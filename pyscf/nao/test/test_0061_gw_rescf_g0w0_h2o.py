@@ -35,7 +35,7 @@ class KnowValues(unittest.TestCase):
 
     dname = os.path.dirname(os.path.abspath(__file__))
     gw = gw_c(label='water', cd=dname, verbosity=0, nocc_conv=4, nvrt_conv=4, rescf=True)
-    gw.kernel_g0w0()
+    gw.kernel_gw()
     np.savetxt('eigvals_g0w0_pyscf_rescf_water_0061.txt', gw.mo_energy_g0w0.T)
       
     for e,eref_str in zip(gw.mo_energy_g0w0,fc.splitlines()):

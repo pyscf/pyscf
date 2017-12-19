@@ -10,7 +10,7 @@ class KnowValues(unittest.TestCase):
     
     dname = os.path.dirname(os.path.abspath(__file__))
     gw = gw_c(label='n2', cd=dname, verbosity=1, jcutoff=9, nff_ia=64, tol_ia=1e-6, rescf=True)
-    gw.kernel_g0w0()
+    gw.kernel_gw()
     #np.savetxt('eigvals_g0w0_pyscf_rescf_n2_0062.txt', gw.mo_energy_g0w0.T)
 
     fc = """-1.294910390463269723e+00
