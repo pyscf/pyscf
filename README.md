@@ -88,7 +88,7 @@ Installation
 Known problems
 --------------
 
-* mkl-2018.0.0-intel_3 from intelpython is gives segfault update to mkl-2018.0.1-intel_4 or superior relaease
+* mkl-2018.0.0-intel_3 from intelpython gives segfault update to mkl-2018.0.1-intel_4 or superior relaease
 
 * Error message "Library not loaded: libcint.3.0.dylib" On OS X.
   libcint.dylib is installed in  pyscf/lib/deps/lib  by default.  Add

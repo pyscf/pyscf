@@ -59,7 +59,9 @@ end subroutine !spline
   n = len(yin)
   u = numpy.zeros((n), dtype='float64')
   yout = numpy.zeros((n), dtype='float64')
-  
+  if h == 0.0:
+      return yout
+
   if yp1<1e300 : yout[0],u[0]=-0.5, (3.0/h)*((yin[1]-yin[0])/h-yp1)
 
   for i in range(1,n-1):

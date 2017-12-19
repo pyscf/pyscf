@@ -171,7 +171,9 @@ class ao_log_c(log_mesh_c):
       h,dat = ion["vna"]["delta"], ion["vna"]["data"][0][:, 1]
       yy_diff2 = spline_diff2(h, dat, 0.0, 1.0e301)
       vna = np.zeros(nr)
-      for ir,r in enumerate(rr): vna[ir] = spline_interp(h, dat, yy_diff2, r)
+      if h != 0.0:
+          for ir,r in enumerate(rr): 
+              vna[ir] = spline_interp(h, dat, yy_diff2, r)
       self.sp2vna.append(vna*0.5) # given in Rydberg?
 
     self.sp_mu2rcut = [ np.array(ion["paos"]["cutoff"]) for ion in sp2ion]
