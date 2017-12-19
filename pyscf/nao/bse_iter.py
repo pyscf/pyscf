@@ -2,6 +2,7 @@ from __future__ import print_function, division
 import numpy as np
 from timeit import default_timer as timer
 from pyscf.nao.tddft_iter import use_numba, tddft_iter
+from pyscf.nao import gw
 from scipy.linalg import blas
 from pyscf.nao.m_pack2den import pack2den_u, pack2den_l
 if use_numba: from pyscf.nao.m_iter_div_eigenenergy_numba import div_eigenenergy_numba

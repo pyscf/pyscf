@@ -52,10 +52,8 @@ class gw(scf):
     
     assert self.cc_da.shape[1]==self.nprod
     self.kernel_sq = self.hkernel_den
-    self.v_dab_ds = self.pb.get_dp_vertex_doubly_sparse(axis=2)
-    self.snmw2sf = self.sf_gw_corr()
-    self.h0_vh_x_expval = self.get_h0_vh_x_expval()
-    if self.verbosity>0: print(__name__, '.h0_vh_x_expval: ', self.h0_vh_x_expval)
+    #self.v_dab_ds = self.pb.get_dp_vertex_doubly_sparse(axis=2)
+
     if self.perform_gw: self.kernel_gw()
     
   def get_h0_vh_x_expval(self):
@@ -163,6 +161,7 @@ class gw(scf):
 
   def gw_corr_int(self, sn2w, eps=None):
     """ This computes an integral part of the GW correction at energies sn2e[spin,len(self.nn)] """
+    if not hasattr(self, 'snmw2sf'): self.snmw2sf = self.sf_gw_corr()
     sn2int = np.zeros_like(sn2w, dtype=self.dtype)
     eps = self.dw_excl if eps is None else eps
     #print(__name__, 'self.dw_ia', self.dw_ia)
@@ -266,6 +265,9 @@ class gw(scf):
 
   def make_mo_g0w0(self):
     """ This creates the fields mo_energy_g0w0, and mo_coeff_g0w0 """
+
+    self.h0_vh_x_expval = self.get_h0_vh_x_expval()
+    if self.verbosity>0: print(__name__, '.h0_vh_x_expval: ', self.h0_vh_x_expval)
 
     if not hasattr(self, 'sn2eval_gw'): self.g0w0_eigvals()
     #print(self.mo_energy)
