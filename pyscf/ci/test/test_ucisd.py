@@ -157,7 +157,7 @@ class KnownValues(unittest.TestCase):
 
         eris = myci.ao2mo(mo)
         self.assertAlmostEqual(lib.finger(myci.make_diagonal(eris)),
-                               -838.45507742639279, 8)
+                               -838.45507742639279, 6)
 
         numpy.random.seed(12)
         nocca, noccb = mol.nelec

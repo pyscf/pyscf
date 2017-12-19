@@ -160,6 +160,8 @@ class KnowValues(unittest.TestCase):
         self.assertTrue(numpy.allclose(mf.mo_occ[:6], [2,2,2,2,1,1]))
 
     def test_convert_to_scf(self):
+        from pyscf.x2c import x2c
+        from pyscf.soscf import newton_ah
         scf.addons.convert_to_rhf(dft.RKS(mol))
         scf.addons.convert_to_uhf(dft.RKS(mol))
         #scf.addons.convert_to_ghf(dft.RKS(mol))
@@ -190,15 +192,15 @@ class KnowValues(unittest.TestCase):
         #scf.addons.convert_to_uhf(scf.GHF(mol).density_fit().x2c())
         scf.addons.convert_to_ghf(scf.GHF(mol).density_fit().x2c())
 
-        scf.addons.convert_to_rhf(scf.RHF(mol).density_fit().x2c().newton())
-        scf.addons.convert_to_uhf(scf.RHF(mol).density_fit().x2c().newton())
-        scf.addons.convert_to_ghf(scf.RHF(mol).density_fit().x2c().newton())
-        scf.addons.convert_to_rhf(scf.UHF(mol).density_fit().x2c().newton())
-        scf.addons.convert_to_uhf(scf.UHF(mol).density_fit().x2c().newton())
-        scf.addons.convert_to_ghf(scf.UHF(mol).density_fit().x2c().newton())
-        #scf.addons.convert_to_rhf(scf.GHF(mol).density_fit().x2c().newton())
-        #scf.addons.convert_to_uhf(scf.GHF(mol).density_fit().x2c().newton())
-        scf.addons.convert_to_ghf(scf.GHF(mol).density_fit().x2c().newton())
+        self.assertTrue (isinstance(scf.addons.convert_to_rhf(scf.RHF(mol).newton().density_fit().x2c()), newton_ah._CIAH_SOSCF))
+        self.assertFalse(isinstance(scf.addons.convert_to_uhf(scf.RHF(mol).newton().density_fit().x2c()), newton_ah._CIAH_SOSCF))
+        self.assertFalse(isinstance(scf.addons.convert_to_ghf(scf.RHF(mol).newton().density_fit().x2c()), newton_ah._CIAH_SOSCF))
+        self.assertFalse(isinstance(scf.addons.convert_to_rhf(scf.UHF(mol).newton().density_fit().x2c()), newton_ah._CIAH_SOSCF))
+        self.assertTrue (isinstance(scf.addons.convert_to_uhf(scf.UHF(mol).newton().density_fit().x2c()), newton_ah._CIAH_SOSCF))
+        self.assertFalse(isinstance(scf.addons.convert_to_ghf(scf.UHF(mol).newton().density_fit().x2c()), newton_ah._CIAH_SOSCF))
+        #self.assertFalse(isinstance(scf.addons.convert_to_rhf(scf.GHF(mol).newton().density_fit().x2c()), newton_ah.CIAH_SOSCF))
+        #self.assertFalse(isinstance(scf.addons.convert_to_uhf(scf.GHF(mol).newton().density_fit().x2c()), newton_ah.CIAH_SOSCF))
+        self.assertTrue (sinstance(scf.addons.convert_to_ghf(scf.GHF(mol).newton().density_fit().x2c()), newton_ah.CIAH_SOSCF))
 
 if __name__ == "__main__":
     print("Full Tests for addons")

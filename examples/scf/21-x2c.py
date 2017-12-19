@@ -37,4 +37,7 @@ mf = scf.UKS(mol).x2c1e()
 energy = mf.kernel()
 print('E = %.12f, ref = -75.439160951099' % energy)
 
-
+# Switch off x2c
+mf.with_x2c = False
+energy = mf.kernel()
+print('E = %.12f, ref = %.12f' % (energy, scf.UKS(mol).kernel()))

@@ -240,7 +240,8 @@ def convert_to_uhf(mf, out=None):
                          scf.khf.KRHF  : scf.kuhf.KUHF,
                          dft.rks.RKS   : dft.uks.UKS  ,
                          scf.hf.RHF    : scf.uhf.UHF  }
-            out = mol_scf.addons._recursive_patch(mf.__class__, known_cls, mf.mol)
+            out = mol_scf.addons._recursive_patch(mf.__class__, known_cls,
+                                                  mf.mol, False)
     else:
         assert(isinstance(out, (scf.uhf.UHF, scf.kuhf.KUHF)))
 
@@ -262,20 +263,21 @@ def convert_to_rhf(mf, out=None):
                          scf.kuhf.KUHF : scf.khf.KRHF ,
                          dft.uks.UKS   : dft.rks.RKS  ,
                          scf.uhf.UHF   : scf.hf.RHF   }
-            out = mol_scf.addons._recursive_patch(mf.__class__, known_cls, mf.mol)
+            out = mol_scf.addons._recursive_patch(mf.__class__, known_cls,
+                                                  mf.mol, False)
     else:
         assert(isinstance(out, (scf.hf.RHF, scf.khf.KRHF)))
 
     return mol_scf.addons.convert_to_rhf(mf, out)
 
-def convert_to_ghf(mf, out=None, convert_df=False):
+def convert_to_ghf(mf, out=None, remove_df=False):
     '''Convert the given mean-field object to the generalized HF/KS object
 
     Args:
         mf : SCF object
 
     Kwargs
-        convert_df : bool
+        remove_df : bool
             Whether to convert the DF-SCF object to the normal SCF object.
             This conversion is not applied by default.
 

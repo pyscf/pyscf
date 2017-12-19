@@ -285,14 +285,18 @@ def remove_linear_dep_(mf, threshold=1e-8):
     return mf
 remove_linear_dep = remove_linear_dep_
 
-def convert_to_uhf(mf, out=None, convert_df=False):
+def convert_to_uhf(mf, out=None, remove_df=False):
     '''Convert the given mean-field object to the unrestricted HF/KS object
+
+    Note if mf is an second order SCF object, the second order object will not
+    be converted (in other words, only the underlying SCF object will be
+    converted)
 
     Args:
         mf : SCF object
 
     Kwargs
-        convert_df : bool
+        remove_df : bool
             Whether to convert the DF-SCF object to the normal SCF object.
             This conversion is not applied by default.
 
@@ -301,14 +305,16 @@ def convert_to_uhf(mf, out=None, convert_df=False):
     '''
     from pyscf import scf
     from pyscf import dft
+    from pyscf.soscf import newton_ah
     assert(isinstance(mf, hf.SCF))
 
     logger.debug(mf, 'Converting %s to UHF', mf.__class__)
 
     def update_mo_(mf, mf1):
-        _keys = mf._keys.union(mf1._keys)
-        mf1.__dict__.update(mf.__dict__)
-        mf1._keys = _keys
+        mf1 = _update_mf_without_soscf(mf, mf1, remove_df)
+        if isinstance(mf, scf.uhf.UHF):
+            return mf1
+
         if mf.mo_energy is not None:
             mf1.mo_energy = numpy.array((mf.mo_energy, mf.mo_energy))
             mf1.mo_coeff = (mf.mo_coeff, mf.mo_coeff)
@@ -319,17 +325,17 @@ def convert_to_uhf(mf, out=None, convert_df=False):
             mf1.mo_occ = numpy.array((mf.mo_occ>0, mf.mo_occ==2), dtype=numpy.double)
         return mf1
 
-    if out is not None:
+    if isinstance(mf, scf.ghf.GHF):
+        raise NotImplementedError
+
+    elif out is not None:
         assert(isinstance(out, scf.uhf.UHF))
-        if isinstance(mf, scf.uhf.UHF):
-            out.__dict.__update(mf)
-        else:  # RHF
-            out = update_mo_(mf, out)
 
     elif isinstance(mf, scf.uhf.UHF):
-        out = copy.copy(mf)
-    elif isinstance(mf, scf.ghf.GHF):
-        raise NotImplementedError
+        if isinstance(mf, newton_ah._CIAH_SOSCF):
+            out = copy.copy(mf._scf)
+        else:
+            return copy.copy(mf)
     else:
         known_cls = {scf.hf.RHF        : scf.uhf.UHF,
                      scf.rohf.ROHF     : scf.uhf.UHF,
@@ -339,35 +345,63 @@ def convert_to_uhf(mf, out=None, convert_df=False):
                      dft.roks.ROKS     : dft.uks.UKS,
                      dft.rks_symm.RKS  : dft.uks_symm.UKS,
                      dft.rks_symm.ROKS : dft.uks_symm.UKS}
-        out = update_mo_(mf, _recursive_patch(mf.__class__, known_cls,
-                                              mf.mol, convert_df))
+        out = _object_without_soscf(mf, known_cls, remove_df)
 
-    if getattr(out, 'with_df', None) and convert_df:
-        out.with_df = False
+    return update_mo_(mf, out)
+
+def _object_without_soscf(mf, known_class, remove_df=False):
+    msg =('Warn: Converting a decorated SCF object to\n'
+          'It is recommended to create an SCF object explicitly and pass it '
+          'to convert_to_xxx function e.g.:\n'
+          '    convert_to_uhf(mf, out=scf.RHF(mol).density_fit())\n')
+    sys.stderr.write(msg)
+# Python resolve the subclass inheritance dynamically based on MRO.  We can
+# change the subclass inheritance order to substitute RHF/RKS with UHF/UKS.
+    mro = mf.__class__.__mro__
+    mronew = []
+    for i, cls in enumerate(mro):
+        if remove_df and 'DFHF' in cls.__name__:
+            continue
+        elif 'SecondOrder' in cls.__name__ or 'SOSCF' in cls.__name__:
+            # Remove SOSCF because SOSCF-UHF cannot be initialized with SOSCF-RHF
+            continue
+        elif cls in known_class:
+            if mronew:
+                mronew = mronew + list(known_class[cls].__mro__)
+                break
+            else:
+                return known_class[cls](mf.mol)
+        else:
+            mronew.append(cls)
+    return lib.overwrite_mro(mf, mronew)
+
+def _update_mf_without_soscf(mf, out, remove_df=False):
+    from pyscf.soscf import newton_ah
+    if isinstance(mf, newton_ah._CIAH_SOSCF):
+        keys = set(out.__dict__).intersection(mf._scf.__dict__)
+        remove_df = True
+    else:
+        keys = set(out.__dict__).intersection(mf.__dict__)
+
+    if remove_df and 'with_df' in keys:
+        keys.remove('with_df')
+
+    for key in keys:
+        setattr(out, key, getattr(mf, key))
     return out
 
-def _recursive_patch(cls, known_class, mol, convert_df=None):
-    if convert_df and 'DFHF' in cls.__name__:
-        cls = cls.__base__
-
-    if cls in known_class:
-        as_class = known_class[cls]
-        if as_class is None:
-            raise NotImplementedError('conversion from %s' % cls)
-        return as_class(mol)
-    elif cls is object:
-        raise RuntimeError('Unknown SCF object')
-    else:
-        return cls(_recursive_patch(cls.__base__, known_class, mol, convert_df))
-
-def convert_to_rhf(mf, out=None, convert_df=False):
+def convert_to_rhf(mf, out=None, remove_df=False):
     '''Convert the given mean-field object to the restricted HF/KS object
+
+    Note if mf is an second order SCF object, the second order object will not
+    be converted (in other words, only the underlying SCF object will be
+    converted)
 
     Args:
         mf : SCF object
 
     Kwargs
-        convert_df : bool
+        remove_df : bool
             Whether to convert the DF-SCF object to the normal SCF object.
             This conversion is not applied by default.
 
@@ -376,14 +410,16 @@ def convert_to_rhf(mf, out=None, convert_df=False):
     '''
     from pyscf import scf
     from pyscf import dft
+    from pyscf.soscf import newton_ah
     assert(isinstance(mf, hf.SCF))
 
     logger.debug(mf, 'Converting %s to RHF', mf.__class__)
 
     def update_mo_(mf, mf1):
-        _keys = mf._keys.union(mf1._keys)
-        mf1.__dict__.update(mf.__dict__)
-        mf1._keys = _keys
+        mf1 = _update_mf_without_soscf(mf, mf1, remove_df)
+        if isinstance(mf, scf.hf.RHF):
+            return mf1
+
         if mf.mo_energy is not None:
             mf1.mo_energy = mf.mo_energy[0]
             mf1.mo_coeff =  mf.mo_coeff[0]
@@ -392,37 +428,38 @@ def convert_to_rhf(mf, out=None, convert_df=False):
             mf1.mo_occ = mf.mo_occ[0] + mf.mo_occ[1]
         return mf1
 
-    if out is not None:
+    if isinstance(mf, scf.ghf.GHF):
+        raise NotImplementedError
+
+    elif out is not None:
         assert(isinstance(out, scf.hf.RHF))
-        if isinstance(mf, scf.hf.RHF):
-            out.__dict.__update(mf)
-        else:  # UHF
-            out = update_mo_(mf, out)
 
     elif isinstance(mf, scf.hf.RHF):
-        out = copy.copy(mf)
-    elif isinstance(mf, scf.ghf.GHF):
-        raise NotImplementedError
+        if isinstance(mf, newton_ah._CIAH_SOSCF):
+            out = copy.copy(mf._scf)
+        else:
+            return copy.copy(mf)
     else:
         known_cls = {scf.uhf.UHF      : scf.rohf.ROHF,
                      scf.uhf_symm.UHF : scf.hf_symm.ROHF,
                      dft.uks.UKS      : dft.roks.ROKS,
                      dft.uks_symm.UKS : dft.rks_symm.ROKS}
-        out = update_mo_(mf, _recursive_patch(mf.__class__, known_cls, mf.mol,
-                                              convert_df))
+        out = _object_without_soscf(mf, known_cls, remove_df)
 
-    if getattr(out, 'with_df', None) and convert_df:
-        out.with_df = False
-    return out
+    return update_mo_(mf, out)
 
-def convert_to_ghf(mf, out=None, convert_df=False):
+def convert_to_ghf(mf, out=None, remove_df=False):
     '''Convert the given mean-field object to the generalized HF/KS object
+
+    Note if mf is an second order SCF object, the second order object will not
+    be converted (in other words, only the underlying SCF object will be
+    converted)
 
     Args:
         mf : SCF object
 
     Kwargs
-        convert_df : bool
+        remove_df : bool
             Whether to convert the DF-SCF object to the normal SCF object.
             This conversion is not applied by default.
 
@@ -431,14 +468,16 @@ def convert_to_ghf(mf, out=None, convert_df=False):
     '''
     from pyscf import scf
     from pyscf import dft
+    from pyscf.soscf import newton_ah
     assert(isinstance(mf, hf.SCF))
 
     logger.debug(mf, 'Converting %s to GHF', mf.__class__)
 
     def update_mo_(mf, mf1):
-        _keys = mf._keys.union(mf1._keys)
-        mf1.__dict__.update(mf.__dict__)
-        mf1._keys = _keys
+        mf1 = _update_mf_without_soscf(mf, mf1, remove_df)
+        if isinstance(mf, scf.ghf.GHF):
+            return mf1
+
         if mf.mo_energy is not None:
             if isinstance(mf, scf.hf.RHF):
                 nao, nmo = mf.mo_coeff.shape
@@ -485,13 +524,12 @@ def convert_to_ghf(mf, out=None, convert_df=False):
 
     if out is not None:
         assert(isinstance(out, scf.ghf.GHF))
-        if isinstance(mf, scf.ghf.GHF):
-            out.__dict.__update(mf)
-        else:
-            out = update_mo_(mf, out)
 
     elif isinstance(mf, scf.ghf.GHF):
-        out = copy.copy(mf)
+        if isinstance(mf, newton_ah._CIAH_SOSCF):
+            out = copy.copy(mf._scf)
+        else:
+            return copy.copy(mf)
 
     else:
         known_cls = {scf.hf.RHF        : scf.ghf.GHF,
@@ -506,12 +544,9 @@ def convert_to_ghf(mf, out=None, convert_df=False):
                      dft.rks_symm.RKS  : None,
                      dft.rks_symm.ROKS : None,
                      dft.uks_symm.UKS  : None}
-        out = update_mo_(mf, _recursive_patch(mf.__class__, known_cls, mf.mol,
-                                              convert_df))
+        out = _object_without_soscf(mf, known_cls, remove_df)
 
-    if getattr(out, 'with_df', None) and convert_df:
-        out.with_df = False
-    return out
+    return update_mo_(mf, out)
 
 def get_ghf_orbspin(mo_energy, mo_occ, is_rhf=None):
     '''Spin of each GHF orbital when the GHF orbitals are converted from
