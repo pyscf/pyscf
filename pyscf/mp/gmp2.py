@@ -159,9 +159,9 @@ def _make_eris_incore(mp, mo_coeff=None, ao2mofn=None, verbose=None):
         ao2mofn = lambda *args: ao2mo.kernel(mp._scf._eri, *args)
 
     if orbspin is None:
-        eri  = ao2mofn((orboa,orbva,orboa,orbva)).reshape(nocc,nocc,nvir,nvir)
-        eri += ao2mofn((orbob,orbvb,orbob,orbvb)).reshape(nocc,nocc,nvir,nvir)
-        eri1 = ao2mofn((orboa,orbva,orbob,orbvb)).reshape(nocc,nocc,nvir,nvir)
+        eri  = ao2mofn((orboa,orbva,orboa,orbva)).reshape(nocc,nvir,nocc,nvir)
+        eri += ao2mofn((orbob,orbvb,orbob,orbvb)).reshape(nocc,nvir,nocc,nvir)
+        eri1 = ao2mofn((orboa,orbva,orbob,orbvb)).reshape(nocc,nvir,nocc,nvir)
         eri += eri1
         eri += eri1.transpose(2,3,0,1)
     else:
@@ -195,11 +195,6 @@ def _make_eris_outcore(mp, mo_coeff=None, verbose=None):
     eris.oovv = feri.create_dataset('oovv', (nocc,nocc,nvir,nvir), 'f8')
 
     if orbspin is None:
-        orbo_a = mo_a[:,:nocc]
-        orbv_a = mo_a[:,nocc:]
-        orbo_b = mo_b[:,:nocc]
-        orbv_b = mo_b[:,nocc:]
-
         max_memory = mp.max_memory-lib.current_memory()[0]
         blksize = min(nocc, max(2, int(max_memory*1e6/8/(nocc*nvir**2*2))))
         max_memory = max(2000, max_memory)

@@ -18,7 +18,7 @@ from pyscf.mp import mp2
 def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=True,
            verbose=logger.NOTE):
     if mo_energy is None or mo_coeff is None:
-        mo_coeff = mp2._mo_energy_without_core(mp, mp.mo_coeff)
+        mo_coeff = mp2._mo_without_core(mp, mp.mo_coeff)
         mo_energy = mp2._mo_energy_without_core(mp, mp.mo_energy)
     else:
         # For backward compatibility.  In pyscf-1.4 or earlier, mp.frozen is
@@ -50,8 +50,8 @@ class DFMP2(mp2.MP2):
         if hasattr(mf, 'with_df') and mf.with_df:
             self.with_df = None
         else:
-            self.with_df = df.DF(mol)
-            self.with_df.auxbasis = df.make_auxbasis(mol, mp2fit=True)
+            self.with_df = df.DF(mf.mol)
+            self.with_df.auxbasis = df.make_auxbasis(mf.mol, mp2fit=True)
         mp2.MP2.__init__(self, mf, frozen, mo_coeff, mo_occ)
 
     @lib.with_doc(mp2.MP2.kernel.__doc__)

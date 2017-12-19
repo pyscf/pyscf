@@ -116,6 +116,7 @@ class KnownValues(unittest.TestCase):
         mol.build()
         mf = scf.RHF(mol).run(conv_tol=1e-14)
         myci = ci.CISD(mf)
+        myci.frozeon = None
         eris = myci.ao2mo()
         ecisd, civec = myci.kernel(eris=eris)
         self.assertAlmostEqual(ecisd, -0.048878084082066106, 8)

@@ -326,15 +326,11 @@ class MP2(lib.StreamObject):
             with_t2 : bool
                 Whether to generate and hold t2 amplitudes in memory.
         '''
-        if mo_energy is not None:
-            self.mo_energy = mo_energy
-        if mo_coeff is not None:
-            self.mo_coeff = mo_coeff
-
+        if mo_energy is not None: self.mo_energy = mo_energy
+        if mo_coeff is not None: self.mo_coeff = mo_coeff
         if self.mo_energy is None or self.mo_coeff is None:
-            log.warn('mo_coeff, mo_energy are not initialized.\n'
-                     'You may need to call mf.kernel() to generate them.')
-            raise RuntimeError
+            raise RuntimeError('mo_coeff, mo_energy are not initialized.\n'
+                               'You may need to call mf.kernel() to generate them.')
         if self.verbose >= logger.WARN:
             self.check_sanity()
         self.dump_flags()
@@ -391,7 +387,7 @@ def _make_eris(mp, mo_coeff=None, ao2mofn=None, verbose=None):
     nvir = nmo - nocc
     mem_incore, mem_outcore, mem_basic = _mem_usage(nocc, nvir)
     mem_now = lib.current_memory()[0]
-    max_memory = max(2000, mp.max_memory*.9-mem_now)
+    max_memory = max(0, mp.max_memory - mem_now)
     if max_memory < mem_basic:
         log.warn('Not enough memory for integral transformation. '
                  'Available mem %s MB, required mem %s MB',
@@ -400,7 +396,7 @@ def _make_eris(mp, mo_coeff=None, ao2mofn=None, verbose=None):
     co = numpy.asarray(mo_coeff[:,:nocc], order='F')
     cv = numpy.asarray(mo_coeff[:,nocc:], order='F')
     if (mp.mol.incore_anyway or
-        (mp._scf._eri is not None and mem_incore+mem_now < mp.max_memory)):
+        (mp._scf._eri is not None and mem_incore < max_memory)):
         log.debug('transform (ia|jb) incore')
         if callable(ao2mofn):
             eris.ovov = ao2mofn((co,cv,co,cv)).reshape(nocc*nvir,nocc*nvir)
@@ -422,7 +418,7 @@ def _make_eris(mp, mo_coeff=None, ao2mofn=None, verbose=None):
         #ao2mo.outcore.general(mp.mol, (co,cv,co,cv), eris.feri,
         #                      max_memory=max_memory, verbose=log)
         #eris.ovov = eris.feri['eri_mo']
-        eris.ovov = _ao2mo_ovov(mp, co, cv, eris.feri, max_memory, log)
+        eris.ovov = _ao2mo_ovov(mp, co, cv, eris.feri, max(2000, max_memory), log)
 
     time1 = log.timer('Integral transformation', *time0)
     return eris
@@ -533,58 +529,18 @@ if __name__ == '__main__':
         [1 , (0. , -0.757 , 0.587)],
         [1 , (0. , 0.757  , 0.587)]]
 
-    mol.basis = {'H': 'cc-pvdz',
-                 'O': 'cc-pvdz',}
+    mol.basis = 'cc-pvdz'
     mol.build()
     mf = scf.RHF(mol).run()
     mp = MP2(mf)
     mp.verbose = 5
 
-    nocc = mol.nelectron//2
-    nmo = mf.mo_energy.size
-    nvir = nmo - nocc
-
-    co = mf.mo_coeff[:,:nocc]
-    cv = mf.mo_coeff[:,nocc:]
-    g = ao2mo.incore.general(mf._eri, (co,cv,co,cv)).ravel()
-    eia = mf.mo_energy[:nocc,None] - mf.mo_energy[nocc:]
-    t2ref0 = g/(eia.reshape(-1,1)+eia.reshape(-1)).ravel()
-    t2ref0 = t2ref0.reshape(nocc,nvir,nocc,nvir).transpose(0,2,1,3)
-
     pt = MP2(mf)
     emp2, t2 = pt.kernel()
     print(emp2 - -0.204019967288338)
-    print('incore', numpy.allclose(t2, t2ref0))
-    pt.max_memory = 1
-    print('direct', numpy.allclose(pt.kernel()[1], t2ref0))
-
-    rdm1 = make_rdm1_ao(pt, mf.mo_energy, mf.mo_coeff)
-    print(numpy.allclose(reduce(numpy.dot, (mf.mo_coeff, pt.make_rdm1(),
-                                            mf.mo_coeff.T)), rdm1))
-
-    eri = ao2mo.restore(1, ao2mo.kernel(mf._eri, mf.mo_coeff), nmo)
-    hcore = mf.get_hcore()
-    rdm1 = pt.make_rdm1()
-    rdm2 = pt.make_rdm2()
-    h1 = reduce(numpy.dot, (mf.mo_coeff.T, hcore, mf.mo_coeff))
-    e1 = numpy.einsum('ij,ji', h1, rdm1)
-    e1+= numpy.einsum('ijkl,jilk', eri, rdm2) * .5
-    e1+= mol.energy_nuc()
-    print(e1 - pt.e_tot)
-
-    pt = MP2(mf)
-    pt.frozen = 2
     pt.max_memory = 1
     emp2, t2 = pt.kernel()
-    eri = ao2mo.restore(1, ao2mo.kernel(mf._eri, mf.mo_coeff), nmo)
-    hcore = mf.get_hcore()
-    rdm1 = pt.make_rdm1()
-    rdm2 = pt.make_rdm2()
-    h1 = reduce(numpy.dot, (mf.mo_coeff.T, hcore, mf.mo_coeff))
-    e1 = numpy.einsum('ij,ji', h1, rdm1)
-    e1+= numpy.einsum('ijkl,jilk', eri, rdm2) * .5
-    e1+= mol.energy_nuc()
-    print(e1 - pt.e_tot)
+    print(emp2 - -0.204019967288338)
 
     pt = MP2(scf.density_fit(mf, 'weigend'))
     print(pt.kernel()[0] - -0.204254500454)
