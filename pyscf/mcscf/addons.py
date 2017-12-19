@@ -5,9 +5,11 @@
 
 import os
 import sys
+import copy
 from functools import reduce
 import numpy
 from pyscf import lib
+from pyscf import gto
 from pyscf.lib import logger
 from pyscf import fci
 from pyscf import scf
@@ -126,10 +128,7 @@ def caslst_by_irrep(casscf, mo_coeff, cas_irrep_nocc,
     '''
     mol = casscf.mol
     log = logger.Logger(casscf.stdout, casscf.verbose)
-    if s is None:
-        s = casscf._scf.get_ovlp()
-    orbsym = symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb, mo_coeff, s)
-    orbsym = numpy.asarray(orbsym)
+    orbsym = numpy.asarray(scf.hf_symm.get_orbsym(mol, mo_coeff))
     ncore = casscf.ncore
 
     irreps = set(orbsym)
@@ -263,6 +262,7 @@ def sort_mo_by_irrep(casscf, mo_coeff, cas_irrep_nocc,
     '''
     caslst = caslst_by_irrep(casscf, mo_coeff, cas_irrep_nocc,
                              cas_irrep_ncore, s, 0)
+    #FIXME: update mo_coeff.orbsym?
     return sort_mo(casscf, mo_coeff, caslst, 0)
 
 
@@ -335,18 +335,23 @@ def project_init_guess(casscf, init_mo, prev_mol=None):
                   - reduce(numpy.dot, (mocore, mocore.T, s, init_mo[:,ncore:nocc]))
             mocc = lo.orth.vec_lowdin(numpy.hstack((mocore, mocas)), s)
         else:
-            mocc = init_mo[:,:nocc]
+            mocc = lo.orth.vec_lowdin(init_mo[:,:nocc], s)
 
         # remove core and active space from rest
         if mocc.shape[1] < mfmo.shape[1]:
-            rest = mfmo - reduce(numpy.dot, (mocc, mocc.T, s, mfmo))
-            e, u = numpy.linalg.eigh(reduce(numpy.dot, (rest.T, s, rest)))
-            restorb = numpy.dot(rest, u[:,e>1e-7])
             if casscf.mol.symmetry:
-                t = casscf.mol.intor_symmetric('int1e_kin')
-                t = reduce(numpy.dot, (restorb.T, t, restorb))
-                e, u = numpy.linalg.eigh(t)
-                restorb = numpy.dot(restorb, u)
+                restorb = []
+                orbsym = scf.hf_symm.get_orbsym(casscf.mol, mfmo, s)
+                for ir in set(orbsym):
+                    mo_ir = mfmo[:,orbsym==ir]
+                    rest = mo_ir - reduce(numpy.dot, (mocc, mocc.T, s, mo_ir))
+                    e, u = numpy.linalg.eigh(reduce(numpy.dot, (rest.T, s, rest)))
+                    restorb.append(numpy.dot(rest, u[:,e>1e-7]))
+                restorb = numpy.hstack(restorb)
+            else:
+                rest = mfmo - reduce(numpy.dot, (mocc, mocc.T, s, mfmo))
+                e, u = numpy.linalg.eigh(reduce(numpy.dot, (rest.T, s, rest)))
+                restorb = numpy.dot(rest, u[:,e>1e-7])
             mo = numpy.hstack((mocc, restorb))
         else:
             mo = mocc
@@ -362,18 +367,21 @@ def project_init_guess(casscf, init_mo, prev_mol=None):
     ncore = casscf.ncore
     mfmo = casscf._scf.mo_coeff
     s = casscf._scf.get_ovlp()
-    if isinstance(ncore, (int, numpy.integer)):
-        if prev_mol is not None:
-            init_mo = scf.addons.project_mo_nr2nr(prev_mol, init_mo, casscf.mol)
+    if prev_mol is None:
+        if init_mo.shape[0] != mfmo.shape[0]:
+            raise RuntimeError('Initial guess orbitals has wrong dimension')
+    elif not gto.same_basis_set(prev_mol, casscf.mol):
+        pmol = copy.copy(casscf.mol)
+        pmol._atom = prev_mol._atom
+        pmol.build(0, 0)
+        if isinstance(ncore, (int, numpy.integer)):  # RHF
+            init_mo = scf.addons.project_mo_nr2nr(prev_mol, init_mo, pmol)
         else:
-            assert(mfmo.shape[0] == init_mo.shape[0])
+            init_mo = (scf.addons.project_mo_nr2nr(prev_mol, init_mo[0], pmol),
+                       scf.addons.project_mo_nr2nr(prev_mol, init_mo[1], pmol))
+    if isinstance(ncore, (int, numpy.integer)):
         mo = project(mfmo, init_mo, ncore, s)
     else: # UHF-based CASSCF
-        if prev_mol is not None:
-            init_mo = (scf.addons.project_mo_nr2nr(prev_mol, init_mo[0], casscf.mol),
-                       scf.addons.project_mo_nr2nr(prev_mol, init_mo[1], casscf.mol))
-        else:
-            assert(mfmo[0].shape[0] == init_mo[0].shape[0])
         mo = (project(mfmo[0], init_mo[0], ncore[0], s),
               project(mfmo[1], init_mo[1], ncore[1], s))
     return mo
@@ -553,12 +561,15 @@ def state_average_(casscf, weights=(0.5,0.5)):
 # but undefined in fcibase object
             e, c = fcibase_class.kernel(self, h1, h2, norb, nelec, ci0,
                                         nroots=self.nroots, **kwargs)
-            if (casscf.verbose >= logger.DEBUG and
-                hasattr(fcibase_class, 'spin_square')):
-                for i, ei in enumerate(e):
-                    ss = fcibase_class.spin_square(self, c[i], norb, nelec)
-                    logger.debug(casscf, 'state %d  E = %.15g S^2 = %.7f',
-                                 i, ei, ss[0])
+            if casscf.verbose >= logger.DEBUG:
+                if hasattr(fcibase_class, 'spin_square'):
+                    for i, ei in enumerate(e):
+                        ss = fcibase_class.spin_square(self, c[i], norb, nelec)
+                        logger.debug(casscf, 'state %d  E = %.15g S^2 = %.7f',
+                                     i, ei, ss[0])
+                else:
+                    for i, ei in enumerate(e):
+                        logger.debug(casscf, 'state %d  E = %.15g', i, ei)
             return numpy.einsum('i,i->', e, weights), c
         def approx_kernel(self, h1, h2, norb, nelec, ci0=None, **kwargs):
             e, c = fcibase_class.kernel(self, h1, h2, norb, nelec, ci0,
@@ -627,11 +638,13 @@ def state_specific_(casscf, state=1):
                 e = [e]
                 c = [c]
             self._civec = c
-            if (casscf.verbose >= logger.DEBUG and
-                hasattr(fcibase_class, 'spin_square')):
-                ss = fcibase_class.spin_square(self, c[state], norb, nelec)
-                logger.debug(casscf, 'state %d  E = %.15g S^2 = %.7f',
-                             state, e[state], ss[0])
+            if casscf.verbose >= logger.DEBUG:
+                if hasattr(fcibase_class, 'spin_square'):
+                    ss = fcibase_class.spin_square(self, c[state], norb, nelec)
+                    logger.debug(casscf, 'state %d  E = %.15g S^2 = %.7f',
+                                 state, e[state], ss[0])
+                else:
+                    logger.debug(casscf, 'state %d  E = %.15g', state, e[state])
             return e[state], c[state]
         def approx_kernel(self, h1, h2, norb, nelec, ci0=None, **kwargs):
             if self._civec is not None:
@@ -664,6 +677,8 @@ def state_average_mix_(casscf, fcisolvers, weights=(0.5,0.5)):
 #        fcibase_class = fcibase_class.__base__
     nroots = sum(solver.nroots for solver in fcisolvers)
     assert(nroots == len(weights))
+    has_spin_square = all(hasattr(solver, 'spin_square')
+                          for solver in fcisolvers)
 
     def collect(items):
         items = list(items)
@@ -694,10 +709,7 @@ def state_average_mix_(casscf, fcisolvers, weights=(0.5,0.5)):
     class FakeCISolver(fcibase_class, StateAverageFCISolver):
         def kernel(self, h1, h2, norb, nelec, ci0=None, verbose=0, **kwargs):
 # Note self.orbsym is initialized lazily in mc1step_symm.kernel function
-            if isinstance(verbose, logger.Logger):
-                log = verbose
-            else:
-                log = logger.Logger(sys.stdout, verbose)
+            log = logger.new_logger(sys, verbose)
             es = []
             cs = []
             for solver, c0 in loop_solver(fcisolvers, ci0):
@@ -709,10 +721,15 @@ def state_average_mix_(casscf, fcisolvers, weights=(0.5,0.5)):
                 else:
                     es.extend(e)
                     cs.extend(c)
-            ss, multip = collect(solver.spin_square(c0, norb, get_nelec(solver, nelec))
-                                 for solver, c0 in loop_civecs(fcisolvers, cs))
-            for i, ei in enumerate(es):
-                log.info('state %d  E = %.15g S^2 = %.7f', i, ei, ss[i])
+            if log.verbose >= logger.DEBUG:
+                if has_spin_square:
+                    ss, multip = collect(solver.spin_square(c0, norb, get_nelec(solver, nelec))
+                                         for solver, c0 in loop_civecs(fcisolvers, cs))
+                    for i, ei in enumerate(es):
+                        log.debug('state %d  E = %.15g S^2 = %.7f', i, ei, ss[i])
+                else:
+                    for i, ei in enumerate(e):
+                        log.debug('state %d  E = %.15g', i, ei)
             return numpy.einsum('i,i', numpy.array(es), weights), cs
 
         def approx_kernel(self, h1, h2, norb, nelec, ci0=None, **kwargs):
@@ -742,7 +759,7 @@ def state_average_mix_(casscf, fcisolvers, weights=(0.5,0.5)):
                 rdm2 += weights[i] * dm2
             return rdm1, rdm2
 
-        if hasattr(fcibase_class, 'spin_square'):
+        if has_spin_square:
             def spin_square(self, ci0, norb, nelec):
                 ss = 0
                 multip = 0
@@ -760,7 +777,7 @@ def state_average_mix_(casscf, fcisolvers, weights=(0.5,0.5)):
 state_average_mix = state_average_mix_
 
 def hot_tuning_(casscf, configfile=None):
-    '''Allow you to tune CASSCF parameters on the runtime
+    '''Allow you to tune CASSCF parameters at the runtime
     '''
     import traceback
     import tempfile
@@ -775,7 +792,7 @@ def hot_tuning_(casscf, configfile=None):
 
     exclude_keys = set(('stdout', 'verbose', 'ci', 'mo_coeff', 'mo_energy',
                         'e_cas', 'e_tot', 'ncore', 'ncas', 'nelecas', 'mol',
-                        'callback', 'fcisolver', 'orbsym'))
+                        'callback', 'fcisolver'))
 
     casscf_settings = {}
     for k, v in casscf.__dict__.items():

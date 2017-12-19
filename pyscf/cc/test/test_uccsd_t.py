@@ -23,7 +23,7 @@ mcc = cc.UCCSD(mf)
 mcc.conv_tol = 1e-14
 mcc.kernel()
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_uccsd_t(self):
         mf1 = copy.copy(mf)
         nao, nmo = mf.mo_coeff[0].shape
@@ -48,7 +48,7 @@ class KnowValues(unittest.TestCase):
         mycc = cc.UCCSD(mf1)
         eris = mycc.ao2mo(mf1.mo_coeff)
         e3a = uccsd_t.kernel(mycc, eris, [t1a,t1b], [t2aa, t2ab, t2bb])
-        self.assertAlmostEqual(e3a, 8193.064821311109, 5)
+        self.assertAlmostEqual(e3a, 9877.2780859693339, 6)
 
         e3a = mcc.ccsd_t()
         self.assertAlmostEqual(e3a, -0.0009857042572475674, 11)

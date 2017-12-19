@@ -26,6 +26,7 @@ mydft = dft.RKS(mol)
 #mydft.xc = 'b97,pw91'
 #mydft.xc = 'b3p86'
 #mydft.xc = 'o3lyp'
+#mydft.xc = 'wb97x'
 mydft.xc = 'b3lyp'
 mydft.kernel()
 

@@ -171,7 +171,7 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         fock = mf.get_fock(h1e, s1e, vhf, dm)
         norm_gorb = numpy.linalg.norm(mf.get_grad(mo_coeff, mo_occ, fock))
         norm_ddm = numpy.linalg.norm(dm-dm_last)
-        scf_conv = (abs(e_tot-last_hf_e) < conv_tol*10 and
+        scf_conv = (abs(e_tot-last_hf_e) < conv_tol*10 or
                     norm_gorb < conv_tol_grad*3)
         logger.info(mf, 'Extra cycle  E= %.15g  delta_E= %4.3g  |g|= %4.3g  |ddm|= %4.3g',
                     e_tot, e_tot-last_hf_e, norm_gorb, norm_ddm)
@@ -403,7 +403,7 @@ def init_guess_by_atom(mol):
     return dm
 
 
-def init_guess_by_chkfile(mol, chkfile_name, project=True):
+def init_guess_by_chkfile(mol, chkfile_name, project=None):
     '''Read the HF results from checkpoint file, then project it to the
     basis defined by ``mol``
 
@@ -492,7 +492,8 @@ def dot_eri_dm(eri, dm, hermi=0):
 
     Args:
         eri : ndarray
-            8-fold or 4-fold ERIs
+            8-fold or 4-fold ERIs or complex integral array with N^4 elements
+            (N is the number of orbitals)
         dm : ndarray or list of ndarrays
             A density matrix or a list of density matrices
 
@@ -520,16 +521,26 @@ def dot_eri_dm(eri, dm, hermi=0):
     >>> print(j.shape)
     (3, 2, 2)
     '''
-    if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
-        vj, vk = _vhf.incore(eri, dm, hermi=hermi)
+    dm = numpy.asarray(dm)
+    nao = dm.shape[-1]
+    dms = dm.reshape(-1,nao,nao)
+    if eri.dtype == numpy.complex128:
+        eri = eri.reshape((nao,)*4)
+        vj = numpy.empty(dms.shape, dtype=numpy.complex128)
+        vk = numpy.empty(dms.shape, dtype=numpy.complex128)
+        for i, dmi in enumerate(dms):
+            vj[i] = numpy.einsum('ijkl,ji->kl', eri, dmi)
+            vk[i] = numpy.einsum('ijkl,jk->il', eri, dmi)
     else:
-        dm = numpy.asarray(dm, order='C')
-        nao = dm.shape[-1]
-        dms = dm.reshape(-1,nao,nao)
-        vjk = [_vhf.incore(eri, dmi, hermi=hermi) for dmi in dms]
-        vj = numpy.array([v[0] for v in vjk]).reshape(dm.shape)
-        vk = numpy.array([v[1] for v in vjk]).reshape(dm.shape)
-    return vj, vk
+        vj = numpy.empty_like(dms)
+        vk = numpy.empty_like(dms)
+        for i, dmi in enumerate(dms):
+            vjk = _vhf.incore(eri, dmi.real, hermi=hermi)
+            if dms.dtype == numpy.complex128:
+                vjk = vjk + _vhf.incore(eri, dmi.imag, hermi=hermi) * 1j
+            vj[i] = vjk[0]
+            vk[i] = vjk[1]
+    return vj.reshape(dm.shape), vk.reshape(dm.shape)
 
 
 def get_jk(mol, dm, hermi=1, vhfopt=None):
@@ -903,8 +914,8 @@ def dip_moment(mol, dm, unit_symbol='Debye', verbose=logger.NOTE):
     else:
         unit = 1.0
 
-    mol.set_common_orig((0,0,0))
-    ao_dip = mol.intor_symmetric('int1e_r', comp=3)
+    with mol.with_common_orig((0,0,0)):
+        ao_dip = mol.intor_symmetric('int1e_r', comp=3)
     el_dip = numpy.einsum('xij,ji->x', ao_dip, dm).real
 
     charges = mol.atom_charges()
@@ -987,7 +998,7 @@ def as_scanner(mf):
                 else:
                     break
 
-        def __call__(self, mol):
+        def __call__(self, mol, **kwargs):
             mf_obj = self
             while mf_obj is not None:
                 mf_obj.mol = mol
@@ -1012,7 +1023,7 @@ def as_scanner(mf):
                 dm0 = self.from_chk(self.chkfile)
             else:
                 dm0 = self.make_rdm1()
-            e_tot = self.kernel(dm0=dm0)
+            e_tot = self.kernel(dm0=dm0, **kwargs)
             return e_tot
 
     return SCF_Scanner(mf)
@@ -1223,14 +1234,14 @@ class SCF(lib.StreamObject):
         return self.make_rdm1(mo_coeff, mo_occ)
 
     @lib.with_doc(init_guess_by_chkfile.__doc__)
-    def init_guess_by_chkfile(self, chkfile=None, project=True):
+    def init_guess_by_chkfile(self, chkfile=None, project=None):
         if isinstance(chkfile, gto.Mole):
             raise TypeError('''
     You see this error message because of the API updates.
     The first argument is chkfile name.''')
         if chkfile is None: chkfile = self.chkfile
         return init_guess_by_chkfile(self.mol, chkfile, project=project)
-    def from_chk(self, chkfile=None, project=True):
+    def from_chk(self, chkfile=None, project=None):
         return self.init_guess_by_chkfile(chkfile, project)
     from_chk.__doc__ = init_guess_by_chkfile.__doc__
 

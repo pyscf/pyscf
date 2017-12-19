@@ -25,11 +25,12 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None):
     nset, nkpts, nao = dms.shape[:3]
     vj_kpts = numpy.zeros((nset,nkpts,nao,nao), dtype=numpy.complex128)
     kpt_allow = numpy.zeros(3)
-    coulG = mydf.weighted_coulG(kpt_allow, False, mydf.gs)
+    mesh = mydf.mesh
+    coulG = mydf.weighted_coulG(kpt_allow, False, mesh)
     max_memory = (mydf.max_memory - lib.current_memory()[0]) * .8
     weight = 1./len(kpts)
     dmsC = dms.conj()
-    for aoaoks, p0, p1 in mydf.ft_loop(mydf.gs, kpt_allow, kpts, max_memory=max_memory):
+    for aoaoks, p0, p1 in mydf.ft_loop(mesh, kpt_allow, kpts, max_memory=max_memory):
         vG = [0] * nset
         #:rho = numpy.einsum('lkL,lk->L', pqk.conj(), dm)
         for k, aoao in enumerate(aoaoks):
@@ -58,13 +59,14 @@ def get_j_for_bands(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=N
     dmsR = dms.real.reshape(nset,nkpts,nao**2)
     dmsI = dms.imag.reshape(nset,nkpts,nao**2)
     kpt_allow = numpy.zeros(3)
-    coulG = mydf.weighted_coulG(kpt_allow, False, mydf.gs)
-    ngs = len(coulG)
-    vG = numpy.zeros((nset,ngs), dtype=numpy.complex128)
+    mesh = mydf.mesh
+    coulG = mydf.weighted_coulG(kpt_allow, False, mesh)
+    ngrids = len(coulG)
+    vG = numpy.zeros((nset,ngrids), dtype=numpy.complex128)
     max_memory = (mydf.max_memory - lib.current_memory()[0]) * .8
 
     dmsC = dms.conj()
-    for aoaoks, p0, p1 in mydf.ft_loop(mydf.gs, kpt_allow, kpts, max_memory=max_memory):
+    for aoaoks, p0, p1 in mydf.ft_loop(mesh, kpt_allow, kpts, max_memory=max_memory):
         #:rho = numpy.einsum('lkL,lk->L', pqk.conj(), dm)
         for k, aoao in enumerate(aoaoks):
             for i in range(nset):
@@ -78,7 +80,7 @@ def get_j_for_bands(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=N
     kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
     nband = len(kpts_band)
     vj_kpts = numpy.zeros((nset,nband,nao,nao), dtype=numpy.complex128)
-    for aoaoks, p0, p1 in mydf.ft_loop(mydf.gs, kpt_allow, kpts_band,
+    for aoaoks, p0, p1 in mydf.ft_loop(mesh, kpt_allow, kpts_band,
                                         max_memory=max_memory):
         for k, aoao in enumerate(aoaoks):
             for i in range(nset):
@@ -95,6 +97,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
     cell = mydf.cell
     log = logger.Logger(mydf.stdout, mydf.verbose)
 
+    mesh = mydf.mesh
     dm_kpts = lib.asarray(dm_kpts, order='C')
     dms = _format_dms(dm_kpts, kpts)
     nset, nkpts, nao = dms.shape[:3]
@@ -132,12 +135,12 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
         #bufI = numpy.empty((blksize*nao**2))
         # Use DF object to mimic KRHF/KUHF object in function get_coulG
         mydf.exxdiv = exxdiv
-        vkcoulG = mydf.weighted_coulG(kpt, True, mydf.gs)
+        vkcoulG = mydf.weighted_coulG(kpt, True, mesh)
         kptjs = kpts[kptj_idx]
         # <r|-G+k_rs|s> = conj(<s|G-k_rs|r>) = conj(<s|G+k_sr|r>)
         #buf1R = numpy.empty((blksize*nao**2))
         #buf1I = numpy.empty((blksize*nao**2))
-        for aoaoks, p0, p1 in mydf.ft_loop(mydf.gs, kpt, kptjs, max_memory=max_memory1):
+        for aoaoks, p0, p1 in mydf.ft_loop(mesh, kpt, kptjs, max_memory=max_memory1):
             coulG = numpy.sqrt(vkcoulG[p0:p1])
             nG = p1 - p0
             bufR = numpy.empty((nG*nao**2))
@@ -229,16 +232,17 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
     j_real = gamma_point(kpt)
     k_real = gamma_point(kpt) and not numpy.iscomplexobj(dms)
 
+    mesh = mydf.mesh
     kptii = numpy.asarray((kpt,kpt))
     kpt_allow = numpy.zeros(3)
 
     if with_j:
-        vjcoulG = mydf.weighted_coulG(kpt_allow, False, mydf.gs)
+        vjcoulG = mydf.weighted_coulG(kpt_allow, False, mesh)
         vjR = numpy.zeros((nset,nao,nao))
         vjI = numpy.zeros((nset,nao,nao))
     if with_k:
         mydf.exxdiv = exxdiv
-        vkcoulG = mydf.weighted_coulG(kpt_allow, True, mydf.gs)
+        vkcoulG = mydf.weighted_coulG(kpt_allow, True, mesh)
         vkR = numpy.zeros((nset,nao,nao))
         vkI = numpy.zeros((nset,nao,nao))
     dmsR = numpy.asarray(dms.real.reshape(nset,nao,nao), order='C')
@@ -253,7 +257,7 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
     blksize = max(int(max_memory*.25e6/16/nao**2), 16)
     bufR = numpy.empty(blksize*nao**2)
     bufI = numpy.empty(blksize*nao**2)
-    for pqkR, pqkI, p0, p1 in mydf.pw_loop(mydf.gs, kptii, max_memory=max_memory):
+    for pqkR, pqkI, p0, p1 in mydf.pw_loop(mesh, kptii, max_memory=max_memory):
         t2 = log.timer_debug1('%d:%d ft_aopair'%(p0,p1), *t2)
         pqkR = pqkR.reshape(nao,nao,-1)
         pqkI = pqkI.reshape(nao,nao,-1)
@@ -325,10 +329,10 @@ if __name__ == '__main__':
     from pyscf.pbc.df import aft
 
     L = 5.
-    n = 5
+    n = 10
     cell = pgto.Cell()
     cell.a = numpy.diag([L,L,L])
-    cell.gs = numpy.array([n,n,n])
+    cell.mesh = numpy.array([n,n,n])
 
     cell.atom = '''He    3.    2.       3.
                    He    1.    1.       1.'''
@@ -341,7 +345,7 @@ if __name__ == '__main__':
     cell.verbose = 5
 
     df = aft.AFTDF(cell)
-    df.gs = (15,)*3
+    df.mesh = (31,)*3
     dm = pscf.RHF(cell).get_init_guess()
     vj, vk = df.get_jk(dm)
     print(numpy.einsum('ij,ji->', df.get_nuc(), dm), 'ref=-10.577490961074622')

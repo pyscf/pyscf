@@ -34,7 +34,7 @@ rhf.conv_tol = 1e-14
 rhf.scf()
 
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_ccsd(self):
         mcc = cc.ccsd.CC(rhf)
         mcc.conv_tol = 1e-12

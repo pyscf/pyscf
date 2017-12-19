@@ -89,7 +89,7 @@ def gen_g_hop_rohf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
     if not hasattr(fock_ao, 'focka'):
         if h1e is None: h1e = mf.get_hcore()
         dm0 = mf.make_rdm1(mo_coeff, mo_occ)
-        fock_ao = h1e + mf.get_veff(mol, dm0)
+        fock_ao = h1e + mf.get_veff(mf.mol, dm0)
     else:
         fock_ao = fock_ao.focka, fock_ao.fockb
     mo_occa = occidxa = mo_occ > 0
@@ -249,17 +249,22 @@ def gen_g_hop_ghf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
 
 def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                       singlet=None, hermi=0, max_memory=None):
-    from pyscf.dft import numint
     assert(not isinstance(mf, (uhf.UHF, rohf.ROHF)))
 
     if mo_coeff is None: mo_coeff = mf.mo_coeff
     if mo_occ is None: mo_occ = mf.mo_occ
     mol = mf.mol
     if hasattr(mf, 'xc') and hasattr(mf, '_numint'):
+        from pyscf.dft import rks
+        from pyscf.dft import numint
         ni = mf._numint
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
+        if getattr(mf, 'nlc', '') != '':
+            logger.warn(mf, 'NLC functional found in DFT object.  Its second '
+                        'deriviative is not available. Its contribution is '
+                        'not included in the response function.')
+        omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
 
-        hyb = ni.hybrid_coeff(mf.xc, spin=mol.spin)
         if singlet is None:  # for newton solver
             rho0, vxc, fxc = ni.cache_xc_kernel(mol, mf.grids, mf.xc,
                                                 mo_coeff, mo_occ, 0)
@@ -283,7 +288,10 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                 if abs(hyb) > 1e-10:
                     if hermi != 2:
                         vj, vk = mf.get_jk(mol, dm1, hermi=hermi)
-                        v1 += vj - .5 * hyb * vk
+                        vk *= hyb
+                        if abs(omega) > 1e-10:  # For range separated Coulomb
+                            vk += rks._get_k_lr(mol, dm1, omega) * (alpha-hyb)
+                        v1 += vj - .5 * vk
                     else:
                         v1 -= .5 * hyb * mf.get_k(mol, dm1, hermi=hermi)
                 elif hermi != 2:
@@ -303,7 +311,10 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                 if abs(hyb) > 1e-10:
                     if hermi != 2:
                         vj, vk = mf.get_jk(mol, dm1, hermi=hermi)
-                        v1 += vj - .5 * hyb * vk
+                        vk *= hyb
+                        if abs(omega) > 1e-10:  # For range separated Coulomb
+                            vk += rks._get_k_lr(mol, dm1, omega) * (alpha-hyb)
+                        v1 += vj - .5 * vk
                     else:
                         v1 -= .5 * hyb * mf.get_k(mol, dm1, hermi=hermi)
                 elif hermi != 2:
@@ -320,7 +331,11 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                                               max_memory=max_memory)
                     v1 *= .5
                 if abs(hyb) > 1e-10:
-                    v1 += -.5 * hyb * mf.get_k(mol, dm1, hermi=hermi)
+                    vk = mf.get_k(mol, dm1, hermi=hermi)
+                    vk *= hyb
+                    if abs(omega) > 1e-10:  # For range separated Coulomb
+                        vk += rks._get_k_lr(mol, dm1, omega) * (alpha-hyb)
+                    v1 += -.5 * vk
                 return v1
 
     else:  # HF
@@ -337,16 +352,20 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
 
 def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
                       with_j=True, hermi=0, max_memory=None):
-    from pyscf.dft import numint
-
     if mo_coeff is None: mo_coeff = mf.mo_coeff
     if mo_occ is None: mo_occ = mf.mo_occ
     mol = mf.mol
     if hasattr(mf, 'xc') and hasattr(mf, '_numint'):
+        from pyscf.dft import rks
+        from pyscf.dft import numint
         ni = mf._numint
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
+        if getattr(mf, 'nlc', '') != '':
+            logger.warn(mf, 'NLC functional found in DFT object.  Its second '
+                        'deriviative is not available. Its contribution is '
+                        'not included in the response function.')
+        omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
 
-        hyb = ni.hybrid_coeff(mf.xc, spin=mol.spin)
         rho0, vxc, fxc = ni.cache_xc_kernel(mol, mf.grids, mf.xc,
                                             mo_coeff, mo_occ, 1)
         #dm0 =(numpy.dot(mo_coeff[0]*mo_occ[0], mo_coeff[0].T.conj()),
@@ -370,9 +389,16 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
             else:
                 if with_j:
                     vj, vk = mf.get_jk(mol, dm1, hermi=hermi)
-                    v1 += vj[0] + vj[1] - vk * hyb
+                    vk *= hyb
+                    if abs(omega) > 1e-10:  # For range separated Coulomb
+                        vk += rks._get_k_lr(mol, dm1, omega) * (alpha-hyb)
+                    v1 += vj[0] + vj[1] - vk
                 else:
-                    v1 -= hyb * mf.get_k(mol, dm1, hermi=hermi)
+                    vk = mf.get_k(mol, dm1, hermi=hermi)
+                    vk *= hyb
+                    if abs(omega) > 1e-10:  # For range separated Coulomb
+                        vk += rks._get_k_lr(mol, dm1, omega) * (alpha-hyb)
+                    v1 -= vk
             return v1
 
     elif with_j:
@@ -390,12 +416,11 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
 
 def _gen_ghf_response(mf, mo_coeff=None, mo_occ=None,
                       with_j=True, hermi=0, max_memory=None):
-    from pyscf.dft import numint
-
     if mo_coeff is None: mo_coeff = mf.mo_coeff
     if mo_occ is None: mo_occ = mf.mo_occ
     mol = mf.mol
     if hasattr(mf, 'xc') and hasattr(mf, '_numint'):
+        from pyscf.dft import numint
         raise NotImplementedError
 
     elif with_j:
@@ -612,7 +637,7 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
     dm = mf.make_rdm1(mo_coeff, mo_occ)
 # call mf._scf.get_veff, to avoid density_fit module polluting get_veff function
     vhf = mf._scf.get_veff(mol, dm)
-    fock = mf.get_fock(h1e, s1e, vhf, dm)
+    fock = mf.get_fock(h1e, s1e, vhf, dm, level_shift_factor=0)
     log.info('Initial guess |g|= %g',
              numpy.linalg.norm(mf._scf.get_grad(mo_coeff, mo_occ, fock)))
 # NOTE: DO NOT change the initial guess mo_occ, mo_coeff
@@ -635,7 +660,7 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
         mo_coeff = mf.rotate_mo(mo_coeff, u, log)
         dm = mf.make_rdm1(mo_coeff, mo_occ)
         vhf = mf._scf.get_veff(mol, dm, dm_last=dm_last, vhf_last=vhf)
-        fock = mf.get_fock(h1e, s1e, vhf, dm)
+        fock = mf.get_fock(h1e, s1e, vhf, dm, level_shift_factor=0)
 # NOTE: DO NOT change the initial guess mo_occ, mo_coeff
         if mf.verbose >= logger.DEBUG:
             mo_energy, mo_tmp = mf.eig(fock, s1e)

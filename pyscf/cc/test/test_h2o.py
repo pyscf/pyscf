@@ -22,7 +22,7 @@ mf.conv_tol_grad = 1e-8
 ehf = mf.kernel()
 
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_ccsd(self):
         mcc = cc.ccsd.CC(mf)
         mcc.conv_tol = 1e-9
@@ -52,10 +52,10 @@ class KnowValues(unittest.TestCase):
         ovvv = lib.unpack_tril(eris.ovvv).reshape(nocc,nvir,nvir,nvir)
         tmp = -numpy.einsum('ijcd,ka,kdcb->ijba', tau, t1, ovvv)
         t2a = tmp + tmp.transpose(1,0,3,2)
-        t2a = t2a[numpy.tril_indices(nocc)]
-        t2a += mcc.add_wvvVV(t1, t2, eris)
+        t2a += mcc._add_vvvv(t1, t2, eris)
         mcc.direct = True
-        t2b = mcc.add_wvvVV(t1, t2, eris)
+        eris.vvvv = None
+        t2b = mcc._add_vvvv(t1, t2, eris)
         self.assertTrue(numpy.allclose(t2a,t2b))
 
     def test_ccsd_frozen(self):
@@ -86,7 +86,7 @@ class KnowValues(unittest.TestCase):
         mycc = cc.ccsd.CCSD(mf)
         mycc.conv_tol = 1e-12
         mycc.diis_start_energy_diff = 1e2
-        mycc.max_cycle = 1000
+        mycc.max_cycle = 400
         mycc.mo_coeff = mo_coeff=numpy.dot(mf.mo_coeff,u)
         self.assertAlmostEqual(mycc.kernel()[0], -0.21334323320620596, 8)
 
@@ -122,14 +122,15 @@ class KnowValues(unittest.TestCase):
 
     def test_ccsd_rdm(self):
         mcc = cc.ccsd.CC(mf)
+        mcc.max_memory = 0
         mcc.conv_tol = 1e-9
         mcc.conv_tol_normt = 1e-7
         mcc.kernel()
         mcc.solve_lambda()
         dm1 = mcc.make_rdm1()
         dm2 = mcc.make_rdm2()
-        self.assertAlmostEqual(numpy.linalg.norm(dm1), 4.4227836730016374, 7)
-        self.assertAlmostEqual(numpy.linalg.norm(dm2), 20.074629443311355, 7)
+        self.assertAlmostEqual(numpy.linalg.norm(dm1), 4.4227785269355078, 3)
+        self.assertAlmostEqual(numpy.linalg.norm(dm2), 20.074587448789089, 3)
 
     def test_scanner(self):
         mol1 = mol.copy()
@@ -138,6 +139,7 @@ class KnowValues(unittest.TestCase):
         H   0.   -0.757   0.587
         H   0.   0.757    0.587''')
         cc_scanner = scf.RHF(mol).apply(cc.CCSD).as_scanner()
+        cc_scanner.conv_tol = 1e-8
         self.assertAlmostEqual(cc_scanner(mol), -76.240108935038691, 7)
         self.assertAlmostEqual(cc_scanner(mol1), -76.228972886940639, 7)
 

@@ -28,7 +28,8 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
     if casscf.ncas == nmo and not casscf.internal_rotation:
         if casscf.canonicalization:
             log.debug('CASSCF canonicalization')
-            mo, fcivec, mo_energy = casscf.canonicalize(mo, fcivec, eris, False,
+            mo, fcivec, mo_energy = casscf.canonicalize(mo, fcivec, eris,
+                                                        casscf.sorting_mo_energy,
                                                         casscf.natorb, verbose=log)
         return True, e_tot, e_ci, fcivec, mo
 
@@ -114,10 +115,11 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
     if casscf.canonicalization:
         log.info('CASSCF canonicalization')
         mo, fcivec, mo_energy = \
-                casscf.canonicalize(mo, fcivec, eris, False, casscf.natorb, casdm1, log)
+                casscf.canonicalize(mo, fcivec, eris, casscf.sorting_mo_energy,
+                                    casscf.natorb, casdm1, log)
         if casscf.natorb: # dump_chk may save casdm1
             nocc = casscf.ncore + casscf.ncas
-            occ, ucas = casscf._eig(-casdm1, casscf.ncore, nocc)[0]
+            occ, ucas = casscf._eig(-casdm1, casscf.ncore, nocc)
             casdm1 = numpy.diag(-occ)
 
     if dump_chk:

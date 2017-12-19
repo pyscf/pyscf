@@ -8,20 +8,51 @@ We provide three ways to install PySCF package.
 Installation with conda
 =======================
 
-If you have `Anaconda <https://www.continuum.io/downloads#linux>`_
-environment, PySCF package can be installed with::
+If you have `Conda <https://conda.io/docs/>`_ 
+(or `Anaconda <https://www.continuum.io/downloads#linux>`_)
+environment, PySCF package can be installed with the command as bellow::
 
+  $ conda install -c pyqc libxc
   $ conda install -c pyscf pyscf
 
 Installation with pip
 =====================
-To install from PyPI, you need to first install the dependent libraries::
 
+You have to first install the dependent libraries (due to the missing of
+build-time dependency in pip `PEP 518 <https://www.python.org/dev/peps/pep-0518/>`_)::
+ 
   $ pip install numpy scipy h5py
 
 Then install PySCF::
 
   $ pip install pyscf
+
+.. note::
+  BLAS library is required to install PySCF library.  In some systems, the
+  installation can automatically detect the installed BLAS libraries in the
+  system and choose one for the program.  If BLAS library is existed
+  in the system but the install script couldn't find it, you can specify the
+  BLAS library either through the environment ``LDFLAGS``, eg
+  ``LDFLAGS="-L/path/to/blas -lblas" pip install pyscf`` or the environment
+  variable ``PYSCF_INC_DIR``, eg
+  ``PYSCF_INC_DIR=/path/to/blas:/path/to/other/lib pip install``.
+
+.. note::
+  libxc library is not available in the PyPI repository.  pyscf.dft module is
+  not working unless the libxc library was installed in the system.  You can
+  download libxc library from http://octopus-code.org/wiki/Libxc:download
+  (note you need to add --enable-shared when compiling the libxc library).
+  Before calling pip, the path where the libxc library is installed needs to be
+  added to the environment variable ``PYSCF_INC_DIR``, eg
+  ``export PYSCF_INC_DIR=/path/to/libxc``.
+
+.. note::
+  Depending on the operator systems, you may fail to ``pip install h5py`` due to
+  the missing of Python header files and HDF5 libraries.  For Linux OS, you can
+  get Python header files by installing ``apt-get install python-dev``
+  (``yum install python-devel`` for redhat) and HDF5 libraries
+  ``apt-get install libhdf5-dev`` (``yum install hdf5-devel`` for redhat).
+
 
 Manual installation from github repo
 ====================================
@@ -47,7 +78,7 @@ Build the C extensions in :file:`pyscf/lib`::
 This will automatically download the analytical GTO integral library `libcint
 <https://github.com/sunqm/libcint.git>`_ and the DFT exchange correlation
 functional libraries `libxc <http://www.tddft.org/programs/Libxc>`_ and `xcfun
-<https://github.com/dftlibs/xcfun.git>`_.  Finally, to make Python able to find
+<https://github.com/dftlibs/xcfun.git>`_.  Finally, to make Python find
 the :code:`pyscf` package, add the top-level :code:`pyscf` directory (not
 the :code:`pyscf/pyscf` subdirectory) to :code:`PYTHONPATH`.  For example, if
 :code:`pyscf` is installed in ``/opt``, :code:`PYTHONPATH` should be like::
@@ -58,40 +89,16 @@ To ensure the installation is successful, start a Python shell, and type::
 
   >>> import pyscf
 
-For Mac OS X/macOS, you may get an import error if your OS X/macOS version is
-10.11 or later::
-
-    OSError: dlopen(xxx/pyscf/pyscf/lib/libcgto.dylib, 6): Library not loaded: libcint.3.0.dylib
-    Referenced from: xxx/pyscf/pyscf/lib/libcgto.dylib
-    Reason: unsafe use of relative rpath libcint.3.0.dylib in xxx/pyscf/pyscf/lib/libcgto.dylib with restricted binary
-
-This is caused by the RPATH.
-It can be fixed by running the script ``pyscf/lib/_runme_to_fix_dylib_osx10.11.sh`` in ``pyscf/lib``
-directory::
- 
-    cd pyscf/lib
-    sh _runme_to_fix_dylib_osx10.11.sh
-
-
-.. note::
-
-  RPATH has been built in the dynamic library.  This may cause library loading
-  error on some systems.  You can run ``pyscf/lib/_runme_to_remove_rpath.sh`` to
-  remove the rpath code from the library head.  Another workaround is to set
-  ``-DCMAKE_SKIP_RPATH=1`` and ``-DCMAKE_MACOSX_RPATH=0`` in cmake command line.
-  When the RPATH was removed, you need to add ``pyscf/lib`` and
-  ``pyscf/lib/deps/lib`` in ``LD_LIBRARY_PATH``.
-
-A useful last step is to set the scratch directory.  The default scratch
-directory of PySCF is controlled by environment variable :code:`PYSCF_TMPDIR`.
-If it's not specified, the system wide temporary directory :code:`TMPDIR` will
-be used as the scratch directory.
+Last, it's recommended to set a scratch directory for PySCF.  The default scratch
+directory is controlled by environment variable :code:`PYSCF_TMPDIR`.  If it's
+not specified, the system temporary directory :code:`TMPDIR` will be used as the
+scratch directory.
 
 
 Installation without network
 ============================
 
-If you have problems downloading the external libraries on your computer, you can
+If you have problems to download the external libraries on your computer, you can
 manually build the libraries, as shown in the following instructions.  First,
 you need to install libcint, libxc or xcfun libraries.
 `libcint cint3 branch <https://github.com/sunqm/libcint/tree/cint3>`_
@@ -148,11 +155,10 @@ Finally update the ``PYTHONPATH`` environment for Python interpreter.
 Using optimized BLAS
 ====================
 
-The default installation does not require the user to identify external linear
-algebra libraries, but instead tries to find them automatically. This automated
-setup script may only find and link to slow BLAS/LAPACK libraries.  To improve
-performance, users can install the package with other BLAS vendors,
-such as the Intel Math Kernel Library (MKL), which can provide 10x speedup in many
+The default installation tries to find BLAS libraries automatically. This
+automated setup script may link the code to slow BLAS libraries.  You can
+compile the package with other BLAS vendors to improve performance, for example
+the Intel Math Kernel Library (MKL), which can provide 10x speedup in many
 modules::
 
   $ cd pyscf/lib/build
@@ -169,9 +175,9 @@ to the MKL library coming with Anaconda package::
   $ make
 
 You can link to other BLAS libraries by setting ``BLA_VENDOR``, eg
-``BLA_VENDOR=ATLAS``, ``BLA_VENDOR=IBMESSL``.  Please refer to `cmake mannual
-<http://www.cmake.org/cmake/help/v3.0/module/FindBLAS.html>`_ for more details
-of the use of ``FindBLAS`` macro.
+``BLA_VENDOR=ATLAS``, ``BLA_VENDOR=IBMESSL``, ``BLA_VENDOR=OpenBLAS`` (requiring cmake-3.6).
+Please refer to `cmake mannual <http://www.cmake.org/cmake/help/v3.6/module/FindBLAS.html>`_
+for more details of the use of ``FindBLAS`` macro.
 
 If the cmake ``BLA_VENDOR`` cannot find the right BLAS library as you expected,
 you can assign the libraries to the variable ``BLAS_LIBRARIES`` in
@@ -182,6 +188,13 @@ you can assign the libraries to the variable ``BLAS_LIBRARIES`` in
   set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_core.so")
   set(BLAS_LIBRARIES "${BLAS_LIBRARIES};/path/to/mkl/lib/intel64/libmkl_avx.so")
 
+.. note::
+  MKL library may lead to an OSError at runtime:
+  ``OSError: ... mkl/lib/intel64/libmkl_avx.so: undefined symbol: ownLastTriangle_64fc``
+  or ``MKL FATAL ERROR: Cannot load libmkl_avx.so or libmkl_def.so.``.
+  It can be solved by preloading MKL core library with:
+  ``export LD_PRELOAD=$MKLROOT/lib/intel64/libmkl_avx.so:$MKLROOT/lib/intel64/libmkl_core.so``
+
 
 .. _installing_qcint:
 
@@ -189,12 +202,11 @@ Using optimized integral library
 ================================
 
 The default integral library used by PySCF is
-libcint (https://github.com/sunqm/libcint).  To ensure the
-compatibility on various high performance computer systems, PySCF does
-not use the fast integral library by default.  For X86-64 platforms,
-libcint library has an efficient implementation Qcint
-https://github.com/sunqm/qcint.git
-which is heavily optimized against SSE3 instructions.
+libcint (https://github.com/sunqm/libcint).  This integral library was
+implemented in the model that ensures the compatibility on various high
+performance computer systems.  For X86-64 platforms, libcint library has an
+efficient counterpart Qcint (https://github.com/sunqm/qcint)
+which is heavily optimized against X86 SIMD instructions (AVX-512/AVX2/AVX/SSE3).
 To replace the default libcint library with qcint library, edit the URL
 of the integral library in lib/CMakeLists.txt file::
 
@@ -202,6 +214,25 @@ of the integral library in lib/CMakeLists.txt file::
      GIT_REPOSITORY
      https://github.com/sunqm/qcint.git
      ...
+
+
+Cmake config file
+=================
+Cmake options can be saved in a config file ``pyscf/lib/cmake.arch.inc``.
+Settings in this config file will be automatically loaded and overwritten the
+default cmake options during compilation.  For example, you can put
+``CMAKE_C_FLAGS`` in this config file to include advanced compiler optimization
+flags::
+
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ffast-math -mtune=native -march=native")
+
+Other settings and variables and flags can all be put in this config file::
+
+  set(ENABLE_XCFUN Off)
+  set(WITH_F12 Off)
+
+Some examples of platform specific configurations can be found in directory
+``pyscf/lib/cmake_arch_config``.
 
 
 .. _installing_plugin:
@@ -217,7 +248,7 @@ Barbry and Peter Koval.  You can enable this module with a cmake flag::
 
     $ cmake -DENABLE_NAO=1 ..
 
-More information of the compilcation can be found in :file:`pyscf/lib/nao/README.md`.
+More information of the compilation can be found in :file:`pyscf/lib/nao/README.md`.
 
 DMRG solver
 -----------
@@ -243,7 +274,7 @@ future/fciqmc/settings.py to store the path where NECI was installed.
 Libxc
 -----
 By default, building PySCF will automatically download and install
-`Libxc 2.2.2 <http://www.tddft.org/programs/octopus/wiki/index.php/Libxc:download>`_.
+`Libxc 3.0.0 <http://www.tddft.org/programs/octopus/wiki/index.php/Libxc:download>`_.
 :mod:`pyscf.dft.libxc` module provided a general interface to access Libxc functionals.
 
 Xcfun

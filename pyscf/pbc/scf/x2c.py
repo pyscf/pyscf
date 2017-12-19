@@ -156,7 +156,7 @@ def get_pnucp(mydf, kpts=None):
     nao = cell.nao_nr()
     nao_pair = nao * (nao+1) // 2
 
-    Gv, Gvbase, kws = cell.get_Gv_weights(mydf.gs)
+    Gv, Gvbase, kws = cell.get_Gv_weights(mydf.mesh)
     kpt_allow = numpy.zeros(3)
     if mydf.eta == 0:
         charge = -cell.atom_charges()
@@ -191,7 +191,7 @@ def get_pnucp(mydf, kpts=None):
 
     max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
     for k, pqkR, pqkI, p0, p1 \
-            in mydf.ft_loop(mydf.gs, kpt_allow, kpts_lst,
+            in mydf.ft_loop(mydf.mesh, kpt_allow, kpts_lst,
                             max_memory=max_memory, aosym='s2'):
 # rho_ij(G) nuc(-G) / G^2
 # = [Re(rho_ij(G)) + Im(rho_ij(G))*1j] [Re(nuc(G)) - Im(nuc(G))*1j] / G^2
@@ -228,7 +228,7 @@ if __name__ == '__main__':
     cell = pbcgto.Cell()
     cell.build(unit = 'B',
                a = numpy.eye(3)*4,
-               gs = [5]*3,
+               mesh = [11]*3,
                atom = 'H 0 0 0; H 0 0 1.8',
                verbose = 4,
                basis='sto3g')

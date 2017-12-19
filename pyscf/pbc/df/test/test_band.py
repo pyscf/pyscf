@@ -2,7 +2,7 @@ import unittest
 import numpy
 from pyscf.pbc import gto, scf, df
 
-cell = gto.M(atom='H 1 2 1; H 1 1 1', a=numpy.eye(3)*4, verbose=0, gs=[5]*3)
+cell = gto.M(atom='H 1 2 1; H 1 1 1', a=numpy.eye(3)*4, verbose=0, mesh=[11]*3)
 numpy.random.seed(1)
 kband = numpy.random.random((2,3))
 

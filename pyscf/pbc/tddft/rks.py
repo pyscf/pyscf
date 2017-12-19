@@ -39,7 +39,7 @@ if __name__ == '__main__':
     '''
     cell.basis = 'gth-szv'
     cell.pseudo = 'gth-pade'
-    cell.gs = [12]*3
+    cell.mesh = [25]*3
     cell.build()
 
     mf = dft.KRKS(cell, cell.make_kpts([2,1,1]))
@@ -49,19 +49,19 @@ if __name__ == '__main__':
     #mf.with_df.build(with_j3c=False)
     mf.xc = 'lda'
     mf.kernel()
-#gs=12 -10.3077341607895
-#gs=5  -10.3086623157515
+#mesh=12 -10.3077341607895
+#mesh=5  -10.3086623157515
 
     td = TDDFT(mf)
     td.nstates = 5
     td.verbose = 5
     print(td.kernel()[0] * 27.2114)
-#gs=12 [ 6.08108297  6.10231481  6.10231478  6.38355803  6.38355804]
-#MDF gs=5 [ 6.07919157  6.10251718  6.10253961  6.37202499  6.37565246]
+#mesh=12 [ 6.08108297  6.10231481  6.10231478  6.38355803  6.38355804]
+#MDF mesh=5 [ 6.07919157  6.10251718  6.10253961  6.37202499  6.37565246]
 
     td = TDA(mf)
     td.singlet = False
     td.verbose = 5
     print(td.kernel()[0] * 27.2114)
-#gs=12 [ 4.01539192  5.1750807   5.17508071]
-#MDF gs=5 [ 4.01148649  5.18043397  5.18043459]
+#mesh=12 [ 4.01539192  5.1750807   5.17508071]
+#MDF mesh=5 [ 4.01148649  5.18043397  5.18043459]

@@ -1,3 +1,7 @@
+'''
+Moller-Plesset perturbation theory
+'''
+
 from pyscf.mp import mp2
 from pyscf.mp import dfmp2
 from pyscf.mp.ump2 import UMP2

@@ -43,49 +43,16 @@ def smearing_(mf, sigma=None, method='fermi'):
     from pyscf.pbc.scf import khf
     mf_class = mf.__class__
     is_uhf = isinstance(mf, uhf.UHF)
-    is_khf = isinstance(mf, khf.KRHF)
+    is_khf = isinstance(mf, khf.KSCF)
     cell_nelec = mf.cell.nelectron
 
-    def fermi_smearing(mo_energy_kpts, fermi, nkpts):
-        # Optimize mu to give correct electron number
-        sigma = mf.sigma
-        def fermi_occ(m):
-            occ = numpy.zeros_like(mo_energy_kpts)
-            de = (mo_energy_kpts - m) / sigma
-            occ[de<40] = 1./(numpy.exp(de[de<40])+1.)
-            return occ
-        def nelec_cost_fn(m):
-            mo_occ_kpts = fermi_occ(m)
-            if not is_uhf:
-                mo_occ_kpts *= 2
-            return ( mo_occ_kpts.sum()/nkpts - cell_nelec )**2
-        res = scipy.optimize.minimize(nelec_cost_fn, fermi, method='Powell')
-        mu = res.x
-        mo_occ_kpts = f = fermi_occ(mu)
-        f = f[(f>0) & (f<1)]
-        entropy = -(f*numpy.log(f) + (1-f)*numpy.log(1-f)).sum()
-        if not is_uhf:
-            mo_occ_kpts *= 2
-            entropy *= 2
-        return mo_occ_kpts, mu, entropy
-
-    def gaussian_smearing(mo_energy_kpts, fermi, nkpts):
-        sigma = mf.sigma
-        def gauss_occ(m):
-            return 1 - scipy.special.erf((mo_energy_kpts-m)/sigma)
-        def nelec_cost_fn(m):
-            mo_occ_kpts = gauss_occ(m)
-            if is_uhf:
-                mo_occ_kpts *= .5
-            return ( mo_occ_kpts.sum()/nkpts - cell_nelec )**2
-        res = scipy.optimize.minimize(nelec_cost_fn, fermi, method='Powell')
-        mu = res.x
-        mo_occ_kpts = gauss_occ(mu)
-        if is_uhf:
-            mo_occ_kpts *= .5
-# Is the entropy correct for spin unrestricted case?
-        entropy = numpy.exp(-((mo_energy_kpts-mu)/sigma)**2).sum() / numpy.sqrt(numpy.pi)
-        return mo_occ_kpts, mu, entropy
+    def fermi_smearing_occ(m, mo_energy_kpts, sigma):
+        occ = numpy.zeros_like(mo_energy_kpts)
+        de = (mo_energy_kpts - m) / sigma
+        occ[de<40] = 1./(numpy.exp(de[de<40])+1.)
+        return occ
+    def gaussian_smearing_occ(m, mo_energy_kpts, sigma):
+        return .5 - .5*scipy.special.erf((mo_energy_kpts-m)/sigma)
 
     def partition_occ(mo_occ, mo_energy_kpts):
         mo_occ_kpts = []
@@ -116,18 +83,42 @@ def smearing_(mf, sigma=None, method='fermi'):
         else:
             nocc = cell_nelec * nkpts // 2
             mo_es = numpy.hstack(mo_energy_kpts)
-        mo_energy = numpy.sort(mo_es.ravel())
-        fermi = mo_energy[nocc-1]
 
         if mf.smearing_method.lower() == 'fermi':  # Fermi-Dirac smearing
-            mo_occs, mu, mf.entropy = fermi_smearing(mo_es, fermi, nkpts)
+            f_occ = fermi_smearing_occ
         else:  # Gaussian smearing
-            mo_occs, mu, mf.entropy = gaussian_smearing(mo_es, fermi, nkpts)
+            f_occ = gaussian_smearing_occ
 
+        mo_energy = numpy.sort(mo_es.ravel())
+        fermi = mo_energy[nocc-1]
+        sigma = mf.sigma
+        def nelec_cost_fn(m):
+            mo_occ_kpts = f_occ(m, mo_es, sigma)
+            if not is_uhf:
+                mo_occ_kpts *= 2
+            return ( mo_occ_kpts.sum()/nkpts - cell_nelec )**2
+        res = scipy.optimize.minimize(nelec_cost_fn, fermi, method='Powell')
+        mu = res.x
+        mo_occs = f = f_occ(mu, mo_es, sigma)
+
+        # See https://www.vasp.at/vasp-workshop/slides/k-points.pdf
+        if mf.smearing_method.lower() == 'fermi':
+            f = f[(f>0) & (f<1)]
+            mf.entropy = -(f*numpy.log(f) + (1-f)*numpy.log(1-f)).sum() / nkpts
+        else:
+            mf.entropy = (numpy.exp(-((mo_es-mu)/mf.sigma)**2).sum()
+                          / (2*numpy.sqrt(numpy.pi)) / nkpts)
+        if not is_uhf:
+            mo_occs *= 2
+            mf.entropy *= 2
+
+        # DO NOT use numpy.array for mo_occ_kpts and mo_energy_kpts, they may
+        # have different dimensions for different k-points
         if is_uhf:
             if is_khf:
-                mo_occ_kpts =(partition_occ(mo_occs, mo_energy_kpts[0]),
-                              partition_occ(mo_occs, mo_energy_kpts[1]))
+                nao_tot = mo_occs.size//2
+                mo_occ_kpts =(partition_occ(mo_occs[:nao_tot], mo_energy_kpts[0]),
+                              partition_occ(mo_occs[nao_tot:], mo_energy_kpts[1]))
             else:
                 mo_occ_kpts = partition_occ(mo_occs, mo_energy_kpts)
         else:
@@ -173,16 +164,19 @@ def smearing_(mf, sigma=None, method='fermi'):
         e_tot = mf.energy_elec(dm_kpts, h1e_kpts, vhf_kpts)[0] + mf.energy_nuc()
         if (mf.sigma and mf.smearing_method and
             mf.entropy is not None and mf.verbose >= logger.INFO):
-            e_free = e_tot - mf.sigma * mf.entropy
-            e_zero = e_tot - mf.sigma * mf.entropy * .5
+            mf.e_free = e_tot - mf.sigma * mf.entropy
+            mf.e_zero = e_tot - mf.sigma * mf.entropy * .5
             logger.info(mf, '    Total E(T) = %.15g  Free energy = %.15g  E0 = %.15g',
-                        e_tot, e_free, e_zero)
+                        e_tot, mf.e_free, mf.e_zero)
         return e_tot
 
     mf.sigma = sigma
     mf.smearing_method = method
     mf.entropy = None
-    mf._keys.union(['sigma', 'smearing_method', 'entropy'])
+    mf.e_free = None
+    mf.e_zero = None
+    mf._keys = mf._keys.union(['sigma', 'smearing_method',
+                               'entropy', 'e_free', 'e_zero'])
 
     mf.get_occ = get_occ
     mf.energy_tot = energy_tot
@@ -234,116 +228,137 @@ def convert_to_uhf(mf, out=None):
     '''Convert the given mean-field object to the corresponding unrestricted
     HF/KS object
     '''
+    from pyscf import scf as mol_scf
     from pyscf.pbc import scf
     from pyscf.pbc import dft
-    def update_mo_(mf, mf1):
-        _keys = mf._keys.union(mf1._keys)
-        mf1.__dict__.update(mf.__dict__)
-        mf1._keys = _keys
-        if mf.mo_energy is not None:
-            mf1.mo_energy = numpy.array((mf.mo_energy, mf.mo_energy))
-            mf1.mo_coeff = numpy.array((mf.mo_coeff, mf.mo_coeff))
-            mo_occ = numpy.asarray(mf.mo_occ)
-            mf1.mo_occ = numpy.array((mo_occ>0, mo_occ==2), dtype=numpy.double)
-        return mf1
 
-    if out is not None:
-        assert(isinstance(out, (scf.uhf.UHF, scf.kuhf.KUHF)))
-        if isinstance(mf, (scf.uhf.UHF, scf.kuhf.KUHF)):
-            out.__dict.__update(mf)
-        else:  # RHF
-            out = update_mo_(mf, out)
-        return out
-
-    else:
-        scf_class = {scf.hf.RHF    : scf.uhf.UHF,
-                     scf.khf.KRHF  : scf.kuhf.KUHF,
-                     dft.rks.RKS   : dft.uks.UKS,
-                     dft.krks.KRKS : dft.kuks.KUKS}
+    if out is None:
+        scf_class = ((dft.krks.KRKS, dft.kuks.KUKS),
+                     (scf.khf.KRHF , scf.kuhf.KUHF),
+                     (dft.rks.RKS  , dft.uks.UKS  ),
+                     (scf.hf.RHF   , scf.uhf.UHF  ))
 
         if isinstance(mf, (scf.uhf.UHF, scf.kuhf.KUHF)):
-            out = copy.copy(mf)
-
-        elif mf.__class__ in scf_class:
-            out = update_mo_(mf, scf_class[mf.__class__](mf.cell))
+            return copy.copy(mf)
 
         else:
-            msg =('Warn: Converting a decorated RHF object to the decorated '
-                  'UHF object is unsafe.\nIt is recommended to create a '
-                  'decorated UHF object explicitly and pass it to '
-                  'convert_to_uhf function eg:\n'
-                  '    convert_to_uhf(mf, out=density_fit(scf.UHF(cell)))\n')
-            sys.stderr.write(msg)
-# Python resolve the subclass inheritance dynamically based on MRO.  We can
-# change the subclass inheritance order to substitute RHF/RKS with UHF/UKS.
-            mro = mf.__class__.__mro__
-            mronew = None
-            for i, cls in enumerate(mro):
-                if cls in scf_class:
-                    mronew = mro[:i] + scf_class[cls].__mro__
+            for cls, newcls in scf_class:
+                if isinstance(mf, cls):
+                    out = newcls(mf.cell)
                     break
-            if mronew is None:
-                raise RuntimeError('%s object is not SCF object')
-            out = update_mo_(mf, lib.overwrite_mro(mf, mronew))
+            if out is None:
+                raise RuntimeError('Unsupported SCF class %s' % mf)
+    else:
+        assert(isinstance(out, (scf.uhf.UHF, scf.kuhf.KUHF)))
 
-        return out
+    return mol_scf.addons.convert_to_uhf(mf, out)
 
 def convert_to_rhf(mf, out=None):
     '''Convert the given mean-field object to the corresponding restricted
     HF/KS object
     '''
+    from pyscf import scf as mol_scf
     from pyscf.pbc import scf
     from pyscf.pbc import dft
-    def update_mo_(mf, mf1):
-        _keys = mf._keys.union(mf1._keys)
-        mf1.__dict__.update(mf.__dict__)
-        mf1._keys = _keys
-        if mf.mo_energy is not None:
-            mf1.mo_energy = mf.mo_energy[0]
-            mf1.mo_coeff =  mf.mo_coeff[0]
-            mf1.mo_occ = numpy.asarray(mf.mo_occ[0]) + numpy.asarray(mf.mo_occ[1])
-        return mf1
 
-    if out is not None:
-        assert(isinstance(out, (scf.hf.RHF, scf.khf.KRHF)))
-        if isinstance(mf, (scf.hf.RHF, scf.khf.KRHF)):
-            out.__dict.__update(mf)
-        else:  # UHF
-            out = update_mo_(mf, out)
-        return out
-
-    else:
-        scf_class = {scf.uhf.UHF   : scf.hf.RHF,
-                     scf.kuhf.KUHF : scf.khf.KRHF,
-                     dft.uks.UKS   : dft.rks.RKS,
-                     dft.kuks.KUKS : dft.krks.KRKS}
+    if out is None:
+        scf_class = ((dft.kuks.KUKS, dft.krks.KRKS),
+                     (scf.kuhf.KUHF, scf.khf.KRHF ),
+                     (dft.uks.UKS  , dft.rks.RKS  ),
+                     (scf.uhf.UHF  , scf.hf.RHF   ))
 
         if isinstance(mf, (scf.hf.RHF, scf.khf.KRHF)):
-            out = copy.copy(mf)
-
-        elif mf.__class__ in scf_class:
-            out = update_mo_(mf, scf_class[mf.__class__](mf.cell))
+            return copy.copy(mf)
 
         else:
-            msg =('Warn: Converting a decorated UHF object to the decorated '
-                  'RHF object is unsafe.\nIt is recommended to create a '
-                  'decorated RHF object explicitly and pass it to '
-                  'convert_to_rhf function eg:\n'
-                  '    convert_to_rhf(mf, out=density_fit(scf.RHF(cell)))\n')
-            sys.stderr.write(msg)
-# Python resolve the subclass inheritance dynamically based on MRO.  We can
-# change the subclass inheritance order to substitute RHF/RKS with UHF/UKS.
-            mro = mf.__class__.__mro__
-            mronew = None
-            for i, cls in enumerate(mro):
-                if cls in scf_class:
-                    mronew = mro[:i] + scf_class[cls].__mro__
+            for cls, newcls in scf_class:
+                if isinstance(mf, cls):
+                    out = newcls(mf.cell)
                     break
-            if mronew is None:
-                raise RuntimeError('%s object is not SCF object')
-            out = update_mo_(mf, lib.overwrite_mro(mf, mronew))
+            if out is None:
+                raise RuntimeError('Unsupported SCF class %s' % mf)
 
-        return out
+    else:
+        assert(isinstance(out, (scf.hf.RHF, scf.khf.KRHF)))
+
+    return mol_scf.addons.convert_to_rhf(mf, out)
+
+def convert_to_ghf(mf, out=None, convert_df=None):
+    '''Convert the given mean-field object to the generalized HF/KS object
+
+    Args:
+        mf : SCF object
+
+    Kwargs
+        convert_df : bool
+            Whether to convert the DF-SCF object to the normal SCF object.
+            This conversion is not applied by default.
+
+    Returns:
+        An generalized SCF object
+    '''
+    from pyscf.scf.addons import get_ghf_orbspin
+    from pyscf import scf as mol_scf
+    from pyscf.pbc import scf
+
+    if isinstance(mf, scf.ghf.GHF):
+        if out is None:
+            return copy.copy(mf)
+        else:
+            assert(isinstance(out, (scf.ghf.GHF, scf.ghf.KGHF)))
+            out.__dict__.update(mf.__dict__)
+            return out
+
+    elif isinstance(mf, scf.khf.KSCF):
+
+        def update_mo_(mf, mf1):
+            _keys = mf._keys.union(mf1._keys)
+            mf1.__dict__.update(mf.__dict__)
+            mf1._keys = _keys
+            if mf.mo_energy is not None:
+                mf1.mo_energy = []
+                mf1.mo_occ = []
+                mf1.mo_coeff = []
+                nkpts = len(mf.kpts)
+                is_rhf = isinstance(mf, scf.hf.RHF)
+                for k in range(nkpts):
+                    if is_rhf:
+                        mo_a = mo_b = mf.mo_coeff[k]
+                        ea = eb = mf.mo_energy[k]
+                        occa = mf.mo_occ[k] > 0
+                        occb = mf.mo_occ[k] == 2
+                        orbspin = get_ghf_orbspin(ea, mf.mo_occ[k], True)
+                    else:
+                        mo_a, mo_b = mf.mo_coeff[k]
+                        ea, eb = mf.mo_energy[k]
+                        occa, occb = mf.mo_occ[k]
+                        orbspin = get_ghf_orbspin((ea, eb), (occa, occb), False)
+
+                    nao, nmo = mo_a.shape
+
+                    mo_energy = numpy.empty(nmo*2)
+                    mo_energy[orbspin==0] = ea
+                    mo_energy[orbspin==1] = eb
+                    mo_occ = numpy.empty(nmo*2)
+                    mo_occ[orbspin==0] = occa
+                    mo_occ[orbspin==1] = occb
+
+                    mo_coeff = numpy.zeros((nao*2,nmo*2), dtype=mo_a.dtype)
+                    mo_coeff[:nao,orbspin==0] = mo_a
+                    mo_coeff[nao:,orbspin==1] = mo_b
+                    mo_coeff = lib.tag_array(mo_coeff, orbspin=orbspin)
+
+                    mf1.mo_energy.append(mo_energy)
+                    mf1.mo_occ.append(mo_occ)
+                    mf1.mo_coeff.append(mo_coeff)
+
+            return mf1
+
+        return update_mo_(mf, scf.kghf.KGHF(mf.cell))
+
+    else:
+        out = scf.ghf.GHF(mf.cell)
+        return mol_scf.addons.convert_to_ghf(mf, out)
 
 def convert_to_khf(mf, out=None):
     '''Convert gamma point SCF object to k-point SCF object
@@ -360,10 +375,11 @@ if __name__ == '__main__':
     '''
     cell.basis = 'ccpvdz'
     cell.a = numpy.eye(3) * 4
-    cell.gs = [8] * 3
+    cell.mesh = [17] * 3
     cell.verbose = 4
     cell.build()
     nks = [2,1,1]
     mf = pscf.KUHF(cell, cell.make_kpts(nks))
-    mf = smearing_(mf, .1)
+    mf = smearing_(mf, .1) # -5.86052594663696 
+    #mf = smearing_(mf, .1, method='gauss')
     mf.kernel()

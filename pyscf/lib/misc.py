@@ -8,6 +8,7 @@ Some hacky functions
 '''
 
 import os, sys
+import warnings
 import imp
 import tempfile
 import shutil
@@ -57,12 +58,39 @@ def current_memory():
     else:
         return 0, 0
 
-def num_threads():
-    if 'OMP_NUM_THREADS' in os.environ:
-        return int(os.environ['OMP_NUM_THREADS'])
+def num_threads(n=None):
+    '''Set the number of OMP threads.  If argument is not given, the function
+    will return the total number of available OMP threads.'''
+    from pyscf.lib.numpy_helper import _np_helper
+    if n is not None:
+        _np_helper.set_omp_threads.restype = ctypes.c_int
+        threads = _np_helper.set_omp_threads(ctypes.c_int(int(n)))
+        if threads == 0:
+            warnings.warn('OpenMP is not available. '
+                          'Setting omp_threads to %s has no effects.' % n)
+        return threads
     else:
-        import multiprocessing
-        return multiprocessing.cpu_count()
+        _np_helper.get_omp_threads.restype = ctypes.c_int
+        return _np_helper.get_omp_threads()
+
+class with_omp_threads(object):
+    '''
+    Usage:
+        with lib.with_threads(2):
+            print(lib.num_threads())
+            ...
+    '''
+    def __init__(self, nthreads=None):
+        self.nthreads = nthreads
+        self.sys_threads = None
+    def __enter__(self):
+        if self.nthreads is not None and self.nthreads >= 1:
+            self.sys_threads = num_threads()
+            num_threads(self.nthreads)
+        return self
+    def __exit__(self, type, value, traceback):
+        if self.sys_threads is not None:
+            num_threads(self.sys_threads)
 
 
 def c_int_arr(m):
@@ -157,6 +185,18 @@ def prange_tril(start, stop, blocksize):
     displs = [x+start for x in _blocksize_partition(cum_costs, blocksize)]
     return zip(displs[:-1], displs[1:])
 
+def square_mat_in_trilu_indices(n):
+    '''Return a n x n symmetric index matrix, in which the elements are the
+    indices of the unique elements of a tril vector 
+    [0 1 3 ... ]
+    [1 2 4 ... ]
+    [3 4 5 ... ]
+    [...       ]
+    '''
+    idx = numpy.tril_indices(n)
+    tril2sq = numpy.zeros((n,n), dtype=int)
+    tril2sq[idx[0],idx[1]] = tril2sq[idx[1],idx[0]] = numpy.arange(n*(n+1)//2)
+    return tril2sq
 
 class ctypes_stdout(object):
     '''make c-printf output to string, but keep python print in /dev/pts/1.
@@ -164,7 +204,8 @@ class ctypes_stdout(object):
     Usage:
         with ctypes_stdout() as stdout:
             ...
-        print(stdout.read())'''
+        print(stdout.read())
+    '''
     def __enter__(self):
         sys.stdout.flush()
         self._contents = None
@@ -339,7 +380,7 @@ def check_sanity(obj, keysref, stdout=sys.stdout):
         class_attr = set(dir(obj.__class__))
         keyin = keysub.intersection(class_attr)
         if keyin:
-            msg = ('Overwrite attributes  %s  of %s\n' %
+            msg = ('Overwritten attributes  %s  of %s\n' %
                    (' '.join(keyin), obj.__class__))
             if msg not in _warn_once_registry:
                 _warn_once_registry[msg] = 1
@@ -502,6 +543,7 @@ class H5TmpFile(h5py.File):
         self.close()
 
 def finger(a):
+    a = numpy.asarray(a)
     return numpy.dot(numpy.cos(numpy.arange(a.size)), a.ravel())
 
 
@@ -547,6 +589,12 @@ class call_in_background(object):
 # Disable the asynchoronous mode for safe importing
             def def_async_fn(fn):
                 return fn
+
+        elif h5py.__version__[:4] == '2.2.':
+# h5py-2.2.* has bug in threading mode.
+            def def_async_fn(fn):
+                return fn
+
         else:
             def def_async_fn(fn):
                 def async_fn(*args, **kwargs):

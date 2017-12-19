@@ -25,6 +25,7 @@ neleca = nelecb = mol.nelectron // 2
 
 #
 # Spin-free 1-particle density matrix
+# <Psi| a_{i\alpha}^\dagger a_{j\alpha} + a_{i\beta}^\dagger a_{j\beta} |Psi>
 #
 dm1 = numpy.zeros((norb,norb))
 for i in range(norb):

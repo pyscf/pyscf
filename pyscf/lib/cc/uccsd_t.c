@@ -53,8 +53,8 @@ static void permute(double *out, double *w, int n)
  * v = numpy.einsum('ij,k->ijk', oo, t1T[c])
  * v+= w
  */
-static void get_wv(double *w, double *v, double *vooo, double *vv_op,
-                   double *t1T, double *t2T,
+static void get_wv(double *w, double *v, double *fovThalf, double *vooo,
+                   double *vv_op, double *t1T, double *t2T,
                    int nocc, int nvir, int a, int b, int c)
 {
         const double D0 = 0;
@@ -66,6 +66,7 @@ static void get_wv(double *w, double *v, double *vooo, double *vv_op,
         const int nooo = nocc * noo;
         const int nvoo = nvir * noo;
         int i, j, k, n;
+        double *pt2T;
 
         dgemm_(&TRANS_N, &TRANS_N, &noo, &nocc, &nvir,
                &DN1, t2T+c*nvoo, &noo, vv_op+nocc, &nmo,
@@ -74,15 +75,17 @@ static void get_wv(double *w, double *v, double *vooo, double *vv_op,
                &DN1, t2T+c*nvoo+b*noo, &nocc, vooo+a*nooo, &nocc,
                &D1, w, &nocc);
 
+        pt2T = t2T + a * nvoo + b * noo;
         for (n = 0, i = 0; i < nocc; i++) {
         for (j = 0; j < nocc; j++) {
         for (k = 0; k < nocc; k++, n++) {
                 v[n] = w[n] + vv_op[i*nmo+j] * t1T[c*nocc+k];
+                v[n]+= pt2T[i*nocc+j] * fovThalf[c*nocc+k];
         } } }
 }
 
-static void sym_wv(double *w, double *v, double *vooo, double *vv_op,
-                   double *t1T, double *t2T,
+static void sym_wv(double *w, double *v, double *fovThalf, double *vooo,
+                   double *vv_op, double *t1T, double *t2T,
                    int nocc, int nvir, int a, int b, int c, int nirrep,
                    int *o_ir_loc, int *v_ir_loc, int *oo_ir_loc, int *orbsym)
 {
@@ -180,20 +183,19 @@ static void sym_wv(double *w, double *v, double *vooo, double *vv_op,
                 }
         }
 
-        for (i = 0; i < nocc; i++) {
-                thalf[i] = t1T[c*nocc+i];
-        }
+        pt2T = t2T + a * nvoo + b * noo;
         for (n = 0, i = 0; i < nocc; i++) {
         for (j = 0; j < nocc; j++) {
         for (k = 0; k < nocc; k++, n++) {
-                v[n] = w[n] + vv_op[i*nmo+j] * thalf[k];
+                v[n] = w[n] + vv_op[i*nmo+j] * t1T[c*nocc+k];
+                v[n]+= pt2T[i*nocc+j] * fovThalf[c*nocc+k];
         } } }
 }
 
 static double contract6_aaa(int nocc, int nvir, int a, int b, int c,
                             double *mo_energy, double *t1T, double *t2T,
                             int nirrep, int *o_ir_loc, int *v_ir_loc,
-                            int *oo_ir_loc, int *orbsym,
+                            int *oo_ir_loc, int *orbsym, double *fovT,
                             double *vooo, double *cache1, double **cache)
 {
         int nooo = nocc * nocc * nocc;
@@ -219,24 +221,24 @@ static double contract6_aaa(int nocc, int nvir, int a, int b, int c,
         int i;
 
         if (nirrep == 1) {
-                get_wv(w0, v0, vooo, cache[0], t1T, t2T, nocc, nvir, a, b, c);
-                get_wv(w1, v1, vooo, cache[1], t1T, t2T, nocc, nvir, a, c, b);
-                get_wv(w2, v2, vooo, cache[2], t1T, t2T, nocc, nvir, b, a, c);
-                get_wv(w3, v3, vooo, cache[3], t1T, t2T, nocc, nvir, b, c, a);
-                get_wv(w4, v4, vooo, cache[4], t1T, t2T, nocc, nvir, c, a, b);
-                get_wv(w5, v5, vooo, cache[5], t1T, t2T, nocc, nvir, c, b, a);
+                get_wv(w0, v0, fovT, vooo, cache[0], t1T, t2T, nocc, nvir, a, b, c);
+                get_wv(w1, v1, fovT, vooo, cache[1], t1T, t2T, nocc, nvir, a, c, b);
+                get_wv(w2, v2, fovT, vooo, cache[2], t1T, t2T, nocc, nvir, b, a, c);
+                get_wv(w3, v3, fovT, vooo, cache[3], t1T, t2T, nocc, nvir, b, c, a);
+                get_wv(w4, v4, fovT, vooo, cache[4], t1T, t2T, nocc, nvir, c, a, b);
+                get_wv(w5, v5, fovT, vooo, cache[5], t1T, t2T, nocc, nvir, c, b, a);
         } else {
-                sym_wv(w0, v0, vooo, cache[0], t1T, t2T, nocc, nvir, a, b, c,
+                sym_wv(w0, v0, fovT, vooo, cache[0], t1T, t2T, nocc, nvir, a, b, c,
                        nirrep, o_ir_loc, v_ir_loc, oo_ir_loc, orbsym);
-                sym_wv(w1, v1, vooo, cache[1], t1T, t2T, nocc, nvir, a, c, b,
+                sym_wv(w1, v1, fovT, vooo, cache[1], t1T, t2T, nocc, nvir, a, c, b,
                        nirrep, o_ir_loc, v_ir_loc, oo_ir_loc, orbsym);
-                sym_wv(w2, v2, vooo, cache[2], t1T, t2T, nocc, nvir, b, a, c,
+                sym_wv(w2, v2, fovT, vooo, cache[2], t1T, t2T, nocc, nvir, b, a, c,
                        nirrep, o_ir_loc, v_ir_loc, oo_ir_loc, orbsym);
-                sym_wv(w3, v3, vooo, cache[3], t1T, t2T, nocc, nvir, b, c, a,
+                sym_wv(w3, v3, fovT, vooo, cache[3], t1T, t2T, nocc, nvir, b, c, a,
                        nirrep, o_ir_loc, v_ir_loc, oo_ir_loc, orbsym);
-                sym_wv(w4, v4, vooo, cache[4], t1T, t2T, nocc, nvir, c, a, b,
+                sym_wv(w4, v4, fovT, vooo, cache[4], t1T, t2T, nocc, nvir, c, a, b,
                        nirrep, o_ir_loc, v_ir_loc, oo_ir_loc, orbsym);
-                sym_wv(w5, v5, vooo, cache[5], t1T, t2T, nocc, nvir, c, b, a,
+                sym_wv(w5, v5, fovT, vooo, cache[5], t1T, t2T, nocc, nvir, c, b, a,
                        nirrep, o_ir_loc, v_ir_loc, oo_ir_loc, orbsym);
         }
         permute(z0, v0, nocc);
@@ -275,7 +277,8 @@ static double contract6_aaa(int nocc, int nvir, int a, int b, int c,
         return et;
 }
 
-double CCuccsd_t_aaa(double *mo_energy, double *t1T, double *t2T, double *vooo,
+double CCuccsd_t_aaa(double *mo_energy, double *t1T, double *t2T,
+                     double *vooo, double *fovT,
                      int nocc, int nvir, int a0, int a1, int b0, int b1,
                      int nirrep, int *o_ir_loc, int *v_ir_loc,
                      int *oo_ir_loc, int *orbsym,
@@ -288,15 +291,20 @@ double CCuccsd_t_aaa(double *mo_energy, double *t1T, double *t2T, double *vooo,
         size_t njobs = _ccsd_t_gen_jobs(jobs, nocc, nvir, a0, a1, b0, b1,
                                         cache_row_a, cache_col_a,
                                         cache_row_b, cache_col_b);
+        double fovThalf[nvir*nocc];
+        int i;
+        for (i = 0; i < nvir*nocc; i++) {
+                fovThalf[i] = fovT[i] * .5;
+        }
 
         double e_tot = 0;
 #pragma omp parallel default(none) \
         shared(njobs, nocc, nvir, mo_energy, t1T, t2T, nirrep, o_ir_loc, \
-               v_ir_loc, oo_ir_loc, orbsym, vooo, jobs, e_tot)
+               v_ir_loc, oo_ir_loc, orbsym, vooo, fovThalf, jobs, e_tot)
 {
         int a, b, c;
         size_t k;
-        double *cache1 = malloc(sizeof(double) * nocc*nocc*nocc*19);
+        double *cache1 = malloc(sizeof(double) * (nocc*nocc*nocc*19+2));
         double e = 0;
 #pragma omp for schedule (dynamic, 32)
         for (k = 0; k < njobs; k++) {
@@ -305,7 +313,7 @@ double CCuccsd_t_aaa(double *mo_energy, double *t1T, double *t2T, double *vooo,
                 c = jobs[k].c;
                 e += contract6_aaa(nocc, nvir, a, b, c, mo_energy, t1T, t2T,
                                    nirrep, o_ir_loc, v_ir_loc, oo_ir_loc, orbsym,
-                                   vooo, cache1, jobs[k].cache);
+                                   fovThalf, vooo, cache1, jobs[k].cache);
         }
         free(cache1);
 #pragma omp critical
@@ -324,13 +332,15 @@ static void get_wv_baa(double *w, double *v, double **vs_ts, double **cache,
                        int nocca, int noccb, int nvira, int nvirb,
                        int a, int b, int c)
 {
-        double *vooo = vs_ts[2];
-        double *vOoO = vs_ts[3];
-        double *VoOo = vs_ts[4];
-        double *t1aT = vs_ts[5];
-        double *t1bT = vs_ts[6];
-        double *t2aaT = vs_ts[7];
-        double *t2abT = vs_ts[8];
+        double *fovT = vs_ts[2];
+        double *fOVT = vs_ts[3];
+        double *vooo = vs_ts[4];
+        double *vOoO = vs_ts[5];
+        double *VoOo = vs_ts[6];
+        double *t1aT = vs_ts[7];
+        double *t1bT = vs_ts[8];
+        double *t2aaT = vs_ts[9];
+        double *t2abT = vs_ts[10];
         double *vvop = cache[0];
         double *vVoP = cache[1];
         double *VvOp = cache[2];
@@ -351,6 +361,7 @@ static void get_wv_baa(double *w, double *v, double **vs_ts, double **cache,
         int i, j, k, n;
 
 /*
+ * t2aaT = t2aa.transpose(2,3,0,1)
  * w  = numpy.einsum('ejI,ke->Ijk', t2abT[:,a], vvov) * 2
  * w += numpy.einsum('EjI,kE->Ijk', t2abT[b,:], vVoV) * 2
  * w += numpy.einsum('mj,mIk->Ijk', t2aaT[b,c], VoOo[a,:])
@@ -359,6 +370,8 @@ static void get_wv_baa(double *w, double *v, double **vs_ts, double **cache,
  * w += numpy.einsum('mI,mjk->Ijk', t2abT[b,a], vooo[c,:]) * 2
  * v  = numpy.einsum('kj,I->Ijk', vvoo, t1bT[a])
  * v += numpy.einsum('Ik,j->Ijk', VvOo, t1aT[b]) * 2
+ * v += numpy.einsum('jk,I->Ijk', t2aaT[b,c], fOVT[a]) * .5
+ * v += numpy.einsum('kI,j->Ijk', t2abT[c,a], fovT[b]) * 2
  * v += w
  */
         dgemm_(&TRANS_T, &TRANS_T, &nocca, &nOo, &nvira,
@@ -386,14 +399,24 @@ static void get_wv_baa(double *w, double *v, double **vs_ts, double **cache,
                &D1, w, &noo);
 
         double t1aT2[nocca];
+        double fovT2[nocca];
+        double fOVThalf[noccb];
         for (i = 0; i < nocca; i++) {
                 t1aT2[i] = t1aT[b*nocca+i] * 2;
+                fovT2[i] = fovT[b*nocca+i] * 2;
         }
+        for (i = 0; i < noccb; i++) {
+                fOVThalf[i] = fOVT[a*noccb+i] * .5;
+        }
+        double *pt2aaT = t2aaT + b * nvoo + c * noo;
+        double *pt2abT = t2abT + (c*nvirb+a) * nOo;
         for (n = 0, i = 0; i < noccb; i++) {
         for (j = 0; j < nocca; j++) {
         for (k = 0; k < nocca; k++, n++) {
                 v[n] = (w[n] + vvop[k*nmoa+j] * t1bT[a*noccb+i]
-                        + VvOp[i*nmoa+k] * t1aT2[j]);
+                        + VvOp[i*nmoa+k] * t1aT2[j]
+                        + pt2aaT[j*nocca+k] * fOVThalf[i]
+                        + pt2abT[k*noccb+i] * fovT2[j]);
         } } }
 }
 
@@ -517,6 +540,7 @@ static size_t gen_baa_jobs(CacheJob *jobs,
 double CCuccsd_t_baa(double *mo_ea, double *mo_eb,
                      double *t1aT, double *t1bT, double *t2aaT, double *t2abT,
                      double *vooo, double *vOoO, double *VoOo,
+                     double *fovT, double *fOVT,
                      int nocca, int noccb, int nvira, int nvirb,
                      int a0, int a1, int b0, int b1,
                      double *cache_row_a, double *cache_col_a,
@@ -529,7 +553,7 @@ double CCuccsd_t_baa(double *mo_ea, double *mo_eb,
                                     a0, a1, b0, b1,
                                     cache_row_a, cache_col_a,
                                     cache_row_b, cache_col_b);
-        double *vs_ts[] = {mo_ea, mo_eb, vooo, vOoO, VoOo,
+        double *vs_ts[] = {mo_ea, mo_eb, fovT, fOVT, vooo, vOoO, VoOo,
                 t1aT, t1bT, t2aaT, t2abT};
 
         double e_tot = 0;
@@ -538,7 +562,7 @@ double CCuccsd_t_baa(double *mo_ea, double *mo_eb,
 {
         int a, b, c;
         size_t k;
-        double *cache1 = malloc(sizeof(double) * noccb*nocca*nocca*7);
+        double *cache1 = malloc(sizeof(double) * (noccb*nocca*nocca*7+2));
         double e = 0;
 #pragma omp for schedule (dynamic, 32)
         for (k = 0; k < njobs; k++) {

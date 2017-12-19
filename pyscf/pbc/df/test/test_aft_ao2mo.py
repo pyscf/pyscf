@@ -5,10 +5,10 @@ import pyscf.pbc.gto as pgto
 from pyscf import ao2mo
 
 L = 5.
-n = 1
+n = 3
 cell = pgto.Cell()
 cell.a = numpy.diag([L,L,L])
-cell.gs = numpy.array([n,n,n])
+cell.mesh = numpy.array([n,n,n])
 
 cell.atom = '''He    3.    2.       3.
                He    1.    1.       1.'''

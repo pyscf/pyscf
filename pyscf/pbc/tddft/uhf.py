@@ -278,7 +278,7 @@ if __name__ == '__main__':
 
     cell.basis = 'gth-szv'
     cell.pseudo = 'gth-pade'
-    cell.gs = [18]*3
+    cell.mesh = [37]*3
     cell.build()
     mf = scf.KUHF(cell, cell.make_kpts([2,1,1])).set(exxdiv=None)
 #    mf.with_df = df.DF(cell, cell.make_kpts([2,1,1]))

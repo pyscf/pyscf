@@ -18,8 +18,8 @@ from pyscf.pbc.scf.newton_ah import _gen_rhf_response
 
 
 class TDA(rhf.TDA):
-#FIXME: numerically unstable with small gs?
-#TODO: Add a warning message for small gs.
+#FIXME: numerically unstable with small mesh?
+#TODO: Add a warning message for small mesh.
     def __init__(self, mf):
         self.cell = mf.cell
         self.conv_tol = 1e-6
@@ -246,7 +246,7 @@ if __name__ == '__main__':
 
     cell.basis = 'gth-szv'
     cell.pseudo = 'gth-pade'
-    cell.gs = [12]*3
+    cell.mesh = [25]*3
     cell.build()
     mf = scf.KRHF(cell, cell.make_kpts([2,1,1])).set(exxdiv=None)
     #mf.with_df = df.MDF(cell, cell.make_kpts([2,1,1]))
@@ -254,18 +254,18 @@ if __name__ == '__main__':
     #mf.with_df._cderi = 'eri3d-mdf.h5'
     #mf.with_df.build(with_j3c=False)
     mf.run()
-#gs=9  -8.65192427146353
-#gs=12 -8.65192352289817
-#gs=15 -8.6519235231529
-#MDF gs=5 -8.6519301815144
+#mesh=9  -8.65192427146353
+#mesh=12 -8.65192352289817
+#mesh=15 -8.6519235231529
+#MDF mesh=5 -8.6519301815144
 
     td = TDA(mf)
     td.verbose = 5
     print(td.kernel()[0] * 27.2114)
-#gs=9  [ 6.0073749   6.09315355  6.3479901 ]
-#gs=12 [ 6.00253282  6.09317929  6.34799109]
-#gs=15 [ 6.00253396  6.09317949  6.34799109]
-#MDF gs=5 [ 6.09317489  6.09318265  6.34798637]
+#mesh=9  [ 6.0073749   6.09315355  6.3479901 ]
+#mesh=12 [ 6.00253282  6.09317929  6.34799109]
+#mesh=15 [ 6.00253396  6.09317949  6.34799109]
+#MDF mesh=5 [ 6.09317489  6.09318265  6.34798637]
 
 #    from pyscf.pbc import tools
 #    scell = tools.super_cell(cell, [2,1,1])
@@ -277,8 +277,8 @@ if __name__ == '__main__':
     td = TDHF(mf)
     td.verbose = 5
     print(td.kernel()[0] * 27.2114)
-#gs=9  [ 6.03860914  6.21664545  8.20305225]
-#gs=12 [ 6.03868259  6.03860343  6.2167623 ]
-#gs=15 [ 6.03861321  6.03861324  6.21675868]
-#MDF gs=5 [ 6.03861693  6.03861775  6.21675694]
+#mesh=9  [ 6.03860914  6.21664545  8.20305225]
+#mesh=12 [ 6.03868259  6.03860343  6.2167623 ]
+#mesh=15 [ 6.03861321  6.03861324  6.21675868]
+#MDF mesh=5 [ 6.03861693  6.03861775  6.21675694]
 

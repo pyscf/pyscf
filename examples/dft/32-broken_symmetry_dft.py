@@ -30,9 +30,9 @@ mf.conv_tol = 1e-4
 mf.kernel()
 
 #
-# Flip the local spin of the first Fe atom
+# Flip the local spin of the first Fe atom ('0 Fe' in ao_labels)
 #
-idx_fe1 = numpy.array([i for i, s in enumerate(mol.ao_labels()) if '0 Fe' in s])
+idx_fe1 = mol.search_ao_label('0 Fe')
 dma, dmb = mf.make_rdm1()
 dma_fe1 = dma[idx_fe1.reshape(-1,1),idx_fe1].copy()
 dmb_fe1 = dmb[idx_fe1.reshape(-1,1),idx_fe1].copy()

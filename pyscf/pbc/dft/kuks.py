@@ -50,11 +50,13 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
 
     weight = 1./len(kpts)
 
-    hyb = ks._numint.hybrid_coeff(ks.xc, spin=cell.spin)
+    omega, alpha, hyb = ks._numint.rsh_and_hybrid_coeff(ks.xc, spin=cell.spin)
     if abs(hyb) < 1e-10:
         vj = ks.get_j(cell, dm, hermi, kpts, kpts_band)
         vxc += vj[0] + vj[1]
     else:
+        if getattr(ks.with_df, '_j_only', False):  # for GDF and MDF
+            ks.with_df._j_only = False
         vj, vk = ks.get_jk(cell, dm, hermi, kpts, kpts_band)
         vxc += vj[0] + vj[1] - vk * hyb
 
@@ -81,7 +83,7 @@ class KUKS(kuhf.KUHF):
         self.small_rho_cutoff = 1e-7  # Use rho to filter grids
 ##################################################
 # don't modify the following attributes, they are not input options
-        # Note Do not refer to .with_df._numint because gs/coords may be different
+        # Note Do not refer to .with_df._numint because mesh/coords may be different
         self._numint = numint._KNumInt(kpts)
         self._keys = self._keys.union(['xc', 'grids', 'small_rho_cutoff'])
 

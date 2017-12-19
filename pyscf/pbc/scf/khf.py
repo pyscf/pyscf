@@ -143,7 +143,6 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
     nkpts = len(mo_energy_kpts)
     nocc = (mf.cell.nelectron * nkpts) // 2
 
-    # TODO: implement Fermi smearing and print mo_energy kpt by kpt
     mo_energy = np.sort(np.hstack(mo_energy_kpts))
     fermi = mo_energy[nocc-1]
     mo_occ_kpts = []
@@ -275,7 +274,7 @@ def canonicalize(mf, mo_coeff_kpts, mo_occ_kpts, fock=None):
     return mo_energy, mo_coeff
 
 
-def init_guess_by_chkfile(cell, chkfile_name, project=True, kpts=None):
+def init_guess_by_chkfile(cell, chkfile_name, project=None, kpts=None):
     '''Read the KHF results from checkpoint file, then project it to the
     basis defined by ``cell``
 
@@ -287,7 +286,7 @@ def init_guess_by_chkfile(cell, chkfile_name, project=True, kpts=None):
     return dm[0] + dm[1]
 
 
-class KSCF(hf.SCF):
+class KSCF(pbchf.SCF):
     '''SCF class with k-point sampling.
 
     Compared to molecular SCF, some members such as mo_coeff, mo_occ
@@ -372,10 +371,10 @@ class KSCF(hf.SCF):
             cell = self.cell
         dm_kpts = None
         if key.lower() == '1e':
-            dm = self.init_guess_by_1e(cell)
+            dm_kpts = self.init_guess_by_1e(cell)
         elif getattr(cell, 'natm', 0) == 0:
             logger.info(self, 'No atom found in cell. Use 1e initial guess')
-            dm = self.init_guess_by_1e(cell)
+            dm_kpts = self.init_guess_by_1e(cell)
         elif key.lower() == 'atom':
             dm = self.init_guess_by_atom(cell)
         elif key.lower().startswith('chk'):
@@ -408,7 +407,7 @@ class KSCF(hf.SCF):
         if cell.dimension < 3:
             logger.warn(self, 'Hcore initial guess is not recommended in '
                         'the SCF of low-dimensional systems.')
-        return hf.SCF.init_guess_by_1e(cell)
+        return hf.SCF.init_guess_by_1e(self, cell)
 
     def get_hcore(self, cell=None, kpts=None):
         if cell is None: cell = self.cell
@@ -522,11 +521,11 @@ class KSCF(hf.SCF):
             mo_coeff = mo_coeff[0]
         return mo_energy, mo_coeff
 
-    def init_guess_by_chkfile(self, chk=None, project=True, kpts=None):
+    def init_guess_by_chkfile(self, chk=None, project=None, kpts=None):
         if chk is None: chk = self.chkfile
         if kpts is None: kpts = self.kpts
         return init_guess_by_chkfile(self.cell, chk, project, kpts)
-    def from_chk(self, chk=None, project=True, kpts=None):
+    def from_chk(self, chk=None, project=None, kpts=None):
         return self.init_guess_by_chkfile(chk, project, kpts)
 
     def dump_chk(self, envs):
@@ -566,7 +565,11 @@ class KSCF(hf.SCF):
         from pyscf.pbc.scf import x2c
         return x2c.sfx2c1e(self)
 
-KRHF = KSCF
+class KRHF(KSCF, pbchf.RHF):
+    def convert_from_(self, mf):
+        '''Convert given mean-field object to KRHF'''
+        addons.convert_to_rhf(mf, self)
+        return self
 
 
 if __name__ == '__main__':
@@ -578,7 +581,7 @@ if __name__ == '__main__':
     '''
     cell.basis = '321g'
     cell.a = np.eye(3) * 3
-    cell.gs = [5] * 3
+    cell.mesh = [11] * 3
     cell.verbose = 5
     cell.build()
     mf = KRHF(cell, [2,1,1])

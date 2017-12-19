@@ -14,7 +14,7 @@ unit='B',
 precision=1e-14,
 basis='gth-tzv2p',
 pseudo='gth-lda',
-gs=[7]*3,
+mesh=[15]*3,
 verbose=0)
 
 class KnownValues(unittest.TestCase):

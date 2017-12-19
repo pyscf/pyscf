@@ -2,6 +2,7 @@
 NIST physical constants
 
 https://physics.nist.gov/cuu/Constants/
+https://physics.nist.gov/cuu/Constants/Table/allascii.txt
 '''
 
 LIGHT_SPEED = 137.03599967994   #http://physics.nist.gov/cgi-bin/cuu/Value?alph
@@ -19,3 +20,4 @@ HARTREE2J = 4.359744650e-18     # J https://physics.nist.gov/cgi-bin/cuu/Value?h
 HARTREE2EV = 27.21138602        # eV https://physics.nist.gov/cgi-bin/cuu/Value?threv
 E_CHARGE = 1.6021766208e-19     # C https://physics.nist.gov/cgi-bin/cuu/Value?e
 LIGHT_SPEED_SI = 299792458      # https://physics.nist.gov/cgi-bin/cuu/Value?c
+AVOGADRO = 6.022140857e23       # https://physics.nist.gov/cgi-bin/cuu/Value?na

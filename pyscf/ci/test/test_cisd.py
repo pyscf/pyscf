@@ -41,18 +41,18 @@ class KnowValues(unittest.TestCase):
                               c2.ravel()))
         hcivec = ci.cisd.contract(myci, civec, eris)
         self.assertAlmostEqual(finger(hcivec), 2059.5730673341673, 9)
-        e2 = ci.cisd.dot(civec, hcivec+eris.ehf*civec, nocc, nvir)
+        e2 = ci.cisd.dot(civec, hcivec+eris.ehf*civec, nmo, nocc)
         self.assertAlmostEqual(e2, 7226.7494656749295, 9)
 
-    def test_from_fci(self):
+    def test_from_fcivec(self):
         mol = gto.M()
         nelec = (3,3)
         nocc, nvir = nelec[0], 4
         nmo = nocc + nvir
         numpy.random.seed(12)
         civec = numpy.random.random(1+nocc*nvir+nocc**2*nvir**2)
-        ci0 = ci.cisd.to_fci(civec, nmo, nelec)
-        self.assertAlmostEqual(abs(civec-ci.cisd.from_fci(ci0, nmo, nelec)).sum(), 0, 9)
+        ci0 = ci.cisd.to_fcivec(civec, nmo, nelec)
+        self.assertAlmostEqual(abs(civec-ci.cisd.from_fcivec(ci0, nmo, nelec)).sum(), 0, 9)
 
     def test_h4(self):
         mol = gto.Mole()
@@ -88,7 +88,7 @@ class KnowValues(unittest.TestCase):
 
         nmo = mf.mo_coeff.shape[1]
         nocc = mol.nelectron//2
-        ci0 = myci.to_fci(civec, nmo, nocc*2)
+        ci0 = myci.to_fcivec(civec, nmo, nocc*2)
         ref1, ref2 = fci.direct_spin1.make_rdm12(ci0, nmo, nocc*2)
         rdm1 = myci.make_rdm1(civec)
         rdm2 = myci.make_rdm2(civec)
@@ -111,7 +111,7 @@ class KnowValues(unittest.TestCase):
         nocc, nvir = 3, 5
         civec1 = numpy.random.random((1+nocc*nvir+nocc**2*nvir**2))
         civec2 = numpy.random.random((1+nocc*nvir+nocc**2*nvir**2))
-        self.assertAlmostEqual(ci.cisd.dot(civec1, civec2, nocc, nvir),
+        self.assertAlmostEqual(ci.cisd.dot(civec1, civec2, 8, nocc),
                                64.274937664180186, 13)
 
     def test_ao_direct(self):
@@ -129,27 +129,6 @@ class KnowValues(unittest.TestCase):
         myci.direct = True
         ecisd, civec = myci.kernel()
         self.assertAlmostEqual(ecisd, -0.2694965385156135, 8)
-
-    def test_ao2mo(self):
-        mol = gto.Mole()
-        mol.verbose = 0
-        mol.atom = [
-            ['O', ( 0., 0.    , 0.   )],
-            ['H', ( 0., -0.757, 0.587)],
-            ['H', ( 0., 0.757 , 0.587)],]
-        mol.basis = 'ccpvtz'
-        mol.build()
-        mf = scf.RHF(mol).run(conv_tol=1e-14)
-        myci = ci.CISD(mf)
-        eris0 = ci.cisd._make_eris_incore(myci)
-        eris1 = ci.cisd._make_eris_outcore(myci)
-
-        self.assertAlmostEqual(abs(eris0.oooo-eris1.oooo).max(), 0, 11)
-        self.assertAlmostEqual(abs(eris0.vooo-eris1.vooo).max(), 0, 11)
-        self.assertAlmostEqual(abs(eris0.vvoo-eris1.vvoo).max(), 0, 11)
-        self.assertAlmostEqual(abs(eris0.voov-eris1.voov).max(), 0, 11)
-        self.assertAlmostEqual(abs(eris0.vovv-eris1.vovv).max(), 0, 11)
-        self.assertAlmostEqual(abs(eris0.vvvv-eris1.vvvv).max(), 0, 11)
 
 
 if __name__ == "__main__":

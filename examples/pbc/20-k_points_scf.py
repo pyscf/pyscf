@@ -42,6 +42,6 @@ kmf.kernel()
 # Second order SCF solver can be used in the PBC SCF code the same way in the
 # molecular calculation
 #
-mf = scf.newton(scf.KRHF(cell, kpts))
+mf = scf.KRHF(cell, kpts).newton()
 mf.kernel()
 

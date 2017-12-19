@@ -10,7 +10,7 @@ def finger(a):
     return numpy.dot(w, a.ravel())
 
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_coulG_ws(self):
         cell = pbcgto.Cell()
         cell.unit = 'A'
@@ -20,14 +20,14 @@ class KnowValues(unittest.TestCase):
                     1.7834  1.7834  0.    '''
         cell.basis = 'gth-szv'
         cell.pseudo = 'gth-pade'
-        cell.gs = [5]*3
+        cell.mesh = [11]*3
         cell.verbose = 5
         cell.output = '/dev/null'
         cell.build()
         mf = khf.KRHF(cell, exxdiv='vcut_ws')
         mf.kpts = cell.make_kpts([2,2,2])
         coulG = tools.get_coulG(cell, mf.kpts[2], True, mf)
-        self.assertAlmostEqual(finger(coulG), 1.3245117871351604, 9)
+        self.assertAlmostEqual(finger(coulG), 1.3245365170998518+0j, 9)
 
     def test_coulG(self):
         numpy.random.seed(19)
@@ -40,7 +40,7 @@ class KnowValues(unittest.TestCase):
                               (1.7834, 1.7834, 0.    ),)) + numpy.random.random((3,3)).T
         cell.basis = 'gth-szv'
         cell.pseudo = 'gth-pade'
-        cell.gs = [5,4,3]
+        cell.mesh = [11,9,7]
         cell.verbose = 5
         cell.output = '/dev/null'
         cell.build()
@@ -63,7 +63,7 @@ class KnowValues(unittest.TestCase):
     #    cell.a[2] = numpy.array((0, 0, 20))
     #    cell.atom = 'He 0 0 0'
     #    cell.unit = 'B'
-    #    cell.gs = [4,4,20]
+    #    cell.mesh = [9,9,40]
     #    cell.verbose = 5
     #    cell.dimension = 2
     #    cell.output = '/dev/null'
@@ -75,7 +75,7 @@ class KnowValues(unittest.TestCase):
     def test_get_lattice_Ls(self):
         numpy.random.seed(2)
         cl1 = pbcgto.M(a = numpy.random.random((3,3))*3,
-                       gs = [1]*3,
+                       mesh = [3]*3,
                        atom ='''He .1 .0 .0''',
                        basis = 'ccpvdz')
         Ls = tools.get_lattice_Ls(cl1)
@@ -84,7 +84,7 @@ class KnowValues(unittest.TestCase):
     def test_super_cell(self):
         numpy.random.seed(2)
         cl1 = pbcgto.M(a = numpy.random.random((3,3))*3,
-                       gs = [1]*3,
+                       mesh = [3]*3,
                        atom ='''He .1 .0 .0''',
                        basis = 'ccpvdz')
         cl2 = tools.super_cell(cl1, [2,3,4])
@@ -93,11 +93,24 @@ class KnowValues(unittest.TestCase):
     def test_cell_plus_imgs(self):
         numpy.random.seed(2)
         cl1 = pbcgto.M(a = numpy.random.random((3,3))*3,
-                       gs = [1]*3,
+                       mesh = [3]*3,
                        atom ='''He .1 .0 .0''',
                        basis = 'ccpvdz')
         cl2 = tools.cell_plus_imgs(cl1, cl1.nimgs)
         self.assertAlmostEqual(finger(cl2.atom_coords()), 465.86333525744129, 9)
+
+    def test_madelung(self):
+        cell = pbcgto.Cell()
+        cell.atom = 'He 0 0 0'
+        cell.a = '''0.      1.7834  1.7834
+                    1.7834  0.      1.7834
+                    1.7834  1.7834  0.    '''
+        cell.build()
+        scell = tools.super_cell(cell, [2,3,5])
+        mad0 = tools.madelung(scell, [0,0,0])
+        kpts = cell.make_kpts([2,3,5])
+        mad1 = tools.madelung(cell, kpts)
+        self.assertAlmostEqual(mad0-mad1, 0, 9)
 
 
 if __name__ == '__main__':

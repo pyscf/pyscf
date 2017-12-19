@@ -1,3 +1,5 @@
+.. _symm:
+
 symm -- Point group symmetry and spin symmetry
 **********************************************
 

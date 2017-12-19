@@ -3,7 +3,7 @@
 
 sudo: required
 language: python
-group: deprecated-2017Q2
+group: deprecated-2017Q4
 
 git:
   depth: 3
@@ -21,12 +21,9 @@ before_install:
       gcc 
       gfortran
       libblas-dev
-      python-h5py
-      python-nose
-      python-nose-exclude
-      python-numpy
-      python-scipy
       cmake
+      python-pip
+    - pip install numpy scipy h5py nose nose-exclude
     
 install:
     - > 

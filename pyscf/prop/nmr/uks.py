@@ -98,7 +98,7 @@ class NMR(uhf_nmr.NMR):
 
             mf = self._scf
             ni = mf._numint
-            hyb = ni.hybrid_coeff(mf.xc, spin=mol.spin)
+            omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=mol.spin)
 
             mem_now = lib.current_memory()[0]
             max_memory = max(2000, mf.max_memory*.9-mem_now)
@@ -111,6 +111,9 @@ class NMR(uhf_nmr.NMR):
             if abs(hyb) > 1e-10:
                 vj, vk = rhf_nmr.get_jk(mol, dm0)
                 h1 += vj[0] + vj[1] - hyb * vk
+                if abs(omega) > 1e-10:
+                    with mol.with_range_coulomb(omega):
+                        h1 -= (alpha-hyb) * rhf_nmr.get_jk(mol, dm0)[1]
             else:
                 vj = _vhf.direct_mapdm(intor, 'a4ij', 'lk->s1ij',
                                        dm0, 3, mol._atm, mol._bas, mol._env)
@@ -120,9 +123,9 @@ class NMR(uhf_nmr.NMR):
             h1 -= mol.intor_asymmetric('int1e_ignuc', 3)
             h1 -= mol.intor('int1e_igkin', 3)
         else:
-            mol.set_common_origin(gauge_orig)
-            h1 = -.5 * mol.intor('int1e_cg_irxp', 3)
-            h1 = (h1, h1)
+            with mol.with_common_origin(gauge_orig):
+                h1 = -.5 * mol.intor('int1e_cg_irxp', 3)
+                h1 = (h1, h1)
         lib.chkfile.dump(self.chkfile, 'nmr/h1', h1)
         return h1
 

@@ -3,9 +3,9 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import pyscf.hessian.rhf
-import pyscf.hessian.rks
+from pyscf.hessian import rhf
+from pyscf.hessian import uhf
 from pyscf.hessian.rhf  import Hessian as RHF
-from pyscf.hessian.rks  import Hessian as RKS
+from pyscf.hessian.uhf  import Hessian as UHF
 from pyscf.hessian.rhf import hess_nuc
 

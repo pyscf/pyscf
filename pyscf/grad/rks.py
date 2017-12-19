@@ -1,1 +1,1 @@
-../dft/rks_grad.py
+from pyscf.dft.rks_grad import *

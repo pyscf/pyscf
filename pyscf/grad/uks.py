@@ -10,9 +10,9 @@ import numpy
 import scipy.linalg
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.grad import rhf as rhf_grad
+from pyscf.scf import rhf_grad
+from pyscf.dft import rks_grad
 from pyscf.grad import uhf as uhf_grad
-from pyscf.grad import rks as rks_grad
 from pyscf.dft import numint, gen_grid
 
 
@@ -24,22 +24,27 @@ def get_veff(ks_grad, mol=None, dm=None):
     t0 = (time.clock(), time.time())
 
     mf = ks_grad._scf
+    ni = mf._numint
     if ks_grad.grids is not None:
         grids = ks_grad.grids
     else:
         grids = mf.grids
     if grids.coords is None:
         grids.build(with_non0tab=True)
-    hyb = mf._numint.libxc.hybrid_coeff(mf.xc, spin=mol.spin)
+
+    if mf.nlc != '':
+        raise NotImplementedError
+    #enabling range-separated hybrids
+    omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=mol.spin)
 
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, ks_grad.max_memory*.9-mem_now)
     if ks_grad.grid_response:
-        exc, vxc = get_vxc_full_response(mf._numint, mol, mf.grids, mf.xc, dm,
+        exc, vxc = get_vxc_full_response(ni, mol, mf.grids, mf.xc, dm,
                                          max_memory=max_memory,
                                          verbose=ks_grad.verbose)
     else:
-        exc, vxc = get_vxc(mf._numint, mol, mf.grids, mf.xc, dm,
+        exc, vxc = get_vxc(ni, mol, mf.grids, mf.xc, dm,
                            max_memory=max_memory, verbose=ks_grad.verbose)
     nao = vxc.shape[-1]
     t0 = logger.timer(ks_grad, 'vxc', *t0)
@@ -49,7 +54,11 @@ def get_veff(ks_grad, mol=None, dm=None):
         vxc += vj[0] + vj[1]
     else:
         vj, vk = ks_grad.get_jk(mol, dm)
-        vxc += vj[0] + vj[1] - vk * hyb
+        vk *= hyb
+        if abs(omega) > 1e-10:  # For range separated Coulomb operator
+            with mol.with_range_coulomb(omega):
+                vk += ks_grad.get_k(mol, dm) * (alpha - hyb)
+        vxc += vj[0] + vj[1] - vk
 
     return lib.tag_array(vxc, exc1_grid=exc)
 
@@ -79,10 +88,10 @@ def grad_elec(grad_mf, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
 
     if atmlst is None:
         atmlst = range(mol.natm)
-    atom_slices = mol.aoslice_by_atom()
+    aoslices = mol.aoslice_by_atom()
     de = numpy.zeros((len(atmlst),3))
     for k, ia in enumerate(atmlst):
-        shl0, shl1, p0, p1 = atom_slices[ia]
+        shl0, shl1, p0, p1 = aoslices[ia]
 # h1, s1, vhf are \nabla <i|h|j>, the nuclear gradients = -\nabla
         vrinv = grad_mf._grad_rinv(mol, ia)
         de[k] += numpy.einsum('sxij,sij->x', f1[:,:,p0:p1], dm0[:,p0:p1]) * 2
@@ -104,7 +113,6 @@ def get_vxc(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
             max_memory=2000, verbose=None):
     xctype = ni._xc_type(xc_code)
     make_rho, nset, nao = ni._gen_rho_evaluator(mol, dms, hermi)
-    shls_slice = (0, mol.nbas)
     ao_loc = mol.ao_loc_nr()
 
     vmat = numpy.zeros((2,3,nao,nao))
@@ -117,13 +125,9 @@ def get_vxc(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
             vxc = ni.eval_xc(xc_code, (rho_a,rho_b), 1, relativity, 1, verbose)[1]
             vrho = vxc[0]
             aow = numpy.einsum('pi,p->pi', ao[0], weight*vrho[:,0])
-            vmat[0,0] += numint._dot_ao_ao(mol, ao[1], aow, mask, shls_slice, ao_loc)
-            vmat[0,1] += numint._dot_ao_ao(mol, ao[2], aow, mask, shls_slice, ao_loc)
-            vmat[0,2] += numint._dot_ao_ao(mol, ao[3], aow, mask, shls_slice, ao_loc)
+            rks_grad._d1_dot_(vmat[0], mol, ao[1:4], aow, mask, ao_loc, True)
             aow = numpy.einsum('pi,p->pi', ao[0], weight*vrho[:,1])
-            vmat[1,0] += numint._dot_ao_ao(mol, ao[1], aow, mask, shls_slice, ao_loc)
-            vmat[1,1] += numint._dot_ao_ao(mol, ao[2], aow, mask, shls_slice, ao_loc)
-            vmat[1,2] += numint._dot_ao_ao(mol, ao[3], aow, mask, shls_slice, ao_loc)
+            rks_grad._d1_dot_(vmat[1], mol, ao[1:4], aow, mask, ao_loc, True)
             rho = vxc = vrho = aow = None
 
     elif xctype == 'GGA':
@@ -133,20 +137,11 @@ def get_vxc(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
             rho_a = make_rho(0, ao[:4], mask, 'GGA')
             rho_b = make_rho(1, ao[:4], mask, 'GGA')
             vxc = ni.eval_xc(xc_code, (rho_a,rho_b), 1, relativity, 1, verbose)[1]
-            vrho, vsigma = vxc[:2]
+            wva, wvb = numint._uks_gga_wv0((rho_a,rho_b), vxc, weight)
 
-            wva = numpy.empty_like(rho_a)
-            wva[0]  = weight * vrho[:,0]
-            wva[1:] = rho_a[1:] * (weight * vsigma[:,0] * 2)  # sigma_uu
-            wva[1:]+= rho_b[1:] * (weight * vsigma[:,1])      # sigma_ud
-            wvb = numpy.empty_like(rho_b)
-            wvb[0]  = weight * vrho[:,1]
-            wvb[1:] = rho_b[1:] * (weight * vsigma[:,2] * 2)  # sigma_dd
-            wvb[1:]+= rho_a[1:] * (weight * vsigma[:,1])      # sigma_ud
-
-            vmat[0] += rks_grad._gga_grad_sum(mol, ao, wva, mask, shls_slice, ao_loc)
-            vmat[1] += rks_grad._gga_grad_sum(mol, ao, wvb, mask, shls_slice, ao_loc)
-            rho_a = rho_b = vxc = vrho = vsigma = wva = wvb = None
+            rks_grad._gga_grad_sum_(vmat[0], mol, ao, wva, mask, ao_loc)
+            rks_grad._gga_grad_sum_(vmat[1], mol, ao, wvb, mask, ao_loc)
+            rho_a = rho_b = vxc = wva = wvb = None
 
     elif xctype == 'NLC':
         raise NotImplementedError('NLC')
@@ -163,19 +158,17 @@ def get_vxc_full_response(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
     '''Full response including the response of the grids'''
     xctype = ni._xc_type(xc_code)
     make_rho, nset, nao = ni._gen_rho_evaluator(mol, dms, hermi)
-    shls_slice = (0, mol.nbas)
     ao_loc = mol.ao_loc_nr()
-    atom_slices = mol.aoslice_by_atom()
+    aoslices = mol.aoslice_by_atom()
 
     excsum = 0
     vmat = numpy.zeros((2,3,nao,nao))
     if xctype == 'LDA':
         ao_deriv = 1
-        vtmp = numpy.empty((3,nao,nao))
         for atm_id, (coords, weight, weight1) \
                 in enumerate(rks_grad.grids_response_cc(grids)):
             ngrids = weight.size
-            sh0, sh1 = atom_slices[atm_id][:2]
+            sh0, sh1 = aoslices[atm_id][:2]
             mask = gen_grid.make_mask(mol, coords)
             ao = ni.eval_ao(mol, coords, deriv=ao_deriv, non0tab=mask)
             rho_a = make_rho(0, ao[0], mask, 'LDA')
@@ -183,18 +176,16 @@ def get_vxc_full_response(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
             exc, vxc = ni.eval_xc(xc_code, (rho_a,rho_b), 1, relativity, 1, verbose)[:2]
             vrho = vxc[0]
 
+            vtmp = numpy.zeros((3,nao,nao))
             aow = numpy.einsum('pi,p->pi', ao[0], weight*vrho[:,0])
-            vtmp[0] = numint._dot_ao_ao(mol, ao[1], aow, mask, shls_slice, ao_loc)
-            vtmp[1] = numint._dot_ao_ao(mol, ao[2], aow, mask, shls_slice, ao_loc)
-            vtmp[2] = numint._dot_ao_ao(mol, ao[3], aow, mask, shls_slice, ao_loc)
+            rks_grad._d1_dot_(vtmp, mol, ao[1:4], aow, mask, ao_loc, True)
             vmat[0] += vtmp
             excsum += numpy.einsum('r,r,nxr->nx', exc, rho_a+rho_b, weight1)
             excsum[atm_id] += numpy.einsum('xij,ji->x', vtmp, dms[0]) * 2
 
+            vtmp = numpy.zeros((3,nao,nao))
             aow = numpy.einsum('pi,p->pi', ao[0], weight*vrho[:,1])
-            vtmp[0] = numint._dot_ao_ao(mol, ao[1], aow, mask, shls_slice, ao_loc)
-            vtmp[1] = numint._dot_ao_ao(mol, ao[2], aow, mask, shls_slice, ao_loc)
-            vtmp[2] = numint._dot_ao_ao(mol, ao[3], aow, mask, shls_slice, ao_loc)
+            rks_grad._d1_dot_(vtmp, mol, ao[1:4], aow, mask, ao_loc, True)
             vmat[1] += vtmp
             excsum[atm_id] += numpy.einsum('xij,ji->x', vtmp, dms[1]) * 2
             rho = vxc = vrho = aow = None
@@ -204,32 +195,25 @@ def get_vxc_full_response(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
         for atm_id, (coords, weight, weight1) \
                 in enumerate(rks_grad.grids_response_cc(grids)):
             ngrids = weight.size
-            sh0, sh1 = atom_slices[atm_id][:2]
+            sh0, sh1 = aoslices[atm_id][:2]
             mask = gen_grid.make_mask(mol, coords)
             ao = ni.eval_ao(mol, coords, deriv=ao_deriv, non0tab=mask)
             rho_a = make_rho(0, ao[:4], mask, 'GGA')
             rho_b = make_rho(1, ao[:4], mask, 'GGA')
             exc, vxc = ni.eval_xc(xc_code, (rho_a,rho_b), 1, relativity, 1, verbose)[:2]
-            vrho, vsigma = vxc[:2]
+            wva, wvb = numint._uks_gga_wv0((rho_a,rho_b), vxc, weight)
 
-            wva = numpy.empty_like(rho_a)
-            wva[0]  = weight * vrho[:,0]
-            wva[1:] = rho_a[1:] * (weight * vsigma[:,0] * 2)  # sigma_uu
-            wva[1:]+= rho_b[1:] * (weight * vsigma[:,1])      # sigma_ud
-            wvb = numpy.empty_like(rho_b)
-            wvb[0]  = weight * vrho[:,1]
-            wvb[1:] = rho_b[1:] * (weight * vsigma[:,2] * 2)  # sigma_dd
-            wvb[1:]+= rho_a[1:] * (weight * vsigma[:,1])      # sigma_ud
-
-            vtmp = rks_grad._gga_grad_sum(mol, ao, wva, mask, shls_slice, ao_loc)
+            vtmp = numpy.zeros((3,nao,nao))
+            rks_grad._gga_grad_sum_(vtmp, mol, ao, wva, mask, ao_loc)
             vmat[0] += vtmp
             excsum += numpy.einsum('r,r,nxr->nx', exc, rho_a[0]+rho_b[0], weight1)
             excsum[atm_id] += numpy.einsum('xij,ji->x', vtmp, dms[0]) * 2
 
-            vtmp = rks_grad._gga_grad_sum(mol, ao, wvb, mask, shls_slice, ao_loc)
+            vtmp = numpy.zeros((3,nao,nao))
+            rks_grad._gga_grad_sum_(vtmp, mol, ao, wvb, mask, ao_loc)
             vmat[1] += vtmp
             excsum[atm_id] += numpy.einsum('xij,ji->x', vtmp, dms[1]) * 2
-            rho_a = rho_b = vxc = vrho = vsigma = wva = wvb = None
+            rho_a = rho_b = vxc = wva = wvb = None
 
     elif xctype == 'NLC':
         raise NotImplementedError('NLC')
@@ -276,27 +260,27 @@ if __name__ == '__main__':
     #mf.grids.atom_grid = (20,86)
     e0 = mf.scf()
     g = Gradients(mf)
-    print(g.kernel())
+    print(lib.finger(g.kernel()) - -0.12090786243525126)
 #[[ -4.20040265e-16  -6.59462771e-16   2.10150467e-02]
 # [  1.42178271e-16   2.81979579e-02  -1.05137653e-02]
 # [  6.34069238e-17  -2.81979579e-02  -1.05137653e-02]]
     g.grid_response = True
-    print(g.kernel())
+    print(lib.finger(g.kernel()) - -0.12091122429043633)
 
     mf.xc = 'b88,p86'
     e0 = mf.scf()
     g = Gradients(mf)
-    print(g.kernel())
+    print(lib.finger(g.kernel()) - -0.11509739136150157)
 #[[ -8.20194970e-16  -2.04319288e-15   2.44405835e-02]
 # [  4.36709255e-18   2.73690416e-02  -1.22232039e-02]
 # [  3.44483899e-17  -2.73690416e-02  -1.22232039e-02]]
     g.grid_response = True
-    print(g.kernel())
+    print(lib.finger(g.kernel()) - -0.11507986316077731)
 
     mf.xc = 'b3lypg'
     e0 = mf.scf()
     g = Gradients(mf)
-    print(g.kernel())
+    print(lib.finger(g.kernel()) - -0.10202554999695367)
 #[[ -3.59411142e-16  -2.68753987e-16   1.21557501e-02]
 # [  4.04977877e-17   2.11112794e-02  -6.08181640e-03]
 # [  1.52600378e-16  -2.11112794e-02  -6.08181640e-03]]
@@ -315,7 +299,7 @@ if __name__ == '__main__':
     mf = dft.UKS(mol)
     mf.conv_tol = 1e-14
     mf.kernel()
-    print(Gradients(mf).kernel())
+    print(lib.finger(Gradients(mf).kernel()) - 0.10365160440876001)
 # sum over z direction non-zero, due to meshgrid response
 #[[ 0  0  -2.68934738e-03]
 # [ 0  0   2.69333577e-03]]
@@ -324,7 +308,7 @@ if __name__ == '__main__':
     mf.grids.level = 6
     mf.conv_tol = 1e-14
     mf.kernel()
-    print(Gradients(mf).kernel())
+    print(lib.finger(Gradients(mf).kernel()) - 0.10365040148752827)
 #[[ 0  0  -2.68931547e-03]
 # [ 0  0   2.68911282e-03]]
 

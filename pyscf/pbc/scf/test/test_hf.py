@@ -12,13 +12,13 @@ import pyscf.pbc.scf as pscf
 from pyscf.pbc import df as pdf
 
 L = 4
-n = 10
+n = 21
 cell = pbcgto.Cell()
 cell.build(unit = 'B',
            verbose = 7,
            output = '/dev/null',
            a = ((L,0,0),(0,L,0),(0,0,L)),
-           gs = [n,n,n],
+           mesh = [n,n,n],
            atom = [['He', (L/2.-.5,L/2.,L/2.-.5)],
                    ['He', (L/2.   ,L/2.,L/2.+.5)]],
            basis = { 'He': [[0, (0.8, 1.0)],
@@ -128,7 +128,7 @@ class KnowValues(unittest.TestCase):
 #        cell = pbcgto.Cell()
 #        cell.build(unit = 'B',
 #                   a = numpy.eye(3)*L*5,
-#                   gs = [10]*3,
+#                   mesh = [21]*3,
 #                   atom = '''He 2 2 2; He 2 2 3''',
 #                   dimension = 0,
 #                   verbose = 0,
@@ -137,7 +137,7 @@ class KnowValues(unittest.TestCase):
 #                                    [0, (1.2, 1.0)]]})
 #        mol = cell.to_mol()
 #        mf = mdf_jk.density_fit(hf.RHF(mol))
-#        mf.with_df.gs = [10]*3
+#        mf.with_df.mesh = [21]*3
 #        mf.with_df.auxbasis = {'He':[[0, (1e6, 1)]]}
 #        mf.with_df.charge_constraint = False
 #        mf.with_df.metric = 'S'
@@ -156,7 +156,7 @@ class KnowValues(unittest.TestCase):
         cell = pbcgto.Cell()
         cell.build(unit = 'B',
                    a = [[L,0,0],[0,L*5,0],[0,0,L*5]],
-                   gs = [5,10,10],
+                   mesh = [11,20,20],
                    atom = '''He 2 0 0; He 3 0 0''',
                    dimension = 1,
                    verbose = 0,
@@ -167,7 +167,7 @@ class KnowValues(unittest.TestCase):
         mf = pbchf.RHF(cell)
         mf.with_df = pdf.AFTDF(cell)
         mf.with_df.eta = 0.3
-        mf.with_df.gs = cell.gs
+        mf.with_df.mesh = cell.mesh
         e1 = mf.kernel()
         self.assertAlmostEqual(e1, -3.24497234871167, 5)
 
@@ -176,7 +176,7 @@ class KnowValues(unittest.TestCase):
         cell = pbcgto.Cell()
         cell.build(unit = 'B',
                    a = [[L,0,0],[0,L,0],[0,0,L*5]],
-                   gs = [5,5,10],
+                   mesh = [11,11,20],
                    atom = '''He 2 0 0; He 3 0 0''',
                    dimension = 2,
                    verbose = 0,
@@ -187,7 +187,7 @@ class KnowValues(unittest.TestCase):
         mf = pbchf.RHF(cell)
         mf.with_df = pdf.AFTDF(cell)
         mf.with_df.eta = 0.3
-        mf.with_df.gs = cell.gs
+        mf.with_df.mesh = cell.mesh
         e1 = mf.kernel()
         self.assertAlmostEqual(e1, -3.2681555164454039, 5)
 
@@ -201,6 +201,8 @@ class KnowValues(unittest.TestCase):
         v12 = mf.get_veff(cell, dm, kpts_band=cell.get_abs_kpts([.25,.25,.25]))
         v13 = mf.get_veff(cell, dm, kpt=cell.get_abs_kpts([-1./3,1./3,.25]),
                           kpts_band=cell.get_abs_kpts([.25,.25,.25]))
+        v14 = mf.get_veff(cell, dm, kpt=cell.get_abs_kpts([-1./3,1./3,.25]),
+                          kpts_band=cell.make_kpts([2,1,1]))
         self.assertTrue(v11.dtype == numpy.complex128)
         self.assertTrue(v12.dtype == numpy.complex128)
 
@@ -210,9 +212,12 @@ class KnowValues(unittest.TestCase):
         v22 = mf.get_veff(cell, dm, kpts_band=cell.get_abs_kpts([.25,.25,.25]))
         v23 = mf.get_veff(cell, dm, kpt=cell.get_abs_kpts([-1./3,1./3,.25]),
                           kpts_band=cell.get_abs_kpts([.25,.25,.25]))
+        v24 = mf.get_veff(cell, dm, kpt=cell.get_abs_kpts([-1./3,1./3,.25]),
+                          kpts_band=cell.make_kpts([2,1,1]))
         self.assertAlmostEqual(abs(v11-v21).max(), 0, 9)
         self.assertAlmostEqual(abs(v12-v22).max(), 0, 9)
         self.assertAlmostEqual(abs(v13-v23).max(), 0, 9)
+        self.assertAlmostEqual(abs(v14-v24).max(), 0, 9)
         self.assertAlmostEqual(lib.finger(v11), -0.30110964334164825+0.81409418199767414j, 9)
         self.assertAlmostEqual(lib.finger(v12), -2.1601376488983997-9.4070613374115908j, 9)
 

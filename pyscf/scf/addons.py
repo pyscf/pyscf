@@ -286,8 +286,7 @@ def remove_linear_dep_(mf, threshold=1e-8):
 remove_linear_dep = remove_linear_dep_
 
 def convert_to_uhf(mf, out=None, convert_df=None):
-    '''Convert the given mean-field object to the corresponding unrestricted
-    HF/KS object
+    '''Convert the given mean-field object to the unrestricted HF/KS object
 
     Args:
         mf : SCF object
@@ -308,7 +307,11 @@ def convert_to_uhf(mf, out=None, convert_df=None):
         mf1._keys = _keys
         if mf.mo_energy is not None:
             mf1.mo_energy = numpy.array((mf.mo_energy, mf.mo_energy))
-            mf1.mo_coeff = numpy.array((mf.mo_coeff, mf.mo_coeff))
+            mf1.mo_coeff = (mf.mo_coeff, mf.mo_coeff)
+            if hasattr(mf.mo_coeff, 'orbsym'):
+                orbsym = mf.mo_coeff.orbsym
+                mf1.mo_coeff = (lib.tag_array(mf1.mo_coeff[0], orbsym=orbsym),
+                                lib.tag_array(mf1.mo_coeff[1], orbsym=orbsym))
             mf1.mo_occ = numpy.array((mf.mo_occ>0, mf.mo_occ==2), dtype=numpy.double)
         return mf1
 
@@ -338,6 +341,9 @@ def convert_to_uhf(mf, out=None, convert_df=None):
         elif mf.__class__ in dft_class:
             out = update_mo_(mf, dft.UKS(mf.mol))
 
+        elif isinstance(mf, scf.ghf.GHF):
+            raise NotImplementedError
+
         else:
             msg =('Warn: Converting a decorated RHF object to the decorated '
                   'UHF object is unsafe.\nIt is recommended to create a '
@@ -360,6 +366,12 @@ def convert_to_uhf(mf, out=None, convert_df=None):
                 raise RuntimeError('%s object is not SCF object')
             out = update_mo_(mf, lib.overwrite_mro(mf, mronew))
 
+    if getattr(out, 'with_df', None) and _df_off(mf, convert_df):
+        out.with_df = False
+    return out
+
+def _df_off(mf, convert_df):
+    from pyscf import scf
     if convert_df is None:
         if isinstance(mf, scf.newton_ah._CIAH_SCF):
 # To handle the case that mf is newton scf with approximate orbital hessian
@@ -371,14 +383,10 @@ def convert_to_uhf(mf, out=None, convert_df=None):
                 convert_df = True
         else:
             convert_df = False
-    if convert_df and getattr(out, 'with_df', None):
-        out.with_df = False
-
-    return out
+    return convert_df
 
 def convert_to_rhf(mf, out=None, convert_df=None):
-    '''Convert the given mean-field object to the corresponding restricted
-    HF/KS object
+    '''Convert the given mean-field object to the restricted HF/KS object
 
     Args:
         mf : SCF object
@@ -400,6 +408,8 @@ def convert_to_rhf(mf, out=None, convert_df=None):
         if mf.mo_energy is not None:
             mf1.mo_energy = mf.mo_energy[0]
             mf1.mo_coeff =  mf.mo_coeff[0]
+            if hasattr(mf.mo_coeff[0], 'orbsym'):
+                mf1.mo_coeff = lib.tag_array(mf1.mo_coeff, orbsym=mf.mo_coeff[0].orbsym)
             mf1.mo_occ = mf.mo_occ[0] + mf.mo_occ[1]
         return mf1
 
@@ -425,6 +435,9 @@ def convert_to_rhf(mf, out=None, convert_df=None):
         elif mf.__class__ in dft_class:
             out = update_mo_(mf, dft.RKS(mf.mol))
 
+        elif isinstance(mf, scf.ghf.GHF):
+            raise NotImplementedError
+
         else:
             msg =('Warn: Converting a decorated UHF object to the decorated '
                   'RHF object is unsafe.\nIt is recommended to create a '
@@ -447,19 +460,164 @@ def convert_to_rhf(mf, out=None, convert_df=None):
                 raise RuntimeError('%s object is not SCF object')
             out = update_mo_(mf, lib.overwrite_mro(mf, mronew))
 
-    if convert_df is None:
-        if isinstance(mf, scf.newton_ah._CIAH_SCF):
-# To handle the case that mf is newton scf with approximate orbital hessian
-            if hasattr(mf._scf, 'with_df') and mf._scf.with_df:
-                convert_df = False
-            else:
-                # The mf should not be treated as DFHF since the underlying
-                # scf object is regular SCF object
-                convert_df = True
-        else:
-            convert_df = False
-    if convert_df and getattr(out, 'with_df', None):
+    if getattr(out, 'with_df', None) and _df_off(mf, convert_df):
         out.with_df = False
-
     return out
 
+def convert_to_ghf(mf, out=None, convert_df=None):
+    '''Convert the given mean-field object to the generalized HF/KS object
+
+    Args:
+        mf : SCF object
+
+    Kwargs
+        convert_df : bool
+            Whether to convert the DF-SCF object to the normal SCF object.
+            This conversion is not applied by default.
+
+    Returns:
+        An generalized SCF object
+    '''
+    from pyscf import scf
+    from pyscf import dft
+    def update_mo_(mf, mf1):
+        _keys = mf._keys.union(mf1._keys)
+        mf1.__dict__.update(mf.__dict__)
+        mf1._keys = _keys
+        if mf.mo_energy is not None:
+            if isinstance(mf, scf.hf.RHF):
+                nao, nmo = mf.mo_coeff.shape
+                orbspin = get_ghf_orbspin(mf.mo_energy, mf.mo_occ, True)
+
+                mf1.mo_energy = numpy.empty(nmo*2)
+                mf1.mo_energy[orbspin==0] = mf.mo_energy
+                mf1.mo_energy[orbspin==1] = mf.mo_energy
+                mf1.mo_occ = numpy.empty(nmo*2)
+                mf1.mo_occ[orbspin==0] = mf.mo_occ > 0
+                mf1.mo_occ[orbspin==1] = mf.mo_occ == 2
+
+                mo_coeff = numpy.zeros((nao*2,nmo*2), dtype=mf.mo_coeff.dtype)
+                mo_coeff[:nao,orbspin==0] = mf.mo_coeff
+                mo_coeff[nao:,orbspin==1] = mf.mo_coeff
+                if hasattr(mf.mo_coeff[0], 'orbsym'):
+                    orbsym = numpy.zeros_like(orbspin)
+                    orbsym[orbspin==0] = mf.mo_coeff.orbsym
+                    orbsym[orbspin==1] = mf.mo_coeff.orbsym
+                    mo_coeff = lib.tag_array(mo_coeff, orbsym=orbsym)
+                mf1.mo_coeff = lib.tag_array(mo_coeff, orbspin=orbspin)
+
+            else: # UHF
+                nao, nmo = mf.mo_coeff[0].shape
+                orbspin = get_ghf_orbspin(mf.mo_energy, mf.mo_occ, False)
+
+                mf1.mo_energy = numpy.empty(nmo*2)
+                mf1.mo_energy[orbspin==0] = mf.mo_energy[0]
+                mf1.mo_energy[orbspin==1] = mf.mo_energy[1]
+                mf1.mo_occ = numpy.empty(nmo*2)
+                mf1.mo_occ[orbspin==0] = mf.mo_occ[0]
+                mf1.mo_occ[orbspin==1] = mf.mo_occ[1]
+
+                mo_coeff = numpy.zeros((nao*2,nmo*2), dtype=mf.mo_coeff[0].dtype)
+                mo_coeff[:nao,orbspin==0] = mf.mo_coeff[0]
+                mo_coeff[nao:,orbspin==1] = mf.mo_coeff[1]
+                if hasattr(mf.mo_coeff[0], 'orbsym'):
+                    orbsym = numpy.zeros_like(orbspin)
+                    orbsym[orbspin==0] = mf.mo_coeff[0].orbsym
+                    orbsym[orbspin==1] = mf.mo_coeff[1].orbsym
+                    mo_coeff = lib.tag_array(mo_coeff, orbsym=orbsym)
+                mf1.mo_coeff = lib.tag_array(mo_coeff, orbspin=orbspin)
+        return mf1
+
+    if out is not None:
+        assert(isinstance(out, scf.ghf.GHF))
+        if isinstance(mf, scf.ghf.GHF):
+            out.__dict.__update(mf)
+        else:
+            out = update_mo_(mf, out)
+
+    else:
+        hf_class = {scf.hf.RHF        : scf.ghf.GHF,
+                    scf.rohf.ROHF     : scf.ghf.GHF,
+                    scf.uhf.UHF       : scf.ghf.GHF,
+                    scf.hf_symm.RHF   : scf.ghf_symm.GHF,
+                    scf.hf_symm.ROHF  : scf.ghf_symm.GHF,
+                    scf.uhf_symm.UHF  : scf.ghf_symm.GHF}
+        dft_class = {dft.rks.RKS      : None,
+                     dft.roks.ROKS    : None,
+                     dft.uks.UKS      : None,
+                     dft.rks_symm.RKS : None,
+                     dft.rks_symm.ROKS: None,
+                     dft.uks_symm.UKS : None}
+
+        if isinstance(mf, scf.ghf.GHF):
+            out = copy.copy(mf)
+
+        elif mf.__class__ in hf_class:
+            out = update_mo_(mf, scf.GHF(mf.mol))
+
+        elif mf.__class__ in dft_class:
+            raise NotImplementedError
+
+        else:
+            msg =('Warn: Converting a decorated SCF object to the decorated '
+                  'GHF object is unsafe.\nIt is recommended to create a '
+                  'decorated GHF object explicitly and pass it to '
+                  'convert_to_ghf function eg:\n'
+                  '    convert_to_ghf(mf, out=scf.GHF(mol).density_fit())\n')
+            sys.stderr.write(msg)
+            mro = mf.__class__.__mro__
+            mronew = None
+            for i, cls in enumerate(mro):
+                if cls in hf_class:
+                    mronew = mro[:i] + hf_class[cls].__mro__
+                    break
+                elif cls in dft_class:
+                    raise NotImplementedError
+                    break
+            if mronew is None:
+                raise RuntimeError('%s object is not SCF object')
+            out = update_mo_(mf, lib.overwrite_mro(mf, mronew))
+
+    if getattr(out, 'with_df', None) and _df_off(mf, convert_df):
+        out.with_df = False
+    return out
+
+def get_ghf_orbspin(mo_energy, mo_occ, is_rhf=None):
+    '''Spin of each GHF orbital when the GHF orbitals are converted from
+    RHF/UHF orbitals
+
+    For RHF orbitals, the orbspin corresponds to first occupied orbitals then
+    unoccupied orbitals.  In the occupied orbital space, if degenerated, first
+    alpha then beta, last the (open-shell) singly occupied (alpha) orbitals In
+    the unoccupied orbital space, first the (open-shell) unoccupied (beta)
+    orbitals if applicable, then alpha and beta orbitals
+
+    For UHF orbitals, the orbspin corresponds to first occupied orbitals then
+    unoccupied orbitals.
+    '''
+    if is_rhf is None:  # guess whether the orbitals are RHF orbitals
+        is_rhf = mo_energy[0].ndim == 0
+
+    if is_rhf:
+        nmo = mo_energy.size
+        nocc = numpy.count_nonzero(mo_occ >0)
+        nvir = nmo - nocc
+        ndocc = numpy.count_nonzero(mo_occ==2)
+        nsocc = nocc - ndocc
+        orbspin = numpy.array([0,1]*ndocc + [0]*nsocc + [1]*nsocc + [0,1]*nvir)
+    else:
+        nmo = mo_energy[0].size
+        nocca = numpy.count_nonzero(mo_occ[0]>0)
+        nvira = nmo - nocca
+        noccb = numpy.count_nonzero(mo_occ[1]>0)
+        nvirb = nmo - noccb
+        # round(6) to avoid numerical uncertainty in degeneracy
+        es = numpy.append(mo_energy[0][mo_occ[0] >0],
+                          mo_energy[1][mo_occ[1] >0])
+        oidx = numpy.argsort(es.round(6))
+        es = numpy.append(mo_energy[0][mo_occ[0]==0],
+                          mo_energy[1][mo_occ[1]==0])
+        vidx = numpy.argsort(es.round(6))
+        orbspin = numpy.append(numpy.array([0]*nocca+[1]*noccb)[oidx],
+                               numpy.array([0]*nvira+[1]*nvirb)[vidx])
+    return orbspin

@@ -427,11 +427,13 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
     if max_space is None: max_space = fci.max_space
     if max_memory is None: max_memory = fci.max_memory
     if verbose is None: verbose = logger.Logger(fci.stdout, fci.verbose)
-    #e, c = lib.davidson(hop, ci0, precond, tol=fci.conv_tol, lindep=fci.lindep)
-    e, c = fci.eig(hop, ci0, precond, tol=tol, lindep=lindep,
-                   max_cycle=max_cycle, max_space=max_space, nroots=nroots,
-                   max_memory=max_memory, verbose=verbose, follow_state=True,
-                   **kwargs)
+
+    with lib.with_omp_threads(fci.threads):
+        #e, c = lib.davidson(hop, ci0, precond, tol=fci.conv_tol, lindep=fci.lindep)
+        e, c = fci.eig(hop, ci0, precond, tol=tol, lindep=lindep,
+                       max_cycle=max_cycle, max_space=max_space, nroots=nroots,
+                       max_memory=max_memory, verbose=verbose, follow_state=True,
+                       **kwargs)
     if nroots > 1:
         return e+ecore, [ci.reshape(na,nb) for ci in c]
     else:
@@ -506,7 +508,7 @@ class FCISolver(lib.StreamObject):
 
     Saved results
 
-        converged : bool
+        converged : bool (or a list of bool for multiple roots)
             Whether davidson iteration is converged
 
     Examples:
@@ -549,6 +551,7 @@ class FCISolver(lib.StreamObject):
 # solver.  They are not used by direct_spin1 solver.
         self.orbsym = None
         self.wfnsym = None
+        self.threads = None
 
         self.converged = False
         self._keys = set(self.__dict__.keys())
@@ -602,6 +605,7 @@ class FCISolver(lib.StreamObject):
                 lib.davidson1(lambda xs: [op(x) for x in xs],
                               x0, precond, lessio=lessio, **kwargs)
         if kwargs['nroots'] == 1:
+            self.converged = self.converged[0]
             e = e[0]
             ci = ci[0]
         return e, ci

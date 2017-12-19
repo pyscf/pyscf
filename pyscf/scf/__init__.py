@@ -168,6 +168,7 @@ def DHF(mol, *args):
 
 
 def X2C(mol, *args):
+    '''X2C UHF (in testing)'''
     return x2c.UHF(mol, *args)
 
 def density_fit(mf, auxbasis=None, with_df=None):
@@ -177,7 +178,10 @@ newton = newton_ah.newton
 
 def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None,
                 auxbasis=None, projectbasis=None, **newton_kwargs):
-    '''Wrap function to quickly setup and call Newton solver.
+    '''This is a wrap function which combines several operations. This
+    function first setup the initial guess
+    from density fitting calculation then use  for
+    Newton solver and call Newton solver.
     Newton solver attributes [max_cycle_inner, max_stepsize, ah_start_tol,
     ah_conv_tol, ah_grad_trust_region, ...] can be passed through **newton_kwargs.
     '''

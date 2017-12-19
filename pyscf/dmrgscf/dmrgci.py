@@ -151,6 +151,13 @@ class DMRGCI(pyscf.lib.StreamObject):
         self._keys = set(self.__dict__.keys())
 
 
+    @property
+    def threads(self):
+        return self.num_thrds
+    @threads.setter
+    def threads(self, x):
+        self.num_thrds = x
+
     def generate_schedule(self):
 
         if self.startM is None:
@@ -674,6 +681,19 @@ class DMRGCI(pyscf.lib.StreamObject):
                 self._restart = False
         return callback
 
+# Block code also allows non-spin-adapted calculation. S^2 is not available in
+# this type of calculation
+    if 'spin_adapted' in settings.BLOCKEXE:
+        def spin_square(self, civec, norb, nelec):
+            if isinstance(nelec, (int, numpy.integer)):
+                nelecb = nelec//2
+                neleca = nelec - nelecb
+            else :
+                neleca, nelecb = nelec
+            s = (neleca - nelecb) * .5
+            ss = s * (s+1)
+            return ss, s*2+1
+
 
 def make_schedule(sweeps, Ms, tols, noises, twodot_to_onedot):
     if len(sweeps) == len(Ms) == len(tols) == len(noises):
@@ -774,6 +794,7 @@ def writeDMRGConfFile(DMRGCI, nelec, Restart,
     f.close()
     #no reorder
     #f.write('noreorder\n')
+    return confFile
 
 def writeIntegralFile(DMRGCI, h1eff, eri_cas, ncas, nelec, ecore=0):
     if isinstance(nelec, (int, numpy.integer)):
@@ -804,6 +825,7 @@ def writeIntegralFile(DMRGCI, h1eff, eri_cas, ncas, nelec, ecore=0):
     pyscf.tools.fcidump.from_integrals(integralFile, h1eff, eri_cas, ncas,
                                        neleca+nelecb, ecore, ms=abs(neleca-nelecb),
                                        orbsym=orbsym)
+    return integralFile
 
 
 def executeBLOCK(DMRGCI):
@@ -816,6 +838,7 @@ def executeBLOCK(DMRGCI):
         check_call(cmd, cwd=DMRGCI.runtimeDir, shell=True)
     except CalledProcessError as err:
         logger.error(DMRGCI, cmd)
+        outFile = os.path.join(DMRGCI.runtimeDir, outFile)
         DMRGCI.stdout.write(check_output(['tail', '-100', outFile]))
         raise err
 
@@ -867,6 +890,10 @@ def dryrun(mc, mo_coeff=None):
     mc.fcisolver.onlywriteIntegral = bak
 
 def block_version(blockexe):
+    version = getattr(settings, 'BLOCKVERSION', None)
+    if isinstance(version, str):
+        return version
+
     try:
         msg = check_output([blockexe, '-v'], stderr=STDOUT)
         version = '1.1.0'

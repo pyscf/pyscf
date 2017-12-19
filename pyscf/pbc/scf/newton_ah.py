@@ -133,7 +133,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
         ni = mf._numint
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
 
-        hyb = ni.hybrid_coeff(mf.xc, spin=cell.spin)
+        omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=cell.spin)
         if singlet is None:  # for newton solver
             rho0, vxc, fxc = ni.cache_xc_kernel(cell, mf.grids, mf.xc, mo_coeff,
                                                 mo_occ, 0, kpts)
@@ -222,7 +222,7 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
         ni = mf._numint
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
 
-        hyb = ni.hybrid_coeff(mf.xc, spin=cell.spin)
+        omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=cell.spin)
         rho0, vxc, fxc = ni.cache_xc_kernel(cell, mf.grids, mf.xc,
                                             mo_coeff, mo_occ, 1, kpts)
         #dm0 =(numpy.dot(mo_coeff[0]*mo_occ[0], mo_coeff[0].T.conj()),
@@ -367,7 +367,7 @@ if __name__ == '__main__':
     '''
     cell.basis = 'ccpvdz'
     cell.a = numpy.eye(3) * 4
-    cell.gs = [8] * 3
+    cell.mesh = [11] * 3
     cell.verbose = 4
     cell.build()
     nks = [2,1,1]

@@ -51,7 +51,7 @@ def solve_nos1(fvind, mo_energy, mo_occ, h1,
     mo1base *= -e_ai
 
     def vind_vo(mo1):
-        v = fvind(mo1).reshape(mo1base.shape)
+        v = fvind(mo1.reshape(mo1base.shape)).reshape(mo1base.shape)
         v *= e_ai
         return v.ravel()
     mo1 = lib.krylov(vind_vo, mo1base.ravel(),

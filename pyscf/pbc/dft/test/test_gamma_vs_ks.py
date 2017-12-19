@@ -21,7 +21,7 @@ cell.a = '''
 cell.basis = 'gth-szv'
 cell.unit = 'B'
 cell.pseudo = 'gth-pade'
-cell.gs = [12]*3
+cell.mesh = [25]*3
 cell.verbose = 0
 cell.build()
 
@@ -33,7 +33,7 @@ class KnowValues(unittest.TestCase):
         ek = mf.kernel()
 
         scell = ptools.super_cell(cell, [1,1,3])
-        scell.gs = [12,12,36]
+        scell.mesh = [25,25,73]
         mf = pdft.RKS(scell)
         eg = mf.kernel()
         self.assertAlmostEqual(ek, eg/3, 5)

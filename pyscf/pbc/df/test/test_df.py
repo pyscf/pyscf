@@ -11,10 +11,10 @@ pyscf.pbc.DEBUG = False
 df.LINEAR_DEP_THR = 1e-7
 
 L = 5.
-n = 5
+n = 11
 cell = pgto.Cell()
 cell.a = numpy.diag([L,L,L])
-cell.gs = numpy.array([n,n,n])
+cell.mesh = numpy.array([n,n,n])
 
 cell.atom = '''He    3.    2.       3.
                He    1.    1.       1.'''
@@ -36,7 +36,7 @@ kpts[4] *= 1e-5
 kmdf = df.DF(cell)
 kmdf.auxbasis = 'weigend'
 kmdf.kpts = kpts
-kmdf.gs = (10,)*3
+kmdf.mesh = (21,)*3
 
 
 def finger(a):
@@ -47,7 +47,7 @@ class KnowValues(unittest.TestCase):
     def test_get_eri_gamma(self):
         odf = df.DF(cell)
         odf.auxbasis = 'weigend'
-        odf.gs = (10,)*3
+        odf.mesh = (21,)*3
         eri0000 = odf.get_eri()
         self.assertTrue(eri0000.dtype == numpy.double)
         self.assertAlmostEqual(eri0000.real.sum(), 41.612815388046052, 9)

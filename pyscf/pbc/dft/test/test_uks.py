@@ -27,7 +27,7 @@ class KnowValues(unittest.TestCase):
 
         Lx = Ly = Lz = 5.430697500
         cell.a = np.diag([Lx,Ly,Lz])
-        cell.gs = np.array([8]*3)
+        cell.mesh = np.array([17]*3)
 
         cell.verbose = 5
         cell.output = '/dev/null'

@@ -3,14 +3,68 @@ PySCF 1.5 alpha (2018-03-??)
 * Added
   - ddCOSMO solvent model
   - VV10 NLC functional for RKS and UKS
-  - range-separated hybrid feature for RKS and UKS
+  - range-separated hybrid features for RKS and UKS, including
+    > Analytical nuclear gradients
+    > Second order SCF
+    > Hessian and frequency
+    > TDDFT
+    > TDDFT gradients
+    > NMR
   - IBO for molecular and PBC systems
+  - UHF analytical nuclear Hessian
+  - UKS analytical nuclear Hessian
+  - FFT for low-dimension (2D) PBC systems
+  - Generalized CCSD
+  - Generalized CCSD lambda solver
+  - Generalized Hartree-Fock with PBC
+  - Generalized CCSD and k-point CCSD with PBC
+  - RCCSD(T) and UCCSD(T) for non-canonical HF orbitals
+  - RCISD and UCISD nuclear gradients
+  - RMP2 and UMP2 nuclear gradients
+  - UCCSD nuclear gradients
+  - Frozen orbitals in MP2, CISD, CCSD, CCSD(T) nuclear gradients
+* Improved
+  - Support of setting omp threads in FCI solver
+  - Supported even number of grids in pbc calculations
+  - Performance of UCCSD lambda solver
+  - The function to make SCF initial guess from the chkfile of the
+    molecule with different geometry
 
 
-PySCF 1.4.1 (201?-?-?)
-----------------------
+PySCF 1.4.3 (2018-01-?)
+-----------------------
+* Improved
+  - Assert convergence in geometry optimization
+  - Initial guess in SCF PES scanning
+* Bugfix
+  - XC parser to support the scaled compound functional
+  - The effects of level_shift in second order SCF
+  - k-point RCCSD for non-canonical HF reference
+
+
+PySCF 1.4.2 (2017-12-06)
+------------------------
+* Added
+  - Frank Jensen, Polarization consistent basis sets
+* Improved
+  - Memory usage of pbc KHF calculation when HF exchange is computed with FFTDF
+* Bugfix
+  - pyberny interface
+  - PBC GDF initialization for hybrid functional
+  - guess of wfn symmetry for given fci wfn
+  - Entropy of Gaussian smearing
+
+
+PySCF 1.4.1 (2017-11-12)
+------------------------
 * Bugfix
   - meta-GGA functional detection code in XC parser
+  - Orbital symmetry label in mcscf initial guess projection
+  - Eigenvalue ordering for Davidson eigen solver
+  - Madelung constant of non-orthogonal lattice
+  - Convergence of Madelung constant for huge number of k-points samples
+  - basis parser for pople-type basis
+  - RCCSD when running large number of virtual orbitals on small memory machine
 
 PySCF 1.4 (2017-10-05)
 ----------------------
@@ -375,8 +429,8 @@ Version 1.1 alpha-2 (2016-3-8):
 * Added
   - CCSD(T) and CCSD(T) gradients
   - General JK contraction function
-  - HF Hessian
-  - DFT Hessian
+  - RHF analytical nuclear Hessian
+  - RKS analytical nuclear Hessian
   - Function to symmetrize given orbital space
   - General XC functional evaluator (using Libxc or Xcfun)
   - Intrinsic Atomic Orbital (IAO)

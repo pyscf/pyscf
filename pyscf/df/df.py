@@ -141,12 +141,14 @@ class DF(lib.StreamObject):
     def kernel(self, *args, **kwargs):
         return self.build(*args, **kwargs)
 
-    def loop(self):
+    def loop(self, blksize=None):
         if self._cderi is None:
             self.build()
+        if blksize is None:
+            blksize = self.blockdim
         with addons.load(self._cderi, 'j3c') as feri:
             naoaux = feri.shape[0]
-            for b0, b1 in self.prange(0, naoaux, self.blockdim):
+            for b0, b1 in self.prange(0, naoaux, blksize):
                 eri1 = numpy.asarray(feri[b0:b1], order='C')
                 yield eri1
 

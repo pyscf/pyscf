@@ -320,9 +320,10 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
     if casscf.ncas == nmo and not casscf.internal_rotation:
         if casscf.canonicalization:
             log.debug('CASSCF canonicalization')
-            mo, fcivec, mo_energy = casscf.canonicalize(mo, fcivec, eris, False,
+            mo, fcivec, mo_energy = casscf.canonicalize(mo, fcivec, eris,
+                                                        casscf.sorting_mo_energy,
                                                         casscf.natorb, verbose=log)
-            return True, e_tot, e_ci, fcivec, mo, mo_energy
+        return True, e_tot, e_ci, fcivec, mo, mo_energy
 
     if conv_tol_grad is None:
         conv_tol_grad = numpy.sqrt(tol)
@@ -425,7 +426,8 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
     if casscf.canonicalization:
         log.info('CASSCF canonicalization')
         mo, fcivec, mo_energy = \
-                casscf.canonicalize(mo, fcivec, eris, False, casscf.natorb, casdm1, log)
+                casscf.canonicalize(mo, fcivec, eris, casscf.sorting_mo_energy,
+                                    casscf.natorb, casdm1, log)
         if casscf.natorb: # dump_chk may save casdm1
             nocc = casscf.ncore + casscf.ncas
             occ, ucas = casscf._eig(-casdm1, casscf.ncore, nocc)
@@ -623,6 +625,7 @@ class CASSCF(casci.CASCI):
         log.info('with_dep4 %d', self.with_dep4)
         log.info('natorb = %s', self.natorb)
         log.info('canonicalization = %s', self.canonicalization)
+        log.info('sorting_mo_energy = %s', self.sorting_mo_energy)
         log.info('chkfile = %s', self.chkfile)
         log.info('max_memory %d MB (current use %d MB)',
                  self.max_memory, lib.current_memory()[0])
@@ -639,6 +642,18 @@ class CASSCF(casci.CASCI):
         return self
 
     def kernel(self, mo_coeff=None, ci0=None, callback=None, _kern=kernel):
+        '''
+        Returns:
+            Five elements, they are
+            total energy,
+            active space CI energy,
+            the active space FCI wavefunction coefficients or DMRG wavefunction ID,
+            the MCSCF canonical orbital coefficients,
+            the MCSCF canonical orbital coefficients.
+
+        They are attributes of mcscf object, which can be accessed by
+        .e_tot, .e_cas, .ci, .mo_coeff, .mo_energy
+        '''
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
         else: # overwrite self.mo_coeff because it is needed in many methods of this class

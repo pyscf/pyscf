@@ -62,9 +62,9 @@ def make_h10(mol, dm0, gauge_orig=None, verbose=logger.WARN):
         log.debug('First-order GIAO Fock matrix')
         h1 = -.5 * mol.intor('int1e_giao_irjxp', 3) + make_h10giao(mol, dm0)
     else:
-        mol.set_common_origin(gauge_orig)
-        h1 = -.5 * mol.intor('int1e_cg_irxp', 3)
-        h1 = (h1, h1)
+        with mol.with_common_origin(gauge_orig):
+            h1 = -.5 * mol.intor('int1e_cg_irxp', 3)
+            h1 = (h1, h1)
     return h1
 
 def make_h10giao(mol, dm0):

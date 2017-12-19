@@ -338,8 +338,8 @@ void FCIcontract_2e_spin0(double *eri, double *ci0, double *ci1,
 {
         int strk, ib;
         size_t blen;
-        double *t1buf = malloc(sizeof(double) * STRB_BLKSIZE*norb*(norb+1));
-        double *ci1buf = malloc(sizeof(double) * na*STRB_BLKSIZE);
+        double *t1buf = malloc(sizeof(double) * (STRB_BLKSIZE*norb*(norb+1)+2));
+        double *ci1buf = malloc(sizeof(double) * (na*STRB_BLKSIZE+2));
         ci1bufs[omp_get_thread_num()] = ci1buf;
         for (ib = 0; ib < na; ib += STRB_BLKSIZE) {
                 blen = MIN(STRB_BLKSIZE, na-ib);
@@ -381,8 +381,8 @@ void FCIcontract_2e_spin1(double *eri, double *ci0, double *ci1,
 {
         int strk, ib;
         size_t blen;
-        double *t1buf = malloc(sizeof(double) * STRB_BLKSIZE*norb*(norb+1));
-        double *ci1buf = malloc(sizeof(double) * na*STRB_BLKSIZE);
+        double *t1buf = malloc(sizeof(double) * (STRB_BLKSIZE*norb*(norb+1)+2));
+        double *ci1buf = malloc(sizeof(double) * (na*STRB_BLKSIZE+2));
         ci1bufs[omp_get_thread_num()] = ci1buf;
         for (ib = 0; ib < nb; ib += STRB_BLKSIZE) {
                 blen = MIN(STRB_BLKSIZE, nb-ib);
@@ -464,8 +464,8 @@ void FCIcontract_uhf2e(double *eri_aa, double *eri_ab, double *eri_bb,
 {
         int strk, ib;
         size_t blen;
-        double *t1buf = malloc(sizeof(double) * STRB_BLKSIZE*norb*(norb+1)*2);
-        double *ci1buf = malloc(sizeof(double) * na*STRB_BLKSIZE);
+        double *t1buf = malloc(sizeof(double) * (STRB_BLKSIZE*norb*(norb+1)*2+2));
+        double *ci1buf = malloc(sizeof(double) * (na*STRB_BLKSIZE+2));
         ci1bufs[omp_get_thread_num()] = ci1buf;
         for (ib = 0; ib < nb; ib += STRB_BLKSIZE) {
                 blen = MIN(STRB_BLKSIZE, nb-ib);
@@ -763,8 +763,8 @@ static void loop_c2e_symm1(double *eri, double *ci0, double *ci1aa, double *ci1a
 {
         int strk, ib;
         size_t blen;
-        double *t1buf = malloc(sizeof(double) * STRB_BLKSIZE*nnorb*2);
-        double *ci1buf = malloc(sizeof(double) * na*STRB_BLKSIZE);
+        double *t1buf = malloc(sizeof(double) * (STRB_BLKSIZE*nnorb*2+2));
+        double *ci1buf = malloc(sizeof(double) * (na*STRB_BLKSIZE+2));
         ci1bufs[omp_get_thread_num()] = ci1buf;
         for (ib = 0; ib < nb; ib += STRB_BLKSIZE) {
                 blen = MIN(STRB_BLKSIZE, nb-ib);

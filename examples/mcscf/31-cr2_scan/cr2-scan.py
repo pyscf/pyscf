@@ -1,17 +1,18 @@
 #!/usr/bin/env python
-import numpy
-from pyscf import gto
-from pyscf import scf
-from pyscf import mcscf
 
 '''
 Scan Cr2 molecule singlet state dissociation curve.
 
-Simliar to the example mcscf/30-hf_scan, we need control the CASSCF initial
+Simliar tthe example mcscf/30-hf_scan, we need to control the CASSCF initial
 guess using functions project_init_guess and sort_mo.  In this example,
-sort_mo function is replaced by the symmetry-adapted version ``sort_mo_by_irrep``
-so that we can control the symmetry of active space in an simple manner.
+sort_mo function is replaced by the symmetry-adapted version
+``sort_mo_by_irrep``.
 '''
+
+import numpy
+from pyscf import gto
+from pyscf import scf
+from pyscf import mcscf
 
 ehf = []
 emc = []
@@ -35,6 +36,8 @@ def run(b, dm, mo, ci=None):
 
     mc = mcscf.CASSCF(mf, 12, 12)
     mc.fcisolver.conv_tol = 1e-9
+    # FCI solver with multi-threads is not stable enough for this sytem
+    mc.fcisolver.threads = 1
     if mo is None:
         # the initial guess for b = 1.5
         ncore = {'A1g':5, 'A1u':5}  # Optional. Program will guess if not given

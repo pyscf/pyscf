@@ -66,11 +66,12 @@ def get_nuc(mydf, kpts=None):
     log = logger.Logger(mydf.stdout, mydf.verbose)
     t1 = (time.clock(), time.time())
 
+    mesh = numpy.asarray(mydf.mesh)
     nkpts = len(kpts_lst)
     nao = cell.nao_nr()
     nao_pair = nao * (nao+1) // 2
 
-    Gv, Gvbase, kws = cell.get_Gv_weights(mydf.gs)
+    Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
     kpt_allow = numpy.zeros(3)
     if mydf.eta == 0:
         vpplocG = pseudo.pp_int.get_gth_vlocG_part1(cell, Gv)
@@ -81,11 +82,11 @@ def get_nuc(mydf, kpts=None):
     else:
         if cell.dimension > 0:
             ke_guess = estimate_ke_cutoff_for_eta(cell, mydf.eta, cell.precision)
-            gs_guess = tools.cutoff_to_gs(cell.lattice_vectors(), ke_guess)
-            if numpy.any(mydf.gs < gs_guess*.8):
-                logger.warn(mydf, 'gs %s is not enough for AFTDF.get_nuc function '
-                            'to get integral accuracy %g.\nRecomended gs is %s.',
-                            mydf.gs, cell.precision, gs_guess)
+            mesh_guess = tools.cutoff_to_mesh(cell.lattice_vectors(), ke_guess)
+            if numpy.any(mesh < mesh_guess*.8):
+                logger.warn(mydf, 'mesh %s is not enough for AFTDF.get_nuc function '
+                            'to get integral accuracy %g.\nRecommended mesh is %s.',
+                            mesh, cell.precision, mesh_guess)
 
         nuccell = copy.copy(cell)
         half_sph_norm = .5/numpy.sqrt(numpy.pi)
@@ -103,13 +104,13 @@ def get_nuc(mydf, kpts=None):
         t1 = log.timer_debug1('vnuc pass1: analytic int', *t1)
 
         charge = -cell.atom_charges()
-        coulG = tools.get_coulG(cell, kpt_allow, gs=mydf.gs, Gv=Gv)
+        coulG = tools.get_coulG(cell, kpt_allow, mesh=mesh, Gv=Gv)
         coulG *= kws
         aoaux = ft_ao.ft_ao(nuccell, Gv)
         vG = numpy.einsum('i,xi->x', charge, aoaux) * coulG
 
     max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
-    for aoaoks, p0, p1 in mydf.ft_loop(mydf.gs, kpt_allow, kpts_lst,
+    for aoaoks, p0, p1 in mydf.ft_loop(mesh, kpt_allow, kpts_lst,
                                        max_memory=max_memory, aosym='s2'):
         for k, aoao in enumerate(aoaoks):
 # rho_ij(G) nuc(-G) / G^2
@@ -194,14 +195,14 @@ class AFTDF(lib.StreamObject):
         self.stdout = cell.stdout
         self.verbose = cell.verbose
         self.max_memory = cell.max_memory
-        self.gs = cell.gs
+        self.mesh = cell.mesh
 # For nuclear attraction integrals using Ewald-like technique.
 # Set to 0 to swith off Ewald tech and use the regular reciprocal space
 # method (solving Poisson equation of nuclear charges in reciprocal space).
         if cell.dimension == 0:
             self.eta = 0.2
         else:
-            ke_cutoff = tools.gs_to_cutoff(cell.lattice_vectors(), self.gs)
+            ke_cutoff = tools.mesh_to_cutoff(cell.lattice_vectors(), self.mesh)
             ke_cutoff = ke_cutoff[:cell.dimension].min()
             self.eta = max(estimate_eta_for_ke_cutoff(cell, ke_cutoff, cell.precision),
                            estimate_eta(cell, cell.precision))
@@ -215,7 +216,7 @@ class AFTDF(lib.StreamObject):
     def dump_flags(self):
         logger.info(self, '\n')
         logger.info(self, '******** %s flags ********', self.__class__)
-        logger.info(self, 'gs = %s', self.gs)
+        logger.info(self, 'mesh = %s', self.mesh)
         logger.info(self, 'eta = %s', self.eta)
         logger.info(self, 'len(kpts) = %d', len(self.kpts))
         logger.debug1(self, '    kpts = %s', self.kpts)
@@ -234,48 +235,48 @@ class AFTDF(lib.StreamObject):
 
         if cell.dimension > 0:
             if cell.ke_cutoff is None:
-                ke_cutoff = tools.gs_to_cutoff(cell.lattice_vectors(), self.gs)
+                ke_cutoff = tools.mesh_to_cutoff(cell.lattice_vectors(), self.mesh)
                 ke_cutoff = ke_cutoff[:cell.dimension].min()
             else:
                 ke_cutoff = numpy.min(cell.ke_cutoff)
             ke_guess = estimate_ke_cutoff(cell, cell.precision)
-            gs_guess = tools.cutoff_to_gs(cell.lattice_vectors(), ke_guess)
-            if ke_cutoff < ke_guess*.8:
-                logger.warn(self, 'ke_cutoff/gs (%g / %s) is not enough for AFTDF '
+            mesh_guess = tools.cutoff_to_mesh(cell.lattice_vectors(), ke_guess)
+            if ke_cutoff < ke_guess*.7:
+                logger.warn(self, 'ke_cutoff/mesh (%g / %s) is not enough for AFTDF '
                             'to get integral accuracy %g.\nCoulomb integral error '
-                            'is ~ %.2g Eh.\nRecomended ke_cutoff/gs are %g / %s.',
-                            ke_cutoff, self.gs, cell.precision,
-                            error_for_ke_cutoff(cell, ke_cutoff), ke_guess, gs_guess)
+                            'is ~ %.2g Eh.\nRecommended ke_cutoff/mesh are %g / %s.',
+                            ke_cutoff, self.mesh, cell.precision,
+                            error_for_ke_cutoff(cell, ke_cutoff), ke_guess, mesh_guess)
         else:
-            gs_guess = numpy.copy(self.gs)
+            mesh_guess = numpy.copy(self.mesh)
 
         if cell.dimension < 3:
-            err = numpy.exp(-0.87278467*min(self.gs[cell.dimension:]) - 2.99944305)
+            err = numpy.exp(-0.436392335*min(self.mesh[cell.dimension:]) - 2.99944305)
             err *= cell.nelectron
             gz = numpy.log(cell.nelectron/cell.precision)/0.8727847-3.4366358
-            gs_guess[cell.dimension:] = int(gz)
+            mesh_guess[cell.dimension:] = int(gz)
             if err > cell.precision*10:
-                logger.warn(self, 'gs %s of AFTDF may not be enough to get '
+                logger.warn(self, 'mesh %s of AFTDF may not be enough to get '
                             'integral accuracy %g for %dD PBC system.\n'
                             'Coulomb integral error is ~ %.2g Eh.\n'
-                            'Recomended gs is %s.',
-                            self.gs, cell.precision, cell.dimension, err, gs_guess)
-            if (cell.gs[cell.dimension:]/(1.*gz) > 1.1).any():
+                            'Recommended mesh is %s.',
+                            self.mesh, cell.precision, cell.dimension, err, mesh_guess)
+            if (cell.mesh[cell.dimension:]/(1.*gz) > 1.1).any():
                 gz = numpy.log(cell.nelectron/cell.precision)/0.8727847-3.4366358
-                logger.warn(self, 'setting gs %s of AFTDF too high in non-periodic direction '
-                            '(=%s) can result in an unneccesarily slow calculation.\n'
+                logger.warn(self, 'setting mesh %s of AFTDF too high in non-periodic direction '
+                            '(=%s) can result in an unnecessarily slow calculation.\n'
                             'For coulomb integral error of ~ %.2g Eh in %dD PBC, \n'
-                            'a recommended gs for non-periodic direction is %s.',
-                            self.gs, self.gs[cell.dimension:], cell.precision, cell.dimension,
-                            gs_guess[cell.dimension:])
+                            'a recommended mesh for non-periodic direction is %s.',
+                            self.mesh, self.mesh[cell.dimension:], cell.precision,
+                            cell.dimension, mesh_guess[cell.dimension:])
         return self
 
-    def pw_loop(self, gs=None, kpti_kptj=None, q=None, shls_slice=None,
+    def pw_loop(self, mesh=None, kpti_kptj=None, q=None, shls_slice=None,
                 max_memory=2000, aosym='s1', blksize=None):
         '''Plane wave part'''
         cell = self.cell
-        if gs is None:
-            gs = self.gs
+        if mesh is None:
+            mesh = self.mesh
         if kpti_kptj is None:
             kpti = kptj = numpy.zeros(3)
         else:
@@ -284,10 +285,10 @@ class AFTDF(lib.StreamObject):
             q = kptj - kpti
 
         ao_loc = cell.ao_loc_nr()
-        Gv, Gvbase, kws = cell.get_Gv_weights(gs)
+        Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
         b = cell.reciprocal_vectors()
         gxyz = lib.cartesian_prod([numpy.arange(len(x)) for x in Gvbase])
-        ngs = gxyz.shape[0]
+        ngrids = gxyz.shape[0]
 
         if shls_slice is None:
             shls_slice = (0, cell.nbas, 0, cell.nbas)
@@ -310,9 +311,9 @@ class AFTDF(lib.StreamObject):
         pqkRbuf = numpy.empty(nij*sublk)
         pqkIbuf = numpy.empty(nij*sublk)
 
-        for p0, p1 in self.prange(0, ngs, blksize):
+        for p0, p1 in self.prange(0, ngrids, blksize):
             #aoao = ft_ao.ft_aopair(cell, Gv[p0:p1], shls_slice, aosym,
-            #                       b, Gvbase, gxyz[p0:p1], gs, (kpti, kptj), q)
+            #                       b, Gvbase, gxyz[p0:p1], mesh, (kpti, kptj), q)
             aoao = ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
                                          b, gxyz[p0:p1], Gvbase, q,
                                          kptj.reshape(1,3), out=buf)[0]
@@ -325,15 +326,15 @@ class AFTDF(lib.StreamObject):
                 pqkI[:] = aoao[i0:i1].imag.T
                 yield (pqkR, pqkI, p0+i0, p0+i1)
 
-    def ft_loop(self, gs=None, q=numpy.zeros(3), kpts=None, shls_slice=None,
+    def ft_loop(self, mesh=None, q=numpy.zeros(3), kpts=None, shls_slice=None,
                 max_memory=4000, aosym='s1'):
         '''
         Fourier transform iterator for all kpti which satisfy  2pi*N = (kpts - kpti - q)*a
         N = -1, 0, 1
         '''
         cell = self.cell
-        if gs is None:
-            gs = self.gs
+        if mesh is None:
+            mesh = self.mesh
         if kpts is None:
             assert(is_zero(q))
             kpts = self.kpts
@@ -342,9 +343,9 @@ class AFTDF(lib.StreamObject):
 
         ao_loc = cell.ao_loc_nr()
         b = cell.reciprocal_vectors()
-        Gv, Gvbase, kws = cell.get_Gv_weights(gs)
+        Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
         gxyz = lib.cartesian_prod([numpy.arange(len(x)) for x in Gvbase])
-        ngs = gxyz.shape[0]
+        ngrids = gxyz.shape[0]
 
         if shls_slice is None:
             shls_slice = (0, cell.nbas, 0, cell.nbas)
@@ -358,10 +359,10 @@ class AFTDF(lib.StreamObject):
             nj = ao_loc[shls_slice[3]] - ao_loc[shls_slice[2]]
             nij = ni*nj
         blksize = max(16, int(max_memory*.9e6/(nij*nkpts*16)))
-        blksize = min(blksize, ngs, 16384)
+        blksize = min(blksize, ngrids, 16384)
         buf = numpy.empty(nkpts*nij*blksize, dtype=numpy.complex128)
 
-        for p0, p1 in self.prange(0, ngs, blksize):
+        for p0, p1 in self.prange(0, ngrids, blksize):
             dat = ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
                                         b, gxyz[p0:p1], Gvbase, q, kpts, out=buf)
             yield dat, p0, p1
@@ -369,12 +370,12 @@ class AFTDF(lib.StreamObject):
     def prange(self, start, stop, step):
         return lib.prange(start, stop, step)
 
-    def weighted_coulG(self, kpt=numpy.zeros(3), exx=False, gs=None):
+    def weighted_coulG(self, kpt=numpy.zeros(3), exx=False, mesh=None):
         cell = self.cell
-        if gs is None:
-            gs = self.gs
-        Gv, Gvbase, kws = cell.get_Gv_weights(gs)
-        coulG = tools.get_coulG(cell, kpt, exx, self, gs, Gv)
+        if mesh is None:
+            mesh = self.mesh
+        Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
+        coulG = tools.get_coulG(cell, kpt, exx, self, mesh, Gv)
         coulG *= kws
         return coulG
 
@@ -413,10 +414,12 @@ class AFTDF(lib.StreamObject):
 ################################################################################
 # With this function to mimic the molecular DF.loop function, the pbc gamma
 # point DF object can be used in the molecular code
-    def loop(self):
+    def loop(self, blksize=None):
+        if blksize is None:
+            blksize = self.blockdim
         Lpq = None
         coulG = self.weighted_coulG()
-        for pqkR, pqkI, p0, p1 in self.pw_loop(aosym='s2', blksize=self.blockdim):
+        for pqkR, pqkI, p0, p1 in self.pw_loop(aosym='s2', blksize=blksize):
             vG = numpy.sqrt(coulG[p0:p1])
             pqkR *= vG
             pqkI *= vG
@@ -426,9 +429,9 @@ class AFTDF(lib.StreamObject):
             yield Lpq
 
     def get_naoaux(self):
-        gs = numpy.asarray(self.gs)
-        ngs = numpy.prod(gs*2+1)
-        return ngs * 2
+        mesh = numpy.asarray(self.mesh)
+        ngrids = numpy.prod(mesh)
+        return ngrids * 2
 
 
 # Since the real-space lattice-sum for nuclear attraction is not implemented,
@@ -468,7 +471,7 @@ if __name__ == '__main__':
     cell.a = numpy.diag([4, 4, 4])
     cell.basis = 'gth-szv'
     cell.pseudo = 'gth-pade'
-    cell.gs = [10, 10, 10]
+    cell.mesh = [20]*3
     cell.build()
     k = numpy.ones(3)*.25
     v1 = AFTDF(cell).get_pp(k)

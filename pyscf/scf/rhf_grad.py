@@ -36,10 +36,10 @@ def grad_elec(grad_mf, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
 
     if atmlst is None:
         atmlst = range(mol.natm)
-    atom_slices = mol.aoslice_by_atom()
+    aoslices = mol.aoslice_by_atom()
     de = numpy.zeros((len(atmlst),3))
     for k, ia in enumerate(atmlst):
-        shl0, shl1, p0, p1 = atom_slices[ia]
+        shl0, shl1, p0, p1 = aoslices[ia]
 # h1, s1, vhf are \nabla <i|h|j>, the nuclear gradients = -\nabla
         vrinv = grad_mf._grad_rinv(mol, ia)
 # nabla was applied on bra in f1, *2 for the contributions of nabla|ket>
@@ -135,12 +135,15 @@ def as_scanner(grad_mf):
         def __init__(self, g):
             self.__dict__.update(g.__dict__)
             self._scf = g._scf.as_scanner()
-        def __call__(self, mol):
+        def __call__(self, mol, **kwargs):
             mf_scanner = self._scf
             e_tot = mf_scanner(mol)
             self.mol = mol
-            de = self.kernel()
+            de = self.kernel(**kwargs)
             return e_tot, de
+        @property
+        def converged(self):
+            return self._scf.converged
     return SCF_GradScanner(grad_mf)
 
 
@@ -154,6 +157,7 @@ class Gradients(lib.StreamObject):
         self.chkfile = scf_method.chkfile
         self.max_memory = self.mol.max_memory
 
+        self.atmlst = range(self.mol.natm)
         self.de = numpy.zeros((0,3))
         self._keys = set(self.__dict__.keys())
 
@@ -231,7 +235,9 @@ class Gradients(lib.StreamObject):
         if mo_coeff is None: mo_coeff = self._scf.mo_coeff
         if mo_occ is None: mo_occ = self._scf.mo_occ
         if atmlst is None:
-            atmlst = range(self.mol.natm)
+            atmlst = self.atmlst
+        else:
+            self.atmlst = atmlst
 
         if self.verbose >= logger.WARN:
             self.check_sanity()

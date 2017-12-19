@@ -94,6 +94,7 @@ def cart2sph(l, c_tensor=None):
     elif l == 1:
         return c_tensor * 0.488602511902919921
     else:
+        assert(l <= 12)
         nd = l * 2 + 1
         ngrid = c_tensor.shape[0]
         c2sph = numpy.zeros((ngrid,nd), order='F')
@@ -118,6 +119,7 @@ def cart2j_kappa(kappa, l=None, normalized=None):
         nd = l * 2
     else:
         assert(l is not None)
+        assert(l <= 12)
         nd = l * 4 + 2
     nf = (l+1)*(l+2)//2
     c2smat = numpy.zeros((nf*2,nd), order='F', dtype=numpy.complex)
@@ -761,6 +763,7 @@ def pack(mol):
             'cart'    : mol.cart,
             'nucmod'  : mol.nucmod,
             'ecp'     : mol.ecp,
+            '_nelectron': mol._nelectron,
             'verbose' : mol.verbose}
     if mol.symmetry and not isinstance(mol.symmetry, str):
         mdic['symmetry'] = mol.groupname
@@ -1182,11 +1185,11 @@ def search_ao_label(mol, label):
     Examples:
 
     >>> mol = gto.M(atom='H 0 0 0; Cl 0 0 1', basis='ccpvtz')
-    >>> mol.parse_aolabel('Cl.*p')
+    >>> mol.search_ao_label('Cl.*p')
     [19 20 21 22 23 24 25 26 27 28 29 30]
-    >>> mol.parse_aolabel('Cl 2p')
+    >>> mol.search_ao_label('Cl 2p')
     [19 20 21]
-    >>> mol.parse_aolabel(['Cl.*d', 'Cl 4p'])
+    >>> mol.search_ao_label(['Cl.*d', 'Cl 4p'])
     [25 26 27 31 32 33 34 35 36 37 38 39 40]
     '''
     return _aolabels2baslst(mol, label)
@@ -1314,6 +1317,21 @@ def aoslice_by_atom(mol, ao_loc=None):
     return aorange
 offset_nr_by_atom = aoslice_by_atom
 
+def same_basis_set(mol1, mol2):
+    '''Check whether two molecules use the same basis sets.
+    The two molecules can have different geometry.
+    '''
+    atomtypes1 = atom_types(mol1._atom, mol1._basis)
+    atomtypes2 = atom_types(mol2._atom, mol2._basis)
+    if set(atomtypes1.keys()) != set(atomtypes2.keys()):
+        return False
+    for k in atomtypes1:
+        if len(atomtypes1[k]) != len(atomtypes2[k]):
+            return False
+        elif mol1._basis[k] != mol2._basis[k]:
+            return False
+    return True
+
 def same_mol(mol1, mol2, tol=1e-5, cmp_basis=True, ignore_chiral=False):
     '''Compare the two molecules whether they have the same structure.
 
@@ -1333,21 +1351,13 @@ def same_mol(mol1, mol2, tol=1e-5, cmp_basis=True, ignore_chiral=False):
     if not numpy.all(numpy.sort(chg1) == numpy.sort(chg2)):
         return False
 
-    if cmp_basis:
-        atomtypes1 = atom_types(mol1._atom, mol1._basis)
-        atomtypes2 = atom_types(mol2._atom, mol2._basis)
-        for k in atomtypes1:
-            if k not in atomtypes2:
-                return False
-            elif len(atomtypes1[k]) != len(atomtypes2[k]):
-                return False
-            elif mol1._basis[k] != mol2._basis[k]:
-                return False
+    if cmp_basis and not same_basis_set(mol1, mol2):
+        return False
 
     def finger(mol, chgs, coord):
         center = charge_center(mol._atom, chgs, coord)
         im = inertia_momentum(mol._atom, chgs, coord)
-        w, v = numpy.linalg.eigh(im)
+        w, v = scipy.linalg.eigh(im)
         axes = v.T
         if numpy.linalg.det(axes) < 0:
             axes *= -1
@@ -1528,8 +1538,11 @@ class Mole(lib.StreamObject):
 
         stdout : file object
             Default is sys.stdout if :attr:`Mole.output` is not set
+        topgroup : str
+            Point group of the system.
         groupname : str
-            One of D2h, C2h, C2v, D2, Cs, Ci, C2, C1
+            The supported subgroup of the point group. It can be one of Dooh,
+            Coov, D2h, C2h, C2v, D2, Cs, Ci, C2, C1
         nelectron : int
             sum of nuclear charges - :attr:`Mole.charge`
         symm_orb : a list of numpy.ndarray
@@ -1639,8 +1652,13 @@ class Mole(lib.StreamObject):
 
     @property
     def nelec(self):
-        nalpha = (self.nelectron+self.spin)//2
+        ne = self.nelectron
+        nalpha = (ne + self.spin) // 2
         nbeta = nalpha - self.spin
+        if nalpha + nbeta != ne:
+            raise RuntimeError('Electron number %d and spin %d are not consistent\n'
+                               'Note mol.spin = 2S = Nalpha - Nbeta, not 2S+1' %
+                               (ne, self.spin))
         return nalpha, nbeta
     @property
     def nelectron(self):
@@ -1808,7 +1826,7 @@ class Mole(lib.StreamObject):
                 self.make_ecp_env(self._atm, self._ecp, self._env)
         if (self.nelectron+self.spin) % 2 != 0:
             raise RuntimeError('Electron number %d and spin %d are not consistent\n'
-                               'Note spin = 2S = Nalpha-Nbeta, not the definition 2S+1' %
+                               'Note mol.spin = 2S = Nalpha - Nbeta, not 2S+1' %
                                (self.nelectron, self.spin))
 
         if self.symmetry:
@@ -2007,33 +2025,63 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         logger.info(self, 'CPU time: %12.2f', time.clock())
         return self
 
-    def set_common_orig(self, coord):
-        '''Update common origin which held in :class`Mole`._env.  **Note** the unit is Bohr
+    def set_common_origin(self, coord):
+        '''Update common origin for integrals of dipole, rxp etc.
+        **Note** the unit is Bohr
 
         Examples:
 
-        >>> mol.set_common_orig(0)
-        >>> mol.set_common_orig((1,0,0))
+        >>> mol.set_common_origin(0)
+        >>> mol.set_common_origin((1,0,0))
         '''
         self._env[PTR_COMMON_ORIG:PTR_COMMON_ORIG+3] = coord
         return self
-    set_common_origin = set_common_orig
+    set_common_orig = set_common_origin
     set_common_orig_ = set_common_orig    # for backward compatibility
     set_common_origin_ = set_common_orig  # for backward compatibility
 
-    def set_rinv_orig(self, coord):
-        r'''Update origin for operator :math:`\frac{1}{|r-R_O|}`.  **Note** the unit is Bohr
+    def with_common_origin(self, coord):
+        '''Retuen a temporary mol context which has the rquired common origin.
+        The required common origin has no effects out of the temporary context.
+        See also :func:`mol.set_common_origin`
 
         Examples:
 
-        >>> mol.set_rinv_orig(0)
-        >>> mol.set_rinv_orig((0,1,0))
+        >>> with mol.with_common_origin((1,0,0)):
+        ...     mol.intor('int1e_r', comp=3)
+        '''
+        coord0 = self._env[PTR_COMMON_ORIG:PTR_COMMON_ORIG+3].copy()
+        return _TemporaryMoleContext(self.set_common_origin, (coord,), (coord0,))
+    with_common_orig = with_common_origin
+
+    def set_rinv_origin(self, coord):
+        r'''Update origin for operator :math:`\frac{1}{|r-R_O|}`.
+        **Note** the unit is Bohr
+
+        Examples:
+
+        >>> mol.set_rinv_origin(0)
+        >>> mol.set_rinv_origin((0,1,0))
         '''
         self._env[PTR_RINV_ORIG:PTR_RINV_ORIG+3] = coord[:3]
         return self
-    set_rinv_origin = set_rinv_orig
+    set_rinv_orig = set_rinv_origin
     set_rinv_orig_ = set_rinv_orig    # for backward compatibility
     set_rinv_origin_ = set_rinv_orig  # for backward compatibility
+
+    def with_rinv_origin(self, coord):
+        '''Retuen a temporary mol context which has the rquired origin of 1/r
+        operator.  The required origin has no effects out of the temporary
+        context.  See also :func:`mol.set_rinv_origin`
+
+        Examples:
+
+        >>> with mol.with_rinv_origin((1,0,0)):
+        ...     mol.intor('int1e_rinv')
+        '''
+        coord0 = self._env[PTR_RINV_ORIG:PTR_RINV_ORIG+3].copy()
+        return _TemporaryMoleContext(self.set_rinv_origin, (coord,), (coord0,))
+    with_rinv_orig = with_rinv_origin
 
     def set_range_coulomb(self, omega):
         '''Apply the long range part of range-separated Coulomb operator for
@@ -2043,6 +2091,19 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         '''
         self._env[PTR_RANGE_OMEGA] = omega
     set_range_coulomb_ = set_range_coulomb  # for backward compatibility
+
+    def with_range_coulomb(self, omega):
+        '''Retuen a temporary mol context which has the rquired
+        range-separated Coulomb parameter omega.
+        See also :func:`mol.set_range_coulomb`
+
+        Examples:
+
+        >>> with mol.with_range_coulomb(omega=1.5):
+        ...     mol.intor('int2e')
+        '''
+        omega0 = self._env[PTR_RANGE_OMEGA].copy()
+        return _TemporaryMoleContext(self.set_range_coulomb, (omega,), (omega0,))
 
     def set_f12_zeta(self, zeta):
         '''Set zeta for YP exp(-zeta r12)/r12 or STG exp(-zeta r12) type integrals  
@@ -2066,7 +2127,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
     set_nuc_mod_ = set_nuc_mod  # for backward compatibility
 
     def set_rinv_zeta(self, zeta):
-        '''Assume the charge distribution on the "rinv_orig".  zeta is the parameter
+        '''Assume the charge distribution on the "rinv_origin".  zeta is the parameter
         to control the charge distribution: rho(r) = Norm * exp(-zeta * r^2).
         **Be careful** when call this function. It affects the behavior of
         int1e_rinv_* functions.  Make sure to set it back to 0 after using it!
@@ -2074,6 +2135,19 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         self._env[PTR_RINV_ZETA] = zeta
         return self
     set_rinv_zeta_ = set_rinv_zeta  # for backward compatibility
+
+    def with_rinv_zeta(self, zeta):
+        '''Retuen a temporary mol context which has the rquired charge
+        distribution on the "rinv_origin": rho(r) = Norm * exp(-zeta * r^2).
+        See also :func:`mol.set_rinv_zeta`
+
+        Examples:
+
+        >>> with mol.with_rinv_zeta(zeta=1.5), mol.with_rinv_origin((1.,0,0)):
+        ...     mol.intor('int1e_rinv')
+        '''
+        zeta0 = self._env[PTR_RINV_ZETA].copy()
+        return _TemporaryMoleContext(self.set_rinv_zeta, (zeta,), (zeta0,))
 
     def set_geom_(self, atoms, unit='Angstrom', symmetry=None):
         '''Replace geometry
@@ -2810,3 +2884,13 @@ def filatov_nuc_mod(nuc_charge, c=param.LIGHT_SPEED):
     zeta = 1 / (r**2)
     return zeta
 
+class _TemporaryMoleContext(object):
+    import copy
+    def __init__(self, method, args, args_bak):
+        self.method = method
+        self.args = args
+        self.args_bak = args_bak
+    def __enter__(self):
+        self.method(*self.args)
+    def __exit__(self, type, value, traceback):
+        self.method(*self.args_bak)

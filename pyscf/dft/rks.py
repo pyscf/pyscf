@@ -60,7 +60,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
             # Filter grids the first time setup grids
             ks.grids = prune_small_rho_grids_(ks, mol, dm, ks.grids)
         t0 = logger.timer(ks, 'setting up grids', *t0)
-    if ks.nlc!='':
+    if ks.nlc != '':
         if ks.nlcgrids.coords is None:
             ks.nlcgrids.build(with_non0tab=True)
             if ks.small_rho_cutoff > 1e-20 and ground_state:
@@ -68,24 +68,21 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
                 ks.nlcgrids = prune_small_rho_grids_(ks, mol, dm, ks.nlcgrids)
             t0 = logger.timer(ks, 'setting up nlc grids', *t0)
 
+    ni = ks._numint
     if hermi == 2:  # because rho = 0
         n, exc, vxc = 0, 0, 0
     else:
-        n, exc, vxc = ks._numint.nr_rks(mol, ks.grids, ks.xc, dm)
-        if ks.nlc!='':
+        n, exc, vxc = ni.nr_rks(mol, ks.grids, ks.xc, dm)
+        if ks.nlc != '':
             assert('VV10' in ks.nlc.upper())
-            _, enlc, vnlc = ks._numint.nr_rks(mol, ks.nlcgrids, ks.xc+'__'+ks.nlc, dm)
+            _, enlc, vnlc = ni.nr_rks(mol, ks.nlcgrids, ks.xc+'__'+ks.nlc, dm)
             exc += enlc
             vxc += vnlc
         logger.debug(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
 
     #enabling range-separated hybrids
-    omega, alpha, beta = ks._numint.rsh_coeff(ks.xc)
-    if abs(omega) > 1e-10:
-        hyb = alpha + beta
-    else:
-        hyb = ks._numint.hybrid_coeff(ks.xc, spin=mol.spin)
+    omega, alpha, hyb = ni.rsh_and_hybrid_coeff(ks.xc, spin=mol.spin)
 
     if abs(hyb) < 1e-10 and abs(alpha) < 1e-10:
         vk = None
@@ -138,19 +135,15 @@ def _get_k_lr(mol, dm, omega=0):
 # computed with regular Coulomb operator. ks.get_jk or ks.get_k do not evalute
 # the K matrix with the range separated Coulomb operator.  Here jk.get_jk
 # function computes the K matrix with the modified Coulomb operator.
-    if dm.ndim == 2:
-        vklr = jk.get_jk(mol, dm, 'ijkl,jk->il')
-    else:
-        nao = dm.shape[-1]
-        dms = dm.reshape(-1,nao,nao)
-        vklr = jk.get_jk(mol, dm, ['ijkl,jk->il']*len(dms))
-        vklr = numpy.asarray(vklr).reshape(dm.shape)
+    nao = dm.shape[-1]
+    dms = dm.reshape(-1,nao,nao)
+    vklr = jk.get_jk(mol, dms, ['ijkl,jk->il']*len(dms))
 
     mol.set_range_coulomb(omega_bak)
-    return vklr
+    return numpy.asarray(vklr).reshape(dm.shape)
 
 
-def energy_elec(ks, dm, h1e=None, vhf=None):
+def energy_elec(ks, dm=None, h1e=None, vhf=None):
     r'''Electronic part of RKS energy.
 
     Args:
@@ -164,8 +157,8 @@ def energy_elec(ks, dm, h1e=None, vhf=None):
     Returns:
         RKS electronic energy and the 2-electron part contribution
     '''
-    if h1e is None:
-        h1e = ks.get_hcore()
+    if dm is None: dm = ks.make_rdm1()
+    if h1e is None: h1e = ks.get_hcore()
     if vhf is None or getattr(vhf, 'ecoul', None) is None:
         vhf = ks.get_veff(ks.mol, dm)
     e1 = numpy.einsum('ij,ji', h1e, dm).real
@@ -268,8 +261,8 @@ class RKS(hf.RHF):
     define_xc_ = define_xc_
 
     def nuc_grad_method(self):
-        from pyscf.grad import rks
-        return rks.Gradients(self)
+        from pyscf.dft import rks_grad
+        return rks_grad.Gradients(self)
 
 def _dft_common_init_(mf):
     mf.xc = 'LDA,VWN'

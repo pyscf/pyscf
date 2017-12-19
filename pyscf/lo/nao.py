@@ -51,7 +51,7 @@ def _prenao_sub(mol, p, s):
     ao_loc = mol.ao_loc_nr()
     nao = ao_loc[-1]
     occ = numpy.zeros(nao)
-    cao = numpy.zeros((nao,nao))
+    cao = numpy.zeros((nao,nao), dtype=s.dtype)
 
     bas_ang = mol._bas[:,mole.ANG_OF]
     for ia, (b0,b1,p0,p1) in enumerate(mol.aoslice_by_atom(ao_loc)):
@@ -87,19 +87,20 @@ def _nao_sub(mol, pre_occ, pre_nao, s=None):
         s = mol.intor_symmetric('int1e_ovlp')
     core_lst, val_lst, rydbg_lst = _core_val_ryd_list(mol)
     nbf = mol.nao_nr()
-    cnao = numpy.empty((nbf,nbf))
+    pre_nao = pre_nao.astype(s.dtype)
+    cnao = numpy.empty((nbf,nbf), dtype=s.dtype)
 
     if core_lst:
         c = pre_nao[:,core_lst].copy()
-        s1 = reduce(lib.dot, (c.T, s, c))
+        s1 = reduce(lib.dot, (c.conj().T, s, c))
         cnao[:,core_lst] = c1 = lib.dot(c, orth.lowdin(s1))
         c = pre_nao[:,val_lst].copy()
-        c -= reduce(lib.dot, (c1, c1.T, s, c))
+        c -= reduce(lib.dot, (c1, c1.conj().T, s, c))
     else:
         c = pre_nao[:,val_lst]
 
     if val_lst:
-        s1 = reduce(lib.dot, (c.T, s, c))
+        s1 = reduce(lib.dot, (c.conj().T, s, c))
         wt = pre_occ[val_lst]
         cnao[:,val_lst] = lib.dot(c, orth.weight_orth(s1, wt))
 
@@ -107,10 +108,10 @@ def _nao_sub(mol, pre_occ, pre_nao, s=None):
         cvlst = core_lst + val_lst
         c1 = cnao[:,cvlst].copy()
         c = pre_nao[:,rydbg_lst].copy()
-        c -= reduce(lib.dot, (c1, c1.T, s, c))
-        s1 = reduce(lib.dot, (c.T, s, c))
+        c -= reduce(lib.dot, (c1, c1.conj().T, s, c))
+        s1 = reduce(lib.dot, (c.conj().T, s, c))
         cnao[:,rydbg_lst] = lib.dot(c, orth.lowdin(s1))
-    snorm = numpy.linalg.norm(reduce(lib.dot, (cnao.T, s, cnao)) - numpy.eye(nbf))
+    snorm = numpy.linalg.norm(reduce(lib.dot, (cnao.conj().T, s, cnao)) - numpy.eye(nbf))
     if snorm > 1e-9:
         logger.warn(mol, 'Weak orthogonality for localized orbitals %s', snorm)
     return cnao

@@ -75,6 +75,7 @@ def density_fit(mf, auxbasis=None, with_df=None):
         '''
         def __init__(self):
             self.__dict__.update(mf.__dict__)
+            self._eri = None
             self.auxbasis = auxbasis
             self.direct_scf = False
             self.with_df = with_df

@@ -33,7 +33,7 @@ def iao(mol, orbocc, minao='minao'):
         eg using :func:`orth.lowdin`
 
         >>> orbocc = mf.mo_coeff[:,mf.mo_occ>0]
-        >>> c = iao(mol, orcc)
+        >>> c = iao(mol, orbocc)
         >>> numpy.dot(c, orth.lowdin(reduce(numpy.dot, (c.T,s,c))))
     '''
     from pyscf.pbc import gto as pbcgto
@@ -43,9 +43,9 @@ def iao(mol, orbocc, minao='minao'):
     pmol = reference_mol(mol, minao)
     #for PBC, we must use the pbc code for evaluating the integrals lest the pbc conditions be ignored
     if isinstance(mol, pbcgto.Cell):
-        s1 = mol.pbc_intor('int1e_ovlp_sph', hermi=1)
-        s2 = pmol.pbc_intor('int1e_ovlp_sph', hermi=1)
-        s12 = pbcgto.cell.intor_cross('int1e_ovlp_sph', mol, pmol)
+        s1 = mol.pbc_intor('int1e_ovlp', hermi=1)
+        s2 = pmol.pbc_intor('int1e_ovlp', hermi=1)
+        s12 = pbcgto.cell.intor_cross('int1e_ovlp', mol, pmol)
     else:
 #s1 is the one electron overlap integrals (coulomb integrals)
         s1 = mol.intor_symmetric('int1e_ovlp')
@@ -62,8 +62,8 @@ def iao(mol, orbocc, minao='minao'):
 
     ctild = scipy.linalg.cho_solve(s2cd, numpy.dot(s21, orbocc))
     ctild = scipy.linalg.cho_solve(s1cd, numpy.dot(s12, ctild))
-    ccs1 = reduce(numpy.dot, (orbocc, orbocc.T, s1))
-    ccs2 = reduce(numpy.dot, (ctild, ctild.T, s1))
+    ccs1 = reduce(numpy.dot, (orbocc, orbocc.conj().T, s1))
+    ccs2 = reduce(numpy.dot, (ctild, ctild.conj().T, s1))
 #a is the set of IAOs in the original basis
     a = (p12 + reduce(numpy.dot, (ccs1, ccs2, p12)) * 2
         - numpy.dot(ccs1, p12) - numpy.dot(ccs2, p12))

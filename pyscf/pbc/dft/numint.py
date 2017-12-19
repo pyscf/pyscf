@@ -72,7 +72,7 @@ def eval_ao_kpts(cell, coords, kpts=None, deriv=0, relativity=0,
                  shl_slice=None, non0tab=None, out=None, verbose=None, **kwargs):
     '''
     Returns:
-        ao_kpts: (nkpts, [comp], ngs, nao) ndarray
+        ao_kpts: (nkpts, [comp], ngrids, nao) ndarray
             AO values at each k-point
     '''
     if kpts is None:
@@ -341,6 +341,7 @@ def nr_rks(ni, cell, grids, xc_code, dms, spin=0, relativity=0, hermi=0,
     '''
     if kpts is None:
         kpts = numpy.zeros((1,3))
+
     xctype = ni._xc_type(xc_code)
     make_rho, nset, nao = ni._gen_rho_evaluator(cell, dms, hermi)
 
@@ -440,6 +441,7 @@ def nr_uks(ni, cell, grids, xc_code, dms, spin=1, relativity=0, hermi=0,
     '''
     if kpts is None:
         kpts = numpy.zeros((1,3))
+
     xctype = ni._xc_type(xc_code)
     dma, dmb = _format_uks_dm(dms)
     nao = dma.shape[-1]
@@ -635,7 +637,7 @@ def nr_rks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
             wv = numpy.empty((4,ngrid))
             for i in range(nset):
                 rho1 = make_rho(i, ao_k1, mask, xctype)
-                wv = numint._rks_gga_wv(rho, rho1, vxc0, fxc0, weight)
+                wv = numint._rks_gga_wv1(rho, rho1, vxc0, fxc0, weight)
                 vmat[i] += ni._fxc_mat(cell, ao_k1, wv, mask, xctype, ao_loc)
 
         # call swapaxes method to swap last two indices because vmat may be a 3D
@@ -732,8 +734,8 @@ def nr_rks_fxc_st(ni, cell, grids, xc_code, dm0, dms_alpha, relativity=0, single
                 # rho1[0 ] = |b><j| z_{bj}
                 # rho1[1:] = \nabla(|b><j|) z_{bj}
                 rho1 = make_rho(i, ao_k1, mask, xctype)
-                wv = numint._rks_gga_wv(rho, rho1, (None,fgamma),
-                                        (frho,frhogamma,fgg), weight)
+                wv = numint._rks_gga_wv1(rho, rho1, (None,fgamma),
+                                         (frho,frhogamma,fgg), weight)
                 vmat[i] += ni._fxc_mat(cell, ao_k1, wv, mask, xctype, ao_loc)
 
         for i in range(nset):  # for (\nabla\mu) \nu + \mu (\nabla\nu)
@@ -854,8 +856,8 @@ def nr_uks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
             for i in range(nset):
                 rho1a = make_rhoa(i, ao_k1, mask, xctype)
                 rho1b = make_rhob(i, ao_k1, mask, xctype)
-                wva, wvb = numint._uks_gga_wv((rho0a,rho0b), (rho1a,rho1b),
-                                              vxc0, fxc0, weight)
+                wva, wvb = numint._uks_gga_wv1((rho0a,rho0b), (rho1a,rho1b),
+                                               vxc0, fxc0, weight)
                 vmata[i] += ni._fxc_mat(cell, ao_k1, wva, mask, xctype, ao_loc)
                 vmatb[i] += ni._fxc_mat(cell, ao_k1, wvb, mask, xctype, ao_loc)
 
@@ -965,12 +967,28 @@ class _NumInt(numint._NumInt):
     @lib.with_doc(nr_rks.__doc__)
     def nr_rks(self, cell, grids, xc_code, dms, hermi=0,
                kpt=numpy.zeros(3), kpts_band=None, max_memory=2000, verbose=None):
+        if kpts_band is not None:
+# To compute Vxc on kpts_band, convert the NumInt object to KNumInt object.
+            ni = _KNumInt()
+            ni.__dict__.update(self.__dict__)
+            nao = dms.shape[-1]
+            return ni.nr_rks(cell, grids, xc_code, dms.reshape(-1,1,nao,nao),
+                             hermi, kpt.reshape(1,3), kpts_band, max_memory,
+                             verbose)
         return nr_rks(self, cell, grids, xc_code, dms,
                       0, 0, hermi, kpt, kpts_band, max_memory, verbose)
 
     @lib.with_doc(nr_uks.__doc__)
     def nr_uks(self, cell, grids, xc_code, dms, hermi=0,
                kpt=numpy.zeros(3), kpts_band=None, max_memory=2000, verbose=None):
+        if kpts_band is not None:
+# To compute Vxc on kpts_band, convert the NumInt object to KNumInt object.
+            ni = _KNumInt()
+            ni.__dict__.update(self.__dict__)
+            nao = dms[0].shape[-1]
+            return ni.nr_uks(cell, grids, xc_code, dms.reshape(-1,1,nao,nao),
+                             hermi, kpt.reshape(1,3), kpts_band, max_memory,
+                             verbose)
         return nr_uks(self, cell, grids, xc_code, dms,
                       1, 0, hermi, kpt, kpts_band, max_memory, verbose)
 
@@ -1038,6 +1056,12 @@ class _NumInt(numint._NumInt):
     cache_xc_kernel  = cache_xc_kernel
     get_rho = get_rho
 
+    def rsh_and_hybrid_coeff(self, xc_code, spin=0):
+        omega, alpha, hyb = numint._NumInt.rsh_and_hybrid_coeff(self, xc_code, spin)
+        if abs(omega) > 1e-10:
+            raise NotImplementedError
+        return omega, alpha, hyb
+
 
 class _KNumInt(numint._NumInt):
     '''Generalization of pyscf's _NumInt class for k-point sampling and
@@ -1062,13 +1086,13 @@ class _KNumInt(numint._NumInt):
         '''
         Args:
             cell : Mole or Cell object
-            ao_kpts : (nkpts, ngs, nao) ndarray
+            ao_kpts : (nkpts, ngrids, nao) ndarray
                 AO values at each k-point
             dm_kpts: (nkpts, nao, nao) ndarray
                 Density matrix at each k-point
 
         Returns:
-           rhoR : (ngs,) ndarray
+           rhoR : (ngrids,) ndarray
         '''
         nkpts = len(ao_kpts)
         rhoR = 0
@@ -1220,4 +1244,10 @@ class _KNumInt(numint._NumInt):
     nr_uks_fxc = nr_uks_fxc
     cache_xc_kernel  = cache_xc_kernel
     get_rho = get_rho
+
+    def rsh_and_hybrid_coeff(self, xc_code, spin=0):
+        omega, alpha, hyb = numint._NumInt.rsh_and_hybrid_coeff(self, xc_code, spin)
+        if abs(omega) > 1e-10:
+            raise NotImplementedError
+        return omega, alpha, hyb
 

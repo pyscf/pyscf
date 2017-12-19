@@ -41,11 +41,11 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
 
     nao = cell.nao_nr()
     naux = auxcell.nao_nr()
-    gs = mydf.gs
-    Gv, Gvbase, kws = cell.get_Gv_weights(gs)
+    mesh = mydf.mesh
+    Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
     b = cell.reciprocal_vectors()
     gxyz = lib.cartesian_prod([numpy.arange(len(x)) for x in Gvbase])
-    ngs = gxyz.shape[0]
+    ngrids = gxyz.shape[0]
 
     kptis = kptij_lst[:,0]
     kptjs = kptij_lst[:,1]
@@ -60,7 +60,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
     for k, kpt in enumerate(uniq_kpts):
         aoaux = ft_ao.ft_ao(fused_cell, Gv, None, b, gxyz, Gvbase, kpt).T
         aoaux = fuse(aoaux)
-        coulG = numpy.sqrt(mydf.weighted_coulG(kpt, False, gs))
+        coulG = numpy.sqrt(mydf.weighted_coulG(kpt, False, mesh))
         kLR = (aoaux.real * coulG).T
         kLI = (aoaux.imag * coulG).T
         if not kLR.flags.c_contiguous: kLR = lib.transpose(kLR.T)
@@ -88,7 +88,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
 
         Gaux = ft_ao.ft_ao(fused_cell, Gv, None, b, gxyz, Gvbase, kpt).T
         Gaux = fuse(Gaux)
-        Gaux *= mydf.weighted_coulG(kpt, False, gs)
+        Gaux *= mydf.weighted_coulG(kpt, False, mesh)
         kLR = Gaux.T.real.copy('C')
         kLI = Gaux.T.imag.copy('C')
         j2c = numpy.asarray(feri['j2c/%d'%uniq_kptji_id])
@@ -135,7 +135,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
             Gblksize = max(16, int(max_memory*.2*1e6/16/buflen/(nkptj+1)))
         else:
             Gblksize = max(16, int(max_memory*.4*1e6/16/buflen/(nkptj+1)))
-        Gblksize = min(Gblksize, ngs, 16384)
+        Gblksize = min(Gblksize, ngrids, 16384)
         pqkRbuf = numpy.empty(buflen*Gblksize)
         pqkIbuf = numpy.empty(buflen*Gblksize)
         # buf for ft_aopair
@@ -163,7 +163,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
                 v = None
 
             shls_slice = (bstart, bend, 0, bend)
-            for p0, p1 in lib.prange(0, ngs, Gblksize):
+            for p0, p1 in lib.prange(0, ngrids, Gblksize):
                 dat = ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
                                             b, gxyz[p0:p1], Gvbase, kpt,
                                             adapted_kptjs, out=buf)
@@ -216,7 +216,7 @@ class MDF(df.DF):
         self.kpts = kpts  # default is gamma point
         self.kpts_band = None
         self.auxbasis = None
-        self.gs = cell.gs
+        self.mesh = cell.mesh
         self.eta = None
 
 # Not input options
@@ -239,7 +239,7 @@ class MDF(df.DF):
             cell = self.cell
             if cell.dimension == 0:
                 return 0.2
-            ke_cutoff = tools.gs_to_cutoff(cell.lattice_vectors(), self.gs)
+            ke_cutoff = tools.mesh_to_cutoff(cell.lattice_vectors(), self.mesh)
             ke_cutoff = ke_cutoff[:cell.dimension].min()
             return aft.estimate_eta_for_ke_cutoff(cell, ke_cutoff, cell.precision)
     @eta.setter
@@ -284,10 +284,10 @@ class MDF(df.DF):
 ################################################################################
 # With this function to mimic the molecular DF.loop function, the pbc gamma
 # point DF object can be used in the molecular code
-    def loop(self):
-        for dat in aft.AFTDF.loop(self):
+    def loop(self, blksize=None):
+        for dat in aft.AFTDF.loop(self, blksize):
             yield dat
-        for dat in df.DF.loop(self):
+        for dat in df.DF.loop(self, blksize):
             yield dat
 
     def get_naoaux(self):

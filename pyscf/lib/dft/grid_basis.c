@@ -92,7 +92,7 @@ void VXCgen_grid(double *out, double *coords, double *atm_coords,
         }
         int ij;
         double fac;
-        double *g = malloc(sizeof(double)*Ngrids);
+        double *g = malloc(sizeof(double)*(Ngrids+2));
 #pragma omp for nowait schedule(static)
         for (ij = 0; ij < natm*natm; ij++) {
                 i = ij / natm;

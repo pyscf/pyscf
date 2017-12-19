@@ -11,11 +11,11 @@ from pyscf.pbc import gto as pgto
 
 
 L = 1.5
-n = 20
+n = 41
 cl = pgto.Cell()
 cl.build(
     a = [[L,0,0], [0,L,0], [0,0,L]],
-    gs = [n,n,n],
+    mesh = [n,n,n],
     atom = 'He %f %f %f' % ((L/2.,)*3),
     basis = 'ccpvdz')
 
@@ -23,7 +23,7 @@ numpy.random.seed(1)
 cl1 = pgto.Cell()
 cl1.build(a = numpy.random.random((3,3)).T,
           precision = 1e-9,
-          gs = [n,n,n],
+          mesh = [n,n,n],
           atom ='''He .1 .0 .0
                    He .5 .1 .0
                    He .0 .5 .0
@@ -54,7 +54,7 @@ class KnownValues(unittest.TestCase):
         cl = pgto.Cell()
         cl.build(
             a = [[L,0,0], [0,L,0], [0,0,L]],
-            gs = [n,n,n],
+            mesh = [n,n,n],
             atom = 'C1 %f %f %f; C2 %f %f %f' % ((L/2.,)*6),
             basis = {'C1':'ccpvdz', 'C2':'gthdzv'})
 
@@ -79,7 +79,7 @@ class KnownValues(unittest.TestCase):
         0.000000000  3.370137329  3.370137329
         3.370137329  0.000000000  3.370137329
         3.370137329  3.370137329  0.000000000''',
-        gs = [7,7,7])
+        mesh = [15]*3)
         rcut = max([cell.bas_rcut(ib, 1e-8) for ib in range(cell.nbas)])
         self.assertEqual(cell.get_lattice_Ls(rcut=rcut).shape, (1217, 3))
         rcut = max([cell.bas_rcut(ib, 1e-9) for ib in range(cell.nbas)])
@@ -90,7 +90,7 @@ class KnownValues(unittest.TestCase):
         cell.unit = 'B'
         Lx = Ly = Lz = 5.
         cell.a = numpy.diag([Lx,Ly,Lz])
-        cell.gs = numpy.array([20,20,20])
+        cell.mesh = numpy.array([41]*3)
         cell.atom = [['He', (2, 0.5*Ly, 0.5*Lz)],
                      ['He', (3, 0.5*Ly, 0.5*Lz)]]
         cell.basis = {'He': [[0, (1.0, 1.0)]]}
@@ -105,7 +105,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(cell.ewald(1  , 100), -0.468640671931, 9)
 
         def check(precision, eta_ref, ewald_ref):
-            ew_eta0, ew_cut0 = cell.get_ewald_params(precision, gs=[20,20,20])
+            ew_eta0, ew_cut0 = cell.get_ewald_params(precision, mesh=[41]*3)
             self.assertAlmostEqual(ew_eta0, eta_ref)
             self.assertAlmostEqual(cell.ewald(ew_eta0, ew_cut0), ewald_ref, 9)
         check(0.001, 3.15273336976, -0.468640679947)
@@ -116,7 +116,7 @@ class KnownValues(unittest.TestCase):
         cell = pgto.Cell()
         numpy.random.seed(10)
         cell.a = numpy.random.random((3,3))*2 + numpy.eye(3) * 2
-        cell.gs = [20]*3
+        cell.mesh = [41]*3
         cell.atom = [['He', (1, 1, 2)],
                      ['He', (3, 2, 1)]]
         cell.basis = {'He': [[0, (1.0, 1.0)]]}
@@ -133,7 +133,7 @@ class KnownValues(unittest.TestCase):
         cell.a = numpy.eye(3) * 4
         cell.atom = 'He 0 0 0; He 0 1 1'
         cell.unit = 'B'
-        cell.gs = [4,4,30]
+        cell.mesh = [9,9,60]
         cell.verbose = 0
         cell.dimension = 2
         cell.rcut = 3.6
@@ -145,7 +145,7 @@ class KnownValues(unittest.TestCase):
         cell.a = numpy.eye(3) * 4
         cell.atom = 'He 0 0 0; He 0 1 1'
         cell.unit = 'B'
-        cell.gs = [4,30,30]
+        cell.mesh = [9,60,60]
         cell.verbose = 0
         cell.dimension = 1
         cell.rcut = 3.6
@@ -157,7 +157,7 @@ class KnownValues(unittest.TestCase):
         cell.a = numpy.eye(3)
         cell.atom = 'He 0 0 0; He 0 1 1'
         cell.unit = 'B'
-        cell.gs = [30] * 3
+        cell.mesh = [60] * 3
         cell.verbose = 0
         cell.dimension = 0
         cell.build()
@@ -182,15 +182,15 @@ class KnownValues(unittest.TestCase):
         from pyscf.pbc.gto import ecp
         cell = pgto.M(
             a = np.eye(3)*5,
-            gs = [4]*3,
+            mesh = [9]*3,
             atom = 'Cu 0 0 1; Na 0 1 0',
-            ecp = 'lanl2dz',
+            ecp = {'Na':'lanl2dz'},
             pseudo = {'Cu': 'gthbp'})
         self.assertTrue(all(cell._ecpbas[:,0] == 1))
 
         cell = pgto.Cell()
         cell.a = numpy.eye(3) * 8
-        cell.gs = [5] * 3
+        cell.mesh = [11] * 3
         cell.atom='''Na 0. 0. 0.
                      H  0.  0.  1.'''
         cell.basis={'Na':'lanl2dz', 'H':'sto3g'}
@@ -204,7 +204,7 @@ class KnownValues(unittest.TestCase):
     def test_ecp_keyword_in_pseudo(self):
         cell = pgto.M(
             a = np.eye(3)*5,
-            gs = [4]*3,
+            mesh = [9]*3,
             atom = 'S 0 0 1',
             ecp = 'lanl2dz',
             pseudo = {'O': 'gthbp', 'Cu': 'stuttgartrsc'})
@@ -213,7 +213,7 @@ class KnownValues(unittest.TestCase):
 
         cell = pgto.M(
             a = np.eye(3)*5,
-            gs = [4]*3,
+            mesh = [9]*3,
             atom = 'S 0 0 1',
             ecp = {'na': 'lanl2dz'},
             pseudo = {'O': 'gthbp', 'Cu': 'stuttgartrsc'})
@@ -222,7 +222,7 @@ class KnownValues(unittest.TestCase):
 
         cell = pgto.M(
             a = np.eye(3)*5,
-            gs = [4]*3,
+            mesh = [9]*3,
             atom = 'S 0 0 1',
             pseudo = {'O': 'gthbp', 'Cu': 'stuttgartrsc'})
         self.assertEqual(cell.ecp, {'Cu': 'stuttgartrsc'})
@@ -230,7 +230,7 @@ class KnownValues(unittest.TestCase):
 
         cell = pgto.M(
             a = np.eye(3)*5,
-            gs = [4]*3,
+            mesh = [9]*3,
             atom = 'S 0 0 1',
             ecp = {'S': 'gthbp', 'na': 'lanl2dz'},
             pseudo = {'O': 'gthbp', 'Cu': 'stuttgartrsc'})
@@ -240,14 +240,14 @@ class KnownValues(unittest.TestCase):
     def test_pseudo_suffix(self):
         cell = pgto.M(
             a = np.eye(3)*5,
-            gs = [4]*3,
+            mesh = [9]*3,
             atom = 'Mg 0 0 1',
             pseudo = {'Mg': 'gth-lda'})
         self.assertEqual(cell.atom_nelec_core(0), 2)
 
         cell = pgto.M(
             a = np.eye(3)*5,
-            gs = [4]*3,
+            mesh = [9]*3,
             atom = 'Mg 0 0 1',
             pseudo = {'Mg': 'gth-lda q2'})
         self.assertEqual(cell.atom_nelec_core(0), 10)

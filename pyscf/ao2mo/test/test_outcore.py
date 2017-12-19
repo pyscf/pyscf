@@ -33,7 +33,7 @@ c_env = numpy.array(mol._env)
 natm = ctypes.c_int(c_atm.shape[0])
 nbas = ctypes.c_int(c_bas.shape[0])
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_nroutcore_grad(self):
         ftmp = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
         erifile = ftmp.name
