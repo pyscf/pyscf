@@ -31,15 +31,15 @@ def get_index_lm(l, m):
     return (l+1)**2 -1 -l + m
 
 
-@nb.jit(nopython=True)
+@nb.jit(nopython=True, parallel=True)
 def get_tem_potential_numba(time, R0, vnorm, vdir, center, rcut, inte1, 
         rr, dr, fr_val, conj_c2r, l, m, jmx, ind_lm, ind_lmm, V_time):
     """
         Numba version of the computation of the external potential in time
         for tem calculations
     """
-    for it, t in enumerate(time):
-        R_sub = R0 + vnorm*vdir*(t - time[0]) - center
+    for it in nb.prange(time.shape[0]):
+        R_sub = R0 + vnorm*vdir*(time[it] - time[0]) - center
         norm = np.sqrt(np.dot(R_sub, R_sub))
 
         if norm > rcut:

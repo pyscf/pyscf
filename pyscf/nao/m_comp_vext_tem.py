@@ -3,6 +3,7 @@ import numpy as np
 from pyscf.nao.m_tools import find_nearrest_index
 from pyscf.nao.m_ao_matelem import ao_matelem_c
 from pyscf.nao.m_csphar import csphar
+from scipy.fftpack import fft
 
 #try:
 from pyscf.nao.m_comp_vext_tem_numba import get_tem_potential_numba
@@ -38,7 +39,6 @@ def comp_vext_tem(self, ao_log=None):
             [l=0 m=0, l=1 m=-1, l=1 m=0, l=1 m=1, ....]
         """
         return (l+1)**2 -1 -l + m
-
 
     V_time = np.zeros((self.time.size), dtype=np.complex64)
 
@@ -118,5 +118,6 @@ def comp_vext_tem(self, ao_log=None):
                 
                 V_time *= dt*np.exp(-1.0j*wmin*(self.time-tmin))
 
-                FT = np.fft.fft(V_time)
+                FT = fft(V_time)
+
                 self.V_freq[:, si + k] = FT[ub:ub+nff]*fact_fft

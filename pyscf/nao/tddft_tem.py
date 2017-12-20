@@ -96,7 +96,9 @@ class tddft_tem(tddft_iter):
                                                                 # and beam offset
         self.check_collision(self.atom2coord)
         self.get_time_range()
+        print("time.size = ", self.time.size)
         self.calc_external_potential()
+        print("end ext pot")
 
         return self.comp_tem_spectrum()
 
@@ -139,23 +141,41 @@ class tddft_tem(tddft_iter):
             with N the number of element of t.
             N must be an odd number in order that t is symmetric
         """
+        from pyscf.nao.m_tools import is_power2
 
         dt = np.min(self.dr)/self.vnorm
         dw = self.freq[1] - self.freq[0]
 
-        N = int(2*np.pi/(dw*dt))
-        #if N % 2 == 0:
-        #  N +=1
-        N += 1
-        
+        N_org = int(2*np.pi/(dw*dt))
+
+        # to improve performance, N must be a power of 2
+        if not is_power2(N_org):
+            power = 1
+            while 2**power < N_org:
+                power +=1
+
+            minima = np.argmin(np.array([abs(2**(power-1) - N_org), abs(2**power - N_org)]))
+            if minima == 0:
+                N = 2**(power-1)
+            else:
+                N = 2**power
+
+            if self.verbosity>0: print("N_org = {0}, N_new = {1}".format(N_org, N))
+            dt = 2*np.pi/(N*dw)
+            dr = dt*self.vnorm
+            self.dr = np.array([dr, dr, dr])
+        else:
+            N = N_org
+
+
         dw_symm = 2.0*np.pi/(N*dt)
 
         wmax = 2.0*np.pi*(N-1)/(N*dt)/2.0
 
-        self.freq_symm = np.arange(-wmax, wmax+dw_symm, dw_symm)
+        self.freq_symm = np.arange(-wmax, wmax+dw_symm, dw_symm)[0:N]
 
         tmax = (N-1)*dt/2
-        self.time = np.arange(-tmax, tmax+dt, dt)
+        self.time = np.arange(-tmax, tmax+dt, dt)[0:N]
         
     def calc_external_potential(self):
         """

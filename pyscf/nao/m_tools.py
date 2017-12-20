@@ -22,3 +22,10 @@ def find_nearrest_index(arr, val):
     """
     idx = (np.abs(arr-val)).argmin()
     return idx
+
+def is_power2(n):
+    """
+        Check if n is a power of 2
+    """
+    assert isinstance(n, int)
+    return ((n & (n-1)) == 0) and n != 0
