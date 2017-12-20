@@ -172,7 +172,7 @@ class KnownValues(unittest.TestCase):
         cisdvec = myci.amplitudes_to_cisdvec(1., (c1a, c1b), (c2aa, c2ab, c2bb))
 
         hcisd0 = myci.contract(myci.amplitudes_to_cisdvec(1., (c1a,c1b), (c2aa,c2ab,c2bb)), eris)
-        self.assertAlmostEqual(lib.finger(hcisd0), 466.56620234351681, 8)
+        self.assertAlmostEqual(lib.finger(hcisd0), 466.56620234351681, 7)
         eris = myci.ao2mo(mf.mo_coeff)
         hcisd0 = myci.contract(cisdvec, eris)
         eri_aa = ao2mo.kernel(mf._eri, mf.mo_coeff[0])

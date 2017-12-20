@@ -22,7 +22,7 @@ def grad_elec(grad_mf, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
     if mo_coeff is None:  mo_coeff = mf.mo_coeff
     log = logger.Logger(grad_mf.stdout, grad_mf.verbose)
 
-    h1 = grad_mf.get_hcore(mol)
+    hcore_deriv = grad_mf.hcore_generator(mol)
     s1 = grad_mf.get_ovlp(mol)
     dm0 = mf.make_rdm1(mo_coeff, mo_occ)
 
@@ -31,7 +31,6 @@ def grad_elec(grad_mf, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
     vhf = grad_mf.get_veff(mol, dm0)
     log.timer('gradients of 2e part', *t0)
 
-    f1 = h1 + vhf
     dme0 = grad_mf.make_rdm1e(mo_energy, mo_coeff, mo_occ)
 
     if atmlst is None:
@@ -40,11 +39,14 @@ def grad_elec(grad_mf, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
     de = numpy.zeros((len(atmlst),3))
     for k, ia in enumerate(atmlst):
         shl0, shl1, p0, p1 = aoslices[ia]
-# h1, s1, vhf are \nabla <i|h|j>, the nuclear gradients = -\nabla
-        vrinv = grad_mf._grad_rinv(mol, ia)
+# h1, s1, vhf are \nabla <i|h|j>, vrinv is the nuclear gradients = -\nabla
+#         h1 = hcore[p0:p1]
+#         vrinv = grad_mf._grad_rinv(mol, ia)
+# h1ao = hcore + vrinv
+        h1ao = hcore_deriv(ia)
 # nabla was applied on bra in f1, *2 for the contributions of nabla|ket>
-        de[k] += numpy.einsum('xij,ij->x', f1[:,p0:p1], dm0[p0:p1]) * 2
-        de[k] += numpy.einsum('xij,ij->x', vrinv, dm0) * 2
+        de[k] += numpy.einsum('xij,ij->x', vhf[:,p0:p1], dm0[p0:p1]) * 2
+        de[k] += numpy.einsum('xij,ij->x', h1ao, dm0) * 2
         de[k] -= numpy.einsum('xij,ij->x', s1[:,p0:p1], dme0[p0:p1]) * 2
     if log.verbose >= logger.DEBUG:
         log.debug('gradients of electronic part')
@@ -177,6 +179,20 @@ class Gradients(lib.StreamObject):
         if mol is None: mol = self.mol
         return get_hcore(mol)
 
+    def hcore_generator(self, mol):
+        with_x2c = getattr(self, 'with_x2c', None)
+        if with_x2c:
+            hcore_deriv = with_x2c.hcore_deriv_generator(deriv=1)
+        else:
+            aoslices = mol.aoslice_by_atom()
+            h1 = self.get_hcore(mol)
+            def hcore_deriv(atm_id):
+                shl0, shl1, p0, p1 = aoslices[atm_id]
+                vrinv = self._grad_rinv(mol, atm_id)
+                vrinv[:,p0:p1] += h1[:,p0:p1]
+                return vrinv
+        return hcore_deriv
+
     def get_ovlp(self, mol=None):
         if mol is None: mol = self.mol
         return get_ovlp(mol)
@@ -218,8 +234,8 @@ class Gradients(lib.StreamObject):
 
     def _grad_rinv(self, mol, ia):
         r''' for given atom, <|\nabla r^{-1}|> '''
-        mol.set_rinv_origin(mol.atom_coord(ia))
-        return -mol.atom_charge(ia) * mol.intor('int1e_iprinv', comp=3)
+        with mol.with_rinv_origin(mol.atom_coord(ia)):
+            return -mol.atom_charge(ia) * mol.intor('int1e_iprinv', comp=3)
 
     grad_elec = grad_elec
 

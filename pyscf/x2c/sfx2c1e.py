@@ -82,11 +82,10 @@ sfx2c = sfx2c1e
 
 
 class SpinFreeX2C(x2c.X2C):
-    '''1-component X2c (spin-free part only) in the real spherical GTO basis.
+    '''1-component X2c (spin-free part only)
     '''
     def get_hcore(self, mol=None):
-        '''1-component X2c hcore Hamiltonian  (spin-free part only) in the
-        real spherical GTO basis.
+        '''1-component X2c hcore Hamiltonian  (spin-free part only)
         '''
         if mol is None: mol = self.mol
         xmol, contr_coeff = self.get_xmol(mol)
@@ -120,6 +119,14 @@ class SpinFreeX2C(x2c.X2C):
         if self.xuncontract and contr_coeff is not None:
             h1 = reduce(numpy.dot, (contr_coeff.T, h1, contr_coeff))
         return h1
+
+    def hcore_deriv_generator(self, mol=None, deriv=1):
+        from pyscf.x2c import sfx2c1e_grad
+        from pyscf.x2c import sfx2c1e_hess
+        if deriv == 1:
+            return sfx2c1e_grad.hcore_grad_generator(self, mol)
+        else:
+            raise NotImplementedError
 
 
 if __name__ == '__main__':
