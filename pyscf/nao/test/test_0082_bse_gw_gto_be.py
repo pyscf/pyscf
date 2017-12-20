@@ -12,7 +12,7 @@ class KnowValues(unittest.TestCase):
 
   def test_bse_gto_vs_nao_inter_0082(self):
     """ Interacting case """
-    print(__name__, 'gto.mo_energy', gto_mf.mo_energy)
+    #print(__name__, 'gto.mo_energy', gto_mf.mo_energy)
     nao_td = bse_iter(mf=gto_mf, gto=mol, verbosity=0, xc_code='GW', perform_gw=True)
     
     omegas = np.linspace(0.0,2.0,450)+1j*0.04

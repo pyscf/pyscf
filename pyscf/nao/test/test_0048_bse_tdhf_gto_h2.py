@@ -14,7 +14,7 @@ gto_td.nstates = 9
 gto_td.singlet = True # False
 gto_td.kernel()
 
-nao_td  = bse_iter(mf=gto_mf, gto=mol, verbosity=1)
+nao_td  = bse_iter(mf=gto_mf, gto=mol, verbosity=0)
 
 class KnowValues(unittest.TestCase):
 
