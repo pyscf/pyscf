@@ -12,8 +12,12 @@ class scf(tddft_iter):
 
   def __init__(self, **kw):
     """ Constructor a self-consistent field """
+    self.perform_scf = kw['perform_scf'] if 'perform_scf' in kw else False
+    inp_params = map(lambda x: kw.pop(x,None), ['xc_code', 'dealloc_hsx'])
     tddft_iter.__init__(self, dtype=np.float64, xc_code='RPA', dealloc_hsx=False, **kw)
     self.xc_code_kernel = copy(self.xc_code)
+    self.xc_code = self.xc_code_mf
+    self.dm_mf   = self.make_rdm1() # necessary to get_hcore(...) in case of pp starting point
     self.hkernel_den = pack2den_l(self.kernel)
     self.pyscf_hf = hf.SCF(self)
     self.pyscf_hf.direct_scf = False # overriding the attributes from hf.SCF ...
@@ -22,11 +26,12 @@ class scf(tddft_iter):
     self.pyscf_hf.get_j = self.get_j
     self.pyscf_hf.get_jk = self.get_jk
     self.pyscf_hf.energy_nuc = self.energy_nuc
+    if self.perform_scf : self.kernel_scf(**kw)
 
   def kernel_scf(self, dump_chk=False, **kw):
     """ This does the actual SCF loop so far only HF """
     from pyscf.nao.m_fermi_energy import fermi_energy as comput_fermi_energy
-    dm0 = self.get_init_guess(**kw)
+    dm0 = self.get_init_guess()
     etot = self.pyscf_hf.kernel(dm0=dm0, dump_chk=dump_chk, **kw)
     self.mo_coeff[0,0,:,:,0] = self.pyscf_hf.mo_coeff.T
     self.mo_energy[0,0,:] = self.pyscf_hf.mo_energy
@@ -47,9 +52,8 @@ class scf(tddft_iter):
     if self.pseudo:
       # This is wrong after a repeated SCF. A better way would be to use pseudo-potentials and really recompute.
       tkin = (0.5*self.laplace_coo()).tocsr()
-      dm = self.make_rdm1()
-      vhar = self.vhartree_coo(dm=dm, **kw).tocsr()
-      vxc  = self.vxc_lil(dm=dm, xc_code=self.xc_code_mf, **kw).tocsr()
+      vhar = self.vhartree_coo(dm=self.dm_mf, **kw).tocsr()
+      vxc  = self.vxc_lil(dm=self.dm_mf, xc_code=self.xc_code_mf, **kw).tocsr()
       vne  = self.get_hamiltonian()[0].tocsr()-tkin-vhar-vxc
     else :
       vne  = self.vnucele_coo_coulomb(**kw)

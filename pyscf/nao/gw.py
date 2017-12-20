@@ -14,7 +14,6 @@ class gw(scf):
     # how to exclude from the input the dtype and xc_code ?
     scf.__init__(self, **kw)
     self.xc_code_scf = copy(self.xc_code)
-    self.xc_code = 'G0W0'
     self.niter_max_ev = kw['niter_max_ev'] if 'niter_max_ev' in kw else 15
     self.nocc_0t = nocc_0t = self.nelectron // (3 - self.nspin)
     self.nocc = min(kw['nocc'],nocc_0t) if 'nocc' in kw else min(6,nocc_0t)
@@ -27,7 +26,6 @@ class gw(scf):
     self.nvrt_conv = kw['nvrt_conv'] if 'nvrt_conv' in kw else self.nvrt
     self.perform_gw = kw['perform_gw'] if 'perform_gw' in kw else False
     
-    self.vnucele_coo_data = self.vnucele_coo()
     self.rescf = kw['rescf'] if 'rescf' in kw else False
     if self.rescf: self.kernel_scf() # here is rescf with HF functional tacitly assumed
     
@@ -58,8 +56,7 @@ class gw(scf):
     
   def get_h0_vh_x_expval(self):
     mat = -0.5*self.get_k()
-    mat += 0.5*self.laplace_coo()
-    mat += self.vnucele_coo_data
+    mat += self.get_hcore()
     mat += self.get_j()
     mat1 = np.dot(self.mo_coeff[0,0,:,:,0], mat)
     expval = np.einsum('nb,nb->n', mat1, self.mo_coeff[0,0,:,:,0])
@@ -257,7 +254,7 @@ class gw(scf):
       mo_eigval[self.nn] = sn2eval_gw
       sn2eval_gw_prev = np.copy(sn2eval_gw)
       err = abs(sn2mismatch[self.nn_close]).sum()/len(self.nn_close)
-      if self.verbosity>0: print('iter', i, mo_eigval[self.nn_close], err, gw_corr_int, gw_corr_res)
+      if self.verbosity>0: print(__name__, i, err, mo_eigval[self.nn_close], gw_corr_int, gw_corr_res)
       if err<self.tol_ev : break
     
     self.sn2eval_gw = sn2eval_gw
@@ -273,32 +270,33 @@ class gw(scf):
     #print(self.mo_energy)
 
     self.mo_energy = self.mo_energy.reshape((self.norbs))
-    self.mo_energy_g0w0 = np.copy(self.mo_energy)
-    self.mo_coeff_g0w0 = np.copy(self.mo_coeff)
+    self.mo_energy_gw = np.copy(self.mo_energy)
+    self.mo_coeff_gw = np.copy(self.mo_coeff)
     #print(self.sn2eval_gw.shape, type(self.sn2eval_gw))
     #print(self.nn, type(self.nn))
     #print(self.mo_energy_g0w0.shape, type(self.mo_energy_g0w0))
-    self.mo_energy_g0w0[self.nn] = self.sn2eval_gw
+    self.mo_energy_gw[self.nn] = self.sn2eval_gw
 
     nn_occ = [n for n in self.nn if n<self.nocc_0t]
     nn_vrt = [n for n in self.nn if n>=self.nocc_0t]
     #print(nn_occ, nn_vrt)
-    scissor_occ = (self.mo_energy_g0w0[nn_occ] - self.mo_energy[nn_occ]).sum()/len(nn_occ)
-    scissor_vrt = (self.mo_energy_g0w0[nn_vrt] - self.mo_energy[nn_vrt]).sum()/len(nn_vrt)
+    scissor_occ = (self.mo_energy_gw[nn_occ] - self.mo_energy[nn_occ]).sum()/len(nn_occ)
+    scissor_vrt = (self.mo_energy_gw[nn_vrt] - self.mo_energy[nn_vrt]).sum()/len(nn_vrt)
     #print(scissor_occ, scissor_vrt)
     mm_occ = list(set(range(self.nocc_0t))-set(nn_occ))
     mm_vrt = list(set(range(self.nocc_0t,self.norbs)) - set(nn_vrt))
     #print(mm_occ, mm_vrt)
-    self.mo_energy_g0w0[mm_occ] +=scissor_occ
-    self.mo_energy_g0w0[mm_vrt] +=scissor_vrt
+    self.mo_energy_gw[mm_occ] +=scissor_occ
+    self.mo_energy_gw[mm_vrt] +=scissor_vrt
     #print(self.mo_energy_g0w0)
-    if self.verbosity>0: print('np.argsort(self.mo_energy_g0w0)', np.argsort(self.mo_energy_g0w0))
-    argsrt = np.argsort(self.mo_energy_g0w0)
-    self.mo_energy_g0w0 = np.sort(self.mo_energy_g0w0)
-    for n,m in enumerate(argsrt): self.mo_coeff_g0w0[0,0,n] = self.mo_coeff[0,0,m]
+    if self.verbosity>0: print(__name__, 'np.argsort(self.mo_energy_gw)', np.argsort(self.mo_energy_gw))
+    argsrt = np.argsort(self.mo_energy_gw)
+    self.mo_energy_gw = np.sort(self.mo_energy_gw)
+    for n,m in enumerate(argsrt): self.mo_coeff_gw[0,0,n] = self.mo_coeff[0,0,m]
+    self.xc_code = 'GW'
     if self.verbosity>0:
-      print('self.mo_energy_g0w0')
-      print(self.mo_energy_g0w0)
-    
+      print(__name__, ' self.mo_energy_gw, self.xc_code ', self.xc_code)
+      print(self.mo_energy_gw)
+        
   kernel_gw = make_mo_g0w0
   

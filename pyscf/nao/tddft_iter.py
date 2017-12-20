@@ -80,7 +80,7 @@ class tddft_iter(mf):
     self.moms0,self.moms1 = pb.comp_moments(dtype=self.dtype)
     self.nprod = self.moms0.size
 
-    if self.verbosity>0 : print('before pb.comp_coulomb_pack')
+    if self.verbosity>0 : print(__name__, ' nprod ', self.nprod, ' cc_da.shape ', self.cc_da.shape)
 
     if load_kernel:
       self.load_kernel_method(**kw)
@@ -95,7 +95,7 @@ class tddft_iter(mf):
         print(' xc_code', xc_code, xc, xc_code.split(','))
         raise RuntimeError('unkn xc_code')
 
-    if self.verbosity>0 : print('before self.ksn2e')
+    if self.verbosity>0 : print(__name__, '      xc_code ', self.xc_code)
         
     # probably unnecessary, require probably does a copy
     # problematic for the dtype, must there should be another option 
@@ -106,11 +106,11 @@ class tddft_iter(mf):
     ksn2fd = fermi_dirac_occupations(self.telec, self.ksn2e, self.fermi_energy)
     if all(ksn2fd[0,0,:]>nfermi_tol):
       print(self.telec, nfermi_tol, ksn2fd[0,0,:])
-      raise RuntimeError('telec is too high?')
+      raise RuntimeError(__name__, 'telec is too high?')
     
     self.ksn2f = (3-self.nspin)*ksn2fd
     self.nfermi = np.argmax(ksn2fd[0,0,:]<nfermi_tol)
-    self.vstart = np.argmax(1.0-ksn2fd[0,0,:]>nfermi_tol)
+    self.vstart = np.argmax(1.0-ksn2fd[0,0,:]>=nfermi_tol)
     
     #print('tddft_iter.__init__')
     #print(self.telec)

@@ -4,7 +4,7 @@ from pyscf import gto, tddft, scf
 from pyscf.nao import bse_iter
 from pyscf.nao import polariz_inter_ave, polariz_nonin_ave
 
-mol = gto.M( verbose = 1, atom = '''H 0 0 0;  H 0.17 0.7 0.587''', basis = 'cc-pvdz',)
+mol = gto.M( verbose = 0, atom = '''H 0 0 0;  H 0.17 0.7 0.587''', basis = 'cc-pvdz',)
 
 gto_mf = scf.RHF(mol)
 gto_mf.kernel()
@@ -14,7 +14,7 @@ gto_td.nstates = 9
 gto_td.singlet = True # False
 gto_td.kernel()
 
-nao_td  = bse_iter(mf=gto_mf, gto=mol)
+nao_td  = bse_iter(mf=gto_mf, gto=mol, verbosity=1)
 
 class KnowValues(unittest.TestCase):
 
@@ -29,7 +29,7 @@ class KnowValues(unittest.TestCase):
     p_ave = -polariz_inter_ave(gto_mf, mol, gto_td, omegas).imag
     data = np.array([omegas.real*27.2114, p_ave])
     np.savetxt('hydrogen.tdhf.omega.inter.pav.txt', data.T, fmt=['%f','%f'])
-    p_iter = -nao_td.comp_polariz_inter_ave(omegas).imag
+    p_iter = -nao_td.polariz_inter_ave(omegas).imag
     data = np.array([omegas.real*27.2114, p_iter])
     np.savetxt('hydrogen.bse_iter_hf.omega.inter.pav.txt', data.T, fmt=['%f','%f'])
     #print('inter', abs(p_ave-p_iter).sum()/omegas.size, nao_td.l0_ncalls)
@@ -45,7 +45,7 @@ class KnowValues(unittest.TestCase):
     p_ave = -polariz_nonin_ave(gto_mf, mol, omegas).imag
     data = np.array([omegas.real*27.2114, p_ave])
     np.savetxt('hydrogen.tdhf.omega.nonin.pav.txt', data.T, fmt=['%f','%f'])
-    p_iter = -nao_td.comp_polariz_nonin_ave(omegas).imag
+    p_iter = -nao_td.polariz_nonin_ave(omegas).imag
     data = np.array([omegas.real*27.2114, p_iter])
     np.savetxt('hydrogen.bse_iter.omega.nonin.pav.txt', data.T, fmt=['%f','%f'])
     #print('nonin', abs(p_ave-p_iter).sum()/omegas.size)

@@ -7,15 +7,19 @@ from scipy.linalg import blas
 from pyscf.nao.m_pack2den import pack2den_u, pack2den_l
 if use_numba: from pyscf.nao.m_iter_div_eigenenergy_numba import div_eigenenergy_numba
 
-class bse_iter(tddft_iter):
+class bse_iter(gw):
 
   def __init__(self, **kw):
-    """ Iterative BSE a la PK, DF, OC JCTC 
+    """ 
+      Iterative BSE a la PK, DF, OC JCTC 
       additionally to the fields from tddft_iter_c, we add the dipole matrix elements dab[ixyz][a,b]
       which is constructed as list of numpy arrays 
        $ d_i = \int f^a(r) r_i f^b(r) dr $
     """
-    tddft_iter.__init__(self, **kw)
+    from pyscf.nao.m_fermi_dirac import fermi_dirac_occupations
+
+    xc_code_kw = kw['xc_code'] if 'xc_code' in kw else None
+    gw.__init__(self, **kw)
     self.l0_ncalls = 0
     self.dip_ab = [d.toarray() for d in self.dipole_coo()]
     self.norbs2 = self.norbs**2
@@ -27,15 +31,46 @@ class bse_iter(tddft_iter):
     self.kernel_4p = (((v_dab.T*(cc_da*kernel_den))*cc_da.T)*v_dab).reshape([n*n,n*n])
     #print(type(self.kernel_4p), self.kernel_4p.shape, 'this is just a reference kernel, must be removed later for sure')
 
+    self.xc_code = self.xc_code if xc_code_kw is None else xc_code_kw 
     xc = self.xc_code.split(',')[0]
+    if self.verbosity>0: 
+      print(__name__, '     xc_code_mf ', self.xc_code_mf)
+      print(__name__, ' xc_code_kernel ', self.xc_code_kernel)
+      print(__name__, '    xc_code_scf ', self.xc_code_scf)
+      print(__name__, '        xc_code ', self.xc_code)
+      
     if xc=='CIS' or xc=='HF' or xc=='GW':
-      pass
       self.kernel_4p -= 0.5*np.einsum('abcd->bcad', self.kernel_4p.reshape([n,n,n,n])).reshape([n*n,n*n])
     elif xc=='RPA' or xc=='LDA' or xc=='GGA':
       pass
     else :
       print(' ?? xc_code ', self.xc_code, xc)
       raise RuntimeError('??? xc_code ???')
+
+    if xc=='GW':
+      w_c_4p = (((v_dab.T*(cc_da*  self.si_c([0.0])[0].real ))*cc_da.T)*v_dab).reshape([n*n,n*n])
+      self.kernel_4p -= 0.5*np.einsum('abcd->bcad', w_c_4p.reshape([n,n,n,n])).reshape([n*n,n*n])
+
+
+    if hasattr(self, 'mo_energy_gw'):
+      # Need to redefine a lot...
+      self.mo_energy_scf = np.copy(self.mo_energy)
+      self.mo_energy = self.mo_energy_gw
+      self.mo_coeff_scf = np.copy(self.mo_coeff)
+      self.mo_coeff = self.mo_coeff_gw
+      self.x = self.mo_coeff[0,0,:,:,0]
+      self.ksn2e = np.require(np.zeros((1,self.nspin,self.norbs)), dtype=self.dtype, requirements='CW')
+      self.ksn2e[0,0,:] = self.mo_energy
+      ksn2fd = fermi_dirac_occupations(self.telec, self.ksn2e, self.fermi_energy)
+      if all(ksn2fd[0,0,:]>self.nfermi_tol):
+        print(__name__, self.telec, nfermi_tol, ksn2fd[0,0,:])
+        raise RuntimeError('telec is too high?')
+    
+      self.ksn2f = (3-self.nspin)*ksn2fd
+      self.nfermi = np.argmax(ksn2fd[0,0,:]<self.nfermi_tol)
+      self.vstart = np.argmax(1.0-ksn2fd[0,0,:]>=self.nfermi_tol)
+      self.xocc = self.mo_coeff[0,0,0:self.nfermi,:,0]
+      self.xvrt = self.mo_coeff[0,0,self.vstart:,:,0]
 
 
   def apply_l0(self, sab, comega=1j*0.0):
@@ -159,7 +194,7 @@ class bse_iter(tddft_iter):
     seff,info = self.seff(sab, comega)
     return self.apply_l0( seff, comega )
 
-  def comp_polariz_nonin_ave(self, comegas):
+  def polariz_nonin_ave(self, comegas):
     """ Non-interacting average polarizability """
     p = np.zeros(len(comegas), dtype=self.dtypeComplex)
     for ixyz in range(3):
@@ -168,12 +203,12 @@ class bse_iter(tddft_iter):
         p[iw] += (vab*self.dip_ab[ixyz]).sum()/3.0
     return p
 
-  def comp_polariz_inter_ave(self, comegas):
+  def polariz_inter_ave(self, comegas):
     """ Compute a direction-averaged interacting polarizability  """
     p = np.zeros(len(comegas), dtype=self.dtypeComplex)
     for ixyz in range(3):
       for iw,omega in enumerate(comegas):
-        if self.verbosity>0: print(ixyz, iw)
+        if self.verbosity>1: print(__name__, ixyz, iw)
         vab = self.apply_l(self.dip_ab[ixyz], omega)
         p[iw] += (vab*self.dip_ab[ixyz]).sum()/3.0
     return p

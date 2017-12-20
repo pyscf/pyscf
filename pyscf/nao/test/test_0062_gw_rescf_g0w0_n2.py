@@ -9,9 +9,9 @@ class KnowValues(unittest.TestCase):
     from pyscf.nao import gw as gw_c
     
     dname = os.path.dirname(os.path.abspath(__file__))
-    gw = gw_c(label='n2', cd=dname, verbosity=1, jcutoff=9, nff_ia=64, tol_ia=1e-6, rescf=True)
+    gw = gw_c(label='n2', cd=dname, verbosity=0, jcutoff=9, nff_ia=64, tol_ia=1e-6, rescf=True)
     gw.kernel_gw()
-    #np.savetxt('eigvals_g0w0_pyscf_rescf_n2_0062.txt', gw.mo_energy_g0w0.T)
+    #np.savetxt('eigvals_g0w0_pyscf_rescf_n2_0062.txt', gw.mo_energy_gw.T)
 
     fc = """-1.294910390463269723e+00
 -6.914426700260764003e-01
@@ -40,7 +40,7 @@ class KnowValues(unittest.TestCase):
 3.002491923857071310e+00
 3.191379493098387865e+00
 """
-    for e,eref_str in zip(gw.mo_energy_g0w0,fc.splitlines()):
+    for e,eref_str in zip(gw.mo_energy_gw,fc.splitlines()):
       self.assertAlmostEqual(e,float(eref_str))
 
 if __name__ == "__main__": unittest.main()

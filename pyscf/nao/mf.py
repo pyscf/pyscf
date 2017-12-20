@@ -28,11 +28,11 @@ class mf(nao):
       pass
     else:
       raise RuntimeError('unknown constructor')
-    if self.verbosity>0: print('before self.init_libnao()')
+    if self.verbosity>0: print(__name__, ' pseudo ', self.pseudo)
     self.init_libnao()
     if self.gen_pb:
       self.pb = prod_basis_c()
-      if self.verbosity>0: print('before self.pb.init_prod_basis_pp_batch(nao=self, **kw)')
+      if self.verbosity>0: print(__name__, ' dtype ', self.dtype, ' norbs ', self.norbs)
       self.pb.init_prod_basis_pp_batch(nao=self, **kw)
 
   def plot_contour(self, w=0.0):

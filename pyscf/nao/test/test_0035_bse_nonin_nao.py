@@ -9,7 +9,7 @@ class KnowValues(unittest.TestCase):
     from pyscf.nao import bse_iter
     
     dname = os.path.dirname(os.path.abspath(__file__))
-    bse = bse_iter(label='water', cd=dname, iter_broadening=1e-2)
+    bse = bse_iter(label='water', cd=dname, iter_broadening=1e-2, xc_code='RPA', verbosity=0)
     omegas = np.linspace(0.0,2.0,500)+1j*bse.eps
     
     pxx = np.zeros(len(omegas))
