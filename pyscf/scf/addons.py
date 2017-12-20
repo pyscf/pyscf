@@ -311,10 +311,6 @@ def convert_to_uhf(mf, out=None, remove_df=False):
     logger.debug(mf, 'Converting %s to UHF', mf.__class__)
 
     def update_mo_(mf, mf1):
-        mf1 = _update_mf_without_soscf(mf, mf1, remove_df)
-        if isinstance(mf, scf.uhf.UHF):
-            return mf1
-
         if mf.mo_energy is not None:
             mf1.mo_energy = numpy.array((mf.mo_energy, mf.mo_energy))
             mf1.mo_coeff = (mf.mo_coeff, mf.mo_coeff)
@@ -330,12 +326,19 @@ def convert_to_uhf(mf, out=None, remove_df=False):
 
     elif out is not None:
         assert(isinstance(out, scf.uhf.UHF))
+        out = _update_mf_without_soscf(mf, out, remove_df)
 
     elif isinstance(mf, scf.uhf.UHF):
-        if isinstance(mf, newton_ah._CIAH_SOSCF):
-            out = copy.copy(mf._scf)
+# Remove with_df for SOSCF method because the post-HF code checks the
+# attribute .with_df to identify whether an SCF object is DF-SCF method.
+# with_df in SOSCF is used in orbital hessian approximation only.  For the
+# returned SCF object, whehter with_df exists in SOSCF has no effects on the
+# mean-field energy and other properties.
+        if hasattr(mf, '_scf'):
+            return _update_mf_without_soscf(mf, copy.copy(mf._scf), remove_df)
         else:
             return copy.copy(mf)
+
     else:
         known_cls = {scf.hf.RHF        : scf.uhf.UHF,
                      scf.rohf.ROHF     : scf.uhf.UHF,
@@ -350,44 +353,38 @@ def convert_to_uhf(mf, out=None, remove_df=False):
     return update_mo_(mf, out)
 
 def _object_without_soscf(mf, known_class, remove_df=False):
-    msg =('Warn: Converting a decorated SCF object to\n'
-          'It is recommended to create an SCF object explicitly and pass it '
-          'to convert_to_xxx function e.g.:\n'
-          '    convert_to_uhf(mf, out=scf.RHF(mol).density_fit())\n')
-    sys.stderr.write(msg)
-# Python resolve the subclass inheritance dynamically based on MRO.  We can
-# change the subclass inheritance order to substitute RHF/RKS with UHF/UKS.
-    mro = mf.__class__.__mro__
-    mronew = []
-    for i, cls in enumerate(mro):
-        if remove_df and 'DFHF' in cls.__name__:
-            continue
-        elif 'SecondOrder' in cls.__name__ or 'SOSCF' in cls.__name__:
-            # Remove SOSCF because SOSCF-UHF cannot be initialized with SOSCF-RHF
-            continue
-        elif cls in known_class:
-            if mronew:
-                mronew = mronew + list(known_class[cls].__mro__)
-                break
-            else:
-                return known_class[cls](mf.mol)
+    sub_classes = []
+    for i, cls in enumerate(mf.__class__.__mro__):
+        if cls in known_class:
+            obj = known_class[cls](mf.mol)
+            break
         else:
-            mronew.append(cls)
-    return lib.overwrite_mro(mf, mronew)
+            sub_classes.append(cls)
+
+# Mimic the initialization procedure to restore the Hamiltonian
+    for cls in reversed(sub_classes):
+        if (not remove_df) and 'DFHF' in cls.__name__:
+            obj = obj.density_fit()
+        elif 'SOSCF' in cls.__name__:
+# SOSCF is not a necessary part
+            # obj = obj.newton()
+            remove_df = remove_df or (not hasattr(mf._scf, 'with_df'))
+        elif 'SFX2C1E' in cls.__name__:
+            obj = obj.sfx2c1e()
+    return _update_mf_without_soscf(mf, obj, remove_df)
 
 def _update_mf_without_soscf(mf, out, remove_df=False):
-    from pyscf.soscf import newton_ah
-    if isinstance(mf, newton_ah._CIAH_SOSCF):
-        keys = set(out.__dict__).intersection(mf._scf.__dict__)
-        remove_df = True
-    else:
-        keys = set(out.__dict__).intersection(mf.__dict__)
+    mf_dic = dict(mf.__dict__)
 
-    if remove_df and 'with_df' in keys:
-        keys.remove('with_df')
+    # For SOSCF, avoid the old _scf to be copied to the new object
+    if '_scf' in mf_dic:
+        mf_dic.pop('_scf')
+        mf_dic.pop('with_df', None)
 
-    for key in keys:
-        setattr(out, key, getattr(mf, key))
+    out.__dict__.update(mf_dic)
+
+    if remove_df and hasattr(out, 'with_df'):
+        delattr(out, 'with_df')
     return out
 
 def convert_to_rhf(mf, out=None, remove_df=False):
@@ -416,10 +413,6 @@ def convert_to_rhf(mf, out=None, remove_df=False):
     logger.debug(mf, 'Converting %s to RHF', mf.__class__)
 
     def update_mo_(mf, mf1):
-        mf1 = _update_mf_without_soscf(mf, mf1, remove_df)
-        if isinstance(mf, scf.hf.RHF):
-            return mf1
-
         if mf.mo_energy is not None:
             mf1.mo_energy = mf.mo_energy[0]
             mf1.mo_coeff =  mf.mo_coeff[0]
@@ -433,12 +426,14 @@ def convert_to_rhf(mf, out=None, remove_df=False):
 
     elif out is not None:
         assert(isinstance(out, scf.hf.RHF))
+        out = _update_mf_without_soscf(mf, out, remove_df)
 
     elif isinstance(mf, scf.hf.RHF):
-        if isinstance(mf, newton_ah._CIAH_SOSCF):
-            out = copy.copy(mf._scf)
+        if hasattr(mf, '_scf'):
+            return _update_mf_without_soscf(mf, copy.copy(mf._scf), remove_df)
         else:
             return copy.copy(mf)
+
     else:
         known_cls = {scf.uhf.UHF      : scf.rohf.ROHF,
                      scf.uhf_symm.UHF : scf.hf_symm.ROHF,
@@ -474,10 +469,6 @@ def convert_to_ghf(mf, out=None, remove_df=False):
     logger.debug(mf, 'Converting %s to GHF', mf.__class__)
 
     def update_mo_(mf, mf1):
-        mf1 = _update_mf_without_soscf(mf, mf1, remove_df)
-        if isinstance(mf, scf.ghf.GHF):
-            return mf1
-
         if mf.mo_energy is not None:
             if isinstance(mf, scf.hf.RHF):
                 nao, nmo = mf.mo_coeff.shape
@@ -524,10 +515,11 @@ def convert_to_ghf(mf, out=None, remove_df=False):
 
     if out is not None:
         assert(isinstance(out, scf.ghf.GHF))
+        out = _update_mf_without_soscf(mf, out, remove_df)
 
     elif isinstance(mf, scf.ghf.GHF):
-        if isinstance(mf, newton_ah._CIAH_SOSCF):
-            out = copy.copy(mf._scf)
+        if hasattr(mf, '_scf'):
+            return _update_mf_without_soscf(mf, copy.copy(mf._scf), remove_df)
         else:
             return copy.copy(mf)
 

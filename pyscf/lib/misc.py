@@ -477,7 +477,7 @@ def overwrite_mro(obj, mro):
     #else:
     #    class Temp(obj.__class__, metaclass=HackMRO):
     #        pass
-    Temp = HackMRO('Temp', obj.__class__.__bases__, obj.__dict__)
+    Temp = HackMRO(obj.__class__.__name__, obj.__class__.__bases__, obj.__dict__)
     obj = Temp()
 # Delete mro function otherwise all subclass of Temp are not able to
 # resolve the right mro

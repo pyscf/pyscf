@@ -228,7 +228,7 @@ def convert_to_uhf(mf, out=None):
     '''Convert the given mean-field object to the corresponding unrestricted
     HF/KS object
     '''
-    from pyscf import scf as mol_scf
+    from pyscf.scf import addons as mol_addons
     from pyscf.pbc import scf
     from pyscf.pbc import dft
 
@@ -240,18 +240,17 @@ def convert_to_uhf(mf, out=None):
                          scf.khf.KRHF  : scf.kuhf.KUHF,
                          dft.rks.RKS   : dft.uks.UKS  ,
                          scf.hf.RHF    : scf.uhf.UHF  }
-            out = mol_scf.addons._recursive_patch(mf.__class__, known_cls,
-                                                  mf.mol, False)
+            out = mol_addons._object_without_soscf(mf, known_cls, False)
     else:
         assert(isinstance(out, (scf.uhf.UHF, scf.kuhf.KUHF)))
 
-    return mol_scf.addons.convert_to_uhf(mf, out)
+    return mol_addons.convert_to_uhf(mf, out, False)
 
 def convert_to_rhf(mf, out=None):
     '''Convert the given mean-field object to the corresponding restricted
     HF/KS object
     '''
-    from pyscf import scf as mol_scf
+    from pyscf.scf import addons as mol_addons
     from pyscf.pbc import scf
     from pyscf.pbc import dft
 
@@ -263,12 +262,11 @@ def convert_to_rhf(mf, out=None):
                          scf.kuhf.KUHF : scf.khf.KRHF ,
                          dft.uks.UKS   : dft.rks.RKS  ,
                          scf.uhf.UHF   : scf.hf.RHF   }
-            out = mol_scf.addons._recursive_patch(mf.__class__, known_cls,
-                                                  mf.mol, False)
+            out = mol_addons._object_without_soscf(mf, known_cls, False)
     else:
         assert(isinstance(out, (scf.hf.RHF, scf.khf.KRHF)))
 
-    return mol_scf.addons.convert_to_rhf(mf, out)
+    return mol_addons.convert_to_rhf(mf, out, False)
 
 def convert_to_ghf(mf, out=None, remove_df=False):
     '''Convert the given mean-field object to the generalized HF/KS object
@@ -284,8 +282,7 @@ def convert_to_ghf(mf, out=None, remove_df=False):
     Returns:
         An generalized SCF object
     '''
-    from pyscf.scf.addons import get_ghf_orbspin
-    from pyscf import scf as mol_scf
+    from pyscf.scf import addons as mol_addons
     from pyscf.pbc import scf
 
     if isinstance(mf, scf.ghf.GHF):
@@ -314,12 +311,12 @@ def convert_to_ghf(mf, out=None, remove_df=False):
                         ea = eb = mf.mo_energy[k]
                         occa = mf.mo_occ[k] > 0
                         occb = mf.mo_occ[k] == 2
-                        orbspin = get_ghf_orbspin(ea, mf.mo_occ[k], True)
+                        orbspin = mol_addons.get_ghf_orbspin(ea, mf.mo_occ[k], True)
                     else:
                         mo_a, mo_b = mf.mo_coeff[k]
                         ea, eb = mf.mo_energy[k]
                         occa, occb = mf.mo_occ[k]
-                        orbspin = get_ghf_orbspin((ea, eb), (occa, occb), False)
+                        orbspin = mol_addons.get_ghf_orbspin((ea, eb), (occa, occb), False)
 
                     nao, nmo = mo_a.shape
 
@@ -345,7 +342,7 @@ def convert_to_ghf(mf, out=None, remove_df=False):
 
     else:
         out = scf.ghf.GHF(mf.cell)
-        return mol_scf.addons.convert_to_ghf(mf, out)
+        return mol_addons.convert_to_ghf(mf, out, False)
 
 def convert_to_khf(mf, out=None):
     '''Convert gamma point SCF object to k-point SCF object

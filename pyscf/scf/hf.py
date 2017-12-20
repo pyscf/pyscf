@@ -140,6 +140,9 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         vhf = mf.get_veff(mol, dm, dm_last, vhf)
         e_tot = mf.energy_tot(dm, h1e, vhf)
 
+        # Here Fock matrix is h1e + vhf, without DIIS.  Calling get_fock
+        # instead of the statement "fock = h1e + vhf" because Fock matrix may
+        # be modified in some methods.
         fock = mf.get_fock(h1e, s1e, vhf, dm)  # = h1e + vhf, no DIIS
         norm_gorb = numpy.linalg.norm(mf.get_grad(mo_coeff, mo_occ, fock))
         norm_ddm = numpy.linalg.norm(dm-dm_last)
@@ -1153,7 +1156,12 @@ class SCF(lib.StreamObject):
 
         logger.info(self, '\n')
         logger.info(self, '******** %s flags ********', self.__class__)
-        logger.info(self, 'method = %s', self.__class__.__name__)
+        method = []
+        cls = self.__class__
+        while cls != SCF:
+            method.append(cls.__name__)
+            cls = cls.__base__
+        logger.info(self, 'method = %s', '-'.join(method))
         logger.info(self, 'initial guess = %s', self.init_guess)
         logger.info(self, 'damping factor = %g', self.damp)
         logger.info(self, 'level shift factor = %s', self.level_shift)
@@ -1525,17 +1533,18 @@ class RHF(SCF):
 
 
 if __name__ == '__main__':
+    from pyscf import scf
     mol = gto.Mole()
     mol.verbose = 5
     mol.output = None
 
     mol.atom = [['He', (0, 0, 0)], ]
     mol.basis = 'ccpvdz'
-    mol.build()
+    mol.build(0, 0)
 
 ##############
 # SCF result
-    method = RHF(mol)
+    method = scf.RHF(mol).x2c().density_fit().newton()
     method.init_guess = '1e'
     energy = method.scf()
     print(energy)

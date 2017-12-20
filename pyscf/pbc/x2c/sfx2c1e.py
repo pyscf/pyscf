@@ -14,6 +14,7 @@ from pyscf.pbc import gto as pbcgto
 from pyscf.pbc.df import aft
 from pyscf.pbc.df import aft_jk
 from pyscf.pbc.df import ft_ao
+from pyscf.pbc.scf import ghf
 
 
 def sfx2c1e(mf):
@@ -70,7 +71,13 @@ def sfx2c1e(mf):
                     else:
                         kpts = kpt
             if self.with_x2c:
-                return self.with_x2c.get_hcore(cell, kpts)
+                hcore = self.with_x2c.get_hcore(cell, kpts)
+                if isinstance(self, ghf.GHF):
+                    if kpts.ndim == 1:
+                        hcore = scipy.linalg.block_diag(hcore, hcore)
+                    else:
+                        hcore = [scipy.linalg.block_diag(h, h) for h in hcore]
+                return hcore
             else:
                 return mf_class.get_hcore(self, cell, kpts)
 

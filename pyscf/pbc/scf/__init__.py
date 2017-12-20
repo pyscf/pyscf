@@ -18,6 +18,7 @@ from pyscf.pbc.scf import addons
 
 RHF = rhf.RHF
 UHF = uhf.UHF
+GHF = ghf.GHF
 
 KRHF = krhf.KRHF
 KUHF = kuhf.KUHF
