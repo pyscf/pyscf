@@ -96,9 +96,7 @@ class tddft_tem(tddft_iter):
                                                                 # and beam offset
         self.check_collision(self.atom2coord)
         self.get_time_range()
-        print("time.size = ", self.time.size)
         self.calc_external_potential()
-        print("end ext pot")
 
         return self.comp_tem_spectrum()
 
