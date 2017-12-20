@@ -4,15 +4,21 @@ from pyscf.nao.m_tools import find_nearrest_index
 from pyscf.nao.m_ao_matelem import ao_matelem_c
 from pyscf.nao.m_csphar import csphar
 from scipy.fftpack import fft
+import warnings
 
-#try:
-from pyscf.nao.m_comp_vext_tem_numba import get_tem_potential_numba
-use_numba = True
-#except:
-#    use_numba = False
+try:
+    import numba as nb
+    from pyscf.nao.m_comp_vext_tem_numba import get_tem_potential_numba
+    use_numba = True
+except BaseException as e:
+    warnings.warn("numba import failed\n" + str(e) + "\n Using plain python")
+    use_numba = False
 
 
-def comp_vext_tem(self, ao_log=None):
+def comp_vext_tem(self, ao_log=None, numba_parallel=True):
+    """
+        Compute the external potential created by a moving charge
+    """
 
     def c2r_lm(conv, clm, clmm, m):
         """
@@ -40,6 +46,8 @@ def comp_vext_tem(self, ao_log=None):
         """
         return (l+1)**2 -1 -l + m
 
+    if use_numba:
+        get_time_potential = nb.jit(nopython=True, parallel=numba_parallel)(get_tem_potential_numba)
     V_time = np.zeros((self.time.size), dtype=np.complex64)
 
     aome = ao_matelem_c(self.ao_log.rr, self.ao_log.pp)
@@ -73,8 +81,6 @@ def comp_vext_tem(self, ao_log=None):
         si = atom2s[atm]
         fi = atom2s[atm+1]
 
-        #print("sum(V_freq) = ", np.sum(abs(self.V_freq.real)), np.sum(abs(self.V_freq.imag)))
-        #print("si, fi = ", si, fi)
         for mu, l in enumerate(self.pb.prod_log.sp_mu2j[sp]):
             s = self.pb.prod_log.sp_mu2s[sp][mu]
             f = self.pb.prod_log.sp_mu2s[sp][mu+1]
@@ -90,7 +96,7 @@ def comp_vext_tem(self, ao_log=None):
                 ind_lmm = get_index_lm(l, -m)
 
                 if use_numba:
-                    get_tem_potential_numba(self.time, R0, self.vnorm, self.vdir, center, rcut, inte1,
+                    get_time_potential(self.time, R0, self.vnorm, self.vdir, center, rcut, inte1,
                         rr, dr, fr_val, me._c2r, l, m, me._j, ind_lm, ind_lmm, V_time)
                 else:
                     for it, t in enumerate(self.time):

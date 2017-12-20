@@ -41,8 +41,8 @@ class tddft_tem(tddft_iter):
 
 
         self.dr = kw["dr"] if "dr" in kw else np.array([0.3, 0.3, 0.3])
+        self.numba_parallel = kw["numba_parallel"] if "numba_parallel" in kw else True 
 
-        # heavy calculations after checking !!
         tddft_iter.__init__(self, **kw)
         self.freq = kw["freq"] if "freq" in kw else np.arange(0.0, 0.367, 1.5*self.eps)
 
@@ -73,7 +73,8 @@ class tddft_tem(tddft_iter):
 
         return self.comp_tem_spectrum_nonin()
 
-    def get_spectrum_inter(self, velec = np.array([1.0, 0.0, 0.0]), beam_offset = np.array([0.0, 0.0, 0.0])):
+    def get_spectrum_inter(self, velec = np.array([1.0, 0.0, 0.0]), 
+                                 beam_offset = np.array([0.0, 0.0, 0.0])):
         """
         Calculate the interacting TEM spectra for an electron trajectory
         
@@ -183,7 +184,7 @@ class tddft_tem(tddft_iter):
 
         self.V_freq = np.zeros((self.freq.size, self.nprod), dtype=np.complex64)
 
-        comp_vext_tem(self, self.pb.prod_log)
+        comp_vext_tem(self, self.pb.prod_log, self.numba_parallel)
         if self.verbosity>0: print("sum(V_freq) = ", np.sum(abs(self.V_freq.real)), np.sum(abs(self.V_freq.imag)))
 
     def comp_tem_spectrum(self, x0=False):

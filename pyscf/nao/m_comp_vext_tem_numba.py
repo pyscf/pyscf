@@ -31,7 +31,7 @@ def get_index_lm(l, m):
     return (l+1)**2 -1 -l + m
 
 
-@nb.jit(nopython=True, parallel=True)
+#@nb.jit(nopython=True, parallel=True)
 def get_tem_potential_numba(time, R0, vnorm, vdir, center, rcut, inte1, 
         rr, dr, fr_val, conj_c2r, l, m, jmx, ind_lm, ind_lmm, V_time):
     """
