@@ -85,7 +85,7 @@ class SpinFreeX2C(x2c.X2C):
     '''1-component X2c (spin-free part only)
     '''
     def get_hcore(self, mol=None):
-        '''1-component X2c hcore Hamiltonian  (spin-free part only)
+        '''1-component X2c Foldy-Wouthuysen (FW Hamiltonian  (spin-free part only)
         '''
         if mol is None: mol = self.mol
         xmol, contr_coeff = self.get_xmol(mol)
@@ -103,9 +103,11 @@ class SpinFreeX2C(x2c.X2C):
                 ish0, ish1, p0, p1 = atom_slices[ia]
                 shls_slice = (ish0, ish1, ish0, ish1)
                 t1 = xmol.intor('int1e_kin', shls_slice=shls_slice)
-                v1 = xmol.intor('int1e_nuc', shls_slice=shls_slice)
                 s1 = xmol.intor('int1e_ovlp', shls_slice=shls_slice)
-                w1 = xmol.intor('int1e_pnucp', shls_slice=shls_slice)
+                with xmol.with_rinv_as_nucleus(ia):
+                    z = -xmol.atom_charge(ia)
+                    v1 = z * xmol.intor('int1e_rinv', shls_slice=shls_slice)
+                    w1 = z * xmol.intor('int1e_prinvp', shls_slice=shls_slice)
                 x[p0:p1,p0:p1] = x2c._x2c1e_xmatrix(t1, v1, w1, s1, c)
             h1 = x2c._get_hcore_fw(t, v, w, s, x, c)
         else:

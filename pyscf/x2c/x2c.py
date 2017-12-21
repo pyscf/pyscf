@@ -51,8 +51,8 @@ class X2C(lib.StreamObject):
             return mol, None
 
     def get_hcore(self, mol=None):
-        '''2-component X2c hcore Hamiltonian (including spin-free and
-        spin-dependent terms) in the j-adapted spinor basis.
+        '''2-component X2c Foldy-Wouthuysen (FW) Hamiltonian (including
+        spin-free and spin-dependent terms) in the j-adapted spinor basis.
         '''
         if mol is None: mol = self.mol
         xmol, contr_coeff_nr = self.get_xmol(mol)
@@ -71,8 +71,10 @@ class X2C(lib.StreamObject):
                 shls_slice = (ish0, ish1, ish0, ish1)
                 s1 = xmol.intor('int1e_ovlp_spinor', shls_slice=shls_slice)
                 t1 = xmol.intor('int1e_spsp_spinor', shls_slice=shls_slice) * .5
-                v1 = xmol.intor('int1e_nuc_spinor', shls_slice=shls_slice)
-                w1 = xmol.intor('int1e_spnucsp_spinor', shls_slice=shls_slice)
+                with xmol.with_rinv_as_nucleus(ia):
+                    z = -xmol.atom_charge(ia)
+                    v1 = z*xmol.intor('int1e_rinv_spinor', shls_slice=shls_slice)
+                    w1 = z*xmol.intor('int1e_sprinvsp_spinor', shls_slice=shls_slice)
                 x[p0:p1,p0:p1] = _x2c1e_xmatrix(t1, v1, w1, s1, c)
             h1 = _get_hcore_fw(t, v, w, s, x, c)
         else:
@@ -260,9 +262,7 @@ def _uncontract_mol(mol, xuncontract=False, exp_drop=0.2):
     ptr = len(pmol._env)
     contr_coeff = []
     for ib in range(mol.nbas):
-        if isinstance(xuncontract, bool):
-            uncontract_me = xuncontract
-        elif isinstance(xuncontract, str):
+        if isinstance(xuncontract, str):
             ia = mol.bas_atom(ib)
             uncontract_me = ((xuncontract == mol.atom_pure_symbol(ia)) or
                              (xuncontract == mol.atom_symbol(ia)))
@@ -272,7 +272,7 @@ def _uncontract_mol(mol, xuncontract=False, exp_drop=0.2):
                              (mol.atom_symbol(ia) in xuncontract) or
                              (ia in xuncontract))
         else:
-            raise RuntimeError('xuncontract needs to be bool, str, tuple or list type')
+            uncontract_me = xuncontract
 
         nc = mol._bas[ib,mole.NCTR_OF]
         l = mol._bas[ib,mole.ANG_OF]

@@ -19,7 +19,7 @@ mol = gto.M(
 )
 
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_sfx2c1e(self):
         myx2c = scf.RHF(mol).sfx2c1e()
         myx2c.with_x2c.xuncontract = False
@@ -29,6 +29,10 @@ class KnowValues(unittest.TestCase):
         myx2c.with_x2c.xuncontract = True
         e = myx2c.kernel()
         self.assertAlmostEqual(e, -76.075429077955874, 9)
+
+        myx2c.with_x2c.approx = 'ATOM1E'
+        e = myx2c.kernel()
+        self.assertAlmostEqual(e, -76.075429671090802, 9)
 
     def test_sfx2c1e_cart(self):
         pmol = mol.copy()
@@ -47,6 +51,10 @@ class KnowValues(unittest.TestCase):
         myx2c.with_x2c.xuncontract = True
         e = myx2c.kernel()
         self.assertAlmostEqual(e, -76.075431226329414, 9)
+
+        myx2c.with_x2c.approx = 'ATOM1E'
+        e = myx2c.kernel()
+        self.assertAlmostEqual(e, -76.075431823222686, 9)
 
 
 if __name__ == "__main__":

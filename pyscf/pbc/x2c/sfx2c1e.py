@@ -1,5 +1,10 @@
 #!/usr/bin/env python
 
+'''
+spin-free X2C correction for extended systems
+(In testing)
+'''
+
 
 import time
 from functools import reduce
@@ -115,9 +120,11 @@ class SpinFreeX2C(X2C):
                 ish0, ish1, p0, p1 = atom_slices[ia]
                 shls_slice = (ish0, ish1, ish0, ish1)
                 t1 = xcell.intor('int1e_kin_sph', shls_slice=shls_slice)
-                v1 = xcell.intor('int1e_nuc_sph', shls_slice=shls_slice)
                 s1 = xcell.intor('int1e_ovlp_sph', shls_slice=shls_slice)
-                w1 = xcell.intor('int1e_pnucp_sph', shls_slice=shls_slice)
+                with xcell.with_rinv_as_nucleus(ia):
+                    z = -xcell.atom_charge(ia)
+                    v1 = z * xcell.intor('int1e_rinv', shls_slice=shls_slice)
+                    w1 = z * xcell.intor('int1e_prinvp', shls_slice=shls_slice)
                 vloc[p0:p1,p0:p1] = v1
                 wloc[p0:p1,p0:p1] = w1
                 x[p0:p1,p0:p1] = x2c._x2c1e_xmatrix(t1, v1, w1, s1, c)
@@ -134,6 +141,7 @@ class SpinFreeX2C(X2C):
 
         h1_kpts = []
         for k in range(len(kpts_lst)):
+# The treatment of pnucp local part has huge effects to hcore
             #h1 = x2c._get_hcore_fw(t[k], vloc, wloc, s[k], x, c) - vloc + v[k]
             #h1 = x2c._get_hcore_fw(t[k], v[k], w[k], s[k], x, c)
             h1 = x2c._get_hcore_fw(t[k], v[k], wloc, s[k], x, c)
