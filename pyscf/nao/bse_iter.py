@@ -52,25 +52,21 @@ class bse_iter(gw):
       self.kernel_4p -= 0.5*np.einsum('abcd->bcad', w_c_4p.reshape([n,n,n,n])).reshape([n*n,n*n])
 
 
-    if hasattr(self, 'mo_energy_gw'):
-      # Need to redefine a lot...
-      self.mo_energy_scf = np.copy(self.mo_energy)
-      self.mo_energy = self.mo_energy_gw
-      self.mo_coeff_scf = np.copy(self.mo_coeff)
-      self.mo_coeff = self.mo_coeff_gw
-      self.x = self.mo_coeff[0,0,:,:,0]
+    if hasattr(self, 'mo_energy_gw') and xc=='GW':  # Need to redefine eigenvectors previously set in the class tddft_iter
       self.ksn2e = np.require(np.zeros((1,self.nspin,self.norbs)), dtype=self.dtype, requirements='CW')
-      self.ksn2e[0,0,:] = self.mo_energy
+      self.ksn2e[0,0,:] = self.mo_energy_gw
+
       ksn2fd = fermi_dirac_occupations(self.telec, self.ksn2e, self.fermi_energy)
       if all(ksn2fd[0,0,:]>self.nfermi_tol):
         print(__name__, self.telec, nfermi_tol, ksn2fd[0,0,:])
         raise RuntimeError('telec is too high?')
-    
       self.ksn2f = (3-self.nspin)*ksn2fd
+
+      self.x = self.mo_coeff_gw[0,0,:,:,0]
       self.nfermi = np.argmax(ksn2fd[0,0,:]<self.nfermi_tol)
       self.vstart = np.argmax(1.0-ksn2fd[0,0,:]>=self.nfermi_tol)
-      self.xocc = self.mo_coeff[0,0,0:self.nfermi,:,0]
-      self.xvrt = self.mo_coeff[0,0,self.vstart:,:,0]
+      self.xocc = self.mo_coeff_gw[0,0,0:self.nfermi,:,0]
+      self.xvrt = self.mo_coeff_gw[0,0,self.vstart:,:,0]
 
 
   def apply_l0(self, sab, comega=1j*0.0):
