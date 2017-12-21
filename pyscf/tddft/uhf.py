@@ -306,6 +306,12 @@ class TDHF(TDA):
         self.e = numpy.array(e)
         self.xy = xy
         return self.e, self.xy
+
+    def nuc_grad_method(self):
+        raise NotImplementedError
+        from pyscf.tddft import uhf_grad
+        return uhf_grad.Gradients(self)
+
 RPA = TDHF
 
 

@@ -2149,6 +2149,27 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         zeta0 = self._env[PTR_RINV_ZETA].copy()
         return _TemporaryMoleContext(self.set_rinv_zeta, (zeta,), (zeta0,))
 
+    def with_rinv_as_nucleus(self, atm_id):
+        '''Retuen a temporary mol context which has the rquired origin of 1/r
+        operator and required nuclear charge distribution on 1/r.
+
+        Examples:
+
+        >>> with mol.with_rinv_as_nucleus(3):
+        ...     mol.intor('int1e_rinv')
+        '''
+        zeta = self._env[self._atm[atm_id,PTR_ZETA]]
+        rinv = self.atom_coord(atm_id)
+        if zeta == 0:
+            return self.with_rinv_origin(rinv)
+        else:
+            rinv0 = self._env[PTR_RINV_ORIG:PTR_RINV_ORIG+3].copy()
+            zeta0 = self._env[PTR_RINV_ZETA].copy()
+            def set_rinv(z, r):
+                self._env[PTR_RINV_ZETA] = z
+                self._env[PTR_RINV_ORIG:PTR_RINV_ORIG+3] = r
+            return _TemporaryMoleContext(set_rinv, (zeta,rinv), (zeta0,rinv0))
+
     def set_geom_(self, atoms, unit='Angstrom', symmetry=None):
         '''Replace geometry
         '''

@@ -179,8 +179,8 @@ def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
     for i0, ia in enumerate(atmlst):
         shl0, shl1, p0, p1 = aoslices[ia]
 
-        mol.set_rinv_origin(mol.atom_coord(ia))
-        h1 = -mol.atom_charge(ia) * mol.intor('int1e_iprinv', comp=3)
+        with mol.with_rinv_as_nucleus(ia):
+            h1 = -mol.atom_charge(ia) * mol.intor('int1e_iprinv', comp=3)
         h1[:,p0:p1] += h1a[:,p0:p1]
 
         shls_slice = (shl0, shl1) + (0, mol.nbas)*3
@@ -214,8 +214,9 @@ def get_hcore(mol):
 
 def _hess_rinv(mol, atom_id):
     mol.set_rinv_origin(mol.atom_coord(atom_id))
-    rinv2aa = mol.intor('int1e_ipiprinv', comp=9)
-    rinv2ab = mol.intor('int1e_iprinvip', comp=9)
+    with mol.with_rinv_as_nucleus(atom_id):
+        rinv2aa = mol.intor('int1e_ipiprinv', comp=9)
+        rinv2ab = mol.intor('int1e_iprinvip', comp=9)
     #mol.set_rinv_origin((0,0,0))
     Z = mol.atom_charge(atom_id)
     rinv2aa *= Z

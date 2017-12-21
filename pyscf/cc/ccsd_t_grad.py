@@ -47,7 +47,7 @@ if __name__ == '__main__':
     print(ehf+ecc+e3ref)
     eris = mycc.ao2mo(mf.mo_coeff)
     conv, l1, l2 = ccsd_t_lambda.kernel(mycc, eris, t1, t2)
-    g1 = kernel(mycc, t1, t2, l1, l2, eris=eris, mf_grad=grad.RHF(mf))
+    g1 = kernel(mycc, t1, t2, l1, l2, eris=eris)
     print(g1)
 #O      0.0000000000            0.0000000000           -0.0112045345
 #H      0.0000000000            0.0234464201            0.0056022672
@@ -77,7 +77,7 @@ H          0.96345360     1.30488291    -0.10782263
     print(ehf0+ecc+e3ref)
     eris = mycc.ao2mo(mf.mo_coeff)
     conv, l1, l2 = ccsd_t_lambda.kernel(mycc, eris, t1, t2)
-    g1 = kernel(mycc, t1, t2, l1, l2, eris=eris, mf_grad=grad.RHF(mf))
+    g1 = kernel(mycc, t1, t2, l1, l2, eris=eris)
     print(g1)
 #CCSD
 #H   0.0113620114            0.0664344363            0.0029855587
