@@ -16,7 +16,7 @@ class KnowValues(unittest.TestCase):
     nao_td = bse_iter(mf=gto_mf, gto=mol, verbosity=0, perform_gw=True)
     
     omegas = np.linspace(0.0,2.0,450)+1j*0.04
-    p_iter = -nao_td.polariz_nonin_ave(omegas).imag
+    p_iter = -nao_td.comp_polariz_nonin_ave(omegas).imag
     data = np.array([omegas.real*27.2114, p_iter])
     np.savetxt('be.bse_iter.omega.nonin.ave.txt', data.T, fmt=['%f','%f'])
 

@@ -194,7 +194,7 @@ class bse_iter(gw):
     seff,info = self.seff(sab, comega)
     return self.apply_l0( seff, comega )
 
-  def polariz_nonin_ave(self, comegas):
+  def comp_polariz_nonin_ave(self, comegas):
     """ Non-interacting average polarizability """
     p = np.zeros(len(comegas), dtype=self.dtypeComplex)
     for ixyz in range(3):
@@ -203,7 +203,7 @@ class bse_iter(gw):
         p[iw] += (vab*self.dip_ab[ixyz]).sum()/3.0
     return p
 
-  def polariz_inter_ave(self, comegas):
+  def comp_polariz_inter_ave(self, comegas):
     """ Compute a direction-averaged interacting polarizability  """
     p = np.zeros(len(comegas), dtype=self.dtypeComplex)
     for ixyz in range(3):
