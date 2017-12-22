@@ -18,10 +18,13 @@ class KnowValues(unittest.TestCase):
     omegas = np.linspace(0.0,2.0,450)+1j*0.04
     p_iter = -b.comp_polariz_inter_ave(omegas).imag
     data = np.array([omegas.real*27.2114, p_iter])
-    np.savetxt('h2_gw_bse_iter.omega.inter.ave.txt', data.T, fmt=['%f','%f'])
+    np.savetxt('h2_gw_bse_iter.omega.inter.ave.txt', data.T)
+    data_ref = np.loadtxt('h2_gw_bse_iter.omega.inter.ave.txt-ref').T
+    #print(abs(data_ref-data).sum()/data.size)
+    self.assertTrue(np.allclose(data_ref, data))
 
     p_iter = -b.comp_polariz_nonin_ave(omegas).imag
     data = np.array([omegas.real*27.2114, p_iter])
-    np.savetxt('h2_gw_bse_iter.omega.nonin.ave.txt', data.T, fmt=['%f','%f'])
+    np.savetxt('h2_gw_bse_iter.omega.nonin.ave.txt', data.T)
         
 if __name__ == "__main__": unittest.main()
