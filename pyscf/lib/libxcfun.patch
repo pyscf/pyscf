@@ -4,7 +4,9 @@ index 6cfb5c4..09b9c93 100644
 +++ b/CMakeLists.txt
 @@ -1,4 +1,5 @@
  cmake_minimum_required(VERSION 2.6 FATAL_ERROR)
++if (${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION}.${CMAKE_PATCH_VERSION} VERSION_GREATER 3.0.0)
 +cmake_policy(SET CMP0042 NEW)
++endif()
  set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_SOURCE_DIR}/cmake)
  set(CMAKE_BUILD_TYPE Debug)
  

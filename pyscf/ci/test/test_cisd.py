@@ -93,16 +93,15 @@ class KnownValues(unittest.TestCase):
         mol.charge = 2
         mol.basis = '3-21g'
         mol.build()
-        mol.verbose = 5
         mf = scf.RHF(mol).run(conv_tol=1e-14)
         ecisd = ci.CISD(mf).kernel()[0]
+        self.assertAlmostEqual(ecisd, -0.024780739973407784, 8)
 
         h2e = ao2mo.kernel(mf._eri, mf.mo_coeff)
         h1e = reduce(numpy.dot, (mf.mo_coeff.T, mf.get_hcore(), mf.mo_coeff))
         eci = fci.direct_spin0.kernel(h1e, h2e, mf.mo_coeff.shape[1], mol.nelectron)[0]
         eci = eci + mol.energy_nuc() - mf.e_tot
         self.assertAlmostEqual(ecisd, eci, 9)
-        self.assertAlmostEqual(ecisd, -0.024780739973407784, 8)
 
     def test_rdm(self):
         mol = gto.Mole()

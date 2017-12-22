@@ -131,8 +131,7 @@ def contract(myci, civec, eris):
         t1[:,p0:p1] += numpy.einsum('jb,iabj->ia', c1, eris_ovvo) * 2
         t1[:,p0:p1] -= numpy.einsum('jb,iajb->ia', c1, eris_oVoV)
 
-        ovov = eris_oVoV
-        ovov *= -.5
+        ovov = -.5 * eris_oVoV
         ovov += eris_ovvo.transpose(3,1,0,2)
         eris_oVoV = eris_oovv = None
         theta = c2[:,:,p0:p1].transpose(2,0,1,3) * 2
