@@ -4,7 +4,10 @@ from pyscf.nao.m_tools import find_nearrest_index
 from pyscf.nao.m_ao_matelem import ao_matelem_c
 from pyscf.nao.m_csphar import csphar
 from scipy.fftpack import fft
+import math
 import warnings
+from pyscf.nao.m_libnao import libnao
+from ctypes import POINTER, c_int, c_int32, c_int64, c_float, c_double
 
 try:
     import numba as nb
@@ -14,10 +17,32 @@ except BaseException as e:
     warnings.warn("numba import failed\n" + str(e) + "\n Using plain python")
     use_numba = False
 
-
 def comp_vext_tem(self, ao_log=None, numba_parallel=True):
     """
         Compute the external potential created by a moving charge
+        using the fortran routine
+    """
+
+    Vfreq_real = np.zeros((self.freq.size, self.nprod), dtype=np.float64)
+    Vfreq_imag = np.zeros((self.freq.size, self.nprod), dtype=np.float64)
+
+    libnao.comp_vext_tem(self.time.ctypes.data_as(POINTER(c_double)),
+                        self.freq_symm.ctypes.data_as(POINTER(c_double)),
+                        c_int(self.time.size),
+                        c_int(self.freq.size), c_int(self.nprod),
+                        c_double(self.vnorm),
+                        self.vdir.ctypes.data_as(POINTER(c_double)),
+                        self.beam_offset.ctypes.data_as(POINTER(c_double)),
+                        Vfreq_real.ctypes.data_as(POINTER(c_double)),
+                        Vfreq_imag.ctypes.data_as(POINTER(c_double)),
+                        )
+
+    return Vfreq_real + 1.0j*Vfreq_imag
+
+def comp_vext_tem_pyth(self, ao_log=None, numba_parallel=True):
+    """
+        Compute the external potential created by a moving charge
+        Python version
     """
 
     def c2r_lm(conv, clm, clmm, m):
@@ -46,6 +71,8 @@ def comp_vext_tem(self, ao_log=None, numba_parallel=True):
         """
         return (l+1)**2 -1 -l + m
 
+    warnings.warn("Obselete routine use comp_vext_tem")
+
     if use_numba:
         get_time_potential = nb.jit(nopython=True, parallel=numba_parallel)(get_tem_potential_numba)
     V_time = np.zeros((self.time.size), dtype=np.complex64)
@@ -67,6 +94,8 @@ def comp_vext_tem(self, ao_log=None, numba_parallel=True):
     ub = self.freq_symm.size//2 - 1
     l2m = [] # list storing m value to corresponding l
     fact_fft = np.exp(-1.0j*self.freq_symm[ub:ub+nff]*tmin)
+    pre_fact = dt*np.exp(-1.0j*wmin*(self.time-tmin))
+
     for l in range(me.jmx+1):
         lm = []
         for m in range(-l, l+1):
@@ -121,8 +150,9 @@ def comp_vext_tem(self, ao_log=None, numba_parallel=True):
                         clmm = (4*np.pi/(2*l+1))*clm_tem[ind_lmm]*(I1 + I2)
                         rlm = c2r_lm(me, clm, clmm, m)
                         V_time[it] = rlm + 0.0j
+            
+                V_time *= pre_fact
                 
-                V_time *= dt*np.exp(-1.0j*wmin*(self.time-tmin))
 
                 FT = fft(V_time)
 
