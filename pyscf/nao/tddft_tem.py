@@ -182,11 +182,7 @@ class tddft_tem(tddft_iter):
         """
         from pyscf.nao.m_comp_vext_tem import comp_vext_tem
 
-        #self.V_freq = np.zeros((self.freq.size, self.nprod), dtype=np.complex64)
-
         self.V_freq = comp_vext_tem(self, self.pb.prod_log, self.numba_parallel)
-        #np.save("Vfreq_pyth.npy", self.V_freq)
-        np.save("Vfreq_fort.npy", self.V_freq)
         if self.verbosity>0: print("sum(V_freq) = ", np.sum(abs(self.V_freq.real)), np.sum(abs(self.V_freq.imag)))
 
     def comp_tem_spectrum(self, x0=False):
