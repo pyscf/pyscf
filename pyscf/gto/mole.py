@@ -2151,7 +2151,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
 
     def with_rinv_as_nucleus(self, atm_id):
         '''Retuen a temporary mol context which has the rquired origin of 1/r
-        operator and required nuclear charge distribution on 1/r.
+        operator and the required nuclear charge distribution on 1/r.
 
         Examples:
 

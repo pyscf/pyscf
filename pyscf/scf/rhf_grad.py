@@ -39,10 +39,6 @@ def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
     de = numpy.zeros((len(atmlst),3))
     for k, ia in enumerate(atmlst):
         shl0, shl1, p0, p1 = aoslices[ia]
-# h1, s1, vhf are \nabla <i|h|j>, vrinv is the nuclear gradients = -\nabla
-#         h1 = hcore[p0:p1]
-#         vrinv = mf_grad._grad_rinv(mol, ia)
-# h1ao = hcore + vrinv
         h1ao = hcore_deriv(ia)
         de[k] += numpy.einsum('xij,ij->x', h1ao, dm0)
 # nabla was applied on bra in vhf, *2 for the contributions of nabla|ket>
@@ -83,6 +79,7 @@ def grad_nuc(mol, atmlst=None):
 
 
 def get_hcore(mol):
+    '''Part of the nuclear gradients of core Hamiltonian'''
     h =(mol.intor('int1e_ipkin', comp=3)
       + mol.intor('int1e_ipnuc', comp=3))
     if mol.has_ecp():
@@ -188,7 +185,8 @@ class Gradients(lib.StreamObject):
         if mol is None: mol = self.mol
         return get_hcore(mol)
 
-    def hcore_generator(self, mol):
+    def hcore_generator(self, mol=None):
+        if mol is None: mol = self.mol
         with_x2c = getattr(self._scf, 'with_x2c', None)
         if with_x2c:
             hcore_deriv = with_x2c.hcore_deriv_generator(deriv=1)
@@ -197,7 +195,9 @@ class Gradients(lib.StreamObject):
             h1 = self.get_hcore(mol)
             def hcore_deriv(atm_id):
                 shl0, shl1, p0, p1 = aoslices[atm_id]
-                vrinv = self._grad_rinv(mol, atm_id)
+                with mol.with_rinv_as_nucleus(atm_id):
+                    z = -mol.atom_charge(atm_id)
+                    vrinv = z * mol.intor('int1e_iprinv', comp=3) # <\nabla|Z/r|>
                 vrinv[:,p0:p1] += h1[:,p0:p1]
                 return vrinv + vrinv.transpose(0,2,1)
         return hcore_deriv
@@ -240,11 +240,6 @@ class Gradients(lib.StreamObject):
         if mo_coeff is None: mo_coeff = self._scf.mo_coeff
         if mo_occ is None: mo_occ = self._scf.mo_occ
         return make_rdm1e(mo_energy, mo_coeff, mo_occ)
-
-    def _grad_rinv(self, mol, ia):
-        r''' for given atom, <|\nabla r^{-1}|> '''
-        with mol.with_rinv_as_nucleus(ia):
-            return -mol.atom_charge(ia) * mol.intor('int1e_iprinv', comp=3)
 
     grad_elec = grad_elec
 

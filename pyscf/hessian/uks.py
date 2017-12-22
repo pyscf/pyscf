@@ -11,7 +11,6 @@ import time
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.scf import rhf_grad
 from pyscf.dft import rks_grad
 from pyscf.hessian import rhf as rhf_hess
 from pyscf.hessian import uhf as uhf_hess
@@ -44,7 +43,7 @@ def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     dme0 = numpy.einsum('pi,qi,i->pq', mocca, mocca, mo_ea)
     dme0+= numpy.einsum('pi,qi,i->pq', moccb, moccb, mo_eb)
 
-    h1aa, h1ab = rhf_hess.get_hcore(mol)
+    hcore_deriv = hessobj.hcore_generator(mol)
     s1aa, s1ab, s1a = rhf_hess.get_ovlp(mol)
 
     if mf.nlc != '':
@@ -153,34 +152,24 @@ def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
             t1 = log.timer_debug1('contracting int2e_ipvip1 for atom %d'%ia, *t1)
         vj1 = vj1a = vj1b = vk1a = vk1b = vk2a = vk2b = None
 
-        rinv2aa, rinv2ab = rhf_hess._hess_rinv(mol, ia)
-        hcore = rinv2ab + rinv2aa.transpose(0,1,3,2)
-        hcore[:,:,p0:p1] += h1ab[:,:,p0:p1]
         s1ao = numpy.zeros((3,nao,nao))
         s1ao[:,p0:p1] += s1a[:,p0:p1]
         s1ao[:,:,p0:p1] += s1a[:,p0:p1].transpose(0,2,1)
         s1ooa = numpy.einsum('xpq,pi,qj->xij', s1ao, mocca, mocca)
         s1oob = numpy.einsum('xpq,pi,qj->xij', s1ao, moccb, moccb)
 
-        de2[i0,i0] += numpy.einsum('xypq,pq->xy', h1aa[:,:,p0:p1], dm0[p0:p1])*2
-        de2[i0,i0] -= numpy.einsum('xypq,pq->xy', rinv2aa, dm0)*2
-        de2[i0,i0] -= numpy.einsum('xypq,pq->xy', rinv2ab, dm0)*2
         de2[i0,i0] += numpy.einsum('xypq,pq->xy', veffa_diag[:,:,p0:p1], dm0a[p0:p1])*2
         de2[i0,i0] += numpy.einsum('xypq,pq->xy', veffb_diag[:,:,p0:p1], dm0b[p0:p1])*2
         de2[i0,i0] -= numpy.einsum('xypq,pq->xy', s1aa[:,:,p0:p1], dme0[p0:p1])*2
 
-        for j0 in range(i0, len(atmlst)):
-            ja = atmlst[j0]
-            q0, q1 = aoslices[ja][2:]
-            de2[j0,i0] += numpy.einsum('xypq,pq->xy', rinv2aa[:,:,q0:q1], dm0[q0:q1])*2
-            de2[j0,i0] += numpy.einsum('xypq,pq->xy', rinv2ab[:,:,q0:q1], dm0[q0:q1])*2
-
         for j0, ja in enumerate(atmlst[:i0+1]):
             q0, q1 = aoslices[ja][2:]
-            de2[i0,j0] += numpy.einsum('xypq,pq->xy', hcore[:,:,:,q0:q1], dm0[:,q0:q1])*2
             de2[i0,j0] += numpy.einsum('xypq,pq->xy', veffa[:,:,q0:q1], dm0a[q0:q1])*2
             de2[i0,j0] += numpy.einsum('xypq,pq->xy', veffb[:,:,q0:q1], dm0b[q0:q1])*2
             de2[i0,j0] -= numpy.einsum('xypq,pq->xy', s1ab[:,:,p0:p1,q0:q1], dme0[p0:p1,q0:q1])*2
+
+            h1ao = hcore_deriv(ia, ja)
+            de2[i0,j0] += numpy.einsum('xypq,pq->xy', h1ao, dm0)
 
         for j0 in range(i0):
             de2[j0,i0] = de2[i0,j0].T
@@ -199,7 +188,7 @@ def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
     moccb = mo_coeff[1][:,mo_occ[1]>0]
     dm0a = numpy.dot(mocca, mocca.T)
     dm0b = numpy.dot(moccb, moccb.T)
-    dR_h1_a = rhf_grad.get_hcore(mol)
+    hcore_deriv = hessobj._scf.nuc_grad_method().hcore_generator(mol)
 
     mf = hessobj._scf
     ni = mf._numint
@@ -212,11 +201,6 @@ def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
     aoslices = mol.aoslice_by_atom()
     for i0, ia in enumerate(atmlst):
         shl0, shl1, p0, p1 = aoslices[ia]
-
-        mol.set_rinv_origin(mol.atom_coord(ia))
-        h1 = -mol.atom_charge(ia) * mol.intor('int1e_iprinv', comp=3)
-        h1[:,p0:p1] += dR_h1_a[:,p0:p1]
-
         shls_slice = (shl0, shl1) + (0, mol.nbas)*3
         if abs(hyb) > 1e-10:
             vj1a, vj1b, vj2a, vj2b, vk1a, vk1b, vk2a, vk2b = \
@@ -228,10 +212,10 @@ def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
                             shls_slice=shls_slice)
             vj1 = vj1a + vj1b
             vj2 = vj2a + vj2b
-            h1a = h1 + vj1 - hyb * vk1a
-            h1b = h1 + vj1 - hyb * vk1b
-            h1a[:,p0:p1] += vj2 - hyb * vk2a
-            h1b[:,p0:p1] += vj2 - hyb * vk2b
+            veffa = vj1 - hyb * vk1a
+            veffb = vj1 - hyb * vk1b
+            veffa[:,p0:p1] += vj2 - hyb * vk2a
+            veffb[:,p0:p1] += vj2 - hyb * vk2b
             if abs(omega) > 1e-10:
                 with mol.with_range_coulomb(omega):
                     vk1a, vk1b, vk2a, vk2b = \
@@ -241,10 +225,10 @@ def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
                                      'jk->s1il', -dm0a         ,
                                      'jk->s1il', -dm0b         ],
                                     shls_slice=shls_slice)
-                h1a -= (alpha-hyb) * vk1a
-                h1b -= (alpha-hyb) * vk1b
-                h1a[:,p0:p1] -= (alpha-hyb) * vk2a
-                h1b[:,p0:p1] -= (alpha-hyb) * vk2b
+                veffa -= (alpha-hyb) * vk1a
+                veffb -= (alpha-hyb) * vk1b
+                veffa[:,p0:p1] -= (alpha-hyb) * vk2a
+                veffb[:,p0:p1] -= (alpha-hyb) * vk2b
         else:
             vj1a, vj1b, vj2a, vj2b = \
                     _get_jk(mol, 'int2e_ip1', 3, 's2kl',
@@ -253,12 +237,13 @@ def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
                             shls_slice=shls_slice)
             vj1 = vj1a + vj1b
             vj2 = vj2a + vj2b
-            h1a = h1 + vj1
-            h1b = h1 + vj1
-            h1a[:,p0:p1] += vj2
-            h1b[:,p0:p1] += vj2
-        h1aoa[ia] += h1a + h1a.transpose(0,2,1)
-        h1aob[ia] += h1b + h1b.transpose(0,2,1)
+            veffa = vj1
+            veffb = vj1.copy()
+            veffa[:,p0:p1] += vj2
+            veffb[:,p0:p1] += vj2
+        h1 = hcore_deriv(ia)
+        h1aoa[ia] += h1 + veffa + veffa.transpose(0,2,1)
+        h1aob[ia] += h1 + veffb + veffb.transpose(0,2,1)
 
     if chkfile is None:
         return h1aoa, h1aob
