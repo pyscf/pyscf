@@ -861,7 +861,9 @@ def direct_sum(subscripts, *operands):
         else:
             out = out.reshape(out.shape+(1,)*op.ndim) - op
 
-    return numpy.einsum('->'.join((''.join(src), dest)), out)
+    out = numpy.einsum('->'.join((''.join(src), dest)), out)
+    out.flags.writeable = True  # old numpy version has this issue
+    return out
 
 def condense(opname, a, locs):
     '''
