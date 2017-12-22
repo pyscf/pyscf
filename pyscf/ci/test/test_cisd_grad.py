@@ -35,6 +35,7 @@ class KnownValues(unittest.TestCase):
             atom = 'H 0 0 0; H 0 0 1.706',
             basis = '631g',
             unit='Bohr')
+        mol.verbose = 5
         ci_scanner = scf.RHF(mol).set(conv_tol=1e-14).apply(ci.CISD).as_scanner()
         e0 = ci_scanner(mol)
         mol = gto.M(
