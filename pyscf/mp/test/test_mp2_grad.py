@@ -26,7 +26,7 @@ class KnownValues(unittest.TestCase):
         pt = mp.mp2.MP2(mf)
         pt.kernel()
         g1 = pt.nuc_grad_method().kernel(pt.t2, mf_grad=grad.RHF(mf), atmlst=[0,1,2])
-        self.assertAlmostEqual(lib.finger(g1), -0.035681131697586257, 7)
+        self.assertAlmostEqual(lib.finger(g1), -0.035681131697586257, 6)
 
     def test_mp2_grad_finite_diff(self):
         mol = gto.M(

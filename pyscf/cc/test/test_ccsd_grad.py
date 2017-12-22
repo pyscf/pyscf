@@ -29,7 +29,7 @@ class KnownValues(unittest.TestCase):
         ecc, t1, t2 = mycc.kernel()
         l1, l2 = mycc.solve_lambda()
         g1 = ccsd_grad.kernel(mycc, t1, t2, l1, l2, mf_grad=grad.RHF(mf))
-        self.assertAlmostEqual(lib.finger(g1), -0.036999389889460096, 7)
+        self.assertAlmostEqual(lib.finger(g1), -0.036999389889460096, 6)
 
         mol = gto.M(
             verbose = 0,

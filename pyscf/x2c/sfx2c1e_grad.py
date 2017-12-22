@@ -128,9 +128,6 @@ def gen_sf_hfw(mol, approx='1E'):
                 h_nesc1 = h_nesc1 + h_nesc1.T
                 h_nesc1+= h1[:nao,:nao]
                 h_nesc1+= reduce(numpy.dot, (x0.T, h1[nao:,nao:], x0))
-                tmp = numpy.dot(h_nesc0, R1)
-                hfw1[i] = tmp + tmp.T
-                hfw1[i]+= reduce(numpy.dot, (R0.T, h_nesc1, R0))
             else:
                 x1 = _get_x1(e0, c0, h1, m1, x0)
 
@@ -147,9 +144,9 @@ def gen_sf_hfw(mol, approx='1E'):
                 h_nesc1+= h1[:nao,:nao]
                 h_nesc1+= reduce(numpy.dot, (x0.T, h1[nao:,nao:], x0))
 
-                tmp = numpy.dot(h_nesc0, R1)
-                hfw1[i] = tmp + tmp.T
-                hfw1[i]+= reduce(numpy.dot, (R0.T, h_nesc1, R0))
+            tmp = reduce(numpy.dot, (R0.T, h_nesc0, R1))
+            hfw1[i] = tmp + tmp.T
+            hfw1[i]+= reduce(numpy.dot, (R0.T, h_nesc1, R0))
         return hfw1
 
     return hcore_deriv

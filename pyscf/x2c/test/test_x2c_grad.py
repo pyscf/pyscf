@@ -178,7 +178,7 @@ def get_x1(mol, ia):
 
 mol1 = gto.M(
     verbose = 0,
-    atom = [["O" , (0. , 0.     , 0.001)],
+    atom = [["O" , (0. , 0.     , 0.0001)],
             [1   , (0. , -0.757 , 0.587)],
             [1   , (0. , 0.757  , 0.587)]],
     basis = '3-21g',
@@ -186,7 +186,7 @@ mol1 = gto.M(
 
 mol2 = gto.M(
     verbose = 0,
-    atom = [["O" , (0. , 0.     ,-0.001)],
+    atom = [["O" , (0. , 0.     ,-0.0001)],
             [1   , (0. , -0.757 , 0.587)],
             [1   , (0. , 0.757  , 0.587)]],
     basis = '3-21g',
@@ -203,12 +203,12 @@ mol = gto.M(
 
 class KnownValues(unittest.TestCase):
     def test_x1(self):
-        with light_speed(20) as c:
+        with light_speed(10) as c:
             x_1 = get_x0(mol1)
             x_2 = get_x0(mol2)
-            x1_ref = (x_1 - x_2) / 0.002 * lib.param.BOHR
+            x1_ref = (x_1 - x_2) / 0.0002 * lib.param.BOHR
             x1t = get_x1(mol, 0)[2]
-            self.assertAlmostEqual(abs(x1t-x1_ref).max(), 0, 5)
+            self.assertAlmostEqual(abs(x1t-x1_ref).max(), 0, 7)
 
             x0 = get_x0(mol)
             h0, s0 = get_h0_s0(mol)
@@ -218,12 +218,12 @@ class KnownValues(unittest.TestCase):
             self.assertAlmostEqual(abs(x1-x1t).max(), 0, 9)
 
     def test_R1(self):
-        with light_speed(20) as c:
+        with light_speed(10) as c:
             R_1 = get_R(mol1)
             R_2 = get_R(mol2)
-            R1_ref = (R_1 - R_2) / 0.002 * lib.param.BOHR
+            R1_ref = (R_1 - R_2) / 0.0002 * lib.param.BOHR
             R1t = get_r1(mol, 0, 2)
-            self.assertAlmostEqual(abs(R1t-R1_ref).max(), 0, 5)
+            self.assertAlmostEqual(abs(R1t-R1_ref).max(), 0, 7)
 
             s0 = mol.intor('int1e_ovlp')
             t0 = mol.intor('int1e_kin')
@@ -258,20 +258,20 @@ class KnownValues(unittest.TestCase):
             self.assertAlmostEqual(abs(R1-R1t).max(), 0, 9)
 
     def test_hfw(self):
-        with light_speed(20) as c:
+        with light_speed(10) as c:
             x2c_1 = sfx2c1e.SpinFreeX2C(mol1)
             x2c_2 = sfx2c1e.SpinFreeX2C(mol2)
             x2cobj = sfx2c1e.SpinFreeX2C(mol)
-            fh_ref = (x2c_1.get_hcore() - x2c_2.get_hcore()) / 0.002 * lib.param.BOHR
+            fh_ref = (x2c_1.get_hcore() - x2c_2.get_hcore()) / 0.0002 * lib.param.BOHR
             fh = x2cobj.hcore_deriv_generator(deriv=1)
-            self.assertAlmostEqual(abs(fh(0)[2] - fh_ref).max(), 0, 4)
+            self.assertAlmostEqual(abs(fh(0)[2] - fh_ref).max(), 0, 7)
 
             x2c_1.xuncontract = 0
             x2c_2.xuncontract = 0
             x2cobj.xuncontract =0
-            fh_ref = (x2c_1.get_hcore() - x2c_2.get_hcore()) / 0.002 * lib.param.BOHR
+            fh_ref = (x2c_1.get_hcore() - x2c_2.get_hcore()) / 0.0002 * lib.param.BOHR
             fh = x2cobj.hcore_deriv_generator(deriv=1)
-            self.assertAlmostEqual(abs(fh(0)[2] - fh_ref).max(), 0, 4)
+            self.assertAlmostEqual(abs(fh(0)[2] - fh_ref).max(), 0, 7)
             x2c_1.xuncontract = 1
             x2c_2.xuncontract = 1
             x2cobj.xuncontract =1
@@ -279,9 +279,9 @@ class KnownValues(unittest.TestCase):
             x2c_1.approx = 'ATOM1E'
             x2c_2.approx = 'ATOM1E'
             x2cobj.approx = 'ATOM1E'
-            fh_ref = (x2c_1.get_hcore() - x2c_2.get_hcore()) / 0.002 * lib.param.BOHR
+            fh_ref = (x2c_1.get_hcore() - x2c_2.get_hcore()) / 0.0002 * lib.param.BOHR
             fh = x2cobj.hcore_deriv_generator(deriv=1)
-            self.assertAlmostEqual(abs(fh(0)[2] - fh_ref).max(), 0, 4)
+            self.assertAlmostEqual(abs(fh(0)[2] - fh_ref).max(), 0, 7)
 
 if __name__ == "__main__":
     print("Full Tests for sfx2c1e gradients")

@@ -38,7 +38,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(numpy.dot(rho[0],v[0]), -81.771672134676805, 9)
         self.assertAlmostEqual(numpy.dot(rho[0],v[1]), 27.485383952241612, 9)
         self.assertAlmostEqual(numpy.dot(rho[0],f[0]), 186.8238053926263, 9)
-        self.assertAlmostEqual(numpy.dot(rho[0],f[1]), -3391.2422871100111, 9)
+        self.assertAlmostEqual(numpy.dot(rho[0],f[1]), -3391.2422871100111, 7)
         self.assertAlmostEqual(numpy.dot(rho[0],f[2]), 0, 9)
 
 if __name__ == "__main__":

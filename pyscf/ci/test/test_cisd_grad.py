@@ -27,7 +27,7 @@ class KnownValues(unittest.TestCase):
         myci.conv_tol = 1e-10
         myci.kernel()
         g1 = myci.nuc_grad_method().kernel(myci.ci, mf_grad=grad.RHF(mf), atmlst=[0,1,2])
-        self.assertAlmostEqual(lib.finger(g1), -0.032562347119070523, 7)
+        self.assertAlmostEqual(lib.finger(g1), -0.032562347119070523, 6)
 
     def test_cisd_grad_finite_diff(self):
         mol = gto.M(

@@ -136,7 +136,7 @@ class KnownValues(unittest.TestCase):
         t2 = t2 + t2.transpose(1,0,3,2)
 
         t1b, t2b = cc.ccsd.update_amps(mycc2, t1, t2, eris2)
-        self.assertAlmostEqual(lib.finger(t1b), -106360.5276951083, 7)
+        self.assertAlmostEqual(lib.finger(t1b), -106360.5276951083, 6)
         self.assertAlmostEqual(lib.finger(t2b), 66540.100267798145, 6)
 
         mycc2.max_memory = 0
