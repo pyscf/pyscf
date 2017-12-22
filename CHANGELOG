@@ -11,6 +11,7 @@ PySCF 1.4.3 (2018-01-?)
 * Improved
   - Assert convergence in geometry optimization
   - Initial guess in SCF PES scanning
+  - Memory usage for generating becke-grids in DFT
 * Bugfix
   - XC parser to support the scaled compound functional
   - The effects of level_shift in second order SCF
