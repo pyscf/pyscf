@@ -73,11 +73,10 @@ if LooseVersion(numpy.__version__) <= LooseVersion('1.8.0'):
                       "Some modules (DFT, CC, MRPT) might be affected because of the bug in old numpy." %
                       numpy.__version__)
 import h5py
-if h5py.__version__[:4] == '2.2.':
+if h5py.version.version[:4] == '2.2.':
     sys.stderr.write('h5py-%s is found in your environment. '
                      'h5py-%s has bug in threading mode.\n'
-                     'Async-IO is disabled.\n' %
-                     h5py.__version__, h5py.__version__)
+                     'Async-IO is disabled.\n' % ((h5py.version.version,)*2))
 from pyscf import gto
 from pyscf import lib
 from pyscf import scf
