@@ -577,7 +577,7 @@ class call_in_background(object):
             def def_async_fn(fn):
                 return fn
 
-        elif h5py.__version__[:4] == '2.2.':
+        elif h5py.version.version[:4] == '2.2.':
 # h5py-2.2.* has bug in threading mode.
             def def_async_fn(fn):
                 return fn
