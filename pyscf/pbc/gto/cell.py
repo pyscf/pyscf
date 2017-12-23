@@ -974,6 +974,12 @@ class Cell(mole.Mole):
             else:
                 ke_cutoff = self.ke_cutoff
             self.mesh = pbctools.cutoff_to_mesh(_a, ke_cutoff)
+            if self.dimension < 3 and self.low_dim_ft_type is None:
+                #prec ~ exp(-0.436392335*mesh -2.99944305)*nelec
+                meshz = (np.log(self.nelectron/self.precision)-2.99944305)/0.436392335
+                self.mesh[self.dimension:] = int(meshz)
+            elif self.dimension < 2 and self.low_dim_ft_type is not None:
+                raise NotImplementedError
 
         if self.ew_eta is None or self.ew_cut is None:
             self.ew_eta, self.ew_cut = self.get_ewald_params(self.precision, self.mesh)
