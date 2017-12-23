@@ -1,5 +1,11 @@
 #!/usr/bin/env python
 
+'''
+Analytical nuclear gradients for 1-electron spin-free x2c method
+
+Ref.
+JCP 135 084114
+'''
 
 import time
 from functools import reduce
@@ -10,8 +16,6 @@ from pyscf import lib
 from pyscf import gto
 from pyscf.lib import logger
 from pyscf.x2c import x2c
-
-# JCP 135 084114
 
 def hcore_grad_generator(x2cobj, mol=None):
     '''nuclear gradients of 1-component X2c hcore Hamiltonian  (spin-free part only)
@@ -87,7 +91,7 @@ def gen_sf_hfw(mol, approx='1E'):
     s1 = mol.intor('int1e_ipovlp', comp=3)
     t1 = mol.intor('int1e_ipkin', comp=3)
     v1 = mol.intor('int1e_ipnuc', comp=3)
-    w1 = mol.intor('int1e_ipspnucsp', comp=12).reshape(3,4,nao,nao)[:,3]
+    w1 = mol.intor('int1e_ippnucp', comp=3)
     n2 = nao * 2
     h1 = numpy.zeros((n2,n2), dtype=v1.dtype)
     m1 = numpy.zeros((n2,n2), dtype=v1.dtype)
@@ -97,7 +101,7 @@ def gen_sf_hfw(mol, approx='1E'):
         with mol.with_rinv_origin(mol.atom_coord(ia)):
             z = mol.atom_charge(ia)
             rinv1   = -z*mol.intor('int1e_iprinv', comp=3)
-            prinvp1 = -z*mol.intor('int1e_ipsprinvsp', comp=12).reshape(3,4,nao,nao)[:,3]
+            prinvp1 = -z*mol.intor('int1e_ipprinvp', comp=3)
         rinv1  [:,p0:p1,:] -= v1[:,p0:p1]
         prinvp1[:,p0:p1,:] -= w1[:,p0:p1]
 
@@ -221,6 +225,8 @@ def _get_r1(s1, s_nesc1, s_nesc0, s0_roots, r0_roots):
 
 if __name__ == '__main__':
     from pyscf import gto
+    bak = lib.param.LIGHT_SPEED
+    lib.param.LIGHT_SPEED = 10
     def get_h(mol):
         c = lib.param.LIGHT_SPEED
         t = mol.intor_symmetric('int1e_kin')
@@ -258,3 +264,4 @@ if __name__ == '__main__':
     hcore_deriv = gen_sf_hfw(mol)
     h1 = hcore_deriv(0)
     print(abs(h1[2]-h_ref).max())
+    lib.param.LIGHT_SPEED = bak

@@ -57,21 +57,21 @@ class KnownValues(unittest.TestCase):
         uhf.conv_tol_grad = 1e-6
         uhf.kernel()
         g = grad.DHF(uhf)
-        self.assertAlmostEqual(finger(g.grad_elec()), 10.126445612578864, 7)
+        self.assertAlmostEqual(finger(g.grad_elec()), 10.126445612578864, 6)
 
     def test_nr_uhf(self):
         mf = scf.UHF(h2o_n)
         mf.conv_tol = 1e-14
         mf.kernel()
         g = grad.UHF(mf)
-        self.assertAlmostEqual(lib.finger(g.grad_elec()), 4.2250348208172541, 7)
+        self.assertAlmostEqual(lib.finger(g.grad_elec()), 4.2250348208172541, 6)
 
     def test_nr_rohf(self):
         mf = scf.ROHF(h2o_n)
         mf.conv_tol = 1e-14
         mf.kernel()
         g = grad.ROHF(mf)
-        self.assertAlmostEqual(lib.finger(g.grad_elec()), 4.1499791106739679, 7)
+        self.assertAlmostEqual(lib.finger(g.grad_elec()), 4.1499791106739679, 6)
 
     def test_energy_nuc(self):
         rhf = scf.RHF(h2o)

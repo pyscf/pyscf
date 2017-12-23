@@ -170,7 +170,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
 #        feri['j2c/%d'%k] = fuse(fuse(j2c[k]).T).T
 #        aoaux = LkR = LkI = coulG = None
 
-    max_memory = max(2000, mydf.max_memory - mem_now)
+    max_memory = max(2000, mydf.max_memory - lib.current_memory()[0])
     blksize = max(2048, int(max_memory*.5e6/16/fused_cell.nao_nr()))
     log.debug2('max_memory %s (MB)  blocksize %s', max_memory, blksize)
     for k, kpt in enumerate(uniq_kpts):
