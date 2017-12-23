@@ -38,13 +38,14 @@ class mf(nao):
       self.pb.init_prod_basis_pp_batch(nao=self, **kw)
 
   def make_rdm1(self, mo_coeff=None, mo_occ=None):
-    """ This is spin-saturated case"""
     # from pyscf.scf.hf import make_rdm1 -- different index order here
-    if mo_occ is None: mo_occ = self.mo_occ[0,0,:]
-    if mo_coeff is None: mo_coeff = self.mo_coeff[0,0,:,:,0]
-    mocc = mo_coeff[mo_occ>0,:]
+    if mo_occ is None: mo_occ = self.mo_occ[0,:,:]
+    if mo_coeff is None: mo_coeff = self.mo_coeff[0,:,:,:,0]
     dm = np.zeros((1,self.nspin,self.norbs,self.norbs,1))
-    dm[0,0,:,:,0] = np.dot(mocc.T.conj()*mo_occ[mo_occ>0], mocc)
+    for s in range(self.nspin):
+      xocc = mo_coeff[s,mo_occ[s]>0,:]
+      focc = mo_occ[s,mo_occ[s]>0]
+      dm[0,s,:,:,0] = np.dot(xocc.T.conj() * focc, xocc)
     return dm
 
   def init_mf(self, **kw):
@@ -52,8 +53,9 @@ class mf(nao):
     #print(__name__, 'mf init_mf>>>>>>')
 
     self.telec = kw['telec'] if 'telec' in kw else 0.0000317 # 10K
-    mf = self.mf = kw['mf']
+    self.mf = mf = kw['mf']
     self.xc_code = mf.xc if hasattr(mf, 'xc') else 'HF'
+    self.k2xyzw = np.array([[0.0,0.0,0.0,1.0]])
 
   def init_mo_coeff_label(self, **kw):
     """ Constructor a self-consistent field calculation class """
@@ -65,12 +67,13 @@ class mf(nao):
     self.fermi_energy = kw['fermi_energy'] if 'fermi_energy' in kw else self.fermi_energy
     ksn2fd = fermi_dirac_occupations(self.telec, self.mo_energy, self.fermi_energy)
     self.mo_occ = (3-self.nspin)*ksn2fd
+    self.k2xyzw = self.xml_dict["k2xyzw"]
 
   def diag_check(self, atol=1e-5, rtol=1e-4):
     from pyscf.nao.m_sv_diag import sv_diag 
-    ksn2e = self.xml_dict['ksn2e']
+    ksn2e = self.mo_energy
     ac = True
-    for k,kvec in enumerate(self.xml_dict["k2xyzw"]):
+    for k,kvec in enumerate(self.k2xyzw):
       for spin in range(self.nspin):
         e,x = sv_diag(self, kvec=kvec[0:3], spin=spin)
         eref = ksn2e[k,spin,:]

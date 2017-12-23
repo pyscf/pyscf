@@ -10,6 +10,7 @@ class KnowValues(unittest.TestCase):
     import os
     dname = os.path.dirname(os.path.abspath(__file__))
     sv = mf(label='water', cd=dname)
+    sv.diag_check()
     self.assertTrue(abs(sv.ucell).sum()>0)
     pb = sv.pb
     self.assertEqual(sv.norbs, 23)

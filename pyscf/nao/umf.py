@@ -37,16 +37,6 @@ class umf(mf):
     self.fermi_energy = kw['fermi_energy'] if 'fermi_energy' in kw else fermi
     self.xc_code = mf.xc if hasattr(mf, 'xc') else 'HF'
 
-  def make_rdm1(self, mo_coeff=None, mo_occ=None):
-    # from pyscf.scf.hf import make_rdm1 -- different index order here
-    if mo_occ is None: mo_occ = self.mo_occ[0,:,:]
-    if mo_coeff is None: mo_coeff = self.mo_coeff[0,:,:,:,0]
-    dm = np.zeros((1,self.nspin,self.norbs,self.norbs,1))
-    for s in range(self.nspin):
-      mocc = mo_coeff[s,mo_occ[s]>0,:]
-      dm[0,s,:,:,0] = np.dot(mocc.T.conj()*mo_occ[s,mo_occ>0], mocc)
-    return dm
-
 #
 # Example of reading pySCF mean-field calculation.
 #
