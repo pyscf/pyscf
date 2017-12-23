@@ -5,10 +5,10 @@ class KnowValues(unittest.TestCase):
 
   def test_dens_elec(self):
     """ Compute density in coordinate space with scf, integrate and compare with number of electrons """
-    from pyscf.nao import mf
+    from pyscf.nao import rmf
     from timeit import default_timer as timer
     
-    sv = mf(label='water', cd=os.path.dirname(os.path.abspath(__file__)))
+    sv = rmf(label='water', cd=os.path.dirname(os.path.abspath(__file__)))
     dm = sv.make_rdm1()
     #dm = sv.comp_dm()
     #print(sv.get_occupations())

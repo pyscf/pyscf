@@ -1,6 +1,6 @@
 from __future__ import print_function, division
 import os,unittest,numpy as np
-from pyscf.nao import mf, conv_yzx2xyz_c
+from pyscf.nao import rmf, conv_yzx2xyz_c
 from pyscf import gto, scf as scf_gto
 
 mol = gto.M( verbose = 1,
@@ -19,7 +19,7 @@ class KnowValues(unittest.TestCase):
     gto_mf = scf_gto.RKS(mol)
     gto_mf.kernel()
         
-    sv = mf(mf=gto_mf, gto=mol)
+    sv = rmf(mf=gto_mf, gto=mol)
     dm = sv.make_rdm1()
     grid = sv.build_3dgrid_pp(level=5)
     dens = sv.dens_elec(grid.coords, dm)

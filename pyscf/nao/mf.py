@@ -9,13 +9,15 @@ class mf(nao):
 
   def __init__(self, **kw):
     """ Constructor a mean field class (store result of a mean-field calc, deliver density matrix etc) """
+    #print(__name__, 'before construct')
     nao.__init__(self, **kw)
-    self.dtype = kw['dtype'] if 'dtype' in kw else np.float32
+    self.dtype = kw['dtype'] if 'dtype' in kw else np.float64
     self.pseudo = hasattr(self, 'sp2ion') 
     self.verbosity = kw['verbosity'] if 'verbosity' in kw else 0
     self.gen_pb = kw['gen_pb'] if 'gen_pb' in kw else True
     
     if 'mf' in kw:
+      #print(__name__, 'init_mf')
       self.init_mf(**kw)
     elif 'label' in kw:
       self.init_mo_coeff_label(**kw)
@@ -35,58 +37,22 @@ class mf(nao):
       if self.verbosity>0: print(__name__, ' dtype ', self.dtype, ' norbs ', self.norbs)
       self.pb.init_prod_basis_pp_batch(nao=self, **kw)
 
-  def plot_contour(self, w=0.0):
-    """
-      Plot contour with poles of Green's function in the self-energy 
-      SelfEnergy(w) = G(w+w')W(w')
-      with respect to w' = Re(w')+Im(w')
-      Poles of G(w+w') are located: w+w'-(E_n-Fermi)+i*eps sign(E_n-Fermi)==0 ==> 
-      w'= (E_n-Fermi) - w -i eps sign(E_n-Fermi)
-    """
-    try :
-      import matplotlib.pyplot as plt
-      from matplotlib.patches import Arc, Arrow 
-    except:
-      print('no matplotlib?')
-      return
-
-    fig,ax = plt.subplots()
-    fe = self.fermi_energy
-    ee = self.mo_energy
-    iee = 0.5-np.array(ee>fe)
-    eew = ee-fe-w
-    ax.plot(eew, iee, 'r.', ms=10.0)
-    pp = list()
-    pp.append(Arc((0,0),4,4,angle=0, linewidth=2, theta1=0, theta2=90, zorder=2, color='b'))
-    pp.append(Arc((0,0),4,4,angle=0, linewidth=2, theta1=180, theta2=270, zorder=2, color='b'))
-    pp.append(Arrow(0,2,0,-4,width=0.2, color='b', hatch='o'))
-    pp.append(Arrow(-2,0,4,0,width=0.2, color='b', hatch='o'))
-    for p in pp: ax.add_patch(p)
-    ax.set_aspect('equal')
-    ax.grid(True, which='both')
-    ax.axhline(y=0, color='k')
-    ax.axvline(x=0, color='k')
-    plt.ylim(-3.0,3.0)
-    plt.show()
+  def make_rdm1(self, mo_coeff=None, mo_occ=None):
+    """ This is spin-saturated case"""
+    # from pyscf.scf.hf import make_rdm1 -- different index order here
+    if mo_occ is None: mo_occ = self.mo_occ[0,0,:]
+    if mo_coeff is None: mo_coeff = self.mo_coeff[0,0,:,:,0]
+    mocc = mo_coeff[mo_occ>0,:]
+    dm = np.zeros((1,self.nspin,self.norbs,self.norbs,1))
+    dm[0,0,:,:,0] = np.dot(mocc.T.conj()*mo_occ[mo_occ>0], mocc)
+    return dm
 
   def init_mf(self, **kw):
     """ Constructor a self-consistent field calculation class """
-    from pyscf.nao import conv_yzx2xyz_c
-    mf = self.mf = kw['mf']
-    self.mo_coeff = np.require(np.zeros((1,self.nspin,self.norbs,self.norbs,1), dtype=self.dtype), requirements='CW')
-    conv = conv_yzx2xyz_c(kw['gto'])
-    self.mo_coeff[0,0,:,:,0] = conv.conv_yzx2xyz_1d(mf.mo_coeff, conv.m_xyz2m_yzx).T
-    
-    self.mo_energy = np.require(mf.mo_energy, dtype=self.dtype, requirements='CW')
-    self.mo_occ = np.require(np.zeros((1,self.nspin,self.norbs),dtype=self.dtype), requirements='CW')
-    self.mo_occ[0,0,:] = mf.mo_occ
-    np.require(mf.mo_occ, dtype=self.dtype, requirements='CW')
+    #print(__name__, 'mf init_mf>>>>>>')
+
     self.telec = kw['telec'] if 'telec' in kw else 0.0000317 # 10K
-    nelec = self.mo_occ.sum()
-    assert int(nelec) % 2 == 0
-    nocc = int(nelec/2)
-    fermi_energy = (self.mo_energy[nocc]+self.mo_energy[nocc-1])/2.0
-    self.fermi_energy = kw['fermi_energy'] if 'fermi_energy' in kw else fermi_energy
+    mf = self.mf = kw['mf']
     self.xc_code = mf.xc if hasattr(mf, 'xc') else 'HF'
 
   def init_mo_coeff_label(self, **kw):
@@ -157,20 +123,6 @@ class mf(nao):
   def vxc_lil(self, **kw):   # Compute exchange-correlation potentials
     from pyscf.nao.m_vxc_lil import vxc_lil
     return vxc_lil(self, deriv=1, **kw)
-
-  #def comp_dm(self):  # Computes the density matrix
-  #  from pyscf.nao.m_comp_dm import comp_dm
-  #  dm = comp_dm(self.wfsx.x, self.get_occupations())
-  #  return dm
-
-  def make_rdm1(self, mo_coeff=None, mo_occ=None):
-    # from pyscf.scf.hf import make_rdm1 -- different index order here
-    if mo_occ is None: mo_occ = self.mo_occ[0,0,:]
-    if mo_coeff is None: mo_coeff = self.mo_coeff[0,0,:,:,0]
-    mocc = mo_coeff[mo_occ>0,:]
-    dm = np.zeros((1,self.nspin,self.norbs,self.norbs,1))
-    dm[0,0,:,:,0] = np.dot(mocc.T.conj()*mo_occ[mo_occ>0], mocc)
-    return dm
 
   def dens_elec(self, coords, dm): # Compute electronic density for a given density matrix and on a given set of coordinates
     from pyscf.nao.m_dens_libnao import dens_libnao
@@ -244,6 +196,41 @@ class mf(nao):
     self.mo_occ = (3-self.nspin)*ksn2fd
     return self
 
+
+  def plot_contour(self, w=0.0):
+    """
+      Plot contour with poles of Green's function in the self-energy 
+      SelfEnergy(w) = G(w+w')W(w')
+      with respect to w' = Re(w')+Im(w')
+      Poles of G(w+w') are located: w+w'-(E_n-Fermi)+i*eps sign(E_n-Fermi)==0 ==> 
+      w'= (E_n-Fermi) - w -i eps sign(E_n-Fermi)
+    """
+    try :
+      import matplotlib.pyplot as plt
+      from matplotlib.patches import Arc, Arrow 
+    except:
+      print('no matplotlib?')
+      return
+
+    fig,ax = plt.subplots()
+    fe = self.fermi_energy
+    ee = self.mo_energy
+    iee = 0.5-np.array(ee>fe)
+    eew = ee-fe-w
+    ax.plot(eew, iee, 'r.', ms=10.0)
+    pp = list()
+    pp.append(Arc((0,0),4,4,angle=0, linewidth=2, theta1=0, theta2=90, zorder=2, color='b'))
+    pp.append(Arc((0,0),4,4,angle=0, linewidth=2, theta1=180, theta2=270, zorder=2, color='b'))
+    pp.append(Arrow(0,2,0,-4,width=0.2, color='b', hatch='o'))
+    pp.append(Arrow(-2,0,4,0,width=0.2, color='b', hatch='o'))
+    for p in pp: ax.add_patch(p)
+    ax.set_aspect('equal')
+    ax.grid(True, which='both')
+    ax.axhline(y=0, color='k')
+    ax.axvline(x=0, color='k')
+    plt.ylim(-3.0,3.0)
+    plt.show()
+
 #
 # Example of reading pySCF mean-field calculation.
 #
@@ -268,5 +255,3 @@ if __name__=="__main__":
   print(sv.pb.norbs)
   print(sv.pb.npdp)
   print(sv.pb.c2s[-1])
-  
-

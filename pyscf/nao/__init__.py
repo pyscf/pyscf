@@ -21,6 +21,8 @@ from .m_conv_yzx2xyz import conv_yzx2xyz_c
 from .m_vertex_loop import vertex_loop_c
 from .nao import nao
 from .mf import mf
+from .rmf import rmf
+from .umf import umf
 from .tddft_iter import tddft_iter
 from .scf import scf
 from .gw import gw

@@ -3,7 +3,7 @@ import numpy as np
 from scipy.sparse import csr_matrix, coo_matrix
 from scipy.linalg import blas
 from timeit import default_timer as timer
-from pyscf.nao import mf
+from pyscf.nao import rmf
 from pyscf.nao.m_tddft_iter_gpu import tddft_iter_gpu_c
 from pyscf.nao.m_chi0_noxv import chi0_mv_gpu, chi0_mv
 from pyscf.nao.m_blas_wrapper import spmv_wrapper
@@ -23,7 +23,7 @@ except:
     use_numba = False
 
 
-class tddft_iter(mf):
+class tddft_iter(rmf):
   """ 
     Iterative TDDFT a la PK, DF, OC JCTC
     
@@ -37,7 +37,8 @@ class tddft_iter(mf):
   def __init__(self, **kw):
     from pyscf.nao.m_fermi_dirac import fermi_dirac_occupations
 
-    mf.__init__(self, **kw)
+    #print(__name__, 'before construct')
+    rmf.__init__(self, **kw)
     self.xc_code_mf = copy(self.xc_code)
     self.dealloc_hsx = kw['dealloc_hsx'] if 'dealloc_hsx' in kw else True
     self.maxiter = kw['maxiter'] if 'maxiter' in kw else 1000
@@ -49,6 +50,7 @@ class tddft_iter(mf):
     self.dtype = kw['dtype'] if 'dtype' in kw else np.float32
     self.telec = kw['telec'] if 'telec' in kw else self.telec
     self.fermi_energy = kw['fermi_energy'] if 'fermi_energy' in kw else self.fermi_energy
+    #print(__name__, ' dtype ', self.dtype)
     
     self.spmv = spmv_wrapper
     if self.dtype == np.float32:

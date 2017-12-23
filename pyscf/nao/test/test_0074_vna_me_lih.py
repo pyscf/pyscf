@@ -6,7 +6,7 @@ class KnowValues(unittest.TestCase):
 
   def test_vneutral_atom_matrix_elements(self):
     """ reSCF then G0W0 """
-    from pyscf.nao import mf as mf_c
+    from pyscf.nao import rmf as mf_c
     
     dname = os.path.dirname(os.path.abspath(__file__))
     mf = mf_c(label='lih', cd=dname)

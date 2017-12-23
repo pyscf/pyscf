@@ -20,6 +20,8 @@ class bse_iter(gw):
 
     xc_code_kw = kw['xc_code'] if 'xc_code' in kw else None
     gw.__init__(self, **kw)
+    #print(__name__, ' dtype ', self.dtype)
+
     self.l0_ncalls = 0
     self.dip_ab = [d.toarray() for d in self.dipole_coo()]
     self.norbs2 = self.norbs**2

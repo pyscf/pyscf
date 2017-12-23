@@ -13,8 +13,10 @@ class scf(tddft_iter):
   def __init__(self, **kw):
     """ Constructor a self-consistent field """
     self.perform_scf = kw['perform_scf'] if 'perform_scf' in kw else False
-    inp_params = map(lambda x: kw.pop(x,None), ['xc_code', 'dealloc_hsx'])
+    ips = map(lambda x: kw.pop(x,None), ['xc_code', 'dealloc_hsx', 'dtype'])
     tddft_iter.__init__(self, dtype=np.float64, xc_code='RPA', dealloc_hsx=False, **kw)
+    #print(__name__, ' dtype ', self.dtype)
+
     self.xc_code_kernel = copy(self.xc_code)
     self.xc_code = self.xc_code_mf
     self.dm_mf   = self.make_rdm1() # necessary to get_hcore(...) in case of pp starting point
