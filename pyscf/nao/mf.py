@@ -1,7 +1,9 @@
 from __future__ import print_function, division
-import sys, numpy as np
+import numpy as np
+from numpy import require, zeros
 from pyscf.nao import nao, prod_basis_c
-
+from pyscf.nao import conv_yzx2xyz_c
+    
 #
 #
 #
@@ -17,13 +19,14 @@ class mf(nao):
     self.gen_pb = kw['gen_pb'] if 'gen_pb' in kw else True
     
     if 'mf' in kw:
-      #print(__name__, 'init_mf')
-      self.init_mf(**kw)
+      self.init_mo_from_pyscf(**kw)      
     elif 'label' in kw:
       self.init_mo_coeff_label(**kw)
+      self.k2xyzw = self.xml_dict["k2xyzw"]
       self.xc_code = 'LDA,PZ' # just a guess...
     elif 'gpaw' in kw:
       self.init_mo_coeff_label(**kw)
+      self.k2xyzw = np.array([[0.0,0.0,0.0,1.0]])
       self.xc_code = 'LDA,PZ' # just a guess, but in case of GPAW there is a field...
     elif 'openmx' in kw:
       self.xc_code = 'GGA,PBE' # just a guess...
@@ -48,14 +51,41 @@ class mf(nao):
       dm[0,s,:,:,0] = np.dot(xocc.T.conj() * focc, xocc)
     return dm
 
-  def init_mf(self, **kw):
-    """ Constructor a self-consistent field calculation class """
-    #print(__name__, 'mf init_mf>>>>>>')
-
+  def init_mo_from_pyscf(self, **kw):
+    """ Initializing from a previous pySCF mean-field calc. """
+    from pyscf.nao.m_fermi_energy import fermi_energy as comput_fermi_energy
+    #print(__name__, 'init_mf')
     self.telec = kw['telec'] if 'telec' in kw else 0.0000317 # 10K
     self.mf = mf = kw['mf']
     self.xc_code = mf.xc if hasattr(mf, 'xc') else 'HF'
     self.k2xyzw = np.array([[0.0,0.0,0.0,1.0]])
+    nspin,n=self.nspin,self.norbs
+    self.mo_coeff =  require(zeros((1,nspin,n,n,1), dtype=self.dtype), requirements='CW')
+    self.mo_energy = require(zeros((1,nspin,n), dtype=self.dtype), requirements='CW')
+    self.mo_occ =    require(zeros((1,nspin,n),dtype=self.dtype), requirements='CW')
+    if nspin==1 :
+      self.init_mo_from_pyscf_nspin1(**kw)
+    else:
+      self.init_mo_from_pyscf_nspin2(**kw)
+      
+    self.nelec = kw['nelec'] if 'nelec' in kw else [self.mo_occ[0,s,:].sum() for s in range(nspin)]
+    fermi = comput_fermi_energy(self.mo_energy, sum(self.nelec), self.telec)
+    self.fermi_energy = kw['fermi_energy'] if 'fermi_energy' in kw else fermi
+
+  def init_mo_from_pyscf_nspin1(self, **kw):
+    """ Molecular orbitals from spin-saturated pySCF """
+    conv = conv_yzx2xyz_c(kw['gto'])
+    self.mo_coeff[0,0,:,:,0] = conv.conv_yzx2xyz_1d(self.mf.mo_coeff, conv.m_xyz2m_yzx).T
+    self.mo_energy[0,0,:] = self.mf.mo_energy
+    self.mo_occ[0,0,:] = self.mf.mo_occ
+
+  def init_mo_from_pyscf_nspin2(self, **kw):
+    """ Molecular orbitals from spin-resolved pySCF """
+    conv = conv_yzx2xyz_c(kw['gto'])
+    for s in range(self.nspin):
+      self.mo_coeff[0,s,:,:,0] = conv.conv_yzx2xyz_1d(self.mf.mo_coeff[s], conv.m_xyz2m_yzx).T
+      self.mo_energy[0,s,:] = self.mf.mo_energy[s]
+    self.mo_occ[0,0:self.nspin,:] = self.mf.mo_occ
 
   def init_mo_coeff_label(self, **kw):
     """ Constructor a self-consistent field calculation class """
@@ -67,7 +97,6 @@ class mf(nao):
     self.fermi_energy = kw['fermi_energy'] if 'fermi_energy' in kw else self.fermi_energy
     ksn2fd = fermi_dirac_occupations(self.telec, self.mo_energy, self.fermi_energy)
     self.mo_occ = (3-self.nspin)*ksn2fd
-    self.k2xyzw = self.xml_dict["k2xyzw"]
 
   def diag_check(self, atol=1e-5, rtol=1e-4):
     from pyscf.nao.m_sv_diag import sv_diag 

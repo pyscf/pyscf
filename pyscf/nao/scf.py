@@ -1,7 +1,7 @@
 from __future__ import print_function, division
 import sys, numpy as np
 from pyscf.nao import tddft_iter
-from pyscf.scf import hf
+from pyscf.scf import hf, uhf
 from copy import copy
 from pyscf.nao.m_pack2den import pack2den_u, pack2den_l
 
@@ -21,24 +21,29 @@ class scf(tddft_iter):
     self.xc_code = self.xc_code_mf
     self.dm_mf   = self.make_rdm1() # necessary to get_hcore(...) in case of pp starting point
     self.hkernel_den = pack2den_l(self.kernel)
-    self.pyscf_hf = hf.SCF(self)
-    self.pyscf_hf.direct_scf = False # overriding the attributes from hf.SCF ...
-    self.pyscf_hf.get_hcore = self.get_hcore
-    self.pyscf_hf.get_ovlp = self.get_ovlp
-    self.pyscf_hf.get_j = self.get_j
-    self.pyscf_hf.get_jk = self.get_jk
-    self.pyscf_hf.energy_nuc = self.energy_nuc
+    if self.nspin==1:
+      self.pyscf_scf = hf.SCF(self)
+    else:
+      self.pyscf_scf = uhf.UHF(self)
+      
+    self.pyscf_scf.direct_scf = False # overriding the attributes from hf.SCF ...
+    self.pyscf_scf.get_hcore = self.get_hcore
+    self.pyscf_scf.get_ovlp = self.get_ovlp
+    self.pyscf_scf.get_j = self.get_j
+    self.pyscf_scf.get_jk = self.get_jk
+    self.pyscf_scf.energy_nuc = self.energy_nuc
     if self.perform_scf : self.kernel_scf(**kw)
 
   def kernel_scf(self, dump_chk=False, **kw):
     """ This does the actual SCF loop so far only HF """
     from pyscf.nao.m_fermi_energy import fermi_energy as comput_fermi_energy
     dm0 = self.get_init_guess()
-    etot = self.pyscf_hf.kernel(dm0=dm0, dump_chk=dump_chk, **kw)
-    self.mo_coeff[0,0,:,:,0] = self.pyscf_hf.mo_coeff.T
-    self.mo_energy[0,0,:] = self.pyscf_hf.mo_energy
+    etot = self.pyscf_scf.kernel(dm0=dm0, dump_chk=dump_chk, **kw)
+    self.mo_coeff[0,0,:,:,0] = self.pyscf_scf.mo_coeff.T
+    #print(__name__, self.mo_energy.shape, self.pyscf_hf.mo_energy.shape)
+    self.mo_energy[0,0,:] = self.pyscf_scf.mo_energy
     self.ksn2e = self.mo_energy
-    self.mo_occ[0,0,:] = self.pyscf_hf.mo_occ
+    self.mo_occ[0,0,:] = self.pyscf_scf.mo_occ
     self.xc_code_previous = copy(self.xc_code)
     self.xc_code = "HF"
     #print('self.fermi_energy is not updated in scf!!!')
@@ -84,9 +89,9 @@ class scf(tddft_iter):
     if dm is None: dm = self.make_rdm1()
     return kmat_den(self, dm=dm, **kw)
 
-  def get_jk(self, sv=None, dm=None, **kvargs):
+  def get_jk(self, sv=None, dm=None, **kw):
     if sv is None: sv = self.sv
     if dm is None: dm = self.make_rdm1()
-    j = self.get_j(dm, **kvargs)
-    k = self.get_k(dm, **kvargs)
+    j = self.get_j(dm, **kw)
+    k = self.get_k(dm, **kw)
     return j,k

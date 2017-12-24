@@ -3,7 +3,7 @@ import numpy as np
 from scipy.sparse import csr_matrix, coo_matrix
 from scipy.linalg import blas
 from timeit import default_timer as timer
-from pyscf.nao import rmf
+from pyscf.nao import mf
 from pyscf.nao.m_tddft_iter_gpu import tddft_iter_gpu_c
 from pyscf.nao.m_chi0_noxv import chi0_mv_gpu, chi0_mv
 from pyscf.nao.m_blas_wrapper import spmv_wrapper
@@ -23,7 +23,7 @@ except:
     use_numba = False
 
 
-class tddft_iter(rmf):
+class tddft_iter(mf):
   """ 
     Iterative TDDFT a la PK, DF, OC JCTC
     
@@ -38,7 +38,8 @@ class tddft_iter(rmf):
     from pyscf.nao.m_fermi_dirac import fermi_dirac_occupations
 
     #print(__name__, 'before construct')
-    rmf.__init__(self, **kw)
+    mf.__init__(self, **kw)
+
     self.xc_code_mf = copy(self.xc_code)
     self.dealloc_hsx = kw['dealloc_hsx'] if 'dealloc_hsx' in kw else True
     self.maxiter = kw['maxiter'] if 'maxiter' in kw else 1000
@@ -103,8 +104,7 @@ class tddft_iter(rmf):
     # problematic for the dtype, must there should be another option 
     #self.x  = np.require(sv.wfsx.x, dtype=self.dtype, requirements='CW')
 
-    self.ksn2e = np.require(np.zeros((1,self.nspin,self.norbs)), dtype=self.dtype, requirements='CW')
-    self.ksn2e[0,0,:] = self.mo_energy
+    self.ksn2e = self.mo_energy
     ksn2fd = fermi_dirac_occupations(self.telec, self.ksn2e, self.fermi_energy)
     if all(ksn2fd[0,0,:]>nfermi_tol):
       print(self.telec, nfermi_tol, ksn2fd[0,0,:])
