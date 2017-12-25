@@ -37,7 +37,7 @@ class KnowValues(unittest.TestCase):
     gw = gw_c(label='water', cd=dname, verbosity=0, nocc_conv=4, nvrt_conv=4, perform_scf=True, perform_gw=True)
     np.savetxt('eigvals_g0w0_water_0080.txt', gw.mo_energy_gw.T)
       
-    for e,eref_str in zip(gw.mo_energy_gw,fc.splitlines()):
+    for e,eref_str in zip(gw.mo_energy_gw[0,0,:],fc.splitlines()):
       self.assertAlmostEqual(e,float(eref_str))
 
 

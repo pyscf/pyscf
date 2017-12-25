@@ -21,12 +21,9 @@ class gw(scf):
     self.perform_gw = kw['perform_gw'] if 'perform_gw' in kw else False
     self.rescf = kw['rescf'] if 'rescf' in kw else False
 
-    if self.nspin==1:
-      self.nocc_0t = nocc_0t = np.array([int(self.nelec/2)])
-    elif self.nspin==2:
-      self.nocc_0t = nocc_0t = self.nelec
-    else:
-      raise RuntimeError('nspin>2?')
+    if self.nspin==1: self.nocc_0t = nocc_0t = np.array([int(self.nelec/2)])
+    elif self.nspin==2: self.nocc_0t = nocc_0t = self.nelec
+    else: raise RuntimeError('nspin>2?')
 
     if self.verbosity>0: print(__name__, 'nocc_0t =', nocc_0t)
 
@@ -47,8 +44,8 @@ class gw(scf):
     self.start_st,self.finish_st = self.nocc_0t-self.nocc, self.nocc_0t+self.nvrt
     if self.verbosity>0: print(__name__, 'sf_st =', self.start_st, self.finish_st)
 
-    #self.nn = [range(self.start_st[s], self.finish_st[s]) for s in range(self.nspin)] # list of states to correct?
-    self.nn = range(self.start_st, self.finish_st) # list of states to correct?
+    self.nn = [range(self.start_st[s], self.finish_st[s]) for s in range(self.nspin)] # list of states to correct?
+    #self.nn = range(self.start_st, self.finish_st) # list of states to correct?
 
     self.nocc_conv = kw['nocc_conv'] if 'nocc_conv' in kw else self.nocc
     self.nvrt_conv = kw['nvrt_conv'] if 'nvrt_conv' in kw else self.nvrt
@@ -182,10 +179,10 @@ class gw(scf):
 
     snmw2sf = []
     for s in range(self.nspin):
-      #nmw2sf = zeros((len(self.nn[s]), self.norbs, self.nff_ia), dtype=self.dtype)
-      nmw2sf = zeros((len(self.nn), self.norbs, self.nff_ia), dtype=self.dtype)
-      #xna = self.mo_coeff[0,s,self.nn[s],:,0]
-      xna = self.mo_coeff[0,s,self.nn,:,0]
+      nmw2sf = zeros((len(self.nn[s]), self.norbs, self.nff_ia), dtype=self.dtype)
+      #nmw2sf = zeros((len(self.nn), self.norbs, self.nff_ia), dtype=self.dtype)
+      xna = self.mo_coeff[0,s,self.nn[s],:,0]
+      #xna = self.mo_coeff[0,s,self.nn,:,0]
       xmb = self.mo_coeff[0,s,:,:,0]
       nmp2xvx = einsum('na,pab,mb->nmp', xna, v_pab, xmb)
       for iw,si0 in enumerate(wpq2si0):
@@ -196,11 +193,13 @@ class gw(scf):
   def gw_corr_int(self, sn2w, eps=None):
     """ This computes an integral part of the GW correction at energies sn2e[spin,len(self.nn)] """
     if not hasattr(self, 'snmw2sf'): self.snmw2sf = self.get_snmw2sf()
+    #print(__name__, 'sn2w', sn2w)
     sn2int = np.zeros_like(sn2w, dtype=self.dtype)
     eps = self.dw_excl if eps is None else eps
     #print(__name__, 'self.dw_ia', self.dw_ia, sn2w)
     for s,ww in enumerate(sn2w):
       for n,w in enumerate(ww):
+        #print(__name__, 's,n,w int corr', s,n,w)
         for m in range(self.norbs):
           if abs(w-self.ksn2e[0,s,m])<eps : continue
           state_corr = ((self.dw_ia*self.snmw2sf[s][n,m,:] / (w + 1j*self.ww_ia-self.ksn2e[0,s,m])).sum()/pi).real
@@ -214,13 +213,13 @@ class gw(scf):
     sn2res = np.zeros_like(sn2w, dtype=self.dtype)
     for s,ww in enumerate(sn2w):
       x = self.mo_coeff[0,s,:,:,0]
-      #for nl,(n,w) in enumerate(zip(self.nn[s],ww)):
-      for nl,(n,w) in enumerate(zip(self.nn,ww)):
+      for nl,(n,w) in enumerate(zip(self.nn[s],ww)):
+      #for nl,(n,w) in enumerate(zip(self.nn,ww)):
         lsos = self.lsofs_inside_contour(self.ksn2e[0,s,:],w,self.dw_excl)
         zww = array([pole[0] for pole in lsos])
         si_ww = self.si_c(ww=zww)
         xv = dot(v_pab,x[n])
-        #print(n,w)
+        #print(__name__, 's,n,w', s,n,w)
         for pole,si in zip(lsos, si_ww.real):
           xvx = dot(xv, x[pole[1]])
           contr = dot(xvx, dot(si, xvx))
@@ -275,8 +274,10 @@ class gw(scf):
   
   def g0w0_eigvals(self):
     """ This computes the G0W0 corrections to the eigenvalues """
-    sn2eval_gw = np.copy(self.ksn2e[0,:,self.nn]).T
-    sn2eval_gw_prev = np.copy(sn2eval_gw)
+    sn2eval_gw = [np.copy(self.ksn2e[0,s,nn]) for s,nn in enumerate(self.nn) ]
+    #print(__name__, 'sn2eval_gw', sn2eval_gw)
+    
+    sn2eval_gw_prev = copy(sn2eval_gw)
     nocc_conv = self.nocc_conv
     nvrt_conv = self.nvrt_conv
     self.nn_close = range(max(self.nocc_0t-nocc_conv,0), 
@@ -295,46 +296,44 @@ class gw(scf):
       if self.verbosity>0: print(__name__, i, err, mo_eigval[self.nn_close], gw_corr_int, gw_corr_res)
       if err<self.tol_ev : break
     
-    self.sn2eval_gw = sn2eval_gw
     return sn2eval_gw
 
   def make_mo_g0w0(self):
     """ This creates the fields mo_energy_g0w0, and mo_coeff_g0w0 """
 
     self.h0_vh_x_expval = self.get_h0_vh_x_expval()
-    if self.verbosity>0: print(__name__, '.h0_vh_x_expval: ', self.h0_vh_x_expval)
+    if self.verbosity>0:
+      print(__name__, '.h0_vh_x_expval: ')
+      print(self.h0_vh_x_expval)
 
-    if not hasattr(self, 'sn2eval_gw'): self.g0w0_eigvals()
-    #print(self.mo_energy)
+    if not hasattr(self, 'sn2eval_gw'): self.sn2eval_gw = self.g0w0_eigvals()
 
-    self.mo_energy = self.mo_energy.reshape((self.norbs))
     self.mo_energy_gw = np.copy(self.mo_energy)
     self.mo_coeff_gw = np.copy(self.mo_coeff)
     #print(self.sn2eval_gw.shape, type(self.sn2eval_gw))
     #print(self.nn, type(self.nn))
     #print(self.mo_energy_g0w0.shape, type(self.mo_energy_g0w0))
-    self.mo_energy_gw[self.nn] = self.sn2eval_gw
-
-    nn_occ = [n for n in self.nn if n<self.nocc_0t]
-    nn_vrt = [n for n in self.nn if n>=self.nocc_0t]
-    #print(nn_occ, nn_vrt)
-    scissor_occ = (self.mo_energy_gw[nn_occ] - self.mo_energy[nn_occ]).sum()/len(nn_occ)
-    scissor_vrt = (self.mo_energy_gw[nn_vrt] - self.mo_energy[nn_vrt]).sum()/len(nn_vrt)
-    #print(scissor_occ, scissor_vrt)
-    mm_occ = list(set(range(self.nocc_0t))-set(nn_occ))
-    mm_vrt = list(set(range(self.nocc_0t,self.norbs)) - set(nn_vrt))
-    #print(mm_occ, mm_vrt)
-    self.mo_energy_gw[mm_occ] +=scissor_occ
-    self.mo_energy_gw[mm_vrt] +=scissor_vrt
-    #print(self.mo_energy_g0w0)
-    if self.verbosity>0: print(__name__, 'np.argsort(self.mo_energy_gw)', np.argsort(self.mo_energy_gw))
-    argsrt = np.argsort(self.mo_energy_gw)
-    self.mo_energy_gw = np.sort(self.mo_energy_gw)
-    for n,m in enumerate(argsrt): self.mo_coeff_gw[0,0,n] = self.mo_coeff[0,0,m]
+    for s,nn in enumerate(self.nn):
+      self.mo_energy_gw[0,s,nn] = self.sn2eval_gw[s]
+      nn_occ = [n for n in nn if n<self.nocc_0t[0]]
+      nn_vrt = [n for n in nn if n>=self.nocc_0t[0]]
+      scissor_occ = (self.mo_energy_gw[0,s,nn_occ] - self.mo_energy[0,s,nn_occ]).sum()/len(nn_occ)
+      scissor_vrt = (self.mo_energy_gw[0,s,nn_vrt] - self.mo_energy[0,s,nn_vrt]).sum()/len(nn_vrt)
+      #print(scissor_occ, scissor_vrt)
+      mm_occ = list(set(range(self.nocc_0t[s]))-set(nn_occ))
+      mm_vrt = list(set(range(self.nocc_0t[s],self.norbs)) - set(nn_vrt))
+      #print(mm_occ, mm_vrt)
+      self.mo_energy_gw[0,s,mm_occ] +=scissor_occ
+      self.mo_energy_gw[0,s,mm_vrt] +=scissor_vrt
+      #print(self.mo_energy_g0w0)
+      if self.verbosity>0: print(__name__, 'np.argsort(self.mo_energy_gw)', np.argsort(self.mo_energy_gw[0,s,:]))
+      argsrt = np.argsort(self.mo_energy_gw[0,s,:])
+      self.mo_energy_gw[0,s,:] = np.sort(self.mo_energy_gw[0,s,:])
+      for n,m in enumerate(argsrt): self.mo_coeff_gw[0,0,n] = self.mo_coeff[0,0,m]
+ 
     self.xc_code = 'GW'
     if self.verbosity>0:
       print(__name__, ' self.mo_energy_gw, self.xc_code ', self.xc_code)
       print(self.mo_energy_gw)
         
   kernel_gw = make_mo_g0w0
-  

@@ -40,7 +40,7 @@ class KnowValues(unittest.TestCase):
 3.002491923857071310e+00
 3.191379493098387865e+00
 """
-    for e,eref_str in zip(gw.mo_energy_gw,fc.splitlines()):
+    for e,eref_str in zip(gw.mo_energy_gw[0,0,:],fc.splitlines()):
       self.assertAlmostEqual(e,float(eref_str))
 
 if __name__ == "__main__": unittest.main()

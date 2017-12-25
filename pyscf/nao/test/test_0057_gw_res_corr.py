@@ -11,7 +11,11 @@ class KnowValues(unittest.TestCase):
     gto_mf = scf.RHF(mol)
     gto_mf.kernel()
     gw = gw_c(mf=gto_mf, gto=mol)
-    sn2eval_gw = np.copy(gw.ksn2e[0,:,gw.nn]).T    
+    sn2eval_gw = [np.copy(gw.ksn2e[0,s,nn]) for s,nn in enumerate(gw.nn) ]
     gw_corr_res = gw.gw_corr_res(sn2eval_gw)
+    
+    fc = """0.03105265 -0.00339984 -0.01294826 -0.06934852 -0.03335821 -0.03335821 0.46324024"""
+    for e,eref_str in zip(gw_corr_res[0,:],fc.split(' ')):
+      self.assertAlmostEqual(e,float(eref_str),7)    
 
 if __name__ == "__main__": unittest.main()
