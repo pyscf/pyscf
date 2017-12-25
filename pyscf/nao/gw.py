@@ -17,24 +17,50 @@ class gw(scf):
 
     self.xc_code_scf = copy(self.xc_code)
     self.niter_max_ev = kw['niter_max_ev'] if 'niter_max_ev' in kw else 15
-    self.nocc_0t = nocc_0t = self.nelectron // (3 - self.nspin)
-    self.nocc = min(kw['nocc'],nocc_0t) if 'nocc' in kw else min(6,nocc_0t)
-    self.nvrt = min(kw['nvrt'],self.norbs-nocc_0t) if 'nvrt' in kw else min(6,self.norbs-nocc_0t)
-    self.start_st = self.nocc_0t-self.nocc
-    self.finish_st = self.nocc_0t+self.nvrt
-    self.nn = range(self.start_st, self.finish_st) # list of states to correct?
     self.tol_ev = kw['tol_ev'] if 'tol_ev' in kw else 1e-6
+    self.perform_gw = kw['perform_gw'] if 'perform_gw' in kw else False
+    self.rescf = kw['rescf'] if 'rescf' in kw else False
+
+    if self.nspin==1:
+      self.nocc_0t = nocc_0t = np.array([int(self.nelec/2)])
+    elif self.nspin==2:
+      self.nocc_0t = nocc_0t = self.nelec
+    else:
+      raise RuntimeError('nspin>2?')
+
+    if self.verbosity>0: print(__name__, 'nocc_0t =', nocc_0t)
+
+    if 'nocc' in kw:
+      s2nocc = [kw['nocc']] if type(kw['nocc'])==int else kw['nocc']
+      self.nocc = array([min(i,j) for i,j in zip(s2nocc,nocc_0t)])
+    else :
+      self.nocc = array([min(6,j) for j in nocc_0t])
+      
+    if 'nvrt' in kw:
+      s2nvrt = [kw['nvrt']] if type(kw['nvrt'])==int else kw['nvrt']
+      self.nvrt = array([min(i,j) for i,j in zip(s2nvrt,self.norbs-nocc_0t)])
+    else :
+      self.nvrt = array([min(6,j) for j in self.norbs-nocc_0t])
+    if self.verbosity>0: print(__name__, 'nocc =', self.nocc, 'nvrt =', self.nvrt)
+
+      
+    self.start_st,self.finish_st = self.nocc_0t-self.nocc, self.nocc_0t+self.nvrt
+    if self.verbosity>0: print(__name__, 'sf_st =', self.start_st, self.finish_st)
+
+    #self.nn = [range(self.start_st[s], self.finish_st[s]) for s in range(self.nspin)] # list of states to correct?
+    self.nn = range(self.start_st, self.finish_st) # list of states to correct?
+
     self.nocc_conv = kw['nocc_conv'] if 'nocc_conv' in kw else self.nocc
     self.nvrt_conv = kw['nvrt_conv'] if 'nvrt_conv' in kw else self.nvrt
-    self.perform_gw = kw['perform_gw'] if 'perform_gw' in kw else False
+
+    if self.verbosity>0: print(__name__, 'nn =', self.nn)
     
-    self.rescf = kw['rescf'] if 'rescf' in kw else False
     if self.rescf: self.kernel_scf() # here is rescf with HF functional tacitly assumed
     
-    #print('nocc_0t:', nocc_0t)
     #print(self.nocc, self.nvrt)
     #print(self.start_st, self.finish_st)
     #print('     nn:', self.nn)
+    
     self.nff_ia = kw['nff_ia'] if 'nff_ia' in kw else 32
     self.tol_ia = kw['tol_ia'] if 'tol_ia' in kw else 1e-6
     (wmin_def,wmax_def,tmin_def,tmax_def) = self.get_wmin_wmax_tmax_ia_def(self.tol_ia)
@@ -57,11 +83,17 @@ class gw(scf):
     if self.perform_gw: self.kernel_gw()
     
   def get_h0_vh_x_expval(self):
-    mat = -0.5*self.get_k()
-    mat += self.get_hcore()
-    mat += self.get_j()
-    mat1 = np.dot(self.mo_coeff[0,0,:,:,0], mat)
-    expval = np.einsum('nb,nb->n', mat1, self.mo_coeff[0,0,:,:,0])
+    if self.nspin==1:
+      mat = self.get_hcore()+self.get_j()-0.5*self.get_k()
+      mat1 = np.dot(self.mo_coeff[0,0,:,:,0], mat)
+      expval = np.einsum('nb,nb->n', mat1, self.mo_coeff[0,0,:,:,0])
+    elif self.nspin==2:
+      vh = self.get_j()
+      mat = self.get_hcore()+vh[0]+vh[1]-self.get_k()
+      expval = np.zeros((self.nspin, self.norbs))
+      for s in range(self.nspin):
+        mat1 = np.dot(self.mo_coeff[0,s,:,:,0], mat[s])
+        expval[s] = np.einsum('nb,nb->n', mat1, self.mo_coeff[0,s,:,:,0])
     return expval
     
   def get_wmin_wmax_tmax_ia_def(self, tol):
@@ -123,14 +155,13 @@ class gw(scf):
   
   rf0 = rf0_cmplx_vertex_ac
   
-  def si_c(self, ww=None):
+  def si_c(self, ww):
     from numpy.linalg import solve
     """ 
     This computes the correlation part of the screened interaction W_c
     by solving <self.nprod> linear equations (1-K chi0) W = K chi0 K
     scr_inter[w,p,q], where w in ww, p and q in 0..self.nprod 
     """
-    ww = 1j*self.ww_ia if ww is None else ww
     rf0 = si0 = self.rf0(ww)
     for iw,w in enumerate(ww):
       k_c = dot(self.kernel_sq, rf0[iw,:,:])
@@ -140,35 +171,39 @@ class gw(scf):
 
     return si0
 
-  def sf_gw_corr(self):
+  def get_snmw2sf(self):
     """ 
     This computes a spectral function of the GW correction.
     sf[spin,n,m,w] = X^n V_mu X^m W_mu_nu X^n V_nu X^m,
     where n runs from s...f, m runs from 0...norbs, w runs from 0...nff_ia, spin=0...1 or 2.
     """
-    snmw2sf = zeros((self.nspin, len(self.nn), self.norbs, self.nff_ia), dtype=self.dtype)
-    wpq2si0 = self.si_c().real
+    wpq2si0 = self.si_c(ww = 1j*self.ww_ia).real
     v_pab = self.pb.get_ac_vertex_array()
-    
+
+    snmw2sf = []
     for s in range(self.nspin):
+      #nmw2sf = zeros((len(self.nn[s]), self.norbs, self.nff_ia), dtype=self.dtype)
+      nmw2sf = zeros((len(self.nn), self.norbs, self.nff_ia), dtype=self.dtype)
+      #xna = self.mo_coeff[0,s,self.nn[s],:,0]
       xna = self.mo_coeff[0,s,self.nn,:,0]
       xmb = self.mo_coeff[0,s,:,:,0]
       nmp2xvx = einsum('na,pab,mb->nmp', xna, v_pab, xmb)
       for iw,si0 in enumerate(wpq2si0):
-        snmw2sf[s,:,:,iw] = einsum('nmp,pq,nmq->nm', nmp2xvx, si0, nmp2xvx)
+        nmw2sf[:,:,iw] = einsum('nmp,pq,nmq->nm', nmp2xvx, si0, nmp2xvx)
+      snmw2sf.append(nmw2sf)
     return snmw2sf
 
   def gw_corr_int(self, sn2w, eps=None):
     """ This computes an integral part of the GW correction at energies sn2e[spin,len(self.nn)] """
-    if not hasattr(self, 'snmw2sf'): self.snmw2sf = self.sf_gw_corr()
+    if not hasattr(self, 'snmw2sf'): self.snmw2sf = self.get_snmw2sf()
     sn2int = np.zeros_like(sn2w, dtype=self.dtype)
     eps = self.dw_excl if eps is None else eps
-    #print(__name__, 'self.dw_ia', self.dw_ia)
+    #print(__name__, 'self.dw_ia', self.dw_ia, sn2w)
     for s,ww in enumerate(sn2w):
       for n,w in enumerate(ww):
         for m in range(self.norbs):
           if abs(w-self.ksn2e[0,s,m])<eps : continue
-          state_corr = ((self.dw_ia*self.snmw2sf[s,n,m,:] / (w + 1j*self.ww_ia-self.ksn2e[0,s,m])).sum()/pi).real
+          state_corr = ((self.dw_ia*self.snmw2sf[s][n,m,:] / (w + 1j*self.ww_ia-self.ksn2e[0,s,m])).sum()/pi).real
           #print(n, m, -state_corr, w-self.ksn2e[0,s,m])
           sn2int[s,n] -= state_corr
     return sn2int
@@ -179,6 +214,7 @@ class gw(scf):
     sn2res = np.zeros_like(sn2w, dtype=self.dtype)
     for s,ww in enumerate(sn2w):
       x = self.mo_coeff[0,s,:,:,0]
+      #for nl,(n,w) in enumerate(zip(self.nn[s],ww)):
       for nl,(n,w) in enumerate(zip(self.nn,ww)):
         lsos = self.lsofs_inside_contour(self.ksn2e[0,s,:],w,self.dw_excl)
         zww = array([pole[0] for pole in lsos])

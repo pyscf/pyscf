@@ -11,8 +11,9 @@ class KnowValues(unittest.TestCase):
     gto_mf = scf.RHF(mol)
     gto_mf.kernel()
     gw = gw_c(mf=gto_mf, gto=mol)
-    sf = gw.sf_gw_corr()
-    self.assertEqual(sf.shape, (1,7,10,32))
+    sf = gw.get_snmw2sf()
+    self.assertEqual(len(sf), 1)
+    self.assertEqual(sf[0].shape, (7,10,32))
     
     
 if __name__ == "__main__": unittest.main()

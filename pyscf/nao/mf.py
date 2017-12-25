@@ -63,29 +63,21 @@ class mf(nao):
     self.mo_coeff =  require(zeros((1,nspin,n,n,1), dtype=self.dtype), requirements='CW')
     self.mo_energy = require(zeros((1,nspin,n), dtype=self.dtype), requirements='CW')
     self.mo_occ =    require(zeros((1,nspin,n),dtype=self.dtype), requirements='CW')
+
+    conv = conv_yzx2xyz_c(kw['gto'])
     if nspin==1 :
-      self.init_mo_from_pyscf_nspin1(**kw)
+      self.mo_coeff[0,0,:,:,0] = conv.conv_yzx2xyz_1d(self.mf.mo_coeff, conv.m_xyz2m_yzx).T
+      self.mo_energy[0,0,:] = self.mf.mo_energy
+      self.mo_occ[0,0,:] = self.mf.mo_occ
     else:
-      self.init_mo_from_pyscf_nspin2(**kw)
+      for s in range(self.nspin):
+        self.mo_coeff[0,s,:,:,0] = conv.conv_yzx2xyz_1d(self.mf.mo_coeff[s], conv.m_xyz2m_yzx).T
+        self.mo_energy[0,s,:] = self.mf.mo_energy[s]
+      self.mo_occ[0,0:self.nspin,:] = self.mf.mo_occ
       
-    self.nelec = kw['nelec'] if 'nelec' in kw else [int(s2o.sum()) for s2o in self.mo_occ[0]]
+    self.nelec = kw['nelec'] if 'nelec' in kw else np.array([int(s2o.sum()) for s2o in self.mo_occ[0]])
     fermi = comput_fermi_energy(self.mo_energy, sum(self.nelec), self.telec)
     self.fermi_energy = kw['fermi_energy'] if 'fermi_energy' in kw else fermi
-
-  def init_mo_from_pyscf_nspin1(self, **kw):
-    """ Molecular orbitals from spin-saturated pySCF """
-    conv = conv_yzx2xyz_c(kw['gto'])
-    self.mo_coeff[0,0,:,:,0] = conv.conv_yzx2xyz_1d(self.mf.mo_coeff, conv.m_xyz2m_yzx).T
-    self.mo_energy[0,0,:] = self.mf.mo_energy
-    self.mo_occ[0,0,:] = self.mf.mo_occ
-
-  def init_mo_from_pyscf_nspin2(self, **kw):
-    """ Molecular orbitals from spin-resolved pySCF """
-    conv = conv_yzx2xyz_c(kw['gto'])
-    for s in range(self.nspin):
-      self.mo_coeff[0,s,:,:,0] = conv.conv_yzx2xyz_1d(self.mf.mo_coeff[s], conv.m_xyz2m_yzx).T
-      self.mo_energy[0,s,:] = self.mf.mo_energy[s]
-    self.mo_occ[0,0:self.nspin,:] = self.mf.mo_occ
 
   def init_mo_coeff_label(self, **kw):
     """ Constructor a self-consistent field calculation class """
@@ -93,7 +85,14 @@ class mf(nao):
     self.mo_coeff = np.require(self.wfsx.x, dtype=self.dtype, requirements='CW')
     self.mo_energy = np.require(self.wfsx.ksn2e, dtype=self.dtype, requirements='CW')
     self.telec = kw['telec'] if 'telec' in kw else self.hsx.telec
-    self.nelec = kw['nelec'] if 'nelec' in kw else self.hsx.nelec
+    if self.nspin==1:
+      self.nelec = kw['nelec'] if 'nelec' in kw else np.array([self.hsx.nelec])
+    elif self.nspin==2:
+      self.nelec = kw['nelec'] if 'nelec' in kw else np.array([int(self.hsx.nelec/2), int(self.hsx.nelec/2)])      
+      print(__name__, 'not sure here: self.nelec', self.nelec)
+    else:
+      raise RuntimeError('0>nspin>2?')
+      
     self.fermi_energy = kw['fermi_energy'] if 'fermi_energy' in kw else self.fermi_energy
     ksn2fd = fermi_dirac_occupations(self.telec, self.mo_energy, self.fermi_energy)
     self.mo_occ = (3-self.nspin)*ksn2fd
