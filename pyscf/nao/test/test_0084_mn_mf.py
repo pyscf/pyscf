@@ -11,7 +11,7 @@ gto_mf_uhf.kernel()
 
 class KnowValues(unittest.TestCase):
 
-  def test_mn_uhf_0084(self):
+  def test_mn_mean_field_0084(self):
     from pyscf.nao.m_fermi_dirac import fermi_dirac_occupations
     """ Spin-resolved case """
     #print(__name__, dir(gto_mf_uhf))

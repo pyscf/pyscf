@@ -68,7 +68,7 @@ class mf(nao):
     else:
       self.init_mo_from_pyscf_nspin2(**kw)
       
-    self.nelec = kw['nelec'] if 'nelec' in kw else [self.mo_occ[0,s,:].sum() for s in range(nspin)]
+    self.nelec = kw['nelec'] if 'nelec' in kw else [int(s2o.sum()) for s2o in self.mo_occ[0]]
     fermi = comput_fermi_energy(self.mo_energy, sum(self.nelec), self.telec)
     self.fermi_energy = kw['fermi_energy'] if 'fermi_energy' in kw else fermi
 

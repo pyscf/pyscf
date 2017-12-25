@@ -4,6 +4,7 @@ from pyscf.nao import tddft_iter
 from pyscf.scf import hf, uhf
 from copy import copy
 from pyscf.nao.m_pack2den import pack2den_u, pack2den_l
+from pyscf.nao.m_vhartree_coo import vhartree_coo
 
 #
 #
@@ -39,15 +40,25 @@ class scf(tddft_iter):
     from pyscf.nao.m_fermi_energy import fermi_energy as comput_fermi_energy
     dm0 = self.get_init_guess()
     etot = self.pyscf_scf.kernel(dm0=dm0, dump_chk=dump_chk, **kw)
-    self.mo_coeff[0,0,:,:,0] = self.pyscf_scf.mo_coeff.T
     #print(__name__, self.mo_energy.shape, self.pyscf_hf.mo_energy.shape)
-    self.mo_energy[0,0,:] = self.pyscf_scf.mo_energy
-    self.ksn2e = self.mo_energy
-    self.mo_occ[0,0,:] = self.pyscf_scf.mo_occ
+
+    if self.nspin==1:
+      self.mo_coeff[0,0,:,:,0] = self.pyscf_scf.mo_coeff.T
+      self.mo_energy[0,0,:] = self.pyscf_scf.mo_energy
+      self.ksn2e = self.mo_energy
+      self.mo_occ[0,0,:] = self.pyscf_scf.mo_occ
+    elif self.nspin==2:
+      for s in range(self.nspin):
+        self.mo_coeff[0,s,:,:,0] = self.pyscf_scf.mo_coeff[s].T
+        self.mo_energy[0,s,:] = self.pyscf_scf.mo_energy[s]
+        self.ksn2e = self.mo_energy
+        self.mo_occ[0,s,:] = self.pyscf_scf.mo_occ[s]
+    else:
+      raise RuntimeError('0>nspin>2?')
+      
     self.xc_code_previous = copy(self.xc_code)
     self.xc_code = "HF"
-    #print('self.fermi_energy is not updated in scf!!!')
-    self.fermi_energy = comput_fermi_energy(self.mo_energy, self.nelec, self.telec)
+    self.fermi_energy = comput_fermi_energy(self.mo_energy, sum(self.nelec), self.telec)
     return etot
 
   def get_hcore(self, mol=None, **kw):
@@ -66,10 +77,6 @@ class scf(tddft_iter):
       vne  = self.vnucele_coo_coulomb(**kw)
     return vne.tocoo()
 
-  def vhartree_coo(self, **kw):
-    from pyscf.nao.m_vhartree_coo import vhartree_coo
-    return vhartree_coo(self, **kw)
-
   def add_pb_hk(self, **kw): return self.pb,self.hkernel_den
 
   def get_ovlp(self, sv=None):
@@ -77,11 +84,24 @@ class scf(tddft_iter):
     sv = self if sv is None else sv
     return sv.overlap_coo(funct=overlap_am).toarray()
 
+  def vhartree_coo(self, **kw):
+    return vhartree_coo(self, **kw)
+
+  def vhartree_den(self, **kw):
+    '''Compute matrix elements of the Hartree potential and return dense matrix compatible with RHF or UHF'''
+    co = self.vhartree_coo(**kw)
+    if self.nspin==1:
+      vh = co.toarray()
+    elif self.nspin==2:
+      vh = np.stack((co[0].toarray(), co[1].toarray() ))
+    else:
+      raise RuntimeError('nspin>2?')
+    return vh
+
   def get_j(self, dm=None, **kw):
     '''Compute J matrix for the given density matrix (matrix elements of the Hartree potential).'''
     if dm is None: dm = self.make_rdm1()
-    from pyscf.nao.m_vhartree_coo import vhartree_coo
-    return vhartree_coo(self, dm=dm).toarray()
+    return self.vhartree_den(dm=dm)
 
   def get_k(self, dm=None, **kw):
     '''Compute K matrix for the given density matrix.'''
@@ -89,8 +109,7 @@ class scf(tddft_iter):
     if dm is None: dm = self.make_rdm1()
     return kmat_den(self, dm=dm, **kw)
 
-  def get_jk(self, sv=None, dm=None, **kw):
-    if sv is None: sv = self.sv
+  def get_jk(self, mol=None, dm=None, hermi=1, **kw):
     if dm is None: dm = self.make_rdm1()
     j = self.get_j(dm, **kw)
     k = self.get_k(dm, **kw)
