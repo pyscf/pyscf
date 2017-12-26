@@ -44,7 +44,7 @@ class gw(scf):
 
       
     self.start_st,self.finish_st = self.nocc_0t-self.nocc, self.nocc_0t+self.nvrt
-    if self.verbosity>0: print(__name__, 'sf_st =', self.start_st, self.finish_st)
+    #if self.verbosity>0: print(__name__, 'sf_st =', self.start_st, self.finish_st)
 
     self.nn = [range(self.start_st[s], self.finish_st[s]) for s in range(self.nspin)] # list of states to correct?
     #self.nn = range(self.start_st, self.finish_st) # list of states to correct?
@@ -206,8 +206,7 @@ class gw(scf):
   def gw_corr_int(self, sn2w, eps=None):
     """ This computes an integral part of the GW correction at energies sn2e[spin,len(self.nn)] """
     if not hasattr(self, 'snmw2sf'): self.snmw2sf = self.get_snmw2sf()
-    #print(__name__, 'sn2w', sn2w)
-    sn2int = np.zeros_like(sn2w, dtype=self.dtype)
+    sn2int = [np.zeros_like(n2w, dtype=self.dtype) for n2w in sn2w ]
     eps = self.dw_excl if eps is None else eps
     #print(__name__, 'self.dw_ia', self.dw_ia, sn2w)
     for s,ww in enumerate(sn2w):
@@ -217,13 +216,13 @@ class gw(scf):
           if abs(w-self.ksn2e[0,s,m])<eps : continue
           state_corr = ((self.dw_ia*self.snmw2sf[s][n,m,:] / (w + 1j*self.ww_ia-self.ksn2e[0,s,m])).sum()/pi).real
           #print(n, m, -state_corr, w-self.ksn2e[0,s,m])
-          sn2int[s,n] -= state_corr
+          sn2int[s][n] -= state_corr
     return sn2int
 
   def gw_corr_res(self, sn2w):
     """ This computes a residue part of the GW correction at energies sn2w[spin,len(self.nn)] """
     v_pab = self.pb.get_ac_vertex_array()
-    sn2res = np.zeros_like(sn2w, dtype=self.dtype)
+    sn2res = [np.zeros_like(n2w, dtype=self.dtype) for n2w in sn2w ]
     for s,ww in enumerate(sn2w):
       x = self.mo_coeff[0,s,:,:,0]
       for nl,(n,w) in enumerate(zip(self.nn[s],ww)):
@@ -237,7 +236,7 @@ class gw(scf):
           xvx = dot(xv, x[pole[1]])
           contr = dot(xvx, dot(si, xvx))
           #print(pole[0], pole[2], contr)
-          sn2res[s,nl] += pole[2]*contr
+          sn2res[s][nl] += pole[2]*contr
     return sn2res
 
   def lsofs_inside_contour(self, ee, w, eps):

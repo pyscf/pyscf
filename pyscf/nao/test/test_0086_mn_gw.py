@@ -22,11 +22,11 @@ class KnowValues(unittest.TestCase):
     from pyscf.nao.m_fermi_dirac import fermi_dirac_occupations
     """ Spin-resolved case GW procedure. """
     #print(__name__, dir(gto_mf_uhf))
-    gw = gw_c(mf=gto_mf_uhf, gto=mol, verbosity=1)
+    gw = gw_c(mf=gto_mf_uhf, gto=mol, verbosity=0)
     self.assertEqual(gw.nspin, 2)
     
-    gw.kernel_gw()
-    print(__name__, gw.nspin)
+    #gw.kernel_gw()
+    #print(__name__, gw.nspin)
     
     #print(__name__)
     #print(gw.mo_occ)

@@ -54,9 +54,18 @@ class mf(nao):
   def init_mo_from_pyscf(self, **kw):
     """ Initializing from a previous pySCF mean-field calc. """
     from pyscf.nao.m_fermi_energy import fermi_energy as comput_fermi_energy
-    #print(__name__, 'init_mf')
+    
     self.telec = kw['telec'] if 'telec' in kw else 0.0000317 # 10K
     self.mf = mf = kw['mf']
+    if type(mf.mo_energy) == tuple: 
+      self.nspin = len(mf.mo_energy)
+    elif type(mf.mo_energy) == np.ndarray:
+      self.nspin = 1
+      assert mf.mo_coeff.shape[0]==mf.mo_coeff.shape[1]
+      assert len(mf.mo_coeff.shape)==2
+    else:
+      raise RuntimeError('ddd')
+    
     self.xc_code = mf.xc if hasattr(mf, 'xc') else 'HF'
     self.k2xyzw = np.array([[0.0,0.0,0.0,1.0]])
     nspin,n=self.nspin,self.norbs
@@ -80,7 +89,7 @@ class mf(nao):
     self.fermi_energy = kw['fermi_energy'] if 'fermi_energy' in kw else fermi
 
   def init_mo_coeff_label(self, **kw):
-    """ Constructor a self-consistent field calculation class """
+    """ Constructor a mean-field class from the preceeding SIESTA calculation """
     from pyscf.nao.m_fermi_dirac import fermi_dirac_occupations
     self.mo_coeff = np.require(self.wfsx.x, dtype=self.dtype, requirements='CW')
     self.mo_energy = np.require(self.wfsx.ksn2e, dtype=self.dtype, requirements='CW')

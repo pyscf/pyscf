@@ -15,7 +15,7 @@ class KnowValues(unittest.TestCase):
     gw_corr_res = gw.gw_corr_res(sn2eval_gw)
     
     fc = """0.03105265 -0.00339984 -0.01294826 -0.06934852 -0.03335821 -0.03335821 0.46324024"""
-    for e,eref_str in zip(gw_corr_res[0,:],fc.split(' ')):
+    for e,eref_str in zip(gw_corr_res[0],fc.split(' ')):
       self.assertAlmostEqual(e,float(eref_str),7)    
 
 if __name__ == "__main__": unittest.main()

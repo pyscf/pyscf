@@ -87,7 +87,8 @@ class nao():
     self.max_memory = 20000
 
     self.spin = gto.spin
-    self.nspin = 1 if gto.spin==0 else 2
+    #print(__name__, 'dir(gto)', dir(gto), gto.nelec)
+    self.nspin = 1 if gto.spin==0 else 2 # this can be wrong and has to be redetermined at in the mean-field class (mf)
     self.label = kw['label'] if 'label' in kw else 'pyscf'
     self.mol=gto # Only some data must be copied, not the whole object. Otherwise, an eventual deepcopy(...) may fail.
     self.natm=self.natoms = gto.natm
