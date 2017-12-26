@@ -421,13 +421,17 @@ class Hessian(lib.StreamObject):
 
     def hcore_generator(self, mol=None):
         if mol is None: mol = self.mol
+        with_x2c = getattr(self._scf, 'with_x2c', None)
+        if with_x2c:
+            return with_x2c.hcore_deriv_generator(deriv=2)
+
         aoslices = mol.aoslice_by_atom()
         nbas = mol.nbas
         nao = mol.nao_nr()
         h1aa, h1ab = self.get_hcore(mol)
         def get_hcore(iatm, jatm):
-            ish0, ish1, p0, p1 = aoslices[iatm]
-            jsh0, jsh1, q0, q1 = aoslices[jatm]
+            ish0, ish1, i0, i1 = aoslices[iatm]
+            jsh0, jsh1, j0, j1 = aoslices[jatm]
             zi = mol.atom_charge(iatm)
             zj = mol.atom_charge(jatm)
             if iatm == jatm:
@@ -437,31 +441,31 @@ class Hessian(lib.StreamObject):
                 rinv2aa = rinv2aa.reshape(3,3,nao,nao)
                 rinv2ab = rinv2ab.reshape(3,3,nao,nao)
                 hcore = -rinv2aa - rinv2ab
-                hcore[:,:,p0:p1] += h1aa[:,:,p0:p1]
-                hcore[:,:,p0:p1] += rinv2aa[:,:,p0:p1] * 2
-                hcore[:,:,p0:p1] += rinv2ab[:,:,p0:p1] * 2
-                hcore[:,:,p0:p1,q0:q1] += h1ab[:,:,p0:p1,q0:q1]
+                hcore[:,:,i0:i1] += h1aa[:,:,i0:i1]
+                hcore[:,:,i0:i1] += rinv2aa[:,:,i0:i1] * 2
+                hcore[:,:,i0:i1] += rinv2ab[:,:,i0:i1] * 2
+                hcore[:,:,i0:i1,i0:i1] += h1ab[:,:,i0:i1,i0:i1]
 
             else:
                 hcore = numpy.zeros((3,3,nao,nao))
-                hcore[:,:,p0:p1,q0:q1] += h1ab[:,:,p0:p1,q0:q1]
+                hcore[:,:,i0:i1,j0:j1] += h1ab[:,:,i0:i1,j0:j1]
                 with mol.with_rinv_as_nucleus(iatm):
                     shls_slice = (jsh0, jsh1, 0, nbas)
                     rinv2aa = mol.intor('int1e_ipiprinv', comp=9, shls_slice=shls_slice)
                     rinv2ab = mol.intor('int1e_iprinvip', comp=9, shls_slice=shls_slice)
-                    rinv2aa = zi * rinv2aa.reshape(3,3,q1-q0,nao)
-                    rinv2ab = zi * rinv2ab.reshape(3,3,q1-q0,nao)
-                    hcore[:,:,q0:q1] += rinv2aa
-                    hcore[:,:,q0:q1] += rinv2ab.transpose(1,0,2,3)
+                    rinv2aa = zi * rinv2aa.reshape(3,3,j1-j0,nao)
+                    rinv2ab = zi * rinv2ab.reshape(3,3,j1-j0,nao)
+                    hcore[:,:,j0:j1] += rinv2aa
+                    hcore[:,:,j0:j1] += rinv2ab.transpose(1,0,2,3)
 
                 with mol.with_rinv_as_nucleus(jatm):
                     shls_slice = (ish0, ish1, 0, nbas)
                     rinv2aa = mol.intor('int1e_ipiprinv', comp=9, shls_slice=shls_slice)
                     rinv2ab = mol.intor('int1e_iprinvip', comp=9, shls_slice=shls_slice)
-                    rinv2aa = zj * rinv2aa.reshape(3,3,p1-p0,nao)
-                    rinv2ab = zj * rinv2ab.reshape(3,3,p1-p0,nao)
-                    hcore[:,:,p0:p1] += rinv2aa
-                    hcore[:,:,p0:p1] += rinv2ab
+                    rinv2aa = zj * rinv2aa.reshape(3,3,i1-i0,nao)
+                    rinv2ab = zj * rinv2ab.reshape(3,3,i1-i0,nao)
+                    hcore[:,:,i0:i1] += rinv2aa
+                    hcore[:,:,i0:i1] += rinv2ab
             return hcore + hcore.conj().transpose(0,1,3,2)
         return get_hcore
 

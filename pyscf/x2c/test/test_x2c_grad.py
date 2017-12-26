@@ -69,8 +69,6 @@ def get_r1(mol, atm_id, pos):
     s1[:,p0:p1] -= s1all[pos][p0:p1].T
     t1[p0:p1,:]  =-t1all[pos][p0:p1]
     t1[:,p0:p1] -= t1all[pos][p0:p1].T
-    s1sqrt = _sqrt1(s0, s1)
-    s1invsqrt = _invsqrt1(s0, s1)
     x0 = get_x0(mol)
     x1 = get_x1(mol, atm_id)[pos]
     sa0 = s0 + reduce(numpy.dot, (x0.T, t0*(.5/c**2), x0))
@@ -207,14 +205,14 @@ class KnownValues(unittest.TestCase):
             x_1 = get_x0(mol1)
             x_2 = get_x0(mol2)
             x1_ref = (x_1 - x_2) / 0.0002 * lib.param.BOHR
-            x1t = get_x1(mol, 0)[2]
-            self.assertAlmostEqual(abs(x1t-x1_ref).max(), 0, 7)
+            x1t = get_x1(mol, 0)
+            self.assertAlmostEqual(abs(x1t[2]-x1_ref).max(), 0, 7)
 
             x0 = get_x0(mol)
             h0, s0 = get_h0_s0(mol)
             e0, c0 = scipy.linalg.eigh(h0, s0)
             h1, s1 = get_h1_s1(mol, 0)
-            x1 = sfx2c1e_grad._get_x1(e0, c0, h1[2], s1[2], x0)
+            x1 = sfx2c1e_grad._get_x1(e0, c0, h1, s1, x0)
             self.assertAlmostEqual(abs(x1-x1t).max(), 0, 9)
 
     def test_R1(self):

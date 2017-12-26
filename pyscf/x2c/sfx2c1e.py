@@ -124,8 +124,11 @@ class SpinFreeX2C(x2c.X2C):
 
     def hcore_deriv_generator(self, mol=None, deriv=1):
         from pyscf.x2c import sfx2c1e_grad
+        from pyscf.x2c import sfx2c1e_hess
         if deriv == 1:
             return sfx2c1e_grad.hcore_grad_generator(self, mol)
+        elif deriv == 2:
+            return sfx2c1e_hess.hcore_hess_generator(self, mol)
         else:
             raise NotImplementedError
 

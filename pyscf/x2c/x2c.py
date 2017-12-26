@@ -357,13 +357,30 @@ def _get_hcore_fw(t, v, w, s, x, c):
     h1 =(v + tx + tx.T.conj() - numpy.dot(x.T.conj(), tx) +
          reduce(numpy.dot, (x.T.conj(), w, x)) * (.25/c**2))
 
-    # R^dag \tilde{S} R = S
-    # R = S^{-1/2} [S^{-1/2}\tilde{S}S^{-1/2}]^{-1/2} S^{1/2}
-    sa = _invsqrt(s)
-    sb = _invsqrt(reduce(numpy.dot, (sa, s1, sa)))
-    r = reduce(numpy.dot, (sa, sb, sa, s))
+    r = _get_r(s, s1)
     h1 = reduce(numpy.dot, (r.T.conj(), h1, r))
     return h1
+
+def _get_r(s, snesc):
+    # R^dag \tilde{S} R = S
+    # R = S^{-1/2} [S^{-1/2}\tilde{S}S^{-1/2}]^{-1/2} S^{1/2}
+    w, v = numpy.linalg.eigh(s)
+    idx = w > 1e-14
+    v = v[:,idx]
+    w_sqrt = numpy.sqrt(w[idx])
+    w_invsqrt = 1 / w_sqrt
+
+    # eigenvectors of S as the new basis
+    snesc = reduce(numpy.dot, (v.conj().T, snesc, v))
+    r_mid = numpy.einsum('i,ij,j->ij', w_invsqrt, snesc, w_invsqrt)
+    w1, v1 = numpy.linalg.eigh(r_mid)
+    idx1 = w1 > 1e-14
+    v1 = v1[:,idx1]
+    r_mid = numpy.dot(v1/numpy.sqrt(w1[idx1]), v1.conj().T)
+    r = numpy.einsum('i,ij,j->ij', w_invsqrt, r_mid, w_sqrt)
+    # Back transform to AO basis
+    r = reduce(numpy.dot, (v, r, v.conj().T))
+    return r
 
 def _x2c1e_xmatrix(t, v, w, s, c):
     nao = s.shape[0]
@@ -471,5 +488,4 @@ if __name__ == '__main__':
     print('E(X2C1E) = %.12g' % method.kernel())
     method.with_x2c.approx = 'atom1e'
     print('E(X2C1E) = %.12g' % method.kernel())
-
 
