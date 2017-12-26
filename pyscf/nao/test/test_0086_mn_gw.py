@@ -25,7 +25,7 @@ class KnowValues(unittest.TestCase):
     gw = gw_c(mf=gto_mf_uhf, gto=mol, verbosity=1)
     self.assertEqual(gw.nspin, 2)
     
-    #gw.kernel_gw()
+    gw.kernel_gw()
     print(__name__, gw.nspin)
     
     #print(__name__)

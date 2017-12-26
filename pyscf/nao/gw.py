@@ -1,9 +1,11 @@
 from __future__ import print_function, division
 import sys, numpy as np
-from numpy import dot, zeros, einsum, pi, log, array
+from numpy import stack, dot, zeros, einsum, pi, log, array
 from pyscf.nao import scf
 from copy import copy
 from pyscf.nao.m_pack2den import pack2den_u, pack2den_l
+from timeit import default_timer as timer
+
 
 class gw(scf):
   """ G0W0 with integration along imaginary axis """
@@ -47,17 +49,22 @@ class gw(scf):
     self.nn = [range(self.start_st[s], self.finish_st[s]) for s in range(self.nspin)] # list of states to correct?
     #self.nn = range(self.start_st, self.finish_st) # list of states to correct?
 
-    self.nocc_conv = kw['nocc_conv'] if 'nocc_conv' in kw else self.nocc
-    self.nvrt_conv = kw['nvrt_conv'] if 'nvrt_conv' in kw else self.nvrt
+    if 'nocc_conv' in kw:
+      s2nocc_conv = [kw['nocc_conv']] if type(kw['nocc_conv'])==int else kw['nocc_conv']
+      self.nocc_conv = array([min(i,j) for i,j in zip(s2nocc_conv,nocc_0t)])
+    else :
+      self.nocc_conv = self.nocc
+
+    if 'nvrt_conv' in kw:
+      s2nvrt_conv = [kw['nvrt_conv']] if type(kw['nvrt_conv'])==int else kw['nvrt_conv']
+      self.nvrt_conv = array([min(i,j) for i,j in zip(s2nvrt_conv,self.norbs-nocc_0t)])
+    else :
+      self.nvrt_conv = self.nvrt
 
     if self.verbosity>0: print(__name__, 'nn =', self.nn)
     
     if self.rescf: self.kernel_scf() # here is rescf with HF functional tacitly assumed
-    
-    #print(self.nocc, self.nvrt)
-    #print(self.start_st, self.finish_st)
-    #print('     nn:', self.nn)
-    
+        
     self.nff_ia = kw['nff_ia'] if 'nff_ia' in kw else 32
     self.tol_ia = kw['tol_ia'] if 'tol_ia' in kw else 1e-6
     (wmin_def,wmax_def,tmin_def,tmax_def) = self.get_wmin_wmax_tmax_ia_def(self.tol_ia)
@@ -77,20 +84,22 @@ class gw(scf):
     self.kernel_sq = self.hkernel_den
     #self.v_dab_ds = self.pb.get_dp_vertex_doubly_sparse(axis=2)
 
+    self.x = np.require(self.mo_coeff[0,:,:,:,0], dtype=self.dtype, requirements='CW')
+
     if self.perform_gw: self.kernel_gw()
     
   def get_h0_vh_x_expval(self):
     if self.nspin==1:
       mat = self.get_hcore()+self.get_j()-0.5*self.get_k()
-      mat1 = np.dot(self.mo_coeff[0,0,:,:,0], mat)
-      expval = np.einsum('nb,nb->n', mat1, self.mo_coeff[0,0,:,:,0])
+      mat1 = dot(self.mo_coeff[0,0,:,:,0], mat)
+      expval = einsum('nb,...nb->...n', mat1, self.mo_coeff[0,:,:,:,0])
     elif self.nspin==2:
       vh = self.get_j()
       mat = self.get_hcore()+vh[0]+vh[1]-self.get_k()
-      expval = np.zeros((self.nspin, self.norbs))
+      expval = zeros((self.nspin, self.norbs))
       for s in range(self.nspin):
-        mat1 = np.dot(self.mo_coeff[0,s,:,:,0], mat[s])
-        expval[s] = np.einsum('nb,nb->n', mat1, self.mo_coeff[0,s,:,:,0])
+        mat1 = dot(self.mo_coeff[0,s,:,:,0], mat[s])
+        expval[s] = einsum('nb,nb->n', mat1, self.mo_coeff[0,s,:,:,0])
     return expval
     
   def get_wmin_wmax_tmax_ia_def(self, tol):
@@ -132,7 +141,8 @@ class gw(scf):
     rf0 = np.zeros((len(ww), self.nprod, self.nprod), dtype=self.dtypeComplex)
     v = self.pb.get_ac_vertex_array()
     
-    #print('self.ksn2e', __name__)
+    t1 = timer()
+    if self.verbosity>1: print(__name__, 'self.ksn2e', self.ksn2e, len(ww))
     #print(self.ksn2e[0,0,0]-self.ksn2e)
     #print(self.ksn2f)
     #print(' abs(v).sum(), ww.sum(), self.nfermi, self.vstart ')
@@ -140,14 +150,17 @@ class gw(scf):
     
     zvxx_a = zeros((len(ww), self.nprod), dtype=self.dtypeComplex)
     for n,(en,fn) in enumerate(zip(self.ksn2e[0,0,0:self.nfermi], self.ksn2f[0, 0, 0:self.nfermi])):
+      #if self.verbosity>1: print(__name__, 'n =', n)
       vx = dot(v, self.xocc[n,:])
-      #print(n, abs(vx).sum(), en)
       for m,(em,fm) in enumerate(zip(self.ksn2e[0,0,self.vstart:],self.ksn2f[0,0,self.vstart:])):
         if (fn - fm)<0 : break
         vxx_a = dot(vx, self.xvrt[m,:].T)
         for iw,comega in enumerate(ww):
           zvxx_a[iw,:] = vxx_a * (fn - fm) * ( 1.0 / (comega - (em - en)) - 1.0 / (comega + (em - en)) )
         rf0 += einsum('wa,b->wab', zvxx_a, vxx_a)
+
+    t2 = timer()
+    if self.verbosity>1: print(__name__, 'finished rf0', t2-t1)
     return rf0
   
   rf0 = rf0_cmplx_vertex_ac
@@ -276,26 +289,24 @@ class gw(scf):
     """ This computes the G0W0 corrections to the eigenvalues """
     sn2eval_gw = [np.copy(self.ksn2e[0,s,nn]) for s,nn in enumerate(self.nn) ]
     #print(__name__, 'sn2eval_gw', sn2eval_gw)
-    
     sn2eval_gw_prev = copy(sn2eval_gw)
-    nocc_conv = self.nocc_conv
-    nvrt_conv = self.nvrt_conv
-    self.nn_close = range(max(self.nocc_0t-nocc_conv,0), 
-                          min(self.nocc_0t+nvrt_conv,self.norbs)) # list of states for checking convergence
-    
-    mo_eigval = np.zeros(self.norbs)
+    self.nn_conv = []
+    for nocc_0t,nocc_conv,nvrt_conv in zip(self.nocc_0t, self.nocc_conv, self.nvrt_conv):
+      self.nn_conv.append( range(max(nocc_0t-nocc_conv,0), min(nocc_0t+nvrt_conv,self.norbs))) # lofs for convergence
+
+    # iterations to converge the     
     for i in range(self.niter_max_ev):
-      gw_corr_int = self.gw_corr_int(sn2eval_gw)
-      gw_corr_res = self.gw_corr_res(sn2eval_gw)
-      sn2eval_gw = self.h0_vh_x_expval[self.nn] + gw_corr_int + gw_corr_res
-      sn2mismatch = np.zeros(self.norbs)
-      sn2mismatch[self.nn] = sn2eval_gw-sn2eval_gw_prev
-      mo_eigval[self.nn] = sn2eval_gw
-      sn2eval_gw_prev = np.copy(sn2eval_gw)
-      err = abs(sn2mismatch[self.nn_close]).sum()/len(self.nn_close)
-      if self.verbosity>0: print(__name__, i, err, mo_eigval[self.nn_close], gw_corr_int, gw_corr_res)
+      sn2i = self.gw_corr_int(sn2eval_gw)
+      sn2r = self.gw_corr_res(sn2eval_gw)
+      sn2eval_gw = [evhf[nn]+n2i+n2r for s,(evhf,n2i,n2r,nn) in enumerate(zip(self.h0_vh_x_expval,sn2i,sn2r,self.nn)) ]
+      sn2mismatch = zeros((self.nspin,self.norbs))
+      for s, nn in enumerate(self.nn): sn2mismatch[s,nn] = sn2eval_gw[s][:]-sn2eval_gw_prev[s][:]
+      sn2eval_gw_prev = copy(sn2eval_gw)
+      err = 0.0
+      for s,nn_conv in enumerate(self.nn_conv): err += abs(sn2mismatch[s,nn_conv]).sum()/len(nn_conv)
+
+      if self.verbosity>0: print(__name__, i, err, sn2eval_gw, sn2i, sn2r)
       if err<self.tol_ev : break
-    
     return sn2eval_gw
 
   def make_mo_g0w0(self):
@@ -315,8 +326,8 @@ class gw(scf):
     #print(self.mo_energy_g0w0.shape, type(self.mo_energy_g0w0))
     for s,nn in enumerate(self.nn):
       self.mo_energy_gw[0,s,nn] = self.sn2eval_gw[s]
-      nn_occ = [n for n in nn if n<self.nocc_0t[0]]
-      nn_vrt = [n for n in nn if n>=self.nocc_0t[0]]
+      nn_occ = [n for n in nn if n<self.nocc_0t[s]]
+      nn_vrt = [n for n in nn if n>=self.nocc_0t[s]]
       scissor_occ = (self.mo_energy_gw[0,s,nn_occ] - self.mo_energy[0,s,nn_occ]).sum()/len(nn_occ)
       scissor_vrt = (self.mo_energy_gw[0,s,nn_vrt] - self.mo_energy[0,s,nn_vrt]).sum()/len(nn_vrt)
       #print(scissor_occ, scissor_vrt)
