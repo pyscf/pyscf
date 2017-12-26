@@ -211,8 +211,8 @@ class KnownValues(unittest.TestCase):
             x0 = get_x0(mol)
             h0, s0 = get_h0_s0(mol)
             e0, c0 = scipy.linalg.eigh(h0, s0)
-            h1, s1 = get_h1_s1(mol, 0)
-            x1 = sfx2c1e_grad._get_x1(e0, c0, h1, s1, x0)
+            get_h1_etc = sfx2c1e_grad._gen_first_order_quantities(mol, e0, c0, x0)
+            x1 = get_h1_etc(0)[4]
             self.assertAlmostEqual(abs(x1-x1t).max(), 0, 9)
 
     def test_R1(self):
@@ -223,36 +223,11 @@ class KnownValues(unittest.TestCase):
             R1t = get_r1(mol, 0, 2)
             self.assertAlmostEqual(abs(R1t-R1_ref).max(), 0, 7)
 
-            s0 = mol.intor('int1e_ovlp')
-            t0 = mol.intor('int1e_kin')
             x0 = get_x0(mol)
-            x1 = get_x1(mol, 0)[2]
-            w_s, v_s = scipy.linalg.eigh(s0)
-            w_sqrt = numpy.sqrt(w_s)
-            s_nesc0 = s0 + reduce(numpy.dot, (x0.T, t0, x0)) * (.5/c**2)
-            s_nesc0_vbas = reduce(numpy.dot, (v_s.T, s_nesc0, v_s))
-            R0_mid = numpy.einsum('i,ij,j->ij', 1./w_sqrt, s_nesc0_vbas, 1./w_sqrt)
-            wr0, vr0 = scipy.linalg.eigh(R0_mid)
-            wr0_sqrt = numpy.sqrt(wr0)
-
-            nao = s0.shape[0]
-            s1 = mol.intor('int1e_ipovlp', comp=3)
-            t1 = mol.intor('int1e_ipkin', comp=3)
-            aoslices = mol.aoslice_by_atom()
-            ish0, ish1, p0, p1 = aoslices[0]
-            s1cc = numpy.zeros((nao,nao))
-            t1cc = numpy.zeros((nao,nao))
-            s1cc[p0:p1,:] =-s1[2,p0:p1]
-            s1cc[:,p0:p1]-= s1[2,p0:p1].T
-            t1cc[p0:p1,:] =-t1[2,p0:p1]
-            t1cc[:,p0:p1]-= t1[2,p0:p1].T
-
-            s_nesc1 = reduce(numpy.dot, (x1.T, t0, x0)) * (.5/c**2)
-            s_nesc1 = s_nesc1 + s_nesc1.T
-            s_nesc1+= reduce(numpy.dot, (x0.T, t1cc, x0)) * (.5/c**2)
-            s_nesc1+= s1cc
-            R1 = sfx2c1e_grad._get_r1(s1cc, s_nesc1, s_nesc0_vbas,
-                                      (w_sqrt,v_s), (wr0_sqrt,vr0))
+            h0, s0 = get_h0_s0(mol)
+            e0, c0 = scipy.linalg.eigh(h0, s0)
+            get_h1_etc = sfx2c1e_grad._gen_first_order_quantities(mol, e0, c0, x0)
+            R1 = get_h1_etc(0)[6][2]
             self.assertAlmostEqual(abs(R1-R1t).max(), 0, 9)
 
     def test_hfw(self):

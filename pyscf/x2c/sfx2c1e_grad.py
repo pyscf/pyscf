@@ -210,6 +210,7 @@ def _get_r1(s0_roots, s_nesc0, s1, s_nesc1, r0_roots):
     w_sqrt, v_s = s0_roots
     w_invsqrt = 1. / w_sqrt
     wr0_sqrt, vr0 = r0_roots
+    wr0_invsqrt = 1. / wr0_sqrt
 
     s1 = reduce(numpy.dot, (v_s.T, s1, v_s))
     s_nesc1 = reduce(numpy.dot, (v_s.T, s_nesc1, v_s))
@@ -222,10 +223,9 @@ def _get_r1(s0_roots, s_nesc0, s1, s_nesc1, r0_roots):
     R1_mid += numpy.einsum('i,ij,j->ij', w_invsqrt, s_nesc1, w_invsqrt)
 
     R1_mid = reduce(numpy.dot, (vr0.T, R1_mid, vr0))
-    R1_mid /= -(1./wr0_sqrt[:,None] + 1./wr0_sqrt)
-    R1_mid *= 1./wr0_sqrt**2
-    R1_mid *= 1./wr0_sqrt[:,None]**2
-    vr0_wr0_sqrt = vr0 / wr0_sqrt
+    R1_mid /= -(wr0_invsqrt[:,None] + wr0_invsqrt)
+    R1_mid = numpy.einsum('i,ij,j->ij', wr0_invsqrt**2, R1_mid, wr0_invsqrt**2)
+    vr0_wr0_sqrt = vr0 * wr0_invsqrt
     vr0_s0_sqrt = vr0.T * w_sqrt
     vr0_s0_invsqrt = vr0.T * w_invsqrt
 

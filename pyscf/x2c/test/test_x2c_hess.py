@@ -5,6 +5,7 @@ from pyscf import lib
 from pyscf import gto
 from pyscf.x2c import sfx2c1e
 from pyscf.x2c import sfx2c1e_grad
+from pyscf.x2c import sfx2c1e_hess
 
 class light_speed(object):
     def __init__(self, c):
@@ -465,133 +466,166 @@ def get_r2(mol, ia, ja, ipos, jpos):
     R2 += reduce(numpy.dot, (s0_invsqrt, R0_mid, s2_sqrt))
     return R2
 
-if __name__ == '__main__':
-    mol1 = gto.M(
-        verbose = 0,
-        atom = [["He" , (0. , 0.     , 0.0001)],
-                [1   , (0. , -0.757 , 0.587)],
-                [1   , (0. , 0.757  , 0.587)]],
-        basis = '3-21g',
-    )
+mol1 = gto.M(
+    verbose = 0,
+    atom = [["He" , (0. , 0.     , 0.0001)],
+            [1   , (0. , -0.757 , 0.587)],
+            [1   , (0. , 0.757  , 0.587)]],
+    basis = '3-21g',
+)
 
-    mol2 = gto.M(
-        verbose = 0,
-        atom = [["He" , (0. , 0.     ,-0.0001)],
-                [1   , (0. , -0.757 , 0.587)],
-                [1   , (0. , 0.757  , 0.587)]],
-        basis = '3-21g',
-    )
+mol2 = gto.M(
+    verbose = 0,
+    atom = [["He" , (0. , 0.     ,-0.0001)],
+            [1   , (0. , -0.757 , 0.587)],
+            [1   , (0. , 0.757  , 0.587)]],
+    basis = '3-21g',
+)
 
-    mol = gto.M(
-        verbose = 0,
-        atom = [["He" , (0. , 0.     , 0.   )],
-                [1   , (0. , -0.757 , 0.587)],
-                [1   , (0. , 0.757  , 0.587)]],
-        basis = '3-21g',
-    )
+mol = gto.M(
+    verbose = 0,
+    atom = [["He" , (0. , 0.     , 0.   )],
+            [1   , (0. , -0.757 , 0.587)],
+            [1   , (0. , 0.757  , 0.587)]],
+    basis = '3-21g',
+)
 
-    nao = mol.nao_nr()
-    aoslices = mol.aoslice_by_atom()
-    p0, p1 = aoslices[0][2:]
-    s1p1 = mol1.intor('int1e_ipovlp', comp=3)
-    s1p2 = mol2.intor('int1e_ipovlp', comp=3)
-    s1_1 = numpy.zeros((3,nao,nao))
-    s1_1[:,p0:p1] = -s1p1[:,p0:p1]
-    s1_1 = s1_1 + s1_1.transpose(0,2,1)
-    s1_2 = numpy.zeros((3,nao,nao))
-    s1_2[:,p0:p1] = -s1p2[:,p0:p1]
-    s1_2 = s1_2 + s1_2.transpose(0,2,1)
-    s2sqrt_ref = (_sqrt1(mol1.intor('int1e_ovlp'), s1_1[2]) -
-                  _sqrt1(mol2.intor('int1e_ovlp'), s1_2[2])) / 0.0002 * lib.param.BOHR
-    s2invsqrt_ref = (_invsqrt1(mol1.intor('int1e_ovlp'), s1_1[2]) -
-                     _invsqrt1(mol2.intor('int1e_ovlp'), s1_2[2])) / 0.0002 * lib.param.BOHR
+class KnownValues(unittest.TestCase):
+    def test_sqrt_second_order(self):
+        with light_speed(10) as c:
+            nao = mol.nao_nr()
+            aoslices = mol.aoslice_by_atom()
+            p0, p1 = aoslices[0][2:]
+            s1p1 = mol1.intor('int1e_ipovlp', comp=3)
+            s1p2 = mol2.intor('int1e_ipovlp', comp=3)
+            s1_1 = numpy.zeros((3,nao,nao))
+            s1_1[:,p0:p1] = -s1p1[:,p0:p1]
+            s1_1 = s1_1 + s1_1.transpose(0,2,1)
+            s1_2 = numpy.zeros((3,nao,nao))
+            s1_2[:,p0:p1] = -s1p2[:,p0:p1]
+            s1_2 = s1_2 + s1_2.transpose(0,2,1)
+            s2sqrt_ref = (_sqrt1(mol1.intor('int1e_ovlp'), s1_1[2]) -
+                          _sqrt1(mol2.intor('int1e_ovlp'), s1_2[2])) / 0.0002 * lib.param.BOHR
+            s2invsqrt_ref = (_invsqrt1(mol1.intor('int1e_ovlp'), s1_1[2]) -
+                             _invsqrt1(mol2.intor('int1e_ovlp'), s1_2[2])) / 0.0002 * lib.param.BOHR
 
-    s1p = mol.intor('int1e_ipovlp', comp=3)
-    s1i = numpy.zeros((3,nao,nao))
-    s1i[:,p0:p1] = -s1p[:,p0:p1]
-    s1i = s1i + s1i.transpose(0,2,1)
-    s2aap = mol.intor('int1e_ipipovlp', comp=9).reshape(3,3,nao,nao)
-    s2abp = mol.intor('int1e_ipovlpip', comp=9).reshape(3,3,nao,nao)
-    s2 = numpy.zeros((3,3,nao,nao))
-    s2[:,:,p0:p1]        = s2aap[:,:,p0:p1]
-    s2[:,:,p0:p1,p0:p1] += s2abp[:,:,p0:p1,p0:p1]
-    s2 = s2 + s2.transpose(0,1,3,2)
-    s2sqrt = _sqrt2(mol.intor('int1e_ovlp'), s1i[2], s1i[2], s2[2,2])
-    s2invsqrt = _invsqrt2(mol.intor('int1e_ovlp'), s1i[2], s1i[2], s2[2,2])
+            s1p = mol.intor('int1e_ipovlp', comp=3)
+            s1i = numpy.zeros((3,nao,nao))
+            s1i[:,p0:p1] = -s1p[:,p0:p1]
+            s1i = s1i + s1i.transpose(0,2,1)
+            s2aap = mol.intor('int1e_ipipovlp', comp=9).reshape(3,3,nao,nao)
+            s2abp = mol.intor('int1e_ipovlpip', comp=9).reshape(3,3,nao,nao)
+            s2 = numpy.zeros((3,3,nao,nao))
+            s2[:,:,p0:p1]        = s2aap[:,:,p0:p1]
+            s2[:,:,p0:p1,p0:p1] += s2abp[:,:,p0:p1,p0:p1]
+            s2 = s2 + s2.transpose(0,1,3,2)
+            s2sqrt = _sqrt2(mol.intor('int1e_ovlp'), s1i[2], s1i[2], s2[2,2])
+            s2invsqrt = _invsqrt2(mol.intor('int1e_ovlp'), s1i[2], s1i[2], s2[2,2])
 
-    print abs(s2sqrt-s2sqrt_ref).max()
-    print abs(s2invsqrt-s2invsqrt_ref).max()
+            self.assertAlmostEqual(abs(s2sqrt-s2sqrt_ref).max(), 0, 7)
+            self.assertAlmostEqual(abs(s2invsqrt-s2invsqrt_ref).max(), 0, 7)
 
-    p0, p1 = aoslices[1][2:]
-    s1_1 = numpy.zeros((3,nao,nao))
-    s1_1[:,p0:p1] = -s1p1[:,p0:p1]
-    s1_1 = s1_1 + s1_1.transpose(0,2,1)
-    s1_2 = numpy.zeros((3,nao,nao))
-    s1_2[:,p0:p1] = -s1p2[:,p0:p1]
-    s1_2 = s1_2 + s1_2.transpose(0,2,1)
-    s2sqrt_ref = (_sqrt1(mol1.intor('int1e_ovlp'), s1_1[2]) -
-                  _sqrt1(mol2.intor('int1e_ovlp'), s1_2[2])) / 0.0002 * lib.param.BOHR
-    s2invsqrt_ref = (_invsqrt1(mol1.intor('int1e_ovlp'), s1_1[2]) -
-                     _invsqrt1(mol2.intor('int1e_ovlp'), s1_2[2])) / 0.0002 * lib.param.BOHR
-    q0, q1 = aoslices[0][2:]
-    s1i = numpy.zeros((3,nao,nao))
-    s1i[:,p0:p1] = -s1p[:,p0:p1]
-    s1i = s1i + s1i.transpose(0,2,1)
-    s1j = numpy.zeros((3,nao,nao))
-    s1j[:,q0:q1] = -s1p[:,q0:q1]
-    s1j = s1j + s1j.transpose(0,2,1)
-    s2 = numpy.zeros((3,3,nao,nao))
-    s2[:,:,p0:p1,q0:q1] = s2abp[:,:,p0:p1,q0:q1]
-    s2 = s2 + s2.transpose(0,1,3,2)
-    s2sqrt = _sqrt2(mol.intor('int1e_ovlp'), s1i[2], s1j[2], s2[2,2])
-    s2invsqrt = _invsqrt2(mol.intor('int1e_ovlp'), s1i[2], s1j[2], s2[2,2])
+            p0, p1 = aoslices[1][2:]
+            s1_1 = numpy.zeros((3,nao,nao))
+            s1_1[:,p0:p1] = -s1p1[:,p0:p1]
+            s1_1 = s1_1 + s1_1.transpose(0,2,1)
+            s1_2 = numpy.zeros((3,nao,nao))
+            s1_2[:,p0:p1] = -s1p2[:,p0:p1]
+            s1_2 = s1_2 + s1_2.transpose(0,2,1)
+            s2sqrt_ref = (_sqrt1(mol1.intor('int1e_ovlp'), s1_1[2]) -
+                          _sqrt1(mol2.intor('int1e_ovlp'), s1_2[2])) / 0.0002 * lib.param.BOHR
+            s2invsqrt_ref = (_invsqrt1(mol1.intor('int1e_ovlp'), s1_1[2]) -
+                             _invsqrt1(mol2.intor('int1e_ovlp'), s1_2[2])) / 0.0002 * lib.param.BOHR
+            q0, q1 = aoslices[0][2:]
+            s1i = numpy.zeros((3,nao,nao))
+            s1i[:,p0:p1] = -s1p[:,p0:p1]
+            s1i = s1i + s1i.transpose(0,2,1)
+            s1j = numpy.zeros((3,nao,nao))
+            s1j[:,q0:q1] = -s1p[:,q0:q1]
+            s1j = s1j + s1j.transpose(0,2,1)
+            s2 = numpy.zeros((3,3,nao,nao))
+            s2[:,:,p0:p1,q0:q1] = s2abp[:,:,p0:p1,q0:q1]
+            s2 = s2 + s2.transpose(0,1,3,2)
+            s2sqrt = _sqrt2(mol.intor('int1e_ovlp'), s1i[2], s1j[2], s2[2,2])
+            s2invsqrt = _invsqrt2(mol.intor('int1e_ovlp'), s1i[2], s1j[2], s2[2,2])
 
-    print abs(s2sqrt-s2sqrt_ref).max()
-    print abs(s2invsqrt-s2invsqrt_ref).max()
+            self.assertAlmostEqual(abs(s2sqrt-s2sqrt_ref).max(), 0, 7)
+            self.assertAlmostEqual(abs(s2invsqrt-s2invsqrt_ref).max(), 0, 7)
+
+    def test_h2(self):
+        with light_speed(10) as c:
+            h1_1, s1_1 = get_h1_s1(mol1, 0)
+            h1_2, s1_2 = get_h1_s1(mol2, 0)
+            h2_ref = (h1_1[2] - h1_2[2]) / 0.0002 * lib.param.BOHR
+            s2_ref = (s1_1[2] - s1_2[2]) / 0.0002 * lib.param.BOHR
+
+            h2, s2 = get_h2_s2(mol, 0, 0)
+            self.assertAlmostEqual(abs(h2[2,2]-h2_ref).max(), 0, 7)
+            self.assertAlmostEqual(abs(s2[2,2]-s2_ref).max(), 0, 7)
+
+            h1_1, s1_1 = get_h1_s1(mol1, 1)
+            h1_2, s1_2 = get_h1_s1(mol2, 1)
+            h2_ref = (h1_1[2] - h1_2[2]) / 0.0002 * lib.param.BOHR
+            s2_ref = (s1_1[2] - s1_2[2]) / 0.0002 * lib.param.BOHR
+
+            h2, s2 = get_h2_s2(mol, 1, 0)
+            self.assertAlmostEqual(abs(h2[2,2]-h2_ref).max(), 0, 7)
+            self.assertAlmostEqual(abs(s2[2,2]-s2_ref).max(), 0, 7)
+
+    def test_x2(self):
+        with light_speed(10) as c:
+            x1_1 = get_x1(mol1, 0)
+            x1_2 = get_x1(mol2, 0)
+            x2_ref = (x1_1[2] - x1_2[2]) / 0.0002 * lib.param.BOHR
+            x2 = get_x2(mol, 0, 0)
+            self.assertAlmostEqual(abs(x2[2,2]-x2_ref).max(), 0, 7)
+
+            x1_1 = get_x1(mol1, 1)
+            x1_2 = get_x1(mol2, 1)
+            x2_ref = (x1_1[2] - x1_2[2]) / 0.0002 * lib.param.BOHR
+            x2 = get_x2(mol, 1, 0)
+            self.assertAlmostEqual(abs(x2[2,2]-x2_ref).max(), 0, 7)
+
+    def test_r2(self):
+        with light_speed(10) as c:
+            r1_1 = get_r1(mol1, 0, 2)
+            r1_2 = get_r1(mol2, 0, 2)
+            r2_ref = (r1_1 - r1_2) / 0.0002 * lib.param.BOHR
+            r2 = get_r2(mol, 0, 0, 2, 2)
+            self.assertAlmostEqual(abs(r2-r2_ref).max(), 0, 7)
+
+            r1_1 = get_r1(mol1, 1, 2)
+            r1_2 = get_r1(mol2, 1, 2)
+            r2_ref = (r1_1 - r1_2) / 0.0002 * lib.param.BOHR
+            r2 = get_r2(mol, 1, 0, 2, 2)
+            self.assertAlmostEqual(abs(r2-r2_ref).max(), 0, 7)
+
+    def test_hfw2(self):
+        h1_deriv_1 = sfx2c1e_grad.gen_sf_hfw(mol1, approx='1E')
+        h1_deriv_2 = sfx2c1e_grad.gen_sf_hfw(mol2, approx='1E')
+        h2_deriv = sfx2c1e_hess.gen_sf_hfw(mol, approx='1E')
+
+        h2 = h2_deriv(0,0)
+        h2_ref = (h1_deriv_1(0)[2] - h1_deriv_2(0)[2]) / 0.0002 * lib.param.BOHR
+        self.assertAlmostEqual(abs(h2[2,2]-h2_ref).max(), 0, 7)
+
+        h2 = h2_deriv(1,0)
+        h2_ref = (h1_deriv_1(1)[2] - h1_deriv_2(1)[2]) / 0.0002 * lib.param.BOHR
+        self.assertAlmostEqual(abs(h2[2,2]-h2_ref).max(), 0, 7)
+
+        h1_deriv_1 = sfx2c1e_grad.gen_sf_hfw(mol1, approx='ATOM1E')
+        h1_deriv_2 = sfx2c1e_grad.gen_sf_hfw(mol2, approx='ATOM1E')
+        h2_deriv = sfx2c1e_hess.gen_sf_hfw(mol, approx='ATOM1E')
+
+        h2 = h2_deriv(0,0)
+        h2_ref = (h1_deriv_1(0)[2] - h1_deriv_2(0)[2]) / 0.0002 * lib.param.BOHR
+        self.assertAlmostEqual(abs(h2[2,2]-h2_ref).max(), 0, 7)
+
+        h2 = h2_deriv(1,0)
+        h2_ref = (h1_deriv_1(1)[2] - h1_deriv_2(1)[2]) / 0.0002 * lib.param.BOHR
+        self.assertAlmostEqual(abs(h2[2,2]-h2_ref).max(), 0, 7)
 
 
-    h1_1, s1_1 = get_h1_s1(mol1, 0)
-    h1_2, s1_2 = get_h1_s1(mol2, 0)
-    h2_ref = (h1_1[2] - h1_2[2]) / 0.0002 * lib.param.BOHR
-    s2_ref = (s1_1[2] - s1_2[2]) / 0.0002 * lib.param.BOHR
-
-    h2, s2 = get_h2_s2(mol, 0, 0)
-    print abs(h2[2,2]-h2_ref).max()
-    print abs(s2[2,2]-s2_ref).max()
-
-    h1_1, s1_1 = get_h1_s1(mol1, 1)
-    h1_2, s1_2 = get_h1_s1(mol2, 1)
-    h2_ref = (h1_1[2] - h1_2[2]) / 0.0002 * lib.param.BOHR
-    s2_ref = (s1_1[2] - s1_2[2]) / 0.0002 * lib.param.BOHR
-
-    h2, s2 = get_h2_s2(mol, 1, 0)
-    print abs(h2[2,2]-h2_ref).max()
-    print abs(s2[2,2]-s2_ref).max()
-
-    lib.param.LIGHT_SPEED = 10
-    x1_1 = get_x1(mol1, 0)
-    x1_2 = get_x1(mol2, 0)
-    x2_ref = (x1_1[2] - x1_2[2]) / 0.0002 * lib.param.BOHR
-    x2 = get_x2(mol, 0, 0)
-    print abs(x2[2,2]-x2_ref).max()
-
-    x1_1 = get_x1(mol1, 1)
-    x1_2 = get_x1(mol2, 1)
-    x2_ref = (x1_1[2] - x1_2[2]) / 0.0002 * lib.param.BOHR
-    x2 = get_x2(mol, 1, 0)
-    print abs(x2[2,2]-x2_ref).max()
-
-
-    lib.param.LIGHT_SPEED = 10
-    r1_1 = get_r1(mol1, 0, 2)
-    r1_2 = get_r1(mol2, 0, 2)
-    r2_ref = (r1_1 - r1_2) / 0.0002 * lib.param.BOHR
-    r2 = get_r2(mol, 0, 0, 2, 2)
-    print abs(r2-r2_ref).max()
-
-    r1_1 = get_r1(mol1, 1, 2)
-    r1_2 = get_r1(mol2, 1, 2)
-    r2_ref = (r1_1 - r1_2) / 0.0002 * lib.param.BOHR
-    r2 = get_r2(mol, 1, 0, 2, 2)
-    print abs(r2-r2_ref).max()
-
+if __name__ == "__main__":
+    print("Full Tests for sfx2c1e gradients")
+    unittest.main()

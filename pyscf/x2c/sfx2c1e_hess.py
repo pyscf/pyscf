@@ -322,13 +322,6 @@ def _get_r2(s0_roots, sa0, s1i, sa1i, s1j, sa1j, s2, sa2, r0_roots):
 if __name__ == '__main__':
     bak = lib.param.LIGHT_SPEED
     lib.param.LIGHT_SPEED = 10
-    def get_h(mol):
-        c = lib.param.LIGHT_SPEED
-        t = mol.intor_symmetric('int1e_kin')
-        v = mol.intor_symmetric('int1e_nuc')
-        s = mol.intor_symmetric('int1e_ovlp')
-        w = mol.intor_symmetric('int1e_pnucp')
-        return x2c._x2c1e_get_hcore(t, v, w, s, c)
 
     mol = gto.M(
         verbose = 0,
