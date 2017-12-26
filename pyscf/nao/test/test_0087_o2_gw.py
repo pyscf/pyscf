@@ -3,7 +3,7 @@ import unittest, numpy as np
 from pyscf import gto, scf
 from pyscf.nao import gw as gw_c
 
-mol = gto.M( verbose = 5, atom = '''O 0 0 0; O 0 0 2.0''', basis = 'cc-pvdz', spin = 0, )
+mol = gto.M( verbose = 1, atom = '''O 0 0 0; O 0 0 2.0''', basis = 'cc-pvdz', spin = 0, )
 #gto_mf_rhf = scf.RHF(mol)
 #gto_mf_rhf.kernel()
 gto_mf_uhf = scf.UHF(mol)
