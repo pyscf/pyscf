@@ -32,6 +32,7 @@ for i,occsa in enumerate(occslst):
         print('   %s       %s      %.12f' % (occsa, occsb, mc.ci[i,j]))
 
 # Only output determinants which have coefficients > 0.05
+nelec = (3,3)  # 3 spin-up electrons and 3 spin-down electrons
 print('   det-alpha,    det-beta,    CI coefficients')
 for c,ia,ib in mc.fcisolver.large_ci(mc.ci, ncas, nelec, tol=.05, return_strs=False):
     print('   %s       %s      %.12f' % (ia, ib, c))
