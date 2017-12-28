@@ -355,9 +355,9 @@ class KUHF(pbcuhf.UHF, khf.KSCF):
         return vhf
 
 
-    def analyze(self, verbose=None, **kwargs):
+    def analyze(self, verbose=None, with_meta_lowdin=True, **kwargs):
         if verbose is None: verbose = self.verbose
-        return khf.analyze(self, verbose, **kwargs)
+        return khf.analyze(self, verbose, with_meta_lowdin, **kwargs)
 
 
     def get_grad(self, mo_coeff_kpts, mo_occ_kpts, fock=None):
