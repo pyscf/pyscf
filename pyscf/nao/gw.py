@@ -5,7 +5,7 @@ from pyscf.nao import scf
 from copy import copy
 from pyscf.nao.m_pack2den import pack2den_u, pack2den_l
 from timeit import default_timer as timer
-
+from pyscf.nao.m_rf0_den import rf0_cmplx_ref_blk, rf0_cmplx_ref, rf0_cmplx_vertex_dp, rf0_cmplx_vertex_ac
 
 class gw(scf):
   """ G0W0 with integration along imaginary axis """
@@ -121,111 +121,12 @@ class gw(scf):
     return wmin_def, wmax_def, tmin_def,tmax_def
 
 
-  def rf0_cmplx_ref_blk(self, ww):
-    """ Full matrix response in the basis of atom-centered product functions, and spin-resolved,
-    or better said spin-summed """
-    rf0 = np.zeros((len(ww), self.nprod, self.nprod), dtype=self.dtypeComplex)
-    v = einsum('pab->apb', self.pb.get_ac_vertex_array())
-    #print('v.shape', v.shape)
-    
-    t1 = timer()
-    if self.verbosity>1: print(__name__, 'self.ksn2e', self.ksn2e, len(ww))
-        
-    bsize = 40
-    zxvx = zeros((len(ww), self.nprod,bsize,bsize), dtype=self.dtypeComplex)
-    sn2e = self.ksn2e.reshape((self.nspin*self.norbs))
-    sn2f = self.ksn2f.reshape((self.nspin*self.norbs))
-    sn2x = self.x.reshape((self.nspin*self.norbs,self.norbs))
-
-    nn = range(0,len(sn2x),bsize)+[len(sn2x)]
-    #print('nn = ', nn, sn2x.shape, len(sn2x))
-
-    for nbs,nbf in zip(nn,nn[1:]):
-      vx = dot(v, sn2x[nbs:nbf,:].T)      
-      for mbs,mbf in zip(nn,nn[1:]):
-        xvx = einsum('mb,bpn->pmn', sn2x[mbs:mbf,:],vx)
-        fmn = np.add.outer(-sn2f[mbs:mbf], sn2f[nbs:nbf])
-        emn = np.add.outer( sn2e[mbs:mbf],-sn2e[nbs:nbf])
-        zxvx.fill(0.0)
-        for iw,comega in enumerate(ww):
-          zxvx[iw,:,0:mbf-mbs,0:nbf-nbs] = (xvx * fmn) / (comega - emn)
-        
-        rf0 += einsum('wpmn,qmn->wpq', zxvx[...,0:mbf-mbs,0:nbf-nbs], xvx)
-
-    t2 = timer()
-    if self.verbosity>0: print(__name__, 'rf0_ref_blk', t2-t1)
-    return rf0
-
-  def rf0_cmplx_ref(self, ww):
-    """ Full matrix response in the basis of atom-centered product functions, and spin-resolved,
-    or better said spin-summed """
-    rf0 = np.zeros((len(ww), self.nprod, self.nprod), dtype=self.dtypeComplex)
-    v = self.pb.get_ac_vertex_array()
-    
-    t1 = timer()
-    if self.verbosity>1: print(__name__, 'self.ksn2e', self.ksn2e, len(ww))
-        
-    zvxx_a = zeros((len(ww), self.nprod), dtype=self.dtypeComplex)
-    sn2e = self.ksn2e.reshape((self.nspin*self.norbs))
-    sn2f = self.ksn2f.reshape((self.nspin*self.norbs))
-    sn2x = self.x.reshape((self.nspin*self.norbs,self.norbs))
-    for en,fn,xn in zip(sn2e, sn2f, sn2x):
-      vx = dot(v, xn)
-      for em,fm,xm in zip(sn2e,sn2f,sn2x):
-        vxx_a = dot(vx, xm.T)
-        for iw,comega in enumerate(ww):
-          zvxx_a[iw,:] = vxx_a * (fn - fm)/ (comega - (em - en))
-        rf0 += einsum('wa,b->wab', zvxx_a, vxx_a)
-
-    t2 = timer()
-    if self.verbosity>0: print(__name__, 'rf0_ref_loop', t2-t1)
-    return rf0
-
-  def rf0_cmplx_vertex_dp(self, ww):
-    """ Full matrix response in the basis of atom-centered product functions """
-    rf0 = np.zeros((len(ww), self.nprod, self.nprod), dtype=self.dtypeComplex)
-    v_arr = self.pb.get_dp_vertex_array()
-    
-    zvxx_a = zeros((len(ww), self.nprod), dtype=self.dtypeComplex)
-    for n,(en,fn) in enumerate(zip(self.ksn2e[0,0,0:self.nfermi], self.ksn2f[0, 0, 0:self.nfermi])):
-      vx = dot(v_arr, self.xocc[n,:])
-      for m,(em,fm) in enumerate(zip(self.ksn2e[0,0,self.vstart:],self.ksn2f[0,0,self.vstart:])):
-        if (fn - fm)<0 : break
-        vxx_a = dot(vx, self.xvrt[m,:]) * self.cc_da
-        for iw,comega in enumerate(ww):
-          zvxx_a[iw,:] = vxx_a * (fn - fm) * ( 1.0 / (comega - (em - en)) - 1.0 / (comega + (em - en)) )
-        rf0 = rf0 + einsum('wa,b->wab', zvxx_a, vxx_a)
-    return rf0
-
-  def rf0_cmplx_vertex_ac(self, ww):
-    """ Full matrix response in the basis of atom-centered product functions """
-    rf0 = np.zeros((len(ww), self.nprod, self.nprod), dtype=self.dtypeComplex)
-    v = self.pb.get_ac_vertex_array()
-    
-    t1 = timer()
-    if self.verbosity>1: print(__name__, 'self.ksn2e', self.ksn2e, len(ww))
-    #print(self.ksn2e[0,0,0]-self.ksn2e)
-    #print(self.ksn2f)
-    #print(' abs(v).sum(), ww.sum(), self.nfermi, self.vstart ')
-    #print(abs(v).sum(), ww.sum(), self.nfermi, self.vstart)
-    
-    zvxx_a = zeros((len(ww), self.nprod), dtype=self.dtypeComplex)
-    for n,(en,fn) in enumerate(zip(self.ksn2e[0,0,0:self.nfermi], self.ksn2f[0, 0, 0:self.nfermi])):
-      #if self.verbosity>1: print(__name__, 'n =', n)
-      vx = dot(v, self.xocc[n,:])
-      for m,(em,fm) in enumerate(zip(self.ksn2e[0,0,self.vstart:],self.ksn2f[0,0,self.vstart:])):
-        if (fn - fm)<0 : break
-        vxx_a = dot(vx, self.xvrt[m,:].T)
-        for iw,comega in enumerate(ww):
-          zvxx_a[iw,:] = vxx_a * (fn - fm) * ( 1.0 / (comega - (em - en)) - 1.0 / (comega + (em - en)) )
-        rf0 += einsum('wa,b->wab', zvxx_a, vxx_a)
-
-    t2 = timer()
-    if self.verbosity>1: print(__name__, 'finished rf0', t2-t1)
-    return rf0
-  
+  rf0_cmplx_ref_blk = rf0_cmplx_ref_blk
+  rf0_cmplx_ref = rf0_cmplx_ref
+  rf0_cmplx_vertex_dp = rf0_cmplx_vertex_dp
+  rf0_cmplx_vertex_ac = rf0_cmplx_vertex_ac
   rf0 = rf0_cmplx_vertex_ac
-  
+
   def si_c(self, ww):
     from numpy.linalg import solve
     """ 
