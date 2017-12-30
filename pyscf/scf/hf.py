@@ -298,7 +298,7 @@ def init_guess_by_minao(mol):
         if nelec_ecp > 0:
             occ4ecp = []
             basis4ecp = []
-            nelec_valence_left = gto.mole._charge(stdsymb) - nelec_ecp
+            nelec_valence_left = gto.mole.charge(stdsymb) - nelec_ecp
             for l in range(4):
                 if nelec_valence_left <= 0:
                     break

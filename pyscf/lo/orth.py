@@ -99,7 +99,7 @@ def project_to_atomic_orbitals(mol, basname):
         ano_idx = numpy.hstack(ano_idx)
         ecp_occ = numpy.zeros(atm_ecp.nao_nr())
         ecp_occ[ecp_idx] = numpy.hstack(ecp_occ_tmp)
-        nelec_valence_left = int(gto.mole._charge(stdsymb) - nelec_core
+        nelec_valence_left = int(gto.mole.charge(stdsymb) - nelec_core
                                  - sum(ecp_occ[ecp_idx]))
         if nelec_valence_left > 0:
             logger.warn(mol, 'Characters of %d valence electrons are not identified.\n'
