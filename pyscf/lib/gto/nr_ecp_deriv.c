@@ -224,7 +224,7 @@ static int _deriv1_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
                         for (i = 0; i < nfi0; i++) {
                                 ly = _cart_pow_y[i] + 1;
                                 lz = _cart_pow_z[i] + 1;
-                                lx = li - _cart_pow_y[i] - _cart_pow_z[i] + 1;
+                                lx = li-1 - _cart_pow_y[i] - _cart_pow_z[i] + 1;
                                 gpx[j*nfi+        i ] += lx * buf1[j*nfi0+i];
                                 gpy[j*nfi+_y_addr[i]] += ly * buf1[j*nfi0+i];
                                 gpz[j*nfi+_z_addr[i]] += lz * buf1[j*nfi0+i];
