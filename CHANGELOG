@@ -25,6 +25,8 @@ PySCF 1.5 alpha (2018-03-??)
   - Frozen orbitals in MP2, CISD, CCSD, CCSD(T) nuclear gradients
   - SF-X2C-1E analytical nuclear gradients
   - SF-X2C-1E analytical nuclear hessian
+  - Analytical nuclear gradients and hessian for ECP integrals
+  - GIAO-ECP integrals for NMR shielding
 * Improved
   - Support of setting omp threads in FCI solver
   - Supported even number of grids in pbc calculations

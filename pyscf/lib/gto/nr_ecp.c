@@ -2328,10 +2328,9 @@ int ECPscalar_cache_size(int comp, int *shls,
         return size;
 }
 
-int ECPscalar_c2s_factory(double *gctr, int comp, int *shls,
-                          int *ecpbas, int necpbas,
-                          int *atm, int natm, int *bas, int nbas, double *env,
-                          double *cache, int (*fcart)())
+int ECPscalar_c2s_factory(int (*fcart)(), double *gctr, int comp, int *shls,
+                          int *ecpbas, int necpbas, int *atm, int natm,
+                          int *bas, int nbas, double *env, double *cache)
 {
         const int ish = shls[0];
         const int jsh = shls[1];
@@ -2379,15 +2378,15 @@ int ECPscalar_c2s_factory(double *gctr, int comp, int *shls,
 int ECPtype1_sph(double *gctr, int *shls, int *ecpbas, int necpbas,
                  int *atm, int natm, int *bas, int nbas, double *env, double *cache)
 {
-        return ECPscalar_c2s_factory(gctr, 1, shls, ecpbas, necpbas,
-                                     atm, natm, bas, nbas, env, cache, ECPtype1_cart);
+        return ECPscalar_c2s_factory(ECPtype1_cart, gctr, 1, shls, ecpbas, necpbas,
+                                     atm, natm, bas, nbas, env, cache);
 }
 
 int ECPtype2_sph(double *gctr, int *shls, int *ecpbas, int necpbas,
                  int *atm, int natm, int *bas, int nbas, double *env, double *cache)
 {
-        return ECPscalar_c2s_factory(gctr, 1, shls, ecpbas, necpbas,
-                                     atm, natm, bas, nbas, env, cache, ECPtype2_cart);
+        return ECPscalar_c2s_factory(ECPtype2_cart, gctr, 1, shls, ecpbas, necpbas,
+                                     atm, natm, bas, nbas, env, cache);
 }
 
 void ECPscalar_distribute(double *out, double *gctr, const int *dims,

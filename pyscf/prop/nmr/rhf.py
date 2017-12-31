@@ -113,6 +113,8 @@ def make_h10giao(mol, dm0):
     h1 = vj - .5 * vk
 # Im[<g\mu|H|g\nu>] = -i * (gnuc + gkin)
     h1 -= mol.intor_asymmetric('int1e_ignuc', 3)
+    if mol.has_ecp():
+        h1 -= mol.intor_asymmetric('ECPscalar_ignuc', 3)
     h1 -= mol.intor('int1e_igkin', 3)
     return h1
 

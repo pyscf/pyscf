@@ -83,7 +83,7 @@ def get_hcore(mol):
     h =(mol.intor('int1e_ipkin', comp=3)
       + mol.intor('int1e_ipnuc', comp=3))
     if mol.has_ecp():
-        raise NotImplementedError("gradients for ECP")
+        h += mol.intor('ECPscalar_ipnuc', comp=3)
     return -h
 
 def get_ovlp(mol):
@@ -191,13 +191,16 @@ class Gradients(lib.StreamObject):
         if with_x2c:
             hcore_deriv = with_x2c.hcore_deriv_generator(deriv=1)
         else:
+            with_ecp = mol.has_ecp()
             aoslices = mol.aoslice_by_atom()
             h1 = self.get_hcore(mol)
             def hcore_deriv(atm_id):
                 shl0, shl1, p0, p1 = aoslices[atm_id]
                 with mol.with_rinv_as_nucleus(atm_id):
-                    z = -mol.atom_charge(atm_id)
-                    vrinv = z * mol.intor('int1e_iprinv', comp=3) # <\nabla|Z/r|>
+                    vrinv = mol.intor('int1e_iprinv', comp=3) # <\nabla|1/r|>
+                    if with_ecp:
+                        vrinv += mol.intor('ECPscalar_iprinv', comp=3)
+                    vrinv *= -mol.atom_charge(atm_id)
                 vrinv[:,p0:p1] += h1[:,p0:p1]
                 return vrinv + vrinv.transpose(0,2,1)
         return hcore_deriv

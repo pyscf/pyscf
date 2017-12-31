@@ -195,6 +195,9 @@ def get_hcore(mol):
     h1aa+= mol.intor('int1e_ipipnuc', comp=9)
     h1ab = mol.intor('int1e_ipkinip', comp=9)
     h1ab+= mol.intor('int1e_ipnucip', comp=9)
+    if mol.has_ecp():
+        h1aa += mol.intor('ECPscalar_ipipnuc', comp=9)
+        h1ab += mol.intor('ECPscalar_ipnucip', comp=9)
     nao = h1aa.shape[-1]
     return h1aa.reshape(3,3,nao,nao), h1ab.reshape(3,3,nao,nao)
 
@@ -425,6 +428,7 @@ class Hessian(lib.StreamObject):
         if with_x2c:
             return with_x2c.hcore_deriv_generator(deriv=2)
 
+        with_ecp = mol.has_ecp()
         aoslices = mol.aoslice_by_atom()
         nbas = mol.nbas
         nao = mol.nao_nr()
@@ -436,8 +440,13 @@ class Hessian(lib.StreamObject):
             zj = mol.atom_charge(jatm)
             if iatm == jatm:
                 with mol.with_rinv_as_nucleus(iatm):
-                    rinv2aa = zi * mol.intor('int1e_ipiprinv', comp=9)
-                    rinv2ab = zi * mol.intor('int1e_iprinvip', comp=9)
+                    rinv2aa = mol.intor('int1e_ipiprinv', comp=9)
+                    rinv2ab = mol.intor('int1e_iprinvip', comp=9)
+                    if with_ecp:
+                        rinv2aa += mol.intor('ECPscalar_ipiprinv', comp=9)
+                        rinv2ab += mol.intor('ECPscalar_iprinvip', comp=9)
+                    rinv2aa *= zi
+                    rinv2ab *= zi
                 rinv2aa = rinv2aa.reshape(3,3,nao,nao)
                 rinv2ab = rinv2ab.reshape(3,3,nao,nao)
                 hcore = -rinv2aa - rinv2ab
@@ -453,6 +462,9 @@ class Hessian(lib.StreamObject):
                     shls_slice = (jsh0, jsh1, 0, nbas)
                     rinv2aa = mol.intor('int1e_ipiprinv', comp=9, shls_slice=shls_slice)
                     rinv2ab = mol.intor('int1e_iprinvip', comp=9, shls_slice=shls_slice)
+                    if with_ecp:
+                        rinv2aa += mol.intor('ECPscalar_ipiprinv', comp=9, shls_slice=shls_slice)
+                        rinv2ab += mol.intor('ECPscalar_iprinvip', comp=9, shls_slice=shls_slice)
                     rinv2aa = zi * rinv2aa.reshape(3,3,j1-j0,nao)
                     rinv2ab = zi * rinv2ab.reshape(3,3,j1-j0,nao)
                     hcore[:,:,j0:j1] += rinv2aa
@@ -462,6 +474,9 @@ class Hessian(lib.StreamObject):
                     shls_slice = (ish0, ish1, 0, nbas)
                     rinv2aa = mol.intor('int1e_ipiprinv', comp=9, shls_slice=shls_slice)
                     rinv2ab = mol.intor('int1e_iprinvip', comp=9, shls_slice=shls_slice)
+                    if with_ecp:
+                        rinv2aa += mol.intor('ECPscalar_ipiprinv', comp=9, shls_slice=shls_slice)
+                        rinv2ab += mol.intor('ECPscalar_iprinvip', comp=9, shls_slice=shls_slice)
                     rinv2aa = zj * rinv2aa.reshape(3,3,i1-i0,nao)
                     rinv2ab = zj * rinv2ab.reshape(3,3,i1-i0,nao)
                     hcore[:,:,i0:i1] += rinv2aa
