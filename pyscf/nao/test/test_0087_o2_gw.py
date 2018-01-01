@@ -14,7 +14,7 @@ class KnowValues(unittest.TestCase):
     from pyscf.nao.m_fermi_dirac import fermi_dirac_occupations
     """ Spin-resolved case GW procedure. """
     #print(__name__, dir(gto_mf_uhf))
-    gw = gw_c(mf=gto_mf_uhf, gto=mol, verbosity=1, niter_max_ev=6)
+    gw = gw_c(mf=gto_mf_uhf, gto=mol, verbosity=0, niter_max_ev=6)
     print(__name__, 'nfermi =', gw.nfermi)
     print(__name__, 'e_tot =', e_tot)
     self.assertEqual(gw.nspin, 2)

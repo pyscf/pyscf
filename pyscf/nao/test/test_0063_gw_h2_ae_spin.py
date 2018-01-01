@@ -13,7 +13,7 @@ class KnowValues(unittest.TestCase):
     etot = gto_mf.kernel()
     #print(__name__, 'etot', etot)
     #print('gto_mf.mo_energy:', gto_mf.mo_energy)
-    b = gw(mf=gto_mf, gto=mol, verbosity=1, nvrt=4)
+    b = gw(mf=gto_mf, gto=mol, verbosity=0, nvrt=4)
     ww = np.arange(0.0, 1.0, 0.1)+1j*0.2
     rf0_ref = b.rf0_cmplx_ref(ww)
     rf0 = b.rf0_cmplx_vertex_ac(ww)
