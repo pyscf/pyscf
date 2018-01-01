@@ -1,6 +1,6 @@
 from __future__ import print_function, division
 import sys, numpy as np
-from pyscf.nao import tddft_iter
+from pyscf.nao.tddft_iter import tddft_iter
 from pyscf.scf import hf, uhf
 from copy import copy
 from pyscf.nao.m_pack2den import pack2den_u, pack2den_l

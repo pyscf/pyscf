@@ -19,8 +19,8 @@ class KnowValues(unittest.TestCase):
     self.assertTrue(hasattr(td, 'xocc'))
     self.assertTrue(hasattr(td, 'xvrt'))
     self.assertTrue(td.ksn2f.sum()==8.0) # water: O -- 6 electrons in the valence + H2 -- 2 electrons
-    self.assertEqual(td.xocc.shape[0], 4)
-    self.assertEqual(td.xvrt.shape[0], 19)
+    self.assertEqual(td.xocc[0].shape[0], 4)
+    self.assertEqual(td.xvrt[0].shape[0], 19)
     dn0 = td.apply_rf0(td.moms1[:,0])
 
   def test_tddft_iter_gpu(self):

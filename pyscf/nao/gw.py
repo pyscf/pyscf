@@ -1,11 +1,11 @@
 from __future__ import print_function, division
 import sys, numpy as np
-from numpy import stack, dot, zeros, einsum, pi, log, array
+from numpy import stack, dot, zeros, einsum, pi, log, array, require
 from pyscf.nao import scf
 from copy import copy
 from pyscf.nao.m_pack2den import pack2den_u, pack2den_l
 from timeit import default_timer as timer
-from pyscf.nao.m_rf0_den import rf0_cmplx_ref_blk, rf0_cmplx_ref, rf0_cmplx_vertex_dp, rf0_cmplx_vertex_ac
+from pyscf.nao.m_rf0_den import rf0_den, rf0_cmplx_ref_blk, rf0_cmplx_ref, rf0_cmplx_vertex_dp, rf0_cmplx_vertex_ac
 
 class gw(scf):
   """ G0W0 with integration along imaginary axis """
@@ -22,12 +22,13 @@ class gw(scf):
     self.tol_ev = kw['tol_ev'] if 'tol_ev' in kw else 1e-6
     self.perform_gw = kw['perform_gw'] if 'perform_gw' in kw else False
     self.rescf = kw['rescf'] if 'rescf' in kw else False
+    self.bsize = kw['bsize'] if 'bsize' in kw else 40
 
     if self.nspin==1: self.nocc_0t = nocc_0t = np.array([int(self.nelec/2)])
     elif self.nspin==2: self.nocc_0t = nocc_0t = self.nelec
     else: raise RuntimeError('nspin>2?')
 
-    if self.verbosity>0: print(__name__, 'nocc_0t =', nocc_0t)
+    if self.verbosity>0: print(__name__, 'nocc_0t =', nocc_0t, 'spin =', self.spin, 'nspin =', self.nspin)
 
     if 'nocc' in kw:
       s2nocc = [kw['nocc']] if type(kw['nocc'])==int else kw['nocc']
@@ -42,12 +43,10 @@ class gw(scf):
       self.nvrt = array([min(6,j) for j in self.norbs-nocc_0t])
     if self.verbosity>0: print(__name__, 'nocc =', self.nocc, 'nvrt =', self.nvrt)
 
-      
     self.start_st,self.finish_st = self.nocc_0t-self.nocc, self.nocc_0t+self.nvrt
-    #if self.verbosity>0: print(__name__, 'sf_st =', self.start_st, self.finish_st)
 
     self.nn = [range(self.start_st[s], self.finish_st[s]) for s in range(self.nspin)] # list of states to correct?
-    #self.nn = range(self.start_st, self.finish_st) # list of states to correct?
+    if self.verbosity>0: print(__name__, 'nn =', self.nn)
 
     if 'nocc_conv' in kw:
       s2nocc_conv = [kw['nocc_conv']] if type(kw['nocc_conv'])==int else kw['nocc_conv']
@@ -60,8 +59,6 @@ class gw(scf):
       self.nvrt_conv = array([min(i,j) for i,j in zip(s2nvrt_conv,self.norbs-nocc_0t)])
     else :
       self.nvrt_conv = self.nvrt
-
-    if self.verbosity>0: print(__name__, 'nn =', self.nn)
     
     if self.rescf: self.kernel_scf() # here is rescf with HF functional tacitly assumed
         
@@ -73,7 +70,7 @@ class gw(scf):
     self.tmin_ia = kw['tmin_ia'] if 'tmin_ia' in kw else tmin_def
     self.tmax_ia = kw['tmax_ia'] if 'tmax_ia' in kw else tmax_def
     self.tt_ia,self.ww_ia = log_mesh(self.nff_ia, self.tmin_ia, self.tmax_ia, self.wmax_ia)
-    #print('self.tmin_ia, self.tmax_ia, self.wmax_ia')    
+    #print('self.tmin_ia, self.tmax_ia, self.wmax_ia')
     #print(self.tmin_ia, self.tmax_ia, self.wmax_ia)
     #print(self.ww_ia[0], self.ww_ia[-1])
 
@@ -84,7 +81,7 @@ class gw(scf):
     self.kernel_sq = self.hkernel_den
     #self.v_dab_ds = self.pb.get_dp_vertex_doubly_sparse(axis=2)
 
-    self.x = np.require(self.mo_coeff[0,:,:,:,0], dtype=self.dtype, requirements='CW')
+    self.x = require(self.mo_coeff[0,:,:,:,0], dtype=self.dtype, requirements='CW')
 
     if self.perform_gw: self.kernel_gw()
     
@@ -121,11 +118,12 @@ class gw(scf):
     return wmin_def, wmax_def, tmin_def,tmax_def
 
 
+  rf0_den = rf0_den
   rf0_cmplx_ref_blk = rf0_cmplx_ref_blk
   rf0_cmplx_ref = rf0_cmplx_ref
   rf0_cmplx_vertex_dp = rf0_cmplx_vertex_dp
   rf0_cmplx_vertex_ac = rf0_cmplx_vertex_ac
-  rf0 = rf0_cmplx_vertex_ac
+  rf0 = rf0_den
 
   def si_c(self, ww):
     from numpy.linalg import solve
@@ -266,7 +264,12 @@ class gw(scf):
       err = 0.0
       for s,nn_conv in enumerate(self.nn_conv): err += abs(sn2mismatch[s,nn_conv]).sum()/len(nn_conv)
 
-      if self.verbosity>0: print(__name__, i, err, sn2eval_gw, sn2i, sn2r)
+      if self.verbosity>0:
+        np.set_printoptions(linewidth=1000)
+        print(__name__, 'iter_ev =', i, 'err =', err, 'sn2eval_gw =')
+        for s,n2ev in enumerate(sn2eval_gw):
+          print(s, n2ev)
+        
       if err<self.tol_ev : break
     return sn2eval_gw
 

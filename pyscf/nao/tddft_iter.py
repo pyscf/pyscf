@@ -1,5 +1,6 @@
 from __future__ import print_function, division
 import numpy as np
+from numpy import array, argmax
 from scipy.sparse import csr_matrix, coo_matrix
 from scipy.linalg import blas
 from timeit import default_timer as timer
@@ -73,7 +74,20 @@ class tddft_iter(mf):
 
     # deallocate hsx
     if hasattr(self, 'hsx') and self.dealloc_hsx: self.hsx.deallocate()
+
+    self.ksn2e = self.mo_energy
+    ksn2fd = fermi_dirac_occupations(self.telec, self.ksn2e, self.fermi_energy)
+    for s,n2fd in enumerate(ksn2fd[0]):
+      if all(n2fd>nfermi_tol):
+        print(self.telec, s, nfermi_tol, n2fd)
+        raise RuntimeError(__name__, 'telec is too high?')
     
+    self.ksn2f = (3-self.nspin)*ksn2fd
+    self.nfermi = array([argmax(ksn2fd[0,s,:]<self.nfermi_tol) for s in range(self.nspin)], dtype=int)
+    self.vstart = array([argmax(1.0-ksn2fd[0,s,:]>=self.nfermi_tol) for s in range(self.nspin)], dtype=int)
+    self.xocc = [self.mo_coeff[0,s,:nfermi,:,0] for s,nfermi in enumerate(self.nfermi)]
+    self.xvrt = [self.mo_coeff[0,s,vstart:,:,0] for s,vstart in enumerate(self.vstart)]
+
     self.rf0_ncalls = 0
     self.matvec_ncalls = 0
 
@@ -103,16 +117,6 @@ class tddft_iter(mf):
     # probably unnecessary, require probably does a copy
     # problematic for the dtype, must there should be another option 
     #self.x  = np.require(sv.wfsx.x, dtype=self.dtype, requirements='CW')
-
-    self.ksn2e = self.mo_energy
-    ksn2fd = fermi_dirac_occupations(self.telec, self.ksn2e, self.fermi_energy)
-    if all(ksn2fd[0,0,:]>nfermi_tol):
-      print(self.telec, nfermi_tol, ksn2fd[0,0,:])
-      raise RuntimeError(__name__, 'telec is too high?')
-    
-    self.ksn2f = (3-self.nspin)*ksn2fd
-    self.nfermi = np.argmax(ksn2fd[0,0,:]<nfermi_tol)
-    self.vstart = np.argmax(1.0-ksn2fd[0,0,:]>=nfermi_tol)
     
     #print('tddft_iter.__init__')
     #print(self.telec)
@@ -124,10 +128,6 @@ class tddft_iter(mf):
     #print(ksn2fd[0,0,:], ksn2fd[0,0,:]<nfermi_tol)
     #print(1.0-ksn2fd[0,0,:], 1.0-ksn2fd[0,0,:]<nfermi_tol)
     #raise RuntimeError('tddft_iter nfermi?')
-
-    self.xocc = self.mo_coeff[0,0,0:self.nfermi,:,0]  # does python creates a copy at this point ?
-    self.xvrt = self.mo_coeff[0,0,self.vstart:,:,0]   # does python creates a copy at this point ?
-
     #print(self.xocc.shape)
     #print(self.xvrt.shape)
     

@@ -28,20 +28,20 @@ def chi0_mv(self, v, comega=1j*0.0):
     # real part
     vdp = csr_matvec(self.cc_da, vext[:, 0])
     sab = (vdp*self.v_dab).reshape([self.norbs,self.norbs])
-
-    nb2v = self.gemm(1.0, self.xocc, sab)
-    nm2v_re = self.gemm(1.0, nb2v, self.xvrt.T)
+    
+    nb2v = self.gemm(1.0, self.xocc[0], sab)
+    nm2v_re = self.gemm(1.0, nb2v, self.xvrt[0].T)
 
     # imaginary part
     vdp = csr_matvec(self.cc_da, vext[:, 1])
     sab = (vdp*self.v_dab).reshape([self.norbs, self.norbs])
 
-    nb2v = self.gemm(1.0, self.xocc, sab)
-    nm2v_im = self.gemm(1.0, nb2v, self.xvrt.T)
+    nb2v = self.gemm(1.0, self.xocc[0], sab)
+    nm2v_im = self.gemm(1.0, nb2v, self.xvrt[0].T)
 
     if use_numba:
-        div_eigenenergy_numba(self.ksn2e[0, 0, :], self.ksn2f[0, 0, :], self.nfermi, 
-                self.vstart, comega, nm2v_re, nm2v_im, self.norbs)
+        div_eigenenergy_numba(self.ksn2e[0, 0, :], self.ksn2f[0, 0, :], self.nfermi[0], 
+                self.vstart[0], comega, nm2v_re, nm2v_im, self.norbs)
     else:
         #print('looping over n,m')
         for n,(en,fn) in enumerate(zip(self.ksn2e[0,0,0:self.nfermi], self.ksn2f[0, 0, 0:self.nfermi])):
@@ -60,15 +60,15 @@ def chi0_mv(self, v, comega=1j*0.0):
                 nm2v_im[n, m] = 0.0
 
     # real part
-    nb2v = self.gemm(1.0, nm2v_re, self.xvrt)
-    ab2v = self.gemm(1.0, self.xocc.T, nb2v).reshape(self.norbs*self.norbs)
+    nb2v = self.gemm(1.0, nm2v_re, self.xvrt[0])
+    ab2v = self.gemm(1.0, self.xocc[0].T, nb2v).reshape(self.norbs*self.norbs)
     vdp = csr_matvec(self.v_dab, ab2v)
     
     chi0_re = vdp*self.cc_da
 
     # imag part
-    nb2v = self.gemm(1.0, nm2v_im, self.xvrt)
-    ab2v = self.gemm(1.0, self.xocc.T, nb2v).reshape(self.norbs*self.norbs)
+    nb2v = self.gemm(1.0, nm2v_im, self.xvrt[0])
+    ab2v = self.gemm(1.0, self.xocc[0].T, nb2v).reshape(self.norbs*self.norbs)
     vdp = csr_matvec(self.v_dab, ab2v)
     
     chi0_im = vdp*self.cc_da

@@ -1,5 +1,6 @@
 from __future__ import print_function, division
 import numpy as np
+from numpy import array, argmax, einsum, require, zeros, dot
 from timeit import default_timer as timer
 from pyscf.nao.tddft_iter import use_numba, tddft_iter
 from pyscf.nao import gw
@@ -29,7 +30,7 @@ class bse_iter(gw):
     n = self.norbs
     v_dab = self.v_dab
     cc_da = self.cc_da
-    self.x = self.mo_coeff[0,0,:,:,0]
+    self.x = self.mo_coeff[0,:,:,:,0]
     self.kernel_4p = (((v_dab.T*(cc_da*kernel_den))*cc_da.T)*v_dab).reshape([n*n,n*n])
     #print(type(self.kernel_4p), self.kernel_4p.shape, 'this is just a reference kernel, must be removed later for sure')
 
@@ -42,7 +43,7 @@ class bse_iter(gw):
       print(__name__, '        xc_code ', self.xc_code)
       
     if xc=='CIS' or xc=='HF' or xc=='GW':
-      self.kernel_4p -= 0.5*np.einsum('abcd->bcad', self.kernel_4p.reshape([n,n,n,n])).reshape([n*n,n*n])
+      self.kernel_4p -= 0.5*einsum('abcd->bcad', self.kernel_4p.reshape([n,n,n,n])).reshape([n*n,n*n])
     elif xc=='RPA' or xc=='LDA' or xc=='GGA':
       pass
     else :
@@ -51,11 +52,11 @@ class bse_iter(gw):
 
     if xc=='GW':
       w_c_4p = (((v_dab.T*(cc_da*  self.si_c([0.0])[0].real ))*cc_da.T)*v_dab).reshape([n*n,n*n])
-      self.kernel_4p -= 0.5*np.einsum('abcd->bcad', w_c_4p.reshape([n,n,n,n])).reshape([n*n,n*n])
+      self.kernel_4p -= 0.5*einsum('abcd->bcad', w_c_4p.reshape([n,n,n,n])).reshape([n*n,n*n])
 
 
     if hasattr(self, 'mo_energy_gw') and xc=='GW':  # Need to redefine eigenvectors previously set in the class tddft_iter
-      self.ksn2e = np.require(np.zeros((1,self.nspin,self.norbs)), dtype=self.dtype, requirements='CW')
+      self.ksn2e = require(zeros((1,self.nspin,self.norbs)), dtype=self.dtype, requirements='CW')
       self.ksn2e[0,0,:] = self.mo_energy_gw
 
       ksn2fd = fermi_dirac_occupations(self.telec, self.ksn2e, self.fermi_energy)
@@ -64,12 +65,11 @@ class bse_iter(gw):
         raise RuntimeError('telec is too high?')
       self.ksn2f = (3-self.nspin)*ksn2fd
 
-      self.x = self.mo_coeff_gw[0,0,:,:,0]
-      self.nfermi = np.argmax(ksn2fd[0,0,:]<self.nfermi_tol)
-      self.vstart = np.argmax(1.0-ksn2fd[0,0,:]>=self.nfermi_tol)
-      self.xocc = self.mo_coeff_gw[0,0,0:self.nfermi,:,0]
-      self.xvrt = self.mo_coeff_gw[0,0,self.vstart:,:,0]
-
+      self.x = self.mo_coeff_gw[0,:,:,:,0]
+      self.nfermi = array([argmax(ksn2fd[0,s,:]<self.nfermi_tol) for s in range(self.nspin)], dtype=int)
+      self.vstart = array([argmax(1.0-ksn2fd[0,s,:]>=self.nfermi_tol) for s in range(self.nspin)], dtype=int)
+      self.xocc = [self.mo_coeff_gw[0,s,:nfermi,:,0] for s,nfermi in enumerate(self.nfermi)]
+      self.xvrt = [self.mo_coeff_gw[0,s,vstart:,:,0] for s,vstart in enumerate(self.vstart)]
 
   def apply_l0(self, sab, comega=1j*0.0):
     """ This applies the non-interacting four point Green's function to a suitable vector (e.g. dipole matrix elements)"""
@@ -78,16 +78,16 @@ class bse_iter(gw):
     sab = sab.reshape([self.norbs,self.norbs])
     self.l0_ncalls+=1
 
-    nm2v = np.zeros((self.norbs,self.norbs), self.dtypeComplex)
-    nm2v[self.vstart:, :self.nfermi] = blas.cgemm(1.0, np.dot(self.xvrt, sab), self.xocc.T)
-    nm2v[:self.nfermi, self.vstart:] = blas.cgemm(1.0, np.dot(self.xocc, sab), self.xvrt.T)
+    nm2v = zeros((self.norbs,self.norbs), self.dtypeComplex)
+    nm2v[self.vstart[0]:, :self.nfermi[0]] = blas.cgemm(1.0, dot(self.xvrt[0], sab), self.xocc[0].T)
+    nm2v[:self.nfermi[0], self.vstart[0]:] = blas.cgemm(1.0, dot(self.xocc[0], sab), self.xvrt[0].T)
     
     for n,[en,fn] in enumerate(zip(self.ksn2e[0,0,:],self.ksn2f[0,0,:])):
       for m,[em,fm] in enumerate(zip(self.ksn2e[0,0,:],self.ksn2f[0,0,:])):
         nm2v[n,m] = nm2v[n,m] * (fn-fm) * ( 1.0 / (comega - (em - en)))
 
-    nb2v = blas.cgemm(1.0, nm2v, self.x)
-    ab2v = blas.cgemm(1.0, self.x.T, nb2v)
+    nb2v = blas.cgemm(1.0, nm2v, self.x[0])
+    ab2v = blas.cgemm(1.0, self.x[0].T, nb2v)
     return ab2v
 
   def apply_l0_exp(self, sab, comega=1j*0.0):
@@ -96,25 +96,25 @@ class bse_iter(gw):
 
     sab = sab.reshape([self.norbs,self.norbs])
     self.l0_ncalls+=1
-    nb2v = np.dot(self.x, sab)
-    nm2v = blas.cgemm(1.0, nb2v, self.x.T)
+    nb2v = dot(self.x[0], sab)
+    nm2v = blas.cgemm(1.0, nb2v, self.x[0].T)
     print(nm2v.dtype)
-    print(nm2v[self.vstart:, :self.nfermi])
-    print(nm2v[:self.nfermi, self.vstart:])
+    print(nm2v[self.vstart[0]:, :self.nfermi[0]])
+    print(nm2v[:self.nfermi[0], self.vstart[0]:])
     
-    nm2v = np.zeros((self.norbs,self.norbs), self.dtypeComplex)
-    nb2v1 = np.dot(self.xocc, sab)
-    nm2v1 = blas.cgemm(1.0, nb2v1, self.xvrt.T)
+    nm2v = zeros((self.norbs,self.norbs), self.dtypeComplex)
+    nb2v1 = dot(self.xocc[0], sab)
+    nm2v1 = blas.cgemm(1.0, nb2v1, self.xvrt[0].T)
 
-    nb2v2 = np.dot(self.xvrt, sab)
-    nm2v2 = blas.cgemm(1.0, nb2v2, self.xocc.T)
+    nb2v2 = dot(self.xvrt[0], sab)
+    nm2v2 = blas.cgemm(1.0, nb2v2, self.xocc[0].T)
 
-    nm2v[self.vstart:, :self.nfermi] = nm2v2
-    nm2v[:self.nfermi, self.vstart:] = nm2v1
+    nm2v[self.vstart[0]:, :self.nfermi[0]] = nm2v2
+    nm2v[:self.nfermi[0], self.vstart[0]:] = nm2v1
     
     print(nm2v.dtype, nm2v1.shape, nm2v1.dtype)
-    print(nm2v[self.vstart:, :self.nfermi])
-    print(nm2v[:self.nfermi, self.vstart:])
+    print(nm2v[self.vstart[0]:, :self.nfermi[0]])
+    print(nm2v[:self.nfermi[0], self.vstart[0]:])
     #raise RuntimeError('11')
     
     #nm2v2 = np.copy(nm2v1)
@@ -132,8 +132,8 @@ class bse_iter(gw):
     
     
 
-    nb2v = blas.cgemm(1.0, nm2v, self.x)
-    ab2v = blas.cgemm(1.0, self.x.T, nb2v)
+    nb2v = blas.cgemm(1.0, nm2v, self.x[0])
+    ab2v = blas.cgemm(1.0, self.x[0].T, nb2v)
     return ab2v
 
   def apply_l0_ref(self, sab, comega=1j*0.0):
@@ -142,15 +142,15 @@ class bse_iter(gw):
 
     sab = sab.reshape([self.norbs,self.norbs])
     self.l0_ncalls+=1
-    nb2v = np.dot(self.x, sab)
-    nm2v = blas.cgemm(1.0, nb2v, self.x.T)
+    nb2v = dot(self.x[0], sab)
+    nm2v = blas.cgemm(1.0, nb2v, self.x[0].T)
     
     for n,[en,fn] in enumerate(zip(self.ksn2e[0,0,:],self.ksn2f[0,0,:])):
       for m,[em,fm] in enumerate(zip(self.ksn2e[0,0,:],self.ksn2f[0,0,:])):
         nm2v[n,m] = nm2v[n,m] * (fn-fm) * ( 1.0 / (comega - (em - en)))
 
-    nb2v = blas.cgemm(1.0, nm2v, self.x)
-    ab2v = blas.cgemm(1.0, self.x.T, nb2v)
+    nb2v = blas.cgemm(1.0, nm2v, self.x[0])
+    ab2v = blas.cgemm(1.0, self.x[0].T, nb2v)
     return ab2v
 
 
@@ -179,11 +179,11 @@ class bse_iter(gw):
     
     l0 = self.apply_l0(sab, self.comega_current).reshape(self.norbs2)
     
-    l0_reim = np.require(l0.real, dtype=self.dtype, requirements=["A", "O"])     # real part
-    mv_real = np.dot(self.kernel_4p, l0_reim)
+    l0_reim = require(l0.real, dtype=self.dtype, requirements=["A", "O"])     # real part
+    mv_real = dot(self.kernel_4p, l0_reim)
     
-    l0_reim = np.require(l0.imag, dtype=self.dtype, requirements=["A", "O"])     # imaginary part
-    mv_imag = np.dot(self.kernel_4p, l0_reim)
+    l0_reim = require(l0.imag, dtype=self.dtype, requirements=["A", "O"])     # imaginary part
+    mv_imag = dot(self.kernel_4p, l0_reim)
 
     return sab - (mv_real + 1.0j*mv_imag)
 

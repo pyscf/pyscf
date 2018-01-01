@@ -17,8 +17,8 @@ class KnowValues(unittest.TestCase):
     """ Check the spatial density change distribution"""
     self.assertTrue(hasattr(td, 'xocc'))
     self.assertTrue(hasattr(td, 'xvrt'))
-    self.assertEqual(td.xocc.shape[0], 4)
-    self.assertEqual(td.xvrt.shape[0], 19)
+    self.assertEqual(td.xocc[0].shape[0], 4)
+    self.assertEqual(td.xvrt[0].shape[0], 19)
 
     # run TDDFT
     omegas = h5py.File(dname+"/tddft_iter_output_water_ref.hdf5", "r")["polarizability/frequency"].value/Ha + 1j*td.eps
