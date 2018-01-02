@@ -69,8 +69,6 @@ class tddft_iter(mf):
     
     assert self.tddft_iter_tol>1e-6
     assert type(self.eps)==float
-    
-    pb = self.pb
 
     # deallocate hsx
     if hasattr(self, 'hsx') and self.dealloc_hsx: self.hsx.deallocate()
@@ -91,6 +89,11 @@ class tddft_iter(mf):
     self.rf0_ncalls = 0
     self.matvec_ncalls = 0
 
+    if not hasattr(self, 'pb'):
+      print('no pb?')
+      return
+      
+    pb = self.pb
     self.v_dab = pb.get_dp_vertex_sparse(dtype=self.dtype, sparseformat=coo_matrix).tocsr()
     self.cc_da = pb.get_da2cc_sparse(dtype=self.dtype, sparseformat=coo_matrix).tocsr()
 
@@ -113,24 +116,7 @@ class tddft_iter(mf):
         raise RuntimeError('unkn xc_code')
 
     if self.verbosity>0 : print(__name__, '      xc_code ', self.xc_code)
-        
-    # probably unnecessary, require probably does a copy
-    # problematic for the dtype, must there should be another option 
-    #self.x  = np.require(sv.wfsx.x, dtype=self.dtype, requirements='CW')
-    
-    #print('tddft_iter.__init__')
-    #print(self.telec)
-    #print(self.ksn2f)
-    #print(self.ksn2e)
-    #print(self.fermi_energy)
-    #print(self.nfermi)
-    #print(self.vstart)
-    #print(ksn2fd[0,0,:], ksn2fd[0,0,:]<nfermi_tol)
-    #print(1.0-ksn2fd[0,0,:], 1.0-ksn2fd[0,0,:]<nfermi_tol)
-    #raise RuntimeError('tddft_iter nfermi?')
-    #print(self.xocc.shape)
-    #print(self.xvrt.shape)
-    
+
     self.td_GPU = tddft_iter_gpu_c(GPU, self.mo_coeff[0, 0, :, :, 0], self.ksn2f, self.ksn2e, 
             self.norbs, self.nfermi, self.nprod, self.vstart)
 
