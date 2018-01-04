@@ -137,7 +137,6 @@ class tddft_iter(mf):
       self.sm2e.append(m2e)
       self.sma2x.append(ma2x)
     self.sm2e = array(self.sm2e)
-    print(self.sm2e.shape)
     return True
 
   def load_kernel_method(self, kernel_fname, kernel_format="npy", kernel_path_hdf5=None, **kwargs):

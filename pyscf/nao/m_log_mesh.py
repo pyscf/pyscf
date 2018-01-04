@@ -106,14 +106,14 @@ class log_mesh_c():
     return self
     
   
-  def init_log_mesh_ion(self, sp2ion, nr=None, rmin=None, rmax=None, kmax=None):
+  def init_log_mesh_ion(self, sp2ion, **kw):
     """ Initialize an optimal logarithmic mesh based on information from SIESTA ion files"""
     self.sp2ion = sp2ion
     nr_def,rmin_def,rmax_def,kmax_def = get_default_log_mesh_param4ion(sp2ion)
-    self.nr = nr_def if nr is None else nr
-    self.rmin = rmin_def if rmin is None else rmin
-    self.rmax = rmax_def if rmax is None else rmax
-    self.kmax = kmax_def if kmax is None else kmax
+    self.nr   = kw['nr'] if "nr" in kw else nr_def
+    self.rmin = kw['rmin'] if "rmin" in kw else rmin_def
+    self.rmax = kw['rmax'] if "rmax" in kw else rmax_def
+    self.kmax = kw['kmax'] if "kmax" in kw else kmax_def
     assert(self.rmin>0.0); assert(self.kmax>0.0); assert(self.nr>2); assert(self.rmax>self.rmin);
     self.rr,self.pp = log_mesh(self.nr, self.rmin, self.rmax, self.kmax)
     self.state = 'can be useful for something'
