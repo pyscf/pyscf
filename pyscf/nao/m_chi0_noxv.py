@@ -3,14 +3,8 @@ import numpy as np
 from scipy.sparse import csr_matrix, coo_matrix
 from scipy.linalg import blas
 from pyscf.nao.m_sparsetools import csr_matvec, csc_matvec, csc_matvecs
-
-try:
-    import numba
-    from pyscf.nao.m_iter_div_eigenenergy_numba import div_eigenenergy_numba
-    use_numba = True
-except:
-    use_numba = False
-
+import math
+  
 def chi0_mv(self, v, comega=1j*0.0):
     """
         Apply the non-interacting response function to a vector
@@ -39,32 +33,48 @@ def chi0_mv(self, v, comega=1j*0.0):
     nb2v = self.gemm(1.0, self.xocc[0], sab)
     nm2v_im = self.gemm(1.0, nb2v, self.xvrt[0].T)
 
-    if use_numba:
-        div_eigenenergy_numba(self.ksn2e[0, 0, :], self.ksn2f[0, 0, :], self.nfermi[0], 
-                self.vstart[0], comega, nm2v_re, nm2v_im, self.norbs)
+    nm2v_re_bak = np.copy(nm2v_re)
+    
+    if self.use_numba:
+      self.div_eigenenergy_numba(self.ksn2e[0,0], self.ksn2f[0,0], self.nfermi[0], self.vstart[0], comega, 
+        nm2v_re, nm2v_im)
     else:
-        #print('looping over n,m')
-        for n,(en,fn) in enumerate(zip(self.ksn2e[0,0,0:self.nfermi], self.ksn2f[0, 0, 0:self.nfermi])):
-          for m,(em,fm) in enumerate(zip(self.ksn2e[0,0,self.vstart:],self.ksn2f[0,0,self.vstart:])):
-            #print(n,m,fn-fm)
-            nm2v = nm2v_re[n, m] + 1.0j*nm2v_im[n, m]
-            nm2v = nm2v * (fn - fm) * \
-                ( 1.0 / (comega - (em - en)) - 1.0 / (comega + (em - en)) )
-            nm2v_re[n, m] = nm2v.real
-            nm2v_im[n, m] = nm2v.imag
+      #print('looping over n,m')
+      for n,(en,fn) in enumerate(zip(self.ksn2e[0,0,0:self.nfermi], self.ksn2f[0, 0, 0:self.nfermi])):
+        for m,(em,fm) in enumerate(zip(self.ksn2e[0,0,self.vstart:],self.ksn2f[0,0,self.vstart:])):
+          #print(n,m,fn-fm)
+          nm2v = nm2v_re[n, m] + 1.0j*nm2v_im[n, m]
+          nm2v = nm2v * (fn - fm) * \
+              ( 1.0 / (comega - (em - en)) - 1.0 / (comega + (em - en)) )
+          nm2v_re[n, m] = nm2v.real
+          nm2v_im[n, m] = nm2v.imag
 
-        #print('padding m<n, which can be also detected as negative occupation difference ')
-        for n in range(self.vstart+1, self.nfermi):
-            for m in range(n-self.vstart):
-                nm2v_re[n, m] = 0.0
-                nm2v_im[n, m] = 0.0
+      #print('padding m<n, which can be also detected as negative occupation difference ')
+      for n in range(self.vstart+1, self.nfermi):
+        for m in range(n-self.vstart):
+          nm2v_re[n, m] = 0.0
+          nm2v_im[n, m] = 0.0
 
     # real part
     nb2v = self.gemm(1.0, nm2v_re, self.xvrt[0])
     ab2v = self.gemm(1.0, self.xocc[0].T, nb2v).reshape(self.norbs*self.norbs)
+
+    #ssum = ab2v.sum()
+    #if math.isnan(ssum):
+      #print(__name__, 'ssum', ssum)
+      #print('self.xocc[0]', self.xocc[0].sum(), self.xocc[0].dtype, self.xocc[0].shape)
+      #print('nb2v.sum()', nb2v.sum(), nb2v.dtype, nb2v.shape)
+      #print('ab2v.sum()', ab2v.sum(), ab2v.dtype, ab2v.shape)
+      #print('comega ', comega)
+      #print('self.ksn2e')
+      #print(self.ksn2e)
+      #print('nm2v_re_bak.sum()', nm2v_re_bak.sum())
+      #raise RuntimeError('ssum == np.nan')
+
     vdp = csr_matvec(self.v_dab, ab2v)
     
     chi0_re = vdp*self.cc_da
+
 
     # imag part
     nb2v = self.gemm(1.0, nm2v_im, self.xvrt[0])

@@ -1,50 +1,29 @@
 from __future__ import print_function, division
 import numpy as np
-from scipy.sparse import csr_matrix, coo_matrix
-from scipy.linalg import blas
 from timeit import default_timer as timer
 from pyscf.nao import tddft_iter
-from pyscf.nao.m_tddft_iter_gpu import tddft_iter_gpu_c
-from pyscf.nao.m_chi0_noxv import chi0_mv_gpu, chi0_mv
-from pyscf.nao.m_blas_wrapper import spmv_wrapper
-
-import scipy
-if int(scipy.__version__[0]) > 0:
-    scipy_ver = 1
-else:
-    scipy_ver = 0
-
-try:
-    import numba
-    from pyscf.nao.m_iter_div_eigenenergy_numba import div_eigenenergy_numba
-    use_numba = True
-except:
-    use_numba = False
-
 
 class tddft_tem(tddft_iter):
 
     def __init__(self, **kw):
         """ 
-        Iterative TDDFT a la PK, DF, OC JCTC 
-        using moving charge as perturbation.
-        The unit of the input are in atomic untis !!!
+        Iterative TDDFT using the electostatic potential of a moving charge as perturbation.
+        The units of the input are in Hartree atomic units...
 
         Input Parameters:
             dr: spatial resolution for the electron trajectory in atomic unit.
                 Warning: This parameter influence the accuracy of the calculations.
                     if it is taken too large the results will be wrong.
+
             freq: Frequency range (in atomic unit), freq[0] must be 0.0!!
-
+            
         """
-        from pyscf.nao.m_fermi_dirac import fermi_dirac_occupations
-
-
+        
         self.dr = kw["dr"] if "dr" in kw else np.array([0.3, 0.3, 0.3])
-        self.numba_parallel = kw["numba_parallel"] if "numba_parallel" in kw else True 
-
         tddft_iter.__init__(self, **kw)
+
         self.freq = kw["freq"] if "freq" in kw else np.arange(0.0, 0.367, 1.5*self.eps)
+
 
     def get_spectrum_nonin(self, velec = np.array([1.0, 0.0, 0.0]), beam_offset = np.array([0.0, 0.0, 0.0])):
         """

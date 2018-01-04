@@ -49,6 +49,26 @@ class nao():
 
   def __init__(self, **kw):
     """  Constructor of NAO class """
+
+    import scipy
+    if int(scipy.__version__[0])>0: 
+      scipy_ver_def = 1;
+    else:
+      scipy_ver_def = 0
+    self.scipy_ver = kw['scipy_ver'] if 'scipy_ver' in kw else scipy_ver_def
+
+    try:
+      import numba
+      use_numba_def = True
+    except:
+      use_numba_def = False
+    self.use_numba = kw['use_numba'] if 'use_numba' in kw else use_numba_def
+
+    self.numba_parallel = kw["numba_parallel"] if "numba_parallel" in kw else True 
+    
+    self.verbosity = kw['verbosity'] if 'verbosity' in kw else 0
+
+
     if 'gto' in kw:
       self.init_gto(**kw)
       self.init_libnao_orbs()

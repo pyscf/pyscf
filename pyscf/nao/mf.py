@@ -15,7 +15,6 @@ class mf(nao):
     nao.__init__(self, **kw)
     self.dtype = kw['dtype'] if 'dtype' in kw else np.float64
     self.pseudo = hasattr(self, 'sp2ion') 
-    self.verbosity = kw['verbosity'] if 'verbosity' in kw else 0
     self.gen_pb = kw['gen_pb'] if 'gen_pb' in kw else True
     
     if 'mf' in kw:

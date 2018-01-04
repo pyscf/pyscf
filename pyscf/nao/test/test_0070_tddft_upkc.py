@@ -1,13 +1,13 @@
 from __future__ import print_function, division
 import unittest,numpy as np
-from pyscf.nao import tddft_iter
+from pyscf.nao.tddft_iter_2ord import tddft_iter_2ord
 from os.path import dirname, abspath
 
 class KnowValues(unittest.TestCase):
 
   def test_tddft_upkc(self):
     """ This is a comparison of two equivalent ways of computing the polarizability for water molecule """
-    td = tddft_iter(label='water', cd=dirname(abspath(__file__)), jcutoff=7, xc_code='RPA')
+    td = tddft_iter_2ord(label='water', cd=dirname(abspath(__file__)), jcutoff=7, xc_code='RPA')
     omegas = np.arange(0.0,1.0,0.005)+1j*0.01
 
     pxx1 = -td.comp_polariz_nonin_xx(omegas).imag
