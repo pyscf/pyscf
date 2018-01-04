@@ -75,8 +75,8 @@ class tddft_iter(mf):
     if hasattr(self, 'hsx') and self.dealloc_hsx: self.hsx.deallocate()     # deallocate hsx
 
     if self.x_zip:
-      sn2e,sna2x = self.build_x_zip()
-      self.ksn2e = np.array([sn2e])
+      sm2e,sma2x = self.build_x_zip()
+      self.ksn2e = np.array([sm2e])
     else:
       self.ksn2e = self.mo_energy
 
@@ -91,8 +91,8 @@ class tddft_iter(mf):
     self.vstart = array([argmax(1.0-ksn2fd[0,s,:]>=self.nfermi_tol) for s in range(self.nspin)], dtype=int)
 
     if self.x_zip:
-      self.xocc = [sna2x[s,:nfermi,:] for s,nfermi in enumerate(self.nfermi)]
-      self.xvrt = [sna2x[s,vstart:,:] for s,vstart in enumerate(self.vstart)]
+      self.xocc = [ma2x[:nfermi,:] for ma2x,nfermi in zip(sma2x,self.nfermi)]
+      self.xvrt = [ma2x[vstart:,:] for ma2x,vstart in zip(sma2x,self.vstart)]
     else:
       self.xocc = [self.mo_coeff[0,s,:nfermi,:,0] for s,nfermi in enumerate(self.nfermi)]
       self.xvrt = [self.mo_coeff[0,s,vstart:,:,0] for s,vstart in enumerate(self.vstart)]
@@ -132,7 +132,7 @@ class tddft_iter(mf):
             self.norbs, self.nfermi, self.nprod, self.vstart)
 
   def build_x_zip(self):
-    """ Redefine ksn2e, xocc, xvrt """
+    """ define ksn2e, xocc, xvrt """
     from pyscf.nao.m_x_zip import x_zip
     sm2e = []
     sma2x = []
