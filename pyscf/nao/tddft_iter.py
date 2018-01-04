@@ -38,8 +38,9 @@ class tddft_iter(mf):
   def __init__(self, **kw):
     from pyscf.nao.m_fermi_dirac import fermi_dirac_occupations
 
-    #print(__name__, 'before construct')
-    mf.__init__(self, **kw)
+    self.dtype = kw['dtype'] if 'dtype' in kw else np.float32
+    ips = map(lambda x: kw.pop(x,None), ['dtype'])
+    mf.__init__(self, dtype=self.dtype, **kw)
 
     self.xc_code_mf = copy(self.xc_code)
     self.dealloc_hsx = kw['dealloc_hsx'] if 'dealloc_hsx' in kw else True
@@ -49,14 +50,12 @@ class tddft_iter(mf):
     self.GPU = GPU = kw['GPU'] if 'GPU' in kw else None
     self.xc_code = xc_code = kw['xc_code'] if 'xc_code' in kw else self.xc_code
     self.nfermi_tol = nfermi_tol = kw['nfermi_tol'] if 'nfermi_tol' in kw else 1e-5
-    self.dtype = kw['dtype'] if 'dtype' in kw else np.float32
     self.telec = kw['telec'] if 'telec' in kw else self.telec
     self.fermi_energy = kw['fermi_energy'] if 'fermi_energy' in kw else self.fermi_energy
+    self.x_zip = kw['x_zip'] if 'x_zip' in kw else False
     self.eps_x_zip = kw['eps_x_zip'] if 'eps_x_zip' in kw else 0.01
     self.emax_x_zip = kw['emax_x_zip'] if 'emax_x_zip' in kw else 1.0
-    
-    #print(__name__, ' dtype ', self.dtype)
-    
+        
     self.spmv = spmv_wrapper
     if self.dtype == np.float32:
       self.dtypeComplex = np.complex64
@@ -69,7 +68,7 @@ class tddft_iter(mf):
     else:
       raise ValueError("dtype can be only float32 or float64")
     self.load_kernel = load_kernel = kw['load_kernel'] if 'load_kernel' in kw else False
-    
+
     assert self.tddft_iter_tol>1e-6
     assert type(self.eps)==float
 
@@ -88,6 +87,11 @@ class tddft_iter(mf):
     self.vstart = array([argmax(1.0-ksn2fd[0,s,:]>=self.nfermi_tol) for s in range(self.nspin)], dtype=int)
     self.xocc = [self.mo_coeff[0,s,:nfermi,:,0] for s,nfermi in enumerate(self.nfermi)]
     self.xvrt = [self.mo_coeff[0,s,vstart:,:,0] for s,vstart in enumerate(self.vstart)]
+
+    if self.x_zip:
+      self.build_x_zip()
+    
+    #print(__name__, ' xocc[0].dtype ', self.xocc[0].dtype, 'xvrt[0].dtype', self.xvrt[0].dtype)
 
     self.rf0_ncalls = 0
     self.matvec_ncalls = 0
@@ -133,7 +137,6 @@ class tddft_iter(mf):
       self.sm2e.append(m2e)
       self.sma2x.append(ma2x)
     self.sm2e = array(self.sm2e)
-    self.sma2x = array(self.sma2x)
     return True
 
   def load_kernel_method(self, kernel_fname, kernel_format="npy", kernel_path_hdf5=None, **kwargs):
