@@ -60,5 +60,3 @@ def x_zip(n2e, na2x, eps=0.01, emax=None):
   m2e = concatenate((n2e[0:vst],j2e))
   ma2x = vstack((na2x[0:vst], ja2x))
   return vst,i2w,i2dos,m2e,ma2x
-  
-  

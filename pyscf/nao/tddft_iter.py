@@ -72,27 +72,31 @@ class tddft_iter(mf):
     assert self.tddft_iter_tol>1e-6
     assert type(self.eps)==float
 
-    # deallocate hsx
-    if hasattr(self, 'hsx') and self.dealloc_hsx: self.hsx.deallocate()
+    if hasattr(self, 'hsx') and self.dealloc_hsx: self.hsx.deallocate()     # deallocate hsx
 
-    self.ksn2e = np.copy(self.mo_energy)
+    if self.x_zip:
+      sn2e,sna2x = self.build_x_zip()
+      self.ksn2e = np.array([sn2e])
+    else:
+      self.ksn2e = self.mo_energy
+
     ksn2fd = fermi_dirac_occupations(self.telec, self.ksn2e, self.fermi_energy)
     for s,n2fd in enumerate(ksn2fd[0]):
-      if all(n2fd>nfermi_tol):
-        print(self.telec, s, nfermi_tol, n2fd)
-        raise RuntimeError(__name__, 'telec is too high?')
-    
+      if not all(n2fd>nfermi_tol): continue
+      print(self.telec, s, nfermi_tol, n2fd)
+      raise RuntimeError(__name__, 'telec is too high?')
+
     self.ksn2f = (3-self.nspin)*ksn2fd
     self.nfermi = array([argmax(ksn2fd[0,s,:]<self.nfermi_tol) for s in range(self.nspin)], dtype=int)
     self.vstart = array([argmax(1.0-ksn2fd[0,s,:]>=self.nfermi_tol) for s in range(self.nspin)], dtype=int)
-    self.xocc = [self.mo_coeff[0,s,:nfermi,:,0] for s,nfermi in enumerate(self.nfermi)]
-    self.xvrt = [self.mo_coeff[0,s,vstart:,:,0] for s,vstart in enumerate(self.vstart)]
 
     if self.x_zip:
-      self.build_x_zip()
+      self.xocc = [sna2x[s,:nfermi,:] for s,nfermi in enumerate(self.nfermi)]
+      self.xvrt = [sna2x[s,vstart:,:] for s,vstart in enumerate(self.vstart)]
+    else:
+      self.xocc = [self.mo_coeff[0,s,:nfermi,:,0] for s,nfermi in enumerate(self.nfermi)]
+      self.xvrt = [self.mo_coeff[0,s,vstart:,:,0] for s,vstart in enumerate(self.vstart)]
     
-    #print(__name__, ' xocc[0].dtype ', self.xocc[0].dtype, 'xvrt[0].dtype', self.xvrt[0].dtype)
-
     self.rf0_ncalls = 0
     self.matvec_ncalls = 0
 
@@ -130,14 +134,14 @@ class tddft_iter(mf):
   def build_x_zip(self):
     """ Redefine ksn2e, xocc, xvrt """
     from pyscf.nao.m_x_zip import x_zip
-    self.sm2e = []
-    self.sma2x = []
+    sm2e = []
+    sma2x = []
     for n2e,na2x in zip(self.mo_energy[0], self.mo_coeff[0,:,:,:,0]):
       vst, i2w,i2dos, m2e, ma2x = x_zip(n2e, na2x, eps=self.eps_x_zip, emax=self.emax_x_zip)
-      self.sm2e.append(m2e)
-      self.sma2x.append(ma2x)
-    self.sm2e = array(self.sm2e)
-    return True
+      sm2e.append(m2e)
+      sma2x.append(ma2x)
+    sm2e = array(sm2e)    
+    return sm2e, sma2x
 
   def load_kernel_method(self, kernel_fname, kernel_format="npy", kernel_path_hdf5=None, **kwargs):
 
