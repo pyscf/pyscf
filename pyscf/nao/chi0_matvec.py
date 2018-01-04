@@ -118,7 +118,7 @@ class chi0_matvec(mf):
     vext = np.transpose(self.moms1)
     for xyz in range(3):
         for iw, comega in enumerate(comegas):
-          if verbosity>0: print(xyz, iw, nww, comega*eV)
+          if verbosity>1: print(xyz, iw, nww, comega*eV)
           dn0 = self.apply_rf0(vext[xyz], comega)
           p_avg[iw] += np.dot(dn0, vext[xyz])
     return p_avg/3.0

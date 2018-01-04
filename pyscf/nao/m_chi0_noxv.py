@@ -24,16 +24,16 @@ def chi0_mv(self, v, comega=1j*0.0):
     sab = (vdp*self.v_dab).reshape([self.norbs,self.norbs])
     
     nb2v = self.gemm(1.0, self.xocc[0], sab)
+    #nb2v_bak = np.copy(nb2v)
     nm2v_re = self.gemm(1.0, nb2v, self.xvrt[0].T)
-
+    #nm2v_re_bak = np.copy(nm2v_re)
+    
     # imaginary part
     vdp = csr_matvec(self.cc_da, vext[:, 1])
     sab = (vdp*self.v_dab).reshape([self.norbs, self.norbs])
 
     nb2v = self.gemm(1.0, self.xocc[0], sab)
     nm2v_im = self.gemm(1.0, nb2v, self.xvrt[0].T)
-
-    nm2v_re_bak = np.copy(nm2v_re)
     
     if self.use_numba:
       self.div_eigenenergy_numba(self.ksn2e[0,0], self.ksn2f[0,0], self.nfermi[0], self.vstart[0], comega, 
@@ -69,6 +69,10 @@ def chi0_mv(self, v, comega=1j*0.0):
       #print('self.ksn2e')
       #print(self.ksn2e)
       #print('nm2v_re_bak.sum()', nm2v_re_bak.sum())
+      #print('nb2v_bak.sum()', nb2v_bak.sum())
+      #print('self.cc_da.sum()', self.cc_da.sum())      
+      #print('vext.sum()', vext.sum())
+      #print(v.shape, v.dtype)
       #raise RuntimeError('ssum == np.nan')
 
     vdp = csr_matvec(self.v_dab, ab2v)

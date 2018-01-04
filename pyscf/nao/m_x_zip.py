@@ -42,12 +42,16 @@ def ee_xx_oo2dos(m2e, ma2x, ab2o, eps):
   i2dos = i2dos/np.pi
   return i2w,i2dos
 
-def x_zip(n2e, na2x, eps=0.01, emax=None):
+def x_zip(n2e, na2x, eps, emax):
   """ Construct a 'presummed' set of eigenvectors, the effect must be a smaller number of eigenvectors """
-  emax = +1.0 if emax is None else emax
   assert len(n2e.shape) == 1
   assert len(na2x.shape) == 2
   assert eps>0.0
+  assert emax>0.0
+  
+  if len(np.where(n2e>emax)[0])==0: return n2e.size,[],[],n2e,na2x
+    
+  #print(__name__, max(n2e), emax)  
   vst = min(np.where(n2e>emax)[0])
   v2e = n2e[vst:]
   i2w,i2dos = ee2dos(v2e, eps) 

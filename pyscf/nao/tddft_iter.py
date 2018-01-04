@@ -130,7 +130,7 @@ class tddft_iter(chi0_matvec):
     nww, eV = len(comegas), 27.2114
     for xyz in range(3):
       for iw, comega in enumerate(comegas):
-        if verbosity>0: print(xyz, iw, nww, comega*eV)
+        if verbosity>1: print(xyz, iw, nww, comega*eV)
         veff = self.comp_veff(vext[xyz], comega)
         dn = self.apply_rf0(veff, comega)
         p_avg[iw] += np.dot(vext[xyz], dn)

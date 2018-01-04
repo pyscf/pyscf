@@ -7,7 +7,7 @@ XML.write .true.
 DM.UseSaveDM               .true.  # .false. by default
 DM.AllowReuse              .true.  # .true. by default
 DM.AllowExtrapolation      .false. # .true. is default
-DM.NumberPullay            5       # 0      is default
+DM.NumberPulay            5       # 0      is default
 DM.MixingWeight            0.03    # 0.25   is default
 MaxSCFIterations           200     # 50     is default
 MeshCutoff                 170 Ry  # 100    is default
