@@ -1,11 +1,15 @@
 from __future__ import print_function, division
 from pyscf.nao import tddft_iter
+from pyscf.nao.m_x_zip import x_zip
 import numpy as np
 
 c = tddft_iter(label='siesta', force_gamma=True, gen_pb=False, dealloc_hsx=False)
 
-eps = 0.001
+eps = 0.01
 ee = c.mo_energy[0,0]
+x_zip(ee, c.mo_coeff[0,0,:,:,0])
+
+
 ww = np.arange(ee[0]*1.1,ee[-1]*1.1, eps/5.0)+1j*eps
 dos = c.dos(ww)
 np.savetxt('dos.txt', np.column_stack((ww.real*27.2114, dos)))

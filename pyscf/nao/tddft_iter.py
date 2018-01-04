@@ -52,6 +52,9 @@ class tddft_iter(mf):
     self.dtype = kw['dtype'] if 'dtype' in kw else np.float32
     self.telec = kw['telec'] if 'telec' in kw else self.telec
     self.fermi_energy = kw['fermi_energy'] if 'fermi_energy' in kw else self.fermi_energy
+    self.eps_x_zip = kw['eps_x_zip'] if 'eps_x_zip' in kw else 0.01
+    self.emax_x_zip = kw['emax_x_zip'] if 'emax_x_zip' in kw else 1.0
+    
     #print(__name__, ' dtype ', self.dtype)
     
     self.spmv = spmv_wrapper
@@ -73,7 +76,7 @@ class tddft_iter(mf):
     # deallocate hsx
     if hasattr(self, 'hsx') and self.dealloc_hsx: self.hsx.deallocate()
 
-    self.ksn2e = self.mo_energy
+    self.ksn2e = np.copy(self.mo_energy)
     ksn2fd = fermi_dirac_occupations(self.telec, self.ksn2e, self.fermi_energy)
     for s,n2fd in enumerate(ksn2fd[0]):
       if all(n2fd>nfermi_tol):
@@ -119,6 +122,19 @@ class tddft_iter(mf):
 
     self.td_GPU = tddft_iter_gpu_c(GPU, self.mo_coeff[0, 0, :, :, 0], self.ksn2f, self.ksn2e, 
             self.norbs, self.nfermi, self.nprod, self.vstart)
+
+  def build_x_zip(self):
+    """ Redefine ksn2e, xocc, xvrt """
+    from pyscf.nao.m_x_zip import x_zip
+    self.sm2e = []
+    self.sma2x = []
+    for n2e,na2x in zip(self.mo_energy[0], self.mo_coeff[0,:,:,:,0]):
+      vst, i2w,i2dos, m2e, ma2x = x_zip(n2e, na2x, eps=self.eps_x_zip, emax=self.emax_x_zip)
+      self.sm2e.append(m2e)
+      self.sma2x.append(ma2x)
+    self.sm2e = array(self.sm2e)
+    self.sma2x = array(self.sma2x)
+    return True
 
   def load_kernel_method(self, kernel_fname, kernel_format="npy", kernel_path_hdf5=None, **kwargs):
 
