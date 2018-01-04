@@ -77,6 +77,7 @@ class tddft_iter(mf):
     if self.x_zip:
       sm2e,sma2x = self.build_x_zip()
       self.ksn2e = np.array([sm2e])
+      print(__name__, 'x_zip: ksn2e', self.ksn2e.shape, self.norbs)
     else:
       self.ksn2e = self.mo_energy
 
