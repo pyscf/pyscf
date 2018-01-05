@@ -155,6 +155,9 @@ def _balanced_partition(cum, ntasks):
 def _blocksize_partition(cum, blocksize):
     n = len(cum) - 1
     displs = [0]
+    if n == 0:
+        return displs
+
     p0 = 0
     for i in range(1, n):
         if cum[i+1]-cum[p0] > blocksize:
@@ -180,6 +183,8 @@ def prange(start, end, step):
 
 def prange_tril(start, stop, blocksize):
     '''for p0, p1 in prange_tril: p1*(p1+1)/2-p0*(p0+1)/2 < blocksize'''
+    if start >= stop:
+        return []
     idx = numpy.arange(start, stop+1)
     cum_costs = idx*(idx+1)//2 - start*(start+1)//2
     displs = [x+start for x in _blocksize_partition(cum_costs, blocksize)]

@@ -67,6 +67,8 @@ except (ImportError, OSError):
         # Call numpy.asarray because A or B may be HDF5 Datasets 
         A = numpy.asarray(A, order='A')
         B = numpy.asarray(B, order='A')
+        if A.size == 0 or B.size == 0:
+            return numpy.einsum(idx_str, *tensors)
         # Split the strings into a list of idx char's
         idxA, idxBC = idx_str.split(',')
         idxB, idxC = idxBC.split('->')
