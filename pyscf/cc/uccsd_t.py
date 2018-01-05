@@ -117,16 +117,10 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     for a0, a1 in lib.prange(0, nvirb, int(bufsize/nvira+1)):
         with lib.call_in_background(contract) as ctr:
             cache_row_a = numpy.asarray(eris_VvOp[a0:a1,:], order='C')
-            if a0 == 0:
-                cache_col_a = cache_row_a
-            else:
-                cache_col_a = numpy.asarray(eris_vVoP[:,a0:a1], order='C')
+            cache_col_a = numpy.asarray(eris_vVoP[:,a0:a1], order='C')
             for b0, b1 in lib.prange_tril(0, nvira, bufsize):
                 cache_row_b = numpy.asarray(eris_vvop[b0:b1,:b1], order='C')
-                if b0 == 0:
-                    cache_col_b = cache_row_b
-                else:
-                    cache_col_b = numpy.asarray(eris_vvop[:b0,b0:b1], order='C')
+                cache_col_b = numpy.asarray(eris_vvop[:b0,b0:b1], order='C')
                 ctr(et_sum, a0, a1, b0, b1, (cache_row_a,cache_col_a,
                                              cache_row_b,cache_col_b))
                 cache_row_b = cache_col_b = None
@@ -142,16 +136,10 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     for a0, a1 in lib.prange(0, nvira, int(bufsize/nvirb+1)):
         with lib.call_in_background(contract) as ctr:
             cache_row_a = numpy.asarray(eris_vVoP[a0:a1,:], order='C')
-            if a0 == 0:
-                cache_col_a = cache_row_a
-            else:
-                cache_col_a = numpy.asarray(eris_VvOp[:,a0:a1], order='C')
+            cache_col_a = numpy.asarray(eris_VvOp[:,a0:a1], order='C')
             for b0, b1 in lib.prange_tril(0, nvirb, bufsize):
                 cache_row_b = numpy.asarray(eris_VVOP[b0:b1,:b1], order='C')
-                if b0 == 0:
-                    cache_col_b = cache_row_b
-                else:
-                    cache_col_b = numpy.asarray(eris_VVOP[:b0,b0:b1], order='C')
+                cache_col_b = numpy.asarray(eris_VVOP[:b0,b0:b1], order='C')
                 ctr(et_sum, a0, a1, b0, b1, (cache_row_a,cache_col_a,
                                              cache_row_b,cache_col_b))
                 cache_row_b = cache_col_b = None
