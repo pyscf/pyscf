@@ -14,26 +14,24 @@ from pyscf.lib import logger
 from pyscf.scf import rhf_grad
 
 
-def grad_elec(grad_mf, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
-    mf = grad_mf._scf
-    mol = grad_mf.mol
+def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
+    mf = mf_grad._scf
+    mol = mf_grad.mol
     if mo_energy is None: mo_energy = mf.mo_energy
     if mo_occ is None:    mo_occ = mf.mo_occ
     if mo_coeff is None:  mo_coeff = mf.mo_coeff
-    log = logger.Logger(grad_mf.stdout, grad_mf.verbose)
+    log = logger.Logger(mf_grad.stdout, mf_grad.verbose)
 
-    h1 = grad_mf.get_hcore(mol)
-    s1 = grad_mf.get_ovlp(mol)
+    hcore_deriv = mf_grad.hcore_generator(mol)
+    s1 = mf_grad.get_ovlp(mol)
     dm0 = mf.make_rdm1(mo_coeff, mo_occ)
 
     t0 = (time.clock(), time.time())
     log.debug('Computing Gradients of NR-UHF Coulomb repulsion')
-    vhf = grad_mf.get_veff(mol, dm0)
+    vhf = mf_grad.get_veff(mol, dm0)
     log.timer('gradients of 2e part', *t0)
 
-    f1 = h1 + vhf
-    dme0 = grad_mf.make_rdm1e(mo_energy, mo_coeff, mo_occ)
-
+    dme0 = mf_grad.make_rdm1e(mo_energy, mo_coeff, mo_occ)
     dm0_sf = dm0[0] + dm0[1]
     dme0_sf = dme0[0] + dme0[1]
 
@@ -43,14 +41,20 @@ def grad_elec(grad_mf, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
     de = numpy.zeros((len(atmlst),3))
     for k, ia in enumerate(atmlst):
         shl0, shl1, p0, p1 = aoslices[ia]
-# h1, s1, vhf are \nabla <i|h|j>, the nuclear gradients = -\nabla
-        vrinv = grad_mf._grad_rinv(mol, ia)
-        de[k] += numpy.einsum('sxij,sij->x', f1[:,:,p0:p1], dm0[:,p0:p1]) * 2
-        de[k] += numpy.einsum('xij,ij->x', vrinv, dm0_sf) * 2
+        h1ao = hcore_deriv(ia)
+        de[k] += numpy.einsum('xij,ij->x', h1ao, dm0_sf)
+# s1, vhf are \nabla <i|h|j>, the nuclear gradients = -\nabla
+        de[k] += numpy.einsum('sxij,sij->x', vhf[:,:,p0:p1], dm0[:,p0:p1]) * 2
         de[k] -= numpy.einsum('xij,ij->x', s1[:,p0:p1], dme0_sf[p0:p1]) * 2
+        if mf_grad.grid_response:
+            de[k] += vhf.exc1_grid[ia]
     if log.verbose >= logger.DEBUG:
         log.debug('gradients of electronic part')
         rhf_grad._write(log, mol, de, atmlst)
+        if mf_grad.grid_response:
+            log.debug('grids response contributions')
+            rhf_grad._write(log, mol, vhf.exc1_grid[atmlst], atmlst)
+            log.debug1('sum(de) %s', vhf.exc1_grid.sum(axis=0))
     return de
 
 def get_veff(mf_grad, mol, dm):

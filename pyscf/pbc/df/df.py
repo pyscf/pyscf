@@ -170,23 +170,28 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
 #        feri['j2c/%d'%k] = fuse(fuse(j2c[k]).T).T
 #        aoaux = LkR = LkI = coulG = None
 
+    max_memory = max(2000, mydf.max_memory - lib.current_memory()[0])
+    blksize = max(2048, int(max_memory*.5e6/16/fused_cell.nao_nr()))
+    log.debug2('max_memory %s (MB)  blocksize %s', max_memory, blksize)
     for k, kpt in enumerate(uniq_kpts):
-        aoaux = ft_ao.ft_ao(fused_cell, Gv, None, b, gxyz, Gvbase, kpt).T
         coulG = numpy.sqrt(mydf.weighted_coulG(kpt, False, mesh))
-        LkR = aoaux.real * coulG
-        LkI = aoaux.imag * coulG
+        for p0, p1 in lib.prange(0, ngrids, blksize):
+            aoaux = ft_ao.ft_ao(fused_cell, Gv[p0:p1], None, b, gxyz[p0:p1], Gvbase, kpt).T
+            LkR = aoaux.real * coulG[p0:p1]
+            LkI = aoaux.imag * coulG[p0:p1]
+            aoaux = None
 
-        if is_zero(kpt):  # kpti == kptj
-            j2c[k][naux:] -= lib.ddot(LkR[naux:], LkR.T)
-            j2c[k][naux:] -= lib.ddot(LkI[naux:], LkI.T)
-            j2c[k][:naux,naux:] = j2c[k][naux:,:naux].T
-        else:
-            j2cR, j2cI = zdotCN(LkR[naux:], LkI[naux:], LkR.T, LkI.T)
-            j2c[k][naux:] -= j2cR + j2cI * 1j
-            j2c[k][:naux,naux:] = j2c[k][naux:,:naux].T.conj()
+            if is_zero(kpt):  # kpti == kptj
+                j2c[k][naux:] -= lib.ddot(LkR[naux:], LkR.T)
+                j2c[k][naux:] -= lib.ddot(LkI[naux:], LkI.T)
+                j2c[k][:naux,naux:] = j2c[k][naux:,:naux].T
+            else:
+                j2cR, j2cI = zdotCN(LkR[naux:], LkI[naux:], LkR.T, LkI.T)
+                j2c[k][naux:] -= j2cR + j2cI * 1j
+                j2c[k][:naux,naux:] = j2c[k][naux:,:naux].T.conj()
+            LkR = LkI = None
         feri['j2c/%d'%k] = fuse(fuse(j2c[k]).T).T
-        aoaux = LkR = LkI = coulG = None
-    j2c = None
+    j2c = coulG = None
 
     def make_kpt(uniq_kptji_id):  # kpt = kptj - kpti
         kpt = uniq_kpts[uniq_kptji_id]
@@ -326,7 +331,7 @@ class GDF(aft.AFTDF):
 
         self.kpts = kpts  # default is gamma point
         self.kpts_band = None
-        self.auxbasis = None
+        self._auxbasis = None
         if cell.dimension == 0:
             self.eta = 0.2
             self.mesh = cell.mesh
@@ -356,9 +361,10 @@ class GDF(aft.AFTDF):
         return self._auxbasis
     @auxbasis.setter
     def auxbasis(self, x):
-        self._auxbasis = x
-        self.auxcell = None
-        self._cderi = None
+        if self._auxbasis != x:
+            self._auxbasis = x
+            self.auxcell = None
+            self._cderi = None
 
     def dump_flags(self, log=None):
         log = logger.new_logger(self, log)

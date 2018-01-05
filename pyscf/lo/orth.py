@@ -7,6 +7,7 @@ from functools import reduce
 import numpy
 import scipy.linalg
 from pyscf.lib import param
+from pyscf.lib import logger
 from pyscf import gto
 
 def lowdin(s):
@@ -76,22 +77,43 @@ def project_to_atomic_orbitals(mol, basname):
         ecp_bas_l = numpy.hstack(ecp_bas_l)
         ano_bas_l = numpy.hstack(ano_bas_l)
 
+        nelec_core = 0
+        ecp_occ_tmp = []
         ecp_idx = []
         ano_idx = []
         for l in range(4):
-            nocc, nfrac = atom_hf.frac_occ(stdsymb, l)
-            if nfrac > 1e-15:
+            nocc, frac = atom_hf.frac_occ(stdsymb, l)
+            l_occ = [2] * ((nocc-ecpcore[l])*(2*l+1))
+            if frac > 1e-15:
+                l_occ.extend([frac] * (2*l+1))
                 nocc += 1
             if nocc == 0:
                 break
+            nelec_core += 2 * ecpcore[l] * (2*l+1)
             i0 = ecpcore[l] * (2*l+1)
             i1 = nocc * (2*l+1)
             ecp_idx.append(numpy.where(ecp_bas_l==l)[0][:i1-i0])
             ano_idx.append(numpy.where(ano_bas_l==l)[0][i0:i1])
+            ecp_occ_tmp.append(l_occ[:i1-i0])
         ecp_idx = numpy.hstack(ecp_idx)
         ano_idx = numpy.hstack(ano_idx)
-        s12 = gto.intor_cross('int1e_ovlp', atm_ecp, atm_ano)[ecp_idx][:,ano_idx]
-        return numpy.linalg.det(s12)
+        ecp_occ = numpy.zeros(atm_ecp.nao_nr())
+        ecp_occ[ecp_idx] = numpy.hstack(ecp_occ_tmp)
+        nelec_valence_left = int(gto.mole.charge(stdsymb) - nelec_core
+                                 - sum(ecp_occ[ecp_idx]))
+        if nelec_valence_left > 0:
+            logger.warn(mol, 'Characters of %d valence electrons are not identified.\n'
+                        'It can affect the "meta-lowdin" localization method '
+                        'and the population analysis of SCF method.\n'
+                        'Adjustment to the core/valence partition may be needed '
+                        '(see function lo.nao.set_atom_conf)\nto get reasonable '
+                        'local orbitals or Mulliken population.\n',
+                        nelec_valence_left)
+            # Return 0 to force the projection to ANO basis
+            return 0
+        else:
+            s12 = gto.intor_cross('int1e_ovlp', atm_ecp, atm_ano)[ecp_idx][:,ano_idx]
+            return numpy.linalg.det(s12)
 
     nelec_ecp_dic = {}
     for ia in range(mol.natm):

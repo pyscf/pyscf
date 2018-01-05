@@ -26,17 +26,17 @@ class KnownValues(unittest.TestCase):
         rhf.conv_tol = 1e-14
         rhf.scf()
         g = grad.RHF(rhf)
-        self.assertAlmostEqual(finger(g.grad_elec()), 7.9210392362911595, 7)
-        self.assertAlmostEqual(finger(g.kernel()), 0.367743084803, 7)
+        self.assertAlmostEqual(finger(g.grad_elec()), 7.9210392362911595, 6)
+        self.assertAlmostEqual(finger(g.kernel()), 0.367743084803, 6)
 
     def test_r_uhf(self):
         uhf = scf.dhf.UHF(mol)
         uhf.conv_tol_grad = 1e-5
         uhf.scf()
         g = grad.DHF(uhf)
-        self.assertAlmostEqual(finger(g.grad_elec()), 7.9216825870803245, 7)
+        self.assertAlmostEqual(finger(g.grad_elec()), 7.9216825870803245, 6)
         g.level = 'LLLL'
-        self.assertAlmostEqual(finger(g.grad_elec()), 7.924684281032623, 7)
+        self.assertAlmostEqual(finger(g.grad_elec()), 7.924684281032623, 6)
 
     def test_energy_nuc(self):
         rhf = scf.RHF(mol)
@@ -61,9 +61,9 @@ class KnownValues(unittest.TestCase):
         F   0.   0.1  0.''')
         mf_scanner = grad.RHF(scf.RHF(mol).set(conv_tol=1e-14)).as_scanner()
         e, de = mf_scanner(mol)
-        self.assertAlmostEqual(finger(de), 0.367743084803, 7)
+        self.assertAlmostEqual(finger(de), 0.367743084803, 6)
         e, de = mf_scanner(mol1)
-        self.assertAlmostEqual(finger(de), 0.041822093538, 7)
+        self.assertAlmostEqual(finger(de), 0.041822093538, 6)
 
     def test_rks_scanner(self):
         mol1 = mol.copy()
@@ -72,9 +72,9 @@ class KnownValues(unittest.TestCase):
         F   0.   0.1  0.''')
         mf_scanner = rks.Grad(scf.RKS(mol).set(conv_tol=1e-14)).as_scanner()
         e, de = mf_scanner(mol)
-        self.assertAlmostEqual(finger(de), 0.458572523892797, 7)
+        self.assertAlmostEqual(finger(de), 0.458572523892797, 6)
         e, de = mf_scanner(mol1)
-        self.assertAlmostEqual(finger(de), 0.12763259021187467, 7)
+        self.assertAlmostEqual(finger(de), 0.12763259021187467, 6)
 
     def test_ccsd_scanner(self):
         from pyscf import cc

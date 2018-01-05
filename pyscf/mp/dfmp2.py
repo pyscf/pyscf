@@ -15,14 +15,19 @@ from pyscf import df
 from pyscf.mp import mp2
 #from pyscf.mp.mp2 import make_rdm1, make_rdm2, make_rdm1_ao
 
-def kernel(mp, eris=None, with_t2=False, verbose=None):
+def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=True,
+           verbose=logger.NOTE):
+    if mo_energy is None or mo_coeff is None:
+        mo_coeff = mp2._mo_without_core(mp, mp.mo_coeff)
+        mo_energy = mp2._mo_energy_without_core(mp, mp.mo_energy)
+    else:
+        # For backward compatibility.  In pyscf-1.4 or earlier, mp.frozen is
+        # not supported when mo_energy or mo_coeff is given.
+        assert(mp.frozen is 0 or mp.frozen is None)
 
     nocc = mp.nocc
     nvir = mp.nmo - nocc
-    moidx = mp.get_frozen_mask()
-    mo_coeff = mp.mo_coeff[:,moidx]
-    mo_e = mp.mo_energy[moidx]
-    eia = mo_e[:nocc,None] - mo_e[None,nocc:]
+    eia = mo_energy[:nocc,None] - mo_energy[None,nocc:]
 
     t2 = None
     emp2 = 0
@@ -45,8 +50,8 @@ class DFMP2(mp2.MP2):
         if hasattr(mf, 'with_df') and mf.with_df:
             self.with_df = None
         else:
-            self.with_df = df.DF(mol)
-            self.with_df.auxbasis = df.make_auxbasis(mol, mp2fit=True)
+            self.with_df = df.DF(mf.mol)
+            self.with_df.auxbasis = df.make_auxbasis(mf.mol, mp2fit=True)
         mp2.MP2.__init__(self, mf, frozen, mo_coeff, mo_occ)
 
     @lib.with_doc(mp2.MP2.kernel.__doc__)

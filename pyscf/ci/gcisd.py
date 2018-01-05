@@ -15,7 +15,9 @@ from pyscf.lib import logger
 from pyscf.cc import ccsd
 from pyscf.cc import gccsd
 from pyscf.cc import gccsd_rdm
+from pyscf.cc.addons import spatial2spin, spin2spatial
 from pyscf.ci import cisd
+from pyscf import fci
 from pyscf.fci import cistring
 
 
@@ -80,10 +82,11 @@ def contract(myci, civec, eris):
     tmp = lib.einsum('ma,ijmb->ijab', c1, numpy.asarray(eris.ooov).conj())
     t2 -= tmp - tmp.transpose(0,1,3,2)
 
+    eris_oovv = numpy.asarray(eris.oovv)
     t1 += fov * c0
-    t2 += eris.oovv * c0
+    t2 += eris_oovv * c0
     t0  = numpy.einsum('ia,ia', fov, c1)
-    t0 += numpy.einsum('ijab,ijab', eris.oovv, c2) * .25
+    t0 += numpy.einsum('ijab,ijab', eris_oovv, c2) * .25
 
     return amplitudes_to_cisdvec(t0, t1, t2)
 
@@ -103,10 +106,11 @@ def cisdvec_to_amplitudes(civec, nmo, nocc):
     return c0, c1, c2
 
 def from_cisdvec(civec, nocc, orbspin):
+    '''Convert the CISD vectors'''
     from pyscf.cc import addons
     from pyscf.ci import ucisd
-    nmoa = len(orbspin == 0)
-    nmob = len(orbspin == 1)
+    nmoa = numpy.count_nonzero(orbspin == 0)
+    nmob = numpy.count_nonzero(orbspin == 1)
     if isinstance(nocc, int):
         nocca = noccb = nocc
     else:
@@ -188,7 +192,6 @@ def to_fcivec(cisdvec, nelec, orbspin):
     return fcivec
 
 def from_fcivec(ci0, nelec, orbspin):
-    from pyscf.cc.addons import spatial2spin
     nocc = nelec
     oidxa = orbspin[:nocc] == 0
     oidxb = orbspin[:nocc] == 1
@@ -279,8 +282,7 @@ def _gamma2_intermediates(myci, civec, nmo, nocc):
 class GCISD(cisd.CISD):
     def get_init_guess(self, eris=None):
         # MP2 initial guess
-        if eris is None:
-            eris = self.ao2mo(self.mo_coeff)
+        if eris is None: eris = self.ao2mo(self.mo_coeff)
         time0 = time.clock(), time.time()
         mo_e = eris.fock.diagonal()
         nocc = self.nocc
@@ -292,6 +294,9 @@ class GCISD(cisd.CISD):
         self.emp2 = 0.25*numpy.einsum('ijab,ijab', t2.conj(), eris_oovv).real
         logger.info(self, 'Init t2, MP2 energy = %.15g', self.emp2)
         logger.timer(self, 'init mp2', *time0)
+
+        if abs(self.emp2) < 1e-3 and abs(t1).sum() < 1e-3:
+            t1 = 1. / eia
         return self.emp2, amplitudes_to_cisdvec(1, t1, t2)
 
     def ao2mo(self, mo_coeff=None):
@@ -327,6 +332,20 @@ class GCISD(cisd.CISD):
         if nocc is None: nocc = self.nocc
         return cisdvec_to_amplitudes(civec, nmo, nocc)
 
+    def spatial2spin(self, tx, orbspin=None):
+        if orbspin is None:
+            orbspin = getattr(self.mo_coeff, 'orbspin', None)
+            if orbspin is not None:
+                orbspin = orbspin[self.get_frozen_mask()]
+        return spatial2spin(tx, orbspin)
+
+    def spin2spatial(self, tx, orbspin=None):
+        if orbspin is None:
+            orbspin = getattr(self.mo_coeff, 'orbspin', None)
+            if orbspin is not None:
+                orbspin = orbspin[self.get_frozen_mask()]
+        return spin2spatial(tx, orbspin)
+
 
 if __name__ == '__main__':
     from pyscf import gto
@@ -334,126 +353,6 @@ if __name__ == '__main__':
     from pyscf import fci
     from pyscf import ao2mo
     from pyscf.cc.addons import spatial2spin
-    numpy.random.seed(12)
-    nocc = 3
-    nvir = 5
-    nmo = nocc + nvir
-
-    orbspin = numpy.zeros(nmo*2, dtype=int)
-    orbspin[1::2] = 1
-    c1a = numpy.random.random((nocc,nvir))
-    c1b = numpy.random.random((nocc,nvir))
-    c2aa = numpy.random.random((nocc,nocc,nvir,nvir))
-    c2bb = numpy.random.random((nocc,nocc,nvir,nvir))
-    c2ab = numpy.random.random((nocc,nocc,nvir,nvir))
-    c1 = spatial2spin((c1a, c1b), orbspin)
-    c2 = spatial2spin((c2aa, c2ab, c2bb), orbspin)
-    cisdvec = amplitudes_to_cisdvec(1., c1, c2)
-    fcivec = to_fcivec(cisdvec, nocc*2, orbspin)
-    cisdvec1 = from_fcivec(fcivec, nocc*2, orbspin)
-    print(abs(cisdvec-cisdvec1).sum())
-    ci1 = to_fcivec(cisdvec1, nocc*2, orbspin)
-    print(abs(fcivec-ci1).sum())
-
-    mol = gto.Mole()
-    mol.verbose = 0
-    mol.atom = [
-        ['H', ( 1.,-1.    , 0.   )],
-        ['H', ( 0.,-1.    ,-1.   )],
-        ['H', ( 1.,-0.5   , 0.   )],
-        ['H', ( 0.,-1.    , 1.   )],
-    ]
-    mol.charge = -2
-    mol.spin = 2
-    mol.basis = '3-21g'
-    mol.build()
-    mf = scf.UHF(mol).run(conv_tol=1e-14)
-    ehf0 = mf.e_tot - mol.energy_nuc()
-    gmf = scf.addons.convert_to_ghf(mf)
-    myci = GCISD(gmf)
-    eris = myci.ao2mo()
-
-    numpy.random.seed(12)
-    nocca, noccb = mol.nelec
-    nmo = mol.nao_nr()
-    nvira = nmo - nocca
-    nvirb = nmo - noccb
-    #cisdvec = myci.get_init_guess(eris)[1]
-    c1a  = .1 * numpy.random.random((nocca,nvira))
-    c1b  = .1 * numpy.random.random((noccb,nvirb))
-    c2aa = .1 * numpy.random.random((nocca,nocca,nvira,nvira))
-    c2bb = .1 * numpy.random.random((noccb,noccb,nvirb,nvirb))
-    c2ab = .1 * numpy.random.random((nocca,noccb,nvira,nvirb))
-    c1 = spatial2spin((c1a, c1b), eris.orbspin)
-    c2 = spatial2spin((c2aa, c2ab, c2bb), eris.orbspin)
-    cisdvec = amplitudes_to_cisdvec(1., c1, c2)
-
-    hcisd0 = contract(myci, cisdvec, eris)
-    eri_aa = ao2mo.kernel(mf._eri, mf.mo_coeff[0])
-    eri_bb = ao2mo.kernel(mf._eri, mf.mo_coeff[1])
-    eri_ab = ao2mo.kernel(mf._eri, [mf.mo_coeff[0], mf.mo_coeff[0],
-                                    mf.mo_coeff[1], mf.mo_coeff[1]])
-    h1a = reduce(numpy.dot, (mf.mo_coeff[0].T, mf.get_hcore(), mf.mo_coeff[0]))
-    h1b = reduce(numpy.dot, (mf.mo_coeff[1].T, mf.get_hcore(), mf.mo_coeff[1]))
-    h2e = fci.direct_uhf.absorb_h1e((h1a,h1b), (eri_aa,eri_ab,eri_bb),
-                                    h1a.shape[0], mol.nelec, .5)
-    fcivec = to_fcivec(cisdvec, mol.nelectron, eris.orbspin)
-    hci1 = fci.direct_uhf.contract_2e(h2e, fcivec, h1a.shape[0], mol.nelec)
-    hci1 -= ehf0 * fcivec
-    hcisd1 = from_fcivec(hci1, mol.nelectron, eris.orbspin)
-    print(numpy.linalg.norm(hcisd1-hcisd0) / numpy.linalg.norm(hcisd0))
-
-    hdiag0 = make_diagonal(myci, eris)
-    hdiag0 = to_fcivec(hdiag0, mol.nelectron, eris.orbspin).ravel()
-    hdiag0 = from_fcivec(hdiag0, mol.nelectron, eris.orbspin).ravel()
-    hdiag1 = fci.direct_uhf.make_hdiag((h1a,h1b), (eri_aa,eri_ab,eri_bb),
-                                       h1a.shape[0], mol.nelec)
-    hdiag1 = from_fcivec(hdiag1, mol.nelectron, eris.orbspin).ravel()
-    print(numpy.linalg.norm(abs(hdiag0)-abs(hdiag1)))
-
-    ecisd = myci.kernel()[0]
-    efci = fci.direct_uhf.kernel((h1a,h1b), (eri_aa,eri_ab,eri_bb),
-                                 h1a.shape[0], mol.nelec)[0]
-    print(ecisd, ecisd - -0.037067274690894436, '> E(fci)', efci-ehf0)
-
-    mol = gto.Mole()
-    mol.verbose = 0
-    mol.atom = [
-        ['H', ( 1.,-1.    , 0.   )],
-        ['H', ( 0.,-1.    ,-1.   )],
-        ['H', ( 1.,-0.5   , 0.   )],
-        ['H', ( 0.,-1.    , 1.   )],
-    ]
-    mol.charge = 2
-    mol.spin = 2
-    mol.basis = '6-31g'
-    mol.build()
-    mf = scf.UHF(mol).run(conv_tol=1e-14)
-    gmf = scf.addons.convert_to_ghf(mf)
-    ehf0 = mf.e_tot - mol.energy_nuc()
-    myci = GCISD(gmf)
-    eris = myci.ao2mo()
-    ecisd = myci.kernel(eris=eris)[0]
-    eri_aa = ao2mo.kernel(mf._eri, mf.mo_coeff[0])
-    eri_bb = ao2mo.kernel(mf._eri, mf.mo_coeff[1])
-    eri_ab = ao2mo.kernel(mf._eri, [mf.mo_coeff[0], mf.mo_coeff[0],
-                                    mf.mo_coeff[1], mf.mo_coeff[1]])
-    h1a = reduce(numpy.dot, (mf.mo_coeff[0].T, mf.get_hcore(), mf.mo_coeff[0]))
-    h1b = reduce(numpy.dot, (mf.mo_coeff[1].T, mf.get_hcore(), mf.mo_coeff[1]))
-    efci, fcivec = fci.direct_uhf.kernel((h1a,h1b), (eri_aa,eri_ab,eri_bb),
-                                         h1a.shape[0], mol.nelec)
-    print(ecisd, '== E(fci)', efci-ehf0)
-    dm1ref, dm2ref = fci.direct_uhf.make_rdm12s(fcivec, h1a.shape[0], mol.nelec)
-    nmo = myci.nmo
-    rdm1 = myci.make_rdm1(myci.ci, nmo, mol.nelectron)
-    rdm2 = myci.make_rdm2(myci.ci, nmo, mol.nelectron)
-    idxa = eris.orbspin == 0
-    idxb = eris.orbspin == 1
-    print('dm1a', abs(dm1ref[0] - rdm1[idxa][:,idxa]).max())
-    print('dm1b', abs(dm1ref[1] - rdm1[idxb][:,idxb]).max())
-    print('dm2aa', abs(dm2ref[0] - rdm2[idxa][:,idxa][:,:,idxa][:,:,:,idxa]).max())
-    print('dm2ab', abs(dm2ref[1] - rdm2[idxa][:,idxb][:,:,idxa][:,:,:,idxb]).max())
-    print('dm2bb', abs(dm2ref[2] - rdm2[idxb][:,idxb][:,:,idxb][:,:,:,idxb]).max())
 
     mol = gto.Mole()
     mol.verbose = 0
@@ -476,13 +375,9 @@ if __name__ == '__main__':
     rdm2 = myci.make_rdm2(civec, nmo, mol.nelectron)
 
     mo = eris.mo_coeff[:7] + eris.mo_coeff[7:]
-    eri = ao2mo.kernel(mf._eri, mo, compact=False)
-    eri = eri.reshape([nmo]*4)
-    for i in range(nmo):
-        for j in range(i):
-            if eris.orbspin[i] != eris.orbspin[j]:
-                eri[i,j,:,:] = eri[j,i,:,:] = 0.
-                eri[:,:,i,j] = eri[:,:,j,i] = 0.
+    eri = ao2mo.kernel(mf._eri, mo, compact=False).reshape([nmo]*4)
+    eri[eris.orbspin[:,None]!=eris.orbspin,:,:] = 0
+    eri[:,:,eris.orbspin[:,None]!=eris.orbspin] = 0
     h1a = reduce(numpy.dot, (mf.mo_coeff[0].T, mf.get_hcore(), mf.mo_coeff[0]))
     h1b = reduce(numpy.dot, (mf.mo_coeff[1].T, mf.get_hcore(), mf.mo_coeff[1]))
     h1e = numpy.zeros((nmo,nmo))
@@ -492,7 +387,8 @@ if __name__ == '__main__':
     h1e[idxb[:,None]&idxb] = h1b.ravel()
     e2 = (numpy.einsum('ij,ji', h1e, rdm1) +
           numpy.einsum('ijkl,jilk', eri, rdm2) * .5)
-    print(ecisd + mf.e_tot - mol.energy_nuc() - e2)   # = 0
+    e2 += mol.energy_nuc()
+    print(myci.e_tot - e2)   # = 0
 
     print(abs(rdm1 - numpy.einsum('ijkk->ij', rdm2)/(mol.nelectron-1)).sum())
 

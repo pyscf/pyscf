@@ -1,5 +1,10 @@
 #!/usr/bin/env python
 
+'''
+spin-free X2C correction for extended systems
+(In testing)
+'''
+
 
 import time
 from functools import reduce
@@ -9,11 +14,12 @@ import scipy.linalg
 from pyscf import lib
 from pyscf.gto import mole
 from pyscf.lib import logger
-from pyscf.scf import x2c
+from pyscf.x2c import x2c
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc.df import aft
 from pyscf.pbc.df import aft_jk
 from pyscf.pbc.df import ft_ao
+from pyscf.pbc.scf import ghf
 
 
 def sfx2c1e(mf):
@@ -29,28 +35,34 @@ def sfx2c1e(mf):
     Examples:
 
     >>> mol = gto.M(atom='H 0 0 0; F 0 0 1', basis='ccpvdz', verbose=0)
-    >>> mf = scf.sfx2c1e(scf.RHF(mol))
+    >>> mf = scf.RHF(mol).sfx2c1e()
     >>> mf.scf()
 
     >>> mol.symmetry = 1
     >>> mol.build(0, 0)
-    >>> mf = scf.sfx2c1e(scf.UHF(mol))
+    >>> mf = scf.UHF(mol).sfx2c1e()
     >>> mf.scf()
     '''
+    if isinstance(mf, x2c._X2C_SCF):
+        if mf.with_x2c is None:
+            return mf.__class__(mf)
+        else:
+            return mf
+
     mf_class = mf.__class__
     if mf_class.__doc__ is None:
         doc = ''
     else:
         doc = mf_class.__doc__
-    class X2C_HF(mf_class, x2c._X2C_HF):
+    class SFX2C1E_SCF(mf_class, x2c._X2C_SCF):
         __doc__ = doc + \
         '''
         Attributes for spin-free X2C:
             with_x2c : X2C object
         '''
-        def __init__(self):
-            self.with_x2c = SpinFreeX2C(mf.mol)
+        def __init__(self, mf):
             self.__dict__.update(mf.__dict__)
+            self.with_x2c = SpinFreeX2C(mf.mol)
             self._keys = self._keys.union(['with_x2c'])
 
         def get_hcore(self, cell=None, kpts=None, kpt=None):
@@ -64,11 +76,17 @@ def sfx2c1e(mf):
                     else:
                         kpts = kpt
             if self.with_x2c:
-                return self.with_x2c.get_hcore(cell, kpts)
+                hcore = self.with_x2c.get_hcore(cell, kpts)
+                if isinstance(self, ghf.GHF):
+                    if kpts.ndim == 1:
+                        hcore = scipy.linalg.block_diag(hcore, hcore)
+                    else:
+                        hcore = [scipy.linalg.block_diag(h, h) for h in hcore]
+                return hcore
             else:
                 return mf_class.get_hcore(self, cell, kpts)
 
-    return X2C_HF()
+    return SFX2C1E_SCF(mf)
 
 sfx2c = sfx2c1e
 
@@ -102,9 +120,11 @@ class SpinFreeX2C(X2C):
                 ish0, ish1, p0, p1 = atom_slices[ia]
                 shls_slice = (ish0, ish1, ish0, ish1)
                 t1 = xcell.intor('int1e_kin_sph', shls_slice=shls_slice)
-                v1 = xcell.intor('int1e_nuc_sph', shls_slice=shls_slice)
                 s1 = xcell.intor('int1e_ovlp_sph', shls_slice=shls_slice)
-                w1 = xcell.intor('int1e_pnucp_sph', shls_slice=shls_slice)
+                with xcell.with_rinv_as_nucleus(ia):
+                    z = -xcell.atom_charge(ia)
+                    v1 = z * xcell.intor('int1e_rinv', shls_slice=shls_slice)
+                    w1 = z * xcell.intor('int1e_prinvp', shls_slice=shls_slice)
                 vloc[p0:p1,p0:p1] = v1
                 wloc[p0:p1,p0:p1] = w1
                 x[p0:p1,p0:p1] = x2c._x2c1e_xmatrix(t1, v1, w1, s1, c)
@@ -121,6 +141,7 @@ class SpinFreeX2C(X2C):
 
         h1_kpts = []
         for k in range(len(kpts_lst)):
+# The treatment of pnucp local part has huge effects to hcore
             #h1 = x2c._get_hcore_fw(t[k], vloc, wloc, s[k], x, c) - vloc + v[k]
             #h1 = x2c._get_hcore_fw(t[k], v[k], w[k], s[k], x, c)
             h1 = x2c._get_hcore_fw(t[k], v[k], wloc, s[k], x, c)

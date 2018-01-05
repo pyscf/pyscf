@@ -85,18 +85,20 @@
 
 * Nuclear Gradients
 
-  - Non-relativistic RHF gradients
+  - Non-relativistic HF gradients
   - 4-component DHF gradients
   - Non-relativistic DFT gradients
   - Non-relativistic CISD gradients
   - Non-relativistic CCSD and CCSD(T) gradients
   - Non-relativistic TDHF and TDDFT gradients
+  - Non-relativistic nuclear gradients with SF-X2C-1e correction
 
 
 * Nuclear Hessian
 
-  - Non-relativistic RHF hessian
-  - Non-relativistic RKS hessian
+  - Non-relativistic HF hessian
+  - Non-relativistic DFT hessian
+  - Non-relativistic nuclear hessian with SF-X2C-1e correction
 
 * Properties
 

@@ -104,10 +104,6 @@ from pyscf.scf.diis import DIIS, CDIIS, EDIIS, ADIIS
 from pyscf.scf.uhf import spin_square
 from pyscf.scf.hf import get_init_guess
 from pyscf.scf.addons import *
-from pyscf.scf import x2c
-from pyscf.scf.x2c import sfx2c1e, sfx2c
-from pyscf.scf import newton_ah
-
 
 
 def RHF(mol, *args):
@@ -169,12 +165,19 @@ def DHF(mol, *args):
 
 def X2C(mol, *args):
     '''X2C UHF (in testing)'''
+    from pyscf.x2c import x2c
     return x2c.UHF(mol, *args)
+
+def sfx2c1e(mf):
+    return mf.sfx2c1e()
+sfx2c = sfx2c1e
 
 def density_fit(mf, auxbasis=None, with_df=None):
     return mf.density_fit(auxbasis, with_df)
 
-newton = newton_ah.newton
+def newton(mf):
+    from pyscf.soscf import newton_ah
+    return newton_ah.newton(mf)
 
 def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None,
                 auxbasis=None, projectbasis=None, **newton_kwargs):
@@ -188,6 +191,7 @@ def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None,
     import copy
     from pyscf.lib import logger
     from pyscf import df
+    from pyscf.soscf import newton_ah
     if auxbasis is None:
         auxbasis = df.addons.aug_etb_for_dfbasis(mf.mol, 'ahlrichs', beta=2.5)
     if projectbasis:

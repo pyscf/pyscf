@@ -22,7 +22,7 @@ mf.kernel()
 grad = mf.nuc_grad_method()
 grad.kernel()
 
-mf = scf.UHF(mol)
+mf = scf.UHF(mol).x2c()
 mf.kernel()
 grad = mf.nuc_grad_method()
 grad.kernel()

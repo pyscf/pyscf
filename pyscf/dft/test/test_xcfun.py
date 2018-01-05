@@ -11,7 +11,7 @@ mol.output = None
 mol.atom = 'h 0 0 0; h 1 .5 0; h 0 4 1; h 1 0 .2'
 mol.basis = 'aug-ccpvdz'
 mol.build()
-dm = scf.RHF(mol).run().make_rdm1()
+dm = scf.RHF(mol).run(conv_tol=1e-14).make_rdm1()
 mf = dft.RKS(mol)
 mf.grids.atom_grid = {"H": (50, 110)}
 mf.prune = None
@@ -34,11 +34,11 @@ class KnowValues(unittest.TestCase):
 
     def test_lyp(self):
         e,v,f = dft.xcfun.eval_xc(',LYP', rho, deriv=2)[:3]
-        self.assertAlmostEqual(numpy.dot(rho[0],e), -62.114577198931428, 9)
-        self.assertAlmostEqual(numpy.dot(rho[0],v[0]), -81.771672134676805, 9)
-        self.assertAlmostEqual(numpy.dot(rho[0],v[1]), 27.485383952241612, 9)
-        self.assertAlmostEqual(numpy.dot(rho[0],f[0]), 186.8238053926263, 9)
-        self.assertAlmostEqual(numpy.dot(rho[0],f[1]), -3391.2422871100111, 9)
+        self.assertAlmostEqual(numpy.dot(rho[0],e), -62.114576182676615, 8)
+        self.assertAlmostEqual(numpy.dot(rho[0],v[0]),-81.771670866308455, 8)
+        self.assertAlmostEqual(numpy.dot(rho[0],v[1]), 27.485383255125743, 8)
+        self.assertAlmostEqual(numpy.dot(rho[0],f[0]), 186.823806251777, 7)
+        self.assertAlmostEqual(numpy.dot(rho[0],f[1]), -3391.2428894571085, 6)
         self.assertAlmostEqual(numpy.dot(rho[0],f[2]), 0, 9)
 
 if __name__ == "__main__":

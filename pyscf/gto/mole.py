@@ -640,9 +640,9 @@ def make_env(atoms, basis, pre_env=[], nucmod={}):
         elif puresymb in _basdic:
             b = _basdic[puresymb].copy()
         else:
-            if symb[:2] == 'X-':
+            if symb[:2].upper() == 'X-':
                 symb = symb[2:]
-            elif symb[:6] == 'GHOST-':
+            elif symb[:6].upper() == 'GHOST-':
                 symb = symb[6:]
             puresymb = _rm_digit(symb)
             if symb in _basdic:
@@ -1473,8 +1473,9 @@ PTR_RINV_ORIG   = 4
 PTR_RINV_ZETA   = 7
 PTR_RANGE_OMEGA = 8
 PTR_F12_ZETA    = 9
-PTR_ECPBAS_OFFSET = 18
-PTR_NECPBAS     = 19
+AS_RINV_ORIG_ATOM = 17
+AS_ECPBAS_OFFSET = 18
+AS_NECPBAS     = 19
 PTR_ENV_START   = 20
 # parameters from libcint
 NUC_POINT = 1
@@ -2149,6 +2150,29 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         zeta0 = self._env[PTR_RINV_ZETA].copy()
         return _TemporaryMoleContext(self.set_rinv_zeta, (zeta,), (zeta0,))
 
+    def with_rinv_as_nucleus(self, atm_id):
+        '''Retuen a temporary mol context which has the rquired origin of 1/r
+        operator and the required nuclear charge distribution on 1/r.
+
+        Examples:
+
+        >>> with mol.with_rinv_as_nucleus(3):
+        ...     mol.intor('int1e_rinv')
+        '''
+        zeta = self._env[self._atm[atm_id,PTR_ZETA]]
+        rinv = self.atom_coord(atm_id)
+        if zeta == 0:
+            self._env[AS_RINV_ORIG_ATOM] = atm_id  # required by ecp gradients
+            return self.with_rinv_origin(rinv)
+        else:
+            self._env[AS_RINV_ORIG_ATOM] = atm_id  # required by ecp gradients
+            rinv0 = self._env[PTR_RINV_ORIG:PTR_RINV_ORIG+3].copy()
+            zeta0 = self._env[PTR_RINV_ZETA].copy()
+            def set_rinv(z, r):
+                self._env[PTR_RINV_ZETA] = z
+                self._env[PTR_RINV_ORIG:PTR_RINV_ORIG+3] = r
+            return _TemporaryMoleContext(set_rinv, (zeta,rinv), (zeta0,rinv0))
+
     def set_geom_(self, atoms, unit='Angstrom', symmetry=None):
         '''Replace geometry
         '''
@@ -2494,8 +2518,8 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         if 'ECP' in intor:
             assert(self._ecp is not None)
             bas = numpy.vstack((self._bas, self._ecpbas))
-            self._env[PTR_ECPBAS_OFFSET] = len(self._bas)
-            self._env[PTR_NECPBAS] = len(self._ecpbas)
+            self._env[AS_ECPBAS_OFFSET] = len(self._bas)
+            self._env[AS_NECPBAS] = len(self._ecpbas)
             if shls_slice is None:
                 shls_slice = (0, self.nbas, 0, self.nbas)
         else:
@@ -2571,8 +2595,8 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         if 'ECP' in intor:
             assert(self._ecp is not None)
             bas = numpy.vstack((self._bas, self._ecpbas))
-            self._env[PTR_ECPBAS_OFFSET] = len(self._bas)
-            self._env[PTR_NECPBAS] = len(self._ecpbas)
+            self._env[AS_ECPBAS_OFFSET] = len(self._bas)
+            self._env[AS_NECPBAS] = len(self._ecpbas)
         else:
             bas = self._bas
         return moleintor.getints_by_shell(intor, shells, self._atm, bas,

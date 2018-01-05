@@ -12,7 +12,7 @@ from functools import reduce
 
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.scf import ciah
+from pyscf.soscf import ciah
 from pyscf.lo import orth
 
 

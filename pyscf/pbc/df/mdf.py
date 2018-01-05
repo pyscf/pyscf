@@ -215,7 +215,7 @@ class MDF(df.DF):
 
         self.kpts = kpts  # default is gamma point
         self.kpts_band = None
-        self.auxbasis = None
+        self._auxbasis = None
         self.mesh = cell.mesh
         self.eta = None
 

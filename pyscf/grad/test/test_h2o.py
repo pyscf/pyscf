@@ -50,28 +50,28 @@ class KnownValues(unittest.TestCase):
         rhf.conv_tol = 1e-14
         rhf.kernel()
         g = grad.RHF(rhf)
-        self.assertAlmostEqual(finger(g.grad_elec()), 10.126405944938071, 7)
+        self.assertAlmostEqual(finger(g.grad_elec()), 10.126405944938071, 6)
 
     def test_r_uhf(self):
         uhf = scf.dhf.UHF(h2o)
         uhf.conv_tol_grad = 1e-6
         uhf.kernel()
         g = grad.DHF(uhf)
-        self.assertAlmostEqual(finger(g.grad_elec()), 10.126445612578864, 7)
+        self.assertAlmostEqual(finger(g.grad_elec()), 10.126445612578864, 6)
 
     def test_nr_uhf(self):
         mf = scf.UHF(h2o_n)
         mf.conv_tol = 1e-14
         mf.kernel()
         g = grad.UHF(mf)
-        self.assertAlmostEqual(lib.finger(g.grad_elec()), 4.2250348208172541, 7)
+        self.assertAlmostEqual(lib.finger(g.grad_elec()), 4.2250348208172541, 6)
 
     def test_nr_rohf(self):
         mf = scf.ROHF(h2o_n)
         mf.conv_tol = 1e-14
         mf.kernel()
         g = grad.ROHF(mf)
-        self.assertAlmostEqual(lib.finger(g.grad_elec()), 4.1499791106739679, 7)
+        self.assertAlmostEqual(lib.finger(g.grad_elec()), 4.1499791106739679, 6)
 
     def test_energy_nuc(self):
         rhf = scf.RHF(h2o)
@@ -86,66 +86,66 @@ class KnownValues(unittest.TestCase):
         mycc.kernel()
         mycc.solve_lambda()
         g1 = grad.ccsd.kernel(mycc)
-        self.assertAlmostEqual(finger(g1), 0.065802850540912422, 8)
+        self.assertAlmostEqual(finger(g1), 0.065802850540912422, 6)
 
     def test_rks_lda(self):
         mf = dft.RKS(h2o)
         mf.grids.prune = None
         mf.run(conv_tol=1e-14, xc='lda,vwn')
         g = rks.Grad(mf)
-        self.assertAlmostEqual(finger(g.grad()), 0.098438461959390822, 7)
+        self.assertAlmostEqual(finger(g.grad()), 0.098438461959390822, 6)
         g.grid_response = True
-        self.assertAlmostEqual(finger(g.grad()), 0.098441823256625829, 7)
+        self.assertAlmostEqual(finger(g.grad()), 0.098441823256625829, 6)
 
     def test_rks_bp86(self):
         mf = dft.RKS(h2o)
         mf.grids.prune = None
         mf.run(conv_tol=1e-14, xc='b88,p86')
         g = rks.Grad(mf)
-        self.assertAlmostEqual(finger(g.grad()), 0.10362532283229957, 7)
+        self.assertAlmostEqual(finger(g.grad()), 0.10362532283229957, 6)
         g.grid_response = True
-        self.assertAlmostEqual(finger(g.grad()), 0.10357804241970789, 7)
+        self.assertAlmostEqual(finger(g.grad()), 0.10357804241970789, 6)
 
     def test_rks_b3lypg(self):
         mf = dft.RKS(h2o)
         mf.grids.prune = None
         mf.run(conv_tol=1e-14, xc='b3lypg')
         g = rks.Grad(mf)
-        self.assertAlmostEqual(finger(g.grad()), 0.066541921001296467, 7)
+        self.assertAlmostEqual(finger(g.grad()), 0.066541921001296467, 6)
         g.grid_response = True
-        self.assertAlmostEqual(finger(g.grad()), 0.066543737224608879, 7)
+        self.assertAlmostEqual(finger(g.grad()), 0.066543737224608879, 6)
 
     def test_uks_lda(self):
         mf = dft.UKS(h2o_p)
         mf.run(conv_tol=1e-14, xc='lda,vwn')
         g = uks.Grad(mf)
-        self.assertAlmostEqual(lib.finger(g.grad()), -0.12090786418355501, 7)
+        self.assertAlmostEqual(lib.finger(g.grad()), -0.12090786418355501, 6)
         g.grid_response = True
-        self.assertAlmostEqual(lib.finger(g.grad()), -0.12091122603875157, 7)
+        self.assertAlmostEqual(lib.finger(g.grad()), -0.12091122603875157, 6)
 
     def test_roks_lda(self):
         mf = dft.ROKS(h2o_p)
         mf.run(conv_tol=1e-14, xc='lda,vwn')
         g = roks.Grad(mf)
-        self.assertAlmostEqual(lib.finger(g.grad()), -0.12051785975616186, 7)
+        self.assertAlmostEqual(lib.finger(g.grad()), -0.12051785975616186, 6)
         g.grid_response = True
-        self.assertAlmostEqual(lib.finger(g.grad()), -0.12052121736985746, 7)
+        self.assertAlmostEqual(lib.finger(g.grad()), -0.12052121736985746, 6)
 
     def test_uks_b3lypg(self):
         mf = dft.UKS(h2o_n)
         mf.run(conv_tol=1e-14, xc='b3lypg')
         g = uks.Grad(mf)
-        self.assertAlmostEqual(lib.finger(g.grad()), -0.1436034999176907, 7)
+        self.assertAlmostEqual(lib.finger(g.grad()), -0.1436034999176907, 6)
         g.grid_response = True
-        self.assertAlmostEqual(lib.finger(g.grad()), -0.14360504586558553, 7)
+        self.assertAlmostEqual(lib.finger(g.grad()), -0.14360504586558553, 6)
 
     def test_roks_b3lypg(self):
         mf = dft.ROKS(h2o_n)
         mf.run(conv_tol=1e-14, xc='b3lypg')
         g = roks.Grad(mf)
-        self.assertAlmostEqual(lib.finger(g.grad()), -0.16655206305717471, 7)
+        self.assertAlmostEqual(lib.finger(g.grad()), -0.16655206305717471, 6)
         g.grid_response = True
-        self.assertAlmostEqual(lib.finger(g.grad()), -0.16655364690125929, 7)
+        self.assertAlmostEqual(lib.finger(g.grad()), -0.16655364690125929, 6)
 
 
 if __name__ == "__main__":

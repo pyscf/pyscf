@@ -94,6 +94,51 @@ class KnowValues(unittest.TestCase):
         mf1 = pscf.addons.convert_to_uhf(mf)
         self.assertTrue(mf1.__class__ == pscf.kuhf.KUHF)
 
+    def test_convert_to_scf(self):
+        from pyscf.pbc import dft
+        from pyscf.soscf import newton_ah
+        cell1 = cell.copy()
+        cell1.verbose = 0
+        pscf.addons.convert_to_rhf(dft.RKS(cell1))
+        pscf.addons.convert_to_uhf(dft.RKS(cell1))
+        #pscf.addons.convert_to_ghf(dft.RKS(cell1))
+        pscf.addons.convert_to_rhf(dft.UKS(cell1))
+        pscf.addons.convert_to_uhf(dft.UKS(cell1))
+        #pscf.addons.convert_to_ghf(dft.UKS(cell1))
+        #pscf.addons.convert_to_rhf(dft.GKS(cell1))
+        #pscf.addons.convert_to_uhf(dft.GKS(cell1))
+        #pscf.addons.convert_to_ghf(dft.GKS(cell1))
+
+        pscf.addons.convert_to_rhf(pscf.RHF(cell1).density_fit())
+        pscf.addons.convert_to_uhf(pscf.RHF(cell1).density_fit())
+        pscf.addons.convert_to_ghf(pscf.RHF(cell1).density_fit())
+        pscf.addons.convert_to_rhf(pscf.UHF(cell1).density_fit())
+        pscf.addons.convert_to_uhf(pscf.UHF(cell1).density_fit())
+        pscf.addons.convert_to_ghf(pscf.UHF(cell1).density_fit())
+        #pscf.addons.convert_to_rhf(pscf.GHF(cell1).density_fit())
+        #pscf.addons.convert_to_uhf(pscf.GHF(cell1).density_fit())
+        pscf.addons.convert_to_ghf(pscf.GHF(cell1).density_fit())
+
+        pscf.addons.convert_to_rhf(pscf.RHF(cell1).x2c().density_fit())
+        pscf.addons.convert_to_uhf(pscf.RHF(cell1).x2c().density_fit())
+        pscf.addons.convert_to_ghf(pscf.RHF(cell1).x2c().density_fit())
+        pscf.addons.convert_to_rhf(pscf.UHF(cell1).x2c().density_fit())
+        pscf.addons.convert_to_uhf(pscf.UHF(cell1).x2c().density_fit())
+        pscf.addons.convert_to_ghf(pscf.UHF(cell1).x2c().density_fit())
+        #pscf.addons.convert_to_rhf(pscf.GHF(cell1).x2c().density_fit())
+        #pscf.addons.convert_to_uhf(pscf.GHF(cell1).x2c().density_fit())
+        pscf.addons.convert_to_ghf(pscf.GHF(cell1).x2c().density_fit())
+
+        self.assertTrue (isinstance(pscf.addons.convert_to_rhf(pscf.RHF(cell1).newton().density_fit().x2c()), newton_ah._CIAH_SOSCF))
+        self.assertFalse(isinstance(pscf.addons.convert_to_uhf(pscf.RHF(cell1).newton().density_fit().x2c()), newton_ah._CIAH_SOSCF))
+        self.assertFalse(isinstance(pscf.addons.convert_to_ghf(pscf.RHF(cell1).newton().density_fit().x2c()), newton_ah._CIAH_SOSCF))
+        self.assertFalse(isinstance(pscf.addons.convert_to_rhf(pscf.UHF(cell1).newton().density_fit().x2c()), newton_ah._CIAH_SOSCF))
+        self.assertTrue (isinstance(pscf.addons.convert_to_uhf(pscf.UHF(cell1).newton().density_fit().x2c()), newton_ah._CIAH_SOSCF))
+        self.assertFalse(isinstance(pscf.addons.convert_to_ghf(pscf.UHF(cell1).newton().density_fit().x2c()), newton_ah._CIAH_SOSCF))
+        #self.assertFalse(isinstance(pscf.addons.convert_to_rhf(pscf.GHF(cell1).newton().density_fit().x2c()), newton_ah._CIAH_SOSCF))
+        #self.assertFalse(isinstance(pscf.addons.convert_to_uhf(pscf.GHF(cell1).newton().density_fit().x2c()), newton_ah._CIAH_SOSCF))
+        self.assertTrue (isinstance(pscf.addons.convert_to_ghf(pscf.GHF(cell1).newton().density_fit().x2c()), newton_ah._CIAH_SOSCF))
+
 
 if __name__ == '__main__':
     print("Full Tests for pbc.scf.addons")

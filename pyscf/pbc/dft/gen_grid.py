@@ -147,20 +147,27 @@ def gen_becke_grids(cell, atom_grid={}, radi_method=dft.radi.gauss_chebyshev,
 
     atm_coords = np.asarray(atm_coords.reshape(-1,3)[supatm_idx], order='C')
     sup_natm = len(atm_coords)
-    ngrids = len(coords_all)
-    pbecke = np.empty((sup_natm,ngrids))
-    coords = np.asarray(coords_all, order='F')
     p_radii_table = lib.c_null_ptr()
     fn = dft.gen_grid.libdft.VXCgen_grid
-    fn(pbecke.ctypes.data_as(ctypes.c_void_p),
-       coords.ctypes.data_as(ctypes.c_void_p),
-       atm_coords.ctypes.data_as(ctypes.c_void_p),
-       p_radii_table, ctypes.c_int(sup_natm), ctypes.c_int(ngrids))
+    ngrids = weights_all.size
 
-    weights_all /= pbecke.sum(axis=0)
-    for ia in range(sup_natm):
-        p0, p1 = offs[ia], offs[ia+1]
-        weights_all[p0:p1] *= pbecke[ia,p0:p1]
+    max_memory = cell.max_memory - lib.current_memory()[0]
+    blocksize = min(ngrids, max(2000, int(max_memory*1e6/8 / sup_natm)))
+    displs = lib.misc._blocksize_partition(offs, blocksize)
+    for n0, n1 in zip(displs[:-1], displs[1:]):
+        p0, p1 = offs[n0], offs[n1]
+        pbecke = np.empty((sup_natm,p1-p0))
+        coords = np.asarray(coords_all[p0:p1], order='F')
+        fn(pbecke.ctypes.data_as(ctypes.c_void_p),
+           coords.ctypes.data_as(ctypes.c_void_p),
+           atm_coords.ctypes.data_as(ctypes.c_void_p),
+           p_radii_table, ctypes.c_int(sup_natm), ctypes.c_int(p1-p0))
+
+        weights_all[p0:p1] /= pbecke.sum(axis=0)
+        for ia in range(n0, n1):
+            i0, i1 = offs[ia], offs[ia+1]
+            weights_all[i0:i1] *= pbecke[ia,i0-p0:i1-p0]
+
     return coords_all, weights_all
 
 

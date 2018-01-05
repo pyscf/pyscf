@@ -17,11 +17,10 @@ from pyscf.ao2mo import _ao2mo
 from pyscf.scf import rhf_grad
 from pyscf.mp import ump2
 from pyscf.mp import mp2_grad
-from pyscf.grad import uhf as uhf_grad
 
 
 def kernel(mp, t2, atmlst=None, mf_grad=None, verbose=logger.INFO):
-    if mf_grad is None: mf_grad = uhf_grad.Gradients(mp._scf)
+    if mf_grad is None: mf_grad = mp._scf.nuc_grad_method()
 
     log = logger.new_logger(mp, verbose)
     time0 = time.clock(), time.time()
@@ -191,7 +190,7 @@ def kernel(mp, t2, atmlst=None, mf_grad=None, verbose=logger.INFO):
     time1 = log.timer_debug1('response_rdm1', *time1)
 
     log.debug('h1 and JK1')
-    h1 = mf_grad.get_hcore(mol)
+    hcore_deriv = mf_grad.hcore_generator(mol)
     s1 = mf_grad.get_ovlp(mol)
     zeta = (mo_ea[:,None] + mo_ea) * .5
     zeta[nocca:,:nocca] = mo_ea[:nocca]
@@ -224,11 +223,9 @@ def kernel(mp, t2, atmlst=None, mf_grad=None, verbose=logger.INFO):
 # s[1] dot I, note matrix im1 is not hermitian
         de[k] += numpy.einsum('xij,ij->x', s1[:,p0:p1], im1[p0:p1])
         de[k] += numpy.einsum('xji,ij->x', s1[:,p0:p1], im1[:,p0:p1])
-# h[1] \dot DM, *2 for +c.c.,  contribute to f1
-        h1ao = mf_grad._grad_rinv(mol, ia)
-        h1ao[:,p0:p1] += h1[:,p0:p1]
-        de[k] += numpy.einsum('xij,ij->x', h1ao, dm1)
-        de[k] += numpy.einsum('xji,ij->x', h1ao, dm1)
+# h[1] \dot DM, contribute to f1
+        h1ao = hcore_deriv(ia)
+        de[k] += numpy.einsum('xij,ji->x', h1ao, dm1)
 # -s[1]*e \dot DM,  contribute to f1
         de[k] -= numpy.einsum('xij,ij->x', s1[:,p0:p1], zeta[p0:p1]  )
         de[k] -= numpy.einsum('xji,ij->x', s1[:,p0:p1], zeta[:,p0:p1])

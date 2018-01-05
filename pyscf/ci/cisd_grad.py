@@ -59,7 +59,7 @@ def as_scanner(grad_ci):
             ci_scanner(mol)
             mf_grad = ci_scanner._scf.nuc_grad_method()
             de = self.kernel(ci_scanner.ci, mf_grad=mf_grad)
-            return ci.e_tot, de
+            return ci_scanner.e_tot, de
         @property
         def converged(self):
             ci_scanner = self._ci

@@ -45,7 +45,7 @@ mol.basis = 'cc-pvtz-dk'
 mol.spin = 0
 mol.build()
 
-mf = scf.sfx2c1e(scf.ROHF(mol))
+mf = scf.ROHF(mol).x2c()
 mf.kernel()
 
 #

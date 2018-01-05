@@ -471,13 +471,13 @@ def overwrite_mro(obj, mro):
         pass
 # Overwrite type.mro function so that Temp class can use the given mro
     HackMRO.mro = lambda self: mro
-    if sys.version_info < (3,):
-        class Temp(obj.__class__):
-            __metaclass__ = HackMRO
-    else:
-        #class Temp(obj.__class__, metaclass=HackMRO):
-        #    pass
-        raise NotImplementedError()
+    #if sys.version_info < (3,):
+    #    class Temp(obj.__class__):
+    #        __metaclass__ = HackMRO
+    #else:
+    #    class Temp(obj.__class__, metaclass=HackMRO):
+    #        pass
+    Temp = HackMRO(obj.__class__.__name__, obj.__class__.__bases__, obj.__dict__)
     obj = Temp()
 # Delete mro function otherwise all subclass of Temp are not able to
 # resolve the right mro
@@ -590,7 +590,7 @@ class call_in_background(object):
             def def_async_fn(fn):
                 return fn
 
-        elif h5py.__version__[:4] == '2.2.':
+        elif h5py.version.version[:4] == '2.2.':
 # h5py-2.2.* has bug in threading mode.
             def def_async_fn(fn):
                 return fn

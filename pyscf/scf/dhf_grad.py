@@ -14,45 +14,44 @@ from pyscf.scf import _vhf
 from pyscf.scf import rhf_grad
 
 
-def grad_elec(grad_mf, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
-    mf = grad_mf._scf
-    mol = grad_mf.mol
+def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
+    mf = mf_grad._scf
+    mol = mf_grad.mol
     if mo_energy is None: mo_energy = mf.mo_energy
     if mo_occ is None:    mo_occ = mf.mo_occ
     if mo_coeff is None:  mo_coeff = mf.mo_coeff
-    log = logger.Logger(grad_mf.stdout, grad_mf.verbose)
+    log = logger.Logger(mf_grad.stdout, mf_grad.verbose)
 
-    h1 = grad_mf.get_hcore(mol)
-    s1 = grad_mf.get_ovlp(mol)
+    hcore_deriv = mf_grad.hcore_generator(mol)
+    s1 = mf_grad.get_ovlp(mol)
     dm0 = mf.make_rdm1(mf.mo_coeff, mf.mo_occ)
     n2c = dm0.shape[0] // 2
 
     t0 = (time.clock(), time.time())
     log.debug('Compute Gradients of NR Hartree-Fock Coulomb repulsion')
-    vhf = grad_mf.get_veff(mol, dm0)
+    vhf = mf_grad.get_veff(mol, dm0)
     log.timer('gradients of 2e part', *t0)
 
-    f1 = h1 + vhf
-    dme0 = grad_mf.make_rdm1e(mf.mo_energy, mf.mo_coeff, mf.mo_occ)
+    dme0 = mf_grad.make_rdm1e(mf.mo_energy, mf.mo_coeff, mf.mo_occ)
 
     if atmlst is None:
         atmlst = range(mol.natm)
-    offsetdic = grad_mf.aorange_by_atom()
+    aoslices = mol.aoslice_2c_by_atom()
     de = numpy.zeros((len(atmlst),3))
     for k, ia in enumerate(atmlst):
-        shl0, shl1, p0, p1 = offsetdic[ia]
-        vrinv = grad_mf._grad_rinv(mol, ia)
-        de[k] +=(numpy.einsum('xij,ji->x', f1[:,p0:p1], dm0[:,p0:p1])
-               + numpy.einsum('xji,ji->x', f1[:,p0:p1].conj(), dm0[p0:p1])).real
-        de[k] +=(numpy.einsum('xij,ji->x', vrinv, dm0)
-               + numpy.einsum('xji,ji->x', vrinv.conj(), dm0)).real
+        shl0, shl1, p0, p1 = aoslices[ia]
+        h1ao = hcore_deriv(ia)
+        de[k] += numpy.einsum('xij,ji->x', h1ao, dm0).real
+# large components
+        de[k] +=(numpy.einsum('xij,ji->x', vhf[:,p0:p1], dm0[:,p0:p1])
+               + numpy.einsum('xji,ji->x', vhf[:,p0:p1].conj(), dm0[p0:p1])).real
         de[k] -=(numpy.einsum('xij,ji->x', s1[:,p0:p1], dme0[:,p0:p1])
                + numpy.einsum('xji,ji->x', s1[:,p0:p1].conj(), dme0[p0:p1])).real
 # small components
         p0 += n2c
         p1 += n2c
-        de[k] +=(numpy.einsum('xij,ji->x', f1[:,p0:p1], dm0[:,p0:p1])
-               + numpy.einsum('xji,ji->x', f1[:,p0:p1].conj(), dm0[p0:p1])).real
+        de[k] +=(numpy.einsum('xij,ji->x', vhf[:,p0:p1], dm0[:,p0:p1])
+               + numpy.einsum('xji,ji->x', vhf[:,p0:p1].conj(), dm0[p0:p1])).real
         de[k] -=(numpy.einsum('xij,ji->x', s1[:,p0:p1], dme0[:,p0:p1])
                + numpy.einsum('xji,ji->x', s1[:,p0:p1].conj(), dme0[p0:p1])).real
     log.debug('gradients of electronic part')
@@ -91,22 +90,6 @@ def get_ovlp(mol):
 
 def make_rdm1e(mo_energy, mo_coeff, mo_occ):
     return rhf_grad.make_rdm1e(mo_energy, mo_coeff, mo_occ)
-
-# 2C AO spinor range
-def aorange_by_atom(mol):
-    aorange = []
-    p0 = p1 = 0
-    b0 = b1 = 0
-    ia0 = 0
-    for ib in range(mol.nbas):
-        if ia0 != mol.bas_atom(ib):
-            aorange.append((b0, ib, p0, p1))
-            ia0 = mol.bas_atom(ib)
-            p0 = p1
-            b0 = ib
-        p1 += mol.bas_len_spinor(ib) * mol.bas_nctr(ib)
-    aorange.append((b0, mol.nbas, p0, p1))
-    return aorange
 
 def get_veff(mol, dm, level='SSSS'):
     return get_coulomb_hf(mol, dm, level)
@@ -147,6 +130,27 @@ class Gradients(rhf_grad.Gradients):
         if mol is None: mol = self.mol
         return get_hcore(mol)
 
+    def hcore_generator(self, mol):
+        aoslices = mol.aoslice_2c_by_atom()
+        h1 = self.get_hcore(mol)
+        n2c = mol.nao_2c()
+        n4c = n2c * 2
+        c = lib.param.LIGHT_SPEED
+        def hcore_deriv(atm_id):
+            shl0, shl1, p0, p1 = aoslices[atm_id]
+            with mol.with_rinv_as_nucleus(atm_id):
+                z = -mol.atom_charge(atm_id)
+                vn = z * mol.intor('int1e_iprinv_spinor', comp=3)
+                wn = z * mol.intor('int1e_ipsprinvsp_spinor', comp=3)
+
+            v = numpy.zeros((3,n4c,n4c), numpy.complex)
+            v[:,:n2c,:n2c] = vn
+            v[:,n2c:,n2c:] = wn * (.25/c**2)
+            v[:,p0:p1]         += h1[:,p0:p1]
+            v[:,n2c+p0:n2c+p1] += h1[:,n2c+p0:n2c+p1]
+            return v + v.conj().transpose(0,2,1)
+        return hcore_deriv
+
     def get_ovlp(self, mol=None):
         if mol is None: mol = self.mol
         return get_ovlp(mol)
@@ -172,10 +176,6 @@ class Gradients(rhf_grad.Gradients):
         if mo_coeff is None: mo_coeff = self._scf.mo_coeff
         if mo_occ is None: mo_occ = self._scf.mo_occ
         return grad_elec(self, mo_energy, mo_coeff, mo_occ, atmlst)
-
-    def aorange_by_atom(self):
-        return aorange_by_atom(self.mol)
-
 
 
 def _call_vhf1_llll(mol, dm):

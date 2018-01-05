@@ -77,7 +77,7 @@ mf.scf(rdm1)
 # configurations is the second order SCF optimizaiton.  In the following code,
 # we call a calculation on cation for a correct HF configuration with spherical
 # symmetry.  This HF configuration is next pass to second order SCF solver
-# scf.newton to solve X2C-ROHF model of the open shell atom.
+# (.newton method) to solve X2C-ROHF model of the open shell atom.
 #
 mol = gto.M(
     verbose = 4,
@@ -86,14 +86,14 @@ mol = gto.M(
     basis = 'cc-pvdz-dk',
     charge = 6,
     spin = 0)
-mf = scf.sfx2c1e(scf.RHF(mol)).run()
+mf = scf.RHF(mol).x2c().run()
 mo, mo_occ = mf.mo_coeff, mf.mo_occ
 
 mol.charge = 0
 mol.spin = 6
 mol.build(False,False)
 
-mf = scf.newton(scf.sfx2c1e(scf.RHF(mol)))
+mf = scf.RHF(mol).x2c().newton()
 mo_occ[9:15] = 1
 mf.kernel(mo, mo_occ)
 #mf.analyze()

@@ -140,6 +140,9 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         vhf = mf.get_veff(mol, dm, dm_last, vhf)
         e_tot = mf.energy_tot(dm, h1e, vhf)
 
+        # Here Fock matrix is h1e + vhf, without DIIS.  Calling get_fock
+        # instead of the statement "fock = h1e + vhf" because Fock matrix may
+        # be modified in some methods.
         fock = mf.get_fock(h1e, s1e, vhf, dm)  # = h1e + vhf, no DIIS
         norm_gorb = numpy.linalg.norm(mf.get_grad(mo_coeff, mo_occ, fock))
         norm_ddm = numpy.linalg.norm(dm-dm_last)
@@ -276,39 +279,58 @@ def init_guess_by_minao(mol):
         stdsymb = gto.mole._std_symbol(symb)
         basis_add = gto.basis.load('ano', stdsymb)
         occ = []
-        basis_new = []
+        basis_ano = []
 # coreshl defines the core shells to be removed in the initial guess
         coreshl = gto.ecp.core_configuration(nelec_ecp)
         #coreshl = (0,0,0,0)  # it keeps all core electrons in the initial guess
         for l in range(4):
-            ndocc, nfrac = atom_hf.frac_occ(stdsymb, l)
+            ndocc, frac = atom_hf.frac_occ(stdsymb, l)
             if coreshl[l] > 0:
                 occ.extend([0]*coreshl[l]*(2*l+1))
             if ndocc > coreshl[l]:
                 occ.extend([2]*(ndocc-coreshl[l])*(2*l+1))
-            if nfrac > 1e-15:
-                occ.extend([nfrac]*(2*l+1))
+            if frac > 1e-15:
+                occ.extend([frac]*(2*l+1))
                 ndocc += 1
             if ndocc > 0:
-                basis_new.append([l] + [b[:ndocc+1] for b in basis_add[l][1:]])
+                basis_ano.append([l] + [b[:ndocc+1] for b in basis_add[l][1:]])
 
         if nelec_ecp > 0:
             occ4ecp = []
             basis4ecp = []
+            nelec_valence_left = gto.mole.charge(stdsymb) - nelec_ecp
             for l in range(4):
-                ndocc, nfrac = atom_hf.frac_occ(stdsymb, l)
+                if nelec_valence_left <= 0:
+                    break
+                ndocc, frac = atom_hf.frac_occ(stdsymb, l)
                 assert(ndocc >= coreshl[l])
-                ndocc -= coreshl[l]
-                occ4ecp.extend([2]*(ndocc*(2*l+1)))
-                if nfrac > 1e-15:
-                    occ4ecp.extend([nfrac]*(2*l+1))
-                    ndocc += 1
+
+                n_valenc_shell = ndocc - coreshl[l]
+                l_occ = [2] * (n_valenc_shell*(2*l+1))
+                if frac > 1e-15:
+                    l_occ.extend([frac] * (2*l+1))
+                    n_valenc_shell += 1
+
+                shell_found = 0
                 for bas in mol._basis[symb]:
-                    if ndocc <= 0:
+                    if shell_found >= n_valenc_shell:
                         break
                     if bas[0] == l:
-                        basis4ecp.append([l] + [b[:ndocc+1] for b in bas[1:]])
-                        ndocc -= len(bas[1]) - 1  # first column of bas[1] is exp
+                        off = n_valenc_shell - shell_found
+                        # b[:off+1] because the first column of bas[1] is exp
+                        basis4ecp.append([l] + [b[:off+1] for b in bas[1:]])
+                        shell_found += len(bas[1]) - 1
+
+                nelec_valence_left -= int(sum(l_occ[:shell_found*(2*l+1)]))
+                occ4ecp.extend(l_occ)
+
+            if nelec_valence_left > 0:
+                logger.debug(mol, 'Characters of %d valence electrons are '
+                             'not identified in the minao initial guess.\n'
+                             'Electron density of valence ANO for %s will '
+                             'be used.', nelec_valence_left, symb)
+                return occ, basis_ano
+
 # Compared to ANO valence basis, to check whether the ECP basis set has
 # reasonable AO-character contraction.  The ANO valence AO should have
 # significant overlap to ECP basis if the ECP basis has AO-character.
@@ -316,11 +338,14 @@ def init_guess_by_minao(mol):
             atm2 = gto.Mole()
             atom = [[symb, (0.,0.,0.)]]
             atm1._atm, atm1._bas, atm1._env = atm1.make_env(atom, {symb:basis4ecp}, [])
-            atm2._atm, atm2._bas, atm2._env = atm2.make_env(atom, {symb:basis_new}, [])
+            atm2._atm, atm2._bas, atm2._env = atm2.make_env(atom, {symb:basis_ano}, [])
             s12 = gto.intor_cross('int1e_ovlp', atm1, atm2)[:,numpy.array(occ)>0]
             if abs(numpy.linalg.det(s12)) > .1:
-                occ, basis_new = occ4ecp, basis4ecp
-        return occ, basis_new
+                occ, basis_ano = occ4ecp, basis4ecp
+            else:
+                logger.debug(mol, 'Density of valence part of ANO basis '
+                             'will be used as initial guess for %s', symb)
+        return occ, basis_ano
 
     atmlst = set([mol.atom_symbol(ia) for ia in range(mol.natm)])
 
@@ -748,7 +773,7 @@ def get_grad(mo_coeff, mo_occ, fock_ao):
     return g.ravel()
 
 
-def analyze(mf, verbose=logger.DEBUG, **kwargs):
+def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=True, **kwargs):
     '''Analyze the given SCF object:  print orbital energies, occupancies;
     print orbital coefficients; Mulliken population analysis; Diople moment.
     '''
@@ -765,14 +790,22 @@ def analyze(mf, verbose=logger.DEBUG, **kwargs):
 
     ovlp_ao = mf.get_ovlp()
     if verbose >= logger.DEBUG:
-        log.debug(' ** MO coefficients (expansion on meta-Lowdin AOs) **')
         label = mf.mol.ao_labels()
-        orth_coeff = orth.orth_ao(mf.mol, 'meta_lowdin', s=ovlp_ao)
-        c = reduce(numpy.dot, (orth_coeff.T, ovlp_ao, mo_coeff))
+        if with_meta_lowdin:
+            log.debug(' ** MO coefficients (expansion on meta-Lowdin AOs) **')
+            orth_coeff = orth.orth_ao(mf.mol, 'meta_lowdin', s=ovlp_ao)
+            c = reduce(numpy.dot, (orth_coeff.T, ovlp_ao, mo_coeff))
+        else:
+            log.debug(' ** MO coefficients (expansion on AOs) **')
+            c = mo_coeff
         dump_mat.dump_rec(mf.stdout, c, label, start=1, **kwargs)
     dm = mf.make_rdm1(mo_coeff, mo_occ)
-    return (mf.mulliken_meta(mf.mol, dm, s=ovlp_ao, verbose=log),
-            mf.dip_moment(mf.mol, dm, verbose=log))
+    if with_meta_lowdin:
+        return (mf.mulliken_meta(mf.mol, dm, s=ovlp_ao, verbose=log),
+                mf.dip_moment(mf.mol, dm, verbose=log))
+    else:
+        return (mf.mulliken_pop(mf.mol, dm, s=ovlp_ao, verbose=log),
+                mf.dip_moment(mf.mol, dm, verbose=log))
 
 def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
     r'''Mulliken population analysis
@@ -1148,9 +1181,17 @@ class SCF(lib.StreamObject):
             self.opt = self.init_direct_scf(mol)
 
     def dump_flags(self):
+        if self.verbose < logger.INFO:
+            return self
+
         logger.info(self, '\n')
         logger.info(self, '******** %s flags ********', self.__class__)
-        logger.info(self, 'method = %s', self.__class__.__name__)
+        method = []
+        cls = self.__class__
+        while cls != SCF:
+            method.append(cls.__name__)
+            cls = cls.__base__
+        logger.info(self, 'method = %s', '-'.join(method))
         logger.info(self, 'initial guess = %s', self.init_guess)
         logger.info(self, 'damping factor = %g', self.damp)
         logger.info(self, 'level shift factor = %s', self.level_shift)
@@ -1380,9 +1421,9 @@ class SCF(lib.StreamObject):
             return vj - vk * .5
 
     @lib.with_doc(analyze.__doc__)
-    def analyze(self, verbose=None, **kwargs):
+    def analyze(self, verbose=None, with_meta_lowdin=True, **kwargs):
         if verbose is None: verbose = self.verbose
-        return analyze(self, verbose, **kwargs)
+        return analyze(self, verbose, with_meta_lowdin, **kwargs)
 
     @lib.with_doc(mulliken_pop.__doc__)
     def mulliken_pop(self, mol=None, dm=None, s=None, verbose=logger.DEBUG):
@@ -1422,15 +1463,17 @@ class SCF(lib.StreamObject):
         import pyscf.df.df_jk
         return pyscf.df.df_jk.density_fit(self, auxbasis, with_df)
 
+    def sfx2c1e(self):
+        import pyscf.x2c.sfx2c1e
+        return pyscf.x2c.sfx2c1e.sfx2c1e(self)
     def x2c1e(self):
-        import pyscf.scf.x2c
-        return pyscf.scf.x2c.sfx2c1e(self)
+        return self.sfx2c1e()
     def x2c(self):
         return self.x2c1e()
 
     def newton(self):
-        import pyscf.scf.newton_ah
-        return pyscf.scf.newton_ah.newton(self)
+        import pyscf.soscf.newton_ah
+        return pyscf.soscf.newton_ah.newton(self)
 
     def update(self, chkfile=None):
         '''Read attributes from the chkfile then replace the attributes of
@@ -1520,17 +1563,18 @@ class RHF(SCF):
 
 
 if __name__ == '__main__':
+    from pyscf import scf
     mol = gto.Mole()
     mol.verbose = 5
     mol.output = None
 
     mol.atom = [['He', (0, 0, 0)], ]
     mol.basis = 'ccpvdz'
-    mol.build()
+    mol.build(0, 0)
 
 ##############
 # SCF result
-    method = RHF(mol)
+    method = scf.RHF(mol).x2c().density_fit().newton()
     method.init_guess = '1e'
     energy = method.scf()
     print(energy)

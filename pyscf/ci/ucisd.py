@@ -17,37 +17,6 @@ from pyscf.cc import uccsd_rdm
 from pyscf.ci import cisd
 from pyscf.cc.ccsd import _unpack_4fold
 
-einsum = lib.einsum
-
-def kernel(myci, eris, ci0=None, max_cycle=50, tol=1e-8,
-           verbose=logger.INFO):
-    mol = myci.mol
-    diag = myci.make_diagonal(eris)
-    ehf = diag[0]
-    diag -= ehf
-
-    if ci0 is None:
-        ci0 = myci.get_init_guess(eris)[1]
-
-    def op(xs):
-        return [myci.contract(x, eris) for x in xs]
-
-    def precond(x, e, *args):
-        diagd = diag - (e-myci.level_shift)
-        diagd[abs(diagd)<1e-8] = 1e-8
-        return x / diagd
-
-    conv, ecisd, ci = lib.davidson1(op, ci0, precond, tol=tol,
-                                    max_cycle=max_cycle, max_space=myci.max_space,
-                                    lindep=myci.lindep, nroots=myci.nroots,
-                                    verbose=verbose)
-    if myci.nroots == 1:
-        conv = conv[0]
-        ecisd = ecisd[0]
-        ci = ci[0]
-    return conv, ecisd, ci
-
-
 def make_diagonal(myci, eris):
     nocca = eris.nocca
     noccb = eris.noccb
@@ -273,11 +242,11 @@ def contract(myci, civec, eris):
             OVvv = None
 
     #:t1  = einsum('ie,ae->ia', c1, fvv)
-    t1a += einsum('ie,ae->ia', c1a, fvva)
-    t1b += einsum('ie,ae->ia', c1b, fvvb)
+    t1a += lib.einsum('ie,ae->ia', c1a, fvva)
+    t1b += lib.einsum('ie,ae->ia', c1b, fvvb)
     #:t1 -= einsum('ma,mi->ia', c1, foo)
-    t1a -=einsum('ma,mi->ia', c1a, fooa)
-    t1b -=einsum('ma,mi->ia', c1b, foob)
+    t1a -= lib.einsum('ma,mi->ia', c1a, fooa)
+    t1b -= lib.einsum('ma,mi->ia', c1b, foob)
     #:t1 += einsum('imae,me->ia', c2, fov)
     t1a += numpy.einsum('imae,me->ia', c2aa, fova)
     t1a += numpy.einsum('imae,me->ia', c2ab, fovb)
@@ -374,6 +343,7 @@ def to_fcivec(cisdvec, nmo, nocc):
     from pyscf import fci
     from pyscf.ci.gcisd import t2strs
     norba, norbb = nmo
+    assert(norba == norbb)
     nocca, noccb = nocc
     nvira = norba - nocca
     nvirb = norbb - noccb
@@ -582,8 +552,7 @@ class UCISD(cisd.CISD):
     get_frozen_mask = uccsd.get_frozen_mask
 
     def get_init_guess(self, eris=None):
-        if eris is None:
-            eris = self.ao2mo(self.mo_coeff)
+        if eris is None: eris = self.ao2mo(self.mo_coeff)
         nocca = eris.nocca
         noccb = eris.noccb
         mo_ea = eris.focka.diagonal()
@@ -612,6 +581,10 @@ class UCISD(cisd.CISD):
         emp2 += numpy.einsum('iabj,ijab', eris_ovVO, t2ab)
         self.emp2 = emp2
         logger.info(self, 'Init t2, MP2 energy = %.15g', self.emp2)
+
+        if abs(emp2) < 1e-3 and (abs(t1a).sum()+abs(t1b).sum()) < 1e-3:
+            t1a = 1e-1 / eia_a
+            t1b = 1e-1 / eia_b
         return self.emp2, amplitudes_to_cisdvec(1, (t1a,t1b), (t2aa,t2ab,t2bb))
 
     contract = contract
@@ -666,125 +639,7 @@ def _cp(a):
 if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
-    from pyscf import fci
     from pyscf import ao2mo
-    numpy.random.seed(12)
-    nocc = 3
-    nvir = 5
-    nmo = nocc + nvir
-
-    c1a = numpy.random.random((nocc,nvir))
-    c1b = numpy.random.random((nocc,nvir))
-    c2aa = numpy.random.random((nocc,nocc,nvir,nvir))
-    c2bb = numpy.random.random((nocc,nocc,nvir,nvir))
-    c2ab = numpy.random.random((nocc,nocc,nvir,nvir))
-    c1 = (c1a, c1b)
-    c2 = (c2aa, c2ab, c2bb)
-    cisdvec = amplitudes_to_cisdvec(1., c1, c2)
-    fcivec = to_fcivec(cisdvec, (nmo,nmo), (nocc,nocc))
-    cisdvec1 = from_fcivec(fcivec, (nmo,nmo), (nocc,nocc))
-    print(abs(cisdvec-cisdvec1).sum())
-    ci1 = to_fcivec(cisdvec1, (nmo,nmo), (nocc,nocc))
-    print(abs(fcivec-ci1).sum())
-
-    mol = gto.Mole()
-    mol.verbose = 0
-    mol.atom = [
-        ['H', ( 1.,-1.    , 0.   )],
-        ['H', ( 0.,-1.    ,-1.   )],
-        ['H', ( 1.,-0.5   , 0.   )],
-        ['H', ( 0.,-1.    , 1.   )],
-    ]
-    mol.charge = -2
-    mol.spin = 2
-    mol.basis = '3-21g'
-    mol.build()
-    mf = scf.UHF(mol).run(conv_tol=1e-14)
-    ehf0 = mf.e_tot - mol.energy_nuc()
-    myci = CISD(mf)
-    numpy.random.seed(10)
-    nao = mol.nao_nr()
-    mo = numpy.random.random((2,nao,nao))
-
-    eris = myci.ao2mo(mo)
-    print(lib.finger(myci.make_diagonal(eris)) - -838.45507742639279)
-
-    numpy.random.seed(12)
-    nocca, noccb = mol.nelec
-    nmo = mf.mo_occ[0].size
-    nvira = nmo - nocca
-    nvirb = nmo - noccb
-    c1a  = .1 * numpy.random.random((nocca,nvira))
-    c1b  = .1 * numpy.random.random((noccb,nvirb))
-    c2aa = .1 * numpy.random.random((nocca,nocca,nvira,nvira))
-    c2bb = .1 * numpy.random.random((noccb,noccb,nvirb,nvirb))
-    c2ab = .1 * numpy.random.random((nocca,noccb,nvira,nvirb))
-    cisdvec = amplitudes_to_cisdvec(1., (c1a, c1b), (c2aa, c2ab, c2bb))
-
-    hcisd0 = contract(myci, amplitudes_to_cisdvec(1., (c1a,c1b), (c2aa,c2ab,c2bb)), eris)
-#    from pyscf.ci import gcisd_slow
-#    res = cisdvec_to_amplitudes(hcisd0, nmo, nocc)
-#    res = (res[0],
-#           uccsd.spatial2spin(res[1], eris.orbspin),
-#           uccsd.spatial2spin(res[2], eris.orbspin))
-#    print(lib.finger(gcisd_slow.amplitudes_to_cisdvec(*res)) - 187.10206473716548)
-    print(lib.finger(hcisd0) - 466.56620234351681)
-    eris = myci.ao2mo(mf.mo_coeff)
-    hcisd0 = contract(myci, cisdvec, eris)
-    eri_aa = ao2mo.kernel(mf._eri, mf.mo_coeff[0])
-    eri_bb = ao2mo.kernel(mf._eri, mf.mo_coeff[1])
-    eri_ab = ao2mo.kernel(mf._eri, [mf.mo_coeff[0], mf.mo_coeff[0],
-                                    mf.mo_coeff[1], mf.mo_coeff[1]])
-    h1a = reduce(numpy.dot, (mf.mo_coeff[0].T, mf.get_hcore(), mf.mo_coeff[0]))
-    h1b = reduce(numpy.dot, (mf.mo_coeff[1].T, mf.get_hcore(), mf.mo_coeff[1]))
-    h2e = fci.direct_uhf.absorb_h1e((h1a,h1b), (eri_aa,eri_ab,eri_bb),
-                                    h1a.shape[0], mol.nelec, .5)
-    nmo = (mf.mo_coeff[0].shape[1],mf.mo_coeff[1].shape[1])
-    fcivec = to_fcivec(cisdvec, nmo, mol.nelec)
-    hci1 = fci.direct_uhf.contract_2e(h2e, fcivec, h1a.shape[0], mol.nelec)
-    hci1 -= ehf0 * fcivec
-    hcisd1 = from_fcivec(hci1, nmo, mol.nelec)
-    print(numpy.linalg.norm(hcisd1-hcisd0) / numpy.linalg.norm(hcisd0))
-
-    ecisd = myci.kernel(eris=eris)[0]
-    efci = fci.direct_uhf.kernel((h1a,h1b), (eri_aa,eri_ab,eri_bb),
-                                 h1a.shape[0], mol.nelec)[0]
-    print(ecisd, ecisd - -0.037067274690894436, '> E(fci)', efci-ehf0)
-
-    mol = gto.Mole()
-    mol.verbose = 0
-    mol.atom = [
-        ['H', ( 1.,-1.    , 0.   )],
-        ['H', ( 0.,-1.    ,-1.   )],
-        ['H', ( 1.,-0.5   , 0.   )],
-        ['H', ( 0.,-1.    , 1.   )],
-    ]
-    mol.charge = 2
-    mol.spin = 2
-    mol.basis = '6-31g'
-    mol.build()
-    mf = scf.UHF(mol).run(conv_tol=1e-14)
-    ehf0 = mf.e_tot - mol.energy_nuc()
-    myci = CISD(mf)
-    eris = myci.ao2mo()
-    ecisd = myci.kernel(eris=eris)[0]
-    eri_aa = ao2mo.kernel(mf._eri, mf.mo_coeff[0])
-    eri_bb = ao2mo.kernel(mf._eri, mf.mo_coeff[1])
-    eri_ab = ao2mo.kernel(mf._eri, [mf.mo_coeff[0], mf.mo_coeff[0],
-                                    mf.mo_coeff[1], mf.mo_coeff[1]])
-    h1a = reduce(numpy.dot, (mf.mo_coeff[0].T, mf.get_hcore(), mf.mo_coeff[0]))
-    h1b = reduce(numpy.dot, (mf.mo_coeff[1].T, mf.get_hcore(), mf.mo_coeff[1]))
-    efci, fcivec = fci.direct_uhf.kernel((h1a,h1b), (eri_aa,eri_ab,eri_bb),
-                                         h1a.shape[0], mol.nelec)
-    print(ecisd, '== E(fci)', efci-ehf0)
-    dm1ref, dm2ref = fci.direct_uhf.make_rdm12s(fcivec, h1a.shape[0], mol.nelec)
-    rdm1 = myci.make_rdm1(myci.ci, myci.get_nmo(), myci.get_nocc())
-    rdm2 = myci.make_rdm2(myci.ci, myci.get_nmo(), myci.get_nocc())
-    print('dm1a', abs(dm1ref[0] - rdm1[0]).max())
-    print('dm1b', abs(dm1ref[1] - rdm1[1]).max())
-    print('dm2aa', abs(dm2ref[0] - rdm2[0]).max())
-    print('dm2ab', abs(dm2ref[1] - rdm2[1]).max())
-    print('dm2bb', abs(dm2ref[2] - rdm2[2]).max())
 
     mol = gto.Mole()
     mol.verbose = 0

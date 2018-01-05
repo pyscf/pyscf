@@ -14,25 +14,24 @@ from pyscf.lib import logger
 from pyscf.scf import _vhf
 
 
-def grad_elec(grad_mf, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
-    mf = grad_mf._scf
-    mol = grad_mf.mol
+def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
+    mf = mf_grad._scf
+    mol = mf_grad.mol
     if mo_energy is None: mo_energy = mf.mo_energy
     if mo_occ is None:    mo_occ = mf.mo_occ
     if mo_coeff is None:  mo_coeff = mf.mo_coeff
-    log = logger.Logger(grad_mf.stdout, grad_mf.verbose)
+    log = logger.Logger(mf_grad.stdout, mf_grad.verbose)
 
-    h1 = grad_mf.get_hcore(mol)
-    s1 = grad_mf.get_ovlp(mol)
+    hcore_deriv = mf_grad.hcore_generator(mol)
+    s1 = mf_grad.get_ovlp(mol)
     dm0 = mf.make_rdm1(mo_coeff, mo_occ)
 
     t0 = (time.clock(), time.time())
     log.debug('Computing Gradients of NR-HF Coulomb repulsion')
-    vhf = grad_mf.get_veff(mol, dm0)
+    vhf = mf_grad.get_veff(mol, dm0)
     log.timer('gradients of 2e part', *t0)
 
-    f1 = h1 + vhf
-    dme0 = grad_mf.make_rdm1e(mo_energy, mo_coeff, mo_occ)
+    dme0 = mf_grad.make_rdm1e(mo_energy, mo_coeff, mo_occ)
 
     if atmlst is None:
         atmlst = range(mol.natm)
@@ -40,15 +39,20 @@ def grad_elec(grad_mf, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
     de = numpy.zeros((len(atmlst),3))
     for k, ia in enumerate(atmlst):
         shl0, shl1, p0, p1 = aoslices[ia]
-# h1, s1, vhf are \nabla <i|h|j>, the nuclear gradients = -\nabla
-        vrinv = grad_mf._grad_rinv(mol, ia)
-# nabla was applied on bra in f1, *2 for the contributions of nabla|ket>
-        de[k] += numpy.einsum('xij,ij->x', f1[:,p0:p1], dm0[p0:p1]) * 2
-        de[k] += numpy.einsum('xij,ij->x', vrinv, dm0) * 2
+        h1ao = hcore_deriv(ia)
+        de[k] += numpy.einsum('xij,ij->x', h1ao, dm0)
+# nabla was applied on bra in vhf, *2 for the contributions of nabla|ket>
+        de[k] += numpy.einsum('xij,ij->x', vhf[:,p0:p1], dm0[p0:p1]) * 2
         de[k] -= numpy.einsum('xij,ij->x', s1[:,p0:p1], dme0[p0:p1]) * 2
+        if mf_grad.grid_response: # Only effective in DFT gradients
+            de[k] += vhf.exc1_grid[ia]
     if log.verbose >= logger.DEBUG:
         log.debug('gradients of electronic part')
         _write(log, mol, de, atmlst)
+        if mf_grad.grid_response:
+            log.debug('grids response contributions')
+            _write(log, mol, vhf.exc1_grid[atmlst], atmlst)
+            log.debug1('sum(de) %s', vhf.exc1_grid.sum(axis=0))
     return de
 
 def _write(dev, mol, de, atmlst):
@@ -75,10 +79,11 @@ def grad_nuc(mol, atmlst=None):
 
 
 def get_hcore(mol):
+    '''Part of the nuclear gradients of core Hamiltonian'''
     h =(mol.intor('int1e_ipkin', comp=3)
       + mol.intor('int1e_ipnuc', comp=3))
     if mol.has_ecp():
-        raise NotImplementedError("gradients for ECP")
+        h += mol.intor('ECPscalar_ipnuc', comp=3)
     return -h
 
 def get_ovlp(mol):
@@ -108,7 +113,7 @@ def make_rdm1e(mo_energy, mo_coeff, mo_occ):
     return numpy.dot(mo0e, mo0.T.conj())
 
 
-def as_scanner(grad_mf):
+def as_scanner(mf_grad):
     '''Generating a nuclear gradients scanner/solver (for geometry optimizer).
 
     The returned solver is a function. This function requires one argument
@@ -130,8 +135,8 @@ def as_scanner(grad_mf):
         >>> e_tot, grad = hf_scanner(gto.M(atom='H 0 0 0; F 0 0 1.1'))
         >>> e_tot, grad = hf_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
     '''
-    logger.info(grad_mf, 'Create scanner for %s', grad_mf.__class__)
-    class SCF_GradScanner(grad_mf.__class__, lib.GradScanner):
+    logger.info(mf_grad, 'Create scanner for %s', mf_grad.__class__)
+    class SCF_GradScanner(mf_grad.__class__, lib.GradScanner):
         def __init__(self, g):
             self.__dict__.update(g.__dict__)
             self._scf = g._scf.as_scanner()
@@ -144,7 +149,7 @@ def as_scanner(grad_mf):
         @property
         def converged(self):
             return self._scf.converged
-    return SCF_GradScanner(grad_mf)
+    return SCF_GradScanner(mf_grad)
 
 
 class Gradients(lib.StreamObject):
@@ -156,6 +161,9 @@ class Gradients(lib.StreamObject):
         self._scf = scf_method
         self.chkfile = scf_method.chkfile
         self.max_memory = self.mol.max_memory
+# This parameter has no effects for HF gradients. Add this attribute so that
+# the kernel function can be reused in the DFT gradients code.
+        self.grid_response = False
 
         self.atmlst = range(self.mol.natm)
         self.de = numpy.zeros((0,3))
@@ -176,6 +184,26 @@ class Gradients(lib.StreamObject):
     def get_hcore(self, mol=None):
         if mol is None: mol = self.mol
         return get_hcore(mol)
+
+    def hcore_generator(self, mol=None):
+        if mol is None: mol = self.mol
+        with_x2c = getattr(self._scf, 'with_x2c', None)
+        if with_x2c:
+            hcore_deriv = with_x2c.hcore_deriv_generator(deriv=1)
+        else:
+            with_ecp = mol.has_ecp()
+            aoslices = mol.aoslice_by_atom()
+            h1 = self.get_hcore(mol)
+            def hcore_deriv(atm_id):
+                shl0, shl1, p0, p1 = aoslices[atm_id]
+                with mol.with_rinv_as_nucleus(atm_id):
+                    vrinv = mol.intor('int1e_iprinv', comp=3) # <\nabla|1/r|>
+                    if with_ecp:
+                        vrinv += mol.intor('ECPscalar_iprinv', comp=3)
+                    vrinv *= -mol.atom_charge(atm_id)
+                vrinv[:,p0:p1] += h1[:,p0:p1]
+                return vrinv + vrinv.transpose(0,2,1)
+        return hcore_deriv
 
     def get_ovlp(self, mol=None):
         if mol is None: mol = self.mol
@@ -215,11 +243,6 @@ class Gradients(lib.StreamObject):
         if mo_coeff is None: mo_coeff = self._scf.mo_coeff
         if mo_occ is None: mo_occ = self._scf.mo_occ
         return make_rdm1e(mo_energy, mo_coeff, mo_occ)
-
-    def _grad_rinv(self, mol, ia):
-        r''' for given atom, <|\nabla r^{-1}|> '''
-        mol.set_rinv_origin(mol.atom_coord(ia))
-        return -mol.atom_charge(ia) * mol.intor('int1e_iprinv', comp=3)
 
     grad_elec = grad_elec
 
@@ -288,3 +311,12 @@ if __name__ == '__main__':
 #[[ 0   0               -2.41134256e-02]
 # [ 0   4.39690522e-03   1.20567128e-02]
 # [ 0  -4.39690522e-03   1.20567128e-02]]
+
+    rhf = scf.RHF(h2o).x2c()
+    rhf.conv_tol = 1e-14
+    e0 = rhf.scf()
+    g = Gradients(rhf)
+    print(g.grad())
+#[[ 0   0               -2.40286232e-02]
+# [ 0   4.27908498e-03   1.20143116e-02]
+# [ 0  -4.27908498e-03   1.20143116e-02]]
