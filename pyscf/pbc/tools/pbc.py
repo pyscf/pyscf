@@ -406,7 +406,7 @@ def get_kconserv(cell, kpts):
                 found = 0
                 kvMLK = kvK - kvL + kvM
                 kvN = kvMLK
-                for ishift in xrange(len(xyz)):
+                for ishift in range(len(xyz)):
                     kvN = kvMLK + np.dot(xyz[ishift],kvecs)
                     finder = np.where(np.logical_and(kpts < kvN + 1.e-12,
                                                      kpts > kvN - 1.e-12).sum(axis=1)==3)
@@ -462,7 +462,7 @@ def get_kconserv3(cell, kpts, kijkab):
 
         found = 0
         kvNs = kvec + kshift
-        for ishift in xrange(len(xyz)):
+        for ishift in range(len(xyz)):
             kvN = kvNs[ishift]
             finder = np.where(np.logical_and(kpts < kvN + 1.e-12, kpts > kvN - 1.e-12).sum(axis=1)==3)
             # The k-point kvN is the one that conserves momentum
@@ -472,8 +472,8 @@ def get_kconserv3(cell, kpts, kijkab):
                 break
 
         if found == 0:
-            print "** ERROR: Problem in get_kconserv3. Quitting."
-            print kijkab
+            print("** ERROR: Problem in get_kconserv3. Quitting.")
+            print(kijkab)
             sys.exit()
     return out_array
 
