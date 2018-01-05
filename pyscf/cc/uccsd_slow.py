@@ -841,7 +841,7 @@ if __name__ == '__main__':
     print(e[0] - 0.16737886338859731)
     print(e[2] - 0.24027613852009164)
     print(e[4] - 0.51006797826488071)
-    print "e=", e
+    print("e=", e)
 
     e,v = mycc.eeccsd(nroots=4)
     print(e[0] - 0.2757159395886167)

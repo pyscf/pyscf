@@ -346,8 +346,8 @@ if __name__ == '__main__':
     h = Hessian(mf)
     e2 = h.kernel().transpose(0,2,1,3).reshape(n3,n3)
     e2ref = rhf_o0.Hessian(mf).kernel().transpose(0,2,1,3).reshape(n3,n3)
-    print numpy.linalg.norm(e2-e2ref)
-    print numpy.allclose(e2,e2ref)
+    print(numpy.linalg.norm(e2-e2ref))
+    print(numpy.allclose(e2,e2ref))
 
 #    def grad1(coord, ptr, x, inc):
 #        coord = coord.copy()
@@ -366,7 +366,7 @@ if __name__ == '__main__':
 #        e2ref.append(grad1(coord, ptr, (0,0,1), .5e-4))
 #    e2ref = numpy.asarray(e2ref).reshape(n3,n3)
 #    numpy.set_printoptions(2,linewidth=100)
-#    print numpy.linalg.norm(e2-e2ref)
-#    print numpy.allclose(e2,e2ref,atol=1e-6)
+#    print(numpy.linalg.norm(e2-e2ref))
+#    print(numpy.allclose(e2,e2ref,atol=1e-6))
 #    #for i in range(n3):
-#    #    print e2ref[i]-e2[i], abs(e2ref[i]-e2[i]).max()
+#    #    print(e2ref[i]-e2[i], abs(e2ref[i]-e2[i]).max())

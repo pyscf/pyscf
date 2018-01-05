@@ -992,8 +992,8 @@ def Wvvvv(cc,t1,t2,eris,fint=None):
     vvvv_tmp_size = BLKSIZE + (nvir,nvir,nvir,nvir)
     vvvv_tmp = np.empty(vvvv_tmp_size,dtype=t2.dtype)
 
-    print "vvvv blksize"
-    print BLKSIZE
+    print("vvvv blksize")
+    print(BLKSIZE)
 
     good2go = True
     while(good2go):
@@ -1276,7 +1276,7 @@ def Wovoo(cc,t1,t2,eris,fint=None):
     nkpts_blksize2 = min(max(int(np.floor(mem/(pre*nkpts_blksize))),1),nkpts)
     nkpts_blksize2 = 1
     BLKSIZE = (nkpts_blksize2,nkpts_blksize,nkpts,)
-    print BLKSIZE
+    print(BLKSIZE)
     loader = mpi_load_balancer.load_balancer(BLKSIZE=BLKSIZE)
     loader.set_ranges((range(nkpts),range(nkpts),range(nkpts),))
     # Adaptive blocking ends here 

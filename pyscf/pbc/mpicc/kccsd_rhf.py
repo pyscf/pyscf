@@ -44,7 +44,7 @@ def read_amplitudes(t1_shape, t2_shape, t1=None, t2=None, filename="t_amplitudes
             t1 = np.empty(t1_shape)
         if t2 is None:
             t2 = np.empty(t2_shape)
-        print "reading t amplitudes from file"
+        print("reading t amplitudes from file")
         feri = h5py.File(filename, 'r', driver='mpio', comm=MPI.COMM_WORLD)
         saved_t1 = feri['t1']
         saved_t2 = feri['t2']
@@ -66,7 +66,7 @@ def read_amplitudes(t1_shape, t2_shape, t1=None, t2=None, filename="t_amplitudes
 def write_amplitudes(t1, t2, filename="t_amplitudes.hdf5"):
     task_list = generate_max_task_list(t2.shape)
     if rank == 0:
-        print "writing t amplitudes to file"
+        print("writing t amplitudes to file")
         feri = h5py.File(filename, 'w')
         ds_type = t2.dtype
         out_t1  = feri.create_dataset('t1', t1.shape, dtype=ds_type)
@@ -86,9 +86,9 @@ def write_amplitudes(t1, t2, filename="t_amplitudes.hdf5"):
 def read_eom_amplitudes(vec_shape, filename="reom_amplitudes.hdf5", vec=None):
     task_list = generate_max_task_list(vec_shape)
     read_success = False
-    print "attempting to read in eom amplitudes from file ", filename
+    print("attempting to read in eom amplitudes from file ", filename)
     if os.path.isfile(filename):
-        print "reading eom amplitudes from file. shape=", vec_shape
+        print("reading eom amplitudes from file. shape=", vec_shape)
         feri = h5py.File(filename, 'r', driver='mpio', comm=MPI.COMM_WORLD)
         saved_v = feri['v']
         if vec is None:
@@ -107,7 +107,7 @@ def read_eom_amplitudes(vec_shape, filename="reom_amplitudes.hdf5", vec=None):
 def write_eom_amplitudes(vec, filename="reom_amplitudes.hdf5"):
     task_list = generate_max_task_list(vec.shape)
     if rank == 0:
-        print "writing eom amplitudes to file"
+        print("writing eom amplitudes to file")
         feri = h5py.File(filename, 'w')
         ds_type = vec.dtype
         out_v  = feri.create_dataset('v', vec.shape, dtype=ds_type)
@@ -321,7 +321,7 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     Lvv = imdk.Lvv(cc,t1,t2,eris)
 
     if rank == 0:
-        print "done making intermediates..."
+        print("done making intermediates...")
     # Move energy terms to the other side
     Foo -= foo
     Fvv -= fvv
@@ -331,12 +331,12 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     kconserv = cc.kconserv
 
     if rank == 0:
-        print "t1 equation"
+        print("t1 equation")
     # T1 equation
     t1new = update_t1(cc,t1,t2,eris,[Foo,Fvv,Fov,Loo,Lvv])
 
     if rank == 0:
-        print "t2 equation"
+        print("t2 equation")
     # T2 equation
     #t2new = numpy.array(eris.oovv, copy=True).conj()
     #t2new = numpy.zeros((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir),dtype=ds_type)
@@ -447,7 +447,7 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     pre = 1.*nvir*nvir*nvir*nvir*nkpts*16
     nkpts_blksize = min(max(int(numpy.floor(mem/pre)),1),nkpts)
     if rank == 0:
-        print "vvvv blocksize = ", nkpts_blksize
+        print("vvvv blocksize = ", nkpts_blksize)
     loader = mpi_load_balancer.load_balancer(BLKSIZE=(nkpts,1,nkpts_blksize,))
     loader.set_ranges((range(nkpts),range(nkpts),range(nkpts),))
 
@@ -2753,7 +2753,7 @@ class _ERIS:
                             new_oovv[kp,kq,kr] = self.oovv[kp,kq,kr].copy()
                 self.oovv = new_oovv
 
-                #print "lower triangular oovv"
+                #print("lower triangular oovv")
                 #self.triu_oovv = numpy.empty( ((nkpts*(nkpts+1))/2,nkpts,nocc,nocc,nvir,nvir), dtype=mo_coeff.dtype)
                 #triu_indices = [list(x) for x in numpy.triu_indices(nkpts)]
                 #self.triu_oovv = self.oovv[triu_indices]

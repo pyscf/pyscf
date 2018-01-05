@@ -493,10 +493,10 @@ class _ERIS:
                                         rspq = eri[kr,ks,kp,r,s,p,q]
                                         diff = numpy.linalg.norm(pqrs - rspq).real
                                         if diff > 1e-5:
-                                            print "** Warning: ERI diff at ",
-                                            print "kp,kq,kr,ks,p,q,r,s =", kp, kq, kr, ks, p, q, r, s
+                                            print("** Warning: ERI diff at "
+                                                  "kp,kq,kr,ks,p,q,r,s =", kp, kq, kr, ks, p, q, r, s)
                                         maxdiff = max(maxdiff,diff)
-            print "Max difference in (pq|rs) - (rs|pq) = %.15g" % maxdiff
+            print("Max difference in (pq|rs) - (rs|pq) = %.15g" % maxdiff)
             #print "ERI ="
             #print eri
 
@@ -540,9 +540,9 @@ def check_antisymm_12( cc, kpts, integrals ):
                                 pqrs = integrals[kp,kq,kr,p,q,r,s]
                                 qprs = integrals[kq,kp,kr,q,p,r,s]
                                 cdiff = numpy.linalg.norm(pqrs+qprs).real
-                                print "AS diff = %.15g" % cdiff, pqrs, qprs, kp, kq, kr, ks, p, q, r, s
+                                print("AS diff = %.15g" % cdiff, pqrs, qprs, kp, kq, kr, ks, p, q, r, s)
                                 diff = max(diff,cdiff)
-    print "antisymmetrization : max diff = %.15g" % diff
+    print("antisymmetrization : max diff = %.15g" % diff)
 
 def check_antisymm_34( cc, kpts, integrals ):
     kconserv = tools.get_kconserv(cc._scf.cell,cc.kpts)
@@ -559,7 +559,7 @@ def check_antisymm_34( cc, kpts, integrals ):
                                 pqrs = integrals[kp,kq,kr,p,q,r,s]
                                 pqsr = integrals[kp,kq,ks,p,q,s,r]
                                 cdiff = numpy.linalg.norm(pqrs+pqsr).real
-                                print "AS diff = %.15g" % cdiff, pqrs, pqsr, kp, kq, kr, ks, p, q, r, s
+                                print("AS diff = %.15g" % cdiff, pqrs, pqsr, kp, kq, kr, ks, p, q, r, s)
                                 diff = max(diff,cdiff)
-    print "antisymmetrization : max diff = %.15g" % diff
+    print("antisymmetrization : max diff = %.15g" % diff)
 

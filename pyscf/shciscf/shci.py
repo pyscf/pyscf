@@ -549,12 +549,12 @@ def writeSHCIConfFile( SHCI, nelec, Restart ):
                    f.write('%i '%(i*2+1))
                    nbeta -= 1
              if (nalpha != 0):
-                print "number of irreps %s in active space = %d"%(k, v[0] - nalpha)
-                print "number of irreps %s alpha electrons = %d"%(k, v[0])
+                print("number of irreps %s in active space = %d"%(k, v[0] - nalpha))
+                print("number of irreps %s alpha electrons = %d"%(k, v[0]))
                 exit(1)
              if (nbeta != 0):
-                print "number of irreps %s in active space = %d"%(k, v[1] - nbeta)
-                print "number of irreps %s beta  electrons = %d"%(k, v[1])
+                print("number of irreps %s in active space = %d"%(k, v[1] - nbeta))
+                print("number of irreps %s beta  electrons = %d"%(k, v[1]))
                 exit(1)
     f.write('\nend\n')
     f.write( 'nroots %r\n' % SHCI.nroots )
@@ -625,7 +625,7 @@ def D2htoDinfh(SHCI, norb, nelec):
             orbsym[i] = 2
       else:
          if (i == norb-1):
-            print "the orbitals dont have dinfh symmetry"
+            print("the orbitals dont have dinfh symmetry")
             exit(0)
          l = int(symbol[1])
          orbsym[i], orbsym[i+1] = 2*l+3, -(2*l+3)
@@ -961,7 +961,7 @@ def writeSOCIntegrals(mc, ncasorbs=None, rdm1=None, pictureChange1e="bp", pictur
        elif (pictureChange2e == "none"):
           hso1e *= 0.0
        else:
-          print pictureChane2e, "not a valid option"
+          print(pictureChane2e, "not a valid option")
           exit(0)
 
        #MF 1 electron term
@@ -984,7 +984,7 @@ def writeSOCIntegrals(mc, ncasorbs=None, rdm1=None, pictureChange1e="bp", pictur
                 if ( abs(h1e_2c[2*i, 2*j].imag) > 1.e-8) :
                    hso1e[2][i,j] -= h1e_2c[2*i, 2*j].imag*2.
        else:
-          print pictureChane1e, "not a valid option"
+          print(pictureChane1e, "not a valid option")
           exit(0)
 
        h1ao = numpy.zeros((3, nc, nc))

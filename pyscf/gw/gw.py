@@ -29,10 +29,10 @@ def kernel(gw, so_energy, so_coeff, verbose=logger.NOTE):
         egw : (nso/2,) ndarray
             The GW-corrected spatial orbital energies.
     '''
-    print "# --- Performing RPA calculation ...",
+    print("# --- Performing RPA calculation ...",)
     e_rpa, t_rpa = rpa(gw, method=gw.screening)
-    print "done."
-    print "# --- Calculating GW QP corrections ...",
+    print("done.")
+    print("# --- Calculating GW QP corrections ...",)
     egw = np.zeros(gw.nso/2)
     for p in range(0,gw.nso,2): 
         def quasiparticle(omega):
@@ -42,10 +42,10 @@ def kernel(gw, so_energy, so_coeff, verbose=logger.NOTE):
         try:
             egw[p/2] = newton(quasiparticle, gw.e_mf[p], tol=1e-6, maxiter=100)
         except RuntimeError:
-            print "Newton-Raphson unconverged, setting GW eval to MF eval."
+            print("Newton-Raphson unconverged, setting GW eval to MF eval.")
             egw[p/2] = gw.e_mf[p]
-        print egw[p/2]
-    print "done."
+        print(egw[p/2])
+    print("done.")
 
     return egw
 
@@ -203,7 +203,7 @@ def eig_asymm(h):
     if np.allclose(e.imag, 0*e.imag):
         e = np.real(e)
     else:
-        print "WARNING: Eigenvalues are complex, will be returned as such."
+        print("WARNING: Eigenvalues are complex, will be returned as such.")
 
     idx = e.argsort()
     e = e[idx]
@@ -253,11 +253,11 @@ class GW(object):
             eri[::2,1::2] = eri[1::2,::2] = eri[:,:,::2,1::2] = eri[:,:,1::2,::2] = 0
             # Integrals are in "chemist's notation"
             # eri[i,j,k,l] = (ij|kl) = \int i(1) j(1) 1/r12 k(r2) l(r2)
-            print "Imag part of ERIs =", np.linalg.norm(eri.imag)
+            print("Imag part of ERIs =", np.linalg.norm(eri.imag))
             self.eri = eri.real
         else:
             # ROHF or UHF, these are already spin-orbitals
-            print "\n*** Only supporting restricted calculations right now! ***\n"
+            print("\n*** Only supporting restricted calculations right now! ***\n")
             raise NotImplementedError
             nso = len(mf.mo_energy)
             self.nso = nso
@@ -268,7 +268,7 @@ class GW(object):
                           compact=False).reshape(nso,nso,nso,nso)
             self.eri = eri
 
-        print "There are %d spin-orbitals"%(self.nso)
+        print("There are %d spin-orbitals"%(self.nso))
 
         self.screening = screening
         self.eta = eta
@@ -319,8 +319,8 @@ if __name__ == '__main__':
     egw = gw.kernel()
 
     for emf, eqp in zip(mf.mo_energy, egw):
-        print "%0.6f %0.6f"%(emf, eqp)
+        print("%0.6f %0.6f"%(emf, eqp))
 
     nocc = mol.nelectron//2
     ehomo = egw[nocc-1] 
-    print "GW -IP = GW HOMO =", ehomo, "au =", ehomo*27.211, "eV"
+    print("GW -IP = GW HOMO =", ehomo, "au =", ehomo*27.211, "eV")

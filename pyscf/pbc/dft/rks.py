@@ -150,4 +150,4 @@ if __name__ == '__main__':
     cell.output = '/dev/null'
     cell.build()
     mf = RKS(cell)
-    print mf.kernel()
+    print(mf.kernel())

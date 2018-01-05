@@ -16,7 +16,7 @@ class load(object):
 
     Usage:
         with load(erifile) as eri:
-            print eri.shape
+            print(eri.shape)
     '''
     def __init__(self, eri, dataname='eri_mo'):
         self.eri = eri

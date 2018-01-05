@@ -563,7 +563,8 @@ class RCCSD(ccsd.CCSD):
 
             deltaE = 0.5*einsum('ijkab,ijkab,ijkab',lijkab,rijkab,_eijkab)
             deltaE = deltaE.real
-            print "Exc. energy, delta energy = %16.12f, %16.12f" % (_eval+deltaE,deltaE)
+            print("Exc. energy, delta energy = %16.12f, %16.12f" %
+                  (_eval+deltaE,deltaE))
         return deltaE
 
     def eaccsd(self, nroots=1, left=False, koopmans=False, guess=None, partition=None):
@@ -860,7 +861,8 @@ class RCCSD(ccsd.CCSD):
                     + 1.*lijabc.transpose(0,1,4,2,3)
             deltaE = 0.5*einsum('ijabc,ijabc,ijabc',lijabc,rijabc,_eijabc)
             deltaE = deltaE.real
-            print "Exc. energy, delta energy = %16.12f, %16.12f" % (_eval+deltaE,deltaE)
+            print("Exc. energy, delta energy = %16.12f, %16.12f" %
+                  (_eval+deltaE,deltaE))
         return deltaE
 
 
@@ -1165,32 +1167,32 @@ if __name__ == '__main__':
     print(ecc - -0.2133432712431435)
 
     part = None
-    print "IP energies... (right eigenvector)"
+    print("IP energies... (right eigenvector)")
     e,v = mycc.ipccsd(nroots=3)
-    print e
+    print(e)
     print(e[0] - 0.4335604332073799)
     print(e[1] - 0.5187659896045407)
     print(e[2] - 0.6782876002229172)
 
-    print "IP energies... (left eigenvector)"
+    print("IP energies... (left eigenvector)")
     le,lv = mycc.ipccsd(nroots=3,left=True)
-    print le
+    print(le)
     print(le[0] - 0.4335604332073799)
     print(le[1] - 0.5187659896045407)
     print(le[2] - 0.6782876002229172)
 
     mycc.ipccsd_star(e,v,lv)
 
-    print "EA energies... (right eigenvector)"
+    print("EA energies... (right eigenvector)")
     e,v = mycc.eaccsd(nroots=3)
-    print e
+    print(e)
     print(e[0] - 0.16737886338859731)
     print(e[1] - 0.24027613852009164)
     print(e[2] - 0.51006797826488071)
 
-    print "EA energies... (left eigenvector)"
+    print("EA energies... (left eigenvector)")
     e,lv = mycc.eaccsd(nroots=3,left=True)
-    print e
+    print(e)
     print(e[0] - 0.16737886338859731)
     print(e[1] - 0.24027613852009164)
     print(e[2] - 0.51006797826488071)

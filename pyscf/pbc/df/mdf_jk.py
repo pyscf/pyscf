@@ -98,7 +98,7 @@ if __name__ == '__main__':
     cell.verbose = 0
     cell.build(0,0)
     cell.verbose = 5
-    #print cell.nimgs
+    #print(cell.nimgs)
     #cell.nimgs = [4,4,4]
 
     mf = pscf.RHF(cell)
