@@ -54,7 +54,7 @@ class load(ao2mo.load):
     manager:
 
     with load(cderifile) as eri:
-        print eri.shape
+        print(eri.shape)
     '''
     def __init__(self, eri, dataname='j3c'):
         ao2mo.load.__init__(self, eri, dataname)

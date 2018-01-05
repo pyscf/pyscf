@@ -73,5 +73,5 @@ if __name__ == '__main__':
                ],
         basis = 'ccpvdz', spin=2, charge=2)
     mf = scf.DHF(mol).run()
-    print GTensor(mf).kernel((0,0,0))
-    print GTensor(mf).kernel(mb='RMB')
+    print(GTensor(mf).kernel((0,0,0)))
+    print(GTensor(mf).kernel(mb='RMB'))
