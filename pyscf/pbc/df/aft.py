@@ -64,7 +64,7 @@ def get_nuc(mydf, kpts=None):
         kpts_lst = numpy.reshape(kpts, (-1,3))
 
     log = logger.Logger(mydf.stdout, mydf.verbose)
-    t1 = (time.clock(), time.time())
+    t0 = t1 = (time.clock(), time.time())
 
     mesh = numpy.asarray(mydf.mesh)
     nkpts = len(kpts_lst)
@@ -101,7 +101,7 @@ def get_nuc(mydf, kpts=None):
 
         # PP-loc part1 is handled by fakenuc in _int_nuc_vloc
         vj = lib.asarray(mydf._int_nuc_vloc(nuccell, kpts_lst))
-        t1 = log.timer_debug1('vnuc pass1: analytic int', *t1)
+        t0 = t1 = log.timer_debug1('vnuc pass1: analytic int', *t0)
 
         charge = -cell.atom_charges()
         coulG = tools.get_coulG(cell, kpt_allow, mesh=mesh, Gv=Gv)
@@ -120,7 +120,8 @@ def get_nuc(mydf, kpts=None):
                 vj[k] += numpy.einsum('k,kx->x', vG[p0:p1].imag, aoao.imag)
             else:
                 vj[k] += numpy.einsum('k,kx->x', vG[p0:p1].conj(), aoao)
-    t1 = log.timer_debug1('contracting Vnuc', *t1)
+        t1 = log.timer_debug1('contracting Vnuc [%s:%s]'%(p0, p1), *t1)
+    log.timer_debug1('contracting Vnuc', *t0)
 
     vj_kpts = []
     for k, kpt in enumerate(kpts_lst):
