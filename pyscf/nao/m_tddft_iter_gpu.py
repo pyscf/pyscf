@@ -66,10 +66,10 @@ class tddft_iter_gpu_c():
                 raise ValueError("GPU['device'] must be an integer, no multi GPU support at the moment.")
               
               self.norbs = norbs
-              self.nfermi = nfermi
+              self.nfermi = nfermi[0] # taking only the first spin, will need to be corrected
               self.nprod = nprod
-              self.vstart = vstart
-              self.nvirt = norbs-vstart
+              self.vstart = vstart[0]
+              self.nvirt = self.norbs-self.vstart
               
               self.block_size = np.array([32, 32], dtype=np.int32) # threads by block
               self.grid_size = np.array([0, 0], dtype=np.int32) # number of blocks
@@ -82,11 +82,15 @@ class tddft_iter_gpu_c():
                   else:
                       self.grid_size[i] = dimensions[i]/self.block_size[i] + 1
 
+              #print(X4.shape)
+              #print(ksn2e.shape)
+              #print(ksn2f.shape)
+              #print(self.nfermi, self.norbs, self.nprod, self.vstart, self.nvirt)
               libnao_gpu.init_tddft_iter_gpu(
-                          X4.ctypes.data_as(POINTER(c_float)), c_int(norbs),
-                          ksn2e.ctypes.data_as(POINTER(c_float)), 
-                          ksn2f.ctypes.data_as(POINTER(c_float)),
-                          c_int(nfermi), c_int(nprod), c_int(vstart))
+                          X4.ctypes.data_as(POINTER(c_float)), c_int(self.norbs),
+                          ksn2e[0, 0, :].ctypes.data_as(POINTER(c_float)), 
+                          ksn2f[0, 0, :].ctypes.data_as(POINTER(c_float)),
+                          c_int(self.nfermi), c_int(self.nprod), c_int(self.vstart))
 
         elif (isinstance(GPU, dict) or GPU == True) and not GPU_import:
             raise ValueError("GPU lib failed to initialize!")

@@ -59,21 +59,21 @@ def chi0_mv(self, v, comega=1j*0.0):
     nb2v = self.gemm(1.0, nm2v_re, self.xvrt[0])
     ab2v = self.gemm(1.0, self.xocc[0].T, nb2v).reshape(self.norbs*self.norbs)
 
-    #ssum = ab2v.sum()
-    #if math.isnan(ssum):
-      #print(__name__, 'ssum', ssum)
-      #print('self.xocc[0]', self.xocc[0].sum(), self.xocc[0].dtype, self.xocc[0].shape)
-      #print('nb2v.sum()', nb2v.sum(), nb2v.dtype, nb2v.shape)
-      #print('ab2v.sum()', ab2v.sum(), ab2v.dtype, ab2v.shape)
-      #print('comega ', comega)
-      #print('self.ksn2e')
-      #print(self.ksn2e)
-      #print('nm2v_re_bak.sum()', nm2v_re_bak.sum())
-      #print('nb2v_bak.sum()', nb2v_bak.sum())
-      #print('self.cc_da.sum()', self.cc_da.sum())      
-      #print('vext.sum()', vext.sum())
-      #print(v.shape, v.dtype)
-      #raise RuntimeError('ssum == np.nan')
+#    ssum = ab2v.sum()
+#    if math.isnan(ssum):
+#      print(__name__, 'ssum', ssum)
+#      print('self.xocc[0]', self.xocc[0].sum(), self.xocc[0].dtype, self.xocc[0].shape)
+#      print('nb2v.sum()', nb2v.sum(), nb2v.dtype, nb2v.shape)
+#      print('ab2v.sum()', ab2v.sum(), ab2v.dtype, ab2v.shape)
+#      print('comega ', comega)
+#      print('self.ksn2e')
+#      print(self.ksn2e)
+#      print('nm2v_re_bak.sum()', nm2v_re_bak.sum())
+#      print('nb2v_bak.sum()', nb2v_bak.sum())
+#      print('self.cc_da.sum()', self.cc_da.sum())      
+#      print('vext.sum()', vext.sum())
+#      print(v.shape, v.dtype)
+#      raise RuntimeError('ssum == np.nan')
 
     vdp = csr_matvec(self.v_dab, ab2v)
     
@@ -147,6 +147,16 @@ def chi0_mv_gpu(self, v, comega=1j*0.0):
 
     vdp = csr_matvec(self.v_dab, sab)
     chi0_im = vdp*self.cc_da
+#    ssum_re = np.sum(abs(chi0_re))
+#    ssum_im = np.sum(abs(chi0_im))
+#    if math.isnan(ssum_re) or math.isnan(ssum_im):
+#      print(__name__)
+#      print('comega ', comega)
+#      print(v.shape, v.dtype)
+#      print("chi0 = ", ssum_re, ssum_im)
+#      print("sab = ", np.sum(abs(sab)))
+#      raise RuntimeError('ssum == np.nan')
+
 
     return chi0_re + 1.0j*chi0_im
 

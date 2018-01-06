@@ -304,6 +304,7 @@ extern "C" void calc_nb2v_from_sab(int reim)
     cublasSgemm(handle_cublas_imag, CUBLAS_OP_N, CUBLAS_OP_N, norbs, nfermi, norbs, &alpha, sab_d, norbs,
           X4_d, norbs, &beta, nb2v_d, norbs);
   }
+
 }
 
 extern "C" void get_nm2v_real()
