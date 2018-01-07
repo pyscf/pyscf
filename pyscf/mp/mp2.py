@@ -105,7 +105,6 @@ def _gamma1_intermediates(mp, t2=None, eris=None):
 
     dm1occ = numpy.zeros((nocc,nocc))
     dm1vir = numpy.zeros((nvir,nvir))
-    emp2 = 0
     for i in range(nocc):
         if t2 is None:
             gi = numpy.asarray(eris.ovov[i*nvir:(i+1)*nvir])
