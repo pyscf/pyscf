@@ -156,12 +156,12 @@ def cc_Wvvvv(t1,t2,eris,kconserv):
                     #Wabcd[ka,kb,kc,a] += -einsum('bkdc,k->bcd',eris.vovv[kb,ka,kd],t1[ka,:,a])
                     Wabcd[ka,kb,kc,a] += -einsum('k,kbcd->bcd',t1[ka,:,a],ovvv)
 
-            # Be careful about making this term only after all the others are created
-            for kb in range(ka+1):
-                for kc in range(nkpts):
-                    kd = kconserv[ka,kc,kb]
-                    for a in range(nvir):
-                        Wabcd[kb,ka,kd,a,:] = Wabcd[ka,kb,kc,:,a].transpose(0,2,1)
+        # Be careful about making this term only after all the others are created
+        for kb in range(ka+1):
+            for kc in range(nkpts):
+                kd = kconserv[ka,kc,kb]
+                for a in range(nvir):
+                    Wabcd[kb,ka,kd,a,:] = Wabcd[ka,kb,kc,:,a].transpose(0,2,1)
 
     return Wabcd
 
