@@ -650,6 +650,7 @@ class FCISolver(lib.StreamObject):
 
     @lib.with_doc(make_rdm1.__doc__)
     def make_rdm1(self, fcivec, norb, nelec, link_index=None):
+        nelec = _unpack_nelec(nelec, self.spin)
         return make_rdm1(fcivec, norb, nelec, link_index)
 
     @lib.with_doc(make_rdm12s.__doc__)
