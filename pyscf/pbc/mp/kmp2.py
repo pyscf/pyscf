@@ -13,7 +13,6 @@ from pyscf.lib import logger
 import pyscf.pbc.tools.pbc as tools
 from pyscf.pbc.cc.kccsd import get_moidx
 from pyscf.pbc.cc.kccsd_rhf import get_nocc, get_nmo
-from pyscf.pbc.cc.kpoint_helper import unique_pqr_list
 
 '''
 kpoint-adapted and spin-adapted MP2
@@ -74,7 +73,6 @@ class KMP2(lib.StreamObject):
         self.mo_energy = mf.mo_energy
         self.nkpts = len(self.kpts)
         self.kconserv = tools.get_kconserv(mf.cell, mf.kpts)
-        self.khelper = unique_pqr_list(mf.cell, mf.kpts)
         self.mo_energy = mf.mo_energy
         self.mo_coeff = mo_coeff
         self.mo_occ = mo_occ
@@ -120,13 +118,11 @@ class KMP2(lib.StreamObject):
 
 
 def _mem_usage(nkpts, nocc, nvir):
-    incore = nkpts**3*(nocc+nvir)**4
-    # Roughly, factor of two for intermediates and factor of two
-    # for safety (temp arrays, copying, etc)
-    incore *= 4
-    # TODO: Improve incore estimate and add outcore estimate
-    outcore = basic = incore
-    return incore*16/1e6, outcore*16/1e6, basic*16/1e6
+    basic = (nkpts**3*nocc**2*nvir**2*2)*16 / 1e6
+    # Roughly, factor of two for safety (t2 array, temp arrays, copying, etc)
+    basic *= 2
+    incore = outcore = basic
+    return incore, outcore, basic
 
 class _ERIS:
     def __init__(self, mp, mo_coeff=None, verbose=None):
@@ -167,9 +163,6 @@ class _ERIS:
         fao2mo = mp._scf.with_df.ao2mo
 
         kconserv = mp.kconserv
-        khelper = mp.khelper
-        unique_klist = khelper.get_uniqueList()
-        nUnique_klist = khelper.nUnique
 
         max_memory = max(2000, mp.max_memory*.9-mem_now)
         log = logger.Logger(mp.stdout, mp.verbose)
@@ -181,29 +174,23 @@ class _ERIS:
         if (mp.mol.incore_anyway or
                 (mem_incore+mem_now < mp.max_memory)):
             log.debug('transform (ia|jb) incore')
-            eri = numpy.zeros((nkpts,nkpts,nkpts,nmo,nmo,nmo,nmo), dtype=dtype)
-
-            # Looping over unique list of k-vectors
-            for pqr in range(nUnique_klist):
-                kp, kq, kr = unique_klist[pqr]
-                ks = kconserv[kp,kq,kr]
-                eri_kpt = fao2mo((mo_coeff[kp],mo_coeff[kq],mo_coeff[kr],mo_coeff[ks]),
-                                 (mp.kpts[kp],mp.kpts[kq],mp.kpts[kr],mp.kpts[ks]), compact=False)
-                eri_kpt = eri_kpt.reshape(nmo,nmo,nmo,nmo)
-                eri[kp,kq,kr] = eri_kpt.copy()
+            self.oovv = numpy.zeros((nkpts,nkpts,nkpts,nocc,nvir,nocc,nvir), dtype=dtype)
 
             for kp in range(nkpts):
                 for kq in range(nkpts):
                     for kr in range(nkpts):
-                        ikp, ikq, ikr = khelper.get_irrVec(kp,kq,kr)
-                        irr_eri = eri[ikp,ikq,ikr]
-                        eri[kp,kq,kr] = khelper.transform_irr2full(irr_eri,kp,kq,kr)
+                        ks = kconserv[kp,kq,kr]
+                        orbo_p = mo_coeff[kp,:,:nocc]
+                        orbo_r = mo_coeff[kr,:,:nocc]
+                        orbv_q = mo_coeff[kq,:,nocc:]
+                        orbv_s = mo_coeff[ks,:,nocc:]
+                        buf_kpt = fao2mo((orbo_p,orbv_q,orbo_r,orbv_s),
+                                        (mp.kpts[kp],mp.kpts[kq],mp.kpts[kr],mp.kpts[ks]), 
+                                        compact=False)
+                        buf_kpt = buf_kpt.reshape(nocc,nvir,nocc,nvir).transpose(0,2,1,3) / nkpts
+                        self.oovv[kp,kr,kq,:,:,:,:] = buf_kpt.copy()
 
-            # <ij|kl> = (ik|jl)
-            eri = eri.transpose(0,2,1,3,5,4,6)
-
-            self.dtype = eri.dtype
-            self.oovv = eri[:,:,:,:nocc,:nocc,nocc:,nocc:].copy() / nkpts
+            self.dtype = buf_kpt.dtype
 
         log.timer('Integral transformation', *cput0)
 
