@@ -18,18 +18,18 @@ import pyscf.pbc
 pyscf.pbc.DEBUG = False
 
 
-def eval_ao(cell, coords, kpt=numpy.zeros(3), deriv=0, relativity=0, shl_slice=None,
+def eval_ao(cell, coords, kpt=numpy.zeros(3), deriv=0, relativity=0, shls_slice=None,
             non0tab=None, out=None, verbose=None):
     gamma_point = kpt is None or abs(kpt).sum() < 1e-9
     aoR = 0
     for L in cell.get_lattice_Ls():
         if gamma_point:
             aoR += pyscf.dft.numint.eval_ao(cell, coords-L, deriv,
-                                            shl_slice, non0tab, out, verbose)
+                                            shls_slice, non0tab, out, verbose)
         else:
             factor = numpy.exp(1j*numpy.dot(kpt,L))
             aoR += pyscf.dft.numint.eval_ao(cell, coords-L, deriv,
-                                            shl_slice, non0tab, out, verbose) * factor
+                                            shls_slice, non0tab, out, verbose) * factor
     return numpy.asarray(aoR)
 
 def finger(a):
@@ -71,12 +71,12 @@ class KnowValues(unittest.TestCase):
         grids.build()
 
         ni = numint._NumInt()
-        ao0 = eval_ao(cell, grids.coords)
+        ao10 = eval_ao(cell, grids.coords, deriv=1)
+        ao0 = ao10[0]
         ao1 = ni.eval_ao(cell, grids.coords)
         self.assertTrue(numpy.allclose(ao0, ao1, atol=1e-9, rtol=1e-9))
         self.assertAlmostEqual(finger(ao1), -0.54069672246407219, 8)
 
-        ao10 = eval_ao(cell, grids.coords, deriv=1)
         ao11 = ni.eval_ao(cell, grids.coords, deriv=1)
         self.assertTrue(numpy.allclose(ao10, ao11, atol=1e-9, rtol=1e-9))
         self.assertAlmostEqual(finger(ao11), 8.8004405892746433, 8)
@@ -89,6 +89,9 @@ class KnowValues(unittest.TestCase):
         ao11 = ni.eval_ao(cell, grids.coords, deriv=1)
         self.assertTrue(numpy.allclose(ao10, ao11, atol=1e-9, rtol=1e-9))
         self.assertAlmostEqual(finger(ao11), 8.8004405892746433, 8)
+
+        ao11 = ni.eval_ao(cell, grids.coords, deriv=1, shls_slice=(3,7))
+        self.assertTrue(numpy.allclose(ao10[:,:,6:17], ao11, atol=1e-9, rtol=1e-9))
 
 
     def test_eval_mat(self):
