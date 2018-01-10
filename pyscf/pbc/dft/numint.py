@@ -30,7 +30,7 @@ from pyscf.pbc.lib.kpt_misc import is_zero, gamma_point, member
 #except:
 #    memory_cache = lambda f: f
 
-def eval_ao(cell, coords, kpt=numpy.zeros(3), deriv=0, relativity=0, shl_slice=None,
+def eval_ao(cell, coords, kpt=numpy.zeros(3), deriv=0, relativity=0, shls_slice=None,
             non0tab=None, out=None, verbose=None):
     '''Collocate AO crystal orbitals (opt. gradients) on the real-space grid.
 
@@ -63,13 +63,13 @@ def eval_ao(cell, coords, kpt=numpy.zeros(3), deriv=0, relativity=0, shl_slice=N
 
     '''
     ao_kpts = eval_ao_kpts(cell, coords, numpy.reshape(kpt, (-1,3)), deriv,
-                           relativity, shl_slice, non0tab, out, verbose)
+                           relativity, shls_slice, non0tab, out, verbose)
     return ao_kpts[0]
 
 
 #@memory_cache
 def eval_ao_kpts(cell, coords, kpts=None, deriv=0, relativity=0,
-                 shl_slice=None, non0tab=None, out=None, verbose=None, **kwargs):
+                 shls_slice=None, non0tab=None, out=None, verbose=None, **kwargs):
     '''
     Returns:
         ao_kpts: (nkpts, [comp], ngs, nao) ndarray
@@ -94,7 +94,11 @@ def eval_ao_kpts(cell, coords, kpts=None, deriv=0, relativity=0,
         non0tab[:] = 0xff
 
     ao_loc = cell.ao_loc_nr()
-    nao = ao_loc[-1]
+    if shls_slice is None:
+        shls_slice = (0, cell.nbas)
+    sh0, sh1 = shls_slice
+    nao = ao_loc[sh1] - ao_loc[sh0]
+
     comp = (deriv+1)*(deriv+2)*(deriv+3)//6
     ao_kpts = [numpy.zeros((ngrids,nao,comp), dtype=numpy.complex128, order='F')
                for k in range(nkpts)]
@@ -107,7 +111,7 @@ def eval_ao_kpts(cell, coords, kpts=None, deriv=0, relativity=0,
 
     drv = getattr(libpbc, 'PBCval_sph_deriv%d' % deriv)
     drv(ctypes.c_int(ngrids),
-        (ctypes.c_int*2)(0, cell.nbas), ao_loc.ctypes.data_as(ctypes.c_void_p),
+        (ctypes.c_int*2)(*shls_slice), ao_loc.ctypes.data_as(ctypes.c_void_p),
         Ls.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(len(Ls)),
         expLk.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nkpts),
         out_ptrs, coords.ctypes.data_as(ctypes.c_void_p),
@@ -939,8 +943,8 @@ class _NumInt(numint._NumInt):
     periodic images.
     '''
     def eval_ao(self, cell, coords, kpt=numpy.zeros(3), deriv=0, relativity=0,
-                shl_slice=None, non0tab=None, out=None, verbose=None):
-        return eval_ao(cell, coords, kpt, deriv, relativity, shl_slice,
+                shls_slice=None, non0tab=None, out=None, verbose=None):
+        return eval_ao(cell, coords, kpt, deriv, relativity, shls_slice,
                        non0tab, out, verbose)
 
     @lib.with_doc(make_mask.__doc__)
@@ -1069,9 +1073,9 @@ class _KNumInt(numint._NumInt):
         self.kpts = numpy.reshape(kpts, (-1,3))
 
     def eval_ao(self, cell, coords, kpts=numpy.zeros((1,3)), deriv=0, relativity=0,
-                shl_slice=None, non0tab=None, out=None, verbose=None, **kwargs):
+                shls_slice=None, non0tab=None, out=None, verbose=None, **kwargs):
         return eval_ao_kpts(cell, coords, kpts, deriv,
-                            relativity, shl_slice, non0tab, out, verbose)
+                            relativity, shls_slice, non0tab, out, verbose)
 
     @lib.with_doc(make_mask.__doc__)
     def make_mask(self, cell, coords, relativity=0, shls_slice=None,
