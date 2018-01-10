@@ -64,12 +64,12 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None):
     dm_kpts = lib.asarray(dm_kpts, order='C')
     dms = _format_dms(dm_kpts, kpts)
     nset, nkpts, nao = dms.shape[:3]
-    naux = mydf.auxcell.nao_nr()
+    naux = mydf.get_naoaux()
     nao_pair = nao * (nao+1) // 2
 
     kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
     nband = len(kpts_band)
-    j_real = gamma_point(kpts_band)
+    j_real = gamma_point(kpts_band) and not numpy.iscomplexobj(dms)
 
     dmsR = dms.real.transpose(0,1,3,2).reshape(nset,nkpts,nao**2)
     dmsI = dms.imag.transpose(0,1,3,2).reshape(nset,nkpts,nao**2)

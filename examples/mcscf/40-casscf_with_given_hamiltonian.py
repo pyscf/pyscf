@@ -16,6 +16,11 @@ Hamiltonian automatically.
 mol = gto.M()
 mol.nelectron = 6
 
+# incore_anyway=True ensures the customized Hamiltonian (the _eri attribute)
+# to be used.  Without this parameter, the MO integral transformation may
+# ignore the customized Hamiltonian if memory is not enough.
+mol.incore_anyway = True
+
 #
 # 1D anti-PBC Hubbard model at half filling
 #
