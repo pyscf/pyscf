@@ -24,7 +24,7 @@ def get_max_blocksize_from_mem(array_size, mem_per_block, mem, priority_list=Non
     '''
     #assert((priority_list is not None and hasattr(priority_list, '__iter__')) and
     #        "nchunks (int) or priority_list (iterable) must be specified.")
-    #print "memory max = %.8e" % mem
+    #print("memory max = %.8e" % mem)
     nindices = len(array_size)
     if priority_list is None:
         _priority_list = [1]*nindices
@@ -60,7 +60,8 @@ def get_max_blocksize_from_mem(array_size, mem_per_block, mem, priority_list=Non
         if iprior == nindices:
             loop = False
     chunksize = numpy.array(chunksize)[idxinv]
-    #print "chunks = ", chunksize
-    #print "mem_per_chunk = %.8e" % (numpy.prod(numpy.asarray(chunksize))*mem_per_block)
+    #print("chunks = ", chunksize)
+    #print("mem_per_chunk = %.8e" %
+    (numpy.prod(numpy.asarray(chunksize))*mem_per_block))
     return tuple(chunksize)
 
