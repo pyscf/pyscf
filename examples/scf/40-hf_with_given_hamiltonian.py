@@ -42,3 +42,10 @@ mf.get_ovlp = lambda *args: numpy.eye(n)
 mf._eri = ao2mo.restore(8, eri, n)
 
 mf.kernel()
+
+# If you need to run post-HF calculations based on the customized Hamiltonian,
+# setting incore_anyway=True to ensure the customized Hamiltonian (the _eri
+# attribute) to be used.  Without this parameter, some post-HF method
+# (particularly in the MO integral transformation) may ignore the customized
+# Hamiltonian if memory is not enough.
+mol.incore_anyway = True
