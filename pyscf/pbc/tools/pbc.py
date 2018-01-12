@@ -419,44 +419,29 @@ def cell_plus_imgs(cell, nimgs):
 
 
 def get_kconserv(cell, kpts):
-    '''Get the momentum conservation array for a set of k-points.
+    r'''Get the momentum conservation array for a set of k-points.
 
     Given k-point indices (k, l, m) the array kconserv[k,l,m] returns
     the index n that satifies momentum conservation,
 
-       k(k) - k(l) = - k(m) + k(n)
+        (k(k) - k(l) + k(m) - k(n)) \dot a = 2n\pi
 
     This is used for symmetry e.g. integrals of the form
         [\phi*[k](1) \phi[l](1) | \phi*[m](2) \phi[n](2)]
     are zero unless n satisfies the above.
     '''
     nkpts = kpts.shape[0]
-    KLMN = np.zeros([nkpts,nkpts,nkpts], np.int)
-    kvecs = cell.reciprocal_vectors()
+    a = cell.lattice_vectors() / (2*np.pi)
 
-    for K, kvK in enumerate(kpts):
-        for L, kvL in enumerate(kpts):
-            for M, kvM in enumerate(kpts):
-                # Here we find where kvN = kvM + kvL - kvK (mod K)
-                temp = range(-1,2)
-                xyz = lib.cartesian_prod((temp,temp,temp))
-                found = 0
-                kvMLK = kvK - kvL + kvM
-                kvN = kvMLK
-                for ishift in xrange(len(xyz)):
-                    kvN = kvMLK + np.dot(xyz[ishift],kvecs)
-                    finder = np.where(np.logical_and(kpts < kvN + 1.e-12,
-                                                     kpts > kvN - 1.e-12).sum(axis=1)==3)
-                    # The k-point should be the same in all 3 indices as kvN
-                    if len(finder[0]) > 0:
-                        KLMN[K, L, M] = finder[0][0]
-                        found = 1
-                        break
-
-                if found == 0:
-                    print('kvMLK', kvMLK)
-                    raise RuntimeError("** ERROR: Problem in get_kconserv. Quitting.")
-    return KLMN
+    kconserv = np.zeros((nkpts,nkpts,nkpts), dtype=int)
+    kvMLK = kpts[:,None,None,:] - kpts[:,None,:] + kpts
+    for N, kvN in enumerate(kpts):
+        kvMLKN = np.einsum('klmx,wx->mlkw', kvMLK - kvN, a)
+        # check whether  (1/(2pi) k_{KLMN} dot a)  are integer
+        kvMLKN_int = np.rint(kvMLKN)
+        mask = np.einsum('klmw->mlk', abs(kvMLKN - kvMLKN_int)) < 1e-9
+        kconserv[mask] = N
+    return kconserv
 
 def get_kconserv3(cell, kpts, kijkab):
     '''Get the momentum conservation array for a set of k-points.
@@ -464,53 +449,32 @@ def get_kconserv3(cell, kpts, kijkab):
     This function is similar to get_kconserv, but instead finds the 'kc'
     that satisfies momentum conservation for 5 k-points,
 
-    kc = ki + kj + kk - ka - kb (mod G),
+        (ki + kj + kk - ka - kb - kc) dot a = 2n\pi
 
     where these kpoints are stored in kijkab[ki,kj,kk,ka,kb].
     '''
     nkpts = kpts.shape[0]
-    KLMN = np.zeros([nkpts,nkpts,nkpts], np.int)
-    kvecs = 2*np.pi*scipy.linalg.inv(cell._h)
-    kijkab = np.array(kijkab)
+    a = cell.lattice_vectors() / (2*np.pi)
 
-    # Finds which indices in ijkab are integers and which are lists
-    # TODO: try to see if it works for more than 1 list
-    idx_sum = np.array([not(isinstance(x,int) or isinstance(x,np.int)) for x in kijkab])
-    idx_range = kijkab[idx_sum]
-    min_idx_range = np.zeros(5,dtype=int)
-    min_idx_range = np.array([min(x) for x in idx_range])
-    out_array_shape = tuple([len(x) for x in idx_range])
-    out_array = np.zeros(shape=out_array_shape,dtype=int)
-    kpqrst_idx = np.zeros(5,dtype=int)
+    kpts_i, kpts_j, kpts_k, kpts_a, kpts_b = \
+            [kpts[x].reshape(-1,3) for x in kijkab]
+    shape = [np.size(x) for x in kijkab]
+    kconserv = np.zeros(shape, dtype=int)
 
-    # Order here matters! Search for most ``obvious" translation first to
-    # get into 1st BZ, i.e. no translation!
-    temp = [0,-1,1,-2,2]
-    xyz = lib.cartesian_prod((temp,temp,temp))
-    kshift = np.dot(xyz,kvecs)
+    kv_kab = kpts_k[:,None,None,:] - kpts_a[:,None,:] - kpts_b
+    for i, kpti in enumerate(kpts_i):
+        for j, kptj in enumerate(kpts_j):
+            kv_ijkab = kv_kab + kpti + kptj
+            for c, kptc in enumerate(kpts):
+                s = np.einsum('kabx,wx->kabw', kv_ijkab - kptc, a)
+                s_int = np.rint(s)
+                mask = np.einsum('kabw->kab', abs(s - s_int)) < 1e-9
+                kconserv[i,j,mask] = c
 
-    for L, kvL in enumerate(lib.cartesian_prod(idx_range)):
-        kpqrst_idx[idx_sum], kpqrst_idx[~idx_sum] = kvL, kijkab[~idx_sum]
-        idx = tuple(kpqrst_idx[idx_sum]-min_idx_range)
-
-        kvec = kpts[kpqrst_idx]
-        kvec = kvec[0:3].sum(axis=0) - kvec[3:5].sum(axis=0)
-
-        found = 0
-        kvNs = kvec + kshift
-        for ishift in xrange(len(xyz)):
-            kvN = kvNs[ishift]
-            finder = np.where(np.logical_and(kpts < kvN + 1.e-12, kpts > kvN - 1.e-12).sum(axis=1)==3)
-            # The k-point kvN is the one that conserves momentum
-            if len(finder[0]) > 0:
-                found = 1
-                out_array[idx] = finder[0][0]
-                break
-
-        if found == 0:
-            print('kijkab', kijkab)
-            raise RuntimeError("** ERROR: Problem in get_kconserv3. Quitting.")
-    return out_array
+    new_shape = [shape[i] for i, x in enumerate(kijkab)
+                 if not isinstance(x, (int,np.int))]
+    kconserv = kconserv.reshape(new_shape)
+    return kconserv
 
 
 def cutoff_to_mesh(a, cutoff):
