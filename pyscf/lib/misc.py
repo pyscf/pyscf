@@ -331,17 +331,48 @@ class StreamObject(object):
     stdout = sys.stdout
     _keys = set(['verbose', 'stdout'])
 
+    def kernel(self, *args, **kwargs):
+        '''
+        Kernel function is the main driver of a method.  Every method should
+        define the kernel function as the entry of the calculation.  Note the
+        return value of kernel function is not strictly defined.  It can be 
+        anything related to the method (such as the energy, the wave-function,
+        the DFT mesh grids etc.).
+        '''
+        pass
+
+    def pre_kernel(self, envs):
+        '''
+        A hook to be run before the main body of kernel function is executed.
+        Internal variables are exposed to pre_kernel through the "envs"
+        dictionary.  Return value of pre_kernel function is not required.
+        '''
+        pass
+
+    def post_kernel(self, envs):
+        '''
+        A hook to be run after the main body of the kernel function.  Internal
+        variables are exposed to post_kernel through the "envs" dictionary.
+        Return value of post_kernel function is not required.
+        '''
+        pass
+
     def run(self, *args, **kwargs):
-        '''Call the kernel function of current object.  `args` will be passed
+        '''
+        Call the kernel function of current object.  `args` will be passed
         to kernel function.  `kwargs` will be used to update the attributes of
-        current object.
+        current object.  The return value of method run is the object itself.
+        This allows a series of functions/methods to be executed in pipe.
         '''
         self.set(**kwargs)
         self.kernel(*args)
         return self
 
     def set(self, **kwargs):
-        '''Update the attributes of the current object.
+        '''
+        Update the attributes of the current object.  The return value of
+        method set is the object itself.  This allows a series of
+        functions/methods to be executed in pipe.
         '''
         #if hasattr(self, '_keys'):
         #    for k,v in kwargs.items():
@@ -355,7 +386,10 @@ class StreamObject(object):
         return self
 
     def apply(self, fn, *args, **kwargs):
-        '''Apply the fn to rest arguments:  return fn(*args, **kwargs)
+        '''
+        Apply the fn to rest arguments:  return fn(*args, **kwargs).  The
+        return value of method set is the object itself.  This allows a series
+        of functions/methods to be executed in pipe.
         '''
         return fn(self, *args, **kwargs)
 
@@ -364,9 +398,12 @@ class StreamObject(object):
 #        return args + args1[len(args):], kwargs
 
     def check_sanity(self):
-        '''Check misinput of class attributes, check whether a class method is
+        '''
+        Check input of class/object attributes, check whether a class method is
         overwritten.  It does not check the attributes which are prefixed with
-        "_".
+        "_".  The
+        return value of method set is the object itself.  This allows a series
+        of functions/methods to be executed in pipe.
         '''
         if (self.verbose > 0 and  # logger.QUIET
             hasattr(self, '_keys')):

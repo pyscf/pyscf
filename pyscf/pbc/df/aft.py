@@ -187,6 +187,15 @@ def get_pp(mydf, kpts=None):
         vpp = vpp[0]
     return vpp
 
+def weighted_coulG(mydf, kpt=numpy.zeros(3), exx=False, mesh=None):
+    cell = mydf.cell
+    if mesh is None:
+        mesh = mydf.mesh
+    Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
+    coulG = tools.get_coulG(cell, kpt, exx, mydf, mesh, Gv)
+    coulG *= kws
+    return coulG
+
 
 class AFTDF(lib.StreamObject):
     '''Density expansion on plane waves
@@ -371,15 +380,7 @@ class AFTDF(lib.StreamObject):
     def prange(self, start, stop, step):
         return lib.prange(start, stop, step)
 
-    def weighted_coulG(self, kpt=numpy.zeros(3), exx=False, mesh=None):
-        cell = self.cell
-        if mesh is None:
-            mesh = self.mesh
-        Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
-        coulG = tools.get_coulG(cell, kpt, exx, self, mesh, Gv)
-        coulG *= kws
-        return coulG
-
+    weighted_coulG = weighted_coulG
     _int_nuc_vloc = _int_nuc_vloc
     get_nuc = get_nuc
     get_pp = get_pp
@@ -406,6 +407,8 @@ class AFTDF(lib.StreamObject):
 
     get_eri = get_ao_eri = aft_ao2mo.get_eri
     ao2mo = get_mo_eri = aft_ao2mo.general
+    get_ao_pairs_G = get_ao_pairs = aft_ao2mo.get_ao_pairs_G
+    get_mo_pairs_G = get_mo_pairs = aft_ao2mo.get_mo_pairs_G
 
     def update_mf(self, mf):
         mf = copy.copy(mf)

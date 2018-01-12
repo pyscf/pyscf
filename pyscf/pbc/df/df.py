@@ -320,7 +320,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
     feri.close()
 
 
-class GDF(aft.AFTDF):
+class GDF(lib.StreamObject):
     '''Gaussian density fitting
     '''
     def __init__(self, cell, kpts=numpy.zeros((1,3))):
@@ -535,6 +535,14 @@ class GDF(aft.AFTDF):
                 LpqR, LpqI = load(j3c, b0, b1, LpqR, LpqI)
                 yield LpqR, LpqI
 
+    def prange(self, start, stop, step):
+        return lib.prange(start, stop, step)
+
+    weighted_coulG = aft.weighted_coulG
+    _int_nuc_vloc = aft._int_nuc_vloc
+    get_nuc = aft.get_nuc
+    get_pp = aft.get_pp
+
     def get_jk(self, dm, hermi=1, kpts=None, kpts_band=None,
                with_j=True, with_k=True, exxdiv='ewald'):
         if kpts is None:
@@ -560,7 +568,9 @@ class GDF(aft.AFTDF):
     ao2mo = get_mo_eri = df_ao2mo.general
 
     def update_mp(self):
-        pass
+        mf = copy.copy(mf)
+        mf.with_df = self
+        return mf
 
     def update_cc(self):
         pass
