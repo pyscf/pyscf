@@ -8,6 +8,8 @@ from setuptools import setup, find_packages, Extension
 #else:
 #    from setuptools.command.build_py import build_py
 from setuptools.command.install import install
+from setuptools.command.build_ext import build_ext
+
 try:
     import numpy
 except ImportError as e:
@@ -66,17 +68,36 @@ if (sys.platform.startswith('linux') or
 elif sys.platform.startswith('darwin'):
     so_ext = '.dylib'
     LD_LIBRARY_PATH = 'DYLD_LIBRARY_PATH'
+    from distutils.sysconfig import get_config_vars
+    conf_vars = get_config_vars()
+# setuptools/pip install by default generate "bundled" library.  Bundled
+# library cannot be linked at compile time
+# https://stackoverflow.com/questions/24519863/what-are-the-g-flags-to-build-a-true-so-mh-bundle-shared-library-on-mac-osx
+# configs LDSHARED and CCSHARED and SO are hard coded in lib/pythonX.X/_sysconfigdata.py
+# In some Python version, steuptools may correct these configs for OS X on the
+# fly by _customize_compiler_for_shlib function or setup_shlib_compiler function
+# in lib/pythonX.X/site-packages/setuptools/command/build_ext.py.
+# The hacks as below are to ensure that the OS X compiler does not generate
+# bundle libraries.  Relevant code:
+#    lib/pythonX.X/_sysconfigdata.py
+#    lib/pythonX.X/distutils/command/build_ext.py
+#    lib/pythonX.X/distutils/sysconfig.py,  get_config_vars()
+#    lib/pythonX.X/distutils/ccompiler.py,  link_shared_object()
+#    lib/pythonX.X/distutils/unixcompiler.py,  link()
+    conf_vars['LDSHARED'] = conf_vars['LDSHARED'].replace('-bundle', '-dynamiclib')
+    conf_vars['CCSHARED'] = " -dynamiclib"
+    conf_vars['SO'] = '.dylib'
 elif sys.platform.startswith('win'):
     so_ext = '.dll'
 else:
     raise OSError('Unknown platform')
 
-if 'CC' in os.environ:
-    compiler = os.environ['CC'].split()[0]
-else:
-    compiler = sysconfig.get_config_var("CC").split()[0]
-if 'gcc' in compiler or 'g++' in compiler:  # GNU compiler
-    so_ext = '.so'
+#if 'CC' in os.environ:
+#    compiler = os.environ['CC'].split()[0]
+#else:
+#    compiler = sysconfig.get_config_var("CC").split()[0]
+#if 'gcc' in compiler or 'g++' in compiler:  # GNU compiler
+#    so_ext = '.so'
 
 #
 # default include and library path
@@ -101,11 +122,10 @@ def search_inc_path(incname, extra_paths=None):
     if 'PYSCF_INC_DIR' in os.environ:
         PYSCF_INC_DIR = os.environ['PYSCF_INC_DIR'].split(os.pathsep)
         for p in PYSCF_INC_DIR:
-            paths = [p, os.path.join(p, 'lib'), os.path.join(p, '..', 'lib')] + paths
+            paths = [p, os.path.join(p, 'include'), os.path.join(p, '..', 'include')] + paths
     if extra_paths is not None:
         paths += extra_paths
     for path in paths:
-        inc_path = os.path.join(os.path.dirname(path), 'include')
         full_incname = os.path.join(path, incname)
         if os.path.exists(full_incname):
             return os.path.abspath(path)
@@ -115,17 +135,20 @@ if 'LDFLAGS' in os.environ:
 else:
     blas_found = False
 
-if blas_found:
-    blas_include = []
-    blas_lib_dir = []
-    blas_libraries = []
-else:
+blas_include = []
+blas_lib_dir = []
+blas_libraries = []
+blas_extra_link_flags = []
+blas_extra_compile_flags = []
+if not blas_found:
     np_blas = numpy.__config__.get_info('blas_opt')
     blas_include = np_blas.get('include_dirs', [])
     blas_lib_dir = np_blas.get('library_dirs', [])
     blas_libraries = np_blas.get('libraries', [])
     blas_path_guess = [search_lib_path('lib'+x+so_ext, blas_lib_dir)
                        for x in blas_libraries]
+    blas_extra_link_flags = np_blas.get('extra_link_args', [])
+    blas_extra_compile_flags = np_blas.get('extra_compile_args', [])
     if None not in blas_path_guess:
         blas_found = True
         blas_lib_dir = list(set(blas_path_guess))
@@ -133,7 +156,7 @@ else:
 if not blas_found:  # for MKL
     mkl_path_guess = search_lib_path('libmkl_core'+so_ext, blas_lib_dir)
     if mkl_path_guess is not None:
-        blas_libraries = ['mkl_core', 'mkl_intel_lp64', 'mkl_intel_thread',
+        blas_libraries = ['mkl_core', 'mkl_intel_lp64', 'mkl_gnu_thread',
                           'mkl_sequential']
         blas_lib_dir = [mkl_path_guess]
         blas_found = True
@@ -184,7 +207,8 @@ with open(os.path.join(topdir, 'build', 'config.h'), 'w') as f:
 ''')
 
 def make_ext(pkg_name, relpath, srcs, libraries=[], library_dirs=default_lib_dir,
-             include_dirs=default_include, **kwargs):
+             include_dirs=default_include, extra_compile_flags=[],
+             extra_link_flags=[], **kwargs):
     if '/' in relpath:
         relpath = os.path.join(*relpath.split('/'))
     if (os.path.isfile(os.path.join(pyscf_lib_dir, 'build', 'CMakeCache.txt')) and
@@ -192,18 +216,20 @@ def make_ext(pkg_name, relpath, srcs, libraries=[], library_dirs=default_lib_dir
         return None
     else:
         if sys.platform.startswith('darwin'):
-            openmp_flag = []
+            soname = pkg_name.split('.')[-1]
+            extra_link_flags = extra_link_flags + ['-install_name', '@loader_path/'+soname+so_ext]
             runtime_library_dirs = []
         else:
-            openmp_flag = ['-fopenmp']
+            extra_compile_flags = extra_compile_flags + ['-fopenmp']
+            extra_link_flags = extra_link_flags + ['-fopenmp']
             runtime_library_dirs = ['$ORIGIN', '.']
         srcs = make_src(relpath, srcs)
         return Extension(pkg_name, srcs,
                          libraries = libraries,
                          library_dirs = library_dirs,
                          include_dirs = include_dirs + [os.path.join(pyscf_lib_dir,relpath)],
-                         extra_compile_args = openmp_flag,
-                         extra_link_args = openmp_flag,
+                         extra_compile_args = extra_compile_flags,
+                         extra_link_args = extra_link_flags,
 # Be careful with the ld flag "-Wl,-R$ORIGIN" in the shell.
 # When numpy.distutils is imported, the default CCompiler of distutils will be
 # overwritten. Compilation is executed in shell and $ORIGIN will be converted to ''
@@ -245,7 +271,9 @@ autocode/gaunt1.c autocode/grad1.c autocode/intor2.c autocode/intor3.c
 autocode/hess.c autocode/intor1.c autocode/grad2.c'''
         if os.path.exists(os.path.join(pyscf_lib_dir, 'libcint')):
             extensions.append(
-                make_ext('pyscf.lib.libcint', 'libcint/src', srcs, blas_libraries)
+                make_ext('pyscf.lib.libcint', 'libcint/src', srcs, blas_libraries,
+                         extra_compile_flags=blas_extra_compile_flags,
+                         extra_link_flags=blas_extra_link_flags)
             )
             default_include.append(os.path.join(pyscf_lib_dir, 'libcint','src'))
         else:
@@ -261,10 +289,13 @@ autocode/hess.c autocode/intor1.c autocode/grad2.c'''
 extensions += [
     make_ext('pyscf.lib.libnp_helper', 'np_helper',
              'condense.c npdot.c omp_reduce.c pack_tril.c transpose.c',
-             blas_libraries),
+             blas_libraries,
+             extra_compile_flags=blas_extra_compile_flags,
+             extra_link_flags=blas_extra_link_flags),
     make_ext('pyscf.lib.libcgto', 'gto',
              '''fill_int2c.c fill_nr_3c.c fill_r_3c.c fill_int2e.c ft_ao.c
-             grid_ao_drv.c fastexp.c deriv1.c deriv2.c nr_ecp.c autocode/auto_eval1.c''',
+             grid_ao_drv.c fastexp.c deriv1.c deriv2.c nr_ecp.c nr_ecp_deriv.c
+             autocode/auto_eval1.c''',
              ['cint', 'np_helper']),
     make_ext('pyscf.lib.libcvhf', 'vhf',
              '''fill_nr_s8.c nr_incore.c nr_direct.c optimizer.c nr_direct_dot.c
@@ -274,6 +305,9 @@ extensions += [
     make_ext('pyscf.lib.libao2mo', 'ao2mo',
              'restore_eri.c nr_ao2mo.c nr_incore.c r_ao2mo.c',
              ['cvhf', 'cint', 'np_helper']),
+    make_ext('pyscf.lib.libcc', 'cc',
+             'ccsd_pack.c ccsd_grad.c ccsd_t.c uccsd_t.c',
+             ['cvhf', 'ao2mo', 'np_helper']),
     make_ext('pyscf.lib.libfci', 'mcscf',
              '''fci_contract.c fci_contract_nosym.c fci_rdm.c fci_string.c
              fci_4pdm.c select_ci.c''',
@@ -295,7 +329,8 @@ extensions += [
 #
 DFT_AVAILABLE = 0
 if 1:
-    libxc_lib_path = search_lib_path('libxc'+so_ext, [os.path.join(pyscf_lib_dir, 'deps', 'lib'),
+    libxc_lib_path = search_lib_path('libxc'+so_ext, [pyscf_lib_dir,
+                                                      os.path.join(pyscf_lib_dir, 'deps', 'lib'),
                                                       os.path.join(pyscf_lib_dir, 'deps', 'lib64')],
                                      version='4.0.0')
     libxc_inc_path = search_inc_path('xc.h', [os.path.join(pyscf_lib_dir, 'deps', 'include')])
@@ -323,7 +358,8 @@ if 1:
 # Check xcfun
 #
 if 1:
-    xcfun_lib_path = search_lib_path('xcfun'+so_ext, [os.path.join(pyscf_lib_dir, 'deps', 'lib'),
+    xcfun_lib_path = search_lib_path('libxcfun'+so_ext, [pyscf_lib_dir,
+                                                         os.path.join(pyscf_lib_dir, 'deps', 'lib'),
                                                       os.path.join(pyscf_lib_dir, 'deps', 'lib64')])
     xcfun_inc_path = search_inc_path('xcfun.h', [os.path.join(pyscf_lib_dir, 'deps', 'include')])
     if xcfun_lib_path and xcfun_inc_path:
@@ -333,7 +369,7 @@ if 1:
         default_lib_dir += [xcfun_lib_path]
         default_include += [xcfun_inc_path]
         extensions += [
-            make_ext('pyscf.lib.xcfun_itrf', 'dft', 'xcfun_itrf.c', ['xcfun']),
+            make_ext('pyscf.lib.libxcfun_itrf', 'dft', 'xcfun_itrf.c', ['xcfun']),
         ]
         DFT_AVAILABLE = 1
 
@@ -347,6 +383,16 @@ class PostInstallCommand(install):
             print("****************************************************************")
             print("*** WARNING: DFT is not available.")
             print("****************************************************************")
+
+# Python ABI updates since 3.5
+# https://www.python.org/dev/peps/pep-3149/
+class BuildExtWithoutPlatformSuffix(build_ext):
+    def get_ext_filename(self, ext_name):
+        from distutils.sysconfig import get_config_var
+        ext_path = ext_name.split('.')
+        filename = build_ext.get_ext_filename(self, ext_name)
+        name, ext_suffix = os.path.splitext(filename)
+        return os.path.join(*ext_path) + ext_suffix
 
 setup(
     name=NAME,
@@ -367,7 +413,9 @@ setup(
                                     '*future*', '*test*', '*examples*',
                                     '*setup.py']),
     ext_modules=extensions,
-    cmdclass={'install': PostInstallCommand},
+    cmdclass={'build_ext': BuildExtWithoutPlatformSuffix,
+              'install': PostInstallCommand},
     install_requires=['numpy', 'scipy', 'h5py'],
+    setup_requires = ['numpy'],
 )
 

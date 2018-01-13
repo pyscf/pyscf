@@ -16,7 +16,7 @@ cell = gto.M(
     a = [[ 0.,          3.37013733,  3.37013733],
          [ 3.37013733,  0.,          3.37013733],
          [ 3.37013733,  3.37013733,  0.        ]],
-    gs = [12,]*3,
+    mesh = [24,]*3,
     atom = '''C 0 0 0
               C 1.68506866 1.68506866 1.68506866''',
     basis = 'gth-szv',
@@ -31,8 +31,8 @@ kpts = cell.make_kpts(nk)
 # Running HF
 #
 kpts -= kpts[0]
+kmf = scf.KRHF(cell, kpts)
 if rank == 0:
-    kmf = scf.KRHF(cell, kpts)
     kmf.kernel()
 
 comm.Barrier()

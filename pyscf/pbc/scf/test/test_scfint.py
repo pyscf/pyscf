@@ -19,7 +19,7 @@ def make_cell1(L, n):
     cell.verbose = 0
     cell.unit = 'B'
     cell.a = ((L,0,0),(0,L,0),(0,0,L))
-    cell.gs = [n,n,n]
+    cell.mesh = [n,n,n]
 
     cell.atom = [['He', (L/2.,L/2.,L/2.)], ]
     cell.basis = { 'He': [[0, (0.8, 1.0)],
@@ -35,7 +35,7 @@ def make_cell2(L, n):
                unit = 'B',
                verbose = 0,
                a = ((L,0,0),(0,L,0),(0,0,L)),
-               gs = [n,n,n],
+               mesh = [n,n,n],
                atom = [['He', (L/2.-.5,L/2.,L/2.-.5)],
                        ['He', (L/2.   ,L/2.,L/2.+.5)]],
                basis = { 'He': [[0, (0.8, 1.0)],
@@ -55,8 +55,8 @@ def get_ovlp(cell, kpt=np.zeros(3)):
     '''
     coords = pdft.gen_grid.gen_uniform_grids(cell)
     aoR = pdft.numint.eval_ao(cell, coords, kpt)
-    ngs = len(aoR)
-    s = (cell.vol/ngs) * np.dot(aoR.T.conj(), aoR)
+    ngrids = len(aoR)
+    s = (cell.vol/ngrids) * np.dot(aoR.T.conj(), aoR)
     return s
 
 def get_t(cell, kpt=np.zeros(3)):
@@ -66,19 +66,19 @@ def get_t(cell, kpt=np.zeros(3)):
     '''
     coords = pdft.gen_grid.gen_uniform_grids(cell)
     aoR = pdft.numint.eval_ao(cell, coords, kpt, deriv=1)
-    ngs = aoR.shape[1]  # because we requested deriv=1, aoR.shape[0] = 4
+    ngrids = aoR.shape[1]  # because we requested deriv=1, aoR.shape[0] = 4
 
     t = 0.5*(np.dot(aoR[1].T.conj(), aoR[1]) +
              np.dot(aoR[2].T.conj(), aoR[2]) +
              np.dot(aoR[3].T.conj(), aoR[3]))
-    t *= (cell.vol/ngs)
+    t *= (cell.vol/ngrids)
     return t
 
 
 
 class KnowValues(unittest.TestCase):
     def test_olvp(self):
-        cell = make_cell1(4, 20)
+        cell = make_cell1(4, 41)
         s0 = get_ovlp(cell)
         s1 = scfint.get_ovlp(cell)
         self.assertAlmostEqual(numpy.linalg.norm(s0-s1), 0, 8)
@@ -89,7 +89,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(numpy.linalg.norm(s0-s1), 0, 8)
 
     def test_t(self):
-        cell = make_cell1(4, 20)
+        cell = make_cell1(4, 41)
         t0 = get_t(cell, kpt=k)
         t1 = scfint.get_t(cell, kpt=k)
         self.assertAlmostEqual(numpy.linalg.norm(t0-t1), 0, 8)

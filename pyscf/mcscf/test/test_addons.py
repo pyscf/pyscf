@@ -170,7 +170,7 @@ class KnowValues(unittest.TestCase):
                          s1.shape[0])
         self.assertAlmostEqual(numpy.linalg.norm(s1), 7.7459666924148349, 9)
 
-        self.assertRaises(AssertionError, mcscf.project_init_guess, mc1, mfr.mo_coeff)
+        self.assertRaises(RuntimeError, mcscf.project_init_guess, mc1, mfr.mo_coeff)
 
 
 if __name__ == "__main__":

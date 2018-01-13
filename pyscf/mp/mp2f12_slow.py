@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 '''
-MP2-F12
+MP2-F12 (In testing)
 
 Refs:
 * JCC 32  2492

@@ -12,10 +12,10 @@ pyscf.pbc.DEBUG = False
 df.LINEAR_DEP_THR = 1e-7
 
 L = 5.
-n = 5
+n = 11
 cell = pgto.Cell()
 cell.a = numpy.diag([L,L,L])
-cell.gs = numpy.array([n,n,n])
+cell.mesh = numpy.array([n,n,n])
 
 cell.atom = '''C    3.    2.       3.
                C    1.    1.       1.'''
@@ -35,8 +35,8 @@ def finger(a):
 
 class KnowValues(unittest.TestCase):
     def test_jk_single_kpt(self):
-        mf = df_jk.density_fit(mf0, auxbasis='weigend', gs=(5,)*3)
-        mf.with_df.gs = cell.gs
+        mf = df_jk.density_fit(mf0, auxbasis='weigend', mesh=(11,)*3)
+        mf.with_df.mesh = cell.mesh
         mf.with_df.eta = 0.3
         dm = mf.get_init_guess()
         vj, vk = mf.get_jk(cell, dm)
@@ -58,7 +58,7 @@ class KnowValues(unittest.TestCase):
         numpy.random.seed(1)
         kpt = numpy.random.random(3)
         mydf = df.DF(cell, [kpt]).set(auxbasis='weigend')
-        mydf.gs = cell.gs
+        mydf.mesh = cell.mesh
         mydf.eta = 0.3
         vj, vk = mydf.get_jk(dm, 1, kpt, exxdiv=None)
         ej1 = numpy.einsum('ij,ji->', vj, dm)
@@ -76,7 +76,7 @@ class KnowValues(unittest.TestCase):
         dm = dm + dm.T
         dm[:2,-3:] *= .5
         jkdf = df.DF(cell).set(auxbasis='weigend')
-        jkdf.gs = (5,)*3
+        jkdf.mesh = (11,)*3
         jkdf.eta = 0.3
         vj0, vk0 = jkdf.get_jk(dm, hermi=0, exxdiv=None)
         ej0 = numpy.einsum('ij,ji->', vj0, dm)
@@ -91,9 +91,9 @@ class KnowValues(unittest.TestCase):
         dm = dm + dm.transpose(0,2,1)
         mydf = df.DF(cell).set(auxbasis='weigend')
         mydf.kpts = numpy.random.random((4,3))
-        mydf.gs = numpy.asarray((5,)*3)
+        mydf.mesh = numpy.asarray((11,)*3)
         mydf.auxbasis = 'weigend'
-        mydf.gs = cell.gs
+        mydf.mesh = cell.mesh
         mydf.eta = 0.3
         vj = df_jk.get_j_kpts(mydf, dm, 1, mydf.kpts)
         self.assertAlmostEqual(finger(vj[0]), (0.49176180692009197-0.11891083594538684j ), 9)
@@ -108,9 +108,9 @@ class KnowValues(unittest.TestCase):
         dm = dm + dm.transpose(0,2,1)
         mydf = df.DF(cell).set(auxbasis='weigend')
         mydf.kpts = numpy.random.random((4,3))
-        mydf.gs = numpy.asarray((5,)*3)
+        mydf.mesh = numpy.asarray((11,)*3)
         mydf.exxdiv = None
-        mydf.gs = cell.gs
+        mydf.mesh = cell.mesh
         mydf.eta = 0.3
         mydf.auxbasis = 'weigend'
         vk = df_jk.get_k_kpts(mydf, dm, 0, mydf.kpts)
@@ -124,7 +124,7 @@ class KnowValues(unittest.TestCase):
         cell.atom = 'He 1. .5 .5; He .1 1.3 2.1'
         cell.basis = {'He': [(0, (2.5, 1)), (0, (1., 1))]}
         cell.a = numpy.eye(3) * 2.5
-        cell.gs = [5] * 3
+        cell.mesh = [11] * 3
         cell.build()
         kpts = cell.get_abs_kpts([[-.25,-.25,-.25],
                                   [-.25,-.25, .25],
@@ -142,7 +142,7 @@ class KnowValues(unittest.TestCase):
         mydf.kpts = kpts
         mydf.auxbasis = {'He': [(0, (4.096, 1)), (0, (2.56, 1)), (0, (1.6, 1)), (0, (1., 1))]}
         mydf.exxdiv = None
-        mydf.gs = cell.gs
+        mydf.mesh = cell.mesh
         mydf.eta = 0.3
         vk = df_jk.get_k_kpts(mydf, dm, 0, mydf.kpts)
         self.assertAlmostEqual(finger(vk[0]), (0.54220010040518218-0.00787204295681934j  ), 9)
@@ -159,7 +159,7 @@ class KnowValues(unittest.TestCase):
         cell.atom = 'He 1. .5 .5; He .1 1.3 2.1'
         cell.basis = {'He': [(0, (2.5, 1)), (0, (1., 1))]}
         cell.a = numpy.eye(3) * 2.5
-        cell.gs = [5] * 3
+        cell.mesh = [11] * 3
         cell.build()
         kpts = cell.get_abs_kpts([[-.25,-.25,-.25],
                                   [-.25,-.25, .25],
@@ -173,7 +173,7 @@ class KnowValues(unittest.TestCase):
         mydf.kpts = kpts
         mydf.auxbasis = {'He': [(0, (4.096, 1)), (0, (2.56, 1)), (0, (1.6, 1)), (0, (1., 1))]}
         mydf.exxdiv = None
-        mydf.gs = cell.gs
+        mydf.mesh = cell.mesh
         mydf.eta = 0.3
         nao = cell.nao_nr()
         numpy.random.seed(1)

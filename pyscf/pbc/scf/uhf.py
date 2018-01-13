@@ -7,7 +7,7 @@
 Unrestricted Hartree-Fock for periodic systems at a single k-point
 
 See Also:
-    pyscf.pbc.scf.khf.py : Hartree-Fock for periodic systems with k-point sampling
+    pyscf/pbc/scf/khf.py : Hartree-Fock for periodic systems with k-point sampling
 '''
 
 import numpy as np
@@ -19,14 +19,18 @@ from pyscf.pbc.scf import addons
 from pyscf.pbc.scf import chkfile
 
 
-def init_guess_by_chkfile(cell, chkfile_name, project=True, kpt=None):
-    '''Read the HF results from checkpoint file, then project it to the
-    basis defined by ``cell``
+def init_guess_by_chkfile(cell, chkfile_name, project=None, kpt=None):
+    '''Read the HF results from checkpoint file and make the density matrix
+    for UHF initial guess.
 
     Returns:
         Density matrix, (nao,nao) ndarray
     '''
+    from pyscf import gto
     chk_cell, scf_rec = chkfile.load_scf(chkfile_name)
+    if project is None:
+        project = not gto.same_basis_set(chk_cell, cell)
+
     mo = scf_rec['mo_coeff']
     mo_occ = scf_rec['mo_occ']
     if kpt is None:
@@ -46,11 +50,15 @@ def init_guess_by_chkfile(cell, chkfile_name, project=True, kpt=None):
     else:  # from molecular code
         chk_kpt = np.zeros(3)
 
+    if project:
+        s = cell.pbc_intor('int1e_ovlp', kpt=kpt)
     def fproj(mo):
         if project:
-            return addons.project_mo_nr2nr(chk_cell, mo, cell, chk_kpt-kpt)
-        else:
-            return mo
+            mo = addons.project_mo_nr2nr(chk_cell, mo, cell, chk_kpt-kpt)
+            norm = np.einsum('pi,pi->i', mo.conj(), s.dot(mo))
+            mo /= np.sqrt(norm)
+        return mo
+
     if mo.ndim == 2:
         mo = fproj(mo)
         mo_occa = (mo_occ>1e-8).astype(np.double)
@@ -70,13 +78,13 @@ class UHF(mol_uhf.UHF, pbchf.SCF):
     '''
     def __init__(self, cell, kpt=np.zeros(3), exxdiv='ewald'):
         pbchf.SCF.__init__(self, cell, kpt, exxdiv)
-        n_b = (cell.nelectron - cell.spin) // 2
-        self.nelec = (cell.nelectron-n_b, n_b)
+        self.nelec = cell.nelec
         self._keys = self._keys.union(['nelec'])
 
     def dump_flags(self):
         pbchf.SCF.dump_flags(self)
-        logger.info(self, 'number electrons alpha = %d  beta = %d', *self.nelec)
+        logger.info(self, 'number of electrons per unit cell  '
+                    'alpha = %d beta = %d', *self.nelec)
         return self
 
     check_sanity = pbchf.SCF.check_sanity
@@ -144,7 +152,15 @@ class UHF(mol_uhf.UHF, pbchf.SCF):
     _is_mem_enough = pbchf.SCF._is_mem_enough
 
     density_fit = pbchf.SCF.density_fit
-    # mix_density_fit inherits from hf.RHF.mix_density_fit
+    # mix_density_fit inherits from hf.SCF.mix_density_fit
 
     x2c1e = pbchf.SCF.x2c1e
+
+    def convert_from_(self, mf):
+        '''Convert given mean-field object to RHF/ROHF'''
+        addons.convert_to_uhf(mf, self)
+        return self
+
+    stability = None
+    nuc_grad_method = None
 

@@ -25,8 +25,8 @@
 
   - TDHF (and density-fitting TDHF)
   - TDDFT (and density-fitting TDDFT)
-  - TDHF gradients
-  - TDDFT gradients
+  - TDHF nuclear gradients
+  - TDDFT nuclear gradients
 
 
 * General CASCI/CASSCF solver (up to ~3000 basis)
@@ -83,19 +83,22 @@
   - CI wavefunction overlap
 
 
-* Gradients
+* Nuclear Gradients
 
-  - Non-relativistic RHF gradients
+  - Non-relativistic HF gradients
   - 4-component DHF gradients
   - Non-relativistic DFT gradients
-  - Non-relativistic CCSD gradients
+  - Non-relativistic CISD gradients
+  - Non-relativistic CCSD and CCSD(T) gradients
   - Non-relativistic TDHF and TDDFT gradients
+  - Non-relativistic nuclear gradients with SF-X2C-1e correction
 
 
-* Hessian
+* Nuclear Hessian
 
-  - Non-relativistic RHF hessian
-  - Non-relativistic RKS hessian
+  - Non-relativistic HF hessian
+  - Non-relativistic DFT hessian
+  - Non-relativistic nuclear hessian with SF-X2C-1e correction
 
 * Properties
 
@@ -129,7 +132,7 @@
   - PBC density fitting
   - Smearing for mean-field calculation
   - Low-dimensional (0D, 1D, 2D) PBC systems
-  - TDHF and TDDFT with k-point sampling
+  - (restricted and unrestricted) TDHF and TDDFT with k-point sampling
 
 
 * AO integrals
@@ -165,7 +168,7 @@
 
 * Geometry optimization
 
-  - RHF, RKS, RCCSD with pyberny geometry optimizer
+  - HF, DFT, RCCSD, RCISD with pyberny geometry optimizer
 
 
 * D2h symmetry and linear molecule symmetry

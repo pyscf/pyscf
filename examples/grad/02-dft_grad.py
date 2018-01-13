@@ -44,3 +44,11 @@ dft.RKS(mol).run(xc='b3lyp').nuc_grad_method().run(grid_response=True)
 # H     0.0000000000     0.0213006425    -0.0062366694
 # H    -0.0000000000    -0.0213006425    -0.0062366694
 
+#
+# Range-separated XC functional is supported
+#
+dft.RKS(mol).run(xc='wb97x').nuc_grad_method().run()
+# O    -0.0000000000     0.0000000000     0.0041289735
+# H    -0.0000000000     0.0178316686    -0.0020388217
+# H     0.0000000000    -0.0178316686    -0.0020388217
+

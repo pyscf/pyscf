@@ -45,10 +45,11 @@ static void permute(double *out, double *w, int n)
  * w = numpy.einsum('if,fjk->ijk', ov, t2T[c])
  * w-= numpy.einsum('ijm,mk->ijk', vooo[a], t2T[c,b])
  * v = numpy.einsum('ij,k->ijk', oo, t1T[c]*.5)
+ * v+= numpy.einsum('ij,k->ijk', t2T[b,a], fov[:,c]*.5)
  * v+= w
  */
-static void get_wv(double *w, double *v, double *vooo, double *vv_op,
-                   double *t1T, double *t2T,
+static void get_wv(double *w, double *v, double *fovThalf, double *vooo,
+                   double *vv_op, double *t1Thalf, double *t2T,
                    int nocc, int nvir, int a, int b, int c)
 {
         const double D0 = 0;
@@ -59,8 +60,8 @@ static void get_wv(double *w, double *v, double *vooo, double *vv_op,
         const int noo = nocc * nocc;
         const int nooo = nocc * noo;
         const int nvoo = nvir * noo;
-        double thalf[nvir];
         int i, j, k, n;
+        double *pt2T;
 
         dgemm_(&TRANS_N, &TRANS_N, &noo, &nocc, &nvir,
                &D1, t2T+c*nvoo, &noo, vv_op+nocc, &nmo,
@@ -69,18 +70,17 @@ static void get_wv(double *w, double *v, double *vooo, double *vv_op,
                &DN1, t2T+c*nvoo+b*noo, &nocc, vooo+a*nooo, &nocc,
                &D1, w, &nocc);
 
-        for (i = 0; i < nocc; i++) {
-                thalf[i] = t1T[c*nocc+i] * .5;
-        }
+        pt2T = t2T + b * nvoo + a * noo;
         for (n = 0, i = 0; i < nocc; i++) {
         for (j = 0; j < nocc; j++) {
         for (k = 0; k < nocc; k++, n++) {
-                v[n] = w[n] + vv_op[i*nmo+j] * thalf[k];
+                v[n] = w[n] + vv_op[i*nmo+j] * t1Thalf[c*nocc+k];
+                v[n]+= pt2T[i*nocc+j] * fovThalf[c*nocc+k];
         } } }
 }
 
-static void sym_wv(double *w, double *v, double *vooo, double *vv_op,
-                   double *t1T, double *t2T,
+static void sym_wv(double *w, double *v, double *fovThalf, double *vooo,
+                   double *vv_op, double *t1Thalf, double *t2T,
                    int nocc, int nvir, int a, int b, int c, int nirrep,
                    int *o_ir_loc, int *v_ir_loc, int *oo_ir_loc, int *orbsym)
 {
@@ -91,7 +91,6 @@ static void sym_wv(double *w, double *v, double *vooo, double *vv_op,
         const int noo = nocc * nocc;
         const int nooo = nocc * noo;
         const int nvoo = nvir * noo;
-        double thalf[nvir];
         int a_irrep = orbsym[nocc+a];
         int b_irrep = orbsym[nocc+b];
         int c_irrep = orbsym[nocc+c];
@@ -178,13 +177,12 @@ static void sym_wv(double *w, double *v, double *vooo, double *vv_op,
                 }
         }
 
-        for (i = 0; i < nocc; i++) {
-                thalf[i] = t1T[c*nocc+i] * .5;
-        }
+        pt2T = t2T + b * nvoo + a * noo;
         for (n = 0, i = 0; i < nocc; i++) {
         for (j = 0; j < nocc; j++) {
         for (k = 0; k < nocc; k++, n++) {
-                v[n] = w[n] + vv_op[i*nmo+j] * thalf[k];
+                v[n] = w[n] + vv_op[i*nmo+j] * t1Thalf[c*nocc+k];
+                v[n]+= pt2T[i*nocc+j] * fovThalf[c*nocc+k];
         } } }
 }
 
@@ -233,7 +231,7 @@ void _ccsd_t_get_denorm(double *d3, double *mo_energy, int nocc,
 static double contract6(int nocc, int nvir, int a, int b, int c,
                         double *mo_energy, double *t1T, double *t2T,
                         int nirrep, int *o_ir_loc, int *v_ir_loc,
-                        int *oo_ir_loc, int *orbsym,
+                        int *oo_ir_loc, int *orbsym, double *fovT,
                         double *vooo, double *cache1, double **cache)
 {
         int nooo = nocc * nocc * nocc;
@@ -259,24 +257,24 @@ static double contract6(int nocc, int nvir, int a, int b, int c,
         int i;
 
         if (nirrep == 1) {
-                get_wv(w0, v0, vooo, cache[0], t1T, t2T, nocc, nvir, a, b, c);
-                get_wv(w1, v1, vooo, cache[1], t1T, t2T, nocc, nvir, a, c, b);
-                get_wv(w2, v2, vooo, cache[2], t1T, t2T, nocc, nvir, b, a, c);
-                get_wv(w3, v3, vooo, cache[3], t1T, t2T, nocc, nvir, b, c, a);
-                get_wv(w4, v4, vooo, cache[4], t1T, t2T, nocc, nvir, c, a, b);
-                get_wv(w5, v5, vooo, cache[5], t1T, t2T, nocc, nvir, c, b, a);
+                get_wv(w0, v0, fovT, vooo, cache[0], t1T, t2T, nocc, nvir, a, b, c);
+                get_wv(w1, v1, fovT, vooo, cache[1], t1T, t2T, nocc, nvir, a, c, b);
+                get_wv(w2, v2, fovT, vooo, cache[2], t1T, t2T, nocc, nvir, b, a, c);
+                get_wv(w3, v3, fovT, vooo, cache[3], t1T, t2T, nocc, nvir, b, c, a);
+                get_wv(w4, v4, fovT, vooo, cache[4], t1T, t2T, nocc, nvir, c, a, b);
+                get_wv(w5, v5, fovT, vooo, cache[5], t1T, t2T, nocc, nvir, c, b, a);
         } else {
-                sym_wv(w0, v0, vooo, cache[0], t1T, t2T, nocc, nvir, a, b, c,
+                sym_wv(w0, v0, fovT, vooo, cache[0], t1T, t2T, nocc, nvir, a, b, c,
                        nirrep, o_ir_loc, v_ir_loc, oo_ir_loc, orbsym);
-                sym_wv(w1, v1, vooo, cache[1], t1T, t2T, nocc, nvir, a, c, b,
+                sym_wv(w1, v1, fovT, vooo, cache[1], t1T, t2T, nocc, nvir, a, c, b,
                        nirrep, o_ir_loc, v_ir_loc, oo_ir_loc, orbsym);
-                sym_wv(w2, v2, vooo, cache[2], t1T, t2T, nocc, nvir, b, a, c,
+                sym_wv(w2, v2, fovT, vooo, cache[2], t1T, t2T, nocc, nvir, b, a, c,
                        nirrep, o_ir_loc, v_ir_loc, oo_ir_loc, orbsym);
-                sym_wv(w3, v3, vooo, cache[3], t1T, t2T, nocc, nvir, b, c, a,
+                sym_wv(w3, v3, fovT, vooo, cache[3], t1T, t2T, nocc, nvir, b, c, a,
                        nirrep, o_ir_loc, v_ir_loc, oo_ir_loc, orbsym);
-                sym_wv(w4, v4, vooo, cache[4], t1T, t2T, nocc, nvir, c, a, b,
+                sym_wv(w4, v4, fovT, vooo, cache[4], t1T, t2T, nocc, nvir, c, a, b,
                        nirrep, o_ir_loc, v_ir_loc, oo_ir_loc, orbsym);
-                sym_wv(w5, v5, vooo, cache[5], t1T, t2T, nocc, nvir, c, b, a,
+                sym_wv(w5, v5, fovT, vooo, cache[5], t1T, t2T, nocc, nvir, c, b, a,
                        nirrep, o_ir_loc, v_ir_loc, oo_ir_loc, orbsym);
         }
         permute(z0, v0, nocc);
@@ -385,7 +383,8 @@ size_t _ccsd_t_gen_jobs(CacheJob *jobs, int nocc, int nvir,
 }
 
 
-double CCsd_t_contract(double *mo_energy, double *t1T, double *t2T, double *vooo,
+double CCsd_t_contract(double *mo_energy, double *t1T, double *t2T,
+                       double *vooo, double *fovT,
                        int nocc, int nvir, int a0, int a1, int b0, int b1,
                        int nirrep, int *o_ir_loc, int *v_ir_loc,
                        int *oo_ir_loc, int *orbsym,
@@ -399,11 +398,18 @@ double CCsd_t_contract(double *mo_energy, double *t1T, double *t2T, double *vooo
         size_t njobs = _ccsd_t_gen_jobs(jobs, nocc, nvir, a0, a1, b0, b1,
                                         cache_row_a, cache_col_a,
                                         cache_row_b, cache_col_b);
+        double t1Thalf[nvir*nocc];
+        double fovThalf[nvir*nocc];
+        int i;
+        for (i = 0; i < nvir*nocc; i++) {
+                t1Thalf[i] = t1T[i] * .5;
+                fovThalf[i] = fovT[i] * .5;
+        }
 
         double e_tot = 0;
 #pragma omp parallel default(none) \
-        shared(njobs, nocc, nvir, mo_energy, t1T, t2T, nirrep, o_ir_loc, \
-               v_ir_loc, oo_ir_loc, orbsym, vooo, jobs, e_tot)
+        shared(njobs, nocc, nvir, mo_energy, t1Thalf, t2T, nirrep, o_ir_loc, \
+               v_ir_loc, oo_ir_loc, orbsym, vooo, fovThalf, jobs, e_tot)
 {
         int a, b, c;
         size_t k;
@@ -414,9 +420,9 @@ double CCsd_t_contract(double *mo_energy, double *t1T, double *t2T, double *vooo
                 a = jobs[k].a;
                 b = jobs[k].b;
                 c = jobs[k].c;
-                e += contract6(nocc, nvir, a, b, c, mo_energy, t1T, t2T,
+                e += contract6(nocc, nvir, a, b, c, mo_energy, t1Thalf, t2T,
                                nirrep, o_ir_loc, v_ir_loc, oo_ir_loc, orbsym,
-                               vooo, cache1, jobs[k].cache);
+                               fovThalf, vooo, cache1, jobs[k].cache);
         }
         free(cache1);
 #pragma omp critical

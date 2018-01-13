@@ -20,7 +20,7 @@ cell = gto.M(
               C     0.8917  2.6751  2.6751''',
     basis = '6-31g',
     verbose = 4,
-    gs = [5,5,5],
+    mesh = [10,10,10],
 )
 
 nk = [4,4,4]  # 4 k-poins for each axis, 4^3=64 kpts in total
@@ -35,9 +35,10 @@ kmf.kernel()
 
 #
 # Second order SCF solver can be used in the PBC SCF code the same way in the
-# molecular calculation
+# molecular calculation.  Note second order SCF algorithm does not support
+# smearing method.
 #
 mf = scf.KRHF(cell, kpts).mix_density_fit()
-mf = scf.newton(mf)
+mf = mf.newton()
 mf.kernel()
 

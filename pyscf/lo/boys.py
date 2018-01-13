@@ -12,7 +12,7 @@ from functools import reduce
 
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.scf import ciah
+from pyscf.soscf import ciah
 from pyscf.lo import orth
 
 
@@ -87,9 +87,9 @@ def dipole_integral(mol, mo_coeff):
     # The gauge origin has no effects for maximization |<r>|^2
     # Set to charge center for physical significance of <r>
     charge_center = numpy.einsum('z,zx->x', mol.atom_charges(), mol.atom_coords())
-    mol.set_common_orig(charge_center)
-    dip = numpy.asarray([reduce(lib.dot, (mo_coeff.T, x, mo_coeff))
-                         for x in mol.intor_symmetric('int1e_r', comp=3)])
+    with mol.with_common_origin(charge_center):
+        dip = numpy.asarray([reduce(lib.dot, (mo_coeff.T, x, mo_coeff))
+                             for x in mol.intor_symmetric('int1e_r', comp=3)])
     return dip
 
 def atomic_init_guess(mol, mo_coeff):

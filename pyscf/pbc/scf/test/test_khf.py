@@ -16,7 +16,7 @@ import pyscf.pbc.tools
 def finger(a):
     return np.dot(np.cos(np.arange(a.size)), a.ravel())
 
-def make_primitive_cell(ngs):
+def make_primitive_cell(mesh):
     cell = pbcgto.Cell()
     cell.unit = 'A'
     cell.atom = 'C 0.,  0.,  0.; C 0.8917,  0.8917,  0.8917'
@@ -26,7 +26,7 @@ def make_primitive_cell(ngs):
 
     cell.basis = 'gth-szv'
     cell.pseudo = 'gth-pade'
-    cell.gs = np.array([ngs,ngs,ngs])
+    cell.mesh = mesh
 
     cell.verbose = 7
     cell.output = '/dev/null'
@@ -35,12 +35,12 @@ def make_primitive_cell(ngs):
 
 class KnowValues(unittest.TestCase):
     def test_kpt_vs_supercell(self):
-        # For large ngs, agreement is always achieved
-        # ngs = 8
-        # For small ngs, agreement only achieved if "wrapping" k-k'+G in get_coulG
-        ngs = 4
+        # For large n, agreement is always achieved
+        # n = 17
+        # For small n, agreement only achieved if "wrapping" k-k'+G in get_coulG
+        n = 9
         nk = (3, 1, 1)
-        cell = make_primitive_cell(ngs)
+        cell = make_primitive_cell([n]*3)
 
         abs_kpts = cell.make_kpts(nk, wrap_around=True)
         kmf = khf.KRHF(cell, abs_kpts, exxdiv='vcut_sph')
@@ -54,11 +54,8 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(ekpt, -12.337299166550796, 8)
 
         supcell = pyscf.pbc.tools.super_cell(cell, nk)
-        supcell.gs = np.array([nk[0]*ngs + (nk[0]-1)//2,
-                               nk[1]*ngs + (nk[1]-1)//2,
-                               nk[2]*ngs + (nk[2]-1)//2])
-        #print "supcell gs =", supcell.gs
         supcell.build()
+        #print "supcell mesh =", supcell.mesh
 
         gamma = [0,0,0]
         mf = khf.KRHF(supcell, gamma, exxdiv='vcut_sph')
@@ -70,9 +67,9 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(ekpt, esup, 6)
 
     def test_init_guess_by_chkfile(self):
-        ngs = 4
+        n = 9
         nk = (1, 1, 1)
-        cell = make_primitive_cell(ngs)
+        cell = make_primitive_cell([n]*3)
 
         kpts = cell.make_kpts(nk)
         kmf = khf.KRHF(cell, kpts, exxdiv='vcut_sph')
@@ -101,8 +98,8 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(ekpt, -11.215218432275057, 8)
 
     def test_kuhf(self):
-        ngs = 4
-        cell = make_primitive_cell(ngs)
+        n = 9
+        cell = make_primitive_cell([n]*3)
         nk = (3, 1, 1)
         kpts = cell.make_kpts(nk)
         kmf1 = kuhf.KUHF(cell, kpts, exxdiv='vcut_sph')

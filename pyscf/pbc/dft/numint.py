@@ -30,7 +30,7 @@ from pyscf.pbc.lib.kpt_misc import is_zero, gamma_point, member
 #except:
 #    memory_cache = lambda f: f
 
-def eval_ao(cell, coords, kpt=numpy.zeros(3), deriv=0, relativity=0, shl_slice=None,
+def eval_ao(cell, coords, kpt=numpy.zeros(3), deriv=0, relativity=0, shls_slice=None,
             non0tab=None, out=None, verbose=None):
     '''Collocate AO crystal orbitals (opt. gradients) on the real-space grid.
 
@@ -63,16 +63,16 @@ def eval_ao(cell, coords, kpt=numpy.zeros(3), deriv=0, relativity=0, shl_slice=N
 
     '''
     ao_kpts = eval_ao_kpts(cell, coords, numpy.reshape(kpt, (-1,3)), deriv,
-                           relativity, shl_slice, non0tab, out, verbose)
+                           relativity, shls_slice, non0tab, out, verbose)
     return ao_kpts[0]
 
 
 #@memory_cache
 def eval_ao_kpts(cell, coords, kpts=None, deriv=0, relativity=0,
-                 shl_slice=None, non0tab=None, out=None, verbose=None, **kwargs):
+                 shls_slice=None, non0tab=None, out=None, verbose=None, **kwargs):
     '''
     Returns:
-        ao_kpts: (nkpts, [comp], ngs, nao) ndarray
+        ao_kpts: (nkpts, [comp], ngrids, nao) ndarray
             AO values at each k-point
     '''
     if kpts is None:
@@ -94,7 +94,11 @@ def eval_ao_kpts(cell, coords, kpts=None, deriv=0, relativity=0,
         non0tab[:] = 0xff
 
     ao_loc = cell.ao_loc_nr()
-    nao = ao_loc[-1]
+    if shls_slice is None:
+        shls_slice = (0, cell.nbas)
+    sh0, sh1 = shls_slice
+    nao = ao_loc[sh1] - ao_loc[sh0]
+
     comp = (deriv+1)*(deriv+2)*(deriv+3)//6
     ao_kpts = [numpy.zeros((ngrids,nao,comp), dtype=numpy.complex128, order='F')
                for k in range(nkpts)]
@@ -107,7 +111,7 @@ def eval_ao_kpts(cell, coords, kpts=None, deriv=0, relativity=0,
 
     drv = getattr(libpbc, 'PBCval_sph_deriv%d' % deriv)
     drv(ctypes.c_int(ngrids),
-        (ctypes.c_int*2)(0, cell.nbas), ao_loc.ctypes.data_as(ctypes.c_void_p),
+        (ctypes.c_int*2)(*shls_slice), ao_loc.ctypes.data_as(ctypes.c_void_p),
         Ls.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(len(Ls)),
         expLk.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nkpts),
         out_ptrs, coords.ctypes.data_as(ctypes.c_void_p),
@@ -341,6 +345,7 @@ def nr_rks(ni, cell, grids, xc_code, dms, spin=0, relativity=0, hermi=0,
     '''
     if kpts is None:
         kpts = numpy.zeros((1,3))
+
     xctype = ni._xc_type(xc_code)
     make_rho, nset, nao = ni._gen_rho_evaluator(cell, dms, hermi)
 
@@ -440,6 +445,7 @@ def nr_uks(ni, cell, grids, xc_code, dms, spin=1, relativity=0, hermi=0,
     '''
     if kpts is None:
         kpts = numpy.zeros((1,3))
+
     xctype = ni._xc_type(xc_code)
     dma, dmb = _format_uks_dm(dms)
     nao = dma.shape[-1]
@@ -934,8 +940,8 @@ class _NumInt(numint._NumInt):
     periodic images.
     '''
     def eval_ao(self, cell, coords, kpt=numpy.zeros(3), deriv=0, relativity=0,
-                shl_slice=None, non0tab=None, out=None, verbose=None):
-        return eval_ao(cell, coords, kpt, deriv, relativity, shl_slice,
+                shls_slice=None, non0tab=None, out=None, verbose=None):
+        return eval_ao(cell, coords, kpt, deriv, relativity, shls_slice,
                        non0tab, out, verbose)
 
     @lib.with_doc(make_mask.__doc__)
@@ -965,12 +971,28 @@ class _NumInt(numint._NumInt):
     @lib.with_doc(nr_rks.__doc__)
     def nr_rks(self, cell, grids, xc_code, dms, hermi=0,
                kpt=numpy.zeros(3), kpts_band=None, max_memory=2000, verbose=None):
+        if kpts_band is not None:
+# To compute Vxc on kpts_band, convert the NumInt object to KNumInt object.
+            ni = _KNumInt()
+            ni.__dict__.update(self.__dict__)
+            nao = dms.shape[-1]
+            return ni.nr_rks(cell, grids, xc_code, dms.reshape(-1,1,nao,nao),
+                             hermi, kpt.reshape(1,3), kpts_band, max_memory,
+                             verbose)
         return nr_rks(self, cell, grids, xc_code, dms,
                       0, 0, hermi, kpt, kpts_band, max_memory, verbose)
 
     @lib.with_doc(nr_uks.__doc__)
     def nr_uks(self, cell, grids, xc_code, dms, hermi=0,
                kpt=numpy.zeros(3), kpts_band=None, max_memory=2000, verbose=None):
+        if kpts_band is not None:
+# To compute Vxc on kpts_band, convert the NumInt object to KNumInt object.
+            ni = _KNumInt()
+            ni.__dict__.update(self.__dict__)
+            nao = dms[0].shape[-1]
+            return ni.nr_uks(cell, grids, xc_code, dms.reshape(-1,1,nao,nao),
+                             hermi, kpt.reshape(1,3), kpts_band, max_memory,
+                             verbose)
         return nr_uks(self, cell, grids, xc_code, dms,
                       1, 0, hermi, kpt, kpts_band, max_memory, verbose)
 
@@ -1038,6 +1060,12 @@ class _NumInt(numint._NumInt):
     cache_xc_kernel  = cache_xc_kernel
     get_rho = get_rho
 
+    def rsh_and_hybrid_coeff(self, xc_code, spin=0):
+        omega, alpha, hyb = numint._NumInt.rsh_and_hybrid_coeff(self, xc_code, spin)
+        if abs(omega) > 1e-10:
+            raise NotImplementedError
+        return omega, alpha, hyb
+
 
 class _KNumInt(numint._NumInt):
     '''Generalization of pyscf's _NumInt class for k-point sampling and
@@ -1048,9 +1076,9 @@ class _KNumInt(numint._NumInt):
         self.kpts = numpy.reshape(kpts, (-1,3))
 
     def eval_ao(self, cell, coords, kpts=numpy.zeros((1,3)), deriv=0, relativity=0,
-                shl_slice=None, non0tab=None, out=None, verbose=None, **kwargs):
+                shls_slice=None, non0tab=None, out=None, verbose=None, **kwargs):
         return eval_ao_kpts(cell, coords, kpts, deriv,
-                            relativity, shl_slice, non0tab, out, verbose)
+                            relativity, shls_slice, non0tab, out, verbose)
 
     @lib.with_doc(make_mask.__doc__)
     def make_mask(self, cell, coords, relativity=0, shls_slice=None,
@@ -1062,13 +1090,13 @@ class _KNumInt(numint._NumInt):
         '''
         Args:
             cell : Mole or Cell object
-            ao_kpts : (nkpts, ngs, nao) ndarray
+            ao_kpts : (nkpts, ngrids, nao) ndarray
                 AO values at each k-point
             dm_kpts: (nkpts, nao, nao) ndarray
                 Density matrix at each k-point
 
         Returns:
-           rhoR : (ngs,) ndarray
+           rhoR : (ngrids,) ndarray
         '''
         nkpts = len(ao_kpts)
         rhoR = 0
@@ -1220,4 +1248,10 @@ class _KNumInt(numint._NumInt):
     nr_uks_fxc = nr_uks_fxc
     cache_xc_kernel  = cache_xc_kernel
     get_rho = get_rho
+
+    def rsh_and_hybrid_coeff(self, xc_code, spin=0):
+        omega, alpha, hyb = numint._NumInt.rsh_and_hybrid_coeff(self, xc_code, spin)
+        if abs(omega) > 1e-10:
+            raise NotImplementedError
+        return omega, alpha, hyb
 

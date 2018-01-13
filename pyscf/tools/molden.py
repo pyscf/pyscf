@@ -15,7 +15,7 @@ from pyscf.lib import logger
 
 
 def orbital_coeff(mol, fout, mo_coeff, spin='Alpha', symm=None, ene=None,
-                  occ=None, ignore_h=False):
+                  occ=None, ignore_h=True):
     from pyscf.symm import label_orb_symm
     if ignore_h:
         mol, mo_coeff = remove_high_l(mol, mo_coeff)
@@ -49,15 +49,15 @@ def orbital_coeff(mol, fout, mo_coeff, spin='Alpha', symm=None, ene=None,
             fout.write(' %3d    %18.14g\n' % (i+1, mo_coeff[j,imo]))
 
 def from_mo(mol, filename, mo_coeff, spin='Alpha', symm=None, ene=None,
-            occ=None, ignore_h=False):
+            occ=None, ignore_h=True):
     with open(filename, 'w') as f:
         header(mol, f, ignore_h)
         orbital_coeff(mol, f, mo_coeff, spin, symm, ene, occ, ignore_h)
 
 
-def from_scf(mf, filename, ignore_h=False):
+def from_scf(mf, filename, ignore_h=True):
     dump_scf(mf, filename, ignore_h)
-def dump_scf(mf, filename, ignore_h=False):
+def dump_scf(mf, filename, ignore_h=True):
     import pyscf.scf
     mol = mf.mol
     mo_coeff = mf.mo_coeff
@@ -74,7 +74,7 @@ def dump_scf(mf, filename, ignore_h=False):
             orbital_coeff(mf.mol, f, mf.mo_coeff,
                           ene=mf.mo_energy, occ=mf.mo_occ, ignore_h=ignore_h)
 
-def from_mcscf(mc, filename, ignore_h=False, cas_natorb=False):
+def from_mcscf(mc, filename, ignore_h=True, cas_natorb=False):
     mol = mc.mol
     dm1 = mc.make_rdm1()
     if cas_natorb:
@@ -88,7 +88,7 @@ def from_mcscf(mc, filename, ignore_h=False, cas_natorb=False):
         header(mol, f, ignore_h)
         orbital_coeff(mol, f, mo_coeff, ene=mo_energy, occ=occ, ignore_h=ignore_h)
 
-def from_chkfile(filename, chkfile, key='scf/mo_coeff', ignore_h=False):
+def from_chkfile(filename, chkfile, key='scf/mo_coeff', ignore_h=True):
     import pyscf.scf
     with open(filename, 'w') as f:
         if key == 'scf/mo_coeff':
@@ -258,7 +258,7 @@ def first_token(stream, key):
 def _d2e(token):
     return token.replace('D', 'e').replace('d', 'e')
 
-def header(mol, fout, ignore_h=False):
+def header(mol, fout, ignore_h=True):
     if ignore_h:
         mol = remove_high_l(mol)[0]
     fout.write('[Molden Format]\n')
@@ -370,7 +370,7 @@ def remove_high_l(mol, mo_coeff=None):
             nc = mol.bas_nctr(ib)
             if l <= 4:
                 idx.append(range(k, k+(l*2+1)*nc))
-                k += (l*2+1) * nc
+            k += (l*2+1) * nc
         idx = numpy.hstack(idx)
         return pmol, mo_coeff[idx]
 

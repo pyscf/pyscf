@@ -6,10 +6,10 @@ from pyscf import ao2mo
 df.LINEAR_DEP_THR = 1e-7
 
 L = 5.
-n = 1
+n = 3
 cell = pgto.Cell()
 cell.a = numpy.diag([L,L,L])
-cell.gs = numpy.array([n,n,n])
+cell.mesh = numpy.array([n,n,n])
 
 cell.atom = '''He    3.    2.       3.
                He    1.    1.       1.'''
@@ -98,7 +98,7 @@ class KnowValues(unittest.TestCase):
         kpts[3] = -numpy.einsum('ij->j', kpts[:3])
         with_df = df.DF(cell).set(auxbasis='weigend')
         with_df.kpts = kpts
-        with_df.gs = [5]*3
+        with_df.mesh = [11]*3
         mo =(numpy.random.random((nao,nao)) +
              numpy.random.random((nao,nao))*1j)
         eri = with_df.get_eri(kpts).reshape((nao,)*4)

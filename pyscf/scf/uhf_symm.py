@@ -211,7 +211,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     return mo_e, mo
 
 
-class UHF(uhf.UHF):
+class SymAdaptedUHF(uhf.UHF):
     __doc__ = uhf.UHF.__doc__ + '''
     Attributes for symmetry allowed UHF:
         irrep_nelec : dict
@@ -442,6 +442,8 @@ class UHF(uhf.UHF):
         return get_irrep_nelec(mol, mo_coeff, mo_occ, s)
 
     canonicalize = canonicalize
+
+UHF = SymAdaptedUHF
 
 def get_orbsym(mol, mo_coeff, s=None, check=False):
     if hasattr(mo_coeff, 'orbsym'):

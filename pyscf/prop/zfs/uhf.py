@@ -20,7 +20,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.gto import mole
 from pyscf.ao2mo import _ao2mo
-from pyscf.scf.newton_ah import _gen_uhf_response
+from pyscf.soscf.newton_ah import _gen_uhf_response
 from pyscf.prop.nmr import uhf as uhf_nmr
 from pyscf.prop.ssc.rhf import _dm1_mo2ao
 from pyscf.data import nist

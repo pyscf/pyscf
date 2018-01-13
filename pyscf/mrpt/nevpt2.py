@@ -613,7 +613,7 @@ class NEVPT(lib.StreamObject):
         #Some preprocess for dmrg-nevpt
         return self
 
-    def compress_approx(self,maxM=500, compress_schedule=None, tol=1e-7, stored_integral =False):
+    def compress_approx(self,maxM=500, nevptsolver=None, tol=1e-7, stored_integral =False):
         '''SC-NEVPT2 with compressed perturber
 
         Kwargs :
@@ -637,9 +637,10 @@ class NEVPT(lib.StreamObject):
 
         from pyscf.dmrgscf.nevpt_mpi import DMRG_COMPRESS_NEVPT
         if stored_integral: #Stored perturbation integral and read them again. For debugging purpose.
-            DMRG_COMPRESS_NEVPT('nevpt_perturb_integral',maxM= maxM, root= self.root, nevptsolver= compress_schedule, tol= tol)
+            DMRG_COMPRESS_NEVPT(self, maxM=maxM, root=self.root, nevptsolver=nevptsolver, tol=tol,
+                                nevpt_integral='nevpt_perturb_integral')
         else:
-            DMRG_COMPRESS_NEVPT(self,maxM= maxM, root= self.root, nevptsolver= compress_schedule, tol= tol)
+            DMRG_COMPRESS_NEVPT(self, maxM=maxM, root=self.root, nevptsolver=nevptsolver, tol=tol)
 
         self.canonicalized = True
         self.compressed_mps = True

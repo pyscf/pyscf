@@ -19,53 +19,41 @@ from pyscf.scf import chkfile
 def get_jk(mol, dm, hermi=0,
            with_j=True, with_k=True, jkbuild=hf.get_jk):
 
-    nao = mol.nao_nr()
-    if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
-        n_dm = 1
-        dmaa = dm[:nao,:nao]
-        dmab = dm[nao:,:nao]
-        dmbb = dm[nao:,nao:]
-        dms = (dmaa, dmbb, dmab)
-    else:
-        n_dm = len(dm)
-        dms =([dmi[:nao,:nao] for dmi in dm]
-            + [dmi[nao:,nao:] for dmi in dm]
-            + [dmi[nao:,:nao] for dmi in dm])
-    dms = numpy.asarray(dms)
-    if dm[0].dtype == numpy.complex128:
+    dm = numpy.asarray(dm)
+    nso = dm.shape[-1]
+    nao = nso // 2
+    dms = dm.reshape(-1,nso,nso)
+    n_dm = dms.shape[0]
+
+    dmaa = dms[:,:nao,:nao]
+    dmab = dms[:,nao:,:nao]
+    dmbb = dms[:,nao:,nao:]
+    dms = numpy.vstack((dmaa, dmbb, dmab))
+    if dm.dtype == numpy.complex128:
         dms = numpy.vstack((dms.real, dms.imag))
         hermi = 0
 
     j1, k1 = jkbuild(mol, dms, hermi)
+    j1 = j1.reshape(-1,n_dm,nao,nao)
+    k1 = k1.reshape(-1,n_dm,nao,nao)
 
-    if dm[0].dtype == numpy.complex128:
-        if with_j: j1 = j1[:n_dm*3] + j1[n_dm*3:] * 1j
-        if with_k: k1 = k1[:n_dm*3] + k1[n_dm*3:] * 1j
+    if dm.dtype == numpy.complex128:
+        if with_j: j1 = j1[:3] + j1[3:] * 1j
+        if with_k: k1 = k1[:3] + k1[3:] * 1j
 
     vj = vk = None
     if with_j:
-        vj = numpy.zeros_like(dm)
-        if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
-            j1 = j1.reshape(3,nao,nao)
-            vj[:nao,:nao] = vj[nao:,nao:] = j1[0] + j1[1]
-        else:
-            j1 = j1.reshape(3,n_dm,nao,nao)
-            vj[:,:nao,:nao] = vj[:,nao:,nao:] = j1[0] + j1[1]
+        vj = numpy.zeros((n_dm,nso,nso), dm.dtype)
+        vj[:,:nao,:nao] = vj[:,nao:,nao:] = j1[0] + j1[1]
+        vj = vj.reshape(dm.shape)
 
     if with_k:
-        vk = numpy.zeros_like(dm)
-        if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
-            k1 = k1.reshape(3,nao,nao)
-            vk[:nao,:nao] = k1[0]
-            vk[nao:,nao:] = k1[1]
-            vk[:nao,nao:] = k1[2]
-            vk[nao:,:nao] = k1[2].T.conj()
-        else:
-            k1 = k1.reshape(3,n_dm,nao,nao)
-            vk[:,:nao,:nao] = k1[0]
-            vk[:,nao:,nao:] = k1[1]
-            vk[:,:nao,nao:] = k1[2]
-            vk[:,nao:,:nao] = k1[2].transpose(0,2,1).conj()
+        vk = numpy.zeros((n_dm,nso,nso), dm.dtype)
+        vk[:,:nao,:nao] = k1[0]
+        vk[:,nao:,nao:] = k1[1]
+        vk[:,:nao,nao:] = k1[2]
+        vk[:,nao:,:nao] = k1[2].transpose(0,2,1).conj()
+        vk = vk.reshape(dm.shape)
 
     return vj, vk
 
@@ -193,10 +181,10 @@ def spin_square(mo, s=1):
         s = s[:nao,:nao]
     mo_a = mo[:nao]
     mo_b = mo[nao:]
-    saa = reduce(numpy.dot, (mo_a.T.conj(), s, mo_a))
-    sbb = reduce(numpy.dot, (mo_b.T.conj(), s, mo_b))
-    sab = reduce(numpy.dot, (mo_a.T.conj(), s, mo_b))
-    sba = sab.T.conj()
+    saa = reduce(numpy.dot, (mo_a.conj().T, s, mo_a))
+    sbb = reduce(numpy.dot, (mo_b.conj().T, s, mo_b))
+    sab = reduce(numpy.dot, (mo_a.conj().T, s, mo_b))
+    sba = sab.conj().T
     nocc_a = saa.trace()
     nocc_b = sbb.trace()
     ssxy = (nocc_a+nocc_b) * .5
@@ -278,6 +266,22 @@ def dip_moment(mol, dm, unit_symbol='Debye', verbose=logger.NOTE):
 
 canonicalize = hf.canonicalize
 
+def guess_orbspin(mo_coeff):
+    '''Guess the orbital spin (alpha 0, beta 1, unknown -1) based on the
+    orbital coefficients
+    '''
+    nao, nmo = mo_coeff.shape
+    mo_a = mo_coeff[:nao//2]
+    mo_b = mo_coeff[nao//2:]
+    # When all coefficients on alpha AOs are close to 0, it's a beta orbital
+    bidx = numpy.all(abs(mo_a) < 1e-14, axis=0)
+    aidx = numpy.all(abs(mo_b) < 1e-14, axis=0)
+    orbspin = numpy.empty(nmo, dtype=int)
+    orbspin[:] = -1
+    orbspin[aidx] = 0
+    orbspin[bidx] = 1
+    return orbspin
+
 class GHF(hf.SCF):
     __doc__ = hf.SCF.__doc__ + '''
 
@@ -294,8 +298,8 @@ class GHF(hf.SCF):
 
     def get_ovlp(self, mol=None):
         if mol is None: mol = self.mol
-        hcore = hf.get_ovlp(mol)
-        return scipy.linalg.block_diag(hcore, hcore)
+        s = hf.get_ovlp(mol)
+        return scipy.linalg.block_diag(s, s)
 
     get_occ = get_occ
 
@@ -315,7 +319,7 @@ class GHF(hf.SCF):
     def init_guess_by_atom(self, mol=None):
         return _from_rhf_init_dm(hf.SCF.init_guess_by_atom(self, mol))
 
-    def init_guess_by_chkfile(self, chkfile=None, project=True):
+    def init_guess_by_chkfile(self, chkfile=None, project=None):
         dma, dmb = uhf.init_guess_by_chkfile(mol, chkfile, project)
         return scipy.linalg.block_diag(dma, dmb)
 
@@ -414,6 +418,8 @@ class GHF(hf.SCF):
     def stability(self, verbose=None):
         from pyscf.scf.stability import ghf_stability
         return ghf_stability(self, verbose)
+
+    nuc_grad_method = None
 
 def _from_rhf_init_dm(dm, breaksym=True):
     dma = dm * .5

@@ -75,6 +75,20 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(dexc_t, exc1_approx[2], 3)
         self.assertAlmostEqual(dexc_t, exc1_full[2], 5)
 
+    def test_range_separated(self):
+        mol = gto.M(atom="H; H 1 1.", basis='ccpvdz', verbose=0)
+        mf = dft.UKS(mol)
+        mf.xc = 'wb97x'
+        mf.kernel()
+        g = mf.nuc_grad_method().kernel()
+        smf = mf.as_scanner()
+        mol1 = gto.M(atom="H; H 1 1.001", basis='ccpvdz')
+        mol2 = gto.M(atom="H; H 1 0.999", basis='ccpvdz')
+        dx = (mol1.atom_coord(1) - mol2.atom_coord(1))[0]
+        e1 = smf(mol1)
+        e2 = smf(mol2)
+        self.assertAlmostEqual((e1-e2)/dx, g[1,0], 5)
+
 
 if __name__ == "__main__":
     print("Full Tests for UKS Gradients")

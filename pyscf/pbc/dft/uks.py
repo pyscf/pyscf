@@ -33,7 +33,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     t0 = (time.clock(), time.time())
 
     # ndim = 3 : dm.shape = ([alpha,beta], nao, nao)
-    ground_state = (dm.ndim == 3 and dm.shape[0] == 2)
+    ground_state = (dm.ndim == 3 and dm.shape[0] == 2 and kpts_band is None)
 
     if ks.grids.coords is None:
         ks.grids.build(with_non0tab=True)
@@ -55,11 +55,13 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         logger.debug(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
 
-    hyb = ks._numint.hybrid_coeff(ks.xc, spin=cell.spin)
+    omega, alpha, hyb = ks._numint.rsh_and_hybrid_coeff(ks.xc, spin=cell.spin)
     if abs(hyb) < 1e-10:
         vj = ks.get_j(cell, dm, hermi, kpt, kpts_band)
         vxc += vj[0] + vj[1]
     else:
+        if getattr(ks.with_df, '_j_only', False):  # for GDF and MDF
+            ks.with_df._j_only = False
         vj, vk = ks.get_jk(cell, dm, hermi, kpt, kpts_band)
         vxc += vj[0] + vj[1] - vk * hyb
 

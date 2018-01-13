@@ -173,7 +173,11 @@ def _parse(raw_basis):
             else:
                 basis_add.append([MAPSPDF[key]])
         else:
-            line = [float(x) for x in dat.replace('D','e').split()]
+            try:
+                line = [float(x) for x in dat.replace('D','e').split()]
+            except BaseException as e:
+                raise RuntimeError('\n' + e.message +
+                                   '\nor the required basis file not existed.')
             if key == 'SP':
                 basis_add[-2].append([line[0], line[1]])
                 basis_add[-1].append([line[0], line[2]])

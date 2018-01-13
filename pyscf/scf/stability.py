@@ -16,9 +16,9 @@ import numpy
 import scipy
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.scf import newton_ah
 from pyscf.scf import hf, hf_symm, uhf_symm
-from pyscf.scf.newton_ah import _gen_rhf_response, _gen_uhf_response
+from pyscf.soscf import newton_ah
+from pyscf.soscf.newton_ah import _gen_rhf_response, _gen_uhf_response
 
 def rhf_stability(mf, internal=True, external=False, verbose=None):
     mo_i = mo_e = None

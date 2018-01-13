@@ -13,10 +13,10 @@ import numpy
 import pyscf.lib
 from pyscf.lib import logger
 from pyscf import dft
+from pyscf.dft import rks
 from pyscf.dft import numint
 from pyscf.dft import rks_grad
 from pyscf.scf import cphf
-from pyscf.tddft import rks
 from pyscf.tddft import rhf_grad
 
 
@@ -26,10 +26,7 @@ from pyscf.tddft import rhf_grad
 def kernel(td_grad, x_y, singlet=True, atmlst=None,
            max_memory=2000, verbose=logger.INFO):
     x, y = x_y
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(td_grad.stdout, verbose)
+    log = logger.new_logger(td_grad, verbose)
     time0 = time.clock(), time.time()
 
     mol = td_grad.mol
@@ -56,7 +53,7 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
     max_memory = max(2000, td_grad.max_memory*.9-mem_now)
 
     ni = mf._numint
-    hyb = ni.hybrid_coeff(mf.xc, spin=mol.spin)
+    omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
     dm0 = None # mf.make_rdm1(mo_coeff, mo_occ)
     rho0, vxc, fxc = ni.cache_xc_kernel(mf.mol, mf.grids, mf.xc,
                                         [mo_coeff]*2, [mo_occ*.5]*2, spin=1)
@@ -65,17 +62,21 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
                                 dmzoo, True, True, singlet, max_memory)
 
     if abs(hyb) > 1e-10:
-        vj, vk = mf.get_jk(mol, (dmzoo, dmzvop+dmzvop.T, dmzvom-dmzvom.T), hermi=0)
-        veff0doo = vj[0] * 2 - hyb * vk[0] + f1oo[0] + k1ao[0] * 2
+        dm = (dmzoo, dmzvop+dmzvop.T, dmzvom-dmzvom.T)
+        vj, vk = mf.get_jk(mol, dm, hermi=0)
+        vk *= hyb
+        if abs(omega) > 1e-10:
+            vk += rks._get_k_lr(mol, dm, omega) * (alpha-hyb)
+        veff0doo = vj[0] * 2 - vk[0] + f1oo[0] + k1ao[0] * 2
         wvo = reduce(numpy.dot, (orbv.T, veff0doo, orbo)) * 2
         if singlet:
-            veff = vj[1] * 2 - hyb * vk[1] + f1vo[0] * 2
+            veff = vj[1] * 2 - vk[1] + f1vo[0] * 2
         else:
-            veff = -hyb * vk[1] + f1vo[0] * 2
+            veff = -vk[1] + f1vo[0] * 2
         veff0mop = reduce(numpy.dot, (mo_coeff.T, veff, mo_coeff))
         wvo -= numpy.einsum('ki,ai->ak', veff0mop[:nocc,:nocc], xpy) * 2
         wvo += numpy.einsum('ac,ai->ci', veff0mop[nocc:,nocc:], xpy) * 2
-        veff = -hyb * vk[2]
+        veff = -vk[2]
         veff0mom = reduce(numpy.dot, (mo_coeff.T, veff, mo_coeff))
         wvo -= numpy.einsum('ki,ai->ak', veff0mom[:nocc,:nocc], xmy) * 2
         wvo += numpy.einsum('ac,ai->ci', veff0mom[nocc:,nocc:], xmy) * 2
@@ -102,6 +103,8 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
         if abs(hyb) > 1e-10:
             vj, vk = mf.get_jk(mol, dm)
             veff = vj * 2 - hyb * vk + vindxc
+            if abs(omega) > 1e-10:
+                veff -= rks._get_k_lr(mol, dm, omega) * (alpha-hyb)
         else:
             vj = mf.get_j(mol, dm)
             veff = vj * 2 + vindxc
@@ -118,6 +121,8 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
     if abs(hyb) > 1e-10:
         vj, vk = mf.get_jk(mol, z1ao, hermi=0)
         veff = vj * 2 - hyb * vk + fxcz1[0]
+        if abs(omega) > 1e-10:
+            veff -= rks._get_k_lr(mol, z1ao, omega) * (alpha-hyb)
     else:
         vj = mf.get_j(mol, z1ao, hermi=1)
         veff = vj * 2 + fxcz1[0]
@@ -141,20 +146,24 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
     dm1[:nocc,:nocc] += numpy.eye(nocc)*2 # for ground state
     im0 = reduce(numpy.dot, (mo_coeff, im0+zeta*dm1, mo_coeff.T))
 
-    h1 = td_grad.get_hcore(mol)
+    hcore_deriv = td_grad.hcore_generator(mol)
     s1 = td_grad.get_ovlp(mol)
 
     dmz1doo = z1ao + dmzoo
     oo0 = reduce(numpy.dot, (orbo, orbo.T))
     if abs(hyb) > 1e-10:
-        vj, vk = td_grad.get_jk(mol, (oo0, dmz1doo+dmz1doo.T, dmzvop+dmzvop.T,
-                                      dmzvom-dmzvom.T))
+        dm = (oo0, dmz1doo+dmz1doo.T, dmzvop+dmzvop.T, dmzvom-dmzvom.T)
+        vj, vk = td_grad.get_jk(mol, dm)
+        vk *= hyb
+        if abs(omega) > 1e-10:
+            with mol.with_range_coulomb(omega):
+                vk += ks_grad.get_k(mol, dm) * (alpha-hyb)
         vj = vj.reshape(-1,3,nao,nao)
         vk = vk.reshape(-1,3,nao,nao)
         if singlet:
-            veff1 = vj * 2 - hyb * vk
+            veff1 = vj * 2 - vk
         else:
-            veff1 = numpy.vstack((vj[:2]*2-hyb*vk[:2], -hyb*vk[2:]))
+            veff1 = numpy.vstack((vj[:2]*2-vk[:2], -vk[2:]))
     else:
         vj = td_grad.get_j(mol, (oo0, dmz1doo+dmz1doo.T, dmzvop+dmzvop.T))
         vj = vj.reshape(-1,3,nao,nao)
@@ -175,16 +184,14 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
     for k, ia in enumerate(atmlst):
         shl0, shl1, p0, p1 = offsetdic[ia]
 
-        mol.set_rinv_origin(mol.atom_coord(ia))
-        h1ao = -mol.atom_charge(ia) * mol.intor('int1e_iprinv', comp=3)
-        h1ao[:,p0:p1] += h1[:,p0:p1] + veff1[0,:,p0:p1]
-
         # Ground state gradients
-        # h1ao*2 for +c.c, oo0*2 for doubly occupied orbitals
-        e1  = numpy.einsum('xpq,pq->x', h1ao, oo0) * 4
+        h1ao = hcore_deriv(ia)
+        h1ao[:,p0:p1]   += veff1[0,:,p0:p1]
+        h1ao[:,:,p0:p1] += veff1[0,:,p0:p1].transpose(0,2,1)
+        # oo0*2 for doubly occupied orbitals
+        e1  = numpy.einsum('xpq,pq->x', h1ao, oo0) * 2
 
         e1 += numpy.einsum('xpq,pq->x', h1ao, dmz1doo)
-        e1 += numpy.einsum('xqp,pq->x', h1ao, dmz1doo)
         e1 -= numpy.einsum('xpq,pq->x', s1[:,p0:p1], im0[p0:p1])
         e1 -= numpy.einsum('xqp,pq->x', s1[:,p0:p1], im0[:,p0:p1])
 
@@ -275,64 +282,32 @@ def _contract_xc_kernel(td_grad, xc_code, xai, oovv=None, with_vxc=True,
     elif xctype == 'GGA':
         if singlet:
             def gga_sum_(vmat, ao, wv, mask):
-                aow  = numpy.einsum('pi,p->pi', ao[0], wv[0]*.5)
+                aow  = numpy.einsum('pi,p->pi', ao[0], wv[0])
                 aow += numpy.einsum('npi,np->pi', ao[1:4], wv[1:])
                 tmp = numint._dot_ao_ao(mol, ao[0], aow, mask, shls_slice, ao_loc)
                 vmat[0] += tmp + tmp.T
-                vmat[1:] += rks_grad._gga_grad_sum(mol, ao, wv, mask,
-                                                   shls_slice, ao_loc)
+                rks_grad._gga_grad_sum_(vmat[1:], mol, ao, wv, mask, ao_loc)
             ao_deriv = 2
             for ao, mask, weight, coords \
                     in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
                 rho = ni.eval_rho2(mol, ao, mo_coeff, mo_occ, mask, 'GGA')
                 vxc, fxc, kxc = ni.eval_xc(xc_code, rho, 0, deriv=deriv)[1:]
 
-                vrho, vgamma = vxc[:2]
-                frr, frg, fgg = fxc[:3]
-
                 rho1 = ni.eval_rho(mol, ao, dmvo, mask, 'GGA') * 2  # *2 for alpha + beta
-                sigma1 = numpy.einsum('xi,xi->i', rho[1:], rho1[1:])
-                wv = numpy.empty_like((rho))
-                wv[0]  = frr * rho1[0]
-                wv[0] += frg * sigma1 * 2
-                wv[1:]  = (fgg * sigma1 * 4 + frg * rho1[0] * 2) * rho[1:]
-                wv[1:] += vgamma * rho1[1:] * 2
-                wv *= weight
+                wv = numint._rks_gga_wv1(rho, rho1, vxc, fxc, weight)
                 gga_sum_(f1vo, ao, wv, mask)
 
                 if oovv is not None:
                     rho2 = ni.eval_rho(mol, ao, oovv, mask, 'GGA') * 2
-                    sigma2 = numpy.einsum('xi,xi->i', rho[1:], rho2[1:])
-                    wv[0]  = frr * rho2[0]
-                    wv[0] += frg * sigma2 * 2
-                    wv[1:]  = (fgg * sigma2 * 4 + frg * rho2[0] * 2) * rho[1:]
-                    wv[1:] += vgamma * rho2[1:] * 2
-                    wv *= weight
+                    wv = numint._rks_gga_wv1(rho, rho2, vxc, fxc, weight)
                     gga_sum_(f1oo, ao, wv, mask)
                 if with_vxc:
-                    wv[0]  = vrho
-                    wv[1:] = 2 * vgamma * rho[1:]
-                    wv *= weight
+                    wv = numint._rks_gga_wv0(rho, vxc, weight)
                     gga_sum_(v1ao, ao, wv, mask)
                 if with_kxc:
-                    frrr, frrg, frgg, fggg = kxc
-                    r1r1 = rho1[0]**2
-                    s1s1 = sigma1**2
-                    r1s1 = rho1[0] * sigma1
-                    sigma2 = numpy.einsum('xi,xi->i', rho1[1:], rho1[1:])
-                    wv[0]  = frrr * r1r1
-                    wv[0] += 4 * frrg * r1s1
-                    wv[0] += 4 * frgg * s1s1
-                    wv[0] += 2 * frg * sigma2
-                    wv[1:]  = 2 * frrg * r1r1 * rho[1:]
-                    wv[1:] += 8 * frgg * r1s1 * rho[1:]
-                    wv[1:] += 4 * frg * rho1[0] * rho1[1:]
-                    wv[1:] += 4 * fgg * sigma2 * rho[1:]
-                    wv[1:] += 8 * fgg * sigma1 * rho1[1:]
-                    wv[1:] += 8 * fggg * s1s1 * rho[1:]
-                    wv *= weight
+                    wv = numint._rks_gga_wv2(rho, rho1, fxc, kxc, weight)
                     gga_sum_(k1ao, ao, wv, mask)
-                vxc = fxc = kxc = rho = rho1 = rho2 = sigma1 = sigma2 = None
+                vxc = fxc = kxc = rho = rho1 = None
 
         else:
             raise NotImplementedError('GGA triplet')

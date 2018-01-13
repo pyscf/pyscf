@@ -46,7 +46,8 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     if kpt is None: kpt = ks.kpt
     t0 = (time.clock(), time.time())
 
-    ground_state = (isinstance(dm, numpy.ndarray) and dm.ndim == 2)
+    ground_state = (isinstance(dm, numpy.ndarray) and dm.ndim == 2
+                    and kpts_band is None)
 
     if ks.grids.coords is None:
         ks.grids.build(with_non0tab=True)
@@ -62,11 +63,13 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         logger.debug(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
 
-    hyb = ks._numint.hybrid_coeff(ks.xc, spin=cell.spin)
+    omega, alpha, hyb = ks._numint.rsh_and_hybrid_coeff(ks.xc, spin=cell.spin)
     if abs(hyb) < 1e-10:
         vj = ks.get_j(cell, dm, hermi, kpt, kpts_band)
         vxc += vj
     else:
+        if getattr(ks.with_df, '_j_only', False):  # for GDF and MDF
+            ks.with_df._j_only = False
         vj, vk = ks.get_jk(cell, dm, hermi, kpt, kpts_band)
         vxc += vj - vk * (hyb * .5)
 
@@ -83,8 +86,8 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
 
 
 def _patch_df_beckegrids(density_fit):
-    def new_df(self, auxbasis=None, gs=None):
-        mf = density_fit(self, auxbasis, gs)
+    def new_df(self, auxbasis=None, mesh=None):
+        mf = density_fit(self, auxbasis, mesh)
         mf.with_df._j_only = True
         mf.grids = gen_grid.BeckeGrids(self.cell)
         return mf

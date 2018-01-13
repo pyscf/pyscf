@@ -54,7 +54,7 @@ def get_jk(mols, dms, scripts=['ijkl,ji->kl'], intor='int2e_sph',
 
         comp : int
             Components of the integrals, e.g. cint2e_ip_sph has 3 components.
-        scripts : a list of strings
+        scripts : string or a list of strings
             Contraction description (following numpy.einsum convention) based on
             letters [ijkl].  Each script will be one-to-one applied to each
             entry of dms.  So it must have the same number of elements as the
@@ -129,7 +129,8 @@ def get_jk(mols, dms, scripts=['ijkl,ji->kl'], intor='int2e_sph',
         if shls_slice is None:
             shls_slice = (0, mols.nbas) * 4
 
-    if isinstance(scripts, str):
+    single_script = isinstance(scripts, str)
+    if single_script:
         scripts = [scripts]
     if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
         dms = [dms]
@@ -146,6 +147,9 @@ def get_jk(mols, dms, scripts=['ijkl,ji->kl'], intor='int2e_sph',
 
     vs = _vhf.direct_bindm(intor, aosym, descript, dms, comp, atm, bas, env,
                            shls_slice=shls_slice)
+    if single_script:
+        vs = vs[0]
+
     if hermi != 0:
         for v in vs:
             if v.ndim == 3:

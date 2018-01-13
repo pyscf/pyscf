@@ -1,5 +1,5 @@
 include MANIFEST.in
-include README.rst setup.py CHANGELOG AUTHORS LICENSE
+include README.md setup.py CHANGELOG AUTHORS LICENSE
 
 #include pyscf/lib/deps/lib/*.so
 #include pyscf/lib/deps/lib/*.dylib

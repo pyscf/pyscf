@@ -10,9 +10,9 @@ import numpy
 import scipy.linalg
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.grad import rhf as rhf_grad
+from pyscf.scf import rhf_grad
+from pyscf.dft import rks_grad
 from pyscf.grad import uhf as uhf_grad
-from pyscf.grad import rks as rks_grad
 from pyscf.dft import numint, gen_grid
 
 
@@ -24,22 +24,27 @@ def get_veff(ks_grad, mol=None, dm=None):
     t0 = (time.clock(), time.time())
 
     mf = ks_grad._scf
+    ni = mf._numint
     if ks_grad.grids is not None:
         grids = ks_grad.grids
     else:
         grids = mf.grids
     if grids.coords is None:
         grids.build(with_non0tab=True)
-    hyb = mf._numint.libxc.hybrid_coeff(mf.xc, spin=mol.spin)
+
+    if mf.nlc != '':
+        raise NotImplementedError
+    #enabling range-separated hybrids
+    omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=mol.spin)
 
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, ks_grad.max_memory*.9-mem_now)
     if ks_grad.grid_response:
-        exc, vxc = get_vxc_full_response(mf._numint, mol, mf.grids, mf.xc, dm,
+        exc, vxc = get_vxc_full_response(ni, mol, mf.grids, mf.xc, dm,
                                          max_memory=max_memory,
                                          verbose=ks_grad.verbose)
     else:
-        exc, vxc = get_vxc(mf._numint, mol, mf.grids, mf.xc, dm,
+        exc, vxc = get_vxc(ni, mol, mf.grids, mf.xc, dm,
                            max_memory=max_memory, verbose=ks_grad.verbose)
     nao = vxc.shape[-1]
     t0 = logger.timer(ks_grad, 'vxc', *t0)
@@ -49,55 +54,13 @@ def get_veff(ks_grad, mol=None, dm=None):
         vxc += vj[0] + vj[1]
     else:
         vj, vk = ks_grad.get_jk(mol, dm)
-        vxc += vj[0] + vj[1] - vk * hyb
+        vk *= hyb
+        if abs(omega) > 1e-10:  # For range separated Coulomb operator
+            with mol.with_range_coulomb(omega):
+                vk += ks_grad.get_k(mol, dm) * (alpha - hyb)
+        vxc += vj[0] + vj[1] - vk
 
     return lib.tag_array(vxc, exc1_grid=exc)
-
-
-def grad_elec(grad_mf, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
-    mf = grad_mf._scf
-    mol = grad_mf.mol
-    if mo_energy is None: mo_energy = mf.mo_energy
-    if mo_occ is None:    mo_occ = mf.mo_occ
-    if mo_coeff is None:  mo_coeff = mf.mo_coeff
-    log = logger.Logger(grad_mf.stdout, grad_mf.verbose)
-
-    h1 = grad_mf.get_hcore(mol)
-    s1 = grad_mf.get_ovlp(mol)
-    dm0 = mf.make_rdm1(mo_coeff, mo_occ)
-
-    t0 = (time.clock(), time.time())
-    log.debug('Computing Gradients of NR-UHF Coulomb repulsion')
-    vhf = grad_mf.get_veff(mol, dm0)
-    log.timer('gradients of 2e part', *t0)
-
-    f1 = h1 + vhf
-    dme0 = grad_mf.make_rdm1e(mo_energy, mo_coeff, mo_occ)
-
-    dm0_sf = dm0[0] + dm0[1]
-    dme0_sf = dme0[0] + dme0[1]
-
-    if atmlst is None:
-        atmlst = range(mol.natm)
-    aoslices = mol.aoslice_by_atom()
-    de = numpy.zeros((len(atmlst),3))
-    for k, ia in enumerate(atmlst):
-        shl0, shl1, p0, p1 = aoslices[ia]
-# h1, s1, vhf are \nabla <i|h|j>, the nuclear gradients = -\nabla
-        vrinv = grad_mf._grad_rinv(mol, ia)
-        de[k] += numpy.einsum('sxij,sij->x', f1[:,:,p0:p1], dm0[:,p0:p1]) * 2
-        de[k] += numpy.einsum('xij,ij->x', vrinv, dm0_sf) * 2
-        de[k] -= numpy.einsum('xij,ij->x', s1[:,p0:p1], dme0_sf[p0:p1]) * 2
-        if grad_mf.grid_response:
-            de[k] += vhf.exc1_grid[ia]
-    if log.verbose >= logger.DEBUG:
-        log.debug('gradients of electronic part')
-        rhf_grad._write(log, mol, de, atmlst)
-        if grad_mf.grid_response:
-            log.debug('grids response contributions')
-            rhf_grad._write(log, mol, vhf.exc1_grid[atmlst], atmlst)
-            log.debug1('sum(de) %s', vhf.exc1_grid.sum(axis=0))
-    return de
 
 
 def get_vxc(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
@@ -228,7 +191,6 @@ class Gradients(uhf_grad.Gradients):
         return self
 
     get_veff = get_veff
-    grad_elec = grad_elec
 
 Grad = Gradients
 

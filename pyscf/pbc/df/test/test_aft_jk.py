@@ -9,7 +9,7 @@ cell = gto.Cell()
 cell.atom = 'He 1. .5 .5; He .1 1.3 2.1'
 cell.basis = {'He': [(0, (2.5, 1)), (0, (1., 1))]}
 cell.a = numpy.eye(3) * 2.5
-cell.gs = [10] * 3
+cell.mesh = [21] * 3
 cell.build()
 
 
@@ -23,7 +23,7 @@ class KnowValues(unittest.TestCase):
         dm = mf0.get_init_guess()
 
         mydf = aft.AFTDF(cell)
-        mydf.gs = [5]*3
+        mydf.mesh = [11]*3
         vj, vk = mydf.get_jk(dm)
         ej1 = numpy.einsum('ij,ji->', vj, dm)
         ek1 = numpy.einsum('ij,ji->', vk, dm)
@@ -55,7 +55,7 @@ class KnowValues(unittest.TestCase):
         dm = dm + dm.transpose(0,2,1)
         mydf = aft.AFTDF(cell)
         mydf.kpts = numpy.random.random((4,3))
-        mydf.gs = numpy.asarray((5,)*3)
+        mydf.mesh = numpy.asarray((11,)*3)
         vj = aft_jk.get_j_kpts(mydf, dm, 1, mydf.kpts)
         self.assertAlmostEqual(finger(vj[0]), (0.93946193432413905+0.00010862804196223034j)/4, 9)
         self.assertAlmostEqual(finger(vj[1]), (0.94866073525335626+0.005571199307452865j)  /4, 9)

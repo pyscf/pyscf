@@ -69,28 +69,29 @@ def get_vlocG(cell, Gv=None, low_dim_ft_type=None):
     '''Local PP kernel in G space: Vloc(G) for G!=0, 0 for G=0.
 
     Returns:
-        (natm, ngs) ndarray
+        (natm, ngrids) ndarray
     '''
     if Gv is None: Gv = cell.Gv
-    Gvnorm = lib.norm(Gv, axis=1)
-    vlocG = get_gth_vlocG(cell, Gvnorm, low_dim_ft_type)
+    vlocG = get_gth_vlocG(cell, Gv, low_dim_ft_type)
     vlocG[:,0] = 0.
     return vlocG
 
-def get_gth_vlocG(cell, G, low_dim_ft_type=None):
+def get_gth_vlocG(cell, Gv, low_dim_ft_type=None):
     '''Local part of the GTH pseudopotential.
 
     See MH (4.79).
 
     Args:
-        G : (ngs,) ndarray
+        Gv : (ngrids,3) ndarray
 
     Returns:
-         (natm, ngs) ndarray
+         (natm, ngrids) ndarray
     '''
+    absG2 = np.einsum('xi,xi->x', Gv, Gv)
+    G = np.sqrt(absG2)
     with np.errstate(divide='ignore'):
-        coulG = 4*np.pi / G**2
-        coulG[0] = 0
+        coulG = 4*np.pi / absG2
+        coulG[absG2==0] = 0
 
     vlocG = np.zeros((cell.natm,len(G)))
     if low_dim_ft_type is None:
@@ -117,11 +118,8 @@ def get_gth_vlocG(cell, G, low_dim_ft_type=None):
     elif low_dim_ft_type == 'analytic_2d_1' and cell.dimension == 2:
         # The following 2D ewald summation is taken from:
         # Minary, Tuckerman, Pihakari, Martyna J. Chem. Phys. 116, 5351 (2002)
-        gs = cell.gs
-        Gv, Gvbase, weights = cell.get_Gv_weights(gs)
 
         vlocG = np.zeros((cell.natm,len(G)))
-        absG2 = G*G
         b = cell.reciprocal_vectors()
         inv_area = np.linalg.norm(np.cross(b[0], b[1]))/(2*np.pi)**2
         lzd2 = cell.vol * inv_area / 2
@@ -186,8 +184,8 @@ def get_projG(cell, kpt=np.zeros(3)):
     Returns:
         hs : list( list( np.array( , ) ) )
          - hs[atm][l][i,j]
-        projs : list( list( list( list( np.array(ngs) ) ) ) )
-         - projs[atm][l][m][i][ngs]
+        projs : list( list( list( list( np.array(ngrids) ) ) ) )
+         - projs[atm][l][m][i][ngrids]
     '''
     return get_gth_projG(cell, kpt+cell.Gv)
 
@@ -313,13 +311,13 @@ def get_pp(cell, kpt=np.zeros(3), low_dim_ft_type=None):
     vpplocG[0] = np.sum(get_alphas(cell, low_dim_ft_type)) # from get_jvloc_G0 function
 
     # vpploc evaluated in real-space
-    vpplocR = tools.ifft(vpplocG, cell.gs).real
+    vpplocR = tools.ifft(vpplocG, cell.mesh).real
     vpploc = np.dot(aoR.T.conj(), vpplocR.reshape(-1,1)*aoR)
 
     # vppnonloc evaluated in reciprocal space
     aokG = tools.fftk(np.asarray(aoR.T, order='C'),
-                      cell.gs, np.exp(-1j*np.dot(coords, kpt))).T
-    ngs = len(aokG)
+                      cell.mesh, np.exp(-1j*np.dot(coords, kpt))).T
+    ngrids = len(aokG)
 
     fakemol = pyscf.gto.Mole()
     fakemol._atm = np.zeros((1,pyscf.gto.ATM_SLOTS), dtype=np.int32)
@@ -348,7 +346,7 @@ def get_pp(cell, kpt=np.zeros(3), low_dim_ft_type=None):
                 fakemol._env[ptr+4] = rl**(l+1.5)*np.pi**1.25
                 pYlm_part = pyscf.dft.numint.eval_ao(fakemol, Gv, deriv=0)
 
-                pYlm = np.empty((nl,l*2+1,ngs))
+                pYlm = np.empty((nl,l*2+1,ngrids))
                 for k in range(nl):
                     qkl = _qli(G_rad*rl, l, k)
                     pYlm[k] = pYlm_part.T * qkl
@@ -357,7 +355,7 @@ def get_pp(cell, kpt=np.zeros(3), low_dim_ft_type=None):
                 SPG_lm_aoG = np.einsum('nmg,gp->nmp', SPG_lmi, aokG)
                 tmp = np.einsum('ij,jmp->imp', hl, SPG_lm_aoG)
                 vppnl += np.einsum('imp,imq->pq', SPG_lm_aoG.conj(), tmp)
-    vppnl *= (1./ngs**2)
+    vppnl *= (1./ngrids**2)
 
     if aoR.dtype == np.double:
         return vpploc.real + vppnl.real

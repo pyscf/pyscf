@@ -60,9 +60,10 @@ Eg
 
 '''
 
-__version__ = '1.4.0'
+__version__ = '1.4.2'
 
 import os
+import sys
 from distutils.version import LooseVersion
 import numpy
 if LooseVersion(numpy.__version__) <= LooseVersion('1.8.0'):
@@ -71,8 +72,13 @@ if LooseVersion(numpy.__version__) <= LooseVersion('1.8.0'):
                       "You still can use all features of PySCF with the old numpy by removing this warning msg. "
                       "Some modules (DFT, CC, MRPT) might be affected because of the bug in old numpy." %
                       numpy.__version__)
-from pyscf import gto
+import h5py
+if h5py.version.version[:4] == '2.2.':
+    sys.stderr.write('h5py-%s is found in your environment. '
+                     'h5py-%s has bug in threading mode.\n'
+                     'Async-IO is disabled.\n' % ((h5py.version.version,)*2))
 from pyscf import lib
+from pyscf import gto
 from pyscf import scf
 from pyscf import ao2mo
 
@@ -81,4 +87,4 @@ __path__.append(os.path.join(os.path.dirname(__file__), 'tools'))
 
 DEBUG = False
 
-del(os, LooseVersion, numpy)
+del(os, sys, LooseVersion, numpy, h5py)

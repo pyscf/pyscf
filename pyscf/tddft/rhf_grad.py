@@ -9,7 +9,7 @@
 import time
 from functools import reduce
 import numpy
-import pyscf.lib
+from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import rhf_grad
 from pyscf.scf import cphf
@@ -83,7 +83,7 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
     im0[nocc:,:nocc] = numpy.einsum('ki,ai->ak', veff0mop[:nocc,:nocc], xpy)*2
     im0[nocc:,:nocc]+= numpy.einsum('ki,ai->ak', veff0mom[:nocc,:nocc], xmy)*2
 
-    zeta = pyscf.lib.direct_sum('i+j->ij', mo_energy, mo_energy) * .5
+    zeta = lib.direct_sum('i+j->ij', mo_energy, mo_energy) * .5
     zeta[nocc:,:nocc] = mo_energy[:nocc]
     zeta[:nocc,nocc:] = mo_energy[nocc:]
     dm1 = numpy.zeros((nmo,nmo))
@@ -93,7 +93,7 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
     dm1[:nocc,:nocc] += numpy.eye(nocc)*2 # for ground state
     im0 = reduce(numpy.dot, (mo_coeff, im0+zeta*dm1, mo_coeff.T))
 
-    h1 = td_grad.get_hcore(mol)
+    hcore_deriv = td_grad.hcore_generator(mol)
     s1 = td_grad.get_ovlp(mol)
 
     dmz1doo = z1ao + dmzoo
@@ -115,16 +115,14 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
     for k, ia in enumerate(atmlst):
         shl0, shl1, p0, p1 = offsetdic[ia]
 
-        mol.set_rinv_origin(mol.atom_coord(ia))
-        h1ao = -mol.atom_charge(ia) * mol.intor('int1e_iprinv', comp=3)
-        h1ao[:,p0:p1] += h1[:,p0:p1] + vhf1[0,:,p0:p1]
-
         # Ground state gradients
-        # h1ao*2 for +c.c, oo0*2 for doubly occupied orbitals
-        de[k] = numpy.einsum('xpq,pq->x', h1ao, oo0) * 4
+        h1ao = hcore_deriv(ia)
+        h1ao[:,p0:p1]   += vhf1[0,:,p0:p1]
+        h1ao[:,:,p0:p1] += vhf1[0,:,p0:p1].transpose(0,2,1)
+        # oo0*2 for doubly occupied orbitals
+        de[k] = numpy.einsum('xpq,pq->x', h1ao, oo0) * 2
 
         de[k] += numpy.einsum('xpq,pq->x', h1ao, dmz1doo)
-        de[k] += numpy.einsum('xqp,pq->x', h1ao, dmz1doo)
         de[k] -= numpy.einsum('xpq,pq->x', s1[:,p0:p1], im0[p0:p1])
         de[k] -= numpy.einsum('xqp,pq->x', s1[:,p0:p1], im0[:,p0:p1])
 
@@ -162,7 +160,7 @@ class Gradients(rhf_grad.Gradients):
         log.info('CPHF max_cycle_cphf = %d', self.max_cycle_cphf)
         log.info('chkfile = %s', self.chkfile)
         log.info('max_memory %d MB (current use %d MB)',
-                 self.max_memory, pyscf.lib.current_memory()[0])
+                 self.max_memory, lib.current_memory()[0])
         log.info('\n')
         return self
 
@@ -213,6 +211,7 @@ if __name__ == '__main__':
     #tdg.verbose = 5
     g1 = tdg.kernel(z[0])
     print(g1)
+    print(lib.finger(g1) - 0.18686568475411308)
 #[[ 0  0  -2.67023832e-01]
 # [ 0  0   2.67023832e-01]]
 
@@ -222,6 +221,7 @@ if __name__ == '__main__':
     tdg = Gradients(td)
     g1 = tdg.kernel(state=0)
     print(g1)
+    print(lib.finger(g1) - 0.18967695046981475)
 # [[ 0  0  -2.71041021e-01]
 #  [ 0  0   2.71041021e-01]]
 
@@ -232,6 +232,7 @@ if __name__ == '__main__':
     tdg = Gradients(td)
     g1 = tdg.kernel(state=0)
     print(g1)
+    print(lib.finger(g1) - 0.19668001441053556)
 # [[ 0  0  -2.81048403e-01]
 #  [ 0  0   2.81048403e-01]]
 
@@ -242,6 +243,7 @@ if __name__ == '__main__':
     tdg = Gradients(td)
     g1 = tdg.kernel(state=0)
     print(g1)
+    print(lib.finger(g1) - 0.20032094306172449)
 # [[ 0  0  -2.86250870e-01]
 #  [ 0  0   2.86250870e-01]]
 

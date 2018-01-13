@@ -130,11 +130,11 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
 
     nao = cell.nao_nr()
     naux = auxcell.nao_nr()
-    gs = mydf.gs
-    Gv, Gvbase, kws = cell.get_Gv_weights(gs)
+    mesh = mydf.mesh
+    Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
     b = cell.reciprocal_vectors()
     gxyz = lib.cartesian_prod([numpy.arange(len(x)) for x in Gvbase])
-    ngs = gxyz.shape[0]
+    ngrids = gxyz.shape[0]
 
     kptis = kptij_lst[:,0]
     kptjs = kptij_lst[:,1]
@@ -150,7 +150,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
 #    chgcell = make_modchg_basis(auxcell, mydf.eta)
 #    for k, kpt in enumerate(uniq_kpts):
 #        aoaux = ft_ao.ft_ao(chgcell, Gv, None, b, gxyz, Gvbase, kpt).T
-#        coulG = numpy.sqrt(mydf.weighted_coulG(kpt, False, gs))
+#        coulG = numpy.sqrt(mydf.weighted_coulG(kpt, False, mesh))
 #        LkR = aoaux.real * coulG
 #        LkI = aoaux.imag * coulG
 #        j2caux = numpy.zeros_like(j2c[k])
@@ -170,23 +170,28 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
 #        feri['j2c/%d'%k] = fuse(fuse(j2c[k]).T).T
 #        aoaux = LkR = LkI = coulG = None
 
+    max_memory = max(2000, mydf.max_memory - lib.current_memory()[0])
+    blksize = max(2048, int(max_memory*.5e6/16/fused_cell.nao_nr()))
+    log.debug2('max_memory %s (MB)  blocksize %s', max_memory, blksize)
     for k, kpt in enumerate(uniq_kpts):
-        aoaux = ft_ao.ft_ao(fused_cell, Gv, None, b, gxyz, Gvbase, kpt).T
-        coulG = numpy.sqrt(mydf.weighted_coulG(kpt, False, gs))
-        LkR = aoaux.real * coulG
-        LkI = aoaux.imag * coulG
+        coulG = numpy.sqrt(mydf.weighted_coulG(kpt, False, mesh))
+        for p0, p1 in lib.prange(0, ngrids, blksize):
+            aoaux = ft_ao.ft_ao(fused_cell, Gv[p0:p1], None, b, gxyz[p0:p1], Gvbase, kpt).T
+            LkR = aoaux.real * coulG[p0:p1]
+            LkI = aoaux.imag * coulG[p0:p1]
+            aoaux = None
 
-        if is_zero(kpt):  # kpti == kptj
-            j2c[k][naux:] -= lib.ddot(LkR[naux:], LkR.T)
-            j2c[k][naux:] -= lib.ddot(LkI[naux:], LkI.T)
-            j2c[k][:naux,naux:] = j2c[k][naux:,:naux].T
-        else:
-            j2cR, j2cI = zdotCN(LkR[naux:], LkI[naux:], LkR.T, LkI.T)
-            j2c[k][naux:] -= j2cR + j2cI * 1j
-            j2c[k][:naux,naux:] = j2c[k][naux:,:naux].T.conj()
+            if is_zero(kpt):  # kpti == kptj
+                j2c[k][naux:] -= lib.ddot(LkR[naux:], LkR.T)
+                j2c[k][naux:] -= lib.ddot(LkI[naux:], LkI.T)
+                j2c[k][:naux,naux:] = j2c[k][naux:,:naux].T
+            else:
+                j2cR, j2cI = zdotCN(LkR[naux:], LkI[naux:], LkR.T, LkI.T)
+                j2c[k][naux:] -= j2cR + j2cI * 1j
+                j2c[k][:naux,naux:] = j2c[k][naux:,:naux].T.conj()
+            LkR = LkI = None
         feri['j2c/%d'%k] = fuse(fuse(j2c[k]).T).T
-        aoaux = LkR = LkI = coulG = None
-    j2c = None
+    j2c = coulG = None
 
     def make_kpt(uniq_kptji_id):  # kpt = kptj - kpti
         kpt = uniq_kpts[uniq_kptji_id]
@@ -198,7 +203,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
 
         shls_slice = (auxcell.nbas, fused_cell.nbas)
         Gaux = ft_ao.ft_ao(fused_cell, Gv, shls_slice, b, gxyz, Gvbase, kpt)
-        Gaux *= mydf.weighted_coulG(kpt, False, gs).reshape(-1,1)
+        Gaux *= mydf.weighted_coulG(kpt, False, mesh).reshape(-1,1)
         kLR = Gaux.real.copy('C')
         kLI = Gaux.imag.copy('C')
         j2c = numpy.asarray(feri['j2c/%d'%uniq_kptji_id])
@@ -208,7 +213,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
         except scipy.linalg.LinAlgError as e:
             #msg =('===================================\n'
             #      'J-metric not positive definite.\n'
-            #      'It is likely that gs is not enough.\n'
+            #      'It is likely that mesh is not enough.\n'
             #      '===================================')
             #log.error(msg)
             #raise scipy.linalg.LinAlgError('\n'.join([e.message, msg]))
@@ -246,7 +251,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
             Gblksize = max(16, int(max_memory*.2*1e6/16/buflen/(nkptj+1)))
         else:
             Gblksize = max(16, int(max_memory*.4*1e6/16/buflen/(nkptj+1)))
-        Gblksize = min(Gblksize, ngs, 16384)
+        Gblksize = min(Gblksize, ngrids, 16384)
         pqkRbuf = numpy.empty(buflen*Gblksize)
         pqkIbuf = numpy.empty(buflen*Gblksize)
         # buf for ft_aopair
@@ -274,7 +279,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
             v = None
 
             shls_slice = (bstart, bend, 0, bend)
-            for p0, p1 in lib.prange(0, ngs, Gblksize):
+            for p0, p1 in lib.prange(0, ngrids, Gblksize):
                 dat = ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
                                             b, gxyz[p0:p1], Gvbase, kpt,
                                             adapted_kptjs, out=buf)
@@ -326,18 +331,18 @@ class GDF(aft.AFTDF):
 
         self.kpts = kpts  # default is gamma point
         self.kpts_band = None
-        self.auxbasis = None
+        self._auxbasis = None
         if cell.dimension == 0:
             self.eta = 0.2
-            self.gs = cell.gs
+            self.mesh = cell.mesh
         else:
-            ke_cutoff = tools.gs_to_cutoff(cell.lattice_vectors(), cell.gs)
+            ke_cutoff = tools.mesh_to_cutoff(cell.lattice_vectors(), cell.mesh)
             ke_cutoff = ke_cutoff[:cell.dimension].min()
             self.eta = min(aft.estimate_eta_for_ke_cutoff(cell, ke_cutoff, cell.precision),
                            estimate_eta(cell, cell.precision))
             ke_cutoff = aft.estimate_ke_cutoff_for_eta(cell, self.eta, cell.precision)
-            self.gs = tools.cutoff_to_gs(cell.lattice_vectors(), ke_cutoff)
-            self.gs[cell.dimension:] = cell.gs[cell.dimension:]
+            self.mesh = tools.cutoff_to_mesh(cell.lattice_vectors(), ke_cutoff)
+            self.mesh[cell.dimension:] = cell.mesh[cell.dimension:]
 
 # Not input options
         self.exxdiv = None  # to mimic KRHF/KUHF object in function get_coulG
@@ -356,15 +361,16 @@ class GDF(aft.AFTDF):
         return self._auxbasis
     @auxbasis.setter
     def auxbasis(self, x):
-        self._auxbasis = x
-        self.auxcell = None
-        self._cderi = None
+        if self._auxbasis != x:
+            self._auxbasis = x
+            self.auxcell = None
+            self._cderi = None
 
     def dump_flags(self, log=None):
         log = logger.new_logger(self, log)
         log.info('\n')
         log.info('******** %s flags ********', self.__class__)
-        log.info('gs = %s', self.gs)
+        log.info('mesh = %s', self.mesh)
         if self.auxcell is None:
             log.info('auxbasis = %s', self.auxbasis)
         else:
@@ -565,8 +571,10 @@ class GDF(aft.AFTDF):
 ################################################################################
 # With this function to mimic the molecular DF.loop function, the pbc gamma
 # point DF object can be used in the molecular code
-    def loop(self):
-        for LpqR, LpqI in self.sr_loop(compact=True, blksize=self.blockdim):
+    def loop(self, blksize=None):
+        if blksize is None:
+            blksize = self.blockdim
+        for LpqR, LpqI in self.sr_loop(compact=True, blksize=blksize):
 # LpqI should be 0 for gamma point DF
 #            assert(numpy.linalg.norm(LpqI) < 1e-12)
             yield LpqR

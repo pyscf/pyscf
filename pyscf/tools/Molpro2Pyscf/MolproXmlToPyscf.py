@@ -21,10 +21,10 @@ from wmme import mdot
 
 
 def PrintMatrix(Caption, M):
-   print "Matrix %s [%i x %i]:\n" % (Caption, M.shape[0], M.shape[1])
+   print("Matrix %s [%i x %i]:\n" % (Caption, M.shape[0], M.shape[1]))
    ColsFmt = M.shape[1] * " %11.5f"
    for iRow in range(M.shape[0]):
-      print "  %s" % (ColsFmt % tuple(M[iRow,:]))
+      print("  %s" % (ColsFmt % tuple(M[iRow,:])))
 
 def ConvertMolproXmlToPyscfInput(XmlData):
 # assemble a 'atoms' declaration compatible with PyScf.
@@ -113,9 +113,9 @@ def _run_with_pyscf(FileNameXml):
    from pyscf import gto
    from pyscf import scf
 
-   print "\n* Reading: '%s'" % FileNameXml
+   print("\n* Reading: '%s'" % FileNameXml)
    XmlData = MolproXml.ReadMolproXml(FileNameXml, SkipVirtual=True)
-   print "Atoms from file [a.u.]:\n%s" % XmlData.Atoms.MakeXyz(NumFmt="%20.15f",Scale=1/wmme.ToAng)
+   print("Atoms from file [a.u.]:\n%s" % XmlData.Atoms.MakeXyz(NumFmt="%20.15f",Scale=1/wmme.ToAng))
 
 
 #  this gives you data from MolproXmlfile ready for use in PySCF
@@ -134,7 +134,7 @@ def _run_with_pyscf(FileNameXml):
 # and the overlap matrix computed with PySCF to check that MO were imported properly.
    SMo = mdot(COrb.T, S, COrb)
    PrintMatrix("MO-Basis overlap (should be unity!)", SMo)
-   print "RMSD(SMo-id): %8.2e" % _rmsd(SMo - np.eye(SMo.shape[0]))
+   print("RMSD(SMo-id): %8.2e" % _rmsd(SMo - np.eye(SMo.shape[0])))
    print
 
 

@@ -54,7 +54,7 @@ class load(ao2mo.load):
     manager:
 
     with load(cderifile) as eri:
-        print eri.shape
+        print(eri.shape)
     '''
     def __init__(self, eri, dataname='j3c'):
         ao2mo.load.__init__(self, eri, dataname)
@@ -130,7 +130,7 @@ def make_auxbasis(mol, mp2fit=False):
         _basis.update(mol.basis)
         del(_basis['default'])
     else:
-        _basis = mol.basis
+        _basis = mol._basis
 
     auxbasis = {}
     for k in _basis:

@@ -17,7 +17,7 @@ from pyscf.mcscf import mc_ao2mo
 from pyscf.mcscf import chkfile
 from pyscf import ao2mo
 from pyscf import scf
-from pyscf.scf import ciah
+from pyscf.soscf import ciah
 
 # ref. JCP, 82, 5053;  JCP, 73, 2342
 
@@ -272,9 +272,14 @@ def rotate_orb_cc(casscf, mo, fcivec, fcasdm1, fcasdm2, eris, x0_guess=None,
                 yield u, g_kf, ihop+jkcount, dxi
 
                 t3m = (time.clock(), time.time())
-                #g_kf1, gorb_update, h_op, h_diag = \
-                #        casscf.gen_g_hop(mo, u, fcasdm1(), fcasdm2(), eris)
-                #g_kf1 = gorb_update(u, casscf.with_dep4)
+# TODO: test whether to update h_op, h_diag to change the orbital hessian.
+# It leads to the different hessian operations in the same davidson
+# diagonalization procedure.  This is generally a bad approximation because it
+# results in ill-defined hessian eigenvalue in the davidson algorithm.  But in
+# certain cases, it is a small perturbation that help the mcscf optimization
+# algorithm move out of local minimum
+#                h_op, h_diag = \
+#                        casscf.gen_g_hop(mo, u, fcasdm1(), fcasdm2(), eris)[2:4]
                 g_kf1 = gorb_update(u, fcivec())
                 jkcount += 1
 
@@ -290,8 +295,12 @@ def rotate_orb_cc(casscf, mo, fcivec, fcasdm1, fcasdm2, eris, x0_guess=None,
                     norm_gkf1 > norm_gkf*casscf.ah_grad_trust_region):
                     log.debug('    Keyframe |g|=%5.3g  |g_last| =%5.3g out of trust region',
                               norm_gkf1, norm_gorb)
-                    dr = -dxi
-                    g_kf = g_kf1 - hdxi
+# Slightly moving forward, not completely restoring last step.
+# In some cases, the optimization moves out of trust region in the first micro
+# iteration.  The small forward step can ensure the orbital changes in the
+# current iteration.
+                    dr = -dxi * .5
+                    g_kf = g_kf1
                     break
                 t3m = log.timer('gen h_op', *t3m)
                 g_orb = g_kf = g_kf1
@@ -625,6 +634,7 @@ class CASSCF(casci.CASCI):
         log.info('with_dep4 %d', self.with_dep4)
         log.info('natorb = %s', self.natorb)
         log.info('canonicalization = %s', self.canonicalization)
+        log.info('sorting_mo_energy = %s', self.sorting_mo_energy)
         log.info('chkfile = %s', self.chkfile)
         log.info('max_memory %d MB (current use %d MB)',
                  self.max_memory, lib.current_memory()[0])
@@ -641,6 +651,18 @@ class CASSCF(casci.CASCI):
         return self
 
     def kernel(self, mo_coeff=None, ci0=None, callback=None, _kern=kernel):
+        '''
+        Returns:
+            Five elements, they are
+            total energy,
+            active space CI energy,
+            the active space FCI wavefunction coefficients or DMRG wavefunction ID,
+            the MCSCF canonical orbital coefficients,
+            the MCSCF canonical orbital coefficients.
+
+        They are attributes of mcscf object, which can be accessed by
+        .e_tot, .e_cas, .ci, .mo_coeff, .mo_energy
+        '''
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
         else: # overwrite self.mo_coeff because it is needed in many methods of this class

@@ -249,7 +249,7 @@ try:
     from pyscf.mcscf import df
     def DFCASSCF(mf, ncas, nelecas, auxbasis=None, **kwargs):
         from pyscf import scf
-        mf = scf.addons.convert_to_rhf(mf, convert_df=False)
+        mf = scf.addons.convert_to_rhf(mf, remove_df=False)
         if mf.mol.symmetry:
             mc = mc1step_symm.CASSCF(mf, ncas, nelecas, **kwargs)
         else:
@@ -258,7 +258,7 @@ try:
 
     def DFCASCI(mf, ncas, nelecas, auxbasis=None, **kwargs):
         from pyscf import scf
-        mf = scf.addons.convert_to_rhf(mf, convert_df=False)
+        mf = scf.addons.convert_to_rhf(mf, remove_df=False)
         if mf.mol.symmetry:
             mc = casci_symm.CASCI(mf, ncas, nelecas, **kwargs)
         else:

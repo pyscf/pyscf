@@ -21,7 +21,7 @@ from pyscf.mcscf import mc_ao2mo
 from pyscf.mcscf import chkfile
 from pyscf import ao2mo
 from pyscf import scf
-from pyscf.scf import ciah
+from pyscf.soscf import ciah
 from pyscf import fci
 
 
@@ -494,7 +494,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
                 casscf.canonicalize(mo, fcivec, eris, casscf.sorting_mo_energy,
                                     casscf.natorb, casdm1, log)
         if casscf.natorb: # dump_chk may save casdm1
-            occ, ucas = casscf._eig(-casdm1, ncore, nocc)[0]
+            occ, ucas = casscf._eig(-casdm1, ncore, nocc)
             casdm1 = -occ
 
     if dump_chk:

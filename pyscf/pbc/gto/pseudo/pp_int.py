@@ -29,8 +29,7 @@ def get_gth_vlocG_part1(cell, Gv):
     G2 = numpy.einsum('ix,ix->i', Gv, Gv)
     with numpy.errstate(divide='ignore'):
         coulG = 4*numpy.pi / G2
-        if G2[0] < 1e-16:
-            coulG[0] = 0
+        coulG[G2==0] = 0
 
     vlocG = numpy.zeros((cell.natm, len(G2)))
     for ia in range(cell.natm):
@@ -96,7 +95,9 @@ def get_pp_nl(cell, kpts=None):
     nao = cell.nao_nr()
     buf = numpy.empty((3*9*nao), dtype=numpy.complex128)
 
-    ppnl = [0] * nkpts
+    # We set this equal to zeros in case hl_blocks loop is skipped
+    # and ppnl is returned
+    ppnl = numpy.zeros((nkpts,nao,nao), dtype=numpy.complex128)
     for k, kpt in enumerate(kpts_lst):
         offset = [0] * 3
         for ib, hl in enumerate(hl_blocks):
@@ -110,13 +111,12 @@ def get_pp_nl(cell, kpts=None):
                 offset[i] = p0 + nd
             ppnl[k] += numpy.einsum('ilp,ij,jlq->pq', ilp.conj(), hl, ilp)
 
-        if abs(kpt).sum() < 1e-9:  # gamma_point:
-            ppnl[k] = ppnl[k].real
-
+    if abs(kpts_lst).sum() < 1e-9:  # gamma_point:
+        ppnl = ppnl.real
 
     if kpts is None or numpy.shape(kpts) == (3,):
         ppnl = ppnl[0]
-    return lib.asarray(ppnl)
+    return ppnl
 
 
 def fake_cell_vloc(cell, cn=0):

@@ -162,8 +162,11 @@ mf = scf.fast_newton(mf)
 # considered in active space.
 #
 mc = mcscf.approx_hessian(dmrgscf.dmrgci.DMRGSCF(mf, 20, 16))
-idx = [i for i,s in enumerate(mol.spheric_labels(1))
-       if 'Fe 3d' in s or 'Fe 4d' in s or 'Fe 4s' in s or 'N 2pz' in s]
+# Function mol.search_ao_label returns the indices of the required AOs
+# It is equivalent to the following expression
+#idx = [i for i,s in enumerate(mol.ao_labels())
+#       if 'Fe 3d' in s or 'Fe 4d' in s or 'Fe 4s' in s or 'N 2pz' in s]
+idx = mol.search_ao_label(['Fe 3d', 'Fe 4d', 'Fe 4s', 'N 2pz'])
 mo = dmet_cas(mc, mf.make_rdm1(), idx)
 
 mc.fcisolver.wfnsym = 'Ag'
@@ -201,8 +204,7 @@ mf = scf.fast_newton(mf)
 # have such issue on MCSCF wfn.
 #
 mc = mcscf.approx_hessian(dmrgscf.dmrgci.DMRGSCF(mf, 20, 16))
-idx = [i for i,s in enumerate(mol.spheric_labels(1))
-       if 'Fe 3d' in s or 'Fe 4d' in s or 'Fe 4s' in s or 'N 2pz' in s]
+idx = mol.search_ao_label(['Fe 3d', 'Fe 4d', 'Fe 4s', 'N 2pz'])
 mo = dmet_cas(mc, mf.make_rdm1(), idx3d)
 mc.fcisolver.wfnsym = 'B1g'
 mc.kernel(mo)

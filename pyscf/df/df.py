@@ -61,7 +61,7 @@ class DF(lib.StreamObject):
         self.stdout = mol.stdout
         self.verbose = mol.verbose
         self.max_memory = mol.max_memory
-        self.auxbasis = None
+        self._auxbasis = None
 
 ##################################################
 # Following are not input options
@@ -79,9 +79,10 @@ class DF(lib.StreamObject):
         return self._auxbasis
     @auxbasis.setter
     def auxbasis(self, x):
-        self._auxbasis = x
-        self.auxmol = None
-        self._cderi = None
+        if self._auxbasis != x:
+            self._auxbasis = x
+            self.auxmol = None
+            self._cderi = None
 
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)
@@ -141,12 +142,14 @@ class DF(lib.StreamObject):
     def kernel(self, *args, **kwargs):
         return self.build(*args, **kwargs)
 
-    def loop(self):
+    def loop(self, blksize=None):
         if self._cderi is None:
             self.build()
+        if blksize is None:
+            blksize = self.blockdim
         with addons.load(self._cderi, 'j3c') as feri:
             naoaux = feri.shape[0]
-            for b0, b1 in self.prange(0, naoaux, self.blockdim):
+            for b0, b1 in self.prange(0, naoaux, blksize):
                 eri1 = numpy.asarray(feri[b0:b1], order='C')
                 yield eri1
 

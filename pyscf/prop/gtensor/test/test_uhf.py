@@ -19,8 +19,8 @@ def make_dia_gc2e(gobj, dm0, gauge_orig, sso_qed_fac=1):
     if gauge_orig is None:
         gc2e_ri = mol.intor('int2e_ip1v_r1', comp=9, aosym='s1').reshape(3,3,nao,nao,nao,nao)
     else:
-        mol.set_common_origin(gauge_orig)
-        gc2e_ri = mol.intor('int2e_ip1v_rc1', comp=9, aosym='s1').reshape(3,3,nao,nao,nao,nao)
+        with mol.with_common_origin(gauge_orig):
+            gc2e_ri = mol.intor('int2e_ip1v_rc1', comp=9, aosym='s1').reshape(3,3,nao,nao,nao,nao)
     ej = numpy.zeros((3,3))
     ek = numpy.zeros((3,3))
     if isinstance(gobj.para_soc2e, str) and 'SSO' in gobj.dia_soc2e.upper():

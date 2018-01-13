@@ -35,31 +35,28 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         if ks.small_rho_cutoff > 1e-20 and ground_state:
             ks.grids = rks.prune_small_rho_grids_(ks, mol, dm[0]+dm[1], ks.grids)
         t0 = logger.timer(ks, 'setting up grids', *t0)
-    if ks.nlc!='':
+    if ks.nlc != '':
         if ks.nlcgrids.coords is None:
             ks.nlcgrids.build(with_non0tab=True)
             if ks.small_rho_cutoff > 1e-20 and ground_state:
                 ks.nlcgrids = rks.prune_small_rho_grids_(ks, mol, dm[0]+dm[1], ks.nlcgrids)
             t0 = logger.timer(ks, 'setting up nlc grids', *t0)
 
+    ni = ks._numint
     if hermi == 2:  # because rho = 0
         n, exc, vxc = (0,0), 0, 0
     else:
-        n, exc, vxc = ks._numint.nr_uks(mol, ks.grids, ks.xc, dm)
-        if ks.nlc!='':
+        n, exc, vxc = ni.nr_uks(mol, ks.grids, ks.xc, dm)
+        if ks.nlc != '':
             assert('VV10' in ks.nlc.upper())
-            _, enlc, vnlc = ks._numint.nr_rks(mol, ks.nlcgrids, ks.xc+'__'+ks.nlc, dm[0]+dm[1])
+            _, enlc, vnlc = ni.nr_rks(mol, ks.nlcgrids, ks.xc+'__'+ks.nlc, dm[0]+dm[1])
             exc += enlc
             vxc += vnlc
         logger.debug(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
 
     #enabling range-separated hybrids
-    omega, alpha, beta = ks._numint.rsh_coeff(ks.xc)
-    if abs(omega) > 1e-10:
-        hyb = alpha + beta
-    else:
-        hyb = ks._numint.hybrid_coeff(ks.xc, spin=mol.spin)
+    omega, alpha, hyb = ni.rsh_and_hybrid_coeff(ks.xc, spin=mol.spin)
 
     if abs(hyb) < 1e-10 and abs(alpha) < 1e-10:
         vk = None
@@ -104,9 +101,9 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     return vxc
 
 
-def energy_elec(ks, dm, h1e=None, vhf=None):
-    if h1e is None:
-        h1e = ks.get_hcore()
+def energy_elec(ks, dm=None, h1e=None, vhf=None):
+    if dm is None: dm = ks.make_rdm1()
+    if h1e is None: h1e = ks.get_hcore()
     if vhf is None or getattr(vhf, 'ecoul', None) is None:
         vhf = ks.get_veff(ks.mol, dm)
     if isinstance(dm, numpy.ndarray) and dm.ndim == 2:

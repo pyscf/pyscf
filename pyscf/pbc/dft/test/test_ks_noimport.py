@@ -112,7 +112,7 @@ class BN(unittest.TestCase):
             a = self.unit_cell_angstrom,
             basis = 'gth-szv',
             pseudo = 'gth-lda',
-            gs = [16,16,75],
+            mesh = [32,32,150],
             verbose = 4,
         )
 
@@ -125,7 +125,7 @@ class BN(unittest.TestCase):
         avg = numpy.mean(e-self.bands_hartree)
         delta = e-self.bands_hartree-avg
         dev_max = numpy.abs(delta).max()
-        print "Maximum deviation:", dev_max, " Hartree"
+        print("Maximum deviation:", dev_max, " Hartree")
         assert dev_max < 1e-4
 
 #    def setUp(self):
@@ -135,7 +135,7 @@ class BN(unittest.TestCase):
 #            a = self.unit_cell_angstrom,
 #            dimension = 2,
 #            basis = 'ccpvdz',
-#            gs = [5,5,25],
+#            mesh = [11,11,51],
 #            verbose = 4,
 #        )
 #
@@ -152,7 +152,7 @@ class BN(unittest.TestCase):
 #        #avg = numpy.mean(e-self.bands_hartree)
 #        #delta = e-self.bands_hartree-avg
 #        #dev_max = numpy.abs(delta).max()
-#        #print "Maximum deviation:", dev_max, " Hartree"
+#        #print("Maximum deviation:", dev_max, " Hartree")
 #        #assert dev_max < 1e-4
 
 if __name__ == '__main__':

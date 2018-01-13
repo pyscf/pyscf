@@ -21,7 +21,7 @@ from pyscf.dft import numint
 from pyscf.prop.gtensor import uhf as uhf_g
 from pyscf.prop.gtensor.uhf import _write, align
 from pyscf.data import nist
-from pyscf.grad import rks as rks_grad
+from pyscf.dft import rks_grad
 
 
 # Note mo10 is the imaginary part of MO^1
@@ -78,7 +78,9 @@ def make_para_soc2e(gobj, dm0, dm10, sso_qed_fac=1):
 
     mf = gobj._scf
     ni = mf._numint
-    hyb = ni.hybrid_coeff(mf.xc, spin=mol.spin)
+    omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=mol.spin)
+    if abs(omega) > 1e-10:
+        raise NotImplementedError
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, mf.max_memory*.9-mem_now)
     v1 = get_vxc_soc(ni, mol, mf.grids, mf.xc, dm0,

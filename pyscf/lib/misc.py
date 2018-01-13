@@ -155,6 +155,9 @@ def _balanced_partition(cum, ntasks):
 def _blocksize_partition(cum, blocksize):
     n = len(cum) - 1
     displs = [0]
+    if n == 0:
+        return displs
+
     p0 = 0
     for i in range(1, n):
         if cum[i+1]-cum[p0] > blocksize:
@@ -180,11 +183,25 @@ def prange(start, end, step):
 
 def prange_tril(start, stop, blocksize):
     '''for p0, p1 in prange_tril: p1*(p1+1)/2-p0*(p0+1)/2 < blocksize'''
+    if start >= stop:
+        return []
     idx = numpy.arange(start, stop+1)
     cum_costs = idx*(idx+1)//2 - start*(start+1)//2
     displs = [x+start for x in _blocksize_partition(cum_costs, blocksize)]
     return zip(displs[:-1], displs[1:])
 
+def square_mat_in_trilu_indices(n):
+    '''Return a n x n symmetric index matrix, in which the elements are the
+    indices of the unique elements of a tril vector 
+    [0 1 3 ... ]
+    [1 2 4 ... ]
+    [3 4 5 ... ]
+    [...       ]
+    '''
+    idx = numpy.tril_indices(n)
+    tril2sq = numpy.zeros((n,n), dtype=int)
+    tril2sq[idx[0],idx[1]] = tril2sq[idx[1],idx[0]] = numpy.arange(n*(n+1)//2)
+    return tril2sq
 
 class ctypes_stdout(object):
     '''make c-printf output to string, but keep python print in /dev/pts/1.
@@ -459,13 +476,13 @@ def overwrite_mro(obj, mro):
         pass
 # Overwrite type.mro function so that Temp class can use the given mro
     HackMRO.mro = lambda self: mro
-    if sys.version_info < (3,):
-        class Temp(obj.__class__):
-            __metaclass__ = HackMRO
-    else:
-        #class Temp(obj.__class__, metaclass=HackMRO):
-        #    pass
-        raise NotImplementedError()
+    #if sys.version_info < (3,):
+    #    class Temp(obj.__class__):
+    #        __metaclass__ = HackMRO
+    #else:
+    #    class Temp(obj.__class__, metaclass=HackMRO):
+    #        pass
+    Temp = HackMRO(obj.__class__.__name__, obj.__class__.__bases__, obj.__dict__)
     obj = Temp()
 # Delete mro function otherwise all subclass of Temp are not able to
 # resolve the right mro
@@ -531,6 +548,7 @@ class H5TmpFile(h5py.File):
         self.close()
 
 def finger(a):
+    a = numpy.asarray(a)
     return numpy.dot(numpy.cos(numpy.arange(a.size)), a.ravel())
 
 
@@ -576,6 +594,12 @@ class call_in_background(object):
 # Disable the asynchoronous mode for safe importing
             def def_async_fn(fn):
                 return fn
+
+        elif h5py.version.version[:4] == '2.2.':
+# h5py-2.2.* has bug in threading mode.
+            def def_async_fn(fn):
+                return fn
+
         else:
             def def_async_fn(fn):
                 def async_fn(*args, **kwargs):

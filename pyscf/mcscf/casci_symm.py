@@ -13,7 +13,7 @@ from pyscf.mcscf import casci
 from pyscf.mcscf import addons
 
 
-class CASCI(casci.CASCI):
+class SymAdaptedCASCI(casci.CASCI):
     def __init__(self, mf, ncas, nelecas, ncore=None):
         assert(mf.mol.symmetry)
 # Ag, A1 or A
@@ -43,6 +43,8 @@ class CASCI(casci.CASCI):
         if mo_coeff is None: mo_coeff = self.mo_coeff
         return addons.sort_mo_by_irrep(self, mo_coeff, cas_irrep_nocc,
                                        cas_irrep_ncore, s)
+
+CASCI = SymAdaptedCASCI
 
 def eig(mat, orbsym):
     orbsym = numpy.asarray(orbsym)

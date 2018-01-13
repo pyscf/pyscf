@@ -143,7 +143,6 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
     nkpts = len(mo_energy_kpts)
     nocc = (mf.cell.nelectron * nkpts) // 2
 
-    # TODO: implement Fermi smearing and print mo_energy kpt by kpt
     mo_energy = np.sort(np.hstack(mo_energy_kpts))
     fermi = mo_energy[nocc-1]
     mo_occ_kpts = []
@@ -215,7 +214,7 @@ def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf_kpts=None):
     return e1+e_coul, e_coul
 
 
-def analyze(mf, verbose=logger.DEBUG, **kwargs):
+def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=True, **kwargs):
     '''Analyze the given SCF object:  print orbital energies, occupancies;
     print orbital coefficients; Mulliken population analysis; Dipole moment
     '''
@@ -225,7 +224,10 @@ def analyze(mf, verbose=logger.DEBUG, **kwargs):
     mo_coeff = mf.mo_coeff
     ovlp_ao = mf.get_ovlp()
     dm = mf.make_rdm1(mo_coeff, mo_occ)
-    return mf.mulliken_meta(mf.cell, dm, s=ovlp_ao, verbose=verbose)
+    if with_meta_lowdin:
+        return mf.mulliken_meta(mf.cell, dm, s=ovlp_ao, verbose=verbose)
+    else:
+        return mf.mulliken_pop(mf.cell, dm, s=ovlp_ao, verbose=verbose)
 
 
 def mulliken_meta(cell, dm_ao, verbose=logger.DEBUG, pre_orth_method='ANO',
@@ -275,7 +277,7 @@ def canonicalize(mf, mo_coeff_kpts, mo_occ_kpts, fock=None):
     return mo_energy, mo_coeff
 
 
-def init_guess_by_chkfile(cell, chkfile_name, project=True, kpts=None):
+def init_guess_by_chkfile(cell, chkfile_name, project=None, kpts=None):
     '''Read the KHF results from checkpoint file, then project it to the
     basis defined by ``cell``
 
@@ -287,7 +289,7 @@ def init_guess_by_chkfile(cell, chkfile_name, project=True, kpts=None):
     return dm[0] + dm[1]
 
 
-class KSCF(hf.SCF):
+class KSCF(pbchf.SCF):
     '''SCF class with k-point sampling.
 
     Compared to molecular SCF, some members such as mo_coeff, mo_occ
@@ -458,9 +460,9 @@ class KSCF(hf.SCF):
         vj, vk = self.get_jk(cell, dm_kpts, hermi, kpts, kpts_band)
         return vj - vk * .5
 
-    def analyze(self, verbose=None, **kwargs):
+    def analyze(self, verbose=None, with_meta_lowdin=True, **kwargs):
         if verbose is None: verbose = self.verbose
-        return analyze(self, verbose, **kwargs)
+        return analyze(self, verbose, with_meta_lowdin, **kwargs)
 
     def get_grad(self, mo_coeff_kpts, mo_occ_kpts, fock=None):
         '''
@@ -522,11 +524,11 @@ class KSCF(hf.SCF):
             mo_coeff = mo_coeff[0]
         return mo_energy, mo_coeff
 
-    def init_guess_by_chkfile(self, chk=None, project=True, kpts=None):
+    def init_guess_by_chkfile(self, chk=None, project=None, kpts=None):
         if chk is None: chk = self.chkfile
         if kpts is None: kpts = self.kpts
         return init_guess_by_chkfile(self.cell, chk, project, kpts)
-    def from_chk(self, chk=None, project=True, kpts=None):
+    def from_chk(self, chk=None, project=None, kpts=None):
         return self.init_guess_by_chkfile(chk, project, kpts)
 
     def dump_chk(self, envs):
@@ -562,11 +564,15 @@ class KSCF(hf.SCF):
         from pyscf.pbc.scf import newton_ah
         return newton_ah.newton(self)
 
-    def x2c1e(self):
-        from pyscf.pbc.scf import x2c
-        return x2c.sfx2c1e(self)
+    def sfx2c1e(self):
+        from pyscf.pbc.x2c import sfx2c1e
+        return sfx2c1e.sfx2c1e(self)
 
-KRHF = KSCF
+class KRHF(KSCF, pbchf.RHF):
+    def convert_from_(self, mf):
+        '''Convert given mean-field object to KRHF'''
+        addons.convert_to_rhf(mf, self)
+        return self
 
 
 if __name__ == '__main__':
@@ -578,7 +584,7 @@ if __name__ == '__main__':
     '''
     cell.basis = '321g'
     cell.a = np.eye(3) * 3
-    cell.gs = [5] * 3
+    cell.mesh = [11] * 3
     cell.verbose = 5
     cell.build()
     mf = KRHF(cell, [2,1,1])

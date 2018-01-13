@@ -2,6 +2,11 @@
 # $Id$
 # -*- coding: utf-8
 
+
+'''
+RMP2
+'''
+
 import time
 from functools import reduce
 import copy
@@ -12,47 +17,54 @@ from pyscf.lib import logger
 from pyscf import ao2mo
 from pyscf.ao2mo import _ao2mo
 
-
-'''
-spin-adapted MP2
-t2[i,j,a,b] = (ia|jb) / D_ij^ab
-'''
-
-def kernel(mp, mo_energy, mo_coeff, eris=None, with_t2=True,
+def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=True,
            verbose=logger.NOTE):
-    if eris is None:
-        eris = mp.ao2mo(mo_coeff)
+    if mo_energy is None or mo_coeff is None:
+        mo_coeff = None
+        mo_energy = _mo_energy_without_core(mp, mp.mo_energy)
+    else:
+        # For backward compatibility.  In pyscf-1.4 or earlier, mp.frozen is
+        # not supported when mo_energy or mo_coeff is given.
+        assert(mp.frozen is 0 or mp.frozen is None)
+
+    if eris is None: eris = mp.ao2mo(mo_coeff)
 
     nocc = mp.nocc
     nvir = mp.nmo - nocc
-    mo_e = _mo_energy_without_core(mp, mo_energy)
-    eia = mo_e[:nocc,None] - mo_e[None,nocc:]
+    eia = mo_energy[:nocc,None] - mo_energy[None,nocc:]
 
     if with_t2:
-        t2 = numpy.empty((nocc,nocc,nvir,nvir))
+        t2 = numpy.empty((nocc,nocc,nvir,nvir), dtype=eris.ovov.dtype)
     else:
         t2 = None
 
-    emp2 = 0.0
-    ovov = eris.ovov
+    emp2 = 0
     for i in range(nocc):
-        gi = numpy.asarray(ovov[i*nvir:(i+1)*nvir])
+        gi = numpy.asarray(eris.ovov[i*nvir:(i+1)*nvir])
         gi = gi.reshape(nvir,nocc,nvir).transpose(1,0,2)
-        t2i = gi/lib.direct_sum('jb+a->jba', eia, eia[i])
-        # 2*ijab-ijba
-        theta = gi*2 - gi.transpose(0,2,1)
-        emp2 += numpy.einsum('jab,jab', t2i, theta)
-        #emp2 -= numpy.einsum('jab,jab', t2i, theta)
+        t2i = gi.conj()/lib.direct_sum('jb+a->jba', eia, eia[i])
+        emp2 += numpy.einsum('jab,jab', t2i, gi) * 2
+        emp2 -= numpy.einsum('jab,jba', t2i, gi)
         if with_t2:
             t2[i] = t2i
 
-    return emp2, t2
+    return emp2.real, t2
 
-# Need less memory
-def make_rdm1_ao(mp, mo_energy, mo_coeff, eris=None, verbose=logger.NOTE):
-    mp = copy.copy(mp)
-    mp.mo_energy = mo_energy
-    mp.mo_coeff = mo_coeff
+def make_rdm1_ao(mp, mo_energy=None, mo_coeff=None, eris=None, verbose=logger.NOTE):
+    '''1-particle density matrix in AO basis.  The occupied-virtual orbital
+    response is not included.  This function uses small amount of memory.  The
+    MP2 t2 amplitudes are generated on the fly using the given eris object.
+    '''
+    if mo_energy is None or mo_coeff is None:
+        mo_coeff = None
+    else:
+        assert(mp.frozen is 0 or mp.frozen is None)
+        mp = copy.copy(mp)
+        mp.mo_energy = mo_energy
+        mp.mo_coeff = mo_coeff
+
+    if eris is None: eris = mp.ao2mo(mo_coeff)
+
     rdm1_mo = make_rdm1(mp, None, eris, verbose)
     rdm1 = reduce(numpy.dot, (mo_coeff, rdm1_mo, mo_coeff.T))
     return rdm1
@@ -61,22 +73,38 @@ def make_rdm1(mp, t2=None, eris=None, verbose=logger.NOTE):
     '''1-particle density matrix in MO basis.  The off-diagonal blocks due to
     the orbital response contribution are not included.
     '''
-    if isinstance(verbose, numpy.ndarray):
-        raise RuntimeError('''
-You see this error message because of the API updates in pyscf v1.0-alpha.
-The old make_rdm1 has been renamed to make_rdm1_ao.
-Given t2 amplitude, current function returns 1-RDM in MO basis''')
+    dm1occ, dm1vir = _gamma1_intermediates(mp, t2, eris)
+    nocc = dm1occ.shape[0]
+    nvir = dm1vir.shape[0]
+    nmo = nocc + nvir
+    dm1 = numpy.zeros((nmo,nmo))
+    dm1[:nocc,:nocc] = dm1occ * 2
+    dm1[nocc:,nocc:] = dm1vir * 2
+
+    if not (mp.frozen is 0 or mp.frozen is None):
+        nmo = mp.mo_occ.size
+        nocc = numpy.count_nonzero(mp.mo_occ > 0)
+        rdm1 = numpy.zeros((nmo,nmo))
+        moidx = numpy.where(get_frozen_mask(mp))[0]
+        rdm1[moidx[:,None],moidx] = dm1
+        dm1 = rdm1
+
+    for i in range(nocc):
+        dm1[i,i] += 2
+    return dm1
+
+def _gamma1_intermediates(mp, t2=None, eris=None):
+    if t2 is None: t2 = mp.t2
     nmo = mp.nmo
     nocc = mp.nocc
     nvir = nmo - nocc
     if t2 is None:
-        if eris is None:
-            eris = mp.ao2mo(mp.mo_coeff)
+        if eris is None: eris = mp.ao2mo()
         mo_energy = _mo_energy_without_core(mp, mp.mo_energy)
         eia = mo_energy[:nocc,None] - mo_energy[None,nocc:]
+
     dm1occ = numpy.zeros((nocc,nocc))
     dm1vir = numpy.zeros((nvir,nvir))
-    emp2 = 0
     for i in range(nocc):
         if t2 is None:
             gi = numpy.asarray(eris.ovov[i*nvir:(i+1)*nvir])
@@ -88,26 +116,30 @@ Given t2 amplitude, current function returns 1-RDM in MO basis''')
                 - numpy.einsum('jca,jbc->ab', t2i, t2i)
         dm1occ += numpy.einsum('iab,jab->ij', t2i, t2i) * 2 \
                 - numpy.einsum('iab,jba->ij', t2i, t2i)
-    rdm1 = numpy.zeros((nmo,nmo))
-# *2 for beta electron
-    rdm1[:nocc,:nocc] =-dm1occ * 2
-    rdm1[nocc:,nocc:] = dm1vir * 2
-    for i in range(nocc):
-        rdm1[i,i] += 2
-    return rdm1
+    return -dm1occ, dm1vir
 
 
-def make_rdm2(mp, t2, eris=None, verbose=logger.NOTE):
+def make_rdm2(mp, t2=None, eris=None, verbose=logger.NOTE):
     '''2-RDM in MO basis'''
-    nmo = mp.nmo
-    nocc = mp.nocc
+    if t2 is None: t2 = mp.t2
+    nmo = nmo0 = mp.nmo
+    nocc = nocc0 = mp.nocc
     nvir = nmo - nocc
     if t2 is None:
-        if eris is None:
-            eris = mp.ao2mo(mp.mo_coeff)
+        if eris is None: eris = mp.ao2mo()
         mo_energy = _mo_energy_without_core(mp, mp.mo_energy)
         eia = mo_energy[:nocc,None] - mo_energy[None,nocc:]
-    dm2 = numpy.zeros((nmo,nmo,nmo,nmo)) # Chemist notation
+
+    if not (mp.frozen is 0 or mp.frozen is None):
+        nmo0 = mp.mo_occ.size
+        nocc0 = numpy.count_nonzero(mp.mo_occ > 0)
+        moidx = get_frozen_mask(mp)
+        oidx = numpy.where(moidx & (mp.mo_occ > 0))[0]
+        vidx = numpy.where(moidx & (mp.mo_occ ==0))[0]
+    else:
+        moidx = oidx = vidx = None
+
+    dm2 = numpy.zeros((nmo0,nmo0,nmo0,nmo0)) # Chemist notation
     #dm2[:nocc,nocc:,:nocc,nocc:] = t2.transpose(0,3,1,2)*2 - t2.transpose(0,2,1,3)
     #dm2[nocc:,:nocc,nocc:,:nocc] = t2.transpose(3,0,2,1)*2 - t2.transpose(2,0,3,1)
     for i in range(nocc):
@@ -117,14 +149,112 @@ def make_rdm2(mp, t2, eris=None, verbose=logger.NOTE):
             t2i = gi/lib.direct_sum('jb+a->jba', eia, eia[i])
         else:
             t2i = t2[i]
-        dm2[i,nocc:,:nocc,nocc:] = t2i.transpose(1,0,2)*2 - t2i.transpose(2,0,1)
-        dm2[nocc:,i,nocc:,:nocc] = dm2[i,nocc:,:nocc,nocc:].transpose(0,2,1)
+        dovov = t2i.transpose(1,0,2)*2 - t2i.transpose(2,0,1)
+        dovov *= 2
+        if moidx is None:
+            dm2[i,nocc:,:nocc,nocc:] = dovov
+            dm2[nocc:,i,nocc:,:nocc] = dovov.transpose(0,2,1)
+        else:
+            dm2[oidx[i],vidx[:,None,None],oidx[:,None],vidx] = dovov
+            dm2[vidx[:,None,None],oidx[i],vidx[:,None],oidx] = dovov.transpose(0,2,1)
 
-    for i in range(nocc):
-        for j in range(nocc):
+    dm1 = make_rdm1(mp, t2, eris, verbose)
+    dm1[numpy.diag_indices(nocc0)] -= 2
+
+    for i in range(nocc0):
+        dm2[i,i,:,:] += dm1 * 2
+        dm2[:,:,i,i] += dm1 * 2
+        dm2[:,i,i,:] -= dm1
+        dm2[i,:,:,i] -= dm1
+
+    for i in range(nocc0):
+        for j in range(nocc0):
             dm2[i,i,j,j] += 4
             dm2[i,j,j,i] -= 2
     return dm2
+
+
+def get_nocc(mp):
+    if mp._nocc is not None:
+        return mp._nocc
+    elif mp.frozen is None:
+        nocc = numpy.count_nonzero(mp.mo_occ > 0)
+        assert(nocc > 0)
+        return nocc
+    elif isinstance(mp.frozen, (int, numpy.integer)):
+        nocc = numpy.count_nonzero(mp.mo_occ > 0) - mp.frozen
+        assert(nocc > 0)
+        return nocc
+    else:
+        occ_idx = mp.mo_occ > 0
+        occ_idx[list(mp.frozen)] = False
+        return numpy.count_nonzero(occ_idx)
+
+def get_nmo(mp):
+    if mp._nmo is not None:
+        return mp._nmo
+    elif mp.frozen is None:
+        return len(mp.mo_occ)
+    elif isinstance(mp.frozen, (int, numpy.integer)):
+        return len(mp.mo_occ) - mp.frozen
+    else:
+        return len(mp.mo_occ) - len(mp.frozen)
+
+def get_frozen_mask(mp):
+    '''Get boolean mask for the restricted reference orbitals.
+    
+    In the returned boolean (mask) array of frozen orbital indices, the
+    element is False if it corresonds to the frozen orbital.
+    '''
+    moidx = numpy.ones(mp.mo_occ.size, dtype=numpy.bool)
+    if mp._nmo is not None:
+        moidx[mp._nmo:] = False
+    elif mp.frozen is None:
+        pass
+    elif isinstance(mp.frozen, (int, numpy.integer)):
+        moidx[:mp.frozen] = False
+    elif len(mp.frozen) > 0:
+        moidx[list(mp.frozen)] = False
+    return moidx
+
+
+def as_scanner(mp):
+    '''Generating a scanner/solver for MP2 PES.
+
+    The returned solver is a function. This function requires one argument
+    "mol" as input and returns total MP2 energy.
+
+    The solver will automatically use the results of last calculation as the
+    initial guess of the new calculation.  All parameters assigned in the
+    MP2 and the underlying SCF objects (conv_tol, max_memory etc) are
+    automatically applied in the solver.
+
+    Note scanner has side effects.  It may change many underlying objects
+    (_scf, with_df, with_x2c, ...) during calculation.
+
+    Examples::
+
+        >>> from pyscf import gto, scf, mp
+        >>> mol = gto.M(atom='H 0 0 0; F 0 0 1')
+        >>> mp2_scanner = mp.MP2(scf.RHF(mol)).as_scanner()
+        >>> e_tot = mp2_scanner(gto.M(atom='H 0 0 0; F 0 0 1.1'))
+        >>> e_tot = mp2_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
+    '''
+    logger.info(mp, 'Set %s as a scanner', mp.__class__)
+    class MP2_Scanner(mp.__class__, lib.SinglePointScanner):
+        def __init__(self, mp):
+            self.__dict__.update(mp.__dict__)
+            self._scf = mp._scf.as_scanner()
+        def __call__(self, mol, **kwargs):
+            mf_scanner = self._scf
+            mf_scanner(mol)
+            self.mol = mol
+            self.mo_energy = mf_scanner.mo_energy
+            self.mo_coeff = mf_scanner.mo_coeff
+            self.mo_occ = mf_scanner.mo_occ
+            self.kernel(**kwargs)[0]
+            return self.e_tot
+    return MP2_Scanner(mp)
 
 
 class MP2(lib.StreamObject):
@@ -148,84 +278,88 @@ class MP2(lib.StreamObject):
         self.mo_occ = mo_occ
         self._nocc = None
         self._nmo = None
-        self.emp2 = None
         self.e_corr = None
         self.t2 = None
         self._keys = set(self.__dict__.keys())
 
     @property
     def nocc(self):
-        if self._nocc is not None:
-            return self._nocc
-        elif isinstance(self.frozen, (int, numpy.integer)):
-            return int(self.mo_occ.sum()) // 2 - self.frozen
-        elif self.frozen:
-            occ_idx = self.mo_occ > 0
-            occ_idx[numpy.asarray(self.frozen)] = False
-            return numpy.count_nonzero(occ_idx)
-        else:
-            return int(self.mo_occ.sum()) // 2
+        return self.get_nocc()
     @nocc.setter
     def nocc(self, n):
         self._nocc = n
 
     @property
     def nmo(self):
-        if self._nmo is not None:
-            return self._nmo
-        if isinstance(self.frozen, (int, numpy.integer)):
-            return len(self.mo_occ) - self.frozen
-        else:
-            return len(self.mo_occ) - len(self.frozen)
+        return self.get_nmo()
     @nmo.setter
     def nmo(self, n):
         self._nmo = n
 
-    def kernel(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=True):
+    get_nocc = get_nocc
+    get_nmo = get_nmo
+    get_frozen_mask = get_frozen_mask
+
+    def dump_flags(self):
+        log = logger.Logger(self.stdout, self.verbose)
+        log.info('')
+        log.info('******** %s flags ********', self.__class__)
+        log.info('nocc = %s, nmo = %s', self.nocc, self.nmo)
+        if self.frozen is not 0:
+            log.info('frozen orbitals %s', self.frozen)
+        log.info('max_memory %d MB (current use %d MB)',
+                 self.max_memory, lib.current_memory()[0])
+
+    @property
+    def emp2(self):
+        return self.e_corr
+
+    @property
+    def e_tot(self):
+        return self.e_corr + self._scf.e_tot
+
+    def kernel(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=True,
+               _kern=kernel):
         '''
         Args:
             with_t2 : bool
                 Whether to generate and hold t2 amplitudes in memory.
         '''
-        if mo_energy is None:
-            mo_energy = self.mo_energy
-        if mo_coeff is None:
-            mo_coeff = self.mo_coeff
-        if mo_energy is None or mo_coeff is None:
-            log.warn('mo_coeff, mo_energy are not given.\n'
-                     'You may need to call mf.kernel() to generate them.')
-            raise RuntimeError
+        if mo_energy is not None: self.mo_energy = mo_energy
+        if mo_coeff is not None: self.mo_coeff = mo_coeff
+        if self.mo_energy is None or self.mo_coeff is None:
+            raise RuntimeError('mo_coeff, mo_energy are not initialized.\n'
+                               'You may need to call mf.kernel() to generate them.')
+        if self.verbose >= logger.WARN:
+            self.check_sanity()
+        self.dump_flags()
 
-        self.emp2, self.t2 = \
-                kernel(self, mo_energy, mo_coeff, eris, with_t2, verbose=self.verbose)
-        logger.log(self, 'RMP2 energy = %.15g', self.emp2)
-        self.e_corr = self.emp2
-        return self.emp2, self.t2
+        self.e_corr, self.t2 = _kern(self, mo_energy, mo_coeff,
+                                     eris, with_t2, self.verbose)
+        logger.log(self, 'E(%s) = %.15g  E_corr = %.15g',
+                   self.__class__.__name__, self.e_tot, self.e_corr)
+        return self.e_corr, self.t2
 
     def ao2mo(self, mo_coeff=None):
-        return _ERIS(self, mo_coeff, verbose=self.verbose)
+        return _make_eris(self, mo_coeff, verbose=self.verbose)
 
-    def make_rdm1(self, t2=None, eris=None):
-        if t2 is None: t2 = self.t2
-        return make_rdm1(self, t2, eris, verbose=self.verbose)
+    make_rdm1 = make_rdm1
+    make_rdm2 = make_rdm2
 
-    def make_rdm2(self, t2=None, eris=None):
-        if t2 is None: t2 = self.t2
-        return make_rdm2(self, t2, eris, verbose=self.verbose)
+    as_scanner = as_scanner
+
+    def nuc_grad_method(self):
+        from pyscf.mp import mp2_grad
+        return mp2_grad.Gradients(self)
+
+RMP2 = MP2
+
 
 def _mo_energy_without_core(mp, mo_energy):
-    return mo_energy[_active_idx(mp)]
+    return mo_energy[get_frozen_mask(mp)]
 
 def _mo_without_core(mp, mo):
-    return mo[:,_active_idx(mp)]
-
-def _active_idx(mp):
-    moidx = numpy.ones(mp.mo_occ.size, dtype=numpy.bool)
-    if isinstance(mp.frozen, (int, numpy.integer)):
-        moidx[:mp.frozen] = False
-    elif len(mp.frozen) > 0:
-        moidx[numpy.asarray(mp.frozen)] = False
-    return moidx
+    return mo[:,get_frozen_mask(mp)]
 
 def _mem_usage(nocc, nvir):
     nmo = nocc + nvir
@@ -234,54 +368,59 @@ def _mem_usage(nocc, nvir):
     outcore = basic
     return incore, outcore, basic
 
-class _ERIS:
-    def __init__(self, mp, mo_coeff=None, verbose=None):
-        cput0 = (time.clock(), time.time())
+class _ChemistsERIs:
+    def __init__(self, mp, mo_coeff=None):
         if mo_coeff is None:
-            self.mo_coeff = mo_coeff = _mo_without_core(mp, mp.mo_coeff)
+            self.mo_coeff = _mo_without_core(mp, mp.mo_coeff)
         else:
-            self.mo_coeff = mo_coeff = _mo_without_core(mp, mo_coeff)
+            self.mo_coeff = _mo_without_core(mp, mo_coeff)
 
-        nocc = mp.nocc
-        nmo = mp.nmo
-        nvir = nmo - nocc
-        mem_incore, mem_outcore, mem_basic = _mem_usage(nocc, nvir)
-        mem_now = lib.current_memory()[0]
-        max_memory = max(2000, mp.max_memory*.9-mem_now)
-        log = logger.Logger(mp.stdout, mp.verbose)
-        if max_memory < mem_basic:
-            log.warn('Not enough memory for integral transformation. '
-                     'Available mem %s MB, required mem %s MB',
-                     max_memory, mem_basic)
+def _make_eris(mp, mo_coeff=None, ao2mofn=None, verbose=None):
+    log = logger.new_logger(mp, verbose)
+    time0 = (time.clock(), time.time())
+    eris = _ChemistsERIs(mp, mo_coeff)
+    mo_coeff = eris.mo_coeff
 
-        time0 = (time.clock(), time.time())
+    nocc = mp.nocc
+    nmo = mp.nmo
+    nvir = nmo - nocc
+    mem_incore, mem_outcore, mem_basic = _mem_usage(nocc, nvir)
+    mem_now = lib.current_memory()[0]
+    max_memory = max(0, mp.max_memory - mem_now)
+    if max_memory < mem_basic:
+        log.warn('Not enough memory for integral transformation. '
+                 'Available mem %s MB, required mem %s MB',
+                 max_memory, mem_basic)
 
-        co = numpy.asarray(mo_coeff[:,:nocc], order='F')
-        cv = numpy.asarray(mo_coeff[:,nocc:], order='F')
-        if hasattr(mp._scf, 'with_df') and mp._scf.with_df:
-            # To handle the PBC or custom 2-electron with 3-index tensor.
-            # Call dfmp2.MP2 for efficient DF-MP2 implementation.
-            log.warn('DF-HF is found. (ia|jb) is computed based on the DF '
-                     '3-tensor integrals.\n'
-                     'You can switch to dfmp2.MP2 for better performance')
-            log.debug('transform (ia|jb) with_df')
-            self.ovov = mp._scf.with_df.ao2mo((co,cv,co,cv))
-
-        elif (mp.mol.incore_anyway or
-              (mp._scf._eri is not None and
-               mem_incore+mem_now < mp.max_memory)):
-            log.debug('transform (ia|jb) incore')
-            self.ovov = ao2mo.incore.general(mp._scf._eri, (co,cv,co,cv))
-
+    co = numpy.asarray(mo_coeff[:,:nocc], order='F')
+    cv = numpy.asarray(mo_coeff[:,nocc:], order='F')
+    if (mp.mol.incore_anyway or
+        (mp._scf._eri is not None and mem_incore < max_memory)):
+        log.debug('transform (ia|jb) incore')
+        if callable(ao2mofn):
+            eris.ovov = ao2mofn((co,cv,co,cv)).reshape(nocc*nvir,nocc*nvir)
         else:
-            log.debug('transform (ia|jb) outcore')
-            self.feri = lib.H5TmpFile()
-            #ao2mo.outcore.general(mp.mol, (co,cv,co,cv), self.feri,
-            #                      max_memory=max_memory, verbose=mp.verbose)
-            #self.ovov = self.feri['eri_mo']
-            self.ovov = _ao2mo_ovov(mp, co, cv, self.feri, max_memory, mp.verbose)
+            eris.ovov = ao2mo.general(mp._scf._eri, (co,cv,co,cv))
 
-        time1 = log.timer('Integral transformation', *time0)
+    elif hasattr(mp._scf, 'with_df') and mp._scf.with_df:
+        # To handle the PBC or custom 2-electron with 3-index tensor.
+        # Call dfmp2.MP2 for efficient DF-MP2 implementation.
+        log.warn('DF-HF is found. (ia|jb) is computed based on the DF '
+                 '3-tensor integrals.\n'
+                 'You can switch to dfmp2.MP2 for better performance')
+        log.debug('transform (ia|jb) with_df')
+        eris.ovov = mp._scf.with_df.ao2mo((co,cv,co,cv))
+
+    else:
+        log.debug('transform (ia|jb) outcore')
+        eris.feri = lib.H5TmpFile()
+        #ao2mo.outcore.general(mp.mol, (co,cv,co,cv), eris.feri,
+        #                      max_memory=max_memory, verbose=log)
+        #eris.ovov = eris.feri['eri_mo']
+        eris.ovov = _ao2mo_ovov(mp, co, cv, eris.feri, max(2000, max_memory), log)
+
+    time1 = log.timer('Integral transformation', *time0)
+    return eris
 
 #
 # the MO integral for MP2 is (ov|ov). This is the efficient integral
@@ -345,42 +484,23 @@ def _ao2mo_ovov(mp, orbo, orbv, feri, max_memory=2000, verbose=None):
     chunks = (nvir,nvir)
     h5dat = feri.create_dataset('ovov', (nocc*nvir,nocc*nvir), 'f8',
                                 chunks=chunks)
-    # jk_where is the sorting indices for the stacked (oO|pP) integrals in pass 2
-    jk_where = []
-    aoao_idx = numpy.arange(nao*nao).reshape(nao,nao)
-    for i0, i1, j0, j1 in jk_blk_slices:
-        # idx of pP in <oO|pP>
-        jk_where.append(aoao_idx[i0:i1,j0:j1].ravel())
-        if i0 != j0:
-            # idx of pP in (<oO|pP>).transpose(1,0,3,2)
-            jk_where.append(aoao_idx[j0:j1,i0:i1].ravel())
-    jk_where = numpy.argsort(numpy.hstack(jk_where)).astype(numpy.int32)
-    orbv = numpy.asarray(orbv, order='F')
-
     occblk = int(min(nocc, max(4, 250/nocc, max_memory*.9e6/8/(nao**2*nocc)/5)))
     def load(i0, eri):
-        if i0 >= nocc:
-            return
-        i1 = min(i0+occblk, nocc)
-        eri = eri[:(i1-i0)*nocc]
-        p1 = 0
-        for k, jk_slice in enumerate(jk_blk_slices):
-            dat = numpy.asarray(ftmp[str(k)][i0:i1]).reshape((i1-i0)*nocc,-1)
-            p0, p1 = p1, p1 + dat.shape[1]
-            eri[:,p0:p1] = dat
-            if jk_slice[0] != jk_slice[2]:
-                dat = numpy.asarray(ftmp[str(k)][:,i0:i1])
-                dat = dat.transpose(1,0,3,2).reshape((i1-i0)*nocc,-1)
-                p0, p1 = p1, p1 + dat.shape[1]
-                eri[:,p0:p1] = dat
+        if i0 < nocc:
+            i1 = min(i0+occblk, nocc)
+            for k, (p0,p1,q0,q1) in enumerate(jk_blk_slices):
+                eri[:i1-i0,:,p0:p1,q0:q1] = ftmp[str(k)][i0:i1]
+                if p0 != q0:
+                    dat = numpy.asarray(ftmp[str(k)][:,i0:i1])
+                    eri[:i1-i0,:,q0:q1,p0:p1] = dat.transpose(1,0,3,2)
 
     def save(i0, i1, dat):
         for i in range(i0, i1):
             h5dat[i*nvir:(i+1)*nvir] = dat[i-i0].reshape(nvir,nocc*nvir)
 
-    buf_prefecth = numpy.empty((occblk*nocc,nao**2))
+    orbv = numpy.asarray(orbv, order='F')
+    buf_prefecth = numpy.empty((occblk,nocc,nao,nao))
     buf = numpy.empty_like(buf_prefecth)
-    buf1 = numpy.empty_like(buf_prefecth)
     bufw = numpy.empty((occblk*nocc,nvir**2))
     bufw1 = numpy.empty_like(bufw)
     with lib.call_in_background(load) as prefetch:
@@ -388,12 +508,10 @@ def _ao2mo_ovov(mp, orbo, orbv, feri, max_memory=2000, verbose=None):
             load(0, buf_prefecth)
             for i0, i1 in lib.prange(0, nocc, occblk):
                 buf, buf_prefecth = buf_prefecth, buf
-                eri = buf[:(i1-i0)*nocc]
                 prefetch(i1, buf_prefecth)
+                eri = buf[:i1-i0].reshape((i1-i0)*nocc,nao,nao)
 
-                idx = numpy.arange(eri.shape[0], dtype=numpy.int32)
-                dat = lib.take_2d(eri, idx, jk_where, out=buf1)
-                dat = _ao2mo.nr_e2(dat, orbv, (0,nvir,0,nvir), 's1', 's1', out=bufw)
+                dat = _ao2mo.nr_e2(eri, orbv, (0,nvir,0,nvir), 's1', 's1', out=bufw)
                 bsave(i0, i1, dat.reshape(i1-i0,nocc,nvir,nvir).transpose(0,2,1,3))
                 bufw, bufw1 = bufw1, bufw
                 time1 = log.timer_debug1('pass2 ao2mo [%d:%d]' % (i0,i1), *time1)
@@ -410,42 +528,18 @@ if __name__ == '__main__':
         [1 , (0. , -0.757 , 0.587)],
         [1 , (0. , 0.757  , 0.587)]]
 
-    mol.basis = {'H': 'cc-pvdz',
-                 'O': 'cc-pvdz',}
+    mol.basis = 'cc-pvdz'
     mol.build()
     mf = scf.RHF(mol).run()
     mp = MP2(mf)
     mp.verbose = 5
-    #print mp.kernel(with_t2=False)
-
-############
-    nocc = mol.nelectron//2
-    nmo = mf.mo_energy.size
-    nvir = nmo - nocc
-
-    co = mf.mo_coeff[:,:nocc]
-    cv = mf.mo_coeff[:,nocc:]
-    g = ao2mo.incore.general(mf._eri, (co,cv,co,cv)).ravel()
-    eia = mf.mo_energy[:nocc,None] - mf.mo_energy[nocc:]
-    t2ref0 = g/(eia.reshape(-1,1)+eia.reshape(-1)).ravel()
-    t2ref0 = t2ref0.reshape(nocc,nvir,nocc,nvir).transpose(0,2,1,3)
 
     pt = MP2(mf)
     emp2, t2 = pt.kernel()
     print(emp2 - -0.204019967288338)
-    print('incore', numpy.allclose(t2, t2ref0))
     pt.max_memory = 1
-    print('direct', numpy.allclose(pt.kernel()[1], t2ref0))
-
-    rdm1 = make_rdm1_ao(pt, mf.mo_energy, mf.mo_coeff)
-    print(numpy.allclose(reduce(numpy.dot, (mf.mo_coeff, pt.make_rdm1(),
-                                            mf.mo_coeff.T)), rdm1))
-
-    eri = ao2mo.restore(1, ao2mo.kernel(mf._eri, mf.mo_coeff), nmo)
-    rdm2 = pt.make_rdm2()
-    e1 = numpy.einsum('ij,ij', mf.make_rdm1(), mf.get_hcore())
-    e2 = .5 * numpy.dot(eri.flatten(), rdm2.flatten())
-    print(e1+e2+mf.energy_nuc()-mf.e_tot - -0.204019976381)
+    emp2, t2 = pt.kernel()
+    print(emp2 - -0.204019967288338)
 
     pt = MP2(scf.density_fit(mf, 'weigend'))
     print(pt.kernel()[0] - -0.204254500454)

@@ -24,12 +24,12 @@ from pyscf.pbc import tools
 
 nk = 1
 kpts = [nk,nk,1]
-Lz = 20 # Smallest Lz value for ~1e-6 convergence in absolute energy
+Lz = 25 # Smallest Lz value for ~1e-6 convergence in absolute energy
 #fft_ke_cut = 300 # We need around accuracy of ~1e-6 for FFTDF
-#                 # Corresponds to gs = [19,12,109]
+#                 # Corresponds to mesh = [32,32,156]
 a = 1.42 # bond length in graphene
 fft_ke_cut = 300
-aft_gs = [15,15,20] # Much smaller gs needed for AFTDF
+aft_mesh = [30,30,40] # Much smaller mesh needed for AFTDF
 e = []
 t = []
 pseudo = 'gth-pade'
@@ -43,7 +43,7 @@ cell = pbcgto.Cell()
 cell.build(unit = 'B',
            a = [[4.6298286730500005, 0.0, 0.0], [-2.3149143365249993, 4.009549246030899, 0.0], [0.0, 0.0, Lz]],
            atom = 'C 0 0 0; C 0 2.67303283 0',
-           gs = aft_gs,
+           mesh = aft_mesh,
            dimension=2,
            pseudo = pseudo,
            verbose = 7,

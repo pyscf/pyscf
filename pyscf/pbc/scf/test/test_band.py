@@ -11,7 +11,7 @@ L = 2
 cell = gto.Cell()
 cell.unit = 'B'
 cell.a = np.diag([L,L,L])
-cell.gs = np.array([5,5,5])
+cell.mesh = np.array([11]*3)
 cell.atom = [['He', (L/2.,L/2.,L/2.)]]
 cell.basis = { 'He': [[0, (1.0, 1.0)]] }
 cell.build()

@@ -200,16 +200,15 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
     dataset ['eri_mo', 'new'], shape (3, 100, 55)
     '''
     time_0pass = (time.clock(), time.time())
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(mol.stdout, verbose)
+    log = logger.new_logger(mol, verbose)
 
     nmoi = mo_coeffs[0].shape[1]
     nmoj = mo_coeffs[1].shape[1]
     nmok = mo_coeffs[2].shape[1]
     nmol = mo_coeffs[3].shape[1]
     nao = mo_coeffs[0].shape[0]
+    assert(nao == mol.nao_nr())
+
     aosym = _stand_sym_code(aosym)
     if aosym in ('s4', 's2kl'):
         nao_pair = nao * (nao+1) // 2

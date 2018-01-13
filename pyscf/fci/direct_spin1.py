@@ -508,7 +508,7 @@ class FCISolver(lib.StreamObject):
 
     Saved results
 
-        converged : bool
+        converged : bool (or a list of bool for multiple roots)
             Whether davidson iteration is converged
 
     Examples:
@@ -605,6 +605,7 @@ class FCISolver(lib.StreamObject):
                 lib.davidson1(lambda xs: [op(x) for x in xs],
                               x0, precond, lessio=lessio, **kwargs)
         if kwargs['nroots'] == 1:
+            self.converged = self.converged[0]
             e = e[0]
             ci = ci[0]
         return e, ci
@@ -649,6 +650,7 @@ class FCISolver(lib.StreamObject):
 
     @lib.with_doc(make_rdm1.__doc__)
     def make_rdm1(self, fcivec, norb, nelec, link_index=None):
+        nelec = _unpack_nelec(nelec, self.spin)
         return make_rdm1(fcivec, norb, nelec, link_index)
 
     @lib.with_doc(make_rdm12s.__doc__)

@@ -6,6 +6,7 @@ from functools import reduce
 import numpy
 import scipy.linalg
 from pyscf import lib
+from pyscf import gto
 from pyscf.lib import logger
 from pyscf.scf import hf
 from pyscf.scf import chkfile
@@ -48,15 +49,47 @@ def init_guess_by_atom(mol, breaksym=True):
     return numpy.array((dma,dmb))
 
 
-def init_guess_by_chkfile(mol, chkfile_name, project=True):
+def init_guess_by_chkfile(mol, chkfile_name, project=None):
+    '''Read SCF chkfile and make the density matrix for UHF initial guess.
+
+    Kwargs:
+        project : None or bool
+            Whether to project chkfile's orbitals to the new basis.  Note when
+            the geometry of the chkfile and the given molecule are very
+            different, this projection can produce very poor initial guess.
+            In PES scanning, it is recommended to swith off project.
+
+            If project is set to None, the projection is only applied when the
+            basis sets of the chkfile's molecule are different to the basis
+            sets of the given molecule (regardless whether the geometry of
+            the two molecules are different).  Note the basis sets are
+            considered to be different if the two molecules are derived from
+            the same molecule with different ordering of atoms.
+    '''
     from pyscf.scf import addons
     chk_mol, scf_rec = chkfile.load_scf(chkfile_name)
+    if project is None:
+        project = not gto.same_basis_set(chk_mol, mol)
+
+    # Check whether the two molecules are similar enough
+    def inertia_momentum(mol):
+        im = gto.inertia_momentum(mol._atom, mol.atom_charges(),
+                                  mol.atom_coords())
+        return scipy.linalg.eigh(im)[0]
+    if abs(inertia_momentum(mol) - inertia_momentum(chk_mol)).sum() > 0.5:
+        logger.warn(mol, "Large deviations found between the input "
+                    "molecule and the molecule from chkfile\n"
+                    "Initial guess density matrix may have large error.")
+
+    if project:
+        s = hf.get_ovlp(mol)
 
     def fproj(mo):
         if project:
-            return addons.project_mo_nr2nr(chk_mol, mo, mol)
-        else:
-            return mo
+            mo = addons.project_mo_nr2nr(chk_mol, mo, mol)
+            norm = numpy.einsum('pi,pi->i', mo.conj(), s.dot(mo))
+            mo /= numpy.sqrt(norm)
+        return mo
 
     mo = scf_rec['mo_coeff']
     mo_occ = scf_rec['mo_occ']
@@ -372,7 +405,7 @@ def spin_square(mo, s=1):
     s = numpy.sqrt(ss+.25) - .5
     return ss, s*2+1
 
-def analyze(mf, verbose=logger.DEBUG, **kwargs):
+def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=True, **kwargs):
     '''Analyze the given SCF object:  print orbital energies, occupancies;
     print orbital coefficients; Mulliken population analysis; Dipole moment
     '''
@@ -392,19 +425,29 @@ def analyze(mf, verbose=logger.DEBUG, **kwargs):
 
     ovlp_ao = mf.get_ovlp()
     if log.verbose >= logger.DEBUG:
-        log.debug(' ** MO coefficients (expansion on meta-Lowdin AOs) for alpha spin **')
         label = mf.mol.ao_labels()
-        orth_coeff = orth.orth_ao(mf.mol, 'meta_lowdin', s=ovlp_ao)
-        c_inv = numpy.dot(orth_coeff.T, ovlp_ao)
-        dump_mat.dump_rec(mf.stdout, c_inv.dot(mo_coeff[0]), label, start=1,
-                          **kwargs)
-        log.debug(' ** MO coefficients (expansion on meta-Lowdin AOs) for beta spin **')
-        dump_mat.dump_rec(mf.stdout, c_inv.dot(mo_coeff[1]), label, start=1,
-                          **kwargs)
+        if with_meta_lowdin:
+            log.debug(' ** MO coefficients (expansion on meta-Lowdin AOs) for alpha spin **')
+            orth_coeff = orth.orth_ao(mf.mol, 'meta_lowdin', s=ovlp_ao)
+            c_inv = numpy.dot(orth_coeff.T, ovlp_ao)
+            dump_mat.dump_rec(mf.stdout, c_inv.dot(mo_coeff[0]), label, start=1,
+                              **kwargs)
+            log.debug(' ** MO coefficients (expansion on meta-Lowdin AOs) for beta spin **')
+            dump_mat.dump_rec(mf.stdout, c_inv.dot(mo_coeff[1]), label, start=1,
+                              **kwargs)
+        else:
+            log.debug(' ** MO coefficients (expansion on AOs) for alpha spin **')
+            dump_mat.dump_rec(mf.stdout, mo_coeff[0], label, start=1, **kwargs)
+            log.debug(' ** MO coefficients (expansion on AOs) for beta spin **')
+            dump_mat.dump_rec(mf.stdout, mo_coeff[1], label, start=1, **kwargs)
 
     dm = mf.make_rdm1(mo_coeff, mo_occ)
-    return (mf.mulliken_meta(mf.mol, dm, s=ovlp_ao, verbose=log),
-            mf.dip_moment(mf.mol, dm, verbose=log))
+    if with_meta_lowdin:
+        return (mf.mulliken_meta(mf.mol, dm, s=ovlp_ao, verbose=log),
+                mf.dip_moment(mf.mol, dm, verbose=log))
+    else:
+        return (mf.mulliken_pop(mf.mol, dm, s=ovlp_ao, verbose=log),
+                mf.dip_moment(mf.mol, dm, verbose=log))
 
 def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
     '''Mulliken population analysis
@@ -682,7 +725,7 @@ class UHF(hf.SCF):
                 dmb[p0:p1,p0:p1] = dma[p0:p1,p0:p1]
         return numpy.array((dma,dmb))
 
-    def init_guess_by_chkfile(self, chkfile=None, project=True):
+    def init_guess_by_chkfile(self, chkfile=None, project=None):
         if chkfile is None: chkfile = self.chkfile
         return init_guess_by_chkfile(self.mol, chkfile, project=project)
 
@@ -720,9 +763,9 @@ class UHF(hf.SCF):
             vhf += numpy.asarray(vhf_last)
         return vhf
 
-    def analyze(self, verbose=None, **kwargs):
+    def analyze(self, verbose=None, with_meta_lowdin=True, **kwargs):
         if verbose is None: verbose = self.verbose
-        return analyze(self, verbose, **kwargs)
+        return analyze(self, verbose, with_meta_lowdin, **kwargs)
 
     def mulliken_pop(self, mol=None, dm=None, s=None, verbose=logger.DEBUG):
         if mol is None: mol = self.mol

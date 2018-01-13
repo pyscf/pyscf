@@ -10,7 +10,7 @@ Short range part of ECP under PBC
 import numpy
 from pyscf import lib
 from pyscf import gto
-from pyscf.gto import PTR_ECPBAS_OFFSET, PTR_NECPBAS
+from pyscf.gto import AS_ECPBAS_OFFSET, AS_NECPBAS
 
 
 def ecp_int(cell, kpts=None):
@@ -31,8 +31,8 @@ def ecp_int(cell, kpts=None):
     ecpcell._env = cell._env
     # In pbc.incore _ecpbas is appended to two sets of cell._bas and the
     # fictitious s function.
-    cell._env[PTR_ECPBAS_OFFSET] = cell.nbas * 2 + 1
-    cell._env[PTR_NECPBAS] = len(cell._ecpbas)
+    cell._env[AS_ECPBAS_OFFSET] = cell.nbas * 2 + 1
+    cell._env[AS_NECPBAS] = len(cell._ecpbas)
     # shls_slice of auxiliary index (0,1) corresponds to the fictitious s function
     shls_slice = (0, cell.nbas, 0, cell.nbas, 0, 1)
 

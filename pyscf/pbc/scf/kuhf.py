@@ -16,6 +16,7 @@ import scipy.linalg
 from pyscf.scf import hf as mol_hf
 from pyscf.scf import uhf as mol_uhf
 from pyscf.pbc.scf import khf
+from pyscf.pbc.scf import uhf as pbcuhf
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc.scf import addons
@@ -200,14 +201,17 @@ def canonicalize(mf, mo_coeff_kpts, mo_occ_kpts, fock=None):
         mo_energy[1].append(mo_e)
     return mo_energy, mo_coeff
 
-def init_guess_by_chkfile(cell, chkfile_name, project=True, kpts=None):
+def init_guess_by_chkfile(cell, chkfile_name, project=None, kpts=None):
     '''Read the KHF results from checkpoint file, then project it to the
     basis defined by ``cell``
 
     Returns:
         Density matrix, 3D ndarray
     '''
+    from pyscf import gto
     chk_cell, scf_rec = chkfile.load_scf(chkfile_name)
+    if project is None:
+        project = not gto.same_basis_set(chk_cell, cell)
 
     if kpts is None:
         kpts = scf_rec['kpts']
@@ -231,11 +235,15 @@ def init_guess_by_chkfile(cell, chkfile_name, project=True, kpts=None):
             mo_occ = [np.expand_dims(mo_occ[0], axis=0),
                       np.expand_dims(mo_occ[1], axis=0)]
 
+    if project:
+        s = cell.pbc_intor('int1e_ovlp', kpts=kpts)
     def fproj(mo, kpts):
         if project:
-            return addons.project_mo_nr2nr(chk_cell, mo, cell, kpts)
-        else:
-            return mo
+            mo = addons.project_mo_nr2nr(chk_cell, mo, cell, kpts)
+            for k, c in enumerate(mo):
+                norm = np.einsum('pi,pi->i', c.conj(), s[k].dot(c))
+                mo[k] /= np.sqrt(norm)
+        return mo
 
     if kpts.shape == chk_kpts.shape and np.allclose(kpts, chk_kpts):
         def makedm(mos, occs):
@@ -267,24 +275,24 @@ def init_guess_by_chkfile(cell, chkfile_name, project=True, kpts=None):
     return dm
 
 
-class KUHF(mol_uhf.UHF, khf.KSCF):
+class KUHF(pbcuhf.UHF, khf.KSCF):
     '''UHF class with k-point sampling.
     '''
     def __init__(self, cell, kpts=np.zeros((1,3)), exxdiv='ewald'):
         khf.KSCF.__init__(self, cell, kpts, exxdiv)
-        n_b = (cell.nelectron - cell.spin) // 2
-        self.nelec = (cell.nelectron-n_b, n_b)
+        self.nelec = cell.nelec
         self._keys = self._keys.union(['nelec'])
 
     def dump_flags(self):
         khf.KSCF.dump_flags(self)
-        logger.info(self, 'number electrons alpha = %d  beta = %d', *self.nelec)
+        logger.info(self, 'number of electrons per unit cell  '
+                    'alpha = %d beta = %d', *self.nelec)
         return self
 
     check_sanity = khf.KSCF.check_sanity
 
     def build(self, cell=None):
-        mol_uhf.UHF.build(self, cell)
+        pbcuhf.UHF.build(self, cell)
         #if self.exxdiv == 'vcut_ws':
         #    self.precompute_exx()
 
@@ -331,13 +339,6 @@ class KUHF(mol_uhf.UHF, khf.KSCF):
                 dm_kpts *= (nelec/ne).reshape(2,-1,1,1)
         return dm_kpts
 
-    def init_guess_by_1e(self, cell=None):
-        if cell is None: cell = self.cell
-        if cell.dimension < 3:
-            logger.warn(self, 'Hcore initial guess is not recommended in '
-                        'the SCF of low-dimensional systems.')
-        return mol_uhf.UHF.init_guess_by_1e(self, cell)
-
     get_hcore = khf.KSCF.get_hcore
     get_ovlp = khf.KSCF.get_ovlp
     get_jk = khf.KSCF.get_jk
@@ -354,9 +355,9 @@ class KUHF(mol_uhf.UHF, khf.KSCF):
         return vhf
 
 
-    def analyze(self, verbose=None, **kwargs):
+    def analyze(self, verbose=None, with_meta_lowdin=True, **kwargs):
         if verbose is None: verbose = self.verbose
-        return khf.analyze(self, verbose, **kwargs)
+        return khf.analyze(self, verbose, with_meta_lowdin, **kwargs)
 
 
     def get_grad(self, mo_coeff_kpts, mo_occ_kpts, fock=None):
@@ -468,6 +469,11 @@ class KUHF(mol_uhf.UHF, khf.KSCF):
         from pyscf.pbc.scf.stability import uhf_stability
         return uhf_stability(self, internal, external, verbose)
 
+    def convert_from_(self, mf):
+        '''Convert given mean-field object to KUHF'''
+        addons.convert_to_uhf(mf, self)
+        return self
+
 
 if __name__ == '__main__':
     from pyscf.pbc import gto
@@ -478,7 +484,7 @@ if __name__ == '__main__':
     '''
     cell.basis = '321g'
     cell.a = np.eye(3) * 3
-    cell.gs = [5] * 3
+    cell.mesh = [11] * 3
     cell.verbose = 5
     cell.build()
     mf = KUHF(cell, [2,1,1])

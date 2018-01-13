@@ -416,13 +416,13 @@ class DMRGCI(pyscf.lib.StreamObject):
         if (filetype == "binary") :
             fname = os.path.join(self.scratchDirectory,"node0", "spatial_threepdm.%d.%d.bin" %(state, state))
             if 'stackblock' in settings.BLOCKEXE:
-              print 'Reading binary 3RDM from STACKBLOCK'
+              print('Reading binary 3RDM from STACKBLOCK')
               fnameout = os.path.join(self.scratchDirectory,"node0", "spatial_threepdm.%d.%d.bin.unpack" %(state, state))
               libunpack.unpackE3(ctypes.c_char_p(fname), ctypes.c_char_p(fnameout), ctypes.c_int(norb))
               E3 = numpy.fromfile(fnameout, dtype=numpy.dtype('Float64'))
               E3 = numpy.reshape(E3, (norb, norb, norb, norb, norb, norb), order='F')
             else:
-              print 'Reading binary 3RDM from BLOCK'
+              print('Reading binary 3RDM from BLOCK')
               E3 = DMRGCI.unpackE3_BLOCK(self,fname,norb)
 
         # The 3RDMs written by "Threepdm_container::save_spatial_npdm_text" in BLOCK and STACKBLOCK
@@ -430,7 +430,7 @@ class DMRGCI(pyscf.lib.StreamObject):
         # and are stored here as E3[i1,j2,k3,n1,m2,l3]
         # This is done with SQA in mind.
         else:
-            print 'Reading text-file 3RDM'
+            print('Reading text-file 3RDM')
             fname = os.path.join(self.scratchDirectory,"node0", "spatial_threepdm.%d.%d.txt" %(state, state))
             f = open(fname, 'r')
             lines = f.readlines()
@@ -450,7 +450,7 @@ class DMRGCI(pyscf.lib.StreamObject):
                 E3[c,b,a, d,e,f] = integral
               else:
                 self.populate(E3, [a,b,c,  f,e,d], integral)
-        print ''
+        print('')
         return E3
 
     def make_rdm4(self, state, norb, nelec, dt=numpy.dtype('Float64'), filetype = "binary", link_index=None, **kwargs):
@@ -486,13 +486,13 @@ class DMRGCI(pyscf.lib.StreamObject):
         if (filetype == "binary") :
             fname = os.path.join(self.scratchDirectory,"node0", "spatial_fourpdm.%d.%d.bin" %(state, state))
             if 'stackblock' in settings.BLOCKEXE:
-              print 'Reading binary 4RDM from STACKBLOCK'
+              print('Reading binary 4RDM from STACKBLOCK')
               fnameout = os.path.join(self.scratchDirectory,"node0", "spatial_fourpdm.%d.%d.bin.unpack" %(state, state))
               libunpack.unpackE4(ctypes.c_char_p(fname), ctypes.c_char_p(fnameout), ctypes.c_int(norb))
               E4 = numpy.fromfile(fnameout, dtype=numpy.dtype('Float64'))
               E4 = numpy.reshape(E4, (norb, norb, norb, norb, norb, norb, norb, norb), order='F')
             else:
-              print 'Reading binary 4RDM from BLOCK'
+              print('Reading binary 4RDM from BLOCK')
               E4 = DMRGCI.unpackE4_BLOCK(self,fname,norb)
 
         # The 4RDMs written by "Fourpdm_container::save_spatial_npdm_text" in BLOCK and STACKBLOCK
@@ -500,7 +500,7 @@ class DMRGCI(pyscf.lib.StreamObject):
         # and are stored here as E4[i1,j2,k3,l4,p1,o2,n3,m4]
         # This is done with SQA in mind.
         else:
-            print 'Reading text-file 4RDM'
+            print('Reading text-file 4RDM')
             fname = os.path.join(self.scratchDirectory,"node0", "spatial_fourpdm.%d.%d.txt" %(state, state))
             f = open(fname, 'r')
             lines = f.readlines()
@@ -528,7 +528,7 @@ class DMRGCI(pyscf.lib.StreamObject):
                            dn_indexes[i],dn_indexes[j],dn_indexes[k],dn_indexes[l]] = integral
               else:
                 self.populate(E4, [a,b,c,d,  h,g,f,e], integral)
-        print ''
+        print('')
         return E4
 
     def populate(self, array, list, value):
@@ -681,6 +681,19 @@ class DMRGCI(pyscf.lib.StreamObject):
                 self._restart = False
         return callback
 
+# Block code also allows non-spin-adapted calculation. S^2 is not available in
+# this type of calculation
+    if 'spin_adapted' in settings.BLOCKEXE:
+        def spin_square(self, civec, norb, nelec):
+            if isinstance(nelec, (int, numpy.integer)):
+                nelecb = nelec//2
+                neleca = nelec - nelecb
+            else :
+                neleca, nelecb = nelec
+            s = (neleca - nelecb) * .5
+            ss = s * (s+1)
+            return ss, s*2+1
+
 
 def make_schedule(sweeps, Ms, tols, noises, twodot_to_onedot):
     if len(sweeps) == len(Ms) == len(tols) == len(noises):
@@ -781,6 +794,7 @@ def writeDMRGConfFile(DMRGCI, nelec, Restart,
     f.close()
     #no reorder
     #f.write('noreorder\n')
+    return confFile
 
 def writeIntegralFile(DMRGCI, h1eff, eri_cas, ncas, nelec, ecore=0):
     if isinstance(nelec, (int, numpy.integer)):
@@ -811,6 +825,7 @@ def writeIntegralFile(DMRGCI, h1eff, eri_cas, ncas, nelec, ecore=0):
     pyscf.tools.fcidump.from_integrals(integralFile, h1eff, eri_cas, ncas,
                                        neleca+nelecb, ecore, ms=abs(neleca-nelecb),
                                        orbsym=orbsym)
+    return integralFile
 
 
 def executeBLOCK(DMRGCI):
@@ -823,6 +838,7 @@ def executeBLOCK(DMRGCI):
         check_call(cmd, cwd=DMRGCI.runtimeDir, shell=True)
     except CalledProcessError as err:
         logger.error(DMRGCI, cmd)
+        outFile = os.path.join(DMRGCI.runtimeDir, outFile)
         DMRGCI.stdout.write(check_output(['tail', '-100', outFile]))
         raise err
 
@@ -874,6 +890,10 @@ def dryrun(mc, mo_coeff=None):
     mc.fcisolver.onlywriteIntegral = bak
 
 def block_version(blockexe):
+    version = getattr(settings, 'BLOCKVERSION', None)
+    if isinstance(version, str):
+        return version
+
     try:
         msg = check_output([blockexe, '-v'], stderr=STDOUT)
         version = '1.1.0'

@@ -26,7 +26,8 @@ def get_eri(mydf, kpts=None, compact=True):
     kptijkl = _format_kpts(kpts)
     kpti, kptj, kptk, kptl = kptijkl
     q = kptj - kpti
-    coulG = mydf.weighted_coulG(q, False, mydf.gs)
+    mesh = mydf.mesh
+    coulG = mydf.weighted_coulG(q, False, mesh)
     nao = cell.nao_nr()
     nao_pair = nao * (nao+1) // 2
     max_memory = max(2000, (mydf.max_memory - lib.current_memory()[0]) * .8)
@@ -36,7 +37,7 @@ def get_eri(mydf, kpts=None, compact=True):
     if gamma_point(kptijkl):
         eriR = numpy.zeros((nao_pair,nao_pair))
         for pqkR, pqkI, p0, p1 \
-                in mydf.pw_loop(mydf.gs, kptijkl[:2], q, max_memory=max_memory,
+                in mydf.pw_loop(mesh, kptijkl[:2], q, max_memory=max_memory,
                                 aosym='s2'):
             vG = numpy.sqrt(coulG[p0:p1])
             pqkR *= vG
@@ -57,7 +58,7 @@ def get_eri(mydf, kpts=None, compact=True):
         eriR = numpy.zeros((nao**2,nao**2))
         eriI = numpy.zeros((nao**2,nao**2))
         for pqkR, pqkI, p0, p1 \
-                in mydf.pw_loop(mydf.gs, kptijkl[:2], q, max_memory=max_memory):
+                in mydf.pw_loop(mesh, kptijkl[:2], q, max_memory=max_memory):
             vG = numpy.sqrt(coulG[p0:p1])
             pqkR *= vG
             pqkI *= vG
@@ -84,8 +85,8 @@ def get_eri(mydf, kpts=None, compact=True):
         eriI = numpy.zeros((nao**2,nao**2))
 # rho_rs(-G-k) = rho_rs(conj(G+k)) = conj(rho_sr(G+k))
         for (pqkR, pqkI, p0, p1), (rskR, rskI, q0, q1) in \
-                lib.izip(mydf.pw_loop(mydf.gs, kptijkl[:2], q, max_memory=max_memory*.5),
-                         mydf.pw_loop(mydf.gs,-kptijkl[2:], q, max_memory=max_memory*.5)):
+                lib.izip(mydf.pw_loop(mesh, kptijkl[:2], q, max_memory=max_memory*.5),
+                         mydf.pw_loop(mesh,-kptijkl[2:], q, max_memory=max_memory*.5)):
             pqkR *= coulG[p0:p1]
             pqkI *= coulG[p0:p1]
 # rho_pq(G+k_pq) * conj(rho_sr(G+k_pq))
@@ -100,7 +101,8 @@ def general(mydf, mo_coeffs, kpts=None, compact=True):
     if isinstance(mo_coeffs, numpy.ndarray) and mo_coeffs.ndim == 2:
         mo_coeffs = (mo_coeffs,) * 4
     q = kptj - kpti
-    coulG = mydf.weighted_coulG(q, False, mydf.gs)
+    mesh = mydf.mesh
+    coulG = mydf.weighted_coulG(q, False, mesh)
     all_real = not any(numpy.iscomplexobj(mo) for mo in mo_coeffs)
     max_memory = max(2000, (mydf.max_memory - lib.current_memory()[0]) * .5)
 
@@ -115,7 +117,7 @@ def general(mydf, mo_coeffs, kpts=None, compact=True):
 
         ijR = ijI = klR = klI = buf = None
         for pqkR, pqkI, p0, p1 \
-                in mydf.pw_loop(mydf.gs, kptijkl[:2], q, max_memory=max_memory,
+                in mydf.pw_loop(mesh, kptijkl[:2], q, max_memory=max_memory,
                                 aosym='s2'):
             vG = numpy.sqrt(coulG[p0:p1])
             pqkR *= vG
@@ -145,7 +147,7 @@ def general(mydf, mo_coeffs, kpts=None, compact=True):
 
         zij = zlk = buf = None
         for pqkR, pqkI, p0, p1 \
-                in mydf.pw_loop(mydf.gs, kptijkl[:2], q, max_memory=max_memory):
+                in mydf.pw_loop(mesh, kptijkl[:2], q, max_memory=max_memory):
             buf = lib.transpose(pqkR+pqkI*1j, out=buf)
             buf *= numpy.sqrt(coulG[p0:p1]).reshape(-1,1)
             zij, zlk = _ztrans(buf, zij, moij, ijslice,
@@ -174,8 +176,8 @@ def general(mydf, mo_coeffs, kpts=None, compact=True):
         ao_loc = None
         zij = zkl = buf = None
         for (pqkR, pqkI, p0, p1), (rskR, rskI, q0, q1) in \
-                lib.izip(mydf.pw_loop(mydf.gs, kptijkl[:2], q, max_memory=max_memory*.5),
-                         mydf.pw_loop(mydf.gs,-kptijkl[2:], q, max_memory=max_memory*.5)):
+                lib.izip(mydf.pw_loop(mesh, kptijkl[:2], q, max_memory=max_memory*.5),
+                         mydf.pw_loop(mesh,-kptijkl[2:], q, max_memory=max_memory*.5)):
             buf = lib.transpose(pqkR+pqkI*1j, out=buf)
             zij = _ao2mo.r_e2(buf, moij, ijslice, tao, ao_loc, out=zij)
             buf = lib.transpose(rskR-rskI*1j, out=buf)

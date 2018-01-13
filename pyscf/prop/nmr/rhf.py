@@ -15,7 +15,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import _vhf
 from pyscf.scf import cphf
-from pyscf.scf.newton_ah import _gen_rhf_response
+from pyscf.soscf.newton_ah import _gen_rhf_response
 from pyscf.data import nist
 
 
@@ -24,6 +24,8 @@ from pyscf.data import nist
 #          [ZX, ZY, ZZ]])
 TENSOR_IDX = numpy.arange(9)
 def dia(mol, dm0, gauge_orig=None, shielding_nuc=None):
+    '''Note the side effects of set_common_origin'''
+
     if shielding_nuc is None:
         shielding_nuc = range(mol.natm)
     if gauge_orig is not None:
@@ -74,7 +76,11 @@ def para(mol, mo10, mo_coeff, mo_occ, shielding_nuc=None):
     return msc_para, para_vir, para_occ
 
 def make_h10(mol, dm0, gauge_orig=None, verbose=logger.WARN):
-    '''Imaginary part of H10 operator'''
+    '''Imaginary part of H10 operator
+
+    Note the side effects of set_common_origin
+    '''
+
     if isinstance(verbose, logger.Logger):
         log = verbose
     else:
@@ -107,6 +113,8 @@ def make_h10giao(mol, dm0):
     h1 = vj - .5 * vk
 # Im[<g\mu|H|g\nu>] = -i * (gnuc + gkin)
     h1 -= mol.intor_asymmetric('int1e_ignuc', 3)
+    if mol.has_ecp():
+        h1 -= mol.intor_asymmetric('ECPscalar_ignuc', 3)
     h1 -= mol.intor('int1e_igkin', 3)
     return h1
 

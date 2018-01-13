@@ -100,7 +100,7 @@ def gen_hop_uhf_external(mf):
     return hop1, hop2
 
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_rhf_external_hop(self):
         mol = gto.M(atom='O 0 0 0; O 0 0 1.2222', basis='631g*')
         mf = scf.RHF(mol).run(conv_tol=1e-14)
@@ -136,7 +136,7 @@ class KnowValues(unittest.TestCase):
 
     def test_uhf_external_hop(self):
         mol = gto.M(atom='O 0 0 0; O 0 0 1.2222', basis='631g*', spin=2)
-        mf = scf.UHF(mol).run(conv_tol=1e-14)
+        mf = scf.UHF(mol).newton().run(conv_tol=1e-14)
         hop1ref, hop2ref = gen_hop_uhf_external(mf)
         hop1, hdiag1, hop2, hdiag2 = stability._gen_hop_uhf_external(mf)
 
@@ -149,7 +149,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(abs(hop2(x1) - hop2ref(x1)).max(), 0, 7)
 
         mol = gto.M(atom='O 0 0 0; O 0 0 1.2222', basis='631g*', symmetry=1, spin=2)
-        mf = scf.UHF(mol).run(conv_tol=1e-14)
+        mf = scf.UHF(mol).newton().run(conv_tol=1e-14)
         hop1ref, hop2ref = gen_hop_uhf_external(mf)
         hop1, hdiag1, hop2, hdiag2 = stability._gen_hop_uhf_external(mf)
 
@@ -166,6 +166,13 @@ class KnowValues(unittest.TestCase):
         xref = hop2ref(x1)
         xref[hdiag2==0] = 0
         self.assertAlmostEqual(abs(hop2(x1) - xref).max(), 0, 8)
+
+    def test_rohf_external_hop(self):
+        mol = gto.M(atom='O 0 0 0; O 0 0 1.2222', basis='631g*', symmetry=1,
+                    spin=2, verbose=0)
+        mf = scf.ROHF(mol).run(conv_tol=1e-12)
+        w = mf.stability(internal=True, external=False)[0]
+        self.assertAlmostEqual(lib.finger(w), -11.241785180215988, 6)
 
 if __name__ == "__main__":
     print("Full Tests for stability")

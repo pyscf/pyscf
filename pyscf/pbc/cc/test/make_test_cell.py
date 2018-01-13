@@ -15,7 +15,7 @@ from pyscf.pbc.ao2mo import eris
 import pyscf.pbc.tools
 import pyscf.pbc.cc
 
-def make_cell(L, ngs):
+def make_cell(L, mesh):
     cell = pbcgto.Cell()
     cell.unit = 'B'
     cell.atom.extend([['Be', (L/2.,  L/2., L/2.)]])
@@ -26,14 +26,14 @@ def make_cell(L, ngs):
     cell.basis = 'sto-3g'
     #cell.pseudo = None
     cell.pseudo = 'gth-pade'
-    cell.gs = np.array([ngs,ngs,ngs])
+    cell.mesh = mesh
 
     #cell.verbose = 4
     cell.output = '/dev/null'
     cell.build()
     return cell
 
-def test_cell_n0( L = 5.0, ngs = 4):
+def test_cell_n0(L=5, mesh=[9]*3):
     cell = pbcgto.Cell()
     cell.unit = 'B'
     cell.atom.extend([['Be', (L/2.,  L/2., L/2.)]])
@@ -42,13 +42,13 @@ def test_cell_n0( L = 5.0, ngs = 4):
 
     cell.basis = 'gth-szv'
     cell.pseudo = 'gth-pade-q2'
-    cell.gs = np.array([ngs,ngs,ngs])
+    cell.mesh = mesh
 
     cell.output = '/dev/null'
     cell.build()
     return cell
 
-def test_cell_n1( L = 5.0, ngs = 4):
+def test_cell_n1(L=5, mesh=[9]*3):
     cell = pbcgto.Cell()
     cell.unit = 'B'
     cell.atom.extend([['Be', (L/2.,  L/2., L/2.)]])
@@ -56,13 +56,13 @@ def test_cell_n1( L = 5.0, ngs = 4):
 
     cell.basis = 'sto-3g'
     cell.pseudo = 'gth-pade-q2'
-    cell.gs = np.array([ngs,ngs,ngs])
+    cell.mesh = mesh
 
     cell.output = '/dev/null'
     cell.build()
     return cell
 
-def test_cell_n2( L = 5.0, ngs = 4):
+def test_cell_n2(L=5, mesh=[9]*3):
     cell = pbcgto.Cell()
     cell.unit = 'B'
     cell.atom.extend([['O', (L/2., L/2., L/2.)],
@@ -73,14 +73,14 @@ def test_cell_n2( L = 5.0, ngs = 4):
 
     cell.basis = 'sto-3g'
     cell.pseudo = 'gth-pade'
-    cell.gs = np.array([ngs,ngs,ngs])
+    cell.mesh = mesh
 
     cell.output = '/dev/null'
     cell.build()
     return cell
 
 
-def test_cell_n3(ngs=4):
+def test_cell_n3(mesh=[9]*3):
     """
     Take ASE Diamond structure, input into PySCF and run
     """
@@ -93,7 +93,7 @@ def test_cell_n3(ngs=4):
     #cell.basis = "gth-dzvp"
     cell.basis = "gth-szv"
     cell.pseudo = "gth-pade"
-    cell.gs = np.array([ngs,ngs,ngs])
+    cell.mesh = mesh
 
     cell.output = '/dev/null'
     cell.build()
