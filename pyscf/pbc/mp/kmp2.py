@@ -16,7 +16,7 @@ from pyscf import lib
 from pyscf.lib import logger
 
 import pyscf.pbc.tools.pbc as tools
-from pyscf.pbc.cc.kccsd import get_moidx
+from pyscf.pbc.cc.kccsd import get_frozen_mask
 from pyscf.pbc.cc.kccsd_rhf import get_nocc, get_nmo
 
 def kernel(mp, mo_energy, mo_coeff, eris=None, verbose=logger.NOTE):
@@ -127,7 +127,7 @@ def _mem_usage(nkpts, nocc, nvir):
 class _ERIS:
     def __init__(self, mp, mo_coeff=None, verbose=None):
         cput0 = (time.clock(), time.time())
-        moidx = get_moidx(mp)
+        moidx = get_frozen_mask(mp)
         nkpts = mp.nkpts
         nmo = mp.nmo
 
