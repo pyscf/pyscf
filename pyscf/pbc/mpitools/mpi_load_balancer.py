@@ -116,7 +116,7 @@ class load_balancer:
     def slave_set(self):
         if self.rank > 0:
 #            print("SLAVE : ", self.rank, " starting...")
-            (tatus = MPI.Status())
+            status = MPI.Status()
 #            print("SLAVE : ", self.rank, " probing for message...")
             msg = self.COMM.Probe(0, MPI.ANY_TAG, status=status)
 #            print("SLAVE : ", self.rank, " recieved a message... ", status.Get_tag())

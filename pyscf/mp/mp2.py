@@ -76,7 +76,6 @@ Given t2 amplitude, current function returns 1-RDM in MO basis''')
         eia = mo_energy[:nocc,None] - mo_energy[None,nocc:]
     dm1occ = numpy.zeros((nocc,nocc))
     dm1vir = numpy.zeros((nvir,nvir))
-    emp2 = 0
     for i in range(nocc):
         if t2 is None:
             gi = numpy.asarray(eris.ovov[i*nvir:(i+1)*nvir])
@@ -192,6 +191,7 @@ class MP2(lib.StreamObject):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
         if mo_energy is None or mo_coeff is None:
+            log = logger.Logger(self.stdout, self.verbose)
             log.warn('mo_coeff, mo_energy are not given.\n'
                      'You may need to call mf.kernel() to generate them.')
             raise RuntimeError
@@ -236,7 +236,6 @@ def _mem_usage(nocc, nvir):
 
 class _ERIS:
     def __init__(self, mp, mo_coeff=None, verbose=None):
-        cput0 = (time.clock(), time.time())
         if mo_coeff is None:
             self.mo_coeff = mo_coeff = _mo_without_core(mp, mp.mo_coeff)
         else:

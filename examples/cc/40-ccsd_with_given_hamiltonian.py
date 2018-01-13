@@ -12,9 +12,9 @@ mol = gto.M(verbose=4)
 n = 6
 mol.nelectron = n
 # Setting incore_anyway=True to ensure the customized Hamiltonian (the _eri
-# attribute) being used in post-HF calculations.  Without this parameter, some
-# post-HF method may ignore the customized Hamiltonian if memory is not
-# enough.
+# attribute) to be used in the post-HF calculations.  Without this parameter,
+# some post-HF method (particularly in the MO integral transformation) may
+# ignore the customized Hamiltonian if memory is not enough.
 mol.incore_anyway = True
 
 h1 = numpy.zeros((n,n))
