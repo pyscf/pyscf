@@ -37,7 +37,7 @@ def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
     else:
         log = logger.Logger(cc.stdout, verbose)
 
-    assert(isinstance(eris, pyscf.cc.ccsd._ChemistsERIs))
+    #assert(isinstance(eris, pyscf.cc.ccsd._ChemistsERIs))
     if t1 is None and t2 is None:
         t1, t2 = cc.init_amps(eris)[1:]
     elif t1 is None:
@@ -923,8 +923,10 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         t2 = vec[nov:].reshape(nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir)
         return t1, t2
 
+KRCCSD = RCCSD
 
-class _ERIS(pyscf.cc.ccsd._ChemistsERIs):
+
+class _ERIS:#(pyscf.cc.ccsd._ChemistsERIs):
     def __init__(self, cc, mo_coeff=None, method='incore',
                  ao2mofn=pyscf.ao2mo.outcore.general_iofree):
         cput0 = (time.clock(), time.time())

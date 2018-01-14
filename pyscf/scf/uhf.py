@@ -822,6 +822,26 @@ class UHF(hf.SCF):
         return self
 
     def stability(self, internal=True, external=False, verbose=None):
+        '''
+        Stability analysis for RHF/RKS method.
+
+        See also pyscf.scf.stability.uhf_stability function.
+
+        Args:
+            mf : UHF or UKS object
+
+        Kwargs:
+            internal : bool
+                Internal stability, within the UHF space.
+            external : bool
+                External stability. Including the UHF -> GHF and real -> complex
+                stability analysis.
+
+        Returns:
+            New orbitals that are more close to the stable condition.  The return
+            value includes two set of orbitals.  The first corresponds to the
+            internal stablity and the second corresponds to the external stability.
+        '''
         from pyscf.scf.stability import uhf_stability
         return uhf_stability(self, internal, external, verbose)
 

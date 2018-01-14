@@ -78,9 +78,8 @@ class unique_pqr_list:
             for i in range(klist.shape[0]):
                 pqr = klist[i]
                 irr_pqr = self.equivalentList[pqr[0],pqr[1],pqr[2]]
-                print("%3d %3d %3d   ->  %3d %3d %3d" %
-                      (pqr[0],pqr[1],pqr[2],)
-                                                         irr_pqr[0],irr_pqr[1],irr_pqr[2])
+                print("%3d %3d %3d   ->  %3d %3d %3d" % (pqr[0],pqr[1],pqr[2],
+                                                         irr_pqr[0],irr_pqr[1],irr_pqr[2]))
 
     def get_uniqueList(self):
         return self.uniqueList

@@ -383,6 +383,21 @@ class ROHF(hf.RHF):
     canonicalize = canonicalize
 
     def stability(self, internal=True, external=False, verbose=None):
+        '''
+        ROHF/ROKS stability analysis.
+
+        See also pyscf.scf.stability.rohf_stability function.
+
+        Kwargs:
+            internal : bool
+                Internal stability, within the RHF optimization space.
+            external : bool
+                External stability. It is not available in current version.
+
+        Returns:
+            The return value includes two set of orbitals which are more close to
+            the required stable condition.
+        '''
         from pyscf.scf.stability import rohf_stability
         return rohf_stability(self, internal, external, verbose)
 

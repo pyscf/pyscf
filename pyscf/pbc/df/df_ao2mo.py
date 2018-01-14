@@ -9,7 +9,7 @@ from pyscf import ao2mo
 from pyscf.ao2mo import _ao2mo
 from pyscf.ao2mo.incore import iden_coeffs, _conc_mos
 from pyscf.pbc.df.df_jk import zdotNN, zdotCN, zdotNC
-from pyscf.pbc.df.fft_ao2mo import _format_kpts
+from pyscf.pbc.df.fft_ao2mo import _format_kpts, _iskconserv
 from pyscf.pbc.lib.kpt_misc import is_zero, gamma_point
 
 
@@ -18,9 +18,14 @@ def get_eri(mydf, kpts=None, compact=True):
         mydf.build()
 
     cell = mydf.cell
-    kptijkl = _format_kpts(kpts)
-    kpti, kptj, kptk, kptl = kptijkl
     nao = cell.nao_nr()
+    kptijkl = _format_kpts(kpts)
+    if not _iskconserv(cell, kptijkl):
+        lib.logger.warn(cell, 'df_ao2mo: momentum conservation not found in '
+                        'the given k-points %s', kptijkl)
+        return numpy.zeros((nao,nao,nao,nao))
+
+    kpti, kptj, kptk, kptl = kptijkl
     nao_pair = nao * (nao+1) // 2
     max_memory = max(2000, mydf.max_memory-lib.current_memory()[0]-nao**4*8/1e6)
 
@@ -85,10 +90,16 @@ def general(mydf, mo_coeffs, kpts=None, compact=True):
     if mydf._cderi is None:
         mydf.build()
 
+    cell = mydf.cell
     kptijkl = _format_kpts(kpts)
     kpti, kptj, kptk, kptl = kptijkl
     if isinstance(mo_coeffs, numpy.ndarray) and mo_coeffs.ndim == 2:
         mo_coeffs = (mo_coeffs,) * 4
+    if not _iskconserv(cell, kptijkl):
+        lib.logger.warn(cell, 'df_ao2mo: momentum conservation not found in '
+                        'the given k-points %s', kptijkl)
+        return numpy.zeros([mo.shape[1] for mo in mo_coeffs])
+
     all_real = not any(numpy.iscomplexobj(mo) for mo in mo_coeffs)
     max_memory = max(2000, (mydf.max_memory - lib.current_memory()[0]) * .5)
 
@@ -201,3 +212,39 @@ def _ztrans(Lpq, zij, moij, ijslice, Lrs, zkl, mokl, klslice, sym):
         zkl = _ao2mo.r_e2(Lrs, mokl, klslice, tao, ao_loc, out=zkl)
     return zij, zkl
 
+if __name__ == '__main__':
+    from pyscf.pbc import gto as pgto
+    from pyscf.pbc import scf as pscf
+    from pyscf.pbc.df import DF
+
+    L = 5.
+    n = 11
+    cell = pgto.Cell()
+    cell.a = numpy.diag([L,L,L])
+    cell.mesh = numpy.array([n,n,n])
+
+    cell.atom = '''He    3.    2.       3.
+                   He    1.    1.       1.'''
+    #cell.basis = {'He': [[0, (1.0, 1.0)]]}
+    #cell.basis = '631g'
+    #cell.basis = {'He': [[0, (2.4, 1)], [1, (1.1, 1)]]}
+    cell.basis = 'ccpvdz'
+    cell.verbose = 0
+    cell.build(0,0)
+
+    nao = cell.nao_nr()
+    numpy.random.seed(1)
+    kpts = numpy.random.random((4,3))
+    kpts[3] = -numpy.einsum('ij->j', kpts[:3])
+    with_df = DF(cell, kpts)
+    with_df.auxbasis = 'weigend'
+    with_df.mesh = [n] * 3
+    mo =(numpy.random.random((nao,nao)) +
+         numpy.random.random((nao,nao))*1j)
+    eri = with_df.get_eri(kpts).reshape((nao,)*4)
+    eri0 = numpy.einsum('pjkl,pi->ijkl', eri , mo.conj())
+    eri0 = numpy.einsum('ipkl,pj->ijkl', eri0, mo       )
+    eri0 = numpy.einsum('ijpl,pk->ijkl', eri0, mo.conj())
+    eri0 = numpy.einsum('ijkp,pl->ijkl', eri0, mo       )
+    eri1 = with_df.ao2mo(mo, kpts)
+    print(abs(eri1-eri0).sum())

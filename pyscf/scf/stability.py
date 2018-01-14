@@ -21,6 +21,24 @@ from pyscf.soscf import newton_ah
 from pyscf.soscf.newton_ah import _gen_rhf_response, _gen_uhf_response
 
 def rhf_stability(mf, internal=True, external=False, verbose=None):
+    '''
+    Stability analysis for RHF/RKS method.
+
+    Args:
+        mf : RHF or RKS object
+
+    Kwargs:
+        internal : bool
+            Internal stability, within the RHF space.
+        external : bool
+            External stability. Including the RHF -> UHF and real -> complex
+            stability analysis.
+
+    Returns:
+        New orbitals that are more close to the stable condition.  The return
+        value includes two set of orbitals.  The first corresponds to the
+        internal stablity and the second corresponds to the external stability.
+    '''
     mo_i = mo_e = None
     if internal:
         mo_i = rhf_internal(mf, verbose=verbose)
@@ -29,6 +47,24 @@ def rhf_stability(mf, internal=True, external=False, verbose=None):
     return mo_i, mo_e
 
 def uhf_stability(mf, internal=True, external=False, verbose=None):
+    '''
+    Stability analysis for RHF/RKS method.
+
+    Args:
+        mf : UHF or UKS object
+
+    Kwargs:
+        internal : bool
+            Internal stability, within the UHF space.
+        external : bool
+            External stability. Including the UHF -> GHF and real -> complex
+            stability analysis.
+
+    Returns:
+        New orbitals that are more close to the stable condition.  The return
+        value includes two set of orbitals.  The first corresponds to the
+        internal stablity and the second corresponds to the external stability.
+    '''
     mo_i = mo_e = None
     if internal:
         mo_i = uhf_internal(mf, verbose=verbose)
@@ -37,6 +73,22 @@ def uhf_stability(mf, internal=True, external=False, verbose=None):
     return mo_i, mo_e
 
 def rohf_stability(mf, internal=True, external=False, verbose=None):
+    '''
+    Stability analysis for ROHF/ROKS method.
+
+    Args:
+        mf : ROHF or ROKS object
+
+    Kwargs:
+        internal : bool
+            Internal stability, within the RHF space.
+        external : bool
+            External stability. It is not available in current version.
+
+    Returns:
+        The return value includes two set of orbitals which are more close to
+        the required stable condition.
+    '''
     mo_i = mo_e = None
     if internal:
         mo_i = rohf_internal(mf, verbose=verbose)

@@ -5,6 +5,7 @@ spin-free X2C correction for extended systems
 (In testing)
 '''
 
+raise RuntimeError('PBC.X2C is incorrect')
 
 import time
 from functools import reduce
@@ -181,7 +182,6 @@ def get_pnucp(mydf, kpts=None):
     kpt_allow = numpy.zeros(3)
     if mydf.eta == 0:
         charge = -cell.atom_charges()
-        #coulG=4*numpy.pi/G^2 is cancelled with (sigma dot p i, sigma dot p j)
         SI = cell.get_SI(Gv)
         vGR = numpy.einsum('i,ix->x', 4*numpy.pi*charge, SI.real) * kws
         vGI = numpy.einsum('i,ix->x', 4*numpy.pi*charge, SI.imag) * kws
@@ -205,7 +205,7 @@ def get_pnucp(mydf, kpts=None):
         t1 = log.timer_debug1('pnucp pass1: analytic int', *t1)
 
         charge = -cell.atom_charges()
-        #coulG=4*numpy.pi/G^2 is cancelled with (sigma dot p i, sigma dot p j)
+        #1/G^2 of coulG=4*numpy.pi/G^2 is cancelled by (sigma dot p i, sigma dot p j)
         aoaux = ft_ao.ft_ao(nuccell, Gv)
         vGR = numpy.einsum('i,xi->x', 4*numpy.pi*charge, aoaux.real) * kws
         vGI = numpy.einsum('i,xi->x', 4*numpy.pi*charge, aoaux.imag) * kws
