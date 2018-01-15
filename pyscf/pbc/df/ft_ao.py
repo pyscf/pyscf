@@ -12,7 +12,7 @@ import numpy
 from pyscf import lib
 from pyscf import gto
 from pyscf.gto.ft_ao import ft_ao as mol_ft_ao
-from pyscf.pbc.lib.kpt_misc import is_zero, gamma_point
+from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point
 
 libpbc = lib.load_library('libpbc')
 
