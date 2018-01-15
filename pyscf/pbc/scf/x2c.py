@@ -1,7 +1,5 @@
 #!/usr/bin/env python
 
-raise RuntimeError('PBC.X2C is incorrect')
-
 import time
 from functools import reduce
 import copy
@@ -12,6 +10,7 @@ from pyscf.gto import mole
 from pyscf.lib import logger
 from pyscf.scf import x2c
 from pyscf.pbc import gto as pbcgto
+from pyscf.pbc import tools
 from pyscf.pbc.df import aft
 from pyscf.pbc.df import aft_jk
 from pyscf.pbc.df import ft_ao
@@ -137,12 +136,11 @@ class SpinFreeX2C(X2C):
         return lib.asarray(h1_kpts)
 
 
-# We still use Ewald-like technique to compute spVsp.
-# Theoratically, spVsp is not divergent because the numeriator spsp and the
-# denorminator in Coulomb kernel 4pi/G^2 are cancelled.  A real space lattice
-# sum can converge to a finite value.  However, it's difficult to accurately
-# converge this value, large number of images in lattice summation is still
-# required.
+# Use Ewald-like technique to compute spVsp.
+# spVsp may not be divergent because the numeriator spsp and the denorminator
+# in Coulomb kernel 4pi/G^2 are likely cancelled.  Even a real space lattice
+# sum can converge to a finite value, it's difficult to accurately converge
+# this value, i.e., large number of images in lattice summation is required.
 def get_pnucp(mydf, kpts=None):
     cell = mydf.cell
     if kpts is None:
@@ -158,14 +156,15 @@ def get_pnucp(mydf, kpts=None):
     nao_pair = nao * (nao+1) // 2
 
     Gv, Gvbase, kws = cell.get_Gv_weights(mydf.gs)
+    charge = -cell.atom_charges()
     kpt_allow = numpy.zeros(3)
+    coulG = tools.get_coulG(cell, kpt_allow, gs=mydf.gs, Gv=Gv)
+    coulG *= kws
     if mydf.eta == 0:
-        charge = -cell.atom_charges()
-        SI = cell.get_SI(Gv)
-        vGR = numpy.einsum('i,ix->x', 4*numpy.pi*charge, SI.real) * kws
-        vGI = numpy.einsum('i,ix->x', 4*numpy.pi*charge, SI.imag) * kws
-        wjR = numpy.zeros((nkpts,nao_pair))
+        wj = numpy.zeros((nkpts,nao_pair), dtype=numpy.complex128)
         wjI = numpy.zeros((nkpts,nao_pair))
+        SI = cell.get_SI(Gv)
+        vG = numpy.einsum('i,ix->x', charge, SI) * coulG
     else:
         nuccell = copy.copy(cell)
         half_sph_norm = .5/numpy.sqrt(numpy.pi)
@@ -179,48 +178,41 @@ def get_pnucp(mydf, kpts=None):
         nuccell._env = numpy.hstack((cell._env, chg_env))
 
         wj = lib.asarray(mydf._int_nuc_vloc(nuccell, kpts_lst, 'int3c2e_pvp1_sph'))
-        wjR = wj.real
-        wjI = wj.imag
         t1 = log.timer_debug1('pnucp pass1: analytic int', *t1)
 
-        charge = -cell.atom_charges()
-        #1/G^2 of coulG=4*numpy.pi/G^2 is cancelled by (sigma dot p i, sigma dot p j)
         aoaux = ft_ao.ft_ao(nuccell, Gv)
-        vGR = numpy.einsum('i,xi->x', 4*numpy.pi*charge, aoaux.real) * kws
-        vGI = numpy.einsum('i,xi->x', 4*numpy.pi*charge, aoaux.imag) * kws
+        vG = numpy.einsum('i,xi->x', charge, aoaux) * coulG
 
     max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
-    for k, pqkR, pqkI, p0, p1 \
-            in mydf.ft_loop(mydf.gs, kpt_allow, kpts_lst,
-                            max_memory=max_memory, aosym='s2'):
-# rho_ij(G) nuc(-G) / G^2
-# = [Re(rho_ij(G)) + Im(rho_ij(G))*1j] [Re(nuc(G)) - Im(nuc(G))*1j] / G^2
-        if not aft_jk.gamma_point(kpts_lst[k]):
-            wjI[k] += numpy.einsum('k,xk->x', vGR[p0:p1], pqkI)
-            wjI[k] -= numpy.einsum('k,xk->x', vGI[p0:p1], pqkR)
-        wjR[k] += numpy.einsum('k,xk->x', vGR[p0:p1], pqkR)
-        wjR[k] += numpy.einsum('k,xk->x', vGI[p0:p1], pqkI)
-    t1 = log.timer_debug1('contracting Vnuc', *t1)
+    for aoaoks, p0, p1 in mydf.ft_loop(mydf.gs, kpt_allow, kpts_lst,
+                                       max_memory=max_memory, aosym='s2',
+                                       intor='GTO_ft_pdotp_sph'):
+        for k, aoao in enumerate(aoaoks):
+            if aft_jk.gamma_point(kpts_lst[k]):
+                wj[k] += numpy.einsum('k,kx->x', vG[p0:p1].real, aoao.real)
+                wj[k] += numpy.einsum('k,kx->x', vG[p0:p1].imag, aoao.imag)
+            else:
+                wj[k] += numpy.einsum('k,kx->x', vG[p0:p1].conj(), aoao)
+    t1 = log.timer_debug1('contracting pnucp', *t1)
 
     if mydf.eta != 0 and cell.dimension == 3:
-        nucbar = sum([z/nuccell.bas_exp(i)[0] for i,z in enumerate(charge)])
-        nucbar *= numpy.pi/cell.vol * 2
+        nucbar = sum([-z/nuccell.bas_exp(i)[0] for i,z in enumerate(charge)])
+        nucbar *= numpy.pi/cell.vol * 2  # 2 due to the factor 1/2 in T
         ovlp = cell.pbc_intor('int1e_kin_sph', 1, lib.HERMITIAN, kpts_lst)
         for k in range(nkpts):
             s = lib.pack_tril(ovlp[k])
-            wjR[k] -= nucbar * s.real
-            wjI[k] -= nucbar * s.imag
+            wj[k] += nucbar * s
 
-    wj = []
+    wj_kpts = []
     for k, kpt in enumerate(kpts_lst):
         if aft_jk.gamma_point(kpt):
-            wj.append(lib.unpack_tril(wjR[k]))
+            wj_kpts.append(lib.unpack_tril(wj[k].real.copy()))
         else:
-            wj.append(lib.unpack_tril(wjR[k]+wjI[k]*1j))
+            wj_kpts.append(lib.unpack_tril(wj[k]))
 
     if kpts is None or numpy.shape(kpts) == (3,):
-        wj = wj[0]
-    return wj
+        wj_kpts = wj_kpts[0]
+    return numpy.asarray(wj_kpts)
 
 
 if __name__ == '__main__':
