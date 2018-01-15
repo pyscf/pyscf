@@ -24,5 +24,6 @@ class KnowValues(unittest.TestCase):
     savetxt('w2scr_int.txt', column_stack((ww.real, si0_dens)))
     wwmx = detect_maxima(ww, si0_dens)
     print(wwmx)
+    
 
 if __name__ == "__main__": unittest.main()
