@@ -63,7 +63,7 @@ class gw(scf):
     if self.rescf: self.kernel_scf() # here is rescf with HF functional tacitly assumed
         
     self.nff_ia = kw['nff_ia'] if 'nff_ia' in kw else 32
-    self.tol_ia = kw['tol_ia'] if 'tol_ia' in kw else 1e-6
+    self.tol_ia = kw['tol_ia'] if 'tol_ia' in kw else 1e-10
     (wmin_def,wmax_def,tmin_def,tmax_def) = self.get_wmin_wmax_tmax_ia_def(self.tol_ia)
     self.wmin_ia = kw['wmin_ia'] if 'wmin_ia' in kw else wmin_def
     self.wmax_ia = kw['wmax_ia'] if 'wmax_ia' in kw else wmax_def
