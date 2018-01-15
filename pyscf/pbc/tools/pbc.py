@@ -3,6 +3,7 @@ import copy
 import numpy as np
 import scipy.linalg
 from pyscf import lib
+from pyscf.pbc.lib.kpts_helper import get_kconserv, get_kconserv3
 
 try:
     import pyfftw

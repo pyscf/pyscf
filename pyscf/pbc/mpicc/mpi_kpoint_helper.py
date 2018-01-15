@@ -4,10 +4,10 @@
 #          Timothy Berkelbach <tim.berkelbach@gmail.com>
 #
 
-import pyscf.pbc.tools.pbc as tools
+import numpy
 import pyscf.pbc.ao2mo
 import pyscf.lib
-import numpy
+from pyscf.pbc.lib import kpts_helper
 
 DEBUG = 0
 
@@ -17,7 +17,7 @@ class unique_pqr_list:
     # Wasn't sure how to do this 'cleanly', but it's fairly straightforward
     #####################################################################################
     def __init__(self,cell,kpts):
-        kconserv = tools.get_kconserv(cell,kpts)
+        kconserv = kpts_helper.get_kconserv(cell,kpts)
         nkpts = len(kpts)
         temp = range(0,nkpts)
         klist = pyscf.lib.cartesian_prod((temp,temp,temp))
