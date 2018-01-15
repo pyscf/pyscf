@@ -15,7 +15,7 @@ import numpy as np
 from pyscf import lib
 from pyscf.lib import logger
 
-import pyscf.pbc.tools.pbc as tools
+from pyscf.pbc.lib import kpts_helper
 from pyscf.pbc.cc.kccsd import get_frozen_mask
 from pyscf.pbc.cc.kccsd_rhf import get_nocc, get_nmo
 
@@ -35,7 +35,7 @@ def kernel(mp, mo_energy, mo_coeff, eris=None, verbose=logger.NOTE):
     eia = numpy.zeros((nocc,nvir))
     eijab = numpy.zeros((nocc,nocc,nvir,nvir))
 
-    kconserv = mp.kconserv
+    kconserv = mp.khelper.kconserv
     for ki in range(nkpts):
       for kj in range(nkpts):
         for ka in range(nkpts):
@@ -72,7 +72,7 @@ class KMP2(lib.StreamObject):
         self.kpts = mf.kpts
         self.mo_energy = mf.mo_energy
         self.nkpts = len(self.kpts)
-        self.kconserv = tools.get_kconserv(mf.cell, mf.kpts)
+        self.khelper = kpts_helper.KptsHelper(mf.cell, mf.kpts)
         self.mo_energy = mf.mo_energy
         self.mo_coeff = mo_coeff
         self.mo_occ = mo_occ
@@ -118,10 +118,12 @@ class KMP2(lib.StreamObject):
 
 
 def _mem_usage(nkpts, nocc, nvir):
+    nmo = nocc + nvir
     basic = (nkpts**3*nocc**2*nvir**2*2)*16 / 1e6
     # Roughly, factor of two for safety (t2 array, temp arrays, copying, etc)
     basic *= 2
-    incore = outcore = basic
+    incore = nmo**4*16 / 1e6 + basic
+    outcore = basic
     return incore, outcore, basic
 
 class _ERIS:
@@ -162,7 +164,7 @@ class _ERIS:
         mem_now = lib.current_memory()[0]
         fao2mo = mp._scf.with_df.ao2mo
 
-        kconserv = mp.kconserv
+        kconserv = mp.khelper.kconserv
 
         max_memory = max(2000, mp.max_memory*.9-mem_now)
         log = logger.Logger(mp.stdout, mp.verbose)
@@ -171,11 +173,29 @@ class _ERIS:
                      'Available mem %s MB, required mem %s MB',
                      max_memory, mem_basic)
 
+        self.oovv = numpy.zeros((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=dtype)
+
         if (mp.mol.incore_anyway or
                 (mem_incore+mem_now < mp.max_memory)):
-            log.debug('transform (ia|jb) incore')
-            self.oovv = numpy.zeros((nkpts,nkpts,nkpts,nocc,nvir,nocc,nvir), dtype=dtype)
+            # more memory, less work because of irreducible k-points
+            log.debug('transform (pq|rs) incore for irreducible k-points')
 
+            khelper = mp.khelper
+
+            for (ikp,ikq,ikr) in khelper.symm_map.keys():
+                iks = kconserv[ikp,ikq,ikr]
+                eri_kpt = fao2mo((mo_coeff[ikp],mo_coeff[ikq],mo_coeff[ikr],mo_coeff[iks]),
+                                 (mp.kpts[ikp],mp.kpts[ikq],mp.kpts[ikr],mp.kpts[iks]), compact=False)
+                if dtype == np.float: eri_kpt = eri_kpt.real
+                eri_kpt = eri_kpt.reshape(nmo,nmo,nmo,nmo)
+                for (kp,kq,kr) in khelper.symm_map[(ikp,ikq,ikr)]:
+                    eri_kpt_symm = khelper.transform_symm(eri_kpt,kp,kq,kr).transpose(0,2,1,3)
+                    self.oovv[kp,kr,kq] = eri_kpt_symm[:nocc,:nocc,nocc:,nocc:] / nkpts
+
+            self.dtype = dtype
+        else:
+            # less memory, more work because no irreducible k-points
+            log.debug('transform (ia|jb) incore for all k-points')
             for kp in range(nkpts):
                 for kq in range(nkpts):
                     for kr in range(nkpts):
@@ -184,15 +204,16 @@ class _ERIS:
                         orbo_r = mo_coeff[kr,:,:nocc]
                         orbv_q = mo_coeff[kq,:,nocc:]
                         orbv_s = mo_coeff[ks,:,nocc:]
-                        buf_kpt = fao2mo((orbo_p,orbv_q,orbo_r,orbv_s),
+                        eri_kpt = fao2mo((orbo_p,orbv_q,orbo_r,orbv_s),
                                         (mp.kpts[kp],mp.kpts[kq],mp.kpts[kr],mp.kpts[ks]), 
                                         compact=False)
-                        buf_kpt = buf_kpt.reshape(nocc,nvir,nocc,nvir).transpose(0,2,1,3) / nkpts
-                        self.oovv[kp,kr,kq,:,:,:,:] = buf_kpt.copy()
+                        if dtype == np.float: eri_kpt = eri_kpt.real
+                        eri_kpt = eri_kpt.reshape(nocc,nvir,nocc,nvir).transpose(0,2,1,3)
+                        self.oovv[kp,kr,kq] = eri_kpt / nkpts
 
-            self.dtype = buf_kpt.dtype
+            self.dtype = eri_kpt.dtype
 
-        log.timer('Integral transformation', *cput0)
+        log.timer('integral transformation', *cput0)
 
 
 if __name__ == '__main__':

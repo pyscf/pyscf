@@ -11,7 +11,7 @@ import os
 import numpy as np
 import h5py
 
-from pyscf.pbc.cc import kpoint_helper
+import mpi_kpoint_helper
 import pyscf.pbc.tools.pbc as tools
 from pyscf import lib
 import pyscf.ao2mo
@@ -998,7 +998,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         self.mo_energy = mf.mo_energy
         self.nkpts = len(self.kpts)
         self.kconserv = tools.get_kconserv(mf.cell, mf.kpts)
-        self.khelper = kpoint_helper.unique_pqr_list(mf.cell, mf.kpts)
+        self.khelper = mpi_kpoint_helper.unique_pqr_list(mf.cell, mf.kpts)
         self.made_ee_imds = False
         self.made_ip_imds = False
         self.made_ea_imds = False

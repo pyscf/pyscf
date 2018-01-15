@@ -18,7 +18,7 @@ from pyscf.pbc import tools
 from pyscf.pbc.df.df_jk import zdotNN, zdotCN, zdotNC
 from pyscf.pbc.df.fft_ao2mo import _format_kpts, _iskconserv
 from pyscf.pbc.df.df_ao2mo import _mo_as_complex, _dtrans, _ztrans
-from pyscf.pbc.lib.kpt_misc import is_zero, gamma_point
+from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point
 
 
 def get_eri(mydf, kpts=None, compact=True):

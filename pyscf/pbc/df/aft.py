@@ -15,7 +15,7 @@ from pyscf.pbc import tools
 from pyscf.pbc.gto import pseudo, estimate_ke_cutoff, error_for_ke_cutoff
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import incore
-from pyscf.pbc.lib.kpt_misc import is_zero, gamma_point
+from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point
 from pyscf.pbc.df import aft_jk
 from pyscf.pbc.df import aft_ao2mo
 
