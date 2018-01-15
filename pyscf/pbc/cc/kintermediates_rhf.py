@@ -149,19 +149,15 @@ def cc_Wvvvv(t1,t2,eris,kconserv):
             for kc in range(nkpts):
                 kd = kconserv[ka,kc,kb]
                 # avoid transpose in loop
-                ovvv = np.array(eris.vovv[kb,ka,kd]).transpose(1,0,3,2)
-                for a in range(nvir):
-                    Wabcd[ka,kb,kc,a] = eris.vvvv[ka,kb,kc,a]
-                    Wabcd[ka,kb,kc,a] += -einsum('kcd,kb->bcd',eris.vovv[ka,kb,kc,a],t1[kb])
-                    #Wabcd[ka,kb,kc,a] += -einsum('bkdc,k->bcd',eris.vovv[kb,ka,kd],t1[ka,:,a])
-                    Wabcd[ka,kb,kc,a] += -einsum('k,kbcd->bcd',t1[ka,:,a],ovvv)
+                Wabcd[ka,kb,kc] = eris.vvvv[ka,kb,kc]
+                Wabcd[ka,kb,kc] += -einsum('akcd,kb->abcd',eris.vovv[ka,kb,kc],t1[kb])
+                Wabcd[ka,kb,kc] += -einsum('bkdc,ak->abcd',eris.vovv[kb,ka,kd],t1[ka])
 
-            # Be careful about making this term only after all the others are created
-            for kb in range(ka+1):
-                for kc in range(nkpts):
-                    kd = kconserv[ka,kc,kb]
-                    for a in range(nvir):
-                        Wabcd[kb,ka,kd,a,:] = Wabcd[ka,kb,kc,:,a].transpose(0,2,1)
+        # Be careful about making this term only after all the others are created
+        for kb in range(ka+1):
+            for kc in range(nkpts):
+                kd = kconserv[ka,kc,kb]
+                Wabcd[kb,ka,kd] = Wabcd[ka,kb,kc].transpose(1,0,3,2)
 
     return Wabcd
 
