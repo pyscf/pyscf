@@ -156,94 +156,52 @@ def update_amps(cc, t1, t2, eris):
             # Chemist's notation for momentum conserving t2(ki,kj,ka,kb)
             kb = kconserv[ki,ka,kj]
 
+            t2new_tmp = np.zeros((nocc,nocc,nvir,nvir), dtype=t2.dtype)
             for kl in range(nkpts):
-                # kk - ki + kl = kj
-                # => kk = kj - kl + ki
                 kk = kconserv[kj,kl,ki]
-                t2new[ki,kj,ka] += einsum('klij,klab->ijab',Woooo[kk,kl,ki],t2[kk,kl,ka])
+                tau_term = t2[kk,kl,ka].copy()
                 if kl == kb and kk == ka:
-                    t2new[ki,kj,ka] += einsum('klij,ka,lb->ijab',Woooo[ka,kb,ki],t1[ka],t1[kb])
+                    tau_term += einsum('ic,jd->ijcd',t1[ka],t1[kb])
+                t2new_tmp += 0.5 * einsum('klij,klab->ijab',Woooo[kk,kl,ki],tau_term)
 
             for kc in range(nkpts):
                 kd = kconserv[ka,kc,kb]
                 tau_term = t2[ki,kj,kc].copy()
                 if ki == kc and kj == kd:
                     tau_term += einsum('ic,jd->ijcd',t1[ki],t1[kj])
-                for a in range(nvir):
-                    Wvvvv_a = np.array(Wvvvv[ka,kb,kc,a])
-                    t2new[ki,kj,ka,:,:,a,:] += einsum('bcd,ijcd->ijb',Wvvvv_a,tau_term)
+                t2new_tmp += 0.5 * einsum('abcd,ijcd->ijab',Wvvvv[ka,kb,kc],tau_term)
 
-            t2new[ki,kj,ka] += einsum('ac,ijcb->ijab',Lvv[ka],t2[ki,kj,ka])
-            #P(ij)P(ab)
-            t2new[ki,kj,ka] += einsum('bc,jica->ijab',Lvv[kb],t2[kj,ki,kb])
+            t2new_tmp += einsum('ac,ijcb->ijab',Lvv[ka],t2[ki,kj,ka])
 
-            t2new[ki,kj,ka] += einsum('ki,kjab->ijab',-Loo[ki],t2[ki,kj,ka])
-            #P(ij)P(ab)
-            t2new[ki,kj,ka] += einsum('kj,kiba->ijab',-Loo[kj],t2[kj,ki,kb])
+            t2new_tmp += einsum('ki,kjab->ijab',-Loo[ki],t2[ki,kj,ka])
 
             kc = kconserv[ka,ki,kb]
-            tmp2 = np.array(eris.vovv[kc,ki,kb]).transpose(3,2,1,0).conj() \
+            tmp2 = np.asarray(eris.vovv[kc,ki,kb]).transpose(3,2,1,0).conj() \
                     - einsum('kbic,ka->abic',eris.ovov[ka,kb,ki],t1[ka])
-            tmp  = einsum('abic,jc->ijab',tmp2,t1[kj])
-            t2new[ki,kj,ka] += tmp
-            #P(ij)P(ab)
-            kc = kconserv[kb,kj,ka]
-            tmp2 = np.array(eris.vovv[kc,kj,ka]).transpose(3,2,1,0).conj() \
-                    - einsum('kajc,kb->bajc',eris.ovov[kb,ka,kj],t1[kb])
-            tmp  = einsum('bajc,ic->ijab',tmp2,t1[ki])
-            t2new[ki,kj,ka] += tmp
+            t2new_tmp += einsum('abic,jc->ijab',tmp2,t1[kj])
 
-            # ka - ki + kk = kj
-            # => kk = ki - ka + kj
             kk = kconserv[ki,ka,kj]
-            tmp2 = np.array(eris.ooov[kj,ki,kk]).transpose(3,2,1,0).conj() \
+            tmp2 = np.asarray(eris.ooov[kj,ki,kk]).transpose(3,2,1,0).conj() \
                     + einsum('akic,jc->akij',eris.voov[ka,kk,ki],t1[kj])
-            tmp  = einsum('akij,kb->ijab',tmp2,t1[kb])
-            t2new[ki,kj,ka] -= tmp
-            #P(ij)P(ab)
-            kk = kconserv[kj,kb,ki]
-            tmp2 = np.array(eris.ooov[ki,kj,kk]).transpose(3,2,1,0).conj() \
-                    + einsum('bkjc,ic->bkji',eris.voov[kb,kk,kj],t1[ki])
-            tmp  = einsum('bkji,ka->ijab',tmp2,t1[ka])
-            t2new[ki,kj,ka] -= tmp
+            t2new_tmp -= einsum('akij,kb->ijab',tmp2,t1[kb])
 
             for kk in range(nkpts):
                 kc = kconserv[ka,ki,kk]
                 tmp_voov = 2.*Wvoov[ka,kk,ki] - Wvovo[ka,kk,kc].transpose(0,1,3,2)
-                tmp = einsum('akic,kjcb->ijab',tmp_voov,t2[kk,kj,kc])
-                #tmp = 2*einsum('akic,kjcb->ijab',Wvoov[ka,kk,ki],t2[kk,kj,kc]) - \
-                #        einsum('akci,kjcb->ijab',Wvovo[ka,kk,kc],t2[kk,kj,kc])
-                t2new[ki,kj,ka] += tmp
-                #P(ij)P(ab)
-                kc = kconserv[kb,kj,kk]
-                tmp_voov = 2.*Wvoov[kb,kk,kj] - Wvovo[kb,kk,kc].transpose(0,1,3,2)
-                tmp = einsum('bkjc,kica->ijab',tmp_voov,t2[kk,ki,kc])
-                #tmp = 2*einsum('bkjc,kica->ijab',Wvoov[kb,kk,kj],t2[kk,ki,kc]) - \
-                #        einsum('bkcj,kica->ijab',Wvovo[kb,kk,kc],t2[kk,ki,kc])
-                t2new[ki,kj,ka] += tmp
+                t2new_tmp += einsum('akic,kjcb->ijab',tmp_voov,t2[kk,kj,kc])
 
                 kc = kconserv[ka,ki,kk]
-                tmp = einsum('akic,kjbc->ijab',Wvoov[ka,kk,ki],t2[kk,kj,kb])
-                t2new[ki,kj,ka] -= tmp
-                #P(ij)P(ab)
-                kc = kconserv[kb,kj,kk]
-                tmp = einsum('bkjc,kiac->ijab',Wvoov[kb,kk,kj],t2[kk,ki,ka])
-                t2new[ki,kj,ka] -= tmp
+                t2new_tmp -= einsum('akic,kjbc->ijab',Wvoov[ka,kk,ki],t2[kk,kj,kb])
 
                 kc = kconserv[kk,ka,kj]
-                tmp = einsum('bkci,kjac->ijab',Wvovo[kb,kk,kc],t2[kk,kj,ka])
-                t2new[ki,kj,ka] -= tmp
-                #P(ij)P(ab)
-                kc = kconserv[kk,kb,ki]
-                tmp = einsum('akcj,kibc->ijab',Wvovo[ka,kk,kc],t2[kk,ki,kb])
-                t2new[ki,kj,ka] -= tmp
+                t2new_tmp -= einsum('bkci,kjac->ijab',Wvovo[kb,kk,kc],t2[kk,kj,ka])
 
-    eia = numpy.zeros(shape=t1new.shape, dtype=t1new.dtype)
+            t2new[ki,kj,ka] += t2new_tmp
+            t2new[kj,ki,kb] += t2new_tmp.transpose(1,0,3,2)
+
     for ki in range(nkpts):
-        for i in range(nocc):
-            for a in range(nvir):
-                eia[ki,i,a] = foo[ki,i,i] - fvv[ki,a,a]
-        t1new[ki] /= eia[ki]
+        eia = foo[ki].diagonal()[:,None] - fvv[ki].diagonal()
+        t1new[ki] /= eia
 
     for ki in range(nkpts):
       for kj in range(nkpts):
@@ -251,7 +209,7 @@ def update_amps(cc, t1, t2, eris):
             kb = kconserv[ki,ka,kj]
             eia = np.diagonal(foo[ki]).reshape(-1,1) - np.diagonal(fvv[ka])
             ejb = np.diagonal(foo[kj]).reshape(-1,1) - np.diagonal(fvv[kb])
-            eijab = lib.direct_sum('ia,jb->ijab',eia,ejb)
+            eijab = eia[:,None,:,None] + ejb[:,None,:]
             t2new[ki,kj,ka] /= eijab
 
     time0 = log.timer_debug1('update t1 t2', *time0)
@@ -266,19 +224,19 @@ def energy(cc, t1, t2, eris):
     e = 0.0 + 1j*0.0
     for ki in range(nkpts):
         e += 2*einsum('ia,ia', fock[ki,:nocc,nocc:], t1[ki])
-    t1t1 = numpy.zeros(shape=t2.shape, dtype=t2.dtype)
+    tau = t1t1 = numpy.zeros(shape=t2.shape, dtype=t2.dtype)
     for ki in range(nkpts):
         ka = ki
         for kj in range(nkpts):
             #kb = kj
             t1t1[ki,kj,ka] = einsum('ia,jb->ijab',t1[ki],t1[kj])
-    tau = t2 + t1t1
+    tau += t2
     for ki in range(nkpts):
         for kj in range(nkpts):
             for ka in range(nkpts):
                 kb = kconserv[ki,ka,kj]
-                e += einsum('ijab,ijab', 2*tau[ki,kj,ka], eris.oovv[ki,kj,ka])
-                e += einsum('ijab,ijba',  -tau[ki,kj,ka], eris.oovv[ki,kj,kb])
+                e += 2*einsum('ijab,ijab', tau[ki,kj,ka], eris.oovv[ki,kj,ka])
+                e +=  -einsum('ijab,ijba', tau[ki,kj,ka], eris.oovv[ki,kj,kb])
     e /= nkpts
     return e.real
 
