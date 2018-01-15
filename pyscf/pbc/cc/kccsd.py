@@ -8,13 +8,12 @@ import time
 import numpy
 from functools import reduce
 
-import pyscf.pbc.tools.pbc as tools
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc import scf
 from pyscf.cc import gccsd
 from pyscf.pbc.cc import kintermediates as imdk
-from pyscf.pbc.cc.kpoint_helper import loop_kkk
+from pyscf.pbc.lib import kpts_helper
 
 DEBUG = False
 
@@ -126,12 +125,12 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     # Get the momentum conservation array
     # Note: chemist's notation for momentum conserving t2(ki,kj,ka,kb), even though
     # integrals are in physics notation
-    kconserv = tools.get_kconserv(cc._scf.cell, cc.kpts)
+    kconserv = kpts_helper.get_kconserv(cc._scf.cell, cc.kpts)
 
     eris_ovvo = numpy.zeros(shape=(nkpts,nkpts,nkpts,nocc,nvir,nvir,nocc), dtype=t2.dtype)
     eris_oovo = numpy.zeros(shape=(nkpts,nkpts,nkpts,nocc,nocc,nvir,nocc), dtype=t2.dtype)
     eris_vvvo = numpy.zeros(shape=(nkpts,nkpts,nkpts,nvir,nvir,nvir,nocc), dtype=t2.dtype)
-    for km, kb, ke in loop_kkk(nkpts):
+    for km, kb, ke in kpts_helper.loop_kkk(nkpts):
         kj = kconserv[km,ke,kb]
         # <mb||je> -> -<mb||ej>
         eris_ovvo[km,kb,ke] = -eris.ovov[km,kb,kj].transpose(0,1,3,2)
@@ -160,7 +159,7 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
 
     # T2 equation
     t2new = numpy.array(eris.oovv).conj()
-    for ki, kj, ka in loop_kkk(nkpts):
+    for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
         # Chemist's notation for momentum conserving t2(ki,kj,ka,kb)
         kb = kconserv[ki,ka,kj]
 
@@ -232,8 +231,8 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
         t1new[ki] /= eia[ki]
 
     eijab = numpy.zeros(shape=t2new.shape, dtype=t2new.dtype)
-    kconserv = tools.get_kconserv(cc._scf.cell, cc.kpts)
-    for ki, kj, ka in loop_kkk(nkpts):
+    kconserv = kpts_helper.get_kconserv(cc._scf.cell, cc.kpts)
+    for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
         kb = kconserv[ki,ka,kj]
         for i in range(nocc):
             for a in range(nvir):
@@ -327,8 +326,8 @@ class GCCSD(gccsd.GCCSD):
         eia = numpy.zeros((nocc,nvir))
         eijab = numpy.zeros((nocc,nocc,nvir,nvir))
 
-        kconserv = tools.get_kconserv(self._scf.cell,self.kpts)
-        for ki, kj, ka in loop_kkk(nkpts):
+        kconserv = kpts_helper.get_kconserv(self._scf.cell,self.kpts)
+        for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
             kb = kconserv[ki,ka,kj]
             for i in range(nocc):
                 for a in range(nvir):
@@ -439,7 +438,7 @@ def _make_eris_incore(cc, mo_coeff=None):
 
     eri = numpy.empty((nkpts,nkpts,nkpts,nmo,nmo,nmo,nmo), dtype=numpy.complex128)
     fao2mo = cc._scf.with_df.ao2mo
-    for kp, kq, kr in loop_kkk(nkpts):
+    for kp, kq, kr in kpts_helper.loop_kkk(nkpts):
         ks = kconserv[kp,kq,kr]
         eri_kpt = fao2mo((so_coeff[kp],so_coeff[kq],so_coeff[kr],so_coeff[ks]),
                          (kpts[kp],kpts[kq],kpts[kr],kpts[ks]), compact=False)
@@ -451,7 +450,7 @@ def _make_eris_incore(cc, mo_coeff=None):
     # Checking some things...
     if DEBUG:
         maxdiff = 0.0
-        for kp, kq, kr in loop_kkk(nkpts):
+        for kp, kq, kr in kpts_helper.loop_kkk(nkpts):
             ks = kconserv[kp,kq,kr]
             for p in range(nmo):
                 for q in range(nmo):
@@ -488,10 +487,10 @@ def _make_eris_incore(cc, mo_coeff=None):
 
 
 def check_antisymm_12( cc, kpts, integrals ):
-    kconserv = tools.get_kconserv(cc._scf.cell,cc.kpts)
+    kconserv = kpts_helper.get_kconserv(cc._scf.cell,cc.kpts)
     nkpts = len(kpts)
     diff = 0.0
-    for kp, kq, kr in loop_kkk(nkpts):
+    for kp, kq, kr in kpts_helper.loop_kkk(nkpts):
         ks = kconserv[kp,kr,kq]
         for p in range(integrals.shape[3]):
             for q in range(integrals.shape[4]):
@@ -505,10 +504,10 @@ def check_antisymm_12( cc, kpts, integrals ):
     print("antisymmetrization : max diff = %.15g" % diff)
 
 def check_antisymm_34( cc, kpts, integrals ):
-    kconserv = tools.get_kconserv(cc._scf.cell,cc.kpts)
+    kconserv = kpts_helper.get_kconserv(cc._scf.cell,cc.kpts)
     nkpts = len(kpts)
     diff = 0.0
-    for kp, kq, kr in loop_kkk(nkpts):
+    for kp, kq, kr in kpts_helper.loop_kkk(nkpts):
         ks = kconserv[kp,kr,kq]
         for p in range(integrals.shape[3]):
             for q in range(integrals.shape[4]):

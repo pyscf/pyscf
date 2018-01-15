@@ -5,6 +5,7 @@
 #          Timothy Berkelbach <tim.berkelbach@gmail.com>
 #
 
+import itertools
 from collections import OrderedDict
 import numpy as np
 import scipy.linalg
@@ -39,6 +40,11 @@ def unique(kpts):
             seen[idx] = True
             n += 1
     return np.asarray(uniq_kpts), np.asarray(uniq_index), uniq_inverse
+
+def loop_kkk(nkpts):
+    range_nkpts = range(nkpts)
+    return itertools.product(range_nkpts, range_nkpts, range_nkpts)
+
 
 def get_kconserv(cell, kpts):
     r'''Get the momentum conservation array for a set of k-points.
@@ -163,6 +169,4 @@ class KptsHelper(pyscf.lib.StreamObject):
             return np.conj(eri_kpt.transpose(1,0,3,2))
         if operation == 3:
             return np.conj(eri_kpt.transpose(3,2,1,0))
-
-
 

@@ -12,7 +12,6 @@ import numpy as np
 import h5py
 
 import mpi_kpoint_helper
-import pyscf.pbc.tools.pbc as tools
 from pyscf import lib
 import pyscf.ao2mo
 from pyscf.lib import logger
@@ -26,6 +25,7 @@ from pyscf.pbc.mpitools.mpi_helper import generate_max_task_list, safeAllreduceI
 from pyscf.lib.numpy_helper import cartesian_prod
 from pyscf.pbc.mpitools import mpi_load_balancer, mpi
 from pyscf.pbc.tools.tril import tril_index, unpack_tril
+from pyscf.pbc.lib import kpts_helper
 
 from mpi4py import MPI
 
@@ -997,7 +997,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         self.kpts = mf.kpts
         self.mo_energy = mf.mo_energy
         self.nkpts = len(self.kpts)
-        self.kconserv = tools.get_kconserv(mf.cell, mf.kpts)
+        self.kconserv = kpts_helper.get_kconserv(mf.cell, mf.kpts)
         self.khelper = mpi_kpoint_helper.unique_pqr_list(mf.cell, mf.kpts)
         self.made_ee_imds = False
         self.made_ip_imds = False
@@ -1631,7 +1631,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                 oovv_ijX = _cp(eris.oovv[slice(*kirange),slice(*kjrange),range(nkpts)])
                 oovv_jiX = _cp(eris.oovv[slice(*kjrange),slice(*kirange),range(nkpts)])
 
-                kklist = tools.get_kconserv3(self._scf.cell, self.kpts, [range(nkpts),range(nkpts),kshift,range(*kirange),range(*kjrange)])
+                kklist = kpts_helper.get_kconserv3(self._scf.cell, self.kpts, [range(nkpts),range(nkpts),kshift,range(*kirange),range(*kjrange)])
 
                 for iterki, ki in enumerate(range(*kirange)):
                     for iterkj, kj in enumerate(range(*kjrange)):
@@ -2340,7 +2340,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                 eris_ooov_jiX = _cp(eris.ooov[slice(*kjrange),slice(*kirange),range(nkpts)])
                 eris_ooov_ijX = _cp(eris.ooov[slice(*kirange),slice(*kjrange),range(nkpts)])
 
-                kclist = tools.get_kconserv3(self._scf.cell, self.kpts, [range(*kirange),range(*kjrange),kshift,range(nkpts),range(nkpts)])
+                kclist = kpts_helper.get_kconserv3(self._scf.cell, self.kpts, [range(*kirange),range(*kjrange),kshift,range(nkpts),range(nkpts)])
 
                 for iterki, ki in enumerate(range(*kirange)):
                     for iterkj, kj in enumerate(range(*kjrange)):
