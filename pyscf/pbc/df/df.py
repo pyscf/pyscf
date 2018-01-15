@@ -320,7 +320,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
     feri.close()
 
 
-class GDF(lib.StreamObject):
+class GDF(aft.AFTDF):
     '''Gaussian density fitting
     '''
     def __init__(self, cell, kpts=numpy.zeros((1,3))):
