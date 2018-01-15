@@ -1527,6 +1527,23 @@ class RHF(SCF):
         return self
 
     def stability(self, internal=True, external=False, verbose=None):
+        '''
+        RHF/RKS stability analysis.
+
+        See also pyscf.scf.stability.rhf_stability function.
+
+        Kwargs:
+            internal : bool
+                Internal stability, within the RHF optimization space.
+            external : bool
+                External stability. Including the RHF -> UHF and real -> complex
+                stability analysis.
+
+        Returns:
+            New orbitals that are more close to the stable condition.  The return
+            value includes two set of orbitals.  The first corresponds to the
+            internal stablity and the second corresponds to the external stability.
+        '''
         from pyscf.scf.stability import rhf_stability
         return rhf_stability(self, internal, external, verbose)
 

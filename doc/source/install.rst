@@ -12,7 +12,6 @@ If you have `Conda <https://conda.io/docs/>`_
 (or `Anaconda <https://www.continuum.io/downloads#linux>`_)
 environment, PySCF package can be installed with the command as bellow::
 
-  $ conda install -c pyqc libxc
   $ conda install -c pyscf pyscf
 
 Installation with pip
@@ -188,6 +187,13 @@ modules::
   $ cd pyscf/lib/build
   $ cmake -DBLA_VENDOR=Intel10_64lp_seq ..
   $ make
+
+When linking the program to MKL library, for some MKL versions, cmake may have
+problems to find the correct MKL libraries.  Setting ``LD_LIBRARY_PATH`` to
+include the MKL dynamic libraries sometimes can help cmake to find the MKL
+libraries, e.g.::
+
+  export LD_LIBRARY_PATH=/opt/intel/compilers_and_libraries_2018/linux/mkl/lib/intel64:$LD_LIBRARY_PATH
 
 If you are using Anaconda as your Python-side platform, you can link PySCF
 to the MKL library coming with Anaconda package::
