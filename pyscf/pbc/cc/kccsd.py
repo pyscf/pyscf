@@ -433,7 +433,7 @@ def _make_eris_incore(cc, mo_coeff=None):
     nvir = nmo - nocc
     eris.nocc = nocc
 
-    kconserv = tools.get_kconserv(cc._scf.cell,cc.kpts)
+    kconserv = kpts_helper.get_kconserv(cc._scf.cell,cc.kpts)
     so_coeff = [mo[:nao//2] + mo[nao//2:] for mo in eris.mo_coeff]
 
     eri = numpy.empty((nkpts,nkpts,nkpts,nmo,nmo,nmo,nmo), dtype=numpy.complex128)

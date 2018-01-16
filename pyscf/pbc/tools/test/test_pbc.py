@@ -5,10 +5,6 @@ from pyscf.pbc import tools
 from pyscf.pbc.scf import khf
 from pyscf import lib
 
-def finger(a):
-    w = numpy.cos(numpy.arange(a.size))
-    return numpy.dot(w, a.ravel())
-
 
 class KnownValues(unittest.TestCase):
     def test_coulG_ws(self):
@@ -26,8 +22,8 @@ class KnownValues(unittest.TestCase):
         cell.build()
         mf = khf.KRHF(cell, exxdiv='vcut_ws')
         mf.kpts = cell.make_kpts([2,2,2])
-        coulG = tools.get_coulG(cell, mf.kpts[2], True, mf)
-        self.assertAlmostEqual(finger(coulG), 1.3245365170998518+0j, 9)
+        coulG = tools.get_coulG(cell, mf.kpts[2], True, mf, gs=[5,5,5])
+        self.assertAlmostEqual(lib.finger(coulG), 1.3245365170998518+0j, 9)
 
     def test_coulG(self):
         numpy.random.seed(19)
@@ -45,17 +41,17 @@ class KnownValues(unittest.TestCase):
         cell.output = '/dev/null'
         cell.build()
         coulG = tools.get_coulG(cell, kpt)
-        self.assertAlmostEqual(finger(coulG), 62.75448804333378, 9)
+        self.assertAlmostEqual(lib.finger(coulG), 62.75448804333378, 9)
 
         cell.a = numpy.eye(3)
         cell.unit = 'B'
         coulG = tools.get_coulG(cell, numpy.array([0, numpy.pi, 0]))
-        self.assertAlmostEqual(finger(coulG), 4.6737453679713905, 9)
+        self.assertAlmostEqual(lib.finger(coulG), 4.6737453679713905, 9)
         coulG = tools.get_coulG(cell, numpy.array([0, numpy.pi, 0]),
                                 wrap_around=False)
-        self.assertAlmostEqual(finger(coulG), 4.5757877990664744, 9)
+        self.assertAlmostEqual(lib.finger(coulG), 4.5757877990664744, 9)
         coulG = tools.get_coulG(cell, exx='ewald')
-        self.assertAlmostEqual(finger(coulG), 4.888843468914021, 9)
+        self.assertAlmostEqual(lib.finger(coulG), 4.888843468914021, 9)
 
     #def test_coulG_2d(self):
     #    cell = pbcgto.Cell()
@@ -69,7 +65,7 @@ class KnownValues(unittest.TestCase):
     #    cell.output = '/dev/null'
     #    cell.build()
     #    coulG = tools.get_coulG(cell)
-    #    self.assertAlmostEqual(finger(coulG), -4.7118365257800496, 9)
+    #    self.assertAlmostEqual(lib.finger(coulG), -4.7118365257800496, 9)
 
 
     def test_get_lattice_Ls(self):
@@ -88,7 +84,7 @@ class KnownValues(unittest.TestCase):
                        atom ='''He .1 .0 .0''',
                        basis = 'ccpvdz')
         cl2 = tools.super_cell(cl1, [2,3,4])
-        self.assertAlmostEqual(finger(cl2.atom_coords()), -18.946080642714836, 9)
+        self.assertAlmostEqual(lib.finger(cl2.atom_coords()), -18.946080642714836, 9)
 
     def test_cell_plus_imgs(self):
         numpy.random.seed(2)
@@ -97,7 +93,7 @@ class KnownValues(unittest.TestCase):
                        atom ='''He .1 .0 .0''',
                        basis = 'ccpvdz')
         cl2 = tools.cell_plus_imgs(cl1, cl1.nimgs)
-        self.assertAlmostEqual(finger(cl2.atom_coords()), 465.86333525744129, 9)
+        self.assertAlmostEqual(lib.finger(cl2.atom_coords()), 465.86333525744129, 9)
 
     def test_madelung(self):
         cell = pbcgto.Cell()
@@ -111,30 +107,6 @@ class KnownValues(unittest.TestCase):
         kpts = cell.make_kpts([2,3,5])
         mad1 = tools.madelung(cell, kpts)
         self.assertAlmostEqual(mad0-mad1, 0, 9)
-
-    def test_kconserve(self):
-        cell = pbcgto.Cell()
-        cell.atom = 'He 0 0 0'
-        cell.a = '''0.      1.7834  1.7834
-                    1.7834  0.      1.7834
-                    1.7834  1.7834  0.    '''
-        cell.build()
-        kpts = cell.make_kpts([3,4,5])
-        kconserve = tools.get_kconserv(cell, kpts)
-        self.assertAlmostEqual(lib.finger(kconserve), 84.88659638289468, 9)
-
-    def test_kconserve3(self):
-        cell = pbcgto.Cell()
-        cell.atom = 'He 0 0 0'
-        cell.a = '''0.      1.7834  1.7834
-                    1.7834  0.      1.7834
-                    1.7834  1.7834  0.    '''
-        cell.build()
-        kpts = cell.make_kpts([2,2,2])
-        nkpts = kpts.shape[0]
-        kijkab = [range(nkpts),range(nkpts),1,range(nkpts),range(nkpts)]
-        kconserve = tools.get_kconserv3(cell, kpts, kijkab)
-        self.assertAlmostEqual(lib.finger(kconserve), -3.1172758206126852, 0)
 
 
 if __name__ == '__main__':

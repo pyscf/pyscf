@@ -127,7 +127,7 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
     if 'gs' in kwargs:
         warnings.warn('cell.gs is deprecated.  It is replaced by cell.mesh,'
                       'the number of PWs (=2*gs+1) along each direction.')
-        mesh = [2*n+1 for n in gs]
+        mesh = [2*n+1 for n in kwargs['gs']]
     if Gv is None:
         Gv = cell.get_Gv(mesh)
 
