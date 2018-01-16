@@ -468,7 +468,7 @@ def get_Gv(cell, mesh=None, **kwargs):
     if 'gs' in kwargs:
         warnings.warn('cell.gs is deprecated.  It is replaced by cell.mesh,'
                       'the number of PWs (=2*gs+1) along each direction.')
-        mesh = [2*n+1 for n in gs]
+        mesh = [2*n+1 for n in kwargs['gs']]
 
     gx = np.fft.fftfreq(mesh[0], 1./mesh[0])
     gy = np.fft.fftfreq(mesh[1], 1./mesh[1])
@@ -491,7 +491,7 @@ def get_Gv_weights(cell, mesh=None, **kwargs):
     if 'gs' in kwargs:
         warnings.warn('cell.gs is deprecated.  It is replaced by cell.mesh,'
                       'the number of PWs (=2*gs+1) along each direction.')
-        mesh = [2*n+1 for n in gs]
+        mesh = [2*n+1 for n in kwargs['gs']]
 
     def plus_minus(n):
         #rs, ws = dft.delley(n)
@@ -779,7 +779,7 @@ def gen_uniform_grids(cell, mesh=None, **kwargs):
     if 'gs' in kwargs:
         warnings.warn('cell.gs is deprecated.  It is replaced by cell.mesh,'
                       'the number of PWs (=2*gs+1) along each direction.')
-        mesh = [2*n+1 for n in gs]
+        mesh = [2*n+1 for n in kwargs['gs']]
     qv = lib.cartesian_prod([np.arange(x) for x in mesh])
     a_frac = np.einsum('i,ij->ij', 1./np.asarray(mesh), cell.lattice_vectors())
     coords = np.dot(qv, a_frac)

@@ -134,7 +134,7 @@ def get_nuc(mydf, kpts=None):
         vj_kpts = vj_kpts[0]
     return numpy.asarray(vj_kpts)
 
-def _int_nuc_vloc(mydf, nuccell, kpts, intor='int3c2e_sph'):
+def _int_nuc_vloc(mydf, nuccell, kpts, intor='int3c2e_sph', aosym='s2', comp=1):
     '''Vnuc - Vloc'''
     cell = mydf.cell
     nkpts = len(kpts)
@@ -146,23 +146,34 @@ def _int_nuc_vloc(mydf, nuccell, kpts, intor='int3c2e_sph'):
                          fakenuc._atm, fakenuc._bas, fakenuc._env)
 
     kptij_lst = numpy.hstack((kpts,kpts)).reshape(-1,2,3)
-    buf = incore.aux_e2(cell, fakenuc, intor, aosym='s2', kptij_lst=kptij_lst)
+    buf = incore.aux_e2(cell, fakenuc, intor, aosym=aosym, comp=comp,
+                        kptij_lst=kptij_lst)
 
     charge = cell.atom_charges()
     charge = numpy.append(charge, -charge)  # (charge-of-nuccell, charge-of-fakenuc)
     nao = cell.nao_nr()
     nchg = len(charge)
-    nao_pair = nao*(nao+1)//2
-    buf = buf.reshape(nkpts,nao_pair,nchg)
-    mat = numpy.einsum('kxz,z->kx', buf, charge)
+    if aosym == 's1':
+        nao_pair = nao**2
+    else:
+        nao_pair = nao*(nao+1)//2
+    if comp == 1:
+        buf = buf.reshape(nkpts,nao_pair,nchg)
+        mat = numpy.einsum('kxz,z->kx', buf, charge)
+    else:
+        buf = buf.reshape(nkpts,comp,nao_pair,nchg)
+        mat = numpy.einsum('kcxz,z->kcx', buf, charge)
 
     if cell.dimension == 3 and intor == 'int3c2e_sph':
+        assert(comp == 1)
         nucbar = sum([z/nuccell.bas_exp(i)[0] for i,z in enumerate(cell.atom_charges())])
         nucbar *= numpy.pi/cell.vol
         ovlp = cell.pbc_intor('int1e_ovlp_sph', 1, lib.HERMITIAN, kpts)
         for k in range(nkpts):
-            s = lib.pack_tril(ovlp[k])
-            mat[k] += nucbar * s
+            if aosym == 's1':
+                mat[k] += nucbar * ovlp[k].reshape(nao_pair)
+            else:
+                mat[k] += nucbar * lib.pack_tril(ovlp[k])
     return mat
 
 get_pp_loc_part1 = get_nuc

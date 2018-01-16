@@ -179,11 +179,10 @@ def get_pnucp(mydf, kpts=None):
     Gv, Gvbase, kws = cell.get_Gv_weights(mydf.mesh)
     charge = -cell.atom_charges()
     kpt_allow = numpy.zeros(3)
-    coulG = tools.get_coulG(cell, kpt_allow, gs=mydf.gs, Gv=Gv)
+    coulG = tools.get_coulG(cell, kpt_allow, mesh=mydf.mesh, Gv=Gv)
     coulG *= kws
     if mydf.eta == 0:
         wj = numpy.zeros((nkpts,nao_pair), dtype=numpy.complex128)
-        wjI = numpy.zeros((nkpts,nao_pair))
         SI = cell.get_SI(Gv)
         vG = numpy.einsum('i,ix->x', charge, SI) * coulG
     else:
@@ -205,7 +204,7 @@ def get_pnucp(mydf, kpts=None):
         vG = numpy.einsum('i,xi->x', charge, aoaux) * coulG
 
     max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
-    for aoaoks, p0, p1 in mydf.ft_loop(mydf.gs, kpt_allow, kpts_lst,
+    for aoaoks, p0, p1 in mydf.ft_loop(mydf.mesh, kpt_allow, kpts_lst,
                                        max_memory=max_memory, aosym='s2',
                                        intor='GTO_ft_pdotp_sph'):
         for k, aoao in enumerate(aoaoks):
