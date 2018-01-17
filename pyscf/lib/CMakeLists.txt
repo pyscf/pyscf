@@ -133,14 +133,12 @@ if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xcfun.h" AND
     ENABLE_XCFUN AND BUILD_XCFUN)
   ExternalProject_Add(libxcfun
     GIT_REPOSITORY https://github.com/dftlibs/xcfun.git
-    GIT_TAG origin/stable-1.x
+    GIT_TAG 355f42497a9cd17d16ae91da1f1aaaf93756ae8b
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
-    PATCH_COMMAND patch -p1 < ${CMAKE_CURRENT_LIST_DIR}/libxcfun.patch
     CMAKE_ARGS -DCMAKE_BUILD_TYPE=RELEASE -DBUILD_SHARED_LIBS=1
-            -DXC_MAX_ORDER=3 -DXCFUN_ENABLE_TESTS=0
+            -DXC_MAX_ORDER=3 -DENABLE_TESTALL=0
             -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
-            -DCMAKE_INSTALL_LIBDIR:PATH=lib
   )
 endif() # ENABLE_XCFUN
 add_subdirectory(dft)
