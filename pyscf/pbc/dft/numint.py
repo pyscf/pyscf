@@ -12,7 +12,7 @@ from pyscf.dft import numint
 from pyscf.dft.numint import eval_mat, _dot_ao_ao, _dot_ao_dm
 from pyscf.dft.numint import OCCDROP
 from pyscf.pbc.dft.gen_grid import libpbc, make_mask, BLKSIZE
-from pyscf.pbc.lib.kpt_misc import is_zero, gamma_point, member
+from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, member
 
 #try:
 ### Moderate speedup by caching eval_ao

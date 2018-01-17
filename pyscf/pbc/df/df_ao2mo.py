@@ -10,7 +10,7 @@ from pyscf.ao2mo import _ao2mo
 from pyscf.ao2mo.incore import iden_coeffs, _conc_mos
 from pyscf.pbc.df.df_jk import zdotNN, zdotCN, zdotNC
 from pyscf.pbc.df.fft_ao2mo import _format_kpts, _iskconserv
-from pyscf.pbc.lib.kpt_misc import is_zero, gamma_point
+from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point
 
 
 def get_eri(mydf, kpts=None, compact=True):

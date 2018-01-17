@@ -35,7 +35,7 @@ from pyscf.pbc.df import df_jk
 from pyscf.pbc.df import df_ao2mo
 from pyscf.pbc.df.aft import estimate_eta, get_nuc
 from pyscf.pbc.df.df_jk import zdotCN, zdotNN, zdotNC
-from pyscf.pbc.lib.kpt_misc import is_zero, gamma_point, member, unique
+from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, member, unique
 
 LINEAR_DEP_THR = 1e-9
 
@@ -320,7 +320,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
     feri.close()
 
 
-class GDF(lib.StreamObject):
+class GDF(aft.AFTDF):
     '''Gaussian density fitting
     '''
     def __init__(self, cell, kpts=numpy.zeros((1,3))):

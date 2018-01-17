@@ -1218,7 +1218,8 @@ void GTO_ft_c2s_sph(double complex *out, double complex *gctr,
         free(buf1);
 }
 
-void c2s_zset0(double complex *out, int *dims, int *counts, int comp, size_t NGv)
+static void _ft_zset0(double complex *out, int *dims, int *counts,
+                      int comp, size_t NGv)
 {
         double complex *pout;
         int i, j, k, ic;
@@ -1297,7 +1298,7 @@ int GTO_ft_aopair_drv(double complex *out, int *dims,
                         (*f_c2s)(out+nout*n, gctr+nc*n, dims, envs, NGv);
                 }
         } else {
-                c2s_zset0(out, dims, counts, n_comp, NGv);
+                _ft_zset0(out, dims, counts, n_comp, NGv);
         }
         free(gctr);
         return has_value;

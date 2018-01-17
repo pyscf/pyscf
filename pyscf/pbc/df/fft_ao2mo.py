@@ -24,7 +24,7 @@ from pyscf import lib
 from pyscf import ao2mo
 from pyscf.ao2mo.incore import iden_coeffs
 from pyscf.pbc import tools
-from pyscf.pbc.lib.kpt_misc import is_zero, gamma_point
+from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point
 
 
 def get_eri(mydf, kpts=None, compact=False):

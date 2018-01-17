@@ -11,7 +11,7 @@ from pyscf.pbc import scf
 from pyscf.pbc import df
 from pyscf.pbc import dft
 from pyscf.pbc import tools
-from pyscf.pbc.scf import x2c
+from pyscf.pbc.x2c import sfx2c1e
 
 cell = gto.Cell()
 cell.build(unit = 'B',
@@ -83,11 +83,11 @@ class KnownValues(unittest.TestCase):
         vne_ref = numpy.einsum('p,xpi,xpj->ij', vneR, aoR[1:4], aoR[1:4])
 
         mydf = df.AFTDF(cell1)
-        dat = x2c.get_pnucp(mydf)
+        dat = sfx2c1e.get_pnucp(mydf)
         self.assertAlmostEqual(abs(dat-vne_ref).max(), 0, 7)
 
         mydf.eta = 0
-        dat = x2c.get_pnucp(mydf)
+        dat = sfx2c1e.get_pnucp(mydf)
         self.assertAlmostEqual(abs(dat-vne_ref).max(), 0, 7)
 
 
