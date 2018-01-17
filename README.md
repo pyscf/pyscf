@@ -5,9 +5,9 @@
 Python-based Simulations of Chemistry Framework
 ===============================================
 
-2017-11-12
+2018-01-17
 
-* [Stable release 1.4.1](https://github.com/sunqm/pyscf/releases/tag/v1.4.1)
+* [Stable release 1.4.3](https://github.com/sunqm/pyscf/releases/tag/v1.4.3)
 * [Changelog](../master/CHANGELOG)
 * [Documentation](http://www.pyscf.org)
 * [Installation](#installation)

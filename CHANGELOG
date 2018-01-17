@@ -6,7 +6,7 @@ PySCF 1.5 alpha (2018-03-??)
   - range-separated hybrid feature for RKS and UKS
 
 
-PySCF 1.4.3 (2018-01-?)
+PySCF 1.4.3 (2018-01-17)
 -----------------------
 * Improved
   - Assert convergence in geometry optimization
@@ -14,7 +14,7 @@ PySCF 1.4.3 (2018-01-?)
   - Memory usage for generating becke-grids in DFT
 * Bugfix
   - XC parser to support the scaled compound functional
-  - The effects of level_shift in second order SCF
+  - In the second order SCF algorithm, removing level_shift
   - k-point RCCSD for non-canonical HF reference
   - basis contraction in ECP integrals
 
