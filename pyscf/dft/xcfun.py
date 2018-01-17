@@ -640,9 +640,9 @@ def _eval_xc(fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
             fxc = (outbuf[XC_D200], outbuf[XC_D110], outbuf[XC_D020],
                    None, outbuf[XC_D002], None, outbuf[XC_D101], None, None, outbuf[XC_D011])
         if deriv > 2:
-            kxc = (output[XC_D300], output[XC_D210], output[XC_D120], output[XC_D030],
-                   output[XC_D201], output[XC_D111], output[XC_D102],
-                   output[XC_D021], output[XC_D012], output[XC_D003])
+            kxc = (outbuf[XC_D300], outbuf[XC_D210], outbuf[XC_D120], outbuf[XC_D030],
+                   outbuf[XC_D201], outbuf[XC_D111], outbuf[XC_D102],
+                   outbuf[XC_D021], outbuf[XC_D012], outbuf[XC_D003])
     elif nvar == 7:
         if deriv > 0:
             vxc = (outbuf[1:3].T, outbuf[3:6].T, None, outbuf[6:8].T)
@@ -668,16 +668,16 @@ def _eval_xc(fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
                            XC_D0120000,XC_D0111000,XC_D0110100,XC_D0102000,XC_D0101100,XC_D0100200]].T,
                    outbuf[[XC_D0030000,XC_D0021000,XC_D0020100,XC_D0012000,XC_D0011100,
                            XC_D0010200,XC_D0003000,XC_D0002100,XC_D0001200,XC_D0000300]].T,
-                   output[[XC_D2000010,XC_D2000001,XC_D1100010,XC_D1100001,XC_D0200010,XC_D0200001]].T,
-                   output[[XC_D1010010,XC_D1010001,XC_D1001010,XC_D1001001,XC_D1000110,XC_D1000101,
+                   outbuf[[XC_D2000010,XC_D2000001,XC_D1100010,XC_D1100001,XC_D0200010,XC_D0200001]].T,
+                   outbuf[[XC_D1010010,XC_D1010001,XC_D1001010,XC_D1001001,XC_D1000110,XC_D1000101,
                            XC_D0110010,XC_D0110001,XC_D0101010,XC_D0101001,XC_D0100110,XC_D0100101]].T,
-                   output[[XC_D1000020,XC_D1000011,XC_D1000002,XC_D0100020,XC_D0100011,XC_D0100002]].T,
-                   output[[XC_D0020010,XC_D0020001,XC_D0011010,XC_D0011001,XC_D0010110,XC_D0010101,
+                   outbuf[[XC_D1000020,XC_D1000011,XC_D1000002,XC_D0100020,XC_D0100011,XC_D0100002]].T,
+                   outbuf[[XC_D0020010,XC_D0020001,XC_D0011010,XC_D0011001,XC_D0010110,XC_D0010101,
                            XC_D0002010,XC_D0002001,XC_D0001110,XC_D0001101,XC_D0000210,XC_D0000201]].T,
-                   output[[XC_D0010020,XC_D0010011,XC_D0010002,
+                   outbuf[[XC_D0010020,XC_D0010011,XC_D0010002,
                            XC_D0001020,XC_D0001011,XC_D0001002,
                            XC_D0000120,XC_D0000111,XC_D0000102]].T,
-                   output[[XC_D0000030,XC_D0000021,XC_D0000012,XC_D0000003]].T)
+                   outbuf[[XC_D0000030,XC_D0000021,XC_D0000012,XC_D0000003]].T)
     return exc, vxc, fxc, kxc
 
 
