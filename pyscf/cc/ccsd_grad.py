@@ -428,19 +428,23 @@ def as_scanner(cc):
     logger.info(cc, 'Set nuclear gradients of %s as a scanner', cc.__class__)
     cc = copy.copy(cc)
     cc._scf = cc._scf.as_scanner()
-    def solver(mol):
-        mf_scanner = cc._scf
-        mf_scanner(mol)
-        cc.mol = mol
-        cc.mo_coeff = mf_scanner.mo_coeff
-        cc.mo_occ = mf_scanner.mo_occ
-        eris = cc.ao2mo(cc.mo_coeff)
-        mf_grad = cc._scf.nuc_grad_method()
-        cc.kernel(cc.t1, cc.t2, eris=eris)
-        cc.solve_lambda(cc.t1, cc.t2, cc.l1, cc.l2, eris=eris)
-        de = kernel(cc, cc.t1, cc.t2, cc.l1, cc.l2, eris=eris, mf_grad=mf_grad)
-        return cc.e_tot, de
-    return solver
+    class CCSD_GradScanner(lib.GradScanner):
+        def __call__(self, mol):
+            mf_scanner = cc._scf
+            mf_scanner(mol)
+            cc.mol = mol
+            cc.mo_coeff = mf_scanner.mo_coeff
+            cc.mo_occ = mf_scanner.mo_occ
+            eris = cc.ao2mo(cc.mo_coeff)
+            mf_grad = cc._scf.nuc_grad_method()
+            cc.kernel(cc.t1, cc.t2, eris=eris)
+            cc.solve_lambda(cc.t1, cc.t2, cc.l1, cc.l2, eris=eris)
+            de = kernel(cc, cc.t1, cc.t2, cc.l1, cc.l2, eris=eris, mf_grad=mf_grad)
+            return cc.e_tot, de
+        @property
+        def converged(self):
+            return all((cc._scf.converged, cc.converged, cc.converged_lambda))
+    return CCSD_GradScanner()
 
 
 def shell_prange(mol, start, stop, blksize):
@@ -573,9 +577,9 @@ def _rdm2_mo2ao(mycc, d2, dm1, mo_coeff, fsave=None):
     _tmpfile = None
     time1 = log.timer_debug1('_rdm2_mo2ao cleanup', *time1)
     if _dm2file is not None:
-        nvir_pair = nvir * (nvir+1) // 2
-        dm2 = numpy.empty((nvir_pair, nvir_pair))
-        ao2mo.outcore._load_from_h5g(fsave['dm2'], 0, nvir_pair, dm2)
+        nao_pair = nao * (nao+1) // 2
+        dm2 = numpy.empty((nao_pair, nao_pair))
+        ao2mo.outcore._load_from_h5g(fsave['dm2'], 0, nao_pair, dm2)
         fsave.close()
         _dm2file = None
         return dm2

@@ -230,7 +230,7 @@ def energy_elec(mf, dm=None, h1e=None, vhf=None):
 def get_veff(mol, dm, dm_last=0, vhf_last=0, hermi=1, vhfopt=None):
     return uhf.get_veff(mol, dm, dm_last, vhf_last, hermi, vhfopt)
 
-def analyze(mf, verbose=logger.DEBUG, **kwargs):
+def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=True, **kwargs):
     '''Analyze the given SCF object:  print orbital energies, occupancies;
     print orbital coefficients; Mulliken population analysis
     '''
@@ -255,13 +255,20 @@ def analyze(mf, verbose=logger.DEBUG, **kwargs):
 
     ovlp_ao = mf.get_ovlp()
     if log.verbose >= logger.DEBUG:
-        log.debug(' ** MO coefficients (expansion on meta-Lowdin AOs) **')
         label = mf.mol.ao_labels()
-        orth_coeff = orth.orth_ao(mf.mol, 'meta_lowdin', s=ovlp_ao)
-        c = reduce(numpy.dot, (orth_coeff.T, ovlp_ao, mo_coeff))
+        if with_meta_lowdin:
+            log.debug(' ** MO coefficients (expansion on meta-Lowdin AOs) **')
+            orth_coeff = orth.orth_ao(mf.mol, 'meta_lowdin', s=ovlp_ao)
+            c = reduce(numpy.dot, (orth_coeff.T, ovlp_ao, mo_coeff))
+        else:
+            log.debug(' ** MO coefficients (expansion on AOs) **')
+            c = mo_coeff
         dump_mat.dump_rec(mf.stdout, c, label, start=1, **kwargs)
     dm = mf.make_rdm1(mo_coeff, mo_occ)
-    return mf.mulliken_meta(mf.mol, dm, s=ovlp_ao, verbose=log)
+    if with_meta_lowdin:
+        return mf.mulliken_meta(mf.mol, dm, s=ovlp_ao, verbose=log)
+    else:
+        return mf.mulliken_pop(mf.mol, dm, s=ovlp_ao, verbose=log)
 
 def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     '''Canonicalization diagonalizes the Fock matrix within occupied, open,
@@ -368,13 +375,28 @@ class ROHF(hf.RHF):
         return vhf
 
     @lib.with_doc(analyze.__doc__)
-    def analyze(self, verbose=None, **kwargs):
+    def analyze(self, verbose=None, with_meta_lowdin=True, **kwargs):
         if verbose is None: verbose = self.verbose
-        return analyze(self, verbose, **kwargs)
+        return analyze(self, verbose, with_meta_lowdin, **kwargs)
 
     canonicalize = canonicalize
 
     def stability(self, internal=True, external=False, verbose=None):
+        '''
+        ROHF/ROKS stability analysis.
+
+        See also pyscf.scf.stability.rohf_stability function.
+
+        Kwargs:
+            internal : bool
+                Internal stability, within the RHF optimization space.
+            external : bool
+                External stability. It is not available in current version.
+
+        Returns:
+            The return value includes two set of orbitals which are more close to
+            the required stable condition.
+        '''
         from pyscf.scf.stability import rohf_stability
         return rohf_stability(self, internal, external, verbose)
 

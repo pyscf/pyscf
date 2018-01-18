@@ -202,8 +202,9 @@ def parse_xc(description):
                     raise KeyError('Unknown key %s' % key)
                 if isinstance(x_id, str):
                     hyb1, fn_facs1 = parse_xc(x_id)
-                    hyb[0] += hyb1
-                    fn_facs.extend(fn_facs1)
+# Recursively scale the composed functional, to support '0.5*b3lyp'
+                    hyb[0] += hyb1 * fac
+                    fn_facs.extend([(xid, c*fac) for xid, c in fn_facs1])
                 elif x_id is None:
                     raise NotImplementedError(key)
                 else:
@@ -232,95 +233,7 @@ def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, verbose=None):
     r'''Interface to call xcfun library to evaluate XC functional, potential
     and functional derivatives.
 
-    * The given functional xc_code must be a one-line string.
-    * The functional xc_code is case-insensitive.
-    * The functional xc_code string has two parts, separated by ",".  The
-      first part describes the exchange functional, the second is the correlation
-      functional.  If "," not appeared in string, entire string is considered as
-      functional.
-
-      - If "," not appeared in string, the entire string is considered as X functional.
-      - To neglect X functional (just apply C functional), leave blank in the
-        first part, eg description=',vwn' for pure VWN functional
-
-    * The functional name can be placed in arbitrary order.  Two name needs to
-      be separated by operators "+" or "-".  Blank spaces are ignored.
-      NOTE the parser only reads operators "+" "-" "*".  / is not in support.
-    * A functional name is associated with one factor.  If the factor is not
-      given, it is assumed equaling 1.
-    * String "HF" stands for exact exchange (HF K matrix).  It is allowed to
-      put in C functional part.
-    * Be careful with the xcfun convention on GGA functional, in which the LDA
-      contribution is included.
-
-    Args:
-        xc_code : str
-            A string to describe the linear combination of different XC functionals.
-            The X and C functional are separated by comma like '.8*LDA+.2*B86,VWN'.
-            If "HF" was appeared in the string, it stands for the exact exchange.
-        rho : ndarray
-            Shape of ((*,N)) for electron density (and derivatives) if spin = 0;
-            Shape of ((*,N),(*,N)) for alpha/beta electron density (and derivatives) if spin > 0;
-            where N is number of grids.
-            rho (*,N) are ordered as (den,grad_x,grad_y,grad_z,laplacian,tau)
-            where grad_x = d/dx den, laplacian = \nabla^2 den, tau = 1/2(\nabla f)^2
-            In spin unrestricted case,
-            rho is ((den_u,grad_xu,grad_yu,grad_zu,laplacian_u,tau_u)
-                    (den_d,grad_xd,grad_yd,grad_zd,laplacian_d,tau_d))
-
-    Kwargs:
-        spin : int
-            spin polarized if spin > 0
-        relativity : int
-            No effects.
-        verbose : int or object of :class:`Logger`
-            No effects.
-
-    Returns:
-        ex, vxc, fxc, kxc
-
-        where
-
-        * vxc = (vrho, vsigma, vlapl, vtau) for restricted case
-
-        * vxc for unrestricted case
-          | vrho[:,2]   = (u, d)
-          | vsigma[:,3] = (uu, ud, dd)
-          | vlapl[:,2]  = (u, d)
-          | vtau[:,2]   = (u, d)
-
-        * fxc for restricted case:
-          (v2rho2, v2rhosigma, v2sigma2, v2lapl2, vtau2, v2rholapl, v2rhotau, v2lapltau, v2sigmalapl, v2sigmatau)
-
-        * fxc for unrestricted case:
-          | v2rho2[:,3]     = (u_u, u_d, d_d)
-          | v2rhosigma[:,6] = (u_uu, u_ud, u_dd, d_uu, d_ud, d_dd)
-          | v2sigma2[:,6]   = (uu_uu, uu_ud, uu_dd, ud_ud, ud_dd, dd_dd)
-          | v2lapl2[:,3]
-          | vtau2[:,3]
-          | v2rholapl[:,4]
-          | v2rhotau[:,4]
-          | v2lapltau[:,4]
-          | v2sigmalapl[:,6]
-          | v2sigmatau[:,6]
-
-        * kxc for restricted case:
-          v3rho3, v3rho2sigma, v3rhosigma2, v3sigma3,
-          v3rho2tau, v3rhosigmatau, v3rhotau2, v3sigma2tau, v3sigmatau2, v3tau3
-
-        * kxc for unrestricted case:
-          | v3rho3[:,4]       = (u_u_u, u_u_d, u_d_d, d_d_d)
-          | v3rho2sigma[:,9]  = (u_u_uu, u_u_ud, u_u_dd, u_d_uu, u_d_ud, u_d_dd, d_d_uu, d_d_ud, d_d_dd)
-          | v3rhosigma2[:,12] = (u_uu_uu, u_uu_ud, u_uu_dd, u_ud_ud, u_ud_dd, u_dd_dd, d_uu_uu, d_uu_ud, d_uu_dd, d_ud_ud, d_ud_dd, d_dd_dd)
-          | v3sigma3[:,10]     = (uu_uu_uu, uu_uu_ud, uu_uu_dd, uu_ud_ud, uu_ud_dd, uu_dd_dd, ud_ud_ud, ud_ud_dd, ud_dd_dd, dd_dd_dd)
-          | v3rho2tau
-          | v3rhosigmatau
-          | v3rhotau2
-          | v3sigma2tau
-          | v3sigmatau2
-          | v3tau3
-
-        see also libxc_itrf.c
+    See also :func:`pyscf.dft.libxc.eval_xc`
     '''
     hyb, fn_facs = parse_xc(xc_code)
     return _eval_xc(fn_facs, rho, spin, relativity, deriv, verbose)
@@ -727,9 +640,9 @@ def _eval_xc(fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
             fxc = (outbuf[XC_D200], outbuf[XC_D110], outbuf[XC_D020],
                    None, outbuf[XC_D002], None, outbuf[XC_D101], None, None, outbuf[XC_D011])
         if deriv > 2:
-            kxc = (output[XC_D300], output[XC_D210], output[XC_D120], output[XC_D030],
-                   output[XC_D201], output[XC_D111], output[XC_D102],
-                   output[XC_D021], output[XC_D012], output[XC_D003])
+            kxc = (outbuf[XC_D300], outbuf[XC_D210], outbuf[XC_D120], outbuf[XC_D030],
+                   outbuf[XC_D201], outbuf[XC_D111], outbuf[XC_D102],
+                   outbuf[XC_D021], outbuf[XC_D012], outbuf[XC_D003])
     elif nvar == 7:
         if deriv > 0:
             vxc = (outbuf[1:3].T, outbuf[3:6].T, None, outbuf[6:8].T)
@@ -755,16 +668,16 @@ def _eval_xc(fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
                            XC_D0120000,XC_D0111000,XC_D0110100,XC_D0102000,XC_D0101100,XC_D0100200]].T,
                    outbuf[[XC_D0030000,XC_D0021000,XC_D0020100,XC_D0012000,XC_D0011100,
                            XC_D0010200,XC_D0003000,XC_D0002100,XC_D0001200,XC_D0000300]].T,
-                   output[[XC_D2000010,XC_D2000001,XC_D1100010,XC_D1100001,XC_D0200010,XC_D0200001]].T,
-                   output[[XC_D1010010,XC_D1010001,XC_D1001010,XC_D1001001,XC_D1000110,XC_D1000101,
+                   outbuf[[XC_D2000010,XC_D2000001,XC_D1100010,XC_D1100001,XC_D0200010,XC_D0200001]].T,
+                   outbuf[[XC_D1010010,XC_D1010001,XC_D1001010,XC_D1001001,XC_D1000110,XC_D1000101,
                            XC_D0110010,XC_D0110001,XC_D0101010,XC_D0101001,XC_D0100110,XC_D0100101]].T,
-                   output[[XC_D1000020,XC_D1000011,XC_D1000002,XC_D0100020,XC_D0100011,XC_D0100002]].T,
-                   output[[XC_D0020010,XC_D0020001,XC_D0011010,XC_D0011001,XC_D0010110,XC_D0010101,
+                   outbuf[[XC_D1000020,XC_D1000011,XC_D1000002,XC_D0100020,XC_D0100011,XC_D0100002]].T,
+                   outbuf[[XC_D0020010,XC_D0020001,XC_D0011010,XC_D0011001,XC_D0010110,XC_D0010101,
                            XC_D0002010,XC_D0002001,XC_D0001110,XC_D0001101,XC_D0000210,XC_D0000201]].T,
-                   output[[XC_D0010020,XC_D0010011,XC_D0010002,
+                   outbuf[[XC_D0010020,XC_D0010011,XC_D0010002,
                            XC_D0001020,XC_D0001011,XC_D0001002,
                            XC_D0000120,XC_D0000111,XC_D0000102]].T,
-                   output[[XC_D0000030,XC_D0000021,XC_D0000012,XC_D0000003]].T)
+                   outbuf[[XC_D0000030,XC_D0000021,XC_D0000012,XC_D0000003]].T)
     return exc, vxc, fxc, kxc
 
 

@@ -502,7 +502,7 @@ if __name__ == '__main__':
     print(numpy.linalg.norm(abs(hdiag0)-abs(hdiag1)))
 
     ecisd = myci.kernel()[0]
-    print ecisd, mf.e_tot
+    print(ecisd, mf.e_tot)
     efci = fci.direct_uhf.kernel((h1a,h1b), (eri_aa,eri_ab,eri_bb),
                                  h1a.shape[0], mol.nelec)[0]
     print(ecisd, ecisd - -0.037067274690894436, '> E(fci)', efci-ehf0)

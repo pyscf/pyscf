@@ -100,7 +100,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     return vxc
 
 
-def energy_elec(ks, dm, h1e=None, vhf=None):
+def energy_elec(ks, dm=None, h1e=None, vhf=None):
     r'''Electronic part of RKS energy.
 
     Args:
@@ -114,8 +114,8 @@ def energy_elec(ks, dm, h1e=None, vhf=None):
     Returns:
         RKS electronic energy and the 2-electron part contribution
     '''
-    if h1e is None:
-        h1e = ks.get_hcore()
+    if dm is None: dm = ks.make_rdm1()
+    if h1e is None: h1e = ks.get_hcore()
     if vhf is None or getattr(vhf, 'ecoul', None) is None:
         vhf = ks.get_veff(ks.mol, dm)
     e1 = numpy.einsum('ij,ji', h1e, dm).real

@@ -35,7 +35,7 @@ from pyscf.pbc.df import df_jk
 from pyscf.pbc.df import df_ao2mo
 from pyscf.pbc.df.aft import estimate_eta, get_nuc
 from pyscf.pbc.df.df_jk import zdotCN, zdotNN, zdotNC
-from pyscf.pbc.lib.kpt_misc import is_zero, gamma_point, member, unique
+from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, member, unique
 
 LINEAR_DEP_THR = 1e-9
 
@@ -359,6 +359,7 @@ class GDF(aft.AFTDF):
         self._auxbasis = x
         self.auxcell = None
         self._cderi = None
+        self._cderi_to_save = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
 
     def dump_flags(self, log=None):
         log = logger.new_logger(self, log)

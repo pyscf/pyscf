@@ -35,9 +35,10 @@ kmf.kernel()
 
 #
 # Second order SCF solver can be used in the PBC SCF code the same way in the
-# molecular calculation
+# molecular calculation.  Note second order SCF algorithm does not support
+# smearing method.
 #
 mf = scf.KRHF(cell, kpts).mix_density_fit()
-mf = scf.newton(mf)
+mf = mf.newton()
 mf.kernel()
 

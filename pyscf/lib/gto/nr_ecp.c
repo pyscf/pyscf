@@ -2436,6 +2436,9 @@ int ECPtype1_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         for (i = 0; i < nci*ncj*d3; i++) { rad_ang_all[i] = 0; }
         for (ip = 0; ip < npi; ip++) {
         for (jp = 0; jp < npj; jp++) {
+                rij[0] = ai[ip] * rca[0] + aj[jp] * rcb[0];
+                rij[1] = ai[ip] * rca[1] + aj[jp] * rcb[1];
+                rij[2] = ai[ip] * rca[2] + aj[jp] * rcb[2];
                 type1_rad_ang(rad_ang, li+lj, rij, rad_all+(ip*npj+jp)*d2);
                 for (ic = 0; ic < nci; ic++) {
                 for (jc = 0; jc < ncj; jc++) {

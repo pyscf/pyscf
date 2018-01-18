@@ -97,9 +97,9 @@ def writeNEVPTIntegrals(mc, E1, E2, E1eff, aaavsplit, nfro, fully_ic=False, thir
     energyE0 += energy_core
     energyE0 += mc.mol.energy_nuc()
 
-    print "Energy_core = ",energy_core
-    print "Energy      = ", energyE0
-    print ""
+    print("Energy_core = ",energy_core)
+    print("Energy      = ", energyE0)
+    print("")
 
     # offdiagonal warning
     offdiagonal = 0.0
@@ -112,9 +112,9 @@ def writeNEVPTIntegrals(mc, E1, E2, E1eff, aaavsplit, nfro, fully_ic=False, thir
         if(k != l):
           offdiagonal = max(abs(offdiagonal), abs(eris_sp['h1eff'][k,l] ))
     if (abs(offdiagonal) > 1e-6):
-      print "WARNING: Have to use natural orbitals from CAASCF"
-      print "         offdiagonal elements:", offdiagonal
-      print ""
+      print("WARNING: Have to use natural orbitals from CAASCF")
+      print("         offdiagonal elements:", offdiagonal)
+      print("")
 
     # Write out ingredients to intfolder
     # 2 "C"
@@ -167,11 +167,11 @@ def writeNEVPTIntegrals(mc, E1, E2, E1eff, aaavsplit, nfro, fully_ic=False, thir
     #                  inout[dom[r]][0]:inout[dom[r]][1],\
     #                  inout[dom[q]][0]:inout[dom[q]][1],\
     #                  inout[dom[s]][0]:inout[dom[s]][1]].transpose(0,2,1,3)
-    #        print 'Output: '+name+' Shape:',test.shape
+    #        print('Output: '+name+' Shape:',test.shape)
     #        numpy.save(intfolder+name, numpy.asfortranarray(test))
 
-    print "Basic ingredients wrote to "+intfolder
-    print ""
+    print("Basic ingredients wrote to "+intfolder)
+    print("")
 
 
     # Write "FCIDUMP_aaav0" and "FCIDUMP_aaac"
@@ -223,7 +223,7 @@ def writeNEVPTIntegrals(mc, E1, E2, E1eff, aaavsplit, nfro, fully_ic=False, thir
           #tools.fcidump.write_hcore(fout, eris_sp['h1eff'][virtRange[K][0]:virtRange[K][-1]+1, virtRange[K][0]:virtRange[K][-1]+1], len(virtRange[K]), tol=1e-8)
           fout.write(' %17.9e  0  0  0  0\n' %( mol.energy_nuc()+energy_core-energyE0))
           fout.close()
-          print "Wrote FCIDUMP_aaav%d file"%(K)
+          print("Wrote FCIDUMP_aaav%d file"%(K))
 
       nocc = ncor+nact
       fout = open('FCIDUMP_aaac','w')
@@ -244,8 +244,8 @@ def writeNEVPTIntegrals(mc, E1, E2, E1eff, aaavsplit, nfro, fully_ic=False, thir
       tools.fcidump.write_hcore(fout, eris_sp['h1eff'][nfro:nocc,nfro:nocc], nocc-nfro, tol=1e-8)
       fout.write(' %17.9e  0  0  0  0\n' %( -dmrge-ecore_aaac))
       fout.close()
-      print "Wrote FCIDUMP_aaac  file"
-      print ""
+      print("Wrote FCIDUMP_aaac  file")
+      print("")
 
     return norb, energyE0
 
@@ -308,9 +308,9 @@ def writeMRLCCIntegrals(mc, E1, E2, nfro, fully_ic=False, third_order=False):
     energyE0 += energy_core
     energyE0 += mc.mol.energy_nuc()
 
-    print "Energy_core = ",energy_core
-    print "Energy      = ", energyE0
-    print ""
+    print("Energy_core = ",energy_core)
+    print("Energy      = ", energyE0)
+    print("")
 
     # offdiagonal warning
     offdiagonal = 0.0
@@ -323,9 +323,9 @@ def writeMRLCCIntegrals(mc, E1, E2, nfro, fully_ic=False, third_order=False):
         if(k != l):
           offdiagonal = max(abs(offdiagonal), abs(eris_sp['h1eff'][k,l] ))
     if (abs(offdiagonal) > 1e-6):
-      print "WARNING: Have to use natural orbitals from CAASCF"
-      print "         offdiagonal elements:", offdiagonal
-      print ""
+      print("WARNING: Have to use natural orbitals from CAASCF")
+      print("         offdiagonal elements:", offdiagonal)
+      print("")
 
     # Write out ingredients to intfolder
     # 2 "C"
@@ -384,11 +384,11 @@ def writeMRLCCIntegrals(mc, E1, E2, nfro, fully_ic=False, third_order=False):
     #                  inout[dom[r]][0]:inout[dom[r]][1],\
     #                  inout[dom[q]][0]:inout[dom[q]][1],\
     #                  inout[dom[s]][0]:inout[dom[s]][1]].transpose(0,2,1,3)
-    #        print 'Output: '+name+' Shape:',test.shape
+    #        print('Output: '+name+' Shape:',test.shape)
     #        numpy.save(intfolder+name, numpy.asfortranarray(test))
 
-    print "Basic ingredients wrote to "+intfolder
-    print ""
+    print("Basic ingredients wrote to "+intfolder)
+    print("")
 
 
     # Write "FCIDUMP_aaav0" and "FCIDUMP_aaac"
@@ -431,12 +431,12 @@ def writeMRLCCIntegrals(mc, E1, E2, nfro, fully_ic=False, third_order=False):
       tools.fcidump.write_hcore(fout, eris_sp['h1eff'][ncor:,ncor:], int1.shape[0]-ncor, tol=1e-8)
       fout.write(' %17.9e  0  0  0  0\n' %( mc.mol.energy_nuc()+energy_core-energyE0))
       fout.close()
-      print "Wrote FCIDUMP_aaav0 file"
+      print("Wrote FCIDUMP_aaav0 file")
 
       eri1cas = ao2mo.outcore.general_iofree(mc.mol, (mo[:,nfro:nocc], mo[:,nfro:nocc], mo[:,nfro:nocc], mo[:,nfro:nocc]), compact=True)
       tools.fcidump.from_integrals("FCIDUMP_aaac", int1[nfro:nocc,nfro:nocc], eri1cas, nocc-nfro, mc.mol.nelectron-2*nfro, nuc=mc.mol.energy_nuc()-energyE0, orbsym = orbsymout[nfro:nocc], tol=1e-8)
-      print "Wrote FCIDUMP_aaac  file"
-      print ""
+      print("Wrote FCIDUMP_aaac  file")
+      print("")
 
     return energyE0, norb
 
@@ -462,7 +462,7 @@ def writeNEVPTIntegralsDF(mc, dm1, dm2, dm1eff, nfro, fully_ic=False):
     #  for n in range(norb):
     #    for p in range(nact):
     #      for q in range(nact):
-    #        print '{:5}{:5}{:5}{:5}{:13.6f}'.format(m,n,p,q,eri_test[m,n,ncor+p,ncor+q])
+    #        print('{:5}{:5}{:5}{:5}{:13.6f}'.format(m,n,p,q,eri_test[m,n,ncor+p,ncor+q]))
     Lpq=Lpq.reshape(-1,norb,norb)
     naux  = Lpq.shape[0]
 
@@ -476,10 +476,10 @@ def writeNEVPTIntegralsDF(mc, dm1, dm2, dm1eff, nfro, fully_ic=False):
     #sym = (iden_coeffs(mo_here[0], mo_here[2]) and
     #       iden_coeffs(mo_here[1], mo_here[3]))
     #Lij = Lkl = None
-    #print 'info:',ijmosym,klmosym,sym
-    #print 'info:',ijslice,klslice,moij.shape
+    #print('info:',ijmosym,klmosym,sym)
+    #print('info:',ijslice,klslice,moij.shape)
     #for eri1 in mc.with_df.loop():
-    #  print 'loop?'
+    #  print('loop?')
     #  Lij = _ao2mo.nr_e2(eri1, moij, ijslice, aosym='s2', mosym=ijmosym, out=Lij)
     #  if sym:
     #    Lkl = Lij
@@ -487,12 +487,12 @@ def writeNEVPTIntegralsDF(mc, dm1, dm2, dm1eff, nfro, fully_ic=False):
     #    Lkl = _ao2mo.nr_e2(eri1, mokl, klslice, aosym='s2', mosym=klmosym, out=Lkl)
     #  lib.dot(Lij.T, Lkl, 1, mo_eri, 1)
     #mo_eri=mo_eri.reshape(norb,norb,norb,norb)
-    #print numpy.allclose(mo_eri,eri_test)
+    #print(numpy.allclose(mo_eri,eri_test))
     ##for m in range(norb):
     ##  for n in range(norb):
     ##    for p in range(nact):
     ##      for q in range(nact):
-    ##        print '{:5}{:5}{:5}{:5}{:13.6f}'.format(m,n,p,q,mo_eri[m,n,ncor+p,ncor+q])
+    ##        print('{:5}{:5}{:5}{:5}{:13.6f}'.format(m,n,p,q,mo_eri[m,n,ncor+p,ncor+q]))
 
 
 
@@ -512,9 +512,9 @@ def writeNEVPTIntegralsDF(mc, dm1, dm2, dm1eff, nfro, fully_ic=False):
     energyE0 += energy_core
     energyE0 += mc.mol.energy_nuc()
 
-    print "Energy_core = ",energy_core
-    print "Energy      = ", energyE0
-    print ""
+    print("Energy_core = ",energy_core)
+    print("Energy      = ", energyE0)
+    print("")
 
 
     # Write out ingredients to intfolder
@@ -531,13 +531,13 @@ def writeNEVPTIntegralsDF(mc, dm1, dm2, dm1eff, nfro, fully_ic=False):
     numpy.save(intfolder+"W:Lae", numpy.asfortranarray(Lpq[:,ncor:nocc, nocc:    ]))
     numpy.save(intfolder+"int1eff",numpy.asfortranarray(int1_eff[nfro:,nfro:]))
 
-    print "Basic ingredients wrote to "+intfolder
-    print ""
+    print("Basic ingredients wrote to "+intfolder)
+    print("")
 
 
     # "fully_ic" isn't ready
     if (not fully_ic):
-        print "Did not think about Density Fitting for uncontracted AAAC and AAAV: do 'fully_ic'"
+        print("Did not think about Density Fitting for uncontracted AAAC and AAAV: do 'fully_ic'")
         exit(0)
 
     return norb, naux, energyE0
@@ -582,9 +582,9 @@ def writeMRLCCIntegralsDF(mc, E1, E2, nfro, fully_ic=False):
     energyE0 += energy_core
     energyE0 += mc.mol.energy_nuc()
 
-    print "Energy_core = ",energy_core
-    print "Energy      = ", energyE0
-    print ""
+    print("Energy_core = ",energy_core)
+    print("Energy      = ", energyE0)
+    print("")
 
 
     # Write out ingredients to intfolder
@@ -603,13 +603,13 @@ def writeMRLCCIntegralsDF(mc, E1, E2, nfro, fully_ic=False):
     numpy.save(intfolder+"int1",   numpy.asfortranarray(int1[nfro:,nfro:]))
     numpy.save(intfolder+"int1eff",numpy.asfortranarray(int1_eff[nfro:,nfro:]))
 
-    print "Basic ingredients wrote to "+intfolder
-    print ""
+    print("Basic ingredients wrote to "+intfolder)
+    print("")
 
 
     # "fully_ic" isn't ready
     if (not fully_ic):
-        print "Did not think about Density Fitting for uncontracted AAAC and AAAV: do 'fully_ic'"
+        print("Did not think about Density Fitting for uncontracted AAAC and AAAV: do 'fully_ic'")
         exit(0)
 
     return energyE0, norb, naux
@@ -627,7 +627,7 @@ def executeMRLCC(nelec, ncor, ncas, nfro, ms2, naux=0, memory=10, fully_ic=False
         methods = ['MRLCC_AAVV']
         domains = ['eeaa']
     totalE = 0.0
-    print "Second-order:"
+    print("Second-order:")
     for method in methods:
         f = open("%s.inp"%(method), 'w')
         if (memory is not None):
@@ -670,16 +670,16 @@ def executeMRLCC(nelec, ncor, ncas, nfro, ms2, naux=0, memory=10, fully_ic=False
             continue
         sys.stdout.flush()
     if (fully_ic):
-        print "Total:             %18.9e"%(totalE)
-        print ""
+        print("Total:             %18.9e"%(totalE))
+        print("")
     if (third_order):
       try:
-        print "Third-order:       %18.9e"%(energy)
-        print ""
+        print("Third-order:       %18.9e"%(energy))
+        print("")
         totalE+=energy
       except ValueError:
-        print "Third-order    --  NA"
-        print ""
+        print("Third-order    --  NA")
+        print("")
     return totalE
 
 
@@ -695,7 +695,7 @@ def executeNEVPT(nelec, ncor, ncas, nfro, ms2, naux=0, memory=10, fully_ic=False
         methods = ['NEVPT2_AAVV']
         domains = ['eeaa']
     totalE = 0.0
-    print "Second-order:"
+    print("Second-order:")
     for method in methods:
         f = open("%s.inp"%(method), 'w')
         if (memory is not None):
@@ -737,16 +737,16 @@ def executeNEVPT(nelec, ncor, ncas, nfro, ms2, naux=0, memory=10, fully_ic=False
             continue
         sys.stdout.flush()
     if (fully_ic):
-        print "Total:             %18.9e"%(totalE)
-        print ""
+        print("Total:             %18.9e"%(totalE))
+        print("")
     if (third_order):
       try:
-        print "Third-order:       %18.9e"%(energy)
-        print ""
+        print("Third-order:       %18.9e"%(energy))
+        print("")
         totalE+=energy
       except ValueError:
-        print "Third-order:       NA"
-        print ""
+        print("Third-order:       NA")
+        print("")
     return totalE
 
 
@@ -761,10 +761,10 @@ def ReadWriteEnergy(outfile,pattern):
   try:
     energy=float(energy)
     if((pattern!='MRLCC3')and(pattern!='NEVPT3')):
-      print "perturber %s --  %18.9e"%(pattern[-4:], energy)
+      print("perturber %s --  %18.9e"%(pattern[-4:], energy))
   except ValueError:
     if((pattern!='MRLCC3')and(pattern!='NEVPT3')):
-      print "perturber %s --  NA"%(pattern[-4:])
+      print("perturber %s --  NA"%(pattern[-4:]))
   return energy
 
 
@@ -1047,7 +1047,7 @@ def writeAAAConfFile(neleca, nelecb, ncor, ncas, norb, DMRGCI, maxM, perturber, 
 #            index += 1
 #
 #    if (norb == -1 or nelec == -1):
-#        print "could not read the norbs or nelec"
+#        print("could not read the norbs or nelec")
 #        exit(0)
 #
 #    int2 = numpy.zeros(shape=(norb, norb, norb, norb), dtype=dt, order='F')
@@ -1116,12 +1116,12 @@ def icmpspt(mc, pttype="NEVPT2", energyE0=0.0, rdmM=0, frozen=0, PTM=1000, PTinc
             have3RDM=False, root=0, nroots=1, verbose=None, AAAVsplit=1,\
             do_dm3=True, do_dm4=False, fully_ic=False, third_order=False, cumulantE4=False, no_handcoded_E3=False):
     sys.stdout.flush()
-    print ""
-    print ""
-    print "--------------------------------------------------"
-    print "                 ICMPSPT CALCULATION              "
-    print "--------------------------------------------------"
-    print ""
+    print("")
+    print("")
+    print("--------------------------------------------------")
+    print("                 ICMPSPT CALCULATION              ")
+    print("--------------------------------------------------")
+    print("")
 
     # Check-up consistency of keywords
     if (do_dm4):
@@ -1129,26 +1129,26 @@ def icmpspt(mc, pttype="NEVPT2", energyE0=0.0, rdmM=0, frozen=0, PTM=1000, PTinc
     elif (do_dm3):
       do_dm4=False
     else:
-      print "WARNING:  Neither do_dm3 nor do_dm4! Turning do_dm3 on."
-      print ""
+      print("WARNING:  Neither do_dm3 nor do_dm4! Turning do_dm3 on.")
+      print("")
       do_dm3=True
     #if (fully_ic and not (do_dm4 or cumulantE4)):
-    #  print "WARNING: Fully IC needs do_dm4 or cumulantE4!"
-    #  print ""
+    #  print("WARNING: Fully IC needs do_dm4 or cumulantE4!")
+    #  print("")
     #  do_dm4=True
     #  do_dm3=False
     if ((third_order)and(not fully_ic)):
-      print "WARNING: Third-order needs Fully IC mode! Turning fully_ic on."
-      print ""
+      print("WARNING: Third-order needs Fully IC mode! Turning fully_ic on.")
+      print("")
       fully_ic=True
     if (pttype != "NEVPT2" and AAAVsplit != 1):
-      print "AAAVsplit only works with CASSCF natural orbitals and NEVPT2"
-      print ""
+      print("AAAVsplit only works with CASSCF natural orbitals and NEVPT2")
+      print("")
       exit(0)
     #if type(mc.fcisolver) is not dmrgci.DMRGCI:
     #  if (mc.fcisolver.fcibase_class is not dmrgci.DMRGCI):
-    #    print "this works with dmrgscf and not regular mcscf"
-    #    print ""
+    #    print("this works with dmrgscf and not regular mcscf")
+    #    print("")
     #    exit(0)
     if (hasattr(mc,'with_df')):
       df=True
@@ -1156,14 +1156,14 @@ def icmpspt(mc, pttype="NEVPT2", energyE0=0.0, rdmM=0, frozen=0, PTM=1000, PTinc
       df=False
 
     # Message
-    print "Perturbation type: %s"%(pttype)
+    print("Perturbation type: %s"%(pttype))
     if (fully_ic):
-      print "With fully internally contracted scheme"
+      print("With fully internally contracted scheme")
     if (third_order):
-      print "With third order correction"
+      print("With third order correction")
     if (df):
-      print "Recognized a Density Fitting run"
-    print ""
+      print("Recognized a Density Fitting run")
+    print("")
 
     # Remove the -1 state
     import os
@@ -1196,7 +1196,7 @@ def icmpspt(mc, pttype="NEVPT2", energyE0=0.0, rdmM=0, frozen=0, PTM=1000, PTinc
       os.system("ln -s "+intfolder+" int")
 
     # RDMs
-    print 'Preparing necessary RDMs'
+    print('Preparing necessary RDMs')
     nelec = mc.nelecas[0]+mc.nelecas[1]
     dm1eff = numpy.zeros(shape=(mc.ncas, mc.ncas)) #this is the state average density which is needed in NEVPT2
     # loop over all states besides the current root
@@ -1213,15 +1213,15 @@ def icmpspt(mc, pttype="NEVPT2", energyE0=0.0, rdmM=0, frozen=0, PTM=1000, PTinc
     # now add the contributaion due to the current root
     if (do_dm3):
       dm3 = mc.fcisolver.make_rdm3(state=root, norb=mc.ncas, nelec=mc.nelecas, dt=float_precision, filetype="notbinary")
-      #print numpy.einsum('ijklmn',dm3)
+      #print(numpy.einsum('ijklmn',dm3))
     elif (do_dm4):
       dm4 = mc.fcisolver.make_rdm4(state=root, norb=mc.ncas, nelec=mc.nelecas, dt=float_precision, filetype="notbinary")
-      #print numpy.einsum('ijklmnop',dm4)
+      #print(numpy.einsum('ijklmnop',dm4))
       trace=numpy.einsum('ijklijkl->',dm4)
       if abs(trace-nelec*(nelec-1)*(nelec-2)*(nelec-3))<0.000001:
-          print '(GOOD) Trace 4RDM: {:5} ={:5}*{:5}*{:5}*{:5}'.format(trace,nelec,nelec-1,nelec-2,nelec-3)
+          print('(GOOD) Trace 4RDM: {:5} ={:5}*{:5}*{:5}*{:5}'.format(trace,nelec,nelec-1,nelec-2,nelec-3))
       else:
-          print '(BAD)  Trace 4RDM: {:5}!={:5}*{:5}*{:5}*{:5}'.format(trace,nelec,nelec-1,nelec-2,nelec-3)
+          print('(BAD)  Trace 4RDM: {:5}!={:5}*{:5}*{:5}*{:5}'.format(trace,nelec,nelec-1,nelec-2,nelec-3))
       # This is coherent with statement about indexes made in "make_rdm4"
       # This is done with SQA in mind
       dm3 = numpy.einsum('ijklmnol', dm4)/(nelec-3)
@@ -1240,21 +1240,21 @@ def icmpspt(mc, pttype="NEVPT2", energyE0=0.0, rdmM=0, frozen=0, PTM=1000, PTinc
     numpy.save(intfolder+"E1.npy", numpy.asfortranarray(dm1))
     trace=numpy.einsum('ijkijk->',dm3)
     if abs(trace-nelec*(nelec-1)*(nelec-2))<0.000001:
-        print '(GOOD) Trace 3RDM: {:5} ={:5}*{:5}*{:5}'.format(trace,nelec,nelec-1,nelec-2)
+        print('(GOOD) Trace 3RDM: {:5} ={:5}*{:5}*{:5}'.format(trace,nelec,nelec-1,nelec-2))
     else:
-        print '(BAD)  Trace 3RDM: {:5}!={:5}*{:5}*{:5}'.format(trace,nelec,nelec-1,nelec-2)
+        print('(BAD)  Trace 3RDM: {:5}!={:5}*{:5}*{:5}'.format(trace,nelec,nelec-1,nelec-2))
     trace=numpy.einsum('ijij->',dm2)
     if abs(trace-nelec*(nelec-1))<0.000001:
-        print '(GOOD) Trace 2RDM: {:5} ={:5}*{:5}'.format(trace,nelec,nelec-1)
+        print('(GOOD) Trace 2RDM: {:5} ={:5}*{:5}'.format(trace,nelec,nelec-1))
     else:
-        print '(BAD)  Trace 2RDM: {:5}!={:5}*{:5}'.format(trace,nelec,nelec-1)
+        print('(BAD)  Trace 2RDM: {:5}!={:5}*{:5}'.format(trace,nelec,nelec-1))
     trace=numpy.einsum('ii->',dm1)
     if abs(trace-nelec)<0.000001:
-        print '(GOOD) Trace 1RDM: {:5} ={:5}'.format(trace,nelec)
+        print('(GOOD) Trace 1RDM: {:5} ={:5}'.format(trace,nelec))
     else:
-        print '(BAD)  Trace 1RDM: {:5}!={:5}'.format(trace,nelec)
+        print('(BAD)  Trace 1RDM: {:5}!={:5}'.format(trace,nelec))
     del dm3
-    print ''
+    print('')
     sys.stdout.flush()
 
     #backup the restartreorder file to -1. this is because responseaaav and responseaaac both overwrite this file
@@ -1305,7 +1305,7 @@ def icmpspt(mc, pttype="NEVPT2", energyE0=0.0, rdmM=0, frozen=0, PTM=1000, PTinc
                   energy = struct.unpack('d', file1.read(8))[0]
                   file1.close()
                   totalE += energy
-                  print "perturber AAAV%i --  %18.9e"%(k, energy)
+                  print("perturber AAAV%i --  %18.9e"%(k, energy))
                   sys.stdout.flush()
 
               if (mc.ncore-frozen != 0):
@@ -1315,16 +1315,16 @@ def icmpspt(mc, pttype="NEVPT2", energyE0=0.0, rdmM=0, frozen=0, PTM=1000, PTinc
                   energy = struct.unpack('d', file1.read(8))[0]
                   file1.close()
                   totalE += energy
-                  print "perturber AAAC --  %18.9e"%(energy)
-              print ""
+                  print("perturber AAAC --  %18.9e"%(energy))
+              print("")
 
           except ValueError:
               print(output)
-          print "Total:             %18.9e"%(totalE)
-          print ""
+          print("Total:             %18.9e"%(totalE))
+          print("")
 
-        print "Total PT       --  %18.9e"%(totalE)
-        print ""
+        print("Total PT       --  %18.9e"%(totalE))
+        print("")
         return totalE
 
     else :
@@ -1361,9 +1361,9 @@ def icmpspt(mc, pttype="NEVPT2", energyE0=0.0, rdmM=0, frozen=0, PTM=1000, PTinc
               energy = struct.unpack('d', file1.read(8))[0]
               file1.close()
               totalE += energy
-              print "perturber AAAV --  %18.9e"%(energy)
+              print("perturber AAAV --  %18.9e"%(energy))
           except ValueError:
-              print "perturber AAAV -- NA"
+              print("perturber AAAV -- NA")
 
           try:
               if (mc.ncore-frozen != 0):
@@ -1373,14 +1373,14 @@ def icmpspt(mc, pttype="NEVPT2", energyE0=0.0, rdmM=0, frozen=0, PTM=1000, PTinc
                   energy = struct.unpack('d', file1.read(8))[0]
                   file1.close()
                   totalE += energy
-                  print "perturber AAAC --  %18.9e"%(energy)
+                  print("perturber AAAC --  %18.9e"%(energy))
           except ValueError:
-              print "perturber AAAC -- NA"
-          print "Total:             %18.9e"%(totalE)
-          print ""
+              print("perturber AAAC -- NA")
+          print("Total:             %18.9e"%(totalE))
+          print("")
 
-        print "Total PT       --  %18.9e"%(totalE)
-        print ""
+        print("Total PT       --  %18.9e"%(totalE))
+        print("")
         return totalE
 
 if __name__ == '__main__':

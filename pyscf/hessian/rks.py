@@ -298,7 +298,7 @@ def hess_elec(hess_mf, mo_energy=None, mo_coeff=None, mo_occ=None,
                 veff2[0] += lib.dot(ao[1].T, aow)
                 veff2[1] += lib.dot(ao[2].T, aow)
                 veff2[2] += lib.dot(ao[3].T, aow)
-                wv = _get_wv(rho, rho1Y, weight, vxc, fxc) * 2
+                wv = get_wv(rho, rho1Y, weight, vxc, fxc) * 2
                 aow = numpy.einsum('npi,np->pi', ao[[1,XX,XY,XZ]], wv)
                 veff2[3] += lib.dot(aow.T, ao[0])
                 aow = numpy.einsum('npi,np->pi', ao[[2,YX,YY,YZ]], wv)
@@ -689,11 +689,11 @@ if __name__ == '__main__':
         e2ref.append(grad1(coord, ptr, (0,1,0), .5e-3))
         e2ref.append(grad1(coord, ptr, (0,0,1), .5e-3))
     e2ref = numpy.asarray(e2ref).reshape(-1,n3)
-    print abs(e2ref).sum()
+    print(abs(e2ref).sum())
     numpy.set_printoptions(2,linewidth=100)
-    print numpy.linalg.norm(e2-e2ref)
+    print(numpy.linalg.norm(e2-e2ref))
     for i in range(n3):
-        print e2ref[i]-e2[i], abs(e2ref[i]-e2[i]).max()
+        print(e2ref[i]-e2[i], abs(e2ref[i]-e2[i]).max())
 
 ## partial derivative for C
 #    e2 = h.hess_elec().transpose(0,2,1,3).reshape(n3,n3)
@@ -712,8 +712,8 @@ if __name__ == '__main__':
 #    mf.kernel()
 #    mol._env[ptr:ptr+3] = coord
 #    g1b = mf.apply(rks_grad.Gradients).grad_elec()
-#    print (g1b-g1a)/inc
-#    print e2[1].reshape(-1,3)
+#    print((g1b-g1a)/inc)
+#    print(e2[1].reshape(-1,3))
 
 ## partial derivative for R
 #    e2 = h.hess_elec().transpose(0,2,1,3).reshape(n3,n3)
@@ -725,8 +725,8 @@ if __name__ == '__main__':
 #    coord = coord.copy()
 #    mol._env[ptr:ptr+3] = coord + numpy.asarray((0,1,0))*inc
 #    g1b = mf.apply(rks_grad.Gradients).grad_elec()
-#    print (g1b-g1a)/inc
-#    print e2[1].reshape(-1,3)
+#    print((g1b-g1a)/inc)
+#    print(e2[1].reshape(-1,3))
 
 #    g1a = mf.apply(rks_grad.Gradients).grad_elec()
 #    ia = 1
@@ -736,8 +736,8 @@ if __name__ == '__main__':
 #    coord = coord.copy()
 #    mol._env[ptr:ptr+3] = coord + numpy.asarray((0,1,0))*inc
 #    g1b = mf.apply(rks_grad.Gradients).grad_elec()
-#    print (g1b-g1a)/inc
-#    print e2[4].reshape(-1,3)
+#    print((g1b-g1a)/inc)
+#    print(e2[4].reshape(-1,3))
 
 # h^1
 #    e2 = h.hess_elec()
@@ -753,4 +753,4 @@ if __name__ == '__main__':
 #    mf._eri = None
 #    g1b = rks_grad.get_veff(rks_grad.Gradients(mf), mol)
 #    #g1b = mf.get_veff(mol, dm0)
-#    print (g1b-g1a)/inc
+#    print((g1b-g1a)/inc)

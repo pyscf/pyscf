@@ -306,4 +306,4 @@ if __name__ == '__main__':
     eri = pyscf.ao2mo.restore(1, eri, nmo).reshape((nmo,)*4)
     e1 = numpy.einsum('pq,pq', h1, dm1)
     e2 = numpy.einsum('pqrs,pqrs', eri, dm2) * .5
-    print e1+e2+mol.energy_nuc() - rhf.e_tot - ecc
+    print(e1+e2+mol.energy_nuc() - rhf.e_tot - ecc)

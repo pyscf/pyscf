@@ -68,7 +68,7 @@ def gto_norm(l, expnt):
 
     Examples:
 
-    >>> print gto_norm(0, 1)
+    >>> print(gto_norm(0, 1))
     2.5264751109842591
     '''
     if l >= 0:
@@ -1176,11 +1176,11 @@ def search_ao_label(mol, label):
     Examples:
 
     >>> mol = gto.M(atom='H 0 0 0; Cl 0 0 1', basis='ccpvtz')
-    >>> mol.parse_aolabel('Cl.*p')
+    >>> mol.search_ao_label('Cl.*p')
     [19 20 21 22 23 24 25 26 27 28 29 30]
-    >>> mol.parse_aolabel('Cl 2p')
+    >>> mol.search_ao_label('Cl 2p')
     [19 20 21]
-    >>> mol.parse_aolabel(['Cl.*d', 'Cl 4p'])
+    >>> mol.search_ao_label(['Cl.*d', 'Cl 4p'])
     [25 26 27 31 32 33 34 35 36 37 38 39 40]
     '''
     return _aolabels2baslst(mol, label)
@@ -1636,8 +1636,13 @@ class Mole(lib.StreamObject):
 
     @property
     def nelec(self):
-        nalpha = (self.nelectron+self.spin)//2
+        ne = self.nelectron
+        nalpha = (ne + self.spin) // 2
         nbeta = nalpha - self.spin
+        if nalpha + nbeta != ne:
+            raise RuntimeError('Electron number %d and spin %d are not consistent\n'
+                               'Note mol.spin = 2S = Nalpha - Nbeta, not 2S+1' %
+                               (ne, self.spin))
         return nalpha, nbeta
     @property
     def nelectron(self):
@@ -1803,10 +1808,10 @@ class Mole(lib.StreamObject):
                 self.make_env(self._atom, self._basis, self._env, self.nucmod)
         self._atm, self._ecpbas, self._env = \
                 self.make_ecp_env(self._atm, self._ecp, self._env)
-        if (self.nelectron+self.spin) % 2 != 0:
-            raise RuntimeError('Electron number %d and spin %d are not consistent\n'
-                               'Note spin = 2S = Nalpha-Nbeta, not the definition 2S+1' %
-                               (self.nelectron, self.spin))
+
+        # Access self.nelec in which the code checks whether the spin and
+        # number of electrons are consistent.
+        self.nelec
 
         if self.symmetry:
             from pyscf import symm
@@ -2676,7 +2681,7 @@ def from_zmatrix(atomstr):
     H 1 2.67247631453057
     H 1 4.22555607338457 2 50.7684795164077
     H 1 2.90305235726773 2 79.3904651036893 3 6.20854462618583"""
-    >>> for x in zmat2cart(a): print x
+    >>> for x in zmat2cart(a): print(x)
     ['H', array([ 0.,  0.,  0.])]
     ['H', array([ 2.67247631,  0.        ,  0.        ])]
     ['H', array([ 2.67247631,  0.        ,  3.27310166])]
@@ -2731,7 +2736,7 @@ def cart2zmat(coord):
     (0.000000000000,  0.000000000000, -1.889726124565),
     (1.889726124565, -1.889726124565,  0.000000000000),
     (1.889726124565,  0.000000000000,  1.133835674739)))
-    >>> print cart2zmat(c)
+    >>> print(cart2zmat(c))
     1
     1 2.67247631453057
     1 4.22555607338457 2 50.7684795164077

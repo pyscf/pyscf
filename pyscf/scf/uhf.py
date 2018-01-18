@@ -369,7 +369,7 @@ def spin_square(mo, s=1):
     s = numpy.sqrt(ss+.25) - .5
     return ss, s*2+1
 
-def analyze(mf, verbose=logger.DEBUG, **kwargs):
+def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=True, **kwargs):
     '''Analyze the given SCF object:  print orbital energies, occupancies;
     print orbital coefficients; Mulliken population analysis; Dipole moment
     '''
@@ -389,19 +389,29 @@ def analyze(mf, verbose=logger.DEBUG, **kwargs):
 
     ovlp_ao = mf.get_ovlp()
     if log.verbose >= logger.DEBUG:
-        log.debug(' ** MO coefficients (expansion on meta-Lowdin AOs) for alpha spin **')
         label = mf.mol.ao_labels()
-        orth_coeff = orth.orth_ao(mf.mol, 'meta_lowdin', s=ovlp_ao)
-        c_inv = numpy.dot(orth_coeff.T, ovlp_ao)
-        dump_mat.dump_rec(mf.stdout, c_inv.dot(mo_coeff[0]), label, start=1,
-                          **kwargs)
-        log.debug(' ** MO coefficients (expansion on meta-Lowdin AOs) for beta spin **')
-        dump_mat.dump_rec(mf.stdout, c_inv.dot(mo_coeff[1]), label, start=1,
-                          **kwargs)
+        if with_meta_lowdin:
+            log.debug(' ** MO coefficients (expansion on meta-Lowdin AOs) for alpha spin **')
+            orth_coeff = orth.orth_ao(mf.mol, 'meta_lowdin', s=ovlp_ao)
+            c_inv = numpy.dot(orth_coeff.T, ovlp_ao)
+            dump_mat.dump_rec(mf.stdout, c_inv.dot(mo_coeff[0]), label, start=1,
+                              **kwargs)
+            log.debug(' ** MO coefficients (expansion on meta-Lowdin AOs) for beta spin **')
+            dump_mat.dump_rec(mf.stdout, c_inv.dot(mo_coeff[1]), label, start=1,
+                              **kwargs)
+        else:
+            log.debug(' ** MO coefficients (expansion on AOs) for alpha spin **')
+            dump_mat.dump_rec(mf.stdout, mo_coeff[0], label, start=1, **kwargs)
+            log.debug(' ** MO coefficients (expansion on AOs) for beta spin **')
+            dump_mat.dump_rec(mf.stdout, mo_coeff[1], label, start=1, **kwargs)
 
     dm = mf.make_rdm1(mo_coeff, mo_occ)
-    return (mf.mulliken_meta(mf.mol, dm, s=ovlp_ao, verbose=log),
-            mf.dip_moment(mf.mol, dm, verbose=log))
+    if with_meta_lowdin:
+        return (mf.mulliken_meta(mf.mol, dm, s=ovlp_ao, verbose=log),
+                mf.dip_moment(mf.mol, dm, verbose=log))
+    else:
+        return (mf.mulliken_pop(mf.mol, dm, s=ovlp_ao, verbose=log),
+                mf.dip_moment(mf.mol, dm, verbose=log))
 
 def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
     '''Mulliken population analysis
@@ -716,9 +726,9 @@ class UHF(hf.SCF):
             vhf = _makevhf(vj, vk) + numpy.asarray(vhf_last)
         return vhf
 
-    def analyze(self, verbose=None, **kwargs):
+    def analyze(self, verbose=None, with_meta_lowdin=True, **kwargs):
         if verbose is None: verbose = self.verbose
-        return analyze(self, verbose, **kwargs)
+        return analyze(self, verbose, with_meta_lowdin, **kwargs)
 
     def mulliken_pop(self, mol=None, dm=None, s=None, verbose=logger.DEBUG):
         if mol is None: mol = self.mol
@@ -775,6 +785,26 @@ class UHF(hf.SCF):
         return self
 
     def stability(self, internal=True, external=False, verbose=None):
+        '''
+        Stability analysis for RHF/RKS method.
+
+        See also pyscf.scf.stability.uhf_stability function.
+
+        Args:
+            mf : UHF or UKS object
+
+        Kwargs:
+            internal : bool
+                Internal stability, within the UHF space.
+            external : bool
+                External stability. Including the UHF -> GHF and real -> complex
+                stability analysis.
+
+        Returns:
+            New orbitals that are more close to the stable condition.  The return
+            value includes two set of orbitals.  The first corresponds to the
+            internal stablity and the second corresponds to the external stability.
+        '''
         from pyscf.scf.stability import uhf_stability
         return uhf_stability(self, internal, external, verbose)
 

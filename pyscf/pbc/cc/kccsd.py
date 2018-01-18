@@ -8,12 +8,12 @@ import time
 import numpy
 from functools import reduce
 
-import pyscf.pbc.tools.pbc as tools
 from pyscf import lib
 from pyscf.lib import logger
 import pyscf.cc
 import pyscf.cc.ccsd
 from pyscf.pbc.cc import kintermediates as imdk
+from pyscf.pbc.lib import kpts_helper
 
 #
 #FIXME: When linear dependence is found in KHF and handled by function
@@ -122,7 +122,7 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     # Get the momentum conservation array
     # Note: chemist's notation for momentum conserving t2(ki,kj,ka,kb), even though
     # integrals are in physics notation
-    kconserv = tools.get_kconserv(cc._scf.cell, cc.kpts)
+    kconserv = kpts_helper.get_kconserv(cc._scf.cell, cc.kpts)
 
     eris_ovvo = numpy.zeros(shape=(nkpts,nkpts,nkpts,nocc,nvir,nvir,nocc), dtype=t2.dtype)
     eris_oovo = numpy.zeros(shape=(nkpts,nkpts,nkpts,nocc,nocc,nvir,nocc), dtype=t2.dtype)
@@ -232,7 +232,7 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
         t1new[ki] /= eia[ki]
 
     eijab = numpy.zeros(shape=t2new.shape, dtype=t2new.dtype)
-    kconserv = tools.get_kconserv(cc._scf.cell, cc.kpts)
+    kconserv = kpts_helper.get_kconserv(cc._scf.cell, cc.kpts)
     for ki in range(nkpts):
         for kj in range(nkpts):
             for ka in range(nkpts):
@@ -349,7 +349,7 @@ class CCSD(pyscf.cc.ccsd.CCSD):
         eia = numpy.zeros((nocc,nvir))
         eijab = numpy.zeros((nocc,nocc,nvir,nvir))
 
-        kconserv = tools.get_kconserv(self._scf.cell,self.kpts)
+        kconserv = kpts_helper.get_kconserv(self._scf.cell,self.kpts)
         for ki in range(nkpts):
           for kj in range(nkpts):
             for ka in range(nkpts):
@@ -464,7 +464,7 @@ class _ERIS:
         if (method == 'incore' and cc._scf._eri is None and
             (mem_incore+mem_now < cc.max_memory) or cc.mol.incore_anyway):
 
-            kconserv = tools.get_kconserv(cc._scf.cell,cc.kpts)
+            kconserv = kpts_helper.get_kconserv(cc._scf.cell,cc.kpts)
 
             eri = numpy.zeros((nkpts,nkpts,nkpts,nmo,nmo,nmo,nmo), dtype=numpy.complex128)
             fao2mo = cc._scf.with_df.ao2mo
@@ -493,10 +493,10 @@ class _ERIS:
                                         rspq = eri[kr,ks,kp,r,s,p,q]
                                         diff = numpy.linalg.norm(pqrs - rspq).real
                                         if diff > 1e-5:
-                                            print "** Warning: ERI diff at ",
-                                            print "kp,kq,kr,ks,p,q,r,s =", kp, kq, kr, ks, p, q, r, s
+                                            print("** Warning: ERI diff at "
+                                                  "kp,kq,kr,ks,p,q,r,s =", kp, kq, kr, ks, p, q, r, s)
                                         maxdiff = max(maxdiff,diff)
-            print "Max difference in (pq|rs) - (rs|pq) = %.15g" % maxdiff
+            print("Max difference in (pq|rs) - (rs|pq) = %.15g" % maxdiff)
             #print "ERI ="
             #print eri
 
@@ -526,7 +526,7 @@ class _ERIS:
 
 
 def check_antisymm_12( cc, kpts, integrals ):
-    kconserv = tools.get_kconserv(cc._scf.cell,cc.kpts)
+    kconserv = kpts_helper.get_kconserv(cc._scf.cell,cc.kpts)
     nkpts = len(kpts)
     diff = 0.0
     for kp in range(nkpts):
@@ -540,12 +540,12 @@ def check_antisymm_12( cc, kpts, integrals ):
                                 pqrs = integrals[kp,kq,kr,p,q,r,s]
                                 qprs = integrals[kq,kp,kr,q,p,r,s]
                                 cdiff = numpy.linalg.norm(pqrs+qprs).real
-                                print "AS diff = %.15g" % cdiff, pqrs, qprs, kp, kq, kr, ks, p, q, r, s
+                                print("AS diff = %.15g" % cdiff, pqrs, qprs, kp, kq, kr, ks, p, q, r, s)
                                 diff = max(diff,cdiff)
-    print "antisymmetrization : max diff = %.15g" % diff
+    print("antisymmetrization : max diff = %.15g" % diff)
 
 def check_antisymm_34( cc, kpts, integrals ):
-    kconserv = tools.get_kconserv(cc._scf.cell,cc.kpts)
+    kconserv = kpts_helper.get_kconserv(cc._scf.cell,cc.kpts)
     nkpts = len(kpts)
     diff = 0.0
     for kp in range(nkpts):
@@ -559,7 +559,7 @@ def check_antisymm_34( cc, kpts, integrals ):
                                 pqrs = integrals[kp,kq,kr,p,q,r,s]
                                 pqsr = integrals[kp,kq,ks,p,q,s,r]
                                 cdiff = numpy.linalg.norm(pqrs+pqsr).real
-                                print "AS diff = %.15g" % cdiff, pqrs, pqsr, kp, kq, kr, ks, p, q, r, s
+                                print("AS diff = %.15g" % cdiff, pqrs, pqsr, kp, kq, kr, ks, p, q, r, s)
                                 diff = max(diff,cdiff)
-    print "antisymmetrization : max diff = %.15g" % diff
+    print("antisymmetrization : max diff = %.15g" % diff)
 

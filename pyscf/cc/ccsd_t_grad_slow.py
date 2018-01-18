@@ -259,7 +259,7 @@ if __name__ == '__main__':
     ecc, t1, t2 = mycc.kernel()
     eris = mycc.ao2mo()
     e3ref = ccsd_t.kernel(mycc, eris, t1, t2)
-    print ehf+ecc+e3ref
+    print(ehf+ecc+e3ref)
     eris = mycc.ao2mo(mf.mo_coeff)
     conv, l1, l2 = ccsd_t_lambda.kernel(mycc, eris, t1, t2)
     g1 = kernel(mycc, t1, t2, l1, l2, eris=eris, mf_grad=grad.RHF(mf))
@@ -289,7 +289,7 @@ H          0.96345360     1.30488291    -0.10782263
     ecc, t1, t2 = mycc.kernel()
     eris = mycc.ao2mo()
     e3ref = ccsd_t.kernel(mycc, eris, t1, t2)
-    print ehf0+ecc+e3ref
+    print(ehf0+ecc+e3ref)
     eris = mycc.ao2mo(mf.mo_coeff)
     conv, l1, l2 = ccsd_t_lambda.kernel(mycc, eris, t1, t2)
     g1 = kernel(mycc, t1, t2, l1, l2, eris=eris, mf_grad=grad.RHF(mf))

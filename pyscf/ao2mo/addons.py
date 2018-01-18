@@ -16,7 +16,7 @@ class load(object):
 
     Usage:
         with load(erifile) as eri:
-            print eri.shape
+            print(eri.shape)
     '''
     def __init__(self, eri, dataname='eri_mo'):
         self.eri = eri
@@ -150,7 +150,7 @@ def _call_restore(origsym, targetsym, eri, eri1, norb, tao=None):
 
 def _stand_sym_code(sym):
     if isinstance(sym, int):
-        return '%d' % sym
+        return str(sym)
     elif 's' == sym[0] or 'a' == sym[0]:
         return sym[1:]
     else:

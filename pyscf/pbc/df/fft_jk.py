@@ -12,7 +12,7 @@ from pyscf import lib
 from pyscf.pbc import tools
 from pyscf.pbc.dft import numint
 from pyscf.pbc.df.df_jk import _format_dms, _format_kpts_band, _format_jks
-from pyscf.pbc.lib.kpt_misc import is_zero, gamma_point
+from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point
 
 
 def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None):
@@ -122,8 +122,10 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
                     for k, occ in enumerate(mo_occ)]
         ao2_kpts = [np.dot(mo_coeff[k].T, ao) for k, ao in enumerate(ao2_kpts)]
 
-    max_memory = mydf.max_memory - lib.current_memory()[0]
-    blksize = int(min(nao, max_memory*1e6/16/2/ngs/nao+1))
+    mem_now = lib.current_memory()[0]
+    max_memory = mydf.max_memory - mem_now
+    blksize = int(min(nao, max(1, (max_memory-mem_now)*1e6/16/4/ngs/nao)))
+    lib.logger.debug1(mydf, 'max_memory %s  blksize %d', max_memory, blksize)
     ao1_dtype = np.result_type(*ao1_kpts)
     ao2_dtype = np.result_type(*ao2_kpts)
     vR_dm = np.empty((nset,nao,ngs), dtype=vk_kpts.dtype)
@@ -150,6 +152,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
             for p0, p1 in lib.prange(0, nao, blksize):
                 rho1 = np.einsum('ig,jg->ijg', ao1T[p0:p1].conj()*expmikr, ao2T)
                 vG = tools.fft(rho1.reshape(-1,ngs), gs)
+                rho1 = None
                 vG *= coulG
                 vR = tools.ifft(vG, gs).reshape(p1-p0,-1,ngs)
                 vG = None

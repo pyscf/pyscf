@@ -141,4 +141,4 @@ if __name__ == '__main__':
     cell.output = '/dev/null'
     cell.build()
     mf = KRKS(cell, cell.make_kpts([2,1,1]))
-    print mf.kernel()
+    print(mf.kernel())

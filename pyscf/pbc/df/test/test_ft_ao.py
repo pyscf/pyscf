@@ -113,10 +113,10 @@ class KnowValues(unittest.TestCase):
                               gxyz=gxyz, Gvbase=Gvbase)
         self.assertAlmostEqual(finger(dat), 1.5666516306798806+1.953555017583245j, 9)
         aoR = pdft.numint.eval_ao(cell1, coords)
-        ngs, nao = aoR.shape
-        ref = numpy.asarray([tools.fft(aoR[:,i].conj()*aoR[:,j], cell1.gs)
-                             for i in range(nao) for j in range(nao)])
-        ref = ref.reshape(nao,nao,-1).transpose(2,0,1) * (cell1.vol/ngs)
+        ngrids, nao = aoR.shape
+        aoaoR = numpy.einsum('pi,pj->ijp', aoR, aoR)
+        ref = tools.fft(aoaoR.reshape(nao*nao,-1), cell1.gs)
+        ref = ref.reshape(nao,nao,-1).transpose(2,0,1) * (cell1.vol/ngrids)
         self.assertAlmostEqual(numpy.linalg.norm(ref[:,0,0]-dat[:,0,0])    , 0, 7)
         self.assertAlmostEqual(numpy.linalg.norm(ref[:,1,1]-dat[:,1,1])    , 0, 7)
         self.assertAlmostEqual(numpy.linalg.norm(ref[:,2:,2:]-dat[:,2:,2:]), 0, 7)
@@ -126,6 +126,33 @@ class KnowValues(unittest.TestCase):
         ref = dat[:,idx[0],idx[1]]
         dat = ft_ao.ft_aopair(cell1, cell1.Gv, aosym='s2')
         self.assertAlmostEqual(abs(dat-ref).sum(), 0, 9)
+
+    def test_ft_aoao_pdotp(self):
+        coords = pdft.gen_grid.gen_uniform_grids(cell1)
+        Gv, Gvbase, kws = cell1.get_Gv_weights(cell1.gs)
+        dat = ft_ao.ft_aopair(cell1, cell1.Gv, aosym='s1', intor='GTO_ft_pdotp_sph')
+        self.assertAlmostEqual(finger(dat), 5.7858606710458078-8.654809509773056j, 9)
+        aoR = pdft.numint.eval_ao(cell1, coords, deriv=1)
+        ngrids, nao = aoR.shape[1:]
+        aoaoR = numpy.einsum('xpi,xpj->ijp', aoR[1:4], aoR[1:4])
+        ref = tools.fft(aoaoR.reshape(nao*nao,-1), cell1.gs)
+        ref = ref.reshape(nao,nao,-1).transpose(2,0,1) * (cell1.vol/ngrids)
+        self.assertAlmostEqual(abs(ref-dat).max(), 0, 7)
+
+    def test_ft_aoao_pxp(self):
+        coords = pdft.gen_grid.gen_uniform_grids(cell1)
+        Gv, Gvbase, kws = cell1.get_Gv_weights(cell1.gs)
+        dat = ft_ao.ft_aopair(cell1, cell1.Gv, aosym='s1', intor='GTO_ft_pxp_sph', comp=3)
+        self.assertAlmostEqual(finger(dat), (6.4124798727215779-10.673712733378771j), 9)
+        aoR = pdft.numint.eval_ao(cell1, coords, deriv=1)
+        ngrids, nao = aoR.shape[1:]
+        aox, aoy, aoz = aoR[1:]
+        aoaoR =(numpy.einsum('pi,pj->ijp', aoy, aoz) - numpy.einsum('pi,pj->ijp', aoz, aoy),
+                numpy.einsum('pi,pj->ijp', aoz, aox) - numpy.einsum('pi,pj->ijp', aox, aoz),
+                numpy.einsum('pi,pj->ijp', aox, aoy) - numpy.einsum('pi,pj->ijp', aoy, aox))
+        ref = tools.fft(numpy.array(aoaoR).reshape(3*nao*nao,-1), cell1.gs)
+        ref = ref.reshape(3,nao,nao,-1).transpose(0,3,1,2) * (cell1.vol/ngrids)
+        self.assertAlmostEqual(abs(ref-dat).max(), 0, 7)
 
     def test_ft_aoao_with_kpts(self):
         numpy.random.seed(1)

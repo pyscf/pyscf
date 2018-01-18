@@ -6,15 +6,34 @@ PySCF 1.5 alpha (2018-03-??)
   - range-separated hybrid feature for RKS and UKS
 
 
-PySCF 1.4.2 (201?-?-?)
-----------------------
+PySCF 1.4.3 (2018-01-17)
+-----------------------
+* Improved
+  - Assert convergence in geometry optimization
+  - Initial guess in SCF PES scanning
+  - Memory usage for generating becke-grids in DFT
+* Bugfix
+  - XC parser to support the scaled compound functional
+  - In the second order SCF algorithm, removing level_shift
+  - k-point RCCSD for non-canonical HF reference
+  - basis contraction in ECP integrals
+
+
+PySCF 1.4.2 (2017-12-06)
+------------------------
+* Added
+  - Frank Jensen, Polarization consistent basis sets
+* Improved
+  - Memory usage of pbc KHF calculation when HF exchange is computed with FFTDF
 * Bugfix
   - pyberny interface
   - PBC GDF initialization for hybrid functional
+  - guess of wfn symmetry for given fci wfn
+  - Entropy of Gaussian smearing
 
 
 PySCF 1.4.1 (2017-11-12)
-----------------------
+------------------------
 * Bugfix
   - meta-GGA functional detection code in XC parser
   - Orbital symmetry label in mcscf initial guess projection

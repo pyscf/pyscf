@@ -562,6 +562,18 @@ class KnowValues(unittest.TestCase):
         ss = fci.spin_op.spin_square0(ci0, norb, nelec)
         self.assertAlmostEqual(ss[0], 6, 9)
 
+        numpy.random.seed(1)
+        u,w,v = numpy.linalg.svd(numpy.random.random((norb,6)))
+        u = u[:,:6]
+        h1a = h1[:6,:6]
+        h1b = reduce(numpy.dot, (v.T, h1a, v))
+        h2aa = ao2mo.restore(1, h2, norb)[:6,:6,:6,:6]
+        h2ab = lib.einsum('klpq,pi,qj->klij', h2aa, v, v)
+        h2bb = lib.einsum('pqkl,pi,qj->ijkl', h2ab, v, v)
+        e1, ci1 = fci.direct_uhf.kernel((h1a,h1b), (h2aa,h2ab,h2bb), 6, (3,2))
+        ss = fci.spin_op.spin_square(ci1, 6, (3,2), mo_coeff=(numpy.eye(6),v))[0]
+        self.assertAlmostEqual(ss, 3.75, 8)
+
     def test_contract_ss(self):
         self.assertAlmostEqual(e0, -25.4538751043, 9)
         nelec = (6,4)

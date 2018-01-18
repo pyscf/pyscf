@@ -100,8 +100,14 @@ def smearing_(mf, sigma=None, method='fermi'):
         res = scipy.optimize.minimize(nelec_cost_fn, fermi, method='Powell')
         mu = res.x
         mo_occs = f = f_occ(mu, mo_es, sigma)
-        f = f[(f>0) & (f<1)]
-        mf.entropy = -(f*numpy.log(f) + (1-f)*numpy.log(1-f)).sum() / nkpts
+
+        # See https://www.vasp.at/vasp-workshop/slides/k-points.pdf
+        if mf.smearing_method.lower() == 'fermi':
+            f = f[(f>0) & (f<1)]
+            mf.entropy = -(f*numpy.log(f) + (1-f)*numpy.log(1-f)).sum() / nkpts
+        else:
+            mf.entropy = (numpy.exp(-((mo_es-mu)/mf.sigma)**2).sum()
+                          / (2*numpy.sqrt(numpy.pi)) / nkpts)
         if not is_uhf:
             mo_occs *= 2
             mf.entropy *= 2

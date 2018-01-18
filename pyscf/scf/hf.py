@@ -171,7 +171,7 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         fock = mf.get_fock(h1e, s1e, vhf, dm)
         norm_gorb = numpy.linalg.norm(mf.get_grad(mo_coeff, mo_occ, fock))
         norm_ddm = numpy.linalg.norm(dm-dm_last)
-        scf_conv = (abs(e_tot-last_hf_e) < conv_tol*10 and
+        scf_conv = (abs(e_tot-last_hf_e) < conv_tol*10 or
                     norm_gorb < conv_tol_grad*3)
         logger.info(mf, 'Extra cycle  E= %.15g  delta_E= %4.3g  |g|= %4.3g  |ddm|= %4.3g',
                     e_tot, e_tot-last_hf_e, norm_gorb, norm_ddm)
@@ -276,39 +276,58 @@ def init_guess_by_minao(mol):
         stdsymb = gto.mole._std_symbol(symb)
         basis_add = gto.basis.load('ano', stdsymb)
         occ = []
-        basis_new = []
+        basis_ano = []
 # coreshl defines the core shells to be removed in the initial guess
         coreshl = gto.ecp.core_configuration(nelec_ecp)
         #coreshl = (0,0,0,0)  # it keeps all core electrons in the initial guess
         for l in range(4):
-            ndocc, nfrac = atom_hf.frac_occ(stdsymb, l)
+            ndocc, frac = atom_hf.frac_occ(stdsymb, l)
             if coreshl[l] > 0:
                 occ.extend([0]*coreshl[l]*(2*l+1))
             if ndocc > coreshl[l]:
                 occ.extend([2]*(ndocc-coreshl[l])*(2*l+1))
-            if nfrac > 1e-15:
-                occ.extend([nfrac]*(2*l+1))
+            if frac > 1e-15:
+                occ.extend([frac]*(2*l+1))
                 ndocc += 1
             if ndocc > 0:
-                basis_new.append([l] + [b[:ndocc+1] for b in basis_add[l][1:]])
+                basis_ano.append([l] + [b[:ndocc+1] for b in basis_add[l][1:]])
 
         if nelec_ecp > 0:
             occ4ecp = []
             basis4ecp = []
+            nelec_valence_left = gto.mole._charge(stdsymb) - nelec_ecp
             for l in range(4):
-                ndocc, nfrac = atom_hf.frac_occ(stdsymb, l)
+                if nelec_valence_left <= 0:
+                    break
+                ndocc, frac = atom_hf.frac_occ(stdsymb, l)
                 assert(ndocc >= coreshl[l])
-                ndocc -= coreshl[l]
-                occ4ecp.extend([2]*(ndocc*(2*l+1)))
-                if nfrac > 1e-15:
-                    occ4ecp.extend([nfrac]*(2*l+1))
-                    ndocc += 1
+
+                n_valenc_shell = ndocc - coreshl[l]
+                l_occ = [2] * (n_valenc_shell*(2*l+1))
+                if frac > 1e-15:
+                    l_occ.extend([frac] * (2*l+1))
+                    n_valenc_shell += 1
+
+                shell_found = 0
                 for bas in mol._basis[symb]:
-                    if ndocc <= 0:
+                    if shell_found >= n_valenc_shell:
                         break
                     if bas[0] == l:
-                        basis4ecp.append([l] + [b[:ndocc+1] for b in bas[1:]])
-                        ndocc -= len(bas[1]) - 1  # first column of bas[1] is exp
+                        off = n_valenc_shell - shell_found
+                        # b[:off+1] because the first column of bas[1] is exp
+                        basis4ecp.append([l] + [b[:off+1] for b in bas[1:]])
+                        shell_found += len(bas[1]) - 1
+
+                nelec_valence_left -= int(sum(l_occ[:shell_found*(2*l+1)]))
+                occ4ecp.extend(l_occ)
+
+            if nelec_valence_left > 0:
+                logger.debug(mol, 'Characters of %d valence electrons are '
+                             'not identified in the minao initial guess.\n'
+                             'Electron density of valence ANO for %s will '
+                             'be used.', nelec_valence_left, symb)
+                return occ, basis_ano
+
 # Compared to ANO valence basis, to check whether the ECP basis set has
 # reasonable AO-character contraction.  The ANO valence AO should have
 # significant overlap to ECP basis if the ECP basis has AO-character.
@@ -316,11 +335,14 @@ def init_guess_by_minao(mol):
             atm2 = gto.Mole()
             atom = [[symb, (0.,0.,0.)]]
             atm1._atm, atm1._bas, atm1._env = atm1.make_env(atom, {symb:basis4ecp}, [])
-            atm2._atm, atm2._bas, atm2._env = atm2.make_env(atom, {symb:basis_new}, [])
+            atm2._atm, atm2._bas, atm2._env = atm2.make_env(atom, {symb:basis_ano}, [])
             s12 = gto.intor_cross('int1e_ovlp', atm1, atm2)[:,numpy.array(occ)>0]
             if abs(numpy.linalg.det(s12)) > .1:
-                occ, basis_new = occ4ecp, basis4ecp
-        return occ, basis_new
+                occ, basis_ano = occ4ecp, basis4ecp
+            else:
+                logger.debug(mol, 'Density of valence part of ANO basis '
+                             'will be used as initial guess for %s', symb)
+        return occ, basis_ano
 
     atmlst = set([mol.atom_symbol(ia) for ia in range(mol.natm)])
 
@@ -733,7 +755,7 @@ def get_grad(mo_coeff, mo_occ, fock_ao):
     return g.ravel()
 
 
-def analyze(mf, verbose=logger.DEBUG, **kwargs):
+def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=True, **kwargs):
     '''Analyze the given SCF object:  print orbital energies, occupancies;
     print orbital coefficients; Mulliken population analysis; Diople moment.
     '''
@@ -750,14 +772,22 @@ def analyze(mf, verbose=logger.DEBUG, **kwargs):
 
     ovlp_ao = mf.get_ovlp()
     if verbose >= logger.DEBUG:
-        log.debug(' ** MO coefficients (expansion on meta-Lowdin AOs) **')
         label = mf.mol.ao_labels()
-        orth_coeff = orth.orth_ao(mf.mol, 'meta_lowdin', s=ovlp_ao)
-        c = reduce(numpy.dot, (orth_coeff.T, ovlp_ao, mo_coeff))
+        if with_meta_lowdin:
+            log.debug(' ** MO coefficients (expansion on meta-Lowdin AOs) **')
+            orth_coeff = orth.orth_ao(mf.mol, 'meta_lowdin', s=ovlp_ao)
+            c = reduce(numpy.dot, (orth_coeff.T, ovlp_ao, mo_coeff))
+        else:
+            log.debug(' ** MO coefficients (expansion on AOs) **')
+            c = mo_coeff
         dump_mat.dump_rec(mf.stdout, c, label, start=1, **kwargs)
     dm = mf.make_rdm1(mo_coeff, mo_occ)
-    return (mf.mulliken_meta(mf.mol, dm, s=ovlp_ao, verbose=log),
-            mf.dip_moment(mf.mol, dm, verbose=log))
+    if with_meta_lowdin:
+        return (mf.mulliken_meta(mf.mol, dm, s=ovlp_ao, verbose=log),
+                mf.dip_moment(mf.mol, dm, verbose=log))
+    else:
+        return (mf.mulliken_pop(mf.mol, dm, s=ovlp_ao, verbose=log),
+                mf.dip_moment(mf.mol, dm, verbose=log))
 
 def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
     r'''Mulliken population analysis
@@ -1004,8 +1034,9 @@ def as_scanner(mf):
 
             if self.mo_coeff is None:
                 dm0 = None
-            elif mol.natm > 0:
-                dm0 = self.from_chk(self.chkfile)
+#            elif mol.natm > 0:
+# Project wfn from another geometry seems providing a bad initial guess
+#                dm0 = self.from_chk(self.chkfile)
             else:
                 dm0 = self.make_rdm1()
             e_tot = self.kernel(dm0=dm0)
@@ -1365,9 +1396,9 @@ class SCF(lib.StreamObject):
             return vj - vk * .5
 
     @lib.with_doc(analyze.__doc__)
-    def analyze(self, verbose=None, **kwargs):
+    def analyze(self, verbose=None, with_meta_lowdin=True, **kwargs):
         if verbose is None: verbose = self.verbose
-        return analyze(self, verbose, **kwargs)
+        return analyze(self, verbose, with_meta_lowdin, **kwargs)
 
     @lib.with_doc(mulliken_pop.__doc__)
     def mulliken_pop(self, mol=None, dm=None, s=None, verbose=logger.DEBUG):
@@ -1496,6 +1527,23 @@ class RHF(SCF):
         return self
 
     def stability(self, internal=True, external=False, verbose=None):
+        '''
+        RHF/RKS stability analysis.
+
+        See also pyscf.scf.stability.rhf_stability function.
+
+        Kwargs:
+            internal : bool
+                Internal stability, within the RHF optimization space.
+            external : bool
+                External stability. Including the RHF -> UHF and real -> complex
+                stability analysis.
+
+        Returns:
+            New orbitals that are more close to the stable condition.  The return
+            value includes two set of orbitals.  The first corresponds to the
+            internal stablity and the second corresponds to the external stability.
+        '''
         from pyscf.scf.stability import rhf_stability
         return rhf_stability(self, internal, external, verbose)
 
