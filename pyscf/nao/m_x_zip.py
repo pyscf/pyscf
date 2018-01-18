@@ -56,11 +56,26 @@ def x_zip(n2e, na2x, eps, emax):
   v2e = n2e[vst:]
   i2w,i2dos = ee2dos(v2e, eps) 
   j2e = detect_maxima(i2w, -i2dos.imag)
+  nj = len(j2e)
   ja2x = np.zeros((len(j2e), na2x.shape[1]))
   for v,e in enumerate(n2e[vst:]):
     j = np.argmin(abs(j2e-e))
-    ja2x[j] += na2x[vst+v]
-  
+    jp = j+1 if j<nj-1 else j
+    jm = j-1 if j>0 else j
+    if j2e[jm]<=e and e<=j2e[j]: 
+      wj = (e-j2e[jm])/(j2e[j]-j2e[jm])
+      ja2x[jm] += (1.0-wj)*na2x[vst+v]
+      ja2x[j] += wj*na2x[vst+v]
+      #print(v, 'share? -', jm, j, j2e[jm], e, j2e[j], wj, 1.0-wj)
+    elif j2e[j]<=e and e<=j2e[jp]:
+      wj = (j2e[jp]-e)/(j2e[jp]-j2e[j])
+      ja2x[j] += wj*na2x[vst+v]
+      ja2x[jp] += (1.0-wj)*na2x[vst+v]
+      #print(v, 'share? + ', j, jp, j2e[j], e, j2e[jp], wj, 1.0-wj)
+    else:
+      #print(v, 'just sum', j2e[j], e)
+      ja2x[j] += na2x[vst+v]
+
   m2e = concatenate((n2e[0:vst],j2e))
   ma2x = vstack((na2x[0:vst], ja2x))
   return vst,i2w,i2dos,m2e,ma2x
