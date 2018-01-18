@@ -895,6 +895,16 @@ class Cell(mole.Mole):
         self._pseudo = {}
         self._keys = set(self.__dict__.keys())
 
+    @property
+    def nelec(self):
+        ne = self.nelectron
+        nalpha = (ne + self.spin) // 2
+        nbeta = nalpha - self.spin
+        if nalpha + nbeta != ne:
+            warnings.warn('Electron number %d and spin %d are not consistent '
+                          'in unit cell\n' % (ne, self.spin))
+        return nalpha, nbeta
+
 #Note: Exculde dump_input, parse_arg, basis from kwargs to avoid parsing twice
     def build(self, dump_input=True, parse_arg=True,
               a=None, mesh=None, ke_cutoff=None, precision=None, nimgs=None,
