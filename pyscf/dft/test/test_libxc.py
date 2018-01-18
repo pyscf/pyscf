@@ -84,8 +84,8 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(lib.finger(v[0].T[1]), -0.6294083390180697, 8)
         self.assertAlmostEqual(lib.finger(f[0].T[0]), -1.1414693830969338*2, 8)
         self.assertAlmostEqual(lib.finger(f[0].T[2]), -1.1414693830969338*2, 8)
-        self.assertAlmostEqual(lib.finger(k[0].T[0]),  4.1402447248393921*4, 8)
-        self.assertAlmostEqual(lib.finger(k[0].T[3]),  4.1402447248393921*4, 8)
+        self.assertAlmostEqual(lib.finger(k[0].T[0]),  4.1402447248393921*4, 7)
+        self.assertAlmostEqual(lib.finger(k[0].T[3]),  4.1402447248393921*4, 7)
 
     def test_lyp(self):
         e,v,f = dft.libxc.eval_xc(',LYP', rho, deriv=2)[:3]

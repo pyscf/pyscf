@@ -10,7 +10,6 @@ dft.numint.SWITCH_SIZE = 0
 
 mol = gto.Mole()
 mol.verbose = 0
-mol.output = None
 mol.atom = [('h', (0,0,i*3)) for i in range(12)]
 mol.basis = 'ccpvtz'
 mol.build()
@@ -20,6 +19,21 @@ mf.prune = None
 mf.grids.build(with_non0tab=False)
 nao = mol.nao_nr()
 ao_loc = mol.ao_loc_nr()
+
+h4 = gto.Mole()
+h4.verbose = 0
+h4.atom = 'H 0 0 0; H 0 0 9; H 0 9 0; H 0 9 9'
+h4.basis = 'ccpvtz'
+h4.build()
+mf_h4 = dft.RKS(h4)
+mf_h4.grids.atom_grid = {"H": (50, 110)}
+mf_h4.grids.build(with_non0tab=True)
+
+mol1 = gto.Mole()
+mol1.verbose = 0
+mol1.atom = [('h', (0,0,i*3)) for i in range(4)]
+mol1.basis = 'ccpvtz'
+mol1.build()
 
 def finger(a):
     return numpy.dot(numpy.cos(numpy.arange(a.size)), a.ravel())
@@ -32,7 +46,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(finger(numpy.cos(non0)), 2.5961863522983433, 9)
 
     def test_dot_ao_dm(self):
-        non0tab = dft.numint.make_mask(mol, mf.grids.coords)
+        non0tab = mf._numint.make_mask(mol, mf.grids.coords)
         ao = dft.numint.eval_ao(mol, mf.grids.coords)
         numpy.random.seed(1)
         dm = numpy.random.random((nao,nao))
@@ -97,12 +111,22 @@ class KnowValues(unittest.TestCase):
         mat1 = dft.numint.eval_mat(mol, ao, weight, rho, vxc, xctype='GGA')
         self.assertTrue(numpy.allclose(mat0, mat1))
 
+        vrho, vsigma, _, vtau = vxc
+        vxc = (vrho, vsigma, None, vtau)
+        wv = weight * vtau * .25
+        mat2  = numpy.einsum('pi,p,pj->ij', ao[1].conj(), wv, ao[1])
+        mat2 += numpy.einsum('pi,p,pj->ij', ao[2].conj(), wv, ao[2])
+        mat2 += numpy.einsum('pi,p,pj->ij', ao[3].conj(), wv, ao[3])
+        mat0 += mat2 + mat2.conj().T
+        mat1 = dft.numint.eval_mat(mol, ao, weight, rho, vxc, xctype='MGGA')
+        self.assertTrue(numpy.allclose(mat0, mat1))
+
     def test_rks_vxc(self):
         numpy.random.seed(10)
         nao = mol.nao_nr()
         dms = numpy.random.random((2,nao,nao))
         ni = dft.numint._NumInt()
-        v = ni.nr_rks(mol, mf.grids, 'B88', dms, hermi=0)[2]
+        v = ni.nr_vxc(mol, mf.grids, 'B88', dms, spin=0, hermi=0)[2]
         self.assertAlmostEqual(finger(v), -0.70124686853021512, 8)
 
     def test_uks_vxc(self):
@@ -110,28 +134,62 @@ class KnowValues(unittest.TestCase):
         nao = mol.nao_nr()
         dms = numpy.random.random((2,nao,nao))
         ni = dft.numint._NumInt()
-        v = ni.nr_uks(mol, mf.grids, 'B88', dms)[2]
+        v = ni.nr_vxc(mol, mf.grids, 'B88', dms, spin=1)[2]
         self.assertAlmostEqual(finger(v), -0.73803886056633594, 8)
 
     def test_rks_fxc(self):
         numpy.random.seed(10)
-        nao = mol.nao_nr()
+        nao = mol1.nao_nr()
         dm0 = numpy.random.random((nao,nao))
-        dm0 = dm0 + dm0.T
+        _, mo_coeff = numpy.linalg.eigh(dm0)
+        mo_occ = numpy.ones(nao)
+        mo_occ[-2:] = -1
+        dm0 = numpy.einsum('pi,i,qi->pq', mo_coeff, mo_occ, mo_coeff)
         dms = numpy.random.random((2,nao,nao))
         ni = dft.numint._NumInt()
-        v = ni.nr_rks_fxc(mol, mf.grids, 'B88', dm0, dms, hermi=0)
-        self.assertAlmostEqual(finger(v), -425.5736438177176, 8)
+        v = ni.nr_fxc(mol1, mf.grids, 'B88', dm0, dms, spin=0, hermi=0)
+        self.assertAlmostEqual(finger(v), -0.90590731862046003, 8)
+
+        # test cache_kernel
+        rvf = ni.cache_xc_kernel(mol1, mf.grids, 'B88', mo_coeff, mo_occ, spin=0)
+        v1 = ni.nr_fxc(mol1, mf.grids, 'B88', dm0, dms, spin=0, hermi=0,
+                       rho0=rvf[0], vxc=rvf[1], fxc=rvf[2])
+        self.assertAlmostEqual(abs(v-v1).max(), 0, 8)
+
+        v = ni.nr_fxc(mol1, mf.grids, 'LDA', dm0, dms, spin=0, hermi=0)
+        self.assertAlmostEqual(finger(v), -1.0026571943551275, 8)
+        # test cache_kernel
+        rvf = ni.cache_xc_kernel(mol1, mf.grids, 'LDA', mo_coeff, mo_occ, spin=0)
+        v1 = ni.nr_fxc(mol1, mf.grids, 'LDA', dm0, dms, spin=0, hermi=0,
+                       rho0=rvf[0], vxc=rvf[1], fxc=rvf[2])
+        self.assertAlmostEqual(abs(v-v1).max(), 0, 8)
 
     def test_uks_fxc(self):
         numpy.random.seed(10)
-        nao = mol.nao_nr()
+        nao = mol1.nao_nr()
         dm0 = numpy.random.random((2,nao,nao))
-        dm0 = dm0 + dm0.transpose(0,2,1)
+        e, mo_coeff = numpy.linalg.eigh(dm0)
+        mo_occ = numpy.ones((2,nao))
+        mo_occ[:,-2:] = -1
+        dm0 = numpy.einsum('xpi,xi,xqi->xpq', mo_coeff, mo_occ, mo_coeff)
         dms = numpy.random.random((2,nao,nao))
         ni = dft.numint._NumInt()
-        v = ni.nr_uks_fxc(mol, mf.grids, 'B88', dm0, dms)
-        self.assertAlmostEqual(finger(v), 403.56257213149746, 8)
+        v = ni.nr_fxc(mol1, mf.grids, 'B88', dm0, dms, spin=1)
+        self.assertAlmostEqual(finger(v), -1.4528647933775907, 8)
+
+        # test cache_kernel
+        rvf = ni.cache_xc_kernel(mol1, mf.grids, 'B88', mo_coeff, mo_occ, spin=1)
+        v1 = ni.nr_fxc(mol1, mf.grids, 'B88', dm0, dms, hermi=0, spin=1,
+                       rho0=rvf[0], vxc=rvf[1], fxc=rvf[2])
+        self.assertAlmostEqual(abs(v-v1).max(), 0, 8)
+
+        v = ni.nr_fxc(mol1, mf.grids, 'LDA', dm0, dms, spin=1)
+        self.assertAlmostEqual(finger(v), -1.4719732345692913, 8)
+        # test cache_kernel
+        rvf = ni.cache_xc_kernel(mol1, mf.grids, 'LDA', mo_coeff, mo_occ, spin=1)
+        v1 = ni.nr_fxc(mol1, mf.grids, 'LDA', dm0, dms, hermi=0, spin=1,
+                       rho0=rvf[0], vxc=rvf[1], fxc=rvf[2])
+        self.assertAlmostEqual(abs(v-v1).max(), 0, 8)
 
     def test_vv10nlc(self):
         numpy.random.seed(10)
@@ -144,6 +202,25 @@ class KnowValues(unittest.TestCase):
         v = dft.numint._vv10nlc(rho, coords, vvrho, vvweight, vvcoords, nlc_pars)
         self.assertAlmostEqual(finger(v[0]), 0.15894647203764295, 9)
         self.assertAlmostEqual(finger(v[1]), 0.20500922537924576, 9)
+
+    def test_dot_ao_dm(self):
+        dm = mf_h4.get_init_guess(key='minao')
+        nao = h4.nao_nr()
+        ao_loc = h4.ao_loc_nr()
+        ao = (mf_h4._numint.eval_ao(h4, mf_h4.grids.coords).T + 0j).T
+        v1 = dft.numint._dot_ao_dm(h4, ao, dm, mf_h4.grids.non0tab, (0,h4.nbas), ao_loc)
+        v2 = dft.numint._dot_ao_dm(h4, ao, dm, None, None, None)
+        self.assertAlmostEqual(abs(v1-v2).max(), 0, 9)
+
+    def test_dot_ao_ao(self):
+        dm = mf_h4.get_init_guess(key='minao')
+        nao = h4.nao_nr()
+        ao_loc = h4.ao_loc_nr()
+        ao = (mf_h4._numint.eval_ao(h4, mf_h4.grids.coords).T + 0j).T
+        v1 = dft.numint._dot_ao_dm(h4, ao, ao, mf_h4.grids.non0tab, (0,h4.nbas), ao_loc)
+        v2 = dft.numint._dot_ao_dm(h4, ao, ao, None, None, None)
+        self.assertAlmostEqual(abs(v1-v2).max(), 0, 9)
+
 
 if __name__ == "__main__":
     print("Test numint")

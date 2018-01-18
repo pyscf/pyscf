@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <xcfun.h>
+#include "config.h"
 
 static int eval_xc(xc_functional fun, int deriv, enum xc_vars vars,
                    int np, int ncol, double *rho, double *output)
@@ -16,8 +17,17 @@ static int eval_xc(xc_functional fun, int deriv, enum xc_vars vars,
         xc_eval_setup(fun, vars, XC_PARTIAL_DERIVATIVES, deriv);
         assert(ncol == xc_input_length(fun));
         int outlen = xc_output_length(fun);
-        xc_eval_vec(fun, np, rho, ncol, output, outlen);
+
+        //xc_eval_vec(fun, np, rho, ncol, output, outlen);
+#pragma omp parallel default(none) shared(fun, rho, output, np, ncol, outlen)
+{
+        int i;
+#pragma omp for nowait schedule(static)
+        for (i=0; i < np; i++) {
+                xc_eval(fun, rho+i*ncol, output+i*outlen);
+        }
         return outlen;
+}
 }
 
 void XCFUN_eval_xc(int nfn, int *fn_id, double *fac,

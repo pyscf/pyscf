@@ -17,8 +17,8 @@ h2o.basis = {"H": '6-31g', "O": '6-31g',}
 h2o.build()
 
 h2osym = gto.Mole()
-h2o.verbose = 5
-h2o.output = '/dev/null'
+h2osym.verbose = 5
+h2osym.output = '/dev/null'
 h2osym.atom = [
     ["O" , (0. , 0.     , 0.)],
     [1   , (0. , -0.757 , 0.587)],
@@ -27,6 +27,29 @@ h2osym.atom = [
 h2osym.basis = {"H": '6-31g', "O": '6-31g',}
 h2osym.symmetry = 1
 h2osym.build()
+
+h2o_cation = gto.M(
+    verbose = 5,
+    output = '/dev/null',
+    atom = [
+    ["O" , (0. , 0.     , 0.)],
+    [1   , (0. , -0.757 , 0.587)],
+    [1   , (0. , 0.757  , 0.587)]],
+    charge = 1,
+    spin = 1,
+    basis = '631g')
+
+h2osym_cation = gto.M(
+    verbose = 5,
+    output = '/dev/null',
+    atom = [
+    ["O" , (0. , 0.     , 0.)],
+    [1   , (0. , -0.757 , 0.587)],
+    [1   , (0. , 0.757  , 0.587)]],
+    symmetry = True,
+    charge = 1,
+    spin = 1,
+    basis = '631g')
 
 
 class KnowValues(unittest.TestCase):
@@ -64,6 +87,8 @@ class KnowValues(unittest.TestCase):
         method.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
         method.xc = 'b3lypg'
         self.assertAlmostEqual(method.scf(), -76.384928891413438, 9)
+        g = method.nuc_grad_method().kernel()
+        self.assertAlmostEqual(lib.finger(g), -0.035648772973075241, 6)
 
     def test_nr_b3lypg_direct(self):
         method = dft.RKS(h2o)
@@ -83,23 +108,17 @@ class KnowValues(unittest.TestCase):
         method.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
         method.xc = 'b3lypg'
         self.assertAlmostEqual(method.scf(), -76.384928891413438, 9)
+        g = method.nuc_grad_method().kernel()
+        self.assertAlmostEqual(lib.finger(g), -0.035648777277847155, 6)
 
     def test_nr_uks_lsda(self):
-        mol1 = h2o.copy()
-        mol1.charge = 1
-        mol1.spin = 1
-        mol1.build(0, 0)
-        method = dft.UKS(mol1)
+        method = dft.UKS(h2osym_cation)
         method.grids.prune = dft.gen_grid.treutler_prune
         method.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
         self.assertAlmostEqual(method.scf(), -75.350995324984709, 9)
 
     def test_nr_uks_b3lypg(self):
-        mol1 = h2o.copy()
-        mol1.charge = 1
-        mol1.spin = 1
-        mol1.build(0, 0)
-        method = dft.UKS(mol1)
+        method = dft.UKS(h2osym_cation)
         method.xc = 'b3lypg'
         method.grids.prune = dft.gen_grid.treutler_prune
         method.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
@@ -128,32 +147,22 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(method.scf(), -75.968190479564399, 9)
 
     def test_nr_roks_lsda(self):
-        mol1 = h2o.copy()
-        mol1.charge = 1
-        mol1.spin = 1
-        mol1.build(0, 0)
-        method = dft.ROKS(mol1)
+        method = dft.RKS(h2o_cation)
         method.grids.prune = dft.gen_grid.treutler_prune
         method.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
         self.assertAlmostEqual(method.scf(), -75.350333965173704, 9)
 
     def test_nr_roks_b3lypg(self):
-        mol1 = h2o.copy()
-        mol1.charge = 1
-        mol1.spin = 1
-        mol1.build(0, 0)
-        method = dft.ROKS(mol1)
+        method = dft.ROKS(h2o_cation)
         method.xc = 'b3lypg'
         method.grids.prune = dft.gen_grid.treutler_prune
         method.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
         self.assertAlmostEqual(method.scf(), -75.926526046608529, 9)
+        g = method.nuc_grad_method().kernel()
+        self.assertAlmostEqual(lib.finger(g), -0.10184251826412283, 6)
 
     def test_nr_roks_b3lypg_direct(self):
-        mol1 = h2o.copy()
-        mol1.charge = 1
-        mol1.spin = 1
-        mol1.build(0, 0)
-        method = dft.ROKS(mol1)
+        method = dft.ROKS(h2o_cation)
         method.xc = 'b3lypg'
         method.max_memory = 0
         method.direct_scf = True
@@ -224,21 +233,13 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(method.scf(), -76.384928891413438, 9)
 
     def test_nr_symm_uks_lsda(self):
-        mol1 = h2osym.copy()
-        mol1.charge = 1
-        mol1.spin = 1
-        mol1.build(0, 0)
-        method = dft.UKS(mol1)
+        method = dft.UKS(h2osym_cation)
         method.grids.prune = dft.gen_grid.treutler_prune
         method.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
         self.assertAlmostEqual(method.scf(), -75.350995324984709, 9)
 
     def test_nr_symm_uks_b3lypg(self):
-        mol1 = h2osym.copy()
-        mol1.charge = 1
-        mol1.spin = 1
-        mol1.build(0, 0)
-        method = dft.UKS(mol1)
+        method = dft.UKS(h2osym_cation)
         method.xc = 'b3lypg'
         method.grids.prune = dft.gen_grid.treutler_prune
         method.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
@@ -254,32 +255,20 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(method.scf(), -76.384928891413438, 9)
 
     def test_nr_symm_roks_lsda(self):
-        mol1 = h2osym.copy()
-        mol1.charge = 1
-        mol1.spin = 1
-        mol1.build(0, 0)
-        method = dft.ROKS(mol1)
+        method = dft.RKS(h2osym_cation)
         method.grids.prune = dft.gen_grid.treutler_prune
         method.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
         self.assertAlmostEqual(method.scf(), -75.350333965173704, 9)
 
     def test_nr_symm_roks_b3lypg(self):
-        mol1 = h2osym.copy()
-        mol1.charge = 1
-        mol1.spin = 1
-        mol1.build(0, 0)
-        method = dft.ROKS(mol1)
+        method = dft.ROKS(h2osym_cation)
         method.xc = 'b3lypg'
         method.grids.prune = dft.gen_grid.treutler_prune
         method.grids.atom_grid = {"H": (50, 194), "O": (50, 194),}
         self.assertAlmostEqual(method.scf(), -75.926526046608529, 9)
 
     def test_nr_symm_roks_b3lypg_direct(self):
-        mol1 = h2osym.copy()
-        mol1.charge = 1
-        mol1.spin = 1
-        mol1.build(0, 0)
-        method = dft.ROKS(mol1)
+        method = dft.ROKS(h2osym_cation)
         method.xc = 'b3lypg'
         method.max_memory = 0
         method.direct_scf = True
@@ -296,6 +285,96 @@ class KnowValues(unittest.TestCase):
 
     def test_nr_rks_vv10(self):
         method = dft.RKS(h2o)
+        dm = method.get_init_guess()
+        method.xc = 'wB97M_V'
+        method.nlc = 'vv10'
+        method.grids.prune = None
+        method.grids.atom_grid = {"H": (30, 86), "O": (30, 86),}
+        method.nlcgrids.prune = None
+        method.nlcgrids.atom_grid = {"H": (20, 50), "O": (20, 50),}
+        method.dump_flags()
+        vxc = method.get_veff(h2o, dm)
+        self.assertAlmostEqual(lib.finger(vxc), 22.767504283729778, 8)
+
+        method._eri = None
+        method.max_memory = 0
+        vxc = method.get_veff(h2o, dm)
+        self.assertAlmostEqual(lib.finger(vxc), 22.767504283729778, 8)
+
+    def test_nr_uks_vv10(self):
+        method = dft.UKS(h2o)
+        dm = method.get_init_guess()
+        dm = (dm[0], dm[0])
+        method.xc = 'wB97M_V'
+        method.nlc = 'vv10'
+        method.grids.prune = None
+        method.grids.atom_grid = {"H": (30, 86), "O": (30, 86),}
+        method.nlcgrids.prune = None
+        method.nlcgrids.atom_grid = {"H": (20, 50), "O": (20, 50),}
+        method.dump_flags()
+        vxc = method.get_veff(h2o, dm)
+        self.assertAlmostEqual(lib.finger(vxc[0]), 22.767504283729778, 8)
+        self.assertAlmostEqual(lib.finger(vxc[1]), 22.767504283729778, 8)
+
+        method._eri = None
+        method.max_memory = 0
+        vxc = method.get_veff(h2o, dm)
+        self.assertAlmostEqual(lib.finger(vxc[0]), 22.767504283729778, 8)
+        self.assertAlmostEqual(lib.finger(vxc[1]), 22.767504283729778, 8)
+
+    def test_nr_rks_rsh(self):
+        method = dft.RKS(h2o)
+        dm = method.get_init_guess()
+        method.xc = 'wB97M_V'
+        vxc = method.get_veff(h2o, dm)
+        self.assertAlmostEqual(lib.finger(vxc), 22.759558596896344, 8)
+
+        method._eri = None
+        method.max_memory = 0
+        method.xc = 'wB97M_V'
+        vxc = method.get_veff(h2o, dm, dm, vxc)
+        self.assertAlmostEqual(lib.finger(vxc), 22.759558596896344, 8)
+
+        method.xc = 'B97M_V'
+        vxc = method.get_veff(h2o, dm)
+        self.assertAlmostEqual(lib.finger(vxc), 23.058813088809824, 8)
+
+        method._eri = None
+        method.max_memory = 0
+        method.xc = 'B97M_V'
+        vxc = method.get_veff(h2o, dm, dm, vxc)
+        self.assertAlmostEqual(lib.finger(vxc), 23.058813088809824, 8)
+
+    def test_nr_uks_rsh(self):
+        method = dft.UKS(h2o)
+        dm = method.get_init_guess()
+        dm = (dm[0], dm[0])
+        method.xc = 'wB97M_V'
+        vxc = method.get_veff(h2o, dm)
+        self.assertAlmostEqual(lib.finger(vxc[0]), 22.759558596896344, 8)
+        self.assertAlmostEqual(lib.finger(vxc[1]), 22.759558596896344, 8)
+
+        method._eri = None
+        method.max_memory = 0
+        method.xc = 'wB97M_V'
+        vxc = method.get_veff(h2o, dm, dm, vxc)
+        self.assertAlmostEqual(lib.finger(vxc[0]), 22.759558596896344, 8)
+        self.assertAlmostEqual(lib.finger(vxc[1]), 22.759558596896344, 8)
+
+        method.xc = 'B97M_V'
+        vxc = method.get_veff(h2o, dm)
+        self.assertAlmostEqual(lib.finger(vxc[0]), 23.058813088809824, 8)
+        self.assertAlmostEqual(lib.finger(vxc[1]), 23.058813088809824, 8)
+
+        method._eri = None
+        method.max_memory = 0
+        method.xc = 'B97M_V'
+        vxc = method.get_veff(h2o, dm, dm, vxc)
+        self.assertAlmostEqual(lib.finger(vxc[0]), 23.058813088809824, 8)
+        self.assertAlmostEqual(lib.finger(vxc[1]), 23.058813088809824, 8)
+
+    def test_nr_rks_vv10_high_cost(self):
+        method = dft.RKS(h2o)
         method.xc = 'wB97M_V'
         method.nlc = 'vv10'
         method.grids.prune = None
@@ -304,7 +383,7 @@ class KnowValues(unittest.TestCase):
         method.nlcgrids.atom_grid = {"H": (40, 110), "O": (40, 110),}
         self.assertAlmostEqual(method.scf(), -76.352381513158718, 8)
 
-    def test_nr_uks_vv10(self):
+    def test_nr_uks_vv10_high_cost(self):
         method = dft.UKS(h2o)
         method.xc = 'wB97M_V'
         method.nlc = 'vv10'

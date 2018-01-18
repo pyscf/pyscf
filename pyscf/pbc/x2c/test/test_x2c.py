@@ -62,22 +62,22 @@ class KnownValues(unittest.TestCase):
         cell1.basis = {'He': [[0, [0.8, 1]],
                               [1, [0.6, 1]]
                              ]}
-        cell1.gs = [7]*3
+        cell1.mesh = [15]*3
         cell1.a = numpy.array(([2.0,  .9, 0. ],
                                [0.1, 1.9, 0.4],
                                [0.8, 0  , 2.1]))
         cell1.build()
 
         charge = -cell1.atom_charges()
-        Gv = cell1.get_Gv(cell1.gs)
+        Gv = cell1.get_Gv(cell1.mesh)
         SI = cell1.get_SI(Gv)
         rhoG = numpy.dot(charge, SI)
 
-        coulG = tools.get_coulG(cell1, gs=cell1.gs, Gv=Gv)
+        coulG = tools.get_coulG(cell1, mesh=cell1.mesh, Gv=Gv)
         vneG = rhoG * coulG
-        vneR = tools.ifft(vneG, cell1.gs).real
+        vneR = tools.ifft(vneG, cell1.mesh).real
 
-        coords = cell1.gen_uniform_grids(gs=cell1.gs)
+        coords = cell1.gen_uniform_grids(cell1.mesh)
         aoR = dft.numint.eval_ao(cell1, coords, deriv=1)
         ngrids, nao = aoR.shape[1:]
         vne_ref = numpy.einsum('p,xpi,xpj->ij', vneR, aoR[1:4], aoR[1:4])

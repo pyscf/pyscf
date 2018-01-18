@@ -149,6 +149,15 @@ HYB_XC = set(('PBE0'    , 'PBE1PBE' , 'B3PW91'  , 'B3P86'   , 'B3LYP'   ,
 RSH_XC = set(('CAMB3LYP',))
 MAX_DERIV_ORDER = 3
 
+VV10_DAT = {
+    'B97M_V'    : [6.0, 0.01],
+    'WB97M_V'   : [6.0, 0.01],
+    'WB97X_V'   : [6.0, 0.01],
+    'VV10'      : [5.9, 0.0093],
+    'LC_VV10'   : [6.3, 0.0089],
+}
+VV10_XC = set(VV10_DAT.keys())
+
 def xc_type(xc_code):
     if isinstance(xc_code, str):
         if is_nlc(xc_code):
@@ -187,13 +196,14 @@ def is_gga(xc_code):
     return xc_type(xc_code) == 'GGA'
 
 def is_nlc(xc_code):
-    return 'VV10' in xc_code.upper()
+    return xc_code.upper() in VV10_XC
 
 def nlc_coeff(xc_code):
     '''Get NLC coefficients
     '''
-    if 'VV10' in xc_code.upper():
-        return 5.9, 0.0093
+    xc_code = xc_code.upper()
+    if is_nlc(xc_code):
+        return VV10_DAT[xc_code]
     else:
         return 0, 0
 

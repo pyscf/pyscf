@@ -66,7 +66,7 @@ class KnowValues(unittest.TestCase):
         self.assertTrue (dft.xcfun.is_hybrid_xc(('b3lyp',4,'vv10')))
 
     def test_nlc_coeff(self):
-        self.assertEqual(dft.xcfun.nlc_coeff('vv10'), (5.9, 0.0093))
+        self.assertEqual(dft.xcfun.nlc_coeff('vv10'), [5.9, 0.0093])
 
     def test_lda(self):
         e,v,f,k = dft.xcfun.eval_xc('lda,', rho[0][:3], deriv=3)
@@ -81,8 +81,8 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(lib.finger(v[0].T[1]), -0.6294083390180697, 8)
         self.assertAlmostEqual(lib.finger(f[0].T[0]), -1.1414693830969338*2, 8)
         self.assertAlmostEqual(lib.finger(f[0].T[2]), -1.1414693830969338*2, 8)
-        self.assertAlmostEqual(lib.finger(k[0].T[0]),  4.1402447248393921*4, 8)
-        self.assertAlmostEqual(lib.finger(k[0].T[3]),  4.1402447248393921*4, 8)
+        self.assertAlmostEqual(lib.finger(k[0].T[0]),  4.1402447248393921*4, 7)
+        self.assertAlmostEqual(lib.finger(k[0].T[3]),  4.1402447248393921*4, 7)
 
     def test_lyp(self):
         e,v,f = dft.xcfun.eval_xc(',LYP', rho, deriv=3)[:3]

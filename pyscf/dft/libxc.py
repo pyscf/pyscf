@@ -431,6 +431,8 @@ XC = XC_CODES = {
 
 XC_KEYS = set(XC_CODES.keys())
 
+VV10_XC = set(('B97M_V', 'WB97M_V', 'WB97X_V', 'VV10', 'LC_VV10'))
+
 def xc_type(xc_code):
     if isinstance(xc_code, str):
         if is_nlc(xc_code):

@@ -1032,7 +1032,6 @@ def energy_nuc(mol, charges=None, coords=None):
         float
     '''
     if charges is None: charges = mol.atom_charges()
-    if coords is None: coords = mol.atom_coords()
     if len(charges) == 0:
         return 0
     #e = 0
@@ -1044,15 +1043,19 @@ def energy_nuc(mol, charges=None, coords=None):
     #        r1 = coords[i]
     #        r = numpy.linalg.norm(r1-r2)
     #        e += q1 * q2 / r
-    rr = numpy.dot(coords, coords.T)
-    rd = rr.diagonal()
-    rr = rd[:,None] + rd - rr*2
-    rr[numpy.diag_indices_from(rr)] = 1e-60
-    r = numpy.sqrt(rr)
-    qq = charges[:,None] * charges[None,:]
-    qq[numpy.diag_indices_from(qq)] = 0
-    e = (qq/r).sum() * .5
+    rr = inter_distance(mol, coords)
+    rr[numpy.diag_indices_from(rr)] = 1e200
+    e = numpy.einsum('i,ij,j->', charges, 1./rr, charges) * .5
     return e
+
+def inter_distance(mol, coords=None):
+    '''
+    Inter-particle distance array
+    '''
+    if coords is None: coords = mol.atom_coords()
+    rr = numpy.linalg.norm(coords.reshape(-1,1,3) - coords, axis=2)
+    rr[numpy.diag_indices_from(rr)] = 0
+    return rr
 
 def sph_labels(mol, fmt=True):
     '''Labels for spherical GTO functions
