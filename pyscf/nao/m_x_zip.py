@@ -60,6 +60,8 @@ def x_zip(n2e, na2x, eps, emax):
   ja2x = np.zeros((len(j2e), na2x.shape[1]))
   for v,e in enumerate(n2e[vst:]):
     j = np.argmin(abs(j2e-e))
+
+    # Sharing method: saved 16 out of 318 extra iterations caused by x-zip feature in case of Na20 chain.
     jp = j+1 if j<nj-1 else j
     jm = j-1 if j>0 else j
     if j2e[jm]<=e and e<=j2e[j]: 
