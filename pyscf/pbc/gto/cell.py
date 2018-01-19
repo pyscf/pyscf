@@ -24,7 +24,7 @@ from pyscf.gto.mole import _symbol, _rm_digit, _atom_symbol, _std_symbol, charge
 from pyscf.gto.mole import conc_env, uncontract
 from pyscf.pbc.gto import basis
 from pyscf.pbc.gto import pseudo
-from pyscf.pbc.gto.eval_gto import eval_gto
+from pyscf.pbc.gto.eval_gto import eval_gto as pbc_eval_gto
 from pyscf.pbc.tools import pbc as pbctools
 from pyscf.gto.basis import ALIAS as MOLE_ALIAS
 
@@ -1260,7 +1260,20 @@ class Cell(mole.Mole):
         '''One-electron integrals with PBC. See also Mole.intor'''
         return intor_cross(intor, self, self, comp, hermi, kpts, kpt)
 
-    pbc_eval_gto = eval_gto
+    @lib.with_doc(pbc_eval_gto.__doc__)
+    def pbc_eval_gto(self, eval_name, coords, comp=1, kpts=None, kpt=None,
+                     shls_slice=None, non0tab=None, ao_loc=None, out=None):
+        return pbc_eval_gto(self, eval_name, coords, comp, kpts, kpt,
+                            shls_slice, non0tab, ao_loc, out)
+
+    def eval_gto(self, eval_name, coords, comp=1, kpts=None, kpt=None,
+                 shls_slice=None, non0tab=None, ao_loc=None, out=None):
+        if eval_name[:3] == 'PBC':
+            return self.pbc_eval_gto(self, eval_name, coords, comp, kpts, kpt,
+                                     shls_slice, non0tab, ao_loc, out)
+        else:
+            return mole.eval_gto(self, eval_name, coords, comp,
+                                 shls_slice, non0tab, ao_loc, out)
 
     def from_ase(self, ase_atom):
         '''Update cell based on given ase atom object

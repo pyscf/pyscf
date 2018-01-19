@@ -45,12 +45,14 @@ def eval_gto(cell, eval_name, coords, comp=1, kpts=None, kpt=None,
             evaluated.  By default, all shells defined in cell will be evaluated.
         non0tab : 2D bool array
             mask array to indicate whether the AO values are zero.  The mask
-            array can be obtained by calling :func:`make_mask`
+            array can be obtained by calling :func:`dft.gen_grid.make_mask`
         out : ndarray
             If provided, results are written into this array.
 
     Returns:
-        2D array of shape (N,nao) Or 3D array of shape (\*,N,nao) for AO values
+        A list of 2D (or 3D) array to hold the AO values on grids.  Each
+        element of the list corresponds to a k-point and it has the shape
+        (N,nao) Or shape (\*,N,nao).
 
     Examples:
 
@@ -98,7 +100,6 @@ def eval_gto(cell, eval_name, coords, comp=1, kpts=None, kpt=None,
 # Initializing it to 255 means all images are summed
         non0tab[:] = 0xff
 
-    print shls_slice, 'SSSSSSSSSSSSSSSSSSSSSS'
     if ao_loc is None:
         ao_loc = make_loc(bas, eval_name)
     if shls_slice is None:
