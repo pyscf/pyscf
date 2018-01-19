@@ -22,7 +22,7 @@ class gw(scf):
     self.tol_ev = kw['tol_ev'] if 'tol_ev' in kw else 1e-6
     self.perform_gw = kw['perform_gw'] if 'perform_gw' in kw else False
     self.rescf = kw['rescf'] if 'rescf' in kw else False
-    self.bsize = kw['bsize'] if 'bsize' in kw else 40
+    self.bsize = kw['bsize'] if 'bsize' in kw else min(40, self.norbs)
 
     if self.nspin==1: self.nocc_0t = nocc_0t = np.array([int(self.nelec/2)])
     elif self.nspin==2: self.nocc_0t = nocc_0t = self.nelec
