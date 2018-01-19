@@ -82,51 +82,14 @@ def eval_ao_kpts(cell, coords, kpts=None, deriv=0, relativity=0,
             kpts = kwargs['kpt']
         else:
             kpts = numpy.zeros((1,3))
-    kpts = numpy.reshape(kpts, (-1,3))
-    nkpts = len(kpts)
-    ngrids = len(coords)
-
-    if non0tab is None:
-        non0tab = numpy.empty(((ngrids+BLKSIZE-1)//BLKSIZE, cell.nbas),
-                              dtype=numpy.uint8)
-# non0tab stores the number of images to be summed in real space.
-# Initializing it to 255 means all images are summed
-        non0tab[:] = 0xff
-
-    ao_loc = cell.ao_loc_nr()
-    if shls_slice is None:
-        shls_slice = (0, cell.nbas)
-    sh0, sh1 = shls_slice
-    nao = ao_loc[sh1] - ao_loc[sh0]
 
     comp = (deriv+1)*(deriv+2)*(deriv+3)//6
-    ao_kpts = [numpy.zeros((ngrids,nao,comp), dtype=numpy.complex128, order='F')
-               for k in range(nkpts)]
-    out_ptrs = (ctypes.c_void_p*nkpts)(
-            *[x.ctypes.data_as(ctypes.c_void_p) for x in ao_kpts])
-    coords = numpy.asarray(coords, order='F')
-    Ls = cell.get_lattice_Ls(dimension=3)
-    Ls = Ls[numpy.argsort(lib.norm(Ls, axis=1))]
-    expLk = numpy.exp(1j * numpy.asarray(numpy.dot(Ls, kpts.T), order='C'))
-
-    drv = getattr(libpbc, 'PBCval_sph_deriv%d' % deriv)
-    drv(ctypes.c_int(ngrids),
-        (ctypes.c_int*2)(*shls_slice), ao_loc.ctypes.data_as(ctypes.c_void_p),
-        Ls.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(len(Ls)),
-        expLk.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nkpts),
-        out_ptrs, coords.ctypes.data_as(ctypes.c_void_p),
-        non0tab.ctypes.data_as(ctypes.c_void_p),
-        cell._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(cell.natm),
-        cell._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(cell.nbas),
-        cell._env.ctypes.data_as(ctypes.c_void_p))
-
-    if gamma_point(kpts):
-        ao_kpts = [ao.real.copy(order='F') for ao in ao_kpts]
-    for k, kpt in enumerate(kpts):
-        ao_kpts[k] = ao_kpts[k].transpose(2,0,1)
-        if comp == 1:
-            ao_kpts[k] = ao_kpts[k][0]
-    return ao_kpts
+    if cell.cart:
+        feval = 'PBCval_cart_deriv%d' % deriv
+    else:
+        feval = 'PBCval_sph_deriv%d' % deriv
+    return cell.eval_gto(feval, coords, comp, kpts,
+                         shls_slice=shls_slice, non0tab=non0tab, out=out)
 
 
 def eval_rho(cell, ao, dm, non0tab=None, xctype='LDA', hermi=0, verbose=None):

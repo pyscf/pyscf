@@ -148,7 +148,7 @@ class KnowValues(unittest.TestCase):
         dms = numpy.random.random((2,nao,nao))
         ni = dft.numint._NumInt()
         v = ni.nr_fxc(mol1, mf.grids, 'B88', dm0, dms, spin=0, hermi=0)
-        self.assertAlmostEqual(finger(v), -0.90590731862046003, 8)
+        self.assertAlmostEqual(finger(v), -7.5671368618070343, 8)
 
         # test cache_kernel
         rvf = ni.cache_xc_kernel(mol1, mf.grids, 'B88', mo_coeff, mo_occ, spin=0)
@@ -175,7 +175,7 @@ class KnowValues(unittest.TestCase):
         dms = numpy.random.random((2,nao,nao))
         ni = dft.numint._NumInt()
         v = ni.nr_fxc(mol1, mf.grids, 'B88', dm0, dms, spin=1)
-        self.assertAlmostEqual(finger(v), -1.4528647933775907, 8)
+        self.assertAlmostEqual(finger(v), -10.316443204083185, 8)
 
         # test cache_kernel
         rvf = ni.cache_xc_kernel(mol1, mf.grids, 'B88', mo_coeff, mo_occ, spin=1)

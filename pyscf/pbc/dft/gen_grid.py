@@ -8,7 +8,7 @@ import numpy as np
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf import dft
-from pyscf.pbc.gto.cell import gen_uniform_grids
+from pyscf.pbc.gto.cell import get_uniform_grids, gen_uniform_grids
 from pyscf.dft.gen_grid import (sg1_prune, nwchem_prune, treutler_prune,
                                 stratmann, original_becke, gen_atomic_grids,
                                 BLKSIZE)
@@ -60,7 +60,7 @@ class UniformGrids(object):
     def build(self, cell=None, with_non0tab=False):
         if cell is None: cell = self.cell
 
-        self.coords = gen_uniform_grids(self.cell, self.mesh)
+        self.coords = get_uniform_grids(self.cell, self.mesh)
         self.weights = np.empty(self.coords.shape[0])
         self.weights[:] = cell.vol/self.weights.shape[0]
 

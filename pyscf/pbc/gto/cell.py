@@ -24,6 +24,7 @@ from pyscf.gto.mole import _symbol, _rm_digit, _atom_symbol, _std_symbol, charge
 from pyscf.gto.mole import conc_env, uncontract
 from pyscf.pbc.gto import basis
 from pyscf.pbc.gto import pseudo
+from pyscf.pbc.gto.eval_gto import eval_gto
 from pyscf.pbc.tools import pbc as pbctools
 from pyscf.gto.basis import ALIAS as MOLE_ALIAS
 
@@ -247,6 +248,67 @@ def loads(cellstr):
     cell._ecpbas = np.array(cell._ecpbas, dtype=np.int32)
 
     return cell
+
+def conc_cell(cell1, cell2):
+    '''Concatenate two Cell objects.
+    '''
+    cell3 = Cell()
+    cell3._atm, cell3._bas, cell3._env = \
+            conc_env(cell1._atm, cell1._bas, cell1._env,
+                     cell2._atm, cell2._bas, cell2._env)
+    off = len(cell1._env)
+    natm_off = len(cell1._atm)
+    if len(cell2._ecpbas) == 0:
+        cell3._ecpbas = cell1._ecpbas
+    else:
+        ecpbas2 = numpy.copy(cell2._ecpbas)
+        ecpbas2[:,ATOM_OF  ] += natm_off
+        ecpbas2[:,PTR_EXP  ] += off
+        ecpbas2[:,PTR_COEFF] += off
+        if len(cell1._ecpbas) == 0:
+            cell3._ecpbas = ecpbas2
+        else:
+            cell3._ecpbas = numpy.hstack((cell1._ecpbas, ecpbas2))
+
+    cell3.verbose = cell1.verbose
+    cell3.output = cell1.output
+    cell3.max_memory = cell1.max_memory
+    cell3.charge = cell1.charge + cell2.charge
+    cell3.spin = cell1.spin + cell2.spin
+    cell3.cart = cell1.cart and cell2.cart
+    cell3._atom = cell1._atom + cell2._atom
+    cell3.unit = cell1.unit
+    cell3._basis = dict(cell2._basis)
+    cell3._basis.update(cell1._basis)
+    # Whether to update the lattice_vectors?
+    cell3.a = cell1.a
+    cell3.mesh = np.max((cell1.mesh, cell2.mesh), axis=0)
+
+    cell3.ke_cutoff = max(cell1.mesh, cell2.mesh)
+    cell3.precision = min(cell1.precision, cell2.precision)
+    cell3.dimension = max(cell1.dimension, cell2.dimension)
+    cell3.low_dim_ft_type = cell1.low_dim_ft_type or cell2.low_dim_ft_type
+    cell3.ew_eta = min(cell1.ew_eta, cell2.ew_eta)
+    cell3.ew_cut = max(cell1.ew_cut, cell2.ew_cut)
+    cell3.rcut = max(cell1.rcut, cell2.rcut)
+
+    if cell2._pseudo is None:
+        cell3._pseudo = cell1._pseudo
+    elif cell1._pseudo is None:
+        cell3._pseudo = cell2._pseudo
+    else:
+        cell3._pseudo = dict(cell2._pseudo)
+        cell3._pseudo.update(cell1._pseudo)
+
+    if cell2._ecp is None:
+        cell3._ecp = cell1._ecp
+    elif cell1._ecp is None:
+        cell3._ecp = cell2._ecp
+    else:
+        cell3._ecp = dict(cell2._ecp)
+        cell3._ecp.update(cell1._ecp)
+
+    return cell3
 
 def intor_cross(intor, cell1, cell2, comp=1, hermi=0, kpts=None, kpt=None):
     r'''1-electron integrals from two cells like
@@ -535,7 +597,7 @@ def get_Gv_weights(cell, mesh=None, **kwargs):
     Gvbase = (rx, ry, rz)
     Gv = np.dot(lib.cartesian_prod(Gvbase), b)
     # This could be appropriate to catch any bugs
-    if low_dim_ft_type is not None:
+    if cell.dimension == 2 and low_dim_ft_type is not None:
         weights = None
     else:
         # 1/cell.vol == det(b)/(2pi)^3
@@ -764,7 +826,7 @@ def make_kpts(cell, nks, wrap_around=False, with_gamma_point=True, scaled_center
     kpts = cell.get_abs_kpts(scaled_kpts)
     return kpts
 
-def gen_uniform_grids(cell, mesh=None, **kwargs):
+def get_uniform_grids(cell, mesh=None, **kwargs):
     '''Generate a uniform real-space grid consistent w/ samp thm; see MH (3.19).
 
     Args:
@@ -784,6 +846,7 @@ def gen_uniform_grids(cell, mesh=None, **kwargs):
     a_frac = np.einsum('i,ij->ij', 1./np.asarray(mesh), cell.lattice_vectors())
     coords = np.dot(qv, a_frac)
     return coords
+gen_uniform_grids = get_uniform_grids
 
 # Check whether ecp keywords are presented in pp and whether pp keywords are
 # presented in ecp.  The return (ecp, pp) should have only the ecp keywords and
@@ -1189,11 +1252,15 @@ class Cell(mole.Mole):
     ewald = ewald
     energy_nuc = ewald
 
-    gen_uniform_grids = gen_uniform_grids
+    gen_uniform_grids = get_uniform_grids = get_uniform_grids
+
+    __add__ = conc_cell
 
     def pbc_intor(self, intor, comp=1, hermi=0, kpts=None, kpt=None):
         '''One-electron integrals with PBC. See also Mole.intor'''
         return intor_cross(intor, self, self, comp, hermi, kpts, kpt)
+
+    pbc_eval_gto = eval_gto
 
     def from_ase(self, ase_atom):
         '''Update cell based on given ase atom object
