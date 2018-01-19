@@ -4,6 +4,7 @@
 #         Qiming Sun <osirpt.sun@gmail.com>
 #
 
+import os
 import ctypes
 import time
 import tempfile
@@ -632,15 +633,14 @@ class NEVPT(lib.StreamObject):
         if hasattr(self.fcisolver, 'nevpt_intermediate'):
             logger.info(self, 'Use compressed mps perturber as an approximation')
         else:
-            logger.error(self, 'Compressed mps perturber can be only used for DMRG wave function')
-            exit()
+            msg = 'Compressed mps perturber can be only used with DMRG wave function'
+            logger.error(self, msg)
+            raise RuntimeError(msg)
 
-        from pyscf.dmrgscf.nevpt_mpi import DMRG_COMPRESS_NEVPT
-        if stored_integral: #Stored perturbation integral and read them again. For debugging purpose.
-            DMRG_COMPRESS_NEVPT(self, maxM=maxM, root=self.root, nevptsolver=nevptsolver, tol=tol,
-                                nevpt_integral='nevpt_perturb_integral')
-        else:
-            DMRG_COMPRESS_NEVPT(self, maxM=maxM, root=self.root, nevptsolver=nevptsolver, tol=tol)
+        self.nevptsolver = nevptsolver
+        self.maxM = maxM
+        self.tol = tol
+        self.stored_integral = stored_integral
 
         self.canonicalized = True
         self.compressed_mps = True
@@ -696,7 +696,17 @@ class NEVPT(lib.StreamObject):
         time1 = log.timer('eri-4pdm contraction', *time1)
 
         if self.compressed_mps:
-            fh5 = h5py.File('Perturbation_%d'%self.root,'r')
+            from pyscf.dmrgscf.nevpt_mpi import DMRG_COMPRESS_NEVPT
+            if self.stored_integral: #Stored perturbation integral and read them again. For debugging purpose.
+                perturb_file = DMRG_COMPRESS_NEVPT(self, maxM=self.maxM, root=self.root,
+                                                   nevptsolver=self.nevptsolver,
+                                                   tol=self.tol,
+                                                   nevpt_integral='nevpt_perturb_integral')
+            else:
+                perturb_file = DMRG_COMPRESS_NEVPT(self, maxM=self.maxM, root=self.root,
+                                                   nevptsolver=self.nevptsolver,
+                                                   tol=self.tol)
+            fh5 = h5py.File(perturb_file, 'r')
             e_Si     =   fh5['Vi/energy'].value
             #The definition of norm changed.
             #However, there is no need to print out it.
