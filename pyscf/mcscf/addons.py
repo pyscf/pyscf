@@ -579,8 +579,15 @@ def state_average_(casscf, weights=(0.5,0.5)):
         def make_rdm1(self, ci0, norb, nelec):
             dm1 = 0
             for i, wi in enumerate(weights):
-                dm1 += wi*fcibase_class.make_rdm1(self, ci0[i], norb, nelec)
+                dm1 += wi * fcibase_class.make_rdm1(self, ci0[i], norb, nelec)
             return dm1
+        def make_rdm1s(self, ci0, norb, nelec):
+            dm1a, dm1b = 0, 0
+            for i, wi in enumerate(weights):
+                dm1s = fcibase_class.make_rdm1s(self, ci0[i], norb, nelec)
+                dm1a += wi * dm1s[0]
+                dm1b += wi * dm1s[1]
+            return dm1a, dm1b
         def make_rdm12(self, ci0, norb, nelec):
             rdm1 = 0
             rdm2 = 0
@@ -750,6 +757,13 @@ def state_average_mix_(casscf, fcisolvers, weights=(0.5,0.5)):
             for i, (solver, c) in enumerate(loop_civecs(fcisolvers, ci0)):
                 dm1 += weights[i]*solver.make_rdm1(c, norb, get_nelec(solver, nelec), **kwargs)
             return dm1
+        def make_rdm1s(self, ci0, norb, nelec, **kwargs):
+            dm1a, dm1b = 0, 0
+            for i, (solver, c) in enumerate(loop_civecs(fcisolvers, ci0)):
+                dm1s = solver.make_rdm1s(c, norb, get_nelec(solver, nelec), **kwargs)
+                dm1a += weights[i] * dm1s[0]
+                dm1b += weights[i] * dm1s[1]
+            return dm1a, dm1b
         def make_rdm12(self, ci0, norb, nelec, **kwargs):
             rdm1 = 0
             rdm2 = 0

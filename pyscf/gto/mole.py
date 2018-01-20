@@ -1828,10 +1828,10 @@ class Mole(lib.StreamObject):
                 self.make_env(self._atom, self._basis, self._env, self.nucmod)
         self._atm, self._ecpbas, self._env = \
                 self.make_ecp_env(self._atm, self._ecp, self._env)
-        if (self.nelectron+self.spin) % 2 != 0:
-            raise RuntimeError('Electron number %d and spin %d are not consistent\n'
-                               'Note mol.spin = 2S = Nalpha - Nbeta, not 2S+1' %
-                               (self.nelectron, self.spin))
+
+        # Access self.nelec in which the code checks whether the spin and
+        # number of electrons are consistent.
+        self.nelec
 
         if self.symmetry:
             from pyscf import symm
