@@ -25,7 +25,7 @@ def finger(a):
     w = numpy.cos(numpy.arange(a.size))
     return numpy.dot(w, a.ravel())
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_parse_xc(self):
         hyb, fn_facs = dft.xcfun.parse_xc('.5*HF+.5*B3LYP,VWN*.5')
         self.assertAlmostEqual(hyb, .6, 12)

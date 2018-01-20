@@ -24,7 +24,7 @@ mol1.charge = 1
 mol1.spin = 1
 mol1.build()
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_nr_lda(self):
         method.xc = 'lda, vwn_rpa'
         self.assertAlmostEqual(method.scf(), -2.8641551904776055, 9)

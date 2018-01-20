@@ -1266,6 +1266,7 @@ class Cell(mole.Mole):
         return pbc_eval_gto(self, eval_name, coords, comp, kpts, kpt,
                             shls_slice, non0tab, ao_loc, out)
 
+    @lib.with_doc(pbc_eval_gto.__doc__)
     def eval_gto(self, eval_name, coords, comp=1, kpts=None, kpt=None,
                  shls_slice=None, non0tab=None, ao_loc=None, out=None):
         if eval_name[:3] == 'PBC':

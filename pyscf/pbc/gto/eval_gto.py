@@ -50,7 +50,7 @@ def eval_gto(cell, eval_name, coords, comp=1, kpts=None, kpt=None,
             If provided, results are written into this array.
 
     Returns:
-        A list of 2D (or 3D) array to hold the AO values on grids.  Each
+        A list of 2D (or 3D) arrays to hold the AO values on grids.  Each
         element of the list corresponds to a k-point and it has the shape
         (N,nao) Or shape (\*,N,nao).
 

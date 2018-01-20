@@ -52,7 +52,7 @@ h2osym_cation = gto.M(
     basis = '631g')
 
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_nr_lda(self):
         method = dft.RKS(h2o)
         method.grids.prune = dft.gen_grid.treutler_prune

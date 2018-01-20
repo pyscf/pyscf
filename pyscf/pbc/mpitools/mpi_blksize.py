@@ -61,7 +61,6 @@ def get_max_blocksize_from_mem(array_size, mem_per_block, mem, priority_list=Non
             loop = False
     chunksize = numpy.array(chunksize)[idxinv]
     #print("chunks = ", chunksize)
-    #print("mem_per_chunk = %.8e" %
-    (numpy.prod(numpy.asarray(chunksize))*mem_per_block))
+    #print("mem_per_chunk = %.8e" % (numpy.prod(numpy.asarray(chunksize))*mem_per_block))
     return tuple(chunksize)
 

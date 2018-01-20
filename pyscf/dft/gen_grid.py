@@ -487,14 +487,6 @@ class Grids(lib.StreamObject):
         logger.info(self, 'tot grids = %d', len(self.weights))
         return self
 
-    def setup_grids(self, mol=None):
-        import warnings
-        with warnings.catch_warnings():
-            warnings.simplefilter("once")
-            warnings.warn('API updates: setup_grids method is depercated '
-                          'and will be removed in future release.\n')
-        return self.build(mol)
-
     def kernel(self, mol=None, with_non0tab=False):
         self.dump_flags()
         return self.build(mol, with_non0tab)
