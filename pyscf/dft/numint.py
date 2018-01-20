@@ -272,7 +272,7 @@ def eval_rho2(mol, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
             for i in range(1, 4):
                 c1 = _dot_ao_dm(mol, ao[i], cneg, non0tab, shls_slice, ao_loc)
                 rho[i] -= numpy.einsum('pi,pi->p', c0, c1) * 2 # *2 for +c.c.
-                rho5 -= numpy.einsum('pi,pi->p', c1, c1)
+                rho5 += numpy.einsum('pi,pi->p', c1, c1)
             XX, YY, ZZ = 4, 7, 9
             ao2 = ao[XX] + ao[YY] + ao[ZZ]
             c1 = _dot_ao_dm(mol, ao2, cneg, non0tab, shls_slice, ao_loc)
