@@ -1280,7 +1280,7 @@ class Cell(mole.Mole):
     def eval_gto(self, eval_name, coords, comp=1, kpts=None, kpt=None,
                  shls_slice=None, non0tab=None, ao_loc=None, out=None):
         if eval_name[:3] == 'PBC':
-            return self.pbc_eval_gto(self, eval_name, coords, comp, kpts, kpt,
+            return self.pbc_eval_gto(eval_name, coords, comp, kpts, kpt,
                                      shls_slice, non0tab, ao_loc, out)
         else:
             return mole.eval_gto(self, eval_name, coords, comp,

@@ -42,7 +42,7 @@ def ecp_int(cell, kpts=None):
     buf = buf.reshape(len(kpts_lst),-1)
     mat = []
     for k, kpt in enumerate(kpts_lst):
-        v = lib.unpack_tril(buf[k])
+        v = lib.unpack_tril(buf[k], lib.HERMITIAN)
         if abs(kpt).sum() < 1e-9:  # gamma_point:
             v = v.real
         mat.append(v)
