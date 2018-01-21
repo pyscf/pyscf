@@ -20,8 +20,8 @@ import h5py
 from pyscf.ao2mo import incore
 from pyscf.ao2mo import outcore
 from pyscf.ao2mo import r_outcore
-
 from pyscf.ao2mo.addons import load, restore
+from pyscf import gto
 
 def full(eri_or_mol, mo_coeff, *args, **kwargs):
     r'''MO integral transformation. The four indices (ij|kl) are transformed
@@ -136,7 +136,8 @@ def full(eri_or_mol, mo_coeff, *args, **kwargs):
     if isinstance(eri_or_mol, numpy.ndarray):
         return incore.full(eri_or_mol, mo_coeff, *args, **kwargs)
     else:
-        if 'intor' in kwargs and '_spinor' in kwargs['intor']:
+        if ('intor' in kwargs and
+            '_spinor' in gto.moleintor.ascint3(kwargs['intor'])):
             mod = r_outcore
         else:
             mod = outcore
