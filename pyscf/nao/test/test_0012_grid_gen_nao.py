@@ -1,7 +1,7 @@
 from __future__ import print_function, division
 import unittest
 from pyscf.nao import nao 
-from pyscf.nao.m_gauleg import leggauss_ab 
+from pyscf.nao.m_gauleg import gauss_legendre 
 from pyscf import dft
 import numpy as np
 
