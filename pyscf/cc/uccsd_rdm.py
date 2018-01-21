@@ -364,7 +364,7 @@ def _make_rdm1(mycc, d1, with_frozen=True):
     dm1a *= .5
     dm1a[numpy.diag_indices(nocca)] += 1
 
-    dm1b = numpy.empty((nmoa,nmoa))
+    dm1b = numpy.empty((nmob,nmob))
     dm1b[:noccb,:noccb] = dOO + dOO.conj().T
     dm1b[:noccb,noccb:] = dOV + dVO.conj().T
     dm1b[noccb:,:noccb] = dm1b[:noccb,noccb:].conj().T

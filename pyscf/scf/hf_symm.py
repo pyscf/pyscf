@@ -278,7 +278,7 @@ def eig(mf, h, s):
     return e, c
 
 
-class RHF(hf.RHF):
+class SymAdaptedRHF(hf.RHF):
     __doc__ = hf.SCF.__doc__ + '''
     Attributes for symmetry allowed RHF:
         irrep_nelec : dict
@@ -410,9 +410,10 @@ class RHF(hf.RHF):
         return get_irrep_nelec(mol, mo_coeff, mo_occ, s)
 
     canonicalize = canonicalize
+RHF = SymAdaptedRHF
 
 
-class ROHF(rohf.ROHF):
+class SymAdaptedROHF(rohf.ROHF):
     __doc__ = hf.SCF.__doc__ + '''
     Attributes for symmetry allowed ROHF:
         irrep_nelec : dict
@@ -711,6 +712,7 @@ class ROHF(rohf.ROHF):
         mo_eb = numpy.einsum('pi,pi->i', mo_coeff, fock.fockb.dot(mo_coeff))
         mo_e = lib.tag_array(mo_e, mo_ea=mo_ea, mo_eb=mo_eb)
         return mo_e, mo_coeff
+ROHF = SymAdaptedROHF
 
 
 def _dump_mo_energy(mol, mo_energy, mo_occ, ehomo, elumo, orbsym, title='',

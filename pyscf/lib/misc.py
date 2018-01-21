@@ -155,6 +155,9 @@ def _balanced_partition(cum, ntasks):
 def _blocksize_partition(cum, blocksize):
     n = len(cum) - 1
     displs = [0]
+    if n == 0:
+        return displs
+
     p0 = 0
     for i in range(1, n):
         if cum[i+1]-cum[p0] > blocksize:
@@ -180,6 +183,8 @@ def prange(start, end, step):
 
 def prange_tril(start, stop, blocksize):
     '''for p0, p1 in prange_tril: p1*(p1+1)/2-p0*(p0+1)/2 < blocksize'''
+    if start >= stop:
+        return []
     idx = numpy.arange(start, stop+1)
     cum_costs = idx*(idx+1)//2 - start*(start+1)//2
     displs = [x+start for x in _blocksize_partition(cum_costs, blocksize)]
@@ -326,17 +331,48 @@ class StreamObject(object):
     stdout = sys.stdout
     _keys = set(['verbose', 'stdout'])
 
+    def kernel(self, *args, **kwargs):
+        '''
+        Kernel function is the main driver of a method.  Every method should
+        define the kernel function as the entry of the calculation.  Note the
+        return value of kernel function is not strictly defined.  It can be 
+        anything related to the method (such as the energy, the wave-function,
+        the DFT mesh grids etc.).
+        '''
+        pass
+
+    def pre_kernel(self, envs):
+        '''
+        A hook to be run before the main body of kernel function is executed.
+        Internal variables are exposed to pre_kernel through the "envs"
+        dictionary.  Return value of pre_kernel function is not required.
+        '''
+        pass
+
+    def post_kernel(self, envs):
+        '''
+        A hook to be run after the main body of the kernel function.  Internal
+        variables are exposed to post_kernel through the "envs" dictionary.
+        Return value of post_kernel function is not required.
+        '''
+        pass
+
     def run(self, *args, **kwargs):
-        '''Call the kernel function of current object.  `args` will be passed
+        '''
+        Call the kernel function of current object.  `args` will be passed
         to kernel function.  `kwargs` will be used to update the attributes of
-        current object.
+        current object.  The return value of method run is the object itself.
+        This allows a series of functions/methods to be executed in pipe.
         '''
         self.set(**kwargs)
         self.kernel(*args)
         return self
 
     def set(self, **kwargs):
-        '''Update the attributes of the current object.
+        '''
+        Update the attributes of the current object.  The return value of
+        method set is the object itself.  This allows a series of
+        functions/methods to be executed in pipe.
         '''
         #if hasattr(self, '_keys'):
         #    for k,v in kwargs.items():
@@ -350,7 +386,10 @@ class StreamObject(object):
         return self
 
     def apply(self, fn, *args, **kwargs):
-        '''Apply the fn to rest arguments:  return fn(*args, **kwargs)
+        '''
+        Apply the fn to rest arguments:  return fn(*args, **kwargs).  The
+        return value of method set is the object itself.  This allows a series
+        of functions/methods to be executed in pipe.
         '''
         return fn(self, *args, **kwargs)
 
@@ -359,9 +398,12 @@ class StreamObject(object):
 #        return args + args1[len(args):], kwargs
 
     def check_sanity(self):
-        '''Check misinput of class attributes, check whether a class method is
+        '''
+        Check input of class/object attributes, check whether a class method is
         overwritten.  It does not check the attributes which are prefixed with
-        "_".
+        "_".  The
+        return value of method set is the object itself.  This allows a series
+        of functions/methods to be executed in pipe.
         '''
         if (self.verbose > 0 and  # logger.QUIET
             hasattr(self, '_keys')):
@@ -471,13 +513,13 @@ def overwrite_mro(obj, mro):
         pass
 # Overwrite type.mro function so that Temp class can use the given mro
     HackMRO.mro = lambda self: mro
-    if sys.version_info < (3,):
-        class Temp(obj.__class__):
-            __metaclass__ = HackMRO
-    else:
-        #class Temp(obj.__class__, metaclass=HackMRO):
-        #    pass
-        raise NotImplementedError()
+    #if sys.version_info < (3,):
+    #    class Temp(obj.__class__):
+    #        __metaclass__ = HackMRO
+    #else:
+    #    class Temp(obj.__class__, metaclass=HackMRO):
+    #        pass
+    Temp = HackMRO(obj.__class__.__name__, obj.__class__.__bases__, obj.__dict__)
     obj = Temp()
 # Delete mro function otherwise all subclass of Temp are not able to
 # resolve the right mro
@@ -590,7 +632,7 @@ class call_in_background(object):
             def def_async_fn(fn):
                 return fn
 
-        elif h5py.__version__[:4] == '2.2.':
+        elif h5py.version.version[:4] == '2.2.':
 # h5py-2.2.* has bug in threading mode.
             def def_async_fn(fn):
                 return fn

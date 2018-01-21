@@ -422,9 +422,9 @@ class SCF(mol_hf.SCF):
         from pyscf.pbc.df import mdf_jk
         return mdf_jk.density_fit(self, auxbasis, with_df)
 
-    def x2c1e(self):
-        from pyscf.pbc.scf import x2c
-        return x2c.sfx2c1e(self)
+    def sfx2c1e(self):
+        from pyscf.pbc.x2c import sfx2c1e
+        return sfx2c1e.sfx2c1e(self)
 
 class RHF(SCF, mol_hf.RHF):
     def convert_from_(self, mf):

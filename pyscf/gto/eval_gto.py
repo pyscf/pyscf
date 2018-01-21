@@ -9,13 +9,6 @@ from pyscf import lib
 from pyscf.gto.moleintor import make_loc
 
 BLKSIZE = 128 # needs to be the same to lib/gto/grid_ao_drv.c
-ANG_OF     = 1
-NPRIM_OF   = 2
-NCTR_OF    = 3
-KAPPA_OF   = 4
-PTR_EXP    = 5
-PTR_COEFF  = 6
-BAS_SLOTS  = 8
 
 libcgto = lib.load_library('libcgto')
 
@@ -55,12 +48,13 @@ def eval_gto(mol, eval_name, coords,
             evaluated.  By default, all shells defined in mol will be evaluated.
         non0tab : 2D bool array
             mask array to indicate whether the AO values are zero.  The mask
-            array can be obtained by calling :func:`make_mask`
+            array can be obtained by calling :func:`dft.gen_grid.make_mask`
         out : ndarray
             If provided, results are written into this array.
 
     Returns:
-        2D array of shape (N,nao) Or 3D array of shape (\*,N,nao) for AO values
+        2D array of shape (N,nao) Or 3D array of shape (\*,N,nao) to store AO
+        values on grids.
 
     Examples:
 

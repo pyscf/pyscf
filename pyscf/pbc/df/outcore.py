@@ -8,7 +8,7 @@ import h5py
 from pyscf import lib
 from pyscf import gto
 from pyscf.ao2mo.outcore import balance_segs
-from pyscf.pbc.lib.kpt_misc import is_zero, gamma_point, unique, KPT_DIFF_TOL
+from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, unique, KPT_DIFF_TOL
 from pyscf.pbc.df.incore import wrap_int3c
 
 libpbc = lib.load_library('libpbc')

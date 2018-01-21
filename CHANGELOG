@@ -19,27 +19,34 @@ PySCF 1.5 alpha (2018-03-??)
   - Generalized Hartree-Fock with PBC
   - Generalized CCSD and k-point CCSD with PBC
   - RCCSD(T) and UCCSD(T) for non-canonical HF orbitals
-  - RCISD and UCISD nuclear gradients
-  - RMP2 and UMP2 nuclear gradients
-  - UCCSD nuclear gradients
+  - RCISD and UCISD analytical nuclear gradients
+  - RMP2 and UMP2 analytical nuclear gradients
+  - UCCSD analytical nuclear gradients
   - Frozen orbitals in MP2, CISD, CCSD, CCSD(T) nuclear gradients
+  - SF-X2C-1E analytical nuclear gradients
+  - SF-X2C-1E analytical nuclear hessian
+  - Analytical nuclear gradients and hessian for ECP integrals
+  - GIAO-ECP integrals for NMR shielding
 * Improved
   - Support of setting omp threads in FCI solver
   - Supported even number of grids in pbc calculations
   - Performance of UCCSD lambda solver
   - The function to make SCF initial guess from the chkfile of the
     molecule with different geometry
+  - The mcscf natural orbitals in the state-average calculation
 
 
-PySCF 1.4.3 (2018-01-?)
+PySCF 1.4.3 (2018-01-17)
 -----------------------
 * Improved
   - Assert convergence in geometry optimization
   - Initial guess in SCF PES scanning
+  - Memory usage for generating becke-grids in DFT
 * Bugfix
   - XC parser to support the scaled compound functional
-  - The effects of level_shift in second order SCF
+  - In the second order SCF algorithm, removing level_shift
   - k-point RCCSD for non-canonical HF reference
+  - basis contraction in ECP integrals
 
 
 PySCF 1.4.2 (2017-12-06)
@@ -129,7 +136,7 @@ PySCF 1.4 beta (2017-08-22)
 PySCF 1.4 alpha (2017-07-24)
 ----------------------------
 * Added
-  - Spinor-GTO evaluator
+  - General function to evaluate Spinor GTO in real space grids
   - Dirac-Kohn-Sham (LDA functional)
   - EDIIS and ADIIS
   - Periodic CCSD with k-point sampling

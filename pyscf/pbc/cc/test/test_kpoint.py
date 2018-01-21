@@ -56,7 +56,7 @@ def run_kcell(cell, n, nk):
 #    print "cc energy (per unit cell) = %.17g" % ecc
     return ekpt, ecc
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_111_n0(self):
         L = 10.0
         n = 11

@@ -151,6 +151,6 @@ if __name__ == '__main__':
     hfg = rhf_grad.Gradients(mf)
     g1 = tdg.kernel(z[0])
     g2 = hfg.kernel()
-    print g1# + g2
+    print(g1)# + g2
 # 0  0  0.3021705380000239
 

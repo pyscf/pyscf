@@ -178,7 +178,7 @@ class KnownValues(unittest.TestCase):
         s1 = cl1.pbc_intor('int1e_ovlp_sph', hermi=1, kpts=kpts[0])
         self.assertAlmostEqual(finger(s1), 492.30658304804126, 4)
 
-    def test_ecp_pseudo(self):
+    def test_ecp_pseudo_high_cost(self):
         from pyscf.pbc.gto import ecp
         cell = pgto.M(
             a = np.eye(3)*5,

@@ -1,5 +1,9 @@
 #!/usr/bin/env python
 
+'''
+spin-free X2C correction for extended systems
+(In testing)
+'''
 
 import time
 from functools import reduce
@@ -9,11 +13,13 @@ import scipy.linalg
 from pyscf import lib
 from pyscf.gto import mole
 from pyscf.lib import logger
-from pyscf.scf import x2c
+from pyscf.x2c import x2c
 from pyscf.pbc import gto as pbcgto
+from pyscf.pbc import tools
 from pyscf.pbc.df import aft
 from pyscf.pbc.df import aft_jk
 from pyscf.pbc.df import ft_ao
+from pyscf.pbc.scf import ghf
 
 
 def sfx2c1e(mf):
@@ -29,28 +35,34 @@ def sfx2c1e(mf):
     Examples:
 
     >>> mol = gto.M(atom='H 0 0 0; F 0 0 1', basis='ccpvdz', verbose=0)
-    >>> mf = scf.sfx2c1e(scf.RHF(mol))
+    >>> mf = scf.RHF(mol).sfx2c1e()
     >>> mf.scf()
 
     >>> mol.symmetry = 1
     >>> mol.build(0, 0)
-    >>> mf = scf.sfx2c1e(scf.UHF(mol))
+    >>> mf = scf.UHF(mol).sfx2c1e()
     >>> mf.scf()
     '''
+    if isinstance(mf, x2c._X2C_SCF):
+        if mf.with_x2c is None:
+            return mf.__class__(mf)
+        else:
+            return mf
+
     mf_class = mf.__class__
     if mf_class.__doc__ is None:
         doc = ''
     else:
         doc = mf_class.__doc__
-    class X2C_HF(mf_class, x2c._X2C_HF):
+    class SFX2C1E_SCF(mf_class, x2c._X2C_SCF):
         __doc__ = doc + \
         '''
         Attributes for spin-free X2C:
             with_x2c : X2C object
         '''
-        def __init__(self):
-            self.with_x2c = SpinFreeX2C(mf.mol)
+        def __init__(self, mf):
             self.__dict__.update(mf.__dict__)
+            self.with_x2c = SpinFreeX2C(mf.mol)
             self._keys = self._keys.union(['with_x2c'])
 
         def get_hcore(self, cell=None, kpts=None, kpt=None):
@@ -64,11 +76,17 @@ def sfx2c1e(mf):
                     else:
                         kpts = kpt
             if self.with_x2c:
-                return self.with_x2c.get_hcore(cell, kpts)
+                hcore = self.with_x2c.get_hcore(cell, kpts)
+                if isinstance(self, ghf.GHF):
+                    if kpts.ndim == 1:
+                        hcore = scipy.linalg.block_diag(hcore, hcore)
+                    else:
+                        hcore = [scipy.linalg.block_diag(h, h) for h in hcore]
+                return hcore
             else:
                 return mf_class.get_hcore(self, cell, kpts)
 
-    return X2C_HF()
+    return SFX2C1E_SCF(mf)
 
 sfx2c = sfx2c1e
 
@@ -102,9 +120,11 @@ class SpinFreeX2C(X2C):
                 ish0, ish1, p0, p1 = atom_slices[ia]
                 shls_slice = (ish0, ish1, ish0, ish1)
                 t1 = xcell.intor('int1e_kin_sph', shls_slice=shls_slice)
-                v1 = xcell.intor('int1e_nuc_sph', shls_slice=shls_slice)
                 s1 = xcell.intor('int1e_ovlp_sph', shls_slice=shls_slice)
-                w1 = xcell.intor('int1e_pnucp_sph', shls_slice=shls_slice)
+                with xcell.with_rinv_as_nucleus(ia):
+                    z = -xcell.atom_charge(ia)
+                    v1 = z * xcell.intor('int1e_rinv', shls_slice=shls_slice)
+                    w1 = z * xcell.intor('int1e_prinvp', shls_slice=shls_slice)
                 vloc[p0:p1,p0:p1] = v1
                 wloc[p0:p1,p0:p1] = w1
                 x[p0:p1,p0:p1] = x2c._x2c1e_xmatrix(t1, v1, w1, s1, c)
@@ -121,6 +141,7 @@ class SpinFreeX2C(X2C):
 
         h1_kpts = []
         for k in range(len(kpts_lst)):
+# The treatment of pnucp local part has huge effects to hcore
             #h1 = x2c._get_hcore_fw(t[k], vloc, wloc, s[k], x, c) - vloc + v[k]
             #h1 = x2c._get_hcore_fw(t[k], v[k], w[k], s[k], x, c)
             h1 = x2c._get_hcore_fw(t[k], v[k], wloc, s[k], x, c)
@@ -136,12 +157,11 @@ class SpinFreeX2C(X2C):
         return lib.asarray(h1_kpts)
 
 
-# We still use Ewald-like technique to compute spVsp.
-# Theoratically, spVsp is not divergent because the numeriator spsp and the
-# denorminator in Coulomb kernel 4pi/G^2 are cancelled.  A real space lattice
-# sum can converge to a finite value.  However, it's difficult to accurately
-# converge this value, large number of images in lattice summation is still
-# required.
+# Use Ewald-like technique to compute spVsp.
+# spVsp may not be divergent because the numeriator spsp and the denorminator
+# in Coulomb kernel 4pi/G^2 are likely cancelled.  Even a real space lattice
+# sum can converge to a finite value, it's difficult to accurately converge
+# this value, i.e., large number of images in lattice summation is required.
 def get_pnucp(mydf, kpts=None):
     cell = mydf.cell
     if kpts is None:
@@ -157,15 +177,14 @@ def get_pnucp(mydf, kpts=None):
     nao_pair = nao * (nao+1) // 2
 
     Gv, Gvbase, kws = cell.get_Gv_weights(mydf.mesh)
+    charge = -cell.atom_charges()
     kpt_allow = numpy.zeros(3)
+    coulG = tools.get_coulG(cell, kpt_allow, mesh=mydf.mesh, Gv=Gv)
+    coulG *= kws
     if mydf.eta == 0:
-        charge = -cell.atom_charges()
-        #coulG=4*numpy.pi/G^2 is cancelled with (sigma dot p i, sigma dot p j)
+        wj = numpy.zeros((nkpts,nao_pair), dtype=numpy.complex128)
         SI = cell.get_SI(Gv)
-        vGR = numpy.einsum('i,ix->x', 4*numpy.pi*charge, SI.real) * kws
-        vGI = numpy.einsum('i,ix->x', 4*numpy.pi*charge, SI.imag) * kws
-        wjR = numpy.zeros((nkpts,nao_pair))
-        wjI = numpy.zeros((nkpts,nao_pair))
+        vG = numpy.einsum('i,ix->x', charge, SI) * coulG
     else:
         nuccell = copy.copy(cell)
         half_sph_norm = .5/numpy.sqrt(numpy.pi)
@@ -179,48 +198,41 @@ def get_pnucp(mydf, kpts=None):
         nuccell._env = numpy.hstack((cell._env, chg_env))
 
         wj = lib.asarray(mydf._int_nuc_vloc(nuccell, kpts_lst, 'int3c2e_pvp1_sph'))
-        wjR = wj.real
-        wjI = wj.imag
         t1 = log.timer_debug1('pnucp pass1: analytic int', *t1)
 
-        charge = -cell.atom_charges()
-        #coulG=4*numpy.pi/G^2 is cancelled with (sigma dot p i, sigma dot p j)
         aoaux = ft_ao.ft_ao(nuccell, Gv)
-        vGR = numpy.einsum('i,xi->x', 4*numpy.pi*charge, aoaux.real) * kws
-        vGI = numpy.einsum('i,xi->x', 4*numpy.pi*charge, aoaux.imag) * kws
+        vG = numpy.einsum('i,xi->x', charge, aoaux) * coulG
 
     max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
-    for k, pqkR, pqkI, p0, p1 \
-            in mydf.ft_loop(mydf.mesh, kpt_allow, kpts_lst,
-                            max_memory=max_memory, aosym='s2'):
-# rho_ij(G) nuc(-G) / G^2
-# = [Re(rho_ij(G)) + Im(rho_ij(G))*1j] [Re(nuc(G)) - Im(nuc(G))*1j] / G^2
-        if not aft_jk.gamma_point(kpts_lst[k]):
-            wjI[k] += numpy.einsum('k,xk->x', vGR[p0:p1], pqkI)
-            wjI[k] -= numpy.einsum('k,xk->x', vGI[p0:p1], pqkR)
-        wjR[k] += numpy.einsum('k,xk->x', vGR[p0:p1], pqkR)
-        wjR[k] += numpy.einsum('k,xk->x', vGI[p0:p1], pqkI)
-    t1 = log.timer_debug1('contracting Vnuc', *t1)
+    for aoaoks, p0, p1 in mydf.ft_loop(mydf.mesh, kpt_allow, kpts_lst,
+                                       max_memory=max_memory, aosym='s2',
+                                       intor='GTO_ft_pdotp_sph'):
+        for k, aoao in enumerate(aoaoks):
+            if aft_jk.gamma_point(kpts_lst[k]):
+                wj[k] += numpy.einsum('k,kx->x', vG[p0:p1].real, aoao.real)
+                wj[k] += numpy.einsum('k,kx->x', vG[p0:p1].imag, aoao.imag)
+            else:
+                wj[k] += numpy.einsum('k,kx->x', vG[p0:p1].conj(), aoao)
+    t1 = log.timer_debug1('contracting pnucp', *t1)
 
     if mydf.eta != 0 and cell.dimension == 3:
-        nucbar = sum([z/nuccell.bas_exp(i)[0] for i,z in enumerate(charge)])
-        nucbar *= numpy.pi/cell.vol * 2
+        nucbar = sum([-z/nuccell.bas_exp(i)[0] for i,z in enumerate(charge)])
+        nucbar *= numpy.pi/cell.vol * 2  # 2 due to the factor 1/2 in T
         ovlp = cell.pbc_intor('int1e_kin_sph', 1, lib.HERMITIAN, kpts_lst)
         for k in range(nkpts):
             s = lib.pack_tril(ovlp[k])
-            wjR[k] -= nucbar * s.real
-            wjI[k] -= nucbar * s.imag
+            wj[k] += nucbar * s
 
-    wj = []
+    wj_kpts = []
     for k, kpt in enumerate(kpts_lst):
         if aft_jk.gamma_point(kpt):
-            wj.append(lib.unpack_tril(wjR[k]))
+            wj_kpts.append(lib.unpack_tril(wj[k].real.copy()))
         else:
-            wj.append(lib.unpack_tril(wjR[k]+wjI[k]*1j))
+            wj_kpts.append(lib.unpack_tril(wj[k]))
 
     if kpts is None or numpy.shape(kpts) == (3,):
-        wj = wj[0]
-    return wj
+        wj_kpts = wj_kpts[0]
+    return numpy.asarray(wj_kpts)
 
 
 if __name__ == '__main__':

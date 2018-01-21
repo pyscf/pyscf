@@ -155,10 +155,12 @@ def default_nevpt_schedule(mol, maxM=500, tol=1e-7):
 
 def DMRG_COMPRESS_NEVPT(mc, maxM=500, root=0, nevptsolver=None, tol=1e-7,
                         nevpt_integral=None):
-    if nevpt_integral:
-        mol = chkfile.load_mol(nevpt_integral)
 
-        fh5 = h5py.File(nevpt_integral, 'r')
+    if isinstance(nevpt_integral, str) and h5py.is_hdf5(nevpt_integral):
+        nevpt_integral_file = os.path.abspath(nevpt_integral)
+        mol = chkfile.load_mol(nevpt_integral_file)
+
+        fh5 = h5py.File(nevpt_integral_file, 'r')
         ncas = fh5['mc/ncas'].value
         ncore = fh5['mc/ncore'].value
         nvirt = fh5['mc/nvirt'].value
@@ -174,16 +176,22 @@ def DMRG_COMPRESS_NEVPT(mc, maxM=500, root=0, nevptsolver=None, tol=1e-7,
         nelecas = mc.nelecas
         nroots = mc.fcisolver.nroots
         wfnsym = mc.fcisolver.wfnsym
-        nevpt_integral_file = 'nevpt_perturb_integral'
-        write_chk(mc, root, nevpt_integral_file)
+        nevpt_integral_file = None
 
     if nevptsolver is None:
-        nevptsolver = default_nevpt_schedule(mol,maxM, tol)
+        nevptsolver = default_nevpt_schedule(mol, maxM, tol)
         nevptsolver.__dict__.update(mc.fcisolver.__dict__)
         nevptsolver.wfnsym = wfnsym
         nevptsolver.block_extra_keyword = mc.fcisolver.block_extra_keyword
     nevptsolver.nroots = nroots
     nevptsolver.executable = settings.BLOCKEXE_COMPRESS_NEVPT
+    nevpt_scratch = os.path.abspath(nevptsolver.scratchDirectory)
+    dmrg_scratch = os.path.abspath(mc.fcisolver.scratchDirectory)
+
+    # Integrals are not given by the kwarg nevpt_integral
+    if nevpt_integral_file is None:
+        nevpt_integral_file = os.path.join(nevpt_scratch, 'nevpt_perturb_integral')
+        write_chk(mc, root, nevpt_integral_file)
 
     conf = dmrgci.writeDMRGConfFile(nevptsolver, nelecas, False, with_2pdm=False,
                                     extraline=['fullrestart','nevpt_state_num %d'%root])
@@ -203,12 +211,12 @@ def DMRG_COMPRESS_NEVPT(mc, maxM=500, root=0, nevptsolver=None, tol=1e-7,
 
     t0 = (time.clock(), time.time())
 
+    # function nevpt_integral_mpi is called in this cmd
     cmd = ' '.join((nevptsolver.mpiprefix,
                     os.path.realpath(os.path.join(__file__, '..', 'nevpt_mpi.py')),
                     nevpt_integral_file,
                     nevptsolver.executable,
-                    mc.fcisolver.scratchDirectory,
-                    nevptsolver.scratchDirectory))
+                    dmrg_scratch, nevpt_scratch))
     logger.debug(nevptsolver, 'DMRG_COMPRESS_NEVPT cmd %s', cmd)
 
     try:
@@ -218,9 +226,10 @@ def DMRG_COMPRESS_NEVPT(mc, maxM=500, root=0, nevptsolver=None, tol=1e-7,
         raise err
 
     if nevptsolver.verbose >= logger.DEBUG1:
-        logger.debug1(nevptsolver, open(os.path.join(nevptsolver.scratchDirectory, '0/dmrg.out')).read())
+        logger.debug1(nevptsolver, open(os.path.join(nevpt_scratch, '0', 'dmrg.out')).read())
 
-    fh5 = h5py.File('Perturbation_%d'%root,'r')
+    perturb_file = os.path.join(nevpt_scratch, '0', 'Perturbation_%d'%root)
+    fh5 = h5py.File(perturb_file, 'r')
     Vi_e  =  fh5['Vi/energy'].value
     Vr_e  =  fh5['Vr/energy'].value
     fh5.close()
@@ -229,7 +238,7 @@ def DMRG_COMPRESS_NEVPT(mc, maxM=500, root=0, nevptsolver=None, tol=1e-7,
     logger.note(nevptsolver,'Si Subspace:  E = %.14f'%( Vi_e))
 
     logger.timer(nevptsolver,'MPS NEVPT calculation time', *t0)
-
+    return perturb_file
 
 
 def nevpt_integral_mpi(mc_chkfile, blockfile, dmrg_scratch, nevpt_scratch):
@@ -286,7 +295,7 @@ def nevpt_integral_mpi(mc_chkfile, blockfile, dmrg_scratch, nevpt_scratch):
     #comm.Reduce(Vi_energy,Vi_total,op=MPI.SUM, root=0)
     if rank == 0:
 
-        fh5 = h5py.File('Perturbation_%d'%root,'w')
+        fh5 = h5py.File(os.path.join(nevpt_scratch, 'Perturbation_%d'%root), 'w')
         fh5['Vi/energy']      =    Vi_total_e
         fh5['Vi/norm']        =    Vi_total_norm
         fh5['Vr/energy']      =    Vr_total_e

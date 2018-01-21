@@ -23,7 +23,8 @@ SG1RADII = numpy.array((
 def murray(n, *args, **kwargs):
     raise RuntimeError('Not implemented')
 
-def becke(n, charge, **kwargs):
+# Gauss-Chebyshev of the first kind,  and the transformed interval [0,\infty)
+def becke(n, charge, *args, **kwargs):
     '''Becke, JCP, 88, 2547 (1988)'''
     if charge == 1:
         rm = BRAGG_RADII[charge]
@@ -50,7 +51,7 @@ def delley(n, *args, **kwargs):
         dr[i-1] = dri
     return r, dr
 
-def mura_knowles(n, charge=None, **kwargs):
+def mura_knowles(n, charge=None, *args, **kwargs):
     '''Mura-Knowles (JCP, 104, 9848) log3 quadrature radial grids'''
     r = numpy.empty(n)
     dr = numpy.empty(n)
@@ -81,7 +82,9 @@ def gauss_chebyshev(n, *args, **kwargs):
 
 
 def treutler_ahlrichs(n, *args, **kwargs):
-    '''Treutler-Ahlrichs (JCP 102, 346 (M4)) radial grids'''
+    '''
+    Treutler-Ahlrichs (JCP 102, 346 (M4)) radial grids
+    '''
     r = numpy.empty(n)
     dr = numpy.empty(n)
     step = numpy.pi / (n+1)
@@ -139,13 +142,4 @@ def treutler_atomic_radii_adjust(mol, atomic_radii):
         g1 += g
         return g1
     return fadjust
-
-def _inter_distance(mol):
-# see gto.mole.energy_nuc
-    coords = mol.atom_coords()
-    rr = numpy.dot(coords, coords.T)
-    rd = rr.diagonal()
-    rr = rd[:,None] + rd - rr*2
-    rr[numpy.diag_indices_from(rr)] = 0
-    return numpy.sqrt(rr)
 

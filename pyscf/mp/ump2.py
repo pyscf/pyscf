@@ -72,14 +72,17 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=True,
 
 
 def get_nocc(mp):
+    frozen = mp.frozen
     if mp._nocc is not None:
         return mp._nocc
-    if isinstance(mp.frozen, (int, numpy.integer)):
-        nocca = int(mp.mo_occ[0].sum()) - mp.frozen
-        noccb = int(mp.mo_occ[1].sum()) - mp.frozen
+    elif frozen is None:
+        nocca = numpy.count_nonzero(mp.mo_occ[0] > 0)
+        noccb = numpy.count_nonzero(mp.mo_occ[1] > 0)
+    elif isinstance(frozen, (int, numpy.integer)):
+        nocca = numpy.count_nonzero(mp.mo_occ[0] > 0) - frozen
+        noccb = numpy.count_nonzero(mp.mo_occ[1] > 0) - frozen
         #assert(nocca > 0 and noccb > 0)
     else:
-        frozen = mp.frozen
         if len(frozen) > 0 and isinstance(frozen[0], (int, numpy.integer)):
 # The same frozen orbital indices for alpha and beta orbitals
             frozen = [frozen, frozen]
@@ -92,17 +95,20 @@ def get_nocc(mp):
     return nocca, noccb
 
 def get_nmo(mp):
+    frozen = mp.frozen
     if mp._nmo is not None:
         return mp._nmo
-    elif isinstance(mp.frozen, (int, numpy.integer)):
-        nmoa = mp.mo_occ[0].size - mp.frozen
-        nmob = mp.mo_occ[1].size - mp.frozen
-    elif isinstance(mp.frozen[0], (int, numpy.integer)):
-        nmoa = mp.mo_occ[0].size - len(mp.frozen)
-        nmob = mp.mo_occ[1].size - len(mp.frozen)
+    elif frozen is None:
+        nmoa = mp.mo_occ[0].size
+        nmob = mp.mo_occ[1].size
+    elif isinstance(frozen, (int, numpy.integer)):
+        nmoa = mp.mo_occ[0].size - frozen
+        nmob = mp.mo_occ[1].size - frozen
     else:
-        nmoa = len(mp.mo_occ[0]) - len(mp.frozen[0])
-        nmob = len(mp.mo_occ[1]) - len(mp.frozen[1])
+        if isinstance(frozen[0], (int, numpy.integer)):
+            frozen = (frozen, frozen)
+        nmoa = len(mp.mo_occ[0]) - len(frozen[0])
+        nmob = len(mp.mo_occ[1]) - len(frozen[1])
     return nmoa, nmob
 
 
@@ -114,15 +120,21 @@ def get_frozen_mask(mp):
     '''
     moidxa = numpy.ones(mp.mo_occ[0].size, dtype=bool)
     moidxb = numpy.ones(mp.mo_occ[1].size, dtype=bool)
-    if isinstance(mp.frozen, (int, numpy.integer)):
-        moidxa[:mp.frozen] = False
-        moidxb[:mp.frozen] = False
-    elif isinstance(mp.frozen[0], (int, numpy.integer)):
-        moidxa[list(mp.frozen)] = False
-        moidxb[list(mp.frozen)] = False
+
+    frozen = mp.frozen
+    if mp._nmo is not None:
+        moidxa[mp._nmo[0]:] = False
+        moidxb[mp._nmo[1]:] = False
+    elif frozen is None:
+        pass
+    elif isinstance(frozen, (int, numpy.integer)):
+        moidxa[:frozen] = False
+        moidxb[:frozen] = False
     else:
-        moidxa[list(mp.frozen[0])] = False
-        moidxb[list(mp.frozen[1])] = False
+        if isinstance(frozen[0], (int, numpy.integer)):
+            frozen = (frozen, frozen)
+        moidxa[list(frozen[0])] = False
+        moidxb[list(frozen[1])] = False
     return moidxa,moidxb
 
 def make_rdm1(mp, t2=None):
@@ -273,12 +285,13 @@ def _make_eris(mp, mo_coeff=None, ao2mofn=None, verbose=None):
 
     nocca, noccb = mp.get_nocc()
     nmoa, nmob = mp.get_nmo()
+    nvira, nvirb = nmoa-nocca, nmob-noccb
     nao = eris.mo_coeff[0].shape[0]
     nmo_pair = nmoa * (nmoa+1) // 2
     nao_pair = nao * (nao+1) // 2
     mem_incore = (nao_pair**2 + nmo_pair**2) * 8/1e6
     mem_now = lib.current_memory()[0]
-    max_memory = max(2000, mp.max_memory*.9-mem_now)
+    max_memory = max(0, mp.max_memory-mem_now)
 
     moa = eris.mo_coeff[0]
     mob = eris.mo_coeff[1]
@@ -291,9 +304,9 @@ def _make_eris(mp, mo_coeff=None, ao2mofn=None, verbose=None):
         (mp._scf._eri is not None and mem_incore+mem_now < mp.max_memory)):
         log.debug('transform (ia|jb) incore')
         if callable(ao2mofn):
-            eris.ovov = ao2mofn((orboa,orbva,orboa,orbva)).reshape(nocc*nvir,nocc*nvir)
-            eris.ovOV = ao2mofn((orboa,orbva,orbob,orbvb)).reshape(nocc*nvir,nocc*nvir)
-            eris.OVOV = ao2mofn((orbob,orbvb,orbob,orbvb)).reshape(nocc*nvir,nocc*nvir)
+            eris.ovov = ao2mofn((orboa,orbva,orboa,orbva)).reshape(nocca*nvira,nocca*nvira)
+            eris.ovOV = ao2mofn((orboa,orbva,orbob,orbvb)).reshape(nocca*nvira,noccb*nvirb)
+            eris.OVOV = ao2mofn((orbob,orbvb,orbob,orbvb)).reshape(noccb*nvirb,noccb*nvirb)
         else:
             eris.ovov = ao2mo.general(mp._scf._eri, (orboa,orbva,orboa,orbva))
             eris.ovOV = ao2mo.general(mp._scf._eri, (orboa,orbva,orbob,orbvb))
@@ -311,7 +324,8 @@ def _make_eris(mp, mo_coeff=None, ao2mofn=None, verbose=None):
     else:
         log.debug('transform (ia|jb) outcore')
         eris.feri = lib.H5TmpFile()
-        _ao2mo_ovov(mp, (orboa,orbva,orbob,orbvb), eris.feri, max_memory, log)
+        _ao2mo_ovov(mp, (orboa,orbva,orbob,orbvb), eris.feri,
+                    max(2000, max_memory), log)
         eris.ovov = eris.feri['ovov']
         eris.ovOV = eris.feri['ovOV']
         eris.OVOV = eris.feri['OVOV']

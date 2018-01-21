@@ -24,12 +24,18 @@ from pyscf import lib
 from pyscf import ao2mo
 from pyscf.ao2mo.incore import iden_coeffs
 from pyscf.pbc import tools
-from pyscf.pbc.lib.kpt_misc import is_zero, gamma_point
+from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point
 
 
 def get_eri(mydf, kpts=None, compact=False):
     cell = mydf.cell
+    nao = cell.nao_nr()
     kptijkl = _format_kpts(kpts)
+    if not _iskconserv(cell, kptijkl):
+        lib.logger.warn(cell, 'fft_ao2mo: momentum conservation not found in '
+                        'the given k-points %s', kptijkl)
+        return numpy.zeros((nao,nao,nao,nao))
+
     kpti, kptj, kptk, kptl = kptijkl
     q = kptj - kpti
     coulG = tools.get_coulG(cell, q, mesh=mydf.mesh)
@@ -46,7 +52,6 @@ def get_eri(mydf, kpts=None, compact=False):
         ao = numpy.asarray(ao.T, order='C')
         eri = _contract_compact(mydf, (ao,ao), coulG, max_memory=max_memory)
         if not compact:
-            nao = cell.nao_nr()
             eri = ao2mo.restore(1, eri, nao).reshape(nao**2,nao**2)
         return eri
 
@@ -85,6 +90,11 @@ def general(mydf, mo_coeffs, kpts=None, compact=False):
     if isinstance(mo_coeffs, numpy.ndarray) and mo_coeffs.ndim == 2:
         mo_coeffs = (mo_coeffs,) * 4
     mo_coeffs = [numpy.asarray(mo, order='F') for mo in mo_coeffs]
+    if not _iskconserv(cell, kptijkl):
+        lib.logger.warn(cell, 'fft_ao2mo: momentum conservation not found in '
+                        'the given k-points %s', kptijkl)
+        return numpy.zeros([mo.shape[1] for mo in mo_coeffs])
+
     allreal = not any(numpy.iscomplexobj(mo) for mo in mo_coeffs)
     q = kptj - kpti
     coulG = tools.get_coulG(cell, q, mesh=mydf.mesh)
@@ -316,6 +326,15 @@ def _format_kpts(kpts):
         else:
             kptijkl = kpts.reshape(4,3)
     return kptijkl
+
+def _iskconserv(cell, kpts):
+    dk = kpts[1] - kpts[0] + kpts[3] - kpts[2]
+    if abs(dk).sum() < 1e-9:
+        return True
+    else:
+        s = 1./(2*numpy.pi)*numpy.dot(dk, cell.lattice_vectors().T)
+        s_int = s.round(0)
+        return abs(s - s_int).sum() < 1e-9
 
 
 if __name__ == '__main__':

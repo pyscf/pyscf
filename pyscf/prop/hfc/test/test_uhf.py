@@ -6,7 +6,7 @@ from pyscf.prop.hfc import uhf as uhf_hfc
 from pyscf.prop.ssc import uhf as uhf_ssc
 from pyscf.ao2mo import _ao2mo
 from pyscf.prop.ssc.rhf import _dm1_mo2ao
-from pyscf.scf.newton_ah import _gen_uhf_response
+from pyscf.soscf.newton_ah import _gen_uhf_response
 from pyscf.data import nist
 from pyscf.data.gyro import get_nuc_g_factor
 

@@ -9,7 +9,7 @@ from pyscf import lib
 from pyscf import gto
 import pyscf.df
 from pyscf.scf import _vhf
-from pyscf.pbc.lib.kpt_misc import is_zero, gamma_point, unique, KPT_DIFF_TOL
+from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, unique, KPT_DIFF_TOL
 
 libpbc = lib.load_library('libpbc')
 

@@ -14,7 +14,7 @@ def grids_response(grids):
                                             grids.radi_method,
                                             grids.level, grids.prune)
     atm_coords = numpy.asarray(mol.atom_coords() , order='C')
-    atm_dist = radi._inter_distance(mol)
+    atm_dist = gto.mole.inter_distance(mol, atm_coords)
 
     def _radii_adjust(mol, atomic_radii):
         charges = mol.atom_charges()
@@ -149,8 +149,8 @@ class KnownValues(unittest.TestCase):
             F   1.   .3  0.5'''
         mol1.unit = 'B'
         mol1.build()
-        grids = dft.gen_grid.Grids(mol1)
-        c, w0b, w1b = grids_response(grids)
+        grids1 = dft.gen_grid.Grids(mol1)
+        c, w0b, w1b = grids_response(grids1)
 
         mol = gto.Mole()
         mol.verbose = 0
@@ -164,8 +164,20 @@ class KnownValues(unittest.TestCase):
         grids = dft.gen_grid.Grids(mol)
         c, w0a, w1a = grids_response(grids)
         self.assertAlmostEqual(lib.finger(w1a.transpose(0,2,1)), -13.101186585274547, 10)
-        dw = (w0a-w0b) / .00001
-        self.assertTrue(abs(dw-w1a[0,:,2]).max() < .002)
+
+        mol0 = gto.Mole()
+        mol0.verbose = 0
+        mol0.atom = '''
+            H   0.   0  -0.49999
+            C   0.   1    .1
+            O   0.   0   0.5
+            F   1.   .3  0.5'''
+        mol0.unit = 'B'
+        mol0.build()
+        grids0 = dft.gen_grid.Grids(mol0)
+        c, w0a      = grids_response(grids0)[:2]
+        dw = (w0a-w0b) / .00002
+        self.assertTrue(abs(dw-w1a[0,:,2]).max() < 1e-5)
 
         coords = []
         w0 = []
@@ -180,6 +192,19 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.finger(w1), -13.101186585274547, 10)
         self.assertAlmostEqual(abs(w1-w1a.transpose(0,2,1)).max(), 0, 12)
 
+        grids.radii_adjust = radi.becke_atomic_radii_adjust
+        coords = []
+        w0 = []
+        w1 = []
+        for c_a, w0_a, w1_a in rks.grids_response_cc(grids):
+            coords.append(c_a)
+            w0.append(w0_a)
+            w1.append(w1_a)
+        coords = numpy.vstack(coords)
+        w0 = numpy.hstack(w0)
+        w1 = numpy.concatenate(w1, axis=2)
+        self.assertAlmostEqual(lib.finger(w1), -163.85086096365865, 9)
+
 
     def test_get_vxc(self):
         mol = gto.Mole()
@@ -192,13 +217,27 @@ class KnownValues(unittest.TestCase):
         mol.build()
         mf = dft.RKS(mol)
         mf.conv_tol = 1e-12
-        e0 = mf.scf()
+        mf.grids.radii_adjust = radi.becke_atomic_radii_adjust
+        mf.scf()
         g = rks.Gradients(mf)
         g.grid_response = True
         g0 = g.kernel()
         dm0 = mf.make_rdm1()
 
-        denom = 1/.00001 * lib.param.BOHR
+        mol0 = gto.Mole()
+        mol0.verbose = 0
+        mol0.atom = [
+            ['O' , (0. , 0.     ,-0.00001)],
+            [1   , (0. , -0.757 , 0.587)],
+            [1   , (0. ,  0.757 , 0.587)] ]
+        mol0.basis = '631g'
+        mol0.build()
+        mf0 = dft.RKS(mol0)
+        mf0.grids.radii_adjust = radi.becke_atomic_radii_adjust
+        mf0.conv_tol = 1e-12
+        e0 = mf0.scf()
+
+        denom = 1/.00002 * lib.param.BOHR
         mol1 = gto.Mole()
         mol1.verbose = 0
         mol1.atom = [
@@ -208,38 +247,96 @@ class KnownValues(unittest.TestCase):
         mol1.basis = '631g'
         mol1.build()
         mf1 = dft.RKS(mol1)
+        mf1.grids.radii_adjust = radi.becke_atomic_radii_adjust
         mf1.conv_tol = 1e-12
         e1 = mf1.scf()
-        self.assertAlmostEqual((e1-e0)*denom, g0[0,2], 3)
+        self.assertAlmostEqual((e1-e0)*denom, g0[0,2], 6)
 
-        grids0 = dft.gen_grid.Grids(mol)
+        # grids response have non-negligible effects for small grids
+        grids = dft.gen_grid.Grids(mol)
+        grids.atom_grid = (20,86)
+        grids.build(with_non0tab=False)
+        grids0 = dft.gen_grid.Grids(mol0)
         grids0.atom_grid = (20,86)
         grids0.build(with_non0tab=False)
         grids1 = dft.gen_grid.Grids(mol1)
         grids1.atom_grid = (20,86)
         grids1.build(with_non0tab=False)
-        exc0 = dft.numint.nr_rks(mf._numint, mol, grids0, mf.xc, dm0)[1]
-        exc1 = dft.numint.nr_rks(mf1._numint, mol1, grids1, mf1.xc, dm0)[1]
+        xc = 'lda'
+        exc0 = dft.numint.nr_rks(mf0._numint, mol0, grids0, xc, dm0)[1]
+        exc1 = dft.numint.nr_rks(mf1._numint, mol1, grids1, xc, dm0)[1]
 
         grids0_w = copy.copy(grids0)
         grids0_w.weights = grids1.weights
         grids0_c = copy.copy(grids0)
         grids0_c.coords = grids1.coords
-        exc0_w = dft.numint.nr_rks(mf._numint, mol, grids0_w, mf.xc, dm0)[1]
-        exc0_c = dft.numint.nr_rks(mf._numint, mol1, grids0_c, mf.xc, dm0)[1]
+        exc0_w = dft.numint.nr_rks(mf0._numint, mol0, grids0_w, xc, dm0)[1]
+        exc0_c = dft.numint.nr_rks(mf1._numint, mol1, grids0_c, xc, dm0)[1]
 
         dexc_t = (exc1 - exc0) * denom
         dexc_c = (exc0_c - exc0) * denom
         dexc_w = (exc0_w - exc0) * denom
         self.assertAlmostEqual(dexc_t, dexc_c+dexc_w, 4)
 
-        vxc = rks.get_vxc(mf._numint, mol, grids0, mf.xc, dm0)[1]
-        ev1, vxc1 = rks.get_vxc_full_response(mf._numint, mol, grids0, mf.xc, dm0)
+        vxc = rks.get_vxc(mf._numint, mol, grids, xc, dm0)[1]
+        ev1, vxc1 = rks.get_vxc_full_response(mf._numint, mol, grids, xc, dm0)
         p0, p1 = mol.aoslice_by_atom()[0][2:]
         exc1_approx = numpy.einsum('xij,ij->x', vxc[:,p0:p1], dm0[p0:p1])*2
         exc1_full = numpy.einsum('xij,ij->x', vxc1[:,p0:p1], dm0[p0:p1])*2 + ev1[0]
-        self.assertAlmostEqual(dexc_t, exc1_approx[2], 3)
+        self.assertAlmostEqual(dexc_t, exc1_approx[2], 2)
         self.assertAlmostEqual(dexc_t, exc1_full[2], 5)
+
+        xc = 'pbe'
+        exc0 = dft.numint.nr_rks(mf0._numint, mol0, grids0, xc, dm0)[1]
+        exc1 = dft.numint.nr_rks(mf1._numint, mol1, grids1, xc, dm0)[1]
+
+        grids0_w = copy.copy(grids0)
+        grids0_w.weights = grids1.weights
+        grids0_c = copy.copy(grids0)
+        grids0_c.coords = grids1.coords
+        exc0_w = dft.numint.nr_rks(mf0._numint, mol0, grids0_w, xc, dm0)[1]
+        exc0_c = dft.numint.nr_rks(mf1._numint, mol1, grids0_c, xc, dm0)[1]
+
+        dexc_t = (exc1 - exc0) * denom
+        dexc_c = (exc0_c - exc0) * denom
+        dexc_w = (exc0_w - exc0) * denom
+        self.assertAlmostEqual(dexc_t, dexc_c+dexc_w, 4)
+
+        vxc = rks.get_vxc(mf._numint, mol, grids, xc, dm0)[1]
+        ev1, vxc1 = rks.get_vxc_full_response(mf._numint, mol, grids, xc, dm0)
+        p0, p1 = mol.aoslice_by_atom()[0][2:]
+        exc1_approx = numpy.einsum('xij,ij->x', vxc[:,p0:p1], dm0[p0:p1])*2
+        exc1_full = numpy.einsum('xij,ij->x', vxc1[:,p0:p1], dm0[p0:p1])*2 + ev1[0]
+        self.assertAlmostEqual(dexc_t, exc1_approx[2], 2)
+        self.assertAlmostEqual(dexc_t, exc1_full[2], 5)
+
+        xc = 'pbe0'
+        grids.radii_adjust = None
+        grids0.radii_adjust = None
+        grids1.radii_adjust = None
+        exc0 = dft.numint.nr_rks(mf0._numint, mol0, grids0, xc, dm0)[1]
+        exc1 = dft.numint.nr_rks(mf1._numint, mol1, grids1, xc, dm0)[1]
+
+        grids0_w = copy.copy(grids0)
+        grids0_w.weights = grids1.weights
+        grids0_c = copy.copy(grids0)
+        grids0_c.coords = grids1.coords
+        exc0_w = dft.numint.nr_rks(mf0._numint, mol0, grids0_w, xc, dm0)[1]
+        exc0_c = dft.numint.nr_rks(mf1._numint, mol1, grids0_c, xc, dm0)[1]
+
+        dexc_t = (exc1 - exc0) * denom
+        dexc_c = (exc0_c - exc0) * denom
+        dexc_w = (exc0_w - exc0) * denom
+        self.assertAlmostEqual(dexc_t, dexc_c+dexc_w, 4)
+
+        vxc = rks.get_vxc(mf._numint, mol, grids, xc, dm0)[1]
+        ev1, vxc1 = rks.get_vxc_full_response(mf._numint, mol, grids, xc, dm0)
+        p0, p1 = mol.aoslice_by_atom()[0][2:]
+        exc1_approx = numpy.einsum('xij,ij->x', vxc[:,p0:p1], dm0[p0:p1])*2
+        exc1_full = numpy.einsum('xij,ij->x', vxc1[:,p0:p1], dm0[p0:p1])*2 + ev1[0]
+        self.assertAlmostEqual(dexc_t, exc1_approx[2], 1)
+#FIXME: exc1_full is quite different to the finite difference results, why?
+        self.assertAlmostEqual(dexc_t, exc1_full[2], 2)
 
     def test_range_separated(self):
         mol = gto.M(atom="H; H 1 1.", basis='ccpvdz', verbose=0)

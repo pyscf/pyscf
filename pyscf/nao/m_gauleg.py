@@ -4,11 +4,20 @@ import numpy as np
 # Generates the Gauss-Legendre knots and weights for an arbitrary integration interval (a..b)
 def leggauss_ab(n=96, a=-1.0, b=1.0):
   assert(n>0)
-  from numpy.polynomial.legendre import leggauss
-  x,w = leggauss(n)
+  x,w = np.polynomial.legendre.leggauss(n)
   x = (b-a) * 0.5 * x+(b+a) * 0.5
   w = w * (b-a) * 0.5
   return x,w
+
+def gauss_legendre(n, charge=None, atom_id=None, **kwargs):
+    '''
+    Generates the Gauss-Legendre knots and weights
+    '''
+    if 'atom2rcut' in kwargs and atom_id is not None:
+        rcut = kwargs['atom2rcut'][atom_id]
+    else:
+        rcut = 1.
+    return leggauss_ab(n, 0, rcut)
 
 # Generates the Gauss-Legendre knots and weights
 #   Fortran version is written by James Talman

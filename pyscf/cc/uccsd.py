@@ -655,6 +655,10 @@ class UCCSD(ccsd.CCSD):
         from pyscf.cc import eom_uccsd
         return eom_uccsd.EOMEE(self).kernel(nroots, koopmans, guess, eris)
 
+    def nuc_grad_method(self):
+        from pyscf.cc import uccsd_grad
+        return uccsd_grad.Gradients(self)
+
     def amplitudes_to_vector(self, t1, t2, out=None):
         return amplitudes_to_vector(t1, t2, out)
 

@@ -23,7 +23,7 @@ from pyscf.pbc.df import df
 from pyscf.pbc.df import aft
 from pyscf.pbc.df.df import make_modrho_basis, fuse_auxcell
 from pyscf.pbc.df.df_jk import zdotNN, zdotCN, zdotNC
-from pyscf.pbc.lib.kpt_misc import is_zero, gamma_point, unique
+from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, unique
 from pyscf.pbc.df import mdf_jk
 from pyscf.pbc.df import mdf_ao2mo
 
@@ -215,7 +215,7 @@ class MDF(df.DF):
 
         self.kpts = kpts  # default is gamma point
         self.kpts_band = None
-        self.auxbasis = None
+        self._auxbasis = None
         self.mesh = cell.mesh
         self.eta = None
 

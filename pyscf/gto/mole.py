@@ -71,7 +71,7 @@ def gto_norm(l, expnt):
 
     Examples:
 
-    >>> print gto_norm(0, 1)
+    >>> print(gto_norm(0, 1))
     2.5264751109842591
     '''
     if l >= 0:
@@ -640,9 +640,9 @@ def make_env(atoms, basis, pre_env=[], nucmod={}):
         elif puresymb in _basdic:
             b = _basdic[puresymb].copy()
         else:
-            if symb[:2] == 'X-':
+            if symb[:2].upper() == 'X-':
                 symb = symb[2:]
-            elif symb[:6] == 'GHOST-':
+            elif symb[:6].upper() == 'GHOST-':
                 symb = symb[6:]
             puresymb = _rm_digit(symb)
             if symb in _basdic:
@@ -1032,7 +1032,6 @@ def energy_nuc(mol, charges=None, coords=None):
         float
     '''
     if charges is None: charges = mol.atom_charges()
-    if coords is None: coords = mol.atom_coords()
     if len(charges) == 0:
         return 0
     #e = 0
@@ -1044,15 +1043,19 @@ def energy_nuc(mol, charges=None, coords=None):
     #        r1 = coords[i]
     #        r = numpy.linalg.norm(r1-r2)
     #        e += q1 * q2 / r
-    rr = numpy.dot(coords, coords.T)
-    rd = rr.diagonal()
-    rr = rd[:,None] + rd - rr*2
-    rr[numpy.diag_indices_from(rr)] = 1e-60
-    r = numpy.sqrt(rr)
-    qq = charges[:,None] * charges[None,:]
-    qq[numpy.diag_indices_from(qq)] = 0
-    e = (qq/r).sum() * .5
+    rr = inter_distance(mol, coords)
+    rr[numpy.diag_indices_from(rr)] = 1e200
+    e = numpy.einsum('i,ij,j->', charges, 1./rr, charges) * .5
     return e
+
+def inter_distance(mol, coords=None):
+    '''
+    Inter-particle distance array
+    '''
+    if coords is None: coords = mol.atom_coords()
+    rr = numpy.linalg.norm(coords.reshape(-1,1,3) - coords, axis=2)
+    rr[numpy.diag_indices_from(rr)] = 0
+    return rr
 
 def sph_labels(mol, fmt=True):
     '''Labels for spherical GTO functions
@@ -1473,8 +1476,9 @@ PTR_RINV_ORIG   = 4
 PTR_RINV_ZETA   = 7
 PTR_RANGE_OMEGA = 8
 PTR_F12_ZETA    = 9
-PTR_ECPBAS_OFFSET = 18
-PTR_NECPBAS     = 19
+AS_RINV_ORIG_ATOM = 17
+AS_ECPBAS_OFFSET = 18
+AS_NECPBAS     = 19
 PTR_ENV_START   = 20
 # parameters from libcint
 NUC_POINT = 1
@@ -1824,10 +1828,10 @@ class Mole(lib.StreamObject):
                 self.make_env(self._atom, self._basis, self._env, self.nucmod)
         self._atm, self._ecpbas, self._env = \
                 self.make_ecp_env(self._atm, self._ecp, self._env)
-        if (self.nelectron+self.spin) % 2 != 0:
-            raise RuntimeError('Electron number %d and spin %d are not consistent\n'
-                               'Note mol.spin = 2S = Nalpha - Nbeta, not 2S+1' %
-                               (self.nelectron, self.spin))
+
+        # Access self.nelec in which the code checks whether the spin and
+        # number of electrons are consistent.
+        self.nelec
 
         if self.symmetry:
             from pyscf import symm
@@ -2148,6 +2152,29 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         '''
         zeta0 = self._env[PTR_RINV_ZETA].copy()
         return _TemporaryMoleContext(self.set_rinv_zeta, (zeta,), (zeta0,))
+
+    def with_rinv_as_nucleus(self, atm_id):
+        '''Retuen a temporary mol context which has the rquired origin of 1/r
+        operator and the required nuclear charge distribution on 1/r.
+
+        Examples:
+
+        >>> with mol.with_rinv_as_nucleus(3):
+        ...     mol.intor('int1e_rinv')
+        '''
+        zeta = self._env[self._atm[atm_id,PTR_ZETA]]
+        rinv = self.atom_coord(atm_id)
+        if zeta == 0:
+            self._env[AS_RINV_ORIG_ATOM] = atm_id  # required by ecp gradients
+            return self.with_rinv_origin(rinv)
+        else:
+            self._env[AS_RINV_ORIG_ATOM] = atm_id  # required by ecp gradients
+            rinv0 = self._env[PTR_RINV_ORIG:PTR_RINV_ORIG+3].copy()
+            zeta0 = self._env[PTR_RINV_ZETA].copy()
+            def set_rinv(z, r):
+                self._env[PTR_RINV_ZETA] = z
+                self._env[PTR_RINV_ORIG:PTR_RINV_ORIG+3] = r
+            return _TemporaryMoleContext(set_rinv, (zeta,rinv), (zeta0,rinv0))
 
     def set_geom_(self, atoms, unit='Angstrom', symmetry=None):
         '''Replace geometry
@@ -2494,8 +2521,8 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         if 'ECP' in intor:
             assert(self._ecp is not None)
             bas = numpy.vstack((self._bas, self._ecpbas))
-            self._env[PTR_ECPBAS_OFFSET] = len(self._bas)
-            self._env[PTR_NECPBAS] = len(self._ecpbas)
+            self._env[AS_ECPBAS_OFFSET] = len(self._bas)
+            self._env[AS_NECPBAS] = len(self._ecpbas)
             if shls_slice is None:
                 shls_slice = (0, self.nbas, 0, self.nbas)
         else:
@@ -2571,8 +2598,8 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         if 'ECP' in intor:
             assert(self._ecp is not None)
             bas = numpy.vstack((self._bas, self._ecpbas))
-            self._env[PTR_ECPBAS_OFFSET] = len(self._bas)
-            self._env[PTR_NECPBAS] = len(self._ecpbas)
+            self._env[AS_ECPBAS_OFFSET] = len(self._bas)
+            self._env[AS_NECPBAS] = len(self._ecpbas)
         else:
             bas = self._bas
         return moleintor.getints_by_shell(intor, shells, self._atm, bas,
@@ -2754,7 +2781,7 @@ def from_zmatrix(atomstr):
     H 1 2.67247631453057
     H 1 4.22555607338457 2 50.7684795164077
     H 1 2.90305235726773 2 79.3904651036893 3 6.20854462618583"""
-    >>> for x in zmat2cart(a): print x
+    >>> for x in zmat2cart(a): print(x)
     ['H', array([ 0.,  0.,  0.])]
     ['H', array([ 2.67247631,  0.        ,  0.        ])]
     ['H', array([ 2.67247631,  0.        ,  3.27310166])]
@@ -2809,7 +2836,7 @@ def cart2zmat(coord):
     (0.000000000000,  0.000000000000, -1.889726124565),
     (1.889726124565, -1.889726124565,  0.000000000000),
     (1.889726124565,  0.000000000000,  1.133835674739)))
-    >>> print cart2zmat(c)
+    >>> print(cart2zmat(c))
     1
     1 2.67247631453057
     1 4.22555607338457 2 50.7684795164077

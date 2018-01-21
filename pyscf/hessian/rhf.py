@@ -13,8 +13,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import _vhf
 from pyscf.scf import cphf
-from pyscf.scf.newton_ah import _gen_rhf_response
-from pyscf.grad import rhf as rhf_grad
+from pyscf.soscf.newton_ah import _gen_rhf_response
 
 
 def hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
@@ -97,7 +96,7 @@ def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     # Energy weighted density matrix
     dme0 = numpy.einsum('pi,qi,i->pq', mocc, mocc, mo_energy[mo_occ>0]) * 2
 
-    h1aa, h1ab = get_hcore(mol)
+    hcore_deriv = hessobj.hcore_generator(mol)
     s1aa, s1ab, s1a = get_ovlp(mol)
 
     vj1, vk1 = _get_jk(mol, 'int2e_ipip1', 9, 's2kl',
@@ -130,32 +129,22 @@ def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
         vhf = vhf.reshape(3,3,nao,nao)
         t1 = log.timer_debug1('contracting int2e_ipvip1 for atom %d'%ia, *t1)
 
-        rinv2aa, rinv2ab = _hess_rinv(mol, ia)
-        hcore = rinv2ab + rinv2aa.transpose(0,1,3,2)
-        hcore[:,:,p0:p1] += h1ab[:,:,p0:p1]
         s1ao = numpy.zeros((3,nao,nao))
         s1ao[:,p0:p1] += s1a[:,p0:p1]
         s1ao[:,:,p0:p1] += s1a[:,p0:p1].transpose(0,2,1)
         s1oo = numpy.einsum('xpq,pi,qj->xij', s1ao, mocc, mocc)
 
-        de2[i0,i0] -= numpy.einsum('xypq,pq->xy', rinv2aa, dm0)*2
-        de2[i0,i0] -= numpy.einsum('xypq,pq->xy', rinv2ab, dm0)*2
-        de2[i0,i0] += numpy.einsum('xypq,pq->xy', h1aa[:,:,p0:p1], dm0[p0:p1])*2
         de2[i0,i0] += numpy.einsum('xypq,pq->xy', vhf_diag[:,:,p0:p1], dm0[p0:p1])*2
         de2[i0,i0] -= numpy.einsum('xypq,pq->xy', s1aa[:,:,p0:p1], dme0[p0:p1])*2
-
-        for j0 in range(i0, len(atmlst)):
-            ja = atmlst[j0]
-            q0, q1 = aoslices[ja][2:]
-            de2[j0,i0] += numpy.einsum('xypq,pq->xy', rinv2aa[:,:,q0:q1], dm0[q0:q1])*2
-            de2[j0,i0] += numpy.einsum('xypq,pq->xy', rinv2ab[:,:,q0:q1], dm0[q0:q1])*2
 
         for j0, ja in enumerate(atmlst[:i0+1]):
             q0, q1 = aoslices[ja][2:]
             # *2 for +c.c.
-            de2[i0,j0] += numpy.einsum('xypq,pq->xy', hcore[:,:,:,q0:q1], dm0[:,q0:q1])*2
             de2[i0,j0] += numpy.einsum('xypq,pq->xy', vhf[:,:,q0:q1], dm0[q0:q1])*2
             de2[i0,j0] -= numpy.einsum('xypq,pq->xy', s1ab[:,:,p0:p1,q0:q1], dme0[p0:p1,q0:q1])*2
+
+            h1ao = hcore_deriv(ia, ja)
+            de2[i0,j0] += numpy.einsum('xypq,pq->xy', h1ao, dm0)
 
         for j0 in range(i0):
             de2[j0,i0] = de2[i0,j0].T
@@ -172,17 +161,12 @@ def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
     nao, nmo = mo_coeff.shape
     mocc = mo_coeff[:,mo_occ>0]
     dm0 = numpy.dot(mocc, mocc.T) * 2
-    h1a = rhf_grad.get_hcore(mol)
+    hcore_deriv = hessobj._scf.nuc_grad_method().hcore_generator(mol)
 
     aoslices = mol.aoslice_by_atom()
     h1ao = [None] * mol.natm
     for i0, ia in enumerate(atmlst):
         shl0, shl1, p0, p1 = aoslices[ia]
-
-        mol.set_rinv_origin(mol.atom_coord(ia))
-        h1 = -mol.atom_charge(ia) * mol.intor('int1e_iprinv', comp=3)
-        h1[:,p0:p1] += h1a[:,p0:p1]
-
         shls_slice = (shl0, shl1) + (0, mol.nbas)*3
         vj1, vj2, vk1, vk2 = _get_jk(mol, 'int2e_ip1', 3, 's2kl',
                                      ['ji->s2kl', -dm0[:,p0:p1],  # vj1
@@ -190,9 +174,10 @@ def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
                                       'li->s1kj', -dm0[:,p0:p1],  # vk1
                                       'jk->s1il', -dm0         ], # vk2
                                      shls_slice=shls_slice)
-        h1 += vj1 - vk1*.5
-        h1[:,p0:p1] += vj2 - vk2*.5
-        h1 = h1 + h1.transpose(0,2,1)
+        vhf = vj1 - vk1*.5
+        vhf[:,p0:p1] += vj2 - vk2*.5
+        h1 = vhf + vhf.transpose(0,2,1)
+        h1 += hcore_deriv(ia)
 
         if chkfile is None:
             h1ao[ia] = h1
@@ -205,23 +190,16 @@ def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
         return chkfile
 
 def get_hcore(mol):
+    '''Part of the second derivatives of core Hamiltonian'''
     h1aa = mol.intor('int1e_ipipkin', comp=9)
     h1aa+= mol.intor('int1e_ipipnuc', comp=9)
     h1ab = mol.intor('int1e_ipkinip', comp=9)
     h1ab+= mol.intor('int1e_ipnucip', comp=9)
+    if mol.has_ecp():
+        h1aa += mol.intor('ECPscalar_ipipnuc', comp=9)
+        h1ab += mol.intor('ECPscalar_ipnucip', comp=9)
     nao = h1aa.shape[-1]
     return h1aa.reshape(3,3,nao,nao), h1ab.reshape(3,3,nao,nao)
-
-def _hess_rinv(mol, atom_id):
-    mol.set_rinv_origin(mol.atom_coord(atom_id))
-    rinv2aa = mol.intor('int1e_ipiprinv', comp=9)
-    rinv2ab = mol.intor('int1e_iprinvip', comp=9)
-    #mol.set_rinv_origin((0,0,0))
-    Z = mol.atom_charge(atom_id)
-    rinv2aa *= Z
-    rinv2ab *= Z
-    nao = rinv2aa.shape[-1]
-    return rinv2aa.reshape(3,3,nao,nao), rinv2ab.reshape(3,3,nao,nao)
 
 def get_ovlp(mol):
     s1a =-mol.intor('int1e_ipovlp', comp=3)
@@ -439,6 +417,72 @@ class Hessian(lib.StreamObject):
     partial_hess_elec = partial_hess_elec
     hess_elec = hess_elec
     make_h1 = make_h1
+
+    def get_hcore(self, mol=None):
+        if mol is None: mol = self.mol
+        return get_hcore(mol)
+
+    def hcore_generator(self, mol=None):
+        if mol is None: mol = self.mol
+        with_x2c = getattr(self._scf, 'with_x2c', None)
+        if with_x2c:
+            return with_x2c.hcore_deriv_generator(deriv=2)
+
+        with_ecp = mol.has_ecp()
+        aoslices = mol.aoslice_by_atom()
+        nbas = mol.nbas
+        nao = mol.nao_nr()
+        h1aa, h1ab = self.get_hcore(mol)
+        def get_hcore(iatm, jatm):
+            ish0, ish1, i0, i1 = aoslices[iatm]
+            jsh0, jsh1, j0, j1 = aoslices[jatm]
+            zi = mol.atom_charge(iatm)
+            zj = mol.atom_charge(jatm)
+            if iatm == jatm:
+                with mol.with_rinv_as_nucleus(iatm):
+                    rinv2aa = mol.intor('int1e_ipiprinv', comp=9)
+                    rinv2ab = mol.intor('int1e_iprinvip', comp=9)
+                    if with_ecp:
+                        rinv2aa += mol.intor('ECPscalar_ipiprinv', comp=9)
+                        rinv2ab += mol.intor('ECPscalar_iprinvip', comp=9)
+                    rinv2aa *= zi
+                    rinv2ab *= zi
+                rinv2aa = rinv2aa.reshape(3,3,nao,nao)
+                rinv2ab = rinv2ab.reshape(3,3,nao,nao)
+                hcore = -rinv2aa - rinv2ab
+                hcore[:,:,i0:i1] += h1aa[:,:,i0:i1]
+                hcore[:,:,i0:i1] += rinv2aa[:,:,i0:i1] * 2
+                hcore[:,:,i0:i1] += rinv2ab[:,:,i0:i1] * 2
+                hcore[:,:,i0:i1,i0:i1] += h1ab[:,:,i0:i1,i0:i1]
+
+            else:
+                hcore = numpy.zeros((3,3,nao,nao))
+                hcore[:,:,i0:i1,j0:j1] += h1ab[:,:,i0:i1,j0:j1]
+                with mol.with_rinv_as_nucleus(iatm):
+                    shls_slice = (jsh0, jsh1, 0, nbas)
+                    rinv2aa = mol.intor('int1e_ipiprinv', comp=9, shls_slice=shls_slice)
+                    rinv2ab = mol.intor('int1e_iprinvip', comp=9, shls_slice=shls_slice)
+                    if with_ecp:
+                        rinv2aa += mol.intor('ECPscalar_ipiprinv', comp=9, shls_slice=shls_slice)
+                        rinv2ab += mol.intor('ECPscalar_iprinvip', comp=9, shls_slice=shls_slice)
+                    rinv2aa = zi * rinv2aa.reshape(3,3,j1-j0,nao)
+                    rinv2ab = zi * rinv2ab.reshape(3,3,j1-j0,nao)
+                    hcore[:,:,j0:j1] += rinv2aa
+                    hcore[:,:,j0:j1] += rinv2ab.transpose(1,0,2,3)
+
+                with mol.with_rinv_as_nucleus(jatm):
+                    shls_slice = (ish0, ish1, 0, nbas)
+                    rinv2aa = mol.intor('int1e_ipiprinv', comp=9, shls_slice=shls_slice)
+                    rinv2ab = mol.intor('int1e_iprinvip', comp=9, shls_slice=shls_slice)
+                    if with_ecp:
+                        rinv2aa += mol.intor('ECPscalar_ipiprinv', comp=9, shls_slice=shls_slice)
+                        rinv2ab += mol.intor('ECPscalar_iprinvip', comp=9, shls_slice=shls_slice)
+                    rinv2aa = zj * rinv2aa.reshape(3,3,i1-i0,nao)
+                    rinv2ab = zj * rinv2ab.reshape(3,3,i1-i0,nao)
+                    hcore[:,:,i0:i1] += rinv2aa
+                    hcore[:,:,i0:i1] += rinv2ab
+            return hcore + hcore.conj().transpose(0,1,3,2)
+        return get_hcore
 
     def solve_mo1(self, mo_energy, mo_coeff, mo_occ, h1ao_or_chkfile,
                   fx=None, atmlst=None, max_memory=4000, verbose=None):

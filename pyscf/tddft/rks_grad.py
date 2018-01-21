@@ -146,7 +146,7 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
     dm1[:nocc,:nocc] += numpy.eye(nocc)*2 # for ground state
     im0 = reduce(numpy.dot, (mo_coeff, im0+zeta*dm1, mo_coeff.T))
 
-    h1 = td_grad.get_hcore(mol)
+    hcore_deriv = td_grad.hcore_generator(mol)
     s1 = td_grad.get_ovlp(mol)
 
     dmz1doo = z1ao + dmzoo
@@ -184,16 +184,14 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
     for k, ia in enumerate(atmlst):
         shl0, shl1, p0, p1 = offsetdic[ia]
 
-        mol.set_rinv_origin(mol.atom_coord(ia))
-        h1ao = -mol.atom_charge(ia) * mol.intor('int1e_iprinv', comp=3)
-        h1ao[:,p0:p1] += h1[:,p0:p1] + veff1[0,:,p0:p1]
-
         # Ground state gradients
-        # h1ao*2 for +c.c, oo0*2 for doubly occupied orbitals
-        e1  = numpy.einsum('xpq,pq->x', h1ao, oo0) * 4
+        h1ao = hcore_deriv(ia)
+        h1ao[:,p0:p1]   += veff1[0,:,p0:p1]
+        h1ao[:,:,p0:p1] += veff1[0,:,p0:p1].transpose(0,2,1)
+        # oo0*2 for doubly occupied orbitals
+        e1  = numpy.einsum('xpq,pq->x', h1ao, oo0) * 2
 
         e1 += numpy.einsum('xpq,pq->x', h1ao, dmz1doo)
-        e1 += numpy.einsum('xqp,pq->x', h1ao, dmz1doo)
         e1 -= numpy.einsum('xpq,pq->x', s1[:,p0:p1], im0[p0:p1])
         e1 -= numpy.einsum('xqp,pq->x', s1[:,p0:p1], im0[:,p0:p1])
 

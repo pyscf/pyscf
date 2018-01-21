@@ -300,7 +300,8 @@ class prod_basis_c():
 
   def init_prod_basis_gto(self, sv, tol_loc=1e-5, tol_biloc=1e-6, ac_rcut_ratio=1.0):
     """ It should work with GTOs as well."""
-    from pyscf.nao import coulomb_am, comp_overlap_coo, get_atom2bas_s, conv_yzx2xyz_c, prod_log_c, ls_part_centers, comp_coulomb_den
+    from pyscf.nao import coulomb_am, get_atom2bas_s, conv_yzx2xyz_c, prod_log_c, ls_part_centers, comp_coulomb_den
+    from pyscf.nao.m_overlap_coo import overlap_coo
     from scipy.sparse import csr_matrix
     from pyscf import gto
 
@@ -311,7 +312,7 @@ class prod_basis_c():
     self.ac_rcut = ac_rcut_ratio*max(sv.ao_log.sp2rcut)
     
     self.prod_log = prod_log_c().init_prod_log_dp(sv.ao_log, tol_loc) # local basis (for each specie) 
-    self.hkernel_csr  = csr_matrix(comp_overlap_coo(sv, self.prod_log, coulomb_am)) # compute local part of Coulomb interaction
+    self.hkernel_csr  = csr_matrix(overlap_coo(sv, self.prod_log, coulomb_am)) # compute local part of Coulomb interaction
     self.c2s = zeros((sv.natm+1), dtype=int64) # global product Center (atom) -> start in case of atom-centered basis
     for gc,sp in enumerate(sv.atom2sp): self.c2s[gc+1]=self.c2s[gc]+self.prod_log.sp2norbs[sp] # 
 
@@ -324,7 +325,7 @@ class prod_basis_c():
       for ia2,n2 in enumerate(sv.atom2s[ia1+2:]-sv.atom2s[ia1+1:-1]):
         ia2 += ia1+1
 
-        mol2 = gto.Mole_pure(atom=[sv._atom[ia1], sv._atom[ia2]], basis=sv.basis, unit='bohr').build()
+        mol2 = gto.Mole(atom=[sv._atom[ia1], sv._atom[ia2]], basis=sv.basis, unit='bohr').build()
         bs = get_atom2bas_s(mol2._bas)
         ss = (bs[0],bs[1], bs[1],bs[2], bs[0],bs[1], bs[1],bs[2])
         eri = mol2.intor('cint2e_sph', shls_slice=ss).reshape(n1,n2,n1,n2)
@@ -358,7 +359,7 @@ class prod_basis_c():
         for c,s,f in zip(lc2c,lc2s,lc2s[1:]):
           n3 = sv.atom2s[c+1]-sv.atom2s[c]
           lcd = self.prod_log.sp2lambda[sv.atom2sp[c]]
-          mol3 = gto.Mole_pure(atom=[sv._atom[ia1], sv._atom[ia2], sv._atom[c]], basis=sv.basis, unit='bohr').build()
+          mol3 = gto.Mole(atom=[sv._atom[ia1], sv._atom[ia2], sv._atom[c]], basis=sv.basis, unit='bohr').build()
           bs = get_atom2bas_s(mol3._bas)
           ss = (bs[2],bs[3], bs[2],bs[3], bs[0],bs[1], bs[1],bs[2])
           tci_ao = mol3.intor('cint2e_sph', shls_slice=ss).reshape(n3,n3,n1,n2)

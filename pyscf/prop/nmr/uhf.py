@@ -15,7 +15,7 @@ from pyscf.lib import logger
 from pyscf.scf import _vhf
 from pyscf.scf import ucphf
 from pyscf.ao2mo import _ao2mo
-from pyscf.scf.newton_ah import _gen_uhf_response
+from pyscf.soscf.newton_ah import _gen_uhf_response
 from pyscf.prop.nmr import rhf as rhf_nmr
 
 
@@ -71,6 +71,8 @@ def make_h10giao(mol, dm0):
     vj, vk = rhf_nmr.get_jk(mol, dm0)
     h1 = vj[0] + vj[1] - vk
     h1 -= mol.intor_asymmetric('int1e_ignuc', 3)
+    if mol.has_ecp():
+        h1 -= mol.intor_asymmetric('ECPscalar_ignuc', 3)
     h1 -= mol.intor('int1e_igkin', 3)
     return h1
 

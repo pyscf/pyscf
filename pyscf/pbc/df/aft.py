@@ -15,7 +15,7 @@ from pyscf.pbc import tools
 from pyscf.pbc.gto import pseudo, estimate_ke_cutoff, error_for_ke_cutoff
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import incore
-from pyscf.pbc.lib.kpt_misc import is_zero, gamma_point
+from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point
 from pyscf.pbc.df import aft_jk
 from pyscf.pbc.df import aft_ao2mo
 
@@ -64,7 +64,7 @@ def get_nuc(mydf, kpts=None):
         kpts_lst = numpy.reshape(kpts, (-1,3))
 
     log = logger.Logger(mydf.stdout, mydf.verbose)
-    t1 = (time.clock(), time.time())
+    t0 = t1 = (time.clock(), time.time())
 
     mesh = numpy.asarray(mydf.mesh)
     nkpts = len(kpts_lst)
@@ -101,7 +101,7 @@ def get_nuc(mydf, kpts=None):
 
         # PP-loc part1 is handled by fakenuc in _int_nuc_vloc
         vj = lib.asarray(mydf._int_nuc_vloc(nuccell, kpts_lst))
-        t1 = log.timer_debug1('vnuc pass1: analytic int', *t1)
+        t0 = t1 = log.timer_debug1('vnuc pass1: analytic int', *t0)
 
         charge = -cell.atom_charges()
         coulG = tools.get_coulG(cell, kpt_allow, mesh=mesh, Gv=Gv)
@@ -120,7 +120,8 @@ def get_nuc(mydf, kpts=None):
                 vj[k] += numpy.einsum('k,kx->x', vG[p0:p1].imag, aoao.imag)
             else:
                 vj[k] += numpy.einsum('k,kx->x', vG[p0:p1].conj(), aoao)
-    t1 = log.timer_debug1('contracting Vnuc', *t1)
+        t1 = log.timer_debug1('contracting Vnuc [%s:%s]'%(p0, p1), *t1)
+    log.timer_debug1('contracting Vnuc', *t0)
 
     vj_kpts = []
     for k, kpt in enumerate(kpts_lst):
@@ -133,7 +134,7 @@ def get_nuc(mydf, kpts=None):
         vj_kpts = vj_kpts[0]
     return numpy.asarray(vj_kpts)
 
-def _int_nuc_vloc(mydf, nuccell, kpts, intor='int3c2e_sph'):
+def _int_nuc_vloc(mydf, nuccell, kpts, intor='int3c2e_sph', aosym='s2', comp=1):
     '''Vnuc - Vloc'''
     cell = mydf.cell
     nkpts = len(kpts)
@@ -145,23 +146,34 @@ def _int_nuc_vloc(mydf, nuccell, kpts, intor='int3c2e_sph'):
                          fakenuc._atm, fakenuc._bas, fakenuc._env)
 
     kptij_lst = numpy.hstack((kpts,kpts)).reshape(-1,2,3)
-    buf = incore.aux_e2(cell, fakenuc, intor, aosym='s2', kptij_lst=kptij_lst)
+    buf = incore.aux_e2(cell, fakenuc, intor, aosym=aosym, comp=comp,
+                        kptij_lst=kptij_lst)
 
     charge = cell.atom_charges()
     charge = numpy.append(charge, -charge)  # (charge-of-nuccell, charge-of-fakenuc)
     nao = cell.nao_nr()
     nchg = len(charge)
-    nao_pair = nao*(nao+1)//2
-    buf = buf.reshape(nkpts,nao_pair,nchg)
-    mat = numpy.einsum('kxz,z->kx', buf, charge)
+    if aosym == 's1':
+        nao_pair = nao**2
+    else:
+        nao_pair = nao*(nao+1)//2
+    if comp == 1:
+        buf = buf.reshape(nkpts,nao_pair,nchg)
+        mat = numpy.einsum('kxz,z->kx', buf, charge)
+    else:
+        buf = buf.reshape(nkpts,comp,nao_pair,nchg)
+        mat = numpy.einsum('kcxz,z->kcx', buf, charge)
 
-    if cell.dimension == 3:
+    if cell.dimension == 3 and intor == 'int3c2e_sph':
+        assert(comp == 1)
         nucbar = sum([z/nuccell.bas_exp(i)[0] for i,z in enumerate(cell.atom_charges())])
         nucbar *= numpy.pi/cell.vol
         ovlp = cell.pbc_intor('int1e_ovlp_sph', 1, lib.HERMITIAN, kpts)
         for k in range(nkpts):
-            s = lib.pack_tril(ovlp[k])
-            mat[k] += nucbar * s
+            if aosym == 's1':
+                mat[k] += nucbar * ovlp[k].reshape(nao_pair)
+            else:
+                mat[k] += nucbar * lib.pack_tril(ovlp[k])
     return mat
 
 get_pp_loc_part1 = get_nuc
@@ -185,6 +197,15 @@ def get_pp(mydf, kpts=None):
     if kpts is None or numpy.shape(kpts) == (3,):
         vpp = vpp[0]
     return vpp
+
+def weighted_coulG(mydf, kpt=numpy.zeros(3), exx=False, mesh=None):
+    cell = mydf.cell
+    if mesh is None:
+        mesh = mydf.mesh
+    Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
+    coulG = tools.get_coulG(cell, kpt, exx, mydf, mesh, Gv)
+    coulG *= kws
+    return coulG
 
 
 class AFTDF(lib.StreamObject):
@@ -253,16 +274,16 @@ class AFTDF(lib.StreamObject):
         if cell.dimension < 3:
             err = numpy.exp(-0.436392335*min(self.mesh[cell.dimension:]) - 2.99944305)
             err *= cell.nelectron
-            gz = numpy.log(cell.nelectron/cell.precision)/0.8727847-3.4366358
-            mesh_guess[cell.dimension:] = int(gz)
+            meshz = (numpy.log(cell.nelectron/cell.precision)-2.99944305)/0.436392335
+            mesh_guess[cell.dimension:] = int(meshz)
             if err > cell.precision*10:
                 logger.warn(self, 'mesh %s of AFTDF may not be enough to get '
                             'integral accuracy %g for %dD PBC system.\n'
                             'Coulomb integral error is ~ %.2g Eh.\n'
                             'Recommended mesh is %s.',
                             self.mesh, cell.precision, cell.dimension, err, mesh_guess)
-            if (cell.mesh[cell.dimension:]/(1.*gz) > 1.1).any():
-                gz = numpy.log(cell.nelectron/cell.precision)/0.8727847-3.4366358
+            if (cell.mesh[cell.dimension:]/(1.*meshz) > 1.1).any():
+                meshz = (numpy.log(cell.nelectron/cell.precision)-2.99944305)/0.436392335
                 logger.warn(self, 'setting mesh %s of AFTDF too high in non-periodic direction '
                             '(=%s) can result in an unnecessarily slow calculation.\n'
                             'For coulomb integral error of ~ %.2g Eh in %dD PBC, \n'
@@ -272,7 +293,8 @@ class AFTDF(lib.StreamObject):
         return self
 
     def pw_loop(self, mesh=None, kpti_kptj=None, q=None, shls_slice=None,
-                max_memory=2000, aosym='s1', blksize=None):
+                max_memory=2000, aosym='s1', blksize=None,
+                intor='GTO_ft_ovlp_sph', comp=1):
         '''Plane wave part'''
         cell = self.cell
         if mesh is None:
@@ -303,31 +325,37 @@ class AFTDF(lib.StreamObject):
             nij = ni*nj
 
         if blksize is None:
-            blksize = min(max(16, int(max_memory*1e6*.75/16/nij)), 16384)
+            blksize = min(max(16, int(max_memory*1e6*.75/(nij*16*comp))), 16384)
             sublk = max(16, int(blksize//4))
         else:
             sublk = blksize
-        buf = numpy.empty(nij*blksize, dtype=numpy.complex128)
-        pqkRbuf = numpy.empty(nij*sublk)
-        pqkIbuf = numpy.empty(nij*sublk)
+        buf = numpy.empty(nij*blksize*comp, dtype=numpy.complex128)
+        pqkRbuf = numpy.empty(nij*sublk*comp)
+        pqkIbuf = numpy.empty(nij*sublk*comp)
 
         for p0, p1 in self.prange(0, ngrids, blksize):
             #aoao = ft_ao.ft_aopair(cell, Gv[p0:p1], shls_slice, aosym,
             #                       b, Gvbase, gxyz[p0:p1], mesh, (kpti, kptj), q)
             aoao = ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
                                          b, gxyz[p0:p1], Gvbase, q,
-                                         kptj.reshape(1,3), out=buf)[0]
+                                         kptj.reshape(1,3), intor, comp, out=buf)[0]
             aoao = aoao.reshape(p1-p0,nij)
             for i0, i1 in lib.prange(0, p1-p0, sublk):
                 nG = i1 - i0
-                pqkR = numpy.ndarray((nij,nG), buffer=pqkRbuf)
-                pqkI = numpy.ndarray((nij,nG), buffer=pqkIbuf)
-                pqkR[:] = aoao[i0:i1].real.T
-                pqkI[:] = aoao[i0:i1].imag.T
+                if comp == 1:
+                    pqkR = numpy.ndarray((nij,nG), buffer=pqkRbuf)
+                    pqkI = numpy.ndarray((nij,nG), buffer=pqkIbuf)
+                    pqkR[:] = aoao[i0:i1].real.T
+                    pqkI[:] = aoao[i0:i1].imag.T
+                else:
+                    pqkR = numpy.ndarray((comp,nij,nG), buffer=pqkRbuf)
+                    pqkI = numpy.ndarray((comp,nij,nG), buffer=pqkIbuf)
+                    pqkR[:] = aoao[i0:i1].real.transpose(0,2,1)
+                    pqkI[:] = aoao[i0:i1].imag.transpose(0,2,1)
                 yield (pqkR, pqkI, p0+i0, p0+i1)
 
     def ft_loop(self, mesh=None, q=numpy.zeros(3), kpts=None, shls_slice=None,
-                max_memory=4000, aosym='s1'):
+                max_memory=4000, aosym='s1', intor='GTO_ft_ovlp_sph', comp=1):
         '''
         Fourier transform iterator for all kpti which satisfy  2pi*N = (kpts - kpti - q)*a
         N = -1, 0, 1
@@ -358,27 +386,20 @@ class AFTDF(lib.StreamObject):
             ni = ao_loc[shls_slice[1]] - ao_loc[shls_slice[0]]
             nj = ao_loc[shls_slice[3]] - ao_loc[shls_slice[2]]
             nij = ni*nj
-        blksize = max(16, int(max_memory*.9e6/(nij*nkpts*16)))
+        blksize = max(16, int(max_memory*.9e6/(nij*nkpts*16*comp)))
         blksize = min(blksize, ngrids, 16384)
-        buf = numpy.empty(nkpts*nij*blksize, dtype=numpy.complex128)
+        buf = numpy.empty(nkpts*nij*blksize*comp, dtype=numpy.complex128)
 
         for p0, p1 in self.prange(0, ngrids, blksize):
             dat = ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
-                                        b, gxyz[p0:p1], Gvbase, q, kpts, out=buf)
+                                        b, gxyz[p0:p1], Gvbase, q, kpts,
+                                        intor, comp, out=buf)
             yield dat, p0, p1
 
     def prange(self, start, stop, step):
         return lib.prange(start, stop, step)
 
-    def weighted_coulG(self, kpt=numpy.zeros(3), exx=False, mesh=None):
-        cell = self.cell
-        if mesh is None:
-            mesh = self.mesh
-        Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
-        coulG = tools.get_coulG(cell, kpt, exx, self, mesh, Gv)
-        coulG *= kws
-        return coulG
-
+    weighted_coulG = weighted_coulG
     _int_nuc_vloc = _int_nuc_vloc
     get_nuc = get_nuc
     get_pp = get_pp
@@ -405,6 +426,8 @@ class AFTDF(lib.StreamObject):
 
     get_eri = get_ao_eri = aft_ao2mo.get_eri
     ao2mo = get_mo_eri = aft_ao2mo.general
+    get_ao_pairs_G = get_ao_pairs = aft_ao2mo.get_ao_pairs_G
+    get_mo_pairs_G = get_mo_pairs = aft_ao2mo.get_mo_pairs_G
 
     def update_mf(self, mf):
         mf = copy.copy(mf)

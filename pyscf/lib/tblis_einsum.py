@@ -117,7 +117,8 @@ def einsum(subscripts, *tensors, **kwargs):
         out = _contract(subscripts, *tensors, **kwargs)
     else:
         sub_idx = subscripts.split(',', 2)
-        res_idx = ''.join(set(sub_idx[0]).symmetric_difference(sub_idx[1]))
+        res_idx = ''.join(set(sub_idx[0]+sub_idx[1]).intersection(sub_idx[2]))
+        res_idx = res_idx.replace(',','')
         script0 = sub_idx[0] + ',' + sub_idx[1] + '->' + res_idx
         subscripts = res_idx + ',' + sub_idx[2]
         tensors = [_contract(script0, *tensors[:2])] + list(tensors[2:])

@@ -21,7 +21,7 @@ from pyscf.mcscf import mc_ao2mo
 from pyscf.mcscf import chkfile
 from pyscf import ao2mo
 from pyscf import scf
-from pyscf.scf import ciah
+from pyscf.soscf import ciah
 from pyscf import fci
 
 

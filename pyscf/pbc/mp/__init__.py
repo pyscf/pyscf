@@ -1,16 +1,21 @@
 from pyscf.pbc import scf
-from pyscf.pbc.ci import cisd
+from pyscf.pbc.mp import mp2
+from pyscf.pbc.mp import kmp2
 
-def RCISD(mf, frozen=0, mo_coeff=None, mo_occ=None):
+def RMP2(mf, frozen=0, mo_coeff=None, mo_occ=None):
     mf = scf.addons.convert_to_rhf(mf)
-    return cisd.RCISD(mf, frozen, mo_coeff, mo_occ)
+    return mp2.RMP2(mf, frozen, mo_coeff, mo_occ)
 
-CISD = RCISD
+MP2 = RMP2
 
-def UCISD(mf, frozen=0, mo_coeff=None, mo_occ=None):
+def UMP2(mf, frozen=0, mo_coeff=None, mo_occ=None):
     mf = scf.addons.convert_to_uhf(mf)
-    return cisd.UCISD(mf, frozen, mo_coeff, mo_occ)
+    return mp2.UMP2(mf, frozen, mo_coeff, mo_occ)
 
-def GCISD(mf, frozen=0, mo_coeff=None, mo_occ=None):
+def GMP2(mf, frozen=0, mo_coeff=None, mo_occ=None):
     mf = scf.addons.convert_to_ghf(mf)
-    return cisd.GCISD(mf, frozen, mo_coeff, mo_occ)
+    return mp2.GMP2(mf, frozen, mo_coeff, mo_occ)
+
+def KMP2(mf, frozen=0, mo_coeff=None, mo_occ=None):
+    return kmp2.KMP2(mf, frozen, mo_coeff, mo_occ)
+

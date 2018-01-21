@@ -13,7 +13,7 @@ class KnowValues(unittest.TestCase):
     atom2rcut=np.array([5.0, 4.0])
     grids = dft.gen_grid.Grids(sv)
     grids.level = 2 # precision as implemented in pyscf
-    grids.radi_method=leggauss_ab
+    grids.radi_method = gauss_legendre
     grids.build(atom2rcut=atom2rcut)
     self.assertEqual(len(grids.weights), 20648)
 
@@ -23,7 +23,7 @@ class KnowValues(unittest.TestCase):
     atom2rcut=np.array([5.0])
     g = dft.gen_grid.Grids(sv)
     g.level = 1 # precision as implemented in pyscf
-    g.radi_method=leggauss_ab
+    g.radi_method = gauss_legendre
     g.build(atom2rcut=atom2rcut)
 
     #print(  max(  np.linalg.norm(g.coords, axis=1)  )  )

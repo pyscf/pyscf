@@ -13,7 +13,7 @@ from pyscf.mcscf import casci_symm
 from pyscf import fci
 
 
-class CASSCF(mc1step.CASSCF):
+class SymAdaptedCASSCF(mc1step.CASSCF):
     __doc__ = mc1step.CASSCF.__doc__
     def __init__(self, mf, ncas, nelecas, ncore=None, frozen=None):
         assert(mf.mol.symmetry)
@@ -75,6 +75,8 @@ class CASSCF(mc1step.CASSCF):
         mo = mc1step.CASSCF.rotate_mo(self, mo, u, log)
         mo = lib.tag_array(mo, orbsym=self.mo_coeff.orbsym)
         return mo
+
+CASSCF = SymAdaptedCASSCF
 
 def _symmetrize(mat, orbsym, groupname):
     mat1 = numpy.zeros_like(mat)

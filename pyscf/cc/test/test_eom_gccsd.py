@@ -67,20 +67,20 @@ class KnownValues(unittest.TestCase):
 
         myeom = eom_gccsd.EOMIP(mycc)
         e,v = myeom.ipccsd(nroots=3)
-        self.assertAlmostEqual(e[0], 0.42789089871467728, 6)
-        self.assertAlmostEqual(e[1], 0.42789089871467728, 6)
-        self.assertAlmostEqual(e[2], 0.50226873136932748, 6)
+        self.assertAlmostEqual(e[0], 0.42789089871467728, 5)
+        self.assertAlmostEqual(e[1], 0.42789089871467728, 5)
+        self.assertAlmostEqual(e[2], 0.50226873136932748, 5)
 
     def test_ipccsd_koopmans(self):
         e,v = mycc.ipccsd(nroots=3, koopmans=True)
-        self.assertAlmostEqual(e[0], 0.42789089871467728, 6)
-        self.assertAlmostEqual(e[1], 0.42789089871467728, 6)
-        self.assertAlmostEqual(e[2], 0.50226873136932748, 6)
+        self.assertAlmostEqual(e[0], 0.42789089871467728, 5)
+        self.assertAlmostEqual(e[1], 0.42789089871467728, 5)
+        self.assertAlmostEqual(e[2], 0.50226873136932748, 5)
 
         e,v = mycc.ipccsd(nroots=3, guess=v[:3])
-        self.assertAlmostEqual(e[0], 0.42789089871467728, 6)
-        self.assertAlmostEqual(e[1], 0.42789089871467728, 6)
-        self.assertAlmostEqual(e[2], 0.50226873136932748, 6)
+        self.assertAlmostEqual(e[0], 0.42789089871467728, 5)
+        self.assertAlmostEqual(e[1], 0.42789089871467728, 5)
+        self.assertAlmostEqual(e[2], 0.50226873136932748, 5)
 
 
     def test_eaccsd(self):

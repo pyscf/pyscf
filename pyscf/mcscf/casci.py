@@ -67,12 +67,7 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO,
     nocc = ncore + ncas
     label = casscf.mol.ao_labels()
 
-    if isinstance(ci, (tuple, list)):
-        ci0 = ci[0]
-        log.info('** Natural natural orbitals are based on the first root **')
-    else:
-        ci0 = ci
-    if ci0 is None and hasattr(casscf, 'casdm1'):
+    if ci is None and hasattr(casscf, 'casdm1'):
         casdm1 = casscf.casdm1
         mocore = mo_coeff[:,:ncore]
         mocas = mo_coeff[:,ncore:nocc]
@@ -81,7 +76,7 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO,
         dm1b = None
         dm1 = dm1a
     elif hasattr(casscf.fcisolver, 'make_rdm1s'):
-        casdm1a, casdm1b = casscf.fcisolver.make_rdm1s(ci0, ncas, nelecas)
+        casdm1a, casdm1b = casscf.fcisolver.make_rdm1s(ci, ncas, nelecas)
         casdm1 = casdm1a + casdm1b
         mocore = mo_coeff[:,:ncore]
         mocas = mo_coeff[:,ncore:nocc]
@@ -95,7 +90,7 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO,
             log.info('beta density matrix (on AO)')
             dump_mat.dump_tri(log.stdout, dm1b, label, **kwargs)
     else:
-        casdm1 = casscf.fcisolver.make_rdm1(ci0, ncas, nelecas)
+        casdm1 = casscf.fcisolver.make_rdm1(ci, ncas, nelecas)
         mocore = mo_coeff[:,:ncore]
         mocas = mo_coeff[:,ncore:nocc]
         dm1a =(numpy.dot(mocore, mocore.T) * 2
@@ -749,6 +744,14 @@ class CASCI(lib.StreamObject):
     def approx_hessian(self, auxbasis=None, with_df=None):
         from pyscf.mcscf import df
         return df.approx_hessian(self, auxbasis, with_df)
+
+    def sfx2c1e(self):
+        import pyscf.x2c.sfx2c1e
+        return pyscf.x2c.sfx2c1e.sfx2c1e(self)
+    def x2c1e(self):
+        return self.sfx2c1e()
+    def x2c(self):
+        return self.x2c1e()
 
 
 if __name__ == '__main__':

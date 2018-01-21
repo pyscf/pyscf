@@ -67,6 +67,8 @@ except (ImportError, OSError):
         # Call numpy.asarray because A or B may be HDF5 Datasets 
         A = numpy.asarray(A, order='A')
         B = numpy.asarray(B, order='A')
+        if A.size == 0 or B.size == 0:
+            return numpy.einsum(idx_str, *tensors)
         # Split the strings into a list of idx char's
         idxA, idxBC = idx_str.split(',')
         idxB, idxC = idxBC.split('->')
@@ -724,20 +726,23 @@ def asarray(a, dtype=None, order=None):
         pass
     return numpy.asarray(a, dtype, order)
 
-def norm(x, ord=None, axis=None):
-    '''numpy.linalg.norm for numpy 1.6.*
-    '''
-    if axis is None or ord is not None:
-        return numpy.linalg.norm(x, ord)
-    else:
-        x = numpy.asarray(x)
-        axes = string.ascii_lowercase[:x.ndim]
-        target = axes.replace(axes[axis], '')
-        descr = '%s,%s->%s' % (axes, axes, target)
-        xx = numpy.einsum(descr, x.real, x.real)
-        if numpy.iscomplexobj(x):
-            xx += numpy.einsum(descr, x.imag, x.imag)
-        return numpy.sqrt(xx)
+from distutils.version import LooseVersion
+if LooseVersion(numpy.__version__) <= LooseVersion('1.6.0'):
+    def norm(x, ord=None, axis=None):
+        '''numpy.linalg.norm for numpy 1.6.*
+        '''
+        if axis is None or ord is not None:
+            return numpy.linalg.norm(x, ord)
+        else:
+            x = numpy.asarray(x)
+            axes = string.ascii_lowercase[:x.ndim]
+            target = axes.replace(axes[axis], '')
+            descr = '%s,%s->%s' % (axes, axes, target)
+            xx = numpy.einsum(descr, x.conj(), x)
+            return numpy.sqrt(xx.real)
+else:
+    norm = numpy.linalg.norm
+del(LooseVersion)
 
 def cond(x, p=None):
     '''Compute the condition number'''
@@ -861,7 +866,9 @@ def direct_sum(subscripts, *operands):
         else:
             out = out.reshape(out.shape+(1,)*op.ndim) - op
 
-    return numpy.einsum('->'.join((''.join(src), dest)), out)
+    out = numpy.einsum('->'.join((''.join(src), dest)), out)
+    out.flags.writeable = True  # old numpy version has this issue
+    return out
 
 def condense(opname, a, locs):
     '''

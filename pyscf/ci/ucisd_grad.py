@@ -10,7 +10,9 @@ UCISD analytical nuclear gradients
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
+from pyscf import ao2mo
 from pyscf.ci import cisd_grad
+from pyscf.ci import ucisd
 from pyscf.cc import uccsd_grad
 
 

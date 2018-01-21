@@ -116,7 +116,6 @@ class GHF(pbchf.SCF, mol_ghf.GHF):
         addons.convert_to_ghf(mf, self)
         return self
 
-    x2c = None
     stability = None
     nuc_grad_method = None
 
