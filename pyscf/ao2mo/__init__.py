@@ -136,7 +136,7 @@ def full(eri_or_mol, mo_coeff, *args, **kwargs):
     if isinstance(eri_or_mol, numpy.ndarray):
         return incore.full(eri_or_mol, mo_coeff, *args, **kwargs)
     else:
-        if 'intor' in kwargs and ('_sph' not in kwargs['intor']):
+        if 'intor' in kwargs and '_spinor' in kwargs['intor']:
             mod = r_outcore
         else:
             mod = outcore

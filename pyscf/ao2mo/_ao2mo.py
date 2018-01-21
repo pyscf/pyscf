@@ -16,7 +16,7 @@ class AO2MOpt(object):
         intor = ascint3(intor)
         self._this = ctypes.POINTER(_vhf._CVHFOpt)()
         #print self._this.contents, expect ValueError: NULL pointer access
-        self._intor = intor
+        self._intor = _fpointer(intor)
 
         c_atm = numpy.asarray(mol._atm, dtype=numpy.int32, order='C')
         c_bas = numpy.asarray(mol._bas, dtype=numpy.int32, order='C')
@@ -33,7 +33,7 @@ class AO2MOpt(object):
 
         if prescreen != 'CVHFnoscreen' and intor in ('int2e_sph', 'int2e_cart'):
             # for int2e_sph, qcondname is 'CVHFsetnr_direct_scf'
-            ao_loc = make_loc(c_bas, self._intor)
+            ao_loc = make_loc(c_bas, intor)
             fsetqcond = getattr(libao2mo, qcondname)
             fsetqcond(self._this,
                       getattr(libao2mo, intor), self._cintopt,

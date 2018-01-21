@@ -235,7 +235,7 @@ def half_e1(mol, mo_coeffs, swapfile,
     return swapfile
 
 def full_iofree(mol, mo_coeff, intor='int2e_spinor', aosym='s4', comp=1,
-                verbose=logger.WARN):
+                verbose=logger.WARN, **kwargs):
     erifile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
     general(mol, (mo_coeff,)*4, erifile.name, dataname='eri_mo',
             intor=intor, aosym=aosym, comp=comp,
@@ -244,7 +244,7 @@ def full_iofree(mol, mo_coeff, intor='int2e_spinor', aosym='s4', comp=1,
         return numpy.asarray(feri['eri_mo'])
 
 def general_iofree(mol, mo_coeffs, intor='int2e_spinor', aosym='s4', comp=1,
-                   verbose=logger.WARN):
+                   verbose=logger.WARN, **kwargs):
     erifile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
     general(mol, mo_coeffs, erifile.name, dataname='eri_mo',
             intor=intor, aosym=aosym, comp=comp,
