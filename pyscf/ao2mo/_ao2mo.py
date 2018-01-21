@@ -16,7 +16,7 @@ class AO2MOpt(object):
         intor = ascint3(intor)
         self._this = ctypes.POINTER(_vhf._CVHFOpt)()
         #print self._this.contents, expect ValueError: NULL pointer access
-        self._intor = _fpointer(intor)
+        self._intor = intor
 
         c_atm = numpy.asarray(mol._atm, dtype=numpy.int32, order='C')
         c_bas = numpy.asarray(mol._bas, dtype=numpy.int32, order='C')
@@ -227,11 +227,11 @@ def r_e1(intor, mo_coeff, orbs_slice, sh_range, atm, bas, env,
     if ao2mopt is not None:
         cao2mopt = ao2mopt._this
         cintopt = ao2mopt._cintopt
-        cintor = ao2mopt._intor
+        intor = ao2mopt._intor
     else:
         cao2mopt = lib.c_null_ptr()
-        cintor = _fpointer(intor)
         cintopt = make_cintopt(c_atm, c_bas, c_env, intor)
+    cintor = _fpointer(intor)
 
     tao = numpy.asarray(tao, dtype=numpy.int32)
     ao_loc = make_loc(bas, 'spinor')
