@@ -21,13 +21,20 @@
 #define AS_ECPBAS_OFFSET        18
 #define AS_NECPBAS              19
 
+typedef struct {
+    double *u_ecp;
+} ECPOpt;
+
 int ECPtype1_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
-                  int *atm, int natm, int *bas, int nbas, double *env, double *cache);
+                  int *atm, int natm, int *bas, int nbas, double *env,
+                  ECPOpt *opt, double *cache);
 int ECPtype2_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
-                  int *atm, int natm, int *bas, int nbas, double *env, double *cache);
+                  int *atm, int natm, int *bas, int nbas, double *env,
+                  ECPOpt *opt, double *cache);
 int ECPscalar_c2s_factory(int (*fcart)(), double *gctr, int comp, int *shls,
                           int *ecpbas, int necpbas, int *atm, int natm,
-                          int *bas, int nbas, double *env, double *cache);
+                          int *bas, int nbas, double *env, ECPOpt *opt,
+                          double *cache);
 void ECPscalar_distribute(double *out, double *gctr, const int *dims,
                           const int comp, const int di, const int dj);
 
@@ -178,7 +185,8 @@ static void _l_up(double *out, double *buf1, double fac, int li, int nfj)
 }
 
 static int _deriv1_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
-                        int *atm, int natm, int *bas, int nbas, double *env, double *cache)
+                        int *atm, int natm, int *bas, int nbas, double *env,
+                        ECPOpt *opt, double *cache)
 {
         const int ish = shls[0];
         const int jsh = shls[1];
@@ -230,9 +238,9 @@ static int _deriv1_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
                 fac = 1. / (expi[ip] * expj[jp]);
                 fakbas[ip*BAS_SLOTS+ANG_OF] = li + 1;
                 has_value = (ECPtype1_cart(buf1, shls1, ecpbas, necpbas, atm, natm,
-                                           fakbas, nfakbas, env, cache) | has_value);
+                                           fakbas, nfakbas, env, opt, cache) | has_value);
                 has_value = (ECPtype2_cart(buf2, shls1, ecpbas, necpbas, atm, natm,
-                                           fakbas, nfakbas, env, cache) | has_value);
+                                           fakbas, nfakbas, env, opt, cache) | has_value);
                 for (i = 0; i < nfi1 * nfj; i++) {
                         buf1[i] += buf2[i];
                 }
@@ -241,9 +249,9 @@ static int _deriv1_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
                 if (li > 0) {
                         fakbas[ip*BAS_SLOTS+ANG_OF] = li - 1;
                         has_value = (ECPtype1_cart(buf1, shls1, ecpbas, necpbas, atm, natm,
-                                                   fakbas, nfakbas, env, cache) | has_value);
+                                                   fakbas, nfakbas, env, opt, cache) | has_value);
                         has_value = (ECPtype2_cart(buf2, shls1, ecpbas, necpbas, atm, natm,
-                                                   fakbas, nfakbas, env, cache) | has_value);
+                                                   fakbas, nfakbas, env, opt, cache) | has_value);
                         for (i = 0; i < nfi0 * nfj; i++) {
                                 buf1[i] += buf2[i];
                         }
@@ -271,7 +279,7 @@ static int _deriv1_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
 static int _cart_factory(int (*intor_cart)(), double *out, int comp,
                          int *dims, int *shls, int *ecpbas, int necpbas,
                          int *atm, int natm, int *bas, int nbas, double *env,
-                         void *opt, double *cache)
+                         ECPOpt *opt, double *cache)
 {
         const int ish = shls[0];
         const int jsh = shls[1];
@@ -294,7 +302,7 @@ static int _cart_factory(int (*intor_cart)(), double *out, int comp,
         cache += dij;
         int has_value;
         has_value = (*intor_cart)(buf, shls, ecpbas, necpbas,
-                                  atm, natm, bas, nbas, env, cache);
+                                  atm, natm, bas, nbas, env, opt, cache);
         ECPscalar_distribute(out, buf, dims, comp, di, dj);
 
         if (stack != NULL) {
@@ -304,7 +312,7 @@ static int _cart_factory(int (*intor_cart)(), double *out, int comp,
 }
 
 int ECPscalar_iprinv_cart(double *out, int *dims, int *shls, int *atm, int natm,
-                          int *bas, int nbas, double *env, void *opt, double *cache)
+                          int *bas, int nbas, double *env, ECPOpt *opt, double *cache)
 {
         int atm_id = (int)env[AS_RINV_ORIG_ATOM];
         int necpbas = (int)env[AS_NECPBAS];
@@ -318,7 +326,7 @@ int ECPscalar_iprinv_cart(double *out, int *dims, int *shls, int *atm, int natm,
 }
 
 int ECPscalar_ipnuc_cart(double *out, int *dims, int *shls, int *atm, int natm,
-                         int *bas, int nbas, double *env, void *opt, double *cache)
+                         int *bas, int nbas, double *env, ECPOpt *opt, double *cache)
 {
         int necpbas = (int)env[AS_NECPBAS];
         int *ecpbas = bas + ((int)env[AS_ECPBAS_OFFSET])*BAS_SLOTS;
@@ -331,7 +339,7 @@ int ECPscalar_ipnuc_cart(double *out, int *dims, int *shls, int *atm, int natm,
 static int _sph_factory(int (*intor_cart)(), double *out, int comp,
                         int *dims, int *shls, int *ecpbas, int necpbas,
                         int *atm, int natm, int *bas, int nbas, double *env,
-                        void *opt, double *cache)
+                        ECPOpt *opt, double *cache)
 {
         const int ish = shls[0];
         const int jsh = shls[1];
@@ -362,7 +370,7 @@ static int _sph_factory(int (*intor_cart)(), double *out, int comp,
         cache += dij;
         int has_value;
         has_value = ECPscalar_c2s_factory(intor_cart, buf, 3, shls, ecpbas, necpbas,
-                                          atm, natm, bas, nbas, env, cache);
+                                          atm, natm, bas, nbas, env, opt, cache);
         ECPscalar_distribute(out, buf, dims, comp, di, dj);
 
         if (stack != NULL) {
@@ -372,7 +380,7 @@ static int _sph_factory(int (*intor_cart)(), double *out, int comp,
 }
 
 int ECPscalar_iprinv_sph(double *out, int *dims, int *shls, int *atm, int natm,
-                          int *bas, int nbas, double *env, void *opt, double *cache)
+                          int *bas, int nbas, double *env, ECPOpt *opt, double *cache)
 {
         int atm_id = (int)env[AS_RINV_ORIG_ATOM];
         int necpbas = (int)env[AS_NECPBAS];
@@ -386,7 +394,7 @@ int ECPscalar_iprinv_sph(double *out, int *dims, int *shls, int *atm, int natm,
 }
 
 int ECPscalar_ipnuc_sph(double *out, int *dims, int *shls, int *atm, int natm,
-                         int *bas, int nbas, double *env, void *opt, double *cache)
+                         int *bas, int nbas, double *env, ECPOpt *opt, double *cache)
 {
         int necpbas = (int)env[AS_NECPBAS];
         int *ecpbas = bas + ((int)env[AS_ECPBAS_OFFSET])*BAS_SLOTS;
@@ -397,7 +405,8 @@ int ECPscalar_ipnuc_sph(double *out, int *dims, int *shls, int *atm, int natm,
 }
 
 static int _ipipv_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
-                       int *atm, int natm, int *bas, int nbas, double *env, double *cache)
+                       int *atm, int natm, int *bas, int nbas, double *env,
+                       ECPOpt *opt, double *cache)
 {
         const int ish = shls[0];
         const int jsh = shls[1];
@@ -445,9 +454,9 @@ static int _ipipv_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
                 fac = 1. / (expi[ip] * expj[jp]);
                 fakbas[ip*BAS_SLOTS+ANG_OF] = li + 2;
                 has_value = (ECPtype1_cart(buf1, shls1, ecpbas, necpbas, atm, natm,
-                                           fakbas, nfakbas, env, cache) | has_value);
+                                           fakbas, nfakbas, env, opt, cache) | has_value);
                 has_value = (ECPtype2_cart(buf2, shls1, ecpbas, necpbas, atm, natm,
-                                           fakbas, nfakbas, env, cache) | has_value);
+                                           fakbas, nfakbas, env, opt, cache) | has_value);
                 for (i = 0; i < nfi2 * nfj; i++) {
                         buf1[i] += buf2[i];
                 }
@@ -455,9 +464,9 @@ static int _ipipv_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
 
                 fakbas[ip*BAS_SLOTS+ANG_OF] = li;
                 has_value = (ECPtype1_cart(buf1, shls1, ecpbas, necpbas, atm, natm,
-                                           fakbas, nfakbas, env, cache) | has_value);
+                                           fakbas, nfakbas, env, opt, cache) | has_value);
                 has_value = (ECPtype2_cart(buf2, shls1, ecpbas, necpbas, atm, natm,
-                                           fakbas, nfakbas, env, cache) | has_value);
+                                           fakbas, nfakbas, env, opt, cache) | has_value);
                 for (i = 0; i < nfi * nfj; i++) {
                         buf1[i] += buf2[i];
                 }
@@ -470,9 +479,9 @@ static int _ipipv_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
                         if (li > 1) {
                                 fakbas[ip*BAS_SLOTS+ANG_OF] = li - 2;
                                 has_value = (ECPtype1_cart(buf1, shls1, ecpbas, necpbas, atm, natm,
-                                                           fakbas, nfakbas, env, cache) | has_value);
+                                                           fakbas, nfakbas, env, opt, cache) | has_value);
                                 has_value = (ECPtype2_cart(buf2, shls1, ecpbas, necpbas, atm, natm,
-                                                           fakbas, nfakbas, env, cache) | has_value);
+                                                           fakbas, nfakbas, env, opt, cache) | has_value);
                                 for (i = 0; i < nfi_1 * nfj; i++) {
                                         buf1[i] += buf2[i];
                                 }
@@ -499,7 +508,7 @@ static int _ipipv_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
 }
 
 int ECPscalar_ipiprinv_cart(double *out, int *dims, int *shls, int *atm, int natm,
-                          int *bas, int nbas, double *env, void *opt, double *cache)
+                          int *bas, int nbas, double *env, ECPOpt *opt, double *cache)
 {
         int atm_id = (int)env[AS_RINV_ORIG_ATOM];
         int necpbas = (int)env[AS_NECPBAS];
@@ -513,7 +522,7 @@ int ECPscalar_ipiprinv_cart(double *out, int *dims, int *shls, int *atm, int nat
 }
 
 int ECPscalar_ipipnuc_cart(double *out, int *dims, int *shls, int *atm, int natm,
-                         int *bas, int nbas, double *env, void *opt, double *cache)
+                         int *bas, int nbas, double *env, ECPOpt *opt, double *cache)
 {
         int necpbas = (int)env[AS_NECPBAS];
         int *ecpbas = bas + ((int)env[AS_ECPBAS_OFFSET])*BAS_SLOTS;
@@ -524,7 +533,7 @@ int ECPscalar_ipipnuc_cart(double *out, int *dims, int *shls, int *atm, int natm
 }
 
 int ECPscalar_ipiprinv_sph(double *out, int *dims, int *shls, int *atm, int natm,
-                          int *bas, int nbas, double *env, void *opt, double *cache)
+                          int *bas, int nbas, double *env, ECPOpt *opt, double *cache)
 {
         int atm_id = (int)env[AS_RINV_ORIG_ATOM];
         int necpbas = (int)env[AS_NECPBAS];
@@ -538,7 +547,7 @@ int ECPscalar_ipiprinv_sph(double *out, int *dims, int *shls, int *atm, int natm
 }
 
 int ECPscalar_ipipnuc_sph(double *out, int *dims, int *shls, int *atm, int natm,
-                         int *bas, int nbas, double *env, void *opt, double *cache)
+                         int *bas, int nbas, double *env, ECPOpt *opt, double *cache)
 {
         int necpbas = (int)env[AS_NECPBAS];
         int *ecpbas = bas + ((int)env[AS_ECPBAS_OFFSET])*BAS_SLOTS;
@@ -549,7 +558,8 @@ int ECPscalar_ipipnuc_sph(double *out, int *dims, int *shls, int *atm, int natm,
 }
 
 static int _ipvip_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
-                       int *atm, int natm, int *bas, int nbas, double *env, double *cache)
+                       int *atm, int natm, int *bas, int nbas, double *env,
+                       ECPOpt *opt, double *cache)
 {
         const int ish = shls[0];
         const int jsh = shls[1];
@@ -599,9 +609,9 @@ static int _ipvip_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
                 fakbas[(npi+jp)*BAS_SLOTS+ANG_OF] = lj + 1;
                 fakbas[ip*BAS_SLOTS+ANG_OF] = li + 1;
                 has_value = (ECPtype1_cart(buf1, shls1, ecpbas, necpbas, atm, natm,
-                                           fakbas, nfakbas, env, cache) | has_value);
+                                           fakbas, nfakbas, env, opt, cache) | has_value);
                 has_value = (ECPtype2_cart(buf2, shls1, ecpbas, necpbas, atm, natm,
-                                           fakbas, nfakbas, env, cache) | has_value);
+                                           fakbas, nfakbas, env, opt, cache) | has_value);
                 for (i = 0; i < nfi1 * nfj1; i++) {
                         buf1[i] += buf2[i];
                 }
@@ -610,9 +620,9 @@ static int _ipvip_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
                 if (li > 0) {
                         fakbas[ip*BAS_SLOTS+ANG_OF] = li - 1;
                         has_value = (ECPtype1_cart(buf1, shls1, ecpbas, necpbas, atm, natm,
-                                                   fakbas, nfakbas, env, cache) | has_value);
+                                                   fakbas, nfakbas, env, opt, cache) | has_value);
                         has_value = (ECPtype2_cart(buf2, shls1, ecpbas, necpbas, atm, natm,
-                                                   fakbas, nfakbas, env, cache) | has_value);
+                                                   fakbas, nfakbas, env, opt, cache) | has_value);
                         for (i = 0; i < nfi0 * nfj1; i++) {
                                 buf1[i] += buf2[i];
                         }
@@ -641,9 +651,9 @@ static int _ipvip_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
                         fakbas[(npi+jp)*BAS_SLOTS+ANG_OF] = lj - 1;
                         fakbas[ip*BAS_SLOTS+ANG_OF] = li + 1;
                         has_value = (ECPtype1_cart(buf1, shls1, ecpbas, necpbas, atm, natm,
-                                                   fakbas, nfakbas, env, cache) | has_value);
+                                                   fakbas, nfakbas, env, opt, cache) | has_value);
                         has_value = (ECPtype2_cart(buf2, shls1, ecpbas, necpbas, atm, natm,
-                                                   fakbas, nfakbas, env, cache) | has_value);
+                                                   fakbas, nfakbas, env, opt, cache) | has_value);
                         for (i = 0; i < nfi1 * nfj0; i++) {
                                 buf1[i] += buf2[i];
                         }
@@ -652,9 +662,9 @@ static int _ipvip_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
                         if (li > 0) {
                                 fakbas[ip*BAS_SLOTS+ANG_OF] = li - 1;
                                 has_value = (ECPtype1_cart(buf1, shls1, ecpbas, necpbas, atm, natm,
-                                                           fakbas, nfakbas, env, cache) | has_value);
+                                                           fakbas, nfakbas, env, opt, cache) | has_value);
                                 has_value = (ECPtype2_cart(buf2, shls1, ecpbas, necpbas, atm, natm,
-                                                           fakbas, nfakbas, env, cache) | has_value);
+                                                           fakbas, nfakbas, env, opt, cache) | has_value);
                                 for (i = 0; i < nfi0 * nfj0; i++) {
                                         buf1[i] += buf2[i];
                                 }
@@ -701,7 +711,7 @@ static int _ipvip_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
 }
 
 int ECPscalar_iprinvip_cart(double *out, int *dims, int *shls, int *atm, int natm,
-                            int *bas, int nbas, double *env, void *opt, double *cache)
+                            int *bas, int nbas, double *env, ECPOpt *opt, double *cache)
 {
         int atm_id = (int)env[AS_RINV_ORIG_ATOM];
         int necpbas = (int)env[AS_NECPBAS];
@@ -715,7 +725,7 @@ int ECPscalar_iprinvip_cart(double *out, int *dims, int *shls, int *atm, int nat
 }
 
 int ECPscalar_ipnucip_cart(double *out, int *dims, int *shls, int *atm, int natm,
-                           int *bas, int nbas, double *env, void *opt, double *cache)
+                           int *bas, int nbas, double *env, ECPOpt *opt, double *cache)
 {
         int necpbas = (int)env[AS_NECPBAS];
         int *ecpbas = bas + ((int)env[AS_ECPBAS_OFFSET])*BAS_SLOTS;
@@ -726,7 +736,7 @@ int ECPscalar_ipnucip_cart(double *out, int *dims, int *shls, int *atm, int natm
 }
 
 int ECPscalar_iprinvip_sph(double *out, int *dims, int *shls, int *atm, int natm,
-                           int *bas, int nbas, double *env, void *opt, double *cache)
+                           int *bas, int nbas, double *env, ECPOpt *opt, double *cache)
 {
         int atm_id = (int)env[AS_RINV_ORIG_ATOM];
         int necpbas = (int)env[AS_NECPBAS];
@@ -740,7 +750,7 @@ int ECPscalar_iprinvip_sph(double *out, int *dims, int *shls, int *atm, int natm
 }
 
 int ECPscalar_ipnucip_sph(double *out, int *dims, int *shls, int *atm, int natm,
-                          int *bas, int nbas, double *env, void *opt, double *cache)
+                          int *bas, int nbas, double *env, ECPOpt *opt, double *cache)
 {
         int necpbas = (int)env[AS_NECPBAS];
         int *ecpbas = bas + ((int)env[AS_ECPBAS_OFFSET])*BAS_SLOTS;
@@ -751,7 +761,8 @@ int ECPscalar_ipnucip_sph(double *out, int *dims, int *shls, int *atm, int natm,
 }
 
 static int _igv_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
-                     int *atm, int natm, int *bas, int nbas, double *env, double *cache)
+                     int *atm, int natm, int *bas, int nbas, double *env,
+                     ECPOpt *opt, double *cache)
 {
         const int ish = shls[0];
         const int jsh = shls[1];
@@ -792,16 +803,16 @@ static int _igv_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
 
         fakbas[ANG_OF] = li + 1;
         has_value = (ECPtype1_cart(buf1, shls1, ecpbas, necpbas, atm, natm,
-                                   fakbas, 2, env, cache) | has_value);
+                                   fakbas, 2, env, opt, cache) | has_value);
         has_value = (ECPtype2_cart(buf2, shls1, ecpbas, necpbas, atm, natm,
-                                   fakbas, 2, env, cache) | has_value);
+                                   fakbas, 2, env, opt, cache) | has_value);
         for (i = 0; i < nfi1*nci*nfj*ncj; i++) {
                 buf1[i] += buf2[i];
         }
         has_value = (ECPtype1_cart(buf2, shls, ecpbas, necpbas, atm, natm,
-                                   bas, nbas, env, cache) | has_value);
+                                   bas, nbas, env, opt, cache) | has_value);
         has_value = (ECPtype2_cart(gctr, shls, ecpbas, necpbas, atm, natm,
-                                   bas, nbas, env, cache) | has_value);
+                                   bas, nbas, env, opt, cache) | has_value);
         for (i = 0; i < di*dj; i++) {
                 buf2[i] += gctr[i];
         }
@@ -829,7 +840,7 @@ static int _igv_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
 }
 
 int ECPscalar_ignuc_cart(double *out, int *dims, int *shls, int *atm, int natm,
-                         int *bas, int nbas, double *env, void *opt, double *cache)
+                         int *bas, int nbas, double *env, ECPOpt *opt, double *cache)
 {
         int necpbas = (int)env[AS_NECPBAS];
         int *ecpbas = bas + ((int)env[AS_ECPBAS_OFFSET])*BAS_SLOTS;
@@ -840,7 +851,7 @@ int ECPscalar_ignuc_cart(double *out, int *dims, int *shls, int *atm, int natm,
 }
 
 int ECPscalar_ignuc_sph(double *out, int *dims, int *shls, int *atm, int natm,
-                        int *bas, int nbas, double *env, void *opt, double *cache)
+                        int *bas, int nbas, double *env, ECPOpt *opt, double *cache)
 {
         int necpbas = (int)env[AS_NECPBAS];
         int *ecpbas = bas + ((int)env[AS_ECPBAS_OFFSET])*BAS_SLOTS;

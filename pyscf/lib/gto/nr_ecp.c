@@ -39,6 +39,10 @@
 
 double CINTcommon_fac_sp(int);
 
+typedef struct {
+    double *u_ecp;
+} ECPOpt;
+
 static double _sph_ine_tab[] = { // 400x24
 9.802640211919197e-01, 6.534919212092035e-03, 2.613937811451498e-05, 7.468346329123935e-08, 1.659625812043017e-10, 3.017493035919202e-13, 4.642287455711235e-16, 6.189706898282851e-19, 7.281999097680386e-22, 7.665254523625293e-25, 7.300236357712470e-28, 6.348027199385843e-31, 5.078418750076879e-34, 3.761789744992798e-37, 2.594336600846831e-40, 1.673764894480139e-43, 1.014402615043443e-46, 5.796584581226479e-50, 3.133288094277013e-53, 1.606814005366913e-56, 7.838115320992611e-60, 3.645634279400473e-63, 1.620281595519583e-66, 6.894814102547425e-70,
 9.423296940236874e-01, 1.884207224818979e-02, 2.260816141980705e-04, 1.937731683913445e-06, 1.291774150186003e-08, 7.045863444090539e-11, 3.251876940391953e-13, 1.300732413080320e-15, 4.590769115454675e-18, 1.449703482841226e-20, 4.141979079274455e-23, 1.080509516656789e-25, 2.593209009591830e-28, 5.762660193098549e-31, 1.192269748342981e-33, 2.307610747161589e-36, 4.195642826638227e-39, 7.192510565377163e-42, 1.166350154849031e-44, 1.794380813740386e-47, 2.625917780013486e-50, 3.664064504096460e-53, 4.885411023215048e-56, 6.236685174215352e-59,
@@ -4616,12 +4620,6 @@ static const double _l2[] = { // l/(2l+1)
         14./29, 15./31, 16./33, 17./35, 18./37, 19./39,
         20./41, 21./43, 22./45, 23./47,
 };
-static const double _1l2[] = { // (l+1)/(2l+1)
-        1., 2./3, 3./5, 4./7, 5./9, 6./11, 7./13, 8./15,
-        9./17, 10./19, 11./21, 12./23, 13./25, 14./27,
-        15./29, 16./31, 17./33, 18./35, 19./37, 20./39,
-        21./41, 22./43, 23./45, 24./47,
-};
 static const double _j_inv[] = { // 1/j
         0., 1., .5, 1./3, 1./4, 1./5, 1./6, 1./7, 1./8, 1./9
 };
@@ -4763,7 +4761,7 @@ void ECPsph_ine_opt(double *out, int order, double z)
                         for (j = 1; j <= K_TAYLOR_MAX; j++) {
                                 k1[0] = k0[1] - k0[0];
                                 for (i = 1; i <= order+K_TAYLOR_MAX-j; i++) {
-                                        k1[i] = _l2[i]*k0[i-1] + _1l2[i]*k0[i+1] - k0[i];
+                                        k1[i] = _l2[i]*k0[i-1] + (1-_l2[i])*k0[i+1] - k0[i];
                                 }
                                 fac *= dz * _j_inv[j];
                                 for (i = 0; i <= order; i++) {
@@ -4808,42 +4806,55 @@ void ECPgauss_chebyshev(double *rs, double *ws, int n)
 /*
  * Return the number of effective grids
  */
-int ECPrad_part(double *ur, double *rs, int nrs, int inc,
+int ECPrad_part(double *ur, double *rs, int rs_off, int nrs, int inc,
                 int *ecpshls, int *ecpbas,
-                int *atm, int natm, int *bas, int nbas, double *env)
+                int *atm, int natm, int *bas, int nbas, double *env, ECPOpt *opt)
 {
+        const int ecpsh0 = ecpshls[0];
+        const int ecpsh1 = ecpshls[1];
         double ubuf[nrs];
         double r2[nrs];
-        double *ak, *ck;
+        double *ak, *ck, *u_ecp;
         int npk;
         int ish, i, kp;
         int nrs_now;
         int nrs_max = 0;
 
+        rs += rs_off;
         for (i = 0; i < nrs; i++) {
                 r2[i] = rs[i*inc] * rs[i*inc];
                 ur[i] = 0;
         }
 
-        for (ish = 0; ecpshls[ish] != -1; ish++) {
-                npk = ecpbas[ecpshls[ish]*BAS_SLOTS+NPRIM_OF];
-                ak = env + ecpbas[ecpshls[ish]*BAS_SLOTS+PTR_EXP];
-                ck = env + ecpbas[ecpshls[ish]*BAS_SLOTS+PTR_COEFF];
+        for (ish = ecpsh0; ish < ecpsh1; ish++) {
+                if (opt == NULL) {
+                        npk = ecpbas[ish*BAS_SLOTS+NPRIM_OF];
+                        ak = env + ecpbas[ish*BAS_SLOTS+PTR_EXP];
+                        ck = env + ecpbas[ish*BAS_SLOTS+PTR_COEFF];
 
-                for (i = 0; i < nrs; i++) {
-                        ubuf[i] = ck[0] * exp(-ak[0]*r2[i]);
-                        for (kp = 1; kp < npk; kp++) {
-                                ubuf[i] += ck[kp] * exp(-ak[kp]*r2[i]);
+                        for (i = 0; i < nrs; i++) {
+                                ubuf[i] = ck[0] * exp(-ak[0]*r2[i]);
+                                for (kp = 1; kp < npk; kp++) {
+                                        ubuf[i] += ck[kp] * exp(-ak[kp]*r2[i]);
+                                }
+                                if (i > 2 &&
+                                    fabs(ubuf[i]) < SIM_ZERO &&
+                                    fabs(ubuf[i-1]) < SIM_ZERO) {
+                                        break;
+                                }
                         }
-                        if (i > 2 &&
-                            fabs(ubuf[i]) < SIM_ZERO &&
-                            fabs(ubuf[i-1]) < SIM_ZERO) {
-                                break;
+                } else {
+                        u_ecp = opt->u_ecp + ish * (1 << LEVEL_MAX);
+                        for (i = 0; i < nrs; i++) {
+                                ubuf[i] = u_ecp[i*inc+rs_off];
+                                if (fabs(ubuf[i]) < SIM_ZERO) {
+                                        break;
+                                }
                         }
                 }
                 nrs_now = i;
                 nrs_max = MAX(nrs_max, nrs_now);
-                switch (ecpbas[ecpshls[ish]*BAS_SLOTS+RADI_POWER]) {
+                switch (ecpbas[ish*BAS_SLOTS+RADI_POWER]) {
                 case 1:
                         for (i = 0; i < nrs_now; i++) {
                                 ubuf[i] *= rs[i*inc];
@@ -5057,33 +5068,42 @@ void type2_facs_rad(double *facs, int ish, int lc, double rca,
         const int nc = bas[NCTR_OF +ish*BAS_SLOTS];
         const double *ai = env + bas[PTR_EXP+ish*BAS_SLOTS];
         const double *ci = env + bas[PTR_COEFF+ish*BAS_SLOTS];
+        const int lilc1 = li + lc + 1;
         int ip, i, j;
         double ka;
         double r2[nrs];
-        double buf[np*nrs*(li+lc+1)];
-        double t1;
+        double buf[np*nrs*lilc1];
+        double t1, ar2;
         double *pbuf = buf;
 
         for (i = 0; i < nrs; i++) {
                 t1 = rs[i*inc] - rca;
-                r2[i] = -t1 * t1;
+                r2[i] = t1 * t1;
         }
         for (ip = 0; ip < np; ip++) {
-                ka = 2 * ai[ip] * rca;
+                ka = 2. * ai[ip] * rca;
                 for (i = 0; i < nrs; i++) {
-                        t1 = exp(r2[i] * ai[ip]);
-                        ECPsph_ine_opt(pbuf, li+lc, ka*rs[i*inc]);
-                        for (j = 0; j <= li+lc; j++) {
-                                pbuf[j] *= t1;
+                        // + 6. to include the largest value in ECPsph_ine_opt
+                        ar2 = ai[ip] * r2[i];
+                        if (ar2 > EXPCUTOFF + 6.) {
+                                for (j = 0; j <= li+lc; j++) {
+                                        pbuf[j] = 0;
+                                }
+                        } else {
+                                t1 = exp(-ar2);
+                                ECPsph_ine_opt(pbuf, li+lc, ka*rs[i*inc]);
+                                for (j = 0; j <= li+lc; j++) {
+                                        pbuf[j] *= t1;
+                                }
                         }
-                        pbuf += li + lc + 1;
+                        pbuf += lilc1;
                 }
         }
 
         const double D0 = 0;
         const double D1 = 1;
         const char TRANS_N = 'N';
-        const int m = nrs * (li+lc+1);
+        const int m = nrs * lilc1;
         dgemm_(&TRANS_N, &TRANS_N, &m, &nc, &np,
                &D1, buf, &m, ci, &np, &D0, facs, &m);
 }
@@ -5158,38 +5178,25 @@ void type1_rad_ang(double *rad_ang, int lmax, double *r, double *rad_all)
         } } }
 }
 
-static int search_ecpatms(int *ecpatmlst, int *ecpbas, int necpbas)
+static int _loc_ecpbas(int *ecploc, int *ecpbas, int necpbas)
 {
-        int i, j, atm_id;
-        int necpatm = 0;
-        for (i = 0; i < necpbas; i++) {
+        int i, j, l, atm_id;
+        ecploc[0] = 0;
+        int nslots = 1;
+        int atm_last = ecpbas[ATOM_OF];
+        int l_last = ecpbas[ANG_OF];
+        for (i = 1; i < necpbas; i++) {
                 atm_id = ecpbas[ATOM_OF+i*BAS_SLOTS];
-                for (j = 0; j < necpatm; j++) {
-                        if (atm_id == ecpatmlst[j]) {
-                                goto next_expbas;
-                        }
-                }
-                ecpatmlst[necpatm] = atm_id;
-                necpatm += 1;
-next_expbas:;
-        }
-        return necpatm;
-}
-
-static int search_ecpshls(int *ecpshls, int atm_id, int lc,
-                           int *ecpbas, int necpbas)
-{
-        int i;
-        int k = 0;
-        for (i = 0; i < necpbas; i++) {
-                if (ecpbas[ATOM_OF+i*BAS_SLOTS] == atm_id &&
-                    ecpbas[ANG_OF +i*BAS_SLOTS] == lc) {
-                        ecpshls[k] = i;
-                        k++;
+                l = ecpbas[ANG_OF +i*BAS_SLOTS];
+                if (atm_id != atm_last || l != l_last) {
+                        ecploc[nslots] = i;
+                        nslots += 1;
+                        atm_last = atm_id;
+                        l_last = l;
                 }
         }
-        ecpshls[k] = -1;
-        return k;
+        ecploc[nslots] = necpbas;
+        return nslots;
 }
 
 static double distance_square(const double *r1, const double *r2)
@@ -5206,6 +5213,8 @@ static int check_3c_overlap(int *shls, int *atm, int *bas, double *env,
 {
         const int ish = shls[0];
         const int jsh = shls[1];
+        const int ecpsh0 = ecpshls[0];
+        const int ecpsh1 = ecpshls[1];
         const int iprim = bas[NPRIM_OF+ish*BAS_SLOTS];
         const int jprim = bas[NPRIM_OF+jsh*BAS_SLOTS];
         const double ai = env[bas[PTR_EXP+ish*BAS_SLOTS]+iprim-1];
@@ -5221,9 +5230,9 @@ static int check_3c_overlap(int *shls, int *atm, int *bas, double *env,
         double *ak;
         int csh, kprim;
 
-        for (csh = 0; ecpshls[csh] != -1; csh++) {
-                kprim = ecpbas[ecpshls[csh]*BAS_SLOTS+NPRIM_OF];
-                ak = env + ecpbas[ecpshls[csh]*BAS_SLOTS+PTR_EXP];
+        for (csh = ecpsh0; csh < ecpsh1; csh++) {
+                kprim = ecpbas[csh*BAS_SLOTS+NPRIM_OF];
+                ak = env + ecpbas[csh*BAS_SLOTS+PTR_EXP];
 
                 // Test the last primitive funciton only because the basis
                 // functions are sorted so that the last one has the smallest
@@ -5240,7 +5249,8 @@ static int check_3c_overlap(int *shls, int *atm, int *bas, double *env,
 }
 
 int ECPtype2_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
-                  int *atm, int natm, int *bas, int nbas, double *env, double *cache)
+                  int *atm, int natm, int *bas, int nbas, double *env,
+                  ECPOpt *opt, double *cache)
 {
         const int ish = shls[0];
         const int jsh = shls[1];
@@ -5255,8 +5265,10 @@ int ECPtype2_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         const double *rj = env + atm[PTR_COORD+bas[ATOM_OF+jsh*BAS_SLOTS]*ATM_SLOTS];
 
         int nrs = 1 << LEVEL_MAX;
-        int ecpatmlst[natm];
-        int necpatm = search_ecpatms(ecpatmlst, ecpbas, necpbas);
+        int ecploc[necpbas+1];
+        int nslots = _loc_ecpbas(ecploc, ecpbas, necpbas);
+        int *ecpshls;
+        int iloc;
 
         const double D0 = 0;
         const double D1 = 1;
@@ -5264,7 +5276,6 @@ int ECPtype2_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         const char TRANS_T = 'T';
         const double common_fac = CINTcommon_fac_sp(li) *
                                   CINTcommon_fac_sp(lj) * 16 * M_PI * M_PI;
-        int ecpshls[necpbas+1];
         int ia, atm_id, lc, lab, lilc1, ljlc1, lilj1, dlc, im, mq;
         int i, j, n, ic, jc;
         int d2, d3;
@@ -5278,7 +5289,7 @@ int ECPtype2_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         double rca[3];
         double rcb[3];
         double buf[nfi*(ECP_LMAX*2+1)*(lj+ECP_LMAX+1)];
-        double dca, dcb;
+        double dca, dcb, s;
         double *rc, *pradi, *pradj, *prur;
         int has_value;
         int ecp_lmax = 0;
@@ -5288,13 +5299,15 @@ int ECPtype2_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
 
         for (i = 0; i < nci*ncj*nfi*nfj; i++) { gctr[i] = 0; }
 
-        for (ia = 0; ia < necpatm; ia++) {
-                atm_id = ecpatmlst[ia];
+        for (iloc = 0; iloc < nslots; iloc++) {
+                lc = ecpbas[ANG_OF+ecploc[iloc]*BAS_SLOTS];
+                if (lc == -1) {
+                        continue;
+                }
+                atm_id = ecpbas[ATOM_OF+ecploc[iloc]*BAS_SLOTS];
                 rc = env + atm[PTR_COORD+atm_id*ATM_SLOTS];
-                for (lc = 0; lc <= ecp_lmax; lc++) {
-                        if (0 == search_ecpshls(ecpshls, atm_id, lc, ecpbas, necpbas)) {
-                                continue;
-                        }
+                ecpshls = ecploc + iloc;
+
         if (!check_3c_overlap(shls, atm, bas, env, rc, ecpshls, ecpbas)) {
                 continue;
         }
@@ -5333,8 +5346,8 @@ int ECPtype2_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         start = step - 1;
         wtscale = step;
         for (level = LEVEL0; level <= LEVEL_MAX; level++) {
-                nrs = ECPrad_part(ur, rs+start, nrs0, step, ecpshls, ecpbas,
-                                  atm, natm, bas, nbas, env);
+                nrs = ECPrad_part(ur, rs, start, nrs0, step, ecpshls, ecpbas,
+                                  atm, natm, bas, nbas, env, opt);
                 for (i = 0; i < nrs; i++) {
                         ur[i] *= ws[start+i*step] * wtscale;
                         rur[i] = ur[i];
@@ -5354,27 +5367,29 @@ int ECPtype2_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
                         pradj = radj + jc * nrs * ljlc1;
                         for (lab = 0; lab <= li+lj; lab++, ijl++) {
                                 if (!converged[ijl]) {
-                                        prur = rur + lab * nrs;
-                                        prad = rad_all + ijl*d2;
-                                        for (i = 0; i < d2; i++) {
-                                                plast[i] = prad[i];
-                                                prad[i] *= .5;
-                                        }
+        prur = rur + lab * nrs;
+        prad = rad_all + ijl*d2;
+        for (i = 0; i < d2; i++) {
+                plast[i] = prad[i];
+                prad[i] *= .5;
+        }
 
-                                        for (n = 0; n < nrs; n++) {
-                                        for (i = 0; i < lilc1; i++) {
-                                        for (j = 0; j < ljlc1; j++) {
-                                                prad[i*ljlc1+j] += prur[n] *
-                                                        pradi[n*lilc1+i] * pradj[n*ljlc1+j];
-                                        } } }
+        for (i = 0; i < lilc1; i++) {
+        for (j = 0; j < ljlc1; j++) {
+                s = prad[i*ljlc1+j];
+                for (n = 0; n < nrs; n++) {
+                        s += prur[n] * pradi[n*lilc1+i] * pradj[n*ljlc1+j];
+                }
+                prad[i*ljlc1+j] = s;
+        } }
 
-                                        for (i = 0; i < d2; i++) {
-                                                if (CLOSE_ENOUGH(plast[i],prad[i])) {
-                                                        converged[ijl] = 0;
-                                                        all_conv = 0;
-                                                        break;
-                                                }
-                                        }
+        for (i = 0; i < d2; i++) {
+                if (CLOSE_ENOUGH(plast[i],prad[i])) {
+                        converged[ijl] = 0;
+                        all_conv = 0;
+                        break;
+                }
+        }
                                 }
                         }
                 } }
@@ -5404,7 +5419,6 @@ int ECPtype2_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
                                &D1, gctr+jc*nfj*di+ic*nfi, &di);
                 } }
         } }
-                }
         }
         return has_value;
 }
@@ -5438,9 +5452,13 @@ void type1_rad_part(double *rad_all, int lmax, double k, double aij,
         for (n = 0; n < nrs; n++) {
                 tmp = rs[n*inc] - kaij;
                 tmp = fac - aij*tmp*tmp;
-                if (ur[n] == 0 || tmp > CUTOFF || tmp < -CUTOFF) {
-/* Avoid exp(tmp) goto infinity!  Usually such points correspond to remote
+                if (ur[n] == 0
+/* Avoid exp(tmp) to be infinity!  Usually such points correspond to remote
  * functions.  Most likely, they can be dropped without affecting accuracy. */
+                    || tmp > CUTOFF
+/* + 6. to include the largest value in ECPsph_ine_opt
+ * +30. to include the rs^lmax of remote point for high-l functions. */
+                    || tmp < -(EXPCUTOFF+6.+30.)) {
                         rur[n] = 0;
                         for (i = 0; i < lmax1; i++) {
                                 bval[n*lmax1+i] = 0;
@@ -5467,7 +5485,8 @@ void type1_rad_part(double *rad_all, int lmax, double k, double aij,
 }
 
 int ECPtype1_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
-                  int *atm, int natm, int *bas, int nbas, double *env, double *cache)
+                  int *atm, int natm, int *bas, int nbas, double *env,
+                  ECPOpt *opt, double *cache)
 {
         const int ish = shls[0];
         const int jsh = shls[1];
@@ -5487,8 +5506,10 @@ int ECPtype1_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         const double *rj = env + atm[PTR_COORD+bas[ATOM_OF+jsh*BAS_SLOTS]*ATM_SLOTS];
 
         int nrs = 1 << LEVEL_MAX;
-        int ecpatmlst[natm];
-        int necpatm = search_ecpatms(ecpatmlst, ecpbas, necpbas);
+        int ecploc[necpbas+1];
+        int nslots = _loc_ecpbas(ecploc, ecpbas, necpbas);
+        int *ecpshls;
+        int iloc;
 
         const int lilj1 = li + lj + 1;
         const int d1 = lilj1;
@@ -5500,7 +5521,6 @@ int ECPtype1_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         const int dj1 = lj + 1;
         const int dj2 = dj1 * dj1;
         const int dj3 = dj2 * dj1;
-        int ecpshls[necpbas+1];
         int ia, atm_id;
         int i, n, ip, jp, ic, jc, mi, mj;
         int i1, i2, i3, j1, j2, j3;
@@ -5523,13 +5543,14 @@ int ECPtype1_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         for (i = 0; i < nci*ncj*nfi*nfj; i++) { gctr[i] = 0; }
         for (i = 0; i < d3; i++) { rad_all[i] = 0; }
 
-        for (ia = 0; ia < necpatm; ia++) {
-                atm_id = ecpatmlst[ia];
-                if (0 == search_ecpshls(ecpshls, atm_id, -1, ecpbas, necpbas)) {
+        for (iloc = 0; iloc < nslots; iloc++) {
+                if (ecpbas[ANG_OF+ecploc[iloc]*BAS_SLOTS] != -1) {
                         continue;
                 }
+                atm_id = ecpbas[ATOM_OF+ecploc[iloc]*BAS_SLOTS];
+                rc = env + atm[PTR_COORD+atm_id*ATM_SLOTS];
+                ecpshls = ecploc + iloc;
 
-        rc = env + atm[PTR_COORD+atm_id*ATM_SLOTS];
         if (!check_3c_overlap(shls, atm, bas, env, rc, ecpshls, ecpbas)) {
                 continue;
         }
@@ -5559,8 +5580,8 @@ int ECPtype1_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         start = step - 1;
         wtscale = step;
         for (level = LEVEL0; level <= LEVEL_MAX; level++) {
-                nrs = ECPrad_part(ur, rs+start, nrs0, step, ecpshls, ecpbas,
-                                  atm, natm, bas, nbas, env);
+                nrs = ECPrad_part(ur, rs, start, nrs0, step, ecpshls, ecpbas,
+                                  atm, natm, bas, nbas, env, opt);
                 for (n = 0; n < nrs; n++) {
                         ur[n] *= ws[start+n*step] * wtscale;
                 }
@@ -5657,7 +5678,8 @@ int ECPscalar_cache_size(int comp, int *shls,
 
 int ECPscalar_c2s_factory(int (*fcart)(), double *gctr, int comp, int *shls,
                           int *ecpbas, int necpbas, int *atm, int natm,
-                          int *bas, int nbas, double *env, double *cache)
+                          int *bas, int nbas, double *env, ECPOpt *opt,
+                          double *cache)
 {
         const int ish = shls[0];
         const int jsh = shls[1];
@@ -5670,7 +5692,7 @@ int ECPscalar_c2s_factory(int (*fcart)(), double *gctr, int comp, int *shls,
 
         if (li < 2 && lj < 2) {
                 return (*fcart)(gctr, shls, ecpbas, necpbas,
-                                atm, natm, bas, nbas, env);
+                                atm, natm, bas, nbas, env, opt);
         }
 
         int j;
@@ -5681,7 +5703,7 @@ int ECPscalar_c2s_factory(int (*fcart)(), double *gctr, int comp, int *shls,
         gcart = cache;
         gtmp = gcart + nfi*nfj*nci*ncj * comp;
         int has_value = (*fcart)(gcart, shls, ecpbas, necpbas,
-                                 atm, natm, bas, nbas, env);
+                                 atm, natm, bas, nbas, env, opt);
 
         if (has_value) {
                 if (li < 2) {
@@ -5703,17 +5725,19 @@ int ECPscalar_c2s_factory(int (*fcart)(), double *gctr, int comp, int *shls,
 }
 
 int ECPtype1_sph(double *gctr, int *shls, int *ecpbas, int necpbas,
-                 int *atm, int natm, int *bas, int nbas, double *env, double *cache)
+                 int *atm, int natm, int *bas, int nbas, double *env,
+                 ECPOpt *opt, double *cache)
 {
         return ECPscalar_c2s_factory(ECPtype1_cart, gctr, 1, shls, ecpbas, necpbas,
-                                     atm, natm, bas, nbas, env, cache);
+                                     atm, natm, bas, nbas, env, opt, cache);
 }
 
 int ECPtype2_sph(double *gctr, int *shls, int *ecpbas, int necpbas,
-                 int *atm, int natm, int *bas, int nbas, double *env, double *cache)
+                 int *atm, int natm, int *bas, int nbas, double *env,
+                 ECPOpt *opt, double *cache)
 {
         return ECPscalar_c2s_factory(ECPtype2_cart, gctr, 1, shls, ecpbas, necpbas,
-                                     atm, natm, bas, nbas, env, cache);
+                                     atm, natm, bas, nbas, env, opt, cache);
 }
 
 void ECPscalar_distribute(double *out, double *gctr, const int *dims,
@@ -5742,7 +5766,7 @@ void ECPscalar_distribute(double *out, double *gctr, const int *dims,
  * For moleintor.getints function
  */
 int ECPscalar_sph(double *out, int *dims, int *shls, int *atm, int natm,
-                  int *bas, int nbas, double *env, void *opt, double *cache)
+                  int *bas, int nbas, double *env, ECPOpt *opt, double *cache)
 
 {
         const int ish = shls[0];
@@ -5776,8 +5800,10 @@ int ECPscalar_sph(double *out, int *dims, int *shls, int *atm, int natm,
         double *buf2 = cache + dij;
         cache += dij * 2;
         int has_value;
-        has_value = ECPtype1_sph(buf1, shls, ecpbas, necpbas, atm, natm, bas, nbas, env, cache);
-        has_value =(ECPtype2_sph(buf2, shls, ecpbas, necpbas, atm, natm, bas, nbas, env, cache) | has_value);
+        has_value = ECPtype1_sph(buf1, shls, ecpbas, necpbas,
+                                 atm, natm, bas, nbas, env, opt, cache);
+        has_value =(ECPtype2_sph(buf2, shls, ecpbas, necpbas,
+                                 atm, natm, bas, nbas, env, opt, cache) | has_value);
 
         if (has_value) {
                 int i;
@@ -5794,7 +5820,7 @@ int ECPscalar_sph(double *out, int *dims, int *shls, int *atm, int natm,
 }
 
 int ECPscalar_cart(double *out, int *dims, int *shls, int *atm, int natm,
-                   int *bas, int nbas, double *env, void *opt, double *cache)
+                   int *bas, int nbas, double *env, ECPOpt *opt, double *cache)
 {
         const int ish = shls[0];
         const int jsh = shls[1];
@@ -5819,8 +5845,10 @@ int ECPscalar_cart(double *out, int *dims, int *shls, int *atm, int natm,
         double *buf2 = cache + dij;
         cache += dij * 2;
         int has_value;
-        has_value = ECPtype1_cart(buf1, shls, ecpbas, necpbas, atm, natm, bas, nbas, env, cache);
-        has_value =(ECPtype2_cart(buf2, shls, ecpbas, necpbas, atm, natm, bas, nbas, env, cache) | has_value);
+        has_value = ECPtype1_cart(buf1, shls, ecpbas, necpbas,
+                                  atm, natm, bas, nbas, env, opt, cache);
+        has_value =(ECPtype2_cart(buf2, shls, ecpbas, necpbas,
+                                  atm, natm, bas, nbas, env, opt, cache) | has_value);
 
         if (has_value) {
                 int i;
@@ -5836,8 +5864,51 @@ int ECPscalar_cart(double *out, int *dims, int *shls, int *atm, int natm,
         return has_value;
 }
 
-void ECPscalar_optimizer(void **opt, int *atm, int natm, int *bas, int nbas, double *env)
+void ECPscalar_optimizer(ECPOpt **opt, int *atm, int natm, int *bas, int nbas, double *env)
 {
-        *opt = NULL;
+        ECPOpt *opt0 = (ECPOpt *)malloc(sizeof(ECPOpt));
+        *opt = opt0;
+
+        int *ecpbas = bas + (int)(env[AS_ECPBAS_OFFSET])*BAS_SLOTS;
+        int necpbas = (int)(env[AS_NECPBAS]);
+
+        double r2;
+        double *ak, *ck, *uk;
+        int npk;
+        int i, ib, kp;
+
+        opt0->u_ecp = malloc(sizeof(double) * (1 << LEVEL_MAX) * necpbas);
+        uk = opt0->u_ecp;
+        for (ib = 0; ib < necpbas; ib++) {
+                npk = ecpbas[ib*BAS_SLOTS+NPRIM_OF];
+                ak = env + ecpbas[ib*BAS_SLOTS+PTR_EXP];
+                ck = env + ecpbas[ib*BAS_SLOTS+PTR_COEFF];
+
+                for (i = 0; i < (1 << LEVEL_MAX); i++) {
+                        r2 = rs_gauss_chebyshev2047[i]*rs_gauss_chebyshev2047[i];
+                        uk[i] = ck[0] * exp(-ak[0]*r2);
+                        for (kp = 1; kp < npk; kp++) {
+                                uk[i] += ck[kp] * exp(-ak[kp]*r2);
+                        }
+                }
+                uk += (1 << LEVEL_MAX);
+        }
 }
 
+void ECPdel_optimizer(ECPOpt **opt)
+{
+        if (opt == NULL) {
+                return;
+        }
+
+        ECPOpt *opt0 = *opt;
+        if (opt0 == NULL) {
+                return;
+        }
+
+        if (opt0->u_ecp != NULL) {
+                free(opt0->u_ecp);
+        }
+        free(opt0);
+        opt = NULL;
+}
