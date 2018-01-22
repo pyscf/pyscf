@@ -13,8 +13,8 @@ class KnowValues(unittest.TestCase):
     #print('gto_mf.mo_energy:', gto_mf.mo_energy)
     gw = gw_c(mf=gto_mf, gto=mol, verbosity=0)
     gw.kernel_gw()
-    self.assertAlmostEqual(gw.mo_energy_gw[0,0,0], -0.5967647)
-    self.assertAlmostEqual(gw.mo_energy_gw[0,0,1], 0.19072719)
+    self.assertAlmostEqual(gw.mo_energy_gw[0,0,0], -0.59709476270318296)
+    self.assertAlmostEqual(gw.mo_energy_gw[0,0,1], 0.19071318743971943)
     
         
 if __name__ == "__main__": unittest.main()
