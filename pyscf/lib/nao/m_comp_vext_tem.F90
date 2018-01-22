@@ -15,7 +15,7 @@ module m_comp_vext_tem
 !
 !
 !
-subroutine comp_vext_tem(time, freq_sym, ntime, nff, nprod, vnorm, &
+subroutine comp_vext_tem(time, freq_sym, ntime, nff, ub, nprod, vnorm, &
           vdir, beam_offset, Vfreq_real, Vfreq_imag) bind(c, name="comp_vext_tem")
 
   !
@@ -34,7 +34,7 @@ subroutine comp_vext_tem(time, freq_sym, ntime, nff, nprod, vnorm, &
 
   implicit none
 
-  integer(c_int), intent(in), value :: ntime, nff, nprod
+  integer(c_int), intent(in), value :: ntime, nff, nprod, ub
   real(c_double), intent(in), value :: vnorm
   real(c_double), intent(in) :: time(ntime), freq_sym(ntime), vdir(3), beam_offset(3)
   real(c_double), intent(inout) :: Vfreq_real(nff*nprod), Vfreq_imag(nff*nprod)
@@ -44,7 +44,7 @@ subroutine comp_vext_tem(time, freq_sym, ntime, nff, nprod, vnorm, &
   type(interp_t) :: a
   integer :: natoms, iatm, rmax, sp, si, fi, nmu, s, f
   integer :: l, m, mu, k, jcutoff, jcut_lmult
-  integer :: ind_lm, nr, it, rsub_max, ub, iw, ind 
+  integer :: ind_lm, nr, it, rsub_max, iw, ind 
   integer(8) :: jmx_pb, plan
   integer, pointer :: atom2sp(:) => null()
   real(8) :: R0(3), center(3), rcut, inte1, I1, I2, norm, R_sub(3), rlm
@@ -77,7 +77,7 @@ subroutine comp_vext_tem(time, freq_sym, ntime, nff, nprod, vnorm, &
   dt = time(2)-time(1)
   wmin = freq_sym(1)
   dw = freq_sym(2)-freq_sym(1)
-  ub = int(ntime/2)
+  !ub = int(ntime/2)
 
   pre_fact = dt*exp(-cmplx(0.0, 1.0, 8)*wmin*(time-tmin))
   post_fact = exp(-cmplx(0.0, 1.0, 8)*freq_sym(ub:ub+nff-1)*tmin)

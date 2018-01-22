@@ -25,11 +25,12 @@ def comp_vext_tem(self, ao_log=None, numba_parallel=True):
 
     Vfreq_real = np.zeros((self.freq.size, self.nprod), dtype=np.float64)
     Vfreq_imag = np.zeros((self.freq.size, self.nprod), dtype=np.float64)
+    ub = find_nearrest_index(self.freq_symm, self.freq[0])
 
     libnao.comp_vext_tem(self.time.ctypes.data_as(POINTER(c_double)),
                         self.freq_symm.ctypes.data_as(POINTER(c_double)),
-                        c_int(self.time.size),
-                        c_int(self.freq.size), c_int(self.nprod),
+                        c_int(self.time.size), c_int(self.freq.size), 
+                        c_int(ub), c_int(self.nprod), 
                         c_double(self.vnorm),
                         self.vdir.ctypes.data_as(POINTER(c_double)),
                         self.beam_offset.ctypes.data_as(POINTER(c_double)),
