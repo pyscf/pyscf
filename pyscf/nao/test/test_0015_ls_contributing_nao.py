@@ -583,9 +583,9 @@ class KnowValues(unittest.TestCase):
 
   def test_ls_contributing(self):
     """ To test the list of contributing centers """
-    from pyscf.nao import nao, prod_basis_c
+    from pyscf.nao import nao, prod_basis
     sv = nao(gto=mol)
-    pb = prod_basis_c()
+    pb = prod_basis()
     pb.sv = sv
     pb.sv.ao_log.sp2rcut[0] = 10.0
     pb.prod_log = sv.ao_log

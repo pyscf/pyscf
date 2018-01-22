@@ -13,7 +13,7 @@ from .m_ao_log import ao_log_c
 from .m_log_mesh import log_mesh_c
 from .m_local_vertex import local_vertex_c
 from .m_ao_matelem import ao_matelem_c
-from .m_prod_basis import prod_basis_c
+from .prod_basis import prod_basis
 from .m_prod_log import prod_log_c
 from .m_comp_coulomb_den import comp_coulomb_den
 from .m_get_atom2bas_s import get_atom2bas_s

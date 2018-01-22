@@ -379,10 +379,10 @@ class nao():
   def build_3dgrid_pp(self, level=3):
     """ Build a global grid and weights for a molecular integration (integration in 3-dimensional coordinate space) """
     from pyscf import dft
-    from pyscf.nao.m_gauleg import leggauss_ab
+    from pyscf.nao.m_gauleg import gauss_legendre
     grid = dft.gen_grid.Grids(self)
     grid.level = level # precision as implemented in pyscf
-    grid.radi_method=leggauss_ab
+    grid.radi_method=gauss_legendre
     atom2rcut=np.zeros(self.natoms)
     for ia,sp in enumerate(self.atom2sp): atom2rcut[ia] = self.ao_log.sp2rcut[sp]
     grid.build(atom2rcut=atom2rcut)

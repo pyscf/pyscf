@@ -1,7 +1,7 @@
 from __future__ import print_function, division
 import numpy as np
 from numpy import require, zeros
-from pyscf.nao import nao, prod_basis_c
+from pyscf.nao import nao, prod_basis
 from pyscf.nao import conv_yzx2xyz_c
     
 #
@@ -35,9 +35,9 @@ class mf(nao):
     if self.verbosity>0: print(__name__, ' pseudo ', self.pseudo)
     self.init_libnao()
     if self.gen_pb:
-      self.pb = prod_basis_c()
+      self.pb = prod_basis(nao=self, **kw)
       if self.verbosity>0: print(__name__, ' dtype ', self.dtype, ' norbs ', self.norbs)
-      self.pb.init_prod_basis_pp_batch(nao=self, **kw)
+      #self.pb.init_prod_basis_pp_batch(nao=self, **kw)
 
   def make_rdm1(self, mo_coeff=None, mo_occ=None):
     # from pyscf.scf.hf import make_rdm1 -- different index order here
