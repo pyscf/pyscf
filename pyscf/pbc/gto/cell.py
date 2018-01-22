@@ -734,9 +734,11 @@ def ewald(cell, ew_eta=None, ew_cut=None):
         # The following 2D ewald summation is taken from:
         # R. Sundararaman and T. Arias PRB 87, 2013
         def fn(eta,Gnorm,z):
+            Gnorm_z = Gnorm*z
+            large_idx = Gnorm_z > 20.0
+            Gnorm_z[large_idx] = 0
             with np.errstate(over='ignore'):
-                ret = np.exp(Gnorm*z)*scipy.special.erfc(Gnorm/2./eta + eta*z)
-            large_idx = Gnorm*z > 20.0
+                ret = np.exp(Gnorm_z)*scipy.special.erfc(Gnorm/2./eta + eta*z)
             if len(large_idx) > 0:
                 x = Gnorm[large_idx]/2./eta + eta*z
                 ret[large_idx] = (np.exp(Gnorm[large_idx]*z-x**2)/np.sqrt(np.pi)/x *
@@ -972,7 +974,7 @@ class Cell(mole.Mole):
     def build(self, dump_input=True, parse_arg=True,
               a=None, mesh=None, ke_cutoff=None, precision=None, nimgs=None,
               ew_eta=None, ew_cut=None, pseudo=None, basis=None, h=None,
-              dimension=None, rcut= None, ecp=None,
+              dimension=None, rcut= None, ecp=None, low_dim_ft_type=None,
               *args, **kwargs):
         '''Setup Mole molecule and Cell and initialize some control parameters.
         Whenever you change the value of the attributes of :class:`Cell`,
@@ -1000,6 +1002,7 @@ class Cell(mole.Mole):
         if rcut is not None: self.rcut = rcut
         if ecp is not None: self.ecp = ecp
         if ke_cutoff is not None: self.ke_cutoff = ke_cutoff
+        if low_dim_ft_type is not None: self.low_dim_ft_type = low_dim_ft_type
 
         assert(self.a is not None)
 

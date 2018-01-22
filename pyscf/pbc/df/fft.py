@@ -145,11 +145,13 @@ class FFTDF(lib.StreamObject):
         self.stdout = cell.stdout
         self.verbose = cell.verbose
         self.max_memory = cell.max_memory
-        self.low_dim_ft_type = low_dim_ft_type
-        if low_dim_ft_type is not None:
+        if low_dim_ft_type is None:
+            self.low_dim_ft_type = cell.low_dim_ft_type
+        else:
             logger.warn(self, 'Setting low_dim_ft_type inside cell class.  Change me in '
                               'future implementation \n')
             cell.low_dim_ft_type = low_dim_ft_type
+            self.low_dim_ft_type = low_dim_ft_type
 
         self.kpts = kpts
         self.mesh = cell.mesh

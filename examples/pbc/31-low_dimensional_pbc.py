@@ -9,7 +9,7 @@ For all-electron systems, AFTDF (analytical Fourier transformation) is
 less accurate than DF (density fitting) and MDF (mixed density fitting)
 methods.
 
-DF uses one center gaussian functions to expand the orbital pair products.
+DF uses one center Gaussian functions to expand the orbital pair products.
 For all-electron problem (regardless of the boundary conditions) DF is more
 accurate than AFTDF and less accurate than MDF, in most scenario.
 
@@ -17,7 +17,7 @@ MDF is a combination of DF and AFTDF. It uses one center gaussian with the
 planewaves to expand the orbital pair products.  Typically, it has better
 accuracy but worse performance than DF.  If the auxiliary gaussians in DF
 have good quality, the DF scheme may have better accuracy than MDF due to
-the linear dependency between gaussian and planewaves.  So choose DF or MDF
+the linear dependency between Gaussian and planewaves.  So choose DF or MDF
 based on your needs.
 
 '''
@@ -115,12 +115,17 @@ e = []
 L = 4
 cell = pbcgto.Cell()
 cell.build(unit = 'B',
-           a = [[L,0,0],[0,L,0],[0,0,1]],
+           a = [[L,0,0],[0,L,0],[0,0,8.]],
            mesh = [10,10,20],
            atom = 'H 0 0 0; H 0 0 1.8',
            dimension=2,
            verbose = 0,
            basis='sto3g')
+
+mf = pbchf.KRHF(cell.copy().set(low_dim_ft_type='analytic_2d_1'))
+mf.kpts = cell.make_kpts([4,4,1])
+e.append(mf.kernel())
+
 mf = pbchf.KRHF(cell)
 mf.with_df = pdf.AFTDF(cell)
 mf.kpts = cell.make_kpts([4,4,1])
@@ -136,6 +141,6 @@ mol = tools.super_cell(cell, [4,4,1]).to_mol()
 mf = scf.RHF(mol)
 e.append(mf.kernel()/16)
 
-print('2D:  AFT      DF       MDF       super-mole')
+print('2D:  FFT      AFT      DF       MDF       super-mole')
 print(e)
 
