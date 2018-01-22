@@ -34,6 +34,7 @@ PySCF 1.5 alpha (2018-03-??)
   - The function to make SCF initial guess from the chkfile of the
     molecule with different geometry
   - The mcscf natural orbitals in the state-average calculation
+  - Performance of ECP integrals
 
 
 PySCF 1.4.3 (2018-01-17)

@@ -4,7 +4,7 @@ import unittest
 import numpy
 import scipy.special
 import scipy.misc
-import pyscf.lib
+from pyscf import lib
 from pyscf import gto
 from pyscf.dft import radi
 
@@ -410,16 +410,16 @@ class KnowValues(unittest.TestCase):
     def test_rad_part(self):
         rs, ws = radi.gauss_chebyshev(99)
         ur0 = rad_part(mol, mol._ecpbas, rs)
-        ecpshls = numpy.array(numpy.append(numpy.arange(len(mol._ecpbas)),-1), dtype=numpy.int32)
         ur1 = numpy.empty_like(ur0)
         libecp.ECPrad_part(ur1.ctypes.data_as(ctypes.c_void_p),
                            rs.ctypes.data_as(ctypes.c_void_p),
-                           ctypes.c_int(len(rs)), ctypes.c_int(1),
-                           ecpshls.ctypes.data_as(ctypes.c_void_p),
+                           ctypes.c_int(0), ctypes.c_int(len(rs)), ctypes.c_int(1),
+                           (ctypes.c_int*2)(0, len(mol._ecpbas)),
                            mol._ecpbas.ctypes.data_as(ctypes.c_void_p),
                            mol._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.natm),
                            mol._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.nbas),
-                           mol._env.ctypes.data_as(ctypes.c_void_p))
+                           mol._env.ctypes.data_as(ctypes.c_void_p),
+                           lib.c_null_ptr())
         self.assertTrue(numpy.allclose(ur0, ur1))
 
     def test_type2_ang_part(self):
@@ -467,13 +467,15 @@ class KnowValues(unittest.TestCase):
                     continue
                 mat0 += type2_by_shell(mol, shls, ia, ecpbas)
             mat1 = numpy.empty(mat0.shape, order='F')
+            cache = numpy.empty(100000)
             libecp.ECPtype2_sph(mat1.ctypes.data_as(ctypes.c_void_p),
                                 (ctypes.c_int*2)(*shls),
                                 mol._ecpbas.ctypes.data_as(ctypes.c_void_p),
                                 ctypes.c_int(len(mol._ecpbas)),
                                 mol._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.natm),
                                 mol._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.nbas),
-                                mol._env.ctypes.data_as(ctypes.c_void_p))
+                                mol._env.ctypes.data_as(ctypes.c_void_p),
+                                lib.c_null_ptr(), cache.ctypes.data_as(ctypes.c_void_p))
             if not numpy.allclose(mat0, mat1, atol=1e-8):
                 print(i, j, 'error = ', numpy.linalg.norm(mat0-mat1))
             self.assertTrue(numpy.allclose(mat0, mat1, atol=1e-6))
@@ -541,13 +543,15 @@ class KnowValues(unittest.TestCase):
                     continue
                 mat0 += type1_by_shell(mol, shls, ia, ecpbas0)
             mat1 = numpy.empty(mat0.shape, order='F')
+            cache = numpy.empty(100000)
             libecp.ECPtype1_sph(mat1.ctypes.data_as(ctypes.c_void_p),
                                 (ctypes.c_int*2)(*shls),
                                 mol._ecpbas.ctypes.data_as(ctypes.c_void_p),
                                 ctypes.c_int(len(mol._ecpbas)),
                                 mol._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.natm),
                                 mol._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.nbas),
-                                mol._env.ctypes.data_as(ctypes.c_void_p))
+                                mol._env.ctypes.data_as(ctypes.c_void_p),
+                                lib.c_null_ptr(), cache.ctypes.data_as(ctypes.c_void_p))
             if not numpy.allclose(mat0, mat1, atol=1e-8):
                 print(i, j, numpy.linalg.norm(mat0-mat1))
             self.assertTrue(numpy.allclose(mat0, mat1, atol=1e-6))

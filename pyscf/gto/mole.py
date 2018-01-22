@@ -569,10 +569,10 @@ def make_bas_env(basis_add, atom_id=0, ptr=0):
         #    print('libcint may have large error for ERI of i function')
         if isinstance(b[1], int):
             kappa = b[1]
-            b_coeff = numpy.array(b[2:])
+            b_coeff = numpy.array(sorted(list(b[2:]), reverse=True))
         else:
             kappa = 0
-            b_coeff = numpy.array(b[1:])
+            b_coeff = numpy.array(sorted(list(b[1:]), reverse=True))
         es = b_coeff[:,0]
         cs = b_coeff[:,1:]
         nprim, nctr = cs.shape
@@ -680,7 +680,7 @@ def make_ecp_env(mol, _atm, ecp, pre_env=[]):
         for lb in ecp_add[1]:
             for rorder, bi in enumerate(lb[1]):
                 if len(bi) > 0:
-                    ec = numpy.array(bi)
+                    ec = numpy.array(sorted(bi, reverse=True))
                     _env.append(ec[:,0])
                     ptr_exp = ptr_env
                     _env.append(ec[:,1])
