@@ -31,7 +31,9 @@ from pyscf.pbc.scf import addons
 def get_ovlp(cell, kpt=np.zeros(3)):
     '''Get the overlap AO matrix.
     '''
-    s = cell.pbc_intor('int1e_ovlp_sph', hermi=1, kpts=kpt)
+# Avoid pbcopt's prescreening in the lattice sum, for better accuracy
+    s = cell.pbc_intor('int1e_ovlp_sph', hermi=1, kpts=kpt,
+                       pbcopt=lib.c_null_ptr())
     cond = np.max(lib.cond(s))
     if cond * cell.precision > 1e2:
         prec = 1e2 / cond

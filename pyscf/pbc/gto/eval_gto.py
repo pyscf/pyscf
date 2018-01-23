@@ -7,10 +7,11 @@ import ctypes
 import numpy
 from pyscf import lib
 from pyscf.gto.moleintor import make_loc
+from pyscf.pbc.gto import _pbcintor
 
 BLKSIZE = 128 # needs to be the same to lib/gto/grid_ao_drv.c
 
-libpbc = lib.load_library('libpbc')
+libpbc = _pbcintor.libpbc
 
 def eval_gto(cell, eval_name, coords, comp=1, kpts=None, kpt=None,
              shls_slice=None, non0tab=None, ao_loc=None, out=None):

@@ -35,6 +35,7 @@ PySCF 1.5 alpha (2018-03-??)
     molecule with different geometry
   - The mcscf natural orbitals in the state-average calculation
   - Performance of ECP integrals
+  - Prescreening for PBC 3-center integrals
 
 
 PySCF 1.4.3 (2018-01-17)

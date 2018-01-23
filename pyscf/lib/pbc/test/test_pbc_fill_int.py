@@ -1,8 +1,10 @@
 import unittest
+import copy
 import ctypes
 import numpy
 from pyscf import lib
 from pyscf.pbc import gto
+from pyscf.pbc.gto import _pbcintor
 from pyscf.scf import _vhf
 
 libpbc = lib.load_library('libpbc')
@@ -47,12 +49,15 @@ def run3c(fill, kpts, shls_slice=None):
         shls_slice = (0, cell.nbas, cell.nbas, cell.nbas*2,
                       cell.nbas*2, cell.nbas*3)
 
+    pcell = copy.copy(cell)
+    pcell._atm, pcell._bas, pcell._env = \
     atm, bas, env = gto.conc_env(cell._atm, cell._bas, cell._env,
                                  cell._atm, cell._bas, cell._env)
     atm, bas, env = gto.conc_env(atm, bas, env,
                                  cell._atm, cell._bas, cell._env)
     ao_loc = gto.moleintor.make_loc(bas, 'int3c2e_sph')
     cintopt = lib.c_null_ptr()
+    pbcopt = _pbcintor.PBCOpt(pcell).init_rcut_cond(pcell, 1e-9)
 
     libpbc.PBCnr3c_drv(getattr(libpbc, intor), getattr(libpbc, fill),
                        out.ctypes.data_as(ctypes.c_void_p),
@@ -62,7 +67,7 @@ def run3c(fill, kpts, shls_slice=None):
                        expkL.ctypes.data_as(ctypes.c_void_p),
                        kptij_idx.ctypes.data_as(ctypes.c_void_p),
                        (ctypes.c_int*6)(*shls_slice),
-                       ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt,
+                       ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt, pbcopt._this,
                        atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(cell.natm),
                        bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(cell.nbas),
                        env.ctypes.data_as(ctypes.c_void_p))
@@ -71,6 +76,8 @@ def run3c(fill, kpts, shls_slice=None):
 def run2c(intor, fill, kpts, shls_slice=None):
     nkpts = len(kpts)
 
+    pcell = copy.copy(cell)
+    pcell._atm, pcell._bas, pcell._env = \
     atm, bas, env = gto.conc_env(cell._atm, cell._bas, cell._env,
                                  cell._atm, cell._bas, cell._env)
     if shls_slice is None:
@@ -84,6 +91,7 @@ def run2c(intor, fill, kpts, shls_slice=None):
     fintor = getattr(gto.moleintor.libcgto, intor)
     fill = getattr(libpbc, fill)
     intopt = lib.c_null_ptr()
+    pbcopt = _pbcintor.PBCOpt(pcell).init_rcut_cond(pcell, 1e-9)
 
     expkL = numpy.asarray(numpy.exp(1j*numpy.dot(kpts, Ls.T)), order='C')
     drv = libpbc.PBCnr2c_drv
@@ -92,7 +100,7 @@ def run2c(intor, fill, kpts, shls_slice=None):
         Ls.ctypes.data_as(ctypes.c_void_p),
         expkL.ctypes.data_as(ctypes.c_void_p),
         (ctypes.c_int*4)(*(shls_slice[:4])),
-        ao_loc.ctypes.data_as(ctypes.c_void_p), intopt,
+        ao_loc.ctypes.data_as(ctypes.c_void_p), intopt, pbcopt._this,
         atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(cell.natm),
         bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(cell.nbas),
         env.ctypes.data_as(ctypes.c_void_p))

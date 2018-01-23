@@ -24,6 +24,7 @@ from pyscf.gto.mole import _symbol, _rm_digit, _atom_symbol, _std_symbol, charge
 from pyscf.gto.mole import conc_env, uncontract
 from pyscf.pbc.gto import basis
 from pyscf.pbc.gto import pseudo
+from pyscf.pbc.gto import _pbcintor
 from pyscf.pbc.gto.eval_gto import eval_gto as pbc_eval_gto
 from pyscf.pbc.tools import pbc as pbctools
 from pyscf.gto.basis import ALIAS as MOLE_ALIAS
@@ -32,7 +33,7 @@ from pyscf.gto.basis import ALIAS as MOLE_ALIAS
 if sys.version_info >= (3,):
     unicode = str
 
-libpbc = lib.load_library('libpbc')
+libpbc = _pbcintor.libpbc
 
 def M(**kwargs):
     r'''This is a shortcut to build up Cell object.
@@ -310,13 +311,15 @@ def conc_cell(cell1, cell2):
 
     return cell3
 
-def intor_cross(intor, cell1, cell2, comp=1, hermi=0, kpts=None, kpt=None):
+def intor_cross(intor, cell1, cell2, comp=1, hermi=0, kpts=None, kpt=None,
+                **kwargs):
     r'''1-electron integrals from two cells like
 
     .. math::
 
         \langle \mu | intor | \nu \rangle, \mu \in cell1, \nu \in cell2
     '''
+    import copy
     intor = cell1._add_suffix(intor)
     intor = moleintor.ascint3(intor)
     if kpts is None:
@@ -328,14 +331,12 @@ def intor_cross(intor, cell1, cell2, comp=1, hermi=0, kpts=None, kpt=None):
         kpts_lst = np.reshape(kpts, (-1,3))
     nkpts = len(kpts_lst)
 
+    pcell = copy.copy(cell1)
+    pcell.precision = min(cell1.precision, cell2.precision)
+    pcell._atm, pcell._bas, pcell._env = \
     atm, bas, env = conc_env(cell1._atm, cell1._bas, cell1._env,
                              cell2._atm, cell2._bas, cell2._env)
-    atm = np.asarray(atm, dtype=np.int32)
-    bas = np.asarray(bas, dtype=np.int32)
-    env = np.asarray(env, dtype=np.double)
-    natm = len(atm)
-    nbas = len(bas)
-    shls_slice = (0, cell1.nbas, cell1.nbas, nbas)
+    shls_slice = (0, cell1.nbas, cell1.nbas, pcell.nbas)
     ao_loc = moleintor.make_loc(bas, intor)
     ni = ao_loc[shls_slice[1]] - ao_loc[shls_slice[0]]
     nj = ao_loc[shls_slice[3]] - ao_loc[shls_slice[2]]
@@ -347,7 +348,10 @@ def intor_cross(intor, cell1, cell2, comp=1, hermi=0, kpts=None, kpt=None):
         aosym = 's2'
     fill = getattr(libpbc, 'PBCnr2c_fill_k'+aosym)
     fintor = getattr(moleintor.libcgto, intor)
-    intopt = lib.c_null_ptr()
+    cintopt = lib.c_null_ptr()
+    pbcopt = kwargs.get('pbcopt', None)
+    if pbcopt is None:
+        pbcopt = _pbcintor.PBCOpt(pcell).init_rcut_cond(pcell)
 
     Ls = cell1.get_lattice_Ls(rcut=max(cell1.rcut, cell2.rcut))
     expkL = np.asarray(np.exp(1j*np.dot(kpts_lst, Ls.T)), order='C')
@@ -357,9 +361,9 @@ def intor_cross(intor, cell1, cell2, comp=1, hermi=0, kpts=None, kpt=None):
         Ls.ctypes.data_as(ctypes.c_void_p),
         expkL.ctypes.data_as(ctypes.c_void_p),
         (ctypes.c_int*4)(*(shls_slice[:4])),
-        ao_loc.ctypes.data_as(ctypes.c_void_p), intopt,
-        atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(natm),
-        bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
+        ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt, pbcopt._this,
+        atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(pcell.natm),
+        bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(pcell.nbas),
         env.ctypes.data_as(ctypes.c_void_p))
 
     mat = []
@@ -1269,9 +1273,10 @@ class Cell(mole.Mole):
 
     __add__ = conc_cell
 
-    def pbc_intor(self, intor, comp=1, hermi=0, kpts=None, kpt=None):
+    def pbc_intor(self, intor, comp=1, hermi=0, kpts=None, kpt=None,
+                  **kwargs):
         '''One-electron integrals with PBC. See also Mole.intor'''
-        return intor_cross(intor, self, self, comp, hermi, kpts, kpt)
+        return intor_cross(intor, self, self, comp, hermi, kpts, kpt, **kwargs)
 
     @lib.with_doc(pbc_eval_gto.__doc__)
     def pbc_eval_gto(self, eval_name, coords, comp=1, kpts=None, kpt=None,
