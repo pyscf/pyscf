@@ -52,6 +52,7 @@ def _contract(subscripts, *tensors, **kwargs):
     indices  = ''.join(sub_idx)
     c_dtype = kwargs.get('dtype', numpy.result_type(*tensors))
     if ('...' in subscripts or
+        tensors[0].size == 0 or tensors[1].size == 0 or
         not (numpy.issubdtype(c_dtype, numpy.float) or
              numpy.issubdtype(c_dtype, numpy.complex))):
         return numpy_einsum(subscripts, *tensors)
