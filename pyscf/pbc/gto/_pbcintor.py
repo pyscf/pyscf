@@ -5,6 +5,8 @@ import numpy
 from pyscf import lib
 
 libpbc = lib.load_library('libpbc')
+def _fpointer(name):
+    return ctypes.addressof(getattr(libpbc, name))
 
 class PBCOpt(object):
     def __init__(self, cell):
@@ -27,6 +29,10 @@ class PBCOpt(object):
                                 cell._atm.ctypes.data_as(ctypes.c_void_p), natm,
                                 cell._bas.ctypes.data_as(ctypes.c_void_p), nbas,
                                 cell._env.ctypes.data_as(ctypes.c_void_p))
+        return self
+
+    def del_rcut_cond(self):
+        self._this.contents.fprescreen = _fpointer('PBCnoscreen')
         return self
 
     def __del__(self):

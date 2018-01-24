@@ -1,3 +1,9 @@
+#!/usr/bin/env python
+
+'''
+Intermediates for restricted CCSD.  Complex integrals are supported.
+'''
+
 import numpy as np
 from pyscf import lib
 from pyscf import ao2mo

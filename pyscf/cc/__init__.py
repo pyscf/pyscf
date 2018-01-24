@@ -52,6 +52,7 @@ from pyscf.cc import ccsd_rdm
 from pyscf.cc import addons
 from pyscf.cc import rccsd
 from pyscf.cc import uccsd
+from pyscf.cc import gccsd
 
 def CCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
     __doc__ = ccsd.CCSD.__doc__
@@ -68,7 +69,6 @@ def RCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
     import sys
     from pyscf import lib
     from pyscf import scf
-    from pyscf.cc import rccsd
     from pyscf.cc import dfccsd
 
     if isinstance(mf, scf.uhf.UHF):
@@ -101,7 +101,6 @@ def UCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
 def GCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
     import sys
     from pyscf import scf
-    from pyscf.cc import gccsd
 
     mf = scf.addons.convert_to_ghf(mf)
     if hasattr(mf, 'with_df') and mf.with_df:

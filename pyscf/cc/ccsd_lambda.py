@@ -3,6 +3,13 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+'''
+Restricted CCSD implementation for real integrals.  Permutation symmetry for
+the 4-index integrals (ij|kl) = (ij|lk) = (ji|kl) are assumed.
+
+Note MO integrals are treated in chemist's notation
+'''
+
 import time
 from functools import reduce
 import numpy

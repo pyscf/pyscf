@@ -564,7 +564,7 @@ N_CORE_SHELLS = [
 ]
 
 
-N_VALENCE_SHELLS = [
+N_CORE_VALENCE_SHELLS = [
     '0s0p0d0f',         #  0  GHOST
     '1s0p0d0f',         #  1  H
     '1s0p0d0f',         #  2  He

@@ -192,16 +192,15 @@ def _gen_first_order_quantities(mol, e0, c0, x0, approx='1E'):
             s_nesc1+= lib.einsum('pi,xpq,qj->xij', x0, s1ao[:,nao:,nao:], x0)
             s_nesc1+= s1ao[:,:nao,:nao]
 
-        R1 = []
-        c_fw1 = []
+        R1 = numpy.empty((3,nao,nao))
+        c_fw1 = numpy.empty((3,n2,nao))
         for i in range(3):
-            R1.append(_get_r1((w_sqrt,v_s), s_nesc0_vbas,
-                              s1ao[i,:nao,:nao], s_nesc1[i], (wr0_sqrt,vr0)))
-            if 'ATOM' in approx:
-                c_fw1.append(numpy.vstack((R1[i], numpy.dot(x0, R1[i]))))
-            else:
-                c_fw1_s = numpy.dot(x0, R1[i]) + numpy.dot(x1[i], R0)
-                c_fw1.append(numpy.vstack((R1[i], c_fw1_s)))
+            R1[i] = _get_r1((w_sqrt,v_s), s_nesc0_vbas,
+                            s1ao[i,:nao,:nao], s_nesc1[i], (wr0_sqrt,vr0))
+            c_fw1[i,:nao] = R1[i]
+            c_fw1[i,nao:] = numpy.dot(x0, R1[i])
+            if 'ATOM' not in approx:
+                c_fw1[i,nao:] += numpy.dot(x1[i], R0)
         return h1ao, s1ao, e1, c1_ao, x1, s_nesc1, R1, c_fw1
     return get_first_order
 

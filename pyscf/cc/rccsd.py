@@ -1,7 +1,11 @@
-'''
-Restricted CCSD for complex integrals
+#!/usr/bin/env python
 
-note MO integrals are treated in chemist's notation
+'''
+Restricted CCSD implementation which supports both real and complex integrals.
+The 4-index integrals are saved on disk entirely (without using any symmetry).
+This code is slower than the pyscf.cc.ccsd implementation.
+
+Note MO integrals are treated in chemist's notation
 
 Ref: Hirata et al., J. Chem. Phys. 120, 2581 (2004)
 '''

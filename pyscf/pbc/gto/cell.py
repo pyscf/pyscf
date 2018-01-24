@@ -263,9 +263,9 @@ def conc_cell(cell1, cell2):
         cell3._ecpbas = cell1._ecpbas
     else:
         ecpbas2 = numpy.copy(cell2._ecpbas)
-        ecpbas2[:,ATOM_OF  ] += natm_off
-        ecpbas2[:,PTR_EXP  ] += off
-        ecpbas2[:,PTR_COEFF] += off
+        ecpbas2[:,mole.ATOM_OF  ] += natm_off
+        ecpbas2[:,mole.PTR_EXP  ] += off
+        ecpbas2[:,mole.PTR_COEFF] += off
         if len(cell1._ecpbas) == 0:
             cell3._ecpbas = ecpbas2
         else:
@@ -352,6 +352,10 @@ def intor_cross(intor, cell1, cell2, comp=1, hermi=0, kpts=None, kpt=None,
     pbcopt = kwargs.get('pbcopt', None)
     if pbcopt is None:
         pbcopt = _pbcintor.PBCOpt(pcell).init_rcut_cond(pcell)
+    if isinstance(pbcopt, _pbcintor.PBCOpt):
+        cpbcopt = pbcopt._this
+    else:
+        cpbcopt = lib.c_null_ptr()
 
     Ls = cell1.get_lattice_Ls(rcut=max(cell1.rcut, cell2.rcut))
     expkL = np.asarray(np.exp(1j*np.dot(kpts_lst, Ls.T)), order='C')
@@ -361,7 +365,7 @@ def intor_cross(intor, cell1, cell2, comp=1, hermi=0, kpts=None, kpt=None,
         Ls.ctypes.data_as(ctypes.c_void_p),
         expkL.ctypes.data_as(ctypes.c_void_p),
         (ctypes.c_int*4)(*(shls_slice[:4])),
-        ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt, pbcopt._this,
+        ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt, cpbcopt,
         atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(pcell.natm),
         bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(pcell.nbas),
         env.ctypes.data_as(ctypes.c_void_p))
@@ -406,8 +410,9 @@ def get_nimgs(cell, precision=None):
 def _estimate_rcut(alpha, l, c, precision=1e-8):
     C = (c**2+1e-200)*(2*l+1)*alpha / precision
     r0 = 20
-    r0 = np.sqrt(max(0, 2*np.log(C*(r0**2*alpha)**(l+1)).max()) / alpha)
-    rcut = np.sqrt(max(0, 2*np.log(C*(r0**2*alpha)**(l+1)).max()) / alpha)
+    # +1. to ensure np.log returning positive value
+    r0 = np.sqrt(2.*np.log(C*(r0**2*alpha)**(l+1)+1.) / alpha)
+    rcut = np.sqrt( 2.*np.log(C*(r0**2*alpha)**(l+1)+1.) / alpha)
     return rcut
 
 def bas_rcut(cell, bas_id, precision=1e-8):
@@ -899,6 +904,52 @@ def classify_ecp_pseudo(cell, ecp, pp):
             ecp_as_pp.update(pp_left)
         pp = ecp_as_pp
     return ecp, pp
+
+DELIMITER = [1.0, 0.5, 0.25, 0.1, 0]
+def _split_basis(cell, delimiter=DELIMITER):
+    '''
+    Split the contracted basis to small segmant.  The new basis has more
+    shells.  Each shell has less primitive basis and thus is more local.
+    '''
+    import copy
+    _bas = []
+    _env = cell._env.copy()
+    contr_coeff = []
+    for ib in range(cell.nbas):
+        pexp = cell._bas[ib,mole.PTR_EXP]
+        pcoeff1 = cell._bas[ib,mole.PTR_COEFF]
+        nc = cell.bas_nctr(ib)
+        es = cell.bas_exp(ib)
+        cs = cell._libcint_ctr_coeff(ib).T.ravel()
+        l = cell.bas_angular(ib)
+        if cell.cart:
+            degen = (l + 1) * (l + 2) // 2
+        else:
+            degen = l * 2 + 1
+
+        mask = np.ones(es.size, dtype=bool)
+        count = 0
+        for thr in delimiter:
+            idx = np.where(mask & (es >= thr))[0]
+            np1 = len(idx)
+            if np1 > 0:
+                pcoeff0, pcoeff1 = pcoeff1, pcoeff1 + np1 * nc
+                cs1 = cs[idx]
+                _env[pcoeff0:pcoeff1] = cs1.T.ravel()
+                btemp = cell._bas[ib].copy()
+                btemp[mole.NPRIM_OF] = np1
+                btemp[mole.PTR_COEFF] = pcoeff0
+                btemp[mole.PTR_EXP] = pexp
+                _bas.append(btemp)
+                mask[idx] = False
+                pexp += np1
+                count += 1
+        contr_coeff.append(np.vstack([np.eye(degen*nc)] * count))
+
+    pcell = copy.copy(cell)
+    pcell._bas = np.asarray(np.vstack(_bas), dtype=np.int32)
+    pcell._env = _env
+    return pcell, scipy.linalg.block_diag(*contr_coeff)
 
 
 class Cell(mole.Mole):
