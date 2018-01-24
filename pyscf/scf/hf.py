@@ -1531,7 +1531,8 @@ class RHF(SCF):
 
     def __init__(self, mol):
         if mol.nelectron != 1 and (mol.nelectron % 2) != 0:
-            raise ValueError('Invalid electron number %i.' % mol.nelectron)
+            logger.warn(self, 'Invalid electron number %d for RHF method.',
+                        mol.nelectron)
 # Note: self._eri requires large amount of memory
         SCF.__init__(self, mol)
 
