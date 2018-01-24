@@ -24,7 +24,8 @@ from pyscf.gto import moleintor
 from pyscf.gto.eval_gto import eval_gto
 import pyscf.gto.ecp
 
-from pyscf.data.elements import ELEMENTS, ELEMENTS_PROTON
+from pyscf.data.elements import ELEMENTS, ELEMENTS_PROTON, \
+        _rm_digit, charge, _symbol, _std_symbol, _atom_symbol, is_ghost_atom
 
 # For code compatiblity in python-2 and python-3
 if sys.version_info >= (3,):
@@ -103,8 +104,8 @@ def cart2sph(l, c_tensor=None):
            c_tensor.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(l))
         return c2sph
 
-def cart2j_kappa(kappa, l=None, normalized=None):
-    '''Cartesian to spinor, indexed by kappa
+def cart2spinor_kappa(kappa, l=None, normalized=None):
+    '''Cartesian to spinor transformation matrix for kappa
 
     Kwargs:
         normalized :
@@ -136,10 +137,35 @@ def cart2j_kappa(kappa, l=None, normalized=None):
         elif l == 1:
             c2smat *= 0.488602511902919921
     return c2smat
+cart2j_kappa = cart2spinor_kappa
 
-def cart2j_l(l, normalized=None):
-    '''Cartesian to spinor, indexed by l'''
-    return cart2j_kappa(0, l, normalized)
+def cart2spinor_l(l, normalized=None):
+    '''Cartesian to spinor transformation matrix for angular moment l'''
+    return cart2spinor_kappa(0, l, normalized)
+cart2j_l = cart2spinor_l
+
+def sph2spinor_kappa(kappa, l=None):
+    '''Real spherical to spinor transformation matrix for kappa'''
+    ua, ub = sph2spinor_l(l)
+    if kappa < 0:
+        l = -kappa - 1
+        nd = l * 2 + 2
+        ua = ua[:,:nd]
+        ub = ub[:,:nd]
+    elif kappa > 0:
+        l = kappa
+        nd = l * 2
+        ua = ua[:,nd:]
+        ub = ub[:,nd:]
+    else:
+        assert(l is not None)
+        assert(l <= 12)
+    return ua, ub
+
+def sph2spinor_l(l):
+    '''Real spherical to spinor transformation matrix for angular moment l'''
+    from pyscf.symm import sph2spinor
+    return sph2spinor(l)
 
 def atom_types(atoms, basis=None):
     '''symmetry inequivalent atoms'''
@@ -2639,7 +2665,8 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
     __add__ = conc_mol
 
     def cart2sph_coeff(self, normalized='sp'):
-        '''Transformation matrix to transform the Cartesian GTOs to spherical GTOs
+        '''Transformation matrix that transforms Cartesian GTOs to spherical
+        GTOs for all basis functions
 
         Kwargs:
             normalized : string or boolean
@@ -2673,69 +2700,22 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
                 c2s.append(c2s_l[l])
         return scipy.linalg.block_diag(*c2s)
 
-def _rm_digit(symb):
-    if symb.isalpha():
-        return symb
-    else:
-        return ''.join([i for i in symb if i.isalpha()])
+    def sph2spinor_coeff(self):
+        '''Transformation matrix that transforms real-spherical GTOs to spinor
+        GTOs for all basis functions
 
-_ELEMENTS_UPPER = dict((x.upper(),x) for x in ELEMENTS)
-_ELEMENTS_UPPER['GHOST'] = 'Ghost'
+        Examples::
 
-def charge(symb_or_chg):
-    if isinstance(symb_or_chg, (str, unicode)):
-        a = symb_or_chg.upper()
-        if ('GHOST' in a or ('X' in a and 'XE' not in a)):
-            return 0
-        else:
-            return elements.ELEMENTS_PROTON[str(_rm_digit(a))]
-    else:
-        return symb_or_chg
-
-def _symbol(symb_or_chg):
-    if isinstance(symb_or_chg, (str, unicode)):
-        return str(symb_or_chg)
-    else:
-        return ELEMENTS[symb_or_chg]
-
-def _std_symbol(symb_or_chg):
-    if isinstance(symb_or_chg, (str, unicode)):
-        rawsymb = str(_rm_digit(symb_or_chg)).upper()
-        if len(rawsymb) > 1 and symb_or_chg[0] == 'X' and symb_or_chg[:2].upper() != 'XE':
-            rawsymb = rawsymb[1:]
-            return 'X-' + _ELEMENTS_UPPER[rawsymb]
-        elif len(rawsymb) > 5 and rawsymb[:5] == 'GHOST':
-            rawsymb = rawsymb[5:]
-            return 'GHOST-' + _ELEMENTS_UPPER[rawsymb]
-        else:
-            return _ELEMENTS_UPPER[rawsymb]
-    else:
-        return ELEMENTS[symb_or_chg]
-
-def _atom_symbol(symb_or_chg):
-    if isinstance(symb_or_chg, int):
-        symb = ELEMENTS[symb_or_chg]
-    else:
-        a = str(symb_or_chg.strip())
-        if a.isdigit():
-            symb = ELEMENTS[int(a)]
-        else:
-            rawsymb = _rm_digit(a)
-            if len(rawsymb) > 1 and a[0] == 'X' and a[:2].upper() != 'XE':
-                rawsymb = rawsymb[1:]
-            elif len(rawsymb) > 5 and rawsymb[:5].upper() == 'GHOST':
-                rawsymb = rawsymb[5:]
-            stdsymb = _ELEMENTS_UPPER[rawsymb.upper()]
-            symb = a.replace(rawsymb, stdsymb)
-    return symb
-
-def is_ghost_atom(symb_or_chg):
-    if isinstance(symb_or_chg, int):
-        return symb_or_chg == 0
-    elif 'GHOST' in symb_or_chg.upper():
-        return True
-    else:
-        return symb_or_chg[0] == 'X' and symb_or_chg[:2].upper() != 'XE'
+        >>> mol = gto.M(atom='H 0 0 0; F 0 0 1', basis='ccpvtz')
+        >>> ca, cb = mol.sph2spinor_coeff()
+        >>> s0 = mol.intor('int1e_ovlp_spinor')
+        >>> s1 = ca.conj().T.dot(mol.intor('int1e_ovlp_sph')).dot(ca)
+        >>> s1+= cb.conj().T.dot(mol.intor('int1e_ovlp_sph')).dot(cb)
+        >>> print(abs(s1-s0).max())
+        >>> 6.66133814775e-16
+        '''
+        from pyscf.symm import sph
+        return sph.sph2spinor_coeff(self)
 
 def _parse_nuc_mod(str_or_int):
     nucmod = NUC_POINT

@@ -27,13 +27,14 @@ def kernel(mf, conv_tol=1e-10, conv_tol_grad=None,
 
     Args:
         mf : an instance of SCF class
-            To hold the flags to control SCF.  Besides the control parameters,
-            one can modify its function members to change the behavior of SCF.
-            The member functions which are called in kernel are
+            mf object holds all parameters to control SCF.  One can modify its
+            member functions to change the behavior of SCF.  The member
+            functions which are called in kernel are
 
             | mf.get_init_guess
             | mf.get_hcore
             | mf.get_ovlp
+            | mf.get_veff
             | mf.get_fock
             | mf.get_grad
             | mf.eig

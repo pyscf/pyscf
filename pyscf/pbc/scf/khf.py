@@ -292,7 +292,7 @@ def init_guess_by_chkfile(cell, chkfile_name, project=None, kpts=None):
 
 
 class KSCF(pbchf.SCF):
-    '''SCF class with k-point sampling.
+    '''SCF base class with k-point sampling.
 
     Compared to molecular SCF, some members such as mo_coeff, mo_occ
     now have an additional first dimension for the k-points,

@@ -181,7 +181,7 @@ def init_guess_by_chkfile(cell, chkfile_name, project=None, kpt=None):
 
 
 class SCF(mol_hf.SCF):
-    '''SCF class adapted for PBCs.
+    '''SCF base class adapted for PBCs.
 
     Attributes:
         kpt : (3,) ndarray

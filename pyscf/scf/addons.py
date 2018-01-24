@@ -5,14 +5,12 @@
 #
 
 
-import sys
 import copy
 from functools import reduce
 import numpy
 from pyscf import lib
 from pyscf.gto import mole
 from pyscf.lib import logger
-from pyscf.symm import sph
 from pyscf.scf import hf
 
 
@@ -21,20 +19,23 @@ def frac_occ_(mf, tol=1e-3):
     old_get_occ = mf.get_occ
     def get_occ(mo_energy, mo_coeff=None):
         mol = mf.mol
-        nocc = mol.nelectron // 2
+        n_docc = mol.nelectron // 2
+        n_socc = (mol.nelectron+1) // 2 - n_docc
+        nocc = n_docc + n_socc
         sort_mo_energy = numpy.sort(mo_energy)
+        homo = sort_mo_energy[nocc-1]
         lumo = sort_mo_energy[nocc]
-        if abs(sort_mo_energy[nocc-1] - lumo) < tol:
+        if abs(homo - lumo) < tol or n_socc:
             mo_occ = numpy.zeros_like(mo_energy)
-            mo_occ[mo_energy<lumo] = 2
-            lst = abs(mo_energy-lumo) < tol
-            degen = int(lst.sum())
-            frac = 2.*numpy.count_nonzero(lst & (mo_occ == 2))/degen
-            mo_occ[lst] = frac
+            mo_occ[:n_docc] = 2
+            mask = abs(mo_energy-homo) < tol
+            degen = int(mask.sum())
+            n_docc_degen = numpy.count_nonzero(mask & (mo_occ == 2))
+            frac = (n_socc + 2.*n_docc_degen) / degen
+            mo_occ[mask] = frac
             logger.warn(mf, 'fraction occ = %6g  for orbitals %s',
-                        frac, numpy.where(lst)[0])
-            logger.info(mf, 'HOMO = %.12g  LUMO = %.12g',
-                        sort_mo_energy[nocc-1], sort_mo_energy[nocc])
+                        frac, numpy.where(mask)[0])
+            logger.info(mf, 'HOMO = %.12g  LUMO = %.12g', homo, lumo)
             logger.debug(mf, '  mo_energy = %s', mo_energy)
         else:
             mo_occ = old_get_occ(mo_energy, mo_coeff)
@@ -123,40 +124,6 @@ def float_occ_(mf):
     mf.get_occ = get_occ
     return mf
 dynamic_sz_ = float_occ = float_occ_
-
-def symm_allow_occ_(mf, tol=1e-3):
-    '''search the unoccupied orbitals, choose the lowest sets which do not
-break symmetry as the occupied orbitals'''
-    def get_occ(mo_energy, mo_coeff=None):
-        mol = mf.mol
-        mo_occ = numpy.zeros_like(mo_energy)
-        nocc = mol.nelectron // 2
-        mo_occ[:nocc] = 2
-        if abs(mo_energy[nocc-1] - mo_energy[nocc]) < tol:
-            lst = abs(mo_energy - mo_energy[nocc-1]) < tol
-            nocc_left = int(lst[:nocc].sum())
-            ndocc = nocc - nocc_left
-            mo_occ[ndocc:nocc] = 0
-            i = ndocc
-            nmo = len(mo_energy)
-            logger.info(mf, 'symm_allow_occ [:%d] = 2', ndocc)
-            while i < nmo and nocc_left > 0:
-                deg = (abs(mo_energy[i:i+5]-mo_energy[i]) < tol).sum()
-                if deg <= nocc_left:
-                    mo_occ[i:i+deg] = 2
-                    nocc_left -= deg
-                    logger.info(mf, 'symm_allow_occ [%d:%d] = 2, energy = %.12g',
-                                i, i+nocc_left, mo_energy[i])
-                    break
-                else:
-                    i += deg
-        logger.info(mf, 'HOMO = %.12g, LUMO = %.12g,',
-                    mo_energy[nocc-1], mo_energy[nocc])
-        logger.debug(mf, '  mo_energy = %s', mo_energy)
-        return mo_occ
-    mf.get_occ = get_occ
-    return mf
-symm_allow_occ = symm_allow_occ_
 
 def follow_state_(mf, occorb=None):
     occstat = [occorb]
@@ -254,7 +221,7 @@ def project_mo_nr2r(mol1, mo1, mol2):
     s22 = mol2.intor_symmetric('int1e_ovlp_spinor')
     s21 = mole.intor_cross('int1e_ovlp_sph', mol2, mol1)
 
-    ua, ub = sph.real2spinor_whole(mol2)
+    ua, ub = mol2.sph2spinor_coeff()
     s21 = numpy.dot(ua.T.conj(), s21) + numpy.dot(ub.T.conj(), s21) # (*)
     # mo2: alpha, beta have been summed in Eq. (*)
     # so DM = mo2[:,:nocc] * 1 * mo2[:,:nocc].H

@@ -5,7 +5,6 @@ Spherical harmonics
 '''
 
 import numpy
-from pyscf import gto
 from pyscf.symm.cg import cg_spin
 
 def real_sph_vec(r, lmax, reorder_p=False):
@@ -59,6 +58,7 @@ def multipoles(r, lmax, reorder_dipole=True):
         reorder_p : bool
             sort dipole to x,y,z
     '''
+    from pyscf import gto
 
 # libcint cart2sph transformation provide the capability to compute
 # multipole directly.  cart2sph function is fast for low angular moment.
@@ -133,7 +133,7 @@ def sph_real2pure(l):
 # |spinor> = (|real_sph>, |real_sph>) * / u_alpha \
 #                                       \ u_beta  /
 # Return 2D array U_{sph,spinor}
-def real2spinor(l):
+def sph2spinor(l):
     if l == 0:
         return numpy.array((0., 1.)).reshape(1,-1), \
                numpy.array((1., 0.)).reshape(1,-1)
@@ -164,14 +164,30 @@ def real2spinor(l):
             mla += 1
             mlb += 1
     return ua, ub
+real2spinor = sph2spinor
 
 # Returns 2D array U_{sph,spinor}
-def real2spinor_whole(mol):
+def sph2spinor_coeff(mol):
+    '''Transformation matrix that transforms real-spherical GTOs to spinor
+    GTOs for all basis functions
+
+    Examples::
+
+    >>> from pyscf import gto
+    >>> from pyscf.symm import sph
+    >>> mol = gto.M(atom='H 0 0 0; F 0 0 1', basis='ccpvtz')
+    >>> ca, cb = sph.sph2spinor_coeff(mol)
+    >>> s0 = mol.intor('int1e_ovlp_spinor')
+    >>> s1 = ca.conj().T.dot(mol.intor('int1e_ovlp_sph')).dot(ca)
+    >>> s1+= cb.conj().T.dot(mol.intor('int1e_ovlp_sph')).dot(cb)
+    >>> print(abs(s1-s0).max())
+    >>> 6.66133814775e-16
+    '''
     lmax = max([mol.bas_angular(i) for i in range(mol.nbas)])
     ualst = []
     ublst = []
     for l in range(lmax+1):
-        u1, u2 = real2spinor(l)
+        u1, u2 = sph2spinor(l)
         ualst.append(u1)
         ublst.append(u2)
 
@@ -189,9 +205,12 @@ def real2spinor_whole(mol):
             p0 += n
             p1 += m
     return ua, ub
+real2spinor_whole = sph2spinor_coeff
 
 def cart2spinor(l):
-    raise RuntimeError('TODO')
+    '''Cartesian to spinor for angular moment l'''
+    from pyscf import gto
+    return gto.cart2spinor_l(l)
 
 
 if __name__ == '__main__':
@@ -200,5 +219,5 @@ if __name__ == '__main__':
         print(sph_real2pure(l))
 
     for l in range(3):
-        print(real2spinor(l)[0])
-        print(real2spinor(l)[1])
+        print(sph2spinor(l)[0])
+        print(sph2spinor(l)[1])
