@@ -9,7 +9,7 @@ For all-electron systems, AFTDF (analytical Fourier transformation) is
 less accurate than DF (density fitting) and MDF (mixed density fitting)
 methods.
 
-DF uses one center gaussian functions to expand the orbital pair products.
+DF uses one center Gaussian functions to expand the orbital pair products.
 For all-electron problem (regardless of the boundary conditions) DF is more
 accurate than AFTDF and less accurate than MDF, in most scenario.
 
@@ -17,7 +17,7 @@ MDF is a combination of DF and AFTDF. It uses one center gaussian with the
 planewaves to expand the orbital pair products.  Typically, it has better
 accuracy but worse performance than DF.  If the auxiliary gaussians in DF
 have good quality, the DF scheme may have better accuracy than MDF due to
-the linear dependency between gaussian and planewaves.  So choose DF or MDF
+the linear dependency between Gaussian and planewaves.  So choose DF or MDF
 based on your needs.
 
 '''
