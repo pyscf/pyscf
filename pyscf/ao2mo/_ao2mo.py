@@ -33,7 +33,7 @@ class AO2MOpt(object):
 
         if prescreen != 'CVHFnoscreen' and intor in ('int2e_sph', 'int2e_cart'):
             # for int2e_sph, qcondname is 'CVHFsetnr_direct_scf'
-            ao_loc = make_loc(c_bas, self._intor)
+            ao_loc = make_loc(c_bas, intor)
             fsetqcond = getattr(libao2mo, qcondname)
             fsetqcond(self._this,
                       getattr(libao2mo, intor), self._cintopt,
@@ -230,11 +230,11 @@ def r_e1(intor, mo_coeff, orbs_slice, sh_range, atm, bas, env,
     if ao2mopt is not None:
         cao2mopt = ao2mopt._this
         cintopt = ao2mopt._cintopt
-        cintor = ao2mopt._intor
+        intor = ao2mopt._intor
     else:
         cao2mopt = lib.c_null_ptr()
-        cintor = _fpointer(intor)
         cintopt = make_cintopt(c_atm, c_bas, c_env, intor)
+    cintor = _fpointer(intor)
 
     tao = numpy.asarray(tao, dtype=numpy.int32)
     ao_loc = make_loc(bas, 'spinor')
