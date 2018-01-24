@@ -33,7 +33,7 @@ kmf = scf.KRHF(cell, kpts).mix_density_fit()
 kmf.with_df.mesh = [10,10,10]
 kmf.kernel()
 
-kmf = dft.KRKS(cell, kpts).mix_density_fit(auxbasis='weigend')
+kmf = dft.KRKS(cell, kpts).density_fit(auxbasis='weigend')
 kmf.xc = 'bp86'
 kmf.kernel()
 
@@ -42,7 +42,7 @@ kmf.kernel()
 # molecular calculation.  Note second order SCF algorithm does not support
 # smearing method.
 #
-mf = scf.KRHF(cell, kpts).mix_density_fit()
+mf = scf.KRHF(cell, kpts).density_fit()
 mf = mf.newton()
 mf.kernel()
 
