@@ -14,6 +14,7 @@ import numpy as np
 import scipy.linalg
 import scipy.special
 from pyscf import lib
+from pyscf.gto import mole
 
 def get_alphas(cell, low_dim_ft_type=None):
     '''alpha parameters from the non-divergent Hartree+Vloc G=0 term.
@@ -297,12 +298,9 @@ def cart2polar(rvec):
 def get_pp(cell, kpt=np.zeros(3), low_dim_ft_type=None):
     '''Get the periodic pseudotential nuc-el AO matrix
     '''
-    import pyscf.dft
     from pyscf.pbc import tools
-    from pyscf.pbc.dft import gen_grid
-    from pyscf.pbc.dft import numint
-    coords = gen_grid.gen_uniform_grids(cell)
-    aoR = numint.eval_ao(cell, coords, kpt)
+    coords = cell.get_uniform_grids()
+    aoR = cell.pbc_eval_gto('GTOval', coords, kpt=kpt)
     nao = cell.nao_nr()
 
     SI = cell.get_SI()
@@ -319,7 +317,7 @@ def get_pp(cell, kpt=np.zeros(3), low_dim_ft_type=None):
                       cell.mesh, np.exp(-1j*np.dot(coords, kpt))).T
     ngrids = len(aokG)
 
-    fakemol = pyscf.gto.Mole()
+    fakemol = mole.Mole()
     fakemol._atm = np.zeros((1,pyscf.gto.ATM_SLOTS), dtype=np.int32)
     fakemol._bas = np.zeros((1,pyscf.gto.BAS_SLOTS), dtype=np.int32)
     ptr = pyscf.gto.PTR_ENV_START
@@ -344,7 +342,7 @@ def get_pp(cell, kpt=np.zeros(3), low_dim_ft_type=None):
                 fakemol._bas[0,pyscf.gto.ANG_OF] = l
                 fakemol._env[ptr+3] = .5*rl**2
                 fakemol._env[ptr+4] = rl**(l+1.5)*np.pi**1.25
-                pYlm_part = pyscf.dft.numint.eval_ao(fakemol, Gv, deriv=0)
+                pYlm_part = fakemol.eval_gto('GTOval', Gv)
 
                 pYlm = np.empty((nl,l*2+1,ngrids))
                 for k in range(nl):

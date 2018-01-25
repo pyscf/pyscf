@@ -86,9 +86,9 @@ def eval_ao_kpts(cell, coords, kpts=None, deriv=0, relativity=0,
 
     comp = (deriv+1)*(deriv+2)*(deriv+3)//6
     if cell.cart:
-        feval = 'PBCval_cart_deriv%d' % deriv
+        feval = 'GTOval_cart_deriv%d' % deriv
     else:
-        feval = 'PBCval_sph_deriv%d' % deriv
+        feval = 'GTOval_sph_deriv%d' % deriv
     return cell.pbc_eval_gto(feval, coords, comp, kpts,
                              shls_slice=shls_slice, non0tab=non0tab, out=out)
 

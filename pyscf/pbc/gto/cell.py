@@ -16,7 +16,7 @@ import scipy.special
 import scipy.optimize
 import pyscf.lib.parameters as param
 from pyscf import lib
-from pyscf import dft
+from pyscf.dft import radi
 from pyscf.lib import logger
 from pyscf.gto import mole
 from pyscf.gto import moleintor
@@ -565,10 +565,10 @@ def get_Gv_weights(cell, mesh=None, **kwargs):
         mesh = [2*n+1 for n in kwargs['gs']]
 
     def plus_minus(n):
-        #rs, ws = dft.delley(n)
-        #rs, ws = dft.treutler_ahlrichs(n)
-        #rs, ws = dft.mura_knowles(n)
-        rs, ws = dft.gauss_chebyshev(n)
+        #rs, ws = radi.delley(n)
+        #rs, ws = radi.treutler_ahlrichs(n)
+        #rs, ws = radi.mura_knowles(n)
+        rs, ws = radi.gauss_chebyshev(n)
         #return np.hstack((0,rs,-rs[::-1])), np.hstack((0,ws,ws[::-1]))
         return np.hstack((rs,-rs[::-1])), np.hstack((ws,ws[::-1]))
 

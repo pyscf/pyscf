@@ -11,8 +11,14 @@ from pyscf.lib import logger
 try:
     from pyscf.dft import libxc
 except (ImportError, OSError):
-    from pyscf.dft import xcfun
-    libxc = xcfun
+    try:
+        from pyscf.dft import xcfun
+        libxc = xcfun
+    except (ImportError, OSError):
+        import warnings
+        warnings.warn('XC functional libraries (libxc or XCfun) are not available.')
+        from pyscf.dft import xc
+        libxc = xc
 
 from pyscf.dft.gen_grid import make_mask, BLKSIZE
 
