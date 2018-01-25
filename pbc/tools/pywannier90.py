@@ -25,6 +25,7 @@ if found == True:
 else:
 	print('WARNING: Check the installation of libwannier90 and its path in pyscf/pbc/tools/pywannier90.py')
 	print('libwannier90 path: ' + W90LIB)
+	print('libwannier90 can be found at: https://github.com/hungpham2017/pyWannier90')	
 	
 	
 def angle(v1, v2):
