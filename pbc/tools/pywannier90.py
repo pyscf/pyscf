@@ -255,40 +255,6 @@ def g_r(grids_coor, site, l, mr, r, zona, x_axis = [1,0,0], z_axis = [0,0,1], un
 			phi[point] = np.sign(r_vec[point,1]) * 0.5 * np.pi
 	
 	return theta_lmr(l, mr, cost, phi) * R_r(r_norm * unit_conv, r = r, zona = zona)
-	
-	
-def get_ovlp(wA, wB, R_A = [0,0,0], R_B = [0,0,0]):
-	'''
-	Evaluate the overlap matrix between two Wannier functions obtained from two sets of Bloch orbitals
-	Note: Wannier functions from the same set of Bloch orbitals are orthogonal to each other.
-	Attributes:
-		wA, wB		: two W90 objects
-		RA, RB		: two R vectors
-	Return:
-		S_{AB} = \langle \omega_{n}^A(\mathbf{R_A,r}) | \omega_{l}^B(\mathbf{R_B,r}) \rangle
-	'''	
-	
-	#R_vec = np.asarray(R).dot(self.cell.lattice_vectors())	
-	cell = wA.cell
-	kpts = wA.kmf.kpts
-	num_kpts = kpts.shape[0]
-	C = wA.kmf.mo_coeff_kpts
-	U_wA = wA.U_matrix
-	U_wB = wB.U_matrix
-	# Be careful about R_A, R_B: should be the absolute vectors
-	s = 0
-	for k1_id in range(num_kpts):
-		for k2_id in range(num_kpts):
-			k_A = kpts[k1_id]
-			k_B = kpts[k2_id]	
-			C_A = C[k1_id]
-			C_B = C[k2_id]	
-			C_tildle_A = C_A.dot(U_wA[k1_id])
-			C_tildle_B = C_B.dot(U_wB[k1_id])
-			S_bloch = 0
-			s =+  np.einsum('mk,nl,mn->kl', C_tildle_A, C_tildle_B, S_bloch, optimize=True) * np.exp(-1j * (k_B.dot(R_B) - k_A.dot(R_A)))
-			
-	return s/np.sqrt(num_kpts)
 			
 	
 class W90:
