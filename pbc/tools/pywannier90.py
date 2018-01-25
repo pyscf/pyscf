@@ -6,6 +6,7 @@ email: pqh3.14@gmail.com
 
 # This is the only place needed to be modified
 # The path for the libwannier90 library
+W90LIB = 'libwannier90-path'
 
 import numpy as np
 import scipy
@@ -14,8 +15,8 @@ import pyscf.lib.parameters as param
 from pyscf import lib
 from pyscf.pbc import df
 from pyscf.pbc.dft import gen_grid, numint
-import sys
-sys.path.append('/panfs/roc/groups/6/gagliard/phamx494/CPPlib/pyWannier90')  # Modify this
+import sys 
+sys.path.append(W90LIB)
 
 import importlib
 found = importlib.find_loader('libwannier90') is not None
@@ -23,6 +24,7 @@ if found == True:
 	import libwannier90
 else:
 	print('WARNING: Check the installation of libwannier90 and its path in pyscf/pbc/tools/pywannier90.py')
+	print('libwannier90 path: ' + W90LIB)
 	
 	
 def angle(v1, v2):
