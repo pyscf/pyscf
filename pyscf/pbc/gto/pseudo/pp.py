@@ -318,14 +318,14 @@ def get_pp(cell, kpt=np.zeros(3), low_dim_ft_type=None):
     ngrids = len(aokG)
 
     fakemol = mole.Mole()
-    fakemol._atm = np.zeros((1,pyscf.gto.ATM_SLOTS), dtype=np.int32)
-    fakemol._bas = np.zeros((1,pyscf.gto.BAS_SLOTS), dtype=np.int32)
-    ptr = pyscf.gto.PTR_ENV_START
+    fakemol._atm = np.zeros((1,mole.ATM_SLOTS), dtype=np.int32)
+    fakemol._bas = np.zeros((1,mole.BAS_SLOTS), dtype=np.int32)
+    ptr = mole.PTR_ENV_START
     fakemol._env = np.zeros(ptr+10)
-    fakemol._bas[0,pyscf.gto.NPRIM_OF ] = 1
-    fakemol._bas[0,pyscf.gto.NCTR_OF  ] = 1
-    fakemol._bas[0,pyscf.gto.PTR_EXP  ] = ptr+3
-    fakemol._bas[0,pyscf.gto.PTR_COEFF] = ptr+4
+    fakemol._bas[0,mole.NPRIM_OF ] = 1
+    fakemol._bas[0,mole.NCTR_OF  ] = 1
+    fakemol._bas[0,mole.PTR_EXP  ] = ptr+3
+    fakemol._bas[0,mole.PTR_COEFF] = ptr+4
     Gv = np.asarray(cell.Gv+kpt)
     G_rad = lib.norm(Gv, axis=1)
 
@@ -339,7 +339,7 @@ def get_pp(cell, kpt=np.zeros(3), low_dim_ft_type=None):
             rl, nl, hl = proj
             if nl > 0:
                 hl = np.asarray(hl)
-                fakemol._bas[0,pyscf.gto.ANG_OF] = l
+                fakemol._bas[0,mole.ANG_OF] = l
                 fakemol._env[ptr+3] = .5*rl**2
                 fakemol._env[ptr+4] = rl**(l+1.5)*np.pi**1.25
                 pYlm_part = fakemol.eval_gto('GTOval', Gv)
