@@ -305,7 +305,7 @@ extensions += [
     make_ext('pyscf.lib.libcgto', 'gto',
              '''fill_int2c.c fill_nr_3c.c fill_r_3c.c fill_int2e.c ft_ao.c
              grid_ao_drv.c fastexp.c deriv1.c deriv2.c nr_ecp.c nr_ecp_deriv.c
-             autocode/auto_eval1.c''',
+             autocode/auto_eval1.c ft_ao_deriv.c''',
              ['cint', 'np_helper']),
     make_ext('pyscf.lib.libcvhf', 'vhf',
              '''fill_nr_s8.c nr_incore.c nr_direct.c optimizer.c nr_direct_dot.c
@@ -327,7 +327,8 @@ extensions += [
     make_ext('pyscf.lib.libri', 'ri', 'r_df_incore.c',
              ['cint', 'ao2mo', 'np_helper']),
     make_ext('pyscf.lib.libhci', 'hci', 'hci.c', ['np_helper']),
-    make_ext('pyscf.lib.libpbc', 'pbc', 'ft_ao.c fill_ints.c grid_ao.c', ['cgto', 'cint']),
+    make_ext('pyscf.lib.libpbc', 'pbc', 'ft_ao.c optimizer.c fill_ints.c grid_ao.c',
+             ['cgto', 'cint']),
     make_ext('pyscf.lib.libmbd', os.path.join('extras', 'mbd'), 'dipole.c', []),
     make_ext('pyscf.lib.libdft', 'dft',
              'CxLebedevGrid.c grid_basis.c nr_numint.c r_numint.c',
