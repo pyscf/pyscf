@@ -162,7 +162,7 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         cput1 = logger.timer(mf, 'cycle= %d'%(cycle+1), *cput1)
         cycle += 1
 
-    if conv_check:
+    if scf_conv and conv_check:
         # An extra diagonalization, to remove level shift
         #fock = mf.get_fock(h1e, s1e, vhf, dm)  # = h1e + vhf
         mo_energy, mo_coeff = mf.eig(fock, s1e)

@@ -6,9 +6,10 @@
 #
 
 import re
+import numpy
 
-MAXL = 8
-SPDF = ('S', 'P', 'D', 'F', 'G', 'H', 'I', 'K')
+MAXL = 12
+SPDF = ('S', 'P', 'D', 'F', 'G', 'H', 'I', 'K', 'L', 'M', 'O', 'P')
 MAPSPDF = {'S': 0,
            'P': 1,
            'D': 2,
@@ -16,15 +17,24 @@ MAPSPDF = {'S': 0,
            'G': 4,
            'H': 5,
            'I': 6,
-           'K': 7}
+           'K': 7,
+           'L': 8,
+           'M': 9,
+           'O': 10,
+           'P': 11,
+          }
 
 BASIS_SET_DELIMITER = re.compile('# *BASIS SET.*\n')
 ECP_DELIMITER = re.compile('\n *ECP *\n')
 
-def parse(string, symb=None):
+def parse(string, symb=None, optimize=False):
     '''Parse the basis text which is in NWChem format, return an internal
     basis format which can be assigned to :attr:`Mole.basis`
     Lines started with # are ignored.
+
+    Kwargs:
+        optimize : Optimize basis contraction.  Convert the segment contracted
+            basis to the general contracted basis.
     '''
     from pyscf.gto.mole import _std_symbol
     if symb is not None:
@@ -38,10 +48,10 @@ def parse(string, symb=None):
         x = dat.split('#')[0].strip().upper()  # Use # to start comments
         if (x and not x.startswith('END') and not x.startswith('BASIS')):
             bastxt.append(x)
-    return _parse(bastxt)
+    return _parse(bastxt, optimize)
 
-def load(basisfile, symb):
-    return _parse(search_seg(basisfile, symb))
+def load(basisfile, symb, optimize=False):
+    return _parse(search_seg(basisfile, symb), optimize)
 
 def parse_ecp(string, symb=None):
     from pyscf.gto.mole import _std_symbol
@@ -159,7 +169,7 @@ def convert_ecp_to_nwchem(symb, ecp):
                 res.append('%d    %15.9f  %15.9f' % (r_order, e, c))
     return '\n'.join(res)
 
-def _parse(raw_basis):
+def _parse(raw_basis, optimize=False):
     basis_add = []
     for line in raw_basis:
         dat = line.strip()
@@ -183,10 +193,34 @@ def _parse(raw_basis):
                 basis_add[-1].append([line[0], line[2]])
             else:
                 basis_add[-1].append(line)
-    bsort = []
-    for l in range(MAXL):
-        bsort.extend([b for b in basis_add if b[0] == l])
-    return bsort
+
+    basis_add = [[b for b in basis_add if b[0] == l] for l in range(MAXL)]
+
+    if optimize:
+        # Optimize contraction: segment contraction -> general contraction
+        bas_l = [[] for l in range(MAXL)]
+        for b in basis_add:
+            l = b[0]
+            ec = numpy.array(b[1:]).T
+            es = ec[0]
+            cs = [c for c in ec[1:]]
+            if bas_l[l]:
+                for e_cs in bas_l[l]:
+                    if numpy.allclose(e_cs[0], es):
+                        e_cs.extend(cs)
+                        break
+                else:
+                    bas_l[l].append([es] + cs)
+            else:
+                bas_l[l].append([es] + cs)
+
+        basis_add = []
+        for l, b in enumerate(bas_l):
+            for e_cs in b:
+                b_l = [l] + numpy.array(e_cs).T.tolist()
+                basis_add.append(b_l)
+
+    return basis_add
 
 def _parse_ecp(raw_ecp):
     ecp_add = []
