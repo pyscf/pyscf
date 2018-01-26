@@ -122,7 +122,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(finger(t2)*1e-6, -369.77282889007887 , 6)
         self.assertAlmostEqual(uccsd.energy(ucc1, r1, r2, eris), 212092.42063102487, 8)
         e0, t1, t2 = ucc1.init_amps(eris)
-        self.assertAlmostEqual(finger(ucc1.spatial2spin(t1, eris.orbspin)), -1388.6092444316866, 9)
+        self.assertAlmostEqual(finger(ucc1.spatial2spin(t1, eris.orbspin)), -1388.6092444316866, 8)
         self.assertAlmostEqual(finger(ucc1.spatial2spin(t2, eris.orbspin)), -38008.739917327577, 4)
         self.assertAlmostEqual(e0, 5308849.5847222833, 2)
         #t1, t2 = ucc1.update_amps(t1, t2, eris)
