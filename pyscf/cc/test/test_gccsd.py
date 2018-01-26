@@ -6,6 +6,7 @@ from pyscf import gto
 from pyscf.cc import gccsd
 from pyscf import ao2mo
 from pyscf.cc import gccsd_rdm
+from pyscf.cc import uccsd
 from pyscf.cc import addons
 
 mol = gto.Mole()
@@ -13,6 +14,8 @@ mol.atom = [
     [8 , (0. , 0.     , 0.)],
     [1 , (0. , -0.757 , 0.587)],
     [1 , (0. , 0.757  , 0.587)]]
+mol.verbose = 5
+mol.output = '/dev/null'
 mol.basis = 'cc-pvdz'
 mol.spin = 2
 mol.build()
@@ -112,8 +115,6 @@ class KnownValues(unittest.TestCase):
     def test_rdm(self):
         nocc = 6
         nvir = 10
-        mol = gto.M()
-        mol.nelectron = nocc
         mf = scf.GHF(mol)
         nmo = nocc + nvir
         npair = nmo*(nmo//2+1)//4
@@ -180,17 +181,23 @@ class KnownValues(unittest.TestCase):
             [8 , (0. , 0.     , 0.)],
             [1 , (0. , -0.757 , 0.587)],
             [1 , (0. , 0.757  , 0.587)]]
+        mol.verbose = 5
+        mol.output = '/dev/null'
         mol.basis = '631g'
         mol.spin = 2
         mol.build()
         mf = scf.UHF(mol).run()
-        mf = scf.addons.convert_to_ghf(mf)
+        myucc = uccsd.UCCSD(mf).run()
+        udm1 = myucc.make_rdm1()
+        udm2 = myucc.make_rdm2()
 
+        mf = scf.addons.convert_to_ghf(mf)
         mycc = gccsd.GCCSD(mf)
         ecc, t1, t2 = mycc.kernel()
         l1, l2 = mycc.solve_lambda()
         dm1 = gccsd_rdm.make_rdm1(mycc, t1, t2, l1, l2)
         dm2 = gccsd_rdm.make_rdm2(mycc, t1, t2, l1, l2)
+
         nao = mol.nao_nr()
         mo_a = mf.mo_coeff[:nao]
         mo_b = mf.mo_coeff[nao:]
@@ -207,6 +214,14 @@ class KnownValues(unittest.TestCase):
         e1+= numpy.einsum('ijkl,jilk', eri, dm2) * .5
         e1+= mol.energy_nuc()
         self.assertAlmostEqual(e1, mycc.e_tot, 7)
+
+        idxa = numpy.where(orbspin == 0)[0]
+        idxb = numpy.where(orbspin == 1)[0]
+        self.assertAlmostEqual(abs(dm1[idxa[:,None],idxa] - udm1[0]).max(), 0, 9)
+        self.assertAlmostEqual(abs(dm1[idxb[:,None],idxb] - udm1[1]).max(), 0, 9)
+        self.assertAlmostEqual(abs(dm2[idxa[:,None,None,None],idxa[:,None,None],idxa[:,None],idxa] - udm2[0]).max(), 0, 9)
+        self.assertAlmostEqual(abs(dm2[idxa[:,None,None,None],idxa[:,None,None],idxb[:,None],idxb] - udm2[1]).max(), 0, 9)
+        self.assertAlmostEqual(abs(dm2[idxb[:,None,None,None],idxb[:,None,None],idxb[:,None],idxb] - udm2[2]).max(), 0, 9)
 
 
 if __name__ == "__main__":

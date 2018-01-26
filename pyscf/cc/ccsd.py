@@ -351,7 +351,6 @@ def _add_vvvv_full(mycc, t1, t2, eris, out=None, with_ovvv=False):
     assert(not with_ovvv)
     time0 = time.clock(), time.time()
     log = logger.Logger(mycc.stdout, mycc.verbose)
-    nocc, nvir = t2.shape[1:3]
     if t1 is None:
         tau = t2
     else:
@@ -364,6 +363,7 @@ def _add_vvvv_full(mycc, t1, t2, eris, out=None, with_ovvv=False):
             mo = eris.mo_coeff
         else:
             mo = _mo_without_core(mycc, mycc.mo_coeff)
+        nocc, nvir = t2.shape[1:3]
         nao, nmo = mo.shape
         aos = numpy.asarray(mo[:,nocc:].T, order='F')
         tau = _ao2mo.nr_e2(tau.reshape(nocc**2,nvir,nvir), aos, (0,nao,0,nao), 's1', 's1')
@@ -489,7 +489,7 @@ def _contract_vvvv_t2(mol, vvvv, t2, out=None, max_memory=2000, verbose=None):
     return Ht2.reshape(t2.shape)
 
 def _unpack_t2_tril(t2tril, nocc, nvir, out=None, t2sym='jiba'):
-    t2 = numpy.ndarray((nocc,nocc,nvir,nvir), buffer=out)
+    t2 = numpy.ndarray((nocc,nocc,nvir,nvir), dtype=t2tril.dtype, buffer=out)
     idx,idy = numpy.tril_indices(nocc)
     if t2sym == 'jiba':
         t2[idy,idx] = t2tril.transpose(0,2,1)
@@ -963,8 +963,8 @@ CC = CCSD
 
 class _ChemistsERIs:
     '''(pq|rs)'''
-    def __init__(self):
-        self.mol = None
+    def __init__(self, mol=None):
+        self.mol = mol
         self.mo_coeff = None
         self.nocc = None
         self.fock = None

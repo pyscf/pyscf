@@ -154,15 +154,18 @@ class GCCSD(ccsd.CCSD):
 
     def solve_lambda(self, t1=None, t2=None, l1=None, l2=None,
                      eris=None):
+        from pyscf.cc import ccsd_lambda
         from pyscf.cc import gccsd_lambda
         if t1 is None: t1 = self.t1
         if t2 is None: t2 = self.t2
         if eris is None: eris = self.ao2mo(self.mo_coeff)
         self.converged_lambda, self.l1, self.l2 = \
-                gccsd_lambda.kernel(self, eris, t1, t2, l1, l2,
-                                    max_cycle=self.max_cycle,
-                                    tol=self.conv_tol_normt,
-                                    verbose=self.verbose)
+                ccsd_lambda.kernel(self, eris, t1, t2, l1, l2,
+                                   max_cycle=self.max_cycle,
+                                   tol=self.conv_tol_normt,
+                                   verbose=self.verbose,
+                                   fintermediates=gccsd_lambda.make_intermediates,
+                                   fupdate=gccsd_lambda.update_lambda)
         return self.l1, self.l2
 
     def ccsd_t(self, t1=None, t2=None, eris=None):
@@ -245,7 +248,8 @@ class GCCSD(ccsd.CCSD):
 
 class _PhysicistsERIs:
     '''<pq||rs> = <pq|rs> - <pq|sr>'''
-    def __init__(self):
+    def __init__(self, mol=None):
+        self.mol = mol
         self.mo_coeff = None
         self.nocc = None
         self.fock = None

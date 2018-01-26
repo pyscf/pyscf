@@ -81,7 +81,6 @@ def make_intermediates(mycc, t1, t2, eris):
     imds.wvOOv = imds.ftmp.create_dataset('wvOOv', (nvir,nocc,nocc,nvir), 'f8')
     imds.wvvov = imds.ftmp.create_dataset('wvvov', (nvir,nvir,nocc,nvir), 'f8')
 
-# As we don't have l2 in memory, hold tau temporarily in memory
     w1 = fvv - numpy.einsum('ja,jb->ba', fov, t1)
     w2 = foo + numpy.einsum('ib,jb->ij', fov, t1)
     w3 = numpy.einsum('kc,jkbc->bj', fov, t2) * 2 + fov.T

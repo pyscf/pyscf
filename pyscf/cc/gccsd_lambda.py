@@ -12,43 +12,15 @@ import h5py
 from pyscf import lib
 from pyscf import ao2mo
 from pyscf.lib import logger
+from pyscf.cc import ccsd_lambda
 
 einsum = lib.einsum
 
-def kernel(mycc, eris, t1=None, t2=None, l1=None, l2=None,
+def kernel(mycc, eris=None, t1=None, t2=None, l1=None, l2=None,
            max_cycle=50, tol=1e-8, verbose=logger.INFO):
-    cput0 = (time.clock(), time.time())
-    log = logger.new_logger(mycc, verbose)
-
-    if t1 is None: t1 = mycc.t1
-    if t2 is None: t2 = mycc.t2
-    if l1 is None: l1 = t1
-    if l2 is None: l2 = t2
-
-    imds = make_intermediates(mycc, t1, t2, eris)
-
-    if mycc.diis:
-        adiis = lib.diis.DIIS(mycc, mycc.diis_file)
-        adiis.space = mycc.diis_space
-    else:
-        adiis = lambda t1,t2,*args: (t1, t2)
-    cput0 = log.timer('UCCSD lambda initialization', *cput0)
-
-    conv = False
-    for istep in range(max_cycle):
-        l1new, l2new = update_lambda(mycc, t1, t2, l1, l2, eris, imds)
-        normt = numpy.linalg.norm(l1new-l1) + numpy.linalg.norm(l2new-l2)
-        l1, l2 = l1new, l2new
-        l1new = l2new = None
-        if mycc.diis:
-            l1, l2 = mycc.diis(l1, l2, istep, normt, 0, adiis)
-        log.info('cycle = %d  norm(lambda1,lambda2) = %.6g', istep+1, normt)
-        cput0 = log.timer('UCCSD iter', *cput0)
-        if normt < tol:
-            conv = True
-            break
-    return conv, l1, l2
-
+    if eris is None: eris = mycc.ao2mo()
+    return ccsd_lambda.kernel(mycc, eris, t1, t2, l1, l2, max_cycle, tol,
+                              verbose, make_intermediates, update_lambda)
 
 # l2, t2 as ijab
 def make_intermediates(mycc, t1, t2, eris):
@@ -63,11 +35,11 @@ def make_intermediates(mycc, t1, t2, eris):
     tau = t2 + einsum('ia,jb->ijab', t1, t1) * 2
 
     v1 = fvv - einsum('ja,jb->ba', fov, t1)
-    v1-= einsum('jbac,jc->ba', eris.ovvv, t1)
+    v1-= numpy.einsum('jbac,jc->ba', eris.ovvv, t1)
     v1+= einsum('jkca,jkbc->ba', eris.oovv, tau) * .5
 
     v2 = foo + einsum('ib,jb->ij', fov, t1)
-    v2-= einsum('kijb,kb->ij', eris.ooov, t1)
+    v2-= numpy.einsum('kijb,kb->ij', eris.ooov, t1)
     v2+= einsum('ikbc,jkbc->ij', eris.oovv, tau) * .5
 
     v3 = einsum('ijcd,klcd->ijkl', eris.oovv, tau)
@@ -105,10 +77,11 @@ def make_intermediates(mycc, t1, t2, eris):
     class _IMDS: pass
     imds = _IMDS()
     imds.ftmp = lib.H5TmpFile()
-    imds.woooo = imds.ftmp.create_dataset('woooo', (nocc,nocc,nocc,nocc), 'f8')
-    imds.wovvo = imds.ftmp.create_dataset('wovvo', (nocc,nvir,nvir,nocc), 'f8')
-    imds.wovoo = imds.ftmp.create_dataset('wovoo', (nocc,nvir,nocc,nocc), 'f8')
-    imds.wvvvo = imds.ftmp.create_dataset('wvvvo', (nvir,nvir,nvir,nocc), 'f8')
+    dtype = numpy.result_type(t2, eris.vvvv).char
+    imds.woooo = imds.ftmp.create_dataset('woooo', (nocc,nocc,nocc,nocc), dtype)
+    imds.wovvo = imds.ftmp.create_dataset('wovvo', (nocc,nvir,nvir,nocc), dtype)
+    imds.wovoo = imds.ftmp.create_dataset('wovoo', (nocc,nvir,nocc,nocc), dtype)
+    imds.wvvvo = imds.ftmp.create_dataset('wvvvo', (nvir,nvir,nvir,nocc), dtype)
     imds.woooo[:] = woooo
     imds.wovvo[:] = wovvo
     imds.wovoo[:] = wovoo
@@ -134,14 +107,14 @@ def update_lambda(mycc, t1, t2, l1, l2, eris, imds):
 
     mba = einsum('klca,klcb->ba', l2, t2) * .5
     mij = einsum('kicd,kjcd->ij', l2, t2) * .5
-    m3 = numpy.einsum('klab,ijkl->ijab', l2, numpy.asarray(imds.woooo))
+    m3 = einsum('klab,ijkl->ijab', l2, numpy.asarray(imds.woooo))
     tau = t2 + einsum('ia,jb->ijab', t1, t1) * 2
-    tmp = numpy.einsum('ijcd,klcd->ijkl', l2, tau)
+    tmp = einsum('ijcd,klcd->ijkl', l2, tau)
     oovv = numpy.asarray(eris.oovv)
-    m3 += numpy.einsum('klab,ijkl->ijab', oovv, tmp) * .25
-    tmp = numpy.einsum('ijcd,kd->ijck', l2, t1)
-    m3 -= numpy.einsum('kcba,ijck->ijab', eris.ovvv, tmp)
-    m3 += numpy.einsum('ijcd,cdab->ijab', l2, eris.vvvv) * .5
+    m3 += einsum('klab,ijkl->ijab', oovv, tmp) * .25
+    tmp = einsum('ijcd,kd->ijck', l2, t1)
+    m3 -= einsum('kcba,ijck->ijab', eris.ovvv, tmp)
+    m3 += einsum('ijcd,cdab->ijab', l2, eris.vvvv) * .5
 
     l2new += oovv
     l2new += m3
@@ -209,7 +182,7 @@ if __name__ == '__main__':
     mycc = gccsd.GCCSD(mf)
     eris = mycc.ao2mo()
     mycc.kernel(eris=eris)
-    conv, l1, l2 = kernel(mycc, eris, mycc.t1, mycc.t2, tol=1e-8)
+    l1, l2 = mycc.solve_lambda(mycc.t1, mycc.t2, eris=eris)
     l1 = mycc.spin2spatial(l1, mycc.mo_coeff.orbspin)
     l2 = mycc.spin2spatial(l2, mycc.mo_coeff.orbspin)
     print(lib.finger(l1[0]) --0.0030030170069977758)
@@ -220,7 +193,7 @@ if __name__ == '__main__':
     print(abs(l2[1]-l2[1].transpose(1,0,2,3)-l2[0]).max())
     print(abs(l2[1]-l2[1].transpose(0,1,3,2)-l2[0]).max())
 
-    from pyscf.cc import ccsd, ccsd_lambda
+    from pyscf.cc import ccsd
     mycc0 = ccsd.CCSD(mf0)
     eris0 = mycc0.ao2mo()
     mycc0.kernel(eris=eris0)

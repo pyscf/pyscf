@@ -730,22 +730,20 @@ def eomsf_ccsd_matvec(eom, vector, imds=None):
 
     eom._cc.direct = False
     fakeri.mo_coeff = (eris.mo_coeff[0], eris.mo_coeff[0])
-    fakeri.vvvv = eris.vvvv
+    fakeri.vvVV = eris.vvvv
     tau2baaa *= .5
     Hr2baaa += eom._cc._add_vvVV(None, tau2baaa, eris)
 
     fakeri.mo_coeff = (eris.mo_coeff[1], eris.mo_coeff[1])
-    fakeri.vvvv = eris.VVVV
+    fakeri.vvVV = eris.VVVV
     tau2abbb *= .5
     Hr2abbb += eom._cc._add_vvVV(None, tau2abbb, fakeri)
-
-    fakeri.mo_coeff = eris.mo_coeff
-    fakeri.vvvv = eris.vvVV
-    tau2bbab *= .5
-    Hr2bbab += eom._cc._add_vvVV(None, tau2bbab, fakeri)
-    tau2aaba = tau2aaba.transpose(0,1,3,2)*.5
-    Hr2aaba += eom._cc._add_vvVV(None, tau2aaba, fakeri).transpose(0,1,3,2)
     fakeri = None
+
+    tau2bbab *= .5
+    Hr2bbab += eom._cc._add_vvVV(None, tau2bbab, eris)
+    tau2aaba = tau2aaba.transpose(0,1,3,2)*.5
+    Hr2aaba += eom._cc._add_vvVV(None, tau2aaba, eris).transpose(0,1,3,2)
 
     Hr2baaa = Hr2baaa - Hr2baaa.transpose(0,1,3,2)
     Hr2bbab = Hr2bbab - Hr2bbab.transpose(1,0,2,3)

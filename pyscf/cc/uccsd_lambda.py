@@ -4,13 +4,9 @@
 #
 
 import time
-import ctypes
-import tempfile
 from functools import reduce
 import numpy
-import h5py
 from pyscf import lib
-from pyscf import ao2mo
 from pyscf.lib import logger
 from pyscf.cc import uccsd
 from pyscf.cc import ccsd_lambda
@@ -134,6 +130,16 @@ def make_intermediates(mycc, t1, t2, eris):
     wOOVO += OVOO.conj().transpose(3,2,1,0) * .5
     wooVO += OVoo.conj().transpose(3,2,1,0)
     wOOvo += ovOO.conj().transpose(3,2,1,0)
+    woovo -= einsum('iclk,jlbc->ikbj', ovoo, t2aa)
+    woovo += einsum('LCik,jLbC->ikbj', OVoo, t2ab)
+    wOOVO -= einsum('iclk,jlbc->ikbj', OVOO, t2bb)
+    wOOVO += einsum('lcIK,lJcB->IKBJ', ovOO, t2ab)
+    wooVO -= einsum('iclk,lJcB->ikBJ', ovoo, t2ab)
+    wooVO += einsum('LCik,JLBC->ikBJ', OVoo, t2bb)
+    wooVO -= einsum('icLK,jLcB->ijBK', ovOO, t2ab)
+    wOOvo -= einsum('ICLK,jLbC->IKbj', OVOO, t2ab)
+    wOOvo += einsum('lcIK,jlbc->IKbj', ovOO, t2aa)
+    wOOvo -= einsum('IClk,lJbC->IJbk', OVoo, t2ab)
 
     wvvvo  = einsum('jack,jb->back', v4ovvo, t1a)
     wVVVO  = einsum('jack,jb->back', v4OVVO, t1b)
@@ -238,23 +244,24 @@ def make_intermediates(mycc, t1, t2, eris):
     class _IMDS: pass
     imds = _IMDS()
     imds.ftmp = lib.H5TmpFile()
-    imds.woooo = imds.ftmp.create_dataset('woooo', (nocca,nocca,nocca,nocca), 'f8')
-    imds.wooOO = imds.ftmp.create_dataset('wooOO', (nocca,nocca,noccb,noccb), 'f8')
-    imds.wOOOO = imds.ftmp.create_dataset('wOOOO', (noccb,noccb,noccb,noccb), 'f8')
-    imds.wovvo = imds.ftmp.create_dataset('wovvo', (nocca,nvira,nvira,nocca), 'f8')
-    imds.wOVVO = imds.ftmp.create_dataset('wOVVO', (noccb,nvirb,nvirb,noccb), 'f8')
-    imds.wovVO = imds.ftmp.create_dataset('wovVO', (nocca,nvira,nvirb,noccb), 'f8')
-    imds.wOVvo = imds.ftmp.create_dataset('wOVvo', (noccb,nvirb,nvira,nocca), 'f8')
-    imds.woVVo = imds.ftmp.create_dataset('woVVo', (nocca,nvirb,nvirb,nocca), 'f8')
-    imds.wOvvO = imds.ftmp.create_dataset('wOvvO', (noccb,nvira,nvira,noccb), 'f8')
-    imds.woovo = imds.ftmp.create_dataset('woovo', (nocca,nocca,nvira,nocca), 'f8')
-    imds.wOOVO = imds.ftmp.create_dataset('wOOVO', (noccb,noccb,nvirb,noccb), 'f8')
-    imds.wOOvo = imds.ftmp.create_dataset('wOOvo', (noccb,noccb,nvira,nocca), 'f8')
-    imds.wooVO = imds.ftmp.create_dataset('wooVO', (nocca,nocca,nvirb,noccb), 'f8')
-    imds.wvvvo = imds.ftmp.create_dataset('wvvvo', (nvira,nvira,nvira,nocca), 'f8')
-    imds.wVVVO = imds.ftmp.create_dataset('wVVVO', (nvirb,nvirb,nvirb,noccb), 'f8')
-    imds.wVVvo = imds.ftmp.create_dataset('wVVvo', (nvirb,nvirb,nvira,nocca), 'f8')
-    imds.wvvVO = imds.ftmp.create_dataset('wvvVO', (nvira,nvira,nvirb,noccb), 'f8')
+    dtype = numpy.result_type(t2ab, eris.vvvv).char
+    imds.woooo = imds.ftmp.create_dataset('woooo', (nocca,nocca,nocca,nocca), dtype)
+    imds.wooOO = imds.ftmp.create_dataset('wooOO', (nocca,nocca,noccb,noccb), dtype)
+    imds.wOOOO = imds.ftmp.create_dataset('wOOOO', (noccb,noccb,noccb,noccb), dtype)
+    imds.wovvo = imds.ftmp.create_dataset('wovvo', (nocca,nvira,nvira,nocca), dtype)
+    imds.wOVVO = imds.ftmp.create_dataset('wOVVO', (noccb,nvirb,nvirb,noccb), dtype)
+    imds.wovVO = imds.ftmp.create_dataset('wovVO', (nocca,nvira,nvirb,noccb), dtype)
+    imds.wOVvo = imds.ftmp.create_dataset('wOVvo', (noccb,nvirb,nvira,nocca), dtype)
+    imds.woVVo = imds.ftmp.create_dataset('woVVo', (nocca,nvirb,nvirb,nocca), dtype)
+    imds.wOvvO = imds.ftmp.create_dataset('wOvvO', (noccb,nvira,nvira,noccb), dtype)
+    imds.woovo = imds.ftmp.create_dataset('woovo', (nocca,nocca,nvira,nocca), dtype)
+    imds.wOOVO = imds.ftmp.create_dataset('wOOVO', (noccb,noccb,nvirb,noccb), dtype)
+    imds.wOOvo = imds.ftmp.create_dataset('wOOvo', (noccb,noccb,nvira,nocca), dtype)
+    imds.wooVO = imds.ftmp.create_dataset('wooVO', (nocca,nocca,nvirb,noccb), dtype)
+    imds.wvvvo = imds.ftmp.create_dataset('wvvvo', (nvira,nvira,nvira,nocca), dtype)
+    imds.wVVVO = imds.ftmp.create_dataset('wVVVO', (nvirb,nvirb,nvirb,noccb), dtype)
+    imds.wVVvo = imds.ftmp.create_dataset('wVVvo', (nvirb,nvirb,nvira,nocca), dtype)
+    imds.wvvVO = imds.ftmp.create_dataset('wvvVO', (nvira,nvira,nvirb,noccb), dtype)
 
     imds.woooo[:] = woooo
     imds.wOOOO[:] = wOOOO
@@ -317,7 +324,10 @@ def update_lambda(mycc, t1, t2, l1, l2, eris, imds):
     mOO+= einsum('kIcD,kJcD->IJ', l2ab, t2ab)
 
     #m3 = numpy.einsum('ijcd,cdab->ijab', l2, eris.vvvv) * .5
-    m3aa, m3ab, m3bb = mycc._add_vvvv(None, (l2aa,l2ab,l2bb), eris)
+    m3aa, m3ab, m3bb = mycc._add_vvvv(None, (l2aa.conj(),l2ab.conj(),l2bb.conj()), eris)
+    m3aa = m3aa.conj()
+    m3ab = m3ab.conj()
+    m3bb = m3bb.conj()
     m3aa += numpy.einsum('klab,ikjl->ijab', l2aa, numpy.asarray(imds.woooo))
     m3bb += numpy.einsum('klab,ikjl->ijab', l2bb, numpy.asarray(imds.wOOOO))
     m3ab += numpy.einsum('kLaB,ikJL->iJaB', l2ab, numpy.asarray(imds.wooOO))
@@ -524,23 +534,6 @@ def update_lambda(mycc, t1, t2, l1, l2, eris, imds):
     u1b -= numpy.einsum('ik,ka->ia', mOO, tmp)
     u1b -= numpy.einsum('ca,ic->ia', mVV, tmp)
 
-    tmp  = einsum('iclk,jlbc->jkib', ovoo, t2aa)
-    tmp -= einsum('LCik,jLbC->jkib', OVoo, t2ab)
-    u1a += einsum('kjab,jkib->ia', l2aa, tmp)
-    tmp  = einsum('iclk,lJcB->JkiB', ovoo, t2ab)
-    tmp -= einsum('LCik,JLBC->JkiB', OVoo, t2bb)
-    u1a += einsum('kJaB,JkiB->ia', l2ab, tmp)
-    tmp  = einsum('icLK,jLcB->jKiB', ovOO, t2ab)
-    u1a += einsum('jKaB,jKiB->ia', l2ab, tmp)
-    tmp  = einsum('iclk,jlbc->jkib', OVOO, t2bb)
-    tmp -= einsum('lcIK,lJcB->JKIB', ovOO, t2ab)
-    u1b += einsum('kjab,jkib->ia', l2bb, tmp)
-    tmp  = einsum('ICLK,jLbC->jKIb', OVOO, t2ab)
-    tmp -= einsum('lcIK,jlbc->jKIb', ovOO, t2aa)
-    u1b += einsum('jKbA,jKIb->IA', l2ab, tmp)
-    tmp  = einsum('IClk,lJbC->JkIb', OVoo, t2ab)
-    u1b += einsum('kJbA,JkIb->IA', l2ab, tmp)
-
     eia = lib.direct_sum('i-j->ij', fooa.diagonal(), fvva.diagonal())
     eIA = lib.direct_sum('i-j->ij', foob.diagonal(), fvvb.diagonal())
     u1a /= eia
@@ -563,51 +556,6 @@ if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
     from pyscf.cc import gccsd
-    from pyscf.cc import gccsd_lambda
-
-    mol = gto.Mole()
-    mol.atom = [
-        [8 , (0. , 0.     , 0.)],
-        [1 , (0. , -0.757 , 0.587)],
-        [1 , (0. , 0.757  , 0.587)]]
-    mol.basis = '631g'
-    mol.spin = 2
-    mol.build()
-    mf = scf.UHF(mol).run()
-    #mf.__dict__.update(scf.chkfile.load('h2o1.chk', 'scf'))
-    mycc = uccsd.UCCSD(mf)
-    eris = mycc.ao2mo()
-    nocca, noccb = 6,4
-    nmo = mol.nao_nr()
-    nvira,nvirb = nmo-nocca, nmo-noccb
-    numpy.random.seed(9)
-    t1 = [numpy.random.random((nocca,nvira))-.9,
-          numpy.random.random((noccb,nvirb))-.9]
-    l1 = [numpy.random.random((nocca,nvira))-.9,
-          numpy.random.random((noccb,nvirb))-.9]
-    t2 = [numpy.random.random((nocca,nocca,nvira,nvira))-.9,
-          numpy.random.random((nocca,noccb,nvira,nvirb))-.9,
-          numpy.random.random((noccb,noccb,nvirb,nvirb))-.9]
-    t2[0] = t2[0] - t2[0].transpose(1,0,2,3)
-    t2[0] = t2[0] - t2[0].transpose(0,1,3,2)
-    t2[2] = t2[2] - t2[2].transpose(1,0,2,3)
-    t2[2] = t2[2] - t2[2].transpose(0,1,3,2)
-    l2 = [numpy.random.random((nocca,nocca,nvira,nvira))-.9,
-          numpy.random.random((nocca,noccb,nvira,nvirb))-.9,
-          numpy.random.random((noccb,noccb,nvirb,nvirb))-.9]
-    l2[0] = l2[0] - l2[0].transpose(1,0,2,3)
-    l2[0] = l2[0] - l2[0].transpose(0,1,3,2)
-    l2[2] = l2[2] - l2[2].transpose(1,0,2,3)
-    l2[2] = l2[2] - l2[2].transpose(0,1,3,2)
-
-    imds = make_intermediates(mycc, t1, t2, eris)
-    l1, l2 = update_lambda(mycc, t1, t2, l1, l2, eris, imds)
-    print(lib.finger(l1[0]) --104.55975252585894)
-    print(lib.finger(l1[1]) --241.12677819375281)
-    print(lib.finger(l2[0]) --0.4957533529669417)
-    print(lib.finger(l2[1]) - 15.46423057451851 )
-    print(lib.finger(l2[2]) - 5.8430776663704407)
-    exit()
 
     mol = gto.Mole()
     mol.atom = [
@@ -621,7 +569,7 @@ if __name__ == '__main__':
     mycc = gccsd.GCCSD(scf.addons.convert_to_ghf(mf))
     eris = mycc.ao2mo()
     mycc.kernel()
-    conv, l1, l2 = gccsd_lambda.kernel(mycc, eris, mycc.t1, mycc.t2, tol=1e-8)
+    l1, l2 = mycc.solve_lambda(mycc.t1, mycc.t2, eris=eris)
     l1ref = mycc.spin2spatial(l1, mycc.mo_coeff.orbspin)
     l2ref = mycc.spin2spatial(l2, mycc.mo_coeff.orbspin)
 
