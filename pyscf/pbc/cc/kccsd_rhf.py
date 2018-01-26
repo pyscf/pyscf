@@ -1088,7 +1088,7 @@ class _IMDS:
         log = logger.Logger(self.stdout, self.verbose)
 
         t1,t2,eris = self.t1, self.t2, self.eris
-        kconserv = self.khelper.kconserv
+        kconserv = self.kconserv
         self.Loo = imd.Loo(t1,t2,eris,kconserv)
         self.Lvv = imd.Lvv(t1,t2,eris,kconserv)
         self.Fov = imd.cc_Fov(t1,t2,eris,kconserv)
@@ -1100,7 +1100,7 @@ class _IMDS:
         log = logger.Logger(self.stdout, self.verbose)
 
         t1,t2,eris = self.t1, self.t2, self.eris
-        kconserv = self.khelper.kconserv
+        kconserv = self.kconserv
         # 2 virtuals
         self.Wovov = imd.Wovov(t1,t2,eris,kconserv)
         self.Wovvo = imd.Wovvo(t1,t2,eris,kconserv)
@@ -1118,7 +1118,7 @@ class _IMDS:
         log = logger.Logger(self.stdout, self.verbose)
 
         t1,t2,eris = self.t1, self.t2, self.eris
-        kconserv = self.khelper.kconserv
+        kconserv = self.kconserv
 
         # 0 or 1 virtuals
         if ip_partition != 'mp':
@@ -1138,7 +1138,7 @@ class _IMDS:
         log = logger.Logger(self.stdout, self.verbose)
 
         t1,t2,eris = self.t1, self.t2, self.eris
-        kconserv = self.khelper.kconserv
+        kconserv = self.kconserv
 
         # 3 or 4 virtuals
         self.Wvovv = imd.Wvovv(t1,t2,eris,kconserv)
