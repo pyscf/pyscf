@@ -92,25 +92,27 @@ def make_intermediates(mycc, t1, t2, eris):
     wovvo-= einsum('ljkb,lc->jcbk', eris.ooov, t1)
     wovvo+= einsum('jcbd,kd->jcbk', eris.ovvv, t1)
 
-    woovo = einsum('icdb,kjbd->kjci', eris.ovvv, tau) * .25
-    woovo+= numpy.einsum('jkic->kjci', numpy.asarray(eris.ooov).conj()) * .5
-    woovo+= einsum('icbk,jb->kjci', v4, t1)
+    wovoo = einsum('icdb,jkdb->icjk', eris.ovvv, tau) * .25
+    wovoo+= numpy.einsum('jkic->icjk', numpy.asarray(eris.ooov).conj()) * .5
+    wovoo+= einsum('icbk,jb->icjk', v4, t1)
+    wovoo-= einsum('lijb,klcb->icjk', eris.ooov, t2)
 
-    wovvv = einsum('jlka,jlbc->kbca', eris.ooov, tau) * .25
-    wovvv-= numpy.einsum('jacb->jbca', numpy.asarray(eris.ovvv).conj()) * .5
-    wovvv+= einsum('jcak,jb->kbca', v4, t1)
+    wvvvo = einsum('jcak,jb->bcak', v4, t1)
+    wvvvo+= einsum('jlka,jlbc->bcak', eris.ooov, tau) * .25
+    wvvvo-= numpy.einsum('jacb->bcaj', numpy.asarray(eris.ovvv).conj()) * .5
+    wvvvo+= einsum('kbad,jkcd->bcaj', eris.ovvv, t2)
 
     class _IMDS: pass
     imds = _IMDS()
     imds.ftmp = lib.H5TmpFile()
     imds.woooo = imds.ftmp.create_dataset('woooo', (nocc,nocc,nocc,nocc), 'f8')
     imds.wovvo = imds.ftmp.create_dataset('wovvo', (nocc,nvir,nvir,nocc), 'f8')
-    imds.woovo = imds.ftmp.create_dataset('woovo', (nocc,nocc,nvir,nocc), 'f8')
-    imds.wovvv = imds.ftmp.create_dataset('wovvv', (nocc,nvir,nvir,nvir), 'f8')
+    imds.wovoo = imds.ftmp.create_dataset('wovoo', (nocc,nvir,nocc,nocc), 'f8')
+    imds.wvvvo = imds.ftmp.create_dataset('wvvvo', (nvir,nvir,nvir,nocc), 'f8')
     imds.woooo[:] = woooo
     imds.wovvo[:] = wovvo
-    imds.woovo[:] = woovo
-    imds.wovvv[:] = wovvv
+    imds.wovoo[:] = wovoo
+    imds.wvvvo[:] = wvvvo
     imds.v1 = v1
     imds.v2 = v2
     imds.w3 = w3
@@ -163,8 +165,8 @@ def update_lambda(mycc, t1, t2, l1, l2, eris, imds):
     l1new += einsum('jb,ibaj->ia', l1, eris.ovvo)
     l1new += einsum('ib,ba->ia', l1, imds.v1)
     l1new -= einsum('ja,ij->ia', l1, imds.v2)
-    l1new -= einsum('kjca,kjci->ia', l2, imds.woovo)
-    l1new -= einsum('ikbc,kbca->ia', l2, imds.wovvv)
+    l1new -= einsum('kjca,icjk->ia', l2, imds.wovoo)
+    l1new -= einsum('ikbc,bcak->ia', l2, imds.wvvvo)
     l1new += einsum('ijab,jb->ia', m3, t1)
     l1new += einsum('jiba,bj->ia', l2, imds.w3)
     tmp =(t1 + einsum('kc,kjcb->jb', l1, t2)
@@ -176,11 +178,6 @@ def update_lambda(mycc, t1, t2, l1, l2, eris, imds):
     tmp = fov - einsum('kjba,jb->ka', oovv, t1)
     l1new -= numpy.einsum('ik,ka->ia', mij, tmp)
     l1new -= numpy.einsum('ca,ic->ia', mba, tmp)
-
-    tmp = einsum('kcad,jkbd->jacb', eris.ovvv, t2)
-    l1new -= einsum('ijcb,jacb->ia', l2, tmp)
-    tmp = einsum('likc,jlbc->jkib', eris.ooov, t2)
-    l1new += einsum('kjab,jkib->ia', l2, tmp)
 
     mo_e = eris.fock.diagonal().real
     eia = lib.direct_sum('i-j->ij', mo_e[:nocc], mo_e[nocc:])

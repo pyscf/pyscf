@@ -218,14 +218,17 @@ def _get_ovov(eris):
         return np.asarray(eris.ovvo).transpose(0,1,3,2)
 
 def _get_ovvv(eris, *slices):
-    if len(eris.ovvv.shape) == 3:  # DO not use .ndim here for h5py library
+    if len(eris.ovvv.shape) == 3:  # DO NOT use .ndim here for h5py library
                                    # backward compatbility
         ovw = np.asarray(eris.ovvv[slices])
         nocc, nvir, nvir_pair = ovw.shape
+        nvir1 = int(np.sqrt(nvir_pair*2))
         ovvv = lib.unpack_tril(ovw.reshape(nocc*nvir,nvir_pair))
-        return ovvv.reshape(nocc,nvir,nvir,nvir)
+        return ovvv.reshape(nocc,nvir,nvir1,nvir1)
+    elif slices:
+        return eris.ovvv[slices]
     else:
-        return np.asarray(eris.ovvv[slices])
+        return eris.ovvv
 
 def _get_vvvv(eris):
     if eris.vvvv is None and hasattr(eris, 'vvL'):  # DF eris
@@ -237,4 +240,4 @@ def _get_vvvv(eris):
         nvir = int(np.sqrt(eris.vvvv.shape[0]*2))
         return ao2mo.restore(1, np.asarray(eris.vvvv), nvir)
     else:
-        return np.asarray(eris.vvvv)
+        return eris.vvvv

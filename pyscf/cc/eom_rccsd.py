@@ -20,9 +20,8 @@ def kernel(eom, nroots=1, koopmans=False, guess=None, left=False, imds=None,
 
     size = eom.vector_size()
     nroots = min(nroots, size)
-    if guess:
+    if guess is not None:
         user_guess = True
-        assert len(guess) == nroots
         for g in guess:
             assert g.size == size
     else:
@@ -34,14 +33,15 @@ def kernel(eom, nroots=1, koopmans=False, guess=None, left=False, imds=None,
 
     eig = lib.davidson_nosym1
     if user_guess or koopmans:
-        def pickeig(w, v, nr, envs):
+        assert len(guess) == nroots
+        def eig_close_to_init_guess(w, v, nr, envs):
             x0 = lib.linalg_helper._gen_x0(envs['v'], envs['xs'])
             s = np.dot(np.asarray(guess).conj(), np.asarray(x0).T)
             s = np.dot(s.conj().T, s).diagonal()
             idx = np.argsort(-s)[:nroots]
             idx = idx[np.argsort(w[idx])]  # sort eigenvalue w
             return w[idx].real, v[:,idx].real, idx
-        conv, es, vs = eig(matvec, guess, precond, pick=pickeig,
+        conv, es, vs = eig(matvec, guess, precond, pick=eig_close_to_init_guess,
                            tol=eom.conv_tol, max_cycle=eom.max_cycle,
                            max_space=eom.max_space, nroots=nroots, verbose=log)
     else:
