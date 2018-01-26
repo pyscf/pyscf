@@ -24,19 +24,12 @@ def init_guess_by_minao(mol, breaksym=True):
     if breaksym:
         #remove off-diagonal part of beta DM
         dmb = numpy.zeros_like(dma)
-        for b0, b1, p0, p1 in mol.offset_nr_by_atom():
+        for b0, b1, p0, p1 in mol.aoslice_by_atom():
             dmb[p0:p1,p0:p1] = dma[p0:p1,p0:p1]
     return numpy.array((dma,dmb))
 
 def init_guess_by_1e(mol, breaksym=True):
-    dm = hf.init_guess_by_1e(mol)
-    dma = dmb = dm*.5
-    if breaksym:
-        #remove off-diagonal part of beta DM
-        dmb = numpy.zeros_like(dma)
-        for b0, b1, p0, p1 in mol.offset_nr_by_atom():
-            dmb[p0:p1,p0:p1] = dma[p0:p1,p0:p1]
-    return numpy.array((dma,dmb))
+    return UHF(mol).init_guess_by_1e(mol, breaksym)
 
 def init_guess_by_atom(mol, breaksym=True):
     dm = hf.init_guess_by_atom(mol)
@@ -44,7 +37,7 @@ def init_guess_by_atom(mol, breaksym=True):
     if breaksym:
         #Add off-diagonal part of alpha DM
         dma = mol.intor('int1e_ovlp') * 1e-2
-        for b0, b1, p0, p1 in mol.offset_nr_by_atom():
+        for b0, b1, p0, p1 in mol.aoslice_by_atom():
             dma[p0:p1,p0:p1] = dmb[p0:p1,p0:p1]
     return numpy.array((dma,dmb))
 
@@ -721,7 +714,7 @@ class UHF(hf.SCF):
         if breaksym:
             #remove off-diagonal part of beta DM
             dmb = numpy.zeros_like(dma)
-            for b0, b1, p0, p1 in mol.offset_nr_by_atom():
+            for b0, b1, p0, p1 in mol.aoslice_by_atom():
                 dmb[p0:p1,p0:p1] = dma[p0:p1,p0:p1]
         return numpy.array((dma,dmb))
 
