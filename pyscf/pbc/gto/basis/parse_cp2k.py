@@ -42,13 +42,14 @@ def _parse(blines, optimize=False):
                     cl.append(bfun.pop(0))
                 basis_n[i].append(tuple(cl))
         basis.extend(basis_n)
-
-    basis = [[b for b in basis if b[0] == l] for l in range(MAXL)]
+    basis_sorted = []
+    for l in range(MAXL):
+        basis_sorted.extend([b for b in basis if b[0] == l])
 
     if optimize:
-        basis = parse_nwchem.optimize_contraction(basis)
+        basis_sorted = parse_nwchem.optimize_contraction(basis_sorted)
 
-    return basis
+    return basis_sorted
 
 BASIS_SET_DELIMITER = re.compile('# *BASIS SET.*\n')
 def search_seg(basisfile, symb):

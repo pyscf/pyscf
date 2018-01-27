@@ -193,13 +193,14 @@ def _parse(raw_basis, optimize=False):
                 basis_add[-1].append([line[0], line[2]])
             else:
                 basis_add[-1].append(line)
-
-    basis_add = [[b for b in basis_add if b[0] == l] for l in range(MAXL)]
+    basis_sorted = []
+    for l in range(MAXL):
+        basis_sorted.extend([b for b in basis_add if b[0] == l])
 
     if optimize:
-        basis_add = optimize_contraction(basis_add)
+        basis_sorted = optimize_contraction(basis_sorted)
 
-    return basis_add
+    return basis_sorted
 
 def optimize_contraction(basis):
     '''
