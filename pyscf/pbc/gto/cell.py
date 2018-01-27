@@ -434,8 +434,7 @@ def _estimate_ke_cutoff(alpha, l, c, precision=1e-8, weight=1.):
     l2fac2 = scipy.misc.factorial2(l*2+1)
     log_rest = np.log(precision*l2fac2**2*(4*alpha)**(l*2+1) / (32*np.pi**2*c**4*weight))
     Ecut = 2*alpha * (log_k0*(4*l+3) - log_rest)
-    Ecut[Ecut<0] = 1e-10
-    log_k0 = .5 * np.log(Ecut*2)
+    log_k0 = .5 * np.log(abs(Ecut)*2)
     Ecut = 2*alpha * (log_k0*(4*l+3) - log_rest)
     return Ecut.max()
 
