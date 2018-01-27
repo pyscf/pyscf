@@ -197,30 +197,36 @@ def _parse(raw_basis, optimize=False):
     basis_add = [[b for b in basis_add if b[0] == l] for l in range(MAXL)]
 
     if optimize:
-        # Optimize contraction: segment contraction -> general contraction
-        bas_l = [[] for l in range(MAXL)]
-        for b in basis_add:
-            l = b[0]
-            ec = numpy.array(b[1:]).T
-            es = ec[0]
-            cs = [c for c in ec[1:]]
-            if bas_l[l]:
-                for e_cs in bas_l[l]:
-                    if numpy.allclose(e_cs[0], es):
-                        e_cs.extend(cs)
-                        break
-                else:
-                    bas_l[l].append([es] + cs)
-            else:
-                bas_l[l].append([es] + cs)
-
-        basis_add = []
-        for l, b in enumerate(bas_l):
-            for e_cs in b:
-                b_l = [l] + numpy.array(e_cs).T.tolist()
-                basis_add.append(b_l)
+        basis_add = optimize_contraction(basis_add)
 
     return basis_add
+
+def optimize_contraction(basis):
+    '''
+    Optimize contraction: segment contraction -> general contraction
+    '''
+    bas_l = [[] for l in range(MAXL)]
+    for b in basis:
+        l = b[0]
+        ec = numpy.array(b[1:]).T
+        es = ec[0]
+        cs = [c for c in ec[1:]]
+        if bas_l[l]:
+            for e_cs in bas_l[l]:
+                if numpy.allclose(e_cs[0], es):
+                    e_cs.extend(cs)
+                    break
+            else:
+                bas_l[l].append([es] + cs)
+        else:
+            bas_l[l].append([es] + cs)
+
+    basis = []
+    for l, b in enumerate(bas_l):
+        for e_cs in b:
+            b_l = [l] + numpy.array(e_cs).T.tolist()
+            basis.append(b_l)
+    return basis
 
 def _parse_ecp(raw_ecp):
     ecp_add = []

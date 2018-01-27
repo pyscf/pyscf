@@ -6,10 +6,11 @@
 #
 
 import re
+from pyscf.gto.basis import parse_nwchem
 
 MAXL = 8
 
-def parse(string):
+def parse(string, optimize=False):
     '''Parse the basis text which is in CP2K format, return an internal
     basis format which can be assigned to :attr:`Mole.basis`
     Lines started with # are ignored.
@@ -19,12 +20,12 @@ def parse(string):
         x = dat.split('#')[0].strip()
         if (x and not x.startswith('END') and not x.startswith('BASIS')):
             bastxt.append(x)
-    return _parse(bastxt)
+    return _parse(bastxt, optimize)
 
-def load(basisfile, symb):
-    return _parse(search_seg(basisfile, symb))
+def load(basisfile, symb, optimize=False):
+    return _parse(search_seg(basisfile, symb), optimize)
 
-def _parse(blines):
+def _parse(blines, optimize=False):
     header_ln = blines.pop(0)
     nsets = int(blines.pop(0))
     basis = []
@@ -41,10 +42,13 @@ def _parse(blines):
                     cl.append(bfun.pop(0))
                 basis_n[i].append(tuple(cl))
         basis.extend(basis_n)
-    bsort = []
-    for l in range(MAXL):
-        bsort.extend([b for b in basis if b[0] == l])
-    return bsort
+
+    basis = [[b for b in basis if b[0] == l] for l in range(MAXL)]
+
+    if optimize:
+        basis = parse_nwchem.optimize_contraction(basis)
+
+    return basis
 
 BASIS_SET_DELIMITER = re.compile('# *BASIS SET.*\n')
 def search_seg(basisfile, symb):
