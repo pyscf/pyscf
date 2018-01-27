@@ -8,8 +8,8 @@
 import re
 import numpy
 
-MAXL = 12
-SPDF = ('S', 'P', 'D', 'F', 'G', 'H', 'I', 'K', 'L', 'M', 'O', 'P')
+MAXL = 10
+SPDF = ('S', 'P', 'D', 'F', 'G', 'H', 'I', 'K', 'L', 'M')
 MAPSPDF = {'S': 0,
            'P': 1,
            'D': 2,
@@ -20,8 +20,6 @@ MAPSPDF = {'S': 0,
            'K': 7,
            'L': 8,
            'M': 9,
-           'O': 10,
-           'P': 11,
           }
 
 BASIS_SET_DELIMITER = re.compile('# *BASIS SET.*\n')
