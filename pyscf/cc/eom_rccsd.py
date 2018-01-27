@@ -49,9 +49,13 @@ def kernel(eom, nroots=1, koopmans=False, guess=None, left=False, imds=None,
                            tol=eom.conv_tol, max_cycle=eom.max_cycle,
                            max_space=eom.max_space, nroots=nroots, verbose=log)
 
-    for n, en, vn, convn in zip(range(nroots), es, vs, conv):
-        logger.info(eom, 'EOM-CCSD root %d E = %.16g  conv = %s', n, en, convn)
-    log.timer('EOM-CCSD', *cput0)
+    if eom.verbose >= logger.INFO:
+        for n, en, vn, convn in zip(range(nroots), es, vs, conv):
+            r1, r2 = eom.vector_to_amplitudes(vn)
+            qp_weight = np.linalg.norm(np.hstack(r1))**2
+            logger.info(eom, 'EOM-CCSD root %d E = %.16g  qpwt = %.6g  conv = %s',
+                        n, en, qp_weight, convn)
+        log.timer('EOM-CCSD', *cput0)
     if nroots == 1:
         return conv[0], es[0].real, vs[0]
     else:

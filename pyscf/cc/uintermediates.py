@@ -1,7 +1,6 @@
-import tempfile
-import h5py
 import numpy as np
 from pyscf import lib
+from pyscf import ao2mo
 from pyscf.cc.rintermediates import _get_ovvv, _get_vvvv
 
 # Ref: Gauss and Stanton, J. Chem. Phys. 103, 3561 (1995) Table III
@@ -52,15 +51,15 @@ def _get_vvVV(eris):
         return eris.vvVV
 
     nvira = int(np.sqrt(vvVV.shape[0]*2))
-    nvirb = int(np.sqrt(vvVV.shape[2]*2))
-    vvVV1 = numpy.zeros((nvira**2,nvirb**2))
-    vtrila = numpy.tril_indices(nvira)
-    vtrilb = numpy.tril_indices(nvirb)
+    nvirb = int(np.sqrt(vvVV.shape[1]*2))
+    vvVV1 = np.zeros((nvira**2,nvirb**2))
+    vtrila = np.tril_indices(nvira)
+    vtrilb = np.tril_indices(nvirb)
     lib.takebak_2d(vvVV1, vvVV, vtrila[0]*nvira+vtrila[1], vtrilb[0]*nvirb+vtrilb[1])
     lib.takebak_2d(vvVV1, vvVV, vtrila[1]*nvira+vtrila[0], vtrilb[1]*nvirb+vtrilb[0])
     lib.takebak_2d(vvVV1, vvVV, vtrila[0]*nvira+vtrila[1], vtrilb[1]*nvirb+vtrilb[0])
     lib.takebak_2d(vvVV1, vvVV, vtrila[1]*nvira+vtrila[0], vtrilb[0]*nvirb+vtrilb[1])
-    return vvVV1
+    return vvVV1.reshape(nvira,nvira,nvirb,nvirb)
 
 def _get_VVVV(eris):
     if eris.VVVV is None and hasattr(eris, 'VVL'):  # DF eris

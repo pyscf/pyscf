@@ -6,8 +6,8 @@ from pyscf import gto
 from pyscf.cc import gccsd
 from pyscf import ao2mo
 from pyscf.cc import gccsd_rdm
+from pyscf.cc import ccsd
 from pyscf.cc import uccsd
-from pyscf.cc import addons
 
 mol = gto.Mole()
 mol.atom = [
@@ -32,40 +32,63 @@ class KnownValues(unittest.TestCase):
         gcc = gccsd.GCCSD(mf1, frozen=4)
         numpy.random.seed(9)
         mo_coeff0 = numpy.random.random(mf1.mo_coeff.shape) - .9
+        mo_coeff0[mf1.mo_coeff == 0] = 0
         mo_coeff1 = mo_coeff0.copy()
         mo_coeff1[-1,0] = 1e-12
 
         eris = gccsd._make_eris_incore(gcc, mo_coeff0)
-        self.assertAlmostEqual(lib.finger(eris.oooo), -274.88757393088122, 9)
-        self.assertAlmostEqual(lib.finger(eris.ooov),  1058.7275352964637, 9)
-        self.assertAlmostEqual(lib.finger(eris.oovv), -160.01426275786184, 9)
-        self.assertAlmostEqual(lib.finger(eris.ovov), -8691.5932754980749, 9)
-        self.assertAlmostEqual(lib.finger(eris.ovvv), -549.93089259191584, 9)
-        self.assertAlmostEqual(lib.finger(eris.vvvv), -2171.9867436901673, 9)
-
-        eris = gccsd._make_eris_incore(gcc, mo_coeff1)
-        self.assertAlmostEqual(lib.finger(eris.oooo), -274.88757393088122, 9)
-        self.assertAlmostEqual(lib.finger(eris.ooov),  1058.7275352964637, 9)
-        self.assertAlmostEqual(lib.finger(eris.oovv), -160.01426275786184, 9)
-        self.assertAlmostEqual(lib.finger(eris.ovov), -8691.5932754980749, 9)
-        self.assertAlmostEqual(lib.finger(eris.ovvv), -549.93089259191584, 9)
-        self.assertAlmostEqual(lib.finger(eris.vvvv), -2171.9867436901673, 9)
+        self.assertAlmostEqual(lib.finger(eris.oooo), -18.784809755855356, 9)
+        self.assertAlmostEqual(lib.finger(eris.ooov),  10.318635295182752, 9)
+        self.assertAlmostEqual(lib.finger(eris.oovv),  48.826269126647048, 9)
+        self.assertAlmostEqual(lib.finger(eris.ovov), -2464.0817096151195, 9)
+        self.assertAlmostEqual(lib.finger(eris.ovvv),  36.516396893446711, 9)
+        self.assertAlmostEqual(lib.finger(eris.vvvv),  309.52000351959856, 9)
 
         eris = gccsd._make_eris_outcore(gcc, mo_coeff0)
-        self.assertAlmostEqual(lib.finger(eris.oooo), -274.88757393088122, 9)
-        self.assertAlmostEqual(lib.finger(eris.ooov),  1058.7275352964637, 9)
-        self.assertAlmostEqual(lib.finger(eris.oovv), -160.01426275786184, 9)
-        self.assertAlmostEqual(lib.finger(eris.ovov), -8691.5932754980749, 9)
-        self.assertAlmostEqual(lib.finger(eris.ovvv), -549.93089259191584, 9)
-        self.assertAlmostEqual(lib.finger(eris.vvvv), -2171.9867436901673, 9)
+        self.assertAlmostEqual(lib.finger(eris.oooo), -18.784809755855356, 9)
+        self.assertAlmostEqual(lib.finger(eris.ooov),  10.318635295182752, 9)
+        self.assertAlmostEqual(lib.finger(eris.oovv),  48.826269126647048, 9)
+        self.assertAlmostEqual(lib.finger(eris.ovov), -2464.0817096151195, 9)
+        self.assertAlmostEqual(lib.finger(eris.ovvv),  36.516396893446711, 9)
+        self.assertAlmostEqual(lib.finger(eris.vvvv),  309.52000351959856, 9)
+
+        eris = gccsd._make_eris_incore(gcc, mo_coeff1)
+        self.assertAlmostEqual(lib.finger(eris.oooo), -18.784809755855356, 9)
+        self.assertAlmostEqual(lib.finger(eris.ooov),  10.318635295182752, 9)
+        self.assertAlmostEqual(lib.finger(eris.oovv),  48.826269126647048, 9)
+        self.assertAlmostEqual(lib.finger(eris.ovov), -2464.0817096151195, 9)
+        self.assertAlmostEqual(lib.finger(eris.ovvv),  36.516396893446711, 9)
+        self.assertAlmostEqual(lib.finger(eris.vvvv),  309.52000351959856, 9)
 
         eris = gccsd._make_eris_outcore(gcc, mo_coeff1)
-        self.assertAlmostEqual(lib.finger(eris.oooo), -274.88757393088122, 9)
-        self.assertAlmostEqual(lib.finger(eris.ooov),  1058.7275352964637, 9)
-        self.assertAlmostEqual(lib.finger(eris.oovv), -160.01426275786184, 9)
-        self.assertAlmostEqual(lib.finger(eris.ovov), -8691.5932754980749, 9)
-        self.assertAlmostEqual(lib.finger(eris.ovvv), -549.93089259191584, 9)
-        self.assertAlmostEqual(lib.finger(eris.vvvv), -2171.9867436901673, 9)
+        self.assertAlmostEqual(lib.finger(eris.oooo), -18.784809755855356, 9)
+        self.assertAlmostEqual(lib.finger(eris.ooov),  10.318635295182752, 9)
+        self.assertAlmostEqual(lib.finger(eris.oovv),  48.826269126647048, 9)
+        self.assertAlmostEqual(lib.finger(eris.ovov), -2464.0817096151195, 9)
+        self.assertAlmostEqual(lib.finger(eris.ovvv),  36.516396893446711, 9)
+        self.assertAlmostEqual(lib.finger(eris.vvvv),  309.52000351959856, 9)
+
+    def test_spin2spatial(self):
+        nocca, noccb = mol.nelec
+        nvira = mol.nao_nr() - nocca
+        nvirb = mol.nao_nr() - noccb
+        numpy.random.seed(1)
+        t1 = [numpy.random.random((nocca,nvira))*.1 - .1,
+              numpy.random.random((noccb,nvirb))*.1 - .1]
+        t2 = [numpy.random.random((nocca,nocca,nvira,nvira))*.1 - .1,
+              numpy.random.random((nocca,noccb,nvira,nvirb))*.1 - .1,
+              numpy.random.random((noccb,noccb,nvirb,nvirb))*.1 - .1]
+        t2[0] = t2[0] - t2[0].transpose(1,0,2,3)
+        t2[0] = t2[0] - t2[0].transpose(0,1,3,2)
+        t2[2] = t2[2] - t2[2].transpose(1,0,2,3)
+        t2[2] = t2[2] - t2[2].transpose(0,1,3,2)
+        t1u = gcc1.spin2spatial(gcc1.spatial2spin(t1))
+        t2u = gcc1.spin2spatial(gcc1.spatial2spin(t2))
+        self.assertAlmostEqual(abs(t1[0] - t1u[0]).max(), 0, 12)
+        self.assertAlmostEqual(abs(t1[1] - t1u[1]).max(), 0, 12)
+        self.assertAlmostEqual(abs(t2[0] - t2u[0]).max(), 0, 12)
+        self.assertAlmostEqual(abs(t2[1] - t2u[1]).max(), 0, 12)
+        self.assertAlmostEqual(abs(t2[2] - t2u[2]).max(), 0, 12)
 
     def test_update_amps(self):
         mol = gto.M()
@@ -148,6 +171,12 @@ class KnownValues(unittest.TestCase):
         e1+= numpy.einsum('ijkl,jilk', eri, dm2) * .5
         self.assertAlmostEqual(e1, mycc.e_tot, 7)
 
+        nocc = nocc // 2
+        nvir = nvir // 2
+        orbspin = numpy.zeros(nmo, dtype=int)
+        orbspin[1::2] = 1
+        mycc.mo_coeff = lib.tag_array(mycc.mo_coeff, orbspin=orbspin)
+
         def antisym(t2):
             t2 = t2 - t2.transpose(0,1,3,2)
             t2 = t2 - t2.transpose(1,0,2,3)
@@ -158,15 +187,15 @@ class KnownValues(unittest.TestCase):
         t2aa = antisym(numpy.random.random((nocc,nocc,nvir,nvir))*.1 - .1)
         t2bb = antisym(numpy.random.random((nocc,nocc,nvir,nvir))*.1 - .1)
         t2 = (t2aa,t2ab,t2bb)
-        t1 = addons.spatial2spin(t1)
-        t2 = addons.spatial2spin(t2)
+        t1 = mycc.spatial2spin(t1)
+        t2 = mycc.spatial2spin(t2)
         l1 = numpy.random.random((2,nocc,nvir))*.1 - .1
         l2ab = numpy.random.random((nocc,nocc,nvir,nvir))*.1 - .1
         l2aa = antisym(numpy.random.random((nocc,nocc,nvir,nvir))*.1 - .1)
         l2bb = antisym(numpy.random.random((nocc,nocc,nvir,nvir))*.1 - .1)
         l2 = (l2aa,l2ab,l2bb)
-        l1 = addons.spatial2spin(l1)
-        l2 = addons.spatial2spin(l2)
+        l1 = mycc.spatial2spin(l1)
+        l2 = mycc.spatial2spin(l2)
 
         dm1 = gccsd_rdm.make_rdm1(mycc, t1, t2, l1, l2)
         dm2 = gccsd_rdm.make_rdm2(mycc, t1, t2, l1, l2)
@@ -175,7 +204,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(dm2+dm2.transpose(2,1,0,3)       ).max(), 0, 9)
         self.assertAlmostEqual(abs(dm2+dm2.transpose(0,3,2,1)       ).max(), 0, 9)
 
-    def test_h2o_rdm(self):
+    def test_rdm_vs_uccsd(self):
         mol = gto.Mole()
         mol.atom = [
             [8 , (0. , 0.     , 0.)],
@@ -187,12 +216,15 @@ class KnownValues(unittest.TestCase):
         mol.spin = 2
         mol.build()
         mf = scf.UHF(mol).run()
-        myucc = uccsd.UCCSD(mf).run()
+        myucc = uccsd.UCCSD(mf)
+        myucc.frozen = 1
+        myucc.kernel()
         udm1 = myucc.make_rdm1()
         udm2 = myucc.make_rdm2()
 
         mf = scf.addons.convert_to_ghf(mf)
         mycc = gccsd.GCCSD(mf)
+        mycc.frozen = 2
         ecc, t1, t2 = mycc.kernel()
         l1, l2 = mycc.solve_lambda()
         dm1 = gccsd_rdm.make_rdm1(mycc, t1, t2, l1, l2)
@@ -217,11 +249,59 @@ class KnownValues(unittest.TestCase):
 
         idxa = numpy.where(orbspin == 0)[0]
         idxb = numpy.where(orbspin == 1)[0]
-        self.assertAlmostEqual(abs(dm1[idxa[:,None],idxa] - udm1[0]).max(), 0, 9)
-        self.assertAlmostEqual(abs(dm1[idxb[:,None],idxb] - udm1[1]).max(), 0, 9)
-        self.assertAlmostEqual(abs(dm2[idxa[:,None,None,None],idxa[:,None,None],idxa[:,None],idxa] - udm2[0]).max(), 0, 9)
-        self.assertAlmostEqual(abs(dm2[idxa[:,None,None,None],idxa[:,None,None],idxb[:,None],idxb] - udm2[1]).max(), 0, 9)
-        self.assertAlmostEqual(abs(dm2[idxb[:,None,None,None],idxb[:,None,None],idxb[:,None],idxb] - udm2[2]).max(), 0, 9)
+        self.assertAlmostEqual(abs(dm1[idxa[:,None],idxa] - udm1[0]).max(), 0, 7)
+        self.assertAlmostEqual(abs(dm1[idxb[:,None],idxb] - udm1[1]).max(), 0, 7)
+        self.assertAlmostEqual(abs(dm2[idxa[:,None,None,None],idxa[:,None,None],idxa[:,None],idxa] - udm2[0]).max(), 0, 7)
+        self.assertAlmostEqual(abs(dm2[idxa[:,None,None,None],idxa[:,None,None],idxb[:,None],idxb] - udm2[1]).max(), 0, 7)
+        self.assertAlmostEqual(abs(dm2[idxb[:,None,None,None],idxb[:,None,None],idxb[:,None],idxb] - udm2[2]).max(), 0, 7)
+
+    def test_rdm_vs_rccsd(self):
+        mol = gto.Mole()
+        mol.atom = [
+            [8 , (0. , 0.     , 0.)],
+            [1 , (0. , -0.757 , 0.587)],
+            [1 , (0. , 0.757  , 0.587)]]
+        mol.verbose = 0
+        mol.basis = '631g'
+        mol.build()
+        mf = scf.RHF(mol).run()
+        mycc = ccsd.CCSD(mf).run()
+        rdm1 = mycc.make_rdm1()
+        rdm2 = mycc.make_rdm2()
+
+        mf = scf.addons.convert_to_ghf(mf)
+        mycc = gccsd.GCCSD(mf).run()
+        dm1 = mycc.make_rdm1()
+        dm2 = mycc.make_rdm2()
+
+        nao = mol.nao_nr()
+        mo_a = mf.mo_coeff[:nao]
+        mo_b = mf.mo_coeff[nao:]
+        nmo = mo_a.shape[1]
+        eri = ao2mo.kernel(mf._eri, mo_a+mo_b, compact=False).reshape([nmo]*4)
+        orbspin = mf.mo_coeff.orbspin
+        sym_forbid = (orbspin[:,None] != orbspin)
+        eri[sym_forbid,:,:] = 0
+        eri[:,:,sym_forbid] = 0
+        hcore = scf.RHF(mol).get_hcore()
+        h1 = reduce(numpy.dot, (mo_a.T.conj(), hcore, mo_a))
+        h1+= reduce(numpy.dot, (mo_b.T.conj(), hcore, mo_b))
+        e1 = numpy.einsum('ij,ji', h1, dm1)
+        e1+= numpy.einsum('ijkl,jilk', eri, dm2) * .5
+        e1+= mol.energy_nuc()
+        self.assertAlmostEqual(e1, mycc.e_tot, 7)
+
+        idxa = numpy.where(orbspin == 0)[0]
+        idxb = numpy.where(orbspin == 1)[0]
+        trdm1 = dm1[idxa[:,None],idxa]
+        trdm1+= dm1[idxb[:,None],idxb]
+        trdm2 = dm2[idxa[:,None,None,None],idxa[:,None,None],idxa[:,None],idxa]
+        trdm2+= dm2[idxb[:,None,None,None],idxb[:,None,None],idxb[:,None],idxb]
+        dm2ab = dm2[idxa[:,None,None,None],idxa[:,None,None],idxb[:,None],idxb]
+        trdm2+= dm2ab
+        trdm2+= dm2ab.transpose(2,3,0,1)
+        self.assertAlmostEqual(abs(trdm1 - rdm1).max(), 0, 6)
+        self.assertAlmostEqual(abs(trdm2 - rdm2).max(), 0, 6)
 
 
 if __name__ == "__main__":

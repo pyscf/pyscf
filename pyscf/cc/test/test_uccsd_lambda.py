@@ -1,10 +1,10 @@
 import unittest
-from pyscf import ao2mo
 import numpy
 import numpy as np
 from pyscf import lib
 from pyscf import gto
 from pyscf import scf
+from pyscf import ao2mo
 from pyscf.cc import uccsd
 from pyscf.cc import addons
 from pyscf.cc import uccsd_lambda

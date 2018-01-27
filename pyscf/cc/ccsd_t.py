@@ -80,7 +80,7 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
 
     # The rest 20% memory for cache b
     mem_now = lib.current_memory()[0]
-    max_memory = max(2000, mycc.max_memory - mem_now)
+    max_memory = max(0, mycc.max_memory - mem_now)
     bufsize = max(1, (max_memory*1e6/8-nocc**3*100)*.7/(nocc*nmo))
     log.debug('max_memory %d MB (%d MB in use)', max_memory, mem_now)
     for a0, a1 in reversed(list(lib.prange_tril(0, nvir, bufsize))):
@@ -126,7 +126,7 @@ def _sort_eri(mycc, eris, nocc, nvir, vvop, log):
     v_sorted = _irrep_argsort(orbsym[nocc:])
     vrank = numpy.argsort(v_sorted)
 
-    max_memory = max(2000, mycc.max_memory - lib.current_memory()[0])
+    max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
     max_memory = min(8000, max_memory*.9)
     blksize = min(nvir, max(16, int(max_memory*1e6/8/(nvir*nocc*nmo))))
     with lib.call_in_background(vvop.__setitem__) as save:

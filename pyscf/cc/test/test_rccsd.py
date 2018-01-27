@@ -9,6 +9,7 @@ from pyscf import gto, lib
 from pyscf import scf, dft
 from pyscf import cc
 from pyscf import ao2mo
+from pyscf import mp
 from pyscf.cc import rccsd
 
 mol = gto.Mole()
@@ -48,6 +49,11 @@ class KnownValues(unittest.TestCase):
     def test_ccsd_t(self):
         e = mycc.ccsd_t()
         self.assertAlmostEqual(e, -0.0009964234049929792, 10)
+
+    def test_mbpt2(self):
+        e = mycc.kernel(mbpt2=True)[0]
+        #emp2 = mp.MP2(mf).kernel()[0]
+        self.assertAlmostEqual(e, -0.12886859466216125, 10)
 
     def test_ao_direct(self):
         cc1 = cc.CCSD(mf)

@@ -1,13 +1,14 @@
 import unittest
-from pyscf import ao2mo
 import numpy
 import numpy as np
 from pyscf import lib
 from pyscf import gto
 from pyscf import scf
+from pyscf import ao2mo
 from pyscf.cc import rccsd
 from pyscf.cc import addons
 from pyscf.cc import rccsd_lambda
+from pyscf.cc import ccsd_rdm
 from pyscf.cc import gccsd, gccsd_lambda
 
 mol = gto.Mole()
@@ -127,6 +128,112 @@ class KnownValues(unittest.TestCase):
         l2ab = l2new[0::2,1::2,0::2,1::2]
         self.assertAlmostEqual(abs(l2ab-l2new_ref).max(), 0, 9)
         self.assertAlmostEqual(abs(l2ab-l2ab.transpose(1,0,2,3) - l2aa).max(), 0, 9)
+
+    def test_rdm(self):
+        mycc = rccsd.RCCSD(mf)
+        mycc.frozen = 1
+        mycc.kernel()
+        dm1 = mycc.make_rdm1()
+        dm2 = mycc.make_rdm2()
+        h1 = reduce(numpy.dot, (mf.mo_coeff.T, mf.get_hcore(), mf.mo_coeff))
+        nmo = mf.mo_coeff.shape[1]
+        eri = ao2mo.restore(1, ao2mo.kernel(mf._eri, mf.mo_coeff), nmo)
+        e1 = numpy.einsum('ij,ji', h1, dm1)
+        e1+= numpy.einsum('ijkl,jilk', eri, dm2) * .5
+        e1+= mol.energy_nuc()
+        self.assertAlmostEqual(e1, mycc.e_tot, 7)
+
+    def test_rdm_trace(self):
+        mycc = rccsd.RCCSD(mf)
+        numpy.random.seed(2)
+        nocc = 5
+        nmo = 12
+        nvir = nmo - nocc
+        eri0 = numpy.random.random((nmo,nmo,nmo,nmo))
+        eri0 = ao2mo.restore(1, ao2mo.restore(8, eri0, nmo), nmo)
+        fock0 = numpy.random.random((nmo,nmo))
+        fock0 = fock0 + fock0.T + numpy.diag(range(nmo))*2
+        t1 = numpy.random.random((nocc,nvir))
+        t2 = numpy.random.random((nocc,nocc,nvir,nvir))
+        t2 = t2 + t2.transpose(1,0,3,2)
+        l1 = numpy.random.random((nocc,nvir))
+        l2 = numpy.random.random((nocc,nocc,nvir,nvir))
+        l2 = l2 + l2.transpose(1,0,3,2)
+        h1 = fock0 - (numpy.einsum('kkpq->pq', eri0[:nocc,:nocc])*2
+                    - numpy.einsum('pkkq->pq', eri0[:,:nocc,:nocc]))
+
+        eris = lambda:None
+        eris.oooo = eri0[:nocc,:nocc,:nocc,:nocc].copy()
+        eris.ooov = eri0[:nocc,:nocc,:nocc,nocc:].copy()
+        eris.ovoo = eri0[:nocc,nocc:,:nocc,:nocc].copy()
+        eris.oovv = eri0[:nocc,:nocc,nocc:,nocc:].copy()
+        eris.ovov = eri0[:nocc,nocc:,:nocc,nocc:].copy()
+        eris.ovvo = eri0[:nocc,nocc:,nocc:,:nocc].copy()
+        eris.ovvv = eri0[:nocc,nocc:,nocc:,nocc:].copy()
+        eris.vvvv = eri0[nocc:,nocc:,nocc:,nocc:].copy()
+        eris.fock = fock0
+
+        doo, dov, dvo, dvv = ccsd_rdm._gamma1_intermediates(mycc, t1, t2, l1, l2)
+        self.assertAlmostEqual((numpy.einsum('ij,ij', doo, fock0[:nocc,:nocc]))*2, -20166.329861034799, 8)
+        self.assertAlmostEqual((numpy.einsum('ab,ab', dvv, fock0[nocc:,nocc:]))*2,  58078.964019246778, 8)
+        self.assertAlmostEqual((numpy.einsum('ia,ia', dov, fock0[:nocc,nocc:]))*2, -74994.356886784764, 8)
+        self.assertAlmostEqual((numpy.einsum('ai,ai', dvo, fock0[nocc:,:nocc]))*2,  34.010188025702391, 9)
+
+        fdm2 = lib.H5TmpFile()
+        dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = \
+                ccsd_rdm._gamma2_outcore(mycc, t1, t2, l1, l2, fdm2, True)
+        self.assertAlmostEqual(lib.finger(numpy.array(dovov)), -14384.907042073517, 9)
+        self.assertAlmostEqual(lib.finger(numpy.array(dvvvv)), -25.374007033024839, 9)
+        self.assertAlmostEqual(lib.finger(numpy.array(doooo)),  60.114594698129963, 9)
+        self.assertAlmostEqual(lib.finger(numpy.array(doovv)), -79.176348067958401, 9)
+        self.assertAlmostEqual(lib.finger(numpy.array(dovvo)),   9.864134457251815, 9)
+        self.assertAlmostEqual(lib.finger(numpy.array(dovvv)), -421.90333700061342, 9)
+        self.assertAlmostEqual(lib.finger(numpy.array(dooov)), -592.66863759586136, 9)
+        fdm2 = None
+
+        dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = \
+                ccsd_rdm._gamma2_intermediates(mycc, t1, t2, l1, l2)
+        self.assertAlmostEqual(lib.finger(numpy.array(dovov)), -14384.907042073517, 9)
+        self.assertAlmostEqual(lib.finger(numpy.array(dvvvv)),  45.872344902116758, 9)
+        self.assertAlmostEqual(lib.finger(numpy.array(doooo)),  60.114594698129963, 9)
+        self.assertAlmostEqual(lib.finger(numpy.array(doovv)), -79.176348067958401, 9)
+        self.assertAlmostEqual(lib.finger(numpy.array(dovvo)),   9.864134457251815, 9)
+        self.assertAlmostEqual(lib.finger(numpy.array(dovvv)), -421.90333700061342, 9)
+        self.assertAlmostEqual(lib.finger(numpy.array(dooov)), -592.66863759586136, 9)
+
+        self.assertAlmostEqual(numpy.einsum('kilj,kilj', doooo, eris.oooo)*2, 15939.9007625418, 7)
+        self.assertAlmostEqual(numpy.einsum('acbd,acbd', dvvvv, eris.vvvv)*2, 37581.823919588 , 7)
+        self.assertAlmostEqual(numpy.einsum('jkia,jkia', dooov, eris.ooov)*2, 128470.009687716, 7)
+        self.assertAlmostEqual(numpy.einsum('icba,icba', dovvv, eris.ovvv)*2,-166794.225195056, 7)
+        self.assertAlmostEqual(numpy.einsum('iajb,iajb', dovov, eris.ovov)*2,-719279.812916893, 7)
+        self.assertAlmostEqual(numpy.einsum('jbai,jbia', dovvo, eris.ovov)*2+
+                               numpy.einsum('jiab,jiba', doovv, eris.oovv)*2,-53634.0012286654, 7)
+
+        dm1 = ccsd_rdm.make_rdm1(mycc, t1, t2, l1, l2)
+        dm2 = ccsd_rdm.make_rdm2(mycc, t1, t2, l1, l2)
+        e2 =(numpy.einsum('ijkl,ijkl', doooo, eris.oooo)*2
+            +numpy.einsum('acbd,acbd', dvvvv, eris.vvvv)*2
+            +numpy.einsum('jkia,jkia', dooov, eris.ooov)*2
+            +numpy.einsum('icba,icba', dovvv, eris.ovvv)*2
+            +numpy.einsum('iajb,iajb', dovov, eris.ovov)*2
+            +numpy.einsum('jbai,jbia', dovvo, eris.ovov)*2
+            +numpy.einsum('ijab,ijab', doovv, eris.oovv)*2
+            +numpy.einsum('ij,ij', doo, fock0[:nocc,:nocc])*2
+            +numpy.einsum('ia,ia', dov, fock0[:nocc,nocc:])*2
+            +numpy.einsum('ai,ai', dvo, fock0[nocc:,:nocc])*2
+            +numpy.einsum('ab,ab', dvv, fock0[nocc:,nocc:])*2
+            +fock0[:nocc].trace()*2
+            -numpy.einsum('kkpq->pq', eri0[:nocc,:nocc,:nocc,:nocc]).trace()*2
+            +numpy.einsum('pkkq->pq', eri0[:nocc,:nocc,:nocc,:nocc]).trace())
+        self.assertAlmostEqual(e2, -794721.197459942, 8)
+        self.assertAlmostEqual(numpy.einsum('pqrs,pqrs', dm2, eri0)*.5 +
+                               numpy.einsum('pq,pq', dm1, h1), e2, 9)
+
+        self.assertAlmostEqual(abs(dm2-dm2.transpose(1,0,3,2)).max(), 0, 9)
+        self.assertAlmostEqual(abs(dm2-dm2.transpose(2,3,0,1)).max(), 0, 9)
+
+        d1 = numpy.einsum('kkpq->pq', dm2) / 9
+        self.assertAlmostEqual(abs(d1-dm1).max(), 0, 9)
 
 
 if __name__ == "__main__":

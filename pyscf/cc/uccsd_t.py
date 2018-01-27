@@ -52,7 +52,7 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
 
     et_sum = [0]
     mem_now = lib.current_memory()[0]
-    max_memory = max(2000, mycc.max_memory - mem_now)
+    max_memory = max(0, mycc.max_memory - mem_now)
     # aaa
     bufsize = max(1, int((max_memory*1e6/8-nocca**3*100)*.7/(nocca*nmoa)))
     log.debug('max_memory %d MB (%d MB in use)', max_memory, mem_now)
