@@ -12,7 +12,7 @@ import scipy.linalg
 
 import pyscf.lib
 
-KPT_DIFF_TOL = 1e-9
+KPT_DIFF_TOL = 1e-6
 
 def is_zero(kpt):
     return abs(np.asarray(kpt)).sum() < KPT_DIFF_TOL

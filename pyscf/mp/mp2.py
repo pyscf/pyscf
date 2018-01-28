@@ -122,9 +122,6 @@ def make_rdm2(mp, t2=None, eris=None, verbose=logger.NOTE):
         mo_energy = _mo_energy_without_core(mp, mp.mo_energy)
         eia = mo_energy[:nocc,None] - mo_energy[None,nocc:]
 
-    dm1 = make_rdm1(mp, t2, eris, verbose)
-    dm1[numpy.diag_indices(nocc0)] -= 2
-
     if not (mp.frozen is 0 or mp.frozen is None):
         nmo0 = mp.mo_occ.size
         nocc0 = numpy.count_nonzero(mp.mo_occ > 0)
@@ -133,6 +130,9 @@ def make_rdm2(mp, t2=None, eris=None, verbose=logger.NOTE):
         vidx = numpy.where(moidx & (mp.mo_occ ==0))[0]
     else:
         moidx = oidx = vidx = None
+
+    dm1 = make_rdm1(mp, t2, eris, verbose)
+    dm1[numpy.diag_indices(nocc0)] -= 2
 
     dm2 = numpy.zeros((nmo0,nmo0,nmo0,nmo0), dtype=dm1.dtype) # Chemist notation
     #dm2[:nocc,nocc:,:nocc,nocc:] = t2.transpose(0,3,1,2)*2 - t2.transpose(0,2,1,3)

@@ -17,7 +17,7 @@ mol.atom = [
     [1 , (0. , -0.757 , 0.587)],
     [1 , (0. , 0.757  , 0.587)]]
 mol.basis = '631g'
-mol.vebose = 5
+mol.verbose = 5
 mol.output = '/dev/null'
 mol.build()
 mf = scf.RHF(mol).run()
@@ -176,8 +176,8 @@ class KnownValues(unittest.TestCase):
         doo, dov, dvo, dvv = ccsd_rdm._gamma1_intermediates(mycc, t1, t2, l1, l2)
         self.assertAlmostEqual((numpy.einsum('ij,ij', doo, fock0[:nocc,:nocc]))*2, -20166.329861034799, 8)
         self.assertAlmostEqual((numpy.einsum('ab,ab', dvv, fock0[nocc:,nocc:]))*2,  58078.964019246778, 8)
-        self.assertAlmostEqual((numpy.einsum('ia,ia', dov, fock0[:nocc,nocc:]))*2, -74994.356886784764, 8)
-        self.assertAlmostEqual((numpy.einsum('ai,ai', dvo, fock0[nocc:,:nocc]))*2,  34.010188025702391, 9)
+        self.assertAlmostEqual((numpy.einsum('ai,ia', dvo, fock0[:nocc,nocc:]))*2, -74994.356886784764, 8)
+        self.assertAlmostEqual((numpy.einsum('ia,ai', dov, fock0[nocc:,:nocc]))*2,  34.010188025702391, 9)
 
         fdm2 = lib.H5TmpFile()
         dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = \
@@ -219,8 +219,8 @@ class KnownValues(unittest.TestCase):
             +numpy.einsum('jbai,jbia', dovvo, eris.ovov)*2
             +numpy.einsum('ijab,ijab', doovv, eris.oovv)*2
             +numpy.einsum('ij,ij', doo, fock0[:nocc,:nocc])*2
-            +numpy.einsum('ia,ia', dov, fock0[:nocc,nocc:])*2
-            +numpy.einsum('ai,ai', dvo, fock0[nocc:,:nocc])*2
+            +numpy.einsum('ai,ia', dvo, fock0[:nocc,nocc:])*2
+            +numpy.einsum('ia,ai', dov, fock0[nocc:,:nocc])*2
             +numpy.einsum('ab,ab', dvv, fock0[nocc:,nocc:])*2
             +fock0[:nocc].trace()*2
             -numpy.einsum('kkpq->pq', eri0[:nocc,:nocc,:nocc,:nocc]).trace()*2

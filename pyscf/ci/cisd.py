@@ -108,28 +108,28 @@ def contract(myci, civec, eris):
     t1 += numpy.einsum('ib,ab->ia', c1, fvv)
     t1 -= numpy.einsum('ja,ji->ia', c1, foo)
 
-    t2 += lib.einsum('iklj,klab->ijab', _cp(eris.oooo)*.5, c2)
+    t2 += lib.einsum('kilj,klab->ijab', _cp(eris.oooo)*.5, c2)
     t2 += lib.einsum('ijac,bc->ijab', c2, fvv)
     t2 -= lib.einsum('kj,kiba->jiba', foo, c2)
     t2 += numpy.einsum('ia,jb->ijab', c1, fov)
 
     unit = nocc*nvir**2 + nocc**2*nvir*3
-    max_memory = max(2000, myci.max_memory - lib.current_memory()[0])
-    blksize = min(nvir, max(ccsd.BLKMIN, int(max_memory/unit)))
+    max_memory = max(0, myci.max_memory - lib.current_memory()[0])
+    blksize = min(nvir, max(ccsd.BLKMIN, int(max_memory*.9e6/8/unit)))
     log.debug1('max_memory %d MB,  nocc,nvir = %d,%d  blksize = %d',
                max_memory, nocc, nvir, blksize)
     nvir_pair = nvir * (nvir+1) // 2
     for p0, p1 in lib.prange(0, nvir, blksize):
         eris_oVoV = _cp(_cp(eris.oovv[:,:,p0:p1]).transpose(0,2,1,3))
-        tmp = lib.einsum('jbkc,ikca->jiba', eris_oVoV, c2)
+        tmp = lib.einsum('kbjc,ikca->jiba', eris_oVoV, c2)
         t2[:,:,p0:p1] -= tmp*.5
         t2[:,:,p0:p1] -= tmp.transpose(1,0,2,3)
         tmp = None
 
         eris_ovvo = _cp(eris.ovvo[:,p0:p1])
         t2[:,:,p0:p1] += eris_ovvo.transpose(0,3,1,2) * (c0*.5)
-        t1[:,p0:p1] += numpy.einsum('jb,iabj->ia', c1, eris_ovvo) * 2
-        t1[:,p0:p1] -= numpy.einsum('jb,iajb->ia', c1, eris_oVoV)
+        t1 += numpy.einsum('ia,iabj->jb', c1[:,p0:p1], eris_ovvo) * 2
+        t1[:,p0:p1] -= numpy.einsum('ib,iajb->ja', c1, eris_oVoV)
 
         ovov = -.5 * eris_oVoV
         ovov += eris_ovvo.transpose(3,1,0,2)
@@ -140,17 +140,18 @@ def contract(myci, civec, eris):
             t2[:,j] += lib.einsum('ckb,ckia->iab', ovov[j], theta)
         tmp = ovov = None
 
-        t1[:,p0:p1] += numpy.einsum('aijb,jb->ia', theta, fov)
+        t1 += numpy.einsum('aijb,ia->jb', theta, fov[:,p0:p1])
 
         eris_ovoo = _cp(eris.ovoo[:,p0:p1])
         t1 -= lib.einsum('bjka,jbki->ia', theta, eris_ovoo)
-        t2[:,:,p0:p1] -= lib.einsum('jbik,ka->jiba', eris_ovoo, c1)
+        t2[:,:,p0:p1] -= lib.einsum('jbik,ka->jiba', eris_ovoo.conj(), c1)
         eris_vooo = None
 
         eris_ovvv = _cp(eris.ovvv[:,p0:p1]).reshape(-1,nvir_pair)
         eris_ovvv = lib.unpack_tril(eris_ovvv).reshape(nocc,p1-p0,nvir,nvir)
+        eris_ovvv = eris_ovvv.conj()
         t1 += lib.einsum('cjib,jcba->ia', theta, eris_ovvv)
-        t2[:,:,p0:p1] += lib.einsum('iabc,jc->ijab', eris_ovvv, c1)
+        t2[:,:,p0:p1] += lib.einsum('iacb,jc->ijab', eris_ovvv, c1)
         tmp = eris_ovvv = None
 
     #:t2 + t2.transpose(1,0,3,2)
@@ -626,8 +627,7 @@ if __name__ == '__main__':
         ['O', ( 0., 0.    , 0.   )],
         ['H', ( 0., -0.757, 0.587)],
         ['H', ( 0., 0.757 , 0.587)],]
-    mol.basis = {'H': 'sto-3g',
-                 'O': 'sto-3g',}
+    mol.basis = 'sto3g'
     mol.build()
     mf = scf.RHF(mol).run()
     myci = CISD(mf)

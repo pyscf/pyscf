@@ -171,10 +171,6 @@ def make_rdm2(mp, t2=None):
     nocca, noccb = nocca0, noccb0 = mp.nocc
     t2aa, t2ab, t2bb = t2
 
-    dm1a, dm1b = make_rdm1(mp, t2)
-    dm1a[numpy.diag_indices(nocca0)] -= 1
-    dm1b[numpy.diag_indices(noccb0)] -= 1
-
     if not (mp.frozen is 0 or mp.frozen is None):
         nmoa0 = mp.mo_occ[0].size
         nmob0 = mp.mo_occ[1].size
@@ -186,42 +182,40 @@ def make_rdm2(mp, t2=None):
         oidxb = numpy.where(moidxb & (mp.mo_occ[1] > 0))[0]
         vidxb = numpy.where(moidxb & (mp.mo_occ[1] ==0))[0]
 
-        dm2aa = numpy.zeros((nmoa0,nmoa0,nmoa0,nmoa0), dtype=dm1a.dtype)
-        dm2ab = numpy.zeros((nmoa0,nmoa0,nmob0,nmob0), dtype=dm1a.dtype)
-        dm2bb = numpy.zeros((nmob0,nmob0,nmob0,nmob0), dtype=dm1a.dtype)
+        dm2aa = numpy.zeros((nmoa0,nmoa0,nmoa0,nmoa0), dtype=t2aa.dtype)
+        dm2ab = numpy.zeros((nmoa0,nmoa0,nmob0,nmob0), dtype=t2aa.dtype)
+        dm2bb = numpy.zeros((nmob0,nmob0,nmob0,nmob0), dtype=t2aa.dtype)
 
-        dm2aa[oidxa[:,None,None,None],vidxa[:,None,None],oidxa[:,None],vidxa] = \
-                (t2aa.transpose(0,2,1,3) - t2aa.transpose(0,3,1,2)).conj() * .5
-        dm2aa[nocca0:,:nocca0,nocca0:,:nocca0] = \
-                dm2aa[:nocca0,nocca0:,:nocca0,nocca0:].transpose(1,0,3,2).conj()
+        tmp = (t2aa.transpose(0,2,1,3) - t2aa.transpose(0,3,1,2)).conj() * .5
+        dm2aa[oidxa[:,None,None,None],vidxa[:,None,None],oidxa[:,None],vidxa] = tmp
+        dm2aa[vidxa[:,None,None,None],oidxa[:,None,None],vidxa[:,None],oidxa] = tmp.conj().transpose(1,0,3,2)
 
-        dm2bb[oidxb[:,None,None,None],vidxb[:,None,None],oidxb[:,None],vidxb] = \
-                (t2bb.transpose(0,2,1,3) - t2bb.transpose(0,3,1,2)).conj() * .5
-        dm2bb[noccb0:,:noccb0,noccb0:,:noccb0] = \
-                dm2bb[:noccb0,noccb0:,:noccb0,noccb0:].transpose(1,0,3,2).conj()
+        tmp = (t2bb.transpose(0,2,1,3) - t2bb.transpose(0,3,1,2)).conj() * .5
+        dm2bb[oidxb[:,None,None,None],vidxb[:,None,None],oidxb[:,None],vidxb] = tmp
+        dm2bb[vidxb[:,None,None,None],oidxb[:,None,None],vidxb[:,None],oidxb] = tmp.conj().transpose(1,0,3,2)
 
-        dm2ab[oidxa[:,None,None,None],vidxa[:,None,None],oidxb[:,None],vidxb] = \
-                t2ab.conj().transpose(0,2,1,3)
-        dm2ab[nocca0:,:nocca0,noccb0:,:noccb0] = \
-                dm2ab[:nocca0,nocca0:,:noccb0,noccb0:].transpose(1,0,3,2).conj()
+        dm2ab[oidxa[:,None,None,None],vidxa[:,None,None],oidxb[:,None],vidxb] = t2ab.conj().transpose(0,2,1,3)
+        dm2ab[vidxa[:,None,None,None],oidxa[:,None,None],vidxb[:,None],oidxb] = t2ab.conj().transpose(2,0,3,1)
+
     else:
+        dm2aa = numpy.zeros((nmoa0,nmoa0,nmoa0,nmoa0), dtype=t2aa.dtype)
+        dm2ab = numpy.zeros((nmoa0,nmoa0,nmob0,nmob0), dtype=t2aa.dtype)
+        dm2bb = numpy.zeros((nmob0,nmob0,nmob0,nmob0), dtype=t2aa.dtype)
 
-        dm2aa = numpy.zeros((nmoa0,nmoa0,nmoa0,nmoa0), dtype=dm1a.dtype)
-        dm2ab = numpy.zeros((nmoa0,nmoa0,nmob0,nmob0), dtype=dm1a.dtype)
-        dm2bb = numpy.zeros((nmob0,nmob0,nmob0,nmob0), dtype=dm1a.dtype)
+        tmp = (t2aa.transpose(0,2,1,3) - t2aa.transpose(0,3,1,2)).conj() * .5
+        dm2aa[:nocca0,nocca0:,:nocca0,nocca0:] = tmp
+        dm2aa[nocca0:,:nocca0,nocca0:,:nocca0] = tmp.conj().transpose(1,0,3,2)
 
-        dm2aa[:nocca0,nocca0:,:nocca0,nocca0:] = \
-                (t2aa.transpose(0,2,1,3) - t2aa.transpose(0,3,1,2)).conj() * .5
-        dm2aa[nocca0:,:nocca0,nocca0:,:nocca0] = \
-                dm2aa[:nocca0,nocca0:,:nocca0,nocca0:].transpose(1,0,3,2).conj()
-
-        dm2bb[:noccb0,noccb0:,:noccb0,noccb0:] = \
-                (t2bb.transpose(0,2,1,3) - t2bb.transpose(0,3,1,2)).conj() * .5
-        dm2bb[noccb0:,:noccb0,noccb0:,:noccb0] = \
-                dm2bb[:noccb0,noccb0:,:noccb0,noccb0:].transpose(1,0,3,2).conj()
+        tmp = (t2bb.transpose(0,2,1,3) - t2bb.transpose(0,3,1,2)).conj() * .5
+        dm2bb[:noccb0,noccb0:,:noccb0,noccb0:] = tmp
+        dm2bb[noccb0:,:noccb0,noccb0:,:noccb0] = tmp.transpose(1,0,3,2).conj()
 
         dm2ab[:nocca0,nocca0:,:noccb0,noccb0:] = t2ab.transpose(0,2,1,3).conj()
         dm2ab[nocca0:,:nocca0,noccb0:,:noccb0] = t2ab.transpose(2,0,3,1)
+
+    dm1a, dm1b = make_rdm1(mp, t2)
+    dm1a[numpy.diag_indices(nocca0)] -= 1
+    dm1b[numpy.diag_indices(noccb0)] -= 1
 
     for i in range(nocca0):
         dm2aa[i,i,:,:] += dm1a

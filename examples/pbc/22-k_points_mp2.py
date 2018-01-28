@@ -22,29 +22,29 @@ cell.unit = 'B'
 cell.verbose = 5
 cell.build()
 
-##
-## KHF and KMP2 with 2x2x2 k-points
-##
-#kpts = cell.make_kpts([2,2,2])
-#kmf = scf.KRHF(cell, exxdiv=None)
-#kmf.kpts = kpts
-#ehf = kmf.kernel()
 #
-#mypt = mp.KMP2(kmf)
-#mypt.kernel()
-#print("KMP2 energy (per unit cell) =", mypt.e_tot)
+# KHF and KMP2 with 2x2x2 k-points
 #
-##
-## The KHF and KMP2 for single k-point calculation.
-##
-#kpts = cell.get_abs_kpts([0.25, 0.25, 0.25])
-#kmf = scf.KRHF(cell, exxdiv=None)
-#kmf.kpts = kpts
-#ehf = kmf.kernel()
+kpts = cell.make_kpts([2,2,2])
+kmf = scf.KRHF(cell, exxdiv=None)
+kmf.kpts = kpts
+ehf = kmf.kernel()
+
+mypt = mp.KMP2(kmf)
+mypt.kernel()
+print("KMP2 energy (per unit cell) =", mypt.e_tot)
+
 #
-#mypt = mp.KMP2(kmf)
-#mypt.kernel()
-#print("KMP2 energy (per unit cell) =", mypt.e_tot)
+# The KHF and KMP2 for single k-point calculation.
+#
+kpts = cell.get_abs_kpts([0.25, 0.25, 0.25])
+kmf = scf.KRHF(cell, exxdiv=None)
+kmf.kpts = kpts
+ehf = kmf.kernel()
+
+mypt = mp.KMP2(kmf)
+mypt.kernel()
+print("KMP2 energy (per unit cell) =", mypt.e_tot)
 
 
 #
@@ -104,3 +104,4 @@ eri_mo[:,:,orbspin[:,None]!=orbspin] = 0
 h1 = reduce(numpy.dot, (mf.mo_coeff.conj().T, mf.get_hcore(), mf.mo_coeff))
 e_tot = numpy.einsum('ij,ji', h1, dm1) + numpy.einsum('ijkl,jilk', eri_mo, dm2)*.5 + mf.energy_nuc()
 print("GMP2 energy based on MP2 density matrices =", e_tot.real)
+
