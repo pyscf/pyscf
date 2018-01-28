@@ -217,12 +217,14 @@ def energy_elec(mf, dm=None, h1e=None, vhf=None):
     >>> dm = mf.make_rdm1()
     >>> scf.hf.energy_elec(mf, dm)
     (-1.5176090667746334, 0.60917167853723675)
+    >>> mf.energy_elec(dm)
+    (-1.5176090667746334, 0.60917167853723675)
     '''
     if dm is None: dm = mf.make_rdm1()
     if h1e is None: h1e = mf.get_hcore()
     if vhf is None: vhf = mf.get_veff(mf.mol, dm)
-    e1 = numpy.einsum('ji,ji', h1e.conj(), dm).real
-    e_coul = numpy.einsum('ji,ji', vhf.conj(), dm).real * .5
+    e1 = numpy.einsum('ij,ji', h1e, dm).real
+    e_coul = numpy.einsum('ij,ji', vhf, dm).real * .5
     logger.debug(mf, 'E_coul = %.15g', e_coul)
     return e1+e_coul, e_coul
 

@@ -20,9 +20,8 @@ def kernel(eom, nroots=1, koopmans=False, guess=None, left=False, imds=None,
 
     size = eom.vector_size()
     nroots = min(nroots, size)
-    if guess:
+    if guess is not None:
         user_guess = True
-        assert len(guess) == nroots
         for g in guess:
             assert g.size == size
     else:
@@ -34,14 +33,15 @@ def kernel(eom, nroots=1, koopmans=False, guess=None, left=False, imds=None,
 
     eig = lib.davidson_nosym1
     if user_guess or koopmans:
-        def pickeig(w, v, nr, envs):
+        assert len(guess) == nroots
+        def eig_close_to_init_guess(w, v, nr, envs):
             x0 = lib.linalg_helper._gen_x0(envs['v'], envs['xs'])
             s = np.dot(np.asarray(guess).conj(), np.asarray(x0).T)
             s = np.dot(s.conj().T, s).diagonal()
             idx = np.argsort(-s)[:nroots]
             idx = idx[np.argsort(w[idx])]  # sort eigenvalue w
             return w[idx].real, v[:,idx].real, idx
-        conv, es, vs = eig(matvec, guess, precond, pick=pickeig,
+        conv, es, vs = eig(matvec, guess, precond, pick=eig_close_to_init_guess,
                            tol=eom.conv_tol, max_cycle=eom.max_cycle,
                            max_space=eom.max_space, nroots=nroots, verbose=log)
     else:
@@ -49,9 +49,13 @@ def kernel(eom, nroots=1, koopmans=False, guess=None, left=False, imds=None,
                            tol=eom.conv_tol, max_cycle=eom.max_cycle,
                            max_space=eom.max_space, nroots=nroots, verbose=log)
 
-    for n, en, vn, convn in zip(range(nroots), es, vs, conv):
-        logger.info(eom, 'EOM-CCSD root %d E = %.16g  conv = %s', n, en, convn)
-    log.timer('EOM-CCSD', *cput0)
+    if eom.verbose >= logger.INFO:
+        for n, en, vn, convn in zip(range(nroots), es, vs, conv):
+            r1, r2 = eom.vector_to_amplitudes(vn)
+            qp_weight = np.linalg.norm(np.hstack(r1))**2
+            logger.info(eom, 'EOM-CCSD root %d E = %.16g  qpwt = %.6g  conv = %s',
+                        n, en, qp_weight, convn)
+        log.timer('EOM-CCSD', *cput0)
     if nroots == 1:
         return conv[0], es[0].real, vs[0]
     else:
@@ -870,7 +874,7 @@ def eeccsd_matvec_singlet(eom, vector, imds=None):
     blksize = min(nocc, max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvir**3*3))))
     for p0,p1 in lib.prange(0, nocc, blksize):
         #:ovvv = np.asarray(eris.ovvv[p0:p1])
-        ovvv = imd._get_ovvv(eris, slice(p0,p1), slice(0,nvir))
+        ovvv = imd._get_ovvv(eris, slice(p0,p1))
         Hr1 += lib.einsum('mfae,imef->ia', ovvv, rho[:,p0:p1])
         tmp = lib.einsum('meaf,ijef->maij', ovvv, tau2)
         Hr2 -= lib.einsum('ma,mbij->ijab', t1[p0:p1], tmp)
@@ -961,7 +965,7 @@ def eeccsd_matvec_triplet(eom, vector, imds=None):
     tmp1 = np.zeros((nvir,nvir), dtype=r1.dtype)
     for p0,p1 in lib.prange(0, nocc, blksize):
         #:ovvv = np.asarray(eris.ovvv[p0:p1])
-        ovvv = imd._get_ovvv(eris, slice(p0,p1), slice(0,nvir))
+        ovvv = imd._get_ovvv(eris, slice(p0,p1))
         Hr1 += lib.einsum('mfae,imef->ia', ovvv, theta[:,p0:p1])
         tmpaa = lib.einsum('meaf,ijef->maij', ovvv, tau2aa)
         tmpab = lib.einsum('meAF,iJeF->mAiJ', ovvv, tau2ab)
@@ -1063,7 +1067,7 @@ def eeccsd_matvec_sf(eom, vector, imds=None):
     blksize = min(nocc, max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvir**3*3))))
     for p0,p1 in lib.prange(0, nocc, blksize):
         #:ovvv = np.asarray(eris.ovvv[p0:p1])
-        ovvv = imd._get_ovvv(eris, slice(p0,p1), slice(0,nvir))
+        ovvv = imd._get_ovvv(eris, slice(p0,p1))
         Hr1 += lib.einsum('mfae,imef->ia', ovvv, r2baaa[:,p0:p1])
         Hr1 += lib.einsum('mfae,imef->ia', ovvv, r2aaba[:,p0:p1])
         tmp1aaba = lib.einsum('meaf,ijef->maij', ovvv, tau2baaa)
@@ -1213,7 +1217,7 @@ def eeccsd_diag(eom, imds=None):
     tmp = np.zeros((nvir,nvir), dtype=t1.dtype)
     for p0,p1 in lib.prange(0, nocc, blksize):
         #:ovvv = np.asarray(eris.ovvv[p0:p1])
-        ovvv = imd._get_ovvv(eris, slice(p0,p1), slice(0,nvir))
+        ovvv = imd._get_ovvv(eris, slice(p0,p1))
         tmp += np.einsum('mb,mbaa->ab', t1[p0:p1], ovvv)
         Wvvaa += np.einsum('mb,maab->ab', t1[p0:p1], ovvv)
         ovvv = None
@@ -1479,7 +1483,7 @@ class _IMDS:
         blksize = min(nocc, max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvir**3*3))))
         for p0,p1 in lib.prange(0, nocc, blksize):
             #:ovvv = np.asarray(eris.ovvv[p0:p1])
-            ovvv = imd._get_ovvv(eris, slice(p0,p1), slice(0,nvir))
+            ovvv = imd._get_ovvv(eris, slice(p0,p1))
             self.Fvv += np.einsum('mf,mfae->ae', t1[p0:p1], ovvv) * 2
             self.Fvv -= np.einsum('mf,meaf->ae', t1[p0:p1], ovvv)
             self.woVoO[p0:p1] = 0.5 * lib.einsum('mebf,ijef->mbij', ovvv, tau)
@@ -1583,7 +1587,7 @@ class _IMDS:
 
             for p0,p1 in lib.prange(0, nocc, blksize):
                 #:ovvv = np.asarray(eris.ovvv[p0:p1])
-                ovvv = imd._get_ovvv(eris, slice(p0,p1), slice(0,nvir))
+                ovvv = imd._get_ovvv(eris, slice(p0,p1))
                 if p0 == i0:
                     wvOvV += ovvv.transpose(2,0,3,1).conj()
                 tmpab = lib.einsum('mebf,miaf->eiab', ovvv, t2[p0:p1,i0:i1])

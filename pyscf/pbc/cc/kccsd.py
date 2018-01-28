@@ -12,6 +12,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc import scf
 from pyscf.cc import gccsd
+from pyscf.pbc.mp.kmp2 import get_frozen_mask
 from pyscf.pbc.cc import kintermediates as imdk
 from pyscf.pbc.lib import kpts_helper
 
@@ -275,20 +276,6 @@ def get_nmo(cc):
     return nmo
 
 
-def get_frozen_mask(cc):
-    moidx = [numpy.ones(x.size, dtype=numpy.bool) for x in cc.mo_occ]
-    if isinstance(cc.frozen, (int, numpy.integer)):
-        for idx in moidx:
-            idx[:cc.frozen] = False
-    elif isinstance(cc.frozen[0], (int, numpy.integer)):
-        frozen = list(cc.frozen)
-        for idx in moidx:
-            idx[frozen] = False
-    else:
-        raise NotImplementedError
-    return moidx
-
-
 class GCCSD(gccsd.GCCSD):
 
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
@@ -499,9 +486,12 @@ def check_antisymm_12( cc, kpts, integrals ):
                         pqrs = integrals[kp,kq,kr,p,q,r,s]
                         qprs = integrals[kq,kp,kr,q,p,r,s]
                         cdiff = numpy.linalg.norm(pqrs+qprs).real
-                        print("AS diff = %.15g" % cdiff, pqrs, qprs, kp, kq, kr, ks, p, q, r, s)
+                        if diff > 1e-5:
+                            print("AS diff = %.15g" % cdiff, pqrs, qprs, kp, kq, kr, ks, p, q, r, s)
                         diff = max(diff,cdiff)
     print("antisymmetrization : max diff = %.15g" % diff)
+    if diff > 1e-5:
+        print("Energy cutoff (or cell.mesh) is not enough to converge AO integrals.")
 
 def check_antisymm_34( cc, kpts, integrals ):
     kconserv = kpts_helper.get_kconserv(cc._scf.cell,cc.kpts)
@@ -516,7 +506,10 @@ def check_antisymm_34( cc, kpts, integrals ):
                         pqrs = integrals[kp,kq,kr,p,q,r,s]
                         pqsr = integrals[kp,kq,ks,p,q,s,r]
                         cdiff = numpy.linalg.norm(pqrs+pqsr).real
-                        print("AS diff = %.15g" % cdiff, pqrs, pqsr, kp, kq, kr, ks, p, q, r, s)
+                        if diff > 1e-5:
+                            print("AS diff = %.15g" % cdiff, pqrs, pqsr, kp, kq, kr, ks, p, q, r, s)
                         diff = max(diff,cdiff)
     print("antisymmetrization : max diff = %.15g" % diff)
+    if diff > 1e-5:
+        print("Energy cutoff (or cell.mesh) is not enough to converge AO integrals.")
 

@@ -29,7 +29,7 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=True,
     eia = mo_energy[:nocc,None] - mo_energy[None,nocc:]
 
     if with_t2:
-        t2 = numpy.empty((nocc,nocc,nvir,nvir))
+        t2 = numpy.empty((nocc,nocc,nvir,nvir), dtype=eris.oovv.dtype)
     else:
         t2 = None
 
@@ -44,8 +44,8 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=True,
     return emp2.real, t2
 
 def make_rdm1(mp, t2=None):
-    if t2 is None: t2 = mp.t2
     from pyscf.cc import gccsd_rdm
+    if t2 is None: t2 = mp.t2
     doo, dvv = _gamma1_intermediates(mp, t2)
     nocc, nvir = t2.shape[1:3]
     dov = numpy.zeros((nocc,nvir))
@@ -70,14 +70,15 @@ def make_rdm2(mp, t2=None):
         oidx = numpy.where(moidx & (mp.mo_occ > 0))[0]
         vidx = numpy.where(moidx & (mp.mo_occ ==0))[0]
 
-        dm2 = numpy.zeros((nmo0,nmo0,nmo0,nmo0)) # Chemist notation
+        dm2 = numpy.zeros((nmo0,nmo0,nmo0,nmo0), dtype=t2.dtype) # Chemist notation
         dm2[oidx[:,None,None,None],vidx[:,None,None],oidx[:,None],vidx] = \
                 (t2.transpose(0,2,1,3) - t2.transpose(0,3,1,2)) * .5
         dm2[nocc0:,:nocc0,nocc0:,:nocc0] = \
                 dm2[:nocc0,nocc0:,:nocc0,nocc0:].transpose(1,0,3,2).conj()
     else:
-        dm2 = numpy.zeros((nmo0,nmo0,nmo0,nmo0)) # Chemist notation
-        dm2[:nocc,nocc:,:nocc,nocc:] = (t2.transpose(0,2,1,3) - t2.transpose(0,3,1,2)) * .5
+        dm2 = numpy.zeros((nmo0,nmo0,nmo0,nmo0), dtype=t2.dtype) # Chemist notation
+        dm2[:nocc,nocc:,:nocc,nocc:] = (t2.transpose(0,2,1,3) -
+                                        t2.transpose(0,3,1,2)).conj() * .5
         dm2[nocc:,:nocc,nocc:,:nocc] = dm2[:nocc,nocc:,:nocc,nocc:].transpose(1,0,3,2).conj()
 
     dm1 = make_rdm1(mp, t2)
@@ -87,7 +88,7 @@ def make_rdm2(mp, t2=None):
         dm2[i,i,:,:] += dm1
         dm2[:,:,i,i] += dm1
         dm2[:,i,i,:] -= dm1
-        dm2[i,:,:,i] -= dm1
+        dm2[i,:,:,i] -= dm1.conj()
 
     for i in range(nocc0):
         for j in range(nocc0):
@@ -149,30 +150,33 @@ def _make_eris_incore(mp, mo_coeff=None, ao2mofn=None, verbose=None):
     nocc = mp.nocc
     nao, nmo = eris.mo_coeff.shape
     nvir = nmo - nocc
-    orboa = eris.mo_coeff[:nao//2,:nocc]
-    orbob = eris.mo_coeff[nao//2:,:nocc]
-    orbva = eris.mo_coeff[:nao//2,nocc:]
-    orbvb = eris.mo_coeff[nao//2:,nocc:]
     orbspin = eris.orbspin
 
-    if not callable(ao2mofn):
-        ao2mofn = lambda *args: ao2mo.kernel(mp._scf._eri, *args)
-
-    if orbspin is None:
-        eri  = ao2mofn((orboa,orbva,orboa,orbva)).reshape(nocc,nvir,nocc,nvir)
-        eri += ao2mofn((orbob,orbvb,orbob,orbvb)).reshape(nocc,nvir,nocc,nvir)
-        eri1 = ao2mofn((orboa,orbva,orbob,orbvb)).reshape(nocc,nvir,nocc,nvir)
-        eri += eri1
-        eri += eri1.transpose(2,3,0,1)
+    if callable(ao2mofn):
+        orbo = eris.mo_coeff[:,:nocc]
+        orbv = eris.mo_coeff[:,nocc:]
+        orbo = lib.tag_array(orbo, orbspin=orbspin)
+        eri = ao2mofn((orbo,orbv,orbo,orbv)).reshape(nocc,nvir,nocc,nvir)
     else:
-        co = orboa + orbob
-        cv = orbva + orbvb
-        eri = ao2mofn((co,cv,co,cv)).reshape(nocc,nvir,nocc,nvir)
-        sym_forbid = (orbspin[:nocc,None] != orbspin[nocc:])
-        eri[sym_forbid,:,:] = 0
-        eri[:,:,sym_forbid] = 0
+        orboa = eris.mo_coeff[:nao//2,:nocc]
+        orbob = eris.mo_coeff[nao//2:,:nocc]
+        orbva = eris.mo_coeff[:nao//2,nocc:]
+        orbvb = eris.mo_coeff[nao//2:,nocc:]
+        if orbspin is None:
+            eri  = ao2mo.kernel(mp._scf._eri, (orboa,orbva,orboa,orbva))
+            eri += ao2mo.kernel(mp._scf._eri, (orbob,orbvb,orbob,orbvb))
+            eri1 = ao2mo.kernel(mp._scf._eri, (orboa,orbva,orbob,orbvb))
+            eri += eri1
+            eri += eri1.T
+            eri = eri.reshape(nocc,nvir,nocc,nvir)
+        else:
+            co = orboa + orbob
+            cv = orbva + orbvb
+            eri = ao2mo.kernel(mp._scf._eri, (co,cv,co,cv)).reshape(nocc,nvir,nocc,nvir)
+            sym_forbid = (orbspin[:nocc,None] != orbspin[nocc:])
+            eri[sym_forbid,:,:] = 0
+            eri[:,:,sym_forbid] = 0
 
-    eri = eri.reshape(nocc,nvir,nocc,nvir)
     eris.oovv = eri.transpose(0,2,1,3) - eri.transpose(0,2,3,1)
     return eris
 

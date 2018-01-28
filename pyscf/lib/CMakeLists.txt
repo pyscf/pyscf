@@ -118,7 +118,7 @@ if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/lib/libxc.so.4" AND
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
     BUILD_IN_SOURCE 1
-    CONFIGURE_COMMAND ./configure --prefix=<INSTALL_DIR> --libdir=<INSTALL_DIR>/lib
+    CONFIGURE_COMMAND <SOURCE_DIR>/configure --prefix=<INSTALL_DIR> --libdir=<INSTALL_DIR>/lib
           --enable-shared --disable-static --disable-fortran LIBS=-lm
           CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER}
 

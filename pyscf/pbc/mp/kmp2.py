@@ -9,15 +9,12 @@ t2[i,j,a,b] = <ij|ab> / D_ij^ab
 
 import time
 from functools import reduce
-import numpy
 import numpy as np
 
 from pyscf import lib
 from pyscf.lib import logger
-
+from pyscf.mp import mp2
 from pyscf.pbc.lib import kpts_helper
-from pyscf.pbc.cc.kccsd import get_frozen_mask
-from pyscf.pbc.cc.kccsd_rhf import get_nocc, get_nmo
 
 def kernel(mp, mo_energy, mo_coeff, eris=None, verbose=logger.NOTE):
     if eris is None:
@@ -26,34 +23,73 @@ def kernel(mp, mo_energy, mo_coeff, eris=None, verbose=logger.NOTE):
     nocc = mp.nocc
     nvir = mp.nmo - nocc
     nkpts = mp.nkpts
-    t2 = numpy.zeros((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=eris.fock.dtype)
+    t2 = np.zeros((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=eris.fock.dtype)
 
-    woovv = numpy.empty((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=eris.fock.dtype)
+    woovv = np.empty((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=eris.fock.dtype)
     emp2 = 0
     foo = eris.fock[:,:nocc,:nocc].copy()
     fvv = eris.fock[:,nocc:,nocc:].copy()
-    eia = numpy.zeros((nocc,nvir))
-    eijab = numpy.zeros((nocc,nocc,nvir,nvir))
+    eia = np.zeros((nocc,nvir))
+    eijab = np.zeros((nocc,nocc,nvir,nvir))
 
     kconserv = mp.khelper.kconserv
-    for ki in range(nkpts):
-      for kj in range(nkpts):
-        for ka in range(nkpts):
-            kb = kconserv[ki,ka,kj]
-            eia = np.diagonal(foo[ki]).reshape(-1,1) - np.diagonal(fvv[ka])
-            ejb = np.diagonal(foo[kj]).reshape(-1,1) - np.diagonal(fvv[kb])
-            eijab = lib.direct_sum('ia,jb->ijab',eia,ejb)
-            woovv[ki,kj,ka] = (2*eris.oovv[ki,kj,ka] - eris.oovv[ki,kj,kb].transpose(0,1,3,2))
-            t2[ki,kj,ka] = eris.oovv[ki,kj,ka] / eijab
+    for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
+        kb = kconserv[ki,ka,kj]
+        eia = np.diagonal(foo[ki]).reshape(-1,1) - np.diagonal(fvv[ka])
+        ejb = np.diagonal(foo[kj]).reshape(-1,1) - np.diagonal(fvv[kb])
+        eijab = lib.direct_sum('ia,jb->ijab',eia,ejb)
+        woovv[ki,kj,ka] = (2*eris.oovv[ki,kj,ka] - eris.oovv[ki,kj,kb].transpose(0,1,3,2))
+        t2[ki,kj,ka] = eris.oovv[ki,kj,ka] / eijab
 
-    t2 = numpy.conj(t2)
-    emp2 = numpy.einsum('pqrijab,pqrijab',t2,woovv).real
+    t2 = t2.conj()
+    emp2 = np.einsum('pqrijab,pqrijab',t2,woovv).real
     emp2 /= nkpts
 
     return emp2, t2
 
 
-class KMP2(lib.StreamObject):
+def get_frozen_mask(mp):
+    moidx = [np.ones(x.size, dtype=np.bool) for x in mp.mo_occ]
+    if isinstance(mp.frozen, (int, np.integer)):
+        for idx in moidx:
+            idx[:mp.frozen] = False
+    elif isinstance(mp.frozen[0], (int, np.integer)):
+        frozen = list(mp.frozen)
+        for idx in moidx:
+            idx[frozen] = False
+    else:
+        raise NotImplementedError
+    return moidx
+
+
+def get_nocc(mp):
+    '''The number of occupied orbitals per k-point.'''
+    if mp._nocc is not None:
+        return mp._nocc
+    elif isinstance(mp.frozen, (int, np.integer)):
+        nocc = int(mp.mo_occ[0].sum()) // 2 - mp.frozen
+    elif isinstance(mp.frozen[0], (int, np.integer)):
+        occ_idx = mp.mo_occ[0] > 0
+        occ_idx[list(mp.frozen)] = False
+        nocc = np.count_nonzero(occ_idx)
+    else:
+        raise NotImplementedError
+    return nocc
+
+def get_nmo(mp):
+    '''The number of molecular orbitals per k-point.'''
+    if mp._nmo is not None:
+        return mp._nmo
+    if isinstance(mp.frozen, (int, np.integer)):
+        nmo = len(mp.mo_occ[0]) - mp.frozen
+    elif isinstance(mp.frozen[0], (int, np.integer)):
+        nmo = len(mp.mo_occ[0]) - len(mp.frozen)
+    else:
+        raise NotImplementedError
+    return nmo
+
+
+class KMP2(mp2.MP2):
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
 
         if mo_coeff  is None: mo_coeff  = mf.mo_coeff
@@ -78,23 +114,13 @@ class KMP2(lib.StreamObject):
         self.mo_occ = mo_occ
         self._nocc = None
         self._nmo = None
-        self.emp2 = None
         self.e_corr = None
         self.t2 = None
         self._keys = set(self.__dict__.keys())
 
-    nocc = property(get_nocc)
-    @nocc.setter
-    def nocc(self, n):
-        self._nocc = n
-
-    nmo = property(get_nmo)
-    @nmo.setter
-    def nmo(self, n):
-        self._nmo = n
-
     get_nocc = get_nocc
     get_nmo = get_nmo
+    get_frozen_mask = get_frozen_mask
 
     def kernel(self, mo_energy=None, mo_coeff=None, eris=None):
         if mo_energy is None:
@@ -107,11 +133,10 @@ class KMP2(lib.StreamObject):
                      'You may need to call mf.kernel() to generate them.')
             raise RuntimeError
 
-        self.emp2, self.t2 = \
+        self.e_corr, self.t2 = \
                 kernel(self, mo_energy, mo_coeff, eris, verbose=self.verbose)
-        logger.log(self, 'KMP2 energy = %.15g', self.emp2)
-        self.e_corr = self.emp2
-        return self.emp2, self.t2
+        logger.log(self, 'KMP2 energy = %.15g', self.e_corr)
+        return self.e_corr, self.t2
 
     def ao2mo(self, mo_coeff=None):
         return _ERIS(self, mo_coeff, verbose=self.verbose)
@@ -135,14 +160,14 @@ class _ERIS:
 
         nao = mp.mo_coeff[0].shape[0]
         dtype = mp.mo_coeff[0].dtype
-        self.mo_coeff = numpy.zeros((nkpts,nao,nmo), dtype=dtype)
-        self.fock = numpy.zeros((nkpts,nmo,nmo), dtype=dtype)
+        self.mo_coeff = np.zeros((nkpts,nao,nmo), dtype=dtype)
+        self.fock = np.zeros((nkpts,nmo,nmo), dtype=dtype)
         if mo_coeff is None:
             for kp in range(nkpts):
                 self.mo_coeff[kp] = mp.mo_coeff[kp][:,moidx[kp]]
             mo_coeff = self.mo_coeff
             for kp in range(nkpts):
-                self.fock[kp] = numpy.diag(mp.mo_energy[kp][moidx[kp]]).astype(dtype)
+                self.fock[kp] = np.diag(mp.mo_energy[kp][moidx[kp]]).astype(dtype)
         else:  # If mo_coeff is not canonical orbital
             for kp in range(nkpts):
                 self.mo_coeff[kp] = mo_coeff[kp][:,moidx[kp]]
@@ -155,7 +180,7 @@ class _ERIS:
             veff = vj - vk * .5
             fockao = mp._scf.get_hcore() + veff
             for kp in range(nkpts):
-                self.fock[kp] = reduce(numpy.dot, (mo_coeff[kp].T.conj(), fockao[kp], mo_coeff[kp])).astype(dtype)
+                self.fock[kp] = reduce(np.dot, (mo_coeff[kp].T.conj(), fockao[kp], mo_coeff[kp])).astype(dtype)
 
         nocc = mp.nocc
         nmo = mp.nmo
@@ -173,7 +198,7 @@ class _ERIS:
                      'Available mem %s MB, required mem %s MB',
                      max_memory, mem_basic)
 
-        self.oovv = numpy.zeros((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=dtype)
+        self.oovv = np.zeros((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=dtype)
 
         if (mp.mol.incore_anyway or
                 (mem_incore+mem_now < mp.max_memory)):

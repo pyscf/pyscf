@@ -29,6 +29,18 @@ mf = scf.addons.convert_to_uhf(rhf)
 
 myucc = cc.UCCSD(mf).run(conv_tol=1e-10)
 
+mol_s2 = gto.Mole()
+mol_s2.atom = [
+    [8 , (0. , 0.     , 0.)],
+    [1 , (0. , -0.757 , 0.587)],
+    [1 , (0. , 0.757  , 0.587)]]
+mol_s2.basis = '631g'
+mol_s2.spin = 2
+mol_s2.verbose = 5
+mol_s2.output = '/dev/null'
+mol_s2.build()
+mf_s2 = scf.UHF(mol).run()
+
 class KnownValues(unittest.TestCase):
 #    def test_with_df(self):
 #        mf = scf.UHF(mol).density_fit(auxbasis='weigend').run()
@@ -103,12 +115,6 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(t2[0]-myucc.t2[0]).max(), 0, 6)
         self.assertAlmostEqual(abs(t2[1]-myucc.t2[1]).max(), 0, 6)
         self.assertAlmostEqual(abs(t2[2]-myucc.t2[2]).max(), 0, 6)
-
-#    def test_uccsd_rdm(self):
-#        dm1 = myucc.make_rdm1()
-#        dm2 = myucc.make_rdm2()
-#        self.assertAlmostEqual(numpy.linalg.norm(dm1), 3.1080942935191711, 6)
-#        self.assertAlmostEqual(numpy.linalg.norm(dm2), 13.151382528402792, 6)
 
     def test_uccsd_frozen(self):
         ucc1 = copy.copy(myucc)
@@ -188,16 +194,8 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(dm2[ib][:,ib][:,:,ib][:,:,:,ib]-dm2bb).max(), 0, 9)
 
     def test_h2o_rdm(self):
-        mol = gto.Mole()
-        mol.atom = [
-            [8 , (0. , 0.     , 0.)],
-            [1 , (0. , -0.757 , 0.587)],
-            [1 , (0. , 0.757  , 0.587)]]
-        mol.basis = '631g'
-        mol.spin = 2
-        mol.build()
-        mf = scf.UHF(mol).run()
-
+        mol = mol_s2
+        mf = mf_s2
         mycc = uccsd.UCCSD(mf)
         mycc.frozen = 2
         ecc, t1, t2 = mycc.kernel()
@@ -258,6 +256,214 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(dm2ref[0] - rdm2[0]).max(), 0, 6)
         self.assertAlmostEqual(abs(dm2ref[1] - rdm2[1]).max(), 0, 6)
         self.assertAlmostEqual(abs(dm2ref[2] - rdm2[2]).max(), 0, 6)
+
+    def test_eris_contract_vvvv_t2(self):
+        mol = gto.Mole()
+        nocca, noccb, nvira, nvirb = 5, 4, 12, 13
+        nvira_pair = nvira*(nvira+1)//2
+        nvirb_pair = nvirb*(nvirb+1)//2
+        numpy.random.seed(9)
+        t2 = numpy.random.random((nocca,noccb,nvira,nvirb))
+        eris = uccsd._ChemistsERIs()
+        eris.vvvv = numpy.random.random((nvira_pair,nvirb_pair))
+        eris.mol = mol
+        self.assertAlmostEqual(lib.finger(eris._contract_vvvv_t2(t2)), 12.00904827896089, 11)
+
+    def test_update_amps1(self):
+        mol = gto.Mole()
+        mol.atom = [
+            [8 , (0. , 0.     , 0.)],
+            [1 , (0. , -0.757 , 0.587)],
+            [1 , (0. , 0.757  , 0.587)]]
+        mol.basis = {'O':'cc-pvdz', 'H':'631g'}
+        mol.spin = 2
+        mol.verbose = 0
+        mol.build()
+        mf = scf.UHF(mol).run()
+
+        mf1 = copy.copy(mf)
+        nmo = mol.nao_nr()
+        mf1.mo_occ = numpy.zeros((2,nmo))
+        mf1.mo_occ[0,:6] = 1
+        mf1.mo_occ[1,:5] = 1
+        mycc = uccsd.UCCSD(mf1)
+        nocca, noccb, nvira, nvirb = 6, 5, 12, 13
+        nvira_pair = nvira*(nvira+1)//2
+        nvirb_pair = nvirb*(nvirb+1)//2
+        numpy.random.seed(9)
+
+        eris = mycc.ao2mo()
+        fakeris = uccsd._ChemistsERIs()
+        fakeris.mo_coeff = eris.mo_coeff
+        fakeris.vvVV = eris.vvVV
+        fakeris.mol = mol
+        t2ab = numpy.random.random((nocca,noccb,nvira,nvirb))
+        t1a = numpy.zeros((nocca,nvira))
+        t1b = numpy.zeros((noccb,nvirb))
+        self.assertAlmostEqual(lib.finger(mycc._add_vvVV(None, t2ab, fakeris)), 7.30721835320601, 9)
+        fakeris.vvVV = None
+        mycc.direct = True
+        mycc.max_memory = 0
+        self.assertAlmostEqual(lib.finger(mycc._add_vvVV(None, t2ab, fakeris)), 7.30721835320601, 9)
+
+        mycc = uccsd.UCCSD(mf)
+        eris = mycc.ao2mo()
+        ecc, t1, t2 = mycc.kernel(eris=eris)
+        self.assertAlmostEqual(ecc, -0.17009326207891234, 7)
+
+        numpy.random.seed(4)
+        mo_coeff = numpy.random.random((2,18,18))-.5
+        eris = mycc.ao2mo(mo_coeff)
+        nocca, noccb, nvira, nvirb = 6, 4, 12, 14
+        t1 = (numpy.random.random((nocca,nvira)), numpy.random.random((noccb,nvirb)))
+        t2 = (numpy.random.random((nocca,nocca,nvira,nvira)),
+              numpy.random.random((nocca,noccb,nvira,nvirb)),
+              numpy.random.random((noccb,noccb,nvirb,nvirb)))
+        t1, t2 = mycc.vector_to_amplitudes(mycc.amplitudes_to_vector(t1, t2))
+        t1, t2 = mycc.update_amps(t1, t2, eris)
+        self.assertAlmostEqual(lib.finger(t1[0]), -91.989448970105428, 9)
+        self.assertAlmostEqual(lib.finger(t1[1]),  1915.9181468793138, 8)
+        self.assertAlmostEqual(lib.finger(t2[0]), -16988.617144235213, 7)
+        self.assertAlmostEqual(lib.finger(t2[1]), -559.07800364396917, 8)
+        self.assertAlmostEqual(lib.finger(t2[2]), -406.15453424081329, 8)
+        self.assertAlmostEqual(lib.finger(mycc.amplitudes_to_vector(t1, t2)), 3559.9139511493886, 7)
+
+    def test_update_amps2(self):  # compare to gccsd.update_amps
+        mol = mol_s2
+        mf = mf_s2
+        mycc = uccsd.UCCSD(mf)
+        eris = mycc.ao2mo()
+        nocca, noccb = 6,4
+        nmo = mol.nao_nr()
+        nvira,nvirb = nmo-nocca, nmo-noccb
+        numpy.random.seed(9)
+        t1 = [numpy.random.random((nocca,nvira))-.9,
+              numpy.random.random((noccb,nvirb))-.9]
+        t2 = [numpy.random.random((nocca,nocca,nvira,nvira))-.9,
+              numpy.random.random((nocca,noccb,nvira,nvirb))-.9,
+              numpy.random.random((noccb,noccb,nvirb,nvirb))-.9]
+        t2[0] = t2[0] - t2[0].transpose(1,0,2,3)
+        t2[0] = t2[0] - t2[0].transpose(0,1,3,2)
+        t2[2] = t2[2] - t2[2].transpose(1,0,2,3)
+        t2[2] = t2[2] - t2[2].transpose(0,1,3,2)
+
+        mo_a = mf.mo_coeff[0] + numpy.sin(mf.mo_coeff[0]) * .01j
+        mo_b = mf.mo_coeff[1] + numpy.sin(mf.mo_coeff[1]) * .01j
+        nao = mo_a.shape[0]
+        eri = ao2mo.restore(1, mf._eri, nao)
+        eri0aa = lib.einsum('pqrs,pi,qj,rk,sl->ijkl', eri, mo_a.conj(), mo_a, mo_a.conj(), mo_a)
+        eri0ab = lib.einsum('pqrs,pi,qj,rk,sl->ijkl', eri, mo_a.conj(), mo_a, mo_b.conj(), mo_b)
+        eri0bb = lib.einsum('pqrs,pi,qj,rk,sl->ijkl', eri, mo_b.conj(), mo_b, mo_b.conj(), mo_b)
+        eri0ba = eri0ab.transpose(2,3,0,1)
+
+        nvira = nao - nocca
+        nvirb = nao - noccb
+        eris = uccsd._ChemistsERIs(mol)
+        eris.oooo = eri0aa[:nocca,:nocca,:nocca,:nocca].copy()
+        eris.ovoo = eri0aa[:nocca,nocca:,:nocca,:nocca].copy()
+        eris.oovv = eri0aa[:nocca,:nocca,nocca:,nocca:].copy()
+        eris.ovvo = eri0aa[:nocca,nocca:,nocca:,:nocca].copy()
+        eris.ovov = eri0aa[:nocca,nocca:,:nocca,nocca:].copy()
+        eris.ovvv = eri0aa[:nocca,nocca:,nocca:,nocca:].copy()
+        eris.vvvv = eri0aa[nocca:,nocca:,nocca:,nocca:].copy()
+
+        eris.OOOO = eri0bb[:noccb,:noccb,:noccb,:noccb].copy()
+        eris.OVOO = eri0bb[:noccb,noccb:,:noccb,:noccb].copy()
+        eris.OOVV = eri0bb[:noccb,:noccb,noccb:,noccb:].copy()
+        eris.OVVO = eri0bb[:noccb,noccb:,noccb:,:noccb].copy()
+        eris.OVOV = eri0bb[:noccb,noccb:,:noccb,noccb:].copy()
+        eris.OVVV = eri0bb[:noccb,noccb:,noccb:,noccb:].copy()
+        eris.VVVV = eri0bb[noccb:,noccb:,noccb:,noccb:].copy()
+
+        eris.ooOO = eri0ab[:nocca,:nocca,:noccb,:noccb].copy()
+        eris.ovOO = eri0ab[:nocca,nocca:,:noccb,:noccb].copy()
+        eris.ooVV = eri0ab[:nocca,:nocca,noccb:,noccb:].copy()
+        eris.ovVO = eri0ab[:nocca,nocca:,noccb:,:noccb].copy()
+        eris.ovOV = eri0ab[:nocca,nocca:,:noccb,noccb:].copy()
+        eris.ovVV = eri0ab[:nocca,nocca:,noccb:,noccb:].copy()
+        eris.vvVV = eri0ab[nocca:,nocca:,noccb:,noccb:].copy()
+
+        eris.OOoo = eri0ba[:noccb,:noccb,:nocca,:nocca].copy()
+        eris.OVoo = eri0ba[:noccb,noccb:,:nocca,:nocca].copy()
+        eris.OOvv = eri0ba[:noccb,:noccb,nocca:,nocca:].copy()
+        eris.OVvo = eri0ba[:noccb,noccb:,nocca:,:nocca].copy()
+        eris.OVov = eri0ba[:noccb,noccb:,:nocca,nocca:].copy()
+        eris.OVvv = eri0ba[:noccb,noccb:,nocca:,nocca:].copy()
+        eris.VVvv = eri0ba[noccb:,noccb:,nocca:,nocca:].copy()
+
+        eris.focka = numpy.diag(mf.mo_energy[0])
+        eris.fockb = numpy.diag(mf.mo_energy[1])
+
+        t1[0] = t1[0] + numpy.sin(t1[0]) * .05j
+        t1[1] = t1[1] + numpy.sin(t1[1]) * .05j
+        t2[0] = t2[0] + numpy.sin(t2[0]) * .05j
+        t2[1] = t2[1] + numpy.sin(t2[1]) * .05j
+        t2[2] = t2[2] + numpy.sin(t2[2]) * .05j
+        t1new_ref, t2new_ref = uccsd.update_amps(mycc, t1, t2, eris)
+
+        nocc = nocca + noccb
+        orbspin = numpy.zeros(nao*2, dtype=int)
+        orbspin[1::2] = 1
+        orbspin[nocc-1] = 0
+        orbspin[nocc  ] = 1
+        eri1 = numpy.zeros([nao*2]*4, dtype=numpy.complex)
+        idxa = numpy.where(orbspin == 0)[0]
+        idxb = numpy.where(orbspin == 1)[0]
+        eri1[idxa[:,None,None,None],idxa[:,None,None],idxa[:,None],idxa] = eri0aa
+        eri1[idxa[:,None,None,None],idxa[:,None,None],idxb[:,None],idxb] = eri0ab
+        eri1[idxb[:,None,None,None],idxb[:,None,None],idxa[:,None],idxa] = eri0ba
+        eri1[idxb[:,None,None,None],idxb[:,None,None],idxb[:,None],idxb] = eri0bb
+        eri1 = eri1.transpose(0,2,1,3) - eri1.transpose(0,2,3,1)
+        erig = gccsd._PhysicistsERIs()
+        erig.oooo = eri1[:nocc,:nocc,:nocc,:nocc].copy()
+        erig.ooov = eri1[:nocc,:nocc,:nocc,nocc:].copy()
+        erig.ovov = eri1[:nocc,nocc:,:nocc,nocc:].copy()
+        erig.ovvo = eri1[:nocc,nocc:,nocc:,:nocc].copy()
+        erig.oovv = eri1[:nocc,:nocc,nocc:,nocc:].copy()
+        erig.ovvv = eri1[:nocc,nocc:,nocc:,nocc:].copy()
+        erig.vvvv = eri1[nocc:,nocc:,nocc:,nocc:].copy()
+        mo_e = numpy.empty(nao*2)
+        mo_e[orbspin==0] = mf.mo_energy[0]
+        mo_e[orbspin==1] = mf.mo_energy[1]
+        erig.fock = numpy.diag(mo_e)
+
+        myccg = gccsd.GCCSD(scf.addons.convert_to_ghf(mf))
+        t1 = myccg.spatial2spin(t1, orbspin)
+        t2 = myccg.spatial2spin(t2, orbspin)
+        t1new, t2new = gccsd.update_amps(myccg, t1, t2, erig)
+        t1new = myccg.spin2spatial(t1new, orbspin)
+        t2new = myccg.spin2spatial(t2new, orbspin)
+        self.assertAlmostEqual(abs(t1new[0] - t1new_ref[0]).max(), 0, 12)
+        self.assertAlmostEqual(abs(t1new[1] - t1new_ref[1]).max(), 0, 12)
+        self.assertAlmostEqual(abs(t2new[0] - t2new_ref[0]).max(), 0, 12)
+        self.assertAlmostEqual(abs(t2new[1] - t2new_ref[1]).max(), 0, 12)
+        self.assertAlmostEqual(abs(t2new[2] - t2new_ref[2]).max(), 0, 12)
+
+    def test_mbpt2(self):
+        myucc = uccsd.UCCSD(mf)
+        e = myucc.kernel(mbpt2=True)[0]
+        #emp2 = mp.MP2(mf).kernel()[0]
+        self.assertAlmostEqual(e, -0.12886859466216125, 10)
+
+        myucc = uccsd.UCCSD(mf_s2)
+        e = myucc.kernel(mbpt2=True)[0]
+        #emp2 = mp.MP2(mf_s2).kernel()[0]
+        self.assertAlmostEqual(e, -0.12886859294747624, 10)
+
+    def test_uintermediats(self):
+        from pyscf.cc import uintermediates
+        eris = uccsd.UCCSD(mf_s2).ao2mo()
+        self.assertTrue(uintermediates._get_ovvv(eris).ndim == 4)
+        self.assertTrue(uintermediates._get_ovVV(eris).ndim == 4)
+        self.assertTrue(uintermediates._get_OVvv(eris).ndim == 4)
+        self.assertTrue(uintermediates._get_OVVV(eris).ndim == 4)
+        self.assertTrue(uintermediates._get_ovvv(eris, slice(None), slice(2,4)).ndim == 4)
+        self.assertTrue(uintermediates._get_ovVV(eris, slice(None), slice(2,4)).ndim == 4)
+        self.assertTrue(uintermediates._get_OVvv(eris, slice(None), slice(2,4)).ndim == 4)
+        self.assertTrue(uintermediates._get_OVVV(eris, slice(None), slice(2,4)).ndim == 4)
+        self.assertTrue(uintermediates._get_vvvv(eris).ndim == 4)
+        self.assertTrue(uintermediates._get_vvVV(eris).ndim == 4)
+        self.assertTrue(uintermediates._get_VVVV(eris).ndim == 4)
 
 
 if __name__ == "__main__":

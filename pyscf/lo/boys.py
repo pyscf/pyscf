@@ -214,8 +214,8 @@ class Boys(ciah.CIAHOptimizer):
         dip = dipole_integral(self.mol, mo_coeff)
         r2 = self.mol.intor_symmetric('int1e_r2')
         r2 = numpy.einsum('pi,pi->', mo_coeff, lib.dot(r2, mo_coeff))
-        val = r2 - numpy.einsum('xii,xii->', dip, dip)
-        return val * 2
+        val = r2 - numpy.einsum('xii,xii->', dip, dip) * 2
+        return val
 
     def get_init_guess(self, key='atomic'):
         '''Generate initial guess for localization.

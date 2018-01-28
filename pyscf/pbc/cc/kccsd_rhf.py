@@ -16,7 +16,7 @@ from pyscf.lib import logger
 import pyscf.cc
 import pyscf.cc.ccsd
 from pyscf.pbc import scf
-from pyscf.pbc.cc.kccsd import get_frozen_mask
+from pyscf.pbc.mp.kmp2 import get_frozen_mask, get_nocc, get_nmo
 from pyscf.pbc.cc import kintermediates_rhf as imdk
 from pyscf.lib import linalg_helper
 from pyscf.pbc.lib import kpts_helper
@@ -240,33 +240,6 @@ def energy(cc, t1, t2, eris):
     return e.real
 
 
-def get_nocc(cc):
-    '''The number of occupied orbitals per k-point.'''
-    if cc._nocc is not None:
-        return cc._nocc
-    elif isinstance(cc.frozen, (int, numpy.integer)):
-        nocc = int(cc.mo_occ[0].sum()) // 2 - cc.frozen
-    elif isinstance(cc.frozen[0], (int, numpy.integer)):
-        occ_idx = cc.mo_occ[0] > 0
-        occ_idx[list(cc.frozen)] = False
-        nocc = numpy.count_nonzero(occ_idx)
-    else:
-        raise NotImplementedError
-    return nocc
-
-def get_nmo(cc):
-    '''The number of molecular orbitals per k-point.'''
-    if cc._nmo is not None:
-        return cc._nmo
-    if isinstance(cc.frozen, (int, numpy.integer)):
-        nmo = len(cc.mo_occ[0]) - cc.frozen
-    elif isinstance(cc.frozen[0], (int, numpy.integer)):
-        nmo = len(cc.mo_occ[0]) - len(cc.frozen)
-    else:
-        raise NotImplementedError
-    return nmo
-
-
 class RCCSD(pyscf.cc.ccsd.CCSD):
 
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
@@ -294,6 +267,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
     get_nocc = get_nocc
     get_nmo = get_nmo
+    get_frozen_mask = get_frozen_mask
 
     def dump_flags(self):
         pyscf.cc.ccsd.CCSD.dump_flags(self)
@@ -1068,6 +1042,8 @@ def verify_eri_symmetry(nmo, nkpts, kconserv, eri):
                                     print("kp,kq,kr,ks,p,q,r,s =", kp, kq, kr, ks, p, q, r, s)
                                 maxdiff = max(maxdiff,diff)
     print("Max difference in (pq|rs) - (rs|pq) = %.15g" % maxdiff)
+    if maxdiff > 1e-5:
+        print("Energy cutoff (or cell.mesh) is not enough to converge AO integrals.")
 
 imd = imdk
 class _IMDS:

@@ -41,11 +41,11 @@ def _gamma1_intermediates(cc, t1, t2, l1, l2):
     xt2a += einsum('mnaf,mnef->ae', t2ab, l2ab)
     xt2a += einsum('ma,me->ae', t1a, l1a)
 
-    dova  = einsum('imae,me->ia', t2aa, l1a)
-    dova += einsum('imae,me->ia', t2ab, l1b)
-    dova -= einsum('mi,ma->ia', xt1a, t1a)
-    dova -= einsum('ie,ae->ia', t1a, xt2a)
-    dova += t1a
+    dvoa  = einsum('imae,me->ai', t2aa, l1a)
+    dvoa += einsum('imae,me->ai', t2ab, l1b)
+    dvoa -= einsum('mi,ma->ai', xt1a, t1a)
+    dvoa -= einsum('ie,ae->ai', t1a, xt2a)
+    dvoa += t1a.T
 
     xt1b  = einsum('mnef,inef->mi', l2bb, t2bb) * .5
     xt1b += einsum('nmef,nief->mi', l2ab, t2ab)
@@ -53,14 +53,14 @@ def _gamma1_intermediates(cc, t1, t2, l1, l2):
     xt2b += einsum('mnfa,mnfe->ae', t2ab, l2ab)
     xt2b += einsum('ma,me->ae', t1b, l1b)
 
-    dovb  = einsum('imae,me->ia', t2bb, l1b)
-    dovb += einsum('miea,me->ia', t2ab, l1a)
-    dovb -= einsum('mi,ma->ia', xt1b, t1b)
-    dovb -= einsum('ie,ae->ia', t1b, xt2b)
-    dovb += t1b
+    dvob  = einsum('imae,me->ai', t2bb, l1b)
+    dvob += einsum('miea,me->ai', t2ab, l1a)
+    dvob -= einsum('mi,ma->ai', xt1b, t1b)
+    dvob -= einsum('ie,ae->ai', t1b, xt2b)
+    dvob += t1b.T
 
-    dvoa = l1a.T.copy()
-    dvob = l1b.T.copy()
+    dova = l1a
+    dovb = l1b
 
     return ((dooa, doob), (dova, dovb), (dvoa, dvob), (dvva, dvvb))
 
@@ -356,7 +356,7 @@ def _make_rdm1(mycc, d1, with_frozen=True):
     nmoa = nocca + nvira
     nmob = noccb + nvirb
 
-    dm1a = numpy.empty((nmoa,nmoa))
+    dm1a = numpy.empty((nmoa,nmoa), dtype=doo.dtype)
     dm1a[:nocca,:nocca] = doo + doo.conj().T
     dm1a[:nocca,nocca:] = dov + dvo.conj().T
     dm1a[nocca:,:nocca] = dm1a[:nocca,nocca:].conj().T
@@ -364,7 +364,7 @@ def _make_rdm1(mycc, d1, with_frozen=True):
     dm1a *= .5
     dm1a[numpy.diag_indices(nocca)] += 1
 
-    dm1b = numpy.empty((nmob,nmob))
+    dm1b = numpy.empty((nmob,nmob), dtype=dOO.dtype)
     dm1b[:noccb,:noccb] = dOO + dOO.conj().T
     dm1b[:noccb,noccb:] = dOV + dVO.conj().T
     dm1b[noccb:,:noccb] = dm1b[:noccb,noccb:].conj().T
@@ -377,8 +377,8 @@ def _make_rdm1(mycc, d1, with_frozen=True):
         nmob = mycc.mo_occ[1].size
         nocca = numpy.count_nonzero(mycc.mo_occ[0] > 0)
         noccb = numpy.count_nonzero(mycc.mo_occ[1] > 0)
-        rdm1a = numpy.zeros((nmoa,nmoa))
-        rdm1b = numpy.zeros((nmob,nmob))
+        rdm1a = numpy.zeros((nmoa,nmoa), dtype=dm1a.dtype)
+        rdm1b = numpy.zeros((nmob,nmob), dtype=dm1b.dtype)
         rdm1a[numpy.diag_indices(nocca)] = 1
         rdm1b[numpy.diag_indices(noccb)] = 1
         moidx = mycc.get_frozen_mask()
@@ -403,9 +403,9 @@ def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True):
     nmoa = nocca + nvira
     nmob = noccb + nvirb
 
-    dm2aa = numpy.empty((nmoa,nmoa,nmoa,nmoa))
-    dm2ab = numpy.empty((nmoa,nmoa,nmob,nmob))
-    dm2bb = numpy.empty((nmob,nmob,nmob,nmob))
+    dm2aa = numpy.empty((nmoa,nmoa,nmoa,nmoa), dtype=doovv.dtype)
+    dm2ab = numpy.empty((nmoa,nmoa,nmob,nmob), dtype=doovv.dtype)
+    dm2bb = numpy.empty((nmob,nmob,nmob,nmob), dtype=doovv.dtype)
 
 # dm2aa
     dovov = numpy.asarray(dovov)
@@ -505,9 +505,9 @@ def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True):
         nocca = numpy.count_nonzero(mycc.mo_occ[0] > 0)
         noccb = numpy.count_nonzero(mycc.mo_occ[1] > 0)
 
-        rdm2aa = numpy.zeros((nmoa,nmoa,nmoa,nmoa))
-        rdm2ab = numpy.zeros((nmoa,nmoa,nmob,nmob))
-        rdm2bb = numpy.zeros((nmob,nmob,nmob,nmob))
+        rdm2aa = numpy.zeros((nmoa,nmoa,nmoa,nmoa), dtype=dm2aa.dtype)
+        rdm2ab = numpy.zeros((nmoa,nmoa,nmob,nmob), dtype=dm2ab.dtype)
+        rdm2bb = numpy.zeros((nmob,nmob,nmob,nmob), dtype=dm2bb.dtype)
         moidxa, moidxb = mycc.get_frozen_mask()
         moidxa = numpy.where(moidxa)[0]
         moidxb = numpy.where(moidxb)[0]
@@ -530,13 +530,13 @@ def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True):
             dm2aa[i,i,:,:] += dm1a
             dm2aa[:,:,i,i] += dm1a
             dm2aa[:,i,i,:] -= dm1a
-            dm2aa[i,:,:,i] -= dm1a
+            dm2aa[i,:,:,i] -= dm1a.conj()
             dm2ab[i,i,:,:] += dm1b
         for i in range(noccb):
             dm2bb[i,i,:,:] += dm1b
             dm2bb[:,:,i,i] += dm1b
             dm2bb[:,i,i,:] -= dm1b
-            dm2bb[i,:,:,i] -= dm1b
+            dm2bb[i,:,:,i] -= dm1b.conj()
             dm2ab[:,:,i,i] += dm1a
 
         for i in range(nocca):

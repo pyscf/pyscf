@@ -73,25 +73,13 @@ def make_rdm1(mp, t2=None, eris=None, verbose=logger.NOTE):
     '''1-particle density matrix in MO basis.  The off-diagonal blocks due to
     the orbital response contribution are not included.
     '''
-    dm1occ, dm1vir = _gamma1_intermediates(mp, t2, eris)
-    nocc = dm1occ.shape[0]
-    nvir = dm1vir.shape[0]
-    nmo = nocc + nvir
-    dm1 = numpy.zeros((nmo,nmo))
-    dm1[:nocc,:nocc] = dm1occ * 2
-    dm1[nocc:,nocc:] = dm1vir * 2
-
-    if not (mp.frozen is 0 or mp.frozen is None):
-        nmo = mp.mo_occ.size
-        nocc = numpy.count_nonzero(mp.mo_occ > 0)
-        rdm1 = numpy.zeros((nmo,nmo))
-        moidx = numpy.where(get_frozen_mask(mp))[0]
-        rdm1[moidx[:,None],moidx] = dm1
-        dm1 = rdm1
-
-    for i in range(nocc):
-        dm1[i,i] += 2
-    return dm1
+    from pyscf.cc import ccsd_rdm
+    doo, dvv = _gamma1_intermediates(mp, t2, eris)
+    nocc = doo.shape[0]
+    nvir = doo.shape[0]
+    dov = numpy.zeros((nocc,nvir), dtype=doo.dtype)
+    dvo = dov.T
+    return ccsd_rdm._make_rdm1(mp, (doo, dov, dvo, dvv), with_frozen=True)
 
 def _gamma1_intermediates(mp, t2=None, eris=None):
     if t2 is None: t2 = mp.t2
@@ -102,20 +90,24 @@ def _gamma1_intermediates(mp, t2=None, eris=None):
         if eris is None: eris = mp.ao2mo()
         mo_energy = _mo_energy_without_core(mp, mp.mo_energy)
         eia = mo_energy[:nocc,None] - mo_energy[None,nocc:]
+        dtype = eris.ovov.dtype
+    else:
+        dtype = t2.dtype
 
-    dm1occ = numpy.zeros((nocc,nocc))
-    dm1vir = numpy.zeros((nvir,nvir))
+    dm1occ = numpy.zeros((nocc,nocc), dtype=dtype)
+    dm1vir = numpy.zeros((nvir,nvir), dtype=dtype)
     for i in range(nocc):
         if t2 is None:
             gi = numpy.asarray(eris.ovov[i*nvir:(i+1)*nvir])
             gi = gi.reshape(nvir,nocc,nvir).transpose(1,0,2)
-            t2i = gi/lib.direct_sum('jb+a->jba', eia, eia[i])
+            t2i = gi.conj()/lib.direct_sum('jb+a->jba', eia, eia[i])
         else:
             t2i = t2[i]
-        dm1vir += numpy.einsum('jca,jcb->ab', t2i, t2i) * 2 \
-                - numpy.einsum('jca,jbc->ab', t2i, t2i)
-        dm1occ += numpy.einsum('iab,jab->ij', t2i, t2i) * 2 \
-                - numpy.einsum('iab,jba->ij', t2i, t2i)
+        l2i = t2i.conj()
+        dm1vir += numpy.einsum('jca,jcb->ba', l2i, t2i) * 2 \
+                - numpy.einsum('jca,jbc->ba', l2i, t2i)
+        dm1occ += numpy.einsum('iab,jab->ij', l2i, t2i) * 2 \
+                - numpy.einsum('iab,jba->ij', l2i, t2i)
     return -dm1occ, dm1vir
 
 
@@ -139,33 +131,34 @@ def make_rdm2(mp, t2=None, eris=None, verbose=logger.NOTE):
     else:
         moidx = oidx = vidx = None
 
-    dm2 = numpy.zeros((nmo0,nmo0,nmo0,nmo0)) # Chemist notation
+    dm1 = make_rdm1(mp, t2, eris, verbose)
+    dm1[numpy.diag_indices(nocc0)] -= 2
+
+    dm2 = numpy.zeros((nmo0,nmo0,nmo0,nmo0), dtype=dm1.dtype) # Chemist notation
     #dm2[:nocc,nocc:,:nocc,nocc:] = t2.transpose(0,3,1,2)*2 - t2.transpose(0,2,1,3)
     #dm2[nocc:,:nocc,nocc:,:nocc] = t2.transpose(3,0,2,1)*2 - t2.transpose(2,0,3,1)
     for i in range(nocc):
         if t2 is None:
             gi = numpy.asarray(eris.ovov[i*nvir:(i+1)*nvir])
             gi = gi.reshape(nvir,nocc,nvir).transpose(1,0,2)
-            t2i = gi/lib.direct_sum('jb+a->jba', eia, eia[i])
+            t2i = gi.conj()/lib.direct_sum('jb+a->jba', eia, eia[i])
         else:
             t2i = t2[i]
+        t2i = t2i.conj()
         dovov = t2i.transpose(1,0,2)*2 - t2i.transpose(2,0,1)
         dovov *= 2
         if moidx is None:
             dm2[i,nocc:,:nocc,nocc:] = dovov
-            dm2[nocc:,i,nocc:,:nocc] = dovov.transpose(0,2,1)
+            dm2[nocc:,i,nocc:,:nocc] = dovov.conj().transpose(0,2,1)
         else:
             dm2[oidx[i],vidx[:,None,None],oidx[:,None],vidx] = dovov
-            dm2[vidx[:,None,None],oidx[i],vidx[:,None],oidx] = dovov.transpose(0,2,1)
-
-    dm1 = make_rdm1(mp, t2, eris, verbose)
-    dm1[numpy.diag_indices(nocc0)] -= 2
+            dm2[vidx[:,None,None],oidx[i],vidx[:,None],oidx] = dovov.conj().transpose(0,2,1)
 
     for i in range(nocc0):
         dm2[i,i,:,:] += dm1 * 2
         dm2[:,:,i,i] += dm1 * 2
         dm2[:,i,i,:] -= dm1
-        dm2[i,:,:,i] -= dm1
+        dm2[i,:,:,i] -= dm1.conj()
 
     for i in range(nocc0):
         for j in range(nocc0):

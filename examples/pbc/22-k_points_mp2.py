@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 
 '''
-CCSD with k-point sampling or at an individual k-point
+MP2 at an individual k-point
 '''
 
 import numpy
-from pyscf.pbc import gto, scf, cc
+from pyscf.pbc import gto, scf, mp
 
 cell = gto.Cell()
 cell.atom='''
@@ -23,28 +23,28 @@ cell.verbose = 5
 cell.build()
 
 #
-# KHF and KCCSD with 2x2x2 k-points
+# KHF and KMP2 with 2x2x2 k-points
 #
 kpts = cell.make_kpts([2,2,2])
 kmf = scf.KRHF(cell, exxdiv=None)
 kmf.kpts = kpts
 ehf = kmf.kernel()
 
-mycc = cc.KCCSD(kmf)
-mycc.kernel()
-print("KRCCSD energy (per unit cell) =", mycc.e_tot)
+mypt = mp.KMP2(kmf)
+mypt.kernel()
+print("KMP2 energy (per unit cell) =", mypt.e_tot)
 
 #
-# The KHF and KCCSD for single k-point calculation.
+# The KHF and KMP2 for single k-point calculation.
 #
 kpts = cell.get_abs_kpts([0.25, 0.25, 0.25])
 kmf = scf.KRHF(cell, exxdiv=None)
 kmf.kpts = kpts
 ehf = kmf.kernel()
 
-mycc = cc.KRCCSD(kmf)
-mycc.kernel()
-print("KRCCSD energy (per unit cell) =", mycc.e_tot)
+mypt = mp.KMP2(kmf)
+mypt.kernel()
+print("KMP2 energy (per unit cell) =", mypt.e_tot)
 
 
 #
@@ -58,22 +58,22 @@ kpt = cell.get_abs_kpts([0.25, 0.25, 0.25])
 mf = scf.RHF(cell, kpt=kpt, exxdiv=None)
 ehf = mf.kernel()
 
-mycc = cc.RCCSD(mf).run()
-print("RCCSD energy (per unit cell) at k-point =", mycc.e_tot)
-dm1 = mycc.make_rdm1()
-dm2 = mycc.make_rdm2()
+mypt = mp.RMP2(mf).run()
+print("RMP2 energy (per unit cell) at k-point =", mypt.e_tot)
+dm1 = mypt.make_rdm1()
+dm2 = mypt.make_rdm2()
 nmo = mf.mo_coeff.shape[1]
 eri_mo = mf.with_df.ao2mo(mf.mo_coeff, kpts=kpt).reshape([nmo]*4)
 h1 = reduce(numpy.dot, (mf.mo_coeff.conj().T, mf.get_hcore(), mf.mo_coeff))
 e_tot = numpy.einsum('ij,ji', h1, dm1) + numpy.einsum('ijkl,jilk', eri_mo, dm2)*.5 + mf.energy_nuc()
-print("RCCSD energy based on CCSD density matrices =", e_tot.real)
+print("RMP2 energy based on MP2 density matrices =", e_tot.real)
 
 
 mf = scf.addons.convert_to_uhf(mf)
-mycc = cc.UCCSD(mf).run()
-print("UCCSD energy (per unit cell) at k-point =", mycc.e_tot)
-dm1a, dm1b = mycc.make_rdm1()
-dm2aa, dm2ab, dm2bb = mycc.make_rdm2()
+mypt = mp.UMP2(mf).run()
+print("UMP2 energy (per unit cell) at k-point =", mypt.e_tot)
+dm1a, dm1b = mypt.make_rdm1()
+dm2aa, dm2ab, dm2bb = mypt.make_rdm2()
 nmo = dm1a.shape[0]
 eri_aa = mf.with_df.ao2mo(mf.mo_coeff[0], kpts=kpt).reshape([nmo]*4)
 eri_bb = mf.with_df.ao2mo(mf.mo_coeff[1], kpts=kpt).reshape([nmo]*4)
@@ -86,14 +86,14 @@ e_tot = (numpy.einsum('ij,ji', h1a, dm1a) +
          numpy.einsum('ijkl,jilk', eri_aa, dm2aa)*.5 +
          numpy.einsum('ijkl,jilk', eri_ab, dm2ab)    +
          numpy.einsum('ijkl,jilk', eri_bb, dm2bb)*.5 + mf.energy_nuc())
-print("UCCSD energy based on CCSD density matrices =", e_tot.real)
+print("UMP2 energy based on MP2 density matrices =", e_tot.real)
 
 
 mf = scf.addons.convert_to_ghf(mf)
-mycc = cc.GCCSD(mf).run()
-print("GCCSD energy (per unit cell) at k-point =", mycc.e_tot)
-dm1 = mycc.make_rdm1()
-dm2 = mycc.make_rdm2()
+mypt = mp.GMP2(mf).run()
+print("GMP2 energy (per unit cell) at k-point =", mypt.e_tot)
+dm1 = mypt.make_rdm1()
+dm2 = mypt.make_rdm2()
 nao = cell.nao_nr()
 nmo = mf.mo_coeff.shape[1]
 mo = mf.mo_coeff[:nao] + mf.mo_coeff[nao:]
@@ -103,4 +103,5 @@ eri_mo[orbspin[:,None]!=orbspin] = 0
 eri_mo[:,:,orbspin[:,None]!=orbspin] = 0
 h1 = reduce(numpy.dot, (mf.mo_coeff.conj().T, mf.get_hcore(), mf.mo_coeff))
 e_tot = numpy.einsum('ij,ji', h1, dm1) + numpy.einsum('ijkl,jilk', eri_mo, dm2)*.5 + mf.energy_nuc()
-print("GCCSD energy based on CCSD density matrices =", e_tot.real)
+print("GMP2 energy based on MP2 density matrices =", e_tot.real)
+

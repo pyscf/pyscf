@@ -105,7 +105,7 @@ def cisdvec_to_amplitudes(civec, nmo, nocc):
     c2 = ccsd._unpack_4fold(civec[nocc*nvir+1:], nocc, nvir)
     return c0, c1, c2
 
-def from_cisdvec(civec, nocc, orbspin):
+def from_rcisdvec(civec, nocc, orbspin):
     '''Convert the CISD vectors'''
     from pyscf.cc import addons
     from pyscf.ci import ucisd

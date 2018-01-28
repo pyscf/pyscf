@@ -165,7 +165,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(r1g-gcc1.spatial2spin(t1, orbspin)).max(), 0, 6)
         self.assertAlmostEqual(abs(r2g-gcc1.spatial2spin(t2, orbspin)).max(), 0, 6)
         self.assertAlmostEqual(lib.finger(cc.addons.spatial2spin(t1, orbspin)), -22.760744706991609, 8)
-        self.assertAlmostEqual(lib.finger(cc.addons.spatial2spin(t2, orbspin)), -10542.613510254763, 6)
+        self.assertAlmostEqual(lib.finger(cc.addons.spatial2spin(t2, orbspin)), -10542.613510254763, 5)
         self.assertAlmostEqual(uccsd.energy(ucc1, r1, r2, eris1), -12.258116633736986, 8)
         e0, t1, t2 = ucc1.init_amps(eris1)
         self.assertAlmostEqual(lib.finger(cc.addons.spatial2spin(t1, orbspin)), 18.376940955391518, 8)

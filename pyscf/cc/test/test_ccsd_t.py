@@ -42,6 +42,10 @@ class KnownValues(unittest.TestCase):
         e = ccsd_t.kernel(mycc, eris, t1, t2)
         self.assertAlmostEqual(e, -8.501010390740708, 9)
 
+        mycc.max_memory = 0
+        e = ccsd_t.kernel(mycc, eris, t1, t2)
+        self.assertAlmostEqual(e, -8.501010390740708, 9)
+
     def test_ccsd_t_symm(self):
         e3a = ccsd_t.kernel(mcc, mcc.ao2mo())
         self.assertAlmostEqual(e3a, -0.003060022611584471, 9)

@@ -351,7 +351,6 @@ def _add_vvvv_full(mycc, t1, t2, eris, out=None, with_ovvv=False):
     assert(not with_ovvv)
     time0 = time.clock(), time.time()
     log = logger.Logger(mycc.stdout, mycc.verbose)
-    nocc, nvir = t2.shape[1:3]
     if t1 is None:
         tau = t2
     else:
@@ -364,6 +363,7 @@ def _add_vvvv_full(mycc, t1, t2, eris, out=None, with_ovvv=False):
             mo = eris.mo_coeff
         else:
             mo = _mo_without_core(mycc, mycc.mo_coeff)
+        nocc, nvir = t2.shape[1:3]
         nao, nmo = mo.shape
         aos = numpy.asarray(mo[:,nocc:].T, order='F')
         tau = _ao2mo.nr_e2(tau.reshape(nocc**2,nvir,nvir), aos, (0,nao,0,nao), 's1', 's1')
@@ -489,7 +489,7 @@ def _contract_vvvv_t2(mol, vvvv, t2, out=None, max_memory=2000, verbose=None):
     return Ht2.reshape(t2.shape)
 
 def _unpack_t2_tril(t2tril, nocc, nvir, out=None, t2sym='jiba'):
-    t2 = numpy.ndarray((nocc,nocc,nvir,nvir), buffer=out)
+    t2 = numpy.ndarray((nocc,nocc,nvir,nvir), dtype=t2tril.dtype, buffer=out)
     idx,idy = numpy.tril_indices(nocc)
     if t2sym == 'jiba':
         t2[idy,idx] = t2tril.transpose(0,2,1)
@@ -536,7 +536,8 @@ def vector_to_amplitudes(vector, nmo, nocc):
     nvir = nmo - nocc
     nov = nocc * nvir
     t1 = vector[:nov].copy().reshape((nocc,nvir))
-    t2 = lib.unpack_tril(vector[nov:])
+    # filltriu=lib.SYMMETRIC because t2[iajb] == t2[jbia]
+    t2 = lib.unpack_tril(vector[nov:], filltriu=lib.SYMMETRIC)
     t2 = t2.reshape(nocc,nvir,nocc,nvir).transpose(0,2,1,3)
     return t1, numpy.asarray(t2, order='C')
 
@@ -963,8 +964,8 @@ CC = CCSD
 
 class _ChemistsERIs:
     '''(pq|rs)'''
-    def __init__(self):
-        self.mol = None
+    def __init__(self, mol=None):
+        self.mol = mol
         self.mo_coeff = None
         self.nocc = None
         self.fock = None
@@ -984,7 +985,7 @@ class _ChemistsERIs:
 # Note: Recomputed fock matrix since SCF may not be fully converged.
         dm = mycc._scf.make_rdm1(mycc.mo_coeff, mycc.mo_occ)
         fockao = mycc._scf.get_hcore() + mycc._scf.get_veff(mycc.mol, dm)
-        self.fock = reduce(numpy.dot, (mo_coeff.T, fockao, mo_coeff))
+        self.fock = reduce(numpy.dot, (mo_coeff.conj().T, fockao, mo_coeff))
         self.nocc = mycc.nocc
         self.mol = mycc.mol
         return self
