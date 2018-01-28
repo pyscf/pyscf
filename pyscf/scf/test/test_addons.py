@@ -83,6 +83,24 @@ class KnowValues(unittest.TestCase):
         mf = scf.addons.frac_occ(mf)
         self.assertAlmostEqual(mf.scf(), -107.13465364012296, 9)
 
+        mol.charge = -1
+        mol.spin = 1
+        mf = scf.RHF(mol)
+        mf = scf.addons.frac_occ(mf)
+        self.assertAlmostEqual(mf.scf(), -108.3626325837689, 9)
+
+        mol.charge = 1
+        mol.spin = 1
+        mf = scf.rhf.RHF(mol)
+        mf = scf.addons.frac_occ(mf)
+        self.assertAlmostEqual(mf.scf(), -108.10375514714799, 9)
+
+        mol.charge = 1
+        mol.spin = 1
+        mf = scf.UHF(mol)
+        mf = scf.addons.frac_occ(mf)
+        self.assertAlmostEqual(mf.scf(), -108.17458104180083, 9)
+
     def test_dynamic_occ(self):
         mol = gto.Mole()
         mol.verbose = 5

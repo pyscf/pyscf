@@ -16,7 +16,7 @@ import scipy.special
 import scipy.optimize
 import pyscf.lib.parameters as param
 from pyscf import lib
-from pyscf import dft
+from pyscf.dft import radi
 from pyscf.lib import logger
 from pyscf.gto import mole
 from pyscf.gto import moleintor
@@ -168,6 +168,7 @@ def pack(cell):
     cldic['pseudo'] = cell.pseudo
     cldic['ke_cutoff'] = cell.ke_cutoff
     cldic['rcut'] = cell.rcut
+    cldic['drop_exponent'] = cell.drop_exponent
     cldic['ew_eta'] = cell.ew_eta
     cldic['ew_cut'] = cell.ew_cut
     cldic['dimension'] = cell.dimension
@@ -262,14 +263,14 @@ def conc_cell(cell1, cell2):
     if len(cell2._ecpbas) == 0:
         cell3._ecpbas = cell1._ecpbas
     else:
-        ecpbas2 = numpy.copy(cell2._ecpbas)
+        ecpbas2 = np.copy(cell2._ecpbas)
         ecpbas2[:,mole.ATOM_OF  ] += natm_off
         ecpbas2[:,mole.PTR_EXP  ] += off
         ecpbas2[:,mole.PTR_COEFF] += off
         if len(cell1._ecpbas) == 0:
             cell3._ecpbas = ecpbas2
         else:
-            cell3._ecpbas = numpy.hstack((cell1._ecpbas, ecpbas2))
+            cell3._ecpbas = np.hstack((cell1._ecpbas, ecpbas2))
 
     cell3.verbose = cell1.verbose
     cell3.output = cell1.output
@@ -565,10 +566,10 @@ def get_Gv_weights(cell, mesh=None, **kwargs):
         mesh = [2*n+1 for n in kwargs['gs']]
 
     def plus_minus(n):
-        #rs, ws = dft.delley(n)
-        #rs, ws = dft.treutler_ahlrichs(n)
-        #rs, ws = dft.mura_knowles(n)
-        rs, ws = dft.gauss_chebyshev(n)
+        #rs, ws = radi.delley(n)
+        #rs, ws = radi.treutler_ahlrichs(n)
+        #rs, ws = radi.mura_knowles(n)
+        rs, ws = radi.gauss_chebyshev(n)
         #return np.hstack((0,rs,-rs[::-1])), np.hstack((0,ws,ws[::-1]))
         return np.hstack((rs,-rs[::-1])), np.hstack((ws,ws[::-1]))
 
@@ -1003,6 +1004,7 @@ class Cell(mole.Mole):
         #       density-fitting class.  This determines how the ewald produces
         #       its energy.
         self.low_dim_ft_type = None
+        self.drop_exponent = None
 
 ##################################################
 # These attributes are initialized by build function if not given
@@ -1089,6 +1091,64 @@ class Cell(mole.Mole):
         _built = self._built
         mole.Mole.build(self, False, parse_arg, *args, **kwargs)
 
+        exp_min = min([self.bas_exp(ib).min() for ib in range(self.nbas)])
+        if self.drop_exponent is None:
+            if exp_min < 0.1:
+                sys.stderr.write('''WARNING!
+  Very diffused basis functions are found in the basis set. They may lead to severe
+  linear dependence and numerical instability.  You can set  cell.drop_exponent=0.1
+  to remove the diffused Gaussians whose exponents are less than 0.1.\n\n''')
+        elif exp_min < self.drop_exponent:
+            _basis = {}
+            for symb, basis_now in self._basis.items():
+                basis_add = []
+                for b in basis_now:
+                    l = b[0]
+                    if isinstance(b[1], int):
+                        kappa = b[1]
+                        b_coeff = np.array(b[2:])
+                    else:
+                        kappa = 0
+                        b_coeff = np.array(b[1:])
+                    es = b_coeff[:,0]
+                    if np.any(es < self.drop_exponent):
+                        b_coeff = b_coeff[es>=self.drop_exponent]
+                        if b_coeff.size > 0:
+                            if kappa == 0:
+                                basis_add.append([l] + b_coeff.tolist())
+                            else:
+                                basis_add.append([l,kappa] + b_coeff.tolist())
+                    else:
+                        basis_add.append(b)
+                _basis[symb] = basis_add
+            self._basis = _basis
+
+            steep_shls = []
+            ndrop = 0
+            for ib in range(len(self._bas)):
+                l = self.bas_angular(ib)
+                nprim = self.bas_nprim(ib)
+                nc = self.bas_nctr(ib)
+                es = self.bas_exp(ib)
+                ptr = self._bas[ib,mole.PTR_COEFF]
+                cs = self._env[ptr:ptr+nprim*nc].reshape(nc,nprim).T
+
+                if np.any(es < self.drop_exponent):
+                    cs = cs[es>=self.drop_exponent]
+                    es = es[es>=self.drop_exponent]
+                    nprim, ndrop = len(es), nprim-len(es)+ndrop
+                    if nprim > 0:
+                        pe = self._bas[ib,mole.PTR_EXP]
+                        self._bas[ib,mole.NPRIM_OF] = nprim
+                        self._env[pe:pe+nprim] = es
+                        cs = mole._nomalize_contracted_ao(l, es, cs)
+                        self._env[ptr:ptr+nprim*nc] = cs.T.reshape(-1)
+                if nprim > 0:
+                    steep_shls.append(ib)
+            self._bas = np.asarray(self._bas[steep_shls], order='C')
+            #logger.info(self, 'Drop %d diffused primitive functions', ndrop)
+            #logger.debug1(self, 'Old shells %s', steep_shls)
+
         if self.rcut is None:
             self.rcut = max([self.bas_rcut(ib, self.precision)
                              for ib in range(self.nbas)] + [0])
@@ -1122,6 +1182,8 @@ class Cell(mole.Mole):
             logger.info(self, '                 a3 [%.9f, %.9f, %.9f]', *_a[2])
             logger.info(self, 'dimension = %s', self.dimension)
             logger.info(self, 'Cell volume = %g', self.vol)
+            if self.drop_exponent is not None:
+                logger.info(self, 'drop_exponent = %s', self.drop_exponent)
             logger.info(self, 'rcut = %s (nimgs = %s)', self.rcut, self.nimgs)
             logger.info(self, 'lattice sum = %d cells', len(self.get_lattice_Ls()))
             logger.info(self, 'precision = %g', self.precision)

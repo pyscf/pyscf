@@ -112,13 +112,12 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
     else:
         vk_kpts = np.zeros((nset,nband,nao,nao), dtype=np.complex128)
 
-    ao2_kpts = mydf._numint.eval_ao(cell, coords, kpts, non0tab=mydf.non0tab)
-    ao2_kpts = [np.asarray(ao.T, order='C') for ao in ao2_kpts]
+    ao2_kpts = [np.asarray(ao.T, order='C') for k, ao in mydf.aoR_loop(kpts=kpts)]
     if input_band is None:
         ao1_kpts = ao2_kpts
     else:
-        ao1_kpts = mydf._numint.eval_ao(cell, coords, kpts_band, non0tab=mydf.non0tab)
-        ao1_kpts = [np.asarray(ao.T, order='C') for ao in ao1_kpts]
+        ao1_kpts = [np.asarray(ao.T, order='C')
+                    for k, ao in mydf.aoR_loop(kpts_band=kpts_band)]
     if mo_coeff is not None and nset == 1:
         mo_coeff = [mo_coeff[k][:,occ>0] * np.sqrt(occ[occ>0])
                     for k, occ in enumerate(mo_occ)]

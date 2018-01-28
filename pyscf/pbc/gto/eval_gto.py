@@ -23,10 +23,10 @@ def eval_gto(cell, eval_name, coords, comp=1, kpts=None, kpt=None,
             ==========================  =======================
             Function                    Expression
             ==========================  =======================
-            "PBCval_sph"                |AO>
-            "PBCval_ip_sph"             nabla |AO>
-            "PBCval_cart"               |AO>
-            "PBCval_ip_cart"            nabla |AO>
+            "GTOval_sph"                \sum_T exp(ik*T) |AO>
+            "GTOval_ip_sph"             nabla \sum_T exp(ik*T) |AO>
+            "GTOval_cart"               \sum_T exp(ik*T) |AO>
+            "GTOval_ip_cart"            nabla \sum_T exp(ik*T) |AO>
             ==========================  =======================
 
         atm : int32 ndarray
@@ -60,12 +60,12 @@ def eval_gto(cell, eval_name, coords, comp=1, kpts=None, kpt=None,
     >>> cell = pbc.gto.M(a=numpy.eye(3)*4, atom='He 1 1 1', basis='6-31g')
     >>> coords = cell.get_uniform_grids([20,20,20])
     >>> kpts = cell.make_kpts([3,3,3])
-    >>> ao_value = cell.eval_gto("GTOval_sph", coords, kpts)
+    >>> ao_value = cell.pbc_eval_gto("GTOval_sph", coords, kpts)
     >>> len(ao_value)
     27
     >>> ao_value[0].shape
     (100, 2)
-    >>> ao_value = cell.eval_gto("GTOval_ig_sph", coords, kpts, comp=3)
+    >>> ao_value = cell.pbc_eval_gto("GTOval_ig_sph", coords, kpts, comp=3)
     >>> print(ao_value.shape)
     >>> len(ao_value)
     27
@@ -78,6 +78,8 @@ def eval_gto(cell, eval_name, coords, comp=1, kpts=None, kpt=None,
             eval_name = eval_name + '_cart'
         else:
             eval_name = eval_name + '_sph'
+    if eval_name[:3] != 'PBC':  # PBCGTOval_xxx
+        eval_name = 'PBC' + eval_name
 
     atm = numpy.asarray(cell._atm, dtype=numpy.int32, order='C')
     bas = numpy.asarray(cell._bas, dtype=numpy.int32, order='C')
@@ -139,11 +141,13 @@ def eval_gto(cell, eval_name, coords, comp=1, kpts=None, kpt=None,
         ao_kpts = ao_kpts[0]
     return ao_kpts
 
+pbc_eval_gto = eval_gto
+
 
 if __name__ == '__main__':
     from pyscf.pbc import gto, dft
     cell = gto.M(a=numpy.eye(3)*4, atom='He 1 1 1', basis='6-31g')
     coords = cell.get_uniform_grids([10]*3)
-    ao_value = eval_gto(cell, "PBCval_sph", coords, kpts=cell.make_kpts([3]*3))
+    ao_value = eval_gto(cell, "PBCGTOval_sph", coords, kpts=cell.make_kpts([3]*3))
     print(lib.finger(numpy.asarray(ao_value)) - 0.542179662042965-0.12290561920251104j)
     print(ao_value[0].shape)

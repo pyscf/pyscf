@@ -9,7 +9,6 @@ import copy
 import numpy
 from pyscf import lib
 from pyscf import gto
-from pyscf import dft
 from pyscf.lib import logger
 from pyscf.pbc import tools
 from pyscf.pbc.gto import pseudo, estimate_ke_cutoff, error_for_ke_cutoff
@@ -97,7 +96,7 @@ def get_pp(mydf, kpts=None):
                     fakemol._bas[0,gto.ANG_OF] = l
                     fakemol._env[ptr+3] = .5*rl**2
                     fakemol._env[ptr+4] = rl**(l+1.5)*numpy.pi**1.25
-                    pYlm_part = dft.numint.eval_ao(fakemol, Gk, deriv=0)
+                    pYlm_part = fakemol.eval_gto('GTOval', Gk)
 
                     p0, p1 = p1, p1+nl*(l*2+1)
                     # pYlm is real, SI[ia] is complex

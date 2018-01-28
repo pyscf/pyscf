@@ -129,8 +129,9 @@ if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/lib/libxc.so.4" AND
   )
 endif() # ENABLE_LIBXC
 
-if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xcfun.h" AND
-    ENABLE_XCFUN AND BUILD_XCFUN)
+#if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xcfun.h" AND
+#    ENABLE_XCFUN AND BUILD_XCFUN)
+if(ENABLE_XCFUN AND BUILD_XCFUN)
   ExternalProject_Add(libxcfun
     GIT_REPOSITORY https://github.com/dftlibs/xcfun.git
     GIT_TAG 355f42497a9cd17d16ae91da1f1aaaf93756ae8b

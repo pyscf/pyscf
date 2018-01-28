@@ -244,6 +244,7 @@ def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None,
 # approx_grids.
             mf0.small_rho_cutoff = mf.small_rho_cutoff * 10
         mf0.kernel()
+        mf1.with_df = mf0.with_df
         mo_coeff, mo_occ = mf0.mo_coeff, mf0.mo_occ
 
         if projectbasis:
@@ -253,6 +254,7 @@ def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None,
             else:
                 mo_coeff = project_mo_nr2nr(pmol, mo_coeff, mf.mol)
             mo_coeff, mo_occ = mf1.from_dm(mf.make_rdm1(mo_coeff,mo_occ))
+        mf0 = None
 
         logger.note(mf, '============================')
         logger.note(mf, 'Generating initial guess end')

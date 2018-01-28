@@ -235,7 +235,11 @@ def gen_linkstr_index_trilidx(orb_list, nocc, strs=None):
 
 # return [cre, des, target_address, parity]
 def gen_cre_str_index_o0(orb_list, nelec):
+    '''Slow version of gen_cre_str_index function'''
     cre_strs = gen_strings4orblist(orb_list, nelec+1)
+    if isinstance(strs, OIndexList):
+        raise NotImplementedError('System with 64 orbitals or more')
+
     credic = dict(zip(cre_strs,range(cre_strs.__len__())))
     def progate1e(str0):
         linktab = []
@@ -249,9 +253,13 @@ def gen_cre_str_index_o0(orb_list, nelec):
     t = [progate1e(s) for s in strs.astype(numpy.int64)]
     return numpy.array(t, dtype=numpy.int32)
 def gen_cre_str_index_o1(orb_list, nelec):
+    '''C implementation of gen_cre_str_index function'''
     norb = len(orb_list)
     assert(nelec < norb)
     strs = gen_strings4orblist(orb_list, nelec)
+    if isinstance(strs, OIndexList):
+        raise NotImplementedError('System with 64 orbitals or more')
+
     strs = numpy.array(strs, dtype=numpy.int64)
     na = strs.shape[0]
     link_index = numpy.empty((len(strs),norb-nelec,4), dtype=numpy.int32)
@@ -272,7 +280,11 @@ def gen_cre_str_index(orb_list, nelec):
 
 # return [cre, des, target_address, parity]
 def gen_des_str_index_o0(orb_list, nelec):
+    '''Slow version of gen_des_str_index function'''
     des_strs = gen_strings4orblist(orb_list, nelec-1)
+    if isinstance(strs, OIndexList):
+        raise NotImplementedError('System with 64 orbitals or more')
+
     desdic = dict(zip(des_strs,range(des_strs.__len__())))
     def progate1e(str0):
         linktab = []
@@ -286,8 +298,12 @@ def gen_des_str_index_o0(orb_list, nelec):
     t = [progate1e(s) for s in strs.astype(numpy.int64)]
     return numpy.array(t, dtype=numpy.int32)
 def gen_des_str_index_o1(orb_list, nelec):
+    '''C implementation of gen_des_str_index function'''
     assert(nelec > 0)
     strs = gen_strings4orblist(orb_list, nelec)
+    if isinstance(strs, OIndexList):
+        raise NotImplementedError('System with 64 orbitals or more')
+
     strs = numpy.array(strs, dtype=numpy.int64)
     norb = len(orb_list)
     na = strs.shape[0]

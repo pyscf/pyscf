@@ -603,16 +603,7 @@ def make_bas_env(basis_add, atom_id=0, ptr=0):
         cs = b_coeff[:,1:]
         nprim, nctr = cs.shape
         cs = numpy.einsum('pi,p->pi', cs, gto_norm(angl, es))
-# normalize contracted AO
-        #ee = numpy.empty((nprim,nprim))
-        #for i in range(nprim):
-        #    for j in range(i+1):
-        #        ee[i,j] = ee[j,i] = gaussian_int(angl*2+2, es[i]+es[j])
-        #s1 = 1/numpy.sqrt(numpy.einsum('pi,pq,qi->i', cs, ee, cs))
-        ee = es.reshape(-1,1) + es.reshape(1,-1)
-        ee = gaussian_int(angl*2+2, ee)
-        s1 = 1/numpy.sqrt(numpy.einsum('pi,pq,qi->i', cs, ee, cs))
-        cs = numpy.einsum('pi,i->pi', cs, s1)
+        cs = _nomalize_contracted_ao(angl, es, cs)
 
         _env.append(es)
         _env.append(cs.T.reshape(-1))
@@ -623,6 +614,17 @@ def make_bas_env(basis_add, atom_id=0, ptr=0):
     _env = lib.flatten(_env) # flatten nested lists
     return (numpy.array(_bas, numpy.int32).reshape(-1,BAS_SLOTS),
             numpy.array(_env, numpy.double))
+
+def _nomalize_contracted_ao(l, es, cs):
+    #ee = numpy.empty((nprim,nprim))
+    #for i in range(nprim):
+    #    for j in range(i+1):
+    #        ee[i,j] = ee[j,i] = gaussian_int(angl*2+2, es[i]+es[j])
+    #s1 = 1/numpy.sqrt(numpy.einsum('pi,pq,qi->i', cs, ee, cs))
+    ee = es.reshape(-1,1) + es.reshape(1,-1)
+    ee = gaussian_int(l*2+2, ee)
+    s1 = 1/numpy.sqrt(numpy.einsum('pi,pq,qi->i', cs, ee, cs))
+    return numpy.einsum('pi,i->pi', cs, s1)
 
 def make_env(atoms, basis, pre_env=[], nucmod={}):
     '''Generate the input arguments for ``libcint`` library based on internal

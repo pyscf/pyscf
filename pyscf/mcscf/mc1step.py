@@ -1051,6 +1051,13 @@ class CASSCF(casci.CASCI):
         self.with_dep4 = x == 4
     grad_update_dep = ci_update_dep
 
+    @property
+    def max_cycle(self):
+        return self.max_cycle_macro
+    @max_cycle.setter
+    def max_cycle(self, x):
+        self.max_cycle_macro = x
+
 
 # to avoid calculating AO integrals
 def _fake_h_for_fast_casci(casscf, mo, eris):

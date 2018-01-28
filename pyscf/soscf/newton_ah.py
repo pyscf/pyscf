@@ -647,6 +647,11 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
     if dump_chk:
         chkfile.save_mol(mol, mf.chkfile)
 
+# Copy the integral file to soscf object to avoid the integrals being cached
+# twice.
+    if hasattr(mf, '_scf') and id(mf._scf.mol) != id(mol) and mf._eri is None:
+        mf._eri = mf._scf._eri
+
     rotaiter = rotate_orb_cc(mf, mo_coeff, mo_occ, fock, h1e, conv_tol_grad, log)
     u, g_orb, kfcount, jkcount = next(rotaiter)
     kftot = kfcount + 1

@@ -15,42 +15,107 @@ from pyscf.scf import hf
 
 
 def frac_occ_(mf, tol=1e-3):
-    assert(isinstance(mf, hf.RHF))
+    from pyscf.scf import uhf, rohf
     old_get_occ = mf.get_occ
-    def get_occ(mo_energy, mo_coeff=None):
-        mol = mf.mol
-        n_docc = mol.nelectron // 2
-        n_socc = (mol.nelectron+1) // 2 - n_docc
-        nocc = n_docc + n_socc
-        sort_mo_energy = numpy.sort(mo_energy)
-        homo = sort_mo_energy[nocc-1]
-        lumo = sort_mo_energy[nocc]
-        if abs(homo - lumo) < tol or n_socc:
-            mo_occ = numpy.zeros_like(mo_energy)
-            mo_occ[:n_docc] = 2
-            mask = abs(mo_energy-homo) < tol
-            degen = int(mask.sum())
-            n_docc_degen = numpy.count_nonzero(mask & (mo_occ == 2))
-            frac = (n_socc + 2.*n_docc_degen) / degen
-            mo_occ[mask] = frac
-            logger.warn(mf, 'fraction occ = %6g  for orbitals %s',
-                        frac, numpy.where(mask)[0])
-            logger.info(mf, 'HOMO = %.12g  LUMO = %.12g', homo, lumo)
-            logger.debug(mf, '  mo_energy = %s', mo_energy)
-        else:
-            mo_occ = old_get_occ(mo_energy, mo_coeff)
-        return mo_occ
+    mol = mf.mol
 
-    def get_grad(mo_coeff, mo_occ, fock_ao):
-        mol = mf.mol
-        fock = reduce(numpy.dot, (mo_coeff.T.conj(), fock_ao, mo_coeff))
-        fock *= mo_occ.reshape(-1,1)
-        nocc = mol.nelectron // 2
-        g = fock[:nocc,nocc:].T
-        return g.ravel()
+    def guess_occ(mo_energy, nocc):
+        sorted_idx = numpy.argsort(mo_energy)
+        homo = mo_energy[sorted_idx[nocc-1]]
+        lumo = mo_energy[sorted_idx[nocc]]
+        frac_occ_lst = abs(mo_energy - homo) < tol
+        integer_occ_lst = (mo_energy <= homo) & (~frac_occ_lst)
+        mo_occ = numpy.zeros_like(mo_energy)
+        mo_occ[integer_occ_lst] = 1
+        degen = numpy.count_nonzero(frac_occ_lst)
+        frac = nocc - numpy.count_nonzero(integer_occ_lst)
+        mo_occ[frac_occ_lst] = float(frac) / degen
+        return mo_occ, numpy.where(frac_occ_lst)[0], homo, lumo
+
+    get_grad = None
+
+    if isinstance(mf, uhf.UHF):
+        def get_occ(mo_energy, mo_coeff=None):
+            nocca, noccb = mol.nelec
+            mo_occa, frac_lsta, homoa, lumoa = guess_occ(mo_energy[0], nocca)
+            mo_occb, frac_lstb, homob, lumob = guess_occ(mo_energy[1], noccb)
+
+            if abs(homoa - lumoa) < tol or abs(homob - lumob) < tol:
+                mo_occ = numpy.array([mo_occa, mo_occb])
+                logger.warn(mf, 'fraction occ = %6g for alpha orbitals %s  '
+                            '%6g for beta orbitals %s',
+                            mo_occa[frac_lsta[0]], frac_lsta,
+                            mo_occb[frac_lstb[0]], frac_lstb)
+                logger.info(mf, '  alpha HOMO = %.12g  LUMO = %.12g', homoa, lumoa)
+                logger.info(mf, '  beta  HOMO = %.12g  LUMO = %.12g', homob, lumob)
+                logger.debug(mf, '  alpha mo_energy = %s', mo_energy[0])
+                logger.debug(mf, '  beta  mo_energy = %s', mo_energy[1])
+            else:
+                mo_occ = old_get_occ(mo_energy, mo_coeff)
+            return mo_occ
+
+    elif isinstance(mf, rohf.ROHF):
+        def get_occ(mo_energy, mo_coeff=None):
+            nocca, noccb = mol.nelec
+            mo_occa, frac_lsta, homoa, lumoa = guess_occ(mo_energy, nocca)
+            mo_occb, frac_lstb, homob, lumob = guess_occ(mo_energy, noccb)
+
+            if abs(homoa - lumoa) < tol or abs(homob - lumob) < tol:
+                mo_occ = mo_occa + mo_occb
+                logger.warn(mf, 'fraction occ = %6g for alpha orbitals %s  '
+                            '%6g for beta orbitals %s',
+                            mo_occa[frac_lsta[0]], frac_lsta,
+                            mo_occb[frac_lstb[0]], frac_lstb)
+                logger.info(mf, '  HOMO = %.12g  LUMO = %.12g', homoa, lumoa)
+                logger.debug(mf, '  mo_energy = %s', mo_energy)
+            else:
+                mo_occ = old_get_occ(mo_energy, mo_coeff)
+            return mo_occ
+
+        def get_grad(mo_coeff, mo_occ, fock):
+            occidxa = mo_occ > 0
+            occidxb = mo_occ > 1
+            viridxa = ~occidxa
+            viridxb = ~occidxb
+            uniq_var_a = viridxa.reshape(-1,1) & occidxa
+            uniq_var_b = viridxb.reshape(-1,1) & occidxb
+
+            if hasattr(fock, 'focka'):
+                focka = fock.focka
+                fockb = fock.fockb
+            elif fock.ndim == 3:
+                focka, fockb = fock
+            else:
+                focka = fockb = fock
+            focka = reduce(numpy.dot, (mo_coeff.T.conj(), focka, mo_coeff))
+            fockb = reduce(numpy.dot, (mo_coeff.T.conj(), fockb, mo_coeff))
+
+            g = numpy.zeros_like(focka)
+            g[uniq_var_a]  = focka[uniq_var_a]
+            g[uniq_var_b] += fockb[uniq_var_b]
+            return g[uniq_var_a | uniq_var_b]
+
+    else:  # RHF
+        def get_occ(mo_energy, mo_coeff=None):
+            nocc = (mol.nelectron+1) // 2  # n_docc + n_socc
+            mo_occ, frac_lst, homo, lumo = guess_occ(mo_energy, nocc)
+            n_docc = mol.nelectron // 2
+            n_socc = nocc - n_docc
+            if abs(homo - lumo) < tol or n_socc:
+                mo_occ *= 2
+                degen = len(frac_lst)
+                mo_occ[frac_lst] -= float(n_socc) / degen
+                logger.warn(mf, 'fraction occ = %6g  for orbitals %s',
+                            mo_occ[frac_lst[0]], frac_lst)
+                logger.info(mf, 'HOMO = %.12g  LUMO = %.12g', homo, lumo)
+                logger.debug(mf, '  mo_energy = %s', mo_energy)
+            else:
+                mo_occ = old_get_occ(mo_energy, mo_coeff)
+            return mo_occ
 
     mf.get_occ = get_occ
-    mf.get_grad = get_grad
+    if get_grad is not None:
+        mf.get_grad = get_grad
     return mf
 frac_occ = frac_occ_
 

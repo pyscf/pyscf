@@ -227,8 +227,8 @@ def get_occ(mf, mo_energy=None, mo_coeff=None):
     else:
         n_a, n_b = mf.nelec
     mo_occ = numpy.zeros_like(mo_energy)
-    mo_occ[0][e_idx_a[:n_a]] = 1
-    mo_occ[1][e_idx_b[:n_b]] = 1
+    mo_occ[0,e_idx_a[:n_a]] = 1
+    mo_occ[1,e_idx_b[:n_b]] = 1
     if mf.verbose >= logger.INFO and n_a < nmo and n_b > 0 and n_b < nmo:
         if e_sort_a[n_a-1]+1e-3 > e_sort_a[n_a]:
             logger.warn(mf, 'alpha nocc = %d  HOMO %.15g >= LUMO %.15g',

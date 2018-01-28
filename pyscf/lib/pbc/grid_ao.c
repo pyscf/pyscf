@@ -358,10 +358,10 @@ void PBCeval_sph_drv(void (*feval)(), int (*fexp)(),
                      ao, coord, non0table, atm, natm, bas, nbas, env);
 }
 
-void PBCval_cart_deriv0(int ngrids, int *shls_slice, int *ao_loc,
-                        double *Ls, int nimgs, double complex *expLk, int nkpts,
-                        double complex **ao, double *coord, unsigned char *non0table,
-                        int *atm, int natm, int *bas, int nbas, double *env)
+void PBCGTOval_cart_deriv0(int ngrids, int *shls_slice, int *ao_loc,
+                           double *Ls, int nimgs, double complex *expLk, int nkpts,
+                           double complex **ao, double *coord, unsigned char *non0table,
+                           int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 1};
         PBCeval_cart_drv(GTOshell_eval_grid_cart, GTOcontract_exp0,
@@ -369,10 +369,10 @@ void PBCval_cart_deriv0(int ngrids, int *shls_slice, int *ao_loc,
                          ao, coord, non0table, atm, natm, bas, nbas, env);
 }
 
-void PBCval_sph_deriv0(int ngrids, int *shls_slice, int *ao_loc,
-                       double *Ls, int nimgs, double complex *expLk, int nkpts,
-                       double complex **ao, double *coord, unsigned char *non0table,
-                       int *atm, int natm, int *bas, int nbas, double *env)
+void PBCGTOval_sph_deriv0(int ngrids, int *shls_slice, int *ao_loc,
+                          double *Ls, int nimgs, double complex *expLk, int nkpts,
+                          double complex **ao, double *coord, unsigned char *non0table,
+                          int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 1};
         PBCeval_sph_drv(GTOshell_eval_grid_cart, GTOcontract_exp0,
@@ -380,10 +380,10 @@ void PBCval_sph_deriv0(int ngrids, int *shls_slice, int *ao_loc,
                         ao, coord, non0table, atm, natm, bas, nbas, env);
 }
 
-void PBCval_cart_deriv1(int ngrids, int *shls_slice, int *ao_loc,
-                        double *Ls, int nimgs, double complex *expLk, int nkpts,
-                        double complex **ao, double *coord, unsigned char *non0table,
-                        int *atm, int natm, int *bas, int nbas, double *env)
+void PBCGTOval_cart_deriv1(int ngrids, int *shls_slice, int *ao_loc,
+                           double *Ls, int nimgs, double complex *expLk, int nkpts,
+                           double complex **ao, double *coord, unsigned char *non0table,
+                           int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 4};
         PBCeval_cart_drv(GTOshell_eval_grid_cart_deriv1, GTOcontract_exp1,
@@ -391,10 +391,10 @@ void PBCval_cart_deriv1(int ngrids, int *shls_slice, int *ao_loc,
                          ao, coord, non0table, atm, natm, bas, nbas, env);
 }
 
-void PBCval_sph_deriv1(int ngrids, int *shls_slice, int *ao_loc,
-                       double *Ls, int nimgs, double complex *expLk, int nkpts,
-                       double complex **ao, double *coord, unsigned char *non0table,
-                       int *atm, int natm, int *bas, int nbas, double *env)
+void PBCGTOval_sph_deriv1(int ngrids, int *shls_slice, int *ao_loc,
+                          double *Ls, int nimgs, double complex *expLk, int nkpts,
+                          double complex **ao, double *coord, unsigned char *non0table,
+                          int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 4};
         PBCeval_sph_drv(GTOshell_eval_grid_cart_deriv1, GTOcontract_exp1,
@@ -402,10 +402,10 @@ void PBCval_sph_deriv1(int ngrids, int *shls_slice, int *ao_loc,
                         ao, coord, non0table, atm, natm, bas, nbas, env);
 }
 
-void PBCval_cart_deriv2(int ngrids, int *shls_slice, int *ao_loc,
-                        double *Ls, int nimgs, double complex *expLk, int nkpts,
-                        double complex **ao, double *coord, unsigned char *non0table,
-                        int *atm, int natm, int *bas, int nbas, double *env)
+void PBCGTOval_cart_deriv2(int ngrids, int *shls_slice, int *ao_loc,
+                           double *Ls, int nimgs, double complex *expLk, int nkpts,
+                           double complex **ao, double *coord, unsigned char *non0table,
+                           int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 10};
         PBCeval_cart_drv(GTOshell_eval_grid_cart_deriv2, GTOprim_exp,
@@ -413,10 +413,10 @@ void PBCval_cart_deriv2(int ngrids, int *shls_slice, int *ao_loc,
                          ao, coord, non0table, atm, natm, bas, nbas, env);
 }
 
-void PBCval_sph_deriv2(int ngrids, int *shls_slice, int *ao_loc,
-                       double *Ls, int nimgs, double complex *expLk, int nkpts,
-                       double complex **ao, double *coord, unsigned char *non0table,
-                       int *atm, int natm, int *bas, int nbas, double *env)
+void PBCGTOval_sph_deriv2(int ngrids, int *shls_slice, int *ao_loc,
+                          double *Ls, int nimgs, double complex *expLk, int nkpts,
+                          double complex **ao, double *coord, unsigned char *non0table,
+                          int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 10};
         PBCeval_sph_drv(GTOshell_eval_grid_cart_deriv2, GTOprim_exp,
@@ -424,10 +424,10 @@ void PBCval_sph_deriv2(int ngrids, int *shls_slice, int *ao_loc,
                         ao, coord, non0table, atm, natm, bas, nbas, env);
 }
 
-void PBCval_cart_deriv3(int ngrids, int *shls_slice, int *ao_loc,
-                        double *Ls, int nimgs, double complex *expLk, int nkpts,
-                        double complex **ao, double *coord, unsigned char *non0table,
-                        int *atm, int natm, int *bas, int nbas, double *env)
+void PBCGTOval_cart_deriv3(int ngrids, int *shls_slice, int *ao_loc,
+                           double *Ls, int nimgs, double complex *expLk, int nkpts,
+                           double complex **ao, double *coord, unsigned char *non0table,
+                           int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 20};
         PBCeval_cart_drv(GTOshell_eval_grid_cart_deriv3, GTOprim_exp,
@@ -435,10 +435,10 @@ void PBCval_cart_deriv3(int ngrids, int *shls_slice, int *ao_loc,
                          ao, coord, non0table, atm, natm, bas, nbas, env);
 }
 
-void PBCval_sph_deriv3(int ngrids, int *shls_slice, int *ao_loc,
-                       double *Ls, int nimgs, double complex *expLk, int nkpts,
-                       double complex **ao, double *coord, unsigned char *non0table,
-                       int *atm, int natm, int *bas, int nbas, double *env)
+void PBCGTOval_sph_deriv3(int ngrids, int *shls_slice, int *ao_loc,
+                          double *Ls, int nimgs, double complex *expLk, int nkpts,
+                          double complex **ao, double *coord, unsigned char *non0table,
+                          int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 20};
         PBCeval_sph_drv(GTOshell_eval_grid_cart_deriv3, GTOprim_exp,
@@ -446,10 +446,10 @@ void PBCval_sph_deriv3(int ngrids, int *shls_slice, int *ao_loc,
                         ao, coord, non0table, atm, natm, bas, nbas, env);
 }
 
-void PBCval_cart_deriv4(int ngrids, int *shls_slice, int *ao_loc,
-                        double *Ls, int nimgs, double complex *expLk, int nkpts,
-                        double complex **ao, double *coord, unsigned char *non0table,
-                        int *atm, int natm, int *bas, int nbas, double *env)
+void PBCGTOval_cart_deriv4(int ngrids, int *shls_slice, int *ao_loc,
+                           double *Ls, int nimgs, double complex *expLk, int nkpts,
+                           double complex **ao, double *coord, unsigned char *non0table,
+                           int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 35};
         PBCeval_cart_drv(GTOshell_eval_grid_cart_deriv4, GTOprim_exp,
@@ -457,10 +457,10 @@ void PBCval_cart_deriv4(int ngrids, int *shls_slice, int *ao_loc,
                          ao, coord, non0table, atm, natm, bas, nbas, env);
 }
 
-void PBCval_sph_deriv4(int ngrids, int *shls_slice, int *ao_loc,
-                       double *Ls, int nimgs, double complex *expLk, int nkpts,
-                       double complex **ao, double *coord, unsigned char *non0table,
-                       int *atm, int natm, int *bas, int nbas, double *env)
+void PBCGTOval_sph_deriv4(int ngrids, int *shls_slice, int *ao_loc,
+                          double *Ls, int nimgs, double complex *expLk, int nkpts,
+                          double complex **ao, double *coord, unsigned char *non0table,
+                          int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 35};
         PBCeval_sph_drv(GTOshell_eval_grid_cart_deriv4, GTOprim_exp,
@@ -468,45 +468,45 @@ void PBCval_sph_deriv4(int ngrids, int *shls_slice, int *ao_loc,
                         ao, coord, non0table, atm, natm, bas, nbas, env);
 }
 
-void PBCval_cart(int ngrids, int *shls_slice, int *ao_loc,
-                 double *Ls, int nimgs, double complex *expLk, int nkpts,
-                 double complex **ao, double *coord, unsigned char *non0table,
-                 int *atm, int natm, int *bas, int nbas, double *env)
+void PBCGTOval_cart(int ngrids, int *shls_slice, int *ao_loc,
+                    double *Ls, int nimgs, double complex *expLk, int nkpts,
+                    double complex **ao, double *coord, unsigned char *non0table,
+                    int *atm, int natm, int *bas, int nbas, double *env)
 {
 //        int param[] = {1, 1};
 //        PBCeval_cart_drv(GTOshell_eval_grid_cart, GTOcontract_exp0,
 //                         ngrids, param, shls_slice, ao_loc, Ls, nimgs, expLk, nkpts,
 //                         ao, coord, non0table, atm, natm, bas, nbas, env);
-        PBCval_cart_deriv0(ngrids, shls_slice, ao_loc, Ls, nimgs, expLk, nkpts,
-                           ao, coord, non0table, atm, natm, bas, nbas, env);
+        PBCGTOval_cart_deriv0(ngrids, shls_slice, ao_loc, Ls, nimgs, expLk, nkpts,
+                              ao, coord, non0table, atm, natm, bas, nbas, env);
 }
-void PBCval_sph(int ngrids, int *shls_slice, int *ao_loc,
-                double *Ls, int nimgs, double complex *expLk, int nkpts,
-                double complex **ao, double *coord, unsigned char *non0table,
-                int *atm, int natm, int *bas, int nbas, double *env)
+void PBCGTOval_sph(int ngrids, int *shls_slice, int *ao_loc,
+                   double *Ls, int nimgs, double complex *expLk, int nkpts,
+                   double complex **ao, double *coord, unsigned char *non0table,
+                   int *atm, int natm, int *bas, int nbas, double *env)
 {
 //        int param[] = {1, 1};
 //        PBCeval_sph_drv(GTOshell_eval_grid_cart, GTOcontract_exp0,
 //                        ngrids, param, shls_slice, ao_loc, Ls, nimgs, expLk, nkpts,
 //                        ao, coord, non0table, atm, natm, bas, nbas, env);
-        PBCval_sph_deriv0(ngrids, shls_slice, ao_loc, Ls, nimgs, expLk, nkpts,
-                          ao, coord, non0table, atm, natm, bas, nbas, env);
+        PBCGTOval_sph_deriv0(ngrids, shls_slice, ao_loc, Ls, nimgs, expLk, nkpts,
+                             ao, coord, non0table, atm, natm, bas, nbas, env);
 }
 
-void PBCval_ip_cart(int ngrids, int *shls_slice, int *ao_loc,
-                    double *Ls, int nimgs, double complex *expLk, int nkpts,
-                    double complex **ao, double *coord, unsigned char *non0table,
-                    int *atm, int natm, int *bas, int nbas, double *env)
+void PBCGTOval_ip_cart(int ngrids, int *shls_slice, int *ao_loc,
+                       double *Ls, int nimgs, double complex *expLk, int nkpts,
+                       double complex **ao, double *coord, unsigned char *non0table,
+                       int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 3};
         PBCeval_cart_drv(GTOshell_eval_grid_ip_cart, GTOcontract_exp1,
                          ngrids, param, shls_slice, ao_loc, Ls, nimgs, expLk, nkpts,
                          ao, coord, non0table, atm, natm, bas, nbas, env);
 }
-void PBCval_ip_sph(int ngrids, int *shls_slice, int *ao_loc,
-                   double *Ls, int nimgs, double complex *expLk, int nkpts,
-                   double complex **ao, double *coord, unsigned char *non0table,
-                   int *atm, int natm, int *bas, int nbas, double *env)
+void PBCGTOval_ip_sph(int ngrids, int *shls_slice, int *ao_loc,
+                      double *Ls, int nimgs, double complex *expLk, int nkpts,
+                      double complex **ao, double *coord, unsigned char *non0table,
+                      int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 3};
         PBCeval_sph_drv(GTOshell_eval_grid_ip_cart, GTOcontract_exp1,
