@@ -58,7 +58,7 @@ def make_intermediates(mycc, t1, t2, eris):
 
     woooo = numpy.asarray(eris.oooo) * .5
     woooo+= v3 * .25
-    woooo+= einsum('jilc,kc->ijkl', eris.ooov, t1)
+    woooo+= einsum('jilc,kc->jilk', eris.ooov, t1)
 
     wovvo = v4 - numpy.einsum('ljdb,lc,kd->jcbk', eris.oovv, t1, t1)
     wovvo-= einsum('ljkb,lc->jcbk', eris.ooov, t1)

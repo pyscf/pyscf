@@ -536,7 +536,8 @@ def vector_to_amplitudes(vector, nmo, nocc):
     nvir = nmo - nocc
     nov = nocc * nvir
     t1 = vector[:nov].copy().reshape((nocc,nvir))
-    t2 = lib.unpack_tril(vector[nov:])
+    # filltriu=lib.SYMMETRIC because t2[iajb] == t2[jbia]
+    t2 = lib.unpack_tril(vector[nov:], filltriu=lib.SYMMETRIC)
     t2 = t2.reshape(nocc,nvir,nocc,nvir).transpose(0,2,1,3)
     return t1, numpy.asarray(t2, order='C')
 
@@ -984,7 +985,7 @@ class _ChemistsERIs:
 # Note: Recomputed fock matrix since SCF may not be fully converged.
         dm = mycc._scf.make_rdm1(mycc.mo_coeff, mycc.mo_occ)
         fockao = mycc._scf.get_hcore() + mycc._scf.get_veff(mycc.mol, dm)
-        self.fock = reduce(numpy.dot, (mo_coeff.T, fockao, mo_coeff))
+        self.fock = reduce(numpy.dot, (mo_coeff.conj().T, fockao, mo_coeff))
         self.nocc = mycc.nocc
         self.mol = mycc.mol
         return self

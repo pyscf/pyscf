@@ -718,8 +718,8 @@ class _ChemistsERIs(ccsd._ChemistsERIs):
 # Note: Recomputed fock matrix since SCF may not be fully converged.
         dm = mycc._scf.make_rdm1(mycc.mo_coeff, mycc.mo_occ)
         fockao = mycc._scf.get_hcore() + mycc._scf.get_veff(mycc.mol, dm)
-        self.focka = reduce(numpy.dot, (mo_coeff[0].T, fockao[0], mo_coeff[0]))
-        self.fockb = reduce(numpy.dot, (mo_coeff[1].T, fockao[1], mo_coeff[1]))
+        self.focka = reduce(numpy.dot, (mo_coeff[0].conj().T, fockao[0], mo_coeff[0]))
+        self.fockb = reduce(numpy.dot, (mo_coeff[1].conj().T, fockao[1], mo_coeff[1]))
         self.fock = (self.focka, self.fockb)
         self.nocc = mycc.nocc
         self.nocca, self.noccb = self.nocc
@@ -744,13 +744,12 @@ def _make_eris_incore(mycc, mo_coeff=None, ao2mofn=None):
     if callable(ao2mofn):
         eri_aa = ao2mofn(moa).reshape([nmoa]*4)
         eri_bb = ao2mofn(mob).reshape([nmob]*4)
-        eri_ab = ao2mofn((moa,moa,mob,mob)).reshape(nmoa,nmoa,nmob,nmob)
+        eri_ab = ao2mofn((moa,moa,mob,mob))
     else:
         eri_aa = ao2mo.restore(1, ao2mo.full(mycc._scf._eri, moa), nmoa)
         eri_bb = ao2mo.restore(1, ao2mo.full(mycc._scf._eri, mob), nmob)
         eri_ab = ao2mo.general(mycc._scf._eri, (moa,moa,mob,mob), compact=False)
-    eri_ba = lib.transpose(eri_ab)
-    assert(eri_aa.dtype == numpy.double)
+    eri_ba = eri_ab.reshape(nmoa,nmoa,nmob,nmob).transpose(2,3,0,1)
 
     eri_aa = eri_aa.reshape(nmoa,nmoa,nmoa,nmoa)
     eri_ab = eri_ab.reshape(nmoa,nmoa,nmob,nmob)
@@ -761,41 +760,51 @@ def _make_eris_incore(mycc, mo_coeff=None, ao2mofn=None):
     eris.ovov = eri_aa[:nocca,nocca:,:nocca,nocca:].copy()
     eris.oovv = eri_aa[:nocca,:nocca,nocca:,nocca:].copy()
     eris.ovvo = eri_aa[:nocca,nocca:,nocca:,:nocca].copy()
-    ovvv = eri_aa[:nocca,nocca:,nocca:,nocca:].reshape(nocca*nvira,nvira,nvira)
-    eris.ovvv = lib.pack_tril(ovvv).reshape(nocca,nvira,nvira*(nvira+1)//2)
-    ovvv = None
-    eris.vvvv = ao2mo.restore(4, eri_aa[nocca:,nocca:,nocca:,nocca:].copy(), nvira)
+    eris.ovvv = eri_aa[:nocca,nocca:,nocca:,nocca:].copy()
+    eris.vvvv = eri_aa[nocca:,nocca:,nocca:,nocca:].copy()
+
     eris.OOOO = eri_bb[:noccb,:noccb,:noccb,:noccb].copy()
     eris.OVOO = eri_bb[:noccb,noccb:,:noccb,:noccb].copy()
     eris.OVOV = eri_bb[:noccb,noccb:,:noccb,noccb:].copy()
     eris.OOVV = eri_bb[:noccb,:noccb,noccb:,noccb:].copy()
     eris.OVVO = eri_bb[:noccb,noccb:,noccb:,:noccb].copy()
-    OVVV = eri_bb[:noccb,noccb:,noccb:,noccb:].reshape(noccb*nvirb,nvirb,nvirb)
-    eris.OVVV = lib.pack_tril(OVVV).reshape(noccb,nvirb,nvirb*(nvirb+1)//2)
-    OVVV = None
-    eris.VVVV = ao2mo.restore(4, eri_bb[noccb:,noccb:,noccb:,noccb:].copy(), nvirb)
+    eris.OVVV = eri_bb[:noccb,noccb:,noccb:,noccb:].copy()
+    eris.VVVV = eri_bb[noccb:,noccb:,noccb:,noccb:].copy()
+
     eris.ooOO = eri_ab[:nocca,:nocca,:noccb,:noccb].copy()
     eris.ovOO = eri_ab[:nocca,nocca:,:noccb,:noccb].copy()
     eris.ovOV = eri_ab[:nocca,nocca:,:noccb,noccb:].copy()
     eris.ooVV = eri_ab[:nocca,:nocca,noccb:,noccb:].copy()
     eris.ovVO = eri_ab[:nocca,nocca:,noccb:,:noccb].copy()
-    ovVV = eri_ab[:nocca,nocca:,noccb:,noccb:].reshape(nocca*nvira,nvirb,nvirb)
-    eris.ovVV = lib.pack_tril(ovVV).reshape(nocca,nvira,nvirb*(nvirb+1)//2)
-    ovVV = None
-    vvVV = eri_ab[nocca:,nocca:,noccb:,noccb:].reshape(nvira**2,nvirb**2)
-    idxa = np.tril_indices(nvira)
-    idxb = np.tril_indices(nvirb)
-    eris.vvVV = lib.take_2d(vvVV, idxa[0]*nvira+idxa[1], idxb[0]*nvirb+idxb[1])
+    eris.ovVV = eri_ab[:nocca,nocca:,noccb:,noccb:].copy()
+    eris.vvVV = eri_ab[nocca:,nocca:,noccb:,noccb:].copy()
+
     #eris.OOoo = eri_ba[:noccb,:noccb,:nocca,:nocca].copy()
     eris.OVoo = eri_ba[:noccb,noccb:,:nocca,:nocca].copy()
     #eris.OVov = eri_ba[:noccb,noccb:,:nocca,nocca:].copy()
     eris.OOvv = eri_ba[:noccb,:noccb,nocca:,nocca:].copy()
     eris.OVvo = eri_ba[:noccb,noccb:,nocca:,:nocca].copy()
-    #eris.OVvv = eri_ba[:noccb,noccb:,nocca:,nocca:].copy()
-    OVvv = eri_ba[:noccb,noccb:,nocca:,nocca:].reshape(noccb*nvirb,nvira,nvira)
-    eris.OVvv = lib.pack_tril(OVvv).reshape(noccb,nvirb,nvira*(nvira+1)//2)
-    OVvv = None
+    eris.OVvv = eri_ba[:noccb,noccb:,nocca:,nocca:].copy()
     #eris.VVvv = eri_ba[noccb:,noccb:,nocca:,nocca:].copy()
+
+    if not callable(ao2mofn):
+        ovvv = eris.ovvv.reshape(nocca*nvira,nvira,nvira)
+        eris.ovvv = lib.pack_tril(ovvv).reshape(nocca,nvira,nvira*(nvira+1)//2)
+        eris.vvvv = ao2mo.restore(4, eris.vvvv, nvira)
+
+        OVVV = eris.OVVV.reshape(noccb*nvirb,nvirb,nvirb)
+        eris.OVVV = lib.pack_tril(OVVV).reshape(noccb,nvirb,nvirb*(nvirb+1)//2)
+        eris.VVVV = ao2mo.restore(4, eris.VVVV, nvirb)
+
+        ovVV = eris.ovVV.reshape(nocca*nvira,nvirb,nvirb)
+        eris.ovVV = lib.pack_tril(ovVV).reshape(nocca,nvira,nvirb*(nvirb+1)//2)
+        vvVV = eris.vvVV.reshape(nvira**2,nvirb**2)
+        idxa = np.tril_indices(nvira)
+        idxb = np.tril_indices(nvirb)
+        eris.vvVV = lib.take_2d(vvVV, idxa[0]*nvira+idxa[1], idxb[0]*nvirb+idxb[1])
+
+        OVvv = eris.OVvv.reshape(noccb*nvirb,nvira,nvira)
+        eris.OVvv = lib.pack_tril(OVvv).reshape(noccb,nvirb,nvira*(nvira+1)//2)
     return eris
 
 def _make_eris_outcore(mycc, mo_coeff=None):

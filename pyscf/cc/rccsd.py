@@ -153,7 +153,7 @@ class RCCSD(ccsd.CCSD):
         t2 = eris_ovov.transpose(0,2,1,3).conj() / eijab
         self.emp2  = 2*np.einsum('ijab,iajb', t2, eris_ovov)
         self.emp2 -=   np.einsum('ijab,ibja', t2, eris_ovov)
-        logger.info(self, 'Init t2, MP2 energy = %.15g', self.emp2)
+        logger.info(self, 'Init t2, MP2 energy = %.15g', self.emp2.real)
         return self.emp2, t1, t2
 
     def kernel(self, t1=None, t2=None, eris=None, mbpt2=False):
