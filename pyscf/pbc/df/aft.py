@@ -239,8 +239,8 @@ class AFTDF(lib.StreamObject):
             else:
                 ke_cutoff = numpy.min(cell.ke_cutoff)
             ke_guess = estimate_ke_cutoff(cell, cell.precision)
+            gs_guess = tools.cutoff_to_gs(cell.lattice_vectors(), ke_guess)
             if ke_cutoff < ke_guess*.8:
-                gs_guess = tools.cutoff_to_gs(cell.lattice_vectors(), ke_guess)
                 logger.warn(self, 'ke_cutoff/gs (%g / %s) is not enough for AFTDF '
                             'to get integral accuracy %g.\nCoulomb integral error '
                             'is ~ %.2g Eh.\nRecomended ke_cutoff/gs are %g / %s.',
