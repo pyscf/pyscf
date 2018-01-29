@@ -260,15 +260,12 @@ def _sort_eri(mycc, eris, h5tmp, log):
     with lib.call_in_background(eris_vvop.__setitem__) as save:
         bufopv = numpy.empty((nocca,nmoa,nvira))
         buf1 = numpy.empty_like(bufopv)
-        buf = numpy.empty((nocca,nvira,nvira))
         for j0, j1 in lib.prange(0, nvira, blksize):
             ovov = numpy.asarray(eris.ovov[:,j0:j1])
-            ovvv = numpy.asarray(eris.ovvv[:,j0:j1])
+            ovvv = eris.get_ovvv(slice(None), slice(j0,j1))
             for j in range(j0,j1):
-                oov = ovov[:,j-j0]
-                ovv = lib.unpack_tril(ovvv[:,j-j0], out=buf)
-                bufopv[:,:nocca,:] = oov
-                bufopv[:,nocca:,:] = ovv
+                bufopv[:,:nocca,:] = ovov[:,j-j0]
+                bufopv[:,nocca:,:] = ovvv[:,j-j0]
                 save(j, bufopv.transpose(2,0,1))
                 bufopv, buf1 = buf1, bufopv
             ovov = ovvv = None
@@ -278,15 +275,12 @@ def _sort_eri(mycc, eris, h5tmp, log):
     with lib.call_in_background(eris_VVOP.__setitem__) as save:
         bufopv = numpy.empty((noccb,nmob,nvirb))
         buf1 = numpy.empty_like(bufopv)
-        buf = numpy.empty((noccb,nvirb,nvirb))
         for j0, j1 in lib.prange(0, nvirb, blksize):
             ovov = numpy.asarray(eris.OVOV[:,j0:j1])
-            ovvv = numpy.asarray(eris.OVVV[:,j0:j1])
+            ovvv = eris.get_OVVV(slice(None), slice(j0,j1))
             for j in range(j0,j1):
-                oov = ovov[:,j-j0]
-                ovv = lib.unpack_tril(ovvv[:,j-j0], out=buf)
-                bufopv[:,:noccb,:] = oov
-                bufopv[:,noccb:,:] = ovv
+                bufopv[:,:noccb,:] = ovov[:,j-j0]
+                bufopv[:,noccb:,:] = ovvv[:,j-j0]
                 save(j, bufopv.transpose(2,0,1))
                 bufopv, buf1 = buf1, bufopv
             ovov = ovvv = None
@@ -296,15 +290,12 @@ def _sort_eri(mycc, eris, h5tmp, log):
     with lib.call_in_background(eris_vVoP.__setitem__) as save:
         bufopv = numpy.empty((nocca,nmob,nvirb))
         buf1 = numpy.empty_like(bufopv)
-        buf = numpy.empty((nocca,nvirb,nvirb))
         for j0, j1 in lib.prange(0, nvira, blksize):
             ovov = numpy.asarray(eris.ovOV[:,j0:j1])
-            ovvv = numpy.asarray(eris.ovVV[:,j0:j1])
+            ovvv = eris.get_ovVV(slice(None), slice(j0,j1))
             for j in range(j0,j1):
-                oov = ovov[:,j-j0]
-                ovv = lib.unpack_tril(ovvv[:,j-j0], out=buf)
-                bufopv[:,:noccb,:] = oov
-                bufopv[:,noccb:,:] = ovv
+                bufopv[:,:noccb,:] = ovov[:,j-j0]
+                bufopv[:,noccb:,:] = ovvv[:,j-j0]
                 save(j, bufopv.transpose(2,0,1))
                 bufopv, buf1 = buf1, bufopv
             ovov = ovvv = None
@@ -314,15 +305,12 @@ def _sort_eri(mycc, eris, h5tmp, log):
     with lib.call_in_background(eris_VvOp.__setitem__) as save:
         bufopv = numpy.empty((noccb,nmoa,nvira))
         buf1 = numpy.empty_like(bufopv)
-        buf = numpy.empty((noccb,nvira,nvira))
         for j0, j1 in lib.prange(0, nvirb, blksize):
             ovvo = numpy.asarray(eris.OVvo[:,j0:j1])
-            ovvv = numpy.asarray(eris.OVvv[:,j0:j1])
+            ovvv = eris.get_OVvv(slice(None), slice(j0,j1))
             for j in range(j0,j1):
-                ovo = ovvo[:,j-j0]
-                ovv = lib.unpack_tril(ovvv[:,j-j0], out=buf)
-                bufopv[:,:nocca,:] = ovo.transpose(0,2,1)
-                bufopv[:,nocca:,:] = ovv
+                bufopv[:,:nocca,:] = ovvo[:,j-j0].transpose(0,2,1)
+                bufopv[:,nocca:,:] = ovvv[:,j-j0]
                 save(j, bufopv.transpose(2,0,1))
                 bufopv, buf1 = buf1, bufopv
             ovvo = ovvv = None

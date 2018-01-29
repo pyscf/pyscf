@@ -10,7 +10,6 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.cc import uccsd
 from pyscf.cc import ccsd_lambda
-from pyscf.cc.uintermediates import _get_ovvv, _get_OVVV, _get_OVvv, _get_ovVV
 
 einsum = lib.einsum
 
@@ -177,9 +176,7 @@ def make_intermediates(mycc, t1, t2, eris):
     wOvvO += einsum('lbJK,lc->JbcK', ovOO, t1a)
 
     if nvira > 0 and nocca > 0:
-        #ovvv = numpy.asarray(eris.ovvv).reshape(nocca*nvira,-1)
-        #ovvv = lib.unpack_tril(ovvv).reshape(nocca,nvira,nvira,nvira)
-        ovvv = _get_ovvv(eris)
+        ovvv = numpy.asarray(eris.get_ovvv())
         ovvv = ovvv - ovvv.transpose(0,3,2,1)
         v1a -= numpy.einsum('jabc,jc->ba', ovvv, t1a)
         v5a += einsum('kdbc,jkcd->bj', ovvv, t2aa) * .5
@@ -191,9 +188,7 @@ def make_intermediates(mycc, t1, t2, eris):
         ovvv = tmp = None
 
     if nvirb > 0 and noccb > 0:
-        #OVVV = numpy.asarray(eris.OVVV).reshape(noccb*nvirb,-1)
-        #OVVV = lib.unpack_tril(OVVV).reshape(noccb,nvirb,nvirb,nvirb)
-        OVVV = _get_OVVV(eris)
+        OVVV = numpy.asarray(eris.get_OVVV())
         OVVV = OVVV - OVVV.transpose(0,3,2,1)
         v1b -= numpy.einsum('jabc,jc->ba', OVVV, t1b)
         v5b += einsum('KDBC,JKCD->BJ', OVVV, t2bb) * .5
@@ -205,9 +200,7 @@ def make_intermediates(mycc, t1, t2, eris):
         OVVV = tmp = None
 
     if nvirb > 0 and nocca > 0:
-        #OVvv = numpy.asarray(eris.OVvv).reshape(noccb*nvirb,-1)
-        #OVvv = lib.unpack_tril(OVvv).reshape(noccb,nvirb,nvira,nvira)
-        OVvv = _get_OVvv(eris)
+        OVvv = numpy.asarray(eris.get_OVvv())
         v1a += numpy.einsum('JCba,JC->ba', OVvv, t1b)
         v5a += einsum('KDbc,jKcD->bj', OVvv, t2ab)
         wOOvo += einsum('IDcb,kJbD->IJck', OVvv, tauab)
@@ -220,9 +213,7 @@ def make_intermediates(mycc, t1, t2, eris):
         OVvv = tmp = None
 
     if nvira > 0 and noccb > 0:
-        #ovVV = numpy.asarray(eris.ovVV).reshape(nocca*nvira,-1)
-        #ovVV = lib.unpack_tril(ovVV).reshape(nocca,nvira,nvirb,nvirb)
-        ovVV = _get_ovVV(eris)
+        ovVV = numpy.asarray(eris.get_ovVV())
         v1b += numpy.einsum('jcBA,jc->BA', ovVV, t1a)
         v5b += einsum('kdBC,kJdC->BJ', ovVV, t2ab)
         wooVO += einsum('idCB,jKdB->ijCK', ovVV, tauab)
@@ -342,9 +333,7 @@ def update_lambda(mycc, t1, t2, l1, l2, eris, imds):
     moo1 = einsum('ic,kc->ik', l1a, t1a) + moo
     mOO1 = einsum('ic,kc->ik', l1b, t1b) + mOO
     if nvira > 0 and nocca > 0:
-        #ovvv = numpy.asarray(eris.ovvv).reshape(nocca*nvira,-1)
-        #ovvv = lib.unpack_tril(ovvv).reshape(nocca,nvira,nvira,nvira)
-        ovvv = _get_ovvv(eris)
+        ovvv = numpy.asarray(eris.get_ovvv())
         ovvv = ovvv - ovvv.transpose(0,3,2,1)
         tmp = numpy.einsum('ijcd,kd->ijck', l2aa, t1a)
         m3aa -= numpy.einsum('kbca,ijck->ijab', ovvv, tmp)
@@ -357,9 +346,7 @@ def update_lambda(mycc, t1, t2, l1, l2, eris, imds):
         ovvv = tmp = None
 
     if nvirb > 0 and noccb > 0:
-        #OVVV = numpy.asarray(eris.OVVV).reshape(noccb*nvirb,-1)
-        #OVVV = lib.unpack_tril(OVVV).reshape(noccb,nvirb,nvirb,nvirb)
-        OVVV = _get_OVVV(eris)
+        OVVV = numpy.asarray(eris.get_OVVV())
         OVVV = OVVV - OVVV.transpose(0,3,2,1)
         tmp = numpy.einsum('ijcd,kd->ijck', l2bb, t1b)
         m3bb -= numpy.einsum('kbca,ijck->ijab', OVVV, tmp)
@@ -372,9 +359,7 @@ def update_lambda(mycc, t1, t2, l1, l2, eris, imds):
         OVVV = tmp = None
 
     if nvirb > 0 and nocca > 0:
-        #OVvv = numpy.asarray(eris.OVvv).reshape(noccb*nvirb,-1)
-        #OVvv = lib.unpack_tril(OVvv).reshape(noccb,nvirb,nvira,nvira)
-        OVvv = _get_OVvv(eris)
+        OVvv = numpy.asarray(eris.get_OVvv())
         tmp = numpy.einsum('iJcD,KD->iJcK', l2ab, t1b)
         m3ab -= numpy.einsum('KBca,iJcK->iJaB', OVvv, tmp)
 
@@ -386,9 +371,7 @@ def update_lambda(mycc, t1, t2, l1, l2, eris, imds):
         OVvv = tmp = None
 
     if nvira > 0 and noccb > 0:
-        #ovVV = numpy.asarray(eris.ovVV).reshape(nocca*nvira,-1)
-        #ovVV = lib.unpack_tril(ovVV).reshape(nocca,nvira,nvirb,nvirb)
-        ovVV = _get_ovVV(eris)
+        ovVV = numpy.asarray(eris.get_ovVV())
         tmp = numpy.einsum('iJdC,kd->iJCk', l2ab, t1a)
         m3ab -= numpy.einsum('kaCB,iJCk->iJaB', ovVV, tmp)
 

@@ -84,15 +84,15 @@ class KnownValues(unittest.TestCase):
         ci1 = gcisd.to_fcivec(cisdvec1, nocc*2, orbspin)
         self.assertAlmostEqual(abs(fcivec-ci1).max(), 0, 12)
 
-        vec1 = gcisd.from_cisdvec(ucisd.amplitudes_to_cisdvec(1, (c1a,c1b), (c2aa,c2ab,c2bb)),
-                                  nocc, orbspin)
+        vec1 = gcisd.from_rcisdvec(ucisd.amplitudes_to_cisdvec(1, (c1a,c1b), (c2aa,c2ab,c2bb)),
+                                   nocc, orbspin)
         self.assertTrue(numpy.all(cisdvec == vec1))
 
         c1 = gcisd.spatial2spin((c1a, c1a), orbspin)
         c2aa = c2ab - c2ab.transpose(1,0,2,3)
         c2 = gcisd.spatial2spin((c2aa, c2ab, c2aa), orbspin)
         cisdvec = gcisd.amplitudes_to_cisdvec(1., c1, c2)
-        vec1 = gcisd.from_cisdvec(ci.cisd.amplitudes_to_cisdvec(1, c1a, c2ab), nocc, orbspin)
+        vec1 = gcisd.from_rcisdvec(ci.cisd.amplitudes_to_cisdvec(1, c1a, c2ab), nocc, orbspin)
         self.assertTrue(numpy.all(cisdvec == vec1))
 
     def test_h4(self):

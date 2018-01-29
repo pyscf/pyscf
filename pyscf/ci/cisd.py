@@ -147,9 +147,7 @@ def contract(myci, civec, eris):
         t2[:,:,p0:p1] -= lib.einsum('jbik,ka->jiba', eris_ovoo.conj(), c1)
         eris_vooo = None
 
-        eris_ovvv = _cp(eris.ovvv[:,p0:p1]).reshape(-1,nvir_pair)
-        eris_ovvv = lib.unpack_tril(eris_ovvv).reshape(nocc,p1-p0,nvir,nvir)
-        eris_ovvv = eris_ovvv.conj()
+        eris_ovvv = eris.get_ovvv(slice(None), slice(p0,p1)).conj()
         t1 += lib.einsum('cjib,jcba->ia', theta, eris_ovvv)
         t2[:,:,p0:p1] += lib.einsum('iacb,jc->ijab', eris_ovvv, c1)
         tmp = eris_ovvv = None

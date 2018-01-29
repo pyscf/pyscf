@@ -324,8 +324,8 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.finger(t1[0]), -91.989448970105428, 9)
         self.assertAlmostEqual(lib.finger(t1[1]),  1915.9181468793138, 8)
         self.assertAlmostEqual(lib.finger(t2[0]), -16988.617144235213, 7)
-        self.assertAlmostEqual(lib.finger(t2[1]), -559.07800364396917, 8)
-        self.assertAlmostEqual(lib.finger(t2[2]), -406.15453424081329, 8)
+        self.assertAlmostEqual(lib.finger(t2[1]), -559.07800364396917, 7)
+        self.assertAlmostEqual(lib.finger(t2[2]), -406.15453424081329, 7)
         self.assertAlmostEqual(lib.finger(mycc.amplitudes_to_vector(t1, t2)), 3559.9139511493886, 7)
 
     def test_update_amps2(self):  # compare to gccsd.update_amps
@@ -453,14 +453,14 @@ class KnownValues(unittest.TestCase):
     def test_uintermediats(self):
         from pyscf.cc import uintermediates
         eris = uccsd.UCCSD(mf_s2).ao2mo()
-        self.assertTrue(uintermediates._get_ovvv(eris).ndim == 4)
-        self.assertTrue(uintermediates._get_ovVV(eris).ndim == 4)
-        self.assertTrue(uintermediates._get_OVvv(eris).ndim == 4)
-        self.assertTrue(uintermediates._get_OVVV(eris).ndim == 4)
-        self.assertTrue(uintermediates._get_ovvv(eris, slice(None), slice(2,4)).ndim == 4)
-        self.assertTrue(uintermediates._get_ovVV(eris, slice(None), slice(2,4)).ndim == 4)
-        self.assertTrue(uintermediates._get_OVvv(eris, slice(None), slice(2,4)).ndim == 4)
-        self.assertTrue(uintermediates._get_OVVV(eris, slice(None), slice(2,4)).ndim == 4)
+        self.assertTrue(eris.get_ovvv().ndim == 4)
+        self.assertTrue(eris.get_ovVV().ndim == 4)
+        self.assertTrue(eris.get_OVvv().ndim == 4)
+        self.assertTrue(eris.get_OVVV().ndim == 4)
+        self.assertTrue(eris.get_ovvv(slice(None), slice(2,4)).ndim == 4)
+        self.assertTrue(eris.get_ovVV(slice(None), slice(2,4)).ndim == 4)
+        self.assertTrue(eris.get_OVvv(slice(None), slice(2,4)).ndim == 4)
+        self.assertTrue(eris.get_OVVV(slice(None), slice(2,4)).ndim == 4)
         self.assertTrue(uintermediates._get_vvvv(eris).ndim == 4)
         self.assertTrue(uintermediates._get_vvVV(eris).ndim == 4)
         self.assertTrue(uintermediates._get_VVVV(eris).ndim == 4)

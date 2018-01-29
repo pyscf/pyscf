@@ -1,7 +1,7 @@
 import numpy as np
 from pyscf import lib
 from pyscf import ao2mo
-from pyscf.cc.rintermediates import _get_ovvv, _get_vvvv
+from pyscf.cc.rintermediates import _get_vvvv
 
 # Ref: Gauss and Stanton, J. Chem. Phys. 103, 3561 (1995) Table III
 
@@ -17,28 +17,6 @@ def make_tau(t2, t1a, t1b, fac=1, out=None):
     tau1 *= fac * .5
     tau1 += t2
     return tau1
-
-def _get_ovvv_base(ovvv, *slices):
-    if len(ovvv.shape) == 3:  # DO NOT use .ndim here for h5py library
-                              # backward compatbility
-        ovw = np.asarray(ovvv[slices])
-        nocc, nvir, nvir_pair = ovw.shape
-        ovvv = lib.unpack_tril(ovw.reshape(nocc*nvir,nvir_pair))
-        nvir1 = ovvv.shape[2]
-        return ovvv.reshape(nocc,nvir,nvir1,nvir1)
-    elif slices:
-        return ovvv[slices]
-    else:
-        return ovvv
-
-def _get_ovVV(eris, *slices):
-    return _get_ovvv_base(eris.ovVV, *slices)
-
-def _get_OVvv(eris, *slices):
-    return _get_ovvv_base(eris.OVvv, *slices)
-
-def _get_OVVV(eris, *slices):
-    return _get_ovvv_base(eris.OVVV, *slices)
 
 def _get_vvVV(eris):
     if eris.vvVV is None and hasattr(eris, 'VVL'):  # DF eris

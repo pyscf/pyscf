@@ -97,17 +97,13 @@ def make_intermediates(mycc, t1, t2, eris):
 
     fswap = lib.H5TmpFile()
     for istep, (p0, p1) in enumerate(lib.prange(0, nvir, blksize)):
-        eris_ovvv = _cp(eris.ovvv[:,p0:p1])
-        eris_ovvv = lib.unpack_tril(eris_ovvv.reshape(nocc*(p1-p0),nvir_pair))
-        eris_ovvv = eris_ovvv.reshape(nocc,p1-p0,nvir,nvir)
+        eris_ovvv = eris.get_ovvv(slice(None), slice(p0,p1))
         fswap['vvov/%d'%istep] = eris_ovvv.transpose(2,3,0,1)
 
     woooo = 0
     wvooo = numpy.zeros((nvir,nocc,nocc,nocc))
     for p0, p1 in lib.prange(0, nvir, blksize):
-        eris_ovvv = _cp(eris.ovvv[:,p0:p1])
-        eris_ovvv = lib.unpack_tril(eris_ovvv.reshape(nocc*(p1-p0),nvir_pair))
-        eris_ovvv = eris_ovvv.reshape(nocc,p1-p0,nvir,nvir)
+        eris_ovvv = eris.get_ovvv(slice(None), slice(p0,p1))
         eris_vvov = numpy.empty(((p1-p0),nvir,nocc,nvir))
         for istep, (q0, q1) in enumerate(lib.prange(0, nvir, blksize)):
             eris_vvov[:,:,:,q0:q1] = fswap['vvov/%d'%istep][p0:p1]
@@ -283,10 +279,7 @@ def update_lambda(mycc, t1, t2, l1, l2, eris=None, imds=None):
 
     l1new -= numpy.einsum('jb,jiab->ia', l1, _cp(eris.oovv))
     for p0, p1 in lib.prange(0, nvir, blksize):
-        eris_ovvv = _cp(eris.ovvv[:,p0:p1])
-        eris_ovvv = lib.unpack_tril(eris_ovvv.reshape(nocc*(p1-p0),-1))
-        eris_ovvv = eris_ovvv.reshape(nocc,p1-p0,nvir,nvir)
-
+        eris_ovvv = eris.get_ovvv(slice(None), slice(p0,p1))
         l1new[:,p0:p1] += numpy.einsum('iabc,bc->ia', eris_ovvv, mba1) * 2
         l1new -= numpy.einsum('ibca,bc->ia', eris_ovvv, mba1[p0:p1])
         l2new[:,:,p0:p1] += lib.einsum('jbac,ic->jiba', eris_ovvv, l1)

@@ -37,7 +37,7 @@ def make_intermediates(mycc, t1, t2, eris):
     fvv = eris.fock[nocc:,nocc:]
 
     tau = _ccsd.make_tau(t2, t1, t1)
-    ovov = imd._get_ovov(eris)
+    ovov = np.asarray(eris.ovov)
     ovoo = np.asarray(eris.ovoo)
     ovov1 = ovov * 2 - ovov.transpose(0,3,2,1)
     ovoo1 = ovoo * 2 - ovoo.transpose(2,1,0,3)
@@ -94,7 +94,7 @@ def make_intermediates(mycc, t1, t2, eris):
     woVVo += lib.einsum('lbjk,lc->jbck', ovoo, t1)
     v4ovvo = v4OVvo = v4oVVo = None
 
-    ovvv = imd._get_ovvv(eris)
+    ovvv = np.asarray(eris.get_ovvv())
     wvvvo += lib.einsum('kacd,kjbd->bacj', ovvv, t2) * 1.5
 
     wOVvo += lib.einsum('jbcd,kd->jbck', ovvv, t1)
@@ -185,7 +185,7 @@ def update_lambda(mycc, t1, t2, l1, l2, eris, imds):
     l1new += np.einsum('jbia,jb->ia', ovov, tmp)
     ovov = tmp = None
 
-    ovvv = imd._get_ovvv(eris)
+    ovvv = np.asarray(eris.get_ovvv())
     l1new += np.einsum('iacb,bc->ia', ovvv, mvv1) * 2
     l1new -= np.einsum('ibca,bc->ia', ovvv, mvv1)
     l2new += lib.einsum('ic,jbca->jiba', l1, ovvv)

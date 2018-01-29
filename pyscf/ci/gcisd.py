@@ -25,15 +25,15 @@ def make_diagonal(myci, eris):
     nocc = myci.nocc
     nmo = myci.nmo
     nvir = nmo - nocc
-    jkdiag = numpy.zeros((nmo,nmo))
+    mo_energy = eris.fock.diagonal()
+    jkdiag = numpy.zeros((nmo,nmo), dtype=mo_energy.dtype)
     jkdiag[:nocc,:nocc] = numpy.einsum('ijij->ij', eris.oooo)
     jkdiag[nocc:,nocc:] = numpy.einsum('ijij->ij', eris.vvvv)
     jkdiag[:nocc,nocc:] = numpy.einsum('ijij->ij', eris.ovov)
     jksum = jkdiag[:nocc,:nocc].sum()
-    mo_energy = eris.fock.diagonal()
     ehf = mo_energy[:nocc].sum() - jksum * .5
-    e1diag = numpy.empty((nocc,nvir))
-    e2diag = numpy.empty((nocc,nocc,nvir,nvir))
+    e1diag = numpy.empty((nocc,nvir), dtype=mo_energy.dtype)
+    e2diag = numpy.empty((nocc,nocc,nvir,nvir), dtype=mo_energy.dtype)
     for i in range(nocc):
         for a in range(nocc, nmo):
             e1diag[i,a-nocc] = ehf - mo_energy[i] + mo_energy[a] - jkdiag[i,a]
@@ -62,8 +62,7 @@ def contract(myci, civec, eris):
     t1  = lib.einsum('ie,ae->ia', c1, fvv)
     t1 -= lib.einsum('ma,mi->ia', c1, foo)
     t1 += lib.einsum('imae,me->ia', c2, fov)
-    #:t1 -= lib.einsum('nf,naif->ia', c1, eris.ovov)
-    t1 += lib.einsum('nf,nafi->ia', c1, eris.ovvo)
+    t1 -= lib.einsum('nf,naif->ia', c1, eris.ovov)
     t1 -= 0.5*lib.einsum('imef,maef->ia', c2, eris.ovvv)
     t1 -= 0.5*lib.einsum('mnae,mnie->ia', c2, eris.ooov)
 
@@ -250,19 +249,19 @@ def make_rdm2(myci, civec=None, nmo=None, nocc=None):
 
 def _gamma1_intermediates(myci, civec, nmo, nocc):
     c0, c1, c2 = cisdvec_to_amplitudes(civec, nmo, nocc)
-    dov = c0 * c1
-    dov += numpy.einsum('jb,ijab->ia', c1.conj(), c2)
+    dvo = c0.conj() * c1.T
+    dvo += numpy.einsum('jb,ijab->ai', c1.conj(), c2)
     doo  =-numpy.einsum('ia,ka->ik', c1.conj(), c1)
     doo -= numpy.einsum('jiab,kiab->jk', c2.conj(), c2) * .5
     dvv  = numpy.einsum('ia,ic->ac', c1, c1.conj())
     dvv += numpy.einsum('ijab,ijac->bc', c2, c2.conj()) * .5
-    return doo, dov, dov.conj().T, dvv
+    return doo, dvo.conj().T, dvo, dvv
 
 def _gamma2_intermediates(myci, civec, nmo, nocc):
     c0, c1, c2 = cisdvec_to_amplitudes(civec, nmo, nocc)
-    goovv = c0 * c2 * .5
-    govvv = numpy.einsum('ia,ikcd->kadc', c1.conj(), c2) * .5
-    gooov = numpy.einsum('ia,klac->klic', c1.conj(), c2) *-.5
+    goovv = c0 * c2.conj() * .5
+    govvv = numpy.einsum('ia,ikcd->kadc', c1, c2.conj()) * .5
+    gooov = numpy.einsum('ia,klac->klic', c1, c2.conj()) *-.5
     goooo = numpy.einsum('ijab,klab->ijkl', c2.conj(), c2) * .25
     gvvvv = numpy.einsum('ijab,ijcd->abcd', c2, c2.conj()) * .25
     govvo = numpy.einsum('ijab,ikac->jcbk', c2.conj(), c2)

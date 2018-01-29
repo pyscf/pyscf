@@ -208,8 +208,7 @@ def contract(myci, civec, eris):
     if nvira > 0 and nocca > 0:
         blksize = max(int(max_memory*1e6/8/(nvira**2*nocca*2)), 2)
         for p0,p1 in lib.prange(0, nvira, blksize):
-            ovvv = _cp(eris.ovvv[:,p0:p1]).reshape(nocca*(p1-p0),-1)
-            ovvv = lib.unpack_tril(ovvv).reshape(nocca,p1-p0,nvira,nvira)
+            ovvv = eris.get_ovvv(slice(None), slice(p0,p1))
             t1a += lib.einsum('mief,mefa->ia', c2aa[:,:,p0:p1], ovvv)
             t2aa[:,:,p0:p1] += lib.einsum('mbae,ie->miba', ovvv, c1a)
             ovvv = None
@@ -217,8 +216,7 @@ def contract(myci, civec, eris):
     if nvirb > 0 and noccb > 0:
         blksize = max(int(max_memory*1e6/8/(nvirb**2*noccb*2)), 2)
         for p0,p1 in lib.prange(0, nvirb, blksize):
-            OVVV = _cp(eris.OVVV[:,p0:p1]).reshape(noccb*(p1-p0),-1)
-            OVVV = lib.unpack_tril(OVVV).reshape(noccb,p1-p0,nvirb,nvirb)
+            OVVV = eris.get_OVVV(slice(None), slice(p0,p1))
             t1b += lib.einsum('MIEF,MEFA->IA', c2bb[:,:,p0:p1], OVVV)
             t2bb[:,:,p0:p1] += lib.einsum('mbae,ie->miba', OVVV, c1b)
             OVVV = None
@@ -226,8 +224,7 @@ def contract(myci, civec, eris):
     if nvirb > 0 and nocca > 0:
         blksize = max(int(max_memory*1e6/8/(nvirb**2*nocca*2)), 2)
         for p0,p1 in lib.prange(0, nvira, blksize):
-            ovVV = _cp(eris.ovVV[:,p0:p1]).reshape(nocca*(p1-p0),-1)
-            ovVV = lib.unpack_tril(ovVV).reshape(nocca,p1-p0,nvirb,nvirb)
+            ovVV = eris.get_ovVV(slice(None), slice(p0,p1))
             t1b += lib.einsum('mIeF,meAF->IA', c2ab[:,:,p0:p1], ovVV)
             t2ab[:,:,p0:p1] += lib.einsum('maBE,IE->mIaB', ovVV, c1b)
             ovVV = None
@@ -235,8 +232,7 @@ def contract(myci, civec, eris):
     if nvira > 0 and noccb > 0:
         blksize = max(int(max_memory*1e6/8/(nvira**2*noccb*2)), 2)
         for p0,p1 in lib.prange(0, nvirb, blksize):
-            OVvv = _cp(eris.OVvv[:,p0:p1]).reshape(noccb*(p1-p0),-1)
-            OVvv = lib.unpack_tril(OVvv).reshape(noccb,p1-p0,nvira,nvira)
+            OVvv = eris.get_OVvv(slice(None), slice(p0,p1))
             t1a += lib.einsum('iMfE,MEaf->ia', c2ab[:,:,:,p0:p1], OVvv)
             t2ab[:,:,:,p0:p1] += lib.einsum('MBae,ie->iMaB', OVvv, c1a)
             OVvv = None

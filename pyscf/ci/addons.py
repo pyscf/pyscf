@@ -21,5 +21,5 @@ def convert_to_gcisd(myci):
         gci.frozen = myci.frozen * 2
     else:
         raise NotImplementedError
-    gci.ci = gcisd.from_cisdvec(myci.ci, myci.nocc, mf.mo_coeff.orbspin)
+    gci.ci = gcisd.from_rcisdvec(myci.ci, myci.nocc, mf.mo_coeff.orbspin)
     return gci

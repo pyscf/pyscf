@@ -2,6 +2,7 @@ from pyscf import lib
 from pyscf.ci import cisd
 from pyscf.ci import ucisd
 from pyscf.ci import gcisd
+from pyscf.pbc import mp
 
 class RCISD(cisd.RCISD):
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
@@ -9,8 +10,7 @@ class RCISD(cisd.RCISD):
             raise NotImplementedError
         cisd.RCISD.__init__(self, mf, frozen, mo_coeff, mo_occ)
     def ao2mo(self, mo_coeff=None):
-        from pyscf.cc import rccsd
-        ao2mofn = _gen_ao2mofn(self._scf)
+        ao2mofn = mp.mp2._gen_ao2mofn(self._scf)
         return rccsd._make_eris_incore(self, mo_coeff, ao2mofn=ao2mofn)
 
 class UCISD(ucisd.UCISD):
@@ -19,15 +19,30 @@ class UCISD(ucisd.UCISD):
             raise NotImplementedError
         ucisd.UCISD.__init__(self, mf, frozen, mo_coeff, mo_occ)
     def ao2mo(self, mo_coeff=None):
-        ao2mofn = _gen_ao2mofn(self._scf)
+        ao2mofn = mp.mp2._gen_ao2mofn(self._scf)
         return ucisd.uccsd._make_eris_incore(self, mo_coeff, ao2mofn=ao2mofn)
 
 class GCISD(gcisd.GCISD):
     def ao2mo(self, mo_coeff=None):
-        ao2mofn = _gen_ao2mofn(self._scf)
+        with_df = self._scf.with_df
+        kpt = self._scf.kpt
+        def ao2mofn(mo_coeff):
+            nao, nmo = mo_coeff.shape
+            mo_a = mo_coeff[:nao//2]
+            mo_b = mo_coeff[nao//2:]
+            orbspin = getattr(mo_coeff, 'orbspin', None)
+            if orbspin is None:
+                eri  = with_df.ao2mo(mo_a, kpt, compact=False)
+                eri += with_df.ao2mo(mo_b, kpt, compact=False)
+                eri1 = with_df.ao2mo((mo_a,mo_a,mo_b,mo_b), kpt, compact=False)
+                eri += eri1
+                eri += eri1.T
+                eri = eri.reshape([nmo]*4)
+            else:
+                mo = mo_a + mo_b
+                eri  = with_df.ao2mo(mo, kpt, compact=False).reshape([nmo]*4)
+                sym_forbid = (orbspin[:,None] != orbspin)
+                eri[sym_forbid,:,:] = 0
+                eri[:,:,sym_forbid] = 0
+            return eri
         return gcisd.gccsd._make_eris_incore(self, mo_coeff, ao2mofn=ao2mofn)
-
-def _gen_ao2mofn(mf):
-    def ao2mofn(mo_coeff):
-        return mf.with_df.ao2mo(mo_coeff, mf.kpt, compact=False)
-    return ao2mofn
