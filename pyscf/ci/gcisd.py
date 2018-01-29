@@ -52,17 +52,17 @@ def contract(myci, civec, eris):
     nmo = myci.nmo
 
     c0, c1, c2 = cisdvec_to_amplitudes(civec, nmo, nocc)
-    c2 = c2
 
     fock = eris.fock
-    fov = fock[:nocc,nocc:]
     foo = fock[:nocc,:nocc]
+    fov = fock[:nocc,nocc:]
+    fvo = fock[nocc:,:nocc]
     fvv = fock[nocc:,nocc:]
 
     t1  = lib.einsum('ie,ae->ia', c1, fvv)
     t1 -= lib.einsum('ma,mi->ia', c1, foo)
     t1 += lib.einsum('imae,me->ia', c2, fov)
-    t1 -= lib.einsum('nf,naif->ia', c1, eris.ovov)
+    t1 += lib.einsum('nf,nafi->ia', c1, eris.ovvo)
     t1 -= 0.5*lib.einsum('imef,maef->ia', c2, eris.ovvv)
     t1 -= 0.5*lib.einsum('mnae,mnie->ia', c2, eris.ooov)
 
@@ -73,7 +73,7 @@ def contract(myci, civec, eris):
     t2 += 0.5*lib.einsum('mnab,mnij->ijab', c2, eris.oooo)
     t2 += 0.5*lib.einsum('ijef,abef->ijab', c2, eris.vvvv)
     tmp = lib.einsum('imae,mbej->ijab', c2, eris.ovvo)
-    tmp+= numpy.einsum('ia,jb->ijab', c1, fov)
+    tmp+= numpy.einsum('ia,bj->ijab', c1, fvo)
     tmp = tmp - tmp.transpose(0,1,3,2)
     t2 += tmp - tmp.transpose(1,0,2,3)
     tmp = lib.einsum('ie,jeba->ijab', c1, numpy.asarray(eris.ovvv).conj())
@@ -82,8 +82,8 @@ def contract(myci, civec, eris):
     t2 -= tmp - tmp.transpose(0,1,3,2)
 
     eris_oovv = numpy.asarray(eris.oovv)
-    t1 += fov * c0
-    t2 += eris_oovv * c0
+    t1 += fov.conj() * c0
+    t2 += eris_oovv.conj() * c0
     t0  = numpy.einsum('ia,ia', fov, c1)
     t0 += numpy.einsum('ijab,ijab', eris_oovv, c2) * .25
 
@@ -251,11 +251,12 @@ def _gamma1_intermediates(myci, civec, nmo, nocc):
     c0, c1, c2 = cisdvec_to_amplitudes(civec, nmo, nocc)
     dvo = c0.conj() * c1.T
     dvo += numpy.einsum('jb,ijab->ai', c1.conj(), c2)
+    dov = dvo.T.conj()
     doo  =-numpy.einsum('ia,ka->ik', c1.conj(), c1)
     doo -= numpy.einsum('jiab,kiab->jk', c2.conj(), c2) * .5
     dvv  = numpy.einsum('ia,ic->ac', c1, c1.conj())
     dvv += numpy.einsum('ijab,ijac->bc', c2, c2.conj()) * .5
-    return doo, dvo.conj().T, dvo, dvv
+    return doo, dov, dvo, dvv
 
 def _gamma2_intermediates(myci, civec, nmo, nocc):
     c0, c1, c2 = cisdvec_to_amplitudes(civec, nmo, nocc)

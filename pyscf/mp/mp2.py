@@ -76,7 +76,7 @@ def make_rdm1(mp, t2=None, eris=None, verbose=logger.NOTE):
     from pyscf.cc import ccsd_rdm
     doo, dvv = _gamma1_intermediates(mp, t2, eris)
     nocc = doo.shape[0]
-    nvir = doo.shape[0]
+    nvir = dvv.shape[0]
     dov = numpy.zeros((nocc,nvir), dtype=doo.dtype)
     dvo = dov.T
     return ccsd_rdm._make_rdm1(mp, (doo, dov, dvo, dvv), with_frozen=True)

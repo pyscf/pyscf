@@ -122,6 +122,8 @@ def contract(myci, civec, eris):
     foob = eris.fockb[:noccb,:noccb]
     fova = eris.focka[:nocca,nocca:]
     fovb = eris.fockb[:noccb,noccb:]
+    fvoa = eris.focka[nocca:,:nocca]
+    fvob = eris.fockb[noccb:,:noccb]
     fvva = eris.focka[nocca:,nocca:]
     fvvb = eris.fockb[noccb:,noccb:]
 
@@ -132,25 +134,29 @@ def contract(myci, civec, eris):
     eris_ooVV = _cp(eris.ooVV)
     eris_OOvv = _cp(eris.OOvv)
     eris_OOVV = _cp(eris.OOVV)
-    eris_ovvo = _cp(eris.ovvo)
-    eris_ovVO = _cp(eris.ovVO)
-    eris_OVVO = _cp(eris.OVVO)
+    eris_ovov = _cp(eris.ovov)
+    eris_ovOV = _cp(eris.ovOV)
+    eris_OVOV = _cp(eris.OVOV)
     #:t2 += eris.oovv * c0
-    t2aa += .25 * c0 * eris_ovvo.transpose(0,3,1,2)
-    t2aa -= .25 * c0 * eris_ovvo.transpose(0,3,2,1)
-    t2bb += .25 * c0 * eris_OVVO.transpose(0,3,1,2)
-    t2bb -= .25 * c0 * eris_OVVO.transpose(0,3,2,1)
-    t2ab += c0 * eris_ovVO.transpose(0,3,1,2)
+    t2aa += .25 * c0 * eris_ovov.conj().transpose(0,2,1,3)
+    t2aa -= .25 * c0 * eris_ovov.conj().transpose(0,2,3,1)
+    t2bb += .25 * c0 * eris_OVOV.conj().transpose(0,2,1,3)
+    t2bb -= .25 * c0 * eris_OVOV.conj().transpose(0,2,3,1)
+    t2ab += c0 * eris_ovOV.conj().transpose(0,2,1,3)
     #:t0 += numpy.einsum('ijab,ijab', eris.oovv, c2) * .25
-    t0 += numpy.einsum('iabj,ijab', eris_ovvo, c2aa) * .25
-    t0 -= numpy.einsum('jabi,ijab', eris_ovvo, c2aa) * .25
-    t0 += numpy.einsum('iabj,ijab', eris_OVVO, c2bb) * .25
-    t0 -= numpy.einsum('jabi,ijab', eris_OVVO, c2bb) * .25
-    t0 += numpy.einsum('iabj,ijab', eris_ovVO, c2ab)
+    t0 += numpy.einsum('iajb,ijab', eris_ovov, c2aa) * .25
+    t0 -= numpy.einsum('jaib,ijab', eris_ovov, c2aa) * .25
+    t0 += numpy.einsum('iajb,ijab', eris_OVOV, c2bb) * .25
+    t0 -= numpy.einsum('jaib,ijab', eris_OVOV, c2bb) * .25
+    t0 += numpy.einsum('iajb,ijab', eris_ovOV, c2ab)
+    eris_ovov = eris_ovOV = eris_OVOV = None
 
     #:tmp = einsum('imae,mbej->ijab', c2, eris.ovvo)
     #:tmp = tmp - tmp.transpose(0,1,3,2)
     #:t2 += tmp - tmp.transpose(1,0,2,3)
+    eris_ovvo = _cp(eris.ovvo)
+    eris_ovVO = _cp(eris.ovVO)
+    eris_OVVO = _cp(eris.OVVO)
     ovvo = eris_ovvo - eris_oovv.transpose(0,3,2,1)
     OVVO = eris_OVVO - eris_OOVV.transpose(0,3,2,1)
     t2aa += lib.einsum('imae,jbem->ijab', c2aa, ovvo)
@@ -262,13 +268,13 @@ def contract(myci, civec, eris):
     t2ab -= lib.einsum('iMaB,MJ->iJaB', c2ab, foob)
     t2ab -= lib.einsum('mIaB,mj->jIaB', c2ab, fooa)
 
-    #:tmp = numpy.einsum('ia,jb->ijab', c1, fov)
+    #:tmp = numpy.einsum('ia,bj->ijab', c1, fvo)
     #:tmp = tmp - tmp.transpose(0,1,3,2)
     #:t2 += tmp - tmp.transpose(1,0,2,3)
-    t2aa += numpy.einsum('ia,jb->ijab', c1a, fova)
-    t2bb += numpy.einsum('ia,jb->ijab', c1b, fovb)
-    t2ab += numpy.einsum('ia,jb->ijab', c1a, fovb)
-    t2ab += numpy.einsum('ia,jb->jiba', c1b, fova)
+    t2aa += numpy.einsum('ia,bj->ijab', c1a, fvoa)
+    t2bb += numpy.einsum('ia,bj->ijab', c1b, fvob)
+    t2ab += numpy.einsum('ia,bj->ijab', c1a, fvob)
+    t2ab += numpy.einsum('ia,bj->jiba', c1b, fvoa)
 
     t2aa = t2aa - t2aa.transpose(0,1,3,2)
     t2aa = t2aa - t2aa.transpose(1,0,2,3)
@@ -283,9 +289,9 @@ def contract(myci, civec, eris):
     t2bb += lib.einsum('mnab,minj->ijab', c2bb, eris_OOOO)
     t2ab += lib.einsum('mNaB,miNJ->iJaB', c2ab, eris_ooOO)
 
-    #:t1 += fov * c0
-    t1a += fova * c0
-    t1b += fovb * c0
+    #:t1 += fov.conj() * c0
+    t1a += fova.conj() * c0
+    t1b += fovb.conj() * c0
     #:t0  = numpy.einsum('ia,ia', fov, c1)
     t0 += numpy.einsum('ia,ia', fova, c1a)
     t0 += numpy.einsum('ia,ia', fovb, c1b)
@@ -306,7 +312,7 @@ def amplitudes_to_cisdvec(c0, c1, c2):
     size = (1, nocca*nvira, noccb*nvirb, nocca*noccb*nvira*nvirb,
             len(ooidxa)*len(vvidxa), len(ooidxb)*len(vvidxb))
     loc = numpy.cumsum(size)
-    civec = numpy.empty(loc[-1])
+    civec = numpy.empty(loc[-1], dtype=c2ab.dtype)
     civec[0] = c0
     civec[loc[0]:loc[1]] = c1a.ravel()
     civec[loc[1]:loc[2]] = c1b.ravel()
@@ -429,12 +435,14 @@ def _gamma1_intermediates(myci, civec, nmo, nocc):
     c1a, c1b = c1
     c2aa, c2ab, c2bb = c2
 
-    dova = c0 * c1a
-    dovb = c0 * c1b
-    dova += numpy.einsum('jb,ijab->ia', c1a.conj(), c2aa)
-    dova += numpy.einsum('jb,ijab->ia', c1b.conj(), c2ab)
-    dovb += numpy.einsum('jb,ijab->ia', c1b.conj(), c2bb)
-    dovb += numpy.einsum('jb,jiba->ia', c1a.conj(), c2ab)
+    dvoa = c0.conj() * c1a.T
+    dvob = c0.conj() * c1b.T
+    dvoa += numpy.einsum('jb,ijab->ai', c1a.conj(), c2aa)
+    dvoa += numpy.einsum('jb,ijab->ai', c1b.conj(), c2ab)
+    dvob += numpy.einsum('jb,ijab->ai', c1b.conj(), c2bb)
+    dvob += numpy.einsum('jb,jiba->ai', c1a.conj(), c2ab)
+    dova = dvoa.T.conj()
+    dovb = dvob.T.conj()
 
     dooa  =-numpy.einsum('ia,ka->ik', c1a.conj(), c1a)
     doob  =-numpy.einsum('ia,ka->ik', c1b.conj(), c1b)
@@ -443,14 +451,13 @@ def _gamma1_intermediates(myci, civec, nmo, nocc):
     doob -= numpy.einsum('ijab,ikab->jk', c2bb.conj(), c2bb) * .5
     doob -= numpy.einsum('ijab,ikab->jk', c2ab.conj(), c2ab)
 
-    dvva  = numpy.einsum('ia,ic->ca', c1a, c1a.conj())
-    dvvb  = numpy.einsum('ia,ic->ca', c1b, c1b.conj())
-    dvva += numpy.einsum('ijab,ijac->cb', c2aa, c2aa.conj()) * .5
-    dvva += numpy.einsum('ijba,ijca->cb', c2ab, c2ab.conj())
-    dvvb += numpy.einsum('ijba,ijca->cb', c2bb, c2bb.conj()) * .5
-    dvvb += numpy.einsum('ijab,ijac->cb', c2ab, c2ab.conj())
-    return ((dooa, doob), (dova, dovb), (dova.conj().T, dovb.conj().T),
-            (dvva, dvvb))
+    dvva  = numpy.einsum('ia,ic->ac', c1a, c1a.conj())
+    dvvb  = numpy.einsum('ia,ic->ac', c1b, c1b.conj())
+    dvva += numpy.einsum('ijab,ijac->bc', c2aa, c2aa.conj()) * .5
+    dvva += numpy.einsum('ijba,ijca->bc', c2ab, c2ab.conj())
+    dvvb += numpy.einsum('ijba,ijca->bc', c2bb, c2bb.conj()) * .5
+    dvvb += numpy.einsum('ijab,ijac->bc', c2ab, c2ab.conj())
+    return (dooa, doob), (dova, dovb), (dvoa, dvob), (dvva, dvvb)
 
 def _gamma2_intermediates(myci, civec, nmo, nocc):
     nmoa, nmob = nmo
@@ -459,19 +466,19 @@ def _gamma2_intermediates(myci, civec, nmo, nocc):
     c1a, c1b = c1
     c2aa, c2ab, c2bb = c2
 
-    goovv = c0 * c2aa * .5
-    goOvV = c0 * c2ab
-    gOOVV = c0 * c2bb * .5
+    goovv = c0 * c2aa.conj() * .5
+    goOvV = c0 * c2ab.conj()
+    gOOVV = c0 * c2bb.conj() * .5
 
-    govvv = numpy.einsum('ia,ikcd->kadc', c1a.conj(), c2aa) * .5
-    gOvVv = numpy.einsum('ia,ikcd->kadc', c1a.conj(), c2ab)
-    goVvV = numpy.einsum('ia,kidc->kadc', c1b.conj(), c2ab)
-    gOVVV = numpy.einsum('ia,ikcd->kadc', c1b.conj(), c2bb) * .5
+    govvv = numpy.einsum('ia,ikcd->kadc', c1a, c2aa.conj()) * .5
+    gOvVv = numpy.einsum('ia,ikcd->kadc', c1a, c2ab.conj())
+    goVvV = numpy.einsum('ia,kidc->kadc', c1b, c2ab.conj())
+    gOVVV = numpy.einsum('ia,ikcd->kadc', c1b, c2bb.conj()) * .5
 
-    gooov = numpy.einsum('ia,klac->klic', c1a.conj(), c2aa) *-.5
-    goOoV =-numpy.einsum('ia,klac->klic', c1a.conj(), c2ab)
-    gOoOv =-numpy.einsum('ia,lkca->klic', c1b.conj(), c2ab)
-    gOOOV = numpy.einsum('ia,klac->klic', c1b.conj(), c2bb) *-.5
+    gooov = numpy.einsum('ia,klac->klic', c1a, c2aa.conj()) *-.5
+    goOoV =-numpy.einsum('ia,klac->klic', c1a, c2ab.conj())
+    gOoOv =-numpy.einsum('ia,lkca->klic', c1b, c2ab.conj())
+    gOOOV = numpy.einsum('ia,klac->klic', c1b, c2bb.conj()) *-.5
 
     goooo = numpy.einsum('ijab,klab->ijkl', c2aa.conj(), c2aa) * .25
     goOoO = numpy.einsum('ijab,klab->ijkl', c2ab.conj(), c2ab)
@@ -555,27 +562,28 @@ class UCISD(cisd.CISD):
         mo_eb = eris.fockb.diagonal()
         eia_a = mo_ea[:nocca,None] - mo_ea[None,nocca:]
         eia_b = mo_eb[:noccb,None] - mo_eb[None,noccb:]
-        t1a = eris.focka[:nocca,nocca:] / eia_a
-        t1b = eris.fockb[:noccb,noccb:] / eia_b
+        t1a = eris.focka[:nocca,nocca:].conj() / eia_a
+        t1b = eris.fockb[:noccb,noccb:].conj() / eia_b
 
-        eris_ovvo = _cp(eris.ovvo)
-        eris_ovVO = _cp(eris.ovVO)
-        eris_OVVO = _cp(eris.OVVO)
-        t2aa = eris_ovvo.transpose(0,3,1,2) - eris_ovvo.transpose(0,3,2,1)
-        t2bb = eris_OVVO.transpose(0,3,1,2) - eris_OVVO.transpose(0,3,2,1)
-        t2ab = eris_ovVO.transpose(0,3,1,2).copy()
+        eris_ovov = _cp(eris.ovov)
+        eris_ovOV = _cp(eris.ovOV)
+        eris_OVOV = _cp(eris.OVOV)
+        t2aa = eris_ovov.transpose(0,2,1,3) - eris_ovov.transpose(0,2,3,1)
+        t2bb = eris_OVOV.transpose(0,2,1,3) - eris_OVOV.transpose(0,2,3,1)
+        t2ab = eris_ovOV.transpose(0,2,1,3).copy()
+        t2aa = t2aa.conj()
+        t2ab = t2ab.conj()
+        t2bb = t2bb.conj()
         t2aa /= lib.direct_sum('ia+jb->ijab', eia_a, eia_a)
         t2ab /= lib.direct_sum('ia+jb->ijab', eia_a, eia_b)
         t2bb /= lib.direct_sum('ia+jb->ijab', eia_b, eia_b)
 
-        emp2  = numpy.einsum('ia,ia', eris.focka[:nocca,nocca:], t1a)
-        emp2 += numpy.einsum('ia,ia', eris.fockb[:noccb,noccb:], t1b)
-        emp2 += numpy.einsum('iabj,ijab', eris_ovvo, t2aa) * .25
-        emp2 -= numpy.einsum('jabi,ijab', eris_ovvo, t2aa) * .25
-        emp2 += numpy.einsum('iabj,ijab', eris_OVVO, t2bb) * .25
-        emp2 -= numpy.einsum('jabi,ijab', eris_OVVO, t2bb) * .25
-        emp2 += numpy.einsum('iabj,ijab', eris_ovVO, t2ab)
-        self.emp2 = emp2
+        emp2  = numpy.einsum('iajb,ijab', eris_ovov, t2aa) * .25
+        emp2 -= numpy.einsum('jaib,ijab', eris_ovov, t2aa) * .25
+        emp2 += numpy.einsum('iajb,ijab', eris_OVOV, t2bb) * .25
+        emp2 -= numpy.einsum('jaib,ijab', eris_OVOV, t2bb) * .25
+        emp2 += numpy.einsum('iajb,ijab', eris_ovOV, t2ab)
+        self.emp2 = emp2.real
         logger.info(self, 'Init t2, MP2 energy = %.15g', self.emp2)
 
         if abs(emp2) < 1e-3 and (abs(t1a).sum()+abs(t1b).sum()) < 1e-3:

@@ -359,6 +359,7 @@ class KnownValues(unittest.TestCase):
         trdm2+= dm2ab
         trdm2+= dm2ab.transpose(2,3,0,1)
         self.assertAlmostEqual(abs(trdm1 - rdm1).max(), 0, 6)
+        self.assertAlmostEqual(abs(trdm2 - rdm2).max(), 0, 6)
 
         rt1 = myrcc.t1 + numpy.cos(myrcc.t1) * .2j
         rl1 = myrcc.l1 + numpy.cos(myrcc.l1) * .2j
@@ -374,9 +375,6 @@ class KnownValues(unittest.TestCase):
         gdm1 = mygcc.make_rdm1(gt1, gt2, gl1, gl2)
         gdm2 = mygcc.make_rdm2(gt1, gt2, gl1, gl2)
 
-        orbspin = mf.mo_coeff.orbspin
-        idxa = numpy.where(orbspin == 0)[0]
-        idxb = numpy.where(orbspin == 1)[0]
         trdm1 = gdm1[idxa[:,None],idxa]
         trdm1+= gdm1[idxb[:,None],idxb]
         trdm2 = gdm2[idxa[:,None,None,None],idxa[:,None,None],idxa[:,None],idxa]

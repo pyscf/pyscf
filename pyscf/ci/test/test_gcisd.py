@@ -29,7 +29,7 @@ class KnownValues(unittest.TestCase):
         mf.mo_occ = numpy.zeros((2,nmo))
         mf.mo_occ[:,:nocc] = 1
         h1 = numpy.random.random((nmo,nmo)) * .1
-        h1 = h1 + h1.T + numpy.arange(nmo)
+        h1 = h1 + h1.T + numpy.diag(numpy.arange(nmo))
         mf.get_hcore = lambda *args: h1
 
         mf1 = scf.addons.convert_to_ghf(mf)
@@ -58,7 +58,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(c2new[0]-c2ref[0]).max(), 0, 12)
         self.assertAlmostEqual(abs(c2new[1]-c2ref[1]).max(), 0, 12)
         self.assertAlmostEqual(abs(c2new[2]-c2ref[2]).max(), 0, 12)
-        self.assertAlmostEqual(lib.finger(cinew), -123.57726507299601, 9)
+        self.assertAlmostEqual(lib.finger(cinew), -102.17887236599671, 9)
 
     def test_from_fcivec(self):
         numpy.random.seed(12)
@@ -226,7 +226,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(ecisd, -0.037067274690894436, 9)
         self.assertTrue(myci.e_tot-mol.energy_nuc() - efci < 0.002)
 
-    def test_rdm(self):
+    def test_rdm_h4(self):
         mol = gto.Mole()
         mol.verbose = 7
         mol.output = '/dev/null'
@@ -260,6 +260,252 @@ class KnownValues(unittest.TestCase):
 
         dm1 = numpy.einsum('ijkk->ij', rdm2)/(mol.nelectron-1)
         self.assertAlmostEqual(abs(rdm1 - dm1).max(), 0, 9)
+
+    def test_rdm_real(self):
+        mol = gto.M()
+        mol.verbose = 0
+        nocc = 6
+        nvir = 10
+        mf = scf.GHF(mol)
+        nmo = nocc + nvir
+        npair = nmo*(nmo//2+1)//4
+        numpy.random.seed(12)
+        mf._eri = numpy.random.random(npair*(npair+1)//2)*.3
+        hcore = numpy.random.random((nmo,nmo)) * .5
+        hcore = hcore + hcore.T + numpy.diag(range(nmo))*2
+        mf.get_hcore = lambda *args: hcore
+        mf.get_ovlp = lambda *args: numpy.eye(nmo)
+        mf.mo_coeff = numpy.eye(nmo)
+        mf.mo_occ = numpy.zeros(nmo)
+        mf.mo_occ[:nocc] = 1
+        dm1 = mf.make_rdm1()
+        mf.e_tot = mf.energy_elec()[0]
+        myci = gcisd.GCISD(mf).run()
+        dm1 = myci.make_rdm1()
+        dm2 = myci.make_rdm2()
+
+        nao = nmo // 2
+        mo_a = mf.mo_coeff[:nao]
+        mo_b = mf.mo_coeff[nao:]
+        eri  = ao2mo.kernel(mf._eri, mo_a)
+        eri += ao2mo.kernel(mf._eri, mo_b)
+        eri1 = ao2mo.kernel(mf._eri, (mo_a,mo_a,mo_b,mo_b))
+        eri += eri1
+        eri += eri1.T
+        eri = ao2mo.restore(1, eri, nmo)
+        h1 = reduce(numpy.dot, (mf.mo_coeff.T.conj(), hcore, mf.mo_coeff))
+        e1 = numpy.einsum('ij,ji', h1, dm1)
+        e1+= numpy.einsum('ijkl,jilk', eri, dm2) * .5
+        self.assertAlmostEqual(e1, myci.e_tot, 7)
+
+        self.assertAlmostEqual(abs(dm2-dm2.transpose(1,0,3,2).conj()).max(), 0, 9)
+        self.assertAlmostEqual(abs(dm2-dm2.transpose(2,3,0,1)       ).max(), 0, 9)
+        self.assertAlmostEqual(abs(dm2+dm2.transpose(2,1,0,3)       ).max(), 0, 9)
+        self.assertAlmostEqual(abs(dm2+dm2.transpose(0,3,2,1)       ).max(), 0, 9)
+
+    def test_rdm_complex(self):
+        mol = gto.M()
+        mol.verbose = 0
+        nocc = 4
+        nvir = 6
+        mf = scf.GHF(mol)
+        nmo = nocc + nvir
+        numpy.random.seed(1)
+        eri = (numpy.random.random((nmo,nmo,nmo,nmo)) +
+               numpy.random.random((nmo,nmo,nmo,nmo))* 1j - (.5+.5j))
+        eri = eri + eri.transpose(1,0,3,2).conj()
+        eri = eri + eri.transpose(2,3,0,1)
+        eri *= .1
+
+        def get_jk(mol, dm, *args,**kwargs):
+            vj = numpy.einsum('ijkl,lk->ij', eri, dm)
+            vk = numpy.einsum('ijkl,jk->il', eri, dm)
+            return vj, vk
+        def get_veff(mol, dm, *args, **kwargs):
+            vj, vk = get_jk(mol, dm)
+            return vj - vk
+        def ao2mofn(mos):
+            return eri
+
+        mf.get_jk = get_jk
+        mf.get_veff = get_veff
+        hcore = numpy.random.random((nmo,nmo)) * .2 + numpy.random.random((nmo,nmo))* .2j
+        hcore = hcore + hcore.T.conj() + numpy.diag(range(nmo))*2
+        mf.get_hcore = lambda *args: hcore
+        mf.get_ovlp = lambda *args: numpy.eye(nmo)
+        orbspin = numpy.zeros(nmo, dtype=int)
+        orbspin[1::2] = 1
+        mf.mo_coeff = lib.tag_array(numpy.eye(nmo) + 0j, orbspin=orbspin)
+        mf.mo_occ = numpy.zeros(nmo)
+        mf.mo_occ[:nocc] = 1
+        mf.e_tot = mf.energy_elec(mf.make_rdm1(), hcore)[0]
+
+        myci = gcisd.GCISD(mf)
+        eris = gcisd.gccsd._make_eris_incore(myci, mf.mo_coeff, ao2mofn)
+        myci.ao2mo = lambda *args, **kwargs: eris
+        myci.kernel(eris=eris)
+        dm1 = myci.make_rdm1()
+        dm2 = myci.make_rdm2()
+
+        e1 = numpy.einsum('ij,ji', hcore, dm1)
+        e1+= numpy.einsum('ijkl,jilk', eri, dm2) * .5
+        self.assertAlmostEqual(e1, myci.e_tot, 7)
+
+        self.assertAlmostEqual(abs(dm2-dm2.transpose(1,0,3,2).conj()).max(), 0, 9)
+        self.assertAlmostEqual(abs(dm2-dm2.transpose(2,3,0,1)       ).max(), 0, 9)
+        self.assertAlmostEqual(abs(dm2+dm2.transpose(2,1,0,3)       ).max(), 0, 9)
+        self.assertAlmostEqual(abs(dm2+dm2.transpose(0,3,2,1)       ).max(), 0, 9)
+
+    def test_rdm_vs_ucisd(self):
+        mol = gto.Mole()
+        mol.atom = [
+            [8 , (0. , 0.     , 0.)],
+            [1 , (0. , -0.757 , 0.587)],
+            [1 , (0. , 0.757  , 0.587)]]
+        mol.verbose = 5
+        mol.output = '/dev/null'
+        mol.basis = '631g'
+        mol.spin = 2
+        mol.build()
+        mf = scf.UHF(mol).run()
+        myuci = ucisd.UCISD(mf)
+        myuci.frozen = 1
+        myuci.kernel()
+        udm1 = myuci.make_rdm1()
+        udm2 = myuci.make_rdm2()
+
+        mf = scf.addons.convert_to_ghf(mf)
+        mygci = gcisd.GCISD(mf)
+        mygci.frozen = 2
+        mygci.kernel()
+        dm1 = mygci.make_rdm1()
+        dm2 = mygci.make_rdm2()
+
+        nao = mol.nao_nr()
+        mo_a = mf.mo_coeff[:nao]
+        mo_b = mf.mo_coeff[nao:]
+        nmo = mo_a.shape[1]
+        eri = ao2mo.kernel(mf._eri, mo_a+mo_b, compact=False).reshape([nmo]*4)
+        orbspin = mf.mo_coeff.orbspin
+        sym_forbid = (orbspin[:,None] != orbspin)
+        eri[sym_forbid,:,:] = 0
+        eri[:,:,sym_forbid] = 0
+        hcore = scf.RHF(mol).get_hcore()
+        h1 = reduce(numpy.dot, (mo_a.T.conj(), hcore, mo_a))
+        h1+= reduce(numpy.dot, (mo_b.T.conj(), hcore, mo_b))
+        e1 = numpy.einsum('ij,ji', h1, dm1)
+        e1+= numpy.einsum('ijkl,jilk', eri, dm2) * .5
+        e1+= mol.energy_nuc()
+        self.assertAlmostEqual(e1, mygci.e_tot, 7)
+
+        idxa = numpy.where(orbspin == 0)[0]
+        idxb = numpy.where(orbspin == 1)[0]
+        self.assertAlmostEqual(abs(dm1[idxa[:,None],idxa] - udm1[0]).max(), 0, 5)
+        self.assertAlmostEqual(abs(dm1[idxb[:,None],idxb] - udm1[1]).max(), 0, 5)
+        self.assertAlmostEqual(abs(dm2[idxa[:,None,None,None],idxa[:,None,None],idxa[:,None],idxa] - udm2[0]).max(), 0, 5)
+        self.assertAlmostEqual(abs(dm2[idxa[:,None,None,None],idxa[:,None,None],idxb[:,None],idxb] - udm2[1]).max(), 0, 5)
+        self.assertAlmostEqual(abs(dm2[idxb[:,None,None,None],idxb[:,None,None],idxb[:,None],idxb] - udm2[2]).max(), 0, 5)
+
+        c0, c1, c2 = myuci.cisdvec_to_amplitudes(myuci.ci)
+        ut1 = [0] * 2
+        ut2 = [0] * 3
+        ut0 = c0 + .2j
+        ut1[0] = c1[0] + numpy.cos(c1[0]) * .2j
+        ut1[1] = c1[1] + numpy.cos(c1[1]) * .2j
+        ut2[0] = c2[0] + numpy.sin(c2[0]) * .8j
+        ut2[1] = c2[1] + numpy.sin(c2[1]) * .8j
+        ut2[2] = c2[2] + numpy.sin(c2[2]) * .8j
+        civec = myuci.amplitudes_to_cisdvec(ut0, ut1, ut2)
+        udm1 = myuci.make_rdm1(civec)
+        udm2 = myuci.make_rdm2(civec)
+
+        gt1 = mygci.spatial2spin(ut1)
+        gt2 = mygci.spatial2spin(ut2)
+        civec = mygci.amplitudes_to_cisdvec(ut0, gt1, gt2)
+        gdm1 = mygci.make_rdm1(civec)
+        gdm2 = mygci.make_rdm2(civec)
+
+        self.assertAlmostEqual(abs(gdm1[idxa[:,None],idxa] - udm1[0]).max(), 0, 9)
+        self.assertAlmostEqual(abs(gdm1[idxb[:,None],idxb] - udm1[1]).max(), 0, 9)
+        self.assertAlmostEqual(abs(gdm2[idxa[:,None,None,None],idxa[:,None,None],idxa[:,None],idxa] - udm2[0]).max(), 0, 9)
+        self.assertAlmostEqual(abs(gdm2[idxa[:,None,None,None],idxa[:,None,None],idxb[:,None],idxb] - udm2[1]).max(), 0, 9)
+        self.assertAlmostEqual(abs(gdm2[idxb[:,None,None,None],idxb[:,None,None],idxb[:,None],idxb] - udm2[2]).max(), 0, 9)
+
+    def test_rdm_vs_rcisd(self):
+        mol = gto.Mole()
+        mol.atom = [
+            [8 , (0. , 0.     , 0.)],
+            [1 , (0. , -0.757 , 0.587)],
+            [1 , (0. , 0.757  , 0.587)]]
+        mol.verbose = 5
+        mol.output = '/dev/null'
+        mol.basis = '631g'
+        mol.build()
+        mf = scf.RHF(mol).run()
+        myrci = ci.cisd.CISD(mf).run()
+        rdm1 = myrci.make_rdm1()
+        rdm2 = myrci.make_rdm2()
+
+        mf = scf.addons.convert_to_ghf(mf)
+        mygci = gcisd.GCISD(mf).run()
+        dm1 = mygci.make_rdm1()
+        dm2 = mygci.make_rdm2()
+
+        nao = mol.nao_nr()
+        mo_a = mf.mo_coeff[:nao]
+        mo_b = mf.mo_coeff[nao:]
+        nmo = mo_a.shape[1]
+        eri = ao2mo.kernel(mf._eri, mo_a+mo_b, compact=False).reshape([nmo]*4)
+        orbspin = mf.mo_coeff.orbspin
+        sym_forbid = (orbspin[:,None] != orbspin)
+        eri[sym_forbid,:,:] = 0
+        eri[:,:,sym_forbid] = 0
+        hcore = scf.RHF(mol).get_hcore()
+        h1 = reduce(numpy.dot, (mo_a.T.conj(), hcore, mo_a))
+        h1+= reduce(numpy.dot, (mo_b.T.conj(), hcore, mo_b))
+        e1 = numpy.einsum('ij,ji', h1, dm1)
+        e1+= numpy.einsum('ijkl,jilk', eri, dm2) * .5
+        e1+= mol.energy_nuc()
+        self.assertAlmostEqual(e1, mygci.e_tot, 7)
+
+        idxa = numpy.where(orbspin == 0)[0]
+        idxb = numpy.where(orbspin == 1)[0]
+        trdm1 = dm1[idxa[:,None],idxa]
+        trdm1+= dm1[idxb[:,None],idxb]
+        trdm2 = dm2[idxa[:,None,None,None],idxa[:,None,None],idxa[:,None],idxa]
+        trdm2+= dm2[idxb[:,None,None,None],idxb[:,None,None],idxb[:,None],idxb]
+        dm2ab = dm2[idxa[:,None,None,None],idxa[:,None,None],idxb[:,None],idxb]
+        trdm2+= dm2ab
+        trdm2+= dm2ab.transpose(2,3,0,1)
+        self.assertAlmostEqual(abs(trdm1 - rdm1).max(), 0, 5)
+        self.assertAlmostEqual(abs(trdm2 - rdm2).max(), 0, 5)
+
+        c0, c1, c2 = myrci.cisdvec_to_amplitudes(myrci.ci)
+        rt0 = c0 + .2j
+        rt1 = c1 + numpy.cos(c1) * .2j
+        rt2 = c2 + numpy.sin(c2) * .8j
+        civec = myrci.amplitudes_to_cisdvec(rt0, rt1, rt2)
+        rdm1 = myrci.make_rdm1(civec)
+        rdm2 = myrci.make_rdm2(civec)
+
+        gt1 = mygci.spatial2spin(rt1)
+        gt2 = mygci.spatial2spin(rt2)
+        civec = mygci.amplitudes_to_cisdvec(rt0, gt1, gt2)
+        gdm1 = mygci.make_rdm1(civec)
+        gdm2 = mygci.make_rdm2(civec)
+
+        orbspin = mf.mo_coeff.orbspin
+        idxa = numpy.where(orbspin == 0)[0]
+        idxb = numpy.where(orbspin == 1)[0]
+        trdm1 = gdm1[idxa[:,None],idxa]
+        trdm1+= gdm1[idxb[:,None],idxb]
+        trdm2 = gdm2[idxa[:,None,None,None],idxa[:,None,None],idxa[:,None],idxa]
+        trdm2+= gdm2[idxb[:,None,None,None],idxb[:,None,None],idxb[:,None],idxb]
+        dm2ab = gdm2[idxa[:,None,None,None],idxa[:,None,None],idxb[:,None],idxb]
+        trdm2+= dm2ab
+        trdm2+= dm2ab.transpose(2,3,0,1)
+        self.assertAlmostEqual(abs(trdm1 - rdm1).max(), 0, 9)
+        self.assertAlmostEqual(abs(trdm2 - rdm2).max(), 0, 9)
 
     def test_ao_direct(self):
         mol = gto.Mole()
