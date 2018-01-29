@@ -13,17 +13,22 @@ class tddft_iter(chi0_matvec):
         kw: keywords arguments:
             * tddft_iter_tol (real, default: 1e-3): tolerance to reach for 
                             convergency in the iterative procedure.
+            * tmp_fname (string, default None): temporary file to save polarizability
+                            at each frequency. Can be a life saver for large systems.
   """
 
   def __init__(self, **kw):
-    chi0_matvec.__init__(self, **kw)
 
-    self.xc_code_mf = copy(self.xc_code)
-    self.xc_code = xc_code = kw['xc_code'] if 'xc_code' in kw else self.xc_code
     self.load_kernel = load_kernel = kw['load_kernel'] if 'load_kernel' in kw else False
     self.maxiter = kw['maxiter'] if 'maxiter' in kw else 1000
     self.tddft_iter_tol = kw['tddft_iter_tol'] if 'tddft_iter_tol' in kw else 1e-3
     assert self.tddft_iter_tol>1e-6
+    
+
+    # better to check input before to initialize calculations
+    chi0_matvec.__init__(self, **kw)
+    self.xc_code_mf = copy(self.xc_code)
+    self.xc_code = xc_code = kw['xc_code'] if 'xc_code' in kw else self.xc_code
 
     self.matvec_ncalls = 0
 
@@ -110,30 +115,55 @@ class tddft_iter(chi0_matvec):
 
     return v - (matvec_real + 1.0j*matvec_imag)
 
-  def comp_polariz_inter_xx(self, comegas):
+  def comp_polariz_inter_xx(self, comegas, tmp_fname=None):
     """  Compute the interacting polarizability along the xx direction  """
     pxx = np.zeros(comegas.shape, dtype=self.dtypeComplex)
+
+    if tmp_fname is not None:
+        if not isinstance(tmp_fname, str):
+            raise ValueError("tmp_fname must be a string")
+
 
     vext = np.transpose(self.moms1)
     for iw, comega in enumerate(comegas):
       veff = self.comp_veff(vext[0], comega)
       dn = self.apply_rf0(veff, comega)
       pxx[iw] = np.dot(vext[0], dn)
+      if tmp_fname is not None:
+        tmp = open(tmp_fname, "a")
+        tmp.write("{0}   {1}   {2}\n".format(comega.real, pxx[iw].real,
+                                                          pxx[iw].imag))
+        tmp.close() # Need to open and close the file at every freq, otherwise
+                    # tmp is written only at the end of the calculations, therefore,
+                    # it is useless
+
     return pxx
 
-  def comp_polariz_inter_ave(self, comegas, **kw):
+  def comp_polariz_inter_ave(self, comegas, tmp_fname=None):
     """  Compute average interacting polarizability  """
     p_avg = np.zeros(comegas.shape, dtype=self.dtypeComplex)
 
-    verbosity = kw['verbosity'] if 'verbosity' in kw else self.verbosity
+    if tmp_fname is not None:
+        if not isinstance(tmp_fname, str):
+            raise ValueError("tmp_fname must be a string")
+
+
     vext = np.transpose(self.moms1)
     nww, eV = len(comegas), 27.2114
-    for xyz in range(3):
-      for iw, comega in enumerate(comegas):
-        if verbosity>1: print(xyz, iw, nww, comega*eV)
-        veff = self.comp_veff(vext[xyz], comega)
-        dn = self.apply_rf0(veff, comega)
-        p_avg[iw] += np.dot(vext[xyz], dn)
+    for iw, comega in enumerate(comegas):
+        for xyz in range(3):
+            if self.verbosity>1: print(xyz, iw, nww, comega*eV)
+            veff = self.comp_veff(vext[xyz], comega)
+            dn = self.apply_rf0(veff, comega)
+            p_avg[iw] += np.dot(vext[xyz], dn)
+        if tmp_fname is not None:
+            tmp = open(tmp_fname, "a")
+            tmp.write("{0}   {1}   {2}\n".format(comega.real, p_avg[iw].real/3.0,
+                                                              p_avg[iw].imag/3.0))
+            tmp.close() # Need to open and close the file at every freq, otherwise
+                    # tmp is written only at the end of the calculations, therefore,
+                    # it is useless
+
     return p_avg/3.0
 
   polariz_inter_ave = comp_polariz_inter_ave
@@ -168,6 +198,7 @@ class tddft_iter(chi0_matvec):
       if Exyz == 0.0: continue
 
       for iw,comega in enumerate(comegas):
+        if self.verbosity>1: print(xyz, iw, comega*eV)
         veff = self.comp_veff(vext[xyz], comega)
         self.dn[xyz, iw, :] = self.apply_rf0(veff, comega)
             

@@ -6,6 +6,13 @@ Library of tools for Managing the numerical atomic orbitals (NAO)
 Installation
 ------------
 
+* Dependence
+
+    * Fortran, C, Python
+    * CMake
+    * BLAS, Lapack, FFTW
+    * numpy, scipy 
+
 * Default compilation of pySCF's low-level libraries with NAO support is possible with custom
   architecture file.
   

@@ -53,7 +53,7 @@ class mf(nao):
   def init_mo_from_pyscf(self, **kw):
     """ Initializing from a previous pySCF mean-field calc. """
     from pyscf.nao.m_fermi_energy import fermi_energy as comput_fermi_energy
-    from m_color import color as tc
+    # from m_color import color as tc ! Not anymore in nao??
     self.telec = kw['telec'] if 'telec' in kw else 0.0000317 # 10K
     self.mf = mf = kw['mf']
     if type(mf.mo_energy) == tuple: 
@@ -63,7 +63,7 @@ class mf(nao):
       assert mf.mo_coeff.shape[0]==mf.mo_coeff.shape[1]
       assert len(mf.mo_coeff.shape)==2
     else:
-      raise RuntimeError(tc.RED+'unknown type of mo_energy %s %s' % (type(mf.mo_energy), tc.ENDC))
+      raise RuntimeError('unknown type of mo_energy %s %s' % (type(mf.mo_energy)))
     
     self.xc_code = mf.xc if hasattr(mf, 'xc') else 'HF'
     self.k2xyzw = np.array([[0.0,0.0,0.0,1.0]])

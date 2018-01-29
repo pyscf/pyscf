@@ -19,13 +19,14 @@ class tddft_tem(tddft_iter):
             
         """
         
-        self.dr = kw["dr"] if "dr" in kw else np.array([0.3, 0.3, 0.3])
         tddft_iter.__init__(self, **kw)
 
         self.freq = kw["freq"] if "freq" in kw else np.arange(0.0, 0.367, 1.5*self.eps)
+        self.dr = kw["dr"] if "dr" in kw else np.array([0.3, 0.3, 0.3])
 
 
-    def get_spectrum_nonin(self, velec = np.array([1.0, 0.0, 0.0]), beam_offset = np.array([0.0, 0.0, 0.0])):
+    def get_spectrum_nonin(self, velec = np.array([1.0, 0.0, 0.0]), beam_offset = np.array([0.0, 0.0, 0.0]),
+            tmp_fname=None):
         """
         Calculate the non interacting TEM spectra for an electron trajectory
         
@@ -37,6 +38,9 @@ class tddft_tem(tddft_iter):
         
         assert velec.size == 3
         assert beam_offset.size == 3
+        if tmp_fname is not None:
+            if not isinstance(tmp_fname, str):
+                raise ValueError("tmp_fname must be a string")
 
         self.velec = velec
         self.beam_offset = beam_offset
@@ -44,16 +48,15 @@ class tddft_tem(tddft_iter):
         self.vnorm = np.sqrt(np.dot(self.velec, self.velec))
         self.vdir = self.velec/self.vnorm
 
-        assert abs(np.dot(self.velec, self.beam_offset)) < 1e-8 # check orthogonality between beam direction
-                                                                # and beam offset
         self.check_collision(self.atom2coord)
         self.get_time_range()
         self.calc_external_potential()
 
-        return self.comp_tem_spectrum_nonin()
+        return self.comp_tem_spectrum_nonin(tmp_fname=tmp_fname)
 
     def get_spectrum_inter(self, velec = np.array([1.0, 0.0, 0.0]), 
-                                 beam_offset = np.array([0.0, 0.0, 0.0])):
+                                 beam_offset = np.array([0.0, 0.0, 0.0]),
+                                 tmp_fname=None):
         """
         Calculate the interacting TEM spectra for an electron trajectory
         
@@ -65,26 +68,37 @@ class tddft_tem(tddft_iter):
         
         assert velec.size == 3
         assert beam_offset.size == 3
+        if tmp_fname is not None:
+            if not isinstance(tmp_fname, str):
+                raise ValueError("tmp_fname must be a string")
+
 
         self.velec = velec
         self.beam_offset = beam_offset
 
         self.vnorm = np.sqrt(np.dot(self.velec, self.velec))
         self.vdir = self.velec/self.vnorm
-
-        assert abs(np.dot(self.velec, self.beam_offset)) < 1e-8 # check orthogonality between beam direction
-                                                                # and beam offset
+       
         self.check_collision(self.atom2coord)
         self.get_time_range()
         self.calc_external_potential()
 
-        return self.comp_tem_spectrum()
+        return self.comp_tem_spectrum(tmp_fname=tmp_fname)
 
     def check_collision(self, atom2coord):
         """
             Check if the electron collide with an atom
         """
 
+        if self.verbosity>0:
+            print("tem parameters:")
+            print("vdir: ", self.vdir)
+            print("vnorm: ", self.vnorm)
+            print("beam_offset: ", self.beam_offset)
+
+        assert abs(np.dot(self.velec, self.beam_offset)) < 1e-8 # check orthogonality between beam direction
+                                                                # and beam offset
+ 
         R0 = -100.0*np.max(atom2coord)*self.vdir + self.beam_offset
 
         for atm in range(atom2coord.shape[0]):
@@ -96,6 +110,7 @@ class tddft_tem(tddft_iter):
             if np.sqrt(np.dot(vec-self.vdir, vec-self.vdir)) < 1e-6:
               ######### fancy message does not work in python2
               mess = 'np.sqrt(np.dot(vec-self.vdir, vec-self.vdir))<1e-6:'
+              print("atoms {0} coordinate: ".format(atm), atom2coord[atm, :])
               #mess = """
               #Electron is collinding with atom {0}:
               #velec = [{1:.3f}, {2:.3f}, {3:.3f}]
@@ -164,28 +179,32 @@ class tddft_tem(tddft_iter):
         self.V_freq = comp_vext_tem(self, self.pb.prod_log, self.numba_parallel)
         if self.verbosity>0: print("sum(V_freq) = ", np.sum(abs(self.V_freq.real)), np.sum(abs(self.V_freq.imag)))
 
-    def comp_tem_spectrum(self, x0=False):
+    def comp_tem_spectrum(self, x0=False, tmp_fname=None):
         """ 
         Compute interacting polarizability
 
         Inputs:
         -------
-            comegas (complex 1D array): frequency range (in Hartree) for which the polarizability is computed.
+            * comegas (complex 1D array): frequency range (in Hartree) for which the polarizability is computed.
                                      The imaginary part control the width of the signal.
                                      For example, 
                                      td = tddft_iter_c(...)
                                      comegas = np.arange(0.0, 10.05, 0.05) + 1j*td.eps
-            x0 (boolean, optional): determine if a starting guess array should be use to
+            * x0 (boolean, optional): determine if a starting guess array should be use to
                                     guess the solution. if True, it will use the non-interacting 
                                     polarizability as guess.
+            * tmp_fname (string, default None): temporary file to save polarizability
+                                    at each frequency. Can be a life saver for large systems.
+                    The format of the file is the following,
+                    # energy (Hartree)    Re(gamma)    Im(gamma)
         Output:
         -------
-            polariz (complex 1D array): computed polarizability
+            gamma (complex 1D array): computed eels spectrum
             self.dn (complex 2D array): computed density change in prod basis
         
         """
         comegas = self.freq + 1.0j*self.eps
-        polariz = np.zeros_like(comegas, dtype=np.complex64)
+        gamma = np.zeros_like(comegas, dtype=np.complex64)
         self.dn = np.zeros((comegas.shape[0], self.nprod), dtype=np.complex64)
     
         for iw,comega in enumerate(comegas):
@@ -197,14 +216,21 @@ class tddft_tem(tddft_iter):
                 veff = self.comp_veff(self.V_freq[iw, :], comega, x0=None)
 
             self.dn[iw, :] = self.apply_rf0(veff, comega)
-            polariz[iw] = np.dot(np.conj(self.V_freq[iw, :]), self.dn[iw, :])
+            gamma[iw] = np.dot(np.conj(self.V_freq[iw, :]), self.dn[iw, :])
+            if tmp_fname is not None:
+                tmp = open(tmp_fname, "a")
+                tmp.write("{0}   {1}   {2}\n".format(comega.real, -gamma[iw].real/np.pi, 
+                                                                  -gamma[iw].imag/np.pi))
+                tmp.close() # Need to open and close the file at every freq, otherwise
+                            # tmp is written only at the end of the calculations, therefore,
+                            # it is useless
             
         if self.td_GPU.GPU is not None:
             self.td_GPU.clean_gpu()
 
-        return -polariz/np.pi
+        return -gamma/np.pi
 
-    def comp_tem_spectrum_nonin(self):
+    def comp_tem_spectrum_nonin(self, tmp_fname = None):
         """ 
         Compute non-interacting polarizability
 
@@ -217,16 +243,24 @@ class tddft_tem(tddft_iter):
                                      comegas = np.arange(0.0, 10.05, 0.05) + 1j*td.eps
         Output:
         -------
-            pxx (complex 1D array): computed non-interacting polarizability
+            gamma (complex 1D array): computed non-interacting eels spectrum
             self.dn0 (complex 2D array): computed non-interacting density change in prod basis
         
         """
         comegas = self.freq + 1.0j*self.eps
 
-        pxx = np.zeros(comegas.shape, dtype=np.complex64)
+        gamma = np.zeros(comegas.shape, dtype=np.complex64)
         self.dn0 = np.zeros((comegas.shape[0], self.nprod), dtype=np.complex64)
-
+        
         for iw, comega in enumerate(comegas):
             self.dn0[iw, :] = self.apply_rf0(self.V_freq[iw, :], comega) 
-            pxx[iw] = np.dot(self.dn0[iw, :], np.conj(self.V_freq[iw, :]))
-        return -pxx/np.pi
+            gamma[iw] = np.dot(self.dn0[iw, :], np.conj(self.V_freq[iw, :]))
+            if tmp_fname is not None:
+                tmp = open(tmp_fname, "a")
+                tmp.write("{0}   {1}   {2}\n".format(comega.real, -gamma[iw].real/np.pi, 
+                                                                  -gamma[iw].imag/np.pi))
+                tmp.close() # Need to open and close the file at every freq, otherwise
+                            # tmp is written only at the end of the calculations, therefore,
+                            # it is useless
+ 
+        return -gamma/np.pi
