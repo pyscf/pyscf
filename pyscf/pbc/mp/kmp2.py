@@ -2,8 +2,6 @@
 # $Id$
 # -*- coding: utf-8
 
-import time
-from functools import reduce
 import numpy
 import numpy as np
 
@@ -11,46 +9,51 @@ from pyscf import lib
 from pyscf.lib import logger
 
 from pyscf.pbc.lib import kpts_helper 
-from pyscf.pbc.cc.kccsd import get_moidx
 from pyscf.pbc.cc.kccsd_rhf import get_nocc, get_nmo
 
 '''
 kpoint-adapted and spin-adapted MP2
 t2[i,j,a,b] = <ij|ab> / D_ij^ab
+
+t2 and eris are never stored in full, only a partial 
+eri of size (nkpts,nocc,nocc,nvir,nvir)
 '''
 
-def kernel(mp, mo_energy, mo_coeff, eris=None, verbose=logger.NOTE):
-    if eris is None:
-        eris = mp.ao2mo(mo_coeff)
-
+def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE):
     nocc = mp.nocc
     nvir = mp.nmo - nocc
     nkpts = mp.nkpts
-    t2 = numpy.zeros((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=eris.fock.dtype)
 
-    woovv = numpy.empty((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=eris.fock.dtype)
-    emp2 = 0
-    foo = eris.fock[:,:nocc,:nocc].copy()
-    fvv = eris.fock[:,nocc:,nocc:].copy()
     eia = numpy.zeros((nocc,nvir))
     eijab = numpy.zeros((nocc,nocc,nvir,nvir))
 
+    fao2mo = mp._scf.with_df.ao2mo
     kconserv = mp.khelper.kconserv
+    emp2 = 0.
+    oovv_ij = np.zeros((nkpts,nocc,nocc,nvir,nvir), dtype=mo_coeff[0].dtype)
     for ki in range(nkpts):
       for kj in range(nkpts):
         for ka in range(nkpts):
             kb = kconserv[ki,ka,kj]
-            eia = np.diagonal(foo[ki]).reshape(-1,1) - np.diagonal(fvv[ka])
-            ejb = np.diagonal(foo[kj]).reshape(-1,1) - np.diagonal(fvv[kb])
+            orbo_i = mo_coeff[ki][:,:nocc]
+            orbo_j = mo_coeff[kj][:,:nocc]
+            orbv_a = mo_coeff[ka][:,nocc:]
+            orbv_b = mo_coeff[kb][:,nocc:]
+            oovv_ij[ka] = fao2mo((orbo_i,orbv_a,orbo_j,orbv_b),
+                            (mp.kpts[ki],mp.kpts[ka],mp.kpts[kj],mp.kpts[kb]), 
+                            compact=False).reshape(nocc,nvir,nocc,nvir).transpose(0,2,1,3) / nkpts
+        for ka in range(nkpts):
+            kb = kconserv[ki,ka,kj]
+            eia = mo_energy[ki][:nocc].reshape(-1,1) - mo_energy[ka][nocc:]
+            ejb = mo_energy[kj][:nocc].reshape(-1,1) - mo_energy[kb][nocc:]
             eijab = lib.direct_sum('ia,jb->ijab',eia,ejb)
-            woovv[ki,kj,ka] = (2*eris.oovv[ki,kj,ka] - eris.oovv[ki,kj,kb].transpose(0,1,3,2))
-            t2[ki,kj,ka] = eris.oovv[ki,kj,ka] / eijab
+            t2_ijab = np.conj(oovv_ij[ka]/eijab)
+            woovv = 2*oovv_ij[ka] - oovv_ij[kb].transpose(0,1,3,2)
+            emp2 += np.einsum('ijab,ijab', t2_ijab, woovv).real
 
-    t2 = numpy.conj(t2)
-    emp2 = numpy.einsum('pqrijab,pqrijab',t2,woovv).real
     emp2 /= nkpts
 
-    return emp2, t2
+    return emp2, None 
 
 
 class KMP2(lib.StreamObject):
@@ -96,7 +99,7 @@ class KMP2(lib.StreamObject):
     get_nocc = get_nocc
     get_nmo = get_nmo
 
-    def kernel(self, mo_energy=None, mo_coeff=None, eris=None):
+    def kernel(self, mo_energy=None, mo_coeff=None):
         if mo_energy is None:
             mo_energy = self.mo_energy
         if mo_coeff is None:
@@ -108,112 +111,17 @@ class KMP2(lib.StreamObject):
             raise RuntimeError
 
         self.emp2, self.t2 = \
-                kernel(self, mo_energy, mo_coeff, eris, verbose=self.verbose)
+                kernel(self, mo_energy, mo_coeff, verbose=self.verbose)
         logger.log(self, 'KMP2 energy = %.15g', self.emp2)
         self.e_corr = self.emp2
         return self.emp2, self.t2
 
-    def ao2mo(self, mo_coeff=None):
-        return _ERIS(self, mo_coeff, verbose=self.verbose)
-
 
 def _mem_usage(nkpts, nocc, nvir):
     nmo = nocc + nvir
-    basic = (nkpts**3*nocc**2*nvir**2*2)*16 / 1e6
-    # Roughly, factor of two for safety (t2 array, temp arrays, copying, etc)
-    basic *= 2
-    incore = nmo**4*16 / 1e6 + basic
-    outcore = basic
+    basic = (nkpts*nocc**2*nvir**2*2)*16 / 1e6
+    incore = outcore = basic 
     return incore, outcore, basic
-
-class _ERIS:
-    def __init__(self, mp, mo_coeff=None, verbose=None):
-        cput0 = (time.clock(), time.time())
-        moidx = get_moidx(mp)
-        nkpts = mp.nkpts
-        nmo = mp.nmo
-
-        nao = mp.mo_coeff[0].shape[0]
-        dtype = mp.mo_coeff[0].dtype
-        self.mo_coeff = numpy.zeros((nkpts,nao,nmo), dtype=dtype)
-        self.fock = numpy.zeros((nkpts,nmo,nmo), dtype=dtype)
-        if mo_coeff is None:
-            for kp in range(nkpts):
-                self.mo_coeff[kp] = mp.mo_coeff[kp][:,moidx[kp]]
-            mo_coeff = self.mo_coeff
-            for kp in range(nkpts):
-                self.fock[kp] = numpy.diag(mp.mo_energy[kp][moidx[kp]]).astype(dtype)
-        else:  # If mo_coeff is not canonical orbital
-            for kp in range(nkpts):
-                self.mo_coeff[kp] = mo_coeff[kp][:,moidx[kp]]
-            mo_coeff = self.mo_coeff
-            dm = mp._scf.make_rdm1(mp.mo_coeff, mp.mo_occ)
-            # Don't use get_veff(), because mp._scf might be DFT,
-            # but veff should be Fock, not Kohn-Sham.
-            #fockao = mp._scf.get_hcore() + mp._scf.get_veff(mp.mol, dm)
-            vj, vk = mp._scf.get_jk(mp.mol, dm)
-            veff = vj - vk * .5
-            fockao = mp._scf.get_hcore() + veff
-            for kp in range(nkpts):
-                self.fock[kp] = reduce(numpy.dot, (mo_coeff[kp].T.conj(), fockao[kp], mo_coeff[kp])).astype(dtype)
-
-        nocc = mp.nocc
-        nmo = mp.nmo
-        nvir = nmo - nocc
-        mem_incore, mem_outcore, mem_basic = _mem_usage(nkpts, nocc, nvir)
-        mem_now = lib.current_memory()[0]
-        fao2mo = mp._scf.with_df.ao2mo
-
-        kconserv = mp.khelper.kconserv
-
-        max_memory = max(2000, mp.max_memory*.9-mem_now)
-        log = logger.Logger(mp.stdout, mp.verbose)
-        if mp.max_memory < mem_basic:
-            log.warn('Not enough memory for integral transformation. '
-                     'Available mem %s MB, required mem %s MB',
-                     max_memory, mem_basic)
-
-        self.oovv = numpy.zeros((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=dtype)
-
-        if (mp.mol.incore_anyway or
-                (mem_incore+mem_now < mp.max_memory)):
-            # more memory, less work because of irreducible k-points
-            log.debug('transform (pq|rs) incore for irreducible k-points')
-
-            khelper = mp.khelper
-
-            for (ikp,ikq,ikr) in khelper.symm_map.keys():
-                iks = kconserv[ikp,ikq,ikr]
-                eri_kpt = fao2mo((mo_coeff[ikp],mo_coeff[ikq],mo_coeff[ikr],mo_coeff[iks]),
-                                 (mp.kpts[ikp],mp.kpts[ikq],mp.kpts[ikr],mp.kpts[iks]), compact=False)
-                if dtype == np.float: eri_kpt = eri_kpt.real
-                eri_kpt = eri_kpt.reshape(nmo,nmo,nmo,nmo)
-                for (kp,kq,kr) in khelper.symm_map[(ikp,ikq,ikr)]:
-                    eri_kpt_symm = khelper.transform_symm(eri_kpt,kp,kq,kr).transpose(0,2,1,3)
-                    self.oovv[kp,kr,kq] = eri_kpt_symm[:nocc,:nocc,nocc:,nocc:] / nkpts
-
-            self.dtype = dtype
-        else:
-            # less memory, more work because no irreducible k-points
-            log.debug('transform (ia|jb) incore for all k-points')
-            for kp in range(nkpts):
-                for kq in range(nkpts):
-                    for kr in range(nkpts):
-                        ks = kconserv[kp,kq,kr]
-                        orbo_p = mo_coeff[kp,:,:nocc]
-                        orbo_r = mo_coeff[kr,:,:nocc]
-                        orbv_q = mo_coeff[kq,:,nocc:]
-                        orbv_s = mo_coeff[ks,:,nocc:]
-                        eri_kpt = fao2mo((orbo_p,orbv_q,orbo_r,orbv_s),
-                                        (mp.kpts[kp],mp.kpts[kq],mp.kpts[kr],mp.kpts[ks]), 
-                                        compact=False)
-                        if dtype == np.float: eri_kpt = eri_kpt.real
-                        eri_kpt = eri_kpt.reshape(nocc,nvir,nocc,nvir).transpose(0,2,1,3)
-                        self.oovv[kp,kr,kq] = eri_kpt / nkpts
-
-            self.dtype = eri_kpt.dtype
-
-        log.timer('integral transformation', *cput0)
 
 
 if __name__ == '__main__':
