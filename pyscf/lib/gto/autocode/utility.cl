@@ -1,5 +1,5 @@
 ;;;;
-;;;; Copyright (C) 2015-  Qiming Sun <osirpt.sun@gmail.com>
+;;;; Copyright (C) 2014-  Qiming Sun <osirpt.sun@gmail.com>
 ;;;; Description:
 
 (defun last-one? (lst)
