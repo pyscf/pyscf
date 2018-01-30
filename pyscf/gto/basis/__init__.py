@@ -323,6 +323,7 @@ def parse(string, symb=None):
         return parse_nwchem.parse(string, symb)
 
 def parse_ecp(string, symb=None):
+    # TODO: catch KeyError and provide suggestion for the possible keys
     return parse_nwchem.parse_ecp(string, symb)
 
 def load(filename_or_basisname, symb):

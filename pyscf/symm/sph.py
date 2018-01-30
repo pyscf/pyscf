@@ -5,6 +5,7 @@ Spherical harmonics
 '''
 
 import numpy
+import scipy.linalg
 from pyscf.symm.cg import cg_spin
 
 def real_sph_vec(r, lmax, reorder_p=False):
@@ -191,20 +192,24 @@ def sph2spinor_coeff(mol):
         ualst.append(u1)
         ublst.append(u2)
 
-    ua = numpy.zeros((mol.nao_nr(),mol.nao_2c()), dtype=complex)
-    ub = numpy.zeros_like(ua)
-    p0 = 0
-    p1 = 0
+    ca = []
+    cb = []
     for ib in range(mol.nbas):
         l = mol.bas_angular(ib)
+        kappa = mol.bas_kappa(ib)
+        if kappa == 0:
+            ua = ualst[l]
+            ub = ublst[l]
+        elif kappa < 0:
+            ua = ualst[l][:,l*2:]
+            ub = ublst[l][:,l*2:]
+        else:
+            ua = ualst[l][:,:l*2]
+            ub = ublst[l][:,:l*2]
         nctr = mol.bas_nctr(ib)
-        n, m = ualst[l].shape
-        for ic in range(nctr):
-            ua[p0:p0+n,p1:p1+m] = ualst[l]
-            ub[p0:p0+n,p1:p1+m] = ublst[l]
-            p0 += n
-            p1 += m
-    return ua, ub
+        ca.extend([ua]*nctr)
+        cb.extend([ub]*nctr)
+    return scipy.linalg.block_diag(*ca), scipy.linalg.block_diag(*cb)
 real2spinor_whole = sph2spinor_coeff
 
 def cart2spinor(l):

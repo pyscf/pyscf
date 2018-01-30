@@ -8,56 +8,11 @@ from pyscf import lib
 from pyscf import scf
 from pyscf import fci
 from pyscf import ci
-from pyscf import ao2mo
 from pyscf.ci import ucisd
+from pyscf import ao2mo
 
 
 class KnownValues(unittest.TestCase):
-    def test_contract(self):
-        '''cross check with GCISD'''
-        mol = gto.M()
-        mol.nelectron = 6
-        nocc, nvir = mol.nelectron//2, 4
-        nmo = nocc + nvir
-        nmo_pair = nmo*(nmo+1)//2
-        mf = scf.UHF(mol)
-        numpy.random.seed(12)
-        mf._eri = numpy.random.random(nmo_pair*(nmo_pair+1)//2) * .2
-        mf.mo_coeff = numpy.random.random((2,nmo,nmo))
-        mf.mo_energy = [numpy.arange(0., nmo)]*2
-        mf.mo_occ = numpy.zeros((2,nmo))
-        mf.mo_occ[:,:nocc] = 1
-        h1 = numpy.random.random((nmo,nmo)) * .1
-        h1 = h1 + h1.T + numpy.arange(nmo)
-        mf.get_hcore = lambda *args: h1
-
-        mf1 = scf.addons.convert_to_ghf(mf)
-        mf1.get_hcore = lambda *args: scipy.linalg.block_diag(h1, h1)
-        gci = ci.GCISD(mf1)
-        c2 = numpy.random.random((nocc*2,nocc*2,nvir*2,nvir*2)) * .1 - .1
-        c2 = c2 - c2.transpose(0,1,3,2)
-        c2 = c2 - c2.transpose(1,0,2,3)
-        c1 = numpy.random.random((nocc*2,nvir*2)) * .1
-        c0 = .5
-        civec = gci.amplitudes_to_cisdvec(c0, c1, c2)
-        civecref = gci.contract(civec, gci.ao2mo())
-        c0ref, c1ref, c2ref = gci.cisdvec_to_amplitudes(civecref)
-        c1ref = gci.spin2spatial(c1ref)
-        c2ref = gci.spin2spatial(c2ref)
-
-        c1 = gci.spin2spatial(c1)
-        c2 = gci.spin2spatial(c2)
-        myci = ci.UCISD(mf)
-        civec = myci.amplitudes_to_cisdvec(c0, c1, c2)
-        cinew = myci.contract(civec, myci.ao2mo())
-        c0new, c1new, c2new = myci.cisdvec_to_amplitudes(cinew)
-        self.assertAlmostEqual(abs(c0new   -c0ref   ).max(), 0, 12)
-        self.assertAlmostEqual(abs(c1new[0]-c1ref[0]).max(), 0, 12)
-        self.assertAlmostEqual(abs(c1new[1]-c1ref[1]).max(), 0, 12)
-        self.assertAlmostEqual(abs(c2new[0]-c2ref[0]).max(), 0, 12)
-        self.assertAlmostEqual(abs(c2new[1]-c2ref[1]).max(), 0, 12)
-        self.assertAlmostEqual(abs(c2new[2]-c2ref[2]).max(), 0, 12)
-        self.assertAlmostEqual(lib.finger(cinew), -123.57726507299601, 9)
 
     def test_from_fcivec(self):
         mol = gto.M()
@@ -196,9 +151,9 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(ecisd, -0.037067274690894436, 9)
         self.assertTrue(myci.e_tot-mol.energy_nuc() - efci < 0.002)
 
-    def test_rdm(self):
+    def test_rdm_h4(self):
         mol = gto.Mole()
-        mol.verbose = 5
+        mol.verbose = 7
         mol.output = '/dev/null'
         mol.atom = [
             ['O', ( 0., 0.    , 0.   )],
@@ -266,6 +221,6 @@ class KnownValues(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    print("Full Tests for CISD")
+    print("Full Tests for UCISD")
     unittest.main()
 

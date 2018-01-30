@@ -12,6 +12,7 @@ import time
 import json
 import ctypes
 import numpy
+import h5py
 import scipy.special
 import scipy.linalg
 from pyscf import lib
@@ -698,6 +699,8 @@ def make_env(atoms, basis, pre_env=[], nucmod={}):
     return _atm, _bas, _env
 
 def make_ecp_env(mol, _atm, ecp, pre_env=[]):
+    '''Generate the input arguments _ecpbas for ECP integrals
+    '''
     _env = []
     ptr_env = len(pre_env)
 
@@ -1476,12 +1479,6 @@ def condense_to_shell(mol, mat, compressor=numpy.max):
     return abstract
 
 
-def check_sanity(obj, keysref, stdout=sys.stdout):
-    sys.stderr.write('Function pyscg.gto.mole.check_sanity will be removed in PySCF-1.1. '
-                     'It is replaced by pyscg.lib.check_sanity\n')
-    return lib.check_sanity(obj, keysref, stdout)
-
-
 # for _atm, _bas, _env
 CHARGE_OF  = 0
 PTR_COORD  = 1
@@ -1914,15 +1911,19 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         return expand_etbs(etbs)
     etbs = expand_etbs
 
+    @lib.with_doc(make_env.__doc__)
     def make_env(self, atoms, basis, pre_env=[], nucmod={}):
         return make_env(atoms, basis, pre_env, nucmod)
 
+    @lib.with_doc(make_atm_env.__doc__)
     def make_atm_env(self, atom, ptr=0):
         return make_atm_env(atom, ptr)
 
+    @lib.with_doc(make_bas_env.__doc__)
     def make_bas_env(self, basis_add, atom_id=0, ptr=0):
         return make_bas_env(basis_add, atom_id, ptr)
 
+    @lib.with_doc(make_ecp_env.__doc__)
     def make_ecp_env(self, _atm, _ecp, pre_env=[]):
         if _ecp:
             _atm, _ecpbas, _env = make_ecp_env(self, _atm, _ecp, pre_env)
@@ -2222,7 +2223,6 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
     def update(self, chkfile):
         return self.update_from_chk(chkfile)
     def update_from_chk(self, chkfile):
-        import h5py
         with h5py.File(chkfile, 'r') as fh5:
             mol = loads(fh5['mol'].value)
             self.__dict__.update(mol.__dict__)
@@ -2503,9 +2503,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
     ao_loc_nr = ao_loc_nr
     ao_loc_2c = ao_loc_2c
 
-    def tmap(self):
-        return time_reversal_map(self)
-    time_reversal_map = time_reversal_map
+    tmap = time_reversal_map = time_reversal_map
 
     def intor(self, intor, comp=1, hermi=0, aosym='s1', out=None,
               shls_slice=None):
@@ -2651,12 +2649,8 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
     search_ao_nr = search_ao_nr
     search_ao_r = search_ao_r
 
-    offset_nr_by_atom = offset_nr_by_atom
-    offset_2c_by_atom = offset_2c_by_atom
-    offset_ao_by_atom = aoslice_by_atom
-    aoslice_nr_by_atom = offset_nr_by_atom
-    aoslice_2c_by_atom = offset_2c_by_atom
-    aoslice_by_atom = aoslice_by_atom
+    aoslice_by_atom = aoslice_nr_by_atom = offset_ao_by_atom = offset_nr_by_atom = aoslice_by_atom
+    aoslice_2c_by_atom = offset_2c_by_atom = offset_2c_by_atom
 
     @lib.with_doc(spinor_labels.__doc__)
     def spinor_labels(self):
@@ -2732,8 +2726,8 @@ def _update_from_cmdargs_(mol):
     # pass sys.args when using ipython
     try:
         __IPYTHON__
-        sys.stderr.write('Warn: Ipython shell catchs sys.args\n')
-        return None
+        #sys.stderr.write('Warn: Ipython shell catchs sys.args\n')
+        return
     except:
         pass
 
@@ -2771,44 +2765,63 @@ def from_zmatrix(atomstr):
     '''
     from pyscf.symm import rotation_mat
     atomstr = atomstr.replace(';','\n').replace(',',' ')
-    atoms = []
-    for line in atomstr.split('\n'):
-        if line.strip():
+    symb = []
+    coord = []
+    for line in atomstr.splitlines():
+        line = line.strip()
+        if line and line[0] != '#':
             rawd = line.split()
+            symb.append(rawd[0])
             if len(rawd) < 3:
-                atoms.append([_atom_symbol(rawd[0]), numpy.zeros(3)])
+                coord.append(numpy.zeros(3))
             elif len(rawd) == 3:
-                atoms.append([_atom_symbol(rawd[0]), numpy.array((float(rawd[2]), 0, 0))])
+                coord.append(numpy.array((float(rawd[2]), 0, 0)))
             elif len(rawd) == 5:
                 bonda = int(rawd[1]) - 1
                 bond  = float(rawd[2])
                 anga  = int(rawd[3]) - 1
                 ang   = float(rawd[4])/180*numpy.pi
                 assert(ang >= 0)
-                v1 = atoms[anga][1] - atoms[bonda][1]
+                v1 = coord[anga] - coord[bonda]
                 if not numpy.allclose(v1[:2], 0):
                     vecn = numpy.cross(v1, numpy.array((0.,0.,1.)))
                 else: # on z
                     vecn = numpy.array((0.,0.,1.))
                 rmat = rotation_mat(vecn, ang)
                 c = numpy.dot(rmat, v1) * (bond/numpy.linalg.norm(v1))
-                atoms.append([_atom_symbol(rawd[0]), atoms[bonda][1]+c])
-            else: # FIXME
+                coord.append(coord[bonda]+c)
+            else:
                 bonda = int(rawd[1]) - 1
                 bond  = float(rawd[2])
                 anga  = int(rawd[3]) - 1
                 ang   = float(rawd[4])/180*numpy.pi
-                assert(ang >= 0)
-                diha  = int(rawd[5]) - 1
-                dih   = float(rawd[6])/180*numpy.pi
-                v1 = atoms[anga][1] - atoms[bonda][1]
-                v2 = atoms[diha][1] - atoms[anga][1]
-                vecn = numpy.cross(v2, -v1)
-                rmat = rotation_mat(v1, -dih)
-                vecn = numpy.dot(rmat, vecn) / numpy.linalg.norm(vecn)
-                rmat = rotation_mat(vecn, ang)
-                c = numpy.dot(rmat, v1) * (bond/numpy.linalg.norm(v1))
-                atoms.append([_atom_symbol(rawd[0]), atoms[bonda][1]+c])
+                assert(ang >= 0 and ang <= numpy.pi)
+                v1 = coord[anga] - coord[bonda]
+                v1 /= numpy.linalg.norm(v1)
+                if ang < 1e-7:
+                    c = v1 * bond
+                elif numpy.pi-ang < 1e-7:
+                    c = -v1 * bond
+                else:
+                    diha  = int(rawd[5]) - 1
+                    dih   = float(rawd[6])/180*numpy.pi
+                    v2 = coord[diha] - coord[anga]
+                    vecn = numpy.cross(v2, -v1)
+                    vecn_norm = numpy.linalg.norm(vecn)
+                    if vecn_norm < 1e-7:
+                        if not numpy.allclose(v1[:2], 0):
+                            vecn = numpy.cross(v1, numpy.array((0.,0.,1.)))
+                        else: # on z
+                            vecn = numpy.array((0.,0.,1.))
+                        rmat = rotation_mat(vecn, ang)
+                        c = numpy.dot(rmat, v1) * bond
+                    else:
+                        rmat = rotation_mat(v1, -dih)
+                        vecn = numpy.dot(rmat, vecn) / vecn_norm
+                        rmat = rotation_mat(vecn, ang)
+                        c = numpy.dot(rmat, v1) * bond
+                coord.append(coord[bonda]+c)
+    atoms = list(zip([_atom_symbol(x) for x in symb], coord))
     return atoms
 zmat2cart = zmat = from_zmatrix
 
