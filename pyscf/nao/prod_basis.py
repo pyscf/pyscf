@@ -148,10 +148,12 @@ class prod_basis():
     if npairs>0 : # Conditional fill of the self.bp2info if there are bilocal pairs (natoms>1)
       ld = p2srncc_cp.shape[1]
       #print('npairs  p2srncc_cp.shape', npairs, p2srncc_cp.shape)
-      #t2 = timer(); print('call vrtx_cc_batch ', t2-t1, 'npairs ', npairs); t1=timer()
+      if nao.verbosity>0:
+        t2 = timer(); print('call vrtx_cc_batch ', t2-t1, 'npairs ', npairs); t1=timer()
       libnao.vrtx_cc_batch( c_int64(npairs), p2srncc_cp.ctypes.data_as(POINTER(c_double)), 
         c_int64(ld), p2ndp.ctypes.data_as(POINTER(c_int64)))
-      #t2 = timer(); print('after vrtx_cc_batch ', t2-t1); t1=timer()
+      if nao.verbosity>0:
+        t2 = timer(); print('after vrtx_cc_batch ', t2-t1); t1=timer()
       nout = 0
       sp2norbs = sv.ao_log.sp2norbs
       for srncc,ndp,npac in zip(p2srncc,p2ndp,p2npac):
