@@ -148,7 +148,7 @@ static void _fill_grid2atm(double *grid2atm, double *coord, double *L,
 }
 
 
-void PBCeval_sph_iter(void (*feval)(),  int (*fexp)(),
+void PBCeval_sph_iter(FPtr_eval feval,  FPtr_exp fexp,
                       size_t nao, size_t ngrids, size_t bgrids, size_t offao,
                       int param[], int *shls_slice, int *ao_loc, double *buf,
                       double *Ls, int nimgs, double complex *expLk, int nkpts,
@@ -228,7 +228,7 @@ int GTOshloc_by_atom(int *shloc, int *shls_slice, int *ao_loc, int *atm, int *ba
  * non0table[ngrids/blksize,natm] is the T/F table for ao values to
  * screen the ao evaluation for each shell
  */
-void PBCeval_loop(void (*fiter)(), void (*feval)(), int (*fexp)(),
+void PBCeval_loop(void (*fiter)(), FPtr_eval feval, FPtr_exp fexp,
                   int ngrids, int param[], int *shls_slice, int *ao_loc,
                   double *Ls, int nimgs, double complex *expLk, int nkpts,
                   double complex **ao, double *coord, unsigned char *non0table,
@@ -268,7 +268,7 @@ void PBCeval_loop(void (*fiter)(), void (*feval)(), int (*fexp)(),
 }
 }
 
-void PBCeval_sph_drv(void (*feval)(), int (*fexp)(),
+void PBCeval_sph_drv(FPtr_eval feval, FPtr_exp fexp,
                      int ngrids, int param[], int *shls_slice, int *ao_loc,
                      double *Ls, int nimgs, double complex *expLk, int nkpts,
                      double complex **ao, double *coord, unsigned char *non0table,
