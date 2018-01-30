@@ -739,8 +739,8 @@ class CASCI(lib.StreamObject):
                 S^2 expection value == s*(s+1)
         '''
         fci.addons.fix_spin_(self.fcisolver, shift, ss)
-    def fix_spin(self, shift=0.2, ss=None):
-        return self.fix_spin_(self.fcisolver, shift, ss)
+        return self
+    fix_spin = fix_spin_
 
     def density_fit(self, auxbasis=None, with_df=None):
         from pyscf.mcscf import df
