@@ -1,3 +1,4 @@
+from __future__ import print_function, division
 import numpy as np
 from pyscf.nao.m_xjl import xjl
 
@@ -50,10 +51,13 @@ class sbt_c():
   
     temp1 = np.zeros((nr2), dtype='complex128')
     temp2 = np.zeros((nr2), dtype='complex128')
+
     temp1[0] = 1.0
     temp2 = np.fft.fft(temp1)
     xx = sum(np.real(temp2))
-    if abs(nr2-xx)>1e-10 : raise SystemError('err: sbt_plan: problem with fftw sum(temp2):')
+    if abs(nr2-xx)>1e-10 : 
+      print(__name__, 'abs(nr2-xx)', nr2, xx)
+      raise SystemError('err: sbt_plan: problem with fftw sum(temp2):')
  
     self._mult_table1 = np.zeros((lmax+1, self.nr), dtype='complex128')
     for it in range(n):

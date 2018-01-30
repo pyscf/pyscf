@@ -14,7 +14,7 @@ class scf(tddft_iter):
   def __init__(self, **kw):
     """ Constructor a self-consistent field """
     self.perform_scf = kw['perform_scf'] if 'perform_scf' in kw else False
-    ips = map(lambda x: kw.pop(x,None), ['xc_code', 'dealloc_hsx', 'dtype'])
+    for x in ['xc_code', 'dealloc_hsx', 'dtype']: kw.pop(x,None)
     tddft_iter.__init__(self, dtype=np.float64, xc_code='RPA', dealloc_hsx=False, **kw)
     #print(__name__, ' dtype ', self.dtype)
 

@@ -18,7 +18,7 @@ class chi0_matvec(mf):
     from scipy.linalg import blas
 
     self.dtype = kw['dtype'] if 'dtype' in kw else np.float32
-    ips = map(lambda x: kw.pop(x,None), ['dtype'])
+    for x in ['dtype']: kw.pop(x, None)
     mf.__init__(self, dtype=self.dtype, **kw)
 
     self.dealloc_hsx = kw['dealloc_hsx'] if 'dealloc_hsx' in kw else True

@@ -14,7 +14,7 @@ class KnowValues(unittest.TestCase):
     sn2eval_gw = np.copy(gw.ksn2e[0,:,gw.nn]).T    
     gw_corr_int = gw.gw_corr_int(sn2eval_gw)
     for c,cref in zip(gw_corr_int[0], [ -4.16459719e-02, -4.79778564e-03,-3.26848826e-03,-4.06138735e-05,
-     -5.13947211e-03,  -5.13947211e-03, 8.42977051e-03]):
-      self.assertAlmostEqual(c, cref)
+      -5.13947211e-03,  -5.13947211e-03, 8.42977051e-03]):
+      self.assertAlmostEqual(c[0], cref)
 
 if __name__ == "__main__": unittest.main()

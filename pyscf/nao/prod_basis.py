@@ -79,7 +79,7 @@ class prod_basis():
     if self.algorithm=='pp':
       self.init_prod_basis_pp_batch(nao, **kw)
     elif self.algorithm=='fp':
-      from m_pb_ae import pb_ae
+      from pyscf.nao.m_pb_ae import pb_ae
       pb_ae(self, nao, self.tol_loc, self.tol_biloc, self.ac_rcut_ratio)
     else:
       print( 'self.algorithm', self.algorithm )

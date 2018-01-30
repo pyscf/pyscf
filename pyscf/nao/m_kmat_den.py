@@ -8,7 +8,6 @@ def kmat_den(mf, dm=None, algo='fci', **kw):
   Returns:
     matrix elements
   """
-  from pyscf.nao.m_prod_basis import prod_basis_c
   from scipy.sparse import csr_matrix
   import numpy as np
 

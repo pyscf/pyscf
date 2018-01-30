@@ -14,9 +14,9 @@ def rf0_den(self, ww):
   zxvx = zeros((len(ww),self.nprod,self.bsize,self.bsize), dtype=self.dtypeComplex)
 
   for sn in range(self.nspin):
-    nn = range(0,self.nfermi[sn],self.bsize)+[self.nfermi[sn]]
+    nn = list(range(0,self.nfermi[sn],self.bsize))+[self.nfermi[sn]]
     for sm in range(self.nspin):
-      mm = range(self.vstart[sm],self.norbs,self.bsize)+[self.norbs]
+      mm = list(range(self.vstart[sm],self.norbs,self.bsize))+[self.norbs]
     
       for nbs,nbf in zip(nn,nn[1:]):
         vx = dot(v, self.x[sn,nbs:nbf,:].T)
