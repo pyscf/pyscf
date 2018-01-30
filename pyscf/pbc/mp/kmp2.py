@@ -1,6 +1,10 @@
 #!/usr/bin/env python
 # $Id$
 # -*- coding: utf-8
+#
+# Author: Timothy Berkelbach <tim.berkelbach@gmail.com>
+#
+
 
 '''
 kpoint-adapted and spin-adapted MP2
@@ -15,8 +19,8 @@ import numpy as np
 
 from pyscf import lib
 from pyscf.lib import logger
+from pyscf.mp import mp2
 from pyscf.pbc.lib import kpts_helper
-from pyscf.pbc.cc.kccsd_rhf import get_nocc, get_nmo
 
 
 def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE):
@@ -142,16 +146,10 @@ class KMP2(mp2.MP2):
             raise RuntimeError
 
         self.e_corr, self.t2 = \
-                kernel(self, mo_energy, mo_coeff, eris, verbose=self.verbose)
+                kernel(self, mo_energy, mo_coeff, verbose=self.verbose)
         logger.log(self, 'KMP2 energy = %.15g', self.e_corr)
         return self.e_corr, self.t2
-
-
-def _mem_usage(nkpts, nocc, nvir):
-    nmo = nocc + nvir
-    basic = (nkpts*nocc**2*nvir**2*2)*16 / 1e6
-    incore = outcore = basic
-    return incore, outcore, basic
+KRMP2 = KMP2
 
 
 if __name__ == '__main__':
