@@ -156,8 +156,8 @@ static void _fill_grid2atm(double *grid2atm, double *coord, double *L,
 }
 
 
-void PBCeval_cart_iter(void (*feval)(),  int (*fexp)(),
-                       int nao, int ngrids, int bgrids, size_t offao,
+void PBCeval_cart_iter(FPtr_eval feval,  FPtr_exp fexp,
+                       size_t nao, size_t ngrids, size_t bgrids, size_t offao,
                        int param[], int *shls_slice, int *ao_loc, double *buf,
                        double *Ls, int nimgs, double complex *expLk, int nkpts,
                        double complex **ao, double *coord, unsigned char *non0table,
@@ -170,8 +170,8 @@ void PBCeval_cart_iter(void (*feval)(),  int (*fexp)(),
         const int atmend = bas[(sh1-1)*BAS_SLOTS+ATOM_OF]+1;
         const int atmcount = atmend - atmstart;
         const size_t Ngrids = ngrids;
-        int i, k, l, m, np, nc, atm_id, bas_id, deg, di, ao_id;
-        size_t off;
+        int i, k, l, m, np, nc, atm_id, bas_id, deg, ao_id;
+        size_t off, di;
         double fac;
         double *p_exp, *pcoeff, *pcoord, *pcart, *ri, *pao;
         double *grid2atm = buf; // [atm_id,xyz,grid]
@@ -215,7 +215,7 @@ void PBCeval_cart_iter(void (*feval)(),  int (*fexp)(),
 }
 
 
-void PBCeval_sph_iter(void (*feval)(),  int (*fexp)(),
+void PBCeval_sph_iter(FPtr_eval feval,  FPtr_exp fexp,
                       size_t nao, size_t ngrids, size_t bgrids, size_t offao,
                       int param[], int *shls_slice, int *ao_loc, double *buf,
                       double *Ls, int nimgs, double complex *expLk, int nkpts,
@@ -295,7 +295,7 @@ int GTOshloc_by_atom(int *shloc, int *shls_slice, int *ao_loc, int *atm, int *ba
  * non0table[ngrids/blksize,natm] is the T/F table for ao values to
  * screen the ao evaluation for each shell
  */
-void PBCeval_loop(void (*fiter)(), void (*feval)(), int (*fexp)(),
+void PBCeval_loop(void (*fiter)(), FPtr_eval feval, FPtr_exp fexp,
                   int ngrids, int param[], int *shls_slice, int *ao_loc,
                   double *Ls, int nimgs, double complex *expLk, int nkpts,
                   double complex **ao, double *coord, unsigned char *non0table,
@@ -335,7 +335,7 @@ void PBCeval_loop(void (*fiter)(), void (*feval)(), int (*fexp)(),
 }
 }
 
-void PBCeval_cart_drv(void (*feval)(), int (*fexp)(),
+void PBCeval_cart_drv(FPtr_eval feval, FPtr_exp fexp,
                       int ngrids, int param[], int *shls_slice, int *ao_loc,
                       double *Ls, int nimgs, double complex *expLk, int nkpts,
                       double complex **ao, double *coord, unsigned char *non0table,
@@ -346,7 +346,7 @@ void PBCeval_cart_drv(void (*feval)(), int (*fexp)(),
                      ao, coord, non0table, atm, natm, bas, nbas, env);
 }
 
-void PBCeval_sph_drv(void (*feval)(), int (*fexp)(),
+void PBCeval_sph_drv(FPtr_eval feval, FPtr_exp fexp,
                      int ngrids, int param[], int *shls_slice, int *ao_loc,
                      double *Ls, int nimgs, double complex *expLk, int nkpts,
                      double complex **ao, double *coord, unsigned char *non0table,
