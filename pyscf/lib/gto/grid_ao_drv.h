@@ -39,11 +39,11 @@ void GTOnabla1(double *fx1, double *fy1, double *fz1,
 void GTOx1(double *fx1, double *fy1, double *fz1,
            double *fx0, double *fy0, double *fz0, int l, double *ri);
 int GTOprim_exp(double *eprim, double *coord, double *alpha, double *coeff,
-                int l, int nprim, int nctr, int ngrids, double fac);
+                int l, int nprim, int nctr, size_t ngrids, double fac);
 int GTOcontract_exp0(double *ectr, double *coord, double *alpha, double *coeff,
-                     int l, int nprim, int nctr, int ngrids, double fac);
+                     int l, int nprim, int nctr, size_t ngrids, double fac);
 int GTOcontract_exp1(double *ectr, double *coord, double *alpha, double *coeff,
-                     int l, int nprim, int nctr, int ngrids, double fac);
+                     int l, int nprim, int nctr, size_t ngrids, double fac);
 
 void GTOeval_sph_drv(void (*feval)(), int (*fexp)(), double fac,
                      int ngrids, int param[], int *shls_slice, int *ao_loc,

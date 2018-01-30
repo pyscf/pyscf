@@ -59,7 +59,8 @@ static void dot_ao_dm(double *vm, double *ao, double *dm,
         double beta = 0;
 
         if (has0) {
-                int box_id, bas_id, b0, blen, i, j;
+                int box_id, bas_id, blen, i, j;
+                size_t b0;
 
                 for (box_id = 0; box_id < nbox; box_id++) {
                         if (!empty[box_id]) {
@@ -122,8 +123,9 @@ static void dot_ao_ao(double *vv, double *ao1, double *ao2,
         const char TRANS_N = 'N';
         const double D1 = 1;
         if (has0) {
-                int ib, jb, b0i, b0j, leni, lenj;
+                int ib, jb, leni, lenj;
                 int j1 = nbox;
+                size_t b0i, b0j;
 
                 for (ib = 0; ib < nbox; ib++) {
                 if (!empty[ib]) {

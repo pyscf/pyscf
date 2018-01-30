@@ -49,7 +49,7 @@ void GTOx1(double *fx1, double *fy1, double *fz1,
 }
 
 int GTOprim_exp(double *eprim, double *coord, double *alpha, double *coeff,
-                int l, int nprim, int nctr, int ngrids, double fac)
+                int l, int nprim, int nctr, size_t ngrids, double fac)
 {
         int i, j;
         double arr, maxc;
@@ -89,10 +89,11 @@ int GTOprim_exp(double *eprim, double *coord, double *alpha, double *coeff,
 
 
 // grid2atm[atm_id,xyz,grid_id]
-static void _fill_grid2atm(double *grid2atm, double *coord, int bgrids, int ngrids,
+static void _fill_grid2atm(double *grid2atm, double *coord, size_t bgrids, size_t ngrids,
                            int *atm, int natm, int *bas, int nbas, double *env)
 {
-        int atm_id, ig;
+        int atm_id;
+        size_t ig;
         double *r_atm;
         for (atm_id = 0; atm_id < natm; atm_id++) {
                 r_atm = env + atm[PTR_COORD+atm_id*ATM_SLOTS];
@@ -106,9 +107,9 @@ static void _fill_grid2atm(double *grid2atm, double *coord, int bgrids, int ngri
 }
 
 
-static void _dset0(double *out, int odim, int bgrids, int counts)
+static void _dset0(double *out, size_t odim, size_t bgrids, int counts)
 {
-        int i, j;
+        size_t i, j;
         for (i = 0; i < counts; i++) {
                 for (j = 0; j < bgrids; j++) {
                         out[i*odim+j] = 0;
@@ -116,9 +117,9 @@ static void _dset0(double *out, int odim, int bgrids, int counts)
         }
 }
 
-static void _zset0(double complex *out, int odim, int bgrids, int counts)
+static void _zset0(double complex *out, size_t odim, size_t bgrids, int counts)
 {
-        int i, j;
+        size_t i, j;
         for (i = 0; i < counts; i++) {
                 for (j = 0; j < bgrids; j++) {
                         out[i*odim+j] = 0;
@@ -127,7 +128,7 @@ static void _zset0(double complex *out, int odim, int bgrids, int counts)
 }
 
 void GTOeval_sph_iter(void (*feval)(),  int (*fexp)(), double fac,
-                      int nao, int ngrids, int bgrids,
+                      size_t nao, size_t ngrids, size_t bgrids,
                       int param[], int *shls_slice, int *ao_loc, double *buf,
                       double *ao, double *coord, char *non0table,
                       int *atm, int natm, int *bas, int nbas, double *env)
@@ -138,7 +139,6 @@ void GTOeval_sph_iter(void (*feval)(),  int (*fexp)(), double fac,
         const int atmstart = bas[sh0*BAS_SLOTS+ATOM_OF];
         const int atmend = bas[(sh1-1)*BAS_SLOTS+ATOM_OF]+1;
         const int atmcount = atmend - atmstart;
-        const size_t Ngrids = ngrids;
         int i, k, l, np, nc, atm_id, bas_id, deg, dcart, ao_id;
         double fac1;
         double *p_exp, *pcoeff, *pcoord, *pcart, *ri, *pao;
@@ -165,14 +165,14 @@ void GTOeval_sph_iter(void (*feval)(),  int (*fexp)(), double fac,
                         dcart = (l+1)*(l+2)/2;
                         ri = env + atm[PTR_COORD+atm_id*ATM_SLOTS];
                         if (l <= 1) { // s, p functions
-                                (*feval)(ao+ao_id*Ngrids, ri, eprim, pcoord, p_exp, pcoeff,
+                                (*feval)(ao+ao_id*ngrids, ri, eprim, pcoord, p_exp, pcoeff,
                                          env, l, np, nc, nao, ngrids, bgrids);
                         } else {
                                 (*feval)(cart_gto, ri, eprim, pcoord, p_exp, pcoeff,
                                          env, l, np, nc, nc*dcart, bgrids, bgrids);
                                 pcart = cart_gto;
                                 for (i = 0; i < ncomp; i++) {
-                                        pao = ao + (i*nao+ao_id)*Ngrids;
+                                        pao = ao + (i*nao+ao_id)*ngrids;
                                         for (k = 0; k < nc; k++) {
                                                 CINTc2s_ket_sph1(pao, pcart,
                                                                  ngrids, bgrids, l);
@@ -183,14 +183,14 @@ void GTOeval_sph_iter(void (*feval)(),  int (*fexp)(), double fac,
                         }
                 } else {
                         for (i = 0; i < ncomp; i++) {
-                                _dset0(ao+(i*nao+ao_id)*Ngrids, ngrids, bgrids, nc*deg);
+                                _dset0(ao+(i*nao+ao_id)*ngrids, ngrids, bgrids, nc*deg);
                         }
                 }
         }
 }
 
 void GTOeval_cart_iter(void (*feval)(),  int (*fexp)(), double fac,
-                       int nao, int ngrids, int bgrids,
+                       size_t nao, size_t ngrids, size_t bgrids,
                        int param[], int *shls_slice, int *ao_loc, double *buf,
                        double *ao, double *coord, char *non0table,
                        int *atm, int natm, int *bas, int nbas, double *env)
@@ -201,7 +201,6 @@ void GTOeval_cart_iter(void (*feval)(),  int (*fexp)(), double fac,
         const int atmstart = bas[sh0*BAS_SLOTS+ATOM_OF];
         const int atmend = bas[(sh1-1)*BAS_SLOTS+ATOM_OF]+1;
         const int atmcount = atmend - atmstart;
-        const size_t Ngrids = ngrids;
         int i, k, l, np, nc, atm_id, bas_id, deg, ao_id;
         double fac1;
         double *p_exp, *pcoeff, *pcoord, *pcart, *ri, *pao;
@@ -225,18 +224,18 @@ void GTOeval_cart_iter(void (*feval)(),  int (*fexp)(), double fac,
                 if (non0table[bas_id] &&
                     (*fexp)(eprim, pcoord, p_exp, pcoeff, l, np, nc, bgrids, fac1)) {
                         ri = env + atm[PTR_COORD+atm_id*ATM_SLOTS];
-                        (*feval)(ao+ao_id*Ngrids, ri, eprim, pcoord, p_exp, pcoeff,
+                        (*feval)(ao+ao_id*ngrids, ri, eprim, pcoord, p_exp, pcoeff,
                                  env, l, np, nc, nao, ngrids, bgrids);
                 } else {
                         for (i = 0; i < ncomp; i++) {
-                                _dset0(ao+(i*nao+ao_id)*Ngrids, ngrids, bgrids, nc*deg);
+                                _dset0(ao+(i*nao+ao_id)*ngrids, ngrids, bgrids, nc*deg);
                         }
                 }
         }
 }
 
 void GTOeval_spinor_iter(void (*feval)(), int (*fexp)(), void (*c2s)(), double fac,
-                         int nao, int ngrids, int bgrids,
+                         size_t nao, size_t ngrids, size_t bgrids,
                          int param[], int *shls_slice, int *ao_loc, double *buf,
                          double complex *ao, double *coord, char *non0table,
                          int *atm, int natm, int *bas, int nbas, double *env)
@@ -248,7 +247,6 @@ void GTOeval_spinor_iter(void (*feval)(), int (*fexp)(), void (*c2s)(), double f
         const int atmstart = bas[sh0*BAS_SLOTS+ATOM_OF];
         const int atmend = bas[(sh1-1)*BAS_SLOTS+ATOM_OF]+1;
         const int atmcount = atmend - atmstart;
-        const size_t Ngrids = ngrids;
         int i, k, l, np, nc, atm_id, bas_id, deg, kappa, dcart, ao_id;
         size_t off;
         double fac1;
@@ -282,13 +280,13 @@ void GTOeval_spinor_iter(void (*feval)(), int (*fexp)(), void (*c2s)(), double f
                                  env, l, np, nc, nc*dcart, bgrids, bgrids);
                         for (i = 0; i < ncomp; i++) {
                                 pcart = cart_gto + i * nc*dcart*bgrids*ncomp_e1;
-                                off = (i*nao+ao_id)*Ngrids;
+                                off = (i*nao+ao_id)*ngrids;
                                 (*c2s)(aoa+off, aob+off, pcart,
                                        ngrids, bgrids, nc, kappa, l);
                         }
                 } else {
                         for (i = 0; i < ncomp; i++) {
-                                off = (i*nao+ao_id)*Ngrids;
+                                off = (i*nao+ao_id)*ngrids;
                                 _zset0(aoa+off, ngrids, bgrids, nc*deg);
                                 _zset0(aob+off, ngrids, bgrids, nc*deg);
                         }
@@ -335,9 +333,9 @@ void GTOeval_loop(void (*fiter)(), void (*feval)(), int (*fexp)(), double fac,
 {
         const int sh0 = shls_slice[0];
         const int sh1 = shls_slice[1];
-        const int nao = ao_loc[sh1] - ao_loc[sh0];
+        const size_t nao = ao_loc[sh1] - ao_loc[sh0];
         int ip, ib, k, iloc, ish;
-        size_t aoff;
+        size_t aoff, bgrids;
         int ncart = NCTR_CART * param[TENSOR] * param[POS_E1];
         double *buf = malloc(sizeof(double) * BLKSIZE*(NPRIMAX*2+ncart));
 #pragma omp for schedule(static)
@@ -347,7 +345,8 @@ void GTOeval_loop(void (*fiter)(), void (*feval)(), int (*fexp)(), double fac,
                 aoff = ao_loc[ish] - ao_loc[sh0];
                 ib = k - iloc * nblk;
                 ip = ib * BLKSIZE;
-                (*fiter)(feval, fexp, fac, nao, ngrids, MIN(ngrids-ip, BLKSIZE),
+                bgrids = MIN(ngrids-ip, BLKSIZE);
+                (*fiter)(feval, fexp, fac, nao, Ngrids, bgrids,
                          param, shloc+iloc, ao_loc, buf, ao+aoff*Ngrids+ip,
                          coord+ip, non0table+ib*nbas,
                          atm, natm, bas, nbas, env);
@@ -392,9 +391,9 @@ void GTOeval_spinor_drv(void (*feval)(), int (*fexp)(), void (*c2s)(), double fa
 {
         const int sh0 = shls_slice[0];
         const int sh1 = shls_slice[1];
-        const int nao = ao_loc[sh1] - ao_loc[sh0];
+        const size_t nao = ao_loc[sh1] - ao_loc[sh0];
         int ip, ib, k, iloc, ish;
-        size_t aoff;
+        size_t aoff, bgrids;
         int ncart = NCTR_CART * param[TENSOR] * param[POS_E1];
         double *buf = malloc(sizeof(double) * BLKSIZE*(NPRIMAX*2+ncart));
 #pragma omp for schedule(static)
@@ -404,8 +403,9 @@ void GTOeval_spinor_drv(void (*feval)(), int (*fexp)(), void (*c2s)(), double fa
                 aoff = ao_loc[ish] - ao_loc[sh0];
                 ib = k - iloc * nblk;
                 ip = ib * BLKSIZE;
+                bgrids = MIN(ngrids-ip, BLKSIZE);
                 GTOeval_spinor_iter(feval, fexp, c2s, fac,
-                                    nao, ngrids, MIN(ngrids-ip, BLKSIZE),
+                                    nao, Ngrids, bgrids,
                                     param, shloc+iloc, ao_loc, buf, ao+aoff*Ngrids+ip,
                                     coord+ip, non0table+ib*nbas,
                                     atm, natm, bas, nbas, env);
