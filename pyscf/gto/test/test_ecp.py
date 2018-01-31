@@ -63,12 +63,13 @@ Ghost-Cu1 0.  0. -0.0001
              basis={'Cu':'lanl2dz', 'Cu1': cu1_basis, 'He':'sto3g'},
              ecp = {'cu':'lanl2dz'})
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_nr_rhf(self):
         mol = gto.M(atom='Na 0. 0. 0.;  H  0.  0.  1.',
                     basis={'Na':'lanl2dz', 'H':'sto3g'},
                     ecp = {'Na':'lanl2dz'},
                     verbose=0)
+        self.assertAlmostEqual(lib.finger(mol.intor('ECPscalar')), -0.19922144394443492, 9)
         mf = scf.RHF(mol)
         self.assertAlmostEqual(mf.kernel(), -0.45002331958981223, 10)
 

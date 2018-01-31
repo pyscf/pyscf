@@ -1533,8 +1533,8 @@ class _NumInt(object):
         comp = (deriv+1)*(deriv+2)*(deriv+3)//6
 # NOTE to index grids.non0tab, the blksize needs to be the integer multiplier of BLKSIZE
         if blksize is None:
-            blksize = min(int(max_memory*1e6/(comp*2*nao*8*BLKSIZE))*BLKSIZE, ngrids)
-            blksize = max(blksize, BLKSIZE)
+            blksize = max(1, int(max_memory*1e6/(comp*2*nao*8*BLKSIZE)))*BLKSIZE
+            blksize = min(blksize, ngrids, BLKSIZE*1200)
         if non0tab is None:
             non0tab = grids.non0tab
         if non0tab is None:

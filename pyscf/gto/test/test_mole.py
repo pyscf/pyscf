@@ -16,9 +16,9 @@ mol0.atom = [
 mol0.nucmod = { "O":'gaussian', 3:'g' }
 mol0.unit = 'ang'
 mol0.basis = {
-    "O": [(0, 0, (15, 1)), ] + gto.mole.expand_etbs(((0, 4, 1, 1.8),
-                                                     (1, 3, 2, 1.8),
-                                                     (2, 2, 1, 1.8),)),
+    "O": [(0, 0, (15, 1)), ] + gto.etbs(((0, 4, 1, 1.8),
+                                         (1, 3, 2, 1.8),
+                                         (2, 2, 1, 1.8),)),
     "H": [(0, 0, (1, 1, 0), (3, 3, 1), (5, 1, 0)),
           (1, -2, (1, 1)), ]}
 mol0.symmetry = 1
@@ -29,7 +29,7 @@ mol0.ecp = {'O1': 'lanl2dz'}
 mol0.output = None
 mol0.build()
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_intor_cross(self):
         mol1 = mol0.unpack(mol0.pack())
         mol1.symmetry = True
@@ -46,6 +46,7 @@ C    S
      29.2101550              0.2321844        
       9.2866630              0.4679413        
       3.1639270              0.3623120        
+#     1.                     0.1
 C    SP
       7.8682724             -0.1193324              0.0689991        
       1.8812885             -0.1608542              0.3164240        
@@ -84,6 +85,9 @@ C    SP
         self.assertEqual(mol0.search_shell_id(1, 1), 7)
         self.assertRaises(RuntimeError, mol0.search_ao_nr, 1, 1, -1, 5)
         self.assertEqual(mol0.search_ao_nr(1, 1, -1, 4), 16)
+        mol0.cart = True
+        self.assertEqual(mol0.search_ao_nr(2, 1, -1, 1), 30)
+        mol0.cart = False
 
     def test_atom_types(self):
         atoms = [['H0', ( 0, 0, 0)],
@@ -135,6 +139,9 @@ C    SP
                              F 0.0000000000 0.0000000000 0.0516931447''')
         self.assertTrue(gto.same_mol(mol1, mol2))
         self.assertTrue(not gto.same_mol(mol1, mol2, tol=1e-6))
+        mol3 = gto.M(atom='''H 0.0000000000 0.0000000000 -0.8746076326
+                             H 0.0000000000 0.0000000000 0.0516931447''')
+        self.assertTrue(not gto.same_mol(mol3, mol2))
 
     def test_same_mol2(self):
         mol1 = gto.M(atom='H 0.0052917700 0.0000000000 -0.8746076326; F 0.0000000000 0.0000000000 0.0464013747')
@@ -153,14 +160,24 @@ C    SP
         mol1 = gto.M(atom='''H 0.0000000000 0.0000000000 0.0000000000
           H 0.9497795800 1.3265673200 0.0000000000
           H 0.9444878100 -1.3265673200 0.0000000000
-          H -0.9444878100 0.0000000000 1.3265673200
-          H -0.9444878100 0.0000000000 -1.3265673200''',charge=1)
+          H1 -0.9444878100 0.0000000000 1.3265673200
+          H1 -0.9444878100 0.0000000000 -1.3265673200''', basis={'H':'sto3g', 'H1':'sto3g'}, charge=1)
         mol2 = gto.M(atom='''H 0.0000000000 0.0000000000 0.0000000000
           H 0.9444878100 1.3265673200 0.0000000000
           H 0.9497795800 -1.3265673200 0.0000000000
-          H -0.9444878100 0.0000000000 1.3265673200
-          H -0.9444878100 0.0000000000 -1.3265673200''',charge=1)
+          H1 -0.9444878100 0.0000000000 1.3265673200
+          H1 -0.9444878100 0.0000000000 -1.3265673200''', basis={'H':'sto3g', 'H1':'sto3g'}, charge=1)
         self.assertTrue(gto.same_mol(mol1, mol2))
+        self.assertEqual(len(gto.atom_types(mol1._atom)), 2)
+        mol3 = gto.M(atom='''H 0.0000000000 0.0000000000 0.0000000000
+          H1 0.9497795800 1.3265673200 0.0000000000
+          H1 0.9444878100 -1.3265673200 0.0000000000
+          H1 -0.9444878100 0.0000000000 1.3265673200
+          H1 -0.9444878100 0.0000000000 -1.3265673200''', basis={'H':'sto3g', 'H1':'321g'}, charge=1)
+        self.assertTrue(not gto.same_mol(mol3, mol2))
+
+    def test_mass_center(self):
+        self.assertAlmostEqual(gto.mass_center(mol0._atom)[2], -0.2038858832140481, 9)
 
     def test_chiral_mol(self):
         mol1 = gto.M(atom='C 0 0 0; H 1 1 1; He -1 -1 1; Li -1 1 -1; Be 1 -1 -1')
@@ -185,17 +202,83 @@ C    SP
         self.assertTrue(gto.chiral_mol(mol1))
 
     def test_format_atom(self):
-        atoms = [['h' , 0,1,1], ["O1", (0.,0.,0.)], [1, 1.,1.,0.],]
+        atoms = [['h' , 0,1,1], "O1  0. 0. 0.", [1, 1.,1.,0.],]
         self.assertTrue(numpy.allclose(gto.mole.format_atom(atoms, unit='Ang')[0][1],
                                        [0.0, 1.8897261245650618, 1.8897261245650618]))
         atoms = '''h 0 1 1
-        O1 0 0 0; 1 1 1 0'''
+        O1 0 0 0; 1 1 1 0; #H 0 0 3'''
         self.assertTrue(numpy.allclose(gto.mole.format_atom(atoms, unit=1)[0][1],
                                        [0.0, 1., 1.]))
         atoms = 'O1; h 1 1; 1 1 1 2 90'
         atoms = gto.mole.format_atom(atoms, unit=1)[2]
         self.assertEqual(atoms[0], 'H')
         self.assertTrue(numpy.allclose(atoms[1], [0, 0, 1.]))
+
+    def test_format_basis(self):
+        mol = gto.M(atom = '''O 0 0 0; 1 0 1 0; H 0 0 1''',
+                    basis = {8: 'ccpvdz'})
+        self.assertEqual(mol.nao_nr(), 14)
+
+        mol = gto.M(atom = '''O 0 0 0; H:1 0 1 0; H@2 0 0 1''',
+                    basis = {'O': 'ccpvdz', 'H:1': 'sto3g', 'H': 'unc-iglo3'})
+        self.assertEqual(mol.nao_nr(), 32)
+
+        mol = gto.M(
+            atom = '''O 0 0 0; H1 0 1 0; H2 0 0 1''',
+            basis = {'default': ('6-31g', [[0, [.05, 1.]], []]), 'H2': 'sto3g'}
+        )
+        self.assertEqual(mol.nao_nr(), 14)
+
+        mol = gto.M(
+            atom = '''O 0 0 0; H1 0 1 0; H2 0 0 1''',
+            basis = {'H1': gto.parse('''
+# Parse NWChem format basis string (see https://bse.pnl.gov/bse/portal).
+# Comment lines are ignored
+#BASIS SET: (6s,3p) -> [2s,1p]
+        H    S
+              2.9412494             -0.09996723
+              0.6834831              0.39951283
+              0.2222899              0.70011547
+        H    S
+              2.9412494             0.15591627
+              0.6834831             0.60768372
+              0.2222899             0.39195739
+                                    ''', optimize=True),
+                     'O': 'unc-ccpvdz',
+                     'H2': gto.load('sto-3g', 'He')  # or use basis of another atom
+                    }
+        )
+        self.assertEqual(mol.nao_nr(), 29)
+
+        mol = gto.M(
+            atom = '''O 0 0 0; H1 0 1 0; H2 0 0 1''',
+            basis = {'H': ['sto3g', '''unc
+        C    S
+             71.6168370              0.15432897
+             13.0450960              0.53532814
+              3.5305122              0.44463454
+        C    SP
+              2.9412494             -0.09996723             0.15591627
+              0.6834831              0.39951283             0.60768372
+              0.2222899              0.70011547             0.39195739
+        '''],
+                     'O': mol.expand_etbs([(0, 4, 1.5, 2.2),  # s-function
+                                           (1, 2, 0.5, 2.2)]) # p-function
+                    }
+        )
+        self.assertEqual(mol.nao_nr(), 42)
+
+        mol = gto.M(
+            atom = '''O 0 0 0; H1 0 1 0; H2 0 0 1''',
+            basis = ('sto3g', 'ccpvdz', '3-21g',
+                     gto.etbs([(0, 4, 1.5, 2.2), (1, 2, 0.5, 2.2)]),
+                    [[0, numpy.array([1e3, 1.])]])
+        )
+        self.assertEqual(mol.nao_nr(), 77)
+
+        mol.atom = 'Hg'
+        mol.basis = 'ccpvdz'
+        self.assertRaises(RuntimeError, mol.build)
 
     def test_default_basis(self):
         mol = gto.M(atom=[['h' , 0,1,1], ["O1", (0.,0.,0.)], [1, 1.,1.,0.],],
@@ -272,6 +355,14 @@ O    SP
         gto.filatov_nuc_mod(80)
         self.assertEqual(gto.mole._parse_nuc_mod(1), gto.NUC_GAUSS)
         self.assertEqual(gto.mole._parse_nuc_mod('Gaussian'), gto.NUC_GAUSS)
+        mol1 = gto.Mole()
+        mol1.atom = mol0.atom
+        mol1.nucmod = 'G'
+        mol1.build(False, False)
+        mol1.set_nuc_mod(1, 2)
+        self.assertTrue(mol1._atm[1,gto.NUC_MOD_OF] == gto.NUC_GAUSS)
+        mol1.set_nuc_mod(1, 0)
+        self.assertTrue(mol1._atm[1,gto.NUC_MOD_OF] == gto.NUC_POINT)
 
     def test_zmat(self):
         coord = numpy.array((
@@ -289,18 +380,45 @@ O    SP
         zstr1 = gto.cart2zmat([x[1] for x in atoms])
         self.assertTrue(zstr0 == zstr1)
 
+        numpy.random.seed(1)
+        coord = numpy.random.random((6,3))
+        zstr0 = gto.cart2zmat(coord)
+        zstr = '\n'.join(['H '+x for x in zstr0.splitlines()])
+        atoms = gto.zmat2cart(zstr)
+        zstr1 = gto.cart2zmat([x[1] for x in atoms])
+        self.assertTrue(zstr0 == zstr1)
+
     def test_c2s(self):  # Transformation of cart <-> sph, sph <-> spinor
         c = mol0.sph2spinor_coeff()
         s0 = mol0.intor('int1e_ovlp_spinor')
         s1 = mol0.intor('int1e_ovlp_sph')
         sa = reduce(numpy.dot, (c[0].T.conj(), s1, c[0]))
         sa+= reduce(numpy.dot, (c[1].T.conj(), s1, c[1]))
-        s2 = mol0.intor('int1e_ovlp_cart')
+        mol0.cart = True
+        s2 = mol0.intor('int1e_ovlp')
+        mol0.cart = False
         self.assertAlmostEqual(abs(s0 - sa).max(), 0, 12)
         c = mol0.cart2sph_coeff()
         sa = reduce(numpy.dot, (c.T.conj(), s2, c))
         self.assertAlmostEqual(abs(s1 - sa).max(), 0, 12)
-        c = gto.mole.cart2spinor_kappa(0, 1)
+
+        c0 = gto.mole.cart2sph(1)
+        ca, cb = gto.mole.cart2spinor_l(1)
+        ua, ub = gto.mole.sph2spinor_l(1)
+        self.assertAlmostEqual(abs(c0.dot(ua)-ca).max(), 0, 9)
+        self.assertAlmostEqual(abs(c0.dot(ub)-cb).max(), 0, 9)
+
+        c0 = gto.mole.cart2sph(0, normalized='sp')
+        ca, cb = gto.mole.cart2spinor_kappa(-1, 0, normalized='sp')
+        ua, ub = gto.mole.sph2spinor_kappa(-1, 0)
+        self.assertAlmostEqual(abs(c0.dot(ua)-ca).max(), 0, 9)
+        self.assertAlmostEqual(abs(c0.dot(ub)-cb).max(), 0, 9)
+
+        c0 = gto.mole.cart2sph(1, normalized='sp')
+        ca, cb = gto.mole.cart2spinor_kappa(1, 1, normalized='sp')
+        ua, ub = gto.mole.sph2spinor_kappa(1, 1)
+        self.assertAlmostEqual(abs(c0.dot(ua)-ca).max(), 0, 9)
+        self.assertAlmostEqual(abs(c0.dot(ub)-cb).max(), 0, 9)
 
     def test_bas_method(self):
         self.assertEqual([mol0.bas_len_cart(x) for x in range(mol0.nbas)],
@@ -311,7 +429,7 @@ O    SP
         self.assertAlmostEqual(abs(c0[:,0]/c0[0,0] - (1,3,1)).max(), 0, 9)
         self.assertAlmostEqual(abs(c0[:,1] - (0,1,0)).max(), 0, 9)
 
-        mol0.gto_norm(0, 1.)
+        self.assertRaises(ValueError, mol0.gto_norm, -1, 1.)
 
     def test_nelectron(self):
         mol0.nelectron = mol0.nelectron
@@ -348,36 +466,47 @@ O    SP
     def test_set_geom(self):
         mol1 = gto.Mole()
         mol1.verbose = 5
-        mol1.set_geom_(mol0._atom, 'B')
+        mol1.set_geom_(mol0._atom, 'B', symmetry=True)
 
     def test_with_MoleContext(self):
-        with mol0.with_rinv_as_nucleus(0):
-            self.assertAlmostEqual(mol0._env[gto.PTR_RINV_ORIG+2], 1.8515459035166109, 9)
-        self.assertAlmostEqual(mol0._env[gto.PTR_RINV_ZETA], 0, 9)
-        self.assertAlmostEqual(mol0._env[gto.PTR_RINV_ORIG+2], 0, 9)
+        mol1 = mol0.copy()
+        with mol1.with_rinv_as_nucleus(1):
+            self.assertTrue(mol1._env[gto.PTR_RINV_ZETA] != 0)
+            self.assertAlmostEqual(mol1._env[gto.PTR_RINV_ORIG+2], -0.46288647587915266, 9)
+        self.assertAlmostEqual(mol1._env[gto.PTR_RINV_ZETA], 0, 9)
+        self.assertAlmostEqual(mol1._env[gto.PTR_RINV_ORIG+2], 0, 9)
+        with mol1.with_rinv_as_nucleus(0):
+            self.assertAlmostEqual(mol1._env[gto.PTR_RINV_ORIG+2], 1.8515459035166109, 9)
+        self.assertAlmostEqual(mol1._env[gto.PTR_RINV_ORIG+2], 0, 9)
 
-        with mol0.with_rinv_zeta(20):
-            self.assertAlmostEqual(mol0._env[gto.PTR_RINV_ZETA], 20, 9)
-        self.assertAlmostEqual(mol0._env[gto.PTR_RINV_ZETA], 0, 9)
+        with mol1.with_rinv_zeta(20):
+            self.assertAlmostEqual(mol1._env[gto.PTR_RINV_ZETA], 20, 9)
+            mol1.set_rinv_zeta(3.)
+        self.assertAlmostEqual(mol1._env[gto.PTR_RINV_ZETA], 0, 9)
 
-        with mol0.with_rinv_origin((1,2,3)):
-            self.assertAlmostEqual(mol0._env[gto.PTR_RINV_ORIG+2], 3, 9)
-        self.assertAlmostEqual(mol0._env[gto.PTR_RINV_ORIG+2], 0, 9)
+        with mol1.with_rinv_origin((1,2,3)):
+            self.assertAlmostEqual(mol1._env[gto.PTR_RINV_ORIG+2], 3, 9)
+        self.assertAlmostEqual(mol1._env[gto.PTR_RINV_ORIG+2], 0, 9)
 
-        with mol0.with_range_coulomb(20):
-            self.assertAlmostEqual(mol0._env[gto.PTR_RANGE_OMEGA], 20, 9)
-        self.assertAlmostEqual(mol0._env[gto.PTR_RANGE_OMEGA], 0, 9)
+        with mol1.with_range_coulomb(20):
+            self.assertAlmostEqual(mol1._env[gto.PTR_RANGE_OMEGA], 20, 9)
+            mol1.set_range_coulomb(2.)
+        self.assertAlmostEqual(mol1._env[gto.PTR_RANGE_OMEGA], 0, 9)
 
-        with mol0.with_common_origin((1,2,3)):
-            self.assertAlmostEqual(mol0._env[gto.PTR_COMMON_ORIG+2], 3, 9)
-        self.assertAlmostEqual(mol0._env[gto.PTR_COMMON_ORIG+2], 0, 9)
+        with mol1.with_common_origin((1,2,3)):
+            self.assertAlmostEqual(mol1._env[gto.PTR_COMMON_ORIG+2], 3, 9)
+        self.assertAlmostEqual(mol1._env[gto.PTR_COMMON_ORIG+2], 0, 9)
+
+        mol1.set_f12_zeta(2.)
 
     def test_input_symmetry(self):
         mol1 = gto.Mole()
         mol1.atom = 'H 0 -1 0; H 0 1 0'
         mol1.unit = 'B'
         mol1.symmetry = True
-        mol1.build(False,False)
+        mol1.verbose = 5
+        mol1.output = '/dev/null'
+        mol1.build()
         self.assertAlmostEqual(lib.finger(mol1.atom_coords()), 0.69980902201036865, 9)
 
         mol1.atom = 'H 0 0 -1; H 0 0 1'
@@ -391,25 +520,41 @@ O    SP
         mol1.unit = 'B'
         mol1.symmetry = True
         mol1.symmetry_subgroup = 'D2h'
-        mol1.build(False,False)
+        mol1.build()
         self.assertAlmostEqual(lib.finger(mol1.atom_coords()), 0.69980902201036865, 9)
 
         mol1.atom = 'H 0 0 -1; H 0 0 1'
         mol1.unit = 'B'
         mol1.symmetry = 'Coov'
         mol1.symmetry_subgroup = 'C2'
-        mol1.build(False,False)
+        mol1.build()
         self.assertAlmostEqual(lib.finger(mol1.atom_coords()), 0.69980902201036865, 9)
 
+        mol1.atom = 'H 1 0 -1; H 0 0 1'
+        mol1.symmetry = 'Coov'
+        self.assertRaises(RuntimeWarning, mol1.build)
+
     def test_search_ao_label(self):
-        self.assertEqual(list(mol0.search_ao_label('O.*2p')), [10,11,12])
-        self.assertEqual(list(mol0.search_ao_label('O1 2p')), [10,11,12])
-        self.assertEqual(list(mol0.search_ao_label(['O.*2p','0 H 1s'])), [0, 10,11,12])
-        self.assertEqual(list(mol0.search_ao_label([10,11,12])), [10,11,12])
-        self.assertEqual(list(mol0.search_ao_label(lambda x: '4d' in x)), [24,25,26,27,28])
-        mol0.cart = True
-        self.assertEqual(list(mol0.search_ao_label('4d')), [25,26,27,28,29,30])
-        mol0.cart = False
+        mol1 = mol0.copy()
+        mol1.atom = mol0.atom + ['Mg 1,1,1']
+        mol1.ecp['Mg'] = 'lanl2dz'
+        mol1.basis['Mg'] = 'lanl2dz'
+        mol1.build(0, 0)
+        self.assertEqual(list(mol1.search_ao_label('O.*2p')), [10,11,12])
+        self.assertEqual(list(mol1.search_ao_label('O1 2p')), [10,11,12])
+        self.assertEqual(list(mol1.search_ao_label(['O.*2p','0 H 1s'])), [0, 10,11,12])
+        self.assertEqual(list(mol1.search_ao_label([10,11,12])), [10,11,12])
+        self.assertEqual(list(mol1.search_ao_label(lambda x: '4d' in x)), [24,25,26,27,28])
+        mol1.ao_labels(fmt='%s%s%s%s')
+        mol1.sph_labels(fmt=None)
+        mol1.cart = True
+        self.assertEqual(list(mol1.search_ao_label('4d')), [25,26,27,28,29,30])
+        mol1.ao_labels(fmt='%s%s%s%s')
+        mol1.ao_labels(fmt=None)
+        mol1.cart = False
+        mol1.spinor_labels()
+        mol1.spinor_labels(fmt='%s%s%s%s')
+        mol1.spinor_labels(fmt=None)
 
     def test_input_ecp(self):
         mol1 = gto.Mole()
@@ -467,7 +612,7 @@ O    SP
 
         mol = gto.M(atom='''
         X-O     0.000000000     0.000000000     2.500000000
-        X_H    -0.663641000    -0.383071000     3.095377000
+        X_H1   -0.663641000    -0.383071000     3.095377000
         X:H     0.663588000     0.383072000     3.095377000
         O     1.000000000     0.000000000     2.500000000
         H    -1.663641000    -0.383071000     3.095377000
@@ -484,12 +629,25 @@ O    SP
         self.assertEqual(mol2.natm, 4)
         self.assertEqual(mol2.nbas, 18)
         self.assertEqual(mol2.nao_nr(), 42)
+        n0 = mol0.npgto_nr()
+        n1 = mol1.npgto_nr()
+        self.assertEqual(mol2.npgto_nr(), n0+n1)
+        mol2 = mol2 + mol2
+        mol2.cart = True
+        self.assertEqual(mol2.npgto_nr(), 100)
 
     def test_intor_cross(self):
         mol1 = gto.M(atom='He', basis={'He': [(2,(1.,1))]}, cart=True)
         s0 = gto.intor_cross('int1e_ovlp', mol1, mol0)
         self.assertEqual(s0.shape, (6, 34))
+        s0 = gto.intor_cross('int1e_ovlp', mol0, mol1)
+        self.assertEqual(s0.shape, (34, 6))
+        s0 = gto.intor_cross('int1e_ovlp_cart', mol0, mol1)
+        self.assertEqual(s0.shape, (36, 6))
 
+    def test_energy_nuc(self):
+        self.assertAlmostEqual(mol0.get_enuc(), 6.3611415029455705, 9)
+        self.assertAlmostEqual(gto.M().energy_nuc(), 0, 9)
 
 if __name__ == "__main__":
     print("test mole.py")

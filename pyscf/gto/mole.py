@@ -33,6 +33,37 @@ if sys.version_info >= (3,):
     unicode = str
 
 
+# for _atm, _bas, _env
+CHARGE_OF  = 0
+PTR_COORD  = 1
+NUC_MOD_OF = 2
+PTR_ZETA   = 3
+ATM_SLOTS  = 6
+ATOM_OF    = 0
+ANG_OF     = 1
+NPRIM_OF   = 2
+NCTR_OF    = 3
+RADI_POWER = 3 # for ECP
+KAPPA_OF   = 4
+PTR_EXP    = 5
+PTR_COEFF  = 6
+BAS_SLOTS  = 8
+# pointer to env
+PTR_LIGHT_SPEED = 0
+PTR_COMMON_ORIG = 1
+PTR_RINV_ORIG   = 4
+PTR_RINV_ZETA   = 7
+PTR_RANGE_OMEGA = 8
+PTR_F12_ZETA    = 9
+AS_RINV_ORIG_ATOM = 17
+AS_ECPBAS_OFFSET = 18
+AS_NECPBAS     = 19
+PTR_ENV_START   = 20
+# parameters from libcint
+NUC_POINT = 1
+NUC_GAUSS = 2
+
+
 def M(**kwargs):
     r'''This is a shortcut to build up Mole object.
 
@@ -84,17 +115,27 @@ def gto_norm(l, expnt):
     else:
         raise ValueError('l should be > 0')
 
-def cart2sph(l, c_tensor=None):
-    '''Cartesian to real spherical transformation matrix'''
+def cart2sph(l, c_tensor=None, normalized=None):
+    '''
+    Cartesian to real spherical transformation matrix
+
+    Kwargs:
+        normalized :
+            How the Cartesian GTOs are normalized.  'sp' means the s and p
+            functions are normalized.
+    '''
     nf = (l+1)*(l+2)//2
     if c_tensor is None:
         c_tensor = numpy.eye(nf)
     else:
         c_tensor = numpy.asarray(c_tensor, order='F').reshape(-1,nf)
-    if l == 0:
-        return c_tensor * 0.282094791773878143
-    elif l == 1:
-        return c_tensor * 0.488602511902919921
+    if l == 0 or l == 1:
+        if normalized == 'sp':
+            return c_tensor
+        elif l == 0:
+            return c_tensor * 0.282094791773878143
+        else:
+            return c_tensor * 0.488602511902919921
     else:
         assert(l <= 12)
         nd = l * 2 + 1
@@ -137,7 +178,7 @@ def cart2spinor_kappa(kappa, l=None, normalized=None):
             c2smat *= 0.282094791773878143
         elif l == 1:
             c2smat *= 0.488602511902919921
-    return c2smat
+    return c2smat[:nf], c2smat[nf:]
 cart2j_kappa = cart2spinor_kappa
 
 def cart2spinor_l(l, normalized=None):
@@ -147,17 +188,16 @@ cart2j_l = cart2spinor_l
 
 def sph2spinor_kappa(kappa, l=None):
     '''Real spherical to spinor transformation matrix for kappa'''
-    ua, ub = sph2spinor_l(l)
+    from pyscf.symm.sph import sph2spinor
+    ua, ub = sph2spinor(l)
     if kappa < 0:
         l = -kappa - 1
-        nd = l * 2 + 2
-        ua = ua[:,:nd]
-        ub = ub[:,:nd]
+        ua = ua[:,l*2:]
+        ub = ub[:,l*2:]
     elif kappa > 0:
         l = kappa
-        nd = l * 2
-        ua = ua[:,nd:]
-        ub = ub[:,nd:]
+        ua = ua[:,:l*2]
+        ub = ub[:,:l*2]
     else:
         assert(l is not None)
         assert(l <= 12)
@@ -165,8 +205,7 @@ def sph2spinor_kappa(kappa, l=None):
 
 def sph2spinor_l(l):
     '''Real spherical to spinor transformation matrix for angular moment l'''
-    from pyscf.symm import sph2spinor
-    return sph2spinor(l)
+    return sph2spinor_kappa(0, l)
 
 def atom_types(atoms, basis=None):
     '''symmetry inequivalent atoms'''
@@ -516,7 +555,7 @@ def conc_mol(mol1, mol2):
     return mol3
 
 # <bas-of-mol1|intor|bas-of-mol2>
-def intor_cross(intor, mol1, mol2, comp=1):
+def intor_cross(intor, mol1, mol2, comp=None):
     r'''1-electron integrals from two molecules like
 
     .. math::
@@ -568,16 +607,21 @@ def intor_cross(intor, mol1, mol2, comp=1):
         return numpy.dot(mol1.cart2sph_coeff().T, mat)
 
 # append (charge, pointer to coordinates, nuc_mod) to _atm
-def make_atm_env(atom, ptr=0):
+def make_atm_env(atom, ptr=0, nuclear_model=NUC_POINT):
     '''Convert the internal format :attr:`Mole._atom` to the format required
     by ``libcint`` integrals
     '''
     nuc_charge = charge(atom[0])
-    _env = numpy.hstack((atom[1], dyall_nuc_mod(elements.ISOTOPE_MAIN[nuc_charge])))
+    if nuclear_model == NUC_POINT:
+        zeta = 0
+    else:
+        nuclear_model = NUC_GAUSS
+        zeta = dyall_nuc_mod(elements.ISOTOPE_MAIN[nuc_charge])
+    _env = numpy.hstack((atom[1], zeta))
     _atm = numpy.zeros(6, dtype=numpy.int32)
     _atm[CHARGE_OF] = nuc_charge
     _atm[PTR_COORD] = ptr
-    _atm[NUC_MOD_OF] = NUC_POINT
+    _atm[NUC_MOD_OF] = nuclear_model
     _atm[PTR_ZETA ] = ptr + 3
     return _atm, _env
 
@@ -638,17 +682,18 @@ def make_env(atoms, basis, pre_env=[], nucmod={}):
 
     for ia, atom in enumerate(atoms):
         symb = atom[0]
-        atm0, env0 = make_atm_env(atom, ptr_env)
-        ptr_env = ptr_env + len(env0)
+        nuclear_model = NUC_POINT
         if nucmod:
             if isinstance(nucmod, (int, str, unicode)):
-                atm0[NUC_MOD_OF] = _parse_nuc_mod(nucmod)
+                nuclear_model = _parse_nuc_mod(nucmod)
             elif ia+1 in nucmod:
-                atm0[NUC_MOD_OF] = _parse_nuc_mod(nucmod[ia+1])
+                nuclear_model = _parse_nuc_mod(nucmod[ia+1])
             elif symb in nucmod:
-                atm0[NUC_MOD_OF] = _parse_nuc_mod(nucmod[symb])
+                nuclear_model = _parse_nuc_mod(nucmod[symb])
             elif _rm_digit(symb) in nucmod:
-                atm0[NUC_MOD_OF] = _parse_nuc_mod(nucmod[_rm_digit(symb)])
+                nuclear_model = _parse_nuc_mod(nucmod[_rm_digit(symb)])
+        atm0, env0 = make_atm_env(atom, ptr_env, nuclear_model)
+        ptr_env = ptr_env + len(env0)
         _atm.append(atm0)
         _env.append(env0)
 
@@ -1124,7 +1169,7 @@ def sph_labels(mol, fmt=True):
         count[ia,l] += nc
         for n in range(shl_start, shl_start+nc):
             for m in range(-l, l+1):
-                label.append((ia, symb, '%d%s' % (n, strl), \
+                label.append((ia, symb, '%d%s' % (n, strl),
                               str(param.REAL_SPHERIC[l][l+m])))
 
     if isinstance(fmt, (str, unicode)):
@@ -1136,7 +1181,7 @@ def sph_labels(mol, fmt=True):
 spheric_labels = spherical_labels = sph_labels
 
 def cart_labels(mol, fmt=True):
-    '''Labels for Cartesian GTO functions
+    '''Labels of Cartesian GTO functions
 
     Kwargs:
         fmt : str or bool
@@ -1185,7 +1230,7 @@ def cart_labels(mol, fmt=True):
         return label
 
 def ao_labels(mol, fmt=True):
-    '''Labels for AO basis functions
+    '''Labels of AO basis functions
 
     Kwargs:
         fmt : str or bool
@@ -1202,8 +1247,40 @@ def ao_labels(mol, fmt=True):
     else:
         return mol.sph_labels(fmt)
 
-def spinor_labels(mol):
-    raise RuntimeError('TODO')
+def spinor_labels(mol, fmt=True):
+    '''
+    Labels of spinor GTO functions
+    '''
+    count = numpy.zeros((mol.natm, 9), dtype=int)
+    label = []
+    for ib in range(mol.nbas):
+        ia = mol.bas_atom(ib)
+        l = mol.bas_angular(ib)
+        kappa = mol.bas_kappa(ib)
+        strl = param.ANGULAR[l]
+        nc = mol.bas_nctr(ib)
+        symb = mol.atom_symbol(ia)
+        nelec_ecp = mol.atom_nelec_core(ia)
+        if nelec_ecp == 0 or l > 3:
+            shl_start = count[ia,l]+l+1
+        else:
+            coreshl = pyscf.gto.ecp.core_configuration(nelec_ecp)
+            shl_start = coreshl[l]+count[ia,l]+l+1
+        count[ia,l] += nc
+        for n in range(shl_start, shl_start+nc):
+            if kappa >= 0:
+                for m in range(-l*2+1, l*2, 2):
+                    label.append((ia, symb, '%d%s%d/2' % (n, strl, l*2-1), '%d/2'%m))
+            if kappa <= 0:
+                for m in range(-l*2-1, l*2+2, 2):
+                    label.append((ia, symb, '%d%s%d/2' % (n, strl, l*2+1), '%d/2'%m))
+
+    if isinstance(fmt, (str, unicode)):
+        return [(fmt % x) for x in label]
+    elif fmt:
+        return ['%d %s %s,%-5s' % x for x in label]
+    else:
+        return label
 
 def search_ao_label(mol, label):
     '''Find the index of the AO basis function based on the given ao_label
@@ -1477,37 +1554,6 @@ def condense_to_shell(mol, mat, compressor=numpy.max):
         for j, j0 in enumerate(ao_loc[:mol.nbas]):
             abstract[i,j] = compressor(mat[i0:ao_loc[i+1],j0:ao_loc[j+1]])
     return abstract
-
-
-# for _atm, _bas, _env
-CHARGE_OF  = 0
-PTR_COORD  = 1
-NUC_MOD_OF = 2
-PTR_ZETA   = 3
-ATM_SLOTS  = 6
-ATOM_OF    = 0
-ANG_OF     = 1
-NPRIM_OF   = 2
-NCTR_OF    = 3
-RADI_POWER = 3 # for ECP
-KAPPA_OF   = 4
-PTR_EXP    = 5
-PTR_COEFF  = 6
-BAS_SLOTS  = 8
-# pointer to env
-PTR_LIGHT_SPEED = 0
-PTR_COMMON_ORIG = 1
-PTR_RINV_ORIG   = 4
-PTR_RINV_ZETA   = 7
-PTR_RANGE_OMEGA = 8
-PTR_F12_ZETA    = 9
-AS_RINV_ORIG_ATOM = 17
-AS_ECPBAS_OFFSET = 18
-AS_NECPBAS     = 19
-PTR_ENV_START   = 20
-# parameters from libcint
-NUC_POINT = 1
-NUC_GAUSS = 2
 
 
 #
@@ -2022,8 +2068,8 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
                 else:
                     kappa = 0
                     b_coeff = b[1:]
-                self.stdout.write('[INPUT] %d   %2d    [%-5d/%-4d]  ' \
-                                  % (b[0], kappa, b_coeff.__len__(), \
+                self.stdout.write('[INPUT] %d   %2d    [%-5d/%-4d]  '
+                                  % (b[0], kappa, b_coeff.__len__(),
                                      b_coeff[0].__len__()-1))
                 for k, x in enumerate(b_coeff):
                     if k == 0:
@@ -2156,6 +2202,10 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         '''
         ptr = self._atm[atm_id,PTR_ZETA]
         self._env[ptr] = zeta
+        if zeta == 0:
+            self._atm[atm_id,NUC_MOD_OF] = NUC_POINT
+        else:
+            self._atm[atm_id,NUC_MOD_OF] = NUC_GAUSS
         return self
     set_nuc_mod_ = set_nuc_mod  # for backward compatibility
 
@@ -2505,7 +2555,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
 
     tmap = time_reversal_map = time_reversal_map
 
-    def intor(self, intor, comp=1, hermi=0, aosym='s1', out=None,
+    def intor(self, intor, comp=None, hermi=0, aosym='s1', out=None,
               shls_slice=None):
         '''Integral generator.
 
@@ -2567,7 +2617,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
                 intor = intor + '_sph'
         return intor
 
-    def intor_symmetric(self, intor, comp=1):
+    def intor_symmetric(self, intor, comp=None):
         '''One-electron integral generator. The integrals are assumed to be hermitian
 
         Args:
@@ -2593,7 +2643,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         '''
         return self.intor(intor, comp, 1, aosym='s4')
 
-    def intor_asymmetric(self, intor, comp=1):
+    def intor_asymmetric(self, intor, comp=None):
         '''One-electron integral generator. The integrals are assumed to be anti-hermitian
 
         Args:
@@ -2620,7 +2670,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         return self.intor(intor, comp, 2, aosym='a4')
 
     @lib.with_doc(moleintor.getints_by_shell.__doc__)
-    def intor_by_shell(self, intor, shells, comp=1):
+    def intor_by_shell(self, intor, shells, comp=None):
         if 'ECP' in intor:
             assert(self._ecp is not None)
             bas = numpy.vstack((self._bas, self._ecpbas))
@@ -2641,6 +2691,8 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
     cart_labels = cart_labels
     ao_labels = ao_labels
 
+    spinor_labels = spinor_labels
+
     search_ao_label = search_ao_label
 
     def search_shell_id(self, atm_id, l):
@@ -2651,10 +2703,6 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
 
     aoslice_by_atom = aoslice_nr_by_atom = offset_ao_by_atom = offset_nr_by_atom = aoslice_by_atom
     aoslice_2c_by_atom = offset_2c_by_atom = offset_2c_by_atom
-
-    @lib.with_doc(spinor_labels.__doc__)
-    def spinor_labels(self):
-        return spinor_labels(self)
 
     condense_to_shell = condense_to_shell
 
@@ -2682,13 +2730,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         >>> print(abs(s1-s0).sum())
         >>> 4.58676826646e-15
         '''
-        c2s_l = [cart2sph(l) for l in range(12)]
-        if normalized:
-            if normalized.lower() == 'sp':
-                c2s_l[0] = numpy.eye(1)
-                c2s_l[1] = numpy.eye(3)
-            elif normalized.lower() == 'all':
-                raise NotImplementedError
+        c2s_l = [cart2sph(l, normalized=normalized) for l in range(12)]
         c2s = []
         for ib in range(self.nbas):
             l = self.bas_angular(ib)

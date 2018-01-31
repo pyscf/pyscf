@@ -31,13 +31,15 @@ def type1_by_shell(mol, shls, cart=False):
         di = (li*2+1) * mol.bas_nctr(shls[0])
         dj = (lj*2+1) * mol.bas_nctr(shls[1])
     buf = numpy.empty((di,dj), order='F')
+    cache = numpy.empty(buf.size*5)
     fn(buf.ctypes.data_as(ctypes.c_void_p),
        (ctypes.c_int*2)(*shls),
        mol._ecpbas.ctypes.data_as(ctypes.c_void_p),
        ctypes.c_int(len(mol._ecpbas)),
        mol._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.natm),
        mol._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.nbas),
-       mol._env.ctypes.data_as(ctypes.c_void_p), lib.c_null_ptr())
+       mol._env.ctypes.data_as(ctypes.c_void_p), lib.c_null_ptr(),
+       cache.ctypes.data_as(ctypes.c_void_p))
     return buf
 
 def type2_by_shell(mol, shls, cart=False):
@@ -52,13 +54,15 @@ def type2_by_shell(mol, shls, cart=False):
         di = (li*2+1) * mol.bas_nctr(shls[0])
         dj = (lj*2+1) * mol.bas_nctr(shls[1])
     buf = numpy.empty((di,dj), order='F')
+    cache = numpy.empty(buf.size*5)
     fn(buf.ctypes.data_as(ctypes.c_void_p),
        (ctypes.c_int*2)(*shls),
        mol._ecpbas.ctypes.data_as(ctypes.c_void_p),
        ctypes.c_int(len(mol._ecpbas)),
        mol._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.natm),
        mol._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.nbas),
-       mol._env.ctypes.data_as(ctypes.c_void_p), lib.c_null_ptr())
+       mol._env.ctypes.data_as(ctypes.c_void_p), lib.c_null_ptr(),
+       cache.ctypes.data_as(ctypes.c_void_p))
     return buf
 
 def core_configuration(nelec_core):

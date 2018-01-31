@@ -387,7 +387,7 @@ def c2s_bra(l, gcart):
              gcart.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(l))
         return gsph
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_bessel(self):
         rs = radi.gauss_chebyshev(99)[0]
         bessel1 = numpy.empty(8)
@@ -479,6 +479,8 @@ class KnowValues(unittest.TestCase):
             if not numpy.allclose(mat0, mat1, atol=1e-8):
                 print(i, j, 'error = ', numpy.linalg.norm(mat0-mat1))
             self.assertTrue(numpy.allclose(mat0, mat1, atol=1e-6))
+            mat2 = gto.ecp.type2_by_shell(mol, shls)
+            self.assertTrue(numpy.allclose(mat0, mat2, atol=1e-6))
         for i in range(mol.nbas):
             for j in range(mol.nbas):
                 gen_type2((i,j))
@@ -555,6 +557,8 @@ class KnowValues(unittest.TestCase):
             if not numpy.allclose(mat0, mat1, atol=1e-8):
                 print(i, j, numpy.linalg.norm(mat0-mat1))
             self.assertTrue(numpy.allclose(mat0, mat1, atol=1e-6))
+            mat2 = gto.ecp.type1_by_shell(mol, shls)
+            self.assertTrue(numpy.allclose(mat0, mat2, atol=1e-6))
         for i in range(mol.nbas):
             for j in range(mol.nbas):
                 gen_type1((i,j))
