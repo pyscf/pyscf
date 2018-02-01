@@ -227,6 +227,7 @@ def _mesh_for_valence(cell, valence_exp=1.):
         cs = abs(cell.bas_ctr_coeff(i)).max(axis=1)
         Ecut_max = max(Ecut_max, gto.cell._estimate_ke_cutoff(es, l, cs, precision, w))
     mesh = tools.cutoff_to_mesh(cell.lattice_vectors(), Ecut_max)
+    mesh = numpy.min((mesh, cell.mesh), axis=0)
     return mesh
 
 

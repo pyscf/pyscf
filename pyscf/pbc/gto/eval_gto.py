@@ -6,14 +6,15 @@
 import ctypes
 import numpy
 from pyscf import lib
-from pyscf.gto.moleintor import make_loc
+from pyscf.gto import moleintor
+from pyscf.gto.eval_gto import _get_intor_and_comp
 from pyscf.pbc.gto import _pbcintor
 
 BLKSIZE = 128 # needs to be the same to lib/gto/grid_ao_drv.c
 
 libpbc = _pbcintor.libpbc
 
-def eval_gto(cell, eval_name, coords, comp=1, kpts=None, kpt=None,
+def eval_gto(cell, eval_name, coords, comp=None, kpts=None, kpt=None,
              shls_slice=None, non0tab=None, ao_loc=None, out=None):
     r'''Evaluate PBC-AO function value on the given grids,
 
@@ -72,14 +73,11 @@ def eval_gto(cell, eval_name, coords, comp=1, kpts=None, kpt=None,
     >>> ao_value[0].shape
     (3, 100, 2)
     '''
-    if not ('_sph' in eval_name or '_cart' in eval_name or
-            '_spinor' in eval_name):
-        if cell.cart:
-            eval_name = eval_name + '_cart'
-        else:
-            eval_name = eval_name + '_sph'
-    if eval_name[:3] != 'PBC':  # PBCGTOval_xxx
-        eval_name = 'PBC' + eval_name
+    if eval_name[:3] == 'PBC':  # PBCGTOval_xxx
+        eval_name, comp = _get_intor_and_comp(cell, eval_name[3:], comp)
+    else:
+        eval_name, comp = _get_intor_and_comp(cell, eval_name, comp)
+    eval_name = 'PBC' + eval_name
 
     atm = numpy.asarray(cell._atm, dtype=numpy.int32, order='C')
     bas = numpy.asarray(cell._bas, dtype=numpy.int32, order='C')
@@ -104,7 +102,7 @@ def eval_gto(cell, eval_name, coords, comp=1, kpts=None, kpt=None,
         non0tab[:] = 0xff
 
     if ao_loc is None:
-        ao_loc = make_loc(bas, eval_name)
+        ao_loc = moleintor.make_loc(bas, eval_name)
     if shls_slice is None:
         shls_slice = (0, nbas)
     sh0, sh1 = shls_slice

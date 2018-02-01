@@ -253,9 +253,10 @@ def make_phi(pcmobj, dm, r_vdw, ui):
 
     cav_coords = cav_coords[extern_point_idx]
     v_phi_e = numpy.empty(cav_coords.shape[0])
+    int3c2e = mol._add_suffix('int3c2e')
     for i0, i1 in lib.prange(0, cav_coords.shape[0], blksize):
         fakemol = _make_fakemol(cav_coords[i0:i1])
-        v_nj = df.incore.aux_e2(mol, fakemol, intor='int3c2e', aosym='s2ij')
+        v_nj = df.incore.aux_e2(mol, fakemol, intor=int3c2e, aosym='s2ij')
         v_phi_e[i0:i1] = numpy.einsum('x,xk->k', tril_dm, v_nj)
     v_phi[extern_point_idx] -= v_phi_e
     return v_phi

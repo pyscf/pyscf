@@ -92,7 +92,7 @@ class KnowValues(unittest.TestCase):
         kpts = cell.make_kpts(nk)
         kmf1 = khf.KRHF(cell, kpts, exxdiv='vcut_sph')
         dm = kmf1.from_chk(mf.chkfile)
-        kmf1.max_cycle = 1
+        kmf1.max_cycle = 2
         ekpt = kmf1.scf(dm)
         kmf1.conv_check = False
         self.assertAlmostEqual(ekpt, -11.215218432275057, 8)

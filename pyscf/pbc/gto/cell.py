@@ -312,7 +312,7 @@ def conc_cell(cell1, cell2):
 
     return cell3
 
-def intor_cross(intor, cell1, cell2, comp=1, hermi=0, kpts=None, kpt=None,
+def intor_cross(intor, cell1, cell2, comp=None, hermi=0, kpts=None, kpt=None,
                 **kwargs):
     r'''1-electron integrals from two cells like
 
@@ -321,8 +321,8 @@ def intor_cross(intor, cell1, cell2, comp=1, hermi=0, kpts=None, kpt=None,
         \langle \mu | intor | \nu \rangle, \mu \in cell1, \nu \in cell2
     '''
     import copy
-    intor = cell1._add_suffix(intor)
-    intor = moleintor.ascint3(intor)
+    intor, comp = moleintor._get_intor_and_comp(cell1._add_suffix(intor), comp)
+
     if kpts is None:
         if kpt is not None:
             kpts_lst = np.reshape(kpt, (1,3))
@@ -1385,19 +1385,19 @@ class Cell(mole.Mole):
 
     __add__ = conc_cell
 
-    def pbc_intor(self, intor, comp=1, hermi=0, kpts=None, kpt=None,
+    def pbc_intor(self, intor, comp=None, hermi=0, kpts=None, kpt=None,
                   **kwargs):
         '''One-electron integrals with PBC. See also Mole.intor'''
         return intor_cross(intor, self, self, comp, hermi, kpts, kpt, **kwargs)
 
     @lib.with_doc(pbc_eval_gto.__doc__)
-    def pbc_eval_gto(self, eval_name, coords, comp=1, kpts=None, kpt=None,
+    def pbc_eval_gto(self, eval_name, coords, comp=None, kpts=None, kpt=None,
                      shls_slice=None, non0tab=None, ao_loc=None, out=None):
         return pbc_eval_gto(self, eval_name, coords, comp, kpts, kpt,
                             shls_slice, non0tab, ao_loc, out)
 
     @lib.with_doc(pbc_eval_gto.__doc__)
-    def eval_gto(self, eval_name, coords, comp=1, kpts=None, kpt=None,
+    def eval_gto(self, eval_name, coords, comp=None, kpts=None, kpt=None,
                  shls_slice=None, non0tab=None, ao_loc=None, out=None):
         if eval_name[:3] == 'PBC':
             return self.pbc_eval_gto(eval_name, coords, comp, kpts, kpt,

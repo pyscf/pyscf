@@ -29,7 +29,7 @@ mo = ao.dot(mf.mo_coeff)
 #
 # AO values and MO gradients on given grids
 #
-ao_grad = mol.eval_gto('GTOval_ip_sph', coords, comp=3)
+ao_grad = mol.eval_gto('GTOval_ip_sph', coords)  # (3,Ngrids,n) array
 mo_grad = [x.dot(mf.mo_coeff) for x in ao_grad]
 
 #
@@ -41,18 +41,18 @@ mo_grad = [x.dot(mf.mo_coeff) for x in ao_grad]
 ao = mol.eval_gto('GTOval_sph_deriv0', coords)
 
 # deriv=1: orbital value + gradients 
-ao_p = mol.eval_gto('GTOval_sph_deriv1', coords, comp=4)
+ao_p = mol.eval_gto('GTOval_sph_deriv1', coords)  # (4,Ngrids,n) array
 ao = ao_p[0]
 ao_grad = ao_p[1:4]  # x, y, z
 
 # deriv=2: value + gradients + second order derivatives
-ao_p = mol.eval_gto('GTOval_sph_deriv2', coords, comp=10)
+ao_p = mol.eval_gto('GTOval_sph_deriv2', coords)  # (10,Ngrids,n) array
 ao = ao_p[0]
 ao_grad = ao_p[1:4]  # x, y, z
 ao_hess = ao_p[4:10] # xx, xy, xz, yy, yz, zz
 
 # deriv=3: value + gradients + second order derivatives + third order
-ao_p = mol.eval_gto('GTOval_sph_deriv3', coords, comp=20)
+ao_p = mol.eval_gto('GTOval_sph_deriv3', coords)  # (20,Ngrids,n) array
 ao = ao_p[0]
 ao_grad = ao_p[1:4]   # x, y, z
 ao_hess = ao_p[4:10]  # xx, xy, xz, yy, yz, zz

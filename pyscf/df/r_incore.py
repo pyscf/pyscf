@@ -9,7 +9,8 @@ from pyscf import gto
 from pyscf.df import incore
 
 # (ij|L)
-def aux_e2(mol, auxmol, intor='int3c2e_spinor', aosym='s1', comp=1, hermi=0):
+def aux_e2(mol, auxmol, intor='int3c2e_spinor', aosym='s1', comp=None, hermi=0):
+    intor, comp = gto.moleintor._get_intor_and_comp(mol._add_suffix(intor), comp)
     atm, bas, env = gto.mole.conc_env(mol._atm, mol._bas, mol._env,
                                       auxmol._atm, auxmol._bas, auxmol._env)
     shls_slice = (0, mol.nbas, 0, mol.nbas, mol.nbas, mol.nbas+auxmol.nbas)

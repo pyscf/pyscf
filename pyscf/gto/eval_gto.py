@@ -69,24 +69,7 @@ def eval_gto(mol, eval_name, coords,
     >>> print(ao_value.shape)
     (3, 100, 24)
     '''
-    if not ('_sph' in eval_name or '_cart' in eval_name or
-            '_spinor' in eval_name):
-        if mol.cart:
-            eval_name = eval_name + '_cart'
-        else:
-            eval_name = eval_name + '_sph'
-    if comp is None:
-        try:
-            if '_spinor' in eval_name:
-                fname = eval_name.replace('_spinor', '')
-                comp = _GTO_EVAL_FUNCTIONS[fname][1]
-            else:
-                fname = eval_name.replace('_sph', '').replace('_cart', '')
-                comp = _GTO_EVAL_FUNCTIONS[fname][0]
-        except KeyError:
-            lib.logger.warn(mol, 'Function %s not found.  Set its comp to 1',
-                            eval_name)
-            comp = 1
+    eval_name, comp = _get_intor_and_comp(mol, eval_name, comp)
 
     atm = numpy.asarray(mol._atm, dtype=numpy.int32, order='C')
     bas = numpy.asarray(mol._bas, dtype=numpy.int32, order='C')
@@ -129,6 +112,27 @@ def eval_gto(mol, eval_name, coords,
         else:
             ao = ao[0]
     return ao
+
+def _get_intor_and_comp(mol, eval_name, comp=None):
+    if not ('_sph' in eval_name or '_cart' in eval_name or
+            '_spinor' in eval_name):
+        if mol.cart:
+            eval_name = eval_name + '_cart'
+        else:
+            eval_name = eval_name + '_sph'
+
+    if comp is None:
+        try:
+            if '_spinor' in eval_name:
+                fname = eval_name.replace('_spinor', '')
+                comp = _GTO_EVAL_FUNCTIONS[fname][1]
+            else:
+                fname = eval_name.replace('_sph', '').replace('_cart', '')
+                comp = _GTO_EVAL_FUNCTIONS[fname][0]
+        except KeyError:
+            warnings.warn('Function %s not found.  Set its comp to 1' % eval_name)
+            comp = 1
+    return eval_name, comp
 
 _GTO_EVAL_FUNCTIONS = {
 #   Functiona name          : (comp-for-scalar, comp-for-spinor)

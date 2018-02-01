@@ -7,6 +7,7 @@ import tempfile
 import numpy
 import h5py
 from pyscf import lib
+from pyscf import gto
 from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
 from pyscf.ao2mo import outcore
@@ -17,21 +18,18 @@ IOBUF_WORDS_PREFER = 1e8
 IOBUF_ROW_MIN = 160
 
 def full(mol, mo_coeff, erifile, dataname='eri_mo', tmpdir=None,
-         intor='int2e_spinor', aosym='s4', comp=1,
+         intor='int2e_spinor', aosym='s4', comp=None,
          max_memory=4000, ioblk_size=256, verbose=logger.WARN):
     general(mol, (mo_coeff,)*4, erifile, dataname, tmpdir,
             intor, aosym, comp, max_memory, ioblk_size, verbose)
     return erifile
 
 def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
-            intor='int2e_spinor', aosym='s4', comp=1,
+            intor='int2e_spinor', aosym='s4', comp=None,
             max_memory=4000, ioblk_size=256, verbose=logger.WARN):
     time_0pass = (time.clock(), time.time())
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(mol.stdout, verbose)
-
+    log = logger.new_logger(mol, verbose)
+    intor, comp = gto.moleintor._get_intor_and_comp(mol._add_suffix(intor), comp)
     klsame = iden_coeffs(mo_coeffs[2], mo_coeffs[3])
 
     nmoi = mo_coeffs[0].shape[1]
@@ -149,13 +147,10 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
 
 # swapfile will be overwritten if exists.
 def half_e1(mol, mo_coeffs, swapfile,
-            intor='int2e_spinor', aosym='s4', comp=1,
+            intor='int2e_spinor', aosym='s4', comp=None,
             max_memory=4000, ioblk_size=256, verbose=logger.WARN, ao2mopt=None):
     time0 = (time.clock(), time.time())
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(mol.stdout, verbose)
+    log = logger.new_logger(mol, verbose)
 
     ijsame = iden_coeffs(mo_coeffs[0], mo_coeffs[1])
 
@@ -234,7 +229,7 @@ def half_e1(mol, mo_coeffs, swapfile,
     fswap.close()
     return swapfile
 
-def full_iofree(mol, mo_coeff, intor='int2e_spinor', aosym='s4', comp=1,
+def full_iofree(mol, mo_coeff, intor='int2e_spinor', aosym='s4', comp=None,
                 verbose=logger.WARN, **kwargs):
     erifile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
     general(mol, (mo_coeff,)*4, erifile.name, dataname='eri_mo',
@@ -243,7 +238,7 @@ def full_iofree(mol, mo_coeff, intor='int2e_spinor', aosym='s4', comp=1,
     with h5py.File(erifile.name, 'r') as feri:
         return numpy.asarray(feri['eri_mo'])
 
-def general_iofree(mol, mo_coeffs, intor='int2e_spinor', aosym='s4', comp=1,
+def general_iofree(mol, mo_coeffs, intor='int2e_spinor', aosym='s4', comp=None,
                    verbose=logger.WARN, **kwargs):
     erifile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
     general(mol, mo_coeffs, erifile.name, dataname='eri_mo',

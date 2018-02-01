@@ -44,7 +44,7 @@ def format_aux_basis(cell, auxbasis='weigend+etb'):
     return make_auxmol(cell, auxbasis)
 
 #@memory_cache
-def aux_e2(cell, auxcell, intor='int3c2e_sph', aosym='s1', comp=1,
+def aux_e2(cell, auxcell, intor='int3c2e_sph', aosym='s1', comp=None,
            kptij_lst=numpy.zeros((1,2,3)), shls_slice=None, **kwargs):
     r'''3-center AO integrals (ij|L) with double lattice sum:
     \sum_{lm} (i[l]j[m]|L[0]), where L is the auxiliary basis.
@@ -60,10 +60,11 @@ def aux_e2(cell, auxcell, intor='int3c2e_sph', aosym='s1', comp=1,
 #    else:
 #        contr_coeff = None
 
+    intor, comp = gto.moleintor._get_intor_and_comp(cell._add_suffix(intor), comp)
+
     if shls_slice is None:
         shls_slice = (0, cell.nbas, 0, cell.nbas, 0, auxcell.nbas)
 
-    intor = gto.moleintor.ascint3(intor)
     ao_loc = cell.ao_loc_nr()
     aux_loc = auxcell.ao_loc_nr('ssc' in intor)[:shls_slice[5]+1]
     ni = ao_loc[shls_slice[1]] - ao_loc[shls_slice[0]]

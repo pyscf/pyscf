@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import os
 import unittest
 import numpy
 from pyscf import gto, scf
@@ -12,7 +13,8 @@ mol.output = None
 mol.atom = 'h 0 0 0; h 1 .5 0; h 0 4 1; h 1 0 .2'
 mol.basis = 'aug-ccpvdz'
 mol.build()
-dm = scf.RHF(mol).run(conv_tol=1e-14).make_rdm1()
+#dm = scf.RHF(mol).run(conv_tol=1e-14).make_rdm1()
+dm = numpy.load(os.path.realpath(os.path.join(__file__, '..', 'dm_h4.npy')))
 mf = dft.RKS(mol)
 mf.grids.atom_grid = {"H": (50, 110)}
 mf.prune = None

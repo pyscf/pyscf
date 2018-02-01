@@ -18,7 +18,7 @@ PTR_EXP    = 5
 PTR_COEFF  = 6
 BAS_SLOTS  = 8
 
-def getints(intor_name, atm, bas, env, shls_slice=None, comp=1, hermi=0,
+def getints(intor_name, atm, bas, env, shls_slice=None, comp=None, hermi=0,
             aosym='s1', ao_loc=None, cintopt=None, out=None):
     r'''1e and 2e integral generator.
 
@@ -195,18 +195,7 @@ def getints(intor_name, atm, bas, env, shls_slice=None, comp=1, hermi=0,
      [[ 0.10289944  0.48176097]
       [-0.48176097 -0.10289944]]]
     '''
-    intor_name = ascint3(intor_name)
-    if comp is None:
-        try:
-            if '_spinor' in intor_name:
-                fname = intor_name.replace('_spinor', '')
-                comp = _INTOR_FUNCTIONS[fname][1]
-            else:
-                fname = intor_name.replace('_sph', '').replace('_cart', '')
-                comp = _INTOR_FUNCTIONS[fname][0]
-        except KeyError:
-            warnings.warn('Function %s not found.  Set its comp to 1' % intor_name)
-            comp = 1
+    intor_name, comp = _get_intor_and_comp(intor_name, comp)
 
     if (intor_name.startswith('int1e') or
         intor_name.startswith('ECP') or
@@ -222,6 +211,21 @@ def getints(intor_name, atm, bas, env, shls_slice=None, comp=1, hermi=0,
     else:
         raise KeyError('Unknown intor %s' % intor_name)
 
+def _get_intor_and_comp(intor_name, comp=None):
+    intor_name = ascint3(intor_name)
+    if comp is None:
+        try:
+            if '_spinor' in intor_name:
+                fname = intor_name.replace('_spinor', '')
+                comp = _INTOR_FUNCTIONS[fname][1]
+            else:
+                fname = intor_name.replace('_sph', '').replace('_cart', '')
+                comp = _INTOR_FUNCTIONS[fname][0]
+        except KeyError:
+            warnings.warn('Function %s not found.  Set its comp to 1' % intor_name)
+            comp = 1
+    return intor_name, comp
+
 _INTOR_FUNCTIONS = {
 #   Functiona name              : (comp-for-scalar, comp-for-spinor)
     'int1e_ovlp'                : (1, 1),
@@ -236,7 +240,7 @@ _INTOR_FUNCTIONS = {
     'int1e_igkin'               : (3, 3),
     'int1e_igovlp'              : (3, 3),
     'int1e_ignuc'               : (3, 3),
-    'int1e_pnucp'               : (3, 3),
+    'int1e_pnucp'               : (1, 1),
     'int1e_z'                   : (1, 1),
     'int1e_zz'                  : (1, 1),
     'int1e_r'                   : (3, 3),
@@ -383,6 +387,11 @@ _INTOR_FUNCTIONS = {
     'int2e_yp'                  : (1, 1),
     'int2e_stg'                 : (3, 3),
     'int2e_coulerf'             : (1, 1),
+    'ECPscalar'                 : (1, None),
+    'ECPscalar_ipnuc'           : (3, None),
+    'ECPscalar_iprinv'          : (3, None),
+    'ECPscalar_igrinv'          : (3, None),
+    'ECPscalar_iprinvip'        : (9, None),
 }
 
 def getints2c(intor_name, atm, bas, env, shls_slice=None, comp=1, hermi=0,
@@ -596,18 +605,7 @@ def getints_by_shell(intor_name, shls, atm, bas, env, comp=1):
       [[[[-0.        ]]]]
       [[[[-0.08760462]]]]]
     '''
-    intor_name = ascint3(intor_name)
-    if comp is None:
-        try:
-            if '_spinor' in intor_name:
-                fname = intor_name.replace('_spinor', '')
-                comp = _INTOR_FUNCTIONS[fname][1]
-            else:
-                fname = intor_name.replace('_sph', '').replace('_cart', '')
-                comp = _INTOR_FUNCTIONS[fname][0]
-        except KeyError:
-            warnings.warn('Function %s not found.  Set its comp to 1' % intor_name)
-            comp = 1
+    intor_name, comp = _get_intor_and_comp(intor_name, comp)
 
     atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
     bas = numpy.asarray(bas, dtype=numpy.int32, order='C')

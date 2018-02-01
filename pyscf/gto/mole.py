@@ -1913,7 +1913,7 @@ class Mole(lib.StreamObject):
                     self.groupname, lgroup = 'C2v', 'Coov'
                 logger.warn(self, 'This version does not support linear molecule '
                             'symmetry %s for cartesian GTO basis.  Its subgroup '
-                            '%s is applied', lgroup, self.groupname)
+                            '%s is used', lgroup, self.groupname)
             try:
                 eql_atoms = symm.symm_identical_atoms(self.groupname, self._atom)
             except RuntimeError:
@@ -2608,9 +2608,9 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
                                  aosym=aosym, out=out)
 
     def _add_suffix(self, intor, cart=False):
-        if not (intor.endswith('_sph') or intor.startswith('cint') or
-                intor.endswith('_spinor') or intor.endswith('_cart') or
-                intor.endswith('_ssc')):
+        if not (intor[-4:] == '_sph' or intor[:4] == 'cint' or
+                intor[-7:] == '_spinor' or intor[-5:] =='_cart' or
+                intor[-4:] == '_ssc'):
             if cart or self.cart:
                 intor = intor + '_cart'
             else:
