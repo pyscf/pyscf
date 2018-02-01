@@ -419,11 +419,11 @@ class UCCSD(ccsd.CCSD):
             for j in range(i):
                 for a in range(nvir):
                     for b in range(a):
-        	        r2[i,j,a,b] =  vector[index]
-        	        r2[j,i,a,b] = -vector[index]
-        	        r2[i,j,b,a] = -vector[index]
-        	        r2[j,i,b,a] =  vector[index]
-	                index += 1
+                        r2[i,j,a,b] =  vector[index]
+                        r2[j,i,a,b] = -vector[index]
+                        r2[i,j,b,a] = -vector[index]
+                        r2[j,i,b,a] =  vector[index]
+                        index += 1
         return [r1,r2]
 
     def amplitudes_to_vector_ee(self,r1,r2):
@@ -437,8 +437,8 @@ class UCCSD(ccsd.CCSD):
             for j in range(i):
                 for a in range(nvir):
                     for b in range(a):
-        	        vector[index] = r2[i,j,a,b]
-	                index += 1
+                        vector[index] = r2[i,j,a,b]
+                        index += 1
         return vector
 
     def amplitudes_from_rccsd(self, t1, t2):

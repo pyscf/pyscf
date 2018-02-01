@@ -31,7 +31,8 @@ static void dot_ao_dm(double complex *vm, double complex *ao, double complex *dm
         double complex beta = 0;
 
         if (has0) {
-                int box_id, bas_id, b0, blen, i, j;
+                int box_id, bas_id, blen, i, j;
+                size_t b0;
                 for (box_id = 0; box_id < nbox; box_id++) {
                         if (!empty[box_id]) {
                                 b0 = box_id * BOXSIZE;
@@ -93,8 +94,9 @@ static void dot_ao_ao(double complex *vv, double complex *ao1, double complex *a
         const char TRANS_N = 'N';
         const double complex Z1 = 1;
         if (has0) {
-                int ib, jb, b0i, b0j, leni, lenj;
+                int ib, jb, leni, lenj;
                 int j1 = nbox;
+                size_t b0i, b0j;
 
                 for (ib = 0; ib < nbox; ib++) {
                 if (!empty[ib]) {

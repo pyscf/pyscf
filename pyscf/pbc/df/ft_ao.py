@@ -12,7 +12,7 @@ import numpy
 from pyscf import lib
 from pyscf import gto
 from pyscf.gto.ft_ao import ft_ao as mol_ft_ao
-from pyscf.pbc.lib.kpt_misc import is_zero, gamma_point
+from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point
 
 libpbc = lib.load_library('libpbc')
 
@@ -20,27 +20,30 @@ libpbc = lib.load_library('libpbc')
 # \int mu*nu*exp(-ik*r) dr
 #
 def ft_aopair(cell, Gv, shls_slice=None, aosym='s1',
-              b=None, gxyz=None, Gvbase=None,
-              kpti_kptj=numpy.zeros((2,3)), q=None, verbose=None):
-    r''' FT transform AO pair
-    \int exp(-i(G+q)r) i(r) j(r) exp(-ikr) dr^3
+              b=None, gxyz=None, Gvbase=None, kpti_kptj=numpy.zeros((2,3)),
+              q=None, intor='GTO_ft_ovlp_sph', comp=1, verbose=None):
+    r'''
+    FT transform AO pair
+    \sum_T exp(-i k_j * T) \int exp(-i(G+q)r) i(r) j(r-T) dr^3
     '''
     kpti, kptj = kpti_kptj
     if q is None:
         q = kptj - kpti
     val = _ft_aopair_kpts(cell, Gv, shls_slice, aosym, b, gxyz, Gvbase,
-                          q, kptj.reshape(1,3))
+                          q, kptj.reshape(1,3), intor, comp)
     return val[0]
 
 # NOTE buffer out must be initialized to 0
 # gxyz is the index for Gvbase
 def _ft_aopair_kpts(cell, Gv, shls_slice=None, aosym='s1',
-                    b=None, gxyz=None, Gvbase=None,
-                    q=numpy.zeros(3), kptjs=numpy.zeros((1,3)),
+                    b=None, gxyz=None, Gvbase=None, q=numpy.zeros(3),
+                    kptjs=numpy.zeros((1,3)), intor='GTO_ft_ovlp_sph', comp=1,
                     out=None):
-    r''' FT transform AO pair
-    \int exp(-i(G+q)r) i(r) j(r) exp(-ikr) dr^3
-    The return list holds the AO pair array
+    r'''
+    FT transform AO pair
+    \sum_T exp(-i k_j * T) \int exp(-i(G+q)r) i(r) j(r-T) dr^3
+
+    The return array holds the AO pair
     corresponding to the kpoints given by kptjs
     '''
     q = numpy.reshape(q, 3)
@@ -68,16 +71,12 @@ def _ft_aopair_kpts(cell, Gv, shls_slice=None, aosym='s1',
         p_b = b.ctypes.data_as(ctypes.c_void_p)
         p_mesh = (ctypes.c_int*3)(*[len(x) for x in Gvbase])
 
-    drv = libpbc.PBC_ft_latsum_drv
-    intor = getattr(libpbc, 'GTO_ft_ovlp_sph')
-    eval_gz = getattr(libpbc, eval_gz)
-
     Ls = cell.get_lattice_Ls()
     expkL = numpy.exp(1j * numpy.dot(kptjs, Ls.T))
 
     atm, bas, env = gto.conc_env(cell._atm, cell._bas, cell._env,
                                  cell._atm, cell._bas, cell._env)
-    ao_loc = gto.moleintor.make_loc(bas, 'GTO_ft_ovlp_sph')
+    ao_loc = gto.moleintor.make_loc(bas, intor)
     if shls_slice is None:
         shls_slice = (0, cell.nbas, cell.nbas, cell.nbas*2)
     else:
@@ -86,7 +85,6 @@ def _ft_aopair_kpts(cell, Gv, shls_slice=None, aosym='s1',
     ni = ao_loc[shls_slice[1]] - ao_loc[shls_slice[0]]
     nj = ao_loc[shls_slice[3]] - ao_loc[shls_slice[2]]
     nkpts = len(kptjs)
-    comp = 1
     nimgs = len(Ls)
     shape = (nkpts, comp, ni, nj, nGv)
 
@@ -101,6 +99,9 @@ def _ft_aopair_kpts(cell, Gv, shls_slice=None, aosym='s1',
         nij = i1*(i1+1)//2 - i0*(i0+1)//2
         shape = (nkpts, comp, nij, nGv)
 
+    drv = libpbc.PBC_ft_latsum_drv
+    intor = getattr(libpbc, intor)
+    eval_gz = getattr(libpbc, eval_gz)
     if nkpts == 1:
         fill = getattr(libpbc, 'PBC_ft_fill_nk1'+aosym)
     else:
@@ -157,7 +158,7 @@ if __name__ == '__main__':
     ao2 = ft_aopair(cell, cell.Gv)
     nao = cell.nao_nr()
     coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
-    aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords)
+    aoR = cell.pbc_eval_gto(cell, coords)
     aoR2 = numpy.einsum('ki,kj->kij', aoR.conj(), aoR)
     ngrids = aoR.shape[0]
 

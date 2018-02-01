@@ -99,7 +99,7 @@ def write_mo(fout, mol, mo_coeff, mo_energy=None, mo_occ=None):
 
         for t in TYPE_MAP[l]:
             types.append([t]*np)
-        ncart = gto.len_cart(l)
+        ncart = mol.bas_len_cart(ib)
         exps.extend([es]*ncart)
         centers.extend([ia+1]*(np*ncart))
         p0 += nd

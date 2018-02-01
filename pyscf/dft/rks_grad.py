@@ -9,6 +9,7 @@ import time
 import copy
 import numpy
 import scipy.linalg
+from pyscf import gto
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import rhf_grad
@@ -204,7 +205,7 @@ def grids_response_cc(grids):
                                             grids.radi_method,
                                             grids.level, grids.prune)
     atm_coords = numpy.asarray(mol.atom_coords() , order='C')
-    atm_dist = radi._inter_distance(mol)
+    atm_dist = gto.inter_distance(mol, atm_coords)
 
     def _radii_adjust(mol, atomic_radii):
         charges = mol.atom_charges()

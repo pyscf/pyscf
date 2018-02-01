@@ -4,12 +4,15 @@
 #
 
 import ctypes
+import copy
 import numpy
 from pyscf import lib
 from pyscf import gto
 import pyscf.df
 from pyscf.scf import _vhf
-from pyscf.pbc.lib.kpt_misc import is_zero, gamma_point, unique, KPT_DIFF_TOL
+from pyscf.pbc import gto as pbcgto
+from pyscf.pbc.gto import _pbcintor
+from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, unique, KPT_DIFF_TOL
 
 libpbc = lib.load_library('libpbc')
 
@@ -42,22 +45,31 @@ def format_aux_basis(cell, auxbasis='weigend+etb'):
 
 #@memory_cache
 def aux_e2(cell, auxcell, intor='int3c2e_sph', aosym='s1', comp=1,
-           kptij_lst=numpy.zeros((1,2,3)), shls_slice=None):
+           kptij_lst=numpy.zeros((1,2,3)), shls_slice=None, **kwargs):
     r'''3-center AO integrals (ij|L) with double lattice sum:
     \sum_{lm} (i[l]j[m]|L[0]), where L is the auxiliary basis.
 
     Returns:
         (nao_pair, naux) array
     '''
-    intor = gto.moleintor.ascint3(intor)
+# For some unkown reasons, the pre-decontracted basis 'is slower than
+#    if shls_slice is None and cell.nao_nr() < 200:
+## Slighly decontract basis. The decontracted basis has better locality.
+## The locality can be used in the lattice sum to reduce cost.
+#        cell, contr_coeff = pbcgto.cell._split_basis(cell)
+#    else:
+#        contr_coeff = None
+
     if shls_slice is None:
         shls_slice = (0, cell.nbas, 0, cell.nbas, 0, auxcell.nbas)
 
+    intor = gto.moleintor.ascint3(intor)
     ao_loc = cell.ao_loc_nr()
     aux_loc = auxcell.ao_loc_nr('ssc' in intor)[:shls_slice[5]+1]
     ni = ao_loc[shls_slice[1]] - ao_loc[shls_slice[0]]
     nj = ao_loc[shls_slice[3]] - ao_loc[shls_slice[2]]
     naux = aux_loc[shls_slice[5]] - aux_loc[shls_slice[4]]
+
     nkptij = len(kptij_lst)
 
     kpti = kptij_lst[:,0]
@@ -76,9 +88,26 @@ def aux_e2(cell, auxcell, intor='int3c2e_sph', aosym='s1', comp=1,
     else:
         dtype = numpy.complex128
 
-    int3c = wrap_int3c(cell, auxcell, intor, aosym, comp, kptij_lst)
+    int3c = wrap_int3c(cell, auxcell, intor, aosym, comp, kptij_lst, **kwargs)
     out = numpy.empty((nkptij,comp,nao_pair,naux), dtype=dtype)
     out = int3c(shls_slice, out)
+
+#    if contr_coeff is not None:
+#        if aosym == 's2':
+#            tmp = out.reshape(nkptij,comp,ni,ni,naux)
+#            idx, idy = numpy.tril_indices(ni)
+#            tmp[:,:,idy,idx] = out.conj()
+#            tmp[:,:,idx,idy] = out
+#            out, tmp = tmp, None
+#            out = lib.einsum('kcpql,pi->kciql', out, contr_coeff)
+#            out = lib.einsum('kciql,qj->kcijl', out, contr_coeff)
+#            idx, idy = numpy.tril_indices(contr_coeff.shape[1])
+#            out = out[:,:,idx,idy]
+#        else:
+#            out = out.reshape(nkptij,comp,ni,nj,naux)
+#            out = lib.einsum('kcpql,pi->kciql', out, contr_coeff)
+#            out = lib.einsum('kciql,qj->kcijl', out, contr_coeff)
+#            out = out.reshape(nkptij,comp,-1,naux)
 
     if comp == 1:
         out = out[:,0]
@@ -87,8 +116,9 @@ def aux_e2(cell, auxcell, intor='int3c2e_sph', aosym='s1', comp=1,
     return out
 
 def wrap_int3c(cell, auxcell, intor='int3c2e_sph', aosym='s1', comp=1,
-               kptij_lst=numpy.zeros((1,2,3))):
-    nbas = cell.nbas
+               kptij_lst=numpy.zeros((1,2,3)), cintopt=None, pbcopt=None):
+    pcell = copy.copy(cell)
+    pcell._atm, pcell._bas, pcell._env = \
     atm, bas, env = gto.conc_env(cell._atm, cell._bas, cell._env,
                                  cell._atm, cell._bas, cell._env)
     ao_loc = gto.moleintor.make_loc(bas, intor)
@@ -127,11 +157,20 @@ def wrap_int3c(cell, auxcell, intor='int3c2e_sph', aosym='s1', comp=1,
 
     fill = 'PBCnr3c_fill_%s%s' % (kk_type, aosym[:2])
     drv = libpbc.PBCnr3c_drv
-    cintopt = _vhf.make_cintopt(atm, bas, env, intor)
+    if cintopt is None:
+        cintopt = _vhf.make_cintopt(atm, bas, env, intor)
 # Remove the precomputed pair data because the pair data corresponds to the
 # integral of cell #0 while the lattice sum moves shls to all repeated images.
-    libpbc.CINTdel_pairdata_optimizer(cintopt)
+        if intor[:3] != 'ECP':
+            libpbc.CINTdel_pairdata_optimizer(cintopt)
+    if pbcopt is None:
+        pbcopt = _pbcintor.PBCOpt(pcell).init_rcut_cond(pcell)
+    if isinstance(pbcopt, _pbcintor.PBCOpt):
+        cpbcopt = pbcopt._this
+    else:
+        cpbcopt = lib.c_null_ptr()
 
+    nbas = cell.nbas
     def int3c(shls_slice, out):
         shls_slice = (shls_slice[0], shls_slice[1],
                       nbas+shls_slice[2], nbas+shls_slice[3],
@@ -144,7 +183,7 @@ def wrap_int3c(cell, auxcell, intor='int3c2e_sph', aosym='s1', comp=1,
             expkL.ctypes.data_as(ctypes.c_void_p),
             kptij_idx.ctypes.data_as(ctypes.c_void_p),
             (ctypes.c_int*6)(*shls_slice),
-            ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt,
+            ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt, cpbcopt,
             atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(cell.natm),
             bas.ctypes.data_as(ctypes.c_void_p),
             ctypes.c_int(nbas),  # need to pass cell.nbas to libpbc.PBCnr3c_drv
@@ -158,4 +197,7 @@ def fill_2c2e(cell, auxcell, intor='int2c2e_sph', hermi=0, kpt=numpy.zeros(3)):
     '''
     if hermi != 0:
         hermi = pyscf.lib.HERMITIAN
-    return auxcell.pbc_intor(intor, 1, hermi, kpt)
+# pbcopt use the value of AO-pair to prescreening PBC integrals in the lattice
+# summation.  Pass NULL pointer to pbcopt to prevent the prescreening
+    return auxcell.pbc_intor(intor, 1, hermi, kpt, pbcopt=lib.c_null_ptr())
+

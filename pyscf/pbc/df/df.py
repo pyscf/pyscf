@@ -35,7 +35,7 @@ from pyscf.pbc.df import df_jk
 from pyscf.pbc.df import df_ao2mo
 from pyscf.pbc.df.aft import estimate_eta, get_nuc
 from pyscf.pbc.df.df_jk import zdotCN, zdotNN, zdotNC
-from pyscf.pbc.lib.kpt_misc import is_zero, gamma_point, member, unique
+from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, member, unique
 
 LINEAR_DEP_THR = 1e-9
 
@@ -60,11 +60,11 @@ def make_modrho_basis(cell, auxbasis=None, drop_eta=1.):
             cs = cs[es>=drop_eta]
             es = es[es>=drop_eta]
             np, ndrop = len(es), ndrop+np-len(es)
+
+        if np > 0:
             pe = auxcell._bas[ib,gto.PTR_EXP]
             auxcell._bas[ib,gto.NPRIM_OF] = np
             auxcell._env[pe:pe+np] = es
-
-        if np > 0:
 # int1 is the multipole value. l*2+2 is due to the radial part integral
 # \int (r^l e^{-ar^2} * Y_{lm}) (r^l Y_{lm}) r^2 dr d\Omega
             int1 = gto.gaussian_int(l*2+2, es)
@@ -74,6 +74,7 @@ def make_modrho_basis(cell, auxbasis=None, drop_eta=1.):
 # simplify the formulism of \int \bar{\rho}, see function auxbar.
             cs = numpy.einsum('pi,i->pi', cs, half_sph_norm/s)
             auxcell._env[ptr:ptr+np*nc] = cs.T.reshape(-1)
+
             steep_shls.append(ib)
 
             r = _estimate_rcut(es, l, abs(cs).max(axis=1), cell.precision)
@@ -535,6 +536,14 @@ class GDF(aft.AFTDF):
                 LpqR, LpqI = load(j3c, b0, b1, LpqR, LpqI)
                 yield LpqR, LpqI
 
+    def prange(self, start, stop, step):
+        return lib.prange(start, stop, step)
+
+    weighted_coulG = aft.weighted_coulG
+    _int_nuc_vloc = aft._int_nuc_vloc
+    get_nuc = aft.get_nuc
+    get_pp = aft.get_pp
+
     def get_jk(self, dm, hermi=1, kpts=None, kpts_band=None,
                with_j=True, with_k=True, exxdiv='ewald'):
         if kpts is None:
@@ -560,7 +569,9 @@ class GDF(aft.AFTDF):
     ao2mo = get_mo_eri = df_ao2mo.general
 
     def update_mp(self):
-        pass
+        mf = copy.copy(mf)
+        mf.with_df = self
+        return mf
 
     def update_cc(self):
         pass

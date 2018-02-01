@@ -132,9 +132,7 @@ def nwchem_prune(nuc, rads, n_ang, radii=radi.BRAGG_RADII):
         (0.1   , 0.4, 0.8, 2.5)))
     leb_ngrid = LEBEDEV_NGRID[4:]  # [38, 50, 74, 86, ...]
     if n_ang < 50:
-        angs = numpy.empty(len(rads), dtype=int)
-        angs[:] = n_ang
-        return angs
+        return numpy.repeat(n_ang, len(rads))
     elif n_ang == 50:
         leb_l = numpy.array([1, 2, 2, 2, 1])
     else:
@@ -185,34 +183,25 @@ def treutler_prune(nuc, rads, n_ang, radii=None):
 # Stratmann, Scuseria, Frisch. CPL, 257, 213 (1996), eq.11
 def stratmann(g):
     '''Stratmann, Scuseria, Frisch. CPL, 257, 213 (1996)'''
-    a = .64  # comment after eq. 14
-    if isinstance(g, numpy.ndarray):
-        ma = g/a
-        ma2 = ma * ma
-        g1 = (1/16.)*(ma*(35 + ma2*(-35 + ma2*(21 - 5 *ma2))))
-        g1[g<=-a] = -1
-        g1[g>= a] =  1
-        return g1
-    else:
-        if g <= -a:
-            g = -1
-        elif g >= a:
-            g = 1
-        else:
-            ma = g/a
-            ma2 = ma*ma
-            g = (1/16.)*(ma*(35 + ma2*(-35 + ma2*(21 - 5 *ma2))))
-        return g
+    a = .64  # for eq. 14
+    g = numpy.asarray(g)
+    ma = g/a
+    ma2 = ma * ma
+    g1 = numpy.asarray((1/16.)*(ma*(35 + ma2*(-35 + ma2*(21 - 5 *ma2)))))
+    g1[g<=-a] = -1
+    g1[g>= a] =  1
+    return g1
 
 def original_becke(g):
     '''Becke, JCP, 88, 2547 (1988)'''
-    g = (3 - g**2) * g * .5
-    g = (3 - g**2) * g * .5
-    g = (3 - g**2) * g * .5
-    return g
+#    This funciton has been optimized in the C code VXCgen_grid
+#    g = (3 - g**2) * g * .5
+#    g = (3 - g**2) * g * .5
+#    g = (3 - g**2) * g * .5
+#    return g
 
 def gen_atomic_grids(mol, atom_grid={}, radi_method=radi.gauss_chebyshev,
-                     level=3, prune=nwchem_prune, **kvargs):
+                     level=3, prune=nwchem_prune, **kwargs):
     '''Generate number of radial grids and angular grids for the given molecule.
 
     Returns:
@@ -233,22 +222,19 @@ def gen_atomic_grids(mol, atom_grid={}, radi_method=radi.gauss_chebyshev,
                 n_rad, n_ang = atom_grid[symb]
                 if n_ang not in LEBEDEV_NGRID:
                     if n_ang in LEBEDEV_ORDER:
+                        logger.warn(mol, 'n_ang %d for atom %d %s is not '
+                                    'the supported Lebedev angular grids. '
+                                    'Set n_ang to %d', n_ang, ia, symb,
+                                    LEBEDEV_ORDER[n_ang])
                         n_ang = LEBEDEV_ORDER[n_ang]
                     else:
                         raise ValueError('Unsupported angular grids %d' % n_ang)
             else:
                 n_rad = _default_rad(chg, level)
                 n_ang = _default_ang(chg, level)
-            rcut = kvargs['atom2rcut'][ia] if 'atom2rcut' in kvargs else None
-            if radi_method.__name__=='leggauss_ab': 
-              rad, dr = radi_method(n_rad, a=0.0, b=rcut)
-            else:
-              rad, dr = radi_method(n_rad, chg)
+            rad, dr = radi_method(n_rad, chg, ia, **kwargs)
 
-            rad_weight = 4*numpy.pi * rad*rad * dr
-            # atomic_scale = 1
-            # rad *= atomic_scale
-            # rad_weight *= atomic_scale
+            rad_weight = 4*numpy.pi * rad**2 * dr
 
             if callable(prune):
                 angs = prune(chg, rad, n_ang)
@@ -289,7 +275,7 @@ def gen_partition(mol, atom_grids_tab,
     else:
         f_radii_adjust = None
     atm_coords = numpy.asarray(mol.atom_coords() , order='C')
-    atm_dist = radi._inter_distance(mol)
+    atm_dist = gto.inter_distance(mol)
     if (becke_scheme is original_becke and
         (radii_adjust is radi.treutler_atomic_radii_adjust or
          radii_adjust is radi.becke_atomic_radii_adjust or
@@ -483,13 +469,13 @@ class Grids(lib.StreamObject):
             logger.info(self, 'User specified grid scheme %s', str(self.atom_grid))
         return self
 
-    def build(self, mol=None, with_non0tab=False, **kvargs):
+    def build(self, mol=None, with_non0tab=False, **kwargs):
         if mol is None: mol = self.mol
         if self.verbose >= logger.WARN:
             self.check_sanity()
         atom_grids_tab = self.gen_atomic_grids(mol, self.atom_grid,
                                                self.radi_method,
-                                               self.level, self.prune, **kvargs)
+                                               self.level, self.prune, **kwargs)
         self.coords, self.weights = \
                 self.gen_partition(mol, atom_grids_tab,
                                    self.radii_adjust, self.atomic_radii,
@@ -501,27 +487,19 @@ class Grids(lib.StreamObject):
         logger.info(self, 'tot grids = %d', len(self.weights))
         return self
 
-    def setup_grids(self, mol=None):
-        import warnings
-        with warnings.catch_warnings():
-            warnings.simplefilter("once")
-            warnings.warn('API updates: setup_grids method is depercated '
-                          'and will be removed in future release.\n')
-        return self.build(mol)
-
     def kernel(self, mol=None, with_non0tab=False):
         self.dump_flags()
         return self.build(mol, with_non0tab)
 
     @lib.with_doc(gen_atomic_grids.__doc__)
     def gen_atomic_grids(self, mol, atom_grid=None, radi_method=None,
-                         level=None, prune=None, **kvargs):
+                         level=None, prune=None, **kwargs):
         ''' See gen_grid.gen_atomic_grids function'''
         if atom_grid is None: atom_grid = self.atom_grid
         if radi_method is None: radi_method = self.radi_method
         if level is None: level = self.level
         if prune is None: prune = self.prune
-        return gen_atomic_grids(mol, atom_grid, self.radi_method, level, prune, **kvargs)
+        return gen_atomic_grids(mol, atom_grid, self.radi_method, level, prune, **kwargs)
 
     @lib.with_doc(gen_partition.__doc__)
     def gen_partition(self, mol, atom_grids_tab,
@@ -530,13 +508,6 @@ class Grids(lib.StreamObject):
         ''' See gen_grid.gen_partition function'''
         return gen_partition(mol, atom_grids_tab, radii_adjust, atomic_radii,
                              becke_scheme)
-
-    @property
-    def prune_scheme(self):
-        import sys
-        sys.stderr.write('WARN: Attribute .prune_scheme will be removed in PySCF v1.1. '
-                         'Please use .prune instead\n')
-        return self.prune
 
     @lib.with_doc(make_mask.__doc__)
     def make_mask(self, mol=None, coords=None, relativity=0, shls_slice=None,

@@ -83,6 +83,24 @@ class KnowValues(unittest.TestCase):
         mf = scf.addons.frac_occ(mf)
         self.assertAlmostEqual(mf.scf(), -107.13465364012296, 9)
 
+        mol.charge = -1
+        mol.spin = 1
+        mf = scf.RHF(mol)
+        mf = scf.addons.frac_occ(mf)
+        self.assertAlmostEqual(mf.scf(), -108.3626325837689, 9)
+
+        mol.charge = 1
+        mol.spin = 1
+        mf = scf.rhf.RHF(mol)
+        mf = scf.addons.frac_occ(mf)
+        self.assertAlmostEqual(mf.scf(), -108.10375514714799, 9)
+
+        mol.charge = 1
+        mol.spin = 1
+        mf = scf.UHF(mol)
+        mf = scf.addons.frac_occ(mf)
+        self.assertAlmostEqual(mf.scf(), -108.17458104180083, 9)
+
     def test_dynamic_occ(self):
         mol = gto.Mole()
         mol.verbose = 5
@@ -104,20 +122,6 @@ class KnowValues(unittest.TestCase):
         mf = scf.addons.follow_state(mf, mo0)
         self.assertAlmostEqual(mf.scf(), -75.178145727548511, 9)
         self.assertTrue(numpy.allclose(mf.mo_occ[:6], [2,2,2,2,0,2]))
-
-    def test_symm_allow_occ(self):
-        mol = gto.Mole()
-        mol.verbose = 5
-        mol.output = '/dev/null'
-        mol.atom = '''
-            7      0.   0  -0.7
-            7      0.   0   0.7'''
-        mol.basis = 'cc-pvdz'
-        mol.charge = 2
-        mol.build()
-        mf = scf.RHF(mol)
-        mf = scf.addons.symm_allow_occ(mf)
-        self.assertAlmostEqual(mf.scf(), -106.49900188208861, 9)
 
     def test_float_occ(self):
         mol = gto.Mole()

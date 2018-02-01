@@ -32,28 +32,30 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.finger(g1), -0.036999389889460096, 6)
 
         mol = gto.M(
-            verbose = 0,
+            verbose = 5,
+            output = '/dev/null',
             atom = 'H 0 0 0; H 0 0 1.706',
             basis = '631g',
             unit='Bohr')
         mf0 = scf.RHF(mol).run(conv_tol=1e-14)
         mycc0 = cc.ccsd.CCSD(mf0).run(conv_tol=1e-10)
         mol = gto.M(
-            verbose = 0,
+            verbose = 5,
+            output = '/dev/null',
             atom = 'H 0 0 0; H 0 0 1.704',
             basis = '631g',
             unit='Bohr')
         mf1 = scf.RHF(mol).run(conv_tol=1e-14)
         mycc1= cc.ccsd.CCSD(mf1).run(conv_tol=1e-10)
         mol = gto.M(
-            verbose = 0,
+            verbose = 5,
+            output = '/dev/null',
             atom = 'H 0 0 0; H 0 0 1.705',
             basis = '631g',
             unit='Bohr')
-        mf2 = scf.RHF(mol).run(conv_tol=1e-14)
-        mycc2 = cc.ccsd.CCSD(mf2).run(conv_tol=1e-10)
-        l1, l2 = mycc2.solve_lambda()
-        g1 = ccsd_grad.kernel(mycc2, mycc2.t1, mycc2.t2, l1, l2)
+        mycc2 = cc.ccsd.CCSD(scf.RHF(mol))
+        g_scanner = mycc2.nuc_grad_method().as_scanner()
+        g1 = g_scanner(mol)[1]
         self.assertAlmostEqual(g1[0,2], (mycc1.e_tot-mycc0.e_tot)*500, 6)
 
     def test_frozen(self):

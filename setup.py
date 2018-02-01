@@ -102,6 +102,10 @@ else:
 #
 # default include and library path
 #
+def check_version(version_to_test, version_min):
+    return cmp(version_to_test.split('.'), version_min.split('.')) >= 0
+
+# version : the lowest version
 def search_lib_path(libname, extra_paths=None, version=None):
     paths = os.environ.get(LD_LIBRARY_PATH, '').split(os.pathsep)
     if 'PYSCF_INC_DIR' in os.environ:
@@ -110,12 +114,18 @@ def search_lib_path(libname, extra_paths=None, version=None):
             paths = [p, os.path.join(p, 'lib'), os.path.join(p, '..', 'lib')] + paths
     if extra_paths is not None:
         paths += extra_paths
+
+    len_libname = len(libname)
     for path in paths:
         full_libname = os.path.join(path, libname)
-        if version is not None:
-            full_libname = full_libname + '.' + version
-        if os.path.exists(full_libname):
-            return os.path.abspath(path)
+        if os.path.isfile(full_libname):
+            if version is None:
+                return os.path.abspath(path)
+            else:
+                for f in os.listdir(path):
+                    f_version = f[len_libname+1:]
+                    if f_version and check_version(f_version, version):
+                        return os.path.abspath(path)
 
 def search_inc_path(incname, extra_paths=None):
     paths = os.environ.get(LD_LIBRARY_PATH, '').split(os.pathsep)
@@ -278,7 +288,7 @@ autocode/hess.c autocode/intor1.c autocode/grad2.c'''
             default_include.append(os.path.join(pyscf_lib_dir, 'libcint','src'))
         else:
             print("****************************************************************")
-            print("*** WARNING: libcint library not found.")
+            print("*** WARNING: libcint library not found or found wrong version.")
             print("* You can download libcint library from http://github.com/sunqm/libcint")
             print("* May need to set PYSCF_INC_DIR if libcint library was not installed in the")
             print("* system standard install path (/usr, /usr/local, etc). Eg")
@@ -295,7 +305,7 @@ extensions += [
     make_ext('pyscf.lib.libcgto', 'gto',
              '''fill_int2c.c fill_nr_3c.c fill_r_3c.c fill_int2e.c ft_ao.c
              grid_ao_drv.c fastexp.c deriv1.c deriv2.c nr_ecp.c nr_ecp_deriv.c
-             autocode/auto_eval1.c''',
+             autocode/auto_eval1.c ft_ao_deriv.c''',
              ['cint', 'np_helper']),
     make_ext('pyscf.lib.libcvhf', 'vhf',
              '''fill_nr_s8.c nr_incore.c nr_direct.c optimizer.c nr_direct_dot.c
@@ -317,7 +327,8 @@ extensions += [
     make_ext('pyscf.lib.libri', 'ri', 'r_df_incore.c',
              ['cint', 'ao2mo', 'np_helper']),
     make_ext('pyscf.lib.libhci', 'hci', 'hci.c', ['np_helper']),
-    make_ext('pyscf.lib.libpbc', 'pbc', 'ft_ao.c fill_ints.c grid_ao.c', ['cgto', 'cint']),
+    make_ext('pyscf.lib.libpbc', 'pbc', 'ft_ao.c optimizer.c fill_ints.c grid_ao.c',
+             ['cgto', 'cint']),
     make_ext('pyscf.lib.libmbd', os.path.join('extras', 'mbd'), 'dipole.c', []),
     make_ext('pyscf.lib.libdft', 'dft',
              'CxLebedevGrid.c grid_basis.c nr_numint.c r_numint.c',

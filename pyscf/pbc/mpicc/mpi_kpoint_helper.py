@@ -4,11 +4,10 @@
 #          Timothy Berkelbach <tim.berkelbach@gmail.com>
 #
 
-import itertools
-import pyscf.pbc.tools.pbc as tools
+import numpy
 import pyscf.pbc.ao2mo
 import pyscf.lib
-import numpy
+from pyscf.pbc.lib import kpts_helper
 
 DEBUG = 0
 
@@ -18,7 +17,7 @@ class unique_pqr_list:
     # Wasn't sure how to do this 'cleanly', but it's fairly straightforward
     #####################################################################################
     def __init__(self,cell,kpts):
-        kconserv = tools.get_kconserv(cell,kpts)
+        kconserv = kpts_helper.get_kconserv(cell,kpts)
         nkpts = len(kpts)
         temp = range(0,nkpts)
         klist = pyscf.lib.cartesian_prod((temp,temp,temp))
@@ -78,9 +77,8 @@ class unique_pqr_list:
             for i in range(klist.shape[0]):
                 pqr = klist[i]
                 irr_pqr = self.equivalentList[pqr[0],pqr[1],pqr[2]]
-                print("%3d %3d %3d   ->  %3d %3d %3d" %
-                      (pqr[0],pqr[1],pqr[2],)
-                                                         irr_pqr[0],irr_pqr[1],irr_pqr[2])
+                print("%3d %3d %3d   ->  %3d %3d %3d" % (pqr[0],pqr[1],pqr[2],
+                                                         irr_pqr[0],irr_pqr[1],irr_pqr[2]))
 
     def get_uniqueList(self):
         return self.uniqueList
@@ -106,7 +104,3 @@ class unique_pqr_list:
             return numpy.conj(invec.transpose(1,0,3,2))
         if operation == 3:
             return numpy.conj(invec.transpose(3,2,1,0))
-
-def loop_kkk(nkpts):
-    range_nkpts = range(nkpts)
-    return itertools.product(range_nkpts, range_nkpts, range_nkpts)

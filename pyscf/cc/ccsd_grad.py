@@ -231,19 +231,6 @@ def as_scanner(grad_cc):
             return all((cc._scf.converged, cc.converged, cc.converged_lambda))
     return CCSD_GradScanner(grad_cc)
 
-
-def shell_prange(mol, start, stop, blksize):
-    nao = 0
-    ib0 = start
-    for ib in range(start, stop):
-        now = (mol.bas_angular(ib)*2+1) * mol.bas_nctr(ib)
-        nao += now
-        if nao > blksize and nao > now:
-            yield (ib0, ib, nao-now)
-            ib0 = ib
-            nao = now
-    yield (ib0, stop, nao)
-
 def _response_dm1(mycc, Xvo, eris=None):
     nvir, nocc = Xvo.shape
     nmo = nocc + nvir

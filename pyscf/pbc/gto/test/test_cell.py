@@ -81,7 +81,7 @@ class KnownValues(unittest.TestCase):
         3.370137329  3.370137329  0.000000000''',
         mesh = [15]*3)
         rcut = max([cell.bas_rcut(ib, 1e-8) for ib in range(cell.nbas)])
-        self.assertEqual(cell.get_lattice_Ls(rcut=rcut).shape, (1217, 3))
+        self.assertEqual(cell.get_lattice_Ls(rcut=rcut).shape, (1097, 3))
         rcut = max([cell.bas_rcut(ib, 1e-9) for ib in range(cell.nbas)])
         self.assertEqual(cell.get_lattice_Ls(rcut=rcut).shape, (1241, 3))
 
@@ -199,7 +199,7 @@ class KnownValues(unittest.TestCase):
         v1 = ecp.ecp_int(cell)
         mol = cell.to_mol()
         v0 = mol.intor('ECPscalar_sph')
-        self.assertAlmostEqual(abs(v0 - v1).sum(), 0.0289322453376, 10)
+        self.assertAlmostEqual(abs(v0 - v1).sum(), 0.029005941884155326, 8)
 
     def test_ecp_keyword_in_pseudo(self):
         cell = pgto.M(

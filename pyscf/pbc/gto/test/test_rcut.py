@@ -19,10 +19,7 @@ verbose=0)
 
 class KnownValues(unittest.TestCase):
     def test_rcut(self):
-        rcut_ref = cell.rcut
-        #print rcut_ref
         kpts = cell.make_kpts([2,2,2])
-        rcut_ref = rcut_ref
         t0 = numpy.asarray(cell.pbc_intor('int1e_kin_sph', hermi=1, kpts=kpts))
         s0 = numpy.asarray(cell.pbc_intor('int1e_ovlp_sph', hermi=1, kpts=kpts))
         for i in range(1, 10):
@@ -31,8 +28,9 @@ class KnownValues(unittest.TestCase):
             t1 = numpy.asarray(cell.pbc_intor('int1e_kin_sph', hermi=1, kpts=kpts))
             s1 = numpy.asarray(cell.pbc_intor('int1e_ovlp_sph', hermi=1, kpts=kpts))
             #print prec, cell.rcut, abs(t1-t0).max(), abs(s1-s0).max()
-            self.assertTrue(abs(t1-t0).max() < prec*1e-1)
-            self.assertTrue(abs(s1-s0).max() < prec*1e-2)
+            print(prec, 'error = ', abs(t1-t0).max(), abs(s1-s0).max())
+            self.assertTrue(abs(t1-t0).max() < prec*1e-0)
+            self.assertTrue(abs(s1-s0).max() < prec*1e-1)
 
 if __name__ == '__main__':
     print("Test rcut and the errorsin pbc.gto.cell")

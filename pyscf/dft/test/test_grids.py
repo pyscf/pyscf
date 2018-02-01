@@ -9,8 +9,8 @@ from pyscf.dft import gen_grid
 from pyscf.dft import radi
 
 h2o = gto.Mole()
-h2o.verbose = 0
-h2o.output = None#"out_h2o"
+h2o.verbose = 5
+h2o.output = '/dev/null'
 h2o.atom.extend([
     ["O" , (0. , 0.     , 0.)],
     [1   , (0. , -0.757 , 0.587)],
@@ -20,7 +20,7 @@ h2o.basis = {"H": '6-31g',
              "O": '6-31g',}
 h2o.build()
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_gen_grid(self):
         grid = gen_grid.Grids(h2o)
         grid.prune = None
@@ -40,8 +40,14 @@ class KnowValues(unittest.TestCase):
         grid.atom_grid = {"O": (10, 50),}
         grid.radii_adjust = None
         grid.becke_scheme = gen_grid.stratmann
-        grid.build(with_non0tab=False)
+        grid.kernel(with_non0tab=False)
         self.assertAlmostEqual(numpy.linalg.norm(grid.weights), 2559.0064040257907, 8)
+
+        grid.atom_grid = (10, 11)
+        grid.becke_scheme = gen_grid.original_becke
+        grid.radii_adjust = None
+        grid.build(with_non0tab=False)
+        self.assertAlmostEqual(numpy.linalg.norm(grid.weights), 1712.3069450297105, 8)
 
     def test_radi(self):
         grid = gen_grid.Grids(h2o)
@@ -57,6 +63,10 @@ class KnowValues(unittest.TestCase):
         grid.build(with_non0tab=False)
         self.assertAlmostEqual(numpy.linalg.norm(grid.weights), 1686.3482864673697, 9)
 
+        grid.radi_method = radi.becke
+        grid.build(with_non0tab=False)
+        self.assertAlmostEqual(numpy.linalg.norm(grid.weights), 45009387.132578261, 7)
+
     def test_prune(self):
         grid = gen_grid.Grids(h2o)
         grid.prune = gen_grid.sg1_prune
@@ -69,6 +79,17 @@ class KnowValues(unittest.TestCase):
         grid.build(with_non0tab=False)
         self.assertAlmostEqual(numpy.linalg.norm(grid.coords), 149.55023044392638, 9)
         self.assertAlmostEqual(numpy.linalg.norm(grid.weights), 586.36841824004455, 9)
+
+        z = 16
+        rad, dr = radi.gauss_chebyshev(50)
+        angs = gen_grid.sg1_prune(z, rad, 434, radii=radi.SG1RADII)
+        self.assertAlmostEqual(lib.finger(angs), -291.0794420982329, 9)
+
+        angs = gen_grid.nwchem_prune(z, rad, 434, radii=radi.BRAGG_RADII)
+        self.assertAlmostEqual(lib.finger(angs), -180.12023039394498, 9)
+
+        angs = gen_grid.nwchem_prune(z, rad, 26, radii=radi.BRAGG_RADII)
+        self.assertTrue(numpy.all(angs==26))
 
     def test_gen_atomic_grids(self):
         grid = gen_grid.Grids(h2o)

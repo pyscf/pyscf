@@ -17,13 +17,14 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.df.outcore import _guess_shell_ranges
 from pyscf.pbc import tools
+from pyscf.pbc import gto
 from pyscf.pbc.df import outcore
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import df
 from pyscf.pbc.df import aft
 from pyscf.pbc.df.df import make_modrho_basis, fuse_auxcell
 from pyscf.pbc.df.df_jk import zdotNN, zdotCN, zdotNC
-from pyscf.pbc.lib.kpt_misc import is_zero, gamma_point, unique
+from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, unique
 from pyscf.pbc.df import mdf_jk
 from pyscf.pbc.df import mdf_ao2mo
 
@@ -204,6 +205,31 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
     feri.close()
 
 
+# valence_exp = 1. is the Gaussian typicall sits in valence
+def _mesh_for_valence(cell, valence_exp=1.):
+    '''Energy cutoff estimation'''
+    b = cell.reciprocal_vectors()
+    if cell.dimension == 0:
+        w = 1
+    elif cell.dimension == 1:
+        w = numpy.linalg.norm(b[0]) / (2*numpy.pi)
+    elif cell.dimension == 2:
+        w = numpy.linalg.norm(numpy.cross(b[0], b[1])) / (2*numpy.pi)**2
+    else:
+        w = abs(numpy.linalg.det(b)) / (2*numpy.pi)**3
+
+    precision = cell.precision * 10
+    Ecut_max = 0
+    for i in range(cell.nbas):
+        l = cell.bas_angular(i)
+        es = cell.bas_exp(i).copy()
+        es[es>valence_exp] = valence_exp
+        cs = abs(cell.bas_ctr_coeff(i)).max(axis=1)
+        Ecut_max = max(Ecut_max, gto.cell._estimate_ke_cutoff(es, l, cs, precision, w))
+    mesh = tools.cutoff_to_mesh(cell.lattice_vectors(), Ecut_max)
+    return mesh
+
+
 class MDF(df.DF):
     '''Gaussian and planewaves mixed density fitting
     '''
@@ -216,7 +242,7 @@ class MDF(df.DF):
         self.kpts = kpts  # default is gamma point
         self.kpts_band = None
         self._auxbasis = None
-        self.mesh = cell.mesh
+        self.mesh = _mesh_for_valence(cell, 1.)
         self.eta = None
 
 # Not input options

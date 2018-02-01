@@ -497,9 +497,14 @@ def pick_real_eigs(w, v, nroots, x0):
     # Here we pick the eigenvalues with smallest imaginary component,
     # where we are forced to choose at least one eigenvalue.
     abs_imag = abs(w.imag)
-    max_imag_tol = max(1e-5,min(abs_imag)*1.1)
+    max_imag_tol = max(1e-4,min(abs_imag)*1.1)
     realidx = numpy.where((abs_imag < max_imag_tol))[0]
-    idx = realidx[w[realidx].real.argsort()]
+    if len(realidx) < nroots and w.size >= nroots:
+        idx = w.real.argsort()
+        warnings.warn('%d eigenvalues with imaginary part > 0.01\n' %
+                      numpy.count_nonzero(abs_imag > 1e-2))
+    else:
+        idx = realidx[w[realidx].real.argsort()]
     return w[idx].real, v[:,idx].real, idx
 
 def eig(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,

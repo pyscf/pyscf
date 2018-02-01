@@ -528,10 +528,16 @@ def make_cintopt(atm, bas, env, intor):
              c_atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(natm),
              c_bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
              c_env.ctypes.data_as(ctypes.c_void_p))
-    return ctypes.cast(cintopt, _cintoptHandler)
+    if intor[:3] == 'ECP':
+        return ctypes.cast(cintopt, _ecpoptHandler)
+    else:
+        return ctypes.cast(cintopt, _cintoptHandler)
 class _cintoptHandler(ctypes.c_void_p):
     def __del__(self):
         libcgto.CINTdel_optimizer(ctypes.byref(self))
+class _ecpoptHandler(ctypes.c_void_p):
+    def __del__(self):
+        libcgto.ECPdel_optimizer(ctypes.byref(self))
 
 def _stand_sym_code(sym):
     if isinstance(sym, int):

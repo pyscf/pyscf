@@ -25,7 +25,7 @@ from pyscf.data import elements
 # core+valence = lambda nuc, l: \
 #            int(numpy.ceil(elements.CONFIGURATION[nuc][l]/(4*l+2.)))
 AOSHELL = list(zip(elements.N_CORE_SHELLS,
-                   elements.N_VALENCE_SHELLS))
+                   elements.N_CORE_VALENCE_SHELLS))
 
 def prenao(mol, dm):
     s = mol.intor_symmetric('int1e_ovlp')

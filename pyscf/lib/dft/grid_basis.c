@@ -16,8 +16,9 @@ void VXCnr_ao_screen(unsigned char *non0table, double *coords, int ngrids,
                      int *atm, int natm, int *bas, int nbas, double *env)
 {
         const int nblk = (ngrids+BLKSIZE-1) / BLKSIZE;
-        int ib, i, j;
-        int np, nc, atm_id, bas_id;
+        int i, j;
+        int np, nc, atm_id;
+        size_t bas_id, ib;
         double rr, arr, maxc;
         double logcoeff[NPRIMAX];
         double dr[3];

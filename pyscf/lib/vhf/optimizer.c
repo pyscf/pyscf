@@ -38,11 +38,9 @@ void CVHFdel_optimizer(CVHFOpt **opt)
 
         if (!opt0->q_cond) {
                 free(opt0->q_cond);
-                opt0->q_cond = NULL;
         }
         if (!opt0->dm_cond) {
                 free(opt0->dm_cond);
-                opt0->dm_cond = NULL;
         }
 
         free(opt0);

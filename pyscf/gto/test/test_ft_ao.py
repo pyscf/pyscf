@@ -119,6 +119,20 @@ class KnowValues(unittest.TestCase):
                 dat[:,i,j] = dat[:,j,i] = dat_s2[:,i*(i+1)//2+j]
         self.assertAlmostEqual(finger(dat), (-5.9794759129252348+8.07254562525371j), 9)
 
+    def test_ft_aopair_pdotp(self):
+        numpy.random.seed(12)
+        invh = numpy.diag(numpy.random.random(3))
+        Gv = 2*numpy.pi* numpy.dot(gxyz, invh)
+        dat = ft_ao.ft_aopair(mol, Gv, intor='GTO_ft_pdotp_sph')
+        self.assertAlmostEqual(finger(dat), (-80.69687735727976+69.239798150854909j), 9)
+
+    def test_ft_aopair_pxp(self):
+        numpy.random.seed(12)
+        invh = numpy.diag(numpy.random.random(3))
+        Gv = 2*numpy.pi* numpy.dot(gxyz, invh)
+        dat = ft_ao.ft_aopair(mol, Gv, intor='GTO_ft_pxp_sph', comp=3)
+        self.assertAlmostEqual(finger(dat), (3.7490985032017079+43.665863070814687j), 8)
+
 
 if __name__ == '__main__':
     print('Full Tests for ft_ao')

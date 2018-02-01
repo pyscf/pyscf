@@ -14,7 +14,7 @@ from pyscf.nao.m_gaunt import gaunt_c
 def build_3dgrid(me, sp1, R1, sp2, R2, level=3):
   from pyscf import dft
   from pyscf.nao.m_system_vars import system_vars_c
-  from pyscf.nao.m_gauleg import leggauss_ab
+  from pyscf.nao.m_gauleg import gauss_legendre
 
   assert sp1>=0
   assert sp2>=0
@@ -27,7 +27,7 @@ def build_3dgrid(me, sp1, R1, sp2, R2, level=3):
   atom2rcut=np.array([me.aos[isp].sp_mu2rcut[sp].max() for isp,sp in enumerate([sp1,sp2])])
   grids = dft.gen_grid.Grids(mol)
   grids.level = level # precision as implemented in pyscf
-  grids.radi_method=leggauss_ab
+  grids.radi_method = gauss_legendre
   grids.build(atom2rcut=atom2rcut)
   #grids.build()
   return grids
@@ -38,7 +38,7 @@ def build_3dgrid(me, sp1, R1, sp2, R2, level=3):
 def build_3dgrid3c(me, sp1, sp2, R1, R2, sp3, R3, level=3):
   from pyscf import dft
   from pyscf.nao.m_system_vars import system_vars_c
-  from pyscf.nao.m_gauleg import leggauss_ab
+  from pyscf.nao.m_gauleg import gauss_legendre
 
   d12 = ((R1-R2)**2).sum()
   d13 = ((R1-R3)**2).sum()
@@ -64,7 +64,7 @@ def build_3dgrid3c(me, sp1, sp2, R1, R2, sp3, R3, level=3):
   atom2rcut=np.array([rc1, rc2, rc3])
   grids = dft.gen_grid.Grids(mol)
   grids.level = level # precision as implemented in pyscf
-  grids.radi_method=leggauss_ab
+  grids.radi_method = gauss_legendre
   grids.build(atom2rcut=atom2rcut)
   return grids
 

@@ -160,9 +160,9 @@ class GCCSD(ccsd.CCSD):
         if eris is None: eris = self.ao2mo(self.mo_coeff)
         self.converged_lambda, self.l1, self.l2 = \
                 gccsd_lambda.kernel(self, eris, t1, t2, l1, l2,
-                                    max_cycle=self.max_cycle,
-                                    tol=self.conv_tol_normt,
-                                    verbose=self.verbose)
+                                   max_cycle=self.max_cycle,
+                                   tol=self.conv_tol_normt,
+                                   verbose=self.verbose)
         return self.l1, self.l2
 
     def ccsd_t(self, t1=None, t2=None, eris=None):
@@ -245,7 +245,8 @@ class GCCSD(ccsd.CCSD):
 
 class _PhysicistsERIs:
     '''<pq||rs> = <pq|rs> - <pq|sr>'''
-    def __init__(self):
+    def __init__(self, mol=None):
+        self.mol = mol
         self.mo_coeff = None
         self.nocc = None
         self.fock = None
@@ -277,7 +278,7 @@ class _PhysicistsERIs:
 # Note: Recomputed fock matrix since SCF may not be fully converged.
         dm = mycc._scf.make_rdm1(mycc.mo_coeff, mycc.mo_occ)
         fockao = mycc._scf.get_hcore() + mycc._scf.get_veff(mycc.mol, dm)
-        self.fock = reduce(np.dot, (mo_coeff.T, fockao, mo_coeff))
+        self.fock = reduce(np.dot, (mo_coeff.conj().T, fockao, mo_coeff))
         self.nocc = mycc.nocc
         return self
 
@@ -287,26 +288,14 @@ def _make_eris_incore(mycc, mo_coeff=None, ao2mofn=None):
     eris._common_init_(mycc, mo_coeff)
     nocc = eris.nocc
     nao, nmo = eris.mo_coeff.shape
-    nvir = nmo - nocc
-    mo_a = eris.mo_coeff[:nao//2]
-    mo_b = eris.mo_coeff[nao//2:]
-    orbspin = eris.orbspin
 
     if callable(ao2mofn):
-        if orbspin is None:
-            eri  = ao2mofn(mo_a).reshape([nmo]*4)
-            eri += ao2mofn(mo_b).reshape([nmo]*4)
-            eri1 = ao2mofn((mo_a,mo_a,mo_b,mo_b)).reshape([nmo]*4)
-            eri += eri1
-            eri += eri1.transpose(2,3,0,1)
-        else:
-            mo = mo_a + mo_b
-            eri = ao2mofn(mo).reshape([nmo]*4)
-            sym_forbid = (orbspin[:,None] != orbspin)
-            eri[sym_forbid,:,:] = 0
-            eri[:,:,sym_forbid] = 0
+        eri = ao2mofn(eris.mo_coeff).reshape([nmo]*4)
     else:
         assert(eris.mo_coeff.dtype == np.double)
+        mo_a = eris.mo_coeff[:nao//2]
+        mo_b = eris.mo_coeff[nao//2:]
+        orbspin = eris.orbspin
         if orbspin is None:
             eri  = ao2mo.kernel(mycc._scf._eri, mo_a)
             eri += ao2mo.kernel(mycc._scf._eri, mo_b)
@@ -316,7 +305,10 @@ def _make_eris_incore(mycc, mo_coeff=None, ao2mofn=None):
         else:
             mo = mo_a + mo_b
             eri = ao2mo.kernel(mycc._scf._eri, mo)
-            sym_forbid = (orbspin[:,None] != orbspin)[np.tril_indices(nmo)]
+            if eri.size == nmo**4:
+                sym_forbid = (orbspin[:,None] != orbspin).ravel()
+            else:  # 4-fold symmetry
+                sym_forbid = (orbspin[:,None] != orbspin)[np.tril_indices(nmo)]
             eri[sym_forbid,:] = 0
             eri[:,sym_forbid] = 0
 

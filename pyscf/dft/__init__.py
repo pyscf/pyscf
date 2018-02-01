@@ -19,6 +19,7 @@ try:
     from pyscf.dft import xcfun
 except (ImportError, OSError):
     pass
+#from pyscf.dft import xc
 from pyscf.dft import rks
 from pyscf.dft import roks
 from pyscf.dft import uks

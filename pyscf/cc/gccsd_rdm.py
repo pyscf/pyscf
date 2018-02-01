@@ -104,7 +104,7 @@ def _make_rdm1(mycc, d1, with_frozen=True):
     nocc, nvir = dov.shape
     nmo = nocc + nvir
 
-    dm1 = numpy.empty((nmo,nmo))
+    dm1 = numpy.empty((nmo,nmo), dtype=doo.dtype)
     dm1[:nocc,:nocc] = doo + doo.conj().T
     dm1[:nocc,nocc:] = dov + dvo.conj().T
     dm1[nocc:,:nocc] = dm1[:nocc,nocc:].conj().T
@@ -115,7 +115,7 @@ def _make_rdm1(mycc, d1, with_frozen=True):
     if with_frozen and not (mycc.frozen is 0 or mycc.frozen is None):
         nmo = mycc.mo_occ.size
         nocc = numpy.count_nonzero(mycc.mo_occ > 0)
-        rdm1 = numpy.zeros((nmo,nmo))
+        rdm1 = numpy.zeros((nmo,nmo), dtype=dm1.dtype)
         rdm1[numpy.diag_indices(nocc)] = 1
         moidx = numpy.where(mycc.get_frozen_mask())[0]
         rdm1[moidx[:,None],moidx] = dm1
@@ -128,7 +128,7 @@ def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True):
     nocc, nvir = dovov.shape[:2]
     nmo = nocc + nvir
 
-    dm2 = numpy.empty((nmo,nmo,nmo,nmo))
+    dm2 = numpy.empty((nmo,nmo,nmo,nmo), dtype=doooo.dtype)
 
     dovov = numpy.asarray(dovov)
     dm2[:nocc,nocc:,:nocc,nocc:] = dovov
@@ -161,7 +161,7 @@ def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True):
     if with_frozen and not (mycc.frozen is 0 or mycc.frozen is None):
         nmo, nmo0 = mycc.mo_occ.size, nmo
         nocc = numpy.count_nonzero(mycc.mo_occ > 0)
-        rdm2 = numpy.zeros((nmo,nmo,nmo,nmo))
+        rdm2 = numpy.zeros((nmo,nmo,nmo,nmo), dtype=dm2.dtype)
         moidx = numpy.where(mycc.get_frozen_mask())[0]
         idx = (moidx.reshape(-1,1) * nmo + moidx).ravel()
         lib.takebak_2d(rdm2.reshape(nmo**2,nmo**2),
@@ -176,7 +176,7 @@ def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True):
             dm2[i,i,:,:] += dm1
             dm2[:,:,i,i] += dm1
             dm2[:,i,i,:] -= dm1
-            dm2[i,:,:,i] -= dm1
+            dm2[i,:,:,i] -= dm1.conj()
 
         for i in range(nocc):
             for j in range(nocc):

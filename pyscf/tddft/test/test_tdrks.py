@@ -20,7 +20,7 @@ def finger(a):
     w = numpy.cos(numpy.arange(len(a)))
     return numpy.dot(w, a)
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_nohbrid_lda(self):
         mf = dft.RKS(mol)
         mf.xc = 'lda, vwn_rpa'

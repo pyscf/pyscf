@@ -129,6 +129,12 @@ def restore(symmetry, eri, norb, tao=None):
     if origsym == targetsym:
         return eri
 
+    if numpy.iscomplexobj(eri):
+        raise RuntimeError('4-fold symmetry and 8-fold symmetry are not '
+                           'available for complex integrals')
+    else:
+        fn = getattr(libao2mo, 'AO2MOrestore_nr%sto%s'%(origsym,targetsym))
+
     if targetsym == '1':
         eri1 = numpy.empty((norb,norb,norb,norb), dtype=eri.dtype)
     elif targetsym == '4':
@@ -136,19 +142,10 @@ def restore(symmetry, eri, norb, tao=None):
     elif targetsym == '8':
         eri1 = numpy.empty(npair*(npair+1)//2, dtype=eri.dtype)
 
-    return _call_restore(origsym, targetsym, eri, eri1, norb)
-
-def _call_restore(origsym, targetsym, eri, eri1, norb, tao=None):
-    if numpy.iscomplexobj(eri):
-        raise RuntimeError('TODO')
-        #if tao is None:
-        #    raise RuntimeError('need time-reversal mapping')
-        #fn = getattr(libao2mo, 'AO2MOrestore_r'+fname)
-    else:
-        fn = getattr(libao2mo, 'AO2MOrestore_nr%sto%s'%(origsym,targetsym))
     fn(eri.ctypes.data_as(ctypes.c_void_p),
        eri1.ctypes.data_as(ctypes.c_void_p),
        ctypes.c_int(norb))
+
     return eri1
 
 def _stand_sym_code(sym):

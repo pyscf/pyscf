@@ -24,19 +24,12 @@ def init_guess_by_minao(mol, breaksym=True):
     if breaksym:
         #remove off-diagonal part of beta DM
         dmb = numpy.zeros_like(dma)
-        for b0, b1, p0, p1 in mol.offset_nr_by_atom():
+        for b0, b1, p0, p1 in mol.aoslice_by_atom():
             dmb[p0:p1,p0:p1] = dma[p0:p1,p0:p1]
     return numpy.array((dma,dmb))
 
 def init_guess_by_1e(mol, breaksym=True):
-    dm = hf.init_guess_by_1e(mol)
-    dma = dmb = dm*.5
-    if breaksym:
-        #remove off-diagonal part of beta DM
-        dmb = numpy.zeros_like(dma)
-        for b0, b1, p0, p1 in mol.offset_nr_by_atom():
-            dmb[p0:p1,p0:p1] = dma[p0:p1,p0:p1]
-    return numpy.array((dma,dmb))
+    return UHF(mol).init_guess_by_1e(mol, breaksym)
 
 def init_guess_by_atom(mol, breaksym=True):
     dm = hf.init_guess_by_atom(mol)
@@ -44,7 +37,7 @@ def init_guess_by_atom(mol, breaksym=True):
     if breaksym:
         #Add off-diagonal part of alpha DM
         dma = mol.intor('int1e_ovlp') * 1e-2
-        for b0, b1, p0, p1 in mol.offset_nr_by_atom():
+        for b0, b1, p0, p1 in mol.aoslice_by_atom():
             dma[p0:p1,p0:p1] = dmb[p0:p1,p0:p1]
     return numpy.array((dma,dmb))
 
@@ -234,8 +227,8 @@ def get_occ(mf, mo_energy=None, mo_coeff=None):
     else:
         n_a, n_b = mf.nelec
     mo_occ = numpy.zeros_like(mo_energy)
-    mo_occ[0][e_idx_a[:n_a]] = 1
-    mo_occ[1][e_idx_b[:n_b]] = 1
+    mo_occ[0,e_idx_a[:n_a]] = 1
+    mo_occ[1,e_idx_b[:n_b]] = 1
     if mf.verbose >= logger.INFO and n_a < nmo and n_b > 0 and n_b < nmo:
         if e_sort_a[n_a-1]+1e-3 > e_sort_a[n_a]:
             logger.warn(mf, 'alpha nocc = %d  HOMO %.15g >= LUMO %.15g',
@@ -721,7 +714,7 @@ class UHF(hf.SCF):
         if breaksym:
             #remove off-diagonal part of beta DM
             dmb = numpy.zeros_like(dma)
-            for b0, b1, p0, p1 in mol.offset_nr_by_atom():
+            for b0, b1, p0, p1 in mol.aoslice_by_atom():
                 dmb[p0:p1,p0:p1] = dma[p0:p1,p0:p1]
         return numpy.array((dma,dmb))
 
@@ -822,6 +815,26 @@ class UHF(hf.SCF):
         return self
 
     def stability(self, internal=True, external=False, verbose=None):
+        '''
+        Stability analysis for RHF/RKS method.
+
+        See also pyscf.scf.stability.uhf_stability function.
+
+        Args:
+            mf : UHF or UKS object
+
+        Kwargs:
+            internal : bool
+                Internal stability, within the UHF space.
+            external : bool
+                External stability. Including the UHF -> GHF and real -> complex
+                stability analysis.
+
+        Returns:
+            New orbitals that are more close to the stable condition.  The return
+            value includes two set of orbitals.  The first corresponds to the
+            internal stablity and the second corresponds to the external stability.
+        '''
         from pyscf.scf.stability import uhf_stability
         return uhf_stability(self, internal, external, verbose)
 

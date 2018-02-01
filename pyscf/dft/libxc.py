@@ -424,9 +424,14 @@ XC = XC_CODES = {
 'X3LYPG'        : 411,  # VWN3, used by Gaussian
 'XC_MGGA_X_M06L': 203,
 'XC_MGGA_C_M06L': 233,
+'CAMB3LYP'      : 'XC_HYB_GGA_XC_CAM_B3LYP',
+'CAMYBLYP'      : 'XC_HYB_GGA_XC_CAMY_BLYP',
+'CAMYB3LYP'     : 'XC_HYB_GGA_XC_CAMY_B3LYP',
 }
 
 XC_KEYS = set(XC_CODES.keys())
+
+VV10_XC = set(('B97M_V', 'WB97M_V', 'WB97X_V', 'VV10', 'LC_VV10'))
 
 def xc_type(xc_code):
     if isinstance(xc_code, str):
@@ -474,7 +479,7 @@ def max_deriv_order(xc_code):
     if fn_facs:
         return min(_itrf.LIBXC_max_deriv_order(ctypes.c_int(xid)) for xid, fac in fn_facs)
     else:
-        return 4
+        return 3
 
 def test_deriv_order(xc_code, deriv, raise_error=False):
     support = deriv <= max_deriv_order(xc_code)
@@ -492,8 +497,10 @@ def test_deriv_order(xc_code, deriv, raise_error=False):
         mf._numint.libxc = xcfun
 ''')
             raise NotImplementedError(msg)
-        except (NotImplementedError, KeyError):
-            raise NotImplementedError(msg)
+        except KeyError as e:
+            sys.stderr.write('\n'+msg+'\n')
+            sys.stderr.write('%s not found in xcfun library\n\n' % xc_code)
+            raise e
     return support
 
 def hybrid_coeff(xc_code, spin=0):
@@ -653,6 +660,8 @@ def parse_xc(description):
                 fac, key = 1, token
             if key == 'HF':
                 hyb[0] += fac
+            elif key.isdigit():
+                fn_facs.append((int(key), fac))
             else:
                 if key in XC_CODES:
                     x_id = XC_CODES[key]
@@ -688,6 +697,8 @@ def parse_xc(description):
     def possible_k_for(key):
         return set((key, 'XC_'+key,
                     'XC_LDA_K_'+key, 'XC_GGA_K_'+key,))
+    def possible_x_k_for(key):
+        return possible_x_for(key).union(possible_k_for(key))
     def possible_c_for(key):
         return set((key, 'XC_'+key,
                     'XC_LDA_C_'+key, 'XC_GGA_C_'+key, 'XC_MGGA_C_'+key))
@@ -707,7 +718,7 @@ def parse_xc(description):
     if ',' in description:
         x_code, c_code = description.replace(' ','').upper().split(',')
         for token in x_code.replace('-', '+-').split('+'):
-            parse_token(token, possible_x_for)
+            parse_token(token, possible_x_k_for)
         for token in c_code.replace('-', '+-').split('+'):
             parse_token(token, possible_c_for)
     else:
@@ -717,7 +728,7 @@ def parse_xc(description):
                 parse_token(token, possible_xc_for)
         except KeyError:
             for token in x_code.replace('-', '+-').split('+'):
-                parse_token(token, possible_x_for)
+                parse_token(token, possible_x_k_for)
     return hyb[0], remove_dup(fn_facs)
 
 
@@ -969,11 +980,11 @@ def define_xc_(ni, description, xctype='LDA', hyb=0, rsh=(0,0,0)):
         ni.rsh_coeff = lambda *args, **kwargs: rsh
         ni._xc_type = lambda *args: xctype
     else:
-        raise RuntimeError('Unknown description %s' % description)
+        raise ValueError('Unknown description %s' % description)
     return ni
 
-def define_xc(ni, description):
-    return define_xc_(copy.copy(ni), description)
+def define_xc(ni, description, xctype='LDA', hyb=0, rsh=(0,0,0)):
+    return define_xc_(copy.copy(ni), description, xctype, hyb, rsh)
 define_xc.__doc__ = define_xc_.__doc__
 
 

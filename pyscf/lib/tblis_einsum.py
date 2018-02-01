@@ -50,11 +50,14 @@ def _contract(subscripts, *tensors, **kwargs):
     '''
     sub_idx = re.split(',|->', subscripts)
     indices  = ''.join(sub_idx)
-    c_dtype = kwargs.get('dtype', numpy.result_type(*tensors))
+    a = numpy.asarray(tensors[0])
+    b = numpy.asarray(tensors[1])
+    c_dtype = kwargs.get('dtype', numpy.result_type(a, b))
     if ('...' in subscripts or
+        a.size == 0 or b.size == 0 or
         not (numpy.issubdtype(c_dtype, numpy.float) or
              numpy.issubdtype(c_dtype, numpy.complex))):
-        return numpy_einsum(subscripts, *tensors)
+        return numpy_einsum(subscripts, a, b)
 
     if '->' not in subscripts:
         # Find chararacters which appear only once in the subscripts for c_descr
@@ -68,8 +71,8 @@ def _contract(subscripts, *tensors, **kwargs):
     c_dtype = numpy.result_type(c_dtype, alpha, beta)
     alpha = numpy.asarray(alpha, dtype=c_dtype)
     beta  = numpy.asarray(beta , dtype=c_dtype)
-    a = numpy.asarray(tensors[0], dtype=c_dtype)
-    b = numpy.asarray(tensors[1], dtype=c_dtype)
+    a = numpy.asarray(a, dtype=c_dtype)
+    b = numpy.asarray(b, dtype=c_dtype)
 
     a_shape = a.shape
     b_shape = b.shape
@@ -117,7 +120,8 @@ def einsum(subscripts, *tensors, **kwargs):
         out = _contract(subscripts, *tensors, **kwargs)
     else:
         sub_idx = subscripts.split(',', 2)
-        res_idx = ''.join(set(sub_idx[0]).symmetric_difference(sub_idx[1]))
+        res_idx = ''.join(set(sub_idx[0]+sub_idx[1]).intersection(sub_idx[2]))
+        res_idx = res_idx.replace(',','')
         script0 = sub_idx[0] + ',' + sub_idx[1] + '->' + res_idx
         subscripts = res_idx + ',' + sub_idx[2]
         tensors = [_contract(script0, *tensors[:2])] + list(tensors[2:])

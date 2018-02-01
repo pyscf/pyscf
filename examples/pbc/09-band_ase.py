@@ -30,7 +30,7 @@ cell.build(None,None)
 
 mf = pbcdft.RKS(cell)
 mf.xc = 'pbe,pbe'
-print mf.scf()
+print mf.kernel()
 
 e_kn = mf.get_bands(band_kpts)[0]
 
@@ -76,7 +76,7 @@ cell.build(None,None)
 
 kmf = pbcdft.KRKS(cell, cell.make_kpts([2,2,2]))
 kmf.xc = 'lda,vwn'
-print kmf.scf()
+print kmf.kernel()
 
 e_kn = kmf.get_bands(band_kpts)[0]
 

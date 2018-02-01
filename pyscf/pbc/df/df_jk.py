@@ -15,7 +15,7 @@ import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc import tools
-from pyscf.pbc.lib.kpt_misc import is_zero, gamma_point, member
+from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, member
 
 def density_fit(mf, auxbasis=None, mesh=None, with_df=None):
     '''Generte density-fitting SCF object

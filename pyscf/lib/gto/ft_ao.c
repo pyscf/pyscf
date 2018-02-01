@@ -36,65 +36,11 @@
 #include <complex.h>
 #include "config.h"
 #include "cint.h"
+#include "gto/ft_ao.h"
 
 #define SQRTPI          1.7724538509055160272981674833411451
 #define EXPCUTOFF       100
 #define NCTRMAX         72
-
-typedef struct {
-        int *atm;
-        int *bas;
-        double *env;
-        int *shls;
-        int natm;
-        int nbas;
-
-        int i_l;
-        int j_l;
-        int k_l;
-        int l_l;
-        int nfi;  // number of cartesion components
-        int nfj;
-        int nfk;
-        int nfl;
-        int nf;  // = nfi*nfj*nfk*nfl;
-        int _padding;
-        int x_ctr[4];
-
-        int gbits;
-        int ncomp_e1; // = 1 if spin free, = 4 when spin included, it
-        int ncomp_e2; // corresponds to POSX,POSY,POSZ,POS1, see cint_const.h
-        int ncomp_tensor; // e.g. = 3 for gradients
-
-        /* values may diff based on the g0_2d4d algorithm */
-        int li_ceil; // power of x, == i_l if nabla is involved, otherwise == i_l
-        int lj_ceil;
-        int lk_ceil;
-        int ll_ceil;
-        int g_stride_i; // nrys_roots * shift of (i++,k,l,j)
-        int g_stride_k; // nrys_roots * shift of (i,k++,l,j)
-        int g_stride_l; // nrys_roots * shift of (i,k,l++,j)
-        int g_stride_j; // nrys_roots * shift of (i,k,l,j++)
-        int nrys_roots;
-        int g_size;  // ref to cint2e.c g = malloc(sizeof(double)*g_size)
-
-        int g2d_ijmax;
-        int g2d_klmax;
-        double common_factor;
-        double _padding1;
-        double rirj[3]; // diff by sign in different g0_2d4d algorithm
-        double rkrl[3];
-        double *rx_in_rijrx;
-        double *rx_in_rklrx;
-
-        double *ri;
-        double *rj;
-        double *rk;
-        double *rl;
-
-// Other definitions in CINTEnvVars are different in libcint and qcint.
-// They should not used in this function.
-} CINTEnvVars;
 
 
 void CINTg1e_index_xyz(int *idx, const CINTEnvVars *envs);
@@ -104,11 +50,10 @@ int CINTinit_int1e_EnvVars(CINTEnvVars *envs, const int *ng, const int *shls,
                            const int *atm, const int natm,
                            const int *bas, const int nbas, const double *env);
 
-static void init1e_envs(CINTEnvVars *envs, const int *shls,
+void GTO_ft_init1e_envs(CINTEnvVars *envs, const int *ng, const int *shls,
                         const int *atm, const int natm,
                         const int *bas, const int nbas, const double *env)
 {
-        int ng[] = {0, 0, 0, 0, 0, 0, 0, 0};
         CINTinit_int1e_EnvVars(envs, ng, shls, atm, natm, bas, nbas, env);
 
         int dli, dlj;
@@ -263,7 +208,7 @@ static const int _DOWN_XYZ_ORDER[] = {
 #define DEC1_XYZ_ORDER(l,m)     _DOWN_XYZ_ORDER[_CUM_LEN_CART[l-1]+m]
 
 static int vrr1d(double complex *g, double *rijri, double aij,
-                 double *Gv, int topl, int nGv)
+                 double *Gv, int topl, size_t NGv)
 {
         int cumxyz = 1;
         if (topl == 0) {
@@ -271,50 +216,50 @@ static int vrr1d(double complex *g, double *rijri, double aij,
         }
 
         double *kx = Gv;
-        double *ky = kx + nGv;
-        double *kz = ky + nGv;
+        double *ky = kx + NGv;
+        double *kz = ky + NGv;
         int i, n, m, l;
         double a2;
         double complex *p0, *p1, *p2, *dec1, *dec2;
-        double *ka2 = malloc(sizeof(double) * nGv*3);
+        double *ka2 = malloc(sizeof(double) * NGv*3);
         double *kxa2 = ka2;
-        double *kya2 = kxa2 + nGv;
-        double *kza2 = kya2 + nGv;
+        double *kya2 = kxa2 + NGv;
+        double *kza2 = kya2 + NGv;
         a2 = .5 / aij;
-        for (n = 0; n < nGv; n++) {
+        for (n = 0; n < NGv; n++) {
                 kxa2[n] = kx[n] * a2;
                 kya2[n] = ky[n] * a2;
                 kza2[n] = kz[n] * a2;
         }
 
-        p0 = g + nGv;
-        for (n = 0; n < nGv; n++) {
+        p0 = g + NGv;
+        for (n = 0; n < NGv; n++) {
                 p0[      n] = (rijri[0] - kxa2[n]*_Complex_I) * g[n];
-                p0[nGv  +n] = (rijri[1] - kya2[n]*_Complex_I) * g[n];
-                p0[nGv*2+n] = (rijri[2] - kza2[n]*_Complex_I) * g[n];
+                p0[NGv  +n] = (rijri[1] - kya2[n]*_Complex_I) * g[n];
+                p0[NGv*2+n] = (rijri[2] - kza2[n]*_Complex_I) * g[n];
         }
         cumxyz += 3;
 
         for (l = 1; l < topl; l++) {
-                p0 = g + cumxyz * nGv;
-                dec1 = p0   - _LEN_CART[l  ] * nGv;
-                dec2 = dec1 - _LEN_CART[l-1] * nGv;
+                p0 = g + cumxyz * NGv;
+                dec1 = p0   - _LEN_CART[l  ] * NGv;
+                dec2 = dec1 - _LEN_CART[l-1] * NGv;
                 for (i = 0; i < _LEN_CART[l+1]; i++) {
                         m = DEC1_XYZ(l+1,i);
-                        kxa2 = ka2 + m * nGv;
+                        kxa2 = ka2 + m * NGv;
                         a2 = .5/aij * DEC1_XYZ_ORDER(l+1,i);
-                        p1 = dec1 + ADDR_IF_L_DEC1(l+1,i) * nGv;
-                        p2 = dec2 + ADDR_IF_L_DEC2(l+1,i) * nGv;
+                        p1 = dec1 + ADDR_IF_L_DEC1(l+1,i) * NGv;
+                        p2 = dec2 + ADDR_IF_L_DEC2(l+1,i) * NGv;
                         if (ADDR_IF_L_DEC2(l+1,i) < 0) {
-                                for (n = 0; n < nGv; n++) {
+                                for (n = 0; n < NGv; n++) {
                                         p0[n] = (rijri[m]-kxa2[n]*_Complex_I)*p1[n];
                                 }
                         } else {
-                                for (n = 0; n < nGv; n++) {
+                                for (n = 0; n < NGv; n++) {
                                         p0[n] = a2*p2[n] + (rijri[m]-kxa2[n]*_Complex_I)*p1[n];
                                 }
                         }
-                        p0 += nGv;
+                        p0 += NGv;
                 }
                 cumxyz += _LEN_CART[l+1];
         }
@@ -328,58 +273,58 @@ static int vrr1d(double complex *g, double *rijri, double aij,
  *  gs + X*fs -> fp
  */
 static void vrr2d_ket_inc1(double complex *out, const double complex *g,
-                           double *rirj, int li, int lj, int nGv)
+                           double *rirj, int li, int lj, size_t NGv)
 {
         if (lj == 0) {
-                memcpy(out, g, sizeof(double complex)*_LEN_CART[li]*nGv);
+                memcpy(out, g, sizeof(double complex)*_LEN_CART[li]*NGv);
                 return;
         }
         const int row_10 = _LEN_CART[li+1];
         const int row_00 = _LEN_CART[li  ];
         const int col_00 = _LEN_CART[lj-1];
         const double complex *g00 = g;
-        const double complex *g10 = g + row_00*col_00*nGv;
+        const double complex *g10 = g + row_00*col_00*NGv;
         int i, j, n;
         const double complex *p00, *p10;
         double complex *p01 = out;
 
         for (j = STARTX_IF_L_DEC1(lj); j < _LEN_CART[lj-1]; j++) {
         for (i = 0; i < row_00; i++) {
-                p00 = g00 + (j*row_00+i) * nGv;
-                p10 = g10 + (j*row_10+WHEREX_IF_L_INC1(i)) * nGv;
-                for (n = 0; n < nGv; n++) {
+                p00 = g00 + (j*row_00+i) * NGv;
+                p10 = g10 + (j*row_10+WHEREX_IF_L_INC1(i)) * NGv;
+                for (n = 0; n < NGv; n++) {
                         p01[n] = p10[n] + rirj[0] * p00[n];
                 }
-                p01 += nGv;
+                p01 += NGv;
         } }
         for (j = STARTY_IF_L_DEC1(lj); j < _LEN_CART[lj-1]; j++) {
         for (i = 0; i < row_00; i++) {
-                p00 = g00 + (j*row_00+i) * nGv;
-                p10 = g10 + (j*row_10+WHEREY_IF_L_INC1(i)) * nGv;
-                for (n = 0; n < nGv; n++) {
+                p00 = g00 + (j*row_00+i) * NGv;
+                p10 = g10 + (j*row_10+WHEREY_IF_L_INC1(i)) * NGv;
+                for (n = 0; n < NGv; n++) {
                         p01[n] = p10[n] + rirj[1] * p00[n];
                 }
-                p01 += nGv;
+                p01 += NGv;
         } }
         j = STARTZ_IF_L_DEC1(lj);
         if (j < _LEN_CART[lj-1]) {
         for (i = 0; i < row_00; i++) {
-                p00 = g00 + (j*row_00+i) * nGv;
-                p10 = g10 + (j*row_10+WHEREZ_IF_L_INC1(i)) * nGv;
-                for (n = 0; n < nGv; n++) {
+                p00 = g00 + (j*row_00+i) * NGv;
+                p10 = g10 + (j*row_10+WHEREZ_IF_L_INC1(i)) * NGv;
+                for (n = 0; n < NGv; n++) {
                         p01[n] = p10[n] + rirj[2] * p00[n];
                 }
-                p01 += nGv;
+                p01 += NGv;
         } }
 }
 /*
  * transpose i, j when store in out
  */
 static void vrr2d_inc1_swapij(double complex *out, const double complex *g,
-                              double *rirj, int li, int lj, int nGv)
+                              double *rirj, int li, int lj, size_t NGv)
 {
         if (lj == 0) {
-                memcpy(out, g, sizeof(double complex)*_LEN_CART[li]*nGv);
+                memcpy(out, g, sizeof(double complex)*_LEN_CART[li]*NGv);
                 return;
         }
         const int row_01 = _LEN_CART[lj];
@@ -387,40 +332,40 @@ static void vrr2d_inc1_swapij(double complex *out, const double complex *g,
         const int row_00 = _LEN_CART[li  ];
         const int col_00 = _LEN_CART[lj-1];
         const double complex *g00 = g;
-        const double complex *g10 = g + row_00*col_00*nGv;
+        const double complex *g10 = g + row_00*col_00*NGv;
         int i, j, n;
         const double complex *p00, *p10;
         double complex *p01 = out;
 
         for (j = STARTX_IF_L_DEC1(lj); j < _LEN_CART[lj-1]; j++) {
                 for (i = 0; i < row_00; i++) {
-                        p00 = g00 + (j*row_00+i) * nGv;
-                        p10 = g10 + (j*row_10+WHEREX_IF_L_INC1(i)) * nGv;
-                        p01 = out + i*row_01 * nGv;
-                        for (n = 0; n < nGv; n++) {
+                        p00 = g00 + (j*row_00+i) * NGv;
+                        p10 = g10 + (j*row_10+WHEREX_IF_L_INC1(i)) * NGv;
+                        p01 = out + i*row_01 * NGv;
+                        for (n = 0; n < NGv; n++) {
                                 p01[n] = p10[n] + rirj[0] * p00[n];
                         }
                 }
-                out += nGv;
+                out += NGv;
         }
         for (j = STARTY_IF_L_DEC1(lj); j < _LEN_CART[lj-1]; j++) {
                 for (i = 0; i < row_00; i++) {
-                        p00 = g00 + (j*row_00+i) * nGv;
-                        p10 = g10 + (j*row_10+WHEREY_IF_L_INC1(i)) * nGv;
-                        p01 = out + i*row_01 * nGv;
-                        for (n = 0; n < nGv; n++) {
+                        p00 = g00 + (j*row_00+i) * NGv;
+                        p10 = g10 + (j*row_10+WHEREY_IF_L_INC1(i)) * NGv;
+                        p01 = out + i*row_01 * NGv;
+                        for (n = 0; n < NGv; n++) {
                                 p01[n] = p10[n] + rirj[1] * p00[n];
                         }
                 }
-                out += nGv;
+                out += NGv;
         }
         j = STARTZ_IF_L_DEC1(lj);
         if (j < _LEN_CART[lj-1]) {
                 for (i = 0; i < row_00; i++) {
-                        p00 = g00 + (j*row_00+i) * nGv;
-                        p10 = g10 + (j*row_10+WHEREZ_IF_L_INC1(i)) * nGv;
-                        p01 = out + i*row_01 * nGv;
-                        for (n = 0; n < nGv; n++) {
+                        p00 = g00 + (j*row_00+i) * NGv;
+                        p10 = g10 + (j*row_10+WHEREZ_IF_L_INC1(i)) * NGv;
+                        p01 = out + i*row_01 * NGv;
+                        for (n = 0; n < NGv; n++) {
                                 p01[n] = p10[n] + rirj[2] * p00[n];
                         }
                 }
@@ -428,7 +373,7 @@ static void vrr2d_inc1_swapij(double complex *out, const double complex *g,
 }
 /* (li+lj,0) => (li,lj) */
 static void vrr2d(double complex *out, double complex *g,
-                  double complex *gbuf2, CINTEnvVars *envs, int nGv)
+                  double complex *gbuf2, CINTEnvVars *envs, size_t NGv)
 {
         const int li = envs->li_ceil;
         const int lj = envs->lj_ceil;
@@ -452,20 +397,20 @@ static void vrr2d(double complex *out, double complex *g,
                 pg00 = g00;
                 pg01 = g01;
                 for (i = li; i <= nmax-j; i++) {
-                        vrr2d_ket_inc1(pg01, pg00, rirj, i, j, nGv);
+                        vrr2d_ket_inc1(pg01, pg00, rirj, i, j, NGv);
                         row_01 = _LEN_CART[i];
                         col_01 = _LEN_CART[j];
                         row_00 = _LEN_CART[i  ];
                         col_00 = _LEN_CART[j-1];
-                        pg00 += row_00*col_00 * nGv;
-                        pg01 += row_01*col_01 * nGv;
+                        pg00 += row_00*col_00 * NGv;
+                        pg01 += row_01*col_01 * NGv;
                 }
         }
-        vrr2d_ket_inc1(out, g01, rirj, li, lj, nGv);
+        vrr2d_ket_inc1(out, g01, rirj, li, lj, NGv);
 }
 /* (0,li+lj) => (li,lj) */
 static void hrr2d(double complex *out, double complex *g,
-                  double complex *gbuf2, CINTEnvVars *envs, int nGv)
+                  double complex *gbuf2, CINTEnvVars *envs, size_t NGv)
 {
         const int li = envs->li_ceil;
         const int lj = envs->lj_ceil;
@@ -489,16 +434,16 @@ static void hrr2d(double complex *out, double complex *g,
                 pg00 = g00;
                 pg01 = g01;
                 for (j = lj; j <= nmax-i; j++) {
-                        vrr2d_ket_inc1(pg01, pg00, rjri, j, i, nGv);
+                        vrr2d_ket_inc1(pg01, pg00, rjri, j, i, NGv);
                         row_01 = _LEN_CART[j];
                         col_01 = _LEN_CART[i];
                         row_00 = _LEN_CART[j  ];
                         col_00 = _LEN_CART[i-1];
-                        pg00 += row_00*col_00 * nGv;
-                        pg01 += row_01*col_01 * nGv;
+                        pg00 += row_00*col_00 * NGv;
+                        pg01 += row_01*col_01 * NGv;
                 }
         }
-        vrr2d_inc1_swapij(out, g01, rjri, lj, li, nGv);
+        vrr2d_inc1_swapij(out, g01, rjri, lj, li, NGv);
 }
 
 /*
@@ -507,7 +452,7 @@ static void hrr2d(double complex *out, double complex *g,
 static void aopair_rr_igtj_early(double complex *g, double ai, double aj,
                                  CINTEnvVars *envs, void (*eval_gz)(),
                                  double complex fac, double *Gv, double *b,
-                                 int *gxyz, int *gs, int nGv)
+                                 int *gxyz, int *gs, size_t NGv)
 {
         const int topl = envs->li_ceil + envs->lj_ceil;
         const double aij = ai + aj;
@@ -522,13 +467,13 @@ static void aopair_rr_igtj_early(double complex *g, double ai, double aj,
         rijri[1] = rij[1] - ri[1];
         rijri[2] = rij[2] - ri[2];
 
-        (*eval_gz)(g, aij, rij, fac, Gv, b, gxyz, gs, nGv);
-        vrr1d(g, rijri, aij, Gv, topl, nGv);
+        (*eval_gz)(g, aij, rij, fac, Gv, b, gxyz, gs, NGv);
+        vrr1d(g, rijri, aij, Gv, topl, NGv);
 }
 static void aopair_rr_iltj_early(double complex *g, double ai, double aj,
                                  CINTEnvVars *envs, void (*eval_gz)(),
                                  double complex fac, double *Gv, double *b,
-                                 int *gxyz, int *gs, int nGv)
+                                 int *gxyz, int *gs, size_t NGv)
 {
         const int topl = envs->li_ceil + envs->lj_ceil;
         const double aij = ai + aj;
@@ -543,19 +488,18 @@ static void aopair_rr_iltj_early(double complex *g, double ai, double aj,
         rijrj[1] = rij[1] - rj[1];
         rijrj[2] = rij[2] - rj[2];
 
-        (*eval_gz)(g, aij, rij, fac, Gv, b, gxyz, gs, nGv);
-        vrr1d(g, rijrj, aij, Gv, topl, nGv);
+        (*eval_gz)(g, aij, rij, fac, Gv, b, gxyz, gs, NGv);
+        vrr1d(g, rijrj, aij, Gv, topl, NGv);
 }
 
 static void aopair_rr_igtj_lazy(double complex *g, double ai, double aj,
                                 CINTEnvVars *envs, void (*eval_gz)(),
                                 double complex fac, double *Gv, double *b,
-                                int *gxyz, int *gs, int nGv)
+                                int *gxyz, int *gs, size_t NGv)
 {
         const int nmax = envs->li_ceil + envs->lj_ceil;
         const int lj = envs->lj_ceil;
         const int dj = envs->g_stride_j;
-        const size_t NGv = nGv;
         const double aij = ai + aj;
         const double a2 = .5 / aij;
         const double *ri = envs->ri;
@@ -565,8 +509,8 @@ static void aopair_rr_igtj_lazy(double complex *g, double ai, double aj,
         double complex *gy = gx + envs->g_size * NGv;
         double complex *gz = gy + envs->g_size * NGv;
         double *kx = Gv;
-        double *ky = kx + nGv;
-        double *kz = ky + nGv;
+        double *ky = kx + NGv;
+        double *kz = ky + NGv;
         size_t off0, off1, off2;
         int i, j, n, ptr;
         double ia2;
@@ -581,28 +525,28 @@ static void aopair_rr_igtj_lazy(double complex *g, double ai, double aj,
         rijri[1] = rij[1] - ri[1];
         rijri[2] = rij[2] - ri[2];
 
-        for (n = 0; n < nGv; n++) {
+        for (n = 0; n < NGv; n++) {
                 gx[n] = 1;
                 gy[n] = 1;
         }
-        (*eval_gz)(gz, aij, rij, fac, Gv, b, gxyz, gs, nGv);
+        (*eval_gz)(gz, aij, rij, fac, Gv, b, gxyz, gs, NGv);
 
         if (nmax > 0) {
-                for (n = 0; n < nGv; n++) {
+                for (n = 0; n < NGv; n++) {
                         if (gz[n] != 0) {
-                                gx[nGv+n] = (rijri[0] - kx[n]*a2*_Complex_I) * gx[n];
-                                gy[nGv+n] = (rijri[1] - ky[n]*a2*_Complex_I) * gy[n];
-                                gz[nGv+n] = (rijri[2] - kz[n]*a2*_Complex_I) * gz[n];
+                                gx[NGv+n] = (rijri[0] - kx[n]*a2*_Complex_I) * gx[n];
+                                gy[NGv+n] = (rijri[1] - ky[n]*a2*_Complex_I) * gy[n];
+                                gz[NGv+n] = (rijri[2] - kz[n]*a2*_Complex_I) * gz[n];
                         }
                 }
         }
 
         for (i = 1; i < nmax; i++) {
-                off0 = (i-1) * nGv;
-                off1 =  i    * nGv;
-                off2 = (i+1) * nGv;
+                off0 = (i-1) * NGv;
+                off1 =  i    * NGv;
+                off2 = (i+1) * NGv;
                 ia2 = i * a2;
-                for (n = 0; n < nGv; n++) {
+                for (n = 0; n < NGv; n++) {
                         if (gz[n] != 0) {
                                 gx[off2+n] = ia2 * gx[off0+n] + (rijri[0] - kx[n]*a2*_Complex_I) * gx[off1+n];
                                 gy[off2+n] = ia2 * gy[off0+n] + (rijri[1] - ky[n]*a2*_Complex_I) * gy[off1+n];
@@ -617,7 +561,7 @@ static void aopair_rr_igtj_lazy(double complex *g, double ai, double aj,
                         off0 =  i    * NGv - dj * NGv;  // [i,  j-1]
                         off1 = (i+1) * NGv - dj * NGv;  // [i+1,j-1]
                         off2 =  i    * NGv;             // [i,  j  ]
-                        for (n = 0; n < nGv; n++) {
+                        for (n = 0; n < NGv; n++) {
                                 if (gz[n] != 0) {
                                         gx[off2+n] = gx[off1+n] + rirj[0] * gx[off0+n];
                                         gy[off2+n] = gy[off1+n] + rirj[1] * gy[off0+n];
@@ -630,7 +574,7 @@ static void aopair_rr_igtj_lazy(double complex *g, double ai, double aj,
 static void aopair_rr_iltj_lazy(double complex *g, double ai, double aj,
                                 CINTEnvVars *envs, void (*eval_gz)(),
                                 double complex fac, double *Gv, double *b,
-                                int *gxyz, int *gs, int nGv)
+                                int *gxyz, int *gs, size_t NGv)
 {
         const int nmax = envs->li_ceil + envs->lj_ceil;
         const int li = envs->li_ceil;
@@ -639,14 +583,13 @@ static void aopair_rr_iltj_lazy(double complex *g, double ai, double aj,
         const double a2 = .5 / aij;
         const double *ri = envs->ri;
         const double *rj = envs->rj;
-        const size_t NGv = nGv;
         double rij[3], rirj[3], rijrj[3];
         double complex *gx = g;
         double complex *gy = gx + envs->g_size * NGv;
         double complex *gz = gy + envs->g_size * NGv;
         double *kx = Gv;
-        double *ky = kx + nGv;
-        double *kz = ky + nGv;
+        double *ky = kx + NGv;
+        double *kz = ky + NGv;
         size_t off0, off1, off2;
         int i, j, n;
         double ia2;
@@ -661,15 +604,15 @@ static void aopair_rr_iltj_lazy(double complex *g, double ai, double aj,
         rijrj[1] = rij[1] - rj[1];
         rijrj[2] = rij[2] - rj[2];
 
-        for (n = 0; n < nGv; n++) {
+        for (n = 0; n < NGv; n++) {
                 gx[n] = 1;
                 gy[n] = 1;
         }
-        (*eval_gz)(gz, aij, rij, fac, Gv, b, gxyz, gs, nGv);
+        (*eval_gz)(gz, aij, rij, fac, Gv, b, gxyz, gs, NGv);
 
         if (nmax > 0) {
-                off0 = dj * nGv;
-                for (n = 0; n < nGv; n++) {
+                off0 = dj * NGv;
+                for (n = 0; n < NGv; n++) {
                         if (gz[n] != 0) {
                                 gx[off0+n] = (rijrj[0] - kx[n]*a2*_Complex_I) * gx[n];
                                 gy[off0+n] = (rijrj[1] - ky[n]*a2*_Complex_I) * gy[n];
@@ -683,7 +626,7 @@ static void aopair_rr_iltj_lazy(double complex *g, double ai, double aj,
                 off1 =  i    * dj * NGv;
                 off2 = (i+1) * dj * NGv;
                 ia2 = i * a2;
-                for (n = 0; n < nGv; n++) {
+                for (n = 0; n < NGv; n++) {
                         if (gz[n] != 0) {
                                 gx[off2+n] = ia2 * gx[off0+n] + (rijrj[0] - kx[n]*a2*_Complex_I) * gx[off1+n];
                                 gy[off2+n] = ia2 * gy[off0+n] + (rijrj[1] - ky[n]*a2*_Complex_I) * gy[off1+n];
@@ -697,7 +640,7 @@ static void aopair_rr_iltj_lazy(double complex *g, double ai, double aj,
                         off0 = (i-1) * NGv +  j    * dj * NGv;  // [i-1,j  ]
                         off1 = (i-1) * NGv + (j+1) * dj * NGv;  // [i-1,j+1]
                         off2 =  i    * NGv +  j    * dj * NGv;  // [i  ,j  ]
-                        for (n = 0; n < nGv; n++) {
+                        for (n = 0; n < NGv; n++) {
                                 if (gz[n] != 0) {
                                         gx[off2+n] = gx[off1+n] + rirj[0] * gx[off0+n];
                                         gy[off2+n] = gy[off1+n] + rirj[1] * gy[off0+n];
@@ -709,10 +652,9 @@ static void aopair_rr_iltj_lazy(double complex *g, double ai, double aj,
 }
 
 static void inner_prod(double complex *g, double complex *gout,
-                       const int *idx, const CINTEnvVars *envs, int nGv,
-                       int empty)
+                       int *idx, const CINTEnvVars *envs,
+                       double *Gv, size_t NGv, int empty)
 {
-        const size_t NGv = nGv;
         int ix, iy, iz, n, k;
         double complex *gz = g + envs->g_size * NGv * 2;
         if (empty) {
@@ -742,11 +684,10 @@ static void inner_prod(double complex *g, double complex *gout,
         }
 }
 
-static void prim_to_ctr(double complex *gc, const size_t nf, const double complex *gp,
+static void prim_to_ctr(double complex *gc, const size_t nf, double complex *gp,
                         const int nprim, const int nctr, const double *coeff,
                         int empty)
 {
-        double complex *pgc = gc;
         size_t n, i;
         double c;
 
@@ -754,20 +695,37 @@ static void prim_to_ctr(double complex *gc, const size_t nf, const double comple
                 for (n = 0; n < nctr; n++) {
                         c = coeff[nprim*n];
                         for (i = 0; i < nf; i++) {
-                                pgc[i] = gp[i] * c;
+                                gc[i] = gp[i] * c;
                         }
-                        pgc += nf;
+                        gc += nf;
                 }
         } else {
                 for (n = 0; n < nctr; n++) {
                         c = coeff[nprim*n];
                         if (c != 0) {
                                 for (i = 0; i < nf; i++) {
-                                        pgc[i] += gp[i] * c;
+                                        gc[i] += gp[i] * c;
                                 }
                         }
-                        pgc += nf;
+                        gc += nf;
                 }
+        }
+}
+
+static void transpose(double complex *out, double complex *in,
+                      int nf, int comp, size_t NGv)
+{
+        size_t n, k, ic;
+        double complex *pin;
+
+        for (ic = 0; ic < comp; ic++) {
+                for (n = 0; n < nf; n++) {
+                        pin = in + (n*comp+ic) * NGv;
+                        for (k = 0; k < NGv; k++) {
+                                out[n*NGv+k] = pin[k];
+                        }
+                }
+                out += nf * NGv;
         }
 }
 
@@ -781,7 +739,7 @@ static const int _GBUFSIZE[] = {
 
 int GTO_aopair_early_contract(double complex *out, CINTEnvVars *envs,
                               void (*eval_gz)(), double complex fac,
-                              double *Gv, double *b, int *gxyz, int *gs, int nGv)
+                              double *Gv, double *b, int *gxyz, int *gs, size_t NGv)
 {
         const int *shls  = envs->shls;
         const int *bas = envs->bas;
@@ -807,7 +765,6 @@ int GTO_aopair_early_contract(double complex *out, CINTEnvVars *envs,
         int empty[2] = {1, 1};
         int *jempty = empty + 0;
         int *iempty = empty + 1;
-        const size_t NGv = nGv;
         const size_t len1 = bufsize(i_l,j_l) * NGv;
         const size_t leni = len1 * i_ctr;
         const size_t lenj = len1 * i_ctr * j_ctr;
@@ -856,7 +813,7 @@ int GTO_aopair_early_contract(double complex *out, CINTEnvVars *envs,
                         dij = exp(-eij) / (aij * sqrt(aij));
                         fac1i = fac1j * dij;
                         (*aopair_rr)(g, ai[ip], aj[jp], envs, eval_gz,
-                                     fac*fac1i, Gv, b, gxyz, gs, nGv);
+                                     fac*fac1i, Gv, b, gxyz, gs, NGv);
 
                         prim_to_ctr(gctri, len_g1d*NGv, g1d+offset_g1d*NGv,
                                     i_prim, i_ctr, ci+ip, *iempty);
@@ -875,9 +832,9 @@ int GTO_aopair_early_contract(double complex *out, CINTEnvVars *envs,
                 g1d = gctrj;
                 for (n = 0; n < i_ctr*j_ctr; n++) {
                         if (i_l >= j_l) {
-                                vrr2d(out+n*nf*NGv, g1d, gctrj+lenj, envs, nGv);
+                                vrr2d(out+n*nf*NGv, g1d, gctrj+lenj, envs, NGv);
                         } else {
-                                hrr2d(out+n*nf*NGv, g1d, gctrj+lenj, envs, nGv);
+                                hrr2d(out+n*nf*NGv, g1d, gctrj+lenj, envs, NGv);
                         }
                         g1d += len_g1d * NGv;
                 }
@@ -889,7 +846,7 @@ int GTO_aopair_early_contract(double complex *out, CINTEnvVars *envs,
 
 int GTO_aopair_lazy_contract(double complex *gctr, CINTEnvVars *envs,
                              void (*eval_gz)(), double complex fac,
-                             double *Gv, double *b, int *gxyz, int *gs,int nGv)
+                             double *Gv, double *b, int *gxyz, int *gs, size_t NGv)
 {
         const int *shls  = envs->shls;
         const int *bas = envs->bas;
@@ -902,6 +859,7 @@ int GTO_aopair_lazy_contract(double complex *gctr, CINTEnvVars *envs,
         const int j_ctr = envs->x_ctr[1];
         const int i_prim = bas(NPRIM_OF, i_sh);
         const int j_prim = bas(NPRIM_OF, j_sh);
+        const int n_comp = envs->ncomp_e1 * envs->ncomp_tensor;
         const int nf = envs->nf;
         const double *ri = envs->ri;
         const double *rj = envs->rj;
@@ -916,16 +874,25 @@ int GTO_aopair_lazy_contract(double complex *gctr, CINTEnvVars *envs,
         int *jempty = empty + 0;
         int *iempty = empty + 1;
         int *gempty = empty + 2;
-        const size_t NGv = nGv;
-        const int len1 = envs->g_size * 3 * NGv;
-        const int leng = nf * NGv;
-        const int leni = nf * i_ctr * NGv;
-        double complex *g = malloc(sizeof(double complex) * (len1+leng+leni));
+        const size_t len1 = envs->g_size * 3 * (1<<envs->gbits) * NGv;
+        const size_t leng = nf * n_comp * NGv;
+        const size_t leni = nf * i_ctr * n_comp * NGv;
+        size_t lenj = 0;
+        if (n_comp > 1) {
+                lenj = nf * i_ctr * j_ctr * n_comp * NGv;
+        }
+        double complex *g = malloc(sizeof(double complex) * (len1+leng+leni+lenj));
         double complex *g1 = g + len1;
-        double complex *gout, *gctri;
+        double complex *gout, *gctri, *gctrj;
 
+        if (n_comp == 1) {
+                gctrj = gctr;
+        } else {
+                gctrj = g1;
+                g1 += lenj;
+        }
         if (j_ctr == 1) {
-                gctri = gctr;
+                gctri = gctrj;
                 iempty = jempty;
         } else {
                 gctri = g1;
@@ -953,6 +920,7 @@ int GTO_aopair_lazy_contract(double complex *gctr, CINTEnvVars *envs,
 
         *jempty = 1;
         for (jp = 0; jp < j_prim; jp++) {
+                envs->aj = aj[jp];
                 if (j_ctr == 1) {
                         fac1j = fac1 * cj[jp];
                 } else {
@@ -960,6 +928,7 @@ int GTO_aopair_lazy_contract(double complex *gctr, CINTEnvVars *envs,
                         *iempty = 1;
                 }
                 for (ip = 0; ip < i_prim; ip++) {
+                        envs->ai = ai[ip];
                         aij = ai[ip] + aj[jp];
                         eij = (ai[ip] * aj[jp] / aij) * rrij;
                         if (eij > EXPCUTOFF) {
@@ -973,22 +942,26 @@ int GTO_aopair_lazy_contract(double complex *gctr, CINTEnvVars *envs,
                                 fac1i = fac1j * dij;
                         }
                         (*aopair_rr)(g, ai[ip], aj[jp], envs, eval_gz,
-                                     fac*fac1i, Gv, b, gxyz, gs, nGv);
+                                     fac*fac1i, Gv, b, gxyz, gs, NGv);
 
-                        inner_prod(g, gout, idx, envs, nGv, *gempty);
+                        (*envs->f_gout)(g, gout, idx, envs, Gv, NGv, *gempty);
                         if (i_ctr > 1) {
-                                prim_to_ctr(gctri, nf*NGv, gout, i_prim,
-                                            i_ctr, ci+ip, *iempty);
+                                prim_to_ctr(gctri, nf*n_comp*NGv, gout,
+                                            i_prim, i_ctr, ci+ip, *iempty);
                         }
                         *iempty = 0;
                 }
                 if (!*iempty) {
                         if (j_ctr > 1) {
-                                prim_to_ctr(gctr, i_ctr*nf*NGv, gctri, j_prim,
-                                            j_ctr, cj+jp, *jempty);
+                                prim_to_ctr(gctrj, i_ctr*nf*n_comp*NGv, gctri,
+                                            j_prim, j_ctr, cj+jp, *jempty);
                         }
                         *jempty = 0;
                 }
+        }
+
+        if (n_comp > 1 && !*jempty) {
+                transpose(gctr, gctrj, nf*i_ctr*j_ctr, n_comp, NGv);
         }
         free(g);
         free(idx);
@@ -998,15 +971,15 @@ int GTO_aopair_lazy_contract(double complex *gctr, CINTEnvVars *envs,
 
 void GTO_Gv_general(double complex *out, double aij, double *rij,
                     double complex fac, double *Gv, double *b,
-                    int *gxyz, int *gs, int nGv)
+                    int *gxyz, int *gs, size_t NGv)
 {
         double *kx = Gv;
-        double *ky = kx + nGv;
-        double *kz = ky + nGv;
+        double *ky = kx + NGv;
+        double *kz = ky + NGv;
         const double cutoff = EXPCUTOFF * aij * 4;
         int n;
         double kR, kk;
-        for (n = 0; n < nGv; n++) {
+        for (n = 0; n < NGv; n++) {
                 kk = kx[n] * kx[n] + ky[n] * ky[n] + kz[n] * kz[n];
                 if (kk < cutoff) {
                         kR = kx[n] * rij[0] + ky[n] * rij[1] + kz[n] * rij[2];
@@ -1024,11 +997,11 @@ void GTO_Gv_general(double complex *out, double aij, double *rij,
  * out = fac * exp(-.25 * kk / aij) * (cos(kr) - sin(kr) * _Complex_I);
  *
  * b: the first 9 elements are 2\pi*inv(a^T), then 3 elements for k_{ij},
- * followed by 3*nGv floats for Gbase
+ * followed by 3*NGv floats for Gbase
  */
 void GTO_Gv_orth(double complex *out, double aij, double *rij,
                  double complex fac, double *Gv, double *b,
-                 int *gxyz, int *gs, int nGv)
+                 int *gxyz, int *gs, size_t NGv)
 {
         const int nx = gs[0];
         const int ny = gs[1];
@@ -1047,8 +1020,8 @@ void GTO_Gv_orth(double complex *out, double aij, double *rij,
         double *Gzbase = Gybase + ny;
 
         double *kx = Gv;
-        double *ky = kx + nGv;
-        double *kz = ky + nGv;
+        double *ky = kx + NGv;
+        double *kz = ky + NGv;
         double complex zbuf[nx+ny+nz];
         double complex *csx = zbuf;
         double complex *csy = csx + nx;
@@ -1058,8 +1031,8 @@ void GTO_Gv_orth(double complex *out, double aij, double *rij,
         double *kky = kkx + nx;
         double *kkz = kky + ny;
         int *gx = gxyz;
-        int *gy = gx + nGv;
-        int *gz = gy + nGv;
+        int *gy = gx + NGv;
+        int *gz = gy + NGv;
 
         const double cutoff = EXPCUTOFF * aij * 4;
         int n, ix, iy, iz;
@@ -1067,7 +1040,7 @@ void GTO_Gv_orth(double complex *out, double aij, double *rij,
         for (n = 0; n < nx+ny+nz; n++) {
                 kkpool[n] = -1;
         }
-        for (n = 0; n < nGv; n++) {
+        for (n = 0; n < NGv; n++) {
                 ix = gx[n];
                 iy = gy[n];
                 iz = gz[n];
@@ -1096,7 +1069,7 @@ void GTO_Gv_orth(double complex *out, double aij, double *rij,
 
 void GTO_Gv_nonorth(double complex *out, double aij, double *rij,
                     double complex fac, double *Gv, double *b,
-                    int *gxyz, int *gs, int nGv)
+                    int *gxyz, int *gs, size_t NGv)
 {
         const int nx = gs[0];
         const int ny = gs[1];
@@ -1121,8 +1094,8 @@ void GTO_Gv_nonorth(double complex *out, double aij, double *rij,
         double *Gzbase = Gybase + ny;
 
         double *kx = Gv;
-        double *ky = kx + nGv;
-        double *kz = ky + nGv;
+        double *ky = kx + NGv;
+        double *kz = ky + NGv;
         double complex zbuf[nx+ny+nz];
         double complex *csx = zbuf;
         double complex *csy = csx + nx;
@@ -1133,13 +1106,13 @@ void GTO_Gv_nonorth(double complex *out, double aij, double *rij,
         char *zempty = yempty + ny;
         memset(empty, 1, sizeof(char)*(nx+ny+nz));
         int *gx = gxyz;
-        int *gy = gx + nGv;
-        int *gz = gy + nGv;
+        int *gy = gx + NGv;
+        int *gz = gy + NGv;
 
         const double cutoff = EXPCUTOFF * aij * 4;
         int n, ix, iy, iz;
         double Gr, kk;
-        for (n = 0; n < nGv; n++) {
+        for (n = 0; n < NGv; n++) {
                 ix = gx[n];
                 iy = gy[n];
                 iz = gz[n];
@@ -1172,9 +1145,8 @@ void GTO_Gv_nonorth(double complex *out, double aij, double *rij,
 
 
 static void zcopy_ij(double complex *out, const double complex *gctr,
-                     const int mi, const int mj, const int ni, const int nGv)
+                     const int mi, const int mj, const int ni, const size_t NGv)
 {
-        const size_t NGv = nGv;
         int i, j, k;
         for (j = 0; j < mj; j++) {
                 for (i = 0; i < mi; i++) {
@@ -1187,8 +1159,8 @@ static void zcopy_ij(double complex *out, const double complex *gctr,
         }
 }
 
-static void aopair_c2s_cart(double complex *out, double complex *gctr,
-                            CINTEnvVars *envs, int *dims, int nGv)
+void GTO_ft_c2s_cart(double complex *out, double complex *gctr,
+                     int *dims, CINTEnvVars *envs, size_t NGv)
 {
         const int i_ctr = envs->x_ctr[0];
         const int j_ctr = envs->x_ctr[1];
@@ -1197,14 +1169,13 @@ static void aopair_c2s_cart(double complex *out, double complex *gctr,
         const int ni = nfi*i_ctr;
         const int nj = nfj*j_ctr;
         const int nf = envs->nf;
-        const size_t NGv = nGv;
         int ic, jc;
         double complex *pout;
 
         for (jc = 0; jc < nj; jc += nfj) {
         for (ic = 0; ic < ni; ic += nfi) {
                 pout = out + (dims[0] * jc + ic) * NGv;
-                zcopy_ij(pout, gctr, nfi, nfj, dims[0], nGv);
+                zcopy_ij(pout, gctr, nfi, nfj, dims[0], NGv);
                 gctr += nf * NGv;
         } }
 }
@@ -1213,8 +1184,8 @@ static void aopair_c2s_cart(double complex *out, double complex *gctr,
 #define C2S(sph, nket, cart, l) \
         (double complex *)CINTc2s_ket_sph((double *)(sph), nket, (double *)(cart), l)
 #define OF_CMPLX        2
-static void aopair_c2s_sph(double complex *out, double complex *gctr,
-                           CINTEnvVars *envs, int *dims, int nGv)
+void GTO_ft_c2s_sph(double complex *out, double complex *gctr,
+                    int *dims, CINTEnvVars *envs, size_t NGv)
 {
         const int i_l = envs->i_l;
         const int j_l = envs->j_l;
@@ -1227,7 +1198,6 @@ static void aopair_c2s_sph(double complex *out, double complex *gctr,
         const int nfi = envs->nfi;
         const int nf = envs->nf;
         int ic, jc, k;
-        const size_t NGv = nGv;
         const int buflen = nfi*dj;
         double complex *buf1 = malloc(sizeof(double complex) * buflen*2 * NGv);
         double complex *buf2 = buf1 + buflen * NGv;
@@ -1235,17 +1205,35 @@ static void aopair_c2s_sph(double complex *out, double complex *gctr,
 
         for (jc = 0; jc < nj; jc += dj) {
         for (ic = 0; ic < ni; ic += di) {
-                buf = C2S(buf1, nfi*nGv*OF_CMPLX, gctr, j_l);
-                pij = C2S(buf2, nGv*OF_CMPLX, buf, i_l);
-                for (k = nGv; k < dj*nGv; k+=nGv) {
-                        pout = C2S(buf2+k*di, nGv*OF_CMPLX, buf+k*nfi, i_l);
+                buf = C2S(buf1, nfi*NGv*OF_CMPLX, gctr, j_l);
+                pij = C2S(buf2, NGv*OF_CMPLX, buf, i_l);
+                for (k = NGv; k < dj*NGv; k+=NGv) {
+                        pout = C2S(buf2+k*di, NGv*OF_CMPLX, buf+k*nfi, i_l);
                 }
 
-                pout = out + (dims[0] * jc + ic) * nGv;
-                zcopy_ij(pout, pij, di, dj, dims[0], nGv);
+                pout = out + (dims[0] * jc + ic) * NGv;
+                zcopy_ij(pout, pij, di, dj, dims[0], NGv);
                 gctr += nf * NGv;
         } }
         free(buf1);
+}
+
+static void _ft_zset0(double complex *out, int *dims, int *counts,
+                      int comp, size_t NGv)
+{
+        double complex *pout;
+        int i, j, k, ic;
+        for (ic = 0; ic < comp; ic++) {
+                for (j = 0; j < counts[1]; j++) {
+                        pout = out + j * counts[0] * NGv;
+                        for (i = 0; i < counts[0]; i++) {
+                                for (k = 0; k < NGv; k++) {
+                                        pout[i*NGv+k] = 0;
+                                }
+                        }
+                }
+                out += dims[0] * dims[1] * NGv;
+        }
 }
 
 /*************************************************
@@ -1258,22 +1246,16 @@ static void aopair_c2s_sph(double complex *out, double complex *gctr,
  *
  *************************************************/
 
-int GTO_ft_ovlp_cart(double complex *out, int *shls, int *dims,
-                     int (*eval_aopair)(), void (*eval_gz)(), double complex fac,
-                     double *Gv, double *b, int *gxyz, int *gs, int nGv,
-                     int *atm, int natm, int *bas, int nbas, double *env)
+int GTO_ft_aopair_drv(double complex *out, int *dims,
+                      int (*eval_aopair)(), void (*eval_gz)(), void (*f_c2s)(),
+                      double complex fac, double *Gv, double *b, int *gxyz,
+                      int *gs, size_t NGv, CINTEnvVars *envs)
 {
-        CINTEnvVars envs;
-        init1e_envs(&envs, shls, atm, natm, bas, nbas, env);
-
-        const int i_sh = shls[0];
-        const int j_sh = shls[1];
-        const int i_ctr = bas(NCTR_OF, i_sh);
-        const int j_ctr = bas(NCTR_OF, j_sh);
-        const int i_prim = bas(NPRIM_OF, i_sh);
-        const int j_prim = bas(NPRIM_OF, j_sh);
-        size_t ntot = envs.nf * i_ctr * j_ctr * (size_t)nGv;
-        double complex *gctr = malloc(sizeof(double complex) * ntot);
+        const int i_ctr = envs->x_ctr[0];
+        const int j_ctr = envs->x_ctr[1];
+        const int n_comp = envs->ncomp_e1 * envs->ncomp_tensor;
+        const size_t nc = envs->nf * i_ctr * j_ctr * NGv;
+        double complex *gctr = malloc(sizeof(double complex) * nc * n_comp);
         if (eval_gz == NULL) {
                 eval_gz = GTO_Gv_general;
         }
@@ -1282,20 +1264,57 @@ int GTO_ft_ovlp_cart(double complex *out, int *shls, int *dims,
         }
 
         if (eval_aopair == NULL) {
+                const int *shls = envs->shls;
+                const int *bas = envs->bas;
+                const int i_sh = shls[0];
+                const int j_sh = shls[1];
+                const int i_prim = bas(NPRIM_OF, i_sh);
+                const int j_prim = bas(NPRIM_OF, j_sh);
                 if (i_prim*j_prim < i_ctr*j_ctr*3) {
                         eval_aopair = GTO_aopair_lazy_contract;
                 } else {
                         eval_aopair = GTO_aopair_early_contract;
                 }
         }
-        int has_value = (*eval_aopair)(gctr, &envs, eval_gz,
-                                       fac, Gv, b, gxyz, gs, nGv);
+        int has_value = (*eval_aopair)(gctr, envs, eval_gz,
+                                       fac, Gv, b, gxyz, gs, NGv);
+
+        int counts[4];
+        if (f_c2s == &GTO_ft_c2s_sph) {
+                counts[0] = (envs->i_l*2+1) * i_ctr;
+                counts[1] = (envs->j_l*2+1) * j_ctr;
+        } else { // f_c2s == &GTO_ft_c2s_cart
+                counts[0] = envs->nfi * i_ctr;
+                counts[1] = envs->nfj * j_ctr;
+        }
+        if (dims == NULL) {
+                dims = counts;
+        }
+        size_t nout = dims[0] * dims[1] * NGv;
+        int n;
 
         if (has_value) {
-                aopair_c2s_cart(out, gctr, &envs, dims, nGv);
+                for (n = 0; n < n_comp; n++) {
+                        (*f_c2s)(out+nout*n, gctr+nc*n, dims, envs, NGv);
+                }
+        } else {
+                _ft_zset0(out, dims, counts, n_comp, NGv);
         }
         free(gctr);
         return has_value;
+}
+
+int GTO_ft_ovlp_cart(double complex *out, int *shls, int *dims,
+                     int (*eval_aopair)(), void (*eval_gz)(), double complex fac,
+                     double *Gv, double *b, int *gxyz, int *gs, int nGv,
+                     int *atm, int natm, int *bas, int nbas, double *env)
+{
+        CINTEnvVars envs;
+        int ng[] = {0, 0, 0, 0, 0, 1, 0, 1};
+        GTO_ft_init1e_envs(&envs, ng, shls, atm, natm, bas, nbas, env);
+        envs.f_gout = &inner_prod;
+        return GTO_ft_aopair_drv(out, dims, eval_aopair, eval_gz, &GTO_ft_c2s_cart,
+                                 fac, Gv, b, gxyz, gs, nGv, &envs);
 }
 
 int GTO_ft_ovlp_sph(double complex *out, int *shls, int *dims,
@@ -1304,38 +1323,11 @@ int GTO_ft_ovlp_sph(double complex *out, int *shls, int *dims,
                     int *atm, int natm, int *bas, int nbas, double *env)
 {
         CINTEnvVars envs;
-        init1e_envs(&envs, shls, atm, natm, bas, nbas, env);
-
-        const int i_sh = shls[0];
-        const int j_sh = shls[1];
-        const int i_ctr = bas(NCTR_OF, i_sh);
-        const int j_ctr = bas(NCTR_OF, j_sh);
-        const int i_prim = bas(NPRIM_OF, i_sh);
-        const int j_prim = bas(NPRIM_OF, j_sh);
-        size_t ntot = envs.nf * i_ctr * j_ctr * (size_t)nGv;
-        double complex *gctr = malloc(sizeof(double complex) * ntot);
-        if (eval_gz == NULL) {
-                eval_gz = GTO_Gv_general;
-        }
-        if (eval_gz != GTO_Gv_general) {
-                assert(gxyz != NULL);
-        }
-
-        if (eval_aopair == NULL) {
-                if (i_prim*j_prim < i_ctr*j_ctr*3) {
-                        eval_aopair = GTO_aopair_lazy_contract;
-                } else {
-                        eval_aopair = GTO_aopair_early_contract;
-                }
-        }
-        int has_value = (*eval_aopair)(gctr, &envs, eval_gz,
-                                       fac, Gv, b, gxyz, gs, nGv);
-
-        if (has_value) {
-                aopair_c2s_sph(out, gctr, &envs, dims, nGv);
-        }
-        free(gctr);
-        return has_value;
+        int ng[] = {0, 0, 0, 0, 0, 1, 0, 1};
+        GTO_ft_init1e_envs(&envs, ng, shls, atm, natm, bas, nbas, env);
+        envs.f_gout = &inner_prod;
+        return GTO_ft_aopair_drv(out, dims, eval_aopair, eval_gz, &GTO_ft_c2s_sph,
+                                 fac, Gv, b, gxyz, gs, nGv, &envs);
 }
 
 
@@ -1343,43 +1335,48 @@ int GTO_ft_ovlp_sph(double complex *out, int *shls, int *dims,
  *
  *************************************************/
 
-static void zcopy_s2_igtj(double complex *out, double complex *in,
-                          int nGv, int ip, int di, int dj)
+static void zcopy_s2_igtj(double complex *out, double complex *in, size_t NGv,
+                          int comp, int nij, int ip, int di, int dj)
 {
         const size_t ip1 = ip + 1;
-        const size_t NGv = nGv;
-        int i, j, n;
-        double complex *pin;
-        for (i = 0; i < di; i++) {
-                for (j = 0; j < dj; j++) {
-                        pin = in  + NGv * (j*di+i);
-                        for (n = 0; n < NGv; n++) {
-                                out[j*NGv+n] = pin[n];
+        int i, j, n, ic;
+        double complex *pin, *pout;
+        for (ic = 0; ic < comp; ic++) {
+                pout = out + ic * nij * NGv;
+                for (i = 0; i < di; i++) {
+                        for (j = 0; j < dj; j++) {
+                                pin = in  + NGv * (j*di+i);
+                                for (n = 0; n < NGv; n++) {
+                                        pout[j*NGv+n] = pin[n];
+                                }
                         }
+                        pout += (ip1 + i) * NGv;
                 }
-                out += (ip1 + i) * NGv;
         }
 }
-static void zcopy_s2_ieqj(double complex *out, double complex *in,
-                          int nGv, int ip, int di, int dj)
+static void zcopy_s2_ieqj(double complex *out, double complex *in, size_t NGv,
+                          int comp, int nij, int ip, int di, int dj)
 {
         const size_t ip1 = ip + 1;
-        const size_t NGv = nGv;
-        int i, j, n;
-        double complex *pin;
-        for (i = 0; i < di; i++) {
-                for (j = 0; j <= i; j++) {
-                        pin = in  + NGv * (j*di+i);
-                        for (n = 0; n < NGv; n++) {
-                                out[j*NGv+n] = pin[n];
+        int i, j, n, ic;
+        double complex *pin, *pout;
+        for (ic = 0; ic < comp; ic++) {
+                pout = out + ic * nij * NGv;
+                for (i = 0; i < di; i++) {
+                        for (j = 0; j <= i; j++) {
+                                pin = in  + NGv * (j*di+i);
+                                for (n = 0; n < NGv; n++) {
+                                        pout[j*NGv+n] = pin[n];
+                                }
                         }
+                        pout += (ip1 + i) * NGv;
                 }
-                out += (ip1 + i) * NGv;
         }
 }
 
-void GTO_ft_fill_s1(int (*intor)(), void (*eval_gz)(), double complex *mat,
-                    int ish, int jsh, double *buf,
+void GTO_ft_fill_s1(int (*intor)(), int (*eval_aopair)(), void (*eval_gz)(),
+                    double complex *mat, int comp, int ish, int jsh,
+                    double complex *buf,
                     int *shls_slice, int *ao_loc, double complex fac,
                     double *Gv, double *b, int *gxyz, int *gs, int nGv,
                     int *atm, int natm, int *bas, int nbas, double *env)
@@ -1395,18 +1392,21 @@ void GTO_ft_fill_s1(int (*intor)(), void (*eval_gz)(), double complex *mat,
         const size_t off = ao_loc[ish] - ao_loc[ish0] + (ao_loc[jsh] - ao_loc[jsh0]) * nrow;
         int shls[2] = {ish, jsh};
         int dims[2] = {nrow, ncol};
-        (*intor)(mat+off*nGv, shls, dims, NULL, eval_gz,
+        (*intor)(mat+off*nGv, shls, dims, eval_aopair, eval_gz,
                  fac, Gv, b, gxyz, gs, nGv, atm, natm, bas, nbas, env);
 }
 
-void GTO_ft_fill_s1hermi(int (*intor)(), void (*eval_gz)(), double complex *mat,
-                         int ish, int jsh, double complex *buf,
+void GTO_ft_fill_s1hermi(int (*intor)(), int (*eval_aopair)(), void (*eval_gz)(),
+                         double complex *mat, int comp, int ish, int jsh,
+                         double complex *buf,
                          int *shls_slice, int *ao_loc, double complex fac,
                          double *Gv, double *b, int *gxyz, int *gs, int nGv,
                          int *atm, int natm, int *bas, int nbas, double *env)
 {
         const int ish0 = shls_slice[0];
+        const int ish1 = shls_slice[1];
         const int jsh0 = shls_slice[2];
+        const int jsh1 = shls_slice[3];
         ish += ish0;
         jsh += jsh0;
         const int ip = ao_loc[ish] - ao_loc[ish0];
@@ -1415,15 +1415,13 @@ void GTO_ft_fill_s1hermi(int (*intor)(), void (*eval_gz)(), double complex *mat,
                 return;
         }
 
-        const int ish1 = shls_slice[1];
-        const int jsh1 = shls_slice[3];
         const int nrow = ao_loc[ish1] - ao_loc[ish0];
         const int ncol = ao_loc[jsh1] - ao_loc[jsh0];
         const size_t off = ao_loc[ish] - ao_loc[ish0] + (ao_loc[jsh] - ao_loc[jsh0]) * nrow;
         const size_t NGv = nGv;
         int shls[2] = {ish, jsh};
         int dims[2] = {nrow, ncol};
-        (*intor)(mat+off*NGv, shls, dims, NULL, eval_gz,
+        (*intor)(mat+off*NGv, shls, dims, eval_aopair, eval_gz,
                  fac, Gv, b, gxyz, gs, nGv, atm, natm, bas, nbas, env);
 
         if (ip != jp && ish0 == jsh0 && ish1 == jsh1) {
@@ -1432,28 +1430,34 @@ void GTO_ft_fill_s1hermi(int (*intor)(), void (*eval_gz)(), double complex *mat,
                 double complex *in = mat + off * NGv;
                 double complex *out = mat + (ao_loc[jsh] - ao_loc[jsh0] +
                                              (ao_loc[ish] - ao_loc[ish0]) * nrow) * NGv;
-                int i, j, n;
+                int i, j, n, ic;
                 double complex *pout, *pin;
-                for (i = 0; i < di; i++) {
-                        for (j = 0; j < dj; j++) {
-                                pin  = in  + NGv * (j*nrow+i);
-                                pout = out + NGv * (i*nrow+j);
-                                for (n = 0; n < nGv; n++) {
-                                        pout[n] = pin[n];
+                for (ic = 0; ic < comp; ic++) {
+                        for (i = 0; i < di; i++) {
+                                for (j = 0; j < dj; j++) {
+                                        pin  = in  + NGv * (j*nrow+i);
+                                        pout = out + NGv * (i*nrow+j);
+                                        for (n = 0; n < nGv; n++) {
+                                                pout[n] = pin[n];
+                                        }
                                 }
                         }
+                        out += nrow * ncol * NGv;
                 }
         }
 }
 
-void GTO_ft_fill_s2(int (*intor)(), void (*eval_gz)(), double complex *mat,
-                    int ish, int jsh, double complex *buf,
+void GTO_ft_fill_s2(int (*intor)(), int (*eval_aopair)(), void (*eval_gz)(),
+                    double complex *mat, int comp, int ish, int jsh,
+                    double complex *buf,
                     int *shls_slice, int *ao_loc, double complex fac,
                     double *Gv, double *b, int *gxyz, int *gs, int nGv,
                     int *atm, int natm, int *bas, int nbas, double *env)
 {
         const int ish0 = shls_slice[0];
+        const int ish1 = shls_slice[1];
         const int jsh0 = shls_slice[2];
+        const int jsh1 = shls_slice[3];
         ish += ish0;
         jsh += jsh0;
         const int ip = ao_loc[ish];
@@ -1465,24 +1469,28 @@ void GTO_ft_fill_s2(int (*intor)(), void (*eval_gz)(), double complex *mat,
         const int di = ao_loc[ish+1] - ao_loc[ish];
         const int dj = ao_loc[jsh+1] - ao_loc[jsh];
         const int i0 = ao_loc[ish0];
-        const size_t off = ip * (ip + 1) / 2 - i0 * (i0 + 1) / 2 + jp;
+        const size_t off0 = i0 * (i0 + 1) / 2;
+        const size_t off = ip * (ip + 1) / 2 - off0 + jp;
+        const size_t nij = ao_loc[ish1] * (ao_loc[ish1] + 1) / 2 - off0;
+        const size_t NGv = nGv;
         int shls[2] = {ish, jsh};
         int dims[2] = {di, dj};
-        (*intor)(buf, shls, dims, NULL, eval_gz,
+        (*intor)(buf, shls, dims, eval_aopair, eval_gz,
                  fac, Gv, b, gxyz, gs, nGv, atm, natm, bas, nbas, env);
 
         if (ip != jp) {
-                zcopy_s2_igtj(mat+off*nGv, buf, nGv, ip, di, dj);
+                zcopy_s2_igtj(mat+off*NGv, buf, NGv, comp, nij, ip, di, dj);
         } else {
-                zcopy_s2_ieqj(mat+off*nGv, buf, nGv, ip, di, dj);
+                zcopy_s2_ieqj(mat+off*NGv, buf, NGv, comp, nij, ip, di, dj);
         }
 }
 
 /*
  * Fourier transform AO pairs and add to mat (inplace)
  */
-void GTO_ft_ovlp_mat(int (*intor)(), void (*eval_gz)(), void (*fill)(),
-                     double complex *mat, int *shls_slice, int *ao_loc, double phase,
+void GTO_ft_fill_drv(int (*intor)(), void (*eval_gz)(), void (*fill)(),
+                     double complex *mat, int comp,
+                     int *shls_slice, int *ao_loc, double phase,
                      double *Gv, double *b, int *gxyz, int *gs, int nGv,
                      int *atm, int natm, int *bas, int nbas, double *env)
 {
@@ -1494,17 +1502,24 @@ void GTO_ft_ovlp_mat(int (*intor)(), void (*eval_gz)(), void (*fill)(),
         const int njsh = jsh1 - jsh0;
         const double complex fac = cos(phase) + sin(phase)*_Complex_I;
 
+        int (*eval_aopair)() = NULL;
+        if (intor != &GTO_ft_ovlp_cart && intor != &GTO_ft_ovlp_sph) {
+                eval_aopair = &GTO_aopair_lazy_contract;
+        }
+
 #pragma omp parallel default(none) \
-        shared(intor, eval_gz, fill, mat, shls_slice, ao_loc, \
-               Gv, b, gxyz, gs, nGv, atm, natm, bas, nbas, env)
+        shared(intor, eval_gz, eval_aopair, fill, mat, comp, shls_slice, \
+               ao_loc, Gv, b, gxyz, gs, nGv, atm, natm, bas, nbas, env)
 {
         int i, j, ij;
-        double complex *buf = malloc(sizeof(double complex) * NCTRMAX*NCTRMAX*(size_t)nGv);
+        double complex *buf = malloc(sizeof(double complex)
+                                     * NCTRMAX*NCTRMAX*comp*(size_t)nGv);
 #pragma omp for schedule(dynamic)
         for (ij = 0; ij < nish*njsh; ij++) {
                 i = ij / njsh;
                 j = ij % njsh;
-                (*fill)(intor, eval_gz, mat, i, j, buf, shls_slice, ao_loc, fac,
+                (*fill)(intor, eval_aopair, eval_gz, mat,
+                        comp, i, j, buf, shls_slice, ao_loc, fac,
                         Gv, b, gxyz, gs, nGv, atm, natm, bas, nbas, env);
         }
         free(buf);
@@ -1516,10 +1531,11 @@ void GTO_ft_ovlp_mat(int (*intor)(), void (*eval_gz)(), void (*fill)(),
  * Given npair of shls in shls_lst, FT their AO pair value and add to
  * out (inplace)
  */
-void GTO_ft_ovlp_shls(int (*intor)(), void (*eval_gz)(), double complex *out,
-                      int npair, int *shls_lst, int *ao_loc, double phase,
-                      double *Gv, double *b, int *gxyz, int *gs, int nGv,
-                      int *atm, int natm, int *bas, int nbas, double *env)
+void GTO_ft_fill_shls_drv(int (*intor)(), void (*eval_gz)(),
+                          double complex *out, int comp,
+                          int npair, int *shls_lst, int *ao_loc, double phase,
+                          double *Gv, double *b, int *gxyz, int *gs, int nGv,
+                          int *atm, int natm, int *bas, int nbas, double *env)
 {
         int n, di, dj, ish, jsh;
         int *ijloc = malloc(sizeof(int) * npair);
@@ -1534,9 +1550,15 @@ void GTO_ft_ovlp_shls(int (*intor)(), void (*eval_gz)(), double complex *out,
         const double complex fac = cos(phase) + sin(phase)*_Complex_I;
         const size_t NGv = nGv;
 
+        int (*eval_aopair)() = NULL;
+        if (intor != &GTO_ft_ovlp_cart && intor != &GTO_ft_ovlp_sph) {
+                eval_aopair = &GTO_aopair_lazy_contract;
+        }
+
 #pragma omp parallel default(none) \
-        shared(intor, out, Gv, b, gxyz, gs, nGv, npair, shls_lst, ao_loc, \
-               eval_gz, atm, natm, bas, nbas, env, ijloc) \
+        shared(intor, eval_gz, eval_aopair, out, comp, Gv, b, gxyz, gs, \
+               nGv, npair, shls_lst, ao_loc, \
+               atm, natm, bas, nbas, env, ijloc) \
         private(n)
 {
         int ish, jsh;
@@ -1547,8 +1569,9 @@ void GTO_ft_ovlp_shls(int (*intor)(), void (*eval_gz)(), double complex *out,
                 jsh = shls_lst[n*2+1];
                 dims[0] = ao_loc[ish+1] - ao_loc[ish];
                 dims[1] = ao_loc[jsh+1] - ao_loc[jsh];
-                (*intor)(out+ijloc[n]*NGv, shls_lst+n*2, dims, NULL, eval_gz,
-                         fac, Gv, b, gxyz, gs, nGv, atm, natm, bas, nbas, env);
+                (*intor)(out+ijloc[n]*comp*NGv, shls_lst+n*2, dims,
+                         eval_aopair, eval_gz, fac, Gv, b, gxyz, gs, nGv,
+                         atm, natm, bas, nbas, env);
         }
 }
         free(ijloc);

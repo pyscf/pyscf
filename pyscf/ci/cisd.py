@@ -108,28 +108,28 @@ def contract(myci, civec, eris):
     t1 += numpy.einsum('ib,ab->ia', c1, fvv)
     t1 -= numpy.einsum('ja,ji->ia', c1, foo)
 
-    t2 += lib.einsum('iklj,klab->ijab', _cp(eris.oooo)*.5, c2)
+    t2 += lib.einsum('kilj,klab->ijab', _cp(eris.oooo)*.5, c2)
     t2 += lib.einsum('ijac,bc->ijab', c2, fvv)
     t2 -= lib.einsum('kj,kiba->jiba', foo, c2)
     t2 += numpy.einsum('ia,jb->ijab', c1, fov)
 
     unit = nocc*nvir**2 + nocc**2*nvir*3
-    max_memory = max(2000, myci.max_memory - lib.current_memory()[0])
-    blksize = min(nvir, max(ccsd.BLKMIN, int(max_memory/unit)))
+    max_memory = max(0, myci.max_memory - lib.current_memory()[0])
+    blksize = min(nvir, max(ccsd.BLKMIN, int(max_memory*.9e6/8/unit)))
     log.debug1('max_memory %d MB,  nocc,nvir = %d,%d  blksize = %d',
                max_memory, nocc, nvir, blksize)
     nvir_pair = nvir * (nvir+1) // 2
     for p0, p1 in lib.prange(0, nvir, blksize):
         eris_oVoV = _cp(_cp(eris.oovv[:,:,p0:p1]).transpose(0,2,1,3))
-        tmp = lib.einsum('jbkc,ikca->jiba', eris_oVoV, c2)
+        tmp = lib.einsum('kbjc,ikca->jiba', eris_oVoV, c2)
         t2[:,:,p0:p1] -= tmp*.5
         t2[:,:,p0:p1] -= tmp.transpose(1,0,2,3)
         tmp = None
 
         eris_ovvo = _cp(eris.ovvo[:,p0:p1])
         t2[:,:,p0:p1] += eris_ovvo.transpose(0,3,1,2) * (c0*.5)
-        t1[:,p0:p1] += numpy.einsum('jb,iabj->ia', c1, eris_ovvo) * 2
-        t1[:,p0:p1] -= numpy.einsum('jb,iajb->ia', c1, eris_oVoV)
+        t1 += numpy.einsum('ia,iabj->jb', c1[:,p0:p1], eris_ovvo) * 2
+        t1[:,p0:p1] -= numpy.einsum('ib,iajb->ja', c1, eris_oVoV)
 
         ovov = -.5 * eris_oVoV
         ovov += eris_ovvo.transpose(3,1,0,2)
@@ -140,17 +140,16 @@ def contract(myci, civec, eris):
             t2[:,j] += lib.einsum('ckb,ckia->iab', ovov[j], theta)
         tmp = ovov = None
 
-        t1[:,p0:p1] += numpy.einsum('aijb,jb->ia', theta, fov)
+        t1 += numpy.einsum('aijb,ia->jb', theta, fov[:,p0:p1])
 
         eris_ovoo = _cp(eris.ovoo[:,p0:p1])
         t1 -= lib.einsum('bjka,jbki->ia', theta, eris_ovoo)
-        t2[:,:,p0:p1] -= lib.einsum('jbik,ka->jiba', eris_ovoo, c1)
+        t2[:,:,p0:p1] -= lib.einsum('jbik,ka->jiba', eris_ovoo.conj(), c1)
         eris_vooo = None
 
-        eris_ovvv = _cp(eris.ovvv[:,p0:p1]).reshape(-1,nvir_pair)
-        eris_ovvv = lib.unpack_tril(eris_ovvv).reshape(nocc,p1-p0,nvir,nvir)
+        eris_ovvv = eris.get_ovvv(slice(None), slice(p0,p1)).conj()
         t1 += lib.einsum('cjib,jcba->ia', theta, eris_ovvv)
-        t2[:,:,p0:p1] += lib.einsum('iabc,jc->ijab', eris_ovvv, c1)
+        t2[:,:,p0:p1] += lib.einsum('iacb,jc->ijab', eris_ovvv, c1)
         tmp = eris_ovvv = None
 
     #:t2 + t2.transpose(1,0,3,2)
@@ -271,16 +270,17 @@ def make_rdm2(myci, civec=None, nmo=None, nocc=None):
 
 def _gamma1_intermediates(myci, civec, nmo, nocc):
     c0, c1, c2 = myci.cisdvec_to_amplitudes(civec, nmo, nocc)
-    dov = c0*c1
-    dov += numpy.einsum('jb,ijab->ia', c1, c2) * 2
-    dov -= numpy.einsum('jb,ijba->ia', c1, c2)
+    dvo = c0.conj() * c1.T
+    dvo += numpy.einsum('jb,ijab->ai', c1.conj(), c2) * 2
+    dvo -= numpy.einsum('jb,ijba->ai', c1.conj(), c2)
+    dov = dvo.T.conj()
 
     theta = c2*2 - c2.transpose(0,1,3,2)
-    doo  =-numpy.einsum('ia,ka->ik', c1, c1)
-    doo -= lib.einsum('ijab,ikab->jk', theta, c2)
-    dvv  = numpy.einsum('ia,ic->ca', c1, c1)
-    dvv += lib.einsum('ijab,ijac->cb', theta, c2)
-    return doo, dov, dov.T, dvv
+    doo  =-numpy.einsum('ia,ka->ik', c1.conj(), c1)
+    doo -= lib.einsum('ijab,ikab->jk', c2.conj(), theta)
+    dvv  = numpy.einsum('ia,ic->ac', c1, c1.conj())
+    dvv += lib.einsum('ijab,ijac->bc', theta, c2.conj())
+    return doo, dov, dvo, dvv
 
 def _gamma2_intermediates(myci, civec, nmo, nocc):
     f = lib.H5TmpFile()
@@ -297,13 +297,14 @@ def _gamma2_outcore(myci, civec, nmo, nocc, h5fobj, compress_vvvv=False):
     nvir_pair = nvir * (nvir+1) // 2
     c0, c1, c2 = myci.cisdvec_to_amplitudes(civec, nmo, nocc)
 
-    h5fobj['dovov'] = 2*c0*c2.transpose(0,2,1,3) - c0*c2.transpose(1,2,0,3)
+    h5fobj['dovov'] = (2*c0*c2.conj().transpose(0,2,1,3) -
+                       c0*c2.conj().transpose(1,2,0,3))
 
-    doooo = lib.einsum('ijab,klab->ijkl', c2, c2)
+    doooo = lib.einsum('ijab,klab->ijkl', c2.conj(), c2)
     h5fobj['doooo'] = doooo.transpose(0,2,1,3) - doooo.transpose(1,2,0,3)*.5
     doooo = None
 
-    dooov =-numpy.einsum('ia,klac->klic', c1*2, c2)
+    dooov =-numpy.einsum('ia,klac->klic', c1*2, c2.conj())
     h5fobj['dooov'] = dooov.transpose(0,2,1,3)*2 - dooov.transpose(1,2,0,3)
     dooov = None
 
@@ -315,15 +316,16 @@ def _gamma2_outcore(myci, civec, nmo, nocc, h5fobj, compress_vvvv=False):
     iobuflen = int(256e6/8/blksize)
     log.debug1('rdm intermediates: block size = %d, nvir = %d in %d blocks',
                blksize, nocc, int((nvir+blksize-1)/blksize))
-    dovvv = h5fobj.create_dataset('dovvv', (nocc,nvir,nvir,nvir), 'f8',
+    dtype = numpy.result_type(civec).char
+    dovvv = h5fobj.create_dataset('dovvv', (nocc,nvir,nvir,nvir), dtype,
                                   chunks=(nocc,nvir,blksize,nvir))
     if compress_vvvv:
-        dvvvv = h5fobj.create_dataset('dvvvv', (nvir_pair,nvir_pair), 'f8')
+        dvvvv = h5fobj.create_dataset('dvvvv', (nvir_pair,nvir_pair), dtype)
     else:
-        dvvvv = h5fobj.create_dataset('dvvvv', (nvir,nvir,nvir,nvir), 'f8')
+        dvvvv = h5fobj.create_dataset('dvvvv', (nvir,nvir,nvir,nvir), dtype)
 
     for istep, (p0, p1) in enumerate(lib.prange(0, nvir, blksize)):
-        gvvvv = lib.einsum('ijab,ijcd->abcd', c2[:,:,p0:p1], c2)
+        gvvvv = lib.einsum('ijab,ijcd->abcd', c2[:,:,p0:p1].conj(), c2)
         if compress_vvvv:
 # symmetrize dvvvv because it does not affect the results of cisd_grad
 # dvvvv = gvvvv.transpose(0,2,1,3)-gvvvv.transpose(0,3,1,2)*.5
@@ -333,8 +335,8 @@ def _gamma2_outcore(myci, civec, nmo, nocc, h5fobj, compress_vvvv=False):
             tmp = numpy.empty((nvir,nvir,nvir))
             tmpvvvv = numpy.empty((p1-p0,nvir,nvir_pair))
             for i in range(p1-p0):
-                tmp[:] = (gvvvv[i].transpose(1,0,2) -
-                          gvvvv[i].transpose(2,0,1)*.5)
+                vvv = gvvvv[i].conj().transpose(1,0,2)
+                tmp[:] = vvv - vvv.transpose(2,1,0)*.5
                 lib.pack_tril(tmp+tmp.transpose(0,2,1), out=tmpvvvv[i])
             # tril of (dvvvv[p0:p1,p0:p1]+dvvvv[p0:p1,p0:p1].T)
             for i in range(p0, p1):
@@ -352,21 +354,22 @@ def _gamma2_outcore(myci, civec, nmo, nocc, h5fobj, compress_vvvv=False):
             tmp = tmpvvvv = None
         else:
             for i in range(p0, p1):
-                dvvvv[i] = (gvvvv[i-p0].transpose(1,0,2) -
-                            gvvvv[i-p0].transpose(2,0,1)*.5)
+                vvv = gvvvv[i-p0].conj().transpose(1,0,2)
+                dvvvv[i] = vvv - vvv.transpose(2,1,0)*.5
 
-        gvovv = numpy.einsum('ia,ikcd->akcd', c1[:,p0:p1]*2, c2)
+        gvovv = numpy.einsum('ia,ikcd->akcd', c1[:,p0:p1].conj()*2, c2)
+        gvovv = gvovv.conj()
         dovvv[:,:,p0:p1] = gvovv.transpose(1,3,0,2)*2 - gvovv.transpose(1,2,0,3)
 
     theta = c2*2 - c2.transpose(1,0,2,3)
-    doovv  = numpy.einsum('ia,kc->ikca', c1, -c1)
-    doovv -= lib.einsum('kjcb,kica->jiab', c2, theta)
-    doovv -= lib.einsum('ikcb,jkca->ijab', c2, theta)
+    doovv  = numpy.einsum('ia,kc->ikca', c1.conj(), -c1)
+    doovv -= lib.einsum('kjcb,kica->jiab', c2.conj(), theta)
+    doovv -= lib.einsum('ikcb,jkca->ijab', c2.conj(), theta)
     h5fobj['doovv'] = doovv
     doovv = None
 
-    dovvo  = lib.einsum('ikac,jkbc->jbai', theta, theta)
-    dovvo += numpy.einsum('ia,kc->iack', c1, c1) * 2
+    dovvo  = lib.einsum('ikac,jkbc->iabj', theta.conj(), theta)
+    dovvo += numpy.einsum('ia,kc->iack', c1.conj(), c1) * 2
     h5fobj['dovvo'] = dovvo
     theta = dovvo = None
 
@@ -532,6 +535,7 @@ class CISD(lib.StreamObject):
         logger.info(self, 'Init t2, MP2 energy = %.15g', self.emp2)
 
         if abs(self.emp2) < 1e-3 and abs(ci1).sum() < 1e-3:
+            # To avoid ci1 being stuck at local minimum
             ci1 = 1e-1 / e_ia
         return self.emp2, amplitudes_to_cisdvec(ci0, ci1, ci2)
 
@@ -626,8 +630,7 @@ if __name__ == '__main__':
         ['O', ( 0., 0.    , 0.   )],
         ['H', ( 0., -0.757, 0.587)],
         ['H', ( 0., 0.757 , 0.587)],]
-    mol.basis = {'H': 'sto-3g',
-                 'O': 'sto-3g',}
+    mol.basis = 'sto3g'
     mol.build()
     mf = scf.RHF(mol).run()
     myci = CISD(mf)

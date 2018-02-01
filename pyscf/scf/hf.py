@@ -27,13 +27,14 @@ def kernel(mf, conv_tol=1e-10, conv_tol_grad=None,
 
     Args:
         mf : an instance of SCF class
-            To hold the flags to control SCF.  Besides the control parameters,
-            one can modify its function members to change the behavior of SCF.
-            The member functions which are called in kernel are
+            mf object holds all parameters to control SCF.  One can modify its
+            member functions to change the behavior of SCF.  The member
+            functions which are called in kernel are
 
             | mf.get_init_guess
             | mf.get_hcore
             | mf.get_ovlp
+            | mf.get_veff
             | mf.get_fock
             | mf.get_grad
             | mf.eig
@@ -161,7 +162,7 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         cput1 = logger.timer(mf, 'cycle= %d'%(cycle+1), *cput1)
         cycle += 1
 
-    if conv_check:
+    if scf_conv and conv_check:
         # An extra diagonalization, to remove level shift
         #fock = mf.get_fock(h1e, s1e, vhf, dm)  # = h1e + vhf
         mo_energy, mo_coeff = mf.eig(fock, s1e)
@@ -216,12 +217,14 @@ def energy_elec(mf, dm=None, h1e=None, vhf=None):
     >>> dm = mf.make_rdm1()
     >>> scf.hf.energy_elec(mf, dm)
     (-1.5176090667746334, 0.60917167853723675)
+    >>> mf.energy_elec(dm)
+    (-1.5176090667746334, 0.60917167853723675)
     '''
     if dm is None: dm = mf.make_rdm1()
     if h1e is None: h1e = mf.get_hcore()
     if vhf is None: vhf = mf.get_veff(mf.mol, dm)
-    e1 = numpy.einsum('ji,ji', h1e.conj(), dm).real
-    e_coul = numpy.einsum('ji,ji', vhf.conj(), dm).real * .5
+    e1 = numpy.einsum('ij,ji', h1e, dm).real
+    e_coul = numpy.einsum('ij,ji', vhf, dm).real * .5
     logger.debug(mf, 'E_coul = %.15g', e_coul)
     return e1+e_coul, e_coul
 
@@ -1530,7 +1533,8 @@ class RHF(SCF):
 
     def __init__(self, mol):
         if mol.nelectron != 1 and (mol.nelectron % 2) != 0:
-            raise ValueError('Invalid electron number %i.' % mol.nelectron)
+            logger.warn(self, 'Invalid electron number %d for RHF method.',
+                        mol.nelectron)
 # Note: self._eri requires large amount of memory
         SCF.__init__(self, mol)
 
@@ -1554,6 +1558,23 @@ class RHF(SCF):
         return self
 
     def stability(self, internal=True, external=False, verbose=None):
+        '''
+        RHF/RKS stability analysis.
+
+        See also pyscf.scf.stability.rhf_stability function.
+
+        Kwargs:
+            internal : bool
+                Internal stability, within the RHF optimization space.
+            external : bool
+                External stability. Including the RHF -> UHF and real -> complex
+                stability analysis.
+
+        Returns:
+            New orbitals that are more close to the stable condition.  The return
+            value includes two set of orbitals.  The first corresponds to the
+            internal stablity and the second corresponds to the external stability.
+        '''
         from pyscf.scf.stability import rhf_stability
         return rhf_stability(self, internal, external, verbose)
 

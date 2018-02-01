@@ -7,6 +7,8 @@ from pyscf import cc
 from pyscf.cc import uccsd_t
 
 mol = gto.Mole()
+mol.verbose = 5
+mol.output = '/dev/null'
 mol.atom = [
     [8 , (0. , 0.     , 0.)],
     [1 , (0. , -.757 , .587)],
@@ -47,6 +49,10 @@ class KnownValues(unittest.TestCase):
         t2 = t2aa, t2ab, t2bb
         mycc = cc.UCCSD(mf1)
         eris = mycc.ao2mo(mf1.mo_coeff)
+        e3a = uccsd_t.kernel(mycc, eris, [t1a,t1b], [t2aa, t2ab, t2bb])
+        self.assertAlmostEqual(e3a, 9877.2780859693339, 6)
+
+        mycc.max_memory = 0
         e3a = uccsd_t.kernel(mycc, eris, [t1a,t1b], [t2aa, t2ab, t2bb])
         self.assertAlmostEqual(e3a, 9877.2780859693339, 6)
 

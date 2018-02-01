@@ -12,6 +12,7 @@ import time
 import json
 import ctypes
 import numpy
+import h5py
 import scipy.special
 import scipy.linalg
 from pyscf import lib
@@ -24,7 +25,8 @@ from pyscf.gto import moleintor
 from pyscf.gto.eval_gto import eval_gto
 import pyscf.gto.ecp
 
-from pyscf.data.elements import ELEMENTS, ELEMENTS_PROTON
+from pyscf.data.elements import ELEMENTS, ELEMENTS_PROTON, \
+        _rm_digit, charge, _symbol, _std_symbol, _atom_symbol, is_ghost_atom
 
 # For code compatiblity in python-2 and python-3
 if sys.version_info >= (3,):
@@ -103,8 +105,8 @@ def cart2sph(l, c_tensor=None):
            c_tensor.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(l))
         return c2sph
 
-def cart2j_kappa(kappa, l=None, normalized=None):
-    '''Cartesian to spinor, indexed by kappa
+def cart2spinor_kappa(kappa, l=None, normalized=None):
+    '''Cartesian to spinor transformation matrix for kappa
 
     Kwargs:
         normalized :
@@ -136,10 +138,35 @@ def cart2j_kappa(kappa, l=None, normalized=None):
         elif l == 1:
             c2smat *= 0.488602511902919921
     return c2smat
+cart2j_kappa = cart2spinor_kappa
 
-def cart2j_l(l, normalized=None):
-    '''Cartesian to spinor, indexed by l'''
-    return cart2j_kappa(0, l, normalized)
+def cart2spinor_l(l, normalized=None):
+    '''Cartesian to spinor transformation matrix for angular moment l'''
+    return cart2spinor_kappa(0, l, normalized)
+cart2j_l = cart2spinor_l
+
+def sph2spinor_kappa(kappa, l=None):
+    '''Real spherical to spinor transformation matrix for kappa'''
+    ua, ub = sph2spinor_l(l)
+    if kappa < 0:
+        l = -kappa - 1
+        nd = l * 2 + 2
+        ua = ua[:,:nd]
+        ub = ub[:,:nd]
+    elif kappa > 0:
+        l = kappa
+        nd = l * 2
+        ua = ua[:,nd:]
+        ub = ub[:,nd:]
+    else:
+        assert(l is not None)
+        assert(l <= 12)
+    return ua, ub
+
+def sph2spinor_l(l):
+    '''Real spherical to spinor transformation matrix for angular moment l'''
+    from pyscf.symm import sph2spinor
+    return sph2spinor(l)
 
 def atom_types(atoms, basis=None):
     '''symmetry inequivalent atoms'''
@@ -569,24 +596,15 @@ def make_bas_env(basis_add, atom_id=0, ptr=0):
         #    print('libcint may have large error for ERI of i function')
         if isinstance(b[1], int):
             kappa = b[1]
-            b_coeff = numpy.array(b[2:])
+            b_coeff = numpy.array(sorted(list(b[2:]), reverse=True))
         else:
             kappa = 0
-            b_coeff = numpy.array(b[1:])
+            b_coeff = numpy.array(sorted(list(b[1:]), reverse=True))
         es = b_coeff[:,0]
         cs = b_coeff[:,1:]
         nprim, nctr = cs.shape
         cs = numpy.einsum('pi,p->pi', cs, gto_norm(angl, es))
-# normalize contracted AO
-        #ee = numpy.empty((nprim,nprim))
-        #for i in range(nprim):
-        #    for j in range(i+1):
-        #        ee[i,j] = ee[j,i] = gaussian_int(angl*2+2, es[i]+es[j])
-        #s1 = 1/numpy.sqrt(numpy.einsum('pi,pq,qi->i', cs, ee, cs))
-        ee = es.reshape(-1,1) + es.reshape(1,-1)
-        ee = gaussian_int(angl*2+2, ee)
-        s1 = 1/numpy.sqrt(numpy.einsum('pi,pq,qi->i', cs, ee, cs))
-        cs = numpy.einsum('pi,i->pi', cs, s1)
+        cs = _nomalize_contracted_ao(angl, es, cs)
 
         _env.append(es)
         _env.append(cs.T.reshape(-1))
@@ -597,6 +615,17 @@ def make_bas_env(basis_add, atom_id=0, ptr=0):
     _env = lib.flatten(_env) # flatten nested lists
     return (numpy.array(_bas, numpy.int32).reshape(-1,BAS_SLOTS),
             numpy.array(_env, numpy.double))
+
+def _nomalize_contracted_ao(l, es, cs):
+    #ee = numpy.empty((nprim,nprim))
+    #for i in range(nprim):
+    #    for j in range(i+1):
+    #        ee[i,j] = ee[j,i] = gaussian_int(angl*2+2, es[i]+es[j])
+    #s1 = 1/numpy.sqrt(numpy.einsum('pi,pq,qi->i', cs, ee, cs))
+    ee = es.reshape(-1,1) + es.reshape(1,-1)
+    ee = gaussian_int(l*2+2, ee)
+    s1 = 1/numpy.sqrt(numpy.einsum('pi,pq,qi->i', cs, ee, cs))
+    return numpy.einsum('pi,i->pi', cs, s1)
 
 def make_env(atoms, basis, pre_env=[], nucmod={}):
     '''Generate the input arguments for ``libcint`` library based on internal
@@ -670,6 +699,8 @@ def make_env(atoms, basis, pre_env=[], nucmod={}):
     return _atm, _bas, _env
 
 def make_ecp_env(mol, _atm, ecp, pre_env=[]):
+    '''Generate the input arguments _ecpbas for ECP integrals
+    '''
     _env = []
     ptr_env = len(pre_env)
 
@@ -680,7 +711,7 @@ def make_ecp_env(mol, _atm, ecp, pre_env=[]):
         for lb in ecp_add[1]:
             for rorder, bi in enumerate(lb[1]):
                 if len(bi) > 0:
-                    ec = numpy.array(bi)
+                    ec = numpy.array(sorted(bi, reverse=True))
                     _env.append(ec[:,0])
                     ptr_exp = ptr_env
                     _env.append(ec[:,1])
@@ -1032,7 +1063,6 @@ def energy_nuc(mol, charges=None, coords=None):
         float
     '''
     if charges is None: charges = mol.atom_charges()
-    if coords is None: coords = mol.atom_coords()
     if len(charges) == 0:
         return 0
     #e = 0
@@ -1044,15 +1074,19 @@ def energy_nuc(mol, charges=None, coords=None):
     #        r1 = coords[i]
     #        r = numpy.linalg.norm(r1-r2)
     #        e += q1 * q2 / r
-    rr = numpy.dot(coords, coords.T)
-    rd = rr.diagonal()
-    rr = rd[:,None] + rd - rr*2
-    rr[numpy.diag_indices_from(rr)] = 1e-60
-    r = numpy.sqrt(rr)
-    qq = charges[:,None] * charges[None,:]
-    qq[numpy.diag_indices_from(qq)] = 0
-    e = (qq/r).sum() * .5
+    rr = inter_distance(mol, coords)
+    rr[numpy.diag_indices_from(rr)] = 1e200
+    e = numpy.einsum('i,ij,j->', charges, 1./rr, charges) * .5
     return e
+
+def inter_distance(mol, coords=None):
+    '''
+    Inter-particle distance array
+    '''
+    if coords is None: coords = mol.atom_coords()
+    rr = numpy.linalg.norm(coords.reshape(-1,1,3) - coords, axis=2)
+    rr[numpy.diag_indices_from(rr)] = 0
+    return rr
 
 def sph_labels(mol, fmt=True):
     '''Labels for spherical GTO functions
@@ -1445,12 +1479,6 @@ def condense_to_shell(mol, mat, compressor=numpy.max):
     return abstract
 
 
-def check_sanity(obj, keysref, stdout=sys.stdout):
-    sys.stderr.write('Function pyscg.gto.mole.check_sanity will be removed in PySCF-1.1. '
-                     'It is replaced by pyscg.lib.check_sanity\n')
-    return lib.check_sanity(obj, keysref, stdout)
-
-
 # for _atm, _bas, _env
 CHARGE_OF  = 0
 PTR_COORD  = 1
@@ -1825,10 +1853,10 @@ class Mole(lib.StreamObject):
                 self.make_env(self._atom, self._basis, self._env, self.nucmod)
         self._atm, self._ecpbas, self._env = \
                 self.make_ecp_env(self._atm, self._ecp, self._env)
-        if (self.nelectron+self.spin) % 2 != 0:
-            raise RuntimeError('Electron number %d and spin %d are not consistent\n'
-                               'Note mol.spin = 2S = Nalpha - Nbeta, not 2S+1' %
-                               (self.nelectron, self.spin))
+
+        # Access self.nelec in which the code checks whether the spin and
+        # number of electrons are consistent.
+        self.nelec
 
         if self.symmetry:
             from pyscf import symm
@@ -1883,15 +1911,19 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         return expand_etbs(etbs)
     etbs = expand_etbs
 
+    @lib.with_doc(make_env.__doc__)
     def make_env(self, atoms, basis, pre_env=[], nucmod={}):
         return make_env(atoms, basis, pre_env, nucmod)
 
+    @lib.with_doc(make_atm_env.__doc__)
     def make_atm_env(self, atom, ptr=0):
         return make_atm_env(atom, ptr)
 
+    @lib.with_doc(make_bas_env.__doc__)
     def make_bas_env(self, basis_add, atom_id=0, ptr=0):
         return make_bas_env(basis_add, atom_id, ptr)
 
+    @lib.with_doc(make_ecp_env.__doc__)
     def make_ecp_env(self, _atm, _ecp, pre_env=[]):
         if _ecp:
             _atm, _ecpbas, _env = make_ecp_env(self, _atm, _ecp, pre_env)
@@ -2191,7 +2223,6 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
     def update(self, chkfile):
         return self.update_from_chk(chkfile)
     def update_from_chk(self, chkfile):
-        import h5py
         with h5py.File(chkfile, 'r') as fh5:
             mol = loads(fh5['mol'].value)
             self.__dict__.update(mol.__dict__)
@@ -2472,9 +2503,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
     ao_loc_nr = ao_loc_nr
     ao_loc_2c = ao_loc_2c
 
-    def tmap(self):
-        return time_reversal_map(self)
-    time_reversal_map = time_reversal_map
+    tmap = time_reversal_map = time_reversal_map
 
     def intor(self, intor, comp=1, hermi=0, aosym='s1', out=None,
               shls_slice=None):
@@ -2620,12 +2649,8 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
     search_ao_nr = search_ao_nr
     search_ao_r = search_ao_r
 
-    offset_nr_by_atom = offset_nr_by_atom
-    offset_2c_by_atom = offset_2c_by_atom
-    offset_ao_by_atom = aoslice_by_atom
-    aoslice_nr_by_atom = offset_nr_by_atom
-    aoslice_2c_by_atom = offset_2c_by_atom
-    aoslice_by_atom = aoslice_by_atom
+    aoslice_by_atom = aoslice_nr_by_atom = offset_ao_by_atom = offset_nr_by_atom = aoslice_by_atom
+    aoslice_2c_by_atom = offset_2c_by_atom = offset_2c_by_atom
 
     @lib.with_doc(spinor_labels.__doc__)
     def spinor_labels(self):
@@ -2636,7 +2661,8 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
     __add__ = conc_mol
 
     def cart2sph_coeff(self, normalized='sp'):
-        '''Transformation matrix to transform the Cartesian GTOs to spherical GTOs
+        '''Transformation matrix that transforms Cartesian GTOs to spherical
+        GTOs for all basis functions
 
         Kwargs:
             normalized : string or boolean
@@ -2670,69 +2696,22 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
                 c2s.append(c2s_l[l])
         return scipy.linalg.block_diag(*c2s)
 
-def _rm_digit(symb):
-    if symb.isalpha():
-        return symb
-    else:
-        return ''.join([i for i in symb if i.isalpha()])
+    def sph2spinor_coeff(self):
+        '''Transformation matrix that transforms real-spherical GTOs to spinor
+        GTOs for all basis functions
 
-_ELEMENTS_UPPER = dict((x.upper(),x) for x in ELEMENTS)
-_ELEMENTS_UPPER['GHOST'] = 'Ghost'
+        Examples::
 
-def charge(symb_or_chg):
-    if isinstance(symb_or_chg, (str, unicode)):
-        a = symb_or_chg.upper()
-        if ('GHOST' in a or ('X' in a and 'XE' not in a)):
-            return 0
-        else:
-            return elements.ELEMENTS_PROTON[str(_rm_digit(a))]
-    else:
-        return symb_or_chg
-
-def _symbol(symb_or_chg):
-    if isinstance(symb_or_chg, (str, unicode)):
-        return str(symb_or_chg)
-    else:
-        return ELEMENTS[symb_or_chg]
-
-def _std_symbol(symb_or_chg):
-    if isinstance(symb_or_chg, (str, unicode)):
-        rawsymb = str(_rm_digit(symb_or_chg)).upper()
-        if len(rawsymb) > 1 and symb_or_chg[0] == 'X' and symb_or_chg[:2].upper() != 'XE':
-            rawsymb = rawsymb[1:]
-            return 'X-' + _ELEMENTS_UPPER[rawsymb]
-        elif len(rawsymb) > 5 and rawsymb[:5] == 'GHOST':
-            rawsymb = rawsymb[5:]
-            return 'GHOST-' + _ELEMENTS_UPPER[rawsymb]
-        else:
-            return _ELEMENTS_UPPER[rawsymb]
-    else:
-        return ELEMENTS[symb_or_chg]
-
-def _atom_symbol(symb_or_chg):
-    if isinstance(symb_or_chg, int):
-        symb = ELEMENTS[symb_or_chg]
-    else:
-        a = str(symb_or_chg.strip())
-        if a.isdigit():
-            symb = ELEMENTS[int(a)]
-        else:
-            rawsymb = _rm_digit(a)
-            if len(rawsymb) > 1 and a[0] == 'X' and a[:2].upper() != 'XE':
-                rawsymb = rawsymb[1:]
-            elif len(rawsymb) > 5 and rawsymb[:5].upper() == 'GHOST':
-                rawsymb = rawsymb[5:]
-            stdsymb = _ELEMENTS_UPPER[rawsymb.upper()]
-            symb = a.replace(rawsymb, stdsymb)
-    return symb
-
-def is_ghost_atom(symb_or_chg):
-    if isinstance(symb_or_chg, int):
-        return symb_or_chg == 0
-    elif 'GHOST' in symb_or_chg.upper():
-        return True
-    else:
-        return symb_or_chg[0] == 'X' and symb_or_chg[:2].upper() != 'XE'
+        >>> mol = gto.M(atom='H 0 0 0; F 0 0 1', basis='ccpvtz')
+        >>> ca, cb = mol.sph2spinor_coeff()
+        >>> s0 = mol.intor('int1e_ovlp_spinor')
+        >>> s1 = ca.conj().T.dot(mol.intor('int1e_ovlp_sph')).dot(ca)
+        >>> s1+= cb.conj().T.dot(mol.intor('int1e_ovlp_sph')).dot(cb)
+        >>> print(abs(s1-s0).max())
+        >>> 6.66133814775e-16
+        '''
+        from pyscf.symm import sph
+        return sph.sph2spinor_coeff(self)
 
 def _parse_nuc_mod(str_or_int):
     nucmod = NUC_POINT
@@ -2747,8 +2726,8 @@ def _update_from_cmdargs_(mol):
     # pass sys.args when using ipython
     try:
         __IPYTHON__
-        sys.stderr.write('Warn: Ipython shell catchs sys.args\n')
-        return None
+        #sys.stderr.write('Warn: Ipython shell catchs sys.args\n')
+        return
     except:
         pass
 
@@ -2786,44 +2765,63 @@ def from_zmatrix(atomstr):
     '''
     from pyscf.symm import rotation_mat
     atomstr = atomstr.replace(';','\n').replace(',',' ')
-    atoms = []
-    for line in atomstr.split('\n'):
-        if line.strip():
+    symb = []
+    coord = []
+    for line in atomstr.splitlines():
+        line = line.strip()
+        if line and line[0] != '#':
             rawd = line.split()
+            symb.append(rawd[0])
             if len(rawd) < 3:
-                atoms.append([_atom_symbol(rawd[0]), numpy.zeros(3)])
+                coord.append(numpy.zeros(3))
             elif len(rawd) == 3:
-                atoms.append([_atom_symbol(rawd[0]), numpy.array((float(rawd[2]), 0, 0))])
+                coord.append(numpy.array((float(rawd[2]), 0, 0)))
             elif len(rawd) == 5:
                 bonda = int(rawd[1]) - 1
                 bond  = float(rawd[2])
                 anga  = int(rawd[3]) - 1
                 ang   = float(rawd[4])/180*numpy.pi
                 assert(ang >= 0)
-                v1 = atoms[anga][1] - atoms[bonda][1]
+                v1 = coord[anga] - coord[bonda]
                 if not numpy.allclose(v1[:2], 0):
                     vecn = numpy.cross(v1, numpy.array((0.,0.,1.)))
                 else: # on z
                     vecn = numpy.array((0.,0.,1.))
                 rmat = rotation_mat(vecn, ang)
                 c = numpy.dot(rmat, v1) * (bond/numpy.linalg.norm(v1))
-                atoms.append([_atom_symbol(rawd[0]), atoms[bonda][1]+c])
-            else: # FIXME
+                coord.append(coord[bonda]+c)
+            else:
                 bonda = int(rawd[1]) - 1
                 bond  = float(rawd[2])
                 anga  = int(rawd[3]) - 1
                 ang   = float(rawd[4])/180*numpy.pi
-                assert(ang >= 0)
-                diha  = int(rawd[5]) - 1
-                dih   = float(rawd[6])/180*numpy.pi
-                v1 = atoms[anga][1] - atoms[bonda][1]
-                v2 = atoms[diha][1] - atoms[anga][1]
-                vecn = numpy.cross(v2, -v1)
-                rmat = rotation_mat(v1, -dih)
-                vecn = numpy.dot(rmat, vecn) / numpy.linalg.norm(vecn)
-                rmat = rotation_mat(vecn, ang)
-                c = numpy.dot(rmat, v1) * (bond/numpy.linalg.norm(v1))
-                atoms.append([_atom_symbol(rawd[0]), atoms[bonda][1]+c])
+                assert(ang >= 0 and ang <= numpy.pi)
+                v1 = coord[anga] - coord[bonda]
+                v1 /= numpy.linalg.norm(v1)
+                if ang < 1e-7:
+                    c = v1 * bond
+                elif numpy.pi-ang < 1e-7:
+                    c = -v1 * bond
+                else:
+                    diha  = int(rawd[5]) - 1
+                    dih   = float(rawd[6])/180*numpy.pi
+                    v2 = coord[diha] - coord[anga]
+                    vecn = numpy.cross(v2, -v1)
+                    vecn_norm = numpy.linalg.norm(vecn)
+                    if vecn_norm < 1e-7:
+                        if not numpy.allclose(v1[:2], 0):
+                            vecn = numpy.cross(v1, numpy.array((0.,0.,1.)))
+                        else: # on z
+                            vecn = numpy.array((0.,0.,1.))
+                        rmat = rotation_mat(vecn, ang)
+                        c = numpy.dot(rmat, v1) * bond
+                    else:
+                        rmat = rotation_mat(v1, -dih)
+                        vecn = numpy.dot(rmat, vecn) / vecn_norm
+                        rmat = rotation_mat(vecn, ang)
+                        c = numpy.dot(rmat, v1) * bond
+                coord.append(coord[bonda]+c)
+    atoms = list(zip([_atom_symbol(x) for x in symb], coord))
     return atoms
 zmat2cart = zmat = from_zmatrix
 

@@ -5,6 +5,7 @@ import numpy
 from pyscf import gto, lib
 from pyscf import scf
 from pyscf import cc
+from pyscf import ao2mo
 
 mol = gto.Mole()
 mol.verbose = 7
@@ -131,6 +132,14 @@ class KnownValues(unittest.TestCase):
         dm2 = mcc.make_rdm2()
         self.assertAlmostEqual(numpy.linalg.norm(dm1), 4.4227785269355078, 3)
         self.assertAlmostEqual(numpy.linalg.norm(dm2), 20.074587448789089, 3)
+
+        nmo = mf.mo_coeff.shape[1]
+        eri = ao2mo.restore(1, ao2mo.kernel(mf._eri, mf.mo_coeff), nmo)
+        h1 = reduce(numpy.dot, (mf.mo_coeff.T.conj(), mf.get_hcore(), mf.mo_coeff))
+        e1 = numpy.einsum('ij,ji', h1, dm1)
+        e1+= numpy.einsum('ijkl,jilk', eri, dm2) * .5
+        e1+= mf.energy_nuc()
+        self.assertAlmostEqual(e1, mcc.e_tot, 7)
 
     def test_scanner(self):
         mol1 = mol.copy()

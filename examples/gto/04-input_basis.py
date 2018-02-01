@@ -213,3 +213,23 @@ C    SP
 ''')]}
 )
 print('nao = ', mol.nao_nr())
+
+#
+# Optimize the basis contraction.  When optimize=True is specified in the
+# parse function, the segment contracted basis can be restructured to
+# general contracted basis.  This can improve integral performance.
+#
+mol = gto.M(
+    atom = '''O 0 0 0; H 0 1 0; H 0 0 1''',
+    basis = {'O': '631g',
+             'H': gto.basis.parse('''
+H    S
+      2.9412494             -0.09996723
+      0.6834831              0.39951283
+      0.2222899              0.70011547
+H    S
+      2.9412494             0.15591627
+      0.6834831             0.60768372
+      0.2222899             0.39195739
+''', optimize=True)}
+)
