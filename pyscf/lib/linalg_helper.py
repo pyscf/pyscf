@@ -236,7 +236,7 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
     Args:
         aop : function([x]) => [array_like_x]
             Matrix vector multiplication :math:`y_{ki} = \sum_{j}a_{ij}*x_{jk}`.
-        x0 : 1D array or a list of 1D array
+        x0 : 1D array or a list of 1D arrays or a function to generate x0 array(s)
             Initial guess.  The initial guess vector(s) are just used as the
             initial subspace bases.  If the subspace is smaller than "nroots",
             eg 10 roots and one initial guess, all eigenvectors are chosen as
@@ -310,6 +310,8 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
     toloose = numpy.sqrt(tol)
     log.debug1('tol %g  toloose %g', tol, toloose)
 
+    if callable(x0):  # lazy initialization to reduce memory footprint
+        x0 = x0()
     if isinstance(x0, numpy.ndarray) and x0.ndim == 1:
         x0 = [x0]
     #max_cycle = min(max_cycle, x0[0].size)
@@ -370,6 +372,7 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
                 for k in range(rnow):
                     heff[head+k,i] = dot(xt[k].conj(), ax[i])
                     heff[i,head+k] = heff[head+k,i].conj()
+        axt = None
 
         w, v = scipy.linalg.eigh(heff[:space,:space])
         if SORT_EIG_BY_SIMILARITY:
@@ -382,6 +385,7 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
             e = w[:nroots]
             v = v[:,:nroots]
 
+        x0 = None
         x0 = _gen_x0(v, xs)
         if lessio:
             ax0 = aop(x0)
@@ -619,6 +623,8 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
     toloose = numpy.sqrt(tol)
     log.debug1('tol %g  toloose %g', tol, toloose)
 
+    if callable(x0):
+        x0 = x0()
     if isinstance(x0, numpy.ndarray) and x0.ndim == 1:
         x0 = [x0]
     #max_cycle = min(max_cycle, x0[0].size)

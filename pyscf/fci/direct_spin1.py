@@ -408,13 +408,15 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
 
     if ci0 is None:
         if hasattr(fci, 'get_init_guess'):
-            ci0 = fci.get_init_guess(norb, nelec, nroots, hdiag)
+            ci0 = lambda: fci.get_init_guess(norb, nelec, nroots, hdiag)
         else:
-            ci0 = []
-            for i in range(nroots):
-                x = numpy.zeros(na*nb)
-                x[addr[i]] = 1
-                ci0.append(x)
+            def ci0():  # lazy initialization to reduce memory footprint
+                x0 = []
+                for i in range(nroots):
+                    x = numpy.zeros(na*nb)
+                    x[addr[i]] = 1
+                    x0.append(x)
+                return x0
     else:
         if isinstance(ci0, numpy.ndarray) and ci0.size == na*nb:
             ci0 = [ci0.ravel()]
