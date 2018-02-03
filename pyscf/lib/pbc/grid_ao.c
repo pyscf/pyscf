@@ -170,10 +170,10 @@ void PBCeval_cart_iter(FPtr_eval feval,  FPtr_exp fexp,
         const int atmend = bas[(sh1-1)*BAS_SLOTS+ATOM_OF]+1;
         const int atmcount = atmend - atmstart;
         const size_t Ngrids = ngrids;
-        int i, k, l, m, np, nc, atm_id, bas_id, deg, ao_id;
+        int i, l, m, np, nc, atm_id, bas_id, ao_id;
         size_t off, di;
         double fac;
-        double *p_exp, *pcoeff, *pcoord, *pcart, *ri, *pao;
+        double *p_exp, *pcoeff, *pcoord, *ri, *pao;
         double *grid2atm = buf; // [atm_id,xyz,grid]
         double *eprim = grid2atm + atmcount*3*BLKSIZE;
         double *aobuf = eprim + NPRIMAX*BLKSIZE*2;
@@ -190,7 +190,6 @@ void PBCeval_cart_iter(FPtr_eval feval,  FPtr_exp fexp,
                         np = bas[bas_id*BAS_SLOTS+NPRIM_OF];
                         nc = bas[bas_id*BAS_SLOTS+NCTR_OF ];
                         l  = bas[bas_id*BAS_SLOTS+ANG_OF  ];
-                        deg = (l+1)*(l+2)/2;
                         fac = CINTcommon_fac_sp(l);
                         p_exp  = env + bas[bas_id*BAS_SLOTS+PTR_EXP];
                         pcoeff = env + bas[bas_id*BAS_SLOTS+PTR_COEFF];

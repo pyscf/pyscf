@@ -129,6 +129,8 @@ def energy(cc, t1, t2, eris):
     eris_ovov = np.asarray(eris.ovov)
     e += 2*np.einsum('ijab,iajb', tau, eris_ovov)
     e +=  -np.einsum('ijab,ibja', tau, eris_ovov)
+    if abs(e.imag) > 1e-4:
+        logger.warn(cc, 'Non-zero imaginary part of CCSD energy was found %s', e)
     return e.real
 
 

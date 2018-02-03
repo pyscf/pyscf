@@ -41,7 +41,7 @@
 			comp = comp + conj(ci)*cj*conj(ck)*cl*int2[ii*n3+jj*n2+kk*norbs+ll];
 		      }
 		if (cimag(comp) > 1.e-4) {
-		  printf("Error in ", i, "  ", j, "  ", k, "  ", l, "  element of rdm ", comp,"\n");
+		  printf("Error in %d %d %d %d element of rdm (%g,%g)\n", i, j, k, l, creal(comp), cimag(comp));
 		  exit(0);
 		}
 
@@ -149,7 +149,7 @@ void r2RDM( double * twoRDM, size_t norb,  char * fIn ){
 // This function is used to create the header for the FCI dump file
 void writeFDHead ( FILE* fOut, size_t norb, size_t nelec, size_t ms, int* orbsym )
 {
-  fprintf(fOut, " &FCI NORB=%d ,NELEC=%d ,MS2=%d,\n", norb, nelec, ms);
+  fprintf(fOut, " &FCI NORB=%zu ,NELEC=%zu ,MS2=%zu,\n", norb, nelec, ms);
   fprintf(fOut, "  ORBSYM=");
   size_t i;
 
@@ -178,7 +178,7 @@ void writeERI ( FILE* fOut, double * eri, size_t norb, double tol)
 	  
 	  if ( ij >= kl ) { 
 	    if ( fabs(eri[ijkl]) > tol ) {
-	    fprintf(fOut,  "%20.12e    %d  %d  %d  %d\n",eri[ ijkl ],i+1,j+1,k+1,l+1);
+	    fprintf(fOut,  "%20.12e    %zu  %zu  %zu  %zu\n",eri[ ijkl ],i+1,j+1,k+1,l+1);
 	    }
 	    ++ijkl;
 	  }

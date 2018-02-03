@@ -9,6 +9,7 @@ if (CMAKE_COMPILER_IS_GNUCC) # Does it skip the link flag on old OsX?
     set(CMAKE_SHARED_LINKER_FLAGS "-Wl,--no-as-needed")
   endif()
 endif()
+set(CMAKE_C_FLAGS "-Wall ${CMAKE_C_FLAGS}")
 
 if (${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION}.${CMAKE_PATCH_VERSION} VERSION_GREATER 3.0.0)
   cmake_policy(SET CMP0042 NEW)

@@ -340,6 +340,8 @@ def energy(cc, t1, t2, eris):
     e += 0.5*np.einsum('ia,jb,iajb',t1b,t1b,eris_OVOV)
     e -= 0.5*np.einsum('ia,jb,ibja',t1b,t1b,eris_OVOV)
     e +=     np.einsum('ia,jb,iajb',t1a,t1b,eris_ovOV)
+    if abs(e.imag) > 1e-5:
+        logger.warn(cc, 'Non-zero imaginary part of CCSD energy was found %s', e)
     return e.real
 
 

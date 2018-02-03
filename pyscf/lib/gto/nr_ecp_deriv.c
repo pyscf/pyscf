@@ -38,6 +38,7 @@ int ECPscalar_c2s_factory(int (*fcart)(), double *gctr, int comp, int *shls,
 void ECPscalar_distribute(double *out, double *gctr, const int *dims,
                           const int comp, const int di, const int dj);
 
+/*
 static int _x_addr[] = {
   0,   1,   2,   3,   4,   5,   6,   7,   8,   9,  10,  11,  12,  13,  14,
  15,  16,  17,  18,  19,  20,  21,  22,  23,  24,  25,  26,  27,  28,  29,
@@ -47,7 +48,7 @@ static int _x_addr[] = {
  75,  76,  77,  78,  79,  80,  81,  82,  83,  84,  85,  86,  87,  88,  89,
  90,  91,  92,  93,  94,  95,  96,  97,  98,  99, 100, 101, 102, 103, 104,
 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119,
-};
+}; */
 static int _y_addr[] = {
   1,   3,   4,   6,   7,   8,  10,  11,  12,  13,  15,  16,  17,  18,  19,
  21,  22,  23,  24,  25,  26,  28,  29,  30,  31,  32,  33,  34,  36,  37,
@@ -111,7 +112,7 @@ static void _uncontract_bas(int *fakbas, int *shls,
         const int jsh = shls[1];
         const int npi = bas[NPRIM_OF+ish*BAS_SLOTS];
         const int npj = bas[NPRIM_OF+jsh*BAS_SLOTS];
-        int i, j;
+        int i;
         for (i = 0; i < npi; i++) {
                 fakbas[i*BAS_SLOTS+ATOM_OF  ] = bas[ish*BAS_SLOTS+ATOM_OF];
                 fakbas[i*BAS_SLOTS+ANG_OF   ] = bas[ish*BAS_SLOTS+ANG_OF ];
@@ -161,7 +162,7 @@ static void _l_up(double *out, double *buf1, double fac, int li, int nfj)
 {
         const int nfi = (li+1) * (li+2) / 2;
         const int nfi0 = li * (li+1) / 2;
-        int i, j, lx, ly, lz;
+        int i, j;
         double *outx = out;
         double *outy = outx + nfi*nfj;
         double *outz = outy + nfi*nfj;
@@ -419,7 +420,6 @@ static int _ipipv_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         const int nfi = (li+1) * (li+2) / 2;
         const int nfj = (lj+1) * (lj+2) / 2;
         const int nfi_1 = li * (li-1) / 2;
-        const int nfi0 = li * (li+1) / 2;
         const int nfi1 = (li+2) * (li+3) / 2;
         const int nfi2 = (li+3) * (li+4) / 2;
         const int nff = nfi * nfj;
@@ -776,8 +776,6 @@ static int _igv_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         const int di = nfi * nci;
         const int dj = nfj * ncj;
         const int dij = di * dj;
-        const double *ci = env + bas[PTR_COEFF+ish*BAS_SLOTS];
-        const double *cj = env + bas[PTR_COEFF+jsh*BAS_SLOTS];
         const double *ri = env + atm[PTR_COORD+bas[ATOM_OF+ish*BAS_SLOTS]*ATM_SLOTS];
         const double *rj = env + atm[PTR_COORD+bas[ATOM_OF+jsh*BAS_SLOTS]*ATM_SLOTS];
         double *buf1 = malloc(sizeof(double) * nfi1*nci*nfj*ncj * 2);

@@ -22,8 +22,8 @@ def kernel(cc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
     nocc, nvir = t1.shape
 
     bcei = numpy.asarray(eris.ovvv).conj().transpose(3,2,1,0)
-    majk = numpy.asarray(eris.ooov).transpose(2,3,0,1)
-    bcjk = numpy.asarray(eris.oovv).transpose(2,3,0,1)
+    majk = numpy.asarray(eris.ooov).conj().transpose(2,3,0,1)
+    bcjk = numpy.asarray(eris.oovv).conj().transpose(2,3,0,1)
     mo_e = eris.fock.diagonal().real
 
     eia = mo_e[:nocc,None] - mo_e[nocc:]
@@ -34,16 +34,17 @@ def kernel(cc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
     t3c = t3c - t3c.transpose(0,1,2,4,3,5) - t3c.transpose(0,1,2,5,4,3)
     t3c = t3c - t3c.transpose(1,0,2,3,4,5) - t3c.transpose(2,1,0,3,4,5)
     t3c /= d3
-#    e4 = numpy.einsum('ijkabc,ijkabc,ijkabc', t3c, d3, t3c) / 36
-#    sia = numpy.einsum('bcjk,ijkabc->ia', bcjk, t3c) * .25
-#    e5 = numpy.einsum('ia,ia', sia, t1)
+#    e4 = numpy.einsum('ijkabc,ijkabc,ijkabc', t3c.conj(), d3, t3c) / 36
+#    sia = numpy.einsum('jkbc,ijkabc->ia', eris.oovv, t3c) * .25
+#    e5 = numpy.einsum('ia,ia', sia, t1.conj())
 #    et = e4 + e5
+#    return et
     t3d = numpy.einsum('ia,bcjk->ijkabc', t1, bcjk)
-    t3d += numpy.einsum('ia,jkbc->ijkabc', eris.fock[:nocc,nocc:], t2)
+    t3d += numpy.einsum('ai,jkbc->ijkabc', eris.fock[nocc:,:nocc], t2)
     t3d = t3d - t3d.transpose(0,1,2,4,3,5) - t3d.transpose(0,1,2,5,4,3)
     t3d = t3d - t3d.transpose(1,0,2,3,4,5) - t3d.transpose(2,1,0,3,4,5)
     t3d /= d3
-    et = numpy.einsum('ijkabc,ijkabc,ijkabc', t3c, d3, t3c+t3d) / 36
+    et = numpy.einsum('ijkabc,ijkabc,ijkabc', (t3c+t3d).conj(), d3, t3c) / 36
     return et
 
 

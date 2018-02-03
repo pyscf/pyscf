@@ -74,12 +74,6 @@ def get_nuc(mydf, kpts=None):
     Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
     kpt_allow = numpy.zeros(3)
     if mydf.eta == 0:
-        vpplocG = pseudo.pp_int.get_gth_vlocG_part1(cell, Gv)
-        vpplocG = -numpy.einsum('ij,ij->j', cell.get_SI(Gv), vpplocG)
-        vpplocG *= kws
-        vG = vpplocG
-        vj = numpy.zeros((nkpts,nao_pair), dtype=numpy.complex128)
-    else:
         if cell.dimension > 0:
             ke_guess = estimate_ke_cutoff_for_eta(cell, mydf.eta, cell.precision)
             mesh_guess = tools.cutoff_to_mesh(cell.lattice_vectors(), ke_guess)
@@ -88,6 +82,13 @@ def get_nuc(mydf, kpts=None):
                             'to get integral accuracy %g.\nRecommended mesh is %s.',
                             mesh, cell.precision, mesh_guess)
 
+        vpplocG = pseudo.pp_int.get_gth_vlocG_part1(cell, Gv)
+        vpplocG = -numpy.einsum('ij,ij->j', cell.get_SI(Gv), vpplocG)
+        vpplocG *= kws
+        vG = vpplocG
+        vj = numpy.zeros((nkpts,nao_pair), dtype=numpy.complex128)
+
+    else:
         nuccell = copy.copy(cell)
         half_sph_norm = .5/numpy.sqrt(numpy.pi)
         norm = half_sph_norm/gto.gaussian_int(2, mydf.eta)

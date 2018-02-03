@@ -96,7 +96,6 @@ static void sym_wv(double *w, double *v, double *fovThalf, double *vooo,
         const int noo = nocc * nocc;
         const int nooo = nocc * noo;
         const int nvoo = nvir * noo;
-        double thalf[nvir];
         int a_irrep = orbsym[nocc+a];
         int b_irrep = orbsym[nocc+b];
         int c_irrep = orbsym[nocc+c];

@@ -4,6 +4,7 @@ import numpy
 from pyscf import gto, scf, lib, symm
 from pyscf import cc
 from pyscf.cc import ccsd_t
+from pyscf.cc import gccsd, gccsd_t
 
 mol = gto.Mole()
 mol.atom = [
@@ -28,23 +29,30 @@ class KnownValues(unittest.TestCase):
         mol = gto.M()
         numpy.random.seed(12)
         nocc, nvir = 5, 12
-        eris = cc.ccsd._ChemistsERIs()
-        eris.ovvv = numpy.random.random((nocc,nvir,nvir*(nvir+1)//2)) * .1
-        eris.ovoo = numpy.random.random((nocc,nvir,nocc,nocc)) * .1
-        eris.ovvo = numpy.random.random((nocc,nvir,nvir,nocc)) * .1
+        nmo = nocc + nvir
+        eris = cc.rccsd._ChemistsERIs()
+        eri1 = numpy.random.random((nmo,nmo,nmo,nmo)) - .5
+        eri1 = eri1 + eri1.transpose(1,0,2,3)
+        eri1 = eri1 + eri1.transpose(0,1,3,2)
+        eri1 = eri1 + eri1.transpose(2,3,0,1)
+        eri1 *= .1
+        eris.ovvv = eri1[:nocc,nocc:,nocc:,nocc:]
+        eris.ovoo = eri1[:nocc,nocc:,:nocc,:nocc]
+        eris.ovov = eri1[:nocc,nocc:,:nocc,nocc:]
         t1 = numpy.random.random((nocc,nvir)) * .1
         t2 = numpy.random.random((nocc,nocc,nvir,nvir)) * .1
         t2 = t2 + t2.transpose(1,0,3,2)
         mf = scf.RHF(mol)
         mycc = cc.CCSD(mf)
         mycc.mo_energy = mycc._scf.mo_energy = numpy.arange(0., nocc+nvir)
-        eris.fock = numpy.diag(mycc.mo_energy)
+        f = numpy.random.random((nmo,nmo)) * .1
+        eris.fock = f+f.T + numpy.diag(numpy.arange(nmo))
         e = ccsd_t.kernel(mycc, eris, t1, t2)
-        self.assertAlmostEqual(e, -8.501010390740708, 9)
+        self.assertAlmostEqual(e, -45.96028705175308, 9)
 
         mycc.max_memory = 0
         e = ccsd_t.kernel(mycc, eris, t1, t2)
-        self.assertAlmostEqual(e, -8.501010390740708, 9)
+        self.assertAlmostEqual(e, -45.96028705175308, 9)
 
     def test_ccsd_t_symm(self):
         e3a = ccsd_t.kernel(mcc, mcc.ao2mo())
@@ -103,6 +111,56 @@ class KnownValues(unittest.TestCase):
 
         self.assertAlmostEqual(abs(ref_vooo-vooo).sum(), 0, 9)
         self.assertAlmostEqual(abs(ref_t2T-t2T).sum(), 0, 9)
+
+    def test_ccsd_t_complex(self):
+        mol = gto.M()
+        numpy.random.seed(12)
+        nocc, nvir = 3, 4
+        nmo = nocc + nvir
+        eris = cc.rccsd._ChemistsERIs()
+        eri1 = (numpy.random.random((nmo,nmo,nmo,nmo)) +
+                numpy.random.random((nmo,nmo,nmo,nmo)) * .8j - .5-.4j)
+        eri1 = eri1 + eri1.transpose(1,0,2,3)
+        eri1 = eri1 + eri1.transpose(0,1,3,2)
+        eri1 = eri1 + eri1.transpose(2,3,0,1)
+        eri1 *= .1
+        eris.ovvv = eri1[:nocc,nocc:,nocc:,nocc:]
+        eris.ovoo = eri1[:nocc,nocc:,:nocc,:nocc]
+        eris.ovov = eri1[:nocc,nocc:,:nocc,nocc:]
+        t1 = (numpy.random.random((nocc,nvir)) * .1 +
+              numpy.random.random((nocc,nvir)) * .1j)
+        t2 = (numpy.random.random((nocc,nocc,nvir,nvir)) * .1 +
+              numpy.random.random((nocc,nocc,nvir,nvir)) * .1j)
+        t2 = t2 + t2.transpose(1,0,3,2)
+        mf = scf.RHF(mol)
+        mcc = cc.CCSD(mf)
+        f = (numpy.random.random((nmo,nmo)) * .1 +
+             numpy.random.random((nmo,nmo)) * .1j)
+        eris.fock = f+f.T.conj() + numpy.diag(numpy.arange(nmo))
+        e0 = ccsd_t.kernel(mcc, eris, t1, t2)
+
+        eri2 = numpy.zeros((nmo*2,nmo*2,nmo*2,nmo*2), dtype=numpy.complex)
+        orbspin = numpy.zeros(nmo*2,dtype=int)
+        orbspin[1::2] = 1
+        eri2[0::2,0::2,0::2,0::2] = eri1
+        eri2[1::2,1::2,0::2,0::2] = eri1
+        eri2[0::2,0::2,1::2,1::2] = eri1
+        eri2[1::2,1::2,1::2,1::2] = eri1
+        eri2 = eri2.transpose(0,2,1,3) - eri2.transpose(0,2,3,1)
+        fock = numpy.zeros((nmo*2,nmo*2), dtype=numpy.complex)
+        fock[0::2,0::2] = eris.fock
+        fock[1::2,1::2] = eris.fock
+        eris1 = gccsd._PhysicistsERIs()
+        eris1.ovvv = eri2[:nocc*2,nocc*2:,nocc*2:,nocc*2:]
+        eris1.oovv = eri2[:nocc*2,:nocc*2,nocc*2:,nocc*2:]
+        eris1.ooov = eri2[:nocc*2,:nocc*2,:nocc*2,nocc*2:]
+        eris1.fock = fock
+        t1 = gccsd.spatial2spin(t1, orbspin)
+        t2 = gccsd.spatial2spin(t2, orbspin)
+        gcc = gccsd.GCCSD(scf.GHF(gto.M()))
+        e1 = gccsd_t.kernel(gcc, eris1, t1, t2)
+        self.assertAlmostEqual(e0, e1.real, 9)
+        self.assertAlmostEqual(e1, (-0.98756910139720788-0.0019567929592079489j), 9)
 
 
 if __name__ == "__main__":

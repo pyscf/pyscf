@@ -22,22 +22,23 @@ def kernel(cc, eris, t1=None, t2=None, verbose=logger.INFO):
     nocc, nvir = t1.shape
 
     bcei = numpy.asarray(eris.ovvv).conj().transpose(3,2,1,0)
-    majk = numpy.asarray(eris.ooov).transpose(2,3,0,1)
-    bcjk = numpy.asarray(eris.oovv).transpose(2,3,0,1)
-    fov = eris.fock[:nocc,nocc:]
+    majk = numpy.asarray(eris.ooov).conj().transpose(2,3,0,1)
+    bcjk = numpy.asarray(eris.oovv).conj().transpose(2,3,0,1)
+    fvo = eris.fock[nocc:,:nocc]
     mo_e = eris.fock.diagonal().real
     eijk = lib.direct_sum('i+j+k->ijk', mo_e[:nocc], mo_e[:nocc], mo_e[:nocc])
     eabc = lib.direct_sum('a+b+c->abc', mo_e[nocc:], mo_e[nocc:], mo_e[nocc:])
 
     t2T = t2.transpose(2,3,0,1)
+    t1T = t1.T
     def get_wv(a, b, c):
         w  = numpy.einsum('ejk,ei->ijk', t2T[a,:], bcei[b,c])
         w -= numpy.einsum('im,mjk->ijk', t2T[b,c], majk[:,a])
-        v  = numpy.einsum('i,jk->ijk', t1 [:,a], bcjk[b,c])
-        v += numpy.einsum('i,jk->ijk', fov[:,a], t2T [b,c])
+        v  = numpy.einsum('i,jk->ijk', t1T[a], bcjk[b,c])
+        v += numpy.einsum('i,jk->ijk', fvo[a], t2T [b,c])
         v += w
         w = w + w.transpose(2,0,1) + w.transpose(1,2,0)
-        return w, v
+        return w, v.conj()
 
     et = 0
     for a in range(nvir):

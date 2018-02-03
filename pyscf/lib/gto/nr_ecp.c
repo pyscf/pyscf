@@ -5180,7 +5180,7 @@ void type1_rad_ang(double *rad_ang, int lmax, double *r, double *rad_all)
 
 static int _loc_ecpbas(int *ecploc, int *ecpbas, int necpbas)
 {
-        int i, j, l, atm_id;
+        int i, l, atm_id;
         ecploc[0] = 0;
         int nslots = 1;
         int atm_last = ecpbas[ATOM_OF];
@@ -5276,7 +5276,7 @@ int ECPtype2_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         const char TRANS_T = 'T';
         const double common_fac = CINTcommon_fac_sp(li) *
                                   CINTcommon_fac_sp(lj) * 16 * M_PI * M_PI;
-        int ia, atm_id, lc, lab, lilc1, ljlc1, lilj1, dlc, im, mq;
+        int atm_id, lc, lab, lilc1, ljlc1, lilj1, dlc, im, mq;
         int i, j, n, ic, jc;
         int d2, d3;
         double ur[nrs];
@@ -5521,7 +5521,7 @@ int ECPtype1_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         const int dj1 = lj + 1;
         const int dj2 = dj1 * dj1;
         const int dj3 = dj2 * dj1;
-        int ia, atm_id;
+        int atm_id;
         int i, n, ip, jp, ic, jc, mi, mj;
         int i1, i2, i3, j1, j2, j3;
         int ix, iy, iz, jx, jy, jz;

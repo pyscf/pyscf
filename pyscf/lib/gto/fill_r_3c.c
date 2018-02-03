@@ -34,13 +34,11 @@ void GTOr3c_fill_s1(int (*intor)(), double complex *out, double complex *buf,
 
         ish += ish0;
         jsh += jsh0;
-        const int di = ao_loc[ish+1] - ao_loc[ish];
-        const int dj = ao_loc[jsh+1] - ao_loc[jsh];
         const int ip = ao_loc[ish] - ao_loc[ish0];
         const int jp = ao_loc[jsh] - ao_loc[jsh0];
         out += jp * naoi + ip;
 
-        int ksh, dk, k0;
+        int ksh, k0;
         int shls[3];
 
         shls[0] = ish;
@@ -49,7 +47,6 @@ void GTOr3c_fill_s1(int (*intor)(), double complex *out, double complex *buf,
         for (ksh = ksh0; ksh < ksh1; ksh++) {
                 shls[2] = ksh;
                 k0 = ao_loc[ksh  ] - ao_loc[ksh0];
-                dk = ao_loc[ksh+1] - ao_loc[ksh];
                 (*intor)(out+k0*nij, dims, shls, atm, natm, bas, nbas, env, cintopt, buf);
         }
 }
