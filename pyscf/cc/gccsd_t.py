@@ -38,7 +38,7 @@ def kernel(cc, eris, t1=None, t2=None, verbose=logger.INFO):
         v += numpy.einsum('i,jk->ijk', fvo[a], t2T [b,c])
         v += w
         w = w + w.transpose(2,0,1) + w.transpose(1,2,0)
-        return w, v.conj()
+        return w, v
 
     et = 0
     for a in range(nvir):
@@ -51,7 +51,7 @@ def kernel(cc, eris, t1=None, t2=None, verbose=logger.INFO):
                 w = wabc + wcab - wbac
                 v = vabc + vcab - vbac
                 w /= eijk - eabc[a,b,c]
-                et += numpy.einsum('ijk,ijk', w, v)
+                et += numpy.einsum('ijk,ijk', w, v.conj())
     et /= 2
     return et
 

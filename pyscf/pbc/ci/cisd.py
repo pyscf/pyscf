@@ -10,8 +10,9 @@ class RCISD(cisd.RCISD):
             raise NotImplementedError
         cisd.RCISD.__init__(self, mf, frozen, mo_coeff, mo_occ)
     def ao2mo(self, mo_coeff=None):
+        from pyscf.cc import rccsd
         ao2mofn = mp.mp2._gen_ao2mofn(self._scf)
-        return cisd.ccsd._make_eris_incore(self, mo_coeff, ao2mofn=ao2mofn)
+        return rccsd._make_eris_incore(self, mo_coeff, ao2mofn=ao2mofn)
 
 class UCISD(ucisd.UCISD):
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):

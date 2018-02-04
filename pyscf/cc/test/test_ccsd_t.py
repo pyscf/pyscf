@@ -160,7 +160,7 @@ class KnownValues(unittest.TestCase):
         gcc = gccsd.GCCSD(scf.GHF(gto.M()))
         e1 = gccsd_t.kernel(gcc, eris1, t1, t2)
         self.assertAlmostEqual(e0, e1.real, 9)
-        self.assertAlmostEqual(e1, (-0.98756910139720788-0.0019567929592079489j), 9)
+        self.assertAlmostEqual(e1, -0.98756910139720788-0.0019567929592079489j, 9)
 
 
 if __name__ == "__main__":

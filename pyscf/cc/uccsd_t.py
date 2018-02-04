@@ -3,16 +3,16 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+'''
+UCCSD(T)
+'''
+
 import time
 import ctypes
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.cc import _ccsd
-
-'''
-UCCSD(T)
-'''
 
 def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     cpu1 = cpu0 = (time.clock(), time.time())
@@ -21,8 +21,6 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     if t2 is None: t2 = mycc.t2
     t1a, t1b = t1
     t2aa, t2ab, t2bb = t2
-    if numpy.iscomplexobj(t2):
-        raise NotImplementedError('Complex integrals are not supported in CCSD(T)')
 
     nocca = eris.nocca
     noccb = eris.noccb
@@ -38,10 +36,10 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     t2aaT = t2aa.transpose(2,3,0,1).copy()
     t2bbT = t2bb.transpose(2,3,0,1).copy()
 
-    eris_vooo = numpy.asarray(eris.ovoo).transpose(1,2,0,3).copy()
-    eris_VOOO = numpy.asarray(eris.OVOO).transpose(1,2,0,3).copy()
-    eris_vOoO = numpy.asarray(eris.ovOO).transpose(1,2,0,3).copy()
-    eris_VoOo = numpy.asarray(eris.OVoo).transpose(1,2,0,3).copy()
+    eris_vooo = numpy.asarray(eris.ovoo).transpose(1,3,0,2).conj().copy()
+    eris_VOOO = numpy.asarray(eris.OVOO).transpose(1,3,0,2).conj().copy()
+    eris_vOoO = numpy.asarray(eris.ovOO).transpose(1,3,0,2).conj().copy()
+    eris_VoOo = numpy.asarray(eris.OVoo).transpose(1,3,0,2).conj().copy()
 
     _sort_eri(mycc, eris, ftmp, log)
     eris_vvop = ftmp['vvop']
@@ -50,7 +48,8 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     eris_VvOp = ftmp['VvOp']
     cpu1 = log.timer_debug1('UCCSD(T) sort_eri', *cpu1)
 
-    et_sum = [0]
+    dtype = numpy.result_type(t1a.dtype, t2aa.dtype, eris_vooo.dtype)
+    et_sum = numpy.zeros(1, dtype=dtype)
     mem_now = lib.current_memory()[0]
     max_memory = max(0, mycc.max_memory - mem_now)
     # aaa
@@ -129,7 +128,8 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
             cache_row_a = cache_col_a = None
     cpu1 = log.timer_debug1('contract_baa', *cpu1)
 
-    t2baT = numpy.ndarray((nvirb,nvira,noccb,nocca), buffer=t2abT)
+    t2baT = numpy.ndarray((nvirb,nvira,noccb,nocca), buffer=t2abT,
+                          dtype=t2abT.dtype)
     t2baT[:] = t2abT.copy().transpose(1,0,3,2)
     # abb
     ts = t1bT, t1aT, t2bbT, t2baT
@@ -150,15 +150,19 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     cpu1 = log.timer_debug1('contract_abb', *cpu1)
 
     t2ab[:] = ftmp['t2ab']
-    et = et_sum[0] * .25
+    et_sum *= .25
+    if abs(et_sum[0].imag) > 1e-4:
+        logger.warn(mycc, 'Non-zero imaginary part of UCCSD(T) energy was found %s',
+                    et_sum[0])
+    et = et_sum[0].real
     log.timer('UCCSD(T)', *cpu0)
     log.note('UCCSD(T) correction = %.15g', et)
     return et
 
 def _gen_contract_aaa(t1T, t2T, vooo, fock, orbsym, log):
     nvir, nocc = t1T.shape
-    mo_energy = fock.diagonal().copy()
-    fovT = fock[:nocc,nocc:].T.copy()
+    mo_energy = fock.diagonal().real.copy()
+    fvo = fock[nocc:,:nocc].copy()
 
     cpu2 = [time.clock(), time.time()]
     orbsym = numpy.hstack((numpy.sort(orbsym[:nocc]),numpy.sort(orbsym[nocc:])))
@@ -173,30 +177,32 @@ def _gen_contract_aaa(t1T, t2T, vooo, fock, orbsym, log):
     o_ir_loc = o_ir_loc.astype(numpy.int32)
     v_ir_loc = v_ir_loc.astype(numpy.int32)
     oo_ir_loc = oo_ir_loc.astype(numpy.int32)
+    dtype = numpy.result_type(t2T.dtype, vooo.dtype, fock.dtype)
+    if dtype == numpy.complex:
+        drv = _ccsd.libcc.CCuccsd_t_zaaa
+    else:
+        drv = _ccsd.libcc.CCuccsd_t_aaa
     def contract(et_sum, a0, a1, b0, b1, cache):
         cache_row_a, cache_col_a, cache_row_b, cache_col_b = cache
-        drv = _ccsd.libcc.CCuccsd_t_aaa
-        drv.restype = ctypes.c_double
-        et = drv(mo_energy.ctypes.data_as(ctypes.c_void_p),
-                 t1T.ctypes.data_as(ctypes.c_void_p),
-                 t2T.ctypes.data_as(ctypes.c_void_p),
-                 vooo.ctypes.data_as(ctypes.c_void_p),
-                 fovT.ctypes.data_as(ctypes.c_void_p),
-                 ctypes.c_int(nocc), ctypes.c_int(nvir),
-                 ctypes.c_int(a0), ctypes.c_int(a1),
-                 ctypes.c_int(b0), ctypes.c_int(b1),
-                 ctypes.c_int(nirrep),
-                 o_ir_loc.ctypes.data_as(ctypes.c_void_p),
-                 v_ir_loc.ctypes.data_as(ctypes.c_void_p),
-                 oo_ir_loc.ctypes.data_as(ctypes.c_void_p),
-                 orbsym.ctypes.data_as(ctypes.c_void_p),
-                 cache_row_a.ctypes.data_as(ctypes.c_void_p),
-                 cache_col_a.ctypes.data_as(ctypes.c_void_p),
-                 cache_row_b.ctypes.data_as(ctypes.c_void_p),
-                 cache_col_b.ctypes.data_as(ctypes.c_void_p))
+        drv(et_sum.ctypes.data_as(ctypes.c_void_p),
+            mo_energy.ctypes.data_as(ctypes.c_void_p),
+            t1T.ctypes.data_as(ctypes.c_void_p),
+            t2T.ctypes.data_as(ctypes.c_void_p),
+            vooo.ctypes.data_as(ctypes.c_void_p),
+            fvo.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(nocc), ctypes.c_int(nvir),
+            ctypes.c_int(a0), ctypes.c_int(a1),
+            ctypes.c_int(b0), ctypes.c_int(b1),
+            ctypes.c_int(nirrep),
+            o_ir_loc.ctypes.data_as(ctypes.c_void_p),
+            v_ir_loc.ctypes.data_as(ctypes.c_void_p),
+            oo_ir_loc.ctypes.data_as(ctypes.c_void_p),
+            orbsym.ctypes.data_as(ctypes.c_void_p),
+            cache_row_a.ctypes.data_as(ctypes.c_void_p),
+            cache_col_a.ctypes.data_as(ctypes.c_void_p),
+            cache_row_b.ctypes.data_as(ctypes.c_void_p),
+            cache_col_b.ctypes.data_as(ctypes.c_void_p))
         cpu2[:] = log.timer_debug1('contract %d:%d,%d:%d'%(a0,a1,b0,b1), *cpu2)
-        et_sum[0] += et
-        return et
     return contract
 
 def _gen_contract_baa(ts, vooo, fock, orbsym, log):
@@ -205,38 +211,40 @@ def _gen_contract_baa(ts, vooo, fock, orbsym, log):
     vooo, vOoO, VoOo = vooo
     nvira, nocca = t1aT.shape
     nvirb, noccb = t1bT.shape
-    mo_ea = focka.diagonal().copy()
-    mo_eb = fockb.diagonal().copy()
-    fovT = focka[:nocca,nocca:].T.copy()
-    fOVT = fockb[:noccb,noccb:].T.copy()
+    mo_ea = focka.diagonal().real.copy()
+    mo_eb = fockb.diagonal().real.copy()
+    fvo = focka[nocca:,:nocca].copy()
+    fVO = fockb[noccb:,:noccb].copy()
 
     cpu2 = [time.clock(), time.time()]
+    dtype = numpy.result_type(t2aaT.dtype, vooo.dtype)
+    if dtype == numpy.complex:
+        drv = _ccsd.libcc.CCuccsd_t_zbaa
+    else:
+        drv = _ccsd.libcc.CCuccsd_t_baa
     def contract(et_sum, a0, a1, b0, b1, cache):
         cache_row_a, cache_col_a, cache_row_b, cache_col_b = cache
-        drv = _ccsd.libcc.CCuccsd_t_baa
-        drv.restype = ctypes.c_double
-        et = drv(mo_ea.ctypes.data_as(ctypes.c_void_p),
-                 mo_eb.ctypes.data_as(ctypes.c_void_p),
-                 t1aT.ctypes.data_as(ctypes.c_void_p),
-                 t1bT.ctypes.data_as(ctypes.c_void_p),
-                 t2aaT.ctypes.data_as(ctypes.c_void_p),
-                 t2abT.ctypes.data_as(ctypes.c_void_p),
-                 vooo.ctypes.data_as(ctypes.c_void_p),
-                 vOoO.ctypes.data_as(ctypes.c_void_p),
-                 VoOo.ctypes.data_as(ctypes.c_void_p),
-                 fovT.ctypes.data_as(ctypes.c_void_p),
-                 fOVT.ctypes.data_as(ctypes.c_void_p),
-                 ctypes.c_int(nocca), ctypes.c_int(noccb),
-                 ctypes.c_int(nvira), ctypes.c_int(nvirb),
-                 ctypes.c_int(a0), ctypes.c_int(a1),
-                 ctypes.c_int(b0), ctypes.c_int(b1),
-                 cache_row_a.ctypes.data_as(ctypes.c_void_p),
-                 cache_col_a.ctypes.data_as(ctypes.c_void_p),
-                 cache_row_b.ctypes.data_as(ctypes.c_void_p),
-                 cache_col_b.ctypes.data_as(ctypes.c_void_p))
+        drv(et_sum.ctypes.data_as(ctypes.c_void_p),
+            mo_ea.ctypes.data_as(ctypes.c_void_p),
+            mo_eb.ctypes.data_as(ctypes.c_void_p),
+            t1aT.ctypes.data_as(ctypes.c_void_p),
+            t1bT.ctypes.data_as(ctypes.c_void_p),
+            t2aaT.ctypes.data_as(ctypes.c_void_p),
+            t2abT.ctypes.data_as(ctypes.c_void_p),
+            vooo.ctypes.data_as(ctypes.c_void_p),
+            vOoO.ctypes.data_as(ctypes.c_void_p),
+            VoOo.ctypes.data_as(ctypes.c_void_p),
+            fvo.ctypes.data_as(ctypes.c_void_p),
+            fVO.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(nocca), ctypes.c_int(noccb),
+            ctypes.c_int(nvira), ctypes.c_int(nvirb),
+            ctypes.c_int(a0), ctypes.c_int(a1),
+            ctypes.c_int(b0), ctypes.c_int(b1),
+            cache_row_a.ctypes.data_as(ctypes.c_void_p),
+            cache_col_a.ctypes.data_as(ctypes.c_void_p),
+            cache_row_b.ctypes.data_as(ctypes.c_void_p),
+            cache_col_b.ctypes.data_as(ctypes.c_void_p))
         cpu2[:] = log.timer_debug1('contract %d:%d,%d:%d'%(a0,a1,b0,b1), *cpu2)
-        et_sum[0] += et
-        return et
     return contract
 
 def _sort_eri(mycc, eris, h5tmp, log):
@@ -248,24 +256,28 @@ def _sort_eri(mycc, eris, h5tmp, log):
     nvira = nmoa - nocca
     nvirb = nmob - noccb
 
-    eris_vvop = h5tmp.create_dataset('vvop', (nvira,nvira,nocca,nmoa), 'f8')
-    eris_VVOP = h5tmp.create_dataset('VVOP', (nvirb,nvirb,noccb,nmob), 'f8')
-    eris_vVoP = h5tmp.create_dataset('vVoP', (nvira,nvirb,nocca,nmob), 'f8')
-    eris_VvOp = h5tmp.create_dataset('VvOp', (nvirb,nvira,noccb,nmoa), 'f8')
+    if mycc.t2 is None:
+        dtype = eris.ovov.dtype
+    else:
+        dtype = numpy.result_type(mycc.t2[0], eris.ovov.dtype)
+    eris_vvop = h5tmp.create_dataset('vvop', (nvira,nvira,nocca,nmoa), dtype)
+    eris_VVOP = h5tmp.create_dataset('VVOP', (nvirb,nvirb,noccb,nmob), dtype)
+    eris_vVoP = h5tmp.create_dataset('vVoP', (nvira,nvirb,nocca,nmob), dtype)
+    eris_VvOp = h5tmp.create_dataset('VvOp', (nvirb,nvira,noccb,nmoa), dtype)
 
     max_memory = max(2000, mycc.max_memory - lib.current_memory()[0])
     max_memory = min(8000, max_memory*.9)
 
     blksize = min(nvira, max(16, int(max_memory*1e6/8/(nvira*nocca*nmoa))))
     with lib.call_in_background(eris_vvop.__setitem__) as save:
-        bufopv = numpy.empty((nocca,nmoa,nvira))
+        bufopv = numpy.empty((nocca,nmoa,nvira), dtype=dtype)
         buf1 = numpy.empty_like(bufopv)
         for j0, j1 in lib.prange(0, nvira, blksize):
             ovov = numpy.asarray(eris.ovov[:,j0:j1])
             ovvv = eris.get_ovvv(slice(None), slice(j0,j1))
             for j in range(j0,j1):
-                bufopv[:,:nocca,:] = ovov[:,j-j0]
-                bufopv[:,nocca:,:] = ovvv[:,j-j0]
+                bufopv[:,:nocca,:] = ovov[:,j-j0].conj()
+                bufopv[:,nocca:,:] = ovvv[:,j-j0].conj()
                 save(j, bufopv.transpose(2,0,1))
                 bufopv, buf1 = buf1, bufopv
             ovov = ovvv = None
@@ -273,14 +285,14 @@ def _sort_eri(mycc, eris, h5tmp, log):
 
     blksize = min(nvirb, max(16, int(max_memory*1e6/8/(nvirb*noccb*nmob))))
     with lib.call_in_background(eris_VVOP.__setitem__) as save:
-        bufopv = numpy.empty((noccb,nmob,nvirb))
+        bufopv = numpy.empty((noccb,nmob,nvirb), dtype=dtype)
         buf1 = numpy.empty_like(bufopv)
         for j0, j1 in lib.prange(0, nvirb, blksize):
             ovov = numpy.asarray(eris.OVOV[:,j0:j1])
             ovvv = eris.get_OVVV(slice(None), slice(j0,j1))
             for j in range(j0,j1):
-                bufopv[:,:noccb,:] = ovov[:,j-j0]
-                bufopv[:,noccb:,:] = ovvv[:,j-j0]
+                bufopv[:,:noccb,:] = ovov[:,j-j0].conj()
+                bufopv[:,noccb:,:] = ovvv[:,j-j0].conj()
                 save(j, bufopv.transpose(2,0,1))
                 bufopv, buf1 = buf1, bufopv
             ovov = ovvv = None
@@ -288,29 +300,30 @@ def _sort_eri(mycc, eris, h5tmp, log):
 
     blksize = min(nvira, max(16, int(max_memory*1e6/8/(nvirb*nocca*nmob))))
     with lib.call_in_background(eris_vVoP.__setitem__) as save:
-        bufopv = numpy.empty((nocca,nmob,nvirb))
+        bufopv = numpy.empty((nocca,nmob,nvirb), dtype=dtype)
         buf1 = numpy.empty_like(bufopv)
         for j0, j1 in lib.prange(0, nvira, blksize):
             ovov = numpy.asarray(eris.ovOV[:,j0:j1])
             ovvv = eris.get_ovVV(slice(None), slice(j0,j1))
             for j in range(j0,j1):
-                bufopv[:,:noccb,:] = ovov[:,j-j0]
-                bufopv[:,noccb:,:] = ovvv[:,j-j0]
+                bufopv[:,:noccb,:] = ovov[:,j-j0].conj()
+                bufopv[:,noccb:,:] = ovvv[:,j-j0].conj()
                 save(j, bufopv.transpose(2,0,1))
                 bufopv, buf1 = buf1, bufopv
             ovov = ovvv = None
             cpu1 = log.timer_debug1('transpose %d:%d'%(j0,j1), *cpu1)
 
     blksize = min(nvirb, max(16, int(max_memory*1e6/8/(nvira*noccb*nmoa))))
+    OVov = numpy.asarray(eris.ovOV).transpose(2,3,0,1)
     with lib.call_in_background(eris_VvOp.__setitem__) as save:
-        bufopv = numpy.empty((noccb,nmoa,nvira))
+        bufopv = numpy.empty((noccb,nmoa,nvira), dtype=dtype)
         buf1 = numpy.empty_like(bufopv)
         for j0, j1 in lib.prange(0, nvirb, blksize):
-            ovvo = numpy.asarray(eris.OVvo[:,j0:j1])
+            ovov = OVov[:,j0:j1]
             ovvv = eris.get_OVvv(slice(None), slice(j0,j1))
             for j in range(j0,j1):
-                bufopv[:,:nocca,:] = ovvo[:,j-j0].transpose(0,2,1)
-                bufopv[:,nocca:,:] = ovvv[:,j-j0]
+                bufopv[:,:nocca,:] = ovov[:,j-j0].conj()
+                bufopv[:,nocca:,:] = ovvv[:,j-j0].conj()
                 save(j, bufopv.transpose(2,0,1))
                 bufopv, buf1 = buf1, bufopv
             ovvo = ovvv = None
@@ -385,3 +398,4 @@ if __name__ == '__main__':
     from pyscf.cc import gccsd_t_slow
     et = gccsd_t_slow.kernel(mycc, eris, t1, t2)
     print(et - 9877.2780859693339)
+

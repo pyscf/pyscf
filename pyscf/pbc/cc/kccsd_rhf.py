@@ -237,6 +237,8 @@ def energy(cc, t1, t2, eris):
                 e += 2*einsum('ijab,ijab', tau[ki,kj,ka], eris.oovv[ki,kj,ka])
                 e +=  -einsum('ijab,ijba', tau[ki,kj,ka], eris.oovv[ki,kj,kb])
     e /= nkpts
+    if abs(e.imag) > 1e-4:
+        logger.warn(cc, 'Non-zero imaginary part found in KRCCSD energy %s', e)
     return e.real
 
 

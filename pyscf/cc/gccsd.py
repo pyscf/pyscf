@@ -82,8 +82,8 @@ def energy(cc, t1, t2, eris):
     eris_oovv = np.array(eris.oovv)
     e += 0.25*np.einsum('ijab,ijab', t2, eris_oovv)
     e += 0.5 *np.einsum('ia,jb,ijab', t1, t1, eris_oovv)
-    if abs(e.imag) > 1e-5:
-        logger.warn(cc, 'Non-zero imaginary part of CCSD energy was found %s', e)
+    if abs(e.imag) > 1e-4:
+        logger.warn(cc, 'Non-zero imaginary part found in GCCSD energy %s', e)
     return e.real
 
 vector_to_amplitudes = ccsd.vector_to_amplitudes_s4

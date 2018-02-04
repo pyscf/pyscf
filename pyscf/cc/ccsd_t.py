@@ -29,11 +29,12 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     nmo = nocc + nvir
 
     ftmp = lib.H5TmpFile()
-    eris_vvop = ftmp.create_dataset('vvop', (nvir,nvir,nocc,nmo), t2.dtype)
+    dtype = numpy.result_type(t1, t2, eris.ovoo.dtype)
+    eris_vvop = ftmp.create_dataset('vvop', (nvir,nvir,nocc,nmo), dtype)
     orbsym = _sort_eri(mycc, eris, nocc, nvir, eris_vvop, log)
 
     ftmp['t2'] = t2  # read back late.  Cache t2T in t2 to reduce memory footprint
-    mo_energy, t1T, t2T, vooo, fvo = \
+    mo_energy, t1T, t2T, vooo, fvo, restore_t2_inplace = \
             _sort_t2_vooo_(mycc, orbsym, t1, t2, eris)
     cpu1 = log.timer_debug1('CCSD(T) sort_eri', *cpu1)
 
@@ -50,11 +51,11 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     o_ir_loc = o_ir_loc.astype(numpy.int32)
     v_ir_loc = v_ir_loc.astype(numpy.int32)
     oo_ir_loc = oo_ir_loc.astype(numpy.int32)
-    if t2.dtype == numpy.complex:
+    if dtype == numpy.complex:
         drv = _ccsd.libcc.CCsd_t_zcontract
     else:
         drv = _ccsd.libcc.CCsd_t_contract
-    et_sum = numpy.zeros(1, dtype=t2.dtype)
+    et_sum = numpy.zeros(1, dtype=dtype)
     def contract(a0, a1, b0, b1, cache):
         cache_row_a, cache_col_a, cache_row_b, cache_col_b = cache
         drv(et_sum.ctypes.data_as(ctypes.c_void_p),
@@ -103,11 +104,12 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
                 cache_row_b = cache_col_b = None
             cache_row_a = cache_col_a = None
 
-    t2[:] = ftmp['t2']
+    t2 = restore_t2_inplace(t2T)
+    et_sum *= 2
     if abs(et_sum[0].imag) > 1e-4:
         logger.warn(mycc, 'Non-zero imaginary part of CCSD(T) energy was found %s',
                     et_sum[0])
-    et = et_sum[0].real * 2
+    et = et_sum[0].real
     log.timer('CCSD(T)', *cpu0)
     log.note('CCSD(T) correction = %.15g', et)
     return et
@@ -138,12 +140,13 @@ def _sort_eri(mycc, eris, nocc, nvir, vvop, log):
         buf = numpy.empty((nocc,nvir,nvir), dtype=dtype)
         for j0, j1 in lib.prange(0, nvir, blksize):
             ovov = numpy.asarray(eris.ovov[:,j0:j1])
-            ovvv = numpy.asarray(eris.ovvv[:,j0:j1])
+            #ovvv = numpy.asarray(eris.ovvv[:,j0:j1])
+            ovvv = eris.get_ovvv(slice(None), slice(j0,j1))
             for j in range(j0,j1):
                 oov = ovov[o_sorted,j-j0]
                 ovv = ovvv[o_sorted,j-j0]
-                if ovv.ndim == 2:
-                    ovv = lib.unpack_tril(ovv, out=buf)
+                #if ovv.ndim == 2:
+                #    ovv = lib.unpack_tril(ovv, out=buf)
                 bufopv[:,:nocc,:] = oov[:,o_sorted][:,:,v_sorted].conj()
                 bufopv[:,nocc:,:] = ovv[:,v_sorted][:,:,v_sorted].conj()
                 save(vrank[j], bufopv.transpose(2,0,1))
@@ -185,16 +188,25 @@ def _sort_t2_vooo_(mycc, orbsym, t1, t2, eris):
         oo_idx = numpy.arange(nocc**2).reshape(nocc,nocc).T[o_sorted][:,o_sorted]
         oo_idx = oo_idx.ravel()[oo_sorted]
         vv_idx = (v_sorted[:,None]*nvir+v_sorted).ravel()
-        t2T = lib.take_2d(t2T.reshape(nvir**2,-1), vv_idx, oo_idx, out=t2)
+        t2T = lib.take_2d(t2T.reshape(nvir**2,nocc**2), vv_idx, oo_idx, out=t2)
         t2T = t2T.reshape(nvir,nvir,nocc,nocc)
+        def restore_t2_inplace(t2T):
+            tmp = numpy.zeros((nvir**2,nocc**2), dtype=t2T.dtype)
+            lib.takebak_2d(tmp, t2T.reshape(nvir**2,nocc**2), vv_idx, oo_idx)
+            t2 = lib.transpose(tmp.reshape(nvir**2,nocc**2), out=t2T)
+            return t2.reshape(nocc,nocc,nvir,nvir)
     else:
         fvo = eris.fock[nocc:,:nocc].copy()
         t1T = t1.T.copy()
-        t2T = lib.transpose(t2.reshape(nocc**2,-1))
-        t2T = lib.transpose(t2T.reshape(-1,nocc,nocc), axes=(0,2,1), out=t2)
+        t2T = lib.transpose(t2.reshape(nocc**2,nvir**2))
+        t2T = lib.transpose(t2T.reshape(nvir**2,nocc,nocc), axes=(0,2,1), out=t2)
         mo_energy = numpy.asarray(eris.fock.diagonal().real, order='C')
+        def restore_t2_inplace(t2T):
+            tmp = lib.transpose(t2T.reshape(nvir**2,nocc,nocc), axes=(0,2,1))
+            t2 = lib.transpose(tmp.reshape(nvir**2,nocc**2), out=t2T)
+            return t2.reshape(nocc,nocc,nvir,nvir)
     t2T = t2T.reshape(nvir,nvir,nocc,nocc)
-    return mo_energy, t1T, t2T, vooo, fvo
+    return mo_energy, t1T, t2T, vooo, fvo, restore_t2_inplace
 
 def _irrep_argsort(orbsym):
     return numpy.hstack([numpy.where(orbsym == i)[0] for i in range(8)])

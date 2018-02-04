@@ -132,85 +132,36 @@ if __name__ == '__main__':
     from pyscf import scf
     from pyscf import cc
 
-#    mol = gto.M()
-#    numpy.random.seed(12)
-#    nocc, nvir = 5, 12
-#    eris = lambda :None
-#    eris.ovvv = numpy.random.random((nocc,nvir,nvir*(nvir+1)//2)) * .1
-#    eris.ovoo = numpy.random.random((nocc,nvir,nocc,nocc)) * .1
-#    eris.ovvo = numpy.random.random((nocc,nvir,nvir,nocc)) * .1
-#    t1 = numpy.random.random((nocc,nvir)) * .1
-#    t2 = numpy.random.random((nocc,nocc,nvir,nvir)) * .1
-#    t2 = t2 + t2.transpose(1,0,3,2)
-#    mf = scf.RHF(mol)
-#    mcc = cc.CCSD(mf)
-#    f = numpy.random.random((nocc+nvir,nocc+nvir)) * .1
-#    eris.fock = f+f.T + numpy.diag(numpy.arange(nocc+nvir))
-#    print(kernel(mcc, eris, t1, t2) - -8.7130467232959781)
-#
-#    mol = gto.Mole()
-#    mol.atom = [
-#        [8 , (0. , 0.     , 0.)],
-#        [1 , (0. , -.957 , .587)],
-#        [1 , (0.2,  .757 , .487)]]
-#
-#    mol.basis = 'ccpvdz'
-#    mol.build()
-#    rhf = scf.RHF(mol)
-#    rhf.conv_tol = 1e-14
-#    rhf.scf()
-#    mcc = cc.CCSD(rhf)
-#    mcc.conv_tol = 1e-14
-#    mcc.ccsd()
-#
-#    e3a = kernel(mcc, mcc.ao2mo())
-#    print(e3a - -0.0033300722698513989)
-
-
     mol = gto.M()
     numpy.random.seed(12)
-    nocc, nvir = 3, 4
-    nmo = nocc + nvir
-    eris = cc.rccsd._ChemistsERIs()
-    eri1 = (numpy.random.random((nmo,nmo,nmo,nmo)) +
-            numpy.random.random((nmo,nmo,nmo,nmo)) * .8j - .5-.4j)
-    eri1 = eri1 + eri1.transpose(1,0,2,3)
-    eri1 = eri1 + eri1.transpose(0,1,3,2)
-    eri1 = eri1 + eri1.transpose(2,3,0,1)
-    eri1 *= .1
-    eris.ovvv = eri1[:nocc,nocc:,nocc:,nocc:]
-    eris.ovoo = eri1[:nocc,nocc:,:nocc,:nocc]
-    eris.ovov = eri1[:nocc,nocc:,:nocc,nocc:]
-    t1 = (numpy.random.random((nocc,nvir)) * .1 +
-          numpy.random.random((nocc,nvir)) * .1j)
-    t2 = (numpy.random.random((nocc,nocc,nvir,nvir)) * .1 +
-          numpy.random.random((nocc,nocc,nvir,nvir)) * .1j)
+    nocc, nvir = 5, 12
+    eris = lambda :None
+    eris.ovvv = numpy.random.random((nocc,nvir,nvir*(nvir+1)//2)) * .1
+    eris.ovoo = numpy.random.random((nocc,nvir,nocc,nocc)) * .1
+    eris.ovvo = numpy.random.random((nocc,nvir,nvir,nocc)) * .1
+    t1 = numpy.random.random((nocc,nvir)) * .1
+    t2 = numpy.random.random((nocc,nocc,nvir,nvir)) * .1
     t2 = t2 + t2.transpose(1,0,3,2)
     mf = scf.RHF(mol)
     mcc = cc.CCSD(mf)
-    f = (numpy.random.random((nmo,nmo)) * .1 +
-         numpy.random.random((nmo,nmo)) * .1j)
-    eris.fock = f+f.T.conj() + numpy.diag(numpy.arange(nmo))
-    print(kernel(mcc, eris, t1, t2) - (-0.98756910139720788-0.0019567929592079489j))
+    f = numpy.random.random((nocc+nvir,nocc+nvir)) * .1
+    eris.fock = f+f.T + numpy.diag(numpy.arange(nocc+nvir))
+    print(kernel(mcc, eris, t1, t2) - -8.7130467232959781)
 
-    from pyscf.cc import gccsd, gccsd_t
-    eri2 = numpy.zeros((nmo*2,nmo*2,nmo*2,nmo*2), dtype=numpy.complex)
-    orbspin = numpy.zeros(nmo*2,dtype=int)
-    orbspin[1::2] = 1
-    eri2[0::2,0::2,0::2,0::2] = eri1
-    eri2[1::2,1::2,0::2,0::2] = eri1
-    eri2[0::2,0::2,1::2,1::2] = eri1
-    eri2[1::2,1::2,1::2,1::2] = eri1
-    eri2 = eri2.transpose(0,2,1,3) - eri2.transpose(0,2,3,1)
-    fock = numpy.zeros((nmo*2,nmo*2), dtype=numpy.complex)
-    fock[0::2,0::2] = eris.fock
-    fock[1::2,1::2] = eris.fock
-    eris1 = gccsd._PhysicistsERIs()
-    eris1.ovvv = eri2[:nocc*2,nocc*2:,nocc*2:,nocc*2:]
-    eris1.oovv = eri2[:nocc*2,:nocc*2,nocc*2:,nocc*2:]
-    eris1.ooov = eri2[:nocc*2,:nocc*2,:nocc*2,nocc*2:]
-    eris1.fock = fock
-    t1 = gccsd.spatial2spin(t1, orbspin)
-    t2 = gccsd.spatial2spin(t2, orbspin)
-    gcc = gccsd.GCCSD(scf.GHF(gto.M()))
-    print(gccsd_t.kernel(gcc, eris1, t1, t2) - (-0.98756910139720788-0.0019567929592079489j))
+    mol = gto.Mole()
+    mol.atom = [
+        [8 , (0. , 0.     , 0.)],
+        [1 , (0. , -.957 , .587)],
+        [1 , (0.2,  .757 , .487)]]
+
+    mol.basis = 'ccpvdz'
+    mol.build()
+    rhf = scf.RHF(mol)
+    rhf.conv_tol = 1e-14
+    rhf.scf()
+    mcc = cc.CCSD(rhf)
+    mcc.conv_tol = 1e-14
+    mcc.ccsd()
+
+    e3a = kernel(mcc, mcc.ao2mo())
+    print(e3a - -0.0033300722698513989)
