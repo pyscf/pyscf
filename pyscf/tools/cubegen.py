@@ -6,7 +6,22 @@
 #
 
 '''
-Gaussian cube file format
+Gaussian cube file format.  Reference:
+http://paulbourke.net/dataformats/cube/
+http://gaussian.com/cubegen/
+
+The output cube file has the following format
+
+Comment line
+Comment line
+N_atom Ox Oy Oz         # number of atoms, followed by the coordinates of the origin
+N1 vx1 vy1 vz1          # number of grids along each axis, followed by the step size in x/y/z direction.
+N2 vx2 vy2 vz2          # ...
+N3 vx3 vy3 vz3          # ...
+Atom1 Z1 x y z          # Atomic number, charge, and coordinates of the atom
+...                     # ...
+AtomN ZN x y z          # ...
+Data on grids           # (N1*N2) lines of records, each line has N3 elements
 '''
 
 import numpy
@@ -14,7 +29,6 @@ import time
 import pyscf
 from pyscf import lib
 from pyscf.dft import numint
-
 
 def density(mol, outfile, dm, nx=80, ny=80, nz=80):
     """Calculates electron density and write out in cube format.
@@ -152,9 +166,11 @@ class Cube():
         coord = mol.atom_coords()
         self.box = numpy.max(coord,axis=0) - numpy.min(coord,axis=0) + 6.0
         self.boxorig = numpy.min(coord,axis=0) - 3.0
-        self.xs = numpy.arange(nx) * (self.box[0]/nx)
-        self.ys = numpy.arange(ny) * (self.box[1]/ny)
-        self.zs = numpy.arange(nz) * (self.box[2]/nz)
+        # .../(nx-1) to get symmetric mesh
+        # see also the discussion on https://github.com/sunqm/pyscf/issues/154
+        self.xs = numpy.arange(nx) * (self.box[0] / (nx - 1))
+        self.ys = numpy.arange(ny) * (self.box[1] / (ny - 1))
+        self.zs = numpy.arange(nz) * (self.box[2] / (nz - 1))
 
     def get_coords(self) :
         """  Result: set of coordinates to compute a field which is to be stored
