@@ -323,6 +323,8 @@ def intor_cross(intor, cell1, cell2, comp=None, hermi=0, kpts=None, kpt=None,
     import copy
     intor, comp = moleintor._get_intor_and_comp(cell1._add_suffix(intor), comp)
 
+    assert('2e' not in intor)
+
     if kpts is None:
         if kpt is not None:
             kpts_lst = np.reshape(kpt, (1,3))
