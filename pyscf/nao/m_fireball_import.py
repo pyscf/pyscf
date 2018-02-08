@@ -92,9 +92,13 @@ def fireball_import(self, **kw):
   for sp,ion in enumerate(self.sp2ion):
     ioncompat = ion
     data = []
-    for i,[d,ff,npts] in enumerate(zip(ion["pao2delta"], ion["pao2ff"], ion["pao2npts"])):
+    for i,[d,ff,npts,j] in enumerate(zip(ion["pao2delta"],ion["pao2ff"],ion["pao2npts"],ion["pao2j"])):
       rr = np.linspace(0.0, npts*d, npts)
+      norm = (np.array(ff)**2*rr**2).sum()*(rr[1]-rr[0])
+      ff = [ff[0]/np.sqrt(norm)]+[f/r/np.sqrt(norm) for f,r in zip(ff, rr) if r>0]
       data.append(np.array([rr, ff]).T)
+      norm = (np.array(ff)**2*rr**2).sum()*(rr[1]-rr[0])
+      print(__name__, 'norm', norm)
     
     paos = {"npaos": ion["npao"], "delta": ion["pao2delta"], "cutoff": ion["pao2rcut"], "npts": ion["pao2npts"], "data": data, 
     "orbital": [ {"l": j, "population": occ} for occ,j in zip(ion["pao2occ"],ion["pao2j"])] }

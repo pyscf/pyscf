@@ -7,9 +7,7 @@ import sys
 #
 #
 def siesta_ion_interp(rr, sp2ion, fj=1):
-  """
-    Interpolation of orbitals given on linear grid in the ion dictionary
-  """
+  """ Interpolation of orbitals given on linear grid in the ion dictionary  """
   nr = len(rr)
   assert(nr>2)
   nsp = len(sp2ion)
@@ -19,7 +17,7 @@ def siesta_ion_interp(rr, sp2ion, fj=1):
   for sp,ion in enumerate(sp2ion):
     nmu = len(sp2ion[sp]["paos"]["orbital"])
 
-    smr2ro_log.append(np.zeros((nmu,nr), dtype='float64'))
+    smr2ro_log.append(np.zeros((nmu,nr)))
 
     for mu,dat in enumerate(ion["paos"]["data"]):
       #print(__name__, 'dat.shape', dat.shape, dat[0:4,0], dat[0:4,1])
