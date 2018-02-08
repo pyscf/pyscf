@@ -247,6 +247,12 @@ class AFTDF(lib.StreamObject):
     def check_sanity(self):
         lib.StreamObject.check_sanity(self)
         cell = self.cell
+        if cell.low_dim_ft_type is not None:
+            raise ValueError('AFTDF detected a non-None cell.low_dim_ft_type! '
+                             'The cell.low_dim_ft_type should only be \nset when '
+                             'using with_df = FFTDF. Please set mf.with_df equal '
+                             'to FFTDF or set cell.low_dim_ft_type \n(= %s) to None. '
+                              % (cell.low_dim_ft_type))
         if not cell.has_ecp():
             logger.warn(self, 'AFTDF integrals are found in all-electron '
                         'calculation.  It often causes huge error.\n'
