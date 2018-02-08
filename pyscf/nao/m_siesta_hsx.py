@@ -47,6 +47,7 @@ def siesta_hsx_read(fname, force_gamma=None):
 #
 #
 class siesta_hsx_c():
+
   def __init__(self, **kw):
     #fname='siesta.HSX', force_gamma=None
     self.fname = fname = kw['fname'] if 'fname' in kw else 'siesta.HSX'

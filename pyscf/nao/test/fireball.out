@@ -1,0 +1,2549 @@
+                Welcome to FIREBALL CZ !     
+           A fast local orbital QMD Package    
+               Version  1.2.0 17/5/2010    
+      brought to you by the Fireball Committee: 
+   
+                  James P. Lewis 
+         Department of Physics and Astronomy 
+              Brigham Young University 
+   
+                  Otto F. Sankey 
+        Department of Physics and Astronomy 
+            Arizona State University 
+   
+                   Jose Ortega 
+              Departmento de Fisica 
+        Teorica de la Materia Condensada 
+              Universidad de Madrid 
+   
+                 Pavel Jelinek 
+              Institute of Physics 
+             Prague, Czech Republic 
+   
+   
+              with contributions from: 
+   
+  Alex A. Demkov (Motorola Physical Sciences Research Labs)
+  Gary B. Adams (Arizona State University) 
+  Jian Jun Dong (Arizona State University) 
+  David A. Drabold (Ohio University) 
+  Peter A. Fedders (Washington University) 
+  Kurt R. Glaesemann (University of Utah) 
+  Kevin Schmidt (Arizona State University) 
+  Spencer Shellman (University of Utah) 
+  John Tomfohr (Arizona State University) 
+  Hao Wang (Brigham Young University) 
+   
+      Latest version 10 Jan. 2005 
+   
+          See Copyright information: 
+            !!!Proprietory Code!!! 
+   
+  Usable only with permission from the Fireball executive 
+  committee. This program is NOT, under any circumstances, 
+  to be transfered to an unauthorized user. 
+   
+  This source code is completely dynamical in memory. 
+  No diagnostics.input file to read. Will run normally 
+   
+  ======================================================================
+  Now reading file fireball.in 
+   
+   
+  ======================================================================
+  The name of the basisfile: 
+   file = initial.bas                   
+   
+  ======================================================================
+  The name of the lattice vector file: 
+   file = input.lvs                     
+   
+  ======================================================================
+  The name of the k-points file: 
+   file = input.kpts                    
+   
+  ======================================================================
+  The initial and final time steps for this 
+  simulation (e.g. 101,200). N O T E: setting the initial 
+  time step to a value less than or equal to zero causes 
+  this program to NOT compute any any derivatives or 
+  forces. Thus no simulation, and no calls to forces.
+   
+  nstepi, nstepf =            1           1
+  ======================================================================
+   
+  Input time step in fs (10**-15 sec): 
+  dt =   0.50000000000000000     
+   
+  The position-velocity filename: XXX.xv. 
+  This file is input and output if nstepi .ne. 1.
+   file = xv.dat                        
+   
+  The file name for the acfile: XXX.ac. 
+  (acfile records values of acceleration and other 
+   time derivatives for last executed step.) 
+   file = ac.dat                        
+  You can have charge transfer in an SCF theory, or you 
+  can run fixed charges as in the Harris functional. The 
+  fixed charges are set by the info.dat file. These same 
+  charges are the initial guess for the SCF charges. 
+   
+  Input itheory - 
+  This describes the level of theory that you want.
+   0 => Harris 
+   1 => DOGS 
+   2 => extended-Hubbard 
+   3 => Kohn-Sham 
+  itheory =            1
+
+  Input itheory_xc - 
+  This describes the exchange-correlation theory used. 
+   0 => Horsfield 
+   1 => generalized Sankey-Niklewski 
+   2 => McWEDA 
+  itheory_xc =            2
+   
+  Would you prefer to use Lowdin charges or Mulliken 
+  charges?  Enter 1 - Lowdin or 2 - Mulliken: 
+  3 - Natural population analysis: 
+  iqout =            3
+   
+  The option exists for changing the charge state of the 
+  system so that it is non-neutral. Insert qstate, the 
+  charge state that you want. 
+  qstate =    0.0000000000000000     
+   
+  This code allows for free dynamics or quenching. 
+   
+  Insert iquench -
+  iquench =  0 ==> Free dynamics (i.e. pure Newton)
+  iquench = -1 ==> dynamical quenching 
+  iquench = -2 ==> crude constant temperature MD 
+                   (from velocity rescaling) 
+  iquench = -3 ==> power quench 
+  iquench = -4 ==> conjugate gradient minimization 
+  iquench = -5 ==> Newton-CG minimization (l-bfgs-b)
+  iquench = +n ==> periodic quench every n steps 
+   
+  In the event that you are searching for an energy 
+  minimum, you can also set energy and force tolerances 
+  (etol and ftot) which will stop execution after 
+  tolerance is achieved. These are read from the 
+  the quench.optional file. 
+  iquench =           -1
+   
+ You can do various ensembles such as (0) NVE (also the
+ correct setting for doing quenching, conjugate 
+ gradient, etc.), (1) NVT with velocity rescaling, (2) NVT
+ with a Nose-Hoover chain thermostat and velocity-verlet
+ integrator, (3) NVE with velocity-verlet integrator
+ Insert 0/1/2/3.
+  iensemble=            0
+   
+  The option exists to calculate a crude energy barrier. 
+  The additions described here are designed to "push" the 
+  system of interest from a given initial configuration to 
+  a given final configuration via a "path of least 
+  resistance". 
+   
+  At each time step we take the vector difference, for 
+  each atom, between the current position (at time step #1 
+  this is the initial configuration) and the final, or 
+  desired, configuration.  These difference vectors are 
+  then transformed into unit vectors.  These unit vectors 
+  describe the direction that each atom must move in order 
+  to reach the final configuration. 
+   
+  Next the calculated forces for each atom are examined. 
+  The question is asked, "Does the force on iatom #i have 
+  a nonnegative component in the desired direction?" 
+  (Is force dot unit direction .ge. 0?).  If the answer is 
+  yes, then we are satisfied that iatom is not being 
+  pushed away from its desired final position and we do 
+  nothing.  But, if the answer is no, we add enough force 
+  IN THE DESIRED DIRECTION to make the component of the 
+  force in the desired direction equal to a given value. 
+   
+  This procedure insures that iatom always has some 
+  component of acceleration towards the desired final 
+  position of iatom.  Given enough time, iatom will arrive 
+  at the desired final position.  (Two rare cases are 
+  ignored here, the force on iatom may be exactly zero, 
+  and the dot product may be exactly zero, but these two 
+  cases could be handled if necessary.) 
+  ibarrier =            0
+   
+  In basvec, we will check the big-4 constraints.
+  (1) rcm  = 0
+  (2) pcm  = 0
+  (3) (1/n) (1/2)*sum (m * v**2) = 3/2 kb * T_initial
+  (4) ltot = 0
+   
+  We allow the option of constraining (1)..(4), or 
+  not constraining.
+   
+  If you want to constrain quantities, insert 1.
+  e.g. for no constriants,  insert 0, 0, 0, 0 
+  e.g. for all constraints, insert 1, 1, 1, 1 
+  Insert iconstraints(1-4): 
+     0   1   1   1
+  ======================================================================
+   
+  Do you want to fix the charge? 
+  (This is necessary if you are doing a band-structure 
+  calculation for example). 
+  ifixcharge =            0
+   
+  Do you want to fix the neighbors? 
+  (This is necessary if you are doing a phase transition 
+  type calculation for example). 
+  ifixneigh =            0
+   
+  Are you doing a cluster (gas-phase molecule)? 
+  In other words, do you want to set the coulomb 
+  interaction between cells equal to zero? 
+  icluster =            1
+   
+  Are you using the umbrella sampling algorithm? 
+  Insert 0/1 = N/Y 
+  iumbrella =            0
+   
+  The option exists for adding in the long range van der 
+  Waals interactions (dispersion terms).  This is done 
+  by adding in an empirical terms proportional to 1/R**6, 
+  according to a scheme that determines the C_6 parameters 
+  by using a combination rule. 
+  Are you including the van der Waals interactions? 
+  Insert 0/1 = N/Y 
+  ivdw =            0
+   
+  Do you want to use gaussian expansions to evaluate bcna 
+  three-center integrals? 
+  Note: you must first run gauss_create with the same 
+  input files you used when you ran create!!! 
+  igauss =            0
+   
+  Do you want to reimage the atoms to the central cell at
+  every N time steps? (zero means never).  This is needed
+  if the atoms move a long distance and you get a bad 
+  neighbor map as a result.  Note: the coordinates 
+  printed out will still not be the minimal image.  This 
+  might be incompatible with a barrier or umbrella 
+  calculation.  This option is also automatically set 
+  to zero if you are doing a cluster calculation. 
+  iimage =            0
+   
+  You have the option of calculating the dynamical
+  matrix. You do this by performing ndim X natoms
+  calculations. We displace each atom u0 in
+  each of the ndim directions. 
+  (Normally ndim=3, but may be less for 2d or 
+  1d molecules.) Each of these calculations
+  is performed in turn by the time step loop. So you
+  ultimately need to perform itime=1,ndim*natoms
+  time steps.
+  Do you wish to perform dynamical matrix calculation?
+  idynmat =            0
+ Do you want to calculate e-ph coupling?
+  (0 .. no; 1 .. yes)
+  iephc =            0
+   
+  Do you want to apply an external field?  If so and
+  the field is a harmonic osciallator, put 1. Otherwise
+  put zero.
+  iharmonic =            0
+   
+  In a MD simulation you have the option of 
+ allowing the system to warm up or cool down during
+ the course of the simulation.  The change in 
+ temperature will increment linearly over the 
+ course of the simulation.  Thus in order to 
+ have a smooth change in temperature a small 
+ difference between the initial temp and the final 
+ temperature should be used over a large number
+ of time steps.
+  
+ Do you want to change the temperature over the
+ course of an MD simulation? (0=no,1=yes)
+  iendtemp =            0
+   
+ Do you want to use Nugged Elastic Band method
+ to find out minimum energy path? (0=no,1=yes)
+  ineb =            0
+   
+ Do you want to calculate transport?
+ (0=no,1=yes)
+  itrans =            0
+   
+ Do you want to run time-dependent SE ?
+ (0=no,1=yes)
+  itdse =            0
+   
+ Do you want to apply bias voltage ?
+ (0=no,1=yes)
+  ibias =            0
+   
+ Do you want to run nonadiabatic coupling calculation ?
+ (0=no,1=yes)
+  imdet =            0
+   
+ The number of iteration steps for the time-dependent 
+ integration for each dynamical time-step dt
+  nddt =         1000
+   
+ Do you want recalate kpts, lvs and atom positions?
+ (1.0d0=no)
+  rescalar =    1.0000000000000000     
+   
+ Do you want see the energy in the second line of the answer.xyz?
+ (0=nothing, 1=energy,temperature 2=energy,temperature,time 3=energy)
+  xyz2line =            1
+  You have the option of calculating the molecular
+  gap correction using Hartree-Fock or Koopman
+  aproximations. If igap = 0 no gap corrections
+  will be done. If igap = 1, Hartree-Fock correction
+  will be used. If igap = 2, Koopman displacement of
+  molecular levels will be calculated. If igap = 3
+  scissor operator (maybe using Koopman correction) will
+  be used.
+  igap =            0
+   
+  The maximum number of iterations to self- 
+  consistency.
+  max_scf_iterations =          200
+   
+  The mixing algorithm for electronic structure,
+  ialgmix =            1
+  1 ... Anderson method 
+    ( see V. Eyert, J. Comp. Phys. 124, 271 (1996))
+  2 ... Broyden method 
+    ( see D.Vanderbilt & S.G.Louie, Phys.Rev.B 30, 6118 (1984))
+  3 ... Louie method 
+    (see D.Vanderbilt & S.G.Louie, Phys.Rev.B 30, 6118 (1984))
+  4 ... Pulay (RMM-DIIS) method 
+    (see F. Eckert et al, J. Comp. Chem. 18, 1473 (1997))
+  ======================================================================
+   
+  The convergence criteria for electronic structure,
+  sigmatol =    1.0000000000000000E-008
+  ======================================================================
+   
+  the mixing factor in SCF iterations, 
+  bmix =    4.0000000000000001E-002
+  ======================================================================
+  The Fermi temperature. This variable determine
+  smearing of (un)occupied states (1 eV = 11604 K)
+  tempfe =    100.00000000000000     
+  ======================================================================
+  Writing out wavefunction coefficients. 
+  Writing out eigenvalues. 
+  Writing out fermi occupations. 
+  Writing out xyz file - answer.xyz 
+  Writing out H & S file 
+  ======================================================================
+   
+  ======================================================================
+  Now we are reading from the info.dat file. 
+   
+  You are using the database created by: 
+   dani                    
+   
+  Number of species in database =            5
+  We will only read these atomic indexes: 
+           6           1
+
+  H 
+           1
+  ======================================================================
+   1 - Information for this species 
+  H  - Element 
+    1 - Nuclear Z 
+    1.008 - Atomic Mass 
+   2 - Number of shells 
+    0  0
+   1 - Number of shells (Pseudopotential) 
+    0
+        0.2000 - Radial cutoffs (Pseudopotential) 
+     1.00   0.00
+     4.00   4.00
+    /basis/001_400.wf1         /basis/001_400.ewf1      
+    /basis/001_400.na0         /basis/001_400.na1         /basis/001_400.ena1      
+      -11.3778 - Atomic energy 
+  ======================================================================
+  C 
+           6
+  ======================================================================
+   2 - Information for this species 
+  C  - Element 
+    6 - Nuclear Z 
+   12.011 - Atomic Mass 
+   4 - Number of shells 
+    0  1  0  1
+   2 - Number of shells (Pseudopotential) 
+    0  1
+        0.9600 - Radial cutoffs (Pseudopotential) 
+     2.00   2.00   0.00   0.00
+     4.00   4.50   4.00   4.50
+    /basis/006_400.wf1         /basis/006_450.wf2         /basis/006_400.ewf1        /basis/006_450.ewf2      
+    /basis/006_450.na0         /basis/006_400.na1         /basis/006_450.na2         /basis/006_400.ena1        /basis/006_450.ena2      
+     -144.3247 - Atomic energy 
+  ======================================================================
+  N 
+           7
+  O 
+           8
+  Ag
+          47
+   
+   
+  Atom Coordinates from Basis File: 
+  ======================================================================
+   Atom #    Type       x          y          z        Species # 
+  ======================================================================
+       1       C      -4.193     -3.948     -0.001        2
+       2       C      -3.106     -3.068      0.003        2
+       3       C      -3.324     -1.687      0.002        2
+       4       C      -4.630     -1.186      0.002        2
+       5       C      -5.717     -2.066     -0.001        2
+       6       C      -5.498     -3.447     -0.006        2
+       7       H      -6.368     -4.152     -0.010        1
+       8       H      -4.018     -5.053     -0.001        1
+       9       H      -2.061     -3.470      0.007        1
+      10       H      -2.455     -0.982      0.004        1
+      11       H      -4.804     -0.080      0.004        1
+      12       H      -6.762     -1.663     -0.002        1
+  ======================================================================
+   
+   
+  You are doing a cluster calculation 
+  Lattice vectors are not needed or read in 
+   
+ mbeta_max =          728
+   
+  You are doing a cluster calculation 
+  k-points are not read in 
+   
+   
+   
+  The Input Masses Are: 
+  ======================================================================
+   Atom #    Type    Mass 
+  ======================================================================
+       1       C      12.01
+       2       C      12.01
+       3       C      12.01
+       4       C      12.01
+       5       C      12.01
+       6       C      12.01
+       7       H       1.01
+       8       H       1.01
+       9       H       1.01
+      10       H       1.01
+      11       H       1.01
+      12       H       1.01
+  ======================================================================
+   
+  ======================================================================
+  You have chosen iquench =           -1
+  Optionally read information from the fireball.in file. 
+   
+   
+  ======================================================================
+  Now reading file fireball.in 
+   
+  In the event that you are searching for an energy 
+  minimum, you can also choose energy and force 
+  tolerances - energy_tol and force_tol. These tolerances 
+  will stop execution after they are achieved. Input a 
+  number for all of the following, even if option is not 
+  being used! 
+  Input energy_tol, force_tol, T_want, taurelax: 
+   
+  energy tolerance =    1.0000000000000000E-004  [eV]
+  force tolerance  =    5.0000000000000003E-002  [eV/A]
+  T_want =    0.0000000000000000       [K]
+  taurelax =    50.000000000000000     
+  ======================================================================
+   
+   
+  The Input Charges Are: 
+  ======================================================================
+   Atom #    Type    Shells   Charges 
+  ======================================================================
+       1       C       4      2.00  2.00  0.00  0.00
+       2       C       4      2.00  2.00  0.00  0.00
+       3       C       4      2.00  2.00  0.00  0.00
+       4       C       4      2.00  2.00  0.00  0.00
+       5       C       4      2.00  2.00  0.00  0.00
+       6       C       4      2.00  2.00  0.00  0.00
+       7       H       2      1.00  0.00
+       8       H       2      1.00  0.00
+       9       H       2      1.00  0.00
+      10       H       2      1.00  0.00
+      11       H       2      1.00  0.00
+      12       H       2      1.00  0.00
+  ======================================================================
+   
+   Calculated position of the Center-of-Mass:    -4.411   -2.567    0.000
+   
+  Constraining angular momentum!!!! 
+   
+   initial lcm =    0.0000000D+00   0.0000000D+00   0.0000000D+00
+     final lcm =    0.0000000D+00   0.0000000D+00   0.0000000D+00
+  Constraining the velocities about the center-of-mass 
+  Rescaling the velocities based on desired temperature. 
+ T_instantaneous   0.0000000000000000     
+ T_initial   0.0000000000000000     
+   
+  Atom Velocities: 
+  ======================================================================
+   Atom #    Type        x           y           z        Species # 
+  ======================================================================
+       1       C     -0.00000    -0.00000    -0.00000        2
+       2       C      0.00000     0.00000     0.00000        2
+       3       C     -0.00000     0.00000    -0.00000        2
+       4       C     -0.00000     0.00000     0.00000        2
+       5       C     -0.00000    -0.00000     0.00000        2
+       6       C     -0.00000    -0.00000    -0.00000        2
+       7       H      0.00000    -0.00000    -0.00000        1
+       8       H      0.00000    -0.00000     0.00000        1
+       9       H     -0.00000     0.00000    -0.00000        1
+      10       H      0.00000     0.00000    -0.00000        1
+      11       H      0.00000     0.00000     0.00000        1
+      12       H      0.00000    -0.00000    -0.00000        1
+
+  In setgear, using gear order of            2
+
+  Initiallizing arrays 
+  Determine maximum number of neighbors. 
+ find_neigh_max(): neigh_max=          12
+  Determine maximum number of PP-neighbors. 
+   
+  ======================================================================
+  Now we are reading Fdata file. 
+   
+   
+  ======================================================================
+  READING DATA FROM DATA FILES IN FDATA DIRECTORY: 
+  ======================================================================
+   
+  Calling   for 1-center exchange-correlation 
+   
+  Calling read_2c for 2-Center Interaction #            1
+  ======================================================================
+ Opening data file: Fdata/overlap.01.01.dat                                                                             
+ Opening data file: Fdata/overlap.01.06.dat                                                                             
+ Opening data file: Fdata/overlap.06.01.dat                                                                             
+ Opening data file: Fdata/overlap.06.06.dat                                                                             
+   
+  Calling read_2c for 2-Center Interaction #            2
+  ======================================================================
+ Opening data file: Fdata/vna_ontopl_00.01.01.dat                                                                       
+ Opening data file: Fdata/vna_ontopl_00.01.06.dat                                                                       
+ Opening data file: Fdata/vna_ontopl_00.06.01.dat                                                                       
+ Opening data file: Fdata/vna_ontopl_00.06.06.dat                                                                       
+   
+  Calling read_2c for 2-Center Interaction #            3
+  ======================================================================
+ Opening data file: Fdata/vna_ontopr_00.01.01.dat                                                                       
+ Opening data file: Fdata/vna_ontopr_00.01.06.dat                                                                       
+ Opening data file: Fdata/vna_ontopr_00.06.01.dat                                                                       
+ Opening data file: Fdata/vna_ontopr_00.06.06.dat                                                                       
+   
+  Calling read_2c for 2-Center Interaction #            4
+  ======================================================================
+ Opening data file: Fdata/vna_atom_00.01.01.dat                                                                         
+ Opening data file: Fdata/vna_atom_00.01.06.dat                                                                         
+ Opening data file: Fdata/vna_atom_00.06.01.dat                                                                         
+ Opening data file: Fdata/vna_atom_00.06.06.dat                                                                         
+   
+  Calling read_2c for 2-Center Interaction #            5
+  ======================================================================
+ Opening data file: Fdata/vnl.01.01.dat                                                                                 
+ Opening data file: Fdata/vnl.01.06.dat                                                                                 
+ Opening data file: Fdata/vnl.06.01.dat                                                                                 
+ Opening data file: Fdata/vnl.06.06.dat                                                                                 
+   
+  Calling read_2c for 2-Center Interaction #            6
+  ======================================================================
+ Opening data file: Fdata/xc_ontop_00.01.01.dat                                                                         
+ Opening data file: Fdata/xc_ontop_00.01.06.dat                                                                         
+ Opening data file: Fdata/xc_ontop_00.06.01.dat                                                                         
+ Opening data file: Fdata/xc_ontop_00.06.06.dat                                                                         
+   
+  Calling read_2c for 2-Center Interaction #            7
+  ======================================================================
+ Opening data file: Fdata/xc_atom_00.01.01.dat                                                                          
+ Opening data file: Fdata/xc_atom_00.01.06.dat                                                                          
+ Opening data file: Fdata/xc_atom_00.06.01.dat                                                                          
+ Opening data file: Fdata/xc_atom_00.06.06.dat                                                                          
+   
+  Calling read_2c for 2-Center Interaction #            8
+  ======================================================================
+ Opening data file: Fdata/xc_corr_00.01.01.dat                                                                          
+ Opening data file: Fdata/xc_corr_00.01.06.dat                                                                          
+ Opening data file: Fdata/xc_corr_00.06.01.dat                                                                          
+ Opening data file: Fdata/xc_corr_00.06.06.dat                                                                          
+   
+  Calling read_2c for 2-Center Interaction #            9
+  ======================================================================
+ Opening data file: Fdata/dipole_z.01.01.dat                                                                            
+ Opening data file: Fdata/dipole_z.01.06.dat                                                                            
+ Opening data file: Fdata/dipole_z.06.01.dat                                                                            
+ Opening data file: Fdata/dipole_z.06.06.dat                                                                            
+   
+  Calling read_2c for 2-Center Interaction #           12
+  ======================================================================
+ Opening data file: Fdata/coulomb.01.01.dat                                                                             
+ Opening data file: Fdata/coulomb.01.06.dat                                                                             
+ Opening data file: Fdata/coulomb.06.01.dat                                                                             
+ Opening data file: Fdata/coulomb.06.06.dat                                                                             
+   
+  Calling read_2c for 2-Center Interaction #           13
+  ======================================================================
+ Opening data file: Fdata/kinetic.01.01.dat                                                                             
+ Opening data file: Fdata/kinetic.01.06.dat                                                                             
+ Opening data file: Fdata/kinetic.06.01.dat                                                                             
+ Opening data file: Fdata/kinetic.06.06.dat                                                                             
+   
+  Calling read2c for 2-Center Interaction #           15
+  ======================================================================
+ Opening data file: Fdata/den_ontopl_01.01.01.dat                                                                       
+ Opening data file: Fdata/den_ontopl_01.01.06.dat                                                                       
+ Opening data file: Fdata/den_ontopl_01.06.01.dat                                                                       
+ Opening data file: Fdata/den_ontopl_01.06.06.dat                                                                       
+   
+  Calling read2c for 2-Center Interaction #           16
+  ======================================================================
+ Opening data file: Fdata/den_ontopr_01.01.01.dat                                                                       
+ Opening data file: Fdata/den_ontopr_01.01.06.dat                                                                       
+ Opening data file: Fdata/den_ontopr_01.06.01.dat                                                                       
+ Opening data file: Fdata/den_ontopr_01.06.06.dat                                                                       
+   
+  Calling read2c for 2-Center Interaction #           17
+  ======================================================================
+ Opening data file: Fdata/den_atom_01.01.01.dat                                                                         
+ Opening data file: Fdata/den_atom_01.01.06.dat                                                                         
+ Opening data file: Fdata/den_atom_01.06.01.dat                                                                         
+ Opening data file: Fdata/den_atom_01.06.06.dat                                                                         
+   
+  Calling read2c for 2-Center Interaction #           18
+  ======================================================================
+ Opening data file: Fdata/dnuxc_ol_01.01.01.dat                                                                         
+ Opening data file: Fdata/dnuxc_ol_01.01.06.dat                                                                         
+ Opening data file: Fdata/dnuxc_ol_01.06.01.dat                                                                         
+ Opening data file: Fdata/dnuxc_ol_01.06.06.dat                                                                         
+   
+  Calling read2c for 2-Center Interaction #           19
+  ======================================================================
+ Opening data file: Fdata/dnuxc_or_01.01.01.dat                                                                         
+ Opening data file: Fdata/dnuxc_or_01.01.06.dat                                                                         
+ Opening data file: Fdata/dnuxc_or_01.06.01.dat                                                                         
+ Opening data file: Fdata/dnuxc_or_01.06.06.dat                                                                         
+   
+  Calling read2c for 2-Center Interaction #           20
+  ======================================================================
+ Opening data file: Fdata/denS_ontopl_01.01.01.dat                                                                      
+ Opening data file: Fdata/denS_ontopl_01.01.06.dat                                                                      
+ Opening data file: Fdata/denS_ontopl_01.06.01.dat                                                                      
+ Opening data file: Fdata/denS_ontopl_01.06.06.dat                                                                      
+   
+  Calling read2c for 2-Center Interaction #           21
+  ======================================================================
+ Opening data file: Fdata/denS_ontopr_01.01.01.dat                                                                      
+ Opening data file: Fdata/denS_ontopr_01.01.06.dat                                                                      
+ Opening data file: Fdata/denS_ontopr_01.06.01.dat                                                                      
+ Opening data file: Fdata/denS_ontopr_01.06.06.dat                                                                      
+   
+  Calling read2c for 2-Center Interaction #           22
+  ======================================================================
+ Opening data file: Fdata/denS_atom_01.01.01.dat                                                                        
+ Opening data file: Fdata/denS_atom_01.01.06.dat                                                                        
+ Opening data file: Fdata/denS_atom_01.06.01.dat                                                                        
+ Opening data file: Fdata/denS_atom_01.06.06.dat                                                                        
+   
+  Calling read2c for 2-Center Interaction #           23
+  ======================================================================
+ Opening data file: Fdata/overlapS.01.01.dat                                                                            
+ Opening data file: Fdata/overlapS.01.06.dat                                                                            
+ Opening data file: Fdata/overlapS.06.01.dat                                                                            
+ Opening data file: Fdata/overlapS.06.06.dat                                                                            
+   
+  Calling read3c for 3-Center Interaction #            1
+  ======================================================================
+ Opening data file: Fdata/bcna_01_00.01.01.01.dat                                                                       
+ Opening data file: Fdata/bcna_01_00.01.01.06.dat                                                                       
+ Opening data file: Fdata/bcna_01_00.01.06.01.dat                                                                       
+ Opening data file: Fdata/bcna_01_00.01.06.06.dat                                                                       
+ Opening data file: Fdata/bcna_01_00.06.01.01.dat                                                                       
+ Opening data file: Fdata/bcna_01_00.06.01.06.dat                                                                       
+ Opening data file: Fdata/bcna_01_00.06.06.01.dat                                                                       
+ Opening data file: Fdata/bcna_01_00.06.06.06.dat                                                                       
+   
+  Calling read3c for 3-Center Interaction #            3
+  ======================================================================
+ Opening data file: Fdata/den3_01_01.01.01.01.dat                                                                       
+ Opening data file: Fdata/den3_01_01.01.01.06.dat                                                                       
+ Opening data file: Fdata/den3_01_01.01.06.01.dat                                                                       
+ Opening data file: Fdata/den3_01_01.01.06.06.dat                                                                       
+ Opening data file: Fdata/den3_01_01.06.01.01.dat                                                                       
+ Opening data file: Fdata/den3_01_01.06.01.06.dat                                                                       
+ Opening data file: Fdata/den3_01_01.06.06.01.dat                                                                       
+ Opening data file: Fdata/den3_01_01.06.06.06.dat                                                                       
+   
+  Calling read3c for 3-Center Interaction #            4
+  ======================================================================
+ Opening data file: Fdata/deS3_01_01.01.01.01.dat                                                                       
+ Opening data file: Fdata/deS3_01_01.01.01.06.dat                                                                       
+ Opening data file: Fdata/deS3_01_01.01.06.01.dat                                                                       
+ Opening data file: Fdata/deS3_01_01.01.06.06.dat                                                                       
+ Opening data file: Fdata/deS3_01_01.06.01.01.dat                                                                       
+ Opening data file: Fdata/deS3_01_01.06.01.06.dat                                                                       
+ Opening data file: Fdata/deS3_01_01.06.06.01.dat                                                                       
+ Opening data file: Fdata/deS3_01_01.06.06.06.dat                                                                       
+  ======================================================================
+  Running setterp_2d. Set up two-dimensional interpolator. 
+   
+  ======================================================= 
+              Begin molecular dynamics simulation. 
+  ======================================================= 
+   
+   
+   
+  ****************************************************** 
+  Begin time step =            1  scf step =            1
+  ****************************************************** 
+   
+   
+  ======================================================================
+  Now we are assembling piecies of Hamiltonian. 
+   
+   
+  ======================================================================
+  Now we are assembling McWeda Hamiltonian. 
+   
+  Determine maximum number of neighbors. 
+ find_neigh_max(): neigh_max=          12
+  Determine maximum number of PP-neighbors. 
+  Welcome to neighborsPP - determine mapping of PP neighbors. 
+   
+   
+  Welcome to common_neighbors - determine mapping of 
+  common neighbors. 
+  Welcome to common_neighborsPP - determine mapping of 
+  common neighbors for Pseudopotential. 
+   
+  ***************************************************** 
+  Assemble one-center interactions. 
+  Assemble OLS-xc exchange-correlation interactions. 
+   
+  Assemble two-center interactions. 
+  Assemble OLS-xc exchange-correlation interactions.
+  Assembling on-site part.
+  Assembling off-site part.
+  Assemble two-center DOGS interactions. 
+   
+  Assemble three-center interactions. 
+  Assemble three-center PP interactions. 
+  Assemble three-center DOGS interactions. 
+  Assemble long-range interactions. 
+  ***************************************************** 
+
+  The information needed to make a TB model or 
+  for doing the complex band-structure is in 
+  the file ---> HS.dat
+  Call diag_k
+   
+  ****************************************************** 
+   
+          Welcome to kspace -- ikpoint =            1
+   
+  ****************************************************** 
+  Call diagonalizer for overlap. 
+                   The overlap eigenvalues: 
+  ******************************************************* 
+   
+  Call diagonalizer for Hamiltonian. 
+             The energy eigenvalues: 
+  *********************************************** 
+ lwork =        1980
+      -22.4620      -19.7506      -19.7504      -16.1070
+      -16.1037      -13.7819      -12.5328      -12.0793
+      -11.3342      -11.3311       -9.9781       -9.4475
+       -9.4462       -7.2804       -7.2791       -1.8946
+       -1.8943        1.6767        2.0047        3.3203
+        3.3225        4.9507        5.8828        5.8905
+       10.1703       10.1838       11.2297       11.2360
+       15.5693       16.3068       23.6237       24.2684
+       25.9811       26.4356       26.4368       27.4059
+       27.4072       28.2476       28.2587       30.0468
+       32.2606       32.2748       35.1565       41.7670
+       42.2853       42.3032       43.1705       43.1862
+       50.2231       50.2644       58.8980       58.9205
+       72.4406       81.4885       86.3556       86.9415
+       86.9672       87.1817       87.2298      137.3018
+   
+   
+  ****************************************************** 
+   
+                    Welcome to denmat --              
+   
+  ****************************************************** 
+  Fermi Level =   -2.4915355937831620     
+   
+  We write out the occupancies of the levels  
+  ----- ioccupy_k, from the subroutine fermie 
+   
+  ------ fermi ioccupy_k for k-point =            1
+ Band n =    1 k-points: ioccupy =  1
+ Band n =    2 k-points: ioccupy =  1
+ Band n =    3 k-points: ioccupy =  1
+ Band n =    4 k-points: ioccupy =  1
+ Band n =    5 k-points: ioccupy =  1
+ Band n =    6 k-points: ioccupy =  1
+ Band n =    7 k-points: ioccupy =  1
+ Band n =    8 k-points: ioccupy =  1
+ Band n =    9 k-points: ioccupy =  1
+ Band n =   10 k-points: ioccupy =  1
+ Band n =   11 k-points: ioccupy =  1
+ Band n =   12 k-points: ioccupy =  1
+ Band n =   13 k-points: ioccupy =  1
+ Band n =   14 k-points: ioccupy =  1
+ Band n =   15 k-points: ioccupy =  1
+ Band n =   16 k-points: ioccupy =  0
+ Band n =   17 k-points: ioccupy =  0
+ Band n =   18 k-points: ioccupy =  0
+ Band n =   19 k-points: ioccupy =  0
+ Band n =   20 k-points: ioccupy =  0
+ Band n =   21 k-points: ioccupy =  0
+ Band n =   22 k-points: ioccupy =  0
+ Band n =   23 k-points: ioccupy =  0
+ Band n =   24 k-points: ioccupy =  0
+ Band n =   25 k-points: ioccupy =  0
+ Band n =   26 k-points: ioccupy =  0
+ Band n =   27 k-points: ioccupy =  0
+ Band n =   28 k-points: ioccupy =  0
+ Band n =   29 k-points: ioccupy =  0
+ Band n =   30 k-points: ioccupy =  0
+ Band n =   31 k-points: ioccupy =  0
+ Band n =   32 k-points: ioccupy =  0
+ Band n =   33 k-points: ioccupy =  0
+ Band n =   34 k-points: ioccupy =  0
+ Band n =   35 k-points: ioccupy =  0
+ Band n =   36 k-points: ioccupy =  0
+ Band n =   37 k-points: ioccupy =  0
+ Band n =   38 k-points: ioccupy =  0
+ Band n =   39 k-points: ioccupy =  0
+ Band n =   40 k-points: ioccupy =  0
+ Band n =   41 k-points: ioccupy =  0
+ Band n =   42 k-points: ioccupy =  0
+ Band n =   43 k-points: ioccupy =  0
+ Band n =   44 k-points: ioccupy =  0
+ Band n =   45 k-points: ioccupy =  0
+ Band n =   46 k-points: ioccupy =  0
+ Band n =   47 k-points: ioccupy =  0
+ Band n =   48 k-points: ioccupy =  0
+ Band n =   49 k-points: ioccupy =  0
+ Band n =   50 k-points: ioccupy =  0
+ Band n =   51 k-points: ioccupy =  0
+ Band n =   52 k-points: ioccupy =  0
+ Band n =   53 k-points: ioccupy =  0
+ Band n =   54 k-points: ioccupy =  0
+ Band n =   55 k-points: ioccupy =  0
+ Band n =   56 k-points: ioccupy =  0
+ Band n =   57 k-points: ioccupy =  0
+ Band n =   58 k-points: ioccupy =  0
+ Band n =   59 k-points: ioccupy =  0
+ Band n =   60 k-points: ioccupy =  0
+   
+  We write out the electron fraction in each level 
+  ------ from the subroutine fermie. 
+   
+  ------ fermi foccupy for k-point =            1
+ Band n =    1 foccupy =         1.00000000
+ Band n =    2 foccupy =         1.00000000
+ Band n =    3 foccupy =         1.00000000
+ Band n =    4 foccupy =         1.00000000
+ Band n =    5 foccupy =         1.00000000
+ Band n =    6 foccupy =         1.00000000
+ Band n =    7 foccupy =         1.00000000
+ Band n =    8 foccupy =         1.00000000
+ Band n =    9 foccupy =         1.00000000
+ Band n =   10 foccupy =         1.00000000
+ Band n =   11 foccupy =         1.00000000
+ Band n =   12 foccupy =         1.00000000
+ Band n =   13 foccupy =         1.00000000
+ Band n =   14 foccupy =         1.00000000
+ Band n =   15 foccupy =         1.00000000
+ Band n =   16 foccupy =         0.00000000
+ Band n =   17 foccupy =         0.00000000
+ Band n =   18 foccupy =         0.00000000
+ Band n =   19 foccupy =         0.00000000
+ Band n =   20 foccupy =         0.00000000
+ Band n =   21 foccupy =         0.00000000
+ Band n =   22 foccupy =         0.00000000
+ Band n =   23 foccupy =         0.00000000
+ Band n =   24 foccupy =         0.00000000
+ Band n =   25 foccupy =         0.00000000
+ Band n =   26 foccupy =         0.00000000
+ Band n =   27 foccupy =         0.00000000
+ Band n =   28 foccupy =         0.00000000
+ Band n =   29 foccupy =         0.00000000
+ Band n =   30 foccupy =         0.00000000
+ Band n =   31 foccupy =         0.00000000
+ Band n =   32 foccupy =         0.00000000
+ Band n =   33 foccupy =         0.00000000
+ Band n =   34 foccupy =         0.00000000
+ Band n =   35 foccupy =         0.00000000
+ Band n =   36 foccupy =         0.00000000
+ Band n =   37 foccupy =         0.00000000
+ Band n =   38 foccupy =         0.00000000
+ Band n =   39 foccupy =         0.00000000
+ Band n =   40 foccupy =         0.00000000
+ Band n =   41 foccupy =         0.00000000
+ Band n =   42 foccupy =         0.00000000
+ Band n =   43 foccupy =         0.00000000
+ Band n =   44 foccupy =         0.00000000
+ Band n =   45 foccupy =         0.00000000
+ Band n =   46 foccupy =         0.00000000
+ Band n =   47 foccupy =         0.00000000
+ Band n =   48 foccupy =         0.00000000
+ Band n =   49 foccupy =         0.00000000
+ Band n =   50 foccupy =         0.00000000
+ Band n =   51 foccupy =         0.00000000
+ Band n =   52 foccupy =         0.00000000
+ Band n =   53 foccupy =         0.00000000
+ Band n =   54 foccupy =         0.00000000
+ Band n =   55 foccupy =         0.00000000
+ Band n =   56 foccupy =         0.00000000
+ Band n =   57 foccupy =         0.00000000
+ Band n =   58 foccupy =         0.00000000
+ Band n =   59 foccupy =         0.00000000
+ Band n =   60 foccupy =         0.00000000
+   
+   Deviation (rms) of input/output charges =    0.1514
+   Deviation (max) of input/output charges =    1.0818
+  Your chosen mixing routine is: mixing with anderson algorithm
+   
+   Renormalization of Qin:   renorm =         0.00000000
+  (Before renormalization) zouttot =    30.000000000000007     
+  (After  renormalization)  zcheck =    29.999999999999996     
+  (What it must be)           ztot =    30.000000000000000     
+   
+ =============> sigma =  0.3666047E+00 Must be less than 0.1000000E-07 SCF step =   1
+             BAD NEWS; results are not self-consistent 
+   
+  ------- THE TOTAL BAND STRUCTURE ENERGY ------- 
+   
+ EBS =          -397.328460 Time step =     1 SCF step =    1
+  ----------------------------------------------- 
+   
+   
+  ****************************************************** 
+  Begin time step =            1  scf step =            2
+  ****************************************************** 
+   
+   
+  ======================================================================
+  Now we are assembling piecies of Hamiltonian. 
+   
+   
+  ======================================================================
+  Now we are assembling McWeda Hamiltonian. 
+   
+   
+  ***************************************************** 
+  Assemble one-center interactions. 
+  Assemble OLS-xc exchange-correlation interactions. 
+   
+  Assemble OLS-xc exchange-correlation interactions.
+  Assembling on-site part.
+  Assembling off-site part.
+  Assemble two-center DOGS interactions. 
+   
+  Assemble three-center DOGS interactions. 
+  Assemble long-range interactions. 
+  ***************************************************** 
+
+  The information needed to make a TB model or 
+  for doing the complex band-structure is in 
+  the file ---> HS.dat
+  Call diag_k
+   
+  ****************************************************** 
+   
+          Welcome to kspace -- ikpoint =            1
+   
+  ****************************************************** 
+  Call diagonalizer for overlap. 
+                   The overlap eigenvalues: 
+  ******************************************************* 
+   
+  Call diagonalizer for Hamiltonian. 
+             The energy eigenvalues: 
+  *********************************************** 
+ lwork =        1980
+      -22.4224      -19.7220      -19.7217      -16.0892
+      -16.0858      -13.7715      -12.5056      -12.0835
+      -11.3213      -11.3182       -9.9446       -9.4386
+       -9.4373       -7.2492       -7.2480       -1.8681
+       -1.8677        1.6919        2.0287        3.3406
+        3.3427        4.9680        5.8992        5.9069
+       10.2050       10.2185       11.2540       11.2603
+       15.5992       16.3554       23.6746       24.3031
+       25.9956       26.4660       26.4672       27.4276
+       27.4290       28.2582       28.2693       30.0561
+       32.2771       32.2913       35.1787       41.7845
+       42.2981       42.3160       43.2161       43.2318
+       50.2030       50.2442       58.8974       58.9199
+       72.3735       81.4631       86.3308       86.9185
+       86.9442       87.1574       87.2055      137.1854
+   
+   
+  ****************************************************** 
+   
+                    Welcome to denmat --              
+   
+  ****************************************************** 
+  Fermi Level =   -2.4714718098477153     
+   
+  We write out the occupancies of the levels  
+  ----- ioccupy_k, from the subroutine fermie 
+   
+  ------ fermi ioccupy_k for k-point =            1
+ Band n =    1 k-points: ioccupy =  1
+ Band n =    2 k-points: ioccupy =  1
+ Band n =    3 k-points: ioccupy =  1
+ Band n =    4 k-points: ioccupy =  1
+ Band n =    5 k-points: ioccupy =  1
+ Band n =    6 k-points: ioccupy =  1
+ Band n =    7 k-points: ioccupy =  1
+ Band n =    8 k-points: ioccupy =  1
+ Band n =    9 k-points: ioccupy =  1
+ Band n =   10 k-points: ioccupy =  1
+ Band n =   11 k-points: ioccupy =  1
+ Band n =   12 k-points: ioccupy =  1
+ Band n =   13 k-points: ioccupy =  1
+ Band n =   14 k-points: ioccupy =  1
+ Band n =   15 k-points: ioccupy =  1
+ Band n =   16 k-points: ioccupy =  0
+ Band n =   17 k-points: ioccupy =  0
+ Band n =   18 k-points: ioccupy =  0
+ Band n =   19 k-points: ioccupy =  0
+ Band n =   20 k-points: ioccupy =  0
+ Band n =   21 k-points: ioccupy =  0
+ Band n =   22 k-points: ioccupy =  0
+ Band n =   23 k-points: ioccupy =  0
+ Band n =   24 k-points: ioccupy =  0
+ Band n =   25 k-points: ioccupy =  0
+ Band n =   26 k-points: ioccupy =  0
+ Band n =   27 k-points: ioccupy =  0
+ Band n =   28 k-points: ioccupy =  0
+ Band n =   29 k-points: ioccupy =  0
+ Band n =   30 k-points: ioccupy =  0
+ Band n =   31 k-points: ioccupy =  0
+ Band n =   32 k-points: ioccupy =  0
+ Band n =   33 k-points: ioccupy =  0
+ Band n =   34 k-points: ioccupy =  0
+ Band n =   35 k-points: ioccupy =  0
+ Band n =   36 k-points: ioccupy =  0
+ Band n =   37 k-points: ioccupy =  0
+ Band n =   38 k-points: ioccupy =  0
+ Band n =   39 k-points: ioccupy =  0
+ Band n =   40 k-points: ioccupy =  0
+ Band n =   41 k-points: ioccupy =  0
+ Band n =   42 k-points: ioccupy =  0
+ Band n =   43 k-points: ioccupy =  0
+ Band n =   44 k-points: ioccupy =  0
+ Band n =   45 k-points: ioccupy =  0
+ Band n =   46 k-points: ioccupy =  0
+ Band n =   47 k-points: ioccupy =  0
+ Band n =   48 k-points: ioccupy =  0
+ Band n =   49 k-points: ioccupy =  0
+ Band n =   50 k-points: ioccupy =  0
+ Band n =   51 k-points: ioccupy =  0
+ Band n =   52 k-points: ioccupy =  0
+ Band n =   53 k-points: ioccupy =  0
+ Band n =   54 k-points: ioccupy =  0
+ Band n =   55 k-points: ioccupy =  0
+ Band n =   56 k-points: ioccupy =  0
+ Band n =   57 k-points: ioccupy =  0
+ Band n =   58 k-points: ioccupy =  0
+ Band n =   59 k-points: ioccupy =  0
+ Band n =   60 k-points: ioccupy =  0
+   
+  We write out the electron fraction in each level 
+  ------ from the subroutine fermie. 
+   
+  ------ fermi foccupy for k-point =            1
+ Band n =    1 foccupy =         1.00000000
+ Band n =    2 foccupy =         1.00000000
+ Band n =    3 foccupy =         1.00000000
+ Band n =    4 foccupy =         1.00000000
+ Band n =    5 foccupy =         1.00000000
+ Band n =    6 foccupy =         1.00000000
+ Band n =    7 foccupy =         1.00000000
+ Band n =    8 foccupy =         1.00000000
+ Band n =    9 foccupy =         1.00000000
+ Band n =   10 foccupy =         1.00000000
+ Band n =   11 foccupy =         1.00000000
+ Band n =   12 foccupy =         1.00000000
+ Band n =   13 foccupy =         1.00000000
+ Band n =   14 foccupy =         1.00000000
+ Band n =   15 foccupy =         1.00000000
+ Band n =   16 foccupy =         0.00000000
+ Band n =   17 foccupy =         0.00000000
+ Band n =   18 foccupy =         0.00000000
+ Band n =   19 foccupy =         0.00000000
+ Band n =   20 foccupy =         0.00000000
+ Band n =   21 foccupy =         0.00000000
+ Band n =   22 foccupy =         0.00000000
+ Band n =   23 foccupy =         0.00000000
+ Band n =   24 foccupy =         0.00000000
+ Band n =   25 foccupy =         0.00000000
+ Band n =   26 foccupy =         0.00000000
+ Band n =   27 foccupy =         0.00000000
+ Band n =   28 foccupy =         0.00000000
+ Band n =   29 foccupy =         0.00000000
+ Band n =   30 foccupy =         0.00000000
+ Band n =   31 foccupy =         0.00000000
+ Band n =   32 foccupy =         0.00000000
+ Band n =   33 foccupy =         0.00000000
+ Band n =   34 foccupy =         0.00000000
+ Band n =   35 foccupy =         0.00000000
+ Band n =   36 foccupy =         0.00000000
+ Band n =   37 foccupy =         0.00000000
+ Band n =   38 foccupy =         0.00000000
+ Band n =   39 foccupy =         0.00000000
+ Band n =   40 foccupy =         0.00000000
+ Band n =   41 foccupy =         0.00000000
+ Band n =   42 foccupy =         0.00000000
+ Band n =   43 foccupy =         0.00000000
+ Band n =   44 foccupy =         0.00000000
+ Band n =   45 foccupy =         0.00000000
+ Band n =   46 foccupy =         0.00000000
+ Band n =   47 foccupy =         0.00000000
+ Band n =   48 foccupy =         0.00000000
+ Band n =   49 foccupy =         0.00000000
+ Band n =   50 foccupy =         0.00000000
+ Band n =   51 foccupy =         0.00000000
+ Band n =   52 foccupy =         0.00000000
+ Band n =   53 foccupy =         0.00000000
+ Band n =   54 foccupy =         0.00000000
+ Band n =   55 foccupy =         0.00000000
+ Band n =   56 foccupy =         0.00000000
+ Band n =   57 foccupy =         0.00000000
+ Band n =   58 foccupy =         0.00000000
+ Band n =   59 foccupy =         0.00000000
+ Band n =   60 foccupy =         0.00000000
+   
+   Deviation (rms) of input/output charges =    0.1452
+   Deviation (max) of input/output charges =    1.0373
+  Your chosen mixing routine is: mixing with anderson algorithm
+   
+   Renormalization of Qin:   renorm =        -0.00000000
+  (Before renormalization) zouttot =    29.999999999999847     
+  (After  renormalization)  zcheck =    30.000000000000004     
+  (What it must be)           ztot =    30.000000000000000     
+   
+ =============> sigma =  0.3375228E+00 Must be less than 0.1000000E-07 SCF step =   2
+             BAD NEWS; results are not self-consistent 
+   
+  ------- THE TOTAL BAND STRUCTURE ENERGY ------- 
+   
+ EBS =          -396.717895 Time step =     1 SCF step =    2
+  ----------------------------------------------- 
+   
+   
+  ****************************************************** 
+  Begin time step =            1  scf step =            3
+  ****************************************************** 
+   
+   
+  ======================================================================
+  Now we are assembling piecies of Hamiltonian. 
+   
+   
+  ======================================================================
+  Now we are assembling McWeda Hamiltonian. 
+   
+   
+  ***************************************************** 
+  Assemble one-center interactions. 
+  Assemble OLS-xc exchange-correlation interactions. 
+   
+  Assemble OLS-xc exchange-correlation interactions.
+  Assembling on-site part.
+  Assembling off-site part.
+  Assemble two-center DOGS interactions. 
+   
+  Assemble three-center DOGS interactions. 
+  Assemble long-range interactions. 
+  ***************************************************** 
+
+  The information needed to make a TB model or 
+  for doing the complex band-structure is in 
+  the file ---> HS.dat
+  Call diag_k
+   
+  ****************************************************** 
+   
+          Welcome to kspace -- ikpoint =            1
+   
+  ****************************************************** 
+  Call diagonalizer for overlap. 
+                   The overlap eigenvalues: 
+  ******************************************************* 
+   
+  Call diagonalizer for Hamiltonian. 
+             The energy eigenvalues: 
+  *********************************************** 
+ lwork =        1980
+      -21.5490      -19.1082      -19.1078      -15.7215
+      -15.7177      -13.5277      -12.2000      -11.8927
+      -11.0151      -11.0116       -9.2234       -9.2218
+       -9.1792       -6.5389       -6.5377       -1.2663
+       -1.2656        2.0365        2.5675        3.8016
+        3.8037        5.3543        6.2644        6.2724
+       10.9918       11.0057       11.8029       11.8091
+       16.2748       17.4701       24.8409       25.0983
+       26.3219       27.1612       27.1624       27.9236
+       27.9250       28.4994       28.5098       30.2666
+       32.6399       32.6540       35.6834       42.1621
+       42.5708       42.5882       44.2552       44.2705
+       49.7336       49.7725       58.8642       58.8840
+       70.7805       80.8648       85.7471       86.3778
+       86.4039       86.5833       86.6315      134.5033
+   
+   
+  ****************************************************** 
+   
+                    Welcome to denmat --              
+   
+  ****************************************************** 
+  Fermi Level =   -2.0425070067620297     
+   
+  We write out the occupancies of the levels  
+  ----- ioccupy_k, from the subroutine fermie 
+   
+  ------ fermi ioccupy_k for k-point =            1
+ Band n =    1 k-points: ioccupy =  1
+ Band n =    2 k-points: ioccupy =  1
+ Band n =    3 k-points: ioccupy =  1
+ Band n =    4 k-points: ioccupy =  1
+ Band n =    5 k-points: ioccupy =  1
+ Band n =    6 k-points: ioccupy =  1
+ Band n =    7 k-points: ioccupy =  1
+ Band n =    8 k-points: ioccupy =  1
+ Band n =    9 k-points: ioccupy =  1
+ Band n =   10 k-points: ioccupy =  1
+ Band n =   11 k-points: ioccupy =  1
+ Band n =   12 k-points: ioccupy =  1
+ Band n =   13 k-points: ioccupy =  1
+ Band n =   14 k-points: ioccupy =  1
+ Band n =   15 k-points: ioccupy =  1
+ Band n =   16 k-points: ioccupy =  0
+ Band n =   17 k-points: ioccupy =  0
+ Band n =   18 k-points: ioccupy =  0
+ Band n =   19 k-points: ioccupy =  0
+ Band n =   20 k-points: ioccupy =  0
+ Band n =   21 k-points: ioccupy =  0
+ Band n =   22 k-points: ioccupy =  0
+ Band n =   23 k-points: ioccupy =  0
+ Band n =   24 k-points: ioccupy =  0
+ Band n =   25 k-points: ioccupy =  0
+ Band n =   26 k-points: ioccupy =  0
+ Band n =   27 k-points: ioccupy =  0
+ Band n =   28 k-points: ioccupy =  0
+ Band n =   29 k-points: ioccupy =  0
+ Band n =   30 k-points: ioccupy =  0
+ Band n =   31 k-points: ioccupy =  0
+ Band n =   32 k-points: ioccupy =  0
+ Band n =   33 k-points: ioccupy =  0
+ Band n =   34 k-points: ioccupy =  0
+ Band n =   35 k-points: ioccupy =  0
+ Band n =   36 k-points: ioccupy =  0
+ Band n =   37 k-points: ioccupy =  0
+ Band n =   38 k-points: ioccupy =  0
+ Band n =   39 k-points: ioccupy =  0
+ Band n =   40 k-points: ioccupy =  0
+ Band n =   41 k-points: ioccupy =  0
+ Band n =   42 k-points: ioccupy =  0
+ Band n =   43 k-points: ioccupy =  0
+ Band n =   44 k-points: ioccupy =  0
+ Band n =   45 k-points: ioccupy =  0
+ Band n =   46 k-points: ioccupy =  0
+ Band n =   47 k-points: ioccupy =  0
+ Band n =   48 k-points: ioccupy =  0
+ Band n =   49 k-points: ioccupy =  0
+ Band n =   50 k-points: ioccupy =  0
+ Band n =   51 k-points: ioccupy =  0
+ Band n =   52 k-points: ioccupy =  0
+ Band n =   53 k-points: ioccupy =  0
+ Band n =   54 k-points: ioccupy =  0
+ Band n =   55 k-points: ioccupy =  0
+ Band n =   56 k-points: ioccupy =  0
+ Band n =   57 k-points: ioccupy =  0
+ Band n =   58 k-points: ioccupy =  0
+ Band n =   59 k-points: ioccupy =  0
+ Band n =   60 k-points: ioccupy =  0
+   
+  We write out the electron fraction in each level 
+  ------ from the subroutine fermie. 
+   
+  ------ fermi foccupy for k-point =            1
+ Band n =    1 foccupy =         1.00000000
+ Band n =    2 foccupy =         1.00000000
+ Band n =    3 foccupy =         1.00000000
+ Band n =    4 foccupy =         1.00000000
+ Band n =    5 foccupy =         1.00000000
+ Band n =    6 foccupy =         1.00000000
+ Band n =    7 foccupy =         1.00000000
+ Band n =    8 foccupy =         1.00000000
+ Band n =    9 foccupy =         1.00000000
+ Band n =   10 foccupy =         1.00000000
+ Band n =   11 foccupy =         1.00000000
+ Band n =   12 foccupy =         1.00000000
+ Band n =   13 foccupy =         1.00000000
+ Band n =   14 foccupy =         1.00000000
+ Band n =   15 foccupy =         1.00000000
+ Band n =   16 foccupy =         0.00000000
+ Band n =   17 foccupy =         0.00000000
+ Band n =   18 foccupy =         0.00000000
+ Band n =   19 foccupy =         0.00000000
+ Band n =   20 foccupy =         0.00000000
+ Band n =   21 foccupy =         0.00000000
+ Band n =   22 foccupy =         0.00000000
+ Band n =   23 foccupy =         0.00000000
+ Band n =   24 foccupy =         0.00000000
+ Band n =   25 foccupy =         0.00000000
+ Band n =   26 foccupy =         0.00000000
+ Band n =   27 foccupy =         0.00000000
+ Band n =   28 foccupy =         0.00000000
+ Band n =   29 foccupy =         0.00000000
+ Band n =   30 foccupy =         0.00000000
+ Band n =   31 foccupy =         0.00000000
+ Band n =   32 foccupy =         0.00000000
+ Band n =   33 foccupy =         0.00000000
+ Band n =   34 foccupy =         0.00000000
+ Band n =   35 foccupy =         0.00000000
+ Band n =   36 foccupy =         0.00000000
+ Band n =   37 foccupy =         0.00000000
+ Band n =   38 foccupy =         0.00000000
+ Band n =   39 foccupy =         0.00000000
+ Band n =   40 foccupy =         0.00000000
+ Band n =   41 foccupy =         0.00000000
+ Band n =   42 foccupy =         0.00000000
+ Band n =   43 foccupy =         0.00000000
+ Band n =   44 foccupy =         0.00000000
+ Band n =   45 foccupy =         0.00000000
+ Band n =   46 foccupy =         0.00000000
+ Band n =   47 foccupy =         0.00000000
+ Band n =   48 foccupy =         0.00000000
+ Band n =   49 foccupy =         0.00000000
+ Band n =   50 foccupy =         0.00000000
+ Band n =   51 foccupy =         0.00000000
+ Band n =   52 foccupy =         0.00000000
+ Band n =   53 foccupy =         0.00000000
+ Band n =   54 foccupy =         0.00000000
+ Band n =   55 foccupy =         0.00000000
+ Band n =   56 foccupy =         0.00000000
+ Band n =   57 foccupy =         0.00000000
+ Band n =   58 foccupy =         0.00000000
+ Band n =   59 foccupy =         0.00000000
+ Band n =   60 foccupy =         0.00000000
+   
+   Deviation (rms) of input/output charges =    0.0050
+   Deviation (max) of input/output charges =    0.0407
+  Your chosen mixing routine is: mixing with anderson algorithm
+   
+   Renormalization of Qin:   renorm =         0.00000000
+  (Before renormalization) zouttot =    30.000000000001940     
+  (After  renormalization)  zcheck =    29.999999999999996     
+  (What it must be)           ztot =    30.000000000000000     
+   
+ =============> sigma =  0.4058903E-03 Must be less than 0.1000000E-07 SCF step =   3
+             BAD NEWS; results are not self-consistent 
+   
+  ------- THE TOTAL BAND STRUCTURE ENERGY ------- 
+   
+ EBS =          -383.104397 Time step =     1 SCF step =    3
+  ----------------------------------------------- 
+   
+   
+  ****************************************************** 
+  Begin time step =            1  scf step =            4
+  ****************************************************** 
+   
+   
+  ======================================================================
+  Now we are assembling piecies of Hamiltonian. 
+   
+   
+  ======================================================================
+  Now we are assembling McWeda Hamiltonian. 
+   
+   
+  ***************************************************** 
+  Assemble one-center interactions. 
+  Assemble OLS-xc exchange-correlation interactions. 
+   
+  Assemble OLS-xc exchange-correlation interactions.
+  Assembling on-site part.
+  Assembling off-site part.
+  Assemble two-center DOGS interactions. 
+   
+  Assemble three-center DOGS interactions. 
+  Assemble long-range interactions. 
+  ***************************************************** 
+
+  The information needed to make a TB model or 
+  for doing the complex band-structure is in 
+  the file ---> HS.dat
+  Call diag_k
+   
+  ****************************************************** 
+   
+          Welcome to kspace -- ikpoint =            1
+   
+  ****************************************************** 
+  Call diagonalizer for overlap. 
+                   The overlap eigenvalues: 
+  ******************************************************* 
+   
+  Call diagonalizer for Hamiltonian. 
+             The energy eigenvalues: 
+  *********************************************** 
+ lwork =        1980
+      -21.9574      -19.4349      -19.4347      -15.9699
+      -15.9662      -13.7265      -12.2717      -12.2489
+      -11.2366      -11.2333       -9.5225       -9.4241
+       -9.4227       -6.8681       -6.8669       -1.5608
+       -1.5603        1.9100        2.2941        3.6196
+        3.6218        5.2256        6.1392        6.1471
+       10.7043       10.7180       11.5840       11.5902
+       15.9892       17.0371       24.3994       24.7672
+       26.0968       26.8493       26.8505       27.6467
+       27.6482       28.3172       28.3278       30.0518
+       32.3990       32.4131       35.4089       41.9347
+       42.4074       42.4251       43.7926       43.8079
+       49.9185       49.9584       58.8060       58.8266
+       71.0095       80.9565       85.8413       86.4412
+       86.4672       86.6618       86.7101      136.2103
+   
+   
+  ****************************************************** 
+   
+                    Welcome to denmat --              
+   
+  ****************************************************** 
+  Fermi Level =   -2.1864127918953482     
+   
+  We write out the occupancies of the levels  
+  ----- ioccupy_k, from the subroutine fermie 
+   
+  ------ fermi ioccupy_k for k-point =            1
+ Band n =    1 k-points: ioccupy =  1
+ Band n =    2 k-points: ioccupy =  1
+ Band n =    3 k-points: ioccupy =  1
+ Band n =    4 k-points: ioccupy =  1
+ Band n =    5 k-points: ioccupy =  1
+ Band n =    6 k-points: ioccupy =  1
+ Band n =    7 k-points: ioccupy =  1
+ Band n =    8 k-points: ioccupy =  1
+ Band n =    9 k-points: ioccupy =  1
+ Band n =   10 k-points: ioccupy =  1
+ Band n =   11 k-points: ioccupy =  1
+ Band n =   12 k-points: ioccupy =  1
+ Band n =   13 k-points: ioccupy =  1
+ Band n =   14 k-points: ioccupy =  1
+ Band n =   15 k-points: ioccupy =  1
+ Band n =   16 k-points: ioccupy =  0
+ Band n =   17 k-points: ioccupy =  0
+ Band n =   18 k-points: ioccupy =  0
+ Band n =   19 k-points: ioccupy =  0
+ Band n =   20 k-points: ioccupy =  0
+ Band n =   21 k-points: ioccupy =  0
+ Band n =   22 k-points: ioccupy =  0
+ Band n =   23 k-points: ioccupy =  0
+ Band n =   24 k-points: ioccupy =  0
+ Band n =   25 k-points: ioccupy =  0
+ Band n =   26 k-points: ioccupy =  0
+ Band n =   27 k-points: ioccupy =  0
+ Band n =   28 k-points: ioccupy =  0
+ Band n =   29 k-points: ioccupy =  0
+ Band n =   30 k-points: ioccupy =  0
+ Band n =   31 k-points: ioccupy =  0
+ Band n =   32 k-points: ioccupy =  0
+ Band n =   33 k-points: ioccupy =  0
+ Band n =   34 k-points: ioccupy =  0
+ Band n =   35 k-points: ioccupy =  0
+ Band n =   36 k-points: ioccupy =  0
+ Band n =   37 k-points: ioccupy =  0
+ Band n =   38 k-points: ioccupy =  0
+ Band n =   39 k-points: ioccupy =  0
+ Band n =   40 k-points: ioccupy =  0
+ Band n =   41 k-points: ioccupy =  0
+ Band n =   42 k-points: ioccupy =  0
+ Band n =   43 k-points: ioccupy =  0
+ Band n =   44 k-points: ioccupy =  0
+ Band n =   45 k-points: ioccupy =  0
+ Band n =   46 k-points: ioccupy =  0
+ Band n =   47 k-points: ioccupy =  0
+ Band n =   48 k-points: ioccupy =  0
+ Band n =   49 k-points: ioccupy =  0
+ Band n =   50 k-points: ioccupy =  0
+ Band n =   51 k-points: ioccupy =  0
+ Band n =   52 k-points: ioccupy =  0
+ Band n =   53 k-points: ioccupy =  0
+ Band n =   54 k-points: ioccupy =  0
+ Band n =   55 k-points: ioccupy =  0
+ Band n =   56 k-points: ioccupy =  0
+ Band n =   57 k-points: ioccupy =  0
+ Band n =   58 k-points: ioccupy =  0
+ Band n =   59 k-points: ioccupy =  0
+ Band n =   60 k-points: ioccupy =  0
+   
+  We write out the electron fraction in each level 
+  ------ from the subroutine fermie. 
+   
+  ------ fermi foccupy for k-point =            1
+ Band n =    1 foccupy =         1.00000000
+ Band n =    2 foccupy =         1.00000000
+ Band n =    3 foccupy =         1.00000000
+ Band n =    4 foccupy =         1.00000000
+ Band n =    5 foccupy =         1.00000000
+ Band n =    6 foccupy =         1.00000000
+ Band n =    7 foccupy =         1.00000000
+ Band n =    8 foccupy =         1.00000000
+ Band n =    9 foccupy =         1.00000000
+ Band n =   10 foccupy =         1.00000000
+ Band n =   11 foccupy =         1.00000000
+ Band n =   12 foccupy =         1.00000000
+ Band n =   13 foccupy =         1.00000000
+ Band n =   14 foccupy =         1.00000000
+ Band n =   15 foccupy =         1.00000000
+ Band n =   16 foccupy =         0.00000000
+ Band n =   17 foccupy =         0.00000000
+ Band n =   18 foccupy =         0.00000000
+ Band n =   19 foccupy =         0.00000000
+ Band n =   20 foccupy =         0.00000000
+ Band n =   21 foccupy =         0.00000000
+ Band n =   22 foccupy =         0.00000000
+ Band n =   23 foccupy =         0.00000000
+ Band n =   24 foccupy =         0.00000000
+ Band n =   25 foccupy =         0.00000000
+ Band n =   26 foccupy =         0.00000000
+ Band n =   27 foccupy =         0.00000000
+ Band n =   28 foccupy =         0.00000000
+ Band n =   29 foccupy =         0.00000000
+ Band n =   30 foccupy =         0.00000000
+ Band n =   31 foccupy =         0.00000000
+ Band n =   32 foccupy =         0.00000000
+ Band n =   33 foccupy =         0.00000000
+ Band n =   34 foccupy =         0.00000000
+ Band n =   35 foccupy =         0.00000000
+ Band n =   36 foccupy =         0.00000000
+ Band n =   37 foccupy =         0.00000000
+ Band n =   38 foccupy =         0.00000000
+ Band n =   39 foccupy =         0.00000000
+ Band n =   40 foccupy =         0.00000000
+ Band n =   41 foccupy =         0.00000000
+ Band n =   42 foccupy =         0.00000000
+ Band n =   43 foccupy =         0.00000000
+ Band n =   44 foccupy =         0.00000000
+ Band n =   45 foccupy =         0.00000000
+ Band n =   46 foccupy =         0.00000000
+ Band n =   47 foccupy =         0.00000000
+ Band n =   48 foccupy =         0.00000000
+ Band n =   49 foccupy =         0.00000000
+ Band n =   50 foccupy =         0.00000000
+ Band n =   51 foccupy =         0.00000000
+ Band n =   52 foccupy =         0.00000000
+ Band n =   53 foccupy =         0.00000000
+ Band n =   54 foccupy =         0.00000000
+ Band n =   55 foccupy =         0.00000000
+ Band n =   56 foccupy =         0.00000000
+ Band n =   57 foccupy =         0.00000000
+ Band n =   58 foccupy =         0.00000000
+ Band n =   59 foccupy =         0.00000000
+ Band n =   60 foccupy =         0.00000000
+   
+   Deviation (rms) of input/output charges =    0.0010
+   Deviation (max) of input/output charges =    0.0070
+  Your chosen mixing routine is: mixing with anderson algorithm
+   
+   Renormalization of Qin:   renorm =         0.00000000
+  (Before renormalization) zouttot =    30.000000000000192     
+  (After  renormalization)  zcheck =    29.999999999999993     
+  (What it must be)           ztot =    30.000000000000000     
+   
+ =============> sigma =  0.1479067E-04 Must be less than 0.1000000E-07 SCF step =   4
+             BAD NEWS; results are not self-consistent 
+   
+  ------- THE TOTAL BAND STRUCTURE ENERGY ------- 
+   
+ EBS =          -391.169125 Time step =     1 SCF step =    4
+  ----------------------------------------------- 
+   
+   
+  ****************************************************** 
+  Begin time step =            1  scf step =            5
+  ****************************************************** 
+   
+   
+  ======================================================================
+  Now we are assembling piecies of Hamiltonian. 
+   
+   
+  ======================================================================
+  Now we are assembling McWeda Hamiltonian. 
+   
+   
+  ***************************************************** 
+  Assemble one-center interactions. 
+  Assemble OLS-xc exchange-correlation interactions. 
+   
+  Assemble OLS-xc exchange-correlation interactions.
+  Assembling on-site part.
+  Assembling off-site part.
+  Assemble two-center DOGS interactions. 
+   
+  Assemble three-center DOGS interactions. 
+  Assemble long-range interactions. 
+  ***************************************************** 
+
+  The information needed to make a TB model or 
+  for doing the complex band-structure is in 
+  the file ---> HS.dat
+  Call diag_k
+   
+  ****************************************************** 
+   
+          Welcome to kspace -- ikpoint =            1
+   
+  ****************************************************** 
+  Call diagonalizer for overlap. 
+                   The overlap eigenvalues: 
+  ******************************************************* 
+   
+  Call diagonalizer for Hamiltonian. 
+             The energy eigenvalues: 
+  *********************************************** 
+ lwork =        1980
+      -21.9679      -19.4440      -19.4437      -15.9775
+      -15.9738      -13.7326      -12.2752      -12.2589
+      -11.2432      -11.2398       -9.5310       -9.4304
+       -9.4290       -6.8765       -6.8753       -1.5685
+       -1.5680        1.9073        2.2869        3.6154
+        3.6176        5.2230        6.1366        6.1444
+       10.6979       10.7116       11.5789       11.5850
+       15.9822       17.0272       24.3895       24.7593
+       26.0902       26.8415       26.8427       27.6391
+       27.6405       28.3117       28.3223       30.0449
+       32.3919       32.4060       35.4014       41.9281
+       42.4026       42.4204       43.7811       43.7964
+       49.9228       49.9627       58.8036       58.8241
+       71.0085       80.9564       85.8414       86.4403
+       86.4663       86.6614       86.7096      136.2593
+   
+   
+  ****************************************************** 
+   
+                    Welcome to denmat --              
+   
+  ****************************************************** 
+  Fermi Level =   -2.1895405719004497     
+   
+  We write out the occupancies of the levels  
+  ----- ioccupy_k, from the subroutine fermie 
+   
+  ------ fermi ioccupy_k for k-point =            1
+ Band n =    1 k-points: ioccupy =  1
+ Band n =    2 k-points: ioccupy =  1
+ Band n =    3 k-points: ioccupy =  1
+ Band n =    4 k-points: ioccupy =  1
+ Band n =    5 k-points: ioccupy =  1
+ Band n =    6 k-points: ioccupy =  1
+ Band n =    7 k-points: ioccupy =  1
+ Band n =    8 k-points: ioccupy =  1
+ Band n =    9 k-points: ioccupy =  1
+ Band n =   10 k-points: ioccupy =  1
+ Band n =   11 k-points: ioccupy =  1
+ Band n =   12 k-points: ioccupy =  1
+ Band n =   13 k-points: ioccupy =  1
+ Band n =   14 k-points: ioccupy =  1
+ Band n =   15 k-points: ioccupy =  1
+ Band n =   16 k-points: ioccupy =  0
+ Band n =   17 k-points: ioccupy =  0
+ Band n =   18 k-points: ioccupy =  0
+ Band n =   19 k-points: ioccupy =  0
+ Band n =   20 k-points: ioccupy =  0
+ Band n =   21 k-points: ioccupy =  0
+ Band n =   22 k-points: ioccupy =  0
+ Band n =   23 k-points: ioccupy =  0
+ Band n =   24 k-points: ioccupy =  0
+ Band n =   25 k-points: ioccupy =  0
+ Band n =   26 k-points: ioccupy =  0
+ Band n =   27 k-points: ioccupy =  0
+ Band n =   28 k-points: ioccupy =  0
+ Band n =   29 k-points: ioccupy =  0
+ Band n =   30 k-points: ioccupy =  0
+ Band n =   31 k-points: ioccupy =  0
+ Band n =   32 k-points: ioccupy =  0
+ Band n =   33 k-points: ioccupy =  0
+ Band n =   34 k-points: ioccupy =  0
+ Band n =   35 k-points: ioccupy =  0
+ Band n =   36 k-points: ioccupy =  0
+ Band n =   37 k-points: ioccupy =  0
+ Band n =   38 k-points: ioccupy =  0
+ Band n =   39 k-points: ioccupy =  0
+ Band n =   40 k-points: ioccupy =  0
+ Band n =   41 k-points: ioccupy =  0
+ Band n =   42 k-points: ioccupy =  0
+ Band n =   43 k-points: ioccupy =  0
+ Band n =   44 k-points: ioccupy =  0
+ Band n =   45 k-points: ioccupy =  0
+ Band n =   46 k-points: ioccupy =  0
+ Band n =   47 k-points: ioccupy =  0
+ Band n =   48 k-points: ioccupy =  0
+ Band n =   49 k-points: ioccupy =  0
+ Band n =   50 k-points: ioccupy =  0
+ Band n =   51 k-points: ioccupy =  0
+ Band n =   52 k-points: ioccupy =  0
+ Band n =   53 k-points: ioccupy =  0
+ Band n =   54 k-points: ioccupy =  0
+ Band n =   55 k-points: ioccupy =  0
+ Band n =   56 k-points: ioccupy =  0
+ Band n =   57 k-points: ioccupy =  0
+ Band n =   58 k-points: ioccupy =  0
+ Band n =   59 k-points: ioccupy =  0
+ Band n =   60 k-points: ioccupy =  0
+   
+  We write out the electron fraction in each level 
+  ------ from the subroutine fermie. 
+   
+  ------ fermi foccupy for k-point =            1
+ Band n =    1 foccupy =         1.00000000
+ Band n =    2 foccupy =         1.00000000
+ Band n =    3 foccupy =         1.00000000
+ Band n =    4 foccupy =         1.00000000
+ Band n =    5 foccupy =         1.00000000
+ Band n =    6 foccupy =         1.00000000
+ Band n =    7 foccupy =         1.00000000
+ Band n =    8 foccupy =         1.00000000
+ Band n =    9 foccupy =         1.00000000
+ Band n =   10 foccupy =         1.00000000
+ Band n =   11 foccupy =         1.00000000
+ Band n =   12 foccupy =         1.00000000
+ Band n =   13 foccupy =         1.00000000
+ Band n =   14 foccupy =         1.00000000
+ Band n =   15 foccupy =         1.00000000
+ Band n =   16 foccupy =         0.00000000
+ Band n =   17 foccupy =         0.00000000
+ Band n =   18 foccupy =         0.00000000
+ Band n =   19 foccupy =         0.00000000
+ Band n =   20 foccupy =         0.00000000
+ Band n =   21 foccupy =         0.00000000
+ Band n =   22 foccupy =         0.00000000
+ Band n =   23 foccupy =         0.00000000
+ Band n =   24 foccupy =         0.00000000
+ Band n =   25 foccupy =         0.00000000
+ Band n =   26 foccupy =         0.00000000
+ Band n =   27 foccupy =         0.00000000
+ Band n =   28 foccupy =         0.00000000
+ Band n =   29 foccupy =         0.00000000
+ Band n =   30 foccupy =         0.00000000
+ Band n =   31 foccupy =         0.00000000
+ Band n =   32 foccupy =         0.00000000
+ Band n =   33 foccupy =         0.00000000
+ Band n =   34 foccupy =         0.00000000
+ Band n =   35 foccupy =         0.00000000
+ Band n =   36 foccupy =         0.00000000
+ Band n =   37 foccupy =         0.00000000
+ Band n =   38 foccupy =         0.00000000
+ Band n =   39 foccupy =         0.00000000
+ Band n =   40 foccupy =         0.00000000
+ Band n =   41 foccupy =         0.00000000
+ Band n =   42 foccupy =         0.00000000
+ Band n =   43 foccupy =         0.00000000
+ Band n =   44 foccupy =         0.00000000
+ Band n =   45 foccupy =         0.00000000
+ Band n =   46 foccupy =         0.00000000
+ Band n =   47 foccupy =         0.00000000
+ Band n =   48 foccupy =         0.00000000
+ Band n =   49 foccupy =         0.00000000
+ Band n =   50 foccupy =         0.00000000
+ Band n =   51 foccupy =         0.00000000
+ Band n =   52 foccupy =         0.00000000
+ Band n =   53 foccupy =         0.00000000
+ Band n =   54 foccupy =         0.00000000
+ Band n =   55 foccupy =         0.00000000
+ Band n =   56 foccupy =         0.00000000
+ Band n =   57 foccupy =         0.00000000
+ Band n =   58 foccupy =         0.00000000
+ Band n =   59 foccupy =         0.00000000
+ Band n =   60 foccupy =         0.00000000
+   
+   Deviation (rms) of input/output charges =    0.0001
+   Deviation (max) of input/output charges =    0.0007
+  Your chosen mixing routine is: mixing with anderson algorithm
+   
+   Renormalization of Qin:   renorm =         0.00000000
+  (Before renormalization) zouttot =    30.000000000000064     
+  (After  renormalization)  zcheck =    30.000000000000011     
+  (What it must be)           ztot =    30.000000000000000     
+   
+ =============> sigma =  0.1535273E-06 Must be less than 0.1000000E-07 SCF step =   5
+             BAD NEWS; results are not self-consistent 
+   
+  ------- THE TOTAL BAND STRUCTURE ENERGY ------- 
+   
+ EBS =          -391.397496 Time step =     1 SCF step =    5
+  ----------------------------------------------- 
+   
+   
+  ****************************************************** 
+  Begin time step =            1  scf step =            6
+  ****************************************************** 
+   
+   
+  ======================================================================
+  Now we are assembling piecies of Hamiltonian. 
+   
+   
+  ======================================================================
+  Now we are assembling McWeda Hamiltonian. 
+   
+   
+  ***************************************************** 
+  Assemble one-center interactions. 
+  Assemble OLS-xc exchange-correlation interactions. 
+   
+  Assemble OLS-xc exchange-correlation interactions.
+  Assembling on-site part.
+  Assembling off-site part.
+  Assemble two-center DOGS interactions. 
+   
+  Assemble three-center DOGS interactions. 
+  Assemble long-range interactions. 
+  ***************************************************** 
+
+  The information needed to make a TB model or 
+  for doing the complex band-structure is in 
+  the file ---> HS.dat
+  Call diag_k
+   
+  ****************************************************** 
+   
+          Welcome to kspace -- ikpoint =            1
+   
+  ****************************************************** 
+  Call diagonalizer for overlap. 
+                   The overlap eigenvalues: 
+  ******************************************************* 
+   
+  Call diagonalizer for Hamiltonian. 
+             The energy eigenvalues: 
+  *********************************************** 
+ lwork =        1980
+      -21.9696      -19.4453      -19.4451      -15.9785
+      -15.9748      -13.7333      -12.2754      -12.2605
+      -11.2440      -11.2406       -9.5324       -9.4311
+       -9.4297       -6.8779       -6.8766       -1.5698
+       -1.5692        1.9072        2.2857        3.6151
+        3.6172        5.2229        6.1365        6.1444
+       10.6966       10.7104       11.5779       11.5841
+       15.9809       17.0254       24.3877       24.7580
+       26.0892       26.8402       26.8414       27.6379
+       27.6394       28.3109       28.3215       30.0439
+       32.3908       32.4049       35.4002       41.9273
+       42.4021       42.4199       43.7792       43.7945
+       49.9236       49.9636       58.8029       58.8236
+       71.0079       80.9569       85.8419       86.4403
+       86.4663       86.6614       86.7096      136.2651
+   
+   
+  ****************************************************** 
+   
+                    Welcome to denmat --              
+   
+  ****************************************************** 
+  Fermi Level =   -2.1903007966313002     
+   
+  We write out the occupancies of the levels  
+  ----- ioccupy_k, from the subroutine fermie 
+   
+  ------ fermi ioccupy_k for k-point =            1
+ Band n =    1 k-points: ioccupy =  1
+ Band n =    2 k-points: ioccupy =  1
+ Band n =    3 k-points: ioccupy =  1
+ Band n =    4 k-points: ioccupy =  1
+ Band n =    5 k-points: ioccupy =  1
+ Band n =    6 k-points: ioccupy =  1
+ Band n =    7 k-points: ioccupy =  1
+ Band n =    8 k-points: ioccupy =  1
+ Band n =    9 k-points: ioccupy =  1
+ Band n =   10 k-points: ioccupy =  1
+ Band n =   11 k-points: ioccupy =  1
+ Band n =   12 k-points: ioccupy =  1
+ Band n =   13 k-points: ioccupy =  1
+ Band n =   14 k-points: ioccupy =  1
+ Band n =   15 k-points: ioccupy =  1
+ Band n =   16 k-points: ioccupy =  0
+ Band n =   17 k-points: ioccupy =  0
+ Band n =   18 k-points: ioccupy =  0
+ Band n =   19 k-points: ioccupy =  0
+ Band n =   20 k-points: ioccupy =  0
+ Band n =   21 k-points: ioccupy =  0
+ Band n =   22 k-points: ioccupy =  0
+ Band n =   23 k-points: ioccupy =  0
+ Band n =   24 k-points: ioccupy =  0
+ Band n =   25 k-points: ioccupy =  0
+ Band n =   26 k-points: ioccupy =  0
+ Band n =   27 k-points: ioccupy =  0
+ Band n =   28 k-points: ioccupy =  0
+ Band n =   29 k-points: ioccupy =  0
+ Band n =   30 k-points: ioccupy =  0
+ Band n =   31 k-points: ioccupy =  0
+ Band n =   32 k-points: ioccupy =  0
+ Band n =   33 k-points: ioccupy =  0
+ Band n =   34 k-points: ioccupy =  0
+ Band n =   35 k-points: ioccupy =  0
+ Band n =   36 k-points: ioccupy =  0
+ Band n =   37 k-points: ioccupy =  0
+ Band n =   38 k-points: ioccupy =  0
+ Band n =   39 k-points: ioccupy =  0
+ Band n =   40 k-points: ioccupy =  0
+ Band n =   41 k-points: ioccupy =  0
+ Band n =   42 k-points: ioccupy =  0
+ Band n =   43 k-points: ioccupy =  0
+ Band n =   44 k-points: ioccupy =  0
+ Band n =   45 k-points: ioccupy =  0
+ Band n =   46 k-points: ioccupy =  0
+ Band n =   47 k-points: ioccupy =  0
+ Band n =   48 k-points: ioccupy =  0
+ Band n =   49 k-points: ioccupy =  0
+ Band n =   50 k-points: ioccupy =  0
+ Band n =   51 k-points: ioccupy =  0
+ Band n =   52 k-points: ioccupy =  0
+ Band n =   53 k-points: ioccupy =  0
+ Band n =   54 k-points: ioccupy =  0
+ Band n =   55 k-points: ioccupy =  0
+ Band n =   56 k-points: ioccupy =  0
+ Band n =   57 k-points: ioccupy =  0
+ Band n =   58 k-points: ioccupy =  0
+ Band n =   59 k-points: ioccupy =  0
+ Band n =   60 k-points: ioccupy =  0
+   
+  We write out the electron fraction in each level 
+  ------ from the subroutine fermie. 
+   
+  ------ fermi foccupy for k-point =            1
+ Band n =    1 foccupy =         1.00000000
+ Band n =    2 foccupy =         1.00000000
+ Band n =    3 foccupy =         1.00000000
+ Band n =    4 foccupy =         1.00000000
+ Band n =    5 foccupy =         1.00000000
+ Band n =    6 foccupy =         1.00000000
+ Band n =    7 foccupy =         1.00000000
+ Band n =    8 foccupy =         1.00000000
+ Band n =    9 foccupy =         1.00000000
+ Band n =   10 foccupy =         1.00000000
+ Band n =   11 foccupy =         1.00000000
+ Band n =   12 foccupy =         1.00000000
+ Band n =   13 foccupy =         1.00000000
+ Band n =   14 foccupy =         1.00000000
+ Band n =   15 foccupy =         1.00000000
+ Band n =   16 foccupy =         0.00000000
+ Band n =   17 foccupy =         0.00000000
+ Band n =   18 foccupy =         0.00000000
+ Band n =   19 foccupy =         0.00000000
+ Band n =   20 foccupy =         0.00000000
+ Band n =   21 foccupy =         0.00000000
+ Band n =   22 foccupy =         0.00000000
+ Band n =   23 foccupy =         0.00000000
+ Band n =   24 foccupy =         0.00000000
+ Band n =   25 foccupy =         0.00000000
+ Band n =   26 foccupy =         0.00000000
+ Band n =   27 foccupy =         0.00000000
+ Band n =   28 foccupy =         0.00000000
+ Band n =   29 foccupy =         0.00000000
+ Band n =   30 foccupy =         0.00000000
+ Band n =   31 foccupy =         0.00000000
+ Band n =   32 foccupy =         0.00000000
+ Band n =   33 foccupy =         0.00000000
+ Band n =   34 foccupy =         0.00000000
+ Band n =   35 foccupy =         0.00000000
+ Band n =   36 foccupy =         0.00000000
+ Band n =   37 foccupy =         0.00000000
+ Band n =   38 foccupy =         0.00000000
+ Band n =   39 foccupy =         0.00000000
+ Band n =   40 foccupy =         0.00000000
+ Band n =   41 foccupy =         0.00000000
+ Band n =   42 foccupy =         0.00000000
+ Band n =   43 foccupy =         0.00000000
+ Band n =   44 foccupy =         0.00000000
+ Band n =   45 foccupy =         0.00000000
+ Band n =   46 foccupy =         0.00000000
+ Band n =   47 foccupy =         0.00000000
+ Band n =   48 foccupy =         0.00000000
+ Band n =   49 foccupy =         0.00000000
+ Band n =   50 foccupy =         0.00000000
+ Band n =   51 foccupy =         0.00000000
+ Band n =   52 foccupy =         0.00000000
+ Band n =   53 foccupy =         0.00000000
+ Band n =   54 foccupy =         0.00000000
+ Band n =   55 foccupy =         0.00000000
+ Band n =   56 foccupy =         0.00000000
+ Band n =   57 foccupy =         0.00000000
+ Band n =   58 foccupy =         0.00000000
+ Band n =   59 foccupy =         0.00000000
+ Band n =   60 foccupy =         0.00000000
+   
+   Deviation (rms) of input/output charges =    0.0000
+   Deviation (max) of input/output charges =    0.0003
+  Your chosen mixing routine is: mixing with anderson algorithm
+   
+   Renormalization of Qin:   renorm =        -0.00000000
+  (Before renormalization) zouttot =    29.999999999999872     
+  (After  renormalization)  zcheck =    30.000000000000004     
+  (What it must be)           ztot =    30.000000000000000     
+   
+ =============> sigma =  0.1324870E-07 Must be less than 0.1000000E-07 SCF step =   6
+             BAD NEWS; results are not self-consistent 
+   
+  ------- THE TOTAL BAND STRUCTURE ENERGY ------- 
+   
+ EBS =          -391.429659 Time step =     1 SCF step =    6
+  ----------------------------------------------- 
+   
+   
+  ****************************************************** 
+  Begin time step =            1  scf step =            7
+  ****************************************************** 
+   
+   
+  ======================================================================
+  Now we are assembling piecies of Hamiltonian. 
+   
+   
+  ======================================================================
+  Now we are assembling McWeda Hamiltonian. 
+   
+   
+  ***************************************************** 
+  Assemble one-center interactions. 
+  Assemble OLS-xc exchange-correlation interactions. 
+   
+  Assemble OLS-xc exchange-correlation interactions.
+  Assembling on-site part.
+  Assembling off-site part.
+  Assemble two-center DOGS interactions. 
+   
+  Assemble three-center DOGS interactions. 
+  Assemble long-range interactions. 
+  ***************************************************** 
+
+  The information needed to make a TB model or 
+  for doing the complex band-structure is in 
+  the file ---> HS.dat
+  Call diag_k
+   
+  ****************************************************** 
+   
+          Welcome to kspace -- ikpoint =            1
+   
+  ****************************************************** 
+  Call diagonalizer for overlap. 
+                   The overlap eigenvalues: 
+  ******************************************************* 
+   
+  Call diagonalizer for Hamiltonian. 
+             The energy eigenvalues: 
+  *********************************************** 
+ lwork =        1980
+      -21.9654      -19.4419      -19.4417      -15.9759
+      -15.9722      -13.7312      -12.2745      -12.2568
+      -11.2416      -11.2383       -9.5289       -9.4290
+       -9.4276       -6.8745       -6.8732       -1.5667
+       -1.5662        1.9088        2.2885        3.6172
+        3.6194        5.2245        6.1380        6.1459
+       10.6996       10.7134       11.5801       11.5863
+       15.9838       17.0299       24.3923       24.7614
+       26.0915       26.8434       26.8446       27.6407
+       27.6422       28.3127       28.3233       30.0460
+       32.3932       32.4073       35.4030       41.9297
+       42.4039       42.4217       43.7839       43.7993
+       49.9217       49.9617       58.8033       58.8240
+       71.0046       80.9560       85.8410       86.4395
+       86.4655       86.6604       86.7087      136.2467
+   
+   
+  ****************************************************** 
+   
+                    Welcome to denmat --              
+   
+  ****************************************************** 
+  Fermi Level =   -2.1888776349486303     
+   
+  We write out the occupancies of the levels  
+  ----- ioccupy_k, from the subroutine fermie 
+   
+  ------ fermi ioccupy_k for k-point =            1
+ Band n =    1 k-points: ioccupy =  1
+ Band n =    2 k-points: ioccupy =  1
+ Band n =    3 k-points: ioccupy =  1
+ Band n =    4 k-points: ioccupy =  1
+ Band n =    5 k-points: ioccupy =  1
+ Band n =    6 k-points: ioccupy =  1
+ Band n =    7 k-points: ioccupy =  1
+ Band n =    8 k-points: ioccupy =  1
+ Band n =    9 k-points: ioccupy =  1
+ Band n =   10 k-points: ioccupy =  1
+ Band n =   11 k-points: ioccupy =  1
+ Band n =   12 k-points: ioccupy =  1
+ Band n =   13 k-points: ioccupy =  1
+ Band n =   14 k-points: ioccupy =  1
+ Band n =   15 k-points: ioccupy =  1
+ Band n =   16 k-points: ioccupy =  0
+ Band n =   17 k-points: ioccupy =  0
+ Band n =   18 k-points: ioccupy =  0
+ Band n =   19 k-points: ioccupy =  0
+ Band n =   20 k-points: ioccupy =  0
+ Band n =   21 k-points: ioccupy =  0
+ Band n =   22 k-points: ioccupy =  0
+ Band n =   23 k-points: ioccupy =  0
+ Band n =   24 k-points: ioccupy =  0
+ Band n =   25 k-points: ioccupy =  0
+ Band n =   26 k-points: ioccupy =  0
+ Band n =   27 k-points: ioccupy =  0
+ Band n =   28 k-points: ioccupy =  0
+ Band n =   29 k-points: ioccupy =  0
+ Band n =   30 k-points: ioccupy =  0
+ Band n =   31 k-points: ioccupy =  0
+ Band n =   32 k-points: ioccupy =  0
+ Band n =   33 k-points: ioccupy =  0
+ Band n =   34 k-points: ioccupy =  0
+ Band n =   35 k-points: ioccupy =  0
+ Band n =   36 k-points: ioccupy =  0
+ Band n =   37 k-points: ioccupy =  0
+ Band n =   38 k-points: ioccupy =  0
+ Band n =   39 k-points: ioccupy =  0
+ Band n =   40 k-points: ioccupy =  0
+ Band n =   41 k-points: ioccupy =  0
+ Band n =   42 k-points: ioccupy =  0
+ Band n =   43 k-points: ioccupy =  0
+ Band n =   44 k-points: ioccupy =  0
+ Band n =   45 k-points: ioccupy =  0
+ Band n =   46 k-points: ioccupy =  0
+ Band n =   47 k-points: ioccupy =  0
+ Band n =   48 k-points: ioccupy =  0
+ Band n =   49 k-points: ioccupy =  0
+ Band n =   50 k-points: ioccupy =  0
+ Band n =   51 k-points: ioccupy =  0
+ Band n =   52 k-points: ioccupy =  0
+ Band n =   53 k-points: ioccupy =  0
+ Band n =   54 k-points: ioccupy =  0
+ Band n =   55 k-points: ioccupy =  0
+ Band n =   56 k-points: ioccupy =  0
+ Band n =   57 k-points: ioccupy =  0
+ Band n =   58 k-points: ioccupy =  0
+ Band n =   59 k-points: ioccupy =  0
+ Band n =   60 k-points: ioccupy =  0
+   
+  We write out the electron fraction in each level 
+  ------ from the subroutine fermie. 
+   
+  ------ fermi foccupy for k-point =            1
+ Band n =    1 foccupy =         1.00000000
+ Band n =    2 foccupy =         1.00000000
+ Band n =    3 foccupy =         1.00000000
+ Band n =    4 foccupy =         1.00000000
+ Band n =    5 foccupy =         1.00000000
+ Band n =    6 foccupy =         1.00000000
+ Band n =    7 foccupy =         1.00000000
+ Band n =    8 foccupy =         1.00000000
+ Band n =    9 foccupy =         1.00000000
+ Band n =   10 foccupy =         1.00000000
+ Band n =   11 foccupy =         1.00000000
+ Band n =   12 foccupy =         1.00000000
+ Band n =   13 foccupy =         1.00000000
+ Band n =   14 foccupy =         1.00000000
+ Band n =   15 foccupy =         1.00000000
+ Band n =   16 foccupy =         0.00000000
+ Band n =   17 foccupy =         0.00000000
+ Band n =   18 foccupy =         0.00000000
+ Band n =   19 foccupy =         0.00000000
+ Band n =   20 foccupy =         0.00000000
+ Band n =   21 foccupy =         0.00000000
+ Band n =   22 foccupy =         0.00000000
+ Band n =   23 foccupy =         0.00000000
+ Band n =   24 foccupy =         0.00000000
+ Band n =   25 foccupy =         0.00000000
+ Band n =   26 foccupy =         0.00000000
+ Band n =   27 foccupy =         0.00000000
+ Band n =   28 foccupy =         0.00000000
+ Band n =   29 foccupy =         0.00000000
+ Band n =   30 foccupy =         0.00000000
+ Band n =   31 foccupy =         0.00000000
+ Band n =   32 foccupy =         0.00000000
+ Band n =   33 foccupy =         0.00000000
+ Band n =   34 foccupy =         0.00000000
+ Band n =   35 foccupy =         0.00000000
+ Band n =   36 foccupy =         0.00000000
+ Band n =   37 foccupy =         0.00000000
+ Band n =   38 foccupy =         0.00000000
+ Band n =   39 foccupy =         0.00000000
+ Band n =   40 foccupy =         0.00000000
+ Band n =   41 foccupy =         0.00000000
+ Band n =   42 foccupy =         0.00000000
+ Band n =   43 foccupy =         0.00000000
+ Band n =   44 foccupy =         0.00000000
+ Band n =   45 foccupy =         0.00000000
+ Band n =   46 foccupy =         0.00000000
+ Band n =   47 foccupy =         0.00000000
+ Band n =   48 foccupy =         0.00000000
+ Band n =   49 foccupy =         0.00000000
+ Band n =   50 foccupy =         0.00000000
+ Band n =   51 foccupy =         0.00000000
+ Band n =   52 foccupy =         0.00000000
+ Band n =   53 foccupy =         0.00000000
+ Band n =   54 foccupy =         0.00000000
+ Band n =   55 foccupy =         0.00000000
+ Band n =   56 foccupy =         0.00000000
+ Band n =   57 foccupy =         0.00000000
+ Band n =   58 foccupy =         0.00000000
+ Band n =   59 foccupy =         0.00000000
+ Band n =   60 foccupy =         0.00000000
+   
+   Deviation (rms) of input/output charges =    0.0001
+   Deviation (max) of input/output charges =    0.0004
+  Your chosen mixing routine is: mixing with anderson algorithm
+   
+   Renormalization of Qin:   renorm =         0.00000000
+  (Before renormalization) zouttot =    30.000000000000004     
+  (After  renormalization)  zcheck =    29.999999999999996     
+  (What it must be)           ztot =    30.000000000000000     
+   
+ =============> sigma =  0.5340414E-07 Must be less than 0.1000000E-07 SCF step =   7
+             BAD NEWS; results are not self-consistent 
+   
+  ------- THE TOTAL BAND STRUCTURE ENERGY ------- 
+   
+ EBS =          -391.345441 Time step =     1 SCF step =    7
+  ----------------------------------------------- 
+   
+   
+  ****************************************************** 
+  Begin time step =            1  scf step =            8
+  ****************************************************** 
+   
+   
+  ======================================================================
+  Now we are assembling piecies of Hamiltonian. 
+   
+   
+  ======================================================================
+  Now we are assembling McWeda Hamiltonian. 
+   
+   
+  ***************************************************** 
+  Assemble one-center interactions. 
+  Assemble OLS-xc exchange-correlation interactions. 
+   
+  Assemble OLS-xc exchange-correlation interactions.
+  Assembling on-site part.
+  Assembling off-site part.
+  Assemble two-center DOGS interactions. 
+   
+  Assemble three-center DOGS interactions. 
+  Assemble long-range interactions. 
+  ***************************************************** 
+
+  The information needed to make a TB model or 
+  for doing the complex band-structure is in 
+  the file ---> HS.dat
+  Call diag_k
+   
+  ****************************************************** 
+   
+          Welcome to kspace -- ikpoint =            1
+   
+  ****************************************************** 
+  Call diagonalizer for overlap. 
+                   The overlap eigenvalues: 
+  ******************************************************* 
+   
+  Call diagonalizer for Hamiltonian. 
+             The energy eigenvalues: 
+  *********************************************** 
+ lwork =        1980
+      -21.9698      -19.4454      -19.4452      -15.9786
+      -15.9749      -13.7334      -12.2753      -12.2606
+      -11.2440      -11.2406       -9.5325       -9.4312
+       -9.4298       -6.8780       -6.8768       -1.5699
+       -1.5694        1.9073        2.2856        3.6152
+        3.6173        5.2230        6.1366        6.1445
+       10.6965       10.7103       11.5778       11.5840
+       15.9808       17.0253       24.3876       24.7579
+       26.0891       26.8401       26.8413       27.6378
+       27.6392       28.3108       28.3214       30.0438
+       32.3907       32.4048       35.4001       41.9273
+       42.4021       42.4199       43.7790       43.7943
+       49.9237       49.9636       58.8028       58.8235
+       71.0074       80.9569       85.8419       86.4402
+       86.4662       86.6613       86.7096      136.2651
+   
+   
+  ****************************************************** 
+   
+                    Welcome to denmat --              
+   
+  ****************************************************** 
+  Fermi Level =   -2.1904083092959450     
+   
+  We write out the occupancies of the levels  
+  ----- ioccupy_k, from the subroutine fermie 
+   
+  ------ fermi ioccupy_k for k-point =            1
+ Band n =    1 k-points: ioccupy =  1
+ Band n =    2 k-points: ioccupy =  1
+ Band n =    3 k-points: ioccupy =  1
+ Band n =    4 k-points: ioccupy =  1
+ Band n =    5 k-points: ioccupy =  1
+ Band n =    6 k-points: ioccupy =  1
+ Band n =    7 k-points: ioccupy =  1
+ Band n =    8 k-points: ioccupy =  1
+ Band n =    9 k-points: ioccupy =  1
+ Band n =   10 k-points: ioccupy =  1
+ Band n =   11 k-points: ioccupy =  1
+ Band n =   12 k-points: ioccupy =  1
+ Band n =   13 k-points: ioccupy =  1
+ Band n =   14 k-points: ioccupy =  1
+ Band n =   15 k-points: ioccupy =  1
+ Band n =   16 k-points: ioccupy =  0
+ Band n =   17 k-points: ioccupy =  0
+ Band n =   18 k-points: ioccupy =  0
+ Band n =   19 k-points: ioccupy =  0
+ Band n =   20 k-points: ioccupy =  0
+ Band n =   21 k-points: ioccupy =  0
+ Band n =   22 k-points: ioccupy =  0
+ Band n =   23 k-points: ioccupy =  0
+ Band n =   24 k-points: ioccupy =  0
+ Band n =   25 k-points: ioccupy =  0
+ Band n =   26 k-points: ioccupy =  0
+ Band n =   27 k-points: ioccupy =  0
+ Band n =   28 k-points: ioccupy =  0
+ Band n =   29 k-points: ioccupy =  0
+ Band n =   30 k-points: ioccupy =  0
+ Band n =   31 k-points: ioccupy =  0
+ Band n =   32 k-points: ioccupy =  0
+ Band n =   33 k-points: ioccupy =  0
+ Band n =   34 k-points: ioccupy =  0
+ Band n =   35 k-points: ioccupy =  0
+ Band n =   36 k-points: ioccupy =  0
+ Band n =   37 k-points: ioccupy =  0
+ Band n =   38 k-points: ioccupy =  0
+ Band n =   39 k-points: ioccupy =  0
+ Band n =   40 k-points: ioccupy =  0
+ Band n =   41 k-points: ioccupy =  0
+ Band n =   42 k-points: ioccupy =  0
+ Band n =   43 k-points: ioccupy =  0
+ Band n =   44 k-points: ioccupy =  0
+ Band n =   45 k-points: ioccupy =  0
+ Band n =   46 k-points: ioccupy =  0
+ Band n =   47 k-points: ioccupy =  0
+ Band n =   48 k-points: ioccupy =  0
+ Band n =   49 k-points: ioccupy =  0
+ Band n =   50 k-points: ioccupy =  0
+ Band n =   51 k-points: ioccupy =  0
+ Band n =   52 k-points: ioccupy =  0
+ Band n =   53 k-points: ioccupy =  0
+ Band n =   54 k-points: ioccupy =  0
+ Band n =   55 k-points: ioccupy =  0
+ Band n =   56 k-points: ioccupy =  0
+ Band n =   57 k-points: ioccupy =  0
+ Band n =   58 k-points: ioccupy =  0
+ Band n =   59 k-points: ioccupy =  0
+ Band n =   60 k-points: ioccupy =  0
+   
+  We write out the electron fraction in each level 
+  ------ from the subroutine fermie. 
+   
+  ------ fermi foccupy for k-point =            1
+ Band n =    1 foccupy =         1.00000000
+ Band n =    2 foccupy =         1.00000000
+ Band n =    3 foccupy =         1.00000000
+ Band n =    4 foccupy =         1.00000000
+ Band n =    5 foccupy =         1.00000000
+ Band n =    6 foccupy =         1.00000000
+ Band n =    7 foccupy =         1.00000000
+ Band n =    8 foccupy =         1.00000000
+ Band n =    9 foccupy =         1.00000000
+ Band n =   10 foccupy =         1.00000000
+ Band n =   11 foccupy =         1.00000000
+ Band n =   12 foccupy =         1.00000000
+ Band n =   13 foccupy =         1.00000000
+ Band n =   14 foccupy =         1.00000000
+ Band n =   15 foccupy =         1.00000000
+ Band n =   16 foccupy =         0.00000000
+ Band n =   17 foccupy =         0.00000000
+ Band n =   18 foccupy =         0.00000000
+ Band n =   19 foccupy =         0.00000000
+ Band n =   20 foccupy =         0.00000000
+ Band n =   21 foccupy =         0.00000000
+ Band n =   22 foccupy =         0.00000000
+ Band n =   23 foccupy =         0.00000000
+ Band n =   24 foccupy =         0.00000000
+ Band n =   25 foccupy =         0.00000000
+ Band n =   26 foccupy =         0.00000000
+ Band n =   27 foccupy =         0.00000000
+ Band n =   28 foccupy =         0.00000000
+ Band n =   29 foccupy =         0.00000000
+ Band n =   30 foccupy =         0.00000000
+ Band n =   31 foccupy =         0.00000000
+ Band n =   32 foccupy =         0.00000000
+ Band n =   33 foccupy =         0.00000000
+ Band n =   34 foccupy =         0.00000000
+ Band n =   35 foccupy =         0.00000000
+ Band n =   36 foccupy =         0.00000000
+ Band n =   37 foccupy =         0.00000000
+ Band n =   38 foccupy =         0.00000000
+ Band n =   39 foccupy =         0.00000000
+ Band n =   40 foccupy =         0.00000000
+ Band n =   41 foccupy =         0.00000000
+ Band n =   42 foccupy =         0.00000000
+ Band n =   43 foccupy =         0.00000000
+ Band n =   44 foccupy =         0.00000000
+ Band n =   45 foccupy =         0.00000000
+ Band n =   46 foccupy =         0.00000000
+ Band n =   47 foccupy =         0.00000000
+ Band n =   48 foccupy =         0.00000000
+ Band n =   49 foccupy =         0.00000000
+ Band n =   50 foccupy =         0.00000000
+ Band n =   51 foccupy =         0.00000000
+ Band n =   52 foccupy =         0.00000000
+ Band n =   53 foccupy =         0.00000000
+ Band n =   54 foccupy =         0.00000000
+ Band n =   55 foccupy =         0.00000000
+ Band n =   56 foccupy =         0.00000000
+ Band n =   57 foccupy =         0.00000000
+ Band n =   58 foccupy =         0.00000000
+ Band n =   59 foccupy =         0.00000000
+ Band n =   60 foccupy =         0.00000000
+   
+   Deviation (rms) of input/output charges =    0.0000
+   Deviation (max) of input/output charges =    0.0000
+  Your chosen mixing routine is: mixing with anderson algorithm
+   
+   Renormalization of Qin:   renorm =        -0.00000000
+  (Before renormalization) zouttot =    29.999999999999996     
+  (After  renormalization)  zcheck =    30.000000000000004     
+  (What it must be)           ztot =    30.000000000000000     
+   
+ =============> sigma =  0.1811384E-10 Must be less than 0.1000000E-07 SCF step =   8
+   
+  Writing out the charge densities. 
+   
+   
+  ------- THE TOTAL BAND STRUCTURE ENERGY ------- 
+   
+ EBS =          -391.431787 Time step =     1 SCF step =    8 SCF success! 
+  ----------------------------------------------- 
+   
+  ======================================================================
+  Now we are performing post-scf analysis. 
+   
+   
+  ======================================================================
+  Now we are calculating the total energy. 
+   
+   
+  Welcome to assemble_usr.f! 
+   
+ eqmmm =   0.0000000000000000     
+  ---------- T H E  T O T A L  E N E R G Y ----------- 
+   Time step =      1 SCF step =   8 etot/atom =     -84.639354
+   
+             ebs =     -391.431787
+       uii - uee =     -718.235236
+       etotxc_1c =        0.000000
+          uxcdcc =       93.994777
+            ETOT =    -1015.672246
+       Etot/atom =      -84.639354
+   Atomic Energy =     -934.214940
+       CohesiveE =      -81.457306
+   
+   Cohesive Energy per atom  =       -6.788109
+  ----------------------------------------------------- 
+   
+  ================= Move on to Forces ================= 
+   
+  ======================================================================
+  Now we are assembling forces. 
+   
+   
+   
+  ***************************************************** 
+  Dassemble two-center force contributions. 
+  Dassemble two-center PP force contributions. 
+  Dassemble on-site OSLXC force contributions. 
+  Dassemble two-center DOGS force contributions. 
+   
+  Dassemble three-center force contributions. 
+  Dassemble three-center PP force contributions. 
+  Dassemble three-center DOGS force contributions. 
+  Dassemble three-center long-range contributions. 
+  Dassemble off-site OLS exchange-correlation forces. 
+  ***************************************************** 
+   
+   
+  ***************************************************** 
+  Assemble all force contributions. 
+  Welcome to assemble_F - ftot assembled here. 
+   
+  The grand total force (eV/A): 
+   iatom =    1 ftot      =  -0.165278E+00  0.102790E+01 -0.338259E-02
+   iatom =    2 ftot      =  -0.977697E+00  0.367850E+00 -0.139141E-01
+   iatom =    3 ftot      =  -0.814420E+00 -0.653231E+00  0.140173E-01
+   iatom =    4 ftot      =   0.166221E+00 -0.102752E+01 -0.685967E-03
+   iatom =    5 ftot      =   0.977713E+00 -0.366934E+00 -0.142755E-01
+   iatom =    6 ftot      =   0.813057E+00  0.653407E+00  0.233570E-01
+   iatom =    7 ftot      =   0.935164E+00  0.763899E+00  0.629123E-02
+   iatom =    8 ftot      =  -0.185193E+00  0.119388E+01 -0.219510E-02
+   iatom =    9 ftot      =  -0.112569E+01  0.437787E+00 -0.389278E-02
+   iatom =   10 ftot      =  -0.934761E+00 -0.765104E+00 -0.486280E-03
+   iatom =   11 ftot      =   0.184454E+00 -0.119353E+01 -0.523611E-02
+   iatom =   12 ftot      =   0.112643E+01 -0.438409E+00  0.402911E-03
+   
+   Cartesian Forces:  Max =       1.19388267    RMS =       0.65157171
+   
+ move_ions
+ 
+  Predictor-Corrector: correct positions.
+ T_instantaneous   0.0000000000000000     
+ 
+  average temperature =    0.0000000000000000     
+ 
+  nuclear kinetic energy =         0.00000000
+   Grand Total = nuclear kinetic + potential =     -1015.67224631
+   total energy per atom =       -84.63935386
+   grand total energy per atom =       -84.63935386
+ deltaE/atom(meV) =   -84639.353858870760     
+   
+  Writing positions and velocities to the xvfile: 
+  Writing accelerations to the acfile. 
+   deltae, etotnew, etotold =   1015.67224631   -84.63935386     0.00000000
+ deltaFmax =    1.1938826744865398      force_tol =   5.0000000000000003E-002
+    Checking MD convergence : 
+   ++++ iter =        1 Etot=     -84.63935386 Fi_max=       1.193883
+  +++ EtotRES =   1015.67224631TOL =       0.00010000 NOT CONVERGED 
+  +++ FmaxRES =      1.19388267TOL =       0.05000000 NOT CONVERGED 
+   center of mass angular momentum =   0.0000D+00  0.0000D+00  0.0000D+00
+   
+           center of mass position =  -0.4411D+01 -0.2567D+01  0.9341D-07
+           center of mass velocity =   0.0000D+00  0.0000D+00  0.0000D+00
+   No quenching. T_instantaneous =        0.0000 T_previous =       0.0000
+=============================      1 ===================================
+  FIREBALL RUNTIME :    5.7439999999999998      [sec]

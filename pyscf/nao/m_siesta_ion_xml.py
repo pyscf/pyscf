@@ -69,8 +69,8 @@ def siesta_ion_xml(fname):
             'delta':list of float
             'cutoff': list of float
             'data':list of np.arrayof shape (npts[i], 2)
-            'orbital': list of dictionnary
-            'projector': list of dictionnary
+            'orbital': list of dictionary
+            'projector': list of dictionary
 
     """
     doc = minidom.parse(fname)

@@ -83,6 +83,8 @@ class nao():
     elif 'openmx' in kw:
       self.init_openmx(**kw)
       #self.init_libnao_orbs()
+    elif 'fireball' in kw:
+      self.init_fireball(**kw)
     else:
       raise RuntimeError('unknown init method')
     
@@ -97,7 +99,6 @@ class nao():
     from pyscf.lib import logger
 
     gto = kw['gto']
-    self.verbose = kw['verbose'] if 'verbose' in kw else 0
     self.stdout = sys.stdout
     self.symmetry = False
     self.symmetry_subgroup = None
@@ -168,6 +169,21 @@ class nao():
   #
   #
   #
+  def init_fireball(self, **kw):
+    from pyscf.nao.m_fireball_import import fireball_import
+    from timeit import default_timer as timer
+    """
+      Initialise system var using only the fireball files (standard output in particular is needed)
+      System variables:
+      -----------------
+        chdir (string): calculation directory
+    """
+    fireball_import(self, **kw)
+    return self
+
+  #
+  #
+  #
   def init_label(self, **kw):
     from pyscf.nao.m_siesta_xml import siesta_xml
     from pyscf.nao.m_siesta_wfsx import siesta_wfsx_c
@@ -206,7 +222,6 @@ class nao():
 
     self.label = label = kw['label'] if 'label' in kw else 'siesta'
     self.cd = cd = kw['cd'] if 'cd' in kw else '.'
-    self.verbose = kw['verbose'] if 'verbose' in kw else 0
     self.xml_dict = siesta_xml(cd+'/'+self.label+'.xml')
     self.wfsx = siesta_wfsx_c(**kw)
     self.hsx = siesta_hsx_c(fname=cd+'/'+self.label+'.HSX', **kw)

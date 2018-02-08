@@ -22,6 +22,7 @@ def siesta_ion_interp(rr, sp2ion, fj=1):
     smr2ro_log.append(np.zeros((nmu,nr), dtype='float64'))
 
     for mu,dat in enumerate(ion["paos"]["data"]):
+      #print(__name__, 'dat.shape', dat.shape, dat[0:4,0], dat[0:4,1])
       j, h = ion["paos"]['orbital'][mu]['l'], ion["paos"]["delta"][mu]
       yy_diff2 = spline_diff2(h, dat[:, 1], 0.0, 1.0e301)
       for ir in range(nr): 

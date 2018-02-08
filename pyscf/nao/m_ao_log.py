@@ -153,6 +153,11 @@ class ao_log_c(log_mesh_c):
     import numpy as np
 
     self.init_log_mesh_ion(sp2ion, **kw)
+    #print(__name__, self.nr)
+    #print(__name__, self.rr)
+    #print(__name__, self.rmax)
+    #print(__name__, self.rmin)
+    #print(__name__, self.kmax)
     self.interp_rr,self.interp_pp = log_interp_c(self.rr), log_interp_c(self.pp)
     _siesta_ion_add_sp2(self, sp2ion) # adds the fields for counting, .nspecies etc.
     self.jmx = max([mu2j.max() for mu2j in self.sp_mu2j])
@@ -162,6 +167,13 @@ class ao_log_c(log_mesh_c):
     
     rr = self.rr
     nr = len(rr)
+    
+    #print(__name__, 'self.jmx', self.jmx)
+    #print(__name__, 'self.sp2norbs', self.sp2norbs)
+    #print(__name__, 'self.sp2norbs', dir(self))
+    #print(__name__, 'self.sp_mu2j', self.sp_mu2j)
+    #print(__name__, 'self.sp_mu2rcut', self.sp_mu2rcut)
+    #print(__name__, 'self.sp_mu2s', self.sp_mu2s)
     
     self.psi_log = siesta_ion_interp(rr, sp2ion, 1)
     self.psi_log_rl = siesta_ion_interp(rr, sp2ion, 0)

@@ -19,10 +19,13 @@ class mf(nao):
     
     if 'mf' in kw:
       self.init_mo_from_pyscf(**kw)      
-    elif 'label' in kw:
+    elif 'label' in kw: # init KS orbitals with SIESTA
       self.init_mo_coeff_label(**kw)
       self.k2xyzw = self.xml_dict["k2xyzw"]
       self.xc_code = 'LDA,PZ' # just a guess...
+    elif 'fireball' in kw: # init KS orbitals with Fireball
+      self.init_mo_coeff_fireball(**kw)
+      self.xc_code = 'GGA,PBE' # just a guess...
     elif 'gpaw' in kw:
       self.init_mo_coeff_label(**kw)
       self.k2xyzw = np.array([[0.0,0.0,0.0,1.0]])
@@ -104,6 +107,29 @@ class mf(nao):
     self.fermi_energy = kw['fermi_energy'] if 'fermi_energy' in kw else self.fermi_energy
     ksn2fd = fermi_dirac_occupations(self.telec, self.mo_energy, self.fermi_energy)
     self.mo_occ = (3-self.nspin)*ksn2fd
+
+  def init_mo_coeff_fireball(self, **kw):
+    """ Constructor a mean-field class from the preceeding FIREBALL calculation """
+    from pyscf.nao.m_fermi_dirac import fermi_dirac_occupations
+    from pyscf.nao.m_fireball_get_eigen_dat import fireball_get_eigen_dat
+    from pyscf.nao.m_fireball_hsx import fireball_hsx
+    self.telec = kw['telec'] if 'telec' in kw else self.telec
+    self.fermi_energy = kw['fermi_energy'] if 'fermi_energy' in kw else self.fermi_energy
+    self.mo_energy = np.require(fireball_get_eigen_dat(self.cd), dtype=self.dtype, requirements='CW')
+    ksn2fd = fermi_dirac_occupations(self.telec, self.mo_energy, self.fermi_energy)
+    self.mo_occ = (3-self.nspin)*ksn2fd
+    if abs(self.nelectron-self.mo_occ.sum())>1e-6: raise RuntimeError("mo_occ wrong?" )
+    print(__name__, ' self.nspecies ', self.nspecies)
+    print(self.sp_mu2j)
+    
+    self.hsx = fireball_hsx(self, **kw)
+    #print(self.telec)
+    #print(self.mo_energy)
+    #print(self.fermi_energy)
+    #print(__name__, ' sum(self.mo_occ)', sum(self.mo_occ))
+    #print(self.mo_occ)
+    
+        
 
   def diag_check(self, atol=1e-5, rtol=1e-4):
     from pyscf.nao.m_sv_diag import sv_diag 
