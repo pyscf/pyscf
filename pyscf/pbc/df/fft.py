@@ -138,19 +138,13 @@ def get_pp(mydf, kpts=None):
 class FFTDF(lib.StreamObject):
     '''Density expansion on plane waves
     '''
-    def __init__(self, cell, kpts=numpy.zeros((1,3)), low_dim_ft_type=None):
+    def __init__(self, cell, kpts=numpy.zeros((1,3))):
         from pyscf.pbc.dft import numint
         self.cell = cell
         self.stdout = cell.stdout
         self.verbose = cell.verbose
         self.max_memory = cell.max_memory
-        if low_dim_ft_type is None:
-            self.low_dim_ft_type = cell.low_dim_ft_type
-        else:
-            logger.warn(self, 'Setting low_dim_ft_type inside cell class.  Change me in '
-                              'future implementation \n')
-            cell.low_dim_ft_type = low_dim_ft_type
-            self.low_dim_ft_type = low_dim_ft_type
+        self.low_dim_ft_type = cell.low_dim_ft_type
 
         self.kpts = kpts
         self.mesh = cell.mesh
