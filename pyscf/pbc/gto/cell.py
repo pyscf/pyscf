@@ -323,8 +323,6 @@ def intor_cross(intor, cell1, cell2, comp=None, hermi=0, kpts=None, kpt=None,
     import copy
     intor, comp = moleintor._get_intor_and_comp(cell1._add_suffix(intor), comp)
 
-    assert('2e' not in intor)
-
     if kpts is None:
         if kpt is not None:
             kpts_lst = np.reshape(kpt, (1,3))
@@ -680,6 +678,20 @@ def _cut_mesh_for_ewald(cell, mesh):
     mesh[mesh>mesh_max] = mesh_max[mesh>mesh_max]
     return mesh
 
+def _model_uniform_charge_SI_on_z(cell, Gv):
+    chargs = cell.atom_charges()
+    coords = cell.atom_coords()
+    charge_center = mole.charge_center(cell._atom, chargs, coords)
+    if cell.dimension == 1:
+        G0idx = (Gv[:,0] == 0)
+        SI_on_z = np.exp(-1j * np.einsum('gx,x->g', Gv[G0idx,1:], charge_center[1:]))
+    elif cell.dimension == 2:
+        G0idx = (Gv[:,0] == 0) & (Gv[:,1] == 0)
+        SI_on_z = np.exp(-1j * (Gv[G0idx,2] * charge_center[2]))
+    else:
+        G0idx = SI_on_z = None
+    return G0idx, SI_on_z
+
 def ewald(cell, ew_eta=None, ew_cut=None):
     '''Perform real (R) and reciprocal (G) space Ewald sum for the energy.
 
@@ -736,11 +748,22 @@ def ewald(cell, ew_eta=None, ew_cut=None):
     if low_dim_ft_type is None or cell.dimension == 3:
         coulG = 4*np.pi / absG2
         coulG *= weights
-        JexpG2 = np.exp(-absG2/(4*ew_eta**2)) * coulG
-
         ZSI = np.einsum("i,ij->j", chargs, cell.get_SI(Gv))
-        ZSIG2 = np.abs(ZSI)**2
-        ewg = .5 * np.dot(ZSIG2, JexpG2)
+        ZexpG2 = ZSI * np.exp(-absG2/(4*ew_eta**2))
+
+        if cell.dimension == 1 or cell.dimension == 2:
+            G0idx, SI_on_z = _model_uniform_charge_SI_on_z(cell, Gv)
+            bg_charge = chargs.sum() * SI_on_z
+            ZexpG2[G0idx] -= bg_charge
+            ZSI_without_bg = ZSI[G0idx] - bg_charge
+            # (m-s|Z)
+            ewg = .5 * np.einsum('i,i,i', ZSI.conj(), ZexpG2, coulG).real
+            # (Z-s|s)
+            ewg -= .5 * np.einsum('i,i,i', ZSI_without_bg.conj(), bg_charge,
+                                  coulG[G0idx]).real
+        else:
+            ewg = .5 * np.einsum('i,i,i', ZSI.conj(), ZexpG2, coulG).real
+
     elif low_dim_ft_type == 'analytic_2d_1' and cell.dimension == 2:
         # The following 2D ewald summation is taken from:
         # R. Sundararaman and T. Arias PRB 87, 2013

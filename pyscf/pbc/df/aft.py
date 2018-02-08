@@ -13,6 +13,7 @@ from pyscf import gto
 from pyscf.lib import logger
 from pyscf.pbc import tools
 from pyscf.pbc.gto import pseudo, estimate_ke_cutoff, error_for_ke_cutoff
+from pyscf.pbc.gto.cell import _model_uniform_charge_SI_on_z
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import incore
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point
@@ -70,25 +71,45 @@ def get_nuc(mydf, kpts=None):
     nkpts = len(kpts_lst)
     nao = cell.nao_nr()
     nao_pair = nao * (nao+1) // 2
+    charges = cell.atom_charges()
 
-    Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
     kpt_allow = numpy.zeros(3)
     if mydf.eta == 0:
         if cell.dimension > 0:
-            ke_guess = estimate_ke_cutoff_for_eta(cell, mydf.eta, cell.precision)
+            ke_guess = estimate_ke_cutoff(cell, cell.precision)
             mesh_guess = tools.cutoff_to_mesh(cell.lattice_vectors(), ke_guess)
             if numpy.any(mesh < mesh_guess*.8):
                 logger.warn(mydf, 'mesh %s is not enough for AFTDF.get_nuc function '
                             'to get integral accuracy %g.\nRecommended mesh is %s.',
                             mesh, cell.precision, mesh_guess)
+        Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
 
         vpplocG = pseudo.pp_int.get_gth_vlocG_part1(cell, Gv)
         vpplocG = -numpy.einsum('ij,ij->j', cell.get_SI(Gv), vpplocG)
+        v1 = -vpplocG.copy()
+
+        if cell.dimension == 1 or cell.dimension == 2:
+            G0idx, SI_on_z = _model_uniform_charge_SI_on_z(cell, Gv)
+            coulG = 4*numpy.pi / numpy.linalg.norm(Gv[G0idx], axis=1)**2
+            vpplocG[G0idx] += charges.sum() * SI_on_z * coulG
+
         vpplocG *= kws
         vG = vpplocG
         vj = numpy.zeros((nkpts,nao_pair), dtype=numpy.complex128)
 
     else:
+        if cell.dimension > 0:
+            ke_guess = estimate_ke_cutoff_for_eta(cell, mydf.eta, cell.precision)
+            mesh_guess = tools.cutoff_to_mesh(cell.lattice_vectors(), ke_guess)
+            #if numpy.any(mesh < mesh_guess*.8):
+            #    logger.warn(mydf, 'mesh %s is not enough for AFTDF.get_nuc function '
+            #                'to get integral accuracy %g.\nRecommended mesh is %s.',
+            #                mesh, cell.precision, mesh_guess)
+            mesh_min = numpy.min((mesh_guess[:cell.dimension]*.8,
+                                  mesh[:cell.dimension]), axis=0)
+            mesh[:cell.dimension] = mesh_min.astype(int)
+        Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
+
         nuccell = copy.copy(cell)
         half_sph_norm = .5/numpy.sqrt(numpy.pi)
         norm = half_sph_norm/gto.gaussian_int(2, mydf.eta)
@@ -104,11 +125,24 @@ def get_nuc(mydf, kpts=None):
         vj = lib.asarray(mydf._int_nuc_vloc(nuccell, kpts_lst))
         t0 = t1 = log.timer_debug1('vnuc pass1: analytic int', *t0)
 
-        charge = -cell.atom_charges()
         coulG = tools.get_coulG(cell, kpt_allow, mesh=mesh, Gv=Gv)
         coulG *= kws
         aoaux = ft_ao.ft_ao(nuccell, Gv)
-        vG = numpy.einsum('i,xi->x', charge, aoaux) * coulG
+        vG = numpy.einsum('i,xi->x', -charges, aoaux) * coulG
+
+        if cell.dimension == 1 or cell.dimension == 2:
+            G0idx, SI_on_z = _model_uniform_charge_SI_on_z(cell, Gv)
+
+            ZSI = numpy.einsum("i,ij->j", -charges, cell.get_SI(Gv[G0idx]))
+            ZSI_mod_diff = ZSI * coulG[G0idx] - vG[G0idx]
+            vG_mod = numpy.dot(ZSI_mod_diff.conj(), SI_on_z)
+            if abs(kpts_lst).sum() < 1e-9:
+                vG_mod = vG_mod.real
+            s = cell.pbc_intor('int1e_ovlp', kpts=kpts_lst)
+            for k, kpt in enumerate(kpts_lst):
+                vj[k] -= vG_mod * lib.pack_tril(s[k])
+
+            vG[G0idx] += charges.sum() * SI_on_z * coulG[G0idx]
 
     max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
     for aoaoks, p0, p1 in mydf.ft_loop(mesh, kpt_allow, kpts_lst,
@@ -325,9 +359,17 @@ class AFTDF(lib.StreamObject):
             nj = ao_loc[shls_slice[3]] - ao_loc[shls_slice[2]]
             nij = ni*nj
 
+        if (abs(q).sum() < 1e-6 and (cell.dimension == 1 or cell.dimension == 2)):
+            if aosym == 's2':
+                s = lib.pack_tril(cell.pbc_intor('int1e_ovlp', kpt=kptj))
+            else:
+                s = cell.pbc_intor('int1e_ovlp', kpt=kptj).ravel()
+        else:
+            s = None
+
         if blksize is None:
             blksize = min(max(16, int(max_memory*1e6*.75/(nij*16*comp))), 16384)
-            sublk = max(16, int(blksize//4))
+            sublk = blksize#max(16, int(blksize//4))
         else:
             sublk = blksize
         buf = numpy.empty(nij*blksize*comp, dtype=numpy.complex128)
@@ -341,6 +383,10 @@ class AFTDF(lib.StreamObject):
                                          b, gxyz[p0:p1], Gvbase, q,
                                          kptj.reshape(1,3), intor, comp, out=buf)[0]
             aoao = aoao.reshape(p1-p0,nij)
+            if s is not None:  # to remove the divergent integrals
+                G0idx, SI_on_z = _model_uniform_charge_SI_on_z(cell, Gv[p0:p1])
+                aoao[G0idx] -= numpy.einsum('g,i->gi', SI_on_z, s)
+
             for i0, i1 in lib.prange(0, p1-p0, sublk):
                 nG = i1 - i0
                 if comp == 1:
@@ -387,6 +433,14 @@ class AFTDF(lib.StreamObject):
             ni = ao_loc[shls_slice[1]] - ao_loc[shls_slice[0]]
             nj = ao_loc[shls_slice[3]] - ao_loc[shls_slice[2]]
             nij = ni*nj
+
+        if (abs(q).sum() < 1e-6 and (cell.dimension == 1 or cell.dimension == 2)):
+            s = cell.pbc_intor('int1e_ovlp', kpts=kpts)
+            if aosym == 's2':
+                s = [lib.pack_tril(x) for x in s]
+        else:
+            s = None
+
         blksize = max(16, int(max_memory*.9e6/(nij*nkpts*16*comp)))
         blksize = min(blksize, ngrids, 16384)
         buf = numpy.empty(nkpts*nij*blksize*comp, dtype=numpy.complex128)
@@ -395,6 +449,12 @@ class AFTDF(lib.StreamObject):
             dat = ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
                                         b, gxyz[p0:p1], Gvbase, q, kpts,
                                         intor, comp, out=buf)
+
+            if s is not None:  # to remove the divergent integrals
+                G0idx, SI_on_z = _model_uniform_charge_SI_on_z(cell, Gv[p0:p1])
+                for k, kpt in enumerate(kpts):
+                    dat[k][G0idx] -= numpy.einsum('g,...->g...', SI_on_z, s[k])
+
             yield dat, p0, p1
 
     def prange(self, start, stop, step):

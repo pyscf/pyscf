@@ -341,7 +341,6 @@ class GDF(aft.AFTDF):
             ke_cutoff = ke_cutoff[:cell.dimension].min()
             self.eta = min(aft.estimate_eta_for_ke_cutoff(cell, ke_cutoff, cell.precision),
                            estimate_eta(cell, cell.precision))
-            ke_cutoff = aft.estimate_ke_cutoff_for_eta(cell, self.eta, cell.precision)
             self.mesh = tools.cutoff_to_mesh(cell.lattice_vectors(), ke_cutoff)
             self.mesh[cell.dimension:] = cell.mesh[cell.dimension:]
 

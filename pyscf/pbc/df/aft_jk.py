@@ -35,13 +35,15 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None):
         #:rho = numpy.einsum('lkL,lk->L', pqk.conj(), dm)
         for k, aoao in enumerate(aoaoks):
             for i in range(nset):
-                rho = numpy.einsum('ij,Lij->L', dmsC[i,k], aoao).conj()
+                rho = numpy.einsum('ij,Lij->L', dmsC[i,k],
+                                   aoao.reshape(-1,nao,nao)).conj()
                 vG[i] += rho * coulG[p0:p1]
         for i in range(nset):
             vG[i] *= weight
         for k, aoao in enumerate(aoaoks):
             for i in range(nset):
-                vj_kpts[i,k] += numpy.einsum('L,Lij->ij', vG[i], aoao)
+                vj_kpts[i,k] += numpy.einsum('L,Lij->ij', vG[i],
+                                             aoao.reshape(-1,nao,nao))
     aoao = aoaoks = p0 = p1 = None
 
     if gamma_point(kpts):
@@ -70,7 +72,8 @@ def get_j_for_bands(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=N
         #:rho = numpy.einsum('lkL,lk->L', pqk.conj(), dm)
         for k, aoao in enumerate(aoaoks):
             for i in range(nset):
-                rho = numpy.einsum('ij,Lij->L', dmsC[i,k], aoao).conj()
+                rho = numpy.einsum('ij,Lij->L', dmsC[i,k],
+                                   aoao.reshape(-1,nao,nao)).conj()
                 vG[i,p0:p1] += rho * coulG[p0:p1]
     aoao = aoaoks = p0 = p1 = None
     weight = 1./len(kpts)
@@ -84,7 +87,8 @@ def get_j_for_bands(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=N
                                         max_memory=max_memory):
         for k, aoao in enumerate(aoaoks):
             for i in range(nset):
-                vj_kpts[i,k] += numpy.einsum('L,Lij->ij', vG[i,p0:p1], aoao)
+                vj_kpts[i,k] += numpy.einsum('L,Lij->ij', vG[i,p0:p1],
+                                             aoao.reshape(-1,nao,nao))
     aoao = aoaoks = p0 = p1 = None
 
     if gamma_point(kpts_band):
