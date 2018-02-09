@@ -33,17 +33,25 @@ class tddft_iter_2ord(tddft_iter):
     return v + self.kchi0_mv(v)
 
   def solve_umkckc(self, vext, comega=1j*0.0, x0=None):
-    from scipy.sparse.linalg import LinearOperator
-    from pyscf.nao.m_lgmres import lgmres
     """ This solves a system of linear equations 
            (1 - K chi0 K chi0 ) X = vext 
      or computes 
            X = (1 - K chi0 K chi0 )^{-1} vext 
     """
+    from scipy.sparse.linalg import LinearOperator
     assert len(vext)==len(self.moms0), "%r, %r "%(len(vext), len(self.moms0))
     self.comega_current = comega
     veff2_op = LinearOperator((self.nprod,self.nprod), matvec=self.umkckc_mv, dtype=self.dtypeComplex)
-    resgm,info = lgmres(veff2_op, np.require(vext, dtype=self.dtypeComplex, requirements='C'), x0=x0, tol=self.tddft_iter_tol, maxiter=self.maxiter)
+
+    if self.scipy_ver > 0:
+        from pyscf.nao.m_lgmres import lgmres
+        resgm,info = lgmres(veff2_op, np.require(vext, dtype=self.dtypeComplex, requirements='C'), x0=x0, 
+                tol=self.tddft_iter_tol, maxiter=self.maxiter, res=self.res_method)
+    else:
+        from scipy.sparse.linalg import lgmres
+        resgm,info = lgmres(veff2_op, np.require(vext, dtype=self.dtypeComplex, requirements='C'), x0=x0, 
+                tol=self.tddft_iter_tol, maxiter=self.maxiter)
+    
     if info != 0:  print("LGMRES Warning: info = {0}".format(info))
     return resgm
 

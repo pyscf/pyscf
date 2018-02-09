@@ -27,6 +27,10 @@ class tddft_iter(chi0_matvec):
 
     # better to check input before to initialize calculations
     chi0_matvec.__init__(self, **kw)
+    if self.scipy_ver < 1 and self.res_method != "both":
+        import warnings
+        warnings.warn("scipy.__version__ < 1, the res_method both will be used!")
+
     self.xc_code_mf = copy(self.xc_code)
     self.xc_code = xc_code = kw['xc_code'] if 'xc_code' in kw else self.xc_code
 
@@ -84,15 +88,22 @@ class tddft_iter(chi0_matvec):
     vxc_pack(self, deriv=2, ao_log=self.pb.prod_log, **kw)
 
   def comp_veff(self, vext, comega=1j*0.0, x0=None):
-    from scipy.sparse.linalg import LinearOperator
-    from pyscf.nao.m_lgmres import lgmres
-    
     """ This computes an effective field (scalar potential) given the external scalar potential """
+    from scipy.sparse.linalg import LinearOperator
     assert len(vext)==len(self.moms0), "%r, %r "%(len(vext), len(self.moms0))
     self.comega_current = comega
     veff_op = LinearOperator((self.nprod,self.nprod), matvec=self.vext2veff_matvec, dtype=self.dtypeComplex)
-    resgm, info = lgmres(veff_op, np.require(vext, dtype=self.dtypeComplex, 
-        requirements='C'), x0=x0, tol=self.tddft_iter_tol, maxiter=self.maxiter, res=self.res_method)
+
+    if self.scipy_ver > 0:
+        from pyscf.nao.m_lgmres import lgmres
+        resgm, info = lgmres(veff_op, np.require(vext, dtype=self.dtypeComplex, 
+            requirements='C'), x0=x0, tol=self.tddft_iter_tol, maxiter=self.maxiter, res=self.res_method)
+    else:
+        # use the non-modified lgmres scipy version
+        from scipy.sparse.linalg import lgmres
+        resgm, info = lgmres(veff_op, np.require(vext, dtype=self.dtypeComplex, 
+            requirements='C'), x0=x0, tol=self.tddft_iter_tol, maxiter=self.maxiter)
+
     if info != 0:
         print("LGMRES Warning: info = {0}".format(info))
     return resgm
