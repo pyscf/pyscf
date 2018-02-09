@@ -33,7 +33,8 @@ class tddft_iter_2ord(tddft_iter):
     return v + self.kchi0_mv(v)
 
   def solve_umkckc(self, vext, comega=1j*0.0, x0=None):
-    from scipy.sparse.linalg import lgmres, LinearOperator
+    from scipy.sparse.linalg import LinearOperator
+    from pyscf.nao.m_lgmres import lgmres
     """ This solves a system of linear equations 
            (1 - K chi0 K chi0 ) X = vext 
      or computes 

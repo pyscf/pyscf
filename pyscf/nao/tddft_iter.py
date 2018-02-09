@@ -22,8 +22,8 @@ class tddft_iter(chi0_matvec):
     self.load_kernel = load_kernel = kw['load_kernel'] if 'load_kernel' in kw else False
     self.maxiter = kw['maxiter'] if 'maxiter' in kw else 1000
     self.tddft_iter_tol = kw['tddft_iter_tol'] if 'tddft_iter_tol' in kw else 1e-3
+    self.res_method = kw["res_method"] if "res_method" in kw else "both"
     assert self.tddft_iter_tol>1e-6
-    
 
     # better to check input before to initialize calculations
     chi0_matvec.__init__(self, **kw)
@@ -84,15 +84,15 @@ class tddft_iter(chi0_matvec):
     vxc_pack(self, deriv=2, ao_log=self.pb.prod_log, **kw)
 
   def comp_veff(self, vext, comega=1j*0.0, x0=None):
-    #from scipy.sparse.linalg import gmres, lgmres as gmres_alias, LinearOperator
-    from scipy.sparse.linalg import lgmres, LinearOperator
+    from scipy.sparse.linalg import LinearOperator
+    from pyscf.nao.m_lgmres import lgmres
     
     """ This computes an effective field (scalar potential) given the external scalar potential """
     assert len(vext)==len(self.moms0), "%r, %r "%(len(vext), len(self.moms0))
     self.comega_current = comega
     veff_op = LinearOperator((self.nprod,self.nprod), matvec=self.vext2veff_matvec, dtype=self.dtypeComplex)
     resgm, info = lgmres(veff_op, np.require(vext, dtype=self.dtypeComplex, 
-        requirements='C'), x0=x0, tol=self.tddft_iter_tol, maxiter=self.maxiter)
+        requirements='C'), x0=x0, tol=self.tddft_iter_tol, maxiter=self.maxiter, res=self.res_method)
     if info != 0:
         print("LGMRES Warning: info = {0}".format(info))
     return resgm
