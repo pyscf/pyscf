@@ -16,6 +16,9 @@ einsum = lib.einsum
 class CCSD(molCCSD):
 
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+        # ERIs with 2D-PBC have some divergent terms
+        if mf.cell.dimension == 2:
+            raise NotImplementedError
         molCCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
 
     def dump_flags(self):
@@ -29,6 +32,8 @@ class CCSD(molCCSD):
 class RCCSD(molRCCSD):
 
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+        if mf.cell.dimension == 2:
+            raise NotImplementedError
         molRCCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
 
     def dump_flags(self):
