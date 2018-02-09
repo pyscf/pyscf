@@ -105,7 +105,7 @@ def update_amps(cc, t1, t2, eris):
     max_memory = lib.param.MAX_MEMORY - mem_now
     blksize = max(int(max_memory*1e6/8/(nvira**3*3+1)), 2)
     for p0,p1 in lib.prange(0, nocca, blksize):
-        ovvv = np.asarray(eris.ovvv[p0:p1]).reshape((p1-p0)*nvira,nvira**2)
+        ovvv = np.asarray(eris.ovvv[p0:p1]).reshape((p1-p0)*nvira,nvira*(nvira+1)//2)
         ovvv = lib.unpack_tril(ovvv).reshape(p1-p0,nvira,nvira,nvira)
         ovvv = ovvv - ovvv.transpose(0,3,2,1)
         Fvva += np.einsum('mf,mfae->ae', t1a[p0:p1], ovvv)
@@ -118,7 +118,7 @@ def update_amps(cc, t1, t2, eris):
 
     blksize = max(int(max_memory*1e6/8/(nvirb**3*3+1)), 2)
     for p0,p1 in lib.prange(0, noccb, blksize):
-        OVVV = np.asarray(eris.OVVV[p0:p1]).reshape((p1-p0)*nvirb,nvirb**2)
+        OVVV = np.asarray(eris.OVVV[p0:p1]).reshape((p1-p0)*nvirb,nvirb*(nvirb+1)//2)
         OVVV = lib.unpack_tril(OVVV).reshape(p1-p0,nvirb,nvirb,nvirb)
         OVVV = OVVV - OVVV.transpose(0,3,2,1)
         Fvvb += np.einsum('mf,mfae->ae', t1b[p0:p1], OVVV)
@@ -131,7 +131,7 @@ def update_amps(cc, t1, t2, eris):
 
     blksize = max(int(max_memory*1e6/8/(nvira*nvirb**2*3+1)), 2)
     for p0,p1 in lib.prange(0, nocca, blksize):
-        ovVV = np.asarray(eris.ovVV[p0:p1]).reshape((p1-p0)*nvira,nvirb**2)
+        ovVV = np.asarray(eris.ovVV[p0:p1]).reshape((p1-p0)*nvira,nvirb*(nvirb+1)//2)
         ovVV = lib.unpack_tril(ovVV).reshape(p1-p0,nvira,nvirb,nvirb)
         Fvvb += np.einsum('mf,mfAE->AE', t1a[p0:p1], ovVV)
         woVvO[p0:p1] = einsum('JF,meBF->mBeJ', t1b, ovVV)
@@ -144,7 +144,7 @@ def update_amps(cc, t1, t2, eris):
 
     blksize = max(int(max_memory*1e6/8/(nvirb*nocca**2*3+1)), 2)
     for p0,p1 in lib.prange(0, noccb, blksize):
-        OVvv = np.asarray(eris.OVvv[p0:p1]).reshape((p1-p0)*nvirb,nvira**2)
+        OVvv = np.asarray(eris.OVvv[p0:p1]).reshape((p1-p0)*nvirb,nvira*(nvira+1)//2)
         OVvv = lib.unpack_tril(OVvv).reshape(p1-p0,nvirb,nvira,nvira)
         Fvva += np.einsum('MF,MFae->ae', t1b[p0:p1], OVvv)
         wOvVo[p0:p1] = einsum('jf,MEbf->MbEj', t1a, OVvv)
