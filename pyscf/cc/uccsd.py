@@ -103,10 +103,10 @@ def update_amps(cc, t1, t2, eris):
 
     mem_now = lib.current_memory()[0]
     max_memory = lib.param.MAX_MEMORY - mem_now
-    blksize = max(int(max_memory*1e6/8/(nvira**3*3)), 2)
+    blksize = max(int(max_memory*1e6/8/(nvira**3*3+1)), 2)
     for p0,p1 in lib.prange(0, nocca, blksize):
-        ovvv = np.asarray(eris.ovvv[p0:p1]).reshape((p1-p0)*nvira,-1)
-        ovvv = lib.unpack_tril(ovvv).reshape(-1,nvira,nvira,nvira)
+        ovvv = np.asarray(eris.ovvv[p0:p1]).reshape((p1-p0)*nvira,nvira**2)
+        ovvv = lib.unpack_tril(ovvv).reshape(p1-p0,nvira,nvira,nvira)
         ovvv = ovvv - ovvv.transpose(0,3,2,1)
         Fvva += np.einsum('mf,mfae->ae', t1a[p0:p1], ovvv)
         wovvo[p0:p1] += einsum('jf,mebf->mbej', t1a, ovvv)
@@ -116,10 +116,10 @@ def update_amps(cc, t1, t2, eris):
         u2aa -= lib.einsum('ijmb,ma->ijab', tmp1aa, t1a[p0:p1]*.5)
         ovvv = tmp1aa = None
 
-    blksize = max(int(max_memory*1e6/8/(nvirb**3*3)), 2)
+    blksize = max(int(max_memory*1e6/8/(nvirb**3*3+1)), 2)
     for p0,p1 in lib.prange(0, noccb, blksize):
-        OVVV = np.asarray(eris.OVVV[p0:p1]).reshape((p1-p0)*nvirb,-1)
-        OVVV = lib.unpack_tril(OVVV).reshape(-1,nvirb,nvirb,nvirb)
+        OVVV = np.asarray(eris.OVVV[p0:p1]).reshape((p1-p0)*nvirb,nvirb**2)
+        OVVV = lib.unpack_tril(OVVV).reshape(p1-p0,nvirb,nvirb,nvirb)
         OVVV = OVVV - OVVV.transpose(0,3,2,1)
         Fvvb += np.einsum('mf,mfae->ae', t1b[p0:p1], OVVV)
         wOVVO[p0:p1] = einsum('jf,mebf->mbej', t1b, OVVV)
@@ -129,10 +129,10 @@ def update_amps(cc, t1, t2, eris):
         u2bb -= lib.einsum('ijmb,ma->ijab', tmp1bb, t1b[p0:p1]*.5)
         OVVV = tmp1bb = None
 
-    blksize = max(int(max_memory*1e6/8/(nvira*nvirb**2*3)), 2)
+    blksize = max(int(max_memory*1e6/8/(nvira*nvirb**2*3+1)), 2)
     for p0,p1 in lib.prange(0, nocca, blksize):
-        ovVV = np.asarray(eris.ovVV[p0:p1]).reshape((p1-p0)*nvira,-1)
-        ovVV = lib.unpack_tril(ovVV).reshape(-1,nvira,nvirb,nvirb)
+        ovVV = np.asarray(eris.ovVV[p0:p1]).reshape((p1-p0)*nvira,nvirb**2)
+        ovVV = lib.unpack_tril(ovVV).reshape(p1-p0,nvira,nvirb,nvirb)
         Fvvb += np.einsum('mf,mfAE->AE', t1a[p0:p1], ovVV)
         woVvO[p0:p1] = einsum('JF,meBF->mBeJ', t1b, ovVV)
         woVVo[p0:p1] = einsum('jf,mfBE->mBEj',-t1a, ovVV)
@@ -142,10 +142,10 @@ def update_amps(cc, t1, t2, eris):
         u2ab -= lib.einsum('iJmB,ma->iJaB', tmp1ab, t1a[p0:p1])
         ovVV = tmp1ab = None
 
-    blksize = max(int(max_memory*1e6/8/(nvirb*nocca**2*3)), 2)
+    blksize = max(int(max_memory*1e6/8/(nvirb*nocca**2*3+1)), 2)
     for p0,p1 in lib.prange(0, noccb, blksize):
-        OVvv = np.asarray(eris.OVvv[p0:p1]).reshape((p1-p0)*nvirb,-1)
-        OVvv = lib.unpack_tril(OVvv).reshape(-1,nvirb,nvira,nvira)
+        OVvv = np.asarray(eris.OVvv[p0:p1]).reshape((p1-p0)*nvirb,nvira**2)
+        OVvv = lib.unpack_tril(OVvv).reshape(p1-p0,nvirb,nvira,nvira)
         Fvva += np.einsum('MF,MFae->ae', t1b[p0:p1], OVvv)
         wOvVo[p0:p1] = einsum('jf,MEbf->MbEj', t1a, OVvv)
         wOvvO[p0:p1] = einsum('JF,MFbe->MbeJ',-t1b, OVvv)

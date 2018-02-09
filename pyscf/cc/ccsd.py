@@ -75,7 +75,8 @@ def update_amps(mycc, t1, t2, eris):
     t2new_tril = numpy.zeros((nocc*(nocc+1)//2,nvir,nvir))
     mycc.add_wvvVV_(t1, t2, eris, t2new_tril)
     idxo = numpy.tril_indices(nocc)
-    lib.takebak_2d(t2new.reshape(nocc**2,nvir**2), t2new_tril.reshape(-1,nvir**2),
+    lib.takebak_2d(t2new.reshape(nocc**2,nvir**2),
+                   t2new_tril.reshape(nocc*(nocc+1)//2,nvir**2),
                    idxo[0]*nocc+idxo[1], numpy.arange(nvir**2))
     idxo = numpy.arange(nocc)
     t2new[idxo,idxo] *= .5
@@ -98,17 +99,17 @@ def update_amps(mycc, t1, t2, eris):
     eris_ooov = _cp(eris.ooov)
     foo += numpy.einsum('kc,jikc->ij', 2*t1, eris_ooov)
     foo += numpy.einsum('kc,jkic->ij',  -t1, eris_ooov)
-    woooo = lib.ddot(eris_ooov.reshape(-1,nvir), t1.T).reshape((nocc,)*4)
+    woooo = lib.ddot(eris_ooov.reshape(nocc**3,nvir), t1.T).reshape((nocc,)*4)
     woooo = lib.transpose_sum(woooo.reshape(nocc**2,nocc**2), inplace=True)
     woooo += _cp(eris.oooo).reshape(nocc**2,nocc**2)
     woooo = _cp(woooo.reshape(nocc,nocc,nocc,nocc).transpose(0,2,1,3))
     eris_ooov = None
     time1 = log.timer_debug1('woooo', *time1)
 
-    unit = _memory_usage_inloop(nocc, nvir)
+    unit = _memory_usage_inloop(nocc, nvir) + 1
     max_memory = max(2000, mycc.max_memory - lib.current_memory()[0])
     blksize = min(nocc, max(BLKMIN, int(max_memory/unit)))
-    blknvir = int((max_memory*.9e6/8-blksize*nocc*nvir**2*6)/(blksize*nvir**2*2))
+    blknvir = int((max_memory*.9e6/8-blksize*nov**2*6)/(blksize*nvir**2*2+1))
     blknvir = min(nvir, max(BLKMIN, blknvir))
     log.debug1('max_memory %d MB,  nocc,nvir = %d,%d  blksize = %d,%d',
                max_memory, nocc, nvir, blksize, blknvir)
@@ -121,7 +122,7 @@ def update_amps(mycc, t1, t2, eris):
     def load_eri(eri, p0, p1, buf):
         buf[:] = eri[p0:p1]
 
-    buflen = max(nocc*nvir**2, nocc**3)
+    buflen = max(nov**2, nocc**3)
     bufs = numpy.empty((5,blksize*buflen))
     buf1, buf2, buf3, buf4, buf5 = bufs
     for p0, p1 in lib.prange(0, nocc, blksize):
@@ -188,7 +189,8 @@ def update_amps(mycc, t1, t2, eris):
 
         tmp = numpy.ndarray((nocc,p1-p0,nvir,nocc), buffer=buf1)
         tmp[:] = _cp(eris.ovoo[p0:p1]).transpose(2,0,1,3)
-        lib.ddot(tmp.reshape(-1,nocc), t1, -1, wOoVv.reshape(-1,nvir), 1)
+        lib.ddot(tmp.reshape(nocc*(p1-p0)*nvir,nocc), t1, -1,
+                             wOoVv.reshape(nocc*(p1-p0)*nvir,nvir), 1)
 
         eris_ooov = _cp(eris.ooov[p0:p1])
         eris_oovv = numpy.empty((p1-p0,nocc,nvir,nvir))
@@ -197,7 +199,8 @@ def update_amps(mycc, t1, t2, eris):
             tmp = numpy.ndarray((p1-p0,nocc,nvir,nocc), buffer=buf1)
             tmp[:] = eris_ooov.transpose(0,1,3,2)
             #: wooVV = numpy.einsum('ka,ijkb->ijba', t1, eris.ooov[p0:p1])
-            lib.ddot(tmp.reshape(-1,nocc), t1, 1, wooVV.reshape(-1,nvir), 1)
+            lib.ddot(tmp.reshape((p1-p0)*nov,nocc), t1, 1,
+                     wooVV.reshape((p1-p0)*nov,nvir), 1)
             t2new[p0:p1] += wOoVv.transpose(1,0,2,3)
 
         eris_ovov = numpy.empty((p1-p0,nvir,nocc,nvir))
@@ -208,10 +211,10 @@ def update_amps(mycc, t1, t2, eris):
 
             #tmp = numpy.einsum('ic,jkbc->jikb', t1, eris_oovv)
             #t2new[p0:p1] += numpy.einsum('ka,jikb->ijba', -t1, tmp)
-            tmp1 = numpy.ndarray((nocc,nocc*nvir), buffer=buf1)
-            tmp2 = numpy.ndarray((nocc*nvir,nocc), buffer=buf2)
+            tmp1 = numpy.ndarray((nocc,nov), buffer=buf1)
+            tmp2 = numpy.ndarray((nov,nocc), buffer=buf2)
             for j in range(p1-p0):
-                tmp = lib.ddot(t1, eris_oovv[j].reshape(-1,nvir).T, 1, tmp1)
+                tmp = lib.ddot(t1, eris_oovv[j].reshape(nov,nvir).T, 1, tmp1)
                 lib.transpose(_cp(tmp).reshape(nocc,nocc,nvir), axes=(0,2,1), out=tmp2)
                 t2new[:,p0+j] -= lib.ddot(tmp2, t1).reshape(nocc,nvir,nvir)
         eris_oovv = None
@@ -222,8 +225,9 @@ def update_amps(mycc, t1, t2, eris):
         #:tmp = numpy.einsum('ic,jbkc->jibk', t1, eris_ovov)
         #:t2new[p0:p1] += numpy.einsum('ka,jibk->jiba', -t1, tmp)
         for j in range(p1-p0):
-            lib.ddot(t1, eris_ovov[j].reshape(-1,nvir).T, 1, tmp1)
-            lib.ddot(tmp1.reshape(-1,nocc), t1, -1, t2new[p0+j].reshape(-1,nvir), 1)
+            lib.ddot(t1, eris_ovov[j].reshape(nov,nvir).T, 1, tmp1)
+            lib.ddot(tmp1.reshape(nov,nocc), t1, -1,
+                     t2new[p0+j].reshape(nov,nvir), 1)
         tmp1 = tmp2 = tmp = None
 
         fov[p0:p1] += numpy.einsum('kc,iakc->ia', t1, eris_ovov) * 2
@@ -239,9 +243,9 @@ def update_amps(mycc, t1, t2, eris):
             theta = lib.transpose(tau, axes=(0,2,1), out=theta)
             theta *= 2
             theta -= tau
-            vov = lib.transpose(eris_ovov[i].reshape(nvir,-1), out=tau)
-            lib.ddot(vov.reshape(nocc,-1), theta.reshape(nocc,-1).T, 1, foo, 1)
-            lib.ddot(theta.reshape(-1,nvir).T, eris_ovov[i].reshape(nvir,-1).T, -1, fvv, 1)
+            vov = lib.transpose(eris_ovov[i].reshape(nvir,nov), out=tau)
+            lib.ddot(vov.reshape(nocc,nvir**2), theta.reshape(nocc,nvir**2).T, 1, foo, 1)
+            lib.ddot(theta.reshape(nov,nvir).T, eris_ovov[i].reshape(nvir,nov).T, -1, fvv, 1)
         tau = theta = vov = None
 
     #: theta = t2.transpose(0,2,1,3) * 2 - t2.transpose(0,3,2,1)
@@ -251,9 +255,9 @@ def update_amps(mycc, t1, t2, eris):
         for i in range(p1-p0):
             tmp = t2[p0+i].transpose(0,2,1) * 2
             tmp-= t2[p0+i]
-            lib.ddot(eris_ooov[i].reshape(nocc,-1),
-                     tmp.reshape(-1,nvir), -1, t1new, 1)
-            lib.transpose(_cp(tmp).reshape(-1,nvir), out=theta[i])  # theta[i] = tmp.transpose(2,0,1)
+            lib.ddot(eris_ooov[i].reshape(nocc,nov),
+                     tmp.reshape(nov,nvir), -1, t1new, 1)
+            lib.transpose(_cp(tmp).reshape(nov,nvir), out=theta[i])  # theta[i] = tmp.transpose(2,0,1)
         t1new += numpy.einsum('jb,jbia->ia', fov[p0:p1], theta)
         eris_ooov = None
 
@@ -264,12 +268,12 @@ def update_amps(mycc, t1, t2, eris):
     #: t2new += numpy.einsum('ikca,kjbc->ijba', theta, wOVov)
         for i in range(p1-p0):
             wOoVv[:,i] += wooVV[i]*.5  #: jiba + ijba*.5
-        wOVov = lib.transpose(wOoVv.reshape(nocc,-1,nvir), axes=(0,2,1), out=buf5)
-        wOVov = wOVov.reshape(nocc,nvir,-1,nvir)
-        eris_OVov = lib.transpose(eris_ovov.reshape(-1,nov), out=buf3)
-        eris_OVov = eris_OVov.reshape(nocc,nvir,-1,nvir)
+        wOVov = lib.transpose(wOoVv.reshape(nocc,(p1-p0)*nvir,nvir), axes=(0,2,1), out=buf5)
+        wOVov = wOVov.reshape(nocc,nvir,p1-p0,nvir)
+        eris_OVov = lib.transpose(eris_ovov.reshape((p1-p0)*nvir,nov), out=buf3)
+        eris_OVov = eris_OVov.reshape(nocc,nvir,p1-p0,nvir)
         wOVov += eris_OVov
-        theta = theta.reshape(-1,nov)
+        theta = theta.reshape((p1-p0)*nvir,nov)
         for i in range(nocc):  # OVov-OVov.transpose(0,3,2,1)*.5
             eris_OVov[i] -= eris_OVov[i].transpose(2,1,0)*.5
         for j0, j1 in lib.prange(0, nocc, blksize):
@@ -279,13 +283,13 @@ def update_amps(mycc, t1, t2, eris):
                 tau[i] -= t2[j0+i].transpose(2,0,1)
                 tau[i] -= numpy.einsum('a,jb->bja', t1[j0+i]*2, t1)
             #: wOVov[j0:j1] += .5 * numpy.einsum('iakc,jbkc->jbai', eris_ovov, tau)
-            lib.ddot(tau.reshape(-1,nov), eris_OVov.reshape(nov,-1),
-                     .5, wOVov[j0:j1].reshape((j1-j0)*nvir,-1), 1)
+            lib.ddot(tau.reshape((j1-j0)*nvir,nov), eris_OVov.reshape(nov,(p1-p0)*nvir),
+                     .5, wOVov[j0:j1].reshape((j1-j0)*nvir,(p1-p0)*nvir), 1)
 
             #theta = t2[p0:p1] * 2 - t2[p0:p1].transpose(0,1,3,2)
             #: t2new[j0:j1] += numpy.einsum('iack,jbck->jiba', theta, wOVov[j0:j1])
-            tmp = lib.ddot(wOVov[j0:j1].reshape((j1-j0)*nvir,-1), theta, 1,
-                           tau.reshape(-1,nov)).reshape(-1,nvir,nocc,nvir)
+            tmp = lib.ddot(wOVov[j0:j1].reshape((j1-j0)*nvir,(p1-p0)*nvir), theta, 1,
+                           tau.reshape((j1-j0)*nvir,nov)).reshape(j1-j0,nvir,nocc,nvir)
             for i in range(j1-j0):
                 t2new[j0+i] += tmp[i].transpose(1,0,2)
         theta = wOoVv = wOVov = eris_OVov = tmp = tau = None
@@ -297,39 +301,41 @@ def update_amps(mycc, t1, t2, eris):
     #: woVoV += numpy.einsum('jkca,ikbc->ijba', tau, eris.oOVv)
         tmp = numpy.ndarray((p1-p0,nvir,nocc,nvir), buffer=buf1)
         tmp[:] = wooVV.transpose(0,2,1,3)
-        woVoV = lib.transpose(_cp(tmp).reshape(-1,nov), out=buf4).reshape(nocc,nvir,p1-p0,nvir)
+        woVoV = lib.transpose(_cp(tmp).reshape((p1-p0)*nvir,nov),
+                              out=buf4).reshape(nocc,nvir,p1-p0,nvir)
         eris_oOvV = numpy.ndarray((p1-p0,nocc,nvir,nvir), buffer=buf3)
         eris_oOvV[:] = eris_ovov.transpose(0,2,1,3)
-        eris_oVOv = lib.transpose(eris_oOvV.reshape(-1,nov,nvir), axes=(0,2,1), out=buf5)
-        eris_oVOv = eris_oVOv.reshape(-1,nvir,nocc,nvir)
+        eris_oVOv = lib.transpose(eris_oOvV.reshape(p1-p0,nov,nvir), axes=(0,2,1), out=buf5)
+        eris_oVOv = eris_oVOv.reshape(p1-p0,nvir,nocc,nvir)
 
         for j0, j1 in lib.prange(0, nocc, blksize):
             tau = make_tau(t2[j0:j1], t1[j0:j1], t1, 1, out=buf2)
             #: woooo[p0:p1,:,j0:j1] += numpy.einsum('ijab,klab->ijkl', eris_oOvV, tau)
             _dgemm('N', 'T', (p1-p0)*nocc, (j1-j0)*nocc, nvir*nvir,
-                   eris_oOvV.reshape(-1,nvir*nvir), tau.reshape(-1,nvir*nvir),
-                   woooo[p0:p1].reshape(-1,nocc*nocc), 1, 1, 0, 0, j0*nocc)
+                   eris_oOvV.reshape((p1-p0)*nocc,nvir*nvir), tau.reshape((j1-j0)*nocc,nvir*nvir),
+                   woooo[p0:p1].reshape((p1-p0)*nocc,nocc*nocc), 1, 1, 0, 0, j0*nocc)
             for i in range(j1-j0):
                 tau[i] -= t2[j0+i] * .5
             #: woVoV[j0:j1] += numpy.einsum('jkca,ickb->jiab', tau, eris_ovov)
-            lib.ddot(lib.transpose(tau.reshape(-1,nov,nvir), axes=(0,2,1)).reshape(-1,nov),
-                     eris_oVOv.reshape(-1,nov).T,
-                    1, woVoV[j0:j1].reshape((j1-j0)*nvir,-1), 1)
+            lib.ddot(lib.transpose(tau.reshape(j1-j0,nov,nvir), axes=(0,2,1)).reshape((j1-j0)*nvir,nov),
+                     eris_oVOv.reshape((p1-p0)*nvir,nov).T,
+                    1, woVoV[j0:j1].reshape((j1-j0)*nvir,(p1-p0)*nvir), 1)
         time2 = log.timer_debug1('woVoV [%d:%d]'%(p0, p1), *time2)
 
         tau = make_tau(t2[p0:p1], t1[p0:p1], t1, 1, out=buf2)
         #: t2new += .5 * numpy.einsum('klij,klab->ijab', woooo[p0:p1], tau)
-        lib.ddot(woooo[p0:p1].reshape(-1,nocc*nocc).T, tau.reshape(-1,nvir*nvir),
-                 .5, t2new.reshape(nocc*nocc,-1), 1)
+        lib.ddot(woooo[p0:p1].reshape((p1-p0)*nocc,nocc*nocc).T,
+                 tau.reshape((p1-p0)*nocc,nvir*nvir),
+                 .5, t2new.reshape(nocc*nocc,nvir**2), 1)
         eris_ovov = eris_oVOv = eris_oOvV = wooVV = tau = tmp = None
 
-        t2ibja = lib.transpose(_cp(t2[p0:p1]).reshape(-1,nov,nvir), axes=(0,2,1),
-                               out=buf1).reshape(-1,nvir,nocc,nvir)
+        t2ibja = lib.transpose(_cp(t2[p0:p1]).reshape(p1-p0,nov,nvir), axes=(0,2,1),
+                               out=buf1).reshape(p1-p0,nvir,nocc,nvir)
         tmp = numpy.ndarray((blksize,nvir,nocc,nvir), buffer=buf2)
         for j0, j1 in lib.prange(0, nocc, blksize):
             #: t2new[j0:j1] += numpy.einsum('ibkc,kcja->ijab', woVoV[j0:j1], t2ibja)
-            lib.ddot(woVoV[j0:j1].reshape((j1-j0)*nvir,-1),
-                     t2ibja.reshape(-1,nov), 1, tmp[:j1-j0].reshape(-1,nov))
+            lib.ddot(woVoV[j0:j1].reshape((j1-j0)*nvir,(p1-p0)*nvir),
+                     t2ibja.reshape((p1-p0)*nvir,nov), 1, tmp[:j1-j0].reshape((j1-j0)*nvir,nov))
             for i in range(j1-j0):
                 t2new[j0+i] += tmp[i].transpose(1,2,0)
                 t2new[j0+i] += tmp[i].transpose(1,0,2) * .5
@@ -343,7 +349,7 @@ def update_amps(mycc, t1, t2, eris):
     ft_ab = fvv - numpy.einsum('ia,ib->ab', .5*t1, fov)
     #: t2new += numpy.einsum('ijac,bc->ijab', t2, ft_ab)
     #: t2new -= numpy.einsum('ki,kjab->ijab', ft_ij, t2)
-    lib.ddot(t2.reshape(-1,nvir), ft_ab.T, 1, t2new.reshape(-1,nvir), 1)
+    lib.ddot(t2.reshape(nocc*nov,nvir), ft_ab.T, 1, t2new.reshape(nocc*nov,nvir), 1)
     lib.ddot(ft_ij.T, t2.reshape(nocc,nocc*nvir**2),-1,
              t2new.reshape(nocc,nocc*nvir**2), 1)
 
@@ -487,7 +493,7 @@ def add_wvvVV_(mycc, t1, t2, eris, t2new_tril, with_ovvv=True):
             tau[p0:p1] += t2[i,:i+1]
         time0 = logger.timer_debug1(mycc, 'vvvv-tau', *time0)
         max_memory = max(2000, mycc.max_memory - lib.current_memory()[0])
-        blksize = int(min(nvir, max(4, max_memory*.95e6/8/(nvir**3*2))))
+        blksize = int(min(nvir, max(4, max_memory*.95e6/8/(nvir**3*2+1))))
 
         def block_contract(buf, a0, a1):
             for a in range(a0, a1):

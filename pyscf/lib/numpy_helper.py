@@ -86,6 +86,9 @@ def unpack_tril(tril, filltriu=HERMITIAN, axis=-1, out=None):
      [ 3.  4.  5.]]
     '''
     tril = numpy.asarray(tril, order='C')
+    if tril.size == 0:
+        return numpy.zeros(tril.shape+(0,), dtype=tril.dtype)
+
     if tril.ndim == 1:
         count, nd = 1, tril.size
         nd = int(numpy.sqrt(nd*2))
@@ -496,12 +499,16 @@ def dot(a, b, alpha=1, c=None, beta=0):
 # a, b, c in C-order
 def _dgemm(trans_a, trans_b, m, n, k, a, b, c, alpha=1, beta=0,
            offseta=0, offsetb=0, offsetc=0):
+    if a.size == 0 or b.size == 0:
+        if beta == 0:
+            c[:] = 0
+        else:
+            c[:] *= beta
+        return c
+
     assert(a.flags.c_contiguous)
     assert(b.flags.c_contiguous)
     assert(c.flags.c_contiguous)
-    assert(a.shape[1] > 0)
-    assert(b.shape[1] > 0)
-    assert(c.shape[1] > 0)
 
     _np_helper.NPdgemm(ctypes.c_char(trans_b.encode('ascii')),
                        ctypes.c_char(trans_a.encode('ascii')),
@@ -517,15 +524,19 @@ def _dgemm(trans_a, trans_b, m, n, k, a, b, c, alpha=1, beta=0,
     return c
 def _zgemm(trans_a, trans_b, m, n, k, a, b, c, alpha=1, beta=0,
            offseta=0, offsetb=0, offsetc=0):
+    if a.size == 0 or b.size == 0:
+        if beta == 0:
+            c[:] = 0
+        else:
+            c[:] *= beta
+        return c
+
     assert(a.flags.c_contiguous)
     assert(b.flags.c_contiguous)
     assert(c.flags.c_contiguous)
     assert(a.dtype == numpy.complex128)
     assert(b.dtype == numpy.complex128)
     assert(c.dtype == numpy.complex128)
-    assert(a.shape[1] > 0)
-    assert(b.shape[1] > 0)
-    assert(c.shape[1] > 0)
 
     _np_helper.NPzgemm(ctypes.c_char(trans_b.encode('ascii')),
                        ctypes.c_char(trans_a.encode('ascii')),
@@ -542,8 +553,9 @@ def _zgemm(trans_a, trans_b, m, n, k, a, b, c, alpha=1, beta=0,
     return c
 
 def prange(start, end, step):
-    for i in range(start, end, step):
-        yield i, min(i+step, end)
+    if start < end:
+        for i in range(start, end, step):
+            yield i, min(i+step, end)
 
 def asarray(a, dtype=None, order=None):
     '''Convert a list of N-dim arrays to a (N+1) dim array.  It is equivalent to
@@ -790,6 +802,12 @@ def einsum(idx_str, *tensors):
         return einsum(",".join(indices_in)+"->"+idx_final,*tensors)
 
     A, B = tensors
+    # A or B might be HDF5 Datasets
+    A = numpy.array(A, copy=False)
+    B = numpy.array(B, copy=False)
+    if A.size < 3000 or B.size < 3000:
+        return numpy.einsum(idx_str, *tensors)
+
     # Split the strings into a list of idx char's
     idxA, idxBC = idx_str.split(',')
     idxB, idxC = idxBC.split('->')
@@ -858,10 +876,6 @@ def einsum(idx_str, *tensors):
         print("Transposing B as", new_orderB)
         print("Reshaping A as (-1,", inner_shape, ")")
         print("Reshaping B as (", inner_shape, ",-1)")
-
-    # A or B might be HDF5 Datasets 
-    A = numpy.array(A, copy=False)
-    B = numpy.array(B, copy=False)
 
     At = A.transpose(new_orderA).reshape(-1,inner_shape)
     Bt = B.transpose(new_orderB).reshape(inner_shape,-1)
