@@ -240,12 +240,18 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
     else:
         assert(isinstance(erifile, h5py.Group))
         feri = erifile
-    if comp == 1:
+
+    if nij_pair == 0 or nkl_pair == 0:
+        chunks = None
+    elif comp == 1:
         chunks = (nmoj,nmol)
+    else:
+        chunks = (1,nmoj,nmol)
+
+    if comp == 1:
         h5d_eri = feri.create_dataset(dataname, (nij_pair,nkl_pair),
                                       'f8', chunks=chunks)
     else:
-        chunks = (1,nmoj,nmol)
         h5d_eri = feri.create_dataset(dataname, (comp,nij_pair,nkl_pair),
                                       'f8', chunks=chunks)
 

@@ -191,7 +191,7 @@ def pack_tril(mat, axis=-1, out=None):
     [0 3 4 6 7 8]
     '''
     if mat.size == 0:
-        return numpy.zeros(tril.shape+(0,), dtype=tril.dtype)
+        return numpy.zeros(mat.shape+(0,), dtype=mat.dtype)
 
     if mat.ndim == 2:
         count, nd = 1, mat.shape[0]
