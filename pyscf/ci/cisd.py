@@ -65,7 +65,7 @@ def make_diagonal(myci, eris):
     kdiag[:nocc,:nocc] = numpy.einsum('jiij->ij', eris.oooo)
     jdiag[:nocc,nocc:] = numpy.einsum('iijj->ij', eris.oovv)
     kdiag[:nocc,nocc:] = numpy.einsum('ijji->ij', eris.ovvo)
-    if eris.vvvv is not None:
+    if eris.vvvv is not None and len(eris.vvvv.shape) == 2:
         #:eris_vvvv = ao2mo.restore(1, eris.vvvv, nvir)
         #:jdiag1 = numpy.einsum('iijj->ij', eris_vvvv)
         diag_idx = numpy.arange(nvir)
