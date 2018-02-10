@@ -306,9 +306,9 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
                     if SI_on_z.size > 0:
                         for k, aoao in enumerate(dat):
                             aoao[G0idx] -= numpy.einsum('g,i->gi', SI_on_z, ovlp[k])
-                            aux = fuse(ft_ao.ft_ao(fused_cell, Gv[G0idx]).T)
+                            aux = fuse(ft_ao.ft_ao(fused_cell, Gv[p0:p1][G0idx]).T)
                             vG_mod = numpy.einsum('ig,g,g->i', aux.conj(),
-                                                  wcoulG[G0idx], SI_on_z)
+                                                  wcoulG[p0:p1][G0idx], SI_on_z)
                             if gamma_point(adapted_kptjs[k]):
                                 j3cR[k][:naux] -= vG_mod[:,None].real * ovlp[k]
                             else:
