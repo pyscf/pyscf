@@ -67,8 +67,9 @@ except (ImportError, OSError):
         # Call numpy.asarray because A or B may be HDF5 Datasets 
         A = numpy.asarray(A, order='A')
         B = numpy.asarray(B, order='A')
-        if A.size == 0 or B.size == 0:
+        if A.size < 2000 or B.size < 2000:
             return numpy.einsum(idx_str, *tensors)
+
         # Split the strings into a list of idx char's
         idxA, idxBC = idx_str.split(',')
         idxB, idxC = idxBC.split('->')
@@ -189,6 +190,9 @@ def pack_tril(mat, axis=-1, out=None):
     >>> pack_tril(numpy.arange(9).reshape(3,3))
     [0 3 4 6 7 8]
     '''
+    if mat.size == 0:
+        return numpy.zeros(tril.shape+(0,), dtype=tril.dtype)
+
     if mat.ndim == 2:
         count, nd = 1, mat.shape[0]
         shape = nd*(nd+1)//2
@@ -666,12 +670,16 @@ def dot(a, b, alpha=1, c=None, beta=0):
 # a, b, c in C-order
 def _dgemm(trans_a, trans_b, m, n, k, a, b, c, alpha=1, beta=0,
            offseta=0, offsetb=0, offsetc=0):
+    if a.size == 0 or b.size == 0:
+        if beta == 0:
+            c[:] = 0
+        else:
+            c[:] *= beta
+        return c
+
     assert(a.flags.c_contiguous)
     assert(b.flags.c_contiguous)
     assert(c.flags.c_contiguous)
-    assert(a.shape[1] > 0)
-    assert(b.shape[1] > 0)
-    assert(c.shape[1] > 0)
 
     _np_helper.NPdgemm(ctypes.c_char(trans_b.encode('ascii')),
                        ctypes.c_char(trans_a.encode('ascii')),
@@ -687,15 +695,19 @@ def _dgemm(trans_a, trans_b, m, n, k, a, b, c, alpha=1, beta=0,
     return c
 def _zgemm(trans_a, trans_b, m, n, k, a, b, c, alpha=1, beta=0,
            offseta=0, offsetb=0, offsetc=0):
+    if a.size == 0 or b.size == 0:
+        if beta == 0:
+            c[:] = 0
+        else:
+            c[:] *= beta
+        return c
+
     assert(a.flags.c_contiguous)
     assert(b.flags.c_contiguous)
     assert(c.flags.c_contiguous)
     assert(a.dtype == numpy.complex128)
     assert(b.dtype == numpy.complex128)
     assert(c.dtype == numpy.complex128)
-    assert(a.shape[1] > 0)
-    assert(b.shape[1] > 0)
-    assert(c.shape[1] > 0)
 
     _np_helper.NPzgemm(ctypes.c_char(trans_b.encode('ascii')),
                        ctypes.c_char(trans_a.encode('ascii')),
@@ -712,8 +724,9 @@ def _zgemm(trans_a, trans_b, m, n, k, a, b, c, alpha=1, beta=0,
     return c
 
 def prange(start, end, step):
-    for i in range(start, end, step):
-        yield i, min(i+step, end)
+    if start < end:
+        for i in range(start, end, step):
+            yield i, min(i+step, end)
 
 def asarray(a, dtype=None, order=None):
     '''Convert a list of N-dim arrays to a (N+1) dim array.  It is equivalent to
@@ -867,7 +880,7 @@ def direct_sum(subscripts, *operands):
             out = out.reshape(out.shape+(1,)*op.ndim) - op
 
     out = numpy.einsum('->'.join((''.join(src), dest)), out)
-    out.flags.writeable = True  # old numpy version has this issue
+    out.flags.writeable = True  # old numpy has this issue
     return out
 
 def condense(opname, a, locs):

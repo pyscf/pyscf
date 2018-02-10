@@ -387,7 +387,8 @@ def zdotNC(aR, aI, bR, bI, alpha=1, cR=None, cI=None, beta=0):
     return cR, cI
 
 def _ewald_exxdiv_for_G0(cell, kpts, dms, vk, kpts_band=None):
-    if cell.dimension == 1 or cell.dimension == 2:
+    if (cell.dimension == 1 or
+        (cell.dimension == 2 and cell.low_dim_ft_type is None)):
         return _ewald_exxdiv_1d2d(cell, kpts, dms, vk, kpts_band)
 
     s = cell.pbc_intor('int1e_ovlp_sph', hermi=1, kpts=kpts)
@@ -400,17 +401,15 @@ def _ewald_exxdiv_for_G0(cell, kpts, dms, vk, kpts_band=None):
             for i,dm in enumerate(dms):
                 vk[i] += madelung * reduce(numpy.dot, (s, dm, s))
 
-    else:  # kpts.shape == (*,3)
-        if kpts_band is None:
-            for k in range(len(kpts)):
+    elif kpts_band is None or numpy.array_equal(kpts, kpts_band):
+        for k in range(len(kpts)):
+            for i,dm in enumerate(dms):
+                vk[i,k] += madelung * reduce(numpy.dot, (s[k], dm[k], s[k]))
+    else:
+        for k, kpt in enumerate(kpts):
+            for kp in member(kpt, kpts_band.reshape(-1,3)):
                 for i,dm in enumerate(dms):
-                    vk[i,k] += madelung * reduce(numpy.dot, (s[k], dm[k], s[k]))
-        else:
-            kpts_band = kpts_band.reshape(-1,3)
-            for k, kpt in enumerate(kpts):
-                for kp in member(kpt, kpts_band):
-                    for i,dm in enumerate(dms):
-                        vk[i,kp] += madelung * reduce(numpy.dot, (s[k], dm[k], s[k]))
+                    vk[i,kp] += madelung * reduce(numpy.dot, (s[k], dm[k], s[k]))
 
 def _ewald_exxdiv_1d2d(cell, kpts, dms, vk, kpts_band=None):
     s = cell.pbc_intor('int1e_ovlp_sph', hermi=1, kpts=kpts)
@@ -420,50 +419,45 @@ def _ewald_exxdiv_1d2d(cell, kpts, dms, vk, kpts_band=None):
     G0idx, SI_on_z = gto.cell._model_uniform_charge_SI_on_z(cell, Gv)
     coulG = 4*numpy.pi / numpy.linalg.norm(Gv[G0idx], axis=1)**2
     wcoulG = coulG * kws[G0idx]
-    madelung_mod = numpy.einsum('g,g,g', SI_on_z.conj(), wcoulG, SI_on_z).real
-    madelung_mod = madelung - madelung_mod
 
     aoao = ft_ao._ft_aopair_kpts(cell, Gv[G0idx], kptjs=kpts)
     if kpts is None:
-        aoaomod = aoao[0] - numpy.einsum('g,ij->gij', SI_on_z, s)
-        gaoao  = numpy.einsum('gij,g->gij', aoao[0].conj(), wcoulG)
-        gaoao1 = numpy.einsum('gij,g->gij', aoaomod.conj(), wcoulG)
-        for i,dm in enumerate(dms):
-            vk[i] -= lib.einsum('gkl,jk,gij->il', aoaomod, dm, gaoao1).real
-            vk[i] += lib.einsum('gkl,jk,gij->il', aoao[0], dm, gaoao ).real
-            vk[i] += madelung_mod * reduce(numpy.dot, (s, dm, s))
+        _ewald_exxdiv_1d2d_get_vk_(vk, dms, s, SI_on_z, aoao[0], wcoulG,
+                                   madelung, 1)
 
     elif numpy.shape(kpts) == (3,):
         if kpts_band is None or is_zero(kpts_band-kpts):
-            aoaomod = aoao[0] - numpy.einsum('g,ij->gij', SI_on_z, s)
-            gaoao  = numpy.einsum('gij,g->gij', aoao[0].conj(), wcoulG)
-            gaoao1 = numpy.einsum('gij,g->gij', aoaomod.conj(), wcoulG)
-            for i,dm in enumerate(dms):
-                vk[i] -= lib.einsum('gkl,jk,gij->il', aoaomod, dm, gaoao1).real
-                vk[i] += lib.einsum('gkl,jk,gij->il', aoao[0], dm, gaoao ).real
-                vk[i] += madelung_mod * reduce(numpy.dot, (s, dm, s))
+            _ewald_exxdiv_1d2d_get_vk_(vk, dms, s, SI_on_z, aoao[0], wcoulG,
+                                       madelung, 1)
 
-    else:  # kpts.shape == (*,3)
-        if kpts_band is None:
-            for k in range(len(kpts)):
-                aoaomod = aoao[k] - numpy.einsum('g,ij->gij', SI_on_z, s[k])
-                gaoao  = numpy.einsum('gij,g->gij', aoao[k].conj(), wcoulG)
-                gaoao1 = numpy.einsum('gij,g->gij', aoaomod.conj(), wcoulG)
-                for i,dm in enumerate(dms):
-                    vk[i,k] -= lib.einsum('gkl,jk,gij->il', aoaomod, dm[k], gaoao1)
-                    vk[i,k] += lib.einsum('gkl,jk,gij->il', aoao[0], dm[k], gaoao )
-                    vk[i,k] += madelung_mod * reduce(numpy.dot, (s[k], dm[k], s[k]))
+    elif kpts_band is None or numpy.array_equal(kpts, kpts_band):
+        nkpts = len(kpts)
+        for k in range(nkpts):
+            _ewald_exxdiv_1d2d_get_vk_(vk[:,k], dms[:,k], s[k], SI_on_z,
+                                       aoao[k], wcoulG, madelung, 1./nkpts)
+    else:
+        nkpts = len(kpts)
+        for k, kpt in enumerate(kpts):
+            for kp in member(kpt, kpts_band.reshape(-1,3)):
+                _ewald_exxdiv_1d2d_get_vk_(vk[:,kp], dms[:,k], s[k], SI_on_z,
+                                           aoao[k], wcoulG, madelung, 1./nkpts)
+
+def _ewald_exxdiv_1d2d_get_vk_(vk, dms, s, SI_on_z, aoao, wcoulG, madelung, kweight):
+    aoaomod = aoao - numpy.einsum('g,ij->gij', SI_on_z, s)
+    tmp = numpy.einsum('gij,g,g->ij', aoaomod, wcoulG, SI_on_z.conj())
+    for i,dm in enumerate(dms):
+        #:ktmp  = kweight * lib.einsum('gkl,jk,g,gij->il', aoao   , dm, wcoulG, aoao   .conj())
+        #:ktmp -= kweight * lib.einsum('gkl,jk,g,gij->il', aoaomod, dm, wcoulG, aoaomod.conj())
+        #:ktmp -= kweight * (SI_on_z.conj()*wcoulG*SI_on_z).sum() * reduce(numpy.dot, (s, dm, s))
+        #:ktmp += madelung * reduce(numpy.dot, (s, dm, s))
+        ktmp  = lib.einsum('ij,jk,kl->il', tmp, dm, s.conj())
+        ktmp += lib.einsum('ij,jk,kl->il', s, dm, tmp.conj())
+        ktmp *= kweight
+        ktmp += madelung * reduce(numpy.dot, (s, dm, s))
+        if vk.dtype == numpy.double:
+            vk[i] += ktmp.real
         else:
-            kpts_band = kpts_band.reshape(-1,3)
-            for k, kpt in enumerate(kpts):
-                aoaomod = aoao[k] - numpy.einsum('g,ij->gij', SI_on_z, s[k])
-                gaoao  = numpy.einsum('gij,g->gij', aoao[k].conj(), wcoulG)
-                gaoao1 = numpy.einsum('gij,g->gij', aoaomod.conj(), wcoulG)
-                for kp in member(kpt, kpts_band):
-                    for i,dm in enumerate(dms):
-                        vk[i,kp] -= lib.einsum('gkl,jk,gij->il', aoaomod, dm[k], gaoao1)
-                        vk[i,kp] += lib.einsum('gkl,jk,gij->il', aoao[0], dm[k], gaoao )
-                        vk[i,kp] += madelung_mod * reduce(numpy.dot, (s[k], dm[k], s[k]))
+            vk[i] += ktmp
 
 
 if __name__ == '__main__':

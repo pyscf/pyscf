@@ -125,8 +125,7 @@ def get_nuc(mydf, kpts=None):
         vj = lib.asarray(mydf._int_nuc_vloc(nuccell, kpts_lst))
         t0 = t1 = log.timer_debug1('vnuc pass1: analytic int', *t0)
 
-        coulG = tools.get_coulG(cell, kpt_allow, mesh=mesh, Gv=Gv)
-        coulG *= kws
+        coulG = tools.get_coulG(cell, kpt_allow, mesh=mesh, Gv=Gv) * kws
         aoaux = ft_ao.ft_ao(nuccell, Gv)
         vG = numpy.einsum('i,xi->x', -charges, aoaux) * coulG
 
