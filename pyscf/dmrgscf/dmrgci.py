@@ -895,7 +895,7 @@ def block_version(blockexe):
         return version
 
     try:
-        msg = check_output([blockexe, '-v'], stderr=STDOUT)
+        msg = check_output([blockexe, '-v'], stderr=STDOUT).decode()
         version = '1.1.0'
         for line in msg.split('\n'):
             if line.startswith('Block '):
@@ -907,7 +907,7 @@ def block_version(blockexe):
         f1.write('memory 1 m\n')
         f1.flush()
         try:
-            msg = check_output([blockexe, f1.name], stderr=STDOUT)
+            msg = check_output([blockexe, f1.name], stderr=STDOUT).decode()
         except CalledProcessError as err:
             if 'Unrecognized option :: memory' in err.output:
                 version = '1.1.1'
