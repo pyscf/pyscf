@@ -11,7 +11,7 @@ import numpy as np
 from pyscf import lib
 from pyscf.pbc import tools
 from pyscf.pbc.dft import numint
-from pyscf.pbc.df.df_jk import _format_dms, _format_kpts_band, _format_jks
+from pyscf.pbc.df.df_jk import _format_dms, _format_kpts_band, _format_jks, _ewald_exxdiv_for_G0
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point
 
 
@@ -145,8 +145,16 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
         for k1, ao1T in enumerate(ao1_kpts):
             kpt1 = kpts_band[k1]
             mydf.exxdiv = exxdiv
-            coulG = tools.get_coulG(cell, kpt2-kpt1, True, mydf, mesh,
-                                    low_dim_ft_type=low_dim_ft_type)
+
+            # If we have an ewald exxdiv, we add the G=0 correction near the
+            # end of the function to bypass any discretization errors
+            # that arise from the FFT.
+            if exxdiv == 'ewald' or exxdiv is None:
+                coulG = tools.get_coulG(cell, kpt2-kpt1, False, mydf, mesh,
+                                        low_dim_ft_type=low_dim_ft_type)
+            else:
+                coulG = tools.get_coulG(cell, kpt2-kpt1, True, mydf, mesh,
+                                        low_dim_ft_type=low_dim_ft_type)
             if is_zero(kpt1-kpt2):
                 expmikr = np.array(1.)
             else:
@@ -168,6 +176,10 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
 
             for i in range(nset):
                 vk_kpts[i,k1] += weight * lib.dot(vR_dm[i], ao1T.T)
+
+    # Add back in the G=0 component to vk_kpts
+    if exxdiv == 'ewald':
+        _ewald_exxdiv_for_G0(cell, kpts, dms, vk_kpts, kpts_band=kpts_band)
 
     return _format_jks(vk_kpts, dm_kpts, input_band, kpts)
 
