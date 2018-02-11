@@ -13,6 +13,8 @@
 #            http://sebwouters.github.io/CheMPS2/doxygen/classCheMPS2_1_1EdmistonRuedenberg.html
 #
 
+raise DeprecationWarning('Localization functions have been moved to module pyscf.lo')
+
 from pyscf import gto, scf
 from pyscf.tools import molden
 from pyscf.lib import parameters as param

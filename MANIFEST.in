@@ -10,5 +10,6 @@ recursive-include pyscf *.dat
 include pyscf/lib/*.so*
 
 recursive-include pyscf/lib *.c *.h
+recursive-exclude pyscf/lib *.cl
 prune pyscf/lib/build
 
