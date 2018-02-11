@@ -191,6 +191,39 @@ class KnowValues(unittest.TestCase):
         e1 = mf.kernel()
         self.assertAlmostEqual(e1, -3.2681555164454039, 5)
 
+    def test_rhf_2d_fft(self):
+        L = 4
+        cell = pbcgto.Cell()
+        cell.build(unit = 'B',
+                   a = [[L,0,0],[0,L,0],[0,0,L*5]],
+                   mesh = [11,11,20],
+                   atom = '''He 2 0 0; He 3 0 0''',
+                   dimension = 2,
+                   low_dim_ft_type = 'analytic_2d_1',
+                   verbose = 0,
+                   basis = { 'He': [[0, (0.8, 1.0)],
+                                    [0, (1.2, 1.0)]
+                                   ]})
+        mf = pbchf.RHF(cell, exxdiv='ewald')
+        mf.with_df = pdf.FFTDF(cell)
+        mf.with_df.mesh = cell.mesh
+        e1 = mf.kernel()
+        self.assertAlmostEqual(e1, -3.5797041803667593, 5)
+
+        mf1 = pbchf.RHF(cell, exxdiv='ewald')
+        mf1.with_df = pdf.FFTDF(cell)
+        mf1.with_df.mesh = cell.mesh
+        mf1.direct_scf = True
+        e1 = mf1.kernel()
+        self.assertAlmostEqual(e1, -3.5797041803667593, 5)
+
+        mf2 = pbchf.RHF(cell, exxdiv=None)
+        mf2.with_df = pdf.FFTDF(cell)
+        mf2.with_df.mesh = cell.mesh
+        mf2.direct_scf = True
+        e2 = mf2.kernel()
+        self.assertAlmostEqual(e2, -1.629571720365774, 5)
+
     def test_get_veff(self):
         mf = pscf.RHF(cell)
         numpy.random.seed(1)
