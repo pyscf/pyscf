@@ -234,7 +234,7 @@ class KnownValues(unittest.TestCase):
         mol.spin = 2
         mol.basis = '6-31g'
         mol.build()
-        mf = scf.UHF(mol).run(conv_tol=1e-14)
+        mf = scf.UHF(mol).set(init_guess='1e').run(conv_tol=1e-14)
         ehf0 = mf.e_tot - mol.energy_nuc()
         mycc = uccsd.UCCSD(mf).run()
         mycc.solve_lambda()
@@ -279,7 +279,7 @@ class KnownValues(unittest.TestCase):
         mol.spin = 2
         mol.verbose = 0
         mol.build()
-        mf = scf.UHF(mol).run()
+        mf = scf.UHF(mol).run(conv_tol=1e-14)
 
         mf1 = copy.copy(mf)
         nmo = mol.nao_nr()
@@ -300,11 +300,11 @@ class KnownValues(unittest.TestCase):
         t2ab = numpy.random.random((nocca,noccb,nvira,nvirb))
         t1a = numpy.zeros((nocca,nvira))
         t1b = numpy.zeros((noccb,nvirb))
-        self.assertAlmostEqual(lib.finger(mycc._add_vvVV(None, t2ab, fakeris)), 7.30721835320601, 9)
+        self.assertAlmostEqual(lib.finger(mycc._add_vvVV(None, t2ab, fakeris)), 7.3072137844055529, 7)
         fakeris.vvVV = None
         mycc.direct = True
         mycc.max_memory = 0
-        self.assertAlmostEqual(lib.finger(mycc._add_vvVV(None, t2ab, fakeris)), 7.30721835320601, 9)
+        self.assertAlmostEqual(lib.finger(mycc._add_vvVV(None, t2ab, fakeris)), 7.3072137844055529, 7)
 
         mycc = uccsd.UCCSD(mf)
         eris = mycc.ao2mo()
@@ -312,7 +312,8 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(ecc, -0.17009326207891234, 7)
 
         numpy.random.seed(4)
-        mo_coeff = numpy.random.random((2,18,18))-.5
+        mf.mo_coeff = mo_coeff = numpy.random.random((2,18,18))-.5
+        mycc = uccsd.UCCSD(mf)
         eris = mycc.ao2mo(mo_coeff)
         nocca, noccb, nvira, nvirb = 6, 4, 12, 14
         t1 = (numpy.random.random((nocca,nvira)), numpy.random.random((noccb,nvirb)))
@@ -321,12 +322,12 @@ class KnownValues(unittest.TestCase):
               numpy.random.random((noccb,noccb,nvirb,nvirb)))
         t1, t2 = mycc.vector_to_amplitudes(mycc.amplitudes_to_vector(t1, t2))
         t1, t2 = mycc.update_amps(t1, t2, eris)
-        self.assertAlmostEqual(lib.finger(t1[0]), -91.989448970105428, 9)
-        self.assertAlmostEqual(lib.finger(t1[1]),  1915.9181468793138, 8)
-        self.assertAlmostEqual(lib.finger(t2[0]), -16988.617144235213, 7)
-        self.assertAlmostEqual(lib.finger(t2[1]), -559.07800364396917, 7)
-        self.assertAlmostEqual(lib.finger(t2[2]), -406.15453424081329, 7)
-        self.assertAlmostEqual(lib.finger(mycc.amplitudes_to_vector(t1, t2)), 3559.9139511493886, 7)
+        self.assertAlmostEqual(lib.finger(t1[0]),  163.7843848368924 , 9)
+        self.assertAlmostEqual(lib.finger(t1[1]), -324.24098918607899, 9)
+        self.assertAlmostEqual(lib.finger(t2[0]),  1437.0169437539737, 9)
+        self.assertAlmostEqual(lib.finger(t2[1]),  4008.0788652455758, 9)
+        self.assertAlmostEqual(lib.finger(t2[2]), -1552.8081121797832, 9)
+        self.assertAlmostEqual(lib.finger(mycc.amplitudes_to_vector(t1, t2)), -7504.3969349509143, 9)
 
     def test_update_amps2(self):  # compare to gccsd.update_amps
         mol = mol_s2
