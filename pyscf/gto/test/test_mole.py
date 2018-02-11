@@ -566,8 +566,11 @@ O    SP
         self.assertRaises(KeyError, gto.format_ecp, {'H':'lan2ldz'})
 
     def test_condense_to_shell(self):
-        v = gto.condense_to_shell(mol0, mol0.intor('int1e_ovlp'), numpy.max)
-        self.assertAlmostEqual(lib.finger(v), 5.748238424974943, 9)
+        mol1 = mol0.copy()
+        mol1.symmetry = False
+        mol1.build(False, False)
+        v = gto.condense_to_shell(mol1, mol1.intor('int1e_ovlp'), numpy.max)
+        self.assertAlmostEqual(lib.finger(v), 5.7342530154117846, 9)
 
     def test_input_ghost_atom(self):
         mol = gto.M(

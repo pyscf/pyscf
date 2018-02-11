@@ -138,7 +138,7 @@ class KnownValues(unittest.TestCase):
         cell.dimension = 2
         cell.rcut = 3.6
         cell.build()
-        self.assertAlmostEqual(cell.ewald(), 3898143.7149599856, 6)
+        self.assertAlmostEqual(cell.ewald(), -2.0207698225112987, 6)
 
     def test_ewald_1d(self):
         cell = pgto.Cell()
@@ -150,7 +150,7 @@ class KnownValues(unittest.TestCase):
         cell.dimension = 1
         cell.rcut = 3.6
         cell.build()
-        self.assertAlmostEqual(cell.ewald(), 70.875202620681918, 4)
+        self.assertAlmostEqual(cell.ewald(), 6.4055183018897317, 4)
 
     def test_ewald_0d(self):
         cell = pgto.Cell()
