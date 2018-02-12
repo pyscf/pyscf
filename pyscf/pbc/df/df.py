@@ -250,8 +250,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
 
             vbar = fuse(mydf.auxbar(fused_cell))
             ovlp = cell.pbc_intor('int1e_ovlp_sph', hermi=1, kpts=adapted_kptjs)
-            for k, ji in enumerate(adapted_ji_idx):
-                ovlp[k] = lib.pack_tril(ovlp[k])
+            ovlp = [lib.pack_tril(s) for s in ovlp]
         else:
             aosym = 's1'
             nao_pair = nao**2

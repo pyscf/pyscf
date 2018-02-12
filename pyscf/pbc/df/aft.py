@@ -131,16 +131,6 @@ def get_nuc(mydf, kpts=None):
 
         if cell.dimension == 1 or cell.dimension == 2:
             G0idx, SI_on_z = _model_uniform_charge_SI_on_z(cell, Gv)
-
-            ZSI = numpy.einsum("i,ij->j", -charges, cell.get_SI(Gv[G0idx]))
-            ZSI_mod_diff = ZSI * coulG[G0idx] - vG[G0idx]
-            vG_mod = numpy.dot(ZSI_mod_diff.conj(), SI_on_z)
-            if abs(kpts_lst).sum() < 1e-9:
-                vG_mod = vG_mod.real
-            s = cell.pbc_intor('int1e_ovlp', kpts=kpts_lst)
-            for k, kpt in enumerate(kpts_lst):
-                vj[k] -= vG_mod * lib.pack_tril(s[k])
-
             vG[G0idx] += charges.sum() * SI_on_z * coulG[G0idx]
 
     max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
@@ -198,16 +188,30 @@ def _int_nuc_vloc(mydf, nuccell, kpts, intor='int3c2e_sph', aosym='s2', comp=1):
         buf = buf.reshape(nkpts,comp,nao_pair,nchg)
         mat = numpy.einsum('kcxz,z->kcx', buf, charge)
 
-    if cell.dimension == 3 and intor == 'int3c2e_sph':
+    if cell.dimension != 0 and intor == 'int3c2e_sph':
         assert(comp == 1)
-        nucbar = sum([z/nuccell.bas_exp(i)[0] for i,z in enumerate(cell.atom_charges())])
-        nucbar *= numpy.pi/cell.vol
+        charge = -cell.atom_charges()
+
+        if cell.dimension == 1 or cell.dimension == 2:
+            Gv, Gvbase, kws = cell.get_Gv_weights(mydf.mesh)
+            G0idx, SI_on_z = _model_uniform_charge_SI_on_z(cell, Gv)
+            ZSI = numpy.einsum("i,ix->x", charge, cell.get_SI(Gv[G0idx]))
+            ZSI -= numpy.einsum('i,xi->x', charge, ft_ao.ft_ao(nuccell, Gv[G0idx]))
+            coulG = 4*numpy.pi / numpy.linalg.norm(Gv[G0idx], axis=1)**2
+            nucbar = numpy.einsum('i,i,i,i', ZSI.conj(), coulG, kws[G0idx], SI_on_z)
+            if abs(kpts).sum() < 1e-9:
+                nucbar = nucbar.real
+        else: # cell.dimension == 3
+            nucbar = sum([z/nuccell.bas_exp(i)[0] for i,z in enumerate(charge)])
+            nucbar *= numpy.pi/cell.vol
+
         ovlp = cell.pbc_intor('int1e_ovlp_sph', 1, lib.HERMITIAN, kpts)
         for k in range(nkpts):
             if aosym == 's1':
-                mat[k] += nucbar * ovlp[k].reshape(nao_pair)
+                mat[k] -= nucbar * ovlp[k].reshape(nao_pair)
             else:
-                mat[k] += nucbar * lib.pack_tril(ovlp[k])
+                mat[k] -= nucbar * lib.pack_tril(ovlp[k])
+
     return mat
 
 get_pp_loc_part1 = get_nuc
@@ -439,7 +443,8 @@ class AFTDF(lib.StreamObject):
             nj = ao_loc[shls_slice[3]] - ao_loc[shls_slice[2]]
             nij = ni*nj
 
-        if (abs(q).sum() < 1e-6 and (cell.dimension == 1 or cell.dimension == 2)):
+        if (abs(q).sum() < 1e-6 and intor == 'GTO_ft_ovlp_sph' and
+            (cell.dimension == 1 or cell.dimension == 2)):
             s = cell.pbc_intor('int1e_ovlp', kpts=kpts)
             if aosym == 's2':
                 s = [lib.pack_tril(x) for x in s]
