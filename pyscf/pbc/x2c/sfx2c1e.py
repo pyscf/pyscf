@@ -185,6 +185,12 @@ def get_pnucp(mydf, kpts=None):
         wj = numpy.zeros((nkpts,nao_pair), dtype=numpy.complex128)
         SI = cell.get_SI(Gv)
         vG = numpy.einsum('i,ix->x', charge, SI) * coulG
+        if cell.dimension == 1 or cell.dimension == 2:
+            G0idx, SI_on_z = pbcgto.cell._model_uniform_charge_SI_on_z(cell, Gv)
+            vG[G0idx] += charge.sum() * SI_on_z * coulG[G0idx]
+
+        wj = numpy.zeros((nkpts,nao_pair), dtype=numpy.complex128)
+
     else:
         nuccell = copy.copy(cell)
         half_sph_norm = .5/numpy.sqrt(numpy.pi)
@@ -202,6 +208,25 @@ def get_pnucp(mydf, kpts=None):
 
         aoaux = ft_ao.ft_ao(nuccell, Gv)
         vG = numpy.einsum('i,xi->x', charge, aoaux) * coulG
+        if cell.dimension != 0:
+            if cell.dimension == 1 or cell.dimension == 2:
+                Gv, Gvbase, kws = cell.get_Gv_weights(mydf.mesh)
+                G0idx, SI_on_z = pbcgto.cell._model_uniform_charge_SI_on_z(cell, Gv)
+                ZSI = numpy.einsum("i,ix->x", charge, cell.get_SI(Gv[G0idx]))
+                nucbar = numpy.einsum('i,i,i', ZSI.conj(), coulG[G0idx], SI_on_z)
+                nucbar -= numpy.einsum('i,i', vG[G0idx].conj(), SI_on_z)
+                if abs(kpts).sum() < 1e-9:
+                    nucbar = nucbar.real
+                vG[G0idx] += charge.sum() * SI_on_z * coulG[G0idx]
+            else: # cell.dimension == 3
+                nucbar = sum([z/nuccell.bas_exp(i)[0] for i,z in enumerate(charge)])
+                nucbar *= numpy.pi/cell.vol
+
+            ovlp = cell.pbc_intor('int1e_kin_sph', 1, lib.HERMITIAN, kpts_lst)
+            for k in range(nkpts):
+                s = lib.pack_tril(ovlp[k])
+                # *2 due to the factor 1/2 in T
+                wj[k] -= nucbar*2 * s
 
     max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
     for aoaoks, p0, p1 in mydf.ft_loop(mydf.mesh, kpt_allow, kpts_lst,
@@ -215,13 +240,14 @@ def get_pnucp(mydf, kpts=None):
                 wj[k] += numpy.einsum('k,kx->x', vG[p0:p1].conj(), aoao)
     t1 = log.timer_debug1('contracting pnucp', *t1)
 
-    if mydf.eta != 0 and cell.dimension == 3:
-        nucbar = sum([-z/nuccell.bas_exp(i)[0] for i,z in enumerate(charge)])
-        nucbar *= numpy.pi/cell.vol * 2  # 2 due to the factor 1/2 in T
-        ovlp = cell.pbc_intor('int1e_kin_sph', 1, lib.HERMITIAN, kpts_lst)
-        for k in range(nkpts):
-            s = lib.pack_tril(ovlp[k])
-            wj[k] += nucbar * s
+    if cell.dimension == 1 or cell.dimension == 2:
+        t = cell.pbc_intor('int1e_kin_sph', 1, lib.HERMITIAN, kpts_lst)
+        G0idx, SI_on_z = pbcgto.cell._model_uniform_charge_SI_on_z(cell, Gv)
+        Zmod = numpy.einsum('i,i', vG[G0idx].conj(), SI_on_z)
+        if abs(kpts).sum() < 1e-9:
+            Zmod = Zmod.real
+        for k, kpt in enumerate(kpts_lst):
+            wj[k] -= Zmod*2 * lib.pack_tril(t[k])
 
     wj_kpts = []
     for k, kpt in enumerate(kpts_lst):
@@ -263,3 +289,16 @@ if __name__ == '__main__':
     mf = sfx2c1e(mf)
     esfx2c = mf.kernel()
     print('E(k-SFX2C1E) = %.12g' % esfx2c)
+
+#    cell = pbcgto.M(unit = 'B',
+#               a = numpy.eye(3)*4,
+#               atom = 'H 0 0 0; H 0 0 1.8',
+#               mesh = None,
+#               dimension = 2,
+#               basis='sto3g')
+#    with_df = aft.AFTDF(cell)
+#    w0 = get_pnucp(with_df, cell.make_kpts([2,2,1]))
+#    with_df = aft.AFTDF(cell)
+#    with_df.eta = 0
+#    w1 = get_pnucp(with_df, cell.make_kpts([2,2,1]))
+#    print(abs(w0-w1).max())
