@@ -136,7 +136,9 @@ class tddft_iter(chi0_matvec):
 
 
     vext = np.transpose(self.moms1)
+    nww, eV = len(comegas), 27.2114
     for iw, comega in enumerate(comegas):
+      if self.verbosity>0: print(iw, nww, comega.real*eV)
       veff = self.comp_veff(vext[0], comega)
       dn = self.apply_rf0(veff, comega)
       pxx[iw] = np.dot(vext[0], dn)
@@ -163,7 +165,7 @@ class tddft_iter(chi0_matvec):
     nww, eV = len(comegas), 27.2114
     for iw, comega in enumerate(comegas):
         for xyz in range(3):
-            if self.verbosity>1: print(xyz, iw, nww, comega*eV)
+            if self.verbosity>0: print(xyz, iw, nww, comega*eV)
             veff = self.comp_veff(vext[xyz], comega)
             dn = self.apply_rf0(veff, comega)
             p_avg[iw] += np.dot(vext[xyz], dn)
@@ -209,7 +211,7 @@ class tddft_iter(chi0_matvec):
       if Exyz == 0.0: continue
 
       for iw,comega in enumerate(comegas):
-        if self.verbosity>1: print(xyz, iw, comega*eV)
+        if self.verbosity>0: print(xyz, iw, comega*eV)
         veff = self.comp_veff(vext[xyz], comega)
         self.dn[xyz, iw, :] = self.apply_rf0(veff, comega)
             
