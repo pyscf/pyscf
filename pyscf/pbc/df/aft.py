@@ -462,8 +462,9 @@ class AFTDF(lib.StreamObject):
 
             if s is not None:  # to remove the divergent integrals
                 G0idx, SI_on_z = _model_uniform_charge_SI_on_z(cell, Gv[p0:p1])
-                for k, kpt in enumerate(kpts):
-                    dat[k][G0idx] -= numpy.einsum('g,...->g...', SI_on_z, s[k])
+                if SI_on_z.size > 0:
+                    for k, kpt in enumerate(kpts):
+                        dat[k][G0idx] -= numpy.einsum('g,...->g...', SI_on_z, s[k])
 
             yield dat, p0, p1
 
