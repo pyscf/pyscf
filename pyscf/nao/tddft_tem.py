@@ -225,9 +225,6 @@ class tddft_tem(tddft_iter):
                             # tmp is written only at the end of the calculations, therefore,
                             # it is useless
             
-        if self.td_GPU.GPU is not None:
-            self.td_GPU.clean_gpu()
-
         return -gamma/np.pi
 
     def comp_tem_spectrum_nonin(self, tmp_fname = None):
