@@ -101,7 +101,7 @@ def update_amps(cc, t1, t2, eris):
             ovVV = tmp1ab = None
 
     if nvira > 0 and noccb > 0:
-        blksize = max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvirb*nocca**2*3+1)))
+        blksize = max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvirb*nvira**2*3+1)))
         for p0,p1 in lib.prange(0, noccb, blksize):
             OVvv = eris.get_OVvv(slice(p0,p1))  # OVvv = eris.OVvv[p0:p1]
             Fvva += np.einsum('MF,MFae->ae', t1b[p0:p1], OVvv)
