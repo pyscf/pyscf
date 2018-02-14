@@ -2183,6 +2183,8 @@ class _ERIS:
         elif hasattr(cc._scf, 'with_df') and cc._scf.with_df:
             raise NotImplementedError
         else:
+            if cc.direct:
+                raise NotImplementedError
             moa = so_coeff[:,idxa]
             mob = so_coeff[:,idxb]
             nmoa = moa.shape[1]
