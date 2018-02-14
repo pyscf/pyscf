@@ -23,10 +23,13 @@ class tddft_tem(tddft_iter):
 
         self.freq = kw["freq"] if "freq" in kw else np.arange(0.0, 0.367, 1.5*self.eps)
         self.dr = kw["dr"] if "dr" in kw else np.array([0.3, 0.3, 0.3])
+        self.V_freq = None
+        self.velec = None
+        self.beam_offset = None
 
 
     def get_spectrum_nonin(self, velec = np.array([1.0, 0.0, 0.0]), beam_offset = np.array([0.0, 0.0, 0.0]),
-            tmp_fname=None):
+            tmp_fname=None, calc_Vext=True):
         """
         Calculate the non interacting TEM spectra for an electron trajectory
         
@@ -42,7 +45,12 @@ class tddft_tem(tddft_iter):
             if not isinstance(tmp_fname, str):
                 raise ValueError("tmp_fname must be a string")
 
+        if not calc_Vext and any(self.velec != velec):
+            calc_Vext = True
         self.velec = velec
+        
+        if not calc_Vext and any(self.beam_offset != beam_offset):
+            calc_Vext = True
         self.beam_offset = beam_offset
 
         self.vnorm = np.sqrt(np.dot(self.velec, self.velec))
@@ -50,13 +58,17 @@ class tddft_tem(tddft_iter):
 
         self.check_collision(self.atom2coord)
         self.get_time_range()
-        self.calc_external_potential()
+        if calc_Vext:
+            self.calc_external_potential()
+        else:
+            if self.V_freq is None:
+                self.calc_external_potential()
 
         return self.comp_tem_spectrum_nonin(tmp_fname=tmp_fname)
 
     def get_spectrum_inter(self, velec = np.array([1.0, 0.0, 0.0]), 
                                  beam_offset = np.array([0.0, 0.0, 0.0]),
-                                 tmp_fname=None):
+                                 tmp_fname=None, calc_Vext=True):
         """
         Calculate the interacting TEM spectra for an electron trajectory
         
@@ -73,7 +85,12 @@ class tddft_tem(tddft_iter):
                 raise ValueError("tmp_fname must be a string")
 
 
+        if not calc_Vext and any(self.velec != velec):
+            calc_Vext = True
         self.velec = velec
+        
+        if not calc_Vext and any(self.beam_offset != beam_offset):
+            calc_Vext = True
         self.beam_offset = beam_offset
 
         self.vnorm = np.sqrt(np.dot(self.velec, self.velec))
@@ -81,7 +98,13 @@ class tddft_tem(tddft_iter):
        
         self.check_collision(self.atom2coord)
         self.get_time_range()
-        self.calc_external_potential()
+        print(calc_Vext)
+        if calc_Vext:
+            self.calc_external_potential()
+        else:
+            if self.V_freq is None:
+                print("self.V_freq is None")
+                self.calc_external_potential()
 
         return self.comp_tem_spectrum(tmp_fname=tmp_fname)
 

@@ -93,7 +93,13 @@ class tddft_iter_gpu_c():
                           c_int(self.nfermi), c_int(self.nprod), c_int(self.vstart))
 
         elif (isinstance(GPU, dict) or GPU == True) and not GPU_import:
-            raise ValueError("GPU lib failed to initialize!")
+            if isinstance(GPU, dict):
+                if GPU["use"]:
+                    raise ValueError("GPU lib failed to initialize!")
+                else:
+                    self.GPU = None
+            else:
+                raise ValueError("GPU lib failed to initialize!")
         else:
             self.GPU = None
 
