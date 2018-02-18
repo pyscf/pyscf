@@ -282,6 +282,11 @@ class _PhysicistsERIs:
         fockao = mycc._scf.get_hcore() + mycc._scf.get_veff(mycc.mol, dm)
         self.fock = reduce(np.dot, (mo_coeff.conj().T, fockao, mo_coeff))
         self.nocc = mycc.nocc
+
+        mo_e = self.fock.diagonal()
+        gap = abs(mo_e[:self.nocc,None] - mo_e[None,self.nocc:]).min()
+        if gap < 1e-5:
+            logger.warn(mycc, 'HOMO-LUMO gap %s too small for GCCSD', gap)
         return self
 
 def _make_eris_incore(mycc, mo_coeff=None, ao2mofn=None):

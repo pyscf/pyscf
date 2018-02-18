@@ -716,6 +716,14 @@ class _ChemistsERIs(ccsd._ChemistsERIs):
         self.nocc = mycc.nocc
         self.nocca, self.noccb = self.nocc
         self.mol = mycc.mol
+
+        mo_ea = self.focka.diagonal()
+        mo_eb = self.fockb.diagonal()
+        gap_a = abs(mo_ea[:self.nocca,None] - mo_ea[None,self.nocca:]).min()
+        gap_b = abs(mo_eb[:self.noccb,None] - mo_eb[None,self.noccb:]).min()
+        if gap_a < 1e-5 or gap_b < 1e-5:
+            logger.warn(mycc, 'HOMO-LUMO gap (%s,%s) too small for UCCSD',
+                        gap_a, gap_b)
         return self
 
     def get_ovvv(self, *slices):

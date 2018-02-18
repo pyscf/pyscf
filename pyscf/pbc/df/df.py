@@ -183,7 +183,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
         for p0, p1 in lib.prange(0, ngrids, blksize):
             aoaux = ft_ao.ft_ao(fused_cell, Gv[p0:p1], None, b, gxyz[p0:p1], Gvbase, kpt)
             if (cell.dimension == 1 or cell.dimension == 2) and is_zero(kpt):
-                G0idx, SI_on_z = pbcgto.cell._model_uniform_charge_SI_on_z(cell, Gv[p0:p1])
+                G0idx, SI_on_z = pbcgto.cell._SI_for_uniform_model_charge(cell, Gv[p0:p1])
                 aoaux[G0idx] -= numpy.einsum('g,i->gi', SI_on_z, plain_ints)
 
             aoaux = aoaux.T
@@ -214,7 +214,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
         shls_slice = (auxcell.nbas, fused_cell.nbas)
         Gaux = ft_ao.ft_ao(fused_cell, Gv, shls_slice, b, gxyz, Gvbase, kpt)
         if (cell.dimension == 1 or cell.dimension == 2) and is_zero(kpt):
-            G0idx, SI_on_z = pbcgto.cell._model_uniform_charge_SI_on_z(cell, Gv)
+            G0idx, SI_on_z = pbcgto.cell._SI_for_uniform_model_charge(cell, Gv)
             s = plain_ints[-Gaux.shape[1]:]  # Only compensated Gaussians
             Gaux[G0idx] -= numpy.einsum('g,i->gi', SI_on_z, s)
 
@@ -301,7 +301,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
                                             adapted_kptjs, out=buf)
 
                 if (cell.dimension == 1 or cell.dimension == 2) and is_zero(kpt):
-                    G0idx, SI_on_z = pbcgto.cell._model_uniform_charge_SI_on_z(cell, Gv[p0:p1])
+                    G0idx, SI_on_z = pbcgto.cell._SI_for_uniform_model_charge(cell, Gv[p0:p1])
                     if SI_on_z.size > 0:
                         for k, aoao in enumerate(dat):
                             aoao[G0idx] -= numpy.einsum('g,i->gi', SI_on_z, ovlp[k])
@@ -566,9 +566,6 @@ class GDF(aft.AFTDF):
             for b0, b1 in lib.prange(0, naux, blksize):
                 LpqR, LpqI = load(j3c, b0, b1, LpqR, LpqI)
                 yield LpqR, LpqI
-
-    def prange(self, start, stop, step):
-        return lib.prange(start, stop, step)
 
     weighted_coulG = aft.weighted_coulG
     _int_nuc_vloc = aft._int_nuc_vloc

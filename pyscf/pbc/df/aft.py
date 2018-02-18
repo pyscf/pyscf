@@ -13,7 +13,7 @@ from pyscf import gto
 from pyscf.lib import logger
 from pyscf.pbc import tools
 from pyscf.pbc.gto import pseudo, estimate_ke_cutoff, error_for_ke_cutoff
-from pyscf.pbc.gto.cell import _model_uniform_charge_SI_on_z
+from pyscf.pbc import gto as pbcgto
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import incore
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point
@@ -89,7 +89,7 @@ def get_nuc(mydf, kpts=None):
         v1 = -vpplocG.copy()
 
         if cell.dimension == 1 or cell.dimension == 2:
-            G0idx, SI_on_z = _model_uniform_charge_SI_on_z(cell, Gv)
+            G0idx, SI_on_z = pbcgto.cell._SI_for_uniform_model_charge(cell, Gv)
             coulG = 4*numpy.pi / numpy.linalg.norm(Gv[G0idx], axis=1)**2
             vpplocG[G0idx] += charges.sum() * SI_on_z * coulG
 
@@ -130,7 +130,7 @@ def get_nuc(mydf, kpts=None):
         vG = numpy.einsum('i,xi->x', -charges, aoaux) * coulG
 
         if cell.dimension == 1 or cell.dimension == 2:
-            G0idx, SI_on_z = _model_uniform_charge_SI_on_z(cell, Gv)
+            G0idx, SI_on_z = pbcgto.cell._SI_for_uniform_model_charge(cell, Gv)
             vG[G0idx] += charges.sum() * SI_on_z * coulG[G0idx]
 
     max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
@@ -194,7 +194,7 @@ def _int_nuc_vloc(mydf, nuccell, kpts, intor='int3c2e_sph', aosym='s2', comp=1):
 
         if cell.dimension == 1 or cell.dimension == 2:
             Gv, Gvbase, kws = cell.get_Gv_weights(mydf.mesh)
-            G0idx, SI_on_z = _model_uniform_charge_SI_on_z(cell, Gv)
+            G0idx, SI_on_z = pbcgto.cell._SI_for_uniform_model_charge(cell, Gv)
             ZSI = numpy.einsum("i,ix->x", charge, cell.get_SI(Gv[G0idx]))
             ZSI -= numpy.einsum('i,xi->x', charge, ft_ao.ft_ao(nuccell, Gv[G0idx]))
             coulG = 4*numpy.pi / numpy.linalg.norm(Gv[G0idx], axis=1)**2
@@ -336,10 +336,13 @@ class AFTDF(lib.StreamObject):
                             cell.dimension, mesh_guess[cell.dimension:])
         return self
 
+# TODO: Put Gv vector in the arguments
     def pw_loop(self, mesh=None, kpti_kptj=None, q=None, shls_slice=None,
                 max_memory=2000, aosym='s1', blksize=None,
                 intor='GTO_ft_ovlp_sph', comp=1):
-        '''Plane wave part'''
+        '''
+        Fourier transform iterator for AO pair
+        '''
         cell = self.cell
         if mesh is None:
             mesh = self.mesh
@@ -393,7 +396,7 @@ class AFTDF(lib.StreamObject):
                                          kptj.reshape(1,3), intor, comp, out=buf)[0]
             aoao = aoao.reshape(p1-p0,nij)
             if s is not None:  # to remove the divergent integrals
-                G0idx, SI_on_z = _model_uniform_charge_SI_on_z(cell, Gv[p0:p1])
+                G0idx, SI_on_z = pbcgto.cell._SI_for_uniform_model_charge(cell, Gv[p0:p1])
                 aoao[G0idx] -= numpy.einsum('g,i->gi', SI_on_z, s)
 
             for i0, i1 in lib.prange(0, p1-p0, sublk):
@@ -413,8 +416,8 @@ class AFTDF(lib.StreamObject):
     def ft_loop(self, mesh=None, q=numpy.zeros(3), kpts=None, shls_slice=None,
                 max_memory=4000, aosym='s1', intor='GTO_ft_ovlp_sph', comp=1):
         '''
-        Fourier transform iterator for all kpti which satisfy  2pi*N = (kpts - kpti - q)*a
-        N = -1, 0, 1
+        Fourier transform iterator for all kpti which satisfy
+            2pi*N = (kpts - kpti - q)*a,  N = -1, 0, 1
         '''
         cell = self.cell
         if mesh is None:
@@ -460,16 +463,13 @@ class AFTDF(lib.StreamObject):
                                         b, gxyz[p0:p1], Gvbase, q, kpts,
                                         intor, comp, out=buf)
 
-            if s is not None:  # to remove the divergent integrals
-                G0idx, SI_on_z = _model_uniform_charge_SI_on_z(cell, Gv[p0:p1])
+            if s is not None:  # to remove the divergent part in 1D/2D systems
+                G0idx, SI_on_z = pbcgto.cell._SI_for_uniform_model_charge(cell, Gv[p0:p1])
                 if SI_on_z.size > 0:
                     for k, kpt in enumerate(kpts):
                         dat[k][G0idx] -= numpy.einsum('g,...->g...', SI_on_z, s[k])
 
             yield dat, p0, p1
-
-    def prange(self, start, stop, step):
-        return lib.prange(start, stop, step)
 
     weighted_coulG = weighted_coulG
     _int_nuc_vloc = _int_nuc_vloc
@@ -505,6 +505,12 @@ class AFTDF(lib.StreamObject):
         mf = copy.copy(mf)
         mf.with_df = self
         return mf
+
+    def prange(self, start, stop, step):
+        '''This is a hook for MPI parallelization. DO NOT use it out of the
+        scope of AFTDF/GDF/MDF.
+        '''
+        return lib.prange(start, stop, step)
 
 ################################################################################
 # With this function to mimic the molecular DF.loop function, the pbc gamma

@@ -186,7 +186,7 @@ def get_pnucp(mydf, kpts=None):
         SI = cell.get_SI(Gv)
         vG = numpy.einsum('i,ix->x', charge, SI) * coulG
         if cell.dimension == 1 or cell.dimension == 2:
-            G0idx, SI_on_z = pbcgto.cell._model_uniform_charge_SI_on_z(cell, Gv)
+            G0idx, SI_on_z = pbcgto.cell._SI_for_uniform_model_charge(cell, Gv)
             vG[G0idx] += charge.sum() * SI_on_z * coulG[G0idx]
 
         wj = numpy.zeros((nkpts,nao_pair), dtype=numpy.complex128)
@@ -211,7 +211,7 @@ def get_pnucp(mydf, kpts=None):
         if cell.dimension != 0:
             if cell.dimension == 1 or cell.dimension == 2:
                 Gv, Gvbase, kws = cell.get_Gv_weights(mydf.mesh)
-                G0idx, SI_on_z = pbcgto.cell._model_uniform_charge_SI_on_z(cell, Gv)
+                G0idx, SI_on_z = pbcgto.cell._SI_for_uniform_model_charge(cell, Gv)
                 ZSI = numpy.einsum("i,ix->x", charge, cell.get_SI(Gv[G0idx]))
                 nucbar = numpy.einsum('i,i,i', ZSI.conj(), coulG[G0idx], SI_on_z)
                 nucbar -= numpy.einsum('i,i', vG[G0idx].conj(), SI_on_z)
@@ -242,7 +242,7 @@ def get_pnucp(mydf, kpts=None):
 
     if cell.dimension == 1 or cell.dimension == 2:
         t = cell.pbc_intor('int1e_kin_sph', 1, lib.HERMITIAN, kpts_lst)
-        G0idx, SI_on_z = pbcgto.cell._model_uniform_charge_SI_on_z(cell, Gv)
+        G0idx, SI_on_z = pbcgto.cell._SI_for_uniform_model_charge(cell, Gv)
         Zmod = numpy.einsum('i,i', vG[G0idx].conj(), SI_on_z)
         if abs(kpts).sum() < 1e-9:
             Zmod = Zmod.real

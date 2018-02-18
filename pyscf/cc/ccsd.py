@@ -1043,6 +1043,11 @@ class _ChemistsERIs:
         self.fock = reduce(numpy.dot, (mo_coeff.conj().T, fockao, mo_coeff))
         self.nocc = mycc.nocc
         self.mol = mycc.mol
+
+        mo_e = self.fock.diagonal()
+        gap = abs(mo_e[:self.nocc,None] - mo_e[None,self.nocc:]).min()
+        if gap < 1e-5:
+            logger.warn(mycc, 'HOMO-LUMO gap %s too small for CCSD', gap)
         return self
 
     def get_ovvv(self, *slices):

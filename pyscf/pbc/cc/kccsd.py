@@ -389,6 +389,13 @@ def _make_eris_incore(cc, mo_coeff=None):
     eris = gccsd._PhysicistsERIs()
     kpts = cc.kpts
     nkpts = cc.nkpts
+    nocc = cc.get_nocc()
+    nvir = nmo - nocc
+    eris.nocc = nocc
+
+    if any(nocc != numpy.count_nonzero(cc._scf.mo_occ[k]>0)
+           for k in range(nkpts)):
+        raise NotImplementedError('Different occupancies found for different k-points')
 
     if mo_coeff is None:
         # If mo_coeff is not canonical orbital
@@ -418,9 +425,6 @@ def _make_eris_incore(cc, mo_coeff=None):
                                for k, mo in enumerate(eris.mo_coeff)])
 
     nao, nmo = eris.mo_coeff[0].shape
-    nocc = cc.get_nocc()
-    nvir = nmo - nocc
-    eris.nocc = nocc
 
     kconserv = kpts_helper.get_kconserv(cc._scf.cell,cc.kpts)
     so_coeff = [mo[:nao//2] + mo[nao//2:] for mo in eris.mo_coeff]
