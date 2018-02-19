@@ -48,7 +48,7 @@ def update_amps(cc, t1, t2, eris):
     t1new += fov.conj()
     t1new += 2*np.einsum('kcai,kc->ia', eris.ovvo, t1)
     t1new +=  -np.einsum('kiac,kc->ia', eris.oovv, t1)
-    eris_ovvv = np.asarray(eris.ovvv)
+    eris_ovvv = np.asarray(eris.get_ovvv())
     t1new += 2*lib.einsum('kdac,ikcd->ia', eris_ovvv, t2)
     t1new +=  -lib.einsum('kcad,ikcd->ia', eris_ovvv, t2)
     t1new += 2*lib.einsum('kdac,kd,ic->ia', eris_ovvv, t1, t1)
@@ -61,7 +61,7 @@ def update_amps(cc, t1, t2, eris):
 
     # T2 equation
     tmp2  = lib.einsum('kibc,ka->abic', eris.oovv, -t1)
-    tmp2 += np.asarray(eris.ovvv).conj().transpose(1,3,0,2)
+    tmp2 += np.asarray(eris_ovvv).conj().transpose(1,3,0,2)
     tmp = lib.einsum('abic,jc->ijab', tmp2, t1)
     t2new = tmp + tmp.transpose(1,0,3,2)
     tmp2  = lib.einsum('kcai,jc->akij', eris.ovvo, t1)
