@@ -7,6 +7,7 @@
 
 import re
 import numpy
+from pyscf.data.elements import _std_symbol
 
 MAXL = 10
 SPDF = ('S', 'P', 'D', 'F', 'G', 'H', 'I', 'K', 'L', 'M')
@@ -25,16 +26,35 @@ MAPSPDF = {'S': 0,
 BASIS_SET_DELIMITER = re.compile('# *BASIS SET.*\n')
 ECP_DELIMITER = re.compile('\n *ECP *\n')
 
-def parse(string, symb=None, optimize=False):
-    '''Parse the basis text which is in NWChem format, return an internal
-    basis format which can be assigned to :attr:`Mole.basis`
-    Lines started with # are ignored.
+def parse(string, symb=None, optimize=True):
+    '''Parse the basis text which is in NWChem format. Return an internal
+    basis format which can be assigned to attribute :attr:`Mole.basis`
+    Empty lines, or the lines started with #, or the lines of "BASIS SET" and
+    "END" will be ignored are ignored.
+
+    Args:
+        string : A string in NWChem basis format. Empty links and the lines of
+        "BASIS SET" and "END" will be ignored
 
     Kwargs:
         optimize : Optimize basis contraction.  Convert the segment contracted
             basis to the general contracted basis.
+
+    Examples:
+
+    >>> mol = gto.Mole()
+    >>> mol.basis = {'O': gto.basis.parse("""
+    ... #BASIS SET: (6s,3p) -> [2s,1p]
+    ... C    S
+    ...      71.6168370              0.15432897
+    ...      13.0450960              0.53532814
+    ...       3.5305122              0.44463454
+    ... C    SP
+    ...       2.9412494             -0.09996723             0.15591627
+    ...       0.6834831              0.39951283             0.60768372
+    ...       0.2222899              0.70011547             0.39195739
+    ... """)}
     '''
-    from pyscf.gto.mole import _std_symbol
     if symb is not None:
         symb = _std_symbol(symb)
         string = _search_seg(re.split(BASIS_SET_DELIMITER, string), symb)
@@ -48,11 +68,10 @@ def parse(string, symb=None, optimize=False):
             bastxt.append(x)
     return _parse(bastxt, optimize)
 
-def load(basisfile, symb, optimize=False):
+def load(basisfile, symb, optimize=True):
     return _parse(search_seg(basisfile, symb), optimize)
 
 def parse_ecp(string, symb=None):
-    from pyscf.gto.mole import _std_symbol
     if symb is not None:
         symb = _std_symbol(symb)
         raw_data = string.splitlines()
@@ -84,7 +103,6 @@ def load_ecp(basisfile, symb):
     return _parse_ecp(search_ecp(basisfile, symb))
 
 def search_seg(basisfile, symb):
-    from pyscf.gto.mole import _std_symbol
     symb = _std_symbol(symb)
     with open(basisfile, 'r') as fin:
         fdata = re.split(BASIS_SET_DELIMITER, fin.read())
@@ -101,7 +119,6 @@ def _search_seg(raw_data, symb):
             return dat
 
 def search_ecp(basisfile, symb):
-    from pyscf.gto.mole import _std_symbol
     symb = _std_symbol(symb)
     with open(basisfile, 'r') as fin:
         fdata = re.split(ECP_DELIMITER, fin.read())
@@ -123,7 +140,6 @@ def search_ecp(basisfile, symb):
 
 def convert_basis_to_nwchem(symb, basis):
     '''Convert the internal basis format to NWChem format string'''
-    from pyscf.gto.mole import _std_symbol
     res = []
     symb = _std_symbol(symb)
 
@@ -154,7 +170,6 @@ def convert_basis_to_nwchem(symb, basis):
 
 def convert_ecp_to_nwchem(symb, ecp):
     '''Convert the internal ecp format to NWChem format string'''
-    from pyscf.gto.mole import _std_symbol
     symb = _std_symbol(symb)
     res = ['%-2s nelec %d' % (symb, ecp[0])]
 
@@ -169,7 +184,7 @@ def convert_ecp_to_nwchem(symb, ecp):
                 res.append('%d    %15.9f  %15.9f' % (r_order, e, c))
     return '\n'.join(res)
 
-def _parse(raw_basis, optimize=False):
+def _parse(raw_basis, optimize=True):
     basis_add = []
     for line in raw_basis:
         dat = line.strip()
@@ -214,7 +229,7 @@ def optimize_contraction(basis):
         cs = [c for c in ec[1:]]
         if bas_l[l]:
             for e_cs in bas_l[l]:
-                if numpy.allclose(e_cs[0], es):
+                if numpy.array_equal(e_cs[0], es):
                     e_cs.extend(cs)
                     break
             else:

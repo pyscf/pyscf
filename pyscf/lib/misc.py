@@ -21,6 +21,11 @@ import numpy
 import h5py
 from pyscf.lib import param
 
+if h5py.version.version[:4] == '2.2.':
+    sys.stderr.write('h5py-%s is found in your environment. '
+                     'h5py-%s has bug in threading mode.\n'
+                     'Async-IO is disabled.\n' % ((h5py.version.version,)*2))
+
 c_double_p = ctypes.POINTER(ctypes.c_double)
 c_int_p = ctypes.POINTER(ctypes.c_int)
 c_null_ptr = ctypes.POINTER(ctypes.c_void_p)

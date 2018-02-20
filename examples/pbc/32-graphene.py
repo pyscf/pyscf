@@ -25,8 +25,6 @@ from pyscf.pbc import tools
 nk = 1
 kpts = [nk,nk,1]
 Lz = 25 # Smallest Lz value for ~1e-6 convergence in absolute energy
-#fft_ke_cut = 300 # We need around accuracy of ~1e-6 for FFTDF
-#                 # Corresponds to mesh = [32,32,156]
 a = 1.42 # bond length in graphene
 fft_ke_cut = 300
 aft_mesh = [30,30,40] # Much smaller mesh needed for AFTDF
@@ -71,11 +69,12 @@ cell.build(unit = 'B',
            pseudo = pseudo,
            verbose = 7,
            precision = 1e-6,
+           low_dim_ft_type='analytic_2d_1',
            basis='gth-szv')
 t0 = time.time()
 mf = pbchf.KRHF(cell, exxdiv='ewald')
 #mf = pbchf.KRHF(cell, exxdiv=None)
-mf.with_df = pdf.FFTDF(cell, low_dim_ft_type='analytic_2d_1')
+mf.with_df = pdf.FFTDF(cell)
 mf.kpts = cell.make_kpts(kpts)
 mf.conv_tol = 1e-6
 e.append(mf.kernel())

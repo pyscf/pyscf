@@ -32,7 +32,7 @@ class KnownValues(unittest.TestCase):
 
         myx2c.with_x2c.approx = 'ATOM1E'
         e = myx2c.kernel()
-        self.assertAlmostEqual(e, -76.075429671090802, 9)
+        self.assertAlmostEqual(e, -76.075429682026396, 9)
 
     def test_sfx2c1e_cart(self):
         pmol = mol.copy()
@@ -54,7 +54,7 @@ class KnownValues(unittest.TestCase):
 
         myx2c.with_x2c.approx = 'ATOM1E'
         e = myx2c.kernel()
-        self.assertAlmostEqual(e, -76.075431823222686, 9)
+        self.assertAlmostEqual(e, -76.07543183416206, 9)
 
 
 if __name__ == "__main__":

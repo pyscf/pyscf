@@ -988,8 +988,8 @@ class _NumInt(numint._NumInt):
         comp = (deriv+1)*(deriv+2)*(deriv+3)//6
 # NOTE to index grids.non0tab, the blksize needs to be the integer multiplier of BLKSIZE
         if blksize is None:
-            blksize = min(int(max_memory*1e6/(comp*2*nao*16*BLKSIZE))*BLKSIZE, ngrids)
-            blksize = max(blksize, BLKSIZE)
+            blksize = max(1, int(max_memory*1e6/(comp*2*nao*16*BLKSIZE)))*BLKSIZE
+            blksize = min(blksize, ngrids, BLKSIZE*1200)
         if non0tab is None:
             non0tab = grids.non0tab
         if non0tab is None:
@@ -1126,7 +1126,8 @@ class _KNumInt(numint._NumInt):
                  non0tab=None, xctype='LDA', spin=0, verbose=None):
         nkpts = len(ao_kpts)
         nao = ao_kpts[0].shape[-1]
-        mat = numpy.empty((nkpts,nao,nao), dtype=numpy.complex128)
+        dtype = numpy.result_type(rho, *ao_kpts)
+        mat = numpy.empty((nkpts,nao,nao), dtype=dtype)
         for k in range(nkpts):
             mat[k] = eval_mat(cell, ao_kpts[k], weight, rho, vxc,
                               non0tab, xctype, spin, verbose)
@@ -1135,7 +1136,8 @@ class _KNumInt(numint._NumInt):
     def _fxc_mat(self, cell, ao_kpts, wv, non0tab, xctype, ao_loc):
         nkpts = len(ao_kpts)
         nao = ao_kpts[0].shape[-1]
-        mat = numpy.empty((nkpts,nao,nao), dtype=numpy.complex128)
+        dtype = numpy.result_type(wv, *ao_kpts)
+        mat = numpy.empty((nkpts,nao,nao), dtype=dtype)
         for k in range(nkpts):
             mat[k] = _fxc_mat(cell, ao_kpts[k], wv, non0tab, xctype, ao_loc)
         return mat
@@ -1151,8 +1153,8 @@ class _KNumInt(numint._NumInt):
         comp = (deriv+1)*(deriv+2)*(deriv+3)//6
 # NOTE to index grids.non0tab, the blksize needs to be the integer multiplier of BLKSIZE
         if blksize is None:
-            blksize = min(int(max_memory*1e6/(comp*2*nkpts*nao*16*BLKSIZE))*BLKSIZE, ngrids)
-            blksize = max(blksize, BLKSIZE)
+            blksize = max(1, int(max_memory*1e6/(comp*2*nkpts*nao*16*BLKSIZE)))*BLKSIZE
+            blksize = min(blksize, ngrids, BLKSIZE*1200)
         if non0tab is None:
             non0tab = grids.non0tab
         if non0tab is None:

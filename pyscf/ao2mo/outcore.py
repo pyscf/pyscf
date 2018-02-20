@@ -6,6 +6,7 @@ import time
 import tempfile
 import numpy
 import h5py
+from pyscf import gto
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
@@ -18,7 +19,7 @@ IOBLK_SIZE = 256  # MB
 IOBUF_ROW_MIN = 160
 
 def full(mol, mo_coeff, erifile, dataname='eri_mo', tmpdir=None,
-         intor='int2e_sph', aosym='s4', comp=1,
+         intor='int2e_sph', aosym='s4', comp=None,
          max_memory=2000, ioblk_size=IOBLK_SIZE, verbose=logger.WARN, compact=True):
     r'''Transfer arbitrary spherical AO integrals to MO integrals for given orbitals
 
@@ -104,7 +105,7 @@ def full(mol, mo_coeff, erifile, dataname='eri_mo', tmpdir=None,
     return erifile
 
 def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
-            intor='int2e_sph', aosym='s4', comp=1,
+            intor='int2e_sph', aosym='s4', comp=None,
             max_memory=2000, ioblk_size=IOBLK_SIZE, verbose=logger.WARN, compact=True):
     r'''For the given four sets of orbitals, transfer arbitrary spherical AO
     integrals to MO integrals on the fly.
@@ -209,6 +210,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
     nao = mo_coeffs[0].shape[0]
     assert(nao == mol.nao_nr())
 
+    intor, comp = gto.moleintor._get_intor_and_comp(mol._add_suffix(intor), comp)
     aosym = _stand_sym_code(aosym)
     if aosym in ('s4', 's2kl'):
         nao_pair = nao * (nao+1) // 2
@@ -238,12 +240,18 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
     else:
         assert(isinstance(erifile, h5py.Group))
         feri = erifile
-    if comp == 1:
+
+    if nij_pair == 0 or nkl_pair == 0:
+        chunks = None
+    elif comp == 1:
         chunks = (nmoj,nmol)
+    else:
+        chunks = (1,nmoj,nmol)
+
+    if comp == 1:
         h5d_eri = feri.create_dataset(dataname, (nij_pair,nkl_pair),
                                       'f8', chunks=chunks)
     else:
-        chunks = (1,nmoj,nmol)
         h5d_eri = feri.create_dataset(dataname, (comp,nij_pair,nkl_pair),
                                       'f8', chunks=chunks)
 
@@ -386,10 +394,7 @@ def half_e1(mol, mo_coeffs, swapfile,
 
     '''
     time0 = (time.clock(), time.time())
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(mol.stdout, verbose)
+    log = logger.new_logger(mol, verbose)
 
     nao = mo_coeffs[0].shape[0]
     aosym = _stand_sym_code(aosym)
@@ -410,7 +415,7 @@ def half_e1(mol, mo_coeffs, swapfile,
                    IOBUF_ROW_MIN)
     shranges = guess_shell_ranges(mol, (aosym in ('s4', 's2kl')), e1buflen, aobuflen)
     if ao2mopt is None:
-        if intor in ('int2e_sph', 'int2e_cart'):
+        if intor == 'int2e':
             ao2mopt = _ao2mo.AO2MOpt(mol, intor, 'CVHFnr_schwarz_cond',
                                      'CVHFsetnr_direct_scf')
         else:
@@ -483,7 +488,7 @@ def _transpose_to_h5g(h5group, key, dat, blksize, chunks=None):
     for col0, col1 in prange(0, ncol, blksize):
         dset[col0:col1] = lib.transpose(dat[:,col0:col1])
 
-def full_iofree(mol, mo_coeff, intor='int2e_sph', aosym='s4', comp=1,
+def full_iofree(mol, mo_coeff, intor='int2e_sph', aosym='s4', comp=None,
                 max_memory=2000, ioblk_size=IOBLK_SIZE, verbose=logger.WARN, compact=True):
     r'''Transfer arbitrary spherical AO integrals to MO integrals for given orbitals
     This function is a wrap for :func:`ao2mo.outcore.general`.  It's not really
@@ -578,7 +583,7 @@ def full_iofree(mol, mo_coeff, intor='int2e_sph', aosym='s4', comp=1,
             del(feri[key])
         return eri
 
-def general_iofree(mol, mo_coeffs, intor='int2e_sph', aosym='s4', comp=1,
+def general_iofree(mol, mo_coeffs, intor='int2e_sph', aosym='s4', comp=None,
                    max_memory=2000, ioblk_size=IOBLK_SIZE, verbose=logger.WARN, compact=True):
     r'''For the given four sets of orbitals, transfer arbitrary spherical AO
     integrals to MO integrals on the fly.  This function is a wrap for

@@ -19,15 +19,16 @@ static int eval_xc(xc_functional fun, int deriv, enum xc_vars vars,
         int outlen = xc_output_length(fun);
 
         //xc_eval_vec(fun, np, rho, ncol, output, outlen);
-#pragma omp parallel default(none) shared(fun, rho, output, np, ncol, outlen)
+#pragma omp parallel default(none) \
+        shared(fun, rho, output, np, ncol, outlen)
 {
         int i;
 #pragma omp for nowait schedule(static)
         for (i=0; i < np; i++) {
                 xc_eval(fun, rho+i*ncol, output+i*outlen);
         }
-        return outlen;
 }
+        return outlen;
 }
 
 void XCFUN_eval_xc(int nfn, int *fn_id, double *fac,

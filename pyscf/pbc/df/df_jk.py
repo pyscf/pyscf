@@ -15,6 +15,8 @@ import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc import tools
+from pyscf.pbc import gto
+from pyscf.pbc.df import ft_ao
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, member
 
 def density_fit(mf, auxbasis=None, mesh=None, with_df=None):
@@ -385,6 +387,13 @@ def zdotNC(aR, aI, bR, bI, alpha=1, cR=None, cI=None, beta=0):
     return cR, cI
 
 def _ewald_exxdiv_for_G0(cell, kpts, dms, vk, kpts_band=None):
+    if (cell.dimension == 1 or
+        (cell.dimension == 2 and cell.low_dim_ft_type is None)):
+        return _ewald_exxdiv_1d2d(cell, kpts, dms, vk, kpts_band)
+    else:
+        return _ewald_exxdiv_3d(cell, kpts, dms, vk, kpts_band)
+
+def _ewald_exxdiv_3d(cell, kpts, dms, vk, kpts_band=None):
     s = cell.pbc_intor('int1e_ovlp_sph', hermi=1, kpts=kpts)
     madelung = tools.pbc.madelung(cell, kpts)
     if kpts is None:
@@ -394,17 +403,64 @@ def _ewald_exxdiv_for_G0(cell, kpts, dms, vk, kpts_band=None):
         if kpts_band is None or is_zero(kpts_band-kpts):
             for i,dm in enumerate(dms):
                 vk[i] += madelung * reduce(numpy.dot, (s, dm, s))
-    else:  # kpts.shape == (*,3)
-        if kpts_band is None:
-            for k in range(len(kpts)):
+
+    elif kpts_band is None or numpy.array_equal(kpts, kpts_band):
+        for k in range(len(kpts)):
+            for i,dm in enumerate(dms):
+                vk[i,k] += madelung * reduce(numpy.dot, (s[k], dm[k], s[k]))
+    else:
+        for k, kpt in enumerate(kpts):
+            for kp in member(kpt, kpts_band.reshape(-1,3)):
                 for i,dm in enumerate(dms):
-                    vk[i,k] += madelung * reduce(numpy.dot, (s[k], dm[k], s[k]))
+                    vk[i,kp] += madelung * reduce(numpy.dot, (s[k], dm[k], s[k]))
+
+def _ewald_exxdiv_1d2d(cell, kpts, dms, vk, kpts_band=None):
+    s = cell.pbc_intor('int1e_ovlp_sph', hermi=1, kpts=kpts)
+    madelung = tools.pbc.madelung(cell, kpts)
+
+    Gv, Gvbase, kws = cell.get_Gv_weights(cell.mesh)
+    G0idx, SI_on_z = gto.cell._model_uniform_charge_SI_on_z(cell, Gv)
+    coulG = 4*numpy.pi / numpy.linalg.norm(Gv[G0idx], axis=1)**2
+    wcoulG = coulG * kws[G0idx]
+
+    aoao = ft_ao._ft_aopair_kpts(cell, Gv[G0idx], kptjs=kpts)
+    if kpts is None:
+        _ewald_exxdiv_1d2d_get_vk_(vk, dms, s, SI_on_z, aoao[0], wcoulG,
+                                   madelung, 1)
+
+    elif numpy.shape(kpts) == (3,):
+        if kpts_band is None or is_zero(kpts_band-kpts):
+            _ewald_exxdiv_1d2d_get_vk_(vk, dms, s, SI_on_z, aoao[0], wcoulG,
+                                       madelung, 1)
+
+    elif kpts_band is None or numpy.array_equal(kpts, kpts_band):
+        nkpts = len(kpts)
+        for k in range(nkpts):
+            _ewald_exxdiv_1d2d_get_vk_(vk[:,k], dms[:,k], s[k], SI_on_z,
+                                       aoao[k], wcoulG, madelung, 1./nkpts)
+    else:
+        nkpts = len(kpts)
+        for k, kpt in enumerate(kpts):
+            for kp in member(kpt, kpts_band.reshape(-1,3)):
+                _ewald_exxdiv_1d2d_get_vk_(vk[:,kp], dms[:,k], s[k], SI_on_z,
+                                           aoao[k], wcoulG, madelung, 1./nkpts)
+
+def _ewald_exxdiv_1d2d_get_vk_(vk, dms, s, SI_on_z, aoao, wcoulG, madelung, kweight):
+    aoaomod = aoao - numpy.einsum('g,ij->gij', SI_on_z, s)
+    tmp = numpy.einsum('gij,g,g->ij', aoaomod, wcoulG, SI_on_z.conj())
+    for i,dm in enumerate(dms):
+        #:ktmp  = kweight * lib.einsum('gkl,jk,g,gij->il', aoao   , dm, wcoulG, aoao   .conj())
+        #:ktmp -= kweight * lib.einsum('gkl,jk,g,gij->il', aoaomod, dm, wcoulG, aoaomod.conj())
+        #:ktmp -= kweight * (SI_on_z.conj()*wcoulG*SI_on_z).sum() * reduce(numpy.dot, (s, dm, s))
+        #:ktmp += madelung * reduce(numpy.dot, (s, dm, s))
+        ktmp  = lib.einsum('ij,jk,kl->il', tmp, dm, s.conj())
+        ktmp += lib.einsum('ij,jk,kl->il', s, dm, tmp.conj())
+        ktmp *= kweight
+        ktmp += madelung * reduce(numpy.dot, (s, dm, s))
+        if vk.dtype == numpy.double:
+            vk[i] += ktmp.real
         else:
-            kpts_band = kpts_band.reshape(-1,3)
-            for k, kpt in enumerate(kpts):
-                for kp in member(kpt, kpts_band):
-                    for i,dm in enumerate(dms):
-                        vk[i,kp] += madelung * reduce(numpy.dot, (s[k], dm[k], s[k]))
+            vk[i] += ktmp
 
 
 if __name__ == '__main__':

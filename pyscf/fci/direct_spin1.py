@@ -408,13 +408,15 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
 
     if ci0 is None:
         if hasattr(fci, 'get_init_guess'):
-            ci0 = fci.get_init_guess(norb, nelec, nroots, hdiag)
+            ci0 = lambda: fci.get_init_guess(norb, nelec, nroots, hdiag)
         else:
-            ci0 = []
-            for i in range(nroots):
-                x = numpy.zeros(na*nb)
-                x[addr[i]] = 1
-                ci0.append(x)
+            def ci0():  # lazy initialization to reduce memory footprint
+                x0 = []
+                for i in range(nroots):
+                    x = numpy.zeros(na*nb)
+                    x[addr[i]] = 1
+                    x0.append(x)
+                return x0
     else:
         if isinstance(ci0, numpy.ndarray) and ci0.size == na*nb:
             ci0 = [ci0.ravel()]
@@ -552,6 +554,7 @@ class FCISolver(lib.StreamObject):
         self.orbsym = None
         self.wfnsym = None
         self.threads = None
+        self.lessio = False
 
         self.converged = False
         self._keys = set(self.__dict__.keys())
@@ -597,13 +600,9 @@ class FCISolver(lib.StreamObject):
             self.converged = True
             return scipy.linalg.eigh(op)
 
-        if kwargs['nroots'] == 1 and x0[0].size > 6.5e7: # 500MB
-            lessio = True
-        else:
-            lessio = False
         self.converged, e, ci = \
                 lib.davidson1(lambda xs: [op(x) for x in xs],
-                              x0, precond, lessio=lessio, **kwargs)
+                              x0, precond, lessio=self.lessio, **kwargs)
         if kwargs['nroots'] == 1:
             self.converged = self.converged[0]
             e = e[0]

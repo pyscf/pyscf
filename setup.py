@@ -103,7 +103,7 @@ else:
 # default include and library path
 #
 def check_version(version_to_test, version_min):
-    return cmp(version_to_test.split('.'), version_min.split('.')) >= 0
+    return version_to_test.split('.') >= version_min.split('.')
 
 # version : the lowest version
 def search_lib_path(libname, extra_paths=None, version=None):

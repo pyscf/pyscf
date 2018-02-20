@@ -69,7 +69,7 @@ void VXCgen_grid(double *out, double *coords, double *atm_coords,
 {
         const size_t Ngrids = ngrids;
         int i, j;
-        double dx, dy, dz, dist;
+        double dx, dy, dz;
         double *atom_dist = malloc(sizeof(double) * natm*natm);
         for (i = 0; i < natm; i++) {
                 for (j = 0; j < i; j++) {

@@ -138,8 +138,8 @@ static void _nr3c_fill_kk(int (*intor)(), void (*fsort)(),
         int kshloc[ksh1-ksh0+1];
         int nkshloc = shloc_partition(kshloc, ao_loc, ksh0, ksh1, dkmax);
 
-        int i, m, msh0, msh1, dijm, dijmc, dijmk;
-        int ksh, dk, iL0, iL1, iL, jL, iLcount, empty;
+        int i, m, msh0, msh1, dijm, dijmc, dijmk, empty;
+        int ksh, dk, iL0, iL, jL, iLcount;
         int shls[3];
         double *bufkk_r, *bufkk_i, *bufkL_r, *bufkL_i, *bufL, *pbuf, *cache;
         int (*fprescreen)();
@@ -414,9 +414,9 @@ static void _nr3c_fill_k(int (*intor)(), void (*fsort)(),
         int kshloc[ksh1-ksh0+1];
         int nkshloc = shloc_partition(kshloc, ao_loc, ksh0, ksh1, dkmax);
 
-        int i, j, m, msh0, msh1, dijmc;
+        int i, m, msh0, msh1, dijmc, empty;
         size_t dijmk;
-        int ksh, dk, iL0, iL1, iL, jL, jLcount, empty;
+        int ksh, dk, iL, jL, jLcount;
         int shls[3];
         double *bufexp_r = buf;
         double *bufexp_i = bufexp_r + nimgs * nkpts;
@@ -503,7 +503,6 @@ static void sort3c_ks2_igtj(double complex *out, double *bufr, double *bufi,
         const int ish0 = shls_slice[0];
         const int ish1 = shls_slice[1];
         const int jsh0 = shls_slice[2];
-        const int jsh1 = shls_slice[3];
         const int ksh0 = shls_slice[4];
         const int ksh1 = shls_slice[5];
         const size_t naok = ao_loc[ksh1] - ao_loc[ksh0];
@@ -519,7 +518,7 @@ static void sort3c_ks2_igtj(double complex *out, double *bufr, double *bufi,
         const int jp = ao_loc[jsh] - ao_loc[jsh0];
         out += (ao_loc[ish]*(ao_loc[ish]+1)/2-off0 + jp) * naok;
 
-        int i, j, k, ij, kk, ik, jk, ksh, ic, dk, dijk;
+        int i, j, k, ij, kk, ksh, ic, dk, dijk;
         size_t off;
         double *pbr, *pbi;
         double complex *pout;
@@ -555,7 +554,6 @@ static void sort3c_ks2_ieqj(double complex *out, double *bufr, double *bufi,
         const int ish0 = shls_slice[0];
         const int ish1 = shls_slice[1];
         const int jsh0 = shls_slice[2];
-        const int jsh1 = shls_slice[3];
         const int ksh0 = shls_slice[4];
         const int ksh1 = shls_slice[5];
         const size_t naok = ao_loc[ksh1] - ao_loc[ksh0];
@@ -571,7 +569,7 @@ static void sort3c_ks2_ieqj(double complex *out, double *bufr, double *bufi,
         const int jp = ao_loc[jsh] - ao_loc[jsh0];
         out += (ao_loc[ish]*(ao_loc[ish]+1)/2-off0 + jp) * naok;
 
-        int i, j, k, ij, kk, ik, jk, ksh, ic, dk, dijk;
+        int i, j, k, ij, kk, ksh, ic, dk, dijk;
         size_t off;
         double *pbr, *pbi;
         double complex *pout;
@@ -646,10 +644,9 @@ static void sort3c_gs1(double *out, double *in, int *shls_slice, int *ao_loc,
         const int jp = ao_loc[jsh] - ao_loc[jsh0];
         const int dij = di * dj;
         const int dkmax = ao_loc[msh1] - ao_loc[msh0];
-        const size_t dijmc = dij * dkmax * comp;
         out += (ip * naoj + jp) * naok;
 
-        int i, j, k, ij, ksh, ic, dk, dijk;
+        int i, j, k, ksh, ic, dk, dijk;
         double *pin, *pout;
 
         for (ksh = msh0; ksh < msh1; ksh++) {
@@ -683,7 +680,6 @@ static void _nr3c_fill_g(int (*intor)(), void (*fsort)(), double *out, int nkpts
         const int jsh0 = shls_slice[2];
         const int ksh0 = shls_slice[4];
         const int ksh1 = shls_slice[5];
-        const size_t naok = ao_loc[ksh1] - ao_loc[ksh0];
 
         jsh += jsh0;
         ish += ish0;
@@ -696,7 +692,7 @@ static void _nr3c_fill_g(int (*intor)(), void (*fsort)(), double *out, int nkpts
         int kshloc[ksh1-ksh0+1];
         int nkshloc = shloc_partition(kshloc, ao_loc, ksh0, ksh1, dkmax);
 
-        int i, j, m, msh0, msh1, dijm;
+        int i, m, msh0, msh1, dijm;
         int ksh, dk, iL, jL, dijkc;
         int shls[3];
 
@@ -765,11 +761,9 @@ void PBCnr3c_fill_gs1(int (*intor)(), double *out, int nkpts_ij,
 static void sort3c_gs2_igtj(double *out, double *in, int *shls_slice, int *ao_loc,
                             int comp, int ish, int jsh, int msh0, int msh1)
 {
-        double *out0 = out;
         const int ish0 = shls_slice[0];
         const int ish1 = shls_slice[1];
         const int jsh0 = shls_slice[2];
-        const int jsh1 = shls_slice[3];
         const int ksh0 = shls_slice[4];
         const int ksh1 = shls_slice[5];
         const size_t naok = ao_loc[ksh1] - ao_loc[ksh0];
@@ -808,11 +802,9 @@ static void sort3c_gs2_igtj(double *out, double *in, int *shls_slice, int *ao_lo
 static void sort3c_gs2_ieqj(double *out, double *in, int *shls_slice, int *ao_loc,
                             int comp, int ish, int jsh, int msh0, int msh1)
 {
-        double *out0 = out;
         const int ish0 = shls_slice[0];
         const int ish1 = shls_slice[1];
         const int jsh0 = shls_slice[2];
-        const int jsh1 = shls_slice[3];
         const int ksh0 = shls_slice[4];
         const int ksh1 = shls_slice[5];
         const size_t naok = ao_loc[ksh1] - ao_loc[ksh0];
@@ -901,11 +893,8 @@ void PBCnr3c_drv(int (*intor)(), void (*fill)(), double complex *eri,
         const int ish1 = shls_slice[1];
         const int jsh0 = shls_slice[2];
         const int jsh1 = shls_slice[3];
-        const int ksh0 = shls_slice[4];
-        const int ksh1 = shls_slice[5];
         const int nish = ish1 - ish0;
         const int njsh = jsh1 - jsh0;
-        const int nksh = ksh1 - ksh0;
         double *expkL_r = malloc(sizeof(double) * nimgs*nkpts * OF_CMPLX);
         double *expkL_i = expkL_r + nimgs*nkpts;
         int i;
@@ -935,7 +924,7 @@ void PBCnr3c_drv(int (*intor)(), void (*fill)(), double complex *eri,
                Ls, expkL_r, expkL_i, kptij_idx, shls_slice, ao_loc, cintopt, pbcopt, \
                atm, natm, bas, nbas, env, count)
 {
-        int ish, jsh, ij, i;
+        int ish, jsh, ij;
         int nenv = PBCsizeof_env(shls_slice, atm, natm, bas, nbas, env);
         nenv = MAX(nenv, PBCsizeof_env(shls_slice+2, atm, natm, bas, nbas, env));
         nenv = MAX(nenv, PBCsizeof_env(shls_slice+4, atm, natm, bas, nbas, env));
@@ -1023,8 +1012,8 @@ static void _nr2c_fill(int (*intor)(), double complex *out,
         int ishloc[ish1-ish0+1];
         int nishloc = shloc_partition(ishloc, ao_loc, ish0, ish1, dimax);
 
-        int i, j, m, msh0, msh1, dmjc, ish, di;
-        int jL, empty;
+        int m, msh0, msh1, dmjc, ish, di, empty;
+        int jL;
         int shls[2];
         double *bufk_r = buf;
         double *bufk_i, *bufL, *pbuf, *cache;

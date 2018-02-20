@@ -50,8 +50,8 @@ int PBCrcut_screen(int *shls, PBCOpt *opt, int *atm, int *bas, double *env)
         return (rr < opt->rrcut[ish] || rr < opt->rrcut[jsh]);
 }
 
-int PBCset_rcut_cond(PBCOpt *opt, double *rcut,
-                     int *atm, int natm, int *bas, int nbas, double *env)
+void PBCset_rcut_cond(PBCOpt *opt, double *rcut,
+                      int *atm, int natm, int *bas, int nbas, double *env)
 {
         if (opt->rrcut) {
                 free(opt->rrcut);

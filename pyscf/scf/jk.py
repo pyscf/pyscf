@@ -20,7 +20,7 @@ from pyscf.scf import _vhf
 
 
 def get_jk(mols, dms, scripts=['ijkl,ji->kl'], intor='int2e_sph',
-           aosym='s1', comp=1, hermi=0, shls_slice=None, verbose=logger.WARN):
+           aosym='s1', comp=None, hermi=0, shls_slice=None, verbose=logger.WARN):
     '''Compute J/K matrices for the given density matrix
 
     Args:
@@ -104,6 +104,7 @@ def get_jk(mols, dms, scripts=['ijkl,ji->kl'], intor='int2e_sph',
     ...                 shls_slice=(0,1,0,1,0,mol.nbas,0,mol.nbas))
     '''
     if isinstance(mols, (tuple, list)):
+        intor, comp = gto.moleintor._get_intor_and_comp(mols[0]._add_suffix(intor), comp)
         assert(len(mols) == 4)
         assert(mols[0].cart == mols[1].cart == mols[2].cart == mols[3].cart)
         if shls_slice is None:
@@ -125,6 +126,7 @@ def get_jk(mols, dms, scripts=['ijkl,ji->kl'], intor='int2e_sph',
             shls_slice[m] += bas_start[m]
         shls_slice = shls_slice.flatten()
     else:
+        intor, comp = gto.moleintor._get_intor_and_comp(mols._add_suffix(intor), comp)
         atm, bas, env = mols._atm, mols._bas, mols._env
         if shls_slice is None:
             shls_slice = (0, mols.nbas) * 4

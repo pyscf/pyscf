@@ -30,7 +30,6 @@ static void fillnr_s8(int (*intor)(), int (*fprescreen)(), double *eri,
         const int natm = envs->natm;
         const int nbas = envs->nbas;
         const int *ao_loc = envs->ao_loc;
-        const int *shls_slice = envs->shls_slice;
         const CINTOpt *cintopt = envs->cintopt;
         const int nao = ao_loc[nbas];
         const size_t nao2 = nao * nao;
@@ -38,7 +37,7 @@ static void fillnr_s8(int (*intor)(), int (*fprescreen)(), double *eri,
         const int dj = ao_loc[jsh+1] - ao_loc[jsh];
         double *cache = eri + di * dj * nao2;
         int dims[4] = {nao, nao, dj, di};
-        int ksh, lsh, dk, dl, ij, k, l;
+        int ksh, lsh, ij, k, l;
         int shls[4];
         double *peri;
 
@@ -70,7 +69,6 @@ static void store_ij(int (*intor)(), double *eri, double *buf, int ish, int jsh,
 {
         const int nbas = envs->nbas;
         const int *ao_loc = envs->ao_loc;
-        const CINTOpt *cintopt = envs->cintopt;
         const int nao = ao_loc[nbas];
         const size_t nao2 = nao * nao;
         const int di = ao_loc[ish+1] - ao_loc[ish];

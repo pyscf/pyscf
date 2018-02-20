@@ -37,7 +37,7 @@ void GTOint2c(int (*intor)(), double *mat, int comp, int hermi,
         shared(intor, mat, comp, hermi, ao_loc, opt, atm, natm, bas, nbas, env)
 {
         int dims[] = {naoi, naoj};
-        int ish, jsh, ij, di, dj, i0, j0;
+        int ish, jsh, ij, i0, j0;
         int shls[2];
         double *cache = malloc(sizeof(double) * cache_size);
 #pragma omp for schedule(dynamic, 4)
@@ -87,7 +87,7 @@ void GTOint2c_spinor(int (*intor)(), double complex *mat, int comp, int hermi,
         shared(intor, mat, comp, hermi, ao_loc, opt, atm, natm, bas, nbas, env)
 {
         int dims[] = {naoi, naoj};
-        int ish, jsh, ij, di, dj, i0, j0;
+        int ish, jsh, ij, i0, j0;
         int shls[2];
         double *cache = malloc(sizeof(double) * cache_size);
 #pragma omp for schedule(dynamic, 4)

@@ -55,14 +55,14 @@ def get_pp_loc_part2(cell, kpts=None):
         kpts_lst = numpy.reshape(kpts, (-1,3))
     nkpts = len(kpts_lst)
 
-    intors = ('int3c2e_sph', 'int3c1e_sph', 'int3c1e_r2_origk_sph',
-              'int3c1e_r4_origk_sph', 'int3c1e_r6_origk_sph')
+    intors = ('int3c2e', 'int3c1e', 'int3c1e_r2_origk',
+              'int3c1e_r4_origk', 'int3c1e_r6_origk')
     kptij_lst = numpy.hstack((kpts_lst,kpts_lst)).reshape(-1,2,3)
     buf = 0
     for cn in range(1, 5):
         fakecell = fake_cell_vloc(cell, cn)
         if fakecell.nbas > 0:
-            v = incore.aux_e2(cell, fakecell, intors[cn], aosym='s2',
+            v = incore.aux_e2(cell, fakecell, intors[cn], aosym='s2', comp=1,
                               kptij_lst=kptij_lst)
             buf += numpy.einsum('...i->...', v)
 

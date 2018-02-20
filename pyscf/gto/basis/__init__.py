@@ -295,36 +295,17 @@ def _parse_pople_basis(basis, symb):
     else:
         return tuple([ALIAS[mbas]] + convert(extension.split(',')[0]))
 
-def parse(string, symb=None):
-    '''Parse the NWChem format basis or ECP text, return an internal basis (ECP)
-    format which can be assigned to :attr:`Mole.basis` or :attr:`Mole.ecp`
-
-    Args:
-        string : Blank linke and the lines of "BASIS SET" and "END" will be ignored
-
-    Examples:
-
-    >>> mol = gto.Mole()
-    >>> mol.basis = {'O': gto.basis.parse("""
-    ... #BASIS SET: (6s,3p) -> [2s,1p]
-    ... C    S
-    ...      71.6168370              0.15432897
-    ...      13.0450960              0.53532814
-    ...       3.5305122              0.44463454
-    ... C    SP
-    ...       2.9412494             -0.09996723             0.15591627
-    ...       0.6834831              0.39951283             0.60768372
-    ...       0.2222899              0.70011547             0.39195739
-    ... """)}
-    '''
+def parse(string, symb=None, optimize=True):
     if 'ECP' in string:
         return parse_nwchem.parse_ecp(string, symb)
     else:
         return parse_nwchem.parse(string, symb)
+parse.__doc__ = parse_nwchem.parse.__doc__
 
 def parse_ecp(string, symb=None):
     # TODO: catch KeyError and provide suggestion for the possible keys
     return parse_nwchem.parse_ecp(string, symb)
+parse_ecp.__doc__ = parse_nwchem.parse_ecp.__doc__
 
 def load(filename_or_basisname, symb):
     '''Convert the basis of the given symbol to internal format
@@ -356,9 +337,12 @@ def load(filename_or_basisname, symb):
         try:
             return parse_nwchem.parse(filename_or_basisname, symb)
         except KeyError:
-            return parse_nwchem.parse(filename_or_basisname)
+            try:
+                return parse_nwchem.parse(filename_or_basisname)
+            except IndexError:
+                raise KeyError('Invalid basis name %s' % filename_or_basisname)
         except IndexError:
-            raise RuntimeError('Basis %s not found' % filename_or_basisname)
+            raise KeyError('Basis %s not found' % filename_or_basisname)
 
     if name in ALIAS:
         basmod = ALIAS[name]

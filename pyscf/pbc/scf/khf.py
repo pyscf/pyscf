@@ -375,14 +375,15 @@ class KSCF(pbchf.SCF):
         if cell is None:
             cell = self.cell
         dm_kpts = None
-        if key.lower() == '1e':
+        key = key.lower()
+        if key == '1e' or key == 'hcore':
             dm_kpts = self.init_guess_by_1e(cell)
         elif getattr(cell, 'natm', 0) == 0:
             logger.info(self, 'No atom found in cell. Use 1e initial guess')
             dm_kpts = self.init_guess_by_1e(cell)
-        elif key.lower() == 'atom':
+        elif key == 'atom':
             dm = self.init_guess_by_atom(cell)
-        elif key.lower().startswith('chk'):
+        elif key[:3] == 'chk':
             try:
                 dm_kpts = self.from_chk()
             except (IOError, KeyError):

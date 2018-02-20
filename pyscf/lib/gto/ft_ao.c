@@ -1036,7 +1036,7 @@ void GTO_Gv_orth(double complex *out, double aij, double *rij,
 
         const double cutoff = EXPCUTOFF * aij * 4;
         int n, ix, iy, iz;
-        double Gr, kk;
+        double Gr;
         for (n = 0; n < nx+ny+nz; n++) {
                 kkpool[n] = -1;
         }
@@ -1457,7 +1457,6 @@ void GTO_ft_fill_s2(int (*intor)(), int (*eval_aopair)(), void (*eval_gz)(),
         const int ish0 = shls_slice[0];
         const int ish1 = shls_slice[1];
         const int jsh0 = shls_slice[2];
-        const int jsh1 = shls_slice[3];
         ish += ish0;
         jsh += jsh0;
         const int ip = ao_loc[ish];

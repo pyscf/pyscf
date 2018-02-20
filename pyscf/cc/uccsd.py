@@ -62,7 +62,7 @@ def update_amps(cc, t1, t2, eris):
     mem_now = lib.current_memory()[0]
     max_memory = max(0, cc.max_memory - mem_now)
     if nvira > 0 and nocca > 0:
-        blksize = max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvira**3*3)))
+        blksize = max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvira**3*3+1)))
         for p0,p1 in lib.prange(0, nocca, blksize):
             ovvv = eris.get_ovvv(slice(p0,p1))  # ovvv = eris.ovvv[p0:p1]
             ovvv = ovvv - ovvv.transpose(0,3,2,1)
@@ -75,7 +75,7 @@ def update_amps(cc, t1, t2, eris):
             ovvv = tmp1aa = None
 
     if nvirb > 0 and noccb > 0:
-        blksize = max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvirb**3*3)))
+        blksize = max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvirb**3*3+1)))
         for p0,p1 in lib.prange(0, noccb, blksize):
             OVVV = eris.get_OVVV(slice(p0,p1))  # OVVV = eris.OVVV[p0:p1]
             OVVV = OVVV - OVVV.transpose(0,3,2,1)
@@ -88,7 +88,7 @@ def update_amps(cc, t1, t2, eris):
             OVVV = tmp1bb = None
 
     if nvirb > 0 and nocca > 0:
-        blksize = max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvira*nvirb**2*3)))
+        blksize = max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvira*nvirb**2*3+1)))
         for p0,p1 in lib.prange(0, nocca, blksize):
             ovVV = eris.get_ovVV(slice(p0,p1))  # ovVV = eris.ovVV[p0:p1]
             Fvvb += np.einsum('mf,mfAE->AE', t1a[p0:p1], ovVV)
@@ -101,7 +101,7 @@ def update_amps(cc, t1, t2, eris):
             ovVV = tmp1ab = None
 
     if nvira > 0 and noccb > 0:
-        blksize = max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvirb*nocca**2*3)))
+        blksize = max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvirb*nvira**2*3+1)))
         for p0,p1 in lib.prange(0, noccb, blksize):
             OVvv = eris.get_OVvv(slice(p0,p1))  # OVvv = eris.OVvv[p0:p1]
             Fvva += np.einsum('MF,MFae->ae', t1b[p0:p1], OVvv)
@@ -340,6 +340,8 @@ def energy(cc, t1, t2, eris):
     e += 0.5*np.einsum('ia,jb,iajb',t1b,t1b,eris_OVOV)
     e -= 0.5*np.einsum('ia,jb,ibja',t1b,t1b,eris_OVOV)
     e +=     np.einsum('ia,jb,iajb',t1a,t1b,eris_ovOV)
+    if abs(e.imag) > 1e-4:
+        logger.warn(cc, 'Non-zero imaginary part found in UCCSD energy %s', e)
     return e.real
 
 
@@ -890,51 +892,55 @@ def _make_eris_outcore(mycc, mo_coeff=None):
     mol = mycc.mol
     # <ij||pq> = <ij|pq> - <ij|qp> = (ip|jq) - (iq|jp)
     tmpf = lib.H5TmpFile()
-    ao2mo.general(mol, (orboa,moa,moa,moa), tmpf, 'aa')
-    buf = np.empty((nmoa,nmoa,nmoa))
-    for i in range(nocca):
-        lib.unpack_tril(tmpf['aa'][i*nmoa:(i+1)*nmoa], out=buf)
-        eris.oooo[i] = buf[:nocca,:nocca,:nocca]
-        eris.ovoo[i] = buf[nocca:,:nocca,:nocca]
-        eris.ovov[i] = buf[nocca:,:nocca,nocca:]
-        eris.oovv[i] = buf[:nocca,nocca:,nocca:]
-        eris.ovvo[i] = buf[nocca:,nocca:,:nocca]
-        eris.ovvv[i] = lib.pack_tril(buf[nocca:,nocca:,nocca:])
-    del(tmpf['aa'])
+    if nocca > 0:
+        ao2mo.general(mol, (orboa,moa,moa,moa), tmpf, 'aa')
+        buf = np.empty((nmoa,nmoa,nmoa))
+        for i in range(nocca):
+            lib.unpack_tril(tmpf['aa'][i*nmoa:(i+1)*nmoa], out=buf)
+            eris.oooo[i] = buf[:nocca,:nocca,:nocca]
+            eris.ovoo[i] = buf[nocca:,:nocca,:nocca]
+            eris.ovov[i] = buf[nocca:,:nocca,nocca:]
+            eris.oovv[i] = buf[:nocca,nocca:,nocca:]
+            eris.ovvo[i] = buf[nocca:,nocca:,:nocca]
+            eris.ovvv[i] = lib.pack_tril(buf[nocca:,nocca:,nocca:])
+        del(tmpf['aa'])
 
-    buf = np.empty((nmob,nmob,nmob))
-    ao2mo.general(mol, (orbob,mob,mob,mob), tmpf, 'bb')
-    for i in range(noccb):
-        lib.unpack_tril(tmpf['bb'][i*nmob:(i+1)*nmob], out=buf)
-        eris.OOOO[i] = buf[:noccb,:noccb,:noccb]
-        eris.OVOO[i] = buf[noccb:,:noccb,:noccb]
-        eris.OVOV[i] = buf[noccb:,:noccb,noccb:]
-        eris.OOVV[i] = buf[:noccb,noccb:,noccb:]
-        eris.OVVO[i] = buf[noccb:,noccb:,:noccb]
-        eris.OVVV[i] = lib.pack_tril(buf[noccb:,noccb:,noccb:])
-    del(tmpf['bb'])
+    if noccb > 0:
+        buf = np.empty((nmob,nmob,nmob))
+        ao2mo.general(mol, (orbob,mob,mob,mob), tmpf, 'bb')
+        for i in range(noccb):
+            lib.unpack_tril(tmpf['bb'][i*nmob:(i+1)*nmob], out=buf)
+            eris.OOOO[i] = buf[:noccb,:noccb,:noccb]
+            eris.OVOO[i] = buf[noccb:,:noccb,:noccb]
+            eris.OVOV[i] = buf[noccb:,:noccb,noccb:]
+            eris.OOVV[i] = buf[:noccb,noccb:,noccb:]
+            eris.OVVO[i] = buf[noccb:,noccb:,:noccb]
+            eris.OVVV[i] = lib.pack_tril(buf[noccb:,noccb:,noccb:])
+        del(tmpf['bb'])
 
-    buf = np.empty((nmoa,nmob,nmob))
-    ao2mo.general(mol, (orboa,moa,mob,mob), tmpf, 'ab')
-    for i in range(nocca):
-        lib.unpack_tril(tmpf['ab'][i*nmoa:(i+1)*nmoa], out=buf)
-        eris.ooOO[i] = buf[:nocca,:noccb,:noccb]
-        eris.ovOO[i] = buf[nocca:,:noccb,:noccb]
-        eris.ovOV[i] = buf[nocca:,:noccb,noccb:]
-        eris.ooVV[i] = buf[:nocca,noccb:,noccb:]
-        eris.ovVO[i] = buf[nocca:,noccb:,:noccb]
-        eris.ovVV[i] = lib.pack_tril(buf[nocca:,noccb:,noccb:])
-    del(tmpf['ab'])
+    if nocca > 0:
+        buf = np.empty((nmoa,nmob,nmob))
+        ao2mo.general(mol, (orboa,moa,mob,mob), tmpf, 'ab')
+        for i in range(nocca):
+            lib.unpack_tril(tmpf['ab'][i*nmoa:(i+1)*nmoa], out=buf)
+            eris.ooOO[i] = buf[:nocca,:noccb,:noccb]
+            eris.ovOO[i] = buf[nocca:,:noccb,:noccb]
+            eris.ovOV[i] = buf[nocca:,:noccb,noccb:]
+            eris.ooVV[i] = buf[:nocca,noccb:,noccb:]
+            eris.ovVO[i] = buf[nocca:,noccb:,:noccb]
+            eris.ovVV[i] = lib.pack_tril(buf[nocca:,noccb:,noccb:])
+        del(tmpf['ab'])
 
-    buf = np.empty((nmob,nmoa,nmoa))
-    ao2mo.general(mol, (orbob,mob,moa,moa), tmpf, 'ba')
-    for i in range(noccb):
-        lib.unpack_tril(tmpf['ba'][i*nmob:(i+1)*nmob], out=buf)
-        eris.OVoo[i] = buf[noccb:,:nocca,:nocca]
-        eris.OOvv[i] = buf[:noccb,nocca:,nocca:]
-        eris.OVvo[i] = buf[noccb:,nocca:,:nocca]
-        eris.OVvv[i] = lib.pack_tril(buf[noccb:,nocca:,nocca:])
-    del(tmpf['ba'])
+    if noccb > 0:
+        buf = np.empty((nmob,nmoa,nmoa))
+        ao2mo.general(mol, (orbob,mob,moa,moa), tmpf, 'ba')
+        for i in range(noccb):
+            lib.unpack_tril(tmpf['ba'][i*nmob:(i+1)*nmob], out=buf)
+            eris.OVoo[i] = buf[noccb:,:nocca,:nocca]
+            eris.OOvv[i] = buf[:noccb,nocca:,nocca:]
+            eris.OVvo[i] = buf[noccb:,nocca:,:nocca]
+            eris.OVvv[i] = lib.pack_tril(buf[noccb:,nocca:,nocca:])
+        del(tmpf['ba'])
     buf = None
     cput1 = logger.timer_debug1(mycc, 'transforming oopq, ovpq', *cput1)
 

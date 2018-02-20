@@ -218,7 +218,7 @@ def _add_ovvv_(mycc, t1, t2, eris, fvv, t1new, t2new, fswap):
     nocc, nvir = t1.shape
 
     max_memory = mycc.max_memory - lib.current_memory()[0]
-    unit = nocc*nvir**2*3 + nocc**2*nvir
+    unit = nocc*nvir**2*3 + nocc**2*nvir + 1
     blksize = min(nvir, max(BLKMIN, int((max_memory*.9e6/8-t2.size)/unit)))
     log.debug1('max_memory %d MB,  nocc,nvir = %d,%d  blksize = %d',
                max_memory, nocc, nvir, blksize)
@@ -405,6 +405,9 @@ def _contract_s4vvvv_t2(mol, vvvv, t2, out=None, max_memory=2000, verbose=None):
             if vvvv is None, contract t2 to AO-integrals using AO-direct algorithm
     '''
     assert(t2.dtype == numpy.double)
+    if t2.size == 0:
+        return numpy.zeros_like(t2)
+
     _dgemm = lib.numpy_helper._dgemm
     time0 = time.clock(), time.time()
     log = logger.new_logger(mol, verbose)
@@ -620,7 +623,7 @@ def energy(mycc, t1, t2, eris):
     fock = eris.fock
     e = numpy.einsum('ia,ia', fock[:nocc,nocc:], t1) * 2
     max_memory = mycc.max_memory - lib.current_memory()[0]
-    blksize = int(min(nvir, max(BLKMIN, max_memory*.3e6/8/(nocc**2*nvir))))
+    blksize = int(min(nvir, max(BLKMIN, max_memory*.3e6/8/(nocc**2*nvir+1))))
     for p0, p1 in lib.prange(0, nvir, blksize):
         eris_ovvo = eris.ovvo[:,p0:p1]
         tau = t2[:,:,p0:p1] + numpy.einsum('ia,jb->ijab', t1[:,p0:p1], t1)
@@ -822,7 +825,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         t1 = eris.fock[:nocc,nocc:] / eia
         t2 = numpy.empty((nocc,nocc,nvir,nvir))
         max_memory = self.max_memory - lib.current_memory()[0]
-        blksize = int(min(nvir, max(BLKMIN, max_memory*.3e6/8/(nocc**2*nvir))))
+        blksize = int(min(nvir, max(BLKMIN, max_memory*.3e6/8/(nocc**2*nvir+1))))
         self.emp2 = 0
         for p0, p1 in lib.prange(0, nvir, blksize):
             eris_ovvo = eris.ovvo[:,p0:p1]

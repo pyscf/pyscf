@@ -59,7 +59,7 @@ static void dot_ao_dm(double *vm, double *ao, double *dm,
         double beta = 0;
 
         if (has0) {
-                int box_id, bas_id, blen, i, j;
+                int box_id, blen, i, j;
                 size_t b0;
 
                 for (box_id = 0; box_id < nbox; box_id++) {

@@ -49,7 +49,6 @@ static void _ft_fill_k(int (*intor)(), int (*eval_aopair)(), void (*eval_gz)(),
         const int dij = di * dj;
         const char TRANS_N = 'N';
         const double complex Z1 = 1;
-        const double complex Z0 = 0;
 
         int jptrxyz = atm[PTR_COORD+bas[ATOM_OF+jsh*BAS_SLOTS]*ATM_SLOTS];
         int shls[2] = {ish, jsh};
@@ -77,7 +76,6 @@ static void _ft_fill_k(int (*intor)(), int (*eval_aopair)(), void (*eval_gz)(),
                                 if ((*intor)(pbuf, shls, dims, eval_aopair, eval_gz,
                                              Z1, sGv, b, sgxyz, gs, dg,
                                              atm, natm, bas, nbas, env_loc)) {
-                                        empty = 0;
                                 } else {
                                         for (i = 0; i < dijg; i++) {
                                                 pbuf[i] = 0;
@@ -204,7 +202,6 @@ static void sort_s2_igtj(double complex *out, double complex *in,
         const int ish0 = shls_slice[0];
         const int ish1 = shls_slice[1];
         const int jsh0 = shls_slice[2];
-        const int jsh1 = shls_slice[3];
         const size_t off0 = ao_loc[ish0] * (ao_loc[ish0] + 1) / 2;
         const size_t nij = ao_loc[ish1] * (ao_loc[ish1] + 1) / 2 - off0;
         const size_t nijg = nij * NGv;
@@ -246,7 +243,6 @@ static void sort_s2_ieqj(double complex *out, double complex *in,
         const int ish0 = shls_slice[0];
         const int ish1 = shls_slice[1];
         const int jsh0 = shls_slice[2];
-        const int jsh1 = shls_slice[3];
         const size_t off0 = ao_loc[ish0] * (ao_loc[ish0] + 1) / 2;
         const size_t nij = ao_loc[ish1] * (ao_loc[ish1] + 1) / 2 - off0;
         const size_t nijg = nij * NGv;
@@ -388,7 +384,7 @@ static int subgroupGv(double *sGv, int *sgxyz, double *Gv, int *gxyz,
         int dij = dimax * djmax;
         int gblksize = 0xfffffff8 & (bufsize / dij);
 
-        int gs0, gs1, dg;
+        int gs0, dg;
         for (gs0 = 0; gs0 < nGv; gs0 += gblksize) {
                 dg = MIN(nGv-gs0, gblksize);
                 for (i = 0; i < 3; i++) {

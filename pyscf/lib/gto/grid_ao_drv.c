@@ -203,9 +203,9 @@ void GTOeval_cart_iter(FPtr_eval feval,  FPtr_exp fexp, double fac,
         const int atmstart = bas[sh0*BAS_SLOTS+ATOM_OF];
         const int atmend = bas[(sh1-1)*BAS_SLOTS+ATOM_OF]+1;
         const int atmcount = atmend - atmstart;
-        int i, k, l, np, nc, atm_id, bas_id, deg, ao_id;
+        int i, l, np, nc, atm_id, bas_id, deg, ao_id;
         double fac1;
-        double *p_exp, *pcoeff, *pcoord, *pcart, *ri, *pao;
+        double *p_exp, *pcoeff, *pcoord, *ri;
         double *grid2atm = buf; // [atm_id,xyz,grid]
         double *eprim = grid2atm + atmcount*3*BLKSIZE;
 
@@ -249,7 +249,7 @@ void GTOeval_spinor_iter(FPtr_eval feval, FPtr_exp fexp, void (*c2s)(), double f
         const int atmstart = bas[sh0*BAS_SLOTS+ATOM_OF];
         const int atmend = bas[(sh1-1)*BAS_SLOTS+ATOM_OF]+1;
         const int atmcount = atmend - atmstart;
-        int i, k, l, np, nc, atm_id, bas_id, deg, kappa, dcart, ao_id;
+        int i, l, np, nc, atm_id, bas_id, deg, kappa, dcart, ao_id;
         size_t off, di;
         double fac1;
         double *p_exp, *pcoeff, *pcoord, *pcart, *ri;

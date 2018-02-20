@@ -171,7 +171,7 @@ coords = (coords-.5)**2 * 80
 def finger(a):
     return numpy.dot(numpy.cos(numpy.arange(a.size)), a.ravel())
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_sph(self):
         ao = eval_gto(mol, 'GTOval_sph', coords)
         self.assertAlmostEqual(finger(ao), -6.8109234394857712, 9)

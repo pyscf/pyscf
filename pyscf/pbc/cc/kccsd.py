@@ -93,6 +93,8 @@ def energy(cc, t1, t2, eris):
     tau = t2 + 2*t1t1
     e += 0.25 * numpy.dot(tau.flatten(), eris_oovv.flatten())
     e /= nkpts
+    if abs(e.imag) > 1e-4:
+        logger.warn(cc, 'Non-zero imaginary part found in KCCSD energy %s', e)
     return e.real
 
 def update_amps(cc, t1, t2, eris, max_memory=2000):

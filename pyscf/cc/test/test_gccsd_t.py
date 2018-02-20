@@ -57,6 +57,33 @@ class KnownValues(unittest.TestCase):
         e3a = gccsd_t.kernel(mycc, eris, t1, t2)
         self.assertAlmostEqual(e3a, 9877.2780859693339, 6)
 
+    def test_gccsd_t_complex(self):
+        nocc, nvir = 4, 6
+        nmo = nocc + nvir
+        numpy.random.seed(1)
+        eris = cc.gccsd._PhysicistsERIs()
+        h = (numpy.random.random((nmo,nmo)) +
+             numpy.random.random((nmo,nmo)) * .6j - .5-.3j)
+        eris.fock = h + h.T.conj() + numpy.diag(numpy.arange(nmo)) * 2
+        eri1 = (numpy.random.random((nmo,nmo,nmo,nmo)) +
+                numpy.random.random((nmo,nmo,nmo,nmo))*.8j - .5-.4j)
+        eri1 = eri1 - eri1.transpose(0,1,3,2)
+        eri1 = eri1 - eri1.transpose(1,0,2,3)
+        eri1 = eri1 + eri1.transpose(2,3,0,1).conj()
+        eris.ovvv = eri1[:nocc,nocc:,nocc:,nocc:]
+        eris.oovv = eri1[:nocc,:nocc,nocc:,nocc:]
+        eris.ooov = eri1[:nocc,:nocc,:nocc,nocc:]
+        t2 = (numpy.random.random((nocc,nocc,nvir,nvir)) +
+              numpy.random.random((nocc,nocc,nvir,nvir))*.8j - .5-.4j)
+        t2 = t2 - t2.transpose(0,1,3,2)
+        t2 = t2 - t2.transpose(1,0,2,3)
+        t1 = (numpy.random.random((nocc,nvir)) +
+              numpy.random.random((nocc,nvir))*.8j - .5-.4j)
+
+        gcc = cc.gccsd.GCCSD(scf.GHF(gto.M()))
+        self.assertAlmostEqual(gccsd_t.kernel(gcc, eris, t1, t2),
+                               (-104.15886718888137+0.30739952563327672j), 9)
+
 
 if __name__ == "__main__":
     print("Full Tests for GCCSD(T)")
