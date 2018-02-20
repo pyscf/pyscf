@@ -6,6 +6,10 @@ from pyscf import gto, lib
 from pyscf import scf
 from pyscf import cc
 from pyscf import ao2mo
+from pyscf.cc import ccsd
+from pyscf.cc import uccsd
+from pyscf.cc import rccsd
+from pyscf.cc import dfccsd
 
 mol = gto.Mole()
 mol.verbose = 7
@@ -153,9 +157,6 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(cc_scanner(mol1), -76.228972886940639, 6)
 
     def test_init(self):
-        from pyscf.cc import ccsd
-        from pyscf.cc import uccsd
-        from pyscf.cc import dfccsd
         self.assertTrue(isinstance(cc.CCSD(mf), ccsd.CCSD))
         self.assertTrue(isinstance(cc.CCSD(mf.density_fit()), dfccsd.RCCSD))
         self.assertTrue(isinstance(cc.CCSD(mf.newton()), ccsd.CCSD))
@@ -180,6 +181,8 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(isinstance(cc.CCSD(umf.newton().density_fit()), uccsd.UCCSD))
 #        self.assertTrue(not isinstance(cc.CCSD(umf.newton().density_fit()), dfccsd.UCCSD))
 #        self.assertTrue(isinstance(cc.CCSD(umf.density_fit().newton().density_fit()), dfccsd.UCCSD))
+
+        self.assertTrue(isinstance(cc.CCSD(mf, mo_coeff=mf.mo_coeff*1j), rccsd.RCCSD))
 
 if __name__ == "__main__":
     print("Full Tests for H2O")

@@ -67,6 +67,7 @@ def CCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
 def RCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
     __doc__ = ccsd.CCSD.__doc__
     import sys
+    import numpy
     from pyscf import lib
     from pyscf import scf
     from pyscf.cc import dfccsd
@@ -81,6 +82,9 @@ def RCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
     mf = scf.addons.convert_to_rhf(mf)
     if hasattr(mf, 'with_df') and mf.with_df:
         return dfccsd.RCCSD(mf, frozen, mo_coeff, mo_occ)
+
+    elif numpy.iscomplexobj(mo_coeff) or numpy.iscomplexobj(mf.mo_coeff):
+        return rccsd.RCCSD(mf, frozen, mo_coeff, mo_occ)
 
     else:
         return ccsd.CCSD(mf, frozen, mo_coeff, mo_occ)

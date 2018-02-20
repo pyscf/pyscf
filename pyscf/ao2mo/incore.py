@@ -6,6 +6,7 @@
 import sys
 import numpy
 import ctypes
+from pyscf import lib
 from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
 
@@ -113,6 +114,12 @@ def general(eri_ao, mo_coeffs, verbose=0, compact=True, **kwargs):
 
     nao = mo_coeffs[0].shape[0]
     nao_pair = nao*(nao+1)//2
+
+    if eri_ao.size == nao**4:
+        return lib.einsum('pqrs,pi,qj,rk,sl->ijkl', eri_ao.reshape([nao]*4),
+                          mo_coeffs[0].conj(), mo_coeffs[1],
+                          mo_coeffs[2].conj(), mo_coeffs[3])
+
     assert(eri_ao.size in (nao_pair**2, nao_pair*(nao_pair+1)//2))
 
 # transform e1
