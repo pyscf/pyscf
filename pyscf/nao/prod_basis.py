@@ -68,7 +68,7 @@ class prod_basis():
     self.tol_biloc = kw['tol_biloc'] if 'tol_biloc' in kw else 1e-6
     self.ac_rcut_ratio = kw['ac_rcut_ratio'] if 'ac_rcut_ratio' in kw else 1.0
     self.ac_npc_max = kw['ac_npc_max'] if 'ac_npc_max' in kw else 8
-    self.algorithm = kw['algorithm'].lower() if 'algorithm' in kw else 'pp'
+    self.pb_algorithm = kw['pb_algorithm'].lower() if 'pb_algorithm' in kw else 'pp'
     self.jcutoff = kw['jcutoff'] if 'jcutoff' in kw else 14
     self.metric_type = kw['metric_type'] if 'metric_type' in kw else 2
     self.optimize_centers = kw['optimize_centers'] if 'optimize_centers' in kw else 0
@@ -76,14 +76,14 @@ class prod_basis():
     
     if nao is None: return
     
-    if self.algorithm=='pp':
+    if self.pb_algorithm=='pp':
       self.init_prod_basis_pp_batch(nao, **kw)
-    elif self.algorithm=='fp':
+    elif self.pb_algorithm=='fp':
       from pyscf.nao.m_pb_ae import pb_ae
       pb_ae(self, nao, self.tol_loc, self.tol_biloc, self.ac_rcut_ratio)
     else:
-      print( 'self.algorithm', self.algorithm )
-      raise RuntimeError('unknown algorithm')
+      print( 'self.pb_algorithm', self.pb_algorithm )
+      raise RuntimeError('unknown pb_algorithm')
       
     return  
 

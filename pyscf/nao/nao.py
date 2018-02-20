@@ -67,7 +67,7 @@ class nao():
     self.numba_parallel = kw["numba_parallel"] if "numba_parallel" in kw else True 
     
     self.verbosity = kw['verbosity'] if 'verbosity' in kw else 0
-
+    self.verbose = self.verbosity
 
     if 'gto' in kw:
       self.init_gto(**kw)
