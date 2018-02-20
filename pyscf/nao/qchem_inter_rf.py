@@ -13,16 +13,19 @@ class qchem_inter_rf(scf):
 
     nf = self.nfermi[0]
     nv = self.norbs-self.vstart[0]
-    self.FmE = np.add.outer( self.ksn2e[0,0,self.vstart[0]:],-self.ksn2e[0,0,:self.nfermi[0]])
-    self.sqrt_FmE = np.sqrt(self.FmE).reshape([nv*nf])    
+    self.FmE = np.add.outer(self.ksn2e[0,0,self.vstart[0]:],-self.ksn2e[0,0,:self.nfermi[0]])
+    self.sqrt_FmE = np.sqrt(self.FmE).reshape([nv*nf])
     self.kernel_qchem_inter_rf()
   
   def inter_rf(self, ww):
     """ This delivers the interacting response function in the product basis"""
     rf = np.zeros((len(ww), self.nprod, self.nprod), dtype=self.dtypeComplex)
-    self.s2xpy, self.pmn2v
-    for xpy in zip(self.s2omega, self.s2xpy):
-      print(__name__)
+    p,m,n = self.pmn2v.shape
+    sp2v = np.dot(self.s2xpy, self.pmn2v.reshape(p,m*n).T)
+    for iw,w in enumerate(ww):
+      for iOmega,(Omega,p2v) in enumerate(zip(self.s2omega, sp2v)):
+        p2z = p2v*(2.0/(w-Omega)-2.0/(w+Omega))
+        rf[iw] += np.outer(p2z,p2v)
     return rf
 
   
@@ -37,6 +40,7 @@ class qchem_inter_rf(scf):
     self.pmn2v = pmn2v = einsum('nb,pmb->pmn', x[:nf,:], einsum('ma,pab->pmb', x[vs:,:], pab2v))
     pmn2c = einsum('qp,pmn->qmn', self.hkernel_den, pmn2v)
     meri = -einsum('pmn,pik->mnik', pmn2c, pmn2v)
+    #meri.fill(0.0)
 
     A = (diagflat( self.FmE ).reshape([nv,nf,nv,nf]) + meri).reshape([nv*nf,nv*nf])
     B = meri.reshape([nv*nf,nv*nf])
