@@ -84,23 +84,10 @@ if __name__ == '__main__':
     mol.basis = '631g'
     mol.spin = 0
     mol.build()
-    mf0 = mf = scf.RHF(mol).run(conv_tol=1)
+    mf0 = mf = scf.RHF(mol).run(conv_tol=1.)
     mf = scf.addons.convert_to_ghf(mf)
     mycc = cc.GCCSD(mf)
     eris = mycc.ao2mo()
-#    mycc.kernel(eris=eris)
-#    et = mycc.ccsd_t(eris=eris)
-#    conv, l1, l2 = kernel(mycc, eris)
-#
-#    l1 = mycc.spin2spatial(l1, mycc.mo_coeff.orbspin)
-#    l2 = mycc.spin2spatial(l2, mycc.mo_coeff.orbspin)
-#    print(lib.finger(l1[0]) --0.01302114832130756  )
-#    print(lib.finger(l1[1]) --0.01302114832130756  )
-#    print(lib.finger(l2[0]) --0.0066148276888968807)
-#    print(lib.finger(l2[1]) --0.013180014994368605 )
-#    print(lib.finger(l2[2]) --0.0066148276888968807)
-#    print(abs(l2[1]-l2[1].transpose(1,0,2,3)-l2[0]).max())
-#    print(abs(l2[1]-l2[1].transpose(0,1,3,2)-l2[0]).max())
 
     from pyscf.cc import ccsd_t_lambda_slow as ccsd_t_lambda
     mycc0 = cc.CCSD(mf0)
@@ -119,5 +106,43 @@ if __name__ == '__main__':
     l1, l2 = update_lambda(mycc, t1, t2, l1, l2, eris, imds)
     l1 = mycc.spin2spatial(l1, mycc.mo_coeff.orbspin)
     l2 = mycc.spin2spatial(l2, mycc.mo_coeff.orbspin)
+    print(abs(l2[1]-l2[1].transpose(1,0,2,3)-l2[0]).max())
+    print(abs(l2[1]-l2[1].transpose(0,1,3,2)-l2[0]).max())
     print(abs(l1[0]-l1ref).max())
     print(abs(l2[1]-l2ref).max())
+
+    mol = gto.Mole()
+    mol.atom = [
+        [8 , (0. , 0.     , 0.)],
+        [1 , (0. , -0.757 , 0.587)],
+        [1 , (0. , 0.757  , 0.587)]]
+    mol.basis = '631g'
+    mol.spin = 2
+    mol.build()
+    mf0 = mf = scf.UHF(mol).run(conv_tol=1)
+    mf = scf.addons.convert_to_ghf(mf)
+    mycc = cc.GCCSD(mf)
+    eris = mycc.ao2mo()
+
+    from pyscf.cc import uccsd_t_lambda
+    mycc0 = cc.CCSD(mf0)
+    eris0 = mycc0.ao2mo()
+    mycc0.kernel(eris=eris0)
+    t1 = mycc0.t1
+    t2 = mycc0.t2
+    imds = uccsd_t_lambda.make_intermediates(mycc0, t1, t2, eris0)
+    l1, l2 = uccsd_t_lambda.update_lambda(mycc0, t1, t2, t1, t2, eris0, imds)
+    l1ref, l2ref = uccsd_t_lambda.update_lambda(mycc0, t1, t2, l1, l2, eris0, imds)
+    t1 = mycc.spatial2spin(t1, mycc.mo_coeff.orbspin)
+    t2 = mycc.spatial2spin(t2, mycc.mo_coeff.orbspin)
+    l1 = mycc.spatial2spin(l1, mycc.mo_coeff.orbspin)
+    l2 = mycc.spatial2spin(l2, mycc.mo_coeff.orbspin)
+    imds = make_intermediates(mycc, t1, t2, eris)
+    l1, l2 = update_lambda(mycc, t1, t2, l1, l2, eris, imds)
+    l1 = mycc.spin2spatial(l1, mycc.mo_coeff.orbspin)
+    l2 = mycc.spin2spatial(l2, mycc.mo_coeff.orbspin)
+    print(abs(l1[0]-l1ref[0]).max())
+    print(abs(l1[1]-l1ref[1]).max())
+    print(abs(l2[0]-l2ref[0]).max())
+    print(abs(l2[1]-l2ref[1]).max())
+    print(abs(l2[2]-l2ref[2]).max())

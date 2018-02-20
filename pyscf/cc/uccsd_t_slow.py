@@ -70,7 +70,7 @@ def kernel(mcc, eris, t1, t2):
     v += numpy.einsum('kIcA,bj->IjkAbc', t2ab, fvo) * 2
     w += v
     d3 = lib.direct_sum('ia+jb+kc->ijkabc', eIA, eia, eia)
-    w /= d3
+    r /= d3
     et += numpy.einsum('ijkabc,ijkabc', w.conj(), r)
 
     # bba
@@ -89,7 +89,7 @@ def kernel(mcc, eris, t1, t2):
     v += numpy.einsum('iKaC,BJ->iJKaBC', t2ab, fVO) * 2
     w += v
     d3 = lib.direct_sum('ia+jb+kc->ijkabc', eia, eIA, eIA)
-    w /= d3
+    r /= d3
     et += numpy.einsum('ijkabc,ijkabc', w.conj(), r)
 
     et *= .25
