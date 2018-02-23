@@ -49,7 +49,7 @@ def make_intermediates(mycc, t1, t2, eris):
                 - 2 * w.transpose(0,1,2,5,4,3) - 2 * w.transpose(0,1,2,3,5,4)
                 - 2 * w.transpose(0,1,2,4,3,5))
 
-    w =(numpy.einsum('iabf,kjcf->ijkabc', eris_ovvv.conj(), t2)
+    w =(numpy.einsum('iafb,kjcf->ijkabc', eris_ovvv.conj(), t2)
       - numpy.einsum('iajm,mkbc->ijkabc', eris_ovoo.conj(), t2)) / d3
     v =(numpy.einsum('iajb,kc->ijkabc', eris_ovov.conj(), t1)
       + numpy.einsum('ck,ijab->ijkabc', eris.fock[nocc:,:nocc], t2)) / d3
