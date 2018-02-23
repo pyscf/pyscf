@@ -6,6 +6,7 @@
 from pyscf.tddft import rks
 from pyscf.tddft import rhf
 from pyscf.tddft.rhf import TDHF, CIS, RPA
+from pyscf.tddft.rks import dRPA
 
 def TD(mf):
     from pyscf import scf
