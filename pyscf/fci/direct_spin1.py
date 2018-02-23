@@ -374,6 +374,7 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
     na = link_indexa.shape[0]
     nb = link_indexb.shape[0]
     hdiag = fci.make_hdiag(h1e, eri, norb, nelec)
+    nroots = min(hdiag.size, nroots)
 
     try:
         addr, h0 = fci.pspace(h1e, eri, norb, nelec, hdiag, max(pspace_size,nroots))
