@@ -2809,15 +2809,20 @@ def from_zmatrix(atomstr):
     atomstr = atomstr.replace(';','\n').replace(',',' ')
     symb = []
     coord = []
+    min_items_per_line = 1
     for line in atomstr.splitlines():
         line = line.strip()
         if line and line[0] != '#':
             rawd = line.split()
+            assert(len(rawd) >= min_items_per_line)
+
             symb.append(rawd[0])
             if len(rawd) < 3:
                 coord.append(numpy.zeros(3))
+                min_items_per_line = 3
             elif len(rawd) == 3:
                 coord.append(numpy.array((float(rawd[2]), 0, 0)))
+                min_items_per_line = 5
             elif len(rawd) == 5:
                 bonda = int(rawd[1]) - 1
                 bond  = float(rawd[2])
@@ -2832,6 +2837,7 @@ def from_zmatrix(atomstr):
                 rmat = rotation_mat(vecn, ang)
                 c = numpy.dot(rmat, v1) * (bond/numpy.linalg.norm(v1))
                 coord.append(coord[bonda]+c)
+                min_items_per_line = 7
             else:
                 bonda = int(rawd[1]) - 1
                 bond  = float(rawd[2])
