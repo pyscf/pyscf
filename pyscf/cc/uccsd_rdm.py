@@ -41,8 +41,8 @@ def _gamma1_intermediates(cc, t1, t2, l1, l2):
     xt2a += einsum('mnaf,mnef->ae', t2ab, l2ab)
     xt2a += einsum('ma,me->ae', t1a, l1a)
 
-    dvoa  = einsum('imae,me->ai', t2aa, l1a)
-    dvoa += einsum('imae,me->ai', t2ab, l1b)
+    dvoa  = numpy.einsum('imae,me->ai', t2aa, l1a)
+    dvoa += numpy.einsum('imae,me->ai', t2ab, l1b)
     dvoa -= einsum('mi,ma->ai', xt1a, t1a)
     dvoa -= einsum('ie,ae->ai', t1a, xt2a)
     dvoa += t1a.T
@@ -53,8 +53,8 @@ def _gamma1_intermediates(cc, t1, t2, l1, l2):
     xt2b += einsum('mnfa,mnfe->ae', t2ab, l2ab)
     xt2b += einsum('ma,me->ae', t1b, l1b)
 
-    dvob  = einsum('imae,me->ai', t2bb, l1b)
-    dvob += einsum('miea,me->ai', t2ab, l1a)
+    dvob  = numpy.einsum('imae,me->ai', t2bb, l1b)
+    dvob += numpy.einsum('miea,me->ai', t2ab, l1a)
     dvob -= einsum('mi,ma->ai', xt1b, t1b)
     dvob -= einsum('ie,ae->ai', t1b, xt2b)
     dvob += t1b.T
@@ -413,6 +413,7 @@ def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True):
     dm2aa[nocca:,:nocca,nocca:,:nocca] = dm2aa[:nocca,nocca:,:nocca,nocca:].transpose(1,0,3,2).conj()
     dovov = None
 
+    #assert(abs(doovv+dovvo.transpose(0,3,2,1)).max() == 0)
     dovvo = numpy.asarray(dovvo)
     dm2aa[:nocca,:nocca,nocca:,nocca:] =-dovvo.transpose(0,3,2,1)
     dm2aa[nocca:,nocca:,:nocca,:nocca] = dm2aa[:nocca,:nocca,nocca:,nocca:].transpose(2,3,0,1)
@@ -608,7 +609,7 @@ if __name__ == '__main__':
     mol.spin = 2
     mol.basis = '6-31g'
     mol.build()
-    mf = scf.UHF(mol).run(conv_tol=1e-14)
+    mf = scf.UHF(mol).run(init_guess='hcore', conv_tol=1.)
     ehf0 = mf.e_tot - mol.energy_nuc()
     mycc = uccsd.UCCSD(mf).run()
     mycc.solve_lambda()

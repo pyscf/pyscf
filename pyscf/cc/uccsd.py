@@ -719,8 +719,16 @@ class _ChemistsERIs(ccsd._ChemistsERIs):
 
         mo_ea = self.focka.diagonal()
         mo_eb = self.fockb.diagonal()
-        gap_a = abs(mo_ea[:self.nocca,None] - mo_ea[None,self.nocca:]).min()
-        gap_b = abs(mo_eb[:self.noccb,None] - mo_eb[None,self.noccb:]).min()
+        gap_a = abs(mo_ea[:self.nocca,None] - mo_ea[None,self.nocca:])
+        gap_b = abs(mo_eb[:self.noccb,None] - mo_eb[None,self.noccb:])
+        if gap_a.size > 0:
+            gap_a = gap_a.min()
+        else:
+            gap_a = 1e9
+        if gap_b.size > 0:
+            gap_b = gap_b.min()
+        else:
+            gap_b = 1e9
         if gap_a < 1e-5 or gap_b < 1e-5:
             logger.warn(mycc, 'HOMO-LUMO gap (%s,%s) too small for UCCSD',
                         gap_a, gap_b)

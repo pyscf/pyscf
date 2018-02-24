@@ -1046,6 +1046,10 @@ class _ChemistsERIs:
 
         mo_e = self.fock.diagonal()
         gap = abs(mo_e[:self.nocc,None] - mo_e[None,self.nocc:]).min()
+        if gap.size > 0:
+            gap = gap.min()
+        else:
+            gap = 1e9
         if gap < 1e-5:
             logger.warn(mycc, 'HOMO-LUMO gap %s too small for CCSD', gap)
         return self

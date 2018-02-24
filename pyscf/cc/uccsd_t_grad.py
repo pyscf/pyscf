@@ -4,27 +4,27 @@
 #
 
 from pyscf import lib
-from pyscf.cc import ccsd_grad
-from pyscf.cc import ccsd_t_rdm_slow as ccsd_t_rdm
+from pyscf.cc import uccsd_grad
+from pyscf.cc import uccsd_t_rdm
 
 # Only works with canonical orbitals
 def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
            mf_grad=None, verbose=lib.logger.INFO):
-    d1 = ccsd_t_rdm._gamma1_intermediates(mycc, t1, t2, l1, l2, eris,
-                                          for_grad=True)
+    d1 = uccsd_t_rdm._gamma1_intermediates(mycc, t1, t2, l1, l2, eris,
+                                           for_grad=True)
     fd2intermediate = lib.H5TmpFile()
-    d2 = ccsd_t_rdm._gamma2_outcore(mycc, t1, t2, l1, l2, eris,
-                                    fd2intermediate, True)
-    return ccsd_grad.kernel(mycc, t1, t2, l1, l2, eris, atmlst, mf_grad,
-                            d1, d2, verbose)
+    d2 = uccsd_t_rdm._gamma2_outcore(mycc, t1, t2, l1, l2, eris,
+                                     fd2intermediate, True)
+    return uccsd_grad.kernel(mycc, t1, t2, l1, l2, eris, atmlst, mf_grad,
+                             d1, d2, verbose)
 
 
 if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
     from pyscf import cc
-    from pyscf.cc import ccsd_t
-    from pyscf.cc import ccsd_t_lambda_slow as ccsd_t_lambda
+    from pyscf.cc import uccsd_t
+    from pyscf.cc import uccsd_t_lambda
 
     mol = gto.M(
         verbose = 0,
@@ -32,23 +32,25 @@ if __name__ == '__main__':
             ["O" , (0. , 0.     , 0.    )],
             [1   , (0. ,-0.757  ,-0.587)],
             [1   , (0. , 0.757  ,-0.587)]],
-        basis = '631g'
+        basis = '631g',
+        spin=2,
     )
-    mf = scf.RHF(mol)
+    mf = scf.UHF(mol)
     mf.conv_tol = 1e-14
     ehf = mf.scf()
 
-    mycc = cc.CCSD(mf)
+    mycc = cc.UCCSD(mf)
     mycc.conv_tol = 1e-10
     mycc.conv_tol_normt = 1e-10
     ecc, t1, t2 = mycc.kernel()
     eris = mycc.ao2mo()
-    e3ref = ccsd_t.kernel(mycc, eris, t1, t2)
+    e3ref = uccsd_t.kernel(mycc, eris, t1, t2)
     print(ehf+ecc+e3ref)
     eris = mycc.ao2mo(mf.mo_coeff)
-    conv, l1, l2 = ccsd_t_lambda.kernel(mycc, eris, t1, t2)
+    conv, l1, l2 = uccsd_t_lambda.kernel(mycc, eris, t1, t2)
     g1 = kernel(mycc, t1, t2, l1, l2, eris=eris)
     print(g1)
+    exit()
 
     myccs = mycc.as_scanner()
     mol.atom[0] = ["O" , (0., 0., 0.001)]
@@ -59,11 +61,11 @@ if __name__ == '__main__':
     mol.build(0, 0)
     e2 = myccs(mol)
     e2 += myccs.ccsd_t()
+# FIXME: Slightly different to finite difference results
     print(g1[0,2], (e1-e2)/0.002*lib.param.BOHR)
-#O      0.0000000000            0.0000000000           -0.0112045345
-#H      0.0000000000            0.0234464201            0.0056022672
-#H      0.0000000000           -0.0234464201            0.0056022672
-
+#O      0.            0.0000000           -0.1480942
+#H      0.            0.1122898            0.0740461
+#H      0.           -0.1122898            0.0740461
 
     mol = gto.M(
         verbose = 0,
@@ -75,19 +77,19 @@ H          0.96345360     1.30488291    -0.10782263
                ''',
         unit='bohr',
         basis = '631g')
-    mf = scf.RHF(mol)
+    mf = scf.UHF(mol)
     mf.conv_tol = 1e-14
     ehf0 = mf.scf()
 
-    mycc = cc.CCSD(mf)
+    mycc = cc.UCCSD(mf)
     mycc.conv_tol = 1e-10
     mycc.conv_tol_normt = 1e-10
     ecc, t1, t2 = mycc.kernel()
     eris = mycc.ao2mo()
-    e3ref = ccsd_t.kernel(mycc, eris, t1, t2)
+    e3ref = uccsd_t.kernel(mycc, eris, t1, t2)
     print(ehf0+ecc+e3ref)
     eris = mycc.ao2mo(mf.mo_coeff)
-    conv, l1, l2 = ccsd_t_lambda.kernel(mycc, eris, t1, t2)
+    conv, l1, l2 = uccsd_t_lambda.kernel(mycc, eris, t1, t2)
     g1 = kernel(mycc, t1, t2, l1, l2, eris=eris)
     print(g1)
 

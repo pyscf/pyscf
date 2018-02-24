@@ -8,7 +8,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.cc import uccsd_rdm
 
-def _gamma1_intermediates(mycc, t1, t2, l1, l2, eris=None):
+def _gamma1_intermediates(mycc, t1, t2, l1, l2, eris=None, for_grad=False):
     d1 = uccsd_rdm._gamma1_intermediates(mycc, t1, t2, l1, l2)
 
     if eris is None: eris = mycc.ao2mo()
@@ -27,9 +27,9 @@ def _gamma1_intermediates(mycc, t1, t2, l1, l2, eris=None):
 
     # aaa
     d3 = lib.direct_sum('ia+jb+kc->ijkabc', eia, eia, eia)
-    w = numpy.einsum('ijae,ckbe->ijkabc', t2aa, eris.vovp[:,:,:,nocca:])
-    w-= numpy.einsum('mkbc,aimj->ijkabc', t2aa, eris.vooo)
-    v = numpy.einsum('bjck,ia->ijkabc', eris.vovp[:,:,:,:nocca], t1a)
+    w = numpy.einsum('ijae,kceb->ijkabc', t2aa, numpy.asarray(eris.get_ovvv()).conj())
+    w-= numpy.einsum('mkbc,iajm->ijkabc', t2aa, numpy.asarray(eris.ovoo.conj()))
+    v = numpy.einsum('jbkc,ia->ijkabc', numpy.asarray(eris.ovov).conj(), t1a)
     v+= numpy.einsum('jkbc,ai->ijkabc', t2aa, fvo) * .5
 
     rw = p6(r6(w)) / d3
@@ -40,9 +40,9 @@ def _gamma1_intermediates(mycc, t1, t2, l1, l2, eris=None):
 
     # bbb
     d3 = lib.direct_sum('ia+jb+kc->ijkabc', eIA, eIA, eIA)
-    w = numpy.einsum('ijae,ckbe->ijkabc', t2bb, eris.VOVP[:,:,:,noccb:])
-    w-= numpy.einsum('imab,ckmj->ijkabc', t2bb, eris.VOOO)
-    v = numpy.einsum('bjck,ia->ijkabc', eris.VOVP[:,:,:,:noccb], t1b)
+    w = numpy.einsum('ijae,kceb->ijkabc', t2bb, numpy.asarray(eris.get_OVVV()).conj())
+    w-= numpy.einsum('imab,kcjm->ijkabc', t2bb, numpy.asarray(eris.OVOO.conj()))
+    v = numpy.einsum('jbkc,ia->ijkabc', numpy.asarray(eris.OVOV).conj(), t1b)
     v+= numpy.einsum('jkbc,ai->ijkabc', t2bb, fVO) * .5
 
     rw = p6(r6(w)) / d3
@@ -53,15 +53,15 @@ def _gamma1_intermediates(mycc, t1, t2, l1, l2, eris=None):
 
     # baa
     d3 = lib.direct_sum('ia+jb+kc->ijkabc', eIA, eia, eia)
-    w  = numpy.einsum('jIeA,ckbe->IjkAbc', t2ab, eris.vovp[:,:,:,nocca:]) * 2
-    w += numpy.einsum('jIbE,ckAE->IjkAbc', t2ab, eris.voVP[:,:,:,noccb:]) * 2
-    w += numpy.einsum('jkbe,AIce->IjkAbc', t2aa, eris.VOvp[:,:,:,nocca:])
-    w -= numpy.einsum('mIbA,ckmj->IjkAbc', t2ab, eris.vooo) * 2
-    w -= numpy.einsum('jMbA,ckMI->IjkAbc', t2ab, eris.voOO) * 2
-    w -= numpy.einsum('jmbc,AImk->IjkAbc', t2aa, eris.VOoo)
-    v  = numpy.einsum('bjck,IA->IjkAbc', eris.vovp[:,:,:,:nocca], t1b)
-    v += numpy.einsum('AIck,jb->IjkAbc', eris.VOvp[:,:,:,:nocca], t1a)
-    v += numpy.einsum('ckAI,jb->IjkAbc', eris.voVP[:,:,:,:noccb], t1a)
+    w  = numpy.einsum('jIeA,kceb->IjkAbc', t2ab, numpy.asarray(eris.get_ovvv()).conj()) * 2
+    w += numpy.einsum('jIbE,kcEA->IjkAbc', t2ab, numpy.asarray(eris.get_ovVV()).conj()) * 2
+    w += numpy.einsum('jkbe,IAec->IjkAbc', t2aa, numpy.asarray(eris.get_OVvv()).conj())
+    w -= numpy.einsum('mIbA,kcjm->IjkAbc', t2ab, numpy.asarray(eris.ovoo).conj()) * 2
+    w -= numpy.einsum('jMbA,kcIM->IjkAbc', t2ab, numpy.asarray(eris.ovOO).conj()) * 2
+    w -= numpy.einsum('jmbc,IAkm->IjkAbc', t2aa, numpy.asarray(eris.OVoo).conj())
+    v  = numpy.einsum('jbkc,IA->IjkAbc', numpy.asarray(eris.ovov).conj(), t1b)
+    v += numpy.einsum('kcIA,jb->IjkAbc', numpy.asarray(eris.ovOV).conj(), t1a)
+    v += numpy.einsum('kcIA,jb->IjkAbc', numpy.asarray(eris.ovOV).conj(), t1a)
     v += numpy.einsum('jkbc,AI->IjkAbc', t2aa, fVO) * .5
     v += numpy.einsum('kIcA,bj->IjkAbc', t2ab, fvo) * 2
 
@@ -78,15 +78,15 @@ def _gamma1_intermediates(mycc, t1, t2, l1, l2, eris=None):
 
     # bba
     d3 = lib.direct_sum('ia+jb+kc->ijkabc', eia, eIA, eIA)
-    w  = numpy.einsum('ijae,ckbe->ijkabc', t2ab, eris.VOVP[:,:,:,noccb:]) * 2
-    w += numpy.einsum('ijeb,ckae->ijkabc', t2ab, eris.VOvp[:,:,:,nocca:]) * 2
-    w += numpy.einsum('jkbe,aice->ijkabc', t2bb, eris.voVP[:,:,:,noccb:])
-    w -= numpy.einsum('imab,ckmj->ijkabc', t2ab, eris.VOOO) * 2
-    w -= numpy.einsum('mjab,ckmi->ijkabc', t2ab, eris.VOoo) * 2
-    w -= numpy.einsum('jmbc,aimk->ijkabc', t2bb, eris.voOO)
-    v  = numpy.einsum('bjck,ia->ijkabc', eris.VOVP[:,:,:,:noccb], t1a)
-    v += numpy.einsum('aick,jb->ijkabc', eris.voVP[:,:,:,:noccb], t1b)
-    v += numpy.einsum('ckai,jb->ijkabc', eris.VOvp[:,:,:,:nocca], t1b)
+    w  = numpy.einsum('ijae,kceb->ijkabc', t2ab, numpy.asarray(eris.get_OVVV()).conj()) * 2
+    w += numpy.einsum('ijeb,kcea->ijkabc', t2ab, numpy.asarray(eris.get_OVvv()).conj()) * 2
+    w += numpy.einsum('jkbe,iaec->ijkabc', t2bb, numpy.asarray(eris.get_ovVV()).conj())
+    w -= numpy.einsum('imab,kcjm->ijkabc', t2ab, numpy.asarray(eris.OVOO).conj()) * 2
+    w -= numpy.einsum('mjab,kcim->ijkabc', t2ab, numpy.asarray(eris.OVoo).conj()) * 2
+    w -= numpy.einsum('jmbc,iakm->ijkabc', t2bb, numpy.asarray(eris.ovOO).conj())
+    v  = numpy.einsum('jbkc,ia->ijkabc', numpy.asarray(eris.OVOV).conj(), t1a)
+    v += numpy.einsum('iakc,jb->ijkabc', numpy.asarray(eris.ovOV).conj(), t1b)
+    v += numpy.einsum('iakc,jb->ijkabc', numpy.asarray(eris.ovOV).conj(), t1b)
     v += numpy.einsum('JKBC,ai->iJKaBC', t2bb, fvo) * .5
     v += numpy.einsum('iKaC,BJ->iJKaBC', t2ab, fVO) * 2
 
@@ -106,17 +106,25 @@ def _gamma1_intermediates(mycc, t1, t2, l1, l2, eris=None):
     dvo, dVO = d1[2]
     dvv, dVV = d1[3]
 
-    doo[numpy.diag_indices(nocca)] -= goo.diagonal()
-    dOO[numpy.diag_indices(noccb)] -= gOO.diagonal()
-    dvv[numpy.diag_indices(nvira)] += gvv.diagonal()
-    dVV[numpy.diag_indices(nvirb)] += gVV.diagonal()
+    if for_grad:
+        doo -= goo
+        dOO -= gOO
+        dvv += gvv
+        dVV += gVV
+    else:
+        doo[numpy.diag_indices(nocca)] -= goo.diagonal()
+        dOO[numpy.diag_indices(noccb)] -= gOO.diagonal()
+        dvv[numpy.diag_indices(nvira)] += gvv.diagonal()
+        dVV[numpy.diag_indices(nvirb)] += gVV.diagonal()
+
     dvo += gvo
     dVO += gVO
 
     return d1
 
 # gamma2 intermediates in Chemist's notation
-def _gamma2_intermediates(mycc, t1, t2, l1, l2, eris=None):
+def _gamma2_intermediates(mycc, t1, t2, l1, l2, eris=None,
+                          compress_vvvv=False):
     d2 = uccsd_rdm._gamma2_intermediates(mycc, t1, t2, l1, l2)
 
     if eris is None: eris = mycc.ao2mo()
@@ -144,22 +152,24 @@ def _gamma2_intermediates(mycc, t1, t2, l1, l2, eris=None):
 
     # aaa
     d3 = lib.direct_sum('ia+jb+kc->ijkabc', eia, eia, eia)
-    w = numpy.einsum('ijae,ckbe->ijkabc', t2aa, eris.vovp[:,:,:,nocca:])
-    w-= numpy.einsum('mkbc,aimj->ijkabc', t2aa, eris.vooo)
-    v = numpy.einsum('bjck,ia->ijkabc', eris.vovp[:,:,:,:nocca], t1a)
+    w = numpy.einsum('ijae,kceb->ijkabc', t2aa, numpy.asarray(eris.get_ovvv()).conj())
+    w-= numpy.einsum('mkbc,iajm->ijkabc', t2aa, numpy.asarray(eris.ovoo.conj()))
+    v = numpy.einsum('jbkc,ia->ijkabc', numpy.asarray(eris.ovov).conj(), t1a)
     v+= numpy.einsum('jkbc,ai->ijkabc', t2aa, fvo) * .5
 
     rw = r6(p6(w)) / d3
     wvd = r6(p6(w * 2 + v)) / d3
     dovov += numpy.einsum('ia,ijkabc->jbkc', t1a, rw.conj()) * 0.25
+# *(1/8) instead of (1/4) because ooov appears 4 times in the 2pdm tensor due
+# to symmetrization, and its contribution is scaled by 1/2 in Tr(H,2pdm)
     dooov -= numpy.einsum('mkbc,ijkabc->jmia', t2aa, wvd.conj()) * .125
     dovvv += numpy.einsum('kjcf,ijkabc->iafb', t2aa, wvd.conj()) * .125
 
     # bbb
     d3 = lib.direct_sum('ia+jb+kc->ijkabc', eIA, eIA, eIA)
-    w = numpy.einsum('ijae,ckbe->ijkabc', t2bb, eris.VOVP[:,:,:,noccb:])
-    w-= numpy.einsum('imab,ckmj->ijkabc', t2bb, eris.VOOO)
-    v = numpy.einsum('bjck,ia->ijkabc', eris.VOVP[:,:,:,:noccb], t1b)
+    w = numpy.einsum('ijae,kceb->ijkabc', t2bb, numpy.asarray(eris.get_OVVV()).conj())
+    w-= numpy.einsum('imab,kcjm->ijkabc', t2bb, numpy.asarray(eris.OVOO.conj()))
+    v = numpy.einsum('jbkc,ia->ijkabc', numpy.asarray(eris.OVOV).conj(), t1b)
     v+= numpy.einsum('jkbc,ai->ijkabc', t2bb, fVO) * .5
 
     rw = r6(p6(w)) / d3
@@ -170,15 +180,15 @@ def _gamma2_intermediates(mycc, t1, t2, l1, l2, eris=None):
 
     # baa
     d3 = lib.direct_sum('ia+jb+kc->ijkabc', eIA, eia, eia)
-    w  = numpy.einsum('jIeA,ckbe->IjkAbc', t2ab, eris.vovp[:,:,:,nocca:]) * 2
-    w += numpy.einsum('jIbE,ckAE->IjkAbc', t2ab, eris.voVP[:,:,:,noccb:]) * 2
-    w += numpy.einsum('jkbe,AIce->IjkAbc', t2aa, eris.VOvp[:,:,:,nocca:])
-    w -= numpy.einsum('mIbA,ckmj->IjkAbc', t2ab, eris.vooo) * 2
-    w -= numpy.einsum('jMbA,ckMI->IjkAbc', t2ab, eris.voOO) * 2
-    w -= numpy.einsum('jmbc,AImk->IjkAbc', t2aa, eris.VOoo)
-    v  = numpy.einsum('bjck,IA->IjkAbc', eris.vovp[:,:,:,:nocca], t1b)
-    v += numpy.einsum('AIck,jb->IjkAbc', eris.VOvp[:,:,:,:nocca], t1a)
-    v += numpy.einsum('ckAI,jb->IjkAbc', eris.voVP[:,:,:,:noccb], t1a)
+    w  = numpy.einsum('jIeA,kceb->IjkAbc', t2ab, numpy.asarray(eris.get_ovvv()).conj()) * 2
+    w += numpy.einsum('jIbE,kcEA->IjkAbc', t2ab, numpy.asarray(eris.get_ovVV()).conj()) * 2
+    w += numpy.einsum('jkbe,IAec->IjkAbc', t2aa, numpy.asarray(eris.get_OVvv()).conj())
+    w -= numpy.einsum('mIbA,kcjm->IjkAbc', t2ab, numpy.asarray(eris.ovoo).conj()) * 2
+    w -= numpy.einsum('jMbA,kcIM->IjkAbc', t2ab, numpy.asarray(eris.ovOO).conj()) * 2
+    w -= numpy.einsum('jmbc,IAkm->IjkAbc', t2aa, numpy.asarray(eris.OVoo).conj())
+    v  = numpy.einsum('jbkc,IA->IjkAbc', numpy.asarray(eris.ovov).conj(), t1b)
+    v += numpy.einsum('kcIA,jb->IjkAbc', numpy.asarray(eris.ovOV).conj(), t1a)
+    v += numpy.einsum('kcIA,jb->IjkAbc', numpy.asarray(eris.ovOV).conj(), t1a)
     v += numpy.einsum('jkbc,AI->IjkAbc', t2aa, fVO) * .5
     v += numpy.einsum('kIcA,bj->IjkAbc', t2ab, fvo) * 2
 
@@ -196,15 +206,15 @@ def _gamma2_intermediates(mycc, t1, t2, l1, l2, eris=None):
 
     # bba
     d3 = lib.direct_sum('ia+jb+kc->ijkabc', eia, eIA, eIA)
-    w  = numpy.einsum('ijae,ckbe->ijkabc', t2ab, eris.VOVP[:,:,:,noccb:]) * 2
-    w += numpy.einsum('ijeb,ckae->ijkabc', t2ab, eris.VOvp[:,:,:,nocca:]) * 2
-    w += numpy.einsum('jkbe,aice->ijkabc', t2bb, eris.voVP[:,:,:,noccb:])
-    w -= numpy.einsum('imab,ckmj->ijkabc', t2ab, eris.VOOO) * 2
-    w -= numpy.einsum('mjab,ckmi->ijkabc', t2ab, eris.VOoo) * 2
-    w -= numpy.einsum('jmbc,aimk->ijkabc', t2bb, eris.voOO)
-    v  = numpy.einsum('bjck,ia->ijkabc', eris.VOVP[:,:,:,:noccb], t1a)
-    v += numpy.einsum('aick,jb->ijkabc', eris.voVP[:,:,:,:noccb], t1b)
-    v += numpy.einsum('ckai,jb->ijkabc', eris.VOvp[:,:,:,:nocca], t1b)
+    w  = numpy.einsum('ijae,kceb->ijkabc', t2ab, numpy.asarray(eris.get_OVVV()).conj()) * 2
+    w += numpy.einsum('ijeb,kcea->ijkabc', t2ab, numpy.asarray(eris.get_OVvv()).conj()) * 2
+    w += numpy.einsum('jkbe,iaec->ijkabc', t2bb, numpy.asarray(eris.get_ovVV()).conj())
+    w -= numpy.einsum('imab,kcjm->ijkabc', t2ab, numpy.asarray(eris.OVOO).conj()) * 2
+    w -= numpy.einsum('mjab,kcim->ijkabc', t2ab, numpy.asarray(eris.OVoo).conj()) * 2
+    w -= numpy.einsum('jmbc,iakm->ijkabc', t2bb, numpy.asarray(eris.ovOO).conj())
+    v  = numpy.einsum('jbkc,ia->ijkabc', numpy.asarray(eris.OVOV).conj(), t1a)
+    v += numpy.einsum('iakc,jb->ijkabc', numpy.asarray(eris.ovOV).conj(), t1b)
+    v += numpy.einsum('iakc,jb->ijkabc', numpy.asarray(eris.ovOV).conj(), t1b)
     v += numpy.einsum('JKBC,ai->iJKaBC', t2bb, fvo) * .5
     v += numpy.einsum('iKaC,BJ->iJKaBC', t2ab, fVO) * 2
 
@@ -220,7 +230,39 @@ def _gamma2_intermediates(mycc, t1, t2, l1, l2, eris=None):
     dovOV += numpy.einsum('jb,ijkabc->iakc', t1b, rw.conj()) * .25
     #dOVov += numpy.einsum('jb,ijkabc->kcia', t1b, rw.conj()) * .25
 
+    if compress_vvvv:
+        nmoa, nmob = mycc.nmo
+        nocca, noccb, nvira, nvirb = t2ab.shape
+        aidx = numpy.tril_indices(nvira)
+        aidx = aidx[0] * nvira + aidx[1]
+        bidx = numpy.tril_indices(nvirb)
+        bidx = bidx[0] * nvirb + bidx[1]
+        dvvvv = dvvvv + dvvvv.transpose(1,0,2,3)
+        dvvvv = dvvvv + dvvvv.transpose(0,1,3,2)
+        dvvvv = lib.take_2d(dvvvv.reshape(nvira**2,nvira**2), aidx, aidx)
+        dvvvv *= .25
+        dvvVV = dvvVV + dvvVV.transpose(1,0,2,3)
+        dvvVV = dvvVV + dvvVV.transpose(0,1,3,2)
+        dvvVV = lib.take_2d(dvvVV.reshape(nvira**2,nvirb**2), aidx, bidx)
+        dvvVV *= .25
+        dVVVV = dVVVV + dVVVV.transpose(1,0,2,3)
+        dVVVV = dVVVV + dVVVV.transpose(0,1,3,2)
+        dVVVV = lib.take_2d(dVVVV.reshape(nvirb**2,nvirb**2), bidx, bidx)
+        dVVVV *= .25
+
+        d2 = ((dovov, dovOV, dOVov, dOVOV),
+              (dvvvv, dvvVV, dVVvv, dVVVV),
+              (doooo, dooOO, dOOoo, dOOOO),
+              (doovv, dooVV, dOOvv, dOOVV),
+              (dovvo, dovVO, dOVvo, dOVVO),
+              (dvvov, dvvOV, dVVov, dVVOV),
+              (dovvv, dovVV, dOVvv, dOVVV),
+              (dooov, dooOV, dOOov, dOOOV))
+
     return d2
+
+def _gamma2_outcore(mycc, t1, t2, l1, l2, eris, h5fobj, compress_vvvv=False):
+    return _gamma2_intermediates(mycc, t1, t2, l1, l2, eris, compress_vvvv)
 
 def make_rdm1(mycc, t1, t2, l1, l2, eris=None):
     d1 = _gamma1_intermediates(mycc, t1, t2, l1, l2, eris)
@@ -260,12 +302,10 @@ if __name__ == '__main__':
         [8 , (0. , 0.     , 0.)],
         [1 , (0. , -.957 , .587)],
         [1 , (0.2,  .757 , .487)]]
-    #mol.basis = '631g'
+    mol.basis = '631g'
     mol.build()
     mf0 = mf = scf.RHF(mol).run(conv_tol=1.)
     mf = scf.addons.convert_to_uhf(mf)
-    mycc = cc.UCCSD(mf)
-    eris = uccsd_t_slow._ChemistsERIs(mycc)
 
     from pyscf.cc import ccsd_t_lambda_slow as ccsd_t_lambda
     from pyscf.cc import ccsd_t_rdm_slow as ccsd_t_rdm
@@ -285,9 +325,33 @@ if __name__ == '__main__':
     l1 = (l1, l1)
     l2aa = l2 - l2.transpose(1,0,2,3)
     l2 = (l2aa, l2, l2aa)
+    mycc = cc.UCCSD(mf)
+    eris = mycc.ao2mo()
     dm1 = make_rdm1(mycc, t1, t2, l1, l2, eris)
     dm2 = make_rdm2(mycc, t1, t2, l1, l2, eris)
     trdm1 = dm1[0] + dm1[1]
     trdm2 = dm2[0] + dm2[1] + dm2[1].transpose(2,3,0,1) + dm2[2]
     print(abs(trdm1 - dm1ref).max())
     print(abs(trdm2 - dm2ref).max())
+
+    ecc = mycc.kernel(eris=eris)[0]
+    l1, l2 = mycc.solve_lambda(eris=eris)
+    e3ref = mycc.e_tot + mycc.ccsd_t()
+
+    nmoa, nmob = mycc.nmo
+    eri_aa = ao2mo.kernel(mf._eri, mf.mo_coeff[0], compact=False).reshape([nmoa]*4)
+    eri_bb = ao2mo.kernel(mf._eri, mf.mo_coeff[1], compact=False).reshape([nmob]*4)
+    eri_ab = ao2mo.kernel(mf._eri, [mf.mo_coeff[k] for k in (0,0,1,1)],
+                          compact=False).reshape(nmoa,nmoa,nmob,nmob)
+    dm1 = make_rdm1(mycc, t1, t2, l1, l2, eris=eris)
+    dm2 = make_rdm2(mycc, t1, t2, l1, l2, eris=eris)
+    h1a = reduce(numpy.dot, (mf.mo_coeff[0].T, mf.get_hcore(), mf.mo_coeff[0]))
+    h1b = reduce(numpy.dot, (mf.mo_coeff[1].T, mf.get_hcore(), mf.mo_coeff[1]))
+    e3 =(numpy.einsum('ij,ij->', h1a, dm1[0]) +
+         numpy.einsum('ij,ij->', h1b, dm1[1]) +
+         numpy.einsum('ijkl,ijkl->', eri_aa, dm2[0])*.5 +
+         numpy.einsum('ijkl,ijkl->', eri_bb, dm2[2])*.5 +
+         numpy.einsum('ijkl,ijkl->', eri_ab, dm2[1])    +
+         mf.mol.energy_nuc())
+    print(e3 - e3ref)
+

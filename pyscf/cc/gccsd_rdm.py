@@ -201,7 +201,7 @@ if __name__ == '__main__':
     mol.basis = '631g'
     mol.spin = 2
     mol.build()
-    mf = scf.UHF(mol).run()
+    mf = scf.UHF(mol).run(conv_tol=1.)
     mf = scf.addons.convert_to_ghf(mf)
 
     mycc = gccsd.GCCSD(mf)

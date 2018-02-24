@@ -8,7 +8,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.cc import ccsd_rdm
 
-def _gamma1_intermediates(mycc, t1, t2, l1, l2, eris=None):
+def _gamma1_intermediates(mycc, t1, t2, l1, l2, eris=None, for_grad=False):
     doo, dov, dvo, dvv = ccsd_rdm._gamma1_intermediates(mycc, t1, t2, l1, l2)
 
     if eris is None: eris = mycc.ao2mo()
@@ -31,18 +31,27 @@ def _gamma1_intermediates(mycc, t1, t2, l1, l2, eris=None):
     rw = r6(w)
     goo = numpy.einsum('iklabc,jklabc->ij', wv.conj(), rw)
     gvv = numpy.einsum('ijkacd,ijkbcd->ab', wv, rw.conj())
-    # t3 amplitudes in CCSD(T) is computed non-iteratively. The off-diagonal
-    # blocks of fock matrix does not contribute to the CCSD(T) energy. To make
-    # Tr(H,D) consistent to the CCSD(T) total energy, the density matrix
-    # off-diagonal parts are excluded.
-    doo[numpy.diag_indices(nocc)] -= goo.diagonal() * .5
-    dvv[numpy.diag_indices(nvir)] += gvv.diagonal() * .5
-    dvo += numpy.einsum('ijab,ijkabc->ck', t2.conj(), rw) * .5
 
+    if not for_grad:
+# t3 amplitudes in CCSD(T) is computed non-iteratively. The off-diagonal
+# blocks of fock matrix does not contribute to CCSD(T) energy. To make Tr(H,D)
+# consistent to the CCSD(T) total energy, the density matrix off-diagonal
+# parts are excluded.
+        doo[numpy.diag_indices(nocc)] -= goo.diagonal() * .5
+        dvv[numpy.diag_indices(nvir)] += gvv.diagonal() * .5
+
+    else:
+# The off-diagonal blocks of fock matrix have small contributions to analytical
+# nuclear gradients.
+        doo -= goo * .5
+        dvv += gvv * .5
+
+    dvo += numpy.einsum('ijab,ijkabc->ck', t2.conj(), rw) * .5
     return doo, dov, dvo, dvv
 
 # gamma2 intermediates in Chemist's notation
-def _gamma2_intermediates(mycc, t1, t2, l1, l2, eris=None):
+def _gamma2_intermediates(mycc, t1, t2, l1, l2, eris=None,
+                          compress_vvvv=False):
     dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = \
             ccsd_rdm._gamma2_intermediates(mycc, t1, t2, l1, l2)
     if eris is None: eris = mycc.ao2mo()
@@ -70,7 +79,20 @@ def _gamma2_intermediates(mycc, t1, t2, l1, l2, eris=None):
     # Note "dovvv +=" also changes the value of dvvov
     dovvv += numpy.einsum('kjcf,ijkabc->iafb', t2, rwv.conj())
     dvvov = dovvv.transpose(2,3,0,1)
+
+    if compress_vvvv:
+        nvir = mycc.nmo - mycc.nocc
+        idx = numpy.tril_indices(nvir)
+        vidx = idx[0] * nvir + idx[1]
+        dvvvv = dvvvv + dvvvv.transpose(1,0,2,3)
+        dvvvv = dvvvv + dvvvv.transpose(0,1,3,2)
+        dvvvv = lib.take_2d(dvvvv.reshape(nvir**2,nvir**2), vidx, vidx)
+        dvvvv *= .25
+
     return dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov
+
+def _gamma2_outcore(mycc, t1, t2, l1, l2, eris, h5fobj, compress_vvvv=False):
+    return _gamma2_intermediates(mycc, t1, t2, l1, l2, eris, compress_vvvv)
 
 def make_rdm1(mycc, t1, t2, l1, l2, eris=None):
     d1 = _gamma1_intermediates(mycc, t1, t2, l1, l2, eris)

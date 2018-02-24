@@ -73,6 +73,8 @@ def _gamma2_intermediates(mycc, t1, t2, l1, l2, eris=None):
     dovov += goovv.transpose(0,2,1,3) - goovv.transpose(0,3,1,2)
 
     m3 = t3c * 2 + t3d
+# *(1/8) instead of (1/4) because ooov appears 4 times in the 2pdm tensor due
+# to symmetrization, and its contribution is scaled by 1/2 in Tr(H,2pdm)
     gooov  = numpy.einsum('imbc,ijkabc->jkma', t2, m3.conj()) * (1./8)
     dooov -= gooov.transpose(0,2,1,3) - gooov.transpose(1,2,0,3)
 
@@ -162,7 +164,6 @@ if __name__ == '__main__':
     t2 = mycc0.t2
     imds = uccsd_t_lambda.make_intermediates(mycc0, t1, t2, eris0)
     l1, l2 = uccsd_t_lambda.update_lambda(mycc0, t1, t2, t1, t2, eris0, imds)
-    eris0 = uccsd_t_slow._ChemistsERIs(mycc0)
     dm1ref = uccsd_t_rdm.make_rdm1(mycc0, t1, t2, l1, l2, eris0)
     dm2ref = uccsd_t_rdm.make_rdm2(mycc0, t1, t2, l1, l2, eris0)
 
@@ -183,36 +184,24 @@ if __name__ == '__main__':
     print(abs(dm2ref[1] - gdm2[idxa[:,None,None,None],idxa[:,None,None],idxb[:,None],idxb]).max())
     print(abs(dm2ref[2] - gdm2[idxb[:,None,None,None],idxb[:,None,None],idxb[:,None],idxb]).max())
 
-#    eri_mo = ao2mo.kernel(mf._eri, mf.mo_coeff, compact=False)
-#    nmo = mf.mo_coeff.shape[1]
-#    eri_mo = eri_mo.reshape(nmo,nmo,nmo,nmo)
-#    dm1 = make_rdm1(mcc, t1, t2, l1, l2, eris=eris)
-#    dm2 = make_rdm2(mcc, t1, t2, l1, l2, eris=eris)
-#    print(lib.finger(dm1) - 1.2905622485441171)
-#    print(lib.finger(dm2) - 6.6064384807461831)
-#    h1 = reduce(numpy.dot, (mf.mo_coeff.T, mf.get_hcore(), mf.mo_coeff))
-#    e3 =(numpy.einsum('ij,ij->', h1, dm1)
-#       + numpy.einsum('ijkl,ijkl->', eri_mo, dm2)*.5 + mf.mol.energy_nuc())
-
-#    mycc = gccsd.GCCSD(mf)
-#    ecc, t1, t2 = mycc.kernel()
-#    l1, l2 = mycc.solve_lambda()
-#    dm1 = make_rdm1(mycc, t1, t2, l1, l2)
-#    dm2 = make_rdm2(mycc, t1, t2, l1, l2)
-#    nao = mol.nao_nr()
-#    mo_a = mf.mo_coeff[:nao]
-#    mo_b = mf.mo_coeff[nao:]
-#    nmo = mo_a.shape[1]
-#    eri = ao2mo.kernel(mf._eri, mo_a+mo_b, compact=False).reshape([nmo]*4)
-#    orbspin = mf.mo_coeff.orbspin
-#    sym_forbid = (orbspin[:,None] != orbspin)
-#    eri[sym_forbid,:,:] = 0
-#    eri[:,:,sym_forbid] = 0
-#    hcore = scf.RHF(mol).get_hcore()
-#    h1 = reduce(numpy.dot, (mo_a.T.conj(), hcore, mo_a))
-#    h1+= reduce(numpy.dot, (mo_b.T.conj(), hcore, mo_b))
-#    e1 = numpy.einsum('ij,ji', h1, dm1)
-#    e1+= numpy.einsum('ijkl,jilk', eri, dm2) * .5
-#    e1+= mol.energy_nuc()
-#    print(e1 - mycc.e_tot)
-
+    ecc, t1, t2 = mycc.kernel(eris=eris)
+    e3ref = mycc.e_tot + mycc.ccsd_t()
+    l1, l2 = mycc.solve_lambda(eris=eris)
+    dm1 = make_rdm1(mycc, t1, t2, l1, l2, eris=eris)
+    dm2 = make_rdm2(mycc, t1, t2, l1, l2, eris=eris)
+    nao = mol.nao_nr()
+    mo_a = mf.mo_coeff[:nao]
+    mo_b = mf.mo_coeff[nao:]
+    nmo = mo_a.shape[1]
+    eri = ao2mo.kernel(mf._eri, mo_a+mo_b, compact=False).reshape([nmo]*4)
+    orbspin = mf.mo_coeff.orbspin
+    sym_forbid = (orbspin[:,None] != orbspin)
+    eri[sym_forbid,:,:] = 0
+    eri[:,:,sym_forbid] = 0
+    hcore = scf.RHF(mol).get_hcore()
+    h1 = reduce(numpy.dot, (mo_a.T.conj(), hcore, mo_a))
+    h1+= reduce(numpy.dot, (mo_b.T.conj(), hcore, mo_b))
+    e3 = numpy.einsum('ij,ji', h1, dm1)
+    e3+= numpy.einsum('ijkl,jilk', eri, dm2) * .5
+    e3+= mol.energy_nuc()
+    print(e3 - e3ref)
