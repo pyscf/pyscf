@@ -86,8 +86,6 @@ if __name__ == '__main__':
     mol.build()
     mf0 = mf = scf.RHF(mol).run(conv_tol=1.)
     mf = scf.addons.convert_to_ghf(mf)
-    mycc = cc.GCCSD(mf)
-    eris = mycc.ao2mo()
 
     from pyscf.cc import ccsd_t_lambda_slow as ccsd_t_lambda
     mycc0 = cc.CCSD(mf0)
@@ -98,6 +96,8 @@ if __name__ == '__main__':
     imds = ccsd_t_lambda.make_intermediates(mycc0, t1, t2, eris0)
     l1, l2 = ccsd_t_lambda.update_lambda(mycc0, t1, t2, t1, t2, eris0, imds)
     l1ref, l2ref = ccsd_t_lambda.update_lambda(mycc0, t1, t2, l1, l2, eris0, imds)
+    mycc = cc.GCCSD(mf)
+    eris = mycc.ao2mo()
     t1 = mycc.spatial2spin(t1, mycc.mo_coeff.orbspin)
     t2 = mycc.spatial2spin(t2, mycc.mo_coeff.orbspin)
     l1 = mycc.spatial2spin(l1, mycc.mo_coeff.orbspin)
@@ -121,8 +121,6 @@ if __name__ == '__main__':
     mol.build()
     mf0 = mf = scf.UHF(mol).run(conv_tol=1)
     mf = scf.addons.convert_to_ghf(mf)
-    mycc = cc.GCCSD(mf)
-    eris = mycc.ao2mo()
 
     from pyscf.cc import uccsd_t_lambda
     mycc0 = cc.CCSD(mf0)
@@ -133,6 +131,8 @@ if __name__ == '__main__':
     imds = uccsd_t_lambda.make_intermediates(mycc0, t1, t2, eris0)
     l1, l2 = uccsd_t_lambda.update_lambda(mycc0, t1, t2, t1, t2, eris0, imds)
     l1ref, l2ref = uccsd_t_lambda.update_lambda(mycc0, t1, t2, l1, l2, eris0, imds)
+    mycc = cc.GCCSD(mf)
+    eris = mycc.ao2mo()
     t1 = mycc.spatial2spin(t1, mycc.mo_coeff.orbspin)
     t2 = mycc.spatial2spin(t2, mycc.mo_coeff.orbspin)
     l1 = mycc.spatial2spin(l1, mycc.mo_coeff.orbspin)

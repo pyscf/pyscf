@@ -12,7 +12,10 @@ from pyscf.cc import uccsd
 UCCSD(T)
 '''
 
-def kernel(mcc, eris, t1, t2):
+def kernel(mcc, eris, t1=None, t2=None):
+    if t1 is None or t2 is None:
+        t1, t2 = mcc.t1, mcc.t2
+
     def p6(t):
         return (t + t.transpose(1,2,0,4,5,3) +
                 t.transpose(2,0,1,5,3,4) + t.transpose(0,2,1,3,5,4) +
