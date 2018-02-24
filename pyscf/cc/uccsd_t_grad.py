@@ -10,6 +10,10 @@ from pyscf.cc import uccsd_t_rdm
 # Only works with canonical orbitals
 def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
            mf_grad=None, verbose=lib.logger.INFO):
+    if t1 is None: t1 = mycc.t1
+    if t2 is None: t2 = mycc.t2
+    if l1 is None: l1 = mycc.l1
+    if l2 is None: l2 = mycc.l2
     d1 = uccsd_t_rdm._gamma1_intermediates(mycc, t1, t2, l1, l2, eris,
                                            for_grad=True)
     fd2intermediate = lib.H5TmpFile()
@@ -46,11 +50,9 @@ if __name__ == '__main__':
     eris = mycc.ao2mo()
     e3ref = uccsd_t.kernel(mycc, eris, t1, t2)
     print(ehf+ecc+e3ref)
-    eris = mycc.ao2mo(mf.mo_coeff)
     conv, l1, l2 = uccsd_t_lambda.kernel(mycc, eris, t1, t2)
     g1 = kernel(mycc, t1, t2, l1, l2, eris=eris)
     print(g1)
-    exit()
 
     myccs = mycc.as_scanner()
     mol.atom[0] = ["O" , (0., 0., 0.001)]
@@ -61,7 +63,6 @@ if __name__ == '__main__':
     mol.build(0, 0)
     e2 = myccs(mol)
     e2 += myccs.ccsd_t()
-# FIXME: Slightly different to finite difference results
     print(g1[0,2], (e1-e2)/0.002*lib.param.BOHR)
 #O      0.            0.0000000           -0.1480942
 #H      0.            0.1122898            0.0740461

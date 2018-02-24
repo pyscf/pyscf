@@ -233,22 +233,18 @@ def _gamma2_intermediates(mycc, t1, t2, l1, l2, eris=None,
     if compress_vvvv:
         nmoa, nmob = mycc.nmo
         nocca, noccb, nvira, nvirb = t2ab.shape
-        aidx = numpy.tril_indices(nvira)
-        aidx = aidx[0] * nvira + aidx[1]
-        bidx = numpy.tril_indices(nvirb)
-        bidx = bidx[0] * nvirb + bidx[1]
+        idxa = numpy.tril_indices(nvira)
+        idxa = idxa[0] * nvira + idxa[1]
+        idxb = numpy.tril_indices(nvirb)
+        idxb = idxb[0] * nvirb + idxb[1]
         dvvvv = dvvvv + dvvvv.transpose(1,0,2,3)
-        dvvvv = dvvvv + dvvvv.transpose(0,1,3,2)
-        dvvvv = lib.take_2d(dvvvv.reshape(nvira**2,nvira**2), aidx, aidx)
-        dvvvv *= .25
+        dvvvv = lib.take_2d(dvvvv.reshape(nvira**2,nvira**2), idxa, idxa)
+        dvvvv *= .5
         dvvVV = dvvVV + dvvVV.transpose(1,0,2,3)
-        dvvVV = dvvVV + dvvVV.transpose(0,1,3,2)
-        dvvVV = lib.take_2d(dvvVV.reshape(nvira**2,nvirb**2), aidx, bidx)
-        dvvVV *= .25
+        dvvVV = lib.take_2d(dvvVV.reshape(nvira**2,nvirb**2), idxa, idxb)
         dVVVV = dVVVV + dVVVV.transpose(1,0,2,3)
-        dVVVV = dVVVV + dVVVV.transpose(0,1,3,2)
-        dVVVV = lib.take_2d(dVVVV.reshape(nvirb**2,nvirb**2), bidx, bidx)
-        dVVVV *= .25
+        dVVVV = lib.take_2d(dVVVV.reshape(nvirb**2,nvirb**2), idxb, idxb)
+        dVVVV *= .5
 
         d2 = ((dovov, dovOV, dOVov, dOVOV),
               (dvvvv, dvvVV, dVVvv, dVVVV),

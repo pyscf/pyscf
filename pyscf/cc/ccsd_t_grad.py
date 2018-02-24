@@ -10,6 +10,10 @@ from pyscf.cc import ccsd_t_rdm_slow as ccsd_t_rdm
 # Only works with canonical orbitals
 def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
            mf_grad=None, verbose=lib.logger.INFO):
+    if t1 is None: t1 = mycc.t1
+    if t2 is None: t2 = mycc.t2
+    if l1 is None: l1 = mycc.l1
+    if l2 is None: l2 = mycc.l2
     d1 = ccsd_t_rdm._gamma1_intermediates(mycc, t1, t2, l1, l2, eris,
                                           for_grad=True)
     fd2intermediate = lib.H5TmpFile()
