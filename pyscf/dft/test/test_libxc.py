@@ -162,6 +162,14 @@ class KnownValues(unittest.TestCase):
         self.assertRaises(NotImplementedError, dft.libxc.test_deriv_order, 'pbe0', 3, True)
         self.assertRaises(KeyError, dft.libxc.test_deriv_order, 'OL2', 3, True)
 
+    def test_xc_type(self):
+        self.assertEqual(dft.libxc.xc_type(416), 'GGA')
+        self.assertEqual(dft.libxc.xc_type('hf'), 'HF')
+        self.assertEqual(dft.libxc.xc_type(',vwn'), 'LDA')
+        self.assertEqual(dft.libxc.xc_type('lda+b3lyp'), 'GGA')
+        self.assertEqual(dft.libxc.xc_type('wb97m_v'), 'MGGA')
+        self.assertEqual(dft.libxc.xc_type('bp86'), 'GGA')
+
 
 if __name__ == "__main__":
     print("Test libxc")

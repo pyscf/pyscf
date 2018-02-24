@@ -178,12 +178,22 @@ class KnownValues(unittest.TestCase):
         v = mf._numint.nr_vxc(mol, mf.grids, 'B88', dms, spin=0, hermi=0)[2]
         self.assertAlmostEqual(finger(v), -0.70124686853021512, 8)
 
+        v = mf._numint.nr_vxc(mol, mf.grids, 'HF', dms, spin=0, hermi=0)[2]
+        self.assertAlmostEqual(abs(v).max(), 0, 9)
+        v = mf._numint.nr_vxc(mol, mf.grids, '', dms, spin=0, hermi=0)[2]
+        self.assertAlmostEqual(abs(v).max(), 0, 9)
+
     def test_uks_vxc(self):
         numpy.random.seed(10)
         nao = mol.nao_nr()
         dms = numpy.random.random((2,nao,nao))
         v = mf._numint.nr_vxc(mol, mf.grids, 'B88', dms, spin=1)[2]
         self.assertAlmostEqual(finger(v), -0.73803886056633594, 8)
+
+        v = mf._numint.nr_vxc(mol, mf.grids, 'HF', dms, spin=1)[2]
+        self.assertAlmostEqual(abs(v).max(), 0, 9)
+        v = mf._numint.nr_vxc(mol, mf.grids, '', dms, spin=1)[2]
+        self.assertAlmostEqual(abs(v).max(), 0, 9)
 
     def test_rks_fxc(self):
         numpy.random.seed(10)
@@ -211,6 +221,11 @@ class KnownValues(unittest.TestCase):
         v1 = dft.numint.nr_fxc(mol1, mf.grids, 'LDA', dm0, dms[0], spin=0, hermi=0,
                                rho0=rvf[0], vxc=rvf[1], fxc=rvf[2])
         self.assertAlmostEqual(abs(v-v1).max(), 0, 8)
+
+        dat = ni.nr_fxc(mol1, mf.grids, 'HF', dm0, dms, spin=0, hermi=0)
+        self.assertAlmostEqual(abs(v).max(), 0, 9)
+        dat = ni.nr_fxc(mol1, mf.grids, '', dm0, dms, spin=0, hermi=0)
+        self.assertAlmostEqual(abs(v).max(), 0, 9)
 
     def test_rks_fxc_st(self):
         numpy.random.seed(10)
