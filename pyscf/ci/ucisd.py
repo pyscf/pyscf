@@ -631,8 +631,8 @@ class UCISD(cisd.CISD):
     make_rdm2 = make_rdm2
 
     def nuc_grad_method(self):
-        from pyscf.ci import ucisd_grad
-        return ucisd_grad.Gradients(self)
+        from pyscf.grad import ucisd
+        return ucisd.Gradients(self)
 
 CISD = UCISD
 

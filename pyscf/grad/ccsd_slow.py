@@ -13,8 +13,7 @@ from pyscf.lib import logger
 from pyscf import ao2mo
 from pyscf.cc import ccsd
 from pyscf.cc import ccsd_rdm
-from pyscf.cc import ccsd_grad
-from pyscf import grad
+from pyscf.grad import ccsd as ccsd_grad
 
 def kernel(cc, t1, t2, l1, l2, eris=None):
     if eris is None:

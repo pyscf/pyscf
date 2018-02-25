@@ -18,7 +18,7 @@ from pyscf.cc import _ccsd
 from pyscf.cc import ccsd_rdm
 from pyscf.scf import rhf_grad
 from pyscf.scf import cphf
-from pyscf.mp.mp2_grad import _shell_prange, _index_frozen_active
+from pyscf.grad.mp2 import _shell_prange, _index_frozen_active
 
 
 #

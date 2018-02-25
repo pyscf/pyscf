@@ -11,7 +11,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import rhf_grad
 from pyscf.ci import cisd
-from pyscf.cc import ccsd_grad
+from pyscf.grad import ccsd as ccsd_grad
 
 
 def kernel(myci, civec=None, eris=None, atmlst=None, mf_grad=None,

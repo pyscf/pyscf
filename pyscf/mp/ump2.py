@@ -263,8 +263,8 @@ class UMP2(mp2.MP2):
     make_rdm2 = make_rdm2
 
     def nuc_grad_method(self):
-        from pyscf.mp import ump2_grad
-        return ump2_grad.Gradients(self)
+        from pyscf.grad import ump2
+        return ump2.Gradients(self)
 
 
 class _ChemistsERIs(mp2._ChemistsERIs):

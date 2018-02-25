@@ -342,8 +342,8 @@ class MP2(lib.StreamObject):
     as_scanner = as_scanner
 
     def nuc_grad_method(self):
-        from pyscf.mp import mp2_grad
-        return mp2_grad.Gradients(self)
+        from pyscf.grad import mp2
+        return mp2.Gradients(self)
 
 RMP2 = MP2
 

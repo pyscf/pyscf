@@ -1011,8 +1011,8 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         lib.chkfile.save(chkfile, 'ccsd', cc_chk)
 
     def nuc_grad_method(self):
-        from pyscf.cc import ccsd_grad
-        return ccsd_grad.Gradients(self)
+        from pyscf.grad import ccsd
+        return ccsd.Gradients(self)
 
 CC = CCSD
 

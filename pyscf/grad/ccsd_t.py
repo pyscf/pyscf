@@ -4,8 +4,8 @@
 #
 
 from pyscf import lib
-from pyscf.cc import ccsd_grad
 from pyscf.cc import ccsd_t_rdm_slow as ccsd_t_rdm
+from pyscf.grad import ccsd as ccsd_grad
 
 # Only works with canonical orbitals
 def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,

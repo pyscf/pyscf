@@ -609,8 +609,8 @@ class CISD(lib.StreamObject):
         return cisdvec_to_amplitudes(civec, nmo, nocc)
 
     def nuc_grad_method(self):
-        from pyscf.ci import cisd_grad
-        return cisd_grad.Gradients(self)
+        from pyscf.grad import cisd
+        return cisd.Gradients(self)
 
 RCISD = CISD
 

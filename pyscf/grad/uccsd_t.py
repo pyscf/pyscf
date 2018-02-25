@@ -4,8 +4,8 @@
 #
 
 from pyscf import lib
-from pyscf.cc import uccsd_grad
 from pyscf.cc import uccsd_t_rdm
+from pyscf.grad import uccsd as uccsd_grad
 
 # Only works with canonical orbitals
 def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
