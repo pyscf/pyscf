@@ -390,6 +390,7 @@ def _make_eris_incore(cc, mo_coeff=None):
     kpts = cc.kpts
     nkpts = cc.nkpts
     nocc = cc.get_nocc()
+    nmo = cc.nmo
     nvir = nmo - nocc
     eris.nocc = nocc
 
