@@ -201,7 +201,7 @@ def as_scanner(grad_cc):
     class CCSD_GradScanner(grad_cc.__class__, lib.GradScanner):
         def __init__(self, g):
             self.__dict__.update(g.__dict__)
-            self._cc = grad_cc._cc.as_scanner()
+            self._cc = g._cc.as_scanner()
         def __call__(self, mol, **kwargs):
             # The following simple version also works.  But eris object is
             # recomputed in cc_scanner and solve_lambda.
@@ -389,6 +389,7 @@ class Gradients(lib.StreamObject):
         self.verbose = mycc.verbose
         self.atmlst = range(mycc.mol.natm)
         self.de = None
+        self._keys = set(self.__dict__.keys())
 
     def kernel(self, t1=None, t2=None, l1=None, l2=None, eris=None,
                atmlst=None, mf_grad=None, verbose=None, _kern=kernel):

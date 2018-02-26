@@ -465,10 +465,10 @@ def as_scanner(mc):
     Examples:
 
     >>> from pyscf import gto, scf, mcscf
-    >>> mf = scf.RHF(gto.Mole().set(verbose=0))
-    >>> mc_scanner = mcscf.CASSCF(mf, 4, 4).as_scanner()
-    >>> mc_scanner(gto.M(atom='N 0 0 0; N 0 0 1.1'))
-    >>> mc_scanner(gto.M(atom='N 0 0 0; N 0 0 1.5'))
+    >>> mol = gto.M(atom='N 0 0 0; N 0 0 1.2', verbose=0)
+    >>> mc_scanner = mcscf.CASSCF(scf.RHF(mol), 4, 4).as_scanner()
+    >>> e = mc_scanner(gto.M(atom='N 0 0 0; N 0 0 1.1'))
+    >>> e = mc_scanner(gto.M(atom='N 0 0 0; N 0 0 1.5'))
     '''
     from pyscf.mcscf.addons import project_init_guess
     logger.info(mc, 'Create scanner for %s', mc.__class__)
@@ -481,7 +481,11 @@ def as_scanner(mc):
             mf_scanner = self._scf
             mf_scanner(mol)
             self.mol = mol
-            mo = project_init_guess(self, self.mo_coeff)
+            if self.mo_coeff is None:
+                mo = mf_scanner.mo_coeff
+            else:
+                mo = self.mo_coeff
+            mo = project_init_guess(self, mo)
             e_tot = self.kernel(mo, self.ci)[0]
             return e_tot
     return CASSCF_Scanner(mc)
@@ -1109,6 +1113,10 @@ class CASSCF(casci.CASCI):
     @max_cycle.setter
     def max_cycle(self, x):
         self.max_cycle_macro = x
+
+    def nuc_grad_method(self):
+        from pyscf.grad import casscf
+        return casscf.Gradients(self)
 
 
 # to avoid calculating AO integrals
