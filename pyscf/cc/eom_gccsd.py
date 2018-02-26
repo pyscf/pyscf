@@ -286,7 +286,8 @@ def eeccsd(eom, nroots=1, koopmans=False, guess=None, eris=None, imds=None):
 
 class EOMEE(eom_rccsd.EOMEE):
 
-    eeccsd = kernel = eeccsd
+    kernel = eeccsd
+    eeccsd = eeccsd
     matvec = eeccsd_matvec
     get_diag = eeccsd_diag
 

@@ -662,6 +662,26 @@ class UCCSD(ccsd.CCSD):
         from pyscf.cc import eom_uccsd
         return eom_uccsd.EOMEE(self).kernel(nroots, koopmans, guess, eris)
 
+    def eomee_ccsd(self, nroots=1, koopmans=False, guess=None, eris=None):
+        from pyscf.cc import eom_uccsd
+        return eom_uccsd.EOMEESpinKeep(self).kernel(nroots, koopmans, guess, eris)
+
+    def eomsf_ccsd(self, nroots=1, koopmans=False, guess=None, eris=None):
+        from pyscf.cc import eom_uccsd
+        return eom_uccsd.EOMEESpinFlip(self).kernel(nroots, koopmans, guess, eris)
+
+    def eomip_method(self):
+        from pyscf.cc import eom_uccsd
+        return eom_uccsd.EOMIP(self)
+
+    def eomea_method(self):
+        from pyscf.cc import eom_uccsd
+        return eom_uccsd.EOMEA(self)
+
+    def eomee_method(self):
+        from pyscf.cc import eom_uccsd
+        return eom_uccsd.EOMEE(self)
+
     def nuc_grad_method(self):
         from pyscf.grad import uccsd
         return uccsd.Gradients(self)

@@ -962,7 +962,8 @@ class EOMEE(eom_rccsd.EOMEE):
         self.nocc = cc.get_nocc()
         self.nmo = cc.get_nmo()
 
-    eeccsd = kernel = eeccsd
+    kernel = eeccsd
+    eeccsd = eeccsd
     get_diag = eeccsd_diag
 
     def vector_size(self):
@@ -978,6 +979,7 @@ class EOMEE(eom_rccsd.EOMEE):
 
 class EOMEESpinKeep(EOMEE):
     kernel = eomee_ccsd
+    eomee_ccsd = eomee_ccsd
     matvec = eomee_ccsd_matvec
     get_diag = eeccsd_diag
 
@@ -1026,6 +1028,7 @@ class EOMEESpinKeep(EOMEE):
 
 class EOMEESpinFlip(EOMEE):
     kernel = eomsf_ccsd
+    eomsf_ccsd = eomsf_ccsd
     matvec = eomsf_ccsd_matvec
 
     def get_init_guess(self, nroots=1, koopmans=True, diag=None):

@@ -348,7 +348,8 @@ class EOMIP(EOM):
                 guess.append(g)
         return guess
 
-    ipccsd = kernel = ipccsd
+    kernel = ipccsd
+    ipccsd = ipccsd
     matvec = ipccsd_matvec
     l_matvec = lipccsd_matvec
     get_diag = ipccsd_diag
@@ -626,7 +627,8 @@ class EOMEA(EOM):
                 guess.append(g)
         return guess
 
-    eaccsd = kernel = eaccsd
+    kernel = eaccsd
+    eaccsd = eaccsd
     matvec = eaccsd_matvec
     l_matvec = leaccsd_matvec
     get_diag = eaccsd_diag
@@ -1272,7 +1274,8 @@ class EOMEE(EOM):
             guess.append(g)
         return guess
 
-    eeccsd = kernel = eeccsd
+    kernel = eeccsd
+    eeccsd = eeccsd
     get_diag = eeccsd_diag
 
     def vector_size(self):
@@ -1293,6 +1296,7 @@ class EOMEE(EOM):
 
 class EOMEESinglet(EOMEE):
     kernel = eomee_ccsd_singlet
+    eomee_ccsd_singlet = eomee_ccsd_singlet
     matvec = eeccsd_matvec_singlet
 
     def gen_matvec(self, imds=None, diag=None, **kwargs):
@@ -1318,6 +1322,7 @@ class EOMEESinglet(EOMEE):
 
 class EOMEETriplet(EOMEE):
     kernel = eomee_ccsd_triplet
+    eomee_ccsd_triplet = eomee_ccsd_triplet
     matvec = eeccsd_matvec_triplet
 
     def gen_matvec(self, imds=None, diag=None, **kwargs):
@@ -1343,6 +1348,7 @@ class EOMEETriplet(EOMEE):
 
 class EOMEESpinFlip(EOMEE):
     kernel = eomsf_ccsd
+    eomsf_ccsd = eomsf_ccsd
     matvec = eeccsd_matvec_sf
 
     def gen_matvec(self, imds=None, diag=None, **kwargs):

@@ -907,6 +907,30 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         from pyscf.cc import eom_rccsd
         return eom_rccsd.EOMEE(self).kernel(nroots, koopmans, guess, eris)
 
+    def eomee_ccsd_singlet(self, nroots=1, koopmans=False, guess=None, eris=None):
+        from pyscf.cc import eom_rccsd
+        return eom_rccsd.EOMEESinglet(self).kernel(nroots, koopmans, guess, eris)
+
+    def eomee_ccsd_triplet(self, nroots=1, koopmans=False, guess=None, eris=None):
+        from pyscf.cc import eom_rccsd
+        return eom_rccsd.EOMEETriplet(self).kernel(nroots, koopmans, guess, eris)
+
+    def eomsf_ccsd(self, nroots=1, koopmans=False, guess=None, eris=None):
+        from pyscf.cc import eom_rccsd
+        return eom_rccsd.EOMEESpinFlip(self).kernel(nroots, koopmans, guess, eris)
+
+    def eomip_method(self):
+        from pyscf.cc import eom_rccsd
+        return eom_rccsd.EOMIP(self)
+
+    def eomea_method(self):
+        from pyscf.cc import eom_rccsd
+        return eom_rccsd.EOMEA(self)
+
+    def eomee_method(self):
+        from pyscf.cc import eom_rccsd
+        return eom_rccsd.EOMEE(self)
+
     def make_rdm1(self, t1=None, t2=None, l1=None, l2=None):
         '''Un-relaxed 1-particle density matrix in MO space'''
         from pyscf.cc import ccsd_rdm
