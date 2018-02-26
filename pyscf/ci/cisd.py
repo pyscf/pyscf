@@ -25,7 +25,7 @@ def kernel(myci, eris, ci0=None, max_cycle=50, tol=1e-8, verbose=logger.INFO):
     diag -= ehf
 
     if ci0 is None:
-        ci0 = myci.get_init_guess(eris)[1]
+        ci0 = myci.get_init_guess(eris=eris, nroots=myci.nroots, diag=diag)[1]
 
     def op(xs):
         return [myci.contract(x, eris) for x in xs]
@@ -519,7 +519,7 @@ class CISD(lib.StreamObject):
                         citype, self.e_tot, self.e_corr)
         return self.e_corr, self.ci
 
-    def get_init_guess(self, eris=None):
+    def get_init_guess(self, eris=None, nroots=1, diag=None):
         # MP2 initial guess
         if eris is None: eris = self.ao2mo(self.mo_coeff)
         nocc = self.nocc
@@ -537,7 +537,25 @@ class CISD(lib.StreamObject):
         if abs(self.emp2) < 1e-3 and abs(ci1).sum() < 1e-3:
             # To avoid ci1 being stuck at local minimum
             ci1 = 1e-1 / e_ia
-        return self.emp2, amplitudes_to_cisdvec(ci0, ci1, ci2)
+
+        ci_guess = amplitudes_to_cisdvec(ci0, ci1, ci2)
+
+        if nroots > 1:
+            civec_size = ci_guess.size
+            dtype = ci_guess.dtype
+            nroots = min(ci1.size+1, nroots)  # Consider Koopmans' theorem only
+
+            if diag is None:
+                idx = range(1, nroots)
+            else:
+                idx = diag[:ci1.size+1].argsort()[1:nroots]  # exclude HF determinant
+
+            ci_guess = [ci_guess]
+            for i in idx:
+                g = numpy.zeros(civec_size, dtype)
+                g[i] = 1.0
+                ci_guess.append(g)
+        return self.emp2, ci_guess
 
     contract = contract
     make_diagonal = make_diagonal
