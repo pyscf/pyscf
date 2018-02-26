@@ -449,6 +449,44 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
     return conv, e_tot, e_ci, fcivec, mo, mo_energy
 
 
+def as_scanner(mc):
+    '''Generating a scanner for CASSCF PES.
+
+    The returned solver is a function. This function requires one argument
+    "mol" as input and returns total CASSCF energy.
+
+    The solver will automatically use the results of last calculation as the
+    initial guess of the new calculation.  All parameters of MCSCF object
+    (conv_tol, max_memory etc) are automatically applied in the solver.
+
+    Note scanner has side effects.  It may change many underlying objects
+    (_scf, with_df, with_x2c, ...) during calculation.
+
+    Examples:
+
+    >>> from pyscf import gto, scf, mcscf
+    >>> mf = scf.RHF(gto.Mole().set(verbose=0))
+    >>> mc_scanner = mcscf.CASSCF(mf, 4, 4).as_scanner()
+    >>> mc_scanner(gto.M(atom='N 0 0 0; N 0 0 1.1'))
+    >>> mc_scanner(gto.M(atom='N 0 0 0; N 0 0 1.5'))
+    '''
+    from pyscf.mcscf.addons import project_init_guess
+    logger.info(mc, 'Create scanner for %s', mc.__class__)
+
+    class CASSCF_Scanner(mc.__class__, lib.SinglePointScanner):
+        def __init__(self, mc):
+            self.__dict__.update(mc.__dict__)
+            self._scf = mc._scf.as_scanner()
+        def __call__(self, mol, **kwargs):
+            mf_scanner = self._scf
+            mf_scanner(mol)
+            self.mol = mol
+            mo = project_init_guess(self, self.mo_coeff)
+            e_tot = self.kernel(mo, self.ci)[0]
+            return e_tot
+    return CASSCF_Scanner(mc)
+
+
 # To extend CASSCF for certain CAS space solver, it can be done by assign an
 # object or a module to CASSCF.fcisolver.  The fcisolver object or module
 # should at least have three member functions "kernel" (wfn for given
@@ -502,10 +540,10 @@ class CASSCF(casci.CASCI):
             >>> mc = mcscf.CASSCF(mf, 6, 6)
             >>> mc.conv_tol = 1e-10
             >>> mc.ah_conv_tol = 1e-5
-            >>> mc.kernel()
+            >>> mc.kernel()[0]
             -109.044401898486001
             >>> mc.ah_conv_tol = 1e-10
-            >>> mc.kernel()
+            >>> mc.kernel()[0]
             -109.044401887945668
 
         chkfile : str
@@ -746,6 +784,9 @@ class CASSCF(casci.CASCI):
                     log.info('CASCI E = %.15g  S^2 = %.7f', e_tot, ss[0])
         return e_tot, e_ci, fcivec
 
+    as_scanner = as_scanner
+
+
     def uniq_var_indices(self, nmo, ncore, ncas, frozen):
         nocc = ncore + ncas
         mask = numpy.zeros((nmo,nmo),dtype=bool)
@@ -955,6 +996,17 @@ class CASSCF(casci.CASCI):
 
     def get_jk(self, mol, dm, hermi=1):
         return self._scf.get_jk(mol, dm, hermi=1)
+
+    def get_grad(self, mo_coeff, casdm1_casdm2=None, eris=None):
+        '''Orbital gradients'''
+        if eris is None:
+            eris = self.ao2mo(mo_coeff)
+        if casdm1_casdm2 is None:
+            e_tot, e_ci, civec = self.casci(mo_coeff, self.ci, eris)
+            casdm1, casdm2 = self.fcisolver.make_rdm12(civec, ncas, nelecas)
+        else:
+            casdm1, casdm2 = casdm1_casdm2
+        return gen_g_hop(self, mo_coeff, 1, casdm1, casdm2, eris)[0]
 
     def _exact_paaa(self, mo, u, out=None):
         nmo = mo.shape[1]

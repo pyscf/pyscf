@@ -665,7 +665,7 @@ def as_scanner(cc):
             self.mol = mol
             self.mo_coeff = mf_scanner.mo_coeff
             self.mo_occ = mf_scanner.mo_occ
-            self.kernel(self.t1, self.t2, **kwargs)[0]
+            self.kernel(self.t1, self.t2, **kwargs)
             return self.e_tot
     return CCSD_Scanner(cc)
 
