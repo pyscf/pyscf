@@ -380,8 +380,8 @@ class AFTDF(lib.StreamObject):
             s = None
 
         if blksize is None:
-            blksize = min(max(16, int(max_memory*1e6*.75/(nij*16*comp))), 16384)
-            sublk = blksize#max(16, int(blksize//4))
+            blksize = min(max(64, int(max_memory*1e6*.75/(nij*16*comp))), 16384)
+            sublk = int(blksize//4)
         else:
             sublk = blksize
         buf = numpy.empty(nij*blksize*comp, dtype=numpy.complex128)

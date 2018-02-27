@@ -259,8 +259,7 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
     # rho_rs(-G+k_rs) is computed as conj(rho_{rs^*}(G-k_rs))
     #                 == conj(transpose(rho_sr(G+k_sr), (0,2,1)))
     blksize = max(int(max_memory*.25e6/16/nao**2), 16)
-    bufR = numpy.empty(blksize*nao**2)
-    bufI = numpy.empty(blksize*nao**2)
+    pLqR = pLqI = None
     for pqkR, pqkI, p0, p1 in mydf.pw_loop(mesh, kptii, max_memory=max_memory):
         t2 = log.timer_debug1('%d:%d ft_aopair'%(p0,p1), *t2)
         pqkR = pqkR.reshape(nao,nao,-1)
@@ -288,8 +287,8 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
             pqkI *= coulG
             #:v4 = numpy.einsum('ijL,lkL->ijkl', pqk, pqk.conj())
             #:vk += numpy.einsum('ijkl,jk->il', v4, dm)
-            pLqR = lib.transpose(pqkR, axes=(0,2,1), out=bufR).reshape(-1,nao)
-            pLqI = lib.transpose(pqkI, axes=(0,2,1), out=bufI).reshape(-1,nao)
+            pLqR = lib.transpose(pqkR, axes=(0,2,1), out=pLqR).reshape(-1,nao)
+            pLqI = lib.transpose(pqkI, axes=(0,2,1), out=pLqI).reshape(-1,nao)
             iLkR = numpy.ndarray((nao*(p1-p0),nao), buffer=pqkR)
             iLkI = numpy.ndarray((nao*(p1-p0),nao), buffer=pqkI)
             for i in range(nset):
