@@ -178,8 +178,8 @@ if not blas_found:
             blas_found = True
     else:
         if None not in blas_path_guess:
-        blas_found = True
-        blas_lib_dir = list(set(blas_path_guess))
+            blas_found = True
+            blas_lib_dir = list(set(blas_path_guess))
 
 if not blas_found:  # for MKL
     mkl_path_guess = search_lib_path('libmkl_core'+so_ext, blas_lib_dir)
