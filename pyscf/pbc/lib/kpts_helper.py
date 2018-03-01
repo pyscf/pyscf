@@ -58,7 +58,6 @@ def loop_kkk(nkpts):
     range_nkpts = range(nkpts)
     return itertools.product(range_nkpts, range_nkpts, range_nkpts)
 
-
 def get_kconserv(cell, kpts):
     r'''Get the momentum conservation array for a set of k-points.
 
@@ -78,11 +77,51 @@ def get_kconserv(cell, kpts):
     kvMLK = kpts[:,None,None,:] - kpts[:,None,:] + kpts
     for N, kvN in enumerate(kpts):
         kvMLKN = np.einsum('klmx,wx->mlkw', kvMLK - kvN, a)
-        # check whether  (1/(2pi) k_{KLMN} dot a)  are integer
+        # check whether (1/(2pi) k_{KLMN} dot a) is an integer
         kvMLKN_int = np.rint(kvMLKN)
         mask = np.einsum('klmw->mlk', abs(kvMLKN - kvMLKN_int)) < 1e-9
         kconserv[mask] = N
     return kconserv
+
+def get_k2particle_idx(cell, kpts, norb_per_kpt, kconserv=None):
+    '''
+    For two-particle arrays (integrals) of the form
+
+        [\phi*[k, kk](1) \phi[l, kl](1) | \phi*[m, km](2) \phi[n, kn](2)]
+
+    this calculates the offset of an array assuming some number of
+    orbitals per k-point `norb_per_kpt`.  This assumes the same
+    ordering as given `kpts` and `kconserv`.
+
+    Returns
+    -------
+    array_offset: `ndarray`
+        The i'th element gives the i'th array's offset in a one-dimensional array.
+    array_size: `ndarray`
+        The i'th element gives the i'th array's size in a one-dimensional array.
+    total_array_size: int
+        Size of one-dimensional array needed to hold all two-particle integrals.
+    '''
+    nkpts = kpts.shape[0]
+
+    if kconserv is None:
+        kconserv = get_kconserv(cell, kpts)
+
+    arr_offset = []
+    arr_size = []
+    offset = 0
+    for kk, kl, km in loop_kkk(nkpts):
+        kn = kconserv[kk, kl, km]
+
+        # Get array size for these k-points and add offset
+        size = np.prod([norb_per_kpt[x] for x in [kk, kl, km, kn]])
+
+        arr_size.append(size)
+        arr_offset.append(offset)
+
+        offset += size
+    return arr_offset, arr_size, (arr_size[-1] + arr_offset[-1])
+
 
 def get_kconserv3(cell, kpts, kijkab):
     '''Get the momentum conservation array for a set of k-points.
@@ -92,7 +131,7 @@ def get_kconserv3(cell, kpts, kijkab):
 
         (ki + kj + kk - ka - kb - kc) dot a = 2n\pi
 
-    where these kpoints are stored in kijkab[ki,kj,kk,ka,kb].
+    where these kpoints are stored in kijkab[ki, kj, kk, ka, kb].
     '''
     nkpts = kpts.shape[0]
     a = cell.lattice_vectors() / (2*np.pi)
@@ -151,15 +190,15 @@ class KptsHelper(pyscf.lib.StreamObject):
                 self._operation[kp,kq,kr] = 0
                 self.symm_map[kpt].append((kp,kq,kr))
 
-                completed[kr,ks,kp] = True 
+                completed[kr,ks,kp] = True
                 self._operation[kr,ks,kp] = 1 #.transpose(2,3,0,1)
                 self.symm_map[kpt].append((kr,ks,kp))
 
-                completed[kq,kp,ks] = True 
+                completed[kq,kp,ks] = True
                 self._operation[kq,kp,ks] = 2 #np.conj(.transpose(1,0,3,2))
                 self.symm_map[kpt].append((kq,kp,ks))
 
-                completed[ks,kr,kq] = True 
+                completed[ks,kr,kq] = True
                 self._operation[ks,kr,kq] = 3 #np.conj(.transpose(3,2,1,0))
                 self.symm_map[kpt].append((ks,kr,kq))
 
