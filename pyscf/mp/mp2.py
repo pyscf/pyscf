@@ -201,12 +201,14 @@ def get_nmo(mp):
         return len(mp.mo_occ)
     elif isinstance(mp.frozen, (int, numpy.integer)):
         return len(mp.mo_occ) - mp.frozen
+    elif isinstance(mp.frozen[0], (int, numpy.integer)):
+        return len(mp.mo_occ) - len(set(mp.frozen))
     else:
-        return len(mp.mo_occ) - len(mp.frozen)
+        raise NotImplementedError
 
 def get_frozen_mask(mp):
     '''Get boolean mask for the restricted reference orbitals.
-    
+
     In the returned boolean (mask) array of frozen orbital indices, the
     element is False if it corresonds to the frozen orbital.
     '''
