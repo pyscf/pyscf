@@ -109,7 +109,7 @@ option(BUILD_LIBXC "Download and build libxc library" ON)
 option(BUILD_XCFUN "Download and build xcfun library" ON)
 
 if(NOT DISABLE_DFT)
-if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/lib/libxc.so.4" AND
+if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xc.h" AND
     ENABLE_LIBXC AND BUILD_LIBXC)
   ExternalProject_Add(libxc
     #GIT_REPOSITORY https://gitlab.com/libxc/libxc/
@@ -119,9 +119,15 @@ if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/lib/libxc.so.4" AND
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
     BUILD_IN_SOURCE 1
-    CONFIGURE_COMMAND <SOURCE_DIR>/configure --prefix=<INSTALL_DIR> --libdir=<INSTALL_DIR>/lib
-          --enable-shared --disable-static --disable-fortran LIBS=-lm
-          CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER}
+    if(UNIX AND NOT APPLE)
+      CONFIGURE_COMMAND <SOURCE_DIR>/configure --prefix=<INSTALL_DIR> --libdir=<INSTALL_DIR>/lib
+            --enable-shared --disable-static --disable-fortran LIBS=-lm
+            CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER}
+    else()
+      CONFIGURE_COMMAND <SOURCE_DIR>/configure --prefix=<INSTALL_DIR> --libdir=<INSTALL_DIR>/lib
+            --enable-shared --disable-static --disable-fortran
+            CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER}
+    endif()
 
 ## For git checkout
 #    CONFIGURE_COMMAND autoreconf -i || autoreconf && ./configure --prefix=<INSTALL_DIR> --libdir=<INSTALL_DIR>/lib
