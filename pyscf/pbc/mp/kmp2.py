@@ -21,7 +21,7 @@
 kpoint-adapted and spin-adapted MP2
 t2[i,j,a,b] = <ij|ab> / D_ij^ab
 
-t2 and eris are never stored in full, only a partial 
+t2 and eris are never stored in full, only a partial
 eri of size (nkpts,nocc,nocc,nvir,nvir)
 '''
 
@@ -99,6 +99,7 @@ def get_nocc(mp):
         raise NotImplementedError
     return nocc
 
+
 def get_nmo(mp):
     '''The number of molecular orbitals per k-point.'''
     if mp._nmo is not None:
@@ -164,7 +165,7 @@ KRMP2 = KMP2
 
 
 if __name__ == '__main__':
-    from pyscf.pbc import gto, scf, mp 
+    from pyscf.pbc import gto, scf, mp
 
     cell = gto.Cell()
     cell.atom='''

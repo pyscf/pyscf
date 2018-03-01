@@ -717,9 +717,9 @@ class CCSD(lib.StreamObject):
             CCSD correlation correction
         e_tot : float
             Total CCSD energy (HF + correlation)
-        t1, t2 : 
+        t1, t2 :
             T amplitudes t1[i,a], t2[i,j,a,b]  (i,j in occ, a,b in virt)
-        l1, l2 : 
+        l1, l2 :
             Lambda amplitudes l1[i,a], l2[i,j,a,b]  (i,j in occ, a,b in virt)
     '''
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):

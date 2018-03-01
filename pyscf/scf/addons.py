@@ -523,7 +523,7 @@ def convert_to_ghf(mf, out=None, remove_df=False):
 
     def update_mo_(mf, mf1):
         if mf.mo_energy is not None:
-            if isinstance(mf, scf.hf.RHF):
+            if isinstance(mf, scf.hf.RHF): # RHF
                 nao, nmo = mf.mo_coeff.shape
                 orbspin = get_ghf_orbspin(mf.mo_energy, mf.mo_occ, True)
 
@@ -599,7 +599,7 @@ def get_ghf_orbspin(mo_energy, mo_occ, is_rhf=None):
 
     For RHF orbitals, the orbspin corresponds to first occupied orbitals then
     unoccupied orbitals.  In the occupied orbital space, if degenerated, first
-    alpha then beta, last the (open-shell) singly occupied (alpha) orbitals In
+    alpha then beta, last the (open-shell) singly occupied (alpha) orbitals. In
     the unoccupied orbital space, first the (open-shell) unoccupied (beta)
     orbitals if applicable, then alpha and beta orbitals
 
