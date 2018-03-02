@@ -467,6 +467,7 @@ O    SP
         mol1 = gto.Mole()
         mol1.verbose = 5
         mol1.set_geom_(mol0._atom, 'B', symmetry=True)
+        mol1.set_geom_(mol0.atom_coords(), 'B')
 
     def test_with_MoleContext(self):
         mol1 = mol0.copy()

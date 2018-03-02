@@ -2260,7 +2260,10 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         '''
         if (symmetry or self.symmetry or
             not isinstance(atoms_or_coords, numpy.ndarray)):
-            self.atom = atoms
+            if isinstance(atoms_or_coords, numpy.ndarray):
+                self.atom = list(zip([x[0] for x in self._atom], atoms_or_coords))
+            else:
+                self.atom = atoms_or_coords
             self.unit = unit
             if symmetry is not None:
                 self.symmetry = symmetry
