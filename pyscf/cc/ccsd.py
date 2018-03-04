@@ -19,7 +19,7 @@ from pyscf.lib import logger
 from pyscf import ao2mo
 from pyscf.ao2mo import _ao2mo
 from pyscf.cc import _ccsd
-from pyscf.mp import mp2
+from pyscf.mp.mp2 import get_nocc, get_nmo, get_frozen_mask, _mo_without_core
 
 BLKMIN = 4
 
@@ -570,12 +570,6 @@ def _unpack_4fold(c2vec, nocc, nvir, anti_symm=True):
         lib.takebak_2d(t2, t2tril, otril[0]*nocc+otril[1], vtril[1]*nvir+vtril[0])
         lib.takebak_2d(t2, t2tril, otril[1]*nocc+otril[0], vtril[0]*nvir+vtril[1])
     return t2.reshape(nocc,nocc,nvir,nvir)
-
-
-get_nocc = mp2.get_nocc
-get_nmo = mp2.get_nmo
-get_frozen_mask = mp2.get_frozen_mask
-_mo_without_core = mp2._mo_without_core
 
 def amplitudes_to_vector(t1, t2, out=None):
     nocc, nvir = t1.shape

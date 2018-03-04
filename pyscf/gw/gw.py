@@ -18,7 +18,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf import ao2mo
 from pyscf import dft
-from pyscf.mp.mp2 import _mo_energy_without_core, _mo_without_core, _active_idx
+from pyscf.mp.mp2 import get_nocc, get_nmo, get_frozen_mask
 
 einsum = lib.einsum
 
@@ -30,7 +30,7 @@ def kernel(gw, mo_energy, mo_coeff, td_e, td_xy, eris=None,
         A list :  converged, mo_energy, mo_coeff
     '''
     # mf must be DFT; for HF use xc = 'hf'
-    mv = gw._scf
+    mf = gw._scf
     assert(isinstance(mf, (dft.rks.RKS      , dft.uks.UKS,
                            dft.roks.ROKS    , dft.uks.UKS,
                            dft.rks_symm.RKS , dft.uks_symm.UKS,
@@ -163,25 +163,21 @@ class GW(lib.StreamObject):
 
     @property
     def nocc(self):
-        if self._nocc is not None:
-            return self._nocc
-        elif isinstance(self.frozen, (int, numpy.integer)):
-            return int(self.mo_occ.sum()) // 2 - self.frozen
-        elif self.frozen:
-            occ_idx = self.mo_occ > 0
-            occ_idx[numpy.asarray(self.frozen)] = False
-            return numpy.count_nonzero(occ_idx)
-        else:
-            return int(self.mo_occ.sum()) // 2
+        return self.get_nocc()
+    @nocc.setter
+    def nocc(self, n):
+        self._nocc = n
 
     @property
     def nmo(self):
-        if self._nmo is not None:
-            return self._nmo
-        if isinstance(self.frozen, (int, numpy.integer)):
-            return len(self.mo_occ) - self.frozen
-        else:
-            return len(self.mo_occ) - len(self.frozen)
+        return self.get_nmo()
+    @nmo.setter
+    def nmo(self, n):
+        self._nmo = n
+
+    get_nocc = get_nocc
+    get_nmo = get_nmo
+    get_frozen_mask = get_frozen_mask
 
     def get_g0(self, omega, eta=None):
         if eta is None:
@@ -232,7 +228,7 @@ class _ERIS:
     def __init__(self, cc, mo_coeff=None, method='incore',
                  ao2mofn=ao2mo.full):
         cput0 = (time.clock(), time.time())
-        moidx = _active_idx(cc)
+        moidx = get_frozen_mask(cc)
         if mo_coeff is None:
             self.mo_coeff = mo_coeff = cc.mo_coeff[:,moidx]
         else:  # If mo_coeff is not canonical orbital

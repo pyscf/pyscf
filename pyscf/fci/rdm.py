@@ -27,6 +27,7 @@ def reorder_rdm(rdm1, rdm2, inplace=False):
 
 # dm_pq = <|p^+ q|>
 def make_rdm1_ms0(fname, cibra, ciket, norb, nelec, link_index=None):
+    assert(cibra is not None and ciket is not None)
     cibra = numpy.asarray(cibra, order='C')
     ciket = numpy.asarray(ciket, order='C')
     if link_index is None:
@@ -71,6 +72,7 @@ def make_rdm12(fname, cibra, ciket, norb, nelec, link_index=None, symm=0):
 # nelec and link_index are tuples of (alpha,beta)
 #
 def make_rdm1_spin1(fname, cibra, ciket, norb, nelec, link_index=None):
+    assert(cibra is not None and ciket is not None)
     cibra = numpy.asarray(cibra, order='C')
     ciket = numpy.asarray(ciket, order='C')
     if link_index is None:
@@ -101,6 +103,7 @@ def make_rdm1_spin1(fname, cibra, ciket, norb, nelec, link_index=None):
 # symm = 1: bra, ket symmetry
 # symm = 2: particle permutation symmetry
 def make_rdm12_spin1(fname, cibra, ciket, norb, nelec, link_index=None, symm=0):
+    assert(cibra is not None and ciket is not None)
     cibra = numpy.asarray(cibra, order='C')
     ciket = numpy.asarray(ciket, order='C')
     if link_index is None:

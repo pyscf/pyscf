@@ -222,9 +222,9 @@ class KnownValues(unittest.TestCase):
                                rho0=rvf[0], vxc=rvf[1], fxc=rvf[2])
         self.assertAlmostEqual(abs(v-v1).max(), 0, 8)
 
-        dat = ni.nr_fxc(mol1, mf.grids, 'HF', dm0, dms, spin=0, hermi=0)
+        v = ni.nr_fxc(mol1, mf.grids, 'HF', dm0, dms, spin=0, hermi=0)
         self.assertAlmostEqual(abs(v).max(), 0, 9)
-        dat = ni.nr_fxc(mol1, mf.grids, '', dm0, dms, spin=0, hermi=0)
+        v = ni.nr_fxc(mol1, mf.grids, '', dm0, dms, spin=0, hermi=0)
         self.assertAlmostEqual(abs(v).max(), 0, 9)
 
     def test_rks_fxc_st(self):

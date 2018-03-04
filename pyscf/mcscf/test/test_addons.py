@@ -159,18 +159,16 @@ class KnowValues(unittest.TestCase):
         mol1 = gto.M(
         verbose = 0,
         atom = [
-            ['O',(  0.000000,  0.000000, -b/2)],
-            ['O',(  0.000000,  0.000000,  b/2)], ],
-        basis = 'ccpvtz',)
+            ['N',(  0.000000,  0.000000, -b/2)],
+            ['N',(  0.000000,  0.000000,  b/2)], ],
+        basis = 'ccpvdz',)
         mf1 = scf.RHF(mol1).run()
-        mc1 = mcscf.CASSCF(mf1, 4, 4)
+        mc1 = mcscf.CASSCF(mf1, 4, 4).run()
         mo1 = mcscf.project_init_guess(mc1, mfr.mo_coeff, prev_mol=mol)
         s1 = reduce(numpy.dot, (mo1.T, mf1.get_ovlp(), mo1))
         self.assertEqual(numpy.count_nonzero(numpy.linalg.eigh(s1)[0]>1e-10),
                          s1.shape[0])
-        self.assertAlmostEqual(numpy.linalg.norm(s1), 7.7459666924148349, 9)
-
-        self.assertRaises(RuntimeError, mcscf.project_init_guess, mc1, mfr.mo_coeff)
+        self.assertAlmostEqual(numpy.linalg.norm(s1), 5.2915026221291841, 9)
 
 
 if __name__ == "__main__":

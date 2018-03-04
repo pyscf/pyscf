@@ -389,12 +389,12 @@ def project_init_guess(casscf, init_mo, prev_mol=None):
                        scf.addons.project_mo_nr2nr(prev_mol, init_mo[1], casscf.mol))
     elif gto.same_basis_set(prev_mol, casscf.mol):
         if isinstance(ncore, (int, numpy.integer)):  # RHF
-            fock = casscf.get_fock(mc, init_mo, casscf.ci)
+            fock = casscf.get_fock(init_mo, casscf.ci)
             return casscf._scf.eig(fock, s)[1]
         else:
-            raise NotImplementedError
+            raise NotImplementedError('Project initial for UHF orbitals.')
     else:
-        raise NotImplementedError
+        raise NotImplementedError('Project initial guess from different system.')
 
 # Be careful with the orbital projection. The projection may lead to bad
 # initial guess orbitals if the geometry is dramatically changed.
