@@ -31,9 +31,9 @@ PySCF 1.5 alpha (2018-03-??)
   - Restricted MP2 with k-point sampling
   - RCCSD(T), UCCSD(T) and GCCSD(T) density matrices
   - RCCSD(T), UCCSD(T) analytical nuclear gradients
-  - MCSCF nuclear gradients
+  - CASCI/CASSCF analytical nuclear gradients
 * Improved
-  - Support of setting omp threads in FCI solver
+  - Supported to set omp threads in FCI solver
   - Supported even number of grids in pbc calculations
   - Performance of UCCSD lambda solver
   - The function to make SCF initial guess from the chkfile of the

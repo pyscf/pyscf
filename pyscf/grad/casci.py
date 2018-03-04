@@ -4,7 +4,7 @@
 #
 
 '''
-CASSCF analytical nuclear gradients
+CASCI analytical nuclear gradients
 
 Ref.
 J. Comput. Chem., 5, 589
@@ -18,15 +18,13 @@ from pyscf import ao2mo
 from pyscf.lib import logger
 from pyscf.scf import rhf_grad
 from pyscf.grad.mp2 import _shell_prange
+from pyscf.scf import cphf
 
 
-def kernel(mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=None,
-           verbose=None):
-    if mo_coeff is None: mo_coeff = mc.mo_coeff
+def kernel(mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=None, verbose=None):
+    if mo_coeff is None: mo_coeff = mc._scf.mo_coeff
     if ci is None: ci = mc.ci
     if mf_grad is None: mf_grad = mc._scf.nuc_grad_method()
-    if mc.frozen is not None:
-        raise NotImplementedError
 
     mol = mc.mol
     ncore = mc.ncore
@@ -35,30 +33,68 @@ def kernel(mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=None,
     nelecas = mc.nelecas
     nao, nmo = mo_coeff.shape
     nao_pair = nao * (nao+1) // 2
+    mo_energy = mc._scf.mo_energy
 
     mo_occ = mo_coeff[:,:nocc]
     mo_core = mo_coeff[:,:ncore]
     mo_cas = mo_coeff[:,ncore:nocc]
+    neleca, nelecb = mol.nelec
+    assert(neleca == nelecb)
+    orbo = mo_coeff[:,:neleca]
+    orbv = mo_coeff[:,neleca:]
 
     casdm1, casdm2 = mc.fcisolver.make_rdm12(mc.ci, ncas, nelecas)
-
-# gfock = Generalized Fock, Adv. Chem. Phys., 69, 63
     dm_core = numpy.dot(mo_core, mo_core.T) * 2
     dm_cas = reduce(numpy.dot, (mo_cas, casdm1, mo_cas.T))
-    aapa = ao2mo.kernel(mol, (mo_cas, mo_cas, mo_occ, mo_cas), compact=False)
-    aapa = aapa.reshape(ncas,ncas,nocc,ncas)
+    aapa = ao2mo.kernel(mol, (mo_cas, mo_cas, mo_coeff, mo_cas), compact=False)
+    aapa = aapa.reshape(ncas,ncas,nmo,ncas)
     vj, vk = mc._scf.get_jk(mol, (dm_core, dm_cas))
     h1 = mc.get_hcore()
     vhf_c = vj[0] - vk[0] * .5
     vhf_a = vj[1] - vk[1] * .5
-    gfock = reduce(numpy.dot, (mo_occ.T, h1 + vhf_c + vhf_a, mo_occ)) * 2
-    gfock[:,ncore:nocc] = reduce(numpy.dot, (mo_occ.T, h1 + vhf_c, mo_cas, casdm1))
-    gfock[:,ncore:nocc] += numpy.einsum('uviw,vuwt->it', aapa, casdm2)
-    dme0 = reduce(numpy.dot, (mo_occ, (gfock+gfock.T)*.5, mo_occ.T))
-    aapa = vj = vk = vhf_c = vhf_a = h1 = gfock = None
+    # Imat = h1_{pi} gamma1_{iq} + h2_{pijk} gamma_{iqkj}
+    Imat = numpy.zeros((nmo,nmo))
+    Imat[:,:nocc] = reduce(numpy.dot, (mo_coeff.T, h1 + vhf_c + vhf_a, mo_occ)) * 2
+    Imat[:,ncore:nocc] = reduce(numpy.dot, (mo_coeff.T, h1 + vhf_c, mo_cas, casdm1))
+    Imat[:,ncore:nocc] += lib.einsum('uviw,vuwt->it', aapa, casdm2)
+    aapa = vj = vk = vhf_c = vhf_a = h1 = None
 
-    dm1 = dm_core + dm_cas
-    vhf1c, vhf1a = mf_grad.get_veff(mol, (dm_core, dm_cas))
+    ee = mo_energy[:,None] - mo_energy
+    zvec = numpy.zeros_like(Imat)
+    zvec[:ncore,ncore:neleca] = Imat[:ncore,ncore:neleca] / -ee[:ncore,ncore:neleca]
+    zvec[ncore:neleca,:ncore] = Imat[ncore:neleca,:ncore] / -ee[ncore:neleca,:ncore]
+    zvec[nocc:,neleca:nocc] = Imat[nocc:,neleca:nocc] / -ee[nocc:,neleca:nocc]
+    zvec[neleca:nocc,nocc:] = Imat[neleca:nocc,nocc:] / -ee[neleca:nocc,nocc:]
+
+    zvec_ao = reduce(numpy.dot, (mo_coeff, zvec+zvec.T, mo_coeff.T))
+    vhf = mc._scf.get_veff(mol, zvec_ao) * 2
+    xvo = reduce(numpy.dot, (orbv.T, vhf, orbo))
+    xvo += Imat[neleca:,:neleca] - Imat[:neleca,neleca:].T
+    def fvind(x):
+        x = x.reshape(xvo.shape)
+        dm = reduce(numpy.dot, (orbv, x, orbo.T))
+        v = mc._scf.get_veff(mol, dm + dm.T)
+        v = reduce(numpy.dot, (orbv.T, v, orbo))
+        return v * 2
+    dm1resp = cphf.solve(fvind, mo_energy, mc._scf.mo_occ, xvo, max_cycle=30)[0]
+    zvec[neleca:,:neleca] = dm1resp
+
+    zeta = numpy.einsum('ij,j->ij', zvec, mo_energy)
+    zeta = reduce(numpy.dot, (mo_coeff, zeta, mo_coeff.T))
+
+    zvec_ao = reduce(numpy.dot, (mo_coeff, zvec+zvec.T, mo_coeff.T))
+    p1 = numpy.dot(mo_coeff[:,:neleca], mo_coeff[:,:neleca].T)
+    vhf_s1occ = reduce(numpy.dot, (p1, mc._scf.get_veff(mol, zvec_ao), p1))
+
+    Imat[:ncore,ncore:neleca] = 0
+    Imat[ncore:neleca,:ncore] = 0
+    Imat[nocc:,neleca:nocc] = 0
+    Imat[neleca:nocc,nocc:] = 0
+    Imat[neleca:,:neleca] = Imat[:neleca,neleca:].T
+    im1 = reduce(numpy.dot, (mo_coeff, Imat, mo_coeff.T))
+
+    casci_dm1 = dm_core + dm_cas
+    hf_dm1 = mc._scf.make_rdm1(mo_coeff, mc._scf.mo_occ)
     hcore_deriv = mf_grad.hcore_generator(mol)
     s1 = mf_grad.get_ovlp(mol)
 
@@ -72,7 +108,8 @@ def kernel(mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=None,
     dm2buf = dm2buf.reshape(ncas,ncas,nao_pair)
     casdm2 = casdm2_cc = None
 
-    atmlst = range(mol.natm)
+    if atmlst is None:
+        atmlst = range(mol.natm)
     aoslices = mol.aoslice_by_atom()
     de = numpy.zeros((len(atmlst),3))
 
@@ -83,9 +120,10 @@ def kernel(mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=None,
     for k, ia in enumerate(atmlst):
         shl0, shl1, p0, p1 = aoslices[ia]
         h1ao = hcore_deriv(ia)
-        de[k] += numpy.einsum('xij,ij->x', h1ao, dm1)
-        de[k] -= numpy.einsum('xij,ij->x', s1[:,p0:p1], dme0[p0:p1]) * 2
+        de[k] += numpy.einsum('xij,ij->x', h1ao, casci_dm1)
+        de[k] += numpy.einsum('xij,ij->x', h1ao, zvec_ao)
 
+        vhf1 = numpy.zeros((3,nao,nao))
         q1 = 0
         for b0, b1, nf in _shell_prange(mol, 0, mol.nbas, blksize):
             q0, q1 = q1, q1 + nf
@@ -94,9 +132,32 @@ def kernel(mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=None,
             eri1 = mol.intor('int2e_ip1', comp=3, aosym='s2kl',
                              shls_slice=shls_slice).reshape(3,p1-p0,nf,nao_pair)
             de[k] -= numpy.einsum('xijw,ijw->x', eri1, dm2_ao) * 2
-            eri1 = None
-        de[k] += numpy.einsum('xij,ij->x', vhf1c[:,p0:p1], dm1[p0:p1]) * 2
-        de[k] += numpy.einsum('xij,ij->x', vhf1a[:,p0:p1], dm_core[p0:p1]) * 2
+
+            for i in range(3):
+                eri1tmp = lib.unpack_tril(eri1[i].reshape((p1-p0)*nf,-1))
+                eri1tmp = eri1tmp.reshape(p1-p0,nf,nao,nao)
+                de[k,i] -= numpy.einsum('ijkl,ij,kl', eri1tmp, hf_dm1[p0:p1,q0:q1], zvec_ao) * 2
+                de[k,i] -= numpy.einsum('ijkl,kl,ij', eri1tmp, hf_dm1, zvec_ao[p0:p1,q0:q1]) * 2
+                de[k,i] += numpy.einsum('ijkl,il,kj', eri1tmp, hf_dm1[p0:p1], zvec_ao[q0:q1])
+                de[k,i] += numpy.einsum('ijkl,jk,il', eri1tmp, hf_dm1[q0:q1], zvec_ao[p0:p1])
+
+                #:vhf1c, vhf1a = mf_grad.get_veff(mol, (dm_core, dm_cas))
+                #:de[k] += numpy.einsum('xij,ij->x', vhf1c[:,p0:p1], casci_dm1[p0:p1]) * 2
+                #:de[k] += numpy.einsum('xij,ij->x', vhf1a[:,p0:p1], dm_core[p0:p1]) * 2
+                de[k,i] -= numpy.einsum('ijkl,lk,ij', eri1tmp, dm_core[q0:q1], casci_dm1[p0:p1]) * 2
+                de[k,i] += numpy.einsum('ijkl,jk,il', eri1tmp, dm_core[q0:q1], casci_dm1[p0:p1])
+                de[k,i] -= numpy.einsum('ijkl,lk,ij', eri1tmp, dm_cas[q0:q1], dm_core[p0:p1]) * 2
+                de[k,i] += numpy.einsum('ijkl,jk,il', eri1tmp, dm_cas[q0:q1], dm_core[p0:p1])
+            eri1 = eri1tmp = None
+
+        de[k] -= numpy.einsum('xij,ij->x', s1[:,p0:p1], im1[p0:p1])
+        de[k] -= numpy.einsum('xij,ji->x', s1[:,p0:p1], im1[:,p0:p1])
+
+        de[k] -= numpy.einsum('xij,ij->x', s1[:,p0:p1], zeta[p0:p1]) * 2
+        de[k] -= numpy.einsum('xij,ji->x', s1[:,p0:p1], zeta[:,p0:p1]) * 2
+
+        de[k] -= numpy.einsum('xij,ij->x', s1[:,p0:p1], vhf_s1occ[p0:p1]) * 2
+        de[k] -= numpy.einsum('xij,ji->x', s1[:,p0:p1], vhf_s1occ[:,p0:p1]) * 2
 
     de += rhf_grad.grad_nuc(mol)
     return de
@@ -129,7 +190,7 @@ def as_scanner(mcscf_grad):
     >>> etot, grad = mc_scanner(gto.M(atom='N 0 0 0; N 0 0 1.5'))
     '''
     logger.info(mcscf_grad, 'Create scanner for %s', mcscf_grad.__class__)
-    class CASSCF_GradScanner(mcscf_grad.__class__, lib.GradScanner):
+    class CASCI_GradScanner(mcscf_grad.__class__, lib.GradScanner):
         def __init__(self, g):
             self.__dict__.update(g.__dict__)
             self._mc = g._mc.as_scanner()
@@ -142,7 +203,7 @@ def as_scanner(mcscf_grad):
         @property
         def converged(self):
             return self._mc.converged
-    return CASSCF_GradScanner(mcscf_grad)
+    return CASCI_GradScanner(mcscf_grad)
 
 
 class Gradients(lib.StreamObject):
@@ -161,7 +222,7 @@ class Gradients(lib.StreamObject):
         log = logger.Logger(self.stdout, self.verbose)
         log.info('\n')
         if not self._mc.converged:
-            log.warn('Ground state CASSCF not converged')
+            log.warn('Ground state CASCI not converged')
         log.info('******** %s for %s ********',
                  self.__class__, self._mc.__class__)
         log.info('max_memory %d MB (current use %d MB)',
@@ -184,10 +245,10 @@ class Gradients(lib.StreamObject):
 
         self.de = kernel(self._mc, mo_coeff, ci, atmlst, mf_grad, log)
         if self.verbose >= logger.NOTE:
-            log.note('--------------- CASSCF gradients ----------------')
+            log.note('--------------- CASCI gradients ----------------')
             rhf_grad._write(self, self.mol, self.de, atmlst)
-            log.note('-------------------------------------------------')
-            log.timer('CASSCF gradients', *cput0)
+            log.note('------------------------------------------------')
+            log.timer('CASCI gradients', *cput0)
         return self.de
 
     as_scanner = as_scanner
@@ -202,25 +263,15 @@ if __name__ == '__main__':
 
     mol = gto.Mole()
     mol.atom = 'N 0 0 0; N 0 0 1.2; H 1 1 0; H 1 1 1.2'
-    mol.basis = '631g'
     mol.build()
-    mf = scf.RHF(mol).run()
-    mc = mcscf.CASSCF(mf, 4, 4).run()
-    de = Grad(mc).kernel()
-    print(lib.finger(de) - 0.019602220578635747)
-
-    mol = gto.Mole()
-    mol.verbose = 0
-    mol.atom = 'N 0 0 0; N 0 0 1.2'
-    mol.basis = 'sto3g'
-    mol.build()
-    mf = scf.RHF(mol).run()
-    mc = mcscf.CASSCF(mf, 4, 4).run()
-    de = kernel(mc)
+    mf = scf.RHF(mol).run(conv_tol=1e-14)
+    mc = mcscf.CASCI(mf, 4, 4).run()
+    g1 = mc.nuc_grad_method().kernel()
+    print(lib.finger(g1) - -0.066025991364829367)
 
     mcs = mc.as_scanner()
-    mol.set_geom_('N 0 0 0; N 0 0 1.201')
+    mol.set_geom_('N 0 0 0; N 0 0 1.201; H 1 1 0; H 1 1 1.2')
     e1 = mcs(mol)
-    mol.set_geom_('N 0 0 0; N 0 0 1.199')
+    mol.set_geom_('N 0 0 0; N 0 0 1.199; H 1 1 0; H 1 1 1.2')
     e2 = mcs(mol)
-    print(de[1,2], (e1-e2)/0.002*lib.param.BOHR)
+    print(g1[1,2], (e1-e2)/0.002*lib.param.BOHR)

@@ -389,6 +389,10 @@ def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE):
     log.debug('core energy = %.15g', energy_core)
     t1 = log.timer('effective h1e in CAS space', *t1)
 
+    if h1eff.shape[0] != ncas:
+        raise RuntimeError('Active space size error. nmo=%d ncore=%d ncas=%d' %
+                           (mo_coeff.shape[1], casci.ncore, ncas))
+
     # FCI
     max_memory = max(400, casci.max_memory-lib.current_memory()[0])
     e_tot, fcivec = casci.fcisolver.kernel(h1eff, eri_cas, ncas, nelecas,
@@ -428,11 +432,15 @@ def as_scanner(mc):
         def __init__(self, mc):
             self.__dict__.update(mc.__dict__)
             self._scf = mc._scf.as_scanner()
-        def __call__(self, mol, **kwargs):
-            mf_scanner = self._scf
-            mf_scanner(mol)
+        def __call__(self, mol, mo_coeff=None, ci0=None):
+            if mo_coeff is None:
+                mf_scanner = self._scf
+                mf_scanner(mol)
+                mo_coeff = mf_scanner.mo_coeff
+            if ci0 is None:
+                ci0 = self.ci
             self.mol = mol
-            e_tot = self.kernel(mf_scanner.mo_coeff, self.ci)[0]
+            e_tot = self.kernel(mo_coeff, ci0)[0]
             return e_tot
     return CASCI_Scanner(mc)
 
@@ -790,6 +798,10 @@ class CASCI(lib.StreamObject):
         return self.sfx2c1e()
     def x2c(self):
         return self.x2c1e()
+
+    def nuc_grad_method(self):
+        from pyscf.grad import casci
+        return casci.Gradients(self)
 
 
 if __name__ == '__main__':

@@ -207,6 +207,8 @@ def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf_kpts=None):
     nkpts = len(dm_kpts)
     e1 = 1./nkpts * np.einsum('kij,kji', dm_kpts, h1e_kpts)
     e_coul = 1./nkpts * np.einsum('kij,kji', dm_kpts, vhf_kpts) * 0.5
+    print e1
+    print e_coul
     if abs(e_coul.imag > 1.e-7):
         raise RuntimeError("Coulomb energy has imaginary part, "
                            "something is wrong!", e_coul.imag)
@@ -462,6 +464,8 @@ class KSCF(pbchf.SCF):
         See :func:`scf.hf.get_veff` and :func:`scf.hf.RHF.get_veff`
         '''
         vj, vk = self.get_jk(cell, dm_kpts, hermi, kpts, kpts_band)
+        vv = vj-vk*.5
+        print vv[0].diagonal()
         return vj - vk * .5
 
     def analyze(self, verbose=None, with_meta_lowdin=True, **kwargs):

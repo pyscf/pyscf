@@ -371,10 +371,16 @@ class GDF(aft.AFTDF):
         else:
             ke_cutoff = tools.mesh_to_cutoff(cell.lattice_vectors(), cell.mesh)
             ke_cutoff = ke_cutoff[:cell.dimension].min()
-            self.eta = min(aft.estimate_eta_for_ke_cutoff(cell, ke_cutoff, cell.precision),
-                           estimate_eta(cell, cell.precision))
-            self.mesh = tools.cutoff_to_mesh(cell.lattice_vectors(), ke_cutoff)
-            self.mesh[cell.dimension:] = cell.mesh[cell.dimension:]
+            eta_cell = aft.estimate_eta_for_ke_cutoff(cell, ke_cutoff, cell.precision)
+            eta_guess = estimate_eta(cell, cell.precision)
+            if eta_cell < eta_guess:
+                self.eta = eta_cell
+                self.mesh = cell.mesh
+            else:
+                self.eta = eta_guess
+                ke_cutoff = aft.estimate_ke_cutoff_for_eta(cell, self.eta, cell.precision)
+                self.mesh = tools.cutoff_to_mesh(cell.lattice_vectors(), ke_cutoff)
+                self.mesh[cell.dimension:] = cell.mesh[cell.dimension:]
 
 # Not input options
         self.exxdiv = None  # to mimic KRHF/KUHF object in function get_coulG

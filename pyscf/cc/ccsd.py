@@ -1034,6 +1034,9 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
             chkfile = self._scf.chkfile
         lib.chkfile.save(chkfile, 'ccsd', cc_chk)
 
+    def density_fit(self):
+        raise NotImplementedError
+
     def nuc_grad_method(self):
         from pyscf.grad import ccsd
         return ccsd.Gradients(self)
