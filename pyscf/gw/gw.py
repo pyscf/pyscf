@@ -30,7 +30,7 @@ def kernel(gw, mo_energy, mo_coeff, td_e, td_xy, eris=None,
         A list :  converged, mo_energy, mo_coeff
     '''
     # mf must be DFT; for HF use xc = 'hf'
-    mv = gw._scf
+    mf = gw._scf
     assert(isinstance(mf, (dft.rks.RKS      , dft.uks.UKS,
                            dft.roks.ROKS    , dft.uks.UKS,
                            dft.rks_symm.RKS , dft.uks_symm.UKS,
