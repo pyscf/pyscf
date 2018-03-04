@@ -101,11 +101,11 @@ def get_nuc(mydf, kpts=None):
         if cell.dimension > 0:
             ke_guess = estimate_ke_cutoff_for_eta(cell, mydf.eta, cell.precision)
             mesh_guess = tools.cutoff_to_mesh(cell.lattice_vectors(), ke_guess)
-            #if numpy.any(mesh < mesh_guess*.8):
-            #    logger.warn(mydf, 'mesh %s is not enough for AFTDF.get_nuc function '
-            #                'to get integral accuracy %g.\nRecommended mesh is %s.',
-            #                mesh, cell.precision, mesh_guess)
-            mesh_min = numpy.min((mesh_guess[:cell.dimension]*.8,
+            if numpy.any(mesh < mesh_guess*.8):
+                logger.warn(mydf, 'mesh %s is not enough for AFTDF.get_nuc function '
+                            'to get integral accuracy %g.\nRecommended mesh is %s.',
+                            mesh, cell.precision, mesh_guess)
+            mesh_min = numpy.min((mesh_guess[:cell.dimension],
                                   mesh[:cell.dimension]), axis=0)
             mesh[:cell.dimension] = mesh_min.astype(int)
         Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
