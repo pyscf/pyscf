@@ -273,20 +273,6 @@ class GCCSD(gccsd.GCCSD):
     def nkpts(self):
         return len(self.kpts)
 
-    @property
-    def nocc(self):
-        return self.get_nocc()
-    @nocc.setter
-    def nocc(self, n):
-        self._nocc = n
-
-    @property
-    def nmo(self):
-        return self.get_nmo()
-    @nmo.setter
-    def nmo(self, n):
-        self._nmo = n
-
     get_nocc = get_nocc
     get_nmo = get_nmo
     get_frozen_mask = get_frozen_mask

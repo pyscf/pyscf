@@ -270,15 +270,9 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         self.made_ip_imds = False
         self.made_ea_imds = False
 
-    nocc = property(get_nocc)
-    @nocc.setter
-    def nocc(self, n):
-        self._nocc = n
-
-    nmo = property(get_nmo)
-    @nmo.setter
-    def nmo(self, n):
-        self._nmo = n
+    @property
+    def nkpts(self):
+        return len(self.kpts)
 
     get_nocc = get_nocc
     get_nmo = get_nmo
