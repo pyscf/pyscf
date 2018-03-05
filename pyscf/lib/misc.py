@@ -593,7 +593,7 @@ class call_in_background(object):
                 def async_fn(*args, **kwargs):
                     if self.handler is not None:
                         self.handler.join()
-                    self.handler = Thread(target=fn, args=args, kwargs=kwargs)
+                    self.handler = ThreadWithReturnValue(target=fn, args=args, kwargs=kwargs)
                     self.handler.start()
                     return self.handler
                 return async_fn
