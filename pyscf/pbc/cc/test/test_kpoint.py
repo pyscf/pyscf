@@ -34,39 +34,17 @@ import pyscf.pbc.cc.kccsd
 import make_test_cell
 
 def run_kcell(cell, n, nk):
-    #############################################
-    # Do a k-point calculation                  #
-    #############################################
     abs_kpts = cell.make_kpts(nk, wrap_around=True)
 
-    #############################################
-    # Running HF                                #
-    #############################################
-#    print ""
-#    print "*********************************"
-#    print "STARTING HF                      "
-#    print "*********************************"
-#    print ""
+    # RHF calculation
     kmf = pbchf.KRHF(cell, abs_kpts, exxdiv=None)
     kmf.conv_tol = 1e-14
-    #kmf.verbose = 7
     ekpt = kmf.scf()
-#    print "scf energy (per unit cell) = %.17g" % ekpt
 
-    #############################################
-    # Running CCSD                              #
-    #############################################
-#    print ""
-#    print "*********************************"
-#    print "STARTING CCSD                    "
-#    print "*********************************"
-#    print ""
-
+    # RCCSD calculation
     cc = pyscf.pbc.cc.kccsd.CCSD(pbchf.addons.convert_to_ghf(kmf))
-    cc.conv_tol=1e-8
-    #cc.verbose = 7
+    cc.conv_tol = 1e-8
     ecc, t1, t2 = cc.kernel()
-#    print "cc energy (per unit cell) = %.17g" % ecc
     return ekpt, ecc
 
 class KnownValues(unittest.TestCase):

@@ -43,6 +43,13 @@ DEBUG = False
 #einsum = numpy.einsum
 einsum = lib.einsum
 
+def _frozen_sanity_check(array):
+    '''Checks whether there have been any repeated elements in the frozen index array'''
+    diff = len(array) - len(numpy.unique(array))
+    if diff > 0:
+        raise RuntimeError("Frozen orbital list contains duplicates: %s" % array)
+
+
 def get_nocc(mp):
     '''The number of occupied orbitals per k-point.'''
     if mp._nocc is not None:
@@ -62,6 +69,7 @@ def get_nocc(mp):
         nocc = numpy.count_nonzero(occ_idx[0])
     else:
         raise NotImplementedError
+    assert(nocc > 0)
     return nocc
 
 
@@ -81,6 +89,7 @@ def get_nmo(mp):
         nmo = len(mp.mo_occ[0]) - len(all_frozen)
     else:
         raise NotImplementedError
+    assert(nmo > 0)
     return nmo
 
 
@@ -506,10 +515,7 @@ def _make_eris_incore(cc, mo_coeff=None):
     # These are 'spin-less' quantities; spin-conservation will be added manually.
     so_coeff = [mo[:nao//2] + mo[nao//2:] for mo in eris.mo_coeff]
 
-    # Get eri sizes at each k-point (for the possibility that each k-point doesn't include the same
-    # number of molecular orbitals)
     eri = numpy.empty((nkpts, nkpts, nkpts, nmo, nmo, nmo, nmo), dtype=numpy.complex128)
-
     fao2mo = cc._scf.with_df.ao2mo
     for kp, kq, kr in kpts_helper.loop_kkk(nkpts):
         ks = kconserv[kp,kq,kr]
