@@ -885,6 +885,10 @@ class _ERIS:#(pyscf.cc.ccsd._ChemistsERIs):
                for k in range(nkpts)):
             raise NotImplementedError('Different occupancies found for different k-points')
 
+        kept_moidx = reduce(numpy.logical_or, moidx)  # Keep if MO included in at least one kpts
+        zeroed_moidx = [~idx[kept_moidx] for idx in moidx]  # Zero if MO not included in at least one kpt
+        moidx = [kept_moidx] * nkpts
+
         nao = cc.mo_coeff[0].shape[0]
         dtype = cc.mo_coeff[0].dtype
         self.mo_coeff = numpy.zeros((nkpts,nao,nmo), dtype=dtype)
@@ -892,12 +896,14 @@ class _ERIS:#(pyscf.cc.ccsd._ChemistsERIs):
         if mo_coeff is None:
             for kp in range(nkpts):
                 self.mo_coeff[kp] = cc.mo_coeff[kp][:,moidx[kp]]
+                self.mo_coeff[kp][:, zeroed_moidx[kp]] *= 0.0
             mo_coeff = self.mo_coeff
             for kp in range(nkpts):
                 self.fock[kp] = numpy.diag(cc.mo_energy[kp][moidx[kp]]).astype(dtype)
         else:  # If mo_coeff is not canonical orbital
             for kp in range(nkpts):
                 self.mo_coeff[kp] = mo_coeff[kp][:,moidx[kp]]
+                self.mo_coeff[kp][:, zeroed_moidx[kp]] *= 0.0
             mo_coeff = self.mo_coeff
             dm = cc._scf.make_rdm1(cc.mo_coeff, cc.mo_occ)
             fockao = cc._scf.get_hcore() + cc._scf.get_veff(cc._scf.cell, dm)
