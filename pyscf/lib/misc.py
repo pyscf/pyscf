@@ -549,7 +549,10 @@ class ProcessWithReturnValue(Process):
         Process.__init__(self, group, qwrap, name, args, kwargs)
     def join(self):
         Process.join(self)
-        return self._q.get()
+        try:
+            return self._q.get(block=False)
+        except:  # Queue.Empty error
+            raise RuntimeError('Error on process %s' % self)
     get = join
 
 class ThreadWithReturnValue(Thread):
@@ -561,7 +564,10 @@ class ThreadWithReturnValue(Thread):
         Thread.__init__(self, group, qwrap, name, args, kwargs)
     def join(self):
         Thread.join(self)
-        return self._q.get()
+        try:
+            return self._q.get(block=False)
+        except:  # Queue.Empty error
+            raise RuntimeError('Error on thread %s' % self)
     get = join
 
 def background_thread(func, *args, **kwargs):
