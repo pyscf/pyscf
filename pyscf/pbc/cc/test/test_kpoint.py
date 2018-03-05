@@ -91,6 +91,26 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(escf,hf_311, 9)
         self.assertAlmostEqual(ecc, cc_311, 6)
 
+    def test_frozen_n3(self):
+        mesh = 5
+        cell = make_test_cell.test_cell_n3([mesh]*3)
+        nk = (1, 1, 3)
+        ehf_bench = -9.15349763559837
+        ecc_bench = -0.06713556649654
+
+        abs_kpts = cell.make_kpts(nk, with_gamma_point=True)
+
+        # RHF calculation
+        kmf = pbchf.KRHF(cell, abs_kpts, exxdiv=None)
+        ehf = kmf.scf()
+
+        # KGCCSD calculation, equivalent to running supercell
+        # calculation with frozen=[0,1,2] (if done with larger mesh)
+        cc = pyscf.pbc.cc.kccsd.CCSD(kmf, frozen=[[0,1],[],[0]])
+        ecc, t1, t2 = cc.kernel()
+        self.assertAlmostEqual(ehf, ehf_bench, 9)
+        self.assertAlmostEqual(ecc, ecc_bench, 9)
+
 if __name__ == '__main__':
     print("Full kpoint test")
     unittest.main()
