@@ -348,7 +348,7 @@ void SCIcontract_2e_bbaa(double *eri, double *ci0, double *ci1,
 {
         int strk, ib, blen;
         double *t1buf = malloc(sizeof(double) * (STRB_BLKSIZE*norb*(norb+1)+2));
-        double *ci1buf;
+        double *ci1buf = NULL;
         for (ib = 0; ib < nb; ib += STRB_BLKSIZE) {
                 blen = MIN(STRB_BLKSIZE, nb-ib);
 #pragma omp for schedule(static)
@@ -392,7 +392,7 @@ void SCIcontract_2e_aaaa(double *eri, double *ci0, double *ci1,
 {
         _LinkTrilT *clinka = malloc(sizeof(_LinkTrilT) * nlinka * inter_na);
         FCIcompress_link_tril(clinka, link_indexa, inter_na, nlinka);
-        _LinkTrilT *clinkb;
+        _LinkTrilT *clinkb = NULL;
 
         double *ci1bufs[MAX_THREADS];
 #pragma omp parallel default(none) \
@@ -571,7 +571,7 @@ void SCIcontract_2e_bbaa_symm(double *eri, double *ci0, double *ci1,
 {
         int strk, ib, blen;
         double *t1buf = malloc(sizeof(double) * (STRB_BLKSIZE*norb*(norb+1)+2));
-        double *ci1buf;
+        double *ci1buf = NULL;
         for (ib = 0; ib < nb; ib += STRB_BLKSIZE) {
                 blen = MIN(STRB_BLKSIZE, nb-ib);
 #pragma omp for schedule(static)
@@ -623,7 +623,7 @@ void SCIcontract_2e_aaaa_symm(double *eri, double *ci0, double *ci1,
 {
         _LinkTrilT *clinka = malloc(sizeof(_LinkTrilT) * nlinka * inter_na);
         FCIcompress_link_tril(clinka, link_indexa, inter_na, nlinka);
-        _LinkTrilT *clinkb;
+        _LinkTrilT *clinkb = NULL;
 
         double *ci1bufs[MAX_THREADS];
 #pragma omp parallel default(none) \

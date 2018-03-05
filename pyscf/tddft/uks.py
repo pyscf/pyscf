@@ -9,6 +9,7 @@ from pyscf import lib
 from pyscf.dft import numint
 from pyscf import dft
 from pyscf.tddft import uhf
+from pyscf.scf import uhf_symm
 from pyscf.ao2mo import _ao2mo
 from pyscf.soscf.newton_ah import _gen_uhf_response
 

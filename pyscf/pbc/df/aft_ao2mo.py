@@ -96,11 +96,14 @@ def get_eri(mydf, kpts=None, compact=True):
 #       rho_rs = 1/N \sum_{Tr,Ts} \int exp( i(G+k_{pq})*r) r(r-Tr) s(r-Ts) dr
 #              = \sum_{Ts} exp(i k_s*Ts) \int exp( i(G+k_{pq})*r) r(r) s(r-Ts) dr
 # rho_pq can be directly evaluated by AFT (function pw_loop)
-# rho_rs needs to be evaluated indirectly
 #       rho_pq = pw_loop(k_q, G+k_{pq})
+# Assuming r(r) and s(r) are real functions, rho_rs is evaluated
 #       rho_rs = 1/N \sum_{Tr,Ts} \int exp( i(G+k_{pq})*r) r(r-Tr) s(r-Ts) dr
 #              = conj(\sum_{Ts} exp(-i k_s*Ts) \int exp(-i(G+k_{pq})*r) r(r) s(r-Ts) dr)
 #              = conj( pw_loop(-k_s, G+k_{pq}) )
+#
+# TODO: For complex AO function r(r) and s(r), pw_loop function needs to be
+# extended to include Gv vector in the arguments
         for (pqkR, pqkI, p0, p1), (rskR, rskI, q0, q1) in \
                 lib.izip(mydf.pw_loop(mesh, kptijkl[:2], q, max_memory=max_memory*.5),
                          mydf.pw_loop(mesh,-kptijkl[2:], q, max_memory=max_memory*.5)):

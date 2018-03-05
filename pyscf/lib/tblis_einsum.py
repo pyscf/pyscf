@@ -48,17 +48,21 @@ def _contract(subscripts, *tensors, **kwargs):
         alpha (number) : Default is 1
         beta (number) :  Default is 0
     '''
-    sub_idx = re.split(',|->', subscripts)
-    indices  = ''.join(sub_idx)
+    if '...' in subscripts:
+        return numpy_einsum(subscripts, a, b)
+
     a = numpy.asarray(tensors[0])
     b = numpy.asarray(tensors[1])
+    if a.size < 2000 or b.size < 2000:
+        return numpy_einsum(subscripts, a, b)
+
     c_dtype = kwargs.get('dtype', numpy.result_type(a, b))
-    if ('...' in subscripts or
-        a.size == 0 or b.size == 0 or
-        not (numpy.issubdtype(c_dtype, numpy.float) or
+    if (not (numpy.issubdtype(c_dtype, numpy.float) or
              numpy.issubdtype(c_dtype, numpy.complex))):
         return numpy_einsum(subscripts, a, b)
 
+    sub_idx = re.split(',|->', subscripts)
+    indices  = ''.join(sub_idx)
     if '->' not in subscripts:
         # Find chararacters which appear only once in the subscripts for c_descr
         for x in set(indices):

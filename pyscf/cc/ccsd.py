@@ -19,7 +19,7 @@ from pyscf.lib import logger
 from pyscf import ao2mo
 from pyscf.ao2mo import _ao2mo
 from pyscf.cc import _ccsd
-from pyscf.mp import mp2
+from pyscf.mp.mp2 import get_nocc, get_nmo, get_frozen_mask, _mo_without_core
 
 BLKMIN = 4
 
@@ -218,7 +218,7 @@ def _add_ovvv_(mycc, t1, t2, eris, fvv, t1new, t2new, fswap):
     nocc, nvir = t1.shape
 
     max_memory = mycc.max_memory - lib.current_memory()[0]
-    unit = nocc*nvir**2*3 + nocc**2*nvir
+    unit = nocc*nvir**2*3 + nocc**2*nvir + 1
     blksize = min(nvir, max(BLKMIN, int((max_memory*.9e6/8-t2.size)/unit)))
     log.debug1('max_memory %d MB,  nocc,nvir = %d,%d  blksize = %d',
                max_memory, nocc, nvir, blksize)
@@ -405,6 +405,9 @@ def _contract_s4vvvv_t2(mol, vvvv, t2, out=None, max_memory=2000, verbose=None):
             if vvvv is None, contract t2 to AO-integrals using AO-direct algorithm
     '''
     assert(t2.dtype == numpy.double)
+    if t2.size == 0:
+        return numpy.zeros_like(t2)
+
     _dgemm = lib.numpy_helper._dgemm
     time0 = time.clock(), time.time()
     log = logger.new_logger(mol, verbose)
@@ -568,12 +571,6 @@ def _unpack_4fold(c2vec, nocc, nvir, anti_symm=True):
         lib.takebak_2d(t2, t2tril, otril[1]*nocc+otril[0], vtril[0]*nvir+vtril[1])
     return t2.reshape(nocc,nocc,nvir,nvir)
 
-
-get_nocc = mp2.get_nocc
-get_nmo = mp2.get_nmo
-get_frozen_mask = mp2.get_frozen_mask
-_mo_without_core = mp2._mo_without_core
-
 def amplitudes_to_vector(t1, t2, out=None):
     nocc, nvir = t1.shape
     nov = nocc * nvir
@@ -620,7 +617,7 @@ def energy(mycc, t1, t2, eris):
     fock = eris.fock
     e = numpy.einsum('ia,ia', fock[:nocc,nocc:], t1) * 2
     max_memory = mycc.max_memory - lib.current_memory()[0]
-    blksize = int(min(nvir, max(BLKMIN, max_memory*.3e6/8/(nocc**2*nvir))))
+    blksize = int(min(nvir, max(BLKMIN, max_memory*.3e6/8/(nocc**2*nvir+1))))
     for p0, p1 in lib.prange(0, nvir, blksize):
         eris_ovvo = eris.ovvo[:,p0:p1]
         tau = t2[:,:,p0:p1] + numpy.einsum('ia,jb->ijab', t1[:,p0:p1], t1)
@@ -662,7 +659,7 @@ def as_scanner(cc):
             self.mol = mol
             self.mo_coeff = mf_scanner.mo_coeff
             self.mo_occ = mf_scanner.mo_occ
-            self.kernel(self.t1, self.t2, **kwargs)[0]
+            self.kernel(self.t1, self.t2, **kwargs)
             return self.e_tot
     return CCSD_Scanner(cc)
 
@@ -822,7 +819,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         t1 = eris.fock[:nocc,nocc:] / eia
         t2 = numpy.empty((nocc,nocc,nvir,nvir))
         max_memory = self.max_memory - lib.current_memory()[0]
-        blksize = int(min(nvir, max(BLKMIN, max_memory*.3e6/8/(nocc**2*nvir))))
+        blksize = int(min(nvir, max(BLKMIN, max_memory*.3e6/8/(nocc**2*nvir+1))))
         self.emp2 = 0
         for p0, p1 in lib.prange(0, nvir, blksize):
             eris_ovvo = eris.ovvo[:,p0:p1]
@@ -903,6 +900,30 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
     def eeccsd(self, nroots=1, koopmans=False, guess=None, eris=None):
         from pyscf.cc import eom_rccsd
         return eom_rccsd.EOMEE(self).kernel(nroots, koopmans, guess, eris)
+
+    def eomee_ccsd_singlet(self, nroots=1, koopmans=False, guess=None, eris=None):
+        from pyscf.cc import eom_rccsd
+        return eom_rccsd.EOMEESinglet(self).kernel(nroots, koopmans, guess, eris)
+
+    def eomee_ccsd_triplet(self, nroots=1, koopmans=False, guess=None, eris=None):
+        from pyscf.cc import eom_rccsd
+        return eom_rccsd.EOMEETriplet(self).kernel(nroots, koopmans, guess, eris)
+
+    def eomsf_ccsd(self, nroots=1, koopmans=False, guess=None, eris=None):
+        from pyscf.cc import eom_rccsd
+        return eom_rccsd.EOMEESpinFlip(self).kernel(nroots, koopmans, guess, eris)
+
+    def eomip_method(self):
+        from pyscf.cc import eom_rccsd
+        return eom_rccsd.EOMIP(self)
+
+    def eomea_method(self):
+        from pyscf.cc import eom_rccsd
+        return eom_rccsd.EOMEA(self)
+
+    def eomee_method(self):
+        from pyscf.cc import eom_rccsd
+        return eom_rccsd.EOMEE(self)
 
     def make_rdm1(self, t1=None, t2=None, l1=None, l2=None):
         '''Un-relaxed 1-particle density matrix in MO space'''
@@ -1007,9 +1028,12 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
             chkfile = self._scf.chkfile
         lib.chkfile.save(chkfile, 'ccsd', cc_chk)
 
+    def density_fit(self):
+        raise NotImplementedError
+
     def nuc_grad_method(self):
-        from pyscf.cc import ccsd_grad
-        return ccsd_grad.Gradients(self)
+        from pyscf.grad import ccsd
+        return ccsd.Gradients(self)
 
 CC = CCSD
 
@@ -1040,6 +1064,15 @@ class _ChemistsERIs:
         self.fock = reduce(numpy.dot, (mo_coeff.conj().T, fockao, mo_coeff))
         self.nocc = mycc.nocc
         self.mol = mycc.mol
+
+        mo_e = self.fock.diagonal()
+        gap = abs(mo_e[:self.nocc,None] - mo_e[None,self.nocc:]).min()
+        if gap.size > 0:
+            gap = gap.min()
+        else:
+            gap = 1e9
+        if gap < 1e-5:
+            logger.warn(mycc, 'HOMO-LUMO gap %s too small for CCSD', gap)
         return self
 
     def get_ovvv(self, *slices):

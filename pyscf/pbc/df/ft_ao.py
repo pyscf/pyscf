@@ -158,7 +158,7 @@ if __name__ == '__main__':
     ao2 = ft_aopair(cell, cell.Gv)
     nao = cell.nao_nr()
     coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
-    aoR = cell.pbc_eval_gto(cell, coords)
+    aoR = cell.pbc_eval_gto('GTOval', coords)
     aoR2 = numpy.einsum('ki,kj->kij', aoR.conj(), aoR)
     ngrids = aoR.shape[0]
 

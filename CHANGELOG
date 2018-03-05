@@ -27,8 +27,13 @@ PySCF 1.5 alpha (2018-03-??)
   - SF-X2C-1E analytical nuclear hessian
   - Analytical nuclear gradients and hessian for ECP integrals
   - GIAO-ECP integrals for NMR shielding
+  - Interface to pyWannier90
+  - Restricted MP2 with k-point sampling
+  - RCCSD(T), UCCSD(T) and GCCSD(T) density matrices
+  - RCCSD(T), UCCSD(T) analytical nuclear gradients
+  - CASCI/CASSCF analytical nuclear gradients
 * Improved
-  - Support of setting omp threads in FCI solver
+  - Supported to set omp threads in FCI solver
   - Supported even number of grids in pbc calculations
   - Performance of UCCSD lambda solver
   - The function to make SCF initial guess from the chkfile of the
@@ -36,6 +41,7 @@ PySCF 1.5 alpha (2018-03-??)
   - The mcscf natural orbitals in the state-average calculation
   - Performance of ECP integrals
   - Prescreening for PBC 3-center integrals
+  - G0W0
 
 
 PySCF 1.4.3 (2018-01-17)
@@ -43,7 +49,7 @@ PySCF 1.4.3 (2018-01-17)
 * Improved
   - Assert convergence in geometry optimization
   - Initial guess in SCF PES scanning
-  - Memory usage for generating becke-grids in DFT
+  - Memory usage for generating Becke-grids in DFT
 * Bugfix
   - XC parser to support the scaled compound functional
   - In the second order SCF algorithm, removing level_shift

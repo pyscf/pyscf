@@ -280,7 +280,7 @@ def _gamma2_intermediates(myci, civec, nmo, nocc):
 
 
 class GCISD(cisd.CISD):
-    def get_init_guess(self, eris=None):
+    def get_init_guess(self, eris=None, nroots=1, diag=None):
         # MP2 initial guess
         if eris is None: eris = self.ao2mo(self.mo_coeff)
         time0 = time.clock(), time.time()
@@ -288,16 +288,36 @@ class GCISD(cisd.CISD):
         nocc = self.nocc
         eia = mo_e[:nocc,None] - mo_e[None,nocc:]
         eijab = lib.direct_sum('ia,jb->ijab',eia,eia)
-        t1 = eris.fock[:nocc,nocc:] / eia
+        ci0 = 1
+        ci1 = eris.fock[:nocc,nocc:] / eia
         eris_oovv = numpy.array(eris.oovv)
-        t2 = eris_oovv / eijab
-        self.emp2 = 0.25*numpy.einsum('ijab,ijab', t2.conj(), eris_oovv).real
+        ci2 = eris_oovv / eijab
+        self.emp2 = 0.25*numpy.einsum('ijab,ijab', ci2.conj(), eris_oovv).real
         logger.info(self, 'Init t2, MP2 energy = %.15g', self.emp2)
         logger.timer(self, 'init mp2', *time0)
 
-        if abs(self.emp2) < 1e-3 and abs(t1).sum() < 1e-3:
-            t1 = 1. / eia
-        return self.emp2, amplitudes_to_cisdvec(1, t1, t2)
+        if abs(self.emp2) < 1e-3 and abs(ci1).sum() < 1e-3:
+            ci1 = 1. / eia
+
+        ci_guess = amplitudes_to_cisdvec(ci0, ci1, ci2)
+
+        if nroots > 1:
+            civec_size = ci_guess.size
+            dtype = ci_guess.dtype
+            nroots = min(ci1.size+1, nroots)  # Consider Koopmans' theorem only
+
+            if diag is None:
+                idx = range(1, nroots)
+            else:
+                idx = diag[:ci1.size+1].argsort()[1:nroots]  # exclude HF determinant
+
+            ci_guess = [ci_guess]
+            for i in idx:
+                g = numpy.zeros(civec_size, dtype)
+                g[i] = 1.0
+                ci_guess.append(g)
+
+        return self.emp2, ci_guess
 
     def ao2mo(self, mo_coeff=None):
         nmo = self.nmo

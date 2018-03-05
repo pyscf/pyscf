@@ -16,7 +16,7 @@ from pyscf.scf import ucphf
 from pyscf.ao2mo import _ao2mo
 from pyscf.scf import rhf_grad
 from pyscf.mp import ump2
-from pyscf.mp import mp2_grad
+from pyscf.grad import mp2 as mp2_grad
 
 
 def kernel(mp, t2, atmlst=None, mf_grad=None, verbose=logger.INFO):

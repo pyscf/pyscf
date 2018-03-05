@@ -27,6 +27,7 @@ from pyscf.lib import logger
 from pyscf.df import addons
 from pyscf.df.outcore import _guess_shell_ranges
 from pyscf.pbc.gto.cell import _estimate_rcut
+from pyscf.pbc import gto as pbcgto
 from pyscf.pbc import tools
 from pyscf.pbc.df import outcore
 from pyscf.pbc.df import ft_ao
@@ -171,13 +172,21 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
 #        feri['j2c/%d'%k] = fuse(fuse(j2c[k]).T).T
 #        aoaux = LkR = LkI = coulG = None
 
+    if cell.dimension == 1 or cell.dimension == 2:
+        plain_ints = _gaussian_int(fused_cell)
+
     max_memory = max(2000, mydf.max_memory - lib.current_memory()[0])
     blksize = max(2048, int(max_memory*.5e6/16/fused_cell.nao_nr()))
     log.debug2('max_memory %s (MB)  blocksize %s', max_memory, blksize)
     for k, kpt in enumerate(uniq_kpts):
         coulG = numpy.sqrt(mydf.weighted_coulG(kpt, False, mesh))
         for p0, p1 in lib.prange(0, ngrids, blksize):
-            aoaux = ft_ao.ft_ao(fused_cell, Gv[p0:p1], None, b, gxyz[p0:p1], Gvbase, kpt).T
+            aoaux = ft_ao.ft_ao(fused_cell, Gv[p0:p1], None, b, gxyz[p0:p1], Gvbase, kpt)
+            if (cell.dimension == 1 or cell.dimension == 2) and is_zero(kpt):
+                G0idx, SI_on_z = pbcgto.cell._SI_for_uniform_model_charge(cell, Gv[p0:p1])
+                aoaux[G0idx] -= numpy.einsum('g,i->gi', SI_on_z, plain_ints)
+
+            aoaux = aoaux.T
             LkR = aoaux.real * coulG[p0:p1]
             LkI = aoaux.imag * coulG[p0:p1]
             aoaux = None
@@ -204,9 +213,16 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
 
         shls_slice = (auxcell.nbas, fused_cell.nbas)
         Gaux = ft_ao.ft_ao(fused_cell, Gv, shls_slice, b, gxyz, Gvbase, kpt)
-        Gaux *= mydf.weighted_coulG(kpt, False, mesh).reshape(-1,1)
+        if (cell.dimension == 1 or cell.dimension == 2) and is_zero(kpt):
+            G0idx, SI_on_z = pbcgto.cell._SI_for_uniform_model_charge(cell, Gv)
+            s = plain_ints[-Gaux.shape[1]:]  # Only compensated Gaussians
+            Gaux[G0idx] -= numpy.einsum('g,i->gi', SI_on_z, s)
+
+        wcoulG = mydf.weighted_coulG(kpt, False, mesh)
+        Gaux *= wcoulG.reshape(-1,1)
         kLR = Gaux.real.copy('C')
         kLI = Gaux.imag.copy('C')
+        Gaux = None
         j2c = numpy.asarray(feri['j2c/%d'%uniq_kptji_id])
         try:
             j2c = scipy.linalg.cholesky(j2c, lower=True)
@@ -234,8 +250,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
 
             vbar = fuse(mydf.auxbar(fused_cell))
             ovlp = cell.pbc_intor('int1e_ovlp_sph', hermi=1, kpts=adapted_kptjs)
-            for k, ji in enumerate(adapted_ji_idx):
-                ovlp[k] = lib.pack_tril(ovlp[k])
+            ovlp = [lib.pack_tril(s) for s in ovlp]
         else:
             aosym = 's1'
             nao_pair = nao**2
@@ -268,7 +283,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
             j3cI = []
             for k, idx in enumerate(adapted_ji_idx):
                 v = numpy.asarray(feri['j3c/%d'%idx][:,col0:col1])
-                if is_zero(kpt):
+                if is_zero(kpt) and cell.dimension == 3:
                     for i, c in enumerate(vbar):
                         if c != 0:
                             v[i] -= c * ovlp[k][col0:col1]
@@ -284,6 +299,23 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
                 dat = ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
                                             b, gxyz[p0:p1], Gvbase, kpt,
                                             adapted_kptjs, out=buf)
+
+                if (cell.dimension == 1 or cell.dimension == 2) and is_zero(kpt):
+                    G0idx, SI_on_z = pbcgto.cell._SI_for_uniform_model_charge(cell, Gv[p0:p1])
+                    if SI_on_z.size > 0:
+                        for k, aoao in enumerate(dat):
+                            aoao[G0idx] -= numpy.einsum('g,i->gi', SI_on_z, ovlp[k])
+                            aux = fuse(ft_ao.ft_ao(fused_cell, Gv[p0:p1][G0idx]).T)
+                            vG_mod = numpy.einsum('ig,g,g->i', aux.conj(),
+                                                  wcoulG[p0:p1][G0idx], SI_on_z)
+                            if gamma_point(adapted_kptjs[k]):
+                                j3cR[k][:naux] -= vG_mod[:,None].real * ovlp[k]
+                            else:
+                                tmp = vG_mod[:,None] * ovlp[k]
+                                j3cR[k][:naux] -= tmp.real
+                                j3cI[k][:naux] -= tmp.imag
+                            tmp = aux = vG_mod
+
                 nG = p1 - p0
                 for k, ji in enumerate(adapted_ji_idx):
                     aoao = dat[k].reshape(nG,ncol)
@@ -339,11 +371,16 @@ class GDF(aft.AFTDF):
         else:
             ke_cutoff = tools.mesh_to_cutoff(cell.lattice_vectors(), cell.mesh)
             ke_cutoff = ke_cutoff[:cell.dimension].min()
-            self.eta = min(aft.estimate_eta_for_ke_cutoff(cell, ke_cutoff, cell.precision),
-                           estimate_eta(cell, cell.precision))
-            ke_cutoff = aft.estimate_ke_cutoff_for_eta(cell, self.eta, cell.precision)
-            self.mesh = tools.cutoff_to_mesh(cell.lattice_vectors(), ke_cutoff)
-            self.mesh[cell.dimension:] = cell.mesh[cell.dimension:]
+            eta_cell = aft.estimate_eta_for_ke_cutoff(cell, ke_cutoff, cell.precision)
+            eta_guess = estimate_eta(cell, cell.precision)
+            if eta_cell < eta_guess:
+                self.eta = eta_cell
+                self.mesh = cell.mesh
+            else:
+                self.eta = eta_guess
+                ke_cutoff = aft.estimate_ke_cutoff_for_eta(cell, self.eta, cell.precision)
+                self.mesh = tools.cutoff_to_mesh(cell.lattice_vectors(), ke_cutoff)
+                self.mesh[cell.dimension:] = cell.mesh[cell.dimension:]
 
 # Not input options
         self.exxdiv = None  # to mimic KRHF/KUHF object in function get_coulG
@@ -536,9 +573,6 @@ class GDF(aft.AFTDF):
                 LpqR, LpqI = load(j3c, b0, b1, LpqR, LpqI)
                 yield LpqR, LpqI
 
-    def prange(self, start, stop, step):
-        return lib.prange(start, stop, step)
-
     weighted_coulG = aft.weighted_coulG
     _int_nuc_vloc = aft._int_nuc_vloc
     get_nuc = aft.get_nuc
@@ -671,3 +705,7 @@ class _load_and_unpack(object):
         v = numpy.asarray(self.dat[s])
         v = lib.transpose(v.reshape(-1,nao,nao), axes=(0,2,1)).conj()
         return v.reshape(-1,nao**2)
+
+def _gaussian_int(cell):
+    r'''Regular gaussian integral \int g(r) dr^3'''
+    return ft_ao.ft_ao(cell, numpy.zeros((1,3)))[0].real

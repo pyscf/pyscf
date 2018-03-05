@@ -33,9 +33,9 @@ def init_guess_by_1e(mol, breaksym=True):
 
 def init_guess_by_atom(mol, breaksym=True):
     dm = hf.init_guess_by_atom(mol)
-    dmb = dm*.5
+    dma = dmb = dm*.5
     if breaksym:
-        #Add off-diagonal part of alpha DM
+        #Add off-diagonal part for alpha DM
         dma = mol.intor('int1e_ovlp') * 1e-2
         for b0, b1, p0, p1 in mol.aoslice_by_atom():
             dma[p0:p1,p0:p1] = dmb[p0:p1,p0:p1]
@@ -698,9 +698,17 @@ class UHF(hf.SCF):
 
     def init_guess_by_minao(self, mol=None, breaksym=True):
         '''Initial guess in terms of the overlap to minimal basis.'''
+        if mol is None: mol = self.mol
+        if mol.spin != 0:
+# For spin polarized system, there is no need to manually break spin symmetry
+            breaksym = False
         return init_guess_by_minao(mol, breaksym)
 
     def init_guess_by_atom(self, mol=None, breaksym=True):
+        if mol is None: mol = self.mol
+        if mol.spin != 0:
+# For spin polarized system, there is no need to manually break spin symmetry
+            breaksym = False
         return init_guess_by_atom(mol, breaksym)
 
     def init_guess_by_1e(self, mol=None, breaksym=True):
@@ -711,7 +719,7 @@ class UHF(hf.SCF):
         mo_energy, mo_coeff = self.eig((h1e,h1e), s1e)
         mo_occ = self.get_occ(mo_energy, mo_coeff)
         dma, dmb = self.make_rdm1(mo_coeff, mo_occ)
-        if breaksym:
+        if mol.spin == 0 and breaksym:
             #remove off-diagonal part of beta DM
             dmb = numpy.zeros_like(dma)
             for b0, b1, p0, p1 in mol.aoslice_by_atom():

@@ -30,6 +30,7 @@ from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point
 def get_eri(mydf, kpts=None, compact=False):
     cell = mydf.cell
     nao = cell.nao_nr()
+    low_dim_ft_type = cell.low_dim_ft_type
     kptijkl = _format_kpts(kpts)
     if not _iskconserv(cell, kptijkl):
         lib.logger.warn(cell, 'fft_ao2mo: momentum conservation not found in '
@@ -38,7 +39,7 @@ def get_eri(mydf, kpts=None, compact=False):
 
     kpti, kptj, kptk, kptl = kptijkl
     q = kptj - kpti
-    coulG = tools.get_coulG(cell, q, mesh=mydf.mesh)
+    coulG = tools.get_coulG(cell, q, mesh=mydf.mesh, low_dim_ft_type=low_dim_ft_type)
     coords = cell.gen_uniform_grids(mydf.mesh)
     max_memory = mydf.max_memory - lib.current_memory()[0]
 
@@ -85,6 +86,7 @@ def get_eri(mydf, kpts=None, compact=False):
 def general(mydf, mo_coeffs, kpts=None, compact=False):
     '''General MO integral transformation'''
     cell = mydf.cell
+    low_dim_ft_type = cell.low_dim_ft_type
     kptijkl = _format_kpts(kpts)
     kpti, kptj, kptk, kptl = kptijkl
     if isinstance(mo_coeffs, numpy.ndarray) and mo_coeffs.ndim == 2:
@@ -97,7 +99,7 @@ def general(mydf, mo_coeffs, kpts=None, compact=False):
 
     allreal = not any(numpy.iscomplexobj(mo) for mo in mo_coeffs)
     q = kptj - kpti
-    coulG = tools.get_coulG(cell, q, mesh=mydf.mesh)
+    coulG = tools.get_coulG(cell, q, mesh=mydf.mesh, low_dim_ft_type=low_dim_ft_type)
     coords = cell.gen_uniform_grids(mydf.mesh)
     max_memory = mydf.max_memory - lib.current_memory()[0]
 

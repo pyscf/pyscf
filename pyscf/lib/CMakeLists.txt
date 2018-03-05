@@ -109,8 +109,11 @@ option(BUILD_LIBXC "Download and build libxc library" ON)
 option(BUILD_XCFUN "Download and build xcfun library" ON)
 
 if(NOT DISABLE_DFT)
-if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/lib/libxc.so.4" AND
+if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xc.h" AND
     ENABLE_LIBXC AND BUILD_LIBXC)
+  if(UNIX AND NOT APPLE)
+    set(LIBM "LIBS=-lm")
+  endif()
   ExternalProject_Add(libxc
     #GIT_REPOSITORY https://gitlab.com/libxc/libxc/
     #GIT_TAG master
@@ -120,7 +123,7 @@ if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/lib/libxc.so.4" AND
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
     BUILD_IN_SOURCE 1
     CONFIGURE_COMMAND <SOURCE_DIR>/configure --prefix=<INSTALL_DIR> --libdir=<INSTALL_DIR>/lib
-          --enable-shared --disable-static --disable-fortran LIBS=-lm
+          --enable-shared --disable-static --disable-fortran ${LIBM}
           CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER}
 
 ## For git checkout
@@ -141,6 +144,7 @@ if(ENABLE_XCFUN AND BUILD_XCFUN)
     CMAKE_ARGS -DCMAKE_BUILD_TYPE=RELEASE -DBUILD_SHARED_LIBS=1
             -DXC_MAX_ORDER=3 -DENABLE_TESTALL=0
             -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
+            -DENABLE_FORTRAN_INTERFACE=OFF
   )
 endif() # ENABLE_XCFUN
 add_subdirectory(dft)

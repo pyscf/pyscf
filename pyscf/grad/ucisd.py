@@ -11,9 +11,9 @@ import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf import ao2mo
-from pyscf.ci import cisd_grad
 from pyscf.ci import ucisd
-from pyscf.cc import uccsd_grad
+from pyscf.grad import cisd as cisd_grad
+from pyscf.grad import uccsd as uccsd_grad
 
 
 def kernel(myci, civec=None, eris=None, atmlst=None, mf_grad=None,

@@ -18,8 +18,8 @@ from pyscf.scf import rhf_grad as rhf
 from pyscf.scf import dhf_grad as dhf
 from pyscf.grad import uhf
 from pyscf.grad import rohf
-from pyscf.cc import ccsd_grad as ccsd
-from pyscf.ci import cisd_grad as cisd
+from pyscf.grad import ccsd
+from pyscf.grad import cisd
 #from pyscf.grad import rks
 RHF = rhf.Gradients
 DHF = dhf.Gradients

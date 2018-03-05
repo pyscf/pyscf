@@ -448,7 +448,7 @@ def get_init_guess(mol, key='minao'):
 
     Kwargs:
         key : str
-            One of 'minao', 'atom', '1e', 'chkfile'.
+            One of 'minao', 'atom', 'hcore', '1e', 'chkfile'.
     '''
     return RHF(mol).get_init_guess(mol, key)
 
@@ -756,7 +756,7 @@ def get_occ(mf, mo_energy=None, mo_coeff=None):
     return mo_occ
 
 def get_grad(mo_coeff, mo_occ, fock_ao):
-    '''RHF Gradients
+    '''RHF orbital gradients
 
     Args:
         mo_coeff : 2D ndarray
@@ -1003,14 +1003,14 @@ def as_scanner(mf):
     Note scanner has side effects.  It may change many underlying objects
     (_scf, with_df, with_x2c, ...) during calculation.
 
-    Examples::
+    Examples:
 
-        >>> from pyscf import gto, scf
-        >>> hf_scanner = scf.RHF(gto.Mole().set(verbose=0)).as_scanner()
-        >>> hf_scanner(gto.M(atom='H 0 0 0; F 0 0 1.1'))
-        -98.552190448277955
-        >>> hf_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
-        -98.414750424294368
+    >>> from pyscf import gto, scf
+    >>> hf_scanner = scf.RHF(gto.Mole().set(verbose=0)).as_scanner()
+    >>> hf_scanner(gto.M(atom='H 0 0 0; F 0 0 1.1'))
+    -98.552190448277955
+    >>> hf_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
+    -98.414750424294368
     '''
     import copy
     logger.info(mf, 'Create scanner for %s', mf.__class__)
@@ -1085,7 +1085,7 @@ class SCF(lib.StreamObject):
         max_cycle : int
             max number of iterations.  Default is 50
         init_guess : str
-            initial guess method.  It can be one of 'minao', 'atom', '1e', 'chkfile'.
+            initial guess method.  It can be one of 'minao', 'atom', 'hcore', '1e', 'chkfile'.
             Default is 'minao'
         diis : boolean or object of DIIS class listed in :mod:`scf.diis`
             Default is :class:`diis.SCF_DIIS`. Set it to None to turn off DIIS.
@@ -1290,16 +1290,17 @@ class SCF(lib.StreamObject):
     from_chk.__doc__ = init_guess_by_chkfile.__doc__
 
     def get_init_guess(self, mol=None, key='minao'):
+        key = key.lower()
         if mol is None:
             mol = self.mol
-        if key.lower() == '1e':
+        if key == '1e' or key == 'hcore':
             dm = self.init_guess_by_1e(mol)
         elif getattr(mol, 'natm', 0) == 0:
             logger.info(self, 'No atom found in mol. Use 1e initial guess')
             dm = self.init_guess_by_1e(mol)
-        elif key.lower() == 'atom':
+        elif key == 'atom':
             dm = self.init_guess_by_atom(mol)
-        elif key.lower().startswith('chk'):
+        elif key[:3] == 'chk':
             try:
                 dm = self.init_guess_by_chkfile()
             except (IOError, KeyError):
@@ -1371,8 +1372,7 @@ class SCF(lib.StreamObject):
             logger.note(self, 'converged SCF energy = %.15g', self.e_tot)
         else:
             logger.note(self, 'SCF not converged.')
-            logger.note(self, 'SCF energy = %.15g after %d cycles',
-                        self.e_tot, self.max_cycle)
+            logger.note(self, 'SCF energy = %.15g', self.e_tot)
         return self
 
     def init_direct_scf(self, mol=None):

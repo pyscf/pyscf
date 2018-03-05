@@ -138,19 +138,13 @@ def get_pp(mydf, kpts=None):
 class FFTDF(lib.StreamObject):
     '''Density expansion on plane waves
     '''
-    def __init__(self, cell, kpts=numpy.zeros((1,3)), low_dim_ft_type=None):
+    def __init__(self, cell, kpts=numpy.zeros((1,3))):
         from pyscf.pbc.dft import numint
         self.cell = cell
         self.stdout = cell.stdout
         self.verbose = cell.verbose
         self.max_memory = cell.max_memory
-        if low_dim_ft_type is None:
-            self.low_dim_ft_type = cell.low_dim_ft_type
-        else:
-            logger.warn(self, 'Setting low_dim_ft_type inside cell class.  Change me in '
-                              'future implementation \n')
-            cell.low_dim_ft_type = low_dim_ft_type
-            self.low_dim_ft_type = low_dim_ft_type
+        self.low_dim_ft_type = cell.low_dim_ft_type
 
         self.kpts = kpts
         self.mesh = cell.mesh
@@ -175,11 +169,11 @@ class FFTDF(lib.StreamObject):
         lib.StreamObject.check_sanity(self)
         cell = self.cell
         if cell.dimension < 2:
-            raise RuntimeError('FFTDF method does not support low-dimension '
+            raise RuntimeError('FFTDF method does not support 0D/1D low-dimension '
                                'PBC system.  DF, MDF or AFTDF methods should '
                                'be used.\nSee also examples/pbc/31-low_dimensional_pbc.py')
         if cell.dimension == 2 and self.low_dim_ft_type is None:
-            raise RuntimeError('FFTDF method only supports low_dim_ft_type of None '
+            raise RuntimeError('FFTDF method does not support low_dim_ft_type of None '
                                'for 2D systems.  Supported types include \'analytic_2d_1\'. '
                                '\nSee also examples/pbc/32-graphene.py')
 

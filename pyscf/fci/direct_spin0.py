@@ -218,6 +218,7 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
     eri = numpy.ascontiguousarray(eri)
     na = link_index.shape[0]
     hdiag = fci.make_hdiag(h1e, eri, norb, nelec)
+    nroots = min(hdiag.size, nroots)
 
     try:
         addr, h0 = fci.pspace(h1e, eri, norb, nelec, hdiag, max(pspace_size,nroots))

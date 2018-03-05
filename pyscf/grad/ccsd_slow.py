@@ -13,8 +13,7 @@ from pyscf.lib import logger
 from pyscf import ao2mo
 from pyscf.cc import ccsd
 from pyscf.cc import ccsd_rdm
-from pyscf.cc import ccsd_grad
-from pyscf import grad
+from pyscf.grad import ccsd as ccsd_grad
 
 def kernel(cc, t1, t2, l1, l2, eris=None):
     if eris is None:
@@ -32,9 +31,8 @@ def kernel(cc, t1, t2, l1, l2, eris=None):
     d1 = _gamma1_intermediates(cc, t1, t2, l1, l2)
     d2 = _gamma2_intermediates(cc, t1, t2, l1, l2)
 
-    dm2 = ccsd_rdm._make_rdm2(mycc, d1, d2, with_dm1=False, with_frozen=False)
-    eri = ao2mo.restore(1, ao2mo.full(mycc.mol, mo_coeff), nmo)
-# Note Imat is not hermitian
+    dm2 = ccsd_rdm._make_rdm2(cc, d1, d2, with_dm1=False, with_frozen=False)
+    eri = ao2mo.restore(1, ao2mo.full(cc.mol, mo_coeff), nmo)
     Imat = numpy.einsum('jqrs,iqrs->ij', dm2, eri) * -1
     Ioo = Imat[:nocc,:nocc]
     Ivv = Imat[nocc:,nocc:]
@@ -47,16 +45,16 @@ def kernel(cc, t1, t2, l1, l2, eris=None):
         dvv[VA[:,None],VF] = Ivv[VA[:,None],VF] / lib.direct_sum('a-b->ab', mo_e_v[VA], mo_e_v[VF])
     dm1 = scipy.linalg.block_diag(doo+doo.T, dvv+dvv.T)
     dm1ao = reduce(numpy.dot, (mo_coeff, dm1, mo_coeff.T))
-    vj, vk = mycc._scf.get_jk(mycc.mol, dm1ao)
+    vj, vk = cc._scf.get_jk(cc.mol, dm1ao)
     Xvo = reduce(numpy.dot, (mo_coeff[:,nocc:].T, vj*2-vk, mo_coeff[:,:nocc]))
     Xvo += Imat[:nocc,nocc:].T - Imat[nocc:,:nocc]
 
     dm1 += ccsd_grad._response_dm1(cc, Xvo, eris)
     Imat[nocc:,:nocc] = Imat[:nocc,nocc:].T
 
-    h1 =-(mol.intor('cint1e_ipkin_sph', comp=3)
-         +mol.intor('cint1e_ipnuc_sph', comp=3))
-    s1 =-mol.intor('cint1e_ipovlp_sph', comp=3)
+    h1 =-(mol.intor('int1e_ipkin', comp=3)
+         +mol.intor('int1e_ipnuc', comp=3))
+    s1 =-mol.intor('int1e_ipovlp', comp=3)
     zeta = lib.direct_sum('i-j->ij', mo_energy, mo_energy)
     eri1 = mol.intor('int2e_ip1', comp=3).reshape(3,nao,nao,nao,nao)
     eri1 = numpy.einsum('xipkl,pj->xijkl', eri1, mo_coeff)
@@ -67,7 +65,7 @@ def kernel(cc, t1, t2, l1, l2, eris=None):
     de = numpy.empty((mol.natm,3))
     for k,(sh0, sh1, p0, p1) in enumerate(mol.offset_nr_by_atom()):
         mol.set_rinv_origin(mol.atom_coord(k))
-        vrinv = -mol.atom_charge(k) * mol.intor('cint1e_iprinv_sph', comp=3)
+        vrinv = -mol.atom_charge(k) * mol.intor('int1e_iprinv', comp=3)
 
 # 2e AO integrals dot 2pdm
         de2 = numpy.zeros(3)
@@ -81,6 +79,7 @@ def kernel(cc, t1, t2, l1, l2, eris=None):
             hx = hx + hx.T
             sx = numpy.einsum('pq,pi,qj->ij', s1[i,p0:p1], mo_coeff[p0:p1], mo_coeff)
             sx = sx + sx.T
+
             fij =(hx[:nocc,:nocc]
                   - numpy.einsum('ij,j->ij', sx[:nocc,:nocc], mo_e_o) * .5
                   - numpy.einsum('ij,i->ij', sx[:nocc,:nocc], mo_e_o) * .5
@@ -101,6 +100,16 @@ def kernel(cc, t1, t2, l1, l2, eris=None):
                   + numpy.einsum('ijkk->ij', g1[nocc:,nocc:,:nocc,:nocc]) * 2
                   - numpy.einsum('ikkj->ij', g1[nocc:,:nocc,:nocc,nocc:]))
 
+            if with_frozen:
+                fij[OA[:,None],OF] -= numpy.einsum('ij,j->ij', sx[OA[:,None],OF], mo_e_o[OF]) * .5
+                fij[OA[:,None],OF] += numpy.einsum('ij,i->ij', sx[OA[:,None],OF], mo_e_o[OA]) * .5
+                fij[OF[:,None],OA] -= numpy.einsum('ij,j->ij', sx[OF[:,None],OA], mo_e_o[OA]) * .5
+                fij[OF[:,None],OA] += numpy.einsum('ij,i->ij', sx[OF[:,None],OA], mo_e_o[OF]) * .5
+                fab[VA[:,None],VF] -= numpy.einsum('ij,j->ij', sx[VA[:,None],VF], mo_e_v[VF]) * .5
+                fab[VA[:,None],VF] += numpy.einsum('ij,i->ij', sx[VA[:,None],VF], mo_e_v[VA]) * .5
+                fab[VF[:,None],VA] -= numpy.einsum('ij,j->ij', sx[VF[:,None],VA], mo_e_v[VA]) * .5
+                fab[VF[:,None],VA] += numpy.einsum('ij,i->ij', sx[VF[:,None],VA], mo_e_v[VF]) * .5
+
             fai =(hx[nocc:,:nocc]
                   - numpy.einsum('ai,i->ai', sx[nocc:,:nocc], mo_e_o)
                   - numpy.einsum('kl,ijlk->ij', sx[:nocc,:nocc],
@@ -115,8 +124,8 @@ def kernel(cc, t1, t2, l1, l2, eris=None):
             f1[nocc:,nocc:] = fab
             f1[nocc:,:nocc] = fai
             f1[:nocc,nocc:] = fai.T
-            de2[i] += numpy.einsum('ij,ij', f1, dm1)
-            de2[i] += numpy.einsum('ij,ij', sx, Imat)
+            de2[i] += numpy.einsum('ij,ji', f1, dm1)
+            de2[i] += numpy.einsum('ij,ji', sx, Imat)
             de2[i] += numpy.einsum('iajb,iajb', dm2, g1) * .5
 
         de[k] = de2

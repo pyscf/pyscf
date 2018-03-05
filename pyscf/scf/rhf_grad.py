@@ -159,7 +159,6 @@ class Gradients(lib.StreamObject):
         self.stdout = scf_method.stdout
         self.mol = scf_method.mol
         self._scf = scf_method
-        self.chkfile = scf_method.chkfile
         self.max_memory = self.mol.max_memory
 # This parameter has no effects for HF gradients. Add this attribute so that
 # the kernel function can be reused in the DFT gradients code.
@@ -176,7 +175,6 @@ class Gradients(lib.StreamObject):
             log.warn('Ground state SCF not converged')
         log.info('******** %s for %s ********',
                  self.__class__, self._scf.__class__)
-        log.info('chkfile = %s', self.chkfile)
         log.info('max_memory %d MB (current use %d MB)',
                  self.max_memory, lib.current_memory()[0])
         return self

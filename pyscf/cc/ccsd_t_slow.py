@@ -135,10 +135,10 @@ if __name__ == '__main__':
     mol = gto.M()
     numpy.random.seed(12)
     nocc, nvir = 5, 12
-    eris = lambda :None
+    eris = cc.ccsd._ChemistsERIs()
     eris.ovvv = numpy.random.random((nocc,nvir,nvir*(nvir+1)//2)) * .1
     eris.ovoo = numpy.random.random((nocc,nvir,nocc,nocc)) * .1
-    eris.ovvo = numpy.random.random((nocc,nvir,nvir,nocc)) * .1
+    eris.ovov = numpy.random.random((nocc,nvir,nocc,nvir)) * .1
     t1 = numpy.random.random((nocc,nvir)) * .1
     t2 = numpy.random.random((nocc,nocc,nvir,nvir)) * .1
     t2 = t2 + t2.transpose(1,0,3,2)
@@ -146,7 +146,7 @@ if __name__ == '__main__':
     mcc = cc.CCSD(mf)
     f = numpy.random.random((nocc+nvir,nocc+nvir)) * .1
     eris.fock = f+f.T + numpy.diag(numpy.arange(nocc+nvir))
-    print(kernel(mcc, eris, t1, t2) - -8.7130467232959781)
+    print(kernel(mcc, eris, t1, t2) - -8.0038781018306828)
 
     mol = gto.Mole()
     mol.atom = [
@@ -160,7 +160,7 @@ if __name__ == '__main__':
     rhf.conv_tol = 1e-14
     rhf.scf()
     mcc = cc.CCSD(rhf)
-    mcc.conv_tol = 1e-14
+    mcc.conv_tol = 1e-12
     mcc.ccsd()
 
     e3a = kernel(mcc, mcc.ao2mo())

@@ -208,8 +208,9 @@ def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf_kpts=None):
     e1 = 1./nkpts * np.einsum('kij,kji', dm_kpts, h1e_kpts)
     e_coul = 1./nkpts * np.einsum('kij,kji', dm_kpts, vhf_kpts) * 0.5
     if abs(e_coul.imag > 1.e-7):
-        raise RuntimeError("Coulomb energy has imaginary part, "
-                           "something is wrong!", e_coul.imag)
+        raise RuntimeError("Coulomb energy has imaginary part %s. "
+                           "Coulomb integrals (e-e, e-N) may not converge !" %
+                           e_coul.imag)
     e1 = e1.real
     e_coul = e_coul.real
     logger.debug(mf, 'E_coul = %.15g', e_coul)
@@ -347,7 +348,8 @@ class KSCF(pbchf.SCF):
         #    if self.exx_built is False:
         #        self.precompute_exx()
         #    logger.info(self, 'WS alpha = %s', self.exx_alpha)
-        if isinstance(self.exxdiv, str) and self.exxdiv.lower() == 'ewald':
+        if (self.cell.dimension == 3 and
+            isinstance(self.exxdiv, str) and self.exxdiv.lower() == 'ewald'):
             madelung = tools.pbc.madelung(self.cell, [self.kpts])
             logger.info(self, '    madelung (= occupied orbital energy shift) = %s', madelung)
             logger.info(self, '    Total energy shift due to Ewald probe charge'
@@ -375,14 +377,15 @@ class KSCF(pbchf.SCF):
         if cell is None:
             cell = self.cell
         dm_kpts = None
-        if key.lower() == '1e':
+        key = key.lower()
+        if key == '1e' or key == 'hcore':
             dm_kpts = self.init_guess_by_1e(cell)
         elif getattr(cell, 'natm', 0) == 0:
             logger.info(self, 'No atom found in cell. Use 1e initial guess')
             dm_kpts = self.init_guess_by_1e(cell)
-        elif key.lower() == 'atom':
+        elif key == 'atom':
             dm = self.init_guess_by_atom(cell)
-        elif key.lower().startswith('chk'):
+        elif key[:3] == 'chk':
             try:
                 dm_kpts = self.from_chk()
             except (IOError, KeyError):

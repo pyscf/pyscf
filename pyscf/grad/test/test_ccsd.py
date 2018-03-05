@@ -3,8 +3,8 @@ import unittest
 from pyscf import gto, lib
 from pyscf import scf, dft
 from pyscf import cc
-from pyscf.cc import ccsd_grad
 from pyscf import grad
+from pyscf.grad import ccsd as ccsd_grad
 
 mol = gto.Mole()
 mol.verbose = 7
@@ -26,8 +26,9 @@ class KnownValues(unittest.TestCase):
         mycc = cc.ccsd.CCSD(mf)
         mycc.max_memory = 1
         mycc.conv_tol = 1e-10
-        ecc, t1, t2 = mycc.kernel()
-        l1, l2 = mycc.solve_lambda()
+        eris = mycc.ao2mo()
+        ecc, t1, t2 = mycc.kernel(eris=eris)
+        l1, l2 = mycc.solve_lambda(eris=eris)
         g1 = ccsd_grad.kernel(mycc, t1, t2, l1, l2, mf_grad=grad.RHF(mf))
         self.assertAlmostEqual(lib.finger(g1), -0.036999389889460096, 6)
 
@@ -39,20 +40,10 @@ class KnownValues(unittest.TestCase):
             unit='Bohr')
         mf0 = scf.RHF(mol).run(conv_tol=1e-14)
         mycc0 = cc.ccsd.CCSD(mf0).run(conv_tol=1e-10)
-        mol = gto.M(
-            verbose = 5,
-            output = '/dev/null',
-            atom = 'H 0 0 0; H 0 0 1.704',
-            basis = '631g',
-            unit='Bohr')
+        mol.set_geom_('H 0 0 0; H 0 0 1.704', unit='Bohr')
         mf1 = scf.RHF(mol).run(conv_tol=1e-14)
         mycc1= cc.ccsd.CCSD(mf1).run(conv_tol=1e-10)
-        mol = gto.M(
-            verbose = 5,
-            output = '/dev/null',
-            atom = 'H 0 0 0; H 0 0 1.705',
-            basis = '631g',
-            unit='Bohr')
+        mol.set_geom_('H 0 0 0; H 0 0 1.705', unit='Bohr')
         mycc2 = cc.ccsd.CCSD(scf.RHF(mol))
         g_scanner = mycc2.nuc_grad_method().as_scanner()
         g1 = g_scanner(mol)[1]
@@ -62,10 +53,47 @@ class KnownValues(unittest.TestCase):
         mycc = cc.ccsd.CCSD(mf)
         mycc.frozen = [0,1,10,11,12]
         mycc.max_memory = 1
-        ecc, t1, t2 = mycc.kernel()
-        l1, l2 = mycc.solve_lambda()
+        eris = mycc.ao2mo()
+        ecc, t1, t2 = mycc.kernel(eris=eris)
+        l1, l2 = mycc.solve_lambda(eris=eris)
         g1 = ccsd_grad.kernel(mycc, t1, t2, l1, l2, mf_grad=grad.RHF(mf))
         self.assertAlmostEqual(lib.finger(g1), 0.10599503839207361, 6)
+
+    def test_uccsd_grad(self):
+        mol = gto.Mole()
+        mol.vebose = 5
+        mol.output = '/dev/null'
+        mol.atom = [
+            [8 , (0. , 0.     , 0.)],
+            [1 , (0. , -0.757 , 0.587)],
+            [1 , (0. , 0.757  , 0.587)]]
+        mol.spin = 2
+        mol.basis = '631g'
+        mol.build(0, 0)
+        mf = scf.UHF(mol)
+        mf.conv_tol_grad = 1e-8
+        mf.kernel()
+        mycc = cc.UCCSD(mf)
+        mycc.max_memory = 1
+        mycc.conv_tol = 1e-10
+        eris = mycc.ao2mo()
+        ecc, t1, t2 = mycc.kernel(eris=eris)
+        l1, l2 = mycc.solve_lambda(eris=eris)
+        g1 = mycc.nuc_grad_method().kernel()
+        self.assertAlmostEqual(lib.finger(g1), -0.22892720804519961, 6)
+
+        cc_scanner = mycc.as_scanner()
+        mol.set_geom_([
+            [8 , (0. , 0.     , 0.001)],
+            [1 , (0. , -0.757 , 0.587)],
+            [1 , (0. , 0.757  , 0.587)]], unit='Ang')
+        e1 = cc_scanner(mol)
+        mol.set_geom_([
+            [8 , (0. , 0.     ,-0.001)],
+            [1 , (0. , -0.757 , 0.587)],
+            [1 , (0. , 0.757  , 0.587)]], unit='Ang')
+        e2 = cc_scanner(mol)
+        self.assertAlmostEqual(g1[0,2], (e1-e2)/.002*lib.param.BOHR, 6)
 
 
 if __name__ == "__main__":

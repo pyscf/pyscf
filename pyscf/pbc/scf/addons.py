@@ -313,9 +313,12 @@ def convert_to_ghf(mf, out=None, remove_df=False):
                         occb = mf.mo_occ[k] == 2
                         orbspin = mol_addons.get_ghf_orbspin(ea, mf.mo_occ[k], True)
                     else:
-                        mo_a, mo_b = mf.mo_coeff[k]
-                        ea, eb = mf.mo_energy[k]
-                        occa, occb = mf.mo_occ[k]
+                        mo_a = mf.mo_coeff[0][k]
+                        mo_b = mf.mo_coeff[1][k]
+                        ea = mf.mo_energy[0][k]
+                        eb = mf.mo_energy[1][k]
+                        occa = mf.mo_occ[0][k]
+                        occb = mf.mo_occ[1][k]
                         orbspin = mol_addons.get_ghf_orbspin((ea, eb), (occa, occb), False)
 
                     nao, nmo = mo_a.shape

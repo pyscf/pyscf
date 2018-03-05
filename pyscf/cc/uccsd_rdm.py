@@ -41,8 +41,8 @@ def _gamma1_intermediates(cc, t1, t2, l1, l2):
     xt2a += einsum('mnaf,mnef->ae', t2ab, l2ab)
     xt2a += einsum('ma,me->ae', t1a, l1a)
 
-    dvoa  = einsum('imae,me->ai', t2aa, l1a)
-    dvoa += einsum('imae,me->ai', t2ab, l1b)
+    dvoa  = numpy.einsum('imae,me->ai', t2aa, l1a)
+    dvoa += numpy.einsum('imae,me->ai', t2ab, l1b)
     dvoa -= einsum('mi,ma->ai', xt1a, t1a)
     dvoa -= einsum('ie,ae->ai', t1a, xt2a)
     dvoa += t1a.T
@@ -53,8 +53,8 @@ def _gamma1_intermediates(cc, t1, t2, l1, l2):
     xt2b += einsum('mnfa,mnfe->ae', t2ab, l2ab)
     xt2b += einsum('ma,me->ae', t1b, l1b)
 
-    dvob  = einsum('imae,me->ai', t2bb, l1b)
-    dvob += einsum('miea,me->ai', t2ab, l1a)
+    dvob  = numpy.einsum('imae,me->ai', t2bb, l1b)
+    dvob += numpy.einsum('miea,me->ai', t2ab, l1a)
     dvob -= einsum('mi,ma->ai', xt1b, t1b)
     dvob -= einsum('ie,ae->ai', t1b, xt2b)
     dvob += t1b.T
@@ -320,12 +320,18 @@ def _gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj, compress_vvvv=False):
     dooov, dooOV, dOOov, dOOOV = d2[7]
     nocca, nvira, noccb, nvirb = dovOV.shape
 
+    idxa = numpy.tril_indices(nvira)
+    idxa = idxa[0] * nvira + idxa[1]
+    idxb = numpy.tril_indices(nvirb)
+    idxb = idxb[0] * nvirb + idxb[1]
     dvvvv = dvvvv + dvvvv.transpose(1,0,2,3)
-    dvvvv = ao2mo.restore(4, dvvvv, nvira) * .5
+    dvvvv = lib.take_2d(dvvvv.reshape(nvira**2,nvira**2), idxa, idxa)
+    dvvvv *= .5
     dvvVV = dvvVV + dvvVV.transpose(1,0,2,3)
-    dvvVV = lib.pack_tril(dvvVV[numpy.tril_indices(nvira)])
+    dvvVV = lib.take_2d(dvvVV.reshape(nvira**2,nvirb**2), idxa, idxb)
     dVVVV = dVVVV + dVVVV.transpose(1,0,2,3)
-    dVVVV = ao2mo.restore(4, dVVVV, nvirb) * .5
+    dVVVV = lib.take_2d(dVVVV.reshape(nvirb**2,nvirb**2), idxb, idxb)
+    dVVVV *= .5
 
     return ((dovov, dovOV, dOVov, dOVOV),
             (dvvvv, dvvVV, dVVvv, dVVVV),
@@ -413,6 +419,7 @@ def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True):
     dm2aa[nocca:,:nocca,nocca:,:nocca] = dm2aa[:nocca,nocca:,:nocca,nocca:].transpose(1,0,3,2).conj()
     dovov = None
 
+    #assert(abs(doovv+dovvo.transpose(0,3,2,1)).max() == 0)
     dovvo = numpy.asarray(dovvo)
     dm2aa[:nocca,:nocca,nocca:,nocca:] =-dovvo.transpose(0,3,2,1)
     dm2aa[nocca:,nocca:,:nocca,:nocca] = dm2aa[:nocca,:nocca,nocca:,nocca:].transpose(2,3,0,1)
@@ -420,6 +427,8 @@ def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True):
     dm2aa[nocca:,:nocca,:nocca,nocca:] = dm2aa[:nocca,nocca:,nocca:,:nocca].transpose(1,0,3,2).conj()
     dovvo = None
 
+    if len(dvvvv.shape) == 2:
+        dvvvv = ao2mo.restore(1, dvvvv, nvira)
     dm2aa[nocca:,nocca:,nocca:,nocca:] = dvvvv
     dm2aa[:nocca,:nocca,:nocca,:nocca] = doooo
 
@@ -450,6 +459,8 @@ def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True):
     dm2bb[noccb:,:noccb,:noccb,noccb:] = dm2bb[:noccb,noccb:,noccb:,:noccb].transpose(1,0,3,2).conj()
     dOVVO = None
 
+    if len(dVVVV.shape) == 2:
+        dVVVV = ao2mo.restore(1, dVVVV, nvirb)
     dm2bb[noccb:,noccb:,noccb:,noccb:] = dVVVV
     dm2bb[:noccb,:noccb,:noccb,:noccb] = dOOOO
 
@@ -480,6 +491,13 @@ def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True):
     dm2ab[nocca:,:nocca,:noccb,noccb:] = dovVO.transpose(1,0,3,2).conj()
     dovVO = None
 
+    if len(dvvVV.shape) == 2:
+        idxa = numpy.tril_indices(nvira)
+        dvvVV1 = lib.unpack_tril(dvvVV)
+        dvvVV = numpy.empty((nvira,nvira,nvirb,nvirb))
+        dvvVV[idxa] = dvvVV1
+        dvvVV[idxa[1],idxa[0]] = dvvVV1
+        dvvVV1 = None
     dm2ab[nocca:,nocca:,noccb:,noccb:] = dvvVV
     dm2ab[:nocca,:nocca,:noccb,:noccb] = dooOO
 
@@ -608,7 +626,7 @@ if __name__ == '__main__':
     mol.spin = 2
     mol.basis = '6-31g'
     mol.build()
-    mf = scf.UHF(mol).run(conv_tol=1e-14)
+    mf = scf.UHF(mol).run(init_guess='hcore', conv_tol=1.)
     ehf0 = mf.e_tot - mol.energy_nuc()
     mycc = uccsd.UCCSD(mf).run()
     mycc.solve_lambda()

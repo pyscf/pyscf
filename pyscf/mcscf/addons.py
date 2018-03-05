@@ -318,6 +318,17 @@ def project_init_guess(casscf, init_mo, prev_mol=None):
     from pyscf import lo
 
     def project(mfmo, init_mo, ncore, s):
+        s_init_mo = numpy.einsum('pi,pi->i', init_mo.conj(), s.dot(init_mo))
+        if abs(s_init_mo - 1).max() < 1e-7:
+            # Initial guess orbitals are orthonormal
+            return init_mo
+# TODO: test whether the canonicalized orbitals are better than the projected orbitals
+# Be careful that the ordering of the canonicalized orbitals may be very different
+# to the CASSCF orbitals.
+#        else:
+#            fock = casscf.get_fock(mc, init_mo, casscf.ci)
+#            return casscf._scf.eig(fock, s)[1]
+
         nocc = ncore + casscf.ncas
         if ncore > 0:
             mo0core = init_mo[:,:ncore]
@@ -370,15 +381,23 @@ def project_init_guess(casscf, init_mo, prev_mol=None):
     if prev_mol is None:
         if init_mo.shape[0] != mfmo.shape[0]:
             raise RuntimeError('Initial guess orbitals has wrong dimension')
-    elif not gto.same_basis_set(prev_mol, casscf.mol):
-        pmol = copy.copy(casscf.mol)
-        pmol._atom = prev_mol._atom
-        pmol.build(0, 0)
+    elif gto.same_mol(prev_mol, casscf.mol, cmp_basis=False):
         if isinstance(ncore, (int, numpy.integer)):  # RHF
-            init_mo = scf.addons.project_mo_nr2nr(prev_mol, init_mo, pmol)
+            init_mo = scf.addons.project_mo_nr2nr(prev_mol, init_mo, casscf.mol)
         else:
-            init_mo = (scf.addons.project_mo_nr2nr(prev_mol, init_mo[0], pmol),
-                       scf.addons.project_mo_nr2nr(prev_mol, init_mo[1], pmol))
+            init_mo = (scf.addons.project_mo_nr2nr(prev_mol, init_mo[0], casscf.mol),
+                       scf.addons.project_mo_nr2nr(prev_mol, init_mo[1], casscf.mol))
+    elif gto.same_basis_set(prev_mol, casscf.mol):
+        if isinstance(ncore, (int, numpy.integer)):  # RHF
+            fock = casscf.get_fock(init_mo, casscf.ci)
+            return casscf._scf.eig(fock, s)[1]
+        else:
+            raise NotImplementedError('Project initial for UHF orbitals.')
+    else:
+        raise NotImplementedError('Project initial guess from different system.')
+
+# Be careful with the orbital projection. The projection may lead to bad
+# initial guess orbitals if the geometry is dramatically changed.
     if isinstance(ncore, (int, numpy.integer)):
         mo = project(mfmo, init_mo, ncore, s)
     else: # UHF-based CASSCF

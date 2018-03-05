@@ -219,8 +219,12 @@ class DIIS(object):
         #    logger.warn(self, ' diis singular')
         if 1:
             w, v = scipy.linalg.eigh(h)
-            idx = abs(w)>1e-14
-            c = numpy.dot(v[:,idx]*(1/w[idx]), numpy.dot(v[:,idx].T.conj(), g))
+            if numpy.any(abs(w)<1e-14):
+                logger.debug(self, 'Singularity found in DIIS error vector space.')
+                idx = abs(w)>1e-14
+                c = numpy.dot(v[:,idx]*(1./w[idx]), numpy.dot(v[:,idx].T.conj(), g))
+            else:
+                c = numpy.linalg.solve(h, g)
         logger.debug1(self, 'diis-c %s', c)
 
         if self._xprev is None:

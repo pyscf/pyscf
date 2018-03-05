@@ -3,8 +3,8 @@ import unittest
 from pyscf import gto, lib
 from pyscf import scf, dft
 from pyscf import ci
-from pyscf.ci import cisd_grad
 from pyscf import grad
+from pyscf.grad import cisd as cisd_grad
 
 mol = gto.Mole()
 mol.verbose = 7

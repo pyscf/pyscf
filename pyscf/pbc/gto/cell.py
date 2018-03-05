@@ -678,6 +678,44 @@ def _cut_mesh_for_ewald(cell, mesh):
     mesh[mesh>mesh_max] = mesh_max[mesh>mesh_max]
     return mesh
 
+# In testing: two types of background charge.
+if 1:
+    def _SI_for_uniform_model_charge(cell, Gv):
+        '''
+        Background charge on one plane which passes through the charge center.
+        '''
+        chargs = cell.atom_charges()
+        coords = cell.atom_coords()
+        charge_center = mole.charge_center(cell._atom, chargs, coords)
+        if cell.dimension == 1:
+            G0idx = (Gv[:,0] == 0)
+            SI_on_z = np.exp(-1j * np.einsum('gx,x->g', Gv[G0idx,1:], charge_center[1:]))
+        elif cell.dimension == 2:
+            G0idx = (Gv[:,0] == 0) & (Gv[:,1] == 0)
+            SI_on_z = np.exp(-1j * (Gv[G0idx,2] * charge_center[2]))
+        else:
+            G0idx = SI_on_z = None
+        return G0idx, SI_on_z
+else:
+    def _SI_for_uniform_model_charge(cell, Gv):
+        '''
+        Background charge on multiple planes.  Each plane passes through one
+        nucleus.
+        '''
+        chargs = cell.atom_charges()
+        coords = cell.atom_coords()
+        if cell.dimension == 1:
+            G0idx = (Gv[:,0] == 0)
+            SI_on_z = np.exp(-1j * np.einsum('gx,ix->ig', Gv[G0idx,1:], coords[:,1:]))
+            SI_on_z = np.einsum("i,ig->g", chargs, SI_on_z) / chargs.sum()
+        elif cell.dimension == 2:
+            G0idx = (Gv[:,0] == 0) & (Gv[:,1] == 0)
+            SI_on_z = np.exp(-1j * np.einsum('g,i->ig', Gv[G0idx,2], coords[:,2]))
+            SI_on_z = np.einsum("i,ig->g", chargs, SI_on_z) / chargs.sum()
+        else:
+            G0idx = SI_on_z = None
+        return G0idx, SI_on_z
+
 def ewald(cell, ew_eta=None, ew_cut=None):
     '''Perform real (R) and reciprocal (G) space Ewald sum for the energy.
 
@@ -734,11 +772,22 @@ def ewald(cell, ew_eta=None, ew_cut=None):
     if low_dim_ft_type is None or cell.dimension == 3:
         coulG = 4*np.pi / absG2
         coulG *= weights
-        JexpG2 = np.exp(-absG2/(4*ew_eta**2)) * coulG
-
         ZSI = np.einsum("i,ij->j", chargs, cell.get_SI(Gv))
-        ZSIG2 = np.abs(ZSI)**2
-        ewg = .5 * np.dot(ZSIG2, JexpG2)
+        ZexpG2 = ZSI * np.exp(-absG2/(4*ew_eta**2))
+
+        if cell.dimension == 1 or cell.dimension == 2:
+            G0idx, SI_on_z = _SI_for_uniform_model_charge(cell, Gv)
+            bg_charge = chargs.sum() * SI_on_z
+            ZexpG2[G0idx] -= bg_charge
+            ZSI_without_bg = ZSI[G0idx] - bg_charge
+            # (m-s|Z)
+            ewg = .5 * np.einsum('i,i,i', ZSI.conj(), ZexpG2, coulG).real
+            # (Z-s|s)
+            ewg -= .5 * np.einsum('i,i,i', ZSI_without_bg.conj(), bg_charge,
+                                  coulG[G0idx]).real
+        else:
+            ewg = .5 * np.einsum('i,i,i', ZSI.conj(), ZexpG2, coulG).real
+
     elif low_dim_ft_type == 'analytic_2d_1' and cell.dimension == 2:
         # The following 2D ewald summation is taken from:
         # R. Sundararaman and T. Arias PRB 87, 2013
