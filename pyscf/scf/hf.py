@@ -1372,7 +1372,7 @@ class SCF(lib.StreamObject):
             logger.note(self, 'converged SCF energy = %.15g', self.e_tot)
         else:
             logger.note(self, 'SCF not converged.')
-            logger.note(self, 'SCF energy = %.15g after %d cycles',
+            logger.note(self, 'SCF energy = %.15g',
                         self.e_tot, self.max_cycle)
         return self
 

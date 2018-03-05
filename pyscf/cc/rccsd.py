@@ -19,6 +19,7 @@ from pyscf.lib import logger
 from pyscf.cc import ccsd
 from pyscf.cc import _ccsd
 from pyscf.cc import rintermediates as imd
+from pyscf.mp import mp2
 
 def update_amps(cc, t1, t2, eris):
     # Ref: Hirata et al., J. Chem. Phys. 120, 2581 (2004) Eqs.(35)-(36)
@@ -168,7 +169,7 @@ class RCCSD(ccsd.CCSD):
                 Use one-shot MBPT2 approximation to CCSD.
         '''
         if mbpt2:
-            pt = ccsd.mp2.MP2(self._scf, self.frozen, self.mo_coeff, self.mo_occ)
+            pt = mp2.MP2(self._scf, self.frozen, self.mo_coeff, self.mo_occ)
             self.e_corr, self.t2 = pt.kernel(eris=eris)
             nocc, nvir = self.t2.shape[1:3]
             self.t1 = np.zeros((nocc,nvir))

@@ -208,8 +208,9 @@ def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf_kpts=None):
     e1 = 1./nkpts * np.einsum('kij,kji', dm_kpts, h1e_kpts)
     e_coul = 1./nkpts * np.einsum('kij,kji', dm_kpts, vhf_kpts) * 0.5
     if abs(e_coul.imag > 1.e-7):
-        raise RuntimeError("Coulomb energy has imaginary part, "
-                           "something is wrong!", e_coul.imag)
+        raise RuntimeError("Coulomb energy has imaginary part %s. "
+                           "Coulomb integrals (e-e, e-N) may not converge !" %
+                           e_coul.imag)
     e1 = e1.real
     e_coul = e_coul.real
     logger.debug(mf, 'E_coul = %.15g', e_coul)
