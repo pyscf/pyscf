@@ -23,7 +23,6 @@ from functools import reduce
 
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.lib.numpy_helper import cartesian_prod
 from pyscf.pbc import scf
 from pyscf.cc import gccsd
 #from pyscf.pbc.mp.kmp2 import get_frozen_mask, get_nmo, get_nocc
@@ -96,9 +95,6 @@ def get_frozen_mask(mp):
         assert(_nkpts == mp.nkpts)
         for ikpt, kpt_occ in enumerate(moidx):
             kpt_occ[mp.frozen[ikpt]] = False
-        #removed_mo = list(reduce(set.intersection, [set(x) for x in mp.frozen]))
-        #for idx in moidx:
-        #    idx[removed_mo] = False
     else:
         raise NotImplementedError
     return moidx
@@ -468,7 +464,7 @@ def _make_eris_incore(cc, mo_coeff=None):
         mo_coeff = cc.mo_coeff
     moidx = get_frozen_mask(cc)
 
-    kept_moidx = reduce(numpy.logical_or, moidx)  # Keep if MO included in all kpts
+    kept_moidx = reduce(numpy.logical_or, moidx)  # Keep if MO included in at least one kpts
     zeroed_moidx = [~idx[kept_moidx] for idx in moidx]  # zero if MO not included at a kpt
     moidx = [kept_moidx] * nkpts
 
