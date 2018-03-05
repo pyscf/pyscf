@@ -23,9 +23,10 @@ from functools import reduce
 
 from pyscf import lib
 from pyscf.lib import logger
+from pyscf.lib.numpy_helper import cartesian_prod
 from pyscf.pbc import scf
 from pyscf.cc import gccsd
-from pyscf.pbc.mp.kmp2 import get_frozen_mask
+#from pyscf.pbc.mp.kmp2 import get_frozen_mask, get_nmo, get_nocc
 from pyscf.pbc.cc import kintermediates as imdk
 from pyscf.pbc.lib import kpts_helper
 
@@ -37,8 +38,71 @@ DEBUG = False
 # number of orbitals.
 #
 
-#einsum = np.einsum
+#einsum = numpy.einsum
 einsum = lib.einsum
+
+def get_nocc(mp):
+    '''The number of occupied orbitals per k-point.'''
+    if mp._nocc is not None:
+        return mp._nocc
+    if isinstance(mp.frozen, (int, numpy.integer)):
+        nocc = numpy.count_nonzero(mp.mo_occ[0]) - mp.frozen
+    elif isinstance(mp.frozen[0], (int, numpy.integer)):
+        nocc = numpy.count_nonzero(mp.mo_occ[0]) - len(mp.frozen)
+    elif isinstance(mp.frozen[0], (list, numpy.ndarray)):
+        _nkpts = len(mp.frozen)
+        assert(_nkpts == mp.nkpts)
+        occ_idx = [mp.mo_occ[ikpt] > 0 for ikpt in range(_nkpts)]
+        # Find where MO is frozen at every k-point
+        all_frozen = reduce(set.intersection, [set(x) for x in mp.frozen])
+        for ikpt in range(_nkpts):
+            occ_idx[ikpt][list(all_frozen)] = False
+        nocc = numpy.count_nonzero(occ_idx[0])
+    else:
+        raise NotImplementedError
+    return nocc
+
+def get_nmo(mp):
+    '''The number of molecular orbitals per k-point.'''
+    if mp._nmo is not None:
+        return mp._nmo
+    if isinstance(mp.frozen, (int, numpy.integer)):
+        nmo = len(mp.mo_occ[0]) - mp.frozen
+    elif isinstance(mp.frozen[0], (int, numpy.integer)):
+        nmo = len(mp.mo_occ[0]) - len(set(mp.frozen))
+    elif isinstance(mp.frozen, (list, numpy.ndarray)):
+        _nkpts = len(mp.frozen)
+        assert(_nkpts == mp.nkpts)
+        # Find where MO is frozen at every k-point
+        all_frozen = reduce(set.intersection, [set(x) for x in mp.frozen])
+        nmo = len(mp.mo_occ[0]) - len(all_frozen)
+    else:
+        raise NotImplementedError
+    return nmo
+
+# TODO: have a mask to convert between rhf and spin-orbital
+
+def get_frozen_mask(mp):
+    moidx = [numpy.ones(x.size, dtype=numpy.bool) for x in mp.mo_occ]
+    if isinstance(mp.frozen, (int, numpy.integer)):
+        for idx in moidx:
+            idx[:mp.frozen] = False
+    elif isinstance(mp.frozen[0], (int, numpy.integer)):
+        frozen = list(mp.frozen)
+        for idx in moidx:
+            idx[frozen] = False
+    elif isinstance(mp.frozen[0], (list, numpy.ndarray)):
+        _nkpts = len(mp.frozen)
+        assert(_nkpts == mp.nkpts)
+        for ikpt, kpt_occ in enumerate(moidx):
+            kpt_occ[mp.frozen[ikpt]] = False
+        #removed_mo = list(reduce(set.intersection, [set(x) for x in mp.frozen]))
+        #for idx in moidx:
+        #    idx[removed_mo] = False
+    else:
+        raise NotImplementedError
+    return moidx
+
 
 def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
            max_memory=2000, verbose=logger.INFO):
@@ -263,34 +327,6 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     return t1new, t2new
 
 
-def get_nocc(cc):
-    # Spin orbitals
-    # TODO: Possibly change this to make it work with k-points with frozen
-    #       As of right now it works, but just not sure how the frozen list will work
-    #       with it
-    if cc._nocc is not None:
-        return cc._nocc
-    elif isinstance(cc.frozen, (int, numpy.integer)):
-        nocc = int(cc.mo_occ[0].sum()) - cc.frozen
-    elif isinstance(cc.frozen[0], (int, numpy.integer)):
-        nocc = int(cc.mo_occ[0].sum()) - len(cc.frozen)
-    else:
-        raise NotImplementedError
-    return nocc
-
-def get_nmo(cc):
-    # TODO: Change this for frozen at k-points, seems like it should work
-    if cc._nmo is not None:
-        return cc._nmo
-    elif isinstance(cc.frozen, (int, numpy.integer)):
-        nmo = len(cc.mo_occ[0]) - cc.frozen
-    elif isinstance(cc.frozen[0], (int, numpy.integer)):
-        nmo = len(cc.mo_occ[0]) - len(cc.frozen)
-    else:
-        raise NotImplementedError
-    return nmo
-
-
 class GCCSD(gccsd.GCCSD):
 
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
@@ -304,6 +340,20 @@ class GCCSD(gccsd.GCCSD):
     def nkpts(self):
         return len(self.kpts)
 
+    @property
+    def nocc(self):
+        return self.get_nocc()
+    @nocc.setter
+    def nocc(self, n):
+        self._nocc = n
+
+    @property
+    def nmo(self):
+        return self.get_nmo()
+    @nmo.setter
+    def nmo(self, n):
+        self._nmo = n
+
     get_nocc = get_nocc
     get_nmo = get_nmo
     get_frozen_mask = get_frozen_mask
@@ -316,8 +366,8 @@ class GCCSD(gccsd.GCCSD):
 
     def init_amps(self, eris):
         time0 = time.clock(), time.time()
-        nocc = self.get_nocc()
-        nvir = self.get_nmo() - nocc
+        nocc = self.nocc
+        nvir = self.nmo - nocc
         nkpts = self.nkpts
         t1 = numpy.zeros((nkpts,nocc,nvir), dtype=numpy.complex128)
         t2 = numpy.zeros((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=numpy.complex128)
@@ -369,7 +419,7 @@ class GCCSD(gccsd.GCCSD):
     def ao2mo(self, mo_coeff=None):
         nkpts = self.nkpts
         nmo = self.nmo
-        mem_incore = nkpts**3*nmo**4 * 8/1e6
+        mem_incore = nkpts**3* numpy.sum(nmo)**4 * 8/1e6
         mem_now = lib.current_memory()[0]
 
         if (mem_incore+mem_now < self.max_memory) or self.mol.incore_anyway:
@@ -417,34 +467,56 @@ def _make_eris_incore(cc, mo_coeff=None):
         raise NotImplementedError
         mo_coeff = cc.mo_coeff
     moidx = get_frozen_mask(cc)
+
+    kept_moidx = reduce(numpy.logical_or, moidx)  # Keep if MO included in all kpts
+    zeroed_moidx = [~idx[kept_moidx] for idx in moidx]  # zero if MO not included at a kpt
+    moidx = [kept_moidx] * nkpts
+
     eris.mo_coeff = []
     eris.orbspin = []
+
+    # Generate the molecular orbital coefficients with the frozen
+    # orbitals masked.  Each MO is tagged with orbspin, a list of
+    # 0's and 1's that give the overall spin of each MO.
     for k in range(nkpts):
-        mo = mo_coeff[k][:,moidx[k]]
-        if hasattr(mo_coeff[k], 'orbspin'):
+        mo = mo_coeff[k][:, moidx[k]]
+        mo[:, zeroed_moidx[k]] *= 0.0
+        if hasattr(mo_coeff[k], 'orbspin'):  # UHF/ROHF calculation
             orbspin = mo_coeff[k].orbspin[moidx[k]]
             mo = lib.tag_array(mo, orbspin=orbspin)
             eris.orbspin.append(orbspin)
-        else:
-            assert(numpy.count_nonzero(moidx[k]) % 2 == 0) # works for restricted CCSD only
+        else:  # RHF calculation
+            assert(numpy.count_nonzero(moidx[k]) % 2 == 0)  # sanity check for RHF
             orbspin = numpy.zeros(mo.shape[1], dtype=int)
-            orbspin[1::2] = 1
+            orbspin[1::2] = 1  # Set all odd number of electrons to beta orbitals
             mo = lib.tag_array(mo, orbspin=orbspin)
             eris.orbspin.append(orbspin)
         eris.mo_coeff.append(mo)
 
+    # Re-make our fock MO matrix elements from density and fock AO
     dm = cc._scf.make_rdm1(cc.mo_coeff, cc.mo_occ)
     fockao = cc._scf.get_hcore() + cc._scf.get_veff(cc._scf.cell, dm)
     eris.fock = numpy.asarray([reduce(numpy.dot, (mo.T.conj(), fockao[k], mo))
                                for k, mo in enumerate(eris.mo_coeff)])
 
-    nao, nmo = eris.mo_coeff[0].shape
+    nao = eris.mo_coeff[0].shape[0]
+    nmo = cc.get_nmo()
+    nocc = cc.get_nocc()
+    nvir = nmo - nocc
 
-    kconserv = kpts_helper.get_kconserv(cc._scf.cell,cc.kpts)
+    eris.nocc = nocc
+
+    kconserv = kpts_helper.get_kconserv(cc._scf.cell, cc.kpts)
+    # The bottom nao//2 coefficients are down (up) spin while the top are up (down).
+    # These are 'spin-less' quantities; spin-conservation will be added manually.
     so_coeff = [mo[:nao//2] + mo[nao//2:] for mo in eris.mo_coeff]
 
-    eri = numpy.empty((nkpts,nkpts,nkpts,nmo,nmo,nmo,nmo), dtype=numpy.complex128)
+    # Get eri sizes at each k-point (for the possibility that each k-point doesn't include the same
+    # number of molecular orbitals)
+    eri = numpy.empty((nkpts, nkpts, nkpts, nmo, nmo, nmo, nmo), dtype=numpy.complex128)
+
     fao2mo = cc._scf.with_df.ao2mo
+
     for kp, kq, kr in kpts_helper.loop_kkk(nkpts):
         ks = kconserv[kp,kq,kr]
         eri_kpt = fao2mo((so_coeff[kp],so_coeff[kq],so_coeff[kr],so_coeff[ks]),
@@ -454,32 +526,17 @@ def _make_eris_incore(cc, mo_coeff=None):
         eri_kpt = eri_kpt.reshape(nmo,nmo,nmo,nmo)
         eri[kp,kq,kr] = eri_kpt
 
-    # Checking some things...
+    # Check some antisymmetrized properties of the integrals
     if DEBUG:
-        maxdiff = 0.0
-        for kp, kq, kr in kpts_helper.loop_kkk(nkpts):
-            ks = kconserv[kp,kq,kr]
-            for p in range(nmo):
-                for q in range(nmo):
-                    for r in range(nmo):
-                        for s in range(nmo):
-                            pqrs = eri[kp,kq,kr,p,q,r,s]
-                            rspq = eri[kr,ks,kp,r,s,p,q]
-                            diff = numpy.linalg.norm(pqrs - rspq).real
-                            if diff > 1e-5:
-                                print("** Warning: ERI diff at ",)
-                                print("kp,kq,kr,ks,p,q,r,s =", kp, kq, kr, ks, p, q, r, s)
-                            maxdiff = max(maxdiff,diff)
-        print("Max difference in (pq|rs) - (rs|pq) = %.15g" % maxdiff)
-        #print("ERI =")
-        #print(eri)
+        check_antisymm_3412(cc, cc.kpts, eri)
 
     # Antisymmetrizing (pq|rs)-(ps|rq), where the latter integral is equal to
     # (rq|ps); done since we aren't tracking the kpoint of orbital 's'
     eri1 = eri - eri.transpose(2,1,0,5,4,3,6)
     # Chemist -> physics notation
-    eri1 = eri1.transpose(0,2,1,3,5,4,6)
+    eri1 = eri.transpose(0,2,1,3,5,4,6)
 
+    # Set the various integrals
     eris.dtype = eri1.dtype
     eris.oooo = eri1[:,:,:,:nocc,:nocc,:nocc,:nocc].copy() / nkpts
     eris.ooov = eri1[:,:,:,:nocc,:nocc,:nocc,nocc:].copy() / nkpts
@@ -492,6 +549,26 @@ def _make_eris_incore(cc, mo_coeff=None):
     log.timer('CCSD integral transformation', *cput0)
     return eris
 
+def check_antisymm_3412(cc, kpts, integrals):
+    kconserv = kpts_helper.get_kconserv(cc._scf.cell,cc.kpts)
+    nkpts = len(kpts)
+    diff = 0.0
+    for kp, kq, kr in kpts_helper.loop_kkk(nkpts):
+        ks = kconserv[kp,kr,kq]
+        for p in range(integrals.shape[3]):
+            for q in range(integrals.shape[4]):
+                for r in range(integrals.shape[5]):
+                    for s in range(integrals.shape[6]):
+                        pqrs = integrals[kp,kq,kr,p,q,r,s]
+                        rspq = integrals[kq,kp,kr,q,p,r,s]
+                        cdiff = numpy.linalg.norm(pqrs - rspq).real
+                        if diff > 1e-5:
+                            print("AS diff = %.15g" % cdiff, pqrs, rspq, kp, kq, kr, ks, p, q, r, s)
+                        diff = max(diff,cdiff)
+    print("antisymmetrization : max diff = %.15g" % diff)
+    if diff > 1e-5:
+        print("Energy cutoff (or cell.mesh) is not enough to converge AO integrals.")
+    return diff
 
 def check_antisymm_12( cc, kpts, integrals ):
     kconserv = kpts_helper.get_kconserv(cc._scf.cell,cc.kpts)
