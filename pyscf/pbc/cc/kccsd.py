@@ -38,6 +38,8 @@ DEBUG = False
 # number of orbitals.
 #
 
+# TODO: just throw an error if the user specifies a duplicate frozen orbital?
+
 #einsum = numpy.einsum
 einsum = lib.einsum
 
@@ -48,7 +50,7 @@ def get_nocc(mp):
     if isinstance(mp.frozen, (int, numpy.integer)):
         nocc = numpy.count_nonzero(mp.mo_occ[0]) - mp.frozen
     elif isinstance(mp.frozen[0], (int, numpy.integer)):
-        nocc = numpy.count_nonzero(mp.mo_occ[0]) - len(mp.frozen)
+        nocc = numpy.count_nonzero(mp.mo_occ[0]) - len(set(mp.frozen))
     elif isinstance(mp.frozen[0], (list, numpy.ndarray)):
         _nkpts = len(mp.frozen)
         assert(_nkpts == mp.nkpts)
