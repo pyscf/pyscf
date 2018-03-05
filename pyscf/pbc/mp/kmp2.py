@@ -14,6 +14,7 @@
 # limitations under the License.
 #
 # Author: Timothy Berkelbach <tim.berkelbach@gmail.com>
+#         James McClain <jdmcclain47@gmail.com>
 #
 
 
@@ -71,32 +72,38 @@ def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE):
     return emp2, None
 
 
-def get_frozen_mask(mp):
-    moidx = [np.ones(x.size, dtype=np.bool) for x in mp.mo_occ]
-    if isinstance(mp.frozen, (int, np.integer)):
-        for idx in moidx:
-            idx[:mp.frozen] = False
-    elif isinstance(mp.frozen[0], (int, np.integer)):
-        frozen = list(mp.frozen)
-        for idx in moidx:
-            idx[frozen] = False
-    else:
-        raise NotImplementedError
-    return moidx
+def _frozen_sanity_check(frozen):
+    '''Checks whether there have been any repeated elements in the frozen index array'''
+    diff = len(frozen) - len(np.unique(frozen))
+    if diff > 0:
+        raise RuntimeError("Frozen orbital list contains duplicates: %s" % frozen)
 
 
 def get_nocc(mp):
     '''The number of occupied orbitals per k-point.'''
     if mp._nocc is not None:
         return mp._nocc
-    elif isinstance(mp.frozen, (int, np.integer)):
-        nocc = int(mp.mo_occ[0].sum()) // 2 - mp.frozen
+    if isinstance(mp.frozen, (int, np.integer)):
+        nocc = np.count_nonzero(mp.mo_occ[0]) - mp.frozen
     elif isinstance(mp.frozen[0], (int, np.integer)):
-        occ_idx = mp.mo_occ[0] > 0
-        occ_idx[list(mp.frozen)] = False
-        nocc = np.count_nonzero(occ_idx)
+        _frozen_sanity_check(mp.frozen)
+        nocc = np.count_nonzero(mp.mo_occ[0]) - len(mp.frozen)
+    elif isinstance(mp.frozen[0], (list, np.ndarray)):
+        [_frozen_sanity_check(idx) for idx in mp.frozen]
+        _nkpts = len(mp.frozen)
+        if _nkpts != mp.nkpts:
+            raise RuntimeError("Frozen list has a different number of k-points (length) than passed in mean-field/"
+                               "correlated calculation.  \n\nCalculation nkpts = %d, frozen list = %s "
+                               "(length = %d)" % (mp.nkpts, mp.frozen, _nkpts))
+        occ_idx = [mp.mo_occ[ikpt] > 0 for ikpt in range(_nkpts)]
+        # Find where MO is frozen at every k-point
+        all_frozen = reduce(set.intersection, [set(x) for x in mp.frozen])
+        for ikpt in range(_nkpts):
+            occ_idx[ikpt][list(all_frozen)] = False
+        nocc = np.count_nonzero(occ_idx[0])
     else:
         raise NotImplementedError
+    assert(nocc > 0)
     return nocc
 
 
@@ -107,10 +114,44 @@ def get_nmo(mp):
     if isinstance(mp.frozen, (int, np.integer)):
         nmo = len(mp.mo_occ[0]) - mp.frozen
     elif isinstance(mp.frozen[0], (int, np.integer)):
-        nmo = len(mp.mo_occ[0]) - len(mp.frozen)
+        nmo = len(mp.mo_occ[0]) - len(set(mp.frozen))
+    elif isinstance(mp.frozen, (list, np.ndarray)):
+        [_frozen_sanity_check(idx) for idx in mp.frozen]
+        _nkpts = len(mp.frozen)
+        if _nkpts != mp.nkpts:
+            raise RuntimeError("Frozen list has a different number of k-points (length) than passed in mean-field/"
+                               "correlated calculation.  \n\nCalculation nkpts = %d, frozen list = %s "
+                               "(length = %d)" % (mp.nkpts, mp.frozen, _nkpts))
+        # Find where MO is frozen at every k-point
+        all_frozen = reduce(set.intersection, [set(x) for x in mp.frozen])
+        nmo = len(mp.mo_occ[0]) - len(all_frozen)
     else:
         raise NotImplementedError
+    assert(nmo > 0)
     return nmo
+
+
+def get_frozen_mask(mp):
+    moidx = [np.ones(x.size, dtype=np.bool) for x in mp.mo_occ]
+    if isinstance(mp.frozen, (int, np.integer)):
+        for idx in moidx:
+            idx[:mp.frozen] = False
+    elif isinstance(mp.frozen[0], (int, np.integer)):
+        frozen = list(mp.frozen)
+        for idx in moidx:
+            idx[frozen] = False
+    elif isinstance(mp.frozen[0], (list, np.ndarray)):
+        [_frozen_sanity_check(idx) for idx in mp.frozen]
+        _nkpts = len(mp.frozen)
+        if _nkpts != mp.nkpts:
+            raise RuntimeError("Frozen list has a different number of k-points (length) than passed in mean-field/"
+                               "correlated calculation.  \n\nCalculation nkpts = %d, frozen list = %s "
+                               "(length = %d)" % (mp.nkpts, mp.frozen, _nkpts))
+        for ikpt, kpt_occ in enumerate(moidx):
+            kpt_occ[mp.frozen[ikpt]] = False
+    else:
+        raise NotImplementedError
+    return moidx
 
 
 class KMP2(mp2.MP2):

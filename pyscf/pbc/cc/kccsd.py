@@ -25,8 +25,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc import scf
 from pyscf.cc import gccsd
-#from pyscf.pbc.mp.kmp2 import get_frozen_mask, get_nmo, get_nocc
-from pyscf.pbc.mp.kmp2 import get_frozen_mask
+from pyscf.pbc.mp.kmp2 import get_frozen_mask, get_nmo, get_nocc
 from pyscf.pbc.cc import kintermediates as imdk
 from pyscf.pbc.lib import kpts_helper
 
@@ -38,78 +37,8 @@ DEBUG = False
 # number of orbitals.
 #
 
-# TODO: just throw an error if the user specifies a duplicate frozen orbital?
-
 #einsum = numpy.einsum
 einsum = lib.einsum
-
-def _frozen_sanity_check(array):
-    '''Checks whether there have been any repeated elements in the frozen index array'''
-    diff = len(array) - len(numpy.unique(array))
-    if diff > 0:
-        raise RuntimeError("Frozen orbital list contains duplicates: %s" % array)
-
-
-def get_nocc(mp):
-    '''The number of occupied orbitals per k-point.'''
-    if mp._nocc is not None:
-        return mp._nocc
-    if isinstance(mp.frozen, (int, numpy.integer)):
-        nocc = numpy.count_nonzero(mp.mo_occ[0]) - mp.frozen
-    elif isinstance(mp.frozen[0], (int, numpy.integer)):
-        nocc = numpy.count_nonzero(mp.mo_occ[0]) - len(set(mp.frozen))
-    elif isinstance(mp.frozen[0], (list, numpy.ndarray)):
-        _nkpts = len(mp.frozen)
-        assert(_nkpts == mp.nkpts)
-        occ_idx = [mp.mo_occ[ikpt] > 0 for ikpt in range(_nkpts)]
-        # Find where MO is frozen at every k-point
-        all_frozen = reduce(set.intersection, [set(x) for x in mp.frozen])
-        for ikpt in range(_nkpts):
-            occ_idx[ikpt][list(all_frozen)] = False
-        nocc = numpy.count_nonzero(occ_idx[0])
-    else:
-        raise NotImplementedError
-    assert(nocc > 0)
-    return nocc
-
-
-def get_nmo(mp):
-    '''The number of molecular orbitals per k-point.'''
-    if mp._nmo is not None:
-        return mp._nmo
-    if isinstance(mp.frozen, (int, numpy.integer)):
-        nmo = len(mp.mo_occ[0]) - mp.frozen
-    elif isinstance(mp.frozen[0], (int, numpy.integer)):
-        nmo = len(mp.mo_occ[0]) - len(set(mp.frozen))
-    elif isinstance(mp.frozen, (list, numpy.ndarray)):
-        _nkpts = len(mp.frozen)
-        assert(_nkpts == mp.nkpts)
-        # Find where MO is frozen at every k-point
-        all_frozen = reduce(set.intersection, [set(x) for x in mp.frozen])
-        nmo = len(mp.mo_occ[0]) - len(all_frozen)
-    else:
-        raise NotImplementedError
-    assert(nmo > 0)
-    return nmo
-
-
-def get_frozen_mask(mp):
-    moidx = [numpy.ones(x.size, dtype=numpy.bool) for x in mp.mo_occ]
-    if isinstance(mp.frozen, (int, numpy.integer)):
-        for idx in moidx:
-            idx[:mp.frozen] = False
-    elif isinstance(mp.frozen[0], (int, numpy.integer)):
-        frozen = list(mp.frozen)
-        for idx in moidx:
-            idx[frozen] = False
-    elif isinstance(mp.frozen[0], (list, numpy.ndarray)):
-        _nkpts = len(mp.frozen)
-        assert(_nkpts == mp.nkpts)
-        for ikpt, kpt_occ in enumerate(moidx):
-            kpt_occ[mp.frozen[ikpt]] = False
-    else:
-        raise NotImplementedError
-    return moidx
 
 
 def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
