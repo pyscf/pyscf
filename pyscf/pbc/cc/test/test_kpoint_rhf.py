@@ -85,6 +85,26 @@ class KnownValues(unittest.TestCase):
         e1 = mycc.kernel()[0]
         self.assertAlmostEqual(e0, e1, 7)
 
+    def test_frozen_n3(self):
+        mesh = 5
+        cell = make_test_cell.test_cell_n3([mesh]*3)
+        nk = (1, 1, 2)
+        ehf_bench = -8.348616843863795
+        ecc_bench = -0.037920339437169
+
+        abs_kpts = cell.make_kpts(nk, with_gamma_point=True)
+
+        # RHF calculation
+        kmf = pbcscf.KRHF(cell, abs_kpts, exxdiv=None)
+        ehf = kmf.scf()
+
+        # KRCCSD calculation, equivalent to running supercell
+        # calculation with frozen=[0,1,2] (if done with larger mesh)
+        cc = pyscf.pbc.cc.kccsd_rhf.RCCSD(kmf, frozen=[[0],[0,1]])
+        ecc, t1, t2 = cc.kernel()
+        self.assertAlmostEqual(ehf, ehf_bench, 9)
+        self.assertAlmostEqual(ecc, ecc_bench, 9)
+
 if __name__ == '__main__':
     print("Full kpoint_rhf test")
     unittest.main()
