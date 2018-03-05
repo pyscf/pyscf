@@ -26,6 +26,7 @@ from pyscf.lib import logger
 from pyscf.pbc import scf
 from pyscf.cc import gccsd
 #from pyscf.pbc.mp.kmp2 import get_frozen_mask, get_nmo, get_nocc
+from pyscf.pbc.mp.kmp2 import get_frozen_mask
 from pyscf.pbc.cc import kintermediates as imdk
 from pyscf.pbc.lib import kpts_helper
 
@@ -61,6 +62,7 @@ def get_nocc(mp):
         raise NotImplementedError
     return nocc
 
+
 def get_nmo(mp):
     '''The number of molecular orbitals per k-point.'''
     if mp._nmo is not None:
@@ -79,7 +81,6 @@ def get_nmo(mp):
         raise NotImplementedError
     return nmo
 
-# TODO: have a mask to convert between rhf and spin-orbital
 
 def get_frozen_mask(mp):
     moidx = [numpy.ones(x.size, dtype=numpy.bool) for x in mp.mo_occ]
@@ -301,22 +302,18 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
 
     eia = numpy.zeros(shape=t1new.shape, dtype=t1new.dtype)
     for ki in range(nkpts):
-        for i in range(nocc):
-            for a in range(nvir):
-                eia[ki,i,a] = foo[ki,i,i] - fvv[ki,a,a]
+        eia[ki, :, :] = foo[ki].diagonal()[:, None] - fvv[ki].diagonal()[None, :]
         t1new[ki] /= eia[ki]
 
     eijab = numpy.zeros(shape=t2new.shape, dtype=t2new.dtype)
     kconserv = kpts_helper.get_kconserv(cc._scf.cell, cc.kpts)
     for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
-        kb = kconserv[ki,ka,kj]
-        for i in range(nocc):
-            for a in range(nvir):
-                for j in range(nocc):
-                    for b in range(nvir):
-                        eijab[ki,kj,ka,i,j,a,b] = ( foo[ki,i,i] + foo[kj,j,j]
-                                                  - fvv[ka,a,a] - fvv[kb,b,b] )
-        t2new[ki,kj,ka] /= eijab[ki,kj,ka]
+        kb = kconserv[ki, ka, kj]
+        eijab[ki, kj, ka] = (foo[ki].diagonal()[:, None, None, None] +
+                             foo[kj].diagonal()[None, :, None, None] -
+                             fvv[ka].diagonal()[None, None, :, None] -
+                             fvv[kb].diagonal()[None, None, None, :])
+        t2new[ki, kj, ka] /= eijab[ki, kj, ka]
 
     time0 = log.timer_debug1('update t1 t2', *time0)
 
@@ -415,7 +412,7 @@ class GCCSD(gccsd.GCCSD):
     def ao2mo(self, mo_coeff=None):
         nkpts = self.nkpts
         nmo = self.nmo
-        mem_incore = nkpts**3* numpy.sum(nmo)**4 * 8/1e6
+        mem_incore = nkpts**3* nmo**4 * 8/1e6
         mem_now = lib.current_memory()[0]
 
         if (mem_incore+mem_now < self.max_memory) or self.mol.incore_anyway:
@@ -465,7 +462,7 @@ def _make_eris_incore(cc, mo_coeff=None):
     moidx = get_frozen_mask(cc)
 
     kept_moidx = reduce(numpy.logical_or, moidx)  # Keep if MO included in at least one kpts
-    zeroed_moidx = [~idx[kept_moidx] for idx in moidx]  # zero if MO not included at a kpt
+    zeroed_moidx = [~idx[kept_moidx] for idx in moidx]  # Zero if MO not included in at least one kpt
     moidx = [kept_moidx] * nkpts
 
     eris.mo_coeff = []
@@ -477,14 +474,14 @@ def _make_eris_incore(cc, mo_coeff=None):
     for k in range(nkpts):
         mo = mo_coeff[k][:, moidx[k]]
         mo[:, zeroed_moidx[k]] *= 0.0
-        if hasattr(mo_coeff[k], 'orbspin'):  # UHF/ROHF calculation
+        if hasattr(mo_coeff[k], 'orbspin'):
             orbspin = mo_coeff[k].orbspin[moidx[k]]
             mo = lib.tag_array(mo, orbspin=orbspin)
             eris.orbspin.append(orbspin)
-        else:  # RHF calculation
-            assert(numpy.count_nonzero(moidx[k]) % 2 == 0)  # sanity check for RHF
+        else:  # guess orbital spin - assumes an RHF calculation
+            assert(numpy.count_nonzero(moidx[k]) % 2 == 0)
             orbspin = numpy.zeros(mo.shape[1], dtype=int)
-            orbspin[1::2] = 1  # Set all odd number of electrons to beta orbitals
+            orbspin[1::2] = 1
             mo = lib.tag_array(mo, orbspin=orbspin)
             eris.orbspin.append(orbspin)
         eris.mo_coeff.append(mo)
@@ -496,8 +493,8 @@ def _make_eris_incore(cc, mo_coeff=None):
                                for k, mo in enumerate(eris.mo_coeff)])
 
     nao = eris.mo_coeff[0].shape[0]
-    nmo = cc.get_nmo()
-    nocc = cc.get_nocc()
+    nmo = cc.nmo
+    nocc = cc.nocc
     nvir = nmo - nocc
 
     eris.nocc = nocc
@@ -512,7 +509,6 @@ def _make_eris_incore(cc, mo_coeff=None):
     eri = numpy.empty((nkpts, nkpts, nkpts, nmo, nmo, nmo, nmo), dtype=numpy.complex128)
 
     fao2mo = cc._scf.with_df.ao2mo
-
     for kp, kq, kr in kpts_helper.loop_kkk(nkpts):
         ks = kconserv[kp,kq,kr]
         eri_kpt = fao2mo((so_coeff[kp],so_coeff[kq],so_coeff[kr],so_coeff[ks]),
@@ -528,19 +524,19 @@ def _make_eris_incore(cc, mo_coeff=None):
 
     # Antisymmetrizing (pq|rs)-(ps|rq), where the latter integral is equal to
     # (rq|ps); done since we aren't tracking the kpoint of orbital 's'
-    eri1 = eri - eri.transpose(2,1,0,5,4,3,6)
+    eri = eri - eri.transpose(2,1,0,5,4,3,6)
     # Chemist -> physics notation
-    eri1 = eri.transpose(0,2,1,3,5,4,6)
+    eri = eri.transpose(0,2,1,3,5,4,6)
 
     # Set the various integrals
-    eris.dtype = eri1.dtype
-    eris.oooo = eri1[:,:,:,:nocc,:nocc,:nocc,:nocc].copy() / nkpts
-    eris.ooov = eri1[:,:,:,:nocc,:nocc,:nocc,nocc:].copy() / nkpts
-    eris.ovoo = eri1[:,:,:,:nocc,nocc:,:nocc,:nocc].copy() / nkpts
-    eris.oovv = eri1[:,:,:,:nocc,:nocc,nocc:,nocc:].copy() / nkpts
-    eris.ovov = eri1[:,:,:,:nocc,nocc:,:nocc,nocc:].copy() / nkpts
-    eris.ovvv = eri1[:,:,:,:nocc,nocc:,nocc:,nocc:].copy() / nkpts
-    eris.vvvv = eri1[:,:,:,nocc:,nocc:,nocc:,nocc:].copy() / nkpts
+    eris.dtype = eri.dtype
+    eris.oooo = eri[:,:,:,:nocc,:nocc,:nocc,:nocc].copy() / nkpts
+    eris.ooov = eri[:,:,:,:nocc,:nocc,:nocc,nocc:].copy() / nkpts
+    eris.ovoo = eri[:,:,:,:nocc,nocc:,:nocc,:nocc].copy() / nkpts
+    eris.oovv = eri[:,:,:,:nocc,:nocc,nocc:,nocc:].copy() / nkpts
+    eris.ovov = eri[:,:,:,:nocc,nocc:,:nocc,nocc:].copy() / nkpts
+    eris.ovvv = eri[:,:,:,:nocc,nocc:,nocc:,nocc:].copy() / nkpts
+    eris.vvvv = eri[:,:,:,nocc:,nocc:,nocc:,nocc:].copy() / nkpts
 
     log.timer('CCSD integral transformation', *cput0)
     return eris
