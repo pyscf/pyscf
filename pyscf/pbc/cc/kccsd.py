@@ -53,8 +53,8 @@ def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6, ma
     if t1 is None and t2 is None:
         t1, t2 = cc.init_amps(eris)[1:]
     elif t1 is None:
-        nocc = cc.get_nocc()
-        nvir = cc.get_nmo() - nocc
+        nocc = cc.nocc
+        nvir = cc.nmo - nocc
         nkpts = cc.nkpts
         t1 = numpy.zeros((nkpts, nocc, nvir), numpy.complex128)
     elif t2 is None:
@@ -367,7 +367,7 @@ def _make_eris_incore(cc, mo_coeff=None):
     eris = gccsd._PhysicistsERIs()
     kpts = cc.kpts
     nkpts = cc.nkpts
-    nocc = cc.get_nocc()
+    nocc = cc.nocc
     nmo = cc.nmo
     nvir = nmo - nocc
     eris.nocc = nocc
