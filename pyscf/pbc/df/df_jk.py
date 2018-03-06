@@ -394,7 +394,7 @@ def _ewald_exxdiv_for_G0(cell, kpts, dms, vk, kpts_band=None):
         return _ewald_exxdiv_3d(cell, kpts, dms, vk, kpts_band)
 
 def _ewald_exxdiv_3d(cell, kpts, dms, vk, kpts_band=None):
-    s = cell.pbc_intor('int1e_ovlp_sph', hermi=1, kpts=kpts)
+    s = cell.pbc_intor('int1e_ovlp', hermi=1, kpts=kpts)
     madelung = tools.pbc.madelung(cell, kpts)
     if kpts is None:
         for i,dm in enumerate(dms):
@@ -415,7 +415,7 @@ def _ewald_exxdiv_3d(cell, kpts, dms, vk, kpts_band=None):
                     vk[i,kp] += madelung * reduce(numpy.dot, (s[k], dm[k], s[k]))
 
 def _ewald_exxdiv_1d2d(cell, kpts, dms, vk, kpts_band=None):
-    s = cell.pbc_intor('int1e_ovlp_sph', hermi=1, kpts=kpts)
+    s = cell.pbc_intor('int1e_ovlp', hermi=1, kpts=kpts)
     madelung = tools.pbc.madelung(cell, kpts)
 
     Gv, Gvbase, kws = cell.get_Gv_weights(cell.mesh)

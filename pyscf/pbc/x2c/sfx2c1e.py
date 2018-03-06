@@ -119,8 +119,8 @@ class SpinFreeX2C(X2C):
             for ia in range(xcell.natm):
                 ish0, ish1, p0, p1 = atom_slices[ia]
                 shls_slice = (ish0, ish1, ish0, ish1)
-                t1 = xcell.intor('int1e_kin_sph', shls_slice=shls_slice)
-                s1 = xcell.intor('int1e_ovlp_sph', shls_slice=shls_slice)
+                t1 = xcell.intor('int1e_kin', shls_slice=shls_slice)
+                s1 = xcell.intor('int1e_ovlp', shls_slice=shls_slice)
                 with xcell.with_rinv_as_nucleus(ia):
                     z = -xcell.atom_charge(ia)
                     v1 = z * xcell.intor('int1e_rinv', shls_slice=shls_slice)
@@ -131,13 +131,13 @@ class SpinFreeX2C(X2C):
         else:
             raise NotImplementedError
 
-        t = xcell.pbc_intor('int1e_kin_sph', 1, lib.HERMITIAN, kpts_lst)
-        s = xcell.pbc_intor('int1e_ovlp_sph', 1, lib.HERMITIAN, kpts_lst)
+        t = xcell.pbc_intor('int1e_kin', 1, lib.HERMITIAN, kpts_lst)
+        s = xcell.pbc_intor('int1e_ovlp', 1, lib.HERMITIAN, kpts_lst)
         v = with_df.get_nuc(kpts_lst)
         #w = get_pnucp(with_df, kpts_lst)
         if self.basis is not None:
             s22 = s
-            s21 = pbcgto.intor_cross('int1e_ovlp_sph', xcell, cell, kpts=kpts_lst)
+            s21 = pbcgto.intor_cross('int1e_ovlp', xcell, cell, kpts=kpts_lst)
 
         h1_kpts = []
         for k in range(len(kpts_lst)):
@@ -203,7 +203,7 @@ def get_pnucp(mydf, kpts=None):
         nuccell._bas = numpy.asarray(chg_bas, dtype=numpy.int32)
         nuccell._env = numpy.hstack((cell._env, chg_env))
 
-        wj = lib.asarray(mydf._int_nuc_vloc(nuccell, kpts_lst, 'int3c2e_pvp1_sph'))
+        wj = lib.asarray(mydf._int_nuc_vloc(nuccell, kpts_lst, 'int3c2e_pvp1'))
         t1 = log.timer_debug1('pnucp pass1: analytic int', *t1)
 
         aoaux = ft_ao.ft_ao(nuccell, Gv)
@@ -222,7 +222,7 @@ def get_pnucp(mydf, kpts=None):
                 nucbar = sum([z/nuccell.bas_exp(i)[0] for i,z in enumerate(charge)])
                 nucbar *= numpy.pi/cell.vol
 
-            ovlp = cell.pbc_intor('int1e_kin_sph', 1, lib.HERMITIAN, kpts_lst)
+            ovlp = cell.pbc_intor('int1e_kin', 1, lib.HERMITIAN, kpts_lst)
             for k in range(nkpts):
                 s = lib.pack_tril(ovlp[k])
                 # *2 due to the factor 1/2 in T
@@ -231,7 +231,7 @@ def get_pnucp(mydf, kpts=None):
     max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
     for aoaoks, p0, p1 in mydf.ft_loop(mydf.mesh, kpt_allow, kpts_lst,
                                        max_memory=max_memory, aosym='s2',
-                                       intor='GTO_ft_pdotp_sph'):
+                                       intor='GTO_ft_pdotp'):
         for k, aoao in enumerate(aoaoks):
             if aft_jk.gamma_point(kpts_lst[k]):
                 wj[k] += numpy.einsum('k,kx->x', vG[p0:p1].real, aoao.real)
@@ -241,7 +241,7 @@ def get_pnucp(mydf, kpts=None):
     t1 = log.timer_debug1('contracting pnucp', *t1)
 
     if cell.dimension == 1 or cell.dimension == 2:
-        t = cell.pbc_intor('int1e_kin_sph', 1, lib.HERMITIAN, kpts_lst)
+        t = cell.pbc_intor('int1e_kin', 1, lib.HERMITIAN, kpts_lst)
         G0idx, SI_on_z = pbcgto.cell._SI_for_uniform_model_charge(cell, Gv)
         Zmod = numpy.einsum('i,i', vG[G0idx].conj(), SI_on_z)
         if abs(kpts).sum() < 1e-9:

@@ -41,7 +41,7 @@ def get_ovlp(mf, cell=None, kpts=None):
     if cell is None: cell = mf.cell
     if kpts is None: kpts = mf.kpts
 # Avoid pbcopt's prescreening in the lattice sum, for better accuracy
-    s = cell.pbc_intor('int1e_ovlp_sph', hermi=1, kpts=kpts,
+    s = cell.pbc_intor('int1e_ovlp', hermi=1, kpts=kpts,
                        pbcopt=lib.c_null_ptr())
     cond = np.max(lib.cond(s))
     if cond * cell.precision > 1e2:
@@ -426,7 +426,7 @@ class KSCF(pbchf.SCF):
             nuc = lib.asarray(self.with_df.get_nuc(kpts))
         if len(cell._ecpbas) > 0:
             nuc += lib.asarray(ecp.ecp_int(cell, kpts))
-        t = lib.asarray(cell.pbc_intor('int1e_kin_sph', 1, 1, kpts))
+        t = lib.asarray(cell.pbc_intor('int1e_kin', 1, 1, kpts))
         return nuc + t
 
     get_ovlp = get_ovlp

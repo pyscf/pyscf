@@ -42,7 +42,7 @@ def ecp_int(cell, kpts=None):
     shls_slice = (0, cell.nbas, 0, cell.nbas, 0, 1)
 
     kptij_lst = numpy.hstack((kpts_lst,kpts_lst)).reshape(-1,2,3)
-    buf = incore.aux_e2(cell, ecpcell, 'ECPscalar_sph', aosym='s2',
+    buf = incore.aux_e2(cell, ecpcell, 'ECPscalar', aosym='s2',
                         kptij_lst=kptij_lst, shls_slice=shls_slice)
     buf = buf.reshape(len(kpts_lst),-1)
     mat = []
