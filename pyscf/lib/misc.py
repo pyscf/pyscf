@@ -494,10 +494,10 @@ class ProcessWithReturnValue(Process):
                 raise e
         Process.__init__(self, group, qwrap, name, args, kwargs)
     def join(self):
-        Process.join(self)
         if self._e is not None:
             raise RuntimeError('Error on process %s' % self)
         else:
+            Process.join(self)
             return self._q.get()
     get = join
 
@@ -514,10 +514,10 @@ class ThreadWithReturnValue(Thread):
                 raise e
         Thread.__init__(self, group, qwrap, name, args, kwargs)
     def join(self):
-        Thread.join(self)
         if self._e is not None:
-            raise RuntimeError('Error on process %s' % self)
+            raise RuntimeError('Error on thread %s' % self)
         else:
+            Thread.join(self)
             return self._q.get()
     get = join
 
