@@ -36,7 +36,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
     log = logger.Logger(mydf.stdout, mydf.verbose)
     max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
     fused_cell, fuse = fuse_auxcell(mydf, auxcell)
-    outcore.aux_e2(cell, fused_cell, cderi_file, 'int3c2e_sph', aosym='s2',
+    outcore.aux_e2(cell, fused_cell, cderi_file, 'int3c2e', aosym='s2',
                    kptij_lst=kptij_lst, dataname='j3c', max_memory=max_memory)
     t1 = log.timer_debug1('3c2e', *t1)
 
@@ -55,7 +55,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
     log.debug('Num uniq kpts %d', len(uniq_kpts))
     log.debug2('uniq_kpts %s', uniq_kpts)
     # j2c ~ (-kpt_ji | kpt_ji)
-    j2c = fused_cell.pbc_intor('int2c2e_sph', hermi=1, kpts=uniq_kpts)
+    j2c = fused_cell.pbc_intor('int2c2e', hermi=1, kpts=uniq_kpts)
     feri = h5py.File(cderi_file)
 
     for k, kpt in enumerate(uniq_kpts):
@@ -117,7 +117,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
             nao_pair = nao*(nao+1)//2
 
             vbar = fuse(mydf.auxbar(fused_cell))
-            ovlp = cell.pbc_intor('int1e_ovlp_sph', hermi=1, kpts=adapted_kptjs)
+            ovlp = cell.pbc_intor('int1e_ovlp', hermi=1, kpts=adapted_kptjs)
             for k, ji in enumerate(adapted_ji_idx):
                 ovlp[k] = lib.pack_tril(ovlp[k])
         else:

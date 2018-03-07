@@ -44,7 +44,7 @@ def format_aux_basis(cell, auxbasis='weigend+etb'):
     return make_auxmol(cell, auxbasis)
 
 #@memory_cache
-def aux_e2(cell, auxcell, intor='int3c2e_sph', aosym='s1', comp=None,
+def aux_e2(cell, auxcell, intor='int3c2e', aosym='s1', comp=None,
            kptij_lst=numpy.zeros((1,2,3)), shls_slice=None, **kwargs):
     r'''3-center AO integrals (ij|L) with double lattice sum:
     \sum_{lm} (i[l]j[m]|L[0]), where L is the auxiliary basis.
@@ -116,7 +116,7 @@ def aux_e2(cell, auxcell, intor='int3c2e_sph', aosym='s1', comp=None,
         out = out[0]
     return out
 
-def wrap_int3c(cell, auxcell, intor='int3c2e_sph', aosym='s1', comp=1,
+def wrap_int3c(cell, auxcell, intor='int3c2e', aosym='s1', comp=1,
                kptij_lst=numpy.zeros((1,2,3)), cintopt=None, pbcopt=None):
     pcell = copy.copy(cell)
     pcell._atm, pcell._bas, pcell._env = \
@@ -193,7 +193,7 @@ def wrap_int3c(cell, auxcell, intor='int3c2e_sph', aosym='s1', comp=1,
     return int3c
 
 
-def fill_2c2e(cell, auxcell, intor='int2c2e_sph', hermi=0, kpt=numpy.zeros(3)):
+def fill_2c2e(cell, auxcell, intor='int2c2e', hermi=0, kpt=numpy.zeros(3)):
     '''2-center 2-electron AO integrals (L|ij), where L is the auxiliary basis.
     '''
     if hermi != 0:

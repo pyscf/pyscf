@@ -27,8 +27,8 @@ def project_mo_nr2nr(cell1, mo1, cell2, kpts=None):
 
         C2 = S^{-1}<AO2|AO1> C1
     '''
-    s22 = cell2.pbc_intor('int1e_ovlp_sph', hermi=1, kpts=kpts)
-    s21 = pbcgto.intor_cross('int1e_ovlp_sph', cell2, cell1, kpts=kpts)
+    s22 = cell2.pbc_intor('int1e_ovlp', hermi=1, kpts=kpts)
+    s21 = pbcgto.intor_cross('int1e_ovlp', cell2, cell1, kpts=kpts)
     if kpts is None or numpy.shape(kpts) == (3,):  # A single k-point
         return scipy.linalg.solve(s22, s21.dot(mo1), sym_pos=True)
     else:

@@ -544,30 +544,40 @@ class ProcessWithReturnValue(Process):
     def __init__(self, group=None, target=None, name=None, args=(),
                  kwargs=None):
         self._q = Queue()
+        self._e = None
         def qwrap(*args, **kwargs):
-            self._q.put(target(*args, **kwargs))
+            try:
+                self._q.put(target(*args, **kwargs))
+            except BaseException as e:
+                self._e = e
+                raise e
         Process.__init__(self, group, qwrap, name, args, kwargs)
     def join(self):
-        Process.join(self)
-        try:
-            return self._q.get(block=False)
-        except:  # Queue.Empty error
+        if self._e is not None:
             raise RuntimeError('Error on process %s' % self)
+        else:
+            Process.join(self)
+            return self._q.get()
     get = join
 
 class ThreadWithReturnValue(Thread):
     def __init__(self, group=None, target=None, name=None, args=(),
                  kwargs=None):
         self._q = Queue()
+        self._e = None
         def qwrap(*args, **kwargs):
-            self._q.put(target(*args, **kwargs))
+            try:
+                self._q.put(target(*args, **kwargs))
+            except BaseException as e:
+                self._e = e
+                raise e
         Thread.__init__(self, group, qwrap, name, args, kwargs)
     def join(self):
-        Thread.join(self)
-        try:
-            return self._q.get(block=False)
-        except:  # Queue.Empty error
+        if self._e is not None:
             raise RuntimeError('Error on thread %s' % self)
+        else:
+            Thread.join(self)
+            return self._q.get()
     get = join
 
 def background_thread(func, *args, **kwargs):

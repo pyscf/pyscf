@@ -14,7 +14,7 @@ from pyscf.pbc.df.incore import wrap_int3c
 libpbc = lib.load_library('libpbc')
 
 
-def aux_e2(cell, auxcell, erifile, intor='int3c2e_sph', aosym='s2ij', comp=None,
+def aux_e2(cell, auxcell, erifile, intor='int3c2e', aosym='s2ij', comp=None,
            kptij_lst=None, dataname='eri_mo', shls_slice=None, max_memory=2000,
            verbose=0):
     r'''3-center AO integrals (ij|L) with double lattice sum:

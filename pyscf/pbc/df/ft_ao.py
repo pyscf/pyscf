@@ -21,7 +21,7 @@ libpbc = lib.load_library('libpbc')
 #
 def ft_aopair(cell, Gv, shls_slice=None, aosym='s1',
               b=None, gxyz=None, Gvbase=None, kpti_kptj=numpy.zeros((2,3)),
-              q=None, intor='GTO_ft_ovlp_sph', comp=1, verbose=None):
+              q=None, intor='GTO_ft_ovlp', comp=1, verbose=None):
     r'''
     FT transform AO pair
     \sum_T exp(-i k_j * T) \int exp(-i(G+q)r) i(r) j(r-T) dr^3
@@ -37,7 +37,7 @@ def ft_aopair(cell, Gv, shls_slice=None, aosym='s1',
 # gxyz is the index for Gvbase
 def _ft_aopair_kpts(cell, Gv, shls_slice=None, aosym='s1',
                     b=None, gxyz=None, Gvbase=None, q=numpy.zeros(3),
-                    kptjs=numpy.zeros((1,3)), intor='GTO_ft_ovlp_sph', comp=1,
+                    kptjs=numpy.zeros((1,3)), intor='GTO_ft_ovlp', comp=1,
                     out=None):
     r'''
     FT transform AO pair
@@ -46,6 +46,9 @@ def _ft_aopair_kpts(cell, Gv, shls_slice=None, aosym='s1',
     The return array holds the AO pair
     corresponding to the kpoints given by kptjs
     '''
+
+    intor = cell._add_suffix(intor)
+
     q = numpy.reshape(q, 3)
     kptjs = numpy.asarray(kptjs, order='C').reshape(-1,3)
     Gv = numpy.asarray(Gv, order='C').reshape(-1,3)
@@ -100,7 +103,7 @@ def _ft_aopair_kpts(cell, Gv, shls_slice=None, aosym='s1',
         shape = (nkpts, comp, nij, nGv)
 
     drv = libpbc.PBC_ft_latsum_drv
-    intor = getattr(libpbc, intor)
+    cintor = getattr(libpbc, intor)
     eval_gz = getattr(libpbc, eval_gz)
     if nkpts == 1:
         fill = getattr(libpbc, 'PBC_ft_fill_nk1'+aosym)
@@ -108,7 +111,7 @@ def _ft_aopair_kpts(cell, Gv, shls_slice=None, aosym='s1',
         fill = getattr(libpbc, 'PBC_ft_fill_k'+aosym)
     out = numpy.ndarray(shape, dtype=numpy.complex128, buffer=out)
 
-    drv(intor, eval_gz, fill, out.ctypes.data_as(ctypes.c_void_p),
+    drv(cintor, eval_gz, fill, out.ctypes.data_as(ctypes.c_void_p),
         ctypes.c_int(nkpts), ctypes.c_int(comp), ctypes.c_int(nimgs),
         Ls.ctypes.data_as(ctypes.c_void_p), expkL.ctypes.data_as(ctypes.c_void_p),
         (ctypes.c_int*4)(*shls_slice), ao_loc.ctypes.data_as(ctypes.c_void_p),

@@ -158,7 +158,7 @@ def get_nuc(mydf, kpts=None):
         vj_kpts = vj_kpts[0]
     return numpy.asarray(vj_kpts)
 
-def _int_nuc_vloc(mydf, nuccell, kpts, intor='int3c2e_sph', aosym='s2', comp=1):
+def _int_nuc_vloc(mydf, nuccell, kpts, intor='int3c2e', aosym='s2', comp=1):
     '''Vnuc - Vloc'''
     cell = mydf.cell
     nkpts = len(kpts)
@@ -188,7 +188,8 @@ def _int_nuc_vloc(mydf, nuccell, kpts, intor='int3c2e_sph', aosym='s2', comp=1):
         buf = buf.reshape(nkpts,comp,nao_pair,nchg)
         mat = numpy.einsum('kcxz,z->kcx', buf, charge)
 
-    if cell.dimension != 0 and intor == 'int3c2e_sph':
+    if cell.dimension != 0 and intor in ('int3c2e', 'int3c2e_sph',
+                                         'int3c2e_cart'):
         assert(comp == 1)
         charge = -cell.atom_charges()
 
@@ -205,7 +206,7 @@ def _int_nuc_vloc(mydf, nuccell, kpts, intor='int3c2e_sph', aosym='s2', comp=1):
             nucbar = sum([z/nuccell.bas_exp(i)[0] for i,z in enumerate(charge)])
             nucbar *= numpy.pi/cell.vol
 
-        ovlp = cell.pbc_intor('int1e_ovlp_sph', 1, lib.HERMITIAN, kpts)
+        ovlp = cell.pbc_intor('int1e_ovlp', 1, lib.HERMITIAN, kpts)
         for k in range(nkpts):
             if aosym == 's1':
                 mat[k] -= nucbar * ovlp[k].reshape(nao_pair)
@@ -339,7 +340,7 @@ class AFTDF(lib.StreamObject):
 # TODO: Put Gv vector in the arguments
     def pw_loop(self, mesh=None, kpti_kptj=None, q=None, shls_slice=None,
                 max_memory=2000, aosym='s1', blksize=None,
-                intor='GTO_ft_ovlp_sph', comp=1):
+                intor='GTO_ft_ovlp', comp=1):
         '''
         Fourier transform iterator for AO pair
         '''
@@ -414,7 +415,7 @@ class AFTDF(lib.StreamObject):
                 yield (pqkR, pqkI, p0+i0, p0+i1)
 
     def ft_loop(self, mesh=None, q=numpy.zeros(3), kpts=None, shls_slice=None,
-                max_memory=4000, aosym='s1', intor='GTO_ft_ovlp_sph', comp=1):
+                max_memory=4000, aosym='s1', intor='GTO_ft_ovlp', comp=1):
         '''
         Fourier transform iterator for all kpti which satisfy
             2pi*N = (kpts - kpti - q)*a,  N = -1, 0, 1
@@ -446,7 +447,7 @@ class AFTDF(lib.StreamObject):
             nj = ao_loc[shls_slice[3]] - ao_loc[shls_slice[2]]
             nij = ni*nj
 
-        if (abs(q).sum() < 1e-6 and intor == 'GTO_ft_ovlp_sph' and
+        if (abs(q).sum() < 1e-6 and intor[:11] == 'GTO_ft_ovlp' and
             (cell.dimension == 1 or cell.dimension == 2)):
             s = cell.pbc_intor('int1e_ovlp', kpts=kpts)
             if aosym == 's2':
