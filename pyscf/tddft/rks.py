@@ -151,6 +151,15 @@ class dRPA(TDDFTNoHybrid):
 
 TDH = dRPA
 
+class dTDA(TDA):
+    def __init__(self, mf):
+        if not hasattr(mf, 'xc'):
+            raise RuntimeError("direct TDA can only be applied with DFT; for HF+dTDA, use .xc='hf'")
+        from pyscf import scf
+        mf = scf.addons.convert_to_rhf(mf)
+        mf.xc = ''
+        TDA.__init__(self, mf)
+
 if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
@@ -207,4 +216,12 @@ if __name__ == '__main__':
     td.nstates = 5
     print(td.kernel()[0] * 27.2114)
 # [ 10.00343861  10.00343861  15.62586305  30.69238874  30.69238874]
+
+    mf = dft.RKS(mol)
+    mf.xc = 'lda,vwn'
+    mf.scf()
+    td = dTDA(mf)
+    td.nstates = 5
+    print(td.kernel()[0] * 27.2114)
+# [ 10.05245288  10.05245288  16.03497655  30.7120363   30.7120363 ]
 
