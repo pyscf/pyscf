@@ -108,13 +108,14 @@ def get_becke_grids(cell, atom_grid={}, radi_method=dft.radi.gauss_chebyshev,
             The real-space grid point coordinates.
         weights : (N) ndarray
     '''
-    # When low_dim_ft_type is set, pbc_eval_gto treats the 2D system as a 3D
-    # system. The atomic grids needs to be consistent with the pbc_eval_gto
-    # function (see issue 164).
+# When low_dim_ft_type is set, pbc_eval_gto treats the 2D system as a 3D system.
+# To get the correct particle number in numint module, the atomic grids needs to
+# be consistent with the treatment in pbc_eval_gto (see issue 164).
     if cell.low_dim_ft_type == 'analytic_2d_1':
-        Ls = cell.get_lattice_Ls(dimension=3)
+        dimension = 3
     else:
-        Ls = cell.get_lattice_Ls(dimension=cell.dimension)
+        dimension = cell.dimension
+    Ls = cell.get_lattice_Ls(dimension=dimension)
 
     atm_coords = Ls.reshape(-1,1,3) + cell.atom_coords()
     atom_grids_tab = gen_atomic_grids(cell, atom_grid, radi_method, level, prune)
@@ -131,23 +132,23 @@ def get_becke_grids(cell, atom_grid={}, radi_method=dft.radi.gauss_chebyshev,
             c = b.dot(coords.T).round(8)
 
             mask = np.ones(c.shape[1], dtype=bool)
-            if cell.dimension >= 1:
+            if dimension >= 1:
                 mask &= (c[0]>=0) & (c[0]<=1)
-            if cell.dimension >= 2:
+            if dimension >= 2:
                 mask &= (c[1]>=0) & (c[1]<=1)
-            if cell.dimension == 3:
+            if dimension == 3:
                 mask &= (c[2]>=0) & (c[2]<=1)
 
             vol = vol[mask]
             if vol.size > 8:
                 c = c[:,mask]
-                if cell.dimension >= 1:
+                if dimension >= 1:
                     vol[c[0]==0] *= .5
                     vol[c[0]==1] *= .5
-                if cell.dimension >= 2:
+                if dimension >= 2:
                     vol[c[1]==0] *= .5
                     vol[c[1]==1] *= .5
-                if cell.dimension == 3:
+                if dimension == 3:
                     vol[c[2]==0] *= .5
                     vol[c[2]==1] *= .5
                 coords = coords[mask]

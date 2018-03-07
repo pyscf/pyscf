@@ -7,7 +7,7 @@ import unittest
 import numpy
 import numpy as np
 
-from pyscf import gto
+from pyscf import gto, lib
 from pyscf.dft import rks
 import pyscf.dft
 
@@ -249,6 +249,46 @@ class KnowValues(unittest.TestCase):
 
         mat1 = numint.eval_mat(cell, ao[0], weight, rho, vxc, xctype='LDA')
         self.assertAlmostEqual(finger(mat1), 10.483493302918024+3.5590312220458227j, 7)
+
+    def test_2d_rho(self):
+        cell = pbcgto.Cell()
+        cell.a = '5 0 0; 0 5 0; 0 0 1'
+        cell.unit = 'B'
+        cell.atom = 'He     1.    0.       1.'
+        cell.basis = {'He': '321g'}
+        cell.dimension = 2
+        cell.verbose = 0
+        cell.mesh = [10,10,30]
+        cell.build()
+        grids = gen_grid.UniformGrids(cell)
+        grids.build()
+        numpy.random.seed(10)
+        nao = cell.nao_nr()
+        dm = numpy.random.random((nao,nao))
+        dm = dm + dm.T
+        ni = numint._NumInt()
+        rho = numint.get_rho(ni, cell, dm, grids)
+        self.assertAlmostEqual(lib.finger(rho), 7.2089907050590334, 9)
+
+    def test_1d_rho(self):
+        cell = pbcgto.Cell()
+        cell.a = '5 0 0; 0 1 0; 0 0 1'
+        cell.unit = 'B'
+        cell.atom = 'He     1.    0.       1.'
+        cell.basis = {'He': '321g'}
+        cell.dimension = 1
+        cell.verbose = 0
+        cell.mesh = [10,30,30]
+        cell.build()
+        grids = gen_grid.UniformGrids(cell)
+        grids.build()
+        numpy.random.seed(10)
+        nao = cell.nao_nr()
+        dm = numpy.random.random((nao,nao))
+        dm = dm + dm.T
+        ni = numint._NumInt()
+        rho = numint.get_rho(ni, cell, dm, grids)
+        self.assertAlmostEqual(lib.finger(rho), 1.1624587519868457, 9)
 
 if __name__ == '__main__':
     print("Full Tests for pbc.dft.numint")
