@@ -113,7 +113,13 @@ def eval_gto(cell, eval_name, coords, comp=None, kpts=None, kpt=None,
     out_ptrs = (ctypes.c_void_p*nkpts)(
             *[x.ctypes.data_as(ctypes.c_void_p) for x in ao_kpts])
     coords = numpy.asarray(coords, order='F')
-    Ls = cell.get_lattice_Ls(dimension=cell.dimension)
+
+    # For atoms near the boundary of the cell, it is necessary (even in low-
+    # dimensional systems) to include lattice translations in all 3 dimensions.
+    if cell.low_dim_ft_type == 'analytic_2d_1':
+        Ls = cell.get_lattice_Ls(dimension=3)
+    else:
+        Ls = cell.get_lattice_Ls(dimension=cell.dimension)
     Ls = Ls[numpy.argsort(lib.norm(Ls, axis=1))]
     expLk = numpy.exp(1j * numpy.asarray(numpy.dot(Ls, kpts_lst.T), order='C'))
 
