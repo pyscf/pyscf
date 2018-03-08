@@ -40,7 +40,7 @@ def ft_aopair(mol, Gv, shls_slice=None, aosym='s1', b=numpy.eye(3),
     \int i(r) j(r) exp(-ikr) dr^3
     '''
 
-    intor = cell._add_suffix(intor)
+    intor = mol._add_suffix(intor)
 
     if shls_slice is None:
         shls_slice = (0, mol.nbas, 0, mol.nbas)

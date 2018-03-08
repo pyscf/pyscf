@@ -93,7 +93,7 @@ class KnowValues(unittest.TestCase):
 
         kmdf.cell.cart = True
         eri1111_cart = kmdf.get_eri((kpts[1],kpts[1],kpts[1],kpts[1]))
-        self.assertTrue(abs(eri1111-eri1111_cart).max(), 0, 9)
+        self.assertAlmostEqual(abs(eri1111-eri1111_cart).max(), 0, 9)
         kmdf.cell.cart = False
 
     def test_get_eri_0011(self):
