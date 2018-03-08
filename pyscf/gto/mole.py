@@ -957,16 +957,20 @@ def len_cart(l):
     '''
     return (l + 1) * (l + 2) // 2
 
-def npgto_nr(mol, cart=False):
+def npgto_nr(mol, cart=None):
     '''Total number of primitive spherical GTOs for the given :class:`Mole` object'''
+    if cart is None:
+        cart = mol.cart
     l = mol._bas[:,ANG_OF]
-    if cart or mol.cart:
+    if cart:
         return ((l+1)*(l+2)//2 * mol._bas[:,NPRIM_OF]).sum()
     else:
         return ((l*2+1) * mol._bas[:,NPRIM_OF]).sum()
-def nao_nr(mol, cart=False):
-    '''Total number of contracted spherical GTOs for the given :class:`Mole` object'''
-    if cart or mol.cart:
+def nao_nr(mol, cart=None):
+    '''Total number of contracted GTOs for the given :class:`Mole` object'''
+    if cart is None:
+        cart = mol.cart
+    if cart:
         return nao_cart(mol)
     else:
         return ((mol._bas[:,ANG_OF]*2+1) * mol._bas[:,NCTR_OF]).sum()
@@ -1038,7 +1042,7 @@ def nao_2c_range(mol, bas_id0, bas_id1):
     nao_id1 = ao_loc[-1]
     return nao_id0, nao_id1
 
-def ao_loc_nr(mol, cart=False):
+def ao_loc_nr(mol, cart=None):
     '''Offset of every shell in the spherical basis function spectrum
 
     Returns:
@@ -1050,7 +1054,9 @@ def ao_loc_nr(mol, cart=False):
     >>> gto.ao_loc_nr(mol)
     [0, 1, 2, 3, 6, 9, 10, 11, 12, 15, 18]
     '''
-    if cart or mol.cart:
+    if cart is None:
+        cart = mol.cart
+    if cart:
         return moleintor.make_loc(mol._bas, 'cart')
     else:
         return moleintor.make_loc(mol._bas, 'sph')
@@ -2619,11 +2625,13 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
                                  shls_slice, comp=comp, hermi=hermi,
                                  aosym=aosym, out=out)
 
-    def _add_suffix(self, intor, cart=False):
+    def _add_suffix(self, intor, cart=None):
         if not (intor[-4:] == '_sph' or intor[:4] == 'cint' or
                 intor[-7:] == '_spinor' or intor[-5:] =='_cart' or
                 intor[-4:] == '_ssc'):
-            if cart or self.cart:
+            if cart is None:
+                cart = self.cart
+            if cart:
                 intor = intor + '_cart'
             else:
                 intor = intor + '_sph'
