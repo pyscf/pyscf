@@ -1,7 +1,7 @@
 # cmake.arch.inc to use for automatic install using singularity
 enable_language(Fortran)
 message("CMAKE_Fortran_COMPILER: ${CMAKE_Fortran_COMPILER}")
-message("CMAKE_Fortran_FLAGS: ${CMAKE_Fortran_FLAGS}")
+message("CMAKE_Fortran_FLAGS: ${CMAKE_Fortran_FLAGS} -ffree-line-length-0")
 
 set(MKLROOT "/opt/conda/lib")
 
