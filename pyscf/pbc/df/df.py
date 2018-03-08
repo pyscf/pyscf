@@ -262,7 +262,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
             aosym = 's2'
             nao_pair = nao*(nao+1)//2
 
-            vbar = fuse(mydf.auxbar(fused_cell))
+            vbar = mydf.auxbar(fused_cell)
             ovlp = cell.pbc_intor('int1e_ovlp', hermi=1, kpts=adapted_kptjs)
             ovlp = [lib.pack_tril(s) for s in ovlp]
         else:
@@ -298,9 +298,8 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
             for k, idx in enumerate(adapted_ji_idx):
                 v = numpy.asarray(feri['j3c/%d'%idx][:,col0:col1])
                 if is_zero(kpt) and cell.dimension == 3:
-                    for i, c in enumerate(vbar):
-                        if c != 0:
-                            v[i] -= c * ovlp[k][col0:col1]
+                    for i in numpy.where(vbar != 0)[0]:
+                        v[i] -= vbar[i] * ovlp[k][col0:col1]
                 j3cR.append(numpy.asarray(v.real, order='C'))
                 if is_zero(kpt) and gamma_point(adapted_kptjs[k]):
                     j3cI.append(None)
@@ -532,6 +531,12 @@ class GDF(aft.AFTDF):
                     norms = half_sph_norm/gto.gaussian_int(2, es)
                     cs = numpy.einsum('i,ij->ij', 1/norms, fused_cell._libcint_ctr_coeff(i))
                     vbar[aux_loc[i]:aux_loc[i+1]] = numpy.einsum('in,i->n', cs, -1/es)
+# TODO: fused_cell.cart and l%2 == 0: # 6d 10f ...
+# Normalization coefficients are different in the same shell for cartesian
+# basis. E.g. the d-type functions, the 5 d-type orbitals are normalized wrt
+# the integral \int r^2 * r^2 e^{-a r^2} dr.  The s-type 3s orbital should be
+# normalized wrt the integral \int r^0 * r^2 e^{-a r^2} dr. The different
+# normalization was not built in the basis.
         vbar *= numpy.pi/fused_cell.vol
         return vbar
 
@@ -666,17 +671,61 @@ def fuse_auxcell(mydf, auxcell):
         l  = chgcell.bas_angular(i)
         modchg_offset[ia,l] = smooth_loc[i]
 
-    def fuse(Lpq):
-        Lpq, chgLpq = Lpq[:naux], Lpq[naux:]
-        for i in range(auxcell.nbas):
-            l  = auxcell.bas_angular(i)
-            ia = auxcell.bas_atom(i)
-            p0 = modchg_offset[ia,l]
-            if p0 >= 0:
-                nd = (aux_loc[i+1] - aux_loc[i]) // auxcell.bas_nctr(i)
-                for i0, i1 in lib.prange(aux_loc[i], aux_loc[i+1], nd):
-                    Lpq[i0:i1] -= chgLpq[p0:p0+nd]
-        return Lpq
+    if auxcell.cart:
+# Normalization coefficients are different in the same shell for cartesian
+# basis. E.g. the d-type functions, the 5 d-type orbitals are normalized wrt
+# the integral \int r^2 * r^2 e^{-a r^2} dr.  The s-type 3s orbital should be
+# normalized wrt the integral \int r^0 * r^2 e^{-a r^2} dr. The different
+# normalization was not built in the basis.  There two ways to surmount this
+# problem.  First is to transform the cartesian basis and scale the 3s (for
+# d functions), 4p (for f functions) ... then transform back. The second is to
+# remove the 3s, 4p functions. The function below is the second solution
+        import ctypes
+        c2s_fn = gto.moleintor.libcgto.CINTc2s_ket_sph
+        aux_loc_sph = auxcell.ao_loc_nr(cart=False)
+        naux_sph = aux_loc_sph[-1]
+        def fuse(Lpq):
+            Lpq, chgLpq = Lpq[:naux], Lpq[naux:]
+            if Lpq.ndim == 1:
+                npq = 1
+                Lpq_sph = numpy.empty(naux_sph, dtype=Lpq.dtype)
+            else:
+                npq = Lpq.shape[1]
+                Lpq_sph = numpy.empty((naux_sph,npq), dtype=Lpq.dtype)
+            if Lpq.dtype == numpy.complex:
+                npq *= 2  # c2s_fn supports double only, *2 to handle complex
+            for i in range(auxcell.nbas):
+                l  = auxcell.bas_angular(i)
+                ia = auxcell.bas_atom(i)
+                p0 = modchg_offset[ia,l]
+                if p0 >= 0:
+                    nd = (l+1) * (l+2) // 2
+                    c0, c1 = aux_loc[i], aux_loc[i+1]
+                    s0, s1 = aux_loc_sph[i], aux_loc_sph[i+1]
+                    for i0, i1 in lib.prange(c0, c1, nd):
+                        Lpq[i0:i1] -= chgLpq[p0:p0+nd]
+
+                    if l < 2:
+                        Lpq_sph[s0:s1] = Lpq[c0:c1]
+                    else:
+                        Lpq_cart = numpy.asarray(Lpq[c0:c1], order='C')
+                        c2s_fn(Lpq_sph[s0:s1].ctypes.data_as(ctypes.c_void_p),
+                               ctypes.c_int(npq * auxcell.bas_nctr(i)),
+                               Lpq_cart.ctypes.data_as(ctypes.c_void_p),
+                               ctypes.c_int(l))
+            return Lpq_sph
+    else:
+        def fuse(Lpq):
+            Lpq, chgLpq = Lpq[:naux], Lpq[naux:]
+            for i in range(auxcell.nbas):
+                l  = auxcell.bas_angular(i)
+                ia = auxcell.bas_atom(i)
+                p0 = modchg_offset[ia,l]
+                if p0 >= 0:
+                    nd = l * 2 + 1
+                    for i0, i1 in lib.prange(aux_loc[i], aux_loc[i+1], nd):
+                        Lpq[i0:i1] -= chgLpq[p0:p0+nd]
+            return Lpq
     return fused_cell, fuse
 
 

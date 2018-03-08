@@ -17,6 +17,7 @@
 #
 
 import ctypes
+import warnings
 import numpy as np
 from pyscf import lib
 from pyscf.lib import logger
@@ -72,6 +73,12 @@ class UniformGrids(object):
 
     def build(self, cell=None, with_non0tab=False):
         if cell is None: cell = self.cell
+        if (cell.dimension < 2 or
+            (cell.dimension == 2 and cell.low_dim_ft_type is None)):
+            warnings.warn('Uniform grids are not adequate for low-dimension '
+                          'systems. It may lead to large errors in DFT-XC '
+                          'numerical integration. It is recommended to use '
+                          'BeckeGrids for low-dimension systems.')
 
         self.coords = get_uniform_grids(self.cell, self.mesh)
         self.weights = np.empty(self.coords.shape[0])
@@ -101,7 +108,8 @@ class UniformGrids(object):
         return make_mask(cell, coords, relativity, shls_slice, verbose)
 
 
-def gen_becke_grids(cell, atom_grid={}, radi_method=dft.radi.gauss_chebyshev,
+# modified from pyscf.dft.gen_grid.gen_partition
+def get_becke_grids(cell, atom_grid={}, radi_method=dft.radi.gauss_chebyshev,
                     level=3, prune=nwchem_prune):
     '''real-space grids using Becke scheme
 
@@ -109,12 +117,19 @@ def gen_becke_grids(cell, atom_grid={}, radi_method=dft.radi.gauss_chebyshev,
         cell : instance of :class:`Cell`
 
     Returns:
-        coords : (ngx*ngy*ngz, 3) ndarray
+        coords : (N, 3) ndarray
             The real-space grid point coordinates.
-        weights : (ngx*ngy*ngz) ndarray
+        weights : (N) ndarray
     '''
-# modified from pyscf.dft.gen_grid.gen_partition
-    Ls = cell.get_lattice_Ls()
+# When low_dim_ft_type is set, pbc_eval_gto treats the 2D system as a 3D system.
+# To get the correct particle number in numint module, the atomic grids needs to
+# be consistent with the treatment in pbc_eval_gto (see issue 164).
+    if cell.low_dim_ft_type == 'analytic_2d_1':
+        dimension = 3
+    else:
+        dimension = cell.dimension
+    Ls = cell.get_lattice_Ls(dimension=dimension)
+
     atm_coords = Ls.reshape(-1,1,3) + cell.atom_coords()
     atom_grids_tab = gen_atomic_grids(cell, atom_grid, radi_method, level, prune)
     coords_all = []
@@ -130,23 +145,23 @@ def gen_becke_grids(cell, atom_grid={}, radi_method=dft.radi.gauss_chebyshev,
             c = b.dot(coords.T).round(8)
 
             mask = np.ones(c.shape[1], dtype=bool)
-            if cell.dimension >= 1:
+            if dimension >= 1:
                 mask &= (c[0]>=0) & (c[0]<=1)
-            if cell.dimension >= 2:
+            if dimension >= 2:
                 mask &= (c[1]>=0) & (c[1]<=1)
-            if cell.dimension == 3:
+            if dimension == 3:
                 mask &= (c[2]>=0) & (c[2]<=1)
 
             vol = vol[mask]
             if vol.size > 8:
                 c = c[:,mask]
-                if cell.dimension >= 1:
+                if dimension >= 1:
                     vol[c[0]==0] *= .5
                     vol[c[0]==1] *= .5
-                if cell.dimension >= 2:
+                if dimension >= 2:
                     vol[c[1]==0] *= .5
                     vol[c[1]==1] *= .5
-                if cell.dimension == 3:
+                if dimension == 3:
                     vol[c[2]==0] *= .5
                     vol[c[2]==1] *= .5
                 coords = coords[mask]
@@ -182,6 +197,7 @@ def gen_becke_grids(cell, atom_grid={}, radi_method=dft.radi.gauss_chebyshev,
             weights_all[i0:i1] *= pbecke[ia,i0-p0:i1-p0]
 
     return coords_all, weights_all
+gen_becke_grids = get_becke_grids
 
 
 class BeckeGrids(dft.gen_grid.Grids):
@@ -192,7 +208,7 @@ class BeckeGrids(dft.gen_grid.Grids):
 
     def build(self, cell=None, with_non0tab=False):
         if cell is None: cell = self.cell
-        self.coords, self.weights = gen_becke_grids(self.cell, self.atom_grid,
+        self.coords, self.weights = get_becke_grids(self.cell, self.atom_grid,
                                                     radi_method=self.radi_method,
                                                     level=self.level,
                                                     prune=self.prune)

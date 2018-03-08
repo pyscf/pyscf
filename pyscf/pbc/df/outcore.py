@@ -57,7 +57,7 @@ def aux_e2(cell, auxcell, erifile, intor='int3c2e', aosym='s2ij', comp=None,
         shls_slice = (0, cell.nbas, 0, cell.nbas, 0, auxcell.nbas)
 
     ao_loc = cell.ao_loc_nr()
-    aux_loc = auxcell.ao_loc_nr('ssc' in intor)[:shls_slice[5]+1]
+    aux_loc = auxcell.ao_loc_nr(auxcell.cart or 'ssc' in intor)[:shls_slice[5]+1]
     ni = ao_loc[shls_slice[1]] - ao_loc[shls_slice[0]]
     nj = ao_loc[shls_slice[3]] - ao_loc[shls_slice[2]]
     naux = aux_loc[shls_slice[5]] - aux_loc[shls_slice[4]]

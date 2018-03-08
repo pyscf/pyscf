@@ -330,9 +330,16 @@ class FCISolver(direct_spin1.FCISolver):
         return get_init_guess(norb, nelec, nroots, hdiag, self.orbsym, wfnsym)
 
     def guess_wfnsym(self, norb, nelec, fcivec=None, wfnsym=None, **kwargs):
+        '''
+        Guess point group symmetry of the FCI wavefunction.  If fcivec is
+        given, the symmetry of fcivec is used.  Otherwise the symmetry is
+        based on the HF determinant.
+        '''
         if fcivec is None:
             wfnsym = _id_wfnsym(self, norb, nelec, wfnsym)
         else:
+            # TODO: if wfnsym is given in the input, check whether the
+            # symmetry of fcivec is consistent with given wfnsym.
             wfnsym = addons.guess_wfnsym(fcivec, norb, nelec, self.orbsym)
         if 'verbose' in kwargs:
             if isinstance(kwargs['verbose'], logger.Logger):

@@ -79,7 +79,7 @@ def aux_e2(cell, auxcell, intor='int3c2e', aosym='s1', comp=None,
         shls_slice = (0, cell.nbas, 0, cell.nbas, 0, auxcell.nbas)
 
     ao_loc = cell.ao_loc_nr()
-    aux_loc = auxcell.ao_loc_nr('ssc' in intor)[:shls_slice[5]+1]
+    aux_loc = auxcell.ao_loc_nr(auxcell.cart or 'ssc' in intor)[:shls_slice[5]+1]
     ni = ao_loc[shls_slice[1]] - ao_loc[shls_slice[0]]
     nj = ao_loc[shls_slice[3]] - ao_loc[shls_slice[2]]
     naux = aux_loc[shls_slice[5]] - aux_loc[shls_slice[4]]
@@ -136,7 +136,7 @@ def wrap_int3c(cell, auxcell, intor='int3c2e', aosym='s1', comp=1,
     atm, bas, env = gto.conc_env(cell._atm, cell._bas, cell._env,
                                  cell._atm, cell._bas, cell._env)
     ao_loc = gto.moleintor.make_loc(bas, intor)
-    aux_loc = auxcell.ao_loc_nr('ssc' in intor)
+    aux_loc = auxcell.ao_loc_nr(auxcell.cart or 'ssc' in intor)
     ao_loc = numpy.asarray(numpy.hstack([ao_loc, ao_loc[-1]+aux_loc[1:]]),
                            dtype=numpy.int32)
     atm, bas, env = gto.conc_env(atm, bas, env,

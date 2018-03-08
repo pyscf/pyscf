@@ -32,6 +32,7 @@ PySCF 1.5 alpha (2018-03-??)
   - RCCSD(T), UCCSD(T) and GCCSD(T) density matrices
   - RCCSD(T), UCCSD(T) analytical nuclear gradients
   - CASCI/CASSCF analytical nuclear gradients
+  - Cartesian GTO (6d 10f) basis in PBC calculations
 * Improved
   - Supported to set omp threads in FCI solver
   - Supported even number of grids in pbc calculations

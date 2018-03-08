@@ -91,6 +91,11 @@ class KnowValues(unittest.TestCase):
         check2 = kmdf.get_eri((kpts[1]+5e-8,kpts[1]+5e-8,kpts[1],kpts[1]))
         self.assertTrue(numpy.allclose(eri1111, check2, atol=1e-7))
 
+        kmdf.cell.cart = True
+        eri1111_cart = kmdf.get_eri((kpts[1],kpts[1],kpts[1],kpts[1]))
+        self.assertTrue(abs(eri1111-eri1111_cart).max(), 0, 9)
+        kmdf.cell.cart = False
+
     def test_get_eri_0011(self):
         eri0011 = kmdf.get_eri((kpts[0],kpts[0],kpts[1],kpts[1]))
         self.assertTrue(eri0011.dtype == numpy.complex128)
