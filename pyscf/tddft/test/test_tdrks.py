@@ -19,7 +19,7 @@
 import unittest
 import numpy
 from pyscf import gto, scf, dft
-from pyscf.tddft import rks
+from pyscf.tddft import rhf, rks
 
 mol = gto.Mole()
 mol.verbose = 0
@@ -183,6 +183,63 @@ class KnownValues(unittest.TestCase):
         td.nstates = 5
         es = td.kernel()[0] * 27.2114
         self.assertAlmostEqual(finger(es), -39.988118769202416, 6)
+
+    def test_ab_hf(self):
+        mf = scf.RHF(mol).run()
+        a, b = rhf.get_ab(mf)
+        ftda = rhf.gen_tda_operation(mf, singlet=True)[0]
+        ftdhf = rhf.gen_tdhf_operation(mf, singlet=True)[0]
+        nocc = numpy.count_nonzero(mf.mo_occ == 2)
+        nvir = numpy.count_nonzero(mf.mo_occ == 0)
+        numpy.random.seed(2)
+        x, y = xy = numpy.random.random((2,nvir,nocc))
+        ax = numpy.einsum('iajb,bj->ai', a, x)
+        self.assertAlmostEqual(abs(ax - ftda([x]).reshape(nvir,nocc)).max(), 0, 9)
+
+        ab1 = ax + numpy.einsum('iajb,bj->ai', b, y)
+        ab2 =-numpy.einsum('iajb,bj->ai', b, x)
+        ab2-= numpy.einsum('iajb,bj->ai', a, y)
+        abxy_ref = ftdhf([xy]).reshape(2,nvir,nocc)
+        self.assertAlmostEqual(abs(ab1 - abxy_ref[0]).max(), 0, 9)
+        self.assertAlmostEqual(abs(ab2 - abxy_ref[1]).max(), 0, 9)
+
+    def test_ab_lda(self):
+        mf = dft.RKS(mol).run(xc='lda,vwn')
+        a, b = rhf.get_ab(mf)
+        ftda = rhf.gen_tda_operation(mf, singlet=True)[0]
+        ftdhf = rhf.gen_tdhf_operation(mf, singlet=True)[0]
+        nocc = numpy.count_nonzero(mf.mo_occ == 2)
+        nvir = numpy.count_nonzero(mf.mo_occ == 0)
+        numpy.random.seed(2)
+        x, y = xy = numpy.random.random((2,nvir,nocc))
+        ax = numpy.einsum('iajb,bj->ai', a, x)
+        self.assertAlmostEqual(abs(ax - ftda([x]).reshape(nvir,nocc)).max(), 0, 9)
+
+        ab1 = ax + numpy.einsum('iajb,bj->ai', b, y)
+        ab2 =-numpy.einsum('iajb,bj->ai', b, x)
+        ab2-= numpy.einsum('iajb,bj->ai', a, y)
+        abxy_ref = ftdhf([xy]).reshape(2,nvir,nocc)
+        self.assertAlmostEqual(abs(ab1 - abxy_ref[0]).max(), 0, 9)
+        self.assertAlmostEqual(abs(ab2 - abxy_ref[1]).max(), 0, 9)
+
+    def test_ab_b3lyp(self):
+        mf = dft.RKS(mol).run(xc='b3lyp')
+        a, b = rhf.get_ab(mf)
+        ftda = rhf.gen_tda_operation(mf, singlet=None)[0]
+        ftdhf = rhf.gen_tdhf_operation(mf, singlet=True)[0]
+        nocc = numpy.count_nonzero(mf.mo_occ == 2)
+        nvir = numpy.count_nonzero(mf.mo_occ == 0)
+        numpy.random.seed(2)
+        x, y = xy = numpy.random.random((2,nvir,nocc))
+        ax = numpy.einsum('iajb,bj->ai', a, x)
+        self.assertAlmostEqual(abs(ax - ftda([x]).reshape(nvir,nocc)).max(), 0, 9)
+
+        ab1 = ax + numpy.einsum('iajb,bj->ai', b, y)
+        ab2 =-numpy.einsum('iajb,bj->ai', b, x)
+        ab2-= numpy.einsum('iajb,bj->ai', a, y)
+        abxy_ref = ftdhf([xy]).reshape(2,nvir,nocc)
+        self.assertAlmostEqual(abs(ab1 - abxy_ref[0]).max(), 0, 9)
+        self.assertAlmostEqual(abs(ab2 - abxy_ref[1]).max(), 0, 9)
 
 
 if __name__ == "__main__":

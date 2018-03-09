@@ -1448,7 +1448,14 @@ class Cell(mole.Mole):
 
     def pbc_intor(self, intor, comp=None, hermi=0, kpts=None, kpt=None,
                   **kwargs):
-        '''One-electron integrals with PBC. See also Mole.intor'''
+        r'''One-electron integrals with PBC.
+
+        .. math::
+
+            \sum_T \int \mu(r) * [intor] * \nu (r-T) dr
+
+        See also Mole.intor
+        '''
         return intor_cross(intor, self, self, comp, hermi, kpts, kpt, **kwargs)
 
     @lib.with_doc(pbc_eval_gto.__doc__)
