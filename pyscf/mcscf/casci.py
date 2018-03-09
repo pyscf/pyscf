@@ -157,7 +157,12 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO,
     return dm1a, dm1b
 
 def get_fock(mc, mo_coeff=None, ci=None, eris=None, casdm1=None, verbose=None):
-    '''Generalized Fock matrix in AO representation
+    r'''Effective one-electron Fock matrix in AO representation
+    f = \sum_{pq} E_{pq} F_{pq}
+    F_{pq} = h_{pq} + \sum_{rs} [(pq|rs)-(ps|rq)] DM_{sr}
+
+    Ref. Theor. Chim. Acta., 91, 31
+    Chem. Phys. 48, 157
     '''
     if ci is None: ci = mc.ci
     if mo_coeff is None: mo_coeff = mc.mo_coeff
@@ -311,7 +316,9 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
 
 def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
                  cas_natorb=False, casdm1=None, verbose=logger.NOTE):
-    '''Canonicalize CASCI/CASSCF orbitals
+    '''Canonicalized CASCI/CASSCF orbitals of effecitve Fock matrix.
+    Effective Fock matrix is built with one-particle density matrix (see
+    also :func:`mcscf.casci.get_fock`)
 
     Args:
         mc : a CASSCF/CASCI object or RHF object
