@@ -485,24 +485,40 @@ class ProcessWithReturnValue(Process):
     def __init__(self, group=None, target=None, name=None, args=(),
                  kwargs=None):
         self._q = Queue()
+        self._e = None
         def qwrap(*args, **kwargs):
-            self._q.put(target(*args, **kwargs))
+            try:
+                self._q.put(target(*args, **kwargs))
+            except BaseException as e:
+                self._e = e
+                raise e
         Process.__init__(self, group, qwrap, name, args, kwargs)
     def join(self):
-        Process.join(self)
-        return self._q.get()
+        if self._e is not None:
+            raise RuntimeError('Error on process %s' % self)
+        else:
+            Process.join(self)
+            return self._q.get()
     get = join
 
 class ThreadWithReturnValue(Thread):
     def __init__(self, group=None, target=None, name=None, args=(),
                  kwargs=None):
         self._q = Queue()
+        self._e = None
         def qwrap(*args, **kwargs):
-            self._q.put(target(*args, **kwargs))
+            try:
+                self._q.put(target(*args, **kwargs))
+            except BaseException as e:
+                self._e = e
+                raise e
         Thread.__init__(self, group, qwrap, name, args, kwargs)
     def join(self):
-        Thread.join(self)
-        return self._q.get()
+        if self._e is not None:
+            raise RuntimeError('Error on thread %s' % self)
+        else:
+            Thread.join(self)
+            return self._q.get()
     get = join
 
 def background_thread(func, *args, **kwargs):
@@ -587,7 +603,7 @@ class call_in_background(object):
                 def async_fn(*args, **kwargs):
                     if self.handler is not None:
                         self.handler.join()
-                    self.handler = Thread(target=fn, args=args, kwargs=kwargs)
+                    self.handler = ThreadWithReturnValue(target=fn, args=args, kwargs=kwargs)
                     self.handler.start()
                     return self.handler
                 return async_fn

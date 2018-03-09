@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Author: Timothy Berkelbach 
+# Author: Timothy Berkelbach
 #
 
 '''
@@ -9,6 +9,7 @@ G0W0 approximation
 
 import time
 import tempfile
+from functools import reduce
 import numpy
 import numpy as np
 import h5py
@@ -17,23 +18,31 @@ from scipy.optimize import newton
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf import ao2mo
+from pyscf import dft
 from pyscf.mp.mp2 import _mo_energy_without_core, _mo_without_core, _active_idx
 
 einsum = lib.einsum
 
 def kernel(gw, mo_energy, mo_coeff, td_e, td_xy, eris=None,
            orbs=None, verbose=logger.NOTE):
-    '''GW-corrected quasiparticle orbital energies 
+    '''GW-corrected quasiparticle orbital energies
 
     Returns:
         A list :  converged, mo_energy, mo_coeff
     '''
+    # mf must be DFT; for HF use xc = 'hf'
+    mf = gw._scf
+    assert(isinstance(mf, (dft.rks.RKS      , dft.uks.UKS,
+                           dft.roks.ROKS    , dft.uks.UKS,
+                           dft.rks_symm.RKS , dft.uks_symm.UKS,
+                           dft.rks_symm.ROKS, dft.uks_symm.UKS)))
+    assert(gw.frozen is 0 or gw.frozen is None)
+
     if eris is None:
         eris = gw.ao2mo(mo_coeff)
     if orbs is None:
-        orbs = range(gw.nmo) 
+        orbs = range(gw.nmo)
 
-    # mf must be DFT; for HF use xc = 'hf'
     v_mf = mf.get_veff() - mf.get_j()
     v_mf = reduce(numpy.dot, (mo_coeff.T, v_mf, mo_coeff))
 
@@ -129,7 +138,7 @@ class GW(lib.StreamObject):
         #self.frozen = frozen
         self.frozen = 0
         self.eta = 1e-3
-        self.linearized = False 
+        self.linearized = False
 
 ##################################################
 # don't modify the following attributes, they are not input options
@@ -199,9 +208,9 @@ class GW(lib.StreamObject):
         cput0 = (time.clock(), time.time())
         self.dump_flags()
         self.converged, self.mo_energy, self.mo_coeff = \
-                kernel(self, mo_energy, mo_coeff, td_e, td_xy, 
+                kernel(self, mo_energy, mo_coeff, td_e, td_xy,
                        eris=eris, orbs=orbs, verbose=self.verbose)
-        
+
         logger.timer(self, 'GW', *cput0)
         return self.mo_energy
 
@@ -211,7 +220,7 @@ class GW(lib.StreamObject):
 
 def _mem_usage(nocc, nvir):
     incore = (nocc+nvir)**4
-    # Roughly, factor of two for safety 
+    # Roughly, factor of two for safety
     incore *= 2
     basic = nocc*nvir**3
     outcore = basic
@@ -333,7 +342,7 @@ if __name__ == '__main__':
 #   0.17291986   0.24457082   0.74758227   0.80045129   1.11748735
 #   1.1508353    1.19081928   1.40406947   1.43593681   1.63324734
 #   1.81839838   1.86943727   2.37827782   2.48829939   3.26028229
-#   3.3247595    3.4958492    3.77735135   4.14572189]    
+#   3.3247595    3.4958492    3.77735135   4.14572189]
 
     gw.linearized = True
     gw.kernel(orbs=[nocc-1,nocc])
