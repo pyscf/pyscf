@@ -85,7 +85,7 @@ for i in range(mol.nbas):
                     buf = mol.intor_by_shell('cint2e_ip1_sph', shls, comp=3)
                     di, dj, dk, dl = buf.shape[1:]
                     eri1[:,pi:pi+di,pj:pj+dj,pk:pk+dk,pl:pl+dl] = buf
-                    dl += dl
+                    pl += dl
                 pk += dk
             pj += dj
         pi += di
@@ -119,7 +119,7 @@ for i in range(2,5):
                 buf = mol.intor_by_shell('int2e_sph', shls)
                 di, dj, dk, dl = buf.shape
                 sub_eri[pi:pi+di,pj:pj+dj,pk:pk+dk,pl:pl+dl] = buf
-                dl += dl
+                pl += dl
             pk += dk
         pj += dj
     pi += di
@@ -158,7 +158,7 @@ for i in range(mol.nbas):
                                 buf = mol.intor_by_shell('int2e_sph', shls)
                                 di, dj, dk, dl = buf.shape
                                 sub_eri[pi:pi+di,pj:pj+dj,pk:pk+dk,pl:pl+dl] = buf
-                                dl += dl
+                                pl += dl
                         pk += dk
                 pj += dj
         pi += di
