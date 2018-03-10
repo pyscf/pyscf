@@ -5,62 +5,55 @@ Installation
 
 We provide three ways to install PySCF package.
 
+Installation with pip
+=====================
+
+This is the recommended way to install PySCF::
+
+  $ pip install pyscf
+
+Pypi provides a precompiled PySCF code (python wheel) which works on almost all
+Linux systems, and most of Mac OS X systems, and the ubuntu subsystems on Windows 10.
+
+Note we observed that our precompiled python wheels sometimes does not work with
+certain version of Python (python-3.4 and python-3.5).  If you're using mac OS X
+with python-3.4 or python-3.5, pip may execute the setup.py file in the source
+code and it may be terminated due to an error of library path of BLAS library.
+BLAS library is required to install PySCF library.  The installation script can
+detect the installed BLAS libraries in the system and choose one for the
+program.  If BLAS library is existed but wasn't found by the installation
+script, you can specify the BLAS library either through the environment
+``LDFLAGS``, e.g. ``LDFLAGS="-L/path/to/blas -lblas" pip install pyscf`` or the
+environment variable ``PYSCF_INC_DIR``, e.g.
+``PYSCF_INC_DIR=/path/to/blas:/path/to/other/lib pip install`` to tell the
+installation script which BLAS libraries to link against.
+Another issue of the installation script you may get is that pyscf.dft module is
+not working.  pyscf.dft module requires the exchange-correlation functional
+library ``libxc`` which was not yet available in the PyPI repository. To enable
+pyscf.dft module, you can download and manually compile libxc library and set
+the environment variable ``PYSCF_INC_DIR``, e.g. ``export PYSCF_INC_DIR=/path/to/libxc``
+before calling ``pip install`` command.  Libxc library can be found in
+http://octopus-code.org/wiki/Libxc:download.  When compiling the libxc library,
+you need to add --enable-shared flag.
+
+
 Installation with conda
 =======================
 
 If you have `Conda <https://conda.io/docs/>`_ 
 (or `Anaconda <https://www.continuum.io/downloads#linux>`_)
-environment, PySCF package can be installed with the command as bellow::
+environment, PySCF package can be installed through Conda cloud::
 
   $ conda install -c pyscf pyscf
-
-Installation with pip
-=====================
-
-You have to first install the dependent libraries (due to the missing of
-build-time dependency in pip `PEP 518 <https://www.python.org/dev/peps/pep-0518/>`_)::
- 
-  $ pip install numpy scipy h5py
-
-Then install PySCF::
-
-  $ pip install pyscf
-
-.. note::
-  BLAS library is required to install PySCF library.  In some systems, the
-  installation can automatically detect the installed BLAS libraries in the
-  system and choose one for the program.  If BLAS library is existed
-  in the system but the install script couldn't find it, you can specify the
-  BLAS library either through the environment ``LDFLAGS``, eg
-  ``LDFLAGS="-L/path/to/blas -lblas" pip install pyscf`` or the environment
-  variable ``PYSCF_INC_DIR``, eg
-  ``PYSCF_INC_DIR=/path/to/blas:/path/to/other/lib pip install``.
-
-.. note::
-  libxc library is not available in the PyPI repository.  pyscf.dft module is
-  not working unless the libxc library was installed in the system.  You can
-  download libxc library from http://octopus-code.org/wiki/Libxc:download
-  (note you need to add --enable-shared when compiling the libxc library).
-  Before calling pip, the path where the libxc library is installed needs to be
-  added to the environment variable ``PYSCF_INC_DIR``, eg
-  ``export PYSCF_INC_DIR=/path/to/libxc``.
-
-.. note::
-  Depending on the operator systems, you may fail to ``pip install h5py`` due to
-  the missing of Python header files and HDF5 libraries.  For Linux OS, you can
-  get Python header files by installing ``apt-get install python-dev``
-  (``yum install python-devel`` for redhat) and HDF5 libraries
-  ``apt-get install libhdf5-dev`` (``yum install hdf5-devel`` for redhat).
 
 
 Manual installation from github repo
 ====================================
 
-You can manually install PySCF from the PySCF github repo.
 Manual installation requires `cmake <http://www.cmake.org>`_,
 `numpy <http://www.numpy.org/>`_, `scipy <http://www.scipy.org/>`_
 and `h5py <http://www.h5py.org/>`_ libraries.
-You can download the latest PySCF version (or the development branch) from github::
+You can download the latest PySCF (or the development branch) from github::
 
   $ git clone https://github.com/sunqm/pyscf
   $ cd pyscf
