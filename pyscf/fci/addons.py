@@ -229,6 +229,7 @@ def _guess_wfnsym(ci, strsa, strsb, orbsym):
     stra = strsa[idx // nb]
     strb = strsb[idx % nb ]
 
+    orbsym = numpy.asarray(orbsym) % 10  # convert to D2h irreps
     airrep = 0
     birrep = 0
     for i, ir in enumerate(orbsym):
