@@ -21,6 +21,13 @@ class CASSCF(mc1step.CASSCF):
         #self.fcisolver = fci.solver(mf.mol, self.nelecas[0]==self.nelecas[1], True)
         self.fcisolver = fci.solver(mf.mol, False, True)
 
+    @property
+    def wfnsym(self):
+        return self.fcisolver.wfnsym
+    @wfnsym.setter
+    def wfnsym(self, wfnsym):
+        self.fcisolver.wfnsym = wfnsym
+
     def mc1step(self, mo_coeff=None, ci0=None, callback=None):
         return self.kernel(mo_coeff, ci0, callback, mc1step.kernel)
 
