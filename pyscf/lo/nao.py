@@ -46,13 +46,20 @@ def prenao(mol, dm):
         # UHF or ROHF
         dm = dm[0] + dm[1]
 
-    s = mol.intor_symmetric('int1e_ovlp')
+    if hasattr(mol, 'pbc_intor'):  # whether mol object is a cell
+        s = mol.pbc_intor('int1e_ovlp', hermi=1)
+    else:
+        s = mol.intor_symmetric('int1e_ovlp')
+
     p = reduce(numpy.dot, (s, dm, s))
     return _prenao_sub(mol, p, s)[1]
 
 def nao(mol, mf, s=None, restore=True):
     if s is None:
-        s = mol.intor_symmetric('int1e_ovlp')
+        if hasattr(mol, 'pbc_intor'):  # whether mol object is a cell
+            s = mol.pbc_intor('int1e_ovlp', hermi=1)
+        else:
+            s = mol.intor_symmetric('int1e_ovlp')
 
     dm = mf.make_rdm1()
     if isinstance(mf, (scf.uhf.UHF, scf.rohf.ROHF)):
@@ -106,7 +113,11 @@ def _prenao_sub(mol, p, s):
 
 def _nao_sub(mol, pre_occ, pre_nao, s=None):
     if s is None:
-        s = mol.intor_symmetric('int1e_ovlp')
+        if hasattr(mol, 'pbc_intor'):  # whether mol object is a cell
+            s = mol.pbc_intor('int1e_ovlp', hermi=1)
+        else:
+            s = mol.intor_symmetric('int1e_ovlp')
+
     core_lst, val_lst, rydbg_lst = _core_val_ryd_list(mol)
     nbf = mol.nao_nr()
     pre_nao = pre_nao.astype(s.dtype)

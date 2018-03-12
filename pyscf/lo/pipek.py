@@ -36,9 +36,8 @@ def atomic_pops(mol, mo_coeff, method='meta_lowdin'):
         method : string
             one of mulliken, lowdin, meta_lowdin
     '''
-    from pyscf.pbc import gto as pbcgto
-    if isinstance(mol, pbcgto.Cell):
-        s = mol.pbc_intor('int1e_ovlp_sph')
+    if hasattr(mol, 'pbc_intor'):  # whether mol object is a cell
+        s = mol.pbc_intor('int1e_ovlp_sph', hermi=1)
     else:
         s = mol.intor_symmetric('int1e_ovlp')
     nmo = mo_coeff.shape[1]
