@@ -14,6 +14,7 @@ See also tddft/rhf.py and scf/newton_ah.py
 
 import numpy
 import scipy
+from functools import reduce
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import hf, hf_symm, uhf_symm
