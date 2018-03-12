@@ -27,6 +27,7 @@ from functools import reduce
 import numpy
 import scipy.linalg
 from pyscf import lib
+from pyscf import scf
 from pyscf.gto import mole
 from pyscf.lo import orth
 from pyscf.lib import logger

@@ -33,7 +33,11 @@ def MP2(mf, frozen=0, mo_coeff=None, mo_occ=None):
 
 def RMP2(mf, frozen=0, mo_coeff=None, mo_occ=None):
     __doc__ = mp2.RMP2.__doc__
-    scf.addons.convert_to_rhf(mf)
+    from pyscf.soscf import newton_ah
+
+    if isinstance(mf, newton_ah._CIAH_SOSCF) or not isinstance(mf, scf.hf.RHF):
+        mf = scf.addons.convert_to_rhf(mf)
+
     if hasattr(mf, 'with_df') and mf.with_df:
         return dfmp2.DFMP2(mf, frozen, mo_coeff, mo_occ)
     else:
@@ -41,7 +45,11 @@ def RMP2(mf, frozen=0, mo_coeff=None, mo_occ=None):
 
 def UMP2(mf, frozen=0, mo_coeff=None, mo_occ=None):
     __doc__ = ump2.UMP2.__doc__
-    mf = scf.addons.convert_to_uhf(mf)
+    from pyscf.soscf import newton_ah
+
+    if isinstance(mf, newton_ah._CIAH_SOSCF) or not isinstance(mf, scf.uhf.UHF):
+        mf = scf.addons.convert_to_uhf(mf)
+
     if hasattr(mf, 'with_df') and mf.with_df:
         raise NotImplementedError('DF-UMP2')
     else:
@@ -49,7 +57,11 @@ def UMP2(mf, frozen=0, mo_coeff=None, mo_occ=None):
 
 def GMP2(mf, frozen=0, mo_coeff=None, mo_occ=None):
     __doc__ = gmp2.GMP2.__doc__
-    mf = scf.addons.convert_to_ghf(mf)
+    from pyscf.soscf import newton_ah
+
+    if isinstance(mf, newton_ah._CIAH_SOSCF) or not isinstance(mf, scf.ghf.GHF):
+        mf = scf.addons.convert_to_ghf(mf)
+
     if hasattr(mf, 'with_df') and mf.with_df:
         raise NotImplementedError('DF-GMP2')
     else:
