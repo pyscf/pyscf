@@ -441,6 +441,8 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
             nocc = casscf.ncore + casscf.ncas
             occ, ucas = casscf._eig(-casdm1, casscf.ncore, nocc)
             casdm1 = numpy.diag(-occ)
+    else:
+        mo_energy = None
 
     if dump_chk:
         casscf.dump_chk(locals())
