@@ -197,6 +197,8 @@ class SelectedCI(select_ci.SelectedCI):
             self.orbsym = orbsym_bak
         if wfnsym is not None:
             self.wfnsym = wfnsym_bak
+
+        self.eci, self.ci = e, c
         return e, c
 
 SCI = SelectedCI

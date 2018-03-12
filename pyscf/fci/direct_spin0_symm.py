@@ -282,6 +282,7 @@ class FCISolver(direct_spin0.FCISolver):
         if orbsym is not None:
             self.orbsym = orbsym_bak
         self.wfnsym = wfnsym_bak
+        self.eci, self.ci = e, c
         return e, c
 
 FCI = FCISolver

@@ -159,6 +159,7 @@ class FCISolver(direct_spin1.FCISolver):
                                        tol, lindep, max_cycle, max_space, nroots,
                                        davidson_only, pspace_size, ecore=ecore,
                                        **kwargs)
+        self.eci, self.ci = e, c
         return e, c
 
 FCI = FCISolver
