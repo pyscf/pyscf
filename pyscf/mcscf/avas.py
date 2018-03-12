@@ -19,7 +19,7 @@ from pyscf import scf
 from pyscf.lib import logger
 
 def kernel(mf, aolabels, threshold=.2, minao='minao', with_iao=False,
-           openshelloption=2, canonicalize=True, verbose=None):
+           openshelloption=2, canonicalize=True, ncore=0, verbose=None):
     '''AVAS method to construct mcscf active space.
     Ref. arXiv:1701.07862 [physics.chem-ph]
 
@@ -46,6 +46,8 @@ def kernel(mf, aolabels, threshold=.2, minao='minao', with_iao=False,
         canonicalize : bool
             Orbitals defined in AVAS method are local orbitals.  Symmetrizing
             the core, active and virtual space.
+        ncore : integer
+            Number of core orbitals to exclude from the AVAS method.
 
     Returns:
         active-space-size, #-active-electrons, orbital-initial-guess-for-CASCI/CASSCF
@@ -98,24 +100,25 @@ def kernel(mf, aolabels, threshold=.2, minao='minao', with_iao=False,
 
     if with_iao:
         from pyscf.lo import iao
-        c = iao.iao(mol, mo_coeff[:,:nocc], minao)[:,baslst]
+        c = iao.iao(mol, mo_coeff[:,ncore:nocc], minao)[:,baslst]
         s2 = reduce(numpy.dot, (c.T, ovlp, c))
-        s21 = reduce(numpy.dot, (c.T, ovlp, mo_coeff))
+        s21 = reduce(numpy.dot, (c.T, ovlp, mo_coeff[:, ncore:]))
     else:
         s2 = pmol.intor_symmetric('int1e_ovlp')[baslst][:,baslst]
         s21 = gto.intor_cross('int1e_ovlp', pmol, mol)[baslst]
-        s21 = numpy.dot(s21, mo_coeff)
+        s21 = numpy.dot(s21, mo_coeff[:, ncore:])
     sa = s21.T.dot(scipy.linalg.solve(s2, s21, sym_pos=True))
 
     if openshelloption == 2:
-        wocc, u = numpy.linalg.eigh(sa[:nocc,:nocc])
+        wocc, u = numpy.linalg.eigh(sa[:(nocc-ncore), :(nocc-ncore)])
         log.info('Option 2: threshold %s', threshold)
         ncas_occ = (wocc > threshold).sum()
-        nelecas = mol.nelectron - (wocc < threshold).sum() * 2
-        mocore = mo_coeff[:,:nocc].dot(u[:,wocc<threshold])
-        mocas = mo_coeff[:,:nocc].dot(u[:,wocc>threshold])
+        nelecas = (mol.nelectron - ncore * 2) - (wocc < threshold).sum() * 2
+        if ncore > 0: mofreeze = mo_coeff[:,:ncore]
+        mocore = mo_coeff[:,ncore:nocc].dot(u[:,wocc<threshold])
+        mocas = mo_coeff[:,ncore:nocc].dot(u[:,wocc>threshold])
 
-        wvir, u = numpy.linalg.eigh(sa[nocc:,nocc:])
+        wvir, u = numpy.linalg.eigh(sa[(nocc-ncore):,(nocc-ncore):])
         ncas_vir = (wvir > threshold).sum()
         mocas = numpy.hstack((mocas, mo_coeff[:,nocc:].dot(u[:,wvir>threshold])))
         movir = mo_coeff[:,nocc:].dot(u[:,wvir<threshold])
@@ -123,14 +126,15 @@ def kernel(mf, aolabels, threshold=.2, minao='minao', with_iao=False,
 
     elif openshelloption == 3:
         docc = nocc - mol.spin
-        wocc, u = numpy.linalg.eigh(sa[:docc,:docc])
+        wocc, u = numpy.linalg.eigh(sa[:(docc-ncore),:(docc-ncore)])
         log.info('Option 3: threshold %s, num open shell %d', threshold, mol.spin)
         ncas_occ = (wocc > threshold).sum()
-        nelecas = mol.nelectron - (wocc < threshold).sum() * 2
-        mocore = mo_coeff[:,:docc].dot(u[:,wocc<threshold])
-        mocas = mo_coeff[:,:docc].dot(u[:,wocc>threshold])
+        nelecas = (mol.nelectron - ncore * 2) - (wocc < threshold).sum() * 2
+        if ncore > 0: mofreeze = mo_coeff[:,:ncore]
+        mocore = mo_coeff[:,ncore:docc].dot(u[:,wocc<threshold])
+        mocas = mo_coeff[:,ncore:docc].dot(u[:,wocc>threshold])
 
-        wvir, u = numpy.linalg.eigh(sa[nocc:,nocc:])
+        wvir, u = numpy.linalg.eigh(sa[(nocc-ncore):,(nocc-ncore):])
         ncas_vir = (wvir > threshold).sum()
         mocas = numpy.hstack((mocas, mo_coeff[:,docc:nocc],
                               mo_coeff[:,nocc:].dot(u[:,wvir>threshold])))
@@ -159,7 +163,10 @@ def kernel(mf, aolabels, threshold=.2, minao='minao', with_iao=False,
                 fock = numpy.dot(csc*mo_energy, csc.T)
                 e, u = scipy.linalg.eigh(fock)
                 return dmet_cas.symmetrize(mol, e, numpy.dot(c, u), ovlp, log)
-        mo = numpy.hstack([trans(mocore), trans(mocas), trans(movir)])
+        if ncore > 0:
+           mo = numpy.hstack([trans(mofreeze), trans(mocore), trans(mocas), trans(movir)])
+        else:
+           mo = numpy.hstack([trans(mocore), trans(mocas), trans(movir)])
     else:
         mo = numpy.hstack((mocore, mocas, movir))
     return ncas, nelecas, mo
