@@ -224,6 +224,8 @@ class GHF(ghf.GHF):
     def _finalize(self):
         ghf.GHF._finalize(self)
 
+        # Using mergesort because it is stable. We don't want to change the
+        # ordering of the symmetry labels when two orbitals are degenerated.
         o_sort = numpy.argsort(self.mo_energy[self.mo_occ> 0].round(9), kind='mergesort')
         v_sort = numpy.argsort(self.mo_energy[self.mo_occ==0].round(9), kind='mergesort')
         orbsym = get_orbsym(self.mol, self.mo_coeff)

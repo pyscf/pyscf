@@ -422,6 +422,8 @@ class SymAdaptedUHF(uhf.UHF):
 
         ea = numpy.hstack(self.mo_energy[0])
         eb = numpy.hstack(self.mo_energy[1])
+        # Using mergesort because it is stable. We don't want to change the
+        # ordering of the symmetry labels when two orbitals are degenerated.
         oa_sort = numpy.argsort(ea[self.mo_occ[0]>0 ].round(9), kind='mergesort')
         va_sort = numpy.argsort(ea[self.mo_occ[0]==0].round(9), kind='mergesort')
         ob_sort = numpy.argsort(eb[self.mo_occ[1]>0 ].round(9), kind='mergesort')

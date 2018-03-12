@@ -213,7 +213,7 @@ def symmetrize(mol, e, c, s, log):
                 es.append(e[idx])
                 cs.append(numpy.dot(mol.symm_orb[i], u[:,idx]))
             es = numpy.hstack(es)
-            idx = numpy.argsort(es)
+            idx = numpy.argsort(es, kind='mergesort')
             assert(numpy.allclose(es[idx], esub, rtol=1e-3, atol=1e-4))
             c[:,degidx] = numpy.hstack(cs)[:,idx]
     return c

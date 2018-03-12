@@ -396,6 +396,8 @@ class SymAdaptedRHF(hf.RHF):
         hf.RHF._finalize(self)
 
         # sort MOs wrt orbital energies, it should be done last.
+        # Using mergesort because it is stable. We don't want to change the
+        # ordering of the symmetry labels when two orbitals are degenerated.
         o_sort = numpy.argsort(self.mo_energy[self.mo_occ> 0].round(9), kind='mergesort')
         v_sort = numpy.argsort(self.mo_energy[self.mo_occ==0].round(9), kind='mergesort')
         idx = numpy.arange(self.mo_energy.size)
@@ -609,6 +611,8 @@ class SymAdaptedROHF(rohf.ROHF):
         rohf.ROHF._finalize(self)
 
         # sort MOs wrt orbital energies, it should be done last.
+        # Using mergesort because it is stable. We don't want to change the
+        # ordering of the symmetry labels when two orbitals are degenerated.
         c_sort = numpy.argsort(self.mo_energy[self.mo_occ==2].round(9), kind='mergesort')
         o_sort = numpy.argsort(self.mo_energy[self.mo_occ==1].round(9), kind='mergesort')
         v_sort = numpy.argsort(self.mo_energy[self.mo_occ==0].round(9), kind='mergesort')
