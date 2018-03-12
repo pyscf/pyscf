@@ -39,7 +39,8 @@ s1 = mol.intor('int1e_ipovlp')  # (3,N,N) array, 3 for x,y,z components
 t1 = mol.intor('int1e_ipkin' )  # (3,N,N) array, 3 for x,y,z components
 v1 = mol.intor('int1e_ipnuc' )  # (3,N,N) array, 3 for x,y,z components
 
-print('Dipole %s' % numpy.einsum('xij,ij->x', mol.intor('int1e_r'), dm))
+mol.set_common_origin([0,0,0])  # Set gauge origin before computing dipole integrals
+print('Dipole %s' % numpy.einsum('xij,ji->x', mol.intor('int1e_r'), dm))
 
 #
 # AO overlap between two molecules
