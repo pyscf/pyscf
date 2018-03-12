@@ -217,7 +217,7 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
     # orbital symmetry is reserved in this _eig call
     occ, ucas = mc._eig(-casdm1, ncore, nocc)
     if sort:
-        casorb_idx = numpy.argsort(occ)
+        casorb_idx = numpy.argsort(occ.round(9), kind='mergesort')
         occ = occ[casorb_idx]
         ucas = ucas[:,casorb_idx]
 # restore phase
@@ -348,7 +348,7 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
         # mc._eig function is called to handle symmetry adapated fock
         w, c1 = mc._eig(fock[:ncore,:ncore], 0, ncore)
         if sort:
-            idx = numpy.argsort(w.round(9))
+            idx = numpy.argsort(w.round(9), kind='mergesort')
             w = w[idx]
             c1 = c1[:,idx]
         mo_coeff1[:,:ncore] = numpy.dot(mo_coeff[:,:ncore], c1)
@@ -356,7 +356,7 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
     if nmo-nocc > 0:
         w, c1 = mc._eig(fock[nocc:,nocc:], nocc, nmo)
         if sort:
-            idx = numpy.argsort(w.round(9))
+            idx = numpy.argsort(w.round(9), kind='mergesort')
             w = w[idx]
             c1 = c1[:,idx]
         mo_coeff1[:,nocc:] = numpy.dot(mo_coeff[:,nocc:], c1)
