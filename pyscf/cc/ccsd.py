@@ -497,7 +497,7 @@ def _contract_s4vvvv_t2(mol, vvvv, t2, out=None, max_memory=2000, verbose=None):
 
     else:
         nvir_pair = nvirb * (nvirb+1) // 2
-        unit = nvira*nvir_pair*2 + nvirb**2*nvira/4
+        unit = nvira*nvir_pair*2 + nvirb**2*nvira/4 + 1
         blksize = max(BLKMIN, numpy.sqrt(max_memory*.95e6/8/unit))
         blksize = int(min((nvira+3)/4, blksize))
 
@@ -547,7 +547,7 @@ def _contract_s1vvvv_t2(mol, vvvv, t2, out=None, max_memory=2000, verbose=None):
     dtype = numpy.result_type(t2, vvvv)
     Ht2 = numpy.ndarray(x2.shape, dtype=dtype, buffer=out)
 
-    unit = nvirb**2*nvira*2 + nocc2*nvirb
+    unit = nvirb**2*nvira*2 + nocc2*nvirb + 1
     blksize = min(nvira, max(BLKMIN, int(max_memory*1e6/8/unit)))
 
     for p0,p1 in lib.prange(0, nvira, blksize):
