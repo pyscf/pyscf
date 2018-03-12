@@ -64,7 +64,8 @@ def CCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
         sys.stderr.write('CCSD Warning: The first argument mf is a DFT object. '
                          'CCSD calculation should be used with HF object')
 
-    if not isinstance(mf, scf.hf.RHF):
+    if (isinstance(mf, scf.newton_ah._CIAH_SCF) or
+        not isinstance(mf, scf.hf.RHF)):
         mf = scf.addons.convert_to_rhf(mf)
 
     if hasattr(mf, 'with_df') and mf.with_df:
@@ -84,7 +85,8 @@ def RCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
                         'is converted to UHF object and UCCSD method is called.')
         return UCCSD(mf, frozen, mo_coeff, mo_occ)
 
-    if not isinstance(mf, scf.hf.RHF):
+    if (isinstance(mf, scf.newton_ah._CIAH_SCF) or
+        not isinstance(mf, scf.hf.RHF)):
         mf = scf.addons.convert_to_rhf(mf)
 
     if hasattr(mf, 'with_df') and mf.with_df:
@@ -103,7 +105,8 @@ def UCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
         sys.stderr.write('CCSD Warning: The first argument mf is a DFT object. '
                          'CCSD calculation should be used with HF object')
 
-    if not isinstance(mf, scf.uhf.UHF):
+    if (isinstance(mf, scf.newton_ah._CIAH_SCF) or
+        not isinstance(mf, scf.uhf.UHF)):
         mf = scf.addons.convert_to_uhf(mf)
 
     if hasattr(mf, 'with_df') and mf.with_df:

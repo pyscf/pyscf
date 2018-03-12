@@ -43,7 +43,7 @@ def smearing_(mf, sigma=None, method='fermi'):
     from pyscf.pbc.scf import khf
     mf_class = mf.__class__
     is_uhf = isinstance(mf, uhf.UHF)
-    is_khf = isinstance(mf, khf.KRHF)
+    is_khf = isinstance(mf, khf.KSCF)
     cell_nelec = mf.cell.nelectron
 
     def fermi_smearing_occ(m, mo_energy_kpts, sigma):
