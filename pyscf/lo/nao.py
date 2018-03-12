@@ -146,6 +146,10 @@ AOSHELL = [
 ]
 
 def prenao(mol, dm):
+    if not (isinstance(dm, numpy.ndarray) and dm.ndim == 2):
+        # UHF or ROHF
+        dm = dm[0] + dm[1]
+
     s = mol.intor_symmetric('int1e_ovlp')
     p = reduce(numpy.dot, (s, dm, s))
     return _prenao_sub(mol, p, s)[1]
@@ -153,7 +157,11 @@ def prenao(mol, dm):
 def nao(mol, mf, s=None, restore=True):
     if s is None:
         s = mol.intor_symmetric('int1e_ovlp')
+
     dm = mf.make_rdm1()
+    if isinstance(mf, (scf.uhf.UHF, scf.rohf.ROHF)):
+        dm = dm[0] + dm[1]
+
     p = reduce(numpy.dot, (s, dm, s))
     pre_occ, pre_nao = _prenao_sub(mol, p, s)
     cnao = _nao_sub(mol, pre_occ, pre_nao)
