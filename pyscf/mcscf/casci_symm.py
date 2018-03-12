@@ -35,6 +35,13 @@ class SymAdaptedCASCI(casci.CASCI):
         #self.fcisolver = fci.solver(mf.mol, self.nelecas[0]==self.nelecas[1], True)
         self.fcisolver = fci.solver(mf.mol, singlet=False, symm=True)
 
+    @property
+    def wfnsym(self):
+        return self.fcisolver.wfnsym
+    @wfnsym.setter
+    def wfnsym(self, wfnsym):
+        self.fcisolver.wfnsym = wfnsym
+
     def kernel(self, mo_coeff=None, ci0=None):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
