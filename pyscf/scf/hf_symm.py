@@ -194,7 +194,7 @@ def _symmetrize_canonicalization_(mf, mo_energy, mo_coeff, s):
             es.append(mo_energy[idx])
             cs.append(numpy.dot(mol.symm_orb[i], u[:,idx]))
         es = numpy.hstack(es).round(7)
-        idx = numpy.argsort(es)
+        idx = numpy.argsort(es, kind='mergesort')
         assert(numpy.allclose(es[idx], esub.round(7)))
         mo_coeff[:,degidx] = numpy.hstack(cs)[:,idx]
     return mo_coeff
@@ -396,8 +396,8 @@ class SymAdaptedRHF(hf.RHF):
         hf.RHF._finalize(self)
 
         # sort MOs wrt orbital energies, it should be done last.
-        o_sort = numpy.argsort(self.mo_energy[self.mo_occ> 0].round(9))
-        v_sort = numpy.argsort(self.mo_energy[self.mo_occ==0].round(9))
+        o_sort = numpy.argsort(self.mo_energy[self.mo_occ> 0].round(9), kind='mergesort')
+        v_sort = numpy.argsort(self.mo_energy[self.mo_occ==0].round(9), kind='mergesort')
         idx = numpy.arange(self.mo_energy.size)
         idx = numpy.hstack((idx[self.mo_occ> 0][o_sort],
                             idx[self.mo_occ==0][v_sort]))
@@ -609,9 +609,9 @@ class SymAdaptedROHF(rohf.ROHF):
         rohf.ROHF._finalize(self)
 
         # sort MOs wrt orbital energies, it should be done last.
-        c_sort = numpy.argsort(self.mo_energy[self.mo_occ==2].round(9))
-        o_sort = numpy.argsort(self.mo_energy[self.mo_occ==1].round(9))
-        v_sort = numpy.argsort(self.mo_energy[self.mo_occ==0].round(9))
+        c_sort = numpy.argsort(self.mo_energy[self.mo_occ==2].round(9), kind='mergesort')
+        o_sort = numpy.argsort(self.mo_energy[self.mo_occ==1].round(9), kind='mergesort')
+        v_sort = numpy.argsort(self.mo_energy[self.mo_occ==0].round(9), kind='mergesort')
         idx = numpy.arange(self.mo_energy.size)
         idx = numpy.hstack((idx[self.mo_occ==2][c_sort],
                             idx[self.mo_occ==1][o_sort],

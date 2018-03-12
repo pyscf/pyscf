@@ -422,10 +422,10 @@ class SymAdaptedUHF(uhf.UHF):
 
         ea = numpy.hstack(self.mo_energy[0])
         eb = numpy.hstack(self.mo_energy[1])
-        oa_sort = numpy.argsort(ea[self.mo_occ[0]>0 ].round(9))
-        va_sort = numpy.argsort(ea[self.mo_occ[0]==0].round(9))
-        ob_sort = numpy.argsort(eb[self.mo_occ[1]>0 ].round(9))
-        vb_sort = numpy.argsort(eb[self.mo_occ[1]==0].round(9))
+        oa_sort = numpy.argsort(ea[self.mo_occ[0]>0 ].round(9), kind='mergesort')
+        va_sort = numpy.argsort(ea[self.mo_occ[0]==0].round(9), kind='mergesort')
+        ob_sort = numpy.argsort(eb[self.mo_occ[1]>0 ].round(9), kind='mergesort')
+        vb_sort = numpy.argsort(eb[self.mo_occ[1]==0].round(9), kind='mergesort')
         idxa = numpy.arange(ea.size)
         idxa = numpy.hstack((idxa[self.mo_occ[0]> 0][oa_sort],
                              idxa[self.mo_occ[0]==0][va_sort]))
