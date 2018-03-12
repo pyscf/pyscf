@@ -180,7 +180,7 @@ def pack(cell):
     cldic['pseudo'] = cell.pseudo
     cldic['ke_cutoff'] = cell.ke_cutoff
     cldic['rcut'] = cell.rcut
-    cldic['drop_exponent'] = cell.drop_exponent
+    cldic['exp_to_discard'] = cell.exp_to_discard
     cldic['ew_eta'] = cell.ew_eta
     cldic['ew_cut'] = cell.ew_cut
     cldic['dimension'] = cell.dimension
@@ -1064,7 +1064,7 @@ class Cell(mole.Mole):
         #       density-fitting class.  This determines how the ewald produces
         #       its energy.
         self.low_dim_ft_type = None
-        self.drop_exponent = None
+        self.exp_to_discard = None
 
 ##################################################
 # These attributes are initialized by build function if not given
@@ -1151,14 +1151,15 @@ class Cell(mole.Mole):
         _built = self._built
         mole.Mole.build(self, False, parse_arg, *args, **kwargs)
 
-        exp_min = min([self.bas_exp(ib).min() for ib in range(self.nbas)])
-        if self.drop_exponent is None:
-            if exp_min < 0.1:
+        exp_min = np.array([self.bas_exp(ib).min() for ib in range(self.nbas)])
+        if self.exp_to_discard is None:
+            if np.any(exp_min) < 0.1:
                 sys.stderr.write('''WARNING!
   Very diffused basis functions are found in the basis set. They may lead to severe
-  linear dependence and numerical instability.  You can set  cell.drop_exponent=0.1
+  linear dependence and numerical instability.  You can set  cell.exp_to_discard=0.1
   to remove the diffused Gaussians whose exponents are less than 0.1.\n\n''')
-        elif exp_min < self.drop_exponent:
+        elif np.any(exp_min < self.exp_to_discard):
+            # Discard functions of small exponents in basis
             _basis = {}
             for symb, basis_now in self._basis.items():
                 basis_add = []
@@ -1171,8 +1172,8 @@ class Cell(mole.Mole):
                         kappa = 0
                         b_coeff = np.array(b[1:])
                     es = b_coeff[:,0]
-                    if np.any(es < self.drop_exponent):
-                        b_coeff = b_coeff[es>=self.drop_exponent]
+                    if np.any(es < self.exp_to_discard):
+                        b_coeff = b_coeff[es>=self.exp_to_discard]
                         if b_coeff.size > 0:
                             if kappa == 0:
                                 basis_add.append([l] + b_coeff.tolist())
@@ -1193,9 +1194,9 @@ class Cell(mole.Mole):
                 ptr = self._bas[ib,mole.PTR_COEFF]
                 cs = self._env[ptr:ptr+nprim*nc].reshape(nc,nprim).T
 
-                if np.any(es < self.drop_exponent):
-                    cs = cs[es>=self.drop_exponent]
-                    es = es[es>=self.drop_exponent]
+                if np.any(es < self.exp_to_discard):
+                    cs = cs[es>=self.exp_to_discard]
+                    es = es[es>=self.exp_to_discard]
                     nprim, ndrop = len(es), nprim-len(es)+ndrop
                     if nprim > 0:
                         pe = self._bas[ib,mole.PTR_EXP]
@@ -1242,8 +1243,8 @@ class Cell(mole.Mole):
             logger.info(self, '                 a3 [%.9f, %.9f, %.9f]', *_a[2])
             logger.info(self, 'dimension = %s', self.dimension)
             logger.info(self, 'Cell volume = %g', self.vol)
-            if self.drop_exponent is not None:
-                logger.info(self, 'drop_exponent = %s', self.drop_exponent)
+            if self.exp_to_discard is not None:
+                logger.info(self, 'exp_to_discard = %s', self.exp_to_discard)
             logger.info(self, 'rcut = %s (nimgs = %s)', self.rcut, self.nimgs)
             logger.info(self, 'lattice sum = %d cells', len(self.get_lattice_Ls()))
             logger.info(self, 'precision = %g', self.precision)
@@ -1448,7 +1449,14 @@ class Cell(mole.Mole):
 
     def pbc_intor(self, intor, comp=None, hermi=0, kpts=None, kpt=None,
                   **kwargs):
-        '''One-electron integrals with PBC. See also Mole.intor'''
+        r'''One-electron integrals with PBC.
+
+        .. math::
+
+            \sum_T \int \mu(r) * [intor] * \nu (r-T) dr
+
+        See also Mole.intor
+        '''
         return intor_cross(intor, self, self, comp, hermi, kpts, kpt, **kwargs)
 
     @lib.with_doc(pbc_eval_gto.__doc__)

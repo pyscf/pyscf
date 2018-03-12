@@ -80,10 +80,10 @@ def CCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
 
 def RCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
     __doc__ = ccsd.CCSD.__doc__
-    import sys
     import numpy
     from pyscf import lib
     from pyscf import scf
+    from pyscf.soscf import newton_ah
     from pyscf.cc import dfccsd
 
     if isinstance(mf, scf.uhf.UHF):
@@ -93,7 +93,9 @@ def RCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
                         'is converted to UHF object and UCCSD method is called.')
         return UCCSD(mf, frozen, mo_coeff, mo_occ)
 
-    mf = scf.addons.convert_to_rhf(mf)
+    if isinstance(mf, newton_ah._CIAH_SOSCF) or not isinstance(mf, scf.hf.RHF):
+        mf = scf.addons.convert_to_rhf(mf)
+
     if hasattr(mf, 'with_df') and mf.with_df:
         return dfccsd.RCCSD(mf, frozen, mo_coeff, mo_occ)
 
@@ -106,10 +108,12 @@ def RCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
 
 def UCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
     __doc__ = uccsd.UCCSD.__doc__
-    import sys
     from pyscf import scf
+    from pyscf.soscf import newton_ah
 
-    mf = scf.addons.convert_to_uhf(mf)
+    if isinstance(mf, newton_ah._CIAH_SOSCF) or not isinstance(mf, scf.uhf.UHF):
+        mf = scf.addons.convert_to_uhf(mf)
+
     if hasattr(mf, 'with_df') and mf.with_df:
         raise NotImplementedError('DF-UCCSD')
     else:
@@ -117,10 +121,13 @@ def UCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
 
 
 def GCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
-    import sys
+    __doc__ = gccsd.GCCSD.__doc__
     from pyscf import scf
+    from pyscf.soscf import newton_ah
 
-    mf = scf.addons.convert_to_ghf(mf)
+    if isinstance(mf, newton_ah._CIAH_SOSCF) or not isinstance(mf, scf.ghf.GHF):
+        mf = scf.addons.convert_to_ghf(mf)
+
     if hasattr(mf, 'with_df') and mf.with_df:
         raise NotImplementedError('DF-GCCSD')
     else:

@@ -347,10 +347,11 @@ class FCISolver(direct_spin1.FCISolver):
                orbsym=None, wfnsym=None, ecore=0, **kwargs):
         if self.verbose >= logger.WARN:
             self.check_sanity()
-        e, ci = kernel_ms0(self, h1e, eri, norb, nelec, ci0, None,
+        self.eci, self.ci = \
+                kernel_ms0(self, h1e, eri, norb, nelec, ci0, None,
                            tol, lindep, max_cycle, max_space, nroots,
                            davidson_only, pspace_size, ecore=ecore, **kwargs)
-        return e, ci
+        return self.eci, self.ci
 
     def energy(self, h1e, eri, fcivec, norb, nelec, link_index=None):
         h2e = self.absorb_h1e(h1e, eri, norb, nelec, .5)

@@ -85,18 +85,18 @@ def FCI(mol_or_mf, mo=None, singlet=True):
     if mo is None:
         return cis
 
+    if mol.symmetry:
+        if mf is None:
+            orbsym = scf.hf_symm.get_orbsym(mol, mo)
+        else:
+            orbsym = scf.hf_symm.get_orbsym(mol, mo, mf.get_ovlp(mol))
+    else:
+        orbsym = None
+
     class CISolver(cis.__class__):
         def __init__(self):
             self.__dict__.update(cis.__dict__)
-            self.orbsym = None
-            self.eci = None
-            self.ci = None
-            if mol.symmetry:
-                if mf is None:
-                    self.orbsym = scf.hf_symm.get_orbsym(mol, mo)
-                else:
-                    self.orbsym = scf.hf_symm.get_orbsym(mol, mo, mf.get_ovlp(mol))
-            self._keys = set(self.__dict__.keys())
+            self.orbsym = orbsym
 
         def kernel(self, h1e=None, eri=None, norb=None, nelec=None, ci0=None,
                    ecore=None, **kwargs):
@@ -120,9 +120,7 @@ def FCI(mol_or_mf, mo=None, singlet=True):
                         ecore = mf.energy_nuc()
             if norb is None: norb = mo.shape[1]
             if nelec is None: nelec = mol.nelec
-            self.eci, self.ci = \
-                    cis.__class__.kernel(self, h1e, eri, norb, nelec, ci0,
-                                         ecore=ecore, **kwargs)
-            return self.eci, self.ci
+            return cis.__class__.kernel(self, h1e, eri, norb, nelec, ci0,
+                                        ecore=ecore, **kwargs)
     return CISolver()
 

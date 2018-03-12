@@ -153,7 +153,7 @@ def _contract_compact(mydf, mos, coulG, max_memory):
     nmok = mokT.shape[0]
     wcoulG = coulG * (cell.vol/ngrids)
 
-    def fill(moT, i0, i1, buf):
+    def fill_orbital_pair(moT, i0, i1, buf):
         npair = i1*(i1+1)//2 - i0*(i0+1)//2
         out = numpy.ndarray((npair,ngrids), dtype=buf.dtype, buffer=buf)
         ij = 0
@@ -166,12 +166,12 @@ def _contract_compact(mydf, mos, coulG, max_memory):
     blksize = int(min(max(nmoi,nmok), (max_memory*1e6/8 - eri.size)/2/ngrids+1))
     buf = numpy.empty((blksize,ngrids))
     for p0, p1 in lib.prange_tril(0, nmoi, blksize):
-        mo_pairs_G = tools.fft(fill(moiT, p0, p1, buf), mydf.mesh)
+        mo_pairs_G = tools.fft(fill_orbital_pair(moiT, p0, p1, buf), mydf.mesh)
         mo_pairs_G*= wcoulG
         v = tools.ifft(mo_pairs_G, mydf.mesh)
         vR = numpy.asarray(v.real, order='C')
         for q0, q1 in lib.prange_tril(0, nmok, blksize):
-            mo_pairs = numpy.asarray(fill(mokT, q0, q1, buf), order='C')
+            mo_pairs = numpy.asarray(fill_orbital_pair(mokT, q0, q1, buf), order='C')
             eri[p0*(p0+1)//2:p1*(p1+1)//2,
                 q0*(q0+1)//2:q1*(q1+1)//2] = lib.ddot(vR, mo_pairs.T)
         v = None

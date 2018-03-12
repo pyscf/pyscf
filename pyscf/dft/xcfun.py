@@ -876,4 +876,4 @@ if __name__ == '__main__':
     print(mf.kernel() - -76.3969707800463)
 
     mf.xc = 'b3lyp'
-    print(mf.kernel() - -76.3969707800463)
+    print(mf.kernel() - -76.3777689410509)

@@ -524,6 +524,10 @@ class FCISolver(lib.StreamObject):
 
     Saved results
 
+        eci : float or a list of float
+            FCI energy(ies)
+        ci : nparray
+            FCI wfn vector(s)
         converged : bool (or a list of bool for multiple roots)
             Whether davidson iteration is converged
 
@@ -571,7 +575,13 @@ class FCISolver(lib.StreamObject):
         self.lessio = False
 
         self.converged = False
+        self.eci = None
+        self.ci = None
         self._keys = set(self.__dict__.keys())
+
+    @property
+    def e_tot(self):
+        return self.eci
 
     def dump_flags(self, verbose=None):
         if verbose is None: verbose = self.verbose
@@ -641,9 +651,11 @@ class FCISolver(lib.StreamObject):
                orbsym=None, wfnsym=None, ecore=0, **kwargs):
         if self.verbose >= logger.WARN:
             self.check_sanity()
-        return kernel_ms1(self, h1e, eri, norb, nelec, ci0, None,
-                          tol, lindep, max_cycle, max_space, nroots,
-                          davidson_only, pspace_size, ecore=ecore, **kwargs)
+        self.eci, self.ci = \
+                kernel_ms1(self, h1e, eri, norb, nelec, ci0, None,
+                           tol, lindep, max_cycle, max_space, nroots,
+                           davidson_only, pspace_size, ecore=ecore, **kwargs)
+        return self.eci, self.ci
 
     @lib.with_doc(energy.__doc__)
     def energy(self, h1e, eri, fcivec, norb, nelec, link_index=None):

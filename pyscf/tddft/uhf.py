@@ -26,7 +26,7 @@ from pyscf.scf import uhf_symm
 from pyscf.soscf.newton_ah import _gen_uhf_response
 
 
-def gen_tda_hop(mf, fock_ao=None, wfnsym=None, max_memory=2000):
+def gen_tda_operation(mf, fock_ao=None, wfnsym=None):
     '''(A+B)x
     
     Kwargs:
@@ -67,7 +67,7 @@ def gen_tda_hop(mf, fock_ao=None, wfnsym=None, max_memory=2000):
     mo_b = numpy.asarray(numpy.hstack((orbob,orbvb)), order='F')
 
     mem_now = lib.current_memory()[0]
-    max_memory = max(2000, max_memory*.8-mem_now)
+    max_memory = max(2000, mf.max_memory*.8-mem_now)
     vresp = _gen_uhf_response(mf, hermi=0, max_memory=max_memory)
 
     def vind(zs):
@@ -96,6 +96,7 @@ def gen_tda_hop(mf, fock_ao=None, wfnsym=None, max_memory=2000):
         return hx
 
     return vind, hdiag
+gen_tda_hop = gen_tda_operation
 
 
 class TDA(rhf.TDA):
@@ -119,9 +120,12 @@ class TDA(rhf.TDA):
             log.warn('Ground state SCF is not converged')
         log.info('\n')
 
-    def get_vind(self, mf):
+    def gen_vind(self, mf):
         '''Compute Ax'''
-        return gen_tda_hop(mf, wfnsym=self.wfnsym, max_memory=self.max_memory)
+        return gen_tda_hop(mf, wfnsym=self.wfnsym)
+
+    def get_ab(self, mf=None):
+        raise NotImplementedError
 
     def init_guess(self, mf, nstates=None, wfnsym=None):
         if nstates is None: nstates = self.nstates
@@ -152,20 +156,22 @@ class TDA(rhf.TDA):
             x0[i,idx[i]] = 1  # lowest excitations
         return x0
 
-    def kernel(self, x0=None):
+    def kernel(self, x0=None, nstates=None):
         '''TDA diagonalization solver
         '''
         self.check_sanity()
         self.dump_flags()
+        if nstates is None:
+            nstates = self.nstates
 
-        vind, hdiag = self.get_vind(self._scf)
+        vind, hdiag = self.gen_vind(self._scf)
         precond = self.get_precond(hdiag)
         if x0 is None:
             x0 = self.init_guess(self._scf, self.nstates)
 
         self.e, x1 = lib.davidson1(vind, x0, precond,
                                    tol=self.conv_tol,
-                                   nroots=self.nstates, lindep=self.lindep,
+                                   nroots=nstates, lindep=self.lindep,
                                    max_space=self.max_space,
                                    verbose=self.verbose)[1:]
 
@@ -183,119 +189,123 @@ class TDA(rhf.TDA):
 CIS = TDA
 
 
+def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
+    '''Generate function to compute
+
+    [ A  B][X]
+    [-B -A][Y]
+    '''
+    mol = mf.mol
+    mo_coeff = mf.mo_coeff
+    assert(mo_coeff[0].dtype == numpy.double)
+    mo_energy = mf.mo_energy
+    mo_occ = mf.mo_occ
+    nao, nmo = mo_coeff[0].shape
+    occidxa = numpy.where(mo_occ[0]>0)[0]
+    occidxb = numpy.where(mo_occ[1]>0)[0]
+    viridxa = numpy.where(mo_occ[0]==0)[0]
+    viridxb = numpy.where(mo_occ[1]==0)[0]
+    nocca = len(occidxa)
+    noccb = len(occidxb)
+    nvira = len(viridxa)
+    nvirb = len(viridxb)
+    orboa = mo_coeff[0][:,occidxa]
+    orbob = mo_coeff[1][:,occidxb]
+    orbva = mo_coeff[0][:,viridxa]
+    orbvb = mo_coeff[1][:,viridxb]
+
+    if wfnsym is not None and mol.symmetry:
+        orbsyma, orbsymb = uhf_symm.get_orbsym(mol, mo_coeff)
+        sym_forbida = (orbsyma[viridxa].reshape(-1,1) ^ orbsyma[occidxa]) != wfnsym
+        sym_forbidb = (orbsymb[viridxb].reshape(-1,1) ^ orbsymb[occidxb]) != wfnsym
+        sym_forbid = numpy.hstack((sym_forbida.ravel(), sym_forbidb.ravel()))
+
+    e_ai_a = mo_energy[0][viridxa].reshape(-1,1) - mo_energy[0][occidxa]
+    e_ai_b = mo_energy[1][viridxb].reshape(-1,1) - mo_energy[1][occidxb]
+    e_ai = hdiag = numpy.hstack((e_ai_a.reshape(-1), e_ai_b.reshape(-1)))
+    if wfnsym is not None and mol.symmetry:
+        hdiag[sym_forbid] = 0
+    hdiag = numpy.hstack((hdiag.ravel(), hdiag.ravel()))
+    mo_a = numpy.asarray(numpy.hstack((orboa,orbva)), order='F')
+    mo_b = numpy.asarray(numpy.hstack((orbob,orbvb)), order='F')
+
+    mem_now = lib.current_memory()[0]
+    max_memory = max(2000, mf.max_memory*.8-mem_now)
+    vresp = _gen_uhf_response(mf, hermi=0, max_memory=max_memory)
+
+    def vind(xys):
+        nz = len(xys)
+        if wfnsym is not None and mol.symmetry:
+            # shape(nz,2,-1): 2 ~ X,Y
+            xys = numpy.copy(zs).reshape(nz,2,-1)
+            xys[:,:,:,sym_forbid] = 0
+        dms = numpy.empty((2,nz,nao,nao)) # 2 ~ alpha,beta
+        for i in range(nz):
+            x, y = xys[i].reshape(2,-1)
+            xa = x[:nocca*nvira].reshape(nvira,nocca)
+            xb = x[nocca*nvira:].reshape(nvirb,noccb)
+            ya = y[:nocca*nvira].reshape(nvira,nocca)
+            yb = y[nocca*nvira:].reshape(nvirb,noccb)
+            dmx = reduce(numpy.dot, (orbva, xa, orboa.T))
+            dmy = reduce(numpy.dot, (orboa, ya.T, orbva.T))
+            dms[0,i] = dmx + dmy  # AX + BY
+            dmx = reduce(numpy.dot, (orbvb, xb, orbob.T))
+            dmy = reduce(numpy.dot, (orbob, yb.T, orbvb.T))
+            dms[1,i] = dmx + dmy  # AX + BY
+
+        v1ao  = vresp(dms)
+        v1avo = _ao2mo.nr_e2(v1ao[0], mo_a, (nocca,nmo,0,nocca))
+        v1bvo = _ao2mo.nr_e2(v1ao[1], mo_b, (noccb,nmo,0,noccb))
+        v1aov = _ao2mo.nr_e2(v1ao[0], mo_a, (0,nocca,nocca,nmo))
+        v1bov = _ao2mo.nr_e2(v1ao[1], mo_b, (0,noccb,noccb,nmo))
+        hx = numpy.empty((nz,2,nvira*nocca+nvirb*noccb), dtype=v1avo.dtype)
+        for i in range(nz):
+            x, y = xys[i].reshape(2,-1)
+            hx[i,0,:nvira*nocca] = v1avo[i].ravel()
+            hx[i,0,nvira*nocca:] = v1bvo[i].ravel()
+            hx[i,0]+= e_ai * x  # AX
+            hx[i,1,:nvira*nocca] =-v1aov[i].reshape(nocca,nvira).T.ravel()
+            hx[i,1,nvira*nocca:] =-v1bov[i].reshape(noccb,nvirb).T.ravel()
+            hx[i,1]-= e_ai * y  #-AY
+
+        if wfnsym is not None and mol.symmetry:
+            hx[:,:,sym_forbid] = 0
+        return hx.reshape(nz,-1)
+
+    return vind, hdiag
+
 class TDHF(TDA):
-    def get_vind(self, mf):
-        '''
-        [ A  B][X]
-        [-B -A][Y]
-        '''
-        wfnsym = self.wfnsym
-        singlet = self.singlet
-
-        mol = mf.mol
-        mo_coeff = mf.mo_coeff
-        assert(mo_coeff[0].dtype == numpy.double)
-        mo_energy = mf.mo_energy
-        mo_occ = mf.mo_occ
-        nao, nmo = mo_coeff[0].shape
-        occidxa = numpy.where(mo_occ[0]>0)[0]
-        occidxb = numpy.where(mo_occ[1]>0)[0]
-        viridxa = numpy.where(mo_occ[0]==0)[0]
-        viridxb = numpy.where(mo_occ[1]==0)[0]
-        nocca = len(occidxa)
-        noccb = len(occidxb)
-        nvira = len(viridxa)
-        nvirb = len(viridxb)
-        orboa = mo_coeff[0][:,occidxa]
-        orbob = mo_coeff[1][:,occidxb]
-        orbva = mo_coeff[0][:,viridxa]
-        orbvb = mo_coeff[1][:,viridxb]
-
-        if wfnsym is not None and mol.symmetry:
-            orbsyma, orbsymb = uhf_symm.get_orbsym(mol, mo_coeff)
-            sym_forbida = (orbsyma[viridxa].reshape(-1,1) ^ orbsyma[occidxa]) != wfnsym
-            sym_forbidb = (orbsymb[viridxb].reshape(-1,1) ^ orbsymb[occidxb]) != wfnsym
-            sym_forbid = numpy.hstack((sym_forbida.ravel(), sym_forbidb.ravel()))
-
-        e_ai_a = mo_energy[0][viridxa].reshape(-1,1) - mo_energy[0][occidxa]
-        e_ai_b = mo_energy[1][viridxb].reshape(-1,1) - mo_energy[1][occidxb]
-        e_ai = hdiag = numpy.hstack((e_ai_a.reshape(-1), e_ai_b.reshape(-1)))
-        if wfnsym is not None and mol.symmetry:
-            hdiag[sym_forbid] = 0
-        hdiag = numpy.hstack((hdiag.ravel(), hdiag.ravel()))
-        mo_a = numpy.asarray(numpy.hstack((orboa,orbva)), order='F')
-        mo_b = numpy.asarray(numpy.hstack((orbob,orbvb)), order='F')
-
-        mem_now = lib.current_memory()[0]
-        max_memory = max(2000, self.max_memory*.8-mem_now)
-        vresp = _gen_uhf_response(mf, hermi=0, max_memory=max_memory)
-
-        def vind(xys):
-            nz = len(xys)
-            if wfnsym is not None and mol.symmetry:
-                # shape(nz,2,-1): 2 ~ X,Y
-                xys = numpy.copy(zs).reshape(nz,2,-1)
-                xys[:,:,:,sym_forbid] = 0
-            dms = numpy.empty((2,nz,nao,nao)) # 2 ~ alpha,beta
-            for i in range(nz):
-                x, y = xys[i].reshape(2,-1)
-                xa = x[:nocca*nvira].reshape(nvira,nocca)
-                xb = x[nocca*nvira:].reshape(nvirb,noccb)
-                ya = y[:nocca*nvira].reshape(nvira,nocca)
-                yb = y[nocca*nvira:].reshape(nvirb,noccb)
-                dmx = reduce(numpy.dot, (orbva, xa, orboa.T))
-                dmy = reduce(numpy.dot, (orboa, ya.T, orbva.T))
-                dms[0,i] = dmx + dmy  # AX + BY
-                dmx = reduce(numpy.dot, (orbvb, xb, orbob.T))
-                dmy = reduce(numpy.dot, (orbob, yb.T, orbvb.T))
-                dms[1,i] = dmx + dmy  # AX + BY
-
-            v1ao  = vresp(dms)
-            v1avo = _ao2mo.nr_e2(v1ao[0], mo_a, (nocca,nmo,0,nocca))
-            v1bvo = _ao2mo.nr_e2(v1ao[1], mo_b, (noccb,nmo,0,noccb))
-            v1aov = _ao2mo.nr_e2(v1ao[0], mo_a, (0,nocca,nocca,nmo))
-            v1bov = _ao2mo.nr_e2(v1ao[1], mo_b, (0,noccb,noccb,nmo))
-            hx = numpy.empty((nz,2,nvira*nocca+nvirb*noccb), dtype=v1avo.dtype)
-            for i in range(nz):
-                x, y = xys[i].reshape(2,-1)
-                hx[i,0,:nvira*nocca] = v1avo[i].ravel()
-                hx[i,0,nvira*nocca:] = v1bvo[i].ravel()
-                hx[i,0]+= e_ai * x  # AX
-                hx[i,1,:nvira*nocca] =-v1aov[i].reshape(nocca,nvira).T.ravel()
-                hx[i,1,nvira*nocca:] =-v1bov[i].reshape(noccb,nvirb).T.ravel()
-                hx[i,1]-= e_ai * y  #-AY
-
-            if wfnsym is not None and mol.symmetry:
-                hx[:,:,sym_forbid] = 0
-            return hx.reshape(nz,-1)
-
-        return vind, hdiag
+    @lib.with_doc(gen_tdhf_operation.__doc__)
+    def gen_vind(self, mf):
+        return gen_tdhf_operation(mf, singlet=self.singlet, wfnsym=self.wfnsym)
 
     def init_guess(self, mf, nstates=None, wfnsym=None):
         x0 = TDA.init_guess(self, mf, nstates, wfnsym)
         y0 = numpy.zeros_like(x0)
         return numpy.hstack((x0,y0))
 
-    def kernel(self, x0=None):
+    def kernel(self, x0=None, nstates=None):
         '''TDHF diagonalization with non-Hermitian eigenvalue solver
         '''
         self.check_sanity()
         self.dump_flags()
+        if nstates is None:
+            nstates = self.nstates
 
-        vind, hdiag = self.get_vind(self._scf)
+        vind, hdiag = self.gen_vind(self._scf)
         precond = self.get_precond(hdiag)
         if x0 is None:
             x0 = self.init_guess(self._scf, self.nstates)
 
         # We only need positive eigenvalues
         def pickeig(w, v, nroots, envs):
-            realidx = numpy.where((abs(w.imag) < 1e-6) & (w.real > 0))[0]
+            realidx = numpy.where((abs(w.imag) < 1e-4) & (w.real > 0))[0]
             idx = realidx[w[realidx].real.argsort()]
             return w[idx].real, v[:,idx].real, idx
 
         w, x1 = lib.davidson_nosym1(vind, x0, precond,
                                     tol=self.conv_tol,
-                                    nroots=self.nstates, lindep=self.lindep,
+                                    nroots=nstates, lindep=self.lindep,
                                     max_space=self.max_space, pick=pickeig,
                                     verbose=self.verbose)[1:]
 
@@ -364,9 +374,8 @@ if __name__ == '__main__':
 # [ 0.02231607274  3.32113736  18.55977052  21.01474222  21.61501962  25.0938973 ]
 
     td = TDHF(mf)
-    td.nstates = 6
+    td.nstates = 4
     td.verbose = 3
     print(td.kernel()[0] * 27.2114)
-# FIXME:  first state
-# [ 0.00077090739  3.31267103  18.4954748   20.84935404  21.54808392]
+# [ 3.31267103  18.4954748   20.84935404  21.54808392]
 

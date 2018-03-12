@@ -94,15 +94,17 @@ class TDDFTNoHybrid(TDA):
 
         return vind, hdiag
 
-    def kernel(self, x0=None):
+    def kernel(self, x0=None, nstates=None):
         '''TDDFT diagonalization solver
         '''
         mf = self._scf
         if mf._numint.libxc.is_hybrid_xc(mf.xc):
-            raise RuntimeError('%s cannot be applied with hybrid functional'
+            raise RuntimeError('%s cannot be used with hybrid functional'
                                % self.__class__)
         self.check_sanity()
         self.dump_flags()
+        if nstates is None:
+            nstates = self.nstates
 
         vind, hdiag = self.gen_vind(self._scf)
         precond = self.get_precond(hdiag)
@@ -111,7 +113,7 @@ class TDDFTNoHybrid(TDA):
 
         w2, x1 = lib.davidson1(vind, x0, precond,
                                tol=self.conv_tol,
-                               nroots=self.nstates, lindep=self.lindep,
+                               nroots=nstates, lindep=self.lindep,
                                max_space=self.max_space,
                                verbose=self.verbose)[1:]
 
@@ -150,6 +152,15 @@ class dRPA(TDDFTNoHybrid):
         TDDFTNoHybrid.__init__(self, mf)
 
 TDH = dRPA
+
+class dTDA(TDA):
+    def __init__(self, mf):
+        if not hasattr(mf, 'xc'):
+            raise RuntimeError("direct TDA can only be applied with DFT; for HF+dTDA, use .xc='hf'")
+        from pyscf import scf
+        mf = scf.addons.convert_to_rhf(mf)
+        mf.xc = ''
+        TDA.__init__(self, mf)
 
 if __name__ == '__main__':
     from pyscf import gto
@@ -207,4 +218,12 @@ if __name__ == '__main__':
     td.nstates = 5
     print(td.kernel()[0] * 27.2114)
 # [ 10.00343861  10.00343861  15.62586305  30.69238874  30.69238874]
+
+    mf = dft.RKS(mol)
+    mf.xc = 'lda,vwn'
+    mf.scf()
+    td = dTDA(mf)
+    td.nstates = 5
+    print(td.kernel()[0] * 27.2114)
+# [ 10.05245288  10.05245288  16.03497655  30.7120363   30.7120363 ]
 

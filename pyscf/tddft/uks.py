@@ -101,15 +101,17 @@ class TDDFTNoHybrid(TDA):
 
         return vind, hdiag
 
-    def kernel(self, x0=None):
+    def kernel(self, x0=None, nstates=None):
         '''TDDFT diagonalization solver
         '''
         mf = self._scf
         if mf._numint.libxc.is_hybrid_xc(mf.xc):
-            raise RuntimeError('%s cannot be applied with hybrid functional'
+            raise RuntimeError('%s cannot be used with hybrid functional'
                                % self.__class__)
         self.check_sanity()
         self.dump_flags()
+        if nstates is None:
+            nstates = self.nstates
 
         vind, hdiag = self.get_vind(self._scf)
         precond = self.get_precond(hdiag)
@@ -119,7 +121,7 @@ class TDDFTNoHybrid(TDA):
 
         w2, x1 = lib.davidson1(vind, x0, precond,
                                tol=self.conv_tol,
-                               nroots=self.nstates, lindep=self.lindep,
+                               nroots=nstates, lindep=self.lindep,
                                max_space=self.max_space,
                                verbose=self.verbose)[1:]
 
