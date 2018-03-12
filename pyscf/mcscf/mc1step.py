@@ -345,6 +345,8 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
             mo, fcivec, mo_energy = casscf.canonicalize(mo, fcivec, eris,
                                                         casscf.sorting_mo_energy,
                                                         casscf.natorb, verbose=log)
+        else:
+            mo_energy = None
         return True, e_tot, e_ci, fcivec, mo, mo_energy
 
     if conv_tol_grad is None:
