@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -18,7 +31,7 @@ from pyscf.cc import _ccsd
 from pyscf.cc import ccsd_rdm
 from pyscf.scf import rhf_grad
 from pyscf.scf import cphf
-from pyscf.mp.mp2_grad import _shell_prange, _index_frozen_active
+from pyscf.grad.mp2 import _shell_prange, _index_frozen_active
 
 
 #
@@ -201,7 +214,7 @@ def as_scanner(grad_cc):
     class CCSD_GradScanner(grad_cc.__class__, lib.GradScanner):
         def __init__(self, g):
             self.__dict__.update(g.__dict__)
-            self._cc = grad_cc._cc.as_scanner()
+            self._cc = g._cc.as_scanner()
         def __call__(self, mol, **kwargs):
             # The following simple version also works.  But eris object is
             # recomputed in cc_scanner and solve_lambda.
@@ -389,6 +402,7 @@ class Gradients(lib.StreamObject):
         self.verbose = mycc.verbose
         self.atmlst = range(mycc.mol.natm)
         self.de = None
+        self._keys = set(self.__dict__.keys())
 
     def kernel(self, t1=None, t2=None, l1=None, l2=None, eris=None,
                atmlst=None, mf_grad=None, verbose=None, _kern=kernel):
@@ -439,6 +453,19 @@ if __name__ == '__main__':
 # [ 0  -2.28063426e-02  -5.04754623e-03]]
     print(lib.finger(g1) - -0.036999389889460096)
 
+    mcs = mycc.as_scanner()
+    mol.set_geom_([
+            ["O" , (0. , 0.     , 0.001)],
+            [1   , (0. ,-0.757  , 0.587)],
+            [1   , (0. , 0.757  , 0.587)]])
+    e1 = mcs(mol)
+    mol.set_geom_([
+            ["O" , (0. , 0.     ,-0.001)],
+            [1   , (0. ,-0.757  , 0.587)],
+            [1   , (0. , 0.757  , 0.587)]])
+    e2 = mcs(mol)
+    print(g1[0,2] - (e1-e2)/0.002*lib.param.BOHR)
+
     print('-----------------------------------')
     mol = gto.M(
         atom = [
@@ -457,6 +484,19 @@ if __name__ == '__main__':
 # [  1.73095055e-16  -7.94568837e-02  -6.02077699e-03]
 # [ -9.49844615e-17   7.94568837e-02  -6.02077699e-03]]
     print(lib.finger(g1) - 0.10599632044533455)
+
+    mcs = mycc.as_scanner()
+    mol.set_geom_([
+            ["O" , (0. , 0.     , 0.001)],
+            [1   , (0. ,-0.757  , 0.587)],
+            [1   , (0. , 0.757  , 0.587)]])
+    e1 = mcs(mol)
+    mol.set_geom_([
+            ["O" , (0. , 0.     ,-0.001)],
+            [1   , (0. ,-0.757  , 0.587)],
+            [1   , (0. , 0.757  , 0.587)]])
+    e2 = mcs(mol)
+    print(g1[0,2] - (e1-e2)/0.002*lib.param.BOHR)
 
     mol = gto.M(
         atom = 'H 0 0 0; H 0 0 1.76',

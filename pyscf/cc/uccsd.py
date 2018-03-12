@@ -1,3 +1,21 @@
+#!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Author: Timothy Berkelbach <tim.berkelbach@gmail.com>
+#
+
 '''
 UCCSD with spatial integrals
 '''
@@ -662,9 +680,29 @@ class UCCSD(ccsd.CCSD):
         from pyscf.cc import eom_uccsd
         return eom_uccsd.EOMEE(self).kernel(nroots, koopmans, guess, eris)
 
+    def eomee_ccsd(self, nroots=1, koopmans=False, guess=None, eris=None):
+        from pyscf.cc import eom_uccsd
+        return eom_uccsd.EOMEESpinKeep(self).kernel(nroots, koopmans, guess, eris)
+
+    def eomsf_ccsd(self, nroots=1, koopmans=False, guess=None, eris=None):
+        from pyscf.cc import eom_uccsd
+        return eom_uccsd.EOMEESpinFlip(self).kernel(nroots, koopmans, guess, eris)
+
+    def eomip_method(self):
+        from pyscf.cc import eom_uccsd
+        return eom_uccsd.EOMIP(self)
+
+    def eomea_method(self):
+        from pyscf.cc import eom_uccsd
+        return eom_uccsd.EOMEA(self)
+
+    def eomee_method(self):
+        from pyscf.cc import eom_uccsd
+        return eom_uccsd.EOMEE(self)
+
     def nuc_grad_method(self):
-        from pyscf.cc import uccsd_grad
-        return uccsd_grad.Gradients(self)
+        from pyscf.grad import uccsd
+        return uccsd.Gradients(self)
 
     def amplitudes_to_vector(self, t1, t2, out=None):
         return amplitudes_to_vector(t1, t2, out)
@@ -716,6 +754,22 @@ class _ChemistsERIs(ccsd._ChemistsERIs):
         self.nocc = mycc.nocc
         self.nocca, self.noccb = self.nocc
         self.mol = mycc.mol
+
+        mo_ea = self.focka.diagonal()
+        mo_eb = self.fockb.diagonal()
+        gap_a = abs(mo_ea[:self.nocca,None] - mo_ea[None,self.nocca:])
+        gap_b = abs(mo_eb[:self.noccb,None] - mo_eb[None,self.noccb:])
+        if gap_a.size > 0:
+            gap_a = gap_a.min()
+        else:
+            gap_a = 1e9
+        if gap_b.size > 0:
+            gap_b = gap_b.min()
+        else:
+            gap_b = 1e9
+        if gap_a < 1e-5 or gap_b < 1e-5:
+            logger.warn(mycc, 'HOMO-LUMO gap (%s,%s) too small for UCCSD',
+                        gap_a, gap_b)
         return self
 
     def get_ovvv(self, *slices):

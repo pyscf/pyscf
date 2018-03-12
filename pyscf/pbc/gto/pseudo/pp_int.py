@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -235,6 +248,7 @@ def _int_vnl(cell, fakecell, hl_blocks, kpts):
     def int_ket(_bas, intor):
         if len(_bas) == 0:
             return []
+        intor = cell._add_suffix(intor)
         atm, bas, env = gto.conc_env(cell._atm, cell._bas, cell._env,
                                      fakecell._atm, _bas, fakecell._env)
         atm = numpy.asarray(atm, dtype=numpy.int32)
@@ -264,8 +278,8 @@ def _int_vnl(cell, fakecell, hl_blocks, kpts):
         return out
 
     hl_dims = numpy.asarray([len(hl) for hl in hl_blocks])
-    out = (int_ket(fakecell._bas[hl_dims>0], 'int1e_ovlp_sph'),
-           int_ket(fakecell._bas[hl_dims>1], 'int1e_r2_origi_sph'),
-           int_ket(fakecell._bas[hl_dims>2], 'int1e_r4_origi_sph'))
+    out = (int_ket(fakecell._bas[hl_dims>0], 'int1e_ovlp'),
+           int_ket(fakecell._bas[hl_dims>1], 'int1e_r2_origi'),
+           int_ket(fakecell._bas[hl_dims>2], 'int1e_r4_origi'))
     return out
 

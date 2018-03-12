@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 import unittest
 from functools import reduce
@@ -159,18 +172,16 @@ class KnowValues(unittest.TestCase):
         mol1 = gto.M(
         verbose = 0,
         atom = [
-            ['O',(  0.000000,  0.000000, -b/2)],
-            ['O',(  0.000000,  0.000000,  b/2)], ],
-        basis = 'ccpvtz',)
+            ['N',(  0.000000,  0.000000, -b/2)],
+            ['N',(  0.000000,  0.000000,  b/2)], ],
+        basis = 'ccpvdz',)
         mf1 = scf.RHF(mol1).run()
-        mc1 = mcscf.CASSCF(mf1, 4, 4)
+        mc1 = mcscf.CASSCF(mf1, 4, 4).run()
         mo1 = mcscf.project_init_guess(mc1, mfr.mo_coeff, prev_mol=mol)
         s1 = reduce(numpy.dot, (mo1.T, mf1.get_ovlp(), mo1))
         self.assertEqual(numpy.count_nonzero(numpy.linalg.eigh(s1)[0]>1e-10),
                          s1.shape[0])
-        self.assertAlmostEqual(numpy.linalg.norm(s1), 7.7459666924148349, 9)
-
-        self.assertRaises(RuntimeError, mcscf.project_init_guess, mc1, mfr.mo_coeff)
+        self.assertAlmostEqual(numpy.linalg.norm(s1), 5.2915026221291841, 9)
 
 
 if __name__ == "__main__":

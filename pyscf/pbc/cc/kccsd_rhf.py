@@ -1,6 +1,19 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
 #
-# Authors: James D. McClain <jmcclain@princeton.edu>
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Authors: James D. McClain
 #          Timothy Berkelbach <tim.berkelbach@gmail.com>
 #
 
@@ -864,7 +877,13 @@ class _ERIS:#(pyscf.cc.ccsd._ChemistsERIs):
         cput0 = (time.clock(), time.time())
         moidx = get_frozen_mask(cc)
         nkpts = cc.nkpts
+        nocc = cc.nocc
         nmo = cc.nmo
+        nvir = nmo - nocc
+
+        if any(nocc != numpy.count_nonzero(cc._scf.mo_occ[k]>0)
+               for k in range(nkpts)):
+            raise NotImplementedError('Different occupancies found for different k-points')
 
         nao = cc.mo_coeff[0].shape[0]
         dtype = cc.mo_coeff[0].dtype
@@ -885,9 +904,13 @@ class _ERIS:#(pyscf.cc.ccsd._ChemistsERIs):
             for kp in range(nkpts):
                 self.fock[kp] = reduce(numpy.dot, (mo_coeff[kp].T.conj(), fockao[kp], mo_coeff[kp])).astype(dtype)
 
-        nocc = cc.nocc
-        nmo = cc.nmo
-        nvir = nmo - nocc
+        for kp in range(nkpts):
+            mo_e = self.fock[kp].diagonal()
+            gap = abs(mo_e[:nocc,None] - mo_e[None,nocc:]).min()
+            if gap < 1e-5:
+                logger.warn(cc, 'HOMO-LUMO gap %s too small for KCCSD at '
+                            'k-point %d %s', gap, kp, cc.kpts[kp])
+
         mem_incore, mem_outcore, mem_basic = _mem_usage(nkpts, nocc, nvir)
         mem_now = lib.current_memory()[0]
         fao2mo = cc._scf.with_df.ao2mo

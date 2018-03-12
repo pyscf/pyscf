@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -19,13 +32,13 @@ def kernel(cc, eris, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
     assert(isinstance(eris, gccsd._PhysicistsERIs))
     if t1 is None or t2 is None:
         t1, t2 = cc.t1, cc.t2
-    nocc, nvir = t1.shape
 
+    nocc, nvir = t1.shape
     bcei = numpy.asarray(eris.ovvv).conj().transpose(3,2,1,0)
     majk = numpy.asarray(eris.ooov).conj().transpose(2,3,0,1)
     bcjk = numpy.asarray(eris.oovv).conj().transpose(2,3,0,1)
-    mo_e = eris.fock.diagonal().real
 
+    mo_e = eris.fock.diagonal().real
     eia = mo_e[:nocc,None] - mo_e[nocc:]
     d3 = lib.direct_sum('ia+jb+kc->ijkabc', eia, eia, eia)
 

@@ -1,5 +1,19 @@
+#!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import time
-import ctypes
 import numpy as np
 
 from pyscf import lib
@@ -348,7 +362,8 @@ class EOMIP(EOM):
                 guess.append(g)
         return guess
 
-    ipccsd = kernel = ipccsd
+    kernel = ipccsd
+    ipccsd = ipccsd
     matvec = ipccsd_matvec
     l_matvec = lipccsd_matvec
     get_diag = ipccsd_diag
@@ -626,7 +641,8 @@ class EOMEA(EOM):
                 guess.append(g)
         return guess
 
-    eaccsd = kernel = eaccsd
+    kernel = eaccsd
+    eaccsd = eaccsd
     matvec = eaccsd_matvec
     l_matvec = leaccsd_matvec
     get_diag = eaccsd_diag
@@ -1272,7 +1288,8 @@ class EOMEE(EOM):
             guess.append(g)
         return guess
 
-    eeccsd = kernel = eeccsd
+    kernel = eeccsd
+    eeccsd = eeccsd
     get_diag = eeccsd_diag
 
     def vector_size(self):
@@ -1293,6 +1310,7 @@ class EOMEE(EOM):
 
 class EOMEESinglet(EOMEE):
     kernel = eomee_ccsd_singlet
+    eomee_ccsd_singlet = eomee_ccsd_singlet
     matvec = eeccsd_matvec_singlet
 
     def gen_matvec(self, imds=None, diag=None, **kwargs):
@@ -1318,6 +1336,7 @@ class EOMEESinglet(EOMEE):
 
 class EOMEETriplet(EOMEE):
     kernel = eomee_ccsd_triplet
+    eomee_ccsd_triplet = eomee_ccsd_triplet
     matvec = eeccsd_matvec_triplet
 
     def gen_matvec(self, imds=None, diag=None, **kwargs):
@@ -1343,6 +1362,7 @@ class EOMEETriplet(EOMEE):
 
 class EOMEESpinFlip(EOMEE):
     kernel = eomsf_ccsd
+    eomsf_ccsd = eomsf_ccsd
     matvec = eeccsd_matvec_sf
 
     def gen_matvec(self, imds=None, diag=None, **kwargs):

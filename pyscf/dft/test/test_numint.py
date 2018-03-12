@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 import unittest
 import numpy
@@ -178,12 +191,22 @@ class KnownValues(unittest.TestCase):
         v = mf._numint.nr_vxc(mol, mf.grids, 'B88', dms, spin=0, hermi=0)[2]
         self.assertAlmostEqual(finger(v), -0.70124686853021512, 8)
 
+        v = mf._numint.nr_vxc(mol, mf.grids, 'HF', dms, spin=0, hermi=0)[2]
+        self.assertAlmostEqual(abs(v).max(), 0, 9)
+        v = mf._numint.nr_vxc(mol, mf.grids, '', dms, spin=0, hermi=0)[2]
+        self.assertAlmostEqual(abs(v).max(), 0, 9)
+
     def test_uks_vxc(self):
         numpy.random.seed(10)
         nao = mol.nao_nr()
         dms = numpy.random.random((2,nao,nao))
         v = mf._numint.nr_vxc(mol, mf.grids, 'B88', dms, spin=1)[2]
         self.assertAlmostEqual(finger(v), -0.73803886056633594, 8)
+
+        v = mf._numint.nr_vxc(mol, mf.grids, 'HF', dms, spin=1)[2]
+        self.assertAlmostEqual(abs(v).max(), 0, 9)
+        v = mf._numint.nr_vxc(mol, mf.grids, '', dms, spin=1)[2]
+        self.assertAlmostEqual(abs(v).max(), 0, 9)
 
     def test_rks_fxc(self):
         numpy.random.seed(10)
@@ -211,6 +234,11 @@ class KnownValues(unittest.TestCase):
         v1 = dft.numint.nr_fxc(mol1, mf.grids, 'LDA', dm0, dms[0], spin=0, hermi=0,
                                rho0=rvf[0], vxc=rvf[1], fxc=rvf[2])
         self.assertAlmostEqual(abs(v-v1).max(), 0, 8)
+
+        v = ni.nr_fxc(mol1, mf.grids, 'HF', dm0, dms, spin=0, hermi=0)
+        self.assertAlmostEqual(abs(v).max(), 0, 9)
+        v = ni.nr_fxc(mol1, mf.grids, '', dm0, dms, spin=0, hermi=0)
+        self.assertAlmostEqual(abs(v).max(), 0, 9)
 
     def test_rks_fxc_st(self):
         numpy.random.seed(10)

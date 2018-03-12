@@ -1,5 +1,17 @@
 #!/usr/bin/env python
-# -*- coding: utf-8
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -957,16 +969,20 @@ def len_cart(l):
     '''
     return (l + 1) * (l + 2) // 2
 
-def npgto_nr(mol, cart=False):
+def npgto_nr(mol, cart=None):
     '''Total number of primitive spherical GTOs for the given :class:`Mole` object'''
+    if cart is None:
+        cart = mol.cart
     l = mol._bas[:,ANG_OF]
-    if cart or mol.cart:
+    if cart:
         return ((l+1)*(l+2)//2 * mol._bas[:,NPRIM_OF]).sum()
     else:
         return ((l*2+1) * mol._bas[:,NPRIM_OF]).sum()
-def nao_nr(mol, cart=False):
-    '''Total number of contracted spherical GTOs for the given :class:`Mole` object'''
-    if cart or mol.cart:
+def nao_nr(mol, cart=None):
+    '''Total number of contracted GTOs for the given :class:`Mole` object'''
+    if cart is None:
+        cart = mol.cart
+    if cart:
         return nao_cart(mol)
     else:
         return ((mol._bas[:,ANG_OF]*2+1) * mol._bas[:,NCTR_OF]).sum()
@@ -1038,7 +1054,7 @@ def nao_2c_range(mol, bas_id0, bas_id1):
     nao_id1 = ao_loc[-1]
     return nao_id0, nao_id1
 
-def ao_loc_nr(mol, cart=False):
+def ao_loc_nr(mol, cart=None):
     '''Offset of every shell in the spherical basis function spectrum
 
     Returns:
@@ -1050,7 +1066,9 @@ def ao_loc_nr(mol, cart=False):
     >>> gto.ao_loc_nr(mol)
     [0, 1, 2, 3, 6, 9, 10, 11, 12, 15, 18]
     '''
-    if cart or mol.cart:
+    if cart is None:
+        cart = mol.cart
+    if cart:
         return moleintor.make_loc(mol._bas, 'cart')
     else:
         return moleintor.make_loc(mol._bas, 'sph')
@@ -2255,19 +2273,31 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
                 self._env[PTR_RINV_ORIG:PTR_RINV_ORIG+3] = r
             return _TemporaryMoleContext(set_rinv, (zeta,rinv), (zeta0,rinv0))
 
-    def set_geom_(self, atoms, unit='Angstrom', symmetry=None):
-        '''Replace geometry
+    def set_geom_(self, atoms_or_coords, unit='Angstrom', symmetry=None):
+        '''Update geometry
         '''
-        self.atom = atoms
-        self.unit = unit
-        if symmetry is not None:
-            self.symmetry = symmetry
-        self.build(False, False)
-        logger.info(self, 'New geometry (unit Bohr)')
-        coords = self.atom_coords()
-        for ia in range(self.natm):
-            logger.info(self, ' %3d %-4s %16.12f %16.12f %16.12f',
-                        ia+1, self.atom_symbol(ia), *coords[ia])
+        if (symmetry or self.symmetry or
+            not isinstance(atoms_or_coords, numpy.ndarray)):
+            if isinstance(atoms_or_coords, numpy.ndarray):
+                self.atom = list(zip([x[0] for x in self._atom], atoms_or_coords))
+            else:
+                self.atom = atoms_or_coords
+            self.unit = unit
+            if symmetry is not None:
+                self.symmetry = symmetry
+            self.build(False, False)
+        else:
+            ptr = self._atm[:,PTR_COORD]
+            self._env[ptr+0] = atoms_or_coords[:,0]
+            self._env[ptr+1] = atoms_or_coords[:,1]
+            self._env[ptr+2] = atoms_or_coords[:,2]
+
+        if self.verbose >= logger.INFO:
+            logger.info(self, 'New geometry (unit Bohr)')
+            coords = self.atom_coords()
+            for ia in range(self.natm):
+                logger.info(self, ' %3d %-4s %16.12f %16.12f %16.12f',
+                            ia+1, self.atom_symbol(ia), *coords[ia])
         return self
 
     def update(self, chkfile):
@@ -2607,11 +2637,13 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
                                  shls_slice, comp=comp, hermi=hermi,
                                  aosym=aosym, out=out)
 
-    def _add_suffix(self, intor, cart=False):
+    def _add_suffix(self, intor, cart=None):
         if not (intor[-4:] == '_sph' or intor[:4] == 'cint' or
                 intor[-7:] == '_spinor' or intor[-5:] =='_cart' or
                 intor[-4:] == '_ssc'):
-            if cart or self.cart:
+            if cart is None:
+                cart = self.cart
+            if cart:
                 intor = intor + '_cart'
             else:
                 intor = intor + '_sph'
@@ -2809,15 +2841,20 @@ def from_zmatrix(atomstr):
     atomstr = atomstr.replace(';','\n').replace(',',' ')
     symb = []
     coord = []
+    min_items_per_line = 1
     for line in atomstr.splitlines():
         line = line.strip()
         if line and line[0] != '#':
             rawd = line.split()
+            assert(len(rawd) >= min_items_per_line)
+
             symb.append(rawd[0])
             if len(rawd) < 3:
                 coord.append(numpy.zeros(3))
+                min_items_per_line = 3
             elif len(rawd) == 3:
                 coord.append(numpy.array((float(rawd[2]), 0, 0)))
+                min_items_per_line = 5
             elif len(rawd) == 5:
                 bonda = int(rawd[1]) - 1
                 bond  = float(rawd[2])
@@ -2832,6 +2869,7 @@ def from_zmatrix(atomstr):
                 rmat = rotation_mat(vecn, ang)
                 c = numpy.dot(rmat, v1) * (bond/numpy.linalg.norm(v1))
                 coord.append(coord[bonda]+c)
+                min_items_per_line = 7
             else:
                 bonda = int(rawd[1]) - 1
                 bond  = float(rawd[2])

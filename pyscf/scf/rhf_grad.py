@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -159,7 +172,6 @@ class Gradients(lib.StreamObject):
         self.stdout = scf_method.stdout
         self.mol = scf_method.mol
         self._scf = scf_method
-        self.chkfile = scf_method.chkfile
         self.max_memory = self.mol.max_memory
 # This parameter has no effects for HF gradients. Add this attribute so that
 # the kernel function can be reused in the DFT gradients code.
@@ -176,7 +188,6 @@ class Gradients(lib.StreamObject):
             log.warn('Ground state SCF not converged')
         log.info('******** %s for %s ********',
                  self.__class__, self._scf.__class__)
-        log.info('chkfile = %s', self.chkfile)
         log.info('max_memory %d MB (current use %d MB)',
                  self.max_memory, lib.current_memory()[0])
         return self

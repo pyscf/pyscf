@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -19,7 +32,7 @@ from pyscf.lib import logger
 from pyscf import ao2mo
 from pyscf.ao2mo import _ao2mo
 from pyscf.cc import _ccsd
-from pyscf.mp import mp2
+from pyscf.mp.mp2 import get_nocc, get_nmo, get_frozen_mask, _mo_without_core
 
 BLKMIN = 4
 
@@ -571,12 +584,6 @@ def _unpack_4fold(c2vec, nocc, nvir, anti_symm=True):
         lib.takebak_2d(t2, t2tril, otril[1]*nocc+otril[0], vtril[0]*nvir+vtril[1])
     return t2.reshape(nocc,nocc,nvir,nvir)
 
-
-get_nocc = mp2.get_nocc
-get_nmo = mp2.get_nmo
-get_frozen_mask = mp2.get_frozen_mask
-_mo_without_core = mp2._mo_without_core
-
 def amplitudes_to_vector(t1, t2, out=None):
     nocc, nvir = t1.shape
     nov = nocc * nvir
@@ -665,7 +672,7 @@ def as_scanner(cc):
             self.mol = mol
             self.mo_coeff = mf_scanner.mo_coeff
             self.mo_occ = mf_scanner.mo_occ
-            self.kernel(self.t1, self.t2, **kwargs)[0]
+            self.kernel(self.t1, self.t2, **kwargs)
             return self.e_tot
     return CCSD_Scanner(cc)
 
@@ -907,6 +914,30 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         from pyscf.cc import eom_rccsd
         return eom_rccsd.EOMEE(self).kernel(nroots, koopmans, guess, eris)
 
+    def eomee_ccsd_singlet(self, nroots=1, koopmans=False, guess=None, eris=None):
+        from pyscf.cc import eom_rccsd
+        return eom_rccsd.EOMEESinglet(self).kernel(nroots, koopmans, guess, eris)
+
+    def eomee_ccsd_triplet(self, nroots=1, koopmans=False, guess=None, eris=None):
+        from pyscf.cc import eom_rccsd
+        return eom_rccsd.EOMEETriplet(self).kernel(nroots, koopmans, guess, eris)
+
+    def eomsf_ccsd(self, nroots=1, koopmans=False, guess=None, eris=None):
+        from pyscf.cc import eom_rccsd
+        return eom_rccsd.EOMEESpinFlip(self).kernel(nroots, koopmans, guess, eris)
+
+    def eomip_method(self):
+        from pyscf.cc import eom_rccsd
+        return eom_rccsd.EOMIP(self)
+
+    def eomea_method(self):
+        from pyscf.cc import eom_rccsd
+        return eom_rccsd.EOMEA(self)
+
+    def eomee_method(self):
+        from pyscf.cc import eom_rccsd
+        return eom_rccsd.EOMEE(self)
+
     def make_rdm1(self, t1=None, t2=None, l1=None, l2=None):
         '''Un-relaxed 1-particle density matrix in MO space'''
         from pyscf.cc import ccsd_rdm
@@ -1010,9 +1041,12 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
             chkfile = self._scf.chkfile
         lib.chkfile.save(chkfile, 'ccsd', cc_chk)
 
+    def density_fit(self):
+        raise NotImplementedError
+
     def nuc_grad_method(self):
-        from pyscf.cc import ccsd_grad
-        return ccsd_grad.Gradients(self)
+        from pyscf.grad import ccsd
+        return ccsd.Gradients(self)
 
 CC = CCSD
 
@@ -1043,6 +1077,15 @@ class _ChemistsERIs:
         self.fock = reduce(numpy.dot, (mo_coeff.conj().T, fockao, mo_coeff))
         self.nocc = mycc.nocc
         self.mol = mycc.mol
+
+        mo_e = self.fock.diagonal()
+        gap = abs(mo_e[:self.nocc,None] - mo_e[None,self.nocc:]).min()
+        if gap.size > 0:
+            gap = gap.min()
+        else:
+            gap = 1e9
+        if gap < 1e-5:
+            logger.warn(mycc, 'HOMO-LUMO gap %s too small for CCSD', gap)
         return self
 
     def get_ovvv(self, *slices):

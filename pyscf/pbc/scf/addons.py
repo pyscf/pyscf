@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #         Timothy Berkelbach <tim.berkelbach@gmail.com>
@@ -27,8 +40,8 @@ def project_mo_nr2nr(cell1, mo1, cell2, kpts=None):
 
         C2 = S^{-1}<AO2|AO1> C1
     '''
-    s22 = cell2.pbc_intor('int1e_ovlp_sph', hermi=1, kpts=kpts)
-    s21 = pbcgto.intor_cross('int1e_ovlp_sph', cell2, cell1, kpts=kpts)
+    s22 = cell2.pbc_intor('int1e_ovlp', hermi=1, kpts=kpts)
+    s21 = pbcgto.intor_cross('int1e_ovlp', cell2, cell1, kpts=kpts)
     if kpts is None or numpy.shape(kpts) == (3,):  # A single k-point
         return scipy.linalg.solve(s22, s21.dot(mo1), sym_pos=True)
     else:
@@ -313,9 +326,12 @@ def convert_to_ghf(mf, out=None, remove_df=False):
                         occb = mf.mo_occ[k] == 2
                         orbspin = mol_addons.get_ghf_orbspin(ea, mf.mo_occ[k], True)
                     else:
-                        mo_a, mo_b = mf.mo_coeff[k]
-                        ea, eb = mf.mo_energy[k]
-                        occa, occb = mf.mo_occ[k]
+                        mo_a = mf.mo_coeff[0][k]
+                        mo_b = mf.mo_coeff[1][k]
+                        ea = mf.mo_energy[0][k]
+                        eb = mf.mo_energy[1][k]
+                        occa = mf.mo_occ[0][k]
+                        occb = mf.mo_occ[1][k]
                         orbspin = mol_addons.get_ghf_orbspin((ea, eb), (occa, occb), False)
 
                     nao, nmo = mo_a.shape

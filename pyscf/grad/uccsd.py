@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -15,11 +28,10 @@ from functools import reduce
 from pyscf.lib import logger
 from pyscf.cc import ccsd
 from pyscf.cc import _ccsd
-from pyscf.cc import ccsd_grad
 from pyscf.cc import uccsd_rdm
 from pyscf.scf import ucphf
 from pyscf.scf import rhf_grad
-from pyscf.grad import uhf as uhf_grad
+from pyscf.grad import ccsd as ccsd_grad
 
 
 #
@@ -494,6 +506,15 @@ if __name__ == '__main__':
 # H     0.0000000000    -0.1118073694    -0.0737315159
     print(lib.finger(g1) - -0.22892718069135981)
 
+    myccs = mycc.as_scanner()
+    mol.atom[0] = ["O" , (0., 0., 0.001)]
+    mol.build(0, 0)
+    e1 = myccs(mol)
+    mol.atom[0] = ["O" , (0., 0.,-0.001)]
+    mol.build(0, 0)
+    e2 = myccs(mol)
+    print(g1[0,2], (e1-e2)/0.002*lib.param.BOHR)
+
     print('-----------------------------------')
     mol = gto.M(
         atom = [
@@ -513,4 +534,13 @@ if __name__ == '__main__':
 # H     0.0000000000     0.1146948540    -0.0772407786
 # H     0.0000000000    -0.1146948540    -0.0772407786
     print(lib.finger(g1) - -0.23639703218041083)
+
+    myccs = mycc.as_scanner()
+    mol.atom[0] = ["O" , (0., 0., 0.001)]
+    mol.build(0, 0)
+    e1 = myccs(mol)
+    mol.atom[0] = ["O" , (0., 0.,-0.001)]
+    mol.build(0, 0)
+    e2 = myccs(mol)
+    print(g1[0,2], (e1-e2)/0.002*lib.param.BOHR)
 

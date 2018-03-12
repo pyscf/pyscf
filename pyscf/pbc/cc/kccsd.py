@@ -1,6 +1,19 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
 #
-# Authors: James D. McClain <jmcclain@princeton.edu>
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Authors: James D. McClain
 #          Timothy Berkelbach <tim.berkelbach@gmail.com>
 #
 
@@ -389,6 +402,14 @@ def _make_eris_incore(cc, mo_coeff=None):
     eris = gccsd._PhysicistsERIs()
     kpts = cc.kpts
     nkpts = cc.nkpts
+    nocc = cc.get_nocc()
+    nmo = cc.nmo
+    nvir = nmo - nocc
+    eris.nocc = nocc
+
+    if any(nocc != numpy.count_nonzero(cc._scf.mo_occ[k]>0)
+           for k in range(nkpts)):
+        raise NotImplementedError('Different occupancies found for different k-points')
 
     if mo_coeff is None:
         # If mo_coeff is not canonical orbital
@@ -418,9 +439,6 @@ def _make_eris_incore(cc, mo_coeff=None):
                                for k, mo in enumerate(eris.mo_coeff)])
 
     nao, nmo = eris.mo_coeff[0].shape
-    nocc = cc.get_nocc()
-    nvir = nmo - nocc
-    eris.nocc = nocc
 
     kconserv = kpts_helper.get_kconserv(cc._scf.cell,cc.kpts)
     so_coeff = [mo[:nao//2] + mo[nao//2:] for mo in eris.mo_coeff]

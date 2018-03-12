@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Authors: Garnet Chan <gkc1000@gmail.com>
 #          Timothy Berkelbach <tim.berkelbach@gmail.com>
@@ -32,7 +45,7 @@ def get_ovlp(cell, kpt=np.zeros(3)):
     '''Get the overlap AO matrix.
     '''
 # Avoid pbcopt's prescreening in the lattice sum, for better accuracy
-    s = cell.pbc_intor('int1e_ovlp_sph', hermi=1, kpts=kpt,
+    s = cell.pbc_intor('int1e_ovlp', hermi=1, kpts=kpt,
                        pbcopt=lib.c_null_ptr())
     cond = np.max(lib.cond(s))
     if cond * cell.precision > 1e2:
@@ -65,7 +78,7 @@ def get_hcore(cell, kpt=np.zeros(3)):
 def get_t(cell, kpt=np.zeros(3)):
     '''Get the kinetic energy AO matrix.
     '''
-    return cell.pbc_intor('int1e_kin_sph', hermi=1, kpts=kpt)
+    return cell.pbc_intor('int1e_kin', hermi=1, kpts=kpt)
 
 
 def get_nuc(cell, kpt=np.zeros(3)):
@@ -229,7 +242,8 @@ class SCF(mol_hf.SCF):
         logger.info(self, '******** PBC SCF flags ********')
         logger.info(self, 'kpt = %s', self.kpt)
         logger.info(self, 'Exchange divergence treatment (exxdiv) = %s', self.exxdiv)
-        if isinstance(self.exxdiv, str) and self.exxdiv.lower() == 'ewald':
+        if (self.cell.dimension == 3 and
+            isinstance(self.exxdiv, str) and self.exxdiv.lower() == 'ewald'):
             madelung = tools.pbc.madelung(self.cell, [self.kpt])
             logger.info(self, '    madelung (= occupied orbital energy shift) = %s', madelung)
             logger.info(self, '    Total energy shift due to Ewald probe charge'
@@ -257,7 +271,7 @@ class SCF(mol_hf.SCF):
             nuc = self.with_df.get_nuc(kpt)
         if len(cell._ecpbas) > 0:
             nuc += ecp.ecp_int(cell, kpt)
-        return nuc + cell.pbc_intor('int1e_kin_sph', 1, 1, kpt)
+        return nuc + cell.pbc_intor('int1e_kin', 1, 1, kpt)
 
     def get_ovlp(self, cell=None, kpt=None):
         if cell is None: cell = self.cell

@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Authors: Garnet Chan <gkc1000@gmail.com>
 #          Timothy Berkelbach <tim.berkelbach@gmail.com>
@@ -41,7 +54,7 @@ def get_ovlp(mf, cell=None, kpts=None):
     if cell is None: cell = mf.cell
     if kpts is None: kpts = mf.kpts
 # Avoid pbcopt's prescreening in the lattice sum, for better accuracy
-    s = cell.pbc_intor('int1e_ovlp_sph', hermi=1, kpts=kpts,
+    s = cell.pbc_intor('int1e_ovlp', hermi=1, kpts=kpts,
                        pbcopt=lib.c_null_ptr())
     cond = np.max(lib.cond(s))
     if cond * cell.precision > 1e2:
@@ -208,8 +221,9 @@ def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf_kpts=None):
     e1 = 1./nkpts * np.einsum('kij,kji', dm_kpts, h1e_kpts)
     e_coul = 1./nkpts * np.einsum('kij,kji', dm_kpts, vhf_kpts) * 0.5
     if abs(e_coul.imag > 1.e-7):
-        raise RuntimeError("Coulomb energy has imaginary part, "
-                           "something is wrong!", e_coul.imag)
+        raise RuntimeError("Coulomb energy has imaginary part %s. "
+                           "Coulomb integrals (e-e, e-N) may not converge !" %
+                           e_coul.imag)
     e1 = e1.real
     e_coul = e_coul.real
     logger.debug(mf, 'E_coul = %.15g', e_coul)
@@ -347,7 +361,8 @@ class KSCF(pbchf.SCF):
         #    if self.exx_built is False:
         #        self.precompute_exx()
         #    logger.info(self, 'WS alpha = %s', self.exx_alpha)
-        if isinstance(self.exxdiv, str) and self.exxdiv.lower() == 'ewald':
+        if (self.cell.dimension == 3 and
+            isinstance(self.exxdiv, str) and self.exxdiv.lower() == 'ewald'):
             madelung = tools.pbc.madelung(self.cell, [self.kpts])
             logger.info(self, '    madelung (= occupied orbital energy shift) = %s', madelung)
             logger.info(self, '    Total energy shift due to Ewald probe charge'
@@ -424,7 +439,7 @@ class KSCF(pbchf.SCF):
             nuc = lib.asarray(self.with_df.get_nuc(kpts))
         if len(cell._ecpbas) > 0:
             nuc += lib.asarray(ecp.ecp_int(cell, kpts))
-        t = lib.asarray(cell.pbc_intor('int1e_kin_sph', 1, 1, kpts))
+        t = lib.asarray(cell.pbc_intor('int1e_kin', 1, 1, kpts))
         return nuc + t
 
     get_ovlp = get_ovlp

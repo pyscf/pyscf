@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Timothy Berkelbach <tim.berkelbach@gmail.com>
 #
@@ -364,5 +377,5 @@ def get_pp(cell, kpt=np.zeros(3), low_dim_ft_type=None):
 def get_jvloc_G0(cell, kpt=np.zeros(3), low_dim_ft_type=None):
     '''Get the (separately divergent) Hartree + Vloc G=0 contribution.
     '''
-    ovlp = cell.pbc_intor('int1e_ovlp_sph', hermi=1, kpts=kpt)
+    ovlp = cell.pbc_intor('int1e_ovlp', hermi=1, kpts=kpt)
     return 1./cell.vol * np.sum(get_alphas(cell, low_dim_ft_type)) * ovlp

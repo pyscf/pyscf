@@ -1,6 +1,5 @@
 ;;;;
-;;;; Copyright (C) 2014-  Qiming Sun <osirpt.sun@gmail.com>
-;;;; Description:
+;;;; Copyright (C) 2014-2017  Qiming Sun <osirpt.sun@gmail.com>
 ;;;;
 
 (load "utility.cl")

@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Timothy Berkelbach <tim.berkelbach@gmail.com>
 #         Qiming Sun <osirpt.sun@gmail.com>
@@ -1126,7 +1139,7 @@ class _KNumInt(numint._NumInt):
                  non0tab=None, xctype='LDA', spin=0, verbose=None):
         nkpts = len(ao_kpts)
         nao = ao_kpts[0].shape[-1]
-        dtype = numpy.result_type(rho, *ao_kpts)
+        dtype = numpy.result_type(*ao_kpts)
         mat = numpy.empty((nkpts,nao,nao), dtype=dtype)
         for k in range(nkpts):
             mat[k] = eval_mat(cell, ao_kpts[k], weight, rho, vxc,
@@ -1136,7 +1149,7 @@ class _KNumInt(numint._NumInt):
     def _fxc_mat(self, cell, ao_kpts, wv, non0tab, xctype, ao_loc):
         nkpts = len(ao_kpts)
         nao = ao_kpts[0].shape[-1]
-        dtype = numpy.result_type(wv, *ao_kpts)
+        dtype = numpy.result_type(*ao_kpts)
         mat = numpy.empty((nkpts,nao,nao), dtype=dtype)
         for k in range(nkpts):
             mat[k] = _fxc_mat(cell, ao_kpts[k], wv, non0tab, xctype, ao_loc)

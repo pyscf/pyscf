@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -44,7 +57,7 @@ def format_aux_basis(cell, auxbasis='weigend+etb'):
     return make_auxmol(cell, auxbasis)
 
 #@memory_cache
-def aux_e2(cell, auxcell, intor='int3c2e_sph', aosym='s1', comp=None,
+def aux_e2(cell, auxcell, intor='int3c2e', aosym='s1', comp=None,
            kptij_lst=numpy.zeros((1,2,3)), shls_slice=None, **kwargs):
     r'''3-center AO integrals (ij|L) with double lattice sum:
     \sum_{lm} (i[l]j[m]|L[0]), where L is the auxiliary basis.
@@ -66,7 +79,7 @@ def aux_e2(cell, auxcell, intor='int3c2e_sph', aosym='s1', comp=None,
         shls_slice = (0, cell.nbas, 0, cell.nbas, 0, auxcell.nbas)
 
     ao_loc = cell.ao_loc_nr()
-    aux_loc = auxcell.ao_loc_nr('ssc' in intor)[:shls_slice[5]+1]
+    aux_loc = auxcell.ao_loc_nr(auxcell.cart or 'ssc' in intor)[:shls_slice[5]+1]
     ni = ao_loc[shls_slice[1]] - ao_loc[shls_slice[0]]
     nj = ao_loc[shls_slice[3]] - ao_loc[shls_slice[2]]
     naux = aux_loc[shls_slice[5]] - aux_loc[shls_slice[4]]
@@ -116,14 +129,14 @@ def aux_e2(cell, auxcell, intor='int3c2e_sph', aosym='s1', comp=None,
         out = out[0]
     return out
 
-def wrap_int3c(cell, auxcell, intor='int3c2e_sph', aosym='s1', comp=1,
+def wrap_int3c(cell, auxcell, intor='int3c2e', aosym='s1', comp=1,
                kptij_lst=numpy.zeros((1,2,3)), cintopt=None, pbcopt=None):
     pcell = copy.copy(cell)
     pcell._atm, pcell._bas, pcell._env = \
     atm, bas, env = gto.conc_env(cell._atm, cell._bas, cell._env,
                                  cell._atm, cell._bas, cell._env)
     ao_loc = gto.moleintor.make_loc(bas, intor)
-    aux_loc = auxcell.ao_loc_nr('ssc' in intor)
+    aux_loc = auxcell.ao_loc_nr(auxcell.cart or 'ssc' in intor)
     ao_loc = numpy.asarray(numpy.hstack([ao_loc, ao_loc[-1]+aux_loc[1:]]),
                            dtype=numpy.int32)
     atm, bas, env = gto.conc_env(atm, bas, env,
@@ -193,7 +206,7 @@ def wrap_int3c(cell, auxcell, intor='int3c2e_sph', aosym='s1', comp=1,
     return int3c
 
 
-def fill_2c2e(cell, auxcell, intor='int2c2e_sph', hermi=0, kpt=numpy.zeros(3)):
+def fill_2c2e(cell, auxcell, intor='int2c2e', hermi=0, kpt=numpy.zeros(3)):
     '''2-center 2-electron AO integrals (L|ij), where L is the auxiliary basis.
     '''
     if hermi != 0:

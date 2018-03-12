@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -94,7 +107,7 @@ def _gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj, compress_vvvv=False):
     goovv = numpy.einsum('ia,jb->ijab', mia.conj(), t1.conj())
     max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
     unit = nocc**2*nvir*6
-    blksize = min(nocc, max(ccsd.BLKMIN, int(max_memory*.95e6/8/unit)))
+    blksize = min(nocc, nvir, max(ccsd.BLKMIN, int(max_memory*.95e6/8/unit)))
     doovv = h5fobj.create_dataset('doovv', (nocc,nocc,nvir,nvir), dtype,
                                   chunks=(nocc,nocc,blksize,nvir))
 
@@ -296,7 +309,7 @@ def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True):
         nmo, nmo0 = mycc.mo_occ.size, nmo
         nocc = numpy.count_nonzero(mycc.mo_occ > 0)
         rdm2 = numpy.zeros((nmo,nmo,nmo,nmo), dtype=dm2.dtype)
-        moidx = numpy.where(ccsd.get_frozen_mask(mycc))[0]
+        moidx = numpy.where(mycc.get_frozen_mask())[0]
         idx = (moidx.reshape(-1,1) * nmo + moidx).ravel()
         lib.takebak_2d(rdm2.reshape(nmo**2,nmo**2),
                        dm2.reshape(nmo0**2,nmo0**2), idx, idx)

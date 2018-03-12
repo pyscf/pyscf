@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -554,7 +567,7 @@ class UCISD(cisd.CISD):
     get_nmo = uccsd.get_nmo
     get_frozen_mask = uccsd.get_frozen_mask
 
-    def get_init_guess(self, eris=None):
+    def get_init_guess(self, eris=None, nroots=1, diag=None):
         if eris is None: eris = self.ao2mo(self.mo_coeff)
         nocca = eris.nocca
         noccb = eris.noccb
@@ -589,7 +602,27 @@ class UCISD(cisd.CISD):
         if abs(emp2) < 1e-3 and (abs(t1a).sum()+abs(t1b).sum()) < 1e-3:
             t1a = 1e-1 / eia_a
             t1b = 1e-1 / eia_b
-        return self.emp2, amplitudes_to_cisdvec(1, (t1a,t1b), (t2aa,t2ab,t2bb))
+
+        ci_guess = amplitudes_to_cisdvec(1, (t1a,t1b), (t2aa,t2ab,t2bb))
+
+        if nroots > 1:
+            civec_size = ci_guess.size
+            ci1_size = t1a.size + t1b.size
+            dtype = ci_guess.dtype
+            nroots = min(ci1_size+1, nroots)
+
+            if diag is None:
+                idx = range(1, nroots)
+            else:
+                idx = diag[:ci1_size+1].argsort()[1:nroots]  # exclude HF determinant
+
+            ci_guess = [ci_guess]
+            for i in idx:
+                g = numpy.zeros(civec_size, dtype)
+                g[i] = 1.0
+                ci_guess.append(g)
+
+        return self.emp2, ci_guess
 
     contract = contract
     make_diagonal = make_diagonal
@@ -631,8 +664,8 @@ class UCISD(cisd.CISD):
     make_rdm2 = make_rdm2
 
     def nuc_grad_method(self):
-        from pyscf.ci import ucisd_grad
-        return ucisd_grad.Gradients(self)
+        from pyscf.grad import ucisd
+        return ucisd.Gradients(self)
 
 CISD = UCISD
 

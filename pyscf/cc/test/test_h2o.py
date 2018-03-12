@@ -1,4 +1,18 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import unittest
 import numpy
 
@@ -6,6 +20,10 @@ from pyscf import gto, lib
 from pyscf import scf
 from pyscf import cc
 from pyscf import ao2mo
+from pyscf.cc import ccsd
+from pyscf.cc import uccsd
+from pyscf.cc import rccsd
+from pyscf.cc import dfccsd
 
 mol = gto.Mole()
 mol.verbose = 7
@@ -153,9 +171,6 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(cc_scanner(mol1), -76.228972886940639, 6)
 
     def test_init(self):
-        from pyscf.cc import ccsd
-        from pyscf.cc import uccsd
-        from pyscf.cc import dfccsd
         self.assertTrue(isinstance(cc.CCSD(mf), ccsd.CCSD))
         self.assertTrue(isinstance(cc.CCSD(mf.density_fit()), dfccsd.RCCSD))
         self.assertTrue(isinstance(cc.CCSD(mf.newton()), ccsd.CCSD))
@@ -180,6 +195,8 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(isinstance(cc.CCSD(umf.newton().density_fit()), uccsd.UCCSD))
 #        self.assertTrue(not isinstance(cc.CCSD(umf.newton().density_fit()), dfccsd.UCCSD))
 #        self.assertTrue(isinstance(cc.CCSD(umf.density_fit().newton().density_fit()), dfccsd.UCCSD))
+
+        self.assertTrue(isinstance(cc.CCSD(mf, mo_coeff=mf.mo_coeff*1j), rccsd.RCCSD))
 
 if __name__ == "__main__":
     print("Full Tests for H2O")

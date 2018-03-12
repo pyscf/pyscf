@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -14,7 +27,7 @@ from pyscf.pbc.df.incore import wrap_int3c
 libpbc = lib.load_library('libpbc')
 
 
-def aux_e2(cell, auxcell, erifile, intor='int3c2e_sph', aosym='s2ij', comp=None,
+def aux_e2(cell, auxcell, erifile, intor='int3c2e', aosym='s2ij', comp=None,
            kptij_lst=None, dataname='eri_mo', shls_slice=None, max_memory=2000,
            verbose=0):
     r'''3-center AO integrals (ij|L) with double lattice sum:
@@ -44,7 +57,7 @@ def aux_e2(cell, auxcell, erifile, intor='int3c2e_sph', aosym='s2ij', comp=None,
         shls_slice = (0, cell.nbas, 0, cell.nbas, 0, auxcell.nbas)
 
     ao_loc = cell.ao_loc_nr()
-    aux_loc = auxcell.ao_loc_nr('ssc' in intor)[:shls_slice[5]+1]
+    aux_loc = auxcell.ao_loc_nr(auxcell.cart or 'ssc' in intor)[:shls_slice[5]+1]
     ni = ao_loc[shls_slice[1]] - ao_loc[shls_slice[0]]
     nj = ao_loc[shls_slice[3]] - ao_loc[shls_slice[2]]
     naux = aux_loc[shls_slice[5]] - aux_loc[shls_slice[4]]

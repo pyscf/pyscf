@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -113,7 +126,13 @@ def eval_gto(cell, eval_name, coords, comp=None, kpts=None, kpt=None,
     out_ptrs = (ctypes.c_void_p*nkpts)(
             *[x.ctypes.data_as(ctypes.c_void_p) for x in ao_kpts])
     coords = numpy.asarray(coords, order='F')
-    Ls = cell.get_lattice_Ls(dimension=cell.dimension)
+
+    # For atoms near the boundary of the cell, it is necessary (even in low-
+    # dimensional systems) to include lattice translations in all 3 dimensions.
+    if cell.low_dim_ft_type == 'analytic_2d_1':
+        Ls = cell.get_lattice_Ls(dimension=3)
+    else:
+        Ls = cell.get_lattice_Ls(dimension=cell.dimension)
     Ls = Ls[numpy.argsort(lib.norm(Ls, axis=1))]
     expLk = numpy.exp(1j * numpy.asarray(numpy.dot(Ls, kpts_lst.T), order='C'))
 

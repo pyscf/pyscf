@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 import unittest
 import tempfile
@@ -177,7 +190,7 @@ C    SP
         self.assertTrue(not gto.same_mol(mol3, mol2))
 
     def test_mass_center(self):
-        self.assertAlmostEqual(gto.mass_center(mol0._atom)[2], -0.2038858832140481, 9)
+        self.assertAlmostEqual(abs(gto.mass_center(mol0._atom)[2]), 0.2038858832140481, 9)
 
     def test_chiral_mol(self):
         mol1 = gto.M(atom='C 0 0 0; H 1 1 1; He -1 -1 1; Li -1 1 -1; Be 1 -1 -1')
@@ -467,16 +480,17 @@ O    SP
         mol1 = gto.Mole()
         mol1.verbose = 5
         mol1.set_geom_(mol0._atom, 'B', symmetry=True)
+        mol1.set_geom_(mol0.atom_coords(), 'B')
 
     def test_with_MoleContext(self):
         mol1 = mol0.copy()
         with mol1.with_rinv_as_nucleus(1):
             self.assertTrue(mol1._env[gto.PTR_RINV_ZETA] != 0)
-            self.assertAlmostEqual(mol1._env[gto.PTR_RINV_ORIG+2], -0.46288647587915266, 9)
+            self.assertAlmostEqual(abs(mol1._env[gto.PTR_RINV_ORIG+2]), 0.46288647587915266, 9)
         self.assertAlmostEqual(mol1._env[gto.PTR_RINV_ZETA], 0, 9)
         self.assertAlmostEqual(mol1._env[gto.PTR_RINV_ORIG+2], 0, 9)
         with mol1.with_rinv_as_nucleus(0):
-            self.assertAlmostEqual(mol1._env[gto.PTR_RINV_ORIG+2], 1.8515459035166109, 9)
+            self.assertAlmostEqual(abs(mol1._env[gto.PTR_RINV_ORIG+2]), 1.8515459035166109, 9)
         self.assertAlmostEqual(mol1._env[gto.PTR_RINV_ORIG+2], 0, 9)
 
         with mol1.with_rinv_zeta(20):

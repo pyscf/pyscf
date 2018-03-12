@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -96,11 +109,14 @@ def get_eri(mydf, kpts=None, compact=True):
 #       rho_rs = 1/N \sum_{Tr,Ts} \int exp( i(G+k_{pq})*r) r(r-Tr) s(r-Ts) dr
 #              = \sum_{Ts} exp(i k_s*Ts) \int exp( i(G+k_{pq})*r) r(r) s(r-Ts) dr
 # rho_pq can be directly evaluated by AFT (function pw_loop)
-# rho_rs needs to be evaluated indirectly
 #       rho_pq = pw_loop(k_q, G+k_{pq})
+# Assuming r(r) and s(r) are real functions, rho_rs is evaluated
 #       rho_rs = 1/N \sum_{Tr,Ts} \int exp( i(G+k_{pq})*r) r(r-Tr) s(r-Ts) dr
 #              = conj(\sum_{Ts} exp(-i k_s*Ts) \int exp(-i(G+k_{pq})*r) r(r) s(r-Ts) dr)
 #              = conj( pw_loop(-k_s, G+k_{pq}) )
+#
+# TODO: For complex AO function r(r) and s(r), pw_loop function needs to be
+# extended to include Gv vector in the arguments
         for (pqkR, pqkI, p0, p1), (rskR, rskI, q0, q1) in \
                 lib.izip(mydf.pw_loop(mesh, kptijkl[:2], q, max_memory=max_memory*.5),
                          mydf.pw_loop(mesh,-kptijkl[2:], q, max_memory=max_memory*.5)):

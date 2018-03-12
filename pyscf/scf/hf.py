@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -756,7 +769,7 @@ def get_occ(mf, mo_energy=None, mo_coeff=None):
     return mo_occ
 
 def get_grad(mo_coeff, mo_occ, fock_ao):
-    '''RHF Gradients
+    '''RHF orbital gradients
 
     Args:
         mo_coeff : 2D ndarray
@@ -1003,14 +1016,14 @@ def as_scanner(mf):
     Note scanner has side effects.  It may change many underlying objects
     (_scf, with_df, with_x2c, ...) during calculation.
 
-    Examples::
+    Examples:
 
-        >>> from pyscf import gto, scf
-        >>> hf_scanner = scf.RHF(gto.Mole().set(verbose=0)).as_scanner()
-        >>> hf_scanner(gto.M(atom='H 0 0 0; F 0 0 1.1'))
-        -98.552190448277955
-        >>> hf_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
-        -98.414750424294368
+    >>> from pyscf import gto, scf
+    >>> hf_scanner = scf.RHF(gto.Mole().set(verbose=0)).as_scanner()
+    >>> hf_scanner(gto.M(atom='H 0 0 0; F 0 0 1.1'))
+    -98.552190448277955
+    >>> hf_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
+    -98.414750424294368
     '''
     import copy
     logger.info(mf, 'Create scanner for %s', mf.__class__)
@@ -1372,8 +1385,7 @@ class SCF(lib.StreamObject):
             logger.note(self, 'converged SCF energy = %.15g', self.e_tot)
         else:
             logger.note(self, 'SCF not converged.')
-            logger.note(self, 'SCF energy = %.15g after %d cycles',
-                        self.e_tot, self.max_cycle)
+            logger.note(self, 'SCF energy = %.15g', self.e_tot)
         return self
 
     def init_direct_scf(self, mol=None):

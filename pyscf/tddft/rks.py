@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -13,6 +26,7 @@ from pyscf import lib
 from pyscf.dft import numint
 from pyscf import dft
 from pyscf.tddft import rhf
+from pyscf.scf import hf_symm
 from pyscf.ao2mo import _ao2mo
 from pyscf.soscf.newton_ah import _gen_rhf_response
 
@@ -29,7 +43,6 @@ class TDDFT(rhf.TDHF):
         return rks_grad.Gradients(self)
 
 RPA = TDDFT
-
 
 class TDDFTNoHybrid(TDA):
     ''' Solve (A-B)(A+B)(X+Y) = (X+Y)w^2
@@ -127,6 +140,17 @@ class TDDFTNoHybrid(TDA):
         return rks_grad.Gradients(self)
 
 
+class dRPA(TDDFTNoHybrid):
+    def __init__(self, mf):
+        if not hasattr(mf, 'xc'):
+            raise RuntimeError("direct RPA can only be applied with DFT; for HF+dRPA, use .xc='hf'")
+        from pyscf import scf
+        mf = scf.addons.convert_to_rhf(mf)
+        mf.xc = ''
+        TDDFTNoHybrid.__init__(self, mf)
+
+TDH = dRPA
+
 if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
@@ -176,4 +200,11 @@ if __name__ == '__main__':
     print(td.kernel()[0] * 27.2114)
 # [  9.0139312    9.0139312   12.42444659]
 
+    mf = dft.RKS(mol)
+    mf.xc = 'lda,vwn'
+    mf.scf()
+    td = dRPA(mf)
+    td.nstates = 5
+    print(td.kernel()[0] * 27.2114)
+# [ 10.00343861  10.00343861  15.62586305  30.69238874  30.69238874]
 

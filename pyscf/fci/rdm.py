@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 '''FCI 1, 2, 3, 4-particle density matrices.
 '''
@@ -27,6 +40,7 @@ def reorder_rdm(rdm1, rdm2, inplace=False):
 
 # dm_pq = <|p^+ q|>
 def make_rdm1_ms0(fname, cibra, ciket, norb, nelec, link_index=None):
+    assert(cibra is not None and ciket is not None)
     cibra = numpy.asarray(cibra, order='C')
     ciket = numpy.asarray(ciket, order='C')
     if link_index is None:
@@ -71,6 +85,7 @@ def make_rdm12(fname, cibra, ciket, norb, nelec, link_index=None, symm=0):
 # nelec and link_index are tuples of (alpha,beta)
 #
 def make_rdm1_spin1(fname, cibra, ciket, norb, nelec, link_index=None):
+    assert(cibra is not None and ciket is not None)
     cibra = numpy.asarray(cibra, order='C')
     ciket = numpy.asarray(ciket, order='C')
     if link_index is None:
@@ -101,6 +116,7 @@ def make_rdm1_spin1(fname, cibra, ciket, norb, nelec, link_index=None):
 # symm = 1: bra, ket symmetry
 # symm = 2: particle permutation symmetry
 def make_rdm12_spin1(fname, cibra, ciket, norb, nelec, link_index=None, symm=0):
+    assert(cibra is not None and ciket is not None)
     cibra = numpy.asarray(cibra, order='C')
     ciket = numpy.asarray(ciket, order='C')
     if link_index is None:

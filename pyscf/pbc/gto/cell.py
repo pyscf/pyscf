@@ -1,5 +1,17 @@
 #!/usr/bin/env python
-# -*- coding: utf-8
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #         Timothy Berkelbach <tim.berkelbach@gmail.com>
@@ -678,19 +690,43 @@ def _cut_mesh_for_ewald(cell, mesh):
     mesh[mesh>mesh_max] = mesh_max[mesh>mesh_max]
     return mesh
 
-def _model_uniform_charge_SI_on_z(cell, Gv):
-    chargs = cell.atom_charges()
-    coords = cell.atom_coords()
-    charge_center = mole.charge_center(cell._atom, chargs, coords)
-    if cell.dimension == 1:
-        G0idx = (Gv[:,0] == 0)
-        SI_on_z = np.exp(-1j * np.einsum('gx,x->g', Gv[G0idx,1:], charge_center[1:]))
-    elif cell.dimension == 2:
-        G0idx = (Gv[:,0] == 0) & (Gv[:,1] == 0)
-        SI_on_z = np.exp(-1j * (Gv[G0idx,2] * charge_center[2]))
-    else:
-        G0idx = SI_on_z = None
-    return G0idx, SI_on_z
+# In testing: two types of background charge.
+if 1:
+    def _SI_for_uniform_model_charge(cell, Gv):
+        '''
+        Background charge on one plane which passes through the charge center.
+        '''
+        chargs = cell.atom_charges()
+        coords = cell.atom_coords()
+        charge_center = mole.charge_center(cell._atom, chargs, coords)
+        if cell.dimension == 1:
+            G0idx = (Gv[:,0] == 0)
+            SI_on_z = np.exp(-1j * np.einsum('gx,x->g', Gv[G0idx,1:], charge_center[1:]))
+        elif cell.dimension == 2:
+            G0idx = (Gv[:,0] == 0) & (Gv[:,1] == 0)
+            SI_on_z = np.exp(-1j * (Gv[G0idx,2] * charge_center[2]))
+        else:
+            G0idx = SI_on_z = None
+        return G0idx, SI_on_z
+else:
+    def _SI_for_uniform_model_charge(cell, Gv):
+        '''
+        Background charge on multiple planes.  Each plane passes through one
+        nucleus.
+        '''
+        chargs = cell.atom_charges()
+        coords = cell.atom_coords()
+        if cell.dimension == 1:
+            G0idx = (Gv[:,0] == 0)
+            SI_on_z = np.exp(-1j * np.einsum('gx,ix->ig', Gv[G0idx,1:], coords[:,1:]))
+            SI_on_z = np.einsum("i,ig->g", chargs, SI_on_z) / chargs.sum()
+        elif cell.dimension == 2:
+            G0idx = (Gv[:,0] == 0) & (Gv[:,1] == 0)
+            SI_on_z = np.exp(-1j * np.einsum('g,i->ig', Gv[G0idx,2], coords[:,2]))
+            SI_on_z = np.einsum("i,ig->g", chargs, SI_on_z) / chargs.sum()
+        else:
+            G0idx = SI_on_z = None
+        return G0idx, SI_on_z
 
 def ewald(cell, ew_eta=None, ew_cut=None):
     '''Perform real (R) and reciprocal (G) space Ewald sum for the energy.
@@ -752,7 +788,7 @@ def ewald(cell, ew_eta=None, ew_cut=None):
         ZexpG2 = ZSI * np.exp(-absG2/(4*ew_eta**2))
 
         if cell.dimension == 1 or cell.dimension == 2:
-            G0idx, SI_on_z = _model_uniform_charge_SI_on_z(cell, Gv)
+            G0idx, SI_on_z = _SI_for_uniform_model_charge(cell, Gv)
             bg_charge = chargs.sum() * SI_on_z
             ZexpG2[G0idx] -= bg_charge
             ZSI_without_bg = ZSI[G0idx] - bg_charge
