@@ -472,7 +472,11 @@ class SCF(hf.SCF):
         from pyscf.pbc.scf import x2c
         return x2c.sfx2c1e(self)
 
-RHF = SCF
+class RHF(SCF, hf.RHF):
+    def convert_from_(self, mf):
+        '''Convert given mean-field object to RHF'''
+        addons.convert_to_rhf(mf, self)
+        return self
 
 def _format_jks(vj, dm, kpts_band):
     if kpts_band is None:

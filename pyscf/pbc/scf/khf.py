@@ -569,7 +569,11 @@ class KSCF(hf.SCF):
         from pyscf.pbc.scf import x2c
         return x2c.sfx2c1e(self)
 
-KRHF = KSCF
+class KRHF(KSCF, pbchf.RHF):
+    def convert_from_(self, mf):
+        '''Convert given mean-field object to KRHF'''
+        addons.convert_to_rhf(mf, self)
+        return self
 
 
 if __name__ == '__main__':
