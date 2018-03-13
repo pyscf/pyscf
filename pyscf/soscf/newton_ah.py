@@ -874,13 +874,27 @@ def newton_SCF_class(mf):
             if isinstance(dm, str):
                 sys.stderr.write('Newton solver reads density matrix from chkfile %s\n' % dm)
                 dm = self.from_chk(dm, True)
-            mol = self._scf.mol
-            h1e = self._scf.get_hcore(mol)
-            s1e = self._scf.get_ovlp(mol)
-            vhf = self._scf.get_veff(mol, dm)
-            fock = self._scf.get_fock(h1e, s1e, vhf, dm)
-            mo_energy, mo_coeff = self._scf.eig(fock, s1e)
-            mo_occ = self._scf.get_occ(mo_energy, mo_coeff)
+
+# * If possible, prefer the methods of SOSCF object to evaluate the Fock
+#   matrix and diagonalize Fock matrix. This is because the addons or settings
+#   of underlying SCF method (self._scf) are automatically transfer to the
+#   SOSCF object. Some addons or settings may be applied (initialized) to
+#   SOSCF object only. In that case, self._scf should not be used.
+# * If self.mol and self._scf.mol are different, SOSCF was approximated by a
+#   different mol object. The underlying self._scf has to be used to get right
+#   dimension for the initial guess.
+            if self.mol is self._scf.mol:
+                mf = self
+            else:
+                mf = self._scf
+
+            mol = mf.mol
+            h1e = mf.get_hcore(mol)
+            s1e = mf.get_ovlp(mol)
+            vhf = mf.get_veff(mol, dm)
+            fock = mf.get_fock(h1e, s1e, vhf, dm)
+            mo_energy, mo_coeff = mf.eig(fock, s1e)
+            mo_occ = mf.get_occ(mo_energy, mo_coeff)
             return mo_coeff, mo_occ
 
         gen_g_hop = gen_g_hop_rhf

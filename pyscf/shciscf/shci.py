@@ -175,6 +175,7 @@ class SHCI(pyscf.lib.StreamObject):
         self.sweep_epsilon = []
         self.maxIter = 6
         self.restart = False
+        self.num_thrds = num_thrds
         self.orbsym = []
         self.onlywriteIntegral = False
         self.orbsym = None
@@ -192,6 +193,13 @@ class SHCI(pyscf.lib.StreamObject):
         self.useExtraSymm = False
         self.initialStates = None
         self.extraline = ""
+
+    @property
+    def threads(self):
+        return self.num_thrds
+    @threads.setter
+    def threads(self, x):
+        self.num_thrds = x
 
     def dump_flags(self, verbose=None):
         if verbose is None:
