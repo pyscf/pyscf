@@ -185,7 +185,7 @@ class KnownValues(unittest.TestCase):
                     spin=2, verbose=0)
         mf = scf.ROHF(mol).run(conv_tol=1e-12)
         w = mf.stability(internal=True, external=False)[0]
-        self.assertAlmostEqual(lib.finger(w), -11.241785180215988, 6)
+        self.assertAlmostEqual(lib.finger(w), -12.705426364356359, 6)
 
 if __name__ == "__main__":
     print("Full Tests for stability")
