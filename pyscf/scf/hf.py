@@ -979,9 +979,12 @@ def dip_moment(mol, dm, unit_symbol='Debye', verbose=logger.NOTE):
         log.note('Dipole moment(X, Y, Z, A.U.): %8.5f, %8.5f, %8.5f', *mol_dip)
     return mol_dip
 
-############
-# For orbital rotation
+
 def uniq_var_indices(mo_occ):
+    '''
+    Indicies of the unique variables for the orbital-gradients (or
+    orbital-rotation) matrix.
+    '''
     occidxa = mo_occ>0
     occidxb = mo_occ==2
     viridxa = ~occidxa
@@ -989,11 +992,19 @@ def uniq_var_indices(mo_occ):
     mask = (viridxa[:,None] & occidxa) | (viridxb[:,None] & occidxb)
     return mask
 
-def pack_uniq_var(x1, mo_occ):
+def pack_uniq_var(x, mo_occ):
+    '''
+    Extract the unique variables from the full orbital-gradients (or
+    orbital-rotation) matrix
+    '''
     idx = uniq_var_indices(mo_occ)
-    return x1[idx]
+    return x[idx]
 
 def unpack_uniq_var(dx, mo_occ):
+    '''
+    Fill the full orbital-gradients (or orbital-rotation) matrix with the
+    unique variables.
+    '''
     nmo = len(mo_occ)
     idx = uniq_var_indices(mo_occ)
 

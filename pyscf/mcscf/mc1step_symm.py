@@ -103,6 +103,10 @@ def _symmetrize(mat, orbsym, groupname):
     orbsym = numpy.asarray(orbsym)
     allowed = orbsym.reshape(-1,1) == orbsym
     mat1[allowed] = mat[allowed]
+
+    if groupname in ('Dooh', 'Coov'):
+        from pyscf.soscf import newton_ah
+        newton_ah._force_Ex_Ey_degeneracy_(mat1, orbsym)
     return mat1
 
 
