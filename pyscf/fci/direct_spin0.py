@@ -347,6 +347,8 @@ class FCISolver(direct_spin1.FCISolver):
                orbsym=None, wfnsym=None, ecore=0, **kwargs):
         if self.verbose >= logger.WARN:
             self.check_sanity()
+        self.norb = norb
+        self.nelec = nelec
         self.eci, self.ci = \
                 kernel_ms0(self, h1e, eri, norb, nelec, ci0, None,
                            tol, lindep, max_cycle, max_space, nroots,

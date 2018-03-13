@@ -575,6 +575,8 @@ class FCISolver(lib.StreamObject):
         self.lessio = False
 
         self.converged = False
+        self.norb = None
+        self.nelec = None
         self.eci = None
         self.ci = None
         self._keys = set(self.__dict__.keys())
@@ -651,6 +653,8 @@ class FCISolver(lib.StreamObject):
                orbsym=None, wfnsym=None, ecore=0, **kwargs):
         if self.verbose >= logger.WARN:
             self.check_sanity()
+        self.norb = norb
+        self.nelec = nelec
         self.eci, self.ci = \
                 kernel_ms1(self, h1e, eri, norb, nelec, ci0, None,
                            tol, lindep, max_cycle, max_space, nroots,

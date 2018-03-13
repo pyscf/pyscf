@@ -362,6 +362,8 @@ class FCISolver(direct_spin1.FCISolver):
             wfnsym = self.wfnsym
         if self.verbose >= logger.WARN:
             self.check_sanity()
+        self.norb = norb
+        self.nelec = nelec
 
         nelec = direct_spin1._unpack_nelec(nelec, self.spin)
         wfnsym_bak = self.wfnsym
