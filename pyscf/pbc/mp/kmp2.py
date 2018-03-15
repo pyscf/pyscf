@@ -137,10 +137,10 @@ def get_nocc(mp, per_kpoint=False):
         [_frozen_sanity_check(fro, mo_occ, ikpt) for ikpt, fro, mo_occ in zip(range(nkpts), mp.frozen, mp.mo_occ)]
         occ_idx = [mp.mo_occ[ikpt] > 0 for ikpt in range(nkpts)]
 
-        # Find where MO is frozen at every k-point and don't include this orbital
-        all_frozen = reduce(set.intersection, [set(x) for x in mp.frozen])
-        for ikpt in range(nkpts):
-            occ_idx[ikpt][list(all_frozen)] = False
+        ## Find where MO is frozen at every k-point and don't include this orbital
+        #all_frozen = reduce(set.intersection, [set(x) for x in mp.frozen])
+        for ikpt, fro in enumerate(mp.frozen):
+            occ_idx[ikpt][list(fro)] = False
 
         nocc = [np.count_nonzero(occ_idx[ikpt]) for ikpt in range(nkpts)]
     else:

@@ -66,12 +66,12 @@ class KnownValues(unittest.TestCase):
         mp = fake_mp(frozen=[[0, 1,], [0]], mo_occ=[np.array([2, 2, 2, 0, 0]), np.array([2, 2, 0, 0, 0])], nkpts=2)
         nocc = get_nocc(mp)
         nmo = get_nmo(mp)
-        self.assertAlmostEqual(nocc, 2)
-        self.assertAlmostEqual(nmo, 5)  # 2 occupied, 3 virtual
+        self.assertAlmostEqual(nocc, 1)
+        self.assertAlmostEqual(nmo, 4)  # 1 occupied, 3 virtual
 
         nocc = get_nocc(mp, per_kpoint=True)
         nmo = get_nmo(mp, per_kpoint=True)
-        self.assertListEqual(nocc, [2, 1])
+        self.assertListEqual(nocc, [1, 1])
         self.assertListEqual(nmo, [3, 4])
 
 if __name__ == '__main__':
