@@ -103,11 +103,39 @@ def _gamma2_intermediates(mycc, t1, t2, l1, l2):
     return (dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov)
 
 def make_rdm1(mycc, t1, t2, l1, l2):
+    r'''
+    One-particle density matrix in molecular spin-orbital representation (the
+    occupied-virtual blocks due to the orbital response contribution are not
+    included).
+
+    dm1[p,q] = <p^\dagger q>  (p,q are spin-orbitals)
+
+    One-particle density matrix should be contracted to integrals with the
+    pattern below to compute energy
+
+    E = numpy.einsum('pq,qp', h1, dm1)
+
+    where h1[p,q] = <p| h1 |q>
+    '''
     d1 = _gamma1_intermediates(mycc, t1, t2, l1, l2)
     return _make_rdm1(mycc, d1, with_frozen=True)
 
 # spin-orbital rdm2 in Chemist's notation
 def make_rdm2(mycc, t1, t2, l1, l2):
+    r'''
+    Two-particle density matrix in molecular spin-orbital representation
+
+    dm2[p,q,r,s] = <p^\dagger r^\dagger s q>
+    (p,q are spin-orbitals. p,q correspond to one particle and r,s correspond
+    to another paritcile)
+
+    Two-particle density matrix should be contracted to integrals with the
+    pattern below to compute energy
+
+    E = numpy.einsum('pqrs,qpsr', eri, dm2)
+
+    where eri[p,q,r,s] = (pq|rs) = \int p^*(r1) q(r1) 1/r12 r^*(r2) s(r2) dr1 dr2
+    '''
     d1 = _gamma1_intermediates(mycc, t1, t2, l1, l2)
     d2 = _gamma2_intermediates(mycc, t1, t2, l1, l2)
     return _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True)

@@ -423,7 +423,21 @@ def from_fcivec(ci0, nmo, nocc):
 
 
 def make_rdm1(myci, civec=None, nmo=None, nocc=None):
-    '''1-particle density matrix
+    r'''
+    One-particle spin density matrices dm1a, dm1b in MO basis (the
+    occupied-virtual blocks due to the orbital response contribution are not
+    included).
+
+    dm1a[p,q] = <p_alpha^\dagger q_alpha>
+    dm1b[p,q] = <p_beta^\dagger q_beta>
+
+    One-particle density matrix should be contracted to integrals with the
+    pattern below to compute energy
+
+    E = numpy.einsum('pq,qp', h1a, dm1a)
+    E+= numpy.einsum('pq,qp', h1b, dm1b)
+
+    where h1a[p,q] = <p_alpha| h1 |q_alpha>,  h1b[p,q] = <p_beta| h1 |q_beta>
     '''
     if civec is None: civec = myci.ci
     if nmo is None: nmo = myci.nmo
@@ -432,7 +446,26 @@ def make_rdm1(myci, civec=None, nmo=None, nocc=None):
     return uccsd_rdm._make_rdm1(myci, d1, with_frozen=True)
 
 def make_rdm2(myci, civec=None, nmo=None, nocc=None):
-    '''2-particle density matrix in chemist's notation
+    r'''
+    Two-particle spin density matrices dm2aa, dm2ab, dm2bb in MO basis
+
+    dm2aa[p,q,r,s] = <p_alpha^\dagger r_alpha^\dagger s_alpha q_alpha>
+    dm2ab[p,q,r,s] = <p_alpha^\dagger r_beta^\dagger s_beta q_alpha>
+    dm2bb[p,q,r,s] = <p_beta^\dagger r_beta^\dagger s_beta q_beta>
+    (p,q correspond to one particle and r,s correspond to another paritcile)
+
+    Two-particle density matrix should be contracted to integrals with the
+    pattern below to compute energy
+
+    E = numpy.einsum('pqrs,qpsr', eri_aa, dm2_aa)
+    E+= numpy.einsum('pqrs,qpsr', eri_ab, dm2_ab)
+    E+= numpy.einsum('pqrs,srqp', eri_ba, dm2_ab)
+    E+= numpy.einsum('pqrs,qpsr', eri_bb, dm2_bb)
+
+    where eri_aa[p,q,r,s] = (p_alpha q_alpha | r_alpha s_alpha )
+    eri_ab[p,q,r,s] = ( p_alpha q_alpha | r_beta s_beta )
+    eri_ba[p,q,r,s] = ( p_beta q_beta | r_alpha s_alpha )
+    eri_bb[p,q,r,s] = ( p_beta q_beta | r_beta s_beta )
     '''
     if civec is None: civec = myci.ci
     if nmo is None: nmo = myci.nmo

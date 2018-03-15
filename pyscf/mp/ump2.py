@@ -153,8 +153,21 @@ def get_frozen_mask(mp):
     return moidxa,moidxb
 
 def make_rdm1(mp, t2=None):
-    '''1-particle density matrix in MO basis.  The off-diagonal blocks due to
-    the orbital response are not included.
+    r'''
+    One-particle spin density matrices dm1a, dm1b in MO basis (the
+    occupied-virtual blocks due to the orbital response contribution are not
+    included).
+
+    dm1a[p,q] = <p_alpha^\dagger q_alpha>
+    dm1b[p,q] = <p_beta^\dagger q_beta>
+
+    One-particle density matrix should be contracted to integrals with the
+    pattern below to compute energy
+
+    E = numpy.einsum('pq,qp', h1a, dm1a)
+    E+= numpy.einsum('pq,qp', h1b, dm1b)
+
+    where h1a[p,q] = <p_alpha| h1 |q_alpha>,  h1b[p,q] = <p_beta| h1 |q_beta>
     '''
     from pyscf.cc import uccsd_rdm
     if t2 is None: t2 = mp.t2
@@ -181,6 +194,27 @@ def _gamma1_intermediates(mp, t2):
 
 # spin-orbital rdm2 in Chemist's notation
 def make_rdm2(mp, t2=None):
+    r'''
+    Two-particle spin density matrices dm2aa, dm2ab, dm2bb in MO basis
+
+    dm2aa[p,q,r,s] = <p_alpha^\dagger r_alpha^\dagger s_alpha q_alpha>
+    dm2ab[p,q,r,s] = <p_alpha^\dagger r_beta^\dagger s_beta q_alpha>
+    dm2bb[p,q,r,s] = <p_beta^\dagger r_beta^\dagger s_beta q_beta>
+    (p,q correspond to one particle and r,s correspond to another paritcile)
+
+    Two-particle density matrix should be contracted to integrals with the
+    pattern below to compute energy
+
+    E = numpy.einsum('pqrs,qpsr', eri_aa, dm2_aa)
+    E+= numpy.einsum('pqrs,qpsr', eri_ab, dm2_ab)
+    E+= numpy.einsum('pqrs,srqp', eri_ba, dm2_ab)
+    E+= numpy.einsum('pqrs,qpsr', eri_bb, dm2_bb)
+
+    where eri_aa[p,q,r,s] = (p_alpha q_alpha | r_alpha s_alpha )
+    eri_ab[p,q,r,s] = ( p_alpha q_alpha | r_beta s_beta )
+    eri_ba[p,q,r,s] = ( p_beta q_beta | r_alpha s_alpha )
+    eri_bb[p,q,r,s] = ( p_beta q_beta | r_beta s_beta )
+    '''
     if t2 is None: t2 = mp.t2
     nmoa, nmob = nmoa0, nmob0 = mp.nmo
     nocca, noccb = nocca0, noccb0 = mp.nocc
