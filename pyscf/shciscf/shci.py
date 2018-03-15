@@ -624,113 +624,106 @@ def writeSHCIConfFile( SHCI, nelec, Restart ):
 
 
 def D2htoDinfh(SHCI, norb, nelec):
-   from pyscf import symm
-   from pyscf.dmrgscf import dmrg_sym
+    coeffs = numpy.zeros(shape=(norb, norb)).astype(complex)
+    nRows = numpy.zeros(shape=(norb,), dtype=int)
+    rowIndex = numpy.zeros(shape=(2*norb,), dtype=int)
+    rowCoeffs = numpy.zeros(shape=(2*norb,), dtype=float)
+    orbsym1 = numpy.zeros(shape=(norb,), dtype=int)
 
-   coeffs = numpy.zeros(shape=(norb, norb)).astype(complex);
-   nRows = numpy.zeros(shape=(norb,), dtype=int)
-   rowIndex = numpy.zeros(shape=(2*norb,), dtype=int)
-   rowCoeffs = numpy.zeros(shape=(2*norb,), dtype=float)
+    orbsym = numpy.asarray(SHCI.orbsym)
+    A_irrep_ids = set([0,1,4,5])
+    E_irrep_ids = set(orbsym).difference(A_irrep_ids)
 
-   i, orbsym, ncore = 0, [0]*len(SHCI.orbsym), len(SHCI.orbsym)-norb
-
-   while i < norb:
-      symbol = symm.basis.linearmole_irrep_id2symb(SHCI.groupname, SHCI.orbsym[i+ncore])
-      if (symbol[0] == 'A'):
-         coeffs[i, i] = 1.0
-         orbsym[i] = 1
-         nRows[i] = 1
-         rowIndex[2*i] = i
-         rowCoeffs[2*i] = 1.
-         if len(symbol) == 3 and symbol[2] == 'u':
-            orbsym[i] = 2
-      else:
-         if (i == norb-1):
-            print("the orbitals dont have dinfh symmetry")
-            exit(0)
-         l = int(symbol[1])
-         orbsym[i], orbsym[i+1] = 2*l+3, -(2*l+3)
-         if ( len(symbol) == 4 and symbol[2] == 'u'):
-            orbsym[i], orbsym[i+1] = orbsym[i]+1, orbsym[i+1]-1
-         if (symbol[3] == 'x'):
-            m1, m2 = 1., -1.
-         else:
-            m1, m2 = -1., 1.
-
-
-         nRows[i] = 2
-         if m1 > 0 :
-            coeffs[i, i], coeffs[i, i+1] = ((-1)**l)*1.0/(2.0**0.5), ((-1)**l)*1.0j/(2.0**0.5)
-            rowIndex[2*i], rowIndex[2*i+1] = i, i+1
-         else:
-            coeffs[i, i+1], coeffs[i, i] = ((-1)**l)*1.0/(2.0**0.5), ((-1)**l)*1.0j/(2.0**0.5)
-            rowIndex[2*i], rowIndex[2*i+1] = i+1, i
-
-         rowCoeffs[2*i], rowCoeffs[2*i+1] = ((-1)**l)*1.0/(2.0**0.5), ((-1)**l)*1.0/(2.0**0.5)
-         i = i+1
-
-         nRows[i] = 2
-         if (m1 > 0):  #m2 is the complex number
-            rowIndex[2*i] = i-1
-            rowIndex[2*i+1] = i
-            rowCoeffs[2*i], rowCoeffs[2*i+1] = 1.0/(2.0**0.5), -1.0/(2.0**0.5)
-            coeffs[i, i-1], coeffs[i, i] = 1.0/(2.0**0.5), -1.0j/(2.0**0.5)
-         else:
+    # A1g/A2g/A1u/A2u for Dooh or A1/A2 for Coov
+    for ir in A_irrep_ids:
+        is_gerade = ir in (0, 1)
+        for i in numpy.where(orbsym == ir)[0]:
+            coeffs[i,i] = 1.0
+            nRows[i] = 1
             rowIndex[2*i] = i
-            rowIndex[2*i+1] = i-1
-            rowCoeffs[2*i], rowCoeffs[2*i+1] = 1.0/(2.0**0.5), -1.0/(2.0**0.5)
-            coeffs[i, i], coeffs[i, i-1] = 1.0/(2.0**0.5), -1.0j/(2.0**0.5)
+            rowCoeffs[2*i] = 1.
+            if is_gerade:  # A1g/A2g for Dooh or A1/A2 for Coov
+                orbsym1[i] = 1
+            else:  # A1u/A2u for Dooh
+                orbsym1[i] = 2
 
-      i = i+1
+    # See L146 of pyscf/symm/basis.py
+    Ex_irrep_ids = [ir for ir in E_irrep_ids if (ir%10) in (0,2,5,7)]
+    for ir in Ex_irrep_ids:
+        is_gerade = (ir % 10) in (0, 2)
+        if is_gerade:
+            # See L146 of basis.py
+            Ex = numpy.where(orbsym == ir)[0]
+            Ey = numpy.where(orbsym == ir+1)[0]
+        else:
+            Ex = numpy.where(orbsym == ir)[0]
+            Ey = numpy.where(orbsym == ir-1)[0]
 
-   return coeffs, nRows, rowIndex, rowCoeffs, orbsym
+        if ir % 10 in (0, 5):
+            l = (ir // 10) * 2
+        else:
+            l = (ir // 10) * 2 + 1
+
+        for ix, iy in zip(Ex, Ey):
+            nRows[ix] = nRows[iy] = 2
+            if is_gerade:
+                orbsym1[ix], orbsym1[iy] = 2*l+3, -(2*l+3)
+            else:
+                orbsym1[ix], orbsym1[iy] = 2*l+4, -(2*l+4)
+
+            rowIndex[2*ix], rowIndex[2*ix+1] = ix, iy
+            rowIndex[2*iy], rowIndex[2*iy+1] = ix, iy
+
+            coeffs[ix,ix], coeffs[ix,iy] = ((-1)**l)*1.0/(2.0**0.5), ((-1)**l)*1.0j/(2.0**0.5)
+            coeffs[iy,ix], coeffs[iy,iy] = 1.0/(2.0**0.5), -1.0j/(2.0**0.5)
+            rowCoeffs[2*ix], rowCoeffs[2*ix+1] = ((-1)**l)*1.0/(2.0**0.5), ((-1)**l)*1.0/(2.0**0.5)
+            rowCoeffs[2*iy], rowCoeffs[2*iy+1] = 1.0/(2.0**0.5), -1.0/(2.0**0.5)
+
+    return coeffs, nRows, rowIndex, rowCoeffs, orbsym1
 
 
 def DinfhtoD2h(SHCI, norb, nelec):
-   from pyscf import symm
-   from pyscf.dmrgscf import dmrg_sym
+    nRows = numpy.zeros(shape=(norb,), dtype=int)
+    rowIndex = numpy.zeros(shape=(2*norb,), dtype=int)
+    rowCoeffs = numpy.zeros(shape=(4*norb,), dtype=float)
 
-   nRows = numpy.zeros(shape=(norb,), dtype=int)
-   rowIndex = numpy.zeros(shape=(2*norb,), dtype=int)
-   rowCoeffs = numpy.zeros(shape=(4*norb,), dtype=float)
+    orbsym = numpy.asarray(SHCI.orbsym)
+    A_irrep_ids = set([0,1,4,5])
+    E_irrep_ids = set(orbsym).difference(A_irrep_ids)
 
-   i, ncore = 0, len(SHCI.orbsym)-norb
+    for ir in A_irrep_ids:
+        for i in numpy.where(orbsym == ir)[0]:
+            nRows[i] = 1
+            rowIndex[2*i] = i
+            rowCoeffs[4*i] = 1.
 
-   while i < norb:
-      symbol = symm.basis.linearmole_irrep_id2symb(SHCI.groupname, SHCI.orbsym[i+ncore])
-      if (symbol[0] == 'A'):
-         nRows[i] = 1
-         rowIndex[2*i] = i
-         rowCoeffs[4*i] = 1.
-      else:
-         l = int(symbol[1])
+    # See L146 of pyscf/symm/basis.py
+    Ex_irrep_ids = [ir for ir in E_irrep_ids if (ir%10) in (0,2,5,7)]
+    for ir in Ex_irrep_ids:
+        is_gerade = (ir % 10) in (0, 2)
+        if is_gerade:
+            # See L146 of basis.py
+            Ex = numpy.where(orbsym == ir)[0]
+            Ey = numpy.where(orbsym == ir+1)[0]
+        else:
+            Ex = numpy.where(orbsym == ir)[0]
+            Ey = numpy.where(orbsym == ir-1)[0]
 
-         if (symbol[3] == 'x'):
-            m1, m2 = 1., -1.
-         else:
-            m1, m2 = -1., 1.
+        if ir % 10 in (0, 5):
+            l = (ir // 10) * 2
+        else:
+            l = (ir // 10) * 2 + 1
 
+        for ix, iy in zip(Ex, Ey):
+            nRows[ix] = nRows[iy] = 2
 
-         nRows[i] = 2
-         rowIndex[2*i], rowIndex[2*i+1] = i, i+1
-         if m1 > 0 :
-            rowCoeffs[4*i], rowCoeffs[4*i+2] = ((-1)**l)*1.0/(2.0**0.5), 1.0/(2.0**0.5)
-         else:
-            rowCoeffs[4*i+1], rowCoeffs[4*i+3] = -((-1)**l)*1.0/(2.0**0.5), 1.0/(2.0**0.5)
+            rowIndex[2*ix], rowIndex[2*ix+1] = ix, iy
+            rowIndex[2*iy], rowIndex[2*iy+1] = ix, iy
 
-         i = i+1
+            rowCoeffs[4*ix], rowCoeffs[4*ix+2] = ((-1)**l)*1.0/(2.0**0.5), 1.0/(2.0**0.5)
+            rowCoeffs[4*iy+1], rowCoeffs[4*iy+3] = -((-1)**l)*1.0/(2.0**0.5), 1.0/(2.0**0.5)
 
-         nRows[i] = 2
-         rowIndex[2*i], rowIndex[2*i+1] = i-1, i
-         if (m1 > 0):  #m2 is the complex number
-            rowCoeffs[4*i+1], rowCoeffs[4*i+3] = -((-1)**l)*1.0/(2.0**0.5), 1.0/(2.0**0.5)
-         else:
-            rowCoeffs[4*i], rowCoeffs[4*i+2] = ((-1)**l)*1.0/(2.0**0.5), 1.0/(2.0**0.5)
-
-
-      i = i+1
-
-   return nRows, rowIndex, rowCoeffs
+    return nRows, rowIndex, rowCoeffs
 
 def writeIntegralFile(SHCI, h1eff, eri_cas, norb, nelec, ecore=0):
     if isinstance(nelec, (int, numpy.integer)):

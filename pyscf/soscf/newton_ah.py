@@ -1038,9 +1038,9 @@ def _force_Ex_Ey_degeneracy_(dr, orbsym):
     orbsym = numpy.asarray(orbsym)
 
     for ir in E_irrep_ids:
-        if ir % 2 == 0:  # Ex
+        if ir % 2 == 0:
             Ex = orbsym == ir
-            Ey = orbsym == ir + 1
+            Ey = orbsym ==(ir + 1)
             dr[Ey[:,None]&Ey] = dr[Ex[:,None]&Ex]
     return dr
 
