@@ -1251,10 +1251,11 @@ class Cell(mole.Mole):
             logger.info(self, 'pseudo = %s', self.pseudo)
             if ke_cutoff is not None:
                 logger.info(self, 'ke_cutoff = %s', ke_cutoff)
-                logger.info(self, '    = %s mesh = %d',
+                logger.info(self, '    = %s mesh (%d PWs)',
                             self.mesh, np.prod(self.mesh))
             else:
-                logger.info(self, 'mesh = %s', self.mesh)
+                logger.info(self, 'mesh = %s (%d PWs)',
+                            self.mesh, np.prod(self.mesh))
                 Ecut = pbctools.mesh_to_cutoff(self.lattice_vectors(), self.mesh)
                 logger.info(self, '    = ke_cutoff %s', Ecut[:self.dimension])
             logger.info(self, 'ew_eta = %g', self.ew_eta)

@@ -1284,6 +1284,11 @@ def _sort_by_similarity(w, v, nroots, conv, vlast, emin=None, heff=None):
     return e, c
 
 def _sort_elast(elast, conv_last, vlast, v, fresh_start):
+    '''
+    Eigenstates may be flipped during the Davidson iterations.  Reorder the
+    eigenvalues of last iteration to make them comparable to the eigenvalues
+    of the current iterations.
+    '''
     if fresh_start:
         return elast, conv_last
     head, nroots = vlast.shape
