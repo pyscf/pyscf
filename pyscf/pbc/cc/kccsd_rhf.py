@@ -264,7 +264,6 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         self._keys = self._keys.union(['max_space'])
         self.kpts = mf.kpts
         self.mo_energy = mf.mo_energy
-        self.nkpts = len(self.kpts)
         self.khelper = kpts_helper.KptsHelper(mf.cell, mf.kpts)
         self.made_ee_imds = False
         self.made_ip_imds = False
