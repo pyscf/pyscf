@@ -201,12 +201,11 @@ def get_nmo(mp, per_kpoint=False):
            (nmo, mp.frozen, mp.mo_occ))
 
     if not per_kpoint:
-        nmo = np.amax(nmo)
         # Depending on whether there are more occupied bands, we want to make sure that
         # nmo has enough room for max(nocc) + max(nvir) number of orbitals for occupied
         # and virtual space
         nocc = mp.get_nocc(per_kpoint=True)
-        nmo += np.max(nocc) - np.min(nocc)
+        nmo = np.max(nocc) + np.max(np.array(nmo) - np.array(nocc))
 
     return nmo
 
