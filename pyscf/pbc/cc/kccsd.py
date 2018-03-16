@@ -27,12 +27,13 @@ from pyscf.pbc import scf
 from pyscf.cc import gccsd
 from pyscf.pbc.mp.kmp2 import get_frozen_mask, get_nmo, get_nocc
 from pyscf.pbc.cc import kintermediates as imdk
+from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM
 from pyscf.pbc.lib import kpts_helper
 
 DEBUG = False
 
 #
-#FIXME: When linear dependence is found in KHF and handled by function
+# FIXME: When linear dependence is found in KHF and handled by function
 # pyscf.scf.addons.remove_linear_dep_, different k-point may have different
 # number of orbitals.
 #
@@ -75,7 +76,11 @@ def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6, ma
     for istep in range(max_cycle):
         t1new, t2new = cc.update_amps(t1, t2, eris, max_memory)
         normt = numpy.linalg.norm(t1new - t1) + numpy.linalg.norm(t2new - t2)
-        t1, t2 = t1new, t2new
+        if cc.iterative_damping < 1.0:
+            alpha = cc.iterative_damping
+            t1, t2 = (1-alpha)*t1 + alpha*t1new, (1-alpha)*t2 + alpha*t2new
+        else:
+            t1, t2 = t1new, t2new
         t1new = t2new = None
 
         if cc.diis:
@@ -120,10 +125,6 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     fov = fock[:, :nocc, nocc:].copy()
     foo = fock[:, :nocc, :nocc].copy()
     fvv = fock[:, nocc:, nocc:].copy()
-
-    #mo_e = eris.fock.diagonal()
-    #eia = mo_e[:nocc,None] - mo_e[None,nocc:]
-    #eijab = lib.direct_sum('ia,jb->ijab',eia,eia)
 
     tau = imdk.make_tau(cc, t2, t1, t1)
 
@@ -240,18 +241,26 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
         tmp = einsum('mb,maij->ijab', t1[kb], eris.ovoo[km, ka, ki])
         t2new[ki, kj, ka] += tmp
 
-    eia = numpy.zeros(shape=t1new.shape, dtype=t1new.dtype)
+    eia = numpy.zeros(shape=(nocc, nvir), dtype=t1new.dtype)
     for ki in range(nkpts):
-        eia[ki, :, :] = foo[ki].diagonal()[:, None] - fvv[ki].diagonal()[None, :]
-        t1new[ki] /= eia[ki]
+        eia = foo[ki].diagonal()[:, None] - fvv[ki].diagonal()[None, :]
+        # When padding the occupied/virtual arrays, some fock elements will be zero
+        idx = numpy.where(abs(eia) < LOOSE_ZERO_TOL)[0]
+        eia[idx] = LARGE_DENOM
 
-    eijab = numpy.zeros(shape=t2new.shape, dtype=t2new.dtype)
+        t1new[ki] /= eia
+
+    eijab = numpy.zeros(shape=(nocc, nocc, nvir, nvir), dtype=t2new.dtype)
     kconserv = kpts_helper.get_kconserv(cc._scf.cell, cc.kpts)
     for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
         kb = kconserv[ki, ka, kj]
-        eijab[ki, kj, ka] = (foo[ki].diagonal()[:, None, None, None] + foo[kj].diagonal()[None, :, None, None] -
-                             fvv[ka].diagonal()[None, None, :, None] - fvv[kb].diagonal()[None, None, None, :])
-        t2new[ki, kj, ka] /= eijab[ki, kj, ka]
+        eijab = (foo[ki].diagonal()[:, None, None, None] + foo[kj].diagonal()[None, :, None, None] -
+                 fvv[ka].diagonal()[None, None, :, None] - fvv[kb].diagonal()[None, None, None, :])
+        # Due to padding; see above discussion concerning t1new in update_amps()
+        idx = numpy.where(abs(eijab) < LOOSE_ZERO_TOL)[0]
+        eijab[idx] = LARGE_DENOM
+
+        t2new[ki, kj, ka] /= eijab
 
     time0 = log.timer_debug1('update t1 t2', *time0)
 
@@ -295,20 +304,21 @@ class GCCSD(gccsd.GCCSD):
         eia = numpy.zeros((nocc, nvir))
         eijab = numpy.zeros((nocc, nocc, nvir, nvir))
 
-        for ki in range(nkpts):
-            eia = foo[ki].diagonal()[:, None] - fvv[ki].diagonal()[None, :]
-            t1[ki] = fov / eia
-
         kconserv = kpts_helper.get_kconserv(self._scf.cell, self.kpts)
         for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
             kb = kconserv[ki, ka, kj]
             eijab = (foo[ki].diagonal()[:, None, None, None] + foo[kj].diagonal()[None, :, None, None] -
                      fvv[ka].diagonal()[None, None, :, None] - fvv[kb].diagonal()[None, None, None, :])
+            # Due to padding; see above discussion concerning t1new in update_amps()
+            idx = numpy.where(abs(eijab) < LOOSE_ZERO_TOL)[0]
+            eijab[idx] = LARGE_DENOM
+
             t2[ki, kj, ka] = eris_oovv[ki, kj, ka] / eijab
 
         t2 = numpy.conj(t2)
         self.emp2 = 0.25 * numpy.einsum('pqrijab,pqrijab', t2, eris_oovv).real
         self.emp2 /= nkpts
+
         logger.info(self, 'Init t2, MP2 energy = %.15g', self.emp2.real)
         logger.timer(self, 'init mp2', *time0)
         return self.emp2, t1, t2
@@ -372,35 +382,58 @@ def _make_eris_incore(cc, mo_coeff=None):
     nvir = nmo - nocc
     eris.nocc = nocc
 
-    if any(nocc != numpy.count_nonzero(cc._scf.mo_occ[k] > 0) for k in range(nkpts)):
-        raise NotImplementedError('Different occupancies found for different k-points')
+    #if any(nocc != numpy.count_nonzero(cc._scf.mo_occ[k] > 0) for k in range(nkpts)):
+    #    raise NotImplementedError('Different occupancies found for different k-points')
 
     if mo_coeff is None:
         # If mo_coeff is not canonical orbital
         # TODO does this work for k-points? changed to conjugate.
         raise NotImplementedError
         mo_coeff = cc.mo_coeff
-    moidx = get_frozen_mask(cc)
+    nao = mo_coeff[0].shape[0]
+    dtype = mo_coeff[0].dtype
 
-    kept_moidx = reduce(numpy.logical_or, moidx)  # Keep if MO included in at least one kpts
-    zeroed_moidx = [~idx[kept_moidx] for idx in moidx]  # Zero if MO not included in at least one kpt
-    moidx = [kept_moidx] * nkpts
+    moidx = get_frozen_mask(cc)
+    nocc_per_kpt = get_nocc(cc, per_kpoint=True)
+    max_nocc = numpy.max(nocc_per_kpt)
+    npadding = max_nocc - numpy.min(nocc_per_kpt)  # Number of zeros to pad moidx
+                                                   # for non-equal `nocc_per_kpt`
+
+    padded_moidx = []
+    for k in range(nkpts):
+        kpt_nocc = nocc_per_kpt[k]
+        kpt_nvir = nmo - kpt_nocc - npadding
+        kpt_padded_moidx = numpy.concatenate((numpy.ones(kpt_nocc, dtype=numpy.bool),
+                                              numpy.zeros(nmo - kpt_nocc - kpt_nvir, dtype=numpy.bool),
+                                              numpy.ones(kpt_nvir, dtype=numpy.bool)))
+        padded_moidx.append(kpt_padded_moidx)
 
     eris.mo_coeff = []
     eris.orbspin = []
 
-    # Generate the molecular orbital coefficients with the frozen
-    # orbitals masked.  Each MO is tagged with orbspin, a list of
-    # 0's and 1's that give the overall spin of each MO.
+    # Generate the molecular orbital coefficients with the frozen orbitals masked.
+    # Each MO is tagged with orbspin, a list of 0's and 1's that give the overall
+    # spin of each MO.
+    #
+    # Here we will work with two index arrays; one is for our original (small) moidx
+    # array while the next is for our new (large) padded array.
     for k in range(nkpts):
-        mo = mo_coeff[k][:, moidx[k]]
-        mo[:, zeroed_moidx[k]] *= 0.0
+        kpt_moidx = moidx[k]
+        kpt_padded_moidx = padded_moidx[k]
+
+        mo = numpy.zeros((nao, nmo), dtype=dtype)
+        mo[:, kpt_padded_moidx] = mo_coeff[k][:, kpt_moidx]
         if hasattr(mo_coeff[k], 'orbspin'):
-            orbspin = mo_coeff[k].orbspin[moidx[k]]
+            orbspin_dtype = mo_coeff[k].orbspin[kpt_moidx].dtype
+            orbspin = numpy.zeros(nmo, dtype=orbspin_dtype)
+            orbspin[kpt_padded_moidx] = mo_coeff[k].orbspin[kpt_moidx]
             mo = lib.tag_array(mo, orbspin=orbspin)
             eris.orbspin.append(orbspin)
+        # FIXME: What if the user freezes all up spin orbitals in
+        # an RHF calculation?  The number of electrons will still be
+        # even.
         else:  # guess orbital spin - assumes an RHF calculation
-            assert (numpy.count_nonzero(moidx[k]) % 2 == 0)
+            assert (numpy.count_nonzero(kpt_moidx) % 2 == 0)
             orbspin = numpy.zeros(mo.shape[1], dtype=int)
             orbspin[1::2] = 1
             mo = lib.tag_array(mo, orbspin=orbspin)
@@ -412,7 +445,6 @@ def _make_eris_incore(cc, mo_coeff=None):
     fockao = cc._scf.get_hcore() + cc._scf.get_veff(cc._scf.cell, dm)
     eris.fock = numpy.asarray([reduce(numpy.dot, (mo.T.conj(), fockao[k], mo)) for k, mo in enumerate(eris.mo_coeff)])
 
-    nao = eris.mo_coeff[0].shape[0]
     nmo = cc.nmo
     nocc = cc.nocc
     nvir = nmo - nocc
