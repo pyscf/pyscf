@@ -476,7 +476,14 @@ class SymAdaptedROHF(rohf.ROHF):
             check_irrep_nelec(mol, self.irrep_nelec, nelec)
         return hf.RHF.build(self, mol)
 
-    eig = eig
+    @lib.with_doc(eig.__doc__)
+    def eig(self, fock, s):
+        e, c = eig(self, fock, s)
+        if hasattr(fock, 'focka'):
+            mo_ea = numpy.einsum('pi,pi->i', c, fock.focka.dot(c))
+            mo_eb = numpy.einsum('pi,pi->i', c, fock.fockb.dot(c))
+            e = lib.tag_array(e, mo_ea=mo_ea, mo_eb=mo_eb)
+        return e, c
 
     def get_grad(self, mo_coeff, mo_occ, fock=None):
         g = rohf.ROHF.get_grad(self, mo_coeff, mo_occ, fock)
