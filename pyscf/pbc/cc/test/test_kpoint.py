@@ -136,8 +136,8 @@ class KnownValues(unittest.TestCase):
         cell = make_test_cell.test_cell_cu_metallic([mesh]*3)
         nk = [1,1,2]
         ehf_bench = -52.5393701339723
-        ecc1_bench = -1.163391007060518
-        ecc2_bench = -1.043082244882168
+        ecc1_bench = -1.1633910051553982
+        ecc2_bench = -1.0430822430909346
 
         # KRHF calculation
         kmf = pbchf.KRHF(cell, exxdiv=None)
@@ -145,7 +145,7 @@ class KnownValues(unittest.TestCase):
         kmf.conv_tol_grad = 1e-6  # Stricter tol needed for answer to agree with supercell
         ehf = kmf.scf()
 
-        self.assertAlmostEqual(ehf, ehf_bench, 9)
+        self.assertAlmostEqual(ehf, ehf_bench, 7)
 
         # The following calculation at full convergence gives -0.711071910294612
         # for a cell.mesh = [25, 25, 25].
@@ -154,7 +154,7 @@ class KnownValues(unittest.TestCase):
         mycc.max_cycle = 2  # Too expensive to do more!
         ecc1, t1, t2 = mycc.kernel()
 
-        self.assertAlmostEqual(ecc1, ecc1_bench, 9)
+        self.assertAlmostEqual(ecc1, ecc1_bench, 7)
 
         # The following calculation at full convergence gives -0.6440448716452378
         # for a cell.mesh = [25, 25, 25].  It is equivalent to a supercell [1, 1, 2]
@@ -164,7 +164,7 @@ class KnownValues(unittest.TestCase):
         mycc.max_cycle = 2
         ecc2, t1, t2 = mycc.kernel()
 
-        self.assertAlmostEqual(ecc2, ecc2_bench, 9)
+        self.assertAlmostEqual(ecc2, ecc2_bench, 7)
 
 if __name__ == '__main__':
     print("Full kpoint test")

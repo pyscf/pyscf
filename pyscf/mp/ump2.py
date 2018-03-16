@@ -97,9 +97,9 @@ def get_nocc(mp):
         nocca = numpy.count_nonzero(mp.mo_occ[0] > 0) - frozen
         noccb = numpy.count_nonzero(mp.mo_occ[1] > 0) - frozen
         #assert(nocca > 0 and noccb > 0)
-    else:
+    elif isinstance(frozen[0], (int, numpy.integer, list, numpy.ndarray)):
         if len(frozen) > 0 and isinstance(frozen[0], (int, numpy.integer)):
-# The same frozen orbital indices for alpha and beta orbitals
+            # The same frozen orbital indices for alpha and beta orbitals
             frozen = [frozen, frozen]
         occidxa = mp.mo_occ[0] > 0
         occidxa[list(frozen[0])] = False
@@ -107,6 +107,8 @@ def get_nocc(mp):
         occidxb[list(frozen[1])] = False
         nocca = numpy.count_nonzero(occidxa)
         noccb = numpy.count_nonzero(occidxb)
+    else:
+        raise NotImplementedError
     return nocca, noccb
 
 def get_nmo(mp):
@@ -119,8 +121,9 @@ def get_nmo(mp):
     elif isinstance(frozen, (int, numpy.integer)):
         nmoa = mp.mo_occ[0].size - frozen
         nmob = mp.mo_occ[1].size - frozen
-    elif isinstance(frozen[0], (int, numpy.integer)):
-        frozen = (frozen, frozen)
+    elif isinstance(frozen[0], (int, numpy.integer, list, numpy.ndarray)):
+        if isinstance(frozen[0], (int, numpy.integer)):
+            frozen = (frozen, frozen)
         nmoa = len(mp.mo_occ[0]) - len(set(frozen[0]))
         nmob = len(mp.mo_occ[1]) - len(set(frozen[1]))
     else:
@@ -146,11 +149,13 @@ def get_frozen_mask(mp):
     elif isinstance(frozen, (int, numpy.integer)):
         moidxa[:frozen] = False
         moidxb[:frozen] = False
-    else:
+    elif isinstance(frozen[0], (int, numpy.integer, list, numpy.ndarray)):
         if isinstance(frozen[0], (int, numpy.integer)):
             frozen = (frozen, frozen)
         moidxa[list(frozen[0])] = False
         moidxb[list(frozen[1])] = False
+    else:
+        raise NotImplementedError
     return moidxa,moidxb
 
 def make_rdm1(mp, t2=None):
