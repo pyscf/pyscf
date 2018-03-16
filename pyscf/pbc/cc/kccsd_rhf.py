@@ -31,6 +31,7 @@ import pyscf.cc.ccsd
 from pyscf.pbc import scf
 from pyscf.pbc.mp.kmp2 import get_frozen_mask, get_nocc, get_nmo
 from pyscf.pbc.cc import kintermediates_rhf as imdk
+from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM
 from pyscf.lib import linalg_helper
 from pyscf.pbc.lib import kpts_helper
 
@@ -73,7 +74,11 @@ def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
     for istep in range(max_cycle):
         t1new, t2new = cc.update_amps(t1, t2, eris)
         normt = numpy.linalg.norm(t1new-t1) + numpy.linalg.norm(t2new-t2)
-        t1, t2 = t1new, t2new
+        if cc.iterative_damping < 1.0:
+            alpha = cc.iterative_damping
+            t1, t2 = (1-alpha)*t1 + alpha*t1new, (1-alpha)*t2 + alpha*t2new
+        else:
+            t1, t2 = t1new, t2new
         t1new = t2new = None
         if cc.diis:
             t1, t2 = cc.diis(t1, t2, istep, normt, eccsd-eold, adiis)
@@ -97,10 +102,6 @@ def update_amps(cc, t1, t2, eris):
     fov = fock[:,:nocc,nocc:]
     foo = fock[:,:nocc,:nocc]
     fvv = fock[:,nocc:,nocc:]
-
-    #mo_e = eris.fock.diagonal()
-    #eia = mo_e[:nocc,None] - mo_e[None,nocc:]
-    #eijab = lib.direct_sum('ia,jb->ijab',eia,eia)
 
     kconserv = cc.khelper.kconserv
 
@@ -162,67 +163,70 @@ def update_amps(cc, t1, t2, eris):
 
     # T2 equation
     t2new = np.array(eris.oovv).conj()
-    for ki in range(nkpts):
-      for kj in range(nkpts):
-        for ka in range(nkpts):
-            # Chemist's notation for momentum conserving t2(ki,kj,ka,kb)
-            kb = kconserv[ki,ka,kj]
+    for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
+        # Chemist's notation for momentum conserving t2(ki,kj,ka,kb)
+        kb = kconserv[ki,ka,kj]
 
-            t2new_tmp = np.zeros((nocc,nocc,nvir,nvir), dtype=t2.dtype)
-            for kl in range(nkpts):
-                kk = kconserv[kj,kl,ki]
-                tau_term = t2[kk,kl,ka].copy()
-                if kl == kb and kk == ka:
-                    tau_term += einsum('ic,jd->ijcd',t1[ka],t1[kb])
-                t2new_tmp += 0.5 * einsum('klij,klab->ijab',Woooo[kk,kl,ki],tau_term)
+        t2new_tmp = np.zeros((nocc,nocc,nvir,nvir), dtype=t2.dtype)
+        for kl in range(nkpts):
+            kk = kconserv[kj,kl,ki]
+            tau_term = t2[kk,kl,ka].copy()
+            if kl == kb and kk == ka:
+                tau_term += einsum('ic,jd->ijcd',t1[ka],t1[kb])
+            t2new_tmp += 0.5 * einsum('klij,klab->ijab',Woooo[kk,kl,ki],tau_term)
 
-            for kc in range(nkpts):
-                kd = kconserv[ka,kc,kb]
-                tau_term = t2[ki,kj,kc].copy()
-                if ki == kc and kj == kd:
-                    tau_term += einsum('ic,jd->ijcd',t1[ki],t1[kj])
-                t2new_tmp += 0.5 * einsum('abcd,ijcd->ijab',Wvvvv[ka,kb,kc],tau_term)
+        for kc in range(nkpts):
+            kd = kconserv[ka,kc,kb]
+            tau_term = t2[ki,kj,kc].copy()
+            if ki == kc and kj == kd:
+                tau_term += einsum('ic,jd->ijcd',t1[ki],t1[kj])
+            t2new_tmp += 0.5 * einsum('abcd,ijcd->ijab',Wvvvv[ka,kb,kc],tau_term)
 
-            t2new_tmp += einsum('ac,ijcb->ijab',Lvv[ka],t2[ki,kj,ka])
+        t2new_tmp += einsum('ac,ijcb->ijab',Lvv[ka],t2[ki,kj,ka])
 
-            t2new_tmp += einsum('ki,kjab->ijab',-Loo[ki],t2[ki,kj,ka])
+        t2new_tmp += einsum('ki,kjab->ijab',-Loo[ki],t2[ki,kj,ka])
 
-            kc = kconserv[ka,ki,kb]
-            tmp2 = np.asarray(eris.vovv[kc,ki,kb]).transpose(3,2,1,0).conj() \
-                    - einsum('kbic,ka->abic',eris.ovov[ka,kb,ki],t1[ka])
-            t2new_tmp += einsum('abic,jc->ijab',tmp2,t1[kj])
+        kc = kconserv[ka,ki,kb]
+        tmp2 = np.asarray(eris.vovv[kc,ki,kb]).transpose(3,2,1,0).conj() \
+                - einsum('kbic,ka->abic',eris.ovov[ka,kb,ki],t1[ka])
+        t2new_tmp += einsum('abic,jc->ijab',tmp2,t1[kj])
 
-            kk = kconserv[ki,ka,kj]
-            tmp2 = np.asarray(eris.ooov[kj,ki,kk]).transpose(3,2,1,0).conj() \
-                    + einsum('akic,jc->akij',eris.voov[ka,kk,ki],t1[kj])
-            t2new_tmp -= einsum('akij,kb->ijab',tmp2,t1[kb])
+        kk = kconserv[ki,ka,kj]
+        tmp2 = np.asarray(eris.ooov[kj,ki,kk]).transpose(3,2,1,0).conj() \
+                + einsum('akic,jc->akij',eris.voov[ka,kk,ki],t1[kj])
+        t2new_tmp -= einsum('akij,kb->ijab',tmp2,t1[kb])
 
-            for kk in range(nkpts):
-                kc = kconserv[ka,ki,kk]
-                tmp_voov = 2.*Wvoov[ka,kk,ki] - Wvovo[ka,kk,kc].transpose(0,1,3,2)
-                t2new_tmp += einsum('akic,kjcb->ijab',tmp_voov,t2[kk,kj,kc])
+        for kk in range(nkpts):
+            kc = kconserv[ka,ki,kk]
+            tmp_voov = 2.*Wvoov[ka,kk,ki] - Wvovo[ka,kk,kc].transpose(0,1,3,2)
+            t2new_tmp += einsum('akic,kjcb->ijab',tmp_voov,t2[kk,kj,kc])
 
-                kc = kconserv[ka,ki,kk]
-                t2new_tmp -= einsum('akic,kjbc->ijab',Wvoov[ka,kk,ki],t2[kk,kj,kb])
+            kc = kconserv[ka,ki,kk]
+            t2new_tmp -= einsum('akic,kjbc->ijab',Wvoov[ka,kk,ki],t2[kk,kj,kb])
 
-                kc = kconserv[kk,ka,kj]
-                t2new_tmp -= einsum('bkci,kjac->ijab',Wvovo[kb,kk,kc],t2[kk,kj,ka])
+            kc = kconserv[kk,ka,kj]
+            t2new_tmp -= einsum('bkci,kjac->ijab',Wvovo[kb,kk,kc],t2[kk,kj,ka])
 
-            t2new[ki,kj,ka] += t2new_tmp
-            t2new[kj,ki,kb] += t2new_tmp.transpose(1,0,3,2)
+        t2new[ki,kj,ka] += t2new_tmp
+        t2new[kj,ki,kb] += t2new_tmp.transpose(1,0,3,2)
 
     for ki in range(nkpts):
         eia = foo[ki].diagonal()[:,None] - fvv[ki].diagonal()
+        # When padding the occupied/virtual arrays, some fock elements will be zero
+        idx = numpy.where(abs(eia) < LOOSE_ZERO_TOL)[0]
+        eia[idx] = LARGE_DENOM
         t1new[ki] /= eia
 
-    for ki in range(nkpts):
-      for kj in range(nkpts):
-        for ka in range(nkpts):
-            kb = kconserv[ki,ka,kj]
-            eia = np.diagonal(foo[ki]).reshape(-1,1) - np.diagonal(fvv[ka])
-            ejb = np.diagonal(foo[kj]).reshape(-1,1) - np.diagonal(fvv[kb])
-            eijab = eia[:,None,:,None] + ejb[:,None,:]
-            t2new[ki,kj,ka] /= eijab
+    for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
+        kb = kconserv[ki,ka,kj]
+        eia = np.diagonal(foo[ki]).reshape(-1,1) - np.diagonal(fvv[ka])
+        ejb = np.diagonal(foo[kj]).reshape(-1,1) - np.diagonal(fvv[kb])
+        eijab = eia[:,None,:,None] + ejb[:,None,:]
+        # Due to padding; see above discussion concerning t1new in update_amps()
+        idx = numpy.where(abs(eijab) < LOOSE_ZERO_TOL)[0]
+        eijab[idx] = LARGE_DENOM
+
+        t2new[ki,kj,ka] /= eijab
 
     time0 = log.timer_debug1('update t1 t2', *time0)
 
@@ -296,15 +300,17 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         eijab = numpy.zeros((nocc,nocc,nvir,nvir))
 
         kconserv = self.khelper.kconserv
-        for ki in range(nkpts):
-          for kj in range(nkpts):
-            for ka in range(nkpts):
-                kb = kconserv[ki,ka,kj]
-                eia = np.diagonal(foo[ki]).reshape(-1,1) - np.diagonal(fvv[ka])
-                ejb = np.diagonal(foo[kj]).reshape(-1,1) - np.diagonal(fvv[kb])
-                eijab = lib.direct_sum('ia,jb->ijab',eia,ejb)
-                woovv[ki,kj,ka] = (2*eris_oovv[ki,kj,ka] - eris_oovv[ki,kj,kb].transpose(0,1,3,2))
-                t2[ki,kj,ka] = eris_oovv[ki,kj,ka] / eijab
+        for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
+            kb = kconserv[ki,ka,kj]
+            eia = foo[ki].diagonal()[:, None] - fvv[ka].diagonal()[None, :]
+            ejb = foo[kj].diagonal()[:, None] - fvv[kb].diagonal()[None, :]
+            eijab = lib.direct_sum('ia,jb->ijab',eia,ejb)
+            # Due to padding; see above discussion concerning t1new in update_amps()
+            idx = numpy.where(abs(eijab) < LOOSE_ZERO_TOL)[0]
+            eijab[idx] = LARGE_DENOM
+
+            woovv[ki,kj,ka] = (2*eris_oovv[ki,kj,ka] - eris_oovv[ki,kj,kb].transpose(0,1,3,2))
+            t2[ki,kj,ka] = eris_oovv[ki,kj,ka] / eijab
 
         t2 = numpy.conj(t2)
         self.emp2 = numpy.einsum('pqrijab,pqrijab',t2,woovv).real
@@ -312,6 +318,9 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         logger.info(self, 'Init t2, MP2 energy = %.15g', self.emp2)
         logger.timer(self, 'init mp2', *time0)
         return self.emp2, t1, t2
+
+    energy = energy
+    update_amps = update_amps
 
     def kernel(self, t1=None, t2=None, eris=None, mbpt2=False):
         return self.ccsd(t1, t2, eris, mbpt2=mbpt2)
@@ -350,9 +359,6 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
     def ao2mo(self, mo_coeff=None):
         return _ERIS(self, mo_coeff)
-
-    def update_amps(self, t1, t2, eris):
-        return update_amps(self, t1, t2, eris)
 
     def ipccsd(self, nroots=1, koopmans=False, guess=None, partition=None,
                kptlist=None):
@@ -874,34 +880,53 @@ class _ERIS:#(pyscf.cc.ccsd._ChemistsERIs):
         nmo = cc.nmo
         nvir = nmo - nocc
 
-        if any(nocc != numpy.count_nonzero(cc._scf.mo_occ[k]>0)
-               for k in range(nkpts)):
-            raise NotImplementedError('Different occupancies found for different k-points')
+        #if any(nocc != numpy.count_nonzero(cc._scf.mo_occ[k]>0)
+        #       for k in range(nkpts)):
+        #    raise NotImplementedError('Different occupancies found for different k-points')
 
-        kept_moidx = reduce(numpy.logical_or, moidx)  # Keep if MO included in at least one kpts
-        zeroed_moidx = [~idx[kept_moidx] for idx in moidx]  # Zero if MO not included in at least one kpt
-        moidx = [kept_moidx] * nkpts
-
-        nao = cc.mo_coeff[0].shape[0]
-        dtype = cc.mo_coeff[0].dtype
-        self.mo_coeff = numpy.zeros((nkpts,nao,nmo), dtype=dtype)
-        self.fock = numpy.zeros((nkpts,nmo,nmo), dtype=dtype)
         if mo_coeff is None:
-            for kp in range(nkpts):
-                self.mo_coeff[kp] = cc.mo_coeff[kp][:,moidx[kp]]
-                self.mo_coeff[kp][:, zeroed_moidx[kp]] *= 0.0
-            mo_coeff = self.mo_coeff
-            for kp in range(nkpts):
-                self.fock[kp] = numpy.diag(cc.mo_energy[kp][moidx[kp]]).astype(dtype)
-        else:  # If mo_coeff is not canonical orbital
-            for kp in range(nkpts):
-                self.mo_coeff[kp] = mo_coeff[kp][:,moidx[kp]]
-                self.mo_coeff[kp][:, zeroed_moidx[kp]] *= 0.0
-            mo_coeff = self.mo_coeff
-            dm = cc._scf.make_rdm1(cc.mo_coeff, cc.mo_occ)
-            fockao = cc._scf.get_hcore() + cc._scf.get_veff(cc._scf.cell, dm)
-            for kp in range(nkpts):
-                self.fock[kp] = reduce(numpy.dot, (mo_coeff[kp].T.conj(), fockao[kp], mo_coeff[kp])).astype(dtype)
+            # If mo_coeff is not canonical orbital
+            # TODO does this work for k-points? changed to conjugate.
+            raise NotImplementedError
+            mo_coeff = cc.mo_coeff
+        nao = mo_coeff[0].shape[0]
+        dtype = mo_coeff[0].dtype
+
+        moidx = get_frozen_mask(cc)
+        nocc_per_kpt = get_nocc(cc, per_kpoint=True)
+        max_nocc = numpy.max(nocc_per_kpt)
+        npadding = max_nocc - numpy.min(nocc_per_kpt)  # Number of zeros to pad moidx
+                                                       # for non-equal `nocc_per_kpt`
+
+        # Create a 'padded' moidx array, where a padding of zeros is done
+        # to ensure there are the same number of occupied orbitals per k-point
+        padded_moidx = []
+        for k in range(nkpts):
+            kpt_nocc = nocc_per_kpt[k]
+            kpt_nvir = nmo - kpt_nocc - npadding
+            kpt_padded_moidx = numpy.concatenate((numpy.ones(kpt_nocc, dtype=numpy.bool),
+                                                  numpy.zeros(nmo - kpt_nocc - kpt_nvir, dtype=numpy.bool),
+                                                  numpy.ones(kpt_nvir, dtype=numpy.bool)))
+            padded_moidx.append(kpt_padded_moidx)
+
+
+        mo_coeff = []
+        # Here we will work with two index arrays; one is for our original (small) moidx
+        # array while the next is for our new (large) padded array.
+        for k in range(nkpts):
+            kpt_moidx = moidx[k]
+            kpt_padded_moidx = padded_moidx[k]
+
+            mo = numpy.zeros((nao, nmo), dtype=dtype)
+            mo[:, kpt_padded_moidx] = cc.mo_coeff[k][:, kpt_moidx]
+            mo_coeff.append(mo)
+
+        print 'occ', cc.mo_occ
+        print 'mo_coeff', cc.mo_coeff[0].shape
+        # Re-make our fock MO matrix elements from density and fock AO
+        dm = cc._scf.make_rdm1(cc.mo_coeff, cc.mo_occ)
+        fockao = cc._scf.get_hcore() + cc._scf.get_veff(cc._scf.cell, dm)
+        self.fock = numpy.asarray([reduce(numpy.dot, (mo_coeff[k].T.conj(), fockao[k], mo_coeff[k])) for k, mo in enumerate(mo_coeff)])
 
         for kp in range(nkpts):
             mo_e = self.fock[kp].diagonal()
