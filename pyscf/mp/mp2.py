@@ -85,16 +85,9 @@ def make_rdm1_ao(mp, mo_energy=None, mo_coeff=None, eris=None, verbose=logger.NO
 def make_rdm1(mp, t2=None, eris=None, verbose=logger.NOTE):
     '''
     Spin-traced one-particle density matrix in MO basis (the occupied-virtual
-    blocks due to the orbital response contribution are not included).
+    blocks from the orbital response contribution are not included).
 
     dm1[p,q] = <p_alpha^\dagger q_alpha> + <p_beta^\dagger q_beta>
-
-    One-particle density matrix should be contracted to integrals with the
-    pattern below to compute energy
-
-    E = numpy.einsum('pq,qp', h1, dm1)
-
-    where h1[p,q] = <p| h1 |q>
     '''
     from pyscf.cc import ccsd_rdm
     doo, dvv = _gamma1_intermediates(mp, t2, eris)
@@ -139,16 +132,6 @@ def make_rdm2(mp, t2=None, eris=None, verbose=logger.NOTE):
     Spin-traced two-particle density matrix in MO basis
 
     dm2[p,q,r,s] = \sum_{sigma,tau} <p_sigma^\dagger r_tau^\dagger s_tau q_sigma>
-
-    where sigma,tau are spin lables. p,q correspond to one particle and r,s
-    correspond to another paritcile
-
-    Two-particle density matrix should be contracted to integrals with the
-    pattern below to compute energy
-
-    E = numpy.einsum('pqrs,qpsr', eri, dm2)
-
-    where eri[p,q,r,s] = (pq|rs) = \int p^*(r1) q(r1) 1/r12 r^*(r2) s(r2) dr1 dr2
     '''
     if t2 is None: t2 = mp.t2
     nmo = nmo0 = mp.nmo

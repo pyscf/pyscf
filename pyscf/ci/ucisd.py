@@ -428,16 +428,8 @@ def make_rdm1(myci, civec=None, nmo=None, nocc=None):
     occupied-virtual blocks due to the orbital response contribution are not
     included).
 
-    dm1a[p,q] = <p_alpha^\dagger q_alpha>
-    dm1b[p,q] = <p_beta^\dagger q_beta>
-
-    One-particle density matrix should be contracted to integrals with the
-    pattern below to compute energy
-
-    E = numpy.einsum('pq,qp', h1a, dm1a)
-    E+= numpy.einsum('pq,qp', h1b, dm1b)
-
-    where h1a[p,q] = <p_alpha| h1 |q_alpha>,  h1b[p,q] = <p_beta| h1 |q_beta>
+    dm1a[p,q] = <q_alpha^\dagger p_alpha>
+    dm1b[p,q] = <q_beta^\dagger p_beta>
     '''
     if civec is None: civec = myci.ci
     if nmo is None: nmo = myci.nmo
@@ -449,18 +441,18 @@ def make_rdm2(myci, civec=None, nmo=None, nocc=None):
     r'''
     Two-particle spin density matrices dm2aa, dm2ab, dm2bb in MO basis
 
-    dm2aa[p,q,r,s] = <p_alpha^\dagger r_alpha^\dagger s_alpha q_alpha>
-    dm2ab[p,q,r,s] = <p_alpha^\dagger r_beta^\dagger s_beta q_alpha>
-    dm2bb[p,q,r,s] = <p_beta^\dagger r_beta^\dagger s_beta q_beta>
-    (p,q correspond to one particle and r,s correspond to another paritcile)
+    dm2aa[p,q,r,s] = <q_alpha^\dagger s_alpha^\dagger r_alpha p_alpha>
+    dm2ab[p,q,r,s] = <q_alpha^\dagger s_beta^\dagger r_beta p_alpha>
+    dm2bb[p,q,r,s] = <q_beta^\dagger s_beta^\dagger r_beta p_beta>
 
+    (p,q correspond to one particle and r,s correspond to another paritcile)
     Two-particle density matrix should be contracted to integrals with the
     pattern below to compute energy
 
-    E = numpy.einsum('pqrs,qpsr', eri_aa, dm2_aa)
-    E+= numpy.einsum('pqrs,qpsr', eri_ab, dm2_ab)
-    E+= numpy.einsum('pqrs,srqp', eri_ba, dm2_ab)
-    E+= numpy.einsum('pqrs,qpsr', eri_bb, dm2_bb)
+    E = numpy.einsum('pqrs,pqrs', eri_aa, dm2_aa)
+    E+= numpy.einsum('pqrs,pqrs', eri_ab, dm2_ab)
+    E+= numpy.einsum('pqrs,rspq', eri_ba, dm2_ab)
+    E+= numpy.einsum('pqrs,pqrs', eri_bb, dm2_bb)
 
     where eri_aa[p,q,r,s] = (p_alpha q_alpha | r_alpha s_alpha )
     eri_ab[p,q,r,s] = ( p_alpha q_alpha | r_beta s_beta )

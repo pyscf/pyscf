@@ -164,7 +164,7 @@ def trans_rdm1(cibra, ciket, norb, nelec, link_index=None):
     rdm1a, rdm1b = trans_rdm1s(cibra, ciket, norb, nelec, link_index)
     return rdm1a + rdm1b
 
-# dm_pq,rs = <I|p^+ q r^+ s|J>
+# dm[p,q,r,s] = <I|p^+ q r^+ s|J>
 @lib.with_doc(direct_spin1.trans_rdm12.__doc__)
 def trans_rdm12(cibra, ciket, norb, nelec, link_index=None, reorder=True):
     dm1, dm2 = rdm.make_rdm12('FCItdm12kern_sf', cibra, ciket,
