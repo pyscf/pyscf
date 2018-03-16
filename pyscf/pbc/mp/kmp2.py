@@ -80,7 +80,7 @@ def _frozen_sanity_check(frozen, mo_occ, kpt_idx):
     freeze all the occupied orbitals.
 
     Args:
-        frozen (:obj:`ndarray` of int): The orbital indices that will be frozen.
+        frozen (array_like of int): The orbital indices that will be frozen.
         mo_occ (:obj:`ndarray` of int): The occupuation number for each orbital
             resulting from a mean-field-like calculation.
         kpt_idx (int): The k-point that `mo_occ` and `frozen` belong to.
@@ -93,8 +93,8 @@ def _frozen_sanity_check(frozen, mo_occ, kpt_idx):
         raise RuntimeError('Frozen orbital list contains duplicates!\n\nkpt_idx %s\n'
                            'frozen %s' % (kpt_idx, frozen))
 
-    max_occ_idx = np.max(np.where(mo_occ) > 0)
-    if any(frozen > max_occ_idx):
+    max_occ_idx = np.max(np.where(mo_occ > 0))
+    if any(np.array(frozen) > max_occ_idx):
         raise RuntimeError('Freezing virtual orbitals is not allowed\n\n'
                            'kpt_idx %s\nfrozen %s\nmo_occ %s' % (kpt_idx, frozen, mo_occ))
 
@@ -116,8 +116,7 @@ def get_nocc(mp, per_kpoint=False):
             orbitals at each k-point.  False gives the max of this list.
 
     Returns:
-        nocc (int, list of int):
-            Number of occupied orbitals. For return type, see description of arg
+        nocc (int, list of int): Number of occupied orbitals. For return type, see description of arg
             `per_kpoint`.
 
     '''
@@ -174,8 +173,8 @@ def get_nmo(mp, per_kpoint=False):
             For a description of False, see Note.
 
     Returns:
-        nmo (int, list of int):
-            Number of orbitals. For return type, see description of arg `per_kpoint`.
+        nmo (int, list of int): Number of orbitals. For return type, see description of arg
+            `per_kpoint`.
 
     '''
     if mp._nmo is not None:
@@ -194,12 +193,7 @@ def get_nmo(mp, per_kpoint=False):
                                '(length = %d)' % (mp.nkpts, mp.frozen, nkpts))
         [_frozen_sanity_check(fro, mo_occ, ikpt) for ikpt, fro, mo_occ in zip(range(nkpts), mp.frozen, mp.mo_occ)]
 
-        if per_kpoint:
-            nmo = [len(mp.mo_occ[ikpt]) - len(mp.frozen[ikpt]) for ikpt in range(nkpts)]
-        else:
-            # Find where MO is frozen at every k-point and remove
-            nfrozen = reduce(set.intersection, [set(x) for x in mp.frozen])
-            nmo = [len(mp.mo_occ[ikpt]) - len(nfrozen) for ikpt in range(nkpts)]
+        nmo = [len(mp.mo_occ[ikpt]) - len(mp.frozen[ikpt]) for ikpt in range(nkpts)]
     else:
         raise NotImplementedError
 
@@ -207,7 +201,7 @@ def get_nmo(mp, per_kpoint=False):
            (nmo, mp.frozen, mp.mo_occ))
 
     if not per_kpoint:
-        nmo = nmo[0]  # If len(mo_occ) is the same at every k-point, then nmo is as well
+        nmo = np.amax(nmo)
         # Depending on whether there are more occupied bands, we want to make sure that
         # nmo has enough room for max(nocc) + max(nvir) number of orbitals for occupied
         # and virtual space
@@ -218,6 +212,18 @@ def get_nmo(mp, per_kpoint=False):
 
 
 def get_frozen_mask(mp):
+    '''Boolean mask for orbitals in k-point post-HF method.
+
+    Creates a boolean mask to remove frozen orbitals and keep other orbitals for post-HF
+    calculations.
+
+    Args:
+        mp (:class:`MP2`): An instantiation of an MP2, SCF, or other mean-field object.
+
+    Returns:
+        moidx (list of :obj:`ndarray` of `np.bool`): Boolean mask of orbitals to include.
+
+    '''
     moidx = [np.ones(x.size, dtype=np.bool) for x in mp.mo_occ]
     if isinstance(mp.frozen, (int, np.integer)):
         for idx in moidx:
@@ -227,12 +233,12 @@ def get_frozen_mask(mp):
         for idx in moidx:
             idx[frozen] = False
     elif isinstance(mp.frozen[0], (list, np.ndarray)):
-        [_frozen_sanity_check(fro, mo_occ, ikpt) for fro, mo_occ in enumerate(zip(mp.frozen, mp.mo_occ))]
         nkpts = len(mp.frozen)
         if nkpts != mp.nkpts:
             raise RuntimeError('Frozen list has a different number of k-points (length) than passed in mean-field/'
                                'correlated calculation.  \n\nCalculation nkpts = %d, frozen list = %s '
                                '(length = %d)' % (mp.nkpts, mp.frozen, nkpts))
+        [_frozen_sanity_check(fro, mo_occ, ikpt) for ikpt, fro, mo_occ in zip(range(nkpts), mp.frozen, mp.mo_occ)]
         for ikpt, kpt_occ in enumerate(moidx):
             kpt_occ[mp.frozen[ikpt]] = False
     else:
