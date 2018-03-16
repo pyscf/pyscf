@@ -893,22 +893,17 @@ class _ERIS:#(pyscf.cc.ccsd._ChemistsERIs):
         dtype = mo_coeff[0].dtype
 
         moidx = get_frozen_mask(cc)
-        nocc_per_kpt = get_nocc(cc, per_kpoint=True)
-        max_nocc = numpy.max(nocc_per_kpt)
-        npadding = max_nocc - numpy.min(nocc_per_kpt)  # Number of zeros to pad moidx
-                                                       # for non-equal `nocc_per_kpt`
+        nocc_per_kpt = numpy.asarray(get_nocc(cc, per_kpoint=True))
+        nmo_per_kpt  = numpy.asarray(get_nmo(cc, per_kpoint=True))
 
-        # Create a 'padded' moidx array, where a padding of zeros is done
-        # to ensure there are the same number of occupied orbitals per k-point
         padded_moidx = []
         for k in range(nkpts):
             kpt_nocc = nocc_per_kpt[k]
-            kpt_nvir = nmo - kpt_nocc - npadding
+            kpt_nvir = nmo_per_kpt[k] - kpt_nocc
             kpt_padded_moidx = numpy.concatenate((numpy.ones(kpt_nocc, dtype=numpy.bool),
                                                   numpy.zeros(nmo - kpt_nocc - kpt_nvir, dtype=numpy.bool),
                                                   numpy.ones(kpt_nvir, dtype=numpy.bool)))
             padded_moidx.append(kpt_padded_moidx)
-
 
         mo_coeff = []
         # Here we will work with two index arrays; one is for our original (small) moidx
@@ -921,8 +916,6 @@ class _ERIS:#(pyscf.cc.ccsd._ChemistsERIs):
             mo[:, kpt_padded_moidx] = cc.mo_coeff[k][:, kpt_moidx]
             mo_coeff.append(mo)
 
-        print 'occ', cc.mo_occ
-        print 'mo_coeff', cc.mo_coeff[0].shape
         # Re-make our fock MO matrix elements from density and fock AO
         dm = cc._scf.make_rdm1(cc.mo_coeff, cc.mo_occ)
         fockao = cc._scf.get_hcore() + cc._scf.get_veff(cc._scf.cell, dm)
