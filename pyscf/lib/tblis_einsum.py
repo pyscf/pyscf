@@ -72,8 +72,8 @@ def _contract(subscripts, *tensors, **kwargs):
         return numpy_einsum(subscripts, a, b)
 
     c_dtype = kwargs.get('dtype', numpy.result_type(a, b))
-    if (not (numpy.issubdtype(c_dtype, numpy.float) or
-             numpy.issubdtype(c_dtype, numpy.complex))):
+    if (not (numpy.issubdtype(c_dtype, numpy.floating) or
+             numpy.issubdtype(c_dtype, numpy.complexfloating))):
         return numpy_einsum(subscripts, a, b)
 
     sub_idx = re.split(',|->', subscripts)
