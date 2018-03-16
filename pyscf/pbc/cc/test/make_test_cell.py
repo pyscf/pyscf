@@ -110,3 +110,29 @@ def test_cell_n3(mesh=[9]*3):
     cell.output = '/dev/null'
     cell.build()
     return cell
+
+def test_cell_cu_metallic(mesh=[9]*3):
+    """
+    Copper unit cell w/ special basis giving non-equal number of occupied orbitals per k-point
+    """
+    cell = pbcgto.Cell()
+    cell.pseudo = 'gth-pade'
+    cell.atom='''
+    Cu 0.        , 0.        , 0.
+    Cu 1.6993361, 1.6993361, 1.6993361
+    '''
+    cell.a = '''
+    0.        , 3.39867219, 3.39867219
+    3.39867219, 0.        , 3.39867219
+    3.39867219, 3.39867219, 0.
+    '''
+    cell.basis = { 'Cu': [[0, (0.8, 1.0)],
+                          [1, (1.0, 1.0)],
+                          [2, (1.2, 1.0)]] }
+    cell.unit = 'B'
+    cell.mesh = mesh
+    cell.verbose = 9
+    cell.incore_anyway = True
+    cell.output = '/dev/null'
+    cell.build()
+    return cell

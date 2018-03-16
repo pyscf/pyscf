@@ -111,6 +111,61 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(ehf, ehf_bench, 9)
         self.assertAlmostEqual(ecc, ecc_bench, 9)
 
+    def test_frozen_n3(self):
+        mesh = 5
+        cell = make_test_cell.test_cell_n3([mesh]*3)
+        nk = (1, 1, 3)
+        ehf_bench = -9.15349763559837
+        ecc_bench = -0.06713556649654
+
+        abs_kpts = cell.make_kpts(nk, with_gamma_point=True)
+
+        # RHF calculation
+        kmf = pbchf.KRHF(cell, abs_kpts, exxdiv=None)
+        ehf = kmf.scf()
+
+        # KGCCSD calculation, equivalent to running supercell
+        # calculation with frozen=[0, 1, 2] (if done with larger mesh)
+        cc = pyscf.pbc.cc.kccsd.CCSD(kmf, frozen=[[0,1],[],[0]])
+        ecc, t1, t2 = cc.kernel()
+        self.assertAlmostEqual(ehf, ehf_bench, 9)
+        self.assertAlmostEqual(ecc, ecc_bench, 9)
+
+    def test_cu_metallic(self):
+        mesh = 7
+        cell = make_test_cell.test_cell_cu_metallic([mesh]*3)
+        nk = [1,1,2]
+        ehf_bench = -52.5393701339723
+        ecc1_bench = -1.163391007060518
+        ecc2_bench = -1.043082244882168
+
+        # KRHF calculation
+        kmf = pbchf.KRHF(cell, exxdiv=None)
+        kmf.kpts = cell.make_kpts(nk, scaled_center=[0.0, 0.0, 0.0], wrap_around=True)
+        kmf.conv_tol_grad = 1e-6  # Stricter tol needed for answer to agree with supercell
+        ehf = kmf.scf()
+
+        self.assertAlmostEqual(ehf, ehf_bench, 9)
+
+        # The following calculation at full convergence gives -0.711071910294612
+        # for a cell.mesh = [25, 25, 25].
+        mycc = pyscf.pbc.cc.KGCCSD(kmf, frozen=0)
+        mycc.iterative_damping = 0.04
+        mycc.max_cycle = 2  # Too expensive to do more!
+        ecc1, t1, t2 = mycc.kernel()
+
+        self.assertAlmostEqual(ecc1, ecc1_bench, 9)
+
+        # The following calculation at full convergence gives -0.6440448716452378
+        # for a cell.mesh = [25, 25, 25].  It is equivalent to a supercell [1, 1, 2]
+        # calculation with frozen = [0, 3].
+        mycc = pyscf.pbc.cc.KGCCSD(kmf, frozen=[[2, 3], [0, 1]])
+        mycc.iterative_damping = 0.04
+        mycc.max_cycle = 2
+        ecc2, t1, t2 = mycc.kernel()
+
+        self.assertAlmostEqual(ecc2, ecc2_bench, 9)
+
 if __name__ == '__main__':
     print("Full kpoint test")
     unittest.main()
