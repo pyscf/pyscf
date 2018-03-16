@@ -399,6 +399,8 @@ def _make_eris_incore(cc, mo_coeff=None):
     npadding = max_nocc - numpy.min(nocc_per_kpt)  # Number of zeros to pad moidx
                                                    # for non-equal `nocc_per_kpt`
 
+    # Create a 'padded' moidx array, where a padding of zeros is done
+    # to ensure there are the same number of occupied orbitals per k-point
     padded_moidx = []
     for k in range(nkpts):
         kpt_nocc = nocc_per_kpt[k]
@@ -410,7 +412,6 @@ def _make_eris_incore(cc, mo_coeff=None):
 
     eris.mo_coeff = []
     eris.orbspin = []
-
     # Generate the molecular orbital coefficients with the frozen orbitals masked.
     # Each MO is tagged with orbspin, a list of 0's and 1's that give the overall
     # spin of each MO.
@@ -444,12 +445,6 @@ def _make_eris_incore(cc, mo_coeff=None):
     dm = cc._scf.make_rdm1(cc.mo_coeff, cc.mo_occ)
     fockao = cc._scf.get_hcore() + cc._scf.get_veff(cc._scf.cell, dm)
     eris.fock = numpy.asarray([reduce(numpy.dot, (mo.T.conj(), fockao[k], mo)) for k, mo in enumerate(eris.mo_coeff)])
-
-    nmo = cc.nmo
-    nocc = cc.nocc
-    nvir = nmo - nocc
-
-    eris.nocc = nocc
 
     kconserv = kpts_helper.get_kconserv(cc._scf.cell, cc.kpts)
     # The bottom nao//2 coefficients are down (up) spin while the top are up (down).
