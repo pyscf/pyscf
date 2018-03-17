@@ -36,5 +36,6 @@ GHF = ghf.GHF
 
 KRHF = krhf.KRHF
 KUHF = kuhf.KUHF
+KGHF = kghf.KGHF
 
 newton = newton_ah.newton

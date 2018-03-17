@@ -34,39 +34,17 @@ import pyscf.pbc.cc.kccsd
 import make_test_cell
 
 def run_kcell(cell, n, nk):
-    #############################################
-    # Do a k-point calculation                  #
-    #############################################
     abs_kpts = cell.make_kpts(nk, wrap_around=True)
 
-    #############################################
-    # Running HF                                #
-    #############################################
-#    print ""
-#    print "*********************************"
-#    print "STARTING HF                      "
-#    print "*********************************"
-#    print ""
+    # RHF calculation
     kmf = pbchf.KRHF(cell, abs_kpts, exxdiv=None)
     kmf.conv_tol = 1e-14
-    #kmf.verbose = 7
     ekpt = kmf.scf()
-#    print "scf energy (per unit cell) = %.17g" % ekpt
 
-    #############################################
-    # Running CCSD                              #
-    #############################################
-#    print ""
-#    print "*********************************"
-#    print "STARTING CCSD                    "
-#    print "*********************************"
-#    print ""
-
+    # RCCSD calculation
     cc = pyscf.pbc.cc.kccsd.CCSD(pbchf.addons.convert_to_ghf(kmf))
-    cc.conv_tol=1e-8
-    #cc.verbose = 7
+    cc.conv_tol = 1e-8
     ecc, t1, t2 = cc.kernel()
-#    print "cc energy (per unit cell) = %.17g" % ecc
     return ekpt, ecc
 
 class KnownValues(unittest.TestCase):
@@ -112,6 +90,81 @@ class KnownValues(unittest.TestCase):
         escf, ecc = run_kcell(cell,n,nk)
         self.assertAlmostEqual(escf,hf_311, 9)
         self.assertAlmostEqual(ecc, cc_311, 6)
+
+    def test_frozen_n3(self):
+        mesh = 5
+        cell = make_test_cell.test_cell_n3([mesh]*3)
+        nk = (1, 1, 3)
+        ehf_bench = -9.15349763559837
+        ecc_bench = -0.06713556649654
+
+        abs_kpts = cell.make_kpts(nk, with_gamma_point=True)
+
+        # RHF calculation
+        kmf = pbchf.KRHF(cell, abs_kpts, exxdiv=None)
+        ehf = kmf.scf()
+
+        # KGCCSD calculation, equivalent to running supercell
+        # calculation with frozen=[0,1,2] (if done with larger mesh)
+        cc = pyscf.pbc.cc.kccsd.CCSD(kmf, frozen=[[0,1],[],[0]])
+        ecc, t1, t2 = cc.kernel()
+        self.assertAlmostEqual(ehf, ehf_bench, 9)
+        self.assertAlmostEqual(ecc, ecc_bench, 9)
+
+    def test_frozen_n3(self):
+        mesh = 5
+        cell = make_test_cell.test_cell_n3([mesh]*3)
+        nk = (1, 1, 3)
+        ehf_bench = -9.15349763559837
+        ecc_bench = -0.06713556649654
+
+        abs_kpts = cell.make_kpts(nk, with_gamma_point=True)
+
+        # RHF calculation
+        kmf = pbchf.KRHF(cell, abs_kpts, exxdiv=None)
+        ehf = kmf.scf()
+
+        # KGCCSD calculation, equivalent to running supercell
+        # calculation with frozen=[0, 1, 2] (if done with larger mesh)
+        cc = pyscf.pbc.cc.kccsd.CCSD(kmf, frozen=[[0,1],[],[0]])
+        ecc, t1, t2 = cc.kernel()
+        self.assertAlmostEqual(ehf, ehf_bench, 9)
+        self.assertAlmostEqual(ecc, ecc_bench, 9)
+
+    def test_cu_metallic(self):
+        mesh = 7
+        cell = make_test_cell.test_cell_cu_metallic([mesh]*3)
+        nk = [1,1,2]
+        ehf_bench = -52.5393701339723
+        ecc1_bench = -1.1633910051553982
+        ecc2_bench = -1.0430822430909346
+
+        # KRHF calculation
+        kmf = pbchf.KRHF(cell, exxdiv=None)
+        kmf.kpts = cell.make_kpts(nk, scaled_center=[0.0, 0.0, 0.0], wrap_around=True)
+        kmf.conv_tol_grad = 1e-6  # Stricter tol needed for answer to agree with supercell
+        ehf = kmf.scf()
+
+        self.assertAlmostEqual(ehf, ehf_bench, 7)
+
+        # The following calculation at full convergence gives -0.711071910294612
+        # for a cell.mesh = [25, 25, 25].
+        mycc = pyscf.pbc.cc.KGCCSD(kmf, frozen=0)
+        mycc.iterative_damping = 0.04
+        mycc.max_cycle = 2  # Too expensive to do more!
+        ecc1, t1, t2 = mycc.kernel()
+
+        self.assertAlmostEqual(ecc1, ecc1_bench, 7)
+
+        # The following calculation at full convergence gives -0.6440448716452378
+        # for a cell.mesh = [25, 25, 25].  It is equivalent to a supercell [1, 1, 2]
+        # calculation with frozen = [0, 3].
+        mycc = pyscf.pbc.cc.KGCCSD(kmf, frozen=[[2, 3], [0, 1]])
+        mycc.iterative_damping = 0.04
+        mycc.max_cycle = 2
+        ecc2, t1, t2 = mycc.kernel()
+
+        self.assertAlmostEqual(ecc2, ecc2_bench, 7)
 
 if __name__ == '__main__':
     print("Full kpoint test")

@@ -210,10 +210,14 @@ def get_nocc(mp):
         nocc = numpy.count_nonzero(mp.mo_occ > 0) - mp.frozen
         assert(nocc > 0)
         return nocc
-    else:
+    elif isinstance(mp.frozen[0], (int, numpy.integer)):
         occ_idx = mp.mo_occ > 0
         occ_idx[list(mp.frozen)] = False
-        return numpy.count_nonzero(occ_idx)
+        nocc = numpy.count_nonzero(occ_idx)
+        assert(nocc > 0)
+        return nocc
+    else:
+        raise NotImplementedError
 
 def get_nmo(mp):
     if mp._nmo is not None:
@@ -222,12 +226,14 @@ def get_nmo(mp):
         return len(mp.mo_occ)
     elif isinstance(mp.frozen, (int, numpy.integer)):
         return len(mp.mo_occ) - mp.frozen
+    elif isinstance(mp.frozen[0], (int, numpy.integer)):
+        return len(mp.mo_occ) - len(set(mp.frozen))
     else:
-        return len(mp.mo_occ) - len(mp.frozen)
+        raise NotImplementedError
 
 def get_frozen_mask(mp):
     '''Get boolean mask for the restricted reference orbitals.
-    
+
     In the returned boolean (mask) array of frozen orbital indices, the
     element is False if it corresonds to the frozen orbital.
     '''
@@ -240,6 +246,8 @@ def get_frozen_mask(mp):
         moidx[:mp.frozen] = False
     elif len(mp.frozen) > 0:
         moidx[list(mp.frozen)] = False
+    else:
+        raise NotImplementedError
     return moidx
 
 
