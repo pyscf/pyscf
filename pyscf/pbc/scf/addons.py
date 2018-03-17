@@ -249,6 +249,12 @@ def convert_to_uhf(mf, out=None):
         if isinstance(mf, (scf.uhf.UHF, scf.kuhf.KUHF)):
             return copy.copy(mf)
         else:
+            unknown_cls = [scf.kghf.KGHF]
+            for i, cls in enumerate(mf.__class__.__mro__):
+                if cls in unknown_cls:
+                    raise NotImplementedError(
+                        "No conversion from %s to uhf object" % cls)
+
             known_cls = {dft.krks.KRKS : dft.kuks.KUKS,
                          scf.khf.KRHF  : scf.kuhf.KUHF,
                          dft.rks.RKS   : dft.uks.UKS  ,
@@ -271,6 +277,12 @@ def convert_to_rhf(mf, out=None):
         if isinstance(mf, (scf.hf.RHF, scf.khf.KRHF)):
             return copy.copy(mf)
         else:
+            unknown_cls = [scf.kghf.KGHF]
+            for i, cls in enumerate(mf.__class__.__mro__):
+                if cls in unknown_cls:
+                    raise NotImplementedError(
+                        "No conversion from %s to rhf object" % cls)
+
             known_cls = {dft.kuks.KUKS : dft.krks.KRKS,
                          scf.kuhf.KUHF : scf.khf.KRHF ,
                          dft.uks.UKS   : dft.rks.RKS  ,
@@ -380,6 +392,6 @@ if __name__ == '__main__':
     cell.build()
     nks = [2,1,1]
     mf = pscf.KUHF(cell, cell.make_kpts(nks))
-    mf = smearing_(mf, .1) # -5.86052594663696 
+    mf = smearing_(mf, .1) # -5.86052594663696
     #mf = smearing_(mf, .1, method='gauss')
     mf.kernel()

@@ -17,7 +17,6 @@
 #          Junzi Liu <latrix1247@gmail.com>
 #
 
-
 import copy
 from functools import reduce
 import numpy
@@ -234,7 +233,7 @@ def mom_occ_(mf, occorb, setocc):
         coef_occ_b = occorb[1][:, setocc[1]>0]
     elif isinstance(mf, rohf.ROHF):
         if mf.mol.spin != int(numpy.sum(setocc[0]) - numpy.sum(setocc[1])) :
-            raise ValueError('Wrong occupation setting for restricted open-shell calculation.') 
+            raise ValueError('Wrong occupation setting for restricted open-shell calculation.')
         coef_occ_a = occorb[:, setocc[0]>0]
         coef_occ_b = occorb[:, setocc[1]>0]
     else:
@@ -247,7 +246,7 @@ def mom_occ_(mf, occorb, setocc):
         mo_occ = numpy.zeros_like(setocc)
         nocc_a = int(numpy.sum(setocc[0]))
         nocc_b = int(numpy.sum(setocc[1]))
-        s_a = reduce(numpy.dot, (coef_occ_a.T, mf.get_ovlp(), mo_coeff[0])) 
+        s_a = reduce(numpy.dot, (coef_occ_a.T, mf.get_ovlp(), mo_coeff[0]))
         s_b = reduce(numpy.dot, (coef_occ_b.T, mf.get_ovlp(), mo_coeff[1]))
         #choose a subset of mo_coeff, which maximizes <old|now>
         idx_a = numpy.argsort(numpy.einsum('ij,ij->j', s_a, s_a))
@@ -399,12 +398,21 @@ def convert_to_uhf(mf, out=None, remove_df=False):
 
 def _object_without_soscf(mf, known_class, remove_df=False):
     sub_classes = []
+    obj = None
     for i, cls in enumerate(mf.__class__.__mro__):
         if cls in known_class:
             obj = known_class[cls](mf.mol)
             break
         else:
             sub_classes.append(cls)
+
+    if obj is None:
+        raise NotImplementedError(
+            "Incompatible object types. Mean-field `mf` class not found in `known_class` "
+            "type. \nThis can happen when running a (RHF/UHF/GHF/etc.) mean-field calculation "
+            "and having no known \nconversion to a (RHF/UHF/GHF/etc.) correlated "
+            "calculation. Change the correlated calculation between unrestricted/restricted? "
+            "\n\nmf = '%s'\n\nknown_class = '%s'" % (mf.__class__.__mro__, known_class))
 
 # Mimic the initialization procedure to restore the Hamiltonian
     for cls in reversed(sub_classes):
@@ -515,7 +523,7 @@ def convert_to_ghf(mf, out=None, remove_df=False):
 
     def update_mo_(mf, mf1):
         if mf.mo_energy is not None:
-            if isinstance(mf, scf.hf.RHF):
+            if isinstance(mf, scf.hf.RHF): # RHF
                 nao, nmo = mf.mo_coeff.shape
                 orbspin = get_ghf_orbspin(mf.mo_energy, mf.mo_occ, True)
 
@@ -591,7 +599,7 @@ def get_ghf_orbspin(mo_energy, mo_occ, is_rhf=None):
 
     For RHF orbitals, the orbspin corresponds to first occupied orbitals then
     unoccupied orbitals.  In the occupied orbital space, if degenerated, first
-    alpha then beta, last the (open-shell) singly occupied (alpha) orbitals In
+    alpha then beta, last the (open-shell) singly occupied (alpha) orbitals. In
     the unoccupied orbital space, first the (open-shell) unoccupied (beta)
     orbitals if applicable, then alpha and beta orbitals
 
