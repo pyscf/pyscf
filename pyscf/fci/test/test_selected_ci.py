@@ -25,8 +25,8 @@ from pyscf import lib
 from pyscf.fci import cistring
 from pyscf.fci import direct_spin1
 from pyscf.fci import direct_spin1_symm
-from pyscf.fci import select_ci
-from pyscf.fci import select_ci_symm
+from pyscf.fci import selected_ci
+from pyscf.fci import selected_ci_symm
 from pyscf.fci import spin_op
 
 norb = 6
@@ -35,7 +35,7 @@ na = cistring.num_strings(norb, nelec//2)
 ci_strs = [[0b111, 0b1011, 0b10101], [0b111, 0b1011, 0b1101]]
 numpy.random.seed(12)
 ci_coeff = (numpy.random.random((len(ci_strs[0]),len(ci_strs[1])))-.2)**3
-civec_strs = select_ci._as_SCIvector(ci_coeff, ci_strs)
+civec_strs = selected_ci._as_SCIvector(ci_coeff, ci_strs)
 nn = norb*(norb+1)//2
 eri = (numpy.random.random(nn*(nn+1)//2)-.2)**3
 h1 = numpy.random.random((norb,norb))
@@ -46,7 +46,7 @@ def finger(a):
 
 class KnowValues(unittest.TestCase):
     def test_select_strs(self):
-        myci = select_ci.SCI()
+        myci = selected_ci.SCI()
         myci.select_cutoff = 1e-3
         norb, nelec = 10, 4
         strs = cistring.gen_strings4orblist(range(norb), nelec)
@@ -60,12 +60,12 @@ class KnowValues(unittest.TestCase):
         eri_pq_max = abs(eri.reshape(norb**2,-1)).max(axis=1).reshape(norb,norb)
         civec_max = numpy.random.random(len(strs))
         strs_add0 = select_strs(myci, eri, eri_pq_max, civec_max, strs, norb, nelec)
-        strs_add1 = select_ci.select_strs(myci, eri, eri_pq_max, civec_max,
-                                          strs, norb, nelec)
+        strs_add1 = selected_ci.select_strs(myci, eri, eri_pq_max, civec_max,
+                                            strs, norb, nelec)
         self.assertTrue(numpy.all(strs_add0 == strs_add1))
 
     def test_select_strs1(self):
-        myci = select_ci.SCI()
+        myci = selected_ci.SCI()
         myci.select_cutoff = .1
         myci.ci_coeff_cutoff = .01
 
@@ -75,21 +75,21 @@ class KnowValues(unittest.TestCase):
         civec_b_max = abs(ci_coeff).max(axis=0)
         strs_add0 = select_strs(myci, eri1, eri_pq_max, civec_a_max, ci_strs[0],
                                 norb, nelec//2)
-        strs_add1 = select_ci.select_strs(myci, eri1, eri_pq_max, civec_a_max,
-                                          ci_strs[0], norb, nelec//2)
+        strs_add1 = selected_ci.select_strs(myci, eri1, eri_pq_max, civec_a_max,
+                                            ci_strs[0], norb, nelec//2)
         self.assertTrue(numpy.all(strs_add0 == strs_add1))
 
         strs_add0 = select_strs(myci, eri1, eri_pq_max, civec_b_max, ci_strs[1],
                                 norb, nelec//2)
-        strs_add1 = select_ci.select_strs(myci, eri1, eri_pq_max, civec_b_max,
-                                          ci_strs[1], norb, nelec//2)
+        strs_add1 = selected_ci.select_strs(myci, eri1, eri_pq_max, civec_b_max,
+                                            ci_strs[1], norb, nelec//2)
         self.assertTrue(numpy.all(strs_add0 == strs_add1))
 
     def test_enlarge_space(self):
-        myci = select_ci.SCI()
+        myci = selected_ci.SCI()
         myci.select_cutoff = .1
         myci.ci_coeff_cutoff = .01
-        cic = select_ci.enlarge_space(myci, civec_strs, eri, norb, nelec)
+        cic = selected_ci.enlarge_space(myci, civec_strs, eri, norb, nelec)
         cis = cic._strs
         self.assertEqual((len(cis[0]), len(cis[1])), (17,18))  # 16,14
         self.assertEqual(list(cis[0]), [7,11,13,14,19,21,22,25,26,28,35,37,41,42,49,52,56])
@@ -97,9 +97,9 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(abs(cic[[0,1,5]][:,[0,1,2]] - ci_coeff).sum(), 0, 12)
 
     def test_contract(self):
-        myci = select_ci.SCI()
-        ci0 = select_ci.to_fci(civec_strs, norb, nelec)
-        e1 = numpy.dot(civec_strs.ravel(), select_ci.contract_2e(eri, civec_strs, norb, nelec).ravel())
+        myci = selected_ci.SCI()
+        ci0 = selected_ci.to_fci(civec_strs, norb, nelec)
+        e1 = numpy.dot(civec_strs.ravel(), selected_ci.contract_2e(eri, civec_strs, norb, nelec).ravel())
         e2 = numpy.dot(ci0.ravel(), direct_spin1.contract_2e(eri, ci0, norb, nelec).ravel())
         self.assertAlmostEqual(e1, e2, 9)
         dm1 = myci.make_rdm1(civec_strs, norb, nelec)
@@ -110,11 +110,11 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(finger(dm2), -3.8397469683353962, 9)
 
     def test_contract1(self):
-        myci = select_ci.SCI()
+        myci = selected_ci.SCI()
         nelec = (4,3)
         strsa = cistring.gen_strings4orblist(range(norb), nelec[0])
         strsb = cistring.gen_strings4orblist(range(norb), nelec[1])
-        ci0 = select_ci._as_SCIvector(numpy.random.random((len(strsa),len(strsb))), (strsa,strsb))
+        ci0 = selected_ci._as_SCIvector(numpy.random.random((len(strsa),len(strsb))), (strsa,strsb))
         h2 = ao2mo.restore(1, eri, norb)
         c1 = myci.contract_2e(h2, ci0, norb, nelec)
         c2 = direct_spin1.contract_2e(h2, ci0, norb, nelec)
@@ -127,8 +127,8 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(abs(dm2_1 - dm2_2).sum(), 0, 9)
 
     def test_kernel(self):
-        myci = select_ci.SCI()
-        e1, c1 = select_ci.kernel(h1, eri, norb, nelec)
+        myci = selected_ci.SCI()
+        e1, c1 = selected_ci.kernel(h1, eri, norb, nelec)
         e2, c2 = direct_spin1.kernel(h1, eri, norb, nelec)
         self.assertAlmostEqual(e1, e2, 9)
         self.assertAlmostEqual(abs(numpy.dot(c1.ravel(), c2.ravel())), 1, 9)
@@ -140,7 +140,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(abs(dm2_1 - dm2_2).sum(), 0, 2)
 
     def test_hdiag(self):
-        hdiag = select_ci.make_hdiag(h1, eri, ci_strs, norb, nelec)
+        hdiag = selected_ci.make_hdiag(h1, eri, ci_strs, norb, nelec)
         self.assertAlmostEqual(finger(hdiag), 8.2760894885437377, 9)
 
     def test_h8(self):
@@ -167,7 +167,7 @@ class KnowValues(unittest.TestCase):
         eri = ao2mo.kernel(m._eri, m.mo_coeff, compact=False)
         eri = eri.reshape(norb,norb,norb,norb)
 
-        myci = select_ci.SCI()
+        myci = selected_ci.SCI()
         myci.select_cutoff = 1e-3
         myci.ci_coeff_cutoff = 1e-3
         e1, c1 = myci.kernel(h1e, eri, norb, nelec)
@@ -195,10 +195,10 @@ class KnowValues(unittest.TestCase):
         mask = numpy.random.random(len(strs)) > .5
         strs = strs[mask]
         cd_index0 = cre_des_linkstr(strs, norb, nelec)
-        cd_index1 = select_ci.cre_des_linkstr(strs, norb, nelec)
+        cd_index1 = selected_ci.cre_des_linkstr(strs, norb, nelec)
         self.assertTrue(numpy.all(cd_index0 == cd_index1))
         cd_index0 = cre_des_linkstr_tril(strs, norb, nelec)
-        cd_index1 = select_ci.cre_des_linkstr_tril(strs, norb, nelec)
+        cd_index1 = selected_ci.cre_des_linkstr_tril(strs, norb, nelec)
         cd_index1[:,:,1] = 0
         self.assertTrue(numpy.all(cd_index0 == cd_index1))
 
@@ -209,10 +209,10 @@ class KnowValues(unittest.TestCase):
         mask = numpy.random.random(len(strs)) > .4
         strs = strs[mask]
         dd_index0 = des_des_linkstr(strs, norb, nelec)
-        dd_index1 = select_ci.des_des_linkstr(strs, norb, nelec)
+        dd_index1 = selected_ci.des_des_linkstr(strs, norb, nelec)
         self.assertTrue(numpy.all(dd_index0 == dd_index1))
         dd_index0 = des_des_linkstr_tril(strs, norb, nelec)
-        dd_index1 = select_ci.des_des_linkstr_tril(strs, norb, nelec)
+        dd_index1 = selected_ci.des_des_linkstr_tril(strs, norb, nelec)
         dd_index1[:,:,1] = 0
         self.assertTrue(numpy.all(dd_index0 == dd_index1))
 
@@ -223,7 +223,7 @@ class KnowValues(unittest.TestCase):
         mask = numpy.random.random(len(strs)) > .4
         strs = strs[mask]
         d_index0 = gen_des_linkstr(strs, norb, nelec)
-        d_index1 = select_ci.gen_des_linkstr(strs, norb, nelec)
+        d_index1 = selected_ci.gen_des_linkstr(strs, norb, nelec)
         d_index1[:,:,0] = 0
         self.assertTrue(numpy.all(d_index0 == d_index1))
 
@@ -234,13 +234,13 @@ class KnowValues(unittest.TestCase):
         mask = numpy.random.random(len(strs)) > .6
         strs = strs[mask]
         c_index0 = gen_cre_linkstr(strs, norb, nelec)
-        c_index1 = select_ci.gen_cre_linkstr(strs, norb, nelec)
+        c_index1 = selected_ci.gen_cre_linkstr(strs, norb, nelec)
         c_index1[:,:,1] = 0
         self.assertTrue(numpy.all(c_index0 == c_index1))
 
     def test_from_to_fci(self):
-        ci0 = select_ci.to_fci(civec_strs, norb, nelec)
-        ci1 = select_ci.from_fci(ci0, ci_strs, norb, nelec)
+        ci0 = selected_ci.to_fci(civec_strs, norb, nelec)
+        ci1 = selected_ci.from_fci(ci0, ci_strs, norb, nelec)
         self.assertAlmostEqual(abs(ci1-ci_coeff).sum(), 0, 12)
 
     def test_rdm(self):
@@ -252,24 +252,24 @@ class KnowValues(unittest.TestCase):
         mask = numpy.random.random(len(strs)) > .7
         strsb = strs[mask]
         ci_strs = (strsa, strsb)
-        ci_coeff = select_ci._as_SCIvector(numpy.random.random((len(strsa),len(strsb))), ci_strs)
-        ci0 = select_ci.to_fci(ci_coeff, norb, (nelec,nelec))
+        ci_coeff = selected_ci._as_SCIvector(numpy.random.random((len(strsa),len(strsb))), ci_strs)
+        ci0 = selected_ci.to_fci(ci_coeff, norb, (nelec,nelec))
         dm1ref, dm2ref = direct_spin1.make_rdm12s(ci0, norb, (nelec,nelec))
-        dm1 = select_ci.make_rdm1s(ci_coeff, norb, (nelec,nelec))
+        dm1 = selected_ci.make_rdm1s(ci_coeff, norb, (nelec,nelec))
         self.assertAlmostEqual(abs(dm1[0]-dm1ref[0]).sum(), 0, 9)
         self.assertAlmostEqual(abs(dm1[1]-dm1ref[1]).sum(), 0, 9)
-        dm2 = select_ci.make_rdm2s(ci_coeff, norb, (nelec,nelec))
+        dm2 = selected_ci.make_rdm2s(ci_coeff, norb, (nelec,nelec))
         self.assertAlmostEqual(abs(dm2[0]-dm2ref[0]).sum(), 0, 9)
         self.assertAlmostEqual(abs(dm2[1]-dm2ref[1]).sum(), 0, 9)
         self.assertAlmostEqual(abs(dm2[2]-dm2ref[2]).sum(), 0, 9)
 
-        ci1_coeff = select_ci._as_SCIvector(numpy.random.random((len(strsa),len(strsb))), ci_strs)
-        ci1 = select_ci.to_fci(ci1_coeff, norb, (nelec,nelec))
+        ci1_coeff = selected_ci._as_SCIvector(numpy.random.random((len(strsa),len(strsb))), ci_strs)
+        ci1 = selected_ci.to_fci(ci1_coeff, norb, (nelec,nelec))
         dm1ref, dm2ref = direct_spin1.trans_rdm12s(ci1, ci0, norb, (nelec,nelec))
-        dm1 = select_ci.trans_rdm1s(ci1_coeff, ci_coeff, norb, (nelec,nelec))
+        dm1 = selected_ci.trans_rdm1s(ci1_coeff, ci_coeff, norb, (nelec,nelec))
         self.assertAlmostEqual(abs(dm1[0]-dm1ref[0]).sum(), 0, 9)
         self.assertAlmostEqual(abs(dm1[1]-dm1ref[1]).sum(), 0, 9)
-        #dm2 = select_ci.trans_rdm1s(ci1_coeff, ci_coeff, norb, (nelec,nelec))
+        #dm2 = selected_ci.trans_rdm1s(ci1_coeff, ci_coeff, norb, (nelec,nelec))
         #self.assertAlmostEqual(abs(dm2[0]-dm2ref[0]).sum(), 0, 9)
         #self.assertAlmostEqual(abs(dm2[1]-dm2ref[1]).sum(), 0, 9)
         #self.assertAlmostEqual(abs(dm2[2]-dm2ref[2]).sum(), 0, 9)
@@ -283,9 +283,9 @@ class KnowValues(unittest.TestCase):
         mask = numpy.random.random(len(strs)) > .7
         strsb = strs[mask]
         ci_strs = (strsa, strsb)
-        ci_coeff = select_ci._as_SCIvector(numpy.random.random((len(strsa),len(strsb))), ci_strs)
-        ci0 = select_ci.to_fci(ci_coeff, norb, (nelec,nelec))
-        ss0 = select_ci.spin_square(ci_coeff, norb, (nelec,nelec))
+        ci_coeff = selected_ci._as_SCIvector(numpy.random.random((len(strsa),len(strsb))), ci_strs)
+        ci0 = selected_ci.to_fci(ci_coeff, norb, (nelec,nelec))
+        ss0 = selected_ci.spin_square(ci_coeff, norb, (nelec,nelec))
         ss1 = spin_op.spin_square0(ci0, norb, (nelec,nelec))
         self.assertAlmostEqual(ss0[0], ss1[0], 9)
 
@@ -298,17 +298,17 @@ class KnowValues(unittest.TestCase):
         mask = numpy.random.random(len(strs)) > .2
         strsb = strs[mask]
         ci_strs = (strsa, strsb)
-        civec_strs = select_ci._as_SCIvector(numpy.random.random((len(strsa),len(strsb))), ci_strs)
+        civec_strs = selected_ci._as_SCIvector(numpy.random.random((len(strsa),len(strsb))), ci_strs)
         orbsym = (numpy.random.random(norb) * 4).astype(int)
         nn = norb*(norb+1)//2
         eri = ao2mo.restore(1, (numpy.random.random(nn*(nn+1)//2)-.2)**3, norb)
         oosym = orbsym[:,None] ^ orbsym
         oosym = oosym.reshape(-1,1) ^ oosym.ravel()
         eri[oosym.reshape([norb]*4)!=0] = 0
-        ci0 = fci.select_ci.to_fci(civec_strs, norb, nelec)
+        ci0 = fci.selected_ci.to_fci(civec_strs, norb, nelec)
         ci0 = fci.addons.symmetrize_wfn(ci0, norb, nelec, orbsym)
-        civec_strs = fci.select_ci.from_fci(ci0, civec_strs._strs, norb, nelec)
-        e1 = numpy.dot(civec_strs.ravel(), select_ci_symm.contract_2e(eri, civec_strs, norb, nelec, orbsym=orbsym).ravel())
+        civec_strs = fci.selected_ci.from_fci(ci0, civec_strs._strs, norb, nelec)
+        e1 = numpy.dot(civec_strs.ravel(), selected_ci_symm.contract_2e(eri, civec_strs, norb, nelec, orbsym=orbsym).ravel())
         e2 = numpy.dot(ci0.ravel(), direct_spin1_symm.contract_2e(eri, ci0, norb, nelec, orbsym=orbsym).ravel())
         self.assertAlmostEqual(e1, e2, 9)
 
@@ -331,13 +331,13 @@ class KnowValues(unittest.TestCase):
         eri = ao2mo.incore.full(m._eri, m.mo_coeff)
         orbsym = symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb, m.mo_coeff)
 
-        myci = select_ci_symm.SCI().set(orbsym=orbsym, select_cutoff=.5e-3)
+        myci = selected_ci_symm.SCI().set(orbsym=orbsym, select_cutoff=.5e-3)
         e1, c1 = myci.kernel(h1e, eri, norb, nelec)
         myci = direct_spin1_symm.FCISolver().set(orbsym=orbsym)
         e2, c2 = myci.kernel(h1e, eri, norb, nelec)
 
         self.assertAlmostEqual(e1, e2, 6)
-        c2 = select_ci.from_fci(c2, c1._strs, norb, nelec)
+        c2 = selected_ci.from_fci(c2, c1._strs, norb, nelec)
         self.assertAlmostEqual(abs(numpy.dot(c1.ravel(), c2.ravel())), 1, 6)
 
 
@@ -534,6 +534,6 @@ def select_strs(myci, eri, eri_pq_max, civec_max, strs, norb, nelec):
     return numpy.asarray(strs_add, dtype=numpy.int64)
 
 if __name__ == "__main__":
-    print("Full Tests for select_ci")
+    print("Full Tests for selected_ci")
     unittest.main()
 

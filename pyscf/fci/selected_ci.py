@@ -26,7 +26,7 @@ Simple usage::
     >>> mf = scf.RHF(mol).run()
     >>> h1 = mf.mo_coeff.T.dot(mf.get_hcore()).dot(mf.mo_coeff)
     >>> h2 = ao2mo.kernel(mol, mf.mo_coeff)
-    >>> e = fci.select_ci.kernel(h1, h2, mf.mo_coeff.shape[1], mol.nelectron)[0]
+    >>> e = fci.selected_ci.kernel(h1, h2, mf.mo_coeff.shape[1], mol.nelectron)[0]
 '''
 
 import ctypes
@@ -479,7 +479,11 @@ def make_rdm1s(civec_strs, norb, nelec, link_index=None):
     '''Spin separated 1-particle density matrices.
     The return values include two density matrices: (alpha,alpha), (beta,beta)
 
-    dm1[p,q] = <p^\dagger q>
+    dm1[p,q] = <q^\dagger p>
+
+    The convention is based on McWeeney's book, Eq (5.4.20).
+    The contraction between 1-particle Hamiltonian and rdm1 is
+    E = einsum('pq,qp', h1, rdm1)
     '''
     ci_coeff, nelec, ci_strs = _unpack(civec_strs, nelec)
     if link_index is None:
@@ -496,7 +500,11 @@ def make_rdm1s(civec_strs, norb, nelec, link_index=None):
 def make_rdm1(civec_strs, norb, nelec, link_index=None):
     r'''Spin-traced 1-particle density matrix.
 
-    dm1[p,q] = <p_alpha^\dagger q_alpha> + <p_beta^\dagger q_beta>
+    dm1[p,q] = <q_alpha^\dagger p_alpha> + <q_beta^\dagger p_beta>
+
+    The convention is based on McWeeney's book, Eq (5.4.20)
+    The contraction between 1-particle Hamiltonian and rdm1 is
+    E = einsum('pq,qp', h1, rdm1)
     '''
     rdm1a, rdm1b = make_rdm1s(civec_strs, norb, nelec, link_index)
     return rdm1a + rdm1b
@@ -552,7 +560,7 @@ def make_rdm2s(civec_strs, norb, nelec, link_index=None, **kwargs):
     return dm2aa, dm2ab, dm2bb
 
 def make_rdm2(civec_strs, norb, nelec, link_index=None, **kwargs):
-    r'''Spin 2-particle density matrix.
+    r'''Spin-traced two-particle density matrix.
 
     2pdm[p,q,r,s] = :math:`\langle p_\alpha^\dagger r_\alpha^\dagger s_\alpha q_\alpha\rangle +
                            \langle p_\beta^\dagger  r_\alpha^\dagger s_\alpha q_\beta\rangle +
@@ -569,7 +577,7 @@ def trans_rdm1s(cibra_strs, ciket_strs, norb, nelec, link_index=None):
     r'''Spin separated transition 1-particle density matrices.
     See also function :func:`make_rdm1s`
 
-    1pdm[p,q] = :math:`\langle p^\dagger q \rangle`
+    1pdm[p,q] = :math:`\langle q^\dagger p \rangle`
     '''
     cibra, nelec, ci_strs = _unpack(cibra_strs, nelec)
     ciket, nelec1, ci_strs1 = _unpack(ciket_strs, nelec)
@@ -590,7 +598,8 @@ def trans_rdm1(cibra_strs, ciket_strs, norb, nelec, link_index=None):
     r'''Spin traced transition 1-particle density matrices.
     See also function :func:`make_rdm1`
 
-    1pdm[p,q] = :math:`\langle p_\alpha^\dagger q_\alpha \rangle + \langle p_\beta^\dagger q_\beta \rangle`
+    1pdm[p,q] = :math:`\langle q_\alpha^\dagger p_\alpha \rangle
+                       + \langle q_\beta^\dagger p_\beta \rangle`
     '''
     rdm1a, rdm1b = trans_rdm1s(cibra_strs, ciket_strs, norb, nelec, link_index)
     return rdm1a + rdm1b

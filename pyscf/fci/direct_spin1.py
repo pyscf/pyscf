@@ -246,7 +246,11 @@ def make_rdm1s(fcivec, norb, nelec, link_index=None):
     '''Spin separated 1-particle density matrices.
     The return values include two density matrices: (alpha,alpha), (beta,beta)
 
-    dm1[p,q] = <p^\dagger q>
+    dm1[p,q] = <q^\dagger p>
+
+    The convention is based on McWeeney's book, Eq (5.4.20).
+    The contraction between 1-particle Hamiltonian and rdm1 is
+    E = einsum('pq,qp', h1, rdm1)
     '''
     if link_index is None:
         neleca, nelecb = _unpack_nelec(nelec)
@@ -260,9 +264,13 @@ def make_rdm1s(fcivec, norb, nelec, link_index=None):
     return rdm1a, rdm1b
 
 def make_rdm1(fcivec, norb, nelec, link_index=None):
-    '''spin-traced one-particle density matrix
+    '''Spin-traced one-particle density matrix
 
-    dm1[p,q] = <p_alpha^\dagger q_alpha> + <p_beta^\dagger q_beta>
+    dm1[p,q] = <q_alpha^\dagger p_alpha> + <q_beta^\dagger p_beta>
+
+    The convention is based on McWeeney's book, Eq (5.4.20)
+    The contraction between 1-particle Hamiltonian and rdm1 is
+    E = einsum('pq,qp', h1, rdm1)
     '''
     rdm1a, rdm1b = make_rdm1s(fcivec, norb, nelec, link_index)
     return rdm1a + rdm1b
@@ -275,8 +283,12 @@ def make_rdm12s(fcivec, norb, nelec, link_index=None, reorder=True):
     (alpha,alpha,alpha,alpha), (alpha,alpha,beta,beta),
     (beta,beta,beta,beta) for 2-particle density matrices.
 
-    1pdm[p,q] = :math:`\langle p^\dagger q\rangle`;
+    1pdm[p,q] = :math:`\langle q^\dagger p\rangle`;
     2pdm[p,q,r,s] = :math:`\langle p^\dagger r^\dagger s q\rangle`.
+
+    Energy should be computed as
+    E = einsum('pq,qp', h1, 1pdm) + 1/2 * einsum('pqrs,pqrs', eri, 2pdm)
+    where h1[p,q] = <p|h|q> and eri[p,q,r,s] = (pq|rs)
     '''
     dm1a, dm2aa = rdm.make_rdm12_spin1('FCIrdm12kern_a', fcivec, fcivec,
                                        norb, nelec, link_index, 1)
@@ -292,12 +304,16 @@ def make_rdm12s(fcivec, norb, nelec, link_index=None, reorder=True):
 def make_rdm12(fcivec, norb, nelec, link_index=None, reorder=True):
     r'''Spin traced 1- and 2-particle density matrices.
 
-    1pdm[p,q] = :math:`\langle p_\alpha^\dagger q_\alpha \rangle +
-                       \langle p_\beta^\dagger q_\beta \rangle`;
+    1pdm[p,q] = :math:`\langle q_\alpha^\dagger p_\alpha \rangle +
+                       \langle q_\beta^\dagger  p_\beta \rangle`;
     2pdm[p,q,r,s] = :math:`\langle p_\alpha^\dagger r_\alpha^\dagger s_\alpha q_\alpha\rangle +
                            \langle p_\beta^\dagger  r_\alpha^\dagger s_\alpha q_\beta\rangle +
                            \langle p_\alpha^\dagger r_\beta^\dagger  s_\beta  q_\alpha\rangle +
                            \langle p_\beta^\dagger  r_\beta^\dagger  s_\beta  q_\beta\rangle`.
+
+    Energy should be computed as
+    E = einsum('pq,qp', h1, 1pdm) + 1/2 * einsum('pqrs,pqrs', eri, 2pdm)
+    where h1[p,q] = <p|h|q> and eri[p,q,r,s] = (pq|rs)
     '''
     #(dm1a, dm1b), (dm2aa, dm2ab, dm2bb) = \
     #        make_rdm12s(fcivec, norb, nelec, link_index, reorder)
@@ -313,7 +329,7 @@ def trans_rdm1s(cibra, ciket, norb, nelec, link_index=None):
     The return values include two density matrices: (alpha,alpha), (beta,beta).
     See also function :func:`make_rdm1s`
 
-    1pdm[p,q] = :math:`\langle p^\dagger q \rangle`
+    1pdm[p,q] = :math:`\langle q^\dagger p \rangle`
     '''
     rdm1a = rdm.make_rdm1_spin1('FCItrans_rdm1a', cibra, ciket,
                                 norb, nelec, link_index)
@@ -321,21 +337,26 @@ def trans_rdm1s(cibra, ciket, norb, nelec, link_index=None):
                                 norb, nelec, link_index)
     return rdm1a, rdm1b
 
-# spacial part of DM
 def trans_rdm1(cibra, ciket, norb, nelec, link_index=None):
-    r'''Spin traced transition 1-particle density matrices.
-    See also function :func:`make_rdm1`
+    r'''Spin traced transition 1-particle transition density matrices.
 
-    1pdm[p,q] = :math:`\langle p_\alpha^\dagger q_\alpha \rangle + \langle p_\beta^\dagger q_\beta \rangle`
+    1pdm[p,q] = :math:`\langle q_\alpha^\dagger p_\alpha \rangle
+                       + \langle q_\beta^\dagger p_\beta \rangle`
     '''
     rdm1a, rdm1b = trans_rdm1s(cibra, ciket, norb, nelec, link_index)
     return rdm1a + rdm1b
 
 def trans_rdm12s(cibra, ciket, norb, nelec, link_index=None, reorder=True):
-    r'''Spin separated transition 1- and 2-particle density matrices.
-    See also function :func:`make_rdm12s`
+    r'''Spin separated 1- and 2-particle transition density matrices.
+    The return values include two lists, a list of 1-particle transition
+    density matrices and a list of 2-particle transition density matrices.
+    The density matrices are:
+    (alpha,alpha), (beta,beta) for 1-particle transition density matrices;
+    (alpha,alpha,alpha,alpha), (alpha,alpha,beta,beta),
+    (beta,beta,alpha,alpha), (beta,beta,beta,beta) for 2-particle transition
+    density matrices.
 
-    1pdm[p,q] = :math:`\langle p^\dagger q\rangle`;
+    1pdm[p,q] = :math:`\langle q^\dagger p\rangle`;
     2pdm[p,q,r,s] = :math:`\langle p^\dagger r^\dagger s q\rangle`.
     '''
     dm1a, dm2aa = rdm.make_rdm12_spin1('FCItdm12kern_a', cibra, ciket,
@@ -353,10 +374,9 @@ def trans_rdm12s(cibra, ciket, norb, nelec, link_index=None, reorder=True):
     return (dm1a, dm1b), (dm2aa, dm2ab, dm2ba, dm2bb)
 
 def trans_rdm12(cibra, ciket, norb, nelec, link_index=None, reorder=True):
-    r'''Spin traced transition 1- and 2-particle density matrices.
-    See also function :func:`make_rdm12`
+    r'''Spin traced transition 1- and 2-particle transition density matrices.
 
-    1pdm[p,q] = :math:`\langle p^\dagger q\rangle`;
+    1pdm[p,q] = :math:`\langle q^\dagger p\rangle`;
     2pdm[p,q,r,s] = :math:`\langle p^\dagger r^\dagger s q\rangle`.
     '''
     #(dm1a, dm1b), (dm2aa, dm2ab, dm2ba, dm2bb) = \

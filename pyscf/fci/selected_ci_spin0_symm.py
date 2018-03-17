@@ -22,16 +22,16 @@ from pyscf import lib
 from pyscf import ao2mo
 from pyscf.fci import direct_spin1
 from pyscf.fci import direct_spin1_symm
-from pyscf.fci import select_ci
-from pyscf.fci import select_ci_symm
-from pyscf.fci import select_ci_spin0
+from pyscf.fci import selected_ci
+from pyscf.fci import selected_ci_symm
+from pyscf.fci import selected_ci_spin0
 
 libfci = lib.load_library('libfci')
 
 def contract_2e(eri, civec_strs, norb, nelec, link_index=None, orbsym=None):
-    ci_coeff, nelec, ci_strs = select_ci._unpack(civec_strs, nelec)
+    ci_coeff, nelec, ci_strs = selected_ci._unpack(civec_strs, nelec)
     if link_index is None:
-        link_index = select_ci._all_linkstr_index(ci_strs, norb, nelec)
+        link_index = selected_ci._all_linkstr_index(ci_strs, norb, nelec)
     cd_indexa, dd_indexa, cd_indexb, dd_indexb = link_index
     na, nlinka = nb, nlinkb = cd_indexa.shape[:2]
     ma, mlinka = mb, mlinkb = dd_indexa.shape[:2]
@@ -43,7 +43,7 @@ def contract_2e(eri, civec_strs, norb, nelec, link_index=None, orbsym=None):
     eri1 = lib.take_2d(eri1.reshape(norb**2,-1), idx, idx) * 2
     lib.transpose_sum(eri1, inplace=True)
     eri1 *= .5
-    eri1, dd_indexa, dimirrep = select_ci_symm.reorder4irrep(eri1, norb, dd_indexa, orbsym, -1)
+    eri1, dd_indexa, dimirrep = selected_ci_symm.reorder4irrep(eri1, norb, dd_indexa, orbsym, -1)
     fcivec = ci_coeff.reshape(na,nb)
     ci1 = numpy.zeros_like(fcivec)
     # (aa|aa)
@@ -66,7 +66,7 @@ def contract_2e(eri, civec_strs, norb, nelec, link_index=None, orbsym=None):
     eri1 = ao2mo.restore(4, eri1, norb)
     lib.transpose_sum(eri1, inplace=True)
     eri1 *= .5
-    eri1, cd_indexa, dimirrep = select_ci_symm.reorder4irrep(eri1, norb, cd_indexa, orbsym)
+    eri1, cd_indexa, dimirrep = selected_ci_symm.reorder4irrep(eri1, norb, cd_indexa, orbsym)
     # (bb|aa)
     libfci.SCIcontract_2e_bbaa_symm(eri1.ctypes.data_as(ctypes.c_void_p),
                                     fcivec.ctypes.data_as(ctypes.c_void_p),
@@ -80,7 +80,7 @@ def contract_2e(eri, civec_strs, norb, nelec, link_index=None, orbsym=None):
                                     ctypes.c_int(len(dimirrep)))
 
     lib.transpose_sum(ci1, inplace=True)
-    return select_ci._as_SCIvector(ci1.reshape(ci_coeff.shape), ci_strs)
+    return selected_ci._as_SCIvector(ci1.reshape(ci_coeff.shape), ci_strs)
 
 def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=1e-3, tol=1e-10,
            lindep=1e-14, max_cycle=50, max_space=12, nroots=1,
@@ -93,8 +93,16 @@ def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=1e-3, tol=1e-10,
                                   ci_coeff_cutoff=ci_coeff_cutoff, ecore=ecore,
                                   **kwargs)
 
+make_rdm1s = selected_ci.make_rdm1s
+make_rdm2s = selected_ci.make_rdm2s
+make_rdm1 = selected_ci.make_rdm1
+make_rdm2 = selected_ci.make_rdm2
 
-class SelectedCI(select_ci_symm.SelectedCI):
+trans_rdm1s = selected_ci.trans_rdm1s
+trans_rdm1 = selected_ci.trans_rdm1
+
+
+class SelectedCI(selected_ci_symm.SelectedCI):
     def contract_2e(self, eri, civec_strs, norb, nelec, link_index=None,
                     orbsym=None, **kwargs):
         if orbsym is None:
@@ -103,13 +111,13 @@ class SelectedCI(select_ci_symm.SelectedCI):
             self._strs = civec_strs._strs
         else:
             assert(civec_strs.size == len(self._strs[0])*len(self._strs[1]))
-            civec_strs = select_ci._as_SCIvector(civec_strs, self._strs)
+            civec_strs = selected_ci._as_SCIvector(civec_strs, self._strs)
         return contract_2e(eri, civec_strs, norb, nelec, link_index, orbsym)
 
     def make_hdiag(self, h1e, eri, ci_strs, norb, nelec):
-        return select_ci_spin0.make_hdiag(h1e, eri, ci_strs, norb, nelec)
+        return selected_ci_spin0.make_hdiag(h1e, eri, ci_strs, norb, nelec)
 
-    enlarge_space = select_ci_spin0.enlarge_space
+    enlarge_space = selected_ci_spin0.enlarge_space
 
 SCI = SelectedCI
 

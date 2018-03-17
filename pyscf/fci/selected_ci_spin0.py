@@ -21,14 +21,14 @@ import numpy
 from pyscf import lib
 from pyscf import ao2mo
 from pyscf.fci import direct_spin1
-from pyscf.fci import select_ci
+from pyscf.fci import selected_ci
 
 libfci = lib.load_library('libfci')
 
 def contract_2e(eri, civec_strs, norb, nelec, link_index=None):
-    ci_coeff, nelec, ci_strs = select_ci._unpack(civec_strs, nelec)
+    ci_coeff, nelec, ci_strs = selected_ci._unpack(civec_strs, nelec)
     if link_index is None:
-        link_index = select_ci._all_linkstr_index(ci_strs, norb, nelec)
+        link_index = selected_ci._all_linkstr_index(ci_strs, norb, nelec)
     cd_indexa, dd_indexa, cd_indexb, dd_indexb = link_index
     na, nlinka = nb, nlinkb = cd_indexa.shape[:2]
     ma, mlinka = mb, mlinkb = dd_indexa.shape[:2]
@@ -71,14 +71,14 @@ def contract_2e(eri, civec_strs, norb, nelec, link_index=None):
                                cd_indexb.ctypes.data_as(ctypes.c_void_p))
 
     lib.transpose_sum(ci1, inplace=True)
-    return select_ci._as_SCIvector(ci1.reshape(ci_coeff.shape), ci_strs)
+    return selected_ci._as_SCIvector(ci1.reshape(ci_coeff.shape), ci_strs)
 
 def enlarge_space(myci, civec_strs, eri, norb, nelec):
     if isinstance(civec_strs, (tuple, list)):
-        nelec, (strsa, strsb) = select_ci._unpack(civec_strs[0], nelec)[1:]
+        nelec, (strsa, strsb) = selected_ci._unpack(civec_strs[0], nelec)[1:]
         ci_coeff = lib.asarray(civec_strs)
     else:
-        ci_coeff, nelec, (strsa, strsb) = select_ci._unpack(civec_strs, nelec)
+        ci_coeff, nelec, (strsa, strsb) = selected_ci._unpack(civec_strs, nelec)
     na = nb = len(strsa)
     ci0 = ci_coeff.reshape(-1,na,nb)
     abs_ci = abs(ci0).max(axis=0)
@@ -90,7 +90,7 @@ def enlarge_space(myci, civec_strs, eri, norb, nelec):
     ci_aidx = numpy.where(civec_a_max > myci.ci_coeff_cutoff)[0]
     civec_a_max = civec_a_max[ci_aidx]
     strsa = strsa[ci_aidx]
-    strsa_add = select_ci.select_strs(myci, eri, eri_pq_max, civec_a_max, strsa, norb, nelec[0])
+    strsa_add = selected_ci.select_strs(myci, eri, eri_pq_max, civec_a_max, strsa, norb, nelec[0])
     strsa = numpy.append(strsa, strsa_add)
     aidx = numpy.argsort(strsa)
     strsa = strsa[aidx]
@@ -106,7 +106,7 @@ def enlarge_space(myci, civec_strs, eri, norb, nelec):
         ci1 = numpy.zeros((ma,mb))
         tmp = lib.take_2d(ci0[i], ci_aidx, ci_bidx)
         lib.takebak_2d(ci1, tmp, aidx, bidx)
-        cs.append(select_ci._as_SCIvector(ci1, (strsa,strsb)))
+        cs.append(selected_ci._as_SCIvector(ci1, (strsa,strsb)))
 
     if ci_coeff[0].ndim == 0 or ci_coeff[0].shape[-1] != nb:
         cs = [c.ravel() for c in cs]
@@ -118,7 +118,7 @@ def enlarge_space(myci, civec_strs, eri, norb, nelec):
 
 
 def make_hdiag(h1e, eri, ci_strs, norb, nelec):
-    hdiag = select_ci.make_hdiag(h1e, eri, ci_strs, norb, nelec)
+    hdiag = selected_ci.make_hdiag(h1e, eri, ci_strs, norb, nelec)
     na = len(ci_strs[0])
     lib.transpose_sum(hdiag.reshape(na,na), inplace=True)
     hdiag *= .5
@@ -135,8 +135,16 @@ def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=1e-3, tol=1e-10,
                                   ci_coeff_cutoff=ci_coeff_cutoff, ecore=ecore,
                                   **kwargs)
 
+make_rdm1s = selected_ci.make_rdm1s
+make_rdm2s = selected_ci.make_rdm2s
+make_rdm1 = selected_ci.make_rdm1
+make_rdm2 = selected_ci.make_rdm2
 
-class SelectedCI(select_ci.SelectedCI):
+trans_rdm1s = selected_ci.trans_rdm1s
+trans_rdm1 = selected_ci.trans_rdm1
+
+
+class SelectedCI(selected_ci.SelectedCI):
     def contract_2e(self, eri, civec_strs, norb, nelec, link_index=None, **kwargs):
 # The argument civec_strs is a CI vector in function FCISolver.contract_2e.
 # Save and patch self._strs to make this contract_2e function compatible to
@@ -145,7 +153,7 @@ class SelectedCI(select_ci.SelectedCI):
             self._strs = civec_strs._strs
         else:
             assert(civec_strs.size == len(self._strs[0])*len(self._strs[1]))
-            civec_strs = select_ci._as_SCIvector(civec_strs, self._strs)
+            civec_strs = selected_ci._as_SCIvector(civec_strs, self._strs)
         return contract_2e(eri, civec_strs, norb, nelec, link_index)
 
     def make_hdiag(self, h1e, eri, ci_strs, norb, nelec):

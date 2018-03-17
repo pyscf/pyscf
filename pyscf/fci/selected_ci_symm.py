@@ -23,7 +23,7 @@ from pyscf.lib import logger
 from pyscf import ao2mo
 from pyscf.fci import direct_spin1
 from pyscf.fci import direct_spin1_symm
-from pyscf.fci import select_ci
+from pyscf.fci import selected_ci
 from pyscf.fci import addons
 
 libfci = lib.load_library('libfci')
@@ -52,9 +52,9 @@ def reorder4irrep(eri, norb, link_index, orbsym, offdiag=0):
     return numpy.asarray(eri, order='C'), link_index_irrep, dimirrep
 
 def contract_2e(eri, civec_strs, norb, nelec, link_index=None, orbsym=None):
-    ci_coeff, nelec, ci_strs = select_ci._unpack(civec_strs, nelec)
+    ci_coeff, nelec, ci_strs = selected_ci._unpack(civec_strs, nelec)
     if link_index is None:
-        link_index = select_ci._all_linkstr_index(ci_strs, norb, nelec)
+        link_index = selected_ci._all_linkstr_index(ci_strs, norb, nelec)
     cd_indexa, dd_indexa, cd_indexb, dd_indexb = link_index
     na, nlinka = cd_indexa.shape[:2]
     nb, nlinkb = cd_indexb.shape[:2]
@@ -117,7 +117,7 @@ def contract_2e(eri, civec_strs, norb, nelec, link_index=None, orbsym=None):
                                     dimirrep.ctypes.data_as(ctypes.c_void_p),
                                     ctypes.c_int(len(dimirrep)))
 
-    return select_ci._as_SCIvector(ci1.reshape(ci_coeff.shape), ci_strs)
+    return selected_ci._as_SCIvector(ci1.reshape(ci_coeff.shape), ci_strs)
 
 def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=1e-3, tol=1e-10,
            lindep=1e-14, max_cycle=50, max_space=12, nroots=1,
@@ -130,8 +130,16 @@ def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=1e-3, tol=1e-10,
                                   ci_coeff_cutoff=ci_coeff_cutoff, ecore=ecore,
                                   **kwargs)
 
+make_rdm1s = selected_ci.make_rdm1s
+make_rdm2s = selected_ci.make_rdm2s
+make_rdm1 = selected_ci.make_rdm1
+make_rdm2 = selected_ci.make_rdm2
 
-class SelectedCI(select_ci.SelectedCI):
+trans_rdm1s = selected_ci.trans_rdm1s
+trans_rdm1 = selected_ci.trans_rdm1
+
+
+class SelectedCI(selected_ci.SelectedCI):
     def contract_2e(self, eri, civec_strs, norb, nelec, link_index=None,
                     orbsym=None, **kwargs):
         if orbsym is None:
@@ -140,7 +148,7 @@ class SelectedCI(select_ci.SelectedCI):
             self._strs = civec_strs._strs
         else:
             assert(civec_strs.size == len(self._strs[0])*len(self._strs[1]))
-            civec_strs = select_ci._as_SCIvector(civec_strs, self._strs)
+            civec_strs = selected_ci._as_SCIvector(civec_strs, self._strs)
         return contract_2e(eri, civec_strs, norb, nelec, link_index, orbsym)
 
     def get_init_guess(self, ci_strs, norb, nelec, nroots, hdiag):
@@ -151,7 +159,7 @@ class SelectedCI(select_ci.SelectedCI):
         birreps = direct_spin1_symm._gen_strs_irrep(ci_strs[1], self.orbsym)
         ci0 = direct_spin1_symm._get_init_guess(airreps, birreps,
                                                 nroots, hdiag, self.orbsym, wfnsym)
-        return [select_ci._as_SCIvector(x, ci_strs) for x in ci0]
+        return [selected_ci._as_SCIvector(x, ci_strs) for x in ci0]
 
     def guess_wfnsym(self, norb, nelec, fcivec=None, wfnsym=None, **kwargs):
         if fcivec is None:
@@ -182,10 +190,10 @@ class SelectedCI(select_ci.SelectedCI):
             self.check_sanity()
 
         wfnsym0 = self.guess_wfnsym(norb, nelec, ci0, self.wfnsym, **kwargs)
-        e, c = select_ci.kernel_float_space(self, h1e, eri, norb, nelec, ci0,
-                                            tol, lindep, max_cycle, max_space,
-                                            nroots, davidson_only, ecore=ecore,
-                                            **kwargs)
+        e, c = selected_ci.kernel_float_space(self, h1e, eri, norb, nelec, ci0,
+                                              tol, lindep, max_cycle, max_space,
+                                              nroots, davidson_only, ecore=ecore,
+                                              **kwargs)
         if self.wfnsym is not None:
             strsa, strsb = c._strs
             if nroots > 1:
@@ -220,14 +228,14 @@ if __name__ == '__main__':
     mask = numpy.random.random(len(strs)) > .2
     strsb = strs[mask]
     ci_strs = (strsa, strsb)
-    civec_strs = select_ci._as_SCIvector(numpy.random.random((len(strsa),len(strsb))), ci_strs)
+    civec_strs = selected_ci._as_SCIvector(numpy.random.random((len(strsa),len(strsb))), ci_strs)
     orbsym = (numpy.random.random(norb) * 4).astype(int)
     nn = norb*(norb+1)//2
     eri = (numpy.random.random(nn*(nn+1)//2)-.2)**3
 
-    ci0 = select_ci.to_fci(civec_strs, norb, nelec)
+    ci0 = selected_ci.to_fci(civec_strs, norb, nelec)
     ci0 = addons.symmetrize_wfn(ci0, norb, nelec, orbsym)
-    civec_strs = select_ci.from_fci(ci0, civec_strs._strs, norb, nelec)
+    civec_strs = selected_ci.from_fci(ci0, civec_strs._strs, norb, nelec)
     e1 = numpy.dot(civec_strs.ravel(), contract_2e(eri, civec_strs, norb, nelec, orbsym=orbsym).ravel())
     e2 = numpy.dot(ci0.ravel(), direct_spin1_symm.contract_2e(eri, ci0, norb, nelec, orbsym=orbsym).ravel())
     print(e1-e2)

@@ -250,7 +250,7 @@ def make_rdm1s(fcivec, norb, nelec, link_index=None):
 
 # spacial part of DM, dm_pq = <|p^+ q|>
 def make_rdm1(fcivec, norb, nelec, link_index=None):
-    return direct_spin1.make_rdm1(fcivec, norb, nelec, link_index)
+    raise ValueError('Spin trace for UHF-FCI density matrices.')
 
 def make_rdm12s(fcivec, norb, nelec, link_index=None, reorder=True):
     return direct_spin1.make_rdm12s(fcivec, norb, nelec, link_index, reorder)
@@ -260,7 +260,7 @@ def trans_rdm1s(cibra, ciket, norb, nelec, link_index=None):
 
 # spacial part of DM
 def trans_rdm1(cibra, ciket, norb, nelec, link_index=None):
-    return direct_spin1.trans_rdm1(cibra, ciket, norb, nelec, link_index)
+    raise ValueError('Spin trace for UHF-FCI density matrices.')
 
 def trans_rdm12s(cibra, ciket, norb, nelec, link_index=None, reorder=True):
     return direct_spin1.trans_rdm12s(cibra, ciket, norb, nelec, link_index, reorder)
@@ -290,6 +290,12 @@ class FCISolver(direct_spin1.FCISolver):
     def spin_square(self, fcivec, norb, nelec):
         from pyscf.fci import spin_op
         return spin_op.spin_square(fcivec, norb, nelec)
+
+    def make_rdm1(self, cibra, ciket, norb, nelec, link_index=None):
+        return trans_rdm1(cibra, ciket, norb, nelec, link_index)
+
+    def trans_rdm1(self, cibra, ciket, norb, nelec, link_index=None):
+        return trans_rdm1(cibra, ciket, norb, nelec, link_index)
 
 FCI = FCISolver
 

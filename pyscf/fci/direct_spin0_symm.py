@@ -139,31 +139,13 @@ def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=1e-3, tol=1e-10,
     e, c = cis.kernel(h1e, eri, norb, nelec, ci0, ecore=ecore, **unknown)
     return e, c
 
-# dm_pq = <|p^+ q|>
-def make_rdm1(fcivec, norb, nelec, link_index=None):
-    return direct_spin0.make_rdm1(fcivec, norb, nelec, link_index)
+make_rdm1 = direct_spin0.make_rdm1
+make_rdm1s = direct_spin0.make_rdm1s
+make_rdm12 = direct_spin0.make_rdm12
 
-# alpha and beta 1pdm
-def make_rdm1s(fcivec, norb, nelec, link_index=None):
-    return direct_spin0.make_rdm1s(fcivec, norb, nelec, link_index)
-
-# dm_pq,rs = <|p^+ q r^+ s|>
-# dm_pq,rs = dm_sr,qp;  dm_qp,rs = dm_rs,qp
-# need call reorder_rdm for this rdm2 to get standard 2pdm
-
-def make_rdm12(fcivec, norb, nelec, link_index=None, reorder=True):
-    return direct_spin0.make_rdm12(fcivec, norb, nelec, link_index, reorder)
-
-# dm_pq = <I|p^+ q|J>
-def trans_rdm1s(cibra, ciket, norb, nelec, link_index=None):
-    return direct_spin0.trans_rdm1s(cibra, ciket, norb, nelec, link_index)
-
-def trans_rdm1(cibra, ciket, norb, nelec, link_index=None):
-    return direct_spin0.trans_rdm1(cibra, ciket, norb, nelec, link_index)
-
-# dm_pq,rs = <I|p^+ q r^+ s|J>
-def trans_rdm12(cibra, ciket, norb, nelec, link_index=None, reorder=True):
-    return direct_spin0.trans_rdm12(cibra, ciket, norb, nelec, link_index, reorder)
+trans_rdm1s = direct_spin0.trans_rdm1s
+trans_rdm1 = direct_spin0.trans_rdm1
+trans_rdm12 = direct_spin0.trans_rdm12
 
 def energy(h1e, eri, fcivec, norb, nelec, link_index=None, orbsym=None, wfnsym=0):
     h2e = direct_spin1.absorb_h1e(h1e, eri, norb, nelec) * .5

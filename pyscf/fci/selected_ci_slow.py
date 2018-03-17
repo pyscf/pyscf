@@ -338,7 +338,7 @@ def make_rdm1(civec_strs, norb, nelec):
         for a, i, str0, sign in tab:
             if a >= 0:
                 rdm1[a,i] += sign * numpy.dot(fcivec[:,str1], fcivec[:,str0])
-    return rdm1
+    return rdm1.T
 
 # dm_pq,rs = <|p^+ q r^+ s|>
 def make_rdm2(civec_strs, norb, nelec):
