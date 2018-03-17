@@ -149,7 +149,7 @@ class GCCSD(ccsd.CCSD):
             return self.e_corr, self.t1, self.t2
 
         if eris is None: eris = self.ao2mo(self.mo_coeff)
-        # Initialize orbspin so that we can attach the 
+        # Initialize orbspin so that we can attach the
         if not hasattr(self.mo_coeff, 'orbspin'):
             orbspin = scf.ghf.guess_orbspin(self.mo_coeff)
             if not np.any(orbspin == -1):
@@ -292,7 +292,7 @@ class _PhysicistsERIs:
                 self.orbspin = orbspin[mo_idx]
                 self.mo_coeff = lib.tag_array(mo_coeff, orbspin=self.orbspin)
 
-# Note: Recomputed fock matrix since SCF may not be fully converged.
+        # Note: Recomputed fock matrix since SCF may not be fully converged.
         dm = mycc._scf.make_rdm1(mycc.mo_coeff, mycc.mo_occ)
         fockao = mycc._scf.get_hcore() + mycc._scf.get_veff(mycc.mol, dm)
         self.fock = reduce(np.dot, (mo_coeff.conj().T, fockao, mo_coeff))

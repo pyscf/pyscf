@@ -62,7 +62,11 @@ def kernel(mycc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
         t1new, t2new = mycc.update_amps(t1, t2, eris)
         normt = numpy.linalg.norm(mycc.amplitudes_to_vector(t1new, t2new) -
                                   mycc.amplitudes_to_vector(t1, t2))
-        t1, t2 = t1new, t2new
+        if mycc.iterative_damping < 1.0:
+            alpha = mycc.iterative_damping
+            t1, t2 = (1-alpha)*t1 + alpha*t1new, (1-alpha)*t2 + alpha*t2new
+        else:
+            t1, t2 = t1new, t2new
         t1new = t2new = None
         if mycc.diis:
             t1, t2 = mycc.diis(t1, t2, istep, normt, eccsd-eold, adiis)
@@ -695,6 +699,8 @@ class CCSD(lib.StreamObject):
             DIIS space size.  Default is 6.
         diis_start_cycle : int
             The step to start DIIS.  Default is 0.
+        iterative_damping : float
+            The self consistent damping parameter.
         direct : bool
             AO-direct CCSD. Default is False.
         frozen : int or list
@@ -717,9 +723,9 @@ class CCSD(lib.StreamObject):
             CCSD correlation correction
         e_tot : float
             Total CCSD energy (HF + correlation)
-        t1, t2 : 
+        t1, t2 :
             T amplitudes t1[i,a], t2[i,j,a,b]  (i,j in occ, a,b in virt)
-        l1, l2 : 
+        l1, l2 :
             Lambda amplitudes l1[i,a], l2[i,j,a,b]  (i,j in occ, a,b in virt)
     '''
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
@@ -745,6 +751,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
 
         self.max_cycle = 50
         self.conv_tol = 1e-7
+        self.iterative_damping = 1.0
         self.conv_tol_normt = 1e-5
         self.diis_space = 6
         self.diis_file = None
