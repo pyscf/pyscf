@@ -160,6 +160,8 @@ def make_rdm1(mp, t2=None):
 
     dm1a[p,q] = <q_alpha^\dagger p_alpha>
     dm1b[p,q] = <q_beta^\dagger p_beta>
+
+    The convention of 1-pdm is based on McWeeney's book, Eq (5.4.20).
     '''
     from pyscf.cc import uccsd_rdm
     if t2 is None: t2 = mp.t2
@@ -193,7 +195,7 @@ def make_rdm2(mp, t2=None):
     dm2ab[p,q,r,s] = <q_alpha^\dagger s_beta^\dagger r_beta p_alpha>
     dm2bb[p,q,r,s] = <q_beta^\dagger s_beta^\dagger r_beta p_beta>
 
-    (p,q correspond to one particle and r,s correspond to another paritcile)
+    (p,q correspond to one particle and r,s correspond to another particle)
     Two-particle density matrix should be contracted to integrals with the
     pattern below to compute energy
 
@@ -283,6 +285,9 @@ def make_rdm2(mp, t2=None):
         for j in range(noccb0):
             dm2ab[i,i,j,j] += 1
 
+    dm2aa = dm2aa.transpose(1,0,3,2)
+    dm2ab = dm2ab.transpose(1,0,3,2)
+    dm2bb = dm2bb.transpose(1,0,3,2)
     return dm2aa, dm2ab, dm2bb
 
 
@@ -546,9 +551,9 @@ if __name__ == '__main__':
     h1b = reduce(numpy.dot, (mo_b.T.conj(), hcore, mo_b))
     e1 = numpy.einsum('ij,ji', h1a, dm1a)
     e1+= numpy.einsum('ij,ji', h1b, dm1b)
-    e1+= numpy.einsum('ijkl,jilk', eriaa, dm2aa) * .5
-    e1+= numpy.einsum('ijkl,jilk', eriab, dm2ab)
-    e1+= numpy.einsum('ijkl,jilk', eribb, dm2bb) * .5
+    e1+= numpy.einsum('ijkl,ijkl', eriaa, dm2aa) * .5
+    e1+= numpy.einsum('ijkl,ijkl', eriab, dm2ab)
+    e1+= numpy.einsum('ijkl,ijkl', eribb, dm2bb) * .5
     e1+= mol.energy_nuc()
     print(e1 - pt.e_tot)
 

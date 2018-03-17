@@ -62,9 +62,10 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=True,
     return emp2.real, t2
 
 def make_rdm1_ao(mp, mo_energy=None, mo_coeff=None, eris=None, verbose=logger.NOTE):
-    '''1-particle density matrix in AO basis.  The occupied-virtual orbital
-    response is not included.  This function uses small amount of memory.  The
-    MP2 t2 amplitudes are generated on the fly using the given eris object.
+    '''Spin-traced one-particle density matrix in the AO basis representation.
+    The occupied-virtual orbital response is not included.  This function uses
+    small amount of memory.  The MP2 t2 amplitudes are generated at the runtime
+    using the given eris object.
 
     See also :func:`pyscf.mp.mp2.make_rdm1`
     '''
@@ -83,11 +84,14 @@ def make_rdm1_ao(mp, mo_energy=None, mo_coeff=None, eris=None, verbose=logger.NO
     return rdm1
 
 def make_rdm1(mp, t2=None, eris=None, verbose=logger.NOTE):
-    '''
-    Spin-traced one-particle density matrix in MO basis (the occupied-virtual
-    blocks from the orbital response contribution are not included).
+    '''Spin-traced one-particle density matrix in the AO basis representation.
+    The occupied-virtual orbital response is not included.
 
-    dm1[p,q] = <p_alpha^\dagger q_alpha> + <p_beta^\dagger q_beta>
+    dm1[p,q] = <q_alpha^\dagger p_alpha> + <q_beta^\dagger p_beta>
+
+    The convention of 1-pdm is based on McWeeney's book, Eq (5.4.20).
+    The contraction between 1-particle Hamiltonian and rdm1 is
+    E = einsum('pq,qp', h1, rdm1)
     '''
     from pyscf.cc import ccsd_rdm
     doo, dvv = _gamma1_intermediates(mp, t2, eris)
@@ -132,6 +136,9 @@ def make_rdm2(mp, t2=None, eris=None, verbose=logger.NOTE):
     Spin-traced two-particle density matrix in MO basis
 
     dm2[p,q,r,s] = \sum_{sigma,tau} <p_sigma^\dagger r_tau^\dagger s_tau q_sigma>
+
+    Note the contraction between ERIs (in Chemist's notation) and rdm2 is
+    E = einsum('pqrs,pqrs', eri, rdm2)
     '''
     if t2 is None: t2 = mp.t2
     nmo = nmo0 = mp.nmo
@@ -184,7 +191,12 @@ def make_rdm2(mp, t2=None, eris=None, verbose=logger.NOTE):
         for j in range(nocc0):
             dm2[i,i,j,j] += 4
             dm2[i,j,j,i] -= 2
-    return dm2
+
+    # dm2 was computed as dm2[p,q,r,s] = < p^\dagger r^\dagger s q > in the
+    # above. Transposing it so that it be contracted with ERIs (in Chemist's
+    # notation):
+    #   E = einsum('pqrs,pqrs', eri, rdm2)
+    return dm2.transpose(1,0,3,2)
 
 
 def get_nocc(mp):

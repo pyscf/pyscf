@@ -74,9 +74,9 @@ class KnownValues(unittest.TestCase):
         h1b = reduce(numpy.dot, (mo_b.T.conj(), hcore, mo_b))
         e1 = numpy.einsum('ij,ji', h1a, dm1[0])
         e1+= numpy.einsum('ij,ji', h1b, dm1[1])
-        e1+= numpy.einsum('ijkl,jilk', eriaa, dm2[0]) * .5
-        e1+= numpy.einsum('ijkl,jilk', eriab, dm2[1])
-        e1+= numpy.einsum('ijkl,jilk', eribb, dm2[2]) * .5
+        e1+= numpy.einsum('ijkl,ijkl', eriaa, dm2[0]) * .5
+        e1+= numpy.einsum('ijkl,ijkl', eriab, dm2[1])
+        e1+= numpy.einsum('ijkl,ijkl', eribb, dm2[2]) * .5
         e1+= mol.energy_nuc()
         self.assertAlmostEqual(e1, pt.e_tot, 9)
 
@@ -85,8 +85,8 @@ class KnownValues(unittest.TestCase):
         h1b = reduce(numpy.dot, (mo_b.T, hcore+vhf[1], mo_b))
         dm1[0][numpy.diag_indices(nocca)] -= 1
         dm1[1][numpy.diag_indices(noccb)] -= 1
-        e = numpy.einsum('pq,pq', h1a, dm1[0])
-        e+= numpy.einsum('pq,pq', h1b, dm1[1])
+        e = numpy.einsum('pq,qp', h1a, dm1[0])
+        e+= numpy.einsum('pq,qp', h1b, dm1[1])
         self.assertAlmostEqual(e, -emp2, 9)
 
     def test_ump2_contract_eri_dm(self):
@@ -107,9 +107,9 @@ class KnownValues(unittest.TestCase):
         h1b = reduce(numpy.dot, (mo_b.T.conj(), hcore, mo_b))
         e1 = numpy.einsum('ij,ji', h1a, dm1a)
         e1+= numpy.einsum('ij,ji', h1b, dm1b)
-        e1+= numpy.einsum('ijkl,jilk', eriaa, dm2aa) * .5
-        e1+= numpy.einsum('ijkl,jilk', eriab, dm2ab)
-        e1+= numpy.einsum('ijkl,jilk', eribb, dm2bb) * .5
+        e1+= numpy.einsum('ijkl,ijkl', eriaa, dm2aa) * .5
+        e1+= numpy.einsum('ijkl,ijkl', eriab, dm2ab)
+        e1+= numpy.einsum('ijkl,ijkl', eribb, dm2bb) * .5
         e1+= mol.energy_nuc()
         self.assertAlmostEqual(e1, pt.e_tot, 9)
 

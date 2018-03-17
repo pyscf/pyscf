@@ -59,11 +59,15 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=True,
 
 def make_rdm1(mp, t2=None):
     r'''
-    One-particle density matrix in molecular spin-orbital representation (the
-    occupied-virtual blocks from the orbital response contribution are not
-    included).
+    One-particle density matrix in the molecular spin-orbital representation
+    (the occupied-virtual blocks from the orbital response contribution are
+    not included).
 
-    dm1[p,q] = <p^\dagger q>  (p,q are spin-orbitals)
+    dm1[p,q] = <q^\dagger p>  (p,q are spin-orbitals)
+
+    The convention of 1-pdm is based on McWeeney's book, Eq (5.4.20).
+    The contraction between 1-particle Hamiltonian and rdm1 is
+    E = einsum('pq,qp', h1, rdm1)
     '''
     from pyscf.cc import gccsd_rdm
     if t2 is None: t2 = mp.t2
@@ -81,12 +85,14 @@ def _gamma1_intermediates(mp, t2):
 # spin-orbital rdm2 in Chemist's notation
 def make_rdm2(mp, t2=None):
     r'''
-    Two-particle density matrix in molecular spin-orbital representation
+    Two-particle density matrix in the molecular spin-orbital representation
 
     dm2[p,q,r,s] = <p^\dagger r^\dagger s q>
 
     where p,q,r,s are spin-orbitals. p,q correspond to one particle and r,s
-    correspond to another paritcile.
+    correspond to another particle.  The contraction between ERIs (in
+    Chemist's notation) and rdm2 is
+    E = einsum('pqrs,pqrs', eri, rdm2)
     '''
     if t2 is None: t2 = mp.t2
     nmo = nmo0 = mp.nmo
@@ -124,7 +130,7 @@ def make_rdm2(mp, t2=None):
             dm2[i,i,j,j] += 1
             dm2[i,j,j,i] -= 1
 
-    return dm2
+    return dm2.transpose(1,0,3,2)
 
 
 class GMP2(mp2.MP2):
@@ -310,6 +316,6 @@ if __name__ == '__main__':
     h1 = reduce(numpy.dot, (mo_a.T.conj(), hcore, mo_a))
     h1+= reduce(numpy.dot, (mo_b.T.conj(), hcore, mo_b))
     e1 = numpy.einsum('ij,ji', h1, dm1)
-    e1+= numpy.einsum('ijkl,jilk', eri, dm2) * .5
+    e1+= numpy.einsum('ijkl,ijkl', eri, dm2) * .5
     e1+= mol.energy_nuc()
     print(e1 - pt.e_tot)

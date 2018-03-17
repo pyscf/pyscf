@@ -83,7 +83,7 @@ class KnownValues(unittest.TestCase):
         h1+= reduce(numpy.dot, (mo_b.T.conj(), hcore, mo_b))
 
         e1 = numpy.einsum('ij,ji', h1, dm1)
-        e1+= numpy.einsum('ijkl,jilk', eri, dm2) * .5
+        e1+= numpy.einsum('ijkl,ijkl', eri, dm2) * .5
         e1+= mol.energy_nuc()
         self.assertAlmostEqual(e1, pt.e_tot, 9)
 
@@ -92,7 +92,7 @@ class KnownValues(unittest.TestCase):
         dm1 = pt.make_rdm1()
         dm2 = pt.make_rdm2()
         e1 = numpy.einsum('ij,ji', h1, dm1)
-        e1+= numpy.einsum('ijkl,jilk', eri, dm2) * .5
+        e1+= numpy.einsum('ijkl,ijkl', eri, dm2) * .5
         e1+= mol.energy_nuc()
         self.assertAlmostEqual(e1, pt.e_tot, 9)
 
