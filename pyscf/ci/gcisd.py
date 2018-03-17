@@ -243,11 +243,15 @@ def from_fcivec(ci0, nelec, orbspin):
 
 def make_rdm1(myci, civec=None, nmo=None, nocc=None):
     r'''
-    One-particle density matrix in molecular spin-orbital representation (the
-    occupied-virtual blocks from the orbital response contribution are not
-    included).
+    One-particle density matrix in the molecular spin-orbital representation
+    (the occupied-virtual blocks from the orbital response contribution are
+    not included).
 
-    dm1[p,q] = <p^\dagger q>  (p,q are spin-orbitals)
+    dm1[p,q] = <q^\dagger p>  (p,q are spin-orbitals)
+
+    The convention of 1-pdm is based on McWeeney's book, Eq (5.4.20).
+    The contraction between 1-particle Hamiltonian and rdm1 is
+    E = einsum('pq,qp', h1, rdm1)
     '''
     if civec is None: civec = myci.ci
     if nmo is None: nmo = myci.nmo
@@ -257,12 +261,14 @@ def make_rdm1(myci, civec=None, nmo=None, nocc=None):
 
 def make_rdm2(myci, civec=None, nmo=None, nocc=None):
     r'''
-    Two-particle density matrix in molecular spin-orbital representation
+    Two-particle density matrix in the molecular spin-orbital representation
 
     dm2[p,q,r,s] = <p^\dagger r^\dagger s q>
 
     where p,q,r,s are spin-orbitals. p,q correspond to one particle and r,s
-    correspond to another paritcile.
+    correspond to another particle.  The contraction between ERIs (in
+    Chemist's notation) and rdm2 is
+    E = einsum('pqrs,pqrs', eri, rdm2)
     '''
     if civec is None: civec = myci.ci
     if nmo is None: nmo = myci.nmo
@@ -430,9 +436,9 @@ if __name__ == '__main__':
     h1e[idxa[:,None]&idxa] = h1a.ravel()
     h1e[idxb[:,None]&idxb] = h1b.ravel()
     e2 = (numpy.einsum('ij,ji', h1e, rdm1) +
-          numpy.einsum('ijkl,jilk', eri, rdm2) * .5)
+          numpy.einsum('ijkl,ijkl', eri, rdm2) * .5)
     e2 += mol.energy_nuc()
     print(myci.e_tot - e2)   # = 0
 
-    print(abs(rdm1 - numpy.einsum('ijkk->ij', rdm2)/(mol.nelectron-1)).sum())
+    print(abs(rdm1 - numpy.einsum('ijkk->ji', rdm2)/(mol.nelectron-1)).sum())
 

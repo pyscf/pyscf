@@ -430,6 +430,8 @@ def make_rdm1(myci, civec=None, nmo=None, nocc=None):
 
     dm1a[p,q] = <q_alpha^\dagger p_alpha>
     dm1b[p,q] = <q_beta^\dagger p_beta>
+
+    The convention of 1-pdm is based on McWeeney's book, Eq (5.4.20).
     '''
     if civec is None: civec = myci.ci
     if nmo is None: nmo = myci.nmo
@@ -445,7 +447,7 @@ def make_rdm2(myci, civec=None, nmo=None, nocc=None):
     dm2ab[p,q,r,s] = <q_alpha^\dagger s_beta^\dagger r_beta p_alpha>
     dm2bb[p,q,r,s] = <q_beta^\dagger s_beta^\dagger r_beta p_beta>
 
-    (p,q correspond to one particle and r,s correspond to another paritcile)
+    (p,q correspond to one particle and r,s correspond to another particle)
     Two-particle density matrix should be contracted to integrals with the
     pattern below to compute energy
 
@@ -736,8 +738,8 @@ if __name__ == '__main__':
           numpy.einsum('ijkl,ijkl', eri_bb, rdm2[2]) * .5)
     print(ecisd + mf.e_tot - mol.energy_nuc() - e2)   # = 0
 
-    print(abs(rdm1[0] - (numpy.einsum('ijkk->ij', rdm2[0]) +
-                         numpy.einsum('ijkk->ij', rdm2[1]))/(mol.nelectron-1)).sum())
-    print(abs(rdm1[1] - (numpy.einsum('ijkk->ij', rdm2[2]) +
-                         numpy.einsum('kkij->ij', rdm2[1]))/(mol.nelectron-1)).sum())
+    print(abs(rdm1[0] - (numpy.einsum('ijkk->ji', rdm2[0]) +
+                         numpy.einsum('ijkk->ji', rdm2[1]))/(mol.nelectron-1)).sum())
+    print(abs(rdm1[1] - (numpy.einsum('ijkk->ji', rdm2[2]) +
+                         numpy.einsum('kkij->ji', rdm2[1]))/(mol.nelectron-1)).sum())
 

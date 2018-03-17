@@ -268,7 +268,11 @@ def make_rdm1(myci, civec=None, nmo=None, nocc=None):
     Spin-traced one-particle density matrix in MO basis (the occupied-virtual
     blocks from the orbital response contribution are not included).
 
-    dm1[p,q] = <p_alpha^\dagger q_alpha> + <p_beta^\dagger q_beta>
+    dm1[p,q] = <q_alpha^\dagger p_alpha> + <q_beta^\dagger p_beta>
+
+    The convention of 1-pdm is based on McWeeney's book, Eq (5.4.20).
+    The contraction between 1-particle Hamiltonian and rdm1 is
+    E = einsum('pq,qp', h1, rdm1)
     '''
     if civec is None: civec = myci.ci
     if nmo is None: nmo = myci.nmo
@@ -281,6 +285,9 @@ def make_rdm2(myci, civec=None, nmo=None, nocc=None):
     Spin-traced two-particle density matrix in MO basis
 
     dm2[p,q,r,s] = \sum_{sigma,tau} <p_sigma^\dagger r_tau^\dagger s_tau q_sigma>
+
+    Note the contraction between ERIs (in Chemist's notation) and rdm2 is
+    E = einsum('pqrs,pqrs', eri, rdm2)
     '''
     if civec is None: civec = myci.ci
     if nmo is None: nmo = myci.nmo
@@ -686,8 +693,8 @@ if __name__ == '__main__':
     h2e = ao2mo.kernel(mf._eri, mf.mo_coeff)
     h2e = ao2mo.restore(1, h2e, nmo)
     e2 = (numpy.einsum('ij,ji', h1e, rdm1) +
-          numpy.einsum('ijkl,jilk', h2e, rdm2) * .5)
+          numpy.einsum('ijkl,ijkl', h2e, rdm2) * .5)
     print(ecisd + mf.e_tot - mol.energy_nuc() - e2)   # = 0
 
-    print(abs(rdm1 - numpy.einsum('ijkk->ij', rdm2)/(mol.nelectron-1)).sum())
+    print(abs(rdm1 - numpy.einsum('ijkk->ji', rdm2)/(mol.nelectron-1)).sum())
 
