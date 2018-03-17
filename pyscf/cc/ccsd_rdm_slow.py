@@ -216,10 +216,10 @@ if __name__ == '__main__':
         +numpy.einsum('pkkq->pq', eri0[:nocc,:nocc,:nocc,:nocc]).trace())
     print(e2+794721.197459942)
     print(numpy.einsum('pqrs,pqrs', dm2, eri0)*.5 +
-          numpy.einsum('pq,pq', dm1, h1) - e2)
+          numpy.einsum('pq,qp', dm1, h1) - e2)
 
     print(numpy.allclose(dm2, dm2.transpose(1,0,3,2)))
     print(numpy.allclose(dm2, dm2.transpose(2,3,0,1)))
 
-    d1 = numpy.einsum('kkpq->pq', dm2) / 9
+    d1 = numpy.einsum('kkpq->qp', dm2) / 9
     print(numpy.allclose(d1, dm1))

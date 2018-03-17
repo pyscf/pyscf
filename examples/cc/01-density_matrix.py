@@ -29,6 +29,7 @@ h1 = numpy.einsum('pi,pq,qj->ij', mf.mo_coeff.conj(), mf.get_hcore(), mf.mo_coef
 nmo = mf.mo_coeff.shape[1]
 eri = ao2mo.kernel(mol, mf.mo_coeff, compact=False).reshape([nmo]*4)
 E = numpy.einsum('pq,qp', h1, dm1)
-E+= numpy.einsum('pqrs,qpsr', eri, dm2) * .5
+# Note dm2 is transposed to simplify its contraction to integrals
+E+= numpy.einsum('pqrs,pqrs', eri, dm2) * .5
 E+= mol.energy_nuc()
 print('E(CCSD) = %s, reference %s' % (E, mycc.e_tot))

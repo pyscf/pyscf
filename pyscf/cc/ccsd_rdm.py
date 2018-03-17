@@ -220,7 +220,11 @@ def make_rdm1(mycc, t1, t2, l1, l2):
     Spin-traced one-particle density matrix in MO basis (the occupied-virtual
     blocks from the orbital response contribution are not included).
 
-    dm1[p,q] = <p_alpha^\dagger q_alpha> + <p_beta^\dagger q_beta>
+    dm1[p,q] = <q_alpha^\dagger p_alpha> + <q_beta^\dagger p_beta>
+
+    The convention of 1-pdm is based on McWeeney's book, Eq (5.4.20).
+    The contraction between 1-particle Hamiltonian and rdm1 is
+    E = einsum('pq,qp', h1, rdm1)
     '''
     d1 = _gamma1_intermediates(mycc, t1, t2, l1, l2)
     return _make_rdm1(mycc, d1, with_frozen=True)
@@ -230,6 +234,9 @@ def make_rdm2(mycc, t1, t2, l1, l2):
     Spin-traced two-particle density matrix in MO basis
 
     dm2[p,q,r,s] = \sum_{sigma,tau} <p_sigma^\dagger r_tau^\dagger s_tau q_sigma>
+
+    Note the contraction between ERIs (in Chemist's notation) and rdm2 is
+    E = einsum('pqrs,pqrs', eri, rdm2)
     '''
     d1 = _gamma1_intermediates(mycc, t1, t2, l1, l2)
     f = lib.H5TmpFile()
@@ -237,6 +244,12 @@ def make_rdm2(mycc, t1, t2, l1, l2):
     return _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True)
 
 def _make_rdm1(mycc, d1, with_frozen=True):
+    '''dm1[p,q] = <q_alpha^\dagger p_alpha> + <q_beta^\dagger p_beta>
+
+    The convention of 1-pdm is based on McWeeney's book, Eq (5.4.20).
+    The contraction between 1-particle Hamiltonian and rdm1 is
+    E = einsum('pq,qp', h1, rdm1)
+    '''
     doo, dov, dvo, dvv = d1
     nocc, nvir = dov.shape
     nmo = nocc + nvir
@@ -257,10 +270,15 @@ def _make_rdm1(mycc, d1, with_frozen=True):
         dm1 = rdm1
     return dm1
 
-# rdm2 in Chemist's notation
 # Note vvvv part of 2pdm have been symmetrized.  It does not correspond to
 # vvvv part of CI 2pdm
 def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True):
+    r'''
+    dm2[p,q,r,s] = \sum_{sigma,tau} <p_sigma^\dagger r_tau^\dagger s_tau q_sigma>
+
+    Note the contraction between ERIs (in Chemist's notation) and rdm2 is
+    E = einsum('pqrs,pqrs', eri, rdm2)
+    '''
     dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = d2
     nocc, nvir = dovov.shape[:2]
     nmo = nocc + nvir
@@ -341,7 +359,11 @@ def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True):
                 dm2[i,i,j,j] += 4
                 dm2[i,j,j,i] -= 2
 
-    return dm2
+    # dm2 was computed as dm2[p,q,r,s] = < p^\dagger r^\dagger s q > in the
+    # above. Transposing it so that it be contracted with ERIs (in Chemist's
+    # notation):
+    #   E = einsum('pqrs,pqrs', eri, rdm2)
+    return dm2.transpose(1,0,3,2)
 
 
 if __name__ == '__main__':
@@ -435,13 +457,13 @@ if __name__ == '__main__':
         -numpy.einsum('kkpq->pq', eri0[:nocc,:nocc,:nocc,:nocc]).trace()*2
         +numpy.einsum('pkkq->pq', eri0[:nocc,:nocc,:nocc,:nocc]).trace())
     print(e2+794721.197459942)
-    print(numpy.einsum('qpsr,pqrs', dm2, eri0)*.5 +
-          numpy.einsum('pq,pq', dm1, h1) - e2)
+    print(numpy.einsum('pqrs,pqrs', dm2, eri0)*.5 +
+          numpy.einsum('pq,qp', dm1, h1) - e2)
 
     print(numpy.allclose(dm2, dm2.transpose(1,0,3,2)))
     print(numpy.allclose(dm2, dm2.transpose(2,3,0,1)))
 
-    d1 = numpy.einsum('kkpq->pq', dm2) / 9
+    d1 = numpy.einsum('kkpq->qp', dm2) / 9
     print(numpy.allclose(d1, dm1))
 
     mol = gto.Mole()
@@ -464,6 +486,6 @@ if __name__ == '__main__':
     hcore = mf.get_hcore()
     h1 = reduce(numpy.dot, (mf.mo_coeff.T, hcore, mf.mo_coeff))
     e1 = numpy.einsum('ij,ji', h1, dm1)
-    e1+= numpy.einsum('ijkl,jilk', eri, dm2) * .5
+    e1+= numpy.einsum('ijkl,ijkl', eri, dm2) * .5
     e1+= mol.energy_nuc()
     print(e1 - mycc.e_tot)

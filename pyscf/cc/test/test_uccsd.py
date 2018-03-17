@@ -229,9 +229,9 @@ class KnownValues(unittest.TestCase):
         h1b = reduce(numpy.dot, (mo_b.T.conj(), hcore, mo_b))
         e1 = numpy.einsum('ij,ji', h1a, dm1a)
         e1+= numpy.einsum('ij,ji', h1b, dm1b)
-        e1+= numpy.einsum('ijkl,jilk', eriaa, dm2aa) * .5
-        e1+= numpy.einsum('ijkl,jilk', eriab, dm2ab)
-        e1+= numpy.einsum('ijkl,jilk', eribb, dm2bb) * .5
+        e1+= numpy.einsum('ijkl,ijkl', eriaa, dm2aa) * .5
+        e1+= numpy.einsum('ijkl,ijkl', eriab, dm2ab)
+        e1+= numpy.einsum('ijkl,ijkl', eribb, dm2bb) * .5
         e1+= mol.energy_nuc()
         self.assertAlmostEqual(e1, mycc.e_tot, 7)
 
