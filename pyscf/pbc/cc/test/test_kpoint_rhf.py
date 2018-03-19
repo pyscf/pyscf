@@ -29,7 +29,7 @@ import pyscf.pbc.cc.kccsd_rhf
 import pyscf.pbc.cc.ccsd
 import make_test_cell
 
-import pyscf.pbc.cc.krccsd_t as krccsd_t
+import pyscf.pbc.cc.kccsd_t_rhf as kccsd_t_rhf
 
 def run_kcell(cell, n, nk):
     #############################################
@@ -154,7 +154,7 @@ class KnownValues(unittest.TestCase):
         mycc = pyscf.pbc.cc.KRCCSD(kmf)
         ecc, t1, t2 = mycc.kernel()
 
-        energy_t = krccsd_t.kernel(mycc)
+        energy_t = kccsd_t_rhf.kernel(mycc)
         energy_t_bench = -0.00191443154358
         self.assertAlmostEqual(energy_t, energy_t_bench, 6)
 
