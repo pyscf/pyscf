@@ -19,6 +19,7 @@ from pyscf.pbc import scf
 from pyscf.pbc.mp.kmp2 import get_frozen_mask, get_nocc, get_nmo
 from pyscf.lib import linalg_helper
 from pyscf.pbc.lib import kpts_helper
+from pyscf.pbc.tools.pbc import super_cell
 
 #einsum = np.einsum
 einsum = lib.einsum
@@ -55,6 +56,9 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
 
     full_t3c = np.zeros((nkpts, nkpts, nkpts, nkpts, nkpts, nocc, nocc, nocc, nvir, nvir, nvir), dtype=dtype)
     full_t3d = np.zeros((nkpts, nkpts, nkpts, nkpts, nkpts, nocc, nocc, nocc, nvir, nvir, nvir), dtype=dtype)
+    print "Checking t2 symmetry"
+    print check_antiperm_symmetry(t2, 0, 1)
+
     for ki in range(nkpts):
         for kj in range(nkpts):
             for kk in range(nkpts):
@@ -77,14 +81,15 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
                                     eijkabc = (eijk - mo_energy_vir[ka][a] - mo_energy_vir[kb][b] - mo_energy_vir[kc][c])
 
                                     # Form connected triple excitation amplitude
+                                    t3c = np.zeros((nocc,nocc,nocc), dtype=dtype)
 
                                     # First term: 1 - p(ij) - p(ik)
                                     ke = kconserv[kj, ka, kk]
-                                    t3c = einsum('jke,ei->ijk', t2[kj, kk, ka, :, :, a, :], eris.oovv[ke, ki, kb, :, :, b, c].conj())
+                                    t3c = t3c + einsum('jke,ie->ijk', t2[kj, kk, ka, :, :, a, :], -eris.ovvv[ki, ke, kc, :, :, c, b].conj())
                                     ke = kconserv[ki, ka, kk]
-                                    t3c = t3c - einsum('ike,ej->ijk', t2[ki, kk, ka, :, :, a, :], eris.oovv[ke, kj, kb, :, :, b, c].conj())
+                                    t3c = t3c - einsum('ike,je->ijk', t2[ki, kk, ka, :, :, a, :], -eris.ovvv[kj, ke, kc, :, :, c, b].conj())
                                     ke = kconserv[kj, ka, ki]
-                                    t3c = t3c - einsum('jie,ek->ijk', t2[kj, ki, ka, :, :, a, :], eris.oovv[ke, kk, kb, :, :, b, c].conj())
+                                    t3c = t3c - einsum('jie,ke->ijk', t2[kj, ki, ka, :, :, a, :], -eris.ovvv[kk, ke, kc, :, :, c, b].conj())
 
                                     km = kconserv[kb, ki, kc]
                                     t3c = t3c - einsum('mi,jkm->ijk', t2[km, ki, kb, :, :, b, c], eris.ooov[kj, kk, km, :, :, :, a])
@@ -95,26 +100,26 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
 
                                     # Second term: - p(ab) + p(ab) p(ij) + p(ab) p(ik)
                                     ke = kconserv[kj, kb, kk]
-                                    t3c = t3c - einsum('jke,ei->ijk', t2[kj, kk, kb, :, :, b, :], eris.oovv[ke, ki, ka, :, :, a, c].conj())
-                                    ke = kconserv[ki, ka, kk]
-                                    t3c = t3c + einsum('ike,ej->ijk', t2[ki, kk, kb, :, :, b, :], eris.oovv[ke, kj, ka, :, :, a, c].conj())
-                                    ke = kconserv[kj, ka, ki]
-                                    t3c = t3c + einsum('jie,ek->ijk', t2[kj, ki, kb, :, :, b, :], eris.oovv[ke, kk, ka, :, :, a, c].conj())
+                                    t3c = t3c - einsum('jke,ie->ijk', t2[kj, kk, kb, :, :, b, :], -eris.ovvv[ki, ke, kc, :, :, c, a].conj())
+                                    ke = kconserv[ki, kb, kk]
+                                    t3c = t3c + einsum('ike,je->ijk', t2[ki, kk, kb, :, :, b, :], -eris.ovvv[kj, ke, kc, :, :, c, a].conj())
+                                    ke = kconserv[kj, kb, ki]
+                                    t3c = t3c + einsum('jie,ke->ijk', t2[kj, ki, kb, :, :, b, :], -eris.ovvv[kk, ke, kc, :, :, c, a].conj())
 
                                     km = kconserv[ka, ki, kc]
                                     t3c = t3c + einsum('mi,jkm->ijk', t2[km, ki, ka, :, :, a, c], eris.ooov[kj, kk, km, :, :, :, b])
                                     km = kconserv[ka, kj, kc]
                                     t3c = t3c - einsum('mj,ikm->ijk', t2[km, kj, ka, :, :, a, c], eris.ooov[ki, kk, km, :, :, :, b])
-                                    km = kconserv[kb, kk, kc]
+                                    km = kconserv[ka, kk, kc]
                                     t3c = t3c - einsum('mk,jim->ijk', t2[km, kk, ka, :, :, a, c], eris.ooov[kj, ki, km, :, :, :, b])
 
                                     # Third term: - p(ac) + p(ac) p(ij) + p(ac) p(ik)
                                     ke = kconserv[kj, kc, kk]
-                                    t3c = t3c - einsum('jke,ei->ijk', t2[kj, kk, kc, :, :, c, :], eris.oovv[ke, ki, kb, :, :, b, a].conj())
+                                    t3c = t3c - einsum('jke,ie->ijk', t2[kj, kk, kc, :, :, c, :], -eris.ovvv[ki, ke, ka, :, :, a, b].conj())
                                     ke = kconserv[ki, kc, kk]
-                                    t3c = t3c + einsum('ike,ej->ijk', t2[ki, kk, kc, :, :, c, :], eris.oovv[ke, kj, kb, :, :, b, a].conj())
+                                    t3c = t3c + einsum('ike,je->ijk', t2[ki, kk, kc, :, :, c, :], -eris.ovvv[kj, ke, ka, :, :, a, b].conj())
                                     ke = kconserv[kj, kc, ki]
-                                    t3c = t3c + einsum('jie,ek->ijk', t2[kj, ki, kc, :, :, c, :], eris.oovv[ke, kk, kb, :, :, b, a].conj())
+                                    t3c = t3c + einsum('jie,ke->ijk', t2[kj, ki, kc, :, :, c, :], -eris.ovvv[kk, ke, ka, :, :, a, b].conj())
 
                                     km = kconserv[kb, ki, ka]
                                     t3c = t3c + einsum('mi,jkm->ijk', t2[km, ki, kb, :, :, b, a], eris.ooov[kj, kk, km, :, :, :, c])
@@ -130,49 +135,49 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
 
                                     # First term: 1 - p(ij) - p(ik)
                                     if ki == ka:
-                                        t3d = t3d + einsum('i,jk->ijk', t1[ki, :, a], eris.oovv[kj, kk, kb, :, :, b, c])
-                                        t3d = t3d + einsum('i,jk->ijk', fov[ki, :, a], t2[kj, kk, kb, :, :, b, c])
+                                        t3d = t3d + einsum('i,jk->ijk',  t1[ki, :, a], eris.oovv[kj, kk, kb, :, :, b, c].conj())
+                                        t3d = t3d + einsum('i,jk->ijk', fov[ki, :, a],        t2[kj, kk, kb, :, :, b, c])
 
                                     if kj == ka:
-                                        t3d = t3d - einsum('j,ik->ijk', t1[kj, :, a], eris.oovv[ki, kk, kb, :, :, b, c])
-                                        t3d = t3d - einsum('j,ik->ijk', fov[kj, :, a], t2[ki, kk, kb, :, :, b, c])
+                                        t3d = t3d - einsum('j,ik->ijk',  t1[kj, :, a], eris.oovv[ki, kk, kb, :, :, b, c].conj())
+                                        t3d = t3d - einsum('j,ik->ijk', fov[kj, :, a],        t2[ki, kk, kb, :, :, b, c])
 
                                     if kk == ka:
-                                        t3d = t3d - einsum('k,ji->ijk', t1[kk, :, a], eris.oovv[kj, ki, kb, :, :, b, c])
-                                        t3d = t3d - einsum('k,ji->ijk', fov[kk, :, a], t2[kj, ki, kb, :, :, b, c])
+                                        t3d = t3d - einsum('k,ji->ijk',  t1[kk, :, a], eris.oovv[kj, ki, kb, :, :, b, c].conj())
+                                        t3d = t3d - einsum('k,ji->ijk', fov[kk, :, a],        t2[kj, ki, kb, :, :, b, c])
 
                                     # Second term: - p(ab) + p(ab) p(ij) + p(ab) p(ik)
                                     if ki == kb:
-                                        t3d = t3d - einsum('i,jk->ijk', t1[ki, :, b], eris.oovv[kj, kk, ka, :, :, a, c])
-                                        t3d = t3d - einsum('i,jk->ijk', fov[ki, :, b], t2[kj, kk, ka, :, :, a, c])
+                                        t3d = t3d - einsum('i,jk->ijk',  t1[ki, :, b], eris.oovv[kj, kk, ka, :, :, a, c].conj())
+                                        t3d = t3d - einsum('i,jk->ijk', fov[ki, :, b],        t2[kj, kk, ka, :, :, a, c])
 
                                     if kj == kb:
-                                        t3d = t3d + einsum('j,ik->ijk', t1[kj, :, b], eris.oovv[ki, kk, kb, :, :, a, c])
-                                        t3d = t3d + einsum('j,ik->ijk', fov[kj, :, b], t2[ki, kk, kb, :, :, a, c])
+                                        t3d = t3d + einsum('j,ik->ijk',  t1[kj, :, b], eris.oovv[ki, kk, ka, :, :, a, c].conj())
+                                        t3d = t3d + einsum('j,ik->ijk', fov[kj, :, b],        t2[ki, kk, ka, :, :, a, c])
 
                                     if kk == kb:
-                                        t3d = t3d + einsum('k,ji->ijk', t1[kk, :, b], eris.oovv[kj, ki, kb, :, :, a, c])
-                                        t3d = t3d + einsum('k,ji->ijk', fov[kk, :, b], t2[kj, ki, kb, :, :, a, c])
+                                        t3d = t3d + einsum('k,ji->ijk',  t1[kk, :, b], eris.oovv[kj, ki, ka, :, :, a, c].conj())
+                                        t3d = t3d + einsum('k,ji->ijk', fov[kk, :, b],        t2[kj, ki, ka, :, :, a, c])
 
                                     # Third term: - p(ac) + p(ac) p(ij) + p(ac) p(ik)
                                     if ki == kc:
-                                        t3d = t3d - einsum('i,jk->ijk', t1[ki, :, c], eris.oovv[kj, kk, kb, :, :, b, a])
-                                        t3d = t3d - einsum('i,jk->ijk', fov[ki, :, c], t2[kj, kk, kb, :, :, b, a])
+                                        t3d = t3d - einsum('i,jk->ijk',  t1[ki, :, c], eris.oovv[kj, kk, kb, :, :, b, a].conj())
+                                        t3d = t3d - einsum('i,jk->ijk', fov[ki, :, c],        t2[kj, kk, kb, :, :, b, a])
 
                                     if kj == kc:
-                                        t3d = t3d + einsum('j,ik->ijk', t1[kj, :, c], eris.oovv[ki, kk, kb, :, :, b, a])
-                                        t3d = t3d + einsum('j,ik->ijk', fov[kj, :, c], t2[ki, kk, kb, :, :, b, a])
+                                        t3d = t3d + einsum('j,ik->ijk',  t1[kj, :, c], eris.oovv[ki, kk, kb, :, :, b, a].conj())
+                                        t3d = t3d + einsum('j,ik->ijk', fov[kj, :, c],        t2[ki, kk, kb, :, :, b, a])
 
                                     if kk == kc:
-                                        t3d = t3d + einsum('k,ji->ijk', t1[kk, :, c], eris.oovv[kj, ki, kb, :, :, b, a])
-                                        t3d = t3d + einsum('k,ji->ijk', fov[kk, :, c], t2[kj, ki, kb, :, :, b, a])
+                                        t3d = t3d + einsum('k,ji->ijk',  t1[kk, :, c], eris.oovv[kj, ki, kb, :, :, b, a].conj())
+                                        t3d = t3d + einsum('k,ji->ijk', fov[kk, :, c],        t2[kj, ki, kb, :, :, b, a])
 
                                     t3c_plus_d = t3c + t3d
                                     t3c_plus_d /= eijkabc
 
                                     full_t3d[ki, kj, kk, ka, kb, :, :, :, a, b, c] = t3d.copy()
 
-                                    energy_t += (1./36) * einsum('ijk,ijk', t3c, t3c_plus_d)
+                                    energy_t += (1./36) * einsum('ijk,ijk', t3c, t3c_plus_d.conj())
     print "Checking t3c symmetry"
     print check_antiperm_symmetry(full_t3c, 0, 1)
     print check_antiperm_symmetry(full_t3c, 0, 2)
@@ -185,7 +190,7 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
     print check_antiperm_symmetry(full_t3d, 3, 4)
     print energy_t
 
-def check_antiperm_symmetry(array, idx1, idx2, tolerance=1e-10):
+def check_antiperm_symmetry(array, idx1, idx2, tolerance=1e-8):
     '''
     Checks whether an array with k-point symmetry has antipermutational symmetry
     with respect to switching two indices idx1, idx2.  For 2-particle arrays,
@@ -203,7 +208,7 @@ def check_antiperm_symmetry(array, idx1, idx2, tolerance=1e-10):
 
     array_shape_len = len(array.shape)
     nparticles = (array_shape_len + 1) / 4
-    assert(idx1 < 2 * nparticles and idx2 < 2 * nparticles)
+    assert(idx1 < ( 2 * nparticles - 1 ) and idx2 < ( 2 * nparticles - 1 ))
 
     if (nparticles > 3):
         raise NotImplementedError("Currently set up for only up to 3 particle "
@@ -224,7 +229,7 @@ def check_antiperm_symmetry(array, idx1, idx2, tolerance=1e-10):
             out_array_indices[kpt_idx2], out_array_indices[kpt_idx1]
     out_array_indices[orb_idx1], out_array_indices[orb_idx2] = \
             out_array_indices[orb_idx2], out_array_indices[orb_idx1]
-    return (np.linalg.norm(array + sign*array.transpose(out_array_indices)) <
+    return (np.linalg.norm(array + array.transpose(out_array_indices)) <
             tolerance)
 
 if __name__ == '__main__':
@@ -245,13 +250,41 @@ if __name__ == '__main__':
     3.370137329, 3.370137329, 0.000000000'''
     cell.unit = 'B'
     cell.verbose = 5
-    cell.mesh = [12, 12, 12]
+    cell.mesh = [24, 24, 24]
     cell.build()
 
-    kmf = scf.KRHF(cell, kpts=cell.make_kpts([1, 1, 1]), exxdiv=None)
+    kmf = scf.KRHF(cell, kpts=cell.make_kpts([1, 1, 2]), exxdiv=None)
     ehf = kmf.kernel()
 
     mycc = cc.KGCCSD(kmf)
     ecc, t1, t2 = mycc.kernel()
 
     kernel(mycc)
+
+    #nmp = [1, 1, 2]
+    #supcell = super_cell(cell, nmp)
+    #mf = scf.RHF(supcell, exxdiv=None)
+    #mf.kernel()
+    #supcell_energy = mf.energy_tot() / np.prod(nmp)
+    #print "supcell energy = ", supcell_energy
+
+    #mycc = cc.RCCSD(mf)
+    #gccsd_energy = mycc.ccsd()[0] / np.prod(nmp)
+    #print "CCSD energy = ", gccsd_energy
+    #print "CCSD_T energy = ", mycc.ccsd_t() / np.prod(nmp)
+
+   # -0.00191451068702
+   # -0.0139599772085
+
+    # Gamma point calculation
+    #
+    # Parameters
+    # ----------
+    #     mesh : [24, 24, 24]
+    #     kpt  : [1, 1, 3]
+    # Returns
+    # -------
+    #     CCSD    : -0.166159134496 Hartree per cell
+    #     CCSD(T) : -0.004037852646 Hartree per cell
+
+    #-0.00191451068698
