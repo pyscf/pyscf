@@ -24,6 +24,10 @@ from pyscf.pbc.tools.pbc import super_cell
 #einsum = np.einsum
 einsum = lib.einsum
 
+# CCSD(T) equations taken from Tu, Yang, Wang, and Guo JPC (135), 2011
+#
+# There are some complex conjugates not included in the equations
+# by Watts, Gauss, Bartlett JCP (98), 1993
 def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
     """
     This function returns the CCSD(T) energy.
@@ -92,11 +96,11 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
                                     t3c = t3c - einsum('jie,ke->ijk', t2[kj, ki, ka, :, :, a, :], -eris.ovvv[kk, ke, kc, :, :, c, b].conj())
 
                                     km = kconserv[kb, ki, kc]
-                                    t3c = t3c - einsum('mi,jkm->ijk', t2[km, ki, kb, :, :, b, c], eris.ooov[kj, kk, km, :, :, :, a])
+                                    t3c = t3c - einsum('mi,jkm->ijk', t2[km, ki, kb, :, :, b, c], eris.ooov[kj, kk, km, :, :, :, a].conj())
                                     km = kconserv[kb, kj, kc]
-                                    t3c = t3c + einsum('mj,ikm->ijk', t2[km, kj, kb, :, :, b, c], eris.ooov[ki, kk, km, :, :, :, a])
+                                    t3c = t3c + einsum('mj,ikm->ijk', t2[km, kj, kb, :, :, b, c], eris.ooov[ki, kk, km, :, :, :, a].conj())
                                     km = kconserv[kb, kk, kc]
-                                    t3c = t3c + einsum('mk,jim->ijk', t2[km, kk, kb, :, :, b, c], eris.ooov[kj, ki, km, :, :, :, a])
+                                    t3c = t3c + einsum('mk,jim->ijk', t2[km, kk, kb, :, :, b, c], eris.ooov[kj, ki, km, :, :, :, a].conj())
 
                                     # Second term: - p(ab) + p(ab) p(ij) + p(ab) p(ik)
                                     ke = kconserv[kj, kb, kk]
@@ -107,11 +111,11 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
                                     t3c = t3c + einsum('jie,ke->ijk', t2[kj, ki, kb, :, :, b, :], -eris.ovvv[kk, ke, kc, :, :, c, a].conj())
 
                                     km = kconserv[ka, ki, kc]
-                                    t3c = t3c + einsum('mi,jkm->ijk', t2[km, ki, ka, :, :, a, c], eris.ooov[kj, kk, km, :, :, :, b])
+                                    t3c = t3c + einsum('mi,jkm->ijk', t2[km, ki, ka, :, :, a, c], eris.ooov[kj, kk, km, :, :, :, b].conj())
                                     km = kconserv[ka, kj, kc]
-                                    t3c = t3c - einsum('mj,ikm->ijk', t2[km, kj, ka, :, :, a, c], eris.ooov[ki, kk, km, :, :, :, b])
+                                    t3c = t3c - einsum('mj,ikm->ijk', t2[km, kj, ka, :, :, a, c], eris.ooov[ki, kk, km, :, :, :, b].conj())
                                     km = kconserv[ka, kk, kc]
-                                    t3c = t3c - einsum('mk,jim->ijk', t2[km, kk, ka, :, :, a, c], eris.ooov[kj, ki, km, :, :, :, b])
+                                    t3c = t3c - einsum('mk,jim->ijk', t2[km, kk, ka, :, :, a, c], eris.ooov[kj, ki, km, :, :, :, b].conj())
 
                                     # Third term: - p(ac) + p(ac) p(ij) + p(ac) p(ik)
                                     ke = kconserv[kj, kc, kk]
@@ -122,11 +126,11 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
                                     t3c = t3c + einsum('jie,ke->ijk', t2[kj, ki, kc, :, :, c, :], -eris.ovvv[kk, ke, ka, :, :, a, b].conj())
 
                                     km = kconserv[kb, ki, ka]
-                                    t3c = t3c + einsum('mi,jkm->ijk', t2[km, ki, kb, :, :, b, a], eris.ooov[kj, kk, km, :, :, :, c])
+                                    t3c = t3c + einsum('mi,jkm->ijk', t2[km, ki, kb, :, :, b, a], eris.ooov[kj, kk, km, :, :, :, c].conj())
                                     km = kconserv[kb, kj, ka]
-                                    t3c = t3c - einsum('mj,ikm->ijk', t2[km, kj, kb, :, :, b, a], eris.ooov[ki, kk, km, :, :, :, c])
+                                    t3c = t3c - einsum('mj,ikm->ijk', t2[km, kj, kb, :, :, b, a], eris.ooov[ki, kk, km, :, :, :, c].conj())
                                     km = kconserv[kb, kk, ka]
-                                    t3c = t3c - einsum('mk,jim->ijk', t2[km, kk, kb, :, :, b, a], eris.ooov[kj, ki, km, :, :, :, c])
+                                    t3c = t3c - einsum('mk,jim->ijk', t2[km, kk, kb, :, :, b, a], eris.ooov[kj, ki, km, :, :, :, c].conj())
 
                                     full_t3c[ki, kj, kk, ka, kb, :, :, :, a, b, c] = t3c.copy()
 
@@ -172,7 +176,9 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
                                         t3d = t3d + einsum('k,ji->ijk',  t1[kk, :, c], eris.oovv[kj, ki, kb, :, :, b, a].conj())
                                         t3d = t3d + einsum('k,ji->ijk', fov[kk, :, c],        t2[kj, ki, kb, :, :, b, a])
 
-                                    t3c_plus_d = t3c + t3d
+                                    # TODO: Use consistent definitions between the two references so you don't have
+                                    # this minus sign...
+                                    t3c_plus_d = t3c - t3d
                                     t3c_plus_d /= eijkabc
 
                                     full_t3d[ki, kj, kk, ka, kb, :, :, :, a, b, c] = t3d.copy()
@@ -253,7 +259,9 @@ if __name__ == '__main__':
     cell.mesh = [24, 24, 24]
     cell.build()
 
-    kmf = scf.KRHF(cell, kpts=cell.make_kpts([1, 1, 2]), exxdiv=None)
+    kpts = cell.make_kpts([1, 1, 2])
+    kpts -= kpts[0]
+    kmf = scf.KRHF(cell, kpts=kpts, exxdiv=None)
     ehf = kmf.kernel()
 
     mycc = cc.KGCCSD(kmf)
@@ -273,18 +281,14 @@ if __name__ == '__main__':
     #print "CCSD energy = ", gccsd_energy
     #print "CCSD_T energy = ", mycc.ccsd_t() / np.prod(nmp)
 
-   # -0.00191451068702
-   # -0.0139599772085
-
     # Gamma point calculation
     #
     # Parameters
     # ----------
     #     mesh : [24, 24, 24]
-    #     kpt  : [1, 1, 3]
+    #     kpt  : [1, 1, 2]
     # Returns
     # -------
-    #     CCSD    : -0.166159134496 Hartree per cell
-    #     CCSD(T) : -0.004037852646 Hartree per cell
-
-    #-0.00191451068698
+    #     SCF     : -8.65192329453 Hartree per cell
+    #     CCSD    : -0.15529836941 Hartree per cell
+    #     CCSD(T) : -0.00191451068 Hartree per cell
