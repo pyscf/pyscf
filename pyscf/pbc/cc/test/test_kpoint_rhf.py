@@ -121,7 +121,7 @@ class KnownValues(unittest.TestCase):
         kmf.conv_tol_grad = 1e-6  # Stricter tol needed for answer to agree with supercell
         ehf = kmf.scf()
 
-        self.assertAlmostEqual(ehf, ehf_bench, 7)
+        self.assertAlmostEqual(ehf, ehf_bench, 6)
 
         # The following calculation at full convergence gives -0.711071910294612
         # for a cell.mesh = [25, 25, 25].
@@ -130,7 +130,7 @@ class KnownValues(unittest.TestCase):
         mycc.max_cycle = 5  # Too expensive to do more
         ecc1, t1, t2 = mycc.kernel()
 
-        self.assertAlmostEqual(ecc1, ecc1_bench, 7)
+        self.assertAlmostEqual(ecc1, ecc1_bench, 6)
 
         # The following calculation at full convergence gives -0.6440448716452378
         # for a cell.mesh = [25, 25, 25].  It is equivalent to an RHF supercell [1, 1, 2]
@@ -140,7 +140,7 @@ class KnownValues(unittest.TestCase):
         mycc.max_cycle = 5
         ecc2, t1, t2 = mycc.kernel()
 
-        self.assertAlmostEqual(ecc2, ecc2_bench, 7)
+        self.assertAlmostEqual(ecc2, ecc2_bench, 6)
 
     def test_ccsd_t(self):
         n = 14
