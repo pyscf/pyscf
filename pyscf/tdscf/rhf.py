@@ -371,10 +371,9 @@ def analyze(tdobj, verbose=None):
                      i+1, wfnsym, e_ev[i], wave_length[i], f_oscillator)
 
         if log.verbose >= logger.INFO:
-            x = x.T
-            o_idx, v_idx = numpy.where(abs(x) > 0.1)
+            v_idx, o_idx = numpy.where(abs(x) > 0.1)
             for i, j in zip(o_idx, v_idx):
-                log.info('    %4d -> %-4d %.5f', i, j+nocc, x[i,j])
+                log.info('    %4d -> %-4d %.5f', i, j+nocc, x[j,i])
 
     if log.verbose >= logger.INFO:
         log.info('\n** Transition electric dipole moments (AU) **')
@@ -541,8 +540,8 @@ class TDA(lib.StreamObject):
     get_nto = get_nto
 
     def nuc_grad_method(self):
-        from pyscf.tddft import rhf_grad
-        return rhf_grad.Gradients(self)
+        from pyscf.grad import tdrhf
+        return tdrhf.Gradients(self)
 
 CIS = TDA
 
@@ -673,10 +672,8 @@ class TDHF(TDA):
         return self.e, self.xy
 
     def nuc_grad_method(self):
-        from pyscf.tddft import rhf_grad
-        return rhf_grad.Gradients(self)
-
-RPA = TDHF
+        from pyscf.grad import tdrhf
+        return tdrhf.Gradients(self)
 
 
 if __name__ == '__main__':

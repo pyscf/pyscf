@@ -21,7 +21,8 @@
 
 from functools import reduce
 import numpy
-import pyscf.lib
+from pyscf import lib
+from pyscf import ao2mo
 from pyscf.lib import logger
 from pyscf.dft import numint
 from pyscf.scf import _vhf
@@ -42,7 +43,7 @@ def kernel(tdgrad, z, atmlst=None, mf_grad=None, max_memory=2000,
     nao, nmo = mo_coeff.shape
     nocc = (mo_occ>0).sum()
     nvir = nmo - nocc
-    #eai = pyscf.lib.direct_sum('a-i->ai', mo_energy[nocc:], mo_energy[:nocc])
+    #eai = lib.direct_sum('a-i->ai', mo_energy[nocc:], mo_energy[:nocc])
     z = z.reshape(nvir,nocc)
     orbv = mo_coeff[:,nocc:]
     orbo = mo_coeff[:,:nocc]
@@ -57,11 +58,10 @@ def kernel(tdgrad, z, atmlst=None, mf_grad=None, max_memory=2000,
 
     eri1 = -mol.intor('int2e_ip1', aosym='s1', comp=3)
     eri1 = eri1.reshape(3,nao,nao,nao,nao)
-    from pyscf import ao2mo
     eri0 = ao2mo.kernel(mol, mo_coeff)
     eri0 = ao2mo.restore(1, eri0, nmo).reshape(nmo,nmo,nmo,nmo)
     g = eri0 * 2 - eri0.transpose(0,3,2,1)
-    zeta = pyscf.lib.direct_sum('i+j->ij', mo_energy, mo_energy) * .5
+    zeta = lib.direct_sum('i+j->ij', mo_energy, mo_energy) * .5
     zeta[nocc:,:nocc] = mo_energy[:nocc]
     zeta[:nocc,nocc:] = mo_energy[nocc:]
 
@@ -142,7 +142,7 @@ if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
     from pyscf import dft
-    import pyscf.tddft.rhf
+    from pyscf import tddft
     mol = gto.Mole()
     mol.verbose = 0
     mol.output = None
@@ -156,7 +156,7 @@ if __name__ == '__main__':
 
     mf = scf.RHF(mol)
     mf.scf()
-    td = pyscf.tddft.rhf.TDA(mf)
+    td = tddft.rhf.TDA(mf)
     td.nstates = 3
     e, z = td.kernel()
     #print e[0] + mf.e_tot

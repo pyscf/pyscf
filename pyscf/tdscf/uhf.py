@@ -21,7 +21,7 @@ import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
-from pyscf.tddft import rhf
+from pyscf.tdscf import rhf
 from pyscf.scf import uhf_symm
 from pyscf.soscf.newton_ah import _gen_uhf_response
 
@@ -334,10 +334,8 @@ class TDHF(TDA):
 
     def nuc_grad_method(self):
         raise NotImplementedError
-        from pyscf.tddft import uhf_grad
-        return uhf_grad.Gradients(self)
-
-RPA = TDHF
+        from pyscf.grad import tduhf
+        return tduhf.Gradients(self)
 
 
 if __name__ == '__main__':

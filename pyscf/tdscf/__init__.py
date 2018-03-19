@@ -11,10 +11,35 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# Author: Qiming Sun <osirpt.sun@gmail.com>
+#
 
-from pyscf.tddft import rks, rhf
-from pyscf.tddft import uks, uhf
-from pyscf.tddft import rhf_grad
-from pyscf.tddft import rks_grad
-from pyscf.tddft import TDHF, CIS, RPA
-from pyscf.tddft import TD, TDA, TDDFT
+from pyscf.tdscf import rhf
+from pyscf.tdscf import uhf
+from pyscf.tdscf import rks
+from pyscf.tdscf import uks
+from pyscf.tdscf.rhf import TDHF, CIS
+from pyscf.tdscf.rks import dRPA, dTDA
+from pyscf import scf
+
+def TD(mf):
+    mf = scf.addons.convert_to_rhf(mf)
+    return TDDFT(mf)
+
+def TDA(mf):
+    mf = scf.addons.convert_to_rhf(mf)
+    if hasattr(mf, 'xc'):
+        return rks.TDA(mf)
+    else:
+        return rhf.TDA(mf)
+
+def TDDFT(mf):
+    mf = scf.addons.convert_to_rhf(mf)
+    if hasattr(mf, 'xc'):
+        if mf._numint.libxc.is_hybrid_xc(mf.xc):
+            return rks.TDDFT(mf)
+        else:
+            return rks.TDDFTNoHybrid(mf)
+    else:
+        return rhf.TDHF(mf)

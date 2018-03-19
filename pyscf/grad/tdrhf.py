@@ -203,7 +203,7 @@ if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
     from pyscf import dft
-    import pyscf.tddft
+    from pyscf import tddft
     mol = gto.Mole()
     mol.verbose = 0
     mol.output = None
@@ -217,7 +217,7 @@ if __name__ == '__main__':
 
     mf = scf.RHF(mol)
     mf.scf()
-    td = pyscf.tddft.TDA(mf)
+    td = tddft.TDA(mf)
     td.nstates = 3
     e, z = td.kernel()
     tdg = Gradients(td)
@@ -228,7 +228,7 @@ if __name__ == '__main__':
 #[[ 0  0  -2.67023832e-01]
 # [ 0  0   2.67023832e-01]]
 
-    td = pyscf.tddft.TDDFT(mf)
+    td = tddft.TDDFT(mf)
     td.nstates = 3
     e, z = td.kernel()
     tdg = Gradients(td)
@@ -238,7 +238,7 @@ if __name__ == '__main__':
 # [[ 0  0  -2.71041021e-01]
 #  [ 0  0   2.71041021e-01]]
 
-    td = pyscf.tddft.TDA(mf)
+    td = tddft.TDA(mf)
     td.nstates = 3
     td.singlet = False
     e, z = td.kernel()
@@ -249,7 +249,7 @@ if __name__ == '__main__':
 # [[ 0  0  -2.81048403e-01]
 #  [ 0  0   2.81048403e-01]]
 
-    td = pyscf.tddft.TDDFT(mf)
+    td = tddft.TDDFT(mf)
     td.nstates = 3
     td.singlet = False
     e, z = td.kernel()

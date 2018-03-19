@@ -20,7 +20,6 @@ import unittest
 import numpy
 from pyscf import gto, dft
 from pyscf import tddft
-from pyscf.tddft import rks_grad
 
 mol = gto.Mole()
 mol.verbose = 0
@@ -43,7 +42,7 @@ class KnownValues(unittest.TestCase):
         mf.grids.prune = False
         mf.scf()
         td = tddft.TDA(mf).run(nstates=3)
-        tdg = rks_grad.Gradients(td)
+        tdg = td.nuc_grad_method()
         g1 = tdg.kernel(state=2)
         self.assertAlmostEqual(g1[0,2], -9.23916667e-02, 8)
 
@@ -53,7 +52,7 @@ class KnownValues(unittest.TestCase):
         mf.grids.prune = False
         mf.scf()
         td = tddft.TDA(mf).run(nstates=3)
-        tdg = rks_grad.Gradients(td)
+        tdg = td.nuc_grad_method()
         g1 = tdg.kernel(state=2)
         self.assertAlmostEqual(g1[0,2], -9.32506535e-02, 8)
 
@@ -63,7 +62,7 @@ class KnownValues(unittest.TestCase):
         mf.grids.prune = False
         mf.scf()
         td = tddft.TDDFT(mf).run(nstates=3)
-        tdg = rks_grad.Gradients(td)
+        tdg = td.nuc_grad_method()
         g1 = tdg.kernel(state=2)
         self.assertAlmostEqual(g1[0,2], -1.31315477e-01, 8)
 
@@ -74,7 +73,7 @@ class KnownValues(unittest.TestCase):
         mf.grids.prune = False
         mf.scf()
         td = tddft.TDDFT(mf).run(nstates=3)
-        tdg = rks_grad.Gradients(td)
+        tdg = td.nuc_grad_method()
         g1 = tdg.kernel(state=2)
         self.assertAlmostEqual(g1[0,2], -1.55778110e-01, 7)
 

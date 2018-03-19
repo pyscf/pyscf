@@ -30,7 +30,7 @@ from pyscf.dft import rks
 from pyscf.dft import numint
 from pyscf.dft import rks_grad
 from pyscf.scf import cphf
-from pyscf.tddft import rhf_grad
+from pyscf.grad import tdrhf
 
 
 #
@@ -335,7 +335,7 @@ def _contract_xc_kernel(td_grad, xc_code, xai, oovv=None, with_vxc=True,
     return f1vo, f1oo, v1ao, k1ao
 
 
-class Gradients(rhf_grad.Gradients):
+class Gradients(tdrhf.Gradients):
     def grad_elec(self, xy, singlet, atmlst=None):
         return kernel(self, xy, singlet, atmlst, self.max_memory, self.verbose)
 
@@ -344,7 +344,7 @@ if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
     from pyscf import dft
-    import pyscf.tddft
+    from pyscf import tddft
     mol = gto.Mole()
     mol.verbose = 0
     mol.output = None
@@ -362,7 +362,7 @@ if __name__ == '__main__':
 #    mf.grids.level = 6
     mf.scf()
 
-    td = pyscf.tddft.TDDFT(mf)
+    td = tddft.TDDFT(mf)
     td.nstates = 3
     e, z = td.kernel()
     tdg = Gradients(td)
@@ -377,7 +377,7 @@ if __name__ == '__main__':
     mf.grids.prune = False
     mf.scf()
 
-    td = pyscf.tddft.TDA(mf)
+    td = tddft.TDA(mf)
     td.nstates = 3
     e, z = td.kernel()
     tdg = Gradients(td)
@@ -386,7 +386,7 @@ if __name__ == '__main__':
 # [[ 0  0  -1.21504524e-01]
 #  [ 0  0   1.21505341e-01]]
 
-#    td = pyscf.tddft.TDA(mf)
+#    td = tddft.TDA(mf)
 #    td.nstates = 3
 #    td.singlet = False
 #    e, z = td.kernel()

@@ -19,7 +19,7 @@
 import unittest
 import numpy
 from pyscf import gto, scf, dft
-from pyscf.tddft import rhf, rks
+from pyscf.tdscf import rhf, rks
 
 mol = gto.Mole()
 mol.verbose = 0

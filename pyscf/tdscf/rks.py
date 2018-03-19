@@ -25,7 +25,7 @@ import numpy
 from pyscf import lib
 from pyscf.dft import numint
 from pyscf import dft
-from pyscf.tddft import rhf
+from pyscf.tdscf import rhf
 from pyscf.scf import hf_symm
 from pyscf.ao2mo import _ao2mo
 from pyscf.soscf.newton_ah import _gen_rhf_response
@@ -33,14 +33,13 @@ from pyscf.soscf.newton_ah import _gen_rhf_response
 
 class TDA(rhf.TDA):
     def nuc_grad_method(self):
-        raise NotImplementedError
-        from pyscf.tddft import rks_grad
-        return rks_grad.Gradients(self)
+        from pyscf.grad import tdrks
+        return tdrks.Gradients(self)
 
 class TDDFT(rhf.TDHF):
     def nuc_grad_method(self):
-        from pyscf.tddft import rks_grad
-        return rks_grad.Gradients(self)
+        from pyscf.grad import tdrks
+        return tdrks.Gradients(self)
 
 RPA = TDDFT
 
@@ -138,9 +137,8 @@ class TDDFTNoHybrid(TDA):
         return self.e, self.xy
 
     def nuc_grad_method(self):
-        raise NotImplementedError
-        from pyscf.tddft import rks_grad
-        return rks_grad.Gradients(self)
+        from pyscf.grad import tdrks
+        return tdrks.Gradients(self)
 
 
 class dRPA(TDDFTNoHybrid):
