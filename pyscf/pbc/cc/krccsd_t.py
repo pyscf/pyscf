@@ -136,7 +136,6 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
     for ki in range(nkpts):
         for kj in range(ki+1):
             for kk in range(kj+1):
-
                 # eigenvalue denominator: e(i) + e(j) + e(k)
                 eijk = lib.direct_sum('i,j,k->ijk', mo_energy_occ[ki], mo_energy_occ[kj], mo_energy_occ[kk])
 
@@ -144,7 +143,6 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
 
                 for ka in range(nkpts):
                     for kb in range(nkpts):
-
                         # Find momentum conservation condition for triples
                         # amplitude t3ijkabc
                         kc = kpts_helper.get_kconserv3(cell, kpts, [ki, kj, kk, ka, kb])
@@ -169,7 +167,6 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
                         for a in range(nvir):
                             for b in range(nvir):
                                 for c in range(nvir):
-
                                     # Form energy denominator
                                     eijkabc = (eijk - mo_energy_vir[ka][a] - mo_energy_vir[kb][b] - mo_energy_vir[kc][c])
 
@@ -178,7 +175,6 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
                                     rwijk = get_rw(ki, kj, kk, ka, kb, kc, a, b, c) / eijkabc
 
                                     energy_t += symm_fac * (1./6) * einsum('ijk,ijk', pwijk, rwijk.conj())
-                                    e_cont += einsum('ijk,ijk', pwijk, rwijk.conj())
 
     if abs(energy_t.imag) > 1e-4:
         log.warn('Non-zero imaginary part of CCSD(T) energy was found %s',
