@@ -103,9 +103,9 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
 
     def get_rw(ki, kj, kk, ka, kb, kc, a, b, c):
         '''R operating on Wijkabc intermediate as described in Scuseria paper'''
-        ret = ( 0. * get_permuted_w(ki, kj, kk, ka, kb, kc, a, b, c) +
-                0. * get_permuted_w(kk, ki, kj, ka, kb, kc, a, b, c).transpose(1, 2, 0) +
-                0. * get_permuted_w(kj, kk, ki, ka, kb, kc, a, b, c).transpose(2, 0, 1) -
+        ret = ( 4. * get_permuted_w(ki, kj, kk, ka, kb, kc, a, b, c) +
+                1. * get_permuted_w(kk, ki, kj, ka, kb, kc, a, b, c).transpose(1, 2, 0) +
+                1. * get_permuted_w(kj, kk, ki, ka, kb, kc, a, b, c).transpose(2, 0, 1) -
                 2. * get_permuted_w(kk, kj, ki, ka, kb, kc, a, b, c).transpose(2, 1, 0) -
                 2. * get_permuted_w(ki, kk, kj, ka, kb, kc, a, b, c).transpose(0, 2, 1) -
                 2. * get_permuted_w(kj, ki, kk, ka, kb, kc, a, b, c).transpose(1, 0, 2) )
@@ -139,8 +139,6 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
                 # eigenvalue denominator: e(i) + e(j) + e(k)
                 eijk = lib.direct_sum('i,j,k->ijk', mo_energy_occ[ki], mo_energy_occ[kj], mo_energy_occ[kk])
 
-                symm_ijk = 1.
-
                 for ka in range(nkpts):
                     for kb in range(nkpts):
                         # Find momentum conservation condition for triples
@@ -170,57 +168,68 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
                                     # Form energy denominator
                                     eijkabc = (eijk - mo_energy_vir[ka][a] - mo_energy_vir[kb][b] - mo_energy_vir[kc][c])
 
-                                    w_int0 = get_w(ki, kj, kk, ka, kb, kc, a, b, c)
-                                    w_int1 = get_w(kj, kk, ki, kb, kc, ka, b, c, a).transpose(2, 0, 1)
-                                    w_int2 = get_w(kk, ki, kj, kc, ka, kb, c, a, b).transpose(1, 2, 0)
-                                    w_int3 = get_w(ki, kk, kj, ka, kc, kb, a, c, b).transpose(0, 2, 1)
-                                    w_int4 = get_w(kk, kj, ki, kc, kb, ka, c, b, a).transpose(2, 1, 0)
-                                    w_int5 = get_w(kj, ki, kk, kb, ka, kc, b, a, c).transpose(1, 0, 2)
+                                    pwijk = (       get_permuted_w(ki, kj, kk, ka, kb, kc, a, b, c) +
+                                              0.5 * get_permuted_v(ki, kj, kk, ka, kb, kc, a, b, c) )
+                                    rwijk = get_rw(ki, kj, kk, ka, kb, kc, a, b, c) / eijkabc
 
-                                    v_int0 = get_v(ki, kj, kk, ka, kb, kc, a, b, c)
-                                    v_int1 = get_v(kj, kk, ki, kb, kc, ka, b, c, a).transpose(2, 0, 1)
-                                    v_int2 = get_v(kk, ki, kj, kc, ka, kb, c, a, b).transpose(1, 2, 0)
-                                    v_int3 = get_v(ki, kk, kj, ka, kc, kb, a, c, b).transpose(0, 2, 1)
-                                    v_int4 = get_v(kk, kj, ki, kc, kb, ka, c, b, a).transpose(2, 1, 0)
-                                    v_int5 = get_v(kj, ki, kk, kb, ka, kc, b, a, c).transpose(1, 0, 2)
+                                    energy_t += symm_fac * einsum('ijk,ijk', pwijk, rwijk.conj())
 
-                                    # Creating permuted W_ijkabc + V_ijkabc intermediate
-                                    pwijk  = w_int0 + 0.5 * v_int0
-                                    pwijk += w_int1 + 0.5 * v_int1
-                                    pwijk += w_int2 + 0.5 * v_int2
-                                    pwijk += w_int3 + 0.5 * v_int3
-                                    pwijk += w_int4 + 0.5 * v_int4
-                                    pwijk += w_int5 + 0.5 * v_int5
+                                    #w_int0 = get_w(ki, kj, kk, ka, kb, kc, a, b, c)
+                                    #w_int1 = get_w(kj, kk, ki, kb, kc, ka, b, c, a).transpose(2, 0, 1)
+                                    #w_int2 = get_w(kk, ki, kj, kc, ka, kb, c, a, b).transpose(1, 2, 0)
+                                    #w_int3 = get_w(ki, kk, kj, ka, kc, kb, a, c, b).transpose(0, 2, 1)
+                                    #w_int4 = get_w(kk, kj, ki, kc, kb, ka, c, b, a).transpose(2, 1, 0)
+                                    #w_int5 = get_w(kj, ki, kk, kb, ka, kc, b, a, c).transpose(1, 0, 2)
 
-                                    rwijk = np.zeros_like(w_int0)
-                                    rwijk += 4. * w_int0
-                                    rwijk += 4. * w_int1
-                                    rwijk += 4. * w_int2
-                                    rwijk += 4. * w_int3
-                                    rwijk += 4. * w_int4
-                                    rwijk += 4. * w_int5
+                                    #v_int0 = get_v(ki, kj, kk, ka, kb, kc, a, b, c)
+                                    #v_int1 = get_v(kj, kk, ki, kb, kc, ka, b, c, a).transpose(2, 0, 1)
+                                    #v_int2 = get_v(kk, ki, kj, kc, ka, kb, c, a, b).transpose(1, 2, 0)
+                                    #v_int3 = get_v(ki, kk, kj, ka, kc, kb, a, c, b).transpose(0, 2, 1)
+                                    #v_int4 = get_v(kk, kj, ki, kc, kb, ka, c, b, a).transpose(2, 1, 0)
+                                    #v_int5 = get_v(kj, ki, kk, kb, ka, kc, b, a, c).transpose(1, 0, 2)
 
-                                    # (i, j, k) -> (k, i, j)
-                                    rwijk += 1. * get_w(kk, ki, kj, ka, kb, kc, a, b, c).transpose(1, 2, 0)
-                                    rwijk += 1. * get_w(ki, kj, kk, kb, kc, ka, b, c, a).transpose(2, 0, 1).transpose(1, 2, 0)
-                                    rwijk += 1. * get_w(kj, kk, ki, kc, ka, kb, c, a, b).transpose(1, 2, 0).transpose(1, 2, 0)
-                                    rwijk += 1. * get_w(kk, kj, ki, ka, kc, kb, a, c, b).transpose(0, 2, 1).transpose(1, 2, 0)
-                                    rwijk += 1. * get_w(kj, ki, kk, kc, kb, ka, c, b, a).transpose(2, 1, 0).transpose(1, 2, 0)
-                                    rwijk += 1. * get_w(ki, kk, kj, kb, ka, kc, b, a, c).transpose(1, 0, 2).transpose(1, 2, 0)
+                                    ## Creating permuted W_ijkabc + V_ijkabc intermediate
+                                    #pwijk  = w_int0 + 0.5 * v_int0
+                                    #pwijk += w_int1 + 0.5 * v_int1
+                                    #pwijk += w_int2 + 0.5 * v_int2
+                                    #pwijk += w_int3 + 0.5 * v_int3
+                                    #pwijk += w_int4 + 0.5 * v_int4
+                                    #pwijk += w_int5 + 0.5 * v_int5
 
-                                    # (i, j, k) -> (j, k, i)
-                                    rwijk += 1. * get_w(kj, kk, ki, ka, kb, kc, a, b, c).transpose(2, 0, 1)
-                                    rwijk += 1. * get_w(kk, ki, kj, kb, kc, ka, b, c, a).transpose(2, 0, 1).transpose(2, 0, 1)
-                                    rwijk += 1. * get_w(ki, kj, kk, kc, ka, kb, c, a, b).transpose(1, 2, 0).transpose(2, 0, 1)
-                                    rwijk += 1. * get_w(kj, ki, kk, ka, kc, kb, a, c, b).transpose(0, 2, 1).transpose(2, 0, 1)
-                                    rwijk += 1. * get_w(ki, kk, kj, kc, kb, ka, c, b, a).transpose(2, 1, 0).transpose(2, 0, 1)
-                                    rwijk += 1. * get_w(kk, kj, ki, kb, ka, kc, b, a, c).transpose(1, 0, 2).transpose(2, 0, 1)
+                                    #rwijk = np.zeros_like(w_int0)
 
-                                    rwijk += get_rw(ki, kj, kk, ka, kb, kc, a, b, c)
+                                    ## (i, j, k) -> (i, j, k)
+                                    #rwijk += 4. * w_int0
+                                    #rwijk += 4. * w_int1
+                                    #rwijk += 4. * w_int2
+                                    #rwijk += 4. * w_int3
+                                    #rwijk += 4. * w_int4
+                                    #rwijk += 4. * w_int5
 
-                                    rwijk /= eijkabc
+                                    ## (i, j, k) -> (k, i, j)
+                                    #rwijk += 1. * get_w(kk, ki, kj, ka, kb, kc, a, b, c).transpose(1, 2, 0)
+                                    #rwijk += 1. * get_w(ki, kj, kk, kb, kc, ka, b, c, a).transpose(2, 0, 1).transpose(1, 2, 0)
+                                    #rwijk += 1. * get_w(kj, kk, ki, kc, ka, kb, c, a, b).transpose(1, 2, 0).transpose(1, 2, 0)
+                                    #rwijk += 1. * get_w(kk, kj, ki, ka, kc, kb, a, c, b).transpose(0, 2, 1).transpose(1, 2, 0)
+                                    #rwijk += 1. * get_w(kj, ki, kk, kc, kb, ka, c, b, a).transpose(2, 1, 0).transpose(1, 2, 0)
+                                    #rwijk += 1. * get_w(ki, kk, kj, kb, ka, kc, b, a, c).transpose(1, 0, 2).transpose(1, 2, 0)
 
-                                    energy_t += symm_fac * (1./6) * einsum('ijk,ijk', pwijk, rwijk.conj())
+                                    ## (i, j, k) -> (j, k, i)
+                                    #rwijk += 1. * get_w(kj, kk, ki, ka, kb, kc, a, b, c).transpose(2, 0, 1)
+                                    #rwijk += 1. * get_w(kk, ki, kj, kb, kc, ka, b, c, a).transpose(2, 0, 1).transpose(2, 0, 1)
+                                    #rwijk += 1. * get_w(ki, kj, kk, kc, ka, kb, c, a, b).transpose(1, 2, 0).transpose(2, 0, 1)
+                                    #rwijk += 1. * get_w(kj, ki, kk, ka, kc, kb, a, c, b).transpose(0, 2, 1).transpose(2, 0, 1)
+                                    #rwijk += 1. * get_w(ki, kk, kj, kc, kb, ka, c, b, a).transpose(2, 1, 0).transpose(2, 0, 1)
+                                    #rwijk += 1. * get_w(kk, kj, ki, kb, ka, kc, b, a, c).transpose(1, 0, 2).transpose(2, 0, 1)
+
+                                    #rwijk += get_rw(ki, kj, kk, ka, kb, kc, a, b, c)
+
+                                    #rwijk /= eijkabc
+
+                                    #energy_t += symm_fac * einsum('ijk,ijk', pwijk, rwijk.conj())
+
+    energy_t *= (1./3)
+    energy_t /= nkpts
 
     if abs(energy_t.imag) > 1e-4:
         log.warn('Non-zero imaginary part of CCSD(T) energy was found %s',
@@ -240,6 +249,18 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
 #     SCF     : -8.65192329453 Hartree per cell
 #     CCSD    : -0.15529836941 Hartree per cell
 #     CCSD(T) : -0.00191451068 Hartree per cell
+
+# Gamma point calculation
+#
+# Parameters
+# ----------
+#     mesh : [24, 24, 24]
+#     kpt  : [1, 1, 3]
+# Returns
+# -------
+#     SCF     : -9.45719492074 Hartree per cell
+#     CCSD    : -0.16615913445 Hartree per cell
+#     CCSD(T) : -0.00403785264 Hartree per cell
 
 if __name__ == '__main__':
     from pyscf.pbc import gto
@@ -265,6 +286,15 @@ if __name__ == '__main__':
     cell.mesh = [24, 24, 24]
     cell.build()
 
+
+    #mk_mesh = [1, 1, 3]
+    #scell = super_cell(cell, mk_mesh)
+    #mf = scf.RHF(scell, exxdiv=None)
+    #mf.kernel()
+    #mycc = pyscf.cc.RCCSD(mf)
+    #ecc, t1, t2 = mycc.kernel()
+    #energy_t = mycc.ccsd_t()
+    #print "ccsd(t) energy per cell = ", energy_t / np.prod(mk_mesh)
     kpts = cell.make_kpts([1, 1, 2])
     kpts -= kpts[0]
     kmf = scf.KRHF(cell, kpts=kpts, exxdiv=None)
