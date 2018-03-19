@@ -2,31 +2,22 @@
 #
 # Authors: James D. McClain <jmcclain@princeton.edu>
 #
-"""Module for running k-point ccsd(t)"""
+"""Module for running restricted closed-shell k-point ccsd(t)"""
 
-import time
-import tempfile
-import numpy
+import itertools
 import numpy as np
-import h5py
 
 from pyscf import lib
-import pyscf.ao2mo
 from pyscf.lib import logger
-import pyscf.cc
-import pyscf.cc.ccsd
 from pyscf.pbc import scf
-from pyscf.pbc.mp.kmp2 import get_frozen_mask, get_nocc, get_nmo
-from pyscf.lib import linalg_helper
 from pyscf.pbc.lib import kpts_helper
 from pyscf.lib.numpy_helper import pack_tril
 from pyscf.lib.numpy_helper import cartesian_prod
 from pyscf.lib.misc import flatten
-from pyscf.pbc.tools.pbc import super_cell
-import itertools
 
 #einsum = np.einsum
 einsum = lib.einsum
+
 
 def range_tril_3d(nrange):
     '''
@@ -50,10 +41,11 @@ def range_tril_3d(nrange):
     # For each x in the leading dimension, produce all (y,z) tuples in lower
     # triangular form with x >= y >= z
     for i in range(nrange):
-        tup = np.array(np.tril_indices(i+1)).T
+        tup = np.array(np.tril_indices(i + 1)).T
         # NOTE: cartesian_prod does not work here, need to use itertools.product
-        tril_3d.extend([flatten(x) for x in list(itertools.product([[i]],tup))])
+        tril_3d.extend([flatten(x) for x in list(itertools.product([[i]], tup))])
     return tril_3d
+
 
 def range_tril_for_indices(nrange, ndim, indices):
     '''
@@ -79,12 +71,13 @@ def range_tril_for_indices(nrange, ndim, indices):
     assert len(indices) == 2
     idx0, idx1 = indices
 
-    range_idx = cartesian_prod([range(nrange)]*(ndim-2))
+    range_idx = cartesian_prod([range(nrange)] * (ndim - 2))
     tril_idx = np.array(np.tril_indices(nrange)).T
     tril_idx = np.array([flatten(x) for x in list(itertools.product(range_idx, tril_idx))])
-    tril_idx[:, idx0], tril_idx[:, ndim-2] = tril_idx[:, ndim-2], tril_idx[:, idx0].copy()
-    tril_idx[:, idx1], tril_idx[:, ndim-1] = tril_idx[:, ndim-1], tril_idx[:, idx1].copy()
+    tril_idx[:, idx0], tril_idx[:, ndim - 2] = tril_idx[:, ndim - 2], tril_idx[:, idx0].copy()
+    tril_idx[:, idx1], tril_idx[:, ndim - 1] = tril_idx[:, ndim - 1], tril_idx[:, idx1].copy()
     return tril_idx
+
 
 # CCSD(T) equations taken from Scuseria, JCP (94), 1991
 #
@@ -93,25 +86,36 @@ def range_tril_for_indices(nrange, ndim, indices):
 #     symmetry in spin-less operators is the exchange of a column of excitation
 #     ooperators).
 def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
-    '''Returns the k-point CCSD(T) for a closed-shell system using spatial orbitals.
+    '''
 
-    Note:
+    Returns the k-point CCSD(T) for a closed-shell system using spatial orbitals.
+
+    Parameters
+    ----------
+        mycc: GCCSD
+            Coupled-cluster object storing results of a coupled-cluster calculation.
+        eris: _ERIS
+            Integral object holding the relevant electron-repulsion integrals and
+            Fock matrix elements
+        t1: ndarray
+            T1 restricted coupled-cluster amplitudes
+        t2: ndarray
+            T2 restricted coupled-cluster amplitudes
+        max_memory: number
+            Maximum memory used in calculation
+        verbose: int, Logger
+            verbosity of calculation
+
+    Returns
+    -------
+        energy_t : float
+            The real-part of the k-point CCSD(T) energy.
+
+    Notes
+    -----
         Returns real part of the CCSD(T) energy, raises warning if there is
         a complex part.
 
-    Args:
-        mycc (:class:`GCCSD`): Coupled-cluster object storing results of
-            a coupled-cluster calculation.
-        eris (:class:`_ERIS`): Integral object holding the relevant electron-
-            repulsion integrals and Fock matrix elements
-        t1 (:obj:`ndarray`): t1 restricted coupled-cluster amplitudes
-        t2 (:obj:`ndarray`): t2 restricted coupled-cluster amplitudes
-        max_memory (float): Maximum memory used in calculation
-        verbose (int, :class:`Logger`) : verbosity of calculation
-
-    Returns:
-        energy_t : float
-            The real-part of the k-point CCSD(T) energy.
     '''
     if isinstance(verbose, logger.Logger):
         log = verbose
@@ -149,13 +153,13 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
         '''Wijkabc intermediate as described in Scuseria paper before Pijkabc acts'''
         km = kconserv[ki, ka, kj]
         kf = kconserv[kk, kc, kj]
-        ret =       einsum('kjf,fi->ijk', t2[kk, kj, kc, :, :, c, :], -eris.vovv[kf, ki, kb, :, :, b, a].conj())
+        ret = einsum('kjf,fi->ijk', t2[kk, kj, kc, :, :, c, :], -eris.vovv[kf, ki, kb, :, :, b, a].conj())
         ret = ret - einsum('mk,jim->ijk', t2[km, kk, kb, :, :, b, c], -eris.ooov[kj, ki, km, :, :, :, a].conj())
         return ret
 
     def get_permuted_w(ki, kj, kk, ka, kb, kc, a, b, c):
         '''Pijkabc operating on Wijkabc intermediate as described in Scuseria paper'''
-        ret =       get_w(ki, kj, kk, ka, kb, kc, a, b, c)
+        ret = get_w(ki, kj, kk, ka, kb, kc, a, b, c)
         ret = ret + get_w(kj, kk, ki, kb, kc, ka, b, c, a).transpose(2, 0, 1)
         ret = ret + get_w(kk, ki, kj, kc, ka, kb, c, a, b).transpose(1, 2, 0)
         ret = ret + get_w(ki, kk, kj, ka, kc, kb, a, c, b).transpose(0, 2, 1)
@@ -165,12 +169,12 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
 
     def get_rw(ki, kj, kk, ka, kb, kc, a, b, c):
         '''R operating on Wijkabc intermediate as described in Scuseria paper'''
-        ret = ( 0. * get_permuted_w(ki, kj, kk, ka, kb, kc, a, b, c) +
-                0. * get_permuted_w(kk, ki, kj, ka, kb, kc, a, b, c).transpose(1, 2, 0) +
-                0. * get_permuted_w(kj, kk, ki, ka, kb, kc, a, b, c).transpose(2, 0, 1) -
-                0. * get_permuted_w(kk, kj, ki, ka, kb, kc, a, b, c).transpose(2, 1, 0) -
-                0. * get_permuted_w(ki, kk, kj, ka, kb, kc, a, b, c).transpose(0, 2, 1) -
-                0. * get_permuted_w(kj, ki, kk, ka, kb, kc, a, b, c).transpose(1, 0, 2) )
+        ret = (4. * get_permuted_w(ki, kj, kk, ka, kb, kc, a, b, c) +
+               1. * get_permuted_w(kk, ki, kj, ka, kb, kc, a, b, c).transpose(1, 2, 0) +
+               1. * get_permuted_w(kj, kk, ki, ka, kb, kc, a, b, c).transpose(2, 0, 1) -
+               2. * get_permuted_w(kk, kj, ki, ka, kb, kc, a, b, c).transpose(2, 1, 0) -
+               2. * get_permuted_w(ki, kk, kj, ka, kb, kc, a, b, c).transpose(0, 2, 1) -
+               2. * get_permuted_w(kj, ki, kk, ka, kb, kc, a, b, c).transpose(1, 0, 2))
         return ret
 
     def get_v(ki, kj, kk, ka, kb, kc, a, b, c):
@@ -179,13 +183,13 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
         kf = kconserv[ki, ka, kj]
         ret = np.zeros((nocc, nocc, nocc), dtype=dtype)
         if kk == kc:
-            ret = ret + einsum('k,ij->ijk',  t1[kk, :, c], -eris.oovv[ki, kj, ka, :, :, a, b].conj())
-            ret = ret + einsum('k,ij->ijk', fov[kk, :, c],         t2[ki, kj, ka, :, :, a, b])
+            ret = ret + einsum('k,ij->ijk', t1[kk, :, c], -eris.oovv[ki, kj, ka, :, :, a, b].conj())
+            ret = ret + einsum('k,ij->ijk', fov[kk, :, c], t2[ki, kj, ka, :, :, a, b])
         return ret
 
     def get_permuted_v(ki, kj, kk, ka, kb, kc, a, b, c):
         '''Pijkabc operating on Vijkabc intermediate as described in Scuseria paper'''
-        ret =       get_v(ki, kj, kk, ka, kb, kc, a, b, c)
+        ret = get_v(ki, kj, kk, ka, kb, kc, a, b, c)
         ret = ret + get_v(kj, kk, ki, kb, kc, ka, b, c, a).transpose(2, 0, 1)
         ret = ret + get_v(kk, ki, kj, kc, ka, kb, c, a, b).transpose(1, 2, 0)
         ret = ret + get_v(ki, kk, kj, ka, kc, kb, a, c, b).transpose(0, 2, 1)
@@ -196,8 +200,8 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
     energy_t = 0.0
 
     for ki in range(nkpts):
-        for kj in range(ki+1):
-            for kk in range(kj+1):
+        for kj in range(ki + 1):
+            for kk in range(kj + 1):
                 # eigenvalue denominator: e(i) + e(j) + e(k)
                 eijk = lib.direct_sum('i,j,k->ijk', mo_energy_occ[ki], mo_energy_occ[kj], mo_energy_occ[kk])
 
@@ -207,34 +211,31 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
                         # amplitude t3ijkabc
                         kc = kpts_helper.get_kconserv3(cell, kpts, [ki, kj, kk, ka, kb])
 
-                        ia_index = ki*nkpts + ka
-                        jb_index = kj*nkpts + kb
-                        kc_index = kk*nkpts + kc
-                        if not (ia_index >= jb_index and
-                                jb_index >= kc_index):
+                        ia_index = ki * nkpts + ka
+                        jb_index = kj * nkpts + kb
+                        kc_index = kk * nkpts + kc
+                        if not (ia_index >= jb_index and jb_index >= kc_index):
                             continue
 
                         # Factors to include for symmetry
-                        if (ia_index == jb_index and
-                            jb_index == kc_index):
+                        if (ia_index == jb_index and jb_index == kc_index):
                             symm_fac = 1.  # only one unique [ia, jb, kc] index
-                        elif (ia_index == jb_index or
-                              jb_index == kc_index):
+                        elif (ia_index == jb_index or jb_index == kc_index):
                             symm_fac = 3.  # three unique permutations of [ia, jb, kc]
                         else:
                             symm_fac = 6.  # six unique permutations of [ia, jb, kc]
 
                         # Determine the a, b, c indices we will loop over as
                         # determined by the k-point symmetry.
-                        abc_indices = cartesian_prod([range(nvir)]*3)
+                        abc_indices = cartesian_prod([range(nvir)] * 3)
                         symm_3d = symm_2d_ab = symm_2d_bc = False
-                        if ia_index == jb_index == kc_index: # loop a >= b >= c
+                        if ia_index == jb_index == kc_index:  # loop a >= b >= c
                             abc_indices = range_tril_3d(nvir)
                             symm_3d = True
-                        elif ia_index == jb_index: # loop a >= b
+                        elif ia_index == jb_index:  # loop a >= b
                             abc_indices = range_tril_for_indices(nvir, 3, [0, 1])
                             symm_2d_ab = True
-                        elif jb_index == kc_index: # loop b >= c
+                        elif jb_index == kc_index:  # loop b >= c
                             abc_indices = range_tril_for_indices(nvir, 3, [1, 2])
                             symm_2d_bc = True
 
@@ -263,10 +264,11 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
                                 else:
                                     symm_abc = 2.
 
+                            # The simplest can be accomplished with the following four lines
+
                             #pwijk = (       get_permuted_w(ki, kj, kk, ka, kb, kc, a, b, c) +
                             #          0.5 * get_permuted_v(ki, kj, kk, ka, kb, kc, a, b, c) )
                             #rwijk = get_rw(ki, kj, kk, ka, kb, kc, a, b, c) / eijkabc
-
                             #energy_t += symm_fac * einsum('ijk,ijk', pwijk, rwijk.conj())
 
                             # Creating permuted W_ijkabc intermediate
@@ -286,7 +288,7 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
                             v_int5 = get_v(kj, ki, kk, kb, ka, kc, b, a, c).transpose(1, 0, 2)
 
                             # Creating permuted W_ijkabc + 0.5 * V_ijkabc intermediate
-                            pwijk  = w_int0 + 0.5 * v_int0
+                            pwijk = w_int0 + 0.5 * v_int0
                             pwijk += w_int1 + 0.5 * v_int1
                             pwijk += w_int2 + 0.5 * v_int2
                             pwijk += w_int3 + 0.5 * v_int3
@@ -297,12 +299,6 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
                             rwijk = np.zeros((nocc, nocc, nocc), dtype=dtype)
 
                             # Adding in contribution 4. * P[(i, j, k) -> (i, j, k)]
-                            #rwijk += 4. * get_w(ki, kj, kk, ka, kb, kc, a, b, c)
-                            #rwijk += 4. * get_w(kj, kk, ki, kb, kc, ka, b, c, a).transpose(2, 0, 1)
-                            #rwijk += 4. * get_w(kk, ki, kj, kc, ka, kb, c, a, b).transpose(1, 2, 0)
-                            #rwijk += 4. * get_w(ki, kk, kj, ka, kc, kb, a, c, b).transpose(0, 2, 1)
-                            #rwijk += 4. * get_w(kk, kj, ki, kc, kb, ka, c, b, a).transpose(2, 1, 0)
-                            #rwijk += 4. * get_w(kj, ki, kk, kb, ka, kc, b, a, c).transpose(1, 0, 2)
                             rwijk += 4. * w_int0
                             rwijk += 4. * w_int1
                             rwijk += 4. * w_int2
@@ -354,15 +350,15 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
 
                             energy_t += symm_abc * symm_fac * einsum('ijk,ijk', pwijk, rwijk.conj())
 
-    energy_t *= (1./3)
+    energy_t *= (1. / 3)
     energy_t /= nkpts
 
     if abs(energy_t.imag) > 1e-4:
-        log.warn('Non-zero imaginary part of CCSD(T) energy was found %s',
-                 energy_t.imag)
+        log.warn('Non-zero imaginary part of CCSD(T) energy was found %s', energy_t.imag)
     log.note('CCSD(T) correction per cell = %.15g', energy_t.real)
     log.note('CCSD(T) correction per cell (imag) = %.15g', energy_t.imag)
     return energy_t.real
+
 
 # Gamma point calculation
 #
@@ -413,15 +409,6 @@ if __name__ == '__main__':
     cell.mesh = [24, 24, 24]
     cell.build()
 
-
-    #mk_mesh = [1, 1, 3]
-    #scell = super_cell(cell, mk_mesh)
-    #mf = scf.RHF(scell, exxdiv=None)
-    #mf.kernel()
-    #mycc = pyscf.cc.RCCSD(mf)
-    #ecc, t1, t2 = mycc.kernel()
-    #energy_t = mycc.ccsd_t()
-    #print "ccsd(t) energy per cell = ", energy_t / np.prod(mk_mesh)
     kpts = cell.make_kpts([1, 1, 3])
     kpts -= kpts[0]
     kmf = scf.KRHF(cell, kpts=kpts, exxdiv=None)
