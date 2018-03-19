@@ -13,8 +13,9 @@ from pyscf.lib import logger
 from pyscf.lib.misc import tril_product
 from pyscf.pbc import scf
 from pyscf.pbc.lib import kpts_helper
-from pyscf.lib.numpy_helper import cartesian_prod
 from pyscf.lib.misc import flatten
+from pyscf.lib.numpy_helper import cartesian_prod
+from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM
 
 #einsum = np.einsum
 einsum = lib.einsum
@@ -147,6 +148,9 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
 
                             # Form energy denominator
                             eijkabc = (eijk - mo_energy_vir[ka][a] - mo_energy_vir[kb][b] - mo_energy_vir[kc][c])
+                            # When padding for non-equal nocc per k-point, some fock elements will be zero
+                            idx = np.where(abs(eijkabc) < LOOSE_ZERO_TOL)[0]
+                            eijkabc[idx] = LARGE_DENOM
 
                             # Form connected triple excitation amplitude
                             t3c = np.zeros((nocc, nocc, nocc), dtype=dtype)
