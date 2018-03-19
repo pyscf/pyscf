@@ -4,25 +4,16 @@
 #
 """Module for running k-point ccsd(t)"""
 
-import time
-import tempfile
-import numpy
 import numpy as np
-import h5py
 
 from pyscf import lib
-import pyscf.ao2mo
 from pyscf.lib import logger
-import pyscf.cc
-import pyscf.cc.ccsd
 from pyscf.pbc import scf
-from pyscf.pbc.mp.kmp2 import get_frozen_mask, get_nocc, get_nmo
-from pyscf.lib import linalg_helper
 from pyscf.pbc.lib import kpts_helper
-from pyscf.pbc.tools.pbc import super_cell
 
 #einsum = np.einsum
 einsum = lib.einsum
+
 
 # CCSD(T) equations taken from Tu, Yang, Wang, and Guo JPC (135), 2011
 #
@@ -42,7 +33,7 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
             repulsion integrals and Fock matrix elements
         t1 (:obj:`ndarray`): t1 coupled-cluster amplitudes
         t2 (:obj:`ndarray`): t2 coupled-cluster amplitudes
-        max_memory (float): Maximum memory used in calculation
+        max_memory (float): Maximum memory used in calculation (NOT USED)
         verbose (int, :class:`Logger`) : verbosity of calculation
 
     Returns:
@@ -84,8 +75,8 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
     energy_t = 0.0
 
     for ki in range(nkpts):
-        for kj in range(ki+1):
-            for kk in range(kj+1):
+        for kj in range(ki + 1):
+            for kk in range(kj + 1):
 
                 # eigenvalue denominator: e(i) + e(j) + e(k)
                 eijk = lib.direct_sum('i,j,k->ijk', mo_energy_occ[ki], mo_energy_occ[kj], mo_energy_occ[kk])
@@ -99,12 +90,12 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
                     symm_ijk = 6.  # 3! combinations of arranging 3 distinct k-points
 
                 for ka in range(nkpts):
-                    for kb in range(ka+1):
+                    for kb in range(ka + 1):
 
                         # Find momentum conservation condition for triples
                         # amplitude t3ijkabc
                         kc = kpts_helper.get_kconserv3(cell, kpts, [ki, kj, kk, ka, kb])
-                        if kc not in range(kb+1):
+                        if kc not in range(kb + 1):
                             continue
 
                         # count the degeneracy of all (ka, kb, kc)
@@ -123,7 +114,7 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
                                     eijkabc = (eijk - mo_energy_vir[ka][a] - mo_energy_vir[kb][b] - mo_energy_vir[kc][c])
 
                                     # Form connected triple excitation amplitude
-                                    t3c = np.zeros((nocc,nocc,nocc), dtype=dtype)
+                                    t3c = np.zeros((nocc, nocc, nocc), dtype=dtype)
 
                                     # First term: 1 - p(ij) - p(ik)
                                     ke = kconserv[kj, ka, kk]
@@ -171,7 +162,7 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
                                     t3c = t3c - einsum('mk,jim->ijk', t2[km, kk, kb, :, :, b, a], eris.ooov[kj, ki, km, :, :, :, c].conj())
 
                                     # Form disconnected triple excitation amplitude contribution
-                                    t3d = np.zeros((nocc,nocc,nocc), dtype=dtype)
+                                    t3d = np.zeros((nocc, nocc, nocc), dtype=dtype)
 
                                     # First term: 1 - p(ij) - p(ik)
                                     if ki == ka:
@@ -215,7 +206,7 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
                                     t3c_plus_d = t3c + t3d
                                     t3c_plus_d /= eijkabc
 
-                                    energy_t += symm_abc * symm_ijk * (1./36) * einsum('ijk,ijk', t3c, t3c_plus_d.conj())
+                                    energy_t += symm_abc * symm_ijk * (1. / 36) * einsum('ijk,ijk', t3c, t3c_plus_d.conj())
 
     energy_t = energy_t / nkpts
 
@@ -224,6 +215,7 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
                  energy_t.imag)
     log.note('CCSD(T) correction per cell = %.15g', energy_t.real)
     return energy_t.real
+
 
 def check_kpt_antiperm_symmetry(array, idx1, idx2, tolerance=1e-8):
     '''
@@ -255,7 +247,7 @@ def check_kpt_antiperm_symmetry(array, idx1, idx2, tolerance=1e-8):
 
     array_shape_len = len(array.shape)
     nparticles = (array_shape_len + 1) / 4
-    assert(idx1 < ( 2 * nparticles - 1 ) and idx2 < ( 2 * nparticles - 1 ) and
+    assert(idx1 < (2 * nparticles - 1) and idx2 < (2 * nparticles - 1) and
            'This function does not support the swapping of the last k-point index '
            '(This k-point is implicitly not indexed due to conservation of momentum '
            'between k-points.).')
@@ -282,6 +274,7 @@ def check_kpt_antiperm_symmetry(array, idx1, idx2, tolerance=1e-8):
     antisymmetric = (np.linalg.norm(array + array.transpose(out_array_indices)) <
                      tolerance)
     return antisymmetric
+
 
 # Gamma point calculation
 #
