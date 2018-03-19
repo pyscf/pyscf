@@ -10,64 +10,14 @@ import pyscf.pbc.cc.kccsd
 
 from pyscf import lib
 from pyscf.lib import logger
+from pyscf.lib.misc import tril_product
 from pyscf.pbc import scf
 from pyscf.pbc.lib import kpts_helper
-from pyscf.lib.numpy_helper import pack_tril
 from pyscf.lib.numpy_helper import cartesian_prod
 from pyscf.lib.misc import flatten
 
 #einsum = np.einsum
 einsum = lib.einsum
-
-
-def range_tril_3d(nrange):
-    '''Lower-triangular form for 3 indices.
-
-    Produces all tuples in 3 dimensions [x, y, z] that satisfy a lower triangular form:
-
-    .. math:: N_{max} > x \ge y \ge z.
-
-    Args:
-        nrange (int): Maximum range in any of the x, y, z dimensions
-
-    Returns:
-        tril_3d (list of lists): List of 3-tuples in lower triangular form
-
-    '''
-    tril_3d = []
-    # For each x in the leading dimension, produce all (y,z) tuples in lower
-    # triangular form with x >= y >= z
-    for i in range(nrange):
-        tup = np.array(np.tril_indices(i + 1)).T
-        # NOTE: cartesian_prod does not work here, need to use itertools.product
-        tril_3d.extend([flatten(x) for x in list(itertools.product([[i]], tup))])
-    return tril_3d
-
-
-def range_tril(nrange, nrepeat=2, tril_idx=[0, 1]):
-    '''Repeated ranges where two indices are in lower-triangular form.
-
-    Produces all `nrepeat`-dimensional tuples that take values in `range(0, nrange)` where
-    the tuple indices described by `[tril_idx[0], tril_idx[1]]` satisfy a lower triangular form.
-
-    Args:
-        nrange (int): Number of elements in the range for each dimension
-        nrepeat (int, optional): Number of repeated dimensions. Default is two.
-        tril_idx (array-like of (2)-int): The tuple indices that will satisfy the lower triangular form
-
-    Returns:
-        tril_idx (list of lists): List of `nrepeat`-tuples
-
-    '''
-    assert len(tril_idx) == 2
-    idx0, idx1 = tril_idx
-
-    range_idx = cartesian_prod([range(nrange)] * (nrepeat - 2))
-    tril_idx = np.array(np.tril_indices(nrange)).T
-    tril_idx = np.array([flatten(x) for x in list(itertools.product(range_idx, tril_idx))])
-    tril_idx[:, idx0], tril_idx[:, nrepeat - 2] = tril_idx[:, nrepeat - 2], tril_idx[:, idx0].copy()
-    tril_idx[:, idx1], tril_idx[:, nrepeat - 1] = tril_idx[:, nrepeat - 1], tril_idx[:, idx1].copy()
-    return tril_idx
 
 
 # CCSD(T) equations taken from Tu, Yang, Wang, and Guo JPC (135), 2011
@@ -132,7 +82,6 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
     for ki in range(nkpts):
         for kj in range(ki + 1):
             for kk in range(kj + 1):
-
                 # eigenvalue denominator: e(i) + e(j) + e(k)
                 eijk = lib.direct_sum('i,j,k->ijk', mo_energy_occ[ki], mo_energy_occ[kj], mo_energy_occ[kk])
 
@@ -166,13 +115,13 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
                         abc_indices = cartesian_prod([range(nvir)] * 3)
                         symm_3d = symm_2d_ab = symm_2d_bc = False
                         if ka == kc == kc:
-                            abc_indices = range_tril_3d(nvir)  # loop a >= b >= c
+                            abc_indices = tril_product(range(nvir), repeat=3, tril_idx=[0, 1, 2])  # loop a >= b >= c
                             symm_3d = True
                         elif ka == kb:
-                            abc_indices = range_tril_for_indices(nvir, 3, [0, 1])  # loop a >= b
+                            abc_indices = tril_product(range(nvir), repeat=3, tril_idx=[0, 1])  # loop a >= b
                             symm_2d_ab = True
                         elif kb == kc:
-                            abc_indices = range_tril_for_indices(nvir, 3, [1, 2])  # loop b >= c
+                            abc_indices = tril_product(range(nvir), repeat=3, tril_idx=[1, 2])  # loop b >= c
                             symm_2d_bc = True
 
                         for a, b, c in abc_indices:
@@ -185,14 +134,12 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
                                     symm_abc = 3.
                                 else:
                                     symm_abc = 6.
-
-                            if symm_2d_ab:
+                            elif symm_2d_ab:
                                 if a == b:
                                     symm_abc = 1.
                                 else:
                                     symm_abc = 2.
-
-                            if symm_2d_bc:
+                            elif symm_2d_bc:
                                 if b == c:
                                     symm_abc = 1.
                                 else:

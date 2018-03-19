@@ -10,8 +10,8 @@ import pyscf.pbc.cc.kccsd_rhf
 
 from pyscf import lib
 from pyscf.lib import logger
+from pyscf.lib.misc import tril_product
 from pyscf.pbc import scf
-from pyscf.pbc.cc.kccsd_t import range_tril_3d, range_tril_for_indices
 from pyscf.pbc.lib import kpts_helper
 from pyscf.lib.numpy_helper import pack_tril
 from pyscf.lib.numpy_helper import cartesian_prod
@@ -161,13 +161,14 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
                         abc_indices = cartesian_prod([range(nvir)] * 3)
                         symm_3d = symm_2d_ab = symm_2d_bc = False
                         if ia_index == jb_index == kc_index:  # ka == kb == kc
-                            abc_indices = range_tril_3d(nvir)  # loop a >= b >= c
+                            symm_3d = True
+                            abc_indices = tril_product(range(nvir), repeat=3, tril_idx=[0, 1, 2])  # loop a >= b >= c
                             symm_3d = True
                         elif ia_index == jb_index:  # ka == kb
-                            abc_indices = range_tril_for_indices(nvir, 3, [0, 1])  # loop a >= b
+                            abc_indices = tril_product(range(nvir), repeat=3, tril_idx=[0, 1])  # loop a >= b
                             symm_2d_ab = True
-                        elif jb_index == kc_index:  # kb == kc
-                            abc_indices = range_tril_for_indices(nvir, 3, [1, 2])  # loop b >= c
+                        elif jb_index == kc_index:
+                            abc_indices = tril_product(range(nvir), repeat=3, tril_idx=[1, 2])  # loop b >= c
                             symm_2d_bc = True
 
                         for a, b, c in abc_indices:
@@ -183,14 +184,12 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
                                     symm_abc = 3.
                                 else:
                                     symm_abc = 6.
-
-                            if symm_2d_ab:
+                            elif symm_2d_ab:
                                 if a == b:
                                     symm_abc = 1.
                                 else:
                                     symm_abc = 2.
-
-                            if symm_2d_bc:
+                            elif symm_2d_bc:
                                 if b == c:
                                     symm_abc = 1.
                                 else:
@@ -317,7 +316,6 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
 #     CCSD(T) : -0.00403785264 Hartree per cell
 
 if __name__ == '__main__':
-    range_tril_for_indices(3, 4, [0, 1])
     from pyscf.pbc import gto
     from pyscf.pbc import scf
     from pyscf.pbc import cc
