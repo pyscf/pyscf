@@ -24,10 +24,12 @@ from functools import reduce
 import numpy
 from pyscf import lib
 from pyscf import ao2mo
+from pyscf import symm
 from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
 from pyscf.dft import numint
 from pyscf.scf import hf_symm
+from pyscf.data import nist
 from pyscf.soscf.newton_ah import _gen_rhf_response
 
 
@@ -203,8 +205,215 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
 
     return a, b
 
+def get_nto(tdobj, state, threshold=0.3, verbose=None):
+    r'''
+    Natural transition orbital analysis.
+
+    The natural transition density matrix between ground state and excited
+    state :math:`Tia = \langle \Psi_{ex} | i a^\dagger | \Psi_0 \rangle` can
+    be transformed to diagonal form through SVD
+    :math:`T = O \sqrt{\lambda} V^\dagger`. O and V are occupied and virtual
+    natural transition orbitals. The diagonal elements :math:`\lambda` are the
+    weights of the occupied-virtual orbital pair in the excitation.
+
+    Ref: Martin, R. L., JCP, 118, 4775-4777
+
+    Note in the TDHF/TDDFT calculations, the excitation part (X) is
+    interpreted as the CIS coefficients and normalized to 1. The de-excitation
+    part (Y) is ignored.
+
+    Args:
+        state : int
+            Excited state ID.  state = 1 means the first excited state.
+
+    Kwargs:
+        threshold : float
+            Above which the NTO coefficients will be printed in the output.
+
+    Returns:
+        A list (weights, NTOs).  NTOs are natural orbitals represented in AO
+        basis. The first N_occ NTOs are occupied NTOs and the rest are virtual
+        NTOs.
+    '''
+    mol = tdobj.mol
+    mo_coeff = tdobj._scf.mo_coeff
+    mo_occ = tdobj._scf.mo_occ
+    orbo = mo_coeff[:,mo_occ==2]
+    orbv = mo_coeff[:,mo_occ==0]
+    nocc = orbo.shape[1]
+    nvir = orbv.shape[1]
+
+    cis_t1 = tdobj.xy[state-1][0]
+    # TDDFT (X,Y) has X^2-Y^2=1.
+    # Renormalizing X (X^2=1) to map it to CIS coefficients
+    cis_t1 *= 1. / numpy.linalg.norm(cis_t1)
+
+# TODO: Comparing to the NTOs defined in JCP, 142, 244103.  JCP, 142, 244103
+# provides a method to incorporate the Y matrix in the transition density
+# matrix.  However, it may break the point group symmetry of the NTO orbitals
+# when the system has degenerated irreducible representations.
+
+    if mol.symmetry:
+        orbsym = hf_symm.get_orbsym(mol, mo_coeff)
+        o_sym = orbsym[mo_occ==2]
+        v_sym = orbsym[mo_occ==0]
+        nto_o = numpy.eye(nocc)
+        nto_v = numpy.eye(nvir)
+        weights_o = numpy.zeros(nocc)
+        weights_v = numpy.zeros(nvir)
+        for ir in set(orbsym):
+            o_idx = numpy.where(o_sym == ir)[0]
+            if o_idx.size > 0:
+                dm_oo = numpy.dot(cis_t1[:,o_idx].T, cis_t1[:,o_idx])
+                weights_o[o_idx], nto_o[o_idx[:,None],o_idx] = numpy.linalg.eigh(dm_oo)
+
+            v_idx = numpy.where(v_sym == ir)[0]
+            if v_idx.size > 0:
+                dm_vv = numpy.dot(cis_t1[v_idx], cis_t1[v_idx].T)
+                weights_v[v_idx], nto_v[v_idx[:,None],v_idx] = numpy.linalg.eigh(dm_vv)
+
+        # weights in descending order
+        idx = numpy.argsort(-weights_o)
+        weights_o = weights_o[idx]
+        nto_o = nto_o[:,idx]
+        o_sym = o_sym[idx]
+
+        idx = numpy.argsort(-weights_v)
+        weights_v = weights_v[idx]
+        nto_v = nto_v[:,idx]
+        v_sym = v_sym[idx]
+
+        nto_orbsym = numpy.hstack((o_sym, v_sym))
+
+        if nocc < nvir:
+            weights = weights_o
+        else:
+            weights = weights_v
+
+    else:
+        nto_v, w, nto_oT = numpy.linalg.svd(cis_t1)
+        nto_o = nto_oT.conj().T
+        weights = w**2
+        nto_orbsym = None
+
+    idx = numpy.argmax(abs(nto_o.real), axis=0)
+    nto_o[:,nto_o[idx,numpy.arange(nocc)].real<0] *= -1
+    idx = numpy.argmax(abs(nto_v.real), axis=0)
+    nto_v[:,nto_v[idx,numpy.arange(nvir)].real<0] *= -1
+
+    occupied_nto = numpy.dot(orbo, nto_o)
+    virtual_nto = numpy.dot(orbv, nto_v)
+    nto_coeff = numpy.hstack((occupied_nto, virtual_nto))
+
+    if mol.symmetry:
+        nto_coeff = lib.tag_array(nto_coeff, orbsym=nto_orbsym)
+
+    log = logger.new_logger(tdobj, verbose)
+    if log.verbose >= logger.INFO:
+        log.info('State %d: %g eV  NTO largest component %s',
+                 state, tdobj.e[state-1]*nist.HARTREE2EV, weights[0])
+        o_idx = numpy.where(abs(nto_o[:,0]) > threshold)[0]
+        v_idx = numpy.where(abs(nto_v[:,0]) > threshold)[0]
+        fmt = '%' + str(lib.param.OUTPUT_DIGITS) + 'f (MO #%d)'
+        log.info('    Occ-NTO: %s',
+                 ' '.join([(fmt % (nto_o[i,0], i+1)) for i in o_idx]))
+        log.info('    Vir-NTO: %s',
+                 ' '.join([(fmt % (nto_v[i,0], i+1+nocc)) for i in v_idx]))
+    return weights, nto_coeff
+
+
+def analyze(tdobj, verbose=None):
+    log = logger.new_logger(tdobj, verbose)
+
+    e_ev = numpy.asarray(tdobj.e) * nist.HARTREE2EV
+    e_wn = numpy.asarray(tdobj.e) * nist.HARTREE2WAVENUMBER
+    wave_length = 1e11/e_wn
+
+    mo_coeff = tdobj._scf.mo_coeff
+    mo_occ = tdobj._scf.mo_occ
+    orbo = mo_coeff[:,mo_occ==2]
+    orbv = mo_coeff[:,mo_occ==0]
+    nocc = orbo.shape[1]
+    nvir = orbv.shape[1]
+
+    mol = tdobj.mol
+    charges = mol.atom_charges()
+    coords  = mol.atom_coords()
+    charge_center = numpy.einsum('i,ix->x', charges, coords)
+    with mol.with_common_orig(charge_center):
+        dip_ints = mol.intor_symmetric('int1e_r', comp=3)
+
+    dip_ints = numpy.einsum('xpq,pi,qj->xij', dip_ints, orbo.conj(), orbv)
+
+    if tdobj.singlet:
+        log.note('\n**** Singlet excitation energies and oscillator strengths ****')
+    else:
+        log.note('\n**** Triplet excitation energies and oscillator strengths ****')
+
+    if mol.symmetry:
+        orbsym = hf_symm.get_orbsym(mol, mo_coeff)
+        x_sym = (orbsym[mo_occ==0,None] & orbsym[mo_occ==2]).ravel()
+    else:
+        x_sym = None
+
+    for i, ei in enumerate(tdobj.e):
+        x, y = tdobj.xy[i]
+        trans_dip = numpy.einsum('xij,ji->x', dip_ints, x)
+        # TODO JCP, 143, 234103
+        f_oscillator = 2./3. * ei * numpy.dot(trans_dip, trans_dip)
+        if x_sym is None:
+            log.note('Excited State %3d: %12.5f eV %9.2f nm  f=%.4f',
+                     i+1, e_ev[i], wave_length[i], f_oscillator)
+        else:
+            wfnsym_id = x_sym[abs(x).argmax()]
+            wfnsym = symm.irrep_id2name(mol.groupname, wfnsym_id)
+            log.note('Excited State %3d: %4s %12.5f eV %9.2f nm  f=%.4f',
+                     i+1, wfnsym, e_ev[i], wave_length[i], f_oscillator)
+
+        if log.verbose >= logger.INFO:
+            x = x.T
+            o_idx, v_idx = numpy.where(abs(x) > 0.1)
+            for i, j in zip(o_idx, v_idx):
+                log.info('    %4d -> %-4d %.5f', i, j+nocc, x[i,j])
+
+    if log.verbose >= logger.INFO:
+        log.info('\n** Transition electric dipole moments (AU) **')
+        log.info('state          X           Y           Z        Dip. S.      Osc.')
+        for i, ei in enumerate(tdobj.e):
+            x, y = tdobj.xy[i]
+            trans_dip = numpy.einsum('xij,ji->x', dip_ints, x)
+            f_oscillator = 2./3. * ei * numpy.dot(trans_dip, trans_dip)
+            log.info('%3d    %11.4f %11.4f %11.4f %11.4f %11.4f',
+                     i+1, trans_dip[0], trans_dip[1], trans_dip[2],
+                     numpy.dot(trans_dip, trans_dip), f_oscillator)
+
+# UV spectrum
+# * transition dipole
+# * velocity moment
+# * magnetic dipole
+
 
 class TDA(lib.StreamObject):
+    '''Tamm-Dancoff approximation
+
+    Attributes:
+        conv_tol : float
+            Diagonalization convergence tolerance.  Default is 1e-9.
+        nstates : int
+            Number of TD states to be computed. Default is 3.
+
+    Saved results:
+
+        converged : bool
+            Diagonalization converged or not
+        e : 1D array
+            excitation energy for each excited state.
+        xy : A list of two 2D arrays
+            Excitation coefficients (X, with shape (nvir,nocc)) and de-excitation
+            coefficients (Y, with shape (nvir,nocc)) for each excited state.
+            (X,Y) are normalized to 1/2 in RHF/RKS methods and normalized to 1
+            for UHF/UKS methods. In the TDA calculation, Y = 0.
+    '''
     def __init__(self, mf):
         self.verbose = mf.verbose
         self.stdout = mf.stdout
@@ -223,8 +432,9 @@ class TDA(lib.StreamObject):
         self.max_memory = mf.max_memory
         self.chkfile = mf.chkfile
 
-        # xy = (X,Y), normlized to 1/2: 2(XX-YY) = 1
+        # xy = (X,Y), normalized to 1/2: 2(XX-YY) = 1
         # In TDA, Y = 0
+        self.converged = None
         self.e = None
         self.xy = None
         self._keys = set(self.__dict__.keys())
@@ -310,19 +520,25 @@ class TDA(lib.StreamObject):
 
         if x0 is None:
             x0 = self.init_guess(self._scf, self.nstates)
-        self.e, x1 = lib.davidson1(vind, x0, precond,
-                                   tol=self.conv_tol,
-                                   nroots=nstates, lindep=self.lindep,
-                                   max_space=self.max_space,
-                                   verbose=self.verbose)[1:]
+        self.converged, self.e, x1 = \
+                lib.davidson1(vind, x0, precond,
+                              tol=self.conv_tol,
+                              nroots=nstates, lindep=self.lindep,
+                              max_space=self.max_space,
+                              verbose=self.verbose)
 
         nocc = (self._scf.mo_occ>0).sum()
         nmo = self._scf.mo_occ.size
         nvir = nmo - nocc
 # 1/sqrt(2) because self.x is for alpha excitation amplitude and 2(X^+*X) = 1
         self.xy = [(xi.reshape(nvir,nocc)*numpy.sqrt(.5),0) for xi in x1]
-        #TODO: analyze CIS wfn point group symmetry
+
+        lib.chkfile.save(self.chkfile, 'tddft/e', self.e)
+        lib.chkfile.save(self.chkfile, 'tddft/xy', self.xy)
         return self.e, self.xy
+
+    analyze = analyze
+    get_nto = get_nto
 
     def nuc_grad_method(self):
         from pyscf.tddft import rhf_grad
@@ -434,11 +650,12 @@ class TDHF(TDA):
             idx = realidx[w[realidx].real.argsort()]
             return w[idx].real, v[:,idx].real, idx
 
-        w, x1 = lib.davidson_nosym1(vind, x0, precond,
+        self.converged, w, x1 = \
+                lib.davidson_nosym1(vind, x0, precond,
                                     tol=self.conv_tol,
                                     nroots=nstates, lindep=self.lindep,
                                     max_space=self.max_space, pick=pickeig,
-                                    verbose=self.verbose)[1:]
+                                    verbose=self.verbose)
 
         nocc = (self._scf.mo_occ>0).sum()
         nmo = self._scf.mo_occ.size
@@ -451,6 +668,8 @@ class TDHF(TDA):
             return x*norm, y*norm
         self.xy = [norm_xy(z) for z in x1]
 
+        lib.chkfile.save(self.chkfile, 'tddft/e', self.e)
+        lib.chkfile.save(self.chkfile, 'tddft/xy', self.xy)
         return self.e, self.xy
 
     def nuc_grad_method(self):

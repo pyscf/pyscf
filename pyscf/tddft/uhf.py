@@ -169,11 +169,12 @@ class TDA(rhf.TDA):
         if x0 is None:
             x0 = self.init_guess(self._scf, self.nstates)
 
-        self.e, x1 = lib.davidson1(vind, x0, precond,
-                                   tol=self.conv_tol,
-                                   nroots=nstates, lindep=self.lindep,
-                                   max_space=self.max_space,
-                                   verbose=self.verbose)[1:]
+        self.converged, self.e, x1 = \
+                lib.davidson1(vind, x0, precond,
+                              tol=self.conv_tol,
+                              nroots=nstates, lindep=self.lindep,
+                              max_space=self.max_space,
+                              verbose=self.verbose)
 
         nmo = self._scf.mo_occ[0].size
         nocca = (self._scf.mo_occ[0]>0).sum()
@@ -303,11 +304,12 @@ class TDHF(TDA):
             idx = realidx[w[realidx].real.argsort()]
             return w[idx].real, v[:,idx].real, idx
 
-        w, x1 = lib.davidson_nosym1(vind, x0, precond,
+        self.converged, w, x1 = \
+                lib.davidson_nosym1(vind, x0, precond,
                                     tol=self.conv_tol,
                                     nroots=nstates, lindep=self.lindep,
                                     max_space=self.max_space, pick=pickeig,
-                                    verbose=self.verbose)[1:]
+                                    verbose=self.verbose)
 
         nmo = self._scf.mo_occ[0].size
         nocca = (self._scf.mo_occ[0]>0).sum()

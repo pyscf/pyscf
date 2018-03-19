@@ -111,11 +111,12 @@ class TDDFTNoHybrid(TDA):
         if x0 is None:
             x0 = self.init_guess(self._scf, self.nstates)
 
-        w2, x1 = lib.davidson1(vind, x0, precond,
-                               tol=self.conv_tol,
-                               nroots=nstates, lindep=self.lindep,
-                               max_space=self.max_space,
-                               verbose=self.verbose)[1:]
+        self.converged, w2, x1 = \
+                lib.davidson1(vind, x0, precond,
+                              tol=self.conv_tol,
+                              nroots=nstates, lindep=self.lindep,
+                              max_space=self.max_space,
+                              verbose=self.verbose)
 
         mo_energy = self._scf.mo_energy
         mo_occ = self._scf.mo_occ

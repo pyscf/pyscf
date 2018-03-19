@@ -4,7 +4,7 @@
 #
 
 '''
-A simple example to run TDDFT calculation.
+TDDFT NTO analysis.
 '''
 
 from pyscf import gto, dft, tddft
@@ -21,7 +21,11 @@ mf.xc = 'b3lyp'
 mf.kernel()
 
 mytd = tddft.TDDFT(mf)
-#mytd.nstates = 10
 mytd.kernel()
 
-mytd.analyze()
+weights_1, nto_1 = mytd.get_nto(state=1, verbose=4)
+weights_2, nto_2 = mytd.get_nto(state=2, verbose=4)
+weights_3, nto_3 = mytd.get_nto(state=3, verbose=4)
+
+from pyscf.tools import molden
+molden.from_mo(mol, 'nto-td-3.molden', nto_3)

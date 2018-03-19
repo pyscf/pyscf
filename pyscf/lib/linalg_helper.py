@@ -417,7 +417,8 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
                                   k, dx_norm[k], ek, de[k])
                         conv[k] = True
         else:
-            elast, conv_last = _sort_elast(elast, conv_last, vlast, v, fresh_start)
+            elast, conv_last = _sort_elast(elast, conv_last, vlast, v,
+                                           fresh_start, log)
             de = e - elast
             dx_norm = []
             xt = []
@@ -730,7 +731,8 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
                                   k, dx_norm[k], ek, de[k])
                         conv[k] = True
         else:
-            elast, conv_last = _sort_elast(elast, conv_last, vlast, v, fresh_start)
+            elast, conv_last = _sort_elast(elast, conv_last, vlast, v,
+                                           fresh_start, log)
             de = e - elast
             dx_norm = []
             xt = []
@@ -1283,7 +1285,7 @@ def _sort_by_similarity(w, v, nroots, conv, vlast, emin=None, heff=None):
     c = v[:,sorted_idx]
     return e, c
 
-def _sort_elast(elast, conv_last, vlast, v, fresh_start):
+def _sort_elast(elast, conv_last, vlast, v, fresh_start, log):
     '''
     Eigenstates may be flipped during the Davidson iterations.  Reorder the
     eigenvalues of last iteration to make them comparable to the eigenvalues
@@ -1294,6 +1296,14 @@ def _sort_elast(elast, conv_last, vlast, v, fresh_start):
     head, nroots = vlast.shape
     ovlp = abs(numpy.dot(v[:head].conj().T, vlast))
     idx = numpy.argmax(ovlp, axis=1)
+
+    if log.verbose >= logger.DEBUG:
+        ordering_diff = (idx != numpy.arange(len(idx)))
+        if numpy.any(ordering_diff):
+            log.debug('Old state -> New state')
+            for i in numpy.where(ordering_diff)[0]:
+                log.debug('  %3d     ->   %3d ', idx[i], i)
+
     return [elast[i] for i in idx], [conv_last[i] for i in idx]
 
 

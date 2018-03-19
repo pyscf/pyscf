@@ -32,6 +32,7 @@ from pyscf.lib import logger
 from pyscf.scf import diis
 from pyscf.scf import _vhf
 from pyscf.scf import chkfile
+from pyscf.data import nist
 
 
 def kernel(mf, conv_tol=1e-10, conv_tol_grad=None,
@@ -959,7 +960,7 @@ def dip_moment(mol, dm, unit_symbol='Debye', verbose=logger.NOTE):
         log = logger.Logger(mol.stdout, verbose)
 
     if unit_symbol == 'Debye':
-        unit = 2.541746    # a.u. to Debye
+        unit = nist.AU2DEBYE
     else:
         unit = 1.0
 
@@ -1133,7 +1134,7 @@ class SCF(lib.StreamObject):
         conv_check : bool
             An extra cycle to check convergence after SCF iterations.
 
-    Saved results
+    Saved results:
 
         converged : bool
             SCF converged or not
