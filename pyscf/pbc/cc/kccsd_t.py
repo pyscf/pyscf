@@ -224,6 +224,12 @@ def check_kpt_antiperm_symmetry(array, idx1, idx2, tolerance=1e-8):
     indices switches both the orbital index and k-point index associated with
     the two indices.
 
+    Note:
+        One common reason for not obeying antipermutational symmetry in a calculation
+        involving FFTs is that the grid to perform the FFT may be too coarse.  This
+        symmetry is present in operators in spin-orbital form and 'spin-free'
+        operators.
+
     array (:obj:`ndarray`): array to test permutational symmetry, where for
         an n-particle array, the first (2n-1) array elements are kpoint indices
         while the final 2n array elements are orbital indices.
