@@ -217,7 +217,7 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
                         if not (ia_index >= jb_index and jb_index >= kc_index):
                             continue
 
-                        # Factors to include for symmetry
+                        # Factors to include for permutational symmetry among k-points
                         if (ia_index == jb_index and jb_index == kc_index):
                             symm_fac = 1.  # only one unique [ia, jb, kc] index
                         elif (ia_index == jb_index or jb_index == kc_index):
@@ -229,20 +229,21 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
                         # determined by the k-point symmetry.
                         abc_indices = cartesian_prod([range(nvir)] * 3)
                         symm_3d = symm_2d_ab = symm_2d_bc = False
-                        if ia_index == jb_index == kc_index:  # loop a >= b >= c
-                            abc_indices = range_tril_3d(nvir)
+                        if ia_index == jb_index == kc_index:  # ka == kb == kc
+                            abc_indices = range_tril_3d(nvir)  # loop a >= b >= c
                             symm_3d = True
-                        elif ia_index == jb_index:  # loop a >= b
-                            abc_indices = range_tril_for_indices(nvir, 3, [0, 1])
+                        elif ia_index == jb_index:  # ka == kb
+                            abc_indices = range_tril_for_indices(nvir, 3, [0, 1])  # loop a >= b
                             symm_2d_ab = True
-                        elif jb_index == kc_index:  # loop b >= c
-                            abc_indices = range_tril_for_indices(nvir, 3, [1, 2])
+                        elif jb_index == kc_index:  # kb == kc
+                            abc_indices = range_tril_for_indices(nvir, 3, [1, 2])  # loop b >= c
                             symm_2d_bc = True
 
                         for a, b, c in abc_indices:
                             # Form energy denominator
                             eijkabc = (eijk - mo_energy_vir[ka][a] - mo_energy_vir[kb][b] - mo_energy_vir[kc][c])
 
+                            # See symm_3d and abc_indices above for description of factors
                             symm_abc = 1.
                             if symm_3d:
                                 if a == b == c:
@@ -264,7 +265,7 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
                                 else:
                                     symm_abc = 2.
 
-                            # The simplest can be accomplished with the following four lines
+                            # The simplest written algorithm can be accomplished with the following four lines
 
                             #pwijk = (       get_permuted_w(ki, kj, kk, ka, kb, kc, a, b, c) +
                             #          0.5 * get_permuted_v(ki, kj, kk, ka, kb, kc, a, b, c) )

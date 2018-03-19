@@ -34,7 +34,7 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
         t1 (:obj:`ndarray`): t1 coupled-cluster amplitudes
         t2 (:obj:`ndarray`): t2 coupled-cluster amplitudes
         max_memory (float): Maximum memory used in calculation (NOT USED)
-        verbose (int, :class:`Logger`) : verbosity of calculation
+        verbose (int, :class:`Logger`): verbosity of calculation
 
     Returns:
         energy_t : float
