@@ -19,10 +19,72 @@ from pyscf.pbc import scf
 from pyscf.pbc.mp.kmp2 import get_frozen_mask, get_nocc, get_nmo
 from pyscf.lib import linalg_helper
 from pyscf.pbc.lib import kpts_helper
+from pyscf.lib.numpy_helper import pack_tril
+from pyscf.lib.numpy_helper import cartesian_prod
+from pyscf.lib.misc import flatten
 from pyscf.pbc.tools.pbc import super_cell
+import itertools
 
 #einsum = np.einsum
 einsum = lib.einsum
+
+def range_tril_3d(nrange):
+    '''
+
+    Produces all tuples in 3 dimensions [x, y, z] that satisfy a lower triangular form
+
+    .. math:: N_{max} > x \ge y \ge z.
+
+    Parameters
+    ----------
+    nrange: int
+        Maximum range in any of the x, y, z dimensions
+
+    Returns
+    -------
+    tril_3d: list of lists
+        Returns a list of 3-tuples in lower triangular form
+
+    '''
+    tril_3d = []
+    # For each x in the leading dimension, produce all (y,z) tuples in lower
+    # triangular form with x >= y >= z
+    for i in range(nrange):
+        tup = np.array(np.tril_indices(i+1)).T
+        # NOTE: cartesian_prod does not work here, need to use itertools.product
+        tril_3d.extend([flatten(x) for x in list(itertools.product([[i]],tup))])
+    return tril_3d
+
+def range_tril_for_indices(nrange, ndim, indices):
+    '''
+
+    Produces all `ndim`-dimensional tuples that take values in `range(0, nrange)` where
+    the tuple indices described by `[indices[0], indices[1]]` satisfy a lower triangular form.
+
+    Parameters
+    ----------
+    nrange: int
+        Number of elements in the range for each dimension
+    ndim: int
+        Number of dimensions
+    indices: array-like of ints
+        Gives the tuple indices that will satisfy the lower triangular form
+
+    Returns
+    -------
+    tril_idx: list of lists
+        Returns a list of `ndim`-tuples
+
+    '''
+    assert len(indices) == 2
+    idx0, idx1 = indices
+
+    range_idx = cartesian_prod([range(nrange)]*(ndim-2))
+    tril_idx = np.array(np.tril_indices(nrange)).T
+    tril_idx = np.array([flatten(x) for x in list(itertools.product(range_idx, tril_idx))])
+    tril_idx[:, idx0], tril_idx[:, ndim-2] = tril_idx[:, ndim-2], tril_idx[:, idx0].copy()
+    tril_idx[:, idx1], tril_idx[:, ndim-1] = tril_idx[:, ndim-1], tril_idx[:, idx1].copy()
+    return tril_idx
 
 # CCSD(T) equations taken from Scuseria, JCP (94), 1991
 #
@@ -103,12 +165,12 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
 
     def get_rw(ki, kj, kk, ka, kb, kc, a, b, c):
         '''R operating on Wijkabc intermediate as described in Scuseria paper'''
-        ret = ( 4. * get_permuted_w(ki, kj, kk, ka, kb, kc, a, b, c) +
-                1. * get_permuted_w(kk, ki, kj, ka, kb, kc, a, b, c).transpose(1, 2, 0) +
-                1. * get_permuted_w(kj, kk, ki, ka, kb, kc, a, b, c).transpose(2, 0, 1) -
-                2. * get_permuted_w(kk, kj, ki, ka, kb, kc, a, b, c).transpose(2, 1, 0) -
-                2. * get_permuted_w(ki, kk, kj, ka, kb, kc, a, b, c).transpose(0, 2, 1) -
-                2. * get_permuted_w(kj, ki, kk, ka, kb, kc, a, b, c).transpose(1, 0, 2) )
+        ret = ( 0. * get_permuted_w(ki, kj, kk, ka, kb, kc, a, b, c) +
+                0. * get_permuted_w(kk, ki, kj, ka, kb, kc, a, b, c).transpose(1, 2, 0) +
+                0. * get_permuted_w(kj, kk, ki, ka, kb, kc, a, b, c).transpose(2, 0, 1) -
+                0. * get_permuted_w(kk, kj, ki, ka, kb, kc, a, b, c).transpose(2, 1, 0) -
+                0. * get_permuted_w(ki, kk, kj, ka, kb, kc, a, b, c).transpose(0, 2, 1) -
+                0. * get_permuted_w(kj, ki, kk, ka, kb, kc, a, b, c).transpose(1, 0, 2) )
         return ret
 
     def get_v(ki, kj, kk, ka, kb, kc, a, b, c):
@@ -162,71 +224,135 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
                         else:
                             symm_fac = 6.  # six unique permutations of [ia, jb, kc]
 
-                        for a in range(nvir):
-                            for b in range(nvir):
-                                for c in range(nvir):
-                                    # Form energy denominator
-                                    eijkabc = (eijk - mo_energy_vir[ka][a] - mo_energy_vir[kb][b] - mo_energy_vir[kc][c])
+                        # Determine the a, b, c indices we will loop over as
+                        # determined by the k-point symmetry.
+                        abc_indices = cartesian_prod([range(nvir)]*3)
+                        symm_3d = symm_2d_ab = symm_2d_bc = False
+                        if ia_index == jb_index == kc_index: # loop a >= b >= c
+                            abc_indices = range_tril_3d(nvir)
+                            symm_3d = True
+                        elif ia_index == jb_index: # loop a >= b
+                            abc_indices = range_tril_for_indices(nvir, 3, [0, 1])
+                            symm_2d_ab = True
+                        elif jb_index == kc_index: # loop b >= c
+                            abc_indices = range_tril_for_indices(nvir, 3, [1, 2])
+                            symm_2d_bc = True
 
-                                    pwijk = (       get_permuted_w(ki, kj, kk, ka, kb, kc, a, b, c) +
-                                              0.5 * get_permuted_v(ki, kj, kk, ka, kb, kc, a, b, c) )
-                                    rwijk = get_rw(ki, kj, kk, ka, kb, kc, a, b, c) / eijkabc
+                        for a, b, c in abc_indices:
+                            # Form energy denominator
+                            eijkabc = (eijk - mo_energy_vir[ka][a] - mo_energy_vir[kb][b] - mo_energy_vir[kc][c])
 
-                                    energy_t += symm_fac * einsum('ijk,ijk', pwijk, rwijk.conj())
+                            symm_abc = 1.
+                            if symm_3d:
+                                if a == b == c:
+                                    symm_abc = 1.
+                                elif a == b or b == c:
+                                    symm_abc = 3.
+                                else:
+                                    symm_abc = 6.
 
-                                    #w_int0 = get_w(ki, kj, kk, ka, kb, kc, a, b, c)
-                                    #w_int1 = get_w(kj, kk, ki, kb, kc, ka, b, c, a).transpose(2, 0, 1)
-                                    #w_int2 = get_w(kk, ki, kj, kc, ka, kb, c, a, b).transpose(1, 2, 0)
-                                    #w_int3 = get_w(ki, kk, kj, ka, kc, kb, a, c, b).transpose(0, 2, 1)
-                                    #w_int4 = get_w(kk, kj, ki, kc, kb, ka, c, b, a).transpose(2, 1, 0)
-                                    #w_int5 = get_w(kj, ki, kk, kb, ka, kc, b, a, c).transpose(1, 0, 2)
+                            if symm_2d_ab:
+                                if a == b:
+                                    symm_abc = 1.
+                                else:
+                                    symm_abc = 2.
 
-                                    #v_int0 = get_v(ki, kj, kk, ka, kb, kc, a, b, c)
-                                    #v_int1 = get_v(kj, kk, ki, kb, kc, ka, b, c, a).transpose(2, 0, 1)
-                                    #v_int2 = get_v(kk, ki, kj, kc, ka, kb, c, a, b).transpose(1, 2, 0)
-                                    #v_int3 = get_v(ki, kk, kj, ka, kc, kb, a, c, b).transpose(0, 2, 1)
-                                    #v_int4 = get_v(kk, kj, ki, kc, kb, ka, c, b, a).transpose(2, 1, 0)
-                                    #v_int5 = get_v(kj, ki, kk, kb, ka, kc, b, a, c).transpose(1, 0, 2)
+                            if symm_2d_bc:
+                                if b == c:
+                                    symm_abc = 1.
+                                else:
+                                    symm_abc = 2.
 
-                                    ## Creating permuted W_ijkabc + V_ijkabc intermediate
-                                    #pwijk  = w_int0 + 0.5 * v_int0
-                                    #pwijk += w_int1 + 0.5 * v_int1
-                                    #pwijk += w_int2 + 0.5 * v_int2
-                                    #pwijk += w_int3 + 0.5 * v_int3
-                                    #pwijk += w_int4 + 0.5 * v_int4
-                                    #pwijk += w_int5 + 0.5 * v_int5
+                            #pwijk = (       get_permuted_w(ki, kj, kk, ka, kb, kc, a, b, c) +
+                            #          0.5 * get_permuted_v(ki, kj, kk, ka, kb, kc, a, b, c) )
+                            #rwijk = get_rw(ki, kj, kk, ka, kb, kc, a, b, c) / eijkabc
 
-                                    #rwijk = np.zeros_like(w_int0)
+                            #energy_t += symm_fac * einsum('ijk,ijk', pwijk, rwijk.conj())
 
-                                    ## (i, j, k) -> (i, j, k)
-                                    #rwijk += 4. * w_int0
-                                    #rwijk += 4. * w_int1
-                                    #rwijk += 4. * w_int2
-                                    #rwijk += 4. * w_int3
-                                    #rwijk += 4. * w_int4
-                                    #rwijk += 4. * w_int5
+                            # Creating permuted W_ijkabc intermediate
+                            w_int0 = get_w(ki, kj, kk, ka, kb, kc, a, b, c)
+                            w_int1 = get_w(kj, kk, ki, kb, kc, ka, b, c, a).transpose(2, 0, 1)
+                            w_int2 = get_w(kk, ki, kj, kc, ka, kb, c, a, b).transpose(1, 2, 0)
+                            w_int3 = get_w(ki, kk, kj, ka, kc, kb, a, c, b).transpose(0, 2, 1)
+                            w_int4 = get_w(kk, kj, ki, kc, kb, ka, c, b, a).transpose(2, 1, 0)
+                            w_int5 = get_w(kj, ki, kk, kb, ka, kc, b, a, c).transpose(1, 0, 2)
 
-                                    ## (i, j, k) -> (k, i, j)
-                                    #rwijk += 1. * get_w(kk, ki, kj, ka, kb, kc, a, b, c).transpose(1, 2, 0)
-                                    #rwijk += 1. * get_w(ki, kj, kk, kb, kc, ka, b, c, a).transpose(2, 0, 1).transpose(1, 2, 0)
-                                    #rwijk += 1. * get_w(kj, kk, ki, kc, ka, kb, c, a, b).transpose(1, 2, 0).transpose(1, 2, 0)
-                                    #rwijk += 1. * get_w(kk, kj, ki, ka, kc, kb, a, c, b).transpose(0, 2, 1).transpose(1, 2, 0)
-                                    #rwijk += 1. * get_w(kj, ki, kk, kc, kb, ka, c, b, a).transpose(2, 1, 0).transpose(1, 2, 0)
-                                    #rwijk += 1. * get_w(ki, kk, kj, kb, ka, kc, b, a, c).transpose(1, 0, 2).transpose(1, 2, 0)
+                            # Creating permuted V_ijkabc intermediate
+                            v_int0 = get_v(ki, kj, kk, ka, kb, kc, a, b, c)
+                            v_int1 = get_v(kj, kk, ki, kb, kc, ka, b, c, a).transpose(2, 0, 1)
+                            v_int2 = get_v(kk, ki, kj, kc, ka, kb, c, a, b).transpose(1, 2, 0)
+                            v_int3 = get_v(ki, kk, kj, ka, kc, kb, a, c, b).transpose(0, 2, 1)
+                            v_int4 = get_v(kk, kj, ki, kc, kb, ka, c, b, a).transpose(2, 1, 0)
+                            v_int5 = get_v(kj, ki, kk, kb, ka, kc, b, a, c).transpose(1, 0, 2)
 
-                                    ## (i, j, k) -> (j, k, i)
-                                    #rwijk += 1. * get_w(kj, kk, ki, ka, kb, kc, a, b, c).transpose(2, 0, 1)
-                                    #rwijk += 1. * get_w(kk, ki, kj, kb, kc, ka, b, c, a).transpose(2, 0, 1).transpose(2, 0, 1)
-                                    #rwijk += 1. * get_w(ki, kj, kk, kc, ka, kb, c, a, b).transpose(1, 2, 0).transpose(2, 0, 1)
-                                    #rwijk += 1. * get_w(kj, ki, kk, ka, kc, kb, a, c, b).transpose(0, 2, 1).transpose(2, 0, 1)
-                                    #rwijk += 1. * get_w(ki, kk, kj, kc, kb, ka, c, b, a).transpose(2, 1, 0).transpose(2, 0, 1)
-                                    #rwijk += 1. * get_w(kk, kj, ki, kb, ka, kc, b, a, c).transpose(1, 0, 2).transpose(2, 0, 1)
+                            # Creating permuted W_ijkabc + 0.5 * V_ijkabc intermediate
+                            pwijk  = w_int0 + 0.5 * v_int0
+                            pwijk += w_int1 + 0.5 * v_int1
+                            pwijk += w_int2 + 0.5 * v_int2
+                            pwijk += w_int3 + 0.5 * v_int3
+                            pwijk += w_int4 + 0.5 * v_int4
+                            pwijk += w_int5 + 0.5 * v_int5
 
-                                    #rwijk += get_rw(ki, kj, kk, ka, kb, kc, a, b, c)
+                            # Creating R[W] intermediate
+                            rwijk = np.zeros((nocc, nocc, nocc), dtype=dtype)
 
-                                    #rwijk /= eijkabc
+                            # Adding in contribution 4. * P[(i, j, k) -> (i, j, k)]
+                            #rwijk += 4. * get_w(ki, kj, kk, ka, kb, kc, a, b, c)
+                            #rwijk += 4. * get_w(kj, kk, ki, kb, kc, ka, b, c, a).transpose(2, 0, 1)
+                            #rwijk += 4. * get_w(kk, ki, kj, kc, ka, kb, c, a, b).transpose(1, 2, 0)
+                            #rwijk += 4. * get_w(ki, kk, kj, ka, kc, kb, a, c, b).transpose(0, 2, 1)
+                            #rwijk += 4. * get_w(kk, kj, ki, kc, kb, ka, c, b, a).transpose(2, 1, 0)
+                            #rwijk += 4. * get_w(kj, ki, kk, kb, ka, kc, b, a, c).transpose(1, 0, 2)
+                            rwijk += 4. * w_int0
+                            rwijk += 4. * w_int1
+                            rwijk += 4. * w_int2
+                            rwijk += 4. * w_int3
+                            rwijk += 4. * w_int4
+                            rwijk += 4. * w_int5
 
-                                    #energy_t += symm_fac * einsum('ijk,ijk', pwijk, rwijk.conj())
+                            # Adding in contribution 1. * P[(i, j, k) -> (k, i, j)]
+                            rwijk += 1. * get_w(kk, ki, kj, ka, kb, kc, a, b, c).transpose(1, 2, 0)
+                            rwijk += 1. * get_w(ki, kj, kk, kb, kc, ka, b, c, a).transpose(2, 0, 1).transpose(1, 2, 0)
+                            rwijk += 1. * get_w(kj, kk, ki, kc, ka, kb, c, a, b).transpose(1, 2, 0).transpose(1, 2, 0)
+                            rwijk += 1. * get_w(kk, kj, ki, ka, kc, kb, a, c, b).transpose(0, 2, 1).transpose(1, 2, 0)
+                            rwijk += 1. * get_w(kj, ki, kk, kc, kb, ka, c, b, a).transpose(2, 1, 0).transpose(1, 2, 0)
+                            rwijk += 1. * get_w(ki, kk, kj, kb, ka, kc, b, a, c).transpose(1, 0, 2).transpose(1, 2, 0)
+
+                            # Adding in contribution 1. * P[(i, j, k) -> (j, k, i)]
+                            rwijk += 1. * get_w(kj, kk, ki, ka, kb, kc, a, b, c).transpose(2, 0, 1)
+                            rwijk += 1. * get_w(kk, ki, kj, kb, kc, ka, b, c, a).transpose(2, 0, 1).transpose(2, 0, 1)
+                            rwijk += 1. * get_w(ki, kj, kk, kc, ka, kb, c, a, b).transpose(1, 2, 0).transpose(2, 0, 1)
+                            rwijk += 1. * get_w(kj, ki, kk, ka, kc, kb, a, c, b).transpose(0, 2, 1).transpose(2, 0, 1)
+                            rwijk += 1. * get_w(ki, kk, kj, kc, kb, ka, c, b, a).transpose(2, 1, 0).transpose(2, 0, 1)
+                            rwijk += 1. * get_w(kk, kj, ki, kb, ka, kc, b, a, c).transpose(1, 0, 2).transpose(2, 0, 1)
+
+                            # Adding in contribution -2. * P[(i, j, k) -> (k, j, i)]
+                            rwijk += -2. * get_w(kk, kj, ki, ka, kb, kc, a, b, c).transpose(2, 1, 0)
+                            rwijk += -2. * get_w(kj, ki, kk, kb, kc, ka, b, c, a).transpose(2, 0, 1).transpose(2, 1, 0)
+                            rwijk += -2. * get_w(ki, kk, kj, kc, ka, kb, c, a, b).transpose(1, 2, 0).transpose(2, 1, 0)
+                            rwijk += -2. * get_w(kk, ki, kj, ka, kc, kb, a, c, b).transpose(0, 2, 1).transpose(2, 1, 0)
+                            rwijk += -2. * get_w(ki, kj, kk, kc, kb, ka, c, b, a).transpose(2, 1, 0).transpose(2, 1, 0)
+                            rwijk += -2. * get_w(kj, kk, ki, kb, ka, kc, b, a, c).transpose(1, 0, 2).transpose(2, 1, 0)
+
+                            # Adding in contribution -2. * P[(i, j, k) -> (i, k, j)]
+                            rwijk += -2. * get_w(ki, kk, kj, ka, kb, kc, a, b, c).transpose(0, 2, 1)
+                            rwijk += -2. * get_w(kk, kj, ki, kb, kc, ka, b, c, a).transpose(2, 0, 1).transpose(0, 2, 1)
+                            rwijk += -2. * get_w(kj, ki, kk, kc, ka, kb, c, a, b).transpose(1, 2, 0).transpose(0, 2, 1)
+                            rwijk += -2. * get_w(ki, kj, kk, ka, kc, kb, a, c, b).transpose(0, 2, 1).transpose(0, 2, 1)
+                            rwijk += -2. * get_w(kj, kk, ki, kc, kb, ka, c, b, a).transpose(2, 1, 0).transpose(0, 2, 1)
+                            rwijk += -2. * get_w(kk, ki, kj, kb, ka, kc, b, a, c).transpose(1, 0, 2).transpose(0, 2, 1)
+
+                            # Adding in contribution -2. * P[(i, j, k) -> (j, i, k)]
+                            rwijk += -2. * get_w(kj, ki, kk, ka, kb, kc, a, b, c).transpose(1, 0, 2)
+                            rwijk += -2. * get_w(ki, kk, kj, kb, kc, ka, b, c, a).transpose(2, 0, 1).transpose(1, 0, 2)
+                            rwijk += -2. * get_w(kk, kj, ki, kc, ka, kb, c, a, b).transpose(1, 2, 0).transpose(1, 0, 2)
+                            rwijk += -2. * get_w(kj, kk, ki, ka, kc, kb, a, c, b).transpose(0, 2, 1).transpose(1, 0, 2)
+                            rwijk += -2. * get_w(kk, ki, kj, kc, kb, ka, c, b, a).transpose(2, 1, 0).transpose(1, 0, 2)
+                            rwijk += -2. * get_w(ki, kj, kk, kb, ka, kc, b, a, c).transpose(1, 0, 2).transpose(1, 0, 2)
+
+                            rwijk /= eijkabc
+
+                            energy_t += symm_abc * symm_fac * einsum('ijk,ijk', pwijk, rwijk.conj())
 
     energy_t *= (1./3)
     energy_t /= nkpts
@@ -263,6 +389,7 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
 #     CCSD(T) : -0.00403785264 Hartree per cell
 
 if __name__ == '__main__':
+    range_tril_for_indices(3, 4, [0, 1])
     from pyscf.pbc import gto
     from pyscf.pbc import scf
     from pyscf.pbc import cc
@@ -295,7 +422,7 @@ if __name__ == '__main__':
     #ecc, t1, t2 = mycc.kernel()
     #energy_t = mycc.ccsd_t()
     #print "ccsd(t) energy per cell = ", energy_t / np.prod(mk_mesh)
-    kpts = cell.make_kpts([1, 1, 2])
+    kpts = cell.make_kpts([1, 1, 3])
     kpts -= kpts[0]
     kmf = scf.KRHF(cell, kpts=kpts, exxdiv=None)
     ehf = kmf.kernel()
