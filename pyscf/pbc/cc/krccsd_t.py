@@ -11,6 +11,7 @@ import pyscf.pbc.cc.kccsd_rhf
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc import scf
+from pyscf.pbc.cc.kccsd_t import range_tril_3d, range_tril_for_indices
 from pyscf.pbc.lib import kpts_helper
 from pyscf.lib.numpy_helper import pack_tril
 from pyscf.lib.numpy_helper import cartesian_prod
@@ -18,66 +19,6 @@ from pyscf.lib.misc import flatten
 
 #einsum = np.einsum
 einsum = lib.einsum
-
-
-def range_tril_3d(nrange):
-    '''
-
-    Produces all tuples in 3 dimensions [x, y, z] that satisfy a lower triangular form
-
-    .. math:: N_{max} > x \ge y \ge z.
-
-    Parameters
-    ----------
-    nrange: int
-        Maximum range in any of the x, y, z dimensions
-
-    Returns
-    -------
-    tril_3d: list of lists
-        Returns a list of 3-tuples in lower triangular form
-
-    '''
-    tril_3d = []
-    # For each x in the leading dimension, produce all (y,z) tuples in lower
-    # triangular form with x >= y >= z
-    for i in range(nrange):
-        tup = np.array(np.tril_indices(i + 1)).T
-        # NOTE: cartesian_prod does not work here, need to use itertools.product
-        tril_3d.extend([flatten(x) for x in list(itertools.product([[i]], tup))])
-    return tril_3d
-
-
-def range_tril_for_indices(nrange, ndim, indices):
-    '''
-
-    Produces all `ndim`-dimensional tuples that take values in `range(0, nrange)` where
-    the tuple indices described by `[indices[0], indices[1]]` satisfy a lower triangular form.
-
-    Parameters
-    ----------
-    nrange: int
-        Number of elements in the range for each dimension
-    ndim: int
-        Number of dimensions
-    indices: array-like of ints
-        Gives the tuple indices that will satisfy the lower triangular form
-
-    Returns
-    -------
-    tril_idx: list of lists
-        Returns a list of `ndim`-tuples
-
-    '''
-    assert len(indices) == 2
-    idx0, idx1 = indices
-
-    range_idx = cartesian_prod([range(nrange)] * (ndim - 2))
-    tril_idx = np.array(np.tril_indices(nrange)).T
-    tril_idx = np.array([flatten(x) for x in list(itertools.product(range_idx, tril_idx))])
-    tril_idx[:, idx0], tril_idx[:, ndim - 2] = tril_idx[:, ndim - 2], tril_idx[:, idx0].copy()
-    tril_idx[:, idx1], tril_idx[:, ndim - 1] = tril_idx[:, ndim - 1], tril_idx[:, idx1].copy()
-    return tril_idx
 
 
 # CCSD(T) equations taken from Scuseria, JCP (94), 1991
@@ -221,11 +162,11 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
 
                         # Factors to include for permutational symmetry among k-points
                         if (ia_index == jb_index and jb_index == kc_index):
-                            symm_fac = 1.  # only one unique [ia, jb, kc] index
+                            symm_kpt = 1.  # only one unique [ia, jb, kc] index
                         elif (ia_index == jb_index or jb_index == kc_index):
-                            symm_fac = 3.  # three unique permutations of [ia, jb, kc]
+                            symm_kpt = 3.  # three unique permutations of [ia, jb, kc]
                         else:
-                            symm_fac = 6.  # six unique permutations of [ia, jb, kc]
+                            symm_kpt = 6.  # six unique permutations of [ia, jb, kc]
 
                         # Determine the a, b, c indices we will loop over as
                         # determined by the k-point symmetry.
@@ -351,7 +292,7 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
 
                             rwijk /= eijkabc
 
-                            energy_t += symm_abc * symm_fac * einsum('ijk,ijk', pwijk, rwijk.conj())
+                            energy_t += symm_abc * symm_kpt * einsum('ijk,ijk', pwijk, rwijk.conj())
 
     energy_t *= (1. / 3)
     energy_t /= nkpts

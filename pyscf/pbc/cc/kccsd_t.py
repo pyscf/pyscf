@@ -4,6 +4,7 @@
 #
 """Module for running k-point ccsd(t)"""
 
+import itertools
 import numpy as np
 import pyscf.pbc.cc.kccsd
 
@@ -11,9 +12,72 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc import scf
 from pyscf.pbc.lib import kpts_helper
+from pyscf.lib.numpy_helper import pack_tril
+from pyscf.lib.numpy_helper import cartesian_prod
+from pyscf.lib.misc import flatten
 
 #einsum = np.einsum
 einsum = lib.einsum
+
+
+def range_tril_3d(nrange):
+    '''
+
+    Produces all tuples in 3 dimensions [x, y, z] that satisfy a lower triangular form
+
+    .. math:: N_{max} > x \ge y \ge z.
+
+    Parameters
+    ----------
+    nrange: int
+        Maximum range in any of the x, y, z dimensions
+
+    Returns
+    -------
+    tril_3d: list of lists
+        Returns a list of 3-tuples in lower triangular form
+
+    '''
+    tril_3d = []
+    # For each x in the leading dimension, produce all (y,z) tuples in lower
+    # triangular form with x >= y >= z
+    for i in range(nrange):
+        tup = np.array(np.tril_indices(i + 1)).T
+        # NOTE: cartesian_prod does not work here, need to use itertools.product
+        tril_3d.extend([flatten(x) for x in list(itertools.product([[i]], tup))])
+    return tril_3d
+
+
+def range_tril_for_indices(nrange, ndim, indices):
+    '''
+
+    Produces all `ndim`-dimensional tuples that take values in `range(0, nrange)` where
+    the tuple indices described by `[indices[0], indices[1]]` satisfy a lower triangular form.
+
+    Parameters
+    ----------
+    nrange: int
+        Number of elements in the range for each dimension
+    ndim: int
+        Number of dimensions
+    indices: array-like of ints
+        Gives the tuple indices that will satisfy the lower triangular form
+
+    Returns
+    -------
+    tril_idx: list of lists
+        Returns a list of `ndim`-tuples
+
+    '''
+    assert len(indices) == 2
+    idx0, idx1 = indices
+
+    range_idx = cartesian_prod([range(nrange)] * (ndim - 2))
+    tril_idx = np.array(np.tril_indices(nrange)).T
+    tril_idx = np.array([flatten(x) for x in list(itertools.product(range_idx, tril_idx))])
+    tril_idx[:, idx0], tril_idx[:, ndim - 2] = tril_idx[:, ndim - 2], tril_idx[:, idx0].copy()
+    tril_idx[:, idx1], tril_idx[:, ndim - 1] = tril_idx[:, ndim - 1], tril_idx[:, idx1].copy()
+    return tril_idx
 
 
 # CCSD(T) equations taken from Tu, Yang, Wang, and Guo JPC (135), 2011
@@ -83,13 +147,13 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
                 # eigenvalue denominator: e(i) + e(j) + e(k)
                 eijk = lib.direct_sum('i,j,k->ijk', mo_energy_occ[ki], mo_energy_occ[kj], mo_energy_occ[kk])
 
-                # count the degeneracy of all (ki, kj, kk)
+                # Factors to include for permutational symmetry among k-points for occupied space
                 if ki == kj and kj == kk:
-                    symm_ijk = 1.  # only one degeneracy
+                    symm_ijk_kpt = 1.  # only one degeneracy
                 elif ki == kj or kj == kk:
-                    symm_ijk = 3.  # 3 degeneracies when only one k-point is unique
+                    symm_ijk_kpt = 3.  # 3 degeneracies when only one k-point is unique
                 else:
-                    symm_ijk = 6.  # 3! combinations of arranging 3 distinct k-points
+                    symm_ijk_kpt = 6.  # 3! combinations of arranging 3 distinct k-points
 
                 for ka in range(nkpts):
                     for kb in range(ka + 1):
@@ -100,117 +164,150 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
                         if kc not in range(kb + 1):
                             continue
 
-                        # count the degeneracy of all (ka, kb, kc)
+                        # Factors to include for permutational symmetry among k-points for virtual space
                         if ka == kb and kb == kc:
-                            symm_abc = 1.  # one unique combination of (ka, kb, kc)
+                            symm_abc_kpt = 1.  # one unique combination of (ka, kb, kc)
                         elif ka == kb or kb == kc:
-                            symm_abc = 3.  # 3 unique combinations of (ka, kb, kc)
+                            symm_abc_kpt = 3.  # 3 unique combinations of (ka, kb, kc)
                         else:
-                            symm_abc = 6.  # 6 unique combinations of (ka, kb, kc)
+                            symm_abc_kpt = 6.  # 6 unique combinations of (ka, kb, kc)
 
-                        for a in range(nvir):
-                            for b in range(nvir):
-                                for c in range(nvir):
+                        # Determine the a, b, c indices we will loop over as
+                        # determined by the k-point symmetry.
+                        abc_indices = cartesian_prod([range(nvir)] * 3)
+                        symm_3d = symm_2d_ab = symm_2d_bc = False
+                        if ka == kc == kc:
+                            abc_indices = range_tril_3d(nvir)  # loop a >= b >= c
+                            symm_3d = True
+                        elif ka == kb:
+                            abc_indices = range_tril_for_indices(nvir, 3, [0, 1])  # loop a >= b
+                            symm_2d_ab = True
+                        elif kb == kc:
+                            abc_indices = range_tril_for_indices(nvir, 3, [1, 2])  # loop b >= c
+                            symm_2d_bc = True
 
-                                    # Form energy denominator
-                                    eijkabc = (eijk - mo_energy_vir[ka][a] - mo_energy_vir[kb][b] - mo_energy_vir[kc][c])
+                        for a, b, c in abc_indices:
+                            # See symm_3d and abc_indices above for description of factors
+                            symm_abc = 1.
+                            if symm_3d:
+                                if a == b == c:
+                                    symm_abc = 1.
+                                elif a == b or b == c:
+                                    symm_abc = 3.
+                                else:
+                                    symm_abc = 6.
 
-                                    # Form connected triple excitation amplitude
-                                    t3c = np.zeros((nocc, nocc, nocc), dtype=dtype)
+                            if symm_2d_ab:
+                                if a == b:
+                                    symm_abc = 1.
+                                else:
+                                    symm_abc = 2.
 
-                                    # First term: 1 - p(ij) - p(ik)
-                                    ke = kconserv[kj, ka, kk]
-                                    t3c = t3c + einsum('jke,ie->ijk', t2[kj, kk, ka, :, :, a, :], -eris.ovvv[ki, ke, kc, :, :, c, b].conj())
-                                    ke = kconserv[ki, ka, kk]
-                                    t3c = t3c - einsum('ike,je->ijk', t2[ki, kk, ka, :, :, a, :], -eris.ovvv[kj, ke, kc, :, :, c, b].conj())
-                                    ke = kconserv[kj, ka, ki]
-                                    t3c = t3c - einsum('jie,ke->ijk', t2[kj, ki, ka, :, :, a, :], -eris.ovvv[kk, ke, kc, :, :, c, b].conj())
+                            if symm_2d_bc:
+                                if b == c:
+                                    symm_abc = 1.
+                                else:
+                                    symm_abc = 2.
 
-                                    km = kconserv[kb, ki, kc]
-                                    t3c = t3c - einsum('mi,jkm->ijk', t2[km, ki, kb, :, :, b, c], eris.ooov[kj, kk, km, :, :, :, a].conj())
-                                    km = kconserv[kb, kj, kc]
-                                    t3c = t3c + einsum('mj,ikm->ijk', t2[km, kj, kb, :, :, b, c], eris.ooov[ki, kk, km, :, :, :, a].conj())
-                                    km = kconserv[kb, kk, kc]
-                                    t3c = t3c + einsum('mk,jim->ijk', t2[km, kk, kb, :, :, b, c], eris.ooov[kj, ki, km, :, :, :, a].conj())
+                            # Form energy denominator
+                            eijkabc = (eijk - mo_energy_vir[ka][a] - mo_energy_vir[kb][b] - mo_energy_vir[kc][c])
 
-                                    # Second term: - p(ab) + p(ab) p(ij) + p(ab) p(ik)
-                                    ke = kconserv[kj, kb, kk]
-                                    t3c = t3c - einsum('jke,ie->ijk', t2[kj, kk, kb, :, :, b, :], -eris.ovvv[ki, ke, kc, :, :, c, a].conj())
-                                    ke = kconserv[ki, kb, kk]
-                                    t3c = t3c + einsum('ike,je->ijk', t2[ki, kk, kb, :, :, b, :], -eris.ovvv[kj, ke, kc, :, :, c, a].conj())
-                                    ke = kconserv[kj, kb, ki]
-                                    t3c = t3c + einsum('jie,ke->ijk', t2[kj, ki, kb, :, :, b, :], -eris.ovvv[kk, ke, kc, :, :, c, a].conj())
+                            # Form connected triple excitation amplitude
+                            t3c = np.zeros((nocc, nocc, nocc), dtype=dtype)
 
-                                    km = kconserv[ka, ki, kc]
-                                    t3c = t3c + einsum('mi,jkm->ijk', t2[km, ki, ka, :, :, a, c], eris.ooov[kj, kk, km, :, :, :, b].conj())
-                                    km = kconserv[ka, kj, kc]
-                                    t3c = t3c - einsum('mj,ikm->ijk', t2[km, kj, ka, :, :, a, c], eris.ooov[ki, kk, km, :, :, :, b].conj())
-                                    km = kconserv[ka, kk, kc]
-                                    t3c = t3c - einsum('mk,jim->ijk', t2[km, kk, ka, :, :, a, c], eris.ooov[kj, ki, km, :, :, :, b].conj())
+                            # First term: 1 - p(ij) - p(ik)
+                            ke = kconserv[kj, ka, kk]
+                            t3c = t3c + einsum('jke,ie->ijk', t2[kj, kk, ka, :, :, a, :], -eris.ovvv[ki, ke, kc, :, :, c, b].conj())
+                            ke = kconserv[ki, ka, kk]
+                            t3c = t3c - einsum('ike,je->ijk', t2[ki, kk, ka, :, :, a, :], -eris.ovvv[kj, ke, kc, :, :, c, b].conj())
+                            ke = kconserv[kj, ka, ki]
+                            t3c = t3c - einsum('jie,ke->ijk', t2[kj, ki, ka, :, :, a, :], -eris.ovvv[kk, ke, kc, :, :, c, b].conj())
 
-                                    # Third term: - p(ac) + p(ac) p(ij) + p(ac) p(ik)
-                                    ke = kconserv[kj, kc, kk]
-                                    t3c = t3c - einsum('jke,ie->ijk', t2[kj, kk, kc, :, :, c, :], -eris.ovvv[ki, ke, ka, :, :, a, b].conj())
-                                    ke = kconserv[ki, kc, kk]
-                                    t3c = t3c + einsum('ike,je->ijk', t2[ki, kk, kc, :, :, c, :], -eris.ovvv[kj, ke, ka, :, :, a, b].conj())
-                                    ke = kconserv[kj, kc, ki]
-                                    t3c = t3c + einsum('jie,ke->ijk', t2[kj, ki, kc, :, :, c, :], -eris.ovvv[kk, ke, ka, :, :, a, b].conj())
+                            km = kconserv[kb, ki, kc]
+                            t3c = t3c - einsum('mi,jkm->ijk', t2[km, ki, kb, :, :, b, c], eris.ooov[kj, kk, km, :, :, :, a].conj())
+                            km = kconserv[kb, kj, kc]
+                            t3c = t3c + einsum('mj,ikm->ijk', t2[km, kj, kb, :, :, b, c], eris.ooov[ki, kk, km, :, :, :, a].conj())
+                            km = kconserv[kb, kk, kc]
+                            t3c = t3c + einsum('mk,jim->ijk', t2[km, kk, kb, :, :, b, c], eris.ooov[kj, ki, km, :, :, :, a].conj())
 
-                                    km = kconserv[kb, ki, ka]
-                                    t3c = t3c + einsum('mi,jkm->ijk', t2[km, ki, kb, :, :, b, a], eris.ooov[kj, kk, km, :, :, :, c].conj())
-                                    km = kconserv[kb, kj, ka]
-                                    t3c = t3c - einsum('mj,ikm->ijk', t2[km, kj, kb, :, :, b, a], eris.ooov[ki, kk, km, :, :, :, c].conj())
-                                    km = kconserv[kb, kk, ka]
-                                    t3c = t3c - einsum('mk,jim->ijk', t2[km, kk, kb, :, :, b, a], eris.ooov[kj, ki, km, :, :, :, c].conj())
+                            # Second term: - p(ab) + p(ab) p(ij) + p(ab) p(ik)
+                            ke = kconserv[kj, kb, kk]
+                            t3c = t3c - einsum('jke,ie->ijk', t2[kj, kk, kb, :, :, b, :], -eris.ovvv[ki, ke, kc, :, :, c, a].conj())
+                            ke = kconserv[ki, kb, kk]
+                            t3c = t3c + einsum('ike,je->ijk', t2[ki, kk, kb, :, :, b, :], -eris.ovvv[kj, ke, kc, :, :, c, a].conj())
+                            ke = kconserv[kj, kb, ki]
+                            t3c = t3c + einsum('jie,ke->ijk', t2[kj, ki, kb, :, :, b, :], -eris.ovvv[kk, ke, kc, :, :, c, a].conj())
 
-                                    # Form disconnected triple excitation amplitude contribution
-                                    t3d = np.zeros((nocc, nocc, nocc), dtype=dtype)
+                            km = kconserv[ka, ki, kc]
+                            t3c = t3c + einsum('mi,jkm->ijk', t2[km, ki, ka, :, :, a, c], eris.ooov[kj, kk, km, :, :, :, b].conj())
+                            km = kconserv[ka, kj, kc]
+                            t3c = t3c - einsum('mj,ikm->ijk', t2[km, kj, ka, :, :, a, c], eris.ooov[ki, kk, km, :, :, :, b].conj())
+                            km = kconserv[ka, kk, kc]
+                            t3c = t3c - einsum('mk,jim->ijk', t2[km, kk, ka, :, :, a, c], eris.ooov[kj, ki, km, :, :, :, b].conj())
 
-                                    # First term: 1 - p(ij) - p(ik)
-                                    if ki == ka:
-                                        t3d = t3d + einsum('i,jk->ijk',  t1[ki, :, a], -eris.oovv[kj, kk, kb, :, :, b, c].conj())
-                                        t3d = t3d + einsum('i,jk->ijk', fov[ki, :, a],         t2[kj, kk, kb, :, :, b, c])
+                            # Third term: - p(ac) + p(ac) p(ij) + p(ac) p(ik)
+                            ke = kconserv[kj, kc, kk]
+                            t3c = t3c - einsum('jke,ie->ijk', t2[kj, kk, kc, :, :, c, :], -eris.ovvv[ki, ke, ka, :, :, a, b].conj())
+                            ke = kconserv[ki, kc, kk]
+                            t3c = t3c + einsum('ike,je->ijk', t2[ki, kk, kc, :, :, c, :], -eris.ovvv[kj, ke, ka, :, :, a, b].conj())
+                            ke = kconserv[kj, kc, ki]
+                            t3c = t3c + einsum('jie,ke->ijk', t2[kj, ki, kc, :, :, c, :], -eris.ovvv[kk, ke, ka, :, :, a, b].conj())
 
-                                    if kj == ka:
-                                        t3d = t3d - einsum('j,ik->ijk',  t1[kj, :, a], -eris.oovv[ki, kk, kb, :, :, b, c].conj())
-                                        t3d = t3d - einsum('j,ik->ijk', fov[kj, :, a],         t2[ki, kk, kb, :, :, b, c])
+                            km = kconserv[kb, ki, ka]
+                            t3c = t3c + einsum('mi,jkm->ijk', t2[km, ki, kb, :, :, b, a], eris.ooov[kj, kk, km, :, :, :, c].conj())
+                            km = kconserv[kb, kj, ka]
+                            t3c = t3c - einsum('mj,ikm->ijk', t2[km, kj, kb, :, :, b, a], eris.ooov[ki, kk, km, :, :, :, c].conj())
+                            km = kconserv[kb, kk, ka]
+                            t3c = t3c - einsum('mk,jim->ijk', t2[km, kk, kb, :, :, b, a], eris.ooov[kj, ki, km, :, :, :, c].conj())
 
-                                    if kk == ka:
-                                        t3d = t3d - einsum('k,ji->ijk',  t1[kk, :, a], -eris.oovv[kj, ki, kb, :, :, b, c].conj())
-                                        t3d = t3d - einsum('k,ji->ijk', fov[kk, :, a],         t2[kj, ki, kb, :, :, b, c])
+                            # Form disconnected triple excitation amplitude contribution
+                            t3d = np.zeros((nocc, nocc, nocc), dtype=dtype)
 
-                                    # Second term: - p(ab) + p(ab) p(ij) + p(ab) p(ik)
-                                    if ki == kb:
-                                        t3d = t3d - einsum('i,jk->ijk',  t1[ki, :, b], -eris.oovv[kj, kk, ka, :, :, a, c].conj())
-                                        t3d = t3d - einsum('i,jk->ijk', fov[ki, :, b],         t2[kj, kk, ka, :, :, a, c])
+                            # First term: 1 - p(ij) - p(ik)
+                            if ki == ka:
+                                t3d = t3d + einsum('i,jk->ijk',  t1[ki, :, a], -eris.oovv[kj, kk, kb, :, :, b, c].conj())
+                                t3d = t3d + einsum('i,jk->ijk', fov[ki, :, a],         t2[kj, kk, kb, :, :, b, c])
 
-                                    if kj == kb:
-                                        t3d = t3d + einsum('j,ik->ijk',  t1[kj, :, b], -eris.oovv[ki, kk, ka, :, :, a, c].conj())
-                                        t3d = t3d + einsum('j,ik->ijk', fov[kj, :, b],         t2[ki, kk, ka, :, :, a, c])
+                            if kj == ka:
+                                t3d = t3d - einsum('j,ik->ijk',  t1[kj, :, a], -eris.oovv[ki, kk, kb, :, :, b, c].conj())
+                                t3d = t3d - einsum('j,ik->ijk', fov[kj, :, a],         t2[ki, kk, kb, :, :, b, c])
 
-                                    if kk == kb:
-                                        t3d = t3d + einsum('k,ji->ijk',  t1[kk, :, b], -eris.oovv[kj, ki, ka, :, :, a, c].conj())
-                                        t3d = t3d + einsum('k,ji->ijk', fov[kk, :, b],         t2[kj, ki, ka, :, :, a, c])
+                            if kk == ka:
+                                t3d = t3d - einsum('k,ji->ijk',  t1[kk, :, a], -eris.oovv[kj, ki, kb, :, :, b, c].conj())
+                                t3d = t3d - einsum('k,ji->ijk', fov[kk, :, a],         t2[kj, ki, kb, :, :, b, c])
 
-                                    # Third term: - p(ac) + p(ac) p(ij) + p(ac) p(ik)
-                                    if ki == kc:
-                                        t3d = t3d - einsum('i,jk->ijk',  t1[ki, :, c], -eris.oovv[kj, kk, kb, :, :, b, a].conj())
-                                        t3d = t3d - einsum('i,jk->ijk', fov[ki, :, c],         t2[kj, kk, kb, :, :, b, a])
+                            # Second term: - p(ab) + p(ab) p(ij) + p(ab) p(ik)
+                            if ki == kb:
+                                t3d = t3d - einsum('i,jk->ijk',  t1[ki, :, b], -eris.oovv[kj, kk, ka, :, :, a, c].conj())
+                                t3d = t3d - einsum('i,jk->ijk', fov[ki, :, b],         t2[kj, kk, ka, :, :, a, c])
 
-                                    if kj == kc:
-                                        t3d = t3d + einsum('j,ik->ijk',  t1[kj, :, c], -eris.oovv[ki, kk, kb, :, :, b, a].conj())
-                                        t3d = t3d + einsum('j,ik->ijk', fov[kj, :, c],         t2[ki, kk, kb, :, :, b, a])
+                            if kj == kb:
+                                t3d = t3d + einsum('j,ik->ijk',  t1[kj, :, b], -eris.oovv[ki, kk, ka, :, :, a, c].conj())
+                                t3d = t3d + einsum('j,ik->ijk', fov[kj, :, b],         t2[ki, kk, ka, :, :, a, c])
 
-                                    if kk == kc:
-                                        t3d = t3d + einsum('k,ji->ijk',  t1[kk, :, c], -eris.oovv[kj, ki, kb, :, :, b, a].conj())
-                                        t3d = t3d + einsum('k,ji->ijk', fov[kk, :, c],         t2[kj, ki, kb, :, :, b, a])
+                            if kk == kb:
+                                t3d = t3d + einsum('k,ji->ijk',  t1[kk, :, b], -eris.oovv[kj, ki, ka, :, :, a, c].conj())
+                                t3d = t3d + einsum('k,ji->ijk', fov[kk, :, b],         t2[kj, ki, ka, :, :, a, c])
 
-                                    t3c_plus_d = t3c + t3d
-                                    t3c_plus_d /= eijkabc
+                            # Third term: - p(ac) + p(ac) p(ij) + p(ac) p(ik)
+                            if ki == kc:
+                                t3d = t3d - einsum('i,jk->ijk',  t1[ki, :, c], -eris.oovv[kj, kk, kb, :, :, b, a].conj())
+                                t3d = t3d - einsum('i,jk->ijk', fov[ki, :, c],         t2[kj, kk, kb, :, :, b, a])
 
-                                    energy_t += symm_abc * symm_ijk * (1. / 36) * einsum('ijk,ijk', t3c, t3c_plus_d.conj())
+                            if kj == kc:
+                                t3d = t3d + einsum('j,ik->ijk',  t1[kj, :, c], -eris.oovv[ki, kk, kb, :, :, b, a].conj())
+                                t3d = t3d + einsum('j,ik->ijk', fov[kj, :, c],         t2[ki, kk, kb, :, :, b, a])
 
-    energy_t = energy_t / nkpts
+                            if kk == kc:
+                                t3d = t3d + einsum('k,ji->ijk',  t1[kk, :, c], -eris.oovv[kj, ki, kb, :, :, b, a].conj())
+                                t3d = t3d + einsum('k,ji->ijk', fov[kk, :, c],         t2[kj, ki, kb, :, :, b, a])
+
+                            t3c_plus_d = t3c + t3d
+                            t3c_plus_d /= eijkabc
+
+                            energy_t += symm_abc_kpt * symm_ijk_kpt * symm_abc * einsum('ijk,ijk', t3c, t3c_plus_d.conj())
+
+    energy_t = (1. / 36) * energy_t / nkpts
 
     if abs(energy_t.imag) > 1e-4:
         log.warn('Non-zero imaginary part of CCSD(T) energy was found %s',
@@ -317,7 +414,7 @@ if __name__ == '__main__':
     cell.mesh = [24, 24, 24]
     cell.build()
 
-    kpts = cell.make_kpts([1, 1, 2])
+    kpts = cell.make_kpts([1, 1, 3])
     kpts -= kpts[0]
     kmf = scf.KRHF(cell, kpts=kpts, exxdiv=None)
     ehf = kmf.kernel()
