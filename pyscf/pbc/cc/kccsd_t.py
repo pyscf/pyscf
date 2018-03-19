@@ -29,9 +29,26 @@ einsum = lib.einsum
 # There are some complex conjugates not included in the equations
 # by Watts, Gauss, Bartlett JCP (98), 1993
 def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
-    """
-    This function returns the CCSD(T) energy.
-    """
+    '''Returns the CCSD(T) for general spin-orbital integrals with k-points.
+
+    Note:
+        Returns real part of the CCSD(T) energy, raises warning if there is
+        a complex part.
+
+    Args:
+        mycc (:class:`GCCSD`): Coupled-cluster object storing results of
+            a coupled-cluster calculation.
+        eris (:class:`_ERIS`): Integral object holding the relevant electron-
+            repulsion integrals and Fock matrix elements
+        t1 (:obj:`ndarray`): t1 coupled-cluster amplitudes
+        t2 (:obj:`ndarray`): t2 coupled-cluster amplitudes
+        max_memory (float): Maximum memory used in calculation
+        verbose (int, :class:`Logger`) : verbosity of calculation
+
+    Returns:
+        energy_t : float
+            The real-part of the k-point CCSD(T) energy.
+    '''
     if isinstance(verbose, logger.Logger):
         log = verbose
     else:
@@ -40,6 +57,14 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
     if eris is None: eris = mycc.eris
     if t1 is None: t1 = mycc.t1
     if t2 is None: t2 = mycc.t2
+
+    if eris is None:
+        raise TypeError('Electron repulsion integrals, `eris`, must be passed in '
+                        'to the CCSD(T) kernel or created in the cc object for '
+                        'the k-point CCSD(T) to run!')
+    if t1 is None or t2 is None:
+        raise TypeError('Must pass in t1/t2 amplitudes to k-point CCSD(T)! (Maybe '
+                        'need to run `.ccsd()` on the ccsd object?)')
 
     cell = mycc._scf.cell
     kpts = mycc.kpts
@@ -202,29 +227,44 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
     log.note('CCSD(T) correction per cell = %.15g', energy_t.real)
     return energy_t.real
 
-def check_antiperm_symmetry(array, idx1, idx2, tolerance=1e-8):
+def check_kpt_antiperm_symmetry(array, idx1, idx2, tolerance=1e-8):
     '''
     Checks whether an array with k-point symmetry has antipermutational symmetry
-    with respect to switching two indices idx1, idx2.  For 2-particle arrays,
-    idx1 and idx2 must be in the range [0,3], while for 3-particle arrays they
-    must be in the range [0,6].
+    with respect to switching the particle indices `idx1`, `idx2`. The particle
+    indices switches both the orbital index and k-point index associated with
+    the two indices.
 
-    For a 3-particle array, such as the T3 amplitude
-        t3[ki, kj, kk, ka, kb, i, j, a, b, c],
-    setting `idx1 = 0` and `idx2 = 1` would switch the orbital indices i, j as well
-    as the kpoint indices ki, kj.
+    array (:obj:`ndarray`): array to test permutational symmetry, where for
+        an n-particle array, the first (2n-1) array elements are kpoint indices
+        while the final 2n array elements are orbital indices.
+    idx1 (int): first index
+    idx2 (int): second index
+
+    Examples:
+        For a 3-particle array, such as the T3 amplitude
+            t3[ki, kj, kk, ka, kb, i, j, a, b, c],
+        setting `idx1 = 0` and `idx2 = 1` would switch the orbital indices i, j as well
+        as the kpoint indices ki, kj.
+
+        >>> nkpts, nocc, nvir = 3, 4, 5
+        >>> t2 = numpy.random.random_sample((nkpts, nkpts, nkpts, nocc, nocc, nvir, nvir))
+        >>> t2 = t2 + t2.transpose(1,0,2,4,3,5,6)
+        >>> check_kpt_antiperm_symmetry(t2, 0, 1)
+        True
     '''
     # Checking to make sure bounds of idx1 and idx2 are O.K.
-    assert(idx1 >= 0 and idx2 >= 0)
-    assert(idx1 != idx2)
+    assert(idx1 >= 0 and idx2 >= 0 and 'indices to swap must be non-negative!')
 
     array_shape_len = len(array.shape)
     nparticles = (array_shape_len + 1) / 4
-    assert(idx1 < ( 2 * nparticles - 1 ) and idx2 < ( 2 * nparticles - 1 ))
+    assert(idx1 < ( 2 * nparticles - 1 ) and idx2 < ( 2 * nparticles - 1 ) and
+           'This function does not support the swapping of the last k-point index '
+           '(This k-point is implicitly not indexed due to conservation of momentum '
+           'between k-points.).')
 
     if (nparticles > 3):
-        raise NotImplementedError("Currently set up for only up to 3 particle "
-                                  "arrays. Input array has %d particles.")
+        raise NotImplementedError('Currently set up for only up to 3 particle '
+                                  'arrays. Input array has %d particles.')
 
     kpt_idx1 = idx1
     kpt_idx2 = idx2
@@ -233,6 +273,7 @@ def check_antiperm_symmetry(array, idx1, idx2, tolerance=1e-8):
     orb_idx1 = (2 * nparticles - 1) + idx1
     orb_idx2 = (2 * nparticles - 1) + idx2
 
+    # Sign of permutation
     sign = (-1)**(abs(idx1 - idx2) + 1)
     out_array_indices = np.arange(array_shape_len)
 
@@ -240,8 +281,21 @@ def check_antiperm_symmetry(array, idx1, idx2, tolerance=1e-8):
             out_array_indices[kpt_idx2], out_array_indices[kpt_idx1]
     out_array_indices[orb_idx1], out_array_indices[orb_idx2] = \
             out_array_indices[orb_idx2], out_array_indices[orb_idx1]
-    return (np.linalg.norm(array + array.transpose(out_array_indices)) <
-            tolerance)
+    antisymmetric = (np.linalg.norm(array + array.transpose(out_array_indices)) <
+                     tolerance)
+    return antisymmetric
+
+# Gamma point calculation
+#
+# Parameters
+# ----------
+#     mesh : [24, 24, 24]
+#     kpt  : [1, 1, 2]
+# Returns
+# -------
+#     SCF     : -8.65192329453 Hartree per cell
+#     CCSD    : -0.15529836941 Hartree per cell
+#     CCSD(T) : -0.00191451068 Hartree per cell
 
 if __name__ == '__main__':
     from pyscf.pbc import gto
@@ -264,8 +318,8 @@ if __name__ == '__main__':
     cell.mesh = [24, 24, 24]
     cell.build()
 
-    kpts = cell.make_kpts([1, 1, 3])
-    kpts -= kpts[0]+0.02
+    kpts = cell.make_kpts([1, 1, 2])
+    kpts -= kpts[0]
     kmf = scf.KRHF(cell, kpts=kpts, exxdiv=None)
     ehf = kmf.kernel()
 
@@ -274,14 +328,3 @@ if __name__ == '__main__':
 
     energy_t = kernel(mycc)
 
-    # Gamma point calculation
-    #
-    # Parameters
-    # ----------
-    #     mesh : [24, 24, 24]
-    #     kpt  : [1, 1, 2]
-    # Returns
-    # -------
-    #     SCF     : -8.65192329453 Hartree per cell
-    #     CCSD    : -0.15529836941 Hartree per cell
-    #     CCSD(T) : -0.00191451068 Hartree per cell
