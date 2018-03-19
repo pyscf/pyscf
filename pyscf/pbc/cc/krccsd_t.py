@@ -28,36 +28,24 @@ einsum = lib.einsum
 #     symmetry in spin-less operators is the exchange of a column of excitation
 #     ooperators).
 def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
-    '''
+    '''Returns the CCSD(T) for restricted closed-shell systems with k-points.
 
-    Returns the k-point CCSD(T) for a closed-shell system using spatial orbitals.
-
-    Parameters
-    ----------
-        mycc: RCCSD
-            Coupled-cluster object storing results of a coupled-cluster calculation.
-        eris: _ERIS
-            Integral object holding the relevant electron-repulsion integrals and
-            Fock matrix elements
-        t1: ndarray
-            T1 restricted coupled-cluster amplitudes
-        t2: ndarray
-            T2 restricted coupled-cluster amplitudes
-        max_memory: number
-            Maximum memory used in calculation
-        verbose: int, Logger
-            verbosity of calculation
-
-    Returns
-    -------
-        energy_t : float
-            The real-part of the k-point CCSD(T) energy.
-
-    Notes
-    -----
+    Note:
         Returns real part of the CCSD(T) energy, raises warning if there is
         a complex part.
 
+    Args:
+        mycc (:class:`RCCSD`): Coupled-cluster object storing results of
+            a coupled-cluster calculation.
+        eris (:class:`_ERIS`): Integral object holding the relevant electron-
+            repulsion integrals and Fock matrix elements
+        t1 (:obj:`ndarray`): t1 coupled-cluster amplitudes
+        t2 (:obj:`ndarray`): t2 coupled-cluster amplitudes
+        max_memory (float): Maximum memory used in calculation (NOT USED)
+        verbose (int, :class:`Logger`): verbosity of calculation
+
+    Returns:
+        energy_t (float): The real-part of the k-point CCSD(T) energy.
     '''
     assert isinstance(mycc, pyscf.pbc.cc.kccsd_rhf.RCCSD)
     if isinstance(verbose, logger.Logger):

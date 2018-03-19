@@ -21,21 +21,17 @@ einsum = lib.einsum
 
 
 def range_tril_3d(nrange):
-    '''
+    '''Lower-triangular form for 3 indices.
 
-    Produces all tuples in 3 dimensions [x, y, z] that satisfy a lower triangular form
+    Produces all tuples in 3 dimensions [x, y, z] that satisfy a lower triangular form:
 
     .. math:: N_{max} > x \ge y \ge z.
 
-    Parameters
-    ----------
-    nrange: int
-        Maximum range in any of the x, y, z dimensions
+    Args:
+        nrange (int): Maximum range in any of the x, y, z dimensions
 
-    Returns
-    -------
-    tril_3d: list of lists
-        Returns a list of 3-tuples in lower triangular form
+    Returns:
+        tril_3d (list of lists): List of 3-tuples in lower triangular form
 
     '''
     tril_3d = []
@@ -48,35 +44,29 @@ def range_tril_3d(nrange):
     return tril_3d
 
 
-def range_tril_for_indices(nrange, ndim, indices):
-    '''
+def range_tril(nrange, nrepeat=2, tril_idx=[0, 1]):
+    '''Repeated ranges where two indices are in lower-triangular form.
 
-    Produces all `ndim`-dimensional tuples that take values in `range(0, nrange)` where
-    the tuple indices described by `[indices[0], indices[1]]` satisfy a lower triangular form.
+    Produces all `nrepeat`-dimensional tuples that take values in `range(0, nrange)` where
+    the tuple indices described by `[tril_idx[0], tril_idx[1]]` satisfy a lower triangular form.
 
-    Parameters
-    ----------
-    nrange: int
-        Number of elements in the range for each dimension
-    ndim: int
-        Number of dimensions
-    indices: array-like of ints
-        Gives the tuple indices that will satisfy the lower triangular form
+    Args:
+        nrange (int): Number of elements in the range for each dimension
+        nrepeat (int, optional): Number of repeated dimensions. Default is two.
+        tril_idx (array-like of (2)-int): The tuple indices that will satisfy the lower triangular form
 
-    Returns
-    -------
-    tril_idx: list of lists
-        Returns a list of `ndim`-tuples
+    Returns:
+        tril_idx (list of lists): List of `nrepeat`-tuples
 
     '''
-    assert len(indices) == 2
-    idx0, idx1 = indices
+    assert len(tril_idx) == 2
+    idx0, idx1 = tril_idx
 
-    range_idx = cartesian_prod([range(nrange)] * (ndim - 2))
+    range_idx = cartesian_prod([range(nrange)] * (nrepeat - 2))
     tril_idx = np.array(np.tril_indices(nrange)).T
     tril_idx = np.array([flatten(x) for x in list(itertools.product(range_idx, tril_idx))])
-    tril_idx[:, idx0], tril_idx[:, ndim - 2] = tril_idx[:, ndim - 2], tril_idx[:, idx0].copy()
-    tril_idx[:, idx1], tril_idx[:, ndim - 1] = tril_idx[:, ndim - 1], tril_idx[:, idx1].copy()
+    tril_idx[:, idx0], tril_idx[:, nrepeat - 2] = tril_idx[:, nrepeat - 2], tril_idx[:, idx0].copy()
+    tril_idx[:, idx1], tril_idx[:, nrepeat - 1] = tril_idx[:, nrepeat - 1], tril_idx[:, idx1].copy()
     return tril_idx
 
 
@@ -102,8 +92,7 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
         verbose (int, :class:`Logger`): verbosity of calculation
 
     Returns:
-        energy_t : float
-            The real-part of the k-point CCSD(T) energy.
+        energy_t (float): The real-part of the k-point CCSD(T) energy.
     '''
     assert isinstance(mycc, pyscf.pbc.cc.kccsd.GCCSD)
     if isinstance(verbose, logger.Logger):
@@ -317,7 +306,8 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
 
 
 def check_kpt_antiperm_symmetry(array, idx1, idx2, tolerance=1e-8):
-    '''
+    '''Checks antipermutational symmetry for k-point array.
+
     Checks whether an array with k-point symmetry has antipermutational symmetry
     with respect to switching the particle indices `idx1`, `idx2`. The particle
     indices switches both the orbital index and k-point index associated with
