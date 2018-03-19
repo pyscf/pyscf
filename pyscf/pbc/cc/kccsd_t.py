@@ -5,6 +5,7 @@
 """Module for running k-point ccsd(t)"""
 
 import numpy as np
+import pyscf.pbc.cc.kccsd
 
 from pyscf import lib
 from pyscf.lib import logger
@@ -40,6 +41,7 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
         energy_t : float
             The real-part of the k-point CCSD(T) energy.
     '''
+    assert isinstance(mycc, pyscf.pbc.cc.kccsd.GCCSD)
     if isinstance(verbose, logger.Logger):
         log = verbose
     else:

@@ -6,6 +6,7 @@
 
 import itertools
 import numpy as np
+import pyscf.pbc.cc.kccsd_rhf
 
 from pyscf import lib
 from pyscf.lib import logger
@@ -92,7 +93,7 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
 
     Parameters
     ----------
-        mycc: GCCSD
+        mycc: RCCSD
             Coupled-cluster object storing results of a coupled-cluster calculation.
         eris: _ERIS
             Integral object holding the relevant electron-repulsion integrals and
@@ -117,6 +118,7 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
         a complex part.
 
     '''
+    assert isinstance(mycc, pyscf.pbc.cc.kccsd_rhf.RCCSD)
     if isinstance(verbose, logger.Logger):
         log = verbose
     else:
