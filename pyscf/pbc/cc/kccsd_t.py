@@ -109,11 +109,11 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
 
                         # count the degeneracy of all (ka, kb, kc)
                         if ka == kb and kb == kc:
-                            symm_abc = 1.  # only one degeneracy
+                            symm_abc = 1.  # one unique combination of (ka, kb, kc)
                         elif ka == kb or kb == kc:
-                            symm_abc = 3.  # 3 degeneracies when only one k-point is unique
+                            symm_abc = 3.  # 3 unique combinations of (ka, kb, kc)
                         else:
-                            symm_abc = 6.  # 3! combinations of arranging 3 distinct k-points
+                            symm_abc = 6.  # 6 unique combinations of (ka, kb, kc)
 
                         for a in range(nvir):
                             for b in range(nvir):

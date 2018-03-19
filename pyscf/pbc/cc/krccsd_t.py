@@ -25,6 +25,11 @@ from pyscf.pbc.tools.pbc import super_cell
 einsum = lib.einsum
 
 # CCSD(T) equations taken from Scuseria, JCP (94), 1991
+#
+# NOTE: As pointed out in cc/ccsd_t_slow.py, there is an error in this paper
+#     and the equation should read [ia] >= [jb] >= [kc] (since the only
+#     symmetry in spin-less operators is the exchange of a column of excitation
+#     ooperators).
 def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.INFO):
     '''Returns the k-point CCSD(T) for a closed-shell system using spatial orbitals.
 
@@ -78,34 +83,29 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
     # Set up class for k-point conservation
     kconserv = kpts_helper.get_kconserv(cell, kpts)
 
-    energy_t = 0.0
-
     def get_w(ki, kj, kk, ka, kb, kc, a, b, c):
         '''Wijkabc intermediate as described in Scuseria paper before Pijkabc acts'''
         km = kconserv[ki, ka, kj]
-        kf = kconserv[ki, ka, kb]
-        #ibaf
-        #bifa
-        #ret =       einsum('kjf,if->ijk', t2[kk, kj, kc, :, :, c, :], eris.ovvv[ki, ka, kb, :, a, b, :])
-        ret =       einsum('kjf,if->ijk', t2[kk, kj, kc, :, :, c, :], eris.vovv[kb, ki, kf, b, :, :, a])
-        #ret = ret - einsum('mk,jmi->ijk', t2[km, kk, kb, :, :, b, c], eris.ooov[kj, km, ki, :, :, :, a].conj())
+        kf = kconserv[kk, kc, kj]
+        ret =       einsum('kjf,fi->ijk', t2[kk, kj, kc, :, :, c, :], -eris.vovv[kf, ki, kb, :, :, b, a].conj())
+        ret = ret - einsum('mk,jim->ijk', t2[km, kk, kb, :, :, b, c], -eris.ooov[kj, ki, km, :, :, :, a].conj())
         return ret
 
     def get_permuted_w(ki, kj, kk, ka, kb, kc, a, b, c):
-        '''Pijkabc operating on Wijkabc intermediate'''
+        '''Pijkabc operating on Wijkabc intermediate as described in Scuseria paper'''
         ret =       get_w(ki, kj, kk, ka, kb, kc, a, b, c)
-        ret = ret + get_w(kj, kk, ki, kb, kc, ka, b, c, a).transpose(1, 2, 0)
-        ret = ret + get_w(kk, ki, kj, kc, ka, kb, c, a, b).transpose(2, 0, 1)
+        ret = ret + get_w(kj, kk, ki, kb, kc, ka, b, c, a).transpose(2, 0, 1)
+        ret = ret + get_w(kk, ki, kj, kc, ka, kb, c, a, b).transpose(1, 2, 0)
         ret = ret + get_w(ki, kk, kj, ka, kc, kb, a, c, b).transpose(0, 2, 1)
         ret = ret + get_w(kk, kj, ki, kc, kb, ka, c, b, a).transpose(2, 1, 0)
         ret = ret + get_w(kj, ki, kk, kb, ka, kc, b, a, c).transpose(1, 0, 2)
         return ret
 
     def get_rw(ki, kj, kk, ka, kb, kc, a, b, c):
-        '''R operating on Wijkabc intermediate'''
+        '''R operating on Wijkabc intermediate as described in Scuseria paper'''
         ret = ( 4. * get_permuted_w(ki, kj, kk, ka, kb, kc, a, b, c) +
-                1. * get_permuted_w(kk, ki, kj, ka, kb, kc, a, b, c).transpose(2, 0, 1) +
-                1. * get_permuted_w(kj, kk, ki, ka, kb, kc, a, b, c).transpose(1, 2, 0) -
+                1. * get_permuted_w(kk, ki, kj, ka, kb, kc, a, b, c).transpose(1, 2, 0) +
+                1. * get_permuted_w(kj, kk, ki, ka, kb, kc, a, b, c).transpose(2, 0, 1) -
                 2. * get_permuted_w(kk, kj, ki, ka, kb, kc, a, b, c).transpose(2, 1, 0) -
                 2. * get_permuted_w(ki, kk, kj, ka, kb, kc, a, b, c).transpose(0, 2, 1) -
                 2. * get_permuted_w(kj, ki, kk, ka, kb, kc, a, b, c).transpose(1, 0, 2) )
@@ -114,17 +114,28 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
     def get_v(ki, kj, kk, ka, kb, kc, a, b, c):
         '''Vijkabc intermediate as described in Scuseria paper'''
         km = kconserv[ki, ka, kj]
-        ret = einsum('kjf,if->ijk', t2[kk, kj, kc, :, :, c, :], eris.ovvv[ki, ka, kb, :, a, b, :])
-        ret = ret - einsum('mk,jmi->ijk', t2[km, kk, kb, :, :, b, c], eris.ooov[kj, km, ki, :, :, :, a].conj())
-        return 0.0*ret
+        kf = kconserv[ki, ka, kj]
+        ret = np.zeros((nocc, nocc, nocc), dtype=dtype)
+        if kk == kc:
+            ret = ret + einsum('k,ij->ijk',  t1[kk, :, c], -eris.oovv[ki, kj, ka, :, :, a, b].conj())
+            ret = ret + einsum('k,ij->ijk', fov[kk, :, c],         t2[ki, kj, ka, :, :, a, b])
+        return ret
 
-    symm_on = True
-    t3c_full = np.zeros((nkpts,nkpts,nkpts,nkpts,nkpts,nocc,nocc,nocc,nvir,nvir,nvir), dtype=dtype)
+    def get_permuted_v(ki, kj, kk, ka, kb, kc, a, b, c):
+        '''Pijkabc operating on Vijkabc intermediate as described in Scuseria paper'''
+        ret =       get_v(ki, kj, kk, ka, kb, kc, a, b, c)
+        ret = ret + get_v(kj, kk, ki, kb, kc, ka, b, c, a).transpose(2, 0, 1)
+        ret = ret + get_v(kk, ki, kj, kc, ka, kb, c, a, b).transpose(1, 2, 0)
+        ret = ret + get_v(ki, kk, kj, ka, kc, kb, a, c, b).transpose(0, 2, 1)
+        ret = ret + get_v(kk, kj, ki, kc, kb, ka, c, b, a).transpose(2, 1, 0)
+        ret = ret + get_v(kj, ki, kk, kb, ka, kc, b, a, c).transpose(1, 0, 2)
+        return ret
+
+    energy_t = 0.0
+
     for ki in range(nkpts):
-        #for kj in range(nkpts):
-        #    for kk in range(nkpts):
-        for kj in range(nkpts):
-            for kk in range(nkpts):
+        for kj in range(ki+1):
+            for kk in range(kj+1):
 
                 # eigenvalue denominator: e(i) + e(j) + e(k)
                 eijk = lib.direct_sum('i,j,k->ijk', mo_energy_occ[ki], mo_energy_occ[kj], mo_energy_occ[kk])
@@ -137,16 +148,24 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
                         # Find momentum conservation condition for triples
                         # amplitude t3ijkabc
                         kc = kpts_helper.get_kconserv3(cell, kpts, [ki, kj, kk, ka, kb])
-                        #if kc not in range(kb+1):
-                        #    continue
 
-                        symm_abc = 1.
-                        #if ka == kb and kb == kc:
-                        #    symm_abc = 2.
-                        #elif ka == kb or kb == kc:
-                        #    symm_abc = 3.
+                        ia_index = ki*nkpts + ka
+                        jb_index = kj*nkpts + kb
+                        kc_index = kk*nkpts + kc
+                        if not (ia_index >= jb_index and
+                                jb_index >= kc_index):
+                            continue
 
-                        e_cont = 0.0
+                        # Factors to include for symmetry
+                        if (ia_index == jb_index and
+                            jb_index == kc_index):
+                            symm_fac = 1.  # only one unique [ia, jb, kc] index
+                        elif (ia_index == jb_index or
+                              jb_index == kc_index):
+                            symm_fac = 3.  # three unique permutations of [ia, jb, kc]
+                        else:
+                            symm_fac = 6.  # six unique permutations of [ia, jb, kc]
+
                         for a in range(nvir):
                             for b in range(nvir):
                                 for c in range(nvir):
@@ -154,72 +173,18 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
                                     # Form energy denominator
                                     eijkabc = (eijk - mo_energy_vir[ka][a] - mo_energy_vir[kb][b] - mo_energy_vir[kc][c])
 
-                                    # Form connected triple excitation amplitude
-                                    t3c = np.zeros((nocc,nocc,nocc), dtype=dtype)
+                                    pwijk = (       get_permuted_w(ki, kj, kk, ka, kb, kc, a, b, c) +
+                                              0.5 * get_permuted_v(ki, kj, kk, ka, kb, kc, a, b, c) )
+                                    rwijk = get_rw(ki, kj, kk, ka, kb, kc, a, b, c) / eijkabc
 
-                                    pwijk = get_permuted_w(ki, kj, kk, ka, kb, kc, a, b, c)
-                                    rwijk =         get_rw(ki, kj, kk, ka, kb, kc, a, b, c) / eijkabc
-                                    t3c_full[ki, kj, kk, ka, kb, :, :, :, a, b, c] = pwijk
-
-                                    # Form disconnected triple excitation amplitude contribution
-                                    t3d = np.zeros((nocc,nocc,nocc), dtype=dtype)
-
-                                    ## First term: 1 - p(ij) - p(ik)
-                                    #if ki == ka:
-                                    #    t3d = t3d + einsum('i,jk->ijk',  t1[ki, :, a], eris.oovv[kj, kk, kb, :, :, b, c].conj())
-                                    #    t3d = t3d + einsum('i,jk->ijk', fov[ki, :, a],        t2[kj, kk, kb, :, :, b, c])
-
-                                    #if kj == ka:
-                                    #    t3d = t3d - einsum('j,ik->ijk',  t1[kj, :, a], eris.oovv[ki, kk, kb, :, :, b, c].conj())
-                                    #    t3d = t3d - einsum('j,ik->ijk', fov[kj, :, a],        t2[ki, kk, kb, :, :, b, c])
-
-                                    #if kk == ka:
-                                    #    t3d = t3d - einsum('k,ji->ijk',  t1[kk, :, a], eris.oovv[kj, ki, kb, :, :, b, c].conj())
-                                    #    t3d = t3d - einsum('k,ji->ijk', fov[kk, :, a],        t2[kj, ki, kb, :, :, b, c])
-
-                                    ## Second term: - p(ab) + p(ab) p(ij) + p(ab) p(ik)
-                                    #if ki == kb:
-                                    #    t3d = t3d - einsum('i,jk->ijk',  t1[ki, :, b], eris.oovv[kj, kk, ka, :, :, a, c].conj())
-                                    #    t3d = t3d - einsum('i,jk->ijk', fov[ki, :, b],        t2[kj, kk, ka, :, :, a, c])
-
-                                    #if kj == kb:
-                                    #    t3d = t3d + einsum('j,ik->ijk',  t1[kj, :, b], eris.oovv[ki, kk, ka, :, :, a, c].conj())
-                                    #    t3d = t3d + einsum('j,ik->ijk', fov[kj, :, b],        t2[ki, kk, ka, :, :, a, c])
-
-                                    #if kk == kb:
-                                    #    t3d = t3d + einsum('k,ji->ijk',  t1[kk, :, b], eris.oovv[kj, ki, ka, :, :, a, c].conj())
-                                    #    t3d = t3d + einsum('k,ji->ijk', fov[kk, :, b],        t2[kj, ki, ka, :, :, a, c])
-
-                                    ## Third term: - p(ac) + p(ac) p(ij) + p(ac) p(ik)
-                                    #if ki == kc:
-                                    #    t3d = t3d - einsum('i,jk->ijk',  t1[ki, :, c], eris.oovv[kj, kk, kb, :, :, b, a].conj())
-                                    #    t3d = t3d - einsum('i,jk->ijk', fov[ki, :, c],        t2[kj, kk, kb, :, :, b, a])
-
-                                    #if kj == kc:
-                                    #    t3d = t3d + einsum('j,ik->ijk',  t1[kj, :, c], eris.oovv[ki, kk, kb, :, :, b, a].conj())
-                                    #    t3d = t3d + einsum('j,ik->ijk', fov[kj, :, c],        t2[ki, kk, kb, :, :, b, a])
-
-                                    #if kk == kc:
-                                    #    t3d = t3d + einsum('k,ji->ijk',  t1[kk, :, c], eris.oovv[kj, ki, kb, :, :, b, a].conj())
-                                    #    t3d = t3d + einsum('k,ji->ijk', fov[kk, :, c],        t2[kj, ki, kb, :, :, b, a])
-
-                                    t3c_plus_d = t3c + t3d
-                                    t3c_plus_d /= eijkabc
-
-                                    energy_t += symm_abc * symm_ijk * einsum('ijk,ijk', pwijk, rwijk.conj())
+                                    energy_t += symm_fac * (1./6) * einsum('ijk,ijk', pwijk, rwijk.conj())
                                     e_cont += einsum('ijk,ijk', pwijk, rwijk.conj())
-                        print [ki, kj, kk, ka, kb, kc], e_cont
-
-    energy_t = 2. * energy_t / nkpts
-    print -0.0153250712056708
-
-    #                                                 ki,kj,kk,ka,kb,i,j,k,a,b,c
-    print np.linalg.norm(t3c_full - t3c_full.transpose(1, 0, 2, 4, 3,6,5,7,9,8,10))
 
     if abs(energy_t.imag) > 1e-4:
-        log.warn(mycc, 'Non-zero imaginary part of CCSD(T) energy was found %s',
+        log.warn('Non-zero imaginary part of CCSD(T) energy was found %s',
                  energy_t.imag)
     log.note('CCSD(T) correction per cell = %.15g', energy_t.real)
+    log.note('CCSD(T) correction per cell (imag) = %.15g', energy_t.imag)
     return energy_t.real
 
 # Gamma point calculation
@@ -250,6 +215,9 @@ if __name__ == '__main__':
     0.000000000, 3.370137329, 3.370137329
     3.370137329, 0.000000000, 3.370137329
     3.370137329, 3.370137329, 0.000000000'''
+    cell.conv_tol = 1e-12
+    cell.conv_tol_grad = 1e-12
+    cell.direct_scf_tol = 1e-16
     cell.unit = 'B'
     cell.verbose = 5
     cell.mesh = [24, 24, 24]
@@ -262,5 +230,4 @@ if __name__ == '__main__':
 
     mycc = cc.KRCCSD(kmf)
     ecc, t1, t2 = mycc.kernel()
-
     energy_t = kernel(mycc)
