@@ -50,3 +50,4 @@ script:
       -e test_j_kpts
       -e test_k_kpts
       -e high_cost
+      -e call_in_background

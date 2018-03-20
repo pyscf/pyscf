@@ -366,7 +366,7 @@ class SymAdaptedRHF(hf.RHF):
             if irname in self.irrep_nelec:
                 ir_idx = numpy.where(orbsym == ir)[0]
                 n = self.irrep_nelec[irname]
-                occ_sort = numpy.argsort(mo_energy[ir_idx].round(9))
+                occ_sort = numpy.argsort(mo_energy[ir_idx].round(9), kind='mergesort')
                 occ_idx  = ir_idx[occ_sort[:n//2]]
                 mo_occ[occ_idx] = 2
                 nelec_fix += n
@@ -375,7 +375,7 @@ class SymAdaptedRHF(hf.RHF):
         assert(nelec_float >= 0)
         if nelec_float > 0:
             rest_idx = numpy.where(rest_idx)[0]
-            occ_sort = numpy.argsort(mo_energy[rest_idx].round(9))
+            occ_sort = numpy.argsort(mo_energy[rest_idx].round(9), kind='mergesort')
             occ_idx  = rest_idx[occ_sort[:nelec_float//2]]
             mo_occ[occ_idx] = 2
 
