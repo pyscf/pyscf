@@ -84,26 +84,6 @@ def get_kconserv(cell, kpts):
         kconserv[mask] = N
     return kconserv
 
-def get_k2particle_idx(cell, kpts, norb_per_kpt, kconserv=None):
-    '''
-    For two-particle arrays (integrals) of the form
-
-        [\phi*[k, kk](1) \phi[l, kl](1) | \phi*[m, km](2) \phi[n, kn](2)]
-
-    this calculates the offset of an array assuming some number of
-    orbitals per k-point `norb_per_kpt`.  This assumes the same
-    ordering as given `kpts` and `kconserv`.
-
-    Returns
-    -------
-    array_offset: `ndarray`
-        The i'th element gives the i'th array's offset in a one-dimensional array.
-    array_size: `ndarray`
-        The i'th element gives the i'th array's size in a one-dimensional array.
-    total_array_size: int
-        Size of one-dimensional array needed to hold all two-particle integrals.
-    '''
-    nkpts = kpts.shape[0]
 
     if kconserv is None:
         kconserv = get_kconserv(cell, kpts)
@@ -122,6 +102,72 @@ def get_k2particle_idx(cell, kpts, norb_per_kpt, kconserv=None):
 
         offset += size
     return arr_offset, arr_size, (arr_size[-1] + arr_offset[-1])
+
+
+def check_kpt_antiperm_symmetry(array, idx1, idx2, tolerance=1e-8):
+    '''Checks antipermutational symmetry for k-point array.
+
+    Checks whether an array with k-point symmetry has antipermutational symmetry
+    with respect to switching the particle indices `idx1`, `idx2`. The particle
+    indices switches both the orbital index and k-point index associated with
+    the two indices.
+
+    Note:
+        One common reason for not obeying antipermutational symmetry in a calculation
+        involving FFTs is that the grid to perform the FFT may be too coarse.  This
+        symmetry is present in operators in spin-orbital form and 'spin-free'
+        operators.
+
+    array (:obj:`ndarray`): array to test permutational symmetry, where for
+        an n-particle array, the first (2n-1) array elements are kpoint indices
+        while the final 2n array elements are orbital indices.
+    idx1 (int): first index
+    idx2 (int): second index
+
+    Examples:
+        For a 3-particle array, such as the T3 amplitude
+            t3[ki, kj, kk, ka, kb, i, j, a, b, c],
+        setting `idx1 = 0` and `idx2 = 1` would switch the orbital indices i, j as well
+        as the kpoint indices ki, kj.
+
+        >>> nkpts, nocc, nvir = 3, 4, 5
+        >>> t2 = numpy.random.random_sample((nkpts, nkpts, nkpts, nocc, nocc, nvir, nvir))
+        >>> t2 = t2 + t2.transpose(1,0,2,4,3,5,6)
+        >>> check_kpt_antiperm_symmetry(t2, 0, 1)
+        True
+    '''
+    # Checking to make sure bounds of idx1 and idx2 are O.K.
+    assert(idx1 >= 0 and idx2 >= 0 and 'indices to swap must be non-negative!')
+
+    array_shape_len = len(array.shape)
+    nparticles = (array_shape_len + 1) / 4
+    assert(idx1 < (2 * nparticles - 1) and idx2 < (2 * nparticles - 1) and
+           'This function does not support the swapping of the last k-point index '
+           '(This k-point is implicitly not indexed due to conservation of momentum '
+           'between k-points.).')
+
+    if (nparticles > 3):
+        raise NotImplementedError('Currently set up for only up to 3 particle '
+                                  'arrays. Input array has %d particles.')
+
+    kpt_idx1 = idx1
+    kpt_idx2 = idx2
+
+    # Start of the orbital index, located after k-point indices
+    orb_idx1 = (2 * nparticles - 1) + idx1
+    orb_idx2 = (2 * nparticles - 1) + idx2
+
+    # Sign of permutation
+    sign = (-1)**(abs(idx1 - idx2) + 1)
+    out_array_indices = np.arange(array_shape_len)
+
+    out_array_indices[kpt_idx1], out_array_indices[kpt_idx2] = \
+            out_array_indices[kpt_idx2], out_array_indices[kpt_idx1]
+    out_array_indices[orb_idx1], out_array_indices[orb_idx2] = \
+            out_array_indices[orb_idx2], out_array_indices[orb_idx1]
+    antisymmetric = (np.linalg.norm(array + array.transpose(out_array_indices)) <
+                     tolerance)
+    return antisymmetric
 
 
 def get_kconserv3(cell, kpts, kijkab):

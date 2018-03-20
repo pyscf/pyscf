@@ -326,6 +326,7 @@ class GCCSD(gccsd.GCCSD):
 
     def ccsd(self, t1=None, t2=None, eris=None, **kwargs):
         if eris is None: eris = self.ao2mo(self.mo_coeff)
+        self.eris = eris
         self.converged, self.e_corr, self.t1, self.t2 = \
                 kernel(self, eris, t1, t2, max_cycle=self.max_cycle,
                        tol=self.conv_tol,
