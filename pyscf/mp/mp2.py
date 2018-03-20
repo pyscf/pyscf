@@ -180,6 +180,10 @@ class MP2(lib.StreamObject):
     def nmo(self, n):
         self._nmo = n
 
+    @property
+    def e_tot(self):
+        return self.e_corr + self._scf.e_tot
+
     def kernel(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=True):
         '''
         Args:
