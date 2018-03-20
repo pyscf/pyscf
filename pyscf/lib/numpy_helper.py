@@ -192,6 +192,17 @@ HERMITIAN = 1
 ANTIHERMI = 2
 SYMMETRIC = 3
 
+LeviCivita = numpy.zeros((3,3,3))
+LeviCivita[0,1,2] = LeviCivita[1,2,0] = LeviCivita[2,0,1] = 1
+LeviCivita[0,2,1] = LeviCivita[2,1,0] = LeviCivita[1,0,2] = -1
+
+PauliMatrices = numpy.array([[[0., 1.],
+                              [1., 0.]],  # x
+                             [[0.,-1j],
+                              [1j, 0.]],  # y
+                             [[1., 0.],
+                              [0.,-1.]]]) # z
+
 
 # 2d -> 1d or 3d -> 2d
 def pack_tril(mat, axis=-1, out=None):
