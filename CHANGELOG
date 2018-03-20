@@ -14,10 +14,11 @@ PySCF 1.5 alpha (2018-03-??)
   - UHF analytical nuclear Hessian
   - UKS analytical nuclear Hessian
   - FFT for low-dimension (2D) PBC systems
-  - Generalized CCSD
+  - Generalized CCSD (GCCSD)
   - Generalized CCSD lambda solver
   - Generalized Hartree-Fock with PBC
-  - Generalized CCSD and k-point CCSD with PBC
+  - k-point GCCSD and RCCSD with PBC
+  - k-point GCCSD(T) and RCCSD(T) with PBC
   - RCCSD(T) and UCCSD(T) for non-canonical HF orbitals
   - RCISD and UCISD analytical nuclear gradients
   - RMP2 and UMP2 analytical nuclear gradients
