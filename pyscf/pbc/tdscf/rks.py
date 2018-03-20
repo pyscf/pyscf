@@ -27,7 +27,7 @@ import numpy
 from pyscf import lib
 from pyscf.dft import numint
 from pyscf.ao2mo import _ao2mo
-from pyscf.pbc.tddft import rhf
+from pyscf.pbc.tdscf import rhf
 
 
 TDA = rhf.TDA

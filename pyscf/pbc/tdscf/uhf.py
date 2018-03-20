@@ -21,9 +21,9 @@ import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
-from pyscf.tddft import uhf
+from pyscf.tdscf import uhf
 from pyscf.scf import uhf_symm
-from pyscf.pbc.tddft.rhf import _get_eai
+from pyscf.pbc.tdscf.rhf import _get_eai
 from pyscf.pbc.scf.newton_ah import _gen_uhf_response
 
 

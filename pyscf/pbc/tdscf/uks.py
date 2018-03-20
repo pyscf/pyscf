@@ -16,7 +16,7 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-from pyscf.pbc.tddft import uhf
+from pyscf.pbc.tdscf import uhf
 
 TDA = uhf.TDA
 
