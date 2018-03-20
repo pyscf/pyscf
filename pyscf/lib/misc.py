@@ -208,9 +208,62 @@ def prange_tril(start, stop, blocksize):
     displs = [x+start for x in _blocksize_partition(cum_costs, blocksize)]
     return zip(displs[:-1], displs[1:])
 
+def tril_product(*iterables, **kwds):
+    '''Cartesian product in lower-triangular form for multiple indices
+
+    For a given list of indices, `iterables`, yields all indices such that the sub-indices
+    given by the kwarg `tril_idx` satisfy a lower-triangular form.  The lower-triangular form
+    satisfies:
+
+    .. math:: i[tril_idx[0]] >= i[tril_idx[1]] >= ... >= i[tril_idx[len(tril_idx)-1]]
+
+    Args:
+        *iterables: Variable length argument list of indices for the cartesian product
+        **kwds: Arbitrary keyword arguments.  Acceptable keywords include:
+            repeat (int): Number of times to repeat the iterables
+            tril_idx (array_like): Indices to put into lower-triangular form.
+
+    Returns:
+        product (tuple): Tuple in lower-triangular form.
+
+    Examples:
+        Specifying no `tril_idx` is equivalent to just a cartesian product.
+
+        >>> list(tril_product(range(2), repeat=2))
+        [(0, 0), (0, 0), (0, 1), (0, 1), (1, 0), (1, 0), (1, 1), (1, 1)]
+
+        We can specify only sub-indices to satisfy a lower-triangular form:
+
+        >>> list(tril_product(range(2), repeat=3, tril_idx=[1,2]))
+        [(0, 0, 0), (0, 1, 0), (0, 1, 1), (1, 0, 0), (1, 1, 0), (1, 1, 1)]
+
+        We specify all indices to satisfy a lower-triangular form, useful for iterating over
+        the symmetry unique elements of occupied/virtual orbitals in a 3-particle operator:
+
+        >>> list(tril_product(range(3), repeat=3, tril_idx=[0,1,2]))
+        [(0, 0, 0), (1, 0, 0), (1, 1, 0), (1, 1, 1), (2, 0, 0), (2, 1, 0), (2, 1, 1), (2, 2, 0), (2, 2, 1), (2, 2, 2)]
+    '''
+    repeat = kwds.get('repeat', 1)
+    tril_idx = kwds.get('tril_idx', [])
+    niterables = len(iterables) * repeat
+    ntril_idx = len(tril_idx)
+
+    assert ntril_idx <= niterables, 'Cant have a greater number of tril indices than iterables!'
+    if ntril_idx > 0:
+        assert numpy.max(tril_idx) < niterables, 'Tril index out of bounds for %d iterables! idx = %s' % \
+                                                 (niterables, tril_idx)
+    for tup in itertools.product(*iterables, repeat=repeat):
+        if ntril_idx == 0:
+            yield tup
+
+        if all([tup[tril_idx[i]] >= tup[tril_idx[i+1]] for i in xrange(ntril_idx-1)]):
+            yield tup
+        else:
+            pass
+
 def square_mat_in_trilu_indices(n):
     '''Return a n x n symmetric index matrix, in which the elements are the
-    indices of the unique elements of a tril vector 
+    indices of the unique elements of a tril vector
     [0 1 3 ... ]
     [1 2 4 ... ]
     [3 4 5 ... ]
@@ -353,7 +406,7 @@ class StreamObject(object):
         '''
         Kernel function is the main driver of a method.  Every method should
         define the kernel function as the entry of the calculation.  Note the
-        return value of kernel function is not strictly defined.  It can be 
+        return value of kernel function is not strictly defined.  It can be
         anything related to the method (such as the energy, the wave-function,
         the DFT mesh grids etc.).
         '''

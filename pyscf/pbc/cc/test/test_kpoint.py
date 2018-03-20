@@ -29,6 +29,7 @@ from pyscf.pbc.ao2mo import eris
 import pyscf.pbc.tools
 
 import pyscf.pbc.cc
+import pyscf.pbc.cc.kccsd_t as kccsd_t
 import pyscf.pbc.cc.kccsd
 
 import make_test_cell
@@ -145,7 +146,7 @@ class KnownValues(unittest.TestCase):
         kmf.conv_tol_grad = 1e-6  # Stricter tol needed for answer to agree with supercell
         ehf = kmf.scf()
 
-        self.assertAlmostEqual(ehf, ehf_bench, 7)
+        self.assertAlmostEqual(ehf, ehf_bench, 6)
 
         # The following calculation at full convergence gives -0.711071910294612
         # for a cell.mesh = [25, 25, 25].
@@ -154,7 +155,7 @@ class KnownValues(unittest.TestCase):
         mycc.max_cycle = 2  # Too expensive to do more!
         ecc1, t1, t2 = mycc.kernel()
 
-        self.assertAlmostEqual(ecc1, ecc1_bench, 7)
+        self.assertAlmostEqual(ecc1, ecc1_bench, 6)
 
         # The following calculation at full convergence gives -0.6440448716452378
         # for a cell.mesh = [25, 25, 25].  It is equivalent to a supercell [1, 1, 2]
@@ -164,7 +165,23 @@ class KnownValues(unittest.TestCase):
         mycc.max_cycle = 2
         ecc2, t1, t2 = mycc.kernel()
 
-        self.assertAlmostEqual(ecc2, ecc2_bench, 7)
+        self.assertAlmostEqual(ecc2, ecc2_bench, 6)
+
+    def test_ccsd_t(self):
+        n = 14
+        cell = make_test_cell.test_cell_n3([n]*3)
+
+        kpts = cell.make_kpts([1, 1, 2])
+        kpts -= kpts[0]
+        kmf = pbchf.KRHF(cell, kpts=kpts, exxdiv=None)
+        ehf = kmf.kernel()
+
+        mycc = pyscf.pbc.cc.KGCCSD(kmf)
+        ecc, t1, t2 = mycc.kernel()
+
+        energy_t = kccsd_t.kernel(mycc)
+        energy_t_bench = -0.00191440345386
+        self.assertAlmostEqual(energy_t, energy_t_bench, 6)
 
 if __name__ == '__main__':
     print("Full kpoint test")
