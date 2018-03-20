@@ -123,7 +123,7 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
             veff = vj * 2 + vindxc
         return reduce(numpy.dot, (orbv.T, veff, orbo)).ravel()
     z1 = cphf.solve(fvind, mo_energy, mo_occ, wvo,
-                    max_cycle=td_grad.max_cycle_cphf, tol=td_grad.conv_tol)[0]
+                    max_cycle=td_grad.cphf_max_cycle, tol=td_grad.cphf_conv_tol)[0]
     z1 = z1.reshape(nvir,nocc)
     time1 = log.timer('Z-vector using CPHF solver', *time0)
 

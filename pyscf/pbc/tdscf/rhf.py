@@ -28,14 +28,17 @@ from pyscf.ao2mo import _ao2mo
 from pyscf.tdscf import rhf
 from pyscf.pbc.dft import numint
 from pyscf.pbc.scf.newton_ah import _gen_rhf_response
+from pyscf import __config__
 
 
 class TDA(rhf.TDA):
 #FIXME: numerically unstable with small mesh?
 #TODO: Add a warning message for small mesh.
+
+    conv_tol = getattr(__config__, 'pbc_tdscf_rhf_TDA_conv_tol', 1e-6)
+
     def __init__(self, mf):
         self.cell = mf.cell
-        self.conv_tol = 1e-6
         rhf.TDA.__init__(self, mf)
 
     def get_vind(self, mf):
@@ -106,11 +109,12 @@ class TDA(rhf.TDA):
 
         if x0 is None:
             x0 = self.init_guess(self._scf, self.nstates)
-        self.e, x1 = lib.davidson1(vind, x0, precond,
-                                   tol=self.conv_tol,
-                                   nroots=self.nstates, lindep=self.lindep,
-                                   max_space=self.max_space,
-                                   verbose=self.verbose)[1:]
+        self.converged, self.e, x1 = \
+                lib.davidson1(vind, x0, precond,
+                              tol=self.conv_tol,
+                              nroots=self.nstates, lindep=self.lindep,
+                              max_space=self.max_space,
+                              verbose=self.verbose)
 
         mo_occ = self._scf.mo_occ
 # 1/sqrt(2) because self.x is for alpha excitation amplitude and 2(X^+*X) = 1
@@ -200,11 +204,12 @@ class TDHF(TDA):
             idx = realidx[w[realidx].real.argsort()]
             return w[idx].real, v[:,idx].real, idx
 
-        w, x1 = lib.davidson_nosym1(vind, x0, precond,
+        self.converged, w, x1 = \
+                lib.davidson_nosym1(vind, x0, precond,
                                     tol=self.conv_tol,
                                     nroots=self.nstates, lindep=self.lindep,
                                     max_space=self.max_space, pick=pickeig,
-                                    verbose=self.verbose)[1:]
+                                    verbose=self.verbose)
         mo_occ = self._scf.mo_occ
         self.e = w
         def norm_xy(z):

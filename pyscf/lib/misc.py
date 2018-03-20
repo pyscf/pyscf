@@ -33,6 +33,7 @@ import ctypes
 import numpy
 import h5py
 from pyscf.lib import param
+from pyscf import __config__
 
 if h5py.version.version[:4] == '2.2.':
     sys.stderr.write('h5py-%s is found in your environment. '
@@ -437,7 +438,7 @@ def check_sanity(obj, keysref, stdout=sys.stdout):
     objkeys = [x for x in obj.__dict__ if not x.startswith('_')]
     keysub = set(objkeys) - set(keysref)
     if keysub:
-        class_attr = set(dir(obj.__class__))
+        class_attr = set(obj.__class__.__dict__)
         keyin = keysub.intersection(class_attr)
         if keyin:
             msg = ('Overwritten attributes  %s  of %s\n' %
@@ -567,11 +568,14 @@ class ProcessWithReturnValue(Process):
         Process.__init__(self, group, qwrap, name, args, kwargs)
     def join(self):
         if self._e is not None:
-            raise RuntimeError('Error on process %s' % self)
+            raise ProcessRuntimeError('Error on process %s' % self)
         else:
             Process.join(self)
             return self._q.get()
     get = join
+
+class ProcessRuntimeError(RuntimeError):
+    pass
 
 class ThreadWithReturnValue(Thread):
     def __init__(self, group=None, target=None, name=None, args=(),
@@ -587,11 +591,14 @@ class ThreadWithReturnValue(Thread):
         Thread.__init__(self, group, qwrap, name, args, kwargs)
     def join(self):
         if self._e is not None:
-            raise RuntimeError('Error on thread %s' % self)
+            raise ThreadRuntimeError('Error on thread %s' % self)
         else:
             Thread.join(self)
             return self._q.get()
     get = join
+
+class ThreadRuntimeError(RuntimeError):
+    pass
 
 def background_thread(func, *args, **kwargs):
     '''applying function in background'''
@@ -654,8 +661,19 @@ class call_in_background(object):
         self.fns = fns
         self.handler = None
 
-    def __enter__(self):
-        if imp.lock_held():
+    if ((not getattr(__config__, 'ASYNC_IO', True)) or
+        # h5py-2.2.* has bug in threading mode.
+        h5py.version.version[:4] == '2.2.'):
+        # Disable back-ground mode
+        def __enter__(self):
+            if len(self.fns) == 1:
+                return self.fns[0]
+            else:
+                return self.fns
+    else:
+
+        def __enter__(self):
+            if imp.lock_held():
 # Some modules like nosetests, coverage etc
 #   python -m unittest test_xxx.py  or  nosetests test_xxx.py
 # hang when Python multi-threading was used in the import stage due to (Python
@@ -663,28 +681,25 @@ class call_in_background(object):
 # https://github.com/paramiko/paramiko/issues/104
 # https://docs.python.org/2/library/threading.html#importing-in-threaded-code
 # Disable the asynchoronous mode for safe importing
-            def def_async_fn(fn):
-                return fn
+                def def_async_fn(fn):
+                    return fn
 
-        elif h5py.version.version[:4] == '2.2.':
-# h5py-2.2.* has bug in threading mode.
-            def def_async_fn(fn):
-                return fn
+            else:
+                # Enable back-ground mode
+                def def_async_fn(fn):
+                    def async_fn(*args, **kwargs):
+                        if self.handler is not None:
+                            self.handler.join()
+                        self.handler = ThreadWithReturnValue(target=fn, args=args,
+                                                             kwargs=kwargs)
+                        self.handler.start()
+                        return self.handler
+                    return async_fn
 
-        else:
-            def def_async_fn(fn):
-                def async_fn(*args, **kwargs):
-                    if self.handler is not None:
-                        self.handler.join()
-                    self.handler = ThreadWithReturnValue(target=fn, args=args, kwargs=kwargs)
-                    self.handler.start()
-                    return self.handler
-                return async_fn
-
-        if len(self.fns) == 1:
-            return def_async_fn(self.fns[0])
-        else:
-            return [def_async_fn(fn) for fn in self.fns]
+            if len(self.fns) == 1:
+                return def_async_fn(self.fns[0])
+            else:
+                return [def_async_fn(fn) for fn in self.fns]
 
     def __exit__(self, type, value, traceback):
         if self.handler is not None:

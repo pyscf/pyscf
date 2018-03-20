@@ -23,9 +23,12 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.symm import basis
 from pyscf.symm import param
+from pyscf import __config__
 
 
-def label_orb_symm(mol, irrep_name, symm_orb, mo, s=None, check=True, tol=1e-9):
+def label_orb_symm(mol, irrep_name, symm_orb, mo, s=None,
+                   check=getattr(__config__, 'symm_addons_label_orb_symm_check', True),
+                   tol=getattr(__config__, 'symm_addons_label_orb_symm_tol', 1e-9)):
     '''Label the symmetry of given orbitals
 
     irrep_name can be either the symbol or the ID of the irreducible
@@ -93,7 +96,8 @@ def label_orb_symm(mol, irrep_name, symm_orb, mo, s=None, check=True, tol=1e-9):
                 logger.debug(mol, 'norm = %s', largest_norm[orbidx])
     return orbsym
 
-def symmetrize_orb(mol, mo, orbsym=None, s=None, check=False):
+def symmetrize_orb(mol, mo, orbsym=None, s=None,
+                   check=getattr(__config__, 'symm_addons_symmetrize_orb_check', False)):
     '''Symmetrize the given orbitals.
 
     This function is different to the :func:`symmetrize_space`:  In this
@@ -153,7 +157,8 @@ def symmetrize_orb(mol, mo, orbsym=None, s=None, check=False):
         mo1[:,idx] = numpy.dot(csym, sc)
     return mo1
 
-def symmetrize_space(mol, mo, s=None, check=True):
+def symmetrize_space(mol, mo, s=None,
+                     check=getattr(__config__, 'symm_addons_symmetrize_space_check', True)):
     '''Symmetrize the given orbital space.
 
     This function is different to the :func:`symmetrize_orb`:  In this function,

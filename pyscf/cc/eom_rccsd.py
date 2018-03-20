@@ -21,6 +21,7 @@ from pyscf import ao2mo
 from pyscf.lib import logger
 from pyscf.cc import ccsd
 from pyscf.cc import rintermediates as imd
+from pyscf import __config__
 
 
 def kernel(eom, nroots=1, koopmans=False, guess=None, left=False, imds=None,
@@ -84,10 +85,10 @@ class EOM(lib.StreamObject):
         self.stdout = cc.stdout
         self.max_memory = cc.max_memory
 
-        self.max_space = 20
-        self.max_cycle = cc.max_cycle
-        self.conv_tol = cc.conv_tol
-        self.partition = None
+        self.max_space = getattr(__config__, 'eom_rccsd_EOM_max_space', 20)
+        self.max_cycle = getattr(__config__, 'eom_rccsd_EOM_max_cycle', cc.max_cycle)
+        self.conv_tol = getattr(__config__, 'eom_rccsd_EOM_conv_tol', cc.conv_tol)
+        self.partition = getattr(__config__, 'eom_rccsd_EOM_partition', None)
 
 ##################################################
 # don't modify the following attributes, they are not input options

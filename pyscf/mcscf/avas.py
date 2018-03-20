@@ -30,9 +30,18 @@ from pyscf import lib
 from pyscf import gto
 from pyscf import scf
 from pyscf.lib import logger
+from pyscf import __config__
 
-def kernel(mf, aolabels, threshold=.2, minao='minao', with_iao=False,
-           openshelloption=2, canonicalize=True, ncore=0, verbose=None):
+THRESHOLD = getattr(__config__, 'mcscf_avas_threshold', 0.2)
+MINAO = getattr(__config__, 'mcscf_avas_minao', 'minao')
+WITH_IAO = getattr(__config__, 'mcscf_avas_with_iao', False)
+OPENSHELL_OPTION = getattr(__config__, 'mcscf_avas_openshell_option', 2)
+CANONICALIZE = getattr(__config__, 'mcscf_avas_canonicalize', True)
+
+
+def kernel(mf, aolabels, threshold=THRESHOLD, minao=MINAO, with_iao=WITH_IAO,
+           openshell_option=OPENSHELL_OPTION, canonicalize=CANONICALIZE,
+           ncore=0, verbose=None):
     '''AVAS method to construct mcscf active space.
     Ref. arXiv:1701.07862 [physics.chem-ph]
 
@@ -50,11 +59,11 @@ def kernel(mf, aolabels, threshold=.2, minao='minao', with_iao=False,
             A reference AOs for AVAS.
         with_iao : bool
             Whether to use IAO localization to construct the reference active AOs.
-        openshelloption : int
+        openshell_option : int
             How to handle singly-occupied orbitals in the active space. The
             singly-occupied orbitals are projected as part of alpha orbitals
-            if openshelloption=2, or completely kept in active space if
-            openshelloption=3.  See Section III.E option 2 or 3 of the
+            if openshell_option=2, or completely kept in active space if
+            openshell_option=3.  See Section III.E option 2 or 3 of the
             reference paper for more details.
         canonicalize : bool
             Orbitals defined in AVAS method are local orbitals.  Symmetrizing
@@ -90,7 +99,7 @@ def kernel(mf, aolabels, threshold=.2, minao='minao', with_iao=False,
         mo_coeff = mf.mo_coeff[0]
         mo_occ = mf.mo_occ[0]
         mo_energy = mf.mo_energy[0]
-        assert(openshelloption != 1)
+        assert(openshell_option != 1)
     else:
         mo_coeff = mf.mo_coeff
         mo_occ = mf.mo_occ
@@ -122,7 +131,7 @@ def kernel(mf, aolabels, threshold=.2, minao='minao', with_iao=False,
         s21 = numpy.dot(s21, mo_coeff[:, ncore:])
     sa = s21.T.dot(scipy.linalg.solve(s2, s21, sym_pos=True))
 
-    if openshelloption == 2:
+    if openshell_option == 2:
         wocc, u = numpy.linalg.eigh(sa[:(nocc-ncore), :(nocc-ncore)])
         log.info('Option 2: threshold %s', threshold)
         ncas_occ = (wocc > threshold).sum()
@@ -137,7 +146,7 @@ def kernel(mf, aolabels, threshold=.2, minao='minao', with_iao=False,
         movir = mo_coeff[:,nocc:].dot(u[:,wvir<threshold])
         ncas = mocas.shape[1]
 
-    elif openshelloption == 3:
+    elif openshell_option == 3:
         docc = nocc - mol.spin
         wocc, u = numpy.linalg.eigh(sa[:(docc-ncore),:(docc-ncore)])
         log.info('Option 3: threshold %s, num open shell %d', threshold, mol.spin)
@@ -184,6 +193,9 @@ def kernel(mf, aolabels, threshold=.2, minao='minao', with_iao=False,
         mo = numpy.hstack((mocore, mocas, movir))
     return ncas, nelecas, mo
 avas = kernel
+
+del(THRESHOLD, MINAO, WITH_IAO, OPENSHELL_OPTION, CANONICALIZE)
+
 
 if __name__ == '__main__':
     from pyscf import gto

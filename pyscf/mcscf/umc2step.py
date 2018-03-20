@@ -16,13 +16,18 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+'''
+UCASSCF (CASSCF without spin-degeneracy between alpha and beta orbitals)
+2-step optimization algorithm
+'''
+
 import time
 import numpy
 import copy
 import scipy.linalg
 import pyscf.lib.logger as logger
 from pyscf.mcscf import mc1step
-from pyscf.mcscf import mc1step_uhf
+from pyscf.mcscf import umc1step
 
 def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
            ci0=None, callback=None, verbose=None, dump_chk=True):
@@ -147,7 +152,7 @@ if __name__ == '__main__':
 
     m = scf.UHF(mol)
     ehf = m.scf()
-    emc = kernel(mc1step_uhf.CASSCF(m, 4, (2,1)), m.mo_coeff, verbose=4)[1]
+    emc = kernel(umc1step.CASSCF(m, 4, (2,1)), m.mo_coeff, verbose=4)[1]
     print(ehf, emc, emc-ehf)
     print(emc - -2.9782774463926618)
 
@@ -164,7 +169,7 @@ if __name__ == '__main__':
 
     m = scf.UHF(mol)
     ehf = m.scf()
-    mc = mc1step_uhf.CASSCF(m, 4, (2,1))
+    mc = umc1step.CASSCF(m, 4, (2,1))
     mc.verbose = 4
     mo = addons.sort_mo(mc, m.mo_coeff, (3,4,6,7), 1)
     emc = mc.mc2step(mo)[0]
@@ -172,7 +177,7 @@ if __name__ == '__main__':
     print(emc - -75.5644202701263, emc - -75.573930418500652,
           emc - -75.574137883405612, emc - -75.648547447838951)
 
-    mc = mc1step_uhf.CASSCF(m, 4, (2,1))
+    mc = umc1step.CASSCF(m, 4, (2,1))
     mc.verbose = 4
     emc = mc.mc2step()[0]
     print(ehf, emc, emc-ehf)

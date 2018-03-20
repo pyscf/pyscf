@@ -28,6 +28,9 @@ from pyscf.lib import logger
 from pyscf.scf import hf
 from pyscf.scf import uhf
 import pyscf.scf.chkfile
+from pyscf import __config__
+
+WITH_META_LOWDIN = getattr(__config__, 'scf_analyze_with_meta_lowdin', True)
 
 
 def init_guess_by_minao(mol):
@@ -234,7 +237,8 @@ def energy_elec(mf, dm=None, h1e=None, vhf=None):
 def get_veff(mol, dm, dm_last=0, vhf_last=0, hermi=1, vhfopt=None):
     return uhf.get_veff(mol, dm, dm_last, vhf_last, hermi, vhfopt)
 
-def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=True, **kwargs):
+def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
+            **kwargs):
     '''Analyze the given SCF object:  print orbital energies, occupancies;
     print orbital coefficients; Mulliken population analysis
     '''
@@ -380,13 +384,17 @@ class ROHF(hf.RHF):
         return vhf
 
     @lib.with_doc(analyze.__doc__)
-    def analyze(self, verbose=None, with_meta_lowdin=True, **kwargs):
+    def analyze(self, verbose=None, with_meta_lowdin=WITH_META_LOWDIN,
+                **kwargs):
         if verbose is None: verbose = self.verbose
         return analyze(self, verbose, with_meta_lowdin, **kwargs)
 
     canonicalize = canonicalize
 
-    def stability(self, internal=True, external=False, verbose=None):
+    def stability(self,
+                  internal=getattr(__config__, 'scf_stability_internal', True),
+                  external=getattr(__config__, 'scf_stability_external', False),
+                  verbose=None):
         '''
         ROHF/ROKS stability analysis.
 
@@ -423,3 +431,4 @@ class HF1e(ROHF):
         self._finalize()
         return self.e_tot
 
+del(WITH_META_LOWDIN)

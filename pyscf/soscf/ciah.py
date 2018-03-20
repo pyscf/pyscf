@@ -22,24 +22,32 @@ import numpy
 import scipy.linalg
 from pyscf import lib
 from pyscf.lib import logger
+from pyscf import __config__
+
 
 def expmat(a):
     return scipy.linalg.expm(a)
 
 class CIAHOptimizer(lib.StreamObject):
+
+    conv_tol_grad = getattr(__config__, 'soscf_ciah_CIAHOptimizer_conv_tol_grad', 1e-4)
+    max_stepsize = getattr(__config__, 'soscf_ciah_CIAHOptimizer_max_stepsize', .05)
+    max_iters = getattr(__config__, 'soscf_ciah_CIAHOptimizer_max_iters', 10)
+    kf_interval = getattr(__config__, 'soscf_ciah_CIAHOptimizer_kf_interval', 5)
+    kf_trust_region = getattr(__config__, 'soscf_ciah_CIAHOptimizer_kf_trust_region', 5)
+    ah_start_tol = getattr(__config__, 'soscf_ciah_CIAHOptimizer_ah_start_tol', 5.)
+    ah_start_cycle = getattr(__config__, 'soscf_ciah_CIAHOptimizer_ah_start_cycle', 1)
+    ah_level_shift = getattr(__config__, 'soscf_ciah_CIAHOptimizer_ah_level_shift', 0)
+    ah_conv_tol = getattr(__config__, 'soscf_ciah_CIAHOptimizer_ah_conv_tol', 1e-12)
+    ah_lindep = getattr(__config__, 'soscf_ciah_CIAHOptimizer_ah_lindep', 1e-14)
+    ah_max_cycle = getattr(__config__, 'soscf_ciah_CIAHOptimizer_ah_max_cycle', 30)
+    ah_trust_region = getattr(__config__, 'soscf_ciah_CIAHOptimizer_ah_trust_region', 3.)
+
     def __init__(self):
-        self.conv_tol_grad = 1e-4
-        self.max_stepsize = .05
-        self.max_iters = 10
-        self.kf_interval = 5
-        self.kf_trust_region = 5
-        self.ah_start_tol = 5.
-        self.ah_start_cycle = 1
-        self.ah_level_shift = 0#1e-4
-        self.ah_conv_tol = 1e-12
-        self.ah_lindep = 1e-14
-        self.ah_max_cycle = 30
-        self.ah_trust_region = 3.
+        self._keys = set(('conv_tol_grad', 'max_stepsize', 'max_iters',
+                          'kf_interval', 'kf_trust_region', 'ah_start_tol',
+                          'ah_start_cycle', 'ah_level_shift', 'ah_conv_tol',
+                          'ah_lindep', 'ah_max_cycle', 'ah_trust_region'))
 
     def gen_g_hop(self, u):
         pass

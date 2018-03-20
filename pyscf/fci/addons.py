@@ -19,8 +19,14 @@ import numpy
 from pyscf import lib
 from pyscf.fci import cistring
 from pyscf import symm
+from pyscf import __config__
 
-def large_ci(ci, norb, nelec, tol=.1, return_strs=True):
+LARGE_CI_TOL = getattr(__config__, 'fci_addons_large_ci_tol', 0.1)
+RETURN_STRS = getattr(__config__, 'fci_addons_large_ci_return_strs', True)
+PENALTY = getattr(__config__, 'fci_addons_fix_spin_shift', 0.2)
+
+
+def large_ci(ci, norb, nelec, tol=LARGE_CI_TOL, return_strs=RETURN_STRS):
     '''Search for the largest CI coefficients
     '''
     neleca, nelecb = _unpack(nelec)
@@ -638,7 +644,7 @@ def overlap(bra, ket, norb, nelec, s=None):
         bra = transform_ci_for_orbital_rotation(bra, norb, nelec, s)
     return numpy.dot(bra.ravel().conj(), ket.ravel())
 
-def fix_spin_(fciobj, shift=.2, ss=None, **kwargs):
+def fix_spin_(fciobj, shift=PENALTY, ss=None, **kwargs):
     r'''If FCI solver cannot stay on spin eigenfunction, this function can
     add a shift to the states which have wrong spin.
 
@@ -777,6 +783,8 @@ def _unpack(nelec, spin=None):
         neleca = nelec - nelecb
         nelec = neleca, nelecb
     return nelec
+
+del(LARGE_CI_TOL, RETURN_STRS, PENALTY)
 
 
 if __name__ == '__main__':

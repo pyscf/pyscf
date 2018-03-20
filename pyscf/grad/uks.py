@@ -27,6 +27,7 @@ from pyscf.scf import rhf_grad
 from pyscf.dft import rks_grad
 from pyscf.grad import uhf as uhf_grad
 from pyscf.dft import numint, gen_grid
+from pyscf import __config__
 
 
 def get_veff(ks_grad, mol=None, dm=None):
@@ -192,6 +193,9 @@ def get_vxc_full_response(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
 
 
 class Gradients(uhf_grad.Gradients):
+
+    grid_response = getattr(__config__, 'grad_uks_Gradients_grid_response', False)
+
     def __init__(self, mf):
         uhf_grad.Gradients.__init__(self, mf)
         self.grids = None

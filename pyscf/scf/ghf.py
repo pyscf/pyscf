@@ -28,6 +28,10 @@ from pyscf.lib import logger
 from pyscf.scf import hf
 from pyscf.scf import uhf
 from pyscf.scf import chkfile
+from pyscf import __config__
+
+PRE_ORTH_METHOD = getattr(__config__, 'scf_analyze_pre_orth_method', 'ANO')
+
 
 def get_jk(mol, dm, hermi=0,
            with_j=True, with_k=True, jkbuild=hf.get_jk):
@@ -241,8 +245,8 @@ def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
         s = s[:nao,:nao]
     return uhf.mulliken_pop(mol, (dma,dmb), s, verbose)
 
-def mulliken_meta(mol, dm_ao, verbose=logger.DEBUG, pre_orth_method='ANO',
-                  s=None):
+def mulliken_meta(mol, dm_ao, verbose=logger.DEBUG,
+                  pre_orth_method=PRE_ORTH_METHOD, s=None):
     '''Mulliken population analysis, based on meta-Lowdin AOs.
     '''
     nao = mol.nao_nr()
@@ -390,7 +394,7 @@ class GHF(hf.SCF):
         return mulliken_pop(mol, dm, s=s, verbose=verbose)
 
     def mulliken_meta(self, mol=None, dm=None, verbose=logger.DEBUG,
-                      pre_orth_method='ANO', s=None):
+                      pre_orth_method=PRE_ORTH_METHOD, s=None):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         if s is None: s = self.get_ovlp(mol)
@@ -409,10 +413,10 @@ class GHF(hf.SCF):
         return det_ovlp(mo1, mo2, occ1, occ2, ovlp)
 
     @lib.with_doc(dip_moment.__doc__)
-    def dip_moment(self, mol=None, dm=None, unit_symbol=None, verbose=logger.NOTE):
+    def dip_moment(self, mol=None, dm=None, unit_symbol='Debye',
+                   verbose=logger.NOTE):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
-        if unit_symbol is None: unit_symbol='Debye'
         return dip_moment(mol, dm, unit_symbol, verbose=verbose)
 
     def _finalize(self):
@@ -442,6 +446,8 @@ def _from_rhf_init_dm(dm, breaksym=True):
         idx, idy = numpy.diag_indices(nao)
         dm[idx+nao,idy] = dm[idx,idy+nao] = dma.diagonal() * .05
     return dm
+
+del(PRE_ORTH_METHOD)
 
 
 if __name__ == '__main__':

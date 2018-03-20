@@ -36,10 +36,15 @@ from pyscf.lib import logger
 from pyscf.scf import hf
 from pyscf.scf import rohf
 from pyscf.scf import chkfile
+from pyscf import __config__
+
+WITH_META_LOWDIN = getattr(__config__, 'scf_analyze_with_meta_lowdin', True)
+
 
 # mo_energy, mo_coeff, mo_occ are all in nosymm representation
 
-def analyze(mf, verbose=logger.DEBUG, **kwargs):
+def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
+            **kwargs):
     '''Analyze the given SCF object:  print orbital energies, occupancies;
     print orbital coefficients; Occupancy for each irreps; Mulliken population analysis
     '''
@@ -47,7 +52,7 @@ def analyze(mf, verbose=logger.DEBUG, **kwargs):
     from pyscf.tools import dump_mat
     mol = mf.mol
     if not mol.symmetry:
-        return hf.analyze(mf, verbose, **kwargs)
+        return hf.analyze(mf, verbose, with_meta_lowdin, **kwargs)
 
     mo_energy = mf.mo_energy
     mo_occ = mf.mo_occ
@@ -85,9 +90,13 @@ def analyze(mf, verbose=logger.DEBUG, **kwargs):
             else:
                 irorbcnt[j] = 1
             molabel.append('#%-d(%s #%d)' % (k+1, irname_full[j], irorbcnt[j]))
-        log.debug(' ** MO coefficients (expansion on meta-Lowdin AOs) **')
-        orth_coeff = orth.orth_ao(mol, 'meta_lowdin', s=ovlp_ao)
-        c = reduce(numpy.dot, (orth_coeff.T, ovlp_ao, mo_coeff))
+        if with_meta_lowdin:
+            log.debug(' ** MO coefficients (expansion on meta-Lowdin AOs) **')
+            orth_coeff = orth.orth_ao(mol, 'meta_lowdin', s=ovlp_ao)
+            c = reduce(numpy.dot, (orth_coeff.T, ovlp_ao, mo_coeff))
+        else:
+            log.debug(' ** MO coefficients (expansion on AOs) **')
+            c = mo_coeff
         dump_mat.dump_rec(mf.stdout, c, label, molabel, start=1, **kwargs)
 
     dm = mf.make_rdm1(mo_coeff, mo_occ)
@@ -412,9 +421,11 @@ class SymAdaptedRHF(hf.RHF):
                              self.mo_coeff, self.mo_occ, overwrite_mol=False)
         return self
 
-    def analyze(self, verbose=None, **kwargs):
+    @lib.with_doc(analyze.__doc__)
+    def analyze(self, verbose=None, with_meta_lowdin=WITH_META_LOWDIN,
+                **kwargs):
         if verbose is None: verbose = self.verbose
-        return analyze(self, verbose, **kwargs)
+        return analyze(self, verbose, with_meta_lowdin, **kwargs)
 
     @lib.with_doc(get_irrep_nelec.__doc__)
     def get_irrep_nelec(self, mol=None, mo_coeff=None, mo_occ=None, s=None):
@@ -642,12 +653,13 @@ class SymAdaptedROHF(rohf.ROHF):
                              self.mo_coeff, self.mo_occ, overwrite_mol=False)
         return self
 
-    def analyze(self, verbose=None, **kwargs):
+    def analyze(self, verbose=None, with_meta_lowdin=WITH_META_LOWDIN,
+                **kwargs):
         if verbose is None: verbose = self.verbose
         from pyscf.lo import orth
         from pyscf.tools import dump_mat
         if not self.mol.symmetry:
-            return rohf.ROHF.analyze(self, verbose, **kwargs)
+            return rohf.ROHF.analyze(self, verbose, with_meta_lowdin, **kwargs)
 
         mol = self.mol
         mo_energy = self.mo_energy
@@ -712,9 +724,13 @@ class SymAdaptedROHF(rohf.ROHF):
                 else:
                     irorbcnt[j] = 1
                 molabel.append('#%-d(%s #%d)' % (k+1, irname_full[j], irorbcnt[j]))
-            log.debug(' ** MO coefficients (expansion on meta-Lowdin AOs) **')
-            orth_coeff = orth.orth_ao(mol, 'meta_lowdin', s=ovlp_ao)
-            c = reduce(numpy.dot, (orth_coeff.T, ovlp_ao, mo_coeff))
+            if with_meta_lowdin:
+                log.debug(' ** MO coefficients (expansion on meta-Lowdin AOs) **')
+                orth_coeff = orth.orth_ao(mol, 'meta_lowdin', s=ovlp_ao)
+                c = reduce(numpy.dot, (orth_coeff.T, ovlp_ao, mo_coeff))
+            else:
+                log.debug(' ** MO coefficients (expansion on AOs) **')
+                c = mo_coeff
             dump_mat.dump_rec(self.stdout, c, label, molabel, start=1, **kwargs)
 
         dm = self.make_rdm1(mo_coeff, mo_occ)
@@ -792,6 +808,9 @@ def get_orbsym(mol, mo_coeff, s=None, check=False):
         orbsym = symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
                                      mo_coeff, s, check)
     return numpy.asarray(orbsym)
+
+
+del(WITH_META_LOWDIN)
 
 
 if __name__ == '__main__':

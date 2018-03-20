@@ -24,6 +24,9 @@ from pyscf.ao2mo import _ao2mo
 from pyscf.tdscf import rhf
 from pyscf.scf import uhf_symm
 from pyscf.soscf.newton_ah import _gen_uhf_response
+from pyscf import __config__
+
+REAL_EIG_THRESHOLD = getattr(__config__, 'tdscf_uhf_TDDFT_pick_eig_threshold', 1e-4)
 
 
 def gen_tda_operation(mf, fock_ao=None, wfnsym=None):
@@ -300,7 +303,8 @@ class TDHF(TDA):
 
         # We only need positive eigenvalues
         def pickeig(w, v, nroots, envs):
-            realidx = numpy.where((abs(w.imag) < 1e-4) & (w.real > 0))[0]
+            realidx = numpy.where((abs(w.imag) < REAL_EIG_THRESHOLD) &
+                                  (w.real > 0))[0]
             idx = realidx[w[realidx].real.argsort()]
             return w[idx].real, v[:,idx].real, idx
 

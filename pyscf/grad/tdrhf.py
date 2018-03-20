@@ -26,6 +26,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import rhf_grad
 from pyscf.scf import cphf
+from pyscf import __config__
 
 
 #
@@ -79,7 +80,8 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
         vj, vk = mf.get_jk(mol, (dm+dm.T))
         return reduce(numpy.dot, (orbv.T, vj*2-vk, orbo)).ravel()
     z1 = cphf.solve(fvind, mo_energy, mo_occ, wvo,
-                    max_cycle=td_grad.max_cycle_cphf, tol=td_grad.conv_tol)[0]
+                    max_cycle=td_grad.cphf_max_cycle,
+                    tol=td_grad.cphf_conv_tol)[0]
     z1 = z1.reshape(nvir,nocc)
     time1 = log.timer('Z-vector using CPHF solver', *time0)
 
@@ -150,6 +152,10 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
 
 
 class Gradients(rhf_grad.Gradients):
+
+    cphf_max_cycle = getattr(__config__, 'grad_tdrhf_Gradients_cphf_max_cycle', 20)
+    cphf_conv_tol = getattr(__config__, 'grad_tdrhf_Gradients_cphf_conv_tol', 1e-8)
+
     def __init__(self, td):
         self.verbose = td.verbose
         self.stdout = td.stdout
@@ -158,19 +164,18 @@ class Gradients(rhf_grad.Gradients):
         self._scf = td._scf
         self.chkfile = td.chkfile
         self.max_memory = td.max_memory
-        self.max_cycle_cphf = 20
-        self.conv_tol = 1e-8
 
         self.de = 0
-        self._keys = set(self.__dict__.keys())
+        keys = set(('cphf_max_cycle', 'cphf_conv_tol'))
+        self._keys = set(self.__dict__.keys()).union(keys)
 
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)
         log.info('\n')
         log.info('******** LR %s gradients for %s ********',
                  self._td.__class__, self._td._scf.__class__)
-        log.info('CPHF conv_tol = %g', self.conv_tol)
-        log.info('CPHF max_cycle_cphf = %d', self.max_cycle_cphf)
+        log.info('cphf_conv_tol = %g', self.cphf_conv_tol)
+        log.info('cphf_max_cycle = %d', self.cphf_max_cycle)
         log.info('chkfile = %s', self.chkfile)
         log.info('max_memory %d MB (current use %d MB)',
                  self.max_memory, lib.current_memory()[0])
@@ -180,9 +185,19 @@ class Gradients(rhf_grad.Gradients):
     def grad_elec(self, xy, singlet, atmlst=None):
         return kernel(self, xy, singlet, atmlst, self.max_memory, self.verbose)
 
-    def kernel(self, xy=None, state=0, singlet=None, atmlst=None):
+    def kernel(self, xy=None, state=1, singlet=None, atmlst=None):
+        '''
+        Args:
+            state : int
+                Excited state ID.  state = 1 means the first excited state.
+        '''
+        if state == 0:
+            logger.warn(self, 'state=0 found in the input. '
+                        'Gradients of ground state is computed.')
+            return self._scf.nuc_grad_method().kernel(atmlst=atmlst)
+
         cput0 = (time.clock(), time.time())
-        if xy is None: xy = self._td.xy[state]
+        if xy is None: xy = self._td.xy[state-1]
         if singlet is None: singlet = self._td.singlet
         if atmlst is None: atmlst = range(self.mol.natm)
         self.check_sanity()

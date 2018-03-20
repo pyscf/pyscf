@@ -43,9 +43,10 @@ import scipy.linalg
 from pyscf.gto import mole
 from pyscf.lib import norm
 from pyscf.lib import logger
-import pyscf.symm.param
+from pyscf.symm.param import OPERATOR_TABLE
+from pyscf import __config__
 
-TOLERANCE = 1e-5
+TOLERANCE = getattr(__config__, 'symm_geom_tol', 1e-5)
 
 def parallel_vectors(v1, v2, tol=TOLERANCE):
     if numpy.allclose(v1, 0, atol=tol) or numpy.allclose(v2, 0, atol=tol):
@@ -386,7 +387,7 @@ def symm_identical_atoms(gpname, atoms):
 #        sys.stderr.write('WARN: Molecular charge center %s is not on (0,0,0)\n'
 #                        % center)
     opdic = symm_ops(gpname)
-    ops = [opdic[op] for op in pyscf.symm.param.OPERATOR_TABLE[gpname]]
+    ops = [opdic[op] for op in OPERATOR_TABLE[gpname]]
     coords = numpy.array([a[1] for a in atoms], dtype=float)
     idx = argsort_coords(coords)
     coords0 = coords[idx]
@@ -423,7 +424,7 @@ def check_given_symm(gpname, atoms, basis=None):
         return numpy.allclose(coords[:,:2], 0, atol=TOLERANCE)
 
     opdic = symm_ops(gpname)
-    ops = [opdic[op] for op in pyscf.symm.param.OPERATOR_TABLE[gpname]]
+    ops = [opdic[op] for op in OPERATOR_TABLE[gpname]]
     rawsys = SymmSys(atoms, basis)
     for lst in rawsys.atomtypes.values():
         coords = rawsys.atoms[lst,1:]
@@ -442,7 +443,7 @@ def shift_atom(atoms, orig, axis):
     c = numpy.dot(c - orig, numpy.array(axis).T)
     return [[atoms[i][0], c[i]] for i in range(len(atoms))]
 
-class RotationAxisNotFound(Exception):
+class RotationAxisNotFound(RuntimeError):
     pass
 
 class SymmSys(object):

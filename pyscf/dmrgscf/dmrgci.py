@@ -30,29 +30,36 @@ import time
 import tempfile
 from subprocess import check_call, check_output, STDOUT, CalledProcessError
 import numpy
-import pyscf.tools
-import pyscf.lib
+from pyscf import lib
+from pyscf import tools
 from pyscf.lib import logger
-from pyscf.lib import chkfile
 from pyscf import mcscf
 from pyscf.dmrgscf import dmrg_sym
 
-import pyscf.lib
+from pyscf import __config__
 
-libunpack = pyscf.lib.load_library('libicmpspt')
+libunpack = lib.load_library('libicmpspt')
 
 
 try:
     from pyscf.dmrgscf import settings
 except ImportError:
-    import sys
-    sys.stderr.write('''settings.py not found.  Please create %s
-''' % os.path.join(os.path.dirname(__file__), 'settings.py'))
-    raise ImportError
+    settings = lambda: None
+    settings.BLOCKEXE = getattr(__config__, 'dmrgscf_BLOCKEXE', None)
+    settings.BLOCKEXE_COMPRESS_NEVPT = \
+            getattr(__config__, 'dmrgscf_BLOCKEXE_COMPRESS_NEVPT', None)
+    settings.BLOCKSCRATCHDIR = getattr(__config__, 'dmrgscf_BLOCKSCRATCHDIR', None)
+    settings.BLOCKRUNTIMEDIR = getattr(__config__, 'dmrgscf_BLOCKRUNTIMEDIR', None)
+    settings.MPIPREFIX = getattr(__config__, 'dmrgscf_MPIPREFIX', None)
+    settings.BLOCKVERSION = getattr(__config__, 'dmrgscf_BLOCKVERSION', None)
+    if (settings.BLOCKEXE is None or settings.BLOCKSCRATCHDIR is None):
+        import sys
+        sys.stderr.write('settings.py not found.  Please create %s\n'
+                         % os.path.join(os.path.dirname(__file__), 'settings.py'))
+        raise ImportError('settings.py not found')
 
 
-
-class DMRGCI(pyscf.lib.StreamObject):
+class DMRGCI(lib.StreamObject):
     '''Block program interface and the object to hold Block program input parameters.
 
     Attributes:
@@ -835,9 +842,9 @@ def writeIntegralFile(DMRGCI, h1eff, eri_cas, ncas, nelec, ecore=0):
     if not os.path.exists(DMRGCI.runtimeDir):
         os.makedirs(DMRGCI.runtimeDir)
 
-    pyscf.tools.fcidump.from_integrals(integralFile, h1eff, eri_cas, ncas,
-                                       neleca+nelecb, ecore, ms=abs(neleca-nelecb),
-                                       orbsym=orbsym)
+    tools.fcidump.from_integrals(integralFile, h1eff, eri_cas, ncas,
+                                 neleca+nelecb, ecore, ms=abs(neleca-nelecb),
+                                 orbsym=orbsym)
     return integralFile
 
 

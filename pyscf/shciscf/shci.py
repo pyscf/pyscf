@@ -40,10 +40,16 @@ ndpointer = numpy.ctypeslib.ndpointer
 try:
    from pyscf.shciscf import settings
 except ImportError:
-    import sys
-    sys.stderr.write('''settings.py not found.  Please create %s
-''' % os.path.join(os.path.dirname(__file__), 'settings.py'))
-    raise ImportError
+    settings = lambda: None
+    settings.SHCIEXE = getattr(__config__, 'shci_SHCIEXE', None)
+    settings.SHCISCRATCHDIR = getattr(__config__, 'shci_SHCISCRATCHDIR', None)
+    settings.SHCIRUNTIMEDIR = getattr(__config__, 'shci_SHCIRUNTIMEDIR', None)
+    settings.MPIPREFIX = getattr(__config__, 'shci_MPIPREFIX', None)
+    if (settings.SHCIEXE is None or settings.SHCISCRATCHDIR is None):
+        import sys
+        sys.stderr.write('settings.py not found.  Please create %s\n'
+                         % os.path.join(os.path.dirname(__file__), 'settings.py'))
+        raise ImportError('settings.py not found')
 
 # Libraries
 libE3unpack = load_library('libicmpspt')

@@ -75,7 +75,7 @@ def trans_e1_incore(eri_ao, mo, ncore, ncas):
 
 
 # level = 1: ppaa, papa and jpc, kpc
-# level = 2 or 3: ppaa, papa
+# level > 1: ppaa, papa only.  It affects accuracy of hdiag
 def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
                      max_memory=None, level=1, verbose=logger.WARN):
     time0 = (time.clock(), time.time())

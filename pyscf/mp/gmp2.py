@@ -24,8 +24,12 @@ from pyscf import ao2mo
 from pyscf.lib import logger
 from pyscf.mp import mp2
 from pyscf import scf
+from pyscf import __config__
 
-def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=True,
+WITH_T2 = getattr(__config__, 'mp_gmp2_with_t2', True)
+
+
+def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2,
            verbose=logger.NOTE):
     if mo_energy is None or mo_coeff is None:
         mo_coeff = None
@@ -139,7 +143,7 @@ class GMP2(mp2.MP2):
         mp2.MP2.__init__(self, mf, frozen, mo_coeff, mo_occ)
 
     @lib.with_doc(mp2.MP2.kernel.__doc__)
-    def kernel(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=True):
+    def kernel(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2):
         return mp2.MP2.kernel(self, mo_energy, mo_coeff, eris, with_t2, kernel)
 
     def ao2mo(self, mo_coeff=None):
@@ -278,6 +282,8 @@ def _make_eris_outcore(mp, mo_coeff=None, verbose=None):
 
     cput0 = log.timer_debug1('transforming oovv', *cput0)
     return eris
+
+del(WITH_T2)
 
 
 if __name__ == '__main__':

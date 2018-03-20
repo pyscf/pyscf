@@ -25,12 +25,15 @@ from pyscf.tdscf import uhf
 from pyscf.scf import uhf_symm
 from pyscf.pbc.tdscf.rhf import _get_eai
 from pyscf.pbc.scf.newton_ah import _gen_uhf_response
+from pyscf import __config__
 
 
 class TDA(uhf.TDA):
+
+    conv_tol = getattr(__config__, 'pbc_tdscf_rhf_TDA_conv_tol', 1e-6)
+
     def __init__(self, mf):
         self.cell = mf.cell
-        self.conv_tol = 1e-6
         uhf.TDA.__init__(self, mf)
 
     def get_vind(self, mf):
@@ -118,11 +121,12 @@ class TDA(uhf.TDA):
         if x0 is None:
             x0 = self.init_guess(self._scf, self.nstates)
 
-        self.e, x1 = lib.davidson1(vind, x0, precond,
-                                   tol=self.conv_tol,
-                                   nroots=self.nstates, lindep=self.lindep,
-                                   max_space=self.max_space,
-                                   verbose=self.verbose)[1:]
+        self.converged, self.e, x1 = \
+                lib.davidson1(vind, x0, precond,
+                              tol=self.conv_tol,
+                              nroots=self.nstates, lindep=self.lindep,
+                              max_space=self.max_space,
+                              verbose=self.verbose)
 
         mo_occ = self._scf.mo_occ
         tot_x_a = sum((occ>0).sum()*(occ==0).sum() for occ in mo_occ[0])
@@ -231,11 +235,12 @@ class TDHF(TDA):
             idx = realidx[w[realidx].real.argsort()]
             return w[idx].real, v[:,idx].real, idx
 
-        w, x1 = lib.davidson_nosym1(vind, x0, precond,
+        self.converged, w, x1 = \
+                lib.davidson_nosym1(vind, x0, precond,
                                     tol=self.conv_tol,
                                     nroots=self.nstates, lindep=self.lindep,
                                     max_space=self.max_space, pick=pickeig,
-                                    verbose=self.verbose)[1:]
+                                    verbose=self.verbose)
 
         mo_occ = self._scf.mo_occ
         e = []

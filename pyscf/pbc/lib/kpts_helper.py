@@ -22,10 +22,11 @@ import itertools
 from collections import OrderedDict
 import numpy as np
 import scipy.linalg
+from pyscf import lib
+from pyscf import __config__
 
-import pyscf.lib
+KPT_DIFF_TOL = getattr(__config__, 'pbc_lib_kpts_helper_kpt_diff_tol', 1e-6)
 
-KPT_DIFF_TOL = 1e-6
 
 def is_zero(kpt):
     return abs(np.asarray(kpt)).sum() < KPT_DIFF_TOL
@@ -157,7 +158,7 @@ def get_kconserv3(cell, kpts, kijkab):
     return kconserv
 
 
-class KptsHelper(pyscf.lib.StreamObject):
+class KptsHelper(lib.StreamObject):
     def __init__(self, cell, kpts):
         '''Helper class for handling k-points in correlated calculations.
 
@@ -173,7 +174,7 @@ class KptsHelper(pyscf.lib.StreamObject):
         self.kconserv = get_kconserv(cell, kpts)
         nkpts = len(kpts)
         temp = range(0,nkpts)
-        kptlist = pyscf.lib.cartesian_prod((temp,temp,temp))
+        kptlist = lib.cartesian_prod((temp,temp,temp))
         completed = np.zeros((nkpts,nkpts,nkpts), dtype=bool)
 
         self._operation = np.zeros((nkpts,nkpts,nkpts), dtype=int)

@@ -31,6 +31,7 @@ from pyscf.cc import ccsd
 from pyscf.cc import rccsd
 from pyscf.ao2mo import _ao2mo
 from pyscf.mp import ump2
+from pyscf import __config__
 
 # This is unrestricted (U)CCSD, in spatial-orbital form.
 
@@ -523,15 +524,17 @@ def _add_vvvv(mycc, t1, t2, eris, out=None, with_ovvv=False, t2sym=None):
 
 
 class UCCSD(ccsd.CCSD):
-# argument frozen can be
+
+    conv_tol = getattr(__config__, 'cc_uccsd_UCCSD_conv_tol', 1e-7)
+    conv_tol_normt = getattr(__config__, 'cc_uccsd_UCCSD_conv_tol_normt', 1e-6)
+
+# Attribute frozen can be
 # * An integer : The same number of inner-most alpha and beta orbitals are frozen
 # * One list : Same alpha and beta orbital indices to be frozen
 # * A pair of list : First list is the orbital indices to be frozen for alpha
 #       orbitals, second list is for beta orbitals
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
         ccsd.CCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
-        # Spin-orbital CCSD needs a stricter tolerance than spatial-orbital
-        self.conv_tol_normt = 1e-6
 
     get_nocc = get_nocc
     get_nmo = get_nmo

@@ -75,8 +75,7 @@ class KnownValues(unittest.TestCase):
 
     def test_uccsd_grad(self):
         mol = gto.Mole()
-        mol.vebose = 5
-        mol.output = '/dev/null'
+        mol.verbose = 0
         mol.atom = [
             [8 , (0. , 0.     , 0.)],
             [1 , (0. , -0.757 , 0.587)],
@@ -107,7 +106,7 @@ class KnownValues(unittest.TestCase):
             [1 , (0. , -0.757 , 0.587)],
             [1 , (0. , 0.757  , 0.587)]], unit='Ang')
         e2 = cc_scanner(mol)
-        self.assertAlmostEqual(g1[0,2], (e1-e2)/.002*lib.param.BOHR, 6)
+        self.assertAlmostEqual(g1[0,2], (e1-e2)/.002*lib.param.BOHR, 5)
 
 
 if __name__ == "__main__":

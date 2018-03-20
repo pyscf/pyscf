@@ -13,6 +13,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+'''
+MO integrals for UCASSCF methods
+'''
+
 import sys
 import ctypes
 import time
@@ -290,7 +294,7 @@ def _mem_usage(ncore, ncas, nmo):
 if __name__ == '__main__':
     from pyscf import scf
     from pyscf import gto
-    from pyscf.mcscf import mc1step_uhf
+    from pyscf.mcscf import umc1step
 
     mol = gto.Mole()
     mol.verbose = 0
@@ -308,7 +312,7 @@ if __name__ == '__main__':
     m = scf.UHF(mol)
     ehf = m.scf()
 
-    mc = mc1step_uhf.CASSCF(m, 4, 4)
+    mc = umc1step.UCASSCF(m, 4, 4)
     mc.verbose = 4
     mo = m.mo_coeff
 

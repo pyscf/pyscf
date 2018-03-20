@@ -34,13 +34,14 @@ except (ImportError, OSError):
         libxc = xc
 
 from pyscf.dft.gen_grid import make_mask, BLKSIZE
+from pyscf import __config__
 
 libdft = lib.load_library('libdft')
-OCCDROP = 1e-12
+OCCDROP = getattr(__config__, 'dft_numint_OCCDROP', 1e-12)
 # The system size above which to consider the sparsity of the density matrix.
 # If the number of AOs in the system is less than this value, all tensors are
 # treated as dense quantities and contracted by dgemm directly.
-SWITCH_SIZE = 800
+SWITCH_SIZE = getattr(__config__, 'dft_numint_SWITCH_SIZE', 800)
 
 def eval_ao(mol, coords, deriv=0, shls_slice=None,
             non0tab=None, out=None, verbose=None):

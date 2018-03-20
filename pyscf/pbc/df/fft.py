@@ -28,6 +28,9 @@ from pyscf.pbc.gto import pseudo, estimate_ke_cutoff, error_for_ke_cutoff
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import fft_ao2mo
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point
+from pyscf import __config__
+
+KE_SCALING = getattr(__config__, 'pbc_df_aft_ke_cutoff_scaling', 0.75)
 
 
 def get_nuc(mydf, kpts=None):
@@ -161,9 +164,10 @@ class FFTDF(lib.StreamObject):
 
         self.kpts = kpts
         self.mesh = cell.mesh
-
-        self.blockdim = 240 # to mimic molecular DF object
         self.non0tab = None
+
+        # to mimic molecular DF object
+        self.blockdim = getattr(__config__, 'pbc_df_df_DF_blockdim', 240)
 
 # Not input options
         self.exxdiv = None  # to mimic KRHF/KUHF object in function get_coulG
@@ -203,7 +207,7 @@ class FFTDF(lib.StreamObject):
         else:
             ke_cutoff = numpy.min(cell.ke_cutoff)
         ke_guess = estimate_ke_cutoff(cell, cell.precision)
-        if ke_cutoff < ke_guess*.7:
+        if ke_cutoff < ke_guess * KE_SCALING:
             mesh_guess = tools.cutoff_to_mesh(cell.lattice_vectors(), ke_guess)
             logger.warn(self, 'ke_cutoff/mesh (%g / %s) is not enough for FFTDF '
                         'to get integral accuracy %g.\nCoulomb integral error '

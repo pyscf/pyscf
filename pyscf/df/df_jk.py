@@ -29,8 +29,6 @@ from pyscf.ao2mo import _ao2mo
 
 libri = lib.load_library('libri')
 
-OCCDROP = 1e-12
-
 def density_fit(mf, auxbasis=None, with_df=None):
     '''For the given SCF object, update the J, K matrix constructor with
     corresponding density fitting integrals.

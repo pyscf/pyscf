@@ -16,6 +16,11 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+'''
+UCASCI (CASCI with non-degenerated alpha and beta orbitals, typically UHF
+orbitals)
+'''
+
 import time
 from functools import reduce
 import numpy
@@ -25,6 +30,7 @@ import pyscf.ao2mo
 from pyscf import scf
 from pyscf import fci
 from pyscf.mcscf import addons
+from pyscf import __config__
 
 # TODO, different ncas space for alpha and beta
 
@@ -103,7 +109,7 @@ def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE):
     return e_tot, e_cas, fcivec
 
 
-class CASCI(lib.StreamObject):
+class UCASCI(lib.StreamObject):
     # nelecas is tuple of (nelecas_alpha, nelecas_beta)
     def __init__(self, mf, ncas, nelecas, ncore=None):
         #assert('UHF' == mf.__class__.__name__)
@@ -130,9 +136,12 @@ class CASCI(lib.StreamObject):
             self.ncore = (ncore[0], ncore[1])
 
         self.fcisolver = fci.direct_uhf.FCISolver(mol)
-        self.fcisolver.lindep = 1e-10
-        self.fcisolver.max_cycle = 30
-        self.fcisolver.conv_tol = 1e-8
+        self.fcisolver.lindep = getattr(__config__,
+                                        'mcscf_ucasci_UCASCI_fcisolver_lindep', 1e-10)
+        self.fcisolver.max_cycle = getattr(__config__,
+                                           'mcscf_ucasci_UCASCI_fcisolver_max_cycle', 200)
+        self.fcisolver.conv_tol = getattr(__config__,
+                                          'mcscf_ucasci_UCASCI_fcisolver_conv_tol', 1e-8)
 
 ##################################################
 # don't modify the following attributes, they are not input options
@@ -361,6 +370,8 @@ class CASCI(lib.StreamObject):
                   ncore=None):
         dm1a,dm1b = self.make_rdm1s(mo_coeff, ci, ncas, nelecas, ncore)
         return dm1a+dm1b
+
+CASCI = UCASCI
 
 
 if __name__ == '__main__':

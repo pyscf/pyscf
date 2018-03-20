@@ -33,6 +33,7 @@ from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import numint
 from pyscf.pbc.dft import rks
 
+
 def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
              kpts=None, kpts_band=None):
     '''Coulomb + XC functional for UKS.  See pyscf/pbc/dft/uks.py
@@ -91,14 +92,7 @@ class KUKS(kuhf.KUHF):
     '''
     def __init__(self, cell, kpts=np.zeros((1,3))):
         kuhf.KUHF.__init__(self, cell, kpts)
-        self.xc = 'LDA,VWN'
-        self.grids = gen_grid.UniformGrids(cell)
-        self.small_rho_cutoff = 1e-7  # Use rho to filter grids
-##################################################
-# don't modify the following attributes, they are not input options
-        # Note Do not refer to .with_df._numint because mesh/coords may be different
-        self._numint = numint._KNumInt(kpts)
-        self._keys = self._keys.union(['xc', 'grids', 'small_rho_cutoff'])
+        rks._dft_common_init_(self)
 
     def dump_flags(self):
         kuhf.KUHF.dump_flags(self)

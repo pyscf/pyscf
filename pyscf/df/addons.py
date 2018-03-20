@@ -24,6 +24,11 @@ from pyscf.lib import logger
 from pyscf import gto
 from pyscf import ao2mo
 from pyscf.data import elements
+from pyscf import __config__
+
+DFBASIS = getattr(__config__, 'df_addons_aug_etb_beta', 'weigend')
+ETB_BETA = getattr(__config__, 'df_addons_aug_dfbasis', 2.0)
+FIRST_ETB_ELEMENT = getattr(__config__, 'df_addons_aug_start_at', 36)  # 'Rb'
 
 # For code compatiblity in python-2 and python-3
 if sys.version_info >= (3,):
@@ -73,7 +78,8 @@ class load(ao2mo.load):
         ao2mo.load.__init__(self, eri, dataname)
 
 
-def aug_etb_for_dfbasis(mol, dfbasis='weigend', beta=2.3, start_at='Rb'):
+def aug_etb_for_dfbasis(mol, dfbasis=DFBASIS, beta=ETB_BETA,
+                        start_at=FIRST_ETB_ELEMENT):
     '''augment weigend basis with even-tempered gaussian basis
     exps = alpha*beta^i for i = 1..N
     '''
@@ -126,7 +132,7 @@ def aug_etb_for_dfbasis(mol, dfbasis='weigend', beta=2.3, start_at='Rb'):
 
     return newbasis
 
-def aug_etb(mol, beta=2.3):
+def aug_etb(mol, beta=ETB_BETA):
     '''To generate the even-tempered auxiliary Gaussian basis'''
     return aug_etb_for_dfbasis(mol, beta=beta, start_at=0)
 
@@ -211,3 +217,5 @@ def make_auxmol(mol, auxbasis=None):
     logger.debug(mol, 'num shells = %d, num cGTOs = %d',
                  pmol.nbas, pmol.nao_nr())
     return pmol
+
+del(DFBASIS, ETB_BETA, FIRST_ETB_ELEMENT)

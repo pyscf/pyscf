@@ -27,12 +27,13 @@ import scipy.linalg
 from pyscf.lib import logger
 from pyscf import gto
 from pyscf import scf
-
+from pyscf import __config__
 
 # Alternately, use ANO for minao
 # orthogonalize iao by orth.lowdin(c.T*mol.intor(ovlp)*c)
+MINAO = getattr(__config__, 'lo_iao_minao', 'minao')
 
-def iao(mol, orbocc, minao='minao'):
+def iao(mol, orbocc, minao=MINAO):
     '''Intrinsic Atomic Orbitals. [Ref. JCTC, 9, 4834]
 
     Args:
@@ -87,7 +88,7 @@ def iao(mol, orbocc, minao='minao'):
     return a
 
 
-def reference_mol(mol, minao='minao'):
+def reference_mol(mol, minao=MINAO):
     '''Create a molecule which uses reference minimal basis'''
     pmol = mol.copy()
     if hasattr(pmol, 'rcut'):
@@ -127,3 +128,4 @@ def fast_iao_mullikan_pop(mol, dm, iaos, verbose=logger.DEBUG):
               reduce(numpy.dot, (iao_inv, dm[1], iao_inv.conj().T))]
         return scf.uhf.mulliken_pop(pmol, dm, s_iao, verbose)
 
+del(MINAO)

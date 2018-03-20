@@ -32,14 +32,17 @@ from pyscf.gto import mole
 from pyscf.lo import orth
 from pyscf.lib import logger
 from pyscf.data import elements
+from pyscf import __config__
 
 # Note the valence space for Li, Be may need include 2p, Al..Cl may need 3d ...
 # This is No. of shells, not the atomic configuations
 #     core       core+valence
 # core+valence = lambda nuc, l: \
 #            int(numpy.ceil(elements.CONFIGURATION[nuc][l]/(4*l+2.)))
-AOSHELL = list(zip(elements.N_CORE_SHELLS,
-                   elements.N_CORE_VALENCE_SHELLS))
+AOSHELL = getattr(__config__, 'lo_nao_AOSHELL', None)
+if AOSHELL is None:
+    AOSHELL = list(zip(elements.N_CORE_SHELLS,
+                       elements.N_CORE_VALENCE_SHELLS))
 
 def prenao(mol, dm):
     if not (isinstance(dm, numpy.ndarray) and dm.ndim == 2):

@@ -30,6 +30,7 @@ from pyscf.lib import logger
 from pyscf.scf import hf
 from pyscf.scf import _vhf
 from pyscf.scf import chkfile
+from pyscf import __config__
 
 
 def kernel(mf, conv_tol=1e-9, conv_tol_grad=None,
@@ -301,16 +302,19 @@ class UHF(hf.SCF):
     >>> print('Relativistic effects = %.12f' % (e1-e0))
     Relativistic effects = -0.000008854205
     '''
+
+    conv_tol = getattr(__config__, 'scf_dhf_SCF_conv_tol', 1e-8)
+    with_ssss = getattr(__config__, 'scf_dhf_SCF_with_ssss', True)
+    with_gaunt = getattr(__config__, 'scf_dhf_SCF_with_gaunt', False)
+    with_breit = getattr(__config__, 'scf_dhf_SCF_with_breit', False)
+
     def __init__(self, mol):
         hf.SCF.__init__(self, mol)
-        self.conv_tol = 1e-8
-        self.with_ssss = True
         self._coulomb_now = 'SSSS' # 'SSSS' ~ LLLL+LLSS+SSSS
-        self.with_gaunt = False
-        self.with_breit = False
-
         self.opt = (None, None, None, None) # (opt_llll, opt_ssll, opt_ssss, opt_gaunt)
-        self._keys = set(self.__dict__.keys())
+
+        keys = set(('conv_tol', 'with_ssss', 'with_gaunt', 'with_breit'))
+        self._keys = set(self.__dict__.keys()).union(keys)
 
     def dump_flags(self):
         hf.SCF.dump_flags(self)

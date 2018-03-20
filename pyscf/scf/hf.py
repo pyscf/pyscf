@@ -33,7 +33,10 @@ from pyscf.scf import diis
 from pyscf.scf import _vhf
 from pyscf.scf import chkfile
 from pyscf.data import nist
+from pyscf import __config__
 
+WITH_META_LOWDIN = getattr(__config__, 'scf_analyze_with_meta_lowdin', True)
+PRE_ORTH_METHOD = getattr(__config__, 'scf_analyze_pre_orth_method', 'ANO')
 
 def kernel(mf, conv_tol=1e-10, conv_tol_grad=None,
            dump_chk=True, dm0=None, callback=None, conv_check=True, **kwargs):
@@ -790,7 +793,8 @@ def get_grad(mo_coeff, mo_occ, fock_ao):
     return g.ravel()
 
 
-def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=True, **kwargs):
+def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
+            **kwargs):
     '''Analyze the given SCF object:  print orbital energies, occupancies;
     print orbital coefficients; Mulliken population analysis; Diople moment.
     '''
@@ -861,8 +865,8 @@ def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
     return pop, chg
 
 
-def mulliken_meta(mol, dm, verbose=logger.DEBUG, pre_orth_method='ANO',
-                  s=None):
+def mulliken_meta(mol, dm, verbose=logger.DEBUG,
+                  pre_orth_method=PRE_ORTH_METHOD, s=None):
     '''Mulliken population analysis, based on meta-Lowdin AOs.
     In the meta-lowdin, the AOs are grouped in three sets: core, valence and
     Rydberg, the orthogonalization are carreid out within each subsets.
@@ -1156,6 +1160,27 @@ class SCF(lib.StreamObject):
     >>> mf.scf()
     -1.0811707843775884
     '''
+    conv_tol = getattr(__config__, 'scf_hf_SCF_conv_tol', 1e-9)
+    conv_tol_grad = getattr(__config__, 'scf_hf_SCF_conv_tol_grad', None)
+    max_cycle = getattr(__config__, 'scf_hf_SCF_max_cycle', 50)
+    init_guess = getattr(__config__, 'scf_hf_SCF_init_guess', 'minao')
+
+    # To avoid diis pollution form previous run, self.diis should not be
+    # initialized as DIIS instance here
+    diis = getattr(__config__, 'scf_hf_SCF_diis', True)
+    diis_space = getattr(__config__, 'scf_hf_SCF_diis_space', 8)
+    # need > 0 if initial DM is numpy.zeros array
+    diis_start_cycle = getattr(__config__, 'scf_hf_SCF_diis_start_cycle', 1)
+    diis_file = None
+    # Give diis_space_rollback=True a trial if all other methods do not converge
+    diis_space_rollback = False
+
+    damp = getattr(__config__, 'scf_hf_SCF_damp', 0)
+    level_shift = getattr(__config__, 'scf_hf_SCF_level_shift', 0)
+    direct_scf = getattr(__config__, 'scf_hf_SCF_direct_scf', True)
+    direct_scf_tol = getattr(__config__, 'scf_hf_SCF_direct_scf_tol', 1e-13)
+    conv_check = getattr(__config__, 'scf_hf_SCF_conv_check', True)
+
     def __init__(self, mol):
         if not mol._built:
             sys.stderr.write('Warning: mol.build() is not called in input\n')
@@ -1169,23 +1194,7 @@ class SCF(lib.StreamObject):
 # filename to self.chkfile
         self._chkfile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
         self.chkfile = self._chkfile.name
-        self.conv_tol = 1e-9
-        self.conv_tol_grad = None
-        self.max_cycle = 50
-        self.init_guess = 'minao'
-        # To avoid diis pollution form previous run, self.diis should not be
-        # initialized as DIIS instance here
-        self.diis = True
-        self.diis_space = 8
-        self.diis_start_cycle = 1 # need > 0 if initial DM is numpy.zeros array
-        self.diis_file = None
-        # Give diis_space_rollback=True a trial if other efforts not converge
-        self.diis_space_rollback = False
-        self.damp = 0
-        self.level_shift = 0
-        self.direct_scf = True
-        self.direct_scf_tol = 1e-13
-        self.conv_check = True
+
 ##################################################
 # don't modify the following attributes, they are not input options
         self.mo_energy = None
@@ -1197,7 +1206,12 @@ class SCF(lib.StreamObject):
 
         self.opt = None
         self._eri = None
-        self._keys = set(self.__dict__.keys())
+
+        keys = set(('conv_tol', 'conv_tol_grad', 'max_cycle', 'init_guess',
+                    'diis', 'diis_space', 'diis_start_cycle', 'diis_file',
+                    'diis_space_rollback', 'damp', 'level_shift',
+                    'direct_scf', 'direct_scf_tol', 'conv_check'))
+        self._keys = set(self.__dict__.keys()).union(keys)
 
     def build(self, mol=None):
         if mol is None: mol = self.mol
@@ -1449,7 +1463,8 @@ class SCF(lib.StreamObject):
             return vj - vk * .5
 
     @lib.with_doc(analyze.__doc__)
-    def analyze(self, verbose=None, with_meta_lowdin=True, **kwargs):
+    def analyze(self, verbose=None, with_meta_lowdin=WITH_META_LOWDIN,
+                **kwargs):
         if verbose is None: verbose = self.verbose
         return analyze(self, verbose, with_meta_lowdin, **kwargs)
 
@@ -1462,7 +1477,7 @@ class SCF(lib.StreamObject):
 
     @lib.with_doc(mulliken_meta.__doc__)
     def mulliken_meta(self, mol=None, dm=None, verbose=logger.DEBUG,
-                      pre_orth_method='ANO', s=None):
+                      pre_orth_method=PRE_ORTH_METHOD, s=None):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         if s is None: s = self.get_ovlp(mol)
@@ -1477,10 +1492,10 @@ class SCF(lib.StreamObject):
     canonicalize = canonicalize
 
     @lib.with_doc(dip_moment.__doc__)
-    def dip_moment(self, mol=None, dm=None, unit_symbol=None, verbose=logger.NOTE):
+    def dip_moment(self, mol=None, dm=None, unit_symbol='Debye',
+                   verbose=logger.NOTE):
         if mol is None: mol = self.mol
         if dm is None: dm =self.make_rdm1()
-        if unit_symbol is None: unit_symbol='Debye'
         return dip_moment(mol, dm, unit_symbol, verbose=verbose)
 
     def _is_mem_enough(self):
@@ -1582,7 +1597,10 @@ class RHF(SCF):
         addons.convert_to_rhf(mf, self)
         return self
 
-    def stability(self, internal=True, external=False, verbose=None):
+    def stability(self,
+                  internal=getattr(__config__, 'scf_stability_internal', True),
+                  external=getattr(__config__, 'scf_stability_external', False),
+                  verbose=None):
         '''
         RHF/RKS stability analysis.
 
@@ -1606,6 +1624,9 @@ class RHF(SCF):
     def nuc_grad_method(self):
         from pyscf.grad import rhf
         return rhf.Gradients(self)
+
+
+del(WITH_META_LOWDIN, PRE_ORTH_METHOD)
 
 
 if __name__ == '__main__':

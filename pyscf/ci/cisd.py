@@ -29,6 +29,10 @@ from pyscf.cc import ccsd
 from pyscf.cc import ccsd_rdm
 from pyscf.fci import cistring
 from functools import reduce
+from pyscf import __config__
+
+BLKMIN = getattr(__config__, 'ci_cisd_blkmin', 4)
+
 
 def kernel(myci, eris, ci0=None, max_cycle=50, tol=1e-8, verbose=logger.INFO):
     log = logger.new_logger(myci, verbose)
@@ -128,7 +132,7 @@ def contract(myci, civec, eris):
 
     unit = nocc*nvir**2 + nocc**2*nvir*3 + 1
     max_memory = max(0, myci.max_memory - lib.current_memory()[0])
-    blksize = min(nvir, max(ccsd.BLKMIN, int(max_memory*.9e6/8/unit)))
+    blksize = min(nvir, max(BLKMIN, int(max_memory*.9e6/8/unit)))
     log.debug1('max_memory %d MB,  nocc,nvir = %d,%d  blksize = %d',
                max_memory, nocc, nvir, blksize)
     nvir_pair = nvir * (nvir+1) // 2
@@ -341,7 +345,7 @@ def _gamma2_outcore(myci, civec, nmo, nocc, h5fobj, compress_vvvv=False):
     #:dvvvv = lib.einsum('ijab,ijcd->abcd', c2, c2)
     max_memory = max(0, myci.max_memory - lib.current_memory()[0])
     unit = max(nocc**2*nvir*2+nocc*nvir**2*3 + 1, nvir**3*2+nocc*nvir**2 + 1)
-    blksize = min(nvir, max(ccsd.BLKMIN, int(max_memory*.95e6/8/unit)))
+    blksize = min(nvir, max(BLKMIN, int(max_memory*.95e6/8/unit)))
     iobuflen = int(256e6/8/blksize)
     log.debug1('rdm intermediates: block size = %d, nvir = %d in %d blocks',
                blksize, nocc, int((nvir+blksize-1)/blksize))
@@ -446,6 +450,14 @@ def as_scanner(ci):
 
 
 class CISD(lib.StreamObject):
+
+    conv_tol = getattr(__config__, 'ci_cisd_CISD_conv_tol', 1e-9)
+    max_cycle = getattr(__config__, 'ci_cisd_CISD_max_cycle', 50)
+    max_space = getattr(__config__, 'ci_cisd_CISD_max_space', 12)
+    lindep = getattr(__config__, 'ci_cisd_CISD_lindep', 1e-14)
+    level_shift = getattr(__config__, 'ci_cisd_CISD_level_shift', 0)  # in preconditioner
+    direct = getattr(__config__, 'ci_cisd_CISD_direct', False)
+
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
         if 'dft' in str(mf.__module__):
              raise RuntimeError('CISD Warning: The first argument mf is a DFT object. '
@@ -460,15 +472,8 @@ class CISD(lib.StreamObject):
         self.stdout = self.mol.stdout
         self.max_memory = mf.max_memory
 
-        self.conv_tol = 1e-9
-        self.max_cycle = 50
-        self.max_space = 12
-        self.lindep = 1e-14
         self.nroots = 1
-        self.level_shift = 0  # in precond
-
         self.frozen = frozen
-        self.direct = False
         self.chkfile = None
 
 ##################################################
@@ -481,7 +486,10 @@ class CISD(lib.StreamObject):
         self.ci = None
         self._nocc = None
         self._nmo = None
-        self._keys = set(self.__dict__.keys())
+
+        keys = set(('conv_tol', 'max_cycle', 'max_space', 'lindep',
+                    'level_shift', 'direct'))
+        self._keys = set(self.__dict__.keys()).union(keys)
 
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)
@@ -659,7 +667,8 @@ class CISD(lib.StreamObject):
         from pyscf.grad import cisd
         return cisd.Gradients(self)
 
-RCISD = CISD
+class RCISD(CISD):
+    pass
 
 def _cp(a):
     return numpy.array(a, copy=False, order='C')

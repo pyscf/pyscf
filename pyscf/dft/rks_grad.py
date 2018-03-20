@@ -27,6 +27,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import rhf_grad
 from pyscf.dft import numint, radi, gen_grid
+from pyscf import __config__
 
 
 def get_veff(ks_grad, mol=None, dm=None):
@@ -325,10 +326,14 @@ def grids_response_cc(grids):
 
 
 class Gradients(rhf_grad.Gradients):
+
+# This parameter has no effects for HF gradients. Add this attribute so that
+# the kernel function can be reused in the DFT gradients code.
+    grid_response = getattr(__config__, 'grad_rks_Gradients_grid_response', False)
+
     def __init__(self, mf):
         rhf_grad.Gradients.__init__(self, mf)
         self.grids = None
-        self.grid_response = False
         self._keys = self._keys.union(['grid_response', 'grids'])
 
     def dump_flags(self):

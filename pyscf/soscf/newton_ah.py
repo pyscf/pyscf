@@ -35,6 +35,10 @@ from pyscf.scf import addons
 from pyscf.scf import hf_symm, uhf_symm
 from pyscf.scf import hf, rohf, uhf
 from pyscf.soscf import ciah
+from pyscf import __config__
+
+WITH_EX_EY_DEGENERACY = getattr(__config__, 'soscf_newton_ah_Ex_Ey_degeneracy', True)
+
 
 # http://scicomp.stackexchange.com/questions/1234/matrix-exponential-of-a-skew-hermitian-matrix-with-fortran-95-and-lapack
 def expmat(a):
@@ -768,32 +772,32 @@ def newton_SCF_class(mf):
                 To control whether to canonicalize the orbitals optimized by
                 Newton solver.  Default is True.
         '''
+
+        max_cycle_inner = getattr(__config__, 'soscf_newton_ah_SOSCF_max_cycle_inner', 12)
+        max_stepsize = getattr(__config__, 'soscf_newton_ah_SOSCF_max_stepsize', .05)
+        canonicalization = getattr(__config__, 'soscf_newton_ah_SOSCF_canonicalization', True)
+
+        ah_start_tol = getattr(__config__, 'soscf_newton_ah_SOSCF_ah_start_tol', 1e9)
+        ah_start_cycle = getattr(__config__, 'soscf_newton_ah_SOSCF_ah_start_cycle', 1)
+        ah_level_shift = getattr(__config__, 'soscf_newton_ah_SOSCF_ah_level_shift', 0)
+        ah_conv_tol = getattr(__config__, 'soscf_newton_ah_SOSCF_ah_conv_tol', 1e-12)
+        ah_lindep = getattr(__config__, 'soscf_newton_ah_SOSCF_ah_lindep', 1e-14)
+        ah_max_cycle = getattr(__config__, 'soscf_newton_ah_SOSCF_ah_max_cycle', 40)
+        ah_grad_trust_region = getattr(__config__, 'soscf_newton_ah_SOSCF_ah_grad_trust_region', 2.5)
+        kf_interval = getattr(__config__, 'soscf_newton_ah_SOSCF_kf_interval', 4)
+        kf_trust_region = getattr(__config__, 'soscf_newton_ah_SOSCF_kf_trust_region', 5)
+
         def __init__(self, mf):
 # Note self.mol can be different to self._scf.mol.  Projected hessian is used
 # in this case.
             self.__dict__.update(mf.__dict__)
             self._scf = mf
-            self.max_cycle_inner = 12
-            self.max_stepsize = .05
-            self.canonicalization = True
-
-            self.ah_start_tol = 1e9
-            self.ah_start_cycle = 1
-            self.ah_level_shift = 0
-            self.ah_conv_tol = 1e-12
-            self.ah_lindep = 1e-14
-            self.ah_max_cycle = 40
-            self.ah_grad_trust_region = 2.5
-# * Classic AH can be simulated by setting
-#               max_cycle_micro_inner = 1
-#               ah_start_tol = 1e-7
-#               max_stepsize = 1.5
-#               ah_grad_trust_region = 1e6
-            self.kf_interval = 4
-            self.kf_trust_region = 5
-            self_keys = set(self.__dict__.keys())
-
-            self._keys = self_keys.union(mf._keys)
+            keys = set(('_scf', 'max_cycle_inner', 'max_stepsize',
+                        'canonicalization', 'ah_start_tol', 'ah_start_cycle',
+                        'ah_level_shift', 'ah_conv_tol', 'ah_lindep',
+                        'ah_max_cycle', 'ah_grad_trust_region', 'kf_interval',
+                        'kf_trust_region'))
+            self._keys = mf._keys.union(keys)
 
         def dump_flags(self):
             log = logger.Logger(self.stdout, self.verbose)
@@ -904,10 +908,11 @@ def newton_SCF_class(mf):
         def update_rotate_matrix(self, dx, mo_occ, u0=1, mo_coeff=None):
             dr = hf.unpack_uniq_var(dx, mo_occ)
 
-            mol = self._scf.mol
-            if mol.symmetry and mol.groupname in ('Dooh', 'Coov'):
-                orbsym = hf_symm.get_orbsym(mol, mo_coeff)
-                _force_Ex_Ey_degeneracy_(dr, orbsym)
+            if WITH_EX_EY_DEGENERACY:
+                mol = self._scf.mol
+                if mol.symmetry and mol.groupname in ('Dooh', 'Coov'):
+                    orbsym = hf_symm.get_orbsym(mol, mo_coeff)
+                    _force_Ex_Ey_degeneracy_(dr, orbsym)
             return numpy.dot(u0, expmat(dr))
 
         def rotate_mo(self, mo_coeff, u, log=None):
@@ -979,11 +984,12 @@ def newton(mf):
                 dr[uniq] = dx
                 dr = dr - dr.conj().transpose(0,2,1)
 
-                mol = self._scf.mol
-                if mol.symmetry and mol.groupname in ('Dooh', 'Coov'):
-                    orbsyma, orbsymb = uhf_symm.get_orbsym(mol, mo_coeff)
-                    _force_Ex_Ey_degeneracy_(dr[0], orbsyma)
-                    _force_Ex_Ey_degeneracy_(dr[0], orbsymb)
+                if WITH_EX_EY_DEGENERACY:
+                    mol = self._scf.mol
+                    if mol.symmetry and mol.groupname in ('Dooh', 'Coov'):
+                        orbsyma, orbsymb = uhf_symm.get_orbsym(mol, mo_coeff)
+                        _force_Ex_Ey_degeneracy_(dr[0], orbsyma)
+                        _force_Ex_Ey_degeneracy_(dr[0], orbsymb)
 
                 if isinstance(u0, int) and u0 == 1:
                     return numpy.asarray((expmat(dr[0]), expmat(dr[1])))
@@ -1027,9 +1033,11 @@ def newton(mf):
     else:
         return SecondOrderRHF(mf)
 
-def _effective_svd(a, tol=1e-5):
+SVD_TOL = getattr(__config__, 'soscf_newton_ah_effective_svd_tol', 1e-5)
+def _effective_svd(a, tol=SVD_TOL):
     w = numpy.linalg.svd(a)[1]
     return w[(tol<w) & (w<1-tol)]
+del(SVD_TOL)
 
 def _force_Ex_Ey_degeneracy_(dr, orbsym):
     '''Force the Ex and Ey orbitals to use the same rotation matrix'''

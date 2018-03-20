@@ -33,6 +33,8 @@ import scipy.linalg
 from pyscf.lib import logger
 from pyscf.lo import iao
 from pyscf.lo import orth, pipek
+from pyscf import __config__
+
 
 def ibo(mol, orbocc, iaos=None, exponent=4, grad_tol=1e-8, max_iter=200,
         verbose=logger.NOTE):
@@ -173,7 +175,9 @@ def ibo(mol, orbocc, iaos=None, exponent=4, grad_tol=1e-8, max_iter=200,
     return numpy.dot(iaos, (orth.vec_lowdin(CIb)))
 
 
-def PipekMezey(mol, orbocc, iaos=None, s=None, exponent=4):
+EXPONENT = getattr(__config__, 'lo_ibo_PipekMezey_exponent', 4)
+
+def PipekMezey(mol, orbocc, iaos=None, s=None, exponent=EXPONENT):
     '''
     Note this localization is slightly different to Knizia's implementation.
     The localization here reserves orthogonormality during optimization.
@@ -227,6 +231,8 @@ def PipekMezey(mol, orbocc, iaos=None, s=None, exponent=4):
     pm.exponent = exponent
     return pm
 PM = Pipek = PipekMezey
+
+del(EXPONENT)
 
 
 '''

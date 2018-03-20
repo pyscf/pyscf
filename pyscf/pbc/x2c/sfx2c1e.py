@@ -33,6 +33,7 @@ from pyscf.pbc.df import aft
 from pyscf.pbc.df import aft_jk
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.scf import ghf
+from pyscf import __config__
 
 
 def sfx2c1e(mf):
@@ -104,11 +105,13 @@ def sfx2c1e(mf):
 sfx2c = sfx2c1e
 
 class X2C(x2c.X2C):
+
+    exp_drop = getattr(__config__, 'pbc_x2c_X2C_exp_drop', 0.2)
+    approx = getattr(__config__, 'pbc_x2c_X2C_approx', 'atom1e')
+    xuncontract = getattr(__config__, 'pbc_x2c_X2C_xuncontract', True)
+    basis = getattr(__config__, 'pbc_x2c_X2C_basis', None)
+
     def __init__(self, cell, kpts=None):
-        self.exp_drop = 0.2
-        self.approx = 'atom1e'
-        self.xuncontract = True
-        self.basis = None
         self.cell = self.mol = cell
 
 class SpinFreeX2C(X2C):

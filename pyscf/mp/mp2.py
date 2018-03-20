@@ -27,8 +27,12 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf import ao2mo
 from pyscf.ao2mo import _ao2mo
+from pyscf import __config__
 
-def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=True,
+WITH_T2 = getattr(__config__, 'mp_mp2_with_t2', True)
+
+
+def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2,
            verbose=logger.NOTE):
     if mo_energy is None or mo_coeff is None:
         mo_coeff = None
@@ -351,7 +355,7 @@ class MP2(lib.StreamObject):
     def e_tot(self):
         return self.e_corr + self._scf.e_tot
 
-    def kernel(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=True,
+    def kernel(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2,
                _kern=kernel):
         '''
         Args:
@@ -551,6 +555,9 @@ def _ao2mo_ovov(mp, orbo, orbv, feri, max_memory=2000, verbose=None):
 
     time0 = log.timer('mp2 ao2mo_ovov pass2', *time0)
     return h5dat
+
+del(WITH_T2)
+
 
 if __name__ == '__main__':
     from pyscf import scf

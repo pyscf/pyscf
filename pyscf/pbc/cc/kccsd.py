@@ -42,7 +42,8 @@ DEBUG = False
 einsum = lib.einsum
 
 
-def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6, max_memory=2000, verbose=logger.INFO):
+def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
+           max_memory=2000, verbose=logger.INFO):
     """Exactly the same as pyscf.cc.ccsd.kernel, which calls a
     *local* energy() function."""
     if isinstance(verbose, logger.Logger):

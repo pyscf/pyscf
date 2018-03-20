@@ -33,8 +33,10 @@ from pyscf import ao2mo
 from pyscf.ao2mo import _ao2mo
 from pyscf.cc import _ccsd
 from pyscf.mp.mp2 import get_nocc, get_nmo, get_frozen_mask, _mo_without_core
+from pyscf import __config__
 
-BLKMIN = 4
+BLKMIN = getattr(__config__, 'cc_ccsd_blkmin', 4)
+
 
 # t1: ia
 # t2: ijab
@@ -728,6 +730,21 @@ class CCSD(lib.StreamObject):
         l1, l2 :
             Lambda amplitudes l1[i,a], l2[i,j,a,b]  (i,j in occ, a,b in virt)
     '''
+
+    max_cycle = getattr(__config__, 'cc_ccsd_CCSD_max_cycle', 50)
+    conv_tol = getattr(__config__, 'cc_ccsd_CCSD_conv_tol', 1e-7)
+    iterative_damping = getattr(__config__, 'cc_ccsd_CCSD_iterative_damping', 1.0)
+    conv_tol_normt = getattr(__config__, 'cc_ccsd_CCSD_conv_tol_normt', 1e-5)
+
+    diis_space = getattr(__config__, 'cc_ccsd_CCSD_diis_space', 6)
+    diis_file = None
+    diis_start_cycle = getattr(__config__, 'cc_ccsd_CCSD_diis_start_cycle', 0)
+    # FIXME: Should we avoid DIIS starting early?
+    diis_start_energy_diff = getattr(__config__, 'cc_ccsd_CCSD_diis_start_energy_diff', 1e9)
+
+    direct = getattr(__config__, 'cc_ccsd_CCSD_direct', False)
+    cc2 = getattr(__config__, 'cc_ccsd_CCSD_cc2', False)
+
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
         from pyscf import gto
         if isinstance(mf, gto.Mole):
@@ -749,18 +766,6 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         self.stdout = self.mol.stdout
         self.max_memory = mf.max_memory
 
-        self.max_cycle = 50
-        self.conv_tol = 1e-7
-        self.iterative_damping = 1.0
-        self.conv_tol_normt = 1e-5
-        self.diis_space = 6
-        self.diis_file = None
-        self.diis_start_cycle = 0
-# FIXME: Should we avoid DIIS starting early?
-        self.diis_start_energy_diff = 1e9
-        self.direct = False
-        self.cc2 = False
-
         self.frozen = frozen
 
 ##################################################
@@ -779,7 +784,11 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         self._nmo = None
         self.chkfile = None
 
-        self._keys = set(self.__dict__.keys())
+        keys = set(('max_cycle', 'conv_tol', 'iterative_damping',
+                    'conv_tol_normt', 'diis_space', 'diis_file',
+                    'diis_start_cycle', 'diis_start_energy_diff', 'direct',
+                    'cc2'))
+        self._keys = set(self.__dict__.keys()).union(keys)
 
     @property
     def ecc(self):

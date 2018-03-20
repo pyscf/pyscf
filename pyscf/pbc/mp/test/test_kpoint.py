@@ -32,7 +32,7 @@ cell.a[1,0] = 5.0
 cell.basis = 'gth-szv'
 cell.pseudo = 'gth-pade-q2'
 cell.mesh = [12]*3
-cell.verboe = 5
+cell.verbose = 5
 cell.output = '/dev/null'
 cell.build()
 

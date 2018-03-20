@@ -28,10 +28,12 @@ import h5py
 from . import parameters
 from . import logger
 from . import misc
+from pyscf import __config__
+
+INCORE_SIZE = getattr(__config__, 'lib_diis_incore_size', 10000000)  # 80 MB
+BLOCK_SIZE  = getattr(__config__, 'lib_diis_block_size', 20000000)  # ~ 160/320 MB
 
 
-INCORE_SIZE = 1e7
-BLOCK_SIZE  = int(20e6) # ~ 160/320 MB
 # PCCP, 4, 11
 # GEDIIS, JCTC, 2, 835
 # C2DIIS, IJQC, 45, 31

@@ -99,13 +99,7 @@ class UKS(pbcuhf.UHF):
     '''
     def __init__(self, cell, kpt=numpy.zeros(3)):
         pbcuhf.UHF.__init__(self, cell, kpt)
-        self.xc = 'LDA,VWN'
-        self.grids = gen_grid.UniformGrids(cell)
-        self.small_rho_cutoff = 1e-7  # Use rho to filter grids
-##################################################
-# don't modify the following attributes, they are not input options
-        self._numint = numint._NumInt()
-        self._keys = self._keys.union(['xc', 'grids', 'small_rho_cutoff'])
+        rks._dft_common_init_(self)
 
     def dump_flags(self):
         pbcuhf.UHF.dump_flags(self)

@@ -14,9 +14,12 @@
 # limitations under the License.
 
 from pyscf.lib.parameters import OUTPUT_DIGITS, OUTPUT_COLS
+from pyscf import __config__
+
+BASE = getattr(__config__, 'BASE', 0)
 
 def dump_tri(stdout, c, label=None,
-             ncol=OUTPUT_COLS, digits=OUTPUT_DIGITS, start=0):
+             ncol=OUTPUT_COLS, digits=OUTPUT_DIGITS, start=BASE):
     ''' Format print for the lower triangular part of an array
 
     Args:
@@ -85,7 +88,7 @@ def dump_tri(stdout, c, label=None,
                 stdout.write(('%12s' % label[ic+m+k]) + (fmt % tuple(v)))
 
 def dump_rec(stdout, c, label=None, label2=None,
-             ncol=OUTPUT_COLS, digits=OUTPUT_DIGITS, start=0):
+             ncol=OUTPUT_COLS, digits=OUTPUT_DIGITS, start=BASE):
     ''' Print an array in rectangular format
 
     Args:
@@ -152,7 +155,7 @@ def dump_rec(stdout, c, label=None, label2=None,
                 stdout.write(('%12s' % label[k]) + (fmt % tuple(v)))
 
 def dump_mo(mol, c, label=None,
-            ncol=OUTPUT_COLS, digits=OUTPUT_DIGITS, start=1):
+            ncol=OUTPUT_COLS, digits=OUTPUT_DIGITS, start=BASE):
     ''' Format print for orbitals
 
     Args:
@@ -186,6 +189,8 @@ def dump_mo(mol, c, label=None,
     if label is None:
         label = mol.ao_labels()
     dump_rec(mol.stdout, c, label, None, ncol, digits, start)
+
+del(BASE)
 
 
 if __name__ == '__main__':

@@ -30,6 +30,7 @@ from pyscf.lib import logger
 from pyscf.pbc.scf import hf as pbchf
 from pyscf.pbc.scf import addons
 from pyscf.pbc.scf import chkfile
+from pyscf import __config__
 
 
 def init_guess_by_chkfile(cell, chkfile_name, project=None, kpt=None):
@@ -89,7 +90,8 @@ def init_guess_by_chkfile(cell, chkfile_name, project=None, kpt=None):
 class UHF(mol_uhf.UHF, pbchf.SCF):
     '''UHF class for PBCs.
     '''
-    def __init__(self, cell, kpt=np.zeros(3), exxdiv='ewald'):
+    def __init__(self, cell, kpt=np.zeros(3),
+                 exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         pbchf.SCF.__init__(self, cell, kpt, exxdiv)
         self.nelec = cell.nelec
         self._keys = self._keys.union(['nelec'])

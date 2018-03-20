@@ -81,6 +81,7 @@ import sys
 import time
 
 from pyscf.lib import parameters as param
+import pyscf.__config__
 
 DEBUG4 = param.VERBOSE_DEBUG + 4
 DEBUG3 = param.VERBOSE_DEBUG + 3
@@ -99,7 +100,7 @@ CRIT   = param.VERBOSE_CRIT
 ALERT  = param.VERBOSE_ALERT
 PANIC  = param.VERBOSE_PANIC
 
-TIMER_LEVEL  = param.TIMER_LEVEL
+TIMER_LEVEL  = getattr(pyscf.__config__, 'TIMER_LEVEL', DEBUG)
 
 sys.verbose = NOTE
 

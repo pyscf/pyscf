@@ -29,6 +29,7 @@ from pyscf.scf import hf
 from pyscf.scf import jk
 from pyscf.dft import gen_grid
 from pyscf.dft import numint
+from pyscf import __config__
 
 
 def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
@@ -180,7 +181,7 @@ def energy_elec(ks, dm=None, h1e=None, vhf=None):
     return tot_e, vhf.ecoul+vhf.exc
 
 
-NELEC_ERROR_TOL = 0.01
+NELEC_ERROR_TOL = getattr(__config__, 'dft_rks_prune_error_tol', 0.02)
 def prune_small_rho_grids_(ks, mol, dm, grids):
     rho = ks._numint.get_rho(mol, dm, grids, ks.max_memory)
     n = numpy.dot(rho, grids.weights)
@@ -281,12 +282,18 @@ def _dft_common_init_(mf):
     mf.xc = 'LDA,VWN'
     mf.nlc = ''
     mf.grids = gen_grid.Grids(mf.mol)
+    mf.grids.level = getattr(__config__, 'dft_rks_RKS_grids_level',
+                             mf.grids.level)
     mf.nlcgrids = gen_grid.Grids(mf.mol)
-    mf.small_rho_cutoff = 1e-7  # Use rho to filter grids
+    mf.nlcgrids.level = getattr(__config__, 'dft_rks_RKS_nlcgrids_level',
+                                mf.nlcgrids.level)
+    # Use rho to filter grids
+    mf.small_rho_cutoff = getattr(__config__, 'dft_rks_RKS_small_rho_cutoff', 1e-7)
 ##################################################
 # don't modify the following attributes, they are not input options
     mf._numint = numint._NumInt()
-    mf._keys = mf._keys.union(['xc', 'nlc', 'grids', 'nlcgrids', 'small_rho_cutoff'])
+    mf._keys = mf._keys.union(['xc', 'nlc', 'grids', 'nlcgrids',
+                               'small_rho_cutoff'])
 
 
 if __name__ == '__main__':

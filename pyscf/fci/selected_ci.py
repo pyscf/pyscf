@@ -37,6 +37,7 @@ from pyscf import ao2mo
 from pyscf.fci import cistring
 from pyscf.fci import direct_spin1
 from pyscf.fci import rdm
+from pyscf import __config__
 
 libfci = lib.load_library('libfci')
 
@@ -408,11 +409,12 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
     namax = cistring.num_strings(norb, nelec[0])
     nbmax = cistring.num_strings(norb, nelec[1])
     e_last = 0
-    float_tol = 3e-4
+    float_tol = myci.start_tol
+    tol_decay_rate = myci.tol_decay_rate
     conv = False
     for icycle in range(norb):
         ci_strs = ci0[0]._strs
-        float_tol = max(float_tol*.3, tol*1e2)
+        float_tol = max(float_tol*tol_decay_rate, tol*1e2)
         log.debug('cycle %d  ci.shape %s  float_tol %g',
                   icycle, (len(ci_strs[0]), len(ci_strs[1])), float_tol)
 
@@ -718,18 +720,24 @@ def from_fci(fcivec, ci_strs, norb, nelec):
 
 
 class SelectedCI(direct_spin1.FCISolver):
+
+    ci_coeff_cutoff = getattr(__config__, 'fci_selected_ci_SCI_ci_coeff_cutoff', .5e-3)
+    select_cutoff = getattr(__config__, 'fci_selected_ci_SCI_select_cutoff', .5e-3)
+    conv_tol = getattr(__config__, 'fci_selected_ci_SCI_conv_tol', 1e-9)
+    start_tol = getattr(__config__, 'fci_selected_ci_SCI_start_tol', 3e-4)
+    tol_decay_rate = getattr(__config__, 'fci_selected_ci_SCI_tol_decay_rate', 0.3)
+
     def __init__(self, mol=None):
         direct_spin1.FCISolver.__init__(self, mol)
-        self.ci_coeff_cutoff = .5e-3
-        self.select_cutoff = .5e-3
-        self.conv_tol = 1e-9
 
 ##################################################
 # don't modify the following attributes, they are not input options
         #self.converged = False
         #self.ci = None
         self._strs = None
-        self._keys = set(self.__dict__.keys())
+        keys = set(('ci_coeff_cutoff', 'select_cutoff', 'conv_tol',
+                    'start_tol', 'tol_decay_rate'))
+        self._keys = set(self.__dict__.keys()).union(keys)
 
     def dump_flags(self, verbose=None):
         direct_spin1.FCISolver.dump_flags(self, verbose)

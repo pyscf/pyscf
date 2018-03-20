@@ -34,6 +34,7 @@ from pyscf.pbc.cc import kintermediates_rhf as imdk
 from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM
 from pyscf.lib import linalg_helper
 from pyscf.pbc.lib import kpts_helper
+from pyscf import __config__
 
 #einsum = np.einsum
 einsum = lib.einsum
@@ -261,17 +262,19 @@ def energy(cc, t1, t2, eris):
 
 class RCCSD(pyscf.cc.ccsd.CCSD):
 
+    max_space = getattr(__config__, 'pbc_cc_kccsd_rhf_KRCCSD_max_space', 20)
+
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
         assert(isinstance(mf, scf.khf.KSCF))
         pyscf.cc.ccsd.CCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
-        self.max_space = 20
-        self._keys = self._keys.union(['max_space'])
         self.kpts = mf.kpts
         self.mo_energy = mf.mo_energy
         self.khelper = kpts_helper.KptsHelper(mf.cell, mf.kpts)
         self.made_ee_imds = False
         self.made_ip_imds = False
         self.made_ea_imds = False
+
+        self._keys = self._keys.union(['max_space'])
 
     @property
     def nkpts(self):

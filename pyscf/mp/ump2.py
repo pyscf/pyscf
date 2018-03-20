@@ -25,10 +25,14 @@ from pyscf import ao2mo
 from pyscf.lib import logger
 from pyscf.mp import mp2
 from pyscf.ao2mo import _ao2mo
+from pyscf import __config__
+
+WITH_T2 = getattr(__config__, 'mp_ump2_with_t2', True)
+
 
 # This is unrestricted (U)MP2, i.e. spin-orbital form.
 
-def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=True,
+def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2,
            verbose=logger.NOTE):
     if mo_energy is None or mo_coeff is None:
         moidx = mp.get_frozen_mask()
@@ -304,7 +308,7 @@ class UMP2(mp2.MP2):
     get_frozen_mask = get_frozen_mask
 
     @lib.with_doc(mp2.MP2.kernel.__doc__)
-    def kernel(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=True):
+    def kernel(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2):
         return mp2.MP2.kernel(self, mo_energy, mo_coeff, eris, with_t2, kernel)
 
     def ao2mo(self, mo_coeff=None):
@@ -521,6 +525,8 @@ def _ao2mo_ovov(mp, orbs, feri, max_memory=2000, verbose=None):
                 time1 = log.timer_debug1('pass2 ao2mo for ab [%d:%d]' % (i0,i1), *time1)
 
     time0 = log.timer('mp2 ao2mo_ovov pass2', *time0)
+
+del(WITH_T2)
 
 
 if __name__ == '__main__':

@@ -29,6 +29,7 @@ from pyscf.pbc.scf import khf
 from pyscf.pbc.scf import ghf as pbcghf
 from pyscf.pbc.scf import addons
 from pyscf.pbc.df.df_jk import _format_jks
+from pyscf import __config__
 
 
 def get_jk(mf, cell=None, dm_kpts=None, hermi=0, kpts=None, kpts_band=None,
@@ -113,7 +114,8 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
 class KGHF(pbcghf.GHF, khf.KSCF):
     '''GHF class for PBCs.
     '''
-    def __init__(self, cell, kpts=np.zeros((1,3)), exxdiv='ewald'):
+    def __init__(self, cell, kpts=np.zeros((1,3)),
+                 exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         khf.KSCF.__init__(self, cell, kpts, exxdiv)
 
     def get_hcore(self, cell=None, kpts=None):

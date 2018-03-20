@@ -33,6 +33,7 @@ from pyscf.lib import logger
 from pyscf import ao2mo
 from pyscf import dft
 from pyscf.mp.mp2 import get_nocc, get_nmo, get_frozen_mask
+from pyscf import __config__
 
 einsum = lib.einsum
 
@@ -139,6 +140,10 @@ class GW(lib.StreamObject):
         mo_coeff
             Orbital coefficients
     '''
+
+    eta = getattr(__config__, 'gw_gw_GW_eta', 1e-3)
+    linearized = getattr(__config__, 'gw_gw_GW_linearized', False)
+
     def __init__(self, mf, tdmf, frozen=0):
         self.mol = mf.mol
         self._scf = mf
@@ -150,8 +155,6 @@ class GW(lib.StreamObject):
         #TODO: implement frozen orbs
         #self.frozen = frozen
         self.frozen = 0
-        self.eta = 1e-3
-        self.linearized = False
 
 ##################################################
 # don't modify the following attributes, they are not input options
@@ -160,7 +163,9 @@ class GW(lib.StreamObject):
         self.mo_energy = None
         self.mo_coeff = mf.mo_coeff
         self.mo_occ = mf.mo_occ
-        self._keys = set(self.__dict__.keys())
+
+        keys = set(('eta', 'linearized'))
+        self._keys = set(self.__dict__.keys()).union(keys)
 
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)

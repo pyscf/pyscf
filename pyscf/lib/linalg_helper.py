@@ -31,8 +31,30 @@ from pyscf.lib import parameters
 from pyscf.lib import logger
 from pyscf.lib import numpy_helper
 from pyscf.lib import misc
+from pyscf import __config__
 
-def safe_eigh(h, s, lindep=1e-15):
+SAFE_EIGH_LINDEP = getattr(__config__, 'lib_linalg_helper_safe_eigh_lindep', 1e-15)
+DAVIDSON_LINDEP = getattr(__config__, 'lib_linalg_helper_davidson_lindep', 1e-14)
+DSOLVE_LINDEP = getattr(__config__, 'lib_linalg_helper_dsolve_lindep', 1e-15)
+MAX_MEMORY = getattr(__config__, 'lib_linalg_helper_davidson_max_memory', 2000)  # 2GB
+
+# sort by similarity has problem which flips the ordering of eigenvalues when
+# the initial guess is closed to excited state.  In this situation, function
+# _sort_by_similarity may mark the excited state as the first eigenvalue and
+# freeze the first eigenvalue.
+SORT_EIG_BY_SIMILARITY = \
+        getattr(__config__, 'lib_linalg_helper_davidson_sort_eig_by_similiarity', False)
+# Projecting out converged eigenvectors has problems when conv_tol is loose.
+# In this situation, the converged eigenvectors may be updated in the
+# following iterations.  Projecting out the converged eigenvectors may lead to
+# large errors to the yet converged eigenvectors.
+PROJECT_OUT_CONV_EIGS = \
+        getattr(__config__, 'lib_linalg_helper_davidson_project_out_eigs', False)
+
+FOLLOW_STATE = getattr(__config__, 'lib_linalg_helper_davidson_follow_state', False)
+
+
+def safe_eigh(h, s, lindep=SAFE_EIGH_LINDEP):
     '''Solve generalized eigenvalue problem  h v = w s v.
 
     .. note::
@@ -144,20 +166,11 @@ def eigh_by_blocks(h, s=None, labels=None):
     idx = numpy.argsort(es)
     return es[idx], cs[:,idx]
 
-# sort by similarity has problem which flips the ordering of eigenvalues when
-# the initial guess is closed to excited state.  In this situation, function
-# _sort_by_similarity may mark the excited state as the first eigenvalue and
-# freeze the first eigenvalue.
-SORT_EIG_BY_SIMILARITY = False
-# Projecting out converged eigenvectors has problems when conv_tol is loose.
-# In this situation, the converged eigenvectors may be updated in the
-# following iterations.  Projecting out the converged eigenvectors may lead to
-# large errors to the yet converged eigenvectors.
-PROJECT_OUT_CONV_EIGS = False
-# default max_memory 2000 MB
 def davidson(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
-             lindep=1e-14, max_memory=2000, dot=numpy.dot, callback=None,
-             nroots=1, lessio=False, verbose=logger.WARN, follow_state=False):
+             lindep=DAVIDSON_LINDEP, max_memory=MAX_MEMORY,
+             dot=numpy.dot, callback=None,
+             nroots=1, lessio=False, verbose=logger.WARN,
+             follow_state=FOLLOW_STATE):
     '''Davidson diagonalization method to solve  a c = e c.  Ref
     [1] E.R. Davidson, J. Comput. Phys. 17 (1), 87-94 (1975).
     [2] http://people.inf.ethz.ch/arbenz/ewp/Lnotes/chapter11.pdf
@@ -240,8 +253,10 @@ def davidson(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         return e, x
 
 def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
-             lindep=1e-14, max_memory=2000, dot=numpy.dot, callback=None,
-             nroots=1, lessio=False, verbose=logger.WARN, follow_state=False):
+             lindep=DAVIDSON_LINDEP, max_memory=MAX_MEMORY,
+             dot=numpy.dot, callback=None,
+             nroots=1, lessio=False, verbose=logger.WARN,
+             follow_state=FOLLOW_STATE):
     '''Davidson diagonalization method to solve  a c = e c.  Ref
     [1] E.R. Davidson, J. Comput. Phys. 17 (1), 87-94 (1975).
     [2] http://people.inf.ethz.ch/arbenz/ewp/Lnotes/chapter11.pdf
@@ -526,9 +541,10 @@ def pick_real_eigs(w, v, nroots, x0):
     return w[idx].real, v[:,idx].real, idx
 
 def eig(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
-        lindep=1e-14, max_memory=2000, dot=numpy.dot, callback=None,
+        lindep=DAVIDSON_LINDEP, max_memory=MAX_MEMORY,
+        dot=numpy.dot, callback=None,
         nroots=1, lessio=False, left=False, pick=pick_real_eigs,
-        verbose=logger.WARN, follow_state=False):
+        verbose=logger.WARN, follow_state=FOLLOW_STATE):
     '''Davidson diagonalization to solve the non-symmetric eigenvalue problem
 
     Args:
@@ -626,9 +642,10 @@ def eig(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
 davidson_nosym = eig
 
 def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
-                    lindep=1e-14, max_memory=2000, dot=numpy.dot, callback=None,
+                    lindep=DAVIDSON_LINDEP, max_memory=MAX_MEMORY,
+                    dot=numpy.dot, callback=None,
                     nroots=1, lessio=False, left=False, pick=pick_real_eigs,
-                    verbose=logger.WARN, follow_state=False):
+                    verbose=logger.WARN, follow_state=FOLLOW_STATE):
     if isinstance(verbose, logger.Logger):
         log = verbose
     else:
@@ -820,7 +837,8 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         return conv, e, x0
 
 def dgeev(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
-          lindep=1e-14, max_memory=2000, dot=numpy.dot, callback=None,
+          lindep=DAVIDSON_LINDEP, max_memory=MAX_MEMORY,
+          dot=numpy.dot, callback=None,
           nroots=1, lessio=False, verbose=logger.WARN):
     '''Davidson diagonalization method to solve  A c = e B c.
 
@@ -883,7 +901,8 @@ def dgeev(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
         return e, x0
 
 def dgeev1(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
-          lindep=1e-14, max_memory=2000, dot=numpy.dot, callback=None,
+          lindep=DAVIDSON_LINDEP, max_memory=MAX_MEMORY,
+          dot=numpy.dot, callback=None,
           nroots=1, lessio=False, verbose=logger.WARN):
     '''Davidson diagonalization method to solve  A c = e B c.
 
@@ -1095,7 +1114,7 @@ def dgeev1(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
 
 
 def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
-           lindep=1e-15, callback=None, hermi=False, verbose=logger.WARN):
+           lindep=DSOLVE_LINDEP, callback=None, hermi=False, verbose=logger.WARN):
     '''Krylov subspace method to solve  (1+a) x = b.  Ref:
     J. A. Pople et al, Int. J.  Quantum. Chem.  Symp. 13, 225 (1979).
 
@@ -1203,7 +1222,7 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
 
 
 def dsolve(aop, b, precond, tol=1e-12, max_cycle=30, dot=numpy.dot,
-           lindep=1e-16, verbose=0):
+           lindep=DSOLVE_LINDEP, verbose=0):
     '''Davidson iteration to solve linear equation.  It works bad.
     '''
 
@@ -1338,6 +1357,8 @@ class _Xlist(list):
     def pop(self, index):
         key = self.index.pop(index)
         del(self.scr_h5[key])
+
+del(SAFE_EIGH_LINDEP, DAVIDSON_LINDEP, DSOLVE_LINDEP, MAX_MEMORY)
 
 
 if __name__ == '__main__':

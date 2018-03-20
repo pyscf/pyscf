@@ -42,6 +42,7 @@ from pyscf.fci import cistring
 from pyscf.fci import direct_spin1
 from pyscf.fci import addons
 from pyscf.fci.spin_op import contract_ss
+from pyscf import __config__
 
 libfci = lib.load_library('libfci')
 
@@ -271,10 +272,13 @@ def gen_str_irrep(strs, orbsym, link_index, rank_eri, irrep_eri):
 
 
 class FCISolver(direct_spin1.FCISolver):
+
+    davidson_only = getattr(__config__, 'fci_direct_spin1_symm_FCI_davidson_only', True)
+    # pspace may break point group symmetry
+    pspace_size = getattr(__config__, 'fci_direct_spin1_symm_FCI_pspace_size', 0)
+
     def __init__(self, mol=None, **kwargs):
         direct_spin1.FCISolver.__init__(self, mol, **kwargs)
-        self.davidson_only = True
-        self.pspace_size = 0  # Improper pspace size may break symmetry
         self.wfnsym = 0
 
     def dump_flags(self, verbose=None):

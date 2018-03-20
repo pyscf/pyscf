@@ -49,6 +49,7 @@ from pyscf.fci import cistring
 from pyscf.fci import rdm
 from pyscf.fci import spin_op
 from pyscf.fci.spin_op import contract_ss
+from pyscf import __config__
 
 libfci = lib.load_library('libfci')
 
@@ -589,6 +590,25 @@ class FCISolver(lib.StreamObject):
     >>> print(e)
     -14.4197890826
     '''
+
+    max_cycle = getattr(__config__, 'fci_direct_spin1_FCI_max_cycle', 100)
+    max_space = getattr(__config__, 'fci_direct_spin1_FCI_max_space', 12)
+    conv_tol = getattr(__config__, 'fci_direct_spin1_FCI_conv_tol', 1e-10)
+    lindep = getattr(__config__, 'fci_direct_spin1_FCI_lindep', 1e-14)
+
+    # level shift in precond
+    level_shift = getattr(__config__, 'fci_direct_spin1_FCI_level_shift', 1e-3)
+
+    # force the diagonlization use davidson iteration.  When the CI space
+    # is small, the solver exactly diagonlizes the Hamiltonian.  But this
+    # solution will ignore the initial guess.  Setting davidson_only can
+    # enforce the solution on the initial guess state
+    davidson_only = getattr(__config__, 'fci_direct_spin1_FCI_davidson_only', False)
+
+    pspace_size = getattr(__config__, 'fci_direct_spin1_FCI_pspace_size', 400)
+    threads = getattr(__config__, 'fci_direct_spin1_FCI_threads', None)
+    lessio = getattr(__config__, 'fci_direct_spin1_FCI_lessio', False)
+
     def __init__(self, mol=None):
         if mol is None:
             self.stdout = sys.stdout
@@ -599,33 +619,23 @@ class FCISolver(lib.StreamObject):
             self.verbose = mol.verbose
             self.max_memory = mol.max_memory
         self.mol = mol
-        self.max_cycle = 100
-        self.max_space = 12
-        self.conv_tol = 1e-10
-        self.lindep = 1e-14
-# level shift in precond
-        self.level_shift = 1e-3
-        # force the diagonlization use davidson iteration.  When the CI space
-        # is small, the solver exactly diagonlizes the Hamiltonian.  But this
-        # solution will ignore the initial guess.  Setting davidson_only can
-        # enforce the solution on the initial guess state
-        self.davidson_only = False
         self.nroots = 1
-        self.pspace_size = 400
         self.spin = None
 # Initialize symmetry attributes for the compatibility with direct_spin1_symm
 # solver.  They are not used by direct_spin1 solver.
         self.orbsym = None
         self.wfnsym = None
-        self.threads = None
-        self.lessio = False
 
         self.converged = False
         self.norb = None
         self.nelec = None
         self.eci = None
         self.ci = None
-        self._keys = set(self.__dict__.keys())
+
+        keys = set(('max_cycle', 'max_space', 'conv_tol', 'lindep',
+                    'level_shift', 'davidson_only', 'pspace_size', 'threads',
+                    'lessio'))
+        self._keys = set(self.__dict__.keys()).union(keys)
 
     @property
     def e_tot(self):
@@ -769,7 +779,9 @@ class FCISolver(lib.StreamObject):
         nelec = _unpack_nelec(nelec, self.spin)
         return trans_rdm12(cibra, ciket, norb, nelec, link_index, reorder)
 
-    def large_ci(self, fcivec, norb, nelec, tol=.1, return_strs=True):
+    def large_ci(self, fcivec, norb, nelec,
+                 tol=getattr(__config__, 'fci_addons_large_ci_tol', .1),
+                 return_strs=getattr(__config__, 'fci_addons_large_ci_return_strs', True)):
         from pyscf.fci import addons
         nelec = _unpack_nelec(nelec, self.spin)
         return addons.large_ci(fcivec, norb, nelec, tol, return_strs)

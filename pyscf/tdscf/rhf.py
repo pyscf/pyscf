@@ -31,6 +31,10 @@ from pyscf.dft import numint
 from pyscf.scf import hf_symm
 from pyscf.data import nist
 from pyscf.soscf.newton_ah import _gen_rhf_response
+from pyscf import __config__
+
+OUTPUT_THRESHOLD = getattr(__config__, 'tdscf_rhf_get_nto_threshold', 0.3)
+REAL_EIG_THRESHOLD = getattr(__config__, 'tdscf_rhf_TDDFT_pick_eig_threshold', 1e-4)
 
 
 def gen_tda_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
@@ -205,7 +209,7 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
 
     return a, b
 
-def get_nto(tdobj, state, threshold=0.3, verbose=None):
+def get_nto(tdobj, state=1, threshold=OUTPUT_THRESHOLD, verbose=None):
     r'''
     Natural transition orbital analysis.
 
@@ -391,6 +395,43 @@ def analyze(tdobj, verbose=None):
 # * velocity moment
 # * magnetic dipole
 
+def as_scanner(td):
+    '''Generating a scanner/solver for TDA/TDHF/TDDFT PES.
+
+    The returned solver is a function. This function requires one argument
+    "mol" as input and returns total TDA/TDHF/TDDFT energy.
+
+    The solver will automatically use the results of last calculation as the
+    initial guess of the new calculation.  All parameters assigned in the
+    TDA/TDDFT and the underlying SCF objects (conv_tol, max_memory etc) are
+    automatically applied in the solver.
+
+    Note scanner has side effects.  It may change many underlying objects
+    (_scf, with_df, with_x2c, ...) during calculation.
+
+    Examples::
+
+        >>> from pyscf import gto, scf, tdscf
+        >>> mol = gto.M(atom='H 0 0 0; F 0 0 1')
+        >>> td_scanner = tdscf.TDHF(scf.RHF(mol)).as_scanner()
+        >>> de = td_scanner(gto.M(atom='H 0 0 0; F 0 0 1.1'))
+        [ 0.34460866  0.34460866  0.7131453 ]
+        >>> de = td_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
+        [ 0.14844013  0.14844013  0.47641829]
+    '''
+    logger.info(td, 'Set %s as a scanner', td.__class__)
+    class TD_Scanner(td.__class__, lib.SinglePointScanner):
+        def __init__(self, td):
+            self.__dict__.update(td.__dict__)
+            self._scf = td._scf.as_scanner()
+        def __call__(self, mol, **kwargs):
+            mf_scanner = self._scf
+            mf_scanner(mol)
+            self.mol = mol
+            self.kernel(**kwargs)[0]
+            return self.e
+    return TD_Scanner(td)
+
 
 class TDA(lib.StreamObject):
     '''Tamm-Dancoff approximation
@@ -413,30 +454,33 @@ class TDA(lib.StreamObject):
             (X,Y) are normalized to 1/2 in RHF/RKS methods and normalized to 1
             for UHF/UKS methods. In the TDA calculation, Y = 0.
     '''
+    conv_tol = getattr(__config__, 'tdscf_rhf_TDA_conv_tol', 1e-9)
+    nstates = getattr(__config__, 'tdscf_rhf_TDA_nstates', 3)
+    singlet = getattr(__config__, 'tdscf_rhf_TDA_singlet', True)
+    lindep = getattr(__config__, 'tdscf_rhf_TDA_lindep', 1e-12)
+    level_shift = getattr(__config__, 'tdscf_rhf_TDA_level_shift', 0)
+    max_space = getattr(__config__, 'tdscf_rhf_TDA_max_space', 50)
+    max_cycle = getattr(__config__, 'tdscf_rhf_TDA_max_cycle', 100)
+
     def __init__(self, mf):
         self.verbose = mf.verbose
         self.stdout = mf.stdout
         self.mol = mf.mol
-        self.chkfile = mf.chkfile
         self._scf = mf
-
-        self.conv_tol = 1e-9
-        self.nstates = 3
-        self.singlet = True
-        self.wfnsym = None
-        self.lindep = 1e-12
-        self.level_shift = 0
-        self.max_space = 50
-        self.max_cycle = 100
         self.max_memory = mf.max_memory
         self.chkfile = mf.chkfile
+
+        self.wfnsym = None
 
         # xy = (X,Y), normalized to 1/2: 2(XX-YY) = 1
         # In TDA, Y = 0
         self.converged = None
         self.e = None
         self.xy = None
-        self._keys = set(self.__dict__.keys())
+
+        keys = set(('conv_tol', 'nstates', 'singlet', 'lindep', 'level_shift',
+                    'max_space', 'max_cycle'))
+        self._keys = set(self.__dict__.keys()).union(keys)
 
     @property
     def nroots(self):
@@ -538,6 +582,7 @@ class TDA(lib.StreamObject):
 
     analyze = analyze
     get_nto = get_nto
+    as_scanner = as_scanner
 
     def nuc_grad_method(self):
         from pyscf.grad import tdrhf
@@ -645,7 +690,8 @@ class TDHF(TDA):
 
         # We only need positive eigenvalues
         def pickeig(w, v, nroots, envs):
-            realidx = numpy.where((abs(w.imag) < 1e-4) & (w.real > 0))[0]
+            realidx = numpy.where((abs(w.imag) < REAL_EIG_THRESHOLD) &
+                                  (w.real > 0))[0]
             idx = realidx[w[realidx].real.argsort()]
             return w[idx].real, v[:,idx].real, idx
 
@@ -674,6 +720,8 @@ class TDHF(TDA):
     def nuc_grad_method(self):
         from pyscf.grad import tdrhf
         return tdrhf.Gradients(self)
+
+del(OUTPUT_THRESHOLD)
 
 
 if __name__ == '__main__':

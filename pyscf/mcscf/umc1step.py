@@ -16,6 +16,11 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+'''
+UCASSCF (CASSCF without spin-degeneracy between alpha and beta orbitals)
+1-step optimization algorithm
+'''
+
 import time
 import copy
 from functools import reduce
@@ -24,10 +29,11 @@ import scipy.linalg
 import pyscf.gto
 import pyscf.scf
 from pyscf.lib import logger
-from pyscf.mcscf import casci_uhf
+from pyscf.mcscf import ucasci
 from pyscf.mcscf.mc1step import expmat, rotate_orb_cc
-from pyscf.mcscf import mc_ao2mo_uhf
+from pyscf.mcscf import umc_ao2mo
 from pyscf.mcscf import chkfile
+from pyscf import __config__
 
 #FIXME:  when the number of core orbitals are different for alpha and beta,
 # the convergence are very unstable and slow
@@ -335,35 +341,43 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
     return conv, e_tot, e_ci, fcivec, mo
 
 
-class CASSCF(casci_uhf.CASCI):
-    def __init__(self, mf, ncas, nelecas, ncore=None, frozen=None):
-        casci_uhf.CASCI.__init__(self, mf, ncas, nelecas, ncore)
-        self.frozen = frozen
-        self.max_stepsize = .02
-        self.max_cycle_macro = 50
-        self.max_cycle_micro = 4
-        #self.max_cycle_micro_inner = 4
-        self.conv_tol = 1e-7
-        self.conv_tol_grad = None
-        # for augmented hessian
-        self.ah_level_shift = 1e-4
-        self.ah_conv_tol = 1e-12
-        self.ah_max_cycle = 30
-        self.ah_lindep = 1e-14
-        self.ah_start_tol = .2
-        self.ah_start_cycle = 2
-        self.ah_grad_trust_region = 3.
-        self.internal_rotation = False
-        self.chkfile = mf.chkfile
-        self.ci_response_space = 4
-        self.with_dep4 = False
-        self.natorb = False
-        self.callback = None
-        self.chk_ci = False
-        self.kf_interval = 4
-        self.kf_trust_region = 3.0
+class UCASSCF(ucasci.UCASCI):
+    max_stepsize = getattr(__config__, 'mcscf_umc1step_UCASSCF_max_stepsize', .02)
+    max_cycle_macro = getattr(__config__, 'mcscf_umc1step_UCASSCF_max_cycle_macro', 50)
+    max_cycle_micro = getattr(__config__, 'mcscf_umc1step_UCASSCF_max_cycle_micro', 4)
+    conv_tol = getattr(__config__, 'mcscf_umc1step_UCASSCF_conv_tol', 1e-7)
+    conv_tol_grad = getattr(__config__, 'mcscf_umc1step_UCASSCF_conv_tol_grad', None)
+    # for augmented hessian
+    ah_level_shift = getattr(__config__, 'mcscf_umc1step_UCASSCF_ah_level_shift', 1e-8)
+    ah_conv_tol = getattr(__config__, 'mcscf_umc1step_UCASSCF_ah_conv_tol', 1e-12)
+    ah_max_cycle = getattr(__config__, 'mcscf_umc1step_UCASSCF_ah_max_cycle', 30)
+    ah_lindep = getattr(__config__, 'mcscf_umc1step_UCASSCF_ah_lindep', 1e-14)
+    ah_start_tol = getattr(__config__, 'mcscf_umc1step_UCASSCF_ah_start_tol', 2.5)
+    ah_start_cycle = getattr(__config__, 'mcscf_umc1step_UCASSCF_ah_start_cycle', 3)
+    ah_grad_trust_region = getattr(__config__, 'mcscf_umc1step_UCASSCF_ah_grad_trust_region', 3.0)
 
-        self.fcisolver.max_cycle = 50
+    internal_rotation = getattr(__config__, 'mcscf_umc1step_UCASSCF_internal_rotation', False)
+    ci_response_space = getattr(__config__, 'mcscf_umc1step_UCASSCF_ci_response_space', 4)
+    with_dep4 = getattr(__config__, 'mcscf_umc1step_UCASSCF_with_dep4', False)
+    chk_ci = getattr(__config__, 'mcscf_umc1step_UCASSCF_chk_ci', False)
+    kf_interval = getattr(__config__, 'mcscf_umc1step_UCASSCF_kf_interval', 4)
+    kf_trust_region = getattr(__config__, 'mcscf_umc1step_UCASSCF_kf_trust_region', 3.0)
+
+    natorb = getattr(__config__, 'mcscf_umc1step_UCASSCF_natorb', False)
+    #canonicalization = getattr(__config__, 'mcscf_umc1step_UCASSCF_canonicalization', True)
+    #sorting_mo_energy = getattr(__config__, 'mcscf_umc1step_UCASSCF_sorting_mo_energy', False)
+
+    def __init__(self, mf, ncas, nelecas, ncore=None, frozen=None):
+        ucasci.UCASCI.__init__(self, mf, ncas, nelecas, ncore)
+        self.frozen = frozen
+
+        self.callback = None
+        self.chkfile = mf.chkfile
+
+        self.fcisolver.max_cycle = getattr(__config__,
+                                           'mcscf_umc1step_UCASSCF_fcisolver_max_cycle', 50)
+        self.fcisolver.conv_tol = getattr(__config__,
+                                          'mcscf_umc1step_UCASSCF_fcisolver_conv_tol', 1e-8)
 
 ##################################################
 # don't modify the following attributes, they are not input options
@@ -373,7 +387,16 @@ class CASSCF(casci_uhf.CASCI):
         self.converged = False
         self._max_stepsize = None
 
-        self._keys = set(self.__dict__.keys())
+        keys = set(('max_stepsize', 'max_cycle_macro', 'max_cycle_micro',
+                    'conv_tol', 'conv_tol_grad', 'ah_level_shift',
+                    'ah_conv_tol', 'ah_max_cycle', 'ah_lindep',
+                    'ah_start_tol', 'ah_start_cycle', 'ah_grad_trust_region',
+                    'internal_rotation', 'ci_response_space',
+                    'with_dep4', 'chk_ci',
+                    'kf_interval', 'kf_trust_region', 'fcisolver_max_cycle',
+                    'fcisolver_conv_tol', 'natorb', 'canonicalization',
+                    'sorting_mo_energy'))
+        self._keys = set(self.__dict__.keys()).union(keys)
 
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)
@@ -394,7 +417,6 @@ class CASSCF(casci_uhf.CASCI):
         log.info('max. micro cycles = %d', self.max_cycle_micro)
         log.info('conv_tol = %g', self.conv_tol)
         log.info('conv_tol_grad = %s', self.conv_tol_grad)
-        #log.info('max_cycle_micro_inner = %d', self.max_cycle_micro_inner)
         log.info('max. orb step = %g', self.max_stepsize)
         log.info('augmented hessian max_cycle = %d', self.ah_max_cycle)
         log.info('augmented hessian conv_tol = %g', self.ah_conv_tol)
@@ -434,7 +456,7 @@ class CASSCF(casci_uhf.CASCI):
                 _kern(self, mo_coeff,
                       tol=self.conv_tol, conv_tol_grad=self.conv_tol_grad,
                       ci0=ci0, callback=callback, verbose=self.verbose)
-        logger.note(self, 'CASSCF energy = %.15g', self.e_tot)
+        logger.note(self, 'UCASSCF energy = %.15g', self.e_tot)
         #if self.verbose >= logger.INFO:
         #    self.analyze(mo_coeff, self.ci, verbose=self.verbose)
         self._finalize()
@@ -444,8 +466,8 @@ class CASSCF(casci_uhf.CASCI):
         return self.kernel(mo_coeff, ci0, callback)
 
     def mc2step(self, mo_coeff=None, ci0=None, callback=None):
-        from pyscf.mcscf import mc2step_uhf
-        return self.kernel(mo_coeff, ci0, callback, mc2step_uhf.kernel)
+        from pyscf.mcscf import umc2step
+        return self.kernel(mo_coeff, ci0, callback, umc2step.kernel)
 
     def casci(self, mo_coeff, ci0=None, eris=None, verbose=None, envs=None):
         if eris is None:
@@ -462,13 +484,13 @@ class CASSCF(casci_uhf.CASCI):
                 verbose = self.verbose
             log = logger.Logger(self.stdout, verbose)
 
-        e_tot, e_ci, fcivec = casci_uhf.kernel(fcasci, mo_coeff, ci0, log)
+        e_tot, e_ci, fcivec = ucasci.kernel(fcasci, mo_coeff, ci0, log)
         if envs is not None and log.verbose >= logger.INFO:
             log.debug('CAS space CI energy = %.15g', e_ci)
 
             if 'imicro' in envs:  # Within CASSCF iteration
                 log.info('macro iter %d (%d JK  %d micro), '
-                         'CASSCF E = %.15g  dE = %.8g',
+                         'UCASSCF E = %.15g  dE = %.8g',
                          envs['imacro'], envs['njk'], envs['imicro'],
                          e_tot, e_tot-envs['elast'])
                 if 'norm_gci' in envs:
@@ -480,7 +502,7 @@ class CASSCF(casci_uhf.CASCI):
                     log.info('               |grad[o]|=%5.3g  |ddm|=%5.3g',
                              envs['norm_gorb0'], envs['norm_ddm'])
             else:  # Initialization step
-                log.info('CASCI E = %.15g', e_tot)
+                log.info('UCASCI E = %.15g', e_tot)
         return e_tot, e_ci, fcivec
 
     def uniq_var_indices(self, nmo, ncore, ncas, frozen):
@@ -571,7 +593,7 @@ class CASSCF(casci_uhf.CASCI):
 #        eris.apCV = numpy.copy(eriab[ncore[0]:nocc[0],:,:ncore[1],ncore[1]:])
 #        eris.APcv = numpy.copy(eriab[:ncore[0],ncore[0]:,ncore[1]:nocc[1],:].transpose(2,3,0,1))
 #        return eris
-        return mc_ao2mo_uhf._ERIS(self, mo)
+        return umc_ao2mo._ERIS(self, mo)
 
     def update_jk_in_ah(self, mo, r, casdm1s, eris):
         ncas = self.ncas
@@ -771,6 +793,8 @@ class CASSCF(casci_uhf.CASCI):
             self._max_stepsize = numpy.sqrt(self.max_stepsize*self.max_stepsize)
         return self._max_stepsize
 
+CASSCF = UCASSCF
+
 
 # to avoid calculating AO integrals
 def _fake_h_for_fast_casci(casscf, mo, eris):
@@ -821,7 +845,7 @@ if __name__ == '__main__':
 
     m = scf.UHF(mol)
     ehf = m.scf()
-    mc = CASSCF(m, 4, (2,1))
+    mc = UCASSCF(m, 4, (2,1))
     #mo = m.mo_coeff
     mo = addons.sort_mo(mc, m.mo_coeff, [(3,4,5,6),(3,4,6,7)], 1)
     emc = kernel(mc, mo, verbose=4)[1]
@@ -842,7 +866,7 @@ if __name__ == '__main__':
 
     m = scf.UHF(mol)
     ehf = m.scf()
-    mc = CASSCF(m, 4, (2,1))
+    mc = UCASSCF(m, 4, (2,1))
     mc.verbose = 4
     emc = mc.mc1step()[0]
     print(ehf, emc, emc-ehf)
@@ -850,7 +874,7 @@ if __name__ == '__main__':
           emc - -75.574137883405612, emc - -75.648547447838951)
 
 
-    mc = CASSCF(m, 4, (2,1))
+    mc = UCASSCF(m, 4, (2,1))
     mc.verbose = 4
     mo = mc.sort_mo((3,4,6,7))
     emc = mc.mc1step(mo)[0]

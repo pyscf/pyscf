@@ -180,8 +180,10 @@ from pyscf.mcscf import mc1step_symm
 from pyscf.mcscf import casci
 from pyscf.mcscf import casci_symm
 from pyscf.mcscf import addons
-from pyscf.mcscf import casci_uhf
-from pyscf.mcscf import mc1step_uhf
+from pyscf.mcscf import ucasci
+casci_uhf = ucasci  # for backward compatibility
+from pyscf.mcscf import umc1step
+mc1step_uhf = umc1step  # for backward compatibility
 from pyscf.mcscf.addons import *
 from pyscf.mcscf import chkfile
 
@@ -236,7 +238,7 @@ RCASCI = CASCI
 def UCASCI(mf, ncas, nelecas, **kwargs):
     from pyscf import scf
     if isinstance(mf, scf.uhf.UHF):
-        mc = casci_uhf.CASCI(mf, ncas, nelecas, **kwargs)
+        mc = ucasci.UCASCI(mf, ncas, nelecas, **kwargs)
     else:
         raise RuntimeError('First argument needs to be UHF object')
     return mc
@@ -245,7 +247,7 @@ def UCASCI(mf, ncas, nelecas, **kwargs):
 def UCASSCF(mf, ncas, nelecas, **kwargs):
     from pyscf import scf
     if isinstance(mf, scf.uhf.UHF):
-        mc = mc1step_uhf.CASSCF(mf, ncas, nelecas, **kwargs)
+        mc = umc1step.UCASSCF(mf, ncas, nelecas, **kwargs)
     else:
         raise RuntimeError('First argument needs to be UHF object')
     return mc
