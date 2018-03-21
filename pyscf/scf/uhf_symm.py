@@ -32,6 +32,7 @@ from pyscf.scf import chkfile
 from pyscf import __config__
 
 WITH_META_LOWDIN = getattr(__config__, 'scf_analyze_with_meta_lowdin', True)
+MO_BASE = getattr(__config__, 'MO_BASE', 1)
 
 
 def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
@@ -82,7 +83,8 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
             else:
                 irorbcnt[j] = 1
             log.note('alpha MO #%d (%s #%d), energy= %.15g occ= %g',
-                     k+1, irname_full[j], irorbcnt[j], mo_energy[0][k], mo_occ[0][k])
+                     k+MO_BASE, irname_full[j], irorbcnt[j],
+                     mo_energy[0][k], mo_occ[0][k])
         irorbcnt = {}
         for k, j in enumerate(orbsymb):
             if j in irorbcnt:
@@ -90,7 +92,8 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
             else:
                 irorbcnt[j] = 1
             log.note('beta  MO #%d (%s #%d), energy= %.15g occ= %g',
-                     k+1, irname_full[j], irorbcnt[j], mo_energy[1][k], mo_occ[1][k])
+                     k+MO_BASE, irname_full[j], irorbcnt[j],
+                     mo_energy[1][k], mo_occ[1][k])
 
     if mf.verbose >= logger.DEBUG:
         label = mol.ao_labels()
@@ -101,7 +104,8 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
                 irorbcnt[j] += 1
             else:
                 irorbcnt[j] = 1
-            molabel.append('#%-d(%s #%d)' % (k+1, irname_full[j], irorbcnt[j]))
+            molabel.append('#%-d(%s #%d)' %
+                           (k+MO_BASE, irname_full[j], irorbcnt[j]))
         if with_meta_lowdin:
             log.debug(' ** alpha MO coefficients (expansion on meta-Lowdin AOs) **')
             orth_coeff = orth.orth_ao(mol, 'meta_lowdin', s=ovlp_ao)
@@ -110,7 +114,7 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
         else:
             log.debug(' ** alpha MO coefficients (expansion on AOs) **')
             mo = mo_coeff[0]
-        dump_mat.dump_rec(mf.stdout, mo, label, start=1, **kwargs)
+        dump_mat.dump_rec(mf.stdout, mo, label, start=MO_BASE, **kwargs)
 
         molabel = []
         irorbcnt = {}
@@ -119,14 +123,15 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
                 irorbcnt[j] += 1
             else:
                 irorbcnt[j] = 1
-            molabel.append('#%-d(%s #%d)' % (k+1, irname_full[j], irorbcnt[j]))
+            molabel.append('#%-d(%s #%d)' %
+                           (k+MO_BASE, irname_full[j], irorbcnt[j]))
         if with_meta_lowdin:
             log.debug(' ** beta MO coefficients (expansion on meta-Lowdin AOs) **')
             mo = c_inv.dot(mo_coeff[1])
         else:
             log.debug(' ** beta MO coefficients (expansion on AOs) **')
             mo = c_inv.dot(mo_coeff[1])
-        dump_mat.dump_rec(mol.stdout, mo, label, molabel, start=1, **kwargs)
+        dump_mat.dump_rec(mol.stdout, mo, label, molabel, start=MO_BASE, **kwargs)
 
     dm = mf.make_rdm1(mo_coeff, mo_occ)
     return mf.mulliken_meta(mol, dm, s=ovlp_ao, verbose=log)

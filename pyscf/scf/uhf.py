@@ -28,6 +28,7 @@ from pyscf import __config__
 WITH_META_LOWDIN = getattr(__config__, 'scf_analyze_with_meta_lowdin', True)
 PRE_ORTH_METHOD = getattr(__config__, 'scf_analyze_pre_orth_method', 'ANO')
 BREAKSYM = getattr(__config__, 'scf_uhf_init_guess_breaksym', True)
+MO_BASE = getattr(__config__, 'MO_BASE', 1)
 
 
 def init_guess_by_minao(mol, breaksym=BREAKSYM):
@@ -432,7 +433,7 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
         log.note('                             alpha | beta                alpha | beta')
         for i in range(mo_occ.shape[1]):
             log.note('MO #%-3d energy= %-18.15g | %-18.15g occ= %g | %g',
-                     i+1, mo_energy[0][i], mo_energy[1][i],
+                     i+MO_BASE, mo_energy[0][i], mo_energy[1][i],
                      mo_occ[0][i], mo_occ[1][i])
 
     ovlp_ao = mf.get_ovlp()
@@ -442,16 +443,18 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
             log.debug(' ** MO coefficients (expansion on meta-Lowdin AOs) for alpha spin **')
             orth_coeff = orth.orth_ao(mf.mol, 'meta_lowdin', s=ovlp_ao)
             c_inv = numpy.dot(orth_coeff.T, ovlp_ao)
-            dump_mat.dump_rec(mf.stdout, c_inv.dot(mo_coeff[0]), label, start=1,
-                              **kwargs)
+            dump_mat.dump_rec(mf.stdout, c_inv.dot(mo_coeff[0]), label,
+                              start=MO_BASE, **kwargs)
             log.debug(' ** MO coefficients (expansion on meta-Lowdin AOs) for beta spin **')
-            dump_mat.dump_rec(mf.stdout, c_inv.dot(mo_coeff[1]), label, start=1,
-                              **kwargs)
+            dump_mat.dump_rec(mf.stdout, c_inv.dot(mo_coeff[1]), label,
+                              start=MO_BASE, **kwargs)
         else:
             log.debug(' ** MO coefficients (expansion on AOs) for alpha spin **')
-            dump_mat.dump_rec(mf.stdout, mo_coeff[0], label, start=1, **kwargs)
+            dump_mat.dump_rec(mf.stdout, mo_coeff[0], label,
+                              start=MO_BASE, **kwargs)
             log.debug(' ** MO coefficients (expansion on AOs) for beta spin **')
-            dump_mat.dump_rec(mf.stdout, mo_coeff[1], label, start=1, **kwargs)
+            dump_mat.dump_rec(mf.stdout, mo_coeff[1], label,
+                              start=MO_BASE, **kwargs)
 
     dm = mf.make_rdm1(mo_coeff, mo_occ)
     if with_meta_lowdin:

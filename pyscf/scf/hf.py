@@ -37,6 +37,7 @@ from pyscf import __config__
 
 WITH_META_LOWDIN = getattr(__config__, 'scf_analyze_with_meta_lowdin', True)
 PRE_ORTH_METHOD = getattr(__config__, 'scf_analyze_pre_orth_method', 'ANO')
+MO_BASE = getattr(__config__, 'MO_BASE', 1)
 
 def kernel(mf, conv_tol=1e-10, conv_tol_grad=None,
            dump_chk=True, dm0=None, callback=None, conv_check=True, **kwargs):
@@ -807,7 +808,8 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
     if log.verbose >= logger.NOTE:
         log.note('**** MO energy ****')
         for i,c in enumerate(mo_occ):
-            log.note('MO #%-3d energy= %-18.15g occ= %g', i+1, mo_energy[i], c)
+            log.note('MO #%-3d energy= %-18.15g occ= %g', i+MO_BASE,
+                     mo_energy[i], c)
 
     ovlp_ao = mf.get_ovlp()
     if verbose >= logger.DEBUG:
@@ -819,7 +821,7 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
         else:
             log.debug(' ** MO coefficients (expansion on AOs) **')
             c = mo_coeff
-        dump_mat.dump_rec(mf.stdout, c, label, start=1, **kwargs)
+        dump_mat.dump_rec(mf.stdout, c, label, start=MO_BASE, **kwargs)
     dm = mf.make_rdm1(mo_coeff, mo_occ)
     if with_meta_lowdin:
         return (mf.mulliken_meta(mf.mol, dm, s=ovlp_ao, verbose=log),

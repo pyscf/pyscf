@@ -29,6 +29,9 @@ from pyscf.lib import logger
 from pyscf.scf import hf_symm
 from pyscf.scf import ghf
 from pyscf.scf import chkfile
+from pyscf import __config__
+
+MO_BASE = getattr(__config__, 'MO_BASE', 1)
 
 
 def analyze(mf, verbose=logger.DEBUG, **kwargs):
@@ -60,7 +63,8 @@ def analyze(mf, verbose=logger.DEBUG, **kwargs):
             else:
                 irorbcnt[j] = 1
             log.note('MO #%d (%s #%d), energy= %.15g occ= %g',
-                     k+1, irname_full[j], irorbcnt[j], mo_energy[k], mo_occ[k])
+                     k+MO_BASE, irname_full[j], irorbcnt[j], mo_energy[k],
+                     mo_occ[k])
 
     dm = mf.make_rdm1(mo_coeff, mo_occ)
     return mf.mulliken_meta(mol, dm, s=ovlp_ao, verbose=log)

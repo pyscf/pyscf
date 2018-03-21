@@ -31,6 +31,7 @@ from pyscf.scf import chkfile
 from pyscf import __config__
 
 PRE_ORTH_METHOD = getattr(__config__, 'scf_analyze_pre_orth_method', 'ANO')
+MO_BASE = getattr(__config__, 'MO_BASE', 1)
 
 
 def get_jk(mol, dm, hermi=0,
@@ -228,7 +229,7 @@ def analyze(mf, verbose=logger.DEBUG, **kwargs):
 
     log.note('**** MO energy ****')
     for i,c in enumerate(mo_occ):
-        log.note('MO #%-3d energy= %-18.15g occ= %g', i+1, mo_energy[i], c)
+        log.note('MO #%-3d energy= %-18.15g occ= %g', i+MO_BASE, mo_energy[i], c)
     ovlp_ao = mf.get_ovlp()
     dm = mf.make_rdm1(mo_coeff, mo_occ)
     return (mf.mulliken_meta(mf.mol, dm, s=ovlp_ao, verbose=log),

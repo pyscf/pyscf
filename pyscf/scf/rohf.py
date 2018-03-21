@@ -31,6 +31,7 @@ import pyscf.scf.chkfile
 from pyscf import __config__
 
 WITH_META_LOWDIN = getattr(__config__, 'scf_analyze_with_meta_lowdin', True)
+MO_BASE = getattr(__config__, 'MO_BASE', 1)
 
 
 def init_guess_by_minao(mol):
@@ -256,10 +257,11 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
             log.note('                Roothaan           | alpha              | beta')
             for i,c in enumerate(mo_occ):
                 log.note('MO #%-3d energy= %-18.15g | %-18.15g | %-18.15g occ= %g',
-                         i+1, mo_energy[i], mo_ea[i], mo_eb[i], c)
+                         i+MO_BASE, mo_energy[i], mo_ea[i], mo_eb[i], c)
         else:
             for i,c in enumerate(mo_occ):
-                log.note('MO #%-3d energy= %-18.15g occ= %g', i+1, mo_energy[i], c)
+                log.note('MO #%-3d energy= %-18.15g occ= %g',
+                         i+MO_BASE, mo_energy[i], c)
 
     ovlp_ao = mf.get_ovlp()
     if log.verbose >= logger.DEBUG:
@@ -271,7 +273,7 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
         else:
             log.debug(' ** MO coefficients (expansion on AOs) **')
             c = mo_coeff
-        dump_mat.dump_rec(mf.stdout, c, label, start=1, **kwargs)
+        dump_mat.dump_rec(mf.stdout, c, label, start=MO_BASE, **kwargs)
     dm = mf.make_rdm1(mo_coeff, mo_occ)
     if with_meta_lowdin:
         return mf.mulliken_meta(mf.mol, dm, s=ovlp_ao, verbose=log)

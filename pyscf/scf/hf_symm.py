@@ -39,6 +39,7 @@ from pyscf.scf import chkfile
 from pyscf import __config__
 
 WITH_META_LOWDIN = getattr(__config__, 'scf_analyze_with_meta_lowdin', True)
+MO_BASE = getattr(__config__, 'MO_BASE', 1)
 
 
 # mo_energy, mo_coeff, mo_occ are all in nosymm representation
@@ -78,7 +79,8 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
             else:
                 irorbcnt[j] = 1
             log.note('MO #%d (%s #%d), energy= %.15g occ= %g',
-                     k+1, irname_full[j], irorbcnt[j], mo_energy[k], mo_occ[k])
+                     k+MO_BASE, irname_full[j], irorbcnt[j],
+                     mo_energy[k], mo_occ[k])
 
     if log.verbose >= logger.DEBUG:
         label = mol.ao_labels()
@@ -89,7 +91,8 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
                 irorbcnt[j] += 1
             else:
                 irorbcnt[j] = 1
-            molabel.append('#%-d(%s #%d)' % (k+1, irname_full[j], irorbcnt[j]))
+            molabel.append('#%-d(%s #%d)' %
+                           (k+MO_BASE, irname_full[j], irorbcnt[j]))
         if with_meta_lowdin:
             log.debug(' ** MO coefficients (expansion on meta-Lowdin AOs) **')
             orth_coeff = orth.orth_ao(mol, 'meta_lowdin', s=ovlp_ao)
@@ -97,7 +100,7 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
         else:
             log.debug(' ** MO coefficients (expansion on AOs) **')
             c = mo_coeff
-        dump_mat.dump_rec(mf.stdout, c, label, molabel, start=1, **kwargs)
+        dump_mat.dump_rec(mf.stdout, c, label, molabel, start=MO_BASE, **kwargs)
 
     dm = mf.make_rdm1(mo_coeff, mo_occ)
     return mf.mulliken_meta(mol, dm, s=ovlp_ao, verbose=log)
@@ -702,7 +705,7 @@ class SymAdaptedROHF(rohf.ROHF):
                     else:
                         irorbcnt[j] = 1
                     log.note('MO #%-4d(%-3s #%-2d) energy= %-18.15g | %-18.15g | %-18.15g occ= %g',
-                             k+1, irname_full[j], irorbcnt[j],
+                             k+MO_BASE, irname_full[j], irorbcnt[j],
                              mo_energy[k], mo_ea[k], mo_eb[k], mo_occ[k])
             else:
                 for k, j in enumerate(orbsym):
@@ -711,7 +714,7 @@ class SymAdaptedROHF(rohf.ROHF):
                     else:
                         irorbcnt[j] = 1
                     log.note('MO #%-3d (%s #%-2d), energy= %-18.15g occ= %g',
-                             k+1, irname_full[j], irorbcnt[j],
+                             k+MO_BASE, irname_full[j], irorbcnt[j],
                              mo_energy[k], mo_occ[k])
 
         if log.verbose >= logger.DEBUG:
@@ -723,7 +726,8 @@ class SymAdaptedROHF(rohf.ROHF):
                     irorbcnt[j] += 1
                 else:
                     irorbcnt[j] = 1
-                molabel.append('#%-d(%s #%d)' % (k+1, irname_full[j], irorbcnt[j]))
+                molabel.append('#%-d(%s #%d)' %
+                               (k+MO_BASE, irname_full[j], irorbcnt[j]))
             if with_meta_lowdin:
                 log.debug(' ** MO coefficients (expansion on meta-Lowdin AOs) **')
                 orth_coeff = orth.orth_ao(mol, 'meta_lowdin', s=ovlp_ao)
@@ -731,7 +735,7 @@ class SymAdaptedROHF(rohf.ROHF):
             else:
                 log.debug(' ** MO coefficients (expansion on AOs) **')
                 c = mo_coeff
-            dump_mat.dump_rec(self.stdout, c, label, molabel, start=1, **kwargs)
+            dump_mat.dump_rec(self.stdout, c, label, molabel, start=MO_BASE, **kwargs)
 
         dm = self.make_rdm1(mo_coeff, mo_occ)
         return self.mulliken_meta(mol, dm, s=ovlp_ao, verbose=verbose)
