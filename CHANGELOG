@@ -45,6 +45,7 @@ PySCF 1.5 alpha (2018-03-??)
   - Performance of ECP integrals
   - Prescreening for PBC 3-center integrals
   - G0W0
+  - KMP2 memory footprint
 
 
 PySCF 1.4.3 (2018-01-17)

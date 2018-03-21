@@ -38,7 +38,8 @@ class TDDFT(uhf.TDHF):
         raise NotImplementedError
         from pyscf.grad import tduks
         return tduks.Gradients(self)
-RPA = TDDFT
+
+RPA = TDUKS = TDDFT
 
 
 class TDDFTNoHybrid(TDA):
@@ -181,6 +182,27 @@ class TDDFTNoHybrid(TDA):
         raise NotImplementedError
         from pyscf.grad import tduks
         return tduks.Gradients(self)
+
+
+class dRPA(TDDFTNoHybrid):
+    def __init__(self, mf):
+        if not hasattr(mf, 'xc'):
+            raise RuntimeError("direct RPA can only be applied with DFT; for HF+dRPA, use .xc='hf'")
+        from pyscf import scf
+        mf = scf.addons.convert_to_uhf(mf)
+        mf.xc = ''
+        TDDFTNoHybrid.__init__(self, mf)
+
+TDH = dRPA
+
+class dTDA(TDA):
+    def __init__(self, mf):
+        if not hasattr(mf, 'xc'):
+            raise RuntimeError("direct TDA can only be applied with DFT; for HF+dTDA, use .xc='hf'")
+        from pyscf import scf
+        mf = scf.addons.convert_to_uhf(mf)
+        mf.xc = ''
+        TDA.__init__(self, mf)
 
 
 if __name__ == '__main__':

@@ -844,6 +844,8 @@ class TDHF(TDA):
         from pyscf.grad import tduhf
         return tduhf.Gradients(self)
 
+RPA = TDUHF = TDHF
+
 del(OUTPUT_THRESHOLD)
 
 

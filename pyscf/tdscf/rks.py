@@ -40,7 +40,8 @@ class TDDFT(rhf.TDHF):
     def nuc_grad_method(self):
         from pyscf.grad import tdrks
         return tdrks.Gradients(self)
-RPA = TDDFT
+
+RPA = TDRKS = TDDFT
 
 class TDDFTNoHybrid(TDA):
     ''' Solve (A-B)(A+B)(X+Y) = (X+Y)w^2

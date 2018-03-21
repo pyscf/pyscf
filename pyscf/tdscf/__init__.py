@@ -19,9 +19,12 @@ from pyscf.tdscf import rhf
 from pyscf.tdscf import uhf
 from pyscf.tdscf import rks
 from pyscf.tdscf import uks
-from pyscf.tdscf.rhf import CIS
-from pyscf.tdscf.rks import dRPA, dTDA
+from pyscf.tdscf.rhf import TDRHF
+from pyscf.tdscf.uhf import TDRKS
+from pyscf.tdscf.rks import TDUHF
+from pyscf.tdscf.uks import TDUKS
 from pyscf import scf
+
 
 def TDHF(mf):
     if hasattr(mf, 'xc'):
@@ -69,3 +72,18 @@ def TDDFT(mf):
 
 TD = TDDFT
 
+
+def RPA(mf):
+    return TDDFT(mf)
+
+def dRPA(mf):
+    if isinstance(mf, scf.uhf.UHF):
+        return uks.dRPA(mf)
+    else:
+        return rks.dRPA(mf)
+
+def dTDA(mf):
+    if isinstance(mf, scf.uhf.UHF):
+        return uks.dTDA(mf)
+    else:
+        return rks.dTDA(mf)
