@@ -20,8 +20,8 @@ from pyscf.tdscf import uhf
 from pyscf.tdscf import rks
 from pyscf.tdscf import uks
 from pyscf.tdscf.rhf import TDRHF
-from pyscf.tdscf.uhf import TDRKS
-from pyscf.tdscf.rks import TDUHF
+from pyscf.tdscf.rks import TDRKS
+from pyscf.tdscf.uhf import TDUHF
 from pyscf.tdscf.uks import TDUKS
 from pyscf import scf
 
