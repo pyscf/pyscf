@@ -5,9 +5,10 @@
 Python-based Simulations of Chemistry Framework
 ===============================================
 
-2018-01-17
+2018-03-20
 
-* [Stable release 1.4.3](https://github.com/sunqm/pyscf/releases/tag/v1.4.3)
+* [Stable release 1.4.4](https://github.com/sunqm/pyscf/releases/tag/v1.4.4)
+* [1.5 alpha](https://github.com/sunqm/pyscf/releases/tag/v1.5-alpha)
 * [Changelog](../master/CHANGELOG)
 * [Documentation](http://www.pyscf.org)
 * [Installation](#installation)
@@ -19,7 +20,7 @@ Installation
 
 * Prerequisites
     - Cmake 2.8 or higher
-    - Python 2.6, 2.7, 3.2 or higher
+    - Python 2.6, 2.7, 3.4 or higher
     - Numpy 1.8.0 or higher
     - Scipy 0.10 or higher (0.12.0 or higher for python 3.4 - 3.6)
     - h5py 2.3.0 or higher (requires HDF5 1.8.4 or higher)
