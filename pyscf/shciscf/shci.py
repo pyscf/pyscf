@@ -241,8 +241,8 @@ class SHCI(pyscf.lib.StreamObject):
         file2pdm = "%s/spatialRDM.%d.%d.txt"%(self.prefix,state, state)
         r2RDM( twopdm, norb, file2pdm )
 
-        #if (SHCI.groupname == 'Dooh' or SHCI.groupname == 'Cooh') and SHCI.useExtraSymm:
-        if (self.groupname == 'Dooh' or self.groupname == 'Cooh') and self.useExtraSymm:
+        #if (SHCI.groupname == 'Dooh' or SHCI.groupname == 'Coov') and SHCI.useExtraSymm:
+        if (self.groupname == 'Dooh' or self.groupname == 'Coov') and self.useExtraSymm:
            nRows, rowIndex, rowCoeffs = DinfhtoD2h(self, norb, nelec)
            twopdmcopy = 1.*twopdm
            twopdm = 0.*twopdm
@@ -748,7 +748,7 @@ def writeIntegralFile(SHCI, h1eff, eri_cas, norb, nelec, ecore=0):
     from pyscf import symm
     from pyscf.dmrgscf import dmrg_sym
 
-    if (SHCI.groupname == 'Dooh' or SHCI.groupname == 'Cooh') and SHCI.useExtraSymm:
+    if (SHCI.groupname == 'Dooh' or SHCI.groupname == 'Coov') and SHCI.useExtraSymm:
        eri_cas = pyscf.ao2mo.restore(1, eri_cas, norb)
        coeffs, nRows, rowIndex, rowCoeffs, orbsym = D2htoDinfh(SHCI, norb, nelec)
 
