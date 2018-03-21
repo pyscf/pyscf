@@ -25,7 +25,7 @@ W90LIB = 'libwannier90-path'
 import numpy as np
 import scipy
 import cmath, os
-import pyscf.lib.parameters as param
+import pyscf.data.nist as param
 from pyscf import lib
 from pyscf.pbc import df
 from pyscf.pbc.dft import gen_grid, numint
