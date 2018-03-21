@@ -25,6 +25,10 @@ from pyscf.tdscf import uhf
 from pyscf.scf import uhf_symm
 from pyscf.ao2mo import _ao2mo
 from pyscf.soscf.newton_ah import _gen_uhf_response
+from pyscf import __config__
+
+# Low excitation filter to avoid numerical instability
+POSTIVE_EIG_THRESHOLD = getattr(__config__, 'tdscf_rhf_TDDFT_positive_eig_threshold', 1e-3)
 
 
 class TDA(uhf.TDA):
@@ -156,7 +160,7 @@ class TDDFTNoHybrid(TDA):
         e = []
         xy = []
         for i, z in enumerate(x1):
-            if w2[i] < 0:
+            if w2[i] < POSTIVE_EIG_THRESHOLD**2:
                 continue
             w = numpy.sqrt(w2[i])
             zp = eai * z

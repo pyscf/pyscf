@@ -29,6 +29,10 @@ from pyscf.tdscf import rhf
 from pyscf.scf import hf_symm
 from pyscf.ao2mo import _ao2mo
 from pyscf.soscf.newton_ah import _gen_rhf_response
+from pyscf import __config__
+
+# Low excitation filter to avoid numerical instability
+POSTIVE_EIG_THRESHOLD = getattr(__config__, 'tdscf_rhf_TDDFT_positive_eig_threshold', 1e-3)
 
 
 class TDA(rhf.TDA):
@@ -135,8 +139,9 @@ class TDDFTNoHybrid(TDA):
             norm = numpy.sqrt(.5/norm)  # normalize to 0.5 for alpha spin
             return (x*norm, y*norm)
 
-        self.e = numpy.sqrt(w2)
-        self.xy = [norm_xy(self.e[i], z) for i, z in enumerate(x1)]
+        idx = numpy.where(w2 > POSTIVE_EIG_THRESHOLD**2)[0]
+        self.e = numpy.sqrt(w2[idx])
+        self.xy = [norm_xy(self.e[i], x1[i]) for i in idx]
         return self.e, self.xy
 
     def nuc_grad_method(self):

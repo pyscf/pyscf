@@ -41,7 +41,7 @@ CLASSIFIERS = [
 'Development Status :: 5 - Production/Stable',
 'Intended Audience :: Science/Research',
 'Intended Audience :: Developers',
-'License :: OSI Approved :: BSD License',
+'License :: OSI Approved :: Apache Software License',
 'Programming Language :: C',
 'Programming Language :: Python',
 'Programming Language :: Python :: 2.7',
@@ -62,7 +62,7 @@ DESCRIPTION      = 'PySCF: Python-based Simulations of Chemistry Framework'
 #LONG_DESCRIPTION = ''
 URL              = 'http://www.pyscf.org'
 DOWNLOAD_URL     = 'http://github.com/sunqm/pyscf'
-LICENSE          = 'BSD 2-clause "Simplified" License (BSD2)'
+LICENSE          = 'Apache License 2.0'
 AUTHOR           = 'Qiming Sun'
 AUTHOR_EMAIL     = 'osirpt.sun@gmail.com'
 PLATFORMS        = ['Linux', 'Mac OS-X', 'Unix']

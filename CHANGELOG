@@ -53,9 +53,9 @@ PySCF 1.5 alpha (2018-03-??)
 PySCF 1.4.4 (2018-03-20)
 -----------------------
 * Improved
-  - Imaginary part in non-hermitian matrix diagonalization
+  - Non-Hermitian matrix diagonalization
   - Symmetric grids in cubegen
-  - FCI initial guess when system has Dooh or Doov symmetry
+  - FCI initial guess when the system has Dooh or Doov symmetry
   - Using stable sort when sorting orbital energies
   - Attribute "e_tot" in the MP2 methods to access the total energy
 * Bugfix

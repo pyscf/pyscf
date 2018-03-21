@@ -38,6 +38,9 @@ OUTPUT_THRESHOLD = getattr(__config__, 'tdscf_rhf_get_nto_threshold', 0.3)
 REAL_EIG_THRESHOLD = getattr(__config__, 'tdscf_rhf_TDDFT_pick_eig_threshold', 1e-4)
 MO_BASE = getattr(__config__, 'MO_BASE', 1)
 
+# Low excitation filter to avoid numerical instability
+POSTIVE_EIG_THRESHOLD = getattr(__config__, 'tdscf_rhf_TDDFT_positive_eig_threshold', 1e-3)
+
 
 def gen_tda_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
     '''Generate function to compute (A+B)x
@@ -870,7 +873,7 @@ class TDHF(TDA):
         # We only need positive eigenvalues
         def pickeig(w, v, nroots, envs):
             realidx = numpy.where((abs(w.imag) < REAL_EIG_THRESHOLD) &
-                                  (w.real > 0))[0]
+                                  (w.real > POSTIVE_EIG_THRESHOLD))[0]
             idx = realidx[w[realidx].real.argsort()]
             return w[idx].real, v[:,idx].real, idx
 
