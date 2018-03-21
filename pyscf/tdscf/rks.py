@@ -40,7 +40,6 @@ class TDDFT(rhf.TDHF):
     def nuc_grad_method(self):
         from pyscf.grad import tdrks
         return tdrks.Gradients(self)
-
 RPA = TDDFT
 
 class TDDFTNoHybrid(TDA):
@@ -104,6 +103,8 @@ class TDDFTNoHybrid(TDA):
         self.dump_flags()
         if nstates is None:
             nstates = self.nstates
+        else:
+            self.nstates = nstates
 
         vind, hdiag = self.gen_vind(self._scf)
         precond = self.get_precond(hdiag)

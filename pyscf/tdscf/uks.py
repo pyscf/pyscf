@@ -27,9 +27,18 @@ from pyscf.ao2mo import _ao2mo
 from pyscf.soscf.newton_ah import _gen_uhf_response
 
 
-TDA = uhf.TDA
+class TDA(uhf.TDA):
+    def nuc_grad_method(self):
+        raise NotImplementedError
+        from pyscf.grad import tduks
+        return tduks.Gradients(self)
 
-RPA = TDDFT = uhf.TDHF
+class TDDFT(uhf.TDHF):
+    def nuc_grad_method(self):
+        raise NotImplementedError
+        from pyscf.grad import tduks
+        return tduks.Gradients(self)
+RPA = TDDFT
 
 
 class TDDFTNoHybrid(TDA):
@@ -112,6 +121,8 @@ class TDDFTNoHybrid(TDA):
         self.dump_flags()
         if nstates is None:
             nstates = self.nstates
+        else:
+            self.nstates = nstates
 
         vind, hdiag = self.get_vind(self._scf)
         precond = self.get_precond(hdiag)
@@ -119,11 +130,12 @@ class TDDFTNoHybrid(TDA):
         if x0 is None:
             x0 = self.init_guess(self._scf, self.nstates)
 
-        w2, x1 = lib.davidson1(vind, x0, precond,
-                               tol=self.conv_tol,
-                               nroots=nstates, lindep=self.lindep,
-                               max_space=self.max_space,
-                               verbose=self.verbose)[1:]
+        self.converged, w2, x1 = \
+                lib.davidson1(vind, x0, precond,
+                              tol=self.conv_tol,
+                              nroots=nstates, lindep=self.lindep,
+                              max_space=self.max_space,
+                              verbose=self.verbose)
 
         mo_energy = self._scf.mo_energy
         mo_occ = self._scf.mo_occ
@@ -160,7 +172,15 @@ class TDDFTNoHybrid(TDA):
                             y[nocca*nvira:].reshape(nvirb,noccb) * norm)))# Y_beta
         self.e = numpy.array(e)
         self.xy = xy
+
+        lib.chkfile.save(self.chkfile, 'tddft/e', self.e)
+        lib.chkfile.save(self.chkfile, 'tddft/xy', self.xy)
         return self.e, self.xy
+
+    def nuc_grad_method(self):
+        raise NotImplementedError
+        from pyscf.grad import tduks
+        return tduks.Gradients(self)
 
 
 if __name__ == '__main__':

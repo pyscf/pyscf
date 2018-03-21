@@ -19,27 +19,53 @@ from pyscf.tdscf import rhf
 from pyscf.tdscf import uhf
 from pyscf.tdscf import rks
 from pyscf.tdscf import uks
-from pyscf.tdscf.rhf import TDHF, CIS
+from pyscf.tdscf.rhf import CIS
 from pyscf.tdscf.rks import dRPA, dTDA
 from pyscf import scf
 
-def TD(mf):
-    mf = scf.addons.convert_to_rhf(mf)
-    return TDDFT(mf)
+def TDHF(mf):
+    if hasattr(mf, 'xc'):
+        raise RuntimeError('TDHF does not support DFT object %s' % mf)
+    if isinstance(mf, scf.uhf.UHF):
+        mf = scf.addons.convert_to_uhf(mf)
+        return uhf.TDHF(mf)
+    else:
+        mf = scf.addons.convert_to_rhf(mf)
+        return rhf.TDHF(mf)
 
 def TDA(mf):
-    mf = scf.addons.convert_to_rhf(mf)
-    if hasattr(mf, 'xc'):
-        return rks.TDA(mf)
+    if isinstance(mf, scf.uhf.UHF):
+        mf = scf.addons.convert_to_uhf(mf)
+        if hasattr(mf, 'xc'):
+            return uks.TDA(mf)
+        else:
+            return uhf.TDA(mf)
     else:
-        return rhf.TDA(mf)
+        mf = scf.addons.convert_to_rhf(mf)
+        if hasattr(mf, 'xc'):
+            return rks.TDA(mf)
+        else:
+            return rhf.TDA(mf)
 
 def TDDFT(mf):
-    mf = scf.addons.convert_to_rhf(mf)
-    if hasattr(mf, 'xc'):
-        if mf._numint.libxc.is_hybrid_xc(mf.xc):
-            return rks.TDDFT(mf)
+    if isinstance(mf, scf.uhf.UHF):
+        mf = scf.addons.convert_to_uhf(mf)
+        if hasattr(mf, 'xc'):
+            if mf._numint.libxc.is_hybrid_xc(mf.xc):
+                return uks.TDDFT(mf)
+            else:
+                return uks.TDDFTNoHybrid(mf)
         else:
-            return rks.TDDFTNoHybrid(mf)
+            return uhf.TDHF(mf)
     else:
-        return rhf.TDHF(mf)
+        mf = scf.addons.convert_to_uhf(mf)
+        if hasattr(mf, 'xc'):
+            if mf._numint.libxc.is_hybrid_xc(mf.xc):
+                return rks.TDDFT(mf)
+            else:
+                return rks.TDDFTNoHybrid(mf)
+        else:
+            return rhf.TDHF(mf)
+
+TD = TDDFT
+

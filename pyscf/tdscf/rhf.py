@@ -23,6 +23,7 @@
 from functools import reduce
 import numpy
 from pyscf import lib
+from pyscf import gto
 from pyscf import ao2mo
 from pyscf import symm
 from pyscf.lib import logger
@@ -35,6 +36,7 @@ from pyscf import __config__
 
 OUTPUT_THRESHOLD = getattr(__config__, 'tdscf_rhf_get_nto_threshold', 0.3)
 REAL_EIG_THRESHOLD = getattr(__config__, 'tdscf_rhf_TDDFT_pick_eig_threshold', 1e-4)
+MO_BASE = getattr(__config__, 'MO_BASE', 1)
 
 
 def gen_tda_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
@@ -123,7 +125,7 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
     mo = numpy.hstack((orbo,orbv))
     nmo = nocc + nvir
 
-    eai = lib.direct_sum('a-i->ai', mo_energy[nocc:], mo_energy[:nocc])
+    eai = lib.direct_sum('a-i->ai', mo_energy[viridx], mo_energy[occidx])
     a = numpy.diag(eai.T.ravel()).reshape(nocc,nvir,nocc,nvir)
     b = numpy.zeros_like(a)
 
@@ -229,6 +231,7 @@ def get_nto(tdobj, state=1, threshold=OUTPUT_THRESHOLD, verbose=None):
     Args:
         state : int
             Excited state ID.  state = 1 means the first excited state.
+            If state < 0, state ID is counted from the last excited state.
 
     Kwargs:
         threshold : float
@@ -239,6 +242,15 @@ def get_nto(tdobj, state=1, threshold=OUTPUT_THRESHOLD, verbose=None):
         basis. The first N_occ NTOs are occupied NTOs and the rest are virtual
         NTOs.
     '''
+    if state == 0:
+        logger.warn(tdobj, 'Excited state starts from 1. '
+                    'Set state=1 for first excited state.')
+        state_id = state
+    elif state < 0:
+        state_id = state
+    else:
+        state_id = state - 1
+
     mol = tdobj.mol
     mo_coeff = tdobj._scf.mo_coeff
     mo_occ = tdobj._scf.mo_occ
@@ -247,7 +259,7 @@ def get_nto(tdobj, state=1, threshold=OUTPUT_THRESHOLD, verbose=None):
     nocc = orbo.shape[1]
     nvir = orbv.shape[1]
 
-    cis_t1 = tdobj.xy[state-1][0]
+    cis_t1 = tdobj.xy[state_id][0]
     # TDDFT (X,Y) has X^2-Y^2=1.
     # Renormalizing X (X^2=1) to map it to CIS coefficients
     cis_t1 *= 1. / numpy.linalg.norm(cis_t1)
@@ -266,15 +278,15 @@ def get_nto(tdobj, state=1, threshold=OUTPUT_THRESHOLD, verbose=None):
         weights_o = numpy.zeros(nocc)
         weights_v = numpy.zeros(nvir)
         for ir in set(orbsym):
-            o_idx = numpy.where(o_sym == ir)[0]
-            if o_idx.size > 0:
-                dm_oo = numpy.dot(cis_t1[:,o_idx].T, cis_t1[:,o_idx])
-                weights_o[o_idx], nto_o[o_idx[:,None],o_idx] = numpy.linalg.eigh(dm_oo)
+            idx = numpy.where(o_sym == ir)[0]
+            if idx.size > 0:
+                dm_oo = numpy.dot(cis_t1[:,idx].T, cis_t1[:,idx])
+                weights_o[idx], nto_o[idx[:,None],idx] = numpy.linalg.eigh(dm_oo)
 
-            v_idx = numpy.where(v_sym == ir)[0]
-            if v_idx.size > 0:
-                dm_vv = numpy.dot(cis_t1[v_idx], cis_t1[v_idx].T)
-                weights_v[v_idx], nto_v[v_idx[:,None],v_idx] = numpy.linalg.eigh(dm_vv)
+            idx = numpy.where(v_sym == ir)[0]
+            if idx.size > 0:
+                dm_vv = numpy.dot(cis_t1[idx], cis_t1[idx].T)
+                weights_v[idx], nto_v[idx[:,None],idx] = numpy.linalg.eigh(dm_vv)
 
         # weights in descending order
         idx = numpy.argsort(-weights_o)
@@ -315,44 +327,34 @@ def get_nto(tdobj, state=1, threshold=OUTPUT_THRESHOLD, verbose=None):
     log = logger.new_logger(tdobj, verbose)
     if log.verbose >= logger.INFO:
         log.info('State %d: %g eV  NTO largest component %s',
-                 state, tdobj.e[state-1]*nist.HARTREE2EV, weights[0])
+                 state_id+1, tdobj.e[state_id]*nist.HARTREE2EV, weights[0])
         o_idx = numpy.where(abs(nto_o[:,0]) > threshold)[0]
         v_idx = numpy.where(abs(nto_v[:,0]) > threshold)[0]
         fmt = '%' + str(lib.param.OUTPUT_DIGITS) + 'f (MO #%d)'
-        log.info('    Occ-NTO: %s',
-                 ' '.join([(fmt % (nto_o[i,0], i+1)) for i in o_idx]))
-        log.info('    Vir-NTO: %s',
-                 ' '.join([(fmt % (nto_v[i,0], i+1+nocc)) for i in v_idx]))
+        log.info('    occ-NTO: ' +
+                 ' + '.join([(fmt % (nto_o[i,0], i+MO_BASE))
+                             for i in o_idx]))
+        log.info('    vir-NTO: ' +
+                 ' + '.join([(fmt % (nto_v[i,0], i+MO_BASE+nocc))
+                             for i in v_idx]))
     return weights, nto_coeff
 
 
 def analyze(tdobj, verbose=None):
     log = logger.new_logger(tdobj, verbose)
+    mol = tdobj.mol
+    mo_coeff = tdobj._scf.mo_coeff
+    mo_occ = tdobj._scf.mo_occ
+    nocc = numpy.count_nonzero(mo_occ == 2)
 
     e_ev = numpy.asarray(tdobj.e) * nist.HARTREE2EV
     e_wn = numpy.asarray(tdobj.e) * nist.HARTREE2WAVENUMBER
     wave_length = 1e11/e_wn
 
-    mo_coeff = tdobj._scf.mo_coeff
-    mo_occ = tdobj._scf.mo_occ
-    orbo = mo_coeff[:,mo_occ==2]
-    orbv = mo_coeff[:,mo_occ==0]
-    nocc = orbo.shape[1]
-    nvir = orbv.shape[1]
-
-    mol = tdobj.mol
-    charges = mol.atom_charges()
-    coords  = mol.atom_coords()
-    charge_center = numpy.einsum('i,ix->x', charges, coords)
-    with mol.with_common_orig(charge_center):
-        dip_ints = mol.intor_symmetric('int1e_r', comp=3)
-
-    dip_ints = numpy.einsum('xpq,pi,qj->xij', dip_ints, orbo.conj(), orbv)
-
     if tdobj.singlet:
-        log.note('\n**** Singlet excitation energies and oscillator strengths ****')
+        log.note('\n** Singlet excitation energies and oscillator strengths **')
     else:
-        log.note('\n**** Triplet excitation energies and oscillator strengths ****')
+        log.note('\n** Triplet excitation energies and oscillator strengths **')
 
     if mol.symmetry:
         orbsym = hf_symm.get_orbsym(mol, mo_coeff)
@@ -360,40 +362,197 @@ def analyze(tdobj, verbose=None):
     else:
         x_sym = None
 
+    f_oscillator = tdobj.oscillator_strength()
     for i, ei in enumerate(tdobj.e):
         x, y = tdobj.xy[i]
-        trans_dip = numpy.einsum('xij,ji->x', dip_ints, x)
-        # TODO JCP, 143, 234103
-        f_oscillator = 2./3. * ei * numpy.dot(trans_dip, trans_dip)
         if x_sym is None:
             log.note('Excited State %3d: %12.5f eV %9.2f nm  f=%.4f',
-                     i+1, e_ev[i], wave_length[i], f_oscillator)
+                     i+1, e_ev[i], wave_length[i], f_oscillator[i])
         else:
             wfnsym_id = x_sym[abs(x).argmax()]
             wfnsym = symm.irrep_id2name(mol.groupname, wfnsym_id)
             log.note('Excited State %3d: %4s %12.5f eV %9.2f nm  f=%.4f',
-                     i+1, wfnsym, e_ev[i], wave_length[i], f_oscillator)
+                     i+1, wfnsym, e_ev[i], wave_length[i], f_oscillator[i])
 
         if log.verbose >= logger.INFO:
             v_idx, o_idx = numpy.where(abs(x) > 0.1)
-            for i, j in zip(o_idx, v_idx):
-                log.info('    %4d -> %-4d %.5f', i, j+nocc, x[j,i])
+            for o, v in zip(o_idx, v_idx):
+                log.info('    %4d -> %-4d %12.5f',
+                         o+MO_BASE, v+MO_BASE+nocc, x[v,o])
 
     if log.verbose >= logger.INFO:
         log.info('\n** Transition electric dipole moments (AU) **')
         log.info('state          X           Y           Z        Dip. S.      Osc.')
+        trans_dip = tdobj.transition_dipole()
         for i, ei in enumerate(tdobj.e):
-            x, y = tdobj.xy[i]
-            trans_dip = numpy.einsum('xij,ji->x', dip_ints, x)
-            f_oscillator = 2./3. * ei * numpy.dot(trans_dip, trans_dip)
+            dip = trans_dip[i]
             log.info('%3d    %11.4f %11.4f %11.4f %11.4f %11.4f',
-                     i+1, trans_dip[0], trans_dip[1], trans_dip[2],
-                     numpy.dot(trans_dip, trans_dip), f_oscillator)
+                     i+1, dip[0], dip[1], dip[2], numpy.dot(dip, dip),
+                     f_oscillator[i])
 
-# UV spectrum
-# * transition dipole
-# * velocity moment
-# * magnetic dipole
+        log.info('\n** Transition velocity dipole moments (imaginary part AU) **')
+        log.info('state          X           Y           Z        Dip. S.      Osc.')
+        trans_v = tdobj.transition_velocity_dipole()
+        f_v = tdobj.oscillator_strength(gauge='velocity', order=0)
+        for i, ei in enumerate(tdobj.e):
+            v = trans_v[i]
+            log.info('%3d    %11.4f %11.4f %11.4f %11.4f %11.4f',
+                     i+1, v[0], v[1], v[2], numpy.dot(v, v), f_v[i])
+
+        log.info('\n** Transition magnetic dipole moments (AU) **')
+        log.info('state          X           Y           Z')
+        trans_m = tdobj.transition_magnetic_dipole()
+        for i, ei in enumerate(tdobj.e):
+            m = trans_m[i]
+            log.info('%3d    %11.4f %11.4f %11.4f',
+                     i+1, m[0], m[1], m[2])
+    return tdobj
+
+
+def transition_dipole(tdobj, xy=None):
+    '''Transition dipole moments in the length gauge'''
+    mol = tdobj.mol
+    with mol.with_common_orig(_charge_center(mol)):
+        ints = mol.intor_symmetric('int1e_r', comp=3)
+    return tdobj._contract_multipole(ints, hermi=True, xy=xy)
+
+def transition_velocity_dipole(tdobj, xy=None):
+    '''Transition dipole moments in the velocity gauge (imaginary part only)
+    '''
+    ints = tdobj.mol.intor('int1e_ipovlp', comp=3, hermi=2)
+    v = tdobj._contract_multipole(ints, hermi=False, xy=xy)
+    return -v
+
+def transition_magnetic_dipole(tdobj, xy=None):
+    '''Transition magnetic dipole moments (imaginary part only)'''
+    mol = tdobj.mol
+    with mol.with_common_orig(_charge_center(mol)):
+        ints = mol.intor('int1e_cg_irxp', comp=3, hermi=2)
+    m_pol = tdobj._contract_multipole(ints, hermi=False, xy=xy)
+    return -m_pol
+
+def transition_quadrupole(tdobj, xy=None):
+    '''Transition quadrupole moments in the length gauge'''
+    mol = tdobj.mol
+    nao = mol.nao_nr()
+    with mol.with_common_orig(_charge_center(mol)):
+        ints = mol.intor('int1e_rr', comp=9, hermi=0).reshape(3,3,nao,nao)
+    quad = tdobj._contract_multipole(ints, hermi=True, xy=xy)
+    return quad
+
+def transition_velocity_quadrupole(tdobj, xy=None):
+    '''Transition quadrupole moments in the velocity gauge (imaginary part only)
+    '''
+    mol = tdobj.mol
+    nao = mol.nao_nr()
+    with mol.with_common_orig(_charge_center(mol)):
+        ints = mol.intor('int1e_irp', comp=9, hermi=0).reshape(3,3,nao,nao)
+    ints = ints + ints.transpose(1,0,3,2)
+    quad = tdobj._contract_multipole(ints, hermi=True, xy=xy)
+    return -quad
+
+def transition_magnetic_quadrupole(tdobj, xy=None):
+    '''Transition magnetic quadrupole moments (imaginary part only)'''
+    XX, XY, XZ, YX, YY, YZ, ZX, ZY, ZZ = range(9)
+    mol = tdobj.mol
+    nao = mol.nao_nr()
+    with mol.with_common_orig(_charge_center(mol)):
+        ints = mol.intor('int1e_irrp', comp=27, hermi=0).reshape(3,9,nao,nao)
+    m_ints = (ints[:,[YZ,ZX,XY]] - ints[:,[ZY,XZ,YX]]).transpose(1,0,2,3)
+    with mol.with_common_orig(_charge_center(mol)):
+        ints = mol.intor('int1e_irpr', comp=27, hermi=0).reshape(9,3,nao,nao)
+    m_ints += ints[[YZ,ZX,XY]] - ints[[ZY,XZ,YX]]
+    m_quad = tdobj._contract_multipole(m_ints, hermi=True, xy=xy)
+    return -m_quad
+
+def transition_octupole(tdobj, xy=None):
+    '''Transition octupole moments in the length gauge'''
+    mol = tdobj.mol
+    nao = mol.nao_nr()
+    with mol.with_common_orig(_charge_center(mol)):
+        ints = mol.intor('int1e_rrr', comp=27, hermi=0).reshape(3,3,3,nao,nao)
+    o_pol = tdobj._contract_multipole(ints, hermi=True, xy=xy)
+    return o_pol
+
+def transition_velocity_octupole(tdobj, xy=None):
+    '''Transition octupole moments in the velocity gauge (imaginary part only)
+    '''
+    mol = tdobj.mol
+    nao = mol.nao_nr()
+    with mol.with_common_orig(_charge_center(mol)):
+        ints = mol.intor('int1e_irrp', comp=27, hermi=0).reshape(3,3,3,nao,nao)
+    ints = ints + ints.transpose(2,1,0,4,3)
+    with mol.with_common_orig(_charge_center(mol)):
+        ints += mol.intor('int1e_irpr', comp=27, hermi=0).reshape(3,3,3,nao,nao)
+    o_pol = tdobj._contract_multipole(ints, hermi=True, xy=xy)
+    return -o_pol
+
+def _charge_center(mol):
+    charges = mol.atom_charges()
+    coords  = mol.atom_coords()
+    return gto.charge_center(mol, charges, coords)
+
+def _contract_multipole(tdobj, ints, hermi=True, xy=None):
+    if xy is None: xy = tdobj.xy
+    mo_coeff = tdobj._scf.mo_coeff
+    mo_occ = tdobj._scf.mo_occ
+    orbo = mo_coeff[:,mo_occ==2]
+    orbv = mo_coeff[:,mo_occ==0]
+
+    ints = numpy.einsum('...pq,pi,qj->...ij', ints, orbo.conj(), orbv)
+    pol = numpy.array([numpy.einsum('...ij,ji->...', ints, x) * 2 for x,y in xy])
+    if isinstance(xy[0][1], numpy.ndarray):
+        if hermi:
+            pol += [numpy.einsum('...ij,ji->...', ints, y) * 2 for x,y in xy]
+        else:  # anti-Hermitian
+            pol -= [numpy.einsum('...ij,ji->...', ints, y) * 2 for x,y in xy]
+    return pol
+
+def oscillator_strength(tdobj, e=None, xy=None, gauge='length', order=0):
+    if e is None: e = tdobj.e
+
+    if gauge == 'length':
+        trans_dip = transition_dipole(tdobj, xy)
+        f = 2./3. * numpy.einsum('s,sx,sx->s', e, trans_dip, trans_dip)
+        return f
+
+    else:  # velocity gauge
+        # Ref. JCP, 143, 234103
+        trans_dip = transition_velocity_dipole(tdobj, xy)
+        f = 2./3. * numpy.einsum('s,sx,sx->s', 1./e, trans_dip, trans_dip)
+
+        if order > 0:
+            m_dip = .5 * transition_magnetic_dipole(tdobj, xy)
+            f_m = numpy.einsum('s,sx,sx->s', e, m_dip, m_dip)
+            f_m = nist.ALPHA**2/6 * f_m.real
+            f += f_m
+
+            quad = .5 * transition_velocity_quadrupole(tdobj, xy)
+            f_quad = numpy.einsum('s,sxy,sxy->s', e, quad, quad)
+            f_quad-= 1./3 * numpy.einsum('s,sxx,sxx->s', e, quad, quad)
+            f_quad = nist.ALPHA**2/20 * f_quad.real
+            f += f_quad
+            logger.debug(tdobj, '    First order correction to oscillator '
+                         'strength (velocity gague)')
+            logger.debug(tdobj, '    %s', f_m+f_quad)
+
+        if order > 1:
+            m_quad = -1./6 * 1j*transition_magnetic_quadrupole(tdobj, xy)
+            f_m = numpy.einsum('s,sy,szx,xyz->s', e, trans_dip*1j, m_quad,
+                               lib.LeviCivita)
+            f_m = nist.ALPHA**3/9 * f_m.real
+            f += f_m
+
+            o_pol = -1./6 * 1j*transition_velocity_octupole(tdobj, xy)
+            f_o = numpy.einsum('s,sy,sxxy->s', e, trans_dip*1j, o_pol)
+            f_o = -2*nist.ALPHA**2/45 * f_o.real
+            f += f_o
+            logger.debug(tdobj, '    Second order correction to oscillator '
+                         'strength (velocity gague)')
+            logger.debug(tdobj, '    %s', f_m+f_o)
+
+    return f
+
 
 def as_scanner(td):
     '''Generating a scanner/solver for TDA/TDHF/TDDFT PES.
@@ -547,7 +706,7 @@ class TDA(lib.StreamObject):
         x0 = numpy.zeros((nroot, nov))
         idx = numpy.argsort(eai.ravel())
         for i in range(nroot):
-            x0[i,idx[i]] = 1  # lowest excitations
+            x0[i,idx[i]] = 1  # Koopmans' excitations
         return x0
 
     def kernel(self, x0=None, nstates=None):
@@ -557,6 +716,8 @@ class TDA(lib.StreamObject):
         self.dump_flags()
         if nstates is None:
             nstates = self.nstates
+        else:
+            self.nstates = nstates
 
         vind, hdiag = self.gen_vind(self._scf)
         precond = self.get_precond(hdiag)
@@ -582,6 +743,16 @@ class TDA(lib.StreamObject):
 
     analyze = analyze
     get_nto = get_nto
+    oscillator_strength = oscillator_strength
+
+    _contract_multipole = _contract_multipole  # needed by following methods
+    transition_dipole              = transition_dipole
+    transition_quadrupole          = transition_quadrupole
+    transition_octupole            = transition_octupole
+    transition_velocity_dipole     = transition_velocity_dipole
+    transition_magnetic_dipole     = transition_magnetic_dipole
+    transition_magnetic_quadrupole = transition_magnetic_quadrupole
+
     as_scanner = as_scanner
 
     def nuc_grad_method(self):
@@ -682,6 +853,8 @@ class TDHF(TDA):
         self.dump_flags()
         if nstates is None:
             nstates = self.nstates
+        else:
+            self.nstates = nstates
 
         vind, hdiag = self.gen_vind(self._scf)
         precond = self.get_precond(hdiag)

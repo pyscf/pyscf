@@ -1265,9 +1265,7 @@ def nr_uks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
 
     if ((xctype == 'LDA' and fxc is None) or
         (xctype == 'GGA' and rho0 is None)):
-        dm0a, dm0b = _format_uks_dm(dm0)
-        make_rho0a = ni._gen_rho_evaluator(mol, dm0a, 1)[0]
-        make_rho0b = ni._gen_rho_evaluator(mol, dm0b, 1)[0]
+        make_rho0 = ni._gen_rho_evaluator(mol, _format_uks_dm(dm0), 1)[0]
 
     shls_slice = (0, mol.nbas)
     ao_loc = mol.ao_loc_nr()
@@ -1282,8 +1280,8 @@ def nr_uks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
             ngrid = weight.size
             aow = numpy.ndarray(ao.shape, order='F', buffer=aow)
             if fxc is None:
-                rho0a = make_rho0a(0, ao, mask, xctype)
-                rho0b = make_rho0b(0, ao, mask, xctype)
+                rho0a = make_rho0(0, ao, mask, xctype)
+                rho0b = make_rho0(1, ao, mask, xctype)
                 fxc0 = ni.eval_xc(xc_code, (rho0a,rho0b), 1, relativity, 2, verbose)[2]
                 u_u, u_d, d_d = fxc0[0].T
             else:
@@ -1310,8 +1308,8 @@ def nr_uks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
             ngrid = weight.size
             aow = numpy.ndarray(ao[0].shape, order='F', buffer=aow)
             if rho0 is None:
-                rho0a = make_rho0a(0, ao, mask, xctype)
-                rho0b = make_rho0b(0, ao, mask, xctype)
+                rho0a = make_rho0(0, ao, mask, xctype)
+                rho0b = make_rho0(1, ao, mask, xctype)
             else:
                 rho0a = rho0[0][:,ip:ip+ngrid]
                 rho0b = rho0[1][:,ip:ip+ngrid]
