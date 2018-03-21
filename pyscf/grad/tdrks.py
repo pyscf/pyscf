@@ -50,8 +50,8 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
     nao, nmo = mo_coeff.shape
     nocc = (mo_occ>0).sum()
     nvir = nmo - nocc
-    xpy = (x+y).reshape(nvir,nocc)
-    xmy = (x-y).reshape(nvir,nocc)
+    xpy = (x+y).reshape(nocc,nvir).T
+    xmy = (x-y).reshape(nocc,nvir).T
     orbv = mo_coeff[:,nocc:]
     orbo = mo_coeff[:,:nocc]
 
@@ -359,6 +359,7 @@ if __name__ == '__main__':
     mf = dft.RKS(mol)
     mf.xc = 'LDA'
     mf.grids.prune = False
+    mf.conv_tol = 1e-14
 #    mf.grids.level = 6
     mf.scf()
 
@@ -366,26 +367,37 @@ if __name__ == '__main__':
     td.nstates = 3
     e, z = td.kernel()
     tdg = Gradients(td)
-    g1 = tdg.kernel(state=2)
+    g1 = tdg.kernel(state=3)
     print(g1)
 # [[ 0  0  -1.31315477e-01]
 #  [ 0  0   1.31319442e-01]]
+    td_solver = td.as_scanner()
+    e1 = td_solver(mol.set_geom_('H 0 0 1.805; F 0 0 0', unit='B'))
+    e2 = td_solver(mol.set_geom_('H 0 0 1.803; F 0 0 0', unit='B'))
+    print(abs((e1[2]-e2[2])/.002 - g1[0,2]).max())
 
+    mol.set_geom_('H 0 0 1.804; F 0 0 0', unit='B')
     mf = dft.RKS(mol)
     mf.xc = 'b3lyp'
     mf._numint.libxc = dft.xcfun
     mf.grids.prune = False
+    mf.conv_tol = 1e-14
     mf.scf()
 
     td = tddft.TDA(mf)
     td.nstates = 3
     e, z = td.kernel()
     tdg = Gradients(td)
-    g1 = tdg.kernel(state=2)
+    g1 = tdg.kernel(state=3)
     print(g1)
 # [[ 0  0  -1.21504524e-01]
 #  [ 0  0   1.21505341e-01]]
+    td_solver = td.as_scanner()
+    e1 = td_solver(mol.set_geom_('H 0 0 1.805; F 0 0 0', unit='B'))
+    e2 = td_solver(mol.set_geom_('H 0 0 1.803; F 0 0 0', unit='B'))
+    print(abs((e1[2]-e2[2])/.002 - g1[0,2]).max())
 
+#    mol.set_geom_('H 0 0 1.804; F 0 0 0', unit='B')
 #    td = tddft.TDA(mf)
 #    td.nstates = 3
 #    td.singlet = False
@@ -395,3 +407,7 @@ if __name__ == '__main__':
 #    print(g1)
 ## [[ 0  0  -0.3633334]
 ##  [ 0  0   0.3633334]]
+#    td_solver = td.as_scanner()
+#    e1 = td_solver(mol.set_geom_('H 0 0 1.805; F 0 0 0', unit='B'))
+#    e2 = td_solver(mol.set_geom_('H 0 0 1.803; F 0 0 0', unit='B'))
+#    print(abs((e1[2]-e2[2])/.002 - g1[0,2]).max())

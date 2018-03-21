@@ -69,12 +69,12 @@ class TDDFTNoHybrid(TDA):
 
         if wfnsym is not None and mol.symmetry:
             orbsyma, orbsymb = uhf_symm.get_orbsym(mol, mo_coeff)
-            sym_forbida = (orbsyma[viridxa].reshape(-1,1) ^ orbsyma[occidxa]) != wfnsym
-            sym_forbidb = (orbsymb[viridxb].reshape(-1,1) ^ orbsymb[occidxb]) != wfnsym
+            sym_forbida = (orbsyma[occidxa,None] ^ orbsyma[viridxa]) != wfnsym
+            sym_forbidb = (orbsymb[occidxb,None] ^ orbsymb[viridxb]) != wfnsym
             sym_forbid = numpy.hstack((sym_forbida.ravel(), sym_forbidb.ravel()))
 
-        e_ai_a = mo_energy[0][viridxa].reshape(-1,1) - mo_energy[0][occidxa]
-        e_ai_b = mo_energy[1][viridxb].reshape(-1,1) - mo_energy[1][occidxb]
+        e_ai_a = (mo_energy[0][viridxa,None] - mo_energy[0][occidxa]).T
+        e_ai_b = (mo_energy[1][viridxb,None] - mo_energy[1][occidxb]).T
         e_ai = numpy.hstack((e_ai_a.reshape(-1), e_ai_b.reshape(-1)))
         if wfnsym is not None and mol.symmetry:
             e_ai[sym_forbid] = 0
@@ -89,19 +89,19 @@ class TDDFTNoHybrid(TDA):
             if wfnsym is not None and mol.symmetry:
                 zs = numpy.copy(zs)
                 zs[:,sym_forbid] = 0
-            dmvo = numpy.empty((2,nz,nao,nao))
+            dmov = numpy.empty((2,nz,nao,nao))
             for i in range(nz):
                 z = dai * zs[i]
-                za = z[:nocca*nvira].reshape(nvira,nocca)
-                zb = z[nocca*nvira:].reshape(nvirb,noccb)
-                dm = reduce(numpy.dot, (orbva, za, orboa.T))
-                dmvo[0,i] = dm + dm.T
-                dm = reduce(numpy.dot, (orbvb, zb, orbob.T))
-                dmvo[1,i] = dm + dm.T
+                za = z[:nocca*nvira].reshape(nocca,nvira)
+                zb = z[nocca*nvira:].reshape(noccb,nvirb)
+                dm = reduce(numpy.dot, (orboa, za, orbva.T))
+                dmov[0,i] = dm + dm.T
+                dm = reduce(numpy.dot, (orbob, zb, orbvb.T))
+                dmov[1,i] = dm + dm.T
 
-            v1ao = vresp(dmvo)
-            v1a = _ao2mo.nr_e2(v1ao[0], mo_coeff[0], (nocca,nmo,0,nocca))
-            v1b = _ao2mo.nr_e2(v1ao[1], mo_coeff[1], (noccb,nmo,0,noccb))
+            v1ao = vresp(dmov)
+            v1a = _ao2mo.nr_e2(v1ao[0], mo_coeff[0], (0,nocca,nocca,nmo))
+            v1b = _ao2mo.nr_e2(v1ao[1], mo_coeff[1], (0,noccb,noccb,nmo))
             hx = numpy.hstack((v1a.reshape(nz,-1), v1b.reshape(nz,-1)))
             for i, z in enumerate(zs):
                 hx[i] += edai * z
@@ -123,6 +123,7 @@ class TDDFTNoHybrid(TDA):
             nstates = self.nstates
         else:
             self.nstates = nstates
+        log = lib.logger.Logger(self.stdout, self.verbose)
 
         vind, hdiag = self.get_vind(self._scf)
         precond = self.get_precond(hdiag)
@@ -134,8 +135,7 @@ class TDDFTNoHybrid(TDA):
                 lib.davidson1(vind, x0, precond,
                               tol=self.conv_tol,
                               nroots=nstates, lindep=self.lindep,
-                              max_space=self.max_space,
-                              verbose=self.verbose)
+                              max_space=self.max_space, verbose=log)
 
         mo_energy = self._scf.mo_energy
         mo_occ = self._scf.mo_occ
@@ -147,8 +147,8 @@ class TDDFTNoHybrid(TDA):
         noccb = len(occidxb)
         nvira = len(viridxa)
         nvirb = len(viridxb)
-        e_ai_a = mo_energy[0][viridxa].reshape(-1,1) - mo_energy[0][occidxa]
-        e_ai_b = mo_energy[1][viridxb].reshape(-1,1) - mo_energy[1][occidxb]
+        e_ai_a = (mo_energy[0][viridxa,None] - mo_energy[0][occidxa]).T
+        e_ai_b = (mo_energy[1][viridxb,None] - mo_energy[1][occidxb]).T
         eai = numpy.hstack((e_ai_a.reshape(-1), e_ai_b.reshape(-1)))
         eai = numpy.sqrt(eai)
 
@@ -166,10 +166,10 @@ class TDDFTNoHybrid(TDA):
             if norm > 0:
                 norm = 1/numpy.sqrt(norm)
                 e.append(w)
-                xy.append(((x[:nocca*nvira].reshape(nvira,nocca) * norm,  # X_alpha
-                            x[nocca*nvira:].reshape(nvirb,noccb) * norm), # X_beta
-                           (y[:nocca*nvira].reshape(nvira,nocca) * norm,  # Y_alpha
-                            y[nocca*nvira:].reshape(nvirb,noccb) * norm)))# Y_beta
+                xy.append(((x[:nocca*nvira].reshape(nocca,nvira) * norm,  # X_alpha
+                            x[nocca*nvira:].reshape(noccb,nvirb) * norm), # X_beta
+                           (y[:nocca*nvira].reshape(nocca,nvira) * norm,  # Y_alpha
+                            y[nocca*nvira:].reshape(noccb,nvirb) * norm)))# Y_beta
         self.e = numpy.array(e)
         self.xy = xy
 
@@ -230,7 +230,7 @@ if __name__ == '__main__':
     #td.verbose = 5
     td.nstates = 5
     print(td.kernel()[0] * 27.2114)
-# [  0.16429701   3.207094    15.26015883  18.41945506  21.11157069]
+# [  0.0765857    3.16823079  15.20150204  18.40379107  21.11477253]
 
     mf = dft.UKS(mol)
     mf.xc = 'b88,p86'
@@ -239,7 +239,7 @@ if __name__ == '__main__':
     td.nstates = 5
     #td.verbose = 5
     print(td.kernel()[0] * 27.2114)
-# [  0.03964157   3.57928871  15.09594298  20.76987534  18.33539087]
+# [  0.05161674   3.57883843  15.0960023   18.33537454  20.76914967]
 
     mf = dft.UKS(mol)
     mf.xc = 'lda,vwn'
@@ -247,5 +247,5 @@ if __name__ == '__main__':
     td = TDA(mf)
     td.nstates = 5
     print(td.kernel()[0] * 27.2114)
-# [  0.15334039   3.22003211  15.02627671  18.33258354  21.17695386]
+# [  0.16142061   3.22811366  14.98443928  18.29273507  21.18410081]
 

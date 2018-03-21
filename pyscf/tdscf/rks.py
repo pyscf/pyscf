@@ -64,9 +64,9 @@ class TDDFTNoHybrid(TDA):
 
         if wfnsym is not None and mol.symmetry:
             orbsym = hf_symm.get_orbsym(mol, mo_coeff)
-            sym_forbid = (orbsym[viridx].reshape(-1,1) ^ orbsym[occidx]) != wfnsym
+            sym_forbid = (orbsym[occidx,None] ^ orbsym[viridx]) != wfnsym
 
-        eai = mo_energy[viridx].reshape(-1,1) - mo_energy[occidx]
+        eai = (mo_energy[viridx].reshape(-1,1) - mo_energy[occidx]).T
         if wfnsym is not None and mol.symmetry:
             eai[sym_forbid] = 0
         dai = numpy.sqrt(eai).ravel()
@@ -77,18 +77,18 @@ class TDDFTNoHybrid(TDA):
 
         def vind(zs):
             nz = len(zs)
-            dmvo = numpy.empty((nz,nao,nao))
+            dmov = numpy.empty((nz,nao,nao))
             for i, z in enumerate(zs):
                 # *2 for double occupancy
-                dm = reduce(numpy.dot, (orbv, (dai*z).reshape(nvir,nocc)*2, orbo.T))
-                dmvo[i] = dm + dm.T # +cc for A+B and K_{ai,jb} in A == K_{ai,bj} in B
-            v1ao = vresp(dmvo)
-            v1vo = _ao2mo.nr_e2(v1ao, mo_coeff, (nocc,nmo,0,nocc)).reshape(-1,nvir*nocc)
+                dm = reduce(numpy.dot, (orbo, (dai*z).reshape(nocc,nvir)*2, orbv.T))
+                dmov[i] = dm + dm.T # +cc for A+B and K_{ai,jb} in A == K_{ai,bj} in B
+            v1ao = vresp(dmov)
+            v1ov = _ao2mo.nr_e2(v1ao, mo_coeff, (0,nocc,nocc,nmo)).reshape(-1,nocc*nvir)
             for i, z in enumerate(zs):
-                # numpy.sqrt(eai) * (eai*dai*z + v1vo)
-                v1vo[i] += edai*z
-                v1vo[i] *= dai
-            return v1vo.reshape(nz,-1)
+                # numpy.sqrt(eai) * (eai*dai*z + v1ov)
+                v1ov[i] += edai*z
+                v1ov[i] *= dai
+            return v1ov.reshape(nz,-1)
 
         return vind, hdiag
 
@@ -106,6 +106,8 @@ class TDDFTNoHybrid(TDA):
         else:
             self.nstates = nstates
 
+        log = lib.logger.Logger(self.stdout, self.verbose)
+
         vind, hdiag = self.gen_vind(self._scf)
         precond = self.get_precond(hdiag)
         if x0 is None:
@@ -115,22 +117,21 @@ class TDDFTNoHybrid(TDA):
                 lib.davidson1(vind, x0, precond,
                               tol=self.conv_tol,
                               nroots=nstates, lindep=self.lindep,
-                              max_space=self.max_space,
-                              verbose=self.verbose)
+                              max_space=self.max_space, verbose=log)
 
         mo_energy = self._scf.mo_energy
         mo_occ = self._scf.mo_occ
         occidx = numpy.where(mo_occ==2)[0]
         viridx = numpy.where(mo_occ==0)[0]
-        eai = lib.direct_sum('a-i->ai', mo_energy[viridx], mo_energy[occidx])
+        eai = (mo_energy[viridx,None] - mo_energy[occidx]).T
         eai = numpy.sqrt(eai)
         def norm_xy(w, z):
             zp = eai * z.reshape(eai.shape)
             zm = w/eai * z.reshape(eai.shape)
             x = (zp + zm) * .5
             y = (zp - zm) * .5
-            norm = 2*(lib.norm(x)**2 - lib.norm(y)**2)
-            norm = 1/numpy.sqrt(norm)
+            norm = lib.norm(x)**2 - lib.norm(y)**2
+            norm = numpy.sqrt(.5/norm)  # normalize to 0.5 for alpha spin
             return (x*norm, y*norm)
 
         self.e = numpy.sqrt(w2)

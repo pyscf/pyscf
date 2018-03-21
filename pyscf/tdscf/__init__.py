@@ -58,7 +58,7 @@ def TDDFT(mf):
         else:
             return uhf.TDHF(mf)
     else:
-        mf = scf.addons.convert_to_uhf(mf)
+        mf = scf.addons.convert_to_rhf(mf)
         if hasattr(mf, 'xc'):
             if mf._numint.libxc.is_hybrid_xc(mf.xc):
                 return rks.TDDFT(mf)

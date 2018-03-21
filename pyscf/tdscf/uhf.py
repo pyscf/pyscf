@@ -62,12 +62,12 @@ def gen_tda_operation(mf, fock_ao=None, wfnsym=None):
 
     if wfnsym is not None and mol.symmetry:
         orbsyma, orbsymb = uhf_symm.get_orbsym(mol, mo_coeff)
-        sym_forbida = (orbsyma[viridxa].reshape(-1,1) ^ orbsyma[occidxa]) != wfnsym
-        sym_forbidb = (orbsymb[viridxb].reshape(-1,1) ^ orbsymb[occidxb]) != wfnsym
+        sym_forbida = (orbsyma[occidxa,None] ^ orbsyma[viridxa]) != wfnsym
+        sym_forbidb = (orbsymb[occidxb,None] ^ orbsymb[viridxb]) != wfnsym
         sym_forbid = numpy.hstack((sym_forbida.ravel(), sym_forbidb.ravel()))
 
-    e_ai_a = mo_energy[0][viridxa].reshape(-1,1) - mo_energy[0][occidxa]
-    e_ai_b = mo_energy[1][viridxb].reshape(-1,1) - mo_energy[1][occidxb]
+    e_ai_a = (mo_energy[0][viridxa,None] - mo_energy[0][occidxa]).T
+    e_ai_b = (mo_energy[1][viridxb,None] - mo_energy[1][occidxb]).T
     e_ai = hdiag = numpy.hstack((e_ai_a.reshape(-1), e_ai_b.reshape(-1)))
     if wfnsym is not None and mol.symmetry:
         hdiag[sym_forbid] = 0
@@ -85,19 +85,19 @@ def gen_tda_operation(mf, fock_ao=None, wfnsym=None):
             zs[:,sym_forbid] = 0
         dmvo = numpy.empty((2,nz,nao,nao))
         for i, z in enumerate(zs):
-            za = z[:nocca*nvira].reshape(nvira,nocca)
-            zb = z[nocca*nvira:].reshape(nvirb,noccb)
-            dmvo[0,i] = reduce(numpy.dot, (orbva, za, orboa.T))
-            dmvo[1,i] = reduce(numpy.dot, (orbvb, zb, orbob.T))
+            za = z[:nocca*nvira].reshape(nocca,nvira)
+            zb = z[nocca*nvira:].reshape(noccb,nvirb)
+            dmvo[0,i] = reduce(numpy.dot, (orboa, za, orbva.T))
+            dmvo[1,i] = reduce(numpy.dot, (orbob, zb, orbvb.T))
 
         v1ao = vresp(dmvo)
-        v1a = _ao2mo.nr_e2(v1ao[0], mo_a, (nocca,nmo,0,nocca)).reshape(-1,nvira,nocca)
-        v1b = _ao2mo.nr_e2(v1ao[1], mo_b, (noccb,nmo,0,noccb)).reshape(-1,nvirb,noccb)
+        v1a = _ao2mo.nr_e2(v1ao[0], mo_a, (0,nocca,nocca,nmo)).reshape(-1,nocca,nvira)
+        v1b = _ao2mo.nr_e2(v1ao[1], mo_b, (0,noccb,noccb,nmo)).reshape(-1,noccb,nvirb)
         for i, z in enumerate(zs):
-            za = z[:nocca*nvira].reshape(nvira,nocca)
-            zb = z[nocca*nvira:].reshape(nvirb,noccb)
-            v1a[i] += numpy.einsum('ai,ai->ai', e_ai_a, za)
-            v1b[i] += numpy.einsum('ai,ai->ai', e_ai_b, zb)
+            za = z[:nocca*nvira].reshape(nocca,nvira)
+            zb = z[nocca*nvira:].reshape(noccb,nvirb)
+            v1a[i] += numpy.einsum('ia,ia->ia', e_ai_a, za)
+            v1b[i] += numpy.einsum('ia,ia->ia', e_ai_b, zb)
         hx = numpy.hstack((v1a.reshape(nz,-1), v1b.reshape(nz,-1)))
         if wfnsym is not None and mol.symmetry:
             hx[:,sym_forbid] = 0
@@ -389,23 +389,23 @@ def get_nto(tdobj, state=1, threshold=OUTPUT_THRESHOLD, verbose=None):
         for ir in set(orbsyma):
             idx = numpy.where(o_sym_a == ir)[0]
             if idx.size > 0:
-                dm_oo = numpy.dot(cis_t1a[:,idx].T, cis_t1a[:,idx])
+                dm_oo = numpy.dot(cis_t1a[idx].T, cis_t1a[idx])
                 weights_o_a[idx], nto_o_a[idx[:,None],idx] = numpy.linalg.eigh(dm_oo)
 
             idx = numpy.where(v_sym_a == ir)[0]
             if idx.size > 0:
-                dm_vv = numpy.dot(cis_t1a[idx], cis_t1a[idx].T)
+                dm_vv = numpy.dot(cis_t1a[idx,:], cis_t1a[idx,:].T)
                 weights_v_a[idx], nto_v_a[idx[:,None],idx] = numpy.linalg.eigh(dm_vv)
 
         for ir in set(orbsymb):
             idx = numpy.where(o_sym_b == ir)[0]
             if idx.size > 0:
-                dm_oo = numpy.dot(cis_t1b[:,idx].T, cis_t1b[:,idx])
+                dm_oo = numpy.dot(cis_t1b[idx].T, cis_t1b[idx])
                 weights_o_b[idx], nto_o_b[idx[:,None],idx] = numpy.linalg.eigh(dm_oo)
 
             idx = numpy.where(v_sym_b == ir)[0]
             if idx.size > 0:
-                dm_vv = numpy.dot(cis_t1b[idx], cis_t1b[idx].T)
+                dm_vv = numpy.dot(cis_t1b[idx,:], cis_t1b[idx,:].T)
                 weights_v_b[idx], nto_v_b[idx[:,None],idx] = numpy.linalg.eigh(dm_vv)
 
         def sort(weights, nto, sym):
@@ -434,10 +434,10 @@ def get_nto(tdobj, state=1, threshold=OUTPUT_THRESHOLD, verbose=None):
             weights_b = weights_v_b
 
     else:
-        nto_v_a, w_a, nto_o_aT = numpy.linalg.svd(cis_t1a)
-        nto_v_b, w_b, nto_o_bT = numpy.linalg.svd(cis_t1b)
-        nto_o_a = nto_o_aT.conj().T
-        nto_o_b = nto_o_bT.conj().T
+        nto_o_a, w_a, nto_v_aT = numpy.linalg.svd(cis_t1a)
+        nto_o_b, w_b, nto_v_bT = numpy.linalg.svd(cis_t1b)
+        nto_v_a = nto_v_aT.conj().T
+        nto_v_b = nto_v_bT.conj().T
         weights_a = w_a**2
         weights_b = w_b**2
         nto_orbsyma = nto_orbsymb = None
@@ -502,7 +502,7 @@ def analyze(tdobj, verbose=None):
 
     if mol.symmetry:
         orbsyma, orbsymb = uhf_symm.get_orbsym(mol, mo_coeff)
-        x_syma = (orbsyma[mo_occ[0]==0,None] & orbsyma[mo_occ[0]==1]).ravel()
+        x_syma = (orbsyma[mo_occ[0]==1,None] & orbsyma[mo_occ[0]==0]).ravel()
     else:
         x_syma = None
 
@@ -519,12 +519,12 @@ def analyze(tdobj, verbose=None):
                      i+1, wfnsym, e_ev[i], wave_length[i], f_oscillator[i])
 
         if log.verbose >= logger.INFO:
-            for v, o in zip(* numpy.where(abs(x[0]) > 0.1)):
+            for o, v in zip(* numpy.where(abs(x[0]) > 0.1)):
                 log.info('    %4da -> %4da %12.5f',
-                         o+MO_BASE, v+MO_BASE+nocc_a, x[0][v,o])
-            for v, o in zip(* numpy.where(abs(x[1]) > 0.1)):
+                         o+MO_BASE, v+MO_BASE+nocc_a, x[0][o,v])
+            for o, v in zip(* numpy.where(abs(x[1]) > 0.1)):
                 log.info('    %4db -> %4db %12.5f',
-                         o+MO_BASE, v+MO_BASE+nocc_b, x[1][v,o])
+                         o+MO_BASE, v+MO_BASE+nocc_b, x[1][o,v])
 
     if log.verbose >= logger.INFO:
         log.info('\n** Transition electric dipole moments (AU) **')
@@ -570,13 +570,13 @@ def _contract_multipole(tdobj, ints, hermi=True, xy=None):
 
     ints_a = numpy.einsum('...pq,pi,qj->...ij', ints, orbo_a.conj(), orbv_a)
     ints_b = numpy.einsum('...pq,pi,qj->...ij', ints, orbo_b.conj(), orbv_b)
-    pol = [(numpy.einsum('...ij,ji->...', ints_a, x[0]) +
-            numpy.einsum('...ij,ji->...', ints_b, x[1])) for x,y in xy]
+    pol = [(numpy.einsum('...ij,ij->...', ints_a, x[0]) +
+            numpy.einsum('...ij,ij->...', ints_b, x[1])) for x,y in xy]
     pol = numpy.array(pol)
     y = xy[0][1]
     if isinstance(y[0], numpy.ndarray):
-        pol_y = [(numpy.einsum('...ij,ji->...', ints_a, y[0]) +
-                  numpy.einsum('...ij,ji->...', ints_b, y[1])) for x,y in xy]
+        pol_y = [(numpy.einsum('...ij,ij->...', ints_a, y[0]) +
+                  numpy.einsum('...ij,ij->...', ints_b, y[1])) for x,y in xy]
         if hermi:
             pol += pol_y
         else:  # anti-Hermitian
@@ -624,15 +624,13 @@ class TDA(rhf.TDA):
         occidxb = numpy.where(mo_occ[1]>0)[0]
         viridxa = numpy.where(mo_occ[0]==0)[0]
         viridxb = numpy.where(mo_occ[1]==0)[0]
-        e_ai_a = mo_energy[0][viridxa].reshape(-1,1) - mo_energy[0][occidxa]
-        e_ai_b = mo_energy[1][viridxb].reshape(-1,1) - mo_energy[1][occidxb]
+        e_ai_a = (mo_energy[0][viridxa,None] - mo_energy[0][occidxa]).T
+        e_ai_b = (mo_energy[1][viridxb,None] - mo_energy[1][occidxb]).T
 
         if wfnsym is not None and mol.symmetry:
             orbsyma, orbsymb = uhf_symm.get_orbsym(mol, mo_coeff)
-            sym_forbida = (orbsyma[viridxa].reshape(-1,1) ^ orbsyma[occidxa]) != wfnsym
-            sym_forbidb = (orbsymb[viridxb].reshape(-1,1) ^ orbsymb[occidxb]) != wfnsym
-            e_ai_a[sym_forbida] = 1e99
-            e_ai_b[sym_forbidb] = 1e99
+            e_ai_a[(orbsyma[occidxa,None] ^ orbsyma[viridxa]) != wfnsym] = 1e99
+            e_ai_b[(orbsymb[occidxb,None] ^ orbsymb[viridxb]) != wfnsym] = 1e99
 
         eai = numpy.hstack((e_ai_a.ravel(), e_ai_b.ravel()))
         nov = eai.size
@@ -652,6 +650,7 @@ class TDA(rhf.TDA):
             nstates = self.nstates
         else:
             self.nstates = nstates
+        log = logger.Logger(self.stdout, self.verbose)
 
         vind, hdiag = self.gen_vind(self._scf)
         precond = self.get_precond(hdiag)
@@ -662,16 +661,15 @@ class TDA(rhf.TDA):
                 lib.davidson1(vind, x0, precond,
                               tol=self.conv_tol,
                               nroots=nstates, lindep=self.lindep,
-                              max_space=self.max_space,
-                              verbose=self.verbose)
+                              max_space=self.max_space, verbose=log)
 
         nmo = self._scf.mo_occ[0].size
         nocca = (self._scf.mo_occ[0]>0).sum()
         noccb = (self._scf.mo_occ[1]>0).sum()
         nvira = nmo - nocca
         nvirb = nmo - noccb
-        self.xy = [((xi[:nocca*nvira].reshape(nvira,nocca),  # X_alpha
-                     xi[nocca*nvira:].reshape(nvirb,noccb)), # X_beta
+        self.xy = [((xi[:nocca*nvira].reshape(nocca,nvira),  # X_alpha
+                     xi[nocca*nvira:].reshape(noccb,nvirb)), # X_beta
                     (0, 0))  # (Y_alpha, Y_beta)
                    for xi in x1]
 
@@ -718,12 +716,12 @@ def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
 
     if wfnsym is not None and mol.symmetry:
         orbsyma, orbsymb = uhf_symm.get_orbsym(mol, mo_coeff)
-        sym_forbida = (orbsyma[viridxa].reshape(-1,1) ^ orbsyma[occidxa]) != wfnsym
-        sym_forbidb = (orbsymb[viridxb].reshape(-1,1) ^ orbsymb[occidxb]) != wfnsym
+        sym_forbida = (orbsyma[occidxa,None] ^ orbsyma[viridxa]) != wfnsym
+        sym_forbidb = (orbsymb[occidxb,None] ^ orbsymb[viridxb]) != wfnsym
         sym_forbid = numpy.hstack((sym_forbida.ravel(), sym_forbidb.ravel()))
 
-    e_ai_a = mo_energy[0][viridxa].reshape(-1,1) - mo_energy[0][occidxa]
-    e_ai_b = mo_energy[1][viridxb].reshape(-1,1) - mo_energy[1][occidxb]
+    e_ai_a = (mo_energy[0][viridxa,None] - mo_energy[0][occidxa]).T
+    e_ai_b = (mo_energy[1][viridxb,None] - mo_energy[1][occidxb]).T
     e_ai = hdiag = numpy.hstack((e_ai_a.reshape(-1), e_ai_b.reshape(-1)))
     if wfnsym is not None and mol.symmetry:
         hdiag[sym_forbid] = 0
@@ -744,15 +742,15 @@ def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
         dms = numpy.empty((2,nz,nao,nao)) # 2 ~ alpha,beta
         for i in range(nz):
             x, y = xys[i].reshape(2,-1)
-            xa = x[:nocca*nvira].reshape(nvira,nocca)
-            xb = x[nocca*nvira:].reshape(nvirb,noccb)
-            ya = y[:nocca*nvira].reshape(nvira,nocca)
-            yb = y[nocca*nvira:].reshape(nvirb,noccb)
-            dmx = reduce(numpy.dot, (orbva, xa, orboa.T))
-            dmy = reduce(numpy.dot, (orboa, ya.T, orbva.T))
+            xa = x[:nocca*nvira].reshape(nocca,nvira)
+            xb = x[nocca*nvira:].reshape(noccb,nvirb)
+            ya = y[:nocca*nvira].reshape(nocca,nvira)
+            yb = y[nocca*nvira:].reshape(noccb,nvirb)
+            dmx = reduce(numpy.dot, (orboa, xa, orbva.T))
+            dmy = reduce(numpy.dot, (orbva, ya.T, orboa.T))
             dms[0,i] = dmx + dmy  # AX + BY
-            dmx = reduce(numpy.dot, (orbvb, xb, orbob.T))
-            dmy = reduce(numpy.dot, (orbob, yb.T, orbvb.T))
+            dmx = reduce(numpy.dot, (orbob, xb, orbvb.T))
+            dmy = reduce(numpy.dot, (orbvb, yb.T, orbob.T))
             dms[1,i] = dmx + dmy  # AX + BY
 
         v1ao  = vresp(dms)
@@ -763,11 +761,11 @@ def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
         hx = numpy.empty((nz,2,nvira*nocca+nvirb*noccb), dtype=v1avo.dtype)
         for i in range(nz):
             x, y = xys[i].reshape(2,-1)
-            hx[i,0,:nvira*nocca] = v1avo[i].ravel()
-            hx[i,0,nvira*nocca:] = v1bvo[i].ravel()
+            hx[i,0,:nvira*nocca] = v1aov[i].ravel()
+            hx[i,0,nvira*nocca:] = v1bov[i].ravel()
             hx[i,0]+= e_ai * x  # AX
-            hx[i,1,:nvira*nocca] =-v1aov[i].reshape(nocca,nvira).T.ravel()
-            hx[i,1,nvira*nocca:] =-v1bov[i].reshape(noccb,nvirb).T.ravel()
+            hx[i,1,:nvira*nocca] =-v1avo[i].reshape(nvira,nocca).T.ravel()
+            hx[i,1,nvira*nocca:] =-v1bvo[i].reshape(nvirb,noccb).T.ravel()
             hx[i,1]-= e_ai * y  #-AY
 
         if wfnsym is not None and mol.symmetry:
@@ -796,6 +794,8 @@ class TDHF(TDA):
         else:
             self.nstates = nstates
 
+        log = logger.Logger(self.stdout, self.verbose)
+
         vind, hdiag = self.gen_vind(self._scf)
         precond = self.get_precond(hdiag)
         if x0 is None:
@@ -813,7 +813,7 @@ class TDHF(TDA):
                                     tol=self.conv_tol,
                                     nroots=nstates, lindep=self.lindep,
                                     max_space=self.max_space, pick=pickeig,
-                                    verbose=self.verbose)
+                                    verbose=log)
 
         nmo = self._scf.mo_occ[0].size
         nocca = (self._scf.mo_occ[0]>0).sum()
@@ -828,10 +828,10 @@ class TDHF(TDA):
             if norm > 0:
                 norm = 1/numpy.sqrt(norm)
                 e.append(w[i])
-                xy.append(((x[:nocca*nvira].reshape(nvira,nocca) * norm,  # X_alpha
-                            x[nocca*nvira:].reshape(nvirb,noccb) * norm), # X_beta
-                           (y[:nocca*nvira].reshape(nvira,nocca) * norm,  # Y_alpha
-                            y[nocca*nvira:].reshape(nvirb,noccb) * norm)))# Y_beta
+                xy.append(((x[:nocca*nvira].reshape(nocca,nvira) * norm,  # X_alpha
+                            x[nocca*nvira:].reshape(noccb,nvirb) * norm), # X_beta
+                           (y[:nocca*nvira].reshape(nocca,nvira) * norm,  # Y_alpha
+                            y[nocca*nvira:].reshape(noccb,nvirb) * norm)))# Y_beta
         self.e = numpy.array(e)
         self.xy = xy
 

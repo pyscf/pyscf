@@ -49,8 +49,8 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
     nocc = (mo_occ>0).sum()
     nvir = nmo - nocc
     x, y = x_y
-    xpy = (x+y).reshape(nvir,nocc)
-    xmy = (x-y).reshape(nvir,nocc)
+    xpy = (x+y).reshape(nocc,nvir).T
+    xmy = (x-y).reshape(nocc,nvir).T
     orbv = mo_coeff[:,nocc:]
     orbo = mo_coeff[:,:nocc]
 
@@ -203,6 +203,7 @@ class Gradients(rhf_grad.Gradients):
         self.check_sanity()
         de = self.grad_elec(xy, singlet, atmlst)
         self.de = de = de + self.grad_nuc(atmlst=atmlst)
+        #self.de = de = de + self._scf.nuc_grad_method().kernel(atmlst=atmlst)
 
         logger.note(self, '--------------')
         logger.note(self, '           x                y                z')
@@ -224,14 +225,15 @@ if __name__ == '__main__':
     mol.output = None
 
     mol.atom = [
+#        ['H' , (1. , 0. , 0.)],
+#        ['H' , (0. , 1. , 0.)],
         ['H' , (0. , 0. , 1.804)],
         ['F' , (0. , 0. , 0.)], ]
     mol.unit = 'B'
     mol.basis = '631g'
     mol.build()
 
-    mf = scf.RHF(mol)
-    mf.scf()
+    mf = scf.RHF(mol).run(conv_tol=1e-14)
     td = tddft.TDA(mf)
     td.nstates = 3
     e, z = td.kernel()
@@ -239,39 +241,58 @@ if __name__ == '__main__':
     #tdg.verbose = 5
     g1 = tdg.kernel(z[0])
     print(g1)
-    print(lib.finger(g1) - 0.18686568475411308)
+    print(lib.finger(g1) - 0.18686561181358813)
 #[[ 0  0  -2.67023832e-01]
 # [ 0  0   2.67023832e-01]]
+    td_solver = td.as_scanner()
+    e1 = td_solver(mol.set_geom_('H 0 0 1.805; F 0 0 0', unit='B'))
+    e2 = td_solver(mol.set_geom_('H 0 0 1.803; F 0 0 0', unit='B'))
+    print(abs((e1[0]-e2[0])/.002 - g1[0,2]).max())
 
+    mol.set_geom_('H 0 0 1.804; F 0 0 0', unit='B')
     td = tddft.TDDFT(mf)
     td.nstates = 3
     e, z = td.kernel()
     tdg = Gradients(td)
-    g1 = tdg.kernel(state=0)
+    g1 = tdg.kernel(state=1)
     print(g1)
-    print(lib.finger(g1) - 0.18967695046981475)
+    print(lib.finger(g1) - 0.18967687762609461)
 # [[ 0  0  -2.71041021e-01]
 #  [ 0  0   2.71041021e-01]]
+    td_solver = td.as_scanner()
+    e1 = td_solver(mol.set_geom_('H 0 0 1.805; F 0 0 0', unit='B'))
+    e2 = td_solver(mol.set_geom_('H 0 0 1.803; F 0 0 0', unit='B'))
+    print(abs((e1[0]-e2[0])/.002 - g1[0,2]).max())
 
+    mol.set_geom_('H 0 0 1.804; F 0 0 0', unit='B')
     td = tddft.TDA(mf)
     td.nstates = 3
     td.singlet = False
     e, z = td.kernel()
     tdg = Gradients(td)
-    g1 = tdg.kernel(state=0)
+    g1 = tdg.kernel(state=1)
     print(g1)
-    print(lib.finger(g1) - 0.19668001441053556)
+    print(lib.finger(g1) - 0.19667995802487931)
 # [[ 0  0  -2.81048403e-01]
 #  [ 0  0   2.81048403e-01]]
+    td_solver = td.as_scanner()
+    e1 = td_solver(mol.set_geom_('H 0 0 1.805; F 0 0 0', unit='B'))
+    e2 = td_solver(mol.set_geom_('H 0 0 1.803; F 0 0 0', unit='B'))
+    print(abs((e1[0]-e2[0])/.002 - g1[0,2]).max())
 
+    mol.set_geom_('H 0 0 1.804; F 0 0 0', unit='B')
     td = tddft.TDDFT(mf)
     td.nstates = 3
     td.singlet = False
     e, z = td.kernel()
     tdg = Gradients(td)
-    g1 = tdg.kernel(state=0)
+    g1 = tdg.kernel(state=1)
     print(g1)
-    print(lib.finger(g1) - 0.20032094306172449)
+    print(lib.finger(g1) - 0.20032088639558535)
 # [[ 0  0  -2.86250870e-01]
 #  [ 0  0   2.86250870e-01]]
+    td_solver = td.as_scanner()
+    e1 = td_solver(mol.set_geom_('H 0 0 1.805; F 0 0 0', unit='B'))
+    e2 = td_solver(mol.set_geom_('H 0 0 1.803; F 0 0 0', unit='B'))
+    print(abs((e1[0]-e2[0])/.002 - g1[0,2]).max())
 

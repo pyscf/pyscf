@@ -61,7 +61,7 @@ def gen_tda_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
 
     if wfnsym is not None and mol.symmetry:
         orbsym = hf_symm.get_orbsym(mol, mo_coeff)
-        sym_forbid = (orbsym[viridx].reshape(-1,1) ^ orbsym[occidx]) != wfnsym
+        sym_forbid = (orbsym[occidx,None] ^ orbsym[viridx]) != wfnsym
 
     if fock_ao is None:
         #dm0 = mf.make_rdm1(mo_coeff, mo_occ)
@@ -73,7 +73,7 @@ def gen_tda_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
         foo = fock[occidx[:,None],occidx]
         fvv = fock[viridx[:,None],viridx]
 
-    hdiag = fvv.diagonal().reshape(-1,1) - foo.diagonal()
+    hdiag = (fvv.diagonal().reshape(-1,1) - foo.diagonal()).T
     if wfnsym is not None and mol.symmetry:
         hdiag[sym_forbid] = 0
     hdiag = hdiag.ravel()
@@ -84,21 +84,21 @@ def gen_tda_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
     def vind(zs):
         nz = len(zs)
         if wfnsym is not None and mol.symmetry:
-            zs = numpy.copy(zs).reshape(-1,nvir,nocc)
+            zs = numpy.copy(zs).reshape(-1,nocc,nvir)
             zs[:,sym_forbid] = 0
-        dmvo = numpy.empty((nz,nao,nao))
+        dmov = numpy.empty((nz,nao,nao))
         for i, z in enumerate(zs):
             # *2 for double occupancy
-            dmvo[i] = reduce(numpy.dot, (orbv, z.reshape(nvir,nocc)*2, orbo.T))
-        v1ao = vresp(dmvo)
-        #v1vo = numpy.asarray([reduce(numpy.dot, (orbv.T, v, orbo)) for v in v1ao])
-        v1vo = _ao2mo.nr_e2(v1ao, mo_coeff, (nocc,nmo,0,nocc)).reshape(-1,nvir,nocc)
+            dmov[i] = reduce(numpy.dot, (orbo, z.reshape(nocc,nvir)*2, orbv.T))
+        v1ao = vresp(dmov)
+        #v1ov = numpy.asarray([reduce(numpy.dot, (orbo.T, v, orbv)) for v in v1ao])
+        v1ov = _ao2mo.nr_e2(v1ao, mo_coeff, (0,nocc,nocc,nmo)).reshape(-1,nocc,nvir)
         for i, z in enumerate(zs):
-            v1vo[i]+= numpy.einsum('ps,sq->pq', fvv, z.reshape(nvir,nocc))
-            v1vo[i]-= numpy.einsum('ps,rp->rs', foo, z.reshape(nvir,nocc))
+            v1ov[i]+= numpy.einsum('sp,qs->qp', fvv, z.reshape(nocc,nvir))
+            v1ov[i]-= numpy.einsum('sp,pr->sr', foo, z.reshape(nocc,nvir))
         if wfnsym is not None and mol.symmetry:
-            v1vo[:,sym_forbid] = 0
-        return v1vo.reshape(nz,-1)
+            v1ov[:,sym_forbid] = 0
+        return v1ov.reshape(nz,-1)
 
     return vind, hdiag
 gen_tda_hop = gen_tda_operation
@@ -280,12 +280,12 @@ def get_nto(tdobj, state=1, threshold=OUTPUT_THRESHOLD, verbose=None):
         for ir in set(orbsym):
             idx = numpy.where(o_sym == ir)[0]
             if idx.size > 0:
-                dm_oo = numpy.dot(cis_t1[:,idx].T, cis_t1[:,idx])
+                dm_oo = numpy.dot(cis_t1[idx].T, cis_t1[idx])
                 weights_o[idx], nto_o[idx[:,None],idx] = numpy.linalg.eigh(dm_oo)
 
             idx = numpy.where(v_sym == ir)[0]
             if idx.size > 0:
-                dm_vv = numpy.dot(cis_t1[idx], cis_t1[idx].T)
+                dm_vv = numpy.dot(cis_t1[idx,:], cis_t1[idx,:].T)
                 weights_v[idx], nto_v[idx[:,None],idx] = numpy.linalg.eigh(dm_vv)
 
         # weights in descending order
@@ -307,8 +307,8 @@ def get_nto(tdobj, state=1, threshold=OUTPUT_THRESHOLD, verbose=None):
             weights = weights_v
 
     else:
-        nto_v, w, nto_oT = numpy.linalg.svd(cis_t1)
-        nto_o = nto_oT.conj().T
+        nto_o, w, nto_vT = numpy.linalg.svd(cis_t1)
+        nto_v = nto_vT.conj().T
         weights = w**2
         nto_orbsym = None
 
@@ -375,10 +375,10 @@ def analyze(tdobj, verbose=None):
                      i+1, wfnsym, e_ev[i], wave_length[i], f_oscillator[i])
 
         if log.verbose >= logger.INFO:
-            v_idx, o_idx = numpy.where(abs(x) > 0.1)
+            o_idx, v_idx = numpy.where(abs(x) > 0.1)
             for o, v in zip(o_idx, v_idx):
                 log.info('    %4d -> %-4d %12.5f',
-                         o+MO_BASE, v+MO_BASE+nocc, x[v,o])
+                         o+MO_BASE, v+MO_BASE+nocc, x[o,v])
 
     if log.verbose >= logger.INFO:
         log.info('\n** Transition electric dipole moments (AU) **')
@@ -500,12 +500,12 @@ def _contract_multipole(tdobj, ints, hermi=True, xy=None):
     orbv = mo_coeff[:,mo_occ==0]
 
     ints = numpy.einsum('...pq,pi,qj->...ij', ints, orbo.conj(), orbv)
-    pol = numpy.array([numpy.einsum('...ij,ji->...', ints, x) * 2 for x,y in xy])
+    pol = numpy.array([numpy.einsum('...ij,ij->...', ints, x) * 2 for x,y in xy])
     if isinstance(xy[0][1], numpy.ndarray):
         if hermi:
-            pol += [numpy.einsum('...ij,ji->...', ints, y) * 2 for x,y in xy]
+            pol += [numpy.einsum('...ij,ij->...', ints, y) * 2 for x,y in xy]
         else:  # anti-Hermitian
-            pol -= [numpy.einsum('...ij,ji->...', ints, y) * 2 for x,y in xy]
+            pol -= [numpy.einsum('...ij,ij->...', ints, y) * 2 for x,y in xy]
     return pol
 
 def oscillator_strength(tdobj, e=None, xy=None, gauge='length', order=0):
@@ -585,10 +585,10 @@ def as_scanner(td):
             self._scf = td._scf.as_scanner()
         def __call__(self, mol, **kwargs):
             mf_scanner = self._scf
-            mf_scanner(mol)
+            mf_e = mf_scanner(mol)
             self.mol = mol
             self.kernel(**kwargs)[0]
-            return self.e
+            return mf_e + self.e
     return TD_Scanner(td)
 
 
@@ -608,10 +608,10 @@ class TDA(lib.StreamObject):
         e : 1D array
             excitation energy for each excited state.
         xy : A list of two 2D arrays
-            Excitation coefficients (X, with shape (nvir,nocc)) and de-excitation
-            coefficients (Y, with shape (nvir,nocc)) for each excited state.
-            (X,Y) are normalized to 1/2 in RHF/RKS methods and normalized to 1
-            for UHF/UKS methods. In the TDA calculation, Y = 0.
+            The two 2D arrays are Excitation coefficients X (shape [nocc,nvir])
+            and de-excitation coefficients Y (shape [nocc,nvir]) for each
+            excited state.  (X,Y) are normalized to 1/2 in RHF/RKS methods and
+            normalized to 1 for UHF/UKS methods. In the TDA calculation, Y = 0.
     '''
     conv_tol = getattr(__config__, 'tdscf_rhf_TDA_conv_tol', 1e-9)
     nstates = getattr(__config__, 'tdscf_rhf_TDA_nstates', 3)
@@ -647,6 +647,11 @@ class TDA(lib.StreamObject):
     @nroots.setter
     def nroots(self, x):
         self.nstates = x
+
+    @property
+    def e_tot(self):
+        '''Excited state energies'''
+        return self._scf.e_tot + self.e
 
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)
@@ -694,12 +699,11 @@ class TDA(lib.StreamObject):
         mo_occ = mf.mo_occ
         occidx = numpy.where(mo_occ==2)[0]
         viridx = numpy.where(mo_occ==0)[0]
-        eai = lib.direct_sum('a-i->ai', mo_energy[viridx], mo_energy[occidx])
+        eai = (mo_energy[viridx,None] - mo_energy[occidx]).T
 
         if wfnsym is not None and mf.mol.symmetry:
             orbsym = hf_symm.get_orbsym(mf.mol, mf.mo_coeff)
-            sym_forbid = (orbsym[viridx].reshape(-1,1) ^ orbsym[occidx]) != wfnsym
-            eai[sym_forbid] = 1e99
+            eai[(orbsym[occidx,None] ^ orbsym[viridx]) != wfnsym] = 1e99
 
         nov = eai.size
         nroot = min(nstates, nov)
@@ -719,6 +723,8 @@ class TDA(lib.StreamObject):
         else:
             self.nstates = nstates
 
+        log = logger.Logger(self.stdout, self.verbose)
+
         vind, hdiag = self.gen_vind(self._scf)
         precond = self.get_precond(hdiag)
 
@@ -728,14 +734,13 @@ class TDA(lib.StreamObject):
                 lib.davidson1(vind, x0, precond,
                               tol=self.conv_tol,
                               nroots=nstates, lindep=self.lindep,
-                              max_space=self.max_space,
-                              verbose=self.verbose)
+                              max_space=self.max_space, verbose=log)
 
         nocc = (self._scf.mo_occ>0).sum()
         nmo = self._scf.mo_occ.size
         nvir = nmo - nocc
 # 1/sqrt(2) because self.x is for alpha excitation amplitude and 2(X^+*X) = 1
-        self.xy = [(xi.reshape(nvir,nocc)*numpy.sqrt(.5),0) for xi in x1]
+        self.xy = [(xi.reshape(nocc,nvir)*numpy.sqrt(.5),0) for xi in x1]
 
         lib.chkfile.save(self.chkfile, 'tddft/e', self.e)
         lib.chkfile.save(self.chkfile, 'tddft/xy', self.xy)
@@ -783,7 +788,7 @@ def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
 
     if wfnsym is not None and mol.symmetry:
         orbsym = hf_symm.get_orbsym(mol, mo_coeff)
-        sym_forbid = (orbsym[viridx].reshape(-1,1) ^ orbsym[occidx]) != wfnsym
+        sym_forbid = (orbsym[occidx,None] ^ orbsym[viridx]) != wfnsym
 
     #dm0 = mf.make_rdm1(mo_coeff, mo_occ)
     #fock_ao = mf.get_hcore() + mf.get_veff(mol, dm0)
@@ -793,7 +798,7 @@ def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
     foo = numpy.diag(mo_energy[occidx])
     fvv = numpy.diag(mo_energy[viridx])
 
-    e_ai = hdiag = fvv.diagonal().reshape(-1,1) - foo.diagonal()
+    hdiag = (fvv.diagonal().reshape(-1,1) - foo.diagonal()).T
     if wfnsym is not None and mol.symmetry:
         hdiag[sym_forbid] = 0
     hdiag = numpy.hstack((hdiag.ravel(), hdiag.ravel()))
@@ -804,30 +809,29 @@ def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
     def vind(xys):
         nz = len(xys)
         if wfnsym is not None and mol.symmetry:
-            # shape(nz,2,nvir,nocc): 2 ~ X,Y
-            xys = numpy.copy(zs).reshape(nz,2,nvir,nocc)
+            # shape(nz,2,nocc,nvir): 2 ~ X,Y
+            xys = numpy.copy(zs).reshape(nz,2,nocc,nvir)
             xys[:,:,sym_forbid] = 0
         dms = numpy.empty((nz,nao,nao))
         for i in range(nz):
-            x, y = xys[i].reshape(2,nvir,nocc)
+            x, y = xys[i].reshape(2,nocc,nvir)
             # *2 for double occupancy
-            dmx = reduce(numpy.dot, (orbv, x*2, orbo.T))
-            dmy = reduce(numpy.dot, (orbo, y.T*2, orbv.T))
+            dmx = reduce(numpy.dot, (orbo, x*2, orbv.T))
+            dmy = reduce(numpy.dot, (orbv, y.T*2, orbo.T))
             dms[i] = dmx + dmy  # AX + BY
 
         v1ao = vresp(dms)
+        v1ov = _ao2mo.nr_e2(v1ao, mo_coeff, (0,nocc,nocc,nmo)).reshape(-1,nocc,nvir)
         v1vo = _ao2mo.nr_e2(v1ao, mo_coeff, (nocc,nmo,0,nocc)).reshape(-1,nvir,nocc)
-        v1ov = _ao2mo.nr_e2(v1ao, mo_coeff, (0,nocc,nocc,nmo))
-        v1ov = v1ov.reshape(-1,nocc,nvir).transpose(0,2,1)
-        hx = numpy.empty((nz,2,nvir,nocc), dtype=v1vo.dtype)
+        hx = numpy.empty((nz,2,nocc,nvir), dtype=v1ov.dtype)
         for i in range(nz):
-            x, y = xys[i].reshape(2,nvir,nocc)
-            hx[i,0] = v1vo[i]
-            hx[i,0]+= numpy.einsum('ps,sq->pq', fvv, x)  # AX
-            hx[i,0]-= numpy.einsum('ps,rp->rs', foo, x)  # AX
-            hx[i,1] =-v1ov[i]
-            hx[i,1]-= numpy.einsum('ps,sq->pq', fvv, y)  #-AY
-            hx[i,1]+= numpy.einsum('ps,rp->rs', foo, y)  #-AY
+            x, y = xys[i].reshape(2,nocc,nvir)
+            hx[i,0] = v1ov[i]
+            hx[i,0]+= numpy.einsum('sp,qs->qp', fvv, x)  # AX
+            hx[i,0]-= numpy.einsum('sp,pr->sr', foo, x)  # AX
+            hx[i,1] =-v1vo[i].T
+            hx[i,1]-= numpy.einsum('sp,qs->qp', fvv, y)  #-AY
+            hx[i,1]+= numpy.einsum('sp,pr->sr', foo, y)  #-AY
 
         if wfnsym is not None and mol.symmetry:
             hx[:,:,sym_forbid] = 0
@@ -856,6 +860,8 @@ class TDHF(TDA):
         else:
             self.nstates = nstates
 
+        log = logger.Logger(self.stdout, self.verbose)
+
         vind, hdiag = self.gen_vind(self._scf)
         precond = self.get_precond(hdiag)
         if x0 is None:
@@ -873,16 +879,16 @@ class TDHF(TDA):
                                     tol=self.conv_tol,
                                     nroots=nstates, lindep=self.lindep,
                                     max_space=self.max_space, pick=pickeig,
-                                    verbose=self.verbose)
+                                    verbose=log)
 
         nocc = (self._scf.mo_occ>0).sum()
         nmo = self._scf.mo_occ.size
         nvir = nmo - nocc
         self.e = w
         def norm_xy(z):
-            x, y = z.reshape(2,nvir,nocc)
-            norm = 2*(lib.norm(x)**2 - lib.norm(y)**2)
-            norm = 1/numpy.sqrt(norm)
+            x, y = z.reshape(2,nocc,nvir)
+            norm = lib.norm(x)**2 - lib.norm(y)**2
+            norm = numpy.sqrt(.5/norm)  # normalize to 0.5 for alpha spin
             return x*norm, y*norm
         self.xy = [norm_xy(z) for z in x1]
 
