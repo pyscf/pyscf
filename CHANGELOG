@@ -6,17 +6,35 @@ PySCF 1.5 alpha (2018-03-??)
   - range-separated hybrid feature for RKS and UKS
 
 
+PySCF 1.4.4 (2018-03-20)
+-----------------------
+* Improved
+  - Imaginary part in non-hermitian matrix diagonalization
+  - Symmetric grids in cubegen
+  - FCI initial guess when system has Dooh or Doov symmetry
+  - Using stable sort when sorting orbital energies
+  - Attribute "e_tot" in the MP2 methods to access the total energy
+* Bugfix
+  - meta-GGA density in dft.numint.eval_rho2
+  - intor parser in ao2mo module
+  - ecp parser if ecp data not found
+  - 1-electron system for UCCSD
+  - Python-3 compatibility for dmrgscf module
+  - Handling the errors which were raised in the background threads
+  - UHF/ROHF density matrices in nao localization method
+
+
 PySCF 1.4.3 (2018-01-17)
 -----------------------
 * Improved
   - Assert convergence in geometry optimization
   - Initial guess in SCF PES scanning
-  - Memory usage for generating becke-grids in DFT
+  - Memory usage for generating Becke-grids in DFT
 * Bugfix
   - XC parser to support the scaled compound functional
   - In the second order SCF algorithm, removing level_shift
   - k-point RCCSD for non-canonical HF reference
-  - basis contraction in ECP integrals
+  - ECP integrals
 
 
 PySCF 1.4.2 (2017-12-06)
@@ -106,7 +124,7 @@ PySCF 1.4 beta (2017-08-22)
 PySCF 1.4 alpha (2017-07-24)
 ----------------------------
 * Added
-  - Spinor-GTO evaluator
+  - General function to evaluate Spinor GTO in real space grids
   - Dirac-Kohn-Sham (LDA functional)
   - EDIIS and ADIIS
   - Periodic CCSD with k-point sampling
@@ -406,8 +424,8 @@ Version 1.1 alpha-2 (2016-3-8):
 * Added
   - CCSD(T) and CCSD(T) gradients
   - General JK contraction function
-  - HF Hessian
-  - DFT Hessian
+  - RHF analytical nuclear Hessian
+  - RKS analytical nuclear Hessian
   - Function to symmetrize given orbital space
   - General XC functional evaluator (using Libxc or Xcfun)
   - Intrinsic Atomic Orbital (IAO)
