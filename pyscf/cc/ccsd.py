@@ -521,7 +521,6 @@ def _contract_s4vvvv_t2(mol, vvvv, t2, out=None, max_memory=2000, verbose=None):
                 contract_blk_(tmp, i0, i1, j0, j1)
 
         with lib.call_in_background(block_contract) as bcontract:
-            bcontract = block_contract
             readbuf = numpy.empty((blksize,nvira,nvir_pair))
             readbuf1 = numpy.empty_like(readbuf)
             for p0, p1 in lib.prange(0, nvira, blksize):

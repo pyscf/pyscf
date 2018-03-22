@@ -318,12 +318,12 @@ class KnownValues(unittest.TestCase):
               numpy.random.random((noccb,noccb,nvirb,nvirb)))
         t1, t2 = mycc.vector_to_amplitudes(mycc.amplitudes_to_vector(t1, t2))
         t1, t2 = mycc.update_amps(t1, t2, eris)
-        self.assertAlmostEqual(lib.finger(t1[0]),  49.912690337392938, 11)
-        self.assertAlmostEqual(lib.finger(t1[1]),  74.596097348134776, 11)
-        self.assertAlmostEqual(lib.finger(t2[0]), -41.784696524955393, 11)
-        self.assertAlmostEqual(lib.finger(t2[1]), -9675.7677695314342, 9)
-        self.assertAlmostEqual(lib.finger(t2[2]),  270.75447826471577, 9)
-        self.assertAlmostEqual(lib.finger(mycc.amplitudes_to_vector(t1, t2)), 4341.9623137256776, 9)
+        self.assertAlmostEqual(lib.finger(t1[0]),  49.912690337392938, 10)
+        self.assertAlmostEqual(lib.finger(t1[1]),  74.596097348134776, 10)
+        self.assertAlmostEqual(lib.finger(t2[0]), -41.784696524955393, 10)
+        self.assertAlmostEqual(lib.finger(t2[1]), -9675.7677695314342, 8)
+        self.assertAlmostEqual(lib.finger(t2[2]),  270.75447826471577, 8)
+        self.assertAlmostEqual(lib.finger(mycc.amplitudes_to_vector(t1, t2)), 4341.9623137256776, 8)
 
     def test_update_amps2(self):  # compare to gccsd.update_amps
         mol = mol_s2
