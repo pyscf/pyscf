@@ -68,8 +68,8 @@ fcidumpFromIntegral.argtypes = [ctypes.c_char_p,
 r2RDM = shciLib.r2RDM
 r2RDM.restype = None
 r2RDM.argtypes = [ ndpointer(ctypes.c_double, flags="C_CONTIGUOUS"),
-					ctypes.c_size_t,
-					ctypes.c_char_p]
+                  ctypes.c_size_t,
+                  ctypes.c_char_p]
 
 
 class SHCI(pyscf.lib.StreamObject):
@@ -212,10 +212,11 @@ class SHCI(pyscf.lib.StreamObject):
 
         twopdm = numpy.zeros( (norb, norb, norb, norb) )
         file2pdm = "%s/spatialRDM.%d.%d.txt"%(self.prefix,state, state)
+        file2pdm = file2pdm.encode()  # .encode for python3 compatibility
         r2RDM( twopdm, norb, file2pdm )
 
         #if (SHCI.groupname == 'Dooh' or SHCI.groupname == 'Cooh') and SHCI.useExtraSymm:
-        if (self.groupname == 'Dooh' or self.groupname == 'Cooh') and self.useExtraSymm:
+        if (self.groupname == 'Dooh' or self.groupname == 'Coov') and self.useExtraSymm:
            nRows, rowIndex, rowCoeffs = DinfhtoD2h(self, norb, nelec)
            twopdmcopy = 1.*twopdm
            twopdm = 0.*twopdm
@@ -339,7 +340,9 @@ class SHCI(pyscf.lib.StreamObject):
         if (filetype == "binary") :
             fname = os.path.join('%s/%s/'%(self.scratchDirectory,"node0"), "spatial_threepdm.%d.%d.bin" %(state, state))
             fnameout = os.path.join('%s/%s/'%(self.scratchDirectory,"node0"), "spatial_threepdm.%d.%d.bin.unpack" %(state, state))
-            libE3unpack.unpackE3(ctypes.c_char_p(fname), ctypes.c_char_p(fnameout), ctypes.c_int(norb))
+            libE3unpack.unpackE3(ctypes.c_char_p(fname.encode()),
+                                 ctypes.c_char_p(fnameout.encode()),
+                                 ctypes.c_int(norb))
 
             E3 = numpy.fromfile(fnameout, dtype=numpy.dtype('Float64'))
             E3 = numpy.reshape(E3, (norb, norb, norb, norb, norb, norb), order='F')
@@ -762,6 +765,7 @@ def writeIntegralFile(SHCI, h1eff, eri_cas, norb, nelec, ecore=0):
 
        eri_cas = pyscf.ao2mo.restore(8, eri_cas, norb)
        # Writes the FCIDUMP file using functions in SHCI_tools.cpp.
+       integralFile = integralFile.encode()  # .encode for python3 compatibility
        fcidumpFromIntegral( integralFile, h1eff, eri_cas, norb, neleca+nelecb,
                             ecore, numpy.asarray(orbsym, dtype=numpy.int32),
                             abs(neleca-nelecb) )

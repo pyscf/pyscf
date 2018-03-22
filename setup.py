@@ -330,7 +330,7 @@ extensions += [
     make_ext('pyscf.lib.libmbd', os.path.join('extras', 'mbd'), 'dipole.c', []),
     make_ext('pyscf.lib.libdft', 'dft',
              'CxLebedevGrid.c grid_basis.c nr_numint.c r_numint.c',
-             ['cvhf', 'cgto', 'cint']),
+             ['cvhf', 'cgto', 'cint', 'np_helper']),
 ]
 
 #
@@ -369,7 +369,7 @@ if 1:
 if 1:
     xcfun_lib_path = search_lib_path('libxcfun'+so_ext, [pyscf_lib_dir,
                                                          os.path.join(pyscf_lib_dir, 'deps', 'lib'),
-                                                      os.path.join(pyscf_lib_dir, 'deps', 'lib64')])
+                                                         os.path.join(pyscf_lib_dir, 'deps', 'lib64')])
     xcfun_inc_path = search_inc_path('xcfun.h', [os.path.join(pyscf_lib_dir, 'deps', 'include')])
     if xcfun_lib_path and xcfun_inc_path:
         print("****************************************************************")
