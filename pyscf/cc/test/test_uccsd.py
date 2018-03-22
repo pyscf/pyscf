@@ -321,9 +321,9 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.finger(t1[0]),  49.912690337392938, 10)
         self.assertAlmostEqual(lib.finger(t1[1]),  74.596097348134776, 10)
         self.assertAlmostEqual(lib.finger(t2[0]), -41.784696524955393, 10)
-        self.assertAlmostEqual(lib.finger(t2[1]), -9675.7677695314342, 8)
+        self.assertAlmostEqual(lib.finger(t2[1]), -9675.7677695314342, 7)
         self.assertAlmostEqual(lib.finger(t2[2]),  270.75447826471577, 8)
-        self.assertAlmostEqual(lib.finger(mycc.amplitudes_to_vector(t1, t2)), 4341.9623137256776, 8)
+        self.assertAlmostEqual(lib.finger(mycc.amplitudes_to_vector(t1, t2)), 4341.9623137256776, 7)
 
     def test_update_amps2(self):  # compare to gccsd.update_amps
         mol = mol_s2

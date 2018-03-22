@@ -1769,6 +1769,12 @@ class Mole(lib.StreamObject):
                                'Note mol.spin = 2S = Nalpha - Nbeta, not 2S+1' %
                                (ne, self.spin))
         return nalpha, nbeta
+    @nelec.setter
+    def nelec(self, neleca_nelecb):
+        neleca, nelecb = neleca_nelecb
+        self._nelectron = neleca + nelecb
+        self.spin = neleca - nelecb
+
     @property
     def nelectron(self):
         if self._nelectron is None:

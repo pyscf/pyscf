@@ -19,8 +19,10 @@ UNIT = 'angstrom'
 conf_file = os.environ.get('PYSCF_CONFIG_FILE', None)
 if conf_file is None:
     conf_file = os.path.join(os.environ.get('HOME', '.'), '.pyscf_conf.py')
-    if not os.path.isfile(conf_file):
-        conf_file = None
+
+if not os.path.isfile(conf_file):
+    conf_file = None
+
 if conf_file is not None:
     if sys.version_info < (3,0):
         import imp
