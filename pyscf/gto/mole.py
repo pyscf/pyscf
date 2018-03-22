@@ -1779,6 +1779,23 @@ class Mole(lib.StreamObject):
     def nelectron(self, n):
         self._nelectron = n
 
+    @property
+    def multiplicity(self):
+        return self.spin + 1
+    @multiplicity.setter
+    def multiplicity(self, x):
+        self.spin = x - 1
+    @property
+    def ms(self):
+        '''Spin quantum number. multiplicity = ms*2+1'''
+        if self.spin % 2 == 0:
+            return self.spin // 2
+        else:
+            return self.spin * .5
+    @ms.setter
+    def ms(self, x):
+        self.spin = int(round(2*x, 4))
+
 # need "deepcopy" here because in shallow copy, _env may get new elements but
 # with ptr_env unchanged
 # def __copy__(self):
