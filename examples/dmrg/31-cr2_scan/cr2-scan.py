@@ -33,7 +33,7 @@ def run(b, dm_guess, mo_guess, ci=None):
     mf = scf.RHF(mol).x2c()
     mf.max_cycle = 100
     mf.conv_tol = 1e-9
-    mf.kenerl(dm_guess)
+    mf.kernel(dm_guess)
 
 #---------------------
 # CAS(12,12)
