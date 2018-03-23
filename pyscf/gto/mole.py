@@ -2827,6 +2827,27 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         from pyscf.symm import sph
         return sph.sph2spinor_coeff(self)
 
+
+    def apply(self, fn, *args, **kwargs):
+        if callable(fn):
+            return lib.StreamObject(fn, *args, **kwargs)
+        elif isinstance(fn, (str, unicode)):
+            from pyscf import scf, dft, mp, cc, ci, mcscf, tdscf
+            for mod in (scf, dft):
+                method = getattr(mod, fn.upper(), None)
+                if method is not None and callable(method):
+                    return method(self, *args, **kwargs)
+
+            for mod in (mp, cc, ci, mcscf, tdscf):
+                method = getattr(mod, fn.upper(), None)
+                if method is not None and callable(method):
+                    return method(scf.RHF(self).run(), *args, **kwargs)
+
+            raise ValueError('Unknown method %s' % fn)
+        else:
+            raise TypeError('First argument of .apply method must be a '
+                            'function or a string.')
+
 def _parse_nuc_mod(str_or_int):
     nucmod = NUC_POINT
     if isinstance(str_or_int, int) and str_or_int != 0:
