@@ -75,7 +75,7 @@ class KnownValues(unittest.TestCase):
                     verbose=0)
         self.assertAlmostEqual(lib.finger(mol.intor('ECPscalar')), -0.19922144394443492, 9)
         mf = scf.RHF(mol)
-        self.assertAlmostEqual(mf.kernel(), -0.45002331958981223, 10)
+        self.assertAlmostEqual(mf.kernel(), -0.45002315563472206, 10)
 
     def test_bfd(self):
         mol = gto.M(atom='H 0. 0. 0.',
