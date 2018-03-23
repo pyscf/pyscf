@@ -212,7 +212,7 @@ class KnownValues(unittest.TestCase):
         v1 = ecp.ecp_int(cell)
         mol = cell.to_mol()
         v0 = mol.intor('ECPscalar_sph')
-        self.assertAlmostEqual(abs(v0 - v1).sum(), 0.029005941884155326, 8)
+        self.assertAlmostEqual(abs(v0 - v1).sum(), 0.029005926114411891, 8)
 
     def test_ecp_keyword_in_pseudo(self):
         cell = pgto.M(

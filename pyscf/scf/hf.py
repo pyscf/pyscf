@@ -1573,7 +1573,7 @@ class SCF(lib.StreamObject):
 
     def apply(self, fn, *args, **kwargs):
         if callable(fn):
-            return lib.StreamObject(fn, *args, **kwargs)
+            return lib.StreamObject.apply(self, fn, *args, **kwargs)
         elif isinstance(fn, (str, unicode)):
             from pyscf import mp, cc, ci, mcscf, tdscf
             for mod in (mp, cc, ci, mcscf, tdscf):

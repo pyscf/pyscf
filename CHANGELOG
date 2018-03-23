@@ -50,8 +50,15 @@ PySCF 1.5 alpha (2018-03-??)
   - KMP2 memory efficiency
 
 
+PySCF 1.4.5 (2018-03-23)
+------------------------
+* Bugfix
+  - Numerical grids not converged in ECP integrals
+  - Python3 compatibility in shci module
+
+
 PySCF 1.4.4 (2018-03-20)
------------------------
+------------------------
 * Improved
   - Non-Hermitian matrix diagonalization
   - Symmetric grids in cubegen
@@ -69,7 +76,7 @@ PySCF 1.4.4 (2018-03-20)
 
 
 PySCF 1.4.3 (2018-01-17)
------------------------
+------------------------
 * Improved
   - Assert convergence in geometry optimization
   - Initial guess in SCF PES scanning

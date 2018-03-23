@@ -23,6 +23,7 @@ from pyscf.dft import numint
 from pyscf import dft
 from pyscf.tdscf import uhf
 from pyscf.scf import uhf_symm
+from pyscf.data import nist
 from pyscf.ao2mo import _ao2mo
 from pyscf.soscf.newton_ah import _gen_uhf_response
 from pyscf import __config__

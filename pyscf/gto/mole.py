@@ -2830,7 +2830,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
 
     def apply(self, fn, *args, **kwargs):
         if callable(fn):
-            return lib.StreamObject(fn, *args, **kwargs)
+            return lib.StreamObject.apply(self, fn, *args, **kwargs)
         elif isinstance(fn, (str, unicode)):
             from pyscf import scf, dft, mp, cc, ci, mcscf, tdscf
             for mod in (scf, dft):
