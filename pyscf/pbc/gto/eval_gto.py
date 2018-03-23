@@ -121,10 +121,7 @@ def eval_gto(cell, eval_name, coords, comp=None, kpts=None, kpt=None,
     sh0, sh1 = shls_slice
     nao = ao_loc[sh1] - ao_loc[sh0]
 
-    ao_kpts = [numpy.zeros((ngrids,nao,comp), dtype=numpy.complex128, order='F')
-               for k in range(nkpts)]
-    out_ptrs = (ctypes.c_void_p*nkpts)(
-            *[x.ctypes.data_as(ctypes.c_void_p) for x in ao_kpts])
+    out = numpy.empty((nkpts,comp,nao,ngrids), dtype=numpy.complex128)
     coords = numpy.asarray(coords, order='F')
 
     # For atoms near the boundary of the cell, it is necessary (even in low-
@@ -135,25 +132,31 @@ def eval_gto(cell, eval_name, coords, comp=None, kpts=None, kpt=None,
         Ls = cell.get_lattice_Ls(dimension=cell.dimension)
     Ls = Ls[numpy.argsort(lib.norm(Ls, axis=1))]
     expLk = numpy.exp(1j * numpy.asarray(numpy.dot(Ls, kpts_lst.T), order='C'))
+    rcut = numpy.array([cell.bas_rcut(ib, cell.precision)
+                        for ib in range(cell.nbas)])
 
     drv = getattr(libpbc, eval_name)
     drv(ctypes.c_int(ngrids),
         (ctypes.c_int*2)(*shls_slice), ao_loc.ctypes.data_as(ctypes.c_void_p),
         Ls.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(len(Ls)),
         expLk.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nkpts),
-        out_ptrs, coords.ctypes.data_as(ctypes.c_void_p),
+        out.ctypes.data_as(ctypes.c_void_p),
+        coords.ctypes.data_as(ctypes.c_void_p),
+        rcut.ctypes.data_as(ctypes.c_void_p),
         non0tab.ctypes.data_as(ctypes.c_void_p),
         atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(natm),
         bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
         env.ctypes.data_as(ctypes.c_void_p))
 
+    ao_kpts = []
     for k, kpt in enumerate(kpts_lst):
-        if abs(kpt).sum() < 1e-9:
-            ao_kpts[k] = ao_kpts[k].real.copy(order='F')
-
-        ao_kpts[k] = ao_kpts[k].transpose(2,0,1)
+        v = out[k].transpose(0,2,1)
         if comp == 1:
-            ao_kpts[k] = ao_kpts[k][0]
+            v = v[0]
+        if abs(kpt).sum() < 1e-9:
+            v = v.real.copy(order='F')
+        ao_kpts.append(v)
+
     if kpts is None or numpy.shape(kpts) == (3,):  # A single k-point
         ao_kpts = ao_kpts[0]
     return ao_kpts
@@ -163,8 +166,13 @@ pbc_eval_gto = eval_gto
 
 if __name__ == '__main__':
     from pyscf.pbc import gto, dft
-    cell = gto.M(a=numpy.eye(3)*4, atom='He 1 1 1', basis='6-31g')
+    cell = gto.M(a=numpy.eye(3)*4, atom='He 1 1 1', basis=[[2,(1,.5),(.5,.5)]])
     coords = cell.get_uniform_grids([10]*3)
-    ao_value = eval_gto(cell, "PBCGTOval_sph", coords, kpts=cell.make_kpts([3]*3))
-    print(lib.finger(numpy.asarray(ao_value)) - 0.542179662042965-0.12290561920251104j)
-    print(ao_value[0].shape)
+    ao_value = eval_gto(cell, "GTOval_sph", coords, kpts=cell.make_kpts([3]*3))
+    print(lib.finger(numpy.asarray(ao_value)) - (-0.27594803231989179+0.0064644591759109114j))
+
+    cell = gto.M(a=numpy.eye(3)*4, atom='He 1 1 1', basis=[[2,(1,.5),(.5,.5)]])
+    coords = cell.get_uniform_grids([10]*3)
+    ao_value = eval_gto(cell, "GTOval_ip_cart", coords, kpts=cell.make_kpts([3]*3))
+    print(lib.finger(numpy.asarray(ao_value)) - (0.38051517609460028+0.062526488684770759j))
+

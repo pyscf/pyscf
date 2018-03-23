@@ -1,11 +1,11 @@
 /* Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
-  
+
    Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
     You may obtain a copy of the License at
- 
+
         http://www.apache.org/licenses/LICENSE-2.0
- 
+
     Unless required by applicable law or agreed to in writing, software
     distributed under the License is distributed on an "AS IS" BASIS,
     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -28,6 +28,7 @@
 #define MIN(X,Y)        ((X)<(Y)?(X):(Y))
 #define MAX(X,Y)        ((X)>(Y)?(X):(Y))
 #define ALL_IMAGES      255
+#define IMGBLK          40
 
 double CINTcommon_fac_sp(int l);
 void GTOshell_eval_grid_cart(double *gto, double *ri, double *exps,
@@ -60,7 +61,7 @@ void GTOshell_eval_grid_ip_cart(double *gto, double *ri, double *exps,
  * Ls should be sorted based on the distance to center cell.
  */
 void PBCnr_ao_screen(unsigned char *non0table, double *coords, int ngrids,
-                     double *Ls, int nimgs, 
+                     double *Ls, int nimgs,
                      int *atm, int natm, int *bas, int nbas, double *env)
 {
         const int nblk = (ngrids+BLKSIZE-1) / BLKSIZE;
@@ -119,51 +120,51 @@ next_blk:;
 }
 }
 
-
-static void axpy(double complex **out, double *ao0, double complex *expLk,
-                 int nkpts, size_t off, size_t ngrids, size_t bgrids, int ncol)
+static void _copy(double complex *out, double *ao_r, double *ao_i,
+                  size_t ngrids, size_t bgrids,
+                  int nkpts, int ncomp, int nao, int ncol)
 {
-        size_t i, j, ik;
-        double complex *out_ik;
-        for (ik = 0; ik < nkpts; ik++) {
-                out_ik = out[ik] + off;
+        int i, j, k, ic;
+        double complex *pout;
+        for (k = 0; k < nkpts; k++) {
+        for (ic = 0; ic < ncomp; ic++) {
+                pout = out + (k * ncomp + ic) * nao * ngrids;
                 for (j = 0; j < ncol; j++) {
                 for (i = 0; i < bgrids; i++) {
-                        out_ik[j*ngrids+i] += ao0[j*BLKSIZE+i] * expLk[ik];
+                        pout[j*ngrids+i] = (ao_r[j*bgrids+i] +
+                                            ao_i[j*bgrids+i]*_Complex_I);
                 } }
-        }
-}
-static void set0(double complex **out,
-                 int nkpts, size_t off, size_t ngrids, size_t bgrids, int ncol)
-{
-        size_t i, j, ik;
-        double complex *out_ik;
-        for (ik = 0; ik < nkpts; ik++) {
-                out_ik = out[ik] + off;
-                for (j = 0; j < ncol; j++) {
-                for (i = 0; i < bgrids; i++) {
-                        out_ik[j*ngrids+i] = 0;
-                } }
-        }
+                ao_r += ncol * bgrids;
+                ao_i += ncol * bgrids;
+        } }
 }
 
-// grid2atm[xyz,grid_id]
-static void _fill_grid2atm(double *grid2atm, double *coord, double *L,
-                           int bgrids, int ngrids,
-                           int *atm, int natm, int *bas, int nbas, double *env)
+// grid2atm[nimgs,xyz,grid_id]
+static void _fill_grid2atm(double *grid2atm, double *min_grid2atm,
+                           double *coord, double *Ls, double *r_atm,
+                           int atm_imag_max, size_t bgrids, size_t ngrids, int nimgs)
 {
-        int atm_id, ig;
-        double *r_atm;
+        int ig, m;
         double rL[3];
-        for (atm_id = 0; atm_id < natm; atm_id++) {
-                r_atm = env + atm[PTR_COORD+atm_id*ATM_SLOTS];
-                rL[0] = r_atm[0] + L[0];
-                rL[1] = r_atm[1] + L[1];
-                rL[2] = r_atm[2] + L[2];
-                for (ig = 0; ig < bgrids; ig++) {
-                        grid2atm[0*BLKSIZE+ig] = coord[0*ngrids+ig] - rL[0];
-                        grid2atm[1*BLKSIZE+ig] = coord[1*ngrids+ig] - rL[1];
-                        grid2atm[2*BLKSIZE+ig] = coord[2*ngrids+ig] - rL[2];
+        double dist;
+        double dist_min;
+        for (m = 0; m < nimgs; m++) {
+                if ((m < atm_imag_max || atm_imag_max == ALL_IMAGES)) {
+                        rL[0] = r_atm[0] + Ls[m*3+0];
+                        rL[1] = r_atm[1] + Ls[m*3+1];
+                        rL[2] = r_atm[2] + Ls[m*3+2];
+                        dist_min = 1e9;
+                        for (ig = 0; ig < bgrids; ig++) {
+                                grid2atm[0*BLKSIZE+ig] = coord[0*ngrids+ig] - rL[0];
+                                grid2atm[1*BLKSIZE+ig] = coord[1*ngrids+ig] - rL[1];
+                                grid2atm[2*BLKSIZE+ig] = coord[2*ngrids+ig] - rL[2];
+
+                                dist = (grid2atm[0*BLKSIZE+ig]*grid2atm[0*BLKSIZE+ig] +
+                                        grid2atm[1*BLKSIZE+ig]*grid2atm[1*BLKSIZE+ig] +
+                                        grid2atm[2*BLKSIZE+ig]*grid2atm[2*BLKSIZE+ig]);
+                                dist_min = MIN(dist, dist_min);
+                        }
+                        min_grid2atm[m] = sqrt(dist_min);
                 }
                 grid2atm += 3*BLKSIZE;
         }
@@ -173,56 +174,114 @@ static void _fill_grid2atm(double *grid2atm, double *coord, double *L,
 void PBCeval_cart_iter(FPtr_eval feval,  FPtr_exp fexp,
                        size_t nao, size_t ngrids, size_t bgrids, size_t offao,
                        int param[], int *shls_slice, int *ao_loc, double *buf,
-                       double *Ls, int nimgs, double complex *expLk, int nkpts,
-                       double complex **ao, double *coord, unsigned char *non0table,
+                       double *Ls, double *expLk_r, double *expLk_i,
+                       int nimgs, int nkpts, int di_max, double complex *ao,
+                       double *coord, double *rcut, unsigned char *non0table,
                        int *atm, int natm, int *bas, int nbas, double *env)
 {
         const int ncomp = param[TENSOR];
         const int sh0 = shls_slice[0];
         const int sh1 = shls_slice[1];
-        const int atmstart = bas[sh0*BAS_SLOTS+ATOM_OF];
-        const int atmend = bas[(sh1-1)*BAS_SLOTS+ATOM_OF]+1;
-        const int atmcount = atmend - atmstart;
-        const size_t Ngrids = ngrids;
-        int i, l, m, np, nc, atm_id, bas_id, ao_id;
-        size_t off, di;
+
+        const char TRANS_N = 'N';
+        const char TRANS_T = 'T';
+        const double D1 = 1;
+
+        int i, j, k, l, np, nc, atm_id, bas_id, deg, ao_id;
+        int iL, iL0, iLcount, dimc;
+        int grid2atm_atm_id, count, bufk_empty;
         double fac;
-        double *p_exp, *pcoeff, *pcoord, *ri, *pao;
-        double *grid2atm = buf; // [atm_id,xyz,grid]
-        double *eprim = grid2atm + atmcount*3*BLKSIZE;
-        double *aobuf = eprim + NPRIMAX*BLKSIZE*2;
+        double *p_exp, *pcoeff, *pcoord, *pao, *ri;
+        double *grid2atm = buf; // shape [nimgs,3,bgrids]
+        double *eprim = grid2atm + nimgs*3*BLKSIZE;
+        double *aobufk_r = eprim + NPRIMAX*BLKSIZE*2;
+        double *aobufk_i = aobufk_r + nkpts*ncomp*di_max*bgrids;
+        double *aobuf = aobufk_i + nkpts*ncomp*di_max*bgrids;
+        double *Lk_r_buf = aobuf + IMGBLK*ncomp*di_max*bgrids;
+        double *Lk_i_buf = Lk_r_buf + IMGBLK * nkpts;
+        double *min_grid2atm = Lk_i_buf + IMGBLK * nkpts;
+        double *pexpLk_r, *pexpLk_i;
+        int img_idx[nimgs];
+        int atm_imag_max[natm];
 
-        for (i = 0; i < ncomp; i++) {
-                off = (i*nao+ao_loc[sh0])*Ngrids + offao;
-                set0(ao, nkpts, offao, ngrids, bgrids, ao_loc[sh1]-ao_loc[sh0]);
+        for (i = 0; i < natm; i++) {
+                atm_imag_max[i] = 0;
         }
-        for (m = 0; m < nimgs; m++) {
-                _fill_grid2atm(grid2atm, coord, Ls+m*3, bgrids, ngrids,
-                               atm+atmstart*ATM_SLOTS, atmcount, bas, nbas, env);
+        for (bas_id = sh0; bas_id < sh1; bas_id++) {
+                atm_id = bas[bas_id*BAS_SLOTS+ATOM_OF];
+                atm_imag_max[atm_id] = MAX(atm_imag_max[atm_id], non0table[bas_id]);
+        }
 
-                for (bas_id = sh0; bas_id < sh1; bas_id++) {
-                        np = bas[bas_id*BAS_SLOTS+NPRIM_OF];
-                        nc = bas[bas_id*BAS_SLOTS+NCTR_OF ];
-                        l  = bas[bas_id*BAS_SLOTS+ANG_OF  ];
-                        fac = CINTcommon_fac_sp(l);
-                        p_exp  = env + bas[bas_id*BAS_SLOTS+PTR_EXP];
-                        pcoeff = env + bas[bas_id*BAS_SLOTS+PTR_COEFF];
-                        atm_id = bas[bas_id*BAS_SLOTS+ATOM_OF];
-                        pcoord = grid2atm + (atm_id - atmstart) * 3*BLKSIZE;
-                        if ((m < non0table[bas_id] || non0table[bas_id] == ALL_IMAGES) &&
-                            (*fexp)(eprim, pcoord, p_exp, pcoeff, l, np, nc, bgrids, fac)) {
-                                ao_id = ao_loc[bas_id] - ao_loc[sh0];
-                                di = ao_loc[bas_id+1] - ao_loc[bas_id];
-                                ri = env + atm[PTR_COORD+atm_id*ATM_SLOTS];
-                                (*feval)(aobuf, ri, eprim, pcoord, p_exp, pcoeff,
-                                         env, l, np, nc, di, BLKSIZE, bgrids);
-                                for (i = 0; i < ncomp; i++) {
-                                        off = (i*nao+ao_id)*Ngrids + offao;
-                                        pao = aobuf + i*di*BLKSIZE;
-                                        axpy(ao, pao, expLk+m*nkpts, nkpts,
-                                             off, ngrids, bgrids, di);
-                                }
+        grid2atm_atm_id = -1;
+        for (bas_id = sh0; bas_id < sh1; bas_id++) {
+                np = bas[bas_id*BAS_SLOTS+NPRIM_OF];
+                nc = bas[bas_id*BAS_SLOTS+NCTR_OF ];
+                l  = bas[bas_id*BAS_SLOTS+ANG_OF  ];
+                deg = (l+1)*(l+2)/2;
+                dimc = nc*deg * ncomp * bgrids;
+                fac = CINTcommon_fac_sp(l);
+                p_exp  = env + bas[bas_id*BAS_SLOTS+PTR_EXP];
+                pcoeff = env + bas[bas_id*BAS_SLOTS+PTR_COEFF];
+                atm_id = bas[bas_id*BAS_SLOTS+ATOM_OF];
+                ri = env + atm[PTR_COORD+atm_id*ATM_SLOTS];
+                ao_id = ao_loc[bas_id] - ao_loc[sh0];
+
+                if (grid2atm_atm_id != atm_id) {
+                        _fill_grid2atm(grid2atm, min_grid2atm, coord, Ls, ri,
+                                       atm_imag_max[atm_id], bgrids, ngrids, nimgs);
+                        grid2atm_atm_id = atm_id;
+                }
+
+                for (i = 0; i < nkpts*dimc; i++) {
+                        aobufk_r[i] = 0;
+                        aobufk_i[i] = 0;
+                }
+                bufk_empty = 1;
+                for (iL0 = 0; iL0 < nimgs; iL0+=IMGBLK) {
+                        iLcount = MIN(IMGBLK, nimgs - iL0);
+
+                        count = 0;
+                        for (iL = iL0; iL < iL0+iLcount; iL++) {
+
+        pcoord = grid2atm + iL * 3*BLKSIZE;
+        if ((iL < non0table[bas_id] || non0table[bas_id] == ALL_IMAGES) &&
+            (min_grid2atm[iL] < rcut[bas_id]) &&
+            (*fexp)(eprim, pcoord, p_exp, pcoeff, l, np, nc, bgrids, fac)) {
+                pao = aobuf + count * dimc;
+                (*feval)(pao, ri, eprim, pcoord, p_exp, pcoeff, env,
+                         l, np, nc, nc*deg, bgrids, bgrids);
+                img_idx[count] = iL;
+                count += 1;
+        }
                         }
+
+                        if (count > 0) {
+        if (img_idx[count-1] != iL0 + count-1) {
+                // some images are skipped
+                for (i = 0; i < count; i++) {
+                        j = img_idx[i];
+                        for (k = 0; k < nkpts; k++) {
+                                Lk_r_buf[i*nkpts+k] = expLk_r[j*nkpts+k];
+                                Lk_i_buf[i*nkpts+k] = expLk_i[j*nkpts+k];
+                        }
+                }
+                pexpLk_r = Lk_r_buf;
+                pexpLk_i = Lk_i_buf;
+        } else {
+                pexpLk_r = expLk_r+nkpts*iL0;
+                pexpLk_i = expLk_i+nkpts*iL0;
+        }
+        dgemm_(&TRANS_N, &TRANS_T, &dimc, &nkpts, &count,
+               &D1, aobuf, &dimc, pexpLk_r, &nkpts, &D1, aobufk_r, &dimc);
+        dgemm_(&TRANS_N, &TRANS_T, &dimc, &nkpts, &count,
+               &D1, aobuf, &dimc, pexpLk_i, &nkpts, &D1, aobufk_i, &dimc);
+        bufk_empty = 0;
+                        }
+                }
+
+                if (!bufk_empty) {
+                        _copy(ao+ao_id*ngrids+offao, aobufk_r, aobufk_i,
+                              ngrids, bgrids, nkpts, ncomp, nao, nc*deg);
                 }
         }
 }
@@ -231,71 +290,128 @@ void PBCeval_cart_iter(FPtr_eval feval,  FPtr_exp fexp,
 void PBCeval_sph_iter(FPtr_eval feval,  FPtr_exp fexp,
                       size_t nao, size_t ngrids, size_t bgrids, size_t offao,
                       int param[], int *shls_slice, int *ao_loc, double *buf,
-                      double *Ls, int nimgs, double complex *expLk, int nkpts,
-                      double complex **ao, double *coord, unsigned char *non0table,
+                      double *Ls, double *expLk_r, double *expLk_i,
+                      int nimgs, int nkpts, int di_max, double complex *ao,
+                      double *coord, double *rcut, unsigned char *non0table,
                       int *atm, int natm, int *bas, int nbas, double *env)
 {
         const int ncomp = param[TENSOR];
         const int sh0 = shls_slice[0];
         const int sh1 = shls_slice[1];
-        const int atmstart = bas[sh0*BAS_SLOTS+ATOM_OF];
-        const int atmend = bas[(sh1-1)*BAS_SLOTS+ATOM_OF]+1;
-        const int atmcount = atmend - atmstart;
-        int i, k, l, m, np, nc, atm_id, bas_id, deg, dcart, di, ao_id;
-        size_t off;
+
+        const char TRANS_N = 'N';
+        const char TRANS_T = 'T';
+        const double D1 = 1;
+
+        int i, j, k, l, np, nc, atm_id, bas_id, deg, dcart, ao_id;
+        int iL, iL0, iLcount, dimc;
+        int grid2atm_atm_id, count, bufk_empty;
         double fac;
-        double *p_exp, *pcoeff, *pcoord, *pcart, *ri, *pao;
-        double *grid2atm = buf; // [atm_id,xyz,grid]
-        double *eprim = grid2atm + atmcount*3*BLKSIZE;
-        double *cart_gto = eprim + NPRIMAX*BLKSIZE*2;
-        double *aobuf = cart_gto + BLKSIZE*NCTR_CART*ncomp*param[POS_E1];
+        double *p_exp, *pcoeff, *pcoord, *pcart, *pao, *ri;
+        double *grid2atm = buf; // shape [nimgs,3,bgrids]
+        double *eprim = grid2atm + nimgs*3*BLKSIZE;
+        double *aobufk_r = eprim + NPRIMAX*BLKSIZE*2;
+        double *aobufk_i = aobufk_r + nkpts*ncomp*di_max*bgrids;
+        double *aobuf = aobufk_i + nkpts*ncomp*di_max*bgrids;
+        double *cart_gto = aobuf + IMGBLK*ncomp*di_max*bgrids;
+        double *Lk_r_buf = cart_gto + ncomp*NCTR_CART*bgrids;
+        double *Lk_i_buf = Lk_r_buf + IMGBLK * nkpts;
+        double *min_grid2atm = Lk_i_buf + IMGBLK * nkpts;
+        double *pexpLk_r, *pexpLk_i;
+        int img_idx[nimgs];
+        int atm_imag_max[natm];
 
-        for (i = 0; i < ncomp; i++) {
-                off = (i*nao+ao_loc[sh0])*ngrids + offao;
-                set0(ao, nkpts, offao, ngrids, bgrids, ao_loc[sh1]-ao_loc[sh0]);
+        for (i = 0; i < natm; i++) {
+                atm_imag_max[i] = 0;
         }
-        for (m = 0; m < nimgs; m++) {
-                _fill_grid2atm(grid2atm, coord, Ls+m*3, bgrids, ngrids,
-                               atm+atmstart*ATM_SLOTS, atmcount, bas, nbas, env);
+        for (bas_id = sh0; bas_id < sh1; bas_id++) {
+                atm_id = bas[bas_id*BAS_SLOTS+ATOM_OF];
+                atm_imag_max[atm_id] = MAX(atm_imag_max[atm_id], non0table[bas_id]);
+        }
 
-                for (bas_id = sh0; bas_id < sh1; bas_id++) {
-                        np = bas[bas_id*BAS_SLOTS+NPRIM_OF];
-                        nc = bas[bas_id*BAS_SLOTS+NCTR_OF ];
-                        l  = bas[bas_id*BAS_SLOTS+ANG_OF  ];
-                        deg = l * 2 + 1;
-                        fac = CINTcommon_fac_sp(l);
-                        p_exp  = env + bas[bas_id*BAS_SLOTS+PTR_EXP];
-                        pcoeff = env + bas[bas_id*BAS_SLOTS+PTR_COEFF];
-                        atm_id = bas[bas_id*BAS_SLOTS+ATOM_OF];
-                        pcoord = grid2atm + (atm_id - atmstart) * 3*BLKSIZE;
-                        ao_id = ao_loc[bas_id] - ao_loc[sh0];
-                        if ((m < non0table[bas_id] || non0table[bas_id] == ALL_IMAGES) &&
-                            (*fexp)(eprim, pcoord, p_exp, pcoeff, l, np, nc, bgrids, fac)) {
-                                dcart = (l+1)*(l+2)/2;
-                                ri = env + atm[PTR_COORD+atm_id*ATM_SLOTS];
-        if (l <= 1) { // s, p functions
-                (*feval)(aobuf, ri, eprim, pcoord, p_exp, pcoeff, env,
-                         l, np, nc, nc*dcart, BLKSIZE, bgrids);
-        } else {
-                (*feval)(cart_gto, ri, eprim, pcoord, p_exp, pcoeff, env,
-                         l, np, nc, nc*dcart, bgrids, bgrids);
-                pcart = cart_gto;
-                pao = aobuf;
-                for (i = 0; i < ncomp; i++) {
-                        for (k = 0; k < nc; k++) {
-                                CINTc2s_ket_sph1(pao, pcart, BLKSIZE, bgrids, l);
-                                pao += deg * BLKSIZE;
+        grid2atm_atm_id = -1;
+        for (bas_id = sh0; bas_id < sh1; bas_id++) {
+                np = bas[bas_id*BAS_SLOTS+NPRIM_OF];
+                nc = bas[bas_id*BAS_SLOTS+NCTR_OF ];
+                l  = bas[bas_id*BAS_SLOTS+ANG_OF  ];
+                deg = l * 2 + 1;
+                dcart = (l+1)*(l+2)/2;
+                dimc = nc*deg * ncomp * bgrids;
+                fac = CINTcommon_fac_sp(l);
+                p_exp  = env + bas[bas_id*BAS_SLOTS+PTR_EXP];
+                pcoeff = env + bas[bas_id*BAS_SLOTS+PTR_COEFF];
+                atm_id = bas[bas_id*BAS_SLOTS+ATOM_OF];
+                ri = env + atm[PTR_COORD+atm_id*ATM_SLOTS];
+                ao_id = ao_loc[bas_id] - ao_loc[sh0];
+
+                if (grid2atm_atm_id != atm_id) {
+                        _fill_grid2atm(grid2atm, min_grid2atm, coord, Ls, ri,
+                                       atm_imag_max[atm_id], bgrids, ngrids, nimgs);
+                        grid2atm_atm_id = atm_id;
+                }
+
+                for (i = 0; i < nkpts*dimc; i++) {
+                        aobufk_r[i] = 0;
+                        aobufk_i[i] = 0;
+                }
+                bufk_empty = 1;
+                for (iL0 = 0; iL0 < nimgs; iL0+=IMGBLK) {
+                        iLcount = MIN(IMGBLK, nimgs - iL0);
+
+                        count = 0;
+                        for (iL = iL0; iL < iL0+iLcount; iL++) {
+
+        pcoord = grid2atm + iL * 3*BLKSIZE;
+        if ((iL < non0table[bas_id] || non0table[bas_id] == ALL_IMAGES) &&
+            (min_grid2atm[iL] < rcut[bas_id]) &&
+            (*fexp)(eprim, pcoord, p_exp, pcoeff, l, np, nc, bgrids, fac)) {
+                pao = aobuf + count * dimc;
+                if (l <= 1) { // s, p functions
+                        (*feval)(pao, ri, eprim, pcoord, p_exp, pcoeff, env,
+                                 l, np, nc, nc*dcart, bgrids, bgrids);
+                } else {
+                        (*feval)(cart_gto, ri, eprim, pcoord, p_exp, pcoeff, env,
+                                 l, np, nc, nc*dcart, bgrids, bgrids);
+                        pcart = cart_gto;
+                        for (i = 0; i < ncomp * nc; i++) {
+                                CINTc2s_ket_sph1(pao, pcart, bgrids, bgrids, l);
+                                pao += deg * bgrids;
                                 pcart += dcart * bgrids;
                         }
                 }
-        }
-        di = nc * deg;
-        for (i = 0; i < ncomp; i++) {
-                off = (i*nao+ao_id)*ngrids + offao;
-                pao = aobuf + i*di*BLKSIZE;
-                axpy(ao, pao, expLk+m*nkpts, nkpts, off, ngrids, bgrids, di);
+
+                img_idx[count] = iL;
+                count++;
         }
                         }
+
+                        if (count > 0) {
+        if (img_idx[count-1] != iL0 + count-1) {
+                // some images are skipped
+                for (i = 0; i < count; i++) {
+                        j = img_idx[i];
+                        for (k = 0; k < nkpts; k++) {
+                                Lk_r_buf[i*nkpts+k] = expLk_r[j*nkpts+k];
+                                Lk_i_buf[i*nkpts+k] = expLk_i[j*nkpts+k];
+                        }
+                }
+                pexpLk_r = Lk_r_buf;
+                pexpLk_i = Lk_i_buf;
+        } else {
+                pexpLk_r = expLk_r+nkpts*iL0;
+                pexpLk_i = expLk_i+nkpts*iL0;
+        }
+        dgemm_(&TRANS_N, &TRANS_T, &dimc, &nkpts, &count,
+               &D1, aobuf, &dimc, pexpLk_r, &nkpts, &D1, aobufk_r, &dimc);
+        dgemm_(&TRANS_N, &TRANS_T, &dimc, &nkpts, &count,
+               &D1, aobuf, &dimc, pexpLk_i, &nkpts, &D1, aobufk_i, &dimc);
+        bufk_empty = 0;
+                        }
+                }
+
+                if (!bufk_empty) {
+                        _copy(ao+ao_id*ngrids+offao, aobufk_r, aobufk_i,
+                              ngrids, bgrids, nkpts, ncomp, nao, nc*deg);
                 }
         }
 }
@@ -311,7 +427,8 @@ int GTOshloc_by_atom(int *shloc, int *shls_slice, int *ao_loc, int *atm, int *ba
 void PBCeval_loop(void (*fiter)(), FPtr_eval feval, FPtr_exp fexp,
                   int ngrids, int param[], int *shls_slice, int *ao_loc,
                   double *Ls, int nimgs, double complex *expLk, int nkpts,
-                  double complex **ao, double *coord, unsigned char *non0table,
+                  double complex *ao, double *coord,
+                  double *rcut, unsigned char *non0table,
                   int *atm, int natm, int *bas, int nbas, double *env)
 {
         int shloc[shls_slice[1]-shls_slice[0]+1];
@@ -319,18 +436,34 @@ void PBCeval_loop(void (*fiter)(), FPtr_eval feval, FPtr_exp fexp,
         const int nblk = (ngrids+BLKSIZE-1) / BLKSIZE;
         const size_t Ngrids = ngrids;
 
+        double *expLk_r = malloc(sizeof(double) * nimgs*nkpts * 2);
+        double *expLk_i = expLk_r + nimgs*nkpts;
+        int i;
+        for (i = 0; i < nimgs*nkpts; i++) {
+                expLk_r[i] = creal(expLk[i]);
+                expLk_i[i] = cimag(expLk[i]);
+        }
+        int di_max = 0;
+        for (i = shls_slice[0]; i < shls_slice[1]; i++) {
+                di_max = MAX(di_max, ao_loc[i+1] - ao_loc[i]);
+        }
+
 #pragma omp parallel default(none) \
         shared(fiter, feval, fexp, param, ngrids, \
-               Ls, nimgs, expLk, nkpts, shls_slice, ao_loc, \
-               ao, coord, non0table, atm, natm, bas, nbas, env, shloc)
+               Ls, nimgs, di_max, expLk_r, expLk_i, nkpts, shls_slice, ao_loc, \
+               ao, coord, rcut, non0table, atm, natm, bas, nbas, env, shloc)
 {
         const int sh0 = shls_slice[0];
         const int sh1 = shls_slice[1];
         const size_t nao = ao_loc[sh1] - ao_loc[sh0];
         int ip, ib, k, iloc, ish;
         size_t aoff, bgrids;
-        int ncart = NCTR_CART * param[TENSOR] * param[POS_E1];
-        double *buf = malloc(sizeof(double) * BLKSIZE*(NPRIMAX*2+ncart*2));
+        size_t bufsize =((nimgs*3 + NPRIMAX*2 +
+                          nkpts *param[POS_E1]*param[TENSOR]*di_max * 2 +
+                          IMGBLK*param[POS_E1]*param[TENSOR]*di_max +
+                          param[POS_E1]*param[TENSOR]*NCTR_CART) * BLKSIZE
+                         + nkpts * IMGBLK * 2 + nimgs);
+        double *buf = malloc(sizeof(double) * bufsize);
 #pragma omp for nowait schedule(static)
         for (k = 0; k < nblk*nshblk; k++) {
                 iloc = k / nblk;
@@ -340,188 +473,206 @@ void PBCeval_loop(void (*fiter)(), FPtr_eval feval, FPtr_exp fexp,
                 aoff = (ao_loc[ish] - ao_loc[sh0]) * Ngrids + ip;
                 bgrids = MIN(ngrids-ip, BLKSIZE);
                 (*fiter)(feval, fexp, nao, Ngrids, bgrids, aoff,
-                         param, shloc+iloc, ao_loc, buf, Ls, nimgs, expLk, nkpts,
-                         ao, coord+ip, non0table+ib*nbas,
+                         param, shloc+iloc, ao_loc, buf,
+                         Ls, expLk_r, expLk_i, nimgs, nkpts, di_max,
+                         ao, coord+ip, rcut, non0table+ib*nbas,
                          atm, natm, bas, nbas, env);
         }
         free(buf);
 }
+        free(expLk_r);
 }
 
 void PBCeval_cart_drv(FPtr_eval feval, FPtr_exp fexp,
                       int ngrids, int param[], int *shls_slice, int *ao_loc,
                       double *Ls, int nimgs, double complex *expLk, int nkpts,
-                      double complex **ao, double *coord, unsigned char *non0table,
+                      double complex *ao, double *coord,
+                      double *rcut, unsigned char *non0table,
                       int *atm, int natm, int *bas, int nbas, double *env)
 {
         PBCeval_loop(PBCeval_cart_iter, feval, fexp,
                      ngrids, param, shls_slice, ao_loc, Ls, nimgs, expLk, nkpts,
-                     ao, coord, non0table, atm, natm, bas, nbas, env);
+                     ao, coord, rcut, non0table, atm, natm, bas, nbas, env);
 }
 
 void PBCeval_sph_drv(FPtr_eval feval, FPtr_exp fexp,
                      int ngrids, int param[], int *shls_slice, int *ao_loc,
                      double *Ls, int nimgs, double complex *expLk, int nkpts,
-                     double complex **ao, double *coord, unsigned char *non0table,
+                     double complex *ao, double *coord,
+                     double *rcut, unsigned char *non0table,
                      int *atm, int natm, int *bas, int nbas, double *env)
 {
         PBCeval_loop(PBCeval_sph_iter, feval, fexp,
                      ngrids, param, shls_slice, ao_loc, Ls, nimgs, expLk, nkpts,
-                     ao, coord, non0table, atm, natm, bas, nbas, env);
+                     ao, coord, rcut, non0table, atm, natm, bas, nbas, env);
 }
 
 void PBCGTOval_cart_deriv0(int ngrids, int *shls_slice, int *ao_loc,
                            double *Ls, int nimgs, double complex *expLk, int nkpts,
-                           double complex **ao, double *coord, unsigned char *non0table,
+                           double complex *ao, double *coord,
+                           double *rcut, unsigned char *non0table,
                            int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 1};
         PBCeval_cart_drv(GTOshell_eval_grid_cart, GTOcontract_exp0,
                          ngrids, param, shls_slice, ao_loc, Ls, nimgs, expLk, nkpts,
-                         ao, coord, non0table, atm, natm, bas, nbas, env);
+                         ao, coord, rcut, non0table, atm, natm, bas, nbas, env);
 }
 
 void PBCGTOval_sph_deriv0(int ngrids, int *shls_slice, int *ao_loc,
                           double *Ls, int nimgs, double complex *expLk, int nkpts,
-                          double complex **ao, double *coord, unsigned char *non0table,
+                          double complex *ao, double *coord,
+                          double *rcut, unsigned char *non0table,
                           int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 1};
         PBCeval_sph_drv(GTOshell_eval_grid_cart, GTOcontract_exp0,
                         ngrids, param, shls_slice, ao_loc, Ls, nimgs, expLk, nkpts,
-                        ao, coord, non0table, atm, natm, bas, nbas, env);
+                        ao, coord, rcut, non0table, atm, natm, bas, nbas, env);
 }
 
 void PBCGTOval_cart_deriv1(int ngrids, int *shls_slice, int *ao_loc,
                            double *Ls, int nimgs, double complex *expLk, int nkpts,
-                           double complex **ao, double *coord, unsigned char *non0table,
+                           double complex *ao, double *coord,
+                           double *rcut, unsigned char *non0table,
                            int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 4};
         PBCeval_cart_drv(GTOshell_eval_grid_cart_deriv1, GTOcontract_exp1,
                          ngrids, param, shls_slice, ao_loc, Ls, nimgs, expLk, nkpts,
-                         ao, coord, non0table, atm, natm, bas, nbas, env);
+                         ao, coord, rcut, non0table, atm, natm, bas, nbas, env);
 }
 
 void PBCGTOval_sph_deriv1(int ngrids, int *shls_slice, int *ao_loc,
                           double *Ls, int nimgs, double complex *expLk, int nkpts,
-                          double complex **ao, double *coord, unsigned char *non0table,
+                          double complex *ao, double *coord,
+                          double *rcut, unsigned char *non0table,
                           int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 4};
         PBCeval_sph_drv(GTOshell_eval_grid_cart_deriv1, GTOcontract_exp1,
                         ngrids, param, shls_slice, ao_loc, Ls, nimgs, expLk, nkpts,
-                        ao, coord, non0table, atm, natm, bas, nbas, env);
+                        ao, coord, rcut, non0table, atm, natm, bas, nbas, env);
 }
 
 void PBCGTOval_cart_deriv2(int ngrids, int *shls_slice, int *ao_loc,
                            double *Ls, int nimgs, double complex *expLk, int nkpts,
-                           double complex **ao, double *coord, unsigned char *non0table,
+                           double complex *ao, double *coord,
+                           double *rcut, unsigned char *non0table,
                            int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 10};
         PBCeval_cart_drv(GTOshell_eval_grid_cart_deriv2, GTOprim_exp,
                          ngrids, param, shls_slice, ao_loc, Ls, nimgs, expLk, nkpts,
-                         ao, coord, non0table, atm, natm, bas, nbas, env);
+                         ao, coord, rcut, non0table, atm, natm, bas, nbas, env);
 }
 
 void PBCGTOval_sph_deriv2(int ngrids, int *shls_slice, int *ao_loc,
                           double *Ls, int nimgs, double complex *expLk, int nkpts,
-                          double complex **ao, double *coord, unsigned char *non0table,
+                          double complex *ao, double *coord,
+                          double *rcut, unsigned char *non0table,
                           int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 10};
         PBCeval_sph_drv(GTOshell_eval_grid_cart_deriv2, GTOprim_exp,
                         ngrids, param, shls_slice, ao_loc, Ls, nimgs, expLk, nkpts,
-                        ao, coord, non0table, atm, natm, bas, nbas, env);
+                        ao, coord, rcut, non0table, atm, natm, bas, nbas, env);
 }
 
 void PBCGTOval_cart_deriv3(int ngrids, int *shls_slice, int *ao_loc,
                            double *Ls, int nimgs, double complex *expLk, int nkpts,
-                           double complex **ao, double *coord, unsigned char *non0table,
+                           double complex *ao, double *coord,
+                           double *rcut, unsigned char *non0table,
                            int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 20};
         PBCeval_cart_drv(GTOshell_eval_grid_cart_deriv3, GTOprim_exp,
                          ngrids, param, shls_slice, ao_loc, Ls, nimgs, expLk, nkpts,
-                         ao, coord, non0table, atm, natm, bas, nbas, env);
+                         ao, coord, rcut, non0table, atm, natm, bas, nbas, env);
 }
 
 void PBCGTOval_sph_deriv3(int ngrids, int *shls_slice, int *ao_loc,
                           double *Ls, int nimgs, double complex *expLk, int nkpts,
-                          double complex **ao, double *coord, unsigned char *non0table,
+                          double complex *ao, double *coord,
+                          double *rcut, unsigned char *non0table,
                           int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 20};
         PBCeval_sph_drv(GTOshell_eval_grid_cart_deriv3, GTOprim_exp,
                         ngrids, param, shls_slice, ao_loc, Ls, nimgs, expLk, nkpts,
-                        ao, coord, non0table, atm, natm, bas, nbas, env);
+                        ao, coord, rcut, non0table, atm, natm, bas, nbas, env);
 }
 
 void PBCGTOval_cart_deriv4(int ngrids, int *shls_slice, int *ao_loc,
                            double *Ls, int nimgs, double complex *expLk, int nkpts,
-                           double complex **ao, double *coord, unsigned char *non0table,
+                           double complex *ao, double *coord,
+                           double *rcut, unsigned char *non0table,
                            int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 35};
         PBCeval_cart_drv(GTOshell_eval_grid_cart_deriv4, GTOprim_exp,
                          ngrids, param, shls_slice, ao_loc, Ls, nimgs, expLk, nkpts,
-                         ao, coord, non0table, atm, natm, bas, nbas, env);
+                         ao, coord, rcut, non0table, atm, natm, bas, nbas, env);
 }
 
 void PBCGTOval_sph_deriv4(int ngrids, int *shls_slice, int *ao_loc,
                           double *Ls, int nimgs, double complex *expLk, int nkpts,
-                          double complex **ao, double *coord, unsigned char *non0table,
+                          double complex *ao, double *coord,
+                          double *rcut, unsigned char *non0table,
                           int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 35};
         PBCeval_sph_drv(GTOshell_eval_grid_cart_deriv4, GTOprim_exp,
                         ngrids, param, shls_slice, ao_loc, Ls, nimgs, expLk, nkpts,
-                        ao, coord, non0table, atm, natm, bas, nbas, env);
+                        ao, coord, rcut, non0table, atm, natm, bas, nbas, env);
 }
 
 void PBCGTOval_cart(int ngrids, int *shls_slice, int *ao_loc,
                     double *Ls, int nimgs, double complex *expLk, int nkpts,
-                    double complex **ao, double *coord, unsigned char *non0table,
+                    double complex *ao, double *coord,
+                    double *rcut, unsigned char *non0table,
                     int *atm, int natm, int *bas, int nbas, double *env)
 {
 //        int param[] = {1, 1};
 //        PBCeval_cart_drv(GTOshell_eval_grid_cart, GTOcontract_exp0,
 //                         ngrids, param, shls_slice, ao_loc, Ls, nimgs, expLk, nkpts,
-//                         ao, coord, non0table, atm, natm, bas, nbas, env);
+//                         ao, coord, rcut, non0table, atm, natm, bas, nbas, env);
         PBCGTOval_cart_deriv0(ngrids, shls_slice, ao_loc, Ls, nimgs, expLk, nkpts,
-                              ao, coord, non0table, atm, natm, bas, nbas, env);
+                              ao, coord, rcut, non0table, atm, natm, bas, nbas, env);
 }
 void PBCGTOval_sph(int ngrids, int *shls_slice, int *ao_loc,
                    double *Ls, int nimgs, double complex *expLk, int nkpts,
-                   double complex **ao, double *coord, unsigned char *non0table,
+                   double complex *ao, double *coord,
+                   double *rcut, unsigned char *non0table,
                    int *atm, int natm, int *bas, int nbas, double *env)
 {
 //        int param[] = {1, 1};
 //        PBCeval_sph_drv(GTOshell_eval_grid_cart, GTOcontract_exp0,
 //                        ngrids, param, shls_slice, ao_loc, Ls, nimgs, expLk, nkpts,
-//                        ao, coord, non0table, atm, natm, bas, nbas, env);
+//                        ao, coord, rcut, non0table, atm, natm, bas, nbas, env);
         PBCGTOval_sph_deriv0(ngrids, shls_slice, ao_loc, Ls, nimgs, expLk, nkpts,
-                             ao, coord, non0table, atm, natm, bas, nbas, env);
+                             ao, coord, rcut, non0table, atm, natm, bas, nbas, env);
 }
 
 void PBCGTOval_ip_cart(int ngrids, int *shls_slice, int *ao_loc,
                        double *Ls, int nimgs, double complex *expLk, int nkpts,
-                       double complex **ao, double *coord, unsigned char *non0table,
+                       double complex *ao, double *coord,
+                       double *rcut, unsigned char *non0table,
                        int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 3};
         PBCeval_cart_drv(GTOshell_eval_grid_ip_cart, GTOcontract_exp1,
                          ngrids, param, shls_slice, ao_loc, Ls, nimgs, expLk, nkpts,
-                         ao, coord, non0table, atm, natm, bas, nbas, env);
+                         ao, coord, rcut, non0table, atm, natm, bas, nbas, env);
 }
 void PBCGTOval_ip_sph(int ngrids, int *shls_slice, int *ao_loc,
                       double *Ls, int nimgs, double complex *expLk, int nkpts,
-                      double complex **ao, double *coord, unsigned char *non0table,
+                      double complex *ao, double *coord,
+                      double *rcut, unsigned char *non0table,
                       int *atm, int natm, int *bas, int nbas, double *env)
 {
         int param[] = {1, 3};
         PBCeval_sph_drv(GTOshell_eval_grid_ip_cart, GTOcontract_exp1,
                         ngrids, param, shls_slice, ao_loc, Ls, nimgs, expLk, nkpts,
-                        ao, coord, non0table, atm, natm, bas, nbas, env);
+                        ao, coord, rcut, non0table, atm, natm, bas, nbas, env);
 }
