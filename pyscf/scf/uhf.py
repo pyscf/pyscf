@@ -767,7 +767,7 @@ class UHF(hf.SCF):
     @lib.with_doc(dip_moment.__doc__)
     def dip_moment(self, mol=None, dm=None, unit_symbol=None, verbose=logger.NOTE):
         if mol is None: mol = self.mol
-        if dm is None: dm =self.make_rdm1()
+        if dm is None: dm = self.make_rdm1()
         if unit_symbol is None: unit_symbol='Debye'
         return dip_moment(mol, dm, unit_symbol, verbose=verbose)
 
