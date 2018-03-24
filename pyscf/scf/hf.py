@@ -944,7 +944,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
             mo_e[idx] = e
     return mo_e, mo
 
-def dip_moment(mol, dm, unit_symbol='Debye', verbose=logger.NOTE):
+def dip_moment(mol, dm, unit='Debye', verbose=logger.NOTE, **kwargs):
     r''' Dipole moment calculation
 
     .. math::
@@ -969,7 +969,12 @@ def dip_moment(mol, dm, unit_symbol='Debye', verbose=logger.NOTE):
     else:
         log = logger.Logger(mol.stdout, verbose)
 
-    if unit_symbol == 'Debye':
+    if 'unit_symbol' in kwargs:
+        log.warn('Kwarg "unit_symbol" was deprecated. It was replaced by kwarg '
+                 'unit since PySCF-1.5.')
+        unit = kwargs['unit_symbol']
+
+    if unit == 'Debye':
         unit = nist.AU2DEBYE
     else:
         unit = 1.0
@@ -984,7 +989,7 @@ def dip_moment(mol, dm, unit_symbol='Debye', verbose=logger.NOTE):
 
     mol_dip = (nucl_dip - el_dip) * unit
 
-    if unit_symbol == 'Debye' :
+    if unit == 'Debye' :
         log.note('Dipole moment(X, Y, Z, Debye): %8.5f, %8.5f, %8.5f', *mol_dip)
     else:
         log.note('Dipole moment(X, Y, Z, A.U.): %8.5f, %8.5f, %8.5f', *mol_dip)
@@ -1499,11 +1504,11 @@ class SCF(lib.StreamObject):
     canonicalize = canonicalize
 
     @lib.with_doc(dip_moment.__doc__)
-    def dip_moment(self, mol=None, dm=None, unit_symbol='Debye',
-                   verbose=logger.NOTE):
+    def dip_moment(self, mol=None, dm=None, unit='Debye', verbose=logger.NOTE,
+                   **kwargs):
         if mol is None: mol = self.mol
         if dm is None: dm =self.make_rdm1()
-        return dip_moment(mol, dm, unit_symbol, verbose=verbose)
+        return dip_moment(mol, dm, unit, verbose=verbose, **kwargs)
 
     def _is_mem_enough(self):
         nbf = self.mol.nao_nr()
