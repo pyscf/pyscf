@@ -255,7 +255,7 @@ class SHCI(pyscf.lib.StreamObject):
 
 
 
-        onepdm = numpy.einsum('ikjj->ik', twopdm)
+        onepdm = numpy.einsum('ikjj->ki', twopdm)
         onepdm /= (nelectrons-1)
 
         return onepdm, twopdm
@@ -277,7 +277,7 @@ class SHCI(pyscf.lib.StreamObject):
         file2pdm = "spatialRDM.%d.%d.txt" % ( root, root )
         r2RDM( twopdm, norb, file2pdm )
 
-        onepdm = numpy.einsum('ikjj->ik', twopdm)
+        onepdm = numpy.einsum('ikjj->ki', twopdm)
         onepdm /= (nelectrons-1)
         return onepdm, twopdm
 
@@ -313,7 +313,7 @@ class SHCI(pyscf.lib.StreamObject):
 
         twopdm = numpy.einsum('ijkklm->ijlm',threepdm)
         twopdm /= (nelectrons-2)
-        onepdm = numpy.einsum('ijjk->ik', twopdm)
+        onepdm = numpy.einsum('ijjk->ki', twopdm)
         onepdm /= (nelectrons-1)
         return onepdm, twopdm, threepdm
 
@@ -332,7 +332,7 @@ class SHCI(pyscf.lib.StreamObject):
         threepdm += numpy.einsum('jm,kinl->ijklmn',numpy.identity(norb),twopdm)
 
         twopdm =(numpy.einsum('iklj->ijkl',twopdm)
-               + numpy.einsum('il,jk->ijkl',onepdm,numpy.identity(norb)))
+               + numpy.einsum('li,jk->ijkl',onepdm,numpy.identity(norb)))
 
         return onepdm, twopdm, threepdm
 

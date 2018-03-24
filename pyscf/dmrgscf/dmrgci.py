@@ -294,7 +294,7 @@ class DMRGCI(lib.StreamObject):
                 twopdm[i,j,k,l] = 2.0 * float(linesp[4])
 
         # (this is coherent with previous statement about indexes) (right?)
-        onepdm = numpy.einsum('ikjj->ik', twopdm)
+        onepdm = numpy.einsum('ikjj->ki', twopdm)
         onepdm /= (nelectrons-1)
         return onepdm, twopdm
 
@@ -342,7 +342,7 @@ class DMRGCI(lib.StreamObject):
                 twopdm[i,j,k,l] = 2.0 * float(linesp[4])
 
         # (this is coherent with previous statement about indexes) (right?)
-        onepdm = numpy.einsum('ikjj->ik', twopdm)
+        onepdm = numpy.einsum('ikjj->ki', twopdm)
         onepdm /= (nelectrons-1)
         return onepdm, twopdm
 
@@ -384,7 +384,7 @@ class DMRGCI(lib.StreamObject):
         # (this is coherent with previous statement about indexes)
         twopdm = numpy.einsum('ijkklm->ijlm',threepdm)
         twopdm /= (nelectrons-2)
-        onepdm = numpy.einsum('ijjk->ik', twopdm)
+        onepdm = numpy.einsum('ijjk->ki', twopdm)
         onepdm /= (nelectrons-1)
         return onepdm, twopdm, threepdm
 
@@ -403,7 +403,7 @@ class DMRGCI(lib.StreamObject):
         threepdm += numpy.einsum('jm,kinl->ijklmn',numpy.identity(norb),twopdm)
 
         twopdm =(numpy.einsum('iklj->ijkl',twopdm)
-               + numpy.einsum('il,jk->ijkl',onepdm,numpy.identity(norb)))
+               + numpy.einsum('li,jk->ijkl',onepdm,numpy.identity(norb)))
 
         return onepdm, twopdm, threepdm
 
