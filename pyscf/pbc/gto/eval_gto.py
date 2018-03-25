@@ -22,8 +22,10 @@ from pyscf import lib
 from pyscf.gto import moleintor
 from pyscf.gto.eval_gto import _get_intor_and_comp
 from pyscf.pbc.gto import _pbcintor
+from pyscf import __config__
 
 BLKSIZE = 128 # needs to be the same to lib/gto/grid_ao_drv.c
+EXTRA_PREC = getattr(__config__, 'pbc_gto_eval_gto_extra_precision', 1e-2)
 
 libpbc = _pbcintor.libpbc
 
@@ -132,8 +134,7 @@ def eval_gto(cell, eval_name, coords, comp=None, kpts=None, kpt=None,
         Ls = cell.get_lattice_Ls(dimension=cell.dimension)
     Ls = Ls[numpy.argsort(lib.norm(Ls, axis=1))]
     expLk = numpy.exp(1j * numpy.asarray(numpy.dot(Ls, kpts_lst.T), order='C'))
-    rcut = numpy.array([cell.bas_rcut(ib, cell.precision)
-                        for ib in range(cell.nbas)])
+    rcut = _estimate_rcut(cell)
 
     drv = getattr(libpbc, eval_name)
     drv(ctypes.c_int(ngrids),
@@ -162,6 +163,21 @@ def eval_gto(cell, eval_name, coords, comp=None, kpts=None, kpt=None,
     return ao_kpts
 
 pbc_eval_gto = eval_gto
+
+def _estimate_rcut(cell):
+    '''Cutoff raidus, above which each shell decays to a value less than the
+    required precsion'''
+    log_prec = numpy.log(cell.precision * EXTRA_PREC)
+    rcut = []
+    for ib in range(cell.nbas):
+        l = cell.bas_angular(ib)
+        es = cell.bas_exp(ib)
+        cs = abs(cell.bas_ctr_coeff(ib)).max(axis=1)
+        r = 5.
+        r = (((l+2)*numpy.log(r)+numpy.log(cs) - log_prec) / es)**.5
+        r = (((l+2)*numpy.log(r)+numpy.log(cs) - log_prec) / es)**.5
+        rcut.append(r.max())
+    return numpy.array(rcut)
 
 
 if __name__ == '__main__':

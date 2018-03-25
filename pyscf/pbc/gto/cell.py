@@ -45,8 +45,8 @@ from pyscf import __config__
 INTEGRAL_PRECISION = getattr(__config__, 'pbc_gto_cell_Cell_precision', 1e-8)
 WRAP_AROUND = getattr(__config__, 'pbc_gto_cell_make_kpts_wrap_around', False)
 WITH_GAMMA = getattr(__config__, 'pbc_gto_cell_make_kpts_with_gamma', True)
-DELIMITER = getattr(__config__, 'pbc_gto_cell_split_basis_delimiter',
-                    [1.0, 0.5, 0.25, 0.1, 0])
+EXP_DELIMITER = getattr(__config__, 'pbc_gto_cell_split_basis_exp_delimiter',
+                        [1.0, 0.5, 0.25, 0.1, 0])
 
 
 # For code compatiblity in python-2 and python-3
@@ -975,7 +975,7 @@ def classify_ecp_pseudo(cell, ecp, pp):
         pp = ecp_as_pp
     return ecp, pp
 
-def _split_basis(cell, delimiter=DELIMITER):
+def _split_basis(cell, delimiter=EXP_DELIMITER):
     '''
     Split the contracted basis to small segmant.  The new basis has more
     shells.  Each shell has less primitive basis and thus is more local.
@@ -989,7 +989,7 @@ def _split_basis(cell, delimiter=DELIMITER):
         pcoeff1 = cell._bas[ib,mole.PTR_COEFF]
         nc = cell.bas_nctr(ib)
         es = cell.bas_exp(ib)
-        cs = cell._libcint_ctr_coeff(ib).T.ravel()
+        cs = cell._libcint_ctr_coeff(ib)
         l = cell.bas_angular(ib)
         if cell.cart:
             degen = (l + 1) * (l + 2) // 2
@@ -1533,4 +1533,4 @@ class Cell(mole.Mole):
         '''Whether pesudo potential is used in the system.'''
         return self.pseudo or self._pseudo or (len(self._ecpbas) > 0)
 
-del(INTEGRAL_PRECISION, WRAP_AROUND, WITH_GAMMA, DELIMITER)
+del(INTEGRAL_PRECISION, WRAP_AROUND, WITH_GAMMA, EXP_DELIMITER)

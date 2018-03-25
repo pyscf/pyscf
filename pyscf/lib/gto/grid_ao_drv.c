@@ -355,7 +355,7 @@ void GTOeval_loop(void (*fiter)(), FPtr_eval feval, FPtr_exp fexp, double fac,
         size_t aoff, bgrids;
         int ncart = NCTR_CART * param[TENSOR] * param[POS_E1];
         double *buf = malloc(sizeof(double) * BLKSIZE*(NPRIMAX*2+ncart));
-#pragma omp for schedule(static)
+#pragma omp for schedule(dynamic, 1)
         for (k = 0; k < nblk*nshblk; k++) {
                 iloc = k / nblk;
                 ish = shloc[iloc];
@@ -413,7 +413,7 @@ void GTOeval_spinor_drv(FPtr_eval feval, FPtr_exp fexp, void (*c2s)(), double fa
         size_t aoff, bgrids;
         int ncart = NCTR_CART * param[TENSOR] * param[POS_E1];
         double *buf = malloc(sizeof(double) * BLKSIZE*(NPRIMAX*2+ncart));
-#pragma omp for schedule(static)
+#pragma omp for schedule(dynamic, 1)
         for (k = 0; k < nblk*nshblk; k++) {
                 iloc = k / nblk;
                 ish = shloc[iloc];
