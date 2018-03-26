@@ -207,7 +207,7 @@ class KnowValues(unittest.TestCase):
         pmol = n2sym.copy()
         pmol.spin = 2
         mf = scf.UHF(pmol).set(verbose = 0).run()
-        self.assertEqual(mf.wfnsym, 2)
+        self.assertTrue(mf.wfnsym in (2, 3))
 
 if __name__ == "__main__":
     print("Full Tests for uhf")
