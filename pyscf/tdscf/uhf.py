@@ -676,8 +676,11 @@ class TDA(rhf.TDA):
                     (0, 0))  # (Y_alpha, Y_beta)
                    for xi in x1]
 
-        lib.chkfile.save(self.chkfile, 'tddft/e', self.e)
-        lib.chkfile.save(self.chkfile, 'tddft/xy', self.xy)
+        if self.chkfile is not None:
+            lib.chkfile.save(self.chkfile, 'tddft/e', self.e)
+            lib.chkfile.save(self.chkfile, 'tddft/xy', self.xy)
+
+        log.note('Excited State energies (eV)\n%s', self.e * nist.HARTREE2EV)
         return self.e, self.xy
 
     analyze = analyze
@@ -838,8 +841,11 @@ class TDHF(TDA):
         self.e = numpy.array(e)
         self.xy = xy
 
-        lib.chkfile.save(self.chkfile, 'tddft/e', self.e)
-        lib.chkfile.save(self.chkfile, 'tddft/xy', self.xy)
+        if self.chkfile is not None:
+            lib.chkfile.save(self.chkfile, 'tddft/e', self.e)
+            lib.chkfile.save(self.chkfile, 'tddft/xy', self.xy)
+
+        log.note('Excited State energies (eV)\n%s', self.e * nist.HARTREE2EV)
         return self.e, self.xy
 
     def nuc_grad_method(self):

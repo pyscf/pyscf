@@ -28,6 +28,7 @@ from pyscf import dft
 from pyscf.tdscf import rhf
 from pyscf.scf import hf_symm
 from pyscf.ao2mo import _ao2mo
+from pyscf.data import nist
 from pyscf.soscf.newton_ah import _gen_rhf_response
 from pyscf import __config__
 
@@ -142,6 +143,12 @@ class TDDFTNoHybrid(TDA):
         idx = numpy.where(w2 > POSTIVE_EIG_THRESHOLD**2)[0]
         self.e = numpy.sqrt(w2[idx])
         self.xy = [norm_xy(self.e[i], x1[i]) for i in idx]
+
+        if self.chkfile is not None:
+            lib.chkfile.save(self.chkfile, 'tddft/e', self.e)
+            lib.chkfile.save(self.chkfile, 'tddft/xy', self.xy)
+
+        log.note('Excited State energies (eV)\n%s', self.e * nist.HARTREE2EV)
         return self.e, self.xy
 
     def nuc_grad_method(self):

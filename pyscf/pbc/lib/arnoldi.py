@@ -92,8 +92,8 @@ class Arnoldi:
 
                 self.totalIter += 1
                 self.currentSize += 1
-        print ""
-        print "Converged in %3d cycles" % self.totalIter
+        print("")
+        print("Converged in %3d cycles" % self.totalIter)
         self.constructAllSolV()
         return self.outeigs, self.outevecs
 
@@ -216,7 +216,7 @@ class Arnoldi:
         orthog = orthog ** 0.5
         if not self.deflated:
             if VERBOSE:
-                print "%3d %20.14f %20.14f  %10.4g" % (self.ciEig, self.cvEig.real, self.resnorm.real, orthog.real)
+                print("%3d %20.14f %20.14f  %10.4g" % (self.ciEig, self.cvEig.real, self.resnorm.real, orthog.real))
         #else:
         #    print "%3d %20.14f %20.14f %20.14f (deflated)" % (self.ciEig, self.cvEig,
         #                                                      self.resnorm, orthog)
@@ -230,15 +230,15 @@ class Arnoldi:
     def checkConvergence(self):
         if self.resnorm < self.tol:
             if VERBOSE:
-                print "Eigenvalue %3d converged! (res = %.15g)" % (self.ciEig, self.resnorm)
+                print("Eigenvalue %3d converged! (res = %.15g)" % (self.ciEig, self.resnorm))
             self.ciEig += 1
         if self.ciEig == self.nEigen:
             self.converged = True
         if self.resnorm < self.tol and not self.converged:
             if VERBOSE:
-                print ""
-                print ""
-                print "%-3s %-20s %-20s %-8s" % ("#", "  Eigenvalue", "  Res. Norm.", "  Ortho. (should be ~0)")
+                print("")
+                print("")
+                print("%-3s %-20s %-20s %-8s" % ("#", "  Eigenvalue", "  Res. Norm.", "  Ortho. (should be ~0)"))
 
     def gramSchmidtCurrentVec(self,northo):
         for i in xrange(northo):

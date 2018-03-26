@@ -91,8 +91,6 @@ def write_chk(mc,root,chkfile):
     fh5['mc/wfnsym']   =       mc.fcisolver.wfnsym
     if hasattr(mc.mo_coeff, 'orbsym'):
         fh5.create_dataset('mc/orbsym',data=mc.mo_coeff.orbsym)
-    else :
-        fh5.create_dataset('mc/orbsym',data=[])
 
     if hasattr(mc.mo_coeff, 'orbsym') and mc.mol.symmetry:
         orbsym = numpy.asarray(mc.mo_coeff.orbsym)
@@ -338,7 +336,10 @@ def _write_integral_file(mc_chkfile, nevpt_scratch, comm):
     if rank == 0:
         fh5 = h5py.File(mc_chkfile, 'r')
         def load(key):
-            return comm.bcast(fh5[key].value)
+            if key in fh5:
+                return comm.bcast(fh5[key].value)
+            else:
+                return comm.bcast([])
     else:
         def load(key):
             return comm.bcast(None)

@@ -39,6 +39,10 @@ WITH_META_LOWDIN = getattr(__config__, 'scf_analyze_with_meta_lowdin', True)
 PRE_ORTH_METHOD = getattr(__config__, 'scf_analyze_pre_orth_method', 'ANO')
 MO_BASE = getattr(__config__, 'MO_BASE', 1)
 
+# For code compatiblity in python-2 and python-3
+if sys.version_info >= (3,):
+    unicode = str
+
 def kernel(mf, conv_tol=1e-10, conv_tol_grad=None,
            dump_chk=True, dm0=None, callback=None, conv_check=True, **kwargs):
     '''kernel: the SCF driver.
@@ -940,7 +944,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
             mo_e[idx] = e
     return mo_e, mo
 
-def dip_moment(mol, dm, unit_symbol='Debye', verbose=logger.NOTE):
+def dip_moment(mol, dm, unit='Debye', verbose=logger.NOTE, **kwargs):
     r''' Dipole moment calculation
 
     .. math::
@@ -965,7 +969,12 @@ def dip_moment(mol, dm, unit_symbol='Debye', verbose=logger.NOTE):
     else:
         log = logger.Logger(mol.stdout, verbose)
 
-    if unit_symbol == 'Debye':
+    if 'unit_symbol' in kwargs:
+        log.warn('Kwarg "unit_symbol" was deprecated. It was replaced by kwarg '
+                 'unit since PySCF-1.5.')
+        unit = kwargs['unit_symbol']
+
+    if unit == 'Debye':
         unit = nist.AU2DEBYE
     else:
         unit = 1.0
@@ -980,7 +989,7 @@ def dip_moment(mol, dm, unit_symbol='Debye', verbose=logger.NOTE):
 
     mol_dip = (nucl_dip - el_dip) * unit
 
-    if unit_symbol == 'Debye' :
+    if unit == 'Debye' :
         log.note('Dipole moment(X, Y, Z, Debye): %8.5f, %8.5f, %8.5f', *mol_dip)
     else:
         log.note('Dipole moment(X, Y, Z, A.U.): %8.5f, %8.5f, %8.5f', *mol_dip)
@@ -1185,7 +1194,8 @@ class SCF(lib.StreamObject):
 
     def __init__(self, mol):
         if not mol._built:
-            sys.stderr.write('Warning: mol.build() is not called in input\n')
+            sys.stderr.write('Warning: %s must be initialized before calling SCF.\n'
+                             'Initialize %s in %s\n' % (mol, mol, self))
             mol.build()
         self.mol = mol
         self.verbose = mol.verbose
@@ -1494,11 +1504,11 @@ class SCF(lib.StreamObject):
     canonicalize = canonicalize
 
     @lib.with_doc(dip_moment.__doc__)
-    def dip_moment(self, mol=None, dm=None, unit_symbol='Debye',
-                   verbose=logger.NOTE):
+    def dip_moment(self, mol=None, dm=None, unit='Debye', verbose=logger.NOTE,
+                   **kwargs):
         if mol is None: mol = self.mol
         if dm is None: dm =self.make_rdm1()
-        return dip_moment(mol, dm, unit_symbol, verbose=verbose)
+        return dip_moment(mol, dm, unit, verbose=verbose, **kwargs)
 
     def _is_mem_enough(self):
         nbf = self.mol.nao_nr()
@@ -1565,6 +1575,24 @@ class SCF(lib.StreamObject):
         sys.stderr.write('WARN: Attribute .damp_factor will be removed in PySCF v1.1. '
                          'It is replaced by attribute .damp\n')
         self.damp = x
+
+    def apply(self, fn, *args, **kwargs):
+        if callable(fn):
+            return lib.StreamObject.apply(self, fn, *args, **kwargs)
+        elif isinstance(fn, (str, unicode)):
+            from pyscf import mp, cc, ci, mcscf, tdscf
+            for mod in (mp, cc, ci, mcscf, tdscf):
+                method = getattr(mod, fn.upper(), None)
+                if method is not None and callable(method):
+                    if self.mo_coeff is None:
+                        logger.warn('SCF object must be initialized before '
+                                    'calling post-SCF methods.\n'
+                                    'Initialize %s for %s', self, mod)
+                    return method(self, *args, **kwargs)
+            raise ValueError('Unknown method %s' % fn)
+        else:
+            raise TypeError('First argument of .apply method must be a '
+                            'function or a string.')
 
 
 ############
