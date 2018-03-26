@@ -198,7 +198,8 @@ class FCISolver(direct_spin0.FCISolver):
 
     def __init__(self, mol=None, **kwargs):
         direct_spin0.FCISolver.__init__(self, mol, **kwargs)
-        self.wfnsym = 0
+        # wfnsym will be guessed based on initial guess if it is None
+        self.wfnsym = None
 
     def dump_flags(self, verbose=None):
         if verbose is None: verbose = self.verbose

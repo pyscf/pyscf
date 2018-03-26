@@ -56,7 +56,8 @@ class SymAdaptedCASCI(casci.CASCI):
         if ci0 is None:
             ci0 = self.ci
 
-        mo_coeff = self.mo_coeff = label_symmetry_(self, mo_coeff)
+        # Initialize/overwrite self.fcisolver.orbsym and self.fcisolver.wfnsym
+        mo_coeff = self.mo_coeff = label_symmetry_(self, mo_coeff, ci0)
         return casci.CASCI.kernel(self, mo_coeff, ci0)
 
     def _eig(self, mat, b0, b1):
@@ -87,14 +88,15 @@ def eig(mat, orbsym):
             c[lst[:,None],lst] = v
     return e, c
 
-def label_symmetry_(mc, mo_coeff):
+def label_symmetry_(mc, mo_coeff, ci0=None):
+    log = logger.Logger(mc.stdout, mc.verbose)
     #irrep_name = mc.mol.irrep_name
     irrep_name = mc.mol.irrep_id
     s = mc._scf.get_ovlp()
     try:
         orbsym = scf.hf_symm.get_orbsym(mc._scf.mol, mo_coeff, s, True)
     except ValueError:
-        logger.warn(mc, 'mc1step_symm symmetrizes input orbitals')
+        log.warn('mc1step_symm symmetrizes input orbitals')
         ncore = mc.ncore
         nocc = mc.ncore + mc.ncas
         mo_cor = symm.symmetrize_space(mc.mol, mo_coeff[:,    :ncore], s=s, check=False)
@@ -103,17 +105,56 @@ def label_symmetry_(mc, mo_coeff):
         mo_coeff = numpy.hstack((mo_cor,mo_act,mo_vir))
         orbsym = symm.label_orb_symm(mc.mol, irrep_name,
                                         mc.mol.symm_orb, mo_coeff, s=s)
-    mo_coeff = lib.tag_array(mo_coeff, orbsym=orbsym)
+    mo_coeff_with_orbsym = lib.tag_array(mo_coeff, orbsym=orbsym)
 
-    if (not hasattr(mc.fcisolver, 'orbsym') or mc.fcisolver.orbsym is None
-        or (hasattr(mc.fcisolver.orbsym, '__len__')
-            and len(mc.fcisolver.orbsym) == 0)):
+    active_orbsym = getattr(mc.fcisolver, 'orbsym', [])
+    if (not hasattr(active_orbsym, '__len__')) or len(active_orbsym) == 0:
         ncore = mc.ncore
         nocc = mc.ncore + mc.ncas
         mc.fcisolver.orbsym = orbsym[ncore:nocc]
-    logger.debug(mc, 'Active space irreps %s', str(mc.fcisolver.orbsym))
-    return mo_coeff
+    log.debug('Active space irreps %s', str(mc.fcisolver.orbsym))
 
+    wfnsym = 0
+    if getattr(mc.fcisolver, 'wfnsym', None) is not None:
+        wfnsym = mc.fcisolver.wfnsym
+
+    elif ci0 is None:
+        # Guess wfnsym based on HF determinant.  mo_coeff may not be HF
+        # canonical orbitals.  Some checks are needed to ensure that mo_coeff
+        # are derived from the symmetry adapted SCF calculations.
+        if mo_coeff is mc._scf.mo_coeff:
+            wfnsym = 0
+            for ir in orbsym[mc._scf.mo_occ == 1]:
+                wfnsym ^= ir
+            mc.fcisolver.wfnsym = wfnsym
+            log.debug('Set CASCI wfnsym %s based on HF determinant', wfnsym)
+        elif hasattr(mo_coeff, 'orbsym'):  # It may be reordered SCF orbitals
+            ncore = mc.ncore
+            nocc = mc.ncore + mc.ncas
+            cas_orb = mo_coeff[:,ncore:nocc]
+            s = reduce(numpy.dot, (cas_orb.T, mc._scf.get_ovlp(), mc._scf.mo_coeff))
+            if numpy.all(numpy.max(s, axis=1) > 1-1e-9):
+                idx = numpy.argmax(s, axis=1)
+                cas_orbsym = orbsym[ncore:nocc]
+                cas_occ = mc._scf.mo_occ[idx]
+                wfnsym = 0
+                for ir in cas_orbsym[cas_occ == 1]:
+                    wfnsym ^= ir
+                mc.fcisolver.wfnsym = wfnsym
+                log.debug('Active space are constructed from canonical SCF '
+                          'orbitals %s', idx)
+                log.debug('Set CASCI wfnsym %s based on HF determinant', wfnsym)
+
+    elif hasattr(mc.fcisolver, 'guess_wfnsym'):
+        wfnsym = mc.fcisolver.guess_wfnsym(mc.ncas, mc.nelecas, ci0, verbose=log)
+        log.debug('CASCI wfnsym %s (based on CI initial guess)', wfnsym)
+
+    if isinstance(wfnsym, (int, numpy.integer)):
+        wfnsym = symm.irrep_id2name(mc.mol.groupname, wfnsym)
+
+    log.info('Active space CI wfn symmetry = %s', wfnsym)
+
+    return mo_coeff_with_orbsym
 
 
 if __name__ == '__main__':
@@ -143,3 +184,8 @@ if __name__ == '__main__':
     mc.fcisolver = fci.direct_spin1
     emc = mc.casci()[0]
     print(emc - -75.439016172976)
+
+    mol.spin = 2
+    m = scf.RHF(mol).run()
+    mc = CASCI(m, 4, 4).run()
+    print(mc.e_tot - -75.46992364325132)
