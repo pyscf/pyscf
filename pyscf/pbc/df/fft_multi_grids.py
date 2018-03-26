@@ -16,7 +16,7 @@ from pyscf import __config__
 
 BLKSIZE = numint.BLKSIZE
 EXTRA_PREC = getattr(__config__, 'pbc_gto_eval_gto_extra_precision', 1e-2)
-TO_EVEN_GRIDS = getattr(__config__, 'pbc_gto_df_fft_multi_grids_to_even', False)
+TO_EVEN_GRIDS = getattr(__config__, 'pbc_gto_df_fft_multi_grids_to_even', True)
 
 
 def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None):
@@ -69,7 +69,6 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None):
 
     for cell_low, idx_l, cell_high, idx_h, coords_idx in tasks:
         mesh = cell_high.mesh
-        print mesh
         log.debug('mesh %s', mesh)
         dms_hh = numpy.asarray(dms[:,:,idx_h[:,None],idx_h], order='C')
         if cell_low is not None:
@@ -153,7 +152,7 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None):
 
     return _format_jks(vj_kpts, dm_kpts, input_band, kpts)
 
-@profile
+
 def multi_grids_tasks(cell, verbose=None):
     log = lib.logger.new_logger(cell, verbose)
     tasks = []
@@ -332,7 +331,6 @@ if __name__ == '__main__':
         #mesh = [15]*3,
         #precision=1e-6
     )
-    print cell.mesh
 
     mydf = df.FFTDF(cell)
     nao = cell.nao_nr()
