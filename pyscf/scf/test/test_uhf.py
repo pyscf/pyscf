@@ -191,18 +191,23 @@ class KnowValues(unittest.TestCase):
         self.assertRaises(ValueError, mf.build)
 
     def test_det_ovlp(self):
-        mf = scf.UHF(mol)
-        mf.scf()
+        mf = scf.UHF(mol).run()
         s, x = mf.det_ovlp(mf.mo_coeff, mf.mo_coeff, mf.mo_occ, mf.mo_occ)
         self.assertAlmostEqual(s, 1.000000000, 9)
         self.assertAlmostEqual(numpy.trace(x[0]), mol.nelec[0]*1.000000000, 9)
         self.assertAlmostEqual(numpy.trace(x[0]), mol.nelec[1]*1.000000000, 9)
 
     def test_dip_moment(self):
-        mf = scf.UHF(mol)
-        mf.scf()
-        dip = mf.dip_moment(unit_symbol='au')
-        self.assertTrue(numpy.allclose(dip, [0.00000, 0.00000, 0.80985])) 
+        dip = mf.dip_moment(unit='au')
+        self.assertTrue(numpy.allclose(dip, [0.00000, 0.00000, 0.80985]))
+
+    def test_get_wfnsym(self):
+        self.assertEqual(n2mf.wfnsym, 0)
+
+        pmol = n2sym.copy()
+        pmol.spin = 2
+        mf = scf.UHF(pmol).set(verbose = 0).run()
+        self.assertEqual(mf.wfnsym, 2)
 
 if __name__ == "__main__":
     print("Full Tests for uhf")

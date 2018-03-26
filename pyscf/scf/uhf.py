@@ -627,31 +627,7 @@ def make_asym_dm(mo1, mo2, occ1, occ2, x):
     dm_b = reduce(numpy.dot, (mo1_b, x[1], mo2_b.T.conj()))
     return numpy.array((dm_a, dm_b))
 
-def dip_moment(mol, dm, unit='Debye', verbose=logger.NOTE, **kwargs):
-    r''' Dipole moment calculation
-
-    .. math::
-
-        \mu_x = -\sum_{\mu}\sum_{\nu} P_{\mu\nu}(\nu|x|\mu) + \sum_A Q_A X_A\\
-        \mu_y = -\sum_{\mu}\sum_{\nu} P_{\mu\nu}(\nu|y|\mu) + \sum_A Q_A Y_A\\
-        \mu_z = -\sum_{\mu}\sum_{\nu} P_{\mu\nu}(\nu|z|\mu) + \sum_A Q_A Z_A
-
-    where :math:`\mu_x, \mu_y, \mu_z` are the x, y and z components of dipole
-    moment
-
-    Args:
-         mol: an instance of :class:`Mole`
-
-         dm : a list of 2D ndarrays
-              a list of density matrices
-
-    Return:
-        A list: the dipole moment on x, y and z component
-    '''
-    if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
-        return hf.dip_moment(mol, dm, unit, verbose, **kwargs)
-    else:
-        return hf.dip_moment(mol, dm[0]+dm[1], unit, verbose, **kwargs)
+dip_moment = hf.dip_moment
 
 class UHF(hf.SCF):
     __doc__ = hf.SCF.__doc__ + '''
@@ -824,13 +800,6 @@ class UHF(hf.SCF):
     @lib.with_doc(make_asym_dm.__doc__)
     def make_asym_dm(self, mo1, mo2, occ1, occ2, x):
         return make_asym_dm(mo1, mo2, occ1, occ2, x)
-
-    @lib.with_doc(dip_moment.__doc__)
-    def dip_moment(self, mol=None, dm=None, unit='Debye', verbose=logger.NOTE,
-                   **kwargs):
-        if mol is None: mol = self.mol
-        if dm is None: dm =self.make_rdm1()
-        return dip_moment(mol, dm, unit, verbose=verbose, **kwargs)
 
     def _finalize(self):
         ss, s = self.spin_square()

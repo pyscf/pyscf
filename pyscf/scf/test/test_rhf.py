@@ -300,11 +300,22 @@ class KnowValues(unittest.TestCase):
         mf.irrep_nelec = {'A1g':6, 'A1u':10, 'E1ux':2, 'E1uy':2}
         self.assertRaises(ValueError, mf.build)
 
-    def test_dip_moment(self):
-        mf = scf.RHF(mol)
-        mf.scf()
-        dip = mf.dip_moment(unit_symbol='au')
-        self.assertTrue(numpy.allclose(dip, [0.00000, 0.00000, 0.80985])) 
+    def test_rhf_dip_moment(self):
+        dip = mf.dip_moment(unit='au')
+        self.assertTrue(numpy.allclose(dip, [0.00000, 0.00000, 0.80985]))
+
+    def test_rohf_dip_moment(self):
+        mf = scf.ROHF(mol).run()
+        dip = mf.dip_moment(unit='au')
+        self.assertTrue(numpy.allclose(dip, [0.00000, 0.00000, 0.80985]))
+
+    def test_get_wfnsym(self):
+        self.assertEqual(n2mf.wfnsym, 0)
+
+        pmol = n2sym.copy()
+        pmol.spin = 2
+        mf = scf.ROHF(pmol).set(verbose = 0).run()
+        self.assertEqual(mf.wfnsym, 2)
 
 if __name__ == "__main__":
     print("Full Tests for rhf")
