@@ -20,6 +20,7 @@
 Integral transformation with analytic Fourier transformation
 '''
 
+import warnings
 import time
 import numpy
 from pyscf import lib
@@ -37,6 +38,7 @@ from pyscf import __config__
 
 def get_eri(mydf, kpts=None,
             compact=getattr(__config__, 'pbc_df_ao2mo_get_eri_compact', True)):
+    warn_pbc2d_eri(mydf)
     cell = mydf.cell
     nao = cell.nao_nr()
     kptijkl = _format_kpts(kpts)
@@ -131,6 +133,7 @@ def get_eri(mydf, kpts=None,
 
 def general(mydf, mo_coeffs, kpts=None,
             compact=getattr(__config__, 'pbc_df_ao2mo_general_compact', True)):
+    warn_pbc2d_eri(mydf)
     cell = mydf.cell
     kptijkl = _format_kpts(kpts)
     kpti, kptj, kptk, kptl = kptijkl
@@ -296,6 +299,18 @@ def get_mo_pairs_G(mydf, mo_coeffs, kpts=numpy.zeros((2,3)), q=None,
         pqk = (pqkR + pqkI*1j).reshape(nao,nao,-1)
         mo_pairs_G[p0:p1] = lib.einsum('pqk,pi,qj->kij', pqk, *mo_coeffs[:2])
     return mo_pairs_G.reshape(ngrids,nmoi*nmoj)
+
+
+class PBC2DIntegralsWarning(RuntimeWarning):
+    pass
+def warn_pbc2d_eri(mydf):
+    if mydf.cell.dimension in (1, 2):
+        with warnings.catch_warnings():
+            warnings.simplefilter('once', PBC2DIntegralsWarning)
+            warnings.warn('\nAFT/GDF/MDF based 2-electron integrals for 1D '
+                          'and 2D PBC systems were designed for SCF methods.\n'
+                          'The treatment to remove G=0 component may not be '
+                          'proper for post-HF calculations.\n')
 
 if __name__ == '__main__':
     from pyscf.pbc import gto as pgto

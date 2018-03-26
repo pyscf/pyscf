@@ -23,12 +23,14 @@ from pyscf.ao2mo import _ao2mo
 from pyscf.ao2mo.incore import iden_coeffs, _conc_mos
 from pyscf.pbc.df.df_jk import zdotNN, zdotCN, zdotNC
 from pyscf.pbc.df.fft_ao2mo import _format_kpts, _iskconserv
+from pyscf.pbc.df.aft_ao2mo import warn_pbc2d_eri
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point
 from pyscf import __config__
 
 
 def get_eri(mydf, kpts=None,
             compact=getattr(__config__, 'pbc_df_ao2mo_get_eri_compact', True)):
+    warn_pbc2d_eri(mydf)
     if mydf._cderi is None:
         mydf.build()
 
@@ -103,6 +105,7 @@ def get_eri(mydf, kpts=None,
 
 def general(mydf, mo_coeffs, kpts=None,
             compact=getattr(__config__, 'pbc_df_ao2mo_general_compact', True)):
+    warn_pbc2d_eri(mydf)
     if mydf._cderi is None:
         mydf.build()
 
