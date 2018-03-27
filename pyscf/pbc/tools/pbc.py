@@ -20,18 +20,64 @@ import scipy.linalg
 from pyscf import lib
 from pyscf.pbc.lib.kpts_helper import get_kconserv, get_kconserv3
 
-try:
-    import pyfftw
-    pyfftw.interfaces.cache.enable()
-    fftn_wrapper = pyfftw.interfaces.numpy_fft.fftn
-    ifftn_wrapper = pyfftw.interfaces.numpy_fft.ifftn
-    nproc = lib.num_threads()
-except ImportError:
-    def fftn_wrapper(a, s=None, axes=None, norm=None, **kwargs):
+#pyfftw is slower than np.fft in most cases
+#try:
+#    import pyfftw
+#    pyfftw.interfaces.cache.enable()
+#    fftn_wrapper = pyfftw.interfaces.numpy_fft.fftn
+#    ifftn_wrapper = pyfftw.interfaces.numpy_fft.ifftn
+#    nproc = lib.num_threads()
+#except ImportError:
+#    def fftn_wrapper(a, s=None, axes=None, norm=None, **kwargs):
+#        return np.fft.fftn(a, s, axes)
+#    def ifftn_wrapper(a, s=None, axes=None, norm=None, **kwargs):
+#        return np.fft.ifftn(a, s, axes)
+#    nproc = 1
+
+_EXCLUDE = [17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79,
+            83, 89, 97,101,103,107,109,113,127,131,137,139,149,151,157,163,
+            167,173,179,181,191,193,197,199]
+_EXCLUDE = set(_EXCLUDE + [n*2 for n in _EXCLUDE] + [n*3 for n in _EXCLUDE])
+
+def fftn_wrapper(a, s=None, axes=None, norm=None, **kwargs):
+    mesh = a.shape[1:]
+    if mesh[0] in _EXCLUDE and mesh[1] in _EXCLUDE and mesh[2] in _EXCLUDE:
+        return _fftn_blas(a, mesh)
+    else:
         return np.fft.fftn(a, s, axes)
-    def ifftn_wrapper(a, s=None, axes=None, norm=None, **kwargs):
+def ifftn_wrapper(a, s=None, axes=None, norm=None, **kwargs):
+    mesh = a.shape[1:]
+    if mesh[0] in _EXCLUDE and mesh[1] in _EXCLUDE and mesh[2] in _EXCLUDE:
+        return _ifftn_blas(a, mesh)
+    else:
         return np.fft.ifftn(a, s, axes)
-    nproc = 1
+nproc = 1
+
+def _fftn_blas(f, mesh):
+    Rx = np.arange(float(mesh[0]))
+    Ry = np.arange(float(mesh[1]))
+    Rz = np.arange(float(mesh[2]))
+    Gx = np.fft.fftfreq(mesh[0])
+    Gy = np.fft.fftfreq(mesh[1])
+    Gz = np.fft.fftfreq(mesh[2])
+    g = lib.transpose(f.reshape(-1, mesh[1]*mesh[2]))
+    g = lib.dot(g.reshape(-1,mesh[0])  , np.exp(-2j*np.pi * Rx[:,None]*Gx))
+    g = lib.dot(g.reshape(mesh[1],-1).T, np.exp(-2j*np.pi * Ry[:,None]*Gy))
+    g = lib.dot(g.reshape(mesh[2],-1).T, np.exp(-2j*np.pi * Rz[:,None]*Gz))
+    return g.reshape(-1, *mesh)
+
+def _ifftn_blas(g, mesh):
+    Rx = np.arange(float(mesh[0]))
+    Ry = np.arange(float(mesh[1]))
+    Rz = np.arange(float(mesh[2]))
+    Gx = np.fft.fftfreq(mesh[0])
+    Gy = np.fft.fftfreq(mesh[1])
+    Gz = np.fft.fftfreq(mesh[2])
+    f = lib.transpose(g.reshape(-1, mesh[1]*mesh[2]))
+    f = lib.dot(f.reshape(-1,mesh[0])  , np.exp(2j*np.pi * Rx[:,None]*Gx), 1./mesh[0])
+    f = lib.dot(f.reshape(mesh[1],-1).T, np.exp(2j*np.pi * Ry[:,None]*Gy), 1./mesh[1])
+    f = lib.dot(f.reshape(mesh[2],-1).T, np.exp(2j*np.pi * Rz[:,None]*Gz), 1./mesh[2])
+    return f.reshape(-1, *mesh)
 
 def fft(f, mesh):
     '''Perform the 3D FFT from real (R) to reciprocal (G) space.
@@ -60,10 +106,11 @@ def fft(f, mesh):
     f3d = f.reshape(-1, *mesh)
     assert(f3d.shape[0] == 1 or f[0].size == f3d[0].size)
     g3d = fftn_wrapper(f3d, axes=(1,2,3), threads=nproc)
-    if f.ndim == 1:
+    ngrids = np.prod(mesh)
+    if f.ndim == 1 or (f.ndim == 3 and f.size == ngrids):
         return g3d.ravel()
     else:
-        return g3d.reshape(f.shape[0], -1)
+        return g3d.reshape(-1, ngrids)
 
 def ifft(g, mesh):
     '''Perform the 3D inverse FFT from reciprocal (G) space to real (R) space.
@@ -90,10 +137,11 @@ def ifft(g, mesh):
     g3d = g.reshape(-1, *mesh)
     assert(g3d.shape[0] == 1 or g[0].size == g3d[0].size)
     f3d = ifftn_wrapper(g3d, axes=(1,2,3), threads=nproc)
-    if g.ndim == 1:
+    ngrids = np.prod(mesh)
+    if g.ndim == 1 or (g.ndim == 3 and g.size == ngrids):
         return f3d.ravel()
     else:
-        return f3d.reshape(g.shape[0], -1)
+        return f3d.reshape(-1, ngrids)
 
 
 def fftk(f, mesh, expmikr):

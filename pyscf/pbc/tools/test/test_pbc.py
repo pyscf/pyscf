@@ -122,6 +122,20 @@ class KnownValues(unittest.TestCase):
         mad1 = tools.madelung(cell, kpts)
         self.assertAlmostEqual(mad0-mad1, 0, 9)
 
+    def test_fft(self):
+        n = 31
+        a = numpy.random.random([2,n,n,n])
+        ref = numpy.fft.fftn(a, axes=(1,2,3)).ravel()
+        v = tools.fft(a, [n,n,n]).ravel()
+        self.assertAlmostEqual(abs(ref-v).max(), 0, 10)
+
+    def test_ifft(self):
+        n = 31
+        a = numpy.random.random([2,n,n,n])
+        ref = numpy.fft.ifftn(a, axes=(1,2,3)).ravel()
+        v = tools.ifft(a, [n,n,n]).ravel()
+        self.assertAlmostEqual(abs(ref-v).max(), 0, 10)
+
 
 if __name__ == '__main__':
     print("Full Tests for pbc.tools")
