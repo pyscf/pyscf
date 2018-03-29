@@ -166,7 +166,8 @@ class KnownValues(unittest.TestCase):
         mat1 = dft.numint.eval_mat(mol, ao, weight, rho, vxc[:4], xctype='GGA')
         self.assertTrue(numpy.allclose(mat0, mat1))
         # UKS
-        vxc_1 = [vxc[0], (vxc[1], 0)]
+        ngrids = weight.size
+        vxc_1 = [vxc[0], numpy.vstack((vxc[1], numpy.zeros(ngrids))).T]
         mat2 = dft.numint.eval_mat(mol, ao, weight, [rho[:4]]*2, vxc_1, xctype='GGA', spin=1)
         self.assertTrue(numpy.allclose(mat0, mat2))
 
@@ -180,7 +181,11 @@ class KnownValues(unittest.TestCase):
         mat1 = dft.numint.eval_mat(mol, ao, weight, rho, vxc, xctype='MGGA')
         self.assertTrue(numpy.allclose(mat0, mat1))
         # UKS
-        vxc_1 = [vxc[0], (vxc[1], 0), (0,0), (vxc[3],0)]
+        ngrids = weight.size
+        vxc_1 = [vxc[0],
+                 numpy.vstack((vxc[1], numpy.zeros(ngrids))).T,
+                 numpy.zeros((ngrids,2)),
+                 numpy.vstack((vxc[3], numpy.zeros(ngrids))).T]
         mat2 = dft.numint.eval_mat(mol, ao, weight, [rho]*2, vxc_1, xctype='MGGA', spin=1)
         self.assertTrue(numpy.allclose(mat0, mat2))
 

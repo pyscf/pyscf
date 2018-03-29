@@ -16,6 +16,7 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+import warnings
 import ctypes
 import numpy
 import scipy.linalg
@@ -438,6 +439,7 @@ def eval_mat(mol, ao, weight, rho, vxc,
                              dtype=numpy.uint8)
     shls_slice = (0, mol.nbas)
     ao_loc = mol.ao_loc_nr()
+    transpose_for_uks = False
     if xctype == 'LDA' or xctype == 'HF':
         if not isinstance(vxc, numpy.ndarray) or vxc.ndim == 2:
             vrho = vxc[0]
@@ -462,8 +464,18 @@ def eval_mat(mol, ao, weight, rho, vxc,
         else:
             rho_a, rho_b = rho
             wv[0]  = weight * vrho * .5
-            wv[1:4] = rho_a[1:4] * (weight * vsigma[0] * 2)  # sigma_uu
-            wv[1:4]+= rho_b[1:4] * (weight * vsigma[1])      # sigma_ud
+            try:
+                wv[1:4] = rho_a[1:4] * (weight * vsigma[0] * 2)  # sigma_uu
+                wv[1:4]+= rho_b[1:4] * (weight * vsigma[1])      # sigma_ud
+            except ValueError:
+                warnings.warn('Note the output of libxc.eval_xc cannot be '
+                              'directly used in eval_mat.\nvsigma from eval_xc '
+                              'should be restructured as '
+                              '(vsigma[:,0],vsigma[:,1])\n')
+                transpose_for_uks = True
+                vsigma = vsigma.T
+                wv[1:4] = rho_a[1:4] * (weight * vsigma[0] * 2)  # sigma_uu
+                wv[1:4]+= rho_b[1:4] * (weight * vsigma[1])      # sigma_ud
         aow = numpy.empty_like(ao[0])
         aow = numpy.einsum('npi,np->pi', ao[:4], wv, out=aow)
         mat = _dot_ao_ao(mol, ao[0], aow, non0tab, shls_slice, ao_loc)
@@ -477,6 +489,8 @@ def eval_mat(mol, ao, weight, rho, vxc,
             vlapl = 0
         else:
             if spin != 0:
+                if transpose_for_uks:
+                    vlapl = vlapl.T
                 vlapl = vlapl[0]
             XX, YY, ZZ = 4, 7, 9
             ao2 = ao[XX] + ao[YY] + ao[ZZ]
@@ -484,6 +498,8 @@ def eval_mat(mol, ao, weight, rho, vxc,
             mat += _dot_ao_ao(mol, ao[0], aow, non0tab, shls_slice, ao_loc)
 
         if spin != 0:
+            if transpose_for_uks:
+                vtau = vtau.T
             vtau = vtau[0]
         wv = weight * (.25*vtau + vlapl)
         aow = numpy.einsum('pi,p->pi', ao[1], wv, out=aow)
