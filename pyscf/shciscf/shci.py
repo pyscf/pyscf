@@ -1089,7 +1089,7 @@ def doSOC(mc, gtensor=False, pictureChange="bp"):
 
 if __name__ == '__main__':
     from pyscf import gto, scf, mcscf, dmrgscf
-    from pyscf.future.shciscf import shci
+    from pyscf.shciscf import shci
 
     # Initialize N2 molecule
     b = 1.098

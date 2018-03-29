@@ -25,7 +25,7 @@ section to view output.
 '''
 
 from pyscf import gto, scf, mcscf, dmrgscf
-from pyscf.future.shciscf import shci
+from pyscf.shciscf import shci
 import os
 
 # O2 molecule Parameters
