@@ -338,7 +338,12 @@ def update_amps(cc, t1, t2, eris):
     return t1new, t2new
 
 
-def energy(cc, t1, t2, eris):
+def energy(cc, t1=None, t2=None, eris=None):
+    '''UCCSD correlation energy'''
+    if t1 is None: t1 = cc.t1
+    if t2 is None: t2 = cc.t2
+    if eris is None: eris = cc.ao2mo()
+
     t1a, t1b = t1
     t2aa, t2ab, t2bb = t2
     nocca, noccb, nvira, nvirb = t2ab.shape

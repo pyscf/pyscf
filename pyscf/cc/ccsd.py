@@ -629,8 +629,12 @@ def vector_to_amplitudes_s4(vector, nmo, nocc):
     return t1, t2
 
 
-def energy(mycc, t1, t2, eris):
+def energy(mycc, t1=None, t2=None, eris=None):
     '''CCSD correlation energy'''
+    if t1 is None: t1 = mycc.t1
+    if t2 is None: t2 = mycc.t2
+    if eris is None: eris = mycc.ao2mo()
+
     nocc, nvir = t1.shape
     fock = eris.fock
     e = numpy.einsum('ia,ia', fock[:nocc,nocc:], t1) * 2
