@@ -363,6 +363,7 @@ def _get_j_pass2(mydf, vG, kpts=numpy.zeros((1,3))):
     return vj_kpts
 
 
+@profile
 def rks_j_xc(mydf, dm_kpts, xc_code, hermi=1, kpts=numpy.zeros((1,3)),
              kpts_band=None, with_j=WITH_J, j_in_xc=J_IN_XC):
     log = lib.logger.Logger(mydf.stdout, mydf.verbose)
@@ -995,7 +996,7 @@ class MultiGridFFTDF(fft.FFTDF):
 
 
 if __name__ == '__main__':
-    from pyscf.pbc import gto, scf
+    from pyscf.pbc import gto, scf, dft
     from pyscf.pbc import df
     from pyscf.pbc.df import fft_jk
     cell = gto.M(
@@ -1023,7 +1024,7 @@ if __name__ == '__main__':
     mydf = df.FFTDF(cell)
     nao = cell.nao_nr()
     numpy.random.seed(1)
-    kpts = cell.make_kpts([1,1,1])
+    kpts = cell.make_kpts([3,1,1])
     dm = numpy.random.random((len(kpts),nao,nao)) * .2
     dm += numpy.eye(nao)
     dm = dm + dm.transpose(0,2,1)
@@ -1049,18 +1050,35 @@ if __name__ == '__main__':
     print(time.clock())
     print('diff', abs(ref-vxc).max(), lib.finger(vxc)-lib.finger(ref))
 
-    cell = gto.Cell()
-    cell.verbose = 0
-    cell.atom = 'C 0 0 0; C 1 1 1; C 0 2 2; C 2 0 2'
-    cell.a = numpy.diag([4, 4, 4])
-    cell.basis = 'gth-szv'
-    cell.pseudo = 'gth-pade'
-    cell.mesh = [20]*3
-    cell.build()
+    cell1 = gto.Cell()
+    cell1.verbose = 0
+    cell1.atom = 'C 0 0 0; C 1 1 1; C 0 2 2; C 2 0 2'
+    cell1.a = numpy.diag([4, 4, 4])
+    cell1.basis = 'gth-szv'
+    cell1.pseudo = 'gth-pade'
+    cell1.mesh = [20]*3
+    cell1.build()
     k = numpy.ones(3)*.25
-    df = MultiGridFFTDF(cell)
-    v1 = get_pp(df, k)
+    mydf = MultiGridFFTDF(cell1)
+    v1 = get_pp(mydf, k)
     print(lib.finger(v1) - (1.8428463642697195-0.10478381725330854j))
-    v1 = get_nuc(df, k)
+    v1 = get_nuc(mydf, k)
     print(lib.finger(v1) - (2.3454744614944714-0.12528407127454744j))
 
+    kpts = cell.make_kpts([2,2,2])
+    mf = dft.KRKS(cell, kpts)
+    mf.verbose = 4
+    mf.with_df = MultiGridFFTDF(cell, kpts)
+    mf.xc = xc = 'lda,vwn'
+    def get_veff(cell, dm, dm_last=0, vhf_last=0, hermi=1,
+                 kpts=None, kpts_band=None):
+        if kpts is None:
+            kpts = mf.with_df.kpts
+        n, exc, vxc, vj = mf.with_df.rks_j_xc(dm, mf.xc, kpts=kpts, kpts_band=kpts_band)
+        weight = 1./len(kpts)
+        ecoul = numpy.einsum('Kij,Kji', dm, vj).real * .5 * weight
+        vxc += vj
+        vxc = lib.tag_array(vxc, ecoul=ecoul, exc=exc, vj=None, vk=None)
+        return vxc
+    mf.get_veff = get_veff
+    mf.kernel()
