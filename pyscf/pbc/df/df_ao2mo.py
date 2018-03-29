@@ -23,7 +23,6 @@ from pyscf.ao2mo import _ao2mo
 from pyscf.ao2mo.incore import iden_coeffs, _conc_mos
 from pyscf.pbc.df.df_jk import zdotNN, zdotCN, zdotNC
 from pyscf.pbc.df.fft_ao2mo import _format_kpts, _iskconserv
-from pyscf.pbc.df.aft_ao2mo import warn_pbc2d_eri
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point
 from pyscf import __config__
 
@@ -230,6 +229,19 @@ def _ztrans(Lpq, zij, moij, ijslice, Lrs, zkl, mokl, klslice, sym):
     else:
         zkl = _ao2mo.r_e2(Lrs, mokl, klslice, tao, ao_loc, out=zkl)
     return zij, zkl
+
+
+class PBC2DIntegralsWarning(RuntimeWarning):
+    pass
+def warn_pbc2d_eri(mydf):
+    if mydf.cell.dimension in (1, 2):
+        with warnings.catch_warnings():
+            warnings.simplefilter('once', PBC2DIntegralsWarning)
+            warnings.warn('\nAFT/GDF/MDF based 2-electron integrals for 1D '
+                          'and 2D PBC systems were designed for SCF methods.\n'
+                          'The treatment to remove G=0 component may not be '
+                          'proper for post-HF calculations.\n')
+
 
 if __name__ == '__main__':
     from pyscf.pbc import gto as pgto

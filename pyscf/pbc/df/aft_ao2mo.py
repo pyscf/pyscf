@@ -32,6 +32,7 @@ from pyscf.pbc import tools
 from pyscf.pbc.df.df_jk import zdotNN, zdotCN, zdotNC
 from pyscf.pbc.df.fft_ao2mo import _format_kpts, _iskconserv
 from pyscf.pbc.df.df_ao2mo import _mo_as_complex, _dtrans, _ztrans
+from pyscf.pbc.df.df_ao2mo import warn_pbc2d_eri
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point
 from pyscf import __config__
 
@@ -299,18 +300,6 @@ def get_mo_pairs_G(mydf, mo_coeffs, kpts=numpy.zeros((2,3)), q=None,
         pqk = (pqkR + pqkI*1j).reshape(nao,nao,-1)
         mo_pairs_G[p0:p1] = lib.einsum('pqk,pi,qj->kij', pqk, *mo_coeffs[:2])
     return mo_pairs_G.reshape(ngrids,nmoi*nmoj)
-
-
-class PBC2DIntegralsWarning(RuntimeWarning):
-    pass
-def warn_pbc2d_eri(mydf):
-    if mydf.cell.dimension in (1, 2):
-        with warnings.catch_warnings():
-            warnings.simplefilter('once', PBC2DIntegralsWarning)
-            warnings.warn('\nAFT/GDF/MDF based 2-electron integrals for 1D '
-                          'and 2D PBC systems were designed for SCF methods.\n'
-                          'The treatment to remove G=0 component may not be '
-                          'proper for post-HF calculations.\n')
 
 if __name__ == '__main__':
     from pyscf.pbc import gto as pgto
