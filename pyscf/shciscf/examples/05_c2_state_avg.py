@@ -23,7 +23,7 @@ cleanup section to view output.
 '''
 import os, time; t0 = time.time()
 from pyscf import gto, scf, mcscf, dmrgscf
-from pyscf.future.shciscf import shci
+from pyscf.shciscf import shci
 
 # C2 molecule Parameters
 b = 1.3119 # Bond length.

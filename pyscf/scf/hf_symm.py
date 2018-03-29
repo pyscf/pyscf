@@ -65,7 +65,11 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
         orbsym = get_orbsym(mf.mol, mo_coeff, ovlp_ao, False)
         wfnsym = 0
         noccs = [sum(orbsym[mo_occ>0]==ir) for ir in mol.irrep_id]
-        log.note('total symmetry = %s', symm.irrep_id2name(mol.groupname, wfnsym))
+        if mol.groupname in ('SO3', 'Dooh', 'Coov'):
+            log.note('TODO: total wave-function symmetry for %s', mol.groupname)
+        else:
+            log.note('Wave-function symmetry = %s',
+                     symm.irrep_id2name(mol.groupname, wfnsym))
         log.note('occupancy for each irrep:  ' + (' %4s'*nirrep), *mol.irrep_name)
         log.note('                           ' + (' %4d'*nirrep), *noccs)
         log.note('**** MO energy ****')
@@ -302,6 +306,33 @@ def eig(mf, h, s):
     c = lib.tag_array(c, orbsym=numpy.hstack(orbsym))
     return e, c
 
+def get_orbsym(mol, mo_coeff, s=None, check=False):
+    if mo_coeff is None:
+        orbsym = numpy.hstack([[ir] * mol.symm_orb[i].shape[1]
+                               for i, ir in enumerate(mol.irrep_id)])
+    elif hasattr(mo_coeff, 'orbsym'):
+        orbsym = mo_coeff.orbsym
+    else:
+        orbsym = symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
+                                     mo_coeff, s, check)
+    return numpy.asarray(orbsym)
+
+def get_wfnsym(mf, mo_coeff=None, mo_occ=None):
+    orbsym = mf.get_orbsym(mo_coeff)
+    if mf.mol.groupname in ('SO3', 'Dooh', 'Coov'):
+        if numpy.any(orbsym > 7):
+            logger.warn(mf, 'Wave-function symmetry for %s not supported. '
+                        'Wfn symmetry is mapped to D2h/C2v group.',
+                        mf.mol.groupname)
+            orbsym = orbsym % 10
+
+    if mo_occ is None:
+        mo_occ = mf.mo_occ
+    wfnsym = 0
+    for ir in orbsym[mo_occ == 1]:
+        wfnsym ^= ir
+    return wfnsym
+
 
 class SymAdaptedRHF(hf.RHF):
     __doc__ = hf.SCF.__doc__ + '''
@@ -437,6 +468,17 @@ class SymAdaptedRHF(hf.RHF):
         if mo_coeff is None: mo_coeff = self.mo_coeff
         if s is None: s = self.get_ovlp()
         return get_irrep_nelec(mol, mo_coeff, mo_occ, s)
+
+    def get_orbsym(self, mo_coeff=None):
+        if mo_coeff is None:
+            mo_coeff = self.mo_coeff
+        if mo_coeff is None:
+            raise RuntimeError('SCF object %s not initialized' % self)
+        return numpy.asarray(get_orbsym(self.mol, mo_coeff))
+    orbsym = property(get_orbsym)
+
+    get_wfnsym = get_wfnsym
+    wfnsym = property(get_wfnsym)
 
     canonicalize = canonicalize
 RHF = SymAdaptedRHF
@@ -679,18 +721,18 @@ class SymAdaptedROHF(rohf.ROHF):
             for k,ir in enumerate(mol.irrep_id):
                 ndoccs.append(sum(orbsym[mo_occ==2] == ir))
                 nsoccs.append(sum(orbsym[mo_occ==1] == ir))
-                if nsoccs[k] % 2:
+                if nsoccs[k] % 2 == 1:
                     wfnsym ^= ir
-            if mol.groupname in ('Dooh', 'Coov'):
-                log.info('TODO: total symmetry for %s', mol.groupname)
+            if mol.groupname in ('SO3', 'Dooh', 'Coov'):
+                log.note('TODO: total wave-function symmetry for %s', mol.groupname)
             else:
-                log.info('total symmetry = %s',
+                log.note('Wave-function symmetry = %s',
                          symm.irrep_id2name(mol.groupname, wfnsym))
-            log.info('occupancy for each irrep:  ' + (' %4s'*nirrep),
+            log.note('occupancy for each irrep:  ' + (' %4s'*nirrep),
                      *mol.irrep_name)
-            log.info('double occ                 ' + (' %4d'*nirrep), *ndoccs)
-            log.info('single occ                 ' + (' %4d'*nirrep), *nsoccs)
-            log.info('**** MO energy ****')
+            log.note('double occ                 ' + (' %4d'*nirrep), *ndoccs)
+            log.note('single occ                 ' + (' %4d'*nirrep), *nsoccs)
+            log.note('**** MO energy ****')
             irname_full = {}
             for k,ir in enumerate(mol.irrep_id):
                 irname_full[ir] = mol.irrep_name[k]
@@ -756,6 +798,18 @@ class SymAdaptedROHF(rohf.ROHF):
         mo_eb = numpy.einsum('pi,pi->i', mo_coeff, fock.fockb.dot(mo_coeff))
         mo_e = lib.tag_array(mo_e, mo_ea=mo_ea, mo_eb=mo_eb)
         return mo_e, mo_coeff
+
+    def get_orbsym(self, mo_coeff=None):
+        if mo_coeff is None:
+            mo_coeff = self.mo_coeff
+        if mo_coeff is None:
+            raise RuntimeError('SCF object %s not initialized' % self)
+        return numpy.asarray(get_orbsym(self.mol, mo_coeff))
+    orbsym = property(get_orbsym)
+
+    get_wfnsym = get_wfnsym
+    wfnsym = property(get_wfnsym)
+
 ROHF = SymAdaptedROHF
 
 
@@ -801,17 +855,6 @@ class HF1e(ROHF):
         self.e_tot = self.mo_energy[self.mo_occ>0][0] + self.mol.energy_nuc()
         self._finalize()
         return self.e_tot
-
-def get_orbsym(mol, mo_coeff, s=None, check=False):
-    if mo_coeff is None:
-        orbsym = numpy.hstack([[ir] * mol.symm_orb[i].shape[1]
-                               for i, ir in enumerate(mol.irrep_id)])
-    elif hasattr(mo_coeff, 'orbsym'):
-        orbsym = mo_coeff.orbsym
-    else:
-        orbsym = symm.label_orb_symm(mol, mol.irrep_id, mol.symm_orb,
-                                     mo_coeff, s, check)
-    return numpy.asarray(orbsym)
 
 
 del(WITH_META_LOWDIN)

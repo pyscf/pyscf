@@ -25,7 +25,7 @@ cleanup section to view output files.
 import time
 t0 = time.time()
 from pyscf import gto, scf, mcscf, dmrgscf
-from pyscf.future.shciscf import shci
+from pyscf.shciscf import shci
 import struct, os
 
 # Initialize O2 molecule

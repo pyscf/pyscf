@@ -137,7 +137,12 @@ def update_amps(cc, t1, t2, eris):
     return t1new, t2new
 
 
-def energy(cc, t1, t2, eris):
+def energy(cc, t1=None, t2=None, eris=None):
+    '''RCCSD correlation energy'''
+    if t1 is None: t1 = cc.t1
+    if t2 is None: t2 = cc.t2
+    if eris is None: eris = cc.ao2mo()
+
     nocc, nvir = t1.shape
     fock = eris.fock
     e = 2*np.einsum('ia,ia', fock[:nocc,nocc:], t1)

@@ -20,6 +20,7 @@
 Integral transformation with analytic Fourier transformation
 '''
 
+import warnings
 import time
 import numpy
 from pyscf import lib
@@ -31,12 +32,14 @@ from pyscf.pbc import tools
 from pyscf.pbc.df.df_jk import zdotNN, zdotCN, zdotNC
 from pyscf.pbc.df.fft_ao2mo import _format_kpts, _iskconserv
 from pyscf.pbc.df.df_ao2mo import _mo_as_complex, _dtrans, _ztrans
+from pyscf.pbc.df.df_ao2mo import warn_pbc2d_eri
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point
 from pyscf import __config__
 
 
 def get_eri(mydf, kpts=None,
             compact=getattr(__config__, 'pbc_df_ao2mo_get_eri_compact', True)):
+    warn_pbc2d_eri(mydf)
     cell = mydf.cell
     nao = cell.nao_nr()
     kptijkl = _format_kpts(kpts)
@@ -131,6 +134,7 @@ def get_eri(mydf, kpts=None,
 
 def general(mydf, mo_coeffs, kpts=None,
             compact=getattr(__config__, 'pbc_df_ao2mo_general_compact', True)):
+    warn_pbc2d_eri(mydf)
     cell = mydf.cell
     kptijkl = _format_kpts(kpts)
     kpti, kptj, kptk, kptl = kptijkl

@@ -59,9 +59,9 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
             if (noccsa[i]+noccsb[i]) % 2:
                 tot_sym ^= ir
         if mol.groupname in ('Dooh', 'Coov', 'SO3'):
-            log.note('TODO: total symmetry for %s', mol.groupname)
+            log.note('TODO: total wave-function symmetry for %s', mol.groupname)
         else:
-            log.note('total symmetry = %s',
+            log.note('Wave-function symmetry = %s',
                      symm.irrep_id2name(mol.groupname, tot_sym))
         log.note('alpha occupancy for each irrep:  '+(' %4s'*nirrep),
                  *mol.irrep_name)
@@ -239,6 +239,33 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     mo = (lib.tag_array(mo[0], orbsym=orbsyma),
           lib.tag_array(mo[1], orbsym=orbsymb))
     return mo_e, mo
+
+def get_orbsym(mol, mo_coeff, s=None, check=False):
+    if hasattr(mo_coeff, 'orbsym'):
+        orbsym = numpy.asarray(mo_coeff.orbsym)
+    else:
+        orbsym = (hf_symm.get_orbsym(mol, mo_coeff[0], s, check),
+                  hf_symm.get_orbsym(mol, mo_coeff[1], s, check))
+    return orbsym
+
+def get_wfnsym(mf, mo_coeff=None, mo_occ=None):
+    orbsyma, orbsymb = mf.get_orbsym(mo_coeff)
+    if mf.mol.groupname in ('SO3', 'Dooh', 'Coov'):
+        if numpy.any(orbsyma > 7):
+            logger.warn(mf, 'Wave-function symmetry for %s not supported. '
+                        'Wfn symmetry is mapped to D2h/C2v group.',
+                        mf.mol.groupname)
+            orbsyma = orbsyma % 10
+            orbsymb = orbsymb % 10
+
+    if mo_occ is None:
+        mo_occ = mf.mo_occ
+    wfnsym = 0
+    for ir in orbsyma[mo_occ[0] == 1]:
+        wfnsym ^= ir
+    for ir in orbsymb[mo_occ[1] == 1]:
+        wfnsym ^= ir
+    return wfnsym
 
 
 class SymAdaptedUHF(uhf.UHF):
@@ -475,17 +502,21 @@ class SymAdaptedUHF(uhf.UHF):
         if s is None: s = self.get_ovlp()
         return get_irrep_nelec(mol, mo_coeff, mo_occ, s)
 
+    def get_orbsym(self, mo_coeff=None):
+        if mo_coeff is None:
+            mo_coeff = self.mo_coeff
+        if mo_coeff is None:
+            raise RuntimeError('SCF object %s not initialized' % self)
+        return get_orbsym(self.mol, mo_coeff)
+    orbsym = property(get_orbsym)
+
+    get_wfnsym = get_wfnsym
+    wfnsym = property(get_wfnsym)
+
     canonicalize = canonicalize
 
 UHF = SymAdaptedUHF
 
-def get_orbsym(mol, mo_coeff, s=None, check=False):
-    if hasattr(mo_coeff, 'orbsym'):
-        orbsym = numpy.asarray(mo_coeff.orbsym)
-    else:
-        orbsym = (hf_symm.get_orbsym(mol, mo_coeff[0], s, check),
-                  hf_symm.get_orbsym(mol, mo_coeff[1], s, check))
-    return orbsym
 
 class HF1e(UHF):
     def scf(self, *args):

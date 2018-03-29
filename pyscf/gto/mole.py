@@ -1809,8 +1809,7 @@ class Mole(lib.StreamObject):
 #        newmol = cls.__new__(cls)
 #        newmol = ...
 # do not use __copy__ to aovid iteratively call copy.copy
-    def copy(self):
-        return copy(self)
+    copy = copy
 
     pack = pack
     @lib.with_doc(unpack.__doc__)

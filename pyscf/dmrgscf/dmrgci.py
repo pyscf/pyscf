@@ -33,6 +33,7 @@ import numpy
 from pyscf import lib
 from pyscf import tools
 from pyscf.lib import logger
+from pyscf import ao2mo
 from pyscf import mcscf
 from pyscf.dmrgscf import dmrg_sym
 
@@ -829,14 +830,14 @@ def writeIntegralFile(DMRGCI, h1eff, eri_cas, ncas, nelec, ecore=0):
         orbsym = numpy.asarray(DMRGCI.orbsym) % 10
         pair_irrep = (orbsym.reshape(-1,1) ^ orbsym)[numpy.tril_indices(ncas)]
         sym_forbid = pair_irrep.reshape(-1,1) != pair_irrep.ravel()
-        eri_cas = pyscf.ao2mo.restore(4, eri_cas, ncas)
+        eri_cas = ao2mo.restore(4, eri_cas, ncas)
         eri_cas[sym_forbid] = 0
-        eri_cas = pyscf.ao2mo.restore(8, eri_cas, ncas)
+        eri_cas = ao2mo.restore(8, eri_cas, ncas)
 # Then convert the pyscf internal irrep-ID to molpro irrep-ID
         orbsym = numpy.asarray(dmrg_sym.convert_orbsym(DMRGCI.groupname, orbsym))
     else:
         orbsym = []
-        eri_cas = pyscf.ao2mo.restore(8, eri_cas, ncas)
+        eri_cas = ao2mo.restore(8, eri_cas, ncas)
     if not os.path.exists(DMRGCI.scratchDirectory):
         os.makedirs(DMRGCI.scratchDirectory)
     if not os.path.exists(DMRGCI.runtimeDir):

@@ -293,7 +293,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     mo_e = lib.tag_array(mo_e, mo_ea=mo_ea, mo_eb=mo_eb)
     return mo_e, mo_coeff
 
-dip_moment = uhf.dip_moment
+dip_moment = hf.dip_moment
 
 
 # use UHF init_guess, get_veff, diis, and intermediates such as fock, vhf, dm
@@ -421,13 +421,6 @@ class ROHF(hf.RHF):
     def nuc_grad_method(self):
         from pyscf.grad import rohf
         return rohf.Gradients(self)
-
-    @lib.with_doc(dip_moment.__doc__)
-    def dip_moment(self, mol=None, dm=None, unit_symbol=None, verbose=logger.NOTE):
-        if mol is None: mol = self.mol
-        if dm is None: dm = self.make_rdm1()
-        if unit_symbol is None: unit_symbol='Debye'
-        return dip_moment(mol, dm, unit_symbol, verbose=verbose)
 
 
 class HF1e(ROHF):

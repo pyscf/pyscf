@@ -71,9 +71,17 @@ def sort_mo(casscf, mo_coeff, caslst, base=BASE):
         if base != 0:
             caslst = [i-base for i in caslst]
         idx = numpy.asarray([i for i in range(nmo) if i not in caslst])
-        return numpy.hstack((mo_coeff[:,idx[:ncore]],
-                             mo_coeff[:,caslst],
-                             mo_coeff[:,idx[ncore:]]))
+        mo = numpy.hstack((mo_coeff[:,idx[:ncore]],
+                           mo_coeff[:,caslst],
+                           mo_coeff[:,idx[ncore:]]))
+
+        if hasattr(mo_coeff, 'orbsym'):
+            orbsym = mo_coeff.orbsym
+            orbsym = numpy.hstack((orbsym[idx[:ncore]], orbsym[caslst],
+                                   orbsym[idx[ncore:]]))
+            mo = lib.tag_array(mo, orbsym=orbsym)
+        return mo
+
     else: # UHF-based CASSCF
         if isinstance(caslst[0], (int, numpy.integer)):
             assert(casscf.ncas == len(caslst))
@@ -87,14 +95,23 @@ def sort_mo(casscf, mo_coeff, caslst, base=BASE):
                 caslst = ([i-base for i in caslst[0]],
                           [i-base for i in caslst[1]])
         nmo = mo_coeff[0].shape[1]
-        idx = numpy.asarray([i for i in range(nmo) if i not in caslst[0]])
-        mo_a = numpy.hstack((mo_coeff[0][:,idx[:ncore[0]]],
+        idxa = numpy.asarray([i for i in range(nmo) if i not in caslst[0]])
+        mo_a = numpy.hstack((mo_coeff[0][:,idxa[:ncore[0]]],
                              mo_coeff[0][:,caslst[0]],
-                             mo_coeff[0][:,idx[ncore[0]:]]))
-        idx = numpy.asarray([i for i in range(nmo) if i not in caslst[1]])
-        mo_b = numpy.hstack((mo_coeff[1][:,idx[:ncore[1]]],
+                             mo_coeff[0][:,idxa[ncore[0]:]]))
+        idxb = numpy.asarray([i for i in range(nmo) if i not in caslst[1]])
+        mo_b = numpy.hstack((mo_coeff[1][:,idxb[:ncore[1]]],
                              mo_coeff[1][:,caslst[1]],
-                             mo_coeff[1][:,idx[ncore[1]:]]))
+                             mo_coeff[1][:,idxb[ncore[1]:]]))
+
+        if hasattr(mo_coeff[0], 'orbsym'):
+            orbsyma, orbsymb = mo_coeff[0].orbsym, mo_coeff[1].orbsym
+            orbsyma = numpy.hstack((orbsyma[idxa[:ncore[0]]], orbsyma[caslst[0]],
+                                    orbsyma[idxa[ncore[0]:]]))
+            orbsymb = numpy.hstack((orbsymb[idxb[:ncore[1]]], orbsymb[caslst[1]],
+                                    orbsymb[idxb[ncore[1]:]]))
+            mo_a = lib.tag_array(mo_a, orbsym=orbsyma)
+            mo_b = lib.tag_array(mo_b, orbsym=orbsymb)
         return (mo_a, mo_b)
 
 def select_mo_by_irrep(casscf,  cas_occ_num, mo = None, base=BASE):
@@ -278,7 +295,6 @@ def sort_mo_by_irrep(casscf, mo_coeff, cas_irrep_nocc,
     '''
     caslst = caslst_by_irrep(casscf, mo_coeff, cas_irrep_nocc,
                              cas_irrep_ncore, s, base=0)
-    #FIXME: update mo_coeff.orbsym?
     return sort_mo(casscf, mo_coeff, caslst, base=0)
 
 

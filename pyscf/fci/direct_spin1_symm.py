@@ -279,17 +279,20 @@ class FCISolver(direct_spin1.FCISolver):
 
     def __init__(self, mol=None, **kwargs):
         direct_spin1.FCISolver.__init__(self, mol, **kwargs)
-        self.wfnsym = 0
+        # wfnsym will be guessed based on initial guess if it is None
+        self.wfnsym = None
 
     def dump_flags(self, verbose=None):
         if verbose is None: verbose = self.verbose
         direct_spin1.FCISolver.dump_flags(self, verbose)
         log = logger.Logger(self.stdout, verbose)
         if isinstance(self.wfnsym, str):
-            log.info('specified CI wfn symmetry = %s', self.wfnsym)
+            log.info('Input CI wfn symmetry = %s', self.wfnsym)
         elif isinstance(self.wfnsym, (int, numpy.number)):
-            log.info('specified CI wfn symmetry = %s',
+            log.info('Input CI wfn symmetry = %s',
                      symm.irrep_id2name(self.mol.groupname, self.wfnsym))
+        else:
+            log.info('CI wfn symmetry = %s', self.wfnsym)
         return self
 
     def absorb_h1e(self, h1e, eri, norb, nelec, fac=1):

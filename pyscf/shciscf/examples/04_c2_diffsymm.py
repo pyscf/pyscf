@@ -26,7 +26,7 @@ import numpy
 import math
 import os
 from pyscf import gto, scf, ao2mo, mcscf, tools, fci
-from pyscf.future.shciscf import shci, settings
+from pyscf.shciscf import shci, settings
 
 
 

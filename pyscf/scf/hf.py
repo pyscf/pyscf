@@ -974,10 +974,14 @@ def dip_moment(mol, dm, unit='Debye', verbose=logger.NOTE, **kwargs):
                  'unit since PySCF-1.5.')
         unit = kwargs['unit_symbol']
 
-    if unit == 'Debye':
+    if unit.upper() == 'DEBYE':
         unit = nist.AU2DEBYE
     else:
         unit = 1.0
+
+    if not (isinstance(dm, numpy.ndarray) and dm.ndim == 2):
+        # UHF denisty matrices
+        dm = dm[0] + dm[1]
 
     with mol.with_common_orig((0,0,0)):
         ao_dip = mol.intor_symmetric('int1e_r', comp=3)
