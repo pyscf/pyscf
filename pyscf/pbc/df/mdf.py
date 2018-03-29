@@ -241,7 +241,8 @@ def _mesh_for_valence(cell, valence_exp=VALENCE_EXP):
         es = cell.bas_exp(i).copy()
         es[es>valence_exp] = valence_exp
         cs = abs(cell.bas_ctr_coeff(i)).max(axis=1)
-        Ecut_max = max(Ecut_max, gto.cell._estimate_ke_cutoff(es, l, cs, precision, w))
+        ke_guess = gto.cell._estimate_ke_cutoff(es, l, cs, precision, w)
+        Ecut_max = max(Ecut_max, ke_guess.max())
     mesh = tools.cutoff_to_mesh(cell.lattice_vectors(), Ecut_max)
     mesh = numpy.min((mesh, cell.mesh), axis=0)
     mesh[cell.dimension:] = cell.mesh[cell.dimension:]

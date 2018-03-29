@@ -59,9 +59,13 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None):
     ngrids = len(coulG)
 
     vR = rhoR = np.zeros((nset,ngrids))
-    for k, aoR in mydf.aoR_loop(mesh, kpts):
-        for i in range(nset):
-            rhoR[i] += numint.eval_rho(cell, aoR, dms[i,k])
+    for ao_ks_etc, p0, p1 in mydf.aoR_loop(mydf.grids, kpts):
+        ao_ks = ao_ks_etc[0]
+        for k, ao in enumerate(ao_ks):
+            for i in range(nset):
+                rhoR[i,p0:p1] += numint.eval_rho(cell, ao, dms[i,k])
+        ao = ao_ks = None
+
     for i in range(nset):
         rhoR[i] *= 1./nkpts
         rhoG = tools.fft(rhoR[i], mesh)
@@ -71,13 +75,16 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None):
     kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
     nband = len(kpts_band)
     weight = cell.vol / ngrids
+    vR *= weight
     if gamma_point(kpts_band):
-        vj_kpts = np.empty((nset,nband,nao,nao))
+        vj_kpts = np.zeros((nset,nband,nao,nao))
     else:
-        vj_kpts = np.empty((nset,nband,nao,nao), dtype=np.complex128)
-    for k, aoR in mydf.aoR_loop(mesh, kpts_band):
-        for i in range(nset):
-            vj_kpts[i,k] = weight * lib.dot(aoR.T.conj()*vR[i], aoR)
+        vj_kpts = np.zeros((nset,nband,nao,nao), dtype=np.complex128)
+    for ao_ks_etc, p0, p1 in mydf.aoR_loop(mydf.grids, kpts_band):
+        ao_ks = ao_ks_etc[0]
+        for k, ao in enumerate(ao_ks):
+            for i in range(nset):
+                vj_kpts[i,k] += lib.dot(ao.T.conj()*vR[i,p0:p1], ao)
 
     return _format_jks(vj_kpts, dm_kpts, input_band, kpts)
 
@@ -126,12 +133,14 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
     else:
         vk_kpts = np.zeros((nset,nband,nao,nao), dtype=np.complex128)
 
-    ao2_kpts = [np.asarray(ao.T, order='C') for k, ao in mydf.aoR_loop(kpts=kpts)]
+    coords = mydf.grids.coords
+    ao2_kpts = [np.asarray(ao.T, order='C')
+                for ao in mydf._numint.eval_ao(cell, coords, kpts=kpts)]
     if input_band is None:
         ao1_kpts = ao2_kpts
     else:
         ao1_kpts = [np.asarray(ao.T, order='C')
-                    for k, ao in mydf.aoR_loop(kpts_band=kpts_band)]
+                    for ao in mydf._numint.eval_ao(cell, coords, kpts=kpts_band)]
     if mo_coeff is not None and nset == 1:
         mo_coeff = [mo_coeff[k][:,occ>0] * np.sqrt(occ[occ>0])
                     for k, occ in enumerate(mo_occ)]

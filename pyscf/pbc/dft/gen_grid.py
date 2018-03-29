@@ -66,13 +66,41 @@ class UniformGrids(object):
         self.cell = cell
         self.stdout = cell.stdout
         self.verbose = cell.verbose
-        self.coords = None
-        self.weights = None
-        self.mesh = None
+        self.mesh = cell.mesh
         self.non0tab = None
 
+        self._coords = None
+        self._weights = None
+
+    @property
+    def coords(self):
+        if self._coords is not None:
+            return self._coords
+        else:
+            return get_uniform_grids(self.cell, self.mesh)
+    @coords.setter
+    def coords(self, x):
+        self._coords = x
+
+    @property
+    def weights(self):
+        if self._weights is not None:
+            return self._weights
+        else:
+            ngrids = np.prod(self.mesh)
+            weights = np.empty(ngrids)
+            weights[:] = self.cell.vol / ngrids
+            return weights
+    @weights.setter
+    def weights(self, x):
+        self._weights = x
+
     def build(self, cell=None, with_non0tab=False):
-        if cell is None: cell = self.cell
+        if cell is None:
+            cell = self.cell
+        else:
+            self.cell = cell
+
         if (cell.dimension < 2 or
             (cell.dimension == 2 and cell.low_dim_ft_type is None)):
             warnings.warn('Uniform grids are not adequate for low-dimension '
@@ -80,15 +108,14 @@ class UniformGrids(object):
                           'numerical integration. It is recommended to use '
                           'BeckeGrids for low-dimension systems.')
 
-        self.coords = get_uniform_grids(self.cell, self.mesh)
-        self.weights = np.empty(self.coords.shape[0])
-        self.weights[:] = cell.vol/self.weights.shape[0]
+        coords = self.coords
+        weights = self.weights
 
         if with_non0tab:
-            self.non0tab = self.make_mask(cell, self.coords)
+            self.non0tab = self.make_mask(cell, coords)
         else:
             self.non0tab = None
-        return self.coords, self.weights
+        return coords, weights
 
     def dump_flags(self):
         if self.mesh is None:

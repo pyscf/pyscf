@@ -997,7 +997,7 @@ class _NumInt(numint._NumInt):
         '''
         if grids.coords is None:
             grids.build(with_non0tab=True)
-        ngrids = grids.weights.size
+        ngrids = grids.coords.shape[0]
         comp = (deriv+1)*(deriv+2)*(deriv+3)//6
 # NOTE to index grids.non0tab, the blksize needs to be the integer multiplier of BLKSIZE
         if blksize is None:
@@ -1161,7 +1161,7 @@ class _KNumInt(numint._NumInt):
         '''
         if grids.coords is None:
             grids.build(with_non0tab=True)
-        ngrids = grids.weights.size
+        ngrids = grids.coords.shape[0]
         nkpts = len(kpts)
         comp = (deriv+1)*(deriv+2)*(deriv+3)//6
 # NOTE to index grids.non0tab, the blksize needs to be the integer multiplier of BLKSIZE

@@ -456,7 +456,7 @@ def _estimate_ke_cutoff(alpha, l, c, precision=INTEGRAL_PRECISION, weight=1.):
     Ecut = 2*alpha * (log_k0*(4*l+3) - log_rest)
     log_k0 = .5 * np.log(abs(Ecut)*2)
     Ecut = 2*alpha * (log_k0*(4*l+3) - log_rest)
-    return Ecut.max()
+    return Ecut
 
 def estimate_ke_cutoff(cell, precision=INTEGRAL_PRECISION):
     '''Energy cutoff estimation'''
@@ -475,7 +475,8 @@ def estimate_ke_cutoff(cell, precision=INTEGRAL_PRECISION):
         l = cell.bas_angular(i)
         es = cell.bas_exp(i)
         cs = abs(cell.bas_ctr_coeff(i)).max(axis=1)
-        Ecut_max = max(Ecut_max, _estimate_ke_cutoff(es, l, cs, precision, w))
+        ke_guess = _estimate_ke_cutoff(es, l, cs, precision, w)
+        Ecut_max = max(Ecut_max, ke_guess.max())
     return Ecut_max
 
 def error_for_ke_cutoff(cell, ke_cutoff):
@@ -923,8 +924,9 @@ def get_uniform_grids(cell, mesh=None, **kwargs):
         warnings.warn('cell.gs is deprecated.  It is replaced by cell.mesh,'
                       'the number of PWs (=2*gs+1) along each direction.')
         mesh = [2*n+1 for n in kwargs['gs']]
+    mesh = np.asarray(mesh, dtype=np.double)
     qv = lib.cartesian_prod([np.arange(x) for x in mesh])
-    a_frac = np.einsum('i,ij->ij', 1./np.asarray(mesh), cell.lattice_vectors())
+    a_frac = np.einsum('i,ij->ij', 1./mesh, cell.lattice_vectors())
     coords = np.dot(qv, a_frac)
     return coords
 gen_uniform_grids = get_uniform_grids
