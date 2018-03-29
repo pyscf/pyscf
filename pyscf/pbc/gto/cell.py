@@ -263,7 +263,7 @@ def loads(cellstr):
     cell.atom = eval(cell.atom)
     cell.basis = eval(cell.basis)
     cell.pseudo = eval(cell.pseudo)
-    cell.pseudo = eval(cell.ecp)
+    cell.ecp = eval(cell.ecp)
     cell._atm = np.array(cell._atm, dtype=np.int32)
     cell._bas = np.array(cell._bas, dtype=np.int32)
     cell._env = np.array(cell._env, dtype=np.double)
