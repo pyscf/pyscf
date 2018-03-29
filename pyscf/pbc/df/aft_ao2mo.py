@@ -20,7 +20,6 @@
 Integral transformation with analytic Fourier transformation
 '''
 
-import warnings
 import time
 import numpy
 from pyscf import lib
