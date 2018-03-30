@@ -40,6 +40,7 @@ ndpointer = numpy.ctypeslib.ndpointer
 try:
    from pyscf.shciscf import settings
 except ImportError:
+    from pyscf import __config__
     settings = lambda: None
     settings.SHCIEXE = getattr(__config__, 'shci_SHCIEXE', None)
     settings.SHCISCRATCHDIR = getattr(__config__, 'shci_SHCISCRATCHDIR', None)

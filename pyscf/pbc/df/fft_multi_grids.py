@@ -253,7 +253,7 @@ def _eval_rhoG(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), deriv=0):
         coords_idx = grids_high.coords_idx
         ngrids0 = numpy.prod(mesh)
         ngrids1 = grids_high.coords.shape[0]
-        log.debug('mesh %s, ngrids %s/%s', mesh, ngrids0, ngrids1)
+        log.debug('mesh %s, ngrids %s/%s', mesh, ngrids1, ngrids0)
 
         idx_h = grids_high.ao_idx
         dms_hh = numpy.asarray(dms[:,:,idx_h[:,None],idx_h], order='C')
@@ -325,7 +325,7 @@ def _get_j_pass2(mydf, vG, kpts=numpy.zeros((1,3))):
         coords_idx = grids_high.coords_idx
         ngrids0 = numpy.prod(mesh)
         ngrids1 = grids_high.coords.shape[0]
-        log.debug('mesh %s, ngrids %s/%s', mesh, ngrids0, ngrids1)
+        log.debug('mesh %s, ngrids %s/%s', mesh, ngrids1, ngrids0)
 
         gx = numpy.fft.fftfreq(mesh[0], 1./mesh[0]).astype(int)
         gy = numpy.fft.fftfreq(mesh[1], 1./mesh[1]).astype(int)
@@ -363,7 +363,6 @@ def _get_j_pass2(mydf, vG, kpts=numpy.zeros((1,3))):
     return vj_kpts
 
 
-@profile
 def rks_j_xc(mydf, dm_kpts, xc_code, hermi=1, kpts=numpy.zeros((1,3)),
              kpts_band=None, with_j=WITH_J, j_in_xc=J_IN_XC):
     log = lib.logger.Logger(mydf.stdout, mydf.verbose)
@@ -450,8 +449,8 @@ def rks_j_xc(mydf, dm_kpts, xc_code, hermi=1, kpts=numpy.zeros((1,3)),
     rhoR = tools.ifft(rhoG.reshape(-1,ngrids), mesh) * (1./weight)
     rhoR = rhoR.real.reshape(nset,-1,ngrids)
     wv_freq = []
-    nelec = [0] * nset
-    excsum = [0] * nset
+    nelec = numpy.zeros(nset)
+    excsum = numpy.zeros(nset)
     for i in range(nset):
         exc, vxc = ni.eval_xc(xc_code, rhoR[i], 0, deriv=1)[:2]
         if xctype == 'LDA':
@@ -474,13 +473,18 @@ def rks_j_xc(mydf, dm_kpts, xc_code, hermi=1, kpts=numpy.zeros((1,3)),
         nelec[i] += rhoR[i,0].sum() * weight
         excsum[i] += (rhoR[i,0]*exc).sum() * weight
         wv_freq.append(tools.fft(wv, mesh) * weight)
-    if nset == 1:
-        nelec = nelec[0]
-        excsum = excsum[0]
 
     wv_freq = numpy.asarray(wv_freq).reshape(nset,-1,*mesh)
     if j_in_xc:
         wv_freq[:,0] += vG
+        vR = tools.ifft(vG.reshape(-1,ngrids), mesh)
+        ecoul = numpy.einsum('ng,ng->n', rhoR[:,0].real, vR.real) * .5
+        log.debug('Coulomb energy %s', ecoul)
+        excsum += ecoul
+
+    if nset == 1:
+        nelec = nelec[0]
+        excsum = excsum[0]
     rhoR = rhoG = None
 
     kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
@@ -497,7 +501,7 @@ def rks_j_xc(mydf, dm_kpts, xc_code, hermi=1, kpts=numpy.zeros((1,3)),
         coords_idx = grids_high.coords_idx
         ngrids0 = numpy.prod(mesh)
         ngrids1 = grids_high.coords.shape[0]
-        log.debug('mesh %s, ngrids %s/%s', mesh, ngrids0, ngrids1)
+        log.debug('mesh %s, ngrids %s/%s', mesh, ngrids1, ngrids0)
 
         gx = numpy.fft.fftfreq(mesh[0], 1./mesh[0]).astype(int)
         gy = numpy.fft.fftfreq(mesh[1], 1./mesh[1]).astype(int)
@@ -528,20 +532,15 @@ def rks_j_xc(mydf, dm_kpts, xc_code, hermi=1, kpts=numpy.zeros((1,3)),
                 ao_l = ao_l_etc[0][0]
                 for i in range(nset):
                     add_xc_(veff[i], ao_h, ao_h, idx_h, idx_h, wv[i,:,p0:p1])
-                    if with_j:
-                        add_j_(vj[i], ao_h, ao_h, idx_h, idx_h, vR[i,p0:p1])
-                for i in range(nset):
                     add_xc_(veff[i], ao_h, ao_l, idx_h, idx_l, wv[i,:,p0:p1])
-                    if with_j:
-                        add_j_(vj[i], ao_h, ao_l, idx_h, idx_l, vR[i,p0:p1])
-                for i in range(nset):
                     add_xc_(veff[i], ao_l, ao_h, idx_l, idx_h, wv[i,:,p0:p1])
                     if with_j:
+                        add_j_(vj[i], ao_h, ao_h, idx_h, idx_h, vR[i,p0:p1])
+                        add_j_(vj[i], ao_h, ao_l, idx_h, idx_l, vR[i,p0:p1])
                         add_j_(vj[i], ao_l, ao_h, idx_l, idx_h, vR[i,p0:p1])
                 ao_h = ao_l = ao_h_etc = ao_l_etc = None
 
-    if with_j:
-        vj = _format_jks(vj, dm_kpts, input_band, kpts)
+    vj = _format_jks(vj, dm_kpts, input_band, kpts)
     veff = _format_jks(veff, dm_kpts, input_band, kpts)
     return nelec, excsum, veff, vj
 
@@ -660,8 +659,8 @@ def uks_j_xc(mydf, dm_kpts, xc_code, hermi=1, kpts=numpy.zeros((1,3)),
     # computing rhoR with IFFT, the weight factor is not needed.
     rhoR = tools.ifft(rhoG.reshape(-1,ngrids), mesh) * (1./weight)
     rhoR = rhoR.real.reshape(2,-1,ngrids)
-    nelec = [0] * 2
-    excsum = [0] * 2
+    nelec = numpy.zeros(2)
+    excsum = 0
 
     exc, vxc = ni.eval_xc(xc_code, rhoR, 1, deriv=1)[:2]
     if xctype == 'LDA':
@@ -697,12 +696,16 @@ def uks_j_xc(mydf, dm_kpts, xc_code, hermi=1, kpts=numpy.zeros((1,3)),
 
     nelec[0] += rhoR[0,0].sum() * weight
     nelec[1] += rhoR[1,0].sum() * weight
-    excsum[0] += (rhoR[0,0]*exc).sum() * weight
-    excsum[1] += (rhoR[1,0]*exc).sum() * weight
+    excsum += (rhoR[0,0]*exc).sum() * weight
+    excsum += (rhoR[1,0]*exc).sum() * weight
     wv_freq = tools.fft(numpy.vstack((wva,wvb)), mesh) * weight
     wv_freq = wv_freq.reshape(2,-1,*mesh)
     if j_in_xc:
         wv_freq[:,0] += vG
+        vR = tools.ifft(vG.reshape(-1,ngrids), mesh)
+        ecoul = numpy.einsum('ng,ng->', rhoR[:,0].real, vR.real) * .5
+        log.debug('Coulomb energy %s', ecoul)
+        excsum += ecoul
     rhoR = rhoG = None
 
     kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
@@ -719,7 +722,7 @@ def uks_j_xc(mydf, dm_kpts, xc_code, hermi=1, kpts=numpy.zeros((1,3)),
         coords_idx = grids_high.coords_idx
         ngrids0 = numpy.prod(mesh)
         ngrids1 = grids_high.coords.shape[0]
-        log.debug('mesh %s, ngrids %s/%s', mesh, ngrids0, ngrids1)
+        log.debug('mesh %s, ngrids %s/%s', mesh, ngrids1, ngrids0)
 
         gx = numpy.fft.fftfreq(mesh[0], 1./mesh[0]).astype(int)
         gy = numpy.fft.fftfreq(mesh[1], 1./mesh[1]).astype(int)
@@ -756,8 +759,7 @@ def uks_j_xc(mydf, dm_kpts, xc_code, hermi=1, kpts=numpy.zeros((1,3)),
                     add_j_(vj, ao_l, ao_h, idx_l, idx_h, vR[:,p0:p1])
                 ao_h = ao_l = ao_h_etc = ao_l_etc = None
 
-    if with_j:
-        vj = _format_jks(vj, dm_kpts, input_band, kpts)
+    vj = _format_jks(vj, dm_kpts, input_band, kpts)
     veff = _format_jks(veff, dm_kpts, input_band, kpts)
     return nelec, excsum, veff, vj
 
@@ -778,8 +780,8 @@ def multi_grids_tasks(cell, verbose=None):
     heights = 1. / numpy.linalg.norm(b, axis=1)
     normal_vector = b * heights.reshape(-1,1)
     distance_to_edge = cell.atom_coords().dot(normal_vector.T)
-    # multi-grids do not support atoms out of unit cell
-    assert(numpy.all(distance_to_edge >= 0))
+    #FIXME: if atoms out of unit cell
+    #assert(numpy.all(distance_to_edge >= 0))
     distance_to_edge = numpy.hstack([distance_to_edge, heights-distance_to_edge])
     min_distance_to_edge = distance_to_edge.min(axis=1)
 
@@ -959,6 +961,9 @@ class MultiGridFFTDF(fft.FFTDF):
         fft.FFTDF.__init__(self, cell, kpts)
         self.tasks = None
         self._keys = self._keys.union(['tasks'])
+
+    def build(self):
+        self.tasks = multi_grids_tasks(self.cell)
 
     get_pp = get_pp
     get_nuc = get_nuc

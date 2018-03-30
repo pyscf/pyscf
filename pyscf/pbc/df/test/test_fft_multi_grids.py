@@ -122,7 +122,7 @@ class KnownValues(unittest.TestCase):
         n, exc, vxc, vj = mydf.rks_j_xc(dm, 'lda', kpts=kpts, with_j=False, j_in_xc=True)
         self.assertAlmostEqual(abs(ref_j+ref-vxc).max(), 0, 6)
         self.assertAlmostEqual(lib.finger(vxc), 0.11593869767055653+0j, 8)
-        self.assertAlmostEqual(exc, -3.0494590778748032, 8)
+        self.assertAlmostEqual(exc, 2.3601737480485134, 8)
         self.assertAlmostEqual(n, 8.0749444279646347, 8)
 
     def test_rks_gga_plus_j(self):
@@ -135,7 +135,7 @@ class KnownValues(unittest.TestCase):
         n, exc, vxc, vj = mydf.rks_j_xc(dm, 'b88', kpts=kpts, with_j=False, j_in_xc=True)
         self.assertAlmostEqual(abs(ref_j+ref-vxc).max(), 0, 4)
         self.assertAlmostEqual(lib.finger(vxc), 0.056907756241836749+0j, 4)
-        self.assertAlmostEqual(exc, -3.3730554511051336, 6)
+        self.assertAlmostEqual(exc, 2.036577374818183, 6)
         self.assertAlmostEqual(n, 8.0749444279646347, 8)
 
 
@@ -149,7 +149,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(ref_j-vj).max(), 0, 8)
         self.assertAlmostEqual(abs(ref-vxc).max(), 0, 6)
         self.assertAlmostEqual(lib.finger(vxc), 0.56051003830739932, 6)
-        self.assertAlmostEqual(sum(exc), -8.1508688099749218, 8)
+        self.assertAlmostEqual(exc, -8.1508688099749218, 8)
         self.assertAlmostEqual(sum(n), 16.77639832814981, 8)
 
     def test_uks_gga(self):
@@ -162,7 +162,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(ref-vxc).max(), 0, 4)
         self.assertAlmostEqual(lib.finger(vxc), 0.62762734582165547, 4)
         self.assertAlmostEqual(lib.finger(vj), -0.80873190911595572, 8)
-        self.assertAlmostEqual(sum(exc), -8.8140921361508582, 8)
+        self.assertAlmostEqual(exc, -8.8140921361508582, 8)
         self.assertAlmostEqual(sum(n), 16.77639832814981, 8)
 
         fft_multi_grids.RHOG_HIGH_DERIV = True
@@ -171,7 +171,7 @@ class KnownValues(unittest.TestCase):
         fft_multi_grids.RHOG_HIGH_DERIV = False
         self.assertAlmostEqual(abs(ref-vxc).max(), 0, 4)
         self.assertAlmostEqual(lib.finger(vxc), 0.62762734582165547, 4)
-        self.assertAlmostEqual(sum(exc), -8.8140921361508582, 6)
+        self.assertAlmostEqual(exc, -8.8140921361508582, 6)
         self.assertAlmostEqual(sum(n), 16.77639832814981, 6)
 
     ## FIXME: small errors in rho that leads to big difference
@@ -185,7 +185,7 @@ class KnownValues(unittest.TestCase):
     #    self.assertAlmostEqual(abs(ref-vxc).max(), 0, 2)
     #    self.assertAlmostEqual(lib.finger(vxc), 0.69310396591433887, 8)
     #    self.assertAlmostEqual(lib.finger(vj), -0.80873190911595572, 8)
-    #    self.assertAlmostEqual(sum(exc), -9.1512747624120561, 8)
+    #    self.assertAlmostEqual(exc, -9.1512747624120561, 8)
     #    self.assertAlmostEqual(sum(n), 16.77639832814981, 8)
 
     def test_uks_lda_plus_j(self):
@@ -198,7 +198,7 @@ class KnownValues(unittest.TestCase):
         n, exc, vxc, vj = mydf.uks_j_xc(dmab, 'lda', kpts=kpts, with_j=False, j_in_xc=True)
         self.assertAlmostEqual(abs(ref_j+ref-vxc).max(), 0, 6)
         self.assertAlmostEqual(lib.finger(vxc), -0.24822187080855951+0j, 4)
-        self.assertAlmostEqual(sum(exc), -8.1508688099749218, 6)
+        self.assertAlmostEqual(exc, 3.3968809873729704, 6)
         self.assertAlmostEqual(sum(n), 16.77639832814981, 8)
 
     def test_uks_gga_plus_j(self):
@@ -211,7 +211,7 @@ class KnownValues(unittest.TestCase):
         n, exc, vxc, vj = mydf.uks_j_xc(dmab, 'b88', kpts=kpts, with_j=False, j_in_xc=True)
         self.assertAlmostEqual(abs(ref_j+ref-vxc).max(), 0, 4)
         self.assertAlmostEqual(lib.finger(vxc), -0.18113908287908242+0j, 8)
-        self.assertAlmostEqual(sum(exc), -8.8140921361508582, 8)
+        self.assertAlmostEqual(exc, 2.7336576611968653, 8)
         self.assertAlmostEqual(sum(n), 16.77639832814981, 8)
 
 
