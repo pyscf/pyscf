@@ -1894,7 +1894,15 @@ class Mole(lib.StreamObject):
         if self.verbose >= logger.WARN:
             self.check_sanity()
 
-        self._atom = self.format_atom(self.atom, unit=self.unit)
+        if os.path.isfile(self.atom):
+            try:
+                with open(self.atom, 'r') as f:
+                    atom_str = f.read()
+                self._atom = self.format_atom(atom_str, unit=self.unit)
+            except ValueError:
+                self._atom = self.format_atom(self.atom, unit=self.unit)
+        else:
+            self._atom = self.format_atom(self.atom, unit=self.unit)
         uniq_atoms = set([a[0] for a in self._atom])
 
         if isinstance(self.basis, (str, unicode, tuple, list)):
@@ -2113,29 +2121,30 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
             self.stdout.write('[INPUT] Gaussian nuclear model for atoms %s\n' %
                               nucatms)
 
-        self.stdout.write('[INPUT] ---------------- BASIS SET ---------------- \n')
-        self.stdout.write('[INPUT] l, kappa, [nprim/nctr], ' \
-                          'expnt,             c_1 c_2 ...\n')
-        for atom, basis in self._basis.items():
-            self.stdout.write('[INPUT] %s\n' % atom)
-            for b in basis:
-                if isinstance(b[1], int):
-                    kappa = b[1]
-                    b_coeff = b[2:]
-                else:
-                    kappa = 0
-                    b_coeff = b[1:]
-                self.stdout.write('[INPUT] %d   %2d    [%-5d/%-4d]  '
-                                  % (b[0], kappa, b_coeff.__len__(),
-                                     b_coeff[0].__len__()-1))
-                for k, x in enumerate(b_coeff):
-                    if k == 0:
-                        self.stdout.write('%-15.12g  ' % x[0])
+        if self.verbose >= logger.DEBUG:
+            self.stdout.write('[INPUT] ---------------- BASIS SET ---------------- \n')
+            self.stdout.write('[INPUT] l, kappa, [nprim/nctr], ' \
+                              'expnt,             c_1 c_2 ...\n')
+            for atom, basis in self._basis.items():
+                self.stdout.write('[INPUT] %s\n' % atom)
+                for b in basis:
+                    if isinstance(b[1], int):
+                        kappa = b[1]
+                        b_coeff = b[2:]
                     else:
-                        self.stdout.write(' '*32+'%-15.12g  ' % x[0])
-                    for c in x[1:]:
-                        self.stdout.write(' %4.12g' % c)
-                    self.stdout.write('\n')
+                        kappa = 0
+                        b_coeff = b[1:]
+                    self.stdout.write('[INPUT] %d   %2d    [%-5d/%-4d]  '
+                                      % (b[0], kappa, b_coeff.__len__(),
+                                         b_coeff[0].__len__()-1))
+                    for k, x in enumerate(b_coeff):
+                        if k == 0:
+                            self.stdout.write('%-15.12g  ' % x[0])
+                        else:
+                            self.stdout.write(' '*32+'%-15.12g  ' % x[0])
+                        for c in x[1:]:
+                            self.stdout.write(' %4.12g' % c)
+                        self.stdout.write('\n')
 
         if self.verbose >= logger.INFO:
             logger.info(self, 'nuclear repulsion = %.15g', self.energy_nuc())
