@@ -317,7 +317,21 @@ def project_mo_r2r(mol1, mo1, mol2):
                          numpy.dot(ps, mo1[n2c:])))
 
 
-def remove_linear_dep_(mf, threshold=1e-8):
+def remove_linear_dep_(mf, threshold=1e-8, lindep=1e-14):
+    '''
+    Args:
+        threshold : float
+            The threshold under which the eigenvalues of the overlap matrix are
+            discarded to avoid numerical instability.
+        lindep : float
+            The threshold that triggers the special treatment of the linear
+            dependence issue.
+    '''
+    s = mf.get_ovlp()
+    cond = np.max(lib.cond(s))
+    if cond < 1./lindep:
+        return mf
+
     def eigh(h, s):
         d, t = numpy.linalg.eigh(s)
         x = t[:,d>threshold] / numpy.sqrt(d[d>threshold])

@@ -311,7 +311,7 @@ def energy_elec(mf, dm=None, h1e=None, vhf=None):
 
 # mo_a and mo_b are occupied orbitals
 def spin_square(mo, s=1):
-    r'''Spin of the given UHF orbitals
+    r'''Spin square and multiplicity of UHF determinant
 
     .. math::
 
@@ -479,11 +479,11 @@ def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
     pop_b = numpy.einsum('ij,ji->i', dm[1], s).real
     label = mol.ao_labels(fmt=None)
 
-    log.note(' ** Mulliken pop       alpha | beta **')
+    log.info(' ** Mulliken pop       alpha | beta **')
     for i, s in enumerate(label):
-        log.note('pop of  %s %10.5f | %-10.5f',
+        log.info('pop of  %s %10.5f | %-10.5f',
                  '%d%s %s%4s'%s, pop_a[i], pop_b[i])
-    log.note('In total          %10.5f | %-10.5f', sum(pop_a), sum(pop_b))
+    log.info('In total          %10.5f | %-10.5f', sum(pop_a), sum(pop_b))
 
     log.note(' ** Mulliken atomic charges  **')
     chg = numpy.zeros(mol.natm)

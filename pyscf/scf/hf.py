@@ -38,6 +38,7 @@ from pyscf import __config__
 WITH_META_LOWDIN = getattr(__config__, 'scf_analyze_with_meta_lowdin', True)
 PRE_ORTH_METHOD = getattr(__config__, 'scf_analyze_pre_orth_method', 'ANO')
 MO_BASE = getattr(__config__, 'MO_BASE', 1)
+TIGHT_GRAD_CONV_TOL = getattr(__config__, 'scf_hf_kernel_tight_grad_conv_tol', True)
 
 # For code compatiblity in python-2 and python-3
 if sys.version_info >= (3,):
@@ -132,7 +133,7 @@ Keyword argument "init_dm" is replaced by "dm0"''')
     if isinstance(mf.diis, lib.diis.DIIS):
         mf_diis = mf.diis
     elif mf.diis:
-        mf_diis = diis.SCF_DIIS(mf, mf.diis_file)
+        mf_diis = mf.DIIS(mf, mf.diis_file)
         mf_diis.space = mf.diis_space
         mf_diis.rollback = mf.diis_space_rollback
     else:
@@ -172,7 +173,11 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         logger.info(mf, 'cycle= %d E= %.15g  delta_E= %4.3g  |g|= %4.3g  |ddm|= %4.3g',
                     cycle+1, e_tot, e_tot-last_hf_e, norm_gorb, norm_ddm)
 
-        if (abs(e_tot-last_hf_e) < conv_tol and norm_gorb < conv_tol_grad):
+        if TIGHT_GRAD_CONV_TOL:
+            grad_tol = conv_tol_grad
+        else:
+            grad_tol = conv_tol_grad / numpy.sqrt(norm_gorb.size)
+        if (abs(e_tot-last_hf_e) < conv_tol and norm_gorb < grad_tol):
             scf_conv = True
 
         if dump_chk:
@@ -197,8 +202,12 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         fock = mf.get_fock(h1e, s1e, vhf, dm)
         norm_gorb = numpy.linalg.norm(mf.get_grad(mo_coeff, mo_occ, fock))
         norm_ddm = numpy.linalg.norm(dm-dm_last)
-        scf_conv = (abs(e_tot-last_hf_e) < conv_tol*10 or
-                    norm_gorb < conv_tol_grad*3)
+
+        if TIGHT_GRAD_CONV_TOL:
+            grad_tol = conv_tol_grad
+        else:
+            grad_tol = conv_tol_grad / numpy.sqrt(norm_gorb.size)
+        scf_conv = abs(e_tot-last_hf_e) < conv_tol*10 or norm_gorb < grad_tol*3
         logger.info(mf, 'Extra cycle  E= %.15g  delta_E= %4.3g  |g|= %4.3g  |ddm|= %4.3g',
                     e_tot, e_tot-last_hf_e, norm_gorb, norm_ddm)
         if dump_chk:
@@ -856,9 +865,9 @@ def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
         pop = numpy.einsum('ij,ji->i', dm[0]+dm[1], s).real
     label = mol.ao_labels(fmt=None)
 
-    log.note(' ** Mulliken pop  **')
+    log.info(' ** Mulliken pop  **')
     for i, s in enumerate(label):
-        log.note('pop of  %s %10.5f', '%d%s %s%-4s'%s, pop[i])
+        log.info('pop of  %s %10.5f', '%d%s %s%-4s'%s, pop[i])
 
     log.note(' ** Mulliken atomic charges  **')
     chg = numpy.zeros(mol.natm)
@@ -1123,7 +1132,7 @@ class SCF(lib.StreamObject):
         chkfile : str
             checkpoint file to save MOs, orbital energies etc.
         conv_tol : float
-            converge threshold.  Default is 1e-10
+            converge threshold.  Default is 1e-9
         conv_tol_grad : float
             gradients converge threshold.  Default is sqrt(conv_tol)
         max_cycle : int
@@ -1131,8 +1140,17 @@ class SCF(lib.StreamObject):
         init_guess : str
             initial guess method.  It can be one of 'minao', 'atom', 'hcore', '1e', 'chkfile'.
             Default is 'minao'
-        diis : boolean or object of DIIS class listed in :mod:`scf.diis`
-            Default is :class:`diis.SCF_DIIS`. Set it to None to turn off DIIS.
+        DIIS : DIIS class
+            The class to generate diis object.  It can be one of
+            diis.SCF_DIIS, diis.ADIIS, diis.EDIIS.
+        diis : boolean or object of DIIS class defined in :mod:`scf.diis`.
+            Default is the object associated to the attribute :attr:`self.DIIS`.
+            Set it to None/False to turn off DIIS.
+            Note if this attribute is inialized as a DIIS object, the SCF driver
+            will use this object in the iteration. The DIIS informations (vector
+            basis and error vector) will be held inside this object. When kernel
+            function is called again, the old states (vector basis and error
+            vector) will be reused.
         diis_space : int
             DIIS space size.  By default, 8 Fock matrices and errors vector are stored.
         diis_start_cycle : int
@@ -1182,6 +1200,7 @@ class SCF(lib.StreamObject):
 
     # To avoid diis pollution form previous run, self.diis should not be
     # initialized as DIIS instance here
+    DIIS = diis.SCF_DIIS
     diis = getattr(__config__, 'scf_hf_SCF_diis', True)
     diis_space = getattr(__config__, 'scf_hf_SCF_diis_space', 8)
     # need > 0 if initial DM is numpy.zeros array
@@ -1630,6 +1649,10 @@ class RHF(SCF):
         from pyscf.scf import addons
         addons.convert_to_rhf(mf, self)
         return self
+
+    def spin_square(self, mo_coeff=None, s=None):
+        '''Spin square and multiplicity of RHF determinant'''
+        return 0, 1
 
     def stability(self,
                   internal=getattr(__config__, 'scf_stability_internal', True),

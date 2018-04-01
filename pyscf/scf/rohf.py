@@ -396,6 +396,13 @@ class ROHF(hf.RHF):
 
     canonicalize = canonicalize
 
+    def spin_square(self, mo_coeff=None, s=None):
+        '''Spin square and multiplicity of RHF determinant'''
+        neleca, nelecb = self.mol.nelec
+        ms = (neleca - nelecb) * .5
+        ss = ms * (ms + 1) * .5
+        return ss, ms*2+1
+
     def stability(self,
                   internal=getattr(__config__, 'scf_stability_internal', True),
                   external=getattr(__config__, 'scf_stability_external', False),

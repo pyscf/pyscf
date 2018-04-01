@@ -1186,14 +1186,7 @@ class _KNumInt(numint._NumInt):
             non0 = non0tab[ip0//BLKSIZE:]
             ao_k1 = ao_k2 = self.eval_ao(cell, coords, kpts, deriv=deriv, non0tab=non0)
             if kpts_band is not None:
-                new_kpts = [k for k,w in zip(kpts_band, where) if w is None]
-                if len(new_kpts) > 0:
-                    new_ao = iter(self.eval_ao(cell, coords, new_kpts,
-                                               deriv=deriv, non0tab=non0))
-                    old_ao = (ao_k2[w] for w in where if not w is None)
-                    ao_k1 = []
-                    for w in where:
-                        ao_k1.append(next(new_ao) if w is None else next(old_ao))
+                ao_k1 = self.eval_ao(cell, coords, kpts_band, deriv=deriv, non0tab=non0)
             yield ao_k1, ao_k2, non0, weight, coords
             ao_k1 = ao_k2 = None
 
