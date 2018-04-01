@@ -1623,7 +1623,16 @@ class _NumInt(object):
         return self.libxc.xc_type(xc_code)
 
     def rsh_and_hybrid_coeff(self, xc_code, spin=0):
-        '''Range-separated parameter and HF exchange components
+        '''Range-separated parameter and HF exchange components: omega, alpha, beta
+
+        Exc_RSH = c_SR * SR_HFX + c_LR * LR_HFX + (1-c_SR) * Ex_SR + (1-c_LR) * Ex_LR + Ec
+                = alpha * HFX + beta * SR_HFX + (1-c_SR) * Ex_SR + (1-c_LR) * Ex_LR + Ec
+                = alpha * LR_HFX + hyb * SR_HFX + (1-c_SR) * Ex_SR + (1-c_LR) * Ex_LR + Ec
+
+        SR_HFX = < pi | e^{-omega r_{12}}/r_{12} | iq >
+        LR_HFX = < pi | (1-e^{-omega r_{12}})/r_{12} | iq >
+        alpha = c_LR
+        beta = c_SR - c_LR
         '''
         omega, alpha, beta = self.rsh_coeff(xc_code)
         if abs(omega) > 1e-10:

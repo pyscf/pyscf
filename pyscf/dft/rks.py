@@ -97,6 +97,8 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
 
     #enabling range-separated hybrids
     omega, alpha, hyb = ni.rsh_and_hybrid_coeff(ks.xc, spin=mol.spin)
+    if ks.omega is not None:
+        omega = ks.omega
 
     if abs(hyb) < 1e-10 and abs(alpha) < 1e-10:
         vk = None
@@ -208,6 +210,8 @@ class RKS(hf.RHF):
             'X_name,C_name' for the XC functional.  Default is 'lda,vwn'
         nlc : str
             'NLC_name' for the NLC functional.  Default is '' (i.e., None)
+        omega : float
+            Omega of the range-separated Coulomb operator e^{-omega r_{12}^2} / r_{12}
         grids : Grids object
             grids.level (0 - 9)  big number for large mesh grids. Default is 3
 
@@ -281,6 +285,7 @@ class RKS(hf.RHF):
 def _dft_common_init_(mf):
     mf.xc = 'LDA,VWN'
     mf.nlc = ''
+    mf.omega = None
     mf.grids = gen_grid.Grids(mf.mol)
     mf.grids.level = getattr(__config__, 'dft_rks_RKS_grids_level',
                              mf.grids.level)
@@ -292,7 +297,7 @@ def _dft_common_init_(mf):
 ##################################################
 # don't modify the following attributes, they are not input options
     mf._numint = numint._NumInt()
-    mf._keys = mf._keys.union(['xc', 'nlc', 'grids', 'nlcgrids',
+    mf._keys = mf._keys.union(['xc', 'nlc', 'omega', 'grids', 'nlcgrids',
                                'small_rho_cutoff'])
 
 
