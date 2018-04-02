@@ -991,13 +991,13 @@ class CASSCF(casci.CASCI):
             tol = None
         if hasattr(self.fcisolver, 'approx_kernel'):
             fn = self.fcisolver.approx_kernel
-            ci1 = fn(h1, h2, ncas, nelecas, ci0=ci0,
+            ci1 = fn(h1, h2, ncas, nelecas, ecore=ecore, ci0=ci0,
                      tol=tol, max_memory=self.max_memory)[1]
             return ci1, None
         elif not (hasattr(self.fcisolver, 'contract_2e') and
                   hasattr(self.fcisolver, 'absorb_h1e')):
             fn = self.fcisolver.kernel
-            ci1 = fn(h1, h2, ncas, nelecas, ci0=ci0,
+            ci1 = fn(h1, h2, ncas, nelecas, ecore=ecore, ci0=ci0,
                      tol=tol, max_memory=self.max_memory,
                      max_cycle=self.ci_response_space)[1]
             return ci1, None
