@@ -61,7 +61,7 @@ class KnownValues(unittest.TestCase):
         self.assertRaises(ValueError, dft.libxc.parse_xc, 'LR-HF(0.3) + SR-HF(.5)')
 
         hyb = dft.libxc.hybrid_coeff('M05')
-        self.assertAlmostEqual(hyb[0], 0.28, 9)
+        self.assertAlmostEqual(hyb, 0.28, 9)
 
         hyb, fn_facs = dft.libxc.parse_xc('APBE,')
         self.assertEqual(fn_facs[0][0], 184)

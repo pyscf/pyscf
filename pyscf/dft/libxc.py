@@ -472,7 +472,7 @@ def is_hybrid_xc(xc_code):
         if xc_code.isdigit():
             return _itrf.LIBXC_is_hybrid(ctypes.c_int(xc_code))
         else:
-            return ('HF' in xc_code or hybrid_coeff(xc_code)[0] != 0)
+            return ('HF' in xc_code or hybrid_coeff(xc_code) != 0)
     elif isinstance(xc_code, int):
         return _itrf.LIBXC_is_hybrid(ctypes.c_int(xc_code))
     else:

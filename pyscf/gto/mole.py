@@ -1894,7 +1894,7 @@ class Mole(lib.StreamObject):
         if self.verbose >= logger.WARN:
             self.check_sanity()
 
-        if os.path.isfile(self.atom):
+        if isinstance(self.atom, (str, unicode)) and os.path.isfile(self.atom):
             try:
                 with open(self.atom, 'r') as f:
                     atom_str = f.read()

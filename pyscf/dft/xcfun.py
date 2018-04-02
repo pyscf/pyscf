@@ -133,8 +133,8 @@ XC = XC_CODES = {
 'B3LYP5'        : '.2*HF + .08*SLATER + .72*B88 + .81*LYP + .19*VWN5',
 'B3LYPG'        : '.2*HF + .08*SLATER + .72*B88 + .81*LYP + .19*VWN3', # B3LYP-VWN3 used by Gaussian and libxc
 'O3LYP'         : '.1161*HF + .1129*SLATER + .8133*OPTX + .81*LYP + .19*VWN5',  # Mol. Phys. 99 607
-# RSH(alpha; beta; omega): Range-separated-hybrid functional
-'CAMB3LYP'      : 'RSH(.65;-.46;.33) + BECKECAMX + VWN5C*0.19 + LYPC*0.81',
+# Range-separated-hybrid functional: (alpha+beta)*SR_HF(0.33) + alpha*LR_HF(0.33)
+'CAMB3LYP'      : '0.19*SR_HF(0.33) + 0.65*LR_HF(0.33) + BECKECAMX + VWN5C*0.19 + LYPC*0.81',
 'CAM_B3LYP'     : 'CAMB3LYP',
 'KT1'           : 'SLATERX - 0.006*KTX + VWN5C',                                     # Keal-Tozer 1
 'KT2'           : 'SLATERX*1.07173 - 0.006*KTX + VWN5C*0.576727',                    # Keal-Tozer 2
@@ -293,6 +293,11 @@ def parse_xc(description):
     else:
         x_code, c_code = description.replace(' ','').upper(), ''
 
+    def assign_omega(omega):
+        if hyb[2] == 0:
+            hyb[2] = omega
+        elif hyb[2] != omega:
+            raise ValueError('Different values of omega found for RSH functionals')
     fn_facs = []
     def parse_token(token, suffix):
         if token:
@@ -303,20 +308,14 @@ def parse_xc(description):
                 fac = float(fac)
             else:
                 fac, key = 1, token
-            if key[:3] == 'RSH':
-# RSH(alpha; beta; omega): Range-separated-hybrid functional
-                alpha, beta, omega = [float(x) for x in key[4:-1].split(';')]
-                hyb[0] += alpha + beta
-                hyb[1] += alpha
-                assign_omega(omega)
-            elif key == 'HF':
+            if key == 'HF':
                 hyb[0] += fac
-            elif 'SR_HF' in key:
+            elif 'SR_HF' in key or 'SRHF' in key:
                 hyb[0] += fac
                 if '(' in key:
                     omega = float(key.split('(')[1].split(')')[0])
                     assign_omega(omega)
-            elif 'LR_HF' in key:
+            elif 'LR_HF' in key or 'LRHF' in key:
                 hyb[1] += fac  # alpha
                 if '(' in key:
                     omega = float(key.split('(')[1].split(')')[0])
