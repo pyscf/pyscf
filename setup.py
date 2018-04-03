@@ -261,10 +261,12 @@ def make_src(relpath, srcs):
 #
 extensions = []
 if 1:
-    libcint_lib_path = search_lib_path('libcint'+so_ext, [os.path.join(pyscf_lib_dir, 'deps', 'lib'),
+    libcint_lib_path = search_lib_path('libcint'+so_ext, [pyscf_lib_dir,
+                                                          os.path.join(pyscf_lib_dir, 'deps', 'lib'),
                                                           os.path.join(pyscf_lib_dir, 'deps', 'lib64')],
-                                       version='3.0')
-    libcint_inc_path = search_inc_path('cint.h', [os.path.join(pyscf_lib_dir, 'deps', 'include')])
+                                       version='3.0.6')
+    libcint_inc_path = search_inc_path('cint.h', [pyscf_lib_dir,
+                                                  os.path.join(pyscf_lib_dir, 'deps', 'include')])
     if libcint_lib_path and libcint_inc_path:
         print("****************************************************************")
         print("* libcint found in %s." % libcint_lib_path)
@@ -341,8 +343,9 @@ if 1:
     libxc_lib_path = search_lib_path('libxc'+so_ext, [pyscf_lib_dir,
                                                       os.path.join(pyscf_lib_dir, 'deps', 'lib'),
                                                       os.path.join(pyscf_lib_dir, 'deps', 'lib64')],
-                                     version='4.0.0')
-    libxc_inc_path = search_inc_path('xc.h', [os.path.join(pyscf_lib_dir, 'deps', 'include')])
+                                     version='4')
+    libxc_inc_path = search_inc_path('xc.h', [pyscf_lib_dir,
+                                              os.path.join(pyscf_lib_dir, 'deps', 'include')])
     if libxc_lib_path and libxc_inc_path:
         print("****************************************************************")
         print("* libxc found in %s." % libxc_lib_path)
@@ -370,7 +373,8 @@ if 1:
     xcfun_lib_path = search_lib_path('libxcfun'+so_ext, [pyscf_lib_dir,
                                                          os.path.join(pyscf_lib_dir, 'deps', 'lib'),
                                                          os.path.join(pyscf_lib_dir, 'deps', 'lib64')])
-    xcfun_inc_path = search_inc_path('xcfun.h', [os.path.join(pyscf_lib_dir, 'deps', 'include')])
+    xcfun_inc_path = search_inc_path('xcfun.h', [pyscf_lib_dir,
+                                                 os.path.join(pyscf_lib_dir, 'deps', 'include')])
     if xcfun_lib_path and xcfun_inc_path:
         print("****************************************************************")
         print("* xcfun found in %s." % xcfun_lib_path)
