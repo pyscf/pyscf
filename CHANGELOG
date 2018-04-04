@@ -1,4 +1,4 @@
-PySCF 1.5 alpha (2018-03-??)
+PySCF 1.5 alpha (2018-03-21)
 ----------------------------
 * Added
   - ddCOSMO solvent model
@@ -37,6 +37,7 @@ PySCF 1.5 alpha (2018-03-??)
   - Natural transition orbital analysis
   - direct-RPA (no exchange, aka TDH)
   - direct-TDA (TDA without exchange)
+  - Updated libxc parser to support customize Range-separated XC functionals
 * Improved
   - Supported to set omp threads in FCI solver
   - Supported even number of grids in pbc calculations
@@ -48,6 +49,19 @@ PySCF 1.5 alpha (2018-03-??)
   - Prescreening for PBC 3-center integrals
   - Performance and memory efficiency of G0W0
   - KMP2 memory efficiency
+  - Efficiency to evaluate the value of AO with PBC
+
+
+PySCF 1.4.7 (2018-04-??)
+------------------------
+* Bugfix
+  outcore ao2mo transform when basis functions are cartesian gaussians
+
+
+PySCF 1.4.6 (2018-04-02)
+------------------------
+* Added
+  dip_moment method for ROHF class
 
 
 PySCF 1.4.5 (2018-03-23)

@@ -31,7 +31,7 @@ MAX_MEMORY = getattr(__config__, 'ao2mo_outcore_max_memory', 2000)  # 2GB
 
 
 def full(mol, mo_coeff, erifile, dataname='eri_mo', tmpdir=None,
-         intor='int2e_sph', aosym='s4', comp=None,
+         intor='int2e', aosym='s4', comp=None,
          max_memory=MAX_MEMORY, ioblk_size=IOBLK_SIZE, verbose=logger.WARN,
          compact=True):
     r'''Transfer arbitrary spherical AO integrals to MO integrals for given orbitals
@@ -118,7 +118,7 @@ def full(mol, mo_coeff, erifile, dataname='eri_mo', tmpdir=None,
     return erifile
 
 def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
-            intor='int2e_sph', aosym='s4', comp=None,
+            intor='int2e', aosym='s4', comp=None,
             max_memory=MAX_MEMORY, ioblk_size=IOBLK_SIZE, verbose=logger.WARN,
             compact=True):
     r'''For the given four sets of orbitals, transfer arbitrary spherical AO
@@ -316,7 +316,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
 
     klaoblks = len(fswap['0'])
     ijmoblks = int(numpy.ceil(float(nij_pair)/iobuflen)) * comp
-    ao_loc = mol.ao_loc_nr('cart' in intor)
+    ao_loc = mol.ao_loc_nr()
     ti0 = time_1pass
     istep = 0
     with lib.call_in_background(load) as prefetch:
@@ -353,7 +353,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
 
 # swapfile will be overwritten if exists.
 def half_e1(mol, mo_coeffs, swapfile,
-            intor='int2e_sph', aosym='s4', comp=1,
+            intor='int2e', aosym='s4', comp=1,
             max_memory=MAX_MEMORY, ioblk_size=IOBLK_SIZE, verbose=logger.WARN,
             compact=True, ao2mopt=None):
     r'''Half transform arbitrary spherical AO integrals to MO integrals
@@ -407,6 +407,7 @@ def half_e1(mol, mo_coeffs, swapfile,
         None
 
     '''
+    intor = mol._add_suffix(intor)
     time0 = (time.clock(), time.time())
     log = logger.new_logger(mol, verbose)
 
@@ -502,7 +503,7 @@ def _transpose_to_h5g(h5group, key, dat, blksize, chunks=None):
     for col0, col1 in prange(0, ncol, blksize):
         dset[col0:col1] = lib.transpose(dat[:,col0:col1])
 
-def full_iofree(mol, mo_coeff, intor='int2e_sph', aosym='s4', comp=None,
+def full_iofree(mol, mo_coeff, intor='int2e', aosym='s4', comp=None,
                 max_memory=MAX_MEMORY, ioblk_size=IOBLK_SIZE,
                 verbose=logger.WARN, compact=True):
     r'''Transfer arbitrary spherical AO integrals to MO integrals for given orbitals
@@ -598,7 +599,7 @@ def full_iofree(mol, mo_coeff, intor='int2e_sph', aosym='s4', comp=None,
             del(feri[key])
         return eri
 
-def general_iofree(mol, mo_coeffs, intor='int2e_sph', aosym='s4', comp=None,
+def general_iofree(mol, mo_coeffs, intor='int2e', aosym='s4', comp=None,
                    max_memory=MAX_MEMORY, ioblk_size=IOBLK_SIZE,
                    verbose=logger.WARN, compact=True):
     r'''For the given four sets of orbitals, transfer arbitrary spherical AO
