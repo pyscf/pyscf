@@ -104,8 +104,8 @@ def spin_square(fcivec, norb, nelec, mo_coeff=None, ovlp=1):
 
     dm2abba = -dm2ab.transpose(0,3,2,1)  # alpha^+ beta^+ alpha beta
     dm2baab = -dm2ab.transpose(2,1,0,3)  # beta^+ alpha^+ beta alpha
-    ssxy =(numpy.einsum('ijkl,ij,kl->', dm2abba, ovlpba, ovlpab)
-         + numpy.einsum('ijkl,ij,kl->', dm2baab, ovlpab, ovlpba)
+    ssxy =(numpy.einsum('ijkl,ij,kl->', dm2baab, ovlpba, ovlpab)
+         + numpy.einsum('ijkl,ij,kl->', dm2abba, ovlpab, ovlpba)
          + numpy.einsum('ji,ij->', dm1a, ovlpaa)
          + numpy.einsum('ji,ij->', dm1b, ovlpbb)) * .5
     ss = ssxy + ssz
