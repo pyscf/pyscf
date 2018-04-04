@@ -458,12 +458,10 @@ def half_e1(mol, mo_coeffs, swapfile,
             for imic, aoshs in enumerate(sh_range[3]):
                 log.debug2('      fill iobuf micro [%d/%d], AO [%d:%d], len(aobuf) = %d',
                            imic+1, nmic, *aoshs)
-                print intor
                 buf = fill(intor, aoshs, mol._atm, mol._bas, mol._env,
                            aosym, comp, ao2mopt, out=buf1).reshape(-1,nao_pair)
                 buf = f_e1(buf, moij, ijshape, aosym, ijmosym)
                 p0, p1 = p1, p1 + aoshs[2]
-                print sh_range[3], nij_pair, iobuf.shape, buf.shape, aoshs[2], buflen
                 iobuf[:,p0:p1] = buf.reshape(comp,aoshs[2],nij_pair)
             ti0 = log.timer_debug1('gen AO/transform MO [%d/%d]'%(istep+1,nstep), *ti0)
 

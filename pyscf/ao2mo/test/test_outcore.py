@@ -124,6 +124,15 @@ class KnownValues(unittest.TestCase):
         out = ao2mo.outcore.balance_segs(segs, 100)
         self.assertTrue(ref == out)
 
+    def test_ao2mo_with_mol_cart(self):
+        pmol = mol.copy()
+        pmol.cart = True
+        nao = pmol.nao_nr()
+        numpy.random.seed(1)
+        mo = numpy.random.random((nao,4))
+        eri = ao2mo.kernel(pmol, mo)
+        self.assertAlmostEqual(lib.finger(eri), -977.99841341828437, 9)
+
 def s2ij_s1(symmetry, eri, norb):
     idx = numpy.tril_indices(norb)
     eri1 = numpy.empty((norb,norb,norb,norb))
