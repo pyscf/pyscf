@@ -18,7 +18,6 @@
 
 '''
 domain decomposition COSMO
-(In testing)
 
 See also the code on github
 
@@ -52,11 +51,13 @@ from pyscf.dft import gen_grid, numint
 from pyscf.data import radii
 from pyscf.symm import sph
 
-def ddcosmo_for_scf(mf, pcmobj):
+def ddcosmo_for_scf(mf, pcmobj=None):
     oldMF = mf.__class__
+    if pcmobj is None:
+        pcmobj = DDCOSMO(mf.mol)
     cosmo_solver = pcmobj.as_solver()
 
-    class MF(oldMF):
+    class SCFWithSolvent(oldMF):
         def __init__(self):
             pass
 
@@ -82,13 +83,17 @@ def ddcosmo_for_scf(mf, pcmobj):
             logger.info(pcmobj, '  E_diel = %.15g', vhf.epcm)
             return e_tot, e_coul
 
-    mf1 = MF()
+    mf1 = SCFWithSolvent()
     mf1.__dict__.update(mf.__dict__)
     return mf1
 
 
-# Generate ddcosmo function to compute energy and potential matrix
+# TODO: Testing the value of psi (make_psi_vmat).  All intermediates except
+# psi are tested against ddPCM implementation on github. Psi needs to be
+# computed by the host program. It requires the numerical integration code. 
 def gen_ddcosmo_solver(pcmobj, verbose=None):
+    '''Generate ddcosmo function to compute energy and potential matrix
+    '''
     mol = pcmobj.mol
     if pcmobj.grids.coords is None:
         pcmobj.grids.build(with_non0tab=True)
