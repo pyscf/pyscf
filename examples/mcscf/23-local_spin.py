@@ -7,8 +7,14 @@ import numpy
 from pyscf import gto, scf, mcscf
 from pyscf import fci
 
-'''
-Local spin <Psi |a><a| S^2 |Psi>
+'''Local spin expectation value <Psi |(local S^2)|Psi >
+
+The local S^2 operator only couples the orbitals specified in aolst. The
+cross term which involves the interaction between the local part (in aolst)
+and non-local part (not in aolst) is not included. As a result, the value
+of local_spin is not additive. In other words, if local_spin is computed
+twice with the complementary aolst in the two runs, the summation does not
+equal to the S^2 of the entire system.
 '''
 
 
@@ -31,7 +37,9 @@ mocas = mo[:,5:9]
 mc.kernel(mo)
 print('RHF-CASCI total energy of O2', mc.e_tot)
 print('S^2 = %.7f, 2S+1 = %.7f' % mcscf.spin_square(mc))
-ss = fci.spin_op.local_spin(mc.ci, ncas, nelec, mocas, mf.get_ovlp(), numpy.arange(9))
+first_atom_list = numpy.arange(9)
+ss = fci.spin_op.local_spin(mc.ci, ncas, nelec, mocas, mf.get_ovlp(),
+                            first_atom_list)
 print('local spin for O = %.7f, 2S+1 = %.7f' % ss)
 
 

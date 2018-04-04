@@ -103,8 +103,18 @@ elif sys.platform.startswith('darwin'):
 #    lib/pythonX.X/distutils/unixcompiler.py,  link()
     conf_vars['LDSHARED'] = conf_vars['LDSHARED'].replace('-bundle', '-dynamiclib')
     conf_vars['CCSHARED'] = " -dynamiclib"
-    conf_vars['SO'] = '.dylib'
-    conf_vars['EXT_SUFFIX'] = '.dylib'
+    # On Mac OS, sysconfig.get_config_vars()["EXT_SUFFIX"] was set to
+    # '.cpython-3*m-darwin.so'. numpy.ctypeslib module uses this parameter to
+    # determine the extension of an external library. Python distutlis module
+    # only generates the library with the extension '.so'.  It causes import
+    # error at the runtime.  numpy.ctypeslib treats '.dylib' as the native
+    # python extension.  Set 'EXT_SUFFIX' to '.dylib' can make distutlis
+    # generate the libraries with extension '.dylib'.  It can be loaded by
+    # numpy.ctypeslib
+    if sys.version_info[0] >= 3:  # python3
+        conf_vars['EXT_SUFFIX'] = '.dylib'
+    else:
+        conf_vars['SO'] = '.dylib'
 elif sys.platform.startswith('win'):
     ostype = 'windows'
     so_ext = '.dll'
@@ -323,7 +333,7 @@ autocode/hess.c autocode/intor1.c autocode/grad2.c'''
             default_include.append(os.path.join(pyscf_lib_dir, 'libcint','src'))
         else:
             print("****************************************************************")
-            print("*** WARNING: libcint library not found or found wrong version.")
+            print("*** WARNING: libcint library not found.")
             print("* You can download libcint library from http://github.com/sunqm/libcint")
             print("* May need to set PYSCF_INC_DIR if libcint library was not installed in the")
             print("* system standard install path (/usr, /usr/local, etc). Eg")

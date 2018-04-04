@@ -2,7 +2,7 @@ PySCF 1.5 alpha (2018-03-21)
 ----------------------------
 * Added
   - ddCOSMO solvent model
-  - VV10 NLC functional for RKS and UKS
+  - VV10 NLC functional for finite size systems
   - range-separated hybrid features for RKS and UKS, including
     > Analytical nuclear gradients
     > Second order SCF
@@ -37,7 +37,6 @@ PySCF 1.5 alpha (2018-03-21)
   - Natural transition orbital analysis
   - direct-RPA (no exchange, aka TDH)
   - direct-TDA (TDA without exchange)
-  - Updated libxc parser to support customize Range-separated XC functionals
 * Improved
   - Supported to set omp threads in FCI solver
   - Supported even number of grids in pbc calculations
@@ -50,6 +49,7 @@ PySCF 1.5 alpha (2018-03-21)
   - Performance and memory efficiency of G0W0
   - KMP2 memory efficiency
   - Efficiency to evaluate the value of AO with PBC
+  - libxc parser to support the customized Range-separated XC functionals
 
 
 PySCF 1.4.7 (2018-04-??)
