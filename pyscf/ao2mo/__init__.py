@@ -317,7 +317,7 @@ def kernel(eri_or_mol, mo_coeffs, *args, **kwargs):
 
 def get_ao_eri(mol):
     '''2-electron integrals in AO basis'''
-    return mol.intor('int2e_sph', aosym='s4')
+    return mol.intor('int2e', aosym='s4')
 get_mo_eri = general
 
 

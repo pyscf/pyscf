@@ -18,7 +18,7 @@ IOBLK_SIZE = 256  # MB
 IOBUF_ROW_MIN = 160
 
 def full(mol, mo_coeff, erifile, dataname='eri_mo', tmpdir=None,
-         intor='int2e_sph', aosym='s4', comp=1,
+         intor='int2e', aosym='s4', comp=1,
          max_memory=2000, ioblk_size=IOBLK_SIZE, verbose=logger.WARN, compact=True):
     r'''Transfer arbitrary spherical AO integrals to MO integrals for given orbitals
 
@@ -104,7 +104,7 @@ def full(mol, mo_coeff, erifile, dataname='eri_mo', tmpdir=None,
     return erifile
 
 def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
-            intor='int2e_sph', aosym='s4', comp=1,
+            intor='int2e', aosym='s4', comp=1,
             max_memory=2000, ioblk_size=IOBLK_SIZE, verbose=logger.WARN, compact=True):
     r'''For the given four sets of orbitals, transfer arbitrary spherical AO
     integrals to MO integrals on the fly.
@@ -199,6 +199,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
     >>> view('oh2.h5')
     dataset ['eri_mo', 'new'], shape (3, 100, 55)
     '''
+    intor = mol._add_suffix(intor)
     time_0pass = (time.clock(), time.time())
     if isinstance(verbose, logger.Logger):
         log = verbose
@@ -297,7 +298,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
 
     klaoblks = len(fswap['0'])
     ijmoblks = int(numpy.ceil(float(nij_pair)/iobuflen)) * comp
-    ao_loc = mol.ao_loc_nr('cart' in intor)
+    ao_loc = mol.ao_loc_nr()
     ti0 = time_1pass
     istep = 0
     with lib.call_in_background(load) as prefetch:
@@ -334,7 +335,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
 
 # swapfile will be overwritten if exists.
 def half_e1(mol, mo_coeffs, swapfile,
-            intor='int2e_sph', aosym='s4', comp=1,
+            intor='int2e', aosym='s4', comp=1,
             max_memory=2000, ioblk_size=IOBLK_SIZE, verbose=logger.WARN, compact=True,
             ao2mopt=None):
     r'''Half transform arbitrary spherical AO integrals to MO integrals
@@ -388,6 +389,7 @@ def half_e1(mol, mo_coeffs, swapfile,
         None
 
     '''
+    intor = mol._add_suffix(intor)
     time0 = (time.clock(), time.time())
     if isinstance(verbose, logger.Logger):
         log = verbose
@@ -456,10 +458,12 @@ def half_e1(mol, mo_coeffs, swapfile,
             for imic, aoshs in enumerate(sh_range[3]):
                 log.debug2('      fill iobuf micro [%d/%d], AO [%d:%d], len(aobuf) = %d',
                            imic+1, nmic, *aoshs)
+                print intor
                 buf = fill(intor, aoshs, mol._atm, mol._bas, mol._env,
                            aosym, comp, ao2mopt, out=buf1).reshape(-1,nao_pair)
                 buf = f_e1(buf, moij, ijshape, aosym, ijmosym)
                 p0, p1 = p1, p1 + aoshs[2]
+                print sh_range[3], nij_pair, iobuf.shape, buf.shape, aoshs[2], buflen
                 iobuf[:,p0:p1] = buf.reshape(comp,aoshs[2],nij_pair)
             ti0 = log.timer_debug1('gen AO/transform MO [%d/%d]'%(istep+1,nstep), *ti0)
 
@@ -486,7 +490,7 @@ def _transpose_to_h5g(h5group, key, dat, blksize, chunks=None):
     for col0, col1 in prange(0, ncol, blksize):
         dset[col0:col1] = lib.transpose(dat[:,col0:col1])
 
-def full_iofree(mol, mo_coeff, intor='int2e_sph', aosym='s4', comp=1,
+def full_iofree(mol, mo_coeff, intor='int2e', aosym='s4', comp=1,
                 max_memory=2000, ioblk_size=IOBLK_SIZE, verbose=logger.WARN, compact=True):
     r'''Transfer arbitrary spherical AO integrals to MO integrals for given orbitals
     This function is a wrap for :func:`ao2mo.outcore.general`.  It's not really
@@ -581,7 +585,7 @@ def full_iofree(mol, mo_coeff, intor='int2e_sph', aosym='s4', comp=1,
             del(feri[key])
         return eri
 
-def general_iofree(mol, mo_coeffs, intor='int2e_sph', aosym='s4', comp=1,
+def general_iofree(mol, mo_coeffs, intor='int2e', aosym='s4', comp=1,
                    max_memory=2000, ioblk_size=IOBLK_SIZE, verbose=logger.WARN, compact=True):
     r'''For the given four sets of orbitals, transfer arbitrary spherical AO
     integrals to MO integrals on the fly.  This function is a wrap for
