@@ -33,17 +33,18 @@ from pyscf import gto
 from pyscf import df
 from pyscf.dft import gen_grid, numint
 from pyscf.data import radii
-from pyscf.pcm import ddcosmo
+from pyscf.solvent import ddcosmo
 from pyscf.symm import sph
 
-ddpcm_for_scf = ddcosmo.ddcosmo_for_scf
+def ddpcm_for_scf(mf, pcmobj=None):
+    if pcmobj is None:
+        pcmobj = DDPCM(mf.mol)
+    return ddcosmo.ddcosmo_for_scf(mf, pcmobj)
 
-def gen_ddpcm_solver(pcmobj, grids=None, verbose=None):
+def gen_ddpcm_solver(pcmobj, verbose=None):
     mol = pcmobj.mol
-    if grids is None:
-        grids = gen_grid.Grids(mol)
-        grids.level = pcmobj.becke_grids_level
-        grids.build(with_non0tab=True)
+    if pcmobj.grids.coords is None:
+        pcmobj.grids.build(with_non0tab=True)
 
     natm = mol.natm
     lmax = pcmobj.lmax
@@ -71,16 +72,16 @@ def gen_ddpcm_solver(pcmobj, grids=None, verbose=None):
     A_diele = Amat + fac * numpy.eye(natm*nlm)
     A_inf = Amat + 2*numpy.pi * numpy.eye(natm*nlm)
 
-    cached_pol = ddcosmo.cache_fake_multipoles(grids, r_vdw, lmax)
+    cached_pol = ddcosmo.cache_fake_multipoles(pcmobj.grids, r_vdw, lmax)
 
     def gen_vind(dm):
-        v_phi = ddcosmo.make_phi(pcmobj, dm, r_vdw, ui, grids)
+        v_phi = ddcosmo.make_phi(pcmobj, dm, r_vdw, ui)
         phi = -numpy.einsum('n,xn,jn,jn->jx', weights_1sph, ylm_1sph,
                             ui, v_phi)
         phi = numpy.linalg.solve(A_diele, A_inf.dot(phi.ravel()))
 
         L_X = numpy.linalg.solve(Lmat, phi.ravel()).reshape(natm,-1)
-        psi, vmat = ddcosmo.make_psi_vmat(pcmobj, dm, r_vdw, ui, grids,
+        psi, vmat = ddcosmo.make_psi_vmat(pcmobj, dm, r_vdw, ui, pcmobj.grids,
                                           ylm_1sph, cached_pol, L_X, Lmat)
         dielectric = pcmobj.eps
         f_epsilon = (dielectric-1.)/dielectric

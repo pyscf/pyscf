@@ -12,8 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from pyscf.pcm import ddcosmo
-from pyscf.pcm.ddcosmo import DDCOSMO
-from pyscf.pcm.ddpcm import DDPCM
+from pyscf.solvent import ddcosmo
+from pyscf.solvent.ddcosmo import DDCOSMO
+from pyscf.solvent.ddpcm import DDPCM
 
 for_scf = ddcosmo.ddcosmo_for_scf
+
+def ddCOSMO(method):
+    return ddcosmo.ddcosmo_for_scf(method)
+
+def ddPCM(method):
+    return ddpcm.ddpcm_for_scf(method)
