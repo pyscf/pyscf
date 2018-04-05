@@ -63,6 +63,7 @@ def delley(n, *args, **kwargs):
         dri = rfac * (-2.0*i*(step)**2) / ((1-(i*step)**2)) # d xi / dr
         dr[i-1] = dri
     return r, dr
+gauss_legendre = delley
 
 def mura_knowles(n, charge=None, *args, **kwargs):
     '''Mura-Knowles (JCP, 104, 9848) log3 quadrature radial grids'''

@@ -594,11 +594,11 @@ def dot_eri_dm(eri, dm, hermi=0):
         vj = numpy.empty_like(dms)
         vk = numpy.empty_like(dms)
         for i, dmi in enumerate(dms):
-            vjk = _vhf.incore(eri, dmi.real, hermi=hermi)
+            vj[i], vk[i] = _vhf.incore(eri, dmi.real, hermi=hermi)
             if dms.dtype == numpy.complex128:
-                vjk = vjk + _vhf.incore(eri, dmi.imag, hermi=hermi) * 1j
-            vj[i] = vjk[0]
-            vk[i] = vjk[1]
+                jk = _vhf.incore(eri, dmi.imag, hermi=0)
+                vj[i] += jk[0] * 1j
+                vk[i] += jk[1] * 1j
     return vj.reshape(dm.shape), vk.reshape(dm.shape)
 
 
@@ -640,8 +640,17 @@ def get_jk(mol, dm, hermi=1, vhfopt=None):
     '''
     dm = numpy.asarray(dm, order='C')
     nao = dm.shape[-1]
-    vj, vk = _vhf.direct(dm.reshape(-1,nao,nao), mol._atm, mol._bas, mol._env,
-                         vhfopt=vhfopt, hermi=hermi, cart=mol.cart)
+    if dm.dtype == numpy.complex128:
+        dms = numpy.vstack((dm.real, dm.imag)).reshape(-1,nao,nao)
+        vj, vk = _vhf.direct(dms, mol._atm, mol._bas, mol._env,
+                             vhfopt=vhfopt, hermi=0, cart=mol.cart)
+        vj = vj.reshape(2,-1,nao,nao)
+        vk = vk.reshape(2,-1,nao,nao)
+        vj = vj[0] + vj[1] * 1j
+        vk = vk[0] + vk[1] * 1j
+    else:
+        vj, vk = _vhf.direct(dm.reshape(-1,nao,nao), mol._atm, mol._bas, mol._env,
+                             vhfopt=vhfopt, hermi=hermi, cart=mol.cart)
     return vj.reshape(dm.shape), vk.reshape(dm.shape)
 
 

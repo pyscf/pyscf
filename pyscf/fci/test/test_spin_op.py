@@ -568,7 +568,7 @@ c0[-1,-1] = 1e-4
 e0, ci0 = fci.direct_spin0.kernel(h1, h2, norb, nelec, ci0=c0)
 
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_spin_squre(self):
         ss = fci.spin_op.spin_square(ci0, norb, nelec)
         self.assertAlmostEqual(ss[0], 6, 9)

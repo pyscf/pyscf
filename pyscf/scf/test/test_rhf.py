@@ -317,6 +317,25 @@ class KnowValues(unittest.TestCase):
         mf = scf.ROHF(pmol).set(verbose = 0).run()
         self.assertTrue(mf.wfnsym in (2, 3))
 
+    def test_complex_orbitals(self):
+        nao = mol.nao_nr()
+        mf = scf.RHF(mol)
+        mf.kernel(numpy.zeros((nao,nao))*0j)
+        self.assertAlmostEqual(mf.e_tot, -76.026765673119627, 9)
+
+        mf = scf.RHF(mol).set(max_memory=0)
+        mf.kernel(numpy.zeros((nao,nao))*0j)
+        self.assertAlmostEqual(mf.e_tot, -76.026765673119627, 9)
+
+        mf = scf.rohf.ROHF(mol)
+        mf.kernel(numpy.zeros((nao,nao))*0j)
+        self.assertAlmostEqual(mf.e_tot, -76.026765673119627, 9)
+
+        mf = scf.rohf.ROHF(mol).set(max_memory=0)
+        mf.kernel(numpy.zeros((nao,nao))*0j)
+        self.assertAlmostEqual(mf.e_tot, -76.026765673119627, 9)
+
+
 if __name__ == "__main__":
     print("Full Tests for rhf")
     unittest.main()
