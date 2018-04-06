@@ -18,7 +18,7 @@ from functools import reduce
 import numpy
 import scipy.special
 from pyscf import gto, scf, lib, dft
-from pyscf.pcm import ddcosmo
+from pyscf.solvent import ddcosmo
 from pyscf.symm import sph
 
 mol = gto.Mole()
@@ -30,7 +30,7 @@ mol.verbose = 5
 mol.output = '/dev/null'
 mol.build()
 
-def make_phi(mol, dm, r_vdw, lebedev_order):
+def make_v_phi(mol, dm, r_vdw, lebedev_order):
     atom_coords = mol.atom_coords()
     atom_charges = mol.atom_charges()
     natm = mol.natm
@@ -253,9 +253,12 @@ class KnownValues(unittest.TestCase):
         dm = numpy.random.random((nao,nao))
         dm = dm + dm.T
 
-        v_phi = make_phi(mol, dm, r_vdw, pcm.lebedev_order)
-        v_phi1 = ddcosmo.make_phi(pcm, dm, r_vdw, ui)
-        self.assertTrue(abs(v_phi*ui - v_phi1*ui).max() < 1e-12)
+        v_phi = make_v_phi(mol, dm, r_vdw, pcm.lebedev_order)
+        coords_1sph, weights_1sph = ddcosmo.make_grids_one_sphere(pcm.lebedev_order)
+        ylm_1sph = numpy.vstack(sph.real_sph_vec(coords_1sph, pcm.lmax, True))
+        phi = -numpy.einsum('n,xn,jn,jn->jx', weights_1sph, ylm_1sph, ui, v_phi)
+        phi1 = ddcosmo.make_phi(pcm, dm, r_vdw, ui)
+        self.assertTrue(abs(phi - phi1).max() < 1e-12)
 
     def test_psi_vmat(self):
         pcm = ddcosmo.DDCOSMO(mol)
@@ -279,7 +282,7 @@ class KnownValues(unittest.TestCase):
 
         L = ddcosmo.make_L(pcm, r_vdw, ylm_1sph, fi)
         psi, vmat = ddcosmo.make_psi_vmat(pcm, dm, r_vdw, ui, grids,
-                                          ylm_1sph, cached_pol, LX, L)
+                                          ylm_1sph, cached_pol, LX, L)[:2]
         psi_ref = make_psi(pcm.mol, dm, r_vdw, pcm.lmax)
         self.assertTrue(abs(psi_ref - psi).max() < 1e-12)
 
