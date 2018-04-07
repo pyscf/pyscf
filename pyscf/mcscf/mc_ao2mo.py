@@ -307,8 +307,6 @@ def _mem_usage(ncore, ncas, nmo):
     nvir = nmo - ncore
     outcore = basic = ncas**2*nmo**2*2 * 8/1e6
     incore = outcore + (ncore+ncas)*nmo**3*4/1e6
-    if outcore > 10000:
-        sys.stderr.write('Be careful with the virtual memorty address space `ulimit -v`\n')
     return incore, outcore, basic
 
 def prange(start, end, step):

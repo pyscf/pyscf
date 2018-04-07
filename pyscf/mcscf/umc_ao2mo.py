@@ -287,8 +287,6 @@ def _mem_usage(ncore, ncas, nmo):
     basic = (ncas**2*nmo**2*7 + nmo**3*2) * 8/1e6
     outcore = basic + (ncore**2*nvir**2*3 + ncas*nmo*ncore*nvir*4 + ncore*nmo**2*3) * 8/1e6
     incore = outcore + nmo**4/1e6 + ncore*nmo**3*4/1e6
-    if outcore > 10000:
-        sys.stderr.write('Be careful with the virtual memorty address space `ulimit -v`\n')
     return incore, outcore, basic
 
 if __name__ == '__main__':
