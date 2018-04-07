@@ -891,7 +891,11 @@ def dumps(mol):
         for c in mol.symm_orb:
             x,y = numpy.nonzero(c)
             val = c[x,y]
-            symm_orb.append((val.tolist(), x.tolist(), y.tolist(), c.shape))
+            if val.dtype == numpy.complex:
+                symm_orb.append((val.real.tolist(), val.imag.tolist(),
+                                 x.tolist(), y.tolist(), c.shape))
+            else:
+                symm_orb.append((val.tolist(), None, x.tolist(), y.tolist(), c.shape))
         moldic['symm_orb'] = symm_orb
     try:
         return json.dumps(moldic)
@@ -946,9 +950,14 @@ def loads(molstr):
     if mol.symm_orb is not None:
         # decompress symm_orb
         symm_orb = []
-        for val, x, y, shape in mol.symm_orb:
-            c = numpy.zeros(shape)
-            c[numpy.array(x),numpy.array(y)] = numpy.array(val)
+        for val_real, val_imag, x, y, shape in mol.symm_orb:
+            if val_imag is None:
+                c = numpy.zeros(shape)
+                c[numpy.array(x),numpy.array(y)] = numpy.array(val_real)
+            else:
+                c = numpy.zeros(shape, dtype=numpy.complex)
+                val = numpy.array(val_real) + numpy.array(val_imag) * 1j
+                c[numpy.array(x),numpy.array(y)] = val
             symm_orb.append(c)
         mol.symm_orb = symm_orb
     return mol
