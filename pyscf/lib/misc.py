@@ -289,7 +289,7 @@ class ctypes_stdout(object):
         self.old_stdout_fileno = sys.stdout.fileno()
         self.bak_stdout_fd = os.dup(self.old_stdout_fileno)
         self.bak_stdout = sys.stdout
-        self.fd, self.ftmp = tempfile.mkstemp(dir='/dev/shm')
+        self.fd, self.ftmp = tempfile.mkstemp(dir=param.TMPDIR)
         os.dup2(self.fd, self.old_stdout_fileno)
         sys.stdout = os.fdopen(self.bak_stdout_fd, 'w')
         return self
@@ -322,7 +322,7 @@ class capture_stdout(object):
         self._contents = None
         self.old_stdout_fileno = sys.stdout.fileno()
         self.bak_stdout_fd = os.dup(self.old_stdout_fileno)
-        self.fd, self.ftmp = tempfile.mkstemp(dir='/dev/shm')
+        self.fd, self.ftmp = tempfile.mkstemp(dir=param.TMPDIR)
         os.dup2(self.fd, self.old_stdout_fileno)
         return self
     def __exit__(self, type, value, traceback):
@@ -352,7 +352,7 @@ class quite_run(object):
     def __enter__(self):
         sys.stdout.flush()
         self.dirnow = os.getcwd()
-        self.tmpdir = tempfile.mkdtemp(dir='/dev/shm')
+        self.tmpdir = tempfile.mkdtemp(dir=param.TMPDIR)
         os.chdir(self.tmpdir)
         self.old_stdout_fileno = sys.stdout.fileno()
         self.bak_stdout_fd = os.dup(self.old_stdout_fileno)
@@ -678,9 +678,10 @@ class H5TmpFile(h5py.File):
     def __del__(self):
         self.close()
 
-def finger(a):
+def fingerprint(a):
     a = numpy.asarray(a)
     return numpy.dot(numpy.cos(numpy.arange(a.size)), a.ravel())
+finger = fingerprint
 
 
 def ndpointer(*args, **kwargs):
