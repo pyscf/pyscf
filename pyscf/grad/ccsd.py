@@ -29,8 +29,8 @@ from pyscf.lib import logger
 from pyscf.cc import ccsd
 from pyscf.cc import _ccsd
 from pyscf.cc import ccsd_rdm
-from pyscf.scf import rhf_grad
 from pyscf.scf import cphf
+from pyscf.grad import rhf as rhf_grad
 from pyscf.grad.mp2 import _shell_prange, _index_frozen_active
 
 
@@ -424,12 +424,15 @@ class Gradients(lib.StreamObject):
 
         self.de = _kern(self._cc, t1, t2, l1, l2, eris, atmlst,
                         mf_grad, verbose=log)
-        if self.verbose >= logger.NOTE:
-            log.note('--------------- %s gradients ---------------',
-                     self.__class__.__name__)
-            rhf_grad._write(self, self.mol, self.de, atmlst)
-            log.note('----------------------------------------------')
+        self._finalize()
         return self.de
+
+    def _finalize(self):
+        if self.verbose >= logger.NOTE:
+            logger.note(self, '--------------- %s gradients ---------------',
+                        self._cc.__class__.__name__)
+            rhf_grad._write(self, self.mol, self.de, self.atmlst)
+            logger.note(self, '----------------------------------------------')
 
     as_scanner = as_scanner
 

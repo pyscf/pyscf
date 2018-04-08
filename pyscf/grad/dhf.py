@@ -22,7 +22,7 @@ import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import _vhf
-from pyscf.scf import rhf_grad
+from pyscf.grad import rhf as rhf_grad
 
 
 def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):

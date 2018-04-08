@@ -18,19 +18,11 @@ from functools import reduce
 import numpy
 import scipy.special
 from pyscf import gto, scf, lib, dft
-from pyscf.pcm import ddcosmo
+from pyscf.solvent import ddcosmo
 from pyscf.symm import sph
 
-mol = gto.Mole()
-mol.atom = ''' O                  0.00000000    0.00000000   -0.11081188
-               H                 -0.00000000   -0.84695236    0.59109389
-               H                 -0.00000000    0.89830571    0.52404783 '''
-mol.basis = '3-21g'
-mol.verbose = 5
-mol.output = '/dev/null'
-mol.build()
 
-def make_phi(mol, dm, r_vdw, lebedev_order):
+def make_v_phi(mol, dm, r_vdw, lebedev_order):
     atom_coords = mol.atom_coords()
     atom_charges = mol.atom_charges()
     natm = mol.natm
@@ -141,7 +133,7 @@ def make_vmat(pcm, r_vdw, lebedev_order, lmax, LX, LS):
             rr[r<=r_vdw[ia]] = r[r<=r_vdw[ia]]**l / r_vdw[ia]**(l+1)
             rr[r> r_vdw[ia]] = r_vdw[ia]**l / r[r>r_vdw[ia]]**(l+1)
             eta_nj = fac * numpy.einsum('n,mn,m->n', rr, Ys[l], LX[ia,p0:p1])
-            vmat += numpy.einsum('n,np,nq->pq', grids.weights[i0:i1] * eta_nj,
+            vmat -= numpy.einsum('n,np,nq->pq', grids.weights[i0:i1] * eta_nj,
                                  ao[i0:i1], ao[i0:i1])
 
     atom_coords = mol.atom_coords()
@@ -183,7 +175,7 @@ class KnownValues(unittest.TestCase):
         pcm.lmax = 6
         pcm.lebedev_order = 17
         mf = ddcosmo.ddcosmo_for_scf(scf.RHF(mol), pcm).run()
-        self.assertAlmostEqual(mf.e_tot, -112.35432135908066, 9)
+        self.assertAlmostEqual(mf.e_tot, -112.35450855007909, 9)
 
     def test_make_ylm(self):
         numpy.random.seed(1)
@@ -226,7 +218,19 @@ class KnownValues(unittest.TestCase):
         ylm = numpy.vstack(sph.real_sph_vec(r, lmax, True))
         self.assertTrue(abs(ylmref - ylm).max() < 1e-14)
 
+    def setUp(self):
+        mol = gto.Mole()
+        mol.atom = ''' O                  0.00000000    0.00000000   -0.11081188
+                       H                 -0.00000000   -0.84695236    0.59109389
+                       H                 -0.00000000    0.89830571    0.52404783 '''
+        mol.basis = '3-21g'
+        mol.verbose = 5
+        mol.output = '/dev/null'
+        mol.build()
+        self.mol = mol
+
     def test_L_x(self):
+        mol = self.mol
         pcm = ddcosmo.DDCOSMO(mol)
         r_vdw = ddcosmo.get_atomic_radii(pcm)
         n = mol.natm * (pcm.lmax+1)**2
@@ -242,6 +246,7 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(abs(Lref.dot(n)-L.dot(n)).max() < 1e-12)
 
     def test_phi(self):
+        mol = self.mol
         pcm = ddcosmo.DDCOSMO(mol)
         r_vdw = ddcosmo.get_atomic_radii(pcm)
         fi = ddcosmo.make_fi(pcm, r_vdw)
@@ -253,11 +258,15 @@ class KnownValues(unittest.TestCase):
         dm = numpy.random.random((nao,nao))
         dm = dm + dm.T
 
-        v_phi = make_phi(mol, dm, r_vdw, pcm.lebedev_order)
-        v_phi1 = ddcosmo.make_phi(pcm, dm, r_vdw, ui)
-        self.assertTrue(abs(v_phi*ui - v_phi1*ui).max() < 1e-12)
+        v_phi = make_v_phi(mol, dm, r_vdw, pcm.lebedev_order)
+        coords_1sph, weights_1sph = ddcosmo.make_grids_one_sphere(pcm.lebedev_order)
+        ylm_1sph = numpy.vstack(sph.real_sph_vec(coords_1sph, pcm.lmax, True))
+        phi = -numpy.einsum('n,xn,jn,jn->jx', weights_1sph, ylm_1sph, ui, v_phi)
+        phi1 = ddcosmo.make_phi(pcm, dm, r_vdw, ui)
+        self.assertTrue(abs(phi - phi1).max() < 1e-12)
 
     def test_psi_vmat(self):
+        mol = self.mol
         pcm = ddcosmo.DDCOSMO(mol)
         pcm.lmax = 2
         r_vdw = ddcosmo.get_atomic_radii(pcm)
@@ -279,18 +288,42 @@ class KnownValues(unittest.TestCase):
 
         L = ddcosmo.make_L(pcm, r_vdw, ylm_1sph, fi)
         psi, vmat = ddcosmo.make_psi_vmat(pcm, dm, r_vdw, ui, grids,
-                                          ylm_1sph, cached_pol, LX, L)
+                                          ylm_1sph, cached_pol, LX, L)[:2]
         psi_ref = make_psi(pcm.mol, dm, r_vdw, pcm.lmax)
-        self.assertTrue(abs(psi_ref - psi).max() < 1e-12)
+        self.assertAlmostEqual(abs(psi_ref - psi).max(), 0, 12)
 
         LS = numpy.linalg.solve(L.T.reshape(natm*nlm,-1),
                                 psi_ref.ravel()).reshape(natm,nlm)
         vmat_ref = make_vmat(pcm, r_vdw, pcm.lebedev_order, pcm.lmax, LX, LS)
-        self.assertTrue(abs(vmat_ref - vmat).max() < 1e-12)
+        self.assertAlmostEqual(abs(vmat_ref - vmat).max(), 0, 12)
+
+    def test_vmat(self):
+        mol = gto.M(atom='H 0 0 0; H 0 1 1.2; H 1. .1 0; H .5 .5 1', verbose=0)
+        pcmobj = ddcosmo.DDCOSMO(mol)
+        f = pcmobj.as_solver()
+        nao = mol.nao_nr()
+        numpy.random.seed(1)
+        dm1 = numpy.random.random((nao,nao))
+        dm1 = dm1 + dm1.T
+        e0, vmat0 = f(dm1)
+        dx = 0.0001
+        vmat1 = numpy.zeros_like(dm1)
+        for i in range(nao):
+            for j in range(i):
+                dm1[i,j] += dx
+                dm1[j,i] += dx
+                e1 = f(dm1)[0]
+                vmat1[i,j] = vmat1[j,i] = (e1 - e0) / (dx*2)
+                dm1[i,j] -= dx
+                dm1[j,i] -= dx
+            dm1[i,i] += dx
+            e1 = f(dm1)[0]
+            vmat1[i,i] = (e1 - e0) / dx
+            dm1[i,i] -= dx
+        self.assertAlmostEqual(abs(vmat0-vmat1).max(), 0, 4)
 
 
 if __name__ == "__main__":
     print("Full Tests for ddcosmo")
     unittest.main()
-
 

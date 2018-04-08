@@ -493,6 +493,10 @@ class Grids(lib.StreamObject):
         self.weights = None
         self._keys = set(self.__dict__.keys())
 
+    @property
+    def size(self):
+        return getattr(self.weights, 'size', 0)
+
     def dump_flags(self):
         logger.info(self, 'radial grids: %s', self.radi_method.__doc__)
         logger.info(self, 'becke partition: %s', self.becke_scheme.__doc__)

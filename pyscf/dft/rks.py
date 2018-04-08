@@ -279,7 +279,7 @@ class RKS(hf.RHF):
     define_xc_ = define_xc_
 
     def nuc_grad_method(self):
-        from pyscf.dft import rks_grad
+        from pyscf.grad import rks as rks_grad
         return rks_grad.Gradients(self)
 
 def _dft_common_init_(mf):

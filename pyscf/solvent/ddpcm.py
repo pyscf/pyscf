@@ -82,12 +82,20 @@ def gen_ddpcm_solver(pcmobj, verbose=None):
 
         L_X = numpy.linalg.solve(Lmat, phi.ravel()).reshape(natm,-1)
         psi, vmat = ddcosmo.make_psi_vmat(pcmobj, dm, r_vdw, ui, pcmobj.grids,
-                                          ylm_1sph, cached_pol, L_X, Lmat)
+                                          ylm_1sph, cached_pol, L_X, Lmat)[:2]
         dielectric = pcmobj.eps
         f_epsilon = (dielectric-1.)/dielectric
         epcm = .5 * f_epsilon * numpy.einsum('jx,jx', psi, L_X)
-        return epcm, vmat
+        return epcm, .5 * f_epsilon * vmat
     return gen_vind
+
+def energy(pcmobj, dm):
+    '''
+    ddPCM energy
+    Es = 1/2 f(eps) \int rho(r) W(r) dr
+    '''
+    epcm = gen_ddpcm_solver(pcmobj, pcmobj.verbose)(dm)[0]
+    return epcm
 
 def regularize_xt(t, eta, scale=1):
     eta *= scale

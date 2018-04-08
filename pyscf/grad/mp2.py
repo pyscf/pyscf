@@ -25,7 +25,7 @@ import numpy
 from pyscf import lib
 from functools import reduce
 from pyscf.lib import logger
-from pyscf.scf import rhf_grad
+from pyscf.grad import rhf as rhf_grad
 from pyscf.scf import cphf
 from pyscf.mp import mp2
 from pyscf.ao2mo import _ao2mo
@@ -283,12 +283,15 @@ class Gradients(lib.StreamObject):
             self.atmlst = atmlst
 
         self.de = _kern(self._mp, t2, atmlst, mf_grad, verbose=log)
-        if self.verbose >= logger.NOTE:
-            log.note('--------------- %s gradients ---------------',
-                     self.__class__.__name__)
-            rhf_grad._write(self, self.mol, self.de, atmlst)
-            log.note('----------------------------------------------')
+        self._finalize()
         return self.de
+
+    def _finalize(self):
+        if self.verbose >= logger.NOTE:
+            logger.note(self, '--------------- %s gradients ---------------',
+                        self._mp.__class__.__name__)
+            rhf_grad._write(self, self.mol, self.de, self.atmlst)
+            logger.note(self, '----------------------------------------------')
 
     as_scanner = as_scanner
 

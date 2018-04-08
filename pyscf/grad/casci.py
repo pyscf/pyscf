@@ -29,7 +29,7 @@ import numpy
 from pyscf import lib
 from pyscf import ao2mo
 from pyscf.lib import logger
-from pyscf.scf import rhf_grad
+from pyscf.grad import rhf as rhf_grad
 from pyscf.grad.mp2 import _shell_prange
 from pyscf.scf import cphf
 
@@ -257,12 +257,16 @@ class Gradients(lib.StreamObject):
             self.dump_flags()
 
         self.de = kernel(self._mc, mo_coeff, ci, atmlst, mf_grad, log)
-        if self.verbose >= logger.NOTE:
-            log.note('--------------- CASCI gradients ----------------')
-            rhf_grad._write(self, self.mol, self.de, atmlst)
-            log.note('------------------------------------------------')
-            log.timer('CASCI gradients', *cput0)
+        log.timer('CASCI gradients', *cput0)
+        self._finalize()
         return self.de
+
+    def _finalize(self):
+        if self.verbose >= logger.NOTE:
+            logger.note(self, '--------------- %s gradients ---------------',
+                        self._mc.__class__.__name__)
+            rhf_grad._write(self, self.mol, self.de, self.atmlst)
+            logger.note(self, '----------------------------------------------')
 
     as_scanner = as_scanner
 

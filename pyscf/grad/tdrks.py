@@ -28,8 +28,8 @@ from pyscf.lib import logger
 from pyscf import dft
 from pyscf.dft import rks
 from pyscf.dft import numint
-from pyscf.dft import rks_grad
 from pyscf.scf import cphf
+from pyscf.grad import rks as rks_grad
 from pyscf.grad import tdrhf
 
 

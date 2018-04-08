@@ -24,7 +24,7 @@ from functools import reduce
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.scf import rhf_grad
+from pyscf.grad import rhf as rhf_grad
 from pyscf.scf import cphf
 from pyscf import __config__
 
@@ -164,6 +164,8 @@ class Gradients(rhf_grad.Gradients):
         self._scf = td._scf
         self.chkfile = td.chkfile
         self.max_memory = td.max_memory
+        self.atmlst = range(self.mol.natm)
+        self.state_id = 1
 
         self.de = 0
         keys = set(('cphf_max_cycle', 'cphf_conv_tol'))
@@ -177,6 +179,7 @@ class Gradients(rhf_grad.Gradients):
         log.info('cphf_conv_tol = %g', self.cphf_conv_tol)
         log.info('cphf_max_cycle = %d', self.cphf_max_cycle)
         log.info('chkfile = %s', self.chkfile)
+        log.info('state_id = %s', self.state_id)
         log.info('max_memory %d MB (current use %d MB)',
                  self.max_memory, lib.current_memory()[0])
         log.info('\n')
@@ -199,20 +202,31 @@ class Gradients(rhf_grad.Gradients):
         cput0 = (time.clock(), time.time())
         if xy is None: xy = self._td.xy[state-1]
         if singlet is None: singlet = self._td.singlet
-        if atmlst is None: atmlst = range(self.mol.natm)
+        self.state_id = state
+        if atmlst is None:
+            atmlst = self.atmlst
+        else:
+            self.atmlst = atmlst
+
         self.check_sanity()
         de = self.grad_elec(xy, singlet, atmlst)
         self.de = de = de + self.grad_nuc(atmlst=atmlst)
         #self.de = de = de + self._scf.nuc_grad_method().kernel(atmlst=atmlst)
 
-        logger.note(self, '--------------')
-        logger.note(self, '           x                y                z')
-        for k, ia in enumerate(atmlst):
-            logger.note(self, '%d %s  %15.9f  %15.9f  %15.9f', ia,
-                        self.mol.atom_symbol(ia), de[k,0], de[k,1], de[k,2])
-        logger.note(self, '--------------')
         logger.timer(self, 'TD gradients', *cput0)
+        self._finalize()
         return self.de
+
+    def _finalize(self):
+        if self.verbose >= logger.NOTE:
+            logger.note(self, '--------------- %s (state %d) gradients ---------------',
+                        self._td.__class__.__name__, self.state_id)
+            logger.note(self, '           x                y                z')
+            de = self.de
+            for k, ia in enumerate(self.atmlst):
+                logger.note(self, '%d %s  %15.9f  %15.9f  %15.9f', ia,
+                            self.mol.atom_symbol(ia), de[k,0], de[k,1], de[k,2])
+            logger.note(self, '----------------------------------------------')
 
 
 if __name__ == '__main__':

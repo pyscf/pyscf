@@ -26,7 +26,7 @@ from pyscf import ao2mo
 from pyscf.lib import logger
 from pyscf.dft import numint
 from pyscf.scf import _vhf
-from pyscf.scf import rhf_grad
+from pyscf.grad import rhf as rhf_grad
 from pyscf.scf import cphf
 
 #

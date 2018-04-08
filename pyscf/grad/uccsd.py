@@ -30,7 +30,7 @@ from pyscf.cc import ccsd
 from pyscf.cc import _ccsd
 from pyscf.cc import uccsd_rdm
 from pyscf.scf import ucphf
-from pyscf.scf import rhf_grad
+from pyscf.grad import rhf as rhf_grad
 from pyscf.grad import ccsd as ccsd_grad
 
 

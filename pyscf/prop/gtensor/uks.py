@@ -34,7 +34,7 @@ from pyscf.dft import numint
 from pyscf.prop.gtensor import uhf as uhf_g
 from pyscf.prop.gtensor.uhf import _write, align
 from pyscf.data import nist
-from pyscf.dft import rks_grad
+from pyscf.grad import rks as rks_grad
 
 
 # Note mo10 is the imaginary part of MO^1
