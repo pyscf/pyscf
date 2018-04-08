@@ -1,3 +1,9 @@
+PySCF 1.5 beta (2018-04-??)
+---------------------------
+* Bugfix
+  - Fock matrix of ddCOSMO and ddPCM method.
+
+
 PySCF 1.5 alpha (2018-03-21)
 ----------------------------
 * Added

@@ -58,13 +58,13 @@ def ddcosmo_for_scf(mf, pcmobj=None):
     cosmo_solver = pcmobj.as_solver()
 
     class SCFWithSolvent(oldMF):
-        def __init__(self):
-            pass
+        def __init__(self, solvent):
+            self._solvent = solvent
 
         def dump_flags(self):
             oldMF.dump_flags(self)
-            pcmobj.check_sanity()
-            pcmobj.dump_flags()
+            self._solvent.check_sanity()
+            self._solvent.dump_flags()
             return self
 
         def get_veff(self, mol, dm, *args, **kwargs):
@@ -80,10 +80,10 @@ def ddcosmo_for_scf(mf, pcmobj=None):
                 vhf = self.get_veff(self.mol, dm)
             e_tot, e_coul = oldMF.energy_elec(self, dm, h1e, vhf-vhf.vpcm)
             e_tot += vhf.epcm
-            logger.info(pcmobj, '  E_diel = %.15g', vhf.epcm)
+            logger.info(self._solvent, '  E_diel = %.15g', vhf.epcm)
             return e_tot, e_coul
 
-    mf1 = SCFWithSolvent()
+    mf1 = SCFWithSolvent(pcmobj)
     mf1.__dict__.update(mf.__dict__)
     return mf1
 
@@ -132,8 +132,16 @@ def gen_ddcosmo_solver(pcmobj, verbose=None):
         else:
             f_epsilon = 1
         epcm = .5 * f_epsilon * numpy.einsum('jx,jx', psi, L_X)
-        return epcm, vmat
+        return epcm, .5 * f_epsilon * vmat
     return gen_vind
+
+def energy(pcmobj, dm):
+    '''
+    ddCOSMO energy
+    Es = 1/2 f(eps) \int rho(r) W(r) dr
+    '''
+    epcm = gen_ddcosmo_solver(pcmobj, pcmobj.verbose)(dm)[0]
+    return epcm
 
 def get_atomic_radii(pcmobj):
     mol = pcmobj.mol
@@ -316,7 +324,7 @@ def make_psi_vmat(pcmobj, dm, r_vdw, ui, grids, ylm_1sph, cached_pol, L_X, L):
         den[p0:p1] = weight * make_rho(0, ao, mask, 'LDA')
         aow = numpy.ndarray(ao.shape, order='F', buffer=aow)
         aow = numpy.einsum('pi,p->pi', ao, scaled_weights[p0:p1], out=aow)
-        vmat += numint._dot_ao_ao(mol, ao, aow, mask, shls_slice, ao_loc)
+        vmat -= numint._dot_ao_ao(mol, ao, aow, mask, shls_slice, ao_loc)
     ao = aow = scaled_weights = None
 
     nelec_leak = 0
@@ -374,7 +382,11 @@ def cache_fake_multipoles(grids, r_vdw, lmax):
     for symb in atom_grids_tab:
         x_nj, w = atom_grids_tab[symb]
         r = lib.norm(x_nj, axis=1)
+        # Different equations are used in JCTC, 9, 3637. r*Ys (the fake_pole)
+        # is computed as r^l/r_vdw. "leak_idx" is not needed.
+        # Here, the implementation is based on JCP, 141, 184108
         leak_idx = r > r_vdw_type[symb]
+
         pol = sph.multipoles(x_nj, lmax)
         fak_pol = []
         for l in range(lmax+1):
@@ -385,6 +397,7 @@ def cache_fake_multipoles(grids, r_vdw, lmax):
             #:rr[r> r_vdw[ia]] = r_vdw[ia]**l / r[r>r_vdw[ia]]**(l+1)
             #:xx_ylm = numpy.einsum('n,mn->mn', rr, Ys[l])
             xx_ylm = pol[l] * (1./r_vdw_type[symb]**(l+1))
+            # The line below is not needed for JCTC, 9, 3637
             xx_ylm[:,leak_idx] *= (r_vdw_type[symb]/r[leak_idx])**(2*l+1)
             fak_pol.append(xx_ylm)
         cached_pol[symb] = (fak_pol, leak_idx)
@@ -439,6 +452,7 @@ class DDCOSMO(lib.StreamObject):
         e, vmat = solver(dm)
         return e, vmat
 
+    energy = energy
     gen_solver = as_solver = gen_ddcosmo_solver
     get_atomic_radii = get_atomic_radii
 
@@ -502,7 +516,7 @@ if __name__ == '__main__':
     cm.verbose = 4
     mf = ddcosmo_for_scf(scf.RHF(mol), cm)#.newton()
     mf.verbose = 4
-    mf.kernel()  # -75.5697158490771
+    mf.kernel()  # -75.570364368059
 
     #mol = gto.Mole()
     #mol.atom = ''' Fe                  0.00000000    0.00000000   -0.11081188
