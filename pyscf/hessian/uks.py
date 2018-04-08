@@ -24,7 +24,7 @@ import time
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.dft import rks_grad
+from pyscf.grad import rks as rks_grad
 from pyscf.hessian import rhf as rhf_hess
 from pyscf.hessian import uhf as uhf_hess
 from pyscf.hessian import rks as rks_hess

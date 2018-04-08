@@ -22,8 +22,8 @@ CISD analytical nuclear gradients
 
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.scf import rhf_grad
 from pyscf.ci import cisd
+from pyscf.grad import rhf as rhf_grad
 from pyscf.grad import ccsd as ccsd_grad
 
 

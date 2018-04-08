@@ -28,15 +28,15 @@ Simple usage::
     >>> grad.RHF(mf).kernel()
 '''
 
-from pyscf.scf import rhf_grad as rhf
-from pyscf.scf import dhf_grad as dhf
+from pyscf.grad import rhf
+from pyscf.grad import dhf
 from pyscf.grad import uhf
 from pyscf.grad import rohf
 from pyscf.grad import ccsd
 from pyscf.grad import cisd
 #from pyscf.grad import rks
-RHF = rhf.Gradients
-DHF = dhf.Gradients
+from pyscf.grad.rhf import Gradients as RHF
+from pyscf.grad.dhf import Gradients as DHF
 from pyscf.grad.uhf import Gradients as UHF
 from pyscf.grad.rohf import Gradients as ROHF
 #from pyscf.grad.rks import Gradients as RKS

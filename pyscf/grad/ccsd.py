@@ -29,8 +29,8 @@ from pyscf.lib import logger
 from pyscf.cc import ccsd
 from pyscf.cc import _ccsd
 from pyscf.cc import ccsd_rdm
-from pyscf.scf import rhf_grad
 from pyscf.scf import cphf
+from pyscf.grad import rhf as rhf_grad
 from pyscf.grad.mp2 import _shell_prange, _index_frozen_active
 
 

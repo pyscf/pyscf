@@ -27,8 +27,8 @@ from functools import reduce
 from pyscf.lib import logger
 from pyscf.scf import ucphf
 from pyscf.ao2mo import _ao2mo
-from pyscf.scf import rhf_grad
 from pyscf.mp import ump2
+from pyscf.grad import rhf as rhf_grad
 from pyscf.grad import mp2 as mp2_grad
 
 

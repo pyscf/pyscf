@@ -25,7 +25,7 @@ import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.hessian import rhf as rhf_hess
-from pyscf.dft import rks_grad
+from pyscf.grad import rks as rks_grad
 from pyscf.dft import numint
 
 
@@ -494,7 +494,6 @@ class Hessian(rhf_hess.Hessian):
 if __name__ == '__main__':
     from pyscf import gto
     from pyscf import dft
-    from pyscf.dft import rks_grad
     #dft.numint._NumInt.libxc = dft.xcfun
     #xc_code = 'lda,vwn'
     xc_code = 'wb97x'
