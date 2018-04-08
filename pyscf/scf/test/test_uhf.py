@@ -209,6 +209,16 @@ class KnowValues(unittest.TestCase):
         mf = scf.UHF(pmol).set(verbose = 0).run()
         self.assertTrue(mf.wfnsym in (2, 3))
 
+    def test_complex_orbitals(self):
+        nao = mol.nao_nr()
+        mf = scf.UHF(mol)
+        mf.kernel(numpy.zeros((2,nao,nao))*0j)
+        self.assertAlmostEqual(mf.e_tot, -76.026765673119627, 9)
+
+        mf = scf.UHF(mol).set(max_memory=0)
+        mf.kernel(numpy.zeros((2,nao,nao))*0j)
+        self.assertAlmostEqual(mf.e_tot, -76.026765673119627, 9)
+
 if __name__ == "__main__":
     print("Full Tests for uhf")
     unittest.main()
