@@ -66,22 +66,22 @@ def as_scanner(grad_ci):
     class CISD_GradScanner(grad_ci.__class__, lib.GradScanner):
         def __init__(self, g):
             self.__dict__.update(g.__dict__)
-            self._ci = grad_ci._ci.as_scanner()
+            self.base = grad_ci.base.as_scanner()
         def __call__(self, mol, **kwargs):
-            ci_scanner = self._ci
+            ci_scanner = self.base
             ci_scanner(mol)
             mf_grad = ci_scanner._scf.nuc_grad_method()
             de = self.kernel(ci_scanner.ci, mf_grad=mf_grad)
             return ci_scanner.e_tot, de
         @property
         def converged(self):
-            ci_scanner = self._ci
+            ci_scanner = self.base
             return all((ci_scanner._scf.converged, ci_scanner.converged))
     return CISD_GradScanner(grad_ci)
 
 class Gradients(lib.StreamObject):
     def __init__(self, myci):
-        self._ci = myci
+        self.base = myci
         self.mol = myci.mol
         self.stdout = myci.stdout
         self.verbose = myci.verbose
@@ -91,21 +91,22 @@ class Gradients(lib.StreamObject):
     def kernel(self, civec=None, eris=None, atmlst=None,
                mf_grad=None, verbose=None, _kern=kernel):
         log = logger.new_logger(self, verbose)
-        if civec is None: civec = self._ci.ci
-        if civec is None: civec = self._ci.kernel(eris=eris)
+        myci = self.base
+        if civec is None: civec = myci.ci
+        if civec is None: civec = myci.kernel(eris=eris)
         if atmlst is None:
             atmlst = self.atmlst
         else:
             self.atmlst = atmlst
 
-        self.de = _kern(self._ci, civec, eris, atmlst, mf_grad, log)
+        self.de = _kern(myci, civec, eris, atmlst, mf_grad, log)
         self._finalize()
         return self.de
 
     def _finalize(self):
         if self.verbose >= logger.NOTE:
             logger.note(self, '--------------- %s gradients ---------------',
-                        self._ci.__class__.__name__)
+                        self.base.__class__.__name__)
             rhf_grad._write(self, self.mol, self.de, self.atmlst)
             logger.note(self, '----------------------------------------------')
 

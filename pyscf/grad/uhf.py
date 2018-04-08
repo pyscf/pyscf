@@ -28,7 +28,7 @@ from pyscf.grad import rhf as rhf_grad
 
 
 def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
-    mf = mf_grad._scf
+    mf = mf_grad.base
     mol = mf_grad.mol
     if mo_energy is None: mo_energy = mf.mo_energy
     if mo_occ is None:    mo_occ = mf.mo_occ
@@ -85,13 +85,13 @@ class Gradients(rhf_grad.Gradients):
     '''
     def get_veff(self, mol=None, dm=None):
         if mol is None: mol = self.mol
-        if dm is None: dm = self._scf.make_rdm1()
+        if dm is None: dm = self.base.make_rdm1()
         return get_veff(self, mol, dm)
 
     def make_rdm1e(self, mo_energy=None, mo_coeff=None, mo_occ=None):
-        if mo_energy is None: mo_energy = self._scf.mo_energy
-        if mo_coeff is None: mo_coeff = self._scf.mo_coeff
-        if mo_occ is None: mo_occ = self._scf.mo_occ
+        if mo_energy is None: mo_energy = self.base.mo_energy
+        if mo_coeff is None: mo_coeff = self.base.mo_coeff
+        if mo_occ is None: mo_occ = self.base.mo_occ
         return make_rdm1e(mo_energy, mo_coeff, mo_occ)
 
     grad_elec = grad_elec

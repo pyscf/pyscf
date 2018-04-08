@@ -41,7 +41,7 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
     time0 = time.clock(), time.time()
 
     mol = td_grad.mol
-    mf = td_grad._td._scf
+    mf = td_grad.base._scf
     mo_coeff = mf.mo_coeff
     mo_energy = mf.mo_energy
     mo_occ = mf.mo_occ
@@ -160,8 +160,8 @@ class Gradients(rhf_grad.Gradients):
         self.verbose = td.verbose
         self.stdout = td.stdout
         self.mol = td.mol
-        self._td = td
-        self._scf = td._scf
+        self.base = td
+        self._scf = td._scf  # needed by hcore_generator
         self.chkfile = td.chkfile
         self.max_memory = td.max_memory
         self.atmlst = range(self.mol.natm)
@@ -175,7 +175,7 @@ class Gradients(rhf_grad.Gradients):
         log = logger.Logger(self.stdout, self.verbose)
         log.info('\n')
         log.info('******** LR %s gradients for %s ********',
-                 self._td.__class__, self._td._scf.__class__)
+                 self.base.__class__, self.base._scf.__class__)
         log.info('cphf_conv_tol = %g', self.cphf_conv_tol)
         log.info('cphf_max_cycle = %d', self.cphf_max_cycle)
         log.info('chkfile = %s', self.chkfile)
@@ -197,11 +197,11 @@ class Gradients(rhf_grad.Gradients):
         if state == 0:
             logger.warn(self, 'state=0 found in the input. '
                         'Gradients of ground state is computed.')
-            return self._scf.nuc_grad_method().kernel(atmlst=atmlst)
+            return self.base._scf.nuc_grad_method().kernel(atmlst=atmlst)
 
         cput0 = (time.clock(), time.time())
-        if xy is None: xy = self._td.xy[state-1]
-        if singlet is None: singlet = self._td.singlet
+        if xy is None: xy = self.base.xy[state-1]
+        if singlet is None: singlet = self.base.singlet
         self.state_id = state
         if atmlst is None:
             atmlst = self.atmlst
@@ -211,7 +211,6 @@ class Gradients(rhf_grad.Gradients):
         self.check_sanity()
         de = self.grad_elec(xy, singlet, atmlst)
         self.de = de = de + self.grad_nuc(atmlst=atmlst)
-        #self.de = de = de + self._scf.nuc_grad_method().kernel(atmlst=atmlst)
 
         logger.timer(self, 'TD gradients', *cput0)
         self._finalize()
@@ -220,7 +219,7 @@ class Gradients(rhf_grad.Gradients):
     def _finalize(self):
         if self.verbose >= logger.NOTE:
             logger.note(self, '--------------- %s (state %d) gradients ---------------',
-                        self._td.__class__.__name__, self.state_id)
+                        self.base.__class__.__name__, self.state_id)
             logger.note(self, '           x                y                z')
             de = self.de
             for k, ia in enumerate(self.atmlst):

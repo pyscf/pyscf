@@ -60,7 +60,7 @@ def ddcosmo_grad(grad_method, pcmobj=None):
 
         def kernel(self, dm=None, atmlst=None):
             if dm is None:
-                dm = grad_method._scf.make_rdm1()
+                dm = grad_method.base.make_rdm1()
             # de_solvent needs to be called first because _finalize method
             # is called in the grad_method.kernel function.  de_solvent is
             # required by the _finalize method.
@@ -70,7 +70,7 @@ def ddcosmo_grad(grad_method, pcmobj=None):
 
             if self.verbose >= logger.NOTE:
                 logger.note(self, '--------------- %s (%s) gradients ---------------',
-                            grad_method._scf.__class__.__name__,
+                            grad_method.base.__class__.__name__,
                             self._solvent.__class__.__name__)
                 rhf_grad._write(self, self.mol, self.de, self.atmlst)
                 logger.note(self, '----------------------------------------------')

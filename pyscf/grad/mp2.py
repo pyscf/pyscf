@@ -212,16 +212,16 @@ def as_scanner(grad_mp):
     class MP2_GradScanner(grad_mp.__class__, lib.GradScanner):
         def __init__(self, g):
             self.__dict__.update(g.__dict__)
-            self._mp = grad_mp._mp.as_scanner()
+            self.base = grad_mp.base.as_scanner()
         def __call__(self, mol, **kwargs):
-            mp_scanner = self._mp
+            mp_scanner = self.base
             mp_scanner(mol, with_t2=True)
             mf_grad = mp_scanner._scf.nuc_grad_method()
             de = self.kernel(mp_scanner.t2, mf_grad=mf_grad)
             return mp_scanner.e_tot, de
         @property
         def converged(self):
-            return self._mp._scf.converged
+            return self.base._scf.converged
     return MP2_GradScanner(grad_mp)
 
 
@@ -265,7 +265,7 @@ def _index_frozen_active(frozen_mask, mo_occ):
 
 class Gradients(lib.StreamObject):
     def __init__(self, mp):
-        self._mp = mp
+        self.base = mp
         self.mol = mp.mol
         self.stdout = mp.stdout
         self.verbose = mp.verbose
@@ -275,21 +275,21 @@ class Gradients(lib.StreamObject):
     def kernel(self, t2=None, atmlst=None, mf_grad=None, verbose=None,
                _kern=kernel):
         log = logger.new_logger(self, verbose)
-        if t2 is None: t2 = self._mp.t2
-        if t2 is None: t2 = self._mp.kernel()
+        if t2 is None: t2 = self.base.t2
+        if t2 is None: t2 = self.base.kernel()
         if atmlst is None:
             atmlst = self.atmlst
         else:
             self.atmlst = atmlst
 
-        self.de = _kern(self._mp, t2, atmlst, mf_grad, verbose=log)
+        self.de = _kern(self.base, t2, atmlst, mf_grad, verbose=log)
         self._finalize()
         return self.de
 
     def _finalize(self):
         if self.verbose >= logger.NOTE:
             logger.note(self, '--------------- %s gradients ---------------',
-                        self._mp.__class__.__name__)
+                        self.base.__class__.__name__)
             rhf_grad._write(self, self.mol, self.de, self.atmlst)
             logger.note(self, '----------------------------------------------')
 

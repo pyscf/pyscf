@@ -28,7 +28,7 @@ from pyscf.scf import _vhf
 
 
 def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
-    mf = mf_grad._scf
+    mf = mf_grad.base
     mol = mf_grad.mol
     if mo_energy is None: mo_energy = mf.mo_energy
     if mo_occ is None:    mo_occ = mf.mo_occ
@@ -152,16 +152,16 @@ def as_scanner(mf_grad):
     class SCF_GradScanner(mf_grad.__class__, lib.GradScanner):
         def __init__(self, g):
             self.__dict__.update(g.__dict__)
-            self._scf = g._scf.as_scanner()
+            self.base = g.base.as_scanner()
         def __call__(self, mol, **kwargs):
-            mf_scanner = self._scf
+            mf_scanner = self.base
             e_tot = mf_scanner(mol)
             self.mol = mol
             de = self.kernel(**kwargs)
             return e_tot, de
         @property
         def converged(self):
-            return self._scf.converged
+            return self.base.converged
     return SCF_GradScanner(mf_grad)
 
 
@@ -171,7 +171,7 @@ class Gradients(lib.StreamObject):
         self.verbose = scf_method.verbose
         self.stdout = scf_method.stdout
         self.mol = scf_method.mol
-        self._scf = scf_method
+        self.base = scf_method
         self.max_memory = self.mol.max_memory
 # This parameter has no effects for HF gradients. Add this attribute so that
 # the kernel function can be reused in the DFT gradients code.
@@ -184,10 +184,10 @@ class Gradients(lib.StreamObject):
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)
         log.info('\n')
-        if not self._scf.converged:
+        if not self.base.converged:
             log.warn('Ground state SCF not converged')
         log.info('******** %s for %s ********',
-                 self.__class__, self._scf.__class__)
+                 self.__class__, self.base.__class__)
         log.info('max_memory %d MB (current use %d MB)',
                  self.max_memory, lib.current_memory()[0])
         return self
@@ -198,7 +198,7 @@ class Gradients(lib.StreamObject):
 
     def hcore_generator(self, mol=None):
         if mol is None: mol = self.mol
-        with_x2c = getattr(self._scf, 'with_x2c', None)
+        with_x2c = getattr(self.base, 'with_x2c', None)
         if with_x2c:
             hcore_deriv = with_x2c.hcore_deriv_generator(deriv=1)
         else:
@@ -223,7 +223,7 @@ class Gradients(lib.StreamObject):
     @lib.with_doc(get_jk.__doc__)
     def get_jk(self, mol=None, dm=None, hermi=0):
         if mol is None: mol = self.mol
-        if dm is None: dm = self._scf.make_rdm1()
+        if dm is None: dm = self.base.make_rdm1()
         cpu0 = (time.clock(), time.time())
         #TODO: direct_scf opt
         vj, vk = get_jk(mol, dm)
@@ -232,27 +232,27 @@ class Gradients(lib.StreamObject):
 
     def get_j(self, mol=None, dm=None, hermi=0):
         if mol is None: mol = self.mol
-        if dm is None: dm = self._scf.make_rdm1()
+        if dm is None: dm = self.base.make_rdm1()
         intor = mol._add_suffix('int2e_ip1')
         return -_vhf.direct_mapdm(intor, 's2kl', 'lk->s1ij', dm, 3,
                                   mol._atm, mol._bas, mol._env)
 
     def get_k(self, mol=None, dm=None, hermi=0):
         if mol is None: mol = self.mol
-        if dm is None: dm = self._scf.make_rdm1()
+        if dm is None: dm = self.base.make_rdm1()
         intor = mol._add_suffix('int2e_ip1')
         return -_vhf.direct_mapdm(intor, 's2kl', 'jk->s1il', dm, 3,
                                   mol._atm, mol._bas, mol._env)
 
     def get_veff(self, mol=None, dm=None):
         if mol is None: mol = self.mol
-        if dm is None: dm = self._scf.make_rdm1()
+        if dm is None: dm = self.base.make_rdm1()
         return get_veff(self, mol, dm)
 
     def make_rdm1e(self, mo_energy=None, mo_coeff=None, mo_occ=None):
-        if mo_energy is None: mo_energy = self._scf.mo_energy
-        if mo_coeff is None: mo_coeff = self._scf.mo_coeff
-        if mo_occ is None: mo_occ = self._scf.mo_occ
+        if mo_energy is None: mo_energy = self.base.mo_energy
+        if mo_coeff is None: mo_coeff = self.base.mo_coeff
+        if mo_occ is None: mo_occ = self.base.mo_occ
         return make_rdm1e(mo_energy, mo_coeff, mo_occ)
 
     grad_elec = grad_elec
@@ -265,9 +265,9 @@ class Gradients(lib.StreamObject):
         return self.kernel(mo_energy, mo_coeff, mo_occ, atmlst)
     def kernel(self, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
         cput0 = (time.clock(), time.time())
-        if mo_energy is None: mo_energy = self._scf.mo_energy
-        if mo_coeff is None: mo_coeff = self._scf.mo_coeff
-        if mo_occ is None: mo_occ = self._scf.mo_occ
+        if mo_energy is None: mo_energy = self.base.mo_energy
+        if mo_coeff is None: mo_coeff = self.base.mo_coeff
+        if mo_occ is None: mo_occ = self.base.mo_occ
         if atmlst is None:
             atmlst = self.atmlst
         else:
@@ -287,7 +287,7 @@ class Gradients(lib.StreamObject):
     def _finalize(self):
         if self.verbose >= logger.NOTE:
             logger.note(self, '--------------- %s gradients ---------------',
-                        self._scf.__class__.__name__)
+                        self.base.__class__.__name__)
             _write(self, self.mol, self.de, self.atmlst)
             logger.note(self, '----------------------------------------------')
 

@@ -34,10 +34,10 @@ def get_veff(ks_grad, mol=None, dm=None):
     '''Coulomb + XC functional
     '''
     if mol is None: mol = ks_grad.mol
-    if dm is None: dm = ks_grad._scf.make_rdm1()
+    if dm is None: dm = ks_grad.base.make_rdm1()
     t0 = (time.clock(), time.time())
 
-    mf = ks_grad._scf
+    mf = ks_grad.base
     ni = mf._numint
     if ks_grad.grids is not None:
         grids = ks_grad.grids

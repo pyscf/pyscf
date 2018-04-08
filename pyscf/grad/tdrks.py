@@ -43,7 +43,7 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
     time0 = time.clock(), time.time()
 
     mol = td_grad.mol
-    mf = td_grad._td._scf
+    mf = td_grad.base._scf
     mo_coeff = mf.mo_coeff
     mo_energy = mf.mo_energy
     mo_occ = mf.mo_occ
@@ -106,7 +106,7 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
         wvo += numpy.einsum('ac,ai->ci', veff0mop[nocc:,nocc:], xpy) * 2
         veff0mom = numpy.zeros((nmo,nmo))
     def fvind(x):
-# Cannot make call to ._td.get_vind because first order orbitals are solved
+# Cannot make call to .base.get_vind because first order orbitals are solved
 # through closed shell ground state CPHF.
         dm = reduce(numpy.dot, (orbv, x.reshape(nvir,nocc), orbo.T))
         dm = dm + dm.T
@@ -224,7 +224,7 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
 def _contract_xc_kernel(td_grad, xc_code, xai, oovv=None, with_vxc=True,
                         with_kxc=True, singlet=True, max_memory=2000):
     mol = td_grad.mol
-    mf = td_grad._scf
+    mf = td_grad.base._scf
     grids = mf.grids
 
     ni = mf._numint

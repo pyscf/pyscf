@@ -36,7 +36,7 @@ from pyscf.scf import cphf
 def kernel(tdgrad, z, atmlst=None, mf_grad=None, max_memory=2000,
            verbose=logger.INFO):
     mol = tdgrad.mol
-    mf = tdgrad._td._scf
+    mf = tdgrad.base._scf
     mo_coeff = mf.mo_coeff
     mo_energy = mf.mo_energy
     mo_occ = mf.mo_occ
@@ -125,13 +125,13 @@ class Gradients(object):
         self.stdout = td.stdout
         self.mol = td.mol
         self.chkfile = td.chkfile
-        self._td = td
+        self.base = td
 
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)
         log.info('\n')
         log.info('******** LR %s gradients for %s ********',
-                 self._td.__class__, self._td._scf.__class__)
+                 self.base.__class__, self.base._scf.__class__)
         log.info('\n')
 
     def kernel(self, z):

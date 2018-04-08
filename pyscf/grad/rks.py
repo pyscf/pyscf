@@ -34,10 +34,10 @@ def get_veff(ks_grad, mol=None, dm=None):
     '''Coulomb + XC functional
     '''
     if mol is None: mol = ks_grad.mol
-    if dm is None: dm = ks_grad._scf.make_rdm1()
+    if dm is None: dm = ks_grad.base.make_rdm1()
     t0 = (time.clock(), time.time())
 
-    mf = ks_grad._scf
+    mf = ks_grad.base
     ni = mf._numint
     if ks_grad.grids is not None:
         grids = ks_grad.grids
@@ -339,10 +339,10 @@ class Gradients(rhf_grad.Gradients):
     def dump_flags(self):
         rhf_grad.Gradients.dump_flags(self)
         logger.info(self, 'grid_response = %s', self.grid_response)
-        #if callable(self._scf.grids.prune):
+        #if callable(self.base.grids.prune):
         #    logger.info(self, 'Grid pruning %s may affect DFT gradients accuracy.'
         #                'Call mf.grids.run(prune=False) to mute grid pruning',
-        #                self._scf.grids.prune)
+        #                self.base.grids.prune)
         return self
 
     get_veff = get_veff
