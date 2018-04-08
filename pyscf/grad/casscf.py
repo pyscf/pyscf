@@ -196,12 +196,16 @@ class Gradients(lib.StreamObject):
             self.dump_flags()
 
         self.de = kernel(self._mc, mo_coeff, ci, atmlst, mf_grad, log)
-        if self.verbose >= logger.NOTE:
-            log.note('--------------- CASSCF gradients ----------------')
-            rhf_grad._write(self, self.mol, self.de, atmlst)
-            log.note('-------------------------------------------------')
-            log.timer('CASSCF gradients', *cput0)
+        log.timer('CASSCF gradients', *cput0)
+        self._finalize()
         return self.de
+
+    def _finalize(self):
+        if self.verbose >= logger.NOTE:
+            logger.note(self, '--------------- %s gradients ---------------',
+                        self._mc.__class__.__name__)
+            rhf_grad._write(self, self.mol, self.de, self.atmlst)
+            logger.note(self, '----------------------------------------------')
 
     as_scanner = as_scanner
 

@@ -57,7 +57,7 @@ def ddcosmo_for_scf(mf, pcmobj=None):
         pcmobj = DDCOSMO(mf.mol)
     cosmo_solver = pcmobj.as_solver()
 
-    class SCFWithSolvent(oldMF):
+    class SCFWithSolvent(oldMF, _Solvent):
         def __init__(self, solvent):
             self._solvent = solvent
 
@@ -83,9 +83,17 @@ def ddcosmo_for_scf(mf, pcmobj=None):
             logger.info(self._solvent, '  E_diel = %.15g', vhf.epcm)
             return e_tot, e_coul
 
+        def nuc_grad_method(self):
+            from pyscf.solvent import ddcosmo_grad
+            grad_method = oldMF.nuc_grad_method(self)
+            return ddcosmo_grad.ddcosmo_grad(grad_method, self._solvent)
+
     mf1 = SCFWithSolvent(pcmobj)
     mf1.__dict__.update(mf.__dict__)
     return mf1
+
+class _Solvent:
+    pass
 
 
 # TODO: Testing the value of psi (make_psi_vmat).  All intermediates except

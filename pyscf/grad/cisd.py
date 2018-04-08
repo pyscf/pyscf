@@ -99,12 +99,15 @@ class Gradients(lib.StreamObject):
             self.atmlst = atmlst
 
         self.de = _kern(self._ci, civec, eris, atmlst, mf_grad, log)
-        if self.verbose >= logger.NOTE:
-            log.note('--------------- %s gradients ---------------',
-                     self.__class__.__name__)
-            rhf_grad._write(self, self.mol, self.de, atmlst)
-            log.note('----------------------------------------------')
+        self._finalize()
         return self.de
+
+    def _finalize(self):
+        if self.verbose >= logger.NOTE:
+            logger.note(self, '--------------- %s gradients ---------------',
+                        self._ci.__class__.__name__)
+            rhf_grad._write(self, self.mol, self.de, self.atmlst)
+            logger.note(self, '----------------------------------------------')
 
     as_scanner = as_scanner
 

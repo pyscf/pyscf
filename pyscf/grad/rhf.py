@@ -280,12 +280,16 @@ class Gradients(lib.StreamObject):
 
         de = self.grad_elec(mo_energy, mo_coeff, mo_occ, atmlst)
         self.de = de + self.grad_nuc(atmlst=atmlst)
-        if self.verbose >= logger.NOTE:
-            logger.note(self, '--------------- SCF gradients ----------------')
-            _write(self, self.mol, self.de, atmlst)
-            logger.note(self, '----------------------------------------------')
-            logger.timer(self, 'SCF gradients', *cput0)
+        logger.timer(self, 'SCF gradients', *cput0)
+        self._finalize()
         return self.de
+
+    def _finalize(self):
+        if self.verbose >= logger.NOTE:
+            logger.note(self, '--------------- %s gradients ---------------',
+                        self._scf.__class__.__name__)
+            _write(self, self.mol, self.de, self.atmlst)
+            logger.note(self, '----------------------------------------------')
 
     as_scanner = as_scanner
 
