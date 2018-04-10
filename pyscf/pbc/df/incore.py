@@ -131,6 +131,7 @@ def aux_e2(cell, auxcell, intor='int3c2e', aosym='s1', comp=None,
 
 def wrap_int3c(cell, auxcell, intor='int3c2e', aosym='s1', comp=1,
                kptij_lst=numpy.zeros((1,2,3)), cintopt=None, pbcopt=None):
+    intor = cell._add_suffix(intor)
     pcell = copy.copy(cell)
     pcell._atm, pcell._bas, pcell._env = \
     atm, bas, env = gto.conc_env(cell._atm, cell._bas, cell._env,
