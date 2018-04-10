@@ -171,6 +171,98 @@ class DMRGCI(lib.StreamObject):
 
         self._keys = set(self.__dict__.keys())
 
+        
+    def get_es(self, mol, mc, mo_dmrgscf, mocas, aolst):
+        '''
+For a multireference calculation, return the static and dynamic
+correlation for each state.  For non-DMRG fcisolvers, also return
+the local spin and wavefunction coefficients for each state.
+
+Input:
+self:  mc.fcisolver
+mol:  the molecule inputted
+mc:  mcscf.CASCI
+mo_dmrgscf:  molecular orbital (MO) coefficients for the CI calculation
+mocas:  the MO coefficients for the active orbitals in the CI calculation
+aolst:  list of the atomic orbital indices used for computing local spin 
+        '''
+        from pyscf import fci, scf
+        from pyscf.mrpt import NEVPT
+        ela = (len(mocas[1]) + mol.spin)/2
+        elb = (len(mocas[1]) - mol.spin)/2
+        mc.casci(mo_dmrgscf)
+        if mc.fcisolver.nroots != 1:
+            e_s = []
+            if hasattr (mc.fcisolver,'maxM'):
+                ss = None
+                for i in range(mc.fcisolver.nroots):
+                    e_s.append(mc.e_tot[i] + NEVPT(mc, root=i).compress_approx(maxM=mc.fcisolver.maxM).kernel())
+            else:
+                ss = []
+                for i in range(mc.fcisolver.nroots):
+                    e_s.append(mc.e_tot[i] + NEVPT(mc,root=i).kernel())
+                    ss.append(fci.spin_op.local_spin(mc.ci[i],mc.ncas,(ela,elb),mocas,scf.RHF(mol).get_ovlp(),aolst))
+                    print('State %d string alpha, string beta, CI coefficients'%i)
+                    for c,ia,ib in fci.addons.large_ci(mc.ci[i], mc.ncas, (ela,elb), tol=.05):
+                        print('  %9s    %9s    %.12f' % (ia, ib, c))
+        else:
+            if hasattr (mc.fcisolver,'maxM'):
+                ss = None
+                e_s = mc.e_tot + NEVPT(mc).compress_approx(maxM=mc.fcisolver.maxM).kernel()
+            else:
+                ss = fci.spin_op.local_spin(mc.ci,mc.ncas,(ela,elb),mocas,scf.RHF(mol).get_ovlp(),aolst)
+                e_s = mc.e_tot + NEVPT(mc).kernel()
+                print('string alpha, string beta, CI coefficients')
+                for c,ia,ib in fci.addons.large_ci(mc.ci, mc.ncas, (ela,elb), tol=.05):
+                    print('  %9s    %9s    %.12f' % (ia, ib, c))
+        return mc, e_s, ss
+
+     def get_excited(self, mol, mc, e_gs, e_s, ci, spin_gs):
+        '''
+From a completed DMRGCI or CASCI calculation, compute the properties
+of any excited state(s).  This function returns excitation energies for
+all spin states along with one-/two-particle transition density 
+matrices and transition dipole moments for all excited states with 
+the same spin multiplicity as the ground state (spin-allowed
+transitions).
+
+Input:
+self:  mc.fcisolver
+mol:  the molecule inputted
+mc:  mcscf.CASCI
+e_gs:  computed ground-state energy
+e_s:  computed total energies of all relevant states
+ci:  computed ground-state wavefunction
+spin_gs:  number of unpaired ground-state electrons.
+        '''
+        orbcas=mc.mo_coeff[:,mc.ncore:mc.ncore+mc.ncas]
+        mol.set_common_orig_((0,0,0))
+        dip_ints = mol.intor('cint1e_r_sph',comp=3)
+        e_excite = []
+        t_dm2 = []
+        t_dm1 = []
+        dip = []
+        counter = 0
+        if mol.spin == spin_gs:
+            i = 1
+        else:
+            i = 0
+        if mc.fcisolver.nroots != 1:
+            while i < mc.fcisolver.nroots:
+                e_excite.append(e_s[i]-e_gs)
+                if mol.spin == spin_gs:
+                    t_density = mc.fcisolver.trans_rdm12(ci, mc.ci[i], mc.ncas, mc.nelecas)
+                    t_dm2.append(t_density[1])
+                    t_dm1.append(t_density[0])
+                    t_dm1_ao=reduce(np.dot,(orbcas,t_dm1[counter],orbcas.T))
+                    dip.append(np.einsum('xij,ji->x',dip_ints,t_dm1_ao))
+                i += 1
+                counter += 1
+        else:
+            e_excite.append(e_s-e_gs)
+        return e_excite, t_dm2, t_dm1, dip
+       
+        
 
     @property
     def threads(self):
