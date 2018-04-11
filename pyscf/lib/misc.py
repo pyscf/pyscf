@@ -711,13 +711,16 @@ class call_in_background(object):
             afun1(a, b)
             do_something_else()
     '''
-    def __init__(self, *fns):
+
+    def __init__(self, *fns, **kwargs):
         self.fns = fns
         self.handler = None
+        if 'sync' in kwargs.keys():
+            self.sync = kwargs['sync']
+        else:
+            self.sync = False
 
-    if ((not getattr(__config__, 'ASYNC_IO', True)) or
-        # h5py-2.2.* has bug in threading mode.
-        h5py.version.version[:4] == '2.2.'):
+    if not getattr(__config__, 'ASYNC_IO', True) or h5py.version.version[:4] == '2.2.': # h5py-2.2.* has bug in threading mode
         # Disable back-ground mode
         def __enter__(self):
             if len(self.fns) == 1:
@@ -727,7 +730,10 @@ class call_in_background(object):
     else:
 
         def __enter__(self):
-            if imp.lock_held():
+            if self.sync:
+                def def_async_fn(fn):
+                    return fn
+            elif imp.lock_held():
 # Some modules like nosetests, coverage etc
 #   python -m unittest test_xxx.py  or  nosetests test_xxx.py
 # hang when Python multi-threading was used in the import stage due to (Python

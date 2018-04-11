@@ -7,6 +7,7 @@
 Different number of OpenMP threads may lead to slightly different answers
 '''
 
+from functools import reduce
 import numpy
 from pyscf import gto, lo, fci, ao2mo, scf, lib
 

@@ -16,6 +16,8 @@
 import unittest
 import numpy
 import copy
+from functools import reduce
+
 from pyscf import gto, scf, lib, symm
 from pyscf import cc
 from pyscf.cc import uccsd_t

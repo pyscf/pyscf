@@ -99,6 +99,7 @@ class SHCI(pyscf.lib.StreamObject):
         davidsonTol: double
         epsilon2: double
         epsilon2Large: double
+        targetError: double
         sampleN: int
         epsilon1: vector<double>
         onlyperturbative: bool
@@ -161,7 +162,8 @@ class SHCI(pyscf.lib.StreamObject):
         # Standard SHCI Input parameters
         self.davidsonTol = 5.e-5
         self.epsilon2 = 1.e-7
-        self.epsilon2Large = 1000
+        self.epsilon2Large = 1000.
+        self.targetError = 1.e-4
         self.sampleN = 200
         self.epsilon1 = None
         self.onlyperturbative = False
@@ -551,9 +553,9 @@ def writeSHCIConfFile( SHCI, nelec, Restart ):
              if (i != len(SHCI.initialStates)-1):
                 f.write('\n')
        elif SHCI.irrep_nelec is None:
-          for i in range(nelec[0]):
+          for i in range(int(nelec[0])):
              f.write('%i '%(2*i))
-          for i in range(nelec[1]):
+          for i in range(int(nelec[1])):
              f.write('%i '%(2*i+1))
        else:
           from pyscf import symm
@@ -610,6 +612,8 @@ def writeSHCIConfFile( SHCI, nelec, Restart ):
        f.write( 'nPTiter %d\n' %SHCI.nPTiter )
 
     f.write( 'epsilon2 %g\n' %SHCI.epsilon2 )
+    f.write( 'epsilon2Large %g\n' %SHCI.epsilon2Large )
+    f.write( 'targetError %g\n' %SHCI.targetError )
     f.write( 'sampleN %i\n' %SHCI.sampleN )
 
     # Miscellaneous Keywords

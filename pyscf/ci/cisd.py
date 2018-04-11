@@ -457,6 +457,7 @@ class CISD(lib.StreamObject):
     lindep = getattr(__config__, 'ci_cisd_CISD_lindep', 1e-14)
     level_shift = getattr(__config__, 'ci_cisd_CISD_level_shift', 0)  # in preconditioner
     direct = getattr(__config__, 'ci_cisd_CISD_direct', False)
+    async_io = getattr(__config__, 'ci_cisd_CISD_async_io', True)
 
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
         if 'dft' in str(mf.__module__):

@@ -14,6 +14,8 @@
 # limitations under the License.
 
 import unittest
+from functools import reduce
+
 from pyscf import scf
 from pyscf import gto
 from pyscf.cc import ccsd
