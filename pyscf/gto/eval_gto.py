@@ -16,6 +16,7 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+import warnings
 import ctypes
 import numpy
 from pyscf import lib

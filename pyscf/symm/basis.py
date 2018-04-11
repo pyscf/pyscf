@@ -115,7 +115,7 @@ def dump_symm_adapted_basis(mol, so):
     raise RuntimeError('TODO')
 
 def symmetrize_matrix(mat, so):
-    return [reduce(numpy.dot, (c.T,mat,c)) for c in so]
+    return [reduce(numpy.dot, (c.conj().T,mat,c)) for c in so]
 
 def _basis_offset_for_atoms(atoms, basis_tab):
     basoff = [0]

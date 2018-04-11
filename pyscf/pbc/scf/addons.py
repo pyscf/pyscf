@@ -27,6 +27,9 @@ import scipy.optimize
 from pyscf import lib
 from pyscf.pbc import gto as pbcgto
 from pyscf.lib import logger
+from pyscf import __config__
+
+SMEARING_METHOD = getattr(__config__, 'pbc_scf_addons_smearing_method', 'fermi')
 
 
 def project_mo_nr2nr(cell1, mo1, cell2, kpts=None):
@@ -50,7 +53,7 @@ def project_mo_nr2nr(cell1, mo1, cell2, kpts=None):
                 for k, kpt in enumerate(kpts)]
 
 
-def smearing_(mf, sigma=None, method='fermi'):
+def smearing_(mf, sigma=None, method=SMEARING_METHOD):
     '''Fermi-Dirac or Gaussian smearing'''
     from pyscf.scf import uhf
     from pyscf.pbc.scf import khf
@@ -249,6 +252,12 @@ def convert_to_uhf(mf, out=None):
         if isinstance(mf, (scf.uhf.UHF, scf.kuhf.KUHF)):
             return copy.copy(mf)
         else:
+            unknown_cls = [scf.kghf.KGHF]
+            for i, cls in enumerate(mf.__class__.__mro__):
+                if cls in unknown_cls:
+                    raise NotImplementedError(
+                        "No conversion from %s to uhf object" % cls)
+
             known_cls = {dft.krks.KRKS : dft.kuks.KUKS,
                          scf.khf.KRHF  : scf.kuhf.KUHF,
                          dft.rks.RKS   : dft.uks.UKS  ,
@@ -271,6 +280,12 @@ def convert_to_rhf(mf, out=None):
         if isinstance(mf, (scf.hf.RHF, scf.khf.KRHF)):
             return copy.copy(mf)
         else:
+            unknown_cls = [scf.kghf.KGHF]
+            for i, cls in enumerate(mf.__class__.__mro__):
+                if cls in unknown_cls:
+                    raise NotImplementedError(
+                        "No conversion from %s to rhf object" % cls)
+
             known_cls = {dft.kuks.KUKS : dft.krks.KRKS,
                          scf.kuhf.KUHF : scf.khf.KRHF ,
                          dft.uks.UKS   : dft.rks.RKS  ,
@@ -281,16 +296,11 @@ def convert_to_rhf(mf, out=None):
 
     return mol_addons.convert_to_rhf(mf, out, False)
 
-def convert_to_ghf(mf, out=None, remove_df=False):
+def convert_to_ghf(mf, out=None):
     '''Convert the given mean-field object to the generalized HF/KS object
 
     Args:
         mf : SCF object
-
-    Kwargs
-        remove_df : bool
-            Whether to convert the DF-SCF object to the normal SCF object.
-            This conversion is not applied by default.
 
     Returns:
         An generalized SCF object
@@ -365,6 +375,8 @@ def convert_to_khf(mf, out=None):
     '''
     raise NotImplementedError
 
+del(SMEARING_METHOD)
+
 
 if __name__ == '__main__':
     import pyscf.pbc.scf as pscf
@@ -380,6 +392,6 @@ if __name__ == '__main__':
     cell.build()
     nks = [2,1,1]
     mf = pscf.KUHF(cell, cell.make_kpts(nks))
-    mf = smearing_(mf, .1) # -5.86052594663696 
+    mf = smearing_(mf, .1) # -5.86052594663696
     #mf = smearing_(mf, .1, method='gauss')
     mf.kernel()

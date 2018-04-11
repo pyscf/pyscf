@@ -32,17 +32,24 @@ from pyscf.pbc.df import incore
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point
 from pyscf.pbc.df import aft_jk
 from pyscf.pbc.df import aft_ao2mo
+from pyscf import __config__
 
 
-def estimate_eta(cell, cutoff=1e-12):
+CUTOFF = getattr(__config__, 'pbc_df_aft_estimate_eta_cutoff', 1e-12)
+ETA_MIN = getattr(__config__, 'pbc_df_aft_estimate_eta_min', 0.2)
+PRECISION = getattr(__config__, 'pbc_df_aft_estimate_eta_precision', 1e-8)
+KE_SCALING = getattr(__config__, 'pbc_df_aft_ke_cutoff_scaling', 0.75)
+
+def estimate_eta(cell, cutoff=CUTOFF):
     '''The exponent of the smooth gaussian model density, requiring that at
     boundary, density ~ 4pi rmax^2 exp(-eta/2*rmax^2) ~ 1e-12
     '''
     # r^5 to guarantee at least up to f shell converging at boundary
-    eta = max(numpy.log(4*numpy.pi*cell.rcut**5/cutoff)/cell.rcut**2*2, .2)
+    eta = max(numpy.log(4*numpy.pi*cell.rcut**5/cutoff)/cell.rcut**2*2,
+              ETA_MIN)
     return eta
 
-def estimate_eta_for_ke_cutoff(cell, ke_cutoff, precision=1e-8):
+def estimate_eta_for_ke_cutoff(cell, ke_cutoff, precision=PRECISION):
     b = cell.reciprocal_vectors()
     if cell.dimension == 0:
         w = 1
@@ -56,7 +63,7 @@ def estimate_eta_for_ke_cutoff(cell, ke_cutoff, precision=1e-8):
     eta = ke_cutoff / (2*numpy.log(32*numpy.pi**2*w*ke_cutoff**2/(precision*alpha)))
     return eta
 
-def estimate_ke_cutoff_for_eta(cell, eta, precision=1e-8):
+def estimate_ke_cutoff_for_eta(cell, eta, precision=PRECISION):
     b = cell.reciprocal_vectors()
     if cell.dimension == 0:
         w = 1
@@ -280,7 +287,9 @@ class AFTDF(lib.StreamObject):
             self.eta = max(estimate_eta_for_ke_cutoff(cell, ke_cutoff, cell.precision),
                            estimate_eta(cell, cell.precision))
         self.kpts = kpts
-        self.blockdim = 240 # to mimic molecular DF object
+
+        # to mimic molecular DF object
+        self.blockdim = getattr(__config__, 'pbc_df_df_DF_blockdim', 240)
 
 # Not input options
         self.exxdiv = None  # to mimic KRHF/KUHF object in function get_coulG
@@ -289,7 +298,7 @@ class AFTDF(lib.StreamObject):
     def dump_flags(self):
         logger.info(self, '\n')
         logger.info(self, '******** %s flags ********', self.__class__)
-        logger.info(self, 'mesh = %s', self.mesh)
+        logger.info(self, 'mesh = %s (%d PWs)', self.mesh, numpy.prod(self.mesh))
         logger.info(self, 'eta = %s', self.eta)
         logger.info(self, 'len(kpts) = %d', len(self.kpts))
         logger.debug1(self, '    kpts = %s', self.kpts)
@@ -320,7 +329,7 @@ class AFTDF(lib.StreamObject):
                 ke_cutoff = numpy.min(cell.ke_cutoff)
             ke_guess = estimate_ke_cutoff(cell, cell.precision)
             mesh_guess = tools.cutoff_to_mesh(cell.lattice_vectors(), ke_guess)
-            if ke_cutoff < ke_guess*.7:
+            if ke_cutoff < ke_guess * KE_SCALING:
                 logger.warn(self, 'ke_cutoff/mesh (%g / %s) is not enough for AFTDF '
                             'to get integral accuracy %g.\nCoulomb integral error '
                             'is ~ %.2g Eh.\nRecommended ke_cutoff/mesh are %g / %s.',
@@ -576,6 +585,8 @@ def _fake_nuc(cell):
     fakenuc._env = numpy.asarray(numpy.hstack(_env), dtype=numpy.double)
     fakenuc.rcut = cell.rcut
     return fakenuc
+
+del(CUTOFF, PRECISION)
 
 
 if __name__ == '__main__':

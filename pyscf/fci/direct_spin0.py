@@ -116,7 +116,7 @@ def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=1e-3, tol=1e-10,
                                   davidson_only, pspace_size, ecore=ecore, **kwargs)
     return e, c
 
-# dm_pq = <|p^+ q|>
+# dm[p,q] = <|q^+ p|>
 @lib.with_doc(direct_spin1.make_rdm1.__doc__)
 def make_rdm1(fcivec, norb, nelec, link_index=None):
     rdm1 = rdm.make_rdm1('FCImake_rdm1a', fcivec, fcivec,
@@ -128,7 +128,7 @@ def make_rdm1(fcivec, norb, nelec, link_index=None):
 def make_rdm1s(fcivec, norb, nelec, link_index=None):
     rdm1 = rdm.make_rdm1('FCImake_rdm1a', fcivec, fcivec,
                          norb, nelec, link_index)
-    return (rdm1, rdm1)
+    return rdm1, rdm1
 
 # Chemist notation
 @lib.with_doc(direct_spin1.make_rdm12.__doc__)
@@ -143,7 +143,7 @@ def make_rdm12(fcivec, norb, nelec, link_index=None, reorder=True):
         dm1, dm2 = rdm.reorder_rdm(dm1, dm2, True)
     return dm1, dm2
 
-# dm_pq = <I|p^+ q|J>
+# dm[p,q] = <I|q^+ p|J>
 @lib.with_doc(direct_spin1.trans_rdm1s.__doc__)
 def trans_rdm1s(cibra, ciket, norb, nelec, link_index=None):
     if link_index is None:
@@ -164,7 +164,7 @@ def trans_rdm1(cibra, ciket, norb, nelec, link_index=None):
     rdm1a, rdm1b = trans_rdm1s(cibra, ciket, norb, nelec, link_index)
     return rdm1a + rdm1b
 
-# dm_pq,rs = <I|p^+ q r^+ s|J>
+# dm[p,q,r,s] = <I|p^+ q r^+ s|J>
 @lib.with_doc(direct_spin1.trans_rdm12.__doc__)
 def trans_rdm12(cibra, ciket, norb, nelec, link_index=None, reorder=True):
     dm1, dm2 = rdm.make_rdm12('FCItdm12kern_sf', cibra, ciket,
@@ -347,6 +347,8 @@ class FCISolver(direct_spin1.FCISolver):
                orbsym=None, wfnsym=None, ecore=0, **kwargs):
         if self.verbose >= logger.WARN:
             self.check_sanity()
+        self.norb = norb
+        self.nelec = nelec
         self.eci, self.ci = \
                 kernel_ms0(self, h1e, eri, norb, nelec, ci0, None,
                            tol, lindep, max_cycle, max_space, nroots,

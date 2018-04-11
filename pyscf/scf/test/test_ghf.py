@@ -33,7 +33,7 @@ H     0    0.757    0.587''',
     basis = 'cc-pvdz',
 )
 mf = scf.GHF(mol)
-mf.conv_tol = 1e-14
+mf.conv_tol = 1e-12
 mf.kernel()
 
 molsym = gto.M(
@@ -171,12 +171,12 @@ class KnowValues(unittest.TestCase):
         mo[:,:nocc] = numpy.dot(mo[:,:nocc], u)
         mo[:,nocc:] = numpy.dot(mo[:,nocc:], vh)
         mo_e, mo = mf.canonicalize(mo, mf.mo_occ)
-        self.assertAlmostEqual(numpy.linalg.norm(mo_e-mf.mo_energy), 0, 8)
+        self.assertAlmostEqual(abs(mo_e-mf.mo_energy).max(), 0, 7)
 
     def test_get_occ(self):
         mfsym.irrep_nelec['B1'] = 1
         occ = mfsym.get_occ(mf.mo_energy, mf.mo_coeff+0j)
-        self.assertAlmostEqual(lib.finger(occ), 1.3371797424932739, 9)
+        self.assertAlmostEqual(lib.finger(occ), 0.49368251542877073, 9)
         mfsym.irrep_nelec['A2'] = 5
         occ = mfsym.get_occ(mf.mo_energy, mf.mo_coeff)
         self.assertAlmostEqual(lib.finger(occ), -1.3108338866693456, 9)

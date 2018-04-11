@@ -18,6 +18,7 @@
 
 import pyscf.symm
 
+# To Molpro symmetry ID
 IRREP_MAP = {'D2h': (1,         # Ag
                      4,         # B1g
                      6,         # B2g
@@ -72,6 +73,7 @@ def convert_orbsym(gpname, orbsym):
         orbsym = [IRREP_MAP[gpname][i] for i in orbsym]
     return orbsym
 
+# LZSYM for Dice code
 UNDEF = 0
 LZSYM_MAP = (
  1    ,  # 0  A1g

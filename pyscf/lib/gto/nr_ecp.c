@@ -32,7 +32,7 @@
 #define SIM_ZERO        1e-50
 #define EXPCUTOFF       39   // 1e-17
 #define CUTOFF          460  // ~ 1e200
-#define CLOSE_ENOUGH(x, y)      (fabs(x-y) < 1e-10*fabs(y) || fabs(x-y) < 1e-10)
+#define CLOSE_ENOUGH(x, y)      (fabs(x-y) < 1e-12*fabs(y) || fabs(x-y) < 1e-12)
 #define SQUARE(r)       (r[0]*r[0]+r[1]*r[1]+r[2]*r[2])
 #define CART_CUM        (455+1) // upto l = 12
 #define K_TAYLOR_MAX    7
@@ -5398,7 +5398,7 @@ int ECPtype2_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         } }
 
         for (i = 0; i < d2; i++) {
-                if (CLOSE_ENOUGH(plast[i],prad[i])) {
+                if (!CLOSE_ENOUGH(plast[i],prad[i])) {
                         converged[ijl] = 0;
                         all_conv = 0;
                         break;
@@ -5616,7 +5616,7 @@ int ECPtype1_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
                                                ai[ip]+aj[jp], ur, rs+start, nrs, step);
                                 converged[ip*npj+jp] = 1;
                                 for (i = 0; i < d2; i++) {
-                                        if (CLOSE_ENOUGH(plast[i],prad[i])) {
+                                        if (!CLOSE_ENOUGH(plast[i],prad[i])) {
                                                 converged[ip*npj+jp] = 0;
                                                 all_conv = 0;
                                                 break;

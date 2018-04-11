@@ -18,7 +18,7 @@ import numpy
 import tempfile
 from pyscf import lib, gto
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_save_load_mol(self):
         mol = gto.M(atom=[['H', (0,0,i)] for i in range(8)],
                     basis='sto3g')

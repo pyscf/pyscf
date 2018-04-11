@@ -16,6 +16,7 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+import warnings
 import ctypes
 import numpy
 import scipy.linalg
@@ -34,13 +35,14 @@ except (ImportError, OSError):
         libxc = xc
 
 from pyscf.dft.gen_grid import make_mask, BLKSIZE
+from pyscf import __config__
 
 libdft = lib.load_library('libdft')
-OCCDROP = 1e-12
+OCCDROP = getattr(__config__, 'dft_numint_OCCDROP', 1e-12)
 # The system size above which to consider the sparsity of the density matrix.
 # If the number of AOs in the system is less than this value, all tensors are
 # treated as dense quantities and contracted by dgemm directly.
-SWITCH_SIZE = 800
+SWITCH_SIZE = getattr(__config__, 'dft_numint_SWITCH_SIZE', 800)
 
 def eval_ao(mol, coords, deriv=0, shls_slice=None,
             non0tab=None, out=None, verbose=None):
@@ -437,6 +439,7 @@ def eval_mat(mol, ao, weight, rho, vxc,
                              dtype=numpy.uint8)
     shls_slice = (0, mol.nbas)
     ao_loc = mol.ao_loc_nr()
+    transpose_for_uks = False
     if xctype == 'LDA' or xctype == 'HF':
         if not isinstance(vxc, numpy.ndarray) or vxc.ndim == 2:
             vrho = vxc[0]
@@ -461,8 +464,18 @@ def eval_mat(mol, ao, weight, rho, vxc,
         else:
             rho_a, rho_b = rho
             wv[0]  = weight * vrho * .5
-            wv[1:4] = rho_a[1:4] * (weight * vsigma[0] * 2)  # sigma_uu
-            wv[1:4]+= rho_b[1:4] * (weight * vsigma[1])      # sigma_ud
+            try:
+                wv[1:4] = rho_a[1:4] * (weight * vsigma[0] * 2)  # sigma_uu
+                wv[1:4]+= rho_b[1:4] * (weight * vsigma[1])      # sigma_ud
+            except ValueError:
+                warnings.warn('Note the output of libxc.eval_xc cannot be '
+                              'directly used in eval_mat.\nvsigma from eval_xc '
+                              'should be restructured as '
+                              '(vsigma[:,0],vsigma[:,1])\n')
+                transpose_for_uks = True
+                vsigma = vsigma.T
+                wv[1:4] = rho_a[1:4] * (weight * vsigma[0] * 2)  # sigma_uu
+                wv[1:4]+= rho_b[1:4] * (weight * vsigma[1])      # sigma_ud
         aow = numpy.empty_like(ao[0])
         aow = numpy.einsum('npi,np->pi', ao[:4], wv, out=aow)
         mat = _dot_ao_ao(mol, ao[0], aow, non0tab, shls_slice, ao_loc)
@@ -476,6 +489,8 @@ def eval_mat(mol, ao, weight, rho, vxc,
             vlapl = 0
         else:
             if spin != 0:
+                if transpose_for_uks:
+                    vlapl = vlapl.T
                 vlapl = vlapl[0]
             XX, YY, ZZ = 4, 7, 9
             ao2 = ao[XX] + ao[YY] + ao[ZZ]
@@ -483,6 +498,8 @@ def eval_mat(mol, ao, weight, rho, vxc,
             mat += _dot_ao_ao(mol, ao[0], aow, non0tab, shls_slice, ao_loc)
 
         if spin != 0:
+            if transpose_for_uks:
+                vtau = vtau.T
             vtau = vtau[0]
         wv = weight * (.25*vtau + vlapl)
         aow = numpy.einsum('pi,p->pi', ao[1], wv, out=aow)
@@ -1264,9 +1281,7 @@ def nr_uks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
 
     if ((xctype == 'LDA' and fxc is None) or
         (xctype == 'GGA' and rho0 is None)):
-        dm0a, dm0b = _format_uks_dm(dm0)
-        make_rho0a = ni._gen_rho_evaluator(mol, dm0a, 1)[0]
-        make_rho0b = ni._gen_rho_evaluator(mol, dm0b, 1)[0]
+        make_rho0 = ni._gen_rho_evaluator(mol, _format_uks_dm(dm0), 1)[0]
 
     shls_slice = (0, mol.nbas)
     ao_loc = mol.ao_loc_nr()
@@ -1281,8 +1296,8 @@ def nr_uks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
             ngrid = weight.size
             aow = numpy.ndarray(ao.shape, order='F', buffer=aow)
             if fxc is None:
-                rho0a = make_rho0a(0, ao, mask, xctype)
-                rho0b = make_rho0b(0, ao, mask, xctype)
+                rho0a = make_rho0(0, ao, mask, xctype)
+                rho0b = make_rho0(1, ao, mask, xctype)
                 fxc0 = ni.eval_xc(xc_code, (rho0a,rho0b), 1, relativity, 2, verbose)[2]
                 u_u, u_d, d_d = fxc0[0].T
             else:
@@ -1309,8 +1324,8 @@ def nr_uks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
             ngrid = weight.size
             aow = numpy.ndarray(ao[0].shape, order='F', buffer=aow)
             if rho0 is None:
-                rho0a = make_rho0a(0, ao, mask, xctype)
-                rho0b = make_rho0b(0, ao, mask, xctype)
+                rho0a = make_rho0(0, ao, mask, xctype)
+                rho0b = make_rho0(1, ao, mask, xctype)
             else:
                 rho0a = rho0[0][:,ip:ip+ngrid]
                 rho0b = rho0[1][:,ip:ip+ngrid]
@@ -1542,7 +1557,7 @@ class _NumInt(object):
         '''
         if grids.coords is None:
             grids.build(with_non0tab=True)
-        ngrids = grids.weights.size
+        ngrids = grids.coords.shape[0]
         comp = (deriv+1)*(deriv+2)*(deriv+3)//6
 # NOTE to index grids.non0tab, the blksize needs to be the integer multiplier of BLKSIZE
         if blksize is None:
@@ -1608,7 +1623,16 @@ class _NumInt(object):
         return self.libxc.xc_type(xc_code)
 
     def rsh_and_hybrid_coeff(self, xc_code, spin=0):
-        '''Range-separated parameter and HF exchange components
+        '''Range-separated parameter and HF exchange components: omega, alpha, beta
+
+        Exc_RSH = c_SR * SR_HFX + c_LR * LR_HFX + (1-c_SR) * Ex_SR + (1-c_LR) * Ex_LR + Ec
+                = alpha * HFX + beta * SR_HFX + (1-c_SR) * Ex_SR + (1-c_LR) * Ex_LR + Ec
+                = alpha * LR_HFX + hyb * SR_HFX + (1-c_SR) * Ex_SR + (1-c_LR) * Ex_LR + Ec
+
+        SR_HFX = < pi | e^{-omega r_{12}}/r_{12} | iq >
+        LR_HFX = < pi | (1-e^{-omega r_{12}})/r_{12} | iq >
+        alpha = c_LR
+        beta = c_SR - c_LR
         '''
         omega, alpha, beta = self.rsh_coeff(xc_code)
         if abs(omega) > 1e-10:

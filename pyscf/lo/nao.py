@@ -32,27 +32,37 @@ from pyscf.gto import mole
 from pyscf.lo import orth
 from pyscf.lib import logger
 from pyscf.data import elements
+from pyscf import __config__
 
 # Note the valence space for Li, Be may need include 2p, Al..Cl may need 3d ...
 # This is No. of shells, not the atomic configuations
 #     core       core+valence
 # core+valence = lambda nuc, l: \
 #            int(numpy.ceil(elements.CONFIGURATION[nuc][l]/(4*l+2.)))
-AOSHELL = list(zip(elements.N_CORE_SHELLS,
-                   elements.N_CORE_VALENCE_SHELLS))
+AOSHELL = getattr(__config__, 'lo_nao_AOSHELL', None)
+if AOSHELL is None:
+    AOSHELL = list(zip(elements.N_CORE_SHELLS,
+                       elements.N_CORE_VALENCE_SHELLS))
 
 def prenao(mol, dm):
     if not (isinstance(dm, numpy.ndarray) and dm.ndim == 2):
         # UHF or ROHF
         dm = dm[0] + dm[1]
 
-    s = mol.intor_symmetric('int1e_ovlp')
+    if hasattr(mol, 'pbc_intor'):  # whether mol object is a cell
+        s = mol.pbc_intor('int1e_ovlp', hermi=1)
+    else:
+        s = mol.intor_symmetric('int1e_ovlp')
+
     p = reduce(numpy.dot, (s, dm, s))
     return _prenao_sub(mol, p, s)[1]
 
 def nao(mol, mf, s=None, restore=True):
     if s is None:
-        s = mol.intor_symmetric('int1e_ovlp')
+        if hasattr(mol, 'pbc_intor'):  # whether mol object is a cell
+            s = mol.pbc_intor('int1e_ovlp', hermi=1)
+        else:
+            s = mol.intor_symmetric('int1e_ovlp')
 
     dm = mf.make_rdm1()
     if isinstance(mf, (scf.uhf.UHF, scf.rohf.ROHF)):
@@ -106,7 +116,11 @@ def _prenao_sub(mol, p, s):
 
 def _nao_sub(mol, pre_occ, pre_nao, s=None):
     if s is None:
-        s = mol.intor_symmetric('int1e_ovlp')
+        if hasattr(mol, 'pbc_intor'):  # whether mol object is a cell
+            s = mol.pbc_intor('int1e_ovlp', hermi=1)
+        else:
+            s = mol.intor_symmetric('int1e_ovlp')
+
     core_lst, val_lst, rydbg_lst = _core_val_ryd_list(mol)
     nbf = mol.nao_nr()
     pre_nao = pre_nao.astype(s.dtype)

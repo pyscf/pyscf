@@ -29,6 +29,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.soscf import ciah
 from pyscf.lo import orth
+from pyscf import __config__
 
 
 def kernel(localizer, mo_coeff=None, callback=None, verbose=None):
@@ -120,23 +121,28 @@ def atomic_init_guess(mol, mo_coeff):
     return lib.dot(vh, u.T)
 
 class Boys(ciah.CIAHOptimizer):
+
+    conv_tol = getattr(__config__, 'lo_boys_Boys_conv_tol', 1e-6)
+    conv_tol_grad = getattr(__config__, 'lo_boys_Boys_conv_tol_grad', None)
+    max_cycle = getattr(__config__, 'lo_boys_Boys_max_cycle', 100)
+    max_iters = getattr(__config__, 'lo_boys_Boys_max_iters', 20)
+    max_stepsize = getattr(__config__, 'lo_boys_Boys_max_stepsize', .05)
+    ah_trust_region = getattr(__config__, 'lo_boys_Boys_ah_trust_region', 3)
+    ah_start_tol = getattr(__config__, 'lo_boys_Boys_ah_start_tol', 1e9)
+    ah_max_cycle = getattr(__config__, 'lo_boys_Boys_ah_max_cycle', 40)
+    init_guess = getattr(__config__, 'lo_boys_Boys_init_guess', 'atomic')
+
     def __init__(self, mol, mo_coeff=None):
         ciah.CIAHOptimizer.__init__(self)
         self.mol = mol
         self.stdout = mol.stdout
         self.verbose = mol.verbose
-        self.conv_tol = 1e-6
-        self.conv_tol_grad = None
-        self.max_cycle = 100
-        self.max_iters = 20
-        self.max_stepsize = .05
-        self.ah_trust_region = 3
-        self.ah_start_tol = 1e9
-        self.ah_max_cycle = 40
-        self.init_guess = 'atomic'
+        self.mo_coeff = mo_coeff
 
-        self.mo_coeff = numpy.asarray(mo_coeff, order='C')
-        self._keys = set(self.__dict__.keys())
+        keys = set(('conv_tol', 'conv_tol_grad', 'max_cycle', 'max_iters',
+                    'max_stepsize', 'ah_trust_region', 'ah_start_tol',
+                    'ah_max_cycle', 'init_guess'))
+        self._keys = set(self.__dict__.keys()).union(keys)
 
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)
@@ -254,7 +260,7 @@ class Boys(ciah.CIAHOptimizer):
 
     kernel = kernel
 
-BF = Boys
+FB = BF = Boys
 
 
 if __name__ == '__main__':

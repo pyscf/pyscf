@@ -23,9 +23,15 @@ from pyscf import gto
 from pyscf.lib import logger
 from pyscf.scf import hf
 from pyscf.scf import chkfile
+from pyscf import __config__
+
+WITH_META_LOWDIN = getattr(__config__, 'scf_analyze_with_meta_lowdin', True)
+PRE_ORTH_METHOD = getattr(__config__, 'scf_analyze_pre_orth_method', 'ANO')
+BREAKSYM = getattr(__config__, 'scf_uhf_init_guess_breaksym', True)
+MO_BASE = getattr(__config__, 'MO_BASE', 1)
 
 
-def init_guess_by_minao(mol, breaksym=True):
+def init_guess_by_minao(mol, breaksym=BREAKSYM):
     '''Generate initial guess density matrix based on ANO basis, then project
     the density matrix to the basis set defined by ``mol``
 
@@ -41,10 +47,10 @@ def init_guess_by_minao(mol, breaksym=True):
             dmb[p0:p1,p0:p1] = dma[p0:p1,p0:p1]
     return numpy.array((dma,dmb))
 
-def init_guess_by_1e(mol, breaksym=True):
+def init_guess_by_1e(mol, breaksym=BREAKSYM):
     return UHF(mol).init_guess_by_1e(mol, breaksym)
 
-def init_guess_by_atom(mol, breaksym=True):
+def init_guess_by_atom(mol, breaksym=BREAKSYM):
     dm = hf.init_guess_by_atom(mol)
     dma = dmb = dm*.5
     if breaksym:
@@ -300,12 +306,12 @@ def energy_elec(mf, dm=None, h1e=None, vhf=None):
         vhf = mf.get_veff(mf.mol, dm)
     e1 = numpy.einsum('ij,ij', h1e.conj(), dm[0]+dm[1])
     e_coul =(numpy.einsum('ij,ji', vhf[0], dm[0]) +
-             numpy.einsum('ij,ji', vhf[1], dm[1])) * .5
+             numpy.einsum('ij,ji', vhf[1], dm[1])).real * .5
     return e1+e_coul, e_coul
 
 # mo_a and mo_b are occupied orbitals
 def spin_square(mo, s=1):
-    r'''Spin of the given UHF orbitals
+    r'''Spin square and multiplicity of UHF determinant
 
     .. math::
 
@@ -407,11 +413,12 @@ def spin_square(mo, s=1):
     s = reduce(numpy.dot, (mo_a.T.conj(), s, mo_b))
     ssxy = (nocc_a+nocc_b) * .5 - numpy.einsum('ij,ij->', s.conj(), s)
     ssz = (nocc_b-nocc_a)**2 * .25
-    ss = ssxy + ssz
+    ss = (ssxy + ssz).real
     s = numpy.sqrt(ss+.25) - .5
     return ss, s*2+1
 
-def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=True, **kwargs):
+def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
+            **kwargs):
     '''Analyze the given SCF object:  print orbital energies, occupancies;
     print orbital coefficients; Mulliken population analysis; Dipole moment
     '''
@@ -426,7 +433,7 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=True, **kwargs):
         log.note('                             alpha | beta                alpha | beta')
         for i in range(mo_occ.shape[1]):
             log.note('MO #%-3d energy= %-18.15g | %-18.15g occ= %g | %g',
-                     i+1, mo_energy[0][i], mo_energy[1][i],
+                     i+MO_BASE, mo_energy[0][i], mo_energy[1][i],
                      mo_occ[0][i], mo_occ[1][i])
 
     ovlp_ao = mf.get_ovlp()
@@ -436,16 +443,18 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=True, **kwargs):
             log.debug(' ** MO coefficients (expansion on meta-Lowdin AOs) for alpha spin **')
             orth_coeff = orth.orth_ao(mf.mol, 'meta_lowdin', s=ovlp_ao)
             c_inv = numpy.dot(orth_coeff.T, ovlp_ao)
-            dump_mat.dump_rec(mf.stdout, c_inv.dot(mo_coeff[0]), label, start=1,
-                              **kwargs)
+            dump_mat.dump_rec(mf.stdout, c_inv.dot(mo_coeff[0]), label,
+                              start=MO_BASE, **kwargs)
             log.debug(' ** MO coefficients (expansion on meta-Lowdin AOs) for beta spin **')
-            dump_mat.dump_rec(mf.stdout, c_inv.dot(mo_coeff[1]), label, start=1,
-                              **kwargs)
+            dump_mat.dump_rec(mf.stdout, c_inv.dot(mo_coeff[1]), label,
+                              start=MO_BASE, **kwargs)
         else:
             log.debug(' ** MO coefficients (expansion on AOs) for alpha spin **')
-            dump_mat.dump_rec(mf.stdout, mo_coeff[0], label, start=1, **kwargs)
+            dump_mat.dump_rec(mf.stdout, mo_coeff[0], label,
+                              start=MO_BASE, **kwargs)
             log.debug(' ** MO coefficients (expansion on AOs) for beta spin **')
-            dump_mat.dump_rec(mf.stdout, mo_coeff[1], label, start=1, **kwargs)
+            dump_mat.dump_rec(mf.stdout, mo_coeff[1], label,
+                              start=MO_BASE, **kwargs)
 
     dm = mf.make_rdm1(mo_coeff, mo_occ)
     if with_meta_lowdin:
@@ -470,11 +479,11 @@ def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
     pop_b = numpy.einsum('ij,ji->i', dm[1], s).real
     label = mol.ao_labels(fmt=None)
 
-    log.note(' ** Mulliken pop       alpha | beta **')
+    log.info(' ** Mulliken pop       alpha | beta **')
     for i, s in enumerate(label):
-        log.note('pop of  %s %10.5f | %-10.5f',
+        log.info('pop of  %s %10.5f | %-10.5f',
                  '%d%s %s%4s'%s, pop_a[i], pop_b[i])
-    log.note('In total          %10.5f | %-10.5f', sum(pop_a), sum(pop_b))
+    log.info('In total          %10.5f | %-10.5f', sum(pop_a), sum(pop_b))
 
     log.note(' ** Mulliken atomic charges  **')
     chg = numpy.zeros(mol.natm)
@@ -486,8 +495,8 @@ def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
         log.note('charge of  %d%s =   %10.5f', ia, symb, chg[ia])
     return (pop_a,pop_b), chg
 
-def mulliken_meta(mol, dm_ao, verbose=logger.DEBUG, pre_orth_method='ANO',
-                  s=None):
+def mulliken_meta(mol, dm_ao, verbose=logger.DEBUG,
+                  pre_orth_method=PRE_ORTH_METHOD, s=None):
     '''Mulliken population analysis, based on meta-Lowdin AOs.
     '''
     from pyscf.lo import orth
@@ -618,31 +627,7 @@ def make_asym_dm(mo1, mo2, occ1, occ2, x):
     dm_b = reduce(numpy.dot, (mo1_b, x[1], mo2_b.T.conj()))
     return numpy.array((dm_a, dm_b))
 
-def dip_moment(mol, dm, unit_symbol='Debye', verbose=logger.NOTE):
-    r''' Dipole moment calculation
-
-    .. math::
-
-        \mu_x = -\sum_{\mu}\sum_{\nu} P_{\mu\nu}(\nu|x|\mu) + \sum_A Q_A X_A\\
-        \mu_y = -\sum_{\mu}\sum_{\nu} P_{\mu\nu}(\nu|y|\mu) + \sum_A Q_A Y_A\\
-        \mu_z = -\sum_{\mu}\sum_{\nu} P_{\mu\nu}(\nu|z|\mu) + \sum_A Q_A Z_A
-
-    where :math:`\mu_x, \mu_y, \mu_z` are the x, y and z components of dipole
-    moment
-
-    Args:
-         mol: an instance of :class:`Mole`
-
-         dm : a list of 2D ndarrays
-              a list of density matrices
-
-    Return:
-        A list: the dipole moment on x, y and z component
-    '''
-    if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
-        return hf.dip_moment(mol, dm, unit_symbol, verbose)
-    else:
-        return hf.dip_moment(mol, dm[0]+dm[1], unit_symbol, verbose)
+dip_moment = hf.dip_moment
 
 class UHF(hf.SCF):
     __doc__ = hf.SCF.__doc__ + '''
@@ -709,7 +694,7 @@ class UHF(hf.SCF):
 
     energy_elec = energy_elec
 
-    def init_guess_by_minao(self, mol=None, breaksym=True):
+    def init_guess_by_minao(self, mol=None, breaksym=BREAKSYM):
         '''Initial guess in terms of the overlap to minimal basis.'''
         if mol is None: mol = self.mol
         if mol.spin != 0:
@@ -717,14 +702,14 @@ class UHF(hf.SCF):
             breaksym = False
         return init_guess_by_minao(mol, breaksym)
 
-    def init_guess_by_atom(self, mol=None, breaksym=True):
+    def init_guess_by_atom(self, mol=None, breaksym=BREAKSYM):
         if mol is None: mol = self.mol
         if mol.spin != 0:
 # For spin polarized system, there is no need to manually break spin symmetry
             breaksym = False
         return init_guess_by_atom(mol, breaksym)
 
-    def init_guess_by_1e(self, mol=None, breaksym=True):
+    def init_guess_by_1e(self, mol=None, breaksym=BREAKSYM):
         if mol is None: mol = self.mol
         logger.info(self, 'Initial guess from hcore.')
         h1e = self.get_hcore(mol)
@@ -777,7 +762,8 @@ class UHF(hf.SCF):
             vhf += numpy.asarray(vhf_last)
         return vhf
 
-    def analyze(self, verbose=None, with_meta_lowdin=True, **kwargs):
+    def analyze(self, verbose=None, with_meta_lowdin=WITH_META_LOWDIN,
+                **kwargs):
         if verbose is None: verbose = self.verbose
         return analyze(self, verbose, with_meta_lowdin, **kwargs)
 
@@ -788,7 +774,7 @@ class UHF(hf.SCF):
         return mulliken_pop(mol, dm, s=s, verbose=verbose)
 
     def mulliken_meta(self, mol=None, dm=None, verbose=logger.DEBUG,
-                      pre_orth_method='ANO', s=None):
+                      pre_orth_method=PRE_ORTH_METHOD, s=None):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         if s is None: s = self.get_ovlp(mol)
@@ -815,13 +801,6 @@ class UHF(hf.SCF):
     def make_asym_dm(self, mo1, mo2, occ1, occ2, x):
         return make_asym_dm(mo1, mo2, occ1, occ2, x)
 
-    @lib.with_doc(dip_moment.__doc__)
-    def dip_moment(self, mol=None, dm=None, unit_symbol=None, verbose=logger.NOTE):
-        if mol is None: mol = self.mol
-        if dm is None: dm =self.make_rdm1()
-        if unit_symbol is None: unit_symbol='Debye'
-        return dip_moment(mol, dm, unit_symbol, verbose=verbose)
-
     def _finalize(self):
         ss, s = self.spin_square()
 
@@ -835,7 +814,10 @@ class UHF(hf.SCF):
                         self.e_tot, self.max_cycle, ss, s)
         return self
 
-    def stability(self, internal=True, external=False, verbose=None):
+    def stability(self,
+                  internal=getattr(__config__, 'scf_stability_internal', True),
+                  external=getattr(__config__, 'scf_stability_external', False),
+                  verbose=None):
         '''
         Stability analysis for RHF/RKS method.
 
@@ -879,3 +861,5 @@ class HF1e(UHF):
 
     def spin_square(self, mo_coeff=None, s=None):
         return .75, 2
+
+del(WITH_META_LOWDIN, PRE_ORTH_METHOD, BREAKSYM)

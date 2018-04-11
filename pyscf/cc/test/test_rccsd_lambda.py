@@ -154,7 +154,7 @@ class KnownValues(unittest.TestCase):
         nmo = mf.mo_coeff.shape[1]
         eri = ao2mo.restore(1, ao2mo.kernel(mf._eri, mf.mo_coeff), nmo)
         e1 = numpy.einsum('ij,ji', h1, dm1)
-        e1+= numpy.einsum('ijkl,jilk', eri, dm2) * .5
+        e1+= numpy.einsum('ijkl,ijkl', eri, dm2) * .5
         e1+= mol.energy_nuc()
         self.assertAlmostEqual(e1, mycc.e_tot, 7)
 
@@ -242,12 +242,12 @@ class KnownValues(unittest.TestCase):
             +numpy.einsum('pkkq->pq', eri0[:nocc,:nocc,:nocc,:nocc]).trace())
         self.assertAlmostEqual(e2, -794721.197459942, 8)
         self.assertAlmostEqual(numpy.einsum('pqrs,pqrs', dm2, eri0)*.5 +
-                               numpy.einsum('pq,pq', dm1, h1), e2, 9)
+                               numpy.einsum('pq,qp', dm1, h1), e2, 9)
 
         self.assertAlmostEqual(abs(dm2-dm2.transpose(1,0,3,2)).max(), 0, 9)
         self.assertAlmostEqual(abs(dm2-dm2.transpose(2,3,0,1)).max(), 0, 9)
 
-        d1 = numpy.einsum('kkpq->pq', dm2) / 9
+        d1 = numpy.einsum('kkpq->qp', dm2) / 9
         self.assertAlmostEqual(abs(d1-dm1).max(), 0, 9)
 
 

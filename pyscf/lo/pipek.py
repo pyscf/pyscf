@@ -29,6 +29,8 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.lo import orth
 from pyscf.lo import boys
+from pyscf import __config__
+
 
 def atomic_pops(mol, mo_coeff, method='meta_lowdin'):
     '''
@@ -36,9 +38,8 @@ def atomic_pops(mol, mo_coeff, method='meta_lowdin'):
         method : string
             one of mulliken, lowdin, meta_lowdin
     '''
-    from pyscf.pbc import gto as pbcgto
-    if isinstance(mol, pbcgto.Cell):
-        s = mol.pbc_intor('int1e_ovlp_sph')
+    if hasattr(mol, 'pbc_intor'):  # whether mol object is a cell
+        s = mol.pbc_intor('int1e_ovlp_sph', hermi=1)
     else:
         s = mol.intor_symmetric('int1e_ovlp')
     nmo = mo_coeff.shape[1]
@@ -61,11 +62,13 @@ def atomic_pops(mol, mo_coeff, method='meta_lowdin'):
 
 
 class PipekMezey(boys.Boys):
+
+    pop_method = getattr(__config__, 'lo_pipek_PM_pop_method', 'meta_lowdin')
+    conv_tol = getattr(__config__, 'lo_pipek_PM_conv_tol', 1e-6)
+    exponent = getattr(__config__, 'lo_pipek_PM_exponent', 2)  # should be 2 or 4
+
     def __init__(self, mol, mo_coeff=None):
         boys.Boys.__init__(self, mol, mo_coeff)
-        self.pop_method = 'meta_lowdin'
-        self.conv_tol = 1e-6
-        self.exponent = 2  # should be 2 or 4
         self._keys = self._keys.union(['pop_method', 'exponent'])
 
     def dump_flags(self):

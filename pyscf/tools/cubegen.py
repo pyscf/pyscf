@@ -42,8 +42,13 @@ import time
 import pyscf
 from pyscf import lib
 from pyscf.dft import numint
+from pyscf import __config__
 
-def density(mol, outfile, dm, nx=80, ny=80, nz=80):
+RESOLUTION = getattr(__config__, 'cubegen_resolution', None)
+BOX_MARGIN = getattr(__config__, 'cubegen_box_margin', 3.0)
+
+
+def density(mol, outfile, dm, nx=80, ny=80, nz=80, resolution=RESOLUTION):
     """Calculates electron density and write out in cube format.
 
     Args:
@@ -66,7 +71,7 @@ def density(mol, outfile, dm, nx=80, ny=80, nz=80):
             Number of grid point divisions in z direction.
     """
 
-    cc = Cube(mol, nx=nx, ny=ny, nz=nz)
+    cc = Cube(mol, nx, ny, nz, resolution)
 
     # Compute density on the .cube grid
     coords = cc.get_coords()
@@ -81,7 +86,7 @@ def density(mol, outfile, dm, nx=80, ny=80, nz=80):
     # Write out density to the .cube file
     cc.write(rho, outfile, comment='Electron density in real space (e/Bohr^3)')
 
-def orbital(mol, outfile, coeff, nx=80, ny=80, nz=80):
+def orbital(mol, outfile, coeff, nx=80, ny=80, nz=80, resolution=RESOLUTION):
     """Calculate orbital value on real space grid and write out in cube format.
 
     Args:
@@ -103,7 +108,7 @@ def orbital(mol, outfile, coeff, nx=80, ny=80, nz=80):
         nz : int
             Number of grid point divisions in z direction.
     """
-    cc = Cube(mol, nx=nx, ny=ny, nz=nz)
+    cc = Cube(mol, nx, ny, nz, resolution)
 
     # Compute density on the .cube grid
     coords = cc.get_coords()
@@ -119,7 +124,7 @@ def orbital(mol, outfile, coeff, nx=80, ny=80, nz=80):
     cc.write(orb_on_grid, outfile, comment='Orbital value in real space (1/Bohr^3)')
 
 
-def mep(mol, outfile, dm, nx=80, ny=80, nz=80):
+def mep(mol, outfile, dm, nx=80, ny=80, nz=80, resolution=RESOLUTION):
     """Calculates the molecular electrostatic potential (MEP) and write out in
     cube format.
 
@@ -142,7 +147,7 @@ def mep(mol, outfile, dm, nx=80, ny=80, nz=80):
         nz : int
             Number of grid point divisions in z direction.
     """
-    cc = Cube(mol, nx=nx, ny=ny, nz=nz)
+    cc = Cube(mol, nx, ny, nz, resolution)
 
     coords = cc.get_coords()
 
@@ -169,16 +174,20 @@ def mep(mol, outfile, dm, nx=80, ny=80, nz=80):
     cc.write(MEP, outfile, 'Molecular electrostatic potential in real space')
 
 
-class Cube():
+class Cube(object):
     '''  Read-write of the Gaussian CUBE files  '''
-    def __init__(self, mol, nx=80, ny=80, nz=80):
+    def __init__(self, mol, nx=80, ny=80, nz=80, resolution=RESOLUTION,
+                 margin=BOX_MARGIN):
+        self.mol = mol
+        coord = mol.atom_coords()
+        self.box = numpy.max(coord,axis=0) - numpy.min(coord,axis=0) + margin*2
+        self.boxorig = numpy.min(coord,axis=0) - margin
+        if resolution is not None:
+            nx, ny, nz = numpy.ceil(self.box / resolution).astype(int)
+
         self.nx = nx
         self.ny = ny
         self.nz = nz
-        self.mol = mol
-        coord = mol.atom_coords()
-        self.box = numpy.max(coord,axis=0) - numpy.min(coord,axis=0) + 6.0
-        self.boxorig = numpy.min(coord,axis=0) - 3.0
         # .../(nx-1) to get symmetric mesh
         # see also the discussion on https://github.com/sunqm/pyscf/issues/154
         self.xs = numpy.arange(nx) * (self.box[0] / (nx - 1))
@@ -226,6 +235,9 @@ class Cube():
                     for iz0, iz1 in lib.prange(0, self.nz, 6):
                         fmt = '%13.5E' * (iz1-iz0) + '\n'
                         f.write(fmt % tuple(field[ix,iy,iz0:iz1].tolist()))
+
+del(RESOLUTION, BOX_MARGIN)
+
 
 if __name__ == '__main__':
     from pyscf import gto, scf

@@ -521,8 +521,8 @@ def hybrid_coeff(xc_code, spin=0):
     '''
     hyb, fn_facs = parse_xc(xc_code)
     for xid, fac in fn_facs:
-        hyb += _itrf.LIBXC_hybrid_coeff(ctypes.c_int(xid))
-    return hyb
+        hyb[0] += _itrf.LIBXC_hybrid_coeff(ctypes.c_int(xid))
+    return hyb[0]
 
 def nlc_coeff(xc_code):
     '''Get NLC coefficients
@@ -537,14 +537,28 @@ def nlc_coeff(xc_code):
     return nlc_pars
 
 def rsh_coeff(xc_code):
-    '''Get RSH coefficients
+    '''Range-separated parameter and HF exchange components: omega, alpha, beta
+
+    Exc_RSH = c_SR * SR_HFX + c_LR * LR_HFX + (1-c_SR) * Ex_SR + (1-c_LR) * Ex_LR + Ec
+            = alpha * HFX + beta * SR_HFX + (1-c_SR) * Ex_SR + (1-c_LR) * Ex_LR + Ec
+            = alpha * LR_HFX + hyb * SR_HFX + (1-c_SR) * Ex_SR + (1-c_LR) * Ex_LR + Ec
+
+    SR_HFX = < pi | e^{-omega r_{12}}/r_{12} | iq >
+    LR_HFX = < pi | (1-e^{-omega r_{12}})/r_{12} | iq >
+    alpha = c_LR
+    beta = c_SR - c_LR
     '''
     hyb, fn_facs = parse_xc(xc_code)
-    rsh_pars = [0, 0, 0]
+    hyb, alpha, omega = hyb
+    beta = hyb - alpha
+    rsh_pars = [omega, alpha, beta]
     rsh_tmp = (ctypes.c_double*3)()
     for xid, fac in fn_facs:
         _itrf.LIBXC_rsh_coeff(xid, rsh_tmp)
-        rsh_pars[0] += rsh_tmp[0]
+        if rsh_pars[0] == 0:
+            rsh_pars[0] = rsh_tmp[0]
+        elif rsh_pars[0] != rsh_tmp[0]:
+            raise ValueError('Different values of omega found for RSH functionals')
         rsh_pars[1] += rsh_tmp[1]
         rsh_pars[2] += rsh_tmp[2]
     return rsh_pars
@@ -556,7 +570,7 @@ def parse_xc_name(xc_name='LDA,VWN'):
     return fn_facs[0][0], fn_facs[1][0]
 
 def parse_xc(description):
-    '''Rules to input functional description:
+    r'''Rules to input functional description:
 
     * The given functional description must be a one-line string.
     * The functional description is case-insensitive.
@@ -564,7 +578,7 @@ def parse_xc(description):
       first part describes the exchange functional, the second is the correlation
       functional.
 
-      - If "," not presented in string, the entire string is treated as
+      - If "," was not appeared in string, the entire string is considered as
         X functional.
       - To neglect X functional (just apply C functional), leave blank in the
         first part, eg description=',vwn' for pure VWN functional
@@ -573,15 +587,19 @@ def parse_xc(description):
         in front of comma) or the C part (the string behind comma), both X and C
         functionals of the compound XC functional will be used.
 
-    * The functional name can be placed in arbitrary order.  Two names needs to
-      be separated by operators + or -.  Blank spaces are ignored.
-      NOTE the parser only reads operators + - *.  / is not supported.
+    * The functional name can be placed in arbitrary order.  Two name needs to
+      be separated by operators "+" or "-".  Blank spaces are ignored.
+      NOTE the parser only reads operators "+" "-" "*".  / is not in support.
     * A functional name is associated with one factor.  If the factor is not
       given, it is assumed equaling 1.  Compound functional can be scaled as a
       unit. For example '0.5*b3lyp' is equivalent to
       'HF*0.1 + .04*LDA + .36*B88, .405*LYP + .095*VWN'
-    * String "HF" stands for exact exchange (HF K matrix).  It is allowed to
-      put "HF" in C (correlation) functional part.
+    * String "HF" stands for exact exchange (HF K matrix).  Putting "HF" in
+      correlation functional part is the same to putting "HF" in exchange
+      part.
+    * String "RSH" means range-separated operator. Its format is
+      RSH(alpha; beta; omega).  Another way to input RSH is "SR-HF(0.1)" and
+      "LR-HF(0.1)".  The number in parenthesis is the value of omega.
     * Be careful with the libxc convention on GGA functional, in which the LDA
       contribution is included.
 
@@ -654,13 +672,17 @@ def parse_xc(description):
 
         see also libxc_itrf.c
     '''
-
+    hyb = [0, 0, 0]  # hybrid, alpha, omega
     if isinstance(description, int):
-        return 0, [(description, 1.)]
+        return hyb, [(description, 1.)]
     elif not isinstance(description, str): #isinstance(description, (tuple,list)):
         return parse_xc('%s,%s' % tuple(description))
 
-    hyb = [0]
+    def assign_omega(omega):
+        if hyb[2] == 0:
+            hyb[2] = omega
+        elif hyb[2] != omega:
+            raise ValueError('Different values of omega found for RSH functionals')
     fn_facs = []
     def parse_token(token, possible_xc_for):
         if token:
@@ -671,8 +693,24 @@ def parse_xc(description):
                 fac = float(fac)
             else:
                 fac, key = 1, token
-            if key == 'HF':
+            if key[:3] == 'RSH':
+# RSH(alpha; beta; omega): Range-separated-hybrid functional
+                alpha, beta, omega = [float(x) for x in key[4:-1].split(';')]
+                hyb[0] += alpha + beta
+                hyb[1] += alpha
+                assign_omega(omega)
+            elif key == 'HF':
                 hyb[0] += fac
+            elif 'SR_HF' in key:
+                hyb[0] += fac
+                if '(' in key:
+                    omega = float(key.split('(')[1].split(')')[0])
+                    assign_omega(omega)
+            elif 'LR_HF' in key:
+                hyb[1] += fac  # alpha
+                if '(' in key:
+                    omega = float(key.split('(')[1].split(')')[0])
+                    assign_omega(omega)
             elif key.isdigit():
                 fn_facs.append((int(key), fac))
             else:
@@ -693,8 +731,10 @@ def parse_xc(description):
                         raise KeyError('Unknown key %s' % key)
                 if isinstance(x_id, str):
                     hyb1, fn_facs1 = parse_xc(x_id)
-# Recursively scale the composed functional, to support '0.5*b3lyp'
-                    hyb[0] += hyb1 * fac
+# Recursively scale the composed functional, to support e.g. '0.5*b3lyp'
+                    hyb[0] += hyb1[0] * fac
+                    hyb[1] += hyb1[1] * fac
+                    assign_omega(hyb1[2])
                     fn_facs.extend([(xid, c*fac) for xid, c in fn_facs1])
                 elif x_id is None:
                     raise NotImplementedError(key)
@@ -728,6 +768,11 @@ def parse_xc(description):
                 n += 1
         return list(zip(fn_ids, facs))
 
+    if '-' in description:  # To handle e.g. M06-L
+        for key in _NAME_WITH_DASH:
+            if key in description:
+                description = description.replace(key, _NAME_WITH_DASH[key])
+
     if ',' in description:
         x_code, c_code = description.replace(' ','').upper().split(',')
         for token in x_code.replace('-', '+-').split('+'):
@@ -742,7 +787,22 @@ def parse_xc(description):
         except KeyError:
             for token in x_code.replace('-', '+-').split('+'):
                 parse_token(token, possible_x_k_for)
-    return hyb[0], remove_dup(fn_facs)
+    return hyb, remove_dup(fn_facs)
+
+_NAME_WITH_DASH = {'SR-HF'  : 'SR_HF',
+                   'LR-HF'  : 'LR_HF',
+                   'OTPSS-D': 'OTPSS_D',
+                   'M06-L'  : 'M06_L',
+                   'M05-2X' : 'M05_2X',
+                   'M06-HF' : 'M06_HF',
+                   'M06-2X' : 'M06_2X',
+                   'M08-HX' : 'M08_HX',
+                   'M08-SO' : 'M08_SO',
+                   'M11-L'  : 'M11_L',
+                   'MN12-L' : 'MN12_L',
+                   'B97M-V' : 'B97M_V',
+                   'MN15-L' : 'MN15_L',
+                   'MN12-SX': 'MN12_SX'}
 
 
 def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, verbose=None):

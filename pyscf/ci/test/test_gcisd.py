@@ -268,11 +268,11 @@ class KnownValues(unittest.TestCase):
         h1e = reduce(numpy.dot, (mo.T, mf.get_hcore(), mo))
         h1e[eris.orbspin[:,None]!=eris.orbspin] = 0
         e2 = (numpy.einsum('ij,ji', h1e, rdm1) +
-              numpy.einsum('ijkl,jilk', eri, rdm2) * .5)
+              numpy.einsum('ijkl,ijkl', eri, rdm2) * .5)
         e2 += mol.energy_nuc()
         self.assertAlmostEqual(myci.e_tot, e2, 9)
 
-        dm1 = numpy.einsum('ijkk->ij', rdm2)/(mol.nelectron-1)
+        dm1 = numpy.einsum('ijkk->ji', rdm2)/(mol.nelectron-1)
         self.assertAlmostEqual(abs(rdm1 - dm1).max(), 0, 9)
 
     def test_rdm_real(self):
@@ -309,7 +309,7 @@ class KnownValues(unittest.TestCase):
         eri = ao2mo.restore(1, eri, nmo)
         h1 = reduce(numpy.dot, (mf.mo_coeff.T.conj(), hcore, mf.mo_coeff))
         e1 = numpy.einsum('ij,ji', h1, dm1)
-        e1+= numpy.einsum('ijkl,jilk', eri, dm2) * .5
+        e1+= numpy.einsum('ijkl,ijkl', eri, dm2) * .5
         self.assertAlmostEqual(e1, myci.e_tot, 7)
 
         self.assertAlmostEqual(abs(dm2-dm2.transpose(1,0,3,2).conj()).max(), 0, 9)
@@ -362,7 +362,7 @@ class KnownValues(unittest.TestCase):
         dm2 = myci.make_rdm2()
 
         e1 = numpy.einsum('ij,ji', hcore, dm1)
-        e1+= numpy.einsum('ijkl,jilk', eri, dm2) * .5
+        e1+= numpy.einsum('ijkl,ijkl', eri, dm2) * .5
         self.assertAlmostEqual(e1, myci.e_tot, 7)
 
         self.assertAlmostEqual(abs(dm2-dm2.transpose(1,0,3,2).conj()).max(), 0, 9)
@@ -408,7 +408,7 @@ class KnownValues(unittest.TestCase):
         h1 = reduce(numpy.dot, (mo_a.T.conj(), hcore, mo_a))
         h1+= reduce(numpy.dot, (mo_b.T.conj(), hcore, mo_b))
         e1 = numpy.einsum('ij,ji', h1, dm1)
-        e1+= numpy.einsum('ijkl,jilk', eri, dm2) * .5
+        e1+= numpy.einsum('ijkl,ijkl', eri, dm2) * .5
         e1+= mol.energy_nuc()
         self.assertAlmostEqual(e1, mygci.e_tot, 7)
 
@@ -478,7 +478,7 @@ class KnownValues(unittest.TestCase):
         h1 = reduce(numpy.dot, (mo_a.T.conj(), hcore, mo_a))
         h1+= reduce(numpy.dot, (mo_b.T.conj(), hcore, mo_b))
         e1 = numpy.einsum('ij,ji', h1, dm1)
-        e1+= numpy.einsum('ijkl,jilk', eri, dm2) * .5
+        e1+= numpy.einsum('ijkl,ijkl', eri, dm2) * .5
         e1+= mol.energy_nuc()
         self.assertAlmostEqual(e1, mygci.e_tot, 7)
 

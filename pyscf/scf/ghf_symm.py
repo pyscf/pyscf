@@ -29,6 +29,9 @@ from pyscf.lib import logger
 from pyscf.scf import hf_symm
 from pyscf.scf import ghf
 from pyscf.scf import chkfile
+from pyscf import __config__
+
+MO_BASE = getattr(__config__, 'MO_BASE', 1)
 
 
 def analyze(mf, verbose=logger.DEBUG, **kwargs):
@@ -60,7 +63,8 @@ def analyze(mf, verbose=logger.DEBUG, **kwargs):
             else:
                 irorbcnt[j] = 1
             log.note('MO #%d (%s #%d), energy= %.15g occ= %g',
-                     k+1, irname_full[j], irorbcnt[j], mo_energy[k], mo_occ[k])
+                     k+MO_BASE, irname_full[j], irorbcnt[j], mo_energy[k],
+                     mo_occ[k])
 
     dm = mf.make_rdm1(mo_coeff, mo_occ)
     return mf.mulliken_meta(mol, dm, s=ovlp_ao, verbose=log)
@@ -182,7 +186,7 @@ class GHF(ghf.GHF):
             ir_idx = numpy.where(orbsym == ir)[0]
             if irname in self.irrep_nelec:
                 n = self.irrep_nelec[irname]
-                occ_sort = numpy.argsort(mo_energy[ir_idx].round(9))
+                occ_sort = numpy.argsort(mo_energy[ir_idx].round(9), kind='mergesort')
                 occ_idx  = ir_idx[occ_sort[:n]]
                 mo_occ[occ_idx] = 1
                 nelec_fix += n
@@ -191,7 +195,7 @@ class GHF(ghf.GHF):
         assert(nelec_float >= 0)
         if nelec_float > 0:
             rest_idx = numpy.where(rest_idx)[0]
-            occ_sort = numpy.argsort(mo_energy[rest_idx].round(9))
+            occ_sort = numpy.argsort(mo_energy[rest_idx].round(9), kind='mergesort')
             occ_idx  = rest_idx[occ_sort[:nelec_float]]
             mo_occ[occ_idx] = 1
 
@@ -224,8 +228,10 @@ class GHF(ghf.GHF):
     def _finalize(self):
         ghf.GHF._finalize(self)
 
-        o_sort = numpy.argsort(self.mo_energy[self.mo_occ> 0].round(9))
-        v_sort = numpy.argsort(self.mo_energy[self.mo_occ==0].round(9))
+        # Using mergesort because it is stable. We don't want to change the
+        # ordering of the symmetry labels when two orbitals are degenerated.
+        o_sort = numpy.argsort(self.mo_energy[self.mo_occ> 0].round(9), kind='mergesort')
+        v_sort = numpy.argsort(self.mo_energy[self.mo_occ==0].round(9), kind='mergesort')
         orbsym = get_orbsym(self.mol, self.mo_coeff)
         self.mo_energy = numpy.hstack((self.mo_energy[self.mo_occ> 0][o_sort],
                                        self.mo_energy[self.mo_occ==0][v_sort]))

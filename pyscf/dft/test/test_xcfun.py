@@ -43,19 +43,19 @@ def finger(a):
 class KnownValues(unittest.TestCase):
     def test_parse_xc(self):
         hyb, fn_facs = dft.xcfun.parse_xc('.5*HF+.5*B3LYP,VWN*.5')
-        self.assertAlmostEqual(hyb, .6, 12)
+        self.assertAlmostEqual(hyb[0], .6, 12)
         self.assertEqual([x[0] for x in fn_facs], [0,6,16,3])
         self.assertTrue(numpy.allclose([x[1] for x in fn_facs],
                                        (0.04, 0.36, 0.405, 0.595)))
         hyb, fn_facs = dft.xcfun.parse_xc('HF,')
-        self.assertEqual(hyb, 1)
+        self.assertEqual(hyb[0], 1)
         self.assertEqual(fn_facs, [])
 
         hyb, fn_facs = dft.xcfun.parse_xc('0.5*B3LYP+0.5*B3LYP')
-        self.assertAlmostEqual(hyb, .2, 12)
+        self.assertAlmostEqual(hyb[0], .2, 12)
 
         hyb, fn_facs = dft.xcfun.parse_xc('M05')
-        self.assertAlmostEqual(hyb, 0.28, 9)
+        self.assertAlmostEqual(hyb[0], 0.28, 9)
 
         hyb, fn_facs = dft.xcfun.parse_xc('TF')
         ref = [(0, 1), (3, 1)]

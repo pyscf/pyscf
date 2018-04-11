@@ -28,6 +28,7 @@ from pyscf.scf import dhf
 from pyscf.dft import rks
 from pyscf.dft import gen_grid
 from pyscf.dft import r_numint
+from pyscf import __config__
 
 
 def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
@@ -123,7 +124,11 @@ class UKS(dhf.UHF):
         dhf.UHF.__init__(self, mol)
         self.xc = 'LDA,VWN'
         self.grids = gen_grid.Grids(self.mol)
-        self.small_rho_cutoff = 1e-7  # Use rho to filter grids
+        self.grids.level = getattr(__config__, 'dft_rks_RKS_grids_level',
+                                   self.grids.level)
+        # Use rho to filter grids
+        self.small_rho_cutoff = getattr(__config__, 'dft_rks_RKS_small_rho_cutoff',
+                                        1e-7)
 ##################################################
 # don't modify the following attributes, they are not input options
         self._numint = r_numint._RNumInt()

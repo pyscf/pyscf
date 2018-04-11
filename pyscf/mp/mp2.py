@@ -27,8 +27,12 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf import ao2mo
 from pyscf.ao2mo import _ao2mo
+from pyscf import __config__
 
-def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=True,
+WITH_T2 = getattr(__config__, 'mp_mp2_with_t2', True)
+
+
+def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2,
            verbose=logger.NOTE):
     if mo_energy is None or mo_coeff is None:
         mo_coeff = None
@@ -62,9 +66,12 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=True,
     return emp2.real, t2
 
 def make_rdm1_ao(mp, mo_energy=None, mo_coeff=None, eris=None, verbose=logger.NOTE):
-    '''1-particle density matrix in AO basis.  The occupied-virtual orbital
-    response is not included.  This function uses small amount of memory.  The
-    MP2 t2 amplitudes are generated on the fly using the given eris object.
+    '''Spin-traced one-particle density matrix in the AO basis representation.
+    The occupied-virtual orbital response is not included.  This function uses
+    small amount of memory.  The MP2 t2 amplitudes are generated at the runtime
+    using the given eris object.
+
+    See also :func:`pyscf.mp.mp2.make_rdm1`
     '''
     if mo_energy is None or mo_coeff is None:
         mo_coeff = None
@@ -81,8 +88,14 @@ def make_rdm1_ao(mp, mo_energy=None, mo_coeff=None, eris=None, verbose=logger.NO
     return rdm1
 
 def make_rdm1(mp, t2=None, eris=None, verbose=logger.NOTE):
-    '''1-particle density matrix in MO basis.  The off-diagonal blocks due to
-    the orbital response contribution are not included.
+    '''Spin-traced one-particle density matrix in the AO basis representation.
+    The occupied-virtual orbital response is not included.
+
+    dm1[p,q] = <q_alpha^\dagger p_alpha> + <q_beta^\dagger p_beta>
+
+    The convention of 1-pdm is based on McWeeney's book, Eq (5.4.20).
+    The contraction between 1-particle Hamiltonian and rdm1 is
+    E = einsum('pq,qp', h1, rdm1)
     '''
     from pyscf.cc import ccsd_rdm
     doo, dvv = _gamma1_intermediates(mp, t2, eris)
@@ -123,7 +136,14 @@ def _gamma1_intermediates(mp, t2=None, eris=None):
 
 
 def make_rdm2(mp, t2=None, eris=None, verbose=logger.NOTE):
-    '''2-RDM in MO basis'''
+    r'''
+    Spin-traced two-particle density matrix in MO basis
+
+    dm2[p,q,r,s] = \sum_{sigma,tau} <p_sigma^\dagger r_tau^\dagger s_tau q_sigma>
+
+    Note the contraction between ERIs (in Chemist's notation) and rdm2 is
+    E = einsum('pqrs,pqrs', eri, rdm2)
+    '''
     if t2 is None: t2 = mp.t2
     nmo = nmo0 = mp.nmo
     nocc = nocc0 = mp.nocc
@@ -175,7 +195,12 @@ def make_rdm2(mp, t2=None, eris=None, verbose=logger.NOTE):
         for j in range(nocc0):
             dm2[i,i,j,j] += 4
             dm2[i,j,j,i] -= 2
-    return dm2
+
+    # dm2 was computed as dm2[p,q,r,s] = < p^\dagger r^\dagger s q > in the
+    # above. Transposing it so that it be contracted with ERIs (in Chemist's
+    # notation):
+    #   E = einsum('pqrs,pqrs', eri, rdm2)
+    return dm2.transpose(1,0,3,2)
 
 
 def get_nocc(mp):
@@ -189,10 +214,14 @@ def get_nocc(mp):
         nocc = numpy.count_nonzero(mp.mo_occ > 0) - mp.frozen
         assert(nocc > 0)
         return nocc
-    else:
+    elif isinstance(mp.frozen[0], (int, numpy.integer)):
         occ_idx = mp.mo_occ > 0
         occ_idx[list(mp.frozen)] = False
-        return numpy.count_nonzero(occ_idx)
+        nocc = numpy.count_nonzero(occ_idx)
+        assert(nocc > 0)
+        return nocc
+    else:
+        raise NotImplementedError
 
 def get_nmo(mp):
     if mp._nmo is not None:
@@ -201,12 +230,14 @@ def get_nmo(mp):
         return len(mp.mo_occ)
     elif isinstance(mp.frozen, (int, numpy.integer)):
         return len(mp.mo_occ) - mp.frozen
+    elif isinstance(mp.frozen[0], (int, numpy.integer)):
+        return len(mp.mo_occ) - len(set(mp.frozen))
     else:
-        return len(mp.mo_occ) - len(mp.frozen)
+        raise NotImplementedError
 
 def get_frozen_mask(mp):
     '''Get boolean mask for the restricted reference orbitals.
-    
+
     In the returned boolean (mask) array of frozen orbital indices, the
     element is False if it corresonds to the frozen orbital.
     '''
@@ -219,6 +250,8 @@ def get_frozen_mask(mp):
         moidx[:mp.frozen] = False
     elif len(mp.frozen) > 0:
         moidx[list(mp.frozen)] = False
+    else:
+        raise NotImplementedError
     return moidx
 
 
@@ -322,7 +355,7 @@ class MP2(lib.StreamObject):
     def e_tot(self):
         return self.e_corr + self._scf.e_tot
 
-    def kernel(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=True,
+    def kernel(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2,
                _kern=kernel):
         '''
         Args:
@@ -522,6 +555,9 @@ def _ao2mo_ovov(mp, orbo, orbv, feri, max_memory=2000, verbose=None):
 
     time0 = log.timer('mp2 ao2mo_ovov pass2', *time0)
     return h5dat
+
+del(WITH_T2)
+
 
 if __name__ == '__main__':
     from pyscf import scf

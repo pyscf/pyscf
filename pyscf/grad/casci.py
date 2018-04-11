@@ -29,7 +29,7 @@ import numpy
 from pyscf import lib
 from pyscf import ao2mo
 from pyscf.lib import logger
-from pyscf.scf import rhf_grad
+from pyscf.grad import rhf as rhf_grad
 from pyscf.grad.mp2 import _shell_prange
 from pyscf.scf import cphf
 
@@ -206,23 +206,23 @@ def as_scanner(mcscf_grad):
     class CASCI_GradScanner(mcscf_grad.__class__, lib.GradScanner):
         def __init__(self, g):
             self.__dict__.update(g.__dict__)
-            self._mc = g._mc.as_scanner()
+            self.base = g.base.as_scanner()
         def __call__(self, mol, **kwargs):
-            mc_scanner = self._mc
+            mc_scanner = self.base
             e_tot = mc_scanner(mol)
             self.mol = mol
             de = self.kernel(**kwargs)
             return e_tot, de
         @property
         def converged(self):
-            return self._mc.converged
+            return self.base.converged
     return CASCI_GradScanner(mcscf_grad)
 
 
 class Gradients(lib.StreamObject):
     '''Non-relativistic restricted Hartree-Fock gradients'''
     def __init__(self, mc):
-        self._mc = mc
+        self.base = mc
         self.mol = mc.mol
         self.stdout = mc.stdout
         self.verbose = mc.verbose
@@ -234,10 +234,10 @@ class Gradients(lib.StreamObject):
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)
         log.info('\n')
-        if not self._mc.converged:
+        if not self.base.converged:
             log.warn('Ground state CASCI not converged')
         log.info('******** %s for %s ********',
-                 self.__class__, self._mc.__class__)
+                 self.__class__, self.base.__class__)
         log.info('max_memory %d MB (current use %d MB)',
                  self.max_memory, lib.current_memory()[0])
         return self
@@ -256,13 +256,17 @@ class Gradients(lib.StreamObject):
         if self.verbose >= logger.INFO:
             self.dump_flags()
 
-        self.de = kernel(self._mc, mo_coeff, ci, atmlst, mf_grad, log)
-        if self.verbose >= logger.NOTE:
-            log.note('--------------- CASCI gradients ----------------')
-            rhf_grad._write(self, self.mol, self.de, atmlst)
-            log.note('------------------------------------------------')
-            log.timer('CASCI gradients', *cput0)
+        self.de = kernel(self.base, mo_coeff, ci, atmlst, mf_grad, log)
+        log.timer('CASCI gradients', *cput0)
+        self._finalize()
         return self.de
+
+    def _finalize(self):
+        if self.verbose >= logger.NOTE:
+            logger.note(self, '--------------- %s gradients ---------------',
+                        self.base.__class__.__name__)
+            rhf_grad._write(self, self.mol, self.de, self.atmlst)
+            logger.note(self, '----------------------------------------------')
 
     as_scanner = as_scanner
 

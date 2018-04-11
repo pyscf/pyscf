@@ -39,6 +39,7 @@ from pyscf.pbc.gto.pseudo import get_pp
 from pyscf.pbc.scf import chkfile
 from pyscf.pbc import df
 from pyscf.pbc.scf import addons
+from pyscf import __config__
 
 
 def get_ovlp(cell, kpt=np.zeros(3)):
@@ -216,7 +217,8 @@ class SCF(mol_hf.SCF):
             depending the available memory, the 4-index integrals may be cached
             and J/K matrices are computed based on the 4-index integrals.
     '''
-    def __init__(self, cell, kpt=np.zeros(3), exxdiv='ewald'):
+    def __init__(self, cell, kpt=np.zeros(3),
+                 exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         if not cell._built:
             sys.stderr.write('Warning: cell.build() is not called in input\n')
             cell.build()

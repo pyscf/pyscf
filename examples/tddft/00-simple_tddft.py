@@ -23,4 +23,5 @@ mf.kernel()
 mytd = tddft.TDDFT(mf)
 #mytd.nstates = 10
 mytd.kernel()
-print('Excitation energy (eV)', mytd.e * 27.2114)
+
+mytd.analyze()

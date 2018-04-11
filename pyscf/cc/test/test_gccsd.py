@@ -166,7 +166,6 @@ class KnownValues(unittest.TestCase):
         mf.mo_coeff = numpy.eye(nmo)
         mf.mo_occ = numpy.zeros(nmo)
         mf.mo_occ[:nocc] = 1
-        dm1 = mf.make_rdm1()
         mf.e_tot = mf.energy_elec()[0]
         mycc = gccsd.GCCSD(mf)
         ecc, t1, t2 = mycc.kernel()
@@ -184,7 +183,7 @@ class KnownValues(unittest.TestCase):
         eri = ao2mo.restore(1, eri, nmo)
         h1 = reduce(numpy.dot, (mf.mo_coeff.T.conj(), hcore, mf.mo_coeff))
         e1 = numpy.einsum('ij,ji', h1, dm1)
-        e1+= numpy.einsum('ijkl,jilk', eri, dm2) * .5
+        e1+= numpy.einsum('ijkl,ijkl', eri, dm2) * .5
         self.assertAlmostEqual(e1, mycc.e_tot, 7)
 
         self.assertAlmostEqual(abs(dm2-dm2.transpose(1,0,3,2).conj()).max(), 0, 9)
@@ -238,7 +237,7 @@ class KnownValues(unittest.TestCase):
         dm2 = mycc.make_rdm2()
 
         e1 = numpy.einsum('ij,ji', hcore, dm1)
-        e1+= numpy.einsum('ijkl,jilk', eri, dm2) * .5
+        e1+= numpy.einsum('ijkl,ijkl', eri, dm2) * .5
         self.assertAlmostEqual(e1, mycc.e_tot, 7)
 
         self.assertAlmostEqual(abs(dm2-dm2.transpose(1,0,3,2).conj()).max(), 0, 9)
@@ -285,7 +284,7 @@ class KnownValues(unittest.TestCase):
         h1 = reduce(numpy.dot, (mo_a.T.conj(), hcore, mo_a))
         h1+= reduce(numpy.dot, (mo_b.T.conj(), hcore, mo_b))
         e1 = numpy.einsum('ij,ji', h1, dm1)
-        e1+= numpy.einsum('ijkl,jilk', eri, dm2) * .5
+        e1+= numpy.einsum('ijkl,ijkl', eri, dm2) * .5
         e1+= mol.energy_nuc()
         self.assertAlmostEqual(e1, mygcc.e_tot, 7)
 
@@ -360,7 +359,7 @@ class KnownValues(unittest.TestCase):
         h1 = reduce(numpy.dot, (mo_a.T.conj(), hcore, mo_a))
         h1+= reduce(numpy.dot, (mo_b.T.conj(), hcore, mo_b))
         e1 = numpy.einsum('ij,ji', h1, dm1)
-        e1+= numpy.einsum('ijkl,jilk', eri, dm2) * .5
+        e1+= numpy.einsum('ijkl,ijkl', eri, dm2) * .5
         e1+= mol.energy_nuc()
         self.assertAlmostEqual(e1, mygcc.e_tot, 7)
 

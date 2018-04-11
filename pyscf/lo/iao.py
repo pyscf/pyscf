@@ -27,12 +27,13 @@ import scipy.linalg
 from pyscf.lib import logger
 from pyscf import gto
 from pyscf import scf
-
+from pyscf import __config__
 
 # Alternately, use ANO for minao
 # orthogonalize iao by orth.lowdin(c.T*mol.intor(ovlp)*c)
+MINAO = getattr(__config__, 'lo_iao_minao', 'minao')
 
-def iao(mol, orbocc, minao='minao'):
+def iao(mol, orbocc, minao=MINAO):
     '''Intrinsic Atomic Orbitals. [Ref. JCTC, 9, 4834]
 
     Args:
@@ -49,13 +50,17 @@ def iao(mol, orbocc, minao='minao'):
         >>> c = iao(mol, orbocc)
         >>> numpy.dot(c, orth.lowdin(reduce(numpy.dot, (c.T,s,c))))
     '''
-    from pyscf.pbc import gto as pbcgto
     if mol.has_ecp():
         logger.warn(mol, 'ECP/PP is used. MINAO is not a good reference AO basis in IAO.')
 
     pmol = reference_mol(mol, minao)
-    #for PBC, we must use the pbc code for evaluating the integrals lest the pbc conditions be ignored
-    if isinstance(mol, pbcgto.Cell):
+    # For PBC, we must use the pbc code for evaluating the integrals lest the
+    # pbc conditions be ignored.
+    # DO NOT import pbcgto early and check whether mol is a cell object.
+    # "from pyscf.pbc import gto as pbcgto and isinstance(mol, pbcgto.Cell)"
+    # The code should work even pbc module is not availabe.
+    if hasattr(mol, 'pbc_intor'):  # cell object has pbc_intor method
+        from pyscf.pbc import gto as pbcgto
         s1 = mol.pbc_intor('int1e_ovlp', hermi=1)
         s2 = pmol.pbc_intor('int1e_ovlp', hermi=1)
         s12 = pbcgto.cell.intor_cross('int1e_ovlp', mol, pmol)
@@ -83,7 +88,8 @@ def iao(mol, orbocc, minao='minao'):
     return a
 
 
-def reference_mol(mol, minao='minao'):
+def reference_mol(mol, minao=MINAO):
+    '''Create a molecule which uses reference minimal basis'''
     pmol = mol.copy()
     if hasattr(pmol, 'rcut'):
         pmol.rcut = None
@@ -102,9 +108,8 @@ def fast_iao_mullikan_pop(mol, dm, iaos, verbose=logger.DEBUG):
     Returns:
         mullikan population analysis in the basis IAO
     '''
-    from pyscf.pbc import gto as pbcgto
     pmol = reference_mol(mol)
-    if isinstance(mol, pbcgto.Cell):
+    if hasattr(mol, 'pbc_intor'):  # whether mol object is a cell
         ovlpS = mol.pbc_intor('int1e_ovlp')
     else:
         ovlpS = mol.intor_symmetric('int1e_ovlp')
@@ -123,3 +128,4 @@ def fast_iao_mullikan_pop(mol, dm, iaos, verbose=logger.DEBUG):
               reduce(numpy.dot, (iao_inv, dm[1], iao_inv.conj().T))]
         return scf.uhf.mulliken_pop(pmol, dm, s_iao, verbose)
 
+del(MINAO)

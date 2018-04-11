@@ -40,6 +40,14 @@ from pyscf.pbc.gto import _pbcintor
 from pyscf.pbc.gto.eval_gto import eval_gto as pbc_eval_gto
 from pyscf.pbc.tools import pbc as pbctools
 from pyscf.gto.basis import ALIAS as MOLE_ALIAS
+from pyscf import __config__
+
+INTEGRAL_PRECISION = getattr(__config__, 'pbc_gto_cell_Cell_precision', 1e-8)
+WRAP_AROUND = getattr(__config__, 'pbc_gto_cell_make_kpts_wrap_around', False)
+WITH_GAMMA = getattr(__config__, 'pbc_gto_cell_make_kpts_with_gamma', True)
+EXP_DELIMITER = getattr(__config__, 'pbc_gto_cell_split_basis_exp_delimiter',
+                        [1.0, 0.5, 0.25, 0.1, 0])
+
 
 # For code compatiblity in python-2 and python-3
 if sys.version_info >= (3,):
@@ -255,7 +263,7 @@ def loads(cellstr):
     cell.atom = eval(cell.atom)
     cell.basis = eval(cell.basis)
     cell.pseudo = eval(cell.pseudo)
-    cell.pseudo = eval(cell.ecp)
+    cell.ecp = eval(cell.ecp)
     cell._atm = np.array(cell._atm, dtype=np.int32)
     cell._bas = np.array(cell._bas, dtype=np.int32)
     cell._env = np.array(cell._env, dtype=np.double)
@@ -420,7 +428,7 @@ def get_nimgs(cell, precision=None):
     nimgs = cell.get_bounding_sphere(rcut)
     return nimgs
 
-def _estimate_rcut(alpha, l, c, precision=1e-8):
+def _estimate_rcut(alpha, l, c, precision=INTEGRAL_PRECISION):
     C = (c**2+1e-200)*(2*l+1)*alpha / precision
     r0 = 20
     # +1. to ensure np.log returning positive value
@@ -428,7 +436,7 @@ def _estimate_rcut(alpha, l, c, precision=1e-8):
     rcut = np.sqrt( 2.*np.log(C*(r0**2*alpha)**(l+1)+1.) / alpha)
     return rcut
 
-def bas_rcut(cell, bas_id, precision=1e-8):
+def bas_rcut(cell, bas_id, precision=INTEGRAL_PRECISION):
     r'''Estimate the largest distance between the function and its image to
     reach the precision in overlap
 
@@ -440,7 +448,7 @@ def bas_rcut(cell, bas_id, precision=1e-8):
     rcut = _estimate_rcut(es, l, cs, precision)
     return rcut.max()
 
-def _estimate_ke_cutoff(alpha, l, c, precision=1e-8, weight=1.):
+def _estimate_ke_cutoff(alpha, l, c, precision=INTEGRAL_PRECISION, weight=1.):
     '''Energy cutoff estimation'''
     log_k0 = 2.5 + np.log(alpha) / 2
     l2fac2 = scipy.misc.factorial2(l*2+1)
@@ -448,9 +456,9 @@ def _estimate_ke_cutoff(alpha, l, c, precision=1e-8, weight=1.):
     Ecut = 2*alpha * (log_k0*(4*l+3) - log_rest)
     log_k0 = .5 * np.log(abs(Ecut)*2)
     Ecut = 2*alpha * (log_k0*(4*l+3) - log_rest)
-    return Ecut.max()
+    return Ecut
 
-def estimate_ke_cutoff(cell, precision=1e-8):
+def estimate_ke_cutoff(cell, precision=INTEGRAL_PRECISION):
     '''Energy cutoff estimation'''
     b = cell.reciprocal_vectors()
     if cell.dimension == 0:
@@ -467,7 +475,8 @@ def estimate_ke_cutoff(cell, precision=1e-8):
         l = cell.bas_angular(i)
         es = cell.bas_exp(i)
         cs = abs(cell.bas_ctr_coeff(i)).max(axis=1)
-        Ecut_max = max(Ecut_max, _estimate_ke_cutoff(es, l, cs, precision, w))
+        ke_guess = _estimate_ke_cutoff(es, l, cs, precision, w)
+        Ecut_max = max(Ecut_max, ke_guess.max())
     return Ecut_max
 
 def error_for_ke_cutoff(cell, ke_cutoff):
@@ -644,7 +653,7 @@ def get_SI(cell, Gv=None):
     SI = np.exp(-1j*np.dot(coords, Gv.T))
     return SI
 
-def get_ewald_params(cell, precision=1e-8, mesh=None):
+def get_ewald_params(cell, precision=INTEGRAL_PRECISION, mesh=None):
     r'''Choose a reasonable value of Ewald 'eta' and 'cut' parameters.
 
     Choice is based on largest G vector and desired relative precision.
@@ -857,7 +866,8 @@ def ewald(cell, ew_eta=None, ew_cut=None):
 
 energy_nuc = ewald
 
-def make_kpts(cell, nks, wrap_around=False, with_gamma_point=True, scaled_center=None):
+def make_kpts(cell, nks, wrap_around=WRAP_AROUND, with_gamma_point=WITH_GAMMA,
+              scaled_center=None):
     '''Given number of kpoints along x,y,z , generate kpoints
 
     Args:
@@ -914,8 +924,9 @@ def get_uniform_grids(cell, mesh=None, **kwargs):
         warnings.warn('cell.gs is deprecated.  It is replaced by cell.mesh,'
                       'the number of PWs (=2*gs+1) along each direction.')
         mesh = [2*n+1 for n in kwargs['gs']]
+    mesh = np.asarray(mesh, dtype=np.double)
     qv = lib.cartesian_prod([np.arange(x) for x in mesh])
-    a_frac = np.einsum('i,ij->ij', 1./np.asarray(mesh), cell.lattice_vectors())
+    a_frac = np.einsum('i,ij->ij', 1./mesh, cell.lattice_vectors())
     coords = np.dot(qv, a_frac)
     return coords
 gen_uniform_grids = get_uniform_grids
@@ -966,8 +977,7 @@ def classify_ecp_pseudo(cell, ecp, pp):
         pp = ecp_as_pp
     return ecp, pp
 
-DELIMITER = [1.0, 0.5, 0.25, 0.1, 0]
-def _split_basis(cell, delimiter=DELIMITER):
+def _split_basis(cell, delimiter=EXP_DELIMITER):
     '''
     Split the contracted basis to small segmant.  The new basis has more
     shells.  Each shell has less primitive basis and thus is more local.
@@ -981,7 +991,7 @@ def _split_basis(cell, delimiter=DELIMITER):
         pcoeff1 = cell._bas[ib,mole.PTR_COEFF]
         nc = cell.bas_nctr(ib)
         es = cell.bas_exp(ib)
-        cs = cell._libcint_ctr_coeff(ib).T.ravel()
+        cs = cell._libcint_ctr_coeff(ib)
         l = cell.bas_angular(ib)
         if cell.cart:
             degen = (l + 1) * (l + 2) // 2
@@ -1051,20 +1061,22 @@ class Cell(mole.Mole):
     >>> print(cl.atom_symbol(0))
     C
     '''
+
+    precision = getattr(__config__, 'pbc_gto_cell_Cell_precision', 1e-8)
+    exp_to_discard = getattr(__config__, 'pbc_gto_cell_Cell_exp_to_discard', None)
+
     def __init__(self, **kwargs):
         mole.Mole.__init__(self, **kwargs)
         self.a = None # lattice vectors, (a1,a2,a3)
         self.mesh = None
         self.ke_cutoff = None # if set, defines a spherical cutoff
                               # of fourier components, with .5 * G**2 < ke_cutoff
-        self.precision = 1.e-8
         self.pseudo = None
         self.dimension = 3
         # TODO: Simple hack for now; the implementation of ewald depends on the
         #       density-fitting class.  This determines how the ewald produces
         #       its energy.
         self.low_dim_ft_type = None
-        self.exp_to_discard = None
 
 ##################################################
 # These attributes are initialized by build function if not given
@@ -1075,17 +1087,24 @@ class Cell(mole.Mole):
 ##################################################
 # don't modify the following variables, they are not input arguments
         self._pseudo = {}
-        self._keys = set(self.__dict__.keys())
 
-    @property
-    def nelec(self):
-        ne = self.nelectron
-        nalpha = (ne + self.spin) // 2
-        nbeta = nalpha - self.spin
-        if nalpha + nbeta != ne:
-            warnings.warn('Electron number %d and spin %d are not consistent '
-                          'in unit cell\n' % (ne, self.spin))
-        return nalpha, nbeta
+        keys = set(('precision', 'exp_to_discard'))
+        self._keys = self._keys.union(self.__dict__).union(keys)
+
+    if not getattr(__config__, 'pbc_gto_cell_Cell_verify_nelec', False):
+# nelec method defined in Mole class raises error when the attributes .spin
+# and .nelectron are inconsistent.  In PBC, when the system has even number of
+# k-points, it is valid that .spin is odd while .nelectron is even.
+# Overwriting nelec method to avoid this check.
+        @property
+        def nelec(self):
+            ne = self.nelectron
+            nalpha = (ne + self.spin) // 2
+            nbeta = nalpha - self.spin
+            if nalpha + nbeta != ne:
+                warnings.warn('Electron number %d and spin %d are not consistent '
+                              'in unit cell\n' % (ne, self.spin))
+            return nalpha, nbeta
 
 #Note: Exculde dump_input, parse_arg, basis from kwargs to avoid parsing twice
     def build(self, dump_input=True, parse_arg=True,
@@ -1174,6 +1193,9 @@ class Cell(mole.Mole):
                     es = b_coeff[:,0]
                     if np.any(es < self.exp_to_discard):
                         b_coeff = b_coeff[es>=self.exp_to_discard]
+# contraction coefficients may be completely zero after removing one primitive
+# basis. Removing the zero-coefficient basis.
+                        b_coeff = b_coeff[:,np.all(b_coeff!=0, axis=0)]
                         if b_coeff.size > 0:
                             if kappa == 0:
                                 basis_add.append([l] + b_coeff.tolist())
@@ -1185,7 +1207,8 @@ class Cell(mole.Mole):
             self._basis = _basis
 
             steep_shls = []
-            ndrop = 0
+            nprim_drop = 0
+            nctr_drop = 0
             for ib in range(len(self._bas)):
                 l = self.bas_angular(ib)
                 nprim = self.bas_nprim(ib)
@@ -1197,17 +1220,27 @@ class Cell(mole.Mole):
                 if np.any(es < self.exp_to_discard):
                     cs = cs[es>=self.exp_to_discard]
                     es = es[es>=self.exp_to_discard]
-                    nprim, ndrop = len(es), nprim-len(es)+ndrop
-                    if nprim > 0:
+                    nprim_old, nc_old = nprim, nc
+
+# contraction coefficients may be completely zero after removing one primitive
+# basis. Removing the zero-coefficient basis.
+                    cs = cs[:,np.all(cs!=0, axis=0)]
+                    nprim, nc = cs.shape
+                    self._bas[ib,mole.NPRIM_OF] = nprim
+                    self._bas[ib,mole.NCTR_OF] = nc
+
+                    nprim_drop = nprim_old - nprim + nprim_drop
+                    nctr_drop = nc_old - nc + nctr_drop
+                    if cs.size > 0:
                         pe = self._bas[ib,mole.PTR_EXP]
-                        self._bas[ib,mole.NPRIM_OF] = nprim
                         self._env[pe:pe+nprim] = es
                         cs = mole._nomalize_contracted_ao(l, es, cs)
                         self._env[ptr:ptr+nprim*nc] = cs.T.reshape(-1)
                 if nprim > 0:
                     steep_shls.append(ib)
             self._bas = np.asarray(self._bas[steep_shls], order='C')
-            #logger.info(self, 'Drop %d diffused primitive functions', ndrop)
+            logger.info(self, 'Discarded %d diffused primitive functions, '
+                        '%d contracted functions', nprim_drop, nctr_drop)
             #logger.debug1(self, 'Old shells %s', steep_shls)
 
         if self.rcut is None:
@@ -1251,10 +1284,11 @@ class Cell(mole.Mole):
             logger.info(self, 'pseudo = %s', self.pseudo)
             if ke_cutoff is not None:
                 logger.info(self, 'ke_cutoff = %s', ke_cutoff)
-                logger.info(self, '    = %s mesh = %d',
+                logger.info(self, '    = %s mesh (%d PWs)',
                             self.mesh, np.prod(self.mesh))
             else:
-                logger.info(self, 'mesh = %s', self.mesh)
+                logger.info(self, 'mesh = %s (%d PWs)',
+                            self.mesh, np.prod(self.mesh))
                 Ecut = pbctools.mesh_to_cutoff(self.lattice_vectors(), self.mesh)
                 logger.info(self, '    = ke_cutoff %s', Ecut[:self.dimension])
             logger.info(self, 'ew_eta = %g', self.ew_eta)
@@ -1501,3 +1535,4 @@ class Cell(mole.Mole):
         '''Whether pesudo potential is used in the system.'''
         return self.pseudo or self._pseudo or (len(self._ecpbas) > 0)
 
+del(INTEGRAL_PRECISION, WRAP_AROUND, WITH_GAMMA, EXP_DELIMITER)

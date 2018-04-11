@@ -29,8 +29,8 @@ from pyscf.lib import logger
 from pyscf.cc import ccsd
 from pyscf.cc import _ccsd
 from pyscf.cc import ccsd_rdm
-from pyscf.scf import rhf_grad
 from pyscf.scf import cphf
+from pyscf.grad import rhf as rhf_grad
 from pyscf.grad.mp2 import _shell_prange, _index_frozen_active
 
 
@@ -214,18 +214,18 @@ def as_scanner(grad_cc):
     class CCSD_GradScanner(grad_cc.__class__, lib.GradScanner):
         def __init__(self, g):
             self.__dict__.update(g.__dict__)
-            self._cc = g._cc.as_scanner()
+            self.base = g.base.as_scanner()
         def __call__(self, mol, **kwargs):
             # The following simple version also works.  But eris object is
             # recomputed in cc_scanner and solve_lambda.
-            # cc = self._cc
+            # cc = self.base
             # cc(mol)
             # eris = cc.ao2mo()
             # cc.solve_lambda(cc.t1, cc.t2, cc.l1, cc.l2, eris=eris)
             # mf_grad = cc._scf.nuc_grad_method()
             # de = self.kernel(cc.t1, cc.t2, cc.l1, cc.l2, eris=eris, mf_grad=mf_grad)
 
-            cc = self._cc
+            cc = self.base
             mf_scanner = cc._scf
             mf_scanner(mol)
             cc.mol = mol
@@ -240,7 +240,7 @@ def as_scanner(grad_cc):
             return cc.e_tot, de
         @property
         def converged(self):
-            cc = self._cc
+            cc = self.base
             return all((cc._scf.converged, cc.converged, cc.converged_lambda))
     return CCSD_GradScanner(grad_cc)
 
@@ -396,7 +396,7 @@ def _cp(a):
 
 class Gradients(lib.StreamObject):
     def __init__(self, mycc):
-        self._cc = mycc
+        self.base = mycc
         self.mol = mycc.mol
         self.stdout = mycc.stdout
         self.verbose = mycc.verbose
@@ -407,29 +407,33 @@ class Gradients(lib.StreamObject):
     def kernel(self, t1=None, t2=None, l1=None, l2=None, eris=None,
                atmlst=None, mf_grad=None, verbose=None, _kern=kernel):
         log = logger.new_logger(self, verbose)
-        if t1 is None: t1 = self._cc.t1
-        if t2 is None: t2 = self._cc.t2
-        if l1 is None: l1 = self._cc.l1
-        if l2 is None: l2 = self._cc.l2
+        mycc = self.base
+        if t1 is None: t1 = mycc.t1
+        if t2 is None: t2 = mycc.t2
+        if l1 is None: l1 = mycc.l1
+        if l2 is None: l2 = mycc.l2
         if eris is None:
-            eris = self._cc.ao2mo()
+            eris = mycc.ao2mo()
         if t1 is None or t2 is None:
-            t1, t2 = self._cc.kernel(eris=eris)
+            t1, t2 = mycc.kernel(eris=eris)
         if l1 is None or l2 is None:
-            l1, l2 = self._cc.solve_lambda(eris=eris)
+            l1, l2 = mycc.solve_lambda(eris=eris)
         if atmlst is None:
             atmlst = self.atmlst
         else:
             self.atmlst = atmlst
 
-        self.de = _kern(self._cc, t1, t2, l1, l2, eris, atmlst,
+        self.de = _kern(mycc, t1, t2, l1, l2, eris, atmlst,
                         mf_grad, verbose=log)
-        if self.verbose >= logger.NOTE:
-            log.note('--------------- %s gradients ---------------',
-                     self.__class__.__name__)
-            rhf_grad._write(self, self.mol, self.de, atmlst)
-            log.note('----------------------------------------------')
+        self._finalize()
         return self.de
+
+    def _finalize(self):
+        if self.verbose >= logger.NOTE:
+            logger.note(self, '--------------- %s gradients ---------------',
+                        self.base.__class__.__name__)
+            rhf_grad._write(self, self.mol, self.de, self.atmlst)
+            logger.note(self, '----------------------------------------------')
 
     as_scanner = as_scanner
 

@@ -25,9 +25,7 @@ JCP, 147, 044104
 
 import time
 import ctypes
-import tempfile
 import numpy
-import h5py
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.cc import ccsd

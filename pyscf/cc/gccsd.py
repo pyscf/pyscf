@@ -24,6 +24,7 @@ from pyscf.cc import ccsd
 from pyscf.cc import addons
 from pyscf.cc import gintermediates as imd
 from pyscf.cc.addons import spatial2spin, spin2spatial
+from pyscf import __config__
 
 #einsum = np.einsum
 einsum = lib.einsum
@@ -110,11 +111,13 @@ def amplitudes_from_rccsd(t1, t2):
 
 
 class GCCSD(ccsd.CCSD):
+
+    conv_tol = getattr(__config__, 'cc_gccsd_GCCSD_conv_tol', 1e-7)
+    conv_tol_normt = getattr(__config__, 'cc_gccsd_GCCSD_conv_tol_normt', 1e-6)
+
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
         assert(isinstance(mf, scf.ghf.GHF))
         ccsd.CCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
-        # Spin-orbital CCSD needs a stricter tolerance than spatial-orbital
-        self.conv_tol_normt = 1e-6
 
     def init_amps(self, eris):
         mo_e = eris.fock.diagonal().real
@@ -149,7 +152,7 @@ class GCCSD(ccsd.CCSD):
             return self.e_corr, self.t1, self.t2
 
         if eris is None: eris = self.ao2mo(self.mo_coeff)
-        # Initialize orbspin so that we can attach the 
+        # Initialize orbspin so that we can attach the
         if not hasattr(self.mo_coeff, 'orbspin'):
             orbspin = scf.ghf.guess_orbspin(self.mo_coeff)
             if not np.any(orbspin == -1):
@@ -292,7 +295,7 @@ class _PhysicistsERIs:
                 self.orbspin = orbspin[mo_idx]
                 self.mo_coeff = lib.tag_array(mo_coeff, orbspin=self.orbspin)
 
-# Note: Recomputed fock matrix since SCF may not be fully converged.
+        # Note: Recomputed fock matrix since SCF may not be fully converged.
         dm = mycc._scf.make_rdm1(mycc.mo_coeff, mycc.mo_occ)
         fockao = mycc._scf.get_hcore() + mycc._scf.get_veff(mycc.mol, dm)
         self.fock = reduce(np.dot, (mo_coeff.conj().T, fockao, mo_coeff))

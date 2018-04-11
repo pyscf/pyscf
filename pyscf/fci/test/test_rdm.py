@@ -82,7 +82,7 @@ class KnowValues(unittest.TestCase):
         self.assertTrue(numpy.allclose(dm3a, numpy.einsum('mnijklpp->mnijkl',dm4b)/5))
 
     def test_tdm2(self):
-        dm1 = numpy.einsum('ij,ijkl->kl', ci0, _trans1(ci0, norb, nelec))
+        dm1 = numpy.einsum('ij,ijkl->lk', ci0, _trans1(ci0, norb, nelec))
         self.assertTrue(numpy.allclose(rdm1, dm1))
 
         dm2 = numpy.einsum('ij,ijklmn->klmn', ci0, _trans2(ci0, norb, nelec))
@@ -101,7 +101,7 @@ class KnowValues(unittest.TestCase):
 
         t1 = _trans1(ci1, norb, nelec)
         t2 = _trans2(ci1, norb, nelec)
-        dm1a = numpy.einsum('ij,ijpq->pq', ci, t1)
+        dm1a = numpy.einsum('ij,ijpq->qp', ci, t1)
         dm2a = numpy.einsum('ij,ijpqrs->pqrs', ci, t2)
         self.assertTrue(numpy.allclose(dm1a, dm1))
         dm1a, dm2a = fci.rdm.reorder_rdm(dm1a, dm2a)

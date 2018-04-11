@@ -47,7 +47,7 @@ VERBOSE = False
 
 def svd_cut(mat,thresh):
    if len(mat.shape) != 2:
-      print "NOT A MATRIX in SVD_CUT !",mat.shape
+      print("NOT A MATRIX in SVD_CUT !",mat.shape)
       exit(1) 
    d1, d2 = mat.shape	
    u, sig, v = scipy.linalg.svd(mat, full_matrices=False)
@@ -94,7 +94,7 @@ def eigGenernal(Hmat):
     tmpH = reduce(numpy.dot,(vr,numpy.diag(eig),vl.T.conj()))
     diff = numpy.linalg.norm(tmpH-Hmat)
     if diff > 1.e-8:
-       if VERBOSE: print 'error: A=R*w*L^+ !',diff
+       if VERBOSE: print('error: A=R*w*L^+ !',diff)
        #exit(1)
     return eig,vl,vr
 
@@ -133,11 +133,11 @@ def mgs_ortho(vlst,rlst,crit_indp,iop=0):
           for i in range(nres):
              rvec = rbas[:,i].copy()	    
              rii = numpy.linalg.norm(rbas[:,i])
-             if debug: print ' ktime,i,rii=',k,i,rii
+             if debug: print(' ktime,i,rii=',k,i,rii)
              # TOO SMALL
              if rii <= crit_indp*10.0**(-k):
-                if debug: print ' unable to normalize:',i,' norm=',rii,\
-                	       ' thresh=',crit_indp
+                if debug: print(' unable to normalize:',i,' norm=',rii,\
+                	       ' thresh=',crit_indp)
                 continue 
              # NORMALIZE
              rvec = rvec / rii
@@ -156,11 +156,11 @@ def mgs_ortho(vlst,rlst,crit_indp,iop=0):
     iden = vbas.T.dot(vbas)
     diff = numpy.linalg.norm(iden-numpy.identity(ndim+nindp))
     if diff > 1.e-10:
-       if VERBOSE: print ' error in mgs_ortho: diff=',diff
-       if VERBOSE: print iden
+       if VERBOSE: print(' error in mgs_ortho: diff=',diff)
+       if VERBOSE: print(iden)
        exit(1)
     else:
-       if VERBOSE: print ' final nindp from mgs_ortho =',nindp,' diffIden=',diff	    
+       if VERBOSE: print(' final nindp from mgs_ortho =',nindp,' diffIden=',diff)
     return nindp,vlst2 
 
 class eigenSolver:
@@ -209,10 +209,10 @@ class eigenSolver:
         return self.v0
  
     def solve_iter(self):
-        if VERBOSE: print '\nDavdison solver for AX=wX'
-        if VERBOSE: print ' ndim = ',self.ndim
-        if VERBOSE: print ' neig = ',self.neig
-	if VERBOSE: print ' maxcycle = ',self.maxcycle
+        if VERBOSE: print('\nDavdison solver for AX=wX')
+        if VERBOSE: print(' ndim = ',self.ndim)
+        if VERBOSE: print(' neig = ',self.neig)
+	if VERBOSE: print(' maxcycle = ',self.maxcycle)
         #
         # Generate v0
         #
@@ -230,8 +230,8 @@ class eigenSolver:
 	rlst  = []
         for niter in range(self.maxcycle):
            if self.iprt > 0: 
-              if VERBOSE: print '\n --- niter=',niter,'ndim0=',self.ndim,\
-			           'ndim=',ndim,'---'
+              if VERBOSE: print('\n --- niter=',niter,'ndim0=',self.ndim,\
+			           'ndim=',ndim,'---')
            
            # List[n,N] -> Max[N,n]
            vbas = numpy.array(vlst).transpose(1,0) 
@@ -239,8 +239,8 @@ class eigenSolver:
 	   iden = vbas.T.dot(vbas)
 	   diff = numpy.linalg.norm(iden-numpy.identity(ndim))
 	   if diff > 1.e-10:
-	      if VERBOSE: print 'diff=',diff
-	      if VERBOSE: print iden
+	      if VERBOSE: print('diff=',diff)
+	      if VERBOSE: print(iden)
 	      exit(1)
            tmpH = vbas.T.dot(wbas)
            eig,vl,vr = eigGenernal(tmpH)
@@ -250,11 +250,11 @@ class eigenSolver:
   	   nconv1 = 0
   	   for i in range(neig):
   	      tmp = abs(teig[i]-eigs[i])
-  	      if VERBOSE: print ' i,eold,enew,ediff=',i,eigs[i],teig[i],tmp
+  	      if VERBOSE: print(' i,eold,enew,ediff=',i,eigs[i],teig[i],tmp)
   	      if tmp <= self.crit_e: nconv1+=1
-  	   if VERBOSE: print ' No. of converged eigval:',nconv1
+  	   if VERBOSE: print(' No. of converged eigval:',nconv1)
   	   if nconv1 == neig: 
-              if VERBOSE: print ' Cong: all eignvalues converged ! '
+              if VERBOSE: print(' Cong: all eignvalues converged ! ')
   	   eigs = teig.copy()
   
            # Full Residuals: Res[i]=Res'[i]-w[i]*X[i]
@@ -269,14 +269,14 @@ class eigenSolver:
   	         iconv[i]=True
               else:
   	         iconv[i]=False   
-  	      if VERBOSE: print ' i,norm=',i,tmp,iconv[i]
-  	   if VERBOSE: print ' No. of converged eigvec:',nconv2
+  	      if VERBOSE: print(' i,norm=',i,tmp,iconv[i])
+  	   if VERBOSE: print(' No. of converged eigvec:',nconv2)
   	   if nconv2 == neig: 
-              if VERBOSE: print ' Cong: all eignvectors converged ! '
+              if VERBOSE: print(' Cong: all eignvectors converged ! ')
   
            ifconv = (nconv1 == neig) or (nconv2 == neig)
   	   if ifconv:
-  	      if VERBOSE: print ' Cong: ALL are converged !\n'		 
+  	      if VERBOSE: print(' Cong: ALL are converged !\n')
    	      break		
   
   	   # Rotated basis to minimal subspace that
@@ -310,10 +310,10 @@ class eigenSolver:
               wlst  = wlst + wlst2
               ndim  = len(vlst)
            else:
-              if VERBOSE: print 'Convergence Failure: Nindp=0 !'
+              if VERBOSE: print('Convergence Failure: Nindp=0 !')
               exit(1)
  
         if not ifconv:
-           if VERBOSE: print 'Convergence Failure: Out of Nmaxcycle !'
+           if VERBOSE: print('Convergence Failure: Out of Nmaxcycle !')
         
 	return eigs,jvec

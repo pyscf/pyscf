@@ -43,16 +43,22 @@ def finger(a):
 class KnownValues(unittest.TestCase):
     def test_parse_xc(self):
         hyb, fn_facs = dft.libxc.parse_xc('.5*HF+.5*B3LYP,VWN*.5')
-        self.assertAlmostEqual(hyb, .6, 12)
+        self.assertAlmostEqual(hyb[0], .6, 12)
         self.assertEqual([x[0] for x in fn_facs], [1,106,131,7])
         self.assertTrue(numpy.allclose([x[1] for x in fn_facs],
                                        (0.04, 0.36, 0.405, 0.595)))
         hyb, fn_facs = dft.libxc.parse_xc('HF,')
-        self.assertEqual(hyb, 1)
+        self.assertEqual(hyb[0], 1)
         self.assertEqual(fn_facs, [])
 
         hyb, fn_facs = dft.libxc.parse_xc('0.5*B3LYP+0.5*B3LYP')
-        self.assertAlmostEqual(hyb, .2, 12)
+        self.assertAlmostEqual(hyb[0], .2, 12)
+
+        hyb, fn_facs = dft.libxc.parse_xc('0.5*SR-HF(0.3) + .8*HF + .22*LR_HF')
+        self.assertEqual(hyb, [1.3, 0.22, 0.3])
+
+        self.assertRaises(ValueError, dft.libxc.parse_xc, 'SR_HF(0.3) + LR_HF(.5)')
+        self.assertRaises(ValueError, dft.libxc.parse_xc, 'LR-HF(0.3) + SR-HF(.5)')
 
         hyb = dft.libxc.hybrid_coeff('M05')
         self.assertAlmostEqual(hyb, 0.28, 9)

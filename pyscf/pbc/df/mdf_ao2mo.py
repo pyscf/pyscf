@@ -20,9 +20,11 @@ import numpy
 from pyscf.pbc.df.fft_ao2mo import _format_kpts
 from pyscf.pbc.df import df_ao2mo
 from pyscf.pbc.df import aft_ao2mo
+from pyscf import __config__
 
 
-def get_eri(mydf, kpts=None, compact=True):
+def get_eri(mydf, kpts=None,
+            compact=getattr(__config__, 'pbc_df_ao2mo_get_eri_compact', True)):
     if mydf._cderi is None:
         mydf.build()
 
@@ -32,7 +34,8 @@ def get_eri(mydf, kpts=None, compact=True):
     return eri
 
 
-def general(mydf, mo_coeffs, kpts=None, compact=True):
+def general(mydf, mo_coeffs, kpts=None,
+            compact=getattr(__config__, 'pbc_df_ao2mo_general_compact', True)):
     if mydf._cderi is None:
         mydf.build()
 

@@ -193,11 +193,11 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(rdm2[1]-ref2[1]).max(), 0, 6)
         self.assertAlmostEqual(abs(rdm2[2]-ref2[2]).max(), 0, 6)
 
-        dm1a = numpy.einsum('ijkk->ij', rdm2[0]) / (mol.nelectron-1)
-        dm1a+= numpy.einsum('ijkk->ij', rdm2[1]) / (mol.nelectron-1)
+        dm1a = numpy.einsum('ijkk->ji', rdm2[0]) / (mol.nelectron-1)
+        dm1a+= numpy.einsum('ijkk->ji', rdm2[1]) / (mol.nelectron-1)
         self.assertAlmostEqual(abs(rdm1[0] - dm1a).max(), 0, 9)
-        dm1b = numpy.einsum('kkij->ij', rdm2[2]) / (mol.nelectron-1)
-        dm1b+= numpy.einsum('kkij->ij', rdm2[1]) / (mol.nelectron-1)
+        dm1b = numpy.einsum('kkij->ji', rdm2[2]) / (mol.nelectron-1)
+        dm1b+= numpy.einsum('kkij->ji', rdm2[1]) / (mol.nelectron-1)
         self.assertAlmostEqual(abs(rdm1[1] - dm1b).max(), 0, 9)
 
         eri_aa = ao2mo.kernel(mf._eri, mf.mo_coeff[0], compact=False).reshape([nmoa]*4)

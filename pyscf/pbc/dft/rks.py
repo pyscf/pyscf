@@ -31,9 +31,11 @@ import pyscf.dft
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc.scf import hf as pbchf
+from pyscf.pbc.scf import khf
 from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import numint
 from pyscf.dft.rks import define_xc_
+from pyscf import __config__
 
 
 def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
@@ -103,10 +105,12 @@ def _patch_df_beckegrids(density_fit):
         mf = density_fit(self, auxbasis, mesh)
         mf.with_df._j_only = True
         mf.grids = gen_grid.BeckeGrids(self.cell)
+        mf.grids.level = getattr(__config__, 'pbc_dft_rks_RKS_grids_level',
+                                 mf.grids.level)
         return mf
     return new_df
 
-NELEC_ERROR_TOL = 0.01
+NELEC_ERROR_TOL = getattr(__config__, 'pbc_dft_rks_prune_error_tol', 0.02)
 def prune_small_rho_grids_(ks, mol, dm, grids, kpts):
     rho = ks._numint.get_rho(mol, dm, grids, kpts, ks.max_memory)
     n = numpy.dot(rho, grids.weights)
@@ -129,13 +133,7 @@ class RKS(pbchf.RHF):
     '''
     def __init__(self, cell, kpt=numpy.zeros(3)):
         pbchf.RHF.__init__(self, cell, kpt)
-        self.xc = 'LDA,VWN'
-        self.grids = gen_grid.UniformGrids(cell)
-        self.small_rho_cutoff = 1e-7  # Use rho to filter grids
-##################################################
-# don't modify the following attributes, they are not input options
-        self._numint = numint._NumInt()
-        self._keys = self._keys.union(['xc', 'grids', 'small_rho_cutoff'])
+        _dft_common_init_(self)
 
     def dump_flags(self):
         pbchf.RHF.dump_flags(self)
@@ -148,6 +146,21 @@ class RKS(pbchf.RHF):
 
     density_fit = _patch_df_beckegrids(pbchf.RHF.density_fit)
     mix_density_fit = _patch_df_beckegrids(pbchf.RHF.mix_density_fit)
+
+def _dft_common_init_(mf):
+    mf.xc = 'LDA,VWN'
+    mf.grids = gen_grid.UniformGrids(mf.cell)
+    # Use rho to filter grids
+    mf.small_rho_cutoff = getattr(__config__,
+                                  'pbc_dft_rks_RKS_small_rho_cutoff', 1e-7)
+##################################################
+# don't modify the following attributes, they are not input options
+    # Note Do not refer to .with_df._numint because mesh/coords may be different
+    if isinstance(mf, khf.KSCF):
+        mf._numint = numint._KNumInt(mf.kpts)
+    else:
+        mf._numint = numint._NumInt()
+    mf._keys = mf._keys.union(['xc', 'grids', 'small_rho_cutoff'])
 
 
 if __name__ == '__main__':

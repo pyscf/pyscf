@@ -25,16 +25,17 @@ from pyscf.lib import logger
 from pyscf.scf import hf
 from pyscf.scf import dhf
 from pyscf.scf import _vhf
+from pyscf import __config__
 
 class X2C(lib.StreamObject):
     '''2-component X2c (including spin-free and spin-dependent terms) in
     the j-adapted spinor basis.
     '''
+    exp_drop = getattr(__config__, 'x2c_X2C_exp_drop', 0.2)
+    approx = getattr(__config__, 'x2c_X2C_approx', '1e')  # 'atom1e'
+    xuncontract = getattr(__config__, 'x2c_X2C_xuncontract', True)
+    basis = getattr(__config__, 'x2c_X2C_basis', None)
     def __init__(self, mol=None):
-        self.exp_drop = 0.2
-        self.approx = '1e'  # 'atom1e'
-        self.xuncontract = True
-        self.basis = None
         self.mol = mol
 
     def dump_flags(self):

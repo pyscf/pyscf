@@ -29,8 +29,13 @@ import copy
 import numpy
 from pyscf import lib
 from pyscf.geomopt.grad import gen_grad_scanner
+from pyscf import __config__
 
-def to_berny_geom(mol, include_ghost=True):
+INCLUDE_GHOST = getattr(__config__, 'geomopt_berny_solver_optimize_include_ghost', True)
+ASSERT_CONV = getattr(__config__, 'geomopt_berny_solver_optimize_assert_convergence', True)
+
+
+def to_berny_geom(mol, include_ghost=INCLUDE_GHOST):
     atom_charges = mol.atom_charges()
     if include_ghost:
         species = [mol.atom_symbol(i) if z != 0 else 'Ghost'
@@ -66,7 +71,8 @@ def to_berny_log(pyscf_log):
                 pyscf_log.info('%d %s', self.n, msg)
     return BernyLogger()
 
-def as_berny_solver(method, assert_convergence=True, include_ghost=True):
+def as_berny_solver(method, assert_convergence=ASSERT_CONV,
+                    include_ghost=INCLUDE_GHOST):
     '''Generate a solver for berny optimize function.
     '''
     mol = copy.copy(method.mol)
@@ -84,7 +90,8 @@ def as_berny_solver(method, assert_convergence=True, include_ghost=True):
         geom = yield energy, gradients
 
 
-def optimize(method, assert_convergence=True, include_ghost=True, **kwargs):
+def optimize(method, assert_convergence=ASSERT_CONV,
+             include_ghost=INCLUDE_GHOST, **kwargs):
     '''Optimize the geometry with the given method.
     '''
     mol = copy.copy(method.mol)
@@ -108,6 +115,8 @@ def optimize(method, assert_convergence=True, include_ghost=True, **kwargs):
     mol.set_geom_(_geom_to_atom(mol, geom, include_ghost))
     return mol
 kernel = optimize
+
+del(INCLUDE_GHOST, ASSERT_CONV)
 
 
 if __name__ == '__main__':

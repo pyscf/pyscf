@@ -103,16 +103,47 @@ def _gamma2_intermediates(mycc, t1, t2, l1, l2):
     return (dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov)
 
 def make_rdm1(mycc, t1, t2, l1, l2):
+    r'''
+    One-particle density matrix in the molecular spin-orbital representation
+    (the occupied-virtual blocks from the orbital response contribution are
+    not included).
+
+    dm1[p,q] = <q^\dagger p>  (p,q are spin-orbitals)
+
+    The convention of 1-pdm is based on McWeeney's book, Eq (5.4.20).
+    The contraction between 1-particle Hamiltonian and rdm1 is
+    E = einsum('pq,qp', h1, rdm1)
+    '''
     d1 = _gamma1_intermediates(mycc, t1, t2, l1, l2)
     return _make_rdm1(mycc, d1, with_frozen=True)
 
-# spin-orbital rdm2 in Chemist's notation
 def make_rdm2(mycc, t1, t2, l1, l2):
+    r'''
+    Two-particle density matrix in the molecular spin-orbital representation
+
+    dm2[p,q,r,s] = <p^\dagger r^\dagger s q>
+
+    where p,q,r,s are spin-orbitals. p,q correspond to one particle and r,s
+    correspond to another particle.  The contraction between ERIs (in
+    Chemist's notation) and rdm2 is
+    E = einsum('pqrs,pqrs', eri, rdm2)
+    '''
     d1 = _gamma1_intermediates(mycc, t1, t2, l1, l2)
     d2 = _gamma2_intermediates(mycc, t1, t2, l1, l2)
     return _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True)
 
 def _make_rdm1(mycc, d1, with_frozen=True):
+    r'''
+    One-particle density matrix in the molecular spin-orbital representation
+    (the occupied-virtual blocks from the orbital response contribution are
+    not included).
+
+    dm1[p,q] = <q^\dagger p>  (p,q are spin-orbitals)
+
+    The convention of 1-pdm is based on McWeeney's book, Eq (5.4.20).
+    The contraction between 1-particle Hamiltonian and rdm1 is
+    E = einsum('pq,qp', h1, rdm1)
+    '''
     doo, dov, dvo, dvv = d1
     nocc, nvir = dov.shape
     nmo = nocc + nvir
@@ -137,6 +168,12 @@ def _make_rdm1(mycc, d1, with_frozen=True):
     return dm1
 
 def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True):
+    r'''
+    dm2[p,q,r,s] = <p^\dagger r^\dagger s q>
+
+    Note the contraction between ERIs (in Chemist's notation) and rdm2 is
+    E = einsum('pqrs,pqrs', eri, rdm2)
+    '''
     dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov = d2
     nocc, nvir = dovov.shape[:2]
     nmo = nocc + nvir
@@ -196,7 +233,11 @@ def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True):
                 dm2[i,i,j,j] += 1
                 dm2[i,j,j,i] -= 1
 
-    return dm2
+    # dm2 was computed as dm2[p,q,r,s] = < p^\dagger r^\dagger s q > in the
+    # above. Transposing it so that it be contracted with ERIs (in Chemist's
+    # notation):
+    #   E = einsum('pqrs,pqrs', eri, rdm2)
+    return dm2.transpose(1,0,3,2)
 
 
 if __name__ == '__main__':
@@ -235,7 +276,7 @@ if __name__ == '__main__':
     h1 = reduce(numpy.dot, (mo_a.T.conj(), hcore, mo_a))
     h1+= reduce(numpy.dot, (mo_b.T.conj(), hcore, mo_b))
     e1 = numpy.einsum('ij,ji', h1, dm1)
-    e1+= numpy.einsum('ijkl,jilk', eri, dm2) * .5
+    e1+= numpy.einsum('ijkl,ijkl', eri, dm2) * .5
     e1+= mol.energy_nuc()
     print(e1 - mycc.e_tot)
 

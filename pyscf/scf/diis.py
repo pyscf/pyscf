@@ -43,24 +43,7 @@ class CDIIS(lib.diis.DIIS):
         self.space = 8
 
     def update(self, s, d, f, *args, **kwargs):
-        if isinstance(f, numpy.ndarray) and f.ndim == 2:
-            sdf = reduce(numpy.dot, (s,d,f))
-            errvec = sdf.T.conj() - sdf
-
-        elif isinstance(f, numpy.ndarray) and f.ndim == 3 and s.ndim == 3:
-            errvec = []
-            for i in range(f.shape[0]):
-                sdf = reduce(numpy.dot, (s[i], d[i], f[i]))
-                errvec.append((sdf.T.conj() - sdf))
-            errvec = numpy.vstack(errvec)
-
-        elif f.ndim == s.ndim+1 and f.shape[0] == 2:  # for UHF
-            nao = s.shape[-1]
-            s = lib.asarray((s,s)).reshape(-1,nao,nao)
-            fnew = self.update(s, d.reshape(s.shape), f.reshape(s.shape))
-            return fnew.reshape(f.shape)
-        else:
-            raise RuntimeError('Unknown SCF DIIS type')
+        errvec = get_err_vec(s, d, f)
         logger.debug1(self, 'diis-norm(errvec)=%g', numpy.linalg.norm(errvec))
         xnew = lib.diis.DIIS.update(self, f, xerr=errvec)
         if self.rollback > 0 and len(self._bookkeep) == self.space:
@@ -74,6 +57,27 @@ class CDIIS(lib.diis.DIIS):
             return len(self._bookkeep)
 
 SCFDIIS = SCF_DIIS = DIIS = CDIIS
+
+def get_err_vec(s, d, f):
+    '''error vector = SDF - FDS'''
+    if isinstance(f, numpy.ndarray) and f.ndim == 2:
+        sdf = reduce(numpy.dot, (s,d,f))
+        errvec = sdf.T.conj() - sdf
+
+    elif isinstance(f, numpy.ndarray) and f.ndim == 3 and s.ndim == 3:
+        errvec = []
+        for i in range(f.shape[0]):
+            sdf = reduce(numpy.dot, (s[i], d[i], f[i]))
+            errvec.append((sdf.T.conj() - sdf))
+        errvec = numpy.vstack(errvec)
+
+    elif f.ndim == s.ndim+1 and f.shape[0] == 2:  # for UHF
+        nao = s.shape[-1]
+        s = lib.asarray((s,s)).reshape(-1,nao,nao)
+        return get_err_vec(s, d.reshape(s.shape), f.reshape(s.shape))
+    else:
+        raise RuntimeError('Unknown SCF DIIS type')
+    return errvec
 
 
 class EDIIS(lib.diis.DIIS):

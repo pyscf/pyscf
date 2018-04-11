@@ -28,6 +28,10 @@ from pyscf.lib import logger
 from pyscf.scf import hf
 from pyscf.scf import uhf
 import pyscf.scf.chkfile
+from pyscf import __config__
+
+WITH_META_LOWDIN = getattr(__config__, 'scf_analyze_with_meta_lowdin', True)
+MO_BASE = getattr(__config__, 'MO_BASE', 1)
 
 
 def init_guess_by_minao(mol):
@@ -234,7 +238,8 @@ def energy_elec(mf, dm=None, h1e=None, vhf=None):
 def get_veff(mol, dm, dm_last=0, vhf_last=0, hermi=1, vhfopt=None):
     return uhf.get_veff(mol, dm, dm_last, vhf_last, hermi, vhfopt)
 
-def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=True, **kwargs):
+def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
+            **kwargs):
     '''Analyze the given SCF object:  print orbital energies, occupancies;
     print orbital coefficients; Mulliken population analysis
     '''
@@ -252,10 +257,11 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=True, **kwargs):
             log.note('                Roothaan           | alpha              | beta')
             for i,c in enumerate(mo_occ):
                 log.note('MO #%-3d energy= %-18.15g | %-18.15g | %-18.15g occ= %g',
-                         i+1, mo_energy[i], mo_ea[i], mo_eb[i], c)
+                         i+MO_BASE, mo_energy[i], mo_ea[i], mo_eb[i], c)
         else:
             for i,c in enumerate(mo_occ):
-                log.note('MO #%-3d energy= %-18.15g occ= %g', i+1, mo_energy[i], c)
+                log.note('MO #%-3d energy= %-18.15g occ= %g',
+                         i+MO_BASE, mo_energy[i], c)
 
     ovlp_ao = mf.get_ovlp()
     if log.verbose >= logger.DEBUG:
@@ -267,7 +273,7 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=True, **kwargs):
         else:
             log.debug(' ** MO coefficients (expansion on AOs) **')
             c = mo_coeff
-        dump_mat.dump_rec(mf.stdout, c, label, start=1, **kwargs)
+        dump_mat.dump_rec(mf.stdout, c, label, start=MO_BASE, **kwargs)
     dm = mf.make_rdm1(mo_coeff, mo_occ)
     if with_meta_lowdin:
         return mf.mulliken_meta(mf.mol, dm, s=ovlp_ao, verbose=log)
@@ -286,6 +292,9 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     mo_eb = numpy.einsum('pi,pi->i', mo_coeff, fock.fockb.dot(mo_coeff))
     mo_e = lib.tag_array(mo_e, mo_ea=mo_ea, mo_eb=mo_eb)
     return mo_e, mo_coeff
+
+dip_moment = hf.dip_moment
+
 
 # use UHF init_guess, get_veff, diis, and intermediates such as fock, vhf, dm
 # keep mo_energy, mo_coeff, mo_occ as RHF structure
@@ -380,13 +389,24 @@ class ROHF(hf.RHF):
         return vhf
 
     @lib.with_doc(analyze.__doc__)
-    def analyze(self, verbose=None, with_meta_lowdin=True, **kwargs):
+    def analyze(self, verbose=None, with_meta_lowdin=WITH_META_LOWDIN,
+                **kwargs):
         if verbose is None: verbose = self.verbose
         return analyze(self, verbose, with_meta_lowdin, **kwargs)
 
     canonicalize = canonicalize
 
-    def stability(self, internal=True, external=False, verbose=None):
+    def spin_square(self, mo_coeff=None, s=None):
+        '''Spin square and multiplicity of RHF determinant'''
+        neleca, nelecb = self.mol.nelec
+        ms = (neleca - nelecb) * .5
+        ss = ms * (ms + 1) * .5
+        return ss, ms*2+1
+
+    def stability(self,
+                  internal=getattr(__config__, 'scf_stability_internal', True),
+                  external=getattr(__config__, 'scf_stability_external', False),
+                  verbose=None):
         '''
         ROHF/ROKS stability analysis.
 
@@ -423,3 +443,4 @@ class HF1e(ROHF):
         self._finalize()
         return self.e_tot
 
+del(WITH_META_LOWDIN)

@@ -41,6 +41,7 @@ from pyscf.pbc.df.df_jk import zdotNN, zdotCN, zdotNC
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, unique
 from pyscf.pbc.df import mdf_jk
 from pyscf.pbc.df import mdf_ao2mo
+from pyscf import __config__
 
 
 # kpti == kptj: s2 symmetry
@@ -220,7 +221,8 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
 
 
 # valence_exp = 1. is the Gaussian typicall sits in valence
-def _mesh_for_valence(cell, valence_exp=1.):
+VALENCE_EXP = getattr(__config__, 'pbc_df_mdf_valence_exp', 1.0)
+def _mesh_for_valence(cell, valence_exp=VALENCE_EXP):
     '''Energy cutoff estimation'''
     b = cell.reciprocal_vectors()
     if cell.dimension == 0:
@@ -239,11 +241,13 @@ def _mesh_for_valence(cell, valence_exp=1.):
         es = cell.bas_exp(i).copy()
         es[es>valence_exp] = valence_exp
         cs = abs(cell.bas_ctr_coeff(i)).max(axis=1)
-        Ecut_max = max(Ecut_max, gto.cell._estimate_ke_cutoff(es, l, cs, precision, w))
+        ke_guess = gto.cell._estimate_ke_cutoff(es, l, cs, precision, w)
+        Ecut_max = max(Ecut_max, ke_guess.max())
     mesh = tools.cutoff_to_mesh(cell.lattice_vectors(), Ecut_max)
     mesh = numpy.min((mesh, cell.mesh), axis=0)
     mesh[cell.dimension:] = cell.mesh[cell.dimension:]
     return mesh
+del(VALENCE_EXP)
 
 
 class MDF(df.DF):
@@ -258,13 +262,13 @@ class MDF(df.DF):
         self.kpts = kpts  # default is gamma point
         self.kpts_band = None
         self._auxbasis = None
-        self.mesh = _mesh_for_valence(cell, 1.)
+        self.mesh = _mesh_for_valence(cell)
         self.eta = None
 
 # Not input options
         self.exxdiv = None  # to mimic KRHF/KUHF object in function get_coulG
         self.auxcell = None
-        self.blockdim = 240
+        self.blockdim = getattr(__config__, 'df_df_DF_blockdim', 240)
         self.linear_dep_threshold = df.LINEAR_DEP_THR
         self._j_only = False
 # If _cderi_to_save is specified, the 3C-integral tensor will be saved in this file.

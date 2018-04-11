@@ -32,7 +32,17 @@ from pyscf.lib import logger
 from pyscf.scf import diis
 from pyscf.scf import _vhf
 from pyscf.scf import chkfile
+from pyscf.data import nist
+from pyscf import __config__
 
+WITH_META_LOWDIN = getattr(__config__, 'scf_analyze_with_meta_lowdin', True)
+PRE_ORTH_METHOD = getattr(__config__, 'scf_analyze_pre_orth_method', 'ANO')
+MO_BASE = getattr(__config__, 'MO_BASE', 1)
+TIGHT_GRAD_CONV_TOL = getattr(__config__, 'scf_hf_kernel_tight_grad_conv_tol', True)
+
+# For code compatiblity in python-2 and python-3
+if sys.version_info >= (3,):
+    unicode = str
 
 def kernel(mf, conv_tol=1e-10, conv_tol_grad=None,
            dump_chk=True, dm0=None, callback=None, conv_check=True, **kwargs):
@@ -123,7 +133,7 @@ Keyword argument "init_dm" is replaced by "dm0"''')
     if isinstance(mf.diis, lib.diis.DIIS):
         mf_diis = mf.diis
     elif mf.diis:
-        mf_diis = diis.SCF_DIIS(mf, mf.diis_file)
+        mf_diis = mf.DIIS(mf, mf.diis_file)
         mf_diis.space = mf.diis_space
         mf_diis.rollback = mf.diis_space_rollback
     else:
@@ -163,7 +173,11 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         logger.info(mf, 'cycle= %d E= %.15g  delta_E= %4.3g  |g|= %4.3g  |ddm|= %4.3g',
                     cycle+1, e_tot, e_tot-last_hf_e, norm_gorb, norm_ddm)
 
-        if (abs(e_tot-last_hf_e) < conv_tol and norm_gorb < conv_tol_grad):
+        if TIGHT_GRAD_CONV_TOL:
+            grad_tol = conv_tol_grad
+        else:
+            grad_tol = conv_tol_grad / numpy.sqrt(norm_gorb.size)
+        if (abs(e_tot-last_hf_e) < conv_tol and norm_gorb < grad_tol):
             scf_conv = True
 
         if dump_chk:
@@ -188,8 +202,12 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         fock = mf.get_fock(h1e, s1e, vhf, dm)
         norm_gorb = numpy.linalg.norm(mf.get_grad(mo_coeff, mo_occ, fock))
         norm_ddm = numpy.linalg.norm(dm-dm_last)
-        scf_conv = (abs(e_tot-last_hf_e) < conv_tol*10 or
-                    norm_gorb < conv_tol_grad*3)
+
+        if TIGHT_GRAD_CONV_TOL:
+            grad_tol = conv_tol_grad
+        else:
+            grad_tol = conv_tol_grad / numpy.sqrt(norm_gorb.size)
+        scf_conv = abs(e_tot-last_hf_e) < conv_tol*10 or norm_gorb < grad_tol*3
         logger.info(mf, 'Extra cycle  E= %.15g  delta_E= %4.3g  |g|= %4.3g  |ddm|= %4.3g',
                     e_tot, e_tot-last_hf_e, norm_gorb, norm_ddm)
         if dump_chk:
@@ -576,11 +594,11 @@ def dot_eri_dm(eri, dm, hermi=0):
         vj = numpy.empty_like(dms)
         vk = numpy.empty_like(dms)
         for i, dmi in enumerate(dms):
-            vjk = _vhf.incore(eri, dmi.real, hermi=hermi)
+            vj[i], vk[i] = _vhf.incore(eri, dmi.real, hermi=hermi)
             if dms.dtype == numpy.complex128:
-                vjk = vjk + _vhf.incore(eri, dmi.imag, hermi=hermi) * 1j
-            vj[i] = vjk[0]
-            vk[i] = vjk[1]
+                jk = _vhf.incore(eri, dmi.imag, hermi=0)
+                vj[i] += jk[0] * 1j
+                vk[i] += jk[1] * 1j
     return vj.reshape(dm.shape), vk.reshape(dm.shape)
 
 
@@ -622,8 +640,17 @@ def get_jk(mol, dm, hermi=1, vhfopt=None):
     '''
     dm = numpy.asarray(dm, order='C')
     nao = dm.shape[-1]
-    vj, vk = _vhf.direct(dm.reshape(-1,nao,nao), mol._atm, mol._bas, mol._env,
-                         vhfopt=vhfopt, hermi=hermi, cart=mol.cart)
+    if dm.dtype == numpy.complex128:
+        dms = numpy.vstack((dm.real, dm.imag)).reshape(-1,nao,nao)
+        vj, vk = _vhf.direct(dms, mol._atm, mol._bas, mol._env,
+                             vhfopt=vhfopt, hermi=0, cart=mol.cart)
+        vj = vj.reshape(2,-1,nao,nao)
+        vk = vk.reshape(2,-1,nao,nao)
+        vj = vj[0] + vj[1] * 1j
+        vk = vk[0] + vk[1] * 1j
+    else:
+        vj, vk = _vhf.direct(dm.reshape(-1,nao,nao), mol._atm, mol._bas, mol._env,
+                             vhfopt=vhfopt, hermi=hermi, cart=mol.cart)
     return vj.reshape(dm.shape), vk.reshape(dm.shape)
 
 
@@ -789,7 +816,8 @@ def get_grad(mo_coeff, mo_occ, fock_ao):
     return g.ravel()
 
 
-def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=True, **kwargs):
+def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
+            **kwargs):
     '''Analyze the given SCF object:  print orbital energies, occupancies;
     print orbital coefficients; Mulliken population analysis; Diople moment.
     '''
@@ -802,7 +830,8 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=True, **kwargs):
     if log.verbose >= logger.NOTE:
         log.note('**** MO energy ****')
         for i,c in enumerate(mo_occ):
-            log.note('MO #%-3d energy= %-18.15g occ= %g', i+1, mo_energy[i], c)
+            log.note('MO #%-3d energy= %-18.15g occ= %g', i+MO_BASE,
+                     mo_energy[i], c)
 
     ovlp_ao = mf.get_ovlp()
     if verbose >= logger.DEBUG:
@@ -814,7 +843,7 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=True, **kwargs):
         else:
             log.debug(' ** MO coefficients (expansion on AOs) **')
             c = mo_coeff
-        dump_mat.dump_rec(mf.stdout, c, label, start=1, **kwargs)
+        dump_mat.dump_rec(mf.stdout, c, label, start=MO_BASE, **kwargs)
     dm = mf.make_rdm1(mo_coeff, mo_occ)
     if with_meta_lowdin:
         return (mf.mulliken_meta(mf.mol, dm, s=ovlp_ao, verbose=log),
@@ -845,9 +874,9 @@ def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
         pop = numpy.einsum('ij,ji->i', dm[0]+dm[1], s).real
     label = mol.ao_labels(fmt=None)
 
-    log.note(' ** Mulliken pop  **')
+    log.info(' ** Mulliken pop  **')
     for i, s in enumerate(label):
-        log.note('pop of  %s %10.5f', '%d%s %s%-4s'%s, pop[i])
+        log.info('pop of  %s %10.5f', '%d%s %s%-4s'%s, pop[i])
 
     log.note(' ** Mulliken atomic charges  **')
     chg = numpy.zeros(mol.natm)
@@ -860,8 +889,8 @@ def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
     return pop, chg
 
 
-def mulliken_meta(mol, dm, verbose=logger.DEBUG, pre_orth_method='ANO',
-                  s=None):
+def mulliken_meta(mol, dm, verbose=logger.DEBUG,
+                  pre_orth_method=PRE_ORTH_METHOD, s=None):
     '''Mulliken population analysis, based on meta-Lowdin AOs.
     In the meta-lowdin, the AOs are grouped in three sets: core, valence and
     Rydberg, the orthogonalization are carreid out within each subsets.
@@ -933,7 +962,7 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
             mo_e[idx] = e
     return mo_e, mo
 
-def dip_moment(mol, dm, unit_symbol='Debye', verbose=logger.NOTE):
+def dip_moment(mol, dm, unit='Debye', verbose=logger.NOTE, **kwargs):
     r''' Dipole moment calculation
 
     .. math::
@@ -958,10 +987,19 @@ def dip_moment(mol, dm, unit_symbol='Debye', verbose=logger.NOTE):
     else:
         log = logger.Logger(mol.stdout, verbose)
 
-    if unit_symbol == 'Debye':
-        unit = 2.541746    # a.u. to Debye
+    if 'unit_symbol' in kwargs:
+        log.warn('Kwarg "unit_symbol" was deprecated. It was replaced by kwarg '
+                 'unit since PySCF-1.5.')
+        unit = kwargs['unit_symbol']
+
+    if unit.upper() == 'DEBYE':
+        unit = nist.AU2DEBYE
     else:
         unit = 1.0
+
+    if not (isinstance(dm, numpy.ndarray) and dm.ndim == 2):
+        # UHF denisty matrices
+        dm = dm[0] + dm[1]
 
     with mol.with_common_orig((0,0,0)):
         ao_dip = mol.intor_symmetric('int1e_r', comp=3)
@@ -973,15 +1011,18 @@ def dip_moment(mol, dm, unit_symbol='Debye', verbose=logger.NOTE):
 
     mol_dip = (nucl_dip - el_dip) * unit
 
-    if unit_symbol == 'Debye' :
+    if unit == 'Debye' :
         log.note('Dipole moment(X, Y, Z, Debye): %8.5f, %8.5f, %8.5f', *mol_dip)
     else:
         log.note('Dipole moment(X, Y, Z, A.U.): %8.5f, %8.5f, %8.5f', *mol_dip)
     return mol_dip
 
-############
-# For orbital rotation
+
 def uniq_var_indices(mo_occ):
+    '''
+    Indicies of the unique variables for the orbital-gradients (or
+    orbital-rotation) matrix.
+    '''
     occidxa = mo_occ>0
     occidxb = mo_occ==2
     viridxa = ~occidxa
@@ -989,11 +1030,19 @@ def uniq_var_indices(mo_occ):
     mask = (viridxa[:,None] & occidxa) | (viridxb[:,None] & occidxb)
     return mask
 
-def pack_uniq_var(x1, mo_occ):
+def pack_uniq_var(x, mo_occ):
+    '''
+    Extract the unique variables from the full orbital-gradients (or
+    orbital-rotation) matrix
+    '''
     idx = uniq_var_indices(mo_occ)
-    return x1[idx]
+    return x[idx]
 
 def unpack_uniq_var(dx, mo_occ):
+    '''
+    Fill the full orbital-gradients (or orbital-rotation) matrix with the
+    unique variables.
+    '''
     nmo = len(mo_occ)
     idx = uniq_var_indices(mo_occ)
 
@@ -1092,7 +1141,7 @@ class SCF(lib.StreamObject):
         chkfile : str
             checkpoint file to save MOs, orbital energies etc.
         conv_tol : float
-            converge threshold.  Default is 1e-10
+            converge threshold.  Default is 1e-9
         conv_tol_grad : float
             gradients converge threshold.  Default is sqrt(conv_tol)
         max_cycle : int
@@ -1100,8 +1149,17 @@ class SCF(lib.StreamObject):
         init_guess : str
             initial guess method.  It can be one of 'minao', 'atom', 'hcore', '1e', 'chkfile'.
             Default is 'minao'
-        diis : boolean or object of DIIS class listed in :mod:`scf.diis`
-            Default is :class:`diis.SCF_DIIS`. Set it to None to turn off DIIS.
+        DIIS : DIIS class
+            The class to generate diis object.  It can be one of
+            diis.SCF_DIIS, diis.ADIIS, diis.EDIIS.
+        diis : boolean or object of DIIS class defined in :mod:`scf.diis`.
+            Default is the object associated to the attribute :attr:`self.DIIS`.
+            Set it to None/False to turn off DIIS.
+            Note if this attribute is inialized as a DIIS object, the SCF driver
+            will use this object in the iteration. The DIIS informations (vector
+            basis and error vector) will be held inside this object. When kernel
+            function is called again, the old states (vector basis and error
+            vector) will be reused.
         diis_space : int
             DIIS space size.  By default, 8 Fock matrices and errors vector are stored.
         diis_start_cycle : int
@@ -1122,7 +1180,7 @@ class SCF(lib.StreamObject):
         conv_check : bool
             An extra cycle to check convergence after SCF iterations.
 
-    Saved results
+    Saved results:
 
         converged : bool
             SCF converged or not
@@ -1144,9 +1202,32 @@ class SCF(lib.StreamObject):
     >>> mf.scf()
     -1.0811707843775884
     '''
+    conv_tol = getattr(__config__, 'scf_hf_SCF_conv_tol', 1e-9)
+    conv_tol_grad = getattr(__config__, 'scf_hf_SCF_conv_tol_grad', None)
+    max_cycle = getattr(__config__, 'scf_hf_SCF_max_cycle', 50)
+    init_guess = getattr(__config__, 'scf_hf_SCF_init_guess', 'minao')
+
+    # To avoid diis pollution form previous run, self.diis should not be
+    # initialized as DIIS instance here
+    DIIS = diis.SCF_DIIS
+    diis = getattr(__config__, 'scf_hf_SCF_diis', True)
+    diis_space = getattr(__config__, 'scf_hf_SCF_diis_space', 8)
+    # need > 0 if initial DM is numpy.zeros array
+    diis_start_cycle = getattr(__config__, 'scf_hf_SCF_diis_start_cycle', 1)
+    diis_file = None
+    # Give diis_space_rollback=True a trial if all other methods do not converge
+    diis_space_rollback = False
+
+    damp = getattr(__config__, 'scf_hf_SCF_damp', 0)
+    level_shift = getattr(__config__, 'scf_hf_SCF_level_shift', 0)
+    direct_scf = getattr(__config__, 'scf_hf_SCF_direct_scf', True)
+    direct_scf_tol = getattr(__config__, 'scf_hf_SCF_direct_scf_tol', 1e-13)
+    conv_check = getattr(__config__, 'scf_hf_SCF_conv_check', True)
+
     def __init__(self, mol):
         if not mol._built:
-            sys.stderr.write('Warning: mol.build() is not called in input\n')
+            sys.stderr.write('Warning: %s must be initialized before calling SCF.\n'
+                             'Initialize %s in %s\n' % (mol, mol, self))
             mol.build()
         self.mol = mol
         self.verbose = mol.verbose
@@ -1157,23 +1238,7 @@ class SCF(lib.StreamObject):
 # filename to self.chkfile
         self._chkfile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
         self.chkfile = self._chkfile.name
-        self.conv_tol = 1e-9
-        self.conv_tol_grad = None
-        self.max_cycle = 50
-        self.init_guess = 'minao'
-        # To avoid diis pollution form previous run, self.diis should not be
-        # initialized as DIIS instance here
-        self.diis = True
-        self.diis_space = 8
-        self.diis_start_cycle = 1 # need > 0 if initial DM is numpy.zeros array
-        self.diis_file = None
-        # Give diis_space_rollback=True a trial if other efforts not converge
-        self.diis_space_rollback = False
-        self.damp = 0
-        self.level_shift = 0
-        self.direct_scf = True
-        self.direct_scf_tol = 1e-13
-        self.conv_check = True
+
 ##################################################
 # don't modify the following attributes, they are not input options
         self.mo_energy = None
@@ -1185,7 +1250,12 @@ class SCF(lib.StreamObject):
 
         self.opt = None
         self._eri = None
-        self._keys = set(self.__dict__.keys())
+
+        keys = set(('conv_tol', 'conv_tol_grad', 'max_cycle', 'init_guess',
+                    'diis', 'diis_space', 'diis_start_cycle', 'diis_file',
+                    'diis_space_rollback', 'damp', 'level_shift',
+                    'direct_scf', 'direct_scf_tol', 'conv_check'))
+        self._keys = set(self.__dict__.keys()).union(keys)
 
     def build(self, mol=None):
         if mol is None: mol = self.mol
@@ -1437,7 +1507,8 @@ class SCF(lib.StreamObject):
             return vj - vk * .5
 
     @lib.with_doc(analyze.__doc__)
-    def analyze(self, verbose=None, with_meta_lowdin=True, **kwargs):
+    def analyze(self, verbose=None, with_meta_lowdin=WITH_META_LOWDIN,
+                **kwargs):
         if verbose is None: verbose = self.verbose
         return analyze(self, verbose, with_meta_lowdin, **kwargs)
 
@@ -1450,7 +1521,7 @@ class SCF(lib.StreamObject):
 
     @lib.with_doc(mulliken_meta.__doc__)
     def mulliken_meta(self, mol=None, dm=None, verbose=logger.DEBUG,
-                      pre_orth_method='ANO', s=None):
+                      pre_orth_method=PRE_ORTH_METHOD, s=None):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         if s is None: s = self.get_ovlp(mol)
@@ -1465,11 +1536,11 @@ class SCF(lib.StreamObject):
     canonicalize = canonicalize
 
     @lib.with_doc(dip_moment.__doc__)
-    def dip_moment(self, mol=None, dm=None, unit_symbol=None, verbose=logger.NOTE):
+    def dip_moment(self, mol=None, dm=None, unit='Debye', verbose=logger.NOTE,
+                   **kwargs):
         if mol is None: mol = self.mol
         if dm is None: dm =self.make_rdm1()
-        if unit_symbol is None: unit_symbol='Debye'
-        return dip_moment(mol, dm, unit_symbol, verbose=verbose)
+        return dip_moment(mol, dm, unit, verbose=verbose, **kwargs)
 
     def _is_mem_enough(self):
         nbf = self.mol.nao_nr()
@@ -1537,6 +1608,24 @@ class SCF(lib.StreamObject):
                          'It is replaced by attribute .damp\n')
         self.damp = x
 
+    def apply(self, fn, *args, **kwargs):
+        if callable(fn):
+            return lib.StreamObject.apply(self, fn, *args, **kwargs)
+        elif isinstance(fn, (str, unicode)):
+            from pyscf import mp, cc, ci, mcscf, tdscf
+            for mod in (mp, cc, ci, mcscf, tdscf):
+                method = getattr(mod, fn.upper(), None)
+                if method is not None and callable(method):
+                    if self.mo_coeff is None:
+                        logger.warn('SCF object must be initialized before '
+                                    'calling post-SCF methods.\n'
+                                    'Initialize %s for %s', self, mod)
+                    return method(self, *args, **kwargs)
+            raise ValueError('Unknown method %s' % fn)
+        else:
+            raise TypeError('First argument of .apply method must be a '
+                            'function or a string.')
+
 
 ############
 
@@ -1570,7 +1659,14 @@ class RHF(SCF):
         addons.convert_to_rhf(mf, self)
         return self
 
-    def stability(self, internal=True, external=False, verbose=None):
+    def spin_square(self, mo_coeff=None, s=None):
+        '''Spin square and multiplicity of RHF determinant'''
+        return 0, 1
+
+    def stability(self,
+                  internal=getattr(__config__, 'scf_stability_internal', True),
+                  external=getattr(__config__, 'scf_stability_external', False),
+                  verbose=None):
         '''
         RHF/RKS stability analysis.
 
@@ -1594,6 +1690,9 @@ class RHF(SCF):
     def nuc_grad_method(self):
         from pyscf.grad import rhf
         return rhf.Gradients(self)
+
+
+del(WITH_META_LOWDIN, PRE_ORTH_METHOD)
 
 
 if __name__ == '__main__':

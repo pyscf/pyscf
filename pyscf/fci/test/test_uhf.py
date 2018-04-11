@@ -99,11 +99,11 @@ class KnowValues(unittest.TestCase):
 
     def test_rdm1(self):
         dm1ref = fci.direct_spin1.make_rdm1(ci0, norb, nelecr)
-        dm1 = fci.direct_uhf.make_rdm1(ci0, norb, nelecr)
-        self.assertTrue(numpy.allclose(dm1ref, dm1))
-        self.assertAlmostEqual(numpy.linalg.norm(dm1), 393.03762428630, 10)
-        dm1 = fci.direct_uhf.make_rdm1(ci2, norb, neleci)
-        self.assertAlmostEqual(numpy.linalg.norm(dm1), 242.33237916212, 10)
+        dm1 = fci.direct_uhf.make_rdm1s(ci0, norb, nelecr)
+        self.assertTrue(numpy.allclose(dm1ref, dm1[0]+dm1[1]))
+        self.assertAlmostEqual(numpy.linalg.norm(dm1[0]+dm1[1]), 393.03762428630, 10)
+        dm1 = fci.direct_uhf.make_rdm1s(ci2, norb, neleci)
+        self.assertAlmostEqual(numpy.linalg.norm(dm1[0]+dm1[1]), 242.33237916212, 10)
 
     def test_rdm12(self):
         dm1ref, dm2ref = fci.direct_spin1.make_rdm12(ci0, norb, nelecr)
@@ -123,14 +123,14 @@ class KnowValues(unittest.TestCase):
 
     def test_trans_rdm1(self):
         dm1ref = fci.direct_spin1.trans_rdm1(ci0, ci1, norb, nelecr)
-        dm1 = fci.direct_uhf.trans_rdm1(ci0, ci1, norb, nelecr)
-        self.assertTrue(numpy.allclose(dm1ref, dm1))
-        self.assertAlmostEqual(numpy.linalg.norm(dm1), 294.40681527414, 10)
-        dm0 = fci.direct_uhf.make_rdm1(ci0, norb, nelecr)
-        dm1 = fci.direct_uhf.trans_rdm1(ci0, ci0, norb, nelecr)
+        dm1 = fci.direct_uhf.trans_rdm1s(ci0, ci1, norb, nelecr)
+        self.assertTrue(numpy.allclose(dm1ref, dm1[0]+dm1[1]))
+        self.assertAlmostEqual(numpy.linalg.norm(dm1[0]+dm1[1]), 294.40681527414, 10)
+        dm0 = fci.direct_uhf.make_rdm1s(ci0, norb, nelecr)
+        dm1 = fci.direct_uhf.trans_rdm1s(ci0, ci0, norb, nelecr)
         self.assertTrue(numpy.allclose(dm1, dm0))
-        dm1 = fci.direct_uhf.trans_rdm1(ci3, ci2, norb, neleci)
-        self.assertAlmostEqual(numpy.linalg.norm(dm1), 193.703051323676, 10)
+        dm1 = fci.direct_uhf.trans_rdm1s(ci3, ci2, norb, neleci)
+        self.assertAlmostEqual(numpy.linalg.norm(dm1[0]+dm1[1]), 193.703051323676, 10)
 
     def test_trans_rdm12(self):
         dm1ref, dm2ref = fci.direct_spin1.trans_rdm12(ci0, ci1, norb, nelecr)

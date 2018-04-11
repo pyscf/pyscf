@@ -356,11 +356,42 @@ def _gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj, compress_vvvv=False):
             (dooov, dooOV, dOOov, dOOOV))
 
 def make_rdm1(mycc, t1, t2, l1, l2):
+    r'''
+    One-particle spin density matrices dm1a, dm1b in MO basis (the
+    occupied-virtual blocks due to the orbital response contribution are not
+    included).
+
+    dm1a[p,q] = <q_alpha^\dagger p_alpha>
+    dm1b[p,q] = <q_beta^\dagger p_beta>
+
+    The convention of 1-pdm is based on McWeeney's book, Eq (5.4.20).
+    '''
     d1 = _gamma1_intermediates(mycc, t1, t2, l1, l2)
     return _make_rdm1(mycc, d1, with_frozen=True)
 
 # spin-orbital rdm2 in Chemist's notation
 def make_rdm2(mycc, t1, t2, l1, l2):
+    r'''
+    Two-particle spin density matrices dm2aa, dm2ab, dm2bb in MO basis
+
+    dm2aa[p,q,r,s] = <q_alpha^\dagger s_alpha^\dagger r_alpha p_alpha>
+    dm2ab[p,q,r,s] = <q_alpha^\dagger s_beta^\dagger r_beta p_alpha>
+    dm2bb[p,q,r,s] = <q_beta^\dagger s_beta^\dagger r_beta p_beta>
+
+    (p,q correspond to one particle and r,s correspond to another particle)
+    Two-particle density matrix should be contracted to integrals with the
+    pattern below to compute energy
+
+    E = numpy.einsum('pqrs,pqrs', eri_aa, dm2_aa)
+    E+= numpy.einsum('pqrs,pqrs', eri_ab, dm2_ab)
+    E+= numpy.einsum('pqrs,rspq', eri_ba, dm2_ab)
+    E+= numpy.einsum('pqrs,pqrs', eri_bb, dm2_bb)
+
+    where eri_aa[p,q,r,s] = (p_alpha q_alpha | r_alpha s_alpha )
+    eri_ab[p,q,r,s] = ( p_alpha q_alpha | r_beta s_beta )
+    eri_ba[p,q,r,s] = ( p_beta q_beta | r_alpha s_alpha )
+    eri_bb[p,q,r,s] = ( p_beta q_beta | r_beta s_beta )
+    '''
     d1 = _gamma1_intermediates(mycc, t1, t2, l1, l2)
     d2 = _gamma2_intermediates(mycc, t1, t2, l1, l2)
     return _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True)
@@ -582,6 +613,9 @@ def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True):
             for j in range(noccb):
                 dm2ab[i,i,j,j] += 1
 
+    dm2aa = dm2aa.transpose(1,0,3,2)
+    dm2ab = dm2ab.transpose(1,0,3,2)
+    dm2bb = dm2bb.transpose(1,0,3,2)
     return dm2aa, dm2ab, dm2bb
 
 
@@ -620,9 +654,9 @@ if __name__ == '__main__':
     h1b = reduce(numpy.dot, (mo_b.T.conj(), hcore, mo_b))
     e1 = numpy.einsum('ij,ji', h1a, dm1a)
     e1+= numpy.einsum('ij,ji', h1b, dm1b)
-    e1+= numpy.einsum('ijkl,jilk', eriaa, dm2aa) * .5
-    e1+= numpy.einsum('ijkl,jilk', eriab, dm2ab)
-    e1+= numpy.einsum('ijkl,jilk', eribb, dm2bb) * .5
+    e1+= numpy.einsum('ijkl,ijkl', eriaa, dm2aa) * .5
+    e1+= numpy.einsum('ijkl,ijkl', eriab, dm2ab)
+    e1+= numpy.einsum('ijkl,ijkl', eribb, dm2bb) * .5
     e1+= mol.energy_nuc()
     print(e1 - mycc.e_tot)
 

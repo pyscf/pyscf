@@ -1,8 +1,16 @@
-PySCF 1.5 alpha (2018-03-??)
+PySCF 1.5 beta (2018-04-??)
+---------------------------
+* Added
+  - ddCOSMO analytical nuclear gradients
+* Bugfix
+  - Fock matrix of ddCOSMO and ddPCM method.
+
+
+PySCF 1.5 alpha (2018-03-21)
 ----------------------------
 * Added
   - ddCOSMO solvent model
-  - VV10 NLC functional for RKS and UKS
+  - VV10 NLC functional for finite size systems
   - range-separated hybrid features for RKS and UKS, including
     > Analytical nuclear gradients
     > Second order SCF
@@ -14,10 +22,11 @@ PySCF 1.5 alpha (2018-03-??)
   - UHF analytical nuclear Hessian
   - UKS analytical nuclear Hessian
   - FFT for low-dimension (2D) PBC systems
-  - Generalized CCSD
+  - Generalized CCSD (GCCSD)
   - Generalized CCSD lambda solver
   - Generalized Hartree-Fock with PBC
-  - Generalized CCSD and k-point CCSD with PBC
+  - k-point GCCSD and RCCSD with PBC
+  - k-point GCCSD(T) and RCCSD(T) with PBC
   - RCCSD(T) and UCCSD(T) for non-canonical HF orbitals
   - RCISD and UCISD analytical nuclear gradients
   - RMP2 and UMP2 analytical nuclear gradients
@@ -33,6 +42,9 @@ PySCF 1.5 alpha (2018-03-??)
   - RCCSD(T), UCCSD(T) analytical nuclear gradients
   - CASCI/CASSCF analytical nuclear gradients
   - Cartesian GTO (6d 10f) basis in PBC calculations
+  - Natural transition orbital analysis
+  - direct-RPA (no exchange, aka TDH)
+  - direct-TDA (TDA without exchange)
 * Improved
   - Supported to set omp threads in FCI solver
   - Supported even number of grids in pbc calculations
@@ -42,11 +54,51 @@ PySCF 1.5 alpha (2018-03-??)
   - The mcscf natural orbitals in the state-average calculation
   - Performance of ECP integrals
   - Prescreening for PBC 3-center integrals
-  - G0W0
+  - Performance and memory efficiency of G0W0
+  - KMP2 memory efficiency
+  - Efficiency to evaluate the value of AO with PBC
+  - libxc parser to support the customized Range-separated XC functionals
+
+
+PySCF 1.4.7 (2018-04-??)
+------------------------
+* Bugfix
+  outcore ao2mo transform when basis functions are cartesian gaussians
+
+
+PySCF 1.4.6 (2018-04-02)
+------------------------
+* Added
+  dip_moment method for ROHF class
+
+
+PySCF 1.4.5 (2018-03-23)
+------------------------
+* Bugfix
+  - Numerical grids not converged in ECP integrals
+  - Python3 compatibility in shci module
+
+
+PySCF 1.4.4 (2018-03-20)
+------------------------
+* Improved
+  - Non-Hermitian matrix diagonalization
+  - Symmetric grids in cubegen
+  - FCI initial guess when the system has Dooh or Doov symmetry
+  - Using stable sort when sorting orbital energies
+  - Attribute "e_tot" in the MP2 methods to access the total energy
+* Bugfix
+  - meta-GGA density in dft.numint.eval_rho2
+  - intor parser in ao2mo module
+  - ecp parser if ecp data not found
+  - 1-electron system for UCCSD
+  - Python-3 compatibility for dmrgscf module
+  - Handling the errors which were raised in the background threads
+  - UHF/ROHF density matrices in nao localization method
 
 
 PySCF 1.4.3 (2018-01-17)
------------------------
+------------------------
 * Improved
   - Assert convergence in geometry optimization
   - Initial guess in SCF PES scanning
@@ -55,7 +107,7 @@ PySCF 1.4.3 (2018-01-17)
   - XC parser to support the scaled compound functional
   - In the second order SCF algorithm, removing level_shift
   - k-point RCCSD for non-canonical HF reference
-  - basis contraction in ECP integrals
+  - ECP integrals
 
 
 PySCF 1.4.2 (2017-12-06)

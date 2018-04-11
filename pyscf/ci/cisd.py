@@ -29,6 +29,10 @@ from pyscf.cc import ccsd
 from pyscf.cc import ccsd_rdm
 from pyscf.fci import cistring
 from functools import reduce
+from pyscf import __config__
+
+BLKMIN = getattr(__config__, 'ci_cisd_blkmin', 4)
+
 
 def kernel(myci, eris, ci0=None, max_cycle=50, tol=1e-8, verbose=logger.INFO):
     log = logger.new_logger(myci, verbose)
@@ -128,7 +132,7 @@ def contract(myci, civec, eris):
 
     unit = nocc*nvir**2 + nocc**2*nvir*3 + 1
     max_memory = max(0, myci.max_memory - lib.current_memory()[0])
-    blksize = min(nvir, max(ccsd.BLKMIN, int(max_memory*.9e6/8/unit)))
+    blksize = min(nvir, max(BLKMIN, int(max_memory*.9e6/8/unit)))
     log.debug1('max_memory %d MB,  nocc,nvir = %d,%d  blksize = %d',
                max_memory, nocc, nvir, blksize)
     nvir_pair = nvir * (nvir+1) // 2
@@ -264,6 +268,16 @@ def from_fcivec(ci0, norb, nelec):
     return amplitudes_to_cisdvec(c0, c1[::-1], c2[::-1,::-1])
 
 def make_rdm1(myci, civec=None, nmo=None, nocc=None):
+    '''
+    Spin-traced one-particle density matrix in MO basis (the occupied-virtual
+    blocks from the orbital response contribution are not included).
+
+    dm1[p,q] = <q_alpha^\dagger p_alpha> + <q_beta^\dagger p_beta>
+
+    The convention of 1-pdm is based on McWeeney's book, Eq (5.4.20).
+    The contraction between 1-particle Hamiltonian and rdm1 is
+    E = einsum('pq,qp', h1, rdm1)
+    '''
     if civec is None: civec = myci.ci
     if nmo is None: nmo = myci.nmo
     if nocc is None: nocc = myci.nocc
@@ -271,7 +285,13 @@ def make_rdm1(myci, civec=None, nmo=None, nocc=None):
     return ccsd_rdm._make_rdm1(myci, d1, with_frozen=True)
 
 def make_rdm2(myci, civec=None, nmo=None, nocc=None):
-    '''spin-traced 2pdm in chemist's notation
+    r'''
+    Spin-traced two-particle density matrix in MO basis
+
+    dm2[p,q,r,s] = \sum_{sigma,tau} <p_sigma^\dagger r_tau^\dagger s_tau q_sigma>
+
+    Note the contraction between ERIs (in Chemist's notation) and rdm2 is
+    E = einsum('pqrs,pqrs', eri, rdm2)
     '''
     if civec is None: civec = myci.ci
     if nmo is None: nmo = myci.nmo
@@ -325,7 +345,7 @@ def _gamma2_outcore(myci, civec, nmo, nocc, h5fobj, compress_vvvv=False):
     #:dvvvv = lib.einsum('ijab,ijcd->abcd', c2, c2)
     max_memory = max(0, myci.max_memory - lib.current_memory()[0])
     unit = max(nocc**2*nvir*2+nocc*nvir**2*3 + 1, nvir**3*2+nocc*nvir**2 + 1)
-    blksize = min(nvir, max(ccsd.BLKMIN, int(max_memory*.95e6/8/unit)))
+    blksize = min(nvir, max(BLKMIN, int(max_memory*.95e6/8/unit)))
     iobuflen = int(256e6/8/blksize)
     log.debug1('rdm intermediates: block size = %d, nvir = %d in %d blocks',
                blksize, nocc, int((nvir+blksize-1)/blksize))
@@ -430,6 +450,14 @@ def as_scanner(ci):
 
 
 class CISD(lib.StreamObject):
+
+    conv_tol = getattr(__config__, 'ci_cisd_CISD_conv_tol', 1e-9)
+    max_cycle = getattr(__config__, 'ci_cisd_CISD_max_cycle', 50)
+    max_space = getattr(__config__, 'ci_cisd_CISD_max_space', 12)
+    lindep = getattr(__config__, 'ci_cisd_CISD_lindep', 1e-14)
+    level_shift = getattr(__config__, 'ci_cisd_CISD_level_shift', 0)  # in preconditioner
+    direct = getattr(__config__, 'ci_cisd_CISD_direct', False)
+
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
         if 'dft' in str(mf.__module__):
              raise RuntimeError('CISD Warning: The first argument mf is a DFT object. '
@@ -444,15 +472,8 @@ class CISD(lib.StreamObject):
         self.stdout = self.mol.stdout
         self.max_memory = mf.max_memory
 
-        self.conv_tol = 1e-9
-        self.max_cycle = 50
-        self.max_space = 12
-        self.lindep = 1e-14
         self.nroots = 1
-        self.level_shift = 0  # in precond
-
         self.frozen = frozen
-        self.direct = False
         self.chkfile = None
 
 ##################################################
@@ -465,7 +486,10 @@ class CISD(lib.StreamObject):
         self.ci = None
         self._nocc = None
         self._nmo = None
-        self._keys = set(self.__dict__.keys())
+
+        keys = set(('conv_tol', 'max_cycle', 'max_space', 'lindep',
+                    'level_shift', 'direct'))
+        self._keys = set(self.__dict__.keys()).union(keys)
 
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)
@@ -643,7 +667,8 @@ class CISD(lib.StreamObject):
         from pyscf.grad import cisd
         return cisd.Gradients(self)
 
-RCISD = CISD
+class RCISD(CISD):
+    pass
 
 def _cp(a):
     return numpy.array(a, copy=False, order='C')
@@ -677,8 +702,8 @@ if __name__ == '__main__':
     h2e = ao2mo.kernel(mf._eri, mf.mo_coeff)
     h2e = ao2mo.restore(1, h2e, nmo)
     e2 = (numpy.einsum('ij,ji', h1e, rdm1) +
-          numpy.einsum('ijkl,jilk', h2e, rdm2) * .5)
+          numpy.einsum('ijkl,ijkl', h2e, rdm2) * .5)
     print(ecisd + mf.e_tot - mol.energy_nuc() - e2)   # = 0
 
-    print(abs(rdm1 - numpy.einsum('ijkk->ij', rdm2)/(mol.nelectron-1)).sum())
+    print(abs(rdm1 - numpy.einsum('ijkk->ji', rdm2)/(mol.nelectron-1)).sum())
 

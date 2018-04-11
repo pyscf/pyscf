@@ -27,6 +27,10 @@ from pyscf.lib import logger
 from pyscf import ao2mo
 from pyscf.ao2mo import _ao2mo
 from pyscf.df.addons import make_auxmol
+from pyscf import __config__
+
+IOBLK_SIZE = getattr(__config__, 'df_outcore_ioblk_size', 256)  # 256 MB
+MAX_MEMORY = getattr(__config__, 'df_outcore_max_memory', 2000)  # 2GB
 
 #
 # for auxe1 (P|ij)
@@ -34,7 +38,7 @@ from pyscf.df.addons import make_auxmol
 
 def cholesky_eri(mol, erifile, auxbasis='weigend+etb', dataname='j3c', tmpdir=None,
                  int3c='int3c2e_sph', aosym='s2ij', int2c='int2c2e_sph', comp=1,
-                 max_memory=2000, ioblk_size=256, auxmol=None, verbose=0):
+                 max_memory=MAX_MEMORY, ioblk_size=IOBLK_SIZE, auxmol=None, verbose=0):
     '''3-center 2-electron AO integrals
     '''
     assert(aosym in ('s1', 's2ij'))
@@ -111,7 +115,8 @@ def cholesky_eri(mol, erifile, auxbasis='weigend+etb', dataname='j3c', tmpdir=No
 # store cderi in blocks
 def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='j3c',
                    int3c='int3c2e_sph', aosym='s2ij', int2c='int2c2e_sph',
-                   comp=1, ioblk_size=256, auxmol=None, verbose=logger.NOTE):
+                   comp=1, ioblk_size=IOBLK_SIZE, auxmol=None,
+                   verbose=logger.NOTE):
     '''3-center 2-electron AO integrals
     '''
     assert(aosym in ('s1', 's2ij'))
@@ -193,7 +198,7 @@ def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='j3c',
 
 def general(mol, mo_coeffs, erifile, auxbasis='weigend+etb', dataname='eri_mo', tmpdir=None,
             int3c='int3c2e_sph', aosym='s2ij', int2c='int2c2e_sph', comp=1,
-            max_memory=2000, ioblk_size=256, verbose=0, compact=True):
+            max_memory=MAX_MEMORY, ioblk_size=IOBLK_SIZE, verbose=0, compact=True):
     ''' Transform ij of (ij|L) to MOs.
     '''
     assert(aosym in ('s1', 's2ij'))
@@ -303,6 +308,8 @@ def _stand_sym_code(sym):
         return sym
     else:
         return 's' + sym
+
+del(MAX_MEMORY)
 
 
 if __name__ == '__main__':

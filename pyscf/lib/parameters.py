@@ -15,20 +15,18 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import os
 from pyscf.data.nist import LIGHT_SPEED, BOHR
 from pyscf.data.elements import ELEMENTS, ELEMENTS_PROTON, NUC
+from pyscf import __config__
 
-L_MAX      = 8
-MAX_MEMORY = int(os.environ.get('PYSCF_MAX_MEMORY', 4000)) # MB
-TMPDIR = os.environ.get('TMPDIR', '.')
-TMPDIR = os.environ.get('PYSCF_TMPDIR', TMPDIR)
+MAX_MEMORY = getattr(__config__, 'MAX_MEMORY', 4000)  # MB
+TMPDIR = getattr(__config__, 'TMPDIR', '.')
+OUTPUT_DIGITS = getattr(__config__, 'OUTPUT_DIGITS', 5)
+OUTPUT_COLS   = getattr(__config__, 'OUTPUT_COLS', 5)
+LOOSE_ZERO_TOL = getattr(__config__, 'LOOSE_ZERO_TOL', 1e-9)
+LARGE_DENOM = getattr(__config__, 'LARGE_DENOM', 1e14)
 
-BOHR = float(os.environ.get('PYSCF_BOHR', BOHR))
-LIGHT_SPEED = float(os.environ.get('PYSCF_LIGHT_SPEED', LIGHT_SPEED))
-OUTPUT_DIGITS = int(os.environ.get('PYSCF_OUTPUT_DIGITS', 5))
-OUTPUT_COLS   = int(os.environ.get('PYSCF_OUTPUT_COLS', 5))
-
+L_MAX = 8
 ANGULAR = 'spdfghik'
 ANGULARMAP = {'s': 0,
               'p': 1,
@@ -58,5 +56,3 @@ VERBOSE_QUIET  = 0
 VERBOSE_CRIT   = -1
 VERBOSE_ALERT  = -2
 VERBOSE_PANIC  = -3
-TIMER_LEVEL    = VERBOSE_DEBUG
-

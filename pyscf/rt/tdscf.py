@@ -46,7 +46,7 @@ def matrixpower(A,p,PrintCondition=False):
     """ Raise a Hermitian Matrix to a possibly fractional power. """
     u,s,v = np.linalg.svd(A)
     if (PrintCondition):
-        print "matrixpower: Minimal Eigenvalue =", np.min(s)
+        print("matrixpower: Minimal Eigenvalue =", np.min(s))
     for i in range(len(s)):
         if (abs(s[i]) < np.power(10.0,-14.0)):
             s[i] = np.power(10.0,-14.0)

@@ -997,7 +997,7 @@ class _NumInt(numint._NumInt):
         '''
         if grids.coords is None:
             grids.build(with_non0tab=True)
-        ngrids = grids.weights.size
+        ngrids = grids.coords.shape[0]
         comp = (deriv+1)*(deriv+2)*(deriv+3)//6
 # NOTE to index grids.non0tab, the blksize needs to be the integer multiplier of BLKSIZE
         if blksize is None:
@@ -1161,7 +1161,7 @@ class _KNumInt(numint._NumInt):
         '''
         if grids.coords is None:
             grids.build(with_non0tab=True)
-        ngrids = grids.weights.size
+        ngrids = grids.coords.shape[0]
         nkpts = len(kpts)
         comp = (deriv+1)*(deriv+2)*(deriv+3)//6
 # NOTE to index grids.non0tab, the blksize needs to be the integer multiplier of BLKSIZE
@@ -1184,16 +1184,9 @@ class _KNumInt(numint._NumInt):
             coords = grids.coords[ip0:ip1]
             weight = grids.weights[ip0:ip1]
             non0 = non0tab[ip0//BLKSIZE:]
-            ao_k2 = self.eval_ao(cell, coords, kpts, deriv=deriv, non0tab=non0)
-            if kpts_band is None:
-                ao_k1 = ao_k2
-            else:
-                new_kpts = [k for k,w in zip(kpts_band, where) if w is None]
-                new_ao = iter(self.eval_ao(cell, coords, new_kpts, deriv=deriv, non0tab=non0))
-                old_ao = (ao_k2[w] for w in where if not w is None)
-                ao_k1 = []
-                for w in where:
-                    ao_k1.append(next(new_ao) if w is None else next(old_ao))
+            ao_k1 = ao_k2 = self.eval_ao(cell, coords, kpts, deriv=deriv, non0tab=non0)
+            if kpts_band is not None:
+                ao_k1 = self.eval_ao(cell, coords, kpts_band, deriv=deriv, non0tab=non0)
             yield ao_k1, ao_k2, non0, weight, coords
             ao_k1 = ao_k2 = None
 

@@ -45,7 +45,7 @@ class KnownValues(unittest.TestCase):
         mf1 = copy.copy(mf)
         nao, nmo = mf.mo_coeff[0].shape
         numpy.random.seed(10)
-        mf1.mo_coeff = numpy.random.random((2,nao,nmo))
+        mf1.mo_coeff = numpy.random.random((2,nao,nmo)) - .5
         numpy.random.seed(12)
         nocca, noccb = mol.nelec
         nmo = mf1.mo_occ[0].size
@@ -65,11 +65,11 @@ class KnownValues(unittest.TestCase):
         mycc = cc.UCCSD(mf1)
         eris = mycc.ao2mo(mf1.mo_coeff)
         e3a = uccsd_t.kernel(mycc, eris, [t1a,t1b], [t2aa, t2ab, t2bb])
-        self.assertAlmostEqual(e3a, 9877.2780859693339, 6)
+        self.assertAlmostEqual(e3a, 15.582860941071505, 8)
 
         mycc.max_memory = 0
         e3a = uccsd_t.kernel(mycc, eris, [t1a,t1b], [t2aa, t2ab, t2bb])
-        self.assertAlmostEqual(e3a, 9877.2780859693339, 6)
+        self.assertAlmostEqual(e3a, 15.582860941071505, 8)
 
         e3a = mcc.ccsd_t()
         self.assertAlmostEqual(e3a, -0.0009857042572475674, 11)

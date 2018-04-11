@@ -40,6 +40,10 @@ from pyscf.pbc.scf import addons
 from pyscf.pbc.scf import chkfile
 from pyscf.pbc import tools
 from pyscf.pbc import df
+from pyscf import __config__
+
+WITH_META_LOWDIN = getattr(__config__, 'pbc_scf_analyze_with_meta_lowdin', True)
+PRE_ORTH_METHOD = getattr(__config__, 'pbc_scf_analyze_pre_orth_method', 'ANO')
 
 
 def get_ovlp(mf, cell=None, kpts=None):
@@ -230,7 +234,8 @@ def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf_kpts=None):
     return e1+e_coul, e_coul
 
 
-def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=True, **kwargs):
+def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
+            **kwargs):
     '''Analyze the given SCF object:  print orbital energies, occupancies;
     print orbital coefficients; Mulliken population analysis; Dipole moment
     '''
@@ -246,8 +251,8 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=True, **kwargs):
         return mf.mulliken_pop(mf.cell, dm, s=ovlp_ao, verbose=verbose)
 
 
-def mulliken_meta(cell, dm_ao, verbose=logger.DEBUG, pre_orth_method='ANO',
-                  s=None):
+def mulliken_meta(cell, dm_ao, verbose=logger.DEBUG,
+                  pre_orth_method=PRE_ORTH_METHOD, s=None):
     '''Mulliken population analysis, based on meta-Lowdin AOs.
 
     Note this function only computes the Mulliken population for the gamma
@@ -316,7 +321,8 @@ class KSCF(pbchf.SCF):
         kpts : (nks,3) ndarray
             The sampling k-points in Cartesian coordinates, in units of 1/Bohr.
     '''
-    def __init__(self, cell, kpts=np.zeros((1,3)), exxdiv='ewald'):
+    def __init__(self, cell, kpts=np.zeros((1,3)),
+                 exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         if not cell._built:
             sys.stderr.write('Warning: cell.build() is not called in input\n')
             cell.build()
@@ -478,7 +484,8 @@ class KSCF(pbchf.SCF):
         vj, vk = self.get_jk(cell, dm_kpts, hermi, kpts, kpts_band)
         return vj - vk * .5
 
-    def analyze(self, verbose=None, with_meta_lowdin=True, **kwargs):
+    def analyze(self, verbose=None, with_meta_lowdin=WITH_META_LOWDIN,
+                **kwargs):
         if verbose is None: verbose = self.verbose
         return analyze(self, verbose, with_meta_lowdin, **kwargs)
 
@@ -557,7 +564,7 @@ class KSCF(pbchf.SCF):
         return self
 
     def mulliken_meta(self, cell=None, dm=None, verbose=logger.DEBUG,
-                      pre_orth_method='ANO', s=None):
+                      pre_orth_method=PRE_ORTH_METHOD, s=None):
         if cell is None: cell = self.cell
         if dm is None: dm = self.make_rdm1()
         if s is None: s = self.get_ovlp(cell)
@@ -574,7 +581,10 @@ class KSCF(pbchf.SCF):
         from pyscf.pbc.df import mdf_jk
         return mdf_jk.density_fit(self, auxbasis, with_df)
 
-    def stability(self, internal=True, external=False, verbose=None):
+    def stability(self,
+                  internal=getattr(__config__, 'pbc_scf_KSCF_stability_internal', True),
+                  external=getattr(__config__, 'pbc_scf_KSCF_stability_external', False),
+                  verbose=None):
         from pyscf.pbc.scf.stability import rhf_stability
         return rhf_stability(self, internal, external, verbose)
 
@@ -591,6 +601,8 @@ class KRHF(KSCF, pbchf.RHF):
         '''Convert given mean-field object to KRHF'''
         addons.convert_to_rhf(mf, self)
         return self
+
+del(WITH_META_LOWDIN, PRE_ORTH_METHOD)
 
 
 if __name__ == '__main__':

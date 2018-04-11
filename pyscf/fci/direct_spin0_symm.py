@@ -44,6 +44,7 @@ from pyscf.fci import direct_spin1
 from pyscf.fci import direct_spin1_symm
 from pyscf.fci import addons
 from pyscf.fci.spin_op import contract_ss
+from pyscf import __config__
 
 libfci = lib.load_library('libfci')
 
@@ -139,31 +140,13 @@ def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=1e-3, tol=1e-10,
     e, c = cis.kernel(h1e, eri, norb, nelec, ci0, ecore=ecore, **unknown)
     return e, c
 
-# dm_pq = <|p^+ q|>
-def make_rdm1(fcivec, norb, nelec, link_index=None):
-    return direct_spin0.make_rdm1(fcivec, norb, nelec, link_index)
+make_rdm1 = direct_spin0.make_rdm1
+make_rdm1s = direct_spin0.make_rdm1s
+make_rdm12 = direct_spin0.make_rdm12
 
-# alpha and beta 1pdm
-def make_rdm1s(fcivec, norb, nelec, link_index=None):
-    return direct_spin0.make_rdm1s(fcivec, norb, nelec, link_index)
-
-# dm_pq,rs = <|p^+ q r^+ s|>
-# dm_pq,rs = dm_sr,qp;  dm_qp,rs = dm_rs,qp
-# need call reorder_rdm for this rdm2 to get standard 2pdm
-
-def make_rdm12(fcivec, norb, nelec, link_index=None, reorder=True):
-    return direct_spin0.make_rdm12(fcivec, norb, nelec, link_index, reorder)
-
-# dm_pq = <I|p^+ q|J>
-def trans_rdm1s(cibra, ciket, norb, nelec, link_index=None):
-    return direct_spin0.trans_rdm1s(cibra, ciket, norb, nelec, link_index)
-
-def trans_rdm1(cibra, ciket, norb, nelec, link_index=None):
-    return direct_spin0.trans_rdm1(cibra, ciket, norb, nelec, link_index)
-
-# dm_pq,rs = <I|p^+ q r^+ s|J>
-def trans_rdm12(cibra, ciket, norb, nelec, link_index=None, reorder=True):
-    return direct_spin0.trans_rdm12(cibra, ciket, norb, nelec, link_index, reorder)
+trans_rdm1s = direct_spin0.trans_rdm1s
+trans_rdm1 = direct_spin0.trans_rdm1
+trans_rdm12 = direct_spin0.trans_rdm12
 
 def energy(h1e, eri, fcivec, norb, nelec, link_index=None, orbsym=None, wfnsym=0):
     h2e = direct_spin1.absorb_h1e(h1e, eri, norb, nelec) * .5
@@ -207,11 +190,16 @@ def get_init_guess(norb, nelec, nroots, hdiag, orbsym, wfnsym=0):
 
 
 class FCISolver(direct_spin0.FCISolver):
+
+    davidson_only = getattr(__config__, 'fci_direct_spin1_symm_FCI_davidson_only', True)
+
+    # pspace may break point group symmetry
+    pspace_size = getattr(__config__, 'fci_direct_spin1_symm_FCI_pspace_size', 0)
+
     def __init__(self, mol=None, **kwargs):
         direct_spin0.FCISolver.__init__(self, mol, **kwargs)
-        self.davidson_only = True
-        self.pspace_size = 0  # Improper pspace size may break symmetry
-        self.wfnsym = 0
+        # wfnsym will be guessed based on initial guess if it is None
+        self.wfnsym = None
 
     def dump_flags(self, verbose=None):
         if verbose is None: verbose = self.verbose
@@ -272,6 +260,8 @@ class FCISolver(direct_spin0.FCISolver):
             wfnsym = self.wfnsym
         if self.verbose >= logger.WARN:
             self.check_sanity()
+        self.norb = norb
+        self.nelec = nelec
 
         wfnsym_bak = self.wfnsym
         self.wfnsym = self.guess_wfnsym(norb, nelec, ci0, wfnsym, **kwargs)
@@ -282,6 +272,7 @@ class FCISolver(direct_spin0.FCISolver):
         if orbsym is not None:
             self.orbsym = orbsym_bak
         self.wfnsym = wfnsym_bak
+        self.eci, self.ci = e, c
         return e, c
 
 FCI = FCISolver

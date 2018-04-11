@@ -133,9 +133,8 @@ XC = XC_CODES = {
 'B3LYP5'        : '.2*HF + .08*SLATER + .72*B88 + .81*LYP + .19*VWN5',
 'B3LYPG'        : '.2*HF + .08*SLATER + .72*B88 + .81*LYP + .19*VWN3', # B3LYP-VWN3 used by Gaussian and libxc
 'O3LYP'         : '.1161*HF + .1129*SLATER + .8133*OPTX + .81*LYP + .19*VWN5',  # Mol. Phys. 99 607
-# RSH(alpha; beta; mu): Range-separated-hybrid functional
-# libxc-omega == mu, libxc-alpha == alpha+beta, libxc-beta == -beta
-'CAMB3LYP'      : 'RSH(.19;.46;.33) + BECKECAMX + VWN5C*0.19 + LYPC*0.81',
+# Range-separated-hybrid functional: (alpha+beta)*SR_HF(0.33) + alpha*LR_HF(0.33)
+'CAMB3LYP'      : '0.19*SR_HF(0.33) + 0.65*LR_HF(0.33) + BECKECAMX + VWN5C*0.19 + LYPC*0.81',
 'CAM_B3LYP'     : 'CAMB3LYP',
 'KT1'           : 'SLATERX - 0.006*KTX + VWN5C',                                     # Keal-Tozer 1
 'KT2'           : 'SLATERX*1.07173 - 0.006*KTX + VWN5C*0.576727',                    # Keal-Tozer 2
@@ -223,15 +222,10 @@ def nlc_coeff(xc_code):
 def rsh_coeff(xc_code):
     '''Get Range-separated-hybrid coefficients
     '''
-    if isinstance(xc_code, str):
-        xc_code = xc_code.replace(' ','').upper()
-        if xc_code in RSH_XC:
-            xc_code = XC_CODES[xc_code]
-        if 'RSH' in xc_code:
-            token = xc_code[xc_code.index('RSH')+4:].split(')', 1)[0]
-            alpha, beta, mu = [float(x) for x in token.split(';')]
-            return mu, alpha+beta, -beta
-    return 0, 0, 0
+    hyb, fn_facs = parse_xc(xc_code)
+    hyb, alpha, omega = hyb
+    beta = hyb - alpha
+    return omega, alpha, beta
 
 def max_deriv_order(xc_code):
     hyb, fn_facs = parse_xc(xc_code)
@@ -247,14 +241,15 @@ def test_deriv_order(xc_code, deriv, raise_error=False):
 def hybrid_coeff(xc_code, spin=0):
     if is_nlc(xc_code):
         return 0
-    return parse_xc(xc_code)[0]
+    hyb, fn_facs = parse_xc(xc_code)
+    return hyb[0]
 
 def parse_xc_name(xc_name):
     fn_facs = parse_xc(xc_name)[1]
     return fn_facs[0][0], fn_facs[1][0]
 
 def parse_xc(description):
-    '''Rules to input functional description:
+    r'''Rules to input functional description:
 
     * The given functional description must be a one-line string.
     * The functional description is case-insensitive.
@@ -266,18 +261,28 @@ def parse_xc(description):
         X functional.
       - To neglect X functional (just apply C functional), leave blank in the
         first part, eg description=',vwn' for pure VWN functional
+      - If compound XC functional (including both X and C functionals, such as
+        b3lyp) is specified, no matter whehter it is in the X part (the string
+        in front of comma) or the C part (the string behind comma), both X and C
+        functionals of the compound XC functional will be used.
 
     * The functional name can be placed in arbitrary order.  Two name needs to
       be separated by operators "+" or "-".  Blank spaces are ignored.
       NOTE the parser only reads operators "+" "-" "*".  / is not in support.
     * A functional name is associated with one factor.  If the factor is not
-      given, it is assumed equaling 1.
-    * String "HF" stands for exact exchange (HF K matrix).  It is allowed to
-      put in C functional part.
+      given, it is assumed equaling 1.  Compound functional can be scaled as a
+      unit. For example '0.5*b3lyp' is equivalent to
+      'HF*0.1 + .04*LDA + .36*B88, .405*LYP + .095*VWN'
+    * String "HF" stands for exact exchange (HF K matrix).  Putting "HF" in
+      correlation functional part is the same to putting "HF" in exchange
+      part.
+    * String "RSH" means range-separated operator. Its format is
+      RSH(alpha; beta; omega).  Another way to input RSH is "SR-HF(0.1)" and
+      "LR-HF(0.1)".  The number in parenthesis is the value of omega.
     * Be careful with the xcfun convention on GGA functional, in which the LDA
       contribution is included.
     '''
-
+    hyb = [0, 0, 0]  # hybrid, alpha, omega
     if isinstance(description, int):
         return 0, [(description, 1.)]
     elif not isinstance(description, str): #isinstance(description, (tuple,list)):
@@ -288,7 +293,11 @@ def parse_xc(description):
     else:
         x_code, c_code = description.replace(' ','').upper(), ''
 
-    hyb = [0]
+    def assign_omega(omega):
+        if hyb[2] == 0:
+            hyb[2] = omega
+        elif hyb[2] != omega:
+            raise ValueError('Different values of omega found for RSH functionals')
     fn_facs = []
     def parse_token(token, suffix):
         if token:
@@ -299,10 +308,18 @@ def parse_xc(description):
                 fac = float(fac)
             else:
                 fac, key = 1, token
-            if key[:3] == 'RSH':
-                hyb[0] += float(key[4:-1].split(';')[0])
-            elif key == 'HF':
+            if key == 'HF':
                 hyb[0] += fac
+            elif 'SR_HF' in key or 'SRHF' in key:
+                hyb[0] += fac
+                if '(' in key:
+                    omega = float(key.split('(')[1].split(')')[0])
+                    assign_omega(omega)
+            elif 'LR_HF' in key or 'LRHF' in key:
+                hyb[1] += fac  # alpha
+                if '(' in key:
+                    omega = float(key.split('(')[1].split(')')[0])
+                    assign_omega(omega)
             elif key.isdigit():
                 fn_facs.append((int(key), fac))
             else:
@@ -314,8 +331,10 @@ def parse_xc(description):
                     raise KeyError('Unknown XC key %s' % key)
                 if isinstance(x_id, str):
                     hyb1, fn_facs1 = parse_xc(x_id)
-# Recursively scale the composed functional, to support '0.5*b3lyp'
-                    hyb[0] += hyb1 * fac
+# Recursively scale the composed functional, to support e.g. '0.5*b3lyp'
+                    hyb[0] += hyb1[0] * fac
+                    hyb[1] += hyb1[1] * fac
+                    assign_omega(hyb1[2])
                     fn_facs.extend([(xid, c*fac) for xid, c in fn_facs1])
                 elif x_id is None:
                     raise NotImplementedError(key)
@@ -334,6 +353,11 @@ def parse_xc(description):
                 n += 1
         return list(zip(fn_ids, facs))
 
+    if '-' in description:  # To handle e.g. M06-L
+        for key in _NAME_WITH_DASH:
+            if key in description:
+                description = description.replace(key, _NAME_WITH_DASH[key])
+
     if ',' in description:
         for token in x_code.replace('-', '+-').split('+'):
             parse_token(token, 'X')
@@ -346,7 +370,14 @@ def parse_xc(description):
         except KeyError:
             for token in x_code.replace('-', '+-').split('+'):
                 parse_token(token, 'X')
-    return hyb[0], remove_dup(fn_facs)
+    return hyb, remove_dup(fn_facs)
+
+_NAME_WITH_DASH = {'SR-HF'  : 'SR_HF',
+                   'LR-HF'  : 'LR_HF',
+                   'M06-L'  : 'M06L',
+                   'M05-2X' : 'M052X',
+                   'M06-HF' : 'M06HF',
+                   'M06-2X' : 'M062X',}
 
 
 def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, verbose=None):

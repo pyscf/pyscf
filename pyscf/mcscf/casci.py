@@ -26,6 +26,11 @@ from pyscf import ao2mo
 from pyscf import fci
 from pyscf.mcscf import addons
 from pyscf import symm
+from pyscf import __config__
+
+WITH_META_LOWDIN = getattr(__config__, 'mcscf_analyze_with_meta_lowdin', True)
+LARGE_CI_TOL = getattr(__config__, 'mcscf_analyze_large_ci_tol', 0.1)
+PENALTY = getattr(__config__, 'mcscf_casci_CASCI_fix_spin_shift', 0.2)
 
 
 def extract_orbs(mo_coeff, ncas, nelecas, ncore):
@@ -67,7 +72,8 @@ def h1e_for_cas(casci, mo_coeff=None, ncas=None, ncore=None):
     return h1eff, energy_core
 
 def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO,
-            large_ci_tol=.1, **kwargs):
+            large_ci_tol=LARGE_CI_TOL, with_meta_lowdin=WITH_META_LOWDIN,
+            **kwargs):
     from pyscf.lo import orth
     from pyscf.tools import dump_mat
     log = logger.new_logger(casscf, verbose)
@@ -119,9 +125,13 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO,
         for i, k in enumerate(numpy.argmax(abs(ucas), axis=0)):
             if ucas[k,i] < 0:
                 ucas[:,i] *= -1
-        orth_coeff = orth.orth_ao(casscf.mol, 'meta_lowdin', s=ovlp_ao)
-        mo_cas = reduce(numpy.dot, (orth_coeff.T, ovlp_ao, mo_coeff[:,ncore:nocc], ucas))
-        log.info('Natural orbital (expansion on meta-Lowdin AOs) in CAS space')
+        if with_meta_lowdin:
+            log.info('Natural orbital (expansion on meta-Lowdin AOs) in CAS space')
+            orth_coeff = orth.orth_ao(casscf.mol, 'meta_lowdin', s=ovlp_ao)
+            mo_cas = reduce(numpy.dot, (orth_coeff.T, ovlp_ao, mo_coeff[:,ncore:nocc], ucas))
+        else:
+            log.info('Natural orbital (expansion on AOs) in CAS space')
+            mo_cas = numpy.dot(mo_coeff[:,ncore:nocc], ucas)
         dump_mat.dump_rec(log.stdout, mo_cas, label, start=1, **kwargs)
         if log.verbose >= logger.DEBUG2:
             if not casscf.natorb:
@@ -133,7 +143,8 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO,
 
         if casscf._scf.mo_coeff is not None:
             s = reduce(numpy.dot, (casscf.mo_coeff.T, ovlp_ao, casscf._scf.mo_coeff))
-            idx = numpy.argwhere(abs(s)>.4)
+            tol = getattr(__config__, 'mcscf_addons_map2hf_tol', 0.4)
+            idx = numpy.argwhere(abs(s) > tol)
             for i,j in idx:
                 log.info('<mo-mcscf|mo-hf> %d  %d  %12.8f', i+1, j+1, s[i,j])
 
@@ -256,7 +267,7 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
     # orbital symmetry is reserved in this _eig call
     occ, ucas = mc._eig(-casdm1, ncore, nocc)
     if sort:
-        casorb_idx = numpy.argsort(occ)
+        casorb_idx = numpy.argsort(occ.round(9), kind='mergesort')
         occ = occ[casorb_idx]
         ucas = ucas[:,casorb_idx]
 # restore phase
@@ -418,7 +429,7 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
         # mc._eig function is called to handle symmetry adapated fock
         w, c1 = mc._eig(fock[:ncore,:ncore], 0, ncore)
         if sort:
-            idx = numpy.argsort(w.round(9))
+            idx = numpy.argsort(w.round(9), kind='mergesort')
             w = w[idx]
             c1 = c1[:,idx]
         mo_coeff1[:,:ncore] = numpy.dot(mo_coeff[:,:ncore], c1)
@@ -426,7 +437,7 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
     if nmo-nocc > 0:
         w, c1 = mc._eig(fock[nocc:,nocc:], nocc, nmo)
         if sort:
-            idx = numpy.argsort(w.round(9))
+            idx = numpy.argsort(w.round(9), kind='mergesort')
             w = w[idx]
             c1 = c1[:,idx]
         mo_coeff1[:,nocc:] = numpy.dot(mo_coeff[:,nocc:], c1)
@@ -587,6 +598,11 @@ class CASCI(lib.StreamObject):
     >>> mc.kernel()[0]
     -108.980200816243354
     '''
+
+    natorb = getattr(__config__, 'mcscf_casci_CASCI_natorb', False)
+    canonicalization = getattr(__config__, 'mcscf_casci_CASCI_canonicalization', True)
+    sorting_mo_energy = getattr(__config__, 'mcscf_casci_CASCI_sorting_mo_energy', False)
+
     def __init__(self, mf, ncas, nelecas, ncore=None):
         mol = mf.mol
         self.mol = mol
@@ -608,15 +624,16 @@ class CASCI(lib.StreamObject):
         else:
             assert(isinstance(ncore, (int, numpy.integer)))
             self.ncore = ncore
-        #self.fcisolver = fci.solver(mol, self.nelecas[0]==self.nelecas[1], False)
-        self.fcisolver = fci.solver(mol, singlet=False, symm=False)
+        singlet = (getattr(__config__, 'mcscf_casci_CASCI_fcisolver_direct_spin0', False)
+                   and self.nelecas[0] == self.nelecas[1])
+        self.fcisolver = fci.solver(mol, singlet, symm=False)
 # CI solver parameters are set in fcisolver object
-        self.fcisolver.lindep = 1e-10
-        self.fcisolver.max_cycle = 200
-        self.fcisolver.conv_tol = 1e-8
-        self.natorb = False
-        self.canonicalization = True
-        self.sorting_mo_energy = False
+        self.fcisolver.lindep = getattr(__config__,
+                                        'mcscf_casci_CASCI_fcisolver_lindep', 1e-10)
+        self.fcisolver.max_cycle = getattr(__config__,
+                                           'mcscf_casci_CASCI_fcisolver_max_cycle', 200)
+        self.fcisolver.conv_tol = getattr(__config__,
+                                          'mcscf_casci_CASCI_fcisolver_conv_tol', 1e-8)
 
 ##################################################
 # don't modify the following attributes, they are not input options
@@ -626,7 +643,8 @@ class CASCI(lib.StreamObject):
         self.mo_coeff = mf.mo_coeff
         self.mo_energy = mf.mo_energy
 
-        self._keys = set(self.__dict__.keys())
+        keys = set(('natorb', 'canonicalization', 'sorting_mo_energy'))
+        self._keys = set(self.__dict__.keys()).union(keys)
 
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)
@@ -794,8 +812,10 @@ class CASCI(lib.StreamObject):
         return self.mo_coeff, ci, self.mo_energy
 
     @lib.with_doc(analyze.__doc__)
-    def analyze(self, mo_coeff=None, ci=None, verbose=None):
-        return analyze(self, mo_coeff, ci, verbose)
+    def analyze(self, mo_coeff=None, ci=None, verbose=None,
+                large_ci_tol=LARGE_CI_TOL, with_meta_lowdin=WITH_META_LOWDIN):
+        return analyze(self, mo_coeff, ci, verbose, large_ci_tol,
+                       with_meta_lowdin)
 
     def sort_mo(self, caslst, mo_coeff=None, base=1):
         '''Select active space.  See also :func:`pyscf.mcscf.addons.sort_mo`
@@ -848,7 +868,7 @@ class CASCI(lib.StreamObject):
         dm1 = dm1 + reduce(numpy.dot, (mocas, casdm1, mocas.T))
         return dm1
 
-    def fix_spin_(self, shift=.2, ss=None):
+    def fix_spin_(self, shift=PENALTY, ss=None):
         r'''Use level shift to control FCI solver spin.
 
         .. math::
@@ -857,7 +877,7 @@ class CASCI(lib.StreamObject):
 
         Kwargs:
             shift : float
-                Level shift for states which have different spin
+                Energy penalty for states which have wrong spin
             ss : number
                 S^2 expection value == s*(s+1)
         '''
@@ -884,6 +904,8 @@ class CASCI(lib.StreamObject):
     def nuc_grad_method(self):
         from pyscf.grad import casci
         return casci.Gradients(self)
+
+del(WITH_META_LOWDIN, LARGE_CI_TOL, PENALTY)
 
 
 if __name__ == '__main__':

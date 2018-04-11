@@ -22,16 +22,18 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
 from pyscf.ao2mo import incore
+from pyscf import __config__
 
-# default ioblk_size is 256 MB
+IOBLK_SIZE = getattr(__config__, 'ao2mo_outcore_ioblk_size', 256)  # 256 MB
+IOBUF_WORDS = getattr(__config__, 'ao2mo_outcore_iobuf_words', 1e8)  # 800 MB
+IOBUF_ROW_MIN = getattr(__config__, 'ao2mo_outcore_row_min', 160)
+MAX_MEMORY = getattr(__config__, 'ao2mo_outcore_max_memory', 2000)  # 2GB
 
-IOBUF_WORDS_PREFER = 1e8 # 800 MB
-IOBLK_SIZE = 256  # MB
-IOBUF_ROW_MIN = 160
 
 def full(mol, mo_coeff, erifile, dataname='eri_mo', tmpdir=None,
-         intor='int2e_sph', aosym='s4', comp=None,
-         max_memory=2000, ioblk_size=IOBLK_SIZE, verbose=logger.WARN, compact=True):
+         intor='int2e', aosym='s4', comp=None,
+         max_memory=MAX_MEMORY, ioblk_size=IOBLK_SIZE, verbose=logger.WARN,
+         compact=True):
     r'''Transfer arbitrary spherical AO integrals to MO integrals for given orbitals
 
     Args:
@@ -116,8 +118,9 @@ def full(mol, mo_coeff, erifile, dataname='eri_mo', tmpdir=None,
     return erifile
 
 def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
-            intor='int2e_sph', aosym='s4', comp=None,
-            max_memory=2000, ioblk_size=IOBLK_SIZE, verbose=logger.WARN, compact=True):
+            intor='int2e', aosym='s4', comp=None,
+            max_memory=MAX_MEMORY, ioblk_size=IOBLK_SIZE, verbose=logger.WARN,
+            compact=True):
     r'''For the given four sets of orbitals, transfer arbitrary spherical AO
     integrals to MO integrals on the fly.
 
@@ -313,7 +316,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
 
     klaoblks = len(fswap['0'])
     ijmoblks = int(numpy.ceil(float(nij_pair)/iobuflen)) * comp
-    ao_loc = mol.ao_loc_nr('cart' in intor)
+    ao_loc = mol.ao_loc_nr()
     ti0 = time_1pass
     istep = 0
     with lib.call_in_background(load) as prefetch:
@@ -350,9 +353,9 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
 
 # swapfile will be overwritten if exists.
 def half_e1(mol, mo_coeffs, swapfile,
-            intor='int2e_sph', aosym='s4', comp=1,
-            max_memory=2000, ioblk_size=IOBLK_SIZE, verbose=logger.WARN, compact=True,
-            ao2mopt=None):
+            intor='int2e', aosym='s4', comp=1,
+            max_memory=MAX_MEMORY, ioblk_size=IOBLK_SIZE, verbose=logger.WARN,
+            compact=True, ao2mopt=None):
     r'''Half transform arbitrary spherical AO integrals to MO integrals
     for the given two sets of orbitals
 
@@ -404,6 +407,7 @@ def half_e1(mol, mo_coeffs, swapfile,
         None
 
     '''
+    intor = mol._add_suffix(intor)
     time0 = (time.clock(), time.time())
     log = logger.new_logger(mol, verbose)
 
@@ -499,8 +503,9 @@ def _transpose_to_h5g(h5group, key, dat, blksize, chunks=None):
     for col0, col1 in prange(0, ncol, blksize):
         dset[col0:col1] = lib.transpose(dat[:,col0:col1])
 
-def full_iofree(mol, mo_coeff, intor='int2e_sph', aosym='s4', comp=None,
-                max_memory=2000, ioblk_size=IOBLK_SIZE, verbose=logger.WARN, compact=True):
+def full_iofree(mol, mo_coeff, intor='int2e', aosym='s4', comp=None,
+                max_memory=MAX_MEMORY, ioblk_size=IOBLK_SIZE,
+                verbose=logger.WARN, compact=True):
     r'''Transfer arbitrary spherical AO integrals to MO integrals for given orbitals
     This function is a wrap for :func:`ao2mo.outcore.general`.  It's not really
     IO free.  The returned MO integrals are held in memory.  For backward compatibility,
@@ -594,8 +599,9 @@ def full_iofree(mol, mo_coeff, intor='int2e_sph', aosym='s4', comp=None,
             del(feri[key])
         return eri
 
-def general_iofree(mol, mo_coeffs, intor='int2e_sph', aosym='s4', comp=None,
-                   max_memory=2000, ioblk_size=IOBLK_SIZE, verbose=logger.WARN, compact=True):
+def general_iofree(mol, mo_coeffs, intor='int2e', aosym='s4', comp=None,
+                   max_memory=MAX_MEMORY, ioblk_size=IOBLK_SIZE,
+                   verbose=logger.WARN, compact=True):
     r'''For the given four sets of orbitals, transfer arbitrary spherical AO
     integrals to MO integrals on the fly.  This function is a wrap for
     :func:`ao2mo.outcore.general`.  It's not really IO free.  The returned MO
@@ -696,7 +702,7 @@ def guess_e1bufsize(max_memory, ioblk_size, nij_pair, nao_pair, comp):
 # part of the max_memory is used to hold the AO integrals.  The iobuf is the
 # buffer to temporary hold the transformed integrals before streaming to disk.
 # iobuf is then divided to small blocks (ioblk_words) and streamed to disk.
-    iobuf_words = max(int(mem_words//6), IOBUF_WORDS_PREFER)
+    iobuf_words = max(int(mem_words//6), IOBUF_WORDS)
     ioblk_words = int(min(ioblk_size*1e6/8, iobuf_words))
 
     e1buflen = int(min(iobuf_words/(comp*nij_pair), mem_words*.66/(comp*nao_pair)))
@@ -781,6 +787,7 @@ def balance_partition(ao_loc, blksize, start_id=0, stop_id=None):
         tasks.append((i0, i1, ao_loc[i1]-ao_loc[i0]))
     return tasks
 
+del(MAX_MEMORY)
 
 
 if __name__ == '__main__':

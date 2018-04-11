@@ -33,6 +33,7 @@ import ctypes
 import numpy
 import h5py
 from pyscf.lib import param
+from pyscf import __config__
 
 if h5py.version.version[:4] == '2.2.':
     sys.stderr.write('h5py-%s is found in your environment. '
@@ -208,9 +209,62 @@ def prange_tril(start, stop, blocksize):
     displs = [x+start for x in _blocksize_partition(cum_costs, blocksize)]
     return zip(displs[:-1], displs[1:])
 
+def tril_product(*iterables, **kwds):
+    '''Cartesian product in lower-triangular form for multiple indices
+
+    For a given list of indices, `iterables`, yields all indices such that the sub-indices
+    given by the kwarg `tril_idx` satisfy a lower-triangular form.  The lower-triangular form
+    satisfies:
+
+    .. math:: i[tril_idx[0]] >= i[tril_idx[1]] >= ... >= i[tril_idx[len(tril_idx)-1]]
+
+    Args:
+        *iterables: Variable length argument list of indices for the cartesian product
+        **kwds: Arbitrary keyword arguments.  Acceptable keywords include:
+            repeat (int): Number of times to repeat the iterables
+            tril_idx (array_like): Indices to put into lower-triangular form.
+
+    Returns:
+        product (tuple): Tuple in lower-triangular form.
+
+    Examples:
+        Specifying no `tril_idx` is equivalent to just a cartesian product.
+
+        >>> list(tril_product(range(2), repeat=2))
+        [(0, 0), (0, 0), (0, 1), (0, 1), (1, 0), (1, 0), (1, 1), (1, 1)]
+
+        We can specify only sub-indices to satisfy a lower-triangular form:
+
+        >>> list(tril_product(range(2), repeat=3, tril_idx=[1,2]))
+        [(0, 0, 0), (0, 1, 0), (0, 1, 1), (1, 0, 0), (1, 1, 0), (1, 1, 1)]
+
+        We specify all indices to satisfy a lower-triangular form, useful for iterating over
+        the symmetry unique elements of occupied/virtual orbitals in a 3-particle operator:
+
+        >>> list(tril_product(range(3), repeat=3, tril_idx=[0,1,2]))
+        [(0, 0, 0), (1, 0, 0), (1, 1, 0), (1, 1, 1), (2, 0, 0), (2, 1, 0), (2, 1, 1), (2, 2, 0), (2, 2, 1), (2, 2, 2)]
+    '''
+    repeat = kwds.get('repeat', 1)
+    tril_idx = kwds.get('tril_idx', [])
+    niterables = len(iterables) * repeat
+    ntril_idx = len(tril_idx)
+
+    assert ntril_idx <= niterables, 'Cant have a greater number of tril indices than iterables!'
+    if ntril_idx > 0:
+        assert numpy.max(tril_idx) < niterables, 'Tril index out of bounds for %d iterables! idx = %s' % \
+                                                 (niterables, tril_idx)
+    for tup in itertools.product(*iterables, repeat=repeat):
+        if ntril_idx == 0:
+            yield tup
+
+        if all([tup[tril_idx[i]] >= tup[tril_idx[i+1]] for i in xrange(ntril_idx-1)]):
+            yield tup
+        else:
+            pass
+
 def square_mat_in_trilu_indices(n):
     '''Return a n x n symmetric index matrix, in which the elements are the
-    indices of the unique elements of a tril vector 
+    indices of the unique elements of a tril vector
     [0 1 3 ... ]
     [1 2 4 ... ]
     [3 4 5 ... ]
@@ -235,7 +289,7 @@ class ctypes_stdout(object):
         self.old_stdout_fileno = sys.stdout.fileno()
         self.bak_stdout_fd = os.dup(self.old_stdout_fileno)
         self.bak_stdout = sys.stdout
-        self.fd, self.ftmp = tempfile.mkstemp(dir='/dev/shm')
+        self.fd, self.ftmp = tempfile.mkstemp(dir=param.TMPDIR)
         os.dup2(self.fd, self.old_stdout_fileno)
         sys.stdout = os.fdopen(self.bak_stdout_fd, 'w')
         return self
@@ -268,7 +322,7 @@ class capture_stdout(object):
         self._contents = None
         self.old_stdout_fileno = sys.stdout.fileno()
         self.bak_stdout_fd = os.dup(self.old_stdout_fileno)
-        self.fd, self.ftmp = tempfile.mkstemp(dir='/dev/shm')
+        self.fd, self.ftmp = tempfile.mkstemp(dir=param.TMPDIR)
         os.dup2(self.fd, self.old_stdout_fileno)
         return self
     def __exit__(self, type, value, traceback):
@@ -298,7 +352,7 @@ class quite_run(object):
     def __enter__(self):
         sys.stdout.flush()
         self.dirnow = os.getcwd()
-        self.tmpdir = tempfile.mkdtemp(dir='/dev/shm')
+        self.tmpdir = tempfile.mkdtemp(dir=param.TMPDIR)
         os.chdir(self.tmpdir)
         self.old_stdout_fileno = sys.stdout.fileno()
         self.bak_stdout_fd = os.dup(self.old_stdout_fileno)
@@ -353,7 +407,7 @@ class StreamObject(object):
         '''
         Kernel function is the main driver of a method.  Every method should
         define the kernel function as the entry of the calculation.  Note the
-        return value of kernel function is not strictly defined.  It can be 
+        return value of kernel function is not strictly defined.  It can be
         anything related to the method (such as the energy, the wave-function,
         the DFT mesh grids etc.).
         '''
@@ -437,7 +491,7 @@ def check_sanity(obj, keysref, stdout=sys.stdout):
     objkeys = [x for x in obj.__dict__ if not x.startswith('_')]
     keysub = set(objkeys) - set(keysref)
     if keysub:
-        class_attr = set(dir(obj.__class__))
+        class_attr = set(obj.__class__.__dict__)
         keyin = keysub.intersection(class_attr)
         if keyin:
             msg = ('Overwritten attributes  %s  of %s\n' %
@@ -567,11 +621,14 @@ class ProcessWithReturnValue(Process):
         Process.__init__(self, group, qwrap, name, args, kwargs)
     def join(self):
         if self._e is not None:
-            raise RuntimeError('Error on process %s' % self)
+            raise ProcessRuntimeError('Error on process %s' % self)
         else:
             Process.join(self)
             return self._q.get()
     get = join
+
+class ProcessRuntimeError(RuntimeError):
+    pass
 
 class ThreadWithReturnValue(Thread):
     def __init__(self, group=None, target=None, name=None, args=(),
@@ -587,11 +644,14 @@ class ThreadWithReturnValue(Thread):
         Thread.__init__(self, group, qwrap, name, args, kwargs)
     def join(self):
         if self._e is not None:
-            raise RuntimeError('Error on thread %s' % self)
+            raise ThreadRuntimeError('Error on thread %s' % self)
         else:
             Thread.join(self)
             return self._q.get()
     get = join
+
+class ThreadRuntimeError(RuntimeError):
+    pass
 
 def background_thread(func, *args, **kwargs):
     '''applying function in background'''
@@ -618,9 +678,10 @@ class H5TmpFile(h5py.File):
     def __del__(self):
         self.close()
 
-def finger(a):
+def fingerprint(a):
     a = numpy.asarray(a)
     return numpy.dot(numpy.cos(numpy.arange(a.size)), a.ravel())
+finger = fingerprint
 
 
 def ndpointer(*args, **kwargs):
@@ -650,16 +711,26 @@ class call_in_background(object):
             afun1(a, b)
             do_something_else()
     '''
+
     def __init__(self, *fns, sync=False):
         self.fns = fns
-        self.sync = sync
         self.handler = None
+        self.sync = sync
 
-    def __enter__(self):
-        if self.sync:
-            def def_async_fn(fn):
-                return fn
-        else:
+    if not getattr(__config__, 'ASYNC_IO', True) or h5py.version.version[:4] == '2.2.': # h5py-2.2.* has bug in threading mode
+        # Disable back-ground mode
+        def __enter__(self):
+            if len(self.fns) == 1:
+                return self.fns[0]
+            else:
+                return self.fns
+    else:
+
+        def __enter__(self):
+            if self.sync:
+                def def_async_fn(fn):
+                    return fn
+
             if imp.lock_held():
 # Some modules like nosetests, coverage etc
 #   python -m unittest test_xxx.py  or  nosetests test_xxx.py
@@ -671,25 +742,22 @@ class call_in_background(object):
                 def def_async_fn(fn):
                     return fn
 
-            elif h5py.version.version[:4] == '2.2.':
-# h5py-2.2.* has bug in threading mode.
-                def def_async_fn(fn):
-                    return fn
-
             else:
+                # Enable back-ground mode
                 def def_async_fn(fn):
                     def async_fn(*args, **kwargs):
                         if self.handler is not None:
                             self.handler.join()
-                        self.handler = ThreadWithReturnValue(target=fn, args=args, kwargs=kwargs)
+                        self.handler = ThreadWithReturnValue(target=fn, args=args,
+                                                             kwargs=kwargs)
                         self.handler.start()
                         return self.handler
                     return async_fn
 
-        if len(self.fns) == 1:
-            return def_async_fn(self.fns[0])
-        else:
-            return [def_async_fn(fn) for fn in self.fns]
+            if len(self.fns) == 1:
+                return def_async_fn(self.fns[0])
+            else:
+                return [def_async_fn(fn) for fn in self.fns]
 
     def __exit__(self, type, value, traceback):
         if self.handler is not None:

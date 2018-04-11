@@ -16,6 +16,12 @@
 # Author: Paul J. Robinson <pjrobinson@ucla.edu>
 #
 
+import warnings
+warnings.warn('This is an incomplete version of CDFT method. See also another '
+              'implementation of cDFT in '
+              'pyscf/examples/1-advanced/033-constrained_dft.py',
+              DeprecationWarning)
+
 '''
 This is a purpose built constrained dft implementation which allows the
 shifting of an orbital (or a linear combination of orbitals) by an arbitrary
@@ -115,7 +121,7 @@ if __name__ == '__main__':
     cell.build()
     cell.rcut*=2
 
-    print "running intial DFT calc to generate IAOs"
+    print("running intial DFT calc to generate IAOs")
     mf = dft.RKS(cell)
     mf.chkfile = 'graphene.chk'
     mf.init_guess = 'chkfile'
@@ -123,7 +129,7 @@ if __name__ == '__main__':
     mf.kernel()
 
     #we need to makVe the IAOs out of a converged calculation
-    print "generating IAOs"
+    print("generating IAOs")
     mo_occ = mf.mo_coeff[:,mf.mo_occ>0]
     a = lo.iao.iao(cell, mo_occ)
     # Orthogonalize IAO
@@ -133,7 +139,7 @@ if __name__ == '__main__':
     offset = 0.0001
     orbital =4
 
-    print "running constrained dft"
+    print("running constrained dft")
 
     mf  = cdft(mf,mf.cell,offset,orbital,basis=a)
     population = fast_iao_mullikan_pop(mf,a=a)
@@ -143,4 +149,4 @@ if __name__ == '__main__':
     result[1] = mf.e_tot
     result[2] = population[0][4]
 
-    print result
+    print(result)

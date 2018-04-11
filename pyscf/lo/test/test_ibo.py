@@ -58,12 +58,12 @@ class KnownValues(unittest.TestCase):
         b = ibo.PM(mol, mf.mo_coeff[:,mf.mo_occ>0], exponent=2).kernel()
         pop = pipek.atomic_pops(mol, b)
         z = numpy.einsum('xii,xii->', pop, pop)
-        self.assertAlmostEqual(z, 4.0573975932440476, 5)
+        self.assertAlmostEqual(z, 4.0573975932440476, 4)
 
         b = ibo.PM(mol, b, exponent=4).kernel()
         pop = pipek.atomic_pops(mol, b)
         z = numpy.einsum('xii,xii->', pop, pop)
-        self.assertAlmostEqual(z, 4.0508136007117201, 5)
+        self.assertAlmostEqual(z, 4.0508136007117201, 4)
 
 
 if __name__ == "__main__":

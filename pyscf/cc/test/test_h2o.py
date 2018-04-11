@@ -155,7 +155,7 @@ class KnownValues(unittest.TestCase):
         eri = ao2mo.restore(1, ao2mo.kernel(mf._eri, mf.mo_coeff), nmo)
         h1 = reduce(numpy.dot, (mf.mo_coeff.T.conj(), mf.get_hcore(), mf.mo_coeff))
         e1 = numpy.einsum('ij,ji', h1, dm1)
-        e1+= numpy.einsum('ijkl,jilk', eri, dm2) * .5
+        e1+= numpy.einsum('ijkl,ijkl', eri, dm2) * .5
         e1+= mf.energy_nuc()
         self.assertAlmostEqual(e1, mcc.e_tot, 7)
 

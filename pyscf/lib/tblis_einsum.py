@@ -63,17 +63,14 @@ def _contract(subscripts, *tensors, **kwargs):
         alpha (number) : Default is 1
         beta (number) :  Default is 0
     '''
-    if '...' in subscripts:
-        return numpy_einsum(subscripts, a, b)
-
     a = numpy.asarray(tensors[0])
     b = numpy.asarray(tensors[1])
-    if a.size < 2000 or b.size < 2000:
+    if not kwargs and (a.size < 2000 or b.size < 2000):
         return numpy_einsum(subscripts, a, b)
 
     c_dtype = kwargs.get('dtype', numpy.result_type(a, b))
-    if (not (numpy.issubdtype(c_dtype, numpy.float) or
-             numpy.issubdtype(c_dtype, numpy.complex))):
+    if (not (numpy.issubdtype(c_dtype, numpy.floating) or
+             numpy.issubdtype(c_dtype, numpy.complexfloating))):
         return numpy_einsum(subscripts, a, b)
 
     sub_idx = re.split(',|->', subscripts)
@@ -132,6 +129,9 @@ def _contract(subscripts, *tensors, **kwargs):
     return c
 
 def einsum(subscripts, *tensors, **kwargs):
+    if '...' in subscripts:
+        return numpy_einsum(subscripts, *tensors, **kwargs)
+
     subscripts = subscripts.replace(' ','')
     if len(tensors) <= 1:
         out = numpy_einsum(subscripts, *tensors, **kwargs)

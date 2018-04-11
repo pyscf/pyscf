@@ -30,7 +30,6 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.mcscf import casci, mc1step
 from pyscf.mcscf.casci import get_fock, cas_natorb, canonicalize
-from pyscf.mcscf import mc_ao2mo
 from pyscf.mcscf import chkfile
 from pyscf import ao2mo
 from pyscf import scf

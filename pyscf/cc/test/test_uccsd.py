@@ -229,9 +229,9 @@ class KnownValues(unittest.TestCase):
         h1b = reduce(numpy.dot, (mo_b.T.conj(), hcore, mo_b))
         e1 = numpy.einsum('ij,ji', h1a, dm1a)
         e1+= numpy.einsum('ij,ji', h1b, dm1b)
-        e1+= numpy.einsum('ijkl,jilk', eriaa, dm2aa) * .5
-        e1+= numpy.einsum('ijkl,jilk', eriab, dm2ab)
-        e1+= numpy.einsum('ijkl,jilk', eribb, dm2bb) * .5
+        e1+= numpy.einsum('ijkl,ijkl', eriaa, dm2aa) * .5
+        e1+= numpy.einsum('ijkl,ijkl', eriab, dm2ab)
+        e1+= numpy.einsum('ijkl,ijkl', eribb, dm2bb) * .5
         e1+= mol.energy_nuc()
         self.assertAlmostEqual(e1, mycc.e_tot, 7)
 
@@ -284,27 +284,19 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.finger(eris._contract_vvvv_t2(t2)), 12.00904827896089, 11)
 
     def test_update_amps1(self):
-        mol = gto.Mole()
-        mol.atom = [
-            [8 , (0. , 0.     , 0.)],
-            [1 , (0. , -0.757 , 0.587)],
-            [1 , (0. , 0.757  , 0.587)]]
-        mol.basis = {'O':'cc-pvdz', 'H':'631g'}
-        mol.spin = 2
-        mol.verbose = 0
-        mol.build()
-        mf = scf.UHF(mol).run(conv_tol=1e-14)
-
-        mf1 = copy.copy(mf)
+        mol = mol_s2
+        mf = scf.UHF(mol)
+        numpy.random.seed(9)
         nmo = mol.nao_nr()
-        mf1.mo_occ = numpy.zeros((2,nmo))
-        mf1.mo_occ[0,:6] = 1
-        mf1.mo_occ[1,:5] = 1
-        mycc = uccsd.UCCSD(mf1)
-        nocca, noccb, nvira, nvirb = 6, 5, 12, 13
+        mf.mo_coeff = numpy.random.random((2,nmo,nmo)) - 0.5
+        mf.mo_occ = numpy.zeros((2,nmo))
+        mf.mo_occ[0,:6] = 1
+        mf.mo_occ[1,:5] = 1
+        mycc = uccsd.UCCSD(mf)
+        nocca, noccb = 6, 5
+        nvira, nvirb = nmo-nocca, nmo-noccb
         nvira_pair = nvira*(nvira+1)//2
         nvirb_pair = nvirb*(nvirb+1)//2
-        numpy.random.seed(9)
 
         eris = mycc.ao2mo()
         fakeris = uccsd._ChemistsERIs()
@@ -314,34 +306,24 @@ class KnownValues(unittest.TestCase):
         t2ab = numpy.random.random((nocca,noccb,nvira,nvirb))
         t1a = numpy.zeros((nocca,nvira))
         t1b = numpy.zeros((noccb,nvirb))
-        self.assertAlmostEqual(lib.finger(mycc._add_vvVV(None, t2ab, fakeris)), 7.3072137844055529, 7)
+        self.assertAlmostEqual(lib.finger(mycc._add_vvVV(None, t2ab, fakeris)), 21.652482203108928, 9)
         fakeris.vvVV = None
         mycc.direct = True
         mycc.max_memory = 0
-        self.assertAlmostEqual(lib.finger(mycc._add_vvVV(None, t2ab, fakeris)), 7.3072137844055529, 7)
+        self.assertAlmostEqual(lib.finger(mycc._add_vvVV(None, t2ab, fakeris)), 21.652482203108928, 9)
 
-        mycc = uccsd.UCCSD(mf)
-        eris = mycc.ao2mo()
-        ecc, t1, t2 = mycc.kernel(eris=eris)
-        self.assertAlmostEqual(ecc, -0.17009326207891234, 7)
-
-        numpy.random.seed(4)
-        mf.mo_coeff = mo_coeff = numpy.random.random((2,18,18))-.5
-        mycc = uccsd.UCCSD(mf)
-        eris = mycc.ao2mo(mo_coeff)
-        nocca, noccb, nvira, nvirb = 6, 4, 12, 14
         t1 = (numpy.random.random((nocca,nvira)), numpy.random.random((noccb,nvirb)))
         t2 = (numpy.random.random((nocca,nocca,nvira,nvira)),
               numpy.random.random((nocca,noccb,nvira,nvirb)),
               numpy.random.random((noccb,noccb,nvirb,nvirb)))
         t1, t2 = mycc.vector_to_amplitudes(mycc.amplitudes_to_vector(t1, t2))
         t1, t2 = mycc.update_amps(t1, t2, eris)
-        self.assertAlmostEqual(lib.finger(t1[0]),  163.7843848368924 , 9)
-        self.assertAlmostEqual(lib.finger(t1[1]), -324.24098918607899, 9)
-        self.assertAlmostEqual(lib.finger(t2[0]),  1437.0169437539737, 9)
-        self.assertAlmostEqual(lib.finger(t2[1]),  4008.0788652455758, 9)
-        self.assertAlmostEqual(lib.finger(t2[2]), -1552.8081121797832, 9)
-        self.assertAlmostEqual(lib.finger(mycc.amplitudes_to_vector(t1, t2)), -7504.3969349509143, 9)
+        self.assertAlmostEqual(lib.finger(t1[0]),  49.912690337392938, 10)
+        self.assertAlmostEqual(lib.finger(t1[1]),  74.596097348134776, 10)
+        self.assertAlmostEqual(lib.finger(t2[0]), -41.784696524955393, 10)
+        self.assertAlmostEqual(lib.finger(t2[1]), -9675.7677695314342, 7)
+        self.assertAlmostEqual(lib.finger(t2[2]),  270.75447826471577, 8)
+        self.assertAlmostEqual(lib.finger(mycc.amplitudes_to_vector(t1, t2)), 4341.9623137256776, 6)
 
     def test_update_amps2(self):  # compare to gccsd.update_amps
         mol = mol_s2

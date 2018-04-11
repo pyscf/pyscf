@@ -27,7 +27,7 @@ def MP2(mf, frozen=0, mo_coeff=None, mo_occ=None):
     if isinstance(mf, scf.uhf.UHF):
         return UMP2(mf, frozen, mo_coeff, mo_occ)
     elif isinstance(mf, scf.rohf.ROHF):
-        raise NotImplementedError
+        return UMP2(mf, frozen, mo_coeff, mo_occ)
     else:
         return RMP2(mf, frozen, mo_coeff, mo_occ)
 

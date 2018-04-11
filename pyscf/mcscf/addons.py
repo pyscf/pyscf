@@ -16,7 +16,6 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-import os
 import sys
 import copy
 from functools import reduce
@@ -27,9 +26,13 @@ from pyscf.lib import logger
 from pyscf import fci
 from pyscf import scf
 from pyscf import symm
+from pyscf import __config__
+
+BASE = getattr(__config__, 'mcscf_addons_sort_mo_base', 1)
+MAP2HF_TOL = getattr(__config__, 'mcscf_addons_map2hf_tol', 0.4)
 
 
-def sort_mo(casscf, mo_coeff, caslst, base=1):
+def sort_mo(casscf, mo_coeff, caslst, base=BASE):
     '''Pick orbitals for CAS space
 
     Args:
@@ -68,9 +71,17 @@ def sort_mo(casscf, mo_coeff, caslst, base=1):
         if base != 0:
             caslst = [i-base for i in caslst]
         idx = numpy.asarray([i for i in range(nmo) if i not in caslst])
-        return numpy.hstack((mo_coeff[:,idx[:ncore]],
-                             mo_coeff[:,caslst],
-                             mo_coeff[:,idx[ncore:]]))
+        mo = numpy.hstack((mo_coeff[:,idx[:ncore]],
+                           mo_coeff[:,caslst],
+                           mo_coeff[:,idx[ncore:]]))
+
+        if hasattr(mo_coeff, 'orbsym'):
+            orbsym = mo_coeff.orbsym
+            orbsym = numpy.hstack((orbsym[idx[:ncore]], orbsym[caslst],
+                                   orbsym[idx[ncore:]]))
+            mo = lib.tag_array(mo, orbsym=orbsym)
+        return mo
+
     else: # UHF-based CASSCF
         if isinstance(caslst[0], (int, numpy.integer)):
             assert(casscf.ncas == len(caslst))
@@ -84,21 +95,30 @@ def sort_mo(casscf, mo_coeff, caslst, base=1):
                 caslst = ([i-base for i in caslst[0]],
                           [i-base for i in caslst[1]])
         nmo = mo_coeff[0].shape[1]
-        idx = numpy.asarray([i for i in range(nmo) if i not in caslst[0]])
-        mo_a = numpy.hstack((mo_coeff[0][:,idx[:ncore[0]]],
+        idxa = numpy.asarray([i for i in range(nmo) if i not in caslst[0]])
+        mo_a = numpy.hstack((mo_coeff[0][:,idxa[:ncore[0]]],
                              mo_coeff[0][:,caslst[0]],
-                             mo_coeff[0][:,idx[ncore[0]:]]))
-        idx = numpy.asarray([i for i in range(nmo) if i not in caslst[1]])
-        mo_b = numpy.hstack((mo_coeff[1][:,idx[:ncore[1]]],
+                             mo_coeff[0][:,idxa[ncore[0]:]]))
+        idxb = numpy.asarray([i for i in range(nmo) if i not in caslst[1]])
+        mo_b = numpy.hstack((mo_coeff[1][:,idxb[:ncore[1]]],
                              mo_coeff[1][:,caslst[1]],
-                             mo_coeff[1][:,idx[ncore[1]:]]))
+                             mo_coeff[1][:,idxb[ncore[1]:]]))
+
+        if hasattr(mo_coeff[0], 'orbsym'):
+            orbsyma, orbsymb = mo_coeff[0].orbsym, mo_coeff[1].orbsym
+            orbsyma = numpy.hstack((orbsyma[idxa[:ncore[0]]], orbsyma[caslst[0]],
+                                    orbsyma[idxa[ncore[0]:]]))
+            orbsymb = numpy.hstack((orbsymb[idxb[:ncore[1]]], orbsymb[caslst[1]],
+                                    orbsymb[idxb[ncore[1]:]]))
+            mo_a = lib.tag_array(mo_a, orbsym=orbsyma)
+            mo_b = lib.tag_array(mo_b, orbsym=orbsymb)
         return (mo_a, mo_b)
 
-def select_mo_by_irrep(casscf,  cas_occ_num, mo = None, base=1):
+def select_mo_by_irrep(casscf,  cas_occ_num, mo = None, base=BASE):
     raise RuntimeError('This function has been replaced by function caslst_by_irrep')
 
 def caslst_by_irrep(casscf, mo_coeff, cas_irrep_nocc,
-                    cas_irrep_ncore=None, s=None, base=1):
+                    cas_irrep_ncore=None, s=None, base=BASE):
     '''Given number of active orbitals for each irrep, return the orbital
     indices of active space
 
@@ -274,9 +294,8 @@ def sort_mo_by_irrep(casscf, mo_coeff, cas_irrep_nocc,
     -108.162863845084
     '''
     caslst = caslst_by_irrep(casscf, mo_coeff, cas_irrep_nocc,
-                             cas_irrep_ncore, s, 0)
-    #FIXME: update mo_coeff.orbsym?
-    return sort_mo(casscf, mo_coeff, caslst, 0)
+                             cas_irrep_ncore, s, base=0)
+    return sort_mo(casscf, mo_coeff, caslst, base=0)
 
 
 def project_init_guess(casscf, init_mo, prev_mol=None):
@@ -510,7 +529,7 @@ def cas_natorb(casscf, mo_coeff=None, ci=None, sort=False):
     else:
         return casscf.cas_natorb(mo_coeff, ci, sort=sort)
 
-def map2hf(casscf, mf_mo=None, base=1, tol=.5):
+def map2hf(casscf, mf_mo=None, base=BASE, tol=MAP2HF_TOL):
     '''The overlap between the CASSCF optimized orbitals and the canonical HF orbitals.
     '''
     if mf_mo is None:
@@ -822,100 +841,7 @@ def state_average_mix_(casscf, fcisolvers, weights=(0.5,0.5)):
     return casscf
 state_average_mix = state_average_mix_
 
-def hot_tuning_(casscf, configfile=None):
-    '''Allow you to tune CASSCF parameters at the runtime
-    '''
-    import traceback
-    import tempfile
-    import json
-    #from numpy import array
-
-    if configfile is None:
-        fconfig = tempfile.NamedTemporaryFile(suffix='.json')
-        configfile = fconfig.name
-    logger.info(casscf, 'Function hot_tuning_ dumps CASSCF parameters in config file%s',
-                configfile)
-
-    exclude_keys = set(('stdout', 'verbose', 'ci', 'mo_coeff', 'mo_energy',
-                        'e_cas', 'e_tot', 'ncore', 'ncas', 'nelecas', 'mol',
-                        'callback', 'fcisolver'))
-
-    casscf_settings = {}
-    for k, v in casscf.__dict__.items():
-        if not (k.startswith('_') or k in exclude_keys):
-            if (v is None or
-                isinstance(v, (str, bool, int, float, list, tuple, dict))):
-                casscf_settings[k] = v
-            elif isinstance(v, set):
-                casscf_settings[k] = list(v)
-
-    doc = '''# JSON format
-# Note the double quote "" around keyword
-'''
-    conf = {'casscf': casscf_settings}
-    with open(configfile, 'w') as f:
-        f.write(doc)
-        f.write(json.dumps(conf, indent=4, sort_keys=True) + '\n')
-        f.write('# Starting from this line, code are parsed as Python script.  The Python code\n'
-                '# will be injected to casscf.kernel through callback hook.  The casscf.kernel\n'
-                '# function local variables can be directly accessed.  Note, these variables\n'
-                '# cannot be directly modified because the environment is generated using\n'
-                '# locals() function (see\n'
-                '# https://docs.python.org/2/library/functions.html#locals).\n'
-                '# You can modify some variables with inplace updating, eg\n'
-                '# from pyscf import fci\n'
-                '# if imacro > 6:\n'
-                '#     casscf.fcislover = fci.fix_spin_(fci.direct_spin1, ss=2)\n'
-                '#     mo[:,:3] *= -1\n'
-                '# Warning: this runtime modification is unsafe and highly unrecommended.\n')
-
-    old_cb = casscf.callback
-    def hot_load(envs):
-        try:
-            with open(configfile) as f:
-# filter out comments
-                raw_js = []
-                balance = 0
-                data = [x for x in f.readlines()
-                        if not x.startswith('#') and x.rstrip()]
-                for n, line in enumerate(data):
-                    if not line.lstrip().startswith('#'):
-                        raw_js.append(line)
-                        balance += line.count('{') - line.count('}')
-                        if balance == 0:
-                            break
-            raw_py = ''.join(data[n+1:])
-            raw_js = ''.join(raw_js)
-
-            logger.debug(casscf, 'Reading CASSCF parameters from config file  %s',
-                         os.path.realpath(configfile))
-            logger.debug1(casscf, '    Inject casscf settings %s', raw_js)
-            conf = json.loads(raw_js)
-            casscf.__dict__.update(conf.pop('casscf'))
-
-            # Not yet found a way to update locals() on the runtime
-            # https://docs.python.org/2/library/functions.html#locals
-            #for k in conf:
-            #    if k in envs:
-            #        logger.info(casscf, 'Update envs[%s] = %s', k, conf[k])
-            #        envs[k] = conf[k]
-
-            logger.debug1(casscf, '    Inject python script\n%s\n', raw_py)
-            if len(raw_py.strip()) > 0:
-                if sys.version_info >= (3,):
-# A hacky call using eval because exec are so different in python2 and python3
-                    eval(compile('exec(raw_py, envs, {})', '<str>', 'exec'))
-                else:
-                    eval(compile('exec raw_py in envs, {}', '<str>', 'exec'))
-        except Exception as e:
-            logger.warn(casscf, 'CASSCF hot_load error %s', e)
-            logger.warn(casscf, ''.join(traceback.format_exc()))
-
-        if callable(old_cb):
-            old_cb(envs)
-
-    casscf.callback = hot_load
-    return casscf
+del(BASE, MAP2HF_TOL)
 
 
 if __name__ == '__main__':

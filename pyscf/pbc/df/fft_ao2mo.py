@@ -38,9 +38,11 @@ from pyscf import ao2mo
 from pyscf.ao2mo.incore import iden_coeffs
 from pyscf.pbc import tools
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point
+from pyscf import __config__
 
 
-def get_eri(mydf, kpts=None, compact=False):
+def get_eri(mydf, kpts=None,
+            compact=getattr(__config__, 'pbc_df_ao2mo_get_eri_compact', True)):
     cell = mydf.cell
     nao = cell.nao_nr()
     low_dim_ft_type = cell.low_dim_ft_type
@@ -96,7 +98,8 @@ def get_eri(mydf, kpts=None, compact=False):
         return eri
 
 
-def general(mydf, mo_coeffs, kpts=None, compact=False):
+def general(mydf, mo_coeffs, kpts=None,
+            compact=getattr(__config__, 'pbc_df_ao2mo_general_compact', True)):
     '''General MO integral transformation'''
     cell = mydf.cell
     low_dim_ft_type = cell.low_dim_ft_type
@@ -187,6 +190,7 @@ def _contract_plain(mydf, mos, coulG, phase, max_memory):
     eri = numpy.empty((nmoi*nmoj,nmok*nmol), dtype=dtype)
 
     blksize = int(min(max(nmoi,nmok), (max_memory*1e6/16 - eri.size)/2/ngrids/max(nmoj,nmol)+1))
+    assert blksize > 0
     buf0 = numpy.empty((blksize,max(nmoj,nmol),ngrids), dtype=dtype)
     buf1 = numpy.ndarray((blksize,nmoj,ngrids), dtype=dtype, buffer=buf0)
     buf2 = numpy.ndarray((blksize,nmol,ngrids), dtype=dtype, buffer=buf0)
@@ -210,7 +214,7 @@ def _contract_plain(mydf, mos, coulG, phase, max_memory):
 
 
 def get_ao_pairs_G(mydf, kpts=numpy.zeros((2,3)), q=None, shls_slice=None,
-                   compact=False):
+                   compact=getattr(__config__, 'pbc_df_ao_pairs_compact', False)):
     '''Calculate forward (G|ij) FFT of all AO pairs.
 
     Returns:
@@ -272,7 +276,8 @@ def get_ao_pairs_G(mydf, kpts=numpy.zeros((2,3)), q=None, shls_slice=None,
 
     return ao_pairs_G
 
-def get_mo_pairs_G(mydf, mo_coeffs, kpts=numpy.zeros((2,3)), q=None, compact=False):
+def get_mo_pairs_G(mydf, mo_coeffs, kpts=numpy.zeros((2,3)), q=None,
+                   compact=getattr(__config__, 'pbc_df_mo_pairs_compact', False)):
     '''Calculate forward (G|ij) FFT of all MO pairs.
 
     Args:

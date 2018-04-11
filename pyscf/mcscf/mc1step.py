@@ -31,6 +31,7 @@ from pyscf.mcscf import chkfile
 from pyscf import ao2mo
 from pyscf import scf
 from pyscf.soscf import ciah
+from pyscf import __config__
 
 # ref. JCP, 82, 5053;  JCP, 73, 2342
 
@@ -526,7 +527,6 @@ class CASSCF(casci.CASCI):
             Default is 1e-4
         max_stepsize : float
             The step size for orbital rotation.  Small step (0.005 - 0.05) is prefered.
-            (see notes in max_cycle_micro_inner attribute)
             Default is 0.03.
         max_cycle_macro : int
             Max number of macro iterations.  Default is 50.
@@ -599,21 +599,18 @@ class CASSCF(casci.CASCI):
     >>> mc.kernel()[0]
     -109.044401882238134
     '''
-    def __init__(self, mf, ncas, nelecas, ncore=None, frozen=None):
-        casci.CASCI.__init__(self, mf, ncas, nelecas, ncore)
-        self.frozen = frozen
+
 # the max orbital rotation and CI increment, prefer small step size
-        self.max_stepsize = .02
-        self.max_cycle_macro = 50
-        self.max_cycle_micro = 4
-        #self.max_cycle_micro_inner = 4
-        self.conv_tol = 1e-7
-        self.conv_tol_grad = None
-        # for augmented hessian
-        self.ah_level_shift = 1e-8
-        self.ah_conv_tol = 1e-12
-        self.ah_max_cycle = 30
-        self.ah_lindep = 1e-14
+    max_stepsize = getattr(__config__, 'mcscf_mc1step_CASSCF_max_stepsize', .02)
+    max_cycle_macro = getattr(__config__, 'mcscf_mc1step_CASSCF_max_cycle_macro', 50)
+    max_cycle_micro = getattr(__config__, 'mcscf_mc1step_CASSCF_max_cycle_micro', 4)
+    conv_tol = getattr(__config__, 'mcscf_mc1step_CASSCF_conv_tol', 1e-7)
+    conv_tol_grad = getattr(__config__, 'mcscf_mc1step_CASSCF_conv_tol_grad', None)
+    # for augmented hessian
+    ah_level_shift = getattr(__config__, 'mcscf_mc1step_CASSCF_ah_level_shift', 1e-8)
+    ah_conv_tol = getattr(__config__, 'mcscf_mc1step_CASSCF_ah_conv_tol', 1e-12)
+    ah_max_cycle = getattr(__config__, 'mcscf_mc1step_CASSCF_ah_max_cycle', 30)
+    ah_lindep = getattr(__config__, 'mcscf_mc1step_CASSCF_ah_lindep', 1e-14)
 # * ah_start_tol and ah_start_cycle control the start point to use AH step.
 #   In function rotate_orb_cc, the orbital rotation is carried out with the
 #   approximate aug_hessian step after a few davidson updates of the AH eigen
@@ -630,26 +627,39 @@ class CASSCF(casci.CASCI):
 #   pi_x, pi_y orbitals since pi_x, pi_y belong to different irreps.  It can
 #   be fixed by increasing the accuracy of AH solver, e.g.
 #               ah_start_tol = 1e-8;  ah_conv_tol = 1e-10
-        self.ah_start_tol = 2.5
-        self.ah_start_cycle = 3
 # * Classic AH can be simulated by setting eg
-#               max_cycle_micro_inner = 1
 #               ah_start_tol = 1e-7
 #               max_stepsize = 1.5
 #               ah_grad_trust_region = 1e6
-# ah_grad_trust_region allow gradients increase for AH optimization
-        self.ah_grad_trust_region = 3.0
-        self.internal_rotation = False
-        self.chkfile = mf.chkfile
-        self.ci_response_space = 4
-        self.ci_grad_trust_region = 3.0
-        self.with_dep4 = False
-        self.callback = None
-        self.chk_ci = False
-        self.kf_interval = 4
-        self.kf_trust_region = 3.0
+# ah_grad_trust_region allow gradients being increased in AH optimization
+    ah_start_tol = getattr(__config__, 'mcscf_mc1step_CASSCF_ah_start_tol', 2.5)
+    ah_start_cycle = getattr(__config__, 'mcscf_mc1step_CASSCF_ah_start_cycle', 3)
+    ah_grad_trust_region = getattr(__config__, 'mcscf_mc1step_CASSCF_ah_grad_trust_region', 3.0)
 
-        self.fcisolver.max_cycle = 50
+    internal_rotation = getattr(__config__, 'mcscf_mc1step_CASSCF_internal_rotation', False)
+    ci_response_space = getattr(__config__, 'mcscf_mc1step_CASSCF_ci_response_space', 4)
+    ci_grad_trust_region = getattr(__config__, 'mcscf_mc1step_CASSCF_ci_grad_trust_region', 3.0)
+    with_dep4 = getattr(__config__, 'mcscf_mc1step_CASSCF_with_dep4', False)
+    chk_ci = getattr(__config__, 'mcscf_mc1step_CASSCF_chk_ci', False)
+    kf_interval = getattr(__config__, 'mcscf_mc1step_CASSCF_kf_interval', 4)
+    kf_trust_region = getattr(__config__, 'mcscf_mc1step_CASSCF_kf_trust_region', 3.0)
+
+    ao2mo_level = getattr(__config__, 'mcscf_mc1step_CASSCF_ao2mo_level', 2)
+    natorb = getattr(__config__, 'mcscf_mc1step_CASSCF_natorb', False)
+    canonicalization = getattr(__config__, 'mcscf_mc1step_CASSCF_canonicalization', True)
+    sorting_mo_energy = getattr(__config__, 'mcscf_mc1step_CASSCF_sorting_mo_energy', False)
+
+    def __init__(self, mf, ncas, nelecas, ncore=None, frozen=None):
+        casci.CASCI.__init__(self, mf, ncas, nelecas, ncore)
+        self.frozen = frozen
+
+        self.callback = None
+        self.chkfile = mf.chkfile
+
+        self.fcisolver.max_cycle = getattr(__config__,
+                                           'mcscf_mc1step_CASSCF_fcisolver_max_cycle', 50)
+        self.fcisolver.conv_tol = getattr(__config__,
+                                          'mcscf_mc1step_CASSCF_fcisolver_conv_tol', 1e-8)
 
 ##################################################
 # don't modify the following attributes, they are not input options
@@ -661,7 +671,16 @@ class CASSCF(casci.CASCI):
         self.converged = False
         self._max_stepsize = None
 
-        self._keys = set(self.__dict__.keys())
+        keys = set(('max_stepsize', 'max_cycle_macro', 'max_cycle_micro',
+                    'conv_tol', 'conv_tol_grad', 'ah_level_shift',
+                    'ah_conv_tol', 'ah_max_cycle', 'ah_lindep',
+                    'ah_start_tol', 'ah_start_cycle', 'ah_grad_trust_region',
+                    'internal_rotation', 'ci_response_space',
+                    'ci_grad_trust_region', 'with_dep4', 'chk_ci',
+                    'kf_interval', 'kf_trust_region', 'fcisolver_max_cycle',
+                    'fcisolver_conv_tol', 'natorb', 'canonicalization',
+                    'sorting_mo_energy'))
+        self._keys = set(self.__dict__.keys()).union(keys)
 
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)
@@ -677,7 +696,6 @@ class CASSCF(casci.CASCI):
         log.info('max_cycle_micro = %d', self.max_cycle_micro)
         log.info('conv_tol = %g', self.conv_tol)
         log.info('conv_tol_grad = %s', self.conv_tol_grad)
-        #log.info('max_cycle_micro_inner = %d', self.max_cycle_micro_inner)
         log.info('orbital rotation max_stepsize = %g', self.max_stepsize)
         log.info('augmented hessian ah_max_cycle = %d', self.ah_max_cycle)
         log.info('augmented hessian ah_conv_tol = %g', self.ah_conv_tol)
@@ -863,7 +881,8 @@ class CASSCF(casci.CASCI):
 #        eris.papa = numpy.asarray(eri[:,ncore:nocc,:,ncore:nocc], order='C')
 #        return eris
 
-        return mc_ao2mo._ERIS(self, mo, method='incore', level=2)
+        return mc_ao2mo._ERIS(self, mo, method='incore',
+                              level=self.ao2mo_level)
 
     # Don't remove the two functions.  They are used in df/approx_hessian code
     def get_h2eff(self, mo_coeff=None):
@@ -972,13 +991,13 @@ class CASSCF(casci.CASCI):
             tol = None
         if hasattr(self.fcisolver, 'approx_kernel'):
             fn = self.fcisolver.approx_kernel
-            ci1 = fn(h1, h2, ncas, nelecas, ci0=ci0,
+            ci1 = fn(h1, h2, ncas, nelecas, ecore=ecore, ci0=ci0,
                      tol=tol, max_memory=self.max_memory)[1]
             return ci1, None
         elif not (hasattr(self.fcisolver, 'contract_2e') and
                   hasattr(self.fcisolver, 'absorb_h1e')):
             fn = self.fcisolver.kernel
-            ci1 = fn(h1, h2, ncas, nelecas, ci0=ci0,
+            ci1 = fn(h1, h2, ncas, nelecas, ecore=ecore, ci0=ci0,
                      tol=tol, max_memory=self.max_memory,
                      max_cycle=self.ci_response_space)[1]
             return ci1, None

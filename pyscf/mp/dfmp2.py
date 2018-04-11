@@ -25,8 +25,12 @@ from pyscf.ao2mo import _ao2mo
 from pyscf import df
 from pyscf.mp import mp2
 #from pyscf.mp.mp2 import make_rdm1, make_rdm2, make_rdm1_ao
+from pyscf import __config__
 
-def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=True,
+WITH_T2 = getattr(__config__, 'mp_dfmp2_with_t2', True)
+
+
+def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2,
            verbose=logger.NOTE):
     if mo_energy is None or mo_coeff is None:
         mo_coeff = mp2._mo_without_core(mp, mp.mo_coeff)
@@ -66,7 +70,7 @@ class DFMP2(mp2.MP2):
         mp2.MP2.__init__(self, mf, frozen, mo_coeff, mo_occ)
 
     @lib.with_doc(mp2.MP2.kernel.__doc__)
-    def kernel(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=True):
+    def kernel(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2):
         return mp2.MP2.kernel(self, mo_energy, mo_coeff, eris, with_t2, kernel)
 
     def loop_ao2mo(self, mo_coeff, nocc):
@@ -96,6 +100,8 @@ class DFMP2(mp2.MP2):
 #    def make_rdm2(self, t2=None):
 #        if t2 is None: t2 = self.t2
 #        return make_rdm2(self, t2, self.verbose)
+
+del(WITH_T2)
 
 
 if __name__ == '__main__':

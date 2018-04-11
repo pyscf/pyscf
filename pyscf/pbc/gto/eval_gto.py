@@ -22,8 +22,10 @@ from pyscf import lib
 from pyscf.gto import moleintor
 from pyscf.gto.eval_gto import _get_intor_and_comp
 from pyscf.pbc.gto import _pbcintor
+from pyscf import __config__
 
 BLKSIZE = 128 # needs to be the same to lib/gto/grid_ao_drv.c
+EXTRA_PREC = getattr(__config__, 'pbc_gto_eval_gto_extra_precision', 1e-2)
 
 libpbc = _pbcintor.libpbc
 
@@ -121,10 +123,7 @@ def eval_gto(cell, eval_name, coords, comp=None, kpts=None, kpt=None,
     sh0, sh1 = shls_slice
     nao = ao_loc[sh1] - ao_loc[sh0]
 
-    ao_kpts = [numpy.zeros((ngrids,nao,comp), dtype=numpy.complex128, order='F')
-               for k in range(nkpts)]
-    out_ptrs = (ctypes.c_void_p*nkpts)(
-            *[x.ctypes.data_as(ctypes.c_void_p) for x in ao_kpts])
+    out = numpy.empty((nkpts,comp,nao,ngrids), dtype=numpy.complex128)
     coords = numpy.asarray(coords, order='F')
 
     # For atoms near the boundary of the cell, it is necessary (even in low-
@@ -135,36 +134,61 @@ def eval_gto(cell, eval_name, coords, comp=None, kpts=None, kpt=None,
         Ls = cell.get_lattice_Ls(dimension=cell.dimension)
     Ls = Ls[numpy.argsort(lib.norm(Ls, axis=1))]
     expLk = numpy.exp(1j * numpy.asarray(numpy.dot(Ls, kpts_lst.T), order='C'))
+    rcut = _estimate_rcut(cell)
 
     drv = getattr(libpbc, eval_name)
     drv(ctypes.c_int(ngrids),
         (ctypes.c_int*2)(*shls_slice), ao_loc.ctypes.data_as(ctypes.c_void_p),
         Ls.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(len(Ls)),
         expLk.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nkpts),
-        out_ptrs, coords.ctypes.data_as(ctypes.c_void_p),
+        out.ctypes.data_as(ctypes.c_void_p),
+        coords.ctypes.data_as(ctypes.c_void_p),
+        rcut.ctypes.data_as(ctypes.c_void_p),
         non0tab.ctypes.data_as(ctypes.c_void_p),
         atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(natm),
         bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
         env.ctypes.data_as(ctypes.c_void_p))
 
+    ao_kpts = []
     for k, kpt in enumerate(kpts_lst):
-        if abs(kpt).sum() < 1e-9:
-            ao_kpts[k] = ao_kpts[k].real.copy(order='F')
-
-        ao_kpts[k] = ao_kpts[k].transpose(2,0,1)
+        v = out[k].transpose(0,2,1)
         if comp == 1:
-            ao_kpts[k] = ao_kpts[k][0]
+            v = v[0]
+        if abs(kpt).sum() < 1e-9:
+            v = v.real.copy(order='F')
+        ao_kpts.append(v)
+
     if kpts is None or numpy.shape(kpts) == (3,):  # A single k-point
         ao_kpts = ao_kpts[0]
     return ao_kpts
 
 pbc_eval_gto = eval_gto
 
+def _estimate_rcut(cell):
+    '''Cutoff raidus, above which each shell decays to a value less than the
+    required precsion'''
+    log_prec = numpy.log(cell.precision * EXTRA_PREC)
+    rcut = []
+    for ib in range(cell.nbas):
+        l = cell.bas_angular(ib)
+        es = cell.bas_exp(ib)
+        cs = abs(cell.bas_ctr_coeff(ib)).max(axis=1)
+        r = 5.
+        r = (((l+2)*numpy.log(r)+numpy.log(cs) - log_prec) / es)**.5
+        r = (((l+2)*numpy.log(r)+numpy.log(cs) - log_prec) / es)**.5
+        rcut.append(r.max())
+    return numpy.array(rcut)
+
 
 if __name__ == '__main__':
     from pyscf.pbc import gto, dft
-    cell = gto.M(a=numpy.eye(3)*4, atom='He 1 1 1', basis='6-31g')
+    cell = gto.M(a=numpy.eye(3)*4, atom='He 1 1 1', basis=[[2,(1,.5),(.5,.5)]])
     coords = cell.get_uniform_grids([10]*3)
-    ao_value = eval_gto(cell, "PBCGTOval_sph", coords, kpts=cell.make_kpts([3]*3))
-    print(lib.finger(numpy.asarray(ao_value)) - 0.542179662042965-0.12290561920251104j)
-    print(ao_value[0].shape)
+    ao_value = eval_gto(cell, "GTOval_sph", coords, kpts=cell.make_kpts([3]*3))
+    print(lib.finger(numpy.asarray(ao_value)) - (-0.27594803231989179+0.0064644591759109114j))
+
+    cell = gto.M(a=numpy.eye(3)*4, atom='He 1 1 1', basis=[[2,(1,.5),(.5,.5)]])
+    coords = cell.get_uniform_grids([10]*3)
+    ao_value = eval_gto(cell, "GTOval_ip_cart", coords, kpts=cell.make_kpts([3]*3))
+    print(lib.finger(numpy.asarray(ao_value)) - (0.38051517609460028+0.062526488684770759j))
+

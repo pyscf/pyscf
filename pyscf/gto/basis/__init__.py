@@ -23,6 +23,7 @@ if sys.version_info < (2,7):
 else:
     import importlib
 from pyscf.gto.basis import parse_nwchem
+from pyscf import __config__
 
 ALIAS = {
     'ano'        : 'ano.dat'        ,
@@ -309,11 +310,12 @@ def _parse_pople_basis(basis, symb):
     else:
         return tuple([ALIAS[mbas]] + convert(extension.split(',')[0]))
 
-def parse(string, symb=None, optimize=True):
+OPTIMIZE_CONTRACTION = getattr(__config__, 'gto_basis_parse_optimize', False)
+def parse(string, symb=None, optimize=OPTIMIZE_CONTRACTION):
     if 'ECP' in string:
         return parse_nwchem.parse_ecp(string, symb)
     else:
-        return parse_nwchem.parse(string, symb)
+        return parse_nwchem.parse(string, symb, optimize)
 parse.__doc__ = parse_nwchem.parse.__doc__
 
 def parse_ecp(string, symb=None):
@@ -321,7 +323,7 @@ def parse_ecp(string, symb=None):
     return parse_nwchem.parse_ecp(string, symb)
 parse_ecp.__doc__ = parse_nwchem.parse_ecp.__doc__
 
-def load(filename_or_basisname, symb):
+def load(filename_or_basisname, symb, optimize=OPTIMIZE_CONTRACTION):
     '''Convert the basis of the given symbol to internal format
 
     Args:
@@ -341,7 +343,7 @@ def load(filename_or_basisname, symb):
     if os.path.isfile(filename_or_basisname):
         # read basis from given file
         try:
-            return parse_nwchem.load(filename_or_basisname, symb)
+            return parse_nwchem.load(filename_or_basisname, symb, optimize)
         except RuntimeError:
             with open(filename_or_basisname, 'r') as fin:
                 return parse_nwchem.parse(fin.read(), symb)
@@ -366,11 +368,11 @@ def load(filename_or_basisname, symb):
         raise RuntimeError('Basis %s not found' % filename_or_basisname)
 
     if 'dat' in basmod:
-        b = parse_nwchem.load(os.path.join(_BASIS_DIR, basmod), symb)
+        b = parse_nwchem.load(os.path.join(_BASIS_DIR, basmod), symb, optimize)
     elif isinstance(basmod, (tuple, list)) and isinstance(basmod[0], str):
         b = []
         for f in basmod:
-            b += parse_nwchem.load(os.path.join(_BASIS_DIR, f), symb)
+            b += parse_nwchem.load(os.path.join(_BASIS_DIR, f), symb, optimize)
     else:
         if sys.version_info < (2,7):
             fp, pathname, description = imp.find_module(basmod, __path__)
@@ -403,3 +405,5 @@ def load_ecp(filename_or_basisname, symb):
 
 def _format_basis_name(basisname):
     return basisname.lower().replace('-', '').replace('_', '').replace(' ', '')
+
+del(OPTIMIZE_CONTRACTION)

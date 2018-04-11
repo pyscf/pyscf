@@ -163,6 +163,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(finger(ao1), (-2.4066959390326477-0.98044994099240701j), 8)
 
     def test_nr_rks(self):
+        pbcgto.eval_gto.EXTRA_PREC, bak = 1e-5, pbcgto.eval_gto.EXTRA_PREC
         cell = pbcgto.Cell()
         cell.verbose = 5
         cell.output = '/dev/null'
@@ -198,6 +199,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(exc[1], -3.9899423803106466, 8)
         self.assertAlmostEqual(finger(vmat[1][0]), -2348.9577179701278-60.733087913116719j, 7)
         self.assertAlmostEqual(finger(vmat[1][1]), -2353.0350086740673-117.74811536967495j, 7)
+        pbcgto.eval_gto.EXTRA_PREC = bak
 
     def test_eval_rho(self):
         cell, grids = make_grids([61]*3)

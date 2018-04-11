@@ -41,6 +41,7 @@ before_script:
 script:
     - >
       nosetests -v -e geomopt -e dmrgscf -e fciqmcscf -e icmpspt -e examples -e nao
+      -e shci
       -e test_bz
       -e test_mc2step_4o4e
       -e test_ks_noimport
@@ -49,3 +50,4 @@ script:
       -e test_j_kpts
       -e test_k_kpts
       -e high_cost
+      -e call_in_background

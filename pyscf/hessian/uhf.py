@@ -37,7 +37,7 @@ def hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     time0 = t1 = (time.clock(), time.time())
 
     mol = hessobj.mol
-    mf = hessobj._scf
+    mf = hessobj.base
     if mo_energy is None: mo_energy = mf.mo_energy
     if mo_occ is None:    mo_occ = mf.mo_occ
     if mo_coeff is None:  mo_coeff = mf.mo_coeff
@@ -113,7 +113,7 @@ def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     time0 = t1 = (time.clock(), time.time())
 
     mol = hessobj.mol
-    mf = hessobj._scf
+    mf = hessobj.base
     if mo_energy is None: mo_energy = mf.mo_energy
     if mo_occ is None:    mo_occ = mf.mo_occ
     if mo_coeff is None:  mo_coeff = mf.mo_coeff
@@ -214,7 +214,7 @@ def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
     moccb = mo_coeff[1][:,mo_occ[1]>0]
     dm0a = numpy.dot(mocca, mocca.T)
     dm0b = numpy.dot(moccb, moccb.T)
-    hcore_deriv = hessobj._scf.nuc_grad_method().hcore_generator(mol)
+    hcore_deriv = hessobj.base.nuc_grad_method().hcore_generator(mol)
 
     aoslices = mol.aoslice_by_atom()
     h1aoa = [None] * mol.natm
@@ -355,7 +355,7 @@ def gen_vind(mf, mo_coeff, mo_occ):
 def gen_hop(hobj, mo_energy=None, mo_coeff=None, mo_occ=None, verbose=None):
     log = logger.new_logger(hobj, verbose)
     mol = hobj.mol
-    mf = hobj._scf
+    mf = hobj.base
 
     if mo_energy is None: mo_energy = mf.mo_energy
     if mo_occ is None:    mo_occ = mf.mo_occ
@@ -441,7 +441,7 @@ class Hessian(rhf_hess.Hessian):
 
     def solve_mo1(self, mo_energy, mo_coeff, mo_occ, h1ao_or_chkfile,
                   fx=None, atmlst=None, max_memory=4000, verbose=None):
-        return solve_mo1(self._scf, mo_energy, mo_coeff, mo_occ, h1ao_or_chkfile,
+        return solve_mo1(self.base, mo_energy, mo_coeff, mo_occ, h1ao_or_chkfile,
                          fx, atmlst, max_memory, verbose)
 
 

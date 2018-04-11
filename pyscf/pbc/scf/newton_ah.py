@@ -309,7 +309,7 @@ def newton(mf):
 
             gen_g_hop = gen_g_hop_uhf
 
-            def update_rotate_matrix(self, dx, mo_occ, u0=1):
+            def update_rotate_matrix(self, dx, mo_occ, u0=1, mo_coeff=None):
                 nkpts = len(mo_occ[0])
                 p0 = 0
                 u = []
@@ -347,7 +347,7 @@ def newton(mf):
 
             gen_g_hop = gen_g_hop_rhf
 
-            def update_rotate_matrix(self, dx, mo_occ, u0=1):
+            def update_rotate_matrix(self, dx, mo_occ, u0=1, mo_coeff=None):
                 p0 = 0
                 u = []
                 for k, occ in enumerate(mo_occ):

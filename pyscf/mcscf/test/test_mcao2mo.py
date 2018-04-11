@@ -91,12 +91,12 @@ class KnowValues(unittest.TestCase):
         m = scf.UHF(mol)
         ehf = m.scf()
 
-        mc = mcscf.mc1step_uhf.CASSCF(m, 4, 4)
+        mc = mcscf.umc1step.CASSCF(m, 4, 4)
         mc.verbose = 5
         mo = m.mo_coeff
 
-        eris0 = mcscf.mc_ao2mo_uhf._ERIS(mc, mo, 'incore')
-        eris1 = mcscf.mc_ao2mo_uhf._ERIS(mc, mo, 'outcore')
+        eris0 = mcscf.umc_ao2mo._ERIS(mc, mo, 'incore')
+        eris1 = mcscf.umc_ao2mo._ERIS(mc, mo, 'outcore')
         self.assertTrue(numpy.allclose(eris1.jkcpp, eris0.jkcpp))
         self.assertTrue(numpy.allclose(eris1.jkcPP, eris0.jkcPP))
         self.assertTrue(numpy.allclose(eris1.jC_pp, eris0.jC_pp))

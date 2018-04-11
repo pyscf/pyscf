@@ -40,6 +40,7 @@ from .df import DF, DF4C
 from . import r_incore
 
 def density_fit(obj, *args, **kwargs):
-    '''Given object, apply density fitting to replace the default 2e integrals.'''
+    '''Given SCF/MCSCF object, use density fitting to approximate the 2e
+    integrals.'''
     return obj.density_fit(*args, **kwargs)
 

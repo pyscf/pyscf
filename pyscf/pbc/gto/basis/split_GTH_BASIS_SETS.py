@@ -20,7 +20,10 @@ from collections import OrderedDict
 
 def main():
 
-    file_GTH = 'GTH_BASIS_SETS'
+    if len(sys.argv) > 1:
+        file_GTH = sys.argv[1]
+    else:
+        file_GTH = 'GTH_BASIS_SETS'
 
     basis_sets = OrderedDict()
     with open(file_GTH,'r') as searchfile:

@@ -137,7 +137,12 @@ def update_amps(cc, t1, t2, eris):
     return t1new, t2new
 
 
-def energy(cc, t1, t2, eris):
+def energy(cc, t1=None, t2=None, eris=None):
+    '''RCCSD correlation energy'''
+    if t1 is None: t1 = cc.t1
+    if t2 is None: t2 = cc.t2
+    if eris is None: eris = cc.ao2mo()
+
     nocc, nvir = t1.shape
     fock = eris.fock
     e = 2*np.einsum('ia,ia', fock[:nocc,nocc:], t1)
@@ -156,10 +161,6 @@ class RCCSD(ccsd.CCSD):
 
     Ground-state CCSD is performed in optimized ccsd.CCSD and EOM is performed here.
     '''
-    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
-        ccsd.CCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
-        self.max_space = 20
-        self._keys = self._keys.union(['max_space'])
 
     def init_amps(self, eris):
         nocc = self.nocc

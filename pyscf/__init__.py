@@ -86,6 +86,8 @@ if LooseVersion(numpy.__version__) <= LooseVersion('1.8.0'):
                       "You still can use all features of PySCF with the old numpy by removing this warning msg. "
                       "Some modules (DFT, CC, MRPT) might be affected because of the bug in old numpy." %
                       numpy.__version__)
+
+from pyscf import __config__
 from pyscf import lib
 from pyscf import gto
 from pyscf import scf
@@ -94,6 +96,6 @@ from pyscf import ao2mo
 #__path__.append(os.path.join(os.path.dirname(__file__), 'future'))
 __path__.append(os.path.join(os.path.dirname(__file__), 'tools'))
 
-DEBUG = False
+DEBUG = __config__.DEBUG
 
 del(os, sys, LooseVersion, numpy)

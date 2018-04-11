@@ -23,6 +23,9 @@ from pyscf import gto
 from pyscf.ao2mo.outcore import balance_segs
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, unique, KPT_DIFF_TOL
 from pyscf.pbc.df.incore import wrap_int3c
+from pyscf import __config__
+
+CHUNK_SIZE = getattr(__config__, 'pbc_df_outcore_chunk_size', 256)
 
 libpbc = lib.load_library('libpbc')
 
@@ -87,7 +90,7 @@ def aux_e2(cell, auxcell, erifile, intor='int3c2e', aosym='s2ij', comp=None,
             shape = (naux,nao_pair)
         else:
             shape = (comp,naux,nao_pair)
-        chunks = (min(256,naux), min(256,nao_pair))  # 512 KB
+        chunks = (min(CHUNK_SIZE,naux), min(CHUNK_SIZE,nao_pair))  # 512 KB
         feri.create_dataset(key, shape, dtype, chunks=chunks)
     if naux == 0:
         feri.close()

@@ -25,7 +25,7 @@ import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.hessian import rhf as rhf_hess
-from pyscf.dft import rks_grad
+from pyscf.grad import rks as rks_grad
 from pyscf.dft import numint
 
 
@@ -35,7 +35,7 @@ def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     time0 = t1 = (time.clock(), time.time())
 
     mol = hessobj.mol
-    mf = hessobj._scf
+    mf = hessobj.base
     if mo_energy is None: mo_energy = mf.mo_energy
     if mo_occ is None:    mo_occ = mf.mo_occ
     if mo_coeff is None:  mo_coeff = mf.mo_coeff
@@ -162,9 +162,9 @@ def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
     nao, nmo = mo_coeff.shape
     mocc = mo_coeff[:,mo_occ>0]
     dm0 = numpy.dot(mocc, mocc.T) * 2
-    hcore_deriv = hessobj._scf.nuc_grad_method().hcore_generator(mol)
+    hcore_deriv = hessobj.base.nuc_grad_method().hcore_generator(mol)
 
-    mf = hessobj._scf
+    mf = hessobj.base
     ni = mf._numint
     ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
     omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=mol.spin)
@@ -221,7 +221,7 @@ YYY, YYZ, YZZ, ZZZ = 16, 17, 18, 19
 
 def _get_vxc_diag(hessobj, mo_coeff, mo_occ, max_memory):
     mol = hessobj.mol
-    mf = hessobj._scf
+    mf = hessobj.base
     if hessobj.grids is not None:
         grids = hessobj.grids
     else:
@@ -322,7 +322,7 @@ def _d1d2_dot_(vmat, mol, ao1, ao2, mask, ao_loc, dR1_on_bra=True):
 
 def _get_vxc_deriv2(hessobj, mo_coeff, mo_occ, max_memory):
     mol = hessobj.mol
-    mf = hessobj._scf
+    mf = hessobj.base
     if hessobj.grids is not None:
         grids = hessobj.grids
     else:
@@ -407,7 +407,7 @@ def _get_vxc_deriv2(hessobj, mo_coeff, mo_occ, max_memory):
 
 def _get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):
     mol = hessobj.mol
-    mf = hessobj._scf
+    mf = hessobj.base
     if hessobj.grids is not None:
         grids = hessobj.grids
     else:
@@ -494,7 +494,6 @@ class Hessian(rhf_hess.Hessian):
 if __name__ == '__main__':
     from pyscf import gto
     from pyscf import dft
-    from pyscf.dft import rks_grad
     #dft.numint._NumInt.libxc = dft.xcfun
     #xc_code = 'lda,vwn'
     xc_code = 'wb97x'

@@ -25,10 +25,14 @@ from pyscf import ao2mo
 from pyscf.lib import logger
 from pyscf.mp import mp2
 from pyscf.ao2mo import _ao2mo
+from pyscf import __config__
+
+WITH_T2 = getattr(__config__, 'mp_ump2_with_t2', True)
+
 
 # This is unrestricted (U)MP2, i.e. spin-orbital form.
 
-def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=True,
+def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2,
            verbose=logger.NOTE):
     if mo_energy is None or mo_coeff is None:
         moidx = mp.get_frozen_mask()
@@ -97,9 +101,9 @@ def get_nocc(mp):
         nocca = numpy.count_nonzero(mp.mo_occ[0] > 0) - frozen
         noccb = numpy.count_nonzero(mp.mo_occ[1] > 0) - frozen
         #assert(nocca > 0 and noccb > 0)
-    else:
+    elif isinstance(frozen[0], (int, numpy.integer, list, numpy.ndarray)):
         if len(frozen) > 0 and isinstance(frozen[0], (int, numpy.integer)):
-# The same frozen orbital indices for alpha and beta orbitals
+            # The same frozen orbital indices for alpha and beta orbitals
             frozen = [frozen, frozen]
         occidxa = mp.mo_occ[0] > 0
         occidxa[list(frozen[0])] = False
@@ -107,6 +111,8 @@ def get_nocc(mp):
         occidxb[list(frozen[1])] = False
         nocca = numpy.count_nonzero(occidxa)
         noccb = numpy.count_nonzero(occidxb)
+    else:
+        raise NotImplementedError
     return nocca, noccb
 
 def get_nmo(mp):
@@ -119,17 +125,19 @@ def get_nmo(mp):
     elif isinstance(frozen, (int, numpy.integer)):
         nmoa = mp.mo_occ[0].size - frozen
         nmob = mp.mo_occ[1].size - frozen
-    else:
+    elif isinstance(frozen[0], (int, numpy.integer, list, numpy.ndarray)):
         if isinstance(frozen[0], (int, numpy.integer)):
             frozen = (frozen, frozen)
-        nmoa = len(mp.mo_occ[0]) - len(frozen[0])
-        nmob = len(mp.mo_occ[1]) - len(frozen[1])
+        nmoa = len(mp.mo_occ[0]) - len(set(frozen[0]))
+        nmob = len(mp.mo_occ[1]) - len(set(frozen[1]))
+    else:
+        raise NotImplementedError
     return nmoa, nmob
 
 
 def get_frozen_mask(mp):
     '''Get boolean mask for the unrestricted reference orbitals.
-    
+
     In the returned boolean (mask) array of frozen orbital indices, the
     element is False if it corresonds to the frozen orbital.
     '''
@@ -145,16 +153,25 @@ def get_frozen_mask(mp):
     elif isinstance(frozen, (int, numpy.integer)):
         moidxa[:frozen] = False
         moidxb[:frozen] = False
-    else:
+    elif isinstance(frozen[0], (int, numpy.integer, list, numpy.ndarray)):
         if isinstance(frozen[0], (int, numpy.integer)):
             frozen = (frozen, frozen)
         moidxa[list(frozen[0])] = False
         moidxb[list(frozen[1])] = False
+    else:
+        raise NotImplementedError
     return moidxa,moidxb
 
 def make_rdm1(mp, t2=None):
-    '''1-particle density matrix in MO basis.  The off-diagonal blocks due to
-    the orbital response are not included.
+    r'''
+    One-particle spin density matrices dm1a, dm1b in MO basis (the
+    occupied-virtual blocks due to the orbital response contribution are not
+    included).
+
+    dm1a[p,q] = <q_alpha^\dagger p_alpha>
+    dm1b[p,q] = <q_beta^\dagger p_beta>
+
+    The convention of 1-pdm is based on McWeeney's book, Eq (5.4.20).
     '''
     from pyscf.cc import uccsd_rdm
     if t2 is None: t2 = mp.t2
@@ -181,6 +198,27 @@ def _gamma1_intermediates(mp, t2):
 
 # spin-orbital rdm2 in Chemist's notation
 def make_rdm2(mp, t2=None):
+    r'''
+    Two-particle spin density matrices dm2aa, dm2ab, dm2bb in MO basis
+
+    dm2aa[p,q,r,s] = <q_alpha^\dagger s_alpha^\dagger r_alpha p_alpha>
+    dm2ab[p,q,r,s] = <q_alpha^\dagger s_beta^\dagger r_beta p_alpha>
+    dm2bb[p,q,r,s] = <q_beta^\dagger s_beta^\dagger r_beta p_beta>
+
+    (p,q correspond to one particle and r,s correspond to another particle)
+    Two-particle density matrix should be contracted to integrals with the
+    pattern below to compute energy
+
+    E = numpy.einsum('pqrs,pqrs', eri_aa, dm2_aa)
+    E+= numpy.einsum('pqrs,pqrs', eri_ab, dm2_ab)
+    E+= numpy.einsum('pqrs,rspq', eri_ba, dm2_ab)
+    E+= numpy.einsum('pqrs,pqrs', eri_bb, dm2_bb)
+
+    where eri_aa[p,q,r,s] = (p_alpha q_alpha | r_alpha s_alpha )
+    eri_ab[p,q,r,s] = ( p_alpha q_alpha | r_beta s_beta )
+    eri_ba[p,q,r,s] = ( p_beta q_beta | r_alpha s_alpha )
+    eri_bb[p,q,r,s] = ( p_beta q_beta | r_beta s_beta )
+    '''
     if t2 is None: t2 = mp.t2
     nmoa, nmob = nmoa0, nmob0 = mp.nmo
     nocca, noccb = nocca0, noccb0 = mp.nocc
@@ -257,6 +295,9 @@ def make_rdm2(mp, t2=None):
         for j in range(noccb0):
             dm2ab[i,i,j,j] += 1
 
+    dm2aa = dm2aa.transpose(1,0,3,2)
+    dm2ab = dm2ab.transpose(1,0,3,2)
+    dm2bb = dm2bb.transpose(1,0,3,2)
     return dm2aa, dm2ab, dm2bb
 
 
@@ -267,7 +308,7 @@ class UMP2(mp2.MP2):
     get_frozen_mask = get_frozen_mask
 
     @lib.with_doc(mp2.MP2.kernel.__doc__)
-    def kernel(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=True):
+    def kernel(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2):
         return mp2.MP2.kernel(self, mo_energy, mo_coeff, eris, with_t2, kernel)
 
     def ao2mo(self, mo_coeff=None):
@@ -485,6 +526,8 @@ def _ao2mo_ovov(mp, orbs, feri, max_memory=2000, verbose=None):
 
     time0 = log.timer('mp2 ao2mo_ovov pass2', *time0)
 
+del(WITH_T2)
+
 
 if __name__ == '__main__':
     from pyscf import scf
@@ -520,9 +563,9 @@ if __name__ == '__main__':
     h1b = reduce(numpy.dot, (mo_b.T.conj(), hcore, mo_b))
     e1 = numpy.einsum('ij,ji', h1a, dm1a)
     e1+= numpy.einsum('ij,ji', h1b, dm1b)
-    e1+= numpy.einsum('ijkl,jilk', eriaa, dm2aa) * .5
-    e1+= numpy.einsum('ijkl,jilk', eriab, dm2ab)
-    e1+= numpy.einsum('ijkl,jilk', eribb, dm2bb) * .5
+    e1+= numpy.einsum('ijkl,ijkl', eriaa, dm2aa) * .5
+    e1+= numpy.einsum('ijkl,ijkl', eriab, dm2ab)
+    e1+= numpy.einsum('ijkl,ijkl', eribb, dm2bb) * .5
     e1+= mol.energy_nuc()
     print(e1 - pt.e_tot)
 

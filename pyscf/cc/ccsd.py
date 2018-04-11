@@ -33,8 +33,10 @@ from pyscf import ao2mo
 from pyscf.ao2mo import _ao2mo
 from pyscf.cc import _ccsd
 from pyscf.mp.mp2 import get_nocc, get_nmo, get_frozen_mask, _mo_without_core
+from pyscf import __config__
 
-BLKMIN = 4
+BLKMIN = getattr(__config__, 'cc_ccsd_blkmin', 4)
+
 
 # t1: ia
 # t2: ijab
@@ -62,7 +64,11 @@ def kernel(mycc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
         t1new, t2new = mycc.update_amps(t1, t2, eris)
         normt = numpy.linalg.norm(mycc.amplitudes_to_vector(t1new, t2new) -
                                   mycc.amplitudes_to_vector(t1, t2))
-        t1, t2 = t1new, t2new
+        if mycc.iterative_damping < 1.0:
+            alpha = mycc.iterative_damping
+            t1, t2 = (1-alpha)*t1 + alpha*t1new, (1-alpha)*t2 + alpha*t2new
+        else:
+            t1, t2 = t1new, t2new
         t1new = t2new = None
         if mycc.diis:
             t1, t2 = mycc.diis(t1, t2, istep, normt, eccsd-eold, adiis)
@@ -524,7 +530,6 @@ def _contract_s4vvvv_t2(mycc, mol, vvvv, t2, out=None, max_memory=2000, verbose=
                 contract_blk_(tmp, i0, i1, j0, j1)
 
         with lib.call_in_background(block_contract, sync=not mycc.cc_async) as bcontract:
-            bcontract = block_contract
             readbuf = numpy.empty((blksize,nvira,nvir_pair))
             readbuf1 = numpy.empty_like(readbuf)
             for p0, p1 in lib.prange(0, nvira, blksize):
@@ -633,8 +638,12 @@ def vector_to_amplitudes_s4(vector, nmo, nocc):
     return t1, t2
 
 
-def energy(mycc, t1, t2, eris):
+def energy(mycc, t1=None, t2=None, eris=None):
     '''CCSD correlation energy'''
+    if t1 is None: t1 = mycc.t1
+    if t2 is None: t2 = mycc.t2
+    if eris is None: eris = mycc.ao2mo()
+
     nocc, nvir = t1.shape
     fock = eris.fock
     e = numpy.einsum('ia,ia', fock[:nocc,nocc:], t1) * 2
@@ -704,12 +713,14 @@ class CCSD(lib.StreamObject):
             DIIS space size.  Default is 6.
         diis_start_cycle : int
             The step to start DIIS.  Default is 0.
+        iterative_damping : float
+            The self consistent damping parameter.
         direct : bool
             AO-direct CCSD. Default is False.
+        cc_async : bool
+            Allow for asynchronous function execution. Default is True.
         incore_complete : bool
             Avoid all I/O. Default is False.
-        cc_async : bool
-            Allow for asynchonous execution of functions. Default is True.
         frozen : int or list
             If integer is given, the inner-most orbitals are frozen from CC
             amplitudes.  Given the orbital indices (0-based) in a list, both
@@ -730,11 +741,28 @@ class CCSD(lib.StreamObject):
             CCSD correlation correction
         e_tot : float
             Total CCSD energy (HF + correlation)
-        t1, t2 : 
+        t1, t2 :
             T amplitudes t1[i,a], t2[i,j,a,b]  (i,j in occ, a,b in virt)
-        l1, l2 : 
+        l1, l2 :
             Lambda amplitudes l1[i,a], l2[i,j,a,b]  (i,j in occ, a,b in virt)
     '''
+
+    max_cycle = getattr(__config__, 'cc_ccsd_CCSD_max_cycle', 50)
+    conv_tol = getattr(__config__, 'cc_ccsd_CCSD_conv_tol', 1e-7)
+    iterative_damping = getattr(__config__, 'cc_ccsd_CCSD_iterative_damping', 1.0)
+    conv_tol_normt = getattr(__config__, 'cc_ccsd_CCSD_conv_tol_normt', 1e-5)
+
+    diis_space = getattr(__config__, 'cc_ccsd_CCSD_diis_space', 6)
+    diis_file = None
+    diis_start_cycle = getattr(__config__, 'cc_ccsd_CCSD_diis_start_cycle', 0)
+    # FIXME: Should we avoid DIIS starting early?
+    diis_start_energy_diff = getattr(__config__, 'cc_ccsd_CCSD_diis_start_energy_diff', 1e9)
+
+    direct = getattr(__config__, 'cc_ccsd_CCSD_direct', False)
+    cc_async = getattr(__config__, 'cc_ccsd_CCSD_direct', True)
+    incore_complete = getattr(__config__, 'cc_ccsd_CCSD_incore_complete', False)
+    cc2 = getattr(__config__, 'cc_ccsd_CCSD_cc2', False)
+
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
         from pyscf import gto
         if isinstance(mf, gto.Mole):
@@ -756,19 +784,6 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         self.stdout = self.mol.stdout
         self.max_memory = mf.max_memory
 
-        self.max_cycle = 50
-        self.conv_tol = 1e-7
-        self.conv_tol_normt = 1e-5
-        self.diis_space = 6
-        self.diis_file = None
-        self.diis_start_cycle = 0
-# FIXME: Should we avoid DIIS starting early?
-        self.diis_start_energy_diff = 1e9
-        self.direct = False
-        self.incore_complete = False
-        self.cc_async = True
-        self.cc2 = False
-
         self.frozen = frozen
 
 ##################################################
@@ -787,7 +802,11 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         self._nmo = None
         self.chkfile = None
 
-        self._keys = set(self.__dict__.keys())
+        keys = set(('max_cycle', 'conv_tol', 'iterative_damping',
+                    'conv_tol_normt', 'diis_space', 'diis_file',
+                    'diis_start_cycle', 'diis_start_energy_diff', 'direct',
+                    'cc_async', 'incore_complete', 'cc2'))
+        self._keys = set(self.__dict__.keys()).union(keys)
 
     @property
     def ecc(self):
@@ -1244,7 +1263,7 @@ def _make_eris_outcore(mycc, mo_coeff=None):
     buf = numpy.empty((blksize*nocc,nao_pair))
     buf_prefetch = numpy.empty_like(buf)
     outbuf = numpy.empty((blksize*nocc,nmo**2))
-    with lib.call_in_background(prefetch) as bprefetch:
+    with lib.call_in_background(prefetch, sync=not mycc.cc_async) as bprefetch:
         fload(fswap['0'], 0, min(nocc,blksize)*nocc, buf_prefetch)
         for p0, p1 in lib.prange(0, nocc, blksize):
             nrow = (p1 - p0) * nocc

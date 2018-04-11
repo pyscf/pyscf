@@ -36,7 +36,7 @@ def hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     time0 = t1 = (time.clock(), time.time())
 
     mol = hessobj.mol
-    mf = hessobj._scf
+    mf = hessobj.base
     if mo_energy is None: mo_energy = mf.mo_energy
     if mo_occ is None:    mo_occ = mf.mo_occ
     if mo_coeff is None:  mo_coeff = mf.mo_coeff
@@ -96,7 +96,7 @@ def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     time0 = t1 = (time.clock(), time.time())
 
     mol = hessobj.mol
-    mf = hessobj._scf
+    mf = hessobj.base
     if mo_energy is None: mo_energy = mf.mo_energy
     if mo_occ is None:    mo_occ = mf.mo_occ
     if mo_coeff is None:  mo_coeff = mf.mo_coeff
@@ -174,7 +174,7 @@ def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
     nao, nmo = mo_coeff.shape
     mocc = mo_coeff[:,mo_occ>0]
     dm0 = numpy.dot(mocc, mocc.T) * 2
-    hcore_deriv = hessobj._scf.nuc_grad_method().hcore_generator(mol)
+    hcore_deriv = hessobj.base.nuc_grad_method().hcore_generator(mol)
 
     aoslices = mol.aoslice_by_atom()
     h1ao = [None] * mol.natm
@@ -354,7 +354,7 @@ def hess_nuc(mol, atmlst=None):
 def gen_hop(hobj, mo_energy=None, mo_coeff=None, mo_occ=None, verbose=None):
     log = logger.new_logger(hobj, verbose)
     mol = hobj.mol
-    mf = hobj._scf
+    mf = hobj.base
 
     if mo_energy is None: mo_energy = mf.mo_energy
     if mo_occ is None:    mo_occ = mf.mo_occ
@@ -419,7 +419,7 @@ class Hessian(lib.StreamObject):
         self.verbose = scf_method.verbose
         self.stdout = scf_method.stdout
         self.mol = scf_method.mol
-        self._scf = scf_method
+        self.base = scf_method
         self.chkfile = scf_method.chkfile
         self.max_memory = self.mol.max_memory
 
@@ -437,7 +437,7 @@ class Hessian(lib.StreamObject):
 
     def hcore_generator(self, mol=None):
         if mol is None: mol = self.mol
-        with_x2c = getattr(self._scf, 'with_x2c', None)
+        with_x2c = getattr(self.base, 'with_x2c', None)
         if with_x2c:
             return with_x2c.hcore_deriv_generator(deriv=2)
 
@@ -499,7 +499,7 @@ class Hessian(lib.StreamObject):
 
     def solve_mo1(self, mo_energy, mo_coeff, mo_occ, h1ao_or_chkfile,
                   fx=None, atmlst=None, max_memory=4000, verbose=None):
-        return solve_mo1(self._scf, mo_energy, mo_coeff, mo_occ, h1ao_or_chkfile,
+        return solve_mo1(self.base, mo_energy, mo_coeff, mo_occ, h1ao_or_chkfile,
                          fx, atmlst, max_memory, verbose)
 
     def hess_nuc(self, mol=None, atmlst=None):
@@ -508,9 +508,9 @@ class Hessian(lib.StreamObject):
 
     def kernel(self, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
         cput0 = (time.clock(), time.time())
-        if mo_energy is None: mo_energy = self._scf.mo_energy
-        if mo_coeff is None: mo_coeff = self._scf.mo_coeff
-        if mo_occ is None: mo_occ = self._scf.mo_occ
+        if mo_energy is None: mo_energy = self.base.mo_energy
+        if mo_coeff is None: mo_coeff = self.base.mo_coeff
+        if mo_occ is None: mo_occ = self.base.mo_occ
         if atmlst is None:
             atmlst = self.atmlst
         else:

@@ -20,8 +20,14 @@ import scipy.linalg
 from pyscf import gto
 from pyscf.lib import logger
 from pyscf import lo
+from pyscf import __config__
 
-def mo_map(mol1, mo1, mol2, mo2, base=0, tol=.5):
+BASE = getattr(__config__, 'BASE', 0)
+MAP_TOL = getattr(__config__, 'mo_mapping_mo_map_tol', 0.5)
+ORTH_METHOD = getattr(__config__, 'mo_mapping_mo_comps_orth_method', 'meta_lowdin')
+
+
+def mo_map(mol1, mo1, mol2, mo2, base=BASE, tol=.5):
     '''Given two orbitals, based on their overlap <i|j>, search all
     orbital-pairs which have significant overlap.
 
@@ -51,7 +57,8 @@ def mo_1to1map(s):
         s1[:,k] = 0
     return like_input
 
-def mo_comps(aolabels_or_baslst, mol, mo_coeff, cart=False, orth_method='meta_lowdin'):
+def mo_comps(aolabels_or_baslst, mol, mo_coeff, cart=False,
+             orth_method=ORTH_METHOD):
     '''Given AO(s), show how the AO(s) are distributed in MOs.
 
     Args:
@@ -109,3 +116,4 @@ def mo_comps(aolabels_or_baslst, mol, mo_coeff, cart=False, orth_method='meta_lo
     s1 = numpy.einsum('ki,ki->i', mo1, mo1)
     return s1
 
+del(BASE, MAP_TOL, ORTH_METHOD)

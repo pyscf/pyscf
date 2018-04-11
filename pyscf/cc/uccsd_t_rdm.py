@@ -356,8 +356,8 @@ if __name__ == '__main__':
     dm2 = make_rdm2(mycc, t1, t2, l1, l2, eris=eris)
     h1a = reduce(numpy.dot, (mf.mo_coeff[0].T, mf.get_hcore(), mf.mo_coeff[0]))
     h1b = reduce(numpy.dot, (mf.mo_coeff[1].T, mf.get_hcore(), mf.mo_coeff[1]))
-    e3 =(numpy.einsum('ij,ij->', h1a, dm1[0]) +
-         numpy.einsum('ij,ij->', h1b, dm1[1]) +
+    e3 =(numpy.einsum('ij,ji->', h1a, dm1[0]) +
+         numpy.einsum('ij,ji->', h1b, dm1[1]) +
          numpy.einsum('ijkl,ijkl->', eri_aa, dm2[0])*.5 +
          numpy.einsum('ijkl,ijkl->', eri_bb, dm2[2])*.5 +
          numpy.einsum('ijkl,ijkl->', eri_ab, dm2[1])    +

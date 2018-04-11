@@ -19,6 +19,7 @@
 import os
 import pyscf.gto.basis
 from pyscf.pbc.gto.basis import parse_cp2k
+from pyscf import __config__
 
 ALIAS = {
     'gthaugdzvp'  : 'gth-aug-dzvp.dat',
@@ -44,7 +45,8 @@ ALIAS = {
     'gthdzvpmoloptsr'   : 'gth-dzvp-molopt-sr.dat',
 }
 
-def parse(string):
+OPTIMIZE_CONTRACTION = getattr(__config__, 'pbc_gto_basis_parse_optimize', False)
+def parse(string, optimize=OPTIMIZE_CONTRACTION):
     '''Parse the basis text which is in CP2K format, return an internal
     basis format which can be assigned to :attr:`Mole.basis`
 
@@ -69,7 +71,7 @@ def parse(string):
     '''
     return parse_cp2k.parse(string)
 
-def load(file_or_basis_name, symb):
+def load(file_or_basis_name, symb, optimize=OPTIMIZE_CONTRACTION):
     '''Convert the basis of the given symbol to internal format
 
     Args:
@@ -98,4 +100,6 @@ def load(file_or_basis_name, symb):
     symb = ''.join(i for i in symb if i.isalpha())
     b = parse_cp2k.load(os.path.join(os.path.dirname(__file__), basmod), symb)
     return b
+
+del(OPTIMIZE_CONTRACTION)
 

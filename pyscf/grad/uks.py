@@ -23,20 +23,21 @@ import numpy
 import scipy.linalg
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.scf import rhf_grad
-from pyscf.dft import rks_grad
+from pyscf.grad import rhf as rhf_grad
+from pyscf.grad import rks as rks_grad
 from pyscf.grad import uhf as uhf_grad
 from pyscf.dft import numint, gen_grid
+from pyscf import __config__
 
 
 def get_veff(ks_grad, mol=None, dm=None):
     '''Coulomb + XC functional
     '''
     if mol is None: mol = ks_grad.mol
-    if dm is None: dm = ks_grad._scf.make_rdm1()
+    if dm is None: dm = ks_grad.base.make_rdm1()
     t0 = (time.clock(), time.time())
 
-    mf = ks_grad._scf
+    mf = ks_grad.base
     ni = mf._numint
     if ks_grad.grids is not None:
         grids = ks_grad.grids
@@ -192,6 +193,9 @@ def get_vxc_full_response(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
 
 
 class Gradients(uhf_grad.Gradients):
+
+    grid_response = getattr(__config__, 'grad_uks_Gradients_grid_response', False)
+
     def __init__(self, mf):
         uhf_grad.Gradients.__init__(self, mf)
         self.grids = None

@@ -22,22 +22,23 @@ from pyscf import gto
 from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
 from pyscf.ao2mo import outcore
+from pyscf import __config__
 
-# default ioblk_size is 256 MB
-
-IOBUF_WORDS_PREFER = 1e8
-IOBUF_ROW_MIN = 160
+IOBLK_SIZE = getattr(__config__, 'ao2mo_outcore_ioblk_size', 256)  # 256 MB
+IOBUF_WORDS = getattr(__config__, 'ao2mo_outcore_iobuf_words', 1e8)  # 1.6 GB
+IOBUF_ROW_MIN = getattr(__config__, 'ao2mo_outcore_row_min', 160)
+MAX_MEMORY = getattr(__config__, 'ao2mo_outcore_max_memory', 4000)  # 4GB
 
 def full(mol, mo_coeff, erifile, dataname='eri_mo', tmpdir=None,
          intor='int2e_spinor', aosym='s4', comp=None,
-         max_memory=4000, ioblk_size=256, verbose=logger.WARN):
+         max_memory=MAX_MEMORY, ioblk_size=IOBLK_SIZE, verbose=logger.WARN):
     general(mol, (mo_coeff,)*4, erifile, dataname, tmpdir,
             intor, aosym, comp, max_memory, ioblk_size, verbose)
     return erifile
 
 def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
             intor='int2e_spinor', aosym='s4', comp=None,
-            max_memory=4000, ioblk_size=256, verbose=logger.WARN):
+            max_memory=MAX_MEMORY, ioblk_size=IOBLK_SIZE, verbose=logger.WARN):
     time_0pass = (time.clock(), time.time())
     log = logger.new_logger(mol, verbose)
     intor, comp = gto.moleintor._get_intor_and_comp(mol._add_suffix(intor), comp)
@@ -159,7 +160,8 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
 # swapfile will be overwritten if exists.
 def half_e1(mol, mo_coeffs, swapfile,
             intor='int2e_spinor', aosym='s4', comp=None,
-            max_memory=4000, ioblk_size=256, verbose=logger.WARN, ao2mopt=None):
+            max_memory=MAX_MEMORY, ioblk_size=IOBLK_SIZE, verbose=logger.WARN,
+            ao2mopt=None):
     time0 = (time.clock(), time.time())
     log = logger.new_logger(mol, verbose)
 
@@ -272,8 +274,8 @@ def guess_e1bufsize(max_memory, ioblk_size, nij_pair, nao_pair, comp):
 # part of the max_memory is used to hold the AO integrals.  The iobuf is the
 # buffer to temporary hold the transformed integrals before streaming to disk.
 # iobuf is then divided to small blocks (ioblk_words) and streamed to disk.
-    if mem_words > 2e8:
-        iobuf_words = int(IOBUF_WORDS_PREFER) # 1.2GB
+    if mem_words > IOBUF_WORDS * 2:
+        iobuf_words = int(IOBUF_WORDS)
     else:
         iobuf_words = int(mem_words // 2)
     ioblk_words = int(min(ioblk_size*1e6/16, iobuf_words))
@@ -304,6 +306,8 @@ def guess_nao_pair(mol, nao):
             dj = ao_loc[j+1] - ao_loc[j]
             nao_pair += di * dj
     return nao_pair
+
+del(MAX_MEMORY)
 
 
 if __name__ == '__main__':
