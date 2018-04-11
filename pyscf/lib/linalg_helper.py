@@ -169,7 +169,7 @@ def eigh_by_blocks(h, s=None, labels=None):
 def davidson(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
              lindep=DAVIDSON_LINDEP, max_memory=MAX_MEMORY,
              dot=numpy.dot, callback=None,
-             nroots=1, lessio=False, verbose=logger.WARN,
+             nroots=1, lessio=False, pick=None, verbose=logger.WARN,
              follow_state=FOLLOW_STATE):
     '''Davidson diagonalization method to solve  a c = e c.  Ref
     [1] E.R. Davidson, J. Comput. Phys. 17 (1), 87-94 (1975).
@@ -220,6 +220,8 @@ def davidson(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
             other is to call aop(x0).  The default is the first method which
             needs more IO and less computational cost.  When IO is slow, the
             second method can be considered.
+        pick : function(w,v,nroots) => (e[idx], w[:,idx], idx)
+            Function to filter eigenvalues and eigenvectors.
         follow_state : bool
             If the solution dramatically changes in two iterations, clean the
             subspace and restart the iteration with the old solution.  It can
@@ -245,7 +247,7 @@ def davidson(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
     '''
     e, x = davidson1(lambda xs: [aop(x) for x in xs],
                      x0, precond, tol, max_cycle, max_space, lindep,
-                     max_memory, dot, callback, nroots, lessio, verbose,
+                     max_memory, dot, callback, nroots, lessio, pick, verbose,
                      follow_state)[1:]
     if nroots == 1:
         return e[0], x[0]
@@ -255,7 +257,7 @@ def davidson(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
 def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
              lindep=DAVIDSON_LINDEP, max_memory=MAX_MEMORY,
              dot=numpy.dot, callback=None,
-             nroots=1, lessio=False, verbose=logger.WARN,
+             nroots=1, lessio=False, pick=None, verbose=logger.WARN,
              follow_state=FOLLOW_STATE):
     '''Davidson diagonalization method to solve  a c = e c.  Ref
     [1] E.R. Davidson, J. Comput. Phys. 17 (1), 87-94 (1975).
@@ -305,6 +307,8 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
             other is to call aop(x0).  The default is the first method which
             needs more IO and less computational cost.  When IO is slow, the
             second method can be considered.
+        pick : function(w,v,nroots) => (e[idx], w[:,idx], idx)
+            Function to filter eigenvalues and eigenvectors.
         follow_state : bool
             If the solution dramatically changes in two iterations, clean the
             subspace and restart the iteration with the old solution.  It can
@@ -403,6 +407,8 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         axt = None
 
         w, v = scipy.linalg.eigh(heff[:space,:space])
+        if callable(pick):
+            w, v, idx = pick(w, v, nroots, locals())
         if SORT_EIG_BY_SIMILARITY:
             e, v = _sort_by_similarity(w, v, nroots, conv, vlast, emin)
             if elast.size != e.size:
@@ -718,16 +724,16 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
                 heff[i,head+k] = dot(xi.conj(), axt[k])
 
         w, v = scipy.linalg.eig(heff[:space,:space])
-        e, v, idx = pick(w, v, nroots, locals())
+        w, v, idx = pick(w, v, nroots, locals())
         if SORT_EIG_BY_SIMILARITY:
-            e, v = _sort_by_similarity(e, v, nroots, conv, vlast, emin,
+            e, v = _sort_by_similarity(w, v, nroots, conv, vlast, emin,
                                        heff[:space,:space])
             if e.size != elast.size:
                 de = e
             else:
                 de = e - elast
         else:
-            e = e[:nroots]
+            e = w[:nroots]
             v = v[:,:nroots]
 
         x0 = _gen_x0(v, xs)

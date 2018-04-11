@@ -733,11 +733,17 @@ class TDA(lib.StreamObject):
 
         if x0 is None:
             x0 = self.init_guess(self._scf, self.nstates)
+
+        def pickeig(w, v, nroots, envs):
+            idx = numpy.where(w > POSTIVE_EIG_THRESHOLD**2)[0]
+            return w[idx], v[:,idx], idx
+
         self.converged, self.e, x1 = \
                 lib.davidson1(vind, x0, precond,
                               tol=self.conv_tol,
                               nroots=nstates, lindep=self.lindep,
-                              max_space=self.max_space, verbose=log)
+                              max_space=self.max_space, pick=pickeig,
+                              verbose=log)
 
         nocc = (self._scf.mo_occ>0).sum()
         nmo = self._scf.mo_occ.size

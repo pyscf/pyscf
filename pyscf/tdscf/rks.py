@@ -119,11 +119,16 @@ class TDDFTNoHybrid(TDA):
         if x0 is None:
             x0 = self.init_guess(self._scf, self.nstates)
 
+        def pickeig(w, v, nroots, envs):
+            idx = numpy.where(w > POSTIVE_EIG_THRESHOLD**2)[0]
+            return w[idx], v[:,idx], idx
+
         self.converged, w2, x1 = \
                 lib.davidson1(vind, x0, precond,
                               tol=self.conv_tol,
                               nroots=nstates, lindep=self.lindep,
-                              max_space=self.max_space, verbose=log)
+                              max_space=self.max_space, pick=pickeig,
+                              verbose=log)
 
         mo_energy = self._scf.mo_energy
         mo_occ = self._scf.mo_occ
