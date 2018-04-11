@@ -31,7 +31,7 @@ class RCCSD(ccsd.CCSD):
         return ccsd.CCSD._add_vvvv(self, t1, t2, eris, out, with_ovvv, t2sym)
 
 
-def _contract_vvvv_t2(mol, vvL, t2, out=None, max_memory=2000, verbose=None):
+def _contract_vvvv_t2(mycc, mol, vvL, t2, out=None, max_memory=2000, verbose=None):
     '''Ht2 = numpy.einsum('ijcd,acdb->ijab', t2, vvvv)
 
     Args:
@@ -97,10 +97,10 @@ def _contract_vvvv_t2(mol, vvL, t2, out=None, max_memory=2000, verbose=None):
 
 
 class _ChemistsERIs(ccsd._ChemistsERIs):
-    def _contract_vvvv_t2(self, t2, direct=False, out=None, max_memory=2000,
+    def _contract_vvvv_t2(self, mycc, t2, direct=False, out=None, max_memory=2000,
                           verbose=None):
         assert(not direct)
-        return _contract_vvvv_t2(self.mol, self.vvL, t2, out, max_memory, verbose)
+        return _contract_vvvv_t2(mycc, self.mol, self.vvL, t2, out, max_memory, verbose)
 
 def _make_df_eris(cc, mo_coeff=None):
     cput0 = (time.clock(), time.time())

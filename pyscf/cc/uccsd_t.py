@@ -71,7 +71,7 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     orbsym = numpy.zeros(nocca, dtype=int)
     contract = _gen_contract_aaa(t1aT, t2aaT, eris_vooo, eris.focka, orbsym, log)
     for a0, a1 in reversed(list(lib.prange_tril(0, nvira, bufsize))):
-        with lib.call_in_background(contract, sync=not mycc.cc_async) as ctr:
+        with lib.call_in_background(contract, sync=not mycc.async_io) as ctr:
             cache_row_a = numpy.asarray(eris_vvop[a0:a1,:a1], order='C')
             if a0 == 0:
                 cache_col_a = cache_row_a
@@ -98,7 +98,7 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     orbsym = numpy.zeros(noccb, dtype=int)
     contract = _gen_contract_aaa(t1bT, t2bbT, eris_VOOO, eris.fockb, orbsym, log)
     for a0, a1 in reversed(list(lib.prange_tril(0, nvirb, bufsize))):
-        with lib.call_in_background(contract, sync=not mycc.cc_async) as ctr:
+        with lib.call_in_background(contract, sync=not mycc.async_io) as ctr:
             cache_row_a = numpy.asarray(eris_VVOP[a0:a1,:a1], order='C')
             if a0 == 0:
                 cache_col_a = cache_row_a
@@ -129,7 +129,7 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     vooo = (eris_vooo, eris_vOoO, eris_VoOo)
     contract = _gen_contract_baa(ts, vooo, fock, orbsym, log)
     for a0, a1 in lib.prange(0, nvirb, int(bufsize/nvira+1)):
-        with lib.call_in_background(contract, sync=not mycc.cc_async) as ctr:
+        with lib.call_in_background(contract, sync=not mycc.async_io) as ctr:
             cache_row_a = numpy.asarray(eris_VvOp[a0:a1,:], order='C')
             cache_col_a = numpy.asarray(eris_vVoP[:,a0:a1], order='C')
             for b0, b1 in lib.prange_tril(0, nvira, bufsize):
@@ -150,7 +150,7 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     vooo = (eris_VOOO, eris_VoOo, eris_vOoO)
     contract = _gen_contract_baa(ts, vooo, fock, orbsym, log)
     for a0, a1 in lib.prange(0, nvira, int(bufsize/nvirb+1)):
-        with lib.call_in_background(contract, sync=not mycc.cc_async) as ctr:
+        with lib.call_in_background(contract, sync=not mycc.async_io) as ctr:
             cache_row_a = numpy.asarray(eris_vVoP[a0:a1,:], order='C')
             cache_col_a = numpy.asarray(eris_VvOp[:,a0:a1], order='C')
             for b0, b1 in lib.prange_tril(0, nvirb, bufsize):
@@ -292,7 +292,7 @@ def _sort_eri(mycc, eris, h5tmp, log):
     max_memory = min(8000, max_memory*.9)
 
     blksize = min(nvira, max(16, int(max_memory*1e6/8/(nvira*nocca*nmoa))))
-    with lib.call_in_background(eris_vvop.__setitem__, sync=not mycc.cc_async) as save:
+    with lib.call_in_background(eris_vvop.__setitem__, sync=not mycc.async_io) as save:
         bufopv = numpy.empty((nocca,nmoa,nvira), dtype=dtype)
         buf1 = numpy.empty_like(bufopv)
         for j0, j1 in lib.prange(0, nvira, blksize):
@@ -307,7 +307,7 @@ def _sort_eri(mycc, eris, h5tmp, log):
             cpu1 = log.timer_debug1('transpose %d:%d'%(j0,j1), *cpu1)
 
     blksize = min(nvirb, max(16, int(max_memory*1e6/8/(nvirb*noccb*nmob))))
-    with lib.call_in_background(eris_VVOP.__setitem__, sync=not mycc.cc_async) as save:
+    with lib.call_in_background(eris_VVOP.__setitem__, sync=not mycc.async_io) as save:
         bufopv = numpy.empty((noccb,nmob,nvirb), dtype=dtype)
         buf1 = numpy.empty_like(bufopv)
         for j0, j1 in lib.prange(0, nvirb, blksize):
@@ -322,7 +322,7 @@ def _sort_eri(mycc, eris, h5tmp, log):
             cpu1 = log.timer_debug1('transpose %d:%d'%(j0,j1), *cpu1)
 
     blksize = min(nvira, max(16, int(max_memory*1e6/8/(nvirb*nocca*nmob))))
-    with lib.call_in_background(eris_vVoP.__setitem__, sync=not mycc.cc_async) as save:
+    with lib.call_in_background(eris_vVoP.__setitem__, sync=not mycc.async_io) as save:
         bufopv = numpy.empty((nocca,nmob,nvirb), dtype=dtype)
         buf1 = numpy.empty_like(bufopv)
         for j0, j1 in lib.prange(0, nvira, blksize):
@@ -338,7 +338,7 @@ def _sort_eri(mycc, eris, h5tmp, log):
 
     blksize = min(nvirb, max(16, int(max_memory*1e6/8/(nvira*noccb*nmoa))))
     OVov = numpy.asarray(eris.ovOV).transpose(2,3,0,1)
-    with lib.call_in_background(eris_VvOp.__setitem__, sync=not mycc.cc_async) as save:
+    with lib.call_in_background(eris_VvOp.__setitem__, sync=not mycc.async_io) as save:
         bufopv = numpy.empty((noccb,nmoa,nvira), dtype=dtype)
         buf1 = numpy.empty_like(bufopv)
         for j0, j1 in lib.prange(0, nvirb, blksize):

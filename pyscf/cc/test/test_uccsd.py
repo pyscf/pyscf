@@ -16,6 +16,7 @@
 import unittest
 import copy
 import numpy
+from functools import reduce
 
 from pyscf import gto, lib
 from pyscf import scf, dft
@@ -281,7 +282,7 @@ class KnownValues(unittest.TestCase):
         eris = uccsd._ChemistsERIs()
         eris.vvvv = numpy.random.random((nvira_pair,nvirb_pair))
         eris.mol = mol
-        self.assertAlmostEqual(lib.finger(eris._contract_vvvv_t2(t2)), 12.00904827896089, 11)
+        self.assertAlmostEqual(lib.finger(eris._contract_vvvv_t2(myucc, t2)), 12.00904827896089, 11)
 
     def test_update_amps1(self):
         mol = mol_s2

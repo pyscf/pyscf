@@ -101,7 +101,7 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     bufsize = max(1, (max_memory*1e6/8-nocc**3*100)*.7/(nocc*nmo))
     log.debug('max_memory %d MB (%d MB in use)', max_memory, mem_now)
     for a0, a1 in reversed(list(lib.prange_tril(0, nvir, bufsize))):
-        with lib.call_in_background(contract, sync=not mycc.cc_async) as async_contract:
+        with lib.call_in_background(contract, sync=not mycc.async_io) as async_contract:
             cache_row_a = numpy.asarray(eris_vvop[a0:a1,:a1], order='C')
             if a0 == 0:
                 cache_col_a = cache_row_a
@@ -151,7 +151,7 @@ def _sort_eri(mycc, eris, nocc, nvir, vvop, log):
     max_memory = min(8000, max_memory*.9)
     blksize = min(nvir, max(16, int(max_memory*1e6/8/(nvir*nocc*nmo))))
     dtype = vvop.dtype
-    with lib.call_in_background(vvop.__setitem__, sync=not mycc.cc_async) as save:
+    with lib.call_in_background(vvop.__setitem__, sync=not mycc.async_io) as save:
         bufopv = numpy.empty((nocc,nmo,nvir), dtype=dtype)
         buf1 = numpy.empty_like(bufopv)
         buf = numpy.empty((nocc,nvir,nvir), dtype=dtype)

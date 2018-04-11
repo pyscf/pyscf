@@ -256,7 +256,7 @@ def _add_ovvv_(mycc, t1, t2, eris, fvv, t1new, t2new, fswap):
     fwooVV = numpy.zeros((nocc,nocc,nvir,nvir))
 
     buf = numpy.empty((blksize,nocc,nvir_pair))
-    with lib.call_in_background(load_ovvv, sync=not mycc.cc_async) as prefetch:
+    with lib.call_in_background(load_ovvv, sync=not mycc.async_io) as prefetch:
         load_ovvv(0, blksize, buf)
         for p0, p1 in lib.prange(0, nvir, blksize):
             eris_vovv, buf = buf[:p1-p0], numpy.empty_like(buf)
@@ -529,7 +529,7 @@ def _contract_s4vvvv_t2(mycc, mol, vvvv, t2, out=None, max_memory=2000, verbose=
                                        ctypes.c_int(nvirb))
                 contract_blk_(tmp, i0, i1, j0, j1)
 
-        with lib.call_in_background(block_contract, sync=not mycc.cc_async) as bcontract:
+        with lib.call_in_background(block_contract, sync=not mycc.async_io) as bcontract:
             readbuf = numpy.empty((blksize,nvira,nvir_pair))
             readbuf1 = numpy.empty_like(readbuf)
             for p0, p1 in lib.prange(0, nvira, blksize):
@@ -717,7 +717,7 @@ class CCSD(lib.StreamObject):
             The self consistent damping parameter.
         direct : bool
             AO-direct CCSD. Default is False.
-        cc_async : bool
+        async_io : bool
             Allow for asynchronous function execution. Default is True.
         incore_complete : bool
             Avoid all I/O. Default is False.
@@ -759,7 +759,7 @@ class CCSD(lib.StreamObject):
     diis_start_energy_diff = getattr(__config__, 'cc_ccsd_CCSD_diis_start_energy_diff', 1e9)
 
     direct = getattr(__config__, 'cc_ccsd_CCSD_direct', False)
-    cc_async = getattr(__config__, 'cc_ccsd_CCSD_direct', True)
+    async_io = getattr(__config__, 'cc_ccsd_CCSD_async_io', True)
     incore_complete = getattr(__config__, 'cc_ccsd_CCSD_incore_complete', False)
     cc2 = getattr(__config__, 'cc_ccsd_CCSD_cc2', False)
 
@@ -805,7 +805,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         keys = set(('max_cycle', 'conv_tol', 'iterative_damping',
                     'conv_tol_normt', 'diis_space', 'diis_file',
                     'diis_start_cycle', 'diis_start_energy_diff', 'direct',
-                    'cc_async', 'incore_complete', 'cc2'))
+                    'async_io', 'incore_complete', 'cc2'))
         self._keys = set(self.__dict__.keys()).union(keys)
 
     @property
@@ -1263,7 +1263,7 @@ def _make_eris_outcore(mycc, mo_coeff=None):
     buf = numpy.empty((blksize*nocc,nao_pair))
     buf_prefetch = numpy.empty_like(buf)
     outbuf = numpy.empty((blksize*nocc,nmo**2))
-    with lib.call_in_background(prefetch, sync=not mycc.cc_async) as bprefetch:
+    with lib.call_in_background(prefetch, sync=not mycc.async_io) as bprefetch:
         fload(fswap['0'], 0, min(nocc,blksize)*nocc, buf_prefetch)
         for p0, p1 in lib.prange(0, nocc, blksize):
             nrow = (p1 - p0) * nocc

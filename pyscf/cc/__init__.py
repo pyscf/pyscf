@@ -42,7 +42,7 @@ to control CCSD calculation.
         The step to start DIIS.  Default is 0.
     direct : bool
         AO-direct CCSD. Default is False.
-    cc_async : bool
+    async_io : bool
         Allow for asynchronous function execution. Default is True.
     incore_complete : bool
         Avoid all I/O. Default is False.
