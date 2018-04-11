@@ -44,7 +44,7 @@ def kernel(tdgrad, z, atmlst=None, mf_grad=None, max_memory=2000,
     nocc = (mo_occ>0).sum()
     nvir = nmo - nocc
     #eai = lib.direct_sum('a-i->ai', mo_energy[nocc:], mo_energy[:nocc])
-    z = z[0].reshape(nvir,nocc)
+    z = z[0].reshape(nocc,nvir).T
     orbv = mo_coeff[:,nocc:]
     orbo = mo_coeff[:,:nocc]
 

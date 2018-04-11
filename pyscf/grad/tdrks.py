@@ -67,7 +67,9 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
 
     ni = mf._numint
     omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
-    dm0 = None # mf.make_rdm1(mo_coeff, mo_occ)
+    # dm0 = mf.make_rdm1(mo_coeff, mo_occ), but it is not used when computing
+    # fxc since rho0 is passed to fxc function.
+    dm0 = None
     rho0, vxc, fxc = ni.cache_xc_kernel(mf.mol, mf.grids, mf.xc,
                                         [mo_coeff]*2, [mo_occ*.5]*2, spin=1)
     f1vo, f1oo, vxc1, k1ao = \

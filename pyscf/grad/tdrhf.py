@@ -136,8 +136,8 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
         h1ao[:,:,p0:p1] += vhf1[0,:,p0:p1].transpose(0,2,1)
         # oo0*2 for doubly occupied orbitals
         de[k] = numpy.einsum('xpq,pq->x', h1ao, oo0) * 2
-
         de[k] += numpy.einsum('xpq,pq->x', h1ao, dmz1doo)
+
         de[k] -= numpy.einsum('xpq,pq->x', s1[:,p0:p1], im0[p0:p1])
         de[k] -= numpy.einsum('xqp,pq->x', s1[:,p0:p1], im0[:,p0:p1])
 
@@ -165,7 +165,6 @@ class Gradients(rhf_grad.Gradients):
         self.chkfile = td.chkfile
         self.max_memory = td.max_memory
         self.atmlst = range(self.mol.natm)
-        self.state_id = 1
 
         self.de = 0
         keys = set(('cphf_max_cycle', 'cphf_conv_tol'))
@@ -179,7 +178,6 @@ class Gradients(rhf_grad.Gradients):
         log.info('cphf_conv_tol = %g', self.cphf_conv_tol)
         log.info('cphf_max_cycle = %d', self.cphf_max_cycle)
         log.info('chkfile = %s', self.chkfile)
-        log.info('state_id = %s', self.state_id)
         log.info('max_memory %d MB (current use %d MB)',
                  self.max_memory, lib.current_memory()[0])
         log.info('\n')
@@ -202,7 +200,6 @@ class Gradients(rhf_grad.Gradients):
         cput0 = (time.clock(), time.time())
         if xy is None: xy = self.base.xy[state-1]
         if singlet is None: singlet = self.base.singlet
-        self.state_id = state
         if atmlst is None:
             atmlst = self.atmlst
         else:
@@ -218,8 +215,8 @@ class Gradients(rhf_grad.Gradients):
 
     def _finalize(self):
         if self.verbose >= logger.NOTE:
-            logger.note(self, '--------------- %s (state %d) gradients ---------------',
-                        self.base.__class__.__name__, self.state_id)
+            logger.note(self, '--------------- %s gradients ---------------',
+                        self.base.__class__.__name__)
             logger.note(self, '           x                y                z')
             de = self.de
             for k, ia in enumerate(self.atmlst):
