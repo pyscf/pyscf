@@ -435,14 +435,14 @@ def _add_vvVV(mycc, t1, t2ab, eris, out=None):
         tau = lib.einsum('ijab,pb->ijap', tau, mo_b[:,noccb:])
         time0 = logger.timer_debug1(mycc, 'vvvv-tau mo2ao', *time0)
         max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
-        buf = eris._contract_vvVV_t2(tau, mycc.direct, out, max_memory, log)
+        buf = eris._contract_vvVV_t2(mycc, tau, mycc.direct, out, max_memory, log)
         mo = np.asarray(np.hstack((mo_a[:,nocca:], mo_b[:,noccb:])), order='F')
         Ht2 = _ao2mo.nr_e2(buf.reshape(nocca*noccb,-1), mo.conj(),
                            (0,nvira,nvira,nvira+nvirb), 's1', 's1')
         return Ht2.reshape(t2ab.shape)
     else:
         max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
-        return eris._contract_vvVV_t2(t2ab, mycc.direct, out, max_memory, log)
+        return eris._contract_vvVV_t2(mycc, t2ab, mycc.direct, out, max_memory, log)
 
 def _add_vvvv(mycc, t1, t2, eris, out=None, with_ovvv=False, t2sym=None):
     time0 = time.clock(), time.time()
@@ -484,7 +484,7 @@ def _add_vvvv(mycc, t1, t2, eris, out=None, with_ovvv=False, t2sym=None):
         time0 = log.timer_debug1('vvvv-tau', *time0)
 
         max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
-        buf = ccsd._contract_vvvv_t2(mycc.mol, None, tau, out, max_memory, log)
+        buf = ccsd._contract_vvvv_t2(mycc, mycc.mol, None, tau, out, max_memory, log)
 
         mo = np.asarray(np.hstack((mo_a[:,nocca:], mo_b[:,noccb:])), order='F')
         u2aa = np.zeros_like(t2aa)
@@ -513,17 +513,17 @@ def _add_vvvv(mycc, t1, t2, eris, out=None, with_ovvv=False, t2sym=None):
         assert(not with_ovvv)
         max_memory = max(0, mycc.max_memory-lib.current_memory()[0]-t2ab.nbytes/1e6*3)
         if t2sym is None:
-            tmp = eris._contract_vvvv_t2(t2aa[np.tril_indices(nocca)],
+            tmp = eris._contract_vvvv_t2(mycc, t2aa[np.tril_indices(nocca)],
                                          mycc.direct, None, max_memory)
             u2aa = ccsd._unpack_t2_tril(tmp, nocca, nvira, None, 'jiba')
-            tmp = eris._contract_VVVV_t2(t2bb[np.tril_indices(noccb)],
+            tmp = eris._contract_VVVV_t2(mycc, t2bb[np.tril_indices(noccb)],
                                          mycc.direct, None, max_memory)
             u2bb = ccsd._unpack_t2_tril(tmp, noccb, nvirb, None, 'jiba')
-            u2ab = eris._contract_vvVV_t2(t2ab, mycc.direct, None, max_memory)
+            u2ab = eris._contract_vvVV_t2(mycc, t2ab, mycc.direct, None, max_memory)
         else:
-            u2aa = eris._contract_vvvv_t2(t2aa, mycc.direct, None, max_memory)
-            u2bb = eris._contract_VVVV_t2(t2bb, mycc.direct, None, max_memory)
-            u2ab = eris._contract_vvVV_t2(t2ab, mycc.direct, None, max_memory)
+            u2aa = eris._contract_vvvv_t2(mycc, t2aa, mycc.direct, None, max_memory)
+            u2bb = eris._contract_VVVV_t2(mycc, t2bb, mycc.direct, None, max_memory)
+            u2ab = eris._contract_vvVV_t2(mycc, t2ab, mycc.direct, None, max_memory)
 
     return u2aa,u2ab,u2bb
 
@@ -792,7 +792,7 @@ class _ChemistsERIs(ccsd._ChemistsERIs):
     def get_OVVV(self, *slices):
         return _get_ovvv_base(self.OVVV, *slices)
 
-    def _contract_VVVV_t2(self, t2, vvvv_or_direct=False, out=None, max_memory=2000,
+    def _contract_VVVV_t2(self, mycc, t2, vvvv_or_direct=False, out=None, max_memory=2000,
                           verbose=None):
         if isinstance(vvvv_or_direct, np.ndarray):
             vvvv = vvvv_or_direct
@@ -800,9 +800,9 @@ class _ChemistsERIs(ccsd._ChemistsERIs):
             vvvv = None
         else:
             vvvv = self.VVVV
-        return ccsd._contract_vvvv_t2(self.mol, vvvv, t2, out, max_memory, verbose)
+        return ccsd._contract_vvvv_t2(mycc, self.mol, vvvv, t2, out, max_memory, verbose)
 
-    def _contract_vvVV_t2(self, t2, vvvv_or_direct=False, out=None, max_memory=2000,
+    def _contract_vvVV_t2(self, mycc, t2, vvvv_or_direct=False, out=None, max_memory=2000,
                           verbose=None):
         if isinstance(vvvv_or_direct, np.ndarray):
             vvvv = vvvv_or_direct
@@ -810,7 +810,7 @@ class _ChemistsERIs(ccsd._ChemistsERIs):
             vvvv = None
         else:
             vvvv = self.vvVV
-        return ccsd._contract_vvvv_t2(self.mol, vvvv, t2, out, max_memory, verbose)
+        return ccsd._contract_vvvv_t2(mycc, self.mol, vvvv, t2, out, max_memory, verbose)
 
 def _get_ovvv_base(ovvv, *slices):
     if len(ovvv.shape) == 3:  # DO NOT use .ndim here for h5py library

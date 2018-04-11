@@ -14,9 +14,11 @@
 # limitations under the License.
 
 import unittest
-from pyscf import ao2mo
 import numpy
 import numpy as np
+from functools import reduce
+
+from pyscf import ao2mo
 from pyscf import lib
 from pyscf import gto
 from pyscf import scf

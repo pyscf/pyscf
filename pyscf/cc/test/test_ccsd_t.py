@@ -15,6 +15,8 @@
 
 import unittest
 import numpy
+from functools import reduce
+
 from pyscf import gto, scf, lib, symm
 from pyscf import cc
 from pyscf.cc import ccsd_t

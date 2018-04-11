@@ -111,7 +111,10 @@ def update_amps(mycc, t1, t2, eris):
     fvv[numpy.diag_indices(nvir)] = 0
     fvv -= .5 * numpy.einsum('ia,ib->ab', t1, fock[:nocc,nocc:])
 
-    fswap = lib.H5TmpFile()
+    if mycc.incore_complete:
+        fswap = None
+    else:
+        fswap = lib.H5TmpFile()
     fwVOov, fwVooV = _add_ovvv_(mycc, t1, t2, eris, fvv, t1new, t2new, fswap)
     time1 = log.timer_debug1('ovvv', *time1)
 
@@ -246,11 +249,14 @@ def _add_ovvv_(mycc, t1, t2, eris, fvv, t1new, t2new, fswap):
         if p0 < p1:
             buf[:p1-p0] = eris.ovvv[:,p0:p1].transpose(1,0,2)
 
-    wVOov = fswap.create_dataset('wVOov', (nvir,nocc,nocc,nvir), 'f8')
+    if fswap is None:
+        wVOov = numpy.zeros((nvir,nocc,nocc,nvir))
+    else:
+        wVOov = fswap.create_dataset('wVOov', (nvir,nocc,nocc,nvir), 'f8')
     fwooVV = numpy.zeros((nocc,nocc,nvir,nvir))
 
     buf = numpy.empty((blksize,nocc,nvir_pair))
-    with lib.call_in_background(load_ovvv) as prefetch:
+    with lib.call_in_background(load_ovvv, sync=not mycc.async_io) as prefetch:
         load_ovvv(0, blksize, buf)
         for p0, p1 in lib.prange(0, nvir, blksize):
             eris_vovv, buf = buf[:p1-p0], numpy.empty_like(buf)
@@ -284,8 +290,11 @@ def _add_ovvv_(mycc, t1, t2, eris, fvv, t1new, t2new, fswap):
             theta = None
             time1 = log.timer_debug1('vovv [%d:%d]'%(p0, p1), *time1)
 
-    fswap['wVooV'] = fwooVV.transpose(2,1,0,3)
-    return fswap['wVOov'], fswap['wVooV']
+    if fswap is None:
+        return wVOov, fwooVV.transpose(2,1,0,3)
+    else:
+        fswap['wVooV'] = fwooVV.transpose(2,1,0,3)
+        return fswap['wVOov'], fswap['wVooV']
 
 def _add_vvvv(mycc, t1, t2, eris, out=None, with_ovvv=None, t2sym=None):
     '''t2sym: whether t2 has the symmetry t2[ijab]==t2[jiba] or
@@ -343,7 +352,7 @@ def _add_vvvv_tril(mycc, t1, t2, eris, out=None, with_ovvv=None):
         time0 = log.timer_debug1('vvvv-tau', *time0)
 
         max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
-        buf = eris._contract_vvvv_t2(tau, mycc.direct, out, max_memory, log)
+        buf = eris._contract_vvvv_t2(mycc, tau, mycc.direct, out, max_memory, log)
         buf = buf.reshape(nocc2,nao,nao)
         Ht2tril = _ao2mo.nr_e2(buf, mo.conj(), (nocc,nmo,nocc,nmo), 's1', 's1')
         Ht2tril = Ht2tril.reshape(nocc2,nvir,nvir)
@@ -363,7 +372,7 @@ def _add_vvvv_tril(mycc, t1, t2, eris, out=None, with_ovvv=None):
     else:
         assert(not with_ovvv)
         max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
-        Ht2tril = eris._contract_vvvv_t2(taux, mycc.direct, out, max_memory, log)
+        Ht2tril = eris._contract_vvvv_t2(mycc, taux, mycc.direct, out, max_memory, log)
     return Ht2tril
 
 def _add_vvvv_full(mycc, t1, t2, eris, out=None, with_ovvv=False):
@@ -392,16 +401,16 @@ def _add_vvvv_full(mycc, t1, t2, eris, out=None, with_ovvv=False):
         tau = tau.reshape(nocc,nocc,nao,nao)
         time0 = log.timer_debug1('vvvv-tau mo2ao', *time0)
 
-        buf = eris._contract_vvvv_t2(tau, mycc.direct, out, max_memory, log)
+        buf = eris._contract_vvvv_t2(mycc, tau, mycc.direct, out, max_memory, log)
         buf = buf.reshape(nocc**2,nao,nao)
         Ht2 = _ao2mo.nr_e2(buf, mo.conj(), (nocc,nmo,nocc,nmo), 's1', 's1')
     else:
-        Ht2 = eris._contract_vvvv_t2(tau, mycc.direct, out, max_memory, log)
+        Ht2 = eris._contract_vvvv_t2(mycc, tau, mycc.direct, out, max_memory, log)
 
     return Ht2.reshape(t2.shape)
 
 
-def _contract_vvvv_t2(mol, vvvv, t2, out=None, max_memory=2000, verbose=None):
+def _contract_vvvv_t2(mycc, mol, vvvv, t2, out=None, max_memory=2000, verbose=None):
     '''Ht2 = numpy.einsum('ijcd,acbd->ijab', t2, vvvv)
 
     Args:
@@ -410,12 +419,12 @@ def _contract_vvvv_t2(mol, vvvv, t2, out=None, max_memory=2000, verbose=None):
     '''
     if vvvv is None or len(vvvv.shape) == 2:
         # AO-direct or vvvv in 4-fold symmetry
-        return _contract_s4vvvv_t2(mol, vvvv, t2, out, max_memory, verbose)
+        return _contract_s4vvvv_t2(mycc, mol, vvvv, t2, out, max_memory, verbose)
     else:
-        return _contract_s1vvvv_t2(mol, vvvv, t2, out, max_memory, verbose)
+        return _contract_s1vvvv_t2(mycc, mol, vvvv, t2, out, max_memory, verbose)
 
 
-def _contract_s4vvvv_t2(mol, vvvv, t2, out=None, max_memory=2000, verbose=None):
+def _contract_s4vvvv_t2(mycc, mol, vvvv, t2, out=None, max_memory=2000, verbose=None):
     '''Ht2 = numpy.einsum('ijcd,acbd->ijab', t2, vvvv)
     where vvvv has to be real and has the 4-fold permutation symmetry
 
@@ -520,7 +529,7 @@ def _contract_s4vvvv_t2(mol, vvvv, t2, out=None, max_memory=2000, verbose=None):
                                        ctypes.c_int(nvirb))
                 contract_blk_(tmp, i0, i1, j0, j1)
 
-        with lib.call_in_background(block_contract) as bcontract:
+        with lib.call_in_background(block_contract, sync=not mycc.async_io) as bcontract:
             readbuf = numpy.empty((blksize,nvira,nvir_pair))
             readbuf1 = numpy.empty_like(readbuf)
             for p0, p1 in lib.prange(0, nvira, blksize):
@@ -531,7 +540,7 @@ def _contract_s4vvvv_t2(mol, vvvv, t2, out=None, max_memory=2000, verbose=None):
                 time0 = log.timer_debug1('vvvv [%d:%d]'%(p0,p1), *time0)
     return Ht2.reshape(t2.shape)
 
-def _contract_s1vvvv_t2(mol, vvvv, t2, out=None, max_memory=2000, verbose=None):
+def _contract_s1vvvv_t2(mycc, mol, vvvv, t2, out=None, max_memory=2000, verbose=None):
     '''Ht2 = numpy.einsum('ijcd,acdb->ijab', t2, vvvv)
     where vvvv can be real or complex and no permutation symmetry is available in vvvv.
 
@@ -541,7 +550,7 @@ def _contract_s1vvvv_t2(mol, vvvv, t2, out=None, max_memory=2000, verbose=None):
     '''
     if vvvv is None:   # AO-direct CCSD
         assert(t2.dtype == numpy.double)
-        return _contract_s4vvvv_t2(mol, vvvv, t2, out, max_memory, verbose)
+        return _contract_s4vvvv_t2(mycc, mol, vvvv, t2, False, out, max_memory, verbose)
 
     time0 = time.clock(), time.time()
     log = logger.new_logger(mol, verbose)
@@ -708,6 +717,10 @@ class CCSD(lib.StreamObject):
             The self consistent damping parameter.
         direct : bool
             AO-direct CCSD. Default is False.
+        async_io : bool
+            Allow for asynchronous function execution. Default is True.
+        incore_complete : bool
+            Avoid all I/O. Default is False.
         frozen : int or list
             If integer is given, the inner-most orbitals are frozen from CC
             amplitudes.  Given the orbital indices (0-based) in a list, both
@@ -746,6 +759,8 @@ class CCSD(lib.StreamObject):
     diis_start_energy_diff = getattr(__config__, 'cc_ccsd_CCSD_diis_start_energy_diff', 1e9)
 
     direct = getattr(__config__, 'cc_ccsd_CCSD_direct', False)
+    async_io = getattr(__config__, 'cc_ccsd_CCSD_async_io', True)
+    incore_complete = getattr(__config__, 'cc_ccsd_CCSD_incore_complete', False)
     cc2 = getattr(__config__, 'cc_ccsd_CCSD_cc2', False)
 
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
@@ -790,7 +805,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         keys = set(('max_cycle', 'conv_tol', 'iterative_damping',
                     'conv_tol_normt', 'diis_space', 'diis_file',
                     'diis_start_cycle', 'diis_start_energy_diff', 'direct',
-                    'cc2'))
+                    'async_io', 'incore_complete', 'cc2'))
         self._keys = set(self.__dict__.keys()).union(keys)
 
     @property
@@ -1115,7 +1130,7 @@ class _ChemistsERIs:
         nvir1 = ovvv.shape[2]
         return ovvv.reshape(nocc,nvir,nvir1,nvir1)
 
-    def _contract_vvvv_t2(self, t2, vvvv_or_direct=False, out=None, max_memory=2000,
+    def _contract_vvvv_t2(self, mycc, t2, vvvv_or_direct=False, out=None, max_memory=2000,
                           verbose=None):
         if isinstance(vvvv_or_direct, numpy.ndarray):
             vvvv = vvvv_or_direct
@@ -1123,7 +1138,7 @@ class _ChemistsERIs:
             vvvv = None
         else:
             vvvv = self.vvvv
-        return _contract_vvvv_t2(self.mol, vvvv, t2, out, max_memory, verbose)
+        return _contract_vvvv_t2(mycc, self.mol, vvvv, t2, out, max_memory, verbose)
 
     def _contract_vvvv_oov(self, mycc, r2, out=None):
         raise NotImplementedError
@@ -1248,7 +1263,7 @@ def _make_eris_outcore(mycc, mo_coeff=None):
     buf = numpy.empty((blksize*nocc,nao_pair))
     buf_prefetch = numpy.empty_like(buf)
     outbuf = numpy.empty((blksize*nocc,nmo**2))
-    with lib.call_in_background(prefetch) as bprefetch:
+    with lib.call_in_background(prefetch, sync=not mycc.async_io) as bprefetch:
         fload(fswap['0'], 0, min(nocc,blksize)*nocc, buf_prefetch)
         for p0, p1 in lib.prange(0, nocc, blksize):
             nrow = (p1 - p0) * nocc

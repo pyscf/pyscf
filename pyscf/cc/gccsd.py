@@ -15,6 +15,7 @@
 
 import time
 import numpy as np
+from functools import reduce
 
 from pyscf import lib
 from pyscf import ao2mo

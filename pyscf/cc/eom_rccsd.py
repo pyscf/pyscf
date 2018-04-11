@@ -352,13 +352,13 @@ class EOMIP(EOM):
         guess = []
         if koopmans:
             for n in range(nroots):
-                g = np.zeros(size, dtype)
+                g = np.zeros(int(size), dtype)
                 g[self.nocc-n-1] = 1.0
                 guess.append(g)
         else:
             idx = diag.argsort()[:nroots]
             for i in idx:
-                g = np.zeros(size, dtype)
+                g = np.zeros(int(size), dtype)
                 g[i] = 1.0
                 guess.append(g)
         return guess

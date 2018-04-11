@@ -16,6 +16,8 @@
 import unittest
 import numpy
 import numpy as np
+from functools import reduce
+
 from pyscf import lib
 from pyscf import gto
 from pyscf import scf

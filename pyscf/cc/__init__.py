@@ -42,6 +42,10 @@ to control CCSD calculation.
         The step to start DIIS.  Default is 0.
     direct : bool
         AO-direct CCSD. Default is False.
+    async_io : bool
+        Allow for asynchronous function execution. Default is True.
+    incore_complete : bool
+        Avoid all I/O. Default is False.
     frozen : int or list
         If integer is given, the inner-most orbitals are frozen from CC
         amplitudes.  Given the orbital indices (0-based) in a list, both
