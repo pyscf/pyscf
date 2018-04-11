@@ -712,10 +712,13 @@ class call_in_background(object):
             do_something_else()
     '''
 
-    def __init__(self, *fns, sync=False):
+    def __init__(self, *fns, **kwargs):
         self.fns = fns
         self.handler = None
-        self.sync = sync
+        if 'sync' in kwargs.keys():
+            self.sync = kwargs['sync']
+        else:
+            self.sync = False
 
     if not getattr(__config__, 'ASYNC_IO', True) or h5py.version.version[:4] == '2.2.': # h5py-2.2.* has bug in threading mode
         # Disable back-ground mode
@@ -730,8 +733,7 @@ class call_in_background(object):
             if self.sync:
                 def def_async_fn(fn):
                     return fn
-            else:
-                if imp.lock_held():
+            elif imp.lock_held():
 # Some modules like nosetests, coverage etc
 #   python -m unittest test_xxx.py  or  nosetests test_xxx.py
 # hang when Python multi-threading was used in the import stage due to (Python
@@ -739,20 +741,20 @@ class call_in_background(object):
 # https://github.com/paramiko/paramiko/issues/104
 # https://docs.python.org/2/library/threading.html#importing-in-threaded-code
 # Disable the asynchoronous mode for safe importing
-                    def def_async_fn(fn):
-                        return fn
-    
-                else:
-                    # Enable back-ground mode
-                    def def_async_fn(fn):
-                        def async_fn(*args, **kwargs):
-                            if self.handler is not None:
-                                self.handler.join()
-                            self.handler = ThreadWithReturnValue(target=fn, args=args,
-                                                                 kwargs=kwargs)
-                            self.handler.start()
-                            return self.handler
-                        return async_fn
+                def def_async_fn(fn):
+                    return fn
+
+            else:
+                # Enable back-ground mode
+                def def_async_fn(fn):
+                    def async_fn(*args, **kwargs):
+                        if self.handler is not None:
+                            self.handler.join()
+                        self.handler = ThreadWithReturnValue(target=fn, args=args,
+                                                             kwargs=kwargs)
+                        self.handler.start()
+                        return self.handler
+                    return async_fn
 
             if len(self.fns) == 1:
                 return def_async_fn(self.fns[0])
