@@ -92,6 +92,7 @@ class SHCI(pyscf.lib.StreamObject):
         davidsonTol: double
         epsilon2: double
         epsilon2Large: double
+        targetError: double
         sampleN: int
         epsilon1: vector<double>
         onlyperturbative: bool
@@ -154,7 +155,8 @@ class SHCI(pyscf.lib.StreamObject):
         # Standard SHCI Input parameters
         self.davidsonTol = 5.e-5
         self.epsilon2 = 1.e-7
-        self.epsilon2Large = 1000
+        self.epsilon2Large = 1000.
+        self.targetError = 1.e-4
         self.sampleN = 200
         self.epsilon1 = None
         self.onlyperturbative = False
@@ -225,7 +227,7 @@ class SHCI(pyscf.lib.StreamObject):
 
         twopdm = numpy.zeros( (norb, norb, norb, norb) )
         file2pdm = "%s/spatialRDM.%d.%d.txt"%(self.prefix,state, state)
-        r2RDM( twopdm, norb, file2pdm )
+        r2RDM( twopdm, norb, bytes(file2pdm, encoding='ascii') )
 
         #if (SHCI.groupname == 'Dooh' or SHCI.groupname == 'Cooh') and SHCI.useExtraSymm:
         if (self.groupname == 'Dooh' or self.groupname == 'Cooh') and self.useExtraSymm:
@@ -534,9 +536,9 @@ def writeSHCIConfFile( SHCI, nelec, Restart ):
              if (i != len(SHCI.initialStates)-1):
                 f.write('\n')
        elif SHCI.irrep_nelec is None:
-          for i in range(nelec[0]):
+          for i in range(int(nelec[0])):
              f.write('%i '%(2*i))
-          for i in range(nelec[1]):
+          for i in range(int(nelec[1])):
              f.write('%i '%(2*i+1))
        else:
           from pyscf import symm
@@ -593,6 +595,8 @@ def writeSHCIConfFile( SHCI, nelec, Restart ):
        f.write( 'nPTiter %d\n' %SHCI.nPTiter )
 
     f.write( 'epsilon2 %g\n' %SHCI.epsilon2 )
+    f.write( 'epsilon2Large %g\n' %SHCI.epsilon2Large )
+    f.write( 'targetError %g\n' %SHCI.targetError )
     f.write( 'sampleN %i\n' %SHCI.sampleN )
 
     # Miscellaneous Keywords
@@ -775,7 +779,7 @@ def writeIntegralFile(SHCI, h1eff, eri_cas, norb, nelec, ecore=0):
 
        eri_cas = pyscf.ao2mo.restore(8, eri_cas, norb)
        # Writes the FCIDUMP file using functions in SHCI_tools.cpp.
-       fcidumpFromIntegral( integralFile, h1eff, eri_cas, norb, neleca+nelecb,
+       fcidumpFromIntegral( bytes(integralFile, encoding='ascii'), h1eff, eri_cas, norb, neleca+nelecb,
                             ecore, numpy.asarray(orbsym, dtype=numpy.int32),
                             abs(neleca-nelecb) )
 
