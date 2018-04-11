@@ -41,12 +41,16 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     nocc, nvir = t1.shape
     nmo = nocc + nvir
 
-    ftmp = lib.H5TmpFile()
     dtype = numpy.result_type(t1, t2, eris.ovoo.dtype)
-    eris_vvop = ftmp.create_dataset('vvop', (nvir,nvir,nocc,nmo), dtype)
+    if mycc.incore_complete:
+        ftmp = None
+        eris_vvop = numpy.zeros((nvir,nvir,nocc,nmo), dtype)
+    else:
+        ftmp = lib.H5TmpFile()
+        eris_vvop = ftmp.create_dataset('vvop', (nvir,nvir,nocc,nmo), dtype)
+
     orbsym = _sort_eri(mycc, eris, nocc, nvir, eris_vvop, log)
 
-    ftmp['t2'] = t2  # read back late.  Cache t2T in t2 to reduce memory footprint
     mo_energy, t1T, t2T, vooo, fvo, restore_t2_inplace = \
             _sort_t2_vooo_(mycc, orbsym, t1, t2, eris)
     cpu1 = log.timer_debug1('CCSD(T) sort_eri', *cpu1)
@@ -97,7 +101,7 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     bufsize = max(1, (max_memory*1e6/8-nocc**3*100)*.7/(nocc*nmo))
     log.debug('max_memory %d MB (%d MB in use)', max_memory, mem_now)
     for a0, a1 in reversed(list(lib.prange_tril(0, nvir, bufsize))):
-        with lib.call_in_background(contract) as async_contract:
+        with lib.call_in_background(contract, sync=not mycc.cc_async) as async_contract:
             cache_row_a = numpy.asarray(eris_vvop[a0:a1,:a1], order='C')
             if a0 == 0:
                 cache_col_a = cache_row_a
@@ -147,7 +151,7 @@ def _sort_eri(mycc, eris, nocc, nvir, vvop, log):
     max_memory = min(8000, max_memory*.9)
     blksize = min(nvir, max(16, int(max_memory*1e6/8/(nvir*nocc*nmo))))
     dtype = vvop.dtype
-    with lib.call_in_background(vvop.__setitem__) as save:
+    with lib.call_in_background(vvop.__setitem__, sync=not mycc.cc_async) as save:
         bufopv = numpy.empty((nocc,nmo,nvir), dtype=dtype)
         buf1 = numpy.empty_like(bufopv)
         buf = numpy.empty((nocc,nvir,nvir), dtype=dtype)
