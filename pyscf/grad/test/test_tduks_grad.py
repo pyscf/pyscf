@@ -28,53 +28,71 @@ mol.atom = [
     ['H' , (0. , 0. , 1.804)],
     ['F' , (0. , 0. , 0.)], ]
 mol.unit = 'B'
+mol.charge = 2
+mol.spin = 2
 mol.basis = '631g'
 mol.build()
+pmol = mol.copy()
 
 class KnownValues(unittest.TestCase):
     def test_tda_lda(self):
-        mf = dft.RKS(mol)
+        mf = dft.UKS(mol).set(conv_tol=1e-12)
         mf.xc = 'LDA'
-        mf.grids.prune = False
         mf.scf()
         td = tddft.TDA(mf).run(nstates=3)
         tdg = td.nuc_grad_method()
         g1 = tdg.kernel(state=3)
-        self.assertAlmostEqual(g1[0,2], -9.23916667e-02, 8)
+        self.assertAlmostEqual(g1[0,2], -0.40279473514282405, 6)
+
+        td_solver = td.as_scanner()
+        e1 = td_solver(pmol.set_geom_('H 0 0 1.805; F 0 0 0', unit='B'))
+        e2 = td_solver(pmol.set_geom_('H 0 0 1.803; F 0 0 0', unit='B'))
+        self.assertAlmostEqual((e1[2]-e2[2])/.002, g1[0,2], 5)
 
     def test_tda_b88(self):
-        mf = dft.RKS(mol)
+        mf = dft.UKS(mol).set(conv_tol=1e-12)
         mf.xc = 'b88'
-        mf.grids.prune = False
         mf.scf()
         td = tddft.TDA(mf).run(nstates=3)
         tdg = td.nuc_grad_method()
         g1 = tdg.kernel(state=3)
-        self.assertAlmostEqual(g1[0,2], -9.32506535e-02, 8)
+        self.assertAlmostEqual(g1[0,2], -0.8120037135120326, 6)
+
+        td_solver = td.as_scanner()
+        e1 = td_solver(pmol.set_geom_('H 0 0 1.805; F 0 0 0', unit='B'))
+        e2 = td_solver(pmol.set_geom_('H 0 0 1.803; F 0 0 0', unit='B'))
+        self.assertAlmostEqual((e1[2]-e2[2])/.002, g1[0,2], 5)
 
     def test_tddft_lda(self):
-        mf = dft.RKS(mol)
+        mf = dft.UKS(mol).set(conv_tol=1e-12)
         mf.xc = 'LDA'
-        mf.grids.prune = False
         mf.scf()
         td = tddft.TDDFT(mf).run(nstates=3)
         tdg = td.nuc_grad_method()
         g1 = tdg.kernel(state=3)
-        self.assertAlmostEqual(g1[0,2], -1.31315477e-01, 8)
+        self.assertAlmostEqual(g1[0,2], -0.39791714992157035, 6)
+
+        td_solver = td.as_scanner()
+        e1 = td_solver(pmol.set_geom_('H 0 0 1.805; F 0 0 0', unit='B'))
+        e2 = td_solver(pmol.set_geom_('H 0 0 1.803; F 0 0 0', unit='B'))
+        self.assertAlmostEqual((e1[2]-e2[2])/.002, g1[0,2], 5)
 
     def test_tddft_b3lyp(self):
-        mf = dft.RKS(mol)
-        mf.xc = 'b3lyp'
-        mf._numint.libxc = dft.xcfun
-        mf.grids.prune = False
+        mf = dft.UKS(mol).set(conv_tol=1e-12)
+        mf.xc = '.2*HF + .8*b88, vwn'
         mf.scf()
         td = tddft.TDDFT(mf).run(nstates=3)
         tdg = td.nuc_grad_method()
         g1 = tdg.kernel(state=3)
-        self.assertAlmostEqual(g1[0,2], -1.55778110e-01, 7)
+        self.assertAlmostEqual(g1[0,2], -0.80446691153291727, 6)
+
+        td_solver = td.as_scanner()
+        e1 = td_solver(pmol.set_geom_('H 0 0 1.805; F 0 0 0', unit='B'))
+        e2 = td_solver(pmol.set_geom_('H 0 0 1.803; F 0 0 0', unit='B'))
+        self.assertAlmostEqual((e1[2]-e2[2])/.002, g1[0,2], 4)
 
 
 if __name__ == "__main__":
-    print("Full Tests for TD-RKS gradients")
+    print("Full Tests for TD-UKS gradients")
     unittest.main()
 

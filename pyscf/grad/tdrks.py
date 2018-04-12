@@ -23,7 +23,7 @@ import time
 import copy
 from functools import reduce
 import numpy
-import pyscf.lib
+from pyscf import lib
 from pyscf.lib import logger
 from pyscf import dft
 from pyscf.dft import rks
@@ -62,7 +62,7 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
     dmzoo = reduce(numpy.dot, (orbo, doo, orbo.T))
     dmzoo+= reduce(numpy.dot, (orbv, dvv, orbv.T))
 
-    mem_now = pyscf.lib.current_memory()[0]
+    mem_now = lib.current_memory()[0]
     max_memory = max(2000, td_grad.max_memory*.9-mem_now)
 
     ni = mf._numint
@@ -151,7 +151,7 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
     im0[nocc:,:nocc] = numpy.einsum('ki,ai->ak', veff0mop[:nocc,:nocc], xpy)*2
     im0[nocc:,:nocc]+= numpy.einsum('ki,ai->ak', veff0mom[:nocc,:nocc], xmy)*2
 
-    zeta = pyscf.lib.direct_sum('i+j->ij', mo_energy, mo_energy) * .5
+    zeta = lib.direct_sum('i+j->ij', mo_energy, mo_energy) * .5
     zeta[nocc:,:nocc] = mo_energy[:nocc]
     zeta[:nocc,nocc:] = mo_energy[nocc:]
     dm1 = numpy.zeros((nmo,nmo))
@@ -221,9 +221,10 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
     log.timer('TDDFT nuclear gradients', *time0)
     return de
 
-# xai, oovv in AO-representation
-# Note spin-trace are applied for fxc, kxc
-def _contract_xc_kernel(td_grad, xc_code, xai, oovv=None, with_vxc=True,
+# dmvo, dmoo in AO-representation
+# Note spin-trace is applied for fxc, kxc
+#TODO: to include the response of grids
+def _contract_xc_kernel(td_grad, xc_code, dmvo, dmoo=None, with_vxc=True,
                         with_kxc=True, singlet=True, max_memory=2000):
     mol = td_grad.mol
     mf = td_grad.base._scf
@@ -233,21 +234,17 @@ def _contract_xc_kernel(td_grad, xc_code, xai, oovv=None, with_vxc=True,
     xctype = ni._xc_type(xc_code)
 
     mo_coeff = mf.mo_coeff
-    mo_energy = mf.mo_energy
     mo_occ = mf.mo_occ
     nao, nmo = mo_coeff.shape
-    nocc = (mo_occ>0).sum()
-    orbv = mo_coeff[:,nocc:]
-    orbo = mo_coeff[:,:nocc]
     shls_slice = (0, mol.nbas)
     ao_loc = mol.ao_loc_nr()
 
     # dmvo ~ reduce(numpy.dot, (orbv, Xai, orbo.T))
-    dmvo = (xai + xai.T) * .5 # because K_{ai,bj} == K_{ai,bj}
+    dmvo = (dmvo + dmvo.T) * .5 # because K_{ia,jb} == K_{ia,jb}
 
-    f1vo = numpy.zeros((4,nao,nao))
+    f1vo = numpy.zeros((4,nao,nao))  # 0th-order, d/dx, d/dy, d/dz
     deriv = 2
-    if oovv is not None:
+    if dmoo is not None:
         f1oo = numpy.zeros((4,nao,nao))
     else:
         f1oo = None
@@ -271,20 +268,20 @@ def _contract_xc_kernel(td_grad, xc_code, xai, oovv=None, with_vxc=True,
 
                 wfxc = fxc[0] * weight * 2  # *2 for alpha+beta
                 rho1 = ni.eval_rho(mol, ao[0], dmvo, mask, 'LDA')
-                aow = numpy.einsum('pi,p->pi', ao[0], wfxc*rho1)
+                aow = numpy.einsum('pi,p,p->pi', ao[0], wfxc, rho1)
                 for k in range(4):
                     f1vo[k] += numint._dot_ao_ao(mol, ao[k], aow, mask, shls_slice, ao_loc)
-                if oovv is not None:
-                    rho2 = ni.eval_rho(mol, ao[0], oovv, mask, 'LDA')
-                    aow = numpy.einsum('pi,p->pi', ao[0], wfxc*rho2)
+                if dmoo is not None:
+                    rho2 = ni.eval_rho(mol, ao[0], dmoo, mask, 'LDA')
+                    aow = numpy.einsum('pi,p,p->pi', ao[0], wfxc, rho2)
                     for k in range(4):
                         f1oo[k] += numint._dot_ao_ao(mol, ao[k], aow, mask, shls_slice, ao_loc)
                 if with_vxc:
-                    aow = numpy.einsum('pi,p->pi', ao[0], vxc[0]*weight)
+                    aow = numpy.einsum('pi,p,p->pi', ao[0], vxc[0], weight)
                     for k in range(4):
                         v1ao[k] += numint._dot_ao_ao(mol, ao[k], aow, mask, shls_slice, ao_loc)
                 if with_kxc:
-                    aow = numpy.einsum('pi,p->pi', ao[0], kxc[0]*weight*rho1**2)
+                    aow = numpy.einsum('pi,p,p,p->pi', ao[0], kxc[0], weight, rho1**2)
                     for k in range(4):
                         k1ao[k] += numint._dot_ao_ao(mol, ao[k], aow, mask, shls_slice, ao_loc)
                 vxc = fxc = kxc = aow = rho = rho1 = rho2 = None
@@ -312,8 +309,8 @@ def _contract_xc_kernel(td_grad, xc_code, xai, oovv=None, with_vxc=True,
                 wv = numint._rks_gga_wv1(rho, rho1, vxc, fxc, weight)
                 gga_sum_(f1vo, ao, wv, mask)
 
-                if oovv is not None:
-                    rho2 = ni.eval_rho(mol, ao, oovv, mask, 'GGA') * 2
+                if dmoo is not None:
+                    rho2 = ni.eval_rho(mol, ao, dmoo, mask, 'GGA') * 2
                     wv = numint._rks_gga_wv1(rho, rho2, vxc, fxc, weight)
                     gga_sum_(f1oo, ao, wv, mask)
                 if with_vxc:
@@ -399,17 +396,39 @@ if __name__ == '__main__':
     e2 = td_solver(mol.set_geom_('H 0 0 1.803; F 0 0 0', unit='B'))
     print(abs((e1[2]-e2[2])/.002 - g1[0,2]).max())
 
-#    mol.set_geom_('H 0 0 1.804; F 0 0 0', unit='B')
-#    td = tddft.TDA(mf)
-#    td.nstates = 3
-#    td.singlet = False
-#    e, z = td.kernel()
-#    tdg = Gradients(td)
-#    g1 = tdg.kernel(state=2)
-#    print(g1)
-## [[ 0  0  -0.3633334]
-##  [ 0  0   0.3633334]]
-#    td_solver = td.as_scanner()
-#    e1 = td_solver(mol.set_geom_('H 0 0 1.805; F 0 0 0', unit='B'))
-#    e2 = td_solver(mol.set_geom_('H 0 0 1.803; F 0 0 0', unit='B'))
-#    print(abs((e1[2]-e2[2])/.002 - g1[0,2]).max())
+    mol.set_geom_('H 0 0 1.804; F 0 0 0', unit='B')
+    mf = dft.RKS(mol)
+    mf.xc = 'lda'
+    mf.conv_tol = 1e-14
+    mf.kernel()
+    td = tddft.TDA(mf)
+    td.nstates = 3
+    td.singlet = False
+    e, z = td.kernel()
+    tdg = Gradients(td)
+    g1 = tdg.kernel(state=2)
+    print(g1)
+# [[ 0  0  -0.3633334]
+#  [ 0  0   0.3633334]]
+    td_solver = td.as_scanner()
+    e1 = td_solver(mol.set_geom_('H 0 0 1.805; F 0 0 0', unit='B'))
+    e2 = td_solver(mol.set_geom_('H 0 0 1.803; F 0 0 0', unit='B'))
+    print(abs((e1[2]-e2[2])/.002 - g1[0,2]).max())
+
+    mf = dft.RKS(mol)
+    mf.xc = 'b3lyp'
+    mf.conv_tol = 1e-14
+    mf.kernel()
+    td = tddft.TDA(mf)
+    td.nstates = 3
+    td.singlet = False
+    e, z = td.kernel()
+    tdg = Gradients(td)
+    g1 = tdg.kernel(state=2)
+    print(g1)
+# [[ 0  0  -0.3633334]
+#  [ 0  0   0.3633334]]
+    td_solver = td.as_scanner()
+    e1 = td_solver(mol.set_geom_('H 0 0 1.805; F 0 0 0', unit='B'))
+    e2 = td_solver(mol.set_geom_('H 0 0 1.803; F 0 0 0', unit='B'))
+    print(abs((e1[2]-e2[2])/.002 - g1[0,2]).max())

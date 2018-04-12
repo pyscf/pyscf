@@ -693,7 +693,6 @@ class TDA(rhf.TDA):
     _contract_multipole = _contract_multipole  # needed by transition dipoles
 
     def nuc_grad_method(self):
-        raise NotImplementedError
         from pyscf.grad import tduhf
         return tduhf.Gradients(self)
 
@@ -854,7 +853,6 @@ class TDHF(TDA):
         return self.e, self.xy
 
     def nuc_grad_method(self):
-        raise NotImplementedError
         from pyscf.grad import tduhf
         return tduhf.Gradients(self)
 

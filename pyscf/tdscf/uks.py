@@ -34,13 +34,11 @@ POSTIVE_EIG_THRESHOLD = getattr(__config__, 'tdscf_rhf_TDDFT_positive_eig_thresh
 
 class TDA(uhf.TDA):
     def nuc_grad_method(self):
-        raise NotImplementedError
         from pyscf.grad import tduks
         return tduks.Gradients(self)
 
 class TDDFT(uhf.TDHF):
     def nuc_grad_method(self):
-        raise NotImplementedError
         from pyscf.grad import tduks
         return tduks.Gradients(self)
 
@@ -192,7 +190,6 @@ class TDDFTNoHybrid(TDA):
         return self.e, self.xy
 
     def nuc_grad_method(self):
-        raise NotImplementedError
         from pyscf.grad import tduks
         return tduks.Gradients(self)
 

@@ -332,6 +332,32 @@ class KnownValues(unittest.TestCase):
         v = dft.numint.nr_vxc(h2o, grids, 'wB97M_V__vv10', dm, spin=1, hermi=0)[2]
         self.assertAlmostEqual(finger(v), 0.02293399033256055, 8)
 
+    def test_uks_gga_wv1(self):
+        numpy.random.seed(1)
+        rho0 = [numpy.random.random((4,5))]*2
+        rho1 = [numpy.random.random((4,5))]*2
+        weight = numpy.ones(5)
+
+        exc, vxc, fxc, kxc = dft.libxc.eval_xc('b88', rho0, 1, 0, 3)
+        wva, wvb = dft.numint._uks_gga_wv1(rho0, rho1, vxc, fxc, weight)
+        exc, vxc, fxc, kxc = dft.libxc.eval_xc('b88', rho0[0]+rho0[1], 0, 0, 3)
+        wv = dft.numint._rks_gga_wv1(rho0[0]+rho0[1], rho1[0]+rho1[1], vxc, fxc, weight)
+        self.assertAlmostEqual(abs(wv - wva).max(), 0, 10)
+        self.assertAlmostEqual(abs(wv - wvb).max(), 0, 10)
+
+    def test_uks_gga_wv2(self):
+        numpy.random.seed(1)
+        rho0 = [numpy.random.random((4,5))]*2
+        rho1 = [numpy.random.random((4,5))]*2
+        weight = numpy.ones(5)
+
+        exc, vxc, fxc, kxc = dft.libxc.eval_xc('b88', rho0, 1, 0, 3)
+        wva, wvb = dft.numint._uks_gga_wv2(rho0, rho1, fxc, kxc, weight)
+        exc, vxc, fxc, kxc = dft.libxc.eval_xc('b88', rho0[0]+rho0[1], 0, 0, 3)
+        wv = dft.numint._rks_gga_wv2(rho0[0]+rho0[1], rho1[0]+rho1[1], fxc, kxc, weight)
+        self.assertAlmostEqual(abs(wv - wva).max(), 0, 10)
+        self.assertAlmostEqual(abs(wv - wvb).max(), 0, 10)
+
 
 if __name__ == "__main__":
     print("Test numint")
