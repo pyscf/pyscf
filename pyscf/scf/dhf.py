@@ -308,8 +308,8 @@ class UHF(hf.SCF):
     with_gaunt = getattr(__config__, 'scf_dhf_SCF_with_gaunt', False)
     with_breit = getattr(__config__, 'scf_dhf_SCF_with_breit', False)
 
-    def __init__(self, mol):
-        hf.SCF.__init__(self, mol)
+    def __init__(self, mol, **kwargs):
+        hf.SCF.__init__(self, mol, **kwargs)
         self._coulomb_now = 'SSSS' # 'SSSS' ~ LLLL+LLSS+SSSS
         self.opt = (None, None, None, None) # (opt_llll, opt_ssll, opt_ssss, opt_gaunt)
 
@@ -496,10 +496,10 @@ class HF1e(UHF):
 
 class RHF(UHF):
     '''Dirac-RHF'''
-    def __init__(self, mol):
+    def __init__(self, mol, **kwargs):
         if mol.nelectron.__mod__(2) != 0:
             raise ValueError('Invalid electron number %i.' % mol.nelectron)
-        UHF.__init__(self, mol)
+        UHF.__init__(self, mol, **kwargs)
 
     # full density matrix for RHF
     def make_rdm1(self, mo_coeff=None, mo_occ=None):

@@ -356,8 +356,8 @@ class SymAdaptedRHF(hf.RHF):
     >>> mf.get_irrep_nelec()
     {'A1': 6, 'A2': 2, 'B1': 2, 'B2': 0}
     '''
-    def __init__(self, mol):
-        hf.RHF.__init__(self, mol)
+    def __init__(self, mol, **kwargs):
+        hf.RHF.__init__(self, mol, **kwargs)
         # number of electrons for each irreps
         self.irrep_nelec = {} # {'ir_name':int,...}
         self._keys = self._keys.union(['irrep_nelec'])
@@ -507,8 +507,8 @@ class SymAdaptedROHF(rohf.ROHF):
     >>> mf.get_irrep_nelec()
     {'A1': (3, 3), 'A2': (0, 0), 'B1': (1, 0), 'B2': (1, 1)}
     '''
-    def __init__(self, mol):
-        rohf.ROHF.__init__(self, mol)
+    def __init__(self, mol, **kwargs):
+        rohf.ROHF.__init__(self, mol, **kwargs)
         self.irrep_nelec = {}
 # use _irrep_doccs and _irrep_soccs help self.eig to compute orbital energy,
 # do not overwrite them

@@ -91,8 +91,8 @@ class GHF(ghf.GHF):
             For the irreps not listed in these dicts, the program will choose the
             occupancy based on the orbital energies.
     '''
-    def __init__(self, mol):
-        ghf.GHF.__init__(self, mol)
+    def __init__(self, mol, **kwargs):
+        ghf.GHF.__init__(self, mol, **kwargs)
         # number of electrons for each irreps
         self.irrep_nelec = {}
         self._keys = self._keys.union(['irrep_nelec'])

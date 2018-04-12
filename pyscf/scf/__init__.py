@@ -120,7 +120,7 @@ from pyscf.scf.hf import get_init_guess
 from pyscf.scf.addons import *
 
 
-def RHF(mol, *args):
+def RHF(mol, *args, **kwargs):
     __doc__ = '''This is a wrap function to decide which SCF class to use, RHF or ROHF\n
     ''' + hf.RHF.__doc__
     if mol.nelectron == 1:
@@ -130,24 +130,24 @@ def RHF(mol, *args):
             return rohf.HF1e(mol)
     elif not mol.symmetry or mol.groupname is 'C1':
         if mol.spin > 0:
-            return rohf.ROHF(mol, *args)
+            return rohf.ROHF(mol, *args, **kwargs)
         else:
-            return rhf.RHF(mol, *args)
+            return rhf.RHF(mol, *args, **kwargs)
     else:
         if mol.spin > 0:
-            return rhf_symm.ROHF(mol, *args)
+            return rhf_symm.ROHF(mol, *args, **kwargs)
         else:
-            return rhf_symm.RHF(mol, *args)
+            return rhf_symm.RHF(mol, *args, **kwargs)
 
-def ROHF(mol, *args):
+def ROHF(mol, *args, **kwargs):
     __doc__ = '''This is a wrap function to decide which ROHF class to use.\n
     ''' + rohf.ROHF.__doc__
     if not mol.symmetry or mol.groupname is 'C1':
-        return rohf.ROHF(mol, *args)
+        return rohf.ROHF(mol, *args, **kwargs)
     else:
-        return hf_symm.ROHF(mol, *args)
+        return hf_symm.ROHF(mol, *args, **kwargs)
 
-def UHF(mol, *args):
+def UHF(mol, *args, **kwargs):
     __doc__ = '''This is a wrap function to decide which UHF class to use.\n
     ''' + uhf.UHF.__doc__
     if mol.nelectron == 1:
@@ -156,31 +156,31 @@ def UHF(mol, *args):
         else:
             return uhf_symm.HF1e(mol, *args)
     elif not mol.symmetry or mol.groupname is 'C1':
-        return uhf.UHF(mol, *args)
+        return uhf.UHF(mol, *args, **kwargs)
     else:
-        return uhf_symm.UHF(mol, *args)
+        return uhf_symm.UHF(mol, *args, **kwargs)
 
-def GHF(mol, *args):
+def GHF(mol, *args, **kwargs):
     __doc__ = '''Non-relativistic generalized Hartree-Fock class.\n
     ''' + ghf.GHF.__doc__
     if not mol.symmetry or mol.groupname is 'C1':
-        return ghf.GHF(mol, *args)
+        return ghf.GHF(mol, *args, **kwargs)
     else:
-        return ghf_symm.GHF(mol, *args)
+        return ghf_symm.GHF(mol, *args, **kwargs)
 
-def DHF(mol, *args):
+def DHF(mol, *args, **kwargs):
     '''This is a wrap function to decide which Dirac-Hartree-Fock class to use.\n
     ''' + dhf.UHF.__doc__
     if mol.nelectron == 1:
         return dhf.HF1e(mol)
     else:
-        return dhf.UHF(mol, *args)
+        return dhf.UHF(mol, *args, **kwargs)
 
 
-def X2C(mol, *args):
+def X2C(mol, *args, **kwargs):
     '''X2C UHF (in testing)'''
     from pyscf.x2c import x2c
-    return x2c.UHF(mol, *args)
+    return x2c.UHF(mol, *args, **kwargs)
 
 def sfx2c1e(mf):
     return mf.sfx2c1e()
@@ -297,15 +297,15 @@ def fast_scf(mf):
     return fast_newton(mf)
 
 
-def RKS(mol, *args):
+def RKS(mol, *args, **kwargs):
     from pyscf import dft
-    return dft.RKS(mol)
+    return dft.RKS(mol, **kwargs)
 
-def ROKS(mol, *args):
+def ROKS(mol, *args, **kwargs):
     from pyscf import dft
-    return dft.ROKS(mol)
+    return dft.ROKS(mol, *args, **kwargs)
 
 def UKS(mol, *args):
     from pyscf import dft
-    return dft.UKS(mol)
+    return dft.UKS(mol, *args, **kwargs)
 

@@ -302,8 +302,8 @@ dip_moment = hf.dip_moment
 class ROHF(hf.RHF):
     __doc__ = hf.SCF.__doc__
 
-    def __init__(self, mol):
-        hf.SCF.__init__(self, mol)
+    def __init__(self, mol, **kwargs):
+        hf.SCF.__init__(self, mol, **kwargs)
         self.nelec = None
         self._keys = self._keys.union(['nelec'])
 

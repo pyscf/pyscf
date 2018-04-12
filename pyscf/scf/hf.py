@@ -1224,7 +1224,7 @@ class SCF(lib.StreamObject):
     direct_scf_tol = getattr(__config__, 'scf_hf_SCF_direct_scf_tol', 1e-13)
     conv_check = getattr(__config__, 'scf_hf_SCF_conv_check', True)
 
-    def __init__(self, mol):
+    def __init__(self, mol, **kwargs):
         if not mol._built:
             sys.stderr.write('Warning: %s must be initialized before calling SCF.\n'
                              'Initialize %s in %s\n' % (mol, mol, self))
@@ -1236,8 +1236,11 @@ class SCF(lib.StreamObject):
 
 # the chkfile will be removed automatically, to save the chkfile, assign a
 # filename to self.chkfile
-        self._chkfile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
-        self.chkfile = self._chkfile.name
+        self.fake = False
+        if 'fake' in kwargs.keys(): self.fake = kwargs['fake']
+        if not self.fake:
+           self._chkfile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
+           self.chkfile = self._chkfile.name
 
 ##################################################
 # don't modify the following attributes, they are not input options
@@ -1633,12 +1636,12 @@ class SCF(lib.StreamObject):
 class RHF(SCF):
     __doc__ = SCF.__doc__
 
-    def __init__(self, mol):
+    def __init__(self, mol, **kwargs):
         if mol.nelectron != 1 and (mol.nelectron % 2) != 0:
             logger.warn(self, 'Invalid electron number %d for RHF method.',
                         mol.nelectron)
 # Note: self._eri requires large amount of memory
-        SCF.__init__(self, mol)
+        SCF.__init__(self, mol, **kwargs)
 
     @lib.with_doc(get_jk.__doc__)
     def get_jk(self, mol=None, dm=None, hermi=1):
