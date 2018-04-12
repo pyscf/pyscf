@@ -1667,7 +1667,7 @@ def _uks_gga_wv2(rho0, rho1, fxc, kxc, weight):
     wvb[1:] += numpy.einsum('i,i,xi->xi', uu_ud_ud, a0b1_a0a1, rho0a[1:]) * 2
     wvb[1:] += numpy.einsum('i,i,xi->xi', uu_uu_ud, a0a1_a0a1, rho0a[1:]) * 4
     wvb *= weight
-    wvb[0]*=.5  # v+v.T shodlu ae bpplieu in the cbller
+    wvb[0]*=.5
 
     return wva, wvb
 

@@ -129,11 +129,31 @@ class KnownValues(unittest.TestCase):
         v = tools.fft(a, [n,n,n]).ravel()
         self.assertAlmostEqual(abs(ref-v).max(), 0, 10)
 
+        a = numpy.random.random([2,n,n,8])
+        ref = numpy.fft.fftn(a, axes=(1,2,3)).ravel()
+        v = tools.fft(a, [n,n,8]).ravel()
+        self.assertAlmostEqual(abs(ref-v).max(), 0, 10)
+
+        a = numpy.random.random([2,8,n,8])
+        ref = numpy.fft.fftn(a, axes=(1,2,3)).ravel()
+        v = tools.fft(a, [8,n,8]).ravel()
+        self.assertAlmostEqual(abs(ref-v).max(), 0, 10)
+
     def test_ifft(self):
         n = 31
         a = numpy.random.random([2,n,n,n])
         ref = numpy.fft.ifftn(a, axes=(1,2,3)).ravel()
         v = tools.ifft(a, [n,n,n]).ravel()
+        self.assertAlmostEqual(abs(ref-v).max(), 0, 10)
+
+        a = numpy.random.random([2,n,n,8])
+        ref = numpy.fft.ifftn(a, axes=(1,2,3)).ravel()
+        v = tools.ifft(a, [n,n,8]).ravel()
+        self.assertAlmostEqual(abs(ref-v).max(), 0, 10)
+
+        a = numpy.random.random([2,8,n,8])
+        ref = numpy.fft.ifftn(a, axes=(1,2,3)).ravel()
+        v = tools.ifft(a, [8,n,8]).ravel()
         self.assertAlmostEqual(abs(ref-v).max(), 0, 10)
 
 

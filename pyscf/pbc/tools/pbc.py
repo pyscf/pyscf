@@ -33,8 +33,8 @@ def _fftn_blas(f, mesh):
     g0 = g = lib.transpose(f.reshape(-1, mesh[1]*mesh[2])).astype(np.complex128)
     g1 = np.empty_like(g0)
     g = lib.dot(g.reshape(-1,mesh[0])  , expRGx, c=g1.reshape(-1,mesh[0]))
-    g = lib.dot(g.reshape(mesh[1],-1).T, expRGx, c=g0.reshape(-1,mesh[1]))
-    g = lib.dot(g.reshape(mesh[2],-1).T, expRGx, c=g1.reshape(-1,mesh[2]))
+    g = lib.dot(g.reshape(mesh[1],-1).T, expRGy, c=g0.reshape(-1,mesh[1]))
+    g = lib.dot(g.reshape(mesh[2],-1).T, expRGz, c=g1.reshape(-1,mesh[2]))
     return g.reshape(-1, *mesh)
 
 def _ifftn_blas(g, mesh):
