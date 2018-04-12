@@ -16,6 +16,7 @@
 import unittest
 import numpy
 import scipy.linalg
+
 from pyscf import gto
 from pyscf import scf, dft
 

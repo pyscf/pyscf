@@ -19,6 +19,8 @@
 import unittest
 import numpy
 import scipy.linalg
+from functools import reduce
+
 from pyscf import gto
 from pyscf import lib
 from pyscf import scf
