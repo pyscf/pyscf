@@ -54,7 +54,7 @@ def kernel(mycc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
     vec_old = 0
     eccsd = 0
     if mycc.diis:
-        adiis = lib.diis.DIIS(mycc, mycc.diis_file)
+        adiis = lib.diis.DIIS(mycc, mycc.diis_file, incore=mycc.incore_complete)
         adiis.space = mycc.diis_space
     else:
         adiis = None
@@ -720,7 +720,7 @@ class CCSD(lib.StreamObject):
         async_io : bool
             Allow for asynchronous function execution. Default is True.
         incore_complete : bool
-            Avoid all I/O. Default is False.
+            Avoid all I/O (also for DIIS). Default is False.
         frozen : int or list
             If integer is given, the inner-most orbitals are frozen from CC
             amplitudes.  Given the orbital indices (0-based) in a list, both
