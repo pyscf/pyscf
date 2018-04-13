@@ -99,7 +99,7 @@ class DIIS(object):
     E_5 = -1.100153764878
     E_6 = -1.100153764878
     '''
-    def __init__(self, dev=None, filename=None):
+    def __init__(self, dev=None, filename=None, incore=False):
         if dev is not None:
             self.verbose = dev.verbose
             self.stdout = dev.stdout
@@ -108,6 +108,7 @@ class DIIS(object):
             self.stdout = sys.stdout
         self.space = 6
         self.min_space = 1
+        self.incore = incore
 
 ##################################################
 # don't modify the following private variables, they are not input options
@@ -121,12 +122,12 @@ class DIIS(object):
         self._err_vec_touched = False
 
     def _store(self, key, value):
-        if value.size < INCORE_SIZE:
+        if value.size < INCORE_SIZE or self.incore:
             self._buffer[key] = value
 
         # save the error vector if filename is given, this file can be used to
         # restore the DIIS state
-        if value.size >= INCORE_SIZE or isinstance(self.filename, str):
+        if (value.size >= INCORE_SIZE and not self.incore) or isinstance(self.filename, str):
             if self._diisfile is None:
                 self._diisfile = misc.H5TmpFile(self.filename)
             if key in self._diisfile:
@@ -169,7 +170,7 @@ class DIIS(object):
             ekey = 'e%d'%self._head
             xkey = 'x%d'%self._head
             self._store(xkey, x)
-            if x.size < INCORE_SIZE:
+            if x.size < INCORE_SIZE or self.incore:
                 self._buffer[ekey] = x - self._xprev
                 if isinstance(self.filename, str):
                     self._store(ekey, self._buffer[ekey])

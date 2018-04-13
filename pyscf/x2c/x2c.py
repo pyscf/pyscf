@@ -165,8 +165,8 @@ def get_init_guess(mol, key='minao'):
 
 
 class UHF(hf.SCF):
-    def __init__(self, mol):
-        hf.SCF.__init__(self, mol)
+    def __init__(self, mol, **kwargs):
+        hf.SCF.__init__(self, mol, **kwargs)
         self.with_x2c = X2C(mol)
         #self.with_x2c.xuncontract = False
         self._keys = self._keys.union(['with_x2c'])
