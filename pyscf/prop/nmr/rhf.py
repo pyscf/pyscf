@@ -246,7 +246,8 @@ class NMR(lib.StreamObject):
         if gauge_orig is None: gauge_orig = self.gauge_orig
         log = logger.Logger(self.stdout, self.verbose)
         h1 = make_h10(mol, dm0, gauge_orig, log)
-        lib.chkfile.dump(self.chkfile, 'nmr/h1', h1)
+        if self.chkfile:
+            lib.chkfile.dump(self.chkfile, 'nmr/h1', h1)
         return h1
 
     def make_s10(self, mol=None, gauge_orig=None):

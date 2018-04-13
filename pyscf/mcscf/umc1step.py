@@ -736,6 +736,9 @@ class UCASSCF(ucasci.UCASCI):
         return ci1, g
 
     def dump_chk(self, envs):
+        if not self.chkfile:
+            return self
+
         if self.chk_ci:
             civec = envs['fcivec']
         else:

@@ -418,8 +418,8 @@ class SCF(mol_hf.SCF):
         return self.init_guess_by_chkfile(chk, project, kpt)
 
     def dump_chk(self, envs):
-        mol_hf.SCF.dump_chk(self, envs)
         if self.chkfile:
+            mol_hf.SCF.dump_chk(self, envs)
             with h5py.File(self.chkfile) as fh5:
                 fh5['scf/kpt'] = self.kpt
         return self

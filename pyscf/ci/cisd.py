@@ -475,7 +475,7 @@ class CISD(lib.StreamObject):
 
         self.nroots = 1
         self.frozen = frozen
-        self.chkfile = None
+        self.chkfile = mf.chkfile
 
 ##################################################
 # don't modify the following attributes, they are not input options
@@ -639,6 +639,9 @@ class CISD(lib.StreamObject):
     as_scanner = as_scanner
 
     def dump_chk(self, ci=None, frozen=None, mo_coeff=None, mo_occ=None):
+        if not self.chkfile:
+            return self
+
         if ci is None: ci = self.ci
         if frozen is None: frozen = self.frozen
         ci_chk = {'e_corr': self.e_corr,
@@ -650,11 +653,7 @@ class CISD(lib.StreamObject):
         if self._nmo is not None: ci_chk['_nmo'] = self._nmo
         if self._nocc is not None: ci_chk['_nocc'] = self._nocc
 
-        if self.chkfile is not None:
-            chkfile = self.chkfile
-        else:
-            chkfile = self._scf.chkfile
-        lib.chkfile.save(chkfile, 'cisd', ci_chk)
+        lib.chkfile.save(self.chkfile, 'cisd', ci_chk)
 
     def amplitudes_to_cisdvec(self, c0, c1, c2):
         return amplitudes_to_cisdvec(c0, c1, c2)

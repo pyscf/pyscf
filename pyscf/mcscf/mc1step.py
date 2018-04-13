@@ -1068,6 +1068,9 @@ class CASSCF(casci.CASCI):
         return paaa.reshape(nmo,ncas,ncas,ncas)
 
     def dump_chk(self, envs):
+        if not self.chkfile:
+            return self
+
         if hasattr(self.fcisolver, 'nevpt_intermediate'):
             civec = None
         elif self.chk_ci:

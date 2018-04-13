@@ -66,6 +66,7 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
     max_memory = max(2000, td_grad.max_memory*.9-mem_now)
 
     ni = mf._numint
+    ni.libxc.test_deriv_order(mf.xc, 3, raise_error=True)
     omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
     # dm0 = mf.make_rdm1(mo_coeff, mo_occ), but it is not used when computing
     # fxc since rho0 is passed to fxc function.

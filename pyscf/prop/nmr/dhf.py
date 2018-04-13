@@ -302,13 +302,15 @@ class NMR(rhf_nmr.NMR):
             h1 = make_h10rkb(mol, dm0, gauge_orig,
                              with_gaunt=self._scf.with_gaunt, verbose=log)
         t0 = log.timer('%s h1'%self.mb, *t0)
-        scf.chkfile.dump(self.chkfile, 'nmr/h1', h1)
+        if self.chkfile:
+            lib.chkfile.dump(self.chkfile, 'nmr/h1', h1)
 
         if gauge_orig is None:
             h1 += make_h10giao(mol, dm0,
                                with_gaunt=self._scf.with_gaunt, verbose=log)
         t0 = log.timer('GIAO', *t0)
-        scf.chkfile.dump(self.chkfile, 'nmr/h1giao', h1)
+        if self.chkfile:
+            lib.chkfile.dump(self.chkfile, 'nmr/h1giao', h1)
         return h1
 
     def make_s10(self, mol=None, gauge_orig=None):

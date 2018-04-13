@@ -182,7 +182,7 @@ class TDDFTNoHybrid(TDA):
         self.e = numpy.array(e)
         self.xy = xy
 
-        if self.chkfile is not None:
+        if self.chkfile:
             lib.chkfile.save(self.chkfile, 'tddft/e', self.e)
             lib.chkfile.save(self.chkfile, 'tddft/xy', self.xy)
 

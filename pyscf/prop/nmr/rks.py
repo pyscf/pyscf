@@ -137,7 +137,8 @@ class NMR(rhf_nmr.NMR):
         else:
             with mol.with_common_origin(gauge_orig):
                 h1 = -.5 * mol.intor('int1e_cg_irxp', 3)
-        lib.chkfile.dump(self.chkfile, 'nmr/h1', h1)
+        if self.chkfile:
+            lib.chkfile.dump(self.chkfile, 'nmr/h1', h1)
         return h1
 
     def solve_mo1(self, mo_energy=None, mo_occ=None, h1=None, s1=None,

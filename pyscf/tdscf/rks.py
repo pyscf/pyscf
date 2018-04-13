@@ -149,7 +149,7 @@ class TDDFTNoHybrid(TDA):
         self.e = numpy.sqrt(w2[idx])
         self.xy = [norm_xy(self.e[i], x1[i]) for i in idx]
 
-        if self.chkfile is not None:
+        if self.chkfile:
             lib.chkfile.save(self.chkfile, 'tddft/e', self.e)
             lib.chkfile.save(self.chkfile, 'tddft/xy', self.xy)
 

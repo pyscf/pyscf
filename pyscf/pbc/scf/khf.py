@@ -557,8 +557,8 @@ class KSCF(pbchf.SCF):
         return self.init_guess_by_chkfile(chk, project, kpts)
 
     def dump_chk(self, envs):
-        hf.SCF.dump_chk(self, envs)
         if self.chkfile:
+            hf.SCF.dump_chk(self, envs)
             with h5py.File(self.chkfile) as fh5:
                 fh5['scf/kpts'] = self.kpts
         return self

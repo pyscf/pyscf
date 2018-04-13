@@ -143,7 +143,7 @@ Keyword argument "init_dm" is replaced by "dm0"''')
     e_tot = mf.energy_tot(dm, h1e, vhf)
     logger.info(mf, 'init E= %.15g', e_tot)
 
-    if dump_chk:
+    if dump_chk and mf.chkfile:
         # Explicit overwrite the mol object in chkfile
         # Note in pbc.scf, mf.mol == mf.cell, cell is saved under key "mol"
         chkfile.save_mol(mol, mf.chkfile)
@@ -1117,7 +1117,7 @@ def as_scanner(mf):
 
             if self.mo_coeff is None:
                 dm0 = None
-            elif mol.natm > 0:
+            elif mol.natm > 0 and self.chkfile:
                 dm0 = self.from_chk(self.chkfile)
             else:
                 dm0 = self.make_rdm1()
@@ -1139,7 +1139,8 @@ class SCF(lib.StreamObject):
         max_memory : float or int
             Allowed memory in MB.  Default equals to :class:`Mole.max_memory`
         chkfile : str
-            checkpoint file to save MOs, orbital energies etc.
+            checkpoint file to save MOs, orbital energies etc.  Writing to
+            chkfile can be disabled if this attribute is set to None or False.
         conv_tol : float
             converge threshold.  Default is 1e-9
         conv_tol_grad : float

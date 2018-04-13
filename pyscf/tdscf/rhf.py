@@ -751,7 +751,7 @@ class TDA(lib.StreamObject):
 # 1/sqrt(2) because self.x is for alpha excitation amplitude and 2(X^+*X) = 1
         self.xy = [(xi.reshape(nocc,nvir)*numpy.sqrt(.5),0) for xi in x1]
 
-        if self.chkfile is not None:
+        if self.chkfile:
             lib.chkfile.save(self.chkfile, 'tddft/e', self.e)
             lib.chkfile.save(self.chkfile, 'tddft/xy', self.xy)
 
@@ -904,7 +904,7 @@ class TDHF(TDA):
             return x*norm, y*norm
         self.xy = [norm_xy(z) for z in x1]
 
-        if self.chkfile is not None:
+        if self.chkfile:
             lib.chkfile.save(self.chkfile, 'tddft/e', self.e)
             lib.chkfile.save(self.chkfile, 'tddft/xy', self.xy)
 

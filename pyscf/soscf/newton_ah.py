@@ -663,7 +663,7 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
     mo_energy, mo_tmp = mf.eig(fock, s1e)
     mf.get_occ(mo_energy, mo_tmp)
 
-    if dump_chk:
+    if dump_chk and mf.chkfile:
         chkfile.save_mol(mol, mf.chkfile)
 
 # Copy the integral file to soscf object to avoid the integrals being cached

@@ -800,7 +800,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         self.l2 = None
         self._nocc = None
         self._nmo = None
-        self.chkfile = None
+        self.chkfile = mf.chkfile
 
         keys = set(('max_cycle', 'conv_tol', 'iterative_damping',
                     'conv_tol_normt', 'diis_space', 'diis_file',
@@ -1054,6 +1054,9 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         return vector_to_amplitudes(vec, nmo, nocc)
 
     def dump_chk(self, t1_t2=None, frozen=None, mo_coeff=None, mo_occ=None):
+        if not self.chkfile:
+            return self
+
         if t1_t2 is None:
             t1, t2 = self.t1, self.t2
         else:
@@ -1069,11 +1072,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         if self._nmo is not None: cc_chk['_nmo'] = self._nmo
         if self._nocc is not None: cc_chk['_nocc'] = self._nocc
 
-        if self.chkfile is not None:
-            chkfile = self.chkfile
-        else:
-            chkfile = self._scf.chkfile
-        lib.chkfile.save(chkfile, 'ccsd', cc_chk)
+        lib.chkfile.save(self.chkfile, 'ccsd', cc_chk)
 
     def density_fit(self):
         raise NotImplementedError

@@ -133,7 +133,8 @@ class DIIS(object):
                 self._diisfile[key][:] = value
             else:
                 self._diisfile[key] = value
-# to avoid "Unable to find a valid file signature" error when reopen from crash
+# to avoid "Unable to find a valid file signature" error when reload the hdf5
+# file from a crashed claculation
             self._diisfile.flush()
 
     def push_err_vec(self, xerr):

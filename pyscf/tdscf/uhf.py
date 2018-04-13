@@ -681,7 +681,7 @@ class TDA(rhf.TDA):
                     (0, 0))  # (Y_alpha, Y_beta)
                    for xi in x1]
 
-        if self.chkfile is not None:
+        if self.chkfile:
             lib.chkfile.save(self.chkfile, 'tddft/e', self.e)
             lib.chkfile.save(self.chkfile, 'tddft/xy', self.xy)
 
@@ -845,7 +845,7 @@ class TDHF(TDA):
         self.e = numpy.array(e)
         self.xy = xy
 
-        if self.chkfile is not None:
+        if self.chkfile:
             lib.chkfile.save(self.chkfile, 'tddft/e', self.e)
             lib.chkfile.save(self.chkfile, 'tddft/xy', self.xy)
 
