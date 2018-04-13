@@ -39,6 +39,7 @@ WITH_META_LOWDIN = getattr(__config__, 'scf_analyze_with_meta_lowdin', True)
 PRE_ORTH_METHOD = getattr(__config__, 'scf_analyze_pre_orth_method', 'ANO')
 MO_BASE = getattr(__config__, 'MO_BASE', 1)
 TIGHT_GRAD_CONV_TOL = getattr(__config__, 'scf_hf_kernel_tight_grad_conv_tol', True)
+MUTE_CHKFILE = getattr(__config__, 'scf_hf_SCF_mute_chkfile', False)
 
 # For code compatiblity in python-2 and python-3
 if sys.version_info >= (3,):
@@ -1235,10 +1236,14 @@ class SCF(lib.StreamObject):
         self.max_memory = mol.max_memory
         self.stdout = mol.stdout
 
+# If chkfile is muted, SCF intermediates will not be dumped anywhere.
+        if MUTE_CHKFILE:
+            self.chkfile = None
+        else:
 # the chkfile will be removed automatically, to save the chkfile, assign a
 # filename to self.chkfile
-        self._chkfile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
-        self.chkfile = self._chkfile.name
+            self._chkfile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
+            self.chkfile = self._chkfile.name
 
 ##################################################
 # don't modify the following attributes, they are not input options
