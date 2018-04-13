@@ -303,9 +303,9 @@ def RKS(mol, *args):
 
 def ROKS(mol, *args):
     from pyscf import dft
-    return dft.ROKS(mol)
+    return dft.ROKS(mol, *args)
 
 def UKS(mol, *args):
     from pyscf import dft
-    return dft.UKS(mol)
+    return dft.UKS(mol, *args)
 
