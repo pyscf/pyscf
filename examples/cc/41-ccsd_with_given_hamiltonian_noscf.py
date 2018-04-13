@@ -8,7 +8,7 @@ from pyscf import cc
 
 def ccsdsolver(hcore, eri, nocc):
     mol = gto.M()
-    fake_hf = scf.RHF(mol, fake=True) # avoid generating scf chk file
+    fake_hf = scf.RHF(mol)
     fake_hf._eri = eri
     fake_hf.get_hcore = lambda *args: hcore
 

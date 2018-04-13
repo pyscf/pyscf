@@ -646,8 +646,8 @@ class UHF(hf.SCF):
     >>> print('S^2 = %.7f, 2S+1 = %.7f' % mf.spin_square())
     S^2 = 0.7570150, 2S+1 = 2.0070027
     '''
-    def __init__(self, mol, **kwargs):
-        hf.SCF.__init__(self, mol, **kwargs)
+    def __init__(self, mol):
+        hf.SCF.__init__(self, mol)
         # self.mo_coeff => [mo_a, mo_b]
         # self.mo_occ => [mo_occ_a, mo_occ_b]
         # self.mo_energy => [mo_energy_a, mo_energy_b]

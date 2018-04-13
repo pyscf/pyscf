@@ -39,7 +39,7 @@ h2e_cas = ao2mo.incore.full(eri, mf.mo_coeff[:, cas_idx])
 # init fake mf
 mol_tmp = gto.M(verbose=1)
 mol_tmp.incore_anyway = True
-mf_tmp = scf.RHF(mol_tmp, fake=True) # avoid generating scf chk file
+mf_tmp = scf.RHF(mol_tmp)
 mf_tmp.get_hcore = lambda *args: h1e_cas
 mf_tmp._eri = h2e_cas
 
