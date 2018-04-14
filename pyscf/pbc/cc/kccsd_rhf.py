@@ -111,10 +111,9 @@ def update_amps(cc, t1, t2, eris):
     Fov = imdk.cc_Fov(t1,t2,eris,kconserv)
     Loo = imdk.Loo(t1,t2,eris,kconserv)
     Lvv = imdk.Lvv(t1,t2,eris,kconserv)
-    Woooo = imdk.cc_Woooo(t1,t2,eris,kconserv)
-    Wvvvv = imdk.cc_Wvvvv(t1,t2,eris,kconserv)
-    Wvoov = imdk.cc_Wvoov(t1,t2,eris,kconserv)
-    Wvovo = imdk.cc_Wvovo(t1,t2,eris,kconserv)
+
+    t1new = np.array(fov).astype(t1.dtype).conj()
+    t2new = np.array(eris.oovv).conj()
 
     # Move energy terms to the other side
     for k in range(nkpts):
@@ -124,7 +123,6 @@ def update_amps(cc, t1, t2, eris):
         Lvv[k] -= np.diag(np.diag(fvv[k]))
 
     # T1 equation
-    t1new = np.array(fov).astype(t1.dtype).conj()
     for ka in range(nkpts):
         ki = ka
         # kc == ki; kk == ka
@@ -162,8 +160,15 @@ def update_amps(cc, t1, t2, eris):
                     tau_term_1 += einsum('ka,lc->klac',t1[ka],t1[kc])
                 t1new[ka] += -einsum('klic,klac->ia',Sooov,tau_term_1)
 
+    mem_now = lib.current_memory()[0]
+    if (nocc**4*nkpts**3)*16/1e6 + mem_now < cc.max_memory*.9:
+        Woooo = imdk.cc_Woooo(t1, t2, eris, kconserv)
+    else:
+        fimd = lib.H5TmpFile()
+        Woooo = fimd.create_dataset('vvvv', (nkpts,nkpts,nkpts,nvir,nvir,nvir,nvir), t1.dtype.char)
+        Woooo = imdk.cc_Woooo(t1, t2, eris, kconserv, Woooo)
+
     # T2 equation
-    t2new = np.array(eris.oovv).conj()
     for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
         # Chemist's notation for momentum conserving t2(ki,kj,ka,kb)
         kb = kconserv[ki,ka,kj]
@@ -175,7 +180,22 @@ def update_amps(cc, t1, t2, eris):
             if kl == kb and kk == ka:
                 tau_term += einsum('ic,jd->ijcd',t1[ka],t1[kb])
             t2new_tmp += 0.5 * einsum('klij,klab->ijab',Woooo[kk,kl,ki],tau_term)
+        t2new[ki,kj,ka] += t2new_tmp
+        t2new[kj,ki,kb] += t2new_tmp.transpose(1,0,3,2)
+    Woooo = None
+    fimd = None
 
+    mem_now = lib.current_memory()[0]
+    if (nvir**4*nkpts**3)*16/1e6 + mem_now < cc.max_memory*.9:
+        Wvvvv = imdk.cc_Wvvvv(t1, t2, eris, kconserv)
+    else:
+        fimd = lib.H5TmpFile()
+        Wvvvv = fimd.create_dataset('vvvv', (nkpts,nkpts,nkpts,nvir,nvir,nvir,nvir), t1.dtype.char)
+        Wvvvv = imdk.cc_Wvvvv(t1, t2, eris, kconserv, Wvvvv)
+
+    for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
+        kb = kconserv[ki,ka,kj]
+        t2new_tmp = np.zeros((nocc,nocc,nvir,nvir), dtype=t2.dtype)
         for kc in range(nkpts):
             kd = kconserv[ka,kc,kb]
             tau_term = t2[ki,kj,kc].copy()
@@ -196,7 +216,25 @@ def update_amps(cc, t1, t2, eris):
         tmp2 = np.asarray(eris.ooov[kj,ki,kk]).transpose(3,2,1,0).conj() \
                 + einsum('akic,jc->akij',eris.voov[ka,kk,ki],t1[kj])
         t2new_tmp -= einsum('akij,kb->ijab',tmp2,t1[kb])
+        t2new[ki,kj,ka] += t2new_tmp
+        t2new[kj,ki,kb] += t2new_tmp.transpose(1,0,3,2)
+    Wvvvv = None
+    fimd = None
 
+    mem_now = lib.current_memory()[0]
+    if (nocc**2*nvir**2*nkpts**3)*16/1e6*2 + mem_now < cc.max_memory*.9:
+        Wvoov = imdk.cc_Wvoov(t1, t2, eris, kconserv)
+        Wvovo = imdk.cc_Wvovo(t1, t2, eris, kconserv)
+    else:
+        fimd = lib.H5TmpFile()
+        Wvoov = fimd.create_dataset('voov', (nkpts,nkpts,nkpts,nvir,nocc,nocc,nvir), t1.dtype.char)
+        Wvovo = fimd.create_dataset('vovo', (nkpts,nkpts,nkpts,nvir,nocc,nvir,nocc), t1.dtype.char)
+        Wvoov = imdk.cc_Wvoov(t1, t2, eris, kconserv, Wvoov)
+        Wvovo = imdk.cc_Wvovo(t1, t2, eris, kconserv, Wvovo)
+
+    for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
+        kb = kconserv[ki,ka,kj]
+        t2new_tmp = np.zeros((nocc,nocc,nvir,nvir), dtype=t2.dtype)
         for kk in range(nkpts):
             kc = kconserv[ka,ki,kk]
             tmp_voov = 2.*Wvoov[ka,kk,ki] - Wvovo[ka,kk,kc].transpose(0,1,3,2)
@@ -210,6 +248,8 @@ def update_amps(cc, t1, t2, eris):
 
         t2new[ki,kj,ka] += t2new_tmp
         t2new[kj,ki,kb] += t2new_tmp.transpose(1,0,3,2)
+    Wvoov = Wvovo = None
+    fimd = None
 
     for ki in range(nkpts):
         eia = foo[ki].diagonal()[:,None] - fvv[ki].diagonal()
@@ -1103,6 +1143,7 @@ class _IMDS:
         self.made_ip_imds = False
         self.made_ea_imds = False
         self._made_shared_2e = False
+        self._fimd = None
 
     def _make_shared_1e(self):
         cput0 = (time.clock(), time.time())
@@ -1122,9 +1163,17 @@ class _IMDS:
 
         t1,t2,eris = self.t1, self.t2, self.eris
         kconserv = self.kconserv
+
+        # TODO: check whether to hold Wovov Wovvo in memory
+        if self._fimd is None:
+            self._fimd = lib.H5TmpFile()
+        nkpts, nocc, nvir = t1.shape
+        self._fimd.create_dataset('ovov', (nkpts,nkpts,nkpts,nocc,nvir,nocc,nvir), t1.dtype.char)
+        self._fimd.create_dataset('ovvo', (nkpts,nkpts,nkpts,nocc,nvir,nvir,nocc), t1.dtype.char)
+
         # 2 virtuals
-        self.Wovov = imd.Wovov(t1,t2,eris,kconserv)
-        self.Wovvo = imd.Wovvo(t1,t2,eris,kconserv)
+        self.Wovov = imd.Wovov(t1,t2,eris,kconserv, self._fimd['ovov'])
+        self.Wovvo = imd.Wovvo(t1,t2,eris,kconserv, self._fimd['ovvo'])
         self.Woovv = eris.oovv
 
         log.timer('EOM-CCSD shared two-electron intermediates', *cput0)
@@ -1141,11 +1190,16 @@ class _IMDS:
         t1,t2,eris = self.t1, self.t2, self.eris
         kconserv = self.kconserv
 
+        nkpts, nocc, nvir = t1.shape
+        self._fimd.create_dataset('oooo', (nkpts,nkpts,nkpts,nocc,nocc,nocc,nocc), t1.dtype.char)
+        self._fimd.create_dataset('ooov', (nkpts,nkpts,nkpts,nocc,nocc,nocc,nvir), t1.dtype.char)
+        self._fimd.create_dataset('ovoo', (nkpts,nkpts,nkpts,nocc,nvir,nocc,nocc), t1.dtype.char)
+
         # 0 or 1 virtuals
         if ip_partition != 'mp':
-            self.Woooo = imd.Woooo(t1,t2,eris,kconserv)
-        self.Wooov = imd.Wooov(t1,t2,eris,kconserv)
-        self.Wovoo = imd.Wovoo(t1,t2,eris,kconserv)
+            self.Woooo = imd.Woooo(t1,t2,eris,kconserv, self._fimd['oooo'])
+        self.Wooov = imd.Wooov(t1,t2,eris,kconserv, self._fimd['ooov'])
+        self.Wovoo = imd.Wovoo(t1,t2,eris,kconserv, self._fimd['ovoo'])
         self.made_ip_imds = True
         log.timer('EOM-CCSD IP intermediates', *cput0)
 
@@ -1161,13 +1215,18 @@ class _IMDS:
         t1,t2,eris = self.t1, self.t2, self.eris
         kconserv = self.kconserv
 
+        nkpts, nocc, nvir = t1.shape
+        self._fimd.create_dataset('vovv', (nkpts,nkpts,nkpts,nvir,nocc,nvir,nvir), t1.dtype.char)
+        self._fimd.create_dataset('vvvo', (nkpts,nkpts,nkpts,nvir,nvir,nvir,nocc), t1.dtype.char)
+        self._fimd.create_dataset('vvvv', (nkpts,nkpts,nkpts,nvir,nvir,nvir,nvir), t1.dtype.char)
+
         # 3 or 4 virtuals
-        self.Wvovv = imd.Wvovv(t1,t2,eris,kconserv)
-        if ea_partition == 'mp' and not np.any(t1):
-            self.Wvvvo = imd.Wvvvo(t1,t2,eris,kconserv)
+        self.Wvovv = imd.Wvovv(t1,t2,eris,kconserv, self._fimd['vovv'])
+        if ea_partition == 'mp' and np.all(t1 == 0):
+            self.Wvvvo = imd.Wvvvo(t1,t2,eris,kconserv, self._fimd['vvvo'])
         else:
-            self.Wvvvv = imd.Wvvvv(t1,t2,eris,kconserv)
-            self.Wvvvo = imd.Wvvvo(t1,t2,eris,kconserv,self.Wvvvv)
+            self.Wvvvv = imd.Wvvvv(t1,t2,eris,kconserv, self._fimd['vvvv'])
+            self.Wvvvo = imd.Wvvvo(t1,t2,eris,kconserv,self.Wvvvv, self._fimd['vvvo'])
         self.made_ea_imds = True
         log.timer('EOM-CCSD EA intermediates', *cput0)
 
