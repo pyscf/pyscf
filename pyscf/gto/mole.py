@@ -892,10 +892,10 @@ def dumps(mol):
             x,y = numpy.nonzero(c)
             val = c[x,y]
             if val.dtype == numpy.complex:
-                symm_orb.append((val.real.tolist(), val.imag.tolist(),
+                symm_orb.append(((val.real.tolist(), val.imag.tolist()),
                                  x.tolist(), y.tolist(), c.shape))
             else:
-                symm_orb.append((val.tolist(), None, x.tolist(), y.tolist(), c.shape))
+                symm_orb.append(((val.tolist(), None), x.tolist(), y.tolist(), c.shape))
         moldic['symm_orb'] = symm_orb
     try:
         return json.dumps(moldic)
@@ -950,7 +950,14 @@ def loads(molstr):
     if mol.symm_orb is not None:
         # decompress symm_orb
         symm_orb = []
-        for val_real, val_imag, x, y, shape in mol.symm_orb:
+        for val, x, y, shape in mol.symm_orb:
+            if isinstance(val[0], list):
+# backward compatibility for chkfile of pyscf-1.4 in which val is an array of
+# real floats. In pyscf-1.5, val can be a list of list, to include the
+# imaginary part
+                val_real, val_imag = val
+            else:
+                val_real, val_imag = val, None
             if val_imag is None:
                 c = numpy.zeros(shape)
                 c[numpy.array(x),numpy.array(y)] = numpy.array(val_real)
