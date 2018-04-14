@@ -244,7 +244,7 @@ def Wooov(t1, t2, eris, kconserv, out=None):
         for kl in range(nkpts):
             for ki in range(nkpts):
                 ooov = einsum('ic,klcd->klid',t1[ki],eris.oovv[kk,kl,ki])
-                ooov += eris.ooov
+                ooov += eris.ooov[kk,kl,ki]
                 Wklid[kk,kl,ki] = ooov
     return Wklid
 
@@ -411,7 +411,7 @@ def Wvvvo(t1, t2, eris, kconserv, _Wvvvv=None, out=None):
                 for kc in range(nkpts):
                     kj = kconserv[ka,kc,kb]
                     Wabcj[ka,kb,kc] = (Wabcj[ka,kb,kc] +
-                                       einsum('bcd,jd->bcj',_Wvvvv[ka,kb,kc],t1[kj]))
+                                       einsum('abcd,jd->abcj',_Wvvvv[ka,kb,kc],t1[kj]))
     return Wabcj
 
 def Wovoo(t1, t2, eris, kconserv, out=None):

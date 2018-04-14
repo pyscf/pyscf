@@ -313,8 +313,14 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         self.made_ee_imds = False
         self.made_ip_imds = False
         self.made_ea_imds = False
+        self.ip_partition = None
+        self.ea_partition = None
+        self.max_space = 20
 
-        self._keys = self._keys.union(['max_space'])
+        keys = set(['kpts', 'mo_energy', 'khelper', 'made_ee_imds',
+                    'made_ip_imds', 'made_ea_imds', 'ip_partition',
+                    'ea_partition', 'max_space'])
+        self._keys = self._keys.union(keys)
 
     @property
     def nkpts(self):
@@ -325,7 +331,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
     get_frozen_mask = get_frozen_mask
 
     def dump_flags(self):
-        pyscf.cc.ccsd.CCSD.dump_flags(self)
+        return pyscf.cc.ccsd.CCSD.dump_flags(self)
 
     def init_amps(self, eris):
         time0 = time.clock(), time.time()
@@ -440,10 +446,10 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
         for k,kshift in enumerate(kptlist):
             self.kshift = kshift
+            adiag = self.ipccsd_diag(kshift)
             if partition == 'full':
-                self._ipccsd_diag_matrix2 = self.vector_to_amplitudes_ip(self.ipccsd_diag())[1]
+                self._ipccsd_diag_matrix2 = self.vector_to_amplitudes_ip(adiag)[1]
 
-            adiag = self.ipccsd_diag()
             user_guess = False
             if guess:
                 user_guess = True
@@ -566,7 +572,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         vector = self.amplitudes_to_vector_ip(Hr1,Hr2)
         return vector
 
-    def ipccsd_diag(self):
+    def ipccsd_diag(self, kshift=0):
         if not hasattr(self,'imds'):
             self.imds = _IMDS(self)
         if not self.imds.made_ip_imds:
@@ -575,43 +581,44 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
         t1,t2 = self.t1, self.t2
         nkpts, nocc, nvir = t1.shape
-        kshift = self.kshift
         kconserv = self.khelper.kconserv
 
         Hr1 = -np.diag(imds.Loo[kshift])
 
         Hr2 = np.zeros((nkpts,nkpts,nocc,nocc,nvir), dtype=t1.dtype)
-        for ki in range(nkpts):
-            for kj in range(nkpts):
-                kb = kconserv[ki,kshift,kj]
-                for i in range(nocc):
-                    for j in range(nocc):
-                        for b in range(nvir):
-                            if self.ip_partition == 'mp':
-                                fock = self.eris.fock
-                                foo = fock[:,:nocc,:nocc]
-                                fvv = fock[:,nocc:,nocc:]
-                                Hr2[ki,kj,i,j,b] = fvv[kb,b,b]
-                                Hr2[ki,kj,i,j,b] -= foo[ki,i,i]
-                                Hr2[ki,kj,i,j,b] -= foo[kj,j,j]
-                            else:
-                                Hr2[ki,kj,i,j,b] = imds.Lvv[kb,b,b]
-                                Hr2[ki,kj,i,j,b] -= imds.Loo[ki,i,i]
-                                Hr2[ki,kj,i,j,b] -= imds.Loo[kj,j,j]
-                                for kl in range(nkpts):
-                                    kk = kconserv[ki,kl,kj]
-                                    Hr2[ki,kj,i,j,b] += imds.Woooo[kk,kl,ki,i,j,i,j]*(kk==ki)*(kl==kj)
-                                    kd = kconserv[kl,kj,kb]
-                                    Hr2[ki,kj,i,j,b] += 2.*imds.Wovvo[kl,kb,kd,j,b,b,j]*(kl==kj)
-                                    Hr2[ki,kj,i,j,b] += -imds.Wovvo[kl,kb,kd,i,b,b,j]*(i==j)*(kl==ki)*(ki==kj)
-                                    Hr2[ki,kj,i,j,b] += -imds.Wovov[kl,kb,kj,j,b,j,b]*(kl==kj)
-                                    kd = kconserv[kl,ki,kb]
-                                    Hr2[ki,kj,i,j,b] += -imds.Wovov[kl,kb,ki,i,b,i,b]*(kl==ki)
-                                    for kk in range(nkpts):
-                                        kc = kshift
-                                        kd = kconserv[kl,kc,kk]
-                                        Hr2[ki,kj,i,j,b] += -2.*np.dot(t2[ki,kj,kshift,i,j,:,b],imds.Woovv[kl,kk,kd,j,i,b,:])*(kk==ki)*(kl==kj)
-                                        Hr2[ki,kj,i,j,b] += np.dot(t2[ki,kj,kshift,i,j,:,b],imds.Woovv[kk,kl,kd,i,j,b,:])*(kk==ki)*(kl==kj)
+        if self.ip_partition == 'mp':
+            foo = self.eris.fock[:,:nocc,:nocc]
+            fvv = self.eris.fock[:,nocc:,nocc:]
+            for ki in range(nkpts):
+                for kj in range(nkpts):
+                    kb = kconserv[ki,kshift,kj]
+                    Hr2[ki,kj]  = fvv[kb].diagonal()
+                    Hr2[ki,kj] -= foo[ki].diagonal()[:,None,None]
+                    Hr2[ki,kj] -= foo[kj].diagonal()[:,None]
+        else:
+            idx = np.arange(nocc)
+            for ki in range(nkpts):
+                for kj in range(nkpts):
+                    kb = kconserv[ki,kshift,kj]
+                    Hr2[ki,kj]  = imds.Lvv[kb].diagonal()
+                    Hr2[ki,kj] -= imds.Loo[ki].diagonal()[:,None,None]
+                    Hr2[ki,kj] -= imds.Loo[kj].diagonal()[:,None]
+
+                    if ki == kconserv[ki,kj,kj]:
+                        Hr2[ki,kj] += np.einsum('ijij->ij', imds.Woooo[ki,kj,ki])[:,:,None]
+
+                    Hr2[ki,kj] -= np.einsum('jbjb->jb', imds.Wovov[kj,kb,kj])
+
+                    Wovvo = np.einsum('jbbj->jb', imds.Wovvo[kj,kb,kb])
+                    Hr2[ki,kj] += 2.*Wovvo
+                    if ki == kj:  # and i == j
+                        Hr2[ki,ki,idx,idx] -= Wovvo
+
+                    Hr2[ki,kj] -= np.einsum('ibib->ib', imds.Wovov[ki,kb,ki])[:,None,:]
+
+                    kd = kconserv[kj,kshift,ki]
+                    Hr2[ki,kj] -= 2.*np.einsum('ijcb,jibc->ijb', t2[ki,kj,kshift], imds.Woovv[kj,ki,kd])
+                    Hr2[ki,kj] += np.einsum('ijcb,ijbc->ijb', t2[ki,kj,kshift], imds.Woovv[ki,kj,kd])
 
         vector = self.amplitudes_to_vector_ip(Hr1,Hr2)
         return vector
@@ -678,10 +685,10 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
         for k,kshift in enumerate(kptlist):
             self.kshift = kshift
+            adiag = self.eaccsd_diag(kshift)
             if partition == 'full':
-                self._eaccsd_diag_matrix2 = self.vector_to_amplitudes_ea(self.eaccsd_diag())[1]
+                self._eaccsd_diag_matrix2 = self.vector_to_amplitudes_ea(adiag)[1]
 
-            adiag = self.eaccsd_diag()
             user_guess = False
             if guess:
                 user_guess = True
@@ -810,7 +817,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         vector = self.amplitudes_to_vector_ea(Hr1,Hr2)
         return vector
 
-    def eaccsd_diag(self):
+    def eaccsd_diag(self, kshift=0):
         if not hasattr(self,'imds'):
             self.imds = _IMDS(self)
         if not self.imds.made_ea_imds:
@@ -819,43 +826,42 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
         t1,t2 = self.t1, self.t2
         nkpts, nocc, nvir = t1.shape
-        kshift = self.kshift
         kconserv = self.khelper.kconserv
 
         Hr1 = np.diag(imds.Lvv[kshift])
 
-        Hr2 = np.zeros((nkpts,nkpts,nocc,nvir,nvir), dtype=t1.dtype)
-        for kj in range(nkpts):
-            for ka in range(nkpts):
-                kb = kconserv[kshift,ka,kj]
-                for j in range(nocc):
-                    for a in range(nvir):
-                        for b in range(nvir):
-                            if self.ea_partition == 'mp':
-                                fock = self.eris.fock
-                                foo = fock[:,:nocc,:nocc]
-                                fvv = fock[:,nocc:,nocc:]
-                                Hr2[kj,ka,j,a,b] -= foo[kj,j,j]
-                                Hr2[kj,ka,j,a,b] += fvv[ka,a,a]
-                                Hr2[kj,ka,j,a,b] += fvv[kb,b,b]
-                            else:
-                                Hr2[kj,ka,j,a,b] -= imds.Loo[kj,j,j]
-                                Hr2[kj,ka,j,a,b] += imds.Lvv[ka,a,a]
-                                Hr2[kj,ka,j,a,b] += imds.Lvv[kb,b,b]
-                                for kd in range(nkpts):
-                                    kc = kconserv[ka,kd,kb]
-                                    Hr2[kj,ka,j,a,b] += imds.Wvvvv[ka,kb,kc,a,b,a,b]*(kc==ka)
-                                    kl = kconserv[kd,kb,kj]
-                                    Hr2[kj,ka,j,a,b] += 2.*imds.Wovvo[kl,kb,kd,j,b,b,j]*(kl==kj)
-                                    Hr2[kj,ka,j,a,b] += -imds.Wovov[kl,kb,kj].transpose(1,0,3,2)[b,j,b,j]*(kl==kj)
-                                    Hr2[kj,ka,j,a,b] += -imds.Wovvo[kl,kb,kd].transpose(1,0,3,2)[b,j,j,b]*(a==b)*(kl==kj)*(kd==ka)
-                                    kl = kconserv[kd,ka,kj]
-                                    Hr2[kj,ka,j,a,b] += -imds.Wovov[kl,ka,kj].transpose(1,0,3,2)[a,j,a,j]*(kl==kj)*(kd==ka)
-                                    for kc in range(nkpts):
-                                        kk = kshift
-                                        kl = kconserv[kc,kk,kd]
-                                        Hr2[kj,ka,j,a,b] += -2*np.dot(t2[kshift,kj,ka,:,j,a,b],imds.Woovv[kk,kl,kc,:,j,a,b])*(kl==kj)*(kc==ka)
-                                        Hr2[kj,ka,j,a,b] += np.dot(t2[kshift,kj,ka,:,j,a,b],imds.Woovv[kk,kl,kd,:,j,b,a])*(kl==kj)*(kc==ka)
+        Hr2 = np.zeros((nkpts,nkpts,nocc,nvir,nvir), dtype=t2.dtype)
+        if self.ea_partition == 'mp':
+            foo = self.eris.fock[:,:nocc,:nocc]
+            fvv = self.eris.fock[:,nocc:,nocc:]
+            for kj in range(nkpts):
+                for ka in range(nkpts):
+                    kb = kconserv[kshift,ka,kj]
+                    Hr2[kj,ka] -= foo[kj].diagonal()[:,None,None]
+                    Hr2[kj,ka] += fvv[ka].diagonal()[None,:,None]
+                    Hr2[kj,ka] += fvv[kb].diagonal()
+        else:
+            idx = np.eye(nvir, dtype=bool)
+            for kj in range(nkpts):
+                for ka in range(nkpts):
+                    kb = kconserv[kshift,ka,kj]
+                    Hr2[kj,ka] -= imds.Loo[kj].diagonal()[:,None,None]
+                    Hr2[kj,ka] += imds.Lvv[ka].diagonal()[None,:,None]
+                    Hr2[kj,ka] += imds.Lvv[kb].diagonal()
+
+                    Hr2[kj,ka] += np.einsum('abab->ab', imds.Wvvvv[ka,kb,ka])
+
+                    Hr2[kj,ka] -= np.einsum('jbjb->jb', imds.Wovov[kj,kb,kj])[:,None,:]
+                    Wovvo = np.einsum('jbbj->jb', imds.Wovvo[kj,kb,kb])
+                    Hr2[kj,ka] += 2.*Wovvo[:,None,:]
+                    if ka == kb:
+                        for a in range(nvir):
+                            Hr2[kj,ka,:,a,a] -= Wovvo[:,a]
+
+                    Hr2[kj,ka] -= np.einsum('jaja->ja', imds.Wovov[kj,ka,kj])[:,:,None]
+
+                    Hr2[kj,ka] -= 2*np.einsum('ijab,ijab->jab', t2[kshift,kj,ka], imds.Woovv[kshift,kj,ka])
+                    Hr2[kj,ka] += np.einsum('ijab,ijba->jab', t2[kshift,kj,ka], imds.Woovv[kshift,kj,kb])
 
         vector = self.amplitudes_to_vector_ea(Hr1,Hr2)
         return vector
