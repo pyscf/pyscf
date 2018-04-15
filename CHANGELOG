@@ -1,15 +1,9 @@
-PySCF 1.5 alpha (2018-03-??)
-----------------------------
-* Added
-  - ddCOSMO solvent model
-  - VV10 NLC functional for RKS and UKS
-  - range-separated hybrid feature for RKS and UKS
-
-
-PySCF 1.4.7 (2018-04-??)
+PySCF 1.4.7 (2018-04-15)
 ------------------------
 * Bugfix
-  outcore ao2mo transform when basis functions are cartesian gaussians
+  - outcore ao2mo transform when basis functions are cartesian gaussians
+  - Fix errors in dmrg-nevpt interface, which overwrite nevpt configure files by
+    variational dmrg configure files.
 
 
 PySCF 1.4.6 (2018-04-02)
