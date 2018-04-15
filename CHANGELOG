@@ -1,4 +1,4 @@
-PySCF 1.5 beta (2018-04-??)
+PySCF 1.5 beta (2018-04-15)
 ---------------------------
 * Added
   - ddCOSMO analytical nuclear gradients
@@ -64,10 +64,12 @@ PySCF 1.5 alpha (2018-03-21)
   - libxc parser to support the customized Range-separated XC functionals
 
 
-PySCF 1.4.7 (2018-04-??)
+PySCF 1.4.7 (2018-04-15)
 ------------------------
 * Bugfix
-  outcore ao2mo transform when basis functions are cartesian gaussians
+  - Outcore ao2mo transform when basis functions are cartesian Gaussians
+  - Fix errors in dmrg-nevpt interface, which overwrite nevpt configure files by
+    variational dmrg configure files.
 
 
 PySCF 1.4.6 (2018-04-02)
