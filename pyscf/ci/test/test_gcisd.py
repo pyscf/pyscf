@@ -540,6 +540,39 @@ class KnownValues(unittest.TestCase):
         ecisd, civec = myci.kernel()
         self.assertAlmostEqual(ecisd, -0.048829195509732602, 8)
 
+    def test_trans_rdm1(self):
+        numpy.random.seed(1)
+        norb = 4
+        nocc = 2
+        nvir = norb - nocc
+        c2 = numpy.random.random((nocc,nocc,nvir,nvir))
+        c2 = c2 + c2.transpose(1,0,3,2)
+        cibra = numpy.hstack((numpy.random.random(1+nocc*nvir), c2.ravel()))
+        c2 = numpy.random.random((nocc,nocc,nvir,nvir))
+        c2 = c2 + c2.transpose(1,0,3,2)
+        ciket = numpy.hstack((numpy.random.random(1+nocc*nvir), c2.ravel()))
+        cibra /= ci.cisd.dot(cibra, cibra, norb, nocc)**.5
+        ciket /= ci.cisd.dot(ciket, ciket, norb, nocc)**.5
+        fcibra = ci.cisd.to_fcivec(cibra, norb, nocc*2)
+        fciket = ci.cisd.to_fcivec(ciket, norb, nocc*2)
+
+        fcidm1, fcidm2 = fci.direct_spin1.trans_rdm12(fcibra, fciket, norb, nocc*2)
+        myci1 = ci.GCISD(scf.GHF(gto.M()))
+        myci1.nmo = norb = 8
+        myci1.nocc = nocc = 4
+        orbspin = numpy.zeros(norb, dtype=int)
+        orbspin[1::2] = 1
+        cibra = myci1.from_rcisdvec(cibra, (nocc//2,nocc//2), orbspin)
+        ciket = myci1.from_rcisdvec(ciket, (nocc//2,nocc//2), orbspin)
+        cidm1 = myci1.trans_rdm1(cibra, ciket, norb, nocc)
+        self.assertAlmostEqual(abs(cidm1[0::2,0::2]+cidm1[1::2,1::2] - fcidm1).max(), 0, 12)
+
+        cibra = myci1.to_ucisdvec(cibra, orbspin)
+        ciket = myci1.to_ucisdvec(ciket, orbspin)
+        myci2 = ci.UCISD(scf.UHF(gto.M()))
+        cidm1 = myci2.trans_rdm1(cibra, ciket, (norb//2,norb//2), (nocc//2,nocc//2))
+        self.assertAlmostEqual(abs(cidm1[0]+cidm1[1] - fcidm1).max(), 0, 12)
+
 
 if __name__ == "__main__":
     print("Full Tests for GCISD")

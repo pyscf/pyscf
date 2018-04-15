@@ -3,6 +3,9 @@ PySCF 1.5 beta (2018-04-??)
 * Added
   - ddCOSMO analytical nuclear gradients
   - TDA and TDDFT analytical nuclear gradients for UHF and UKS
+  - CISD/GCISD/UCISD 1-particle transition density matrix
+* Improved
+  - Memory usage of KRHF-KCCSD and IP/EA-EOM-KCCSD
 * Bugfix
   - Fock matrix of ddCOSMO and ddPCM method.
 

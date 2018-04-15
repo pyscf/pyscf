@@ -117,9 +117,9 @@ def cisdvec_to_amplitudes(civec, nmo, nocc):
     c2 = ccsd._unpack_4fold(civec[nocc*nvir+1:], nocc, nvir)
     return c0, c1, c2
 
-def from_rcisdvec(civec, nocc, orbspin):
-    '''Convert the CISD vectors'''
-    from pyscf.cc import addons
+def from_ucisdvec(civec, nocc, orbspin):
+    '''Convert the (spin-separated) CISD coefficient vector to GCISD
+    coefficient vector'''
     from pyscf.ci import ucisd
     nmoa = numpy.count_nonzero(orbspin == 0)
     nmob = numpy.count_nonzero(orbspin == 1)
@@ -133,9 +133,18 @@ def from_rcisdvec(civec, nocc, orbspin):
         c0, c1, c2 = cisd.cisdvec_to_amplitudes(civec, nmoa, nocca)
     else:  # UCISD
         c0, c1, c2 = ucisd.cisdvec_to_amplitudes(civec, (nmoa,nmob), (nocca,noccb))
-    c1 = addons.spatial2spin(c1, orbspin)
-    c2 = addons.spatial2spin(c2, orbspin)
+    c1 = spatial2spin(c1, orbspin)
+    c2 = spatial2spin(c2, orbspin)
     return amplitudes_to_cisdvec(c0, c1, c2)
+from_rcisdvec = from_ucisdvec
+
+def to_ucisdvec(civec, nmo, nocc, orbspin):
+    '''Convert the GCISD coefficient vector to UCISD coefficient vector'''
+    from pyscf.ci import ucisd
+    c0, c1, c2 = cisdvec_to_amplitudes(civec, nmo, nocc)
+    c1 = spin2spatial(c1, orbspin)
+    c2 = spin2spatial(c2, orbspin)
+    return ucisd.amplitudes_to_cisdvec(c0, c1, c2)
 
 t1strs = cisd.t1strs
 
@@ -308,8 +317,60 @@ def _gamma2_intermediates(myci, civec, nmo, nocc):
     dvvov = None
     return dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov
 
+def trans_rdm1(myci, cibra, ciket, nmo=None, nocc=None):
+    r'''
+    One-particle transition density matrix in the molecular spin-orbital
+    representation.
+
+    dm1[p,q] = <q^\dagger p>  (p,q are spin-orbitals)
+
+    The convention of 1-pdm is based on McWeeney's book, Eq (5.4.20).
+    The contraction between 1-particle Hamiltonian and rdm1 is
+    E = einsum('pq,qp', h1, rdm1)
+    '''
+    if nmo is None: nmo = myci.nmo
+    if nocc is None: nocc = myci.nocc
+    c0bra, c1bra, c2bra = myci.cisdvec_to_amplitudes(cibra, nmo, nocc)
+    c0ket, c1ket, c2ket = myci.cisdvec_to_amplitudes(ciket, nmo, nocc)
+
+    dvo = c0bra.conj() * c1ket.T
+    dvo += numpy.einsum('jb,ijab->ai', c1bra.conj(), c2ket)
+
+    dov = c0ket * c1bra.conj()
+    dov += numpy.einsum('jb,ijab->ia', c1ket, c2bra.conj())
+
+    doo  =-numpy.einsum('ia,ka->ik', c1bra.conj(), c1ket)
+    doo -= numpy.einsum('jiab,kiab->jk', c2bra.conj(), c2ket) * .5
+    dvv  = numpy.einsum('ia,ic->ac', c1ket, c1bra.conj())
+    dvv += numpy.einsum('ijab,ijac->bc', c2ket, c2bra.conj()) * .5
+
+    dm1 = numpy.empty((nmo,nmo), dtype=doo.dtype)
+    dm1[:nocc,:nocc] = doo
+    dm1[:nocc,nocc:] = dov
+    dm1[nocc:,:nocc] = dvo
+    dm1[nocc:,nocc:] = dvv
+    dm1[numpy.diag_indices(nocc)] += numpy.dot(cibra, ciket)
+
+    if not (myci.frozen is 0 or myci.frozen is None):
+        nmo = myci.mo_occ.size
+        nocc = numpy.count_nonzero(myci.mo_occ > 0)
+        rdm1 = numpy.zeros((nmo,nmo), dtype=dm1.dtype)
+        rdm1[numpy.diag_indices(nocc)] = numpy.dot(cibra, ciket)
+        moidx = numpy.where(myci.get_frozen_mask())[0]
+        rdm1[moidx[:,None],moidx] = dm1
+        dm1 = rdm1
+    return dm1
+
 
 class GCISD(cisd.CISD):
+
+    def vector_size(self):
+        nocc = self.nocc
+        nvir = self.nmo - nocc
+        noo = nocc * (nocc-1) // 2
+        nvv = nvir * (nvir-1) // 2
+        return 1 + nocc*nvir + noo*nvv
+
     def get_init_guess(self, eris=None, nroots=1, diag=None):
         # MP2 initial guess
         if eris is None: eris = self.ao2mo(self.mo_coeff)
@@ -374,6 +435,8 @@ class GCISD(cisd.CISD):
     make_rdm1 = make_rdm1
     make_rdm2 = make_rdm2
 
+    trans_rdm1 = trans_rdm1
+
     def amplitudes_to_cisdvec(self, c0, c1, c2):
         return amplitudes_to_cisdvec(c0, c1, c2)
 
@@ -381,6 +444,28 @@ class GCISD(cisd.CISD):
         if nmo is None: nmo = self.nmo
         if nocc is None: nocc = self.nocc
         return cisdvec_to_amplitudes(civec, nmo, nocc)
+
+    @lib.with_doc(from_ucisdvec.__doc__)
+    def from_ucisdvec(self, civec, nocc=None, orbspin=None):
+        if orbspin is None:
+            orbspin = getattr(self.mo_coeff, 'orbspin', None)
+            if orbspin is not None:
+                orbspin = orbspin[self.get_frozen_mask()]
+        assert(orbspin is not None)
+        if nocc is None:
+            nocc = (numpy.count_nonzero((self.mo_occ > 0) & (orbspin == 0)),
+                    numpy.count_nonzero((self.mo_occ > 0) & (orbspin == 1)))
+        return from_ucisdvec(civec, nocc, orbspin=orbspin)
+    from_rcisdvec = from_ucisdvec
+
+    @lib.with_doc(to_ucisdvec.__doc__)
+    def to_ucisdvec(self, civec, orbspin=None):
+        from pyscf.ci import ucisd
+        if orbspin is None:
+            orbspin = getattr(self.mo_coeff, 'orbspin', None)
+            if orbspin is not None:
+                orbspin = orbspin[self.get_frozen_mask()]
+        return to_ucisdvec(civec, self.nmo, self.nocc, orbspin)
 
     def spatial2spin(self, tx, orbspin=None):
         if orbspin is None:

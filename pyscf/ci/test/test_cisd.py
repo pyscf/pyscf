@@ -178,6 +178,34 @@ class KnownValues(unittest.TestCase):
             )
         self.assertAlmostEqual(e2, ecisd, 9)
 
+    def test_trans_rdm(self):
+        numpy.random.seed(1)
+        numpy.random.seed(1)
+        myci = ci.CISD(scf.RHF(gto.M()))
+        myci.nmo = norb = 4
+        myci.nocc = nocc = 2
+        nvir = norb - nocc
+        c2 = numpy.random.random((nocc,nocc,nvir,nvir))
+        c2 = c2 + c2.transpose(1,0,3,2)
+        cibra = numpy.hstack((numpy.random.random(1+nocc*nvir), c2.ravel()))
+        c2 = numpy.random.random((nocc,nocc,nvir,nvir))
+        c2 = c2 + c2.transpose(1,0,3,2)
+        ciket = numpy.hstack((numpy.random.random(1+nocc*nvir), c2.ravel()))
+        cibra /= ci.cisd.dot(cibra, cibra, norb, nocc)**.5
+        ciket /= ci.cisd.dot(ciket, ciket, norb, nocc)**.5
+        fcibra = ci.cisd.to_fcivec(cibra, norb, nocc*2)
+        fciket = ci.cisd.to_fcivec(ciket, norb, nocc*2)
+
+        fcidm1, fcidm2 = fci.direct_spin1.make_rdm12(fciket, norb, nocc*2)
+        cidm1 = ci.cisd.make_rdm1(myci, ciket, norb, nocc)
+        cidm2 = ci.cisd.make_rdm2(myci, ciket, norb, nocc)
+        self.assertAlmostEqual(abs(fcidm1-cidm1).max(), 0, 9)
+        self.assertAlmostEqual(abs(fcidm2-cidm2).max(), 0, 9)
+
+        fcidm1 = fci.direct_spin1.trans_rdm1(fcibra, fciket, norb, nocc*2)
+        cidm1  = ci.cisd.trans_rdm1(myci, cibra, ciket, norb, nocc)
+        self.assertAlmostEqual(abs(fcidm1-cidm1).max(), 0, 9)
+
     def test_dot(self):
         numpy.random.seed(12)
         nocc, nvir = 3, 5
@@ -235,6 +263,31 @@ class KnownValues(unittest.TestCase):
         mf = scf.RHF(mol).density_fit('weigend').run(conv_tol=1e-14)
         myci = ci.cisd.RCISD(mf).run()
         self.assertAlmostEqual(myci.e_corr, -0.18730699567992737, 8)
+
+    def test_trans_rdm1(self):
+        numpy.random.seed(1)
+        myci = ci.CISD(scf.RHF(gto.M()))
+        myci.nmo = norb = 4
+        myci.nocc = nocc = 2
+        nvir = norb - nocc
+        c2 = numpy.random.random((nocc,nocc,nvir,nvir))
+        c2 = c2 + c2.transpose(1,0,3,2)
+        cibra = numpy.hstack((numpy.random.random(1+nocc*nvir), c2.ravel()))
+        c2 = numpy.random.random((nocc,nocc,nvir,nvir))
+        c2 = c2 + c2.transpose(1,0,3,2)
+        ciket = numpy.hstack((numpy.random.random(1+nocc*nvir), c2.ravel()))
+        cibra /= ci.cisd.dot(cibra, cibra, norb, nocc)**.5
+        ciket /= ci.cisd.dot(ciket, ciket, norb, nocc)**.5
+        fcibra = ci.cisd.to_fcivec(cibra, norb, nocc*2)
+        fciket = ci.cisd.to_fcivec(ciket, norb, nocc*2)
+
+        fcidm2 = fci.direct_spin1.make_rdm12(fciket, norb, nocc*2)[1]
+        cidm2  = ci.cisd.make_rdm2(myci, ciket, norb, nocc)
+        self.assertAlmostEqual(abs(fcidm2-cidm2).max(), 0, 12)
+
+        fcidm1, fcidm2 = fci.direct_spin1.trans_rdm12(fcibra, fciket, norb, nocc*2)
+        cidm1 = ci.cisd.trans_rdm1(myci, cibra, ciket, norb, nocc)
+        self.assertAlmostEqual(abs(fcidm1-cidm1).max(), 0, 12)
 
 
 if __name__ == "__main__":

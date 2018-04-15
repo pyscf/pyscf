@@ -354,6 +354,20 @@ def cisdvec_to_amplitudes(civec, nmo, nocc):
     c2bb = _unpack_4fold(civec[loc[4]:loc[5]], noccb, nvirb)
     return c0, (c1a,c1b), (c2aa,c2ab,c2bb)
 
+def dot(v1, v2, nmo, nocc):
+    bra0, bra1, bra2 = cisdvec_to_amplitudes(v1, nmo, nocc)
+    ket0, ket1, ket2 = cisdvec_to_amplitudes(v2, nmo, nocc)
+    val = bra0.conj() * ket0
+    val+= numpy.dot(bra1[0].ravel().conj(), ket1[0].ravel())
+    val+= numpy.dot(bra1[1].ravel().conj(), ket1[1].ravel())
+    val+= numpy.einsum('ijab,ijab', bra2[0].conj(), ket2[0])
+    val+= numpy.einsum('ijab,ijab', bra2[1].conj(), ket2[1])
+    val+= numpy.einsum('jiba,jiba', bra2[1].conj(), ket2[1])
+    val+= numpy.einsum('jiab,jiab', bra2[1].conj(), ket2[1])
+    val+= numpy.einsum('ijba,ijba', bra2[1].conj(), ket2[1])
+    val+= numpy.einsum('ijab,ijab', bra2[2].conj(), ket2[2])
+    return val
+
 def to_fcivec(cisdvec, nmo, nocc):
     from pyscf import fci
     from pyscf.ci.gcisd import t2strs
@@ -587,8 +601,104 @@ def _gamma2_intermediates(myci, civec, nmo, nocc):
             (dovvv, dovVV, dOVvv, dOVVV),
             (dooov, dooOV, dOOov, dOOOV))
 
+def trans_rdm1(myci, cibra, ciket, nmo=None, nocc=None):
+    r'''
+    One-particle spin density matrices dm1a, dm1b in MO basis (the
+    occupied-virtual blocks due to the orbital response contribution are not
+    included).
+
+    dm1a[p,q] = <q_alpha^\dagger p_alpha>
+    dm1b[p,q] = <q_beta^\dagger p_beta>
+
+    The convention of 1-pdm is based on McWeeney's book, Eq (5.4.20).
+    '''
+    if nmo is None: nmo = myci.nmo
+    if nocc is None: nocc = myci.nocc
+    c0bra, c1bra, c2bra = myci.cisdvec_to_amplitudes(cibra, nmo, nocc)
+    c0ket, c1ket, c2ket = myci.cisdvec_to_amplitudes(ciket, nmo, nocc)
+
+    nmoa, nmob = nmo
+    nocca, noccb = nocc
+    bra1a, bra1b = c1bra
+    bra2aa, bra2ab, bra2bb = c2bra
+    ket1a, ket1b = c1ket
+    ket2aa, ket2ab, ket2bb = c2ket
+
+    dvoa = c0bra.conj() * ket1a.T
+    dvob = c0bra.conj() * ket1b.T
+    dvoa += numpy.einsum('jb,ijab->ai', bra1a.conj(), ket2aa)
+    dvoa += numpy.einsum('jb,ijab->ai', bra1b.conj(), ket2ab)
+    dvob += numpy.einsum('jb,ijab->ai', bra1b.conj(), ket2bb)
+    dvob += numpy.einsum('jb,jiba->ai', bra1a.conj(), ket2ab)
+
+    dova = c0ket * bra1a.conj()
+    dovb = c0ket * bra1b.conj()
+    dova += numpy.einsum('jb,ijab->ia', ket1a.conj(), bra2aa)
+    dova += numpy.einsum('jb,ijab->ia', ket1b.conj(), bra2ab)
+    dovb += numpy.einsum('jb,ijab->ia', ket1b.conj(), bra2bb)
+    dovb += numpy.einsum('jb,jiba->ia', ket1a.conj(), bra2ab)
+
+    dooa  =-numpy.einsum('ia,ka->ik', bra1a.conj(), ket1a)
+    doob  =-numpy.einsum('ia,ka->ik', bra1b.conj(), ket1b)
+    dooa -= numpy.einsum('ijab,ikab->jk', bra2aa.conj(), ket2aa) * .5
+    dooa -= numpy.einsum('jiab,kiab->jk', bra2ab.conj(), ket2ab)
+    doob -= numpy.einsum('ijab,ikab->jk', bra2bb.conj(), ket2bb) * .5
+    doob -= numpy.einsum('ijab,ikab->jk', bra2ab.conj(), ket2ab)
+
+    dvva  = numpy.einsum('ia,ic->ac', ket1a, bra1a.conj())
+    dvvb  = numpy.einsum('ia,ic->ac', ket1b, bra1b.conj())
+    dvva += numpy.einsum('ijab,ijac->bc', ket2aa, bra2aa.conj()) * .5
+    dvva += numpy.einsum('ijba,ijca->bc', ket2ab, bra2ab.conj())
+    dvvb += numpy.einsum('ijba,ijca->bc', ket2bb, bra2bb.conj()) * .5
+    dvvb += numpy.einsum('ijab,ijac->bc', ket2ab, bra2ab.conj())
+
+    dm1a = numpy.empty((nmoa,nmoa), dtype=dooa.dtype)
+    dm1a[:nocca,:nocca] = dooa
+    dm1a[:nocca,nocca:] = dova
+    dm1a[nocca:,:nocca] = dvoa
+    dm1a[nocca:,nocca:] = dvva
+    dm1a[numpy.diag_indices(nocca)] += numpy.dot(cibra, ciket)
+
+    dm1b = numpy.empty((nmob,nmob), dtype=dooa.dtype)
+    dm1b[:noccb,:noccb] = doob
+    dm1b[:noccb,noccb:] = dovb
+    dm1b[noccb:,:noccb] = dvob
+    dm1b[noccb:,noccb:] = dvvb
+    dm1b[numpy.diag_indices(noccb)] += numpy.dot(cibra, ciket)
+
+    if not (myci.frozen is 0 or myci.frozen is None):
+        nmoa = myci.mo_occ[0].size
+        nmob = myci.mo_occ[1].size
+        nocca = numpy.count_nonzero(myci.mo_occ[0] > 0)
+        noccb = numpy.count_nonzero(myci.mo_occ[1] > 0)
+        rdm1a = numpy.zeros((nmoa,nmoa), dtype=dm1a.dtype)
+        rdm1b = numpy.zeros((nmob,nmob), dtype=dm1b.dtype)
+        rdm1a[numpy.diag_indices(nocca)] = numpy.dot(cibra, ciket)
+        rdm1b[numpy.diag_indices(noccb)] = numpy.dot(cibra, ciket)
+        moidx = myci.get_frozen_mask()
+        moidxa = numpy.where(moidx[0])[0]
+        moidxb = numpy.where(moidx[1])[0]
+        rdm1a[moidxa[:,None],moidxa] = dm1a
+        rdm1b[moidxb[:,None],moidxb] = dm1b
+        dm1a = rdm1a
+        dm1b = rdm1b
+    return dm1a, dm1b
+
 
 class UCISD(cisd.CISD):
+
+    def vector_size(self):
+        norba, norbb = self.nmo
+        nocca, noccb = self.nocc
+        nvira = norba - nocca
+        nvirb = norbb - noccb
+        nooa = nocca * (nocca-1) // 2
+        nvva = nvira * (nvira-1) // 2
+        noob = noccb * (noccb-1) // 2
+        nvvb = nvirb * (nvirb-1) // 2
+        size = (1 + nocca*nvira + noccb*nvirb +
+                nocca*noccb*nvira*nvirb + nooa*nvva + noob*nvvb)
+        return size
 
     get_nocc = uccsd.get_nocc
     get_nmo = uccsd.get_nmo
@@ -689,6 +799,7 @@ class UCISD(cisd.CISD):
 
     make_rdm1 = make_rdm1
     make_rdm2 = make_rdm2
+    trans_rdm1 = trans_rdm1
 
     def nuc_grad_method(self):
         from pyscf.grad import ucisd

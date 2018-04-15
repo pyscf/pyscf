@@ -74,7 +74,7 @@ Eg
 
 '''
 
-__version__ = '1.5a'
+__version__ = '1.5b'
 
 import os
 import sys
