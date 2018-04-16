@@ -107,13 +107,71 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(ehf, ehf_bench, 9)
         self.assertAlmostEqual(ecc, ecc_bench, 9)
 
+    def _test_cu_metallic_nonequal_occ(self, kmf, cell, nk=[1,1,1]):
+        assert cell.mesh == [7, 7, 7]
+        ecc1_bench = -0.9646107739333411
+        max_cycle = 5  # Too expensive to do more
+
+        # The following calculation at full convergence gives -0.711071910294612
+        # for a cell.mesh = [25, 25, 25].
+        mycc = pyscf.pbc.cc.kccsd_rhf.RCCSD(kmf, frozen=0)
+        mycc.iterative_damping = 0.05
+        mycc.max_cycle = max_cycle
+        ecc1, t1, t2 = mycc.kernel()
+
+        self.assertAlmostEqual(ecc1, ecc1_bench, 6)
+
+    def _test_cu_metallic_frozen_occ(self, kmf, cell, nk=[1,1,1]):
+        assert cell.mesh == [7, 7, 7]
+        ecc2_bench = -0.7651806468801496
+        max_cycle = 5
+
+        # The following calculation at full convergence gives -0.6440448716452378
+        # for a cell.mesh = [25, 25, 25].  It is equivalent to an RHF supercell [1, 1, 2]
+        # calculation with frozen = [0, 3].
+        mycc = pyscf.pbc.cc.kccsd_rhf.RCCSD(kmf, frozen=[[2, 3], [0, 1]])
+        mycc.iterative_damping = 0.05
+        mycc.max_cycle = max_cycle
+        ecc2, t1, t2 = mycc.kernel()
+
+        self.assertAlmostEqual(ecc2, ecc2_bench, 6)
+
+    def _test_cu_metallic_frozen_vir(self, kmf, cell, nk=[1,1,1]):
+        assert cell.mesh == [7, 7, 7]
+        ecc3_bench = -0.76794053711557086
+        max_cycle = 5
+
+        # The following calculation at full convergence gives -0.58688462599474
+        # for a cell.mesh = [25, 25, 25].  It is equivalent to a supercell [1, 1, 2]
+        # calculation with frozen = [0, 3, 35].
+        mycc = pyscf.pbc.cc.kccsd_rhf.RCCSD(kmf, frozen=[[1, 17], [0]])
+        mycc.max_cycle = max_cycle
+        mycc.iterative_damping = 0.05
+        ecc3, t1, t2 = mycc.kernel()
+
+        self.assertAlmostEqual(ecc3, ecc3_bench, 6)
+
+        check_gamma = False  # Turn me on to run the supercell calculation!
+
+        if check_gamma:
+            from pyscf.pbc.tools.pbc import super_cell
+            supcell = super_cell(cell, nk)
+            kmf = pbcscf.RHF(supcell, exxdiv=None)
+            ehf = kmf.scf()
+
+            mycc = pyscf.pbc.cc.RCCSD(kmf, frozen=[0, 3, 35])
+            mycc.max_cycle = max_cycle
+            mycc.iterative_damping = 0.05
+            ecc, t1, t2 = mycc.kernel()
+
+            print('Gamma energy =', ecc/np.prod(nk))
+            print('K-point energy =', ecc3)
+
     def test_cu_metallic(self):
         mesh = 7
         cell = make_test_cell.test_cell_cu_metallic([mesh]*3)
         nk = [1,1,2]
         ehf_bench = -52.5393701339723
-        ecc1_bench = -0.9646107739333411
-        ecc2_bench = -0.7651806468801496
 
         # KRHF calculation
         kmf = pbcscf.KRHF(cell, exxdiv=None)
@@ -123,24 +181,10 @@ class KnownValues(unittest.TestCase):
 
         self.assertAlmostEqual(ehf, ehf_bench, 6)
 
-        # The following calculation at full convergence gives -0.711071910294612
-        # for a cell.mesh = [25, 25, 25].
-        mycc = pyscf.pbc.cc.kccsd_rhf.RCCSD(kmf, frozen=0)
-        mycc.iterative_damping = 0.05
-        mycc.max_cycle = 5  # Too expensive to do more
-        ecc1, t1, t2 = mycc.kernel()
-
-        self.assertAlmostEqual(ecc1, ecc1_bench, 6)
-
-        # The following calculation at full convergence gives -0.6440448716452378
-        # for a cell.mesh = [25, 25, 25].  It is equivalent to an RHF supercell [1, 1, 2]
-        # calculation with frozen = [0, 3].
-        mycc = pyscf.pbc.cc.kccsd_rhf.RCCSD(kmf, frozen=[[2, 3], [0, 1]])
-        mycc.iterative_damping = 0.05
-        mycc.max_cycle = 5
-        ecc2, t1, t2 = mycc.kernel()
-
-        self.assertAlmostEqual(ecc2, ecc2_bench, 6)
+        # Run CC calculations
+        self._test_cu_metallic_nonequal_occ(kmf, cell, nk=nk)
+        self._test_cu_metallic_frozen_occ(kmf, cell, nk=nk)
+        self._test_cu_metallic_frozen_vir(kmf, cell, nk=nk)
 
     def test_ccsd_t(self):
         n = 14
