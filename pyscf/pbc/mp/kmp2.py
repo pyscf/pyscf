@@ -96,7 +96,7 @@ def _frozen_sanity_check(frozen, mo_occ, kpt_idx):
                            'frozen %s' % (kpt_idx, frozen))
     if len(frozen) > 0 and np.max(frozen) > len(mo_occ) - 1:
         raise RuntimeError('Freezing orbital not in MO list!\n\nkpt_idx %s\n'
-                           'frozen %s\nmax orbital %s' % (kpt_idx, frozen, len(mo_occ-1)))
+                           'frozen %s\nmax orbital idx %s' % (kpt_idx, frozen, len(mo_occ) - 1))
 
     occ_idx = np.where(mo_occ > 0)
     max_occ_idx = np.max(occ_idx)
