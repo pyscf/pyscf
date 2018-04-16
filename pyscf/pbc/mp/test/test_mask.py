@@ -62,6 +62,11 @@ class KnownValues(unittest.TestCase):
         self.assertRaises(RuntimeError, get_nocc, mp, per_kpoint=True)
         self.assertRaises(RuntimeError, get_nmo, mp, per_kpoint=True)
 
+        # Freeze all virtual at the first k-point
+        mp = fake_mp(frozen=[3, 4], mo_occ=[np.array([2, 2, 2, 0, 0]), np.array([2, 2, 0, 0, 0])], nkpts=2)
+        self.assertRaises(RuntimeError, get_nocc, mp)
+        self.assertRaises(RuntimeError, get_nmo, mp)  # Fails because it pads by calling get_nocc
+
     def test_frozen_kpt_list1(self):
         mp = fake_mp(frozen=[[0, 1,], [0]], mo_occ=[np.array([2, 2, 2, 0, 0]), np.array([2, 2, 0, 0, 0])], nkpts=2)
         nocc = get_nocc(mp)
@@ -85,6 +90,30 @@ class KnownValues(unittest.TestCase):
         nmo = get_nmo(mp, per_kpoint=True)
         self.assertListEqual(nocc, [1, 3, 2])
         self.assertListEqual(nmo, [3, 5, 4])
+
+    def test_frozen_kpt_list3(self):
+        mp = fake_mp(frozen=[[0,1,3],[3],[0]], mo_occ=[np.array([2, 2, 2, 0, 0])] * 3, nkpts=3)
+        nocc = get_nocc(mp)
+        nmo = get_nmo(mp)
+        self.assertAlmostEqual(nocc, 3)
+        self.assertAlmostEqual(nmo, 5)  # 2nd k-point has 3 occupied and 2 virtual orbitals
+
+        nocc = get_nocc(mp, per_kpoint=True)
+        nmo = get_nmo(mp, per_kpoint=True)
+        self.assertListEqual(nocc, [1, 3, 2])
+        self.assertListEqual(nmo, [2, 4, 4])
+
+    def test_frozen_kpt_list3(self):
+        mp = fake_mp(frozen=[[0,1,3],[3],[0]], mo_occ=[np.array([2, 2, 2, 0, 0])] * 3, nkpts=3)
+        nocc = get_nocc(mp)
+        nmo = get_nmo(mp)
+        self.assertAlmostEqual(nocc, 3)
+        self.assertAlmostEqual(nmo, 5)  # 2nd k-point has 3 occupied and 2 virtual orbitals
+
+        nocc = get_nocc(mp, per_kpoint=True)
+        nmo = get_nmo(mp, per_kpoint=True)
+        self.assertListEqual(nocc, [1, 3, 2])
+        self.assertListEqual(nmo, [2, 4, 4])
 
 if __name__ == '__main__':
     print("Full mask test")
