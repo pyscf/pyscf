@@ -112,7 +112,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(ehf, ehf_bench, 9)
         self.assertAlmostEqual(ecc, ecc_bench, 9)
 
- 5   def _test_cu_metallic_nonequal_occ(self, kmf, cell, nk=[1,1,1]):
+    def _test_cu_metallic_nonequal_occ(self, kmf, cell, nk=[1,1,1]):
         assert cell.mesh == [7, 7, 7]
         ecc1_bench = -1.1633910051553982
         max_cycle = 2  # Too expensive to do more!
