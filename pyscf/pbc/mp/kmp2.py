@@ -170,11 +170,9 @@ def get_nmo(mp, per_kpoint=False):
     frozen orbitals.
 
     Note:
-        If per_kpoint is False, then the number of orbitals here is the same at every k-point,
-        regardless of whether there are a different number of occupied orbitals per k-point.
-        To do this, it will "pad" some k-points so that each k-point has a number of orbitals
-        equal to max(noccupied orbitals) + max(nvirtual orbitals), where each max is done over
-        all k-points.  This only removes a frozen orbital if its frozen at every k-point.
+        If `per_kpoint` is False, then the number of orbitals here is equal to max(nocc) + max(nvir),
+        where each max is done over all k-points.  Otherwise the number of orbitals is returned
+        as a list of number of orbitals at each k-point.
 
     Args:
         mp (:class:`MP2`): An instantiation of an MP2, SCF, or other mean-field object.
