@@ -77,3 +77,16 @@ objects using the python built in methods ``.__dict__.update``, eg::
     mc = mcscf.CASCI(mf, 6, 6)
     mc.__dict__.update(lib.chkfile.load('n2.chk', 'mcscf'))
     mc.kernel()
+
+
+Other helper functions
+======================
+
+Background mode
+---------------
+
+Macro :func:`call_in_background`
+
+
+Temporary HDF5 file
+-------------------

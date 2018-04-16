@@ -3,8 +3,6 @@
 Installation
 ************
 
-We provide three ways to install PySCF package.
-
 Installation with pip
 =====================
 
@@ -14,6 +12,9 @@ This is the recommended way to install PySCF::
 
 Pypi provides a precompiled PySCF code (python wheel) which works on almost all
 Linux systems, and most of Mac OS X systems, and the ubuntu subsystems on Windows 10.
+If you already have pyscf installed, you can upgrade it to the new version::
+
+  $ pip install --upgrade pyscf
 
 Note we observed that our precompiled python wheels sometimes does not work with
 certain version of Python (python-3.4 and python-3.5).  If you're using mac OS X
@@ -45,6 +46,22 @@ If you have `Conda <https://conda.io/docs/>`_
 environment, PySCF package can be installed through Conda cloud::
 
   $ conda install -c pyscf pyscf
+
+
+PySCF docker image
+==================
+
+The following command starts a container with the jupyter notebook server
+listening for HTTP connections on port 8888::
+
+  $ docker run -it -p 8888:8888 pyscf/pyscf-1.5b
+
+Then visit ``https://localhost:8888`` with your browser to use notebook and
+pyscf.
+
+Another way to use PySCF in docker container is to start an Ipython shell::
+
+  $ docker run -it pyscf/pyscf-1.5b start.sh ipython
 
 
 Manual installation from github repo
@@ -80,6 +97,30 @@ the :code:`pyscf/pyscf` subdirectory) to :code:`PYTHONPATH`.  For example, if
 To ensure the installation is successful, start a Python shell, and type::
 
   >>> import pyscf
+
+For Mac OS X/macOS, you may get an import error if your OS X/macOS version is
+10.11 or newer::
+
+    OSError: dlopen(xxx/pyscf/pyscf/lib/libcgto.dylib, 6): Library not loaded: libcint.3.0.dylib
+    Referenced from: xxx/pyscf/pyscf/lib/libcgto.dylib
+    Reason: unsafe use of relative rpath libcint.3.0.dylib in xxx/pyscf/pyscf/lib/libcgto.dylib with restricted binary
+
+This is caused by the incorrect RPATH.  Script
+``pyscf/lib/_runme_to_fix_dylib_osx10.11.sh`` in ``pyscf/lib`` directory can be
+used to fix this problem::
+ 
+    cd pyscf/lib
+    sh _runme_to_fix_dylib_osx10.11.sh
+
+
+.. note::
+
+  RPATH has been built in the dynamic library.  This may cause library loading
+  error on some systems.  You can run ``pyscf/lib/_runme_to_remove_rpath.sh`` to
+  remove the rpath code from the library head.  Another workaround is to set
+  ``-DCMAKE_SKIP_RPATH=1`` and ``-DCMAKE_MACOSX_RPATH=0`` in cmake command line.
+  When the RPATH was removed, you need to add ``pyscf/lib`` and
+  ``pyscf/lib/deps/lib`` in ``LD_LIBRARY_PATH``.
 
 Last, it's recommended to set a scratch directory for PySCF.  The default scratch
 directory is controlled by environment variable :code:`PYSCF_TMPDIR`.  If it's

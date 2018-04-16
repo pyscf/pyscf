@@ -143,10 +143,11 @@ Citing PySCF
 
 The following paper should be cited in publications utilizing the PySCF program package:
 
-* PySCF: the Python-based Simulations of Chemistry Framework,
-  Q. Sun, T. C. Berkelbach, N. S. Blunt, G. H. Booth, S.  Guo, Z. Li, J. Liu,
-  J. McClain, E. R. Sayfutyarova, S. Sharma, S. Wouters, G. K.-L. Chan,
-  WIREs Comput Mol Sci 2017, DOI: 10.1002/wcms.1340
+PySCF: the Python-based Simulations of Chemistry Framework,
+Q. Sun, T. C. Berkelbach, N. S. Blunt, G. H. Booth, S. Guo, Z. Li, J. Liu,
+J. McClain, E. R. Sayfutyarova, S. Sharma, S. Wouters, G. K.-L. Chan (2018),
+PySCF: the Python‐based simulations of chemistry framework.
+WIREs Comput. Mol. Sci., 8: e1340. doi:10.1002/wcms.1340
 
 
 Bug report
