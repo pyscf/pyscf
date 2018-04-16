@@ -213,8 +213,7 @@ def as_scanner(grad_cc):
     logger.info(grad_cc, 'Set nuclear gradients of %s as a scanner', grad_cc.__class__)
     class CCSD_GradScanner(grad_cc.__class__, lib.GradScanner):
         def __init__(self, g):
-            self.__dict__.update(g.__dict__)
-            self.base = g.base.as_scanner()
+            lib.GradScanner.__init__(self, g)
         def __call__(self, mol, **kwargs):
             # The following simple version also works.  But eris object is
             # recomputed in cc_scanner and solve_lambda.

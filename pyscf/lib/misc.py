@@ -768,7 +768,16 @@ class call_in_background(object):
 
 # A tag to label the derived Scanner class
 class SinglePointScanner: pass
-class GradScanner: pass
+class GradScanner:
+    def __init__(self, g):
+        self.__dict__.update(g.__dict__)
+        self.base = g.base.as_scanner()
+    @property
+    def e_tot(self):
+        return self.base.e_tot
+    @property
+    def converged(self):
+        return self.base.converged
 
 
 if __name__ == '__main__':

@@ -65,8 +65,7 @@ def as_scanner(grad_ci):
     logger.info(grad_ci, 'Set nuclear gradients of %s as a scanner', grad_ci.__class__)
     class CISD_GradScanner(grad_ci.__class__, lib.GradScanner):
         def __init__(self, g):
-            self.__dict__.update(g.__dict__)
-            self.base = grad_ci.base.as_scanner()
+            lib.GradScanner.__init__(self, g)
         def __call__(self, mol, **kwargs):
             ci_scanner = self.base
             ci_scanner(mol)
