@@ -67,6 +67,16 @@ class KnownValues(unittest.TestCase):
         self.assertRaises(RuntimeError, get_nocc, mp)
         self.assertRaises(RuntimeError, get_nmo, mp)  # Fails because it pads by calling get_nocc
 
+        # Freeze virtual not contained in set
+        mp = fake_mp(frozen=[4, 5], mo_occ=[np.array([2, 2, 2, 0, 0]), np.array([2, 2, 0, 0, 0])], nkpts=2)
+        self.assertRaises(RuntimeError, get_nocc, mp)
+        self.assertRaises(RuntimeError, get_nmo, mp)  # Fails because it pads by calling get_nocc
+
+    def test_frozen_repeated_orbital(self):
+        mp = fake_mp(frozen=[[1, 1], [0]], mo_occ=[np.array([2, 2, 2, 0, 0]), np.array([2, 2, 0, 0, 0])], nkpts=2)
+        self.assertRaises(RuntimeError, get_nocc, mp)
+        self.assertRaises(RuntimeError, get_nmo, mp)  # Fails because it pads by calling get_nocc
+
     def test_frozen_kpt_list1(self):
         mp = fake_mp(frozen=[[0, 1,], [0]], mo_occ=[np.array([2, 2, 2, 0, 0]), np.array([2, 2, 0, 0, 0])], nkpts=2)
         nocc = get_nocc(mp)

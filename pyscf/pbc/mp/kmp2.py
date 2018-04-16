@@ -90,10 +90,13 @@ def _frozen_sanity_check(frozen, mo_occ, kpt_idx):
     nocc = np.count_nonzero(mo_occ > 0)
     nvir = len(mo_occ) - nocc
     assert nocc, 'No occupied orbitals?\n\nnocc = %s\nmo_occ = %s' % (nocc, mo_occ)
-    diff = len(frozen) - len(np.unique(frozen))
-    if diff > 0:
+    all_frozen_unique = (len(frozen) - len(np.unique(frozen))) == 0
+    if not all_frozen_unique:
         raise RuntimeError('Frozen orbital list contains duplicates!\n\nkpt_idx %s\n'
                            'frozen %s' % (kpt_idx, frozen))
+    if len(frozen) > 0 and np.max(frozen) > len(mo_occ) - 1:
+        raise RuntimeError('Freezing orbital not in MO list!\n\nkpt_idx %s\n'
+                           'frozen %s\nmax orbital %s' % (kpt_idx, frozen, len(mo_occ-1)))
 
     occ_idx = np.where(mo_occ > 0)
     max_occ_idx = np.max(occ_idx)
