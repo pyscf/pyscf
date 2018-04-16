@@ -328,7 +328,7 @@ def remove_linear_dep_(mf, threshold=1e-8, lindep=1e-14):
             dependence issue.
     '''
     s = mf.get_ovlp()
-    cond = np.max(lib.cond(s))
+    cond = numpy.max(lib.cond(s))
     if cond < 1./lindep:
         return mf
 
