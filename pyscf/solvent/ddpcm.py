@@ -75,9 +75,7 @@ def gen_ddpcm_solver(pcmobj, verbose=None):
     cached_pol = ddcosmo.cache_fake_multipoles(pcmobj.grids, r_vdw, lmax)
 
     def gen_vind(dm):
-        v_phi = ddcosmo.make_phi(pcmobj, dm, r_vdw, ui)
-        phi = -numpy.einsum('n,xn,jn,jn->jx', weights_1sph, ylm_1sph,
-                            ui, v_phi)
+        phi = ddcosmo.make_phi(pcmobj, dm, r_vdw, ui)
         phi = numpy.linalg.solve(A_diele, A_inf.dot(phi.ravel()))
 
         L_X = numpy.linalg.solve(Lmat, phi.ravel()).reshape(natm,-1)

@@ -275,7 +275,7 @@ class KnownValues(unittest.TestCase):
         grids1 = dft.gen_grid.Grids(mol1)
         grids1.atom_grid = (20,86)
         grids1.build(with_non0tab=False)
-        xc = 'lda'
+        xc = 'lda,'
         exc0 = dft.numint.nr_rks(mf0._numint, mol0, grids0, xc, dm0)[1]
         exc1 = dft.numint.nr_rks(mf1._numint, mol1, grids1, xc, dm0)[1]
 
@@ -299,7 +299,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(dexc_t, exc1_approx[2], 2)
         self.assertAlmostEqual(dexc_t, exc1_full[2], 5)
 
-        xc = 'pbe'
+        xc = 'pbe,'
         exc0 = dft.numint.nr_rks(mf0._numint, mol0, grids0, xc, dm0)[1]
         exc1 = dft.numint.nr_rks(mf1._numint, mol1, grids1, xc, dm0)[1]
 

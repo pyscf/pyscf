@@ -66,7 +66,7 @@ class KnownValues(unittest.TestCase):
         hyb, fn_facs = dft.libxc.parse_xc('APBE,')
         self.assertEqual(fn_facs[0][0], 184)
 
-        hyb, fn_facs = dft.libxc.parse_xc('TF')
+        hyb, fn_facs = dft.libxc.parse_xc('TF,')
         ref = [(1, 1), (7, 1)]
         self.assertEqual(dft.libxc.parse_xc_name('LDA,VWN'), (1,7))
         self.assertEqual(dft.libxc.parse_xc(('LDA','VWN'))[1], ref)
@@ -76,12 +76,12 @@ class KnownValues(unittest.TestCase):
 
         self.assertTrue (dft.libxc.is_meta_gga('m05'))
         self.assertFalse(dft.libxc.is_meta_gga('pbe0'))
-        self.assertFalse(dft.libxc.is_meta_gga('tf'))
+        self.assertFalse(dft.libxc.is_meta_gga('tf,'))
         self.assertFalse(dft.libxc.is_meta_gga('vv10'))
         self.assertTrue (dft.libxc.is_gga('PBE0'))
         self.assertFalse(dft.libxc.is_gga('m05'))
-        self.assertFalse(dft.libxc.is_gga('tf'))
-        self.assertTrue (dft.libxc.is_lda('tf'))
+        self.assertFalse(dft.libxc.is_gga('tf,'))
+        self.assertTrue (dft.libxc.is_lda('tf,'))
         self.assertFalse(dft.libxc.is_lda('vv10'))
         self.assertTrue (dft.libxc.is_hybrid_xc('m05'))
         self.assertTrue (dft.libxc.is_hybrid_xc('pbe0,'))

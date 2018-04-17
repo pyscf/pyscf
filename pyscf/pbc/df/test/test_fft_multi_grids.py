@@ -68,9 +68,9 @@ class KnownValues(unittest.TestCase):
         mydf = df.FFTDF(cell)
         mydf.grids.build()
         ref_j = fft_jk.get_j_kpts(mydf, dm, kpts=kpts)
-        n, exc, ref = mydf._numint.nr_rks(cell, mydf.grids, 'lda', dm, 0, kpts)
+        n, exc, ref = mydf._numint.nr_rks(cell, mydf.grids, 'lda,', dm, 0, kpts)
         mydf = fft_multi_grids.MultiGridFFTDF(cell)
-        n, exc, vxc, vj = mydf.rks_j_xc(dm, 'lda', kpts=kpts, with_j=True, j_in_xc=False)
+        n, exc, vxc, vj = mydf.rks_j_xc(dm, 'lda,', kpts=kpts, with_j=True, j_in_xc=False)
         self.assertAlmostEqual(abs(ref_j-vj).max(), 0, 8)
         self.assertAlmostEqual(abs(ref-vxc).max(), 0, 6)
         self.assertAlmostEqual(lib.finger(vxc), -0.10369726976205595, 6)
@@ -80,10 +80,10 @@ class KnownValues(unittest.TestCase):
     def test_rks_gga(self):
         mydf = df.FFTDF(cell)
         mydf.grids.build()
-        n, exc, ref = mydf._numint.nr_rks(cell, mydf.grids, 'b88', dm, 0, kpts)
+        n, exc, ref = mydf._numint.nr_rks(cell, mydf.grids, 'b88,', dm, 0, kpts)
 
         mydf = fft_multi_grids.MultiGridFFTDF(cell)
-        n, exc, vxc, vj = mydf.rks_j_xc(dm, 'b88', kpts=kpts, with_j=True, j_in_xc=False)
+        n, exc, vxc, vj = mydf.rks_j_xc(dm, 'b88,', kpts=kpts, with_j=True, j_in_xc=False)
         self.assertAlmostEqual(abs(ref-vxc).max(), 0, 4)
         self.assertAlmostEqual(lib.finger(vxc), -0.16275189251143374, 4)
         self.assertAlmostEqual(lib.finger(vj), 0.21963596743261393, 8)
@@ -92,7 +92,7 @@ class KnownValues(unittest.TestCase):
 
         fft_multi_grids.RHOG_HIGH_DERIV = True
         mydf = fft_multi_grids.MultiGridFFTDF(cell)
-        n, exc, vxc, vj = mydf.rks_j_xc(dm, 'b88', kpts=kpts, with_j=True, j_in_xc=False)
+        n, exc, vxc, vj = mydf.rks_j_xc(dm, 'b88,', kpts=kpts, with_j=True, j_in_xc=False)
         fft_multi_grids.RHOG_HIGH_DERIV = False
         self.assertAlmostEqual(abs(ref-vxc).max(), 0, 5)
         self.assertAlmostEqual(lib.finger(vxc), -0.16273163782921141, 8)
@@ -102,10 +102,10 @@ class KnownValues(unittest.TestCase):
     def test_rks_mgga(self):
         mydf = df.FFTDF(cell)
         mydf.grids.build()
-        n, exc, ref = mydf._numint.nr_rks(cell, mydf.grids, 'tpss', dm, 0, kpts)
+        n, exc, ref = mydf._numint.nr_rks(cell, mydf.grids, 'tpss,', dm, 0, kpts)
 
         mydf = fft_multi_grids.MultiGridFFTDF(cell)
-        n, exc, vxc, vj = mydf.rks_j_xc(dm, 'tpss', kpts=kpts, with_j=True, j_in_xc=False)
+        n, exc, vxc, vj = mydf.rks_j_xc(dm, 'tpss,', kpts=kpts, with_j=True, j_in_xc=False)
         self.assertAlmostEqual(abs(ref-vxc).max(), 0, 2)
         self.assertAlmostEqual(lib.finger(vxc), -0.12904037508240063, 8)
         self.assertAlmostEqual(lib.finger(vj), 0.21963596743261393, 8)
@@ -116,10 +116,10 @@ class KnownValues(unittest.TestCase):
         mydf = df.FFTDF(cell)
         mydf.grids.build()
         ref_j = fft_jk.get_j_kpts(mydf, dm, kpts=kpts)
-        n, exc, ref = mydf._numint.nr_rks(cell, mydf.grids, 'lda', dm, 0, kpts)
+        n, exc, ref = mydf._numint.nr_rks(cell, mydf.grids, 'lda,', dm, 0, kpts)
 
         mydf = fft_multi_grids.MultiGridFFTDF(cell)
-        n, exc, vxc, vj = mydf.rks_j_xc(dm, 'lda', kpts=kpts, with_j=False, j_in_xc=True)
+        n, exc, vxc, vj = mydf.rks_j_xc(dm, 'lda,', kpts=kpts, with_j=False, j_in_xc=True)
         self.assertAlmostEqual(abs(ref_j+ref-vxc).max(), 0, 6)
         self.assertAlmostEqual(lib.finger(vxc), 0.11593869767055653+0j, 8)
         self.assertAlmostEqual(exc, 2.3601737480485134, 8)
@@ -129,10 +129,10 @@ class KnownValues(unittest.TestCase):
         mydf = df.FFTDF(cell)
         mydf.grids.build()
         ref_j = fft_jk.get_j_kpts(mydf, dm, kpts=kpts)
-        n, exc, ref = mydf._numint.nr_rks(cell, mydf.grids, 'b88', dm, 0, kpts)
+        n, exc, ref = mydf._numint.nr_rks(cell, mydf.grids, 'b88,', dm, 0, kpts)
 
         mydf = fft_multi_grids.MultiGridFFTDF(cell)
-        n, exc, vxc, vj = mydf.rks_j_xc(dm, 'b88', kpts=kpts, with_j=False, j_in_xc=True)
+        n, exc, vxc, vj = mydf.rks_j_xc(dm, 'b88,', kpts=kpts, with_j=False, j_in_xc=True)
         self.assertAlmostEqual(abs(ref_j+ref-vxc).max(), 0, 4)
         self.assertAlmostEqual(lib.finger(vxc), 0.056907756241836749+0j, 4)
         self.assertAlmostEqual(exc, 2.036577374818183, 6)
@@ -143,9 +143,9 @@ class KnownValues(unittest.TestCase):
         mydf = df.FFTDF(cell)
         mydf.grids.build()
         ref_j = fft_jk.get_j_kpts(mydf, dmab, kpts=kpts)
-        n, exc, ref = mydf._numint.nr_uks(cell, mydf.grids, 'lda', dmab, 0, kpts)
+        n, exc, ref = mydf._numint.nr_uks(cell, mydf.grids, 'lda,', dmab, 0, kpts)
         mydf = fft_multi_grids.MultiGridFFTDF(cell)
-        n, exc, vxc, vj = mydf.uks_j_xc(dmab, 'lda', kpts=kpts, with_j=True, j_in_xc=False)
+        n, exc, vxc, vj = mydf.uks_j_xc(dmab, 'lda,', kpts=kpts, with_j=True, j_in_xc=False)
         self.assertAlmostEqual(abs(ref_j-vj).max(), 0, 8)
         self.assertAlmostEqual(abs(ref-vxc).max(), 0, 6)
         self.assertAlmostEqual(lib.finger(vxc), 0.56051003830739932, 6)
@@ -155,10 +155,10 @@ class KnownValues(unittest.TestCase):
     def test_uks_gga(self):
         mydf = df.FFTDF(cell)
         mydf.grids.build()
-        n, exc, ref = mydf._numint.nr_uks(cell, mydf.grids, 'b88', dmab, 0, kpts)
+        n, exc, ref = mydf._numint.nr_uks(cell, mydf.grids, 'b88,', dmab, 0, kpts)
 
         mydf = fft_multi_grids.MultiGridFFTDF(cell)
-        n, exc, vxc, vj = mydf.uks_j_xc(dmab, 'b88', kpts=kpts, with_j=True, j_in_xc=False)
+        n, exc, vxc, vj = mydf.uks_j_xc(dmab, 'b88,', kpts=kpts, with_j=True, j_in_xc=False)
         self.assertAlmostEqual(abs(ref-vxc).max(), 0, 4)
         self.assertAlmostEqual(lib.finger(vxc), 0.62762734582165547, 4)
         self.assertAlmostEqual(lib.finger(vj), -0.80873190911595572, 8)
@@ -167,7 +167,7 @@ class KnownValues(unittest.TestCase):
 
         fft_multi_grids.RHOG_HIGH_DERIV = True
         mydf = fft_multi_grids.MultiGridFFTDF(cell)
-        n, exc, vxc, vj = mydf.uks_j_xc(dmab, 'b88', kpts=kpts, with_j=True, j_in_xc=False)
+        n, exc, vxc, vj = mydf.uks_j_xc(dmab, 'b88,', kpts=kpts, with_j=True, j_in_xc=False)
         fft_multi_grids.RHOG_HIGH_DERIV = False
         self.assertAlmostEqual(abs(ref-vxc).max(), 0, 4)
         self.assertAlmostEqual(lib.finger(vxc), 0.62762734582165547, 4)
@@ -192,10 +192,10 @@ class KnownValues(unittest.TestCase):
         mydf = df.FFTDF(cell)
         mydf.grids.build()
         ref_j = fft_jk.get_j_kpts(mydf, dmab, kpts=kpts)
-        n, exc, ref = mydf._numint.nr_uks(cell, mydf.grids, 'lda', dmab, 0, kpts)
+        n, exc, ref = mydf._numint.nr_uks(cell, mydf.grids, 'lda,', dmab, 0, kpts)
 
         mydf = fft_multi_grids.MultiGridFFTDF(cell)
-        n, exc, vxc, vj = mydf.uks_j_xc(dmab, 'lda', kpts=kpts, with_j=False, j_in_xc=True)
+        n, exc, vxc, vj = mydf.uks_j_xc(dmab, 'lda,', kpts=kpts, with_j=False, j_in_xc=True)
         self.assertAlmostEqual(abs(ref_j+ref-vxc).max(), 0, 6)
         self.assertAlmostEqual(lib.finger(vxc), -0.24822187080855951+0j, 4)
         self.assertAlmostEqual(exc, 3.3968809873729704, 6)
@@ -205,10 +205,10 @@ class KnownValues(unittest.TestCase):
         mydf = df.FFTDF(cell)
         mydf.grids.build()
         ref_j = fft_jk.get_j_kpts(mydf, dmab, kpts=kpts)
-        n, exc, ref = mydf._numint.nr_uks(cell, mydf.grids, 'b88', dmab, 0, kpts)
+        n, exc, ref = mydf._numint.nr_uks(cell, mydf.grids, 'b88,', dmab, 0, kpts)
 
         mydf = fft_multi_grids.MultiGridFFTDF(cell)
-        n, exc, vxc, vj = mydf.uks_j_xc(dmab, 'b88', kpts=kpts, with_j=False, j_in_xc=True)
+        n, exc, vxc, vj = mydf.uks_j_xc(dmab, 'b88,', kpts=kpts, with_j=False, j_in_xc=True)
         self.assertAlmostEqual(abs(ref_j+ref-vxc).max(), 0, 4)
         self.assertAlmostEqual(lib.finger(vxc), -0.18113908287908242+0j, 8)
         self.assertAlmostEqual(exc, 2.7336576611968653, 8)

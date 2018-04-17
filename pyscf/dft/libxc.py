@@ -292,7 +292,7 @@ XC = XC_CODES = {
 'XC_HYB_GGA_XC_HJS_B88'        :  431, # HJS hybrid screened exchange B88 version
 'XC_HYB_GGA_XC_HJS_B97X'       :  432, # HJS hybrid screened exchange B97x version
 'XC_HYB_GGA_XC_CAM_B3LYP'      :  433, # CAM version of B3LYP
-'XC_HYB_GGA_XC_TUNED_CAM_B3LYP' :  434, # CAM version of B3LYP tuned for excitations
+'XC_HYB_GGA_XC_TUNED_CAM_B3LYP':  434, # CAM version of B3LYP tuned for excitations
 'XC_HYB_GGA_XC_BHANDH'         :  435, # Becke half-and-half
 'XC_HYB_GGA_XC_BHANDHLYP'      :  436, # Becke half-and-half with B88 exchange
 'XC_HYB_GGA_XC_MB3LYP_RC04'    :  437, # B3LYP with RC04 LDA
@@ -442,6 +442,18 @@ XC = XC_CODES = {
 'CAMYB3LYP'     : 'XC_HYB_GGA_XC_CAMY_B3LYP',
 }
 
+# Some XC functionals have conventional name, like M06-L means M06-L for X
+# functional and M06-L for C functional, PBE mean PBE-X plus PBE-C. If the
+# conventional name was placed in the XC_CODES, it may lead to recursive
+# reference when parsing the xc description.  These names (as exceptions of
+# XC_CODES) are listed in XC_ALIAS below and they should be treated as a
+# shortcut for XC functional.
+XC_ALIAS = {
+    # Conventional name : name in XC_CODES
+    'M06-L'             : 'M06_L,M06_L',
+    'PBE'               : 'PBE,PBE'
+}
+
 XC_KEYS = set(XC_CODES.keys())
 
 VV10_XC = set(('B97M_V', 'WB97M_V', 'WB97X_V', 'VV10', 'LC_VV10'))
@@ -578,10 +590,12 @@ def parse_xc(description):
       first part describes the exchange functional, the second is the correlation
       functional.
 
-      - If "," was not appeared in string, the entire string is considered as
-        X functional.
+      - If "," was not in string, the entire string is considered as a XC
+        functional (if applicable).
+      - To apply only X functional (without C functional), leave blank in the
+        second part, e.g. description='lda,' for pure LDA functional
       - To neglect X functional (just apply C functional), leave blank in the
-        first part, eg description=',vwn' for pure VWN functional
+        first part, e.g. description=',vwn' for pure VWN functional
       - If compound XC functional (including both X and C functionals, such as
         b3lyp) is specified, no matter whehter it is in the X part (the string
         in front of comma) or the C part (the string behind comma), both X and C
@@ -768,25 +782,24 @@ def parse_xc(description):
                 n += 1
         return list(zip(fn_ids, facs))
 
+    description = description.replace(' ','').upper()
+    if ',' not in description and description in XC_ALIAS:
+        description = XC_ALIAS[description]
+
     if '-' in description:  # To handle e.g. M06-L
         for key in _NAME_WITH_DASH:
             if key in description:
                 description = description.replace(key, _NAME_WITH_DASH[key])
 
     if ',' in description:
-        x_code, c_code = description.replace(' ','').upper().split(',')
+        x_code, c_code = description.split(',')
         for token in x_code.replace('-', '+-').split('+'):
             parse_token(token, possible_x_k_for)
         for token in c_code.replace('-', '+-').split('+'):
             parse_token(token, possible_c_for)
     else:
-        x_code = description.replace(' ','').upper()
-        try:
-            for token in x_code.replace('-', '+-').split('+'):
-                parse_token(token, possible_xc_for)
-        except KeyError:
-            for token in x_code.replace('-', '+-').split('+'):
-                parse_token(token, possible_x_k_for)
+        for token in description.replace('-', '+-').split('+'):
+            parse_token(token, possible_xc_for)
     return hyb, remove_dup(fn_facs)
 
 _NAME_WITH_DASH = {'SR-HF'  : 'SR_HF',
