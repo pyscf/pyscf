@@ -34,7 +34,7 @@ mol.build()
 class KnownValues(unittest.TestCase):
     def test_tda_lda(self):
         mf = dft.RKS(mol)
-        mf.xc = 'LDA'
+        mf.xc = 'LDA,'
         mf.grids.prune = False
         mf.scf()
         td = tddft.TDA(mf).run(nstates=3)
@@ -44,7 +44,7 @@ class KnownValues(unittest.TestCase):
 
     def test_tda_b88(self):
         mf = dft.RKS(mol)
-        mf.xc = 'b88'
+        mf.xc = 'b88,'
         mf.grids.prune = False
         mf.scf()
         td = tddft.TDA(mf).run(nstates=3)
@@ -54,7 +54,7 @@ class KnownValues(unittest.TestCase):
 
     def test_tddft_lda(self):
         mf = dft.RKS(mol)
-        mf.xc = 'LDA'
+        mf.xc = 'LDA,'
         mf.grids.prune = False
         mf.scf()
         td = tddft.TDDFT(mf).run(nstates=3)

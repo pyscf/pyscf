@@ -37,7 +37,7 @@ pmol = mol.copy()
 class KnownValues(unittest.TestCase):
     def test_tda_lda(self):
         mf = dft.UKS(mol).set(conv_tol=1e-12)
-        mf.xc = 'LDA'
+        mf.xc = 'LDA,'
         mf.scf()
         td = tddft.TDA(mf).run(nstates=3)
         tdg = td.nuc_grad_method()
@@ -51,7 +51,7 @@ class KnownValues(unittest.TestCase):
 
     def test_tda_b88(self):
         mf = dft.UKS(mol).set(conv_tol=1e-12)
-        mf.xc = 'b88'
+        mf.xc = 'b88,'
         mf.scf()
         td = tddft.TDA(mf).run(nstates=3)
         tdg = td.nuc_grad_method()
@@ -65,7 +65,7 @@ class KnownValues(unittest.TestCase):
 
     def test_tddft_lda(self):
         mf = dft.UKS(mol).set(conv_tol=1e-12)
-        mf.xc = 'LDA'
+        mf.xc = 'LDA,'
         mf.scf()
         td = tddft.TDDFT(mf).run(nstates=3)
         tdg = td.nuc_grad_method()

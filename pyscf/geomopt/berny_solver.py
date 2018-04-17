@@ -141,7 +141,7 @@ H       -0.0227 1.1812  -0.8852
     print(scf.RHF(mol1).kernel() - -153.222680852335)
 
     mf = dft.RKS(mol)
-    mf.xc = 'pbe'
+    mf.xc = 'pbe,'
     mf.conv_tol = 1e-7
     mol1 = optimize(mf)
 

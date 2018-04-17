@@ -28,7 +28,7 @@ class KnownValues(unittest.TestCase):
         mol.output = '/dev/null'
         mol.build()
         mf = dks.DKS(mol)
-        mf.xc = 'lda'
+        mf.xc = 'lda,'
         eks4 = mf.kernel()
         self.assertAlmostEqual(eks4, -126.041808355268, 9)
 

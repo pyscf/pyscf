@@ -446,7 +446,7 @@ if __name__ == '__main__':
     mol.build()
 
     mf = dft.UKS(mol).set(conv_tol=1e-14)
-    mf.xc = 'LDA'
+    mf.xc = 'LDA,'
     mf.grids.prune = False
     mf.kernel()
 

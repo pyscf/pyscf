@@ -68,7 +68,7 @@ class KnowValues(unittest.TestCase):
 
     def test_nr_rks_lda(self):
         mf = dft.RKS(cell)
-        mf.xc = 'lda'
+        mf.xc = 'lda,'
         mf = scf.newton(mf)
         mf.conv_tol_grad = 1e-4
         mf.kernel()
@@ -76,7 +76,7 @@ class KnowValues(unittest.TestCase):
 
     def test_nr_uks_lda(self):
         mf = dft.UKS(cell)
-        mf.xc = 'lda'
+        mf.xc = 'lda,'
         mf = scf.newton(mf)
         mf.conv_tol_grad = 1e-4
         mf.kernel()
@@ -84,7 +84,7 @@ class KnowValues(unittest.TestCase):
 
     def test_nr_rks_gga(self):
         mf = dft.RKS(cell)
-        mf.xc = 'b88'
+        mf.xc = 'b88,'
         mf = scf.newton(mf)
         mf.conv_tol_grad = 1e-4
         mf.kernel()
@@ -92,7 +92,7 @@ class KnowValues(unittest.TestCase):
 
     def test_nr_uks_gga(self):
         mf = dft.UKS(cell)
-        mf.xc = 'b88'
+        mf.xc = 'b88,'
         mf = scf.newton(mf)
         mf.conv_tol_grad = 1e-4
         mf.kernel()
@@ -114,7 +114,7 @@ class KnowValues(unittest.TestCase):
 
     def test_nr_krks_lda(self):
         mf = dft.KRKS(cell, cell.make_kpts([2,1,1]))
-        mf.xc = 'lda'
+        mf.xc = 'lda,'
         mf = scf.newton(mf)
         mf.conv_tol_grad = 1e-4
         mf.kernel()
@@ -122,7 +122,7 @@ class KnowValues(unittest.TestCase):
 
     def test_nr_kuks_lda(self):
         mf = dft.KUKS(cell, cell.make_kpts([2,1,1]))
-        mf.xc = 'lda'
+        mf.xc = 'lda,'
         mf = scf.newton(mf)
         mf.conv_tol_grad = 1e-4
         mf.kernel()
@@ -130,7 +130,7 @@ class KnowValues(unittest.TestCase):
 
     def test_nr_krks_gga(self):
         mf = dft.KRKS(cell, cell.make_kpts([2,1,1]))
-        mf.xc = 'b88'
+        mf.xc = 'b88,'
         mf = scf.newton(mf)
         mf.conv_tol_grad = 1e-4
         mf.kernel()
@@ -138,7 +138,7 @@ class KnowValues(unittest.TestCase):
 
     def test_nr_kuks_gga(self):
         mf = dft.KUKS(cell, cell.make_kpts([2,1,1]))
-        mf.xc = 'b88'
+        mf.xc = 'b88,'
         mf = scf.newton(mf)
         mf.conv_tol_grad = 1e-4
         mf.kernel()

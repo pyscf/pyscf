@@ -357,7 +357,7 @@ if __name__ == '__main__':
     mol.build()
 
     mf = dft.RKS(mol)
-    mf.xc = 'LDA'
+    mf.xc = 'LDA,'
     mf.grids.prune = False
     mf.conv_tol = 1e-14
 #    mf.grids.level = 6
@@ -399,7 +399,7 @@ if __name__ == '__main__':
 
     mol.set_geom_('H 0 0 1.804; F 0 0 0', unit='B')
     mf = dft.RKS(mol)
-    mf.xc = 'lda'
+    mf.xc = 'lda,'
     mf.conv_tol = 1e-14
     mf.kernel()
     td = tddft.TDA(mf)

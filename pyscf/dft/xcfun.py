@@ -149,6 +149,18 @@ XC = XC_CODES = {
 'TF'            : 'TFK',
 }
 
+# Some XC functionals have conventional name, like M06-L means M06-L for X
+# functional and M06-L for C functional, PBE mean PBE-X plus PBE-C. If the
+# conventional name was placed in the XC_CODES, it may lead to recursive
+# reference when parsing the xc description.  These names (as exceptions of
+# XC_CODES) are listed in XC_ALIAS below and they should be treated as a
+# shortcut for XC functional.
+XC_ALIAS = {
+    # Conventional name : name in XC_CODES
+    'M06-L'             : 'M06L,M06L',
+    'PBE'               : 'PBE,PBE'
+}
+
 LDA_IDS = set([0, 2, 3, 13, 14, 15, 24, 28, 45])
 GGA_IDS = set([1, 4, 5, 6, 7, 8, 9, 16, 17, 18, 19, 20, 21, 22, 23, 25, 26,
                27, 44, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 57, 58, 59, 61,
@@ -257,10 +269,12 @@ def parse_xc(description):
       first part describes the exchange functional, the second is the correlation
       functional.
 
-      - If "," was not appeared in string, the entire string is considered as
-        X functional.
+      - If "," was not in string, the entire string is considered as a XC
+        functional (if applicable).
+      - To apply only X functional (without C functional), leave blank in the
+        second part, e.g. description='lda,' for pure LDA functional
       - To neglect X functional (just apply C functional), leave blank in the
-        first part, eg description=',vwn' for pure VWN functional
+        first part, e.g. description=',vwn' for pure VWN functional
       - If compound XC functional (including both X and C functionals, such as
         b3lyp) is specified, no matter whehter it is in the X part (the string
         in front of comma) or the C part (the string behind comma), both X and C
@@ -288,10 +302,14 @@ def parse_xc(description):
     elif not isinstance(description, str): #isinstance(description, (tuple,list)):
         return parse_xc('%s,%s' % tuple(description))
 
+    description = description.replace(' ','').upper()
+    if ',' not in description and description in XC_ALIAS:
+        description = XC_ALIAS[description]
+
     if ',' in description:
-        x_code, c_code = description.replace(' ','').upper().split(',')
+        x_code, c_code = description.split(',')
     else:
-        x_code, c_code = description.replace(' ','').upper(), ''
+        x_code, c_code = description, ''
 
     def assign_omega(omega):
         if hyb[2] == 0:
