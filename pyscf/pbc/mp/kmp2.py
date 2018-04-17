@@ -75,9 +75,9 @@ def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE):
 def _frozen_sanity_check(frozen, mo_occ, kpt_idx):
     '''Performs a few sanity checks on the frozen array and mo_occ.
 
-    Specific tests include checking for duplicates within the frozen array,
-    making sure we only freeze occupied orbitals, and making sure we didn't
-    freeze all the occupied orbitals.
+    Specific tests include checking for duplicates within the frozen array
+    and making sure we didn't freeze either all the occupied orbitals or all
+    the unoccupied orbitals.
 
     Args:
         frozen (array_like of int): The orbital indices that will be frozen.
@@ -86,21 +86,28 @@ def _frozen_sanity_check(frozen, mo_occ, kpt_idx):
         kpt_idx (int): The k-point that `mo_occ` and `frozen` belong to.
 
     '''
+    frozen = np.array(frozen)
     nocc = np.count_nonzero(mo_occ > 0)
+    nvir = len(mo_occ) - nocc
     assert nocc, 'No occupied orbitals?\n\nnocc = %s\nmo_occ = %s' % (nocc, mo_occ)
-    diff = len(frozen) - len(np.unique(frozen))
-    if diff > 0:
+    all_frozen_unique = (len(frozen) - len(np.unique(frozen))) == 0
+    if not all_frozen_unique:
         raise RuntimeError('Frozen orbital list contains duplicates!\n\nkpt_idx %s\n'
                            'frozen %s' % (kpt_idx, frozen))
+    if len(frozen) > 0 and np.max(frozen) > len(mo_occ) - 1:
+        raise RuntimeError('Freezing orbital not in MO list!\n\nkpt_idx %s\n'
+                           'frozen %s\nmax orbital idx %s' % (kpt_idx, frozen, len(mo_occ) - 1))
 
-    max_occ_idx = np.max(np.where(mo_occ > 0))
-    if any(np.array(frozen) > max_occ_idx):
-        raise RuntimeError('Freezing virtual orbitals is not allowed\n\n'
+    occ_idx = np.where(mo_occ > 0)
+    max_occ_idx = np.max(occ_idx)
+    frozen_nocc = len(frozen[frozen <= max_occ_idx])
+    if frozen_nocc >= nocc:
+        raise RuntimeError('Cannot freeze all occupied orbitals!:\n\n'
                            'kpt_idx %s\nfrozen %s\nmo_occ %s' % (kpt_idx, frozen, mo_occ))
 
-    nfrozen = len(frozen)
-    if nfrozen >= nocc:
-        raise RuntimeError('Must freeze less orbitals than occupied!:\n\n'
+    frozen_nvir = len(frozen[frozen > max_occ_idx])
+    if frozen_nvir >= nvir:
+        raise RuntimeError('Cannot freeze all virtual orbitals!:\n\n'
                            'kpt_idx %s\nfrozen %s\nmo_occ %s' % (kpt_idx, frozen, mo_occ))
 
 
@@ -126,22 +133,24 @@ def get_nocc(mp, per_kpoint=False):
         nocc = [(np.count_nonzero(mp.mo_occ[ikpt]) - mp.frozen) for ikpt in range(mp.nkpts)]
     elif isinstance(mp.frozen[0], (int, np.integer)):
         [_frozen_sanity_check(mp.frozen, mp.mo_occ[ikpt], ikpt) for ikpt in range(mp.nkpts)]
-        nocc = [(np.count_nonzero(mp.mo_occ[ikpt]) - len(mp.frozen)) for ikpt in range(mp.nkpts)]
+        nocc = []
+        for ikpt in range(mp.nkpts):
+            max_occ_idx = np.max(np.where(mp.mo_occ[ikpt] > 0))
+            frozen_nocc = np.sum(np.array(mp.frozen) <= max_occ_idx)
+            nocc.append(np.count_nonzero(mp.mo_occ[ikpt]) - frozen_nocc)
     elif isinstance(mp.frozen[0], (list, np.ndarray)):
         nkpts = len(mp.frozen)
         if nkpts != mp.nkpts:
             raise RuntimeError('Frozen list has a different number of k-points (length) than passed in mean-field/'
                                'correlated calculation.  \n\nCalculation nkpts = %d, frozen list = %s '
                                '(length = %d)' % (mp.nkpts, mp.frozen, nkpts))
-        [_frozen_sanity_check(fro, mo_occ, ikpt) for ikpt, fro, mo_occ in zip(range(nkpts), mp.frozen, mp.mo_occ)]
-        occ_idx = [mp.mo_occ[ikpt] > 0 for ikpt in range(nkpts)]
+        [_frozen_sanity_check(frozen, mo_occ, ikpt) for ikpt, frozen, mo_occ in zip(range(nkpts), mp.frozen, mp.mo_occ)]
 
-        ## Find where MO is frozen at every k-point and don't include this orbital
-        #all_frozen = reduce(set.intersection, [set(x) for x in mp.frozen])
-        for ikpt, fro in enumerate(mp.frozen):
-            occ_idx[ikpt][list(fro)] = False
-
-        nocc = [np.count_nonzero(occ_idx[ikpt]) for ikpt in range(nkpts)]
+        nocc = []
+        for ikpt, frozen in enumerate(mp.frozen):
+            max_occ_idx = np.max(np.where(mp.mo_occ[ikpt] > 0))
+            frozen_nocc = np.sum(np.array(frozen) <= max_occ_idx)
+            nocc.append(np.count_nonzero(mp.mo_occ[ikpt]) - frozen_nocc)
     else:
         raise NotImplementedError
 
@@ -161,11 +170,9 @@ def get_nmo(mp, per_kpoint=False):
     frozen orbitals.
 
     Note:
-        If per_kpoint is False, then the number of orbitals here is the same at every k-point,
-        regardless of whether there are a different number of occupied orbitals per k-point.
-        To do this, it will "pad" some k-points so that each k-point has a number of orbitals
-        equal to max(noccupied orbitals) + max(nvirtual orbitals), where each max is done over
-        all k-points.  This only removes a frozen orbital if its frozen at every k-point.
+        If `per_kpoint` is False, then the number of orbitals here is equal to max(nocc) + max(nvir),
+        where each max is done over all k-points.  Otherwise the number of orbitals is returned
+        as a list of number of orbitals at each k-point.
 
     Args:
         mp (:class:`MP2`): An instantiation of an MP2, SCF, or other mean-field object.
