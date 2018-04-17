@@ -68,6 +68,7 @@ def load_library(libname):
 CLOCK_TICKS = os.sysconf("SC_CLK_TCK")
 PAGESIZE = os.sysconf("SC_PAGE_SIZE")
 def current_memory():
+    '''Return the size of used memory and allocated virtual memory (in MB)'''
     #import resource
     #return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1000
     if sys.platform.startswith('linux'):
@@ -78,8 +79,19 @@ def current_memory():
         return 0, 0
 
 def num_threads(n=None):
-    '''Set the number of OMP threads.  If argument is not given, the function
-    will return the total number of available OMP threads.'''
+    '''Set the number of OMP threads.  If argument is not specified, the
+    function will return the total number of available OMP threads.
+
+    Examples:
+
+    >>> from pyscf import lib
+    >>> print(lib.num_threads())
+    8
+    >>> lib.num_threads(4)
+    4
+    >>> print(lib.num_threads())
+    4
+    '''
     from pyscf.lib.numpy_helper import _np_helper
     if n is not None:
         _np_helper.set_omp_threads.restype = ctypes.c_int
@@ -93,11 +105,23 @@ def num_threads(n=None):
         return _np_helper.get_omp_threads()
 
 class with_omp_threads(object):
-    '''
-    Usage:
-        with lib.with_threads(2):
-            print(lib.num_threads())
-            ...
+    '''Using this macro to create a temporary context in which the number of
+    OpenMP threads are set to the required value. When the program exits the
+    context, the number OpenMP threads will be restored.
+
+    Args:
+        nthreads : int
+
+    Examples:
+
+    >>> from pyscf import lib
+    >>> print(lib.num_threads())
+    8
+    >>> with lib.with_omp_threads(2):
+    ...     print(lib.num_threads())
+    2
+    >>> print(lib.num_threads())
+    8
     '''
     def __init__(self, nthreads=None):
         self.nthreads = nthreads
@@ -197,11 +221,35 @@ def flatten(lst):
     return list(itertools.chain.from_iterable(lst))
 
 def prange(start, end, step):
-    for i in range(start, end, step):
-        yield i, min(i+step, end)
+    '''This function splits the number sequence between "start" and "end"
+    using uniform "step" length. It yields the boundary (start, end) for each
+    fragment.
+
+    Examples:
+
+    >>> for p0, p1 in lib.prange(0, 8, 2):
+    ...    print(p0, p1)
+    (0, 2)
+    (2, 4)
+    (4, 6)
+    (6, 8)
+    '''
+    if start < end:
+        for i in range(start, end, step):
+            yield i, min(i+step, end)
 
 def prange_tril(start, stop, blocksize):
-    '''for p0, p1 in prange_tril: p1*(p1+1)/2-p0*(p0+1)/2 < blocksize'''
+    '''Similar to :func:`prange`, yeilds start (p0) and end (p1) with the
+    restriction p1*(p1+1)/2-p0*(p0+1)/2 < blocksize
+
+    Examples:
+
+    >>> for p0, p1 in lib.prange_tril(0, 10, 25):
+    ...     print(p0, p1)
+    (0, 6)
+    (6, 9)
+    (9, 10)
+    '''
     if start >= stop:
         return []
     idx = numpy.arange(start, stop+1)
@@ -212,9 +260,9 @@ def prange_tril(start, stop, blocksize):
 def tril_product(*iterables, **kwds):
     '''Cartesian product in lower-triangular form for multiple indices
 
-    For a given list of indices, `iterables`, yields all indices such that the sub-indices
-    given by the kwarg `tril_idx` satisfy a lower-triangular form.  The lower-triangular form
-    satisfies:
+    For a given list of indices (`iterables`), this function yields all
+    indices such that the sub-indices given by the kwarg `tril_idx` satisfy a
+    lower-triangular form.  The lower-triangular form satisfies:
 
     .. math:: i[tril_idx[0]] >= i[tril_idx[1]] >= ... >= i[tril_idx[len(tril_idx)-1]]
 
@@ -224,7 +272,7 @@ def tril_product(*iterables, **kwds):
             repeat (int): Number of times to repeat the iterables
             tril_idx (array_like): Indices to put into lower-triangular form.
 
-    Returns:
+    Yields:
         product (tuple): Tuple in lower-triangular form.
 
     Examples:
@@ -278,10 +326,6 @@ def square_mat_in_trilu_indices(n):
 class ctypes_stdout(object):
     '''make c-printf output to string, but keep python print in /dev/pts/1.
     Note it cannot correctly handle c-printf with GCC, don't know why.
-    Usage:
-        with ctypes_stdout() as stdout:
-            ...
-        print(stdout.read())
     '''
     def __enter__(self):
         sys.stdout.flush()
@@ -312,11 +356,16 @@ class ctypes_stdout(object):
 
 class capture_stdout(object):
     '''redirect all stdout (c printf & python print) into a string
-    Usage:
-        with capture_stdout() as stdout:
-            ...
-        print(stdout.read())
+
+    Examples:
+
+    >>> import os
+    >>> from pyscf import lib
+    >>> with lib.capture_stdout as out:
+    ...     os.system('ls')
+    >>> print(out.read())
     '''
+    #TODO: handle stderr
     def __enter__(self):
         sys.stdout.flush()
         self._contents = None
@@ -342,12 +391,14 @@ class capture_stdout(object):
             return open(self.ftmp, 'r').read()
 
 class quite_run(object):
-    '''output nothing
+    '''capture all stdout (c printf & python print) but output nothing
 
-    Examples
-    --------
-    with quite_run():
-        ...
+    Examples:
+
+    >>> import os
+    >>> from pyscf import lib
+    >>> with lib.quite_run():
+    ...     os.system('ls')
     '''
     def __enter__(self):
         sys.stdout.flush()
@@ -519,7 +570,7 @@ def with_doc(doc):
         def fn:
             ...
 
-    makes
+    is equivalent to
 
         fn.__doc__ = doc
     '''
@@ -669,47 +720,23 @@ bg = background = bg_thread = background_thread
 bp = bg_process = background_process
 
 
-class H5TmpFile(h5py.File):
-    def __init__(self, filename=None, *args, **kwargs):
-        if filename is None:
-            tmpfile = tempfile.NamedTemporaryFile(dir=param.TMPDIR)
-            filename = tmpfile.name
-        h5py.File.__init__(self, filename, *args, **kwargs)
-    def __del__(self):
-        self.close()
-
-def fingerprint(a):
-    a = numpy.asarray(a)
-    return numpy.dot(numpy.cos(numpy.arange(a.size)), a.ravel())
-finger = fingerprint
-
-
-def ndpointer(*args, **kwargs):
-    base = numpy.ctypeslib.ndpointer(*args, **kwargs)
-
-    @classmethod
-    def from_param(cls, obj):
-        if obj is None:
-            return obj
-        return base.from_param(obj)
-    return type(base.__name__, (base,), {'from_param': from_param})
-
-
 class call_in_background(object):
-    '''Asynchonously execute the given function
+    '''Within this macro, function(s) can be executed asynchronously (the
+    given functions are executed in background).
 
-    Usage:
-        with call_in_background(fun) as async_fun:
-            async_fun(a, b)  # == fun(a, b)
-            do_something_else()
+    Examples:
 
-        with call_in_background(fun1, fun2) as (afun1, afun2):
-            afun2(a, b)
-            do_something_else()
-            afun2(a, b)
-            do_something_else()
-            afun1(a, b)
-            do_something_else()
+    >>> with call_in_background(fun) as async_fun:
+    ...     async_fun(a, b)  # == fun(a, b)
+    ...     do_something_else()
+
+    >>> with call_in_background(fun1, fun2) as (afun1, afun2):
+    ...     afun2(a, b)
+    ...     do_something_else()
+    ...     afun2(a, b)
+    ...     do_something_else()
+    ...     afun1(a, b)
+    ...     do_something_else()
     '''
 
     def __init__(self, *fns, **kwargs):
@@ -764,6 +791,51 @@ class call_in_background(object):
     def __exit__(self, type, value, traceback):
         if self.handler is not None:
             self.handler.join()
+
+
+class H5TmpFile(h5py.File):
+    '''Create and return an HDF5 temporary file.
+
+    Kwargs:
+        filename : str or None
+            If a string is given, an HDF5 file of the given filename will be
+            created. The temporary file will exist even if the H5TmpFile
+            object is released.  If nothing is specified, the HDF5 temporary
+            file will be deleted when the H5TmpFile object is released.
+
+    The return object is an h5py.File object. The file will be automatically
+    deleted when it is closed or the object is released (unless filename is
+    specified).
+
+    Examples:
+
+    >>> from pyscf import lib
+    >>> ftmp = lib.H5TmpFile()
+    '''
+    def __init__(self, filename=None, *args, **kwargs):
+        if filename is None:
+            tmpfile = tempfile.NamedTemporaryFile(dir=param.TMPDIR)
+            filename = tmpfile.name
+        h5py.File.__init__(self, filename, *args, **kwargs)
+    def __del__(self):
+        self.close()
+
+def fingerprint(a):
+    '''Fingerprint of numpy array'''
+    a = numpy.asarray(a)
+    return numpy.dot(numpy.cos(numpy.arange(a.size)), a.ravel())
+finger = fingerprint
+
+
+def ndpointer(*args, **kwargs):
+    base = numpy.ctypeslib.ndpointer(*args, **kwargs)
+
+    @classmethod
+    def from_param(cls, obj):
+        if obj is None:
+            return obj
+        return base.from_param(obj)
+    return type(base.__name__, (base,), {'from_param': from_param})
 
 
 # A tag to label the derived Scanner class

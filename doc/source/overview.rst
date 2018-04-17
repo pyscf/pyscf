@@ -50,6 +50,8 @@ Features
 
 * Interface to XC functional library `Libxc <http://www.tddft.org/programs/octopus/wiki/index.php/Libxc>`_
 
+* Interface to tensor contraction library `TBLIS <https://github.com/devinamatthews/tblis>`_
+
 * Interface to Heat-bath Selected CI program `Dice <https://sanshar.github.io/Dice/>`_
 
 * Interface to geometry optimizer `Pyberny <https://github.com/azag0/pyberny>`_
@@ -158,6 +160,8 @@ changed or overwritten by the ``state_average_`` method.  Cautious should be
 taken when you see the functions or methods with ugly suffices.
 
 
+.. _global_config:
+
 Global configurations
 ---------------------
 
@@ -169,7 +173,7 @@ during initialization.  For example, the configuration file below detects the
 available memory in the operate system at the runtime and set the maximum memory
 for PySCF::
 
-  $ cat ~/.pyscf_config.py
+  $ cat ~/.pyscf_conf.py
   import psutil
   total, available, percent, used, free, active, inactive, buffers, cached, shared = psutil.virtual_memory()
   MAX_MEMORY = available
@@ -180,7 +184,7 @@ determined ``max_memory`` will be loaded during the program initialization step
 automatically.
 
 There are two methods to let the PySCF package load the global configurations.
-One is to create a configuration file ``.pyscf_config.py`` in home directory or
+One is to create a configuration file ``.pyscf_conf.py`` in home directory or
 in work directory.  Another is to set the environment variable
 ``PYSCF_CONFIG_FILE`` which points to the configuration file (with the absolute
 path).  The environment variable ``PYSCF_CONFIG_FILE`` has high priority than
@@ -188,7 +192,7 @@ the configuration file in default locations (home directory or work directory).
 If environment variable ``PYSCF_CONFIG_FILE`` is available, the program will
 read the configurations from the ``$PYSCF_CONFIG_FILE``. If
 ``PYSCF_CONFIG_FILE`` is not set or the file it points to does not exist, the
-program will turn to the default location for the file ``.pyscf_config.py``.  If
+program will turn to the default location for the file ``.pyscf_conf.py``.  If
 none of the configuration file exists, the program will use the built-in
 configurations which are generally conservative settings.
 
@@ -200,6 +204,8 @@ In the source code, global configurations are loaded by importing
 
 Please refer to the source code for the available configurations.
 
+
+.. _scanner:
 
 Scanner
 -------

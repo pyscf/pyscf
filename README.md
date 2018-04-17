@@ -5,10 +5,10 @@
 Python-based Simulations of Chemistry Framework
 ===============================================
 
-2018-03-23
+2018-04-15
 
-* [Stable release 1.4.5](https://github.com/sunqm/pyscf/releases/tag/v1.4.5)
-* [1.5 alpha](https://github.com/sunqm/pyscf/releases/tag/v1.5-alpha)
+* [Stable release 1.4.7](https://github.com/sunqm/pyscf/releases/tag/v1.4.7)
+* [1.5 beta](https://github.com/sunqm/pyscf/releases/tag/v1.5-beta)
 * [Changelog](../master/CHANGELOG)
 * [Documentation](http://www.pyscf.org)
 * [Installation](#installation)
@@ -81,9 +81,21 @@ Installation
 
       git clone https://github.com/azag0/pyberny /path/to/pyberny
 
-  edit the environment variable to make pyscf find pyberny
+  edit the environment variable to make pyberny a python module
 
       export PYTHONPATH=/path/to/pyberny:$PYTHONPATH
+
+
+Tutorials
+---------
+* An Ipython notebook of user-guide can be found in https://github.com/nmardirossian/PySCF_Tutorial.
+  This repository documents the basic structure of PySCF input script and the
+  use of regular methods which were routinely executed in most quantum chemistry
+  packages.  It also provides an implementation to drive PySCF program in a
+  simple manner.
+* Developer's tutorial can be found in the online documentation
+  http://sunqm.github.io/pyscf/tutorial.html#tutorial and the repository above
+  https://github.com/nmardirossian/PySCF_Tutorial/blob/master/dev_guide.ipynb
 
 
 Known problems

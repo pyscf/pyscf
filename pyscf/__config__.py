@@ -17,9 +17,7 @@ UNIT = 'angstrom'
 # Loading pyscf_conf.py and overwriting above parameters
 #
 for conf_file in (os.environ.get('PYSCF_CONFIG_FILE', None),
-                  os.path.join(os.path.abspath('.'), '.pyscf_config.py'),
                   os.path.join(os.path.abspath('.'), '.pyscf_conf.py'),
-                  os.path.join(os.environ.get('HOME', '.'), '.pyscf_config.py'),
                   os.path.join(os.environ.get('HOME', '.'), '.pyscf_conf.py')):
     if conf_file is not None and os.path.isfile(conf_file):
         break

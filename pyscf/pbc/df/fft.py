@@ -64,6 +64,9 @@ def get_nuc(mydf, kpts=None):
 
 def get_pp(mydf, kpts=None):
     '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.
+
+    See also the implementations of get_pp in pyscf/pbc/df/aft.py,
+    pyscf/pbc/gto/pseudo/pp.py and pyscf/pbc/gto/pseudo/pp_int.py.
     '''
     cell = mydf.cell
     if kpts is None:

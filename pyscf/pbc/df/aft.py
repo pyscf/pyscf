@@ -239,6 +239,13 @@ get_pp_loc_part1 = get_nuc
 
 def get_pp(mydf, kpts=None):
     '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.
+    The local part of the integration are computed analytically. (In contrast
+    to the implementations of get_pp in pyscf/pbc/gto/pseudo/pp.py which
+    computes the matrix elements with discreted grids in real-space or
+    reciprocal space).
+
+    See also the implementations of get_pp in pyscf/pbc/df/fft.py,
+    pyscf/pbc/gto/pseudo/pp.py and pyscf/pbc/gto/pseudo/pp_int.py.
     '''
     cell = mydf.cell
     if kpts is None:

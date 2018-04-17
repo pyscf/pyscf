@@ -15,6 +15,34 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+'''
+PySCF environment variables are defined in this module.
+
+
+Scratch directory
+-----------------
+
+The PySCF scratch directory is specified by :data:`TMPDIR`.  Its default value
+is the same to the system-wide environment variable ``TMPDIR``.  It can be
+overwritten by the environment variable ``PYSCF_TMPDIR``.  Another place to set
+``TMPDIR`` is the global configuration file (see :ref:`global_config`).
+
+
+.. _max_mem:
+
+Maximum memory
+--------------
+
+The variable :data:`MAX_MEMORY` defines the maximum memory that PySCF can be
+used in the calculation.  Its unit is MB.  The default value is 4000 MB.  It can
+be overwritten by the system-wide environment variable ``PYSCF_MAX_MEMORY``.
+``MAX_MEMORY`` can also be set in :ref:`global_config` file.
+
+.. note:: Some calculations may exceed the max_memory limit, especially
+  when the attribute :attr:`Mole.incore_anyway` was set.
+'''
+
+
 from pyscf.data.nist import LIGHT_SPEED, BOHR
 from pyscf.data.elements import ELEMENTS, ELEMENTS_PROTON, NUC
 from pyscf import __config__

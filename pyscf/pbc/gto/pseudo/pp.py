@@ -309,7 +309,13 @@ def cart2polar(rvec):
 
 
 def get_pp(cell, kpt=np.zeros(3), low_dim_ft_type=None):
-    '''Get the periodic pseudotential nuc-el AO matrix
+    '''Get the periodic pseudotential nuc-el AO matrix for a single k point.
+
+    See also the implementations of get_pp in pyscf/pbc/df/fft.py,
+    pyscf/pbc/df/aft.py and pyscf/pbc/gto/pseudo/pp_int.py.
+
+    get_pp in pyscf/pbc/df/fft.py supports the integration of pseudopotential
+    for a list of k-points (thus more efficient for k-point sampling methods).
     '''
     from pyscf.pbc import tools
     coords = cell.get_uniform_grids()
