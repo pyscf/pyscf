@@ -44,6 +44,7 @@ from pyscf import __config__
 
 WITH_META_LOWDIN = getattr(__config__, 'pbc_scf_analyze_with_meta_lowdin', True)
 PRE_ORTH_METHOD = getattr(__config__, 'pbc_scf_analyze_pre_orth_method', 'ANO')
+CHECK_COULOMB_IMAG = getattr(__config__, 'pbc_scf_check_coulomb_imag', True)
 
 
 def get_ovlp(mf, cell=None, kpts=None):
@@ -224,7 +225,7 @@ def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf_kpts=None):
     nkpts = len(dm_kpts)
     e1 = 1./nkpts * np.einsum('kij,kji', dm_kpts, h1e_kpts)
     e_coul = 1./nkpts * np.einsum('kij,kji', dm_kpts, vhf_kpts) * 0.5
-    if abs(e_coul.imag > 1.e-7):
+    if CHECK_COULOMB_IMAG and abs(e_coul.imag > mf.cell.precision*10):
         raise RuntimeError("Coulomb energy has imaginary part %s. "
                            "Coulomb integrals (e-e, e-N) may not converge !" %
                            e_coul.imag)
