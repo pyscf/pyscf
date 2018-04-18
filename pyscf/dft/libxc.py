@@ -402,7 +402,7 @@ XC = XC_CODES = {
 'XC_HYB_MGGA_XC_REVTPSSH'      :  458, # revTPSS hybrid
 'XC_HYB_MGGA_XC_M08_HX'        :  460, # M08-HX functional from Minnesota
 'XC_HYB_MGGA_XC_M08_SO'        :  461, # M08-SO functional from Minnesota
-'XC_HYB_MGGA_XC_M11'           :  462, # M11 functional from Minnesota
+'XC_LDA_X_M11'                 :  462, # M11 functional from Minnesota
 'XC_HYB_MGGA_X_MVSH'           :  474, # MVS hybrid
 'XC_HYB_MGGA_XC_WB97M_V'       :  531, # Mardirossian and Head-Gordon
 #
@@ -413,6 +413,8 @@ XC = XC_CODES = {
 'VWN3'          : 8,
 'VWNRPA'        : 8,
 'VWN5'          : 7,
+'BLYP'          : 'B88,LYP',
+'BP86'          : 'B88,P86',
 'PBE0'          : 406,
 'PBE1PBE'       : 406,
 'B3LYP'         : 'B3LYP5',  # VWN5 version
@@ -433,8 +435,6 @@ XC = XC_CODES = {
 'X3LYP'         : 'X3LYP5',  # VWN5 version
 'X3LYP5'        : '.218*HF + .073*LDA + .478575*B88 + .166615*PW91, .871*LYP + .129*VWN',
 'X3LYPG'        : 411,  # VWN3, used by Gaussian
-'XC_MGGA_X_M06L': 203,
-'XC_MGGA_C_M06L': 233,
 'CAMB3LYP'      : 'XC_HYB_GGA_XC_CAM_B3LYP',
 'CAMYBLYP'      : 'XC_HYB_GGA_XC_CAMY_BLYP',
 'CAMYB3LYP'     : 'XC_HYB_GGA_XC_CAMY_B3LYP',
@@ -446,6 +446,23 @@ XC = XC_CODES = {
 'B1B95'         : 440,
 'TPSS0'         : '.25*HF + .75*TPSS, TPSS',
 }
+
+def _xc_key_without_underscore(xc_keys):
+    new_xc = []
+    for key in xc_keys:
+        if key[:3] == 'XC_':
+            for delimeter in ('_XC_', '_X_', '_C_', '_K_'):
+                if delimeter in key:
+                    key0, key1 = key.split(delimeter)
+                    new_key1 = key1.replace('_', '').replace('-', '')
+                    if key1 != new_key1:
+                        new_xc.append((key0+delimeter+new_key1, XC_CODES[key]))
+                    break
+    return new_xc
+XC_CODES.update(_xc_key_without_underscore(XC_CODES))
+del(_xc_key_without_underscore)
+
+XC_KEYS = set(XC_CODES.keys())
 
 # Some XC functionals have conventional name, like M06-L means M06-L for X
 # functional and M06-L for C functional, PBE mean PBE-X plus PBE-C. If the
@@ -499,8 +516,8 @@ XC_ALIAS = {
     'PBEOP'             : 'PBE,OP_PBE',
     'BOP'               : 'B88,OP_B88',
 }
-
-XC_KEYS = set(XC_CODES.keys())
+XC_ALIAS.update([(key.replace('-',''), XC_ALIAS[key])
+                 for key in XC_ALIAS if '-' in key])
 
 VV10_XC = set(('B97M_V', 'WB97M_V', 'WB97X_V', 'VV10', 'LC_VV10'))
 
@@ -606,7 +623,11 @@ def rsh_coeff(xc_code):
     alpha = c_LR
     beta = c_SR - c_LR
     '''
-    hyb, fn_facs = parse_xc(xc_code)
+    # Parse only X part for the RSH coefficients.  This is to handle
+    # exceptions (for functionals such as M11).
+    x_code = xc_code.split(',')[0]
+    hyb, fn_facs = parse_xc(x_code)
+
     hyb, alpha, omega = hyb
     beta = hyb - alpha
     rsh_pars = [omega, alpha, beta]
@@ -783,7 +804,10 @@ def parse_xc(description):
                             sys.stderr.write('Possible xc_code %s matches %s. '
                                              % (possible_xc, key))
                             x_id = possible_xc.pop()
-                            sys.stderr.write('Take %s\n' % x_id)
+                            sys.stderr.write('XC parser takes %s\n' % x_id)
+                            sys.stderr.write('You can add prefix to %s for a '
+                                             'specific functional. E.g. '
+                                             'MGGA_X_M11\n' % x_id)
                         else:
                             x_id = possible_xc.pop()
                         x_id = XC_CODES[x_id]
@@ -801,6 +825,7 @@ def parse_xc(description):
                 else:
                     fn_facs.append((x_id, fac))
     def possible_x_for(key):
+        key1 = key.replace('_', '')
         return set((key, 'XC_'+key,
                     'XC_LDA_X_'+key, 'XC_GGA_X_'+key, 'XC_MGGA_X_'+key,
                     'XC_HYB_GGA_X_'+key, 'XC_HYB_MGGA_X_'+key))
@@ -829,7 +854,7 @@ def parse_xc(description):
         return list(zip(fn_ids, facs))
 
     description = description.replace(' ','').upper()
-    if ',' not in description and description in XC_ALIAS:
+    if description in XC_ALIAS:
         description = XC_ALIAS[description]
 
     if '-' in description:  # To handle e.g. M06-L

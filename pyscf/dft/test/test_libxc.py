@@ -74,6 +74,12 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(dft.libxc.parse_xc('1, 7')[1], ref)
         self.assertEqual(dft.libxc.parse_xc(7)[1], [(7,1)])
 
+        self.assertEqual(dft.libxc.parse_xc('M11-L')[1], [(226,1),(75,1)])
+        self.assertEqual(dft.libxc.parse_xc('M11L' )[1], [(226,1),(75,1)])
+        self.assertEqual(dft.libxc.parse_xc('M11-L,M11L' )[1], [(226,1),(75,1)])
+        self.assertEqual(dft.libxc.parse_xc('M11_L,M11-L')[1], [(226,1),(75,1)])
+        self.assertEqual(dft.libxc.parse_xc('M11L,M11_L' )[1], [(226,1),(75,1)])
+
         self.assertTrue (dft.libxc.is_meta_gga('m05'))
         self.assertFalse(dft.libxc.is_meta_gga('pbe0'))
         self.assertFalse(dft.libxc.is_meta_gga('tf,'))

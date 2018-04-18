@@ -118,9 +118,10 @@ XC = XC_CODES = {
 'BPW91'         : 'B88 + PW91C',
 'BPW92'         : 'B88 + PW92C',
 'OLYP'          : '2.4832*SLATER - 1.43169*OPTX + LYP',  # CPL, 341, 319
-'KT1'           : '1.006*SLATER - .006*KTX + VWN5',  # JCP, 119, 3015
-'KT2'           : '1.07773*SLATER - .006*KTX + 0.576727*VWN5',  # JCP, 119, 3015
-'KT3'           : '2.021452*SLATER - .004*KTX - .925452*OPTX + .864409*LYP',  # JCP, 121, 5654
+'KT1'           : 'SLATERX - 0.006*KTX',  # Keal-Tozer 1, JCP, 119, 3015
+'KT2XC'         : '1.07173*SLATER - .006*KTX + 0.576727*VWN5',  # Keal-Tozer 2, JCP, 119, 3015
+'KT3XC'         : 'SLATERX*1.092 + KTX*-0.004 + OPTXCORR*-0.925452 + LYPC*0.864409',  # Keal-Tozer 3, JCP, 121, 5654
+# == '2.021452*SLATER - .004*KTX - .925452*OPTX + .864409*LYP',
 'PBE0'          : '.25*HF + .75*PBEX + PBEC',  # Perdew-Burke-Ernzerhof, JCP, 110, 6158
 'PBE1PBE'       : 'PBE0',
 'PBEH'          : 'PBE0',
@@ -136,14 +137,10 @@ XC = XC_CODES = {
 # Range-separated-hybrid functional: (alpha+beta)*SR_HF(0.33) + alpha*LR_HF(0.33)
 'CAMB3LYP'      : '0.19*SR_HF(0.33) + 0.65*LR_HF(0.33) + BECKECAMX + VWN5C*0.19 + LYPC*0.81',
 'CAM_B3LYP'     : 'CAMB3LYP',
-'KT1'           : 'SLATERX - 0.006*KTX + VWN5C',                                     # Keal-Tozer 1
-'KT2'           : 'SLATERX*1.07173 - 0.006*KTX + VWN5C*0.576727',                    # Keal-Tozer 2
-'KT3'           : 'SLATERX*1.092 + KTX*-0.004 + OPTXCORR*-0.925452 + LYPC*0.864409', # Keal-Tozer 3
 'LDAERF'        : 'LDAERFX + LDAERFC',  # Short-range exchange and correlation LDA functional
 'B97XC'         : 'B97X + B97C + HF*0.1943',
 'B97_1XC'       : 'B97_1X + B97_1C + HF*0.21',
 'B97_2XC'       : 'B97_2X + B97_2C + HF*0.21',
-'OLYP'          : 'LYPC + OPTX',  # LYP correlation and OPTX exchange"
 'M05XC'         : '.28*HF + .72*M05X + M05C',
 'TPSSH'         : '0.1*HF + 0.9*TPSSX + TPSSC',
 'TF'            : 'TFK',
@@ -157,9 +154,52 @@ XC = XC_CODES = {
 # shortcut for XC functional.
 XC_ALIAS = {
     # Conventional name : name in XC_CODES
+    'BLYP'              : 'B88,LYP',
+    'BP86'              : 'B88,P86',
+    'PW91'              : 'PW91,PW91',
+    'PBE'               : 'PBE,PBE',
+    'REVPBE'            : 'REVPBE,PBE',
+    'PBESOL'            : 'PBESOL,PBESOL',
+#    'PKZB'              : 'PKZB,PKZB',
+    'TPSS'              : 'TPSS,TPSS',
+    'REVTPSS'           : 'REVTPSS,REVTPSS',
+#    'SCAN'              : 'SCAN,SCAN',
+#    'SOGGA'             : 'SOGGA,PBE',
+    'BLOC'              : 'BLOC,TPSSLOC',
+    'OLYP'              : 'OPTX,LYP',
+    'RPBE'              : 'RPBE,PBE',
+    'BPBE'              : 'B88,PBE',
+#    'MPW91'             : 'MPW91,PW91',
+    'HFLYP'             : 'HF,LYP',
+#    'HFPW92'            : 'HF,PWMOD',
+#    'SPW92'             : 'LDA,PWMOD',
+    'SVWN'              : 'LDA,VWN',
+#    'MS0'               : 'MS0,REGTPSS',
+#    'MS1'               : 'MS1,REGTPSS',
+#    'MS2'               : 'MS2,REGTPSS',
+#    'MS2H'              : 'MS2H,REGTPSS',
+#    'MVS'               : 'MVS,REGTPSS',
+#    'MVSH'              : 'MVSH,REGTPSS',
+#    'SOGGA11'           : 'SOGGA11,SOGGA11',
+#    'SOGGA11-X'         : 'SOGGA11X,SOGGA11X',
+    'KT1'               : 'KT1,VWN',
+#    'DLDF'              : 'DLDF,DLDF',
+#    'GAM'               : 'GAM,GAM',
     'M06-L'             : 'M06L,M06L',
-    'PBE'               : 'PBE,PBE'
+#    'M11-L'             : 'M11L,M11L',
+#    'MN12-L'            : 'MN12L,MN12L',
+#    'MN15-L'            : 'MN15L,MN15L',
+#    'N12'               : 'N12,N12',
+#    'N12-SX'            : 'N12SX,N12SX',
+#    'MN12-SX'           : 'MN12SX,MN12SX',
+#    'MN15'              : 'MN15,MN15',
+#    'MBEEF'             : 'MBEEF,PBESOL',
+#    'SCAN0'             : 'SCAN0,SCAN',
+#    'PBEOP'             : 'PBE,OPPBE',
+#    'BOP'               : 'B88,OPB88',
 }
+XC_ALIAS.update([(key.replace('-',''), XC_ALIAS[key])
+                 for key in XC_ALIAS if '-' in key])
 
 LDA_IDS = set([0, 2, 3, 13, 14, 15, 24, 28, 45])
 GGA_IDS = set([1, 4, 5, 6, 7, 8, 9, 16, 17, 18, 19, 20, 21, 22, 23, 25, 26,
@@ -169,7 +209,8 @@ MGGA_IDS =set([10, 11, 12, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41,
                42, 43, 56, 60, 65])
 HYB_XC = set(('PBE0'    , 'PBE1PBE' , 'B3PW91'  , 'B3P86'   , 'B3LYP'   ,
               'B3PW91G' , 'B3P86G'  , 'B3LYPG'  , 'O3LYP'   , 'CAMB3LYP',
-              'B97XC'   , 'B97_1XC' , 'B97_2XC' , 'M05XC'   , 'TPSSH'   ,))
+              'B97XC'   , 'B97_1XC' , 'B97_2XC' , 'M05XC'   , 'TPSSH'   ,
+              'HFLYP'))
 RSH_XC = set(('CAMB3LYP',))
 MAX_DERIV_ORDER = 3
 
@@ -382,12 +423,8 @@ def parse_xc(description):
         for token in c_code.replace('-', '+-').split('+'):
             parse_token(token, 'C')
     else:
-        try:
-            for token in x_code.replace('-', '+-').split('+'):
-                parse_token(token, 'XC')
-        except KeyError:
-            for token in x_code.replace('-', '+-').split('+'):
-                parse_token(token, 'X')
+        for token in x_code.replace('-', '+-').split('+'):
+            parse_token(token, 'XC')
     return hyb, remove_dup(fn_facs)
 
 _NAME_WITH_DASH = {'SR-HF'  : 'SR_HF',
