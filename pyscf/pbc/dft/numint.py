@@ -995,9 +995,12 @@ class _NumInt(numint._NumInt):
                    kpts_band=None, max_memory=2000, non0tab=None, blksize=None):
         '''Define this macro to loop over grids by blocks.
         '''
-        if grids.coords is None:
+# For UniformGrids, grids.coords does not indicate whehter grids are initialized
+        if grids.non0tab is None:
             grids.build(with_non0tab=True)
-        ngrids = grids.coords.shape[0]
+        grids_coords = grids.coords
+        grids_weights = grids.weights
+        ngrids = grids_coords.shape[0]
         comp = (deriv+1)*(deriv+2)*(deriv+3)//6
 # NOTE to index grids.non0tab, the blksize needs to be the integer multiplier of BLKSIZE
         if blksize is None:
@@ -1018,8 +1021,8 @@ class _NumInt(numint._NumInt):
 
         for ip0 in range(0, ngrids, blksize):
             ip1 = min(ngrids, ip0+blksize)
-            coords = grids.coords[ip0:ip1]
-            weight = grids.weights[ip0:ip1]
+            coords = grids_coords[ip0:ip1]
+            weight = grids_weights[ip0:ip1]
             non0 = non0tab[ip0//BLKSIZE:]
             ao_k2 = self.eval_ao(cell, coords, kpt2, deriv=deriv, non0tab=non0)
             if abs(kpt1-kpt2).sum() < 1e-9:
@@ -1161,7 +1164,9 @@ class _KNumInt(numint._NumInt):
         '''
         if grids.coords is None:
             grids.build(with_non0tab=True)
-        ngrids = grids.coords.shape[0]
+        grids_coords = grids.coords
+        grids_weights = grids.weights
+        ngrids = grids_coords.shape[0]
         nkpts = len(kpts)
         comp = (deriv+1)*(deriv+2)*(deriv+3)//6
 # NOTE to index grids.non0tab, the blksize needs to be the integer multiplier of BLKSIZE
@@ -1181,8 +1186,8 @@ class _KNumInt(numint._NumInt):
 
         for ip0 in range(0, ngrids, blksize):
             ip1 = min(ngrids, ip0+blksize)
-            coords = grids.coords[ip0:ip1]
-            weight = grids.weights[ip0:ip1]
+            coords = grids_coords[ip0:ip1]
+            weight = grids_weights[ip0:ip1]
             non0 = non0tab[ip0//BLKSIZE:]
             ao_k1 = ao_k2 = self.eval_ao(cell, coords, kpts, deriv=deriv, non0tab=non0)
             if kpts_band is not None:
