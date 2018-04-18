@@ -211,8 +211,7 @@ def as_scanner(grad_mp):
     logger.info(grad_mp, 'Set nuclear gradients of %s as a scanner', grad_mp.__class__)
     class MP2_GradScanner(grad_mp.__class__, lib.GradScanner):
         def __init__(self, g):
-            self.__dict__.update(g.__dict__)
-            self.base = grad_mp.base.as_scanner()
+            lib.GradScanner.__init__(self, g)
         def __call__(self, mol, **kwargs):
             mp_scanner = self.base
             mp_scanner(mol, with_t2=True)

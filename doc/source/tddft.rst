@@ -1,23 +1,17 @@
 tddft --- Time dependent density functional theory
 **************************************************
 
-.. automodule:: pyscf.tddft
+.. automodule:: pyscf.tdscf
 
 TDHF
 ====
 
-.. automodule:: pyscf.tddft.rhf
-   :members:
-
-.. automodule:: pyscf.tddft.rhf_grad
+.. automodule:: pyscf.tdscf.rhf
    :members:
 
 
 TDDFT
 =====
 
-.. automodule:: pyscf.tddft.rks
-   :members:
-
-.. automodule:: pyscf.tddft.rks_grad
+.. automodule:: pyscf.tdscf.rks
    :members:

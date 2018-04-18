@@ -205,17 +205,13 @@ def as_scanner(mcscf_grad):
     logger.info(mcscf_grad, 'Create scanner for %s', mcscf_grad.__class__)
     class CASCI_GradScanner(mcscf_grad.__class__, lib.GradScanner):
         def __init__(self, g):
-            self.__dict__.update(g.__dict__)
-            self.base = g.base.as_scanner()
+            lib.GradScanner.__init__(self, g)
         def __call__(self, mol, **kwargs):
             mc_scanner = self.base
             e_tot = mc_scanner(mol)
             self.mol = mol
             de = self.kernel(**kwargs)
             return e_tot, de
-        @property
-        def converged(self):
-            return self.base.converged
     return CASCI_GradScanner(mcscf_grad)
 
 

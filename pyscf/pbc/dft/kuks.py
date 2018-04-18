@@ -47,7 +47,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     # ndim = 4 : dm.shape = ([alpha,beta], nkpts, nao, nao)
     ground_state = (dm.ndim == 4 and dm.shape[0] == 2 and kpts_band is None)
 
-    if ks.grids.coords is None:
+    if ks.grids.non0tab is None:
         ks.grids.build(with_non0tab=True)
         if ks.small_rho_cutoff > 1e-20 and ground_state:
             ks.grids = rks.prune_small_rho_grids_(ks, cell, dm[0]+dm[1],

@@ -3,8 +3,6 @@
 Installation
 ************
 
-We provide three ways to install PySCF package.
-
 Installation with pip
 =====================
 
@@ -14,6 +12,9 @@ This is the recommended way to install PySCF::
 
 Pypi provides a precompiled PySCF code (python wheel) which works on almost all
 Linux systems, and most of Mac OS X systems, and the ubuntu subsystems on Windows 10.
+If you already have pyscf installed, you can upgrade it to the new version::
+
+  $ pip install --upgrade pyscf
 
 Note we observed that our precompiled python wheels sometimes does not work with
 certain version of Python (python-3.4 and python-3.5).  If you're using mac OS X
@@ -45,6 +46,22 @@ If you have `Conda <https://conda.io/docs/>`_
 environment, PySCF package can be installed through Conda cloud::
 
   $ conda install -c pyscf pyscf
+
+
+PySCF docker image
+==================
+
+The following command starts a container with the jupyter notebook server
+listening for HTTP connections on port 8888::
+
+  $ docker run -it -p 8888:8888 pyscf/pyscf-1.5b
+
+Then visit ``https://localhost:8888`` with your browser to use notebook and
+pyscf.
+
+Another way to use PySCF in docker container is to start an Ipython shell::
+
+  $ docker run -it pyscf/pyscf-1.5b start.sh ipython
 
 
 Manual installation from github repo
@@ -80,6 +97,30 @@ the :code:`pyscf/pyscf` subdirectory) to :code:`PYTHONPATH`.  For example, if
 To ensure the installation is successful, start a Python shell, and type::
 
   >>> import pyscf
+
+For Mac OS X/macOS, you may get an import error if your OS X/macOS version is
+10.11 or newer::
+
+    OSError: dlopen(xxx/pyscf/pyscf/lib/libcgto.dylib, 6): Library not loaded: libcint.3.0.dylib
+    Referenced from: xxx/pyscf/pyscf/lib/libcgto.dylib
+    Reason: unsafe use of relative rpath libcint.3.0.dylib in xxx/pyscf/pyscf/lib/libcgto.dylib with restricted binary
+
+This is caused by the incorrect RPATH.  Script
+``pyscf/lib/_runme_to_fix_dylib_osx10.11.sh`` in ``pyscf/lib`` directory can be
+used to fix this problem::
+ 
+    cd pyscf/lib
+    sh _runme_to_fix_dylib_osx10.11.sh
+
+
+.. note::
+
+  RPATH has been built in the dynamic library.  This may cause library loading
+  error on some systems.  You can run ``pyscf/lib/_runme_to_remove_rpath.sh`` to
+  remove the rpath code from the library head.  Another workaround is to set
+  ``-DCMAKE_SKIP_RPATH=1`` and ``-DCMAKE_MACOSX_RPATH=0`` in cmake command line.
+  When the RPATH was removed, you need to add ``pyscf/lib`` and
+  ``pyscf/lib/deps/lib`` in ``LD_LIBRARY_PATH``.
 
 Last, it's recommended to set a scratch directory for PySCF.  The default scratch
 directory is controlled by environment variable :code:`PYSCF_TMPDIR`.  If it's
@@ -249,6 +290,7 @@ Barbry and Peter Koval.  You can enable this module with a cmake flag::
 
 More information of the compilation can be found in :file:`pyscf/lib/nao/README.md`.
 
+
 DMRG solver
 -----------
 Density matrix renormalization group (DMRG) implementations Block
@@ -259,9 +301,20 @@ are efficient DMRG solvers for ab initio quantum chemistry problem.
 C++11 compiler.  If C++11 is not supported by your compiler, you can
 register and download the precompiled Block binary from
 http://chemists.princeton.edu/chan/software/block-code-for-dmrg.
-Before using the Block or CheMPS2, you need create a config file
-future/dmrgscf/settings.py  (as shown by settings.py.example) to store
+Before using the Block or CheMPS2, you need create a configuration file
+``pyscf/dmrgscf/settings.py``  (as shown by settings.py.example) to store
 the path where the DMRG solver was installed.
+
+
+Heat-bath Selected CI
+---------------------
+`Dice <https://sanshar.github.io/Dice/>`_ is an efficient implementation for
+heat-bath selected CI (SHCI) algorithm.  It can be used with the CASCI and
+CASSCF module to solve large active space problems.  The method to use SHCI
+is very much like the use of DMRG program.  The path of Dice program and other
+configurations should be initialized in the configuration file
+``pyscf/shci/settings.py`` before using the SHCI method.
+
 
 FCIQMC
 ------
@@ -270,11 +323,13 @@ George Booth and Ali Alavi.  PySCF has an interface to call FCIQMC
 solver NECI.  To use NECI, you need create a config file
 future/fciqmc/settings.py to store the path where NECI was installed.
 
+
 Libxc
 -----
 By default, building PySCF will automatically download and install
 `Libxc 3.0.0 <http://www.tddft.org/programs/octopus/wiki/index.php/Libxc:download>`_.
 :mod:`pyscf.dft.libxc` module provided a general interface to access Libxc functionals.
+
 
 Xcfun
 -----
@@ -282,6 +337,32 @@ By default, building PySCF will automatically download and install
 latest xcfun code from https://github.com/dftlibs/xcfun.
 :mod:`pyscf.dft.xcfun` module provided a general interface to access Libxc
 functionals.
+
+
+TBLIS
+-----
+`TBLIS <https://github.com/devinamatthews/tblis>`_ provides a native algorithm
+to perform tensor contraction for arbitrary high dimensional tensors. The native
+algorithm does not need to translate the tensors into matrices and call the BLAS
+libraries for the matrix contraction.  Tensor transposing and data moving are
+largely avoided in TBLIS tensor library.  The interface to TBLIS offers an
+efficient implementation for :func:`numpy.einsum` style tensor contraction.
+
+
+Pyberny
+-------
+The geometry optimizer `Pyberny <https://github.com/azag0/pyberny>`_ provides an
+independent implementation that supports various geometry optimization
+techniques (comprising redundant internal coordinates, iterative Hessian
+estimate, trust region, line search, and coordinate weighing etc.).  It can take
+the output of PySCF Gradients :ref:`scanner` and generate new geometry to feed
+back to PySCF program.  The geometry optimization :mod:`geomopt` exposes a
+wrapper function to simplify the geometry optimization setup::
+
+  from pyscf import gto, scf, geomopt
+  mf = gto.M(atom='H 0 0 0; H 0 0 1.').apply(scf.RHF)
+  mol_eq = geomopt.optimize(mf)
+
 
 XianCI
 ------

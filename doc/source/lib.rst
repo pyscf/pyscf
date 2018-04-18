@@ -1,68 +1,60 @@
-lib --- Helper functions, parameters, and C extensions
-******************************************************
+:mod:`lib` --- Helper functions, parameters, and C extensions
+*************************************************************
 
-.. automodule:: pyscf.lib
+.. module:: lib
+   :synopsis: Helper functions, parameters, and C extensions.
  
 
-parameters
-==========
+:mod:`lib.parameters`
+=====================
 
-Some PySCF environment parameters are defined in this module.
-
-Scratch directory
------------------
-
-The PySCF scratch directory is specified by :data:`TMPDIR`.  Its default value
-is the same to the system environment variable ``TMPDIR``.  It can be
-overwritten by the system environment variable ``PYSCF_TMPDIR``.
+.. automodule:: lib.parameters
 
 
-.. _max_mem:
+:mod:`lib.logger`
+=================
 
-Maximum memory
---------------
+.. automodule:: lib.logger
 
-The variable :data:`MAX_MEMORY` defines the maximum memory that PySCF can be
-used in the calculation.  Its unit is MB.  The default value is 4000 MB.  It can
-be overwritten by the system environment variable ``PYSCF_MAX_MEMORY``.
+Logger object
+-------------
+.. autoclass:: lib.logger.Logger
 
-.. note:: Some calculations may exceed the max_memory limit, especially
-  when the attribute :attr:`Mole.incore_anyway` was set.
+.. autofunction:: lib.logger.new_logger
 
-.. automodule:: pyscf.lib.parameters
+
+numpy extensions
+================
+
+.. automodule:: lib.numpy_helper
    :members:
 
 
-logger
-======
+scipy extensions
+================
 
-.. automodule:: pyscf.lib.logger
+.. automodule:: lib.linalg_helper
    :members:
 
 
-numpy helper
-============
+:mod:`lib.chkfile`
+==================
 
-.. automodule:: pyscf.lib.numpy_helper
-   :members:
+Chkfile is a HDF5 file.
 
-.. automodule:: pyscf.lib.linalg_helper
-   :members:
+Functions to access key/value in chkfile
+----------------------------------------
 
-
-chkfile
-=======
-
-.. automodule:: pyscf.lib.chkfile
-   :members:
+.. automodule:: lib.chkfile
+   :members: save, load, save_mol, load_mol
 
 
-Fast load
----------
+Quickly loading object from chkfile
+-----------------------------------
 
 The results of SCF and MCSCF methods are saved as a Python dictionary in
 the chkfile.  One can fast load the results and update the SCF and MCSCF
-objects using the python built in methods ``.__dict__.update``, eg::
+objects using the python built in methods ``.__dict__.update``, e.g.::
 
     from pyscf import gto, scf, mcscf, lib
     mol = gto.M(atom='N 0 0 0; N 1 1 1', basis='ccpvdz')
@@ -77,3 +69,34 @@ objects using the python built in methods ``.__dict__.update``, eg::
     mc = mcscf.CASCI(mf, 6, 6)
     mc.__dict__.update(lib.chkfile.load('n2.chk', 'mcscf'))
     mc.kernel()
+
+
+Other helper functions
+======================
+
+Background mode
+---------------
+.. autofunction:: lib.call_in_background
+
+
+Temporary HDF5 file
+-------------------
+.. autoclass:: lib.H5TmpFile
+
+
+OpenMP threads
+--------------
+.. autofunction:: lib.num_threads
+
+.. autoclass:: lib.with_omp_threads
+
+
+Capture stdout
+--------------
+.. autoclass:: lib.capture_stdout
+
+
+Other helper functions in :mod:`lib.misc`
+-----------------------------------------
+.. automodule:: lib.misc
+  :members: flatten

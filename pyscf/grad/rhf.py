@@ -151,17 +151,13 @@ def as_scanner(mf_grad):
     logger.info(mf_grad, 'Create scanner for %s', mf_grad.__class__)
     class SCF_GradScanner(mf_grad.__class__, lib.GradScanner):
         def __init__(self, g):
-            self.__dict__.update(g.__dict__)
-            self.base = g.base.as_scanner()
+            lib.GradScanner.__init__(self, g)
         def __call__(self, mol, **kwargs):
             mf_scanner = self.base
             e_tot = mf_scanner(mol)
             self.mol = mol
             de = self.kernel(**kwargs)
             return e_tot, de
-        @property
-        def converged(self):
-            return self.base.converged
     return SCF_GradScanner(mf_grad)
 
 

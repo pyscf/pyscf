@@ -21,6 +21,7 @@
 import time
 import copy
 import numpy
+import scipy.misc
 from pyscf import lib
 from pyscf import gto
 from pyscf.lib import logger
@@ -59,8 +60,10 @@ def estimate_eta_for_ke_cutoff(cell, ke_cutoff, precision=PRECISION):
         w = numpy.linalg.norm(numpy.cross(b[0], b[1])) / (2*numpy.pi)**2
     else:
         w = abs(numpy.linalg.det(b)) / (2*numpy.pi)**3
-    alpha = 20
-    eta = ke_cutoff / (2*numpy.log(32*numpy.pi**2*w*ke_cutoff**2/(precision*alpha)))
+    lmax = min(3, numpy.max(cell._bas[:,gto.ANG_OF]))
+    fac = scipy.misc.factorial2(lmax*2+1)
+    eta = ke_cutoff / ((4+2*lmax)*numpy.log(2*ke_cutoff) -
+                       2*numpy.log(3*fac*precision/(32*numpy.pi**2*w)))
     return eta
 
 def estimate_ke_cutoff_for_eta(cell, eta, precision=PRECISION):
@@ -73,8 +76,9 @@ def estimate_ke_cutoff_for_eta(cell, eta, precision=PRECISION):
         w = numpy.linalg.norm(numpy.cross(b[0], b[1])) / (2*numpy.pi)**2
     else:
         w = abs(numpy.linalg.det(b)) / (2*numpy.pi)**3
-    alpha = 20
-    Ecut = 2 * eta * (8 - numpy.log(precision*alpha/(8*numpy.pi**2*w*eta)))
+    lmax = min(3, numpy.max(cell._bas[:,gto.ANG_OF]))
+    fac = scipy.misc.factorial2(lmax*2+1)
+    Ecut = 2 * eta * (8+4*lmax - numpy.log(3*fac*precision*(4*eta)**lmax/(32*numpy.pi**2*w)))
     return Ecut
 
 def get_nuc(mydf, kpts=None):

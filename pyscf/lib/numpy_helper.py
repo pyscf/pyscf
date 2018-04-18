@@ -17,14 +17,15 @@
 #
 
 '''
-Extension to numpy module
+Extension to numpy and scipy
 '''
 
 import string
 import ctypes
-import numpy
 import math
 import re
+import numpy
+import scipy.linalg
 from pyscf.lib import misc
 
 try:
@@ -388,7 +389,9 @@ def hermi_triu(mat, hermi=HERMITIAN, inplace=True):
 
 LINEAR_DEP_THRESHOLD = 1e-10
 def solve_lineq_by_SVD(a, b):
-    ''' a * x = b '''
+    '''Solving a * x = b.  If a is a singular matrix, its small SVD values are
+    neglected.
+    '''
     t, w, vH = numpy.linalg.svd(a)
     idx = []
     for i,wi in enumerate(w):
@@ -403,7 +406,7 @@ def solve_lineq_by_SVD(a, b):
     return x
 
 def take_2d(a, idx, idy, out=None):
-    '''a(idx,idy)
+    '''Equivalent to a[idx[:,None],idy] for a 2D array.
 
     Examples:
 
@@ -429,7 +432,8 @@ def take_2d(a, idx, idy, out=None):
     return out
 
 def takebak_2d(out, a, idx, idy):
-    '''Reverse operation of take_2d.  out(idx,idy) += a
+    '''Reverse operation of take_2d.  Equivalent to out[idx[:,None],idy] += a
+    for a 2D array.
 
     Examples:
 
@@ -456,7 +460,7 @@ def takebak_2d(out, a, idx, idy):
     return out
 
 def transpose(a, axes=None, inplace=False, out=None):
-    '''Transpose array for better memory efficiency
+    '''Transposing an array with better memory efficiency
 
     Examples:
 
@@ -518,7 +522,7 @@ def transpose(a, axes=None, inplace=False, out=None):
     return out
 
 def transpose_sum(a, inplace=False, out=None):
-    '''a + a.T for better memory efficiency
+    '''Computing a + a.T with better memory efficiency
 
     Examples:
 
@@ -529,7 +533,7 @@ def transpose_sum(a, inplace=False, out=None):
     return hermi_sum(a, inplace=inplace, out=out)
 
 def hermi_sum(a, axes=None, hermi=HERMITIAN, inplace=False, out=None):
-    '''a + a.T for better memory efficiency
+    '''Computing a + a.T.conj() with better memory efficiency
 
     Examples:
 
@@ -614,8 +618,7 @@ def ddot(a, b, alpha=1, c=None, beta=0):
     return _dgemm(trans_a, trans_b, m, n, k, a, b, c, alpha, beta)
 
 def zdot(a, b, alpha=1, c=None, beta=0):
-    '''Matrix-matrix multiplication for double complex arrays using Gauss's
-    complex multiplication algorithm
+    '''Matrix-matrix multiplication for double complex arrays
     '''
     m = a.shape[0]
     k = a.shape[1]
@@ -672,6 +675,7 @@ def dot(a, b, alpha=1, c=None, beta=0):
         ab = cr + ci*1j
 
     elif atype == numpy.complex128 and btype == numpy.complex128:
+        # Gauss's complex multiplication algorithm may affect numerical stability
         #k1 = ddot(a.real+a.imag, b.real.copy(), alpha)
         #k2 = ddot(a.real.copy(), b.imag-b.real, alpha)
         #k3 = ddot(a.imag.copy(), b.real+b.imag, alpha)
@@ -747,14 +751,9 @@ def _zgemm(trans_a, trans_b, m, n, k, a, b, c, alpha=1, beta=0,
                        (ctypes.c_double*2)(beta.real, beta.imag))
     return c
 
-def prange(start, end, step):
-    if start < end:
-        for i in range(start, end, step):
-            yield i, min(i+step, end)
-
 def asarray(a, dtype=None, order=None):
     '''Convert a list of N-dim arrays to a (N+1) dim array.  It is equivalent to
-    numpy.asarray function but more efficient.
+    numpy.asarray function.
     '''
     try:
         a0_shape = numpy.shape(a[0])
@@ -935,6 +934,7 @@ def condense(opname, a, locs):
     return out
 
 def expm(a):
+    '''Equivalent to scipy.linalg.expm'''
     bs = [a.copy()]
     n = 0
     for n in range(1, 14):
@@ -958,8 +958,25 @@ def expm(a):
 
 
 class NPArrayWithTag(numpy.ndarray):
-    pass
+    # Initialize kwargs in function tag_array
+    #def __new__(cls, a, **kwargs):
+    #    obj = numpy.asarray(a).view(cls)
+    #    obj.__dict__.update(kwargs)
+    #    return obj
+# Customize __reduce__ and __setstate__ to keep tags after serialization
+# pickle.loads(pickle.dumps(tagarray)).  This is needed by mpi communication
+    def __reduce__(self):
+        pickled = numpy.ndarray.__reduce__(self)
+        state = pickled[2] + (self.__dict__,)
+        return (pickled[0], pickled[1], state)
+    def __setstate__(self, state):
+        numpy.ndarray.__setstate__(self, state[0:-1])
+        self.__dict__.update(state[-1])
+
 def tag_array(a, **kwargs):
+    '''Attach attributes to numpy ndarray. The attribute name and value are
+    obtained from the keyword arguments.
+    '''
     # Do not check isinstance(a, xxx) here since a may be the object of a
     # derived class of the immutable class (list, tuple, ndarray), which
     # allows to update attributes dynamically.

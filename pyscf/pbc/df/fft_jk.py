@@ -167,11 +167,11 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
 
         for k1, ao1T in enumerate(ao1_kpts):
             kpt1 = kpts_band[k1]
-            mydf.exxdiv = exxdiv
 
             # If we have an ewald exxdiv, we add the G=0 correction near the
             # end of the function to bypass any discretization errors
             # that arise from the FFT.
+            mydf.exxdiv = exxdiv
             if exxdiv == 'ewald' or exxdiv is None:
                 coulG = tools.get_coulG(cell, kpt2-kpt1, False, mydf, mesh,
                                         low_dim_ft_type=low_dim_ft_type)

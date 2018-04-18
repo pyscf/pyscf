@@ -237,7 +237,7 @@ class FFTDF(lib.StreamObject):
             cell = self.cell
         else:
             cell = grids.cell
-        if grids.coords is None:
+        if grids.non0tab is None:
             grids.build(with_non0tab=True)
 
         if kpts is None: kpts = self.kpts
