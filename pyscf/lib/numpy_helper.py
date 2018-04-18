@@ -958,7 +958,21 @@ def expm(a):
 
 
 class NPArrayWithTag(numpy.ndarray):
-    pass
+    # Initialize kwargs in function tag_array
+    #def __new__(cls, a, **kwargs):
+    #    obj = numpy.asarray(a).view(cls)
+    #    obj.__dict__.update(kwargs)
+    #    return obj
+# Customize __reduce__ and __setstate__ to keep tags after serialization
+# pickle.loads(pickle.dumps(tagarray)).  This is needed by mpi communication
+    def __reduce__(self):
+        pickled = numpy.ndarray.__reduce__(self)
+        state = pickled[2] + (self.__dict__,)
+        return (pickled[0], pickled[1], state)
+    def __setstate__(self, state):
+        numpy.ndarray.__setstate__(self, state[0:-1])
+        self.__dict__.update(state[-1])
+
 def tag_array(a, **kwargs):
     '''Attach attributes to numpy ndarray. The attribute name and value are
     obtained from the keyword arguments.
