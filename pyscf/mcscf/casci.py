@@ -285,7 +285,7 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
         max_memory = max(400, mc.max_memory-lib.current_memory()[0])
         e, fcivec = mc.fcisolver.kernel(h1eff, aaaa, ncas, nelecas, ecore=ecore,
                                         max_memory=max_memory, verbose=log)
-        log.debug('In Natural orbital, CASCI energy = %.12g', e)
+        log.debug('In Natural orbital, CASCI energy = %s', e)
 
     if log.verbose >= logger.INFO:
         ovlp_ao = mc._scf.get_ovlp()
