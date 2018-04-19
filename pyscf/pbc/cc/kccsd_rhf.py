@@ -77,13 +77,14 @@ def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
         normt = numpy.linalg.norm(t1new-t1) + numpy.linalg.norm(t2new-t2)
         if cc.iterative_damping < 1.0:
             alpha = cc.iterative_damping
-            t1, t2 = (1-alpha)*t1 + alpha*t1new, (1-alpha)*t2 + alpha*t2new
-        else:
-            t1, t2 = t1new, t2new
+            t1new = (1-alpha) * t1 + alpha * t1new
+            t2new *= alpha
+            t2new += (1-alpha) * t2
+        t1, t2 = t1new, t2new
         t1new = t2new = None
         if cc.diis:
             t1, t2 = cc.diis(t1, t2, istep, normt, eccsd-eold, adiis)
-        eold, eccsd = eccsd, energy(cc, t1, t2, eris)
+        eold, eccsd = eccsd, cc.energy(t1, t2, eris)
         log.info('cycle = %d  E(KCCSD) = %.15g  dE = %.9g  norm(t1,t2) = %.6g',
                  istep, eccsd, eccsd - eold, normt)
         cput1 = log.timer('KCCSD iter', *cput1)
