@@ -95,7 +95,7 @@ def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
 
 
 def update_amps(cc, t1, t2, eris):
-    time0 = time.clock(), time.time()
+    time0 = time1 = time.clock(), time.time()
     log = logger.Logger(cc.stdout, cc.verbose)
     nkpts, nocc, nvir = t1.shape
     fock = eris.fock
@@ -112,17 +112,17 @@ def update_amps(cc, t1, t2, eris):
     Loo = imdk.Loo(t1,t2,eris,kconserv)
     Lvv = imdk.Lvv(t1,t2,eris,kconserv)
 
-    t1new = np.array(fov).astype(t1.dtype).conj()
-    t2new = np.array(eris.oovv).conj()
-
     # Move energy terms to the other side
     for k in range(nkpts):
         Foo[k] -= np.diag(np.diag(foo[k]))
         Fvv[k] -= np.diag(np.diag(fvv[k]))
         Loo[k] -= np.diag(np.diag(foo[k]))
         Lvv[k] -= np.diag(np.diag(fvv[k]))
+    time1 = log.timer_debug1('intermediates', *time1)
 
     # T1 equation
+    t1new = np.array(fov).astype(t1.dtype).conj()
+
     for ka in range(nkpts):
         ki = ka
         # kc == ki; kk == ka
@@ -159,16 +159,21 @@ def update_amps(cc, t1, t2, eris):
                 if kk == ka and kl == kc:
                     tau_term_1 += einsum('ka,lc->klac',t1[ka],t1[kc])
                 t1new[ka] += -einsum('klic,klac->ia',Sooov,tau_term_1)
+    time1 = log.timer_debug1('t1', *time1)
+
+    # T2 equation
+    t2new = np.empty_like(t2)
+    for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
+        t2new[ki,kj,ka] = eris.oovv[ki,kj,ka].conj()
 
     mem_now = lib.current_memory()[0]
     if (nocc**4*nkpts**3)*16/1e6 + mem_now < cc.max_memory*.9:
         Woooo = imdk.cc_Woooo(t1, t2, eris, kconserv)
     else:
         fimd = lib.H5TmpFile()
-        Woooo = fimd.create_dataset('vvvv', (nkpts,nkpts,nkpts,nvir,nvir,nvir,nvir), t1.dtype.char)
+        Woooo = fimd.create_dataset('oooo', (nkpts,nkpts,nkpts,nocc,nocc,nocc,nocc), t1.dtype.char)
         Woooo = imdk.cc_Woooo(t1, t2, eris, kconserv, Woooo)
 
-    # T2 equation
     for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
         # Chemist's notation for momentum conserving t2(ki,kj,ka,kb)
         kb = kconserv[ki,ka,kj]
@@ -184,6 +189,7 @@ def update_amps(cc, t1, t2, eris):
         t2new[kj,ki,kb] += t2new_tmp.transpose(1,0,3,2)
     Woooo = None
     fimd = None
+    time1 = log.timer_debug1('t2 oooo', *time1)
 
     mem_now = lib.current_memory()[0]
     if (nvir**4*nkpts**3)*16/1e6 + mem_now < cc.max_memory*.9:
@@ -220,6 +226,7 @@ def update_amps(cc, t1, t2, eris):
         t2new[kj,ki,kb] += t2new_tmp.transpose(1,0,3,2)
     Wvvvv = None
     fimd = None
+    time1 = log.timer_debug1('t2 vvvv', *time1)
 
     mem_now = lib.current_memory()[0]
     if (nocc**2*nvir**2*nkpts**3)*16/1e6*2 + mem_now < cc.max_memory*.9:
@@ -250,12 +257,12 @@ def update_amps(cc, t1, t2, eris):
         t2new[kj,ki,kb] += t2new_tmp.transpose(1,0,3,2)
     Wvoov = Wvovo = None
     fimd = None
+    time1 = log.timer_debug1('t2 voov', *time1)
 
     for ki in range(nkpts):
         eia = foo[ki].diagonal()[:,None] - fvv[ki].diagonal()
         # When padding the occupied/virtual arrays, some fock elements will be zero
-        idx = numpy.where(abs(eia) < LOOSE_ZERO_TOL)[0]
-        eia[idx] = LARGE_DENOM
+        eia[abs(eia) < LOOSE_ZERO_TOL] = LARGE_DENOM
         t1new[ki] /= eia
 
     for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
@@ -264,8 +271,7 @@ def update_amps(cc, t1, t2, eris):
         ejb = np.diagonal(foo[kj]).reshape(-1,1) - np.diagonal(fvv[kb])
         eijab = eia[:,None,:,None] + ejb[:,None,:]
         # Due to padding; see above discussion concerning t1new in update_amps()
-        idx = numpy.where(abs(eijab) < LOOSE_ZERO_TOL)[0]
-        eijab[idx] = LARGE_DENOM
+        eijab[abs(eijab) < LOOSE_ZERO_TOL] = LARGE_DENOM
 
         t2new[ki,kj,ka] /= eijab
 
@@ -339,31 +345,40 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         nvir = self.nmo - nocc
         nkpts = self.nkpts
         t1 = numpy.zeros((nkpts,nocc,nvir), dtype=eris.fock.dtype)
-        t2 = numpy.zeros((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=eris.fock.dtype)
-        woovv = numpy.empty((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=eris.fock.dtype)
-        self.emp2 = 0
+        t2 = numpy.empty((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=eris.fock.dtype)
         foo = eris.fock[:,:nocc,:nocc].copy()
         fvv = eris.fock[:,nocc:,nocc:].copy()
-        eris_oovv = np.array(eris.oovv).copy()
-        eia = numpy.zeros((nocc,nvir))
-        eijab = numpy.zeros((nocc,nocc,nvir,nvir))
 
+        emp2 = 0
         kconserv = self.khelper.kconserv
+        touched = numpy.zeros((nkpts,nkpts,nkpts), dtype=bool)
         for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
+            if touched[ki,kj,ka]:
+                continue
+
             kb = kconserv[ki,ka,kj]
-            eia = foo[ki].diagonal()[:, None] - fvv[ka].diagonal()[None, :]
-            ejb = foo[kj].diagonal()[:, None] - fvv[kb].diagonal()[None, :]
-            eijab = lib.direct_sum('ia,jb->ijab',eia,ejb)
+            eia = foo[ki].diagonal().real[:, None] - fvv[ka].diagonal().real
+            ejb = foo[kj].diagonal().real[:, None] - fvv[kb].diagonal().real
+            eijab = lib.direct_sum('ia,jb->ijab', eia, ejb)
             # Due to padding; see above discussion concerning t1new in update_amps()
-            idx = numpy.where(abs(eijab) < LOOSE_ZERO_TOL)[0]
+            idx = abs(eijab) < LOOSE_ZERO_TOL
             eijab[idx] = LARGE_DENOM
 
-            woovv[ki,kj,ka] = (2*eris_oovv[ki,kj,ka] - eris_oovv[ki,kj,kb].transpose(0,1,3,2))
-            t2[ki,kj,ka] = eris_oovv[ki,kj,ka] / eijab
+            eris_ijab = eris.oovv[ki,kj,ka]
+            eris_ijba = eris.oovv[ki,kj,kb]
+            t2[ki,kj,ka] = eris_ijab.conj() / eijab
+            woovv = 2*eris_ijab - eris_ijba.transpose(0,1,3,2)
+            emp2 += numpy.einsum('ijab,ijab', t2[ki,kj,ka], woovv)
 
-        t2 = numpy.conj(t2)
-        self.emp2 = numpy.einsum('pqrijab,pqrijab',t2,woovv).real
-        self.emp2 /= nkpts
+            if ka != kb:
+                eijba = eijab.transpose(0,1,3,2)
+                t2[ki,kj,kb] = eris_ijba.conj() / eijba
+                woovv = 2*eris_ijba - eris_ijab.transpose(0,1,3,2)
+                emp2 += numpy.einsum('ijab,ijab', t2[ki,kj,kb], woovv)
+
+            touched[ki,kj,ka] = touched[ki,kj,kb] = True
+
+        self.emp2 = emp2.real / nkpts
         logger.info(self, 'Init t2, MP2 energy = %.15g', self.emp2)
         logger.timer(self, 'init mp2', *time0)
         return self.emp2, t1, t2
@@ -971,8 +986,11 @@ class _ERIS:#(pyscf.cc.ccsd._ChemistsERIs):
         self.fock = numpy.asarray([reduce(numpy.dot, (mo_coeff[k].T.conj(), fockao[k], mo_coeff[k])) for k, mo in enumerate(mo_coeff)])
 
         for kp in range(nkpts):
-            mo_e = self.fock[kp].diagonal()
-            gap = abs(mo_e[:nocc,None] - mo_e[None,nocc:]).min()
+            mo_e = self.fock[kp].diagonal().real
+            kpt_padded_moidx = padded_moidx[kp]
+            oidx = kpt_padded_moidx[:nocc]
+            vidx = kpt_padded_moidx[nocc:]
+            gap = abs(mo_e[:nocc][oidx][:,None] - mo_e[nocc:][vidx]).min()
             if gap < 1e-5:
                 logger.warn(cc, 'HOMO-LUMO gap %s too small for KCCSD at '
                             'k-point %d %s', gap, kp, cc.kpts[kp])

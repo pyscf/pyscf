@@ -402,7 +402,7 @@ XC = XC_CODES = {
 'XC_HYB_MGGA_XC_REVTPSSH'      :  458, # revTPSS hybrid
 'XC_HYB_MGGA_XC_M08_HX'        :  460, # M08-HX functional from Minnesota
 'XC_HYB_MGGA_XC_M08_SO'        :  461, # M08-SO functional from Minnesota
-'XC_LDA_X_M11'                 :  462, # M11 functional from Minnesota
+'XC_HYB_MGGA_XC_M11'           :  462, # M11 functional from Minnesota
 'XC_HYB_MGGA_X_MVSH'           :  474, # MVS hybrid
 'XC_HYB_MGGA_XC_WB97M_V'       :  531, # Mardirossian and Head-Gordon
 #
@@ -623,10 +623,11 @@ def rsh_coeff(xc_code):
     alpha = c_LR
     beta = c_SR - c_LR
     '''
-    # Parse only X part for the RSH coefficients.  This is to handle
-    # exceptions (for functionals such as M11).
-    x_code = xc_code.split(',')[0]
-    hyb, fn_facs = parse_xc(x_code)
+    if ',' in xc_code:
+        # Parse only X part for the RSH coefficients.  This is to handle
+        # exceptions for C functionals such as M11.
+        xc_code = xc_code.split(',')[0] + ','
+    hyb, fn_facs = parse_xc(xc_code)
 
     hyb, alpha, omega = hyb
     beta = hyb - alpha
@@ -806,8 +807,8 @@ def parse_xc(description):
                             x_id = possible_xc.pop()
                             sys.stderr.write('XC parser takes %s\n' % x_id)
                             sys.stderr.write('You can add prefix to %s for a '
-                                             'specific functional. E.g. '
-                                             'MGGA_X_M11\n' % x_id)
+                                             'specific functional (e.g. X_%s)\n'
+                                             % (key, key))
                         else:
                             x_id = possible_xc.pop()
                         x_id = XC_CODES[x_id]
