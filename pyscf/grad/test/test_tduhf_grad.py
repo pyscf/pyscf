@@ -22,42 +22,41 @@ from pyscf import gto, scf
 from pyscf import tddft
 
 
-class KnownValues(unittest.TestCase):
-    def setUp(self):
-        self.mol = mol = gto.Mole()
-        mol.verbose = 5
-        mol.output = '/dev/null'
-        mol.atom = [
-            ['H' , (0. , 0. , 1.804)],
-            ['F' , (0. , 0. , 0.)], ]
-        mol.unit = 'B'
-        mol.charge = 2
-        mol.spin = 2
-        mol.basis = '631g'
-        mol.build()
-        self.pmol = mol.copy()
-        self.mf = scf.UHF(mol).set(conv_tol=1e-12).run()
+mol = gto.Mole()
+mol.verbose = 5
+mol.output = '/dev/null'
+mol.atom = [
+    ['H' , (0. , 0. , 1.804)],
+    ['F' , (0. , 0. , 0.)], ]
+mol.unit = 'B'
+mol.charge = 2
+mol.spin = 2
+mol.basis = '631g'
+mol.build()
+pmol = mol.copy()
+mf = scf.UHF(mol).set(conv_tol=1e-12).run()
 
+class KnownValues(unittest.TestCase):
     def test_tda(self):
-        td = tddft.TDA(self.mf).run(nstates=3)
+        td = tddft.TDA(mf).run(nstates=3)
         tdg = td.nuc_grad_method()
         g1 = tdg.kernel(state=3)
         self.assertAlmostEqual(g1[0,2], -0.78246882668628404, 8)
 
         td_solver = td.as_scanner()
-        e1 = td_solver(self.pmol.set_geom_('H 0 0 1.805; F 0 0 0', unit='B'))
-        e2 = td_solver(self.pmol.set_geom_('H 0 0 1.803; F 0 0 0', unit='B'))
+        e1 = td_solver(pmol.set_geom_('H 0 0 1.805; F 0 0 0', unit='B'))
+        e2 = td_solver(pmol.set_geom_('H 0 0 1.803; F 0 0 0', unit='B'))
         self.assertAlmostEqual((e1[2]-e2[2])/.002, g1[0,2], 4)
 
     def test_tdhf(self):
-        td = tddft.TDDFT(self.mf).run(nstates=3)
+        td = tddft.TDDFT(mf).run(nstates=3)
         tdg = td.nuc_grad_method()
         g1 = tdg.kernel(state=3)
         self.assertAlmostEqual(g1[0,2], -0.78969714300299776, 8)
 
         td_solver = td.as_scanner()
-        e1 = td_solver(self.pmol.set_geom_('H 0 0 1.805; F 0 0 0', unit='B'))
-        e2 = td_solver(self.pmol.set_geom_('H 0 0 1.803; F 0 0 0', unit='B'))
+        e1 = td_solver(pmol.set_geom_('H 0 0 1.805; F 0 0 0', unit='B'))
+        e2 = td_solver(pmol.set_geom_('H 0 0 1.803; F 0 0 0', unit='B'))
         self.assertAlmostEqual((e1[2]-e2[2])/.002, g1[0,2], 4)
 
 

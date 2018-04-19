@@ -34,13 +34,17 @@ mol.spin = 2
 mol.build()
 mf = scf.UHF(mol)
 mf.conv_tol = 1e-14
-ehf = mf.scf()
+mf.scf()
+
+def tearDownModule():
+    global mol, mf
+    del mol, mf
 
 
 class KnownValues(unittest.TestCase):
     def test_ump2(self):
         pt = mp.MP2(mf)
-        emp2, t2 = pt.kernel()
+        emp2, t2 = pt.kernel(mf.mo_energy, mf.mo_coeff)
         self.assertAlmostEqual(emp2, -0.16575150552336643, 9)
 
         pt.max_memory = 1

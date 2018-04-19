@@ -35,7 +35,11 @@ mol.basis = {'H': 'cc-pvdz',
 mol.build()
 mf = scf.RHF(mol)
 mf.conv_tol = 1e-14
-ehf = mf.scf()
+mf.scf()
+
+def tearDownModule():
+    global mol, mf
+    del mol, mf
 
 
 class KnownValues(unittest.TestCase):
@@ -52,7 +56,7 @@ class KnownValues(unittest.TestCase):
         t2ref0 = t2ref0.reshape(nocc,nvir,nocc,nvir).transpose(0,2,1,3)
 
         pt = mp.MP2(mf)
-        emp2, t2 = pt.kernel()
+        emp2, t2 = pt.kernel(mf.mo_energy, mf.mo_coeff)
         self.assertAlmostEqual(emp2, -0.204019967288338, 9)
         self.assertAlmostEqual(abs(t2 - t2ref0).max(), 0, 9)
 
@@ -102,6 +106,8 @@ class KnownValues(unittest.TestCase):
         rdm1 = mp.mp2.make_rdm1_ao(pt, mf.mo_energy, mf.mo_coeff)
         self.assertTrue(numpy.allclose(rdm1, dm1refao))
         self.assertTrue(numpy.allclose(pt.make_rdm1(), dm1ref))
+        rdm1 = mp.mp2.make_rdm1_ao(pt)
+        self.assertTrue(numpy.allclose(rdm1, dm1refao))
 
         dm2ref = numpy.zeros((nmo*2,)*4)
         dm2ref[:nocc*2,nocc*2:,:nocc*2,nocc*2:] = t2s.transpose(0,3,1,2) * .5
@@ -148,6 +154,9 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e, -0.14708846352674113, 9)
 
         pt = mp.dfmp2.DFMP2(mf.density_fit('weigend'))
+        e = pt.kernel(mf.mo_energy, mf.mo_coeff)[0]
+        self.assertAlmostEqual(e, -0.20425449198334983, 9)
+
         pt.frozen = [1]
         e = pt.kernel()[0]
         self.assertAlmostEqual(e, -0.14708846352674113, 9)
@@ -157,6 +166,7 @@ class KnownValues(unittest.TestCase):
         pt.with_df = mf.density_fit('weigend').with_df
         e = pt.kernel()[0]
         self.assertAlmostEqual(e, -0.14708846352674113, 9)
+
 
     def test_mp2_frozen(self):
         pt = mp.mp2.MP2(mf)
@@ -242,6 +252,20 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(dm2-dm2.transpose(1,0,3,2).conj()).max(), 0, 9)
         self.assertAlmostEqual(abs(dm2-dm2.transpose(2,3,0,1)       ).max(), 0, 9)
 
+    def test_init_mp2(self):
+        mf0 = mf
+        mf1 = scf.RHF(gto.M(atom='H', spin=1))
+        self.assertTrue(isinstance(mp.MP2(mf0), mp.mp2.RMP2))
+        self.assertTrue(isinstance(mp.MP2(mf1), mp.ump2.UMP2))
+        self.assertTrue(isinstance(mp.MP2(mf0.density_fit()), mp.dfmp2.DFMP2))
+        #self.assertTrue(isinstance(mp.MP2(mf1.density_fit()), mp.dfmp2.DFUMP2))
+        self.assertTrue(isinstance(mp.MP2(mf0.newton()), mp.mp2.RMP2))
+        self.assertTrue(isinstance(mp.MP2(mf1.newton()), mp.ump2.UMP2))
+
+    def test_mp2_scanner(self):
+        pt_scanner = mp.MP2(mf).as_scanner()
+        e = pt_scanner(mol)
+        self.assertAlmostEqual(e, mf.e_tot-0.204019967288338, 9)
 
 
 if __name__ == "__main__":

@@ -1458,6 +1458,7 @@ class SCF(lib.StreamObject):
     kernel.__doc__ = scf.__doc__
 
     def _finalize(self):
+        '''Hook for dumping results and clearing up the object.'''
         if self.converged:
             logger.note(self, 'converged SCF energy = %.15g', self.e_tot)
         else:
@@ -1568,6 +1569,10 @@ class SCF(lib.StreamObject):
     def newton(self):
         import pyscf.soscf.newton_ah
         return pyscf.soscf.newton_ah.newton(self)
+
+    def nuc_grad_method(self):
+        '''Hook to create object for analytical nuclear gradients.'''
+        pass
 
     def update(self, chkfile=None):
         '''Read attributes from the chkfile then replace the attributes of

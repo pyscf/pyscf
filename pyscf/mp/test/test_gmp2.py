@@ -39,11 +39,15 @@ gmf = scf.GHF(mol)
 gmf.conv_tol = 1e-14
 gmf.scf()
 
+def tearDownModule():
+    global mol, mf, gmf
+    del mol, mf, gmf
+
 
 class KnownValues(unittest.TestCase):
     def test_gmp2(self):
         pt = mp.GMP2(gmf)
-        emp2, t2 = pt.kernel()
+        emp2, t2 = pt.kernel(gmf.mo_energy, gmf.mo_coeff)
         self.assertAlmostEqual(emp2, -0.12886859466191491, 9)
 
         pt.max_memory = 1

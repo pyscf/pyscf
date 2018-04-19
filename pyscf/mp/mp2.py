@@ -74,7 +74,8 @@ def make_rdm1_ao(mp, mo_energy=None, mo_coeff=None, eris=None, verbose=logger.NO
     See also :func:`pyscf.mp.mp2.make_rdm1`
     '''
     if mo_energy is None or mo_coeff is None:
-        mo_coeff = None
+        mo_energy = mp.mo_energy
+        mo_coeff = mp.mo_coeff
     else:
         assert(mp.frozen is 0 or mp.frozen is None)
         mp = copy.copy(mp)
@@ -288,7 +289,7 @@ def as_scanner(mp):
             self.mo_energy = mf_scanner.mo_energy
             self.mo_coeff = mf_scanner.mo_coeff
             self.mo_occ = mf_scanner.mo_occ
-            self.kernel(**kwargs)[0]
+            self.kernel(**kwargs)
             return self.e_tot
     return MP2_Scanner(mp)
 
@@ -372,9 +373,14 @@ class MP2(lib.StreamObject):
 
         self.e_corr, self.t2 = _kern(self, mo_energy, mo_coeff,
                                      eris, with_t2, self.verbose)
-        logger.log(self, 'E(%s) = %.15g  E_corr = %.15g',
-                   self.__class__.__name__, self.e_tot, self.e_corr)
+        self._finalize()
         return self.e_corr, self.t2
+
+    def _finalize(self):
+        '''Hook for dumping results and clearing up the object.'''
+        logger.note(self, 'E(%s) = %.15g  E_corr = %.15g',
+                    self.__class__.__name__, self.e_tot, self.e_corr)
+        return self
 
     def ao2mo(self, mo_coeff=None):
         return _make_eris(self, mo_coeff, verbose=self.verbose)

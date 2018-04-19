@@ -398,7 +398,7 @@ _INTOR_FUNCTIONS = {
     'int3c1e_iprinv'            : (3, 3),
     'int2c2e'                   : (1, 1),
     'int2e_yp'                  : (1, 1),
-    'int2e_stg'                 : (3, 3),
+    'int2e_stg'                 : (1, 1),
     'int2e_coulerf'             : (1, 1),
     'ECPscalar'                 : (1, None),
     'ECPscalar_ipnuc'           : (3, None),

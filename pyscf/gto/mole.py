@@ -1884,6 +1884,11 @@ class Mole(lib.StreamObject):
 # Note obj.x = obj.member_function causes circular referrence
         gc.collect()
 
+        if isinstance(dump_input, (str, unicode)):
+            sys.stderr.write('Assigning the first argument %s to mol.atom\n' %
+                             dump_input)
+            dump_input, atom = True, dump_input
+
         if verbose is not None: self.verbose = verbose
         if output is not None: self.output = output
         if max_memory is not None: self.max_memory = max_memory
