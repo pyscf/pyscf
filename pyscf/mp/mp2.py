@@ -175,7 +175,10 @@ def make_rdm2(mp, t2=None, eris=None, verbose=logger.NOTE):
             t2i = gi.conj()/lib.direct_sum('jb+a->jba', eia, eia[i])
         else:
             t2i = t2[i]
-        t2i = t2i.conj()
+        # dm2 was computed as dm2[p,q,r,s] = < p^\dagger r^\dagger s q > in the
+        # above. Transposing it so that it be contracted with ERIs (in Chemist's
+        # notation):
+        #   E = einsum('pqrs,pqrs', eri, rdm2)
         dovov = t2i.transpose(1,0,2)*2 - t2i.transpose(2,0,1)
         dovov *= 2
         if moidx is None:
@@ -186,21 +189,17 @@ def make_rdm2(mp, t2=None, eris=None, verbose=logger.NOTE):
             dm2[vidx[:,None,None],oidx[i],vidx[:,None],oidx] = dovov.conj().transpose(0,2,1)
 
     for i in range(nocc0):
-        dm2[i,i,:,:] += dm1 * 2
-        dm2[:,:,i,i] += dm1 * 2
-        dm2[:,i,i,:] -= dm1
-        dm2[i,:,:,i] -= dm1.conj()
+        dm2[i,i,:,:] += dm1.T * 2
+        dm2[:,:,i,i] += dm1.T * 2
+        dm2[:,i,i,:] -= dm1.T
+        dm2[i,:,:,i] -= dm1
 
     for i in range(nocc0):
         for j in range(nocc0):
             dm2[i,i,j,j] += 4
             dm2[i,j,j,i] -= 2
 
-    # dm2 was computed as dm2[p,q,r,s] = < p^\dagger r^\dagger s q > in the
-    # above. Transposing it so that it be contracted with ERIs (in Chemist's
-    # notation):
-    #   E = einsum('pqrs,pqrs', eri, rdm2)
-    return dm2.transpose(1,0,3,2)
+    return dm2
 
 
 def get_nocc(mp):
