@@ -986,8 +986,11 @@ class _ERIS:#(pyscf.cc.ccsd._ChemistsERIs):
         self.fock = numpy.asarray([reduce(numpy.dot, (mo_coeff[k].T.conj(), fockao[k], mo_coeff[k])) for k, mo in enumerate(mo_coeff)])
 
         for kp in range(nkpts):
-            mo_e = self.fock[kp].diagonal()
-            gap = abs(mo_e[:nocc,None] - mo_e[None,nocc:]).min()
+            mo_e = self.fock[kp].diagonal().real
+            kpt_padded_moidx = padded_moidx[kp]
+            oidx = kpt_padded_moidx[:nocc]
+            vidx = kpt_padded_moidx[nocc:]
+            gap = abs(mo_e[:nocc][oidx][:,None] - mo_e[nocc:][vidx]).min()
             if gap < 1e-5:
                 logger.warn(cc, 'HOMO-LUMO gap %s too small for KCCSD at '
                             'k-point %d %s', gap, kp, cc.kpts[kp])
