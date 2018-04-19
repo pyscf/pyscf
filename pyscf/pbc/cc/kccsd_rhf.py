@@ -344,7 +344,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         nocc = self.nocc
         nvir = self.nmo - nocc
         nkpts = self.nkpts
-        t1 = numpy.empty((nkpts,nocc,nvir), dtype=eris.fock.dtype)
+        t1 = numpy.zeros((nkpts,nocc,nvir), dtype=eris.fock.dtype)
         t2 = numpy.empty((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=eris.fock.dtype)
         foo = eris.fock[:,:nocc,:nocc].copy()
         fvv = eris.fock[:,nocc:,nocc:].copy()
