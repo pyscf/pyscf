@@ -31,6 +31,7 @@ from pyscf import ao2mo
 from pyscf.lib import logger
 from pyscf.grad import rhf as rhf_grad
 from pyscf.grad.mp2 import _shell_prange
+from pyscf.grad.casci import as_scanner
 
 
 def kernel(mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=None,
@@ -113,45 +114,6 @@ def kernel(mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=None,
 
     de += rhf_grad.grad_nuc(mol)
     return de
-
-
-def as_scanner(mcscf_grad):
-    '''Generating a nuclear gradients scanner/solver (for geometry optimizer).
-
-    The returned solver is a function. This function requires one argument
-    "mol" as input and returns energy and first order nuclear derivatives.
-
-    The solver will automatically use the results of last calculation as the
-    initial guess of the new calculation.  All parameters assigned in the
-    nuc-grad object and SCF object (DIIS, conv_tol, max_memory etc) are
-    automatically applied in the solver.
-
-    Note scanner has side effects.  It may change many underlying objects
-    (_scf, with_df, with_x2c, ...) during calculation.
-
-    Examples:
-
-    >>> from pyscf import gto, scf, mcscf
-    >>> mol = gto.M(atom='N 0 0 0; N 0 0 1.1', verbose=0)
-    >>> mc_scanner = mcscf.CASSCF(scf.RHF(mol), 4, 4).nuc_grad_method().as_scanner()
-    >>> etot, grad = mc_scanner(gto.M(atom='N 0 0 0; N 0 0 1.1'))
-    >>> etot, grad = mc_scanner(gto.M(atom='N 0 0 0; N 0 0 1.5'))
-
-    >>> mc_scanner = mcscf.CASCI(scf.RHF(mol), 4, 4).nuc_grad_method().as_scanner()
-    >>> etot, grad = mc_scanner(gto.M(atom='N 0 0 0; N 0 0 1.1'))
-    >>> etot, grad = mc_scanner(gto.M(atom='N 0 0 0; N 0 0 1.5'))
-    '''
-    logger.info(mcscf_grad, 'Create scanner for %s', mcscf_grad.__class__)
-    class CASSCF_GradScanner(mcscf_grad.__class__, lib.GradScanner):
-        def __init__(self, g):
-            lib.GradScanner.__init__(self, g)
-        def __call__(self, mol, **kwargs):
-            mc_scanner = self.base
-            e_tot = mc_scanner(mol)
-            self.mol = mol
-            de = self.kernel(**kwargs)
-            return e_tot, de
-    return CASSCF_GradScanner(mcscf_grad)
 
 
 class Gradients(lib.StreamObject):

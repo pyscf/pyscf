@@ -166,9 +166,9 @@ def as_scanner(td_grad):
 
     >>> from pyscf import gto, scf, tdscf, grad
     >>> mol = gto.M(atom='H 0 0 0; F 0 0 1')
-    >>> hf_scanner = scf.RHF(mol).apply(grad.RHF).apply(tdscf.TDA).as_scanner()
-    >>> e_tot, grad = hf_scanner(gto.M(atom='H 0 0 0; F 0 0 1.1'))
-    >>> e_tot, grad = hf_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
+    >>> td_grad_scanner = scf.RHF(mol).apply(tdscf.TDA).nuc_grad_method().as_scanner()
+    >>> e_tot, grad = td_grad_scanner(gto.M(atom='H 0 0 0; F 0 0 1.1'))
+    >>> e_tot, grad = td_grad_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
     '''
     logger.info(td_grad, 'Create scanner for %s', td_grad.__class__)
     class TDSCF_GradScanner(td_grad.__class__, lib.GradScanner):

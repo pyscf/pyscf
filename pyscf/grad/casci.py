@@ -194,16 +194,16 @@ def as_scanner(mcscf_grad):
 
     >>> from pyscf import gto, scf, mcscf
     >>> mol = gto.M(atom='N 0 0 0; N 0 0 1.1', verbose=0)
-    >>> mc_scanner = mcscf.CASSCF(scf.RHF(mol), 4, 4).nuc_grad_method().as_scanner()
-    >>> etot, grad = mc_scanner(gto.M(atom='N 0 0 0; N 0 0 1.1'))
-    >>> etot, grad = mc_scanner(gto.M(atom='N 0 0 0; N 0 0 1.5'))
+    >>> mc_grad_scanner = mcscf.CASSCF(scf.RHF(mol), 4, 4).nuc_grad_method().as_scanner()
+    >>> etot, grad = mc_grad_scanner(gto.M(atom='N 0 0 0; N 0 0 1.1'))
+    >>> etot, grad = mc_grad_scanner(gto.M(atom='N 0 0 0; N 0 0 1.5'))
 
-    >>> mc_scanner = mcscf.CASCI(scf.RHF(mol), 4, 4).nuc_grad_method().as_scanner()
-    >>> etot, grad = mc_scanner(gto.M(atom='N 0 0 0; N 0 0 1.1'))
-    >>> etot, grad = mc_scanner(gto.M(atom='N 0 0 0; N 0 0 1.5'))
+    >>> mc_grad_scanner = mcscf.CASCI(scf.RHF(mol), 4, 4).nuc_grad_method().as_scanner()
+    >>> etot, grad = mc_grad_scanner(gto.M(atom='N 0 0 0; N 0 0 1.1'))
+    >>> etot, grad = mc_grad_scanner(gto.M(atom='N 0 0 0; N 0 0 1.5'))
     '''
     logger.info(mcscf_grad, 'Create scanner for %s', mcscf_grad.__class__)
-    class CASCI_GradScanner(mcscf_grad.__class__, lib.GradScanner):
+    class MCSCF_GradScanner(mcscf_grad.__class__, lib.GradScanner):
         def __init__(self, g):
             lib.GradScanner.__init__(self, g)
         def __call__(self, mol, **kwargs):
@@ -212,7 +212,7 @@ def as_scanner(mcscf_grad):
             self.mol = mol
             de = self.kernel(**kwargs)
             return e_tot, de
-    return CASCI_GradScanner(mcscf_grad)
+    return MCSCF_GradScanner(mcscf_grad)
 
 
 class Gradients(lib.StreamObject):
