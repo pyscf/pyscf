@@ -23,6 +23,7 @@ Non-relativistic RHF analytical Hessian
 import time
 import numpy
 from pyscf import lib
+from pyscf import gto
 from pyscf.lib import logger
 from pyscf.scf import _vhf
 from pyscf.scf import cphf
@@ -442,6 +443,10 @@ class Hessian(lib.StreamObject):
             return with_x2c.hcore_deriv_generator(deriv=2)
 
         with_ecp = mol.has_ecp()
+        if with_ecp:
+            ecp_atoms = set(mol._ecpbas[:,gto.ATOM_OF])
+        else:
+            ecp_atoms = ()
         aoslices = mol.aoslice_by_atom()
         nbas = mol.nbas
         nao = mol.nao_nr()
@@ -455,11 +460,11 @@ class Hessian(lib.StreamObject):
                 with mol.with_rinv_as_nucleus(iatm):
                     rinv2aa = mol.intor('int1e_ipiprinv', comp=9)
                     rinv2ab = mol.intor('int1e_iprinvip', comp=9)
-                    if with_ecp:
-                        rinv2aa += mol.intor('ECPscalar_ipiprinv', comp=9)
-                        rinv2ab += mol.intor('ECPscalar_iprinvip', comp=9)
                     rinv2aa *= zi
                     rinv2ab *= zi
+                    if with_ecp and iatm in ecp_atoms:
+                        rinv2aa += mol.intor('ECPscalar_ipiprinv', comp=9)
+                        rinv2ab += mol.intor('ECPscalar_iprinvip', comp=9)
                 rinv2aa = rinv2aa.reshape(3,3,nao,nao)
                 rinv2ab = rinv2ab.reshape(3,3,nao,nao)
                 hcore = -rinv2aa - rinv2ab
@@ -475,25 +480,25 @@ class Hessian(lib.StreamObject):
                     shls_slice = (jsh0, jsh1, 0, nbas)
                     rinv2aa = mol.intor('int1e_ipiprinv', comp=9, shls_slice=shls_slice)
                     rinv2ab = mol.intor('int1e_iprinvip', comp=9, shls_slice=shls_slice)
-                    if with_ecp:
+                    rinv2aa *= zi
+                    rinv2ab *= zi
+                    if with_ecp and iatm in ecp_atoms:
                         rinv2aa += mol.intor('ECPscalar_ipiprinv', comp=9, shls_slice=shls_slice)
                         rinv2ab += mol.intor('ECPscalar_iprinvip', comp=9, shls_slice=shls_slice)
-                    rinv2aa = zi * rinv2aa.reshape(3,3,j1-j0,nao)
-                    rinv2ab = zi * rinv2ab.reshape(3,3,j1-j0,nao)
-                    hcore[:,:,j0:j1] += rinv2aa
-                    hcore[:,:,j0:j1] += rinv2ab.transpose(1,0,2,3)
+                    hcore[:,:,j0:j1] += rinv2aa.reshape(3,3,j1-j0,nao)
+                    hcore[:,:,j0:j1] += rinv2ab.reshape(3,3,j1-j0,nao).transpose(1,0,2,3)
 
                 with mol.with_rinv_as_nucleus(jatm):
                     shls_slice = (ish0, ish1, 0, nbas)
                     rinv2aa = mol.intor('int1e_ipiprinv', comp=9, shls_slice=shls_slice)
                     rinv2ab = mol.intor('int1e_iprinvip', comp=9, shls_slice=shls_slice)
-                    if with_ecp:
+                    rinv2aa *= zj
+                    rinv2ab *= zj
+                    if with_ecp and jatm in ecp_atoms:
                         rinv2aa += mol.intor('ECPscalar_ipiprinv', comp=9, shls_slice=shls_slice)
                         rinv2ab += mol.intor('ECPscalar_iprinvip', comp=9, shls_slice=shls_slice)
-                    rinv2aa = zj * rinv2aa.reshape(3,3,i1-i0,nao)
-                    rinv2ab = zj * rinv2ab.reshape(3,3,i1-i0,nao)
-                    hcore[:,:,i0:i1] += rinv2aa
-                    hcore[:,:,i0:i1] += rinv2ab
+                    hcore[:,:,i0:i1] += rinv2aa.reshape(3,3,i1-i0,nao)
+                    hcore[:,:,i0:i1] += rinv2ab.reshape(3,3,i1-i0,nao)
             return hcore + hcore.conj().transpose(0,1,3,2)
         return get_hcore
 
