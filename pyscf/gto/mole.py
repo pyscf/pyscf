@@ -2342,10 +2342,14 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
                 self._env[PTR_RINV_ORIG:PTR_RINV_ORIG+3] = r
             return _TemporaryMoleContext(set_rinv, (zeta,rinv), (zeta0,rinv0))
 
-    def set_geom_(self, atoms_or_coords, unit='Angstrom', symmetry=None):
+    def set_geom_(self, atoms_or_coords, unit=None, symmetry=None):
         '''Update geometry
         '''
-        if (symmetry or self.symmetry or
+        if unit is None:
+            unit = self.unit
+
+        if (unit != self.unit or
+            symmetry or self.symmetry or
             not isinstance(atoms_or_coords, numpy.ndarray)):
             if isinstance(atoms_or_coords, numpy.ndarray):
                 self.atom = list(zip([x[0] for x in self._atom], atoms_or_coords))

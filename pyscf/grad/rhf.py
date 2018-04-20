@@ -22,6 +22,7 @@ Non-relativistic Hartree-Fock analytical nuclear gradients
 
 import time
 import numpy
+from pyscf import gto
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import _vhf
@@ -199,15 +200,19 @@ class Gradients(lib.StreamObject):
             hcore_deriv = with_x2c.hcore_deriv_generator(deriv=1)
         else:
             with_ecp = mol.has_ecp()
+            if with_ecp:
+                ecp_atoms = set(mol._ecpbas[:,gto.ATOM_OF])
+            else:
+                ecp_atoms = ()
             aoslices = mol.aoslice_by_atom()
             h1 = self.get_hcore(mol)
             def hcore_deriv(atm_id):
                 shl0, shl1, p0, p1 = aoslices[atm_id]
                 with mol.with_rinv_as_nucleus(atm_id):
                     vrinv = mol.intor('int1e_iprinv', comp=3) # <\nabla|1/r|>
-                    if with_ecp:
-                        vrinv += mol.intor('ECPscalar_iprinv', comp=3)
                     vrinv *= -mol.atom_charge(atm_id)
+                    if with_ecp and atm_id in ecp_atoms:
+                        vrinv += mol.intor('ECPscalar_iprinv', comp=3)
                 vrinv[:,p0:p1] += h1[:,p0:p1]
                 return vrinv + vrinv.transpose(0,2,1)
         return hcore_deriv

@@ -727,14 +727,20 @@ def make_cintopt(atm, bas, env, intor):
     natm = c_atm.shape[0]
     nbas = c_bas.shape[0]
     cintopt = lib.c_null_ptr()
-    foptinit = getattr(libcgto, intor+'_optimizer')
-    foptinit(ctypes.byref(cintopt),
-             c_atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(natm),
-             c_bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
-             c_env.ctypes.data_as(ctypes.c_void_p))
+    # TODO: call specific ECP optimizers for each intor.
     if intor[:3] == 'ECP':
+        foptinit = libcgto.ECPscalar_optimizer
+        foptinit(ctypes.byref(cintopt),
+                 c_atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(natm),
+                 c_bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
+                 c_env.ctypes.data_as(ctypes.c_void_p))
         return ctypes.cast(cintopt, _ecpoptHandler)
     else:
+        foptinit = getattr(libcgto, intor+'_optimizer')
+        foptinit(ctypes.byref(cintopt),
+                 c_atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(natm),
+                 c_bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
+                 c_env.ctypes.data_as(ctypes.c_void_p))
         return ctypes.cast(cintopt, _cintoptHandler)
 class _cintoptHandler(ctypes.c_void_p):
     def __del__(self):
