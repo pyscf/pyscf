@@ -53,7 +53,9 @@ def kernel(mycc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
     eold = 0
     vec_old = 0
     eccsd = 0
-    if mycc.diis:
+    if isinstance(mycc.diis, lib.diis.DIIS):
+        adiis = mycc.diis
+    elif mycc.diis:
         adiis = lib.diis.DIIS(mycc, mycc.diis_file, incore=mycc.incore_complete)
         adiis.space = mycc.diis_space
     else:
@@ -66,12 +68,12 @@ def kernel(mycc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
                                   mycc.amplitudes_to_vector(t1, t2))
         if mycc.iterative_damping < 1.0:
             alpha = mycc.iterative_damping
-            t1, t2 = (1-alpha)*t1 + alpha*t1new, (1-alpha)*t2 + alpha*t2new
-        else:
-            t1, t2 = t1new, t2new
+            t1new = (1-alpha) * t1 + alpha * t1new
+            t2new *= alpha
+            t2new += (1-alpha) * t2
+        t1, t2 = t1new, t2new
         t1new = t2new = None
-        if mycc.diis:
-            t1, t2 = mycc.diis(t1, t2, istep, normt, eccsd-eold, adiis)
+        t1, t2 = mycc.run_diis(t1, t2, istep, normt, eccsd-eold, adiis)
         eold, eccsd = eccsd, mycc.energy(t1, t2, eris)
         log.info('cycle = %d  E(CCSD) = %.15g  dE = %.9g  norm(t1,t2) = %.6g',
                  istep+1, eccsd, eccsd - eold, normt)
@@ -752,6 +754,7 @@ class CCSD(lib.StreamObject):
     iterative_damping = getattr(__config__, 'cc_ccsd_CCSD_iterative_damping', 1.0)
     conv_tol_normt = getattr(__config__, 'cc_ccsd_CCSD_conv_tol_normt', 1e-5)
 
+    diis = getattr(__config__, 'cc_ccsd_CCSD_diis', True)
     diis_space = getattr(__config__, 'cc_ccsd_CCSD_diis_space', 6)
     diis_file = None
     diis_start_cycle = getattr(__config__, 'cc_ccsd_CCSD_diis_start_cycle', 0)
@@ -803,7 +806,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         self.chkfile = mf.chkfile
 
         keys = set(('max_cycle', 'conv_tol', 'iterative_damping',
-                    'conv_tol_normt', 'diis_space', 'diis_file',
+                    'conv_tol_normt', 'diis', 'diis_space', 'diis_file',
                     'diis_start_cycle', 'diis_start_energy_diff', 'direct',
                     'async_io', 'incore_complete', 'cc2'))
         self._keys = set(self.__dict__.keys()).union(keys)
@@ -1035,10 +1038,9 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         else:
             return _make_eris_outcore(self, mo_coeff)
 
-    def diis(self, t1, t2, istep, normt, de, adiis):
-        return self.diis_(t1, t2, istep, normt, de, adiis)
-    def diis_(self, t1, t2, istep, normt, de, adiis):
-        if (istep > self.diis_start_cycle and
+    def run_diis(self, t1, t2, istep, normt, de, adiis):
+        if (adiis and
+            istep > self.diis_start_cycle and
             abs(de) < self.diis_start_energy_diff):
             vec = self.amplitudes_to_vector(t1, t2)
             t1, t2 = self.vector_to_amplitudes(adiis.update(vec))

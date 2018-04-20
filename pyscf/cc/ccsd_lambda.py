@@ -50,8 +50,10 @@ def kernel(mycc, eris=None, t1=None, t2=None, l1=None, l2=None,
 
     imds = fintermediates(mycc, t1, t2, eris)
 
-    if mycc.diis:
-        adiis = lib.diis.DIIS(mycc, mycc.diis_file)
+    if isinstance(mycc.diis, lib.diis.DIIS):
+        adiis = mycc.diis
+    elif mycc.diis:
+        adiis = lib.diis.DIIS(mycc, mycc.diis_file, incore=mycc.incore_complete)
         adiis.space = mycc.diis_space
     else:
         adiis = None
@@ -64,8 +66,7 @@ def kernel(mycc, eris=None, t1=None, t2=None, l1=None, l2=None,
                                   mycc.amplitudes_to_vector(l1, l2))
         l1, l2 = l1new, l2new
         l1new = l2new = None
-        if mycc.diis:
-            l1, l2 = mycc.diis(l1, l2, istep, normt, 0, adiis)
+        l1, l2 = mycc.run_diis(l1, l2, istep, normt, 0, adiis)
         log.info('cycle = %d  norm(lambda1,lambda2) = %.6g', istep+1, normt)
         cput0 = log.timer('CCSD iter', *cput0)
         if normt < tol:

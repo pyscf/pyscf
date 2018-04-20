@@ -46,7 +46,7 @@ class KnownValues(unittest.TestCase):
         td = tdscf.TDA(mf).run(nstates=3)
         tdg = td.nuc_grad_method()
         g1 = tdg.kernel(state=3)
-        self.assertAlmostEqual(g1[0,2], -0.78246882668628404, 8)
+        self.assertAlmostEqual(g1[0,2], -0.78246882668628404, 7)
 
         td_solver = td.as_scanner()
         e1 = td_solver(pmol.set_geom_('H 0 0 1.805; F 0 0 0', unit='B'))
@@ -58,7 +58,7 @@ class KnownValues(unittest.TestCase):
         tdg = td.nuc_grad_method()
         g1 = tduhf_grad.kernel(tdg, td.xy[2])
         g1 += tdg.grad_nuc()
-        self.assertAlmostEqual(g1[0,2], -0.78969714300299776, 8)
+        self.assertAlmostEqual(g1[0,2], -0.78969714300299776, 6)
 
         td_solver = td.as_scanner()
         e1 = td_solver(pmol.set_geom_('H 0 0 1.805; F 0 0 0', unit='B'))

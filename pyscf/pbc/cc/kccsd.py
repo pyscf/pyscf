@@ -67,11 +67,13 @@ def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
     eold = 0
     eccsd = 0
 
-    if cc.diis:
+    if isinstance(cc.diis, lib.diis.DIIS):
+        adiis = cc.diis
+    elif cc.diis:
         adiis = lib.diis.DIIS(cc, cc.diis_file)
         adiis.space = cc.diis_space
     else:
-        adiis = lambda t1, t2, *args: (t1, t2)
+        adiis = None
 
     conv = False
     for istep in range(max_cycle):
@@ -84,8 +86,7 @@ def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
             t1, t2 = t1new, t2new
         t1new = t2new = None
 
-        if cc.diis:
-            t1, t2 = cc.diis(t1, t2, istep, normt, eccsd - eold, adiis)
+        t1, t2 = cc.run_diis(t1, t2, istep, normt, eccsd - eold, adiis)
         eold, eccsd = eccsd, energy(cc, t1, t2, eris)
         log.info('istep = %d  E(CCSD) = %.15g  dE = %.9g  norm(t1,t2) = %.6g', istep, eccsd, eccsd - eold, normt)
         cput1 = log.timer('CCSD iter', *cput1)

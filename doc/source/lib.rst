@@ -71,6 +71,13 @@ objects using the python built in methods ``.__dict__.update``, e.g.::
     mc.kernel()
 
 
+:mod:`lib.diis`
+===============
+
+.. automodule:: lib.diis
+   :members: DIIS, restore
+
+
 Other helper functions
 ======================
 

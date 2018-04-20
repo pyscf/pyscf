@@ -100,7 +100,7 @@ class KnownValues(unittest.TestCase):
         td = mf.apply(tdscf.TDA)
         tdg_scanner = td.nuc_grad_method().as_scanner()
         g = tdg_scanner(mol, state=3)[1]
-        self.assertAlmostEqual(lib.finger(g), -0.46624634722855973, 7)
+        self.assertAlmostEqual(lib.finger(g), -0.46624634722855973, 6)
         smf = td.as_scanner()
         e1 = smf(mol.set_geom_("H; H 1 1.001"))[2]
         e2 = smf(mol.set_geom_("H; H 1 0.999"))[2]
