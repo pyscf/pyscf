@@ -2112,15 +2112,23 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
                     self.stdout.write('GIT %s branch  %s' % (branch, f.read()))
         except IOError:
             pass
-        self.stdout.write('config %s\n' % getattr(__config__, 'conf_file', None))
+
+        self.stdout.write('\n')
         for key in os.environ:
             if 'PYSCF' in key:
-                self.stdout.write('%s %s\n' % (key, os.environ[key]))
-        self.stdout.write('\n')
+                self.stdout.write('[ENV] %s %s\n' % (key, os.environ[key]))
+        if self.verbose >= logger.DEBUG2:
+            for key in dir(__config__):
+                if key[:2] != '__':
+                    self.stdout.write('[CONFIG] %s = %s\n' %
+                                      (key, getattr(__config__, key)))
+        else:
+            conf_file = getattr(__config__, 'conf_file', None)
+            self.stdout.write('[CONFIG] conf_file %s\n' % conf_file)
 
-        self.stdout.write('[INPUT] VERBOSE %d\n' % self.verbose)
-        self.stdout.write('[INPUT] num atoms = %d\n' % self.natm)
-        self.stdout.write('[INPUT] num electrons = %d\n' % self.nelectron)
+        self.stdout.write('[INPUT] verbose = %d\n' % self.verbose)
+        self.stdout.write('[INPUT] num. atoms = %d\n' % self.natm)
+        self.stdout.write('[INPUT] num. electrons = %d\n' % self.nelectron)
         self.stdout.write('[INPUT] charge = %d\n' % self.charge)
         self.stdout.write('[INPUT] spin (= nelec alpha-beta = 2S) = %d\n' % self.spin)
         self.stdout.write('[INPUT] symmetry %s subgroup %s\n' %
@@ -2168,6 +2176,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
                         self.stdout.write('\n')
 
         if self.verbose >= logger.INFO:
+            self.stdout.write('\n')
             logger.info(self, 'nuclear repulsion = %.15g', self.energy_nuc())
             if self.symmetry:
                 if self.topgroup == self.groupname:
