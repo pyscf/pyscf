@@ -2606,16 +2606,6 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
         return np.array(e)
 
-    def run_diis_(self, t1, t2, istep, normt, de, adiis):
-        if (adiis and
-            istep > self.diis_start_cycle and
-            abs(de) < self.diis_start_energy_diff):
-            vec = self.amplitudes_to_vector(t1, t2)
-            t1, t2 = self.vector_to_amplitudes(adiis.update(vec))
-            logger.debug1(self, 'DIIS for step %d', istep)
-        return t1, t2
-    run_diis = run_diis_
-
     def amplitudes_to_vector(self, t1, t2):
         return np.hstack((t1.ravel(), t2.ravel()))
 

@@ -131,7 +131,7 @@ class DIIS(object):
         # restore the DIIS state
         if (value.size >= INCORE_SIZE and not self.incore) or isinstance(self.filename, str):
             if self._diisfile is None:
-                self._diisfile = misc.H5TmpFile(self.filename)
+                self._diisfile = misc.H5TmpFile(self.filename, 'w')
             if key in self._diisfile:
                 self._diisfile[key][:] = value
             else:
@@ -288,7 +288,7 @@ class DIIS(object):
 
         nd = len(e_keys)
         self._bookkeep = range(min(self.space, nd))
-        self._head = 0
+        self._head = nd
         vecsize = 0
 
         e_mat = []

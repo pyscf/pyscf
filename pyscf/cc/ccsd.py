@@ -1040,7 +1040,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
 
     def run_diis(self, t1, t2, istep, normt, de, adiis):
         if (adiis and
-            istep > self.diis_start_cycle and
+            istep >= self.diis_start_cycle and
             abs(de) < self.diis_start_energy_diff):
             vec = self.amplitudes_to_vector(t1, t2)
             t1, t2 = self.vector_to_amplitudes(adiis.update(vec))
