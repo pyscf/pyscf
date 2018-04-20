@@ -150,8 +150,39 @@ def grids_response(grids):
         w0[p0:p1] = vol * pbecke[ia] / z
     return coords_all, w0, w1
 
+mol = gto.Mole()
+mol.verbose = 5
+mol.output = '/dev/null'
+mol.atom.extend([
+    ["O" , (0. , 0.     , 0.)],
+    [1   , (0. , -0.757 , 0.587)],
+    [1   , (0. , 0.757  , 0.587)] ])
+mol.basis = '6-31g'
+mol.build()
+mf = dft.RKS(mol)
+mf.conv_tol = 1e-14
+mf.kernel()
+
+def tearDownModule():
+    global mol, mf
+    del mol, mf
 
 class KnownValues(unittest.TestCase):
+    def test_finite_diff_rks_grad(self):
+        g = mf.nuc_grad_method().kernel()
+        self.assertAlmostEqual(lib.finger(g), -0.049887866191414401, 6)
+
+        mf_scanner = mf.as_scanner()
+        e1 = mf_scanner(mol.set_geom_('O  0. 0. 0.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
+        e2 = mf_scanner(mol.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
+        self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 4)
+
+    def test_different_grids_for_grad(self):
+        grids1 = dft.gen_grid.Grids(mol)
+        grids1.level = 1
+        g = mf.nuc_grad_method().set(grids=grids1).kernel()
+        self.assertAlmostEqual(lib.finger(g), -0.049837230292484727, 6)
+
     def test_grid_response(self):
         mol1 = gto.Mole()
         mol1.verbose = 0

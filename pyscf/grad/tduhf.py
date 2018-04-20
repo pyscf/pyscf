@@ -32,12 +32,8 @@ from pyscf import __config__
 #
 # Given Y = 0, TDHF gradients (XAX+XBY+YBX+YAY)^1 turn to TDA gradients (XAX)^1
 #
-def kernel(td_grad, x_y, singlet=True, atmlst=None,
-           max_memory=2000, verbose=logger.INFO):
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(td_grad.stdout, verbose)
+def kernel(td_grad, x_y, atmlst=None, max_memory=2000, verbose=logger.INFO):
+    log = logger.new_logger(td_grad, verbose)
     time0 = time.clock(), time.time()
 
     mol = td_grad.mol
@@ -219,7 +215,7 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
 class Gradients(tdrhf_grad.Gradients):
 
     def grad_elec(self, xy, singlet, atmlst=None):
-        return kernel(self, xy, singlet, atmlst, self.max_memory, self.verbose)
+        return kernel(self, xy, atmlst, self.max_memory, self.verbose)
 
 
 if __name__ == '__main__':

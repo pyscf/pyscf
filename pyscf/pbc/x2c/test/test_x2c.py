@@ -34,19 +34,9 @@ cell.build(unit = 'B',
            verbose = 0,
            basis='sto3g')
 
-class light_speed(object):
-    def __init__(self, c):
-        self.bak = lib.param.LIGHT_SPEED
-        self.c = c
-    def __enter__(self):
-        lib.param.LIGHT_SPEED = self.c
-        return self.c
-    def __exit__(self, type, value, traceback):
-        lib.param.LIGHT_SPEED = self.bak
-
 class KnownValues(unittest.TestCase):
     def test_hf(self):
-        with light_speed(2) as c:
+        with lib.light_speed(2) as c:
             mf = scf.RHF(cell).sfx2c1e()
             mf.with_df = df.AFTDF(cell)
             dm = mf.get_init_guess()
@@ -57,7 +47,7 @@ class KnownValues(unittest.TestCase):
             self.assertAlmostEqual(numpy.einsum('ij,ji', dm, h1), -0.09637799091491725+0j, 8)
 
     def test_khf(self):
-        with light_speed(2) as c:
+        with lib.light_speed(2) as c:
             mf = scf.KRHF(cell).sfx2c1e()
             mf.with_df = df.AFTDF(cell)
             mf.kpts = cell.make_kpts([3,1,1])

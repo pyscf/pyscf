@@ -34,6 +34,10 @@ mf = scf.RHF(mol)
 mf.conv_tol_grad = 1e-8
 mf.kernel()
 
+def tearDownModule():
+    global mol, mf
+    del mol, mf
+
 
 class KnownValues(unittest.TestCase):
     def test_mp2_grad(self):

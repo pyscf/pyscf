@@ -642,6 +642,7 @@ class CASCI(lib.StreamObject):
         self.ci = None
         self.mo_coeff = mf.mo_coeff
         self.mo_energy = mf.mo_energy
+        self.converged = False
 
         keys = set(('natorb', 'canonicalization', 'sorting_mo_energy'))
         self._keys = set(self.__dict__.keys()).union(keys)
@@ -756,10 +757,13 @@ class CASCI(lib.StreamObject):
                                    cas_natorb=self.natorb, verbose=log)
 
         if hasattr(self.fcisolver, 'converged'):
-            if numpy.all(self.fcisolver.converged):
+            self.converged = numpy.all(self.fcisolver.converged)
+            if self.converged:
                 log.info('CASCI converged')
             else:
                 log.info('CASCI not converged')
+        else:
+            self.converged = True
         if log.verbose >= logger.NOTE and hasattr(self.fcisolver, 'spin_square'):
             if isinstance(self.e_cas, (float, numpy.number)):
                 ss = self.fcisolver.spin_square(self.ci, self.ncas, self.nelecas)

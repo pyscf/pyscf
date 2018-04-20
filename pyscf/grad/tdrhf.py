@@ -34,10 +34,7 @@ from pyscf import __config__
 #
 def kernel(td_grad, x_y, singlet=True, atmlst=None,
            max_memory=2000, verbose=logger.INFO):
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(td_grad.stdout, verbose)
+    log = logger.new_logger(td_grad, verbose)
     time0 = time.clock(), time.time()
 
     mol = td_grad.mol
@@ -151,6 +148,42 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
     return de
 
 
+def as_scanner(td_grad):
+    '''Generating a nuclear gradients scanner/solver (for geometry optimizer).
+
+    The returned solver is a function. This function requires one argument
+    "mol" as input and returns energy and first order nuclear derivatives.
+
+    The solver will automatically use the results of last calculation as the
+    initial guess of the new calculation.  All parameters assigned in the
+    nuc-grad object and SCF object (DIIS, conv_tol, max_memory etc) are
+    automatically applied in the solver.
+
+    Note scanner has side effects.  It may change many underlying objects
+    (_scf, with_df, with_x2c, ...) during calculation.
+
+    Examples::
+
+    >>> from pyscf import gto, scf, tdscf, grad
+    >>> mol = gto.M(atom='H 0 0 0; F 0 0 1')
+    >>> hf_scanner = scf.RHF(mol).apply(grad.RHF).apply(tdscf.TDA).as_scanner()
+    >>> e_tot, grad = hf_scanner(gto.M(atom='H 0 0 0; F 0 0 1.1'))
+    >>> e_tot, grad = hf_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
+    '''
+    logger.info(td_grad, 'Create scanner for %s', td_grad.__class__)
+    class TDSCF_GradScanner(td_grad.__class__, lib.GradScanner):
+        def __init__(self, g):
+            lib.GradScanner.__init__(self, g)
+            self._keys.update(['e_tot'])
+        def __call__(self, mol, state=1, **kwargs):
+            td_scanner = self.base
+            td_scanner(mol)
+            self.mol = mol
+            de = self.kernel(state=state, **kwargs)
+            return self.e_tot, de
+    return TDSCF_GradScanner(td_grad)
+
+
 class Gradients(rhf_grad.Gradients):
 
     cphf_max_cycle = getattr(__config__, 'grad_tdrhf_Gradients_cphf_max_cycle', 20)
@@ -206,6 +239,7 @@ class Gradients(rhf_grad.Gradients):
             self.atmlst = atmlst
 
         self.check_sanity()
+        self.dump_flags()
         de = self.grad_elec(xy, singlet, atmlst)
         self.de = de = de + self.grad_nuc(atmlst=atmlst)
 
@@ -223,6 +257,8 @@ class Gradients(rhf_grad.Gradients):
                 logger.note(self, '%d %s  %15.9f  %15.9f  %15.9f', ia,
                             self.mol.atom_symbol(ia), de[k,0], de[k,1], de[k,2])
             logger.note(self, '----------------------------------------------')
+
+    as_scanner = as_scanner
 
 
 if __name__ == '__main__':

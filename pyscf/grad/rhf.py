@@ -143,11 +143,11 @@ def as_scanner(mf_grad):
 
     Examples::
 
-        >>> from pyscf import gto, scf, grad
-        >>> mol = gto.M(atom='H 0 0 0; F 0 0 1')
-        >>> hf_scanner = scf.RHF(mol).apply(grad.RHF).as_scanner()
-        >>> e_tot, grad = hf_scanner(gto.M(atom='H 0 0 0; F 0 0 1.1'))
-        >>> e_tot, grad = hf_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
+    >>> from pyscf import gto, scf, grad
+    >>> mol = gto.M(atom='H 0 0 0; F 0 0 1')
+    >>> hf_scanner = scf.RHF(mol).apply(grad.RHF).as_scanner()
+    >>> e_tot, grad = hf_scanner(gto.M(atom='H 0 0 0; F 0 0 1.1'))
+    >>> e_tot, grad = hf_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
     '''
     logger.info(mf_grad, 'Create scanner for %s', mf_grad.__class__)
     class SCF_GradScanner(mf_grad.__class__, lib.GradScanner):

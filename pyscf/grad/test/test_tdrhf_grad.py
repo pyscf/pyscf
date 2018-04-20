@@ -19,7 +19,8 @@
 import unittest
 import numpy
 from pyscf import gto, scf
-from pyscf import tddft
+from pyscf import tdscf
+from pyscf.grad import tdrhf as tdrhf_grad
 
 
 mol = gto.Mole()
@@ -34,10 +35,13 @@ mol.build()
 pmol = mol.copy()
 mf = scf.RHF(mol).set(conv_tol=1e-12).run()
 
-class KnownValues(unittest.TestCase):
+def tearDownModule():
+    global mol, pmol, mf
+    del mol, pmol, mf
 
-    def test_tda(self):
-        td = tddft.TDA(mf).run(nstates=3)
+class KnownValues(unittest.TestCase):
+    def test_tda_singlet(self):
+        td = tdscf.TDA(mf).run(nstates=3)
         tdg = td.nuc_grad_method()
         g1 = tdg.kernel(state=3)
         self.assertAlmostEqual(g1[0,2], -0.23226123352352346, 8)
@@ -47,10 +51,25 @@ class KnownValues(unittest.TestCase):
         e2 = td_solver(pmol.set_geom_('H 0 0 1.803; F 0 0 0', unit='B'))
         self.assertAlmostEqual((e1[2]-e2[2])/.002, g1[0,2], 6)
 
-    def test_tdhf(self):
-        td = tddft.TDDFT(mf).run(nstates=3)
+        self.assertAlmostEqual(abs(tdg.kernel(state=0) -
+                                   mf.nuc_grad_method().kernel()).max(), 0, 8)
+
+    def test_tda_triplet(self):
+        td = tdscf.TDA(mf).run(singlet=False, nstates=3)
         tdg = td.nuc_grad_method()
         g1 = tdg.kernel(state=3)
+        self.assertAlmostEqual(g1[0,2], -0.47296513687621511, 8)
+
+        td_solver = td.as_scanner()
+        e1 = td_solver(pmol.set_geom_('H 0 0 1.805; F 0 0 0', unit='B'))
+        e2 = td_solver(pmol.set_geom_('H 0 0 1.803; F 0 0 0', unit='B'))
+        self.assertAlmostEqual((e1[2]-e2[2])/.002, g1[0,2], 5)
+
+    def test_tdhf(self):
+        td = tdscf.TDDFT(mf).run(nstates=3)
+        tdg = td.nuc_grad_method()
+        g1 = tdrhf_grad.kernel(tdg, td.xy[2])
+        g1 += tdg.grad_nuc()
         self.assertAlmostEqual(g1[0,2], -0.25240005833657309, 8)
 
         td_solver = td.as_scanner()

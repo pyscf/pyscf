@@ -202,11 +202,11 @@ def as_scanner(grad_mp):
 
     Examples::
 
-        >>> from pyscf import gto, scf, mp
-        >>> mol = gto.M(atom='H 0 0 0; F 0 0 1')
-        >>> mp2_scanner = mp.MP2(scf.RHF(mol)).nuc_grad_method().as_scanner()
-        >>> e_tot, grad = mp2_scanner(gto.M(atom='H 0 0 0; F 0 0 1.1'))
-        >>> e_tot, grad = mp2_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
+    >>> from pyscf import gto, scf, mp
+    >>> mol = gto.M(atom='H 0 0 0; F 0 0 1')
+    >>> mp2_scanner = mp.MP2(scf.RHF(mol)).nuc_grad_method().as_scanner()
+    >>> e_tot, grad = mp2_scanner(gto.M(atom='H 0 0 0; F 0 0 1.1'))
+    >>> e_tot, grad = mp2_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
     '''
     logger.info(grad_mp, 'Set nuclear gradients of %s as a scanner', grad_mp.__class__)
     class MP2_GradScanner(grad_mp.__class__, lib.GradScanner):

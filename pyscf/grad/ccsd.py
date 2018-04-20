@@ -204,11 +204,11 @@ def as_scanner(grad_cc):
 
     Examples::
 
-        >>> from pyscf import gto, scf, cc
-        >>> mol = gto.M(atom='H 0 0 0; F 0 0 1')
-        >>> cc_scanner = cc.CCSD(scf.RHF(mol)).nuc_grad_method().as_scanner()
-        >>> e_tot, grad = cc_scanner(gto.M(atom='H 0 0 0; F 0 0 1.1'))
-        >>> e_tot, grad = cc_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
+    >>> from pyscf import gto, scf, cc
+    >>> mol = gto.M(atom='H 0 0 0; F 0 0 1')
+    >>> cc_scanner = cc.CCSD(scf.RHF(mol)).nuc_grad_method().as_scanner()
+    >>> e_tot, grad = cc_scanner(gto.M(atom='H 0 0 0; F 0 0 1.1'))
+    >>> e_tot, grad = cc_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
     '''
     logger.info(grad_cc, 'Set nuclear gradients of %s as a scanner', grad_cc.__class__)
     class CCSD_GradScanner(grad_cc.__class__, lib.GradScanner):
@@ -414,7 +414,7 @@ class Gradients(lib.StreamObject):
         if eris is None:
             eris = mycc.ao2mo()
         if t1 is None or t2 is None:
-            t1, t2 = mycc.kernel(eris=eris)
+            t1, t2 = mycc.kernel(eris=eris)[1:]
         if l1 is None or l2 is None:
             l1, l2 = mycc.solve_lambda(eris=eris)
         if atmlst is None:

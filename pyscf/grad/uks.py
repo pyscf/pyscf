@@ -54,11 +54,11 @@ def get_veff(ks_grad, mol=None, dm=None):
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, ks_grad.max_memory*.9-mem_now)
     if ks_grad.grid_response:
-        exc, vxc = get_vxc_full_response(ni, mol, mf.grids, mf.xc, dm,
+        exc, vxc = get_vxc_full_response(ni, mol, grids, mf.xc, dm,
                                          max_memory=max_memory,
                                          verbose=ks_grad.verbose)
     else:
-        exc, vxc = get_vxc(ni, mol, mf.grids, mf.xc, dm,
+        exc, vxc = get_vxc(ni, mol, grids, mf.xc, dm,
                            max_memory=max_memory, verbose=ks_grad.verbose)
     nao = vxc.shape[-1]
     t0 = logger.timer(ks_grad, 'vxc', *t0)

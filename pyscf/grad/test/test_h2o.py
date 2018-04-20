@@ -53,6 +53,10 @@ h2o_p.spin = 1
 h2o_p.basis = '6-31g'
 h2o_p.build()
 
+def tearDownModule():
+    global h2o, h2o_n, h2o_p
+    del h2o, h2o_n, h2o_p
+
 
 def finger(mat):
     return abs(mat).sum()
@@ -67,7 +71,7 @@ class KnownValues(unittest.TestCase):
 
     def test_r_uhf(self):
         uhf = scf.dhf.UHF(h2o)
-        uhf.conv_tol_grad = 1e-6
+        uhf.conv_tol = 1e-12
         uhf.kernel()
         g = grad.DHF(uhf)
         self.assertAlmostEqual(finger(g.grad_elec()), 10.126445612578864, 6)

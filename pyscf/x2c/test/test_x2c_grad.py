@@ -21,16 +21,6 @@ from pyscf import gto
 from pyscf.x2c import sfx2c1e
 from pyscf.x2c import sfx2c1e_grad
 
-class light_speed(object):
-    def __init__(self, c):
-        self.bak = lib.param.LIGHT_SPEED
-        self.c = c
-    def __enter__(self):
-        lib.param.LIGHT_SPEED = self.c
-        return self.c
-    def __exit__(self, type, value, traceback):
-        lib.param.LIGHT_SPEED = self.bak
-
 def _sqrt0(a):
     w, v = scipy.linalg.eigh(a)
     return numpy.dot(v*numpy.sqrt(w), v.conj().T)
@@ -216,7 +206,7 @@ mol = gto.M(
 
 class KnownValues(unittest.TestCase):
     def test_x1(self):
-        with light_speed(10) as c:
+        with lib.light_speed(10) as c:
             x_1 = get_x0(mol1)
             x_2 = get_x0(mol2)
             x1_ref = (x_1 - x_2) / 0.0002 * lib.param.BOHR
@@ -231,7 +221,7 @@ class KnownValues(unittest.TestCase):
             self.assertAlmostEqual(abs(x1-x1t).max(), 0, 9)
 
     def test_R1(self):
-        with light_speed(10) as c:
+        with lib.light_speed(10) as c:
             R_1 = get_R(mol1)
             R_2 = get_R(mol2)
             R1_ref = (R_1 - R_2) / 0.0002 * lib.param.BOHR
@@ -246,7 +236,7 @@ class KnownValues(unittest.TestCase):
             self.assertAlmostEqual(abs(R1-R1t).max(), 0, 9)
 
     def test_hfw(self):
-        with light_speed(10) as c:
+        with lib.light_speed(10) as c:
             x2c_1 = sfx2c1e.SpinFreeX2C(mol1)
             x2c_2 = sfx2c1e.SpinFreeX2C(mol2)
             x2cobj = sfx2c1e.SpinFreeX2C(mol)

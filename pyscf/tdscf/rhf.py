@@ -573,13 +573,13 @@ def as_scanner(td):
 
     Examples::
 
-        >>> from pyscf import gto, scf, tdscf
-        >>> mol = gto.M(atom='H 0 0 0; F 0 0 1')
-        >>> td_scanner = tdscf.TDHF(scf.RHF(mol)).as_scanner()
-        >>> de = td_scanner(gto.M(atom='H 0 0 0; F 0 0 1.1'))
-        [ 0.34460866  0.34460866  0.7131453 ]
-        >>> de = td_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
-        [ 0.14844013  0.14844013  0.47641829]
+    >>> from pyscf import gto, scf, tdscf
+    >>> mol = gto.M(atom='H 0 0 0; F 0 0 1')
+    >>> td_scanner = tdscf.TDHF(scf.RHF(mol)).as_scanner()
+    >>> de = td_scanner(gto.M(atom='H 0 0 0; F 0 0 1.1'))
+    [ 0.34460866  0.34460866  0.7131453 ]
+    >>> de = td_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
+    [ 0.14844013  0.14844013  0.47641829]
     '''
     logger.info(td, 'Set %s as a scanner', td.__class__)
     class TD_Scanner(td.__class__, lib.SinglePointScanner):
@@ -590,7 +590,7 @@ def as_scanner(td):
             mf_scanner = self._scf
             mf_e = mf_scanner(mol)
             self.mol = mol
-            self.kernel(**kwargs)[0]
+            self.kernel(**kwargs)
             return mf_e + self.e
     return TD_Scanner(td)
 

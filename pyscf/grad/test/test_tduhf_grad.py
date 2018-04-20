@@ -19,7 +19,8 @@
 import unittest
 import numpy
 from pyscf import gto, scf
-from pyscf import tddft
+from pyscf import tdscf
+from pyscf.grad import tduhf as tduhf_grad
 
 
 mol = gto.Mole()
@@ -36,9 +37,13 @@ mol.build()
 pmol = mol.copy()
 mf = scf.UHF(mol).set(conv_tol=1e-12).run()
 
+def tearDownModule():
+    global mol, pmol, mf
+    del mol, pmol, mf
+
 class KnownValues(unittest.TestCase):
     def test_tda(self):
-        td = tddft.TDA(mf).run(nstates=3)
+        td = tdscf.TDA(mf).run(nstates=3)
         tdg = td.nuc_grad_method()
         g1 = tdg.kernel(state=3)
         self.assertAlmostEqual(g1[0,2], -0.78246882668628404, 8)
@@ -49,9 +54,10 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual((e1[2]-e2[2])/.002, g1[0,2], 4)
 
     def test_tdhf(self):
-        td = tddft.TDDFT(mf).run(nstates=3)
+        td = tdscf.TDDFT(mf).run(nstates=3)
         tdg = td.nuc_grad_method()
-        g1 = tdg.kernel(state=3)
+        g1 = tduhf_grad.kernel(tdg, td.xy[2])
+        g1 += tdg.grad_nuc()
         self.assertAlmostEqual(g1[0,2], -0.78969714300299776, 8)
 
         td_solver = td.as_scanner()

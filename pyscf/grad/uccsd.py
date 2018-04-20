@@ -356,7 +356,7 @@ def _rdm2_mo2ao(mycc, d2, mo_coeff, fsave=None):
         dvvOP[:,i] = buf1[numpy.tril_indices(nvira)]
     for p0, p1 in lib.prange(0, nvira_pair, blksize_a):
         buf1 = numpy.zeros((p1-p0,nmob,nmob))
-        buf1[:,noccb:,noccb:] = lib.unpack_tril(dvvVV[p0:p1] * .25)
+        buf1[:,noccb:,noccb:] = lib.unpack_tril(dvvVV[p0:p1] * .5)
         buf1[:,:noccb,:] = dvvOP[p0:p1] * .5
         v_ba[:,p0:p1] = _trans(buf1, mo_b, (0,nmob,0,nmob)).T
     dvvOO = dvvOV = None

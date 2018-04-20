@@ -474,10 +474,14 @@ class UHF(hf.SCF):
         return analyze(self, verbose)
 
     def x2c(self):
-        import pyscf.x2c.x2c
-        x2chf = pyscf.x2c.x2c.UHF(self.mol)
+        from pyscf import x2c
+        x2chf = x2c.x2c.UHF(self.mol)
         x2chf.__dict__.update(self.__dict__)
         return x2chf
+
+    def nuc_grad_method(self):
+        from pyscf.grad import dhf
+        return dhf.Gradients(self)
 DHF = UHF
 
 

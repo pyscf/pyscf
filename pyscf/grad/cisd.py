@@ -56,11 +56,11 @@ def as_scanner(grad_ci):
 
     Examples::
 
-        >>> from pyscf import gto, scf, ci
-        >>> mol = gto.M(atom='H 0 0 0; F 0 0 1')
-        >>> ci_scanner = ci.CISD(scf.RHF(mol)).nuc_grad_method().as_scanner()
-        >>> e_tot, grad = ci_scanner(gto.M(atom='H 0 0 0; F 0 0 1.1'))
-        >>> e_tot, grad = ci_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
+    >>> from pyscf import gto, scf, ci
+    >>> mol = gto.M(atom='H 0 0 0; F 0 0 1')
+    >>> ci_scanner = ci.CISD(scf.RHF(mol)).nuc_grad_method().as_scanner()
+    >>> e_tot, grad = ci_scanner(gto.M(atom='H 0 0 0; F 0 0 1.1'))
+    >>> e_tot, grad = ci_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
     '''
     logger.info(grad_ci, 'Set nuclear gradients of %s as a scanner', grad_ci.__class__)
     class CISD_GradScanner(grad_ci.__class__, lib.GradScanner):

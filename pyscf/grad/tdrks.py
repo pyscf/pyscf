@@ -38,7 +38,6 @@ from pyscf.grad import tdrhf
 #
 def kernel(td_grad, x_y, singlet=True, atmlst=None,
            max_memory=2000, verbose=logger.INFO):
-    x, y = x_y
     log = logger.new_logger(td_grad, verbose)
     time0 = time.clock(), time.time()
 
@@ -50,6 +49,7 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
     nao, nmo = mo_coeff.shape
     nocc = (mo_occ>0).sum()
     nvir = nmo - nocc
+    x, y = x_y
     xpy = (x+y).reshape(nocc,nvir).T
     xmy = (x-y).reshape(nocc,nvir).T
     orbv = mo_coeff[:,nocc:]
@@ -173,7 +173,7 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
         vk *= hyb
         if abs(omega) > 1e-10:
             with mol.with_range_coulomb(omega):
-                vk += ks_grad.get_k(mol, dm) * (alpha-hyb)
+                vk += td_grad.get_k(mol, dm) * (alpha-hyb)
         vj = vj.reshape(-1,3,nao,nao)
         vk = vk.reshape(-1,3,nao,nao)
         if singlet:

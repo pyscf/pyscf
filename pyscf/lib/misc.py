@@ -849,7 +849,30 @@ class GradScanner:
         return self.base.e_tot
     @property
     def converged(self):
-        return self.base.converged
+# Some base methods like MP2 does not have the attribute converged
+        conv = getattr(self.base, 'converged', True)
+        return conv
+
+class light_speed(object):
+    '''Within the context of this macro, the environment varialbe LIGHT_SPEED
+    can be customized.
+
+    Examples:
+
+    >>> with light_speed(15.):
+    ...     print(lib.param.LIGHT_SPEED)
+    15.
+    >>> print(lib.param.LIGHT_SPEED)
+    137.03599967994
+    '''
+    def __init__(self, c):
+        self.bak = param.LIGHT_SPEED
+        self.c = c
+    def __enter__(self):
+        param.LIGHT_SPEED = self.c
+        return self.c
+    def __exit__(self, type, value, traceback):
+        param.LIGHT_SPEED = self.bak
 
 
 if __name__ == '__main__':

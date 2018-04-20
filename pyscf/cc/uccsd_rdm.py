@@ -342,6 +342,7 @@ def _gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj, compress_vvvv=False):
     dvvvv *= .5
     dvvVV = dvvVV + dvvVV.transpose(1,0,2,3)
     dvvVV = lib.take_2d(dvvVV.reshape(nvira**2,nvirb**2), idxa, idxb)
+    dvvVV *= .5
     dVVVV = dVVVV + dVVVV.transpose(1,0,2,3)
     dVVVV = lib.take_2d(dVVVV.reshape(nvirb**2,nvirb**2), idxb, idxb)
     dVVVV *= .5

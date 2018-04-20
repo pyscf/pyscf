@@ -99,4 +99,4 @@ Capture stdout
 Other helper functions in :mod:`lib.misc`
 -----------------------------------------
 .. automodule:: lib.misc
-  :members: flatten
+  :members: flatten, light_speed

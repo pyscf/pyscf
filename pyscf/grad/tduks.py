@@ -36,12 +36,8 @@ from pyscf import __config__
 #
 # Given Y = 0, TDHF gradients (XAX+XBY+YBX+YAY)^1 turn to TDA gradients (XAX)^1
 #
-def kernel(td_grad, x_y, singlet=True, atmlst=None,
-           max_memory=2000, verbose=logger.INFO):
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(td_grad.stdout, verbose)
+def kernel(td_grad, x_y, atmlst=None, max_memory=2000, verbose=logger.INFO):
+    log = logger.new_logger(td_grad, verbose)
     time0 = time.clock(), time.time()
 
     mol = td_grad.mol
@@ -103,7 +99,7 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
         vj = vj.reshape(2,3,nao,nao)
         vk = vk.reshape(2,3,nao,nao) * hyb
         if abs(omega) > 1e-10:
-            vk += rks._get_k_lr(mol, dm, omega) * (alpha-hyb)
+            vk += rks._get_k_lr(mol, dm, omega).reshape(2,3,nao,nao) * (alpha-hyb)
 
         veff0doo = vj[0,0]+vj[1,0] - vk[:,0] + f1oo[:,0] + k1ao[:,0] * 2
         wvoa = reduce(numpy.dot, (orbva.T, veff0doo[0], orboa)) * 2
@@ -237,7 +233,7 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
         vk = vk.reshape(2,4,3,nao,nao) * hyb
         if abs(omega) > 1e-10:
             with mol.with_range_coulomb(omega):
-                vk += ks_grad.get_k(mol, dm) * (alpha-hyb)
+                vk += td_grad.get_k(mol, dm).reshape(2,4,3,nao,nao) * (alpha-hyb)
         veff1 = vj[0] + vj[1] - vk
     else:
         dm = (oo0a, dmz1dooa+dmz1dooa.T, dmzvopa+dmzvopa.T,
@@ -424,7 +420,7 @@ def _contract_xc_kernel(td_grad, xc_code, dmvo, dmoo=None, with_vxc=True,
 class Gradients(tdrhf_grad.Gradients):
 
     def grad_elec(self, xy, singlet, atmlst=None):
-        return kernel(self, xy, singlet, atmlst, self.max_memory, self.verbose)
+        return kernel(self, xy, atmlst, self.max_memory, self.verbose)
 
 
 if __name__ == '__main__':
