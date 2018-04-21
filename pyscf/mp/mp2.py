@@ -390,6 +390,10 @@ class MP2(lib.StreamObject):
 
     as_scanner = as_scanner
 
+    def density_fit(self):
+        from pyscf.mp import dfmp2
+        return dfmp2.DFMP2(self._scf, self.frozen, self.mo_coeff, self.mo_occ)
+
     def nuc_grad_method(self):
         from pyscf.grad import mp2
         return mp2.Gradients(self)
