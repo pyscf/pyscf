@@ -1910,7 +1910,10 @@ class Mole(lib.StreamObject):
         if (parse_arg and self.output is not None and
             not (hasattr(self.stdout, 'name') and  # to handle StringIO().name bug
                  self.stdout.name == self.output)):
-            self.stdout = open(self.output, 'w')
+            if self.output == '/dev/null':
+                self.stdout = open(os.devnull, 'wb')
+            else:
+                self.stdout = open(self.output, 'w')
 
         if self.verbose >= logger.WARN:
             self.check_sanity()
