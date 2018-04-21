@@ -240,6 +240,10 @@ class RCCSD(ccsd.CCSD):
 #?        assert(t2.dtype == np.double)
         return ccsd.CCSD.ccsd_t(self, t1, t2, eris)
 
+    def density_fit(self):
+        from pyscf.cc import dfccsd
+        return self.view(dfccsd.RCCSD)
+
 
 class _ChemistsERIs(ccsd._ChemistsERIs):
 

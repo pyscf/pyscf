@@ -708,6 +708,9 @@ class UCCSD(ccsd.CCSD):
         from pyscf.cc import eom_uccsd
         return eom_uccsd.EOMEE(self)
 
+    def density_fit(self):
+        raise NotImplementedError
+
     def nuc_grad_method(self):
         from pyscf.grad import uccsd
         return uccsd.Gradients(self)

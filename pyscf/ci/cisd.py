@@ -714,6 +714,9 @@ class CISD(lib.StreamObject):
         if nocc is None: nocc = self.nocc
         return cisdvec_to_amplitudes(civec, nmo, nocc)
 
+    def density_fit(self):
+        raise NotImplementedError
+
     def nuc_grad_method(self):
         from pyscf.grad import cisd
         return cisd.Gradients(self)
