@@ -323,37 +323,6 @@ def square_mat_in_trilu_indices(n):
     tril2sq[idx[0],idx[1]] = tril2sq[idx[1],idx[0]] = numpy.arange(n*(n+1)//2)
     return tril2sq
 
-class ctypes_stdout(object):
-    '''make c-printf output to string, but keep python print in /dev/pts/1.
-    Note it cannot correctly handle c-printf with GCC, don't know why.
-    '''
-    def __enter__(self):
-        sys.stdout.flush()
-        self._contents = None
-        self.old_stdout_fileno = sys.stdout.fileno()
-        self.bak_stdout_fd = os.dup(self.old_stdout_fileno)
-        self.bak_stdout = sys.stdout
-        self.fd, self.ftmp = tempfile.mkstemp(dir=param.TMPDIR)
-        os.dup2(self.fd, self.old_stdout_fileno)
-        sys.stdout = os.fdopen(self.bak_stdout_fd, 'w')
-        return self
-    def __exit__(self, type, value, traceback):
-        sys.stdout.flush()
-        os.fsync(self.fd)
-        self._contents = open(self.ftmp, 'r').read()
-        os.dup2(self.bak_stdout_fd, self.old_stdout_fileno)
-        sys.stdout = self.bak_stdout # self.bak_stdout_fd is closed
-        #os.close(self.fd) is closed when os.fdopen is closed
-        os.remove(self.ftmp)
-    def read(self):
-        if self._contents:
-            return self._contents
-        else:
-            sys.stdout.flush()
-            #f = os.fdopen(self.fd, 'r') # need to rewind(0) before reading
-            #f.seek(0)
-            return open(self.ftmp, 'r').read()
-
 class capture_stdout(object):
     '''redirect all stdout (c printf & python print) into a string
 
@@ -371,24 +340,24 @@ class capture_stdout(object):
         self._contents = None
         self.old_stdout_fileno = sys.stdout.fileno()
         self.bak_stdout_fd = os.dup(self.old_stdout_fileno)
-        self.fd, self.ftmp = tempfile.mkstemp(dir=param.TMPDIR)
-        os.dup2(self.fd, self.old_stdout_fileno)
+        self.ftmp = tempfile.NamedTemporaryFile(dir=param.TMPDIR)
+        os.dup2(self.ftmp.file.fileno(), self.old_stdout_fileno)
         return self
     def __exit__(self, type, value, traceback):
         sys.stdout.flush()
-        self._contents = open(self.ftmp, 'r').read()
+        self.ftmp.file.seek(0)
+        self._contents = self.ftmp.file.read()
+        self.ftmp.close()
         os.dup2(self.bak_stdout_fd, self.old_stdout_fileno)
         os.close(self.bak_stdout_fd)
-        #os.close(self.fd) will be closed when os.fdopen is closed
-        os.remove(self.ftmp)
     def read(self):
         if self._contents:
             return self._contents
         else:
             sys.stdout.flush()
-            #f = os.fdopen(self.fd, 'r') # need to rewind(0) before reading
-            #f.seek(0)
-            return open(self.ftmp, 'r').read()
+            self.ftmp.file.seek(0)
+            return self.ftmp.file.read()
+ctypes_stdout = capture_stdout
 
 class quite_run(object):
     '''capture all stdout (c printf & python print) but output nothing
@@ -402,9 +371,7 @@ class quite_run(object):
     '''
     def __enter__(self):
         sys.stdout.flush()
-        self.dirnow = os.getcwd()
-        self.tmpdir = tempfile.mkdtemp(dir=param.TMPDIR)
-        os.chdir(self.tmpdir)
+        #TODO: to handle the redirected stdout e.g. StringIO()
         self.old_stdout_fileno = sys.stdout.fileno()
         self.bak_stdout_fd = os.dup(self.old_stdout_fileno)
         self.fnull = open(os.devnull, 'wb')
@@ -413,8 +380,6 @@ class quite_run(object):
         sys.stdout.flush()
         os.dup2(self.bak_stdout_fd, self.old_stdout_fileno)
         self.fnull.close()
-        shutil.rmtree(self.tmpdir)
-        os.chdir(self.dirnow)
 
 
 # from pygeocoder
@@ -532,6 +497,12 @@ class StreamObject(object):
             hasattr(self, '_keys')):
             check_sanity(self, self._keys, self.stdout)
         return self
+
+    def view(self, cls):
+        '''New view of object with the same attributes.'''
+        obj = cls.__new__(cls)
+        obj.__dict__.update(self.__dict__)
+        return obj
 
 _warn_once_registry = {}
 def check_sanity(obj, keysref, stdout=sys.stdout):
