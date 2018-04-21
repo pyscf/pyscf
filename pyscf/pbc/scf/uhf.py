@@ -169,7 +169,7 @@ class UHF(mol_uhf.UHF, pbchf.SCF):
     density_fit = pbchf.SCF.density_fit
     # mix_density_fit inherits from hf.SCF.mix_density_fit
 
-    x2c1e = pbchf.SCF.x2c1e
+    x2c = x2c1e = sfx2c1e = pbchf.SCF.sfx2c1e
 
     def convert_from_(self, mf):
         '''Convert given mean-field object to RHF/ROHF'''

@@ -443,6 +443,7 @@ class SCF(mol_hf.SCF):
     def sfx2c1e(self):
         from pyscf.pbc.x2c import sfx2c1e
         return sfx2c1e.sfx2c1e(self)
+    x2c = x2c1e = sfx2c1e
 
 class RHF(SCF, mol_hf.RHF):
     def convert_from_(self, mf):

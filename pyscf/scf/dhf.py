@@ -312,9 +312,8 @@ class UHF(hf.SCF):
         hf.SCF.__init__(self, mol)
         self._coulomb_now = 'SSSS' # 'SSSS' ~ LLLL+LLSS+SSSS
         self.opt = (None, None, None, None) # (opt_llll, opt_ssll, opt_ssss, opt_gaunt)
-
-        keys = set(('conv_tol', 'with_ssss', 'with_gaunt', 'with_breit'))
-        self._keys = set(self.__dict__.keys()).union(keys)
+        self._keys.update(('conv_tol', 'with_ssss', 'with_gaunt',
+                           'with_breit', 'opt'))
 
     def dump_flags(self):
         hf.SCF.dump_flags(self)
@@ -473,11 +472,14 @@ class UHF(hf.SCF):
         if verbose is None: verbose = self.verbose
         return analyze(self, verbose)
 
-    def x2c(self):
+    def sfx2c1e(self):
+        raise NotImplementedError
+    def x2c1e(self):
         from pyscf import x2c
         x2chf = x2c.x2c.UHF(self.mol)
         x2chf.__dict__.update(self.__dict__)
         return x2chf
+    x2c = x2c1e
 
     def nuc_grad_method(self):
         from pyscf.grad import dhf

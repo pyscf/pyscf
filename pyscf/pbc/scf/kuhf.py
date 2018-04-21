@@ -482,7 +482,7 @@ class KUHF(pbcuhf.UHF, khf.KSCF):
     # mix_density_fit inherits from khf.KSCF.mix_density_fit
 
     newton = khf.KSCF.newton
-    x2c1e = khf.KSCF.x2c1e
+    x2c = x2c1e = sfx2c1e = khf.KSCF.sfx2c1e
 
     def stability(self,
                   internal=getattr(__config__, 'pbc_scf_KSCF_stability_internal', True),

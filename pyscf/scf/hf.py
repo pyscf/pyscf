@@ -1561,10 +1561,8 @@ class SCF(lib.StreamObject):
     def sfx2c1e(self):
         import pyscf.x2c.sfx2c1e
         return pyscf.x2c.sfx2c1e.sfx2c1e(self)
-    def x2c1e(self):
-        return self.sfx2c1e()
-    def x2c(self):
-        return self.x2c1e()
+    x2c1e = sfx2c1e
+    x2c = x2c1e
 
     def newton(self):
         import pyscf.soscf.newton_ah
