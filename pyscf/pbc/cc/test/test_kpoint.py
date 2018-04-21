@@ -108,6 +108,7 @@ class KnownValues(unittest.TestCase):
         # KGCCSD calculation, equivalent to running supercell
         # calculation with frozen=[0,1,2] (if done with larger mesh)
         cc = pyscf.pbc.cc.kccsd.CCSD(kmf, frozen=[[0,1],[],[0]])
+        cc.diis_start_cycle = 1
         ecc, t1, t2 = cc.kernel()
         self.assertAlmostEqual(ehf, ehf_bench, 9)
         self.assertAlmostEqual(ecc, ecc_bench, 9)
@@ -120,6 +121,7 @@ class KnownValues(unittest.TestCase):
         # The following calculation at full convergence gives -0.711071910294612
         # for a cell.mesh = [25, 25, 25].
         mycc = pyscf.pbc.cc.KGCCSD(kmf, frozen=0)
+        mycc.diis_start_cycle = 1
         mycc.iterative_damping = 0.04
         mycc.max_cycle = max_cycle
         ecc1, t1, t2 = mycc.kernel()
@@ -135,6 +137,7 @@ class KnownValues(unittest.TestCase):
         # for a cell.mesh = [25, 25, 25].  It is equivalent to a supercell [1, 1, 2]
         # calculation with frozen = [0, 3].
         mycc = pyscf.pbc.cc.KGCCSD(kmf, frozen=[[2, 3], [0, 1]])
+        mycc.diis_start_cycle = 1
         mycc.iterative_damping = 0.04
         mycc.max_cycle = max_cycle
         ecc2, t1, t2 = mycc.kernel()

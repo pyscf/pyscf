@@ -230,13 +230,13 @@ class DIIS(object):
         dt = None
 
         if self._xprev is None:
-            xnew = self.extraplate_vector(nd)
+            xnew = self.extrapolate(nd)
         else:
             self._xprev = None # release memory first
-            self._xprev = xnew = self.extraplate_vector(nd)
+            self._xprev = xnew = self.extrapolate(nd)
         return xnew.reshape(x.shape)
 
-    def extraplate_vector(self, nd=None):
+    def extrapolate(self, nd=None):
         if nd is None:
             nd = self.get_num_vec()
 
@@ -266,9 +266,9 @@ class DIIS(object):
                 xnew[p0:p1] += xi[p0:p1] * ci
         return xnew
 
-    def restore_from_file(self, filename, inplace=True):
-        '''Read diis contents from a diis file then construct the vector and
-        replace the attributes of current diis object if needed.
+    def restore(self, filename, inplace=True):
+        '''Read diis contents from a diis file and replace the attributes of
+        current diis object if needed, then construct the vector.
         '''
         fdiis = misc.H5TmpFile(filename)
         diis_keys = fdiis.keys()
@@ -284,7 +284,7 @@ class DIIS(object):
                     self._buffer[key] = numpy.asarray(fdiis[key])
         else:
             for key in diis_keys:
-                self._store(key, fdiis[key])
+                self._store(key, fdiis[key].value)
 
         nd = len(e_keys)
         self._bookkeep = range(min(self.space, nd))
@@ -309,17 +309,12 @@ class DIIS(object):
         self._H = numpy.zeros((space+1,space+1), e_mat.dtype)
         self._H[0,1:] = self._H[1:,0] = 1
         self._H[1:nd+1,1:nd+1] = e_mat
-        self._xprev = self.extraplate_vector(nd)
-        return self._xprev
-    restore = restore_from_file
+        return self
 
 
-def restore(diisobj_or_file):
-    '''Restore vector from a diis object or a diis file'''
-    if isinstance(diisobj_or_file, DIIS):
-        return diisobj_or_file.extraplate_vector()
-    else:
-        return DIIS().restore_from_file(diisobj_or_file)
+def restore(filename):
+    '''Restore/construct diis object based on a diis file'''
+    return DIIS().restore(filename)
 
 
 def prange(start, end, step):

@@ -83,6 +83,7 @@ class KnownValues(unittest.TestCase):
         # Freeze 1s electrons
         frozen = [[0,1], [0,1]]
         ucc = cc.UCCSD(mf1, frozen=frozen)
+        ucc.diis_start_cycle = 1
         ecc, t1, t2 = ucc.kernel()
         self.assertAlmostEqual(ecc, -0.12065952206237093, 8)
 

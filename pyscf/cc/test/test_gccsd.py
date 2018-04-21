@@ -339,12 +339,12 @@ class KnownValues(unittest.TestCase):
         mol.basis = '631g'
         mol.build()
         mf = scf.RHF(mol).run()
-        myrcc = ccsd.CCSD(mf).run()
+        myrcc = ccsd.CCSD(mf).set(diis_start_cycle=1).run()
         rdm1 = myrcc.make_rdm1()
         rdm2 = myrcc.make_rdm2()
 
         mf = scf.addons.convert_to_ghf(mf)
-        mygcc = gccsd.GCCSD(mf).run()
+        mygcc = gccsd.GCCSD(mf).set(diis_start_cycle=1).run()
         dm1 = mygcc.make_rdm1()
         dm2 = mygcc.make_rdm2()
 

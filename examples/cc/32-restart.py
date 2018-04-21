@@ -50,7 +50,7 @@ mf.__dict__.update(lib.chkfile.load('hf.chk', 'scf'))
 #
 mycc = cc.CCSD(mf)
 mycc.verbose = 4
-ccvec = lib.diis.restore('ccdiis.h5')
+ccvec = lib.diis.restore('ccdiis.h5').extrapolate()
 t1, t2 = mycc.vector_to_amplitudes(ccvec)
 mycc.kernel(t1, t2)
 
@@ -63,7 +63,8 @@ mycc.kernel(t1, t2)
 #
 mycc = cc.CCSD(mf)
 mycc.verbose = 4
-mycc.diis = lib.diis.DIIS(mol)
-ccvec = mycc.diis.restore('ccdiis.h5')
+mycc.diis = lib.diis.restore('ccdiis.h5')
+ccvec = mycc.diis.extrapolate()
 t1, t2 = mycc.vector_to_amplitudes(ccvec)
 mycc.kernel(t1, t2)
+

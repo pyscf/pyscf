@@ -74,6 +74,7 @@ class KnownValues(unittest.TestCase):
     def test_frozen(self):
         mycc = cc.ccsd.CCSD(mf)
         mycc.frozen = [0,1,10,11,12]
+        mycc.diis_start_cycle = 1
         mycc.max_memory = 1
         g1 = mycc.nuc_grad_method().kernel(atmlst=range(mol.natm))
         self.assertAlmostEqual(lib.finger(g1), 0.10599503839207361, 6)
@@ -116,6 +117,7 @@ class KnownValues(unittest.TestCase):
     def test_rdm2_mo2ao(self):
         mycc = cc.ccsd.CCSD(mf)
         mycc.conv_tol = 1e-10
+        mycc.diis_start_cycle = 1
         eris = mycc.ao2mo()
         ecc, t1, t2 = mycc.kernel(eris=eris)
         l1, l2 = mycc.solve_lambda(eris=eris)
@@ -133,7 +135,7 @@ class KnownValues(unittest.TestCase):
         ccsd_grad._rdm2_mo2ao(mycc, d2, mycc.mo_coeff, fdm2)
         self.assertAlmostEqual(abs(ref-rdm2).max(), 0, 10)
         self.assertAlmostEqual(abs(ref-fdm2['dm2'].value).max(), 0, 10)
-        self.assertAlmostEqual(lib.finger(rdm2), -0.32532303057849454, 7)
+        self.assertAlmostEqual(lib.finger(rdm2), -0.32532303057849454, 6)
 
     def test_uccsd_rdm2_mo2ao(self):
         mol = gto.Mole()
@@ -149,6 +151,7 @@ class KnownValues(unittest.TestCase):
         mf.conv_tol_grad = 1e-8
         mf.kernel()
         mycc = cc.UCCSD(mf)
+        mycc.diis_start_cycle = 1
         mycc.conv_tol = 1e-10
         eris = mycc.ao2mo()
         ecc, t1, t2 = mycc.kernel(eris=eris)
