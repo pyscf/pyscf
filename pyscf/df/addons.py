@@ -188,7 +188,7 @@ def make_auxmol(mol, auxbasis=None):
     required elements not defined in the optimized auxiliary basis),
     even-tempered Gaussian basis set will be generated.
 
-    See also the paper JCTC, 13, 554 about the generation of auxiliary fitting basis.
+    See also the paper JCTC, 13, 554 about generating auxiliary fitting basis.
     '''
     pmol = copy.copy(mol)  # just need shallow copy
 

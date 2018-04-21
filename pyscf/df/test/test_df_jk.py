@@ -21,6 +21,7 @@ import scipy.linalg
 from pyscf import lib
 from pyscf import gto
 from pyscf import scf
+from pyscf import df
 from pyscf.df import df_jk
 
 mol = gto.M(
@@ -42,6 +43,10 @@ symol = gto.M(
     basis = 'cc-pvdz',
     symmetry = 1,
 )
+
+def tearDownModule():
+    global mol, symol
+    del mol, symol
 
 
 class KnowValues(unittest.TestCase):
@@ -71,7 +76,7 @@ class KnowValues(unittest.TestCase):
         pmol = mol.copy()
         pmol.build(False, False)
         mf = scf.density_fit(scf.DHF(pmol), auxbasis='weigend')
-        mf.conv_tol_grad = 1e-5
+        mf.conv_tol = 1e-10
         self.assertAlmostEqual(mf.scf(), -76.080738677021458, 8)
 
     def test_rhf_symm(self):
@@ -130,6 +135,50 @@ class KnowValues(unittest.TestCase):
         mf = scf.density_fit(scf.UHF(mol), auxbasis='weigend')
         mf._cderi = (u[:,idx] * numpy.sqrt(w[idx])).T.copy()
         self.assertAlmostEqual(mf.kernel(), -76.026765673110447, 9)
+
+    def test_nr_get_jk(self):
+        numpy.random.seed(1)
+        mf = scf.RHF(mol).density_fit(auxbasis='weigend')
+        nao = mol.nao_nr()
+        dms = numpy.random.random((2,nao,nao))
+
+        vj, vk = mf.get_jk(mol, dms, hermi=0)
+        self.assertAlmostEqual(lib.finger(vj), -194.15910890730066, 9)
+        self.assertAlmostEqual(lib.finger(vk), -46.365071587653517, 9)
+        vj = mf.get_j(mol, dms, hermi=0)
+        self.assertAlmostEqual(lib.finger(vj), -194.15910890730066, 9)
+        vk = mf.get_k(mol, dms, hermi=0)
+        self.assertAlmostEqual(lib.finger(vk), -46.365071587653517, 9)
+
+        mf.with_df = None
+        vj, vk = mf.get_jk(mol, dms, hermi=0)
+        self.assertAlmostEqual(lib.finger(vj), -194.08878302990749, 9)
+        self.assertAlmostEqual(lib.finger(vk), -46.530782983591152, 9)
+        vj = mf.get_j(mol, dms, hermi=0)
+        self.assertAlmostEqual(lib.finger(vj), -194.08878302990749, 9)
+        vk = mf.get_k(mol, dms, hermi=0)
+        self.assertAlmostEqual(lib.finger(vk), -46.530782983591152, 9)
+
+    def test_r_get_jk(self):
+        numpy.random.seed(1)
+        dfobj = df.df.DF4C(mol)
+        n2c = mol.nao_2c()
+        n4c = n2c * 2
+        dms = numpy.random.random((2,n4c,n4c))
+        vj, vk = dfobj.get_jk(dms, hermi=0)
+        self.assertAlmostEqual(lib.finger(vj), 12.961687328405461+55.686811159338134j, 9)
+        self.assertAlmostEqual(lib.finger(vk), 41.984238099875462+12.870888901217896j, 9)
+
+    def test_df_jk_density_fit(self):
+        mf = scf.RHF(mol).density_fit()
+        mf.with_df = None
+        mf = mf.density_fit()
+        self.assertTrue(mf.with_df is not None)
+
+        self.assertRaises(RuntimeError, mf.density_fit, 'sto3g')
+
+        mf = mf.newton().density_fit(auxbasis='sto3g')
+        self.assertEqual(mf.with_df.auxbasis, 'sto3g')
 
 
 if __name__ == "__main__":

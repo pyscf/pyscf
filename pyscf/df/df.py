@@ -109,7 +109,7 @@ class DF(lib.StreamObject):
         if isinstance(self._cderi, str):
             log.info('_cderi = %s  where DF integrals are loaded (readonly).',
                      self._cderi)
-        elif isinstance(self._cderi_to_save, str):
+        if isinstance(self._cderi_to_save, str):
             log.info('_cderi_to_save = %s', self._cderi_to_save)
         else:
             log.info('_cderi_to_save = %s', self._cderi_to_save.name)
@@ -221,19 +221,6 @@ class DF(lib.StreamObject):
         return mo_eri
     get_mo_eri = ao2mo
 
-    def update_mf(self, mf):
-        return df_jk.density_fit(mf, self.auxbasis, self)
-
-    def update_mc(self, mc):
-        from pyscf.mcscf import df
-        return df.density_fit(mc, self.auxbasis, self)
-
-    def update_mp2(self):
-        pass
-
-    def update(self):
-        pass
-
 
 class DF4C(DF):
     '''Relativistic 4-component'''
@@ -270,5 +257,5 @@ class DF4C(DF):
         return df_jk.r_get_jk(self, dm, hermi)
 
     def ao2mo(self, mo_coeffs):
-        pass
+        raise NotImplementedError
 

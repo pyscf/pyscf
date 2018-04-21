@@ -2665,6 +2665,9 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
     ao_loc_nr = ao_loc_nr
     ao_loc_2c = ao_loc_2c
 
+    nao = property(nao_nr)
+    ao_loc = property(ao_loc_nr)
+
     tmap = time_reversal_map = time_reversal_map
 
     def intor(self, intor, comp=None, hermi=0, aosym='s1', out=None,
