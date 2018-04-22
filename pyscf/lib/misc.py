@@ -453,7 +453,9 @@ class StreamObject(object):
         This allows a series of functions/methods to be executed in pipe.
         '''
         self.set(**kwargs)
+        #TODO: self.pre_kernel({})
         self.kernel(*args)
+        #TODO: self.post_kernel({})
         return self
 
     def set(self, **kwargs):
@@ -788,8 +790,10 @@ class H5TmpFile(h5py.File):
             tmpfile = tempfile.NamedTemporaryFile(dir=param.TMPDIR)
             filename = tmpfile.name
         h5py.File.__init__(self, filename, *args, **kwargs)
-    def __del__(self):
-        self.close()
+#FIXME: Does GC flush/close the HDF5 file when releasing the resource?
+# To make HDF5 file reusable, file has to be closed or flushed
+#    def __del__(self):
+#        self.close()
 
 def fingerprint(a):
     '''Fingerprint of numpy array'''

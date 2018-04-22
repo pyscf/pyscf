@@ -38,30 +38,38 @@ mf.conv_tol_grad = 1e-8
 mf.kernel()
 
 cc1 = dfccsd.RCCSD(mf).run(conv_tol=1e-10)
-mycc = dfccsd.RCCSD(mf).set(max_memory=0)
+mycc = cc.ccsd.CCSD(mf).density_fit().set(max_memory=0)
 mycc.__dict__.update(cc1.__dict__)
 
-mf1 = copy.copy(mf)
-no = mol.nelectron // 2
-n = mol.nao_nr()
-nv = n - no
-mf1.mo_occ = numpy.zeros(mol.nao_nr())
-mf1.mo_occ[:no] = 2
-numpy.random.seed(12)
-mf1.mo_coeff = numpy.random.random((n,n))
-dm = mf1.make_rdm1(mf1.mo_coeff, mf1.mo_occ)
-fockao = mf1.get_hcore() + mf1.get_veff(mol, dm)
-mf1.mo_energy = numpy.einsum('pi,pq,qi->i', mf1.mo_coeff, fockao, mf1.mo_coeff)
-idx = numpy.hstack([mf1.mo_energy[:no].argsort(), no+mf1.mo_energy[no:].argsort()])
-mf1.mo_coeff = mf1.mo_coeff[:,idx]
-mycc1 = dfccsd.RCCSD(mf1)
-eris1 = mycc1.ao2mo()
-numpy.random.seed(12)
-r1 = numpy.random.random((no,nv)) - .9
-r2 = numpy.random.random((no,no,nv,nv)) - .9
-r2 = r2 + r2.transpose(1,0,3,2)
-mycc1.t1 = r1*1e-5
-mycc1.t2 = r2*1e-5
+def make_mycc1():
+    mf1 = copy.copy(mf)
+    no = mol.nelectron // 2
+    n = mol.nao_nr()
+    nv = n - no
+    mf1.mo_occ = numpy.zeros(mol.nao_nr())
+    mf1.mo_occ[:no] = 2
+    numpy.random.seed(12)
+    mf1.mo_coeff = numpy.random.random((n,n))
+    dm = mf1.make_rdm1(mf1.mo_coeff, mf1.mo_occ)
+    fockao = mf1.get_hcore() + mf1.get_veff(mol, dm)
+    mf1.mo_energy = numpy.einsum('pi,pq,qi->i', mf1.mo_coeff, fockao, mf1.mo_coeff)
+    idx = numpy.hstack([mf1.mo_energy[:no].argsort(), no+mf1.mo_energy[no:].argsort()])
+    mf1.mo_coeff = mf1.mo_coeff[:,idx]
+    mycc1 = dfccsd.RCCSD(mf1)
+    eris1 = mycc1.ao2mo()
+    numpy.random.seed(12)
+    r1 = numpy.random.random((no,nv)) - .9
+    r2 = numpy.random.random((no,no,nv,nv)) - .9
+    r2 = r2 + r2.transpose(1,0,3,2)
+    mycc1.t1 = r1*1e-5
+    mycc1.t2 = r2*1e-5
+    return mf1, mycc1, eris1
+mf1, mycc1, eris1 = make_mycc1()
+no, nv = mycc1.t1.shape
+
+def tearDownModule():
+    global mol, mf, cc1, mycc, mf1, mycc1, eris1
+    del mol, mf, cc1, mycc, mf1, mycc1, eris1
 
 class KnownValues(unittest.TestCase):
     def test_with_df(self):

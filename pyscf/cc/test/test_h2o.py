@@ -23,6 +23,7 @@ from pyscf import cc
 from pyscf import ao2mo
 from pyscf.cc import ccsd
 from pyscf.cc import uccsd
+from pyscf.cc import gccsd
 from pyscf.cc import rccsd
 from pyscf.cc import dfccsd
 
@@ -40,6 +41,10 @@ mol.build()
 mf = scf.RHF(mol)
 mf.conv_tol_grad = 1e-8
 ehf = mf.kernel()
+
+def tearDownModule():
+    global mol, mf
+    del mol, mf
 
 
 class KnownValues(unittest.TestCase):
@@ -66,17 +71,6 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(numpy.allclose(mcc.t2,mcc.t2.transpose(1,0,3,2)))
         self.assertAlmostEqual(mcc.ecc, -0.2133432312951, 8)
         self.assertAlmostEqual(abs(mcc.t2).sum(), 5.63970279799556984, 6)
-
-        nocc, nvir = t1.shape
-        tau = t2 + numpy.einsum('ia,jb->ijab', t1, t1)
-        ovvv = lib.unpack_tril(eris.ovvv).reshape(nocc,nvir,nvir,nvir)
-        tmp = -numpy.einsum('ijcd,ka,kdcb->ijba', tau, t1, ovvv)
-        t2a = tmp + tmp.transpose(1,0,3,2)
-        t2a += mcc._add_vvvv(t1, t2, eris)
-        mcc.direct = True
-        eris.vvvv = None
-        t2b = mcc._add_vvvv(t1, t2, eris)
-        self.assertTrue(numpy.allclose(t2a,t2b))
 
     def test_ccsd_frozen(self):
         mcc = cc.ccsd.CC(mf, frozen=range(1))
@@ -187,6 +181,7 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(isinstance(cc.UCCSD(mf.newton().density_fit()), uccsd.UCCSD))
 #        self.assertTrue(not isinstance(cc.UCCSD(mf.newton().density_fit()), dfccsd.UCCSD))
 #        self.assertTrue(isinstance(cc.UCCSD(mf.density_fit().newton().density_fit()), dfccsd.UCCSD))
+        self.assertTrue(isinstance(cc.CCSD(scf.GHF(mol)), gccsd.GCCSD))
 
         umf = scf.convert_to_uhf(mf, scf.UHF(mol))
         self.assertTrue(isinstance(cc.CCSD(umf), uccsd.UCCSD))

@@ -48,6 +48,10 @@ rhf = scf.RHF(mol)
 rhf.conv_tol = 1e-14
 rhf.scf()
 
+def tearDownModule():
+    global mol, rhf
+    del mol, rhf
+
 
 class KnownValues(unittest.TestCase):
     def test_ccsd(self):

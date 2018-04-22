@@ -24,12 +24,16 @@ from pyscf.cc import rintermediates as imd
 from pyscf import __config__
 
 
-def kernel(eom, nroots=1, koopmans=False, guess=None, left=False, imds=None,
-           **kwargs):
+def kernel(eom, nroots=1, koopmans=False, guess=None, left=False,
+           eris=None, imds=None, **kwargs):
     cput0 = (time.clock(), time.time())
     log = logger.Logger(eom.stdout, eom.verbose)
+    if eom.verbose >= logger.WARN:
+        eom.check_sanity()
+    eom.dump_flags()
+
     if imds is None:
-        imds = eom.make_imds()
+        imds = eom.make_imds(eris)
 
     matvec, diag = eom.gen_matvec(imds, left=left, **kwargs)
 
@@ -67,7 +71,11 @@ def kernel(eom, nroots=1, koopmans=False, guess=None, left=False, imds=None,
     if eom.verbose >= logger.INFO:
         for n, en, vn, convn in zip(range(nroots), es, vs, conv):
             r1, r2 = eom.vector_to_amplitudes(vn)
-            qp_weight = np.linalg.norm(np.hstack(r1))**2
+            if isinstance(r1, np.ndarray):
+                qp_weight = np.linalg.norm(r1)**2
+            else: # for EOM-UCCSD
+                r1 = np.hstack([x.ravel() for x in r1])
+                qp_weight = np.linalg.norm(r1)**2
             logger.info(eom, 'EOM-CCSD root %d E = %.16g  qpwt = %.6g  conv = %s',
                         n, en, qp_weight, convn)
         log.timer('EOM-CCSD', *cput0)
@@ -99,7 +107,7 @@ class EOM(lib.StreamObject):
         self._keys = set(self.__dict__.keys())
 
     def dump_flags(self):
-        logger.info('')
+        logger.info(self, '')
         logger.info(self, '******** %s flags ********', self.__class__)
         logger.info(self, 'max_space = %d', self.max_space)
         logger.info(self, 'max_cycle = %d', self.max_cycle)
@@ -136,10 +144,8 @@ def ipccsd(eom, nroots=1, left=False, koopmans=False, guess=None,
     if partition is not None:
         eom.partition = partition.lower()
         assert eom.partition in ['mp','full']
-    if eris is None: eris = eom._cc.ao2mo()
-    if imds is None: imds = eom.make_imds(eris)
     eom.converged, eom.e, eom.v \
-            = kernel(eom, nroots, koopmans, guess, left, imds)
+            = kernel(eom, nroots, koopmans, guess, left, eris=eris, imds=imds)
     return eom.e, eom.v
 
 def vector_to_amplitudes_ip(vector, nmo, nocc):
@@ -709,9 +715,7 @@ def eeccsd(eom, nroots=1, koopmans=False, guess=None, eris=None, imds=None):
     guess_eeS = []
     guess_eeT = []
     guess_sf = []
-    if guess and guess[0].size == spinvec_size:
-        raise NotImplementedError
-    elif guess:
+    if guess:
         for g in guess:
             if g is None: # beta->alpha spin-flip excitation
                 pass
@@ -724,6 +728,9 @@ def eeccsd(eom, nroots=1, koopmans=False, guess=None, eris=None, imds=None):
         nroots_eeS = len(guess_eeS)
         nroots_eeT = len(guess_eeT)
         nroots_sf = len(guess_sf)
+        if len(guess) != nroots:
+            logger.warn(eom, 'Number of states in initial guess %d does not '
+                        'equal to nroots %d.', len(guess), nroots)
     else:
         deeS = np.sort(diag_eeS)[:nroots]
         deeT = np.sort(diag_eeT)[:nroots]
@@ -785,10 +792,8 @@ def eomee_ccsd_singlet(eom, nroots=1, koopmans=False, guess=None,
                        eris=None, imds=None, diag=None):
     '''EOM-EE-CCSD singlet
     '''
-    if eris is None: eris = eom._cc.ao2mo()
-    if imds is None: imds = eom.make_imds(eris)
     eom.converged, eom.e, eom.v \
-            = kernel(eom, nroots, koopmans, guess, imds=imds, diag=diag)
+            = kernel(eom, nroots, koopmans, guess, eris=eris, imds=imds, diag=diag)
     return eom.e, eom.v
 
 def eomee_ccsd_triplet(eom, nroots=1, koopmans=False, guess=None,
@@ -1368,7 +1373,7 @@ class EOMEESpinFlip(EOMEE):
 
     def gen_matvec(self, imds=None, diag=None, **kwargs):
         if imds is None: imds = self.make_imds()
-        if diag is None: diag = self.get_diag(imds)[1]
+        if diag is None: diag = self.get_diag(imds)[2]
         matvec = lambda xs: [self.matvec(x, imds) for x in xs]
         return matvec, diag
 
@@ -1455,7 +1460,7 @@ class _IMDS:
 
         # 3 or 4 virtuals
         self.Wvovv = imd.Wvovv(t1, t2, eris)
-        if ea_partition == 'mp' and not np.any(t1):
+        if ea_partition == 'mp':
             self.Wvvvo = imd.Wvvvo(t1, t2, eris)
         else:
             self.Wvvvv = imd.Wvvvv(t1, t2, eris)

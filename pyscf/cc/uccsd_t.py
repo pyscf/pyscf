@@ -44,10 +44,8 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
 
     if mycc.incore_complete:
         ftmp = None
-        t2ab_cp = numpy.copy(t2ab)
     else:
         ftmp = lib.H5TmpFile()
-        ftmp['t2ab'] = t2ab
     t1aT = t1a.T.copy()
     t1bT = t1b.T.copy()
     t2aaT = t2aa.transpose(2,3,0,1).copy()
@@ -120,7 +118,8 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     cpu1 = log.timer_debug1('contract_bbb', *cpu1)
 
     # Cache t2abT in t2ab to reduce memory footprint
-    t2abT = lib.transpose(t2ab.reshape(nocca*noccb,nvira*nvirb).copy(), out=t2ab)
+    assert(t2ab.flags.c_contiguous)
+    t2abT = lib.transpose(t2ab.copy().reshape(nocca*noccb,nvira*nvirb), out=t2ab)
     t2abT = t2abT.reshape(nvira,nvirb,nocca,noccb)
     # baa
     bufsize = max(1, int((max_memory*.9e6/8-noccb*nocca**2*7)*.3/nocca*nmob))
@@ -162,10 +161,9 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
             cache_row_a = cache_col_a = None
     cpu1 = log.timer_debug1('contract_abb', *cpu1)
 
-    if mycc.incore_complete:
-        t2ab = numpy.copy(t2ab_cp)
-    else:
-        t2ab[:] = ftmp['t2ab']
+    # Restore t2ab
+    lib.transpose(t2baT.transpose(1,0,3,2).copy().reshape(nvira*nvirb,nocca*noccb),
+                  out=t2ab)
     et_sum *= .25
     if abs(et_sum[0].imag) > 1e-4:
         logger.warn(mycc, 'Non-zero imaginary part of UCCSD(T) energy was found %s',
@@ -277,11 +275,11 @@ def _sort_eri(mycc, eris, h5tmp, log):
     else:
         dtype = numpy.result_type(mycc.t2[0], eris.ovov.dtype)
 
-    if mycc.incore_complete:
-        eris_vvop = numpy.zeros((nvira,nvira,nocca,nmoa), dtype)
-        eris_VVOP = numpy.zeros((nvirb,nvirb,noccb,nmob), dtype)
-        eris_vVoP = numpy.zeros((nvira,nvirb,nocca,nmob), dtype)
-        eris_VvOp = numpy.zeros((nvirb,nvira,noccb,nmoa), dtype)
+    if mycc.incore_complete or h5tmp is None:
+        eris_vvop = numpy.empty((nvira,nvira,nocca,nmoa), dtype)
+        eris_VVOP = numpy.empty((nvirb,nvirb,noccb,nmob), dtype)
+        eris_vVoP = numpy.empty((nvira,nvirb,nocca,nmob), dtype)
+        eris_VvOp = numpy.empty((nvirb,nvira,noccb,nmoa), dtype)
     else:
         eris_vvop = h5tmp.create_dataset('vvop', (nvira,nvira,nocca,nmoa), dtype)
         eris_VVOP = h5tmp.create_dataset('VVOP', (nvirb,nvirb,noccb,nmob), dtype)

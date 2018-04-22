@@ -24,9 +24,6 @@ from pyscf.cc import uccsd
 from pyscf.cc import eom_rccsd
 from pyscf.cc import eom_gccsd
 from pyscf.cc import addons
-from pyscf.cc import uintermediates as imd
-
-
 
 
 ########################################
@@ -73,22 +70,26 @@ def eeccsd(eom, nroots=1, koopmans=False, guess=None, eris=None, imds=None):
     guess_ee = []
     guess_sf = []
     if guess and guess[0].size == spinvec_size:
-        orbspin = scf.ghf.guess_orbspin(eris.mo_coeff)
-        nmo = np.sum(eom.nmo)
-        nocc = np.sum(eom.nocc)
-        for g in guess:
-            r1, r2 = eom_gccsd.vector_to_amplitudes_ee(g, nmo, nocc)
-            r1 = addons.spin2spatial(r1, orbspin)
-            r2 = addons.spin2spatial(r2, orbspin)
-            g = eom.amplitudes_to_vector(r1, r2)
-            if np.linalg.norm(g) > 1e-7:
-                guess_ee.append(g)
-            else:
-                g = amplitudes_to_vector_eomsf(r1, r2)
-                guess_sf.append(g)
-            r1 = r2 = None
-        nroots_ee = len(guess_ee)
-        nroots_sf = len(guess_sf)
+        raise NotImplementedError
+        #TODO: initial guess from GCCSD EOM amplitudes
+        #orbspin = scf.addons.get_ghf_orbspin(eris.mo_coeff)
+        #nmo = np.sum(eom.nmo)
+        #nocc = np.sum(eom.nocc)
+        #for g in guess:
+        #    r1, r2 = eom_gccsd.vector_to_amplitudes_ee(g, nmo, nocc)
+        #    r1aa = r1[orbspin==0][:,orbspin==0]
+        #    r1ab = r1[orbspin==0][:,orbspin==1]
+        #    if abs(r1aa).max() > 1e-7:
+        #        r1 = addons.spin2spatial(r1, orbspin)
+        #        r2 = addons.spin2spatial(r2, orbspin)
+        #        guess_ee.append(eom.amplitudes_to_vector(r1, r2))
+        #    else:
+        #        r1 = spin2spatial_eomsf(r1, orbspin)
+        #        r2 = spin2spatial_eomsf(r2, orbspin)
+        #        guess_sf.append(amplitudes_to_vector_eomsf(r1, r2))
+        #    r1 = r2 = r1aa = r1ab = g = None
+        #nroots_ee = len(guess_ee)
+        #nroots_sf = len(guess_sf)
     elif guess:
         for g in guess:
             if g.size == diag_ee.size:
@@ -982,7 +983,7 @@ class EOMEE(eom_rccsd.EOMEE):
     def vector_size(self):
         '''size of the vector based on spin-orbital basis'''
         nocc = np.sum(self.nocc)
-        nvir = np.sum(self.nmo - nocc)
+        nvir = np.sum(self.nmo) - nocc
         return nocc*nvir + nocc*(nocc-1)//2*nvir*(nvir-1)//2
 
     def make_imds(self, eris=None):
@@ -1108,149 +1109,11 @@ class _IMDS:
         self.made_ea_imds = False
         self.made_ee_imds = False
 
-    def _make_shared(self):
-        cput0 = (time.clock(), time.time())
-        log = logger.Logger(self.stdout, self.verbose)
-
-        t1, t2, eris = self.t1, self.t2, self.eris
-        t1 = spatial2spin(t1, eris.orbspin)
-        t2 = spatial2spin(t2, eris.orbspin)
-        nocc, nvir = t1.shape
-
-        fov = eris.fock[:nocc,nocc:]
-        foo = eris.fock[:nocc,:nocc]
-        fvv = eris.fock[nocc:,nocc:]
-
-        eris_ovvv = np.asarray(eris.ovvv)
-        Fvv  = np.einsum('mf,mfae->ae', t1, eris_ovvv)
-        Fvv -= np.einsum('mf,meaf->ae', t1, eris_ovvv)
-        Wmbej  = lib.einsum('jf,mebf->mbej', t1, eris_ovvv)
-        Wmbej -= lib.einsum('jf,mfbe->mbej', t1, eris_ovvv)
-        eris_ovvv = None
-
-        tau_tilde = imd.make_tau(t2,t1,t1,fac=0.5)
-        tau = t2 + np.einsum('jf,nb->jnfb', t1, t1)
-        eris_ovov = np.asarray(eris.ovov)
-        eris_ovov = eris_ovov - eris_ovov.transpose(0,3,2,1)
-        self.Fov = np.einsum('nf,menf->me',t1,eris_ovov)
-        tau_tilde = imd.make_tau(t2,t1,t1,fac=0.5)
-        Foo  = 0.5*lib.einsum('inef,menf->mi',tau_tilde,eris_ovov)
-        Fvv -= 0.5*lib.einsum('mnaf,menf->ae',tau_tilde,eris_ovov)
-        Wmbej -= lib.einsum('jnfb,menf->mbej', tau, eris_ovov)
-        eris_ovov = None
-
-        eris_ovoo = np.asarray(eris.ovoo)
-        Foo += np.einsum('ne,nemi->mi', t1, eris_ovoo)
-        Foo -= np.einsum('ne,meni->mi', t1, eris_ovoo)
-        Wmbej += lib.einsum('nb,nemj->mbej', t1, eris_ovoo)
-        Wmbej -= lib.einsum('nb,menj->mbej', t1, eris_ovoo)
-        eris_ovoo = None
-
-        Foo += foo + 0.5*lib.einsum('me,ie->mi',fov,t1)
-        Foo += 0.5*lib.einsum('me,ie->mi',self.Fov,t1)
-        self.Foo = Foo
-        Fvv += fvv - 0.5*lib.einsum('me,ma->ae',fov,t1)
-        Fvv -= 0.5*lib.einsum('ma,me->ae',t1,self.Fov)
-        self.Fvv = Fvv
-
-        Wmbej += np.asarray(eris.ovvo).transpose(0,2,1,3)
-        Wmbej -= np.asarray(eris.oovv).transpose(0,2,3,1)
-        self.Wovvo = Wmbej
-
-        self._made_shared = True
-        log.timer('EOM-CCSD shared intermediates', *cput0)
-
     def make_ip(self):
-        if self._made_shared is False:
-            self._make_shared()
-
-        cput0 = (time.clock(), time.time())
-        log = logger.Logger(self.stdout, self.verbose)
-
-        t1, t2, eris = self.t1, self.t2, self.eris
-        orbspin = scf.ghf.guess_orbspin(eris.mo_coeff)
-        t1 = spatial2spin(t1, orbspin)
-        t2 = spatial2spin(t2, orbspin)
-        nocc, nvir = t1.shape
-        tau = imd.make_tau(t2,t1,t1)
-
-        eris_ovoo = np.asarray(eris.ovoo)
-        eris_ovoo = eris_ovoo - eris_ovoo.transpose(2,1,0,3)
-        Woooo = lib.einsum('je,nemi->mnij', t1, eris_ovoo)
-        Wmbij = lib.einsum('nemi,jnbe->mbij', eris_ovoov, t2)
-        self.Wooov = eris_ovoo.transpose(2,0,3,1).copy()
-        eris_ovoo = None
-
-        Woooo += np.asarray(eris.oooo).transpose(0,2,1,3)
-        self.Woooo = Woooo - Woooo.transpose(0,1,3,2)
-
-        eris_ovov = np.asarray(eris.ovov)
-        eris_ovov = eris_ovov - eris_ovov.transpose(0,3,2,1)
-        self.Woooo += 0.5*lib.einsum('ijef,menf->mnij', tau, eris_ovov)
-
-        self.Wooov += lib.einsum('if,mfne->mnie', t1, eris_ovov)
-
-        tmp  = lib.einsum('njbf,menf->mbej', t2, eris_ovov)
-        Wmbij -= lib.einsum('ie,mbej->mbij', t1, tmp)
-        Wmbij += np.asarray(eris.ovoo).transpose(3,1,2,0)
-        eris_ovov = None
-        Wmbij = Wmbij - Wmbij.transpose(0,1,3,2)
-
-        eris_ovvo = np.asarray(eris.ovvo)
-        eris_oovv = np.asarray(eris.oovv)
-        tmp = lib.einsum('ie,mebj->mbij',t1, eris_ovvo)
-        tmp-= lib.einsum('ie,mjbe->mbij',t1, eris_oovv)
-        Wmbij += tmp - tmp.transpose(0,1,3,2)
-        eris_oovv = eris_ovvo = None
-        Wmbij -= lib.einsum('me,ijbe->mbij', self.Fov, t2)
-        Wmbij -= lib.einsum('nb,mnij->mbij', t1, self.Woooo)
-
-        eris_ovvv = np.asarray(eris.ovvv)
-        Wmbij += 0.5 * lib.einsum('mebf,ijef->mbij', eris_ovvv, tau)
-        Wmbij -= 0.5 * lib.einsum('mfbe,ijef->mbij', eris_ovvv, tau)
-        self.Wovoo = Wmbij
-        self.made_ip_imds = True
-        log.timer('EOM-CCSD IP intermediates', *cput0)
+        raise NotImplementedError
 
     def make_ea(self):
-        if self._made_shared is False:
-            self._make_shared()
-
-        cput0 = (time.clock(), time.time())
-        log = logger.Logger(self.stdout, self.verbose)
-
-        t1, t2, eris = self.t1, self.t2, self.eris
-        orbspin = scf.ghf.guess_orbspin(eris.mo_coeff)
-        t1 = spatial2spin(t1, orbspin)
-        t2 = spatial2spin(t2, orbspin)
-        nocc, nvir = t1.shape
-        tau = imd.make_tau(t2,t1,t1)
-
-        eris_ovoo = np.asarray(eris.ovoo)
-        Wabei = lib.einsum('meni,mnab->abei', eris_ovoo, tau)
-        eris_ovoo = None
-
-        eris_ovov = np.asarray(eris.ovov)
-        eris_ovov = eris_ovov - eris_ovov.transpose(0,3,2,1)
-        Wabei -= np.einsum('me,miab->abei', self.Fov, t2)
-        tmp = lib.einsum('nibf,menf->mbei', t2, eris_ovov)
-        tmp = lib.einsum('ma,mbei->abei', t1, tmp)
-        eris_ovov = None
-        eris_ovvo = np.asarray(eris.ovvo)
-        eris_oovv = np.asarray(eris.oovv)
-        tmp += lib.einsum('ma,mibe->abei', t1, eris_oovv)
-        tmp -= lib.einsum('ma,mebi->abei', t1, eris_ovvo)
-        eris_oovv = eris_ovvo = None
-        Wabei += tmp - tmp.transpose(1,0,2,3)
-
-        eris_ovvv = np.asarray(eris.ovvv)
-        eris_ovvv = eris_ovvv - eris_ovvv.transpose(0,3,2,1)
-        Wabei += eris_ovvv.transpose(3,1,2,0).conj()
-        tmp1 = lib.einsum('mebf,miaf->abei', eris_ovvv, t2)
-        Wabei -= tmp1 - tmp1.transpose(1,0,2,3)
-        self.Wvvvo = Wabei
-        self.made_ea_imds = True
-        log.timer('EOM-CCSD EA intermediates', *cput0)
+        raise NotImplementedError
 
     def make_ee(self):
         cput0 = (time.clock(), time.time())
@@ -1787,3 +1650,4 @@ class _IMDS:
 
         self.made_ee_imds = True
         log.timer('EOM-CCSD EE intermediates', *cput0)
+

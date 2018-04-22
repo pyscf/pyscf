@@ -26,14 +26,21 @@ def MP2(mf, frozen=0, mo_coeff=None, mo_occ=None):
     __doc__ = mp2.MP2.__doc__
     if isinstance(mf, scf.uhf.UHF):
         return UMP2(mf, frozen, mo_coeff, mo_occ)
-    elif isinstance(mf, scf.rohf.ROHF):
-        return UMP2(mf, frozen, mo_coeff, mo_occ)
+    elif isinstance(mf, scf.ghf.GHF):
+        return GMP2(mf, frozen, mo_coeff, mo_occ)
     else:
         return RMP2(mf, frozen, mo_coeff, mo_occ)
 
 def RMP2(mf, frozen=0, mo_coeff=None, mo_occ=None):
     __doc__ = mp2.RMP2.__doc__
     from pyscf.soscf import newton_ah
+
+    if isinstance(mf, scf.uhf.UHF):
+        raise RuntimeError('RMP2 cannot be used with UHF method.')
+    elif isinstance(mf, scf.rohf.ROHF):
+        lib.logger.warn(mf, 'RMP2 method does not support ROHF method. ROHF object '
+                        'is converted to UHF object and UMP2 method is called.')
+        return UMP2(mf, frozen, mo_coeff, mo_occ)
 
     if isinstance(mf, newton_ah._CIAH_SOSCF) or not isinstance(mf, scf.hf.RHF):
         mf = scf.addons.convert_to_rhf(mf)

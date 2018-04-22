@@ -19,10 +19,23 @@ import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
+from pyscf import df
 from pyscf.cc import ccsd
 from pyscf.cc import _ccsd
+from pyscf import __config__
+
+MEMORYMIN = getattr(__config__, 'cc_ccsd_memorymin', 2000)
 
 class RCCSD(ccsd.CCSD):
+    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+        ccsd.CCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
+        if hasattr(mf, 'with_df') and mf.with_df:
+            self.with_df = mf.with_df
+        else:
+            self.with_df = df.DF(mf.mol)
+            self.with_df.auxbasis = df.make_auxbasis(mf.mol, mp2fit=True)
+        self._keys.update(['with_df'])
+
     def ao2mo(self, mo_coeff=None):
         return _make_df_eris(self, mo_coeff)
 
@@ -31,7 +44,8 @@ class RCCSD(ccsd.CCSD):
         return ccsd.CCSD._add_vvvv(self, t1, t2, eris, out, with_ovvv, t2sym)
 
 
-def _contract_vvvv_t2(mycc, mol, vvL, t2, out=None, max_memory=2000, verbose=None):
+def _contract_vvvv_t2(mycc, mol, vvL, t2, out=None, max_memory=MEMORYMIN,
+                      verbose=None):
     '''Ht2 = numpy.einsum('ijcd,acdb->ijab', t2, vvvv)
 
     Args:
@@ -97,8 +111,8 @@ def _contract_vvvv_t2(mycc, mol, vvL, t2, out=None, max_memory=2000, verbose=Non
 
 
 class _ChemistsERIs(ccsd._ChemistsERIs):
-    def _contract_vvvv_t2(self, mycc, t2, direct=False, out=None, max_memory=2000,
-                          verbose=None):
+    def _contract_vvvv_t2(self, mycc, t2, direct=False, out=None,
+                          max_memory=MEMORYMIN, verbose=None):
         assert(not direct)
         return _contract_vvvv_t2(mycc, self.mol, self.vvL, t2, out, max_memory, verbose)
 
@@ -111,7 +125,7 @@ def _make_df_eris(cc, mo_coeff=None):
     nvir = nmo - nocc
     nocc_pair = nocc*(nocc+1)//2
     nvir_pair = nvir*(nvir+1)//2
-    with_df = cc._scf.with_df
+    with_df = cc.with_df
     naux = eris.naux = with_df.get_naoaux()
 
     eris.feri = lib.H5TmpFile()

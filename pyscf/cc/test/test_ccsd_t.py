@@ -40,6 +40,10 @@ mcc = cc.CCSD(rhf)
 mcc.conv_tol = 1e-14
 mcc.ccsd()
 
+def tearDownModule():
+    global mol, rhf, mcc
+    del mol, rhf, mcc
+
 class KnownValues(unittest.TestCase):
     def test_ccsd_t(self):
         mol = gto.M()
@@ -60,6 +64,7 @@ class KnownValues(unittest.TestCase):
         t2 = t2 + t2.transpose(1,0,3,2)
         mf = scf.RHF(mol)
         mycc = cc.CCSD(mf)
+        mycc.incore_complete = True
         mycc.mo_energy = mycc._scf.mo_energy = numpy.arange(0., nocc+nvir)
         f = numpy.random.random((nmo,nmo)) * .1
         eris.fock = f+f.T + numpy.diag(numpy.arange(nmo))

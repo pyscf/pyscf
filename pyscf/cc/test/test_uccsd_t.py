@@ -42,6 +42,10 @@ mcc = cc.UCCSD(mf)
 mcc.conv_tol = 1e-14
 mcc.kernel()
 
+def tearDownModule():
+    global mol, mol1, mf, mcc
+    del mol, mol1, mf, mcc
+
 class KnownValues(unittest.TestCase):
     def test_uccsd_t(self):
         mf1 = copy.copy(mf)
@@ -66,9 +70,11 @@ class KnownValues(unittest.TestCase):
         t2 = t2aa, t2ab, t2bb
         mycc = cc.UCCSD(mf1)
         eris = mycc.ao2mo(mf1.mo_coeff)
-        e3a = uccsd_t.kernel(mycc, eris, [t1a,t1b], [t2aa, t2ab, t2bb])
+        mycc.incore_complete = True
+        e3a = mycc.ccsd_t([t1a,t1b], [t2aa, t2ab, t2bb], eris)
         self.assertAlmostEqual(e3a, 15.582860941071505, 8)
 
+        mycc.incore_complete = False
         mycc.max_memory = 0
         e3a = uccsd_t.kernel(mycc, eris, [t1a,t1b], [t2aa, t2ab, t2bb])
         self.assertAlmostEqual(e3a, 15.582860941071505, 8)

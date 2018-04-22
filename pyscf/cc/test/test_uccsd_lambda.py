@@ -38,6 +38,10 @@ mol.build()
 mf = scf.UHF(mol).run()
 mycc = uccsd.UCCSD(mf)
 
+def tearDownModule():
+    global mol, mf, mycc
+    del mol, mf, mycc
+
 class KnownValues(unittest.TestCase):
     def test_update_lambda_real(self):
         numpy.random.seed(21)

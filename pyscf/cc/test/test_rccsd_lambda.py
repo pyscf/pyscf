@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import copy
 import unittest
 import numpy
 import numpy as np
@@ -39,6 +40,10 @@ mol.output = '/dev/null'
 mol.build()
 mf = scf.RHF(mol).run()
 mycc = rccsd.RCCSD(mf)
+
+def tearDownModule():
+    global mol, mf, mycc
+    del mol, mf, mycc
 
 class KnownValues(unittest.TestCase):
     def test_update_lambda_real(self):
@@ -155,6 +160,16 @@ class KnownValues(unittest.TestCase):
         h1 = reduce(numpy.dot, (mf.mo_coeff.T, mf.get_hcore(), mf.mo_coeff))
         nmo = mf.mo_coeff.shape[1]
         eri = ao2mo.restore(1, ao2mo.kernel(mf._eri, mf.mo_coeff), nmo)
+        e1 = numpy.einsum('ij,ji', h1, dm1)
+        e1+= numpy.einsum('ijkl,ijkl', eri, dm2) * .5
+        e1+= mol.energy_nuc()
+        self.assertAlmostEqual(e1, mycc.e_tot, 7)
+
+        d1 = ccsd_rdm._gamma1_intermediates(mycc, mycc.t1, mycc.t2, mycc.l1, mycc.l2)
+        mycc1 = copy.copy(mycc)
+        mycc1.max_memory = 0
+        d2 = ccsd_rdm._gamma2_intermediates(mycc1, mycc.t1, mycc.t2, mycc.l1, mycc.l2, True)
+        dm2 = ccsd_rdm._make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True)
         e1 = numpy.einsum('ij,ji', h1, dm1)
         e1+= numpy.einsum('ijkl,ijkl', eri, dm2) * .5
         e1+= mol.energy_nuc()

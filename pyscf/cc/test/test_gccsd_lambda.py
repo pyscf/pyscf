@@ -35,6 +35,10 @@ mol.basis = '631g'
 mol.spin = 2
 mol.build()
 
+def tearDownModule():
+    global mol
+    del mol
+
 class ccsd:
     def __init__(self,nso,nelec,h1e,int2e,h1e_is_fock=False):
         self.nso = nso

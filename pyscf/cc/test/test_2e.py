@@ -36,6 +36,10 @@ mol.basis = '3-21g'
 mol.build()
 mf = scf.RHF(mol).run()
 
+def tearDownModule():
+    global mol, mf
+    del mol, mf
+
 def finger(a):
     return numpy.dot(a.ravel(), numpy.cos(numpy.arange(a.size)))
 

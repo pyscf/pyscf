@@ -62,12 +62,13 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2,
 
 class DFMP2(mp2.MP2):
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+        mp2.MP2.__init__(self, mf, frozen, mo_coeff, mo_occ)
         if hasattr(mf, 'with_df') and mf.with_df:
-            self.with_df = None
+            self.with_df = mf.with_df
         else:
             self.with_df = df.DF(mf.mol)
             self.with_df.auxbasis = df.make_auxbasis(mf.mol, mp2fit=True)
-        mp2.MP2.__init__(self, mf, frozen, mo_coeff, mo_occ)
+        self._keys.update(['with_df'])
 
     @lib.with_doc(mp2.MP2.kernel.__doc__)
     def kernel(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2):
@@ -78,10 +79,7 @@ class DFMP2(mp2.MP2):
         nmo = mo.shape[1]
         ijslice = (0, nocc, nocc, nmo)
         Lov = None
-        if self.with_df is None:
-            with_df = self._scf.with_df
-        else:
-            with_df = self.with_df
+        with_df = self.with_df
 
         nvir = nmo - nocc
         naux = with_df.get_naoaux()

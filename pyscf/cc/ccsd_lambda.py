@@ -88,6 +88,7 @@ def make_intermediates(mycc, t1, t2, eris):
 
     class _IMDS: pass
     imds = _IMDS()
+    #TODO: mycc.incore_complete
     imds.ftmp = lib.H5TmpFile()
     imds.woooo = imds.ftmp.create_dataset('woooo', (nocc,nocc,nocc,nocc), 'f8')
     imds.wvooo = imds.ftmp.create_dataset('wvooo', (nvir,nocc,nocc,nocc), 'f8')
