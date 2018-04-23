@@ -2889,7 +2889,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
             for mod in (mp, cc, ci, mcscf, tdscf):
                 method = getattr(mod, fn.upper(), None)
                 if method is not None and callable(method):
-                    return method(scf.RHF(self).run(), *args, **kwargs)
+                    return method(scf.HF(self).run(), *args, **kwargs)
 
             raise ValueError('Unknown method %s' % fn)
         else:

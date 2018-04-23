@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import copy
 import unittest
 import tempfile
 from functools import reduce
@@ -37,10 +38,14 @@ mol0.basis = {
 mol0.symmetry = 1
 mol0.charge = 1
 mol0.spin = 1
-mol0.verbose = 4
+mol0.verbose = 7
 mol0.ecp = {'O1': 'lanl2dz'}
-mol0.output = None
+ftmp = tempfile.NamedTemporaryFile()
+mol0.output = ftmp.name
 mol0.build()
+
+def tearDownModule():
+    global mol0, ftmp
 
 class KnownValues(unittest.TestCase):
     def test_intor_cross(self):
@@ -136,6 +141,20 @@ C    SP
             self.assertTrue(w[0].category, UserWarning)
         mol1.loads(mol0.dumps())
 
+    def test_symm_orb_serialization(self):
+        '''Handle the complex symmetry-adapted orbitals'''
+        mol = gto.M(atom='He', basis='ccpvdz', symmetry=True)
+        mol.loads(mol.dumps())
+
+        lz_minus = numpy.sqrt(.5) * (mol.symm_orb[3] - mol.symm_orb[2] * 1j)
+        lz_plus = -numpy.sqrt(.5) * (mol.symm_orb[3] + mol.symm_orb[2] * 1j)
+        mol.symm_orb[2] = lz_minus
+        mol.symm_orb[3] = lz_plus
+        mol.loads(mol.dumps())
+        self.assertTrue(mol.symm_orb[0].dtype == numpy.double)
+        self.assertTrue(mol.symm_orb[2].dtype == numpy.complex128)
+        self.assertTrue(mol.symm_orb[3].dtype == numpy.complex128)
+
     def test_same_mol1(self):
         self.assertTrue(gto.same_mol(mol0, mol0))
         mol1 = gto.M(atom='h   0  1  1; O1  0  0  0;  h   1  1  0')
@@ -213,6 +232,26 @@ C    SP
                             H -0.9444878100 0.0000000000 1.3265673200
                             H -0.9444878100 0.0000000000 -1.3265673200''')
         self.assertTrue(gto.chiral_mol(mol1))
+
+    def test_first_argument(self):
+        mol1 = gto.Mole()
+        mol1.build('He')
+        self.assertEqual(mol1.natm, 1)
+
+    def test_atom_as_file(self):
+        ftmp = tempfile.NamedTemporaryFile()
+        # file in xyz format
+        ftmp.write('He 0 0 0\nHe 0 0 1\n')
+        ftmp.flush()
+        mol1 = gto.M(atom=ftmp.name)
+        self.assertEqual(mol1.natm, 2)
+
+        # file in zmatrix format
+        ftmp = tempfile.NamedTemporaryFile()
+        ftmp.write('He\nHe 1 1.5\n')
+        ftmp.flush()
+        mol1 = gto.M(atom=ftmp.name)
+        self.assertEqual(mol1.natm, 2)
 
     def test_format_atom(self):
         atoms = [['h' , 0,1,1], "O1  0. 0. 0.", [1, 1.,1.,0.],]
@@ -427,11 +466,17 @@ O    SP
         self.assertAlmostEqual(abs(c0.dot(ua)-ca).max(), 0, 9)
         self.assertAlmostEqual(abs(c0.dot(ub)-cb).max(), 0, 9)
 
+        c1 = gto.mole.cart2sph(0, numpy.eye(1))
+        self.assertAlmostEqual(abs(c0*0.282094791773878143-c1).max(), 0, 12)
+
         c0 = gto.mole.cart2sph(1, normalized='sp')
         ca, cb = gto.mole.cart2spinor_kappa(1, 1, normalized='sp')
         ua, ub = gto.mole.sph2spinor_kappa(1, 1)
         self.assertAlmostEqual(abs(c0.dot(ua)-ca).max(), 0, 9)
         self.assertAlmostEqual(abs(c0.dot(ub)-cb).max(), 0, 9)
+
+        c1 = gto.mole.cart2sph(1, numpy.eye(3).T)
+        self.assertAlmostEqual(abs(c0*0.488602511902919921-c1).max(), 0, 12)
 
     def test_bas_method(self):
         self.assertEqual([mol0.bas_len_cart(x) for x in range(mol0.nbas)],
@@ -450,6 +495,27 @@ O    SP
         mol0.spin = 2
         self.assertRaises(RuntimeError, lambda *args: mol0.nelec)
         mol0.spin = 1
+
+        mol1 = copy.copy(mol0)
+        self.assertEqual(mol1.nelec, (5, 4))
+        mol1.nelec = (3, 6)
+        self.assertEqual(mol1.nelec, (3, 6))
+
+    def test_multiplicity(self):
+        mol1 = copy.copy(mol0)
+        self.assertEqual(mol1.multiplicity, 2)
+        mol1.multiplicity = 5
+        self.assertEqual(mol1.multiplicity, 5)
+        self.assertEqual(mol1.spin, 4)
+        self.assertRaises(RuntimeError, lambda:mol1.nelec)
+
+    def test_ms(self):
+        mol1 = copy.copy(mol0)
+        self.assertEqual(mol1.ms, 0.5)
+        mol1.ms = 1
+        self.assertEqual(mol1.multiplicity, 3)
+        self.assertEqual(mol1.spin, 2)
+        self.assertRaises(RuntimeError, lambda:mol1.nelec)
 
     def test_atom_method(self):
         aoslice = mol0.aoslice_by_atom()
@@ -481,6 +547,16 @@ O    SP
         mol1.verbose = 5
         mol1.set_geom_(mol0._atom, 'B', symmetry=True)
         mol1.set_geom_(mol0.atom_coords(), 'B')
+
+        mol1.symmetry = False
+        mol1.set_geom_(mol0.atom_coords(), 'B')
+
+    def test_apply(self):
+        from pyscf import scf, mp
+        self.assertTrue(isinstance(mol0.apply('RHF'), scf.rohf.ROHF))
+        self.assertTrue(isinstance(mol0.apply('MP2'), mp.ump2.UMP2))
+        self.assertTrue(isinstance(mol0.apply(scf.RHF), scf.rohf.ROHF))
+        self.assertTrue(isinstance(mol0.apply(scf.uhf.UHF), scf.uhf.UHF))
 
     def test_with_MoleContext(self):
         mol1 = mol0.copy()

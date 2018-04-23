@@ -120,6 +120,14 @@ from pyscf.scf.hf import get_init_guess
 from pyscf.scf.addons import *
 
 
+def HF(mol, *args):
+    __doc__ = '''This is a wrap function to decide which SCF class to use, RHF or UHF\n
+    ''' + hf.SCF.__doc__
+    if mol.nelectron == 1 or mol.spin == 0:
+        return RHF(mol, *args)
+    else:
+        return UHF(mol, *args)
+
 def RHF(mol, *args):
     __doc__ = '''This is a wrap function to decide which SCF class to use, RHF or ROHF\n
     ''' + hf.RHF.__doc__
@@ -296,6 +304,10 @@ def fast_scf(mf):
                 'Use function fast_newton instead')
     return fast_newton(mf)
 
+
+def KS(mol, *args):
+    from pyscf import dft
+    return dft.KS(mol)
 
 def RKS(mol, *args):
     from pyscf import dft

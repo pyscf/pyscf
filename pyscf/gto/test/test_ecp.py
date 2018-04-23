@@ -68,6 +68,19 @@ Ghost-Cu1 0.  0. -0.0001
              ecp = {'cu':'lanl2dz'})
 
 class KnownValues(unittest.TestCase):
+    def test_ecp_by_shell(self):
+        for i in (0,2,3,6,9):
+            for j in (1,2,3,5,6):
+                ref = mol.intor_by_shell('ECPscalar_sph', (i,j))
+                dat = gto.ecp.type1_by_shell(mol, (i, j))
+                dat+= gto.ecp.type2_by_shell(mol, (i, j))
+                self.assertAlmostEqual(abs(ref-dat).max(), 0, 12)
+
+                ref = mol.intor_by_shell('ECPscalar_cart', (i,j))
+                dat = gto.ecp.type1_by_shell(mol, (i, j), cart=True)
+                dat+= gto.ecp.type2_by_shell(mol, (i, j), cart=True)
+                self.assertAlmostEqual(abs(ref-dat).max(), 0, 12)
+
     def test_nr_rhf(self):
         mol = gto.M(atom='Na 0. 0. 0.;  H  0.  0.  1.',
                     basis={'Na':'lanl2dz', 'H':'sto3g'},

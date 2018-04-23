@@ -33,6 +33,7 @@ def MP2(mf, frozen=0, mo_coeff=None, mo_occ=None):
 
 def RMP2(mf, frozen=0, mo_coeff=None, mo_occ=None):
     __doc__ = mp2.RMP2.__doc__
+    from pyscf import lib
     from pyscf.soscf import newton_ah
 
     if isinstance(mf, scf.uhf.UHF):
