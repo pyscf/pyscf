@@ -361,16 +361,6 @@ class KSCF(pbchf.SCF):
     def mo_occ_kpts(self):
         return self.mo_occ
 
-    def build(self, cell=None):
-        # To handle the attribute kpts loaded from chkfile
-        if 'kpts' in self.__dict__:
-            self.kpts = self.__dict__['kpts']
-        elif self._kpts is not None:
-            self.kpts = self._kpts
-        if self.verbose >= logger.WARN:
-            self.check_sanity()
-        return self
-
     def dump_flags(self):
         hf.SCF.dump_flags(self)
         logger.info(self, '\n')
@@ -403,9 +393,17 @@ class KSCF(pbchf.SCF):
         return self
 
     def build(self, cell=None):
-        hf.SCF.build(self, cell)
         #if self.exxdiv == 'vcut_ws':
         #    self.precompute_exx()
+
+        # To handle the attribute kpts loaded from chkfile
+        if 'kpts' in self.__dict__:
+            self.kpts = self.__dict__['kpts']
+        elif getattr(self, '_kpts', None) is not None:
+            self.kpts = self._kpts
+        if self.verbose >= logger.WARN:
+            self.check_sanity()
+        return self
 
     def get_init_guess(self, cell=None, key='minao'):
         if cell is None:

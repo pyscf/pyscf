@@ -307,12 +307,8 @@ class KUHF(pbcuhf.UHF, khf.KSCF):
                     'alpha = %d beta = %d', *self.nelec)
         return self
 
+    build = khf.KSCF.build
     check_sanity = khf.KSCF.check_sanity
-
-    def build(self, cell=None):
-        pbcuhf.UHF.build(self, cell)
-        #if self.exxdiv == 'vcut_ws':
-        #    self.precompute_exx()
 
     def get_init_guess(self, cell=None, key='minao'):
         if cell is None:

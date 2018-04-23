@@ -247,7 +247,7 @@ class SCF(mol_hf.SCF):
         # To handle the attribute kpt loaded from chkfile
         if 'kpt' in self.__dict__:
             self.kpt = self.__dict__['kpt']
-        elif self._kpt is not None:
+        elif getattr(self, '_kpt', None) is not None:
             self.kpt = self._kpt
         if self.verbose >= logger.WARN:
             self.check_sanity()

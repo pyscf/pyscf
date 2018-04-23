@@ -102,6 +102,7 @@ class UHF(mol_uhf.UHF, pbchf.SCF):
                     'alpha = %d beta = %d', *self.nelec)
         return self
 
+    build = pbchf.SCF.build
     check_sanity = pbchf.SCF.check_sanity
     get_hcore = pbchf.SCF.get_hcore
     get_ovlp = pbchf.SCF.get_ovlp
