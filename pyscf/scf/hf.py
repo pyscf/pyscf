@@ -149,6 +149,9 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         # Note in pbc.scf, mf.mol == mf.cell, cell is saved under key "mol"
         chkfile.save_mol(mol, mf.chkfile)
 
+    # A preprocessing hook before the SCF iteration
+    mf.pre_kernel(locals())
+
     scf_conv = False
     cycle = 0
     cput1 = logger.timer(mf, 'initialize scf', *cput0)
@@ -170,15 +173,15 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         # be modified in some methods.
         fock = mf.get_fock(h1e, s1e, vhf, dm)  # = h1e + vhf, no DIIS
         norm_gorb = numpy.linalg.norm(mf.get_grad(mo_coeff, mo_occ, fock))
+        if not TIGHT_GRAD_CONV_TOL:
+            norm_gorb = norm_gorb / numpy.sqrt(norm_gorb.size)
         norm_ddm = numpy.linalg.norm(dm-dm_last)
         logger.info(mf, 'cycle= %d E= %.15g  delta_E= %4.3g  |g|= %4.3g  |ddm|= %4.3g',
                     cycle+1, e_tot, e_tot-last_hf_e, norm_gorb, norm_ddm)
 
-        if TIGHT_GRAD_CONV_TOL:
-            grad_tol = conv_tol_grad
-        else:
-            grad_tol = conv_tol_grad / numpy.sqrt(norm_gorb.size)
-        if (abs(e_tot-last_hf_e) < conv_tol and norm_gorb < grad_tol):
+        if callable(mf.check_convergence):
+            scf_conv = mf.check_convergence(locals())
+        elif abs(e_tot-last_hf_e) < conv_tol and norm_gorb < conv_tol_grad:
             scf_conv = True
 
         if dump_chk:
@@ -202,18 +205,24 @@ Keyword argument "init_dm" is replaced by "dm0"''')
 
         fock = mf.get_fock(h1e, s1e, vhf, dm)
         norm_gorb = numpy.linalg.norm(mf.get_grad(mo_coeff, mo_occ, fock))
+        if not TIGHT_GRAD_CONV_TOL:
+            norm_gorb = norm_gorb / numpy.sqrt(norm_gorb.size)
         norm_ddm = numpy.linalg.norm(dm-dm_last)
 
-        if TIGHT_GRAD_CONV_TOL:
-            grad_tol = conv_tol_grad
-        else:
-            grad_tol = conv_tol_grad / numpy.sqrt(norm_gorb.size)
-        scf_conv = abs(e_tot-last_hf_e) < conv_tol*10 or norm_gorb < grad_tol*3
+        conv_tol = conv_tol * 10
+        conv_tol_grad = conv_tol_grad * 3
+        if callable(mf.check_convergence):
+            scf_conv = mf.check_convergence(locals())
+        elif abs(e_tot-last_hf_e) < conv_tol or norm_gorb < conv_tol_grad:
+            scf_conv = True
         logger.info(mf, 'Extra cycle  E= %.15g  delta_E= %4.3g  |g|= %4.3g  |ddm|= %4.3g',
                     e_tot, e_tot-last_hf_e, norm_gorb, norm_ddm)
         if dump_chk:
             mf.dump_chk(locals())
+
     logger.timer(mf, 'scf_cycle', *cput0)
+    # A post-processing hook before return
+    mf.post_kernel(locals())
     return scf_conv, e_tot, mo_energy, mo_coeff, mo_occ
 
 
@@ -1181,6 +1190,8 @@ class SCF(lib.StreamObject):
             envrionment.
         conv_check : bool
             An extra cycle to check convergence after SCF iterations.
+        check_convergence : function(envs) => bool
+            A hook for overloading convergence criteria in SCF iterations.
 
     Saved results:
 
@@ -1421,6 +1432,12 @@ class SCF(lib.StreamObject):
 
     def energy_nuc(self):
         return self.mol.energy_nuc()
+
+    # A hook for overloading convergence criteria in SCF iterations. Assigning
+    # a function
+    #   f(envs) => bool
+    # to check_convergence can overwrite the default convergence criteria
+    check_convergence = None
 
     def scf(self, dm0=None, **kwargs):
         '''main routine for SCF

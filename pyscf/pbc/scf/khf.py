@@ -340,9 +340,13 @@ class KSCF(pbchf.SCF):
 
     @property
     def kpts(self):
+        if self._kpts is not None:
+            # To handle the attribute kpts loaded from chkfile
+            self.kpts = self._kpts
         return self.with_df.kpts
     @kpts.setter
     def kpts(self, x):
+        self._kpts = None
         self.with_df.kpts = np.reshape(x, (-1,3))
 
     @property
@@ -356,6 +360,16 @@ class KSCF(pbchf.SCF):
     @property
     def mo_occ_kpts(self):
         return self.mo_occ
+
+    def build(self, cell=None):
+        # To handle the attribute kpts loaded from chkfile
+        if 'kpts' in self.__dict__:
+            self.kpts = self.__dict__['kpts']
+        elif self._kpts is not None:
+            self.kpts = self._kpts
+        if self.verbose >= logger.WARN:
+            self.check_sanity()
+        return self
 
     def dump_flags(self):
         hf.SCF.dump_flags(self)
@@ -561,7 +575,7 @@ class KSCF(pbchf.SCF):
         if self.chkfile:
             hf.SCF.dump_chk(self, envs)
             with h5py.File(self.chkfile) as fh5:
-                fh5['scf/kpts'] = self.kpts
+                fh5['scf/_kpts'] = self.kpts
         return self
 
     def mulliken_meta(self, cell=None, dm=None, verbose=logger.DEBUG,

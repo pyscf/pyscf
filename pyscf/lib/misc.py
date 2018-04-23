@@ -453,9 +453,7 @@ class StreamObject(object):
         This allows a series of functions/methods to be executed in pipe.
         '''
         self.set(**kwargs)
-        #TODO: self.pre_kernel({})
         self.kernel(*args)
-        #TODO: self.post_kernel({})
         return self
 
     def set(self, **kwargs):

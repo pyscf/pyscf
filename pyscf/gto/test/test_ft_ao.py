@@ -38,6 +38,10 @@ Gvbase = (numpy.fft.fftfreq(mesh[0], 1./mesh[0]),
 Gv = numpy.dot(lib.cartesian_prod(Gvbase), b)
 gxyz = lib.cartesian_prod([numpy.arange(len(x)) for x in Gvbase])
 
+def tearDownModule():
+    global mol, Gvbase, Gv, gxyz
+    del mol, Gvbase, Gv, gxyz
+
 
 def ft_ao_o0(mol, Gv):
     nao = mol.nao_nr()

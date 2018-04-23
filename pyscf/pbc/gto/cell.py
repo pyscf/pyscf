@@ -1535,4 +1535,24 @@ class Cell(mole.Mole):
         '''Whether pesudo potential is used in the system.'''
         return self.pseudo or self._pseudo or (len(self._ecpbas) > 0)
 
+    def apply(self, fn, *args, **kwargs):
+        if callable(fn):
+            return lib.StreamObject.apply(self, fn, *args, **kwargs)
+        elif isinstance(fn, (str, unicode)):
+            from pyscf.pbc import scf, dft, mp, cc, ci, tdscf
+            for mod in (scf, dft):
+                method = getattr(mod, fn.upper(), None)
+                if method is not None and callable(method):
+                    return method(self, *args, **kwargs)
+
+            for mod in (mp, cc, ci, tdscf):
+                method = getattr(mod, fn.upper(), None)
+                if method is not None and callable(method):
+                    return method(scf.HF(self).run(), *args, **kwargs)
+
+            raise ValueError('Unknown method %s' % fn)
+        else:
+            raise TypeError('First argument of .apply method must be a '
+                            'function or a string.')
+
 del(INTEGRAL_PRECISION, WRAP_AROUND, WITH_GAMMA, EXP_DELIMITER)

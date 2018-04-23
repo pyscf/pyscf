@@ -67,6 +67,10 @@ Ghost-Cu1 0.  0. -0.0001
              basis={'Cu':'lanl2dz', 'Cu1': cu1_basis, 'He':'sto3g'},
              ecp = {'cu':'lanl2dz'})
 
+def tearDownModule():
+    global mol, mol1, mol2, cu1_basis
+    del mol, mol1, mol2, cu1_basis
+
 class KnownValues(unittest.TestCase):
     def test_ecp_by_shell(self):
         for i in (0,2,3,6,9):

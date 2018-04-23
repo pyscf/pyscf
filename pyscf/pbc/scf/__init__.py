@@ -39,3 +39,16 @@ KUHF = kuhf.KUHF
 KGHF = kghf.KGHF
 
 newton = newton_ah.newton
+
+def HF(cell, *args, **kwargs):
+    if cell.spin == 0:
+        return RHF(cell, *args, **kwargs)
+    else:
+        return UHF(cell, *args, **kwargs)
+
+def KHF(cell, *args, **kwargs):
+    if cell.spin == 0:
+        return KRHF(cell, *args, **kwargs)
+    else:
+        return KUHF(cell, *args, **kwargs)
+

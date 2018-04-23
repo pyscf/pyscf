@@ -63,6 +63,11 @@ C    D
 mol.ecp = {'C1': 'LANL2DZ'}
 mol.build()
 
+def tearDownModule():
+    global mol
+    del mol
+
+
 def finger(mat):
     return abs(mat).sum()
 

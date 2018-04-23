@@ -46,6 +46,7 @@ mol0.build()
 
 def tearDownModule():
     global mol0, ftmp
+    del mol0, ftmp
 
 class KnownValues(unittest.TestCase):
     def test_intor_cross(self):
