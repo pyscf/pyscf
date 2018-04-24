@@ -30,7 +30,6 @@ import pyscf.ao2mo
 from pyscf.lib import logger
 import pyscf.cc
 import pyscf.cc.ccsd
-from pyscf.cc.ccsd import _cp
 from pyscf.pbc.mpicc import kintermediates_rhf as imdk
 from pyscf.pbc.lib.linalg_helper import eigs
 from pyscf.lib.linalg_helper import eig
@@ -2648,7 +2647,6 @@ class _ERIS:
         nocc = cc.nocc()
         nmo = cc.nmo()
         nvir = nmo - nocc
-        mem_incore, mem_outcore, mem_basic = pyscf.cc.ccsd._mem_usage(nocc, nvir)
         mem_now = pyscf.lib.current_memory()[0]
         fao2mo = cc._scf.with_df.ao2mo
 
@@ -3162,3 +3160,7 @@ class _IMDS:
 #
         #self.Wvvvo  = self.fint2['Wvvvo' ]
         self.WvvvoR1  = self.fint2['WvvvoR1' ]
+
+def _cp(a):
+    return np.array(a, copy=False, order='C')
+
