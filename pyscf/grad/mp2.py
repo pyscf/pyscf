@@ -208,7 +208,11 @@ def as_scanner(grad_mp):
     >>> e_tot, grad = mp2_scanner(gto.M(atom='H 0 0 0; F 0 0 1.1'))
     >>> e_tot, grad = mp2_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
     '''
-    logger.info(grad_mp, 'Set nuclear gradients of %s as a scanner', grad_mp.__class__)
+    if isinstance(grad_mp, lib.GradScanner):
+        return grad_mp
+
+    logger.info(grad_mp, 'Create scanner for %s', grad_mp.__class__)
+
     class MP2_GradScanner(grad_mp.__class__, lib.GradScanner):
         def __init__(self, g):
             lib.GradScanner.__init__(self, g)
@@ -268,8 +272,9 @@ class Gradients(lib.StreamObject):
         self.mol = mp.mol
         self.stdout = mp.stdout
         self.verbose = mp.verbose
-        self.atmlst = range(mp.mol.natm)
+        self.atmlst = None
         self.de = None
+        self._keys = set(self.__dict__.keys())
 
     def kernel(self, t2=None, atmlst=None, mf_grad=None, verbose=None,
                _kern=kernel):

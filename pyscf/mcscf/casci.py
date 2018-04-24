@@ -519,6 +519,9 @@ def as_scanner(mc):
     >>> mc_scanner(gto.M(atom='N 0 0 0; N 0 0 1.1'))
     >>> mc_scanner(gto.M(atom='N 0 0 0; N 0 0 1.5'))
     '''
+    if isinstance(mc, lib.SinglePointScanner):
+        return mc
+
     logger.info(mc, 'Create scanner for %s', mc.__class__)
 
     class CASCI_Scanner(mc.__class__, lib.SinglePointScanner):

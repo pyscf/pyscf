@@ -160,7 +160,7 @@ class KnownValues(unittest.TestCase):
         O   0.   0.       .1
         H   0.   -0.757   0.587
         H   0.   0.757    0.587''')
-        cc_scanner = scf.RHF(mol).apply(cc.CCSD).as_scanner()
+        cc_scanner = scf.RHF(mol).apply(cc.CCSD).as_scanner().as_scanner()
         cc_scanner.conv_tol = 1e-8
         self.assertAlmostEqual(cc_scanner(mol), -76.240108935038691, 6)
         self.assertAlmostEqual(cc_scanner(mol1), -76.228972886940639, 6)

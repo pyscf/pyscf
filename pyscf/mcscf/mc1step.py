@@ -489,6 +489,9 @@ def as_scanner(mc):
     >>> e = mc_scanner(gto.M(atom='N 0 0 0; N 0 0 1.5'))
     '''
     from pyscf.mcscf.addons import project_init_guess
+    if isinstance(mc, lib.SinglePointScanner):
+        return mc
+
     logger.info(mc, 'Create scanner for %s', mc.__class__)
 
     class CASSCF_Scanner(mc.__class__, lib.SinglePointScanner):

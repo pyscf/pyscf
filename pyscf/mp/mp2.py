@@ -277,7 +277,11 @@ def as_scanner(mp):
         >>> e_tot = mp2_scanner(gto.M(atom='H 0 0 0; F 0 0 1.1'))
         >>> e_tot = mp2_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
     '''
+    if isinstance(mp, lib.SinglePointScanner):
+        return mp
+
     logger.info(mp, 'Set %s as a scanner', mp.__class__)
+
     class MP2_Scanner(mp.__class__, lib.SinglePointScanner):
         def __init__(self, mp):
             self.__dict__.update(mp.__dict__)

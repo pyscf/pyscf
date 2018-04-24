@@ -66,7 +66,7 @@ class KnownValues(unittest.TestCase):
         mycc1= cc.ccsd.CCSD(mf1).run(conv_tol=1e-10)
         mol.set_geom_('H 0 0 0; H 0 0 1.705', unit='Bohr')
         mycc2 = cc.ccsd.CCSD(scf.RHF(mol))
-        g_scanner = mycc2.nuc_grad_method().as_scanner()
+        g_scanner = mycc2.nuc_grad_method().as_scanner().as_scanner()
         g1 = g_scanner(mol)[1]
         self.assertTrue(g_scanner.converged)
         self.assertAlmostEqual(g1[0,2], (mycc1.e_tot-mycc0.e_tot)*500, 6)

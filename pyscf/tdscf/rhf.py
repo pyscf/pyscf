@@ -581,7 +581,11 @@ def as_scanner(td):
     >>> de = td_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
     [ 0.14844013  0.14844013  0.47641829]
     '''
+    if isinstance(td, lib.SinglePointScanner):
+        return td
+
     logger.info(td, 'Set %s as a scanner', td.__class__)
+
     class TD_Scanner(td.__class__, lib.SinglePointScanner):
         def __init__(self, td):
             self.__dict__.update(td.__dict__)

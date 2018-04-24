@@ -86,8 +86,9 @@ class KnownValues(unittest.TestCase):
     def test_ecp_grad(self):
         mol = gto.M(atom='Cu 0 0 0; H 0 0 1.5', basis='lanl2dz',
                     ecp='lanl2dz', verbose=0)
-        mf = scf.RHF(mol).run()
-        g = mf.nuc_grad_method().kernel()
+        mf = scf.RHF(mol)
+        g_scan = mf.nuc_grad_method().as_scanner().as_scanner()
+        g = g_scan(mol)[1]
         self.assertAlmostEqual(lib.finger(g), -0.012310573162997052, 9)
 
         mfs = mf.as_scanner()

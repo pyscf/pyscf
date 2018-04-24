@@ -64,7 +64,11 @@ def as_scanner(grad_ci, state=0):
     >>> e_tot, grad = ci_scanner(gto.M(atom='H 0 0 0; F 0 0 1.1'))
     >>> e_tot, grad = ci_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
     '''
-    logger.info(grad_ci, 'Set nuclear gradients of %s as a scanner', grad_ci.__class__)
+    if isinstance(grad_ci, lib.GradScanner):
+        return grad_ci
+
+    logger.info(grad_ci, 'Create scanner for %s', grad_ci.__class__)
+
     class CISD_GradScanner(grad_ci.__class__, lib.GradScanner):
         def __init__(self, g):
             lib.GradScanner.__init__(self, g)
@@ -95,8 +99,9 @@ class Gradients(lib.StreamObject):
         self.mol = myci.mol
         self.stdout = myci.stdout
         self.verbose = myci.verbose
-        self.atmlst = range(myci.mol.natm)
+        self.atmlst = None
         self.de = None
+        self._keys = set(self.__dict__.keys())
 
     def kernel(self, civec=None, eris=None, atmlst=None,
                mf_grad=None, state=0, verbose=None, _kern=kernel):

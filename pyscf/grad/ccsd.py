@@ -210,7 +210,11 @@ def as_scanner(grad_cc):
     >>> e_tot, grad = cc_scanner(gto.M(atom='H 0 0 0; F 0 0 1.1'))
     >>> e_tot, grad = cc_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
     '''
-    logger.info(grad_cc, 'Set nuclear gradients of %s as a scanner', grad_cc.__class__)
+    if isinstance(grad_cc, lib.GradScanner):
+        return grad_cc
+
+    logger.info(grad_cc, 'Create scanner for %s', grad_cc.__class__)
+
     class CCSD_GradScanner(grad_cc.__class__, lib.GradScanner):
         def __init__(self, g):
             lib.GradScanner.__init__(self, g)
@@ -399,7 +403,7 @@ class Gradients(lib.StreamObject):
         self.mol = mycc.mol
         self.stdout = mycc.stdout
         self.verbose = mycc.verbose
-        self.atmlst = range(mycc.mol.natm)
+        self.atmlst = None
         self.de = None
         self._keys = set(self.__dict__.keys())
 

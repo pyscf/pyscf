@@ -289,6 +289,15 @@ class KnownValues(unittest.TestCase):
         cidm1 = ci.cisd.trans_rdm1(myci, cibra, ciket, norb, nocc)
         self.assertAlmostEqual(abs(fcidm1-cidm1).max(), 0, 12)
 
+    def test_scanner(self):
+        mol = gto.M(atom='''
+        O   0.   0.       .0
+        H   0.   -0.757   0.587
+        H   0.   0.757    0.587''', basis='631g')
+        ci_scanner = scf.RHF(mol).apply(ci.CISD).as_scanner().as_scanner()
+        ci_scanner.conv_tol = 1e-8
+        self.assertAlmostEqual(ci_scanner(mol), -76.114077022009468, 7)
+
 
 if __name__ == "__main__":
     print("Full Tests for CISD")

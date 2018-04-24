@@ -199,7 +199,11 @@ def as_scanner(mcscf_grad, state=0):
     >>> etot, grad = mc_grad_scanner(gto.M(atom='N 0 0 0; N 0 0 1.1'))
     >>> etot, grad = mc_grad_scanner(gto.M(atom='N 0 0 0; N 0 0 1.5'))
     '''
+    if isinstance(mcscf_grad, lib.GradScanner):
+        return mcscf_grad
+
     logger.info(mcscf_grad, 'Create scanner for %s', mcscf_grad.__class__)
+
     class CASCI_GradScanner(mcscf_grad.__class__, lib.GradScanner):
         def __init__(self, g):
             lib.GradScanner.__init__(self, g)
@@ -229,7 +233,7 @@ class Gradients(lib.StreamObject):
         self.stdout = mc.stdout
         self.verbose = mc.verbose
         self.max_memory = mc.max_memory
-        self.atmlst = range(mc.mol.natm)
+        self.atmlst = None
         self.de = None
         self._keys = set(self.__dict__.keys())
 

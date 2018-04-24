@@ -91,7 +91,7 @@ class KnownValues(unittest.TestCase):
         mf = dft.RKS(mol).set(xc='CAMB3LYP')
         mf._numint.libxc = dft.xcfun
         td = mf.apply(tdscf.TDA)
-        tdg_scanner = td.nuc_grad_method().as_scanner()
+        tdg_scanner = td.nuc_grad_method().as_scanner().as_scanner()
         g = tdg_scanner(mol, state=3)[1]
         self.assertAlmostEqual(lib.finger(g), 0.60789020244330605, 7)
         smf = td.as_scanner()

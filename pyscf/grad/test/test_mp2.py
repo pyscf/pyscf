@@ -80,7 +80,7 @@ class KnownValues(unittest.TestCase):
     def test_as_scanner(self):
         pt = mp.mp2.MP2(mf)
         pt.frozen = [0,1,10,11,12]
-        gscan = pt.nuc_grad_method().as_scanner()
+        gscan = pt.nuc_grad_method().as_scanner().as_scanner()
         e, g1 = gscan(mol)
         self.assertTrue(gscan.converged)
         self.assertAlmostEqual(e, -76.025166662910223, 9)

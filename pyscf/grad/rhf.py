@@ -70,6 +70,8 @@ def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
     return de
 
 def _write(dev, mol, de, atmlst):
+    if atmlst is None:
+        atmlst = range(mol.natm)
     dev.stdout.write('         x                y                z\n')
     for k, ia in enumerate(atmlst):
         dev.stdout.write('%d %s  %15.10f  %15.10f  %15.10f\n' %
@@ -149,7 +151,11 @@ def as_scanner(mf_grad):
     >>> e_tot, grad = hf_scanner(gto.M(atom='H 0 0 0; F 0 0 1.1'))
     >>> e_tot, grad = hf_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
     '''
+    if isinstance(mf_grad, lib.GradScanner):
+        return mf_grad
+
     logger.info(mf_grad, 'Create scanner for %s', mf_grad.__class__)
+
     class SCF_GradScanner(mf_grad.__class__, lib.GradScanner):
         def __init__(self, g):
             lib.GradScanner.__init__(self, g)
@@ -174,8 +180,8 @@ class Gradients(lib.StreamObject):
 # the kernel function can be reused in the DFT gradients code.
         self.grid_response = False
 
-        self.atmlst = range(self.mol.natm)
-        self.de = numpy.zeros((0,3))
+        self.atmlst = None
+        self.de = None
         self._keys = set(self.__dict__.keys())
 
     def dump_flags(self):

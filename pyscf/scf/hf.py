@@ -1085,6 +1085,9 @@ def as_scanner(mf):
     -98.414750424294368
     '''
     import copy
+    if isinstance(mf, lib.SinglePointScanner):
+        return mf
+
     logger.info(mf, 'Create scanner for %s', mf.__class__)
 
     class SCF_Scanner(mf.__class__, lib.SinglePointScanner):

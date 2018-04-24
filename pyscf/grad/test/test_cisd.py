@@ -88,7 +88,7 @@ class KnownValues(unittest.TestCase):
     def test_as_scanner(self):
         myci = ci.cisd.CISD(mf)
         myci.frozen = [0,1,10,11,12]
-        gscan = myci.nuc_grad_method().as_scanner()
+        gscan = myci.nuc_grad_method().as_scanner().as_scanner()
         e, g1 = gscan(mol)
         self.assertTrue(gscan.converged)
         self.assertAlmostEqual(e, -76.032220245016717, 9)

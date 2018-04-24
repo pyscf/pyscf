@@ -170,7 +170,11 @@ def as_scanner(td_grad, state=1):
     >>> e_tot, grad = td_grad_scanner(gto.M(atom='H 0 0 0; F 0 0 1.1'))
     >>> e_tot, grad = td_grad_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
     '''
+    if isinstance(td_grad, lib.GradScanner):
+        return td_grad
+
     logger.info(td_grad, 'Create scanner for %s', td_grad.__class__)
+
     class TDSCF_GradScanner(td_grad.__class__, lib.GradScanner):
         def __init__(self, g):
             lib.GradScanner.__init__(self, g)
@@ -197,9 +201,8 @@ class Gradients(rhf_grad.Gradients):
         self._scf = td._scf  # needed by hcore_generator
         self.chkfile = td.chkfile
         self.max_memory = td.max_memory
-        self.atmlst = range(self.mol.natm)
-
-        self.de = 0
+        self.atmlst = None
+        self.de = None
         keys = set(('cphf_max_cycle', 'cphf_conv_tol'))
         self._keys = set(self.__dict__.keys()).union(keys)
 
@@ -238,8 +241,11 @@ class Gradients(rhf_grad.Gradients):
         else:
             self.atmlst = atmlst
 
-        self.check_sanity()
-        self.dump_flags()
+        if self.verbose >= logger.WARN:
+            self.check_sanity()
+        if self.verbose >= logger.INFO:
+            self.dump_flags()
+
         de = self.grad_elec(xy, singlet, atmlst)
         self.de = de = de + self.grad_nuc(atmlst=atmlst)
 
@@ -251,11 +257,7 @@ class Gradients(rhf_grad.Gradients):
         if self.verbose >= logger.NOTE:
             logger.note(self, '--------------- %s gradients ---------------',
                         self.base.__class__.__name__)
-            logger.note(self, '           x                y                z')
-            de = self.de
-            for k, ia in enumerate(self.atmlst):
-                logger.note(self, '%d %s  %15.9f  %15.9f  %15.9f', ia,
-                            self.mol.atom_symbol(ia), de[k,0], de[k,1], de[k,2])
+            rhf_grad._write(self, self.mol, self.de, self.atmlst)
             logger.note(self, '----------------------------------------------')
 
     as_scanner = as_scanner

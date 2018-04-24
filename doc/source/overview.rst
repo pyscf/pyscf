@@ -240,9 +240,12 @@ Scanner is a special derived object of the caller.  Most methods which are
 defined in the caller class can be used with the scanner object. For example::
 
   mf_scanner = gto.M().apply(scf.RHF).as_scanner()
-  mf_scanner(gto.M(atom='H 0 0 0; H 0 0 %g'%r))
+  mf_scanner(gto.M(atom='H 0 0 0; H 0 0 1.2'))
   mf_scanner.analyze()
   dm1 = mf_scanner.make_rdm1()
+
+  mf_grad_scanner = mf_scanner.nuc_grad_method().as_scanner()
+  mf_grad_scanner(gto.M(atom='H 0 0 0; H 0 0 1.2'))
 
 As shown in the example above, the scanner works pretty close to the relevant
 class object except that the scanner does not need the ``kernel`` or ``run``
