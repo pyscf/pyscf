@@ -163,6 +163,11 @@ def read(filename):
                 dic['ECORE'] = float(dat[0])
         dat = finp.readline().split()
 
+    idx, idy = numpy.tril_indices(norb, -1)
+    if numpy.linalg.norm(h1e[idy,idx]) == 0:
+        h1e[idy,idx] = h1e[idx,idy]
+    elif numpy.linalg.norm(h1e[idx,idy]) == 0:
+        h1e[idx,idy] = h1e[idy,idx]
     dic['H1'] = h1e
     dic['H2'] = h2e
     finp.close()
