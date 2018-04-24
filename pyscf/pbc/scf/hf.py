@@ -234,21 +234,18 @@ class SCF(mol_hf.SCF):
 
     @property
     def kpt(self):
-        if self._kpt is not None:
+        if 'kpt' in self.__dict__:
             # To handle the attribute kpt loaded from chkfile
-            self.kpt = self._kpt
+            self.kpt = self.__dict__.pop('kpt')
         return self.with_df.kpts.reshape(3)
     @kpt.setter
     def kpt(self, x):
-        self._kpt = None
         self.with_df.kpts = np.reshape(x, (-1,3))
 
     def build(self, cell=None):
-        # To handle the attribute kpt loaded from chkfile
         if 'kpt' in self.__dict__:
-            self.kpt = self.__dict__['kpt']
-        elif getattr(self, '_kpt', None) is not None:
-            self.kpt = self._kpt
+            # To handle the attribute kpt loaded from chkfile
+            self.kpt = self.__dict__.pop('kpt')
         if self.verbose >= logger.WARN:
             self.check_sanity()
         return self
@@ -435,7 +432,7 @@ class SCF(mol_hf.SCF):
         if self.chkfile:
             mol_hf.SCF.dump_chk(self, envs)
             with h5py.File(self.chkfile) as fh5:
-                fh5['scf/_kpt'] = self.kpt
+                fh5['scf/kpt'] = self.kpt
         return self
 
     def _is_mem_enough(self):

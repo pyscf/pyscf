@@ -340,13 +340,12 @@ class KSCF(pbchf.SCF):
 
     @property
     def kpts(self):
-        if self._kpts is not None:
-            # To handle the attribute kpts loaded from chkfile
-            self.kpts = self._kpts
+        if 'kpts' in self.__dict__:
+            # To handle the attribute kpt loaded from chkfile
+            self.kpt = self.__dict__.pop('kpts')
         return self.with_df.kpts
     @kpts.setter
     def kpts(self, x):
-        self._kpts = None
         self.with_df.kpts = np.reshape(x, (-1,3))
 
     @property
@@ -396,11 +395,9 @@ class KSCF(pbchf.SCF):
         #if self.exxdiv == 'vcut_ws':
         #    self.precompute_exx()
 
-        # To handle the attribute kpts loaded from chkfile
         if 'kpts' in self.__dict__:
-            self.kpts = self.__dict__['kpts']
-        elif getattr(self, '_kpts', None) is not None:
-            self.kpts = self._kpts
+            # To handle the attribute kpts loaded from chkfile
+            self.kpts = self.__dict__.pop('kpts')
         if self.verbose >= logger.WARN:
             self.check_sanity()
         return self
@@ -573,7 +570,7 @@ class KSCF(pbchf.SCF):
         if self.chkfile:
             hf.SCF.dump_chk(self, envs)
             with h5py.File(self.chkfile) as fh5:
-                fh5['scf/_kpts'] = self.kpts
+                fh5['scf/kpts'] = self.kpts
         return self
 
     def mulliken_meta(self, cell=None, dm=None, verbose=logger.DEBUG,
