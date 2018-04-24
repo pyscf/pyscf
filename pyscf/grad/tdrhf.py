@@ -148,7 +148,7 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
     return de
 
 
-def as_scanner(td_grad):
+def as_scanner(td_grad, state=1):
     '''Generating a nuclear gradients scanner/solver (for geometry optimizer).
 
     The returned solver is a function. This function requires one argument
@@ -175,7 +175,7 @@ def as_scanner(td_grad):
         def __init__(self, g):
             lib.GradScanner.__init__(self, g)
             self._keys.update(['e_tot'])
-        def __call__(self, mol, state=1, **kwargs):
+        def __call__(self, mol, state=state, **kwargs):
             td_scanner = self.base
             td_scanner(mol)
             self.mol = mol

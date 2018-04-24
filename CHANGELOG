@@ -29,10 +29,11 @@ PySCF 1.5 alpha (2018-03-21)
   - Generalized CCSD (GCCSD)
   - Generalized CCSD lambda solver
   - Generalized Hartree-Fock with PBC
-  - k-point GCCSD and RCCSD with PBC
-  - k-point GCCSD(T) and RCCSD(T) with PBC
+  - PBC GCCSD and RCCSD with k-point sampling
+  - PBC GCCSD(T) and RCCSD(T) with k-point sampling
   - RCCSD(T) and UCCSD(T) for non-canonical HF orbitals
   - RCISD and UCISD analytical nuclear gradients
+  - RCISD, UCISD analytical nuclear gradients for excited states
   - RMP2 and UMP2 analytical nuclear gradients
   - UCCSD analytical nuclear gradients
   - Frozen orbitals in MP2, CISD, CCSD, CCSD(T) nuclear gradients
@@ -42,9 +43,10 @@ PySCF 1.5 alpha (2018-03-21)
   - GIAO-ECP integrals for NMR shielding
   - Interface to pyWannier90
   - Restricted MP2 with k-point sampling
-  - RCCSD(T), UCCSD(T) and GCCSD(T) density matrices
+  - RCCSD(T), UCCSD(T) and GCCSD(T) 1-particle and 2-particle density matrices
   - RCCSD(T), UCCSD(T) analytical nuclear gradients
   - CASCI/CASSCF analytical nuclear gradients
+  - CASCI analytical nuclear gradients for excited states
   - Cartesian GTO (6d 10f) basis in PBC calculations
   - Natural transition orbital analysis
   - direct-RPA (no exchange, aka TDH)
@@ -203,12 +205,12 @@ PySCF 1.4 beta (2017-08-22)
 PySCF 1.4 alpha (2017-07-24)
 ----------------------------
 * Added
-  - General function to evaluate Spinor GTO in real space grids
+  - General function to evaluate Spinor GTO on real space grids
   - Dirac-Kohn-Sham (LDA functional)
   - EDIIS and ADIIS
   - Periodic CCSD with k-point sampling
   - Periodic EOM-IP-CCSD and EOM-EA-CCSD for single k-point calculation
-  - spin-square value (per unit) of KUHF calculation
+  - spin-square value (per unit cell) of KUHF calculation
   - Update interface to fciqmc for standalone executing
   - Routines in fciqmc to read in the spinned one and two RDMs
   - Heat-Bath CI

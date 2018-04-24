@@ -321,6 +321,22 @@ class KnownValues(unittest.TestCase):
         e2 = mcs(pmol.set_geom_('N 0 0 0; N 0 0 1.199; H 1 1 0; H 1 1 1.2'))
         self.assertAlmostEqual(g1[1,2], (e1-e2)/0.002*lib.param.BOHR, 5)
 
+    def test_casci_grad_excited_state(self):
+        mc = mcscf.CASCI(mf, 4, 4)
+        mc.fcisolver.nroots = 3
+        g_scan = mc.nuc_grad_method().as_scanner(state=2)
+        g1 = g_scan(mol, atmlst=range(4))[1]
+        self.assertAlmostEqual(lib.finger(g1), -0.058112001722577293, 7)
+
+        g2 = g_scan.kernel()
+        self.assertAlmostEqual(lib.finger(g2), -0.066025991364829367, 7)
+
+        mcs = mc.as_scanner()
+        pmol = mol.copy()
+        e1 = mcs(pmol.set_geom_('N 0 0 0; N 0 0 1.201; H 1 1 0; H 1 1 1.2'))
+        e2 = mcs(pmol.set_geom_('N 0 0 0; N 0 0 1.199; H 1 1 0; H 1 1 1.2'))
+        self.assertAlmostEqual(g1[1,2], (e1[2]-e2[2])/0.002*lib.param.BOHR, 5)
+
     def test_casci_grad_with_ccsd_solver(self):
         mol = gto.Mole()
         mol.atom = 'N 0 0 0; N 0 0 1.2; H 1 1 0; H 1 1 1.2'
