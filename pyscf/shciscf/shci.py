@@ -756,7 +756,6 @@ def writeIntegralFile(SHCI, h1eff, eri_cas, norb, nelec, ecore=0):
     from pyscf.dmrgscf import dmrg_sym
 
     if (SHCI.groupname == 'Dooh' or SHCI.groupname == 'Coov') and SHCI.useExtraSymm:
-       eri_cas = pyscf.ao2mo.restore(1, eri_cas, norb)
        coeffs, nRows, rowIndex, rowCoeffs, orbsym = D2htoDinfh(SHCI, norb, nelec)
 
        newintt = numpy.tensordot(coeffs.conj(), h1eff, axes=([1],[0]))
@@ -765,9 +764,8 @@ def writeIntegralFile(SHCI, h1eff, eri_cas, norb, nelec, ecore=0):
        for i in range(norb):
           for j in range(norb):
              newint1r[i,j] = newint1[i,j].real
-       eri_cas = pyscf.ao2mo.restore(1, eri_cas, norb)
-       int2 = 1.0*eri_cas
-       eri_cas = 0.0*eri_cas
+       int2 = pyscf.ao2mo.restore(1, eri_cas, norb)
+       eri_cas = numpy.zeros_like(int2)
 
        transformDinfh(norb, numpy.ascontiguousarray(nRows, numpy.int32),
                       numpy.ascontiguousarray(rowIndex, numpy.int32),
@@ -784,7 +782,6 @@ def writeIntegralFile(SHCI, h1eff, eri_cas, norb, nelec, ecore=0):
        if SHCI.groupname is not None and SHCI.orbsym is not []:
           orbsym = dmrg_sym.convert_orbsym(SHCI.groupname, SHCI.orbsym)
        else:
-          eri_cas = pyscf.ao2mo.restore(8, eri_cas, norb)
           orbsym = [1]*norb
 
        eri_cas = pyscf.ao2mo.restore(8, eri_cas, norb)

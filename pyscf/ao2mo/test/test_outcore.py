@@ -46,6 +46,10 @@ c_env = numpy.array(mol._env)
 natm = ctypes.c_int(c_atm.shape[0])
 nbas = ctypes.c_int(c_bas.shape[0])
 
+def tearDownModule():
+    global mol, mo
+    del mol, mo
+
 class KnownValues(unittest.TestCase):
     def test_nroutcore_grad(self):
         ftmp = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
@@ -104,7 +108,7 @@ class KnownValues(unittest.TestCase):
         eriref = numpy.einsum('ijkp,pl->ijkl', eriref, mo)
 
         ao2mo.outcore.full(mol, mo, erifile, dataname='eri_mo',
-                           intor='int2e_sph', aosym='s1', comp=1,
+                           intor='int2e', aosym=1, comp=1,
                            max_memory=10, ioblk_size=5)
         feri = h5py.File(erifile)
         eri1 = numpy.array(feri['eri_mo']).reshape(nao,nao,nao,nao)
@@ -114,20 +118,23 @@ class KnownValues(unittest.TestCase):
         ao2mo.outcore.full(mol, mo, erifile, dataname='eri_mo',
                            intor='int2e_sph', aosym='s2ij', comp=1,
                            max_memory=10, ioblk_size=5)
-        feri = h5py.File(erifile)
-        eri1 = s2ij_s1(1, numpy.array(feri['eri_mo']), nao)
-        feri.close()
+        with ao2mo.load(erifile, 'eri_mo') as eri:
+            eri1 = ao2mo.restore(1, numpy.array(eri), nao)
         eri1 = eri1.reshape(nao,nao,nao,nao)
         self.assertTrue(numpy.allclose(eri1, eriref))
 
         ao2mo.outcore.full(mol, mo, erifile, dataname='eri_mo',
                            intor='int2e_sph', aosym='s2kl', comp=1,
                            max_memory=10, ioblk_size=5)
-        feri = h5py.File(erifile)
-        eri1 = s2kl_s1(1, numpy.array(feri['eri_mo']), nao)
-        feri.close()
-        eri1 = eri1.reshape(nao,nao,nao,nao)
+        with ao2mo.load(erifile, 'eri_mo') as eri:
+            eri1 = ao2mo.restore(1, numpy.array(eri), nao)
+            eri1 = eri1.reshape(nao,nao,nao,nao)
         self.assertTrue(numpy.allclose(eri1, eriref))
+
+        ao2mo.outcore.full(mol, mo[:,:0], erifile,
+                           intor='int2e', aosym='1', comp=1)
+        with ao2mo.load(erifile, 'eri_mo') as eri:
+            self.assertTrue(eri.size == 0)
 
     def test_group_segs(self):
         numpy.random.seed(1)
@@ -146,21 +153,10 @@ class KnownValues(unittest.TestCase):
         eri = ao2mo.kernel(pmol, mo)
         self.assertAlmostEqual(lib.finger(eri), -977.99841341828437, 9)
 
-def s2ij_s1(symmetry, eri, norb):
-    idx = numpy.tril_indices(norb)
-    eri1 = numpy.empty((norb,norb,norb,norb))
-    eri1[idx] = eri.reshape(-1,norb,norb)
-    eri1[idx[1],idx[0]] = eri.reshape(-1,norb,norb)
-    return eri1
-
-def s2kl_s1(symmetry, eri, norb):
-    idx = numpy.tril_indices(norb)
-    eri1 = numpy.empty((norb,norb,norb,norb))
-    eri1[:,:,idx[0],idx[1]] = eri.reshape(norb,norb,-1)
-    eri1[:,:,idx[1],idx[0]] = eri.reshape(norb,norb,-1)
-    return eri1
+        eri = ao2mo.kernel(mol, mo, intor='int2e_cart')
+        self.assertAlmostEqual(lib.finger(eri), -977.99841341828437, 9)
 
 if __name__ == '__main__':
-    print('Full Tests for outcore')
+    print('Full Tests for ao2mo.outcore')
     unittest.main()
 

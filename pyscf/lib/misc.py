@@ -790,8 +790,11 @@ class H5TmpFile(h5py.File):
         h5py.File.__init__(self, filename, *args, **kwargs)
 #FIXME: Does GC flush/close the HDF5 file when releasing the resource?
 # To make HDF5 file reusable, file has to be closed or flushed
-#    def __del__(self):
-#        self.close()
+    def __del__(self):
+        try:
+            self.close()
+        except ValueError:  # if close() is called twice
+            pass
 
 def fingerprint(a):
     '''Fingerprint of numpy array'''

@@ -120,10 +120,7 @@ def general(eri_ao, mo_coeffs, verbose=0, compact=True, **kwargs):
     (80, 80)
 
     '''
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(sys.stdout, verbose)
+    log = logger.new_logger(sys, verbose)
 
     nao = mo_coeffs[0].shape[0]
     nao_pair = nao*(nao+1)//2
@@ -133,15 +130,13 @@ def general(eri_ao, mo_coeffs, verbose=0, compact=True, **kwargs):
                           mo_coeffs[0].conj(), mo_coeffs[1],
                           mo_coeffs[2].conj(), mo_coeffs[3])
 
-    assert(eri_ao.size in (nao_pair**2, nao_pair*(nao_pair+1)//2))
-
 # transform e1
     eri1 = half_e1(eri_ao, mo_coeffs, compact)
     klmosym, nkl_pair, mokl, klshape = _conc_mos(mo_coeffs[2], mo_coeffs[3], compact)
 
     if eri1.shape[0] == 0 or nkl_pair == 0:
-        # 0 dimension sometimes causes blas problem
-        return numpy.zeros((nij_pair,nkl_pair))
+        # 0 dimension causes error in certain BLAS implementations
+        return numpy.zeros((eri1.shape[0],nkl_pair))
 
 #    if nij_pair > nkl_pair:
 #        log.warn('low efficiency for AO to MO trans!')

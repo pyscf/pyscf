@@ -28,6 +28,10 @@ mol.atom = [
 mol.basis = 'cc-pvdz'
 mol.build()
 
+def tearDownModule():
+    global mol
+    del mol
+
 class KnownValues(unittest.TestCase):
     def test_r_outcore_eri(self):
         n2c = mol.nao_2c()

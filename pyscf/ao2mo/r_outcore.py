@@ -29,14 +29,14 @@ IOBUF_WORDS = getattr(__config__, 'ao2mo_outcore_iobuf_words', 1e8)  # 1.6 GB
 IOBUF_ROW_MIN = getattr(__config__, 'ao2mo_outcore_row_min', 160)
 MAX_MEMORY = getattr(__config__, 'ao2mo_outcore_max_memory', 4000)  # 4GB
 
-def full(mol, mo_coeff, erifile, dataname='eri_mo', tmpdir=None,
+def full(mol, mo_coeff, erifile, dataname='eri_mo',
          intor='int2e_spinor', aosym='s4', comp=None,
          max_memory=MAX_MEMORY, ioblk_size=IOBLK_SIZE, verbose=logger.WARN):
-    general(mol, (mo_coeff,)*4, erifile, dataname, tmpdir,
+    general(mol, (mo_coeff,)*4, erifile, dataname,
             intor, aosym, comp, max_memory, ioblk_size, verbose)
     return erifile
 
-def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
+def general(mol, mo_coeffs, erifile, dataname='eri_mo',
             intor='int2e_spinor', aosym='s4', comp=None,
             max_memory=MAX_MEMORY, ioblk_size=IOBLK_SIZE, verbose=logger.WARN):
     time_0pass = (time.clock(), time.time())
@@ -60,10 +60,11 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
 
     if klsame and aosym in ('s4', 's2kl', 'a2kl', 'a4ij', 'a4kl', 'a4'):
         log.debug('k-mo == l-mo')
-        mokl = numpy.asarray(mo_coeffs[2], order='F')
+        mokl = numpy.asarray(mo_coeffs[2], dtype=numpy.complex128, order='F')
         klshape = (0, nmok, 0, nmok)
     else:
-        mokl = numpy.asarray(numpy.hstack((mo_coeffs[2],mo_coeffs[3])), order='F')
+        mokl = numpy.asarray(numpy.hstack((mo_coeffs[2],mo_coeffs[3])),
+                             dtype=numpy.complex128, order='F')
         klshape = (0, nmok, nmok, nmok+nmol)
 
     if isinstance(erifile, str):
@@ -93,9 +94,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
               float(nij_pair)*nkl_pair*comp, nij_pair*nkl_pair*comp*16/1e6)
 
 # transform e1
-    if tmpdir is None:
-        tmpdir = lib.param.TMPDIR
-    swapfile = tempfile.NamedTemporaryFile(dir=tmpdir)
+    swapfile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
     half_e1(mol, mo_coeffs, swapfile.name, intor, aosym, comp,
             max_memory, ioblk_size, log)
 
