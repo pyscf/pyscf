@@ -477,6 +477,7 @@ def as_scanner(ci):
         >>> e_tot = ci_scanner(gto.M(atom='H 0 0 0; F 0 0 1.1'))
         >>> e_tot = ci_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
     '''
+    from pyscf import gto
     if isinstance(ci, lib.SinglePointScanner):
         return ci
 
@@ -486,7 +487,12 @@ def as_scanner(ci):
         def __init__(self, ci):
             self.__dict__.update(ci.__dict__)
             self._scf = ci._scf.as_scanner()
-        def __call__(self, mol, **kwargs):
+        def __call__(self, mol_or_geom, **kwargs):
+            if isinstance(mol_or_geom, gto.Mole):
+                mol = mol_or_geom
+            else:
+                mol = self.mol.set_geom_(mol_or_geom, inplace=False)
+
             mf_scanner = self._scf
             mf_scanner(mol)
             self.mol = mol

@@ -33,6 +33,16 @@ def tearDownModule():
     del mol
 
 class KnownValues(unittest.TestCase):
+    def test_rhf_grad(self):
+        g_scan = scf.RHF(mol).nuc_grad_method().as_scanner()
+        g = g_scan(mol)[1]
+        self.assertAlmostEqual(lib.finger(g), 0.0055116240804341972, 9)
+
+        mfs = g_scan.base.as_scanner()
+        e1 = mfs('O  0.  0. -0.001; H  0.  -0.757  0.587; H  0.  0.757   0.587')
+        e2 = mfs('O  0.  0.  0.001; H  0.  -0.757  0.587; H  0.  0.757   0.587')
+        self.assertAlmostEqual(g[0,2], (e2-e1)/0.002*lib.param.BOHR, 6)
+
     def test_finite_diff_x2c_rhf_grad(self):
         mf = scf.RHF(mol).x2c()
         mf.conv_tol = 1e-14
@@ -88,7 +98,7 @@ class KnownValues(unittest.TestCase):
                     ecp='lanl2dz', verbose=0)
         mf = scf.RHF(mol)
         g_scan = mf.nuc_grad_method().as_scanner().as_scanner()
-        g = g_scan(mol)[1]
+        g = g_scan(mol.atom)[1]
         self.assertAlmostEqual(lib.finger(g), -0.012310573162997052, 9)
 
         mfs = mf.as_scanner()

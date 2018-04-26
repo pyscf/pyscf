@@ -353,7 +353,7 @@ class KnownValues(unittest.TestCase):
     def test_scanner(self):
         mc = mcscf.CASCI(mf, 4, 4)
         gs = mc.nuc_grad_method().as_scanner().as_scanner()
-        e, g1 = gs(mol)
+        e, g1 = gs(mol.atom)
         self.assertAlmostEqual(e, -108.38187009571901, 9)
         self.assertAlmostEqual(lib.finger(g1), -0.066025991364829367, 7)
 

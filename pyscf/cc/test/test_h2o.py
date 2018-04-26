@@ -155,15 +155,15 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e1, mcc.e_tot, 7)
 
     def test_scanner(self):
-        mol1 = mol.copy()
-        mol1.set_geom_('''
-        O   0.   0.       .1
-        H   0.   -0.757   0.587
-        H   0.   0.757    0.587''')
-        cc_scanner = scf.RHF(mol).apply(cc.CCSD).as_scanner().as_scanner()
+        cc_scanner = scf.RHF(mol).apply(cc.CCSD).as_scanner()
         cc_scanner.conv_tol = 1e-8
         self.assertAlmostEqual(cc_scanner(mol), -76.240108935038691, 6)
-        self.assertAlmostEqual(cc_scanner(mol1), -76.228972886940639, 6)
+        geom = '''
+        O   0.   0.       .1
+        H   0.   -0.757   0.587
+        H   0.   0.757    0.587'''
+        cc_scanner = cc_scanner.as_scanner()
+        self.assertAlmostEqual(cc_scanner(geom), -76.228972886940639, 6)
 
     def test_init(self):
         self.assertTrue(isinstance(cc.CCSD(mf), ccsd.CCSD))

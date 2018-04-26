@@ -199,6 +199,7 @@ def as_scanner(mcscf_grad, state=0):
     >>> etot, grad = mc_grad_scanner(gto.M(atom='N 0 0 0; N 0 0 1.1'))
     >>> etot, grad = mc_grad_scanner(gto.M(atom='N 0 0 0; N 0 0 1.5'))
     '''
+    from pyscf import gto
     if isinstance(mcscf_grad, lib.GradScanner):
         return mcscf_grad
 
@@ -207,7 +208,12 @@ def as_scanner(mcscf_grad, state=0):
     class CASCI_GradScanner(mcscf_grad.__class__, lib.GradScanner):
         def __init__(self, g):
             lib.GradScanner.__init__(self, g)
-        def __call__(self, mol, state=state, **kwargs):
+        def __call__(self, mol_or_geom, state=state, **kwargs):
+            if isinstance(mol_or_geom, gto.Mole):
+                mol = mol_or_geom
+            else:
+                mol = self.mol.set_geom_(mol_or_geom, inplace=False)
+
             mc_scanner = self.base
             if (mc_scanner.fcisolver.nroots > 1 and
                 state >= mc_scanner.fcisolver.nroots):

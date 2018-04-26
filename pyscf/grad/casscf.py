@@ -138,6 +138,7 @@ def as_scanner(mcscf_grad):
     >>> etot, grad = mc_grad_scanner(gto.M(atom='N 0 0 0; N 0 0 1.1'))
     >>> etot, grad = mc_grad_scanner(gto.M(atom='N 0 0 0; N 0 0 1.5'))
     '''
+    from pyscf import gto
     if isinstance(mcscf_grad, lib.GradScanner):
         return mcscf_grad
 
@@ -146,7 +147,12 @@ def as_scanner(mcscf_grad):
     class CASSCF_GradScanner(mcscf_grad.__class__, lib.GradScanner):
         def __init__(self, g):
             lib.GradScanner.__init__(self, g)
-        def __call__(self, mol, **kwargs):
+        def __call__(self, mol_or_geom, **kwargs):
+            if isinstance(mol_or_geom, gto.Mole):
+                mol = mol_or_geom
+            else:
+                mol = self.mol.set_geom_(mol_or_geom, inplace=False)
+
             mc_scanner = self.base
             e_tot = mc_scanner(mol)
             self.mol = mol

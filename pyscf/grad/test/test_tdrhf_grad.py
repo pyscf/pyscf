@@ -42,8 +42,8 @@ def tearDownModule():
 class KnownValues(unittest.TestCase):
     def test_tda_singlet(self):
         td = tdscf.TDA(mf).run(nstates=3)
-        tdg = td.nuc_grad_method()
-        g1 = tdg.kernel(state=3)
+        tdg = td.nuc_grad_method().as_scanner()
+        g1 = tdg(mol.atom_coords(), state=3)[1]
         self.assertAlmostEqual(g1[0,2], -0.23226123352352346, 8)
 
         td_solver = td.as_scanner()

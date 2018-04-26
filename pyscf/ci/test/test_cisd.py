@@ -294,9 +294,16 @@ class KnownValues(unittest.TestCase):
         O   0.   0.       .0
         H   0.   -0.757   0.587
         H   0.   0.757    0.587''', basis='631g')
-        ci_scanner = scf.RHF(mol).apply(ci.CISD).as_scanner().as_scanner()
+        ci_scanner = scf.RHF(mol).apply(ci.CISD).as_scanner()
         ci_scanner.conv_tol = 1e-8
         self.assertAlmostEqual(ci_scanner(mol), -76.114077022009468, 7)
+
+        geom = '''
+        O   0.   0.       .1
+        H   0.   -0.757   0.587
+        H   0.   0.757    0.587'''
+        ci_scanner = ci_scanner.as_scanner()
+        self.assertAlmostEqual(ci_scanner(geom), -76.104634289269356, 7)
 
 
 if __name__ == "__main__":

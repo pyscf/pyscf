@@ -106,7 +106,8 @@ class KnownValues(unittest.TestCase):
 
 #    def test_frozen(self):
 #        mc = mcscf.CASSCF(mf, 4, 4).set(frozen=2).run()
-#        g1 = mc.nuc_grad_method().kernel(atmlst=range(mol.natm))
+#        gscan = mc.nuc_grad_method().as_scanner()
+#        g1 = gscan(mol)[1]
 #        self.assertAlmostEqual(lib.finger(g1), -0.065094188906156134, 9)
 #
 #        mcs = mc.as_scanner()
@@ -118,7 +119,7 @@ class KnownValues(unittest.TestCase):
     def test_scanner(self):
         mc = mcscf.CASSCF(mf, 4, 4)
         gs = mc.nuc_grad_method().as_scanner().as_scanner()
-        e, g1 = gs(mol, atmlst=range(4))
+        e, g1 = gs(mol.atom, atmlst=range(4))
         self.assertAlmostEqual(e, -108.39289688030243, 9)
         self.assertAlmostEqual(lib.finger(g1), -0.065094188906156134, 7)
 

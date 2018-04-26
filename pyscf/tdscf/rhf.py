@@ -581,6 +581,7 @@ def as_scanner(td):
     >>> de = td_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
     [ 0.14844013  0.14844013  0.47641829]
     '''
+    from pyscf import gto
     if isinstance(td, lib.SinglePointScanner):
         return td
 
@@ -590,7 +591,12 @@ def as_scanner(td):
         def __init__(self, td):
             self.__dict__.update(td.__dict__)
             self._scf = td._scf.as_scanner()
-        def __call__(self, mol, **kwargs):
+        def __call__(self, mol_or_geom, **kwargs):
+            if isinstance(mol_or_geom, gto.Mole):
+                mol = mol_or_geom
+            else:
+                mol = self.mol.set_geom_(mol_or_geom, inplace=False)
+
             mf_scanner = self._scf
             mf_e = mf_scanner(mol)
             self.mol = mol

@@ -64,6 +64,7 @@ def as_scanner(grad_ci, state=0):
     >>> e_tot, grad = ci_scanner(gto.M(atom='H 0 0 0; F 0 0 1.1'))
     >>> e_tot, grad = ci_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
     '''
+    from pyscf import gto
     if isinstance(grad_ci, lib.GradScanner):
         return grad_ci
 
@@ -72,7 +73,12 @@ def as_scanner(grad_ci, state=0):
     class CISD_GradScanner(grad_ci.__class__, lib.GradScanner):
         def __init__(self, g):
             lib.GradScanner.__init__(self, g)
-        def __call__(self, mol, state=state, **kwargs):
+        def __call__(self, mol_or_geom, state=state, **kwargs):
+            if isinstance(mol_or_geom, gto.Mole):
+                mol = mol_or_geom
+            else:
+                mol = self.mol.set_geom_(mol_or_geom, inplace=False)
+
             ci_scanner = self.base
             if ci_scanner.nroots > 1 and state >= ci_scanner.nroots:
                 raise ValueError('State ID greater than the number of CISD roots')

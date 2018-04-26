@@ -98,7 +98,8 @@ class KnownValues(unittest.TestCase):
         eris = mycc.ao2mo()
         ecc, t1, t2 = mycc.kernel(eris=eris)
         l1, l2 = mycc.solve_lambda(eris=eris)
-        g1 = mycc.nuc_grad_method().kernel()
+        g_scan = mycc.nuc_grad_method().as_scanner()
+        g1 = g_scan(mol.atom)[1]
         self.assertAlmostEqual(lib.finger(g1), -0.22892720804519961, 6)
 
         cc_scanner = mycc.as_scanner()

@@ -74,7 +74,7 @@ class KnownValues(unittest.TestCase):
         e1 = ci_scanner(mol.set_geom_('H 0 0 0; H 0 0 1.704'))
 
         g_scan = myci.nuc_grad_method().as_scanner(state=2)
-        g1 = g_scan(mol.set_geom_('H 0 0 0; H 0 0 1.705'), atmlst=range(2))[1]
+        g1 = g_scan('H 0 0 0; H 0 0 1.705', atmlst=range(2))[1]
         self.assertAlmostEqual(g1[0,2], (e1[2]-e0[2])*500, 6)
 
     def test_frozen(self):

@@ -66,7 +66,8 @@ class KnownValues(unittest.TestCase):
             basis = '631g',
             unit='Bohr')
         mp_scanner(mol)
-        g1 = mp_scanner.nuc_grad_method().kernel()
+        g_scan = mp_scanner.nuc_grad_method().as_scanner()
+        g1 = g_scan(mol.atom)[1]
         self.assertAlmostEqual(g1[0,2], (e1-e0)*500, 6)
 
     def test_frozen(self):

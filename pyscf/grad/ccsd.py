@@ -210,6 +210,7 @@ def as_scanner(grad_cc):
     >>> e_tot, grad = cc_scanner(gto.M(atom='H 0 0 0; F 0 0 1.1'))
     >>> e_tot, grad = cc_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
     '''
+    from pyscf import gto
     if isinstance(grad_cc, lib.GradScanner):
         return grad_cc
 
@@ -218,7 +219,11 @@ def as_scanner(grad_cc):
     class CCSD_GradScanner(grad_cc.__class__, lib.GradScanner):
         def __init__(self, g):
             lib.GradScanner.__init__(self, g)
-        def __call__(self, mol, **kwargs):
+        def __call__(self, mol_or_geom, **kwargs):
+            if isinstance(mol_or_geom, gto.Mole):
+                mol = mol_or_geom
+            else:
+                mol = self.mol.set_geom_(mol_or_geom, inplace=False)
             # The following simple version also works.  But eris object is
             # recomputed in cc_scanner and solve_lambda.
             # cc = self.base

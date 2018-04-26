@@ -1109,7 +1109,12 @@ def as_scanner(mf):
                 else:
                     break
 
-        def __call__(self, mol, **kwargs):
+        def __call__(self, mol_or_geom, **kwargs):
+            if isinstance(mol_or_geom, gto.Mole):
+                mol = mol_or_geom
+            else:
+                mol = self.mol.set_geom_(mol_or_geom, inplace=False)
+
             mf_obj = self
             while mf_obj is not None:
                 mf_obj.mol = mol

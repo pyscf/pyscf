@@ -519,6 +519,7 @@ def as_scanner(mc):
     >>> mc_scanner(gto.M(atom='N 0 0 0; N 0 0 1.1'))
     >>> mc_scanner(gto.M(atom='N 0 0 0; N 0 0 1.5'))
     '''
+    from pyscf import gto
     if isinstance(mc, lib.SinglePointScanner):
         return mc
 
@@ -528,7 +529,12 @@ def as_scanner(mc):
         def __init__(self, mc):
             self.__dict__.update(mc.__dict__)
             self._scf = mc._scf.as_scanner()
-        def __call__(self, mol, mo_coeff=None, ci0=None):
+        def __call__(self, mol_or_geom, mo_coeff=None, ci0=None):
+            if isinstance(mol_or_geom, gto.Mole):
+                mol = mol_or_geom
+            else:
+                mol = self.mol.set_geom_(mol_or_geom, inplace=False)
+
             if mo_coeff is None:
                 mf_scanner = self._scf
                 mf_scanner(mol)

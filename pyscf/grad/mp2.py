@@ -208,6 +208,7 @@ def as_scanner(grad_mp):
     >>> e_tot, grad = mp2_scanner(gto.M(atom='H 0 0 0; F 0 0 1.1'))
     >>> e_tot, grad = mp2_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
     '''
+    from pyscf import gto
     if isinstance(grad_mp, lib.GradScanner):
         return grad_mp
 
@@ -216,7 +217,12 @@ def as_scanner(grad_mp):
     class MP2_GradScanner(grad_mp.__class__, lib.GradScanner):
         def __init__(self, g):
             lib.GradScanner.__init__(self, g)
-        def __call__(self, mol, **kwargs):
+        def __call__(self, mol_or_geom, **kwargs):
+            if isinstance(mol_or_geom, gto.Mole):
+                mol = mol_or_geom
+            else:
+                mol = self.mol.set_geom_(mol_or_geom, inplace=False)
+
             mp_scanner = self.base
             mp_scanner(mol, with_t2=True)
             mf_grad = mp_scanner._scf.nuc_grad_method()

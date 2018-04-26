@@ -317,15 +317,15 @@ def format_atom(atoms, origin=0, axes=None,
         axes = numpy.eye(3)
 
     if isinstance(unit, (str, unicode)):
-        if unit.startswith(('B','b','au','AU')):
-            convert = 1.
-        else: #if unit.startswith(('A','a')):
-            convert = 1./param.BOHR
+        if unit.upper().startswith(('B', 'AU')):
+            unit = 1.
+        else: #unit[:3].upper() == 'ANG':
+            unit = 1./param.BOHR
     else:
-        convert = 1./unit
+        unit = 1./unit
 
     c = numpy.array([a[1] for a in fmt_atoms], dtype=numpy.double)
-    c = numpy.einsum('ix,kx->ki', axes, c - origin) * convert
+    c = numpy.einsum('ix,kx->ki', axes * unit, c - origin)
     z = [a[0] for a in fmt_atoms]
     return list(zip(z, c.tolist()))
 
@@ -2136,8 +2136,9 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         self.stdout.write('[INPUT] spin (= nelec alpha-beta = 2S) = %d\n' % self.spin)
         self.stdout.write('[INPUT] symmetry %s subgroup %s\n' %
                           (self.symmetry, self.symmetry_subgroup))
+        self.stdout.write('[INPUT] Mole.unit = %s\n' % self.unit)
         if self.cart:
-            self.stdout.write('[INPUT] Cartesian GTO integrals (6d 10f)')
+            self.stdout.write('[INPUT] Cartesian GTO integrals (6d 10f)\n')
 
         for ia,atom in enumerate(self._atom):
             coorda = tuple([x * param.BOHR for x in atom[1]])
@@ -2205,7 +2206,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
 
     def set_common_origin(self, coord):
         '''Update common origin for integrals of dipole, rxp etc.
-        **Note** the unit is Bohr
+        **Note** the unit of the coordinates needs to be Bohr
 
         Examples:
 
@@ -2354,36 +2355,49 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
                 self._env[PTR_RINV_ORIG:PTR_RINV_ORIG+3] = r
             return _TemporaryMoleContext(set_rinv, (zeta,rinv), (zeta0,rinv0))
 
-    def set_geom_(self, atoms_or_coords, unit=None, symmetry=None):
+    def set_geom_(self, atoms_or_coords, unit=None, symmetry=None,
+                  inplace=True):
         '''Update geometry
         '''
-        if unit is None:
-            unit = self.unit
-
-        if (unit != self.unit or
-            symmetry or self.symmetry or
-            not isinstance(atoms_or_coords, numpy.ndarray)):
-            if isinstance(atoms_or_coords, numpy.ndarray):
-                self.atom = list(zip([x[0] for x in self._atom], atoms_or_coords))
-            else:
-                self.atom = atoms_or_coords
-            self.unit = unit
-            if symmetry is not None:
-                self.symmetry = symmetry
-            self.build(False, False)
+        import copy
+        if inplace:
+            mol = self
         else:
-            ptr = self._atm[:,PTR_COORD]
-            self._env[ptr+0] = atoms_or_coords[:,0]
-            self._env[ptr+1] = atoms_or_coords[:,1]
-            self._env[ptr+2] = atoms_or_coords[:,2]
+            mol = copy.copy(self)
+        if unit is None:
+            unit = mol.unit
+        if symmetry is None:
+            symmetry = mol.symmetry
 
-        if self.verbose >= logger.INFO:
-            logger.info(self, 'New geometry (unit Bohr)')
-            coords = self.atom_coords()
-            for ia in range(self.natm):
-                logger.info(self, ' %3d %-4s %16.12f %16.12f %16.12f',
-                            ia+1, self.atom_symbol(ia), *coords[ia])
-        return self
+        if isinstance(atoms_or_coords, numpy.ndarray) and not symmetry:
+            if isinstance(unit, (str, unicode)):
+                if unit.upper().startswith(('B', 'AU')):
+                    unit = 1.
+                else: #unit[:3].upper() == 'ANG':
+                    unit = 1./param.BOHR
+            else:
+                unit = 1./unit
+            mol._env = mol._env.copy()
+            ptr = mol._atm[:,PTR_COORD]
+            mol._env[ptr+0] = unit * atoms_or_coords[:,0]
+            mol._env[ptr+1] = unit * atoms_or_coords[:,1]
+            mol._env[ptr+2] = unit * atoms_or_coords[:,2]
+        else:
+            if isinstance(atoms_or_coords, numpy.ndarray):
+                mol.atom = list(zip([x[0] for x in mol._atom], atoms_or_coords))
+            else:
+                mol.atom = atoms_or_coords
+            mol.unit = unit
+            mol.symmetry = symmetry
+            mol.build(False, False)
+
+        if mol.verbose >= logger.INFO:
+            logger.info(mol, 'New geometry (unit Bohr)')
+            coords = mol.atom_coords()
+            for ia in range(mol.natm):
+                logger.info(mol, ' %3d %-4s %16.12f %16.12f %16.12f',
+                            ia+1, mol.atom_symbol(ia), *coords[ia])
+        return mol
 
     def update(self, chkfile):
         return self.update_from_chk(chkfile)
