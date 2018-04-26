@@ -20,6 +20,7 @@
 JK with discrete Fourier transformation
 '''
 
+import time
 import numpy as np
 from pyscf import lib
 from pyscf.pbc import tools
@@ -149,11 +150,13 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
     mem_now = lib.current_memory()[0]
     max_memory = mydf.max_memory - mem_now
     blksize = int(min(nao, max(1, (max_memory-mem_now)*1e6/16/4/ngrids/nao)))
-    lib.logger.debug1(mydf, 'max_memory %s  blksize %d', max_memory, blksize)
+    lib.logger.debug1(mydf, 'fft_jk: get_k_kpts max_memory %s  blksize %d',
+                      max_memory, blksize)
     ao1_dtype = np.result_type(*ao1_kpts)
     ao2_dtype = np.result_type(*ao2_kpts)
     vR_dm = np.empty((nset,nao,ngrids), dtype=vk_kpts.dtype)
 
+    t1 = (time.clock(), time.time())
     for k2, ao2T in enumerate(ao2_kpts):
         if ao2T.size == 0:
             continue
@@ -199,6 +202,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
 
             for i in range(nset):
                 vk_kpts[i,k1] += weight * lib.dot(vR_dm[i], ao1T.T)
+        t1 = lib.logger.timer_debug1(mydf, 'get_k_kpts: make_kpt (%d,*)'%k2, *t1)
 
     # Function _ewald_exxdiv_for_G0 to add back in the G=0 component to vk_kpts
     # Note in the _ewald_exxdiv_G0 implementation, the G=0 treatments are

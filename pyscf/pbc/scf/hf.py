@@ -263,7 +263,9 @@ class SCF(mol_hf.SCF):
                         ' = -1/2 * Nelec*madelung/cell.vol = %.12g',
                         madelung*self.cell.nelectron * -.5)
         logger.info(self, 'DF object = %s', self.with_df)
-        self.with_df.dump_flags()
+        if not hasattr(self.with_df, 'build'):
+            # .dump_flags() is called in pbc.df.build function
+            self.with_df.dump_flags()
         return self
 
     def check_sanity(self):

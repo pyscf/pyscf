@@ -38,6 +38,7 @@ from pyscf import __config__
 
 WITH_META_LOWDIN = getattr(__config__, 'pbc_scf_analyze_with_meta_lowdin', True)
 PRE_ORTH_METHOD = getattr(__config__, 'pbc_scf_analyze_pre_orth_method', 'ANO')
+CHECK_COULOMB_IMAG = getattr(__config__, 'pbc_scf_check_coulomb_imag', True)
 
 
 canonical_occ = canonical_occ_ = addons.canonical_occ_
@@ -144,13 +145,12 @@ def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf_kpts=None):
     e1+= 1./nkpts * np.einsum('kij,kji', dm_kpts[1], h1e_kpts)
     e_coul = 1./nkpts * np.einsum('kij,kji', dm_kpts[0], vhf_kpts[0]) * 0.5
     e_coul+= 1./nkpts * np.einsum('kij,kji', dm_kpts[1], vhf_kpts[1]) * 0.5
-    if abs(e_coul.imag > 1.e-10):
-        raise RuntimeError("Coulomb energy has imaginary part, "
-                           "something is wrong!", e_coul.imag)
-    e1 = e1.real
-    e_coul = e_coul.real
-    logger.debug(mf, 'E_coul = %.15g', e_coul)
-    return e1+e_coul, e_coul
+    logger.debug(mf, 'E1 = %s  E_coul = %s', e1, e_coul)
+    if CHECK_COULOMB_IMAG and abs(e_coul.imag > mf.cell.precision*10):
+        logger.warn(mf, "Coulomb energy has imaginary part %s. "
+                    "Coulomb integrals (e-e, e-N) may not converge !",
+                    e_coul.imag)
+    return (e1+e_coul).real, e_coul.real
 
 
 def mulliken_meta(cell, dm_ao_kpts, verbose=logger.DEBUG,

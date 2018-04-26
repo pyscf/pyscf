@@ -113,6 +113,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
                exxdiv=None):
     cell = mydf.cell
     log = logger.Logger(mydf.stdout, mydf.verbose)
+    t1 = (time.clock(), time.time())
 
     mesh = mydf.mesh
     dm_kpts = lib.asarray(dm_kpts, order='C')
@@ -204,6 +205,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
         for kj, kptj in enumerate(kpts):
             if kk_todo[ki,kj]:
                 make_kpt(kptj-kpti)
+        t1 = log.timer_debug1('get_k_kpts: make_kpt (%d,*)'%ki, *t1)
 
     if (gamma_point(kpts) and gamma_point(kpts_band) and
         not numpy.iscomplexobj(dm_kpts)):

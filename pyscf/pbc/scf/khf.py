@@ -225,14 +225,12 @@ def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf_kpts=None):
     nkpts = len(dm_kpts)
     e1 = 1./nkpts * np.einsum('kij,kji', dm_kpts, h1e_kpts)
     e_coul = 1./nkpts * np.einsum('kij,kji', dm_kpts, vhf_kpts) * 0.5
+    logger.debug(mf, 'E1 = %s  E_coul = %s', e1, e_coul)
     if CHECK_COULOMB_IMAG and abs(e_coul.imag > mf.cell.precision*10):
-        raise RuntimeError("Coulomb energy has imaginary part %s. "
-                           "Coulomb integrals (e-e, e-N) may not converge !" %
-                           e_coul.imag)
-    e1 = e1.real
-    e_coul = e_coul.real
-    logger.debug(mf, 'E_coul = %.15g', e_coul)
-    return e1+e_coul, e_coul
+        logger.warn(mf, "Coulomb energy has imaginary part %s. "
+                    "Coulomb integrals (e-e, e-N) may not converge !",
+                    e_coul.imag)
+    return (e1+e_coul).real, e_coul.real
 
 
 def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
@@ -379,7 +377,9 @@ class KSCF(pbchf.SCF):
                         ' = -1/2 * Nelec*madelung/cell.vol = %.12g',
                         madelung*self.cell.nelectron * -.5)
         logger.info(self, 'DF object = %s', self.with_df)
-        self.with_df.dump_flags()
+        if not hasattr(self.with_df, 'build'):
+            # .dump_flags() is called in pbc.df.build function
+            self.with_df.dump_flags()
         return self
 
     def check_sanity(self):

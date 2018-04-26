@@ -29,6 +29,7 @@ Ref:
 J. Chem. Phys. 147, 164119 (2017)
 '''
 
+import os
 import time
 import copy
 import tempfile
@@ -481,11 +482,17 @@ class GDF(aft.AFTDF):
         if with_j3c:
             if isinstance(self._cderi_to_save, str):
                 cderi = self._cderi_to_save
-                if isinstance(self._cderi, str):
-                    logger.warn(self, 'Value of _cderi is ignored. DF '
-                                'integrals will be saved in file %s .', cderi)
             else:
                 cderi = self._cderi_to_save.name
+            if isinstance(self._cderi, str):
+                if self._cderi == cderi and os.path.isfile(cderi):
+                    logger.warn(self, 'DF integrals in %s (specified by '
+                                '._cderi) is overwritten by GDF '
+                                'initialization. ', cderi)
+                else:
+                    logger.warn(self, 'Value of ._cderi is ignored. '
+                                'DF integrals will be saved in file %s .',
+                                cderi)
             self._cderi = cderi
             t1 = (time.clock(), time.time())
             self._make_j3c(self.cell, self.auxcell, kptij_lst, cderi)

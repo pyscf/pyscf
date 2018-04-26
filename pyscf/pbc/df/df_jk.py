@@ -198,15 +198,17 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
                            pLqR.reshape(nao,-1).T, pLqI.reshape(nao,-1).T,
                            1, vkR[i,ki], vkI[i,ki], 1)
 
-    if kpts_band is None:  # normal k-points HF/DFT
+    if kpts_band is kpts:  # normal k-points HF/DFT
         for ki in range(nkpts):
             for kj in range(ki):
                 make_kpt(ki, kj, True)
             make_kpt(ki, ki, False)
+            t1 = log.timer_debug1('get_k_kpts: make_kpt ki>=kj (%d,*)'%ki, *t1)
     else:
         for ki in range(nkpts):
             for kj in range(nband):
                 make_kpt(ki, kj, False)
+            t1 = log.timer_debug1('get_k_kpts: make_kpt (%d,*)'%ki, *t1)
 
     if (gamma_point(kpts) and gamma_point(kpts_band) and
         not numpy.iscomplexobj(dm_kpts)):
