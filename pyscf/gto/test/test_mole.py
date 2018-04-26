@@ -411,6 +411,8 @@ O    SP
         mol1 = gto.Mole()
         mol1.atom = mol0.atom
         mol1.nucmod = 'G'
+        mol1.verbose = 5
+        mol1.output = '/dev/null'
         mol1.build(False, False)
         mol1.set_nuc_mod(1, 2)
         self.assertTrue(mol1._atm[1,gto.NUC_MOD_OF] == gto.NUC_GAUSS)
@@ -547,10 +549,13 @@ O    SP
         mol1 = gto.Mole()
         mol1.verbose = 5
         mol1.set_geom_(mol0._atom, 'B', symmetry=True)
-        mol1.set_geom_(mol0.atom_coords(), 'B')
+        mol1.set_geom_(mol0.atom_coords(), 'B', inplace=False)
 
         mol1.symmetry = False
         mol1.set_geom_(mol0.atom_coords(), 'B')
+        mol1.set_geom_(mol0.atom_coords(), inplace=False)
+        mol1.set_geom_(mol0.atom_coords(), unit=1.)
+        mol1.set_geom_(mol0.atom_coords(), unit='Ang', inplace=False)
 
     def test_apply(self):
         from pyscf import scf, mp
@@ -592,21 +597,26 @@ O    SP
 
     def test_input_symmetry(self):
         mol1 = gto.Mole()
-        mol1.atom = 'H 0 -1 0; H 0 1 0'
+        mol1.atom = 'H 1 1 1; H -1 -1 1; H 1 -1 -1; H -1 1 -1'
         mol1.unit = 'B'
         mol1.symmetry = True
         mol1.verbose = 5
         mol1.output = '/dev/null'
-        mol1.build()
-        self.assertAlmostEqual(lib.finger(mol1.atom_coords()), 0.69980902201036865, 9)
+        mol1.build(True,False)
+        self.assertAlmostEqual(lib.finger(mol1.atom_coords()), 4.2517312170868475, 9)
 
+        mol1 = gto.Mole()
+        mol1 = gto.Mole()
         mol1.atom = 'H 0 0 -1; H 0 0 1'
         mol1.cart = True
         mol1.unit = 'B'
         mol1.symmetry = 'Dooh'
-        mol1.build(False,False)
+        mol1.verbose = 5
+        mol1.output = '/dev/null'
+        mol1.build(True,False)
         self.assertAlmostEqual(lib.finger(mol1.atom_coords()), 0.69980902201036865, 9)
 
+        mol1 = gto.Mole()
         mol1.atom = 'H 0 -1 0; H 0 1 0'
         mol1.unit = 'B'
         mol1.symmetry = True

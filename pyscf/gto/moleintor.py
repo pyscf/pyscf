@@ -517,10 +517,7 @@ def getints3c(intor_name, atm, bas, env, shls_slice=None, comp=1,
 
 def getints4c(intor_name, atm, bas, env, shls_slice=None, comp=1,
               aosym='s1', ao_loc=None, cintopt=None, out=None):
-    if '_spinor' in intor_name:
-        raise NotImplementedError(intor_name)
     aosym = _stand_sym_code(aosym)
-
     atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
     bas = numpy.asarray(bas, dtype=numpy.int32, order='C')
     env = numpy.asarray(env, dtype=numpy.double, order='C')
@@ -529,6 +526,9 @@ def getints4c(intor_name, atm, bas, env, shls_slice=None, comp=1,
     c_env = env.ctypes.data_as(ctypes.c_void_p)
     natm = atm.shape[0]
     nbas = bas.shape[0]
+
+    if '_spinor' in intor_name:
+        assert(aosym == 's1')
 
     ao_loc = make_loc(bas, intor_name)
     if cintopt is None:
@@ -561,24 +561,34 @@ def getints4c(intor_name, atm, bas, env, shls_slice=None, comp=1,
         naok = ao_loc[k1] - ao_loc[k0]
         naol = ao_loc[l1] - ao_loc[l0]
         if aosym in ('s4', 's2ij'):
-            nij = naoi * (naoi + 1) // 2
+            nij = [naoi * (naoi + 1) // 2]
             assert(numpy.all(ao_loc[i0:i1]-ao_loc[i0] == ao_loc[j0:j1]-ao_loc[j0]))
         else:
-            nij = naoi * naoj
+            nij = [naoi, naoj]
         if aosym in ('s4', 's2kl'):
-            nkl = naok * (naok + 1) // 2
+            nkl = [naok * (naok + 1) // 2]
             assert(numpy.all(ao_loc[k0:k1]-ao_loc[k0] == ao_loc[l0:l1]-ao_loc[l0]))
         else:
-            nkl = naok * naol
-        if comp == 1:
-            out = numpy.ndarray((nij,nkl), buffer=out)
+            nkl = [naok, naol]
+
+        if '_spinor' in intor_name:
+            dtype = numpy.complex
+            drv = libcgto.GTOr4c_drv
+            fill = libcgto.GTOr4c_fill_s1
+            order = 'F'
         else:
-            out = numpy.ndarray((comp,nij,nkl), buffer=out)
+            dtype = numpy.double
+            drv = libcgto.GTOnr2e_fill_drv
+            fill = getattr(libcgto, 'GTOnr2e_fill_'+aosym)
+            order = 'C'
+
+        if comp == 1:
+            out = numpy.ndarray(nij+nkl, dtype=dtype, buffer=out, order=order)
+        else:
+            out = numpy.ndarray([comp]+nij+nkl, dtype=dtype, buffer=out, order=order)
 
         prescreen = lib.c_null_ptr()
-        drv = libcgto.GTOnr2e_fill_drv
-        drv(getattr(libcgto, intor_name),
-            getattr(libcgto, 'GTOnr2e_fill_'+aosym), prescreen,
+        drv(getattr(libcgto, intor_name), fill, prescreen,
             out.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(comp),
             (ctypes.c_int*8)(*shls_slice),
             ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt,

@@ -148,7 +148,7 @@ def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
                  ctypes.POINTER(ctypes.c_void_p)(), ctypes.c_int(0))
             p0 = 0
             for ij in range(sh_range[0], sh_range[1]):
-                i,j = _ao2mo._extract_pair(ij)
+                i,j = lib.index_tril_to_pair(ij)
                 i0 = ao_loc[i]
                 j0 = ao_loc[j]
                 i1 = ao_loc[i+1]
@@ -196,7 +196,7 @@ def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
                 bufpa.reshape(sh_range[2],nmo,ncas)[:,ncore:nocc].reshape(-1,ncas**2).T
         p0 = 0
         for ij in range(sh_range[0], sh_range[1]):
-            i,j = _ao2mo._extract_pair(ij)
+            i,j = lib.index_tril_to_pair(ij)
             i0 = ao_loc[i]
             j0 = ao_loc[j]
             i1 = ao_loc[i+1]

@@ -257,6 +257,16 @@ def prange_tril(start, stop, blocksize):
     displs = [x+start for x in _blocksize_partition(cum_costs, blocksize)]
     return zip(displs[:-1], displs[1:])
 
+
+def index_tril_to_pair(ij):
+    '''Given tril-index ij, compute the pair indices (i,j) which satisfy
+    ij = i * (i+1) / 2 + j
+    '''
+    i = (numpy.sqrt(2*ij+.25) - .5 + 1e-7).astype(int)
+    j = ij - i*(i+1)//2
+    return i, j
+
+
 def tril_product(*iterables, **kwds):
     '''Cartesian product in lower-triangular form for multiple indices
 

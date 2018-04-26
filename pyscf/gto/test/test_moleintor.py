@@ -155,17 +155,17 @@ class KnownValues(unittest.TestCase):
 
         idx = numpy.tril_indices(13)
         naopair = nao * (nao+1) // 2
-        ref = eri0[:,idx[0],idx[1]].reshape(3,naopair,-1)
+        ref = eri0[:,idx[0],idx[1]]
         eri1 = mol1.intor('int2e_ip1_sph', comp=3, aosym='s2ij')
         self.assertTrue(numpy.allclose(ref, eri1))
 
         idx = numpy.tril_indices(13)
-        ref = eri0[:,:,:,idx[0],idx[1]].reshape(3,-1,naopair)
+        ref = eri0[:,:,:,idx[0],idx[1]]
         eri1 = mol1.intor('int2e_ip1_sph', comp=3, aosym='s2kl')
         self.assertTrue(numpy.allclose(ref, eri1))
 
         idx = numpy.tril_indices(13)
-        ref = eri0[:,idx[0],idx[1]][:,:,idx[0],idx[1]].reshape(3,-1,naopair)
+        ref = eri0[:,idx[0],idx[1]][:,:,idx[0],idx[1]]
         eri1 = mol1.intor('int2e_ip1_sph', comp=3, aosym='4')
         self.assertTrue(numpy.allclose(ref, eri1))
 
@@ -200,8 +200,8 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(numpy.allclose(ref, eri1))
 
         eri1 = mol1.intor('int2e_ip1_sph', comp=3, aosym='s1', shls_slice=(2,4,1,3))
-        self.assertEqual(eri1.shape, (3,8,169))
-        self.assertTrue(numpy.allclose(eri0[:,2:6,1:3].reshape(3,8,169), eri1))
+        self.assertEqual(eri1.shape, (3,4,2,13,13))
+        self.assertTrue(numpy.allclose(eri0[:,2:6,1:3], eri1))
 
     def test_intor_r2e(self):
         mol1 = gto.M(atom=[[1   , (0. , -0.7 , 0.)],
