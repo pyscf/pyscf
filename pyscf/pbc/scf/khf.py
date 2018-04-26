@@ -320,6 +320,9 @@ class KSCF(pbchf.SCF):
         kpts : (nks,3) ndarray
             The sampling k-points in Cartesian coordinates, in units of 1/Bohr.
     '''
+    conv_tol = getattr(__config__, 'pbc_scf_KSCF_conv_tol', 1e-7)
+    conv_tol_grad = getattr(__config__, 'pbc_scf_KSCF_conv_tol_grad', None)
+
     def __init__(self, cell, kpts=np.zeros((1,3)),
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         if not cell._built:

@@ -46,6 +46,7 @@ C, 0.8917,  2.6751,  2.6751'''
 
         kpts = cell.make_kpts((2,2,2), with_gamma_point=False)
         mf = pbcdft.KUKS(cell, kpts)
+        mf.conv_tol = 1e-9
         mf.xc = 'lda,vwn'
         e1 = mf.scf()
         self.assertAlmostEqual(e1, -45.42583489512954, 8)

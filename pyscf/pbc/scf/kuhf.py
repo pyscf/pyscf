@@ -295,6 +295,9 @@ def init_guess_by_chkfile(cell, chkfile_name, project=None, kpts=None):
 class KUHF(pbcuhf.UHF, khf.KSCF):
     '''UHF class with k-point sampling.
     '''
+    conv_tol = getattr(__config__, 'pbc_scf_KSCF_conv_tol', 1e-7)
+    conv_tol_grad = getattr(__config__, 'pbc_scf_KSCF_conv_tol_grad', None)
+
     def __init__(self, cell, kpts=np.zeros((1,3)),
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         khf.KSCF.__init__(self, cell, kpts, exxdiv)

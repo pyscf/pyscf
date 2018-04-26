@@ -86,6 +86,7 @@ class KnowValues(unittest.TestCase):
 
         kpts = cell.make_kpts(nk)
         kmf = khf.KRHF(cell, kpts, exxdiv='vcut_sph')
+        kmf.conv_tol = 1e-9
         ekpt = kmf.scf()
         dm1 = kmf.make_rdm1()
         dm2 = kmf.from_chk(kmf.chkfile)
@@ -104,6 +105,7 @@ class KnowValues(unittest.TestCase):
         nk = (3, 1, 1)
         kpts = cell.make_kpts(nk)
         kmf1 = khf.KRHF(cell, kpts, exxdiv='vcut_sph')
+        kmf1.conv_tol = 1e-9
         dm = kmf1.from_chk(mf.chkfile)
         kmf1.max_cycle = 2
         ekpt = kmf1.scf(dm)
@@ -116,6 +118,7 @@ class KnowValues(unittest.TestCase):
         nk = (3, 1, 1)
         kpts = cell.make_kpts(nk)
         kmf1 = kuhf.KUHF(cell, kpts, exxdiv='vcut_sph')
+        kmf1.conv_tol = 1e-9
         ekpt = kmf1.scf()
         self.assertAlmostEqual(ekpt, -11.218735269838586, 8)
         np.random.seed(1)

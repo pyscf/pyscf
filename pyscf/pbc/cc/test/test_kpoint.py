@@ -103,6 +103,7 @@ class KnownValues(unittest.TestCase):
 
         # RHF calculation
         kmf = pbchf.KRHF(cell, abs_kpts, exxdiv=None)
+        kmf.conv_tol = 1e-9
         ehf = kmf.scf()
 
         # KGCCSD calculation, equivalent to running supercell

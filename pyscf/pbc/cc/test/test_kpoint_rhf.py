@@ -78,7 +78,7 @@ class KnownValues(unittest.TestCase):
         cell.build()
 
         kpts = cell.get_abs_kpts([.5,.5,.5]).reshape(1,3)
-        mf = pbcscf.KRHF(cell, kpts=kpts).run()
+        mf = pbcscf.KRHF(cell, kpts=kpts).run(conv_tol=1e-9)
         kcc = pyscf.pbc.cc.kccsd_rhf.RCCSD(mf)
         e0 = kcc.kernel()[0]
 
@@ -98,6 +98,7 @@ class KnownValues(unittest.TestCase):
 
         # RHF calculation
         kmf = pbcscf.KRHF(cell, abs_kpts, exxdiv=None)
+        kmf.conv_tol = 1e-9
         ehf = kmf.scf()
 
         # KRCCSD calculation, equivalent to running supercell
