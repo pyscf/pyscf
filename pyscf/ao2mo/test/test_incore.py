@@ -40,10 +40,10 @@ def tearDownModule():
 
 def trans(eri, mos):
     eriref = ao2mo.restore(1, eri, nao)
-    eriref = numpy.einsum('pjkl,pi->ijkl', eriref, mos[0].conj())
-    eriref = numpy.einsum('ipkl,pj->ijkl', eriref, mos[1])
-    eriref = numpy.einsum('ijpl,pk->ijkl', eriref, mos[2].conj())
-    eriref = numpy.einsum('ijkp,pl->ijkl', eriref, mos[3])
+    eriref = lib.einsum('pjkl,pi->ijkl', eriref, mos[0].conj())
+    eriref = lib.einsum('ipkl,pj->ijkl', eriref, mos[1])
+    eriref = lib.einsum('ijpl,pk->ijkl', eriref, mos[2].conj())
+    eriref = lib.einsum('ijkp,pl->ijkl', eriref, mos[3])
     return eriref
 
 class KnowValues(unittest.TestCase):

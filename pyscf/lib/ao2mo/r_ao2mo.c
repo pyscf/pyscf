@@ -250,7 +250,6 @@ static void fill_s1(int (*intor)(), int (*fprescreen)(), double complex *eri,
         shls[0] = ish;
 
         for (kl = klsh_start; kl < klsh_end; kl++) {
-                // kl = k * (k+1) / 2 + l
                 ksh = kl / envs->nbas;
                 lsh = kl - ksh * envs->nbas;
                 dk = ao_loc[ksh+1] - ao_loc[ksh];

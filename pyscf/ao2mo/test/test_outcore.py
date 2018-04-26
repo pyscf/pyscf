@@ -107,29 +107,27 @@ class KnownValues(unittest.TestCase):
         eriref = numpy.einsum('ijpl,pk->ijkl', eriref, mo)
         eriref = numpy.einsum('ijkp,pl->ijkl', eriref, mo)
 
-        ao2mo.outcore.full(mol, mo, erifile, dataname='eri_mo',
-                           intor='int2e', aosym=1, comp=1,
-                           max_memory=10, ioblk_size=5)
-        feri = h5py.File(erifile)
-        eri1 = numpy.array(feri['eri_mo']).reshape(nao,nao,nao,nao)
-        feri.close()
-        self.assertTrue(numpy.allclose(eri1, eriref))
+        mos = (mo[:,:4], mo[:,:3], mo[:,:3], mo[:,:2])
+        ao2mo.outcore.general(mol, mos, erifile, dataname='eri_mo',
+                              intor='int2e', aosym=1)
+        with ao2mo.load(erifile) as eri1:
+            eri1 = numpy.asarray(eri1).reshape(4,3,3,2)
+        self.assertTrue(numpy.allclose(eri1, eriref[:4,:3,:3,:2]))
 
         ao2mo.outcore.full(mol, mo, erifile, dataname='eri_mo',
-                           intor='int2e_sph', aosym='s2ij', comp=1,
-                           max_memory=10, ioblk_size=5)
+                              intor='int2e_sph', aosym='s2ij', comp=1)
         with ao2mo.load(erifile, 'eri_mo') as eri:
             eri1 = ao2mo.restore(1, numpy.array(eri), nao)
         eri1 = eri1.reshape(nao,nao,nao,nao)
         self.assertTrue(numpy.allclose(eri1, eriref))
 
-        ao2mo.outcore.full(mol, mo, erifile, dataname='eri_mo',
-                           intor='int2e_sph', aosym='s2kl', comp=1,
-                           max_memory=10, ioblk_size=5)
-        with ao2mo.load(erifile, 'eri_mo') as eri:
-            eri1 = ao2mo.restore(1, numpy.array(eri), nao)
-            eri1 = eri1.reshape(nao,nao,nao,nao)
-        self.assertTrue(numpy.allclose(eri1, eriref))
+        mos = (mo[:,:3], mo[:,:3], mo[:,:3], mo[:,:2])
+        ao2mo.outcore.general(mol, mos, erifile, dataname='eri_mo',
+                              intor='int2e_sph', aosym='s4', comp=1,
+                              compact=False)
+        with ao2mo.load(erifile, 'eri_mo') as eri1:
+            eri1 = numpy.asarray(eri1).reshape(3,3,3,2)
+        self.assertTrue(numpy.allclose(eri1, eriref[:3,:3,:3,:2]))
 
         ao2mo.outcore.full(mol, mo[:,:0], erifile,
                            intor='int2e', aosym='1', comp=1)

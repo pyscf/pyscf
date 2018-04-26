@@ -49,11 +49,11 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo',
     nmok = mo_coeffs[2].shape[1]
     nmol = mo_coeffs[3].shape[1]
     nao = mo_coeffs[0].shape[0]
-    aosym = _stand_sym_code(aosym)
+    aosym = outcore._stand_sym_code(aosym)
     if aosym in ('s1', 's2ij', 'a2ij'):
         nao_pair = nao * nao
     else:
-        nao_pair = guess_nao_pair(mol, nao)
+        nao_pair = _count_naopair(mol, nao)
 
     nij_pair = nmoi*nmoj
     nkl_pair = nmok*nmol
@@ -77,18 +77,22 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo',
     else:
         assert(isinstance(erifile, h5py.Group))
         feri = erifile
+
     if comp == 1:
         chunks = (nmoj,nmol)
-        h5d_eri = feri.create_dataset(dataname, (nij_pair,nkl_pair),
-                                      'c16', chunks=chunks)
+        shape = (nij_pair, nkl_pair)
     else:
         chunks = (1,nmoj,nmol)
-        h5d_eri = feri.create_dataset(dataname, (comp,nij_pair,nkl_pair),
-                                      'c16', chunks=chunks)
+        shape = (comp, nij_pair, nkl_pair)
 
     if nij_pair == 0 or nkl_pair == 0:
-        feri.close()
+        feri.create_dataset(dataname, shape, 'c16')
+        if isinstance(erifile, str):
+            feri.close()
         return erifile
+    else:
+        h5d_eri = feri.create_dataset(dataname, shape, 'c16', chunks=chunks)
+
     log.debug('MO integrals %s are saved in %s/%s', intor, erifile, dataname)
     log.debug('num. MO ints = %.8g, required disk %.8g MB',
               float(nij_pair)*nkl_pair*comp, nij_pair*nkl_pair*comp*16/1e6)
@@ -169,14 +173,14 @@ def half_e1(mol, mo_coeffs, swapfile,
     nmoi = mo_coeffs[0].shape[1]
     nmoj = mo_coeffs[1].shape[1]
     nao = mo_coeffs[0].shape[0]
-    aosym = _stand_sym_code(aosym)
+    aosym = outcore._stand_sym_code(aosym)
     if aosym in ('s1', 's2kl', 'a2kl'):
         nao_pair = nao * nao
     else:
-        nao_pair = guess_nao_pair(mol, nao)
+        nao_pair = _count_naopair(mol, nao)
     nij_pair = nmoi * nmoj
 
-    if  ijsame and aosym in ('s4', 's2ij', 'a2ij', 'a4ij', 'a4kl', 'a4'):
+    if ijsame and aosym in ('s4', 's2ij', 'a2ij', 'a4ij', 'a4kl', 'a4'):
         log.debug('i-mo == j-mo')
         moij = numpy.asarray(mo_coeffs[0], order='F')
         ijshape = (0, nmoi, 0, nmoi)
@@ -188,7 +192,7 @@ def half_e1(mol, mo_coeffs, swapfile,
             guess_e1bufsize(max_memory, ioblk_size, nij_pair, nao_pair, comp)
 # The buffer to hold AO integrals in C code
     aobuflen = int((mem_words - iobuf_words) // (nao*nao*comp))
-    shranges = outcore.guess_shell_ranges(mol, (aosym not in ('s1', 's2kl', 'a2kl')),
+    shranges = outcore.guess_shell_ranges(mol, (aosym not in ('s1', 's2ij', 'a2ij')),
                                           aobuflen, e1buflen, mol.ao_loc_2c(), False)
     if ao2mopt is None:
 #        if intor == 'int2e_spinor':
@@ -288,15 +292,7 @@ def guess_e2bufsize(ioblk_size, nrows, ncols):
     chunks = (IOBUF_ROW_MIN, ncols)
     return e2buflen, chunks
 
-def _stand_sym_code(sym):
-    if isinstance(sym, int):
-        return 's%d' % sym
-    elif 's' == sym[0] or 'a' == sym[0]:
-        return sym
-    else:
-        return 's' + sym
-
-def guess_nao_pair(mol, nao):
+def _count_naopair(mol, nao):
     ao_loc = mol.ao_loc_2c()
     nao_pair = 0
     for i in range(mol.nbas):

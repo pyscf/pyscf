@@ -246,24 +246,21 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo',
         assert(isinstance(erifile, h5py.Group))
         feri = erifile
 
-    if nij_pair == 0 or nkl_pair == 0:
-        chunks = None
-    elif comp == 1:
+    if comp == 1:
         chunks = (nmoj,nmol)
+        shape = (nij_pair,nkl_pair)
     else:
         chunks = (1,nmoj,nmol)
-
-    if comp == 1:
-        h5d_eri = feri.create_dataset(dataname, (nij_pair,nkl_pair),
-                                      'f8', chunks=chunks)
-    else:
-        h5d_eri = feri.create_dataset(dataname, (comp,nij_pair,nkl_pair),
-                                      'f8', chunks=chunks)
+        shape = (comp,nij_pair,nkl_pair)
 
     if nij_pair == 0 or nkl_pair == 0:
+        feri.create_dataset(dataname, shape, 'f8')
         if isinstance(erifile, str):
             feri.close()
         return erifile
+    else:
+        h5d_eri = feri.create_dataset(dataname, shape, 'f8', chunks=chunks)
+
     log.debug('MO integrals %s are saved in %s/%s', intor, erifile, dataname)
     log.debug('num. MO ints = %.8g, required disk %.8g MB',
               float(nij_pair)*nkl_pair*comp, nij_pair*nkl_pair*comp*8/1e6)
@@ -694,9 +691,8 @@ def guess_e2bufsize(ioblk_size, nrows, ncols):
 # based on the size of buffer, dynamic range of AO-shells for each buffer
 def guess_shell_ranges(mol, aosym, max_iobuf, max_aobuf=None, ao_loc=None,
                        compress_diag=True):
+    if ao_loc is None: ao_loc = mol.ao_loc_nr()
     max_iobuf = max(1, max_iobuf)
-    if ao_loc is None:
-        ao_loc = mol.ao_loc_nr()
 
     dims = ao_loc[1:] - ao_loc[:-1]
     dijs = (dims.reshape(-1,1) * dims)

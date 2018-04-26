@@ -129,11 +129,7 @@ def nr_e1(eri, mo_coeff, orbs_slice, aosym='s1', mosym='s1', out=None):
             fmmm = _fpointer('AO2MOmmm_nr_s1_igtj')
 
     nrow = eri.shape[0]
-
-    if out is None:
-        out = numpy.empty((nrow,ij_count))
-    else:
-        out = numpy.ndarray((nrow,ij_count), buffer=out)
+    out = numpy.ndarray((nrow,ij_count), buffer=out)
     if out.size == 0:
         return out
 
@@ -179,11 +175,7 @@ def nr_e2(eri, mo_coeff, orbs_slice, aosym='s1', mosym='s1', out=None,
             fmmm = _fpointer('AO2MOmmm_nr_s1_igtj')
 
     nrow = eri.shape[0]
-
-    if out is None:
-        out = numpy.empty((nrow,kl_count))
-    else:
-        out = numpy.ndarray((nrow,kl_count), buffer=out)
+    out = numpy.ndarray((nrow,kl_count), buffer=out)
     if out.size == 0:
         return out
 
@@ -232,11 +224,7 @@ def r_e1(intor, mo_coeff, orbs_slice, sh_range, atm, bas, env,
     else:
         fmmm = _fpointer('AO2MOmmm_r_igtj')
 
-    if out is None:
-        out = numpy.empty((comp,nkl,ij_count), dtype=numpy.complex)
-    else:
-        out = numpy.ndarray((comp,nkl,nao_pair), dtype=numpy.complex,
-                            buffer=out)
+    out = numpy.ndarray((comp,nkl,ij_count), dtype=numpy.complex, buffer=out)
     if out.size == 0:
         return out
 
@@ -286,12 +274,7 @@ def r_e2(eri, mo_coeff, orbs_slice, tao, ao_loc, aosym='s1', out=None):
         fmmm = _fpointer('AO2MOmmm_r_igtj')
 
     nrow = eri.shape[0]
-
-    if out is None:
-        out = numpy.empty((nrow,kl_count), dtype=numpy.complex)
-    else:
-        out = numpy.ndarray((nrow,kl_count), dtype=numpy.complex,
-                            buffer=out)
+    out = numpy.ndarray((nrow,kl_count), dtype=numpy.complex, buffer=out)
     if out.size == 0:
         return out
 
@@ -315,16 +298,4 @@ def r_e2(eri, mo_coeff, orbs_slice, tao, ao_loc, aosym='s1', out=None):
          (ctypes.c_int*4)(*orbs_slice),
          tao.ctypes.data_as(ctypes.c_void_p), c_ao_loc, c_nbas)
     return out
-
-
-def _get_num_threads():
-    libao2mo.omp_get_num_threads.restype = ctypes.c_int
-    nthreads = libao2mo.omp_get_num_threads()
-    return nthreads
-
-# ij = i * (i+1) / 2 + j
-def _extract_pair(ij):
-    i = int(numpy.sqrt(2*ij+.25) - .5 + 1e-7)
-    j = ij - i*(i+1)//2
-    return i,j
 
