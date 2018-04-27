@@ -24,7 +24,7 @@ from pyscf import scf
 from pyscf import df
 
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_aug_etb(self):
         mol = gto.M(
             verbose = 0,

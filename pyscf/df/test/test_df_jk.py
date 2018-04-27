@@ -51,7 +51,7 @@ def tearDownModule():
     del mol, symol
 
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_rhf(self):
         mf = scf.density_fit(scf.RHF(mol), auxbasis='weigend')
         self.assertAlmostEqual(mf.scf(), -76.025936299702536, 9)

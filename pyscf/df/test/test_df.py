@@ -39,7 +39,7 @@ def tearDownModule():
     del mol
 
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_ao2mo(self):
         dfobj = df.DF(mol)
         # force DF intermediates to be saved on disk

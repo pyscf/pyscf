@@ -40,7 +40,7 @@ def tearDownModule():
     del mol, auxmol, atm, bas, env
 
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_aux_e2(self):
         nao = mol.nao_nr()
         naoaux = auxmol.nao_nr()

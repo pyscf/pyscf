@@ -216,6 +216,8 @@ def t1strs(norb, nelec, frozen=0):
 def to_fcivec(cisdvec, norb, nelec, frozen=0):
     '''Convert CISD coefficients to FCI coefficients'''
     if frozen is not 0:
+        # be careful with the parity if CISD vector is based on discontinued
+        # orbital indices
         raise NotImplementedError
     if isinstance(nelec, (int, numpy.number)):
         nelecb = nelec//2
@@ -254,6 +256,8 @@ def to_fcivec(cisdvec, norb, nelec, frozen=0):
 def from_fcivec(ci0, norb, nelec, frozen=0):
     '''Extract CISD coefficients from FCI coefficients'''
     if frozen is not 0:
+        # be careful with the parity if CISD vector is based on discontinued
+        # orbital indices
         raise NotImplementedError
     if isinstance(nelec, (int, numpy.number)):
         nelecb = nelec//2
@@ -319,9 +323,9 @@ def _gamma1_intermediates(myci, civec, nmo, nocc):
     dvv += lib.einsum('ijab,ijac->bc', theta, c2.conj())
     return doo, dov, dvo, dvv
 
-def _gamma2_intermediates(myci, civec, nmo, nocc):
+def _gamma2_intermediates(myci, civec, nmo, nocc, compress_vvvv=False):
     f = lib.H5TmpFile()
-    _gamma2_outcore(myci, civec, nmo, nocc, f, False)
+    _gamma2_outcore(myci, civec, nmo, nocc, f, compress_vvvv)
     d2 = (f['dovov'].value, f['dvvvv'].value, f['doooo'].value, f['doovv'].value,
           f['dovvo'].value, None,             f['dovvv'].value, f['dooov'].value)
     return d2

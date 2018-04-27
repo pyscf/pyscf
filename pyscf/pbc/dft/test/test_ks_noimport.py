@@ -129,7 +129,7 @@ class BN(unittest.TestCase):
             verbose = 4,
         )
 
-    def test_bands(self):
+    def test_bands_high_cost(self):
         model = pbcdft.KRKS(self.cell, self.cell.make_kpts([3,3,1]))
         model.xc = 'lda,'
         model.kernel()

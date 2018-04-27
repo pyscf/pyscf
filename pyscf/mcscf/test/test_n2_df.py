@@ -76,12 +76,12 @@ class KnowValues(unittest.TestCase):
         emc = mc.mc2step()[0]
         self.assertAlmostEqual(emc, -108.91052310869014, 7)
 
-    def test_mc1step_6o6e(self):
+    def test_mc1step_6o6e_high_cost(self):
         mc = mcscf.approx_hessian(mcscf.CASSCF(m, 6, 6), auxbasis='weigend')
         emc = mc.mc1step()[0]
         self.assertAlmostEqual(emc, -108.980105451388, 7)
 
-    def test_mc2step_6o6e(self):
+    def test_mc2step_6o6e_high_cost(self):
         mc = mcscf.approx_hessian(mcscf.CASSCF(m, 6, 6), auxbasis='weigend')
         emc = mc.mc2step()[0]
         self.assertAlmostEqual(emc, -108.980105451388, 7)

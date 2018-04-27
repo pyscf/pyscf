@@ -16,7 +16,8 @@ import unittest
 import numpy
 from pyscf.pbc import gto, scf, df
 
-cell = gto.M(atom='H 1 2 1; H 1 1 1', a=numpy.eye(3)*4, verbose=0, mesh=[11]*3)
+cell = gto.M(atom='H 1 2 1; H 1 1 1', basis=[[0, (.8, 1)], [1, (0.5, 1)]],
+             a=numpy.eye(3)*2.5, verbose=0, mesh=[11]*3)
 numpy.random.seed(1)
 kband = numpy.random.random((2,3))
 
@@ -28,60 +29,60 @@ class KnowValues(unittest.TestCase):
     def test_fft_band(self):
         mf = scf.RHF(cell)
         mf.kernel()
-        self.assertAlmostEqual(finger(mf.get_bands(kband[0])[0]), -0.037522993818908168, 8)
+        self.assertAlmostEqual(finger(mf.get_bands(kband[0])[0]), 1.9966435479483238, 8)
 
     def test_aft_band(self):
         mf = scf.RHF(cell)
         mf.with_df = df.AFTDF(cell)
         mf.kernel()
-        self.assertAlmostEqual(finger(mf.get_bands(kband[0])[0]), -0.093770552709347754, 8)
+        self.assertAlmostEqual(finger(mf.get_bands(kband[0])[0]), 1.9966027703000777, 8)
 
     def test_df_band(self):
         mf = scf.RHF(cell)
         mf.with_df = df.DF(cell).set(auxbasis='weigend')
         mf.with_df.kpts_band = kband[0]
         mf.kernel()
-        self.assertAlmostEqual(finger(mf.get_bands(kband[0])[0]), -0.093621142380270361, 8)
+        self.assertAlmostEqual(finger(mf.get_bands(kband[0])[0]), 1.9905548831851645, 8)
 
     def test_mdf_band(self):
         mf = scf.RHF(cell)
         mf.with_df = df.MDF(cell).set(auxbasis='weigend')
         mf.with_df.kpts_band = kband[0]
         mf.kernel()
-        self.assertAlmostEqual(finger(mf.get_bands(kband[0])[0]), -0.093705179423150875, 6)
+        self.assertAlmostEqual(finger(mf.get_bands(kband[0])[0]), 1.9966027693492583, 6)
 
     def test_fft_bands(self):
         mf = scf.KRHF(cell)
         mf.kpts = cell.make_kpts([2]*3)
         mf.kernel()
-        self.assertAlmostEqual(finger(mf.get_bands(kband[0])[0]), -0.26539150034518982, 8)
-        self.assertAlmostEqual(finger(mf.get_bands(kband)[0]), -0.6562304384317044, 8)
+        self.assertAlmostEqual(finger(mf.get_bands(kband[0])[0]), 1.758544475679261, 8)
+        self.assertAlmostEqual(finger(mf.get_bands(kband)[0]), 0.76562781841701533, 8)
 
     def test_aft_bands(self):
         mf = scf.KRHF(cell)
         mf.with_df = df.AFTDF(cell)
-        mf.kpts = cell.make_kpts([2]*3)
+        mf.kpts = cell.make_kpts([2,1,1])
         mf.kernel()
-        self.assertAlmostEqual(finger(mf.get_bands(kband[0])[0]), -0.32214958122356513, 8)
-        self.assertAlmostEqual(finger(mf.get_bands(kband)[0]), -0.64207984898611348, 8)
+        self.assertAlmostEqual(finger(mf.get_bands(kband[0])[0]), 1.968506055533682, 8)
+        self.assertAlmostEqual(finger(mf.get_bands(kband)[0]), 1.0538585525613609, 8)
 
     def test_df_bands(self):
         mf = scf.KRHF(cell)
         mf.with_df = df.DF(cell).set(auxbasis='weigend')
         mf.with_df.kpts_band = kband
-        mf.kpts = cell.make_kpts([2]*3)
+        mf.kpts = cell.make_kpts([2,1,1])
         mf.kernel()
-        self.assertAlmostEqual(finger(mf.get_bands(kband[0])[0]), -0.32200476157045782, 8)
-        self.assertAlmostEqual(finger(mf.get_bands(kband)[0]), -0.64216552168395347, 8)
+        self.assertAlmostEqual(finger(mf.get_bands(kband[0])[0]), 1.9630519740658308, 8)
+        self.assertAlmostEqual(finger(mf.get_bands(kband)[0]), 1.04461751922109, 8)
 
     def test_mdf_bands(self):
         mf = scf.KRHF(cell)
         mf.with_df = df.MDF(cell).set(auxbasis='weigend')
         mf.with_df.kpts_band = kband
-        mf.kpts = cell.make_kpts([2]*3)
+        mf.kpts = cell.make_kpts([2,1,1])
         mf.kernel()
-        self.assertAlmostEqual(finger(mf.get_bands(kband[0])[0]), -0.32205949082575414, 7)
-        self.assertAlmostEqual(finger(mf.get_bands(kband)[0]), -0.6420939191777898, 8)
+        self.assertAlmostEqual(finger(mf.get_bands(kband[0])[0]), 1.9685060546389677, 7)
+        self.assertAlmostEqual(finger(mf.get_bands(kband)[0]), 1.0538585514926302, 8)
 
 
 if __name__ == '__main__':

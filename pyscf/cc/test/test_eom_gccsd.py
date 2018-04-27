@@ -130,9 +130,9 @@ class KnownValues(unittest.TestCase):
 
 
     def test_eeccsd(self):
-        e,v = mycc.eeccsd(nroots=2)
-        self.assertAlmostEqual(e[0], 0.28114507364237717, 6)
-        self.assertAlmostEqual(e[1], 0.28114507364237717, 6)
+        #e,v = mycc.eeccsd(nroots=2)
+        #self.assertAlmostEqual(e[0], 0.28114507364237717, 6)
+        #self.assertAlmostEqual(e[1], 0.28114507364237717, 6)
 
         myeom = eom_gccsd.EOMEE(mycc)
         e,v = myeom.eeccsd(nroots=4)

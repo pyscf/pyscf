@@ -40,7 +40,7 @@ cell.build()
 
 
 class KnowValues(unittest.TestCase):
-    def test_gamma_vs_ks(self):
+    def test_gamma_vs_ks_high_cost(self):
         mf = pdft.KRKS(cell)
         mf.kpts = cell.make_kpts([1,1,3])
         ek = mf.kernel()

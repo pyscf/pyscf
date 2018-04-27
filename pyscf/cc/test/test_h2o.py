@@ -90,7 +90,7 @@ class KnownValues(unittest.TestCase):
         mcc.kernel()
         self.assertAlmostEqual(mcc.ecc, -0.21303885376969361, 8)
 
-    def test_h2o_non_hf_orbital(self):
+    def test_h2o_non_hf_orbital_high_cost(self):
         nmo = mf.mo_energy.size
         nocc = mol.nelectron // 2
         nvir = nmo - nocc

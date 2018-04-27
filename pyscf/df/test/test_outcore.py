@@ -43,7 +43,7 @@ def tearDownModule():
     del mol, auxmol
 
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_outcore(self):
         ftmp = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
         cderi0 = df.incore.cholesky_eri(mol)

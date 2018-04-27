@@ -176,7 +176,7 @@ class KnownValues(unittest.TestCase):
             print('Gamma energy =', ecc/np.prod(nk))
             print('K-point energy =', ecc3)
 
-    def test_cu_metallic(self):
+    def test_cu_metallic_high_cost(self):
         mesh = 7
         cell = make_test_cell.test_cell_cu_metallic([mesh]*3)
         nk = [1,1,2]

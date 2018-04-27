@@ -47,7 +47,7 @@ def make_primitive_cell(mesh):
     return cell
 
 class KnowValues(unittest.TestCase):
-    def test_kpt_vs_supercell(self):
+    def test_kpt_vs_supercell_high_cost(self):
         # For large n, agreement is always achieved
         # n = 17
         # For small n, agreement only achieved if "wrapping" k-k'+G in get_coulG
