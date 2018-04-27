@@ -9,62 +9,51 @@ os: linux
 git:
   depth: 3
 
-matrix:
-  - python: "2.7"
-    addons:
-      apt:
-        sources:
-        - ubuntu-toolchain-r-test
-        packages:
-        - gcc-4.8
-        - g++-4.8
-        - gfortran-4.8
-        - libblas-dev
-        - cmake
-    env: CC=gcc-4.8 CXX=g++-4.8 FC=gfortran-4.8 PYTHON=2.7
-  - python: "3.4"
-    addons:
-      apt:
-        sources:
-        - ubuntu-toolchain-r-test
-        packages:
-        - gcc-4.8
-        - g++-4.8
-        - gfortran-4.8
-        - libblas-dev
-        - cmake
-    env: CC=gcc-4.8 CXX=g++-4.8 FC=gfortran-4.8 PYTHON=3.4
+addons:
+  apt:
+    sources:
+    - ubuntu-toolchain-r-test
+    packages:
+    - gcc-4.8
+    - g++-4.8
+    - gfortran-4.8
+    - libblas-dev
+    - cmake
+
+python:
+  - 2.7
+  - 3.4
 
 virtualenv:
     system_site_packages: true
     
 before_install:
-    - pip install --upgrade pip
-    - pip install numpy scipy h5py nose nose-exclude
+  - pip install --upgrade pip
+  - pip install numpy scipy h5py nose nose-exclude
     
 install:
-    - > 
-      cd pyscf/lib &&
-      mkdir build &&
-      cd build &&
-      cmake .. &&
-      make &&
-      cd ../..
+  - > 
+    cd pyscf/lib &&
+    mkdir build &&
+    cd build &&
+    cmake .. &&
+    make &&
+    cd ../..
 
 before_script:
-    - export PYTHONPATH=$(pwd):$PYTHONPATH
-    - rm $TRAVIS_BUILD_DIR/pyscf/pbc/tools/pyscf_ase.py
+  - export PYTHONPATH=$(pwd):$PYTHONPATH
+  - rm $TRAVIS_BUILD_DIR/pyscf/pbc/tools/pyscf_ase.py
 
 script:
-    - >
-      nosetests -v -e geomopt -e dmrgscf -e fciqmcscf -e icmpspt -e examples -e nao
-      -e shci
-      -e test_bz
-      -e test_mc2step_4o4e
-      -e test_ks_noimport
-      -e test_jk_single_kpt
-      -e test_jk_hermi0
-      -e test_j_kpts
-      -e test_k_kpts
-      -e high_cost
-      -e call_in_background
+  - >
+    nosetests -v -e geomopt -e dmrgscf -e fciqmcscf -e icmpspt -e examples -e nao
+    -e shci
+    -e test_bz
+    -e test_mc2step_4o4e
+    -e test_ks_noimport
+    -e test_jk_single_kpt
+    -e test_jk_hermi0
+    -e test_j_kpts
+    -e test_k_kpts
+    -e high_cost
+    -e call_in_background
