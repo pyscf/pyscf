@@ -11,18 +11,18 @@ git:
 
 addons:
   apt:
-    sources:
-    - ubuntu-toolchain-r-test
     packages:
-    - gcc-4.8
-    - g++-4.8
-    - gfortran-4.8
+    - gcc
+    - g++
+    - gfortran
     - libblas-dev
     - cmake
 
 python:
   - 2.7
   - 3.4
+  - 3.5
+  - 3.6
 
 virtualenv:
     system_site_packages: true
