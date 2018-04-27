@@ -55,7 +55,7 @@ ci1 = numpy.random.random((na,na))
 ci1 = ci1 + ci1.T
 ci1 /= numpy.linalg.norm(ci1)
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_contract(self):
         ci1 = fci.direct_spin0.contract_1e(h1e, ci0, norb, nelec)
         ci1ref = fci.direct_spin1.contract_1e(h1e, ci0, norb, nelec)

@@ -53,7 +53,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(escf, hf_111, 9)
         self.assertAlmostEqual(emp, mp_111, 6)
 
-    def test_311(self):
+    def test_311_high_cost(self):
         nk = (3, 1, 1)
         hf_311 = -0.85656225114216422
         mp_311 = -8.3491016166387105e-06

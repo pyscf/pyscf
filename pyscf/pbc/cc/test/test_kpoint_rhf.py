@@ -53,7 +53,7 @@ def run_kcell(cell, n, nk):
     return ekpt, ecc
 
 class KnownValues(unittest.TestCase):
-    def test_311_n1(self):
+    def test_311_n1_high_cost(self):
         L = 7.0
         n = 9
         cell = make_test_cell.test_cell_n1(L,[n]*3)
@@ -191,7 +191,7 @@ class KnownValues(unittest.TestCase):
         self._test_cu_metallic_frozen_occ(kmf, cell, nk=nk)
         self._test_cu_metallic_frozen_vir(kmf, cell, nk=nk)
 
-    def test_ccsd_t(self):
+    def test_ccsd_t_high_cost(self):
         n = 14
         cell = make_test_cell.test_cell_n3([n]*3)
 

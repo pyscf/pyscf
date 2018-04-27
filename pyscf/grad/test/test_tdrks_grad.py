@@ -75,7 +75,7 @@ class KnownValues(unittest.TestCase):
         g1 = tdg.kernel(state=3)
         self.assertAlmostEqual(g1[0,2], -1.31315477e-01, 8)
 
-    def test_tddft_b3lyp(self):
+    def test_tddft_b3lyp_high_cost(self):
         mf = dft.RKS(mol)
         mf.xc = 'b3lyp'
         mf._numint.libxc = dft.xcfun

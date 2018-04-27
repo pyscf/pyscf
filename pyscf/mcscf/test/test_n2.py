@@ -69,12 +69,12 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(numpy.linalg.norm(mc.analyze()),
                                2.7015375913946591, 4)
 
-    def test_mc1step_6o6e(self):
+    def test_mc1step_6o6e_high_cost(self):
         mc = mcscf.CASSCF(m, 6, 6)
         emc = mc.mc1step()[0]
         self.assertAlmostEqual(emc, -108.980105451388, 7)
 
-    def test_mc2step_6o6e(self):
+    def test_mc2step_6o6e_high_cost(self):
         mc = mcscf.CASSCF(m, 6, 6)
         emc = mc.mc2step()[0]
         self.assertAlmostEqual(emc, -108.980105451388, 7)
@@ -93,12 +93,12 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(numpy.linalg.norm(mc.analyze()),
                                2.7015375913946591, 4)
 
-    def test_mc1step_symm_6o6e(self):
+    def test_mc1step_symm_6o6e_high_cost(self):
         mc = mcscf.CASSCF(msym, 6, 6)
         emc = mc.mc1step()[0]
         self.assertAlmostEqual(emc, -108.980105451388, 7)
 
-    def test_mc2step_symm_6o6e(self):
+    def test_mc2step_symm_6o6e_high_cost(self):
         mc = mcscf.CASSCF(msym, 6, 6)
         emc = mc.mc2step()[0]
         self.assertAlmostEqual(emc, -108.980105451388, 7)

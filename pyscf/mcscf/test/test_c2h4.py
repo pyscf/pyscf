@@ -54,7 +54,7 @@ class KnowValues(unittest.TestCase):
         emc = mc.casci()[0]
         self.assertAlmostEqual(emc, -77.9804561351, 7)
 
-    def test_mc2step_6o6e(self):
+    def test_mc2step_6o6e_high_cost(self):
         mc = mcscf.CASSCF(mf, 6, 6)
         mc.conv_tol = 1e-8
         emc = mc.mc2step()[0]
@@ -72,7 +72,7 @@ class KnowValues(unittest.TestCase):
         emc = mc.mc2step()[0]
         self.assertAlmostEqual(emc, -78.0103838390, 6)
 
-    def test_mc1step_4o4e(self):
+    def test_mc1step_4o4e_high_cost(self):
         mc = mcscf.CASSCF(mf, 4, 4)
         mc.dynamic_micro_step = True
         mc.conv_tol = 1e-8

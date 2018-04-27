@@ -112,7 +112,7 @@ class KnowValues(unittest.TestCase):
         kmf1.conv_check = False
         self.assertAlmostEqual(ekpt, -11.215218432275057, 8)
 
-    def test_kuhf(self):
+    def test_kuhf_high_cost(self):
         n = 9
         cell = make_primitive_cell([n]*3)
         nk = (3, 1, 1)

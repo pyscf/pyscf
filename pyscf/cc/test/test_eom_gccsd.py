@@ -129,10 +129,10 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[2], 0.28345228596676159, 6)
 
 
-    def test_eeccsd(self):
-        #e,v = mycc.eeccsd(nroots=2)
-        #self.assertAlmostEqual(e[0], 0.28114507364237717, 6)
-        #self.assertAlmostEqual(e[1], 0.28114507364237717, 6)
+    def test_eeccsd_high_cost(self):
+        e,v = mycc.eeccsd(nroots=2)
+        self.assertAlmostEqual(e[0], 0.28114507364237717, 6)
+        self.assertAlmostEqual(e[1], 0.28114507364237717, 6)
 
         myeom = eom_gccsd.EOMEE(mycc)
         e,v = myeom.eeccsd(nroots=4)
@@ -141,7 +141,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[2], 0.28114507364237717, 6)
         self.assertAlmostEqual(e[3], 0.30819729785603989, 6)
 
-    def test_eeccsd_koopmans(self):
+    def test_eeccsd_koopmans_high_cost(self):
         e,v = mycc.eeccsd(nroots=4, koopmans=True)
         self.assertAlmostEqual(e[0], 0.28114507364237717, 6)
         self.assertAlmostEqual(e[1], 0.28114507364237717, 6)

@@ -18,7 +18,7 @@ import numpy
 from pyscf.fci import cistring
 
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_strings4orblist(self):
         ref = ['0b1010', '0b100010', '0b101000', '0b10000010', '0b10001000',
                '0b10100000']

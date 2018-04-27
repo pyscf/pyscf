@@ -70,6 +70,15 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(finger(numpy.cos(non0)), 2.5961863522983433, 9)
 
     def test_dot_ao_dm(self):
+        dm = mf_h4.get_init_guess(key='minao')
+        ao_loc = h4.ao_loc_nr()
+        ao = mf_h4._numint.eval_ao(h4, mf_h4.grids.coords).copy() + 0j
+        nao = ao.shape[1]
+        v1 = dft.numint._dot_ao_dm(h4, ao, dm, mf_h4.grids.non0tab, (0,h4.nbas), ao_loc)
+        v2 = dft.numint._dot_ao_dm(h4, ao, dm, None, None, None)
+        self.assertAlmostEqual(abs(v1-v2).max(), 0, 9)
+
+    def test_dot_ao_dm_high_cost(self):
         non0tab = mf._numint.make_mask(mol, mf.grids.coords)
         ao = dft.numint.eval_ao(mol, mf.grids.coords)
         numpy.random.seed(1)
@@ -82,15 +91,16 @@ class KnownValues(unittest.TestCase):
                                      shls_slice=(0,mol.nbas), ao_loc=ao_loc)
         self.assertTrue(numpy.allclose(res0, res1))
 
+    def test_dot_ao_ao(self):
         dm = mf_h4.get_init_guess(key='minao')
         ao_loc = h4.ao_loc_nr()
         ao = mf_h4._numint.eval_ao(h4, mf_h4.grids.coords).copy() + 0j
-        nao = ao.shape[1]
-        v1 = dft.numint._dot_ao_dm(h4, ao, dm, mf_h4.grids.non0tab, (0,h4.nbas), ao_loc)
-        v2 = dft.numint._dot_ao_dm(h4, ao, dm, None, None, None)
+        nao = h4.nao_nr()
+        v1 = dft.numint._dot_ao_ao(h4, ao, ao, mf_h4.grids.non0tab, (0,h4.nbas), ao_loc)
+        v2 = dft.numint._dot_ao_ao(h4, ao, ao, None, None, None)
         self.assertAlmostEqual(abs(v1-v2).max(), 0, 9)
 
-    def test_dot_ao_ao(self):
+    def test_dot_ao_ao_high_cost(self):
         non0tab = mf.grids.make_mask(mol, mf.grids.coords)
         ao = dft.numint.eval_ao(mol, mf.grids.coords, deriv=1)
         nao = ao.shape[1]
@@ -99,14 +109,6 @@ class KnownValues(unittest.TestCase):
         res1 = dft.numint._dot_ao_ao(mol, ao[0], ao[1], non0tab,
                                      shls_slice=(0,mol.nbas), ao_loc=ao_loc)
         self.assertTrue(numpy.allclose(res0, res1))
-
-        dm = mf_h4.get_init_guess(key='minao')
-        ao_loc = h4.ao_loc_nr()
-        ao = mf_h4._numint.eval_ao(h4, mf_h4.grids.coords).copy() + 0j
-        nao = h4.nao_nr()
-        v1 = dft.numint._dot_ao_ao(h4, ao, ao, mf_h4.grids.non0tab, (0,h4.nbas), ao_loc)
-        v2 = dft.numint._dot_ao_ao(h4, ao, ao, None, None, None)
-        self.assertAlmostEqual(abs(v1-v2).max(), 0, 9)
 
     def test_eval_rho(self):
         numpy.random.seed(10)
@@ -202,6 +204,19 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(v).max(), 0, 9)
 
     def test_uks_vxc(self):
+        numpy.random.seed(10)
+        nao = h2o.nao_nr()
+        dms = numpy.random.random((2,nao,nao))
+        grids = dft.gen_grid.Grids(h2o)
+        v = mf._numint.nr_vxc(h2o, grids, 'B88,', dms, spin=1)[2]
+        self.assertAlmostEqual(finger(v), -7.7508525240447348, 8)
+
+        v = mf._numint.nr_vxc(h2o, grids, 'HF', dms, spin=1)[2]
+        self.assertAlmostEqual(abs(v).max(), 0, 9)
+        v = mf._numint.nr_vxc(h2o, grids, '', dms, spin=1)[2]
+        self.assertAlmostEqual(abs(v).max(), 0, 9)
+
+    def test_uks_vxc_high_cost(self):
         numpy.random.seed(10)
         nao = mol.nao_nr()
         dms = numpy.random.random((2,nao,nao))

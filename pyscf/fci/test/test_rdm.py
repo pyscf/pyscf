@@ -29,7 +29,7 @@ ci0 = numpy.random.random((na,na))
 ci0 = ci0 + ci0.T
 rdm1, rdm2 = fci.direct_spin1.make_rdm12(ci0, norb, nelec)
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_rdm3(self):
         dm3ref = make_dm3_o0(ci0, norb, nelec)
         dm1, dm2, dm3 = fci.rdm.make_dm123('FCI3pdm_kern_spin0', ci0, ci0, norb, nelec)

@@ -16,6 +16,7 @@ addons:
     - g++
     - gfortran
     - libblas-dev
+    - curl
     - cmake
 
 python:
@@ -32,10 +33,13 @@ before_install:
 
 install:
   # openblas from numpy is slightly faster than the default libblas library
-  - cd pyscf/lib &&
+  - cd $TRAVIS_BUILD_DIR/pyscf/lib &&
     ln -s `python -c "import os, numpy; print(os.path.dirname(numpy.__file__))"`/.libs/lib* ./ &&
     blaslib=`basename libopenblas* .so | cut -c 4-` &&
-    echo 'set(BLAS_LIBRARIES "-L${PROJECT_SOURCE_DIR} -l'${blaslib}'")' > cmake.arch.inc &&
+    echo 'set(BLAS_LIBRARIES "-L${PROJECT_SOURCE_DIR} -l'${blaslib}'")' > cmake.arch.inc
+  - cd $TRAVIS_BUILD_DIR/pyscf/lib &&
+    curl http://www.sunqm.net/pyscf/files/bin/pyscf-1.5-deps.tar.gz | tar xzf -
+  - cd $TRAVIS_BUILD_DIR/pyscf/lib &&
     mkdir build &&
     cd build &&
     cmake .. &&
@@ -46,11 +50,14 @@ before_script:
   - rm $TRAVIS_BUILD_DIR/pyscf/pbc/tools/pyscf_ase.py
 
 script:
-  - PYTHONPATH=$TRAVIS_BUILD_DIR:$PYTHONPATH
+  - cd $TRAVIS_BUILD_DIR/pyscf &&
+    echo 'pbc_tools_pbc_fft_engine = "NUMPY"' > pyscf_config.py
+  - PYTHONPATH=$TRAVIS_BUILD_DIR:$PYTHONPATH PYSCF_CONFIG_FILE=$(pwd)/pyscf_config.py
     nosetests -v --with-timer
     -e geomopt -e dmrgscf -e fciqmcscf -e icmpspt -e examples -e nao
     -e shci
     -e test_bz
+    -e h2o_vdz
     -e test_mc2step_4o4e
     -e test_ks_noimport
     -e test_jk_single_kpt

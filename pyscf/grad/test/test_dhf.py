@@ -38,7 +38,7 @@ def tearDownModule():
 
 
 class KnownValues(unittest.TestCase):
-    def test_dhf_grad_with_ssss(self):
+    def test_dhf_grad_with_ssss_high_cost(self):
         with lib.light_speed(30):
             mf = scf.DHF(h2o).run()
             g = mf.nuc_grad_method().kernel()

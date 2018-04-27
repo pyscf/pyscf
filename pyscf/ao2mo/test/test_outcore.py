@@ -54,22 +54,7 @@ class KnownValues(unittest.TestCase):
     def test_nroutcore_grad(self):
         ftmp = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
         erifile = ftmp.name
-        eri_ao = numpy.empty((3,nao,nao,nao,nao))
-        ip = 0
-        for i in range(mol.nbas):
-            jp = 0
-            for j in range(mol.nbas):
-                kp = 0
-                for k in range(mol.nbas):
-                    lp = 0
-                    for l in range(mol.nbas):
-                        buf = mol.intor_by_shell('int2e_ip1_sph', (i,j,k,l), comp=3)
-                        di,dj,dk,dl = buf.shape[1:]
-                        eri_ao[:,ip:ip+di,jp:jp+dj,kp:kp+dk,lp:lp+dl] = buf
-                        lp += dl
-                    kp += dk
-                jp += dj
-            ip += di
+        eri_ao = mol.intor('int2e_ip1', aosym='s1').reshape(3,nao,nao,nao,nao)
         eriref = numpy.einsum('npjkl,pi->nijkl', eri_ao, mo)
         eriref = numpy.einsum('nipkl,pj->nijkl', eriref, mo)
         eriref = numpy.einsum('nijpl,pk->nijkl', eriref, mo)
@@ -86,22 +71,7 @@ class KnownValues(unittest.TestCase):
     def test_nroutcore_eri(self):
         ftmp = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
         erifile = ftmp.name
-        eri_ao = numpy.empty((nao,nao,nao,nao))
-        ip = 0
-        for i in range(mol.nbas):
-            jp = 0
-            for j in range(mol.nbas):
-                kp = 0
-                for k in range(mol.nbas):
-                    lp = 0
-                    for l in range(mol.nbas):
-                        buf = mol.intor_by_shell('int2e_sph', (i,j,k,l))
-                        di,dj,dk,dl = buf.shape
-                        eri_ao[ip:ip+di,jp:jp+dj,kp:kp+dk,lp:lp+dl] = buf
-                        lp += dl
-                    kp += dk
-                jp += dj
-            ip += di
+        eri_ao = ao2mo.restore(1, mol.intor('int2e', aosym='s2kl'), nao)
         eriref = numpy.einsum('pjkl,pi->ijkl', eri_ao, mo)
         eriref = numpy.einsum('ipkl,pj->ijkl', eriref, mo)
         eriref = numpy.einsum('ijpl,pk->ijkl', eriref, mo)

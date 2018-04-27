@@ -27,7 +27,7 @@ m.kernel()
 norb = m.mo_energy.size
 nelec = mol.nelectron
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_symm_spin0(self):
         fs = fci.FCI(mol, m.mo_coeff)
         fs.wfnsym = 'B1'

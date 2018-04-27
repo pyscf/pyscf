@@ -44,7 +44,7 @@ h1 = h1 + h1.T
 def finger(a):
     return numpy.dot(a.ravel(), numpy.cos(numpy.arange(a.size)))
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_select_strs(self):
         myci = selected_ci.SCI()
         myci.select_cutoff = 1e-3

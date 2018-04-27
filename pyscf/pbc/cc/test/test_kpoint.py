@@ -81,7 +81,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(escf,hf_111,9)
         self.assertAlmostEqual(ecc, cc_111,6)
 
-    def test_311_n1(self):
+    def test_311_n1_high_cost(self):
         L = 7.0
         n = 9
         cell = make_test_cell.test_cell_n1(L,[n]*3)
@@ -92,7 +92,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(escf,hf_311, 9)
         self.assertAlmostEqual(ecc, cc_311, 6)
 
-    def test_frozen_n3(self):
+    def test_frozen_n3_high_cost(self):
         mesh = 5
         cell = make_test_cell.test_cell_n3([mesh]*3)
         nk = (1, 1, 3)
@@ -196,7 +196,7 @@ class KnownValues(unittest.TestCase):
         self._test_cu_metallic_frozen_occ(kmf, cell, nk=nk)
         self._test_cu_metallic_frozen_vir(kmf, cell, nk=nk)
 
-    def test_ccsd_t(self):
+    def test_ccsd_t_high_cost(self):
         n = 14
         cell = make_test_cell.test_cell_n3([n]*3)
 

@@ -67,7 +67,7 @@ numpy.random.seed(15)
 ci2 = numpy.random.random((na,nb))
 ci3 = numpy.random.random((na,nb))
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_contract(self):
         ci1ref = fci.direct_spin1.contract_1e(h1er, ci0, norb, nelecr)
         ci1 = fci.direct_uhf.contract_1e(h1es, ci0, norb, nelecr)

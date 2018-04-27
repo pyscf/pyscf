@@ -587,7 +587,7 @@ class KnownValues(unittest.TestCase):
         ss = fci.spin_op.spin_square(ci1, 6, (3,2), mo_coeff=(numpy.eye(6),v))[0]
         self.assertAlmostEqual(ss, 3.75, 8)
 
-    def test_contract_ss(self):
+    def test_contract_ss_high_cost(self):
         self.assertAlmostEqual(e0, -25.4538751043, 9)
         nelec = (6,4)
         na = fci.cistring.num_strings(norb, nelec[0])
