@@ -376,7 +376,11 @@ def convert_to_uhf(mf, out=None, remove_df=False):
                 orbsym = mf.mo_coeff.orbsym
                 mf1.mo_coeff = (lib.tag_array(mf1.mo_coeff[0], orbsym=orbsym),
                                 lib.tag_array(mf1.mo_coeff[1], orbsym=orbsym))
-            mf1.mo_occ = numpy.array((mf.mo_occ>0, mf.mo_occ==2), dtype=numpy.double)
+            if isinstance(mf.mo_occ, numpy.ndarray):
+                mf1.mo_occ = numpy.array((mf.mo_occ>0, mf.mo_occ==2), dtype=numpy.double)
+            else:  # This to handle KRHF object
+                mf1.mo_occ = [numpy.array((occ>0, occ==2), dtype=numpy.double)
+                              for occ in mf.mo_occ]
         return mf1
 
     if isinstance(mf, scf.ghf.GHF):
@@ -485,7 +489,10 @@ def convert_to_rhf(mf, out=None, remove_df=False):
             mf1.mo_coeff =  mf.mo_coeff[0]
             if hasattr(mf.mo_coeff[0], 'orbsym'):
                 mf1.mo_coeff = lib.tag_array(mf1.mo_coeff, orbsym=mf.mo_coeff[0].orbsym)
-            mf1.mo_occ = mf.mo_occ[0] + mf.mo_occ[1]
+            if isinstance(mf.mo_occ[0], numpy.ndarray):
+                mf1.mo_occ = mf.mo_occ[0] + mf.mo_occ[1]
+            else:  # This to handle KUHF object
+                mf1.mo_occ = [occa+occb for occa, occb in zip(*mf.mo_occ)]
         return mf1
 
     if isinstance(mf, scf.ghf.GHF):
