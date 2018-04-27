@@ -31,27 +31,16 @@ endif()
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
-#enable_language(Fortran)
-find_package(BLAS)
-check_function_exists(ffsll HAVE_FFS)
-
-find_package(OpenMP)
-if(OPENMP_FOUND)
-  set(HAVE_OPENMP 1)
-else ()
-  set(OpenMP_C_FLAGS " ")
-endif()
-
-#find_package(PythonInterp REQUIRED)
-#find_package(PythonLibs REQUIRED)
-#execute_process(COMMAND ${PYTHON_EXECUTABLE} -c "import numpy; print(numpy.get_include())"
-#  OUTPUT_VARIABLE NUMPY_INCLUDE)
-#include_directories(${PYTHON_INCLUDE_DIRS} ${NUMPY_INCLUDE})
-
 # Architecture specified cmake flags.  See also the templates in
 # pyscf/lib/cmake_arch_config
 if(EXISTS "${PROJECT_SOURCE_DIR}/cmake.arch.inc")
   include("${PROJECT_SOURCE_DIR}/cmake.arch.inc")
+endif()
+
+if (NOT BLAS_LIBRARIES)
+#enable_language(Fortran)
+find_package(BLAS)
+check_function_exists(ffsll HAVE_FFS)
 endif()
 
 if (NOT BLAS_LIBRARIES)
@@ -72,6 +61,19 @@ endif()
 # These settings can be written in the cmake.arch.inc file. This config file
 # will automatically load all settings specified in cmake.arch.inc
 #
+
+find_package(OpenMP)
+if(OPENMP_FOUND)
+  set(HAVE_OPENMP 1)
+else ()
+  set(OpenMP_C_FLAGS " ")
+endif()
+
+#find_package(PythonInterp REQUIRED)
+#find_package(PythonLibs REQUIRED)
+#execute_process(COMMAND ${PYTHON_EXECUTABLE} -c "import numpy; print(numpy.get_include())"
+#  OUTPUT_VARIABLE NUMPY_INCLUDE)
+#include_directories(${PYTHON_INCLUDE_DIRS} ${NUMPY_INCLUDE})
 
 
 include(ExternalProject)
