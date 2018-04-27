@@ -6,8 +6,8 @@ language: python
 group: deprecated-2017Q4
 os: linux
 
-#git:
-#  depth: 3
+git:
+  depth: 3
 
 addons:
   apt:
@@ -15,7 +15,7 @@ addons:
     - gcc
     - g++
     - gfortran
-    - libblas-dev
+    - libopenblas-dev
     - cmake
 
 python:
