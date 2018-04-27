@@ -1,7 +1,7 @@
 # More syntax details at: https://docs.travis-ci.com/user/customizing-the-build
 # Workaround present for https://github.com/sunqm/pyscf/issues/71
 
-sudo: false
+sudo: required
 language: python
 group: deprecated-2017Q4
 os: linux
@@ -26,13 +26,13 @@ python:
 
 #virtualenv:  affect python 3.5 3.6?
 #    system_site_packages: true
-    
+
 before_install:
   - pip install --upgrade pip
   - pip install numpy scipy h5py nose nose-exclude
-    
+
 install:
-  - > 
+  - >
     cd pyscf/lib &&
     mkdir build &&
     cd build &&
