@@ -31,7 +31,7 @@ mol.build(
 O     0    0        0
 H     0    -0.757   0.587
 H     0    0.757    0.587''',
-    basis = 'cc-pvdz',
+    basis = '631g',
 )
 
 mf = scf.RHF(mol)
@@ -51,26 +51,7 @@ class KnowValues(unittest.TestCase):
     def test_direct_mapdm(self):
         numpy.random.seed(1)
         dm = numpy.random.random((nao,nao))
-        eri0 = numpy.zeros((3,nmo,nmo,nmo,nmo))
-        c_atm = numpy.array(mol._atm, dtype=numpy.int32)
-        c_bas = numpy.array(mol._bas, dtype=numpy.int32)
-        c_env = numpy.array(mol._env)
-        i0 = 0
-        for i in range(mol.nbas):
-            j0 = 0
-            for j in range(mol.nbas):
-                k0 = 0
-                for k in range(mol.nbas):
-                    l0 = 0
-                    for l in range(mol.nbas):
-                        buf = gto.getints_by_shell('int2e_ip1_sph', (i,j,k,l),
-                                                   c_atm, c_bas, c_env, 3)
-                        di,dj,dk,dl = buf.shape[1:]
-                        eri0[:,i0:i0+di,j0:j0+dj,k0:k0+dk,l0:l0+dl] = buf
-                        l0 += dl
-                    k0 += dk
-                j0 += dj
-            i0 += di
+        eri0 = mol.intor('int2e_ip1_sph', comp=3).reshape(3,nao,nao,nao,nao)
         vj0 = numpy.einsum('nijkl,lk->nij', eri0, dm)
         vk0 = numpy.einsum('nijkl,jk->nil', eri0, dm)
         vj1, vk1 = _vhf.direct_mapdm('int2e_ip1_sph', 's2kl',
@@ -97,58 +78,20 @@ class KnowValues(unittest.TestCase):
         n2c = nao*2
         dm = numpy.random.random((n2c,n2c)) + \
              numpy.random.random((n2c,n2c)) * 1j
-        eri0 = numpy.zeros((3,n2c,n2c,n2c,n2c),dtype=numpy.complex)
-        c_atm = numpy.array(mol._atm, dtype=numpy.int32)
-        c_bas = numpy.array(mol._bas, dtype=numpy.int32)
-        c_env = numpy.array(mol._env)
-        i0 = 0
-        for i in range(mol.nbas):
-            j0 = 0
-            for j in range(mol.nbas):
-                k0 = 0
-                for k in range(mol.nbas):
-                    l0 = 0
-                    for l in range(mol.nbas):
-                        buf = gto.getints_by_shell('int2e_g1_spinor', (i,j,k,l),
-                                                   c_atm, c_bas, c_env, 3)
-                        di,dj,dk,dl = buf.shape[1:]
-                        eri0[:,i0:i0+di,j0:j0+dj,k0:k0+dk,l0:l0+dl] = buf
-                        l0 += dl
-                    k0 += dk
-                j0 += dj
-            i0 += di
+        eri0 = mol.intor('int2e_g1_spinor', comp=3).reshape(3,n2c,n2c,n2c,n2c)
         vk0 = numpy.einsum('nijkl,jk->nil', eri0, dm)
         vj1, vk1 = _vhf.rdirect_mapdm('int2e_g1_spinor', 'a4ij',
                                       ('lk->s2ij', 'jk->s1il'),
                                       dm, 3, mol._atm, mol._bas, mol._env)
         self.assertTrue(numpy.allclose(vk0,vk1))
 
-    def test_rdirect_bindm(self):
+    def test_rdirect_bindm_high_cost(self):
         n2c = nao*2
-        eri0 = numpy.zeros((n2c,n2c,n2c,n2c),dtype=numpy.complex)
         mfr = scf.DHF(mol)
         mfr.scf()
         dm = mfr.make_rdm1()[:n2c,:n2c].copy()
-        c_atm = numpy.array(mol._atm, dtype=numpy.int32)
-        c_bas = numpy.array(mol._bas, dtype=numpy.int32)
-        c_env = numpy.array(mol._env)
-        i0 = 0
-        for i in range(mol.nbas):
-            j0 = 0
-            for j in range(mol.nbas):
-                k0 = 0
-                for k in range(mol.nbas):
-                    l0 = 0
-                    for l in range(mol.nbas):
-                        buf = gto.getints_by_shell('int2e_spsp1_spinor', (i,j,k,l),
-                                                   c_atm, c_bas, c_env, 1)
-                        di,dj,dk,dl = buf.shape
-                        eri0[i0:i0+di,j0:j0+dj,k0:k0+dk,l0:l0+dl] = buf
-                        l0 += dl
-                    k0 += dk
-                j0 += dj
-            i0 += di
 
+        eri0 = mol.intor('int2e_spsp1_spinor').reshape(n2c,n2c,n2c,n2c)
         vk0 = numpy.einsum('ijkl,jk->il', eri0, dm)
         vk1 = _vhf.rdirect_bindm('int2e_spsp1_spinor', 's4', ('jk->s1il',),
                                  (dm,), 1, mol._atm, mol._bas, mol._env)

@@ -570,22 +570,17 @@ def getints4c(intor_name, atm, bas, env, shls_slice=None, comp=1,
             assert(numpy.all(ao_loc[k0:k1]-ao_loc[k0] == ao_loc[l0:l1]-ao_loc[l0]))
         else:
             nkl = [naok, naol]
+        shape = [comp] + nij + nkl
 
         if '_spinor' in intor_name:
-            dtype = numpy.complex
             drv = libcgto.GTOr4c_drv
             fill = libcgto.GTOr4c_fill_s1
-            order = 'F'
+            out = numpy.ndarray(shape[::-1], dtype=numpy.complex, buffer=out, order='F')
+            out = numpy.rollaxis(out, -1, 0)
         else:
-            dtype = numpy.double
             drv = libcgto.GTOnr2e_fill_drv
             fill = getattr(libcgto, 'GTOnr2e_fill_'+aosym)
-            order = 'C'
-
-        if comp == 1:
-            out = numpy.ndarray(nij+nkl, dtype=dtype, buffer=out, order=order)
-        else:
-            out = numpy.ndarray([comp]+nij+nkl, dtype=dtype, buffer=out, order=order)
+            out = numpy.ndarray(shape, buffer=out)
 
         prescreen = lib.c_null_ptr()
         drv(getattr(libcgto, intor_name), fill, prescreen,
@@ -593,6 +588,8 @@ def getints4c(intor_name, atm, bas, env, shls_slice=None, comp=1,
             (ctypes.c_int*8)(*shls_slice),
             ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt,
             c_atm, ctypes.c_int(natm), c_bas, ctypes.c_int(nbas), c_env)
+        if comp == 1:
+            out = out[0]
         return out
 
 def getints_by_shell(intor_name, shls, atm, bas, env, comp=1):
