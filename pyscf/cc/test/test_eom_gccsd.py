@@ -31,7 +31,7 @@ mol.atom = [
 [1 , (0. , -0.757 , 0.587)],
 [1 , (0. , 0.757  , 0.587)]]
 mol.basis = '6-31g'
-#mol.verbose = 7
+mol.verbose = 7
 mol.output = '/dev/null'
 mol.build()
 mf = scf.RHF(mol).run()
@@ -81,6 +81,7 @@ nocc, nvir = mycc1.t1.shape
 
 def tearDownModule():
     global mol, mf, mycc, eris1, mycc1
+    mol.stdout.close()
     del mol, mf, mycc, eris1, mycc1
 
 class KnownValues(unittest.TestCase):

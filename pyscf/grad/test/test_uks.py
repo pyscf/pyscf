@@ -38,6 +38,7 @@ mf.kernel()
 
 def tearDownModule():
     global mol, mf
+    mol.stdout.close()
     del mol, mf
 
 class KnownValues(unittest.TestCase):

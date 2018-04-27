@@ -677,7 +677,7 @@ def get_ewald_params(cell, precision=INTEGRAL_PRECISION, mesh=None):
         if mesh is None:
             mesh = cell.mesh
         mesh = _cut_mesh_for_ewald(cell, mesh)
-        Gmax = min(np.asarray(mesh)/2 * lib.norm(cell.reciprocal_vectors(), axis=1))
+        Gmax = min(np.asarray(mesh)//2 * lib.norm(cell.reciprocal_vectors(), axis=1))
         log_precision = np.log(precision/(4*np.pi*Gmax**2))
         ew_eta = np.sqrt(-Gmax**2/(4*log_precision))
         ew_cut = _estimate_rcut(ew_eta**2, 0, 1., precision)

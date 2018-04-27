@@ -46,6 +46,8 @@ symol = gto.M(
 
 def tearDownModule():
     global mol, symol
+    mol.stdout.close()
+    symol.stdout.close()
     del mol, symol
 
 

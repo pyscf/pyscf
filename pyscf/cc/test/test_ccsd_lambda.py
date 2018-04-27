@@ -48,6 +48,7 @@ mycc.kernel(eris=eris)
 
 def tearDownModule():
     global mol, mf, mycc
+    mol.stdout.close()
     del mol, mf, mycc
 
 

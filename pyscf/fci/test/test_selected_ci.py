@@ -118,7 +118,7 @@ class KnowValues(unittest.TestCase):
         h2 = ao2mo.restore(1, eri, norb)
         c1 = myci.contract_2e(h2, ci0, norb, nelec)
         c2 = direct_spin1.contract_2e(h2, ci0, norb, nelec)
-        self.assertAlmostEqual(abs(c1-c2).sum(), 0, 9)
+        self.assertAlmostEqual(float(abs(c1-c2).sum()), 0, 9)
         dm1_1 = myci.make_rdm1(c1, norb, nelec)
         dm1_2 = direct_spin1.make_rdm1(c2, norb, nelec)
         self.assertAlmostEqual(abs(dm1_1 - dm1_2).sum(), 0, 9)

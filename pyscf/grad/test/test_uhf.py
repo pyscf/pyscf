@@ -32,6 +32,7 @@ mol.build()
 
 def tearDownModule():
     global mol
+    mol.stdout.close()
     del mol
 
 

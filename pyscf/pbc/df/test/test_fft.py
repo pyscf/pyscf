@@ -115,8 +115,8 @@ def get_mo_pairs_G(cell, mo_coeffs, kpts=None, q=None):
     mo_pairs_G = np.zeros([ngrids,nmoi*nmoj], np.complex128)
 
     fac = np.exp(-1j*np.dot(coords, q))
-    for i in xrange(nmoi):
-        for j in xrange(nmoj):
+    for i in range(nmoi):
+        for j in range(nmoj):
             mo_pairs_R_ij = np.conj(moiR[:,i])*mojR[:,j]
             mo_pairs_G[:,i*nmoj+j] = tools.fftk(mo_pairs_R_ij, cell.mesh, fac)
 
@@ -167,8 +167,8 @@ def get_mo_pairs_invG(cell, mo_coeffs, kpts=None, q=None):
     mo_pairs_invG = np.zeros([ngrids,nmoi*nmoj], np.complex128)
 
     fac = np.exp(1j*np.dot(coords, q))
-    for i in xrange(nmoi):
-        for j in xrange(nmoj):
+    for i in range(nmoi):
+        for j in range(nmoj):
             mo_pairs_R_ij = np.conj(moiR[:,i])*mojR[:,j]
             mo_pairs_invG[:,i*nmoj+j] = np.conj(tools.fftk(np.conj(mo_pairs_R_ij), cell.mesh, fac))
 
@@ -220,8 +220,8 @@ def get_mo_pairs_G_old(cell, mo_coeffs, kpts=None, q=None):
     mo_pairs_invG = np.zeros([ngrids,nmoi*nmoj], np.complex128)
 
     fac = np.exp(-1j*np.dot(coords, q))
-    for i in xrange(nmoi):
-        for j in xrange(nmoj):
+    for i in range(nmoi):
+        for j in range(nmoj):
             mo_pairs_G[:,i*nmoj+j] = tools.fftk(mo_pairs_R[:,i,j], cell.mesh, fac)
             mo_pairs_invG[:,i*nmoj+j] = np.conj(tools.fftk(np.conj(mo_pairs_R[:,i,j]), cell.mesh,
                                                                    fac.conj()))

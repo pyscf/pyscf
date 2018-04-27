@@ -30,9 +30,9 @@ if conf_file is not None:
         imp.load_source('pyscf.__config__', conf_file)
         del(imp)
     else:
-        import importlib
-        importlib.machinery.SourceFileLoader('pyscf.__config__', conf_file).load_module()
-        del(importlib)
+        from importlib import machinery
+        machinery.SourceFileLoader('pyscf.__config__', conf_file).load_module()
+        del(machinery)
 del(os, sys)
 
 #

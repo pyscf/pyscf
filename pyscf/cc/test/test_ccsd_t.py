@@ -42,6 +42,7 @@ mcc.ccsd()
 
 def tearDownModule():
     global mol, rhf, mcc
+    mol.stdout.close()
     del mol, rhf, mcc
 
 class KnownValues(unittest.TestCase):

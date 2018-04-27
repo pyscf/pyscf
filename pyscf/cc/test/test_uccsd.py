@@ -61,6 +61,8 @@ eris = uccsd.UCCSD(mf_s2).ao2mo()
 
 def tearDownModule():
     global mol, rhf, mf, myucc, mol_s2, mf_s2, eris
+    mol.stdout.close()
+    mol_s2.stdout.close()
     del mol, rhf, mf, myucc, mol_s2, mf_s2, eris
 
 class KnownValues(unittest.TestCase):

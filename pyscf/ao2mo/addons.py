@@ -40,11 +40,11 @@ class load(object):
         if isinstance(self.eri, str):
             self.feri = h5py.File(self.eri, 'r')
             return self.feri[self.dataname]
+        elif isinstance(self.eri, h5py.Group):
+            return self.eri[self.dataname]
         elif isinstance(getattr(self.eri, 'name', None), str):
             self.feri = h5py.File(self.eri.name)
             return self.feri[self.dataname]
-        elif isinstance(self.eri, h5py.Group):
-            return self.eri[self.dataname]
         elif isinstance(self.eri, numpy.ndarray):
             return self.eri
         else:

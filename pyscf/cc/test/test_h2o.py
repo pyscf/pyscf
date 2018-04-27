@@ -44,6 +44,7 @@ ehf = mf.kernel()
 
 def tearDownModule():
     global mol, mf
+    mol.stdout.close()
     del mol, mf
 
 

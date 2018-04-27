@@ -43,6 +43,7 @@ mycc = rccsd.RCCSD(mf)
 
 def tearDownModule():
     global mol, mf, mycc
+    mol.stdout.close()
     del mol, mf, mycc
 
 class KnownValues(unittest.TestCase):
@@ -145,11 +146,11 @@ class KnownValues(unittest.TestCase):
         l1, l2 = myccg.amplitudes_from_ccsd(l1, l2)
         imds = gccsd_lambda.make_intermediates(myccg, t1, t2, erig)
         l1new, l2new = gccsd_lambda.update_lambda(myccg, t1, t2, l1, l2, erig, imds)
-        self.assertAlmostEqual(abs(l1new[0::2,0::2]-l1new_ref).max(), 0, 9)
+        self.assertAlmostEqual(float(abs(l1new[0::2,0::2]-l1new_ref).max()), 0, 9)
         l2aa = l2new[0::2,0::2,0::2,0::2]
         l2ab = l2new[0::2,1::2,0::2,1::2]
-        self.assertAlmostEqual(abs(l2ab-l2new_ref).max(), 0, 9)
-        self.assertAlmostEqual(abs(l2ab-l2ab.transpose(1,0,2,3) - l2aa).max(), 0, 9)
+        self.assertAlmostEqual(float(abs(l2ab-l2new_ref).max()), 0, 9)
+        self.assertAlmostEqual(float(abs(l2ab-l2ab.transpose(1,0,2,3) - l2aa).max()), 0, 9)
 
     def test_rdm(self):
         mycc = rccsd.RCCSD(mf)

@@ -1911,7 +1911,7 @@ class Mole(lib.StreamObject):
             not (hasattr(self.stdout, 'name') and  # to handle StringIO().name bug
                  self.stdout.name == self.output)):
             if self.output == '/dev/null':
-                self.stdout = open(os.devnull, 'wb')
+                self.stdout = open(os.devnull, 'w')
             else:
                 self.stdout = open(self.output, 'w')
 

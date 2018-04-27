@@ -70,7 +70,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(abs(mo_eri0-mo_eri1).max(), 0, 9)
 
     def test_cderi_to_save(self):
-        with open(os.devnull, 'wb') as f:
+        with open(os.devnull, 'w') as f:
             ftmp = tempfile.NamedTemporaryFile()
             dfobj = df.DF(mol)
             dfobj.auxmol = df.addons.make_auxmol(mol, 'weigend')

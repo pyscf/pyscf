@@ -45,6 +45,7 @@ gcc1 = gccsd.GCCSD(mf).run(conv_tol=1e-9)
 
 def tearDownModule():
     global mol, mf, gcc1
+    mol.stdout.close()
     del mol, mf, gcc1
 
 class KnownValues(unittest.TestCase):

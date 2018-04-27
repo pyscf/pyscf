@@ -32,6 +32,7 @@ eri0 = mol.intor('int2e_spinor')
 
 def tearDownModule():
     global mol, eri0
+    mol.stdout.close()
     del mol, eri0
 
 def trans(eri, mos):

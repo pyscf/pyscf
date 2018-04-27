@@ -24,8 +24,8 @@ from pyscf import tdscf
 from pyscf.grad import tduks as tduks_grad
 
 mol = gto.Mole()
-mol.verbose = 0
-mol.output = None
+mol.verbose = 5
+mol.output = '/dev/null'
 mol.atom = [
     ['H' , (0. , 0. , 1.804)],
     ['F' , (0. , 0. , 0.)], ]
@@ -42,6 +42,7 @@ mf_gga.kernel()
 
 def tearDownModule():
     global mol, pmol
+    mol.stdout.close()
     del mol, pmol
 
 class KnownValues(unittest.TestCase):

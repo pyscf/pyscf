@@ -279,7 +279,7 @@ class DIIS(object):
         if inplace:
             self.filename = filename
             self._diisfile = fdiis
-            if fdiis[diis_keys[0]].size < INCORE_SIZE or self.incore:
+            if fdiis[x_keys[0]].size < INCORE_SIZE or self.incore:
                 for key in diis_keys:
                     self._buffer[key] = numpy.asarray(fdiis[key])
         else:
@@ -287,7 +287,7 @@ class DIIS(object):
                 self._store(key, fdiis[key].value)
 
         nd = len(e_keys)
-        self._bookkeep = range(min(self.space, nd))
+        self._bookkeep = list(range(min(self.space, nd)))
         self._head = nd
         vecsize = 0
 

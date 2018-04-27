@@ -37,6 +37,7 @@ mf = scf.RHF(mol).set(conv_tol=1e-12).run()
 
 def tearDownModule():
     global mol, pmol, mf
+    mol.stdout.close()
     del mol, pmol, mf
 
 class KnownValues(unittest.TestCase):

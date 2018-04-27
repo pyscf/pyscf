@@ -38,6 +38,7 @@ myrcc = ccsd.CCSD(mf1).run()
 
 def tearDownModule():
     global mol, mf1, gmf, myrcc
+    mol.stdout.close()
     del mol, mf1, gmf, myrcc
 
 class KnownValues(unittest.TestCase):

@@ -69,6 +69,7 @@ no, nv = mycc1.t1.shape
 
 def tearDownModule():
     global mol, mf, cc1, mycc, mf1, mycc1, eris1
+    mol.stdout.close()
     del mol, mf, cc1, mycc, mf1, mycc1, eris1
 
 class KnownValues(unittest.TestCase):

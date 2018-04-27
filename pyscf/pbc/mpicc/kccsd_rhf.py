@@ -18,7 +18,6 @@
 #
 
 import time
-import tempfile
 import numpy
 import os
 import numpy as np

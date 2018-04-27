@@ -657,14 +657,15 @@ def trans_rdm1(myci, cibra, ciket, nmo=None, nocc=None):
     dm1a[:nocca,nocca:] = dova
     dm1a[nocca:,:nocca] = dvoa
     dm1a[nocca:,nocca:] = dvva
-    dm1a[numpy.diag_indices(nocca)] += numpy.dot(cibra, ciket)
+    norm = numpy.dot(cibra, ciket)
+    dm1a[numpy.diag_indices(nocca)] += norm
 
     dm1b = numpy.empty((nmob,nmob), dtype=dooa.dtype)
     dm1b[:noccb,:noccb] = doob
     dm1b[:noccb,noccb:] = dovb
     dm1b[noccb:,:noccb] = dvob
     dm1b[noccb:,noccb:] = dvvb
-    dm1b[numpy.diag_indices(noccb)] += numpy.dot(cibra, ciket)
+    dm1b[numpy.diag_indices(noccb)] += norm
 
     if not (myci.frozen is 0 or myci.frozen is None):
         nmoa = myci.mo_occ[0].size
@@ -673,8 +674,8 @@ def trans_rdm1(myci, cibra, ciket, nmo=None, nocc=None):
         noccb = numpy.count_nonzero(myci.mo_occ[1] > 0)
         rdm1a = numpy.zeros((nmoa,nmoa), dtype=dm1a.dtype)
         rdm1b = numpy.zeros((nmob,nmob), dtype=dm1b.dtype)
-        rdm1a[numpy.diag_indices(nocca)] = numpy.dot(cibra, ciket)
-        rdm1b[numpy.diag_indices(noccb)] = numpy.dot(cibra, ciket)
+        rdm1a[numpy.diag_indices(nocca)] = norm
+        rdm1b[numpy.diag_indices(noccb)] = norm
         moidx = myci.get_frozen_mask()
         moidxa = numpy.where(moidx[0])[0]
         moidxb = numpy.where(moidx[1])[0]

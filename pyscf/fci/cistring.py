@@ -463,6 +463,23 @@ def strs2addr(norb, nelec, strings):
                         ctypes.c_int(norb), ctypes.c_int(nelec))
     return addrs
 
+def sub_addrs(norb, nelec, orbital_indices, sub_nelec=0):
+    '''The addresses of the determinants which include the specified orbital
+    indices. The size of the returned addresses is equal to the number of
+    determinants of (norb, nelec) system.
+    '''
+    assert(norb < 63)
+    if sub_nelec == 0:
+        strs = gen_strings4orblist(orbital_indices, nelec)
+        return strs2addr(norb, nelec, strs)
+    else:
+        strs = gen_strings4orblist(range(norb), nelec)
+        counts = numpy.zeros(len(strs), dtype=int)
+        for i in orbital_indices:
+            counts += (strs & (1<<i)) != 0
+        sub_strs = strs[counts == sub_nelec]
+        return strs2addr(norb, nelec, sub_strs)
+
 def tn_strs(norb, nelec, n):
     '''Generate strings for Tn amplitudes.  Eg n=1 (T1) has nvir*nocc strings,
     n=2 (T2) has nvir*(nvir-1)/2 * nocc*(nocc-1)/2 strings.

@@ -39,6 +39,7 @@ auxmol = df.addons.make_auxmol(mol, 'weigend')
 
 def tearDownModule():
     global mol, auxmol
+    mol.stdout.close()
     del mol, auxmol
 
 

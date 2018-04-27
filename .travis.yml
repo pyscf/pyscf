@@ -1,28 +1,45 @@
 # More syntax details at: https://docs.travis-ci.com/user/customizing-the-build
 # Workaround present for https://github.com/sunqm/pyscf/issues/71
 
-sudo: required
+sudo: false
 language: python
 group: deprecated-2017Q4
+os: linux
 
 git:
   depth: 3
 
 matrix:
-  include:
-    - dist: trusty
+  - python: "2.7"
+    addons:
+      apt:
+        sources:
+        - ubuntu-toolchain-r-test
+        packages:
+        - gcc-4.8
+        - g++-4.8
+        - gfortran-4.8
+        - libblas-dev
+        - cmake
+    env: CC=gcc-4.8 CXX=g++-4.8 FC=gfortran-4.8 PYTHON=2.7
+  - python: "3.4"
+    addons:
+      apt:
+        sources:
+        - ubuntu-toolchain-r-test
+        packages:
+        - gcc-4.8
+        - g++-4.8
+        - gfortran-4.8
+        - libblas-dev
+        - cmake
+    env: CC=gcc-4.8 CXX=g++-4.8 FC=gfortran-4.8 PYTHON=3.4
 
 virtualenv:
     system_site_packages: true
     
 before_install:
-    - >
-      sudo apt-get -qq install 
-      gcc 
-      gfortran
-      libblas-dev
-      cmake
-      python-pip
+    - pip install --upgrade pip
     - pip install numpy scipy h5py nose nose-exclude
     
 install:

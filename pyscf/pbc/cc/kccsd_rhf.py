@@ -18,11 +18,11 @@
 #
 
 import time
-import tempfile
 import numpy
 import numpy as np
 import h5py
 
+from functools import reduce
 from pyscf import lib
 import pyscf.ao2mo
 from pyscf.lib import logger
@@ -1035,8 +1035,7 @@ class _ERIS:#(pyscf.cc.ccsd._ChemistsERIs):
             self.dtype = dtype
         else:
             log.info('using HDF5 ERI storage')
-            _tmpfile1 = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
-            self.feri1 = h5py.File(_tmpfile1.name)
+            self.feri1 = lib.H5TmpFile()
 
             self.oooo = self.feri1.create_dataset('oooo', (nkpts,nkpts,nkpts,nocc,nocc,nocc,nocc), dtype.char)
             self.ooov = self.feri1.create_dataset('ooov', (nkpts,nkpts,nkpts,nocc,nocc,nocc,nvir), dtype.char)

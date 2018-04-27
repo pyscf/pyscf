@@ -315,7 +315,7 @@ def tril_product(*iterables, **kwds):
         if ntril_idx == 0:
             yield tup
 
-        if all([tup[tril_idx[i]] >= tup[tril_idx[i+1]] for i in xrange(ntril_idx-1)]):
+        if all([tup[tril_idx[i]] >= tup[tril_idx[i+1]] for i in range(ntril_idx-1)]):
             yield tup
         else:
             pass

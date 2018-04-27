@@ -200,7 +200,7 @@ def dot(v1, v2, nmo, nocc):
     val-= numpy.einsum('jiab,ijab->', cijab, hijab)
     return val
 
-def t1strs(norb, nelec):
+def t1strs(norb, nelec, frozen=0):
     '''FCI strings (address) for CIS single-excitation amplitues'''
     nocc = nelec
     hf_str = int('1'*nocc, 2)
@@ -213,8 +213,10 @@ def t1strs(norb, nelec):
             signs.append(cistring.cre_des_sign(a, i, hf_str))
     return numpy.asarray(addrs), numpy.asarray(signs)
 
-def to_fcivec(cisdvec, norb, nelec):
+def to_fcivec(cisdvec, norb, nelec, frozen=0):
     '''Convert CISD coefficients to FCI coefficients'''
+    if frozen is not 0:
+        raise NotImplementedError
     if isinstance(nelec, (int, numpy.number)):
         nelecb = nelec//2
         neleca = nelec - nelecb
@@ -225,7 +227,7 @@ def to_fcivec(cisdvec, norb, nelec):
     c0, c1, c2 = cisdvec_to_amplitudes(cisdvec, norb, nocc)
     t1addr, t1sign = t1strs(norb, nocc)
 
-    na = cistring.num_strings(norb, nocc)
+    na = cistring.num_strings(norb+frozen, nocc+frozen)
     fcivec = numpy.zeros((na,na))
     fcivec[0,0] = c0
     c1 = c1[::-1].T.ravel()
@@ -249,8 +251,10 @@ def to_fcivec(cisdvec, norb, nelec):
                         fcivec[0,addr] = fcivec[addr,0] = c2aa
     return fcivec
 
-def from_fcivec(ci0, norb, nelec):
+def from_fcivec(ci0, norb, nelec, frozen=0):
     '''Extract CISD coefficients from FCI coefficients'''
+    if frozen is not 0:
+        raise NotImplementedError
     if isinstance(nelec, (int, numpy.number)):
         nelecb = nelec//2
         neleca = nelec - nelecb
@@ -442,13 +446,14 @@ def trans_rdm1(myci, cibra, ciket, nmo=None, nocc=None):
     dm1[:nocc,nocc:] = dov * 2
     dm1[nocc:,:nocc] = dvo * 2
     dm1[nocc:,nocc:] = dvv * 2
-    dm1[numpy.diag_indices(nocc)] += 2 * dot(cibra, ciket, nmo, nocc)
+    norm = dot(cibra, ciket, nmo, nocc)
+    dm1[numpy.diag_indices(nocc)] += 2 * norm
 
     if not (myci.frozen is 0 or myci.frozen is None):
         nmo = myci.mo_occ.size
         nocc = numpy.count_nonzero(myci.mo_occ > 0)
         rdm1 = numpy.zeros((nmo,nmo), dtype=dm1.dtype)
-        rdm1[numpy.diag_indices(nocc)] = 2 * dot(cibra, ciket, nmo, nocc)
+        rdm1[numpy.diag_indices(nocc)] = 2 * norm
         moidx = numpy.where(myci.get_frozen_mask())[0]
         rdm1[moidx[:,None],moidx] = dm1
         dm1 = rdm1
@@ -583,6 +588,9 @@ class CISD(lib.StreamObject):
         self._nmo = n
 
     def vector_size(self):
+        '''The size of the vector which was returned from
+        :func:`amplitudes_to_cisdvec`
+        '''
         nocc = self.nocc
         nvir = self.nmo - nocc
         return 1 + nocc*nvir + (nocc*nvir)**2
@@ -603,6 +611,10 @@ class CISD(lib.StreamObject):
         self.converged, self.e_corr, self.ci = \
                 kernel(self, eris, ci0, max_cycle=self.max_cycle,
                        tol=self.conv_tol, verbose=self.verbose)
+        self._finalize()
+        return self.e_corr, self.ci
+
+    def _finalize(self):
         citype = self.__class__.__name__
         if numpy.all(self.converged):
             logger.info(self, '%s converged', citype)
@@ -614,7 +626,7 @@ class CISD(lib.StreamObject):
         else:
             logger.note(self, 'E(%s) = %.16g  E_corr = %.16g',
                         citype, self.e_tot, self.e_corr)
-        return self.e_corr, self.ci
+        return self
 
     def get_init_guess(self, eris=None, nroots=1, diag=None):
         # MP2 initial guess
@@ -686,11 +698,15 @@ class CISD(lib.StreamObject):
     def _add_vvvv(self, c2, eris, out=None, t2sym=None):
         return ccsd._add_vvvv(self, None, c2, eris, out, False, t2sym)
 
-    def to_fcivec(self, cisdvec, norb, nelec):
-        return to_fcivec(cisdvec, norb, nelec)
+    def to_fcivec(self, cisdvec, norb=None, nelec=None, frozen=0):
+        if norb is None: norb = self.nmo
+        if nelec is None: nelec = self.nocc*2
+        return to_fcivec(cisdvec, norb, nelec, frozen)
 
-    def from_fcivec(self, fcivec, norb, nelec):
-        return from_fcivec(fcivec, norb, nelec)
+    def from_fcivec(self, fcivec, norb=None, nelec=None, frozen=0):
+        if norb is None: norb = self.nmo
+        if nelec is None: nelec = self.nocc*2
+        return from_fcivec(fcivec, norb, nelec, frozen)
 
     make_rdm1 = make_rdm1
     make_rdm2 = make_rdm2

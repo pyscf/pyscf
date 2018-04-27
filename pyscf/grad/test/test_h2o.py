@@ -55,6 +55,9 @@ h2o_p.build()
 
 def tearDownModule():
     global h2o, h2o_n, h2o_p
+    h2o.stdout.close()
+    h2o_n.stdout.close()
+    h2o_p.stdout.close()
     del h2o, h2o_n, h2o_p
 
 

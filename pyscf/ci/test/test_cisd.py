@@ -88,13 +88,18 @@ class KnownValues(unittest.TestCase):
 
     def test_from_fcivec(self):
         mol = gto.M()
+        myci = scf.RHF(mol).apply(ci.CISD)
         nelec = (3,3)
         nocc, nvir = nelec[0], 4
         nmo = nocc + nvir
-        numpy.random.seed(12)
-        civec = numpy.random.random(1+nocc*nvir+nocc**2*nvir**2)
-        ci0 = ci.cisd.to_fcivec(civec, nmo, nelec)
+        myci.nocc = nocc
+        myci.nmo = nmo
+        civec = numpy.random.random(myci.vector_size())
+        ci0 = myci.to_fcivec(civec, nmo, nelec)
         self.assertAlmostEqual(abs(civec-ci.cisd.from_fcivec(ci0, nmo, nelec)).sum(), 0, 9)
+
+        ci0 = myci.to_fcivec(civec, nmo, sum(nelec))
+        self.assertAlmostEqual(abs(civec-ci.cisd.from_fcivec(ci0, nmo, sum(nelec))).sum(), 0, 9)
 
     def test_h4(self):
         mol = gto.Mole()
@@ -180,7 +185,6 @@ class KnownValues(unittest.TestCase):
 
     def test_trans_rdm(self):
         numpy.random.seed(1)
-        numpy.random.seed(1)
         myci = ci.CISD(scf.RHF(gto.M()))
         myci.nmo = norb = 4
         myci.nocc = nocc = 2
@@ -199,12 +203,12 @@ class KnownValues(unittest.TestCase):
         fcidm1, fcidm2 = fci.direct_spin1.make_rdm12(fciket, norb, nocc*2)
         cidm1 = ci.cisd.make_rdm1(myci, ciket, norb, nocc)
         cidm2 = ci.cisd.make_rdm2(myci, ciket, norb, nocc)
-        self.assertAlmostEqual(abs(fcidm1-cidm1).max(), 0, 9)
-        self.assertAlmostEqual(abs(fcidm2-cidm2).max(), 0, 9)
+        self.assertAlmostEqual(abs(fcidm1-cidm1).max(), 0, 12)
+        self.assertAlmostEqual(abs(fcidm2-cidm2).max(), 0, 12)
 
         fcidm1 = fci.direct_spin1.trans_rdm1(fcibra, fciket, norb, nocc*2)
         cidm1  = ci.cisd.trans_rdm1(myci, cibra, ciket, norb, nocc)
-        self.assertAlmostEqual(abs(fcidm1-cidm1).max(), 0, 9)
+        self.assertAlmostEqual(abs(fcidm1-cidm1).max(), 0, 12)
 
     def test_dot(self):
         numpy.random.seed(12)
@@ -232,7 +236,7 @@ class KnownValues(unittest.TestCase):
         ecisd, civec = myci.kernel()
         self.assertAlmostEqual(ecisd, -0.1319371817220385, 8)
 
-    def test_dump_chk(self):
+    def test_multi_roots(self):
         mol = gto.Mole()
         mol.verbose = 0
         mol.atom = [
@@ -264,31 +268,6 @@ class KnownValues(unittest.TestCase):
         myci = ci.cisd.RCISD(mf).run()
         self.assertAlmostEqual(myci.e_corr, -0.18730699567992737, 8)
 
-    def test_trans_rdm1(self):
-        numpy.random.seed(1)
-        myci = ci.CISD(scf.RHF(gto.M()))
-        myci.nmo = norb = 4
-        myci.nocc = nocc = 2
-        nvir = norb - nocc
-        c2 = numpy.random.random((nocc,nocc,nvir,nvir))
-        c2 = c2 + c2.transpose(1,0,3,2)
-        cibra = numpy.hstack((numpy.random.random(1+nocc*nvir), c2.ravel()))
-        c2 = numpy.random.random((nocc,nocc,nvir,nvir))
-        c2 = c2 + c2.transpose(1,0,3,2)
-        ciket = numpy.hstack((numpy.random.random(1+nocc*nvir), c2.ravel()))
-        cibra /= ci.cisd.dot(cibra, cibra, norb, nocc)**.5
-        ciket /= ci.cisd.dot(ciket, ciket, norb, nocc)**.5
-        fcibra = ci.cisd.to_fcivec(cibra, norb, nocc*2)
-        fciket = ci.cisd.to_fcivec(ciket, norb, nocc*2)
-
-        fcidm2 = fci.direct_spin1.make_rdm12(fciket, norb, nocc*2)[1]
-        cidm2  = ci.cisd.make_rdm2(myci, ciket, norb, nocc)
-        self.assertAlmostEqual(abs(fcidm2-cidm2).max(), 0, 12)
-
-        fcidm1, fcidm2 = fci.direct_spin1.trans_rdm12(fcibra, fciket, norb, nocc*2)
-        cidm1 = ci.cisd.trans_rdm1(myci, cibra, ciket, norb, nocc)
-        self.assertAlmostEqual(abs(fcidm1-cidm1).max(), 0, 12)
-
     def test_scanner(self):
         mol = gto.M(atom='''
         O   0.   0.       .0
@@ -304,6 +283,27 @@ class KnownValues(unittest.TestCase):
         H   0.   0.757    0.587'''
         ci_scanner = ci_scanner.as_scanner()
         self.assertAlmostEqual(ci_scanner(geom), -76.104634289269356, 7)
+
+    def test_dump_chk(self):
+        mol = gto.M(atom='''
+        O   0.   0.       .0
+        H   0.   -0.757   0.587
+        H   0.   0.757    0.587''', basis='631g')
+        mf = scf.RHF(mol).run()
+        ci_scanner = ci.CISD(mf).as_scanner()
+        ci_scanner(mol)
+        ci_scanner.nmo = mf.mo_energy.size
+        ci_scanner.nocc = mol.nelectron // 2
+        ci_scanner.dump_chk()
+        myci = ci.CISD(mf)
+        myci.__dict__.update(lib.chkfile.load(mf.chkfile, 'cisd'))
+        self.assertAlmostEqual(abs(ci_scanner.ci-myci.ci).max(), 0, 9)
+
+        ci_scanner.e_corr = -1
+        ci_scanner.chkfile = None
+        ci_scanner.dump_chk(frozen=2)
+        self.assertEqual(lib.chkfile.load(mf.chkfile, 'cisd/e_corr'),
+                         myci.e_corr)
 
 
 if __name__ == "__main__":

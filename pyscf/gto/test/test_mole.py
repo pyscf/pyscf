@@ -46,6 +46,7 @@ mol0.build()
 
 def tearDownModule():
     global mol0, ftmp
+    mol0.stdout.close()
     del mol0, ftmp
 
 class KnownValues(unittest.TestCase):
@@ -240,7 +241,7 @@ C    SP
         self.assertEqual(mol1.natm, 1)
 
     def test_atom_as_file(self):
-        ftmp = tempfile.NamedTemporaryFile()
+        ftmp = tempfile.NamedTemporaryFile('w')
         # file in xyz format
         ftmp.write('He 0 0 0\nHe 0 0 1\n')
         ftmp.flush()
@@ -248,7 +249,7 @@ C    SP
         self.assertEqual(mol1.natm, 2)
 
         # file in zmatrix format
-        ftmp = tempfile.NamedTemporaryFile()
+        ftmp = tempfile.NamedTemporaryFile('w')
         ftmp.write('He\nHe 1 1.5\n')
         ftmp.flush()
         mol1 = gto.M(atom=ftmp.name)
@@ -534,11 +535,12 @@ O    SP
         self.assertEqual([x[3] for x in aoslice], [8, 56, 64])
 
     def test_dump_loads(self):
+        import json
         tmpfile = tempfile.NamedTemporaryFile()
         lib.chkfile.save_mol(mol0, tmpfile.name)
         mol1 = gto.Mole()
         mol1.update(tmpfile.name)
-        self.assertEqual(str(mol1.dumps()), str(mol0.dumps()))
+        self.assertEqual(json.loads(mol1.dumps()), json.loads(mol0.dumps()))
         tmpfile = None
         mol1.loads(mol1.dumps())
         mol1.loads_(mol0.dumps())
@@ -602,7 +604,7 @@ O    SP
         mol1.symmetry = True
         mol1.verbose = 5
         mol1.output = '/dev/null'
-        mol1.build(True,False)
+        mol1.build()
         self.assertAlmostEqual(lib.finger(mol1.atom_coords()), 4.2517312170868475, 9)
 
         mol1 = gto.Mole()
@@ -613,7 +615,7 @@ O    SP
         mol1.symmetry = 'Dooh'
         mol1.verbose = 5
         mol1.output = '/dev/null'
-        mol1.build(True,False)
+        mol1.build()
         self.assertAlmostEqual(lib.finger(mol1.atom_coords()), 0.69980902201036865, 9)
 
         mol1 = gto.Mole()

@@ -43,6 +43,7 @@ mygcc = cc.GCCSD(mf).run()
 
 def tearDownModule():
     global mol, mol1, mf, myucc, mygcc
+    mol.stdout.close()
     del mol, mol1, mf, myucc, mygcc
 
 class KnownValues(unittest.TestCase):

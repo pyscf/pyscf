@@ -33,6 +33,7 @@ h2o.build()
 
 def tearDownModule():
     global h2o
+    h2o.stdout.close()
     del h2o
 
 
