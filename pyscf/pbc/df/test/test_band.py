@@ -75,7 +75,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(finger(mf.get_bands(kband[0])[0]), 1.9630519740658308, 8)
         self.assertAlmostEqual(finger(mf.get_bands(kband)[0]), 1.04461751922109, 8)
 
-    def test_mdf_bands(self):
+    def test_mdf_bands_high_cost(self):
         mf = scf.KRHF(cell)
         mf.with_df = df.MDF(cell).set(auxbasis='weigend')
         mf.with_df.kpts_band = kband

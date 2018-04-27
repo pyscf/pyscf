@@ -28,7 +28,7 @@ python:
 #    system_site_packages: true
 
 before_install:
-  - pip install numpy scipy h5py nose nose-exclude
+  - pip install numpy scipy h5py nose nose-exclude nose-timer
 
 install:
   # openblas from numpy is slightly faster than the default libblas library
@@ -47,7 +47,8 @@ before_script:
 
 script:
   - PYTHONPATH=$TRAVIS_BUILD_DIR:$PYTHONPATH
-    nosetests -v -e geomopt -e dmrgscf -e fciqmcscf -e icmpspt -e examples -e nao
+    nosetests -v --with-timer
+    -e geomopt -e dmrgscf -e fciqmcscf -e icmpspt -e examples -e nao
     -e shci
     -e test_bz
     -e test_mc2step_4o4e

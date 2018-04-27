@@ -100,7 +100,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(finger(vk[6]), (3.6342630872923456-0.054892635365850449j)/8, 9)
         self.assertAlmostEqual(finger(vk[7]), (3.3483735224533548+0.040877095049528467j)/8, 9)
 
-    def test_aft_k1(self):
+    def test_aft_k1_high_cost(self):
         kpts = cell.get_abs_kpts([[-.25,-.25,-.25],
                                   [-.25,-.25, .25],
                                   [-.25, .25,-.25],
