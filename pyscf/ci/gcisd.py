@@ -211,7 +211,6 @@ def from_fcivec(ci0, nelec, orbspin, frozen=0):
              numpy.count_nonzero(orbspin[:nelec] == 1))
     ucisdvec = ucisd.from_fcivec(ci0, norb//2, nelec, frozen)
     nocc = numpy.count_nonzero(~frozen_mask[:sum(nelec)])
-    print nocc, len(orbspin)
     return from_ucisdvec(ucisdvec, nocc, orbspin[~frozen_mask])
 
 
