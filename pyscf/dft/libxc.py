@@ -804,7 +804,11 @@ def parse_xc(description):
                         if len(possible_xc) > 1:
                             sys.stderr.write('Possible xc_code %s matches %s. '
                                              % (possible_xc, key))
-                            x_id = possible_xc.pop()
+                            for x_id in possible_xc:  # Prefer X functional
+                                if '_X_' in x_id:
+                                    break
+                            else:
+                                x_id = possible_xc.pop()
                             sys.stderr.write('XC parser takes %s\n' % x_id)
                             sys.stderr.write('You can add prefix to %s for a '
                                              'specific functional (e.g. X_%s)\n'

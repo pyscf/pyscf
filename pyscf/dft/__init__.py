@@ -51,7 +51,7 @@ from pyscf.dft.radi import BRAGG_RADII, COVALENT_RADII, \
 
 def KS(mol, *args):
     __doc__ = '''This is a wrap function to decide which DFT class to use, RKS or UKS\n
-    ''' + hf.SCF.__doc__
+    ''' + rks.RKS.__doc__
     if mol.spin == 0:
         return RKS(mol, *args)
     else:
