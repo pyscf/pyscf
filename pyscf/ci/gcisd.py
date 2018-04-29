@@ -20,6 +20,7 @@
 General spin-orbital CISD
 '''
 
+import warnings
 import time
 from functools import reduce
 import numpy
@@ -30,7 +31,7 @@ from pyscf.cc import gccsd
 from pyscf.cc import gccsd_rdm
 from pyscf.cc.addons import spatial2spin, spin2spatial
 from pyscf.ci import cisd
-from pyscf import fci
+from pyscf.ci import ucisd
 from pyscf.fci import cistring
 
 
@@ -120,11 +121,11 @@ def cisdvec_to_amplitudes(civec, nmo, nocc):
 def from_ucisdvec(civec, nocc, orbspin):
     '''Convert the (spin-separated) CISD coefficient vector to GCISD
     coefficient vector'''
-    from pyscf.ci import ucisd
     nmoa = numpy.count_nonzero(orbspin == 0)
     nmob = numpy.count_nonzero(orbspin == 1)
     if isinstance(nocc, int):
-        nocca = noccb = nocc
+        nocca = numpy.count_nonzero(orbspin[:nocc] == 0)
+        noccb = numpy.count_nonzero(orbspin[:nocc] == 1)
     else:
         nocca, noccb = nocc
     nvira, nvirb = nmoa-nocca, nmob-noccb
@@ -140,11 +141,20 @@ from_rcisdvec = from_ucisdvec
 
 def to_ucisdvec(civec, nmo, nocc, orbspin):
     '''Convert the GCISD coefficient vector to UCISD coefficient vector'''
-    from pyscf.ci import ucisd
     c0, c1, c2 = cisdvec_to_amplitudes(civec, nmo, nocc)
     c1 = spin2spatial(c1, orbspin)
     c2 = spin2spatial(c2, orbspin)
-    return ucisd.amplitudes_to_cisdvec(c0, c1, c2)
+    ucisdvec = ucisd.amplitudes_to_cisdvec(c0, c1, c2)
+    unorm = numpy.linalg.norm(ucisdvec)
+    if unorm < 1e-2:
+        raise RuntimeError('GCISD vector corresponds to spin-flip excitation. '
+                           'It cannot be converted to UCISD wfn.'
+                           'norm(UCISD) = %s' % unorm)
+    elif unorm < 0.99:
+        warnings.warn('GCISD vector has spin-flip excitation. '
+                      'They are ignored when converting to UCISD wfn. '
+                      'norm(UCISD) = %s' % unorm)
+    return ucisdvec
 
 t1strs = cisd.t1strs
 
@@ -165,89 +175,44 @@ def t2strs(norb, nelec):
                     signs.append(sign)
     return numpy.asarray(addrs), numpy.asarray(signs)
 
-def to_fcivec(cisdvec, nelec, orbspin):
-    from pyscf import fci
-    nocc = nelec
+def to_fcivec(cisdvec, nelec, orbspin, frozen=0):
+    assert(numpy.count_nonzero(orbspin == 0) ==
+           numpy.count_nonzero(orbspin == 1))
     norb = len(orbspin)
-    c0, c1, c2 = cisdvec_to_amplitudes(cisdvec, norb, nocc)
-    oidxa = orbspin[:nocc] == 0
-    oidxb = orbspin[:nocc] == 1
-    vidxa = orbspin[nocc:] == 0
-    vidxb = orbspin[nocc:] == 1
-    c1a = c1[oidxa][:,vidxa]
-    c1b = c1[oidxb][:,vidxb]
-    c2aa = c2[oidxa][:,oidxa][:,:,vidxa][:,:,:,vidxa]
-    c2bb = c2[oidxb][:,oidxb][:,:,vidxb][:,:,:,vidxb]
-    c2ab = c2[oidxa][:,oidxb][:,:,vidxa][:,:,:,vidxb]
-    nocca = numpy.count_nonzero(oidxa)
-    noccb = numpy.count_nonzero(oidxb)
-    nvira = numpy.count_nonzero(vidxa)
-    nvirb = numpy.count_nonzero(vidxb)
-    norba = nocca + nvira
-    norbb = noccb + nvirb
-    t1addra, t1signa = t1strs(norba, nocca)
-    t1addrb, t1signb = t1strs(norbb, noccb)
+    frozen_mask = numpy.zeros(norb, dtype=bool)
+    if isinstance(frozen, (int, numpy.integer)):
+        frozen_mask[:frozen] = True
+    else:
+        frozen_mask[frozen] = True
+    frozen = (numpy.where(frozen_mask[orbspin == 0])[0],
+              numpy.where(frozen_mask[orbspin == 1])[0])
+    nelec = (numpy.count_nonzero(orbspin[:nelec] == 0),
+             numpy.count_nonzero(orbspin[:nelec] == 1))
+    orbspin = orbspin[~frozen_mask]
+    nmo = len(orbspin)
+    nocc = numpy.count_nonzero(~frozen_mask[:sum(nelec)])
+    ucisdvec = to_ucisdvec(cisdvec, nmo, nocc, orbspin)
+    return ucisd.to_fcivec(ucisdvec, norb//2, nelec, frozen)
 
-    na = fci.cistring.num_strings(norba, nocca)
-    nb = fci.cistring.num_strings(norbb, noccb)
-    fcivec = numpy.zeros((na,nb))
-    fcivec[0,0] = c0
-    fcivec[t1addra,0] = c1a[::-1].T.ravel() * t1signa
-    fcivec[0,t1addrb] = c1b[::-1].T.ravel() * t1signb
-    c2ab = c2ab[::-1,::-1].transpose(2,0,3,1).reshape(nocca*nvira,-1)
-    c2ab = numpy.einsum('i,j,ij->ij', t1signa, t1signb, c2ab)
-    lib.takebak_2d(fcivec, c2ab, t1addra, t1addrb)
-
-    if nocca > 1 and nvira > 1:
-        ooidx = numpy.tril_indices(nocca, -1)
-        vvidx = numpy.tril_indices(nvira, -1)
-        c2aa = c2aa[ooidx][:,vvidx[0],vvidx[1]]
-        t2addra, t2signa = t2strs(norba, nocca)
-        fcivec[t2addra,0] = c2aa[::-1].T.ravel() * t2signa
-    if noccb > 1 and nvirb > 1:
-        ooidx = numpy.tril_indices(noccb, -1)
-        vvidx = numpy.tril_indices(nvirb, -1)
-        c2bb = c2bb[ooidx][:,vvidx[0],vvidx[1]]
-        t2addrb, t2signb = t2strs(norbb, noccb)
-        fcivec[0,t2addrb] = c2bb[::-1].T.ravel() * t2signb
-    return fcivec
-
-def from_fcivec(ci0, nelec, orbspin):
-    nocc = nelec
-    oidxa = orbspin[:nocc] == 0
-    oidxb = orbspin[:nocc] == 1
-    vidxa = orbspin[nocc:] == 0
-    vidxb = orbspin[nocc:] == 1
-    nocca = numpy.count_nonzero(oidxa)
-    noccb = numpy.count_nonzero(oidxb)
-    nvira = numpy.count_nonzero(vidxa)
-    nvirb = numpy.count_nonzero(vidxb)
-    norba = nocca+nvira
-    norbb = noccb+nvirb
-    t1addra, t1signa = t1strs(norba, nocca)
-    t1addrb, t1signb = t1strs(norbb, noccb)
-
-    na = fci.cistring.num_strings(norba, nocca)
-    nb = fci.cistring.num_strings(norbb, noccb)
-    ci0 = ci0.reshape(na,nb)
-    c0 = ci0[0,0]
-    c1a = ((ci0[t1addra,0] * t1signa).reshape(nvira,nocca).T)[::-1]
-    c1b = ((ci0[0,t1addrb] * t1signb).reshape(nvirb,noccb).T)[::-1]
-    c1 = spatial2spin((c1a, c1b), orbspin)
-
-    c2ab = numpy.einsum('i,j,ij->ij', t1signa, t1signb, ci0[t1addra][:,t1addrb])
-    c2ab = c2ab.reshape(nvira,nocca,nvirb,noccb).transpose(1,3,0,2)
-    c2ab = c2ab[::-1,::-1]
-    t2addra, t2signa = t2strs(norba, nocca)
-    c2aa = (ci0[t2addra,0] * t2signa).reshape(nvira*(nvira-1)//2,-1).T
-    c2aa = ccsd._unpack_4fold(c2aa[::-1], nocca, nvira)
-    t2addrb, t2signb = t2strs(norbb, noccb)
-    c2bb = (ci0[0,t2addrb] * t2signb).reshape(nvirb*(nvirb-1)//2,-1).T
-    c2bb = ccsd._unpack_4fold(c2bb[::-1], noccb, nvirb)
-    c2 = spatial2spin((c2aa, c2ab, c2bb), orbspin)
-
-    cisdvec = amplitudes_to_cisdvec(c0, c1, c2)
-    return cisdvec
+def from_fcivec(ci0, nelec, orbspin, frozen=0):
+    assert(numpy.count_nonzero(orbspin == 0) ==
+           numpy.count_nonzero(orbspin == 1))
+    norb = len(orbspin)
+    frozen_mask = numpy.zeros(norb, dtype=bool)
+    if isinstance(frozen, (int, numpy.integer)):
+        frozen_mask[:frozen] = True
+    else:
+        frozen_mask[frozen] = True
+    if frozen is not 0:
+        raise NotImplementedError
+    #frozen = (numpy.where(frozen_mask[orbspin == 0])[0],
+    #          numpy.where(frozen_mask[orbspin == 1])[0])
+    nelec = (numpy.count_nonzero(orbspin[:nelec] == 0),
+             numpy.count_nonzero(orbspin[:nelec] == 1))
+    ucisdvec = ucisd.from_fcivec(ci0, norb//2, nelec, frozen)
+    nocc = numpy.count_nonzero(~frozen_mask[:sum(nelec)])
+    print nocc, len(orbspin)
+    return from_ucisdvec(ucisdvec, nocc, orbspin[~frozen_mask])
 
 
 def make_rdm1(myci, civec=None, nmo=None, nocc=None):
@@ -349,13 +314,14 @@ def trans_rdm1(myci, cibra, ciket, nmo=None, nocc=None):
     dm1[:nocc,nocc:] = dov
     dm1[nocc:,:nocc] = dvo
     dm1[nocc:,nocc:] = dvv
-    dm1[numpy.diag_indices(nocc)] += numpy.dot(cibra, ciket)
+    norm = numpy.dot(cibra, ciket)
+    dm1[numpy.diag_indices(nocc)] += norm
 
     if not (myci.frozen is 0 or myci.frozen is None):
         nmo = myci.mo_occ.size
         nocc = numpy.count_nonzero(myci.mo_occ > 0)
         rdm1 = numpy.zeros((nmo,nmo), dtype=dm1.dtype)
-        rdm1[numpy.diag_indices(nocc)] = numpy.dot(cibra, ciket)
+        rdm1[numpy.diag_indices(nocc)] = norm
         moidx = numpy.where(myci.get_frozen_mask())[0]
         rdm1[moidx[:,None],moidx] = dm1
         dm1 = rdm1
@@ -426,11 +392,11 @@ class GCISD(cisd.CISD):
     make_diagonal = make_diagonal
     _dot = None
 
-    def to_fcivec(self, cisdvec, nelec, orbspin):
-        return to_fcivec(cisdvec, nelec, orbspin)
+    def to_fcivec(self, cisdvec, nelec, orbspin, frozen=0):
+        return to_fcivec(cisdvec, nelec, orbspin, frozen)
 
-    def from_fcivec(self, fcivec, nelec, orbspin):
-        return from_fcivec(fcivec, nelec, orbspin)
+    def from_fcivec(self, fcivec, nelec, orbspin, frozen=0):
+        return from_fcivec(fcivec, nelec, orbspin, frozen)
 
     make_rdm1 = make_rdm1
     make_rdm2 = make_rdm2
@@ -447,20 +413,17 @@ class GCISD(cisd.CISD):
 
     @lib.with_doc(from_ucisdvec.__doc__)
     def from_ucisdvec(self, civec, nocc=None, orbspin=None):
+        if nocc is None: nocc = self.nocc
         if orbspin is None:
             orbspin = getattr(self.mo_coeff, 'orbspin', None)
             if orbspin is not None:
                 orbspin = orbspin[self.get_frozen_mask()]
         assert(orbspin is not None)
-        if nocc is None:
-            nocc = (numpy.count_nonzero((self.mo_occ > 0) & (orbspin == 0)),
-                    numpy.count_nonzero((self.mo_occ > 0) & (orbspin == 1)))
         return from_ucisdvec(civec, nocc, orbspin=orbspin)
     from_rcisdvec = from_ucisdvec
 
     @lib.with_doc(to_ucisdvec.__doc__)
     def to_ucisdvec(self, civec, orbspin=None):
-        from pyscf.ci import ucisd
         if orbspin is None:
             orbspin = getattr(self.mo_coeff, 'orbspin', None)
             if orbspin is not None:
@@ -485,7 +448,6 @@ class GCISD(cisd.CISD):
 if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
-    from pyscf import fci
     from pyscf import ao2mo
     from pyscf.cc.addons import spatial2spin
 

@@ -28,13 +28,14 @@ from pyscf.lib import logger
 from pyscf.cc import uccsd
 from pyscf.cc import uccsd_rdm
 from pyscf.ci import cisd
+from pyscf.fci import cistring
 from pyscf.cc.ccsd import _unpack_4fold
 
 def make_diagonal(myci, eris):
     nocca = eris.nocca
     noccb = eris.noccb
     nmoa = eris.focka.shape[0]
-    nmob = eris.focka.shape[1]
+    nmob = eris.fockb.shape[1]
     nvira = nmoa - nocca
     nvirb = nmob - noccb
     jdiag_aa = numpy.zeros((nmoa,nmoa))
@@ -354,36 +355,42 @@ def cisdvec_to_amplitudes(civec, nmo, nocc):
     c2bb = _unpack_4fold(civec[loc[4]:loc[5]], noccb, nvirb)
     return c0, (c1a,c1b), (c2aa,c2ab,c2bb)
 
-def dot(v1, v2, nmo, nocc):
-    bra0, bra1, bra2 = cisdvec_to_amplitudes(v1, nmo, nocc)
-    ket0, ket1, ket2 = cisdvec_to_amplitudes(v2, nmo, nocc)
-    val = bra0.conj() * ket0
-    val+= numpy.dot(bra1[0].ravel().conj(), ket1[0].ravel())
-    val+= numpy.dot(bra1[1].ravel().conj(), ket1[1].ravel())
-    val+= numpy.einsum('ijab,ijab', bra2[0].conj(), ket2[0])
-    val+= numpy.einsum('ijab,ijab', bra2[1].conj(), ket2[1])
-    val+= numpy.einsum('jiba,jiba', bra2[1].conj(), ket2[1])
-    val+= numpy.einsum('jiab,jiab', bra2[1].conj(), ket2[1])
-    val+= numpy.einsum('ijba,ijba', bra2[1].conj(), ket2[1])
-    val+= numpy.einsum('ijab,ijab', bra2[2].conj(), ket2[2])
-    return val
-
-def to_fcivec(cisdvec, nmo, nocc):
-    from pyscf import fci
+def to_fcivec(cisdvec, norb, nelec, frozen=0):
     from pyscf.ci.gcisd import t2strs
-    norba, norbb = nmo
-    assert(norba == norbb)
-    nocca, noccb = nocc
-    nvira = norba - nocca
-    nvirb = norbb - noccb
+    if isinstance(nelec, (int, numpy.number)):
+        nelecb = nelec//2
+        neleca = nelec - nelecb
+    else:
+        neleca, nelecb = nelec
+
+    frozena_mask = numpy.zeros(norb, dtype=bool)
+    frozenb_mask = numpy.zeros(norb, dtype=bool)
+    if isinstance(frozen, (int, numpy.integer)):
+        nfroza = nfrozb = frozen
+        frozena_mask[:frozen] = True
+        frozenb_mask[:frozen] = True
+    else:
+        nfroza = len(frozen[0])
+        nfrozb = len(frozen[1])
+        frozena_mask[frozen[0]] = True
+        frozenb_mask[frozen[1]] = True
+
+#    if nfroza != nfrozb:
+#        raise NotImplementedError
+    nocca = numpy.count_nonzero(~frozena_mask[:neleca])
+    noccb = numpy.count_nonzero(~frozenb_mask[:nelecb])
+    nmo = nmoa, nmob = norb - nfroza, norb - nfrozb
+    nocc = nocca, noccb
+    nvira, nvirb = nmoa - nocca, nmob - noccb
+
     c0, c1, c2 = cisdvec_to_amplitudes(cisdvec, nmo, nocc)
     c1a, c1b = c1
     c2aa, c2ab, c2bb = c2
-    t1addra, t1signa = cisd.t1strs(norba, nocca)
-    t1addrb, t1signb = cisd.t1strs(norbb, noccb)
+    t1addra, t1signa = cisd.t1strs(nmoa, nocca)
+    t1addrb, t1signb = cisd.t1strs(nmob, noccb)
 
-    na = fci.cistring.num_strings(norba, nocca)
-    nb = fci.cistring.num_strings(norbb, noccb)
+    na = cistring.num_strings(nmoa, nocca)
+    nb = cistring.num_strings(nmob, noccb)
     fcivec = numpy.zeros((na,nb))
     fcivec[0,0] = c0
     fcivec[t1addra,0] = c1a[::-1].T.ravel() * t1signa
@@ -396,28 +403,79 @@ def to_fcivec(cisdvec, nmo, nocc):
         ooidx = numpy.tril_indices(nocca, -1)
         vvidx = numpy.tril_indices(nvira, -1)
         c2aa = c2aa[ooidx][:,vvidx[0],vvidx[1]]
-        t2addra, t2signa = t2strs(norba, nocca)
+        t2addra, t2signa = t2strs(nmoa, nocca)
         fcivec[t2addra,0] = c2aa[::-1].T.ravel() * t2signa
     if noccb > 1 and nvirb > 1:
         ooidx = numpy.tril_indices(noccb, -1)
         vvidx = numpy.tril_indices(nvirb, -1)
         c2bb = c2bb[ooidx][:,vvidx[0],vvidx[1]]
-        t2addrb, t2signb = t2strs(norbb, noccb)
+        t2addrb, t2signb = t2strs(nmob, noccb)
         fcivec[0,t2addrb] = c2bb[::-1].T.ravel() * t2signb
-    return fcivec
 
-def from_fcivec(ci0, nmo, nocc):
-    from pyscf import fci
+    if nfroza == nfrozb == 0:
+        return fcivec
+
+    assert(norb < 63)
+
+    strsa = cistring.gen_strings4orblist(range(norb), neleca)
+    strsb = cistring.gen_strings4orblist(range(norb), nelecb)
+    na = len(strsa)
+    nb = len(strsb)
+    count_a = numpy.zeros(na, dtype=int)
+    count_b = numpy.zeros(nb, dtype=int)
+    parity_a = numpy.zeros(na, dtype=bool)
+    parity_b = numpy.zeros(nb, dtype=bool)
+    core_a_mask = numpy.ones(na, dtype=bool)
+    core_b_mask = numpy.ones(nb, dtype=bool)
+
+    for i in range(norb):
+        if frozena_mask[i]:
+            if i < neleca:
+                core_a_mask &= (strsa & (1<<i)) != 0
+                parity_a ^= (count_a & 1) == 1
+            else:
+                core_a_mask &= (strsa & (1<<i)) == 0
+        else:
+            count_a += (strsa & (1<<i)) != 0
+
+        if frozenb_mask[i]:
+            if i < nelecb:
+                core_b_mask &= (strsb & (1<<i)) != 0
+                parity_b ^= (count_b & 1) == 1
+            else:
+                core_b_mask &= (strsb & (1<<i)) == 0
+        else:
+            count_b += (strsb & (1<<i)) != 0
+
+    sub_strsa = strsa[core_a_mask & (count_a == nocca)]
+    sub_strsb = strsb[core_b_mask & (count_b == noccb)]
+    addrsa = cistring.strs2addr(norb, neleca, sub_strsa)
+    addrsb = cistring.strs2addr(norb, nelecb, sub_strsb)
+    fcivec1 = numpy.zeros((na,nb))
+    fcivec1[addrsa[:,None],addrsb] = fcivec
+    fcivec1[parity_a,:] *= -1
+    fcivec1[:,parity_b] *= -1
+    return fcivec1
+
+def from_fcivec(ci0, norb, nelec, frozen=0):
     from pyscf.ci.gcisd import t2strs
-    norba, norbb = nmo
-    nocca, noccb = nocc
+    if frozen is not 0:
+        raise NotImplementedError
+    if isinstance(nelec, (int, numpy.number)):
+        nelecb = nelec//2
+        neleca = nelec - nelecb
+    else:
+        neleca, nelecb = nelec
+
+    norba = norbb = norb
+    nocc = nocca, noccb = neleca, nelecb
     nvira = norba - nocca
     nvirb = norbb - noccb
     t1addra, t1signa = cisd.t1strs(norba, nocca)
     t1addrb, t1signb = cisd.t1strs(norbb, noccb)
 
-    na = fci.cistring.num_strings(norba, nocca)
-    nb = fci.cistring.num_strings(norbb, noccb)
+    na = cistring.num_strings(norba, nocca)
+    nb = cistring.num_strings(norbb, noccb)
     ci0 = ci0.reshape(na,nb)
     c0 = ci0[0,0]
     c1a = ((ci0[t1addra,0] * t1signa).reshape(nvira,nocca).T)[::-1]

@@ -40,6 +40,7 @@ def gen_strings4orblist(orb_list, nelec):
     >>> [bin(x) for x in gen_strings4orblist((3,1,0,2),2)]
     [0b1010, 0b1001, 0b11, 0b1100, 0b110, 0b101]
     '''
+    orb_list = list(orb_list)
     if len(orb_list) > 63:
         return _gen_occslst(orb_list, nelec)
 
@@ -70,6 +71,7 @@ def gen_strings4orblist(orb_list, nelec):
 def _gen_occslst(orb_list, nelec):
     '''Generate occupied orbital list for each string.
     '''
+    orb_list = list(orb_list)
     assert(nelec >= 0)
     if nelec == 0:
         return numpy.zeros((1,nelec), dtype=numpy.int32)
@@ -87,7 +89,7 @@ def _gen_occslst(orb_list, nelec):
             for n in gen_occs_iter(restorb, nelec-1):
                 res.append(n + [thisorb])
         return res
-    occslst = gen_occs_iter(list(orb_list), nelec)
+    occslst = gen_occs_iter(orb_list, nelec)
     return numpy.asarray(occslst, dtype=numpy.int32).view(OIndexList)
 def _strs2occslst(strs, norb):
     na = len(strs)
@@ -250,7 +252,7 @@ def gen_linkstr_index_trilidx(orb_list, nocc, strs=None):
 def gen_cre_str_index_o0(orb_list, nelec):
     '''Slow version of gen_cre_str_index function'''
     cre_strs = gen_strings4orblist(orb_list, nelec+1)
-    if isinstance(strs, OIndexList):
+    if isinstance(cre_strs, OIndexList):
         raise NotImplementedError('System with 64 orbitals or more')
 
     credic = dict(zip(cre_strs,range(cre_strs.__len__())))
@@ -295,7 +297,7 @@ def gen_cre_str_index(orb_list, nelec):
 def gen_des_str_index_o0(orb_list, nelec):
     '''Slow version of gen_des_str_index function'''
     des_strs = gen_strings4orblist(orb_list, nelec-1)
-    if isinstance(strs, OIndexList):
+    if isinstance(des_strs, OIndexList):
         raise NotImplementedError('System with 64 orbitals or more')
 
     desdic = dict(zip(des_strs,range(des_strs.__len__())))

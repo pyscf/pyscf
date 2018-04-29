@@ -200,7 +200,7 @@ def dot(v1, v2, nmo, nocc):
     val-= numpy.einsum('jiab,ijab->', cijab, hijab)
     return val
 
-def t1strs(norb, nelec, frozen=0):
+def t1strs(norb, nelec):
     '''FCI strings (address) for CIS single-excitation amplitues'''
     nocc = nelec
     hf_str = int('1'*nocc, 2)
@@ -215,21 +215,28 @@ def t1strs(norb, nelec, frozen=0):
 
 def to_fcivec(cisdvec, norb, nelec, frozen=0):
     '''Convert CISD coefficients to FCI coefficients'''
-    if frozen is not 0:
-        # be careful with the parity if CISD vector is based on discontinued
-        # orbital indices
-        raise NotImplementedError
     if isinstance(nelec, (int, numpy.number)):
         nelecb = nelec//2
         neleca = nelec - nelecb
     else:
         neleca, nelecb = nelec
-    nocc = neleca
-    nvir = norb - nocc
-    c0, c1, c2 = cisdvec_to_amplitudes(cisdvec, norb, nocc)
-    t1addr, t1sign = t1strs(norb, nocc)
+        assert(neleca == nelecb)
 
-    na = cistring.num_strings(norb+frozen, nocc+frozen)
+    frozen_mask = numpy.zeros(norb, dtype=bool)
+    if isinstance(frozen, (int, numpy.integer)):
+        nfroz = frozen
+        frozen_mask[:frozen] = True
+    else:
+        nfroz = len(frozen)
+        frozen_mask[frozen] = True
+
+    nocc = numpy.count_nonzero(~frozen_mask[:neleca])
+    nmo = norb - nfroz
+    nvir = nmo - nocc
+    c0, c1, c2 = cisdvec_to_amplitudes(cisdvec, nmo, nocc)
+    t1addr, t1sign = t1strs(nmo, nocc)
+
+    na = cistring.num_strings(nmo, nocc)
     fcivec = numpy.zeros((na,na))
     fcivec[0,0] = c0
     c1 = c1[::-1].T.ravel()
@@ -240,7 +247,7 @@ def to_fcivec(cisdvec, norb, nelec, frozen=0):
 
     if nocc > 1 and nvir > 1:
         hf_str = int('1'*nocc, 2)
-        for a in range(nocc, norb):
+        for a in range(nocc, nmo):
             for b in range(nocc, a):
                 for i in reversed(range(1, nocc)):
                     for j in reversed(range(i)):
@@ -249,15 +256,47 @@ def to_fcivec(cisdvec, norb, nelec, frozen=0):
                         c2aa*= cistring.cre_des_sign(b, j, hf_str)
                         c2aa*= cistring.cre_des_sign(a, i, str1)
                         str1^= (1 << i) | (1 << a)
-                        addr = cistring.str2addr(norb, nocc, str1)
+                        addr = cistring.str2addr(nmo, nocc, str1)
                         fcivec[0,addr] = fcivec[addr,0] = c2aa
-    return fcivec
+
+    if nfroz == 0:
+        return fcivec
+
+    assert(norb < 63)
+
+    strs = cistring.gen_strings4orblist(range(norb), neleca)
+    na = len(strs)
+    count = numpy.zeros(na, dtype=int)
+    parity = numpy.zeros(na, dtype=bool)
+    core_mask = numpy.ones(na, dtype=bool)
+    # During the loop, count saves the number of occupied orbitals that
+    # lower (with small orbital ID) than the present orbital i.
+    # Moving all the frozen orbitals to the beginning of the orbital list
+    # (before the occupied orbitals) leads to parity odd (= True, with
+    # negative sign) or even (= False, with positive sign).
+    for i in range(norb):
+        if frozen_mask[i]:
+            if i < neleca:
+                # frozen occupied orbital should be occupied
+                core_mask &= (strs & (1<<i)) != 0
+                parity ^= (count & 1) == 1
+            else:
+                # frozen virtual orbital should not be occupied.
+                # parity is not needed since it's unoccupied
+                core_mask &= (strs & (1<<i)) == 0
+        else:
+            count += (strs & (1<<i)) != 0
+    sub_strs = strs[core_mask & (count == nocc)]
+    addrs = cistring.strs2addr(norb, neleca, sub_strs)
+    fcivec1 = numpy.zeros((na,na))
+    fcivec1[addrs[:,None],addrs] = fcivec
+    fcivec1[parity,:] *= -1
+    fcivec1[:,parity] *= -1
+    return fcivec1
 
 def from_fcivec(ci0, norb, nelec, frozen=0):
     '''Extract CISD coefficients from FCI coefficients'''
     if frozen is not 0:
-        # be careful with the parity if CISD vector is based on discontinued
-        # orbital indices
         raise NotImplementedError
     if isinstance(nelec, (int, numpy.number)):
         nelecb = nelec//2
@@ -707,10 +746,10 @@ class CISD(lib.StreamObject):
         if nelec is None: nelec = self.nocc*2
         return to_fcivec(cisdvec, norb, nelec, frozen)
 
-    def from_fcivec(self, fcivec, norb=None, nelec=None, frozen=0):
+    def from_fcivec(self, fcivec, norb=None, nelec=None):
         if norb is None: norb = self.nmo
         if nelec is None: nelec = self.nocc*2
-        return from_fcivec(fcivec, norb, nelec, frozen)
+        return from_fcivec(fcivec, norb, nelec)
 
     make_rdm1 = make_rdm1
     make_rdm2 = make_rdm2

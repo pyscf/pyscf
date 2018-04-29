@@ -99,15 +99,15 @@ class KnownValues(unittest.TestCase):
         ci1 = gcisd.to_fcivec(cisdvec1, nocc*2, orbspin)
         self.assertAlmostEqual(abs(fcivec-ci1).max(), 0, 12)
 
-        vec1 = gcisd.from_rcisdvec(ucisd.amplitudes_to_cisdvec(1, (c1a,c1b), (c2aa,c2ab,c2bb)),
-                                   nocc, orbspin)
-        self.assertTrue(numpy.all(cisdvec == vec1))
+        vec1 = gcisd.from_ucisdvec(ucisd.amplitudes_to_cisdvec(1, (c1a,c1b), (c2aa,c2ab,c2bb)),
+                                   nocc*2, orbspin)
+        self.assertAlmostEqual(abs(cisdvec - vec1).max(), 0, 12)
 
         c1 = gcisd.spatial2spin((c1a, c1a), orbspin)
         c2aa = c2ab - c2ab.transpose(1,0,2,3)
         c2 = gcisd.spatial2spin((c2aa, c2ab, c2aa), orbspin)
         cisdvec = gcisd.amplitudes_to_cisdvec(1., c1, c2)
-        vec1 = gcisd.from_rcisdvec(ci.cisd.amplitudes_to_cisdvec(1, c1a, c2ab), nocc, orbspin)
+        vec1 = gcisd.from_rcisdvec(ci.cisd.amplitudes_to_cisdvec(1, c1a, c2ab), nocc*2, orbspin)
         self.assertTrue(numpy.all(cisdvec == vec1))
 
     def test_h4(self):
@@ -211,6 +211,7 @@ class KnownValues(unittest.TestCase):
         c1 = myci.spatial2spin((c1a, c1b))
         c2 = myci.spatial2spin((c2aa, c2ab, c2bb))
         cisdvec = myci.amplitudes_to_cisdvec(1., c1, c2)
+        self.assertEqual(cisdvec.size, myci.vector_size())
 
         hcisd0 = myci.contract(cisdvec, eris)
         eri_aa = ao2mo.kernel(mf._eri, mf.mo_coeff[0])
@@ -556,22 +557,84 @@ class KnownValues(unittest.TestCase):
         fcibra = ci.cisd.to_fcivec(cibra, norb, nocc*2)
         fciket = ci.cisd.to_fcivec(ciket, norb, nocc*2)
 
-        fcidm1, fcidm2 = fci.direct_spin1.trans_rdm12(fcibra, fciket, norb, nocc*2)
+        fcidm1 = fci.direct_spin1.trans_rdm1s(fcibra, fciket, norb, nocc*2)
         myci1 = ci.GCISD(scf.GHF(gto.M()))
         myci1.nmo = norb = 8
         myci1.nocc = nocc = 4
         orbspin = numpy.zeros(norb, dtype=int)
         orbspin[1::2] = 1
+        myci1.mo_coeff = lib.tag_array(numpy.eye(norb), orbspin=orbspin)
+        myci1.mo_occ = numpy.zeros(norb)
+        myci1.mo_occ[:nocc] = 1
         cibra = myci1.from_rcisdvec(cibra, (nocc//2,nocc//2), orbspin)
-        ciket = myci1.from_rcisdvec(ciket, (nocc//2,nocc//2), orbspin)
+        ciket = myci1.from_rcisdvec(ciket)
         cidm1 = myci1.trans_rdm1(cibra, ciket, norb, nocc)
-        self.assertAlmostEqual(abs(cidm1[0::2,0::2]+cidm1[1::2,1::2] - fcidm1).max(), 0, 12)
+        self.assertAlmostEqual(abs(cidm1[0::2,0::2] - fcidm1[0]).max(), 0, 12)
+        self.assertAlmostEqual(abs(cidm1[1::2,1::2] - fcidm1[1]).max(), 0, 12)
 
         cibra = myci1.to_ucisdvec(cibra, orbspin)
-        ciket = myci1.to_ucisdvec(ciket, orbspin)
+        ciket = myci1.to_ucisdvec(ciket)
         myci2 = ci.UCISD(scf.UHF(gto.M()))
         cidm1 = myci2.trans_rdm1(cibra, ciket, (norb//2,norb//2), (nocc//2,nocc//2))
-        self.assertAlmostEqual(abs(cidm1[0]+cidm1[1] - fcidm1).max(), 0, 12)
+        self.assertAlmostEqual(abs(cidm1[0] - fcidm1[0]).max(), 0, 12)
+        self.assertAlmostEqual(abs(cidm1[1] - fcidm1[1]).max(), 0, 12)
+
+    def test_multi_roots(self):
+        mol = gto.Mole()
+        mol.verbose = 0
+        mol.atom = [
+            ['H', ( 1.,-1.    , 0.   )],
+            ['H', ( 0.,-1.    ,-1.   )],
+            ['H', ( 1.,-0.5   , 0.   )],
+            ['H', ( 0.,-1.    , 1.   )],
+        ]
+        mol.basis = '3-21g'
+        mol.build()
+        mf = scf.GHF(mol).run()
+        myci = ci.GCISD(mf)
+        myci.nroots = 3
+        myci.run()
+        self.assertAlmostEqual(myci.e_tot[2], -1.9802158893844912, 8)
+
+    def test_trans_rdm_with_frozen(self):
+        mol = gto.M(atom='''
+        O   0.   0.       .0
+        H   0.   -0.757   0.587
+        H   0.   0.757    0.587''', basis='sto3g')
+        mf = scf.convert_to_ghf(scf.RHF(mol).run())
+        orbspin = mf.mo_coeff.orbspin
+        idxa = numpy.where(orbspin == 0)[0]
+        idxb = numpy.where(orbspin == 1)[0]
+        nmo_1c = mf.mo_coeff.shape[1]//2
+
+        def check_frozen(frozen):
+            myci = ci.GCISD(mf)
+            myci.frozen = frozen
+            myci.nroots = 3
+            myci.kernel()
+            nocc = myci.nocc
+            nmo = myci.nmo
+            nfroz = len(frozen)
+            try:
+                ket_id = 1
+                fciket = gcisd.to_fcivec(myci.ci[ket_id], mol.nelectron, orbspin, myci.frozen)
+            except RuntimeError:
+                ket_id = 2
+                fciket = gcisd.to_fcivec(myci.ci[ket_id], mol.nelectron, orbspin, myci.frozen)
+                # spin-forbidden transition
+                cidm1  = myci.trans_rdm1(myci.ci[0], myci.ci[1], nmo, nocc)
+                self.assertAlmostEqual(abs(cidm1[idxa[:,None],idxa]).max(), 0, 7)
+                self.assertAlmostEqual(abs(cidm1[idxb[:,None],idxb]).max(), 0, 7)
+
+            cibra = (myci.ci[0] + myci.ci[ket_id]) * numpy.sqrt(.5)
+            fcibra = gcisd.to_fcivec(cibra, mol.nelectron, orbspin, myci.frozen)
+            fcidm1 = fci.direct_spin1.trans_rdm1s(fcibra, fciket, nmo_1c, mol.nelectron)
+            cidm1  = myci.trans_rdm1(cibra, myci.ci[ket_id], nmo, nocc)
+            self.assertAlmostEqual(abs(fcidm1[0]-cidm1[idxa[:,None],idxa]).max(), 0, 12)
+            self.assertAlmostEqual(abs(fcidm1[1]-cidm1[idxb[:,None],idxb]).max(), 0, 12)
+
+        check_frozen([10])
+        check_frozen([10,3])
 
 
 if __name__ == "__main__":

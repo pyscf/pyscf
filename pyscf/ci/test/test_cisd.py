@@ -167,10 +167,29 @@ class KnownValues(unittest.TestCase):
         e1+= mol.energy_nuc()
         self.assertAlmostEqual(e1, myci.e_tot, 7)
 
+    def test_rdm1(self):
+        mol = gto.Mole()
+        mol.verbose = 0
+        mol.atom = [
+            ['O', ( 0., 0.    , 0.   )],
+            ['H', ( 0., -0.757, 0.587)],
+            ['H', ( 0., 0.757 , 0.587)],]
+        mol.basis = '631g'
+        mol.build()
+        mf = scf.RHF(mol).run(conv_tol=1e-14)
+        myci = ci.CISD(mf)
+        myci.frozen = 1
+        myci.kernel()
+
+        nmo = myci.nmo
+        nocc = myci.nocc
         d1 = cisd._gamma1_intermediates(myci, myci.ci, nmo, nocc)
         myci.max_memory = 0
         d2 = cisd._gamma2_intermediates(myci, myci.ci, nmo, nocc, True)
         dm2 = cisd.ccsd_rdm._make_rdm2(myci, d1, d2, with_dm1=True, with_frozen=True)
+        dm1 = numpy.einsum('ijkk->ij', dm2)/(mol.nelectron-1)
+        h1 = reduce(numpy.dot, (mf.mo_coeff.T, mf.get_hcore(), mf.mo_coeff))
+        eri = ao2mo.restore(1, ao2mo.kernel(mf._eri, mf.mo_coeff), nmo+1)
         e1 = numpy.einsum('ij,ji', h1, dm1)
         e1+= numpy.einsum('ijkl,ijkl', eri, dm2) * .5
         e1+= mol.energy_nuc()
@@ -208,40 +227,28 @@ class KnownValues(unittest.TestCase):
         O   0.   0.       .0
         H   0.   -0.757   0.587
         H   0.   0.757    0.587''', basis='sto3g')
-        myci = scf.RHF(mol).run().apply(ci.CISD)
-        myci.frozen = [0,3]
-        myci.nroots = 2
-        myci.kernel()
-        nocc = myci.nocc
-        nmo = myci.nmo
+        mf = scf.RHF(mol).run()
 
-        nfroz = 2
-        strs = fci.cistring.gen_strings4orblist(range(nmo+nfroz), nocc+nfroz)
-        counts = numpy.zeros(len(strs), dtype=int)
-        for i in [1,2,4,5,6]:
-            counts += (strs & (1<<i)) != 0
-        mask = numpy.ones(len(strs), dtype=bool)
-        for i in myci.frozen:
-            mask &= (strs & (1<<i)) != 0
-        sub_strs = strs[mask & (counts == nocc)]
-        addrs = fci.cistring.strs2addr(nmo+nfroz, nocc+nfroz, sub_strs)
-        parity = numpy.zeros(len(strs), dtype=bool)
-        for i in [1,2]:
-            parity ^= (strs & (1<<i)) != 0
+        def check_frozen(frozen):
+            myci = ci.CISD(mf)
+            myci.frozen = frozen
+            myci.nroots = 2
+            myci.kernel()
+            nocc = myci.nocc
+            nmo = myci.nmo
+            nfroz = len(frozen)
+            cibra = (myci.ci[0] + myci.ci[1]) * numpy.sqrt(.5)
+            fcibra = ci.cisd.to_fcivec(cibra, nmo+nfroz, mol.nelectron, myci.frozen)
+            fciket = ci.cisd.to_fcivec(myci.ci[1], nmo+nfroz, mol.nelectron, myci.frozen)
+            fcidm1 = fci.direct_spin1.trans_rdm1(fcibra, fciket, nmo+nfroz, mol.nelectron)
+            cidm1  = myci.trans_rdm1(cibra, myci.ci[1], nmo, nocc)
+            self.assertAlmostEqual(abs(fcidm1-cidm1).max(), 0, 12)
 
-        cibra = (myci.ci[0] + myci.ci[1]) * numpy.sqrt(.5)
-        na = len(strs)
-        fcibra = numpy.zeros((na,na))
-        fciket = numpy.zeros((na,na))
-        fcibra[addrs[:,None],addrs] = ci.cisd.to_fcivec(cibra, nmo, nocc*2)
-        fciket[addrs[:,None],addrs] = ci.cisd.to_fcivec(myci.ci[1], nmo, nocc*2)
-        fcibra[parity,:] *= -1
-        fcibra[:,parity] *= -1
-        fciket[parity,:] *= -1
-        fciket[:,parity] *= -1
-        fcidm1 = fci.direct_spin1.trans_rdm1(fcibra, fciket, nmo+nfroz, (nocc+nfroz)*2)
-        cidm1  = myci.trans_rdm1(cibra, myci.ci[1], nmo, nocc)
-        self.assertAlmostEqual(abs(fcidm1-cidm1).max(), 0, 12)
+        check_frozen([5])
+        check_frozen([3])
+        check_frozen([1,3])
+        check_frozen([2,5])
+        #check_frozen([5,6])
 
     def test_dot(self):
         numpy.random.seed(12)
@@ -260,7 +267,7 @@ class KnownValues(unittest.TestCase):
             ['H', ( 0., 0.757 , 0.587)],]
         mol.basis = 'ccpvdz'
         mol.build()
-        mf = scf.RHF(mol).run(conv_tol=1e-14)
+        mf = scf.RHF(mol).set(conv_tol=1e-14).newton().run()
         myci = ci.CISD(mf)
         myci.max_memory = .1
         myci.nmo = 16
@@ -285,6 +292,7 @@ class KnownValues(unittest.TestCase):
         myci.nroots = 3
         myci.run()
         myci.dump_chk()
+        self.assertAlmostEqual(myci.e_tot[2], -1.6979890451316759, 8)
 
     def test_with_df(self):
         mol = gto.Mole()

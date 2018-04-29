@@ -110,7 +110,7 @@ class KnownValues(unittest.TestCase):
     def test_full_alpha(self):
         nelec = (6,3)
         norb = 6
-        npair = norb*(norb+1)/2
+        npair = norb*(norb+1)//2
         numpy.random.seed(12)
         h1 = numpy.random.random((norb,norb))
         h1 = h1 + h1.T
@@ -128,7 +128,7 @@ class KnownValues(unittest.TestCase):
     def test_0beta(self):
         nelec = (3,0)
         norb = 6
-        npair = norb*(norb+1)/2
+        npair = norb*(norb+1)//2
         numpy.random.seed(12)
         h1 = numpy.random.random((norb,norb))
         h1 = h1 + h1.T

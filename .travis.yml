@@ -9,6 +9,7 @@ os: linux
 git:
   depth: 3
 
+# blas and openblas from APT is much slower than "sudo apt-get -qq install"
 #addons:
 #  apt:
 #    packages:
@@ -33,7 +34,7 @@ before_install:
   - pip install numpy scipy h5py nose nose-exclude nose-timer
 
 install:
-  # openblas from numpy is slightly faster than the default libblas library
+  # openblas from numpy may be slightly faster than the default libblas library
   #- cd $TRAVIS_BUILD_DIR/pyscf/lib &&
   #  ln -s `python -c "import os, numpy; print(os.path.dirname(numpy.__file__))"`/.libs/lib* ./ &&
   #  blaslib=`basename libopenblas* .so | cut -c 4-` &&
@@ -51,10 +52,10 @@ before_script:
   - rm $TRAVIS_BUILD_DIR/pyscf/pbc/tools/pyscf_ase.py
 
 script:
-  #- cd $TRAVIS_BUILD_DIR/pyscf &&
-  #  echo 'pbc_tools_pbc_fft_engine = "NUMPY"' > pyscf_config.py
-  - PYTHONPATH=$TRAVIS_BUILD_DIR:$PYTHONPATH PYSCF_CONFIG_FILE=$(pwd)/pyscf_config.py
-    nosetests -v --with-timer
+  - cd $TRAVIS_BUILD_DIR/pyscf &&
+    echo 'pbc_tools_pbc_fft_engine = "NUMPY"' > pyscf_config.py
+  - OMP_NUM_THREADS=1 PYTHONPATH=$TRAVIS_BUILD_DIR:$PYTHONPATH PYSCF_CONFIG_FILE=$(pwd)/pyscf_config.py
+    nosetests -v
     -e geomopt -e dmrgscf -e fciqmcscf -e icmpspt -e examples -e nao
     -e shci
     -e test_bz

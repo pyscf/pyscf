@@ -28,17 +28,15 @@ from pyscf import ao2mo
 
 
 class KnownValues(unittest.TestCase):
-
     def test_from_fcivec(self):
-        mol = gto.M()
+        myci = scf.UHF(gto.M()).apply(ci.CISD)
         nocca, noccb = nelec = (3,2)
         nvira, nvirb = 5, 6
-        nmo = (8,8)
+        myci.nocc = nocc = nocca, noccb
+        nmo = 8
+        myci.nmo = (nmo,nmo)
         numpy.random.seed(12)
-        civec = numpy.random.random(1+nocca*nvira+noccb*nvirb
-                                    +nocca*(nocca-1)//2*nvira*(nvira-1)//2
-                                    +noccb*(noccb-1)//2*nvirb*(nvirb-1)//2
-                                    +nocca*noccb*nvira*nvirb)
+        civec = numpy.random.random(myci.vector_size())
         ci0 = ucisd.to_fcivec(civec, nmo, nelec)
         self.assertAlmostEqual(abs(civec-ucisd.from_fcivec(ci0, nmo, nelec)).max(), 0, 9)
 
@@ -53,10 +51,10 @@ class KnownValues(unittest.TestCase):
         c1 = (c1a, c1b)
         c2 = (c2aa, c2ab, c2bb)
         cisdvec = ucisd.amplitudes_to_cisdvec(1., c1, c2)
-        fcivec = ucisd.to_fcivec(cisdvec, (nmo,nmo), (nocc,nocc))
-        cisdvec1 = ucisd.from_fcivec(fcivec, (nmo,nmo), (nocc,nocc))
+        fcivec = ucisd.to_fcivec(cisdvec, nmo, nocc*2)
+        cisdvec1 = ucisd.from_fcivec(fcivec, nmo, nocc*2)
         self.assertAlmostEqual(abs(cisdvec-cisdvec1).max(), 0, 12)
-        ci1 = ucisd.to_fcivec(cisdvec1, (nmo,nmo), (nocc,nocc))
+        ci1 = ucisd.to_fcivec(cisdvec1, nmo, (nocc,nocc))
         self.assertAlmostEqual(abs(fcivec-ci1).max(), 0, 12)
 
     def test_h4(self):
@@ -153,7 +151,7 @@ class KnownValues(unittest.TestCase):
         h1b = reduce(numpy.dot, (mf.mo_coeff[1].T, mf.get_hcore(), mf.mo_coeff[1]))
         h2e = fci.direct_uhf.absorb_h1e((h1a,h1b), (eri_aa,eri_ab,eri_bb),
                                         h1a.shape[0], mol.nelec, .5)
-        nmo = (mf.mo_coeff[0].shape[1],mf.mo_coeff[1].shape[1])
+        nmo = mf.mo_coeff[0].shape[1]
         fcivec = myci.to_fcivec(cisdvec, nmo, mol.nelec)
         hci1 = fci.direct_uhf.contract_2e(h2e, fcivec, h1a.shape[0], mol.nelec)
         hci1 -= ehf0 * fcivec
@@ -184,7 +182,7 @@ class KnownValues(unittest.TestCase):
 
         nmoa = nmob = nmo = mf.mo_coeff[1].shape[1]
         nocc = (6,4)
-        ci0 = myci.to_fcivec(civec, (nmoa,nmob), nocc)
+        ci0 = myci.to_fcivec(civec, nmo, nocc)
         ref1, ref2 = fci.direct_uhf.make_rdm12s(ci0, nmo, nocc)
         rdm1 = myci.make_rdm1(civec)
         rdm2 = myci.make_rdm2(civec)
@@ -233,6 +231,35 @@ class KnownValues(unittest.TestCase):
         myci.direct = True
         ecisd, civec = myci.kernel()
         self.assertAlmostEqual(ecisd, -0.04754878399464485, 8)
+
+    def test_trans_rdm_with_frozen(self):
+        mol = gto.M(atom='''
+        O   0.   0.       .0
+        H   0.   -0.757   0.587
+        H   0.   0.757    0.587''', basis='sto3g')
+        mf = scf.UHF(mol).run()
+
+        def check_frozen(frozen):
+            myci = ci.UCISD(mf)
+            myci.frozen = frozen
+            myci.nroots = 2
+            myci.kernel()
+            nocc = myci.nocc
+            nmo = myci.nmo
+            norb = mf.mo_coeff[0].shape[1]
+            nfroz = len(frozen[0])
+            cibra = (myci.ci[0] + myci.ci[1]) * numpy.sqrt(.5)
+            fcibra = ucisd.to_fcivec(cibra, norb, mol.nelec, myci.frozen)
+            fciket = ucisd.to_fcivec(myci.ci[1], norb, mol.nelec, myci.frozen)
+            fcidm1 = fci.direct_spin1.trans_rdm1s(fcibra, fciket, norb, mol.nelec)
+            cidm1  = myci.trans_rdm1(cibra, myci.ci[1], nmo, nocc)
+            self.assertAlmostEqual(abs(fcidm1[0]-cidm1[0]).max(), 0, 12)
+            self.assertAlmostEqual(abs(fcidm1[1]-cidm1[1]).max(), 0, 12)
+
+        check_frozen([[5], [6]])
+        check_frozen([[3], [5]])
+        check_frozen([[1,3], [2,5]])
+        check_frozen([[2,5], [5]])
 
 
 if __name__ == "__main__":
