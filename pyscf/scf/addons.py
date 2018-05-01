@@ -436,7 +436,7 @@ def _object_without_soscf(mf, known_class, remove_df=False):
     for cls in reversed(sub_classes):
         if (not remove_df) and 'DFHF' in cls.__name__:
             obj = obj.density_fit()
-        elif 'SOSCF' in cls.__name__:
+        elif 'SecondOrder' in cls.__name__:
 # SOSCF is not a necessary part
             # obj = obj.newton()
             remove_df = remove_df or (not hasattr(mf._scf, 'with_df'))
