@@ -23,7 +23,7 @@ import os
 import numpy as np
 import h5py
 
-import mpi_kpoint_helper
+from pyscf.pbc.mpicc import mpi_kpoint_helper
 from pyscf import lib
 import pyscf.ao2mo
 from pyscf.lib import logger
