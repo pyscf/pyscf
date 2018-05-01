@@ -50,6 +50,7 @@ def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
     See also :func:`get_roothaan_fock`
     '''
     if h1e is None: h1e = mf.get_hcore()
+    if s1e is None: s1e = mf.get_ovlp()
     if vhf is None: vhf = mf.get_veff(dm=dm)
     if dm is None: dm = mf.make_rdm1()
     if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
@@ -136,7 +137,7 @@ def get_occ(mf, mo_energy=None, mo_coeff=None):
         mo_ea = mo_eb = mo_energy
     nmo = mo_ea.size
     mo_occ = numpy.zeros(nmo)
-    if mf.nelec is None:
+    if getattr(mf, 'nelec', None) is None:
         nelec = mf.mol.nelec
     else:
         nelec = mf.nelec
@@ -149,11 +150,9 @@ def get_occ(mf, mo_energy=None, mo_coeff=None):
         ehomo = max(mo_energy[mo_occ> 0])
         elumo = min(mo_energy[mo_occ==0])
         if ehomo+1e-3 > elumo:
-            logger.warn(mf.mol, 'HOMO %.15g >= LUMO %.15g',
-                        ehomo, elumo)
+            logger.warn(mf, 'HOMO %.15g >= LUMO %.15g', ehomo, elumo)
         else:
-            logger.info(mf, '  HOMO = %.15g  LUMO = %.15g',
-                        ehomo, elumo)
+            logger.info(mf, '  HOMO = %.15g  LUMO = %.15g', ehomo, elumo)
         if nopen > 0:
             core_idx = mo_occ == 2
             open_idx = mo_occ == 1
@@ -205,7 +204,7 @@ def get_grad(mo_coeff, mo_occ, fock):
     if hasattr(fock, 'focka'):
         focka = fock.focka
         fockb = fock.fockb
-    elif fock.ndim == 3:
+    elif getattr(fock, 'ndim', None) == 3:
         focka, fockb = fock
     else:
         focka = fockb = fock
@@ -234,9 +233,7 @@ def energy_elec(mf, dm=None, h1e=None, vhf=None):
     logger.debug(mf, 'Ecoul = %.15g', ecoul)
     return ee, ecoul
 
-# pass in a set of density matrix in dm as (alpha,alpha,...,beta,beta,...)
-def get_veff(mol, dm, dm_last=0, vhf_last=0, hermi=1, vhfopt=None):
-    return uhf.get_veff(mol, dm, dm_last, vhf_last, hermi, vhfopt)
+get_veff = uhf.get_veff
 
 def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
             **kwargs):
@@ -276,9 +273,11 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
         dump_mat.dump_rec(mf.stdout, c, label, start=MO_BASE, **kwargs)
     dm = mf.make_rdm1(mo_coeff, mo_occ)
     if with_meta_lowdin:
-        return mf.mulliken_meta(mf.mol, dm, s=ovlp_ao, verbose=log)
+        pop_and_charge = mf.mulliken_meta(mf.mol, dm, s=ovlp_ao, verbose=log)
     else:
-        return mf.mulliken_pop(mf.mol, dm, s=ovlp_ao, verbose=log)
+        pop_and_charge = mf.mulliken_pop(mf.mol, dm, s=ovlp_ao, verbose=log)
+    dip = mf.dip_moment(mf.mol, dm, verbose=log)
+    return pop_and_charge, dip
 
 def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     '''Canonicalization diagonalizes the Fock matrix within occupied, open,
@@ -309,13 +308,13 @@ class ROHF(hf.RHF):
 
     def dump_flags(self):
         hf.SCF.dump_flags(self)
-        if hasattr(self, 'nelectron_alpha'):
+        if hasattr(self, 'nelectron_alpha'):  # pragma: no cover
             logger.warn(self, 'Note the API updates: attribute nelectron_alpha was replaced by attribute nelec')
             #raise RuntimeError('API updates')
             self.nelec = (self.nelectron_alpha,
                           self.mol.nelectron-self.nelectron_alpha)
             delattr(self, 'nelectron_alpha')
-        if self.nelec is None:
+        if getattr(self, 'nelec', None) is None:
             nelec = self.mol.nelec
         else:
             nelec = self.nelec
@@ -328,7 +327,7 @@ class ROHF(hf.RHF):
 
     def init_guess_by_atom(self, mol=None):
         if mol is None: mol = self.mol
-        logger.info(self, 'Initial guess from superpostion of atomic densties.')
+        logger.info(self, 'Initial guess from the superpostion of atomic densties.')
         return init_guess_by_atom(mol)
 
     def init_guess_by_1e(self, mol=None):
@@ -398,9 +397,12 @@ class ROHF(hf.RHF):
 
     def spin_square(self, mo_coeff=None, s=None):
         '''Spin square and multiplicity of RHF determinant'''
-        neleca, nelecb = self.mol.nelec
+        if getattr(self, 'nelec', None) is None:
+            neleca, nelecb = self.mol.nelec
+        else:
+            neleca, nelecb = self.nelec
         ms = (neleca - nelecb) * .5
-        ss = ms * (ms + 1) * .5
+        ss = ms * (ms + 1)
         return ss, ms*2+1
 
     def stability(self,

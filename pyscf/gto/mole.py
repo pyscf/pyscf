@@ -1760,8 +1760,8 @@ class Mole(lib.StreamObject):
         self.irrep_name = None
         self._nelectron = None
         self._atom = []
-        self._basis = []
-        self._ecp = []
+        self._basis = {}
+        self._ecp = {}
         self._built = False
 
         keys = set(('verbose', 'unit', 'cart', 'incore_anyway'))
@@ -2908,7 +2908,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
             raise ValueError('Unknown method %s' % fn)
         else:
             raise TypeError('First argument of .apply method must be a '
-                            'function or a string.')
+                            'function/class or a name (string) of a method.')
 
 def _parse_nuc_mod(str_or_int):
     nucmod = NUC_POINT

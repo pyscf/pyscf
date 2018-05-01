@@ -130,11 +130,16 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
             mo = c_inv.dot(mo_coeff[1])
         else:
             log.debug(' ** beta MO coefficients (expansion on AOs) **')
-            mo = c_inv.dot(mo_coeff[1])
+            mo = mo_coeff[1]
         dump_mat.dump_rec(mol.stdout, mo, label, molabel, start=MO_BASE, **kwargs)
 
     dm = mf.make_rdm1(mo_coeff, mo_occ)
-    return mf.mulliken_meta(mol, dm, s=ovlp_ao, verbose=log)
+    if with_meta_lowdin:
+        pop_and_charge = mf.mulliken_meta(mol, dm, s=ovlp_ao, verbose=log)
+    else:
+        pop_and_charge = mf.mulliken_pop(mol, dm, s=ovlp_ao, verbose=log)
+    dip = mf.dip_moment(mol, dm, verbose=log)
+    return pop_and_charge, dip
 
 def get_irrep_nelec(mol, mo_coeff, mo_occ, s=None):
     '''Alpha/beta electron numbers for each irreducible representation.
@@ -176,8 +181,6 @@ def get_irrep_nelec(mol, mo_coeff, mo_occ, s=None):
                                              int(sum(mo_occ[1][orbsymb==ir]))))
                         for k, ir in enumerate(mol.irrep_id)])
     return irrep_nelec
-
-rhf_to_uhf = uhf.rhf_to_uhf
 
 def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     '''Canonicalization diagonalizes the UHF Fock matrix in occupied, virtual
@@ -306,6 +309,10 @@ class SymAdaptedUHF(uhf.UHF):
     def build(self, mol=None):
         if mol is None: mol = self.mol
         if mol.symmetry:
+            for irname in self.irrep_nelec:
+                if irname not in self.mol.irrep_name:
+                    logger.warn(self, 'No irrep %s', irname)
+
             if self.nelec is None:
                 nelec = self.mol.nelec
             else:

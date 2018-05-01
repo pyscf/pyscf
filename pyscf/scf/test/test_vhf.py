@@ -38,6 +38,11 @@ mf = scf.RHF(mol)
 mf.scf()
 nao, nmo = mf.mo_coeff.shape
 
+def tearDownModule():
+    global mol, mf
+    mol.stdout.close()
+    del mol, mf
+
 
 class KnowValues(unittest.TestCase):
     def test_incore_s4(self):

@@ -112,6 +112,15 @@ def gen_hop_uhf_external(mf):
         return h2.dot(x)
     return hop1, hop2
 
+mol = gto.M(atom='O 0 0 0; O 0 0 1.2222', basis='631g*', symmetry=1,
+            spin=2, verbose=5, output='/dev/null')
+mf = scf.ROHF(mol).run(conv_tol=1e-12)
+
+def tearDownModule():
+    global mol, mf
+    mol.stdout.close()
+    del mol, mf
+
 
 class KnownValues(unittest.TestCase):
     def test_rhf_external_hop(self):
@@ -180,12 +189,27 @@ class KnownValues(unittest.TestCase):
         xref[hdiag2==0] = 0
         self.assertAlmostEqual(abs(hop2(x1) - xref).max(), 0, 8)
 
-    def test_rohf_external_hop(self):
-        mol = gto.M(atom='O 0 0 0; O 0 0 1.2222', basis='631g*', symmetry=1,
-                    spin=2, verbose=0)
-        mf = scf.ROHF(mol).run(conv_tol=1e-12)
+    def test_rohf_stability(self):
         w = mf.stability(internal=True, external=False)[0]
         self.assertAlmostEqual(lib.finger(w), -12.705426364356359, 6)
+
+    def test_rhf_stability(self):
+        mol = gto.M(atom='C 0 0 0; O 0 0 2.2222', basis='631g*', symmetry=1,
+                    verbose=0)
+        mf = scf.RHF(mol).run(conv_tol=1e-12)
+        w = mf.stability(internal=True, external=False)[0]
+        self.assertAlmostEqual(lib.finger(w), 10.288025916498276, 6)
+
+    def test_uhf_stability(self):
+        mf1 = scf.convert_to_uhf(mf)
+        w = mf1.stability(internal=True, external=False)[0]
+        self.assertAlmostEqual(lib.finger(w), -9.9100863415006017, 6)
+
+    def test_ghf_stability(self):
+        mf1 = scf.convert_to_ghf(mf)
+        w = mf1.stability()[0]
+        self.assertAlmostEqual(lib.finger(w), -9.9100863415006017, 6)
+
 
 if __name__ == "__main__":
     print("Full Tests for stability")

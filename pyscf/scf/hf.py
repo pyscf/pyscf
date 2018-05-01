@@ -149,8 +149,8 @@ Keyword argument "init_dm" is replaced by "dm0"''')
         # Note in pbc.scf, mf.mol == mf.cell, cell is saved under key "mol"
         chkfile.save_mol(mol, mf.chkfile)
 
-    # A preprocessing hook before the SCF iteration
-    mf.pre_kernel(locals())
+#    # A preprocessing hook before the SCF iteration
+#    mf.pre_kernel(locals())
 
     scf_conv = False
     cycle = 0
@@ -221,8 +221,8 @@ Keyword argument "init_dm" is replaced by "dm0"''')
             mf.dump_chk(locals())
 
     logger.timer(mf, 'scf_cycle', *cput0)
-    # A post-processing hook before return
-    mf.post_kernel(locals())
+#    # A post-processing hook before return
+#    mf.post_kernel(locals())
     return scf_conv, e_tot, mo_energy, mo_coeff, mo_occ
 
 
@@ -593,10 +593,10 @@ def dot_eri_dm(eri, dm, hermi=0):
     dm = numpy.asarray(dm)
     nao = dm.shape[-1]
     dms = dm.reshape(-1,nao,nao)
-    if eri.dtype == numpy.complex128:
+    if eri.dtype == numpy.complex128 or eri.size == nao**4:
         eri = eri.reshape((nao,)*4)
-        vj = numpy.empty(dms.shape, dtype=numpy.complex128)
-        vk = numpy.empty(dms.shape, dtype=numpy.complex128)
+        vj = numpy.empty(dms.shape, dtype=eri.dtype)
+        vk = numpy.empty(dms.shape, dtype=eri.dtype)
         for i, dmi in enumerate(dms):
             vj[i] = numpy.einsum('ijkl,ji->kl', eri, dmi)
             vk[i] = numpy.einsum('ijkl,jk->il', eri, dmi)
@@ -724,7 +724,7 @@ def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
     Fock matrix if diis and cycle is specified (The two parameters are passed
     to get_fock function during the SCF iteration)
 
-    Args:
+    Kwargs:
         h1e : 2D ndarray
             Core hamiltonian
         s1e : 2D ndarray
@@ -733,8 +733,6 @@ def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
             HF potential matrix
         dm : 2D ndarray
             Density matrix, for DIIS
-
-    Kwargs:
         cycle : int
             Then present SCF iteration step, for DIIS
         diis : an object of :attr:`SCF.DIIS` class
@@ -756,6 +754,9 @@ def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
         level_shift_factor = mf.level_shift
     if damp_factor is None:
         damp_factor = mf.damp
+
+    if s1e is None:
+        s1e = mf.get_ovlp()
 
     if 0 <= cycle < diis_start_cycle-1 and abs(damp_factor) > 1e-4:
         f = damping(s1e, dm*.5, f, damp_factor)
@@ -872,12 +873,8 @@ def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
     .. math:: \delta_i = \sum_j M_{ij}
 
     '''
-    if s is None:
-        s = get_ovlp(mol)
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(mol.stdout, verbose)
+    if s is None: s = get_ovlp(mol)
+    log = logger.new_logger(mol, verbose)
     if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
         pop = numpy.einsum('ij,ji->i', dm, s).real
     else: # ROHF
@@ -925,9 +922,9 @@ def mulliken_meta(mol, dm, verbose=logger.DEBUG,
 
     '''
     from pyscf.lo import orth
-    if s is None:
-        s = get_ovlp(mol)
+    if s is None: s = get_ovlp(mol)
     log = logger.new_logger(mol, verbose)
+
     c = orth.restore_ao_character(mol, pre_orth_method)
     orth_coeff = orth.orth_ao(mol, 'meta_lowdin', pre_orth_ao=c, s=s)
     c_inv = numpy.dot(orth_coeff.T, s)
@@ -997,7 +994,7 @@ def dip_moment(mol, dm, unit='Debye', verbose=logger.NOTE, **kwargs):
     else:
         log = logger.Logger(mol.stdout, verbose)
 
-    if 'unit_symbol' in kwargs:
+    if 'unit_symbol' in kwargs:  # pragma: no cover
         log.warn('Kwarg "unit_symbol" was deprecated. It was replaced by kwarg '
                  'unit since PySCF-1.5.')
         unit = kwargs['unit_symbol']
@@ -1135,8 +1132,9 @@ def as_scanner(mf):
 
             if self.mo_coeff is None:
                 dm0 = None
-            elif mol.natm > 0 and self.chkfile:
+            elif self.chkfile:
                 dm0 = self.from_chk(self.chkfile)
+            #elif mol.natm == 0: self._eri = mol._eri?
             else:
                 dm0 = self.make_rdm1()
             e_tot = self.kernel(dm0=dm0, **kwargs)
@@ -1277,8 +1275,8 @@ class SCF(lib.StreamObject):
         self._eri = None
 
         keys = set(('conv_tol', 'conv_tol_grad', 'max_cycle', 'init_guess',
-                    'diis', 'diis_space', 'diis_start_cycle', 'diis_file',
-                    'diis_space_rollback', 'damp', 'level_shift',
+                    'DIIS', 'diis', 'diis_space', 'diis_start_cycle',
+                    'diis_file', 'diis_space_rollback', 'damp', 'level_shift',
                     'direct_scf', 'direct_scf_tol', 'conv_check'))
         self._keys = set(self.__dict__.keys()).union(keys)
 
@@ -1391,7 +1389,7 @@ class SCF(lib.StreamObject):
         if isinstance(chkfile, gto.Mole):
             raise TypeError('''
     You see this error message because of the API updates.
-    The first argument is chkfile name.''')
+    The first argument needs to be the name of a chkfile.''')
         if chkfile is None: chkfile = self.chkfile
         return init_guess_by_chkfile(self.mol, chkfile, project=project)
     def from_chk(self, chkfile=None, project=None):
@@ -1560,11 +1558,10 @@ class SCF(lib.StreamObject):
         if s is None: s = self.get_ovlp(mol)
         return mulliken_meta(mol, dm, s=s, verbose=verbose,
                              pre_orth_method=pre_orth_method)
-    def mulliken_pop_meta_lowdin_ao(self, *args, **kwargs):
-        return self.mulliken_meta(*args, **kwargs)
     def pop(self, *args, **kwargs):
         return self.mulliken_meta(*args, **kwargs)
     pop.__doc__ = mulliken_meta.__doc__
+    mulliken_pop_meta_lowdin_ao = pop
 
     canonicalize = canonicalize
 
@@ -1593,52 +1590,51 @@ class SCF(lib.StreamObject):
         import pyscf.soscf.newton_ah
         return pyscf.soscf.newton_ah.newton(self)
 
-    def nuc_grad_method(self):
+    def nuc_grad_method(self):  # pragma: no cover
         '''Hook to create object for analytical nuclear gradients.'''
         pass
 
-    def update(self, chkfile=None):
+    def update_(self, chkfile=None):
         '''Read attributes from the chkfile then replace the attributes of
-        current object.  See also mf.update_from_chk
+        current object.  It's an alias of function update_from_chk_.
         '''
-        return self.update_from_chk(chkfile)
-    def update_from_chk(self, chkfile=None):
         from pyscf.scf import chkfile as chkmod
         if chkfile is None: chkfile = self.chkfile
         self.__dict__.update(chkmod.load(chkfile, 'scf'))
         return self
+    update_from_chk = update_from_chk_ = update = update_
 
     as_scanner = as_scanner
 
     @property
-    def hf_energy(self):
+    def hf_energy(self):  # pragma: no cover
         sys.stderr.write('WARN: Attribute .hf_energy will be removed in PySCF v1.1. '
                          'It is replaced by attribute .e_tot\n')
         return self.e_tot
     @hf_energy.setter
-    def hf_energy(self, x):
+    def hf_energy(self, x):  # pragma: no cover
         sys.stderr.write('WARN: Attribute .hf_energy will be removed in PySCF v1.1. '
                          'It is replaced by attribute .e_tot\n')
         self.hf_energy = x
 
     @property
-    def level_shift_factor(self):
+    def level_shift_factor(self):  # pragma: no cover
         sys.stderr.write('WARN: Attribute .level_shift_factor will be removed in PySCF v1.1. '
                          'It is replaced by attribute .level_shift\n')
         return self.level_shift
     @level_shift_factor.setter
-    def level_shift_factor(self, x):
+    def level_shift_factor(self, x):  # pragma: no cover
         sys.stderr.write('WARN: Attribute .level_shift_factor will be removed in PySCF v1.1. '
                          'It is replaced by attribute .level_shift\n')
         self.level_shift = x
 
     @property
-    def damp_factor(self):
+    def damp_factor(self):  # pragma: no cover
         sys.stderr.write('WARN: Attribute .damp_factor will be removed in PySCF v1.1. '
                          'It is replaced by attribute .damp\n')
         return self.damp
     @damp_factor.setter
-    def damp_factor(self, x):
+    def damp_factor(self, x):  # pragma: no cover
         sys.stderr.write('WARN: Attribute .damp_factor will be removed in PySCF v1.1. '
                          'It is replaced by attribute .damp\n')
         self.damp = x
@@ -1652,14 +1648,15 @@ class SCF(lib.StreamObject):
                 method = getattr(mod, fn.upper(), None)
                 if method is not None and callable(method):
                     if self.mo_coeff is None:
-                        logger.warn('SCF object must be initialized before '
-                                    'calling post-SCF methods.\n'
+                        logger.warn(self, 'SCF object must be initialized '
+                                    'before calling post-SCF methods.\n'
                                     'Initialize %s for %s', self, mod)
+                        self.kernel()
                     return method(self, *args, **kwargs)
             raise ValueError('Unknown method %s' % fn)
         else:
             raise TypeError('First argument of .apply method must be a '
-                            'function or a string.')
+                            'function/class or a name (string) of a method.')
 
 
 ############
@@ -1691,10 +1688,9 @@ class RHF(SCF):
     def convert_from_(self, mf):
         '''Convert given mean-field object to RHF/ROHF'''
         from pyscf.scf import addons
-        addons.convert_to_rhf(mf, self)
-        return self
+        return addons.convert_to_rhf(mf, out=self)
 
-    def spin_square(self, mo_coeff=None, s=None):
+    def spin_square(self, mo_coeff=None, s=None):  # pragma: no cover
         '''Spin square and multiplicity of RHF determinant'''
         return 0, 1
 

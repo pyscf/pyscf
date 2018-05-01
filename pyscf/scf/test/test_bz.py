@@ -42,6 +42,10 @@ mol.basis = {"H": 'ccpvdz',
              "C": 'ccpvdz',}
 mol.build()
 
+def tearDownModule():
+    global mol
+    del mol
+
 
 class KnowValues(unittest.TestCase):
     def test_nr_rhf(self):

@@ -31,6 +31,10 @@ mol.build(
     basis = 'cc-pvdz',
 )
 
+def tearDownModule():
+    global mol
+    del mol
+
 
 class KnowValues(unittest.TestCase):
     def test_nr_rhf(self):

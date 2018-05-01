@@ -152,7 +152,7 @@ def kernel(td_grad, x_y, atmlst=None, max_memory=2000, verbose=logger.INFO):
             vj, vk = mf.get_jk(mol, dm1)
             veff = vj[0] + vj[1] - hyb * vk + vindxc
             if abs(omega) > 1e-10:
-                veff -= rks._get_k_lr(mol, dm1, omega) * (alpha-hyb)
+                veff -= rks._get_k_lr(mol, dm1, omega, hermi=1) * (alpha-hyb)
         else:
             vj = mf.get_j(mol, dm1)
             veff = vj[0] + vj[1] + vindxc

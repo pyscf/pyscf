@@ -90,6 +90,16 @@ h4_z1_s = gto.M(
     spin = 1,
     symmetry = 1,)
 
+def tearDownModule():
+    global h2o_z0, h2o_z1, h2o_z0_s, h2o_z1_s, h4_z0_s, h4_z1_s
+    h2o_z0.stdout.close()
+    h2o_z1.stdout.close()
+    h2o_z0_s.stdout.close()
+    h2o_z1_s.stdout.close()
+    h4_z0_s.stdout.close()
+    h4_z1_s.stdout.close()
+    del h2o_z0, h2o_z1, h2o_z0_s, h2o_z1_s, h4_z0_s, h4_z1_s
+
 class KnowValues(unittest.TestCase):
     def test_nr_rhf(self):
         mf = scf.RHF(h2o_z0)

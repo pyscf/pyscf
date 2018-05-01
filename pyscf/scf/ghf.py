@@ -30,6 +30,7 @@ from pyscf.scf import uhf
 from pyscf.scf import chkfile
 from pyscf import __config__
 
+WITH_META_LOWDIN = getattr(__config__, 'scf_analyze_with_meta_lowdin', True)
 PRE_ORTH_METHOD = getattr(__config__, 'scf_analyze_pre_orth_method', 'ANO')
 MO_BASE = getattr(__config__, 'MO_BASE', 1)
 
@@ -215,7 +216,8 @@ def spin_square(mo, s=1):
     s = numpy.sqrt(ss+.25) - .5
     return ss, s*2+1
 
-def analyze(mf, verbose=logger.DEBUG, **kwargs):
+def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
+            **kwargs):
     '''Analyze the given SCF object:  print orbital energies, occupancies;
     print orbital coefficients; Mulliken population analysis; Dipole moment
     '''
@@ -232,8 +234,12 @@ def analyze(mf, verbose=logger.DEBUG, **kwargs):
         log.note('MO #%-3d energy= %-18.15g occ= %g', i+MO_BASE, mo_energy[i], c)
     ovlp_ao = mf.get_ovlp()
     dm = mf.make_rdm1(mo_coeff, mo_occ)
-    return (mf.mulliken_meta(mf.mol, dm, s=ovlp_ao, verbose=log),
-            mf.dip_moment(mf.mol, dm, verbose=log))
+    dip = mf.dip_moment(mf.mol, dm, verbose=log)
+    if with_meta_lowdin:
+        pop_and_chg = mf.mulliken_meta(mf.mol, dm, s=ovlp_ao, verbose=log)
+    else:
+        pop_and_chg = mf.mulliken_pop(mf.mol, dm, s=ovlp_ao, verbose=log)
+    return pop_and_chg, dip
 
 def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
     '''Mulliken population analysis
@@ -331,14 +337,18 @@ class GHF(hf.SCF):
                                mo_coeff[:,viridx]))
         return g.T.ravel()
 
+    @lib.with_doc(hf.SCF.init_guess_by_minao.__doc__)
     def init_guess_by_minao(self, mol=None):
         return _from_rhf_init_dm(hf.SCF.init_guess_by_minao(self, mol))
 
+    @lib.with_doc(hf.SCF.init_guess_by_atom.__doc__)
     def init_guess_by_atom(self, mol=None):
         return _from_rhf_init_dm(hf.SCF.init_guess_by_atom(self, mol))
 
+    @lib.with_doc(hf.SCF.init_guess_by_chkfile.__doc__)
     def init_guess_by_chkfile(self, chkfile=None, project=None):
-        dma, dmb = uhf.init_guess_by_chkfile(mol, chkfile, project)
+        if chkfile is None: chkfile = self.chkfile
+        dma, dmb = uhf.init_guess_by_chkfile(self.mol, chkfile, project)
         return scipy.linalg.block_diag(dma, dmb)
 
     def get_jk(self, mol=None, dm=None, hermi=0):

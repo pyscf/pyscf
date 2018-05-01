@@ -217,6 +217,8 @@ def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None,
     if auxbasis is None:
         auxbasis = df.addons.aug_etb_for_dfbasis(mf.mol, 'ahlrichs', beta=2.5)
     if projectbasis:
+        logger.warn(mf, '"projectbasis" of fast_newton is an experimental feature. '
+                    'It may be changed in the future release.')
         mf1 = newton(mf)
         pmol = mf1.mol = newton_ah.project_mol(mf.mol, projectbasis)
         mf1 = density_fit(mf1, auxbasis)
@@ -298,7 +300,7 @@ def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None,
 #    mf.kernel = mf_kernel
     return mf
 
-def fast_scf(mf):
+def fast_scf(mf):  # pragma: no cover
     from pyscf.lib import logger
     logger.warn(mf, 'NOTE function fast_scf will be removed in the next release. '
                 'Use function fast_newton instead')

@@ -50,6 +50,12 @@ H     0    0.757    0.587''',
 )
 mfsym = scf.GHF(molsym)
 
+def tearDownModule():
+    global mol, mf, molsym, mfsym
+    mol.stdout.close()
+    molsym.stdout.close()
+    del mol, mf, molsym, mfsym
+
 def spin_square(mol, mo):
     s = mol.intor('int1e_ovlp')
     nao = s.shape[0]
@@ -84,6 +90,13 @@ class KnowValues(unittest.TestCase):
     def test_init_guess_minao(self):
         dm = mf.get_init_guess(mol, key='minao')
         self.assertAlmostEqual(abs(dm).sum(), 14.00554247575052, 9)
+
+    def test_init_guess_chk(self):
+        dm = scf.ghf.GHF(mol).get_init_guess(mol, key='chkfile')
+        self.assertAlmostEqual(lib.finger(dm), 1.8117584283411752, 9)
+
+        dm = mf.get_init_guess(mol, key='chkfile')
+        self.assertAlmostEqual(lib.finger(dm), 3.2111753674560535, 9)
 
     def test_ghf_complex(self):
         dm = mf.init_guess_by_1e(mol) + 0j
@@ -182,6 +195,53 @@ class KnowValues(unittest.TestCase):
         mfsym.irrep_nelec['A2'] = 5
         occ = mfsym.get_occ(mf.mo_energy, mf.mo_coeff)
         self.assertAlmostEqual(lib.finger(occ), -1.3108338866693456, 9)
+
+    def test_analyze(self):
+        (pop, chg), dip = mf.analyze()
+        self.assertAlmostEqual(numpy.linalg.norm(pop[0]+pop[1]), 4.0049440587033116, 6)
+        self.assertAlmostEqual(numpy.linalg.norm(dip), 2.05844441822, 5)
+        (pop, chg), dip = mf.analyze(with_meta_lowdin=False)
+        self.assertAlmostEqual(numpy.linalg.norm(pop[0]+pop[1]), 3.2031790129016922, 6)
+
+    def test_det_ovlp(self):
+        s, x = mf.det_ovlp(mf.mo_coeff, mf.mo_coeff, mf.mo_occ, mf.mo_occ)
+        self.assertAlmostEqual(s, 1.000000000, 9)
+
+    def test_spin_square(self):
+        self.assertAlmostEqual(mf.spin_square()[0], 0, 9)
+
+    def test_get_veff(self):
+        pmol = gto.Mole()
+        pmol.atom = '''
+O     0    0        0
+H     0    -0.757   0.587
+H     0    0.757    0.587'''
+        pmol.basis = '6-31g'
+        pmol.cart = True
+
+        mf1 = scf.ghf.GHF(pmol)
+        mf1.direct_scf = True
+        mf1.max_memory = 0
+        nao = pmol.nao_nr()*2
+        numpy.random.seed(1)
+        dm = numpy.random.random((2,3,nao,nao)) - .5 + 0.1j
+        vhf2 = mf1.get_veff(pmol, dm[0,0], hermi=0)
+        self.assertEqual(vhf2.ndim, 2)
+
+        vhf3 = mf1.get_veff(pmol, dm[0], hermi=0)
+        self.assertEqual(vhf3.ndim, 3)
+        self.assertAlmostEqual(abs(vhf3[0]-vhf2).max(), 0, 12)
+
+        vhf4 = mf1.get_veff(pmol, dm, hermi=0)
+        self.assertEqual(vhf4.ndim, 4)
+        self.assertAlmostEqual(lib.finger(vhf4),
+                               -5.1441200982786057-5.5331447834480718j, 12)
+        self.assertAlmostEqual(abs(vhf4[0]-vhf3).max(), 0, 12)
+
+        vj = mf1.get_j(pmol, dm[0,0], hermi=0)
+        vk = mf1.get_k(pmol, dm[0,0], hermi=0)
+        self.assertAlmostEqual(abs(vj-vk-vhf2).max(), 0, 12)
+
 
 if __name__ == "__main__":
     print("Full Tests for GHF")

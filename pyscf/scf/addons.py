@@ -95,7 +95,7 @@ def frac_occ_(mf, tol=1e-3):
             if hasattr(fock, 'focka'):
                 focka = fock.focka
                 fockb = fock.fockb
-            elif fock.ndim == 3:
+            elif getattr(fock, 'ndim', None) == 3:
                 focka, fockb = fock
             else:
                 focka = fockb = fock
@@ -232,12 +232,12 @@ def mom_occ_(mf, occorb, setocc):
         coef_occ_a = occorb[0][:, setocc[0]>0]
         coef_occ_b = occorb[1][:, setocc[1]>0]
     elif isinstance(mf, rohf.ROHF):
-        if mf.mol.spin != int(numpy.sum(setocc[0]) - numpy.sum(setocc[1])) :
+        if mf.mol.spin != (numpy.sum(setocc[0]) - numpy.sum(setocc[1])):
             raise ValueError('Wrong occupation setting for restricted open-shell calculation.')
         coef_occ_a = occorb[:, setocc[0]>0]
         coef_occ_b = occorb[:, setocc[1]>0]
     else:
-        raise AssertionError('Can not support this class of instance.')
+        raise RuntimeError('Cannot support this class of instance %s' % mf)
     log = logger.Logger(mf.stdout, mf.verbose)
     def get_occ(mo_energy=None, mo_coeff=None):
         if mo_energy is None: mo_energy = mf.mo_energy
@@ -249,20 +249,18 @@ def mom_occ_(mf, occorb, setocc):
         s_a = reduce(numpy.dot, (coef_occ_a.T, mf.get_ovlp(), mo_coeff[0]))
         s_b = reduce(numpy.dot, (coef_occ_b.T, mf.get_ovlp(), mo_coeff[1]))
         #choose a subset of mo_coeff, which maximizes <old|now>
-        idx_a = numpy.argsort(numpy.einsum('ij,ij->j', s_a, s_a))
-        idx_b = numpy.argsort(numpy.einsum('ij,ij->j', s_b, s_b))
-        mo_occ[0][idx_a[-nocc_a:]] = 1.
-        mo_occ[1][idx_b[-nocc_b:]] = 1.
+        idx_a = numpy.argsort(numpy.einsum('ij,ij->j', s_a, s_a))[::-1]
+        idx_b = numpy.argsort(numpy.einsum('ij,ij->j', s_b, s_b))[::-1]
+        mo_occ[0][idx_a[:nocc_a]] = 1.
+        mo_occ[1][idx_b[:nocc_b]] = 1.
 
-        if mf.verbose >= logger.DEBUG:
-            log.info(' New alpha occ pattern: %s', mo_occ[0])
-            log.info(' New beta occ pattern: %s', mo_occ[1])
-        if mf.verbose >= logger.DEBUG1:
-            if mo_energy.ndim == 2:
-                log.info(' Current alpha mo_energy(sorted) = %s', mo_energy[0])
-                log.info(' Current beta mo_energy(sorted) = %s', mo_energy[1])
-            elif mo_energy.ndim == 1:
-                log.info(' Current mo_energy(sorted) = %s', mo_energy)
+        log.debug(' New alpha occ pattern: %s', mo_occ[0])
+        log.debug(' New beta occ pattern: %s', mo_occ[1])
+        if isinstance(mf.mo_energy, numpy.ndarray) and mf.mo_energy.ndim == 1:
+            log.debug1(' Current mo_energy(sorted) = %s', mo_energy)
+        else:
+            log.debug1(' Current alpha mo_energy(sorted) = %s', mo_energy[0])
+            log.debug1(' Current beta mo_energy(sorted) = %s', mo_energy[1])
 
         if (int(numpy.sum(mo_occ[0])) != nocc_a):
             log.error('mom alpha electron occupation numbers do not match: %d, %d',
@@ -376,8 +374,10 @@ def convert_to_uhf(mf, out=None, remove_df=False):
                 orbsym = mf.mo_coeff.orbsym
                 mf1.mo_coeff = (lib.tag_array(mf1.mo_coeff[0], orbsym=orbsym),
                                 lib.tag_array(mf1.mo_coeff[1], orbsym=orbsym))
-            if isinstance(mf.mo_occ, numpy.ndarray):
+            if getattr(mf.mo_occ, 'ndim', None) == 1:  # RHF
                 mf1.mo_occ = numpy.array((mf.mo_occ>0, mf.mo_occ==2), dtype=numpy.double)
+            elif getattr(mf.mo_occ[0], 'ndim', None) == 1:  # UHF
+                mf1.mo_occ = mf.mo_occ
             else:  # This to handle KRHF object
                 mf1.mo_occ = [numpy.array((occ>0, occ==2), dtype=numpy.double)
                               for occ in mf.mo_occ]
@@ -489,7 +489,9 @@ def convert_to_rhf(mf, out=None, remove_df=False):
             mf1.mo_coeff =  mf.mo_coeff[0]
             if hasattr(mf.mo_coeff[0], 'orbsym'):
                 mf1.mo_coeff = lib.tag_array(mf1.mo_coeff, orbsym=mf.mo_coeff[0].orbsym)
-            if isinstance(mf.mo_occ[0], numpy.ndarray):
+            if getattr(mf.mo_occ, 'ndim', None) == 1:
+                mf1.mo_occ = mf.mo_occ
+            elif getattr(mf.mo_occ[0], 'ndim', None) == 1:  # UHF
                 mf1.mo_occ = mf.mo_occ[0] + mf.mo_occ[1]
             else:  # This to handle KUHF object
                 mf1.mo_occ = [occa+occb for occa, occb in zip(*mf.mo_occ)]
@@ -558,7 +560,7 @@ def convert_to_ghf(mf, out=None, remove_df=False):
                 mo_coeff = numpy.zeros((nao*2,nmo*2), dtype=mf.mo_coeff.dtype)
                 mo_coeff[:nao,orbspin==0] = mf.mo_coeff
                 mo_coeff[nao:,orbspin==1] = mf.mo_coeff
-                if hasattr(mf.mo_coeff[0], 'orbsym'):
+                if hasattr(mf.mo_coeff, 'orbsym'):
                     orbsym = numpy.zeros_like(orbspin)
                     orbsym[orbspin==0] = mf.mo_coeff.orbsym
                     orbsym[orbspin==1] = mf.mo_coeff.orbsym

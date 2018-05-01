@@ -120,7 +120,7 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
             vj, vk = mf.get_jk(mol, dm)
             veff = vj * 2 - hyb * vk + vindxc
             if abs(omega) > 1e-10:
-                veff -= rks._get_k_lr(mol, dm, omega) * (alpha-hyb)
+                veff -= rks._get_k_lr(mol, dm, omega, hermi=1) * (alpha-hyb)
         else:
             vj = mf.get_j(mol, dm)
             veff = vj * 2 + vindxc

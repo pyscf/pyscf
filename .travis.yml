@@ -7,7 +7,7 @@ group: deprecated-2017Q4
 os: linux
 
 git:
-  depth: 3
+  depth: 20
 
 # blas and openblas from APT is much slower than "sudo apt-get -qq install"
 #addons:

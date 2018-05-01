@@ -114,8 +114,8 @@ def init_guess_by_chkfile(mol, chkfile_name, project=None):
         dm = make_rdm1([mo_coeff,mo_coeff], [mo_occa,mo_occb])
     else: #UHF
         if hasattr(mo[0][0], 'ndim') and mo[0][0].ndim == 2:  # KUHF
-            logger.warn(mol, 'k-point UHF results are found.  The gamma point '
-                        'density matrix is used for the molecular SCF initial guess')
+            logger.warn(mol, 'k-point UHF results are found.  Density matrix '
+                        'at Gamma point is used for the molecular SCF initial guess')
             mo = mo[0]
         dm = make_rdm1([fproj(mo[0]),fproj(mo[1])], mo_occ)
     return dm
@@ -201,8 +201,16 @@ def get_veff(mol, dm, dm_last=0, vhf_last=0, hermi=1, vhfopt=None):
     vhf += numpy.asarray(vhf_last)
     return vhf
 
-def get_fock(mf, h1e, s1e, vhf, dm, cycle=-1, diis=None,
+def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
              diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
+    if h1e is None: h1e = mf.get_hcore()
+    if vhf is None: vhf = mf.get_veff(dm=dm)
+    f = h1e + vhf
+    if f.ndim == 2:
+        f = (f, f)
+    if cycle < 0 and diis is None:  # Not inside the SCF iteration
+        return f
+
     if diis_start_cycle is None:
         diis_start_cycle = mf.diis_start_cycle
     if level_shift_factor is None:
@@ -219,9 +227,6 @@ def get_fock(mf, h1e, s1e, vhf, dm, cycle=-1, diis=None,
     else:
         dampa = dampb = damp_factor
 
-    f = h1e + vhf
-    if f.ndim == 2:
-        f = (f, f)
     if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
         dm = [dm*.5] * 2
     if 0 <= cycle < diis_start_cycle-1 and abs(dampa)+abs(dampb) > 1e-4:
@@ -467,12 +472,8 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
 def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
     '''Mulliken population analysis
     '''
-    if s is None:
-        s = hf.get_ovlp(mol)
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(mol.stdout, verbose)
+    if s is None: s = hf.get_ovlp(mol)
+    log = logger.new_logger(mol, verbose)
     if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
         dm = numpy.array((dm*.5, dm*.5))
     pop_a = numpy.einsum('ij,ji->i', dm[0], s).real
@@ -500,8 +501,7 @@ def mulliken_meta(mol, dm_ao, verbose=logger.DEBUG,
     '''Mulliken population analysis, based on meta-Lowdin AOs.
     '''
     from pyscf.lo import orth
-    if s is None:
-        s = hf.get_ovlp(mol)
+    if s is None: s = hf.get_ovlp(mol)
     log = logger.new_logger(mol, verbose)
     if isinstance(dm_ao, numpy.ndarray) and dm_ao.ndim == 2:
         dm_ao = numpy.array((dm_ao*.5, dm_ao*.5))
@@ -514,11 +514,6 @@ def mulliken_meta(mol, dm_ao, verbose=logger.DEBUG,
     log.note(' ** Mulliken pop alpha/beta on meta-lowdin orthogonal AOs **')
     return mulliken_pop(mol, (dm_a,dm_b), numpy.eye(orth_coeff.shape[0]), log)
 mulliken_pop_meta_lowdin_ao = mulliken_meta
-
-def rhf_to_uhf(mf):
-    '''Create UHF object based on the RHF object'''
-    from pyscf.scf import addons
-    return addons.convert_to_uhf(mf)
 
 def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     '''Canonicalization diagonalizes the UHF Fock matrix within occupied,
@@ -578,19 +573,19 @@ def det_ovlp(mo1, mo2, occ1, occ2, ovlp):
             They are used to calculate asymmetric density matrix
     '''
 
-    if numpy.sum(occ1) != numpy.sum(occ2):
+    if not numpy.array_equal(occ1, occ2):
         raise RuntimeError('Electron numbers are not equal. Electronic coupling does not exist.')
 
     c1_a = mo1[0][:, occ1[0]>0]
     c1_b = mo1[1][:, occ1[1]>0]
     c2_a = mo2[0][:, occ2[0]>0]
     c2_b = mo2[1][:, occ2[1]>0]
-    o_a = reduce(numpy.dot, (c1_a.T, ovlp, c2_a))
-    o_b = reduce(numpy.dot, (c1_b.T, ovlp, c2_b))
+    o_a = reduce(numpy.dot, (c1_a.conj().T, ovlp, c2_a))
+    o_b = reduce(numpy.dot, (c1_b.conj().T, ovlp, c2_b))
     u_a, s_a, vt_a = numpy.linalg.svd(o_a)
     u_b, s_b, vt_b = numpy.linalg.svd(o_b)
-    x_a = reduce(numpy.dot, (u_a, numpy.diag(numpy.reciprocal(s_a)), vt_a))
-    x_b = reduce(numpy.dot, (u_b, numpy.diag(numpy.reciprocal(s_b)), vt_b))
+    x_a = reduce(numpy.dot, (u_a*numpy.reciprocal(s_a), vt_a))
+    x_b = reduce(numpy.dot, (u_b*numpy.reciprocal(s_b), vt_b))
     return numpy.prod(s_a)*numpy.prod(s_b), numpy.array((x_a, x_b))
 
 def make_asym_dm(mo1, mo2, occ1, occ2, x):
@@ -656,7 +651,7 @@ class UHF(hf.SCF):
         self._keys = self._keys.union(['nelec'])
 
     def dump_flags(self):
-        if hasattr(self, 'nelectron_alpha'):
+        if hasattr(self, 'nelectron_alpha'):  # pragma: no cover
             logger.warn(self, 'Note the API updates: attribute nelectron_alpha was replaced by attribute nelec')
             #raise RuntimeError('API updates')
             self.nelec = (self.nelectron_alpha,
@@ -813,6 +808,11 @@ class UHF(hf.SCF):
                         '<S^2> = %.8g  2S+1 = %.8g',
                         self.e_tot, self.max_cycle, ss, s)
         return self
+
+    def convert_from_(self, mf):
+        '''Create UHF object based on the RHF/ROHF object'''
+        from pyscf.scf import addons
+        return addons.convert_to_uhf(mf, out=self)
 
     def stability(self,
                   internal=getattr(__config__, 'scf_stability_internal', True),

@@ -36,6 +36,11 @@ mf = scf.dhf.UHF(mol)
 mf.conv_tol_grad = 1e-5
 mf.kernel()
 
+def tearDownModule():
+    global mol, mf
+    mol.stdout.close()
+    del mol, mf
+
 
 class KnowValues(unittest.TestCase):
     def test_init_guess_minao(self):
@@ -63,9 +68,19 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(mf.e_tot, -76.081567907064198, 6)
 
     def test_rhf(self):
+        mol = gto.M(
+            verbose = 5,
+            output = '/dev/null',
+            atom = '''
+                O     0    0        0
+                H     0    -0.757   0.587
+                H     0    0.757    0.587''',
+            basis = '631g',
+        )
         mf = scf.dhf.RHF(mol)
         mf.conv_tol_grad = 1e-5
-        self.assertAlmostEqual(mf.scf(), -76.081567907064198, 6)
+        self.assertAlmostEqual(mf.scf(), -76.038520455193861, 6)
+        mol.stdout.close()
 
     def test_get_veff(self):
         n4c = mol.nao_2c() * 2
@@ -87,28 +102,7 @@ class KnowValues(unittest.TestCase):
         )
         n2c = mol.nao_2c()
         n4c = n2c * 2
-        #eri0 = numpy.empty((n2c,n2c,n2c,n2c), dtype=numpy.complex)
-        eri1 = numpy.empty((n2c,n2c,n2c,n2c), dtype=numpy.complex)
-        ip = 0
-        for i in range(mol.nbas):
-            jp = 0
-            for j in range(mol.nbas):
-                kp = 0
-                for k in range(mol.nbas):
-                    lp = 0
-                    for l in range(mol.nbas):
-                        #buf = mol.intor_by_shell('int2e_ssp1sps2_spinor', (i,j,k,l))
-                        #di, dj, dk, dl = buf.shape
-                        #eri0[ip:ip+di,jp:jp+dj,kp:kp+dk,lp:lp+dl] = buf
-
-                        buf = mol.intor_by_shell('int2e_ssp1ssp2_spinor', (i,j,k,l))
-                        di, dj, dk, dl = buf.shape
-                        eri1[ip:ip+di,jp:jp+dj,kp:kp+dk,lp:lp+dl] = buf
-                        lp += dl
-                    kp += dk
-                jp += dj
-            ip += di
-
+        eri1 = mol.intor('int2e_ssp1ssp2_spinor')
         erig = numpy.zeros((n4c,n4c,n4c,n4c), dtype=numpy.complex)
         tao = numpy.asarray(mol.time_reversal_map())
         idx = abs(tao)-1 # -1 for C indexing convention
