@@ -485,7 +485,7 @@ def init_guess_by_chkfile(mol, chkfile_name, project=None):
 
 
 def get_init_guess(mol, key='minao'):
-    '''Pick a init_guess method
+    '''Generate density matrix for initial guess
 
     Kwargs:
         key : str
@@ -879,19 +879,18 @@ def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
         pop = numpy.einsum('ij,ji->i', dm, s).real
     else: # ROHF
         pop = numpy.einsum('ij,ji->i', dm[0]+dm[1], s).real
-    label = mol.ao_labels(fmt=None)
 
     log.info(' ** Mulliken pop  **')
-    for i, s in enumerate(label):
-        log.info('pop of  %s %10.5f', '%d%s %s%-4s'%s, pop[i])
+    for i, s in enumerate(mol.ao_labels()):
+        log.info('pop of  %s %10.5f', s, pop[i])
 
     log.note(' ** Mulliken atomic charges  **')
     chg = numpy.zeros(mol.natm)
-    for i, s in enumerate(label):
+    for i, s in enumerate(mol.ao_labels(fmt=None)):
         chg[s[0]] += pop[i]
+    chg = mol.atom_charges() - chg
     for ia in range(mol.natm):
         symb = mol.atom_symbol(ia)
-        chg[ia] = mol.atom_charge(ia) - chg[ia]
         log.note('charge of  %d%s =   %10.5f', ia, symb, chg[ia])
     return pop, chg
 
@@ -999,11 +998,6 @@ def dip_moment(mol, dm, unit='Debye', verbose=logger.NOTE, **kwargs):
                  'unit since PySCF-1.5.')
         unit = kwargs['unit_symbol']
 
-    if unit.upper() == 'DEBYE':
-        unit = nist.AU2DEBYE
-    else:
-        unit = 1.0
-
     if not (isinstance(dm, numpy.ndarray) and dm.ndim == 2):
         # UHF denisty matrices
         dm = dm[0] + dm[1]
@@ -1015,10 +1009,10 @@ def dip_moment(mol, dm, unit='Debye', verbose=logger.NOTE, **kwargs):
     charges = mol.atom_charges()
     coords  = mol.atom_coords()
     nucl_dip = numpy.einsum('i,ix->x', charges, coords)
+    mol_dip = nucl_dip - el_dip
 
-    mol_dip = (nucl_dip - el_dip) * unit
-
-    if unit == 'Debye' :
+    if unit.upper() == 'DEBYE':
+        mol_dip *= nist.AU2DEBYE
         log.note('Dipole moment(X, Y, Z, Debye): %8.5f, %8.5f, %8.5f', *mol_dip)
     else:
         log.note('Dipole moment(X, Y, Z, A.U.): %8.5f, %8.5f, %8.5f', *mol_dip)

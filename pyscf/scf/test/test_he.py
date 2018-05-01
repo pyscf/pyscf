@@ -34,7 +34,7 @@ def tearDownModule():
     global mol
     del mol
 
-class KnowValues_NR(unittest.TestCase):
+class KnownValues_NR(unittest.TestCase):
     """non-relativistic"""
     def test_fock_1e(self):
         rhf = scf.RHF(mol)

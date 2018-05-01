@@ -32,7 +32,7 @@ from pyscf import symm
 from pyscf.lib import logger
 from pyscf.scf import chkfile
 from pyscf.scf import addons
-from pyscf.scf import hf_symm, uhf_symm
+from pyscf.scf import hf_symm, uhf_symm, ghf_symm
 from pyscf.scf import hf, rohf, uhf
 from pyscf.soscf import ciah
 from pyscf import __config__
@@ -226,7 +226,7 @@ def gen_g_hop_ghf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
     orbo = mo_coeff[:,occidx]
     orbv = mo_coeff[:,viridx]
     if with_symmetry and mol.symmetry:
-        orbsym = scf.ghf_symm.get_orbsym(mol, mo_coeff)
+        orbsym = ghf_symm.get_orbsym(mol, mo_coeff)
         sym_forbid = orbsym[viridx,None] != orbsym[occidx]
 
     if fock_ao is None:
@@ -1017,6 +1017,16 @@ def newton(mf):
 
             def gen_g_hop(self, mo_coeff, mo_occ, fock_ao=None, h1e=None):
                 return gen_g_hop_ghf(self, mo_coeff, mo_occ, fock_ao, h1e)
+
+            def update_rotate_matrix(self, dx, mo_occ, u0=1, mo_coeff=None):
+                dr = hf.unpack_uniq_var(dx, mo_occ)
+
+                if WITH_EX_EY_DEGENERACY:
+                    mol = self._scf.mol
+                    if mol.symmetry and mol.groupname in ('Dooh', 'Coov'):
+                        orbsym = scf.ghf_symm.get_orbsym(mol, mo_coeff)
+                        _force_Ex_Ey_degeneracy_(dr, orbsym)
+                return numpy.dot(u0, expmat(dr))
 
             def rotate_mo(self, mo_coeff, u, log=None):
                 mo = numpy.dot(mo_coeff, u)

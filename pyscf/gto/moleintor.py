@@ -768,9 +768,7 @@ def ascint3(intor_name):
     '''convert cint2 function name to cint3 function name'''
     if intor_name.startswith('cint'):
         intor_name = intor_name[1:]
-    if not (intor_name.endswith('_cart') or
-            intor_name.endswith('_sph') or
-            intor_name.endswith('_spinor')):
+    if not intor_name.endswith(('_sph', '_cart', '_spinor', '_ssc')):
         intor_name = intor_name + '_spinor'
     return intor_name
 

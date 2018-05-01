@@ -100,7 +100,7 @@ def tearDownModule():
     h4_z1_s.stdout.close()
     del h2o_z0, h2o_z1, h2o_z0_s, h2o_z1_s, h4_z0_s, h4_z1_s
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_nr_rhf(self):
         mf = scf.RHF(h2o_z0)
         mf.max_cycle = 1

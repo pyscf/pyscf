@@ -373,16 +373,24 @@ def hermi_triu(mat, hermi=HERMITIAN, inplace=True):
      [ 6.  7.  8.]]
     '''
     assert(hermi == HERMITIAN or hermi == ANTIHERMI)
-    if not mat.flags.c_contiguous:
-        assert(not inplace)
-        mat = mat.copy(order='C')
+    if not inplace:
+        mat = mat.copy('A')
+    if mat.flags.c_contiguous:
+        buf = mat
+    elif mat.flags.f_contiguous:
+        buf = mat.T
+    else:
+        raise NotImplementedError
+
     nd = mat.shape[0]
+    assert(mat.size == nd**2)
+
     if mat.dtype == numpy.double:
         fn = _np_helper.NPdsymm_triu
     else:
         fn = _np_helper.NPzhermi_triu
     fn.restype = ctypes.c_void_p
-    fn(ctypes.c_int(nd), mat.ctypes.data_as(ctypes.c_void_p),
+    fn(ctypes.c_int(nd), buf.ctypes.data_as(ctypes.c_void_p),
        ctypes.c_int(hermi))
     return mat
 
@@ -1015,8 +1023,8 @@ if __name__ == '__main__':
         a[i,i] = a[i,i].real
     b = a-a.T.conj()
     b = numpy.array((b,b))
-    x = hermi_triu(b[0], hermi=2, inplace=0)
-    print(abs(b[0]-x).sum())
+    x = hermi_triu(b[0].T, hermi=2, inplace=0)
+    print(abs(b[0].T-x).sum())
     x = hermi_triu(b[1], hermi=2, inplace=0)
     print(abs(b[1]-x).sum())
     print(abs(x - unpack_tril(pack_tril(x), 2)).sum())

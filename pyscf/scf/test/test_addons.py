@@ -56,7 +56,7 @@ def tearDownModule():
     del mol, mf, mol1, mf_u, mol2, sym_mf, mol3, sym_mf_u
 
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_project_mo_nr2nr(self):
         nao = mol.nao_nr()
         c = numpy.random.random((nao,nao))
@@ -250,11 +250,22 @@ class KnowValues(unittest.TestCase):
         self.assertTrue(isinstance(mf1.convert_from_(mf_u), scf.rhf.RHF))
         self.assertTrue(isinstance(mf1.convert_from_(sym_mf), scf.rhf.RHF))
         self.assertTrue(isinstance(mf1.convert_from_(sym_mf_u), scf.rhf.RHF))
+        self.assertFalse(isinstance(mf1.convert_from_(sym_mf), scf.hf_symm.RHF))
+        self.assertFalse(isinstance(mf1.convert_from_(sym_mf_u), scf.hf_symm.RHF))
         mf1 = copy.copy(mf_u)
         self.assertTrue(isinstance(mf1.convert_from_(mf), scf.uhf.UHF))
         self.assertTrue(isinstance(mf1.convert_from_(mf_u), scf.uhf.UHF))
         self.assertTrue(isinstance(mf1.convert_from_(sym_mf), scf.uhf.UHF))
         self.assertTrue(isinstance(mf1.convert_from_(sym_mf_u), scf.uhf.UHF))
+        self.assertFalse(isinstance(mf1.convert_from_(sym_mf), scf.uhf_symm.UHF))
+        self.assertFalse(isinstance(mf1.convert_from_(sym_mf_u), scf.uhf_symm.UHF))
+        mf1 = scf.GHF(mol)
+        self.assertTrue(isinstance(mf1.convert_from_(mf), scf.ghf.GHF))
+        self.assertTrue(isinstance(mf1.convert_from_(mf_u), scf.ghf.GHF))
+        self.assertTrue(isinstance(mf1.convert_from_(sym_mf), scf.ghf.GHF))
+        self.assertTrue(isinstance(mf1.convert_from_(sym_mf_u), scf.ghf.GHF))
+        self.assertFalse(isinstance(mf1.convert_from_(sym_mf), scf.ghf_symm.GHF))
+        self.assertFalse(isinstance(mf1.convert_from_(sym_mf_u), scf.ghf_symm.GHF))
 
         self.assertTrue(isinstance(addons.convert_to_rhf(scf.RHF(mol).density_fit(), remove_df=False), df_jk._DFHF))
         self.assertTrue(isinstance(addons.convert_to_uhf(scf.RHF(mol).density_fit(), remove_df=False), df_jk._DFHF))

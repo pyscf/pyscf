@@ -2740,9 +2740,8 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
                                  aosym=aosym, out=out)
 
     def _add_suffix(self, intor, cart=None):
-        if not (intor[-4:] == '_sph' or intor[:4] == 'cint' or
-                intor[-7:] == '_spinor' or intor[-5:] =='_cart' or
-                intor[-4:] == '_ssc'):
+        if not (intor[:4] == 'cint' or
+                intor.endswith(('_sph', '_cart', '_spinor', '_ssc'))):
             if cart is None:
                 cart = self.cart
             if cart:

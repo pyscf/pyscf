@@ -28,7 +28,7 @@ def _fpointer(name):
 class VHFOpt(object):
     def __init__(self, mol, intor,
                  prescreen='CVHFnoscreen', qcondname=None, dmcondname=None):
-        intor = ascint3(intor)
+        intor = mol._add_suffix(intor)
         self._this = ctypes.POINTER(_CVHFOpt)()
         #print self._this.contents, expect ValueError: NULL pointer access
         self._intor = intor
@@ -163,13 +163,10 @@ def direct(dms, atm, bas, env, vhfopt=None, hermi=0, cart=False):
     nbas = ctypes.c_int(c_bas.shape[0])
 
     if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
-        n_dm = 1
-        nao = dms.shape[0]
-        dms = (numpy.asarray(dms, order='C'),)
-    else:
-        n_dm = len(dms)
-        nao = dms[0].shape[0]
-        dms = numpy.asarray(dms, order='C')
+        dms = dms[numpy.newaxis,:,:]
+    n_dm = len(dms)
+    nao = dms[0].shape[0]
+    dms = numpy.asarray(dms, order='C')
 
     if vhfopt is None:
         if cart:
@@ -239,13 +236,10 @@ def direct_mapdm(intor, aosym, jkdescript,
     nbas = ctypes.c_int(c_bas.shape[0])
 
     if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
-        n_dm = 1
-        nao = dms.shape[0]
-        dms = (numpy.asarray(dms, order='C'),)
-    else:
-        n_dm = len(dms)
-        nao = dms[0].shape[0]
-        dms = [numpy.asarray(dm, order='C') for dm in dms]
+        dms = dms[numpy.newaxis,:,:]
+    n_dm = len(dms)
+    nao = dms[0].shape[0]
+    dms = [numpy.asarray(dm, order='C') for dm in dms]
     if isinstance(jkdescript, str):
         jkdescripts = (jkdescript,)
     else:
@@ -324,13 +318,10 @@ def direct_bindm(intor, aosym, jkdescript,
     nbas = ctypes.c_int(c_bas.shape[0])
 
     if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
-        n_dm = 1
-        nao = dms.shape[0]
-        dms = (numpy.asarray(dms, order='C'),)
-    else:
-        n_dm = len(dms)
-        nao = dms[0].shape[0]
-        dms = [numpy.asarray(dm, order='C') for dm in dms]
+        dms = dms[numpy.newaxis,:,:]
+    n_dm = len(dms)
+    nao = dms[0].shape[0]
+    dms = [numpy.asarray(dm, order='C') for dm in dms]
     if isinstance(jkdescript, str):
         jkdescripts = (jkdescript,)
     else:
@@ -392,7 +383,7 @@ def direct_bindm(intor, aosym, jkdescript,
 
 
 # 8-fold permutation symmetry
-def int2e_sph(atm, bas, env, cart=False):
+def int2e_sph(atm, bas, env, cart=False):  # pragma: no cover
     if cart:
         intor = 'int2e_cart'
     else:
@@ -415,18 +406,13 @@ def rdirect_mapdm(intor, aosym, jkdescript,
     nbas = ctypes.c_int(c_bas.shape[0])
 
     if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
-        n_dm = 1
-        nao = dms.shape[0]
-        dms = (numpy.asarray(dms, order='C', dtype=numpy.complex128),)
-    else:
-        n_dm = len(dms)
-        nao = dms[0].shape[0]
-        dms = numpy.asarray(dms, order='C', dtype=numpy.complex128)
+        dms = dms[numpy.newaxis,:,:]
+    n_dm = len(dms)
+    nao = dms[0].shape[0]
+    dms = numpy.asarray(dms, order='C', dtype=numpy.complex128)
     if isinstance(jkdescript, str):
-        njk = 1
         jkdescript = (jkdescript,)
-    else:
-        njk = len(jkdescript)
+    njk = len(jkdescript)
 
     if vhfopt is None:
         cintor = _fpointer(intor)
@@ -489,18 +475,13 @@ def rdirect_bindm(intor, aosym, jkdescript,
     nbas = ctypes.c_int(c_bas.shape[0])
 
     if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
-        n_dm = 1
-        nao = dms.shape[0]
-        dms = (numpy.asarray(dms, order='C', dtype=numpy.complex128),)
-    else:
-        n_dm = len(dms)
-        nao = dms[0].shape[0]
-        dms = numpy.asarray(dms, order='C', dtype=numpy.complex128)
+        dms = dms[numpy.newaxis,:,:]
+    n_dm = len(dms)
+    nao = dms[0].shape[0]
+    dms = numpy.asarray(dms, order='C', dtype=numpy.complex128)
     if isinstance(jkdescript, str):
-        njk = 1
         jkdescript = (jkdescript,)
-    else:
-        njk = len(jkdescript)
+    njk = len(jkdescript)
     assert(njk == n_dm)
 
     if vhfopt is None:

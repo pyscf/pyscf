@@ -68,7 +68,7 @@ def tearDownModule():
     n2sym.stdout.close()
     del mol, mf, n2sym, n2mf, mol2, mf2
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_init_guess_minao(self):
         dm1 = mf.init_guess_by_minao(mol, breaksym=False)
         self.assertAlmostEqual(abs(dm1).sum(), 13.649710173723337, 9)

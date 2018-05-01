@@ -31,10 +31,12 @@ from pyscf.scf import ghf
 from pyscf.scf import chkfile
 from pyscf import __config__
 
+WITH_META_LOWDIN = getattr(__config__, 'scf_analyze_with_meta_lowdin', True)
 MO_BASE = getattr(__config__, 'MO_BASE', 1)
 
 
-def analyze(mf, verbose=logger.DEBUG, **kwargs):
+def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
+            **kwargs):
     mol = mf.mol
     if not mol.symmetry:
         return ghf.analyze(mf, verbose, **kwargs)
@@ -67,7 +69,12 @@ def analyze(mf, verbose=logger.DEBUG, **kwargs):
                      mo_occ[k])
 
     dm = mf.make_rdm1(mo_coeff, mo_occ)
-    return mf.mulliken_meta(mol, dm, s=ovlp_ao, verbose=log)
+    dip = mf.dip_moment(mol, dm, verbose=log)
+    if with_meta_lowdin:
+        pop_and_chg = mf.mulliken_meta(mol, dm, s=ovlp_ao, verbose=log)
+    else:
+        pop_and_chg = mf.mulliken_pop(mol, dm, s=ovlp_ao, verbose=log)
+    return pop_and_chg, dip
 
 def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     '''Canonicalization diagonalizes the UHF Fock matrix in occupied, virtual
