@@ -310,7 +310,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                         vj, vk = mf.get_jk(mol, dm1, hermi=hermi)
                         vk *= hyb
                         if abs(omega) > 1e-10:  # For range separated Coulomb
-                            vk += rks._get_k_lr(mol, dm1, omega) * (alpha-hyb)
+                            vk += rks._get_k_lr(mol, dm1, omega, hermi) * (alpha-hyb)
                         v1 += vj - .5 * vk
                     else:
                         v1 -= .5 * hyb * mf.get_k(mol, dm1, hermi=hermi)
@@ -333,7 +333,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                         vj, vk = mf.get_jk(mol, dm1, hermi=hermi)
                         vk *= hyb
                         if abs(omega) > 1e-10:  # For range separated Coulomb
-                            vk += rks._get_k_lr(mol, dm1, omega) * (alpha-hyb)
+                            vk += rks._get_k_lr(mol, dm1, omega, hermi) * (alpha-hyb)
                         v1 += vj - .5 * vk
                     else:
                         v1 -= .5 * hyb * mf.get_k(mol, dm1, hermi=hermi)
@@ -354,7 +354,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                     vk = mf.get_k(mol, dm1, hermi=hermi)
                     vk *= hyb
                     if abs(omega) > 1e-10:  # For range separated Coulomb
-                        vk += rks._get_k_lr(mol, dm1, omega) * (alpha-hyb)
+                        vk += rks._get_k_lr(mol, dm1, omega, hermi) * (alpha-hyb)
                     v1 += -.5 * vk
                 return v1
 
@@ -411,13 +411,13 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
                     vj, vk = mf.get_jk(mol, dm1, hermi=hermi)
                     vk *= hyb
                     if abs(omega) > 1e-10:  # For range separated Coulomb
-                        vk += rks._get_k_lr(mol, dm1, omega) * (alpha-hyb)
+                        vk += rks._get_k_lr(mol, dm1, omega, hermi) * (alpha-hyb)
                     v1 += vj[0] + vj[1] - vk
                 else:
                     vk = mf.get_k(mol, dm1, hermi=hermi)
                     vk *= hyb
                     if abs(omega) > 1e-10:  # For range separated Coulomb
-                        vk += rks._get_k_lr(mol, dm1, omega) * (alpha-hyb)
+                        vk += rks._get_k_lr(mol, dm1, omega, hermi) * (alpha-hyb)
                     v1 -= vk
             return v1
 
@@ -751,135 +751,124 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
 #    return density_fit_(copy.copy(mf), auxbasis)
 
 
-def newton_SCF_class(mf):
-    '''Generate the CIAH base class
+# A tag to label the derived SCF class
+class _CIAH_SOSCF(hf.SCF):
     '''
-    assert(isinstance(mf, hf.SCF))
+    Attributes for Newton solver:
+        max_cycle_inner : int
+            AH iterations within eacy macro iterations. Default is 10
+        max_stepsize : int
+            The step size for orbital rotation.  Small step is prefered.  Default is 0.05.
+        canonicalization : bool
+            To control whether to canonicalize the orbitals optimized by
+            Newton solver.  Default is True.
+    '''
 
-    if mf.__class__.__doc__ is None:
-        doc = ''
-    else:
-        doc = mf.__class__.__doc__
-    class CIAH_SOSCF(mf.__class__, _CIAH_SOSCF):
-        __doc__ = doc + \
-        '''
-        Attributes for Newton solver:
-            max_cycle_inner : int
-                AH iterations within eacy macro iterations. Default is 10
-            max_stepsize : int
-                The step size for orbital rotation.  Small step is prefered.  Default is 0.05.
-            canonicalization : bool
-                To control whether to canonicalize the orbitals optimized by
-                Newton solver.  Default is True.
-        '''
+    max_cycle_inner = getattr(__config__, 'soscf_newton_ah_SOSCF_max_cycle_inner', 12)
+    max_stepsize = getattr(__config__, 'soscf_newton_ah_SOSCF_max_stepsize', .05)
+    canonicalization = getattr(__config__, 'soscf_newton_ah_SOSCF_canonicalization', True)
 
-        max_cycle_inner = getattr(__config__, 'soscf_newton_ah_SOSCF_max_cycle_inner', 12)
-        max_stepsize = getattr(__config__, 'soscf_newton_ah_SOSCF_max_stepsize', .05)
-        canonicalization = getattr(__config__, 'soscf_newton_ah_SOSCF_canonicalization', True)
+    ah_start_tol = getattr(__config__, 'soscf_newton_ah_SOSCF_ah_start_tol', 1e9)
+    ah_start_cycle = getattr(__config__, 'soscf_newton_ah_SOSCF_ah_start_cycle', 1)
+    ah_level_shift = getattr(__config__, 'soscf_newton_ah_SOSCF_ah_level_shift', 0)
+    ah_conv_tol = getattr(__config__, 'soscf_newton_ah_SOSCF_ah_conv_tol', 1e-12)
+    ah_lindep = getattr(__config__, 'soscf_newton_ah_SOSCF_ah_lindep', 1e-14)
+    ah_max_cycle = getattr(__config__, 'soscf_newton_ah_SOSCF_ah_max_cycle', 40)
+    ah_grad_trust_region = getattr(__config__, 'soscf_newton_ah_SOSCF_ah_grad_trust_region', 2.5)
+    kf_interval = getattr(__config__, 'soscf_newton_ah_SOSCF_kf_interval', 4)
+    kf_trust_region = getattr(__config__, 'soscf_newton_ah_SOSCF_kf_trust_region', 5)
 
-        ah_start_tol = getattr(__config__, 'soscf_newton_ah_SOSCF_ah_start_tol', 1e9)
-        ah_start_cycle = getattr(__config__, 'soscf_newton_ah_SOSCF_ah_start_cycle', 1)
-        ah_level_shift = getattr(__config__, 'soscf_newton_ah_SOSCF_ah_level_shift', 0)
-        ah_conv_tol = getattr(__config__, 'soscf_newton_ah_SOSCF_ah_conv_tol', 1e-12)
-        ah_lindep = getattr(__config__, 'soscf_newton_ah_SOSCF_ah_lindep', 1e-14)
-        ah_max_cycle = getattr(__config__, 'soscf_newton_ah_SOSCF_ah_max_cycle', 40)
-        ah_grad_trust_region = getattr(__config__, 'soscf_newton_ah_SOSCF_ah_grad_trust_region', 2.5)
-        kf_interval = getattr(__config__, 'soscf_newton_ah_SOSCF_kf_interval', 4)
-        kf_trust_region = getattr(__config__, 'soscf_newton_ah_SOSCF_kf_trust_region', 5)
+    def __init__(self, mf):
+        self.__dict__.update(mf.__dict__)
+        self._scf = mf
+        self._keys.update(('max_cycle_inner', 'max_stepsize',
+                           'canonicalization', 'ah_start_tol', 'ah_start_cycle',
+                           'ah_level_shift', 'ah_conv_tol', 'ah_lindep',
+                           'ah_max_cycle', 'ah_grad_trust_region', 'kf_interval',
+                           'kf_trust_region'))
 
-        def __init__(self, mf):
-# Note self.mol can be different to self._scf.mol.  Projected hessian is used
-# in this case.
-            self.__dict__.update(mf.__dict__)
-            self._scf = mf
-            keys = set(('_scf', 'max_cycle_inner', 'max_stepsize',
-                        'canonicalization', 'ah_start_tol', 'ah_start_cycle',
-                        'ah_level_shift', 'ah_conv_tol', 'ah_lindep',
-                        'ah_max_cycle', 'ah_grad_trust_region', 'kf_interval',
-                        'kf_trust_region'))
-            self._keys = mf._keys.union(keys)
+    def dump_flags(self):
+        log = logger.Logger(self.stdout, self.verbose)
+        log.info('\n')
+        self._scf.dump_flags()
+        log.info('******** %s Newton solver flags ********', self._scf.__class__)
+        log.info('SCF tol = %g', self.conv_tol)
+        log.info('conv_tol_grad = %s',    self.conv_tol_grad)
+        log.info('max. SCF cycles = %d', self.max_cycle)
+        log.info('direct_scf = %s', self._scf.direct_scf)
+        if self._scf.direct_scf:
+            log.info('direct_scf_tol = %g', self._scf.direct_scf_tol)
+        if self.chkfile:
+            log.info('chkfile to save SCF result = %s', self.chkfile)
+        log.info('max_cycle_inner = %d',  self.max_cycle_inner)
+        log.info('max_stepsize = %g', self.max_stepsize)
+        log.info('ah_start_tol = %g',     self.ah_start_tol)
+        log.info('ah_level_shift = %g',   self.ah_level_shift)
+        log.info('ah_conv_tol = %g',      self.ah_conv_tol)
+        log.info('ah_lindep = %g',        self.ah_lindep)
+        log.info('ah_start_cycle = %d',   self.ah_start_cycle)
+        log.info('ah_max_cycle = %d',     self.ah_max_cycle)
+        log.info('ah_grad_trust_region = %g', self.ah_grad_trust_region)
+        log.info('kf_interval = %d', self.kf_interval)
+        log.info('kf_trust_region = %d', self.kf_trust_region)
+        log.info('canonicalization = %s', self.canonicalization)
+        log.info('max_memory %d MB (current use %d MB)',
+                 self.max_memory, lib.current_memory()[0])
+        return self
 
-        def dump_flags(self):
-            log = logger.Logger(self.stdout, self.verbose)
-            log.info('\n')
-            self._scf.dump_flags()
-            log.info('******** %s Newton solver flags ********', self._scf.__class__)
-            log.info('SCF tol = %g', self.conv_tol)
-            log.info('conv_tol_grad = %s',    self.conv_tol_grad)
-            log.info('max. SCF cycles = %d', self.max_cycle)
-            log.info('direct_scf = %s', self._scf.direct_scf)
-            if self._scf.direct_scf:
-                log.info('direct_scf_tol = %g', self._scf.direct_scf_tol)
-            if self.chkfile:
-                log.info('chkfile to save SCF result = %s', self.chkfile)
-            log.info('max_cycle_inner = %d',  self.max_cycle_inner)
-            log.info('max_stepsize = %g', self.max_stepsize)
-            log.info('ah_start_tol = %g',     self.ah_start_tol)
-            log.info('ah_level_shift = %g',   self.ah_level_shift)
-            log.info('ah_conv_tol = %g',      self.ah_conv_tol)
-            log.info('ah_lindep = %g',        self.ah_lindep)
-            log.info('ah_start_cycle = %d',   self.ah_start_cycle)
-            log.info('ah_max_cycle = %d',     self.ah_max_cycle)
-            log.info('ah_grad_trust_region = %g', self.ah_grad_trust_region)
-            log.info('kf_interval = %d', self.kf_interval)
-            log.info('kf_trust_region = %d', self.kf_trust_region)
-            log.info('canonicalization = %s', self.canonicalization)
-            log.info('max_memory %d MB (current use %d MB)',
-                     self.max_memory, lib.current_memory()[0])
-            return self
+    def build(self, mol=None):
+        if mol is None: mol = self.mol
+        if self.verbose >= logger.WARN:
+            self.check_sanity()
+        if hasattr(self, '_scf') and id(self._scf.mol) != id(mol):
+            self.opt = self.init_direct_scf(mol)
+            self._eri = None
+        self._scf.build(mol)
 
-        def build(self, mol=None):
-            if mol is None: mol = self.mol
-            if self.verbose >= logger.WARN:
-                self.check_sanity()
-            if hasattr(self, '_scf') and id(self._scf.mol) != id(mol):
-                self.opt = self.init_direct_scf(mol)
-                self._eri = None
-
-        def kernel(self, mo_coeff=None, mo_occ=None, dm0=None):
-            cput0 = (time.clock(), time.time())
-            if dm0 is not None:
-                mo_coeff, mo_occ = self.from_dm(dm0)
-            elif mo_coeff is not None and mo_occ is None:
-                logger.warn(self, 'Newton solver expects mo_coeff with '
-                            'mo_occ as initial guess but the given initial '
-                            'guess does not have mo_occ.\n      The given '
-                            'argument is treated as density matrix.')
-                dm = mo_coeff
+    def kernel(self, mo_coeff=None, mo_occ=None, dm0=None):
+        cput0 = (time.clock(), time.time())
+        if dm0 is not None:
+            mo_coeff, mo_occ = self.from_dm(dm0)
+        elif mo_coeff is not None and mo_occ is None:
+            logger.warn(self, 'Newton solver expects mo_coeff with '
+                        'mo_occ as initial guess but the given initial '
+                        'guess does not have mo_occ.\n      The given '
+                        'argument is treated as density matrix.')
+            dm = mo_coeff
+            mo_coeff, mo_occ = self.from_dm(dm)
+        else:
+            if mo_coeff is None: mo_coeff = self.mo_coeff
+            if mo_occ is None: mo_occ = self.mo_occ
+            if mo_coeff is None or mo_occ is None:
+                logger.debug(self, 'Initial guess orbitals not given. '
+                             'Generating initial guess from %s density matrix',
+                             self.init_guess)
+                dm = self.get_init_guess(self.mol, self.init_guess)
                 mo_coeff, mo_occ = self.from_dm(dm)
-            else:
-                if mo_coeff is None: mo_coeff = self.mo_coeff
-                if mo_occ is None: mo_occ = self.mo_occ
-                if mo_coeff is None or mo_occ is None:
-                    logger.debug(self, 'Initial guess orbitals not given. '
-                                 'Generating initial guess from %s density matrix',
-                                 self.init_guess)
-                    dm = self.get_init_guess(self.mol, self.init_guess)
-                    mo_coeff, mo_occ = self.from_dm(dm)
 
-            self.build(self.mol)
-            self.dump_flags()
+        self.build(self.mol)
+        self.dump_flags()
 
-            # save initial guess because some methods may need them
-            self.mo_coeff = mo_coeff
-            self.mo_occ = mo_occ
+        # save initial guess because some methods may need them
+        self.mo_coeff = mo_coeff
+        self.mo_occ = mo_occ
 
-            self.converged, self.e_tot, \
-                    self.mo_energy, self.mo_coeff, self.mo_occ = \
-                    kernel(self, mo_coeff, mo_occ, conv_tol=self.conv_tol,
-                           conv_tol_grad=self.conv_tol_grad,
-                           max_cycle=self.max_cycle,
-                           callback=self.callback, verbose=self.verbose)
+        self.converged, self.e_tot, \
+                self.mo_energy, self.mo_coeff, self.mo_occ = \
+                kernel(self, mo_coeff, mo_occ, conv_tol=self.conv_tol,
+                       conv_tol_grad=self.conv_tol_grad,
+                       max_cycle=self.max_cycle,
+                       callback=self.callback, verbose=self.verbose)
 
-            logger.timer(self, 'Second order SCF', *cput0)
-            self._finalize()
-            return self.e_tot
+        logger.timer(self, 'Second order SCF', *cput0)
+        self._finalize()
+        return self.e_tot
 
-        def from_dm(self, dm):
-            '''Transform density matrix to the initial guess'''
-            if isinstance(dm, str):
-                sys.stderr.write('Newton solver reads density matrix from chkfile %s\n' % dm)
-                dm = self.from_chk(dm, True)
+    def from_dm(self, dm):
+        '''Transform density matrix to the initial guess'''
+        if isinstance(dm, str):
+            sys.stderr.write('Newton solver reads density matrix from chkfile %s\n' % dm)
+            dm = self.from_chk(dm, True)
 
 # * If possible, prefer the methods of SOSCF object to evaluate the Fock
 #   matrix and diagonalize Fock matrix. This is because the addons or settings
@@ -889,43 +878,39 @@ def newton_SCF_class(mf):
 # * If self.mol and self._scf.mol are different, SOSCF was approximated by a
 #   different mol object. The underlying self._scf has to be used to get right
 #   dimension for the initial guess.
-            if self.mol is self._scf.mol:
-                mf = self
-            else:
-                mf = self._scf
+        if self.mol is self._scf.mol:
+            mf = self
+        else:
+            mf = self._scf
 
-            mol = mf.mol
-            h1e = mf.get_hcore(mol)
-            s1e = mf.get_ovlp(mol)
-            vhf = mf.get_veff(mol, dm)
-            fock = mf.get_fock(h1e, s1e, vhf, dm)
-            mo_energy, mo_coeff = mf.eig(fock, s1e)
-            mo_occ = mf.get_occ(mo_energy, mo_coeff)
-            return mo_coeff, mo_occ
+        mol = mf.mol
+        h1e = mf.get_hcore(mol)
+        s1e = mf.get_ovlp(mol)
+        vhf = mf.get_veff(mol, dm)
+        fock = mf.get_fock(h1e, s1e, vhf, dm)
+        mo_energy, mo_coeff = mf.eig(fock, s1e)
+        mo_occ = mf.get_occ(mo_energy, mo_coeff)
+        return mo_coeff, mo_occ
 
-        gen_g_hop = gen_g_hop_rhf
+    gen_g_hop = gen_g_hop_rhf
 
-        def update_rotate_matrix(self, dx, mo_occ, u0=1, mo_coeff=None):
-            dr = hf.unpack_uniq_var(dx, mo_occ)
+    def update_rotate_matrix(self, dx, mo_occ, u0=1, mo_coeff=None):
+        dr = hf.unpack_uniq_var(dx, mo_occ)
 
-            if WITH_EX_EY_DEGENERACY:
-                mol = self._scf.mol
-                if mol.symmetry and mol.groupname in ('Dooh', 'Coov'):
-                    orbsym = hf_symm.get_orbsym(mol, mo_coeff)
-                    _force_Ex_Ey_degeneracy_(dr, orbsym)
-            return numpy.dot(u0, expmat(dr))
+        if WITH_EX_EY_DEGENERACY:
+            mol = self._scf.mol
+            if mol.symmetry and mol.groupname in ('Dooh', 'Coov'):
+                orbsym = hf_symm.get_orbsym(mol, mo_coeff)
+                _force_Ex_Ey_degeneracy_(dr, orbsym)
+        return numpy.dot(u0, expmat(dr))
 
-        def rotate_mo(self, mo_coeff, u, log=None):
-            mo = numpy.dot(mo_coeff, u)
-            if self._scf.mol.symmetry:
-                orbsym = hf_symm.get_orbsym(self._scf.mol, mo_coeff)
-                mo = lib.tag_array(mo, orbsym=orbsym)
-            return mo
-    return CIAH_SOSCF
+    def rotate_mo(self, mo_coeff, u, log=None):
+        mo = numpy.dot(mo_coeff, u)
+        if self._scf.mol.symmetry:
+            orbsym = hf_symm.get_orbsym(self._scf.mol, mo_coeff)
+            mo = lib.tag_array(mo, orbsym=orbsym)
+        return mo
 
-# A tag to label the derived SCF class
-class _CIAH_SOSCF:
-    pass
 
 def newton(mf):
     '''Co-iterative augmented hessian (CIAH) second order SCF solver
@@ -943,13 +928,21 @@ def newton(mf):
     if isinstance(mf, _CIAH_SOSCF):
         return mf
 
-    CIAH_SOSCF = newton_SCF_class(mf)
-    class SecondOrderRHF(CIAH_SOSCF):
+    assert(isinstance(mf, hf.SCF))
+    if mf.__doc__ is None:
+        mf_doc = ''
+    else:
+        mf_doc = mf.__doc__
+
+    class SecondOrderRHF(mf.__class__, _CIAH_SOSCF):
+        __doc__ = mf_doc + _CIAH_SOSCF.__doc__
+        __init__ = _CIAH_SOSCF.__init__
+
         def gen_g_hop(self, mo_coeff, mo_occ, fock_ao=None, h1e=None):
             return gen_g_hop_rhf(self, mo_coeff, mo_occ, fock_ao, h1e)
 
         def rotate_mo(self, mo_coeff, u, log=None):
-            mo = CIAH_SOSCF.rotate_mo(self, mo_coeff, u, log)
+            mo = _CIAH_SOSCF.rotate_mo(self, mo_coeff, u, log)
             if log is not None and log.verbose >= logger.DEBUG:
                 idx = self.mo_occ > 0
                 s = reduce(numpy.dot, (mo[:,idx].T, self._scf.get_ovlp(),
@@ -967,7 +960,10 @@ def newton(mf):
         return SecondOrderROHF(mf)
 
     elif isinstance(mf, uhf.UHF):
-        class SecondOrderUHF(CIAH_SOSCF):
+        class SecondOrderUHF(mf.__class__, _CIAH_SOSCF):
+            __doc__ = mf_doc + _CIAH_SOSCF.__doc__
+            __init__ = _CIAH_SOSCF.__init__
+
             def gen_g_hop(self, mo_coeff, mo_occ, fock_ao=None, h1e=None):
                 return gen_g_hop_uhf(self, mo_coeff, mo_occ, fock_ao, h1e)
 
@@ -1015,7 +1011,10 @@ def newton(mf):
         return SecondOrderUHF(mf)
 
     elif isinstance(mf, scf.ghf.GHF):
-        class SecondOrderGHF(CIAH_SOSCF):
+        class SecondOrderGHF(mf.__class__, _CIAH_SOSCF):
+            __doc__ = mf_doc + _CIAH_SOSCF.__doc__
+            __init__ = _CIAH_SOSCF.__init__
+
             def gen_g_hop(self, mo_coeff, mo_occ, fock_ao=None, h1e=None):
                 return gen_g_hop_ghf(self, mo_coeff, mo_occ, fock_ao, h1e)
 
