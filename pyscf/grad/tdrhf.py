@@ -179,7 +179,7 @@ def as_scanner(td_grad, state=1):
     class TDSCF_GradScanner(td_grad.__class__, lib.GradScanner):
         def __init__(self, g):
             lib.GradScanner.__init__(self, g)
-            self._keys.update(['e_tot'])
+            self._keys = self._keys.union(['e_tot'])
         def __call__(self, mol_or_geom, state=state, **kwargs):
             if isinstance(mol_or_geom, gto.Mole):
                 mol = mol_or_geom

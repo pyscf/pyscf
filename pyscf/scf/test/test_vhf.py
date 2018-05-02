@@ -44,7 +44,7 @@ def tearDownModule():
     del mol, mf
 
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_incore_s4(self):
         eri4 = ao2mo.restore(4, mf._eri, nmo)
         dm = mf.make_rdm1()
@@ -65,6 +65,24 @@ class KnowValues(unittest.TestCase):
         self.assertTrue(numpy.allclose(vj0,vj1))
         self.assertTrue(numpy.allclose(vk0,vk1))
 
+    def test_direct_mapdm1(self):
+        numpy.random.seed(1)
+        nao = mol.nao_nr(cart=True)
+        dm = numpy.random.random((nao,nao))
+        vhfopt = _vhf.VHFOpt(mol, 'int2e_cart', 'CVHFnrs8_prescreen',
+                             'CVHFsetnr_direct_scf',
+                             'CVHFsetnr_direct_scf_dm')
+        vj0, vk0 = _vhf.direct(dm, mol._atm, mol._bas, mol._env,
+                               vhfopt=vhfopt, hermi=0, cart=True)
+        vj = _vhf.direct_mapdm('int2e_cart', 's1', 'kl->s1ij', dm, 1,
+                               mol._atm, mol._bas, mol._env, vhfopt)
+        self.assertTrue(numpy.allclose(vj0, vj))
+
+        vk = _vhf.direct_mapdm('int2e_cart', 's1', 'jk->s1il', [dm]*2, 1,
+                               mol._atm, mol._bas, mol._env, vhfopt)
+        self.assertTrue(numpy.allclose(vk0, vk[0]))
+        self.assertTrue(numpy.allclose(vk0, vk[1]))
+
     def test_direct_bindm(self):
         numpy.random.seed(1)
         dm = numpy.random.random((nao,nao))
@@ -78,11 +96,24 @@ class KnowValues(unittest.TestCase):
         self.assertTrue(numpy.allclose(vj0,vj1))
         self.assertTrue(numpy.allclose(vk0,vk1))
 
+    def test_direct_bindm1(self):
+        numpy.random.seed(1)
+        nao = mol.nao_nr(cart=True)
+        dm = numpy.random.random((nao,nao))
+        vhfopt = _vhf.VHFOpt(mol, 'int2e_cart', 'CVHFnrs8_prescreen',
+                             'CVHFsetnr_direct_scf',
+                             'CVHFsetnr_direct_scf_dm')
+        vj0, vk0 = _vhf.direct(dm, mol._atm, mol._bas, mol._env,
+                               vhfopt=vhfopt, hermi=0, cart=True)
+        vj = _vhf.direct_bindm('int2e_cart', 's1', 'kl->s1ij', dm, 1,
+                               mol._atm, mol._bas, mol._env, vhfopt)
+        self.assertTrue(numpy.allclose(vj0,vj))
+
     def test_rdirect_mapdm(self):
         numpy.random.seed(1)
         n2c = nao*2
-        dm = numpy.random.random((n2c,n2c)) + \
-             numpy.random.random((n2c,n2c)) * 1j
+        dm = (numpy.random.random((n2c,n2c)) +
+              numpy.random.random((n2c,n2c)) * 1j)
         eri0 = mol.intor('int2e_g1_spinor', comp=3).reshape(3,n2c,n2c,n2c,n2c)
         vk0 = numpy.einsum('nijkl,jk->nil', eri0, dm)
         vj1, vk1 = _vhf.rdirect_mapdm('int2e_g1_spinor', 'a4ij',
@@ -90,16 +121,29 @@ class KnowValues(unittest.TestCase):
                                       dm, 3, mol._atm, mol._bas, mol._env)
         self.assertTrue(numpy.allclose(vk0,vk1))
 
-    def test_rdirect_bindm_high_cost(self):
+    def test_rdirect_bindm(self):
         n2c = nao*2
-        mfr = scf.DHF(mol)
-        mfr.scf()
-        dm = mfr.make_rdm1()[:n2c,:n2c].copy()
+        dm = (numpy.random.random((n2c,n2c)) +
+              numpy.random.random((n2c,n2c)) * 1j)
+        dm = dm + dm.conj().T
 
         eri0 = mol.intor('int2e_spsp1_spinor').reshape(n2c,n2c,n2c,n2c)
         vk0 = numpy.einsum('ijkl,jk->il', eri0, dm)
         vk1 = _vhf.rdirect_bindm('int2e_spsp1_spinor', 's4', ('jk->s1il',),
                                  (dm,), 1, mol._atm, mol._bas, mol._env)
+        self.assertTrue(numpy.allclose(vk0,vk1))
+
+        opt_ssll = _vhf.VHFOpt(mol, 'int2e_spsp1_spinor',
+                               'CVHFrkbssll_prescreen',
+                               'CVHFrkbssll_direct_scf',
+                               'CVHFrkbssll_direct_scf_dm')
+        opt_ssll._this.contents.r_vkscreen = _vhf._fpointer('CVHFrkbssll_vkscreen')
+        vk1 = _vhf.rdirect_bindm('int2e_spsp1_spinor', 's4', 'jk->s1il',
+                                 dm, 1, mol._atm, mol._bas, mol._env, opt_ssll)
+        print vk0[:2,:2]
+        print vk1[:2,:2]
+        print abs(vk1).max()
+        print abs(vk0-vk1).max()
         self.assertTrue(numpy.allclose(vk0,vk1))
 
 

@@ -478,22 +478,24 @@ def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
         dm = numpy.array((dm*.5, dm*.5))
     pop_a = numpy.einsum('ij,ji->i', dm[0], s).real
     pop_b = numpy.einsum('ij,ji->i', dm[1], s).real
-    label = mol.ao_labels(fmt=None)
 
     log.info(' ** Mulliken pop       alpha | beta **')
-    for i, s in enumerate(label):
+    for i, s in enumerate(mol.ao_labels()):
         log.info('pop of  %s %10.5f | %-10.5f',
-                 '%d%s %s%4s'%s, pop_a[i], pop_b[i])
+                 s, pop_a[i], pop_b[i])
     log.info('In total          %10.5f | %-10.5f', sum(pop_a), sum(pop_b))
 
-    log.note(' ** Mulliken atomic charges  **')
-    chg = numpy.zeros(mol.natm)
-    for i, s in enumerate(label):
-        chg[s[0]] += pop_a[i] + pop_b[i]
+    log.note(' ** Mulliken atomic charges   ( Nelec_alpha | Nelec_beta ) **')
+    nelec_a = numpy.zeros(mol.natm)
+    nelec_b = numpy.zeros(mol.natm)
+    for i, s in enumerate(mol.ao_labels(fmt=None)):
+        nelec_a[s[0]] += pop_a[i]
+        nelec_b[s[0]] += pop_b[i]
+    chg = mol.atom_charges() - (nelec_a + nelec_b)
     for ia in range(mol.natm):
         symb = mol.atom_symbol(ia)
-        chg[ia] = mol.atom_charge(ia) - chg[ia]
-        log.note('charge of  %d%s =   %10.5f', ia, symb, chg[ia])
+        log.note('charge of  %d%s =   %10.5f  (  %10.5f   %10.5f )',
+                 ia, symb, chg[ia], nelec_a[ia], nelec_b[ia])
     return (pop_a,pop_b), chg
 
 def mulliken_meta(mol, dm_ao, verbose=logger.DEBUG,
