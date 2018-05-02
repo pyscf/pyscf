@@ -121,29 +121,33 @@ class KnownValues(unittest.TestCase):
                                       dm, 3, mol._atm, mol._bas, mol._env)
         self.assertTrue(numpy.allclose(vk0,vk1))
 
+        vj1 = _vhf.rdirect_mapdm('int2e_g1_spinor', 's1', 'lk->s1ij',
+                                 dm, 3, mol._atm, mol._bas, mol._env)
+        vj0 = numpy.einsum('nijkl,lk->nij', eri0, dm)
+        self.assertTrue(numpy.allclose(vj0,vj1))
+
     def test_rdirect_bindm(self):
         n2c = nao*2
+        numpy.random.seed(1)
         dm = (numpy.random.random((n2c,n2c)) +
               numpy.random.random((n2c,n2c)) * 1j)
         dm = dm + dm.conj().T
 
         eri0 = mol.intor('int2e_spsp1_spinor').reshape(n2c,n2c,n2c,n2c)
         vk0 = numpy.einsum('ijkl,jk->il', eri0, dm)
-        vk1 = _vhf.rdirect_bindm('int2e_spsp1_spinor', 's4', ('jk->s1il',),
-                                 (dm,), 1, mol._atm, mol._bas, mol._env)
+        vk1 = _vhf.rdirect_bindm('int2e_spsp1_spinor', 's4', 'jk->s1il',
+                                 dm, 1, mol._atm, mol._bas, mol._env)
         self.assertTrue(numpy.allclose(vk0,vk1))
 
-        opt_ssll = _vhf.VHFOpt(mol, 'int2e_spsp1_spinor',
-                               'CVHFrkbssll_prescreen',
-                               'CVHFrkbssll_direct_scf',
-                               'CVHFrkbssll_direct_scf_dm')
-        opt_ssll._this.contents.r_vkscreen = _vhf._fpointer('CVHFrkbssll_vkscreen')
-        vk1 = _vhf.rdirect_bindm('int2e_spsp1_spinor', 's4', 'jk->s1il',
-                                 dm, 1, mol._atm, mol._bas, mol._env, opt_ssll)
-        print vk0[:2,:2]
-        print vk1[:2,:2]
-        print abs(vk1).max()
-        print abs(vk0-vk1).max()
+        opt_llll = _vhf.VHFOpt(mol, 'int2e_spinor',
+                               'CVHFrkbllll_prescreen',
+                               'CVHFrkbllll_direct_scf',
+                               'CVHFrkbllll_direct_scf_dm')
+        opt_llll._this.contents.r_vkscreen = _vhf._fpointer('CVHFrkbllll_vkscreen')
+        eri0 = mol.intor('int2e_spinor').reshape(n2c,n2c,n2c,n2c)
+        vk0 = numpy.einsum('ijkl,jk->il', eri0, dm)
+        vk1 = _vhf.rdirect_bindm('int2e_spinor', 's1', 'jk->s1il',
+                                 dm, 1, mol._atm, mol._bas, mol._env, opt_llll)
         self.assertTrue(numpy.allclose(vk0,vk1))
 
 

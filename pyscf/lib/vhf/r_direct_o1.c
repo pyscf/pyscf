@@ -98,7 +98,7 @@ void CVHFdot_rs1(int (*intor)(), void (**fjk)(),
         int idm, ksh, lsh, dk, dl, dijkl;
         int shls[4];
         double complex *pv;
-        double *dms_cond[n_dm];
+        double *dms_cond[n_dm+1];
         double dm_atleast;
         void (*pf)();
 
@@ -148,7 +148,7 @@ static void dot_rs2sub(int (*intor)(), void (**fjk)(),
         int idm, ksh, lsh, dk, dl, dijkl;
         int shls[4];
         double complex *pv;
-        double *dms_cond[n_dm];
+        double *dms_cond[n_dm+1];
         double dm_atleast;
         void (*pf)();
 
@@ -227,7 +227,7 @@ void CVHFdot_rs8(int (*intor)(), void (**fjk)(),
         int idm, ksh, lsh, dk, dl, dijkl;
         int shls[4];
         double complex *pv;
-        double *dms_cond[n_dm];
+        double *dms_cond[n_dm+1];
         double dm_atleast;
         void (*pf)();
 
