@@ -638,7 +638,7 @@ Density fitting
 Customizing Hamiltonian
 -----------------------
 
-.. literalinclude:: ../../examples/scf/40-hf_with_given_hamiltonian.py
+.. literalinclude:: ../../examples/scf/40-customizing_hamiltonian.py
 
 Symmetry in CASSCF
 ------------------
