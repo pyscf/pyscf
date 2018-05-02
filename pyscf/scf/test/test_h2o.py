@@ -398,7 +398,7 @@ class KnownValues(unittest.TestCase):
     def test_fast_newton(self):
         nao = mol.nao_nr()
         dm0 = numpy.zeros((nao,nao))
-        mf = scf.fast_newton(scf.RHF(mol), dm0=dm0, projectbasis=True,
+        mf = scf.fast_newton(scf.RHF(mol), dm0=dm0, dual_basis=True,
                              kf_trust_region=3.)
         self.assertAlmostEqual(mf.e_tot, -75.983948497843272, 9)
 

@@ -202,7 +202,7 @@ def newton(mf):
     return newton_ah.newton(mf)
 
 def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None,
-                auxbasis=None, projectbasis=None, **newton_kwargs):
+                auxbasis=None, dual_basis=None, **newton_kwargs):
     '''This is a wrap function which combines several operations. This
     function first setup the initial guess
     from density fitting calculation then use  for
@@ -216,11 +216,9 @@ def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None,
     from pyscf.soscf import newton_ah
     if auxbasis is None:
         auxbasis = df.addons.aug_etb_for_dfbasis(mf.mol, 'ahlrichs', beta=2.5)
-    if projectbasis:
-        logger.warn(mf, '"projectbasis" of fast_newton is an experimental feature. '
-                    'It may be changed in the future release.')
+    if dual_basis:
         mf1 = newton(mf)
-        pmol = mf1.mol = newton_ah.project_mol(mf.mol, projectbasis)
+        pmol = mf1.mol = newton_ah.project_mol(mf.mol, dual_basis)
         mf1 = density_fit(mf1, auxbasis)
     else:
         mf1 = density_fit(newton(mf), auxbasis)
@@ -247,7 +245,7 @@ def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None,
         logger.note(mf, '========================================================')
         logger.note(mf, 'Generating initial guess with DIIS-SCF for newton solver')
         logger.note(mf, '========================================================')
-        if projectbasis:
+        if dual_basis:
             mf0 = copy.copy(mf)
             mf0.mol = pmol
             mf0 = density_fit(mf0, auxbasis)
@@ -271,7 +269,7 @@ def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None,
         mf1.with_df = mf0.with_df
         mo_coeff, mo_occ = mf0.mo_coeff, mf0.mo_occ
 
-        if projectbasis:
+        if dual_basis:
             if mo_occ.ndim == 2:
                 mo_coeff =(project_mo_nr2nr(pmol, mo_coeff[0], mf.mol),
                            project_mo_nr2nr(pmol, mo_coeff[1], mf.mol))

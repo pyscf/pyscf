@@ -48,7 +48,14 @@ def expmat(a):
 # the stability analysis can break the point group symmetry.
 def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
                   with_symmetry=True):
+    mo_coeff0 = mo_coeff
     mol = mf.mol
+    if hasattr(mf, '_scf') and mf._scf.mol != mol:
+        #TODO: construct vind with dual-basis treatment, (see also JCP, 118, 9497)
+        # To project Hessians from another basis if different basis sets are used
+        # in newton solver and underlying mean-filed solver.
+        mo_coeff = addons.project_mo_nr2nr(mf._scf.mol, mo_coeff, mol)
+
     occidx = numpy.where(mo_occ==2)[0]
     viridx = numpy.where(mo_occ==0)[0]
     nocc = len(occidx)
@@ -63,7 +70,11 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
         if h1e is None: h1e = mf.get_hcore()
         dm0 = mf.make_rdm1(mo_coeff, mo_occ)
         fock_ao = h1e + mf.get_veff(mol, dm0)
-    fock = reduce(numpy.dot, (mo_coeff.T, fock_ao, mo_coeff))
+        fock = reduce(numpy.dot, (mo_coeff.T, fock_ao, mo_coeff))
+    else:
+        # If fock is given, it corresponds to main basis. It needs to be
+        # diagonalized with the mo_coeff of the main basis.
+        fock = reduce(numpy.dot, (mo_coeff0.T, fock_ao, mo_coeff0))
 
     g = fock[viridx[:,None],occidx] * 2
 
@@ -75,12 +86,6 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
     if with_symmetry and mol.symmetry:
         g[sym_forbid] = 0
         h_diag[sym_forbid] = 0
-
-    # To project Hessians from another basis if different basis sets are used
-    # in newton solver and underlying mean-filed solver.
-    if hasattr(mf, '_scf') and id(mf._scf.mol) != id(mol):
-        mo_coeff = addons.project_mo_nr2nr(mf._scf.mol, mo_coeff, mol)
-
     vind = _gen_rhf_response(mf, mo_coeff, mo_occ, singlet=None, hermi=1)
 
     def h_op(x):
@@ -146,7 +151,9 @@ def gen_g_hop_rohf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
 def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
                   with_symmetry=True):
     mol = mf.mol
-    if hasattr(mf, '_scf') and id(mf._scf.mol) != id(mol):
+    mo_coeff0 = mo_coeff
+    if hasattr(mf, '_scf') and mf._scf.mol != mol:
+        #TODO: construct vind with dual-basis treatment, (see also JCP, 118, 9497)
         mo_coeff = (addons.project_mo_nr2nr(mf._scf.mol, mo_coeff[0], mol),
                     addons.project_mo_nr2nr(mf._scf.mol, mo_coeff[1], mol))
 
@@ -172,8 +179,11 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
         if h1e is None: h1e = mf.get_hcore()
         dm0 = mf.make_rdm1(mo_coeff, mo_occ)
         fock_ao = h1e + mf.get_veff(mol, dm0)
-    focka = reduce(numpy.dot, (mo_coeff[0].T, fock_ao[0], mo_coeff[0]))
-    fockb = reduce(numpy.dot, (mo_coeff[1].T, fock_ao[1], mo_coeff[1]))
+        focka = reduce(numpy.dot, (mo_coeff[0].T, fock_ao[0], mo_coeff[0]))
+        fockb = reduce(numpy.dot, (mo_coeff[1].T, fock_ao[1], mo_coeff[1]))
+    else:
+        focka = reduce(numpy.dot, (mo_coeff0[0].T, fock_ao[0], mo_coeff0[0]))
+        fockb = reduce(numpy.dot, (mo_coeff0[1].T, fock_ao[1], mo_coeff0[1]))
     fooa = focka[occidxa[:,None],occidxa]
     fvva = focka[viridxa[:,None],viridxa]
     foob = fockb[occidxb[:,None],occidxb]
@@ -455,7 +465,8 @@ def _gen_ghf_response(mf, mo_coeff=None, mo_occ=None,
     return vind
 
 
-def project_mol(mol, projectbasis={}):
+# Dual basis for gradients and hessian
+def project_mol(mol, dual_basis={}):
     from pyscf import df
     uniq_atoms = set([a[0] for a in mol._atom])
     newbasis = {}
@@ -470,11 +481,11 @@ def project_mol(mol, projectbasis={}):
             newbasis[symb] = 'dzp'
         else:
             newbasis[symb] = 'sto3g'
-    if isinstance(projectbasis, (dict, tuple, list)):
-        newbasis.update(projectbasis)
-    elif isinstance(projectbasis, str):
+    if isinstance(dual_basis, (dict, tuple, list)):
+        newbasis.update(dual_basis)
+    elif isinstance(dual_basis, str):
         for k in newbasis:
-            newbasis[k] = projectbasis
+            newbasis[k] = dual_basis
     return df.addons.make_auxmol(mol, newbasis)
 
 
@@ -639,11 +650,11 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
            max_cycle=50, dump_chk=True,
            callback=None, verbose=logger.NOTE):
     cput0 = (time.clock(), time.time())
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(mf.stdout, verbose)
+    log = logger.new_logger(mf, verbose)
     mol = mf._scf.mol
+    if mol != mf.mol:
+        logger.warn(mf, 'dual-basis SOSCF is an experimental feature.')
+
     if conv_tol_grad is None:
         conv_tol_grad = numpy.sqrt(conv_tol)
         log.info('Set conv_tol_grad to %g', conv_tol_grad)
@@ -668,7 +679,7 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
 
 # Copy the integral file to soscf object to avoid the integrals being cached
 # twice.
-    if hasattr(mf, '_scf') and id(mf._scf.mol) != id(mol) and mf._eri is None:
+    if mol == mf.mol and mf._eri is None:
         mf._eri = mf._scf._eri
 
     rotaiter = rotate_orb_cc(mf, mo_coeff, mo_occ, fock, h1e, conv_tol_grad, log)
@@ -820,7 +831,7 @@ class _CIAH_SOSCF(hf.SCF):
         if mol is None: mol = self.mol
         if self.verbose >= logger.WARN:
             self.check_sanity()
-        if hasattr(self, '_scf') and id(self._scf.mol) != id(mol):
+        if hasattr(self, '_scf') and self._scf.mol != mol:
             self.opt = self.init_direct_scf(mol)
             self._eri = None
         self._scf.build(mol)
@@ -843,7 +854,10 @@ class _CIAH_SOSCF(hf.SCF):
                 logger.debug(self, 'Initial guess orbitals not given. '
                              'Generating initial guess from %s density matrix',
                              self.init_guess)
-                dm = self.get_init_guess(self.mol, self.init_guess)
+                if self.mol == self._scf.mol:
+                    dm = self.get_init_guess(self.mol, self.init_guess)
+                else:
+                    dm = self.get_init_guess(self._scf.mol, self.init_guess)
                 mo_coeff, mo_occ = self.from_dm(dm)
 
         self.build(self.mol)
@@ -866,10 +880,6 @@ class _CIAH_SOSCF(hf.SCF):
 
     def from_dm(self, dm):
         '''Transform density matrix to the initial guess'''
-        if isinstance(dm, str):
-            sys.stderr.write('Newton solver reads density matrix from chkfile %s\n' % dm)
-            dm = self.from_chk(dm, True)
-
 # * If possible, prefer the methods of SOSCF object to evaluate the Fock
 #   matrix and diagonalize Fock matrix. This is because the addons or settings
 #   of underlying SCF method (self._scf) are automatically transfer to the
@@ -878,10 +888,14 @@ class _CIAH_SOSCF(hf.SCF):
 # * If self.mol and self._scf.mol are different, SOSCF was approximated by a
 #   different mol object. The underlying self._scf has to be used to get right
 #   dimension for the initial guess.
-        if self.mol is self._scf.mol:
+        if self.mol == self._scf.mol:
             mf = self
         else:
             mf = self._scf
+
+        if isinstance(dm, str):
+            sys.stderr.write('Newton solver reads density matrix from chkfile %s\n' % dm)
+            dm = mf.from_chk(dm, True)
 
         mol = mf.mol
         h1e = mf.get_hcore(mol)
@@ -1005,7 +1019,7 @@ def newton(mf):
                 if mo_coeff is None:
                     mo_coeff = (self.mo_coeff[0][:,self.mo_occ[0]>0],
                                 self.mo_coeff[1][:,self.mo_occ[1]>0])
-                if hasattr(self, '_scf') and id(self._scf.mol) != id(self.mol):
+                if hasattr(self, '_scf') and self._scf.mol != self.mol:
                     s = self._scf.get_ovlp()
                 return self._scf.spin_square(mo_coeff, s)
         return SecondOrderUHF(mf)
