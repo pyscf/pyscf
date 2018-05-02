@@ -343,19 +343,15 @@ def parse_xc(description):
     elif not isinstance(description, str): #isinstance(description, (tuple,list)):
         return parse_xc('%s,%s' % tuple(description))
 
-    description = description.replace(' ','').upper()
-    if ',' not in description and description in XC_ALIAS:
-        description = XC_ALIAS[description]
-
-    if ',' in description:
-        x_code, c_code = description.split(',')
-    else:
-        x_code, c_code = description, ''
-
-    def assign_omega(omega):
-        if hyb[2] == 0:
+    def assign_omega(omega, hyb_or_sr, lr=0):
+        if hyb[2] == omega or omega == 0:
+            hyb[0] += hyb_or_sr
+            hyb[1] += lr
+        elif hyb[2] == 0:
+            hyb[0] += hyb_or_sr
+            hyb[1] += lr
             hyb[2] = omega
-        elif hyb[2] != omega:
+        else:
             raise ValueError('Different values of omega found for RSH functionals')
     fn_facs = []
     def parse_token(token, suffix):
@@ -367,18 +363,26 @@ def parse_xc(description):
                 fac = float(fac)
             else:
                 fac, key = 1, token
-            if key == 'HF':
+
+            if key[:3] == 'RSH':
+# RSH(alpha; beta; omega): Range-separated-hybrid functional
+                alpha, beta, omega = [float(x) for x in key[4:-1].split(';')]
+                assign_omega(omega, fac*(alpha+beta), fac*alpha)
+            elif key == 'HF':
                 hyb[0] += fac
+                hyb[1] += fac  # also add to LR_HF
             elif 'SR_HF' in key or 'SRHF' in key:
-                hyb[0] += fac
                 if '(' in key:
                     omega = float(key.split('(')[1].split(')')[0])
-                    assign_omega(omega)
-            elif 'LR_HF' in key or 'LRHF' in key:
-                hyb[1] += fac  # alpha
+                    assign_omega(omega, fac, 0)
+                else:  # Assuming this omega the same to the existing omega
+                    hyb[0] += fac
+            elif 'LR_HF' in key:
                 if '(' in key:
                     omega = float(key.split('(')[1].split(')')[0])
-                    assign_omega(omega)
+                    assign_omega(omega, 0, fac)
+                else:
+                    hyb[1] += fac  # == alpha
             elif key.isdigit():
                 fn_facs.append((int(key), fac))
             else:
@@ -391,9 +395,8 @@ def parse_xc(description):
                 if isinstance(x_id, str):
                     hyb1, fn_facs1 = parse_xc(x_id)
 # Recursively scale the composed functional, to support e.g. '0.5*b3lyp'
-                    hyb[0] += hyb1[0] * fac
-                    hyb[1] += hyb1[1] * fac
-                    assign_omega(hyb1[2])
+                    if hyb1[0] != 0 or hyb1[1] != 0:
+                        assign_omega(hyb1[2], hyb1[0]*fac, hyb1[1]*fac)
                     fn_facs.extend([(xid, c*fac) for xid, c in fn_facs1])
                 elif x_id is None:
                     raise NotImplementedError(key)
@@ -412,19 +415,26 @@ def parse_xc(description):
                 n += 1
         return list(zip(fn_ids, facs))
 
+    description = description.replace(' ','').upper()
+    if description in XC_ALIAS:
+        description = XC_ALIAS[description]
+
     if '-' in description:  # To handle e.g. M06-L
         for key in _NAME_WITH_DASH:
             if key in description:
                 description = description.replace(key, _NAME_WITH_DASH[key])
 
     if ',' in description:
+        x_code, c_code = description.split(',')
         for token in x_code.replace('-', '+-').split('+'):
             parse_token(token, 'X')
         for token in c_code.replace('-', '+-').split('+'):
             parse_token(token, 'C')
     else:
-        for token in x_code.replace('-', '+-').split('+'):
+        for token in description.replace('-', '+-').split('+'):
             parse_token(token, 'XC')
+    if hyb[2] == 0: # No omega is assigned. LR_HF is 0 for normal Coulomb operator
+        hyb[1] = 0
     return hyb, remove_dup(fn_facs)
 
 _NAME_WITH_DASH = {'SR-HF'  : 'SR_HF',

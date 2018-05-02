@@ -51,11 +51,37 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(hyb[0], 1)
         self.assertEqual(fn_facs, [])
 
-        hyb, fn_facs = dft.libxc.parse_xc('0.5*B3LYP+0.5*B3LYP')
-        self.assertAlmostEqual(hyb[0], .2, 12)
+        hyb, fn_facs = dft.libxc.parse_xc('0.5*B3LYP+0.25*B3LYP')
+        self.assertTrue(numpy.allclose(hyb, [.15, 0, 0]))
+        hyb = dft.libxc.hybrid_coeff('0.5*B3LYP+0.25*B3LYP')
+        self.assertAlmostEqual(hyb, .15, 12)
+
+        hyb, fn_facs = dft.libxc.parse_xc('0.6*CAM_B3LYP+0.4*B3P86')
+        self.assertTrue(numpy.allclose(hyb, [.08, 0, 0]))
+        self.assertTrue(numpy.allclose(fn_facs,
+                                       [(433, 0.6), (1, 0.032), (106, 0.288), (132, 0.324), (7, 0.076)]))
+        rsh = dft.libxc.rsh_coeff('0.6*CAM_B3LYP+0.4*B3P86')
+        self.assertTrue(numpy.allclose(rsh, (0.33, 0.39, -0.196)))
+
+        hyb, fn_facs = dft.libxc.parse_xc('0.4*B3P86+0.6*CAM_B3LYP')
+        self.assertTrue(numpy.allclose(hyb, [.08, 0, 0]))
+        self.assertTrue(numpy.allclose(fn_facs,
+                                       [(1, 0.032), (106, 0.288), (132, 0.324), (7, 0.076), (433, 0.6)]))
+        rsh = dft.libxc.rsh_coeff('0.4*B3P86+0.6*CAM_B3LYP')
+        self.assertTrue(numpy.allclose(rsh, (0.33, 0.39, -0.196)))
 
         hyb, fn_facs = dft.libxc.parse_xc('0.5*SR-HF(0.3) + .8*HF + .22*LR_HF')
-        self.assertEqual(hyb, [1.3, 0.22, 0.3])
+        self.assertEqual(hyb, [1.3, 1.02, 0.3])
+
+        hyb, fn_facs = dft.libxc.parse_xc('0.5*SR-HF + .22*LR_HF(0.3) + .8*HF')
+        self.assertEqual(hyb, [1.3, 1.02, 0.3])
+
+        hyb, fn_facs = dft.libxc.parse_xc('0.5*SR-HF + .8*HF + .22*LR_HF(0.3)')
+        self.assertEqual(hyb, [1.3, 1.02, 0.3])
+
+        hyb, fn_facs = dft.libxc.parse_xc('0.5*RSH(2.04;0.56;0.3) + 0.5*BP86')
+        self.assertEqual(hyb, [1.3, 1.02, 0.3])
+        self.assertEqual(fn_facs, [(106, 0.5), (132, 0.5)])
 
         self.assertRaises(ValueError, dft.libxc.parse_xc, 'SR_HF(0.3) + LR_HF(.5)')
         self.assertRaises(ValueError, dft.libxc.parse_xc, 'LR-HF(0.3) + SR-HF(.5)')
@@ -64,9 +90,11 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(hyb, 0.28, 9)
 
         hyb, fn_facs = dft.libxc.parse_xc('APBE,')
-        self.assertEqual(fn_facs[0][0], 184)
+        self.assertEqual(fn_facs, [(184, 1)])
 
         hyb, fn_facs = dft.libxc.parse_xc('TF,')
+        self.assertEqual(fn_facs, [(50, 1)])
+
         ref = [(1, 1), (7, 1)]
         self.assertEqual(dft.libxc.parse_xc_name('LDA,VWN'), (1,7))
         self.assertEqual(dft.libxc.parse_xc(('LDA','VWN'))[1], ref)
@@ -97,9 +125,31 @@ class KnownValues(unittest.TestCase):
         self.assertFalse(dft.libxc.is_hybrid_xc('m05,'))
         self.assertFalse(dft.libxc.is_hybrid_xc('vv10'))
         self.assertTrue (dft.libxc.is_hybrid_xc((402,'vv10')))
+        self.assertTrue (dft.libxc.is_hybrid_xc(('402','vv10')))
+
+    def test_libxc_cam_beta_bug(self):
+        '''Depending on libxc version, this test may not be passed.  Use this
+        test to check if libxc bug (https://gitlab.com/libxc/libxc/issues/46)
+        is fixed.
+        '''
+        import ctypes
+        rsh_tmp = (ctypes.c_double*3)()
+        dft.libxc._itrf.LIBXC_rsh_coeff(1, rsh_tmp)
+        beta = rsh_tmp[2]
+        self.assertEqual(beta, 0)
+
+        dft.libxc._itrf.LIBXC_rsh_coeff(433, rsh_tmp)
+        dft.libxc._itrf.LIBXC_rsh_coeff(1, rsh_tmp)
+        beta = rsh_tmp[2]
+        self.assertEqual(beta, -.46)
+
+        dft.libxc._itrf.LIBXC_is_hybrid(1)
+        dft.libxc._itrf.LIBXC_rsh_coeff(1, rsh_tmp)
+        beta = rsh_tmp[2]
+        self.assertEqual(beta, 0)
 
     def test_nlc_coeff(self):
-        self.assertEqual(dft.libxc.nlc_coeff('vv10'), [5.9, 0.0093])
+        self.assertEqual(dft.libxc.nlc_coeff('0.5*vv10'), [5.9, 0.0093])
 
     def test_lda(self):
         e,v,f,k = dft.libxc.eval_xc('lda,', rho[0][:3], deriv=3)

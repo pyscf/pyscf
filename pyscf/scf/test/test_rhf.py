@@ -569,15 +569,15 @@ H     0    0.757    0.587'''
     def test_canonicalize(self):
         n2_rohf = n2mf.view(scf.hf_symm.ROHF)
         e, c = n2_rohf.canonicalize(n2mf.mo_coeff, n2mf.mo_occ)
-        self.assertAlmostEqual(abs(e - n2mf.mo_energy).max(), 0, 7)
+        self.assertAlmostEqual(float(abs(e - n2mf.mo_energy).max()), 0, 7)
 
         mo_coeff = numpy.array(n2mf.mo_coeff)
         e, c = n2mf.canonicalize(mo_coeff, n2mf.mo_occ)
-        self.assertAlmostEqual(abs(e - n2mf.mo_energy).max(), 0, 7)
+        self.assertAlmostEqual(float(abs(e - n2mf.mo_energy).max()), 0, 7)
 
         n2_rohf = n2mf.view(scf.rohf.ROHF)
         e, c = n2_rohf.canonicalize(n2mf.mo_coeff, n2mf.mo_occ)
-        self.assertAlmostEqual(abs(e - n2mf.mo_energy).max(), 0, 7)
+        self.assertAlmostEqual(float(abs(e - n2mf.mo_energy).max()), 0, 7)
 
     def test_get_irrep_nelec(self):
         fock = n2mf.get_fock()

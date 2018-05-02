@@ -545,7 +545,7 @@ def is_lda(xc_code):
 def is_hybrid_xc(xc_code):
     if isinstance(xc_code, str):
         if xc_code.isdigit():
-            return _itrf.LIBXC_is_hybrid(ctypes.c_int(xc_code))
+            return _itrf.LIBXC_is_hybrid(ctypes.c_int(int(xc_code)))
         else:
             return ('HF' in xc_code or hybrid_coeff(xc_code) != 0)
     elif isinstance(xc_code, int):
@@ -596,7 +596,7 @@ def hybrid_coeff(xc_code, spin=0):
     '''
     hyb, fn_facs = parse_xc(xc_code)
     for xid, fac in fn_facs:
-        hyb[0] += _itrf.LIBXC_hybrid_coeff(ctypes.c_int(xid))
+        hyb[0] += fac * _itrf.LIBXC_hybrid_coeff(ctypes.c_int(xid))
     return hyb[0]
 
 def nlc_coeff(xc_code):
@@ -621,9 +621,9 @@ def rsh_coeff(xc_code):
     SR_HFX = < pi | e^{-omega r_{12}}/r_{12} | iq >
     LR_HFX = < pi | (1-e^{-omega r_{12}})/r_{12} | iq >
     alpha = c_LR
-    beta = c_SR - c_LR
+    beta = c_SR - c_LR = hyb - alpha
     '''
-    if ',' in xc_code:
+    if isinstance(xc_code, str) and ',' in xc_code:
         # Parse only X part for the RSH coefficients.  This is to handle
         # exceptions for C functionals such as M11.
         xc_code = xc_code.split(',')[0] + ','
@@ -633,14 +633,19 @@ def rsh_coeff(xc_code):
     beta = hyb - alpha
     rsh_pars = [omega, alpha, beta]
     rsh_tmp = (ctypes.c_double*3)()
+    _itrf.LIBXC_rsh_coeff(433, rsh_tmp)
     for xid, fac in fn_facs:
         _itrf.LIBXC_rsh_coeff(xid, rsh_tmp)
         if rsh_pars[0] == 0:
             rsh_pars[0] = rsh_tmp[0]
-        elif rsh_pars[0] != rsh_tmp[0]:
+        elif (rsh_tmp[0] != 0 and rsh_pars[0] != rsh_tmp[0]):
             raise ValueError('Different values of omega found for RSH functionals')
-        rsh_pars[1] += rsh_tmp[1]
-        rsh_pars[2] += rsh_tmp[2]
+        # libxc bug https://gitlab.com/libxc/libxc/issues/46
+        #rsh_pars[1] += rsh_tmp[1] * fac
+        #rsh_pars[2] += rsh_tmp[2] * fac
+        if _itrf.LIBXC_is_hybrid(ctypes.c_int(xid)):
+            rsh_pars[1] += rsh_tmp[1] * fac
+            rsh_pars[2] += rsh_tmp[2] * fac
     return rsh_pars
 
 def parse_xc_name(xc_name='LDA,VWN'):
@@ -754,16 +759,21 @@ def parse_xc(description):
 
         see also libxc_itrf.c
     '''
-    hyb = [0, 0, 0]  # hybrid, alpha, omega
+    hyb = [0, 0, 0]  # hybrid, alpha, omega (== SR_HF, LR_HF, omega)
     if isinstance(description, int):
         return hyb, [(description, 1.)]
     elif not isinstance(description, str): #isinstance(description, (tuple,list)):
         return parse_xc('%s,%s' % tuple(description))
 
-    def assign_omega(omega):
-        if hyb[2] == 0:
+    def assign_omega(omega, hyb_or_sr, lr=0):
+        if hyb[2] == omega or omega == 0:
+            hyb[0] += hyb_or_sr
+            hyb[1] += lr
+        elif hyb[2] == 0:
+            hyb[0] += hyb_or_sr
+            hyb[1] += lr
             hyb[2] = omega
-        elif hyb[2] != omega:
+        else:
             raise ValueError('Different values of omega found for RSH functionals')
     fn_facs = []
     def parse_token(token, possible_xc_for):
@@ -775,24 +785,26 @@ def parse_xc(description):
                 fac = float(fac)
             else:
                 fac, key = 1, token
+
             if key[:3] == 'RSH':
 # RSH(alpha; beta; omega): Range-separated-hybrid functional
                 alpha, beta, omega = [float(x) for x in key[4:-1].split(';')]
-                hyb[0] += alpha + beta
-                hyb[1] += alpha
-                assign_omega(omega)
+                assign_omega(omega, fac*(alpha+beta), fac*alpha)
             elif key == 'HF':
                 hyb[0] += fac
+                hyb[1] += fac  # also add to LR_HF
             elif 'SR_HF' in key:
-                hyb[0] += fac
                 if '(' in key:
                     omega = float(key.split('(')[1].split(')')[0])
-                    assign_omega(omega)
+                    assign_omega(omega, fac, 0)
+                else:  # Assuming this omega the same to the existing omega
+                    hyb[0] += fac
             elif 'LR_HF' in key:
-                hyb[1] += fac  # alpha
                 if '(' in key:
                     omega = float(key.split('(')[1].split(')')[0])
-                    assign_omega(omega)
+                    assign_omega(omega, 0, fac)
+                else:
+                    hyb[1] += fac  # == alpha
             elif key.isdigit():
                 fn_facs.append((int(key), fac))
             else:
@@ -821,9 +833,8 @@ def parse_xc(description):
                 if isinstance(x_id, str):
                     hyb1, fn_facs1 = parse_xc(x_id)
 # Recursively scale the composed functional, to support e.g. '0.5*b3lyp'
-                    hyb[0] += hyb1[0] * fac
-                    hyb[1] += hyb1[1] * fac
-                    assign_omega(hyb1[2])
+                    if hyb1[0] != 0 or hyb1[1] != 0:
+                        assign_omega(hyb1[2], hyb1[0]*fac, hyb1[1]*fac)
                     fn_facs.extend([(xid, c*fac) for xid, c in fn_facs1])
                 elif x_id is None:
                     raise NotImplementedError(key)
@@ -876,6 +887,8 @@ def parse_xc(description):
     else:
         for token in description.replace('-', '+-').split('+'):
             parse_token(token, possible_xc_for)
+    if hyb[2] == 0: # No omega is assigned. LR_HF is 0 for normal Coulomb operator
+        hyb[1] = 0
     return hyb, remove_dup(fn_facs)
 
 _NAME_WITH_DASH = {'SR-HF'    : 'SR_HF',

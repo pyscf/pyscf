@@ -1340,6 +1340,13 @@ class Cell(mole.Mole):
         self.mesh = [2*n+1 for n in x]
 
     @property
+    def drop_exponent(self):
+        return self.exp_to_discard
+    @drop_exponent.setter
+    def drop_exponent(self, x):
+        self.exp_to_discard = x
+
+    @property
     def nimgs(self):
         return self.get_bounding_sphere(self.rcut)
     @nimgs.setter

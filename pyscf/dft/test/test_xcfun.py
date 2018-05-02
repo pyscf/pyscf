@@ -51,13 +51,53 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(hyb[0], 1)
         self.assertEqual(fn_facs, [])
 
-        hyb, fn_facs = dft.xcfun.parse_xc('0.5*B3LYP+0.5*B3LYP')
-        self.assertAlmostEqual(hyb[0], .2, 12)
+        hyb, fn_facs = dft.xcfun.parse_xc('0.5*B3LYP+0.25*B3LYP')
+        self.assertTrue(numpy.allclose(hyb, [.15, 0, 0]))
+        hyb = dft.libxc.hybrid_coeff('0.5*B3LYP+0.25*B3LYP')
+        self.assertAlmostEqual(hyb, .15, 12)
 
-        hyb, fn_facs = dft.xcfun.parse_xc('M05')
-        self.assertAlmostEqual(hyb[0], 0.28, 9)
+        hyb, fn_facs = dft.xcfun.parse_xc('CAM_B3LYP')
+        self.assertTrue(numpy.allclose(hyb, [0.19, 0.65, 0.33]))
 
-        hyb, fn_facs = dft.xcfun.parse_xc('TF')
+        hyb, fn_facs = dft.xcfun.parse_xc('0.6*CAM_B3LYP+0.4*B3P86')
+        self.assertTrue(numpy.allclose(hyb, [.08+0.19*.6, 0.65*.6, 0.33]))
+        self.assertTrue(numpy.allclose(fn_facs,
+                                       [(9, 0.6), (3, 0.19), (16, 0.486), (0, 0.032), (6, 0.288), (46, 0.324)]))
+        rsh = dft.xcfun.rsh_coeff('0.6*CAM_B3LYP+0.4*B3P86')
+        self.assertTrue(numpy.allclose(rsh, (0.33, 0.39, -0.196)))
+
+        hyb, fn_facs = dft.xcfun.parse_xc('0.4*B3P86+0.6*CAM_B3LYP')
+        self.assertTrue(numpy.allclose(hyb, [.08+0.19*.6, 0.65*.6, 0.33]))
+        self.assertTrue(numpy.allclose(fn_facs,
+                                       [(0, 0.032), (6, 0.288), (46, 0.324), (3, 0.19), (9, 0.6), (16, 0.486)]))
+        rsh = dft.xcfun.rsh_coeff('0.4*B3P86+0.6*CAM_B3LYP')
+        self.assertTrue(numpy.allclose(rsh, (0.33, 0.39, -0.196)))
+
+        hyb, fn_facs = dft.xcfun.parse_xc('0.5*SR-HF(0.3) + .8*HF + .22*LR_HF')
+        self.assertEqual(hyb, [1.3, 1.02, 0.3])
+
+        hyb, fn_facs = dft.xcfun.parse_xc('0.5*SR-HF + .22*LR_HF(0.3) + .8*HF')
+        self.assertEqual(hyb, [1.3, 1.02, 0.3])
+
+        hyb, fn_facs = dft.xcfun.parse_xc('0.5*SR-HF + .8*HF + .22*LR_HF(0.3)')
+        self.assertEqual(hyb, [1.3, 1.02, 0.3])
+
+        hyb, fn_facs = dft.xcfun.parse_xc('0.5*RSH(2.04;0.56;0.3) + 0.5*BP86')
+        self.assertEqual(hyb, [1.3, 1.02, 0.3])
+        self.assertEqual(fn_facs, [(6, 0.5), (46, 0.5)])
+
+        self.assertRaises(ValueError, dft.xcfun.parse_xc, 'SR_HF(0.3) + LR_HF(.5)')
+        self.assertRaises(ValueError, dft.xcfun.parse_xc, 'LR-HF(0.3) + SR-HF(.5)')
+
+        hyb = dft.xcfun.hybrid_coeff('M05')
+        self.assertAlmostEqual(hyb, 0.28, 9)
+
+        hyb, fn_facs = dft.xcfun.parse_xc('APBE,')
+        self.assertEqual(fn_facs[0][0], 58)
+
+        hyb, fn_facs = dft.xcfun.parse_xc('TF,')
+        self.assertEqual(fn_facs, [(24, 1)])
+
         ref = [(0, 1), (3, 1)]
         self.assertEqual(dft.xcfun.parse_xc_name('LDA,VWN'), (0,3))
         self.assertEqual(dft.xcfun.parse_xc(('LDA','VWN'))[1], ref)
@@ -65,14 +105,23 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(dft.xcfun.parse_xc('0, 3')[1], ref)
         self.assertEqual(dft.xcfun.parse_xc(3)[1], [(3,1)])
 
+        #self.assertEqual(dft.xcfun.parse_xc('M11-L')[1], [(226,1),(75,1)])
+        #self.assertEqual(dft.xcfun.parse_xc('M11L' )[1], [(226,1),(75,1)])
+        #self.assertEqual(dft.xcfun.parse_xc('M11-L,M11L' )[1], [(226,1),(75,1)])
+        #self.assertEqual(dft.xcfun.parse_xc('M11_L,M11-L')[1], [(226,1),(75,1)])
+        #self.assertEqual(dft.xcfun.parse_xc('M11L,M11_L' )[1], [(226,1),(75,1)])
+
+        #self.assertEqual(dft.xcfun.parse_xc('Xpbe,')[1], [(123,1)])
+        #self.assertEqual(dft.xcfun.parse_xc('pbe,' )[1], [(101,1)])
+
         self.assertTrue (dft.xcfun.is_meta_gga('m05'))
         self.assertFalse(dft.xcfun.is_meta_gga('pbe0'))
-        self.assertFalse(dft.xcfun.is_meta_gga('tf'))
+        self.assertFalse(dft.xcfun.is_meta_gga('tf,'))
         self.assertFalse(dft.xcfun.is_meta_gga('vv10'))
         self.assertTrue (dft.xcfun.is_gga('PBE0'))
         self.assertFalse(dft.xcfun.is_gga('m05'))
-        self.assertFalse(dft.xcfun.is_gga('tf'))
-        self.assertTrue (dft.xcfun.is_lda('tf'))
+        self.assertFalse(dft.xcfun.is_gga('tf,'))
+        self.assertTrue (dft.xcfun.is_lda('tf,'))
         self.assertFalse(dft.xcfun.is_lda('vv10'))
         self.assertTrue (dft.xcfun.is_hybrid_xc('m05'))
         self.assertTrue (dft.xcfun.is_hybrid_xc('pbe0,'))
