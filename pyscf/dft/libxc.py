@@ -1058,8 +1058,8 @@ def _eval_xc(fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
     if fn_ids_set.intersection(PROBLEMATIC_XC):
         problem_xc = [PROBLEMATIC_XC[k]
                       for k in fn_ids_set.intersection(PROBLEMATIC_XC)]
-        warnings.warn('Found problematic functionals %s. They have large '
-                      'discrepancy to xcfun library.\n' % problem_xc)
+        warnings.warn('Libxc functionals %s have large discrepancy to xcfun '
+                      'library.\n' % problem_xc)
 
     if all((is_lda(x) for x in fn_ids)):
         if spin == 0:

@@ -140,8 +140,8 @@ XC = XC_CODES = {
 'X3LYP'         : '.218*HF + .073*SLATER + 0.542385*B88 + .166615*PW91X + .871*LYP + .129*VWN5C',  # Xu, PNAS, 101, 2673
 'X3LYPG'        : '.218*HF + .073*SLATER + 0.542385*B88 + .166615*PW91X + .871*LYP + .129*VWN3C',
 # Range-separated-hybrid functional: (alpha+beta)*SR_HF(0.33) + alpha*LR_HF(0.33)
-'CAMB3LYP'      : '0.19*SR_HF(0.33) + 0.65*LR_HF(0.33) + BECKECAMX + VWN5C*0.19 + LYPC*0.81',  # FIXME
-#'CAMB3LYP'      : '0.19*SR_HF(0.33) + 0.65*LR_HF(0.33) + B88*0.35 + 0.46*BECKESRX + VWN3C*0.19 + LYPC*0.81',  # FIXME
+# Note default mu of xcfun is 0.4. It can cause discrepancy for CAMB3LYP
+'CAMB3LYP'      : '0.19*SR_HF(0.33) + 0.65*LR_HF(0.33) + BECKECAMX + VWN5C*0.19 + LYPC*0.81',
 'CAM_B3LYP'     : 'CAMB3LYP',
 'LDAERF'        : 'LDAERFX + LDAERFC',  # Short-range exchange and correlation LDA functional
 'B97XC'         : 'B97X + B97C + HF*0.1943',

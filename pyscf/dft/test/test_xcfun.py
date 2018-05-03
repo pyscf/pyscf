@@ -249,7 +249,7 @@ class KnownValues(unittest.TestCase):
         check('m062x,', deriv=1, e_place=6, v_place=6)
         check('m06l,' , deriv=1, e_place=6, v_place=6)
         check('TPSS,' ,                                  k_place=-4)
-        #?check('REVTPSS,', deriv=1)  # libxc crash
+        #?check('REVTPSS,', deriv=1)  # xcfun crash
         check('APBE,')
         check('BLOC,' ,                                  k_place=-5)
         check('PBEINT,', e_place=7, v_place=6, f_place=5, k_place=4)
@@ -297,7 +297,7 @@ class KnownValues(unittest.TestCase):
         check('O3LYP'  , deriv=2)
         check('O3LYPG' , deriv=2)
         check('X3LYP'  , deriv=2, e_place=7, v_place=5, f_place=2)
-#        check('CAMB3LYP', deriv=1, e_place=9, v_place=1)
+        check('CAMB3LYP', deriv=1)
         check('B97_1'   , deriv=2, e_place=6, v_place=5, f_place=3)
         check('B97_2'   , deriv=2, e_place=6, v_place=5, f_place=3)
         check('TPSSH'   , deriv=1,            v_place=1)
@@ -390,7 +390,7 @@ class KnownValues(unittest.TestCase):
         check('O3LYP'  , deriv=2)
         check('O3LYPG' , deriv=2, e_place=3, v_place=2, f_place=2)
         check('X3LYP'  , deriv=2, e_place=7, v_place=5, f_place=2)
-#        check('CAMB3LYP', deriv=1, e_place=9, v_place=9)
+        check('CAMB3LYP', deriv=1)
         check('B97_1'   , deriv=2, e_place=6, v_place=5, f_place=3)
         check('B97_2'   , deriv=2, e_place=6, v_place=5, f_place=3)
         check('TPSSH'   , deriv=1,            v_place=1)

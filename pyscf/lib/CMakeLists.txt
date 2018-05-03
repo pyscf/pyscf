@@ -155,6 +155,7 @@ if(ENABLE_XCFUN AND BUILD_XCFUN)
   ExternalProject_Add(libxcfun
     GIT_REPOSITORY https://github.com/dftlibs/xcfun.git
     GIT_TAG 355f42497a9cd17d16ae91da1f1aaaf93756ae8b
+    PATCH_COMMAND patch -p1 < ${PROJECT_SOURCE_DIR}/libxcfun.patch
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
     CMAKE_ARGS -DCMAKE_BUILD_TYPE=RELEASE -DBUILD_SHARED_LIBS=1
