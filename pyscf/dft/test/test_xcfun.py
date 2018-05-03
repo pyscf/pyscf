@@ -51,6 +51,11 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(hyb[0], 1)
         self.assertEqual(fn_facs, [])
 
+        hyb, fn_facs = dft.libxc.parse_xc('B88 - SLATER')
+        self.assertEqual(fn_facs, [(106, 1), (1, -1)])
+        hyb, fn_facs = dft.libxc.parse_xc('B88 -SLATER*.5')
+        self.assertEqual(fn_facs, [(106, 1), (1, -0.5)])
+
         hyb, fn_facs = dft.xcfun.parse_xc('0.5*B3LYP+0.25*B3LYP')
         self.assertTrue(numpy.allclose(hyb, [.15, 0, 0]))
         hyb = dft.libxc.hybrid_coeff('0.5*B3LYP+0.25*B3LYP')
@@ -204,6 +209,192 @@ class KnownValues(unittest.TestCase):
         ni = dft.xcfun.define_xc(mf._numint, eval_xc, 'GGA', hyb=0.2)
         ni = dft.xcfun.define_xc(mf._numint, 'b3lyp+vwn', 'GGA', hyb=0.2)
         self.assertRaises(ValueError, dft.xcfun.define_xc, mf._numint, 0.1)
+
+    def test_vs_libxc_rks(self):
+        ao = dft.numint.eval_ao(mol, mf.grids.coords[:200], deriv=2)
+        rho = dft.numint.eval_rho(mol, ao, dm, xctype='MGGA')
+        rhoa = rho[:,:200]
+        def check(xc_code, deriv=3, e_place=9, v_place=9, f_place=9, k_place=9):
+            exc0, vxc0, fxc0, kxc0 = dft.libxc.eval_xc(xc_code, rhoa, 0, deriv=deriv)
+            exc1, vxc1, fxc1, kxc1 = dft.xcfun.eval_xc(xc_code, rhoa, 0, deriv=deriv)
+            self.assertAlmostEqual(abs(exc0-exc1).max(), 0, e_place)
+            if deriv > 0:
+                for v0, v1 in zip(vxc0, vxc1):
+                    if v0 is not None and v1 is not None:
+                        self.assertAlmostEqual(abs(v0-v1).max(), 0, v_place)
+            if deriv > 1:
+                for f0, f1 in zip(fxc0, fxc1):
+                    if f0 is not None and f1 is not None:
+                        self.assertAlmostEqual(abs(f0-f1).max(), 0, f_place)
+            if deriv > 2:
+                for k0, k1 in zip(kxc0, kxc1):
+                    if k0 is not None and k1 is not None:
+                        self.assertAlmostEqual(abs(k0-k1).max(), 0, k_place)
+
+        check('lda,')
+
+        check('pw86,')
+        check('pbe,', e_place=6, v_place=6, f_place=5, k_place=4)
+        #?check('becke,')
+        #?check('br,')
+        #?check('LDAERF,')
+        check('optx,')
+        check('OPTXCORR,')
+        check('RPBE,')
+        check('TF,'  )
+        check('PW91,' , e_place=6, v_place=4, f_place=2, k_place=-1)
+        check('m05,'  , deriv=1, e_place=6, v_place=6)
+        check('m052x,', deriv=1, e_place=6, v_place=6)
+        check('m06,'  , deriv=1, e_place=6, v_place=6)
+        check('m062x,', deriv=1, e_place=6, v_place=6)
+        check('m06l,' , deriv=1, e_place=6, v_place=6)
+        check('TPSS,' ,                                  k_place=-4)
+        #?check('REVTPSS,', deriv=1)  # libxc crash
+        check('APBE,')
+        check('BLOC,' ,                                  k_place=-5)
+        check('PBEINT,', e_place=7, v_place=6, f_place=5, k_place=4)
+
+        check(',vwn3')
+        check(',vwn5')
+        check(',pbe'  , deriv=2)
+        #?check(',br')
+        #?check(',LDAERF')
+        check(',lyp'  , deriv=2)
+        check(',SPBE' , deriv=2, e_place=1, v_place=1, f_place=0)
+        check(',PW91' , deriv=2,                       f_place=3)
+        check(',m052x', deriv=1)
+        check(',m05'  , deriv=1)
+        check(',m06'  , deriv=1)
+        check(',m062x', deriv=1)
+        check(',m06l' , deriv=1)
+        check(',TPSS' , deriv=1,              v_place=1)
+        check(',REVTPSS', deriv=1, e_place=2, v_place=1)
+        check(',p86'    , deriv=2, e_place=5, v_place=5, f_place=3)
+        check(',APBE'   , deriv=2)
+        check(',PBEINT' , deriv=1)
+        check(',TPSSLOC', deriv=1, e_place=1, v_place=0)
+
+        #?check('br')
+        check('revpbe', deriv=2, e_place=6, v_place=6, f_place=5)
+        check('b97'   , deriv=2, e_place=6, v_place=5, f_place=3)
+        #?check('b97_1')
+        #?check('b97_2')
+        check('SVWN')
+        check('BLYP'  , deriv=2)
+        check('BP86'  , deriv=2, e_place=5, v_place=5, f_place=3)
+        check('OLYP'  , deriv=2)
+        check('KT1'   , deriv=1)
+        check('KT2'   , deriv=1)
+        #?check('KT3')
+        check('PBE0'   , deriv=2, e_place=6, v_place=6, f_place=5)
+        check('B3P86'  , deriv=2, e_place=5, v_place=5, f_place=3)
+        check('B3P86G' , deriv=2, e_place=5, v_place=5, f_place=3)
+        check('B3PW91' , deriv=2,                       f_place=4)
+        check('B3PW91G', deriv=2,                       f_place=4)
+        check('B3LYP'  , deriv=2)
+        check('B3LYP5' , deriv=2)
+        check('B3LYPG' , deriv=2)
+        check('O3LYP'  , deriv=2)
+        check('O3LYPG' , deriv=2)
+        check('X3LYP'  , deriv=2, e_place=7, v_place=5, f_place=2)
+#        check('CAMB3LYP', deriv=1, e_place=9, v_place=1)
+        check('B97_1'   , deriv=2, e_place=6, v_place=5, f_place=3)
+        check('B97_2'   , deriv=2, e_place=6, v_place=5, f_place=3)
+        check('TPSSH'   , deriv=1,            v_place=1)
+
+    def test_vs_libxc_uks(self):
+        ao = dft.numint.eval_ao(mol, mf.grids.coords[:400], deriv=2)
+        rho = dft.numint.eval_rho(mol, ao, dm, xctype='MGGA')
+        rhoa = rho[:,:200]
+        rhob = rhoa + rho[:,200:400]
+        def check(xc_code, deriv=3, e_place=9, v_place=9, f_place=9, k_place=9):
+            exc0, vxc0, fxc0, kxc0 = dft.libxc.eval_xc(xc_code, (rhoa, rhob), 1, deriv=deriv)
+            exc1, vxc1, fxc1, kxc1 = dft.xcfun.eval_xc(xc_code, (rhoa, rhob), 1, deriv=deriv)
+            self.assertAlmostEqual(abs(exc0-exc1).max(), 0, e_place)
+            if deriv > 0:
+                for v0, v1 in zip(vxc0, vxc1):
+                    if v0 is not None and v1 is not None:
+                        self.assertAlmostEqual(abs(v0-v1).max(), 0, v_place)
+            if deriv > 1:
+                for f0, f1 in zip(fxc0, fxc1):
+                    if f0 is not None and f1 is not None:
+                        self.assertAlmostEqual(abs(f0-f1).max(), 0, f_place)
+            if deriv > 2 and kxc0 is not None:
+                for k0, k1 in zip(kxc0, kxc1):
+                    if k0 is not None and k1 is not None:
+                        self.assertAlmostEqual(abs(k0-k1).max(), 0, k_place)
+
+        check('lda,')
+
+        check('pw86,')
+        check('pbe,', e_place=6, v_place=6, f_place=5, k_place=4)
+        #?check('becke,')
+        #?check('br,')
+        #?check('LDAERF,')
+        check('optx,')
+        check('OPTXCORR,')
+        check('RPBE,')
+        check('TF,'  , e_place=0, v_place=-1, f_place=-2, k_place=-2)
+        check('PW91,' , e_place=6, v_place=4, f_place=2, k_place=-1)
+        check('m05,'  , deriv=1, e_place=6, v_place=6)
+        check('m052x,', deriv=1, e_place=6, v_place=6)
+        check('m06,'  , deriv=1, e_place=6, v_place=6)
+        check('m062x,', deriv=1, e_place=6, v_place=6)
+        check('m06l,' , deriv=1, e_place=6, v_place=6)
+        check('TPSS,' ,                                  k_place=-4)
+        #?check('REVTPSS,', deriv=1)  # libxc crash
+        check('APBE,')
+        check('BLOC,' ,                                  k_place=-5)
+        check('PBEINT,', e_place=7, v_place=6, f_place=5, k_place=4)
+
+        check(',vwn3', e_place=2, v_place=1, f_place=1, k_place=0)
+        check(',vwn5')
+        check(',pbe'  , deriv=2)
+        #?check(',br')
+        #?check(',LDAERF')
+        check(',lyp'  , deriv=2)
+        check(',SPBE' , deriv=2, e_place=1, v_place=1, f_place=0)
+        check(',PW91' , deriv=2,                       f_place=3)
+        check(',m052x', deriv=1)
+        check(',m05'  , deriv=1)
+        check(',m06'  , deriv=1)
+        check(',m062x', deriv=1)
+        check(',m06l' , deriv=1)
+        check(',TPSS' , deriv=1,              v_place=1)
+        check(',REVTPSS', deriv=1, e_place=2, v_place=1)
+        check(',p86'    , deriv=2, e_place=5, v_place=5, f_place=3)
+        check(',APBE'   , deriv=2)
+        check(',PBEINT' , deriv=1)
+        check(',TPSSLOC', deriv=1, e_place=1, v_place=0)
+
+        #?check('br')
+        check('revpbe', deriv=2, e_place=6, v_place=6, f_place=5)
+        check('b97'   , deriv=2, e_place=6, v_place=5, f_place=3)
+        #?check('b97_1')
+        #?check('b97_2')
+        check('SVWN')
+        check('BLYP'  , deriv=2)
+        check('BP86'  , deriv=2, e_place=5, v_place=5, f_place=3)
+        check('OLYP'  , deriv=2)
+        check('KT1'   , deriv=1)
+        check('KT2'   , deriv=1)
+        #?check('KT3')
+        check('PBE0'   , deriv=2, e_place=6, v_place=6, f_place=5)
+        check('B3P86'  , deriv=2, e_place=5, v_place=5, f_place=3)
+        check('B3P86G' , deriv=2, e_place=3, v_place=2, f_place=2)
+        check('B3PW91' , deriv=2,                       f_place=4)
+        check('B3PW91G', deriv=2, e_place=2, v_place=2, f_place=2)
+        check('B3LYP'  , deriv=2)
+        check('B3LYP5' , deriv=2)
+        check('B3LYPG' , deriv=2, e_place=3, v_place=2, f_place=2)
+        check('O3LYP'  , deriv=2)
+        check('O3LYPG' , deriv=2, e_place=3, v_place=2, f_place=2)
+        check('X3LYP'  , deriv=2, e_place=7, v_place=5, f_place=2)
+#        check('CAMB3LYP', deriv=1, e_place=9, v_place=9)
+        check('B97_1'   , deriv=2, e_place=6, v_place=5, f_place=3)
+        check('B97_2'   , deriv=2, e_place=6, v_place=5, f_place=3)
+        check('TPSSH'   , deriv=1,            v_place=1)
+
 
 if __name__ == "__main__":
     print("Test xcfun")

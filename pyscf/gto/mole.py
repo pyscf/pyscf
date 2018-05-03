@@ -2130,6 +2130,8 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
             self.stdout.write('[CONFIG] conf_file %s\n' % conf_file)
 
         self.stdout.write('[INPUT] verbose = %d\n' % self.verbose)
+        if self.verbose >= logger.DEBUG:
+            self.stdout.write('[INPUT] max_memory = %s \n' % self.max_memory)
         self.stdout.write('[INPUT] num. atoms = %d\n' % self.natm)
         self.stdout.write('[INPUT] num. electrons = %d\n' % self.nelectron)
         self.stdout.write('[INPUT] charge = %d\n' % self.charge)

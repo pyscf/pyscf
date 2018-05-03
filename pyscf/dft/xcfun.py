@@ -105,6 +105,7 @@ XC = XC_CODES = {
 'LDA'           : 0,  # SLATERX
 'VWN'           : 3,  # VWN5C
 'VWN5'          : 3,  # VWN5C
+'VWN3'          : 2,  # VWN3C
 'SVWN'          : 'SLATERX + VWN5',
 'B88'           : 6,  # BECKECORRX
 'LYP'           : 16,
@@ -125,17 +126,22 @@ XC = XC_CODES = {
 'PBE0'          : '.25*HF + .75*PBEX + PBEC',  # Perdew-Burke-Ernzerhof, JCP, 110, 6158
 'PBE1PBE'       : 'PBE0',
 'PBEH'          : 'PBE0',
-'B3P86'         : '.2*HF + .08*SLATER + .72*B88 + .81*P86C + .19*VWN5',
-'B3P86G'        : '.2*HF + .08*SLATER + .72*B88 + .81*P86C + .19*VWN3',
-'B3PW91'        : '.2*HF + .08*SLATER + .72*B88 + .81*PW91C + .19*VWN5',
-'B3PW91G'       : '.2*HF + .08*SLATER + .72*B88 + .81*PW91C + .19*VWN3',
+'B3P86'         : '.2*HF + .08*SLATER + .72*B88 + .81*P86C + .19*VWN5C',
+'B3P86G'        : '.2*HF + .08*SLATER + .72*B88 + .81*P86C + .19*VWN3C',
+'B3PW91'        : '.2*HF + .08*SLATER + .72*B88 + .81*PW91C + .19*VWN5C',
+'B3PW91G'       : '.2*HF + .08*SLATER + .72*B88 + .81*PW91C + .19*VWN3C',
 # Note, use VWN5 for B3LYP. It is different to the libxc default B3LYP
 'B3LYP'         : 'B3LYP5',
-'B3LYP5'        : '.2*HF + .08*SLATER + .72*B88 + .81*LYP + .19*VWN5',
-'B3LYPG'        : '.2*HF + .08*SLATER + .72*B88 + .81*LYP + .19*VWN3', # B3LYP-VWN3 used by Gaussian and libxc
-'O3LYP'         : '.1161*HF + .1129*SLATER + .8133*OPTX + .81*LYP + .19*VWN5',  # Mol. Phys. 99 607
+'B3LYP5'        : '.2*HF + .08*SLATER + .72*B88 + .81*LYP + .19*VWN5C',
+'B3LYPG'        : '.2*HF + .08*SLATER + .72*B88 + .81*LYP + .19*VWN3C', # B3LYP-VWN3 used by Gaussian and libxc
+'O3LYP'         : '.1161*HF + .9262*SLATER + .8133*OPTXCORR + .81*LYP + .19*VWN5C',  # Mol. Phys. 99 607
+#'O3LYPG'        : '.1161*HF + .9262*SLATER + .8133*OPTXCORR + .81*LYP + .19*VWN3C',
+'O3LYPG'        : '.1161*HF + .9262*SLATER + .8133*OPTXCORR + .81*LYP + .19*VWN3C',
+'X3LYP'         : '.218*HF + .073*SLATER + 0.542385*B88 + .166615*PW91X + .871*LYP + .129*VWN5C',  # Xu, PNAS, 101, 2673
+'X3LYPG'        : '.218*HF + .073*SLATER + 0.542385*B88 + .166615*PW91X + .871*LYP + .129*VWN3C',
 # Range-separated-hybrid functional: (alpha+beta)*SR_HF(0.33) + alpha*LR_HF(0.33)
-'CAMB3LYP'      : '0.19*SR_HF(0.33) + 0.65*LR_HF(0.33) + BECKECAMX + VWN5C*0.19 + LYPC*0.81',
+'CAMB3LYP'      : '0.19*SR_HF(0.33) + 0.65*LR_HF(0.33) + BECKECAMX + VWN5C*0.19 + LYPC*0.81',  # FIXME
+#'CAMB3LYP'      : '0.19*SR_HF(0.33) + 0.65*LR_HF(0.33) + B88*0.35 + 0.46*BECKESRX + VWN3C*0.19 + LYPC*0.81',  # FIXME
 'CAM_B3LYP'     : 'CAMB3LYP',
 'LDAERF'        : 'LDAERFX + LDAERFC',  # Short-range exchange and correlation LDA functional
 'B97XC'         : 'B97X + B97C + HF*0.1943',
@@ -172,8 +178,8 @@ XC_ALIAS = {
 #    'MPW91'             : 'MPW91,PW91',
     'HFLYP'             : 'HF,LYP',
 #    'HFPW92'            : 'HF,PWMOD',
-#    'SPW92'             : 'LDA,PWMOD',
-    'SVWN'              : 'LDA,VWN',
+#    'SPW92'             : 'SLATER,PWMOD',
+    'SVWN'              : 'SLATER,VWN',
 #    'MS0'               : 'MS0,REGTPSS',
 #    'MS1'               : 'MS1,REGTPSS',
 #    'MS2'               : 'MS2,REGTPSS',
@@ -356,13 +362,18 @@ def parse_xc(description):
     fn_facs = []
     def parse_token(token, suffix):
         if token:
+            if token[0] == '-':
+                sign = -1
+                token = token[1:]
+            else:
+                sign = 1
             if '*' in token:
                 fac, key = token.split('*')
                 if fac[0].isalpha():
                     fac, key = key, fac
-                fac = float(fac)
+                fac = sign * float(fac)
             else:
-                fac, key = 1, token
+                fac, key = sign, token
 
             if key[:3] == 'RSH':
 # RSH(alpha; beta; omega): Range-separated-hybrid functional

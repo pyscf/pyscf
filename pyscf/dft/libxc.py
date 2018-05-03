@@ -22,6 +22,7 @@ XC functional, the interface to libxc
 '''
 
 import sys
+import warnings
 import copy
 import ctypes
 import math
@@ -413,32 +414,42 @@ XC = XC_CODES = {
 'VWN3'          : 8,
 'VWNRPA'        : 8,
 'VWN5'          : 7,
+'B88'           : 106,
 'BLYP'          : 'B88,LYP',
 'BP86'          : 'B88,P86',
 'PBE0'          : 406,
 'PBE1PBE'       : 406,
+'OPTXCORR'      : '0.7344536875999693*SLATER - 0.6984752285760186*OPTX,',
 'B3LYP'         : 'B3LYP5',  # VWN5 version
-'B3LYP5'        : '.2*HF + .08*LDA + .72*B88, .81*LYP + .19*VWN',
+'B3LYP5'        : '.2*HF + .08*SLATER + .72*B88, .81*LYP + .19*VWN',
 'B3LYPG'        : 402,  # VWN3, used by Gaussian
 'B3P86'         : 'B3P865',  # VWN5 version
-'B3P865'        : '.2*HF + .08*LDA + .72*B88, .81*P86 + .19*VWN',
-'B3P86G'        : 403,  # VWN3, used by Gaussian
+'B3P865'        : '.2*HF + .08*SLATER + .72*B88, .81*P86 + .19*VWN',
+#?'B3P86G'        : 403,  # VWN3, used by Gaussian
+'B3P86G'        : '.2*HF + .08*SLATER + .72*B88, .81*P86 + .19*VWN3',
+'B3PW91'        : 'B3PW915',
+'B3PW915'       : '.2*HF + .08*SLATER + .72*B88, .81*PW91 + .19*VWN',
+'B3PW91G'       : '.2*HF + .08*SLATER + .72*B88, .81*PW91 + .19*VWN3',
+'O3LYP'         : 'O3LYP5',
+'O3LYP5'        : '.1161*HF + .9262*SLATER + .8133*OPTXCORR, .81*LYP + .19*VWN5',
+#'O3LYPG'        : 404, # == '.1161*HF + 0.071006917*SLATER + .8133*OPTX, .81*LYP + .19*VWN5', this is erroreous
+'O3LYPG'        : '.1161*HF + .9262*SLATER + .8133*OPTXCORR, .81*LYP + .19*VWN3',
 'MPW3PW'        : 'MPW3PW5',  # VWN5 version
-'MPW3PW5'       : '.2*HF + .08*LDA + .72*MPW91, .81*PW91 + .19*VWN',
+'MPW3PW5'       : '.2*HF + .08*SLATER + .72*MPW91, .81*PW91 + .19*VWN',
 'MPW3PWG'       : 415,  # VWN3, used by Gaussian
 'MPW3LYP'       : 'MPW3LYP5',  # VWN5 version
-'MPW3LYP5'      : '.218*HF + .073*LDA + .709*MPW91, .871*LYP + .129*VWN',
+'MPW3LYP5'      : '.218*HF + .073*SLATER + .709*MPW91, .871*LYP + .129*VWN',
 'MPW3LYPG'      : 419,  # VWN3, used by Gaussian
 'REVB3LYP'      : 'REVB3LYP5',  # VWN5 version
-'REVB3LYP5'     : '.2*HF + .13*LDA + .67*B88, .84*LYP + .16*VWN',
+'REVB3LYP5'     : '.2*HF + .13*SLATER + .67*B88, .84*LYP + .16*VWN',
 'REVB3LYPG'     : 454,  # VWN3, used by Gaussian
 'X3LYP'         : 'X3LYP5',  # VWN5 version
-'X3LYP5'        : '.218*HF + .073*LDA + .478575*B88 + .166615*PW91, .871*LYP + .129*VWN',
+'X3LYP5'        : '.218*HF + .073*SLATER + .542385*B88 + .166615*PW91, .871*LYP + .129*VWN',
 'X3LYPG'        : 411,  # VWN3, used by Gaussian
 'CAMB3LYP'      : 'XC_HYB_GGA_XC_CAM_B3LYP',
 'CAMYBLYP'      : 'XC_HYB_GGA_XC_CAMY_BLYP',
 'CAMYB3LYP'     : 'XC_HYB_GGA_XC_CAMY_B3LYP',
-'B5050LYP'      : '.5*HF + .08*LDA + .42*B88, .81*LYP + .19*VWN',
+'B5050LYP'      : '.5*HF + .08*SLATER + .42*B88, .81*LYP + .19*VWN',
 'MPW1LYP'       : '.25*HF + .75*MPW91, LYP',
 'MPW1PBE'       : '.25*HF + .75*MPW91, PBE',
 'PBE50'         : '.5*HF + .5*PBE, PBE',
@@ -490,8 +501,8 @@ XC_ALIAS = {
     'MPW91'             : 'MPW91,PW91',
     'HFLYP'             : 'HF,LYP',
     'HFPW92'            : 'HF,PW_MOD',
-    'SPW92'             : 'LDA,PW_MOD',
-    'SVWN'              : 'LDA,VWN',
+    'SPW92'             : 'SLATER,PW_MOD',
+    'SVWN'              : 'SLATER,VWN',
     'MS0'               : 'MS0,REGTPSS',
     'MS1'               : 'MS1,REGTPSS',
     'MS2'               : 'MS2,REGTPSS',
@@ -520,6 +531,10 @@ XC_ALIAS.update([(key.replace('-',''), XC_ALIAS[key])
                  for key in XC_ALIAS if '-' in key])
 
 VV10_XC = set(('B97M_V', 'WB97M_V', 'WB97X_V', 'VV10', 'LC_VV10'))
+
+PROBLEMATIC_XC = dict([(XC_CODES[x], x) for x in
+                       ('XC_GGA_C_SPBE', 'XC_MGGA_X_TPSS', 'XC_MGGA_X_REVTPSS',
+                        'XC_MGGA_C_TPSSLOC', 'XC_HYB_MGGA_XC_TPSSH')])
 
 def xc_type(xc_code):
     if isinstance(xc_code, str):
@@ -640,12 +655,12 @@ def rsh_coeff(xc_code):
             rsh_pars[0] = rsh_tmp[0]
         elif (rsh_tmp[0] != 0 and rsh_pars[0] != rsh_tmp[0]):
             raise ValueError('Different values of omega found for RSH functionals')
-        # libxc bug https://gitlab.com/libxc/libxc/issues/46
-        #rsh_pars[1] += rsh_tmp[1] * fac
-        #rsh_pars[2] += rsh_tmp[2] * fac
-        if _itrf.LIBXC_is_hybrid(ctypes.c_int(xid)):
-            rsh_pars[1] += rsh_tmp[1] * fac
-            rsh_pars[2] += rsh_tmp[2] * fac
+        # libxc-3.0.0 bug https://gitlab.com/libxc/libxc/issues/46
+        #if _itrf.LIBXC_is_hybrid(ctypes.c_int(xid)):
+        #    rsh_pars[1] += rsh_tmp[1] * fac
+        #    rsh_pars[2] += rsh_tmp[2] * fac
+        rsh_pars[1] += rsh_tmp[1] * fac
+        rsh_pars[2] += rsh_tmp[2] * fac
     return rsh_pars
 
 def parse_xc_name(xc_name='LDA,VWN'):
@@ -778,13 +793,18 @@ def parse_xc(description):
     fn_facs = []
     def parse_token(token, possible_xc_for):
         if token:
+            if token[0] == '-':
+                sign = -1
+                token = token[1:]
+            else:
+                sign = 1
             if '*' in token:
                 fac, key = token.split('*')
                 if fac[0].isalpha():
                     fac, key = key, fac
-                fac = float(fac)
+                fac = sign * float(fac)
             else:
-                fac, key = 1, token
+                fac, key = sign, token
 
             if key[:3] == 'RSH':
 # RSH(alpha; beta; omega): Range-separated-hybrid functional
@@ -1034,6 +1054,13 @@ def _eval_xc(fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
 
     fn_ids = [x[0] for x in fn_facs]
     facs   = [x[1] for x in fn_facs]
+    fn_ids_set = set(fn_ids)
+    if fn_ids_set.intersection(PROBLEMATIC_XC):
+        problem_xc = [PROBLEMATIC_XC[k]
+                      for k in fn_ids_set.intersection(PROBLEMATIC_XC)]
+        warnings.warn('Found problematic functionals %s. They have large '
+                      'discrepancy to xcfun library.\n' % problem_xc)
+
     if all((is_lda(x) for x in fn_ids)):
         if spin == 0:
             nvar = 1
@@ -1051,7 +1078,7 @@ def _eval_xc(fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
             nvar = 5
     outlen = (math.factorial(nvar+deriv) //
               (math.factorial(nvar) * math.factorial(deriv)))
-    if SINGULAR_IDS.intersection(fn_ids) and deriv > 1:
+    if SINGULAR_IDS.intersection(fn_ids_set) and deriv > 1:
         non0idx = (rho_u[0] > 1e-10) & (rho_d[0] > 1e-10)
         rho_u = numpy.asarray(rho_u[:,non0idx], order='C')
         rho_d = numpy.asarray(rho_d[:,non0idx], order='C')
@@ -1108,6 +1135,8 @@ def _eval_xc(fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
             vxc = outbuf[1:5]
         if deriv > 1:
             fxc = outbuf[5:15]
+        if deriv > 2:
+            kxc = outbuf[15:19]
     elif nvar == 9:  # MGGA
         if deriv > 0:
             vxc = (outbuf[1:3].T, outbuf[3:6].T, outbuf[6:8].T, outbuf[8:10].T)
@@ -1187,8 +1216,12 @@ if __name__ == '__main__':
         ["O" , (0. , 0.     , 0.)],
         [1   , (0. , -0.757 , 0.587)],
         [1   , (0. , 0.757  , 0.587)] ],
-        basis = '6311g**',)
+        )#basis = '6311g**',)
     mf = dft.RKS(mol)
+    mf._numint.libxc = dft.xcfun
+    mf.xc = 'camb3lyp'
+    mf.kernel()
+    exit()
     mf.xc = 'b88,lyp'
     eref = mf.kernel()
 

@@ -68,3 +68,4 @@ script:
     -e test_k_kpts
     -e high_cost
     -e call_in_background
+    -e libxc_cam_beta_bug

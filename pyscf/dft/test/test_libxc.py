@@ -51,6 +51,11 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(hyb[0], 1)
         self.assertEqual(fn_facs, [])
 
+        hyb, fn_facs = dft.libxc.parse_xc('B88 - SLATER')
+        self.assertEqual(fn_facs, [(106, 1), (1, -1)])
+        hyb, fn_facs = dft.libxc.parse_xc('B88 -SLATER*.5')
+        self.assertEqual(fn_facs, [(106, 1), (1, -0.5)])
+
         hyb, fn_facs = dft.libxc.parse_xc('0.5*B3LYP+0.25*B3LYP')
         self.assertTrue(numpy.allclose(hyb, [.15, 0, 0]))
         hyb = dft.libxc.hybrid_coeff('0.5*B3LYP+0.25*B3LYP')
@@ -128,9 +133,7 @@ class KnownValues(unittest.TestCase):
         self.assertTrue (dft.libxc.is_hybrid_xc(('402','vv10')))
 
     def test_libxc_cam_beta_bug(self):
-        '''Depending on libxc version, this test may not be passed.  Use this
-        test to check if libxc bug (https://gitlab.com/libxc/libxc/issues/46)
-        is fixed.
+        '''As a detector for libxc-3.0.0. libxc-3.0.1 has fixed this bug
         '''
         import ctypes
         rsh_tmp = (ctypes.c_double*3)()
@@ -141,7 +144,7 @@ class KnownValues(unittest.TestCase):
         dft.libxc._itrf.LIBXC_rsh_coeff(433, rsh_tmp)
         dft.libxc._itrf.LIBXC_rsh_coeff(1, rsh_tmp)
         beta = rsh_tmp[2]
-        self.assertEqual(beta, -.46)
+        self.assertEqual(beta, 0) # libxc-3.0.0 produces -0.46
 
         dft.libxc._itrf.LIBXC_is_hybrid(1)
         dft.libxc._itrf.LIBXC_rsh_coeff(1, rsh_tmp)
