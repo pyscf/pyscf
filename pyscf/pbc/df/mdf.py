@@ -178,7 +178,10 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
                     j3cI.append(numpy.asarray(v.imag, order='C'))
                 v = None
 
-            shls_slice = (bstart, bend, 0, bend)
+            if aosym == 's2':
+                shls_slice = (bstart, bend, 0, bend)
+            else:
+                shls_slice = (bstart, bend, 0, cell.nbas)
             for p0, p1 in lib.prange(0, ngrids, Gblksize):
                 dat = ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
                                             b, gxyz[p0:p1], Gvbase, kpt,
