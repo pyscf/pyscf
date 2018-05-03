@@ -290,7 +290,7 @@ class KnownValues(unittest.TestCase):
         check('B3P86'  , deriv=2, e_place=5, v_place=5, f_place=3)
         check('B3P86G' , deriv=2, e_place=5, v_place=5, f_place=3)
         check('B3PW91' , deriv=2,                       f_place=4)
-        check('B3PW91G', deriv=2,                       f_place=4)
+        check('B3PW91G', deriv=2, e_place=2, v_place=2, f_place=2)
         check('B3LYP'  , deriv=2)
         check('B3LYP5' , deriv=2)
         check('B3LYPG' , deriv=2)

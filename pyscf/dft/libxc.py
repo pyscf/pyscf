@@ -429,7 +429,8 @@ XC = XC_CODES = {
 'B3P86G'        : '.2*HF + .08*SLATER + .72*B88, .81*P86 + .19*VWN3',
 'B3PW91'        : 'B3PW915',
 'B3PW915'       : '.2*HF + .08*SLATER + .72*B88, .81*PW91 + .19*VWN',
-'B3PW91G'       : '.2*HF + .08*SLATER + .72*B88, .81*PW91 + .19*VWN3',
+#'B3PW91G'       : '.2*HF + .08*SLATER + .72*B88, .81*PW91 + .19*VWN3',
+'B3PW91G'       : 401,
 'O3LYP'         : 'O3LYP5',
 'O3LYP5'        : '.1161*HF + .9262*SLATER + .8133*OPTXCORR, .81*LYP + .19*VWN5',
 #'O3LYPG'        : 404, # == '.1161*HF + 0.071006917*SLATER + .8133*OPTX, .81*LYP + .19*VWN5', this is erroreous
