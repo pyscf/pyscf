@@ -56,7 +56,9 @@ def eval_ao(mol, coords, deriv=0, with_s=True, shls_slice=None,
         if deriv == 0:
             aoSa = aoSa[0]
             aoSb = aoSb[0]
-    return aoLa, aoLb, aoSa, aoSb
+        return aoLa, aoLb, aoSa, aoSb
+    else:
+        return aoLa, aoLb
 
 def _dm2c_to_rho2x2(mol, ao, dm, non0tab, shls_slice, ao_loc, out=None):
     aoa, aob = ao
@@ -204,6 +206,9 @@ def r_vxc(ni, mol, grids, xc_code, dms, spin=0, relativity=0, hermi=1,
         for idm in range(nset):
             vmat[idm,:n2c,:n2c] = matLL[idm]
             vmat[idm,n2c:,n2c:] = matSS[idm] * c1**2
+    else:
+        vmat = matLL
+
     if nset == 1:
         nelec = nelec[0]
         excsum = excsum[0]

@@ -164,7 +164,7 @@ def get_init_guess(mol, key='minao'):
         return init_guess_by_minao(mol)
 
 
-class UHF(hf.SCF):
+class X2C_UHF(hf.SCF):
     def __init__(self, mol):
         hf.SCF.__init__(self, mol)
         self.with_x2c = X2C(mol)
@@ -266,6 +266,27 @@ class UHF(hf.SCF):
     def analyze(self, verbose=None):
         if verbose is None: verbose = self.verbose
         return dhf.analyze(self, verbose)
+UHF = X2C_UHF
+
+try:
+    from pyscf.dft import rks, dks
+    class X2C_UKS(X2C_UHF):
+        def dump_flags(self):
+            hf.SCF.dump_flags(self)
+            logger.info(self, 'XC functionals = %s', self.xc)
+            logger.info(self, 'small_rho_cutoff = %g', self.small_rho_cutoff)
+            self.grids.dump_flags()
+            if self.with_x2c:
+                self.with_x2c.dump_flags()
+            return self
+
+        get_veff = dks.get_veff
+        energy_elec = rks.energy_elec
+        define_xc_ = rks.define_xc_
+
+    UKS = X2C_UKS
+except ImportError:
+    pass
 
 
 def _uncontract_mol(mol, xuncontract=False, exp_drop=0.2):
