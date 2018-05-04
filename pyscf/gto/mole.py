@@ -2726,7 +2726,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
          [-0.67146312+0.j  0.00000000+0.j -1.69771092+0.j  0.00000000+0.j]
          [ 0.00000000+0.j -0.67146312+0.j  0.00000000+0.j -1.69771092+0.j]]
         '''
-        if self._env is []:
+        if not self._built and self._env is []:
             sys.stderr.write('Warning: intor envs of %s not initialized.\n' % self)
             self.build(False, False)
         intor = self._add_suffix(intor)

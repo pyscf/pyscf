@@ -1238,6 +1238,10 @@ class SCF(lib.StreamObject):
     conv_check = getattr(__config__, 'scf_hf_SCF_conv_check', True)
 
     def __init__(self, mol):
+        if not mol._built:
+            sys.stderr.write('Warning: %s must be initialized before calling SCF.\n'
+                             'Initialize %s in %s\n' % (mol, mol, self))
+            mol.build()
         self.mol = mol
         self.verbose = mol.verbose
         self.max_memory = mol.max_memory
