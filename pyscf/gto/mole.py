@@ -567,6 +567,12 @@ def conc_mol(mol1, mol2):
     else:
         mol3._ecp = dict(mol2._ecp)
         mol3._ecp.update(mol1._ecp)
+
+    if not mol1._built:
+        logger.warn(mol1, 'Warning: intor envs of %s not initialized.', mol1)
+    if not mol2._built:
+        logger.warn(mol2, 'Warning: intor envs of %s not initialized.', mol2)
+    mol3._built = mol1._built or mol2._built
     return mol3
 
 # <bas-of-mol1|intor|bas-of-mol2>
@@ -2726,7 +2732,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
          [ 0.00000000+0.j -0.67146312+0.j  0.00000000+0.j -1.69771092+0.j]]
         '''
         if not self._built:
-            sys.stderr.write('Warning: intor envs of %s not initialized.\n' % self)
+            logger.warn(self, 'Warning: intor envs of %s not initialized.', self)
             # FIXME: Whether to check _built and call build?  ._bas and .basis
             # may not be consistent. calling .build() may leads to wrong intor env.
             #self.build(False, False)

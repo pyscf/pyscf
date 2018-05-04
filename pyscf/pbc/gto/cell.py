@@ -330,6 +330,11 @@ def conc_cell(cell1, cell2):
         cell3._ecp = dict(cell2._ecp)
         cell3._ecp.update(cell1._ecp)
 
+    if not cell1._built:
+        logger.warn(cell1, 'Warning: intor envs of %s not initialized.', cell1)
+    if not cell2._built:
+        logger.warn(cell2, 'Warning: intor envs of %s not initialized.', cell2)
+    cell3._built = cell1._built or cell2._built
     return cell3
 
 def intor_cross(intor, cell1, cell2, comp=None, hermi=0, kpts=None, kpt=None,
@@ -1499,7 +1504,7 @@ class Cell(mole.Mole):
         See also Mole.intor
         '''
         if not self._built:
-            sys.stderr.write('Warning: intor envs of %s not initialized.\n' % self)
+            logger.warn(self, 'Warning: intor envs of %s not initialized.', self)
             # FIXME: Whether to check _built and call build?  ._bas and .basis
             # may not be consistent. calling .build() may leads to wrong intor env.
             #self.build(False, False)
