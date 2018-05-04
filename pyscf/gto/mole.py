@@ -3119,6 +3119,34 @@ def filatov_nuc_mod(nuc_charge, c=param.LIGHT_SPEED):
     zeta = 1 / (r**2)
     return zeta
 
+def fakemol_for_charges(coords, expnt=1e16):
+    '''Construct a fake Mole object that holds the charges on the given
+    coordinates (coords).  The shape of the charge can be a normal
+    distribution with the Gaussian exponent (expnt).
+    '''
+    nbas = coords.shape[0]
+    fakeatm = numpy.zeros((nbas,ATM_SLOTS), dtype=numpy.int32)
+    fakebas = numpy.zeros((nbas,BAS_SLOTS), dtype=numpy.int32)
+    fakeenv = [0] * PTR_ENV_START
+    ptr = PTR_ENV_START
+    fakeatm[:,PTR_COORD] = numpy.arange(ptr, ptr+nbas*3, 3)
+    fakeenv.append(coords.ravel())
+    ptr += nbas*3
+    fakebas[:,ATOM_OF] = numpy.arange(nbas)
+    fakebas[:,NPRIM_OF] = 1
+    fakebas[:,NCTR_OF] = 1
+# approximate point charge with gaussian distribution exp(-1e16*r^2)
+    fakebas[:,PTR_EXP] = ptr
+    fakebas[:,PTR_COEFF] = ptr+1
+    fakeenv.append([expnt, 1/(2*numpy.sqrt(numpy.pi)*gaussian_int(2,expnt))])
+    ptr += 2
+    fakemol = Mole()
+    fakemol._atm = fakeatm
+    fakemol._bas = fakebas
+    fakemol._env = numpy.hstack(fakeenv)
+    fakemol._built = True
+    return fakemol
+
 class _TemporaryMoleContext(object):
     import copy
     def __init__(self, method, args, args_bak):

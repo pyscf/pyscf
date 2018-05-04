@@ -86,7 +86,7 @@ def mm_charge(scf_method, coords, charges, unit=None):
                     mol.set_rinv_origin(coords[i])
                     v += mol.intor('int1e_rinv') * -q
             else:
-                fakemol = _make_fakemol(coords)
+                fakemol = gto.fakemol_for_charges(coords)
                 if mol.cart:
                     intor = 'int3c2e_cart'
                 else:
@@ -166,7 +166,7 @@ def mm_charge_grad(scf_grad, coords, charges, unit=None):
                     mol.set_rinv_origin(coords[i])
                     v += mol.intor('int1e_iprinv', comp=3) * q
             else:
-                fakemol = _make_fakemol(coords)
+                fakemol = gto.fakemol_for_charges(coords)
                 j3c = df.incore.aux_e2(mol, fakemol, intor='int3c2e_ip1',
                                        aosym='s1', comp=3).reshape(3,nao,nao,-1)
                 v = numpy.einsum('ipqk,k->ipq', j3c, charges)
@@ -192,31 +192,6 @@ class _QMMM:
     pass
 class _QMMMGrad:
     pass
-
-def _make_fakemol(coords):
-    nbas = coords.shape[0]
-    fakeatm = numpy.zeros((nbas,gto.ATM_SLOTS), dtype=numpy.int32)
-    fakebas = numpy.zeros((nbas,gto.BAS_SLOTS), dtype=numpy.int32)
-    fakeenv = [0] * gto.PTR_ENV_START
-    ptr = gto.PTR_ENV_START
-    fakeatm[:,gto.PTR_COORD] = numpy.arange(ptr, ptr+nbas*3, 3)
-    fakeenv.append(coords.ravel())
-    ptr += nbas*3
-    fakebas[:,gto.ATOM_OF] = numpy.arange(nbas)
-    fakebas[:,gto.NPRIM_OF] = 1
-    fakebas[:,gto.NCTR_OF] = 1
-# approximate point charge with gaussian distribution exp(-1e16*r^2)
-    fakebas[:,gto.PTR_EXP] = ptr
-    fakebas[:,gto.PTR_COEFF] = ptr+1
-    expnt = 1e16
-    fakeenv.append([expnt, 1/(2*numpy.sqrt(numpy.pi)*gto.gaussian_int(2,expnt))])
-    ptr += 2
-    fakemol = gto.Mole()
-    fakemol._atm = fakeatm
-    fakemol._bas = fakebas
-    fakemol._env = numpy.hstack(fakeenv)
-    fakemol._built = True
-    return fakemol
 
 if __name__ == '__main__':
     from pyscf import scf, cc, grad

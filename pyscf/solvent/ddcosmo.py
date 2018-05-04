@@ -287,7 +287,7 @@ def make_phi(pcmobj, dm, r_vdw, ui):
     v_phi_e = numpy.empty(cav_coords.shape[0])
     int3c2e = mol._add_suffix('int3c2e')
     for i0, i1 in lib.prange(0, cav_coords.shape[0], blksize):
-        fakemol = _make_fakemol(cav_coords[i0:i1])
+        fakemol = gto.fakemol_for_charges(cav_coords[i0:i1])
         v_nj = df.incore.aux_e2(mol, fakemol, intor=int3c2e, aosym='s2ij')
         v_phi_e[i0:i1] = numpy.einsum('x,xk->k', tril_dm, v_nj)
     v_phi[extern_point_idx] -= v_phi_e
@@ -368,7 +368,7 @@ def make_psi_vmat(pcmobj, dm, r_vdw, ui, grids, ylm_1sph, cached_pol, L_X, L):
 
     vmat_tril = 0
     for i0, i1 in lib.prange(0, xi_jn.size, blksize):
-        fakemol = _make_fakemol(cav_coords[i0:i1])
+        fakemol = gto.fakemol_for_charges(cav_coords[i0:i1])
         v_nj = df.incore.aux_e2(mol, fakemol, intor='int3c2e', aosym='s2ij')
         vmat_tril += numpy.einsum('xn,n->x', v_nj, xi_jn[i0:i1])
     vmat += lib.unpack_tril(vmat_tril)
@@ -467,32 +467,6 @@ class DDCOSMO(lib.StreamObject):
     def regularize_xt(self, t, eta, scale=1):
         # scale = eta*scale, is it correct?
         return regularize_xt(t, eta*scale)
-
-
-def _make_fakemol(coords):
-    nbas = coords.shape[0]
-    fakeatm = numpy.zeros((nbas,gto.ATM_SLOTS), dtype=numpy.int32)
-    fakebas = numpy.zeros((nbas,gto.BAS_SLOTS), dtype=numpy.int32)
-    fakeenv = [0] * gto.PTR_ENV_START
-    ptr = gto.PTR_ENV_START
-    fakeatm[:,gto.PTR_COORD] = numpy.arange(ptr, ptr+nbas*3, 3)
-    fakeenv.append(coords.ravel())
-    ptr += nbas*3
-    fakebas[:,gto.ATOM_OF] = numpy.arange(nbas)
-    fakebas[:,gto.NPRIM_OF] = 1
-    fakebas[:,gto.NCTR_OF] = 1
-# approximate point charge with gaussian distribution exp(-1e14*r^2)
-    fakebas[:,gto.PTR_EXP] = ptr
-    fakebas[:,gto.PTR_COEFF] = ptr+1
-    expnt = 1e14
-    fakeenv.append([expnt, 1/(2*numpy.sqrt(numpy.pi)*gto.gaussian_int(2,expnt))])
-    ptr += 2
-    fakemol = gto.Mole()
-    fakemol._atm = fakeatm
-    fakemol._bas = fakebas
-    fakemol._env = numpy.hstack(fakeenv)
-    fakemol._built = True
-    return fakemol
 
 
 if __name__ == '__main__':

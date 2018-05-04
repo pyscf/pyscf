@@ -755,6 +755,23 @@ O    SP
         self.assertAlmostEqual(mol0.get_enuc(), 6.3611415029455705, 9)
         self.assertAlmostEqual(gto.M().energy_nuc(), 0, 9)
 
+    def test_fakemol(self):
+        numpy.random.seed(1)
+        coords = numpy.random.random((6,3))*4
+        vref = 0
+        mol = mol0.copy()
+        for c in coords:
+            mol.set_rinv_origin(c)
+            vref += mol.intor('int1e_rinv')
+
+        fakemol = gto.fakemol_for_charges(coords)
+        pmol = mol + fakemol
+        shls_slice = (0, mol.nbas, 0, mol.nbas, mol.nbas, pmol.nbas)
+        v = pmol.intor('int3c2e', comp=1, shls_slice=shls_slice)
+        v = numpy.einsum('pqk->pq', v)
+        self.assertAlmostEqual(abs(vref-v).max(), 0, 12)
+
+
 if __name__ == "__main__":
     print("test mole.py")
     unittest.main()
