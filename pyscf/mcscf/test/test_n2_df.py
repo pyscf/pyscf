@@ -50,8 +50,14 @@ msym = scf.RHF(molsym)
 msym.conv_tol = 1e-9
 msym.scf()
 
+def tearDownModule():
+    global mol, molsym, m, msym
+    mol.stdout.close()
+    molsym.stdout.close()
+    del mol, molsym, m, msym
 
-class KnowValues(unittest.TestCase):
+
+class KnownValues(unittest.TestCase):
     def test_mc1step_4o4e(self):
         mc = mcscf.approx_hessian(mcscf.CASSCF(m, 4, 4), auxbasis='weigend')
         emc = mc.mc1step()[0]
@@ -67,7 +73,7 @@ class KnowValues(unittest.TestCase):
                                2.7015375913946591, 4)
 
     def test_mc1step_4o4e_df(self):
-        mc = mcscf.density_fit(mcscf.CASSCF(m, 4, 4), auxbasis='weigend')
+        mc = mcscf.DFCASSCF(m, 4, 4, auxbasis='weigend')
         emc = mc.mc1step()[0]
         self.assertAlmostEqual(emc, -108.9105231091045, 7)
 
@@ -180,6 +186,16 @@ class KnowValues(unittest.TestCase):
         mc.kernel()
         self.assertAlmostEqual(mc.e_tot, -108.98010545803884, 7)
 
+    def test_newton_casscf(self):
+        mc = mcscf.newton(mcscf.CASSCF(m, 4, 4))
+        mc.kernel()
+        self.assertAlmostEqual(mc.e_tot, -108.9137864132358, 8)
+
+    def test_newton_casscf_symm(self):
+        mc = mcscf.newton(mcscf.CASSCF(msym, 4, 4))
+        mc.kernel()
+        self.assertAlmostEqual(mc.e_tot, -108.9137864132358, 8)
+
     def test_init(self):
         from pyscf.mcscf import df
         mf = scf.RHF(mol)
@@ -189,6 +205,41 @@ class KnowValues(unittest.TestCase):
         self.assertTrue(isinstance(mcscf.CASCI(mf.density_fit().newton(), 2, 2), df._DFCASSCF))
         self.assertTrue(isinstance(mcscf.CASCI(mf.newton().density_fit(), 2, 2), mcscf.casci.CASCI))
         self.assertTrue(isinstance(mcscf.CASCI(mf.density_fit().newton().density_fit(), 2, 2), df._DFCASSCF))
+
+        self.assertTrue(isinstance(mcscf.CASSCF(mf, 2, 2), mcscf.mc1step.CASSCF))
+        self.assertTrue(isinstance(mcscf.CASSCF(mf.density_fit(), 2, 2), df._DFCASSCF))
+        self.assertTrue(isinstance(mcscf.CASSCF(mf.newton(), 2, 2), mcscf.mc1step.CASSCF))
+        self.assertTrue(isinstance(mcscf.CASSCF(mf.density_fit().newton(), 2, 2), df._DFCASSCF))
+        self.assertTrue(isinstance(mcscf.CASSCF(mf.newton().density_fit(), 2, 2), mcscf.mc1step.CASSCF))
+        self.assertTrue(isinstance(mcscf.CASSCF(mf.density_fit().newton().density_fit(), 2, 2), df._DFCASSCF))
+
+        self.assertTrue(isinstance(mcscf.DFCASCI(mf, 2, 2), df._DFCASSCF))
+        self.assertTrue(isinstance(mcscf.DFCASCI(mf.density_fit(), 2, 2), df._DFCASSCF))
+        self.assertTrue(isinstance(mcscf.DFCASCI(mf.newton(), 2, 2), df._DFCASSCF))
+        self.assertTrue(isinstance(mcscf.DFCASCI(mf.density_fit().newton(), 2, 2), df._DFCASSCF))
+        self.assertTrue(isinstance(mcscf.DFCASCI(mf.newton().density_fit(), 2, 2), df._DFCASSCF))
+        self.assertTrue(isinstance(mcscf.DFCASCI(mf.density_fit().newton().density_fit(), 2, 2), df._DFCASSCF))
+
+        self.assertTrue(isinstance(mcscf.DFCASSCF(mf, 2, 2), df._DFCASSCF))
+        self.assertTrue(isinstance(mcscf.DFCASSCF(mf.density_fit(), 2, 2), df._DFCASSCF))
+        self.assertTrue(isinstance(mcscf.DFCASSCF(mf.newton(), 2, 2), df._DFCASSCF))
+        self.assertTrue(isinstance(mcscf.DFCASSCF(mf.density_fit().newton(), 2, 2), df._DFCASSCF))
+        self.assertTrue(isinstance(mcscf.DFCASSCF(mf.newton().density_fit(), 2, 2), df._DFCASSCF))
+        self.assertTrue(isinstance(mcscf.DFCASSCF(mf.density_fit().newton().density_fit(), 2, 2), df._DFCASSCF))
+
+        self.assertTrue(isinstance(mcscf.CASCI(msym, 2, 2), mcscf.casci_symm.CASCI))
+        self.assertTrue(isinstance(mcscf.CASCI(msym.density_fit(), 2, 2), df._DFCASSCF))
+        self.assertTrue(isinstance(mcscf.CASCI(msym.newton(), 2, 2), mcscf.casci_symm.CASCI))
+        self.assertTrue(isinstance(mcscf.CASCI(msym.density_fit().newton(), 2, 2), df._DFCASSCF))
+        self.assertTrue(isinstance(mcscf.CASCI(msym.newton().density_fit(), 2, 2), mcscf.casci_symm.CASCI))
+        self.assertTrue(isinstance(mcscf.CASCI(msym.density_fit().newton().density_fit(), 2, 2), df._DFCASSCF))
+
+        self.assertTrue(isinstance(mcscf.CASSCF(msym, 2, 2), mcscf.mc1step_symm.CASSCF))
+        self.assertTrue(isinstance(mcscf.CASSCF(msym.density_fit(), 2, 2), df._DFCASSCF))
+        self.assertTrue(isinstance(mcscf.CASSCF(msym.newton(), 2, 2), mcscf.mc1step_symm.CASSCF))
+        self.assertTrue(isinstance(mcscf.CASSCF(msym.density_fit().newton(), 2, 2), df._DFCASSCF))
+        self.assertTrue(isinstance(mcscf.CASSCF(msym.newton().density_fit(), 2, 2), mcscf.mc1step_symm.CASSCF))
+        self.assertTrue(isinstance(mcscf.CASSCF(msym.density_fit().newton().density_fit(), 2, 2), df._DFCASSCF))
 
 
 if __name__ == "__main__":

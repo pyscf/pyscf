@@ -102,6 +102,30 @@ def get_hcore(mol):
         h += mol.intor('ECPscalar_ipnuc', comp=3)
     return -h
 
+def hcore_generator(mf, mol=None):
+    if mol is None: mol = mf.mol
+    with_x2c = getattr(mf.base, 'with_x2c', None)
+    if with_x2c:
+        hcore_deriv = with_x2c.hcore_deriv_generator(deriv=1)
+    else:
+        with_ecp = mol.has_ecp()
+        if with_ecp:
+            ecp_atoms = set(mol._ecpbas[:,gto.ATOM_OF])
+        else:
+            ecp_atoms = ()
+        aoslices = mol.aoslice_by_atom()
+        h1 = mf.get_hcore(mol)
+        def hcore_deriv(atm_id):
+            shl0, shl1, p0, p1 = aoslices[atm_id]
+            with mol.with_rinv_as_nucleus(atm_id):
+                vrinv = mol.intor('int1e_iprinv', comp=3) # <\nabla|1/r|>
+                vrinv *= -mol.atom_charge(atm_id)
+                if with_ecp and atm_id in ecp_atoms:
+                    vrinv += mol.intor('ECPscalar_iprinv', comp=3)
+            vrinv[:,p0:p1] += h1[:,p0:p1]
+            return vrinv + vrinv.transpose(0,2,1)
+    return hcore_deriv
+
 def get_ovlp(mol):
     return -mol.intor('int1e_ipovlp', comp=3)
 
@@ -204,29 +228,7 @@ class Gradients(lib.StreamObject):
         if mol is None: mol = self.mol
         return get_hcore(mol)
 
-    def hcore_generator(self, mol=None):
-        if mol is None: mol = self.mol
-        with_x2c = getattr(self.base, 'with_x2c', None)
-        if with_x2c:
-            hcore_deriv = with_x2c.hcore_deriv_generator(deriv=1)
-        else:
-            with_ecp = mol.has_ecp()
-            if with_ecp:
-                ecp_atoms = set(mol._ecpbas[:,gto.ATOM_OF])
-            else:
-                ecp_atoms = ()
-            aoslices = mol.aoslice_by_atom()
-            h1 = self.get_hcore(mol)
-            def hcore_deriv(atm_id):
-                shl0, shl1, p0, p1 = aoslices[atm_id]
-                with mol.with_rinv_as_nucleus(atm_id):
-                    vrinv = mol.intor('int1e_iprinv', comp=3) # <\nabla|1/r|>
-                    vrinv *= -mol.atom_charge(atm_id)
-                    if with_ecp and atm_id in ecp_atoms:
-                        vrinv += mol.intor('ECPscalar_iprinv', comp=3)
-                vrinv[:,p0:p1] += h1[:,p0:p1]
-                return vrinv + vrinv.transpose(0,2,1)
-        return hcore_deriv
+    hcore_generator = hcore_generator
 
     def get_ovlp(self, mol=None):
         if mol is None: mol = self.mol

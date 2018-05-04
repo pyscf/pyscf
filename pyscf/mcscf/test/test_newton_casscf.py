@@ -41,8 +41,12 @@ mc.fcisolver = fci.direct_spin1.FCI(mol)
 ci0 = numpy.random.random((6,6))
 ci0/= numpy.linalg.norm(ci0)
 
+def tearDownModule():
+    global mol, mf, mc
+    del mol, mf, mc
 
-class KnowValues(unittest.TestCase):
+
+class KnownValues(unittest.TestCase):
     def test_gen_g_hop(self):
         mo = mc.mo_coeff
         gall, gop, hop, hdiag = newton_casscf.gen_g_hop(mc, mo, ci0, mc.ao2mo(mo))

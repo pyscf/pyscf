@@ -358,6 +358,17 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e, -108.38187009571901, 9)
         self.assertAlmostEqual(lib.finger(g1), -0.066025991364829367, 7)
 
+    def test_with_x2c_scanner(self):
+        with lib.light_speed(20.):
+            mcs = mcscf.CASCI(mf, 4, 4).as_scanner().x2c()
+            gscan = mcs.nuc_grad_method().as_scanner()
+            g1 = gscan(mol)[1]
+            self.assertAlmostEqual(lib.finger(g1), -0.070708933966346407, 7)
+
+            e1 = mcs('N 0 0 0; N 0 0 1.201; H 1 1 0; H 1 1 1.2')
+            e2 = mcs('N 0 0 0; N 0 0 1.199; H 1 1 0; H 1 1 1.2')
+            self.assertAlmostEqual(g1[1,2], (e1-e2)/0.002*lib.param.BOHR, 5)
+
 
 if __name__ == "__main__":
     print("Tests for CASCI gradients")

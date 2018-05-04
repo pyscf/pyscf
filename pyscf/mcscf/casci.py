@@ -76,6 +76,7 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO,
             **kwargs):
     from pyscf.lo import orth
     from pyscf.tools import dump_mat
+    from pyscf.mcscf import addons
     log = logger.new_logger(casscf, verbose)
 
     if mo_coeff is None: mo_coeff = casscf.mo_coeff
@@ -86,16 +87,15 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO,
     nocc = ncore + ncas
     label = casscf.mol.ao_labels()
 
-    if ci is None and hasattr(casscf, 'casdm1'):
-        casdm1 = casscf.casdm1
-        mocore = mo_coeff[:,:ncore]
-        mocas = mo_coeff[:,ncore:nocc]
-        dm1a =(numpy.dot(mocore, mocore.T) * 2
-             + reduce(numpy.dot, (mocas, casdm1, mocas.T)))
-        dm1b = None
-        dm1 = dm1a
-    elif hasattr(casscf.fcisolver, 'make_rdm1s'):
-        casdm1a, casdm1b = casscf.fcisolver.make_rdm1s(ci, ncas, nelecas)
+    if (isinstance(ci, (list, tuple)) and
+        not isinstance(casscf.fcisolver, addons.StateAverageFCISolver)):
+        log.warn('Mulitple states found in CASCI/CASSCF solver. Density '
+                 'matrix of first state is generated in .analyze() function.')
+        civec = ci[0]
+    else:
+        civec = ci
+    if hasattr(casscf.fcisolver, 'make_rdm1s'):
+        casdm1a, casdm1b = casscf.fcisolver.make_rdm1s(civec, ncas, nelecas)
         casdm1 = casdm1a + casdm1b
         mocore = mo_coeff[:,:ncore]
         mocas = mo_coeff[:,ncore:nocc]
@@ -109,7 +109,7 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO,
             log.info('beta density matrix (on AO)')
             dump_mat.dump_tri(log.stdout, dm1b, label, **kwargs)
     else:
-        casdm1 = casscf.fcisolver.make_rdm1(ci, ncas, nelecas)
+        casdm1 = casscf.fcisolver.make_rdm1(civec, ncas, nelecas)
         mocore = mo_coeff[:,:ncore]
         mocas = mo_coeff[:,ncore:nocc]
         dm1a =(numpy.dot(mocore, mocore.T) * 2
@@ -122,16 +122,13 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO,
         # note the last two args of ._eig for mc1step_symm
         occ, ucas = casscf._eig(-casdm1, ncore, nocc)
         log.info('Natural occ %s', str(-occ))
-        for i, k in enumerate(numpy.argmax(abs(ucas), axis=0)):
-            if ucas[k,i] < 0:
-                ucas[:,i] *= -1
+        mo_cas = numpy.dot(mo_coeff[:,ncore:nocc], ucas)
         if with_meta_lowdin:
             log.info('Natural orbital (expansion on meta-Lowdin AOs) in CAS space')
             orth_coeff = orth.orth_ao(casscf.mol, 'meta_lowdin', s=ovlp_ao)
-            mo_cas = reduce(numpy.dot, (orth_coeff.T, ovlp_ao, mo_coeff[:,ncore:nocc], ucas))
+            mo_cas = reduce(numpy.dot, (orth_coeff.T, ovlp_ao, mo_cas))
         else:
             log.info('Natural orbital (expansion on AOs) in CAS space')
-            mo_cas = numpy.dot(mo_coeff[:,ncore:nocc], ucas)
         dump_mat.dump_rec(log.stdout, mo_cas, label, start=1, **kwargs)
         if log.verbose >= logger.DEBUG2:
             if not casscf.natorb:
@@ -252,12 +249,9 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
     from pyscf.lo import orth
     from pyscf.tools import dump_mat
     from pyscf.tools.mo_mapping import mo_1to1map
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(mc.stdout, mc.verbose)
     if mo_coeff is None: mo_coeff = mc.mo_coeff
     if ci is None: ci = mc.ci
+    log = logger.new_logger(mc, verbose)
     ncore = mc.ncore
     ncas = mc.ncas
     nocc = ncore + ncas
@@ -284,9 +278,6 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
 #       [2(=0B011), 0(=0B101), 1(=0B110)]
 # to indicate which CASorb-strings address to be loaded in each natorb-strings slot
     where_natorb = mo_1to1map(ucas)
-    for i, k in enumerate(where_natorb):
-        if ucas[i,k] < 0:
-            ucas[:,k] *= -1
 
     occ = -occ
     mo_occ = numpy.zeros(mo_coeff.shape[1])
@@ -321,6 +312,8 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
             aaaa = ao2mo.restore(4, eris.ppaa[ncore:nocc,ncore:nocc,:,:], ncas)
             aaaa = ao2mo.incore.full(aaaa, ucas)
         else:
+            if getattr(mc, 'with_df', None):
+                raise NotImplementedError('cas_natorb for DFCASCI/DFCASSCF')
             corevhf = mc.get_veff(mc.mol, dm_core)
             ecore += numpy.einsum('ij,ji', dm_core, corevhf) * .5
             h1eff += reduce(numpy.dot, (mocas.T, corevhf, mocas))
@@ -402,12 +395,19 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
     '''
     from pyscf.lo import orth
     from pyscf.tools import dump_mat
+    from pyscf.mcscf import addons
     log = logger.new_logger(mc, verbose)
 
     if mo_coeff is None: mo_coeff = mc.mo_coeff
     if ci is None: ci = mc.ci
     if casdm1 is None:
-        casdm1 = mc.fcisolver.make_rdm1(ci, mc.ncas, mc.nelecas)
+        if (isinstance(ci, (list, tuple)) and
+            not isinstance(mc.fcisolver, addons.StateAverageFCISolver)):
+            log.warn('Mulitple states found in CASCI solver. First state is '
+                     'used to compute the natural orbitals in active space.')
+            casdm1 = mc.fcisolver.make_rdm1(ci[0], mc.ncas, mc.nelecas)
+        else:
+            casdm1 = mc.fcisolver.make_rdm1(ci, mc.ncas, mc.nelecas)
     ncore = mc.ncore
     nocc = ncore + mc.ncas
     nmo = mo_coeff.shape[1]
@@ -424,6 +424,7 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
 # may cause problem for external CI solver eg DMRG.
         mo_coeff1 = numpy.empty_like(mo_coeff)
         mo_coeff1[:,ncore:nocc] = mo_coeff[:,ncore:nocc]
+        log.info('Density matrix diagonal elements %s', casdm1.diagonal())
     if ncore > 0:
         # note the last two args of ._eig for mc1step_symm
         # mc._eig function is called to handle symmetry adapated fock
@@ -668,16 +669,11 @@ class CASCI(lib.StreamObject):
         log.info('canonicalization = %s', self.canonicalization)
         log.info('sorting_mo_energy = %s', self.sorting_mo_energy)
         log.info('max_memory %d (MB)', self.max_memory)
-        if self.mo_coeff is None:
-            log.warn('Orbital initial guess is not given.\n'
-                     'You may need mf.kernel() to generate initial guess form SCF calculation.')
-        try:
+        if hasattr(self.fcisolver, 'dump_flags'):
             self.fcisolver.dump_flags(self.verbose)
-        except AttributeError:
-            pass
         if self.mo_coeff is None:
-            log.warn('Orbital for CASCI is not specified.  You probably need '
-                     'call SCF.kernel() to initialize orbitals.')
+            log.error('Orbitals for CASCI are not specified. The relevant SCF '
+                      'object may not be initialized.')
         return self
 
     def get_hcore(self, mol=None):
@@ -696,8 +692,20 @@ class CASCI(lib.StreamObject):
         return scf.hf.eig(h, None)
 
     def get_h2cas(self, mo_coeff=None):
+        '''Computing active space two-particle Hamiltonian.
+
+        Note It is different to get_h2eff when df.approx_hessian is applied,
+        in which get_h2eff function returns the DF integrals while get_h2cas
+        returns the regular 2-electron integrals.
+        '''
         return self.ao2mo(mo_coeff)
     def get_h2eff(self, mo_coeff=None):
+        '''Computing active space two-particle Hamiltonian.
+
+        Note It is different to get_h2cas when df.approx_hessian is applied.
+        in which get_h2eff function returns the DF integrals while get_h2cas
+        returns the regular 2-electron integrals.
+        '''
         return self.ao2mo(mo_coeff)
     def ao2mo(self, mo_coeff=None):
         if mo_coeff is None:
@@ -713,15 +721,10 @@ class CASCI(lib.StreamObject):
                              max_memory=self.max_memory)
         return eri
 
-    @lib.with_doc(h1e_for_cas.__doc__)
-    def h1e_for_cas(self, mo_coeff=None, ncas=None, ncore=None):
-        if mo_coeff is None: mo_coeff = self.mo_coeff
-        return h1e_for_cas(self, mo_coeff, ncas, ncore)
-    def get_h1cas(self, mo_coeff=None, ncas=None, ncore=None):
-        return self.h1e_for_cas(mo_coeff, ncas, ncore)
+    get_h1cas = h1e_for_cas = h1e_for_cas
+
     def get_h1eff(self, mo_coeff=None, ncas=None, ncore=None):
         return self.h1e_for_cas(mo_coeff, ncas, ncore)
-    get_h1cas.__doc__ = h1e_for_cas.__doc__
     get_h1eff.__doc__ = h1e_for_cas.__doc__
 
     def casci(self, mo_coeff=None, ci0=None):
@@ -756,14 +759,9 @@ class CASCI(lib.StreamObject):
         log = logger.Logger(self.stdout, self.verbose)
 
         if self.canonicalization:
-            if isinstance(self.e_cas, (float, numpy.number)):
-                self.canonicalize_(mo_coeff, self.ci,
-                                   sort=self.sorting_mo_energy,
-                                   cas_natorb=self.natorb, verbose=log)
-            else:
-                self.canonicalize_(mo_coeff, self.ci[0],
-                                   sort=self.sorting_mo_energy,
-                                   cas_natorb=self.natorb, verbose=log)
+            self.canonicalize_(mo_coeff, self.ci,
+                               sort=self.sorting_mo_energy,
+                               cas_natorb=self.natorb, verbose=log)
 
         if hasattr(self.fcisolver, 'converged'):
             self.converged = numpy.all(self.fcisolver.converged)
@@ -902,17 +900,11 @@ class CASCI(lib.StreamObject):
         from pyscf.mcscf import df
         return df.density_fit(self, auxbasis, with_df)
 
-    def approx_hessian(self, auxbasis=None, with_df=None):
-        from pyscf.mcscf import df
-        return df.approx_hessian(self, auxbasis, with_df)
-
     def sfx2c1e(self):
-        import pyscf.x2c.sfx2c1e
-        return pyscf.x2c.sfx2c1e.sfx2c1e(self)
-    def x2c1e(self):
-        return self.sfx2c1e()
-    def x2c(self):
-        return self.x2c1e()
+        from pyscf.x2c import sfx2c1e
+        self._scf = sfx2c1e.sfx2c1e(self._scf)
+        return self
+    x2c = x2c1e = sfx2c1e
 
     def nuc_grad_method(self):
         from pyscf.grad import casci

@@ -429,11 +429,14 @@ def update_orb_ci(casscf, mo, ci0, eris, x0_guess=None,
 
 def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
            ci0=None, callback=None, verbose=logger.NOTE, dump_chk=True):
-    '''CASSCF solver
+    '''Second order CASSCF driver
     '''
     log = logger.new_logger(casscf, verbose)
+    log.warn('SO-CASSCF (Second order CASSCF) is an experimental feature. '
+             'It has bad performance for large system.')
+
     cput0 = (time.clock(), time.time())
-    log.debug('Start newton CASSCF')
+    log.debug('Start SO-CASSCF (newton CASSCF)')
     if callback is None:
         callback = casscf.callback
 

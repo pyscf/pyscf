@@ -81,8 +81,8 @@ def density_fit(casscf, auxbasis=None, with_df=None):
             casscf_class.dump_flags(self)
             logger.info(self, 'DFCASCI/DFCASSCF: density fitting for JK matrix and 2e integral transformation')
 
-        def ao2mo(self, mo_coeff):
-            if self.with_df:
+        def ao2mo(self, mo_coeff=None):
+            if self.with_df and 'CASSCF' in casscf_class.__name__:
                 return _ERIS(self, mo_coeff, self.with_df)
             else:
                 return casscf_class.ao2mo(self, mo_coeff)

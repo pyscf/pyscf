@@ -97,6 +97,13 @@ class SymAdaptedCASSCF(mc1step.CASSCF):
         mo = lib.tag_array(mo, orbsym=self.mo_coeff.orbsym)
         return mo
 
+    def newton(self):
+        from pyscf.mcscf import newton_casscf_symm
+        mc1 = newton_casscf_symm.CASSCF(self._scf, self.ncas, self.nelecas)
+        mc1.__dict__.update(self.__dict__)
+        mc1.max_cycle_micro = 10
+        return mc1
+
 CASSCF = SymAdaptedCASSCF
 
 def _symmetrize(mat, orbsym, groupname):

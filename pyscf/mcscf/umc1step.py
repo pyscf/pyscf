@@ -770,9 +770,9 @@ class UCASSCF(ucasci.UCASCI):
         mo_a = numpy.dot(mo[0], u[0])
         mo_b = numpy.dot(mo[1], u[1])
         if log is not None and log.verbose >= logger.DEBUG:
-            ncore = self.ncore
+            ncore = self.ncore[0]
             ncas = self.ncas
-            nocc = ncore[0] + ncas
+            nocc = ncore + ncas
             s = reduce(numpy.dot, (mo_a[:,ncore:nocc].T, self._scf.get_ovlp(),
                                    self.mo_coeff[0][:,ncore:nocc]))
             log.debug('Alpha active space overlap to initial guess, SVD = %s',

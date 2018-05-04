@@ -1880,9 +1880,7 @@ class Mole(lib.StreamObject):
                 name, the given point group symmetry will be used.
 
         '''
-# release circular referred objs
-# Note obj.x = obj.member_function causes circular referrence
-        gc.collect()
+        gc.collect()  # To release circular referred objects
 
         if isinstance(dump_input, (str, unicode)):
             sys.stderr.write('Assigning the first argument %s to mol.atom\n' %

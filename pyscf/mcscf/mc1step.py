@@ -725,15 +725,13 @@ class CASSCF(casci.CASCI):
         log.info('max_memory %d MB (current use %d MB)',
                  self.max_memory, lib.current_memory()[0])
         log.info('internal_rotation = %s', self.internal_rotation)
-        try:
+        if hasattr(self.fcisolver, 'dump_flags'):
             self.fcisolver.dump_flags(self.verbose)
-        except AttributeError:
-            pass
         if hasattr(self, 'max_orb_stepsize'):
             log.warn('Attribute "max_orb_stepsize" was replaced by "max_stepsize"')
         if self.mo_coeff is None:
-            log.warn('Orbital for CASCI is not specified.  You probably need '
-                     'call SCF.kernel() to initialize orbitals.')
+            log.error('Orbitals for CASCI are not specified. The relevant SCF '
+                      'object may not be initialized.')
         return self
 
     def kernel(self, mo_coeff=None, ci0=None, callback=None, _kern=kernel):
@@ -790,7 +788,7 @@ class CASSCF(casci.CASCI):
             log = logger.Logger(self.stdout, verbose)
 
         e_tot, e_ci, fcivec = casci.kernel(fcasci, mo_coeff, ci0, log)
-        if numpy.size(e_ci) != 1:
+        if not isinstance(e_ci, (float, numpy.number)):
             raise RuntimeError('Multiple roots are detected in fcisolver.  '
                                'CASSCF does not know which state to optimize.\n'
                                'See also  mcscf.state_average  or  mcscf.state_specific  for excited states.')
@@ -874,7 +872,8 @@ class CASSCF(casci.CASCI):
         raise DeprecationWarning('update_ao2mo was obseleted since pyscf v1.0.  '
                                  'Use .ao2mo method instead')
 
-    def ao2mo(self, mo):
+    def ao2mo(self, mo_coeff=None):
+        if mo_coeff is None: mo_coeff = self.mo_coeff
 #        nmo = mo.shape[1]
 #        ncore = self.ncore
 #        ncas = self.ncas
@@ -890,13 +889,25 @@ class CASSCF(casci.CASCI):
 #        eris.papa = numpy.asarray(eri[:,ncore:nocc,:,ncore:nocc], order='C')
 #        return eris
 
-        return mc_ao2mo._ERIS(self, mo, method='incore',
+        return mc_ao2mo._ERIS(self, mo_coeff, method='incore',
                               level=self.ao2mo_level)
 
-    # Don't remove the two functions.  They are used in df/approx_hessian code
+    # Don't remove the two functions.  They are used in df.approx_hessian code
     def get_h2eff(self, mo_coeff=None):
+        '''Computing active space two-particle Hamiltonian.
+
+        Note It is different to get_h2cas when df.approx_hessian is applied,
+        in which get_h2eff function returns the DF integrals while get_h2cas
+        returns the regular 2-electron integrals.
+        '''
         return self.get_h2cas(mo_coeff)
     def get_h2cas(self, mo_coeff=None):
+        '''Computing active space two-particle Hamiltonian.
+
+        Note It is different to get_h2eff when df.approx_hessian is applied,
+        in which get_h2eff function returns the DF integrals while get_h2cas
+        returns the regular 2-electron integrals.
+        '''
         return casci.CASCI.ao2mo(self, mo_coeff)
 
     def update_jk_in_ah(self, mo, r, casdm1, eris):
@@ -1162,9 +1173,20 @@ class CASSCF(casci.CASCI):
     def max_cycle(self, x):
         self.max_cycle_macro = x
 
+    def approx_hessian(self, auxbasis=None, with_df=None):
+        from pyscf.mcscf import df
+        return df.approx_hessian(self, auxbasis, with_df)
+
     def nuc_grad_method(self):
         from pyscf.grad import casscf
         return casscf.Gradients(self)
+
+    def newton(self):
+        from pyscf.mcscf import newton_casscf
+        mc1 = newton_casscf.CASSCF(self._scf, self.ncas, self.nelecas)
+        mc1.__dict__.update(self.__dict__)
+        mc1.max_cycle_micro = 10
+        return mc1
 
 
 # to avoid calculating AO integrals

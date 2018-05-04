@@ -43,8 +43,12 @@ mcu = mcscf.UCASSCF(mfu, 4, 4)
 mcu.conv_tol_grad = 1e-6
 mcu.mc1step()[0]
 
+def tearDownModule():
+    global mol, mfr, mcr, mfu, mcu
+    del mol, mfr, mcr, mfu, mcu
 
-class KnowValues(unittest.TestCase):
+
+class KnownValues(unittest.TestCase):
     def test_spin_square(self):
         ss = mcscf.addons.spin_square(mcr)[0]
         self.assertAlmostEqual(ss, 0, 7)

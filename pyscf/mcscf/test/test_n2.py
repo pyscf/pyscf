@@ -45,8 +45,14 @@ msym = scf.RHF(molsym)
 msym.conv_tol = 1e-9
 msym.scf()
 
+def tearDownModule():
+    global mol, molsym, m, msym
+    mol.stdout.close()
+    molsym.stdout.close()
+    del mol, molsym, m, msym
 
-class KnowValues(unittest.TestCase):
+
+class KnownValues(unittest.TestCase):
     def test_mc1step_4o4e(self):
         mc = mcscf.CASSCF(m, 4, 4)
         emc = mc.mc1step()[0]
@@ -151,6 +157,16 @@ class KnowValues(unittest.TestCase):
         mc.fcisolver.wfnsym = 4
         emc = mc.mc1step()[0]
         self.assertAlmostEqual(emc, -108.74508322877787, 7)
+
+    def test_ucasci(self):
+        mc = mcscf.UCASCI(msym, 4, (3,1))
+        emc = mc.kernel()[0]
+        self.assertAlmostEqual(emc, -108.77486560653847, 7)
+
+    def test_ucasscf_high_cost(self):
+        mc = mcscf.UCASSCF(msym, 4, (3,1))
+        emc = mc.kernel()[0]
+        self.assertAlmostEqual(emc, -108.80789718975041, 7)
 
 if __name__ == "__main__":
     print("Full Tests for N2")

@@ -215,14 +215,11 @@ class UCASCI(lib.StreamObject):
 
         return (eri_aa, eri_ab, eri_bb)
 
-    def get_h1cas(self, mo_coeff=None, ncas=None, ncore=None):
-        return self.h1e_for_cas(mo_coeff, ncas, ncore)
+    get_h1cas = h1e_for_cas = h1e_for_cas
+
     def get_h1eff(self, mo_coeff=None, ncas=None, ncore=None):
         return self.h1e_for_cas(mo_coeff, ncas, ncore)
-    def h1e_for_cas(self, mo_coeff=None, ncas=None, nelecas=None):
-        if mo_coeff is None:
-            mo_coeff = self.mo_coeff
-        return h1e_for_cas(self, mo_coeff, ncas, nelecas)
+    get_h1eff.__doc__ = h1e_for_cas.__doc__
 
     def casci(self, mo_coeff=None, ci0=None):
         return self.kernel(mo_coeff, ci0)
