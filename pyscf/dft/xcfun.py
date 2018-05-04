@@ -911,7 +911,7 @@ def define_xc_(ni, description, xctype='LDA', hyb=0, rsh=(0,0,0)):
     '''Define XC functional.  See also :func:`eval_xc` for the rules of input description.
 
     Args:
-        ni : an instance of :class:`_NumInt`
+        ni : an instance of :class:`NumInt`
 
         description : str
             A string to describe the linear combination of different XC functionals.

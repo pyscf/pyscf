@@ -494,7 +494,7 @@ class Hessian(rhf_hess.Hessian):
 if __name__ == '__main__':
     from pyscf import gto
     from pyscf import dft
-    #dft.numint._NumInt.libxc = dft.xcfun
+    #dft.numint.NumInt.libxc = dft.xcfun
     #xc_code = 'lda,vwn'
     xc_code = 'wb97x'
     #xc_code = 'b3lyp'

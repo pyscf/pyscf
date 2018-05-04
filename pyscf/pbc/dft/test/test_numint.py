@@ -83,7 +83,7 @@ class KnowValues(unittest.TestCase):
         grids = gen_grid.UniformGrids(cell)
         grids.build()
 
-        ni = numint._NumInt()
+        ni = numint.NumInt()
         ao10 = eval_ao(cell, grids.coords, deriv=1)
         ao0 = ao10[0]
         ao1 = ni.eval_ao(cell, grids.coords)
@@ -134,7 +134,7 @@ class KnowValues(unittest.TestCase):
 
         np.random.seed(1)
         kpts = np.random.random((4,3))
-        ni = numint._KNumInt(kpts)
+        ni = numint.KNumInt(kpts)
         ao1 = ni.eval_ao(cell, grids.coords, kpts)
         self.assertAlmostEqual(finger(ao1[0]), (-2.4066959390326477-0.98044994099240701j), 8)
         self.assertAlmostEqual(finger(ao1[1]), (-0.30643153325360639+0.1571658820483913j), 8)
@@ -156,7 +156,7 @@ class KnowValues(unittest.TestCase):
 
         np.random.seed(1)
         kpt = np.random.random(3)
-        ni = numint._NumInt()
+        ni = numint.NumInt()
         ao0 = eval_ao(cell, grids.coords, kpt)
         ao1 = ni.eval_ao(cell, grids.coords, kpt)
         self.assertTrue(numpy.allclose(ao0, ao1, atol=1e-9, rtol=1e-9))
@@ -181,13 +181,13 @@ class KnowValues(unittest.TestCase):
         kpts = np.random.random((2,3))
         dms = np.random.random((2,nao,nao))
         dms = (dms + dms.transpose(0,2,1)) * .5
-        ni = numint._NumInt()
+        ni = numint.NumInt()
         ne, exc, vmat = ni.nr_rks(cell, grids, 'blyp', dms[0], 0, kpts[0])
         self.assertAlmostEqual(ne, 5.0499199224525153, 8)
         self.assertAlmostEqual(exc, -3.8870579114663886, 8)
         self.assertAlmostEqual(finger(vmat), 0.42538491159934377+0.14139753327162483j, 8)
 
-        ni = numint._KNumInt()
+        ni = numint.KNumInt()
         ne, exc, vmat = ni.nr_rks(cell, grids, 'blyp', dms, 0, kpts)
         self.assertAlmostEqual(ne, 6.0923292346269742, 8)
         self.assertAlmostEqual(exc, -3.9899423803106466, 8)
@@ -281,7 +281,7 @@ class KnowValues(unittest.TestCase):
         nao = cell.nao_nr()
         dm = numpy.random.random((nao,nao))
         dm = dm + dm.T
-        ni = numint._NumInt()
+        ni = numint.NumInt()
         rho = numint.get_rho(ni, cell, dm, grids)
         self.assertAlmostEqual(lib.finger(rho), 7.2089907050590334, 9)
 
@@ -301,7 +301,7 @@ class KnowValues(unittest.TestCase):
         nao = cell.nao_nr()
         dm = numpy.random.random((nao,nao))
         dm = dm + dm.T
-        ni = numint._NumInt()
+        ni = numint.NumInt()
         rho = numint.get_rho(ni, cell, dm, grids)
         self.assertAlmostEqual(lib.finger(rho), 1.1624587519868457, 9)
 

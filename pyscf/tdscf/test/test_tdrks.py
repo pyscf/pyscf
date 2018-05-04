@@ -116,13 +116,13 @@ class KnownValues(unittest.TestCase):
     def test_tddft_b3lyp_xcfun(self):
         td = rks.TDDFT(mf_b3lyp1)
         es = td.kernel(nstates=5)[0] * 27.2114
-        dft.numint._NumInt.libxc = dft.libxc
+        dft.numint.NumInt.libxc = dft.libxc
         self.assertAlmostEqual(abs(es - [9.88975514, 9.88975514, 15.16643994, 30.55289462, 30.55289462]).max(), 0, 6)
 
     def test_tda_b3lyp_xcfun(self):
         td = rks.TDA(mf_b3lyp1)
         es = td.kernel(nstates=5)[0] * 27.2114
-        dft.numint._NumInt.libxc = dft.libxc
+        dft.numint.NumInt.libxc = dft.libxc
         self.assertAlmostEqual(lib.finger(es), -41.393122257109056, 6)
 
     def test_tda_lda_xcfun(self):
@@ -133,7 +133,7 @@ class KnownValues(unittest.TestCase):
         mf.scf()
         td = rks.TDA(mf)
         es = td.kernel(nstates=5)[0] * 27.2114
-        dft.numint._NumInt.libxc = dft.libxc
+        dft.numint.NumInt.libxc = dft.libxc
         self.assertAlmostEqual(lib.finger(es), -41.201828219760415, 6)
 
     def test_tda_b3lyp_triplet(self):

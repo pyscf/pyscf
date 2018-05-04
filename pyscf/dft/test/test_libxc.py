@@ -36,6 +36,10 @@ nao = mol.nao_nr()
 ao = dft.numint.eval_ao(mol, mf.grids.coords, deriv=1)
 rho = dft.numint.eval_rho(mol, ao, dm, xctype='GGA')
 
+def tearDownModule():
+    global mol, mf, ao, rho
+    del mol, mf, ao, rho
+
 def finger(a):
     w = numpy.cos(numpy.arange(a.size))
     return numpy.dot(w, a.ravel())

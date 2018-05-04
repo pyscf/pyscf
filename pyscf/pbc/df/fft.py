@@ -179,7 +179,7 @@ class FFTDF(lib.StreamObject):
 
 # Not input options
         self.exxdiv = None  # to mimic KRHF/KUHF object in function get_coulG
-        self._numint = numint._KNumInt()
+        self._numint = numint.KNumInt()
         self._keys = set(self.__dict__.keys())
 
     @property

@@ -317,7 +317,7 @@ def make_psi_vmat(pcmobj, dm, r_vdw, ui, grids, ylm_1sph, cached_pol, L_X, L):
 
     if not (isinstance(dm, numpy.ndarray) and dm.ndim == 2):
         dm = dm[0] + dm[1]
-    ni = numint._NumInt()
+    ni = numint.NumInt()
     max_memory = pcmobj.max_memory - lib.current_memory()[0]
     make_rho, nset, nao = ni._gen_rho_evaluator(mol, dm)
     shls_slice = (0, mol.nbas)

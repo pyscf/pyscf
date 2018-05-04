@@ -296,7 +296,7 @@ def _dft_common_init_(mf):
     mf.small_rho_cutoff = getattr(__config__, 'dft_rks_RKS_small_rho_cutoff', 1e-7)
 ##################################################
 # don't modify the following attributes, they are not input options
-    mf._numint = numint._NumInt()
+    mf._numint = numint.NumInt()
     mf._keys = mf._keys.union(['xc', 'nlc', 'omega', 'grids', 'nlcgrids',
                                'small_rho_cutoff'])
 

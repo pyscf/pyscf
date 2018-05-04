@@ -618,7 +618,7 @@ def nr_vxc(mol, grids, xc_code, dms, spin=0, relativity=0, hermi=0,
     >>> dm = numpy.random.random((2,nao,nao))
     >>> nelec, exc, vxc = dft.numint.nr_vxc(mol, grids, 'lda,vwn', dm, spin=1)
     '''
-    ni = _NumInt()
+    ni = NumInt()
     return ni.nr_vxc(mol, grids, xc_code, dms, spin, relativity,
                      hermi, max_memory, verbose)
 
@@ -628,7 +628,7 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
     for a set of density matrices
 
     Args:
-        ni : an instance of :class:`_NumInt`
+        ni : an instance of :class:`NumInt`
 
         mol : an instance of :class:`Mole`
 
@@ -661,7 +661,7 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
     >>> grids.weights = numpy.random.random(100)
     >>> nao = mol.nao_nr()
     >>> dm = numpy.random.random((nao,nao))
-    >>> ni = dft.numint._NumInt()
+    >>> ni = dft.numint.NumInt()
     >>> nelec, exc, vxc = ni.nr_rks(mol, grids, 'lda,vwn', dm)
     '''
     xctype = ni._xc_type(xc_code)
@@ -823,7 +823,7 @@ def nr_uks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
     >>> grids.weights = numpy.random.random(100)
     >>> nao = mol.nao_nr()
     >>> dm = numpy.random.random((2,nao,nao))
-    >>> ni = dft.numint._NumInt()
+    >>> ni = dft.numint.NumInt()
     >>> nelec, exc, vxc = ni.nr_uks(mol, grids, 'lda,vwn', dm)
     '''
     xctype = ni._xc_type(xc_code)
@@ -967,7 +967,7 @@ def nr_rks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
     '''Contract RKS XC (singlet hessian) kernel matrix with given density matrices
 
     Args:
-        ni : an instance of :class:`_NumInt`
+        ni : an instance of :class:`NumInt`
 
         mol : an instance of :class:`Mole`
 
@@ -1238,7 +1238,7 @@ def nr_uks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
     '''Contract UKS XC kernel matrix with given density matrices
 
     Args:
-        ni : an instance of :class:`_NumInt`
+        ni : an instance of :class:`NumInt`
 
         mol : an instance of :class:`Mole`
 
@@ -1680,7 +1680,7 @@ def nr_fxc(mol, grids, xc_code, dm0, dms, spin=0, relativity=0, hermi=0,
             a_{pq} = f_{pq,rs} * x_{rs}
 
     '''
-    ni = _NumInt()
+    ni = NumInt()
     return ni.nr_fxc(mol, grids, xc_code, dm0, dms, spin, relativity,
                      hermi, rho0, vxc, fxc, max_memory, verbose)
 
@@ -1731,7 +1731,7 @@ def get_rho(ni, mol, dm, grids, max_memory=2000):
     return rho
 
 
-class _NumInt(object):
+class NumInt(object):
     def __init__(self):
         self.libxc = libxc
 
@@ -1870,6 +1870,7 @@ class _NumInt(object):
         else:
             hyb = self.hybrid_coeff(xc_code, spin)
         return omega, alpha, hyb
+_NumInt = NumInt
 
 
 if __name__ == '__main__':

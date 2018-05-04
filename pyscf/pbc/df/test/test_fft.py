@@ -413,7 +413,7 @@ def get_j_kpts(mf, cell, dm_kpts, kpts, kpts_band=None):
     dm_kpts = np.asarray(dm_kpts)
     nao = dm_kpts.shape[-1]
 
-    ni = numint._KNumInt(kpts)
+    ni = numint.KNumInt(kpts)
     aoR_kpts = ni.eval_ao(cell, coords, kpts)
     if kpts_band is not None:
         aoR_kband = numint.eval_ao(cell, coords, kpts_band)
@@ -447,7 +447,7 @@ def get_jk_kpts(mf, cell, dm_kpts, kpts, kpts_band=None):
     dms = dm_kpts.reshape(-1,nkpts,nao,nao)
     nset = dms.shape[0]
 
-    ni = numint._KNumInt(kpts)
+    ni = numint.KNumInt(kpts)
     aoR_kpts = ni.eval_ao(cell, coords, kpts)
     if kpts_band is not None:
         aoR_kband = numint.eval_ao(cell, coords, kpts_band)

@@ -6,7 +6,7 @@ Input a XC functional which was not implemented in pyscf.
 See also
 * The definition of define_xc_ function in pyscf/dft/libxc.py
 * dft.libxc for API of function eval_xc;
-* dft.numint._NumInt class for its methods eval_xc, hybrid_coeff and _xc_type.
+* dft.numint.NumInt class for its methods eval_xc, hybrid_coeff and _xc_type.
   These methods controls the XC functional evaluation;
 * Example 24-custom_xc_functional.py to customize XC functionals using the
   functionals provided by Libxc or XcFun library.

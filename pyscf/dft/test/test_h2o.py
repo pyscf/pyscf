@@ -64,6 +64,14 @@ h2osym_cation = gto.M(
     spin = 1,
     basis = '631g')
 
+def tearDownModule():
+    global h2o, h2osym, h2o_cation, h2osym_cation
+    h2o.stdout.close()
+    h2osym.stdout.close()
+    h2o_cation.stdout.close()
+    h2osym_cation.stdout.close()
+    del h2o, h2osym, h2o_cation, h2osym_cation
+
 
 class KnownValues(unittest.TestCase):
     def test_nr_lda(self):

@@ -59,6 +59,12 @@ h2o.atom = [
 h2o.basis = {"H": '6-31g', "O": '6-31g',}
 h2o.build()
 
+def tearDownModule():
+    dft.numint.SWITCH_SIZE = 800
+    global mol, mf, h4, mf_h4, mol1, h2o
+    h2o.stdout.close()
+    del mol, mf, h4, mf_h4, mol1, h2o
+
 def finger(a):
     return numpy.dot(numpy.cos(numpy.arange(a.size)), a.ravel())
 
@@ -137,7 +143,7 @@ class KnownValues(unittest.TestCase):
         rho0[4]+= rho0[5]*2
         rho0[5] *= .5
 
-        ni = dft.numint._NumInt()
+        ni = dft.numint.NumInt()
         rho1 = ni.eval_rho (mol, ao, dm, xctype='MGGA')
         rho2 = ni.eval_rho2(mol, ao, mo_coeff, mo_occ, xctype='MGGA')
         self.assertTrue(numpy.allclose(rho0, rho1))
@@ -237,7 +243,7 @@ class KnownValues(unittest.TestCase):
         mo_occ[-2:] = -1
         dm0 = numpy.einsum('pi,i,qi->pq', mo_coeff, mo_occ, mo_coeff)
         dms = numpy.random.random((2,nao,nao))
-        ni = dft.numint._NumInt()
+        ni = dft.numint.NumInt()
         v = ni.nr_fxc(mol1, mf.grids, 'B88,', dm0, dms, spin=0, hermi=0)
         self.assertAlmostEqual(finger(v), -7.5671368618070343, 8)
 
@@ -269,7 +275,7 @@ class KnownValues(unittest.TestCase):
         mo_occ[-2:] = -1
         dm0 = numpy.einsum('pi,i,qi->pq', mo_coeff, mo_occ, mo_coeff)
         dms = numpy.random.random((2,nao,nao))
-        ni = dft.numint._NumInt()
+        ni = dft.numint.NumInt()
 
         rvf = ni.cache_xc_kernel(mol1, mf.grids, 'B88,', [mo_coeff,mo_coeff],
                                  [mo_occ*.5]*2, spin=1)
@@ -308,7 +314,7 @@ class KnownValues(unittest.TestCase):
         mo_occ[:,-2:] = -1
         dm0 = numpy.einsum('xpi,xi,xqi->xpq', mo_coeff, mo_occ, mo_coeff)
         dms = numpy.random.random((2,nao,nao))
-        ni = dft.numint._NumInt()
+        ni = dft.numint.NumInt()
         v = ni.nr_fxc(mol1, mf.grids, 'B88,', dm0, dms, spin=1)
         self.assertAlmostEqual(finger(v), -10.316443204083185, 8)
 

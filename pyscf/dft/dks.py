@@ -131,7 +131,7 @@ class UKS(dhf.UHF):
                                         1e-7)
 ##################################################
 # don't modify the following attributes, they are not input options
-        self._numint = r_numint._RNumInt()
+        self._numint = r_numint.RNumInt()
         self._keys = self._keys.union(['xc', 'grids', 'small_rho_cutoff'])
 
     def dump_flags(self):
