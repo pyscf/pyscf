@@ -120,8 +120,8 @@ class KnownValues(unittest.TestCase):
         mc1.kernel()
         self.assertAlmostEqual(mc1.e_tot, -108.80445340617777, 9)
         dm1 = mc1.analyze()
-        self.assertAlmostEqual(lib.finger(dm1[0]), 2.6993157521103779, 7)
-        self.assertAlmostEqual(lib.finger(dm1[1]), 2.6993157521103779, 7)
+        self.assertAlmostEqual(lib.finger(dm1[0]), 2.6993157521103779, 5)
+        self.assertAlmostEqual(lib.finger(dm1[1]), 2.6993157521103779, 5)
 
 
 if __name__ == "__main__":

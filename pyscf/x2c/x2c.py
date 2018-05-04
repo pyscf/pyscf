@@ -490,7 +490,7 @@ def _x2c1e_get_hcore(t, v, w, s, c):
 
 def _proj_dmll(mol_nr, dm_nr, mol):
     from pyscf.scf import addons
-    proj = addons.project_mo_nr2r(mol_nr, 1, mol)
+    proj = addons.project_mo_nr2r(mol_nr, numpy.eye(mol_nr.nao_nr()), mol)
     # *.5 because alpha and beta are summed in project_mo_nr2r
     dm_ll = reduce(numpy.dot, (proj, dm_nr*.5, proj.T.conj()))
     dm_ll = (dm_ll + dhf.time_reversal_matrix(mol, dm_ll)) * .5

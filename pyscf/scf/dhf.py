@@ -737,7 +737,7 @@ def _proj_dmll(mol_nr, dm_nr, mol):
     representation
     '''
     from pyscf.scf import addons
-    proj = addons.project_mo_nr2r(mol_nr, 1, mol)
+    proj = addons.project_mo_nr2r(mol_nr, numpy.eye(mol_nr.nao_nr()), mol)
 
     n2c = proj.shape[0]
     n4c = n2c * 2

@@ -297,6 +297,7 @@ class KUHF(pbcuhf.UHF, khf.KSCF):
     '''
     conv_tol = getattr(__config__, 'pbc_scf_KSCF_conv_tol', 1e-7)
     conv_tol_grad = getattr(__config__, 'pbc_scf_KSCF_conv_tol_grad', None)
+    direct_scf = getattr(__config__, 'pbc_scf_SCF_direct_scf', False)
 
     def __init__(self, cell, kpts=np.zeros((1,3)),
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):

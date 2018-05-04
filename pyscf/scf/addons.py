@@ -20,6 +20,7 @@
 import copy
 from functools import reduce
 import numpy
+import scipy.linalg
 from pyscf import lib
 from pyscf.gto import mole
 from pyscf.lib import logger
@@ -277,21 +278,32 @@ def mom_occ_(mf, occorb, setocc):
 mom_occ = mom_occ_
 
 def project_mo_nr2nr(mol1, mo1, mol2):
-    r''' Project orbital coefficients
+    r''' Project orbital coefficients from basis set 1 (C1 for mol1) to basis
+    set 2 (C2 for mol2).
 
     .. math::
 
-        |\psi1> = |AO1> C1
+        |\psi1\rangle = |AO1\rangle C1
 
-        |\psi2> = P |\psi1> = |AO2>S^{-1}<AO2| AO1> C1 = |AO2> C2
+        |\psi2\rangle = P |\psi1\rangle = |AO2\rangle S^{-1}\langle AO2| AO1\rangle> C1 = |AO2\rangle> C2
 
-        C2 = S^{-1}<AO2|AO1> C1
+        C2 = S^{-1}\langle AO2|AO1\rangle C1
+
+    There are three relevant functions:
+    :func:`project_mo_nr2nr` is the projection for non-relativistic (scalar) basis.
+    :func:`project_mo_nr2r` projects from non-relativistic to relativistic basis.
+    :func:`project_mo_r2r`  is the projection between relativistic (spinor) basis.
     '''
     s22 = mol2.intor_symmetric('int1e_ovlp')
     s21 = mole.intor_cross('int1e_ovlp', mol2, mol1)
-    return lib.cho_solve(s22, numpy.dot(s21, mo1))
+    if isinstance(mo1, numpy.ndarray) and mo1.ndim == 2:
+        return lib.cho_solve(s22, numpy.dot(s21, mo1))
+    else:
+        return [lib.cho_solve(s22, numpy.dot(s21, x)) for x in mo1]
 
 def project_mo_nr2r(mol1, mo1, mol2):
+    __doc__ = project_mo_nr2nr.__doc__
+
     assert(not mol1.cart)
     s22 = mol2.intor_symmetric('int1e_ovlp_spinor')
     s21 = mole.intor_cross('int1e_ovlp_sph', mol2, mol1)
@@ -300,10 +312,15 @@ def project_mo_nr2r(mol1, mo1, mol2):
     s21 = numpy.dot(ua.T.conj(), s21) + numpy.dot(ub.T.conj(), s21) # (*)
     # mo2: alpha, beta have been summed in Eq. (*)
     # so DM = mo2[:,:nocc] * 1 * mo2[:,:nocc].H
-    mo2 = numpy.dot(s21, mo1)
-    return lib.cho_solve(s22, mo2)
+    if isinstance(mo1, numpy.ndarray) and mo1.ndim == 2:
+        mo2 = numpy.dot(s21, mo1)
+        return lib.cho_solve(s22, mo2)
+    else:
+        return [lib.cho_solve(s22, numpy.dot(s21, x)) for x in mo1]
 
 def project_mo_r2r(mol1, mo1, mol2):
+    __doc__ = project_mo_nr2nr.__doc__
+
     s22 = mol2.intor_symmetric('int1e_ovlp_spinor')
     t22 = mol2.intor_symmetric('int1e_spsp_spinor')
     s21 = mole.intor_cross('int1e_ovlp_spinor', mol2, mol1)
@@ -311,8 +328,72 @@ def project_mo_r2r(mol1, mo1, mol2):
     n2c = s21.shape[1]
     pl = lib.cho_solve(s22, s21)
     ps = lib.cho_solve(t22, t21)
-    return numpy.vstack((numpy.dot(pl, mo1[:n2c]),
-                         numpy.dot(ps, mo1[n2c:])))
+    if isinstance(mo1, numpy.ndarray) and mo1.ndim == 2:
+        return numpy.vstack((numpy.dot(pl, mo1[:n2c]),
+                             numpy.dot(ps, mo1[n2c:])))
+    else:
+        return [numpy.vstack((numpy.dot(pl, x[:n2c]),
+                              numpy.dot(ps, x[n2c:]))) for x in mo1]
+
+def project_dm_nr2nr(mol1, dm1, mol2):
+    r''' Project density matrix representation from basis set 1 (mol1) to basis
+    set 2 (mol2).
+
+    .. math::
+
+        |AO2\rangle DM_AO2 \langle AO2|
+
+        = |AO2\rangle P DM_AO1 P \langle AO2|
+
+        DM_AO2 = P DM_AO1 P
+
+        P = S_{AO2}^{-1}\langle AO2|AO1\rangle
+
+    There are three relevant functions:
+    :func:`project_dm_nr2nr` is the projection for non-relativistic (scalar) basis.
+    :func:`project_dm_nr2r` projects from non-relativistic to relativistic basis.
+    :func:`project_dm_r2r`  is the projection between relativistic (spinor) basis.
+    '''
+    s22 = mol2.intor_symmetric('int1e_ovlp')
+    s21 = mole.intor_cross('int1e_ovlp', mol2, mol1)
+    p21 = lib.cho_solve(s22, s21)
+    if isinstance(dm1, numpy.ndarray) and dm1.ndim == 2:
+        return reduce(numpy.dot, (p21, dm1, p21.conj().T))
+    else:
+        return lib.einsum('pi,nij,qj->npq', p21, dm1, p21.conj())
+
+def project_dm_nr2r(mol1, dm1, mol2):
+    __doc__ = project_dm_nr2nr.__doc__
+
+    assert(not mol1.cart)
+    s22 = mol2.intor_symmetric('int1e_ovlp_spinor')
+    s21 = mole.intor_cross('int1e_ovlp_sph', mol2, mol1)
+
+    ua, ub = mol2.sph2spinor_coeff()
+    s21 = numpy.dot(ua.T.conj(), s21) + numpy.dot(ub.T.conj(), s21) # (*)
+    # mo2: alpha, beta have been summed in Eq. (*)
+    # so DM = mo2[:,:nocc] * 1 * mo2[:,:nocc].H
+    p21 = lib.cho_solve(s22, s21)
+    if isinstance(dm1, numpy.ndarray) and dm1.ndim == 2:
+        return reduce(numpy.dot, (p21, dm1, p21.conj().T))
+    else:
+        return lib.einsum('pi,nij,qj->npq', p21, dm1, p21.conj())
+
+def project_dm_r2r(mol1, dm1, mol2):
+    __doc__ = project_dm_nr2nr.__doc__
+
+    s22 = mol2.intor_symmetric('int1e_ovlp_spinor')
+    t22 = mol2.intor_symmetric('int1e_spsp_spinor')
+    s21 = mole.intor_cross('int1e_ovlp_spinor', mol2, mol1)
+    t21 = mole.intor_cross('int1e_spsp_spinor', mol2, mol1)
+    n2c = s21.shape[1]
+    pl = lib.cho_solve(s22, s21)
+    ps = lib.cho_solve(t22, t21)
+    p21 = scipy.linalg.block_diag(pl, ps)
+    if isinstance(dm1, numpy.ndarray) and dm1.ndim == 2:
+        return reduce(numpy.dot, (p21, dm1, p21.conj().T))
+    else:
+        return lib.einsum('pi,nij,qj->npq', p21, dm1, p21.conj())
 
 
 def remove_linear_dep_(mf, threshold=1e-8, lindep=1e-14):

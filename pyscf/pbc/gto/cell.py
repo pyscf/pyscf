@@ -1498,6 +1498,9 @@ class Cell(mole.Mole):
 
         See also Mole.intor
         '''
+        if self._env is []:
+            sys.stderr.write('Warning: intor envs of %s not initialized.\n' % self)
+            self.build(False, False)
         return intor_cross(intor, self, self, comp, hermi, kpts, kpt, **kwargs)
 
     @lib.with_doc(pbc_eval_gto.__doc__)

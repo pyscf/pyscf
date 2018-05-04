@@ -177,7 +177,7 @@ def project_to_atomic_orbitals(mol, basname):
         else:
             ecpcore = [0] * 4
 
-        ano = project_mo_nr2nr(atmp, 1, atm)
+        ano = project_mo_nr2nr(atmp, numpy.eye(atmp.nao_nr()), atm)
         rm_ano = numpy.eye(ano.shape[0]) - reduce(numpy.dot, (ano, ano.T, s0))
         c = rm_ano.copy()
         for l in range(param.L_MAX):

@@ -671,7 +671,7 @@ O    SP
     def test_condense_to_shell(self):
         mol1 = mol0.copy()
         mol1.symmetry = False
-        mol1.build(False, False)
+        mol1._built = False # test .build(False, False) in intor
         v = gto.condense_to_shell(mol1, mol1.intor('int1e_ovlp'), numpy.max)
         self.assertAlmostEqual(lib.finger(v), 5.7342530154117846, 9)
 

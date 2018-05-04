@@ -90,6 +90,9 @@ def init_guess_by_chkfile(cell, chkfile_name, project=None, kpt=None):
 class UHF(mol_uhf.UHF, pbchf.SCF):
     '''UHF class for PBCs.
     '''
+
+    direct_scf = getattr(__config__, 'pbc_scf_SCF_direct_scf', False)
+
     def __init__(self, cell, kpt=np.zeros(3),
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         pbchf.SCF.__init__(self, cell, kpt, exxdiv)

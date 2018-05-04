@@ -418,7 +418,7 @@ def init_guess_by_minao(mol):
 
     pmol = gto.Mole()
     pmol._atm, pmol._bas, pmol._env = pmol.make_env(new_atom, basis, [])
-    c = addons.project_mo_nr2nr(pmol, 1, mol)
+    c = addons.project_mo_nr2nr(pmol, numpy.eye(pmol.nao_nr()), mol)
 
     dm = numpy.dot(c*occ, c.T)
 # normalize eletron number
@@ -1238,10 +1238,6 @@ class SCF(lib.StreamObject):
     conv_check = getattr(__config__, 'scf_hf_SCF_conv_check', True)
 
     def __init__(self, mol):
-        if not mol._built:
-            sys.stderr.write('Warning: %s must be initialized before calling SCF.\n'
-                             'Initialize %s in %s\n' % (mol, mol, self))
-            mol.build()
         self.mol = mol
         self.verbose = mol.verbose
         self.max_memory = mol.max_memory

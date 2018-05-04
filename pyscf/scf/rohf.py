@@ -77,6 +77,7 @@ def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
     if diis and cycle >= diis_start_cycle:
         f = diis.update(s1e, dm_tot, f, mf, h1e, vhf)
     f = hf.level_shift(s1e, dm_tot*.5, f, level_shift_factor)
+    f = lib.tag_array(f, focka=focka, fockb=fockb)
     return f
 
 def get_roothaan_fock(focka_fockb, dma_dmb, s):

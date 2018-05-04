@@ -18,7 +18,7 @@ import copy
 import numpy
 import scipy.linalg
 
-from pyscf import gto
+from pyscf import gto, lib
 from pyscf import scf, dft
 from pyscf.scf import addons
 
@@ -34,6 +34,11 @@ mol.basis = {"H": '6-31g',
              "O": '6-31g',}
 mol.build()
 mf = scf.RHF(mol).run()
+
+mol_dz = mol.copy()
+mol_dz.basis = 'cc-pvdz'
+mol_dz.cart = True
+mol_dz.build(False, False)
 
 mol1 = mol.copy()
 mol1.spin = 2
@@ -51,9 +56,9 @@ mol3.build(0,0)
 sym_mf_u = scf.UHF(mol3).run()
 
 def tearDownModule():
-    global mol, mf, mol1, mf_u, mol2, sym_mf, mol3, sym_mf_u
+    global mol, mf, mol_dz, mol1, mf_u, mol2, sym_mf, mol3, sym_mf_u
     mol.stdout.close()
-    del mol, mf, mol1, mf_u, mol2, sym_mf, mol3, sym_mf_u
+    del mol, mf, mol_dz, mol1, mf_u, mol2, sym_mf, mol3, sym_mf_u
 
 
 class KnownValues(unittest.TestCase):
@@ -61,50 +66,94 @@ class KnownValues(unittest.TestCase):
         nao = mol.nao_nr()
         c = numpy.random.random((nao,nao))
         c1 = addons.project_mo_nr2nr(mol, c, mol)
-        self.assertTrue(numpy.allclose(c, c1))
+        self.assertAlmostEqual(abs(c-c1).max(), 0, 12)
 
         numpy.random.seed(15)
         nao = mol.nao_nr()
         mo1 = numpy.random.random((nao,nao))
-        mol2 = gto.Mole()
-        mol2.atom = mol.atom
-        mol2.basis = {'H': 'cc-pvdz', 'O': 'cc-pvdz'}
-        mol2.build(False, False)
-        mo2 = addons.project_mo_nr2nr(mol, mo1, mol2)
-        self.assertAlmostEqual(abs(mo2).sum(), 83.342096002254607, 11)
-
-        mol2.cart = True
-        mo2 = addons.project_mo_nr2nr(mol, mo1, mol2)
-        self.assertAlmostEqual(abs(mo2).sum(), 83.436359425591888, 11)
+        mo2 = addons.project_mo_nr2nr(mol, [mo1,mo1], mol_dz)
+        self.assertAlmostEqual(abs(mo2[0]).sum(), 83.436359425591888, 11)
+        self.assertAlmostEqual(abs(mo2[1]).sum(), 83.436359425591888, 11)
 
     def test_project_mo_r2r(self):
         nao = mol.nao_2c()
         c = numpy.random.random((nao*2,nao*2))
         c = c + numpy.sin(c)*1j
         c1 = addons.project_mo_r2r(mol, c, mol)
-        self.assertTrue(numpy.allclose(c, c1))
+        self.assertAlmostEqual(abs(c-c1).max(), 0, 12)
 
         numpy.random.seed(15)
         n2c = mol.nao_2c()
         n4c = n2c * 2
         mo1 = numpy.random.random((n4c,n4c)) + numpy.random.random((n4c,n4c))*1j
-        mol2 = gto.Mole()
-        mol2.atom = mol.atom
-        mol2.basis = {'H': 'cc-pvdz', 'O': 'cc-pvdz'}
-        mol2.build(False, False)
-        mo2 = addons.project_mo_r2r(mol, mo1, mol2)
-        self.assertAlmostEqual(abs(mo2).sum(), 2159.3715489514038, 11)
+        mo2 = addons.project_mo_r2r(mol, [mo1,mo1], mol_dz)
+        self.assertAlmostEqual(abs(mo2[0]).sum(), 2159.3715489514038, 11)
+        self.assertAlmostEqual(abs(mo2[1]).sum(), 2159.3715489514038, 11)
 
     def test_project_mo_nr2r(self):
         numpy.random.seed(15)
         nao = mol.nao_nr()
         mo1 = numpy.random.random((nao,nao))
-        mol2 = gto.Mole()
-        mol2.atom = mol.atom
-        mol2.basis = {'H': 'cc-pvdz', 'O': 'cc-pvdz'}
-        mol2.build(False, False)
-        mo2 = addons.project_mo_nr2r(mol, mo1, mol2)
+        mo2 = addons.project_mo_nr2r(mol, [mo1,mo1], mol_dz)
+        self.assertAlmostEqual(abs(mo2[0]).sum(), 172.66468850263556, 11)
+        self.assertAlmostEqual(abs(mo2[1]).sum(), 172.66468850263556, 11)
+
+        mo2 = addons.project_mo_nr2r(mol, mo1, mol_dz)
         self.assertAlmostEqual(abs(mo2).sum(), 172.66468850263556, 11)
+
+    def test_project_dm_nr2nr(self):
+        nao = mol.nao_nr()
+        dm = numpy.random.random((nao,nao))
+        dm = dm + dm.T
+        x1 = addons.project_dm_nr2nr(mol, dm, mol)
+        self.assertAlmostEqual(abs(dm-x1).max(), 0, 12)
+
+        numpy.random.seed(15)
+        mo = numpy.random.random((nao,10))
+        mo1 = addons.project_mo_nr2nr(mol, mo, mol_dz)
+        dm = numpy.dot(mo, mo.T)
+        dmref = numpy.dot(mo1, mo1.T)
+        dm1 = addons.project_dm_nr2nr(mol, [dm,dm], mol_dz)
+
+        self.assertAlmostEqual(abs(dmref-dm1[0]).max(), 0, 11)
+        self.assertAlmostEqual(abs(dmref-dm1[1]).max(), 0, 11)
+        self.assertAlmostEqual(lib.finger(dm1[0]), 73.603267455214876, 11)
+
+    def test_project_dm_r2r(self):
+        nao = mol.nao_2c()
+        dm = numpy.random.random((nao*2,nao*2))
+        dm = dm + numpy.sin(dm)*1j
+        x1 = addons.project_dm_r2r(mol, dm, mol)
+        self.assertTrue(numpy.allclose(dm, x1))
+
+        numpy.random.seed(15)
+        n2c = mol.nao_2c()
+        n4c = n2c * 2
+        mo = numpy.random.random((n4c,10)) + numpy.random.random((n4c,10))*1j
+        mo1 = addons.project_mo_r2r(mol, mo, mol_dz)
+        dm = numpy.dot(mo, mo.T.conj())
+        dmref = numpy.dot(mo1, mo1.T.conj())
+        dm1 = addons.project_dm_r2r(mol, [dm,dm], mol_dz)
+
+        self.assertAlmostEqual(abs(dmref-dm1[0]).max(), 0, 11)
+        self.assertAlmostEqual(abs(dmref-dm1[1]).max(), 0, 11)
+        self.assertAlmostEqual(lib.finger(dm1[0]), -5.3701392643370607+15.484616570244016j, 11)
+
+    def test_project_dm_nr2r(self):
+        numpy.random.seed(15)
+        nao = mol.nao_nr()
+        mo = numpy.random.random((nao,10))
+        mo1 = addons.project_mo_nr2r(mol, mo, mol_dz)
+        dm = numpy.dot(mo, mo.T.conj())
+        dmref = numpy.dot(mo1, mo1.T.conj())
+        dm1 = addons.project_dm_nr2r(mol, [dm,dm], mol_dz)
+
+        self.assertAlmostEqual(abs(dmref-dm1[0]).max(), 0, 11)
+        self.assertAlmostEqual(abs(dmref-dm1[1]).max(), 0, 11)
+        self.assertAlmostEqual(lib.finger(dm1[0]), -13.580612999088892-20.209297457056557j, 11)
+
+        dm1 = addons.project_dm_nr2r(mol, dm, mol_dz)
+        self.assertAlmostEqual(abs(dmref-dm1).max(), 0, 11)
 
     def test_frac_occ(self):
         mol = gto.Mole()

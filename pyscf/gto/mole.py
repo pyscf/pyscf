@@ -1674,8 +1674,8 @@ class Mole(lib.StreamObject):
             stored in symm_orb.  The irrep symbols are defined in
             :attr:`symm.param.IRREP_ID_TABLE`
         _built : bool
-            To label whether :func:`Mole.build` has been called.  It ensures some functions
-            being initialized once.
+            To label whether :func:`Mole.build` has been called.  It is to
+            ensure certain functions being initialized only once.
         _basis : dict
             like :attr:`Mole.basis`, the internal format which is returned from the
             parser :func:`format_basis`
@@ -1749,7 +1749,7 @@ class Mole(lib.StreamObject):
 # don't modify the following private variables, they are not input options
         self._atm = numpy.zeros((0,6))
         self._bas = numpy.zeros((0,8))
-        self._env = [0] * PTR_ENV_START
+        self._env = []
         self._ecpbas = numpy.zeros((0,8))
 
         self.stdout = sys.stdout
@@ -1980,6 +1980,7 @@ class Mole(lib.StreamObject):
 # Note the internal _format is in Bohr
             self._atom = self.format_atom(self._atom, orig, axes, 'Bohr')
 
+        self._env = [0] * PTR_ENV_START
         self._env[PTR_LIGHT_SPEED] = param.LIGHT_SPEED
         self._atm, self._bas, self._env = \
                 self.make_env(self._atom, self._basis, self._env, self.nucmod)
@@ -2725,6 +2726,9 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
          [-0.67146312+0.j  0.00000000+0.j -1.69771092+0.j  0.00000000+0.j]
          [ 0.00000000+0.j -0.67146312+0.j  0.00000000+0.j -1.69771092+0.j]]
         '''
+        if self._env is []:
+            sys.stderr.write('Warning: intor envs of %s not initialized.\n' % self)
+            self.build(False, False)
         intor = self._add_suffix(intor)
         if 'ECP' in intor:
             assert(self._ecp is not None)

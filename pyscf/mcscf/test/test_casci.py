@@ -100,6 +100,24 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.finger(dm1[0]), 2.6252082970845532, 7)
         self.assertAlmostEqual(lib.finger(dm1[1]), 2.6252082970845532, 7)
 
+    def test_external_fcisolver(self):
+        class FCI_as_DMRG(fci.direct_spin1.FCISolver):
+            def __getattribute__(self, attr):
+                """Prevent 'private' attribute access"""
+                if attr in ('make_rdm1s', 'spin_square'):
+                    raise AttributeError
+                else:
+                    return object.__getattribute__(self, attr)
+        mc1 = mcscf.CASCI(m, 4, 4)
+        mc1.fcisolver = FCI_as_DMRG(mol)
+        mc1.fcisolver.nroots = 2
+        mc1.natorb = True
+        mc1.kernel()
+        self.assertAlmostEqual(mc1.e_tot[0], -108.83741684447352, 9)
+        self.assertAlmostEqual(mc1.e_tot[1], -108.72522194135604, 9)
+        dm1 = mc1.analyze(with_meta_lowdin=False)
+        self.assertAlmostEqual(lib.finger(dm1[0]), 2.6252082970845532*2, 7)
+
     def test_get_h2eff(self):
         mc1 = mcscf.approx_hessian(mcscf.CASCI(m, 4, 4))
         eri1 = mc1.get_h2eff(m.mo_coeff[:,5:9])

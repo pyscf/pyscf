@@ -33,13 +33,6 @@ LARGE_CI_TOL = getattr(__config__, 'mcscf_analyze_large_ci_tol', 0.1)
 PENALTY = getattr(__config__, 'mcscf_casci_CASCI_fix_spin_shift', 0.2)
 
 
-def extract_orbs(mo_coeff, ncas, nelecas, ncore):
-    nocc = ncore + ncas
-    mo_core = mo_coeff[:,:ncore]
-    mo_cas = mo_coeff[:,ncore:nocc]
-    mo_vir = mo_coeff[:,nocc:]
-    return mo_core, mo_cas, mo_vir
-
 def h1e_for_cas(casci, mo_coeff=None, ncas=None, ncore=None):
     '''CAS sapce one-electron hamiltonian
 
@@ -57,10 +50,7 @@ def h1e_for_cas(casci, mo_coeff=None, ncas=None, ncore=None):
     mo_cas = mo_coeff[:,ncore:ncore+ncas]
 
     hcore = casci.get_hcore()
-    if hasattr(casci, 'energy_nuc'):
-        energy_core = casci.energy_nuc()
-    else:
-        energy_core = casci._scf.energy_nuc()
+    energy_core = casci._scf.energy_nuc()
     if mo_core.size == 0:
         corevhf = 0
     else:
@@ -822,11 +812,7 @@ class CASCI(lib.StreamObject):
             self.ci = ci
         return self.mo_coeff, ci, self.mo_energy
 
-    @lib.with_doc(analyze.__doc__)
-    def analyze(self, mo_coeff=None, ci=None, verbose=None,
-                large_ci_tol=LARGE_CI_TOL, with_meta_lowdin=WITH_META_LOWDIN):
-        return analyze(self, mo_coeff, ci, verbose, large_ci_tol,
-                       with_meta_lowdin)
+    analyze = analyze
 
     def sort_mo(self, caslst, mo_coeff=None, base=1):
         '''Select active space.  See also :func:`pyscf.mcscf.addons.sort_mo`

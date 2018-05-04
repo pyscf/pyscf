@@ -217,6 +217,9 @@ class SCF(mol_hf.SCF):
             depending the available memory, the 4-index integrals may be cached
             and J/K matrices are computed based on the 4-index integrals.
     '''
+
+    direct_scf = getattr(__config__, 'pbc_scf_SCF_direct_scf', False)
+
     def __init__(self, cell, kpt=np.zeros(3),
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         if not cell._built:
@@ -228,7 +231,6 @@ class SCF(mol_hf.SCF):
         self.with_df = df.FFTDF(cell)
         self.exxdiv = exxdiv
         self.kpt = kpt
-        self.direct_scf = False
 
         self._keys = self._keys.union(['cell', 'exxdiv', 'with_df'])
 
