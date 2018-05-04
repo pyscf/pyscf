@@ -674,7 +674,8 @@ def fix_spin_(fciobj, shift=PENALTY, ss=None, **kwargs):
     else:
         ss_value = ss
 
-    if 'contract_2e' in getattr(fciobj, '__dict__', {}):
+    if (not isinstance(fciobj, types.ModuleType)
+        and 'contract_2e' in getattr(fciobj, '__dict__', {})):
         del fciobj.contract_2e  # To avoid initialize twice
     old_contract_2e = fciobj.contract_2e
     def contract_2e(eri, fcivec, norb, nelec, link_index=None, **kwargs):

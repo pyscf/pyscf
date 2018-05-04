@@ -86,14 +86,14 @@ class KnownValues(unittest.TestCase):
         g1 = tdg.kernel(state=3)
         self.assertAlmostEqual(g1[0,2], -1.55778110e-01, 7)
 
-    def test_range_separated(self):
+    def test_range_separated_high_cost(self):
         mol = gto.M(atom="H; H 1 1.", basis='631g', verbose=0)
         mf = dft.RKS(mol).set(xc='CAMB3LYP')
         mf._numint.libxc = dft.xcfun
         td = mf.apply(tdscf.TDA)
         tdg_scanner = td.nuc_grad_method().as_scanner().as_scanner()
         g = tdg_scanner(mol, state=3)[1]
-        self.assertAlmostEqual(lib.finger(g), 0.60789020244330605, 7)
+        self.assertAlmostEqual(lib.finger(g), 0.60109310253094916, 7)
         smf = td.as_scanner()
         e1 = smf(mol.set_geom_("H; H 1 1.001"))[2]
         e2 = smf(mol.set_geom_("H; H 1 0.999"))[2]

@@ -383,6 +383,8 @@ def init_guess_by_minao(mol):
             atom = [[symb, (0.,0.,0.)]]
             atm1._atm, atm1._bas, atm1._env = atm1.make_env(atom, {symb:basis4ecp}, [])
             atm2._atm, atm2._bas, atm2._env = atm2.make_env(atom, {symb:basis_ano}, [])
+            atm1._built = True
+            atm2._built = True
             s12 = gto.intor_cross('int1e_ovlp', atm1, atm2)[:,numpy.array(occ)>0]
             if abs(numpy.linalg.det(s12)) > .1:
                 occ, basis_ano = occ4ecp, basis4ecp
@@ -418,6 +420,7 @@ def init_guess_by_minao(mol):
 
     pmol = gto.Mole()
     pmol._atm, pmol._bas, pmol._env = pmol.make_env(new_atom, basis, [])
+    pmol._built = True
     c = addons.project_mo_nr2nr(pmol, numpy.eye(pmol.nao_nr()), mol)
 
     dm = numpy.dot(c*occ, c.T)

@@ -1498,9 +1498,11 @@ class Cell(mole.Mole):
 
         See also Mole.intor
         '''
-        if not self._built and self._env is []:
+        if not self._built:
             sys.stderr.write('Warning: intor envs of %s not initialized.\n' % self)
-            self.build(False, False)
+            # FIXME: Whether to check _built and call build?  ._bas and .basis
+            # may not be consistent. calling .build() may leads to wrong intor env.
+            #self.build(False, False)
         return intor_cross(intor, self, self, comp, hermi, kpts, kpt, **kwargs)
 
     @lib.with_doc(pbc_eval_gto.__doc__)

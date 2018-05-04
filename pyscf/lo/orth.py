@@ -149,6 +149,7 @@ def project_to_atomic_orbitals(mol, basname):
         atm._atm, atm._bas, atm._env = \
                 atm.make_env([[stdsymb,(0,0,0)]], {stdsymb:mol._basis[symb]}, [])
         atm.cart = mol.cart
+        atm._built = True
         s0 = atm.intor_symmetric('int1e_ovlp')
 
         if gto.is_ghost_atom(symb):
@@ -159,6 +160,7 @@ def project_to_atomic_orbitals(mol, basname):
         atmp._atm, atmp._bas, atmp._env = \
                 atmp.make_env([[stdsymb,(0,0,0)]], {stdsymb:basis_add}, [])
         atmp.cart = mol.cart
+        atmp._built = True
 
         if symb in nelec_ecp_dic and nelec_ecp_dic[symb] > 0:
             if not PROJECT_ECP_BASIS:
