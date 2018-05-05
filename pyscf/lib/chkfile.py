@@ -100,7 +100,7 @@ def dump(chkfile, key, value):
         elif isinstance(value, (tuple, list)):
             root1 = root.create_group(key + '__from_list__')
             for k, v in enumerate(value):
-                save_as_group(str(k), v, root1)
+                save_as_group('%06d'%k, v, root1)
         else:
             try:
                 root[key] = value
@@ -110,7 +110,7 @@ def dump(chkfile, key, value):
                     raise e
                 root1 = root.create_group(key + '__from_list__')
                 for k, v in enumerate(value):
-                    save_as_group(str(k), v, root1)
+                    save_as_group('%06d'%k, v, root1)
 
     if h5py.is_hdf5(chkfile):
         with h5py.File(chkfile, 'r+') as fh5:

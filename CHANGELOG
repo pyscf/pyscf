@@ -1,9 +1,10 @@
 PySCF 1.4.7 (2018-04-15)
 ------------------------
 * Bugfix
-  - outcore ao2mo transform when basis functions are cartesian gaussians
+  - Outcore ao2mo transform when basis functions are cartesian Gaussians
   - Fix errors in dmrg-nevpt interface, which overwrite nevpt configure files by
     variational dmrg configure files.
+  - The order of elements of a list that are loaded by chkfile.load
 
 
 PySCF 1.4.6 (2018-04-02)
@@ -137,12 +138,12 @@ PySCF 1.4 beta (2017-08-22)
 PySCF 1.4 alpha (2017-07-24)
 ----------------------------
 * Added
-  - General function to evaluate Spinor GTO in real space grids
+  - General function to evaluate Spinor GTO on real space grids
   - Dirac-Kohn-Sham (LDA functional)
   - EDIIS and ADIIS
   - Periodic CCSD with k-point sampling
   - Periodic EOM-IP-CCSD and EOM-EA-CCSD for single k-point calculation
-  - spin-square value (per unit) of KUHF calculation
+  - spin-square value (per unit cell) of KUHF calculation
   - Update interface to fciqmc for standalone executing
   - Routines in fciqmc to read in the spinned one and two RDMs
   - Heat-Bath CI
