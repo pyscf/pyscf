@@ -423,6 +423,15 @@ class GDF(aft.AFTDF):
             self.auxcell = None
             self._cderi = None
 
+    @property
+    def gs(self):
+        return [n//2 for n in self.mesh]
+    @gs.setter
+    def gs(self, x):
+        warnings.warn('Attribute .gs is deprecated. It is replaced by attribute .mesh.\n'
+                      'mesh = the number of PWs (=2*gs+1) for each direction.')
+        self.mesh = [2*n+1 for n in x]
+
     def dump_flags(self, log=None):
         log = logger.new_logger(self, log)
         log.info('\n')
