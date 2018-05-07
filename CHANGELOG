@@ -78,6 +78,7 @@ PySCF 1.4.7 (2018-04-15)
   - Outcore ao2mo transform when basis functions are cartesian Gaussians
   - Fix errors in dmrg-nevpt interface, which overwrite nevpt configure files by
     variational dmrg configure files.
+  - The order of elements of a list that are loaded by chkfile.load
 
 
 PySCF 1.4.6 (2018-04-02)

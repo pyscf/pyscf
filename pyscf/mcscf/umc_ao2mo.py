@@ -70,8 +70,7 @@ def trans_e1_incore(eri_ao, mo, ncore, ncas):
 
 
 def trans_e1_outcore(mol, mo, ncore, ncas,
-                     max_memory=None, ioblk_size=512, tmpdir=None,
-                     verbose=logger.WARN):
+                     max_memory=None, ioblk_size=512, verbose=logger.WARN):
     time0 = (time.clock(), time.time())
     if isinstance(verbose, logger.Logger):
         log = verbose
@@ -81,9 +80,7 @@ def trans_e1_outcore(mol, mo, ncore, ncas,
     nao_pair = nao*(nao+1)//2
     nocc = (ncore[0] + ncas, ncore[1] + ncas)
 
-    if tmpdir is None:
-        tmpdir = lib.param.TMPDIR
-    swapfile = tempfile.NamedTemporaryFile(dir=tmpdir)
+    swapfile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
     ao2mo.outcore.half_e1(mol, (mo[1][:,:nocc[1]],mo[1]), swapfile.name,
                           verbose=log, compact=False)
 
@@ -118,9 +115,7 @@ def trans_e1_outcore(mol, mo, ncore, ncas,
 
     ###########################
 
-    if tmpdir is None:
-        tmpdir = lib.param.TMPDIR
-    swapfile = tempfile.NamedTemporaryFile(dir=tmpdir)
+    swapfile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
     ao2mo.outcore.half_e1(mol, (mo[0][:,:nocc[0]],mo[0]), swapfile.name,
                           verbose=log, compact=False)
 
@@ -279,7 +274,6 @@ class _ERIS(object):
                               numpy.einsum('ipq->pq', self.jkcPP) + self.jc_PP)
             else:
                 raise RuntimeError('.max_memory not enough')
-                assert(max_memory > mem_basic)
 
 def _mem_usage(ncore, ncas, nmo):
     ncore = (ncore[0] + ncore[1]) * .5

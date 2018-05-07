@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import copy
 import unittest
 import numpy
 from pyscf import lib
@@ -138,6 +139,32 @@ class KnownValues(unittest.TestCase):
         veff1 = mc1.get_veff(mol, dm)
         veff2 = m.get_veff(mol, dm)
         self.assertAlmostEqual(abs(veff1-veff2).max(), 0, 12)
+
+    def test_with_ci_init_guess(self):
+        mc1 = mcscf.CASCI(msym, 4, 4)
+        ci0 = numpy.zeros((6,6))
+        ci0[0,1] = 1
+        mc1.kernel(ci0=ci0)
+
+        mc2 = mcscf.CASCI(msym, 4, 4)
+        mc2.wfnsym = 'A1u'
+        mc2.kernel()
+        self.assertAlmostEqual(mc1.e_tot, mc2.e_tot, 9)
+
+    def test_slight_symmetry_broken(self):
+        mf = copy.copy(msym)
+        mf.mo_coeff = numpy.array(msym.mo_coeff)
+        u = numpy.linalg.svd(numpy.random.random((4,4)))[0]
+        mf.mo_coeff[:,5:9] = mf.mo_coeff[:,5:9].dot(u)
+        mc1 = mcscf.CASCI(mf, 4, 4)
+        mc1.kernel()
+        self.assertAlmostEqual(mc1.e_tot, -108.83741684445798, 9)
+
+    def test_sort_mo(self):
+        mc1 = mcscf.CASCI(msym, 4, 4)
+        mo = mc1.sort_mo_by_irrep({'A1u':3, 'A1g':1})
+        mc1.kernel(mo)
+        self.assertAlmostEqual(mc1.e_tot, -105.82542805259033, 9)
 
 
 if __name__ == "__main__":

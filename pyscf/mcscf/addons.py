@@ -532,8 +532,7 @@ def cas_natorb(casscf, mo_coeff=None, ci=None, sort=False):
 def map2hf(casscf, mf_mo=None, base=BASE, tol=MAP2HF_TOL):
     '''The overlap between the CASSCF optimized orbitals and the canonical HF orbitals.
     '''
-    if mf_mo is None:
-        mf_mo = casscf._scf.mo_coeff
+    if mf_mo is None: mf_mo = casscf._scf.mo_coeff
     s = casscf.mol.intor_symmetric('int1e_ovlp')
     s = reduce(numpy.dot, (casscf.mo_coeff.T, s, mf_mo))
     idx = numpy.argwhere(abs(s) > tol)
@@ -571,11 +570,15 @@ def spin_square(casscf, mo_coeff=None, ci=None, ovlp=None):
         if ovlp is None: ovlp = casscf._scf.get_ovlp()
         nocc = (ncore[0] + ncas, ncore[1] + ncas)
         mocas = (mo_coeff[0][:,ncore[0]:nocc[0]], mo_coeff[1][:,ncore[1]:nocc[1]])
-        sscas = fci.spin_op.spin_square(ci, ncas, nelecas, mocas, ovlp)
+        if isinstance(ci, (list, tuple)):
+            sscas = numpy.array([fci.spin_op.spin_square(c, ncas, nelecas, mocas, ovlp)[0]
+                                 for c in ci])
+        else:
+            sscas = fci.spin_op.spin_square(ci, ncas, nelecas, mocas, ovlp)[0]
         mocore = (mo_coeff[0][:,:ncore[0]], mo_coeff[1][:,:ncore[1]])
-        sscore = scf.uhf.spin_square(mocore, ovlp)
-        logger.debug(casscf, 'S^2 of core %f  S^2 of cas %f', sscore[0], sscas[0])
-        ss = sscas[0]+sscore[0]
+        sscore = casscf._scf.spin_square(mocore, ovlp)[0]
+        logger.debug(casscf, 'S^2 of core %s  S^2 of cas %s', sscore, sscas)
+        ss = sscas+sscore
         s = numpy.sqrt(ss+.25) - .5
         return ss, s*2+1
 
@@ -596,14 +599,16 @@ def state_average_(casscf, weights=(0.5,0.5)):
     assert(abs(sum(weights)-1) < 1e-3)
     fcibase_class = casscf.fcisolver.__class__
     if fcibase_class.__name__ == 'FakeCISolver':
-        sys.stderr.write('state_average function cannot work with decorated '
-                         'fcisolver %s.\nYou can restore the base fcisolver '
-                         'then call state_average function, eg\n'
-                         '    mc.fcisolver = %s.%s(mc.mol)\n'
-                         '    mc.state_average_()\n' %
-                         (casscf.fcisolver, fcibase_class.__base__.__module__,
-                          fcibase_class.__base__.__name__))
-        raise TypeError('mc.fcisolver is not base FCI solver')
+        raise TypeError('mc.fcisolver is not base FCI solver\n'
+                        'state_average function cannot work with decorated '
+                        'fcisolver %s.\nYou can restore the base fcisolver '
+                        'then call state_average function, eg\n'
+                        '    mc.fcisolver = %s.%s(mc.mol)\n'
+                        '    mc.state_average_()\n' %
+                        (casscf.fcisolver, fcibase_class.__base__.__module__,
+                         fcibase_class.__base__.__name__))
+    has_spin_square = hasattr(casscf.fcisolver, 'spin_square')
+
     class FakeCISolver(fcibase_class, StateAverageFCISolver):
         def __init__(self, mol=None):
             self.nroots = len(weights)
@@ -613,7 +618,7 @@ def state_average_(casscf, weights=(0.5,0.5)):
             e, c = fcibase_class.kernel(self, h1, h2, norb, nelec, ci0,
                                         nroots=self.nroots, **kwargs)
             if casscf.verbose >= logger.DEBUG:
-                if hasattr(fcibase_class, 'spin_square'):
+                if has_spin_square:
                     for i, ei in enumerate(e):
                         ss = fcibase_class.spin_square(self, c[i], norb, nelec)
                         logger.debug(casscf, 'state %d  E = %.15g S^2 = %.7f',
@@ -648,7 +653,7 @@ def state_average_(casscf, weights=(0.5,0.5)):
                 rdm2 += wi * dm2
             return rdm1, rdm2
 
-        if hasattr(fcibase_class, 'spin_square'):
+        if has_spin_square:
             def spin_square(self, ci0, norb, nelec):
                 ss = 0
                 multip = 0
@@ -675,14 +680,14 @@ def state_specific_(casscf, state=1):
     '''
     fcibase_class = casscf.fcisolver.__class__
     if fcibase_class.__name__ == 'FakeCISolver':
-        sys.stderr.write('state_specific function cannot work with decorated '
-                         'fcisolver %s.\nYou can restore the base fcisolver '
-                         'then call state_specific function, eg\n'
-                         '    mc.fcisolver = %s.%s(mc.mol)\n'
-                         '    mc.state_specific_()\n' %
-                         (casscf.fcisolver, fcibase_class.__base__.__module__,
-                          fcibase_class.__base__.__name__))
-        raise TypeError('mc.fcisolver is not base FCI solver')
+        raise TypeError('mc.fcisolver is not base FCI solver\n'
+                        'state_specific function cannot work with decorated '
+                        'fcisolver %s.\nYou can restore the base fcisolver '
+                        'then call state_specific function, eg\n'
+                        '    mc.fcisolver = %s.%s(mc.mol)\n'
+                        '    mc.state_specific_()\n' %
+                        (casscf.fcisolver, fcibase_class.__base__.__module__,
+                         fcibase_class.__base__.__name__))
     class FakeCISolver(fcibase_class, StateAverageFCISolver):
         def __init__(self):
             self.nroots = state+1
@@ -786,7 +791,7 @@ def state_average_mix_(casscf, fcisolvers, weights=(0.5,0.5)):
                     for i, ei in enumerate(es):
                         log.debug('state %d  E = %.15g S^2 = %.7f', i, ei, ss[i])
                 else:
-                    for i, ei in enumerate(e):
+                    for i, ei in enumerate(es):
                         log.debug('state %d  E = %.15g', i, ei)
             return numpy.einsum('i,i', numpy.array(es), weights), cs
 

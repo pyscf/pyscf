@@ -283,7 +283,7 @@ def _regular_step(heff, ovlp, xs, lindep, log):
         e, c = scipy.linalg.eigh(heff[1:,1:], ovlp[1:,1:])
     except scipy.linalg.LinAlgError:
         e, c = lib.safe_eigh(heff[1:,1:], ovlp[1:,1:], lindep)[:2]
-    if e[0] < -1e-5:
+    if numpy.any(e < -1e-5):
         log.debug('Negative hessians found %s', e[e<0])
 
     w, v, seig = lib.safe_eigh(heff, ovlp, lindep)

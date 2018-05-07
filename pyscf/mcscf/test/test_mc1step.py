@@ -34,6 +34,7 @@ basis = {'N': '631g', },
 m = scf.RHF(mol)
 m.conv_tol = 1e-10
 m.scf()
+mc0 = mcscf.CASSCF(m, 4, 4).run()
 
 molsym = gto.M(
 verbose = 5,
@@ -49,10 +50,10 @@ msym.conv_tol = 1e-10
 msym.scf()
 
 def tearDownModule():
-    global mol, molsym, m, msym
+    global mol, molsym, m, msym, mc0
     mol.stdout.close()
     molsym.stdout.close()
-    del mol, molsym, m, msym
+    del mol, molsym, m, msym, mc0
 
 
 class KnownValues(unittest.TestCase):
@@ -64,6 +65,20 @@ class KnownValues(unittest.TestCase):
         mc1(mol)
         self.assertAlmostEqual(mc1.e_tot, -108.91497905985173, 7)
 
+        mc1('N 0 0 0; N 0 0 1.1')
+        self.assertAlmostEqual(mc1.e_tot, -109.02535605303684, 7)
+
+    def test_mc1step_symm_with_x2c_scanner(self):
+        mc1 = mcscf.CASSCF(msym, 4, 4).x2c().run()
+        self.assertAlmostEqual(mc1.e_tot, -108.91497905985173, 7)
+
+        mc1 = mcscf.CASSCF(msym, 4, 4).x2c().as_scanner().as_scanner()
+        mc1(molsym)
+        self.assertAlmostEqual(mc1.e_tot, -108.91497905985173, 7)
+
+        mc1('N 0 0 0; N 0 0 1.1')
+        self.assertAlmostEqual(mc1.e_tot, -109.02535605303684, 7)
+
     def test_0core_0virtual(self):
         mol = gto.M(atom='He', basis='321g')
         mf = scf.RHF(mol).run()
@@ -74,6 +89,18 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(mc1.e_tot, -2.8356798736405673, 9)
 
         mc1 = mcscf.CASSCF(mf, 1, 0).run()
+        self.assertAlmostEqual(mc1.e_tot, -2.8356798736405673, 9)
+
+        mc1 = mcscf.CASSCF(mf, 2, 2)
+        mc1.mc2step()
+        self.assertAlmostEqual(mc1.e_tot, -2.850576699649737, 9)
+
+        mc1 = mcscf.CASSCF(mf, 1, 2)
+        mc1.mc2step()
+        self.assertAlmostEqual(mc1.e_tot, -2.8356798736405673, 9)
+
+        mc1 = mcscf.CASSCF(mf, 1, 0)
+        mc1.mc2step()
         self.assertAlmostEqual(mc1.e_tot, -2.8356798736405673, 9)
 
     def test_cas_natorb(self):
@@ -94,7 +121,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(fci.addons.overlap(ci0, ci1, 4, 4, s), 1, 9)
 
     def test_get_h2eff(self):
-        mc1 = mcscf.approx_hessian(mcscf.CASSCF(m, 4, 4))
+        mc1 = mcscf.CASSCF(m, 4, 4).approx_hessian()
         eri1 = mc1.get_h2eff(m.mo_coeff[:,5:9])
         eri2 = mc1.get_h2cas(m.mo_coeff[:,5:9])
         self.assertAlmostEqual(abs(eri1-eri2).max(), 0, 12)
@@ -118,10 +145,130 @@ class KnownValues(unittest.TestCase):
         mc1 = mcscf.CASSCF(m, 4, 4).state_average_((0.5,0.5))
         mc1.natorb = True
         mc1.kernel()
-        self.assertAlmostEqual(mc1.e_tot, -108.80445340617777, 9)
+        self.assertAlmostEqual(mc1.e_tot, -108.80445340617777, 8)
+        mo_occ = lib.chkfile.load(mc1.chkfile, 'mcscf/mo_occ')[5:9]
+        self.assertAlmostEqual(lib.finger(mo_occ), 1.8748844779923917, 4)
         dm1 = mc1.analyze()
-        self.assertAlmostEqual(lib.finger(dm1[0]), 2.6993157521103779, 5)
-        self.assertAlmostEqual(lib.finger(dm1[1]), 2.6993157521103779, 5)
+        self.assertAlmostEqual(lib.finger(dm1[0]), 2.6993157521103779, 4)
+        self.assertAlmostEqual(lib.finger(dm1[1]), 2.6993157521103779, 4)
+
+    def test_natorb(self):
+        mc1 = mcscf.CASSCF(msym, 4, 4)
+        mo = mc1.sort_mo_by_irrep({'A1u':2, 'A1g':2})
+        mc1.natorb = True
+        mc1.conv_tol = 1e-10
+        mc1.kernel(mo)
+        mo_occ = lib.chkfile.load(mc1.chkfile, 'mcscf/mo_occ')[5:9]
+        self.assertAlmostEqual(mc1.e_tot, -105.83025103050596, 9)
+        self.assertAlmostEqual(lib.finger(mo_occ), 2.4188178285392317, 4)
+
+        mc1.mc2step(mo)
+        mo_occ = lib.chkfile.load(mc1.chkfile, 'mcscf/mo_occ')[5:9]
+        self.assertAlmostEqual(mc1.e_tot, -105.83025103050596, 9)
+        self.assertAlmostEqual(lib.finger(mo_occ), 2.418822007439851, 4)
+
+    def test_dep4(self):
+        mc1 = mcscf.CASSCF(msym, 4, 4)
+        mo = mc1.sort_mo_by_irrep({'A1u':2, 'A1g':2})
+        mc1.with_dep4 = True
+        mc1.max_cycle = 1
+        mc1.max_cycle_micro = 6
+        mc1.kernel(mo)
+        self.assertAlmostEqual(mc1.e_tot, -105.8292690292608, 8)
+
+    def test_dep4_df(self):
+        mc1 = mcscf.CASSCF(msym, 4, 4).density_fit()
+        mo = mc1.sort_mo_by_irrep({'A1u':2, 'A1g':2})
+        mc1.with_dep4 = True
+        mc1.max_cycle = 1
+        mc1.max_cycle_micro = 6
+        mc1.kernel(mo)
+        self.assertAlmostEqual(mc1.e_tot, -105.82923271851176, 8)
+
+    # FIXME: How to test ci_response_space? The test below seems numerical instable
+    #def test_ci_response_space(self):
+    #    mc1 = mcscf.CASSCF(m, 4, 4)
+    #    mc1.ci_response_space = 9
+    #    mc1.max_cycle = 1
+    #    mc1.max_cycle_micro = 2
+    #    mc1.kernel()
+    #    self.assertAlmostEqual(mc1.e_tot, -108.85920100433893, 8)
+
+    #    mc1 = mcscf.CASSCF(m, 4, 4)
+    #    mc1.ci_response_space = 1
+    #    mc1.max_cycle = 1
+    #    mc1.max_cycle_micro = 2
+    #    mc1.kernel()
+    #    self.assertAlmostEqual(mc1.e_tot, -108.85920400781617, 8)
+
+    def test_chk(self):
+        mc2 = mcscf.CASSCF(m, 4, 4)
+        mc2.update(mc0.chkfile)
+        mc2.max_cycle = 0
+        mc2.kernel()
+        self.assertAlmostEqual(mc0.e_tot, mc2.e_tot, 8)
+
+    def test_grad(self):
+        self.assertAlmostEqual(abs(mc0.get_grad()).max(), 0, 4)
+
+    def test_external_fcisolver(self):
+        fcisolver1 = fci.direct_spin1.FCISolver(mol)
+        class FCI_as_DMRG(fci.direct_spin1.FCISolver):
+            def __getattribute__(self, attr):
+                """Prevent 'private' attribute access"""
+                if attr in ('make_rdm1s', 'spin_square', 'contract_2e',
+                            'absorb_h1e'):
+                    raise AttributeError
+                else:
+                    return object.__getattribute__(self, attr)
+            def kernel(self, *args, **kwargs):
+                return fcisolver1.kernel(*args, **kwargs)
+        mc1 = mcscf.CASSCF(m, 4, 4)
+        mc1.fcisolver = FCI_as_DMRG(mol)
+        mc1.natorb = True
+        mc1.kernel()
+        self.assertAlmostEqual(mc1.e_tot, -108.85974001740854, 8)
+        dm1 = mc1.analyze(with_meta_lowdin=False)
+        self.assertAlmostEqual(lib.finger(dm1[0]), 5.33303, 4)
+
+    def test_casci_in_casscf(self):
+        mc1 = mcscf.CASSCF(m, 4, 4)
+        e_tot, e_ci, fcivec = mc1.casci(mc1.mo_coeff)
+        self.assertAlmostEqual(e_tot, -108.83741684447352, 9)
+
+    def test_scanner(self):
+        mc_scan = mcscf.CASSCF(scf.RHF(mol), 4, 4).as_scanner().as_scanner()
+        mc_scan(mol)
+        self.assertAlmostEqual(mc_scan.e_tot, -108.85974001740854, 8)
+
+    def test_trust_region(self):
+        mc1 = mcscf.CASSCF(msym, 4, 4)
+        mc1.max_stepsize = 0.1
+        mo = mc1.sort_mo_by_irrep({'A1u':3, 'A1g':1})
+        mc1.ah_grad_trust_region = 0.3
+        mc1.conv_tol = 1e-7
+        tot_jk = []
+        def count_jk(envs):
+            tot_jk.append(envs.get('njk', 0))
+        mc1.callback = count_jk
+        mc1.kernel(mo)
+        self.assertAlmostEqual(mc1.e_tot, -105.82941031838349, 8)
+        self.assertEqual(tot_jk, [3,6,6,4,4,3,6,6,3,6,6,3,4,4,3,3,3,3,4,4])
+
+    def test_with_ci_init_guess(self):
+        mc1 = mcscf.CASSCF(msym, 4, 4)
+        ci0 = numpy.zeros((6,6))
+        ci0[0,1] = 1
+        mc1.kernel(ci0=ci0)
+
+        mc2 = mcscf.CASSCF(msym, 4, 4)
+        mc2.wfnsym = 'A1u'
+        mc2.kernel()
+        self.assertAlmostEqual(mc1.e_tot, mc2.e_tot, 8)
+
+    def test_dump_chk(self):
+        mcdic = lib.chkfile.load(mc0.chkfile, 'mcscf')
+        mcscf.chkfile.dump_mcscf(mc0, **mcdic)
 
 
 if __name__ == "__main__":

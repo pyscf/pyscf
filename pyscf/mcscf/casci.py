@@ -61,7 +61,7 @@ def h1e_for_cas(casci, mo_coeff=None, ncas=None, ncore=None):
     h1eff = reduce(numpy.dot, (mo_cas.T, hcore+corevhf, mo_cas))
     return h1eff, energy_core
 
-def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO,
+def analyze(casscf, mo_coeff=None, ci=None, verbose=None,
             large_ci_tol=LARGE_CI_TOL, with_meta_lowdin=WITH_META_LOWDIN,
             **kwargs):
     from pyscf.lo import orth
@@ -75,8 +75,10 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO,
     ncas = casscf.ncas
     ncore = casscf.ncore
     nocc = ncore + ncas
-    label = casscf.mol.ao_labels()
+    mocore = mo_coeff[:,:ncore]
+    mocas = mo_coeff[:,ncore:nocc]
 
+    label = casscf.mol.ao_labels()
     if (isinstance(ci, (list, tuple)) and
         not isinstance(casscf.fcisolver, addons.StateAverageFCISolver)):
         log.warn('Mulitple states found in CASCI/CASSCF solver. Density '
@@ -87,8 +89,6 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO,
     if hasattr(casscf.fcisolver, 'make_rdm1s'):
         casdm1a, casdm1b = casscf.fcisolver.make_rdm1s(civec, ncas, nelecas)
         casdm1 = casdm1a + casdm1b
-        mocore = mo_coeff[:,:ncore]
-        mocas = mo_coeff[:,ncore:nocc]
         dm1b = numpy.dot(mocore, mocore.T)
         dm1a = dm1b + reduce(numpy.dot, (mocas, casdm1a, mocas.T))
         dm1b += reduce(numpy.dot, (mocas, casdm1b, mocas.T))
@@ -100,8 +100,6 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO,
             dump_mat.dump_tri(log.stdout, dm1b, label, **kwargs)
     else:
         casdm1 = casscf.fcisolver.make_rdm1(civec, ncas, nelecas)
-        mocore = mo_coeff[:,:ncore]
-        mocas = mo_coeff[:,ncore:nocc]
         dm1a =(numpy.dot(mocore, mocore.T) * 2
              + reduce(numpy.dot, (mocas, casdm1, mocas.T)))
         dm1b = None
@@ -112,28 +110,29 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=logger.INFO,
         # note the last two args of ._eig for mc1step_symm
         occ, ucas = casscf._eig(-casdm1, ncore, nocc)
         log.info('Natural occ %s', str(-occ))
-        mo_cas = numpy.dot(mo_coeff[:,ncore:nocc], ucas)
+        mocas = numpy.dot(mocas, ucas)
         if with_meta_lowdin:
             log.info('Natural orbital (expansion on meta-Lowdin AOs) in CAS space')
             orth_coeff = orth.orth_ao(casscf.mol, 'meta_lowdin', s=ovlp_ao)
-            mo_cas = reduce(numpy.dot, (orth_coeff.T, ovlp_ao, mo_cas))
+            mocas = reduce(numpy.dot, (orth_coeff.T, ovlp_ao, mocas))
         else:
             log.info('Natural orbital (expansion on AOs) in CAS space')
-        dump_mat.dump_rec(log.stdout, mo_cas, label, start=1, **kwargs)
+        dump_mat.dump_rec(log.stdout, mocas, label, start=1, **kwargs)
         if log.verbose >= logger.DEBUG2:
             if not casscf.natorb:
                 log.debug2('NOTE: mc.mo_coeff in active space is different to '
                            'the natural orbital coefficients printed in above.')
             log.debug2(' ** CASCI/CASSCF orbital coefficients (expansion on meta-Lowdin AOs) **')
-            c = reduce(numpy.dot, (orth_coeff.T, ovlp_ao, mo_coeff))
+            if with_meta_lowdin:
+                c = reduce(numpy.dot, (orth_coeff.T, ovlp_ao, mo_coeff))
+                log.debug2('MCSCF orbital (expansion on meta-Lowdin AOs)')
+            else:
+                c = mo_coeff
+                log.debug2('MCSCF orbital (expansion on AOs)')
             dump_mat.dump_rec(log.stdout, c, label, start=1, **kwargs)
 
         if casscf._scf.mo_coeff is not None:
-            s = reduce(numpy.dot, (casscf.mo_coeff.T, ovlp_ao, casscf._scf.mo_coeff))
-            tol = getattr(__config__, 'mcscf_addons_map2hf_tol', 0.4)
-            idx = numpy.argwhere(abs(s) > tol)
-            for i,j in idx:
-                log.info('<mo-mcscf|mo-hf> %d  %d  %12.8f', i+1, j+1, s[i,j])
+            addons.map2hf(casscf, casscf._scf.mo_coeff)
 
         if hasattr(casscf.fcisolver, 'large_ci') and ci is not None:
             log.info('** Largest CI components **')
@@ -453,11 +452,8 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
 def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE):
     '''CASCI solver
     '''
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(casci.stdout, verbose)
     if mo_coeff is None: mo_coeff = casci.mo_coeff
+    log = logger.new_logger(casci, verbose)
     t0 = (time.clock(), time.time())
     log.debug('Start CASCI')
 
@@ -674,7 +670,7 @@ class CASCI(lib.StreamObject):
         if dm is None:
             mocore = self.mo_coeff[:,:self.ncore]
             dm = numpy.dot(mocore, mocore.T) * 2
-# don't call self._scf.get_veff, _scf object might be from DFT
+# don't call self._scf.get_veff because _scf might be DFT object
         vj, vk = self._scf.get_jk(mol, dm, hermi=hermi)
         return vj - vk * .5
 
@@ -743,10 +739,9 @@ class CASCI(lib.StreamObject):
             self.check_sanity()
         self.dump_flags()
 
-        self.e_tot, self.e_cas, self.ci = \
-                kernel(self, mo_coeff, ci0=ci0, verbose=self.verbose)
-
         log = logger.Logger(self.stdout, self.verbose)
+        self.e_tot, self.e_cas, self.ci = \
+                kernel(self, mo_coeff, ci0=ci0, verbose=log)
 
         if self.canonicalization:
             self.canonicalize_(mo_coeff, self.ci,
@@ -761,6 +756,11 @@ class CASCI(lib.StreamObject):
                 log.info('CASCI not converged')
         else:
             self.converged = True
+        self._finalize()
+        return self.e_tot, self.e_cas, self.ci, self.mo_coeff, self.mo_energy
+
+    def _finalize(self):
+        log = logger.Logger(self.stdout, self.verbose)
         if log.verbose >= logger.NOTE and hasattr(self.fcisolver, 'spin_square'):
             if isinstance(self.e_cas, (float, numpy.number)):
                 ss = self.fcisolver.spin_square(self.ci, self.ncas, self.nelecas)
@@ -778,11 +778,7 @@ class CASCI(lib.StreamObject):
                 for i, e in enumerate(self.e_cas):
                     log.note('CASCI root %d  E = %.15g  E(CI) = %.15g',
                              i, self.e_tot[i], e)
-        self._finalize()
-        return self.e_tot, self.e_cas, self.ci, self.mo_coeff, self.mo_energy
-
-    def _finalize(self):
-        pass
+        return self
 
     as_scanner = as_scanner
 
@@ -814,9 +810,8 @@ class CASCI(lib.StreamObject):
 
     analyze = analyze
 
+    @lib.with_doc(addons.sort_mo.__doc__)
     def sort_mo(self, caslst, mo_coeff=None, base=1):
-        '''Select active space.  See also :func:`pyscf.mcscf.addons.sort_mo`
-        '''
         if mo_coeff is None: mo_coeff = self.mo_coeff
         return addons.sort_mo(self, mo_coeff, caslst, base)
 

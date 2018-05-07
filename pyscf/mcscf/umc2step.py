@@ -41,9 +41,9 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
     nmo = mo[0].shape[1]
     ncore = casscf.ncore
     eris = casscf.ao2mo(mo)
-    e_tot, e_ci, fcivec = casscf.casci(mo, ci0, eris, log, locals())
+    e_tot, e_cas, fcivec = casscf.casci(mo, ci0, eris, log, locals())
     if casscf.ncas == nmo and not casscf.internal_rotation:
-        return True, e_tot, e_ci, fcivec, mo
+        return True, e_tot, e_cas, fcivec, mo
 
     if conv_tol_grad is None:
         conv_tol_grad = numpy.sqrt(tol)
@@ -100,7 +100,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
         totinner += njk
         totmicro += imicro+1
 
-        e_tot, e_ci, fcivec = casscf.casci(mo, fcivec, eris, log, locals())
+        e_tot, e_cas, fcivec = casscf.casci(mo, fcivec, eris, log, locals())
         log.timer('CASCI solver', *t3m)
         t2m = t1m = log.timer('macro iter %d'%imacro, *t1m)
 
@@ -122,7 +122,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
         log.info('2-step CASSCF not converged, %d macro (%d JK %d micro) steps',
                  imacro+1, totinner, totmicro)
     log.timer('2-step CASSCF', *cput0)
-    return conv, e_tot, e_ci, fcivec, mo
+    return conv, e_tot, e_cas, fcivec, mo
 
 
 if __name__ == '__main__':

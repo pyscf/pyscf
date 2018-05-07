@@ -240,9 +240,9 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
     nmo = mo[0].shape[1]
     #TODO: lazy evaluate eris, to leave enough memory for FCI solver
     eris = casscf.ao2mo(mo)
-    e_tot, e_ci, fcivec = casscf.casci(mo, ci0, eris, log, locals())
+    e_tot, e_cas, fcivec = casscf.casci(mo, ci0, eris, log, locals())
     if casscf.ncas == nmo and not casscf.internal_rotation:
-        return True, e_tot, e_ci, fcivec, mo
+        return True, e_tot, e_cas, fcivec, mo
 
     if conv_tol_grad is None:
         conv_tol_grad = numpy.sqrt(tol)
@@ -278,7 +278,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
                           imicro, norm_t, norm_gorb)
                 break
 
-            casdm1, casdm2, gci, fcivec = casscf.update_casdm(mo, u, fcivec, e_ci, eris)
+            casdm1, casdm2, gci, fcivec = casscf.update_casdm(mo, u, fcivec, e_cas, eris)
             norm_ddm =(numpy.linalg.norm(casdm1[0] - casdm1_last[0])
                      + numpy.linalg.norm(casdm1[1] - casdm1_last[1]))
             t3m = log.timer('update CAS DM', *t3m)
@@ -312,7 +312,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
         eris = casscf.ao2mo(mo)
         t2m = log.timer('update eri', *t3m)
 
-        e_tot, e_ci, fcivec = casscf.casci(mo, fcivec, eris, log, locals())
+        e_tot, e_cas, fcivec = casscf.casci(mo, fcivec, eris, log, locals())
         casdm1, casdm2 = casscf.fcisolver.make_rdm12s(fcivec, casscf.ncas, casscf.nelecas)
         norm_ddm =(numpy.linalg.norm(casdm1[0] - casdm1_last[0])
                  + numpy.linalg.norm(casdm1[1] - casdm1_last[1]))
@@ -338,7 +338,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
         log.info('1-step CASSCF not converged, %d macro (%d JK %d micro) steps',
                  imacro+1, totinner, totmicro)
     log.timer('1-step CASSCF', *cput0)
-    return conv, e_tot, e_ci, fcivec, mo
+    return conv, e_tot, e_cas, fcivec, mo
 
 
 class UCASSCF(ucasci.UCASCI):
@@ -382,6 +382,7 @@ class UCASSCF(ucasci.UCASCI):
 ##################################################
 # don't modify the following attributes, they are not input options
         self.e_tot = None
+        self.e_cas = None
         self.ci = None
         self.mo_coeff = mf.mo_coeff
         self.converged = False
@@ -438,8 +439,6 @@ class UCASSCF(ucasci.UCASCI):
             self.fcisolver.dump_flags(self.verbose)
         except AttributeError:
             pass
-        if hasattr(self, 'max_orb_stepsize'):
-            raise AttributeError('"max_orb_stepsize" was replaced by "max_stepsize"')
 
     def kernel(self, mo_coeff=None, ci0=None, callback=None, _kern=kernel):
         if mo_coeff is None:
@@ -452,7 +451,7 @@ class UCASSCF(ucasci.UCASCI):
             self.check_sanity()
         self.dump_flags()
 
-        self.converged, self.e_tot, e_cas, self.ci, self.mo_coeff = \
+        self.converged, self.e_tot, self.e_cas, self.ci, self.mo_coeff = \
                 _kern(self, mo_coeff,
                       tol=self.conv_tol, conv_tol_grad=self.conv_tol_grad,
                       ci0=ci0, callback=callback, verbose=self.verbose)
@@ -460,7 +459,7 @@ class UCASSCF(ucasci.UCASCI):
         #if self.verbose >= logger.INFO:
         #    self.analyze(mo_coeff, self.ci, verbose=self.verbose)
         self._finalize()
-        return self.e_tot, e_cas, self.ci, self.mo_coeff
+        return self.e_tot, self.e_cas, self.ci, self.mo_coeff
 
     def mc1step(self, mo_coeff=None, ci0=None, callback=None):
         return self.kernel(mo_coeff, ci0, callback)
@@ -469,24 +468,25 @@ class UCASSCF(ucasci.UCASCI):
         from pyscf.mcscf import umc2step
         return self.kernel(mo_coeff, ci0, callback, umc2step.kernel)
 
+    def get_h2eff(self, mo_coeff=None):
+        '''Computing active space two-particle Hamiltonian.
+        '''
+        return self.get_h2cas(mo_coeff)
+    def get_h2cas(self, mo_coeff=None):
+        return ucasci.UCASCI.ao2mo(self, mo_coeff)
+
     def casci(self, mo_coeff, ci0=None, eris=None, verbose=None, envs=None):
         if eris is None:
-            import copy
             fcasci = copy.copy(self)
             fcasci.ao2mo = self.get_h2cas
         else:
             fcasci = _fake_h_for_fast_casci(self, mo_coeff, eris)
 
-        if isinstance(verbose, logger.Logger):
-            log = verbose
-        else:
-            if verbose is None:
-                verbose = self.verbose
-            log = logger.Logger(self.stdout, verbose)
+        log = logger.new_logger(self, verbose)
 
-        e_tot, e_ci, fcivec = ucasci.kernel(fcasci, mo_coeff, ci0, log)
+        e_tot, e_cas, fcivec = ucasci.kernel(fcasci, mo_coeff, ci0, log)
         if envs is not None and log.verbose >= logger.INFO:
-            log.debug('CAS space CI energy = %.15g', e_ci)
+            log.debug('CAS space CI energy = %.15g', e_cas)
 
             if 'imicro' in envs:  # Within CASSCF iteration
                 log.info('macro iter %d (%d JK  %d micro), '
@@ -503,7 +503,7 @@ class UCASSCF(ucasci.UCASCI):
                              envs['norm_gorb0'], envs['norm_ddm'])
             else:  # Initialization step
                 log.info('UCASCI E = %.15g', e_tot)
-        return e_tot, e_ci, fcivec
+        return e_tot, e_cas, fcivec
 
     def uniq_var_indices(self, nmo, ncore, ncas, frozen):
         nocc = ncore + ncas
@@ -550,7 +550,8 @@ class UCASSCF(ucasci.UCASCI):
 
     rotate_orb_cc = rotate_orb_cc
 
-    def ao2mo(self, mo):
+    def ao2mo(self, mo_coeff=None):
+        if mo_coeff is None: mo_coeff = self.mo_coeff
 #        nmo = mo[0].shape[1]
 #        ncore = self.ncore
 #        ncas = self.ncas
@@ -593,7 +594,7 @@ class UCASSCF(ucasci.UCASCI):
 #        eris.apCV = numpy.copy(eriab[ncore[0]:nocc[0],:,:ncore[1],ncore[1]:])
 #        eris.APcv = numpy.copy(eriab[:ncore[0],ncore[0]:,ncore[1]:nocc[1],:].transpose(2,3,0,1))
 #        return eris
-        return umc_ao2mo._ERIS(self, mo)
+        return umc_ao2mo._ERIS(self, mo_coeff)
 
     def update_jk_in_ah(self, mo, r, casdm1s, eris):
         ncas = self.ncas
@@ -621,11 +622,11 @@ class UCASSCF(ucasci.UCASCI):
         vc = (vhf3ca + vhf4a, vhf3cb + vhf4b)
         return va, vc
 
-    def update_casdm(self, mo, u, fcivec, e_ci, eris):
+    def update_casdm(self, mo, u, fcivec, e_cas, eris):
 
         ecore, h1cas, h2cas = self.approx_cas_integral(mo, u, eris)
 
-        ci1, g = self.solve_approx_ci(h1cas, h2cas, fcivec, ecore, e_ci)
+        ci1, g = self.solve_approx_ci(h1cas, h2cas, fcivec, ecore, e_cas)
         casdm1, casdm2 = self.fcisolver.make_rdm12s(ci1, self.ncas, self.nelecas)
         return casdm1, casdm2, g, ci1
 
@@ -693,7 +694,7 @@ class UCASSCF(ucasci.UCASCI):
 
         return ecore, h1cas, (aaaa, aaAA, AAAA)
 
-    def solve_approx_ci(self, h1, h2, ci0, ecore, e_ci):
+    def solve_approx_ci(self, h1, h2, ci0, ecore, e_cas):
         ''' Solve CI eigenvalue/response problem approximately
         '''
         ncas = self.ncas
@@ -707,7 +708,7 @@ class UCASSCF(ucasci.UCASCI):
         h2eff = self.fcisolver.absorb_h1e(h1, h2, ncas, nelecas, .5)
         hc = self.fcisolver.contract_2e(h2eff, ci0, ncas, nelecas).ravel()
 
-        g = hc - (e_ci-ecore) * ci0.ravel()
+        g = hc - (e_cas-ecore) * ci0.ravel()
         if self.ci_response_space > 6:
             logger.debug(self, 'CI step by full response')
             # full response
@@ -723,7 +724,7 @@ class UCASSCF(ucasci.UCASCI):
             heff[0,0] = numpy.dot(xs[0], ax[0])
             seff[0,0] = 1
             for i in range(1, nd):
-                xs.append(ax[i-1] - xs[i-1] * e_ci)
+                xs.append(ax[i-1] - xs[i-1] * e_cas)
                 ax.append(self.fcisolver.contract_2e(h2eff, xs[i], ncas,
                                                      nelecas).ravel())
                 for j in range(i+1):
@@ -746,6 +747,10 @@ class UCASSCF(ucasci.UCASCI):
         ncore = self.ncore
         nocca = self.ncore[0] + self.ncas
         noccb = self.ncore[1] + self.ncas
+        if 'mo' in envs:
+            mo_coeff = envs['mo']
+        else:
+            mo_coeff = envs['mo']
         mo_occ = numpy.zeros((2,envs['mo'][0].shape[1]))
         mo_occ[0,:ncore[0]] = 1
         mo_occ[1,:ncore[1]] = 1
@@ -760,8 +765,8 @@ class UCASSCF(ucasci.UCASCI):
         mo_energy = 'None'
 
         chkfile.dump_mcscf(self, self.chkfile, 'mcscf', envs['e_tot'],
-                           envs['mo'], self.ncore, self.ncas, mo_occ,
-                           mo_energy, envs['e_ci'], civec, envs['casdm1'],
+                           mo_coeff, self.ncore, self.ncas, mo_occ,
+                           mo_energy, envs['e_cas'], civec, envs['casdm1'],
                            overwrite_mol=False)
         return self
 
@@ -795,6 +800,14 @@ class UCASSCF(ucasci.UCASCI):
         else:
             self._max_stepsize = numpy.sqrt(self.max_stepsize*self.max_stepsize)
         return self._max_stepsize
+
+    @property
+    def max_orb_stepsize(self):  # pragma: no cover
+        return self.max_stepsize
+    @max_orb_stepsize.setter
+    def max_orb_stepsize(self, x):  # pragma: no cover
+        sys.stderr.write('WARN: Attribute "max_orb_stepsize" was replaced by "max_stepsize"\n')
+        self.max_stepsize = x
 
 CASSCF = UCASSCF
 

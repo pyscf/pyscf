@@ -16,6 +16,7 @@
 import unittest
 from functools import reduce
 import numpy
+from pyscf import lib
 from pyscf import gto
 from pyscf import scf
 from pyscf import mcscf
@@ -24,7 +25,8 @@ from pyscf import fci
 b = 1.4
 mol = gto.Mole()
 mol.build(
-verbose = 0,
+verbose = 7,
+output = '/dev/null',
 atom = [
     ['N',(  0.000000,  0.000000, -b/2)],
     ['N',(  0.000000,  0.000000,  b/2)], ],
@@ -45,6 +47,7 @@ mcu.mc1step()[0]
 
 def tearDownModule():
     global mol, mfr, mcr, mfu, mcu
+    mol.stdout.close()
     del mol, mfr, mcr, mfu, mcu
 
 
@@ -163,6 +166,89 @@ class KnownValues(unittest.TestCase):
         mc.state_average_((.64,.36))
         e = mc.kernel()[0]
         self.assertAlmostEqual(e, -108.83342083775061, 7)
+        dm1 = mc.analyze()
+        self.assertAlmostEqual(lib.finger(dm1[0]), 0.52396929381500434, 4)
+
+    def test_state_average_fci_dmrg(self):
+        fcisolver1 = fci.direct_spin1_symm.FCISolver(mol)
+        class FCI_as_DMRG(fci.direct_spin1_symm.FCISolver):
+            def __getattribute__(self, attr):
+                """Prevent 'private' attribute access"""
+                if attr in ('make_rdm1s', 'spin_square', 'contract_2e',
+                            'absorb_h1e'):
+                    raise AttributeError
+                else:
+                    return object.__getattribute__(self, attr)
+            def kernel(self, *args, **kwargs):
+                return fcisolver1.kernel(*args, **kwargs)
+            def approx_kernel(self, *args, **kwargs):
+                return fcisolver1.kernel(*args, **kwargs)
+            @property
+            def orbsym(self):
+                return fcisolver1.orbsym
+            @orbsym.setter
+            def orbsym(self, x):
+                fcisolver1.orbsym = x
+
+        mc = mcscf.CASSCF(mfr, 4, 4)
+        mc.fcisolver = FCI_as_DMRG(mol)
+        mc.fcisolver.nroots =  fcisolver1.nroots = 2
+        mc.state_average_((.64,.36))
+        e = mc.kernel()[0]
+        self.assertAlmostEqual(e, -108.83342083775061, 7)
+        dm1 = mc.analyze()
+        self.assertAlmostEqual(lib.finger(dm1[0]), 0.52396929381500434*2, 4)
+
+    def test_state_average_mix(self):
+        solver1 = fci.FCI(mol)
+        solver1.spin = 0
+        solver1.nroots = 2
+        solver2 = fci.FCI(mol, singlet=False)
+        solver2.spin = 2
+        mc = mcscf.CASSCF(mfr, 4, 4)
+        mc = mcscf.addons.state_average_mix_(mc, [solver1, solver2],
+                                             (0.25,0.25,0.5))
+        e = mc.kernel()[0]
+        self.assertAlmostEqual(e, -108.80340952016508, 7)
+        dm1 = mc.analyze()
+        self.assertAlmostEqual(lib.finger(dm1[0]), 0.52172669549357464, 4)
+        self.assertAlmostEqual(lib.finger(dm1[1]), 0.53366776017869022, 4)
+        self.assertAlmostEqual(lib.finger(dm1[0]+dm1[1]), 1.0553944556722636, 4)
+
+    def test_state_average_mix_fci_dmrg(self):
+        fcisolver1 = fci.direct_spin0_symm.FCISolver(mol)
+        class FCI_as_DMRG(fci.direct_spin0_symm.FCISolver):
+            def __getattribute__(self, attr):
+                """Prevent 'private' attribute access"""
+                if attr in ('make_rdm1s', 'spin_square', 'contract_2e',
+                            'absorb_h1e'):
+                    raise AttributeError
+                else:
+                    return object.__getattribute__(self, attr)
+            def kernel(self, *args, **kwargs):
+                return fcisolver1.kernel(*args, **kwargs)
+            def approx_kernel(self, *args, **kwargs):
+                return fcisolver1.kernel(*args, **kwargs)
+            @property
+            def orbsym(self):
+                return fcisolver1.orbsym
+            @orbsym.setter
+            def orbsym(self, x):
+                fcisolver1.orbsym = x
+
+        solver1 = FCI_as_DMRG(mol)
+        solver1.spin =    fcisolver1.spin = 0
+        solver1.nroots =  fcisolver1.nroots = 2
+        solver2 = fci.FCI(mol, singlet=False)
+        solver2.spin = 2
+        mc = mcscf.CASSCF(mfr, 4, 4)
+        mc = mcscf.addons.state_average_mix_(mc, [solver1, solver2],
+                                             (0.25,0.25,0.5))
+        e = mc.kernel()[0]
+        self.assertAlmostEqual(e, -108.80340952016508, 7)
+        dm1 = mc.analyze()
+        self.assertAlmostEqual(lib.finger(dm1[0]), 1.0553944556722636, 4)
+        self.assertEqual(dm1[1], None)
 
     def test_state_specific(self):
         mc = mcscf.CASSCF(mfr, 4, 4)
@@ -170,6 +256,16 @@ class KnownValues(unittest.TestCase):
         mc.state_specific_(state=1)
         e = mc.kernel()[0]
         self.assertAlmostEqual(e, -108.70065770892457, 7)
+        dm1 = mc.analyze()
+        self.assertAlmostEqual(lib.finger(dm1[0]), 0.54605283139098515, 4)
+
+        mc = mcscf.CASSCF(mfr, 4, 4)
+        mc.state_specific_(state=0)
+        e = mc.kernel()[0]
+        self.assertAlmostEqual(mc.e_tot, mcr.e_tot, 7)
+        dm1 = mc.analyze()
+        dmref = mcr.analyze()
+        self.assertAlmostEqual(float(abs(dm1[0]-dmref[0]).max()), 0, 4)
 
     def test_project_init_guess(self):
         b = 1.5

@@ -187,7 +187,7 @@ mc1step_uhf = umc1step  # for backward compatibility
 from pyscf.mcscf.addons import *
 from pyscf.mcscf import chkfile
 
-def CASSCF(mf, ncas, nelecas, **kwargs):
+def CASSCF(mf, ncas, nelecas, ncore=None, frozen=None):
     from pyscf import gto
     from pyscf import scf
     if isinstance(mf, gto.Mole):
@@ -200,18 +200,18 @@ of API conventions''')
 
     mf = scf.addons.convert_to_rhf(mf)
     if hasattr(mf, 'with_df') and mf.with_df:
-        return DFCASSCF(mf, ncas, nelecas, **kwargs)
+        return DFCASSCF(mf, ncas, nelecas, ncore, frozen)
 
     if mf.mol.symmetry:
-        mc = mc1step_symm.CASSCF(mf, ncas, nelecas, **kwargs)
+        mc = mc1step_symm.CASSCF(mf, ncas, nelecas, ncore, frozen)
     else:
-        mc = mc1step.CASSCF(mf, ncas, nelecas, **kwargs)
+        mc = mc1step.CASSCF(mf, ncas, nelecas, ncore, frozen)
     return mc
 
 RCASSCF = CASSCF
 
 
-def CASCI(mf, ncas, nelecas, **kwargs):
+def CASCI(mf, ncas, nelecas, ncore=None):
     from pyscf import gto
     from pyscf import scf
     if isinstance(mf, gto.Mole):
@@ -224,30 +224,30 @@ of API conventions''')
 
     mf = scf.addons.convert_to_rhf(mf)
     if hasattr(mf, 'with_df') and mf.with_df:
-        return DFCASCI(mf, ncas, nelecas, **kwargs)
+        return DFCASCI(mf, ncas, nelecas, ncore)
 
     if mf.mol.symmetry:
-        mc = casci_symm.CASCI(mf, ncas, nelecas, **kwargs)
+        mc = casci_symm.CASCI(mf, ncas, nelecas, ncore)
     else:
-        mc = casci.CASCI(mf, ncas, nelecas, **kwargs)
+        mc = casci.CASCI(mf, ncas, nelecas, ncore)
     return mc
 
 RCASCI = CASCI
 
 
-def UCASCI(mf, ncas, nelecas, **kwargs):
+def UCASCI(mf, ncas, nelecas, ncore=None):
     from pyscf import scf
     if not isinstance(mf, scf.uhf.UHF):
         mf = scf.addons.convert_to_uhf(mf, remove_df=True)
-    mc = ucasci.UCASCI(mf, ncas, nelecas, **kwargs)
+    mc = ucasci.UCASCI(mf, ncas, nelecas, ncore)
     return mc
 
 
-def UCASSCF(mf, ncas, nelecas, **kwargs):
+def UCASSCF(mf, ncas, nelecas, ncore=None, frozen=None):
     from pyscf import scf
     if not isinstance(mf, scf.uhf.UHF):
         mf = scf.addons.convert_to_uhf(mf, remove_df=True)
-    mc = umc1step.UCASSCF(mf, ncas, nelecas, **kwargs)
+    mc = umc1step.UCASSCF(mf, ncas, nelecas, ncore, frozen)
     return mc
 
 def newton(mc):
@@ -255,22 +255,22 @@ def newton(mc):
 
 
 from pyscf.mcscf import df
-def DFCASSCF(mf, ncas, nelecas, auxbasis=None, **kwargs):
+def DFCASSCF(mf, ncas, nelecas, auxbasis=None, ncore=None, frozen=None):
     from pyscf import scf
     mf = scf.addons.convert_to_rhf(mf, remove_df=False)
     if mf.mol.symmetry:
-        mc = mc1step_symm.CASSCF(mf, ncas, nelecas, **kwargs)
+        mc = mc1step_symm.CASSCF(mf, ncas, nelecas, ncore, frozen)
     else:
-        mc = mc1step.CASSCF(mf, ncas, nelecas, **kwargs)
+        mc = mc1step.CASSCF(mf, ncas, nelecas, ncore, frozen)
     return df.density_fit(mc, auxbasis)
 
-def DFCASCI(mf, ncas, nelecas, auxbasis=None, **kwargs):
+def DFCASCI(mf, ncas, nelecas, auxbasis=None, ncore=None):
     from pyscf import scf
     mf = scf.addons.convert_to_rhf(mf, remove_df=False)
     if mf.mol.symmetry:
-        mc = casci_symm.CASCI(mf, ncas, nelecas, **kwargs)
+        mc = casci_symm.CASCI(mf, ncas, nelecas, ncore)
     else:
-        mc = casci.CASCI(mf, ncas, nelecas, **kwargs)
+        mc = casci.CASCI(mf, ncas, nelecas, ncore)
     return df.density_fit(mc, auxbasis)
 
 approx_hessian = df.approx_hessian
