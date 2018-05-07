@@ -679,32 +679,33 @@ def parse_xc(description):
       first part describes the exchange functional, the second is the correlation
       functional.
 
-      - If "," was not in string, the entire string is considered as a XC
-        functional (if applicable).
-      - To apply only X functional (without C functional), leave blank in the
-        second part, e.g. description='lda,' for pure LDA functional
-      - To neglect X functional (just apply C functional), leave blank in the
-        first part, e.g. description=',vwn' for pure VWN functional
-      - If compound XC functional (including both X and C functionals, such as
-        b3lyp) is specified, no matter whehter it is in the X part (the string
-        in front of comma) or the C part (the string behind comma), both X and C
-        functionals of the compound XC functional will be used.
+      - If "," was not in string, the entire string is considered as a
+        compound XC functional (including both X and C functionals, such as b3lyp).
+      - To input only X functional (without C functional), leave the second
+        part blank. E.g. description='slater,' means pure LDA functional.
+      - To neglect X functional (just apply C functional), leave the first
+        part blank. E.g. description=',vwn' means pure VWN functional.
+      - If compound XC functional is specified, no matter whehter it is in the
+        X part (the string in front of comma) or the C part (the string behind
+        comma), both X and C functionals of the compound XC functional will be
+        used.
 
     * The functional name can be placed in arbitrary order.  Two name needs to
       be separated by operators "+" or "-".  Blank spaces are ignored.
       NOTE the parser only reads operators "+" "-" "*".  / is not in support.
-    * A functional name is associated with one factor.  If the factor is not
-      given, it is assumed equaling 1.  Compound functional can be scaled as a
-      unit. For example '0.5*b3lyp' is equivalent to
+    * A functional name can have at most one factor.  If the factor is not
+      given, it is set to 1.  Compound functional can be scaled as a unit. For
+      example '0.5*b3lyp' is equivalent to
       'HF*0.1 + .04*LDA + .36*B88, .405*LYP + .095*VWN'
     * String "HF" stands for exact exchange (HF K matrix).  Putting "HF" in
       correlation functional part is the same to putting "HF" in exchange
       part.
     * String "RSH" means range-separated operator. Its format is
-      RSH(alpha; beta; omega).  Another way to input RSH is "SR-HF(0.1)" and
-      "LR-HF(0.1)".  The number in parenthesis is the value of omega.
+      RSH(alpha; beta; omega).  Another way to input RSH is to use keywords
+      SR_HF and LR_HF: "SR_HF(0.1) * alpha_plus_beta" and "LR_HF(0.1) *
+      alpha" where the number in parenthesis is the value of omega.
     * Be careful with the libxc convention on GGA functional, in which the LDA
-      contribution is included.
+      contribution has been included.
 
     Args:
         xc_code : str
