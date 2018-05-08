@@ -105,10 +105,16 @@ configure_file(
 # to find config.h
 include_directories("${PROJECT_BINARY_DIR}")
 
-SET(CMAKE_SKIP_BUILD_RPATH  True)
-SET(CMAKE_BUILD_WITH_INSTALL_RPATH True)
-SET(CMAKE_INSTALL_RPATH "$ORIGIN:$ORIGIN/deps/lib")
-#TODO: test me set(CMAKE_MACOSX_RPATH OFF)
+# See also https://gitlab.kitware.com/cmake/community/wikis/doc/cmake/RPATH-handling
+if (WIN32)
+  #?
+elseif (APPLE)
+  #TODO: test me set(CMAKE_MACOSX_RPATH On)
+else ()
+  set(CMAKE_SKIP_BUILD_RPATH  True)
+  set(CMAKE_BUILD_WITH_INSTALL_RPATH True)
+  set(CMAKE_INSTALL_RPATH "\$ORIGIN:\$ORIGIN/deps/lib")
+endif ()
 
 add_subdirectory(np_helper)
 add_subdirectory(gto)
