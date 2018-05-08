@@ -105,6 +105,11 @@ configure_file(
 # to find config.h
 include_directories("${PROJECT_BINARY_DIR}")
 
+SET(CMAKE_SKIP_BUILD_RPATH  True)
+SET(CMAKE_BUILD_WITH_INSTALL_RPATH True)
+SET(CMAKE_INSTALL_RPATH "$ORIGIN:$ORIGIN/deps/lib")
+#TODO: test me set(CMAKE_MACOSX_RPATH OFF)
+
 add_subdirectory(np_helper)
 add_subdirectory(gto)
 add_subdirectory(vhf)

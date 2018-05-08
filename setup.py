@@ -464,7 +464,8 @@ setup(
     author_email=AUTHOR_EMAIL,
     platforms=PLATFORMS,
     #package_dir={'pyscf': 'pyscf'},  # packages are under directory pyscf
-    package_data={'': ['*.so', '*.dylib', '*.dll', '*.dat']}, # any package contains *.so *.dat files
+    #include *.so *.dat files. They are now placed in MAINTAINER.in
+    #package_data={'': ['*.so', '*.dylib', '*.dll', '*.dat']},
     include_package_data=True,  # include everything in source control
     packages=find_packages(exclude=['*dmrgscf*', '*fciqmcscf*', '*icmpspt*',
                                     '*shciscf*', '*xianci*', '*nao*',

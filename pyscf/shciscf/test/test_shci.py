@@ -15,6 +15,9 @@
 
 import unittest
 import numpy
+from pyscf import __config__
+__config__.shci_SHCIEXE = 'shci_emulator'
+__config__.shci_SHCISCRATCHDIR = '.'
 from pyscf.shciscf import shci
 
 def D2htoDinfh(SHCI, norb, nelec):
