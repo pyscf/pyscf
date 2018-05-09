@@ -754,8 +754,7 @@ class CASCI(lib.StreamObject):
         if self.canonicalization:
             self.canonicalize_(mo_coeff, self.ci,
                                sort=self.sorting_mo_energy,
-                               cas_natorb=self.natorb, verbose=log,
-                               with_meta_lowdin=WITH_META_LOWDIN)
+                               cas_natorb=self.natorb, verbose=log)
 
         if hasattr(self.fcisolver, 'converged'):
             self.converged = numpy.all(self.fcisolver.converged)
@@ -800,8 +799,7 @@ class CASCI(lib.StreamObject):
     def cas_natorb_(self, mo_coeff=None, ci=None, eris=None, sort=False,
                     casdm1=None, verbose=None):
         self.mo_coeff, self.ci, occ = cas_natorb(self, mo_coeff, ci, eris,
-                                                 sort, casdm1, verbose,
-                                                 with_meta_lowdin)
+                                                 sort, casdm1, verbose)
         return self.mo_coeff, self.ci, occ
 
     def get_fock(self, mo_coeff=None, ci=None, eris=None, casdm1=None,
