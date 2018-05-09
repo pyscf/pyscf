@@ -122,7 +122,6 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=None,
             if not casscf.natorb:
                 log.debug2('NOTE: mc.mo_coeff in active space is different to '
                            'the natural orbital coefficients printed in above.')
-            log.debug2(' ** CASCI/CASSCF orbital coefficients (expansion on meta-Lowdin AOs) **')
             if with_meta_lowdin:
                 c = reduce(numpy.dot, (orth_coeff.T, ovlp_ao, mo_coeff))
                 log.debug2('MCSCF orbital (expansion on meta-Lowdin AOs)')
@@ -150,7 +149,10 @@ def analyze(casscf, mo_coeff=None, ci=None, verbose=None,
                 for c,ia,ib in res:
                     log.info('  %-20s %-30s %.12f', ia, ib, c)
 
-        casscf._scf.mulliken_meta(casscf.mol, dm1, s=ovlp_ao, verbose=log)
+        if with_meta_lowdin:
+            casscf._scf.mulliken_meta(casscf.mol, dm1, s=ovlp_ao, verbose=log)
+        else:
+            casscf._scf.mulliken_pop(casscf.mol, dm1, s=ovlp_ao, verbose=log)
     return dm1a, dm1b
 
 def get_fock(mc, mo_coeff=None, ci=None, eris=None, casdm1=None, verbose=None):
