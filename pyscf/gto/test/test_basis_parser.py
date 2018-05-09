@@ -33,6 +33,7 @@ class KnownValues(unittest.TestCase):
     def test_basis_load(self):
         self.assertEqual(gto.basis.load(__file__, 'H'), [])
         self.assertRaises(KeyError, gto.basis.load, 'abas', 'H')
+        #self.assertRaises(RuntimeError, gto.basis.load(__file__, 'C'), [])
 
         self.assertEqual(len(gto.basis.load('631++g**', 'C')), 8)
         self.assertEqual(len(gto.basis.load('ccpcvdz', 'C')), 7)
@@ -50,7 +51,7 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(bas, basdat1)
 
     def test_basis_load_ecp(self):
-        self.assertEqual(gto.basis.load(__file__, 'H'), [])
+        self.assertEqual(gto.basis.load_ecp(__file__, 'H'), [])
 
     def test_parse_basis(self):
         basis_str = '''
@@ -96,6 +97,55 @@ Na P
         ecpdat1 = gto.basis.parse_nwchem.parse_ecp(
             gto.basis.parse_nwchem.convert_ecp_to_nwchem('Na', ecpdat), 'Na')
         self.assertEqual(ecpdat, ecpdat1)
+
+    def test_optimize_contraction(self):
+        bas = gto.parse(r'''
+#BASIS SET: (6s,3p) -> [2s,1p]
+        C    S
+              2.9412494             -0.09996723
+              0.6834831              0.39951283
+              0.2222899              0.70011547
+        C    S
+              2.9412494             0.15591627
+              0.6834831             0.60768372
+              0.2222899             0.39195739
+                                    ''', optimize=True)
+        self.assertEqual(len(bas), 1)
+
+        bas = [[1, 0,
+                [2.9412494, -0.09996723],
+                [0.6834831,  0.39951283],
+                [0.2222899,  0.70011547]],
+               [1, 1,
+                [2.9412494, -0.09996723],
+                [0.6834831,  0.39951283],
+                [0.2222899,  0.70011547]],
+               [1, 1,
+                [2.9412494,  0.15591627],
+                [0.6834831,  0.60768372],
+                [0.2222899,  0.39195739]]]
+        bas = gto.basis.parse_nwchem.optimize_contraction(bas)
+        self.assertEqual(len(bas), 2)
+
+    def test_remove_zero(self):
+        bas = gto.parse(r'''
+        C    S
+        7.2610457926   0.0000000000   0.0000000000
+        2.1056583087   0.0000000000   0.0000000000
+        0.6439906571   1.0000000000   0.0000000000
+        0.0797152017   0.0000000000   1.0000000000
+        0.0294029590   0.0000000000   0.0000000000
+                                    ''')
+        self.assertEqual(len(bas[0]), 3)
+
+        bas = [[0, 0,
+                [7.2610457926,  0.0000000000,  0.0000000000],
+                [2.1056583087,  0.0000000000,  0.0000000000],
+                [0.6439906571,  1.0000000000,  0.0000000000],
+                [0.0797152017,  0.0000000000,  1.0000000000],
+                [0.0294029590,  0.0000000000,  0.0000000000]]]
+        bas = gto.basis.parse_nwchem.remove_zero(bas)
+        self.assertEqual(len(bas[0]), 4)
 
 
 if __name__ == "__main__":

@@ -64,6 +64,7 @@ def _parse(blines, optimize=False):
     if optimize:
         basis_sorted = parse_nwchem.optimize_contraction(basis_sorted)
 
+    basis_sorted = parse_nwchem.remove_zero(basis_sorted)
     return basis_sorted
 
 BASIS_SET_DELIMITER = re.compile('# *BASIS SET.*\n')
