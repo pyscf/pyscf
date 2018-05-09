@@ -222,7 +222,7 @@ def get_fock(mc, mo_coeff=None, ci=None, eris=None, casdm1=None, verbose=None):
     return fock
 
 def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
-               casdm1=None, verbose=None):
+               casdm1=None, verbose=None, with_meta_lowdin=WITH_META_LOWDIN):
     '''Transform active orbitals to natrual orbitals, and update the CI wfn
 
     Args:
@@ -325,10 +325,15 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
         ovlp_ao = mc._scf.get_ovlp()
         log.debug('where_natorb %s', str(where_natorb))
         log.info('Natural occ %s', str(occ))
-        log.info('Natural orbital (expansion on meta-Lowdin AOs) in CAS space')
-        label = mc.mol.ao_labels()
-        orth_coeff = orth.orth_ao(mc.mol, 'meta_lowdin', s=ovlp_ao)
-        mo_cas = reduce(numpy.dot, (orth_coeff.T, ovlp_ao, mo_coeff1[:,ncore:nocc]))
+        if with_meta_lowdin:
+            log.info('Natural orbital (expansion on meta-Lowdin AOs) in CAS space')
+            label = mc.mol.ao_labels()
+            orth_coeff = orth.orth_ao(mc.mol, 'meta_lowdin', s=ovlp_ao)
+            mo_cas = reduce(numpy.dot, (orth_coeff.T, ovlp_ao, mo_coeff1[:,ncore:nocc]))
+        else:
+            log.info('Natural orbital (expansion on AOs) in CAS space')
+            label = mc.mol.ao_labels()
+            mo_cas = mo_coeff1[:,ncore:nocc]
         dump_mat.dump_rec(log.stdout, mo_cas, label, start=1)
 
         if mc._scf.mo_coeff is not None:
@@ -341,7 +346,8 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
     return mo_coeff1, fcivec, mo_occ
 
 def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
-                 cas_natorb=False, casdm1=None, verbose=logger.NOTE):
+                 cas_natorb=False, casdm1=None, verbose=logger.NOTE,
+                 with_meta_lowdin=WITH_META_LOWDIN):
     '''Canonicalized CASCI/CASSCF orbitals of effecitve Fock matrix.
     Effective Fock matrix is built with one-particle density matrix (see
     also :func:`mcscf.casci.get_fock`). For state-average CASCI/CASSCF object,
@@ -407,7 +413,7 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
     mo_energy = fock.diagonal().copy()
     if cas_natorb:
         mo_coeff1, ci, occ = mc.cas_natorb(mo_coeff, ci, eris, sort, casdm1,
-                                           verbose)
+                                           verbose, with_meta_lowdin)
         ma = mo_coeff1[:,ncore:nocc]
         mo_energy[ncore:nocc] = numpy.einsum('ji,ji->i', ma, fock_ao.dot(ma))
     else:
@@ -748,7 +754,8 @@ class CASCI(lib.StreamObject):
         if self.canonicalization:
             self.canonicalize_(mo_coeff, self.ci,
                                sort=self.sorting_mo_energy,
-                               cas_natorb=self.natorb, verbose=log)
+                               cas_natorb=self.natorb, verbose=log,
+                               with_meta_lowdin=WITH_META_LOWDIN)
 
         if hasattr(self.fcisolver, 'converged'):
             self.converged = numpy.all(self.fcisolver.converged)
@@ -786,13 +793,15 @@ class CASCI(lib.StreamObject):
 
     @lib.with_doc(cas_natorb.__doc__)
     def cas_natorb(self, mo_coeff=None, ci=None, eris=None, sort=False,
-                   casdm1=None, verbose=None):
-        return cas_natorb(self, mo_coeff, ci, eris, sort, casdm1, verbose)
+                   casdm1=None, verbose=None, with_meta_lowdin=WITH_META_LOWDIN):
+        return cas_natorb(self, mo_coeff, ci, eris, sort, casdm1, verbose,
+                          with_meta_lowdin)
     @lib.with_doc(cas_natorb.__doc__)
     def cas_natorb_(self, mo_coeff=None, ci=None, eris=None, sort=False,
                     casdm1=None, verbose=None):
         self.mo_coeff, self.ci, occ = cas_natorb(self, mo_coeff, ci, eris,
-                                                 sort, casdm1, verbose)
+                                                 sort, casdm1, verbose,
+                                                 with_meta_lowdin)
         return self.mo_coeff, self.ci, occ
 
     def get_fock(self, mo_coeff=None, ci=None, eris=None, casdm1=None,
@@ -802,10 +811,11 @@ class CASCI(lib.StreamObject):
     canonicalize = canonicalize
     @lib.with_doc(canonicalize.__doc__)
     def canonicalize_(self, mo_coeff=None, ci=None, eris=None, sort=False,
-                      cas_natorb=False, casdm1=None, verbose=None):
+                      cas_natorb=False, casdm1=None, verbose=None,
+                      with_meta_lowdin=WITH_META_LOWDIN):
         self.mo_coeff, ci, self.mo_energy = \
                 canonicalize(self, mo_coeff, ci, eris,
-                             sort, cas_natorb, casdm1, verbose)
+                             sort, cas_natorb, casdm1, verbose, with_meta_lowdin)
         if cas_natorb:  # When active space is changed, the ci solution needs to be updated
             self.ci = ci
         return self.mo_coeff, ci, self.mo_energy
