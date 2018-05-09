@@ -93,7 +93,7 @@ class KnownValues(unittest.TestCase):
         s = numpy.einsum('pi,pq,qj->ij', mo0[:,5:9], msym.get_ovlp(), mo1[:,5:9])
         self.assertAlmostEqual(fci.addons.overlap(ci0, ci1, 4, 4, s), 1, 9)
 
-        self.assertAlmostEqual(abs(mo1-mo2).max(), 0, 9)
+        self.assertAlmostEqual(float(abs(mo1-mo2).max()), 0, 9)
         self.assertAlmostEqual(ci1.ravel().dot(ci2.ravel()), 1, 9)
 
     def test_multi_roots(self):
