@@ -81,14 +81,20 @@ class KnownValues(unittest.TestCase):
         mo0 = mc1.mo_coeff
         ci0 = mc1.ci
         self.assertAlmostEqual(mc1.e_tot, -108.71841138528966, 9)
+
+        mo2, ci2, mo_e = mc1.canonicalize(sort=False, cas_natorb=True,
+                                          with_meta_lowdin=False, verbose=7)
+
         casdm1 = mc1.fcisolver.make_rdm1(mc1.ci, 4, 4)
         mc1.ci = None  # Force cas_natorb_ to recompute CI coefficients
-
-        mc1.cas_natorb_(casdm1=casdm1, sort=True)
+        mc1.cas_natorb_(casdm1=casdm1, sort=True, with_meta_lowdin=True)
         mo1 = mc1.mo_coeff
         ci1 = mc1.ci
         s = numpy.einsum('pi,pq,qj->ij', mo0[:,5:9], msym.get_ovlp(), mo1[:,5:9])
         self.assertAlmostEqual(fci.addons.overlap(ci0, ci1, 4, 4, s), 1, 9)
+
+        self.assertAlmostEqual(abs(mo1-mo2).max(), 0, 9)
+        self.assertAlmostEqual(ci1.ravel().dot(ci2.ravel()), 1, 9)
 
     def test_multi_roots(self):
         mc1 = mcscf.CASCI(m, 4, 4)
