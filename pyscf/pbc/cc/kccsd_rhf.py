@@ -76,7 +76,7 @@ def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
     conv = False
     for istep in range(max_cycle):
         t1new, t2new = cc.update_amps(t1, t2, eris)
-        normt = numpy.linalg.norm(t1new-t1) + numpy.linalg.norm(t2new-t2)
+        normt = cc.get_normt_diff(t1, t2, t1new, t2new)
         if cc.iterative_damping < 1.0:
             alpha = cc.iterative_damping
             t1new = (1-alpha) * t1 + alpha * t1new
@@ -95,6 +95,9 @@ def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
     log.timer('KCCSD', *cput0)
     return conv, eccsd, t1, t2
 
+def get_normt_diff(cc, t1, t2, t1new, t2new):
+    '''Calculates norm(t1 - t1new) + norm(t2 - t2new).'''
+    return numpy.linalg.norm(t1new-t1) + numpy.linalg.norm(t2new-t2)
 
 def update_amps(cc, t1, t2, eris):
     time0 = time1 = time.clock(), time.time()
@@ -334,6 +337,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
     def nkpts(self):
         return len(self.kpts)
 
+    get_normt_diff = get_normt_diff
     get_nocc = get_nocc
     get_nmo = get_nmo
     get_frozen_mask = get_frozen_mask
@@ -935,6 +939,62 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
 KRCCSD = RCCSD
 
+def pad_frozen_kpt_mo_coeff(cc, mo_coeff):
+    '''Creates the mo_coeff and fock molecular orbital matrix elements for
+    frozen orbitals.
+
+    The padded molecular orbital coefficients at each k-point are done so that
+    the first `nocc[ikpt]` and last `nvir[ikpt]` molecular orbital coefficients
+    of the padded array are the same as those of `mo_coeff` while the remaining
+    elements in the array are zero.  Here `nocc[ikpt]` and `nvir[ikpt]`
+
+    Note:
+        When remaking the fock matrix elements with the padded arrays, some
+        fock matrix elements will be zero.  This needs to be accounted for in
+        most algorithms.
+
+    Args:
+        cc (:class:`CCSD`): Coupled-cluster object storing results of a coupled-
+            cluster calculation.
+        mo_coeff (:obj:`ndarray`): Molecular orbital coefficients.
+
+    Returns:
+        padded_mo_coeff (:obj:list of `ndarray`): Molecular orbital coefficients
+            with padding from frozen orbitals.
+    '''
+    moidx = get_frozen_mask(cc)
+    nkpts = cc.nkpts
+    nocc = cc.nocc
+    nmo = cc.nmo
+    nvir = nmo - nocc
+
+    nao = mo_coeff[0].shape[0]
+    dtype = mo_coeff[0].dtype
+
+    nocc_per_kpt = numpy.asarray(get_nocc(cc, per_kpoint=True))
+    nmo_per_kpt  = numpy.asarray(get_nmo(cc, per_kpoint=True))
+
+    padded_moidx = []
+    for k in range(nkpts):
+        kpt_nocc = nocc_per_kpt[k]
+        kpt_nvir = nmo_per_kpt[k] - kpt_nocc
+        kpt_padded_moidx = numpy.concatenate((numpy.ones(kpt_nocc, dtype=numpy.bool),
+                                              numpy.zeros(nmo - kpt_nocc - kpt_nvir, dtype=numpy.bool),
+                                              numpy.ones(kpt_nvir, dtype=numpy.bool)))
+        padded_moidx.append(kpt_padded_moidx)
+
+    mo_coeff = []
+    # Here we will work with two index arrays; one is for our original (small) moidx
+    # array while the next is for our new (large) padded array.
+    for k in range(nkpts):
+        kpt_moidx = moidx[k]
+        kpt_padded_moidx = padded_moidx[k]
+
+        mo = numpy.zeros((nao, nmo), dtype=dtype)
+        mo[:, kpt_padded_moidx] = cc.mo_coeff[k][:, kpt_moidx]
+        mo_coeff.append(mo)
+
+    return mo_coeff
 
 class _ERIS:#(pyscf.cc.ccsd._ChemistsERIs):
     def __init__(self, cc, mo_coeff=None, method='incore',
@@ -955,47 +1015,28 @@ class _ERIS:#(pyscf.cc.ccsd._ChemistsERIs):
             # TODO does this work for k-points? changed to conjugate.
             raise NotImplementedError
             mo_coeff = cc.mo_coeff
-        nao = mo_coeff[0].shape[0]
         dtype = mo_coeff[0].dtype
 
-        moidx = get_frozen_mask(cc)
-        nocc_per_kpt = numpy.asarray(get_nocc(cc, per_kpoint=True))
-        nmo_per_kpt  = numpy.asarray(get_nmo(cc, per_kpoint=True))
-
-        padded_moidx = []
-        for k in range(nkpts):
-            kpt_nocc = nocc_per_kpt[k]
-            kpt_nvir = nmo_per_kpt[k] - kpt_nocc
-            kpt_padded_moidx = numpy.concatenate((numpy.ones(kpt_nocc, dtype=numpy.bool),
-                                                  numpy.zeros(nmo - kpt_nocc - kpt_nvir, dtype=numpy.bool),
-                                                  numpy.ones(kpt_nvir, dtype=numpy.bool)))
-            padded_moidx.append(kpt_padded_moidx)
-
-        mo_coeff = []
-        # Here we will work with two index arrays; one is for our original (small) moidx
-        # array while the next is for our new (large) padded array.
-        for k in range(nkpts):
-            kpt_moidx = moidx[k]
-            kpt_padded_moidx = padded_moidx[k]
-
-            mo = numpy.zeros((nao, nmo), dtype=dtype)
-            mo[:, kpt_padded_moidx] = cc.mo_coeff[k][:, kpt_moidx]
-            mo_coeff.append(mo)
+        mo_coeff = pad_frozen_kpt_mo_coeff(cc, mo_coeff)
 
         # Re-make our fock MO matrix elements from density and fock AO
         dm = cc._scf.make_rdm1(cc.mo_coeff, cc.mo_occ)
         fockao = cc._scf.get_hcore() + cc._scf.get_veff(cc._scf.cell, dm)
-        self.fock = numpy.asarray([reduce(numpy.dot, (mo_coeff[k].T.conj(), fockao[k], mo_coeff[k])) for k, mo in enumerate(mo_coeff)])
+        self.fock = numpy.asarray([reduce(numpy.dot,
+                                  (mo_coeff[k].T.conj(),fockao[k], mo_coeff[k]))
+                                  for k, mo in enumerate(mo_coeff)])
 
+        nocc_per_kpt = numpy.asarray(get_nocc(cc, per_kpoint=True))
+        nmo_per_kpt  = numpy.asarray(get_nmo(cc, per_kpoint=True))
+        nvir_per_kpt = nmo_per_kpt - nocc_per_kpt
         for kp in range(nkpts):
             mo_e = self.fock[kp].diagonal().real
-            kpt_padded_moidx = padded_moidx[kp]
-            oidx = kpt_padded_moidx[:nocc]
-            vidx = kpt_padded_moidx[nocc:]
-            gap = abs(mo_e[:nocc][oidx][:,None] - mo_e[nocc:][vidx]).min()
+            gap = abs(mo_e[:nocc_per_kpt[kp]][:, None] -
+                      mo_e[-nvir_per_kpt[kp]:]).min()
             if gap < 1e-5:
                 logger.warn(cc, 'HOMO-LUMO gap %s too small for KCCSD at '
-                            'k-point %d %s', gap, kp, cc.kpts[kp])
+                            'k-point %d %s. May cause issues in convergence.',
+                            gap, kp, cc.kpts[kp])
 
         mem_incore, mem_outcore, mem_basic = _mem_usage(nkpts, nocc, nvir)
         mem_now = lib.current_memory()[0]
