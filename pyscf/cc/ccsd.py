@@ -41,10 +41,11 @@ MEMORYMIN = getattr(__config__, 'cc_ccsd_memorymin', 2000)
 
 # t1: ia
 # t2: ijab
-def kernel(mycc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
-           verbose=logger.INFO):
+def kernel(mycc, eris=None, t1=None, t2=None, max_cycle=50, tol=1e-8,
+           tolnormt=1e-6, verbose=None):
     log = logger.new_logger(mycc, verbose)
-
+    if eris is None:
+        eris = mycc.ao2mo(mycc.mo_coeff)
     if t1 is None and t2 is None:
         t1, t2 = mycc.get_init_guess(eris)
     elif t2 is None:
@@ -182,16 +183,16 @@ def update_amps(mycc, t1, t2, eris):
         tau = None
         for q0, q1 in lib.prange(0, nvir, blksize):
             tmp = lib.einsum('jkca,ckib->jaib', t2[:,:,p0:p1,q0:q1], wVooV)
-            t2new[:,:,:,q0:q1] += tmp.transpose(0,2,3,1)
-            t2new[:,:,q0:q1,:] += tmp.transpose(0,2,1,3) * .5
+            t2new[:,:,q0:q1] += tmp.transpose(2,0,1,3)
+            t2new[:,:,q0:q1] += tmp.transpose(0,2,1,3) * .5
             tmp = None
 
         wVOov += eris_voov
         eris_VOov = eris_voov - eris_voov.transpose(0,2,1,3)*.5
         eris_voov = None
         for q0, q1 in lib.prange(0, nvir, blksize):
-            tau  = t2[:,:,:,q0:q1].transpose(0,2,1,3) * 2
-            tau -= t2[:,:,q0:q1,:].transpose(0,3,1,2)
+            tau  = t2[:,:,q0:q1].transpose(1,3,0,2) * 2
+            tau -= t2[:,:,q0:q1].transpose(0,3,1,2)
             tau -= numpy.einsum('ia,jb->ibja', t1[:,q0:q1]*2, t1)
             wVOov[:,:,:,q0:q1] += .5 * lib.einsum('aikc,kcjb->aijb', eris_VOov, tau)
             tau = None
@@ -659,7 +660,7 @@ def energy(mycc, t1=None, t2=None, eris=None):
         e += 2 * numpy.einsum('ijab,iabj', tau, eris_ovvo)
         e -=     numpy.einsum('jiab,iabj', tau, eris_ovvo)
     if abs(e.imag) > 1e-4:
-        logger.warn(cc, 'Non-zero imaginary part found in CCSD energy %s', e)
+        logger.warn(mycc, 'Non-zero imaginary part found in CCSD energy %s', e)
     return e
 
 
@@ -915,8 +916,6 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
             self.check_sanity()
         self.dump_flags()
 
-        if eris is None:
-            eris = self.ao2mo(self.mo_coeff)
         self.converged, self.e_corr, self.t1, self.t2 = \
                 kernel(self, eris, t1, t2, max_cycle=self.max_cycle,
                        tol=self.conv_tol, tolnormt=self.conv_tol_normt,
@@ -1234,7 +1233,7 @@ def _make_eris_outcore(mycc, mo_coeff=None):
     eris._common_init_(mycc, mo_coeff)
 
     mol = mycc.mol
-    mo_coeff = eris.mo_coeff
+    mo_coeff = numpy.asarray(eris.mo_coeff, order='F')
     nocc = eris.nocc
     nao, nmo = mo_coeff.shape
     nvir = nmo - nocc
@@ -1272,16 +1271,15 @@ def _make_eris_outcore(mycc, mo_coeff=None):
         cput1 = log.timer_debug1('transforming vvvv', *cput1)
 
     fswap = lib.H5TmpFile()
-    mo_coeff = numpy.asarray(mo_coeff, order='F')
     max_memory = max(MEMORYMIN, mycc.max_memory-lib.current_memory()[0])
     int2e = mol._add_suffix('int2e')
-    ao2mo.outcore.half_e1(mol, (mo_coeff,mo_coeff[:,:nocc]), fswap, int2e,
+    ao2mo.outcore.half_e1(mol, (mo_coeff,orbo), fswap, int2e,
                           's4', 1, max_memory, verbose=log)
 
     ao_loc = mol.ao_loc_nr()
     nao_pair = nao * (nao+1) // 2
     blksize = int(min(8e9,max_memory*.5e6)/8/(nao_pair+nmo**2)/nocc)
-    blksize = max(BLKMIN, min(nmo*nocc, blksize))
+    blksize = min(nmo, max(BLKMIN, blksize))
     fload = ao2mo.outcore._load_from_h5g
     def prefetch(p0, p1, rowmax, buf):
         p0, p1 = p1, min(rowmax, p1+blksize)

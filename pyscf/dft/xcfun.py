@@ -134,9 +134,11 @@ XC = XC_CODES = {
 'B3LYP'         : 'B3LYP5',
 'B3LYP5'        : '.2*HF + .08*SLATER + .72*B88 + .81*LYP + .19*VWN5C',
 'B3LYPG'        : '.2*HF + .08*SLATER + .72*B88 + .81*LYP + .19*VWN3C', # B3LYP-VWN3 used by Gaussian and libxc
-'O3LYP'         : '.1161*HF + .9262*SLATER + .8133*OPTXCORR + .81*LYP + .19*VWN5C',  # Mol. Phys. 99 607
+#'O3LYP'         : '.1161*HF + .9262*SLATER + .8133*OPTXCORR + .81*LYP + .19*VWN5C',  # Mol. Phys. 99 607
 #'O3LYPG'        : '.1161*HF + .9262*SLATER + .8133*OPTXCORR + .81*LYP + .19*VWN3C',
-'O3LYPG'        : '.1161*HF + .9262*SLATER + .8133*OPTXCORR + .81*LYP + .19*VWN3C',
+# How libxc implemented, see also discussion in https://gitlab.com/libxc/libxc/issues/47
+'O3LYP'         : '.1161*HF + .9262*SLATER + .8133*1.43169*OPTXCORR + .81*LYP + .19*VWN5C',
+'O3LYPG'        : '.1161*HF + .9262*SLATER + .8133*1.43169*OPTXCORR + .81*LYP + .19*VWN3C',
 'X3LYP'         : '.218*HF + .073*SLATER + 0.542385*B88 + .166615*PW91X + .871*LYP + .129*VWN5C',  # Xu, PNAS, 101, 2673
 'X3LYPG'        : '.218*HF + .073*SLATER + 0.542385*B88 + .166615*PW91X + .871*LYP + .129*VWN3C',
 # Range-separated-hybrid functional: (alpha+beta)*SR_HF(0.33) + alpha*LR_HF(0.33)

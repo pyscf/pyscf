@@ -1450,7 +1450,7 @@ class Cell(mole.Mole):
         '''
         return 1./(2*np.pi)*np.dot(abs_kpts, self.lattice_vectors().T)
 
-    make_kpts = make_kpts
+    make_kpts = get_kpts = make_kpts
 
     def copy(self):
         return copy(self)
