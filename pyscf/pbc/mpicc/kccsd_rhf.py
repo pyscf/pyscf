@@ -34,6 +34,7 @@ from pyscf.pbc.mpicc import kintermediates_rhf as imdk
 from pyscf.pbc.lib.linalg_helper import eigs
 from pyscf.lib.linalg_helper import eig
 from pyscf.pbc.mpitools.mpi_helper import generate_max_task_list, safeAllreduceInPlace, safeNormDiff, safeBcastInPlace
+from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM
 from pyscf.lib.numpy_helper import cartesian_prod
 from pyscf.pbc.mpitools import mpi_load_balancer, mpi
 from pyscf.pbc.tools.tril import tril_index, unpack_tril
@@ -882,21 +883,23 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
 
     eia = numpy.zeros(shape=t1new.shape, dtype=t1new.dtype)
     for ki in range(nkpts):
-        for i in range(nocc):
-            for a in range(nvir):
-                eia[ki,i,a] = foo[ki,i,i] - fvv[ki,a,a]
-        t1new[ki] /= eia[ki]
+        eia = foo[ki].diagonal()[:,None] - fvv[ki].diagonal()
+        # When padding the occupied/virtual arrays, some fock elements will be zero
+        eia[abs(eia) < LOOSE_ZERO_TOL] = LARGE_DENOM
+        t1new[ki] /= eia
 
-    for ki in range(nkpts):
-      for kj in range(nkpts):
-        for ka in range(nkpts):
-            kb = kconserv[ki,ka,kj]
-            eia = numpy.diagonal(foo[ki]).reshape(-1,1) - numpy.diagonal(fvv[ka])
-            ejb = numpy.diagonal(foo[kj]).reshape(-1,1) - numpy.diagonal(fvv[kb])
-            eijab = pyscf.lib.direct_sum('ia,jb->ijab',eia,ejb)
-    #        t2new[ki,kj,ka] /= eijab
-            if ki <= kj:
-                t2new_tril[tril_index(ki,kj),ka] /= eijab
+    for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
+        if ki > kj:
+            continue
+
+        kb = kconserv[ki,ka,kj]
+        eia = np.diagonal(foo[ki]).reshape(-1,1) - np.diagonal(fvv[ka])
+        ejb = np.diagonal(foo[kj]).reshape(-1,1) - np.diagonal(fvv[kb])
+        eijab = eia[:,None,:,None] + ejb[:,None,:]
+        # Due to padding; see above discussion concerning t1new in update_amps()
+        eijab[abs(eijab) < LOOSE_ZERO_TOL] = LARGE_DENOM
+
+        t2new_tril[tril_index(ki,kj),ka] /= eijab
 
     time0 = log.timer_debug1('update t1 t2', *time0)
 
@@ -998,6 +1001,10 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
                             eia = numpy.diagonal(foo[ki]).reshape(-1,1) - numpy.diagonal(fvv[ka])
                             ejb = numpy.diagonal(foo[kj]).reshape(-1,1) - numpy.diagonal(fvv[kb])
                             eijab = pyscf.lib.direct_sum('ia,jb->ijab',eia,ejb)
+                            # Due to padding; see above discussion concerning t1new in update_amps()
+                            idx = abs(eijab) < LOOSE_ZERO_TOL
+                            eijab[idx] = LARGE_DENOM
+
                             oovv_ijab = numpy.array(eris.oovv[ki,kj,ka])
                             oovv_ijba = numpy.array(eris.oovv[ki,kj,kb]).transpose(0,1,3,2)
                             woovv = 2.*oovv_ijab - oovv_ijba
