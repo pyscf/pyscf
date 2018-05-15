@@ -22,6 +22,9 @@ TDA = uhf.TDA
 
 RPA = TDDFT = uhf.TDHF
 
+#TODO:
+TDDFTNoHybrid = TDDFT
+
 
 if __name__ == '__main__':
 

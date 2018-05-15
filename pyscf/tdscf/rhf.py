@@ -72,7 +72,7 @@ def gen_tda_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
         foo = numpy.diag(mo_energy[occidx])
         fvv = numpy.diag(mo_energy[viridx])
     else:
-        fock = reduce(numpy.dot, (mo_coeff.T, fock_ao, mo_coeff))
+        fock = reduce(numpy.dot, (mo_coeff.conj().T, fock_ao, mo_coeff))
         foo = fock[occidx[:,None],occidx]
         fvv = fock[viridx[:,None],viridx]
 
@@ -92,7 +92,7 @@ def gen_tda_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
         dmov = numpy.empty((nz,nao,nao))
         for i, z in enumerate(zs):
             # *2 for double occupancy
-            dmov[i] = reduce(numpy.dot, (orbo, z.reshape(nocc,nvir)*2, orbv.T))
+            dmov[i] = reduce(numpy.dot, (orbo, z.reshape(nocc,nvir)*2, orbv.conj().T))
         v1ao = vresp(dmov)
         #v1ov = numpy.asarray([reduce(numpy.dot, (orbo.T, v, orbv)) for v in v1ao])
         v1ov = _ao2mo.nr_e2(v1ao, mo_coeff, (0,nocc,nocc,nmo)).reshape(-1,nocc,nvir)

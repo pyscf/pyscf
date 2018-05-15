@@ -33,6 +33,8 @@ class TDA(uhf.TDA):
     conv_tol = getattr(__config__, 'pbc_tdscf_rhf_TDA_conv_tol', 1e-6)
 
     def __init__(self, mf):
+        from pyscf.pbc import scf
+        assert(isinstance(mf, scf.khf.KSCF))
         self.cell = mf.cell
         uhf.TDA.__init__(self, mf)
 

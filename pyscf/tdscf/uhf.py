@@ -90,8 +90,8 @@ def gen_tda_operation(mf, fock_ao=None, wfnsym=None):
         for i, z in enumerate(zs):
             za = z[:nocca*nvira].reshape(nocca,nvira)
             zb = z[nocca*nvira:].reshape(noccb,nvirb)
-            dmvo[0,i] = reduce(numpy.dot, (orboa, za, orbva.T))
-            dmvo[1,i] = reduce(numpy.dot, (orbob, zb, orbvb.T))
+            dmvo[0,i] = reduce(numpy.dot, (orboa, za, orbva.conj().T))
+            dmvo[1,i] = reduce(numpy.dot, (orbob, zb, orbvb.conj().T))
 
         v1ao = vresp(dmvo)
         v1a = _ao2mo.nr_e2(v1ao[0], mo_a, (0,nocca,nocca,nmo)).reshape(-1,nocca,nvira)

@@ -34,6 +34,9 @@ TDA = rhf.TDA
 
 RPA = TDDFT = rhf.TDHF
 
+#TODO:
+TDDFTNoHybrid = TDDFT
+
 
 if __name__ == '__main__':
     from pyscf.pbc import gto
