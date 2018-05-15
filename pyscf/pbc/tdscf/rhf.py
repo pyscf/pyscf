@@ -30,6 +30,8 @@ from pyscf.pbc.dft import numint
 from pyscf.pbc.scf.newton_ah import _gen_rhf_response
 from pyscf import __config__
 
+REAL_EIG_THRESHOLD = getattr(__config__, 'pbc_tdscf_rhf_TDDFT_pick_eig_threshold', 1e-3)
+POSTIVE_EIG_THRESHOLD = getattr(__config__, 'pbc_tdscf_rhf_TDDFT_positive_eig_threshold', 1e-3)
 
 class TDA(rhf.TDA):
 #FIXME: numerically unstable with small mesh?
@@ -206,7 +208,8 @@ class TDHF(TDA):
 
         # We only need positive eigenvalues
         def pickeig(w, v, nroots, envs):
-            realidx = numpy.where((abs(w.imag) < 1e-4) & (w.real > 0))[0]
+            realidx = numpy.where((abs(w.imag) < REAL_EIG_THRESHOLD) &
+                                  (w.real > POSTIVE_EIG_THRESHOLD))[0]
             idx = realidx[w[realidx].real.argsort()]
             return w[idx].real, v[:,idx].real, idx
 
