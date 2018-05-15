@@ -32,6 +32,7 @@ J. Chem. Phys. 147, 164119 (2017)
 import os
 import time
 import copy
+import warnings
 import tempfile
 import numpy
 import h5py
