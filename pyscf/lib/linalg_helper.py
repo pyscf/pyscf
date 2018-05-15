@@ -258,7 +258,7 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
              lindep=DAVIDSON_LINDEP, max_memory=MAX_MEMORY,
              dot=numpy.dot, callback=None,
              nroots=1, lessio=False, pick=None, verbose=logger.WARN,
-             follow_state=FOLLOW_STATE):
+             follow_state=FOLLOW_STATE, tol_residual=None):
     '''Davidson diagonalization method to solve  a c = e c.  Ref
     [1] E.R. Davidson, J. Comput. Phys. 17 (1), 87-94 (1975).
     [2] http://people.inf.ethz.ch/arbenz/ewp/Lnotes/chapter11.pdf
@@ -339,7 +339,10 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
     else:
         log = logger.Logger(sys.stdout, verbose)
 
-    toloose = numpy.sqrt(tol)
+    if tol_residual is None:
+        toloose = numpy.sqrt(tol)
+    else:
+        toloose = tol_residual
     log.debug1('tol %g  toloose %g', tol, toloose)
 
     if callable(x0):  # lazy initialization to reduce memory footprint
@@ -651,13 +654,17 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
                     lindep=DAVIDSON_LINDEP, max_memory=MAX_MEMORY,
                     dot=numpy.dot, callback=None,
                     nroots=1, lessio=False, left=False, pick=pick_real_eigs,
-                    verbose=logger.WARN, follow_state=FOLLOW_STATE):
+                    verbose=logger.WARN, follow_state=FOLLOW_STATE,
+                    tol_residual=None):
     if isinstance(verbose, logger.Logger):
         log = verbose
     else:
         log = logger.Logger(sys.stdout, verbose)
 
-    toloose = numpy.sqrt(tol)
+    if tol_residual is None:
+        toloose = numpy.sqrt(tol)
+    else:
+        toloose = tol_residual
     log.debug1('tol %g  toloose %g', tol, toloose)
 
     if callable(x0):
@@ -909,7 +916,7 @@ def dgeev(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
 def dgeev1(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
           lindep=DAVIDSON_LINDEP, max_memory=MAX_MEMORY,
           dot=numpy.dot, callback=None,
-          nroots=1, lessio=False, verbose=logger.WARN):
+          nroots=1, lessio=False, verbose=logger.WARN, tol_residual=None):
     '''Davidson diagonalization method to solve  A c = e B c.
 
     Args:
@@ -965,7 +972,10 @@ def dgeev1(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
     else:
         log = logger.Logger(sys.stdout, verbose)
 
-    toloose = numpy.sqrt(tol) * 1e-2
+    if tol_residual is None:
+        toloose = numpy.sqrt(tol) * 1e-2
+    else:
+        toloose = tol_residual
 
     if isinstance(x0, numpy.ndarray) and x0.ndim == 1:
         x0 = [x0]
@@ -1228,11 +1238,14 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
 
 
 def dsolve(aop, b, precond, tol=1e-12, max_cycle=30, dot=numpy.dot,
-           lindep=DSOLVE_LINDEP, verbose=0):
+           lindep=DSOLVE_LINDEP, verbose=0, tol_residual=None):
     '''Davidson iteration to solve linear equation.  It works bad.
     '''
 
-    toloose = numpy.sqrt(tol)
+    if tol_residual is None:
+        toloose = numpy.sqrt(tol)
+    else:
+        toloose = tol_residual
 
     xs = [precond(b)]
     ax = [aop(xs[-1])]
