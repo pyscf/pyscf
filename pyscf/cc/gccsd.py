@@ -122,7 +122,9 @@ class GCCSD(ccsd.CCSD):
         assert(isinstance(mf, scf.ghf.GHF))
         ccsd.CCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
 
-    def init_amps(self, eris):
+    def init_amps(self, eris=None):
+        if eris is None:
+            eris = self.ao2mo(self.mo_coeff)
         mo_e = eris.fock.diagonal().real
         nocc = self.nocc
         eia = mo_e[:nocc,None] - mo_e[None,nocc:]

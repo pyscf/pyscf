@@ -554,8 +554,10 @@ class UCCSD(ccsd.CCSD):
     get_nmo = get_nmo
     get_frozen_mask = get_frozen_mask
 
-    def init_amps(self, eris):
+    def init_amps(self, eris=None):
         time0 = time.clock(), time.time()
+        if eris is None:
+            eris = self.ao2mo(self.mo_coeff)
         nocca, noccb = self.nocc
 
         fooa = eris.focka[:nocca,:nocca]

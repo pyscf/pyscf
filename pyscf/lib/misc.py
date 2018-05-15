@@ -679,8 +679,29 @@ class ThreadWithReturnValue(Thread):
             raise ThreadRuntimeError('Error on thread %s' % self)
         else:
             Thread.join(self)
+# Note: If the return value of target is huge, Queue.get may raise
+# SystemError: NULL result without error in PyObject_Call
+# It is because return value is cached somewhere by pickle but pickle is
+# unable to handle huge amount of data.
             return self._q.get()
     get = join
+
+class ThreadWithTraceBack(Thread):
+    def __init__(self, group=None, target=None, name=None, args=(),
+                 kwargs=None):
+        self._e = None
+        def qwrap(*args, **kwargs):
+            try:
+                target(*args, **kwargs)
+            except BaseException as e:
+                self._e = e
+                raise e
+        Thread.__init__(self, group, qwrap, name, args, kwargs)
+    def join(self):
+        if self._e is not None:
+            raise ThreadRuntimeError('Error on thread %s' % self)
+        else:
+            Thread.join(self)
 
 class ThreadRuntimeError(RuntimeError):
     pass
@@ -758,8 +779,8 @@ class call_in_background(object):
                     def async_fn(*args, **kwargs):
                         if self.handler is not None:
                             self.handler.join()
-                        self.handler = ThreadWithReturnValue(target=fn, args=args,
-                                                             kwargs=kwargs)
+                        self.handler = ThreadWithTraceBack(target=fn, args=args,
+                                                           kwargs=kwargs)
                         self.handler.start()
                         return self.handler
                     return async_fn
