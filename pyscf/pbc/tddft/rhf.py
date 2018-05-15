@@ -212,17 +212,16 @@ def _get_eai(mo_energy, mo_occ):
     for k, occ in enumerate(mo_occ):
         occidx = occ >  0
         viridx = occ == 0
-        ai = lib.direct_sum('a-i->ai', mo_energy[k,viridx], mo_energy[k,occidx])
+        ai = lib.direct_sum('a-i->ai', mo_energy[k][viridx], mo_energy[k][occidx])
         eai.append(ai)
     return eai
 
 def _unpack(vo, mo_occ):
-    nmo = mo_occ.shape[-1]
-    nocc = numpy.sum(mo_occ > 0, axis=1)
     z = []
     ip = 0
-    for k, no in enumerate(nocc):
-        nv = nmo - no
+    for k, occ in enumerate(mo_occ):
+        no = numpy.count_nonzero(occ > 0)
+        nv = occ.size - no
         z.append(vo[ip:ip+nv*no].reshape(nv,no))
         ip += nv * no
     return z
