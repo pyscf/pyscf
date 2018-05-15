@@ -862,24 +862,8 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     comm.Barrier()
     cput2 = log.timer_debug1('transforming Wovov (aj)', *cput2)
 
-    #t2new = numpy.zeros((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir),dtype=ds_type)
-    #for ki in range(nkpts):
-    #    for kj in range(nkpts):
-    #        if ki <= kj:
-    #            for ka in range(nkpts):
-    #                t2new[ki,kj,ka] += t2new_tril[tril_index(ki,kj),ka]
-
     comm.Barrier()
-    #comm.Allreduce(MPI.IN_PLACE, t2new, op=MPI.SUM)
-    #safeAllreduce(comm, t2new)
     safeAllreduceInPlace(comm, t2new_tril)
-    #comm.Allreduce(MPI.IN_PLACE, t2new_tril, op=MPI.SUM)
-
-    #for kj in range(nkpts):
-    #    for ki in range(kj):
-    #        for ka in range(nkpts):
-    #            kb = kconserv[ki,ka,kj]
-    #            t2new[kj,ki,kb] += t2new[ki,kj,ka].transpose(1,0,3,2)
 
     eia = numpy.zeros(shape=t1new.shape, dtype=t1new.dtype)
     for ki in range(nkpts):
@@ -1021,8 +1005,7 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
                             oovv_ijab = numpy.array(eris.oovv[ki,kj,ka])
                             oovv_ijba = numpy.array(eris.oovv[ki,kj,kb]).transpose(0,1,3,2)
                             woovv = 2.*oovv_ijab - oovv_ijba
-                            #woovv = (2*eris_oovv[ki,kj,ka] - eris_oovv[ki,kj,kb].transpose(0,1,3,2))
-                            #t2[ki,kj,ka] = numpy.conj(eris_oovv[ki,kj,ka] / eijab)
+
                             t2_tril[tril_index(kj,ki),kb] = numpy.conj(oovv_ijab.transpose(0,1,3,2) / eijab)
                             local_mp2 += numpy.dot(t2_tril[tril_index(kj,ki),kb].flatten(),woovv.flatten())
             loader.slave_finished()
