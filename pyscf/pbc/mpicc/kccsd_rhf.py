@@ -1023,7 +1023,7 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
                             woovv = 2.*oovv_ijab - oovv_ijba
                             #woovv = (2*eris_oovv[ki,kj,ka] - eris_oovv[ki,kj,kb].transpose(0,1,3,2))
                             #t2[ki,kj,ka] = numpy.conj(eris_oovv[ki,kj,ka] / eijab)
-                            t2_tril[tril_index(kj,ki),kb] = numpy.conj(oovv_ijab / eijab)
+                            t2_tril[tril_index(kj,ki),kb] = numpy.conj(oovv_ijab.transpose(0,1,3,2) / eijab)
                             local_mp2 += numpy.dot(t2_tril[tril_index(kj,ki),kb].flatten(),woovv.flatten())
             loader.slave_finished()
 
