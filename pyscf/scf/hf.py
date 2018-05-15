@@ -1012,7 +1012,7 @@ def dip_moment(mol, dm, unit='Debye', verbose=logger.NOTE, **kwargs):
 
     mol_dip = (nucl_dip - el_dip) * unit
 
-    if unit == 'Debye' :
+    if unit == nist.AU2DEBYE:
         log.note('Dipole moment(X, Y, Z, Debye): %8.5f, %8.5f, %8.5f', *mol_dip)
     else:
         log.note('Dipole moment(X, Y, Z, A.U.): %8.5f, %8.5f, %8.5f', *mol_dip)
