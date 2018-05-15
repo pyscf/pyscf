@@ -30,6 +30,11 @@ mol.charge = -1
 mol.spin = 1
 mol.build()
 
+def tearDownModule():
+    global mol
+    mol.stdout.close()
+    del mol
+
 
 def make_mol(atom_id, coords):
     mol1 = mol.copy()

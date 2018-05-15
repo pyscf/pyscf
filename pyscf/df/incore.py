@@ -23,14 +23,14 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf import gto
 from pyscf.df import addons
+from pyscf import __config__
 
 
-def format_aux_basis(mol, auxbasis='weigend+etb'):
-    '''See also pyscf.df.addons.make_auxmol.
+LINEAR_DEP_THR = getattr(__config__, 'df_df_DF_lindep', 1e-12)
 
-    This funciton is defined for backward compatibility.
-    '''
-    return addons.make_auxmol(mol, auxbasis)
+
+# This funciton is aliased for backward compatibility.
+format_aux_basis = addons.make_auxmol
 
 
 # (ij|L)
@@ -78,18 +78,22 @@ def cholesky_eri(mol, auxbasis='weigend+etb', auxmol=None,
     naux = j2c.shape[0]
     log.debug('size of aux basis %d', naux)
     t1 = log.timer('2c2e', *t0)
-    try:
-        low = scipy.linalg.cholesky(j2c, lower=True)
-    except scipy.linalg.LinAlgError:
-        j2c[numpy.diag_indices(j2c.shape[1])] += 1e-14
-        low = scipy.linalg.cholesky(j2c, lower=True)
-    j2c = None
-    t1 = log.timer('Cholesky 2c2e', *t1)
 
     j3c = fauxe2(mol, auxmol, intor=int3c, aosym=aosym).reshape(-1,naux)
     t1 = log.timer('3c2e', *t1)
-    cderi = scipy.linalg.solve_triangular(low, j3c.T, lower=True,
-                                          overwrite_b=True)
+
+    try:
+        low = scipy.linalg.cholesky(j2c, lower=True)
+        j2c = None
+        t1 = log.timer('Cholesky 2c2e', *t1)
+        cderi = scipy.linalg.solve_triangular(low, j3c.T, lower=True,
+                                              overwrite_b=True)
+    except scipy.linalg.LinAlgError:
+        w, v = scipy.linalg.eigh(j2c)
+        idx = w > LINEAR_DEP_THR
+        v = (v[:,idx] / numpy.sqrt(w[idx]))
+        cderi = lib.dot(v.T, j3c.T)
+
     j3c = None
     if cderi.flags.f_contiguous:
         cderi = lib.transpose(cderi.T)

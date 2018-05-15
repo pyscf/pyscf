@@ -16,11 +16,12 @@ UNIT = 'angstrom'
 #
 # Loading pyscf_conf.py and overwriting above parameters
 #
-conf_file = os.environ.get('PYSCF_CONFIG_FILE', None)
-if conf_file is None:
-    conf_file = os.path.join(os.environ.get('HOME', '.'), '.pyscf_conf.py')
-
-if not os.path.isfile(conf_file):
+for conf_file in (os.environ.get('PYSCF_CONFIG_FILE', None),
+                  os.path.join(os.path.abspath('.'), '.pyscf_conf.py'),
+                  os.path.join(os.environ.get('HOME', '.'), '.pyscf_conf.py')):
+    if conf_file is not None and os.path.isfile(conf_file):
+        break
+else:
     conf_file = None
 
 if conf_file is not None:
@@ -29,9 +30,9 @@ if conf_file is not None:
         imp.load_source('pyscf.__config__', conf_file)
         del(imp)
     else:
-        import importlib
-        importlib.machinery.SourceFileLoader('pyscf.__config__', conf_file).load_module()
-        del(importlib)
+        from importlib import machinery
+        machinery.SourceFileLoader('pyscf.__config__', conf_file).load_module()
+        del(machinery)
 del(os, sys)
 
 #

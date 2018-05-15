@@ -429,11 +429,14 @@ def update_orb_ci(casscf, mo, ci0, eris, x0_guess=None,
 
 def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
            ci0=None, callback=None, verbose=logger.NOTE, dump_chk=True):
-    '''CASSCF solver
+    '''Second order CASSCF driver
     '''
     log = logger.new_logger(casscf, verbose)
+    log.warn('SO-CASSCF (Second order CASSCF) is an experimental feature. '
+             'It has bad performance for large system.')
+
     cput0 = (time.clock(), time.time())
-    log.debug('Start newton CASSCF')
+    log.debug('Start SO-CASSCF (newton CASSCF)')
     if callback is None:
         callback = casscf.callback
 
@@ -441,14 +444,14 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
     nmo = mo_coeff.shape[1]
     #TODO: lazy evaluate eris, to leave enough memory for FCI solver
     eris = casscf.ao2mo(mo)
-    e_tot, e_ci, fcivec = casscf.casci(mo, ci0, eris, log, locals())
+    e_tot, e_cas, fcivec = casscf.casci(mo, ci0, eris, log, locals())
     if casscf.ncas == nmo and not casscf.internal_rotation:
         if casscf.canonicalization:
             log.debug('CASSCF canonicalization')
             mo, fcivec, mo_energy = casscf.canonicalize(mo, fcivec, eris,
                                                         casscf.sorting_mo_energy,
                                                         casscf.natorb, verbose=log)
-        return True, e_tot, e_ci, fcivec, mo, mo_energy
+        return True, e_tot, e_cas, fcivec, mo, mo_energy
 
     casdm1 = casscf.fcisolver.make_rdm1(fcivec, casscf.ncas, casscf.nelecas)
     if conv_tol_grad is None:
@@ -478,7 +481,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
         eris = casscf.ao2mo(mo)
         t2m = log.timer('update eri', *t2m)
 
-        e_tot, e_ci, fcivec = casscf.casci(mo, fcivec, eris, log, locals())
+        e_tot, e_cas, fcivec = casscf.casci(mo, fcivec, eris, log, locals())
         log.timer('CASCI solver', *t2m)
         t2m = t1m = log.timer('macro iter %d'%imacro, *t1m)
 
@@ -513,7 +516,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
         casscf.dump_chk(locals())
 
     log.timer('newton CASSCF', *cput0)
-    return conv, e_tot, e_ci, fcivec, mo, mo_energy
+    return conv, e_tot, e_cas, fcivec, mo, mo_energy
 
 
 class CASSCF(mc1step.CASSCF):
@@ -690,14 +693,14 @@ class CASSCF(mc1step.CASSCF):
         else:
             fcasci = mc1step._fake_h_for_fast_casci(self, mo_coeff, eris)
 
-        e_tot, e_ci, fcivec = casci.kernel(fcasci, mo_coeff, ci0, log)
-        if not isinstance(e_ci, (float, numpy.number)):
+        e_tot, e_cas, fcivec = casci.kernel(fcasci, mo_coeff, ci0, log)
+        if not isinstance(e_cas, (float, numpy.number)):
             raise RuntimeError('Multiple roots are detected in fcisolver.  '
                                'CASSCF does not know which state to optimize.\n'
                                'See also  mcscf.state_average  or  mcscf.state_specific  for excited states.')
 
         if envs is not None and log.verbose >= logger.INFO:
-            log.debug('CAS space CI energy = %.15g', e_ci)
+            log.debug('CAS space CI energy = %.15g', e_cas)
 
             if hasattr(self.fcisolver,'spin_square'):
                 ss = self.fcisolver.spin_square(fcivec, self.ncas, self.nelecas)
@@ -723,7 +726,7 @@ class CASSCF(mc1step.CASSCF):
                 else:
                     log.info('CASCI E = %.15g  dE = %.8g  S^2 = %.7f',
                              e_tot, e_tot-elast, ss[0])
-        return e_tot, e_ci, fcivec
+        return e_tot, e_cas, fcivec
 
     def update_ao2mo(self, mo):
         raise DeprecationWarning('update_ao2mo was obseleted since pyscf v1.0.  '

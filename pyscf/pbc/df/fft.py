@@ -179,7 +179,7 @@ class FFTDF(lib.StreamObject):
 
 # Not input options
         self.exxdiv = None  # to mimic KRHF/KUHF object in function get_coulG
-        self._numint = numint._KNumInt()
+        self._numint = numint.KNumInt()
         self._keys = set(self.__dict__.keys())
 
     @property
@@ -237,7 +237,7 @@ class FFTDF(lib.StreamObject):
             cell = self.cell
         else:
             cell = grids.cell
-        if grids.coords is None:
+        if grids.non0tab is None:
             grids.build(with_non0tab=True)
 
         if kpts is None: kpts = self.kpts

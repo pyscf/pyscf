@@ -29,7 +29,7 @@ ci0 = numpy.random.random((na,na))
 ci0 = ci0 + ci0.T
 rdm1, rdm2 = fci.direct_spin1.make_rdm12(ci0, norb, nelec)
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_rdm3(self):
         dm3ref = make_dm3_o0(ci0, norb, nelec)
         dm1, dm2, dm3 = fci.rdm.make_dm123('FCI3pdm_kern_spin0', ci0, ci0, norb, nelec)
@@ -110,7 +110,7 @@ class KnowValues(unittest.TestCase):
     def test_full_alpha(self):
         nelec = (6,3)
         norb = 6
-        npair = norb*(norb+1)/2
+        npair = norb*(norb+1)//2
         numpy.random.seed(12)
         h1 = numpy.random.random((norb,norb))
         h1 = h1 + h1.T
@@ -128,7 +128,7 @@ class KnowValues(unittest.TestCase):
     def test_0beta(self):
         nelec = (3,0)
         norb = 6
-        npair = norb*(norb+1)/2
+        npair = norb*(norb+1)//2
         numpy.random.seed(12)
         h1 = numpy.random.random((norb,norb))
         h1 = h1 + h1.T

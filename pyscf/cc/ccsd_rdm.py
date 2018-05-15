@@ -46,9 +46,9 @@ def _gamma1_intermediates(mycc, t1, t2, l1, l2):
     return doo, dov, dvo, dvv
 
 # gamma2 intermediates in Chemist's notation
-def _gamma2_intermediates(mycc, t1, t2, l1, l2):
+def _gamma2_intermediates(mycc, t1, t2, l1, l2, compress_vvvv=False):
     f = lib.H5TmpFile()
-    _gamma2_outcore(mycc, t1, t2, l1, l2, f, False)
+    _gamma2_outcore(mycc, t1, t2, l1, l2, f, compress_vvvv)
     d2 = (f['dovov'].value, f['dvvvv'].value, f['doooo'].value, f['doovv'].value,
           f['dovvo'].value, None,             f['dovvv'].value, f['dooov'].value)
     return d2

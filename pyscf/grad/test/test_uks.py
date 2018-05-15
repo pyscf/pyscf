@@ -21,7 +21,42 @@ from pyscf.dft import radi
 from pyscf.grad import uks
 
 
+mol = gto.Mole()
+mol.verbose = 5
+mol.output = '/dev/null'
+mol.atom.extend([
+    ["O" , (0. , 0.     , 0.)],
+    [1   , (0. , -0.757 , 0.587)],
+    [1   , (0. , 0.757  , 0.587)] ])
+mol.basis = '6-31g'
+mol.charge = 1
+mol.spin = 1
+mol.build()
+mf = dft.UKS(mol)
+mf.conv_tol = 1e-14
+mf.kernel()
+
+def tearDownModule():
+    global mol, mf
+    mol.stdout.close()
+    del mol, mf
+
 class KnownValues(unittest.TestCase):
+    def test_finite_diff_uks_grad(self):
+        g = mf.nuc_grad_method().kernel()
+        self.assertAlmostEqual(lib.finger(g), -0.12090786416814017, 6)
+
+        mf_scanner = mf.as_scanner()
+        e1 = mf_scanner(mol.set_geom_('O  0. 0. 0.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
+        e2 = mf_scanner(mol.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
+        self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 4)
+
+    def test_different_grids_for_grad(self):
+        grids1 = dft.gen_grid.Grids(mol)
+        grids1.level = 1
+        g = mf.nuc_grad_method().set(grids=grids1).kernel()
+        self.assertAlmostEqual(lib.finger(g), -0.12085837432386037, 6)
+
     def test_get_vxc(self):
         mol = gto.Mole()
         mol.verbose = 0

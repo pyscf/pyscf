@@ -17,6 +17,7 @@
 1-electron Spin-free X2C approximation
 '''
 
+from functools import reduce
 import numpy
 import scipy.linalg
 from pyscf import lib

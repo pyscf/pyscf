@@ -1029,7 +1029,7 @@ class _IMDS:
 
         # 3 or 4 virtuals
         self.Wvovv = imd.Wvovv(t1,t2,eris)
-        if ea_partition == 'mp' and not np.any(t1):
+        if ea_partition == 'mp':
             self.Wvvvo = imd.Wvvvo(t1,t2,eris)
         else:
             self.Wvvvv = imd.Wvvvv(t1,t2,eris)

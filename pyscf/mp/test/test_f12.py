@@ -18,7 +18,9 @@ from functools import reduce
 import numpy
 from pyscf import gto
 from pyscf import lo
+from pyscf import scf
 from pyscf.mp import mp2f12_slow as mp2f12
+from pyscf import mp
 
 mol = gto.Mole()
 mol.verbose = 0
@@ -30,6 +32,10 @@ mol.atom = [
 
 mol.basis = 'ccpvdz'
 mol.build()
+
+def tearDownModule():
+    global mol
+    del mol
 
 
 class KnowValues(unittest.TestCase):
@@ -45,6 +51,16 @@ class KnowValues(unittest.TestCase):
         c = numpy.hstack((c1,cabs_coeff))
         s = reduce(numpy.dot, (c.T, cabs_mol.intor('int1e_ovlp_sph'), c))
         self.assertAlmostEqual(numpy.linalg.norm(s-numpy.eye(c.shape[1])), 0, 8)
+
+    # FIXME
+    def test_energy(self):
+        mol = gto.Mole(atom='Ne', basis='ccpvdz')
+        mf = scf.RHF(mol).run()
+        auxmol = gto.M(atom=mol.atom,
+                       basis=('ccpvdz-fit', 'cc-pVDZ-F12-OptRI'),
+                       verbose=0)
+        e = mp.MP2(mf).kernel()[0] + mp2f12.energy_f12(mf, auxmol, 1.)
+        self.assertAlmostEqual(e, -0.27522161783457028, 9)
 
 
 if __name__ == "__main__":

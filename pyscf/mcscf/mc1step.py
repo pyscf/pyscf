@@ -339,7 +339,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
     nmo = mo_coeff.shape[1]
     #TODO: lazy evaluate eris, to leave enough memory for FCI solver
     eris = casscf.ao2mo(mo)
-    e_tot, e_ci, fcivec = casscf.casci(mo, ci0, eris, log, locals())
+    e_tot, e_cas, fcivec = casscf.casci(mo, ci0, eris, log, locals())
     if casscf.ncas == nmo and not casscf.internal_rotation:
         if casscf.canonicalization:
             log.debug('CASSCF canonicalization')
@@ -348,7 +348,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
                                                         casscf.natorb, verbose=log)
         else:
             mo_energy = None
-        return True, e_tot, e_ci, fcivec, mo, mo_energy
+        return True, e_tot, e_cas, fcivec, mo, mo_energy
 
     if conv_tol_grad is None:
         conv_tol_grad = numpy.sqrt(tol)
@@ -386,7 +386,8 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
                           imicro, norm_t, norm_gorb)
                 break
 
-            casdm1, casdm2, gci, fcivec = casscf.update_casdm(mo, u, fcivec, e_ci, eris, locals())
+            casdm1, casdm2, gci, fcivec = \
+                    casscf.update_casdm(mo, u, fcivec, e_cas, eris, locals())
             norm_ddm = numpy.linalg.norm(casdm1 - casdm1_last)
             norm_ddm_micro = numpy.linalg.norm(casdm1 - casdm1_prev)
             casdm1_prev = casdm1
@@ -423,7 +424,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
         eris = casscf.ao2mo(mo)
         t2m = log.timer('update eri', *t3m)
 
-        e_tot, e_ci, fcivec = casscf.casci(mo, fcivec, eris, log, locals())
+        e_tot, e_cas, fcivec = casscf.casci(mo, fcivec, eris, log, locals())
         casdm1, casdm2 = casscf.fcisolver.make_rdm12(fcivec, casscf.ncas, casscf.nelecas)
         norm_ddm = numpy.linalg.norm(casdm1 - casdm1_last)
         casdm1_prev = casdm1_last = casdm1
@@ -453,7 +454,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
         mo, fcivec, mo_energy = \
                 casscf.canonicalize(mo, fcivec, eris, casscf.sorting_mo_energy,
                                     casscf.natorb, casdm1, log)
-        if casscf.natorb: # dump_chk may save casdm1
+        if casscf.natorb and dump_chk: # dump_chk may save casdm1
             nocc = casscf.ncore + casscf.ncas
             occ, ucas = casscf._eig(-casdm1, casscf.ncore, nocc)
             casdm1 = numpy.diag(-occ)
@@ -464,7 +465,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
         casscf.dump_chk(locals())
 
     log.timer('1-step CASSCF', *cput0)
-    return conv, e_tot, e_ci, fcivec, mo, mo_energy
+    return conv, e_tot, e_cas, fcivec, mo, mo_energy
 
 
 def as_scanner(mc):
@@ -488,14 +489,23 @@ def as_scanner(mc):
     >>> e = mc_scanner(gto.M(atom='N 0 0 0; N 0 0 1.1'))
     >>> e = mc_scanner(gto.M(atom='N 0 0 0; N 0 0 1.5'))
     '''
+    from pyscf import gto
     from pyscf.mcscf.addons import project_init_guess
+    if isinstance(mc, lib.SinglePointScanner):
+        return mc
+
     logger.info(mc, 'Create scanner for %s', mc.__class__)
 
     class CASSCF_Scanner(mc.__class__, lib.SinglePointScanner):
         def __init__(self, mc):
             self.__dict__.update(mc.__dict__)
             self._scf = mc._scf.as_scanner()
-        def __call__(self, mol, **kwargs):
+        def __call__(self, mol_or_geom, **kwargs):
+            if isinstance(mol_or_geom, gto.Mole):
+                mol = mol_or_geom
+            else:
+                mol = self.mol.set_geom_(mol_or_geom, inplace=False)
+
             mf_scanner = self._scf
             mf_scanner(mol)
             self.mol = mol
@@ -716,15 +726,11 @@ class CASSCF(casci.CASCI):
         log.info('max_memory %d MB (current use %d MB)',
                  self.max_memory, lib.current_memory()[0])
         log.info('internal_rotation = %s', self.internal_rotation)
-        try:
+        if hasattr(self.fcisolver, 'dump_flags'):
             self.fcisolver.dump_flags(self.verbose)
-        except AttributeError:
-            pass
-        if hasattr(self, 'max_orb_stepsize'):
-            log.warn('Attribute "max_orb_stepsize" was replaced by "max_stepsize"')
         if self.mo_coeff is None:
-            log.warn('Orbital for CASCI is not specified.  You probably need '
-                     'call SCF.kernel() to initialize orbitals.')
+            log.error('Orbitals for CASCI are not specified. The relevant SCF '
+                      'object may not be initialized.')
         return self
 
     def kernel(self, mo_coeff=None, ci0=None, callback=None, _kern=kernel):
@@ -767,30 +773,24 @@ class CASSCF(casci.CASCI):
         return self.kernel(mo_coeff, ci0, callback, mc2step.kernel)
 
     def casci(self, mo_coeff, ci0=None, eris=None, verbose=None, envs=None):
+        log = logger.new_logger(self, verbose)
         if eris is None:
             fcasci = copy.copy(self)
             fcasci.ao2mo = self.get_h2cas
         else:
             fcasci = _fake_h_for_fast_casci(self, mo_coeff, eris)
 
-        if isinstance(verbose, logger.Logger):
-            log = verbose
-        else:
-            if verbose is None:
-                verbose = self.verbose
-            log = logger.Logger(self.stdout, verbose)
-
-        e_tot, e_ci, fcivec = casci.kernel(fcasci, mo_coeff, ci0, log)
-        if numpy.size(e_ci) != 1:
+        e_tot, e_cas, fcivec = casci.kernel(fcasci, mo_coeff, ci0, log)
+        if not isinstance(e_cas, (float, numpy.number)):
             raise RuntimeError('Multiple roots are detected in fcisolver.  '
                                'CASSCF does not know which state to optimize.\n'
                                'See also  mcscf.state_average  or  mcscf.state_specific  for excited states.')
-        elif numpy.ndim(e_ci) != 0:
+        elif numpy.ndim(e_cas) != 0:
             # This is a workaround for external CI solver compatibility.
-            e_ci = e_ci[0]
+            e_cas = e_cas[0]
 
         if envs is not None and log.verbose >= logger.INFO:
-            log.debug('CAS space CI energy = %.15g', e_ci)
+            log.debug('CAS space CI energy = %.15g', e_cas)
 
             if hasattr(self.fcisolver,'spin_square'):
                 ss = self.fcisolver.spin_square(fcivec, self.ncas, self.nelecas)
@@ -821,7 +821,7 @@ class CASSCF(casci.CASCI):
                     log.info('CASCI E = %.15g', e_tot)
                 else:
                     log.info('CASCI E = %.15g  S^2 = %.7f', e_tot, ss[0])
-        return e_tot, e_ci, fcivec
+        return e_tot, e_cas, fcivec
 
     as_scanner = as_scanner
 
@@ -865,7 +865,8 @@ class CASSCF(casci.CASCI):
         raise DeprecationWarning('update_ao2mo was obseleted since pyscf v1.0.  '
                                  'Use .ao2mo method instead')
 
-    def ao2mo(self, mo):
+    def ao2mo(self, mo_coeff=None):
+        if mo_coeff is None: mo_coeff = self.mo_coeff
 #        nmo = mo.shape[1]
 #        ncore = self.ncore
 #        ncas = self.ncas
@@ -881,13 +882,25 @@ class CASSCF(casci.CASCI):
 #        eris.papa = numpy.asarray(eri[:,ncore:nocc,:,ncore:nocc], order='C')
 #        return eris
 
-        return mc_ao2mo._ERIS(self, mo, method='incore',
+        return mc_ao2mo._ERIS(self, mo_coeff, method='incore',
                               level=self.ao2mo_level)
 
-    # Don't remove the two functions.  They are used in df/approx_hessian code
+    # Don't remove the two functions.  They are used in df.approx_hessian code
     def get_h2eff(self, mo_coeff=None):
+        '''Computing active space two-particle Hamiltonian.
+
+        Note It is different to get_h2cas when df.approx_hessian is applied,
+        in which get_h2eff function returns the DF integrals while get_h2cas
+        returns the regular 2-electron integrals.
+        '''
         return self.get_h2cas(mo_coeff)
     def get_h2cas(self, mo_coeff=None):
+        '''Computing active space two-particle Hamiltonian.
+
+        Note It is different to get_h2eff when df.approx_hessian is applied,
+        in which get_h2eff function returns the DF integrals while get_h2cas
+        returns the regular 2-electron integrals.
+        '''
         return casci.CASCI.ao2mo(self, mo_coeff)
 
     def update_jk_in_ah(self, mo, r, casdm1, eris):
@@ -910,11 +923,11 @@ class CASSCF(casci.CASCI):
 
 # hessian_co exactly expands up to first order of H
 # update_casdm exand to approx 2nd order of H
-    def update_casdm(self, mo, u, fcivec, e_ci, eris, envs={}):
+    def update_casdm(self, mo, u, fcivec, e_cas, eris, envs={}):
         nmo = mo.shape[1]
         rmat = u - numpy.eye(nmo)
 
-        #g = hessian_co(self, mo, rmat, fcivec, e_ci, eris)
+        #g = hessian_co(self, mo, rmat, fcivec, e_cas, eris)
         ### hessian_co part start ###
         ncas = self.ncas
         nelecas = self.nelecas
@@ -965,7 +978,7 @@ class CASSCF(casci.CASCI):
               + numpy.einsum('pq,pq->', eris.vhf_c, ddm))
         ### hessian_co part end ###
 
-        ci1, g = self.solve_approx_ci(h1, h2, fcivec, ecore, e_ci, envs)
+        ci1, g = self.solve_approx_ci(h1, h2, fcivec, ecore, e_cas, envs)
         if g is not None:  # So state average CI, DMRG etc will not be applied
             ovlp = numpy.dot(fcivec.ravel(), ci1.ravel())
             norm_g = numpy.linalg.norm(g)
@@ -978,7 +991,7 @@ class CASSCF(casci.CASCI):
 
         return casdm1, casdm2, g, ci1
 
-    def solve_approx_ci(self, h1, h2, ci0, ecore, e_ci, envs):
+    def solve_approx_ci(self, h1, h2, ci0, ecore, e_cas, envs):
         ''' Solve CI eigenvalue/response problem approximately
         '''
         ncas = self.ncas
@@ -1005,7 +1018,7 @@ class CASSCF(casci.CASCI):
         h2eff = self.fcisolver.absorb_h1e(h1, h2, ncas, nelecas, .5)
         hc = self.fcisolver.contract_2e(h2eff, ci0, ncas, nelecas).ravel()
 
-        g = hc - (e_ci-ecore) * ci0.ravel()
+        g = hc - (e_cas-ecore) * ci0.ravel()
         if self.ci_response_space > 7:
             logger.debug(self, 'CI step by full response')
             # full response
@@ -1022,7 +1035,7 @@ class CASSCF(casci.CASCI):
             heff[0,0] = numpy.dot(xs[0], ax[0])
             seff[0,0] = 1
             for i in range(1, nd):
-                xs.append(ax[i-1] - xs[i-1] * e_ci)
+                xs.append(ax[i-1] - xs[i-1] * e_cas)
                 ax.append(self.fcisolver.contract_2e(h2eff, xs[i], ncas,
                                                      nelecas).ravel())
                 for j in range(i+1):
@@ -1037,13 +1050,13 @@ class CASSCF(casci.CASCI):
     def get_jk(self, mol, dm, hermi=1):
         return self._scf.get_jk(mol, dm, hermi=1)
 
-    def get_grad(self, mo_coeff, casdm1_casdm2=None, eris=None):
+    def get_grad(self, mo_coeff=None, casdm1_casdm2=None, eris=None):
         '''Orbital gradients'''
-        if eris is None:
-            eris = self.ao2mo(mo_coeff)
+        if mo_coeff is None: mo_coeff = self.mo_coeff
+        if eris is None: eris = self.ao2mo(mo_coeff)
         if casdm1_casdm2 is None:
-            e_tot, e_ci, civec = self.casci(mo_coeff, self.ci, eris)
-            casdm1, casdm2 = self.fcisolver.make_rdm12(civec, ncas, nelecas)
+            e_tot, e_cas, civec = self.casci(mo_coeff, self.ci, eris)
+            casdm1, casdm2 = self.fcisolver.make_rdm12(civec, self.ncas, self.nelecas)
         else:
             casdm1, casdm2 = casdm1_casdm2
         return gen_g_hop(self, mo_coeff, 1, casdm1, casdm2, eris)[0]
@@ -1079,7 +1092,11 @@ class CASSCF(casci.CASCI):
             civec = None
         ncore = self.ncore
         nocc = self.ncore + self.ncas
-        mo_occ = numpy.zeros(envs['mo'].shape[1])
+        if 'mo' in envs:
+            mo_coeff = envs['mo']
+        else:
+            mo_coeff = envs['mo_coeff']
+        mo_occ = numpy.zeros(mo_coeff.shape[1])
         mo_occ[:ncore] = 2
         if self.natorb:
             occ = self._eig(-envs['casdm1'], ncore, nocc)[0]
@@ -1092,17 +1109,16 @@ class CASSCF(casci.CASCI):
         else:
             mo_energy = 'None'
         chkfile.dump_mcscf(self, self.chkfile, 'mcscf', envs['e_tot'],
-                           envs['mo'], self.ncore, self.ncas, mo_occ,
-                           mo_energy, envs['e_ci'], civec, envs['casdm1'],
+                           mo_coeff, self.ncore, self.ncas, mo_occ,
+                           mo_energy, envs['e_cas'], civec, envs['casdm1'],
                            overwrite_mol=False)
         return self
 
-    def update(self, chkfile=None):
-        return self.update_from_chk(chkfile)
     def update_from_chk(self, chkfile=None):
         if chkfile is None: chkfile = self.chkfile
         self.__dict__.update(lib.chkfile.load(chkfile, 'mcscf'))
         return self
+    update = update_from_chk
 
     def rotate_mo(self, mo, u, log=None):
         '''Rotate orbitals with the given unitary matrix'''
@@ -1138,10 +1154,17 @@ class CASSCF(casci.CASCI):
         pass
 
     @property
-    def ci_update_dep(self):
+    def max_orb_stepsize(self):  # pragma: no cover
+        return self.max_stepsize
+    @max_orb_stepsize.setter
+    def max_orb_stepsize(self, x):  # pragma: no cover
+        sys.stderr.write('WARN: Attribute "max_orb_stepsize" was replaced by "max_stepsize"\n')
+        self.max_stepsize = x
+    @property
+    def ci_update_dep(self):  # pragma: no cover
         return self.with_dep4
     @ci_update_dep.setter
-    def ci_update_dep(self, x):
+    def ci_update_dep(self, x):  # pragma: no cover
         sys.stderr.write('WARN: Attribute .ci_update_dep was replaced by .with_dep4 since PySCF v1.1.\n')
         self.with_dep4 = x == 4
     grad_update_dep = ci_update_dep
@@ -1153,9 +1176,20 @@ class CASSCF(casci.CASCI):
     def max_cycle(self, x):
         self.max_cycle_macro = x
 
+    def approx_hessian(self, auxbasis=None, with_df=None):
+        from pyscf.mcscf import df
+        return df.approx_hessian(self, auxbasis, with_df)
+
     def nuc_grad_method(self):
         from pyscf.grad import casscf
         return casscf.Gradients(self)
+
+    def newton(self):
+        from pyscf.mcscf import newton_casscf
+        mc1 = newton_casscf.CASSCF(self._scf, self.ncas, self.nelecas)
+        mc1.__dict__.update(self.__dict__)
+        mc1.max_cycle_micro = 10
+        return mc1
 
 
 # to avoid calculating AO integrals

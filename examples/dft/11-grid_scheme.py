@@ -6,10 +6,10 @@ from pyscf import dft
 '''
 Tune DFT grids
 
-By default, the DFT grid employs
+By default, the DFT integration grids use
 * Bragg radius for atom
 * Treutler-Ahlrichs radial grids
-* Becke partition for grid weight
+* Becke partition for grid weights
 * NWChem pruning scheme
 * mesh grids
   ===================================
@@ -51,7 +51,7 @@ method = dft.RKS(mol)
 method.grids.becke_scheme = dft.stratmann
 print('Changed grid partition funciton.  E = %.12f' % method.kernel())
 
-# Grids dense level 0 - 9.  Big number indicates dense grids. Default is 3
+# Grids level 0 - 9.  Big number indicates dense grids. Default is 3
 method = dft.RKS(mol)
 method.grids.level = 4
 print('Dense grids.  E = %.12f' % method.kernel())

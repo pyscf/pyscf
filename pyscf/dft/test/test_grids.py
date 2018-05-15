@@ -33,6 +33,12 @@ h2o.basis = {"H": '6-31g',
              "O": '6-31g',}
 h2o.build()
 
+def tearDownModule():
+    global h2o
+    h2o.stdout.close()
+    del h2o
+
+
 class KnownValues(unittest.TestCase):
     def test_gen_grid(self):
         grid = gen_grid.Grids(h2o)

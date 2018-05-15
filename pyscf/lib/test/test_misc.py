@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import unittest
+import numpy
 from pyscf import lib
 
 class KnownValues(unittest.TestCase):
@@ -28,6 +29,15 @@ class KnownValues(unittest.TestCase):
             raise IndexError
 
         self.assertRaises(lib.ThreadRuntimeError, bg_raise)
+
+    def test_index_tril_to_pair(self):
+        i_j = (numpy.random.random((2,30)) * 100).astype(int)
+        i0 = numpy.max(i_j, axis=0)
+        j0 = numpy.min(i_j, axis=0)
+        ij = i0 * (i0+1) // 2 + j0
+        i1, j1 = lib.index_tril_to_pair(ij)
+        self.assertTrue(numpy.all(i0 == i1))
+        self.assertTrue(numpy.all(j0 == j1))
 
 if __name__ == "__main__":
     unittest.main()

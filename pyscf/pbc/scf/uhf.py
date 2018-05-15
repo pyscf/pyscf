@@ -90,6 +90,9 @@ def init_guess_by_chkfile(cell, chkfile_name, project=None, kpt=None):
 class UHF(mol_uhf.UHF, pbchf.SCF):
     '''UHF class for PBCs.
     '''
+
+    direct_scf = getattr(__config__, 'pbc_scf_SCF_direct_scf', False)
+
     def __init__(self, cell, kpt=np.zeros(3),
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         pbchf.SCF.__init__(self, cell, kpt, exxdiv)
@@ -102,6 +105,7 @@ class UHF(mol_uhf.UHF, pbchf.SCF):
                     'alpha = %d beta = %d', *self.nelec)
         return self
 
+    build = pbchf.SCF.build
     check_sanity = pbchf.SCF.check_sanity
     get_hcore = pbchf.SCF.get_hcore
     get_ovlp = pbchf.SCF.get_ovlp
@@ -169,7 +173,7 @@ class UHF(mol_uhf.UHF, pbchf.SCF):
     density_fit = pbchf.SCF.density_fit
     # mix_density_fit inherits from hf.SCF.mix_density_fit
 
-    x2c1e = pbchf.SCF.x2c1e
+    x2c = x2c1e = sfx2c1e = pbchf.SCF.sfx2c1e
 
     def convert_from_(self, mf):
         '''Convert given mean-field object to RHF/ROHF'''

@@ -33,6 +33,8 @@ from pyscf.ao2mo import _ao2mo
 from pyscf.mp import ump2
 from pyscf import __config__
 
+MEMORYMIN = getattr(__config__, 'cc_ccsd_memorymin', 2000)
+
 # This is unrestricted (U)CCSD, in spatial-orbital form.
 
 def update_amps(cc, t1, t2, eris):
@@ -395,7 +397,8 @@ def vector_to_amplitudes(vector, nmo, nocc):
     nov = nocc * nvir
     size = nov + nocc*(nocc-1)//2*nvir*(nvir-1)//2
     if vector.size == size:
-        return ccsd.vector_to_amplitudes_s4(vector, nmo, nocc)
+        #return ccsd.vector_to_amplitudes_s4(vector, nmo, nocc)
+        raise RuntimeError('Input vector is GCCSD vecotr')
     else:
         size = vector.size
         sizea = nocca * nvira + nocca*(nocca-1)//2*nvira*(nvira-1)//2
@@ -425,18 +428,24 @@ def _add_vvVV(mycc, t1, t2ab, eris, out=None):
     nocca, noccb, nvira, nvirb = t2ab.shape
 
     if mycc.direct:  # AO direct CCSD
-        if hasattr(eris, 'mo_coeff'):
+        if hasattr(eris, 'mo_coeff') and eris.mo_coeff is not None:
             mo_a, mo_b = eris.mo_coeff
         else:
             moidxa, moidxb = mycc.get_frozen_mask()
             mo_a = mycc.mo_coeff[0][:,moidxa]
             mo_b = mycc.mo_coeff[1][:,moidxb]
-        tau = lib.einsum('ijab,pa->ijpb', t2ab, mo_a[:,nocca:])
-        tau = lib.einsum('ijab,pb->ijap', tau, mo_b[:,noccb:])
+        # Note tensor t2ab may be t2bbab from eom_uccsd code.  In that
+        # particular case, nocca, noccb do not equal to the actual number of
+        # alpha/beta occupied orbitals. orbva and orbvb cannot be indexed as
+        # mo_a[:,nocca:] and mo_b[:,noccb:]
+        orbva = mo_a[:,-nvira:]
+        orbvb = mo_b[:,-nvirb:]
+        tau = lib.einsum('ijab,pa->ijpb', t2ab, orbva)
+        tau = lib.einsum('ijab,pb->ijap', tau, orbvb)
         time0 = logger.timer_debug1(mycc, 'vvvv-tau mo2ao', *time0)
         max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
         buf = eris._contract_vvVV_t2(mycc, tau, mycc.direct, out, max_memory, log)
-        mo = np.asarray(np.hstack((mo_a[:,nocca:], mo_b[:,noccb:])), order='F')
+        mo = np.asarray(np.hstack((orbva, orbvb)), order='F')
         Ht2 = _ao2mo.nr_e2(buf.reshape(nocca*noccb,-1), mo.conj(),
                            (0,nvira,nvira,nvira+nvirb), 's1', 's1')
         return Ht2.reshape(t2ab.shape)
@@ -458,7 +467,7 @@ def _add_vvvv(mycc, t1, t2, eris, out=None, with_ovvv=False, t2sym=None):
         assert(t2sym is None)
         if with_ovvv:
             raise NotImplementedError
-        if hasattr(eris, 'mo_coeff'):
+        if hasattr(eris, 'mo_coeff') and eris.mo_coeff is not None:
             mo_a, mo_b = eris.mo_coeff
         else:
             moidxa, moidxb = mycc.get_frozen_mask()
@@ -659,7 +668,7 @@ class UCCSD(ccsd.CCSD):
         mem_incore = (max(nao_pair**2, nmoa**4) + nmo_pair**2) * 8/1e6
         mem_now = lib.current_memory()[0]
         if (self._scf._eri is not None and
-            (mem_incore+mem_now < self.max_memory) or self.mol.incore_anyway):
+            (mem_incore+mem_now < self.max_memory or self.incore_complete)):
             return _make_eris_incore(self, mo_coeff)
 
         elif hasattr(self._scf, 'with_df'):
@@ -707,6 +716,9 @@ class UCCSD(ccsd.CCSD):
     def eomee_method(self):
         from pyscf.cc import eom_uccsd
         return eom_uccsd.EOMEE(self)
+
+    def density_fit(self):
+        raise NotImplementedError
 
     def nuc_grad_method(self):
         from pyscf.grad import uccsd
@@ -792,8 +804,8 @@ class _ChemistsERIs(ccsd._ChemistsERIs):
     def get_OVVV(self, *slices):
         return _get_ovvv_base(self.OVVV, *slices)
 
-    def _contract_VVVV_t2(self, mycc, t2, vvvv_or_direct=False, out=None, max_memory=2000,
-                          verbose=None):
+    def _contract_VVVV_t2(self, mycc, t2, vvvv_or_direct=False, out=None,
+                          max_memory=MEMORYMIN, verbose=None):
         if isinstance(vvvv_or_direct, np.ndarray):
             vvvv = vvvv_or_direct
         elif vvvv_or_direct:
@@ -802,8 +814,8 @@ class _ChemistsERIs(ccsd._ChemistsERIs):
             vvvv = self.VVVV
         return ccsd._contract_vvvv_t2(mycc, self.mol, vvvv, t2, out, max_memory, verbose)
 
-    def _contract_vvVV_t2(self, mycc, t2, vvvv_or_direct=False, out=None, max_memory=2000,
-                          verbose=None):
+    def _contract_vvVV_t2(self, mycc, t2, vvvv_or_direct=False, out=None,
+                          max_memory=MEMORYMIN, verbose=None):
         if isinstance(vvvv_or_direct, np.ndarray):
             vvvv = vvvv_or_direct
         elif vvvv_or_direct:

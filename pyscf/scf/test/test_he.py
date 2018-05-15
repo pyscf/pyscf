@@ -30,7 +30,11 @@ mol.atom.extend([[2, (0.,0.,0.)], ])
 mol.basis = {"He": 'cc-pvdz'}
 mol.build()
 
-class KnowValues_NR(unittest.TestCase):
+def tearDownModule():
+    global mol
+    del mol
+
+class KnownValues_NR(unittest.TestCase):
     """non-relativistic"""
     def test_fock_1e(self):
         rhf = scf.RHF(mol)

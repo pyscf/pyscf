@@ -96,7 +96,7 @@ class KnowValues(unittest.TestCase):
         msc = m.shielding()
         self.assertAlmostEqual(finger(msc), 1493.7229929087348, 4)
 
-    def test_rmb_giao_cpscf(self):
+    def test_rmb_giao_cpscf_high_cost(self):
         m = nmr.DHF(rhf)
         m.cphf = True
         m.gauge_orig = None

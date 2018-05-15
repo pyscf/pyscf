@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from functools import reduce
 import unittest
 import numpy
 import scipy.linalg
@@ -21,16 +22,6 @@ from pyscf import gto
 from pyscf.x2c import sfx2c1e
 from pyscf.x2c import sfx2c1e_grad
 from pyscf.x2c import sfx2c1e_hess
-
-class light_speed(object):
-    def __init__(self, c):
-        self.bak = lib.param.LIGHT_SPEED
-        self.c = c
-    def __enter__(self):
-        lib.param.LIGHT_SPEED = self.c
-        return self.c
-    def __exit__(self, type, value, traceback):
-        lib.param.LIGHT_SPEED = self.bak
 
 def _sqrt0(a):
     w, v = scipy.linalg.eigh(a)
@@ -507,7 +498,7 @@ mol = gto.M(
 
 class KnownValues(unittest.TestCase):
     def test_sqrt_second_order(self):
-        with light_speed(10) as c:
+        with lib.light_speed(10) as c:
             nao = mol.nao_nr()
             aoslices = mol.aoslice_by_atom()
             p0, p1 = aoslices[0][2:]
@@ -568,7 +559,7 @@ class KnownValues(unittest.TestCase):
             self.assertAlmostEqual(abs(s2invsqrt-s2invsqrt_ref).max(), 0, 7)
 
     def test_h2(self):
-        with light_speed(10) as c:
+        with lib.light_speed(10) as c:
             h1_1, s1_1 = get_h1_s1(mol1, 0)
             h1_2, s1_2 = get_h1_s1(mol2, 0)
             h2_ref = (h1_1[2] - h1_2[2]) / 0.0002 * lib.param.BOHR
@@ -588,7 +579,7 @@ class KnownValues(unittest.TestCase):
             self.assertAlmostEqual(abs(s2[2,2]-s2_ref).max(), 0, 7)
 
     def test_x2(self):
-        with light_speed(10) as c:
+        with lib.light_speed(10) as c:
             x1_1 = get_x1(mol1, 0)
             x1_2 = get_x1(mol2, 0)
             x2_ref = (x1_1[2] - x1_2[2]) / 0.0002 * lib.param.BOHR
@@ -602,7 +593,7 @@ class KnownValues(unittest.TestCase):
             self.assertAlmostEqual(abs(x2[2,2]-x2_ref).max(), 0, 7)
 
     def test_r2(self):
-        with light_speed(10) as c:
+        with lib.light_speed(10) as c:
             r1_1 = get_r1(mol1, 0, 2)
             r1_2 = get_r1(mol2, 0, 2)
             r2_ref = (r1_1 - r1_2) / 0.0002 * lib.param.BOHR

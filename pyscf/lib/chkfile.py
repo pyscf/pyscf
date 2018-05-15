@@ -19,8 +19,6 @@
 import json
 import h5py
 
-def load_chkfile_key(chkfile, key):
-    return load(chkfile, key)
 def load(chkfile, key):
     '''Load array(s) from chkfile
     
@@ -28,8 +26,8 @@ def load(chkfile, key):
         chkfile : str
             Name of chkfile. The chkfile needs to be saved in HDF5 format.
         key : str
-            HDF5.dataset name or group name.  If key is the HDF5 group name,
-            the group will be loaded into an Python dict, recursively
+            HDF5.dataset name or group name.  If key is the name of a HDF5
+            group, the group will be loaded into a Python dict, recursively.
 
     Returns:
         whatever read from chkfile
@@ -68,11 +66,8 @@ def load(chkfile, key):
 
     with h5py.File(chkfile, 'r') as fh5:
         return load_as_dic(key, fh5)
+load_chkfile_key = load
 
-def dump_chkfile_key(chkfile, key, value):
-    dump(chkfile, key, value)
-def save(chkfile, key, value):
-    dump(chkfile, key, value)
 def dump(chkfile, key, value):
     '''Save array(s) in chkfile
     
@@ -80,10 +75,11 @@ def dump(chkfile, key, value):
         chkfile : str
             Name of chkfile.
         key : str
-
-        value : array, vector ... or dict
-            If value is a python dict, the key/value of the dict will be saved
-            recursively as the HDF5 group/dataset
+            key to be used in h5py object. It can contain "/" to represent the
+            path in the HDF5 storage structure.
+        value : array, vector, list ... or dict
+            If value is a python dict or list, the key/value of the dict will
+            be saved recursively as the HDF5 group/dataset structure.
 
     Returns:
         No return value
@@ -112,7 +108,7 @@ def dump(chkfile, key, value):
         elif isinstance(value, (tuple, list)):
             root1 = root.create_group(key + '__from_list__')
             for k, v in enumerate(value):
-                save_as_group(str(k), v, root1)
+                save_as_group('%06d'%k, v, root1)
         else:
             try:
                 root[key] = value
@@ -122,7 +118,7 @@ def dump(chkfile, key, value):
                     raise e
                 root1 = root.create_group(key + '__from_list__')
                 for k, v in enumerate(value):
-                    save_as_group(str(k), v, root1)
+                    save_as_group('%06d'%k, v, root1)
 
     if h5py.is_hdf5(chkfile):
         with h5py.File(chkfile, 'r+') as fh5:
@@ -134,6 +130,7 @@ def dump(chkfile, key, value):
     else:
         with h5py.File(chkfile, 'w') as fh5:
             save_as_group(key, value, fh5)
+dump_chkfile_key = save = dump
 
 
 def load_mol(chkfile):
@@ -177,13 +174,12 @@ def save_mol(mol, chkfile):
     '''Save Mole object in chkfile
 
     Args:
-        mol : an instance of :class:`Mole`.
-
-        chkfile : str
+        chkfile str:
             Name of chkfile.
 
     Returns:
         No return value
+
     '''
     dump(chkfile, 'mol', mol.dumps())
 dump_mol = save_mol

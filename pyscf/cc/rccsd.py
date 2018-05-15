@@ -36,6 +36,10 @@ from pyscf.cc import ccsd
 from pyscf.cc import _ccsd
 from pyscf.cc import rintermediates as imd
 from pyscf.mp import mp2
+from pyscf import __config__
+
+BLKMIN = getattr(__config__, 'cc_ccsd_blkmin', 4)
+MEMORYMIN = getattr(__config__, 'cc_ccsd_memorymin', 2000)
 
 def update_amps(cc, t1, t2, eris):
     # Ref: Hirata et al., J. Chem. Phys. 120, 2581 (2004) Eqs.(35)-(36)
@@ -240,6 +244,9 @@ class RCCSD(ccsd.CCSD):
 #?        assert(t2.dtype == np.double)
         return ccsd.CCSD.ccsd_t(self, t1, t2, eris)
 
+    def density_fit(self, auxbasis=None, with_df=None):
+        raise NotImplementedError
+
 
 class _ChemistsERIs(ccsd._ChemistsERIs):
 
@@ -295,7 +302,7 @@ def _make_eris_outcore(mycc, mo_coeff=None):
     eris.ovvv = eris.feri1.create_dataset('ovvv', (nocc,nvir,nvir,nvir), 'f8', chunks=(nocc,1,nvir,nvir))
     eris.oovv = eris.feri1.create_dataset('oovv', (nocc,nocc,nvir,nvir), 'f8', chunks=(nocc,nocc,1,nvir))
     eris.vvvv = eris.feri1.create_dataset('vvvv', (nvir,nvir,nvir,nvir), 'f8')
-    max_memory = max(2000, mycc.max_memory-lib.current_memory()[0])
+    max_memory = max(MEMORYMIN, mycc.max_memory-lib.current_memory()[0])
 
     ftmp = lib.H5TmpFile()
     ao2mo.full(mol, mo_coeff, ftmp, max_memory=max_memory, verbose=log)
@@ -310,7 +317,7 @@ def _make_eris_outcore(mycc, mo_coeff=None):
     oo = oovv = None
 
     tril2sq = lib.square_mat_in_trilu_indices(nmo)
-    blksize = min(nvir, max(2, int(max_memory*1e6/8/nmo**3/2)))
+    blksize = min(nvir, max(BLKMIN, int(max_memory*1e6/8/nmo**3/2)))
     for p0, p1 in lib.prange(0, nvir, blksize):
         q0, q1 = p0+nocc, p1+nocc
         off0 = q0*(q0+1)//2

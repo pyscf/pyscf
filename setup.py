@@ -389,7 +389,8 @@ if 1:
                                                       os.path.join(pyscf_lib_dir, 'deps', 'lib'),
                                                       os.path.join(pyscf_lib_dir, 'deps', 'lib64')],
                                      version='4.0.0')
-    libxc_inc_path = search_inc_path('xc.h', [os.path.join(pyscf_lib_dir, 'deps', 'include')])
+    libxc_inc_path = search_inc_path('xc.h', [pyscf_lib_dir,
+                                              os.path.join(pyscf_lib_dir, 'deps', 'include')])
     if libxc_lib_path and libxc_inc_path:
         print("****************************************************************")
         print("* libxc found in %s." % libxc_lib_path)
@@ -417,7 +418,8 @@ if 1:
     xcfun_lib_path = search_lib_path('libxcfun'+so_ext, [pyscf_lib_dir,
                                                          os.path.join(pyscf_lib_dir, 'deps', 'lib'),
                                                          os.path.join(pyscf_lib_dir, 'deps', 'lib64')])
-    xcfun_inc_path = search_inc_path('xcfun.h', [os.path.join(pyscf_lib_dir, 'deps', 'include')])
+    xcfun_inc_path = search_inc_path('xcfun.h', [pyscf_lib_dir,
+                                                 os.path.join(pyscf_lib_dir, 'deps', 'include')])
     if xcfun_lib_path and xcfun_inc_path:
         print("****************************************************************")
         print("* xcfun found in %s." % xcfun_lib_path)
@@ -462,7 +464,8 @@ setup(
     author_email=AUTHOR_EMAIL,
     platforms=PLATFORMS,
     #package_dir={'pyscf': 'pyscf'},  # packages are under directory pyscf
-    package_data={'': ['*.so', '*.dylib', '*.dll', '*.dat']}, # any package contains *.so *.dat files
+    #include *.so *.dat files. They are now placed in MAINTAINER.in
+    #package_data={'': ['*.so', '*.dylib', '*.dll', '*.dat']},
     include_package_data=True,  # include everything in source control
     packages=find_packages(exclude=['*dmrgscf*', '*fciqmcscf*', '*icmpspt*',
                                     '*shciscf*', '*xianci*', '*nao*',

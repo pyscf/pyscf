@@ -49,6 +49,14 @@ from pyscf.dft.radi import BRAGG_RADII, COVALENT_RADII, \
         treutler_atomic_radii_adjust, becke_atomic_radii_adjust
 
 
+def KS(mol, *args):
+    __doc__ = '''This is a wrap function to decide which DFT class to use, RKS or UKS\n
+    ''' + rks.RKS.__doc__
+    if mol.spin == 0:
+        return RKS(mol, *args)
+    else:
+        return UKS(mol, *args)
+
 def RKS(mol, *args):
     if mol.nelectron == 1:
         return uks.UKS(mol)

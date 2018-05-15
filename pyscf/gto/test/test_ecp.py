@@ -67,7 +67,24 @@ Ghost-Cu1 0.  0. -0.0001
              basis={'Cu':'lanl2dz', 'Cu1': cu1_basis, 'He':'sto3g'},
              ecp = {'cu':'lanl2dz'})
 
+def tearDownModule():
+    global mol, mol1, mol2, cu1_basis
+    del mol, mol1, mol2, cu1_basis
+
 class KnownValues(unittest.TestCase):
+    def test_ecp_by_shell(self):
+        for i in (0,2,3,6,9):
+            for j in (1,2,3,5,6):
+                ref = mol.intor_by_shell('ECPscalar_sph', (i,j))
+                dat = gto.ecp.type1_by_shell(mol, (i, j))
+                dat+= gto.ecp.type2_by_shell(mol, (i, j))
+                self.assertAlmostEqual(abs(ref-dat).max(), 0, 12)
+
+                ref = mol.intor_by_shell('ECPscalar_cart', (i,j))
+                dat = gto.ecp.type1_by_shell(mol, (i, j), cart=True)
+                dat+= gto.ecp.type2_by_shell(mol, (i, j), cart=True)
+                self.assertAlmostEqual(abs(ref-dat).max(), 0, 12)
+
     def test_nr_rhf(self):
         mol = gto.M(atom='Na 0. 0. 0.;  H  0.  0.  1.',
                     basis={'Na':'lanl2dz', 'H':'sto3g'},
@@ -119,6 +136,39 @@ class KnownValues(unittest.TestCase):
                 ref = (mol1.intor_by_shell('ECPscalar_cart', shls1) -
                        mol2.intor_by_shell('ECPscalar_cart', shls1)) / 0.0002 * lib.param.BOHR
                 dat = mol.intor_by_shell('ECPscalar_ipnuc_cart', shls, comp=3)
+                self.assertAlmostEqual(abs(-dat[2]-ref).max(), 0, 4)
+
+    def test_ecp_iprinv(self):
+        mol = gto.M(atom='''
+        Cu 0. 0. 0.
+        H  1. 0. 0.
+        ''',
+                    basis={'Cu':'lanl2dz', 'H':'ccpvdz'},
+                    ecp = {'cu':'lanl2dz'})
+        mol1 = gto.M(atom='''
+        Cu 0. 0. 0.
+        H  1. 0. 0.
+        Ghost-Cu 0.  0.  0.0001
+        ''',
+                    basis={'Cu':'lanl2dz', 'H':'ccpvdz'},
+                    ecp = {'cu':'lanl2dz'})
+        mol2 = gto.M(atom='''
+        Cu 0. 0. 0.
+        H  1. 0. 0.
+        Ghost-Cu 0.  0. -0.0001
+        ''',
+                    basis={'Cu':'lanl2dz', 'H':'ccpvdz'},
+                    ecp = {'cu':'lanl2dz'})
+        aoslices = mol.aoslice_nr_by_atom()
+        ish0, ish1 = aoslices[0][:2]
+        for i in range(ish0, ish1):
+            for j in range(mol.nbas):
+                shls = (i,j)
+                shls1 = (shls[0] + mol.nbas, shls[1])
+                ref = (mol1.intor_by_shell('ECPscalar_cart', shls1) -
+                       mol2.intor_by_shell('ECPscalar_cart', shls1)) / 0.0002 * lib.param.BOHR
+                with mol.with_rinv_as_nucleus(0):
+                    dat = mol.intor_by_shell('ECPscalar_iprinv_cart', shls, comp=3)
                 self.assertAlmostEqual(abs(-dat[2]-ref).max(), 0, 4)
 
     def test_ecp_hessian(self):

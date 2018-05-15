@@ -37,6 +37,17 @@ def atomic_pops(mol, mo_coeff, method='meta_lowdin'):
     Kwargs:
         method : string
             one of mulliken, lowdin, meta_lowdin
+
+    Returns:
+        A 3-index tensor [A,i,j] indicates the population of any orbital-pair
+        density |i><j| for each species (atom in this case).  This tensor is
+        used to construct the population and gradients etc.
+        
+        You can customize the PM localization wrt other population metric,
+        such as the charge of a site, the charge of a fragment (a group of
+        atoms) by overwriting this tensor.  See also the example
+        pyscf/examples/loc_orb/40-hubbard_model_PM_localization.py for the PM
+        localization of site-based population for hubbard model.
     '''
     if hasattr(mol, 'pbc_intor'):  # whether mol object is a cell
         s = mol.pbc_intor('int1e_ovlp_sph', hermi=1)

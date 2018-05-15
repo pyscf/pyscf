@@ -44,6 +44,7 @@ from pyscf import __config__
 
 WITH_META_LOWDIN = getattr(__config__, 'pbc_scf_analyze_with_meta_lowdin', True)
 PRE_ORTH_METHOD = getattr(__config__, 'pbc_scf_analyze_pre_orth_method', 'ANO')
+CHECK_COULOMB_IMAG = getattr(__config__, 'pbc_scf_check_coulomb_imag', True)
 
 
 def get_ovlp(mf, cell=None, kpts=None):
@@ -224,14 +225,12 @@ def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf_kpts=None):
     nkpts = len(dm_kpts)
     e1 = 1./nkpts * np.einsum('kij,kji', dm_kpts, h1e_kpts)
     e_coul = 1./nkpts * np.einsum('kij,kji', dm_kpts, vhf_kpts) * 0.5
-    if abs(e_coul.imag > 1.e-7):
-        raise RuntimeError("Coulomb energy has imaginary part %s. "
-                           "Coulomb integrals (e-e, e-N) may not converge !" %
-                           e_coul.imag)
-    e1 = e1.real
-    e_coul = e_coul.real
-    logger.debug(mf, 'E_coul = %.15g', e_coul)
-    return e1+e_coul, e_coul
+    logger.debug(mf, 'E1 = %s  E_coul = %s', e1, e_coul)
+    if CHECK_COULOMB_IMAG and abs(e_coul.imag > mf.cell.precision*10):
+        logger.warn(mf, "Coulomb energy has imaginary part %s. "
+                    "Coulomb integrals (e-e, e-N) may not converge !",
+                    e_coul.imag)
+    return (e1+e_coul).real, e_coul.real
 
 
 def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
@@ -321,6 +320,10 @@ class KSCF(pbchf.SCF):
         kpts : (nks,3) ndarray
             The sampling k-points in Cartesian coordinates, in units of 1/Bohr.
     '''
+    conv_tol = getattr(__config__, 'pbc_scf_KSCF_conv_tol', 1e-7)
+    conv_tol_grad = getattr(__config__, 'pbc_scf_KSCF_conv_tol_grad', None)
+    direct_scf = getattr(__config__, 'pbc_scf_SCF_direct_scf', False)
+
     def __init__(self, cell, kpts=np.zeros((1,3)),
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         if not cell._built:
@@ -332,13 +335,15 @@ class KSCF(pbchf.SCF):
         self.with_df = df.FFTDF(cell)
         self.exxdiv = exxdiv
         self.kpts = kpts
-        self.direct_scf = False
 
         self.exx_built = False
         self._keys = self._keys.union(['cell', 'exx_built', 'exxdiv', 'with_df'])
 
     @property
     def kpts(self):
+        if 'kpts' in self.__dict__:
+            # To handle the attribute kpt loaded from chkfile
+            self.kpt = self.__dict__.pop('kpts')
         return self.with_df.kpts
     @kpts.setter
     def kpts(self, x):
@@ -375,7 +380,9 @@ class KSCF(pbchf.SCF):
                         ' = -1/2 * Nelec*madelung/cell.vol = %.12g',
                         madelung*self.cell.nelectron * -.5)
         logger.info(self, 'DF object = %s', self.with_df)
-        self.with_df.dump_flags()
+        if not hasattr(self.with_df, 'build'):
+            # .dump_flags() is called in pbc.df.build function
+            self.with_df.dump_flags()
         return self
 
     def check_sanity(self):
@@ -388,9 +395,15 @@ class KSCF(pbchf.SCF):
         return self
 
     def build(self, cell=None):
-        hf.SCF.build(self, cell)
         #if self.exxdiv == 'vcut_ws':
         #    self.precompute_exx()
+
+        if 'kpts' in self.__dict__:
+            # To handle the attribute kpts loaded from chkfile
+            self.kpts = self.__dict__.pop('kpts')
+        if self.verbose >= logger.WARN:
+            self.check_sanity()
+        return self
 
     def get_init_guess(self, cell=None, key='minao'):
         if cell is None:
@@ -595,6 +608,7 @@ class KSCF(pbchf.SCF):
     def sfx2c1e(self):
         from pyscf.pbc.x2c import sfx2c1e
         return sfx2c1e.sfx2c1e(self)
+    x2c = x2c1e = sfx2c1e
 
 class KRHF(KSCF, pbchf.RHF):
     def convert_from_(self, mf):

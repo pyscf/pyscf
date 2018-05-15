@@ -42,7 +42,7 @@ g2e = ao2mo.incore.general(m._eri, (m.mo_coeff,)*4, compact=False)
 na = fci.cistring.num_strings(norb, nelec//2)
 e, ci0 = fci.direct_spin1.kernel(h1e, g2e, norb, nelec, tol=1e-15)
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_large_ci(self):
         res = fci.addons.large_ci(ci0, norb, nelec, tol=.1)
         refstr =[('0b111'  , '0b111'  ),
@@ -186,6 +186,12 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(ss[0], 0, 9)
 
     def test_fix_spin(self):
+        mci = fci.FCI(mol, m.mo_coeff, False)
+        mci = fci.addons.fix_spin_(mci, .2, 0)
+        mci.kernel(nelec=(3,3))
+        self.assertAlmostEqual(mci.spin_square(mci.ci, mol.nao_nr(), (3,3))[0], 0, 7)
+
+    def test_fix_spin_high_cost(self):
         def check(mci):
             mci = fci.addons.fix_spin_(mci, .2, 0)
             mci.kernel(nelec=(8,8))

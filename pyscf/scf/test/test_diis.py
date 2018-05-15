@@ -15,9 +15,11 @@
 
 import unittest
 import numpy
+from pyscf import gto
+from pyscf import scf
 from pyscf.scf import diis
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_addis_minimize(self):
         numpy.random.seed(1)
         ds = numpy.random.random((4,2,2))
@@ -33,6 +35,41 @@ class KnowValues(unittest.TestCase):
         es = numpy.random.random(4)
         v, x = diis.ediis_minimize(es, ds, fs)
         self.assertAlmostEqual(v, 0.31551563100606295, 9)
+
+    def test_input_diis(self):
+        mol = gto.M(
+            verbose = 7,
+            output = '/dev/null',
+            atom = '''
+        O     0    0        0
+        H     0    -0.757   0.587
+        H     0    0.757    0.587''',
+            basis = '631g',
+        )
+        mf1 = scf.RHF(mol)
+        mf1.DIIS = diis.EDIIS
+        mf1.max_cycle = 4
+        e = mf1.kernel()
+        self.assertAlmostEqual(e, -75.983875341696987, 9)
+        mol.stdout.close()
+
+    def test_roll_back(self):
+        mol = gto.M(
+            verbose = 7,
+            output = '/dev/null',
+            atom = '''
+        O     0    0        0
+        H     0    -1.757   1.587
+        H     0    1.757    1.587''',
+            basis = '631g',
+        )
+        mf1 = scf.RHF(mol)
+        mf1.diis_space = 4
+        mf1.diis_space_rollback = True
+        mf1.max_cycle = 10
+        e = mf1.kernel()
+        self.assertAlmostEqual(e, -75.446749864901321, 9)
+        mol.stdout.close()
 
 
 if __name__ == "__main__":

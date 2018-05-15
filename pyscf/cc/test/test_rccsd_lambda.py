@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import copy
 import unittest
 import numpy
 import numpy as np
@@ -39,6 +40,11 @@ mol.output = '/dev/null'
 mol.build()
 mf = scf.RHF(mol).run()
 mycc = rccsd.RCCSD(mf)
+
+def tearDownModule():
+    global mol, mf, mycc
+    mol.stdout.close()
+    del mol, mf, mycc
 
 class KnownValues(unittest.TestCase):
     def test_update_lambda_real(self):
@@ -140,11 +146,11 @@ class KnownValues(unittest.TestCase):
         l1, l2 = myccg.amplitudes_from_ccsd(l1, l2)
         imds = gccsd_lambda.make_intermediates(myccg, t1, t2, erig)
         l1new, l2new = gccsd_lambda.update_lambda(myccg, t1, t2, l1, l2, erig, imds)
-        self.assertAlmostEqual(abs(l1new[0::2,0::2]-l1new_ref).max(), 0, 9)
+        self.assertAlmostEqual(float(abs(l1new[0::2,0::2]-l1new_ref).max()), 0, 9)
         l2aa = l2new[0::2,0::2,0::2,0::2]
         l2ab = l2new[0::2,1::2,0::2,1::2]
-        self.assertAlmostEqual(abs(l2ab-l2new_ref).max(), 0, 9)
-        self.assertAlmostEqual(abs(l2ab-l2ab.transpose(1,0,2,3) - l2aa).max(), 0, 9)
+        self.assertAlmostEqual(float(abs(l2ab-l2new_ref).max()), 0, 9)
+        self.assertAlmostEqual(float(abs(l2ab-l2ab.transpose(1,0,2,3) - l2aa).max()), 0, 9)
 
     def test_rdm(self):
         mycc = rccsd.RCCSD(mf)
@@ -155,6 +161,16 @@ class KnownValues(unittest.TestCase):
         h1 = reduce(numpy.dot, (mf.mo_coeff.T, mf.get_hcore(), mf.mo_coeff))
         nmo = mf.mo_coeff.shape[1]
         eri = ao2mo.restore(1, ao2mo.kernel(mf._eri, mf.mo_coeff), nmo)
+        e1 = numpy.einsum('ij,ji', h1, dm1)
+        e1+= numpy.einsum('ijkl,ijkl', eri, dm2) * .5
+        e1+= mol.energy_nuc()
+        self.assertAlmostEqual(e1, mycc.e_tot, 7)
+
+        d1 = ccsd_rdm._gamma1_intermediates(mycc, mycc.t1, mycc.t2, mycc.l1, mycc.l2)
+        mycc1 = copy.copy(mycc)
+        mycc1.max_memory = 0
+        d2 = ccsd_rdm._gamma2_intermediates(mycc1, mycc.t1, mycc.t2, mycc.l1, mycc.l2, True)
+        dm2 = ccsd_rdm._make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True)
         e1 = numpy.einsum('ij,ji', h1, dm1)
         e1+= numpy.einsum('ijkl,ijkl', eri, dm2) * .5
         e1+= mol.energy_nuc()

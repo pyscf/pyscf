@@ -30,7 +30,7 @@ def TDHF(mf):
     if hasattr(mf, 'xc'):
         raise RuntimeError('TDHF does not support DFT object %s' % mf)
     if isinstance(mf, scf.uhf.UHF):
-        mf = scf.addons.convert_to_uhf(mf)
+        mf = scf.addons.convert_to_uhf(mf)  # To remove newton decoration
         return uhf.TDHF(mf)
     else:
         mf = scf.addons.convert_to_rhf(mf)

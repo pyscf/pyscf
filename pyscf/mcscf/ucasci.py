@@ -30,7 +30,11 @@ import pyscf.ao2mo
 from pyscf import scf
 from pyscf import fci
 from pyscf.mcscf import addons
+from pyscf.mcscf import casci
 from pyscf import __config__
+
+WITH_META_LOWDIN = getattr(__config__, 'mcscf_analyze_with_meta_lowdin', True)
+LARGE_CI_TOL = getattr(__config__, 'mcscf_analyze_large_ci_tol', 0.1)
 
 # TODO, different ncas space for alpha and beta
 
@@ -75,11 +79,8 @@ def h1e_for_cas(casci, mo_coeff=None, ncas=None, ncore=None):
 def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE):
     '''UHF-CASCI solver
     '''
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(casci.stdout, verbose)
     if mo_coeff is None: mo_coeff = casci.mo_coeff
+    log = logger.new_logger(casci, verbose)
     t0 = (time.clock(), time.time())
     log.debug('Start uhf-based CASCI')
 
@@ -109,7 +110,7 @@ def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE):
     return e_tot, e_cas, fcivec
 
 
-class UCASCI(lib.StreamObject):
+class UCASCI(casci.CASCI):
     # nelecas is tuple of (nelecas_alpha, nelecas_beta)
     def __init__(self, mf, ncas, nelecas, ncore=None):
         #assert('UHF' == mf.__class__.__name__)
@@ -148,6 +149,7 @@ class UCASCI(lib.StreamObject):
         self.mo_coeff = mf.mo_coeff
         self.ci = None
         self.e_tot = 0
+        self.e_cas = 0
 
         self._keys = set(self.__dict__.keys())
 
@@ -172,14 +174,16 @@ class UCASCI(lib.StreamObject):
         hcore = self._scf.get_hcore(mol)
         return (hcore,hcore)
 
-    def get_veff(self, mol=None, dm=None):
+    def get_veff(self, mol=None, dm=None, hermi=1):
         if mol is None: mol = self.mol
         if dm is None:
             mocore = (self.mo_coeff[0][:,:self.ncore[0]],
                       self.mo_coeff[1][:,:self.ncore[1]])
             dm = (numpy.dot(mocore[0], mocore[0].T),
                   numpy.dot(mocore[1], mocore[1].T))
-        return self._scf.get_veff(mol, dm)
+# don't call self._scf.get_veff because _scf might be DFT object
+        vj, vk = self._scf.get_jk(mol, dm, hermi=hermi)
+        return vj[0]+vj[1] - vk
 
     def _eig(self, h, *args):
         return scf.hf.eig(h, None)
@@ -205,7 +209,7 @@ class UCASCI(lib.StreamObject):
             eri_bb = eri[na:,na:,na:,na:].copy()
         else:
             moab = numpy.hstack((mo_coeff[0], mo_coeff[1]))
-            eri = pyscf.ao2mo.full(self.mol, mo_coeff, verbose=self.verbose)
+            eri = pyscf.ao2mo.full(self.mol, moab, verbose=self.verbose)
             na = mo_coeff[0].shape[1]
             nab = moab.shape[1]
             eri = pyscf.ao2mo.restore(1, eri, nab)
@@ -215,14 +219,11 @@ class UCASCI(lib.StreamObject):
 
         return (eri_aa, eri_ab, eri_bb)
 
-    def get_h1cas(self, mo_coeff=None, ncas=None, ncore=None):
-        return self.h1e_for_cas(mo_coeff, ncas, ncore)
+    get_h1cas = h1e_for_cas = h1e_for_cas
+
     def get_h1eff(self, mo_coeff=None, ncas=None, ncore=None):
         return self.h1e_for_cas(mo_coeff, ncas, ncore)
-    def h1e_for_cas(self, mo_coeff=None, ncas=None, nelecas=None):
-        if mo_coeff is None:
-            mo_coeff = self.mo_coeff
-        return h1e_for_cas(self, mo_coeff, ncas, nelecas)
+    get_h1eff.__doc__ = h1e_for_cas.__doc__
 
     def casci(self, mo_coeff=None, ci0=None):
         return self.kernel(mo_coeff, ci0)
@@ -236,8 +237,13 @@ class UCASCI(lib.StreamObject):
             self.check_sanity()
         self.dump_flags()
 
+        log = logger.Logger(self.stdout, self.verbose)
         self.e_tot, self.e_cas, self.ci = \
-                kernel(self, mo_coeff, ci0=ci0, verbose=self.verbose)
+                kernel(self, mo_coeff, ci0=ci0, verbose=log)
+        self._finalize()
+        return self.e_tot, self.e_cas, self.ci
+
+    def _finalize(self):
         log = logger.Logger(self.stdout, self.verbose)
         if log.verbose >= logger.NOTE and hasattr(self.fcisolver, 'spin_square'):
             ncore = self.ncore
@@ -268,61 +274,86 @@ class UCASCI(lib.StreamObject):
                              i, self.e_tot[i], e)
         #if self.verbose >= logger.INFO:
         #    self.analyze(mo_coeff, self.ci, verbose=self.verbose)
-        self._finalize()
-        return self.e_tot, self.e_cas, self.ci
-
-    def _finalize(self):
-        pass
+        return self
 
     def cas_natorb(self, mo_coeff=None, ci0=None):
+        if mo_coeff is None: mo_coeff = self.mo_coeff
+        if ci0 is None: ci0 = self.ci
         return addons.cas_natorb(self, mo_coeff, ci0)
     def cas_natorb_(self, mo_coeff=None, ci0=None):
-        self.ci, self.mo_coeff, occ = addons.cas_natorb(self, mo_coeff, ci0)
+        self.ci, self.mo_coeff, occ = self.cas_natorb(mo_coeff, ci0)
         return self.ci, self.mo_coeff
 
-    def analyze(self, mo_coeff=None, ci=None, verbose=logger.DEBUG,
-                large_ci_tol=0.1, **kwargs):
+    def analyze(self, mo_coeff=None, ci=None, verbose=None,
+                large_ci_tol=LARGE_CI_TOL, with_meta_lowdin=WITH_META_LOWDIN,
+                **kwargs):
+        from pyscf.lo import orth
         from pyscf.tools import dump_mat
         if mo_coeff is None: mo_coeff = self.mo_coeff
         if ci is None: ci = self.ci
+        log = logger.new_logger(self, verbose)
         nelecas = self.nelecas
         ncas = self.ncas
         ncore = self.ncore
+        mocore_a = mo_coeff[0][:,:ncore[0]]
+        mocas_a = mo_coeff[0][:,ncore[0]:ncore[0]+ncas]
+        mocore_b = mo_coeff[1][:,:ncore[1]]
+        mocas_b = mo_coeff[1][:,ncore[1]:ncore[1]+ncas]
 
-        casdm1a, casdm1b = self.fcisolver.make_rdm1s(ci, ncas, nelecas)
-        mocore = mo_coeff[0][:,:ncore[0]]
-        mocas = mo_coeff[0][:,ncore[0]:ncore[0]+ncas]
-        dm1a = numpy.dot(mocore, mocore.T)
-        dm1a += reduce(numpy.dot, (mocas, casdm1a, mocas.T))
-        mocore = mo_coeff[1][:,:ncore[1]]
-        mocas = mo_coeff[1][:,ncore[1]:ncore[1]+ncas]
-        dm1b = numpy.dot(mocore, mocore.T)
-        dm1b += reduce(numpy.dot, (mocas, casdm1b, mocas.T))
+        label = self.mol.ao_labels()
+        if (isinstance(ci, (list, tuple)) and
+            not isinstance(self.fcisolver, addons.StateAverageFCISolver)):
+            log.warn('Mulitple states found in UCASCI solver. Density '
+                     'matrix of first state is generated in .analyze() function.')
+            civec = ci[0]
+        else:
+            civec = ci
+        casdm1a, casdm1b = self.fcisolver.make_rdm1s(civec, ncas, nelecas)
+        dm1a = numpy.dot(mocore_a, mocore_a.T)
+        dm1a += reduce(numpy.dot, (mocas_a, casdm1a, mocas_a.T))
+        dm1b = numpy.dot(mocore_b, mocore_b.T)
+        dm1b += reduce(numpy.dot, (mocas_b, casdm1b, mocas_b.T))
+        if log.verbose >= logger.DEBUG2:
+            log.debug2('alpha density matrix (on AO)')
+            dump_mat.dump_tri(self.stdout, dm1a, label)
+            log.debug2('beta density matrix (on AO)')
+            dump_mat.dump_tri(self.stdout, dm1b, label)
 
-        if verbose >= logger.INFO:
-            log = logger.Logger(self.stdout, verbose)
-            label = self.mol.ao_labels()
-            if log.verbose >= logger.DEBUG:
-                log.info('alpha density matrix (on AO)')
-                dump_mat.dump_tri(self.stdout, dm1a, label)
-                log.info('beta density matrix (on AO)')
-                dump_mat.dump_tri(self.stdout, dm1b, label)
+        if log.verbose >= logger.INFO:
+            ovlp_ao = self._scf.get_ovlp()
+            occa, ucasa = self._eig(-casdm1a, ncore[0], ncore[0]+ncas)
+            occb, ucasb = self._eig(-casdm1b, ncore[1], ncore[1]+ncas)
+            log.info('Natural alpha-occupancy %s', str(-occa))
+            log.info('Natural beta-occupancy %s', str(-occb))
+            mocas_a = numpy.dot(mocas_a, ucasa)
+            mocas_b = numpy.dot(mocas_b, ucasb)
+            if with_meta_lowdin:
+                orth_coeff = orth.orth_ao(self.mol, 'meta_lowdin', s=ovlp_ao)
+                mocas_a = reduce(numpy.dot, (orth_coeff.T, ovlp_ao, mocas_a))
+                mocas_b = reduce(numpy.dot, (orth_coeff.T, ovlp_ao, mocas_b))
+                log.info('Natural alpha-orbital (expansion on meta-Lowdin AOs) in CAS space')
+                dump_mat.dump_rec(log.stdout, mocas_a, label, start=1, **kwargs)
+                log.info('Natural beta-orbital (expansion on meta-Lowdin AOs) in CAS space')
+                dump_mat.dump_rec(log.stdout, mocas_b, label, start=1, **kwargs)
+            else:
+                log.info('Natural alpha-orbital (expansion on AOs) in CAS space')
+                dump_mat.dump_rec(log.stdout, mocas_a, label, start=1, **kwargs)
+                log.info('Natural beta-orbital (expansion on AOs) in CAS space')
+                dump_mat.dump_rec(log.stdout, mocas_b, label, start=1, **kwargs)
 
-            s = reduce(numpy.dot, (mo_coeff[0].T, self._scf.get_ovlp(),
-                                   self._scf.mo_coeff[0]))
-            idx = numpy.argwhere(abs(s)>.4)
+            tol = getattr(__config__, 'mcscf_addons_map2hf_tol', 0.4)
+            s = reduce(numpy.dot, (mo_coeff[0].T, ovlp_ao, self._scf.mo_coeff[0]))
+            idx = numpy.argwhere(abs(s)>tol)
             for i,j in idx:
                 log.info('alpha <mo-mcscf|mo-hf> %d  %d  %12.8f' % (i+1,j+1,s[i,j]))
-            s = reduce(numpy.dot, (mo_coeff[1].T, self._scf.get_ovlp(),
-                                   self._scf.mo_coeff[1]))
-            idx = numpy.argwhere(abs(s)>.4)
+            s = reduce(numpy.dot, (mo_coeff[1].T, ovlp_ao, self._scf.mo_coeff[1]))
+            idx = numpy.argwhere(abs(s)>tol)
             for i,j in idx:
                 log.info('beta <mo-mcscf|mo-hf> %d  %d  %12.8f' % (i+1,j+1,s[i,j]))
 
-            log.info('\n** Largest CI components **')
-            if (hasattr(self.fcisolver, 'large_ci') and
-                ci is not None and numpy.ndim(ci) >= 2):
-                if ci[0].ndim == 2:
+            if hasattr(self.fcisolver, 'large_ci') and ci is not None:
+                log.info('\n** Largest CI components **')
+                if isinstance(ci, (tuple, list)):
                     for i, state in enumerate(ci):
                         log.info('  [alpha occ-orbitals] [beta occ-orbitals]  state %-3d CI coefficient', i)
                         res = self.fcisolver.large_ci(state, self.ncas, self.nelecas,
@@ -340,8 +371,10 @@ class UCASCI(lib.StreamObject):
     def spin_square(self, fcivec=None, mo_coeff=None, ovlp=None):
         return addons.spin_square(self, mo_coeff, fcivec, ovlp)
 
+    fix_spin_ = fix_spin = None
+
+    @lib.with_doc(addons.sort_mo.__doc__)
     def sort_mo(self, caslst, mo_coeff=None, base=1):
-        from pyscf.mcscf import addons
         if mo_coeff is None: mo_coeff = self.mo_coeff
         return addons.sort_mo(self, mo_coeff, caslst, base)
 
@@ -372,6 +405,8 @@ class UCASCI(lib.StreamObject):
         return dm1a+dm1b
 
 CASCI = UCASCI
+
+del(WITH_META_LOWDIN, LARGE_CI_TOL)
 
 
 if __name__ == '__main__':

@@ -78,7 +78,8 @@ def _gamma1_intermediates(cc, t1, t2, l1, l2):
     return ((dooa, doob), (dova, dovb), (dvoa, dvob), (dvva, dvvb))
 
 # gamma2 intermediates in Chemist's notation
-def _gamma2_intermediates(cc, t1, t2, l1, l2):
+#TODO: hold d2 intermediates in h5fobj
+def _gamma2_outcore(cc, t1, t2, l1, l2, h5fobj, compress_vvvv=False):
     t1a, t1b = t1
     t2aa, t2ab, t2bb = t2
     l1a, l1b = l1
@@ -310,41 +311,21 @@ def _gamma2_intermediates(cc, t1, t2, l1, l2):
     dOOvv =-(dOOvv + dOOvv.transpose(1,0,3,2).conj()) * .5
     dVVov = None
 
-    return ((dovov, dovOV, dOVov, dOVOV),
-            (dvvvv, dvvVV, dVVvv, dVVVV),
-            (doooo, dooOO, dOOoo, dOOOO),
-            (doovv, dooVV, dOOvv, dOOVV),
-            (dovvo, dovVO, dOVvo, dOVVO),
-            (dvvov, dvvOV, dVVov, dVVOV),
-            (dovvv, dovVV, dOVvv, dOVVV),
-            (dooov, dooOV, dOOov, dOOOV))
-
-def _gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj, compress_vvvv=False):
-    d2 = _gamma2_intermediates(mycc, t1, t2, l1, l2)
-    if not compress_vvvv:
-        return d2
-    dovov, dovOV, dOVov, dOVOV = d2[0]
-    dvvvv, dvvVV, dVVvv, dVVVV = d2[1]
-    doooo, dooOO, dOOoo, dOOOO = d2[2]
-    doovv, dooVV, dOOvv, dOOVV = d2[3]
-    dovvo, dovVO, dOVvo, dOVVO = d2[4]
-    dvvov, dvvOV, dVVov, dVVOV = d2[5]
-    dovvv, dovVV, dOVvv, dOVVV = d2[6]
-    dooov, dooOV, dOOov, dOOOV = d2[7]
-    nocca, nvira, noccb, nvirb = dovOV.shape
-
-    idxa = numpy.tril_indices(nvira)
-    idxa = idxa[0] * nvira + idxa[1]
-    idxb = numpy.tril_indices(nvirb)
-    idxb = idxb[0] * nvirb + idxb[1]
-    dvvvv = dvvvv + dvvvv.transpose(1,0,2,3)
-    dvvvv = lib.take_2d(dvvvv.reshape(nvira**2,nvira**2), idxa, idxa)
-    dvvvv *= .5
-    dvvVV = dvvVV + dvvVV.transpose(1,0,2,3)
-    dvvVV = lib.take_2d(dvvVV.reshape(nvira**2,nvirb**2), idxa, idxb)
-    dVVVV = dVVVV + dVVVV.transpose(1,0,2,3)
-    dVVVV = lib.take_2d(dVVVV.reshape(nvirb**2,nvirb**2), idxb, idxb)
-    dVVVV *= .5
+    if compress_vvvv:
+        nocca, noccb, nvira, nvirb = t2ab.shape
+        idxa = numpy.tril_indices(nvira)
+        idxa = idxa[0] * nvira + idxa[1]
+        idxb = numpy.tril_indices(nvirb)
+        idxb = idxb[0] * nvirb + idxb[1]
+        dvvvv = dvvvv + dvvvv.transpose(1,0,2,3)
+        dvvvv = lib.take_2d(dvvvv.reshape(nvira**2,nvira**2), idxa, idxa)
+        dvvvv *= .5
+        dvvVV = dvvVV + dvvVV.transpose(1,0,2,3)
+        dvvVV = lib.take_2d(dvvVV.reshape(nvira**2,nvirb**2), idxa, idxb)
+        dvvVV *= .5
+        dVVVV = dVVVV + dVVVV.transpose(1,0,2,3)
+        dVVVV = lib.take_2d(dVVVV.reshape(nvirb**2,nvirb**2), idxb, idxb)
+        dVVVV *= .5
 
     return ((dovov, dovOV, dOVov, dOVOV),
             (dvvvv, dvvVV, dVVvv, dVVVV),
@@ -354,6 +335,12 @@ def _gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj, compress_vvvv=False):
             (dvvov, dvvOV, dVVov, dVVOV),
             (dovvv, dovVV, dOVvv, dOVVV),
             (dooov, dooOV, dOOov, dOOOV))
+
+def _gamma2_intermediates(cc, t1, t2, l1, l2, compress_vvvv=False):
+    #TODO: h5fobj = lib.H5TmpFile()
+    h5fobj = None
+    d2 = _gamma2_outcore(cc, t1, t2, l1, l2, h5fobj, compress_vvvv)
+    return d2
 
 def make_rdm1(mycc, t1, t2, l1, l2):
     r'''

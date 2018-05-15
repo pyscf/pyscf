@@ -33,6 +33,8 @@ class TDA(uhf.TDA):
     conv_tol = getattr(__config__, 'pbc_tdscf_rhf_TDA_conv_tol', 1e-6)
 
     def __init__(self, mf):
+        from pyscf.pbc import scf
+        assert(isinstance(mf, scf.khf.KSCF))
         self.cell = mf.cell
         uhf.TDA.__init__(self, mf)
 
@@ -266,13 +268,15 @@ def _unpack(vo, mo_occ):
     za = []
     zb = []
     ip = 0
-    for k, no in enumerate(nocca):
-        nv = nmo - no
+    for k, occ in enumerate(mo_occ[0]):
+        no = numpy.count_nonzero(occ > 0)
+        nv = occ.size - no
         za.append(vo[ip:ip+nv*no].reshape(nv,no))
         ip += nv * no
 
-    for k, no in enumerate(noccb):
-        nv = nmo - no
+    for k, occ in enumerate(mo_occ[1]):
+        no = numpy.count_nonzero(occ > 0)
+        nv = occ.size - no
         zb.append(vo[ip:ip+nv*no].reshape(nv,no))
         ip += nv * no
     return za, zb

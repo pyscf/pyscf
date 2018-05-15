@@ -29,8 +29,10 @@ Ref:
 J. Chem. Phys. 147, 164119 (2017)
 '''
 
+import os
 import time
 import copy
+import warnings
 import tempfile
 import numpy
 import h5py
@@ -309,7 +311,10 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
                     j3cI.append(numpy.asarray(v.imag, order='C'))
             v = None
 
-            shls_slice = (bstart, bend, 0, bend)
+            if aosym == 's2':
+                shls_slice = (bstart, bend, 0, bend)
+            else:
+                shls_slice = (bstart, bend, 0, cell.nbas)
             for p0, p1 in lib.prange(0, ngrids, Gblksize):
                 dat = ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
                                             b, gxyz[p0:p1], Gvbase, kpt,
@@ -419,6 +424,15 @@ class GDF(aft.AFTDF):
             self.auxcell = None
             self._cderi = None
 
+    @property
+    def gs(self):
+        return [n//2 for n in self.mesh]
+    @gs.setter
+    def gs(self, x):
+        warnings.warn('Attribute .gs is deprecated. It is replaced by attribute .mesh.\n'
+                      'mesh = the number of PWs (=2*gs+1) for each direction.')
+        self.mesh = [2*n+1 for n in x]
+
     def dump_flags(self, log=None):
         log = logger.new_logger(self, log)
         log.info('\n')
@@ -481,11 +495,17 @@ class GDF(aft.AFTDF):
         if with_j3c:
             if isinstance(self._cderi_to_save, str):
                 cderi = self._cderi_to_save
-                if isinstance(self._cderi, str):
-                    logger.warn(self, 'Value of _cderi is ignored. DF '
-                                'integrals will be saved in file %s .', cderi)
             else:
                 cderi = self._cderi_to_save.name
+            if isinstance(self._cderi, str):
+                if self._cderi == cderi and os.path.isfile(cderi):
+                    logger.warn(self, 'DF integrals in %s (specified by '
+                                '._cderi) is overwritten by GDF '
+                                'initialization. ', cderi)
+                else:
+                    logger.warn(self, 'Value of ._cderi is ignored. '
+                                'DF integrals will be saved in file %s .',
+                                cderi)
             self._cderi = cderi
             t1 = (time.clock(), time.time())
             self._make_j3c(self.cell, self.auxcell, kptij_lst, cderi)

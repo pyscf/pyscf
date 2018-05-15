@@ -37,6 +37,11 @@ mol1.charge = 1
 mol1.spin = 1
 mol1.build()
 
+def tearDownModule():
+    global mol, method, mol1
+    del mol, method, mol1
+
+
 class KnownValues(unittest.TestCase):
     def test_nr_lda(self):
         method.xc = 'lda, vwn_rpa'

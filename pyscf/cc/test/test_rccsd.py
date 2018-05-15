@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import tempfile
 from functools import reduce
 import unittest
 import copy
@@ -21,9 +22,11 @@ import numpy as np
 
 from pyscf import gto, lib
 from pyscf import scf, dft
+from pyscf import df
 from pyscf import cc
 from pyscf import ao2mo
 from pyscf import mp
+from pyscf.cc import ccsd
 from pyscf.cc import rccsd
 
 mol = gto.Mole()
@@ -40,7 +43,15 @@ mf = scf.RHF(mol)
 mf.conv_tol_grad = 1e-8
 mf.kernel()
 
-mycc = rccsd.RCCSD(mf).run(conv_tol=1e-10)
+mycc = rccsd.RCCSD(mf)
+mycc.conv_tol = 1e-10
+eris = mycc.ao2mo()
+mycc.kernel(eris=eris)
+
+def tearDownModule():
+    global mol, mf, eris, mycc
+    mol.stdout.close()
+    del mol, mf, eris, mycc
 
 
 class KnownValues(unittest.TestCase):
@@ -49,6 +60,53 @@ class KnownValues(unittest.TestCase):
         mycc = cc.RCCSD(mf).run()
         self.assertAlmostEqual(mycc.e_tot, -76.119346385357446, 7)
 
+    def test_denisty_fit_interface(self):
+        mydf = df.DF(mol)
+        mycc1 = ccsd.CCSD(mf).density_fit(auxbasis='ccpvdz-ri', with_df=mydf).run()
+        self.assertAlmostEqual(mycc1.e_tot, -76.119348934346789, 7)
+
+    def test_ERIS(self):
+        mycc = rccsd.RCCSD(mf)
+        numpy.random.seed(1)
+        mo_coeff = numpy.random.random(mf.mo_coeff.shape)
+        eris = rccsd._make_eris_incore(mycc, mo_coeff)
+
+        self.assertAlmostEqual(lib.finger(eris.oooo),  4.963884938282539, 11)
+        self.assertAlmostEqual(lib.finger(eris.ovoo), -1.362368189698315, 11)
+        self.assertAlmostEqual(lib.finger(eris.ovov),125.815506844421580, 11)
+        self.assertAlmostEqual(lib.finger(eris.oovv), 55.123681017639463, 11)
+        self.assertAlmostEqual(lib.finger(eris.ovvo),133.480835278982620, 11)
+        self.assertAlmostEqual(lib.finger(eris.ovvv), 95.756230114113222, 11)
+        self.assertAlmostEqual(lib.finger(eris.vvvv),-10.450387490987071, 11)
+
+        ccsd.MEMORYMIN, bak = 0, ccsd.MEMORYMIN
+        mycc.max_memory = 0
+        eris1 = mycc.ao2mo(mo_coeff)
+        ccsd.MEMORYMIN = bak
+        self.assertAlmostEqual(abs(numpy.array(eris1.oooo)-eris.oooo).max(), 0, 11)
+        self.assertAlmostEqual(abs(numpy.array(eris1.ovoo)-eris.ovoo).max(), 0, 11)
+        self.assertAlmostEqual(abs(numpy.array(eris1.ovov)-eris.ovov).max(), 0, 11)
+        self.assertAlmostEqual(abs(numpy.array(eris1.oovv)-eris.oovv).max(), 0, 11)
+        self.assertAlmostEqual(abs(numpy.array(eris1.ovvo)-eris.ovvo).max(), 0, 11)
+        self.assertAlmostEqual(abs(numpy.array(eris1.ovvv)-eris.ovvv).max(), 0, 11)
+        self.assertAlmostEqual(abs(numpy.array(eris1.vvvv)-eris.vvvv).max(), 0, 11)
+
+        # Testing the complex MO integrals
+        def ao2mofn(mos):
+            if isinstance(mos, numpy.ndarray) and mos.ndim == 2:
+                mos = [mos]*4
+            nmos = [mo.shape[1] for mo in mos]
+            eri_mo = ao2mo.kernel(mf._eri, mos, compact=False).reshape(nmos)
+            return eri_mo * 1j
+        eris1 = rccsd._make_eris_incore(mycc, mo_coeff, ao2mofn=ao2mofn)
+        self.assertAlmostEqual(abs(eris1.oooo.imag-eris.oooo).max(), 0, 11)
+        self.assertAlmostEqual(abs(eris1.ovoo.imag-eris.ovoo).max(), 0, 11)
+        self.assertAlmostEqual(abs(eris1.ovov.imag-eris.ovov).max(), 0, 11)
+        self.assertAlmostEqual(abs(eris1.oovv.imag-eris.oovv).max(), 0, 11)
+        self.assertAlmostEqual(abs(eris1.ovvo.imag-eris.ovvo).max(), 0, 11)
+        self.assertAlmostEqual(abs(eris1.ovvv.imag-eris.ovvv).max(), 0, 11)
+        self.assertAlmostEqual(abs(eris1.vvvv.imag-eris.vvvv).max(), 0, 11)
+
     def test_dump_chk(self):
         cc1 = copy.copy(mycc)
         cc1.nmo = mf.mo_energy.size
@@ -56,9 +114,14 @@ class KnownValues(unittest.TestCase):
         cc1.dump_chk()
         cc1 = cc.CCSD(mf)
         cc1.__dict__.update(lib.chkfile.load(cc1._scf.chkfile, 'ccsd'))
-        eris = cc1.ao2mo()
         e = cc1.energy(cc1.t1, cc1.t2, eris)
         self.assertAlmostEqual(e, -0.13539788638119823, 8)
+
+        cc1.e_corr = -1
+        cc1.chkfile = None
+        cc1.dump_chk(frozen=2)
+        self.assertEqual(lib.chkfile.load(cc1._scf.chkfile, 'ccsd/e_corr'),
+                         mycc.e_corr)
 
     def test_ccsd_t(self):
         e = mycc.ccsd_t()
@@ -73,29 +136,57 @@ class KnownValues(unittest.TestCase):
         cc1 = cc.CCSD(mf)
         cc1.direct = True
         cc1.conv_tol = 1e-10
+        cc1.kernel(t1=numpy.zeros_like(mycc.t1))
+        self.assertAlmostEqual(cc1.e_corr, -0.13539788638119823, 8)
+
+    def test_incore_complete(self):
+        cc1 = cc.CCSD(mf)
+        cc1.incore_complete = True
+        cc1.conv_tol = 1e-10
         cc1.kernel()
         self.assertAlmostEqual(cc1.e_corr, -0.13539788638119823, 8)
 
-    def test_diis(self):
+    def test_no_diis(self):
         cc1 = cc.CCSD(mf)
         cc1.diis = False
         cc1.max_cycle = 4
         cc1.kernel()
         self.assertAlmostEqual(cc1.e_corr, -0.13516622806104395, 8)
 
-    def test_ERIS(self):
-        cc1 = cc.RCCSD(mf)
-        numpy.random.seed(1)
-        mo_coeff = numpy.random.random(mf.mo_coeff.shape)
-        eris = cc.rccsd._make_eris_outcore(cc1, mo_coeff)
+    def test_restart(self):
+        ftmp = tempfile.NamedTemporaryFile()
+        cc1 = cc.CCSD(mf)
+        cc1.max_cycle = 5
+        cc1.kernel()
+        ref = cc1.e_corr
 
-        self.assertAlmostEqual(lib.finger(numpy.array(eris.oooo)), 4.9638849382825754, 12)
-        self.assertAlmostEqual(lib.finger(numpy.array(eris.ovoo)),-1.3623681896984081, 12)
-        self.assertAlmostEqual(lib.finger(numpy.array(eris.ovvo)), 133.4808352789826 , 12)
-        self.assertAlmostEqual(lib.finger(numpy.array(eris.oovv)), 55.123681017639655, 12)
-        self.assertAlmostEqual(lib.finger(numpy.array(eris.ovov)), 125.81550684442149, 12)
-        self.assertAlmostEqual(lib.finger(numpy.array(eris.ovvv)), 95.756230114113322, 12)
-        self.assertAlmostEqual(lib.finger(numpy.array(eris.vvvv)),-10.450387490987545, 12)
+        adiis = lib.diis.DIIS(mol)
+        adiis.filename = ftmp.name
+        cc1.diis = adiis
+        cc1.max_cycle = 3
+        cc1.kernel(t1=None, t2=None)
+        self.assertAlmostEqual(cc1.e_corr, -0.13529291367331436, 8)
+
+        t1, t2 = cc1.vector_to_amplitudes(adiis.extrapolate())
+        self.assertAlmostEqual(abs(t1-cc1.t1).max(), 0, 9)
+        self.assertAlmostEqual(abs(t2-cc1.t2).max(), 0, 9)
+        cc1.diis = None
+        cc1.max_cycle = 1
+        cc1.kernel(t1, t2)
+        self.assertAlmostEqual(cc1.e_corr, -0.13535690694539226, 8)
+
+        cc1.diis = adiis
+        cc1.max_cycle = 2
+        cc1.kernel(t1, t2)
+        self.assertAlmostEqual(cc1.e_corr, ref, 8)
+
+    def test_iterative_dampling(self):
+        ftmp = tempfile.NamedTemporaryFile()
+        cc1 = cc.CCSD(mf)
+        cc1.max_cycle = 3
+        cc1.iterative_damping = 0.7
+        cc1.kernel()
+        self.assertAlmostEqual(cc1.e_corr, -0.13508743605375528, 8)
 
     def test_amplitudes_to_vector(self):
         vec = mycc.amplitudes_to_vector(mycc.t1, mycc.t2)
@@ -146,7 +237,7 @@ class KnownValues(unittest.TestCase):
 
         mycc1 = rccsd.RCCSD(mf)
         eris1 = mycc1.ao2mo()
-        mycc2 = cc.ccsd.CCSD(mf)
+        mycc2 = ccsd.CCSD(mf)
         eris2 = mycc2.ao2mo()
         a = np.random.random((nmo,nmo)) * .1
         eris1.fock += a + a.T.conj()
@@ -155,19 +246,19 @@ class KnownValues(unittest.TestCase):
         t2 = np.random.random((nocc,nocc,nvir,nvir)) * .1
         t2 = t2 + t2.transpose(1,0,3,2)
 
-        t1b, t2b = cc.ccsd.update_amps(mycc2, t1, t2, eris2)
+        t1b, t2b = ccsd.update_amps(mycc2, t1, t2, eris2)
         self.assertAlmostEqual(lib.finger(t1b), -106360.5276951083, 6)
         self.assertAlmostEqual(lib.finger(t2b), 66540.100267798145, 6)
 
         mycc2.max_memory = 0
-        t1a, t2a = cc.ccsd.update_amps(mycc2, t1, t2, eris2)
+        t1a, t2a = ccsd.update_amps(mycc2, t1, t2, eris2)
         self.assertAlmostEqual(abs(t1a-t1b).max(), 0, 9)
         self.assertAlmostEqual(abs(t2a-t2b).max(), 0, 9)
 
-        t2tril = cc.ccsd._add_vvvv_tril(mycc2, t1, t2, eris2)
+        t2tril = ccsd._add_vvvv_tril(mycc2, t1, t2, eris2)
         self.assertAlmostEqual(lib.finger(t2tril), 13306.139402693696, 8)
 
-        Ht2 = cc.ccsd._add_vvvv_full(mycc2, t1, t2, eris2)
+        Ht2 = ccsd._add_vvvv_full(mycc2, t1, t2, eris2)
         self.assertAlmostEqual(lib.finger(Ht2), 760.50164232208408, 9)
 
         mycc1.cc2 = False
@@ -192,14 +283,15 @@ class KnownValues(unittest.TestCase):
                      'O': 'cc-pvdz',}
         mol.charge = 1
         mol.build(0, 0)
-        mycc.direct = True
+        mycc2.direct = True
         eris2.vvvv = None
         eris2.mol = mol
-        t2tril = cc.ccsd._add_vvvv_tril(mycc, t1, t2, eris2, with_ovvv=True)
+        mycc2.mo_coeff, eris2.mo_coeff = eris2.mo_coeff, None
+        t2tril = ccsd._add_vvvv_tril(mycc2, t1, t2, eris2, with_ovvv=True)
         self.assertAlmostEqual(lib.finger(t2tril), 680.07199094501584, 9)
-        t2tril = cc.ccsd._add_vvvv_tril(mycc, t1, t2, eris2, with_ovvv=False)
+        t2tril = ccsd._add_vvvv_tril(mycc2, t1, t2, eris2, with_ovvv=False)
         self.assertAlmostEqual(lib.finger(t2tril), 446.56702664171348, 9)
-        Ht2 = cc.ccsd._add_vvvv_full(mycc, t1, t2, eris2)
+        Ht2 = ccsd._add_vvvv_full(mycc2, t1, t2, eris2)
         self.assertAlmostEqual(lib.finger(Ht2), 48.122317842230686, 9)
 
         eri1 = np.random.random((nmo,nmo,nmo,nmo)) + np.random.random((nmo,nmo,nmo,nmo))*1j
@@ -228,6 +320,51 @@ class KnownValues(unittest.TestCase):
         t1a, t2a = rccsd.update_amps(mycc1, t1, t2, eris1)
         self.assertAlmostEqual(lib.finger(t1a), -13.32050019680894-1.8825765910430254j, 9)
         self.assertAlmostEqual(lib.finger(t2a), -0.056223856104895858+0.025472249329733986j, 9)
+
+    def test_eris_contract_vvvv_t2(self):
+        mol = gto.Mole()
+        nocc, nvir = 5, 12
+        nvir_pair = nvir*(nvir+1)//2
+        numpy.random.seed(9)
+        t2 = numpy.random.random((nocc,nocc,nvir,nvir)) - .5
+        t2 = t2 + t2.transpose(1,0,3,2)
+        eris = ccsd._ChemistsERIs()
+        vvvv = numpy.random.random((nvir_pair,nvir_pair)) - .5
+        eris.vvvv = vvvv + vvvv.T
+        eris.mol = mol
+        vt2 = eris._contract_vvvv_t2(mycc, t2, eris.vvvv, max_memory=0)
+        self.assertAlmostEqual(lib.finger(vt2), -39.572579908080087, 11)
+        vvvv = ao2mo.restore(1, eris.vvvv, nvir)
+        ref = lib.einsum('acbd,ijcd->ijab', vvvv, t2)
+        self.assertAlmostEqual(abs(vt2 - ref).max(), 0, 11)
+
+        # _contract_s1vvvv_t2, testing complex and real mixed contraction
+        vvvv =(numpy.random.random((nvir,nvir,nvir,nvir)) +
+               numpy.random.random((nvir,nvir,nvir,nvir))*1j - (.5+.5j))
+        vvvv = vvvv + vvvv.transpose(1,0,3,2).conj()
+        vvvv = vvvv + vvvv.transpose(2,3,0,1)
+        eris.vvvv = vvvv
+        eris.mol = mol
+        vt2 = eris._contract_vvvv_t2(mycc, t2, eris.vvvv, max_memory=0)
+        self.assertAlmostEqual(lib.finger(vt2), 23.502736435296871+113.90422480013488j, 11)
+        ref = lib.einsum('acbd,ijcd->ijab', eris.vvvv, t2)
+        self.assertAlmostEqual(abs(vt2 - ref).max(), 0, 11)
+
+    def test_add_vvvv(self):
+        t1 = mycc.t1
+        t2 = mycc.t2
+        nocc, nvir = t1.shape
+        tau = t2 + numpy.einsum('ia,jb->ijab', t1, t1)
+        eris1 = copy.copy(eris)
+        mycc1 = copy.copy(mycc)
+        ovvv = eris1.get_ovvv()
+        tmp = -numpy.einsum('ijcd,ka,kdcb->ijba', tau, t1, ovvv)
+        t2a = tmp + tmp.transpose(1,0,3,2)
+        t2a += mycc1._add_vvvv(t1, t2, eris1)
+        mycc1.direct = True
+        eris1.vvvv = None  # == with_ovvv=True in the call below
+        t2b = mycc1._add_vvvv(t1, t2, eris1, t2sym='jiba')
+        self.assertAlmostEqual(abs(t2a-t2b).max(), 0, 12)
 
 
 if __name__ == "__main__":

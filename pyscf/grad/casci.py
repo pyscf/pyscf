@@ -38,6 +38,7 @@ def kernel(mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=None, verbose=None):
     if mo_coeff is None: mo_coeff = mc._scf.mo_coeff
     if ci is None: ci = mc.ci
     if mf_grad is None: mf_grad = mc._scf.nuc_grad_method()
+    assert(isinstance(ci, numpy.ndarray))
 
     mol = mc.mol
     ncore = mc.ncore
@@ -56,7 +57,7 @@ def kernel(mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=None, verbose=None):
     orbo = mo_coeff[:,:neleca]
     orbv = mo_coeff[:,neleca:]
 
-    casdm1, casdm2 = mc.fcisolver.make_rdm12(mc.ci, ncas, nelecas)
+    casdm1, casdm2 = mc.fcisolver.make_rdm12(ci, ncas, nelecas)
     dm_core = numpy.dot(mo_core, mo_core.T) * 2
     dm_cas = reduce(numpy.dot, (mo_cas, casdm1, mo_cas.T))
     aapa = ao2mo.kernel(mol, (mo_cas, mo_cas, mo_coeff, mo_cas), compact=False)
@@ -172,11 +173,11 @@ def kernel(mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=None, verbose=None):
         de[k] -= numpy.einsum('xij,ij->x', s1[:,p0:p1], vhf_s1occ[p0:p1]) * 2
         de[k] -= numpy.einsum('xij,ji->x', s1[:,p0:p1], vhf_s1occ[:,p0:p1]) * 2
 
-    de += rhf_grad.grad_nuc(mol)
+    de += rhf_grad.grad_nuc(mol, atmlst)
     return de
 
 
-def as_scanner(mcscf_grad):
+def as_scanner(mcscf_grad, state=0):
     '''Generating a nuclear gradients scanner/solver (for geometry optimizer).
 
     The returned solver is a function. This function requires one argument
@@ -194,28 +195,39 @@ def as_scanner(mcscf_grad):
 
     >>> from pyscf import gto, scf, mcscf
     >>> mol = gto.M(atom='N 0 0 0; N 0 0 1.1', verbose=0)
-    >>> mc_scanner = mcscf.CASSCF(scf.RHF(mol), 4, 4).nuc_grad_method().as_scanner()
-    >>> etot, grad = mc_scanner(gto.M(atom='N 0 0 0; N 0 0 1.1'))
-    >>> etot, grad = mc_scanner(gto.M(atom='N 0 0 0; N 0 0 1.5'))
-
-    >>> mc_scanner = mcscf.CASCI(scf.RHF(mol), 4, 4).nuc_grad_method().as_scanner()
-    >>> etot, grad = mc_scanner(gto.M(atom='N 0 0 0; N 0 0 1.1'))
-    >>> etot, grad = mc_scanner(gto.M(atom='N 0 0 0; N 0 0 1.5'))
+    >>> mc_grad_scanner = mcscf.CASCI(scf.RHF(mol), 4, 4).nuc_grad_method().as_scanner()
+    >>> etot, grad = mc_grad_scanner(gto.M(atom='N 0 0 0; N 0 0 1.1'))
+    >>> etot, grad = mc_grad_scanner(gto.M(atom='N 0 0 0; N 0 0 1.5'))
     '''
+    from pyscf import gto
+    if isinstance(mcscf_grad, lib.GradScanner):
+        return mcscf_grad
+
     logger.info(mcscf_grad, 'Create scanner for %s', mcscf_grad.__class__)
+
     class CASCI_GradScanner(mcscf_grad.__class__, lib.GradScanner):
         def __init__(self, g):
-            self.__dict__.update(g.__dict__)
-            self.base = g.base.as_scanner()
-        def __call__(self, mol, **kwargs):
+            lib.GradScanner.__init__(self, g)
+        def __call__(self, mol_or_geom, state=state, **kwargs):
+            if isinstance(mol_or_geom, gto.Mole):
+                mol = mol_or_geom
+            else:
+                mol = self.mol.set_geom_(mol_or_geom, inplace=False)
+
             mc_scanner = self.base
+            if (mc_scanner.fcisolver.nroots > 1 and
+                state >= mc_scanner.fcisolver.nroots):
+                raise ValueError('State ID greater than the number of CASCI roots')
+
             e_tot = mc_scanner(mol)
+            if mc_scanner.fcisolver.nroots > 1:
+                ci = mc_scanner.ci[state]
+            else:
+                ci = mc_scanner.ci
+
             self.mol = mol
-            de = self.kernel(**kwargs)
+            de = self.kernel(ci=ci, state=state, **kwargs)
             return e_tot, de
-        @property
-        def converged(self):
-            return self.base.converged
     return CASCI_GradScanner(mcscf_grad)
 
 
@@ -227,7 +239,7 @@ class Gradients(lib.StreamObject):
         self.stdout = mc.stdout
         self.verbose = mc.verbose
         self.max_memory = mc.max_memory
-        self.atmlst = range(mc.mol.natm)
+        self.atmlst = None
         self.de = None
         self._keys = set(self.__dict__.keys())
 
@@ -243,9 +255,14 @@ class Gradients(lib.StreamObject):
         return self
 
     def kernel(self, mo_coeff=None, ci=None, atmlst=None, mf_grad=None,
-               verbose=None):
+               state=0, verbose=None):
         cput0 = (time.clock(), time.time())
         log = logger.new_logger(self, verbose)
+        if ci is None: ci = self.base.ci
+        if isinstance(ci, (list, tuple)):
+            ci = ci[state]
+            logger.info(self, 'Multiple roots are found in CASCI solver. '
+                        'Nuclear gradients of root %d are computed.', state)
         if atmlst is None:
             atmlst = self.atmlst
         else:

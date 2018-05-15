@@ -41,9 +41,14 @@ mf = scf.UHF(mol1).run(conv_tol=1e-14)
 myucc = cc.UCCSD(mf).run()
 mygcc = cc.GCCSD(mf).run()
 
+def tearDownModule():
+    global mol, mol1, mf, myucc, mygcc
+    mol.stdout.close()
+    del mol, mol1, mf, myucc, mygcc
+
 class KnownValues(unittest.TestCase):
     def test_gccsd_t_compare_uccsd_t(self):
-        self.assertAlmostEqual(myucc.ccsd_t(), mygcc.ccsd_t(), 7)
+        self.assertAlmostEqual(myucc.ccsd_t(), mygcc.ccsd_t(t1=None), 7)
 
     def test_gccsd_t(self):
         mf1 = copy.copy(mf)

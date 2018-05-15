@@ -34,6 +34,11 @@ mf = scf.RHF(mol)
 mf.conv_tol_grad = 1e-8
 mf.kernel()
 
+def tearDownModule():
+    global mol, mf
+    mol.stdout.close()
+    del mol, mf
+
 
 class KnownValues(unittest.TestCase):
     def test_cisd_grad(self):
@@ -51,20 +56,27 @@ class KnownValues(unittest.TestCase):
             unit='Bohr')
         ci_scanner = scf.RHF(mol).set(conv_tol=1e-14).apply(ci.CISD).as_scanner()
         e0 = ci_scanner(mol)
-        mol = gto.M(
-            verbose = 0,
-            atom = 'H 0 0 0; H 0 0 1.704',
-            basis = '631g',
-            unit='Bohr')
-        e1 = ci_scanner(mol)
-        mol = gto.M(
-            verbose = 0,
-            atom = 'H 0 0 0; H 0 0 1.705',
-            basis = '631g',
-            unit='Bohr')
-        ci_scanner(mol)
+        e1 = ci_scanner(mol.set_geom_('H 0 0 0; H 0 0 1.704'))
+
+        ci_scanner.nroots = 2
+        ci_scanner(mol.set_geom_('H 0 0 0; H 0 0 1.705'))
         g1 = ci_scanner.nuc_grad_method().kernel()
         self.assertAlmostEqual(g1[0,2], (e1-e0)*500, 6)
+
+    def test_cisd_grad_excited_state(self):
+        mol = gto.M(
+            verbose = 0,
+            atom = 'H 0 0 0; H 0 0 1.706',
+            basis = '631g',
+            unit='Bohr')
+        myci = scf.RHF(mol).set(conv_tol=1e-14).apply(ci.CISD).set(nroots=3)
+        ci_scanner = myci.as_scanner()
+        e0 = ci_scanner(mol)
+        e1 = ci_scanner(mol.set_geom_('H 0 0 0; H 0 0 1.704'))
+
+        g_scan = myci.nuc_grad_method().as_scanner(state=2)
+        g1 = g_scan('H 0 0 0; H 0 0 1.705', atmlst=range(2))[1]
+        self.assertAlmostEqual(g1[0,2], (e1[2]-e0[2])*500, 6)
 
     def test_frozen(self):
         myci = ci.cisd.CISD(mf)
@@ -77,7 +89,7 @@ class KnownValues(unittest.TestCase):
     def test_as_scanner(self):
         myci = ci.cisd.CISD(mf)
         myci.frozen = [0,1,10,11,12]
-        gscan = myci.nuc_grad_method().as_scanner()
+        gscan = myci.nuc_grad_method().as_scanner().as_scanner()
         e, g1 = gscan(mol)
         self.assertTrue(gscan.converged)
         self.assertAlmostEqual(e, -76.032220245016717, 9)

@@ -45,6 +45,9 @@ def _gamma1_intermediates(mycc, t1, t2, l1, l2):
     return doo, dov, dvo, dvv
 
 # gamma2 intermediates in Chemist's notation
+# When computing intermediates, the convention
+# dm2[q,p,s,r] = <p^\dagger r^\dagger s q> is assumed in this function.
+# It changes to dm2[p,q,r,s] = <p^\dagger r^\dagger s q> in _make_rdm2
 def _gamma2_intermediates(mycc, t1, t2, l1, l2):
     tau = t2 + einsum('ia,jb->ijab', t1, t1) * 2
     miajb = einsum('ikac,kjcb->iajb', l2, t2)

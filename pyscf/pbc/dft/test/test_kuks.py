@@ -22,7 +22,7 @@ from pyscf.pbc import gto as pbcgto
 from pyscf.pbc import dft as pbcdft
 
 class KnowValues(unittest.TestCase):
-    def test_klda8_cubic_kpt_222(self):
+    def test_klda8_cubic_kpt_222_high_cost(self):
         cell = pbcgto.Cell()
         cell.unit = 'A'
         cell.a = '''3.5668  0.      0.
@@ -46,6 +46,7 @@ C, 0.8917,  2.6751,  2.6751'''
 
         kpts = cell.make_kpts((2,2,2), with_gamma_point=False)
         mf = pbcdft.KUKS(cell, kpts)
+        mf.conv_tol = 1e-9
         mf.xc = 'lda,vwn'
         e1 = mf.scf()
         self.assertAlmostEqual(e1, -45.42583489512954, 8)

@@ -28,9 +28,23 @@ class KnownValues(unittest.TestCase):
         mol.output = '/dev/null'
         mol.build()
         mf = dks.DKS(mol)
-        mf.xc = 'lda'
+        mf.xc = 'lda,'
         eks4 = mf.kernel()
         self.assertAlmostEqual(eks4, -126.041808355268, 9)
+        mol.stdout.close()
+
+    def test_x2c_uks_lda(self):
+        mol = gto.Mole()
+        mol.atom = [['Ne',(0.,0.,0.)]]
+        mol.basis = 'uncsto3g'
+        mol.verbose = 7
+        mol.output = '/dev/null'
+        mol.build()
+        mf = dks.DKS(mol).x2c()
+        mf.xc = 'lda,'
+        eks4 = mf.kernel()
+        self.assertAlmostEqual(eks4, -126.03378903205831, 9)
+        mol.stdout.close()
 
 
 if __name__ == "__main__":

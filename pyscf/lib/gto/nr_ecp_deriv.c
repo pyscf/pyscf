@@ -51,6 +51,8 @@ int ECPscalar_c2s_factory(int (*fcart)(), double *gctr, int comp, int *shls,
                           double *cache);
 void ECPscalar_distribute(double *out, double *gctr, const int *dims,
                           const int comp, const int di, const int dj);
+void ECPscalar_distribute0(double *out, const int *dims,
+                           const int comp, const int di, const int dj);
 
 /*
 static int _x_addr[] = {
@@ -203,6 +205,9 @@ static int _deriv1_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
                         int *atm, int natm, int *bas, int nbas, double *env,
                         ECPOpt *opt, double *cache)
 {
+        if (necpbas == 0) {
+                return 0;
+        }
         const int ish = shls[0];
         const int jsh = shls[1];
         const int npi = bas[NPRIM_OF+ish*BAS_SLOTS];
@@ -318,7 +323,11 @@ static int _cart_factory(int (*intor_cart)(), double *out, int comp,
         int has_value;
         has_value = (*intor_cart)(buf, shls, ecpbas, necpbas,
                                   atm, natm, bas, nbas, env, opt, cache);
-        ECPscalar_distribute(out, buf, dims, comp, di, dj);
+        if (has_value) {
+                ECPscalar_distribute(out, buf, dims, comp, di, dj);
+        } else {
+                ECPscalar_distribute0(out, dims, comp, di, dj);
+        }
 
         if (stack != NULL) {
                 free(stack);
@@ -386,7 +395,11 @@ static int _sph_factory(int (*intor_cart)(), double *out, int comp,
         int has_value;
         has_value = ECPscalar_c2s_factory(intor_cart, buf, 3, shls, ecpbas, necpbas,
                                           atm, natm, bas, nbas, env, opt, cache);
-        ECPscalar_distribute(out, buf, dims, comp, di, dj);
+        if (has_value) {
+                ECPscalar_distribute(out, buf, dims, comp, di, dj);
+        } else {
+                ECPscalar_distribute0(out, dims, comp, di, dj);
+        }
 
         if (stack != NULL) {
                 free(stack);
@@ -423,6 +436,9 @@ static int _ipipv_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
                        int *atm, int natm, int *bas, int nbas, double *env,
                        ECPOpt *opt, double *cache)
 {
+        if (necpbas == 0) {
+                return 0;
+        }
         const int ish = shls[0];
         const int jsh = shls[1];
         const int npi = bas[NPRIM_OF+ish*BAS_SLOTS];
@@ -575,6 +591,9 @@ static int _ipvip_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
                        int *atm, int natm, int *bas, int nbas, double *env,
                        ECPOpt *opt, double *cache)
 {
+        if (necpbas == 0) {
+                return 0;
+        }
         const int ish = shls[0];
         const int jsh = shls[1];
         const int npi = bas[NPRIM_OF+ish*BAS_SLOTS];
@@ -778,6 +797,9 @@ static int _igv_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
                      int *atm, int natm, int *bas, int nbas, double *env,
                      ECPOpt *opt, double *cache)
 {
+        if (necpbas == 0) {
+                return 0;
+        }
         const int ish = shls[0];
         const int jsh = shls[1];
         const int nci = bas[NCTR_OF+ish*BAS_SLOTS];
@@ -872,3 +894,18 @@ int ECPscalar_ignuc_sph(double *out, int *dims, int *shls, int *atm, int natm,
                                      atm, natm, bas, nbas, env, opt, cache);
         return has_value;
 }
+
+void ECPscalar_optimizer(ECPOpt **opt, int *atm, int natm, int *bas, int nbas, double *env);
+#define make_optimizer(fname) \
+void ECPscalar_##fname##_optimizer(ECPOpt **opt, int *atm, int natm, \
+                                   int *bas, int nbas, double *env) \
+{ \
+        ECPscalar_optimizer(opt, atm, natm, bas, nbas, env); \
+}
+make_optimizer(ignuc)
+make_optimizer(ipnuc)
+make_optimizer(iprinv)
+make_optimizer(ipipnuc)
+make_optimizer(ipiprinv)
+make_optimizer(ipnucip)
+make_optimizer(iprinvip)

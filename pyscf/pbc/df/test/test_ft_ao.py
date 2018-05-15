@@ -167,7 +167,7 @@ class KnowValues(unittest.TestCase):
         ref = ref.reshape(3,nao,nao,-1).transpose(0,3,1,2) * (cell1.vol/ngrids)
         self.assertAlmostEqual(abs(ref-dat).max(), 0, 7)
 
-    def test_ft_aoao_with_kpts(self):
+    def test_ft_aoao_with_kpts_high_cost(self):
         numpy.random.seed(1)
         kpti, kptj = numpy.random.random((2,3))
         dat = ft_ao.ft_aopair(cell, cell.Gv, kpti_kptj=(kpti,kptj))
@@ -187,6 +187,9 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(numpy.linalg.norm(ref[:,0,2:]-dat[:,0,2:])  , 0, 9)
         self.assertAlmostEqual(numpy.linalg.norm(ref[:,2:,0]-dat[:,2:,0])  , 0, 9)
 
+    def test_ft_aoao_pair_vs_fft(self):
+        numpy.random.seed(1)
+        kpti, kptj = numpy.random.random((2,3))
         coords = pdft.gen_grid.gen_uniform_grids(cell1)
         aoi = pdft.numint.eval_ao(cell1, coords, kpt=kpti)
         aoj = pdft.numint.eval_ao(cell1, coords, kpt=kptj)

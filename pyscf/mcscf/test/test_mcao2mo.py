@@ -21,11 +21,11 @@ from pyscf import ao2mo
 from pyscf import mcscf
 
 
-mol = gto.Mole()
-mol.verbose = 7
-mol.output = '/dev/null'
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_rhf(self):
+        mol = gto.Mole()
+        mol.verbose = 7
+        mol.output = '/dev/null'
         mol.atom = [
             ['O', ( 0., 0.    , 0.   )],
             ['H', ( 0., -0.757, 0.587)],
@@ -78,8 +78,12 @@ class KnowValues(unittest.TestCase):
         self.assertTrue(numpy.allclose(k_pc , eris0.k_pc ))
         self.assertTrue(numpy.allclose(ppaa , eris0.ppaa ))
         self.assertTrue(numpy.allclose(papa , eris0.papa ))
+        mol.stdout.close()
 
     def test_uhf(self):
+        mol = gto.Mole()
+        mol.verbose = 7
+        mol.output = '/dev/null'
         mol.atom = [
             ['O', ( 0., 0.    , 0.   )],
             ['H', ( 0., -0.757, 0.587)],
@@ -175,6 +179,7 @@ class KnowValues(unittest.TestCase):
         self.assertTrue(numpy.allclose(IAPCV, eris0.IAPCV))
         self.assertTrue(numpy.allclose(apCV , eris0.apCV ))
         self.assertTrue(numpy.allclose(APcv , eris0.APcv ))
+        mol.stdout.close()
 
 
 if __name__ == "__main__":

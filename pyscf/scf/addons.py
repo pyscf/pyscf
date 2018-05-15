@@ -20,6 +20,7 @@
 import copy
 from functools import reduce
 import numpy
+import scipy.linalg
 from pyscf import lib
 from pyscf.gto import mole
 from pyscf.lib import logger
@@ -95,7 +96,7 @@ def frac_occ_(mf, tol=1e-3):
             if hasattr(fock, 'focka'):
                 focka = fock.focka
                 fockb = fock.fockb
-            elif fock.ndim == 3:
+            elif getattr(fock, 'ndim', None) == 3:
                 focka, fockb = fock
             else:
                 focka = fockb = fock
@@ -232,12 +233,12 @@ def mom_occ_(mf, occorb, setocc):
         coef_occ_a = occorb[0][:, setocc[0]>0]
         coef_occ_b = occorb[1][:, setocc[1]>0]
     elif isinstance(mf, rohf.ROHF):
-        if mf.mol.spin != int(numpy.sum(setocc[0]) - numpy.sum(setocc[1])) :
+        if mf.mol.spin != (numpy.sum(setocc[0]) - numpy.sum(setocc[1])):
             raise ValueError('Wrong occupation setting for restricted open-shell calculation.')
         coef_occ_a = occorb[:, setocc[0]>0]
         coef_occ_b = occorb[:, setocc[1]>0]
     else:
-        raise AssertionError('Can not support this class of instance.')
+        raise RuntimeError('Cannot support this class of instance %s' % mf)
     log = logger.Logger(mf.stdout, mf.verbose)
     def get_occ(mo_energy=None, mo_coeff=None):
         if mo_energy is None: mo_energy = mf.mo_energy
@@ -249,20 +250,18 @@ def mom_occ_(mf, occorb, setocc):
         s_a = reduce(numpy.dot, (coef_occ_a.T, mf.get_ovlp(), mo_coeff[0]))
         s_b = reduce(numpy.dot, (coef_occ_b.T, mf.get_ovlp(), mo_coeff[1]))
         #choose a subset of mo_coeff, which maximizes <old|now>
-        idx_a = numpy.argsort(numpy.einsum('ij,ij->j', s_a, s_a))
-        idx_b = numpy.argsort(numpy.einsum('ij,ij->j', s_b, s_b))
-        mo_occ[0][idx_a[-nocc_a:]] = 1.
-        mo_occ[1][idx_b[-nocc_b:]] = 1.
+        idx_a = numpy.argsort(numpy.einsum('ij,ij->j', s_a, s_a))[::-1]
+        idx_b = numpy.argsort(numpy.einsum('ij,ij->j', s_b, s_b))[::-1]
+        mo_occ[0][idx_a[:nocc_a]] = 1.
+        mo_occ[1][idx_b[:nocc_b]] = 1.
 
-        if mf.verbose >= logger.DEBUG:
-            log.info(' New alpha occ pattern: %s', mo_occ[0])
-            log.info(' New beta occ pattern: %s', mo_occ[1])
-        if mf.verbose >= logger.DEBUG1:
-            if mo_energy.ndim == 2:
-                log.info(' Current alpha mo_energy(sorted) = %s', mo_energy[0])
-                log.info(' Current beta mo_energy(sorted) = %s', mo_energy[1])
-            elif mo_energy.ndim == 1:
-                log.info(' Current mo_energy(sorted) = %s', mo_energy)
+        log.debug(' New alpha occ pattern: %s', mo_occ[0])
+        log.debug(' New beta occ pattern: %s', mo_occ[1])
+        if isinstance(mf.mo_energy, numpy.ndarray) and mf.mo_energy.ndim == 1:
+            log.debug1(' Current mo_energy(sorted) = %s', mo_energy)
+        else:
+            log.debug1(' Current alpha mo_energy(sorted) = %s', mo_energy[0])
+            log.debug1(' Current beta mo_energy(sorted) = %s', mo_energy[1])
 
         if (int(numpy.sum(mo_occ[0])) != nocc_a):
             log.error('mom alpha electron occupation numbers do not match: %d, %d',
@@ -279,21 +278,32 @@ def mom_occ_(mf, occorb, setocc):
 mom_occ = mom_occ_
 
 def project_mo_nr2nr(mol1, mo1, mol2):
-    r''' Project orbital coefficients
+    r''' Project orbital coefficients from basis set 1 (C1 for mol1) to basis
+    set 2 (C2 for mol2).
 
     .. math::
 
-        |\psi1> = |AO1> C1
+        |\psi1\rangle = |AO1\rangle C1
 
-        |\psi2> = P |\psi1> = |AO2>S^{-1}<AO2| AO1> C1 = |AO2> C2
+        |\psi2\rangle = P |\psi1\rangle = |AO2\rangle S^{-1}\langle AO2| AO1\rangle> C1 = |AO2\rangle> C2
 
-        C2 = S^{-1}<AO2|AO1> C1
+        C2 = S^{-1}\langle AO2|AO1\rangle C1
+
+    There are three relevant functions:
+    :func:`project_mo_nr2nr` is the projection for non-relativistic (scalar) basis.
+    :func:`project_mo_nr2r` projects from non-relativistic to relativistic basis.
+    :func:`project_mo_r2r`  is the projection between relativistic (spinor) basis.
     '''
     s22 = mol2.intor_symmetric('int1e_ovlp')
     s21 = mole.intor_cross('int1e_ovlp', mol2, mol1)
-    return lib.cho_solve(s22, numpy.dot(s21, mo1))
+    if isinstance(mo1, numpy.ndarray) and mo1.ndim == 2:
+        return lib.cho_solve(s22, numpy.dot(s21, mo1))
+    else:
+        return [lib.cho_solve(s22, numpy.dot(s21, x)) for x in mo1]
 
 def project_mo_nr2r(mol1, mo1, mol2):
+    __doc__ = project_mo_nr2nr.__doc__
+
     assert(not mol1.cart)
     s22 = mol2.intor_symmetric('int1e_ovlp_spinor')
     s21 = mole.intor_cross('int1e_ovlp_sph', mol2, mol1)
@@ -302,10 +312,15 @@ def project_mo_nr2r(mol1, mo1, mol2):
     s21 = numpy.dot(ua.T.conj(), s21) + numpy.dot(ub.T.conj(), s21) # (*)
     # mo2: alpha, beta have been summed in Eq. (*)
     # so DM = mo2[:,:nocc] * 1 * mo2[:,:nocc].H
-    mo2 = numpy.dot(s21, mo1)
-    return lib.cho_solve(s22, mo2)
+    if isinstance(mo1, numpy.ndarray) and mo1.ndim == 2:
+        mo2 = numpy.dot(s21, mo1)
+        return lib.cho_solve(s22, mo2)
+    else:
+        return [lib.cho_solve(s22, numpy.dot(s21, x)) for x in mo1]
 
 def project_mo_r2r(mol1, mo1, mol2):
+    __doc__ = project_mo_nr2nr.__doc__
+
     s22 = mol2.intor_symmetric('int1e_ovlp_spinor')
     t22 = mol2.intor_symmetric('int1e_spsp_spinor')
     s21 = mole.intor_cross('int1e_ovlp_spinor', mol2, mol1)
@@ -313,8 +328,72 @@ def project_mo_r2r(mol1, mo1, mol2):
     n2c = s21.shape[1]
     pl = lib.cho_solve(s22, s21)
     ps = lib.cho_solve(t22, t21)
-    return numpy.vstack((numpy.dot(pl, mo1[:n2c]),
-                         numpy.dot(ps, mo1[n2c:])))
+    if isinstance(mo1, numpy.ndarray) and mo1.ndim == 2:
+        return numpy.vstack((numpy.dot(pl, mo1[:n2c]),
+                             numpy.dot(ps, mo1[n2c:])))
+    else:
+        return [numpy.vstack((numpy.dot(pl, x[:n2c]),
+                              numpy.dot(ps, x[n2c:]))) for x in mo1]
+
+def project_dm_nr2nr(mol1, dm1, mol2):
+    r''' Project density matrix representation from basis set 1 (mol1) to basis
+    set 2 (mol2).
+
+    .. math::
+
+        |AO2\rangle DM_AO2 \langle AO2|
+
+        = |AO2\rangle P DM_AO1 P \langle AO2|
+
+        DM_AO2 = P DM_AO1 P
+
+        P = S_{AO2}^{-1}\langle AO2|AO1\rangle
+
+    There are three relevant functions:
+    :func:`project_dm_nr2nr` is the projection for non-relativistic (scalar) basis.
+    :func:`project_dm_nr2r` projects from non-relativistic to relativistic basis.
+    :func:`project_dm_r2r`  is the projection between relativistic (spinor) basis.
+    '''
+    s22 = mol2.intor_symmetric('int1e_ovlp')
+    s21 = mole.intor_cross('int1e_ovlp', mol2, mol1)
+    p21 = lib.cho_solve(s22, s21)
+    if isinstance(dm1, numpy.ndarray) and dm1.ndim == 2:
+        return reduce(numpy.dot, (p21, dm1, p21.conj().T))
+    else:
+        return lib.einsum('pi,nij,qj->npq', p21, dm1, p21.conj())
+
+def project_dm_nr2r(mol1, dm1, mol2):
+    __doc__ = project_dm_nr2nr.__doc__
+
+    assert(not mol1.cart)
+    s22 = mol2.intor_symmetric('int1e_ovlp_spinor')
+    s21 = mole.intor_cross('int1e_ovlp_sph', mol2, mol1)
+
+    ua, ub = mol2.sph2spinor_coeff()
+    s21 = numpy.dot(ua.T.conj(), s21) + numpy.dot(ub.T.conj(), s21) # (*)
+    # mo2: alpha, beta have been summed in Eq. (*)
+    # so DM = mo2[:,:nocc] * 1 * mo2[:,:nocc].H
+    p21 = lib.cho_solve(s22, s21)
+    if isinstance(dm1, numpy.ndarray) and dm1.ndim == 2:
+        return reduce(numpy.dot, (p21, dm1, p21.conj().T))
+    else:
+        return lib.einsum('pi,nij,qj->npq', p21, dm1, p21.conj())
+
+def project_dm_r2r(mol1, dm1, mol2):
+    __doc__ = project_dm_nr2nr.__doc__
+
+    s22 = mol2.intor_symmetric('int1e_ovlp_spinor')
+    t22 = mol2.intor_symmetric('int1e_spsp_spinor')
+    s21 = mole.intor_cross('int1e_ovlp_spinor', mol2, mol1)
+    t21 = mole.intor_cross('int1e_spsp_spinor', mol2, mol1)
+    n2c = s21.shape[1]
+    pl = lib.cho_solve(s22, s21)
+    ps = lib.cho_solve(t22, t21)
+    p21 = scipy.linalg.block_diag(pl, ps)
+    if isinstance(dm1, numpy.ndarray) and dm1.ndim == 2:
+        return reduce(numpy.dot, (p21, dm1, p21.conj().T))
+    else:
+        return lib.einsum('pi,nij,qj->npq', p21, dm1, p21.conj())
 
 
 def remove_linear_dep_(mf, threshold=1e-8, lindep=1e-14):
@@ -328,7 +407,7 @@ def remove_linear_dep_(mf, threshold=1e-8, lindep=1e-14):
             dependence issue.
     '''
     s = mf.get_ovlp()
-    cond = np.max(lib.cond(s))
+    cond = numpy.max(lib.cond(s))
     if cond < 1./lindep:
         return mf
 
@@ -376,7 +455,13 @@ def convert_to_uhf(mf, out=None, remove_df=False):
                 orbsym = mf.mo_coeff.orbsym
                 mf1.mo_coeff = (lib.tag_array(mf1.mo_coeff[0], orbsym=orbsym),
                                 lib.tag_array(mf1.mo_coeff[1], orbsym=orbsym))
-            mf1.mo_occ = numpy.array((mf.mo_occ>0, mf.mo_occ==2), dtype=numpy.double)
+            if getattr(mf.mo_occ, 'ndim', None) == 1:  # RHF
+                mf1.mo_occ = numpy.array((mf.mo_occ>0, mf.mo_occ==2), dtype=numpy.double)
+            elif getattr(mf.mo_occ[0], 'ndim', None) == 1:  # UHF
+                mf1.mo_occ = mf.mo_occ
+            else:  # This to handle KRHF object
+                mf1.mo_occ = [numpy.array((occ>0, occ==2), dtype=numpy.double)
+                              for occ in mf.mo_occ]
         return mf1
 
     if isinstance(mf, scf.ghf.GHF):
@@ -432,7 +517,7 @@ def _object_without_soscf(mf, known_class, remove_df=False):
     for cls in reversed(sub_classes):
         if (not remove_df) and 'DFHF' in cls.__name__:
             obj = obj.density_fit()
-        elif 'SOSCF' in cls.__name__:
+        elif 'SecondOrder' in cls.__name__:
 # SOSCF is not a necessary part
             # obj = obj.newton()
             remove_df = remove_df or (not hasattr(mf._scf, 'with_df'))
@@ -485,7 +570,12 @@ def convert_to_rhf(mf, out=None, remove_df=False):
             mf1.mo_coeff =  mf.mo_coeff[0]
             if hasattr(mf.mo_coeff[0], 'orbsym'):
                 mf1.mo_coeff = lib.tag_array(mf1.mo_coeff, orbsym=mf.mo_coeff[0].orbsym)
-            mf1.mo_occ = mf.mo_occ[0] + mf.mo_occ[1]
+            if getattr(mf.mo_occ, 'ndim', None) == 1:
+                mf1.mo_occ = mf.mo_occ
+            elif getattr(mf.mo_occ[0], 'ndim', None) == 1:  # UHF
+                mf1.mo_occ = mf.mo_occ[0] + mf.mo_occ[1]
+            else:  # This to handle KUHF object
+                mf1.mo_occ = [occa+occb for occa, occb in zip(*mf.mo_occ)]
         return mf1
 
     if isinstance(mf, scf.ghf.GHF):
@@ -551,7 +641,7 @@ def convert_to_ghf(mf, out=None, remove_df=False):
                 mo_coeff = numpy.zeros((nao*2,nmo*2), dtype=mf.mo_coeff.dtype)
                 mo_coeff[:nao,orbspin==0] = mf.mo_coeff
                 mo_coeff[nao:,orbspin==1] = mf.mo_coeff
-                if hasattr(mf.mo_coeff[0], 'orbsym'):
+                if hasattr(mf.mo_coeff, 'orbsym'):
                     orbsym = numpy.zeros_like(orbspin)
                     orbsym[orbspin==0] = mf.mo_coeff.orbsym
                     orbsym[orbspin==1] = mf.mo_coeff.orbsym

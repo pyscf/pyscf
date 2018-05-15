@@ -120,6 +120,14 @@ from pyscf.scf.hf import get_init_guess
 from pyscf.scf.addons import *
 
 
+def HF(mol, *args):
+    __doc__ = '''This is a wrap function to decide which SCF class to use, RHF or UHF\n
+    ''' + hf.SCF.__doc__
+    if mol.nelectron == 1 or mol.spin == 0:
+        return RHF(mol, *args)
+    else:
+        return UHF(mol, *args)
+
 def RHF(mol, *args):
     __doc__ = '''This is a wrap function to decide which SCF class to use, RHF or ROHF\n
     ''' + hf.RHF.__doc__
@@ -194,7 +202,7 @@ def newton(mf):
     return newton_ah.newton(mf)
 
 def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None,
-                auxbasis=None, projectbasis=None, **newton_kwargs):
+                auxbasis=None, dual_basis=None, **newton_kwargs):
     '''This is a wrap function which combines several operations. This
     function first setup the initial guess
     from density fitting calculation then use  for
@@ -208,9 +216,9 @@ def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None,
     from pyscf.soscf import newton_ah
     if auxbasis is None:
         auxbasis = df.addons.aug_etb_for_dfbasis(mf.mol, 'ahlrichs', beta=2.5)
-    if projectbasis:
+    if dual_basis:
         mf1 = newton(mf)
-        pmol = mf1.mol = newton_ah.project_mol(mf.mol, projectbasis)
+        pmol = mf1.mol = newton_ah.project_mol(mf.mol, dual_basis)
         mf1 = density_fit(mf1, auxbasis)
     else:
         mf1 = density_fit(newton(mf), auxbasis)
@@ -237,7 +245,7 @@ def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None,
         logger.note(mf, '========================================================')
         logger.note(mf, 'Generating initial guess with DIIS-SCF for newton solver')
         logger.note(mf, '========================================================')
-        if projectbasis:
+        if dual_basis:
             mf0 = copy.copy(mf)
             mf0.mol = pmol
             mf0 = density_fit(mf0, auxbasis)
@@ -261,7 +269,7 @@ def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None,
         mf1.with_df = mf0.with_df
         mo_coeff, mo_occ = mf0.mo_coeff, mf0.mo_occ
 
-        if projectbasis:
+        if dual_basis:
             if mo_occ.ndim == 2:
                 mo_coeff =(project_mo_nr2nr(pmol, mo_coeff[0], mf.mol),
                            project_mo_nr2nr(pmol, mo_coeff[1], mf.mol))
@@ -290,12 +298,16 @@ def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None,
 #    mf.kernel = mf_kernel
     return mf
 
-def fast_scf(mf):
+def fast_scf(mf):  # pragma: no cover
     from pyscf.lib import logger
     logger.warn(mf, 'NOTE function fast_scf will be removed in the next release. '
                 'Use function fast_newton instead')
     return fast_newton(mf)
 
+
+def KS(mol, *args):
+    from pyscf import dft
+    return dft.KS(mol)
 
 def RKS(mol, *args):
     from pyscf import dft

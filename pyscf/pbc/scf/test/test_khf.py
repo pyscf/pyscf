@@ -47,7 +47,7 @@ def make_primitive_cell(mesh):
     return cell
 
 class KnowValues(unittest.TestCase):
-    def test_kpt_vs_supercell(self):
+    def test_kpt_vs_supercell_high_cost(self):
         # For large n, agreement is always achieved
         # n = 17
         # For small n, agreement only achieved if "wrapping" k-k'+G in get_coulG
@@ -86,6 +86,7 @@ class KnowValues(unittest.TestCase):
 
         kpts = cell.make_kpts(nk)
         kmf = khf.KRHF(cell, kpts, exxdiv='vcut_sph')
+        kmf.conv_tol = 1e-9
         ekpt = kmf.scf()
         dm1 = kmf.make_rdm1()
         dm2 = kmf.from_chk(kmf.chkfile)
@@ -104,18 +105,20 @@ class KnowValues(unittest.TestCase):
         nk = (3, 1, 1)
         kpts = cell.make_kpts(nk)
         kmf1 = khf.KRHF(cell, kpts, exxdiv='vcut_sph')
+        kmf1.conv_tol = 1e-9
         dm = kmf1.from_chk(mf.chkfile)
         kmf1.max_cycle = 2
         ekpt = kmf1.scf(dm)
         kmf1.conv_check = False
         self.assertAlmostEqual(ekpt, -11.215218432275057, 8)
 
-    def test_kuhf(self):
+    def test_kuhf_high_cost(self):
         n = 9
         cell = make_primitive_cell([n]*3)
         nk = (3, 1, 1)
         kpts = cell.make_kpts(nk)
         kmf1 = kuhf.KUHF(cell, kpts, exxdiv='vcut_sph')
+        kmf1.conv_tol = 1e-9
         ekpt = kmf1.scf()
         self.assertAlmostEqual(ekpt, -11.218735269838586, 8)
         np.random.seed(1)

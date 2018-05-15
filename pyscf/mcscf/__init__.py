@@ -187,7 +187,7 @@ mc1step_uhf = umc1step  # for backward compatibility
 from pyscf.mcscf.addons import *
 from pyscf.mcscf import chkfile
 
-def CASSCF(mf, ncas, nelecas, **kwargs):
+def CASSCF(mf, ncas, nelecas, ncore=None, frozen=None):
     from pyscf import gto
     from pyscf import scf
     if isinstance(mf, gto.Mole):
@@ -200,18 +200,18 @@ of API conventions''')
 
     mf = scf.addons.convert_to_rhf(mf)
     if hasattr(mf, 'with_df') and mf.with_df:
-        return DFCASSCF(mf, ncas, nelecas, **kwargs)
+        return DFCASSCF(mf, ncas, nelecas, ncore, frozen)
 
     if mf.mol.symmetry:
-        mc = mc1step_symm.CASSCF(mf, ncas, nelecas, **kwargs)
+        mc = mc1step_symm.CASSCF(mf, ncas, nelecas, ncore, frozen)
     else:
-        mc = mc1step.CASSCF(mf, ncas, nelecas, **kwargs)
+        mc = mc1step.CASSCF(mf, ncas, nelecas, ncore, frozen)
     return mc
 
 RCASSCF = CASSCF
 
 
-def CASCI(mf, ncas, nelecas, **kwargs):
+def CASCI(mf, ncas, nelecas, ncore=None):
     from pyscf import gto
     from pyscf import scf
     if isinstance(mf, gto.Mole):
@@ -224,66 +224,57 @@ of API conventions''')
 
     mf = scf.addons.convert_to_rhf(mf)
     if hasattr(mf, 'with_df') and mf.with_df:
-        return DFCASCI(mf, ncas, nelecas, **kwargs)
+        return DFCASCI(mf, ncas, nelecas, ncore)
 
     if mf.mol.symmetry:
-        mc = casci_symm.CASCI(mf, ncas, nelecas, **kwargs)
+        mc = casci_symm.CASCI(mf, ncas, nelecas, ncore)
     else:
-        mc = casci.CASCI(mf, ncas, nelecas, **kwargs)
+        mc = casci.CASCI(mf, ncas, nelecas, ncore)
     return mc
 
 RCASCI = CASCI
 
 
-def UCASCI(mf, ncas, nelecas, **kwargs):
+def UCASCI(mf, ncas, nelecas, ncore=None):
     from pyscf import scf
-    if isinstance(mf, scf.uhf.UHF):
-        mc = ucasci.UCASCI(mf, ncas, nelecas, **kwargs)
-    else:
-        raise RuntimeError('First argument needs to be UHF object')
+    if not isinstance(mf, scf.uhf.UHF):
+        mf = scf.addons.convert_to_uhf(mf, remove_df=True)
+    mc = ucasci.UCASCI(mf, ncas, nelecas, ncore)
     return mc
 
 
-def UCASSCF(mf, ncas, nelecas, **kwargs):
+def UCASSCF(mf, ncas, nelecas, ncore=None, frozen=None):
     from pyscf import scf
-    if isinstance(mf, scf.uhf.UHF):
-        mc = umc1step.UCASSCF(mf, ncas, nelecas, **kwargs)
-    else:
-        raise RuntimeError('First argument needs to be UHF object')
+    if not isinstance(mf, scf.uhf.UHF):
+        mf = scf.addons.convert_to_uhf(mf, remove_df=True)
+    mc = umc1step.UCASSCF(mf, ncas, nelecas, ncore, frozen)
     return mc
 
 def newton(mc):
-    from pyscf.mcscf import newton_casscf
-    mc1 = newton_casscf.CASSCF(mc._scf, mc.ncas, mc.nelecas)
-    mc1.__dict__.update(mc.__dict__)
-    mc1.max_cycle_micro = 10
-    return mc1
+    return mc.newton()
 
 
-try:
-    from pyscf.mcscf import df
-    def DFCASSCF(mf, ncas, nelecas, auxbasis=None, **kwargs):
-        from pyscf import scf
-        mf = scf.addons.convert_to_rhf(mf, remove_df=False)
-        if mf.mol.symmetry:
-            mc = mc1step_symm.CASSCF(mf, ncas, nelecas, **kwargs)
-        else:
-            mc = mc1step.CASSCF(mf, ncas, nelecas, **kwargs)
-        return df.density_fit(mc, auxbasis)
+from pyscf.mcscf import df
+def DFCASSCF(mf, ncas, nelecas, auxbasis=None, ncore=None, frozen=None):
+    from pyscf import scf
+    mf = scf.addons.convert_to_rhf(mf, remove_df=False)
+    if mf.mol.symmetry:
+        mc = mc1step_symm.CASSCF(mf, ncas, nelecas, ncore, frozen)
+    else:
+        mc = mc1step.CASSCF(mf, ncas, nelecas, ncore, frozen)
+    return df.density_fit(mc, auxbasis)
 
-    def DFCASCI(mf, ncas, nelecas, auxbasis=None, **kwargs):
-        from pyscf import scf
-        mf = scf.addons.convert_to_rhf(mf, remove_df=False)
-        if mf.mol.symmetry:
-            mc = casci_symm.CASCI(mf, ncas, nelecas, **kwargs)
-        else:
-            mc = casci.CASCI(mf, ncas, nelecas, **kwargs)
-        return df.density_fit(mc, auxbasis)
+def DFCASCI(mf, ncas, nelecas, auxbasis=None, ncore=None):
+    from pyscf import scf
+    mf = scf.addons.convert_to_rhf(mf, remove_df=False)
+    if mf.mol.symmetry:
+        mc = casci_symm.CASCI(mf, ncas, nelecas, ncore)
+    else:
+        mc = casci.CASCI(mf, ncas, nelecas, ncore)
+    return df.density_fit(mc, auxbasis)
 
-    approx_hessian = df.approx_hessian
+approx_hessian = df.approx_hessian
 
-    def density_fit(mc, auxbasis=None, with_df=None):
-        return mc.density_fit(auxbasis, with_df)
+def density_fit(mc, auxbasis=None, with_df=None):
+    return mc.density_fit(auxbasis, with_df)
 
-except ImportError:
-    pass

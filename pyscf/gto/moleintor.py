@@ -398,7 +398,7 @@ _INTOR_FUNCTIONS = {
     'int3c1e_iprinv'            : (3, 3),
     'int2c2e'                   : (1, 1),
     'int2e_yp'                  : (1, 1),
-    'int2e_stg'                 : (3, 3),
+    'int2e_stg'                 : (1, 1),
     'int2e_coulerf'             : (1, 1),
     'ECPscalar'                 : (1, None),
     'ECPscalar_ipnuc'           : (3, None),
@@ -517,10 +517,7 @@ def getints3c(intor_name, atm, bas, env, shls_slice=None, comp=1,
 
 def getints4c(intor_name, atm, bas, env, shls_slice=None, comp=1,
               aosym='s1', ao_loc=None, cintopt=None, out=None):
-    if '_spinor' in intor_name:
-        raise NotImplementedError(intor_name)
     aosym = _stand_sym_code(aosym)
-
     atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
     bas = numpy.asarray(bas, dtype=numpy.int32, order='C')
     env = numpy.asarray(env, dtype=numpy.double, order='C')
@@ -529,6 +526,9 @@ def getints4c(intor_name, atm, bas, env, shls_slice=None, comp=1,
     c_env = env.ctypes.data_as(ctypes.c_void_p)
     natm = atm.shape[0]
     nbas = bas.shape[0]
+
+    if '_spinor' in intor_name:
+        assert(aosym == 's1')
 
     ao_loc = make_loc(bas, intor_name)
     if cintopt is None:
@@ -561,28 +561,35 @@ def getints4c(intor_name, atm, bas, env, shls_slice=None, comp=1,
         naok = ao_loc[k1] - ao_loc[k0]
         naol = ao_loc[l1] - ao_loc[l0]
         if aosym in ('s4', 's2ij'):
-            nij = naoi * (naoi + 1) // 2
+            nij = [naoi * (naoi + 1) // 2]
             assert(numpy.all(ao_loc[i0:i1]-ao_loc[i0] == ao_loc[j0:j1]-ao_loc[j0]))
         else:
-            nij = naoi * naoj
+            nij = [naoi, naoj]
         if aosym in ('s4', 's2kl'):
-            nkl = naok * (naok + 1) // 2
+            nkl = [naok * (naok + 1) // 2]
             assert(numpy.all(ao_loc[k0:k1]-ao_loc[k0] == ao_loc[l0:l1]-ao_loc[l0]))
         else:
-            nkl = naok * naol
-        if comp == 1:
-            out = numpy.ndarray((nij,nkl), buffer=out)
+            nkl = [naok, naol]
+        shape = [comp] + nij + nkl
+
+        if '_spinor' in intor_name:
+            drv = libcgto.GTOr4c_drv
+            fill = libcgto.GTOr4c_fill_s1
+            out = numpy.ndarray(shape[::-1], dtype=numpy.complex, buffer=out, order='F')
+            out = numpy.rollaxis(out, -1, 0)
         else:
-            out = numpy.ndarray((comp,nij,nkl), buffer=out)
+            drv = libcgto.GTOnr2e_fill_drv
+            fill = getattr(libcgto, 'GTOnr2e_fill_'+aosym)
+            out = numpy.ndarray(shape, buffer=out)
 
         prescreen = lib.c_null_ptr()
-        drv = libcgto.GTOnr2e_fill_drv
-        drv(getattr(libcgto, intor_name),
-            getattr(libcgto, 'GTOnr2e_fill_'+aosym), prescreen,
+        drv(getattr(libcgto, intor_name), fill, prescreen,
             out.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(comp),
             (ctypes.c_int*8)(*shls_slice),
             ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt,
             c_atm, ctypes.c_int(natm), c_bas, ctypes.c_int(nbas), c_env)
+        if comp == 1:
+            out = out[0]
         return out
 
 def getints_by_shell(intor_name, shls, atm, bas, env, comp=1):
@@ -727,14 +734,20 @@ def make_cintopt(atm, bas, env, intor):
     natm = c_atm.shape[0]
     nbas = c_bas.shape[0]
     cintopt = lib.c_null_ptr()
-    foptinit = getattr(libcgto, intor+'_optimizer')
-    foptinit(ctypes.byref(cintopt),
-             c_atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(natm),
-             c_bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
-             c_env.ctypes.data_as(ctypes.c_void_p))
+    # TODO: call specific ECP optimizers for each intor.
     if intor[:3] == 'ECP':
+        foptinit = libcgto.ECPscalar_optimizer
+        foptinit(ctypes.byref(cintopt),
+                 c_atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(natm),
+                 c_bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
+                 c_env.ctypes.data_as(ctypes.c_void_p))
         return ctypes.cast(cintopt, _ecpoptHandler)
     else:
+        foptinit = getattr(libcgto, intor+'_optimizer')
+        foptinit(ctypes.byref(cintopt),
+                 c_atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(natm),
+                 c_bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
+                 c_env.ctypes.data_as(ctypes.c_void_p))
         return ctypes.cast(cintopt, _cintoptHandler)
 class _cintoptHandler(ctypes.c_void_p):
     def __del__(self):
@@ -755,9 +768,7 @@ def ascint3(intor_name):
     '''convert cint2 function name to cint3 function name'''
     if intor_name.startswith('cint'):
         intor_name = intor_name[1:]
-    if not (intor_name.endswith('_cart') or
-            intor_name.endswith('_sph') or
-            intor_name.endswith('_spinor')):
+    if not intor_name.endswith(('_sph', '_cart', '_spinor', '_ssc')):
         intor_name = intor_name + '_spinor'
     return intor_name
 

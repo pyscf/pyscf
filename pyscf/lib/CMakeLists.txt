@@ -31,27 +31,16 @@ endif()
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
-#enable_language(Fortran)
-find_package(BLAS)
-check_function_exists(ffsll HAVE_FFS)
-
-find_package(OpenMP)
-if(OPENMP_FOUND)
-  set(HAVE_OPENMP 1)
-else ()
-  set(OpenMP_C_FLAGS " ")
-endif()
-
-#find_package(PythonInterp REQUIRED)
-#find_package(PythonLibs REQUIRED)
-#execute_process(COMMAND ${PYTHON_EXECUTABLE} -c "import numpy; print(numpy.get_include())"
-#  OUTPUT_VARIABLE NUMPY_INCLUDE)
-#include_directories(${PYTHON_INCLUDE_DIRS} ${NUMPY_INCLUDE})
-
 # Architecture specified cmake flags.  See also the templates in
 # pyscf/lib/cmake_arch_config
 if(EXISTS "${PROJECT_SOURCE_DIR}/cmake.arch.inc")
   include("${PROJECT_SOURCE_DIR}/cmake.arch.inc")
+endif()
+
+if (NOT BLAS_LIBRARIES)
+#enable_language(Fortran)
+find_package(BLAS)
+check_function_exists(ffsll HAVE_FFS)
 endif()
 
 if (NOT BLAS_LIBRARIES)
@@ -73,6 +62,19 @@ endif()
 # will automatically load all settings specified in cmake.arch.inc
 #
 
+find_package(OpenMP)
+if(OPENMP_FOUND)
+  set(HAVE_OPENMP 1)
+else ()
+  set(OpenMP_C_FLAGS " ")
+endif()
+
+#find_package(PythonInterp REQUIRED)
+#find_package(PythonLibs REQUIRED)
+#execute_process(COMMAND ${PYTHON_EXECUTABLE} -c "import numpy; print(numpy.get_include())"
+#  OUTPUT_VARIABLE NUMPY_INCLUDE)
+#include_directories(${PYTHON_INCLUDE_DIRS} ${NUMPY_INCLUDE})
+
 
 include(ExternalProject)
 option(BUILD_LIBCINT "Using libcint for analytical gaussian integral" ON)
@@ -81,7 +83,7 @@ if(BUILD_LIBCINT)
 if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/cint.h")
   ExternalProject_Add(libcint
     GIT_REPOSITORY https://github.com/sunqm/libcint.git
-    GIT_TAG v3.0.10
+    GIT_TAG v3.0.12
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
     CMAKE_ARGS -DWITH_F12=${WITH_F12} -DWITH_RANGE_COULOMB=1 -DWITH_COULOMB_ERF=1
@@ -102,6 +104,17 @@ configure_file(
   "${PROJECT_BINARY_DIR}/config.h")
 # to find config.h
 include_directories("${PROJECT_BINARY_DIR}")
+
+# See also https://gitlab.kitware.com/cmake/community/wikis/doc/cmake/RPATH-handling
+if (WIN32)
+  #?
+elseif (APPLE)
+  #TODO: test me set(CMAKE_MACOSX_RPATH On)
+else ()
+  set(CMAKE_SKIP_BUILD_RPATH  True)
+  set(CMAKE_BUILD_WITH_INSTALL_RPATH True)
+  set(CMAKE_INSTALL_RPATH "\$ORIGIN:\$ORIGIN/deps/lib")
+endif ()
 
 add_subdirectory(np_helper)
 add_subdirectory(gto)
@@ -131,8 +144,8 @@ if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xc.h" AND
   ExternalProject_Add(libxc
     #GIT_REPOSITORY https://gitlab.com/libxc/libxc/
     #GIT_TAG master
-    URL http://www.tddft.org/programs/octopus/down.php?file=libxc/libxc-3.0.0.tar.gz
-    #URL http://www.sunqm.net/pyscf/files/src/libxc-3.0.0.tar.gz
+    URL http://www.tddft.org/programs/octopus/down.php?file=libxc/3.0.1/libxc-3.0.1.tar.gz
+    #URL http://www.sunqm.net/pyscf/files/src/libxc-3.0.1.tar.gz
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
     BUILD_IN_SOURCE 1
@@ -153,6 +166,7 @@ if(ENABLE_XCFUN AND BUILD_XCFUN)
   ExternalProject_Add(libxcfun
     GIT_REPOSITORY https://github.com/dftlibs/xcfun.git
     GIT_TAG 355f42497a9cd17d16ae91da1f1aaaf93756ae8b
+    PATCH_COMMAND patch -p1 < ${PROJECT_SOURCE_DIR}/libxcfun.patch
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
     CMAKE_ARGS -DCMAKE_BUILD_TYPE=RELEASE -DBUILD_SHARED_LIBS=1

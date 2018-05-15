@@ -664,6 +664,7 @@ def fix_spin_(fciobj, shift=PENALTY, ss=None, **kwargs):
     Returns
             A modified FCI object based on fciobj.
     '''
+    import types
     from pyscf.fci import spin_op
     from pyscf.fci import direct_spin0
     if 'ss_value' in kwargs:
@@ -673,7 +674,9 @@ def fix_spin_(fciobj, shift=PENALTY, ss=None, **kwargs):
     else:
         ss_value = ss
 
-    fciobj.davidson_only = True
+    if (not isinstance(fciobj, types.ModuleType)
+        and 'contract_2e' in getattr(fciobj, '__dict__', {})):
+        del fciobj.contract_2e  # To avoid initialize twice
     old_contract_2e = fciobj.contract_2e
     def contract_2e(eri, fcivec, norb, nelec, link_index=None, **kwargs):
         if isinstance(nelec, (int, numpy.number)):
@@ -702,6 +705,8 @@ def fix_spin_(fciobj, shift=PENALTY, ss=None, **kwargs):
         ci0 = old_contract_2e(eri, fcivec, norb, nelec, link_index, **kwargs)
         ci1 += ci0.reshape(fcivec.shape)
         return ci1
+
+    fciobj.davidson_only = True
     fciobj.contract_2e = contract_2e
     return fciobj
 def fix_spin(fciobj, shift=.1, ss=None):

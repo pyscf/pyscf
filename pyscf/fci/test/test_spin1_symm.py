@@ -47,7 +47,7 @@ numpy.random.seed(15)
 na = fci.cistring.num_strings(norb, nelec//2)
 ci0 = numpy.random.random((na,na))
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_contract(self):
         ci1 = fci.addons.symmetrize_wfn(ci0, norb, nelec, orbsym, wfnsym=0)
         ci1 = cis.contract_2e(g2e, ci1, norb, nelec, wfnsym=0)

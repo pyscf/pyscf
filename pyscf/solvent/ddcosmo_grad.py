@@ -293,8 +293,8 @@ def make_phi1(pcmobj, dm, r_vdw, ui):
     aoslices = mol.aoslice_by_atom()
     for ia in range(natm):
         cav_coords = atom_coords[ia] + r_vdw[ia] * coords_1sph
-        #fakemol = ddcosmo._make_fakemol(cav_coords[ui[ia]>0])
-        fakemol = ddcosmo._make_fakemol(cav_coords)
+        #fakemol = gto.fakemol_for_charges(cav_coords[ui[ia]>0])
+        fakemol = gto.fakemol_for_charges(cav_coords)
         v_nj = df.incore.aux_e2(mol, fakemol, intor=int3c2e, aosym='s1')
         v_phi = numpy.einsum('ij,ijk->k', dm, v_nj)
         phi1[:,:,ia] += numpy.einsum('n,ln,azn,n->azl', weights_1sph, ylm_1sph, ui1[:,:,ia], v_phi)
@@ -319,7 +319,7 @@ def make_e_psi1(pcmobj, dm, r_vdw, ui, grids, ylm_1sph, cached_pol, L_X, L):
 
     if not (isinstance(dm, numpy.ndarray) and dm.ndim == 2):
         dm = dm[0] + dm[1]
-    ni = numint._NumInt()
+    ni = numint.NumInt()
     max_memory = pcmobj.max_memory - lib.current_memory()[0]
     make_rho, nset, nao = ni._gen_rho_evaluator(mol, dm)
     den = numpy.empty((4,grids.weights.size))

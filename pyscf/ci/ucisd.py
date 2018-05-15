@@ -28,13 +28,14 @@ from pyscf.lib import logger
 from pyscf.cc import uccsd
 from pyscf.cc import uccsd_rdm
 from pyscf.ci import cisd
+from pyscf.fci import cistring
 from pyscf.cc.ccsd import _unpack_4fold
 
 def make_diagonal(myci, eris):
     nocca = eris.nocca
     noccb = eris.noccb
     nmoa = eris.focka.shape[0]
-    nmob = eris.focka.shape[1]
+    nmob = eris.fockb.shape[1]
     nvira = nmoa - nocca
     nvirb = nmob - noccb
     jdiag_aa = numpy.zeros((nmoa,nmoa))
@@ -354,22 +355,42 @@ def cisdvec_to_amplitudes(civec, nmo, nocc):
     c2bb = _unpack_4fold(civec[loc[4]:loc[5]], noccb, nvirb)
     return c0, (c1a,c1b), (c2aa,c2ab,c2bb)
 
-def to_fcivec(cisdvec, nmo, nocc):
-    from pyscf import fci
+def to_fcivec(cisdvec, norb, nelec, frozen=0):
     from pyscf.ci.gcisd import t2strs
-    norba, norbb = nmo
-    assert(norba == norbb)
-    nocca, noccb = nocc
-    nvira = norba - nocca
-    nvirb = norbb - noccb
+    if isinstance(nelec, (int, numpy.number)):
+        nelecb = nelec//2
+        neleca = nelec - nelecb
+    else:
+        neleca, nelecb = nelec
+
+    frozena_mask = numpy.zeros(norb, dtype=bool)
+    frozenb_mask = numpy.zeros(norb, dtype=bool)
+    if isinstance(frozen, (int, numpy.integer)):
+        nfroza = nfrozb = frozen
+        frozena_mask[:frozen] = True
+        frozenb_mask[:frozen] = True
+    else:
+        nfroza = len(frozen[0])
+        nfrozb = len(frozen[1])
+        frozena_mask[frozen[0]] = True
+        frozenb_mask[frozen[1]] = True
+
+#    if nfroza != nfrozb:
+#        raise NotImplementedError
+    nocca = numpy.count_nonzero(~frozena_mask[:neleca])
+    noccb = numpy.count_nonzero(~frozenb_mask[:nelecb])
+    nmo = nmoa, nmob = norb - nfroza, norb - nfrozb
+    nocc = nocca, noccb
+    nvira, nvirb = nmoa - nocca, nmob - noccb
+
     c0, c1, c2 = cisdvec_to_amplitudes(cisdvec, nmo, nocc)
     c1a, c1b = c1
     c2aa, c2ab, c2bb = c2
-    t1addra, t1signa = cisd.t1strs(norba, nocca)
-    t1addrb, t1signb = cisd.t1strs(norbb, noccb)
+    t1addra, t1signa = cisd.t1strs(nmoa, nocca)
+    t1addrb, t1signb = cisd.t1strs(nmob, noccb)
 
-    na = fci.cistring.num_strings(norba, nocca)
-    nb = fci.cistring.num_strings(norbb, noccb)
+    na = cistring.num_strings(nmoa, nocca)
+    nb = cistring.num_strings(nmob, noccb)
     fcivec = numpy.zeros((na,nb))
     fcivec[0,0] = c0
     fcivec[t1addra,0] = c1a[::-1].T.ravel() * t1signa
@@ -382,28 +403,79 @@ def to_fcivec(cisdvec, nmo, nocc):
         ooidx = numpy.tril_indices(nocca, -1)
         vvidx = numpy.tril_indices(nvira, -1)
         c2aa = c2aa[ooidx][:,vvidx[0],vvidx[1]]
-        t2addra, t2signa = t2strs(norba, nocca)
+        t2addra, t2signa = t2strs(nmoa, nocca)
         fcivec[t2addra,0] = c2aa[::-1].T.ravel() * t2signa
     if noccb > 1 and nvirb > 1:
         ooidx = numpy.tril_indices(noccb, -1)
         vvidx = numpy.tril_indices(nvirb, -1)
         c2bb = c2bb[ooidx][:,vvidx[0],vvidx[1]]
-        t2addrb, t2signb = t2strs(norbb, noccb)
+        t2addrb, t2signb = t2strs(nmob, noccb)
         fcivec[0,t2addrb] = c2bb[::-1].T.ravel() * t2signb
-    return fcivec
 
-def from_fcivec(ci0, nmo, nocc):
-    from pyscf import fci
+    if nfroza == nfrozb == 0:
+        return fcivec
+
+    assert(norb < 63)
+
+    strsa = cistring.gen_strings4orblist(range(norb), neleca)
+    strsb = cistring.gen_strings4orblist(range(norb), nelecb)
+    na = len(strsa)
+    nb = len(strsb)
+    count_a = numpy.zeros(na, dtype=int)
+    count_b = numpy.zeros(nb, dtype=int)
+    parity_a = numpy.zeros(na, dtype=bool)
+    parity_b = numpy.zeros(nb, dtype=bool)
+    core_a_mask = numpy.ones(na, dtype=bool)
+    core_b_mask = numpy.ones(nb, dtype=bool)
+
+    for i in range(norb):
+        if frozena_mask[i]:
+            if i < neleca:
+                core_a_mask &= (strsa & (1<<i)) != 0
+                parity_a ^= (count_a & 1) == 1
+            else:
+                core_a_mask &= (strsa & (1<<i)) == 0
+        else:
+            count_a += (strsa & (1<<i)) != 0
+
+        if frozenb_mask[i]:
+            if i < nelecb:
+                core_b_mask &= (strsb & (1<<i)) != 0
+                parity_b ^= (count_b & 1) == 1
+            else:
+                core_b_mask &= (strsb & (1<<i)) == 0
+        else:
+            count_b += (strsb & (1<<i)) != 0
+
+    sub_strsa = strsa[core_a_mask & (count_a == nocca)]
+    sub_strsb = strsb[core_b_mask & (count_b == noccb)]
+    addrsa = cistring.strs2addr(norb, neleca, sub_strsa)
+    addrsb = cistring.strs2addr(norb, nelecb, sub_strsb)
+    fcivec1 = numpy.zeros((na,nb))
+    fcivec1[addrsa[:,None],addrsb] = fcivec
+    fcivec1[parity_a,:] *= -1
+    fcivec1[:,parity_b] *= -1
+    return fcivec1
+
+def from_fcivec(ci0, norb, nelec, frozen=0):
     from pyscf.ci.gcisd import t2strs
-    norba, norbb = nmo
-    nocca, noccb = nocc
+    if frozen is not 0:
+        raise NotImplementedError
+    if isinstance(nelec, (int, numpy.number)):
+        nelecb = nelec//2
+        neleca = nelec - nelecb
+    else:
+        neleca, nelecb = nelec
+
+    norba = norbb = norb
+    nocc = nocca, noccb = neleca, nelecb
     nvira = norba - nocca
     nvirb = norbb - noccb
     t1addra, t1signa = cisd.t1strs(norba, nocca)
     t1addrb, t1signb = cisd.t1strs(norbb, noccb)
 
-    na = fci.cistring.num_strings(norba, nocca)
-    nb = fci.cistring.num_strings(norbb, noccb)
+    na = cistring.num_strings(norba, nocca)
+    nb = cistring.num_strings(norbb, noccb)
     ci0 = ci0.reshape(na,nb)
     c0 = ci0[0,0]
     c1a = ((ci0[t1addra,0] * t1signa).reshape(nvira,nocca).T)[::-1]
@@ -587,8 +659,105 @@ def _gamma2_intermediates(myci, civec, nmo, nocc):
             (dovvv, dovVV, dOVvv, dOVVV),
             (dooov, dooOV, dOOov, dOOOV))
 
+def trans_rdm1(myci, cibra, ciket, nmo=None, nocc=None):
+    r'''
+    One-particle spin density matrices dm1a, dm1b in MO basis (the
+    occupied-virtual blocks due to the orbital response contribution are not
+    included).
+
+    dm1a[p,q] = <q_alpha^\dagger p_alpha>
+    dm1b[p,q] = <q_beta^\dagger p_beta>
+
+    The convention of 1-pdm is based on McWeeney's book, Eq (5.4.20).
+    '''
+    if nmo is None: nmo = myci.nmo
+    if nocc is None: nocc = myci.nocc
+    c0bra, c1bra, c2bra = myci.cisdvec_to_amplitudes(cibra, nmo, nocc)
+    c0ket, c1ket, c2ket = myci.cisdvec_to_amplitudes(ciket, nmo, nocc)
+
+    nmoa, nmob = nmo
+    nocca, noccb = nocc
+    bra1a, bra1b = c1bra
+    bra2aa, bra2ab, bra2bb = c2bra
+    ket1a, ket1b = c1ket
+    ket2aa, ket2ab, ket2bb = c2ket
+
+    dvoa = c0bra.conj() * ket1a.T
+    dvob = c0bra.conj() * ket1b.T
+    dvoa += numpy.einsum('jb,ijab->ai', bra1a.conj(), ket2aa)
+    dvoa += numpy.einsum('jb,ijab->ai', bra1b.conj(), ket2ab)
+    dvob += numpy.einsum('jb,ijab->ai', bra1b.conj(), ket2bb)
+    dvob += numpy.einsum('jb,jiba->ai', bra1a.conj(), ket2ab)
+
+    dova = c0ket * bra1a.conj()
+    dovb = c0ket * bra1b.conj()
+    dova += numpy.einsum('jb,ijab->ia', ket1a.conj(), bra2aa)
+    dova += numpy.einsum('jb,ijab->ia', ket1b.conj(), bra2ab)
+    dovb += numpy.einsum('jb,ijab->ia', ket1b.conj(), bra2bb)
+    dovb += numpy.einsum('jb,jiba->ia', ket1a.conj(), bra2ab)
+
+    dooa  =-numpy.einsum('ia,ka->ik', bra1a.conj(), ket1a)
+    doob  =-numpy.einsum('ia,ka->ik', bra1b.conj(), ket1b)
+    dooa -= numpy.einsum('ijab,ikab->jk', bra2aa.conj(), ket2aa) * .5
+    dooa -= numpy.einsum('jiab,kiab->jk', bra2ab.conj(), ket2ab)
+    doob -= numpy.einsum('ijab,ikab->jk', bra2bb.conj(), ket2bb) * .5
+    doob -= numpy.einsum('ijab,ikab->jk', bra2ab.conj(), ket2ab)
+
+    dvva  = numpy.einsum('ia,ic->ac', ket1a, bra1a.conj())
+    dvvb  = numpy.einsum('ia,ic->ac', ket1b, bra1b.conj())
+    dvva += numpy.einsum('ijab,ijac->bc', ket2aa, bra2aa.conj()) * .5
+    dvva += numpy.einsum('ijba,ijca->bc', ket2ab, bra2ab.conj())
+    dvvb += numpy.einsum('ijba,ijca->bc', ket2bb, bra2bb.conj()) * .5
+    dvvb += numpy.einsum('ijab,ijac->bc', ket2ab, bra2ab.conj())
+
+    dm1a = numpy.empty((nmoa,nmoa), dtype=dooa.dtype)
+    dm1a[:nocca,:nocca] = dooa
+    dm1a[:nocca,nocca:] = dova
+    dm1a[nocca:,:nocca] = dvoa
+    dm1a[nocca:,nocca:] = dvva
+    norm = numpy.dot(cibra, ciket)
+    dm1a[numpy.diag_indices(nocca)] += norm
+
+    dm1b = numpy.empty((nmob,nmob), dtype=dooa.dtype)
+    dm1b[:noccb,:noccb] = doob
+    dm1b[:noccb,noccb:] = dovb
+    dm1b[noccb:,:noccb] = dvob
+    dm1b[noccb:,noccb:] = dvvb
+    dm1b[numpy.diag_indices(noccb)] += norm
+
+    if not (myci.frozen is 0 or myci.frozen is None):
+        nmoa = myci.mo_occ[0].size
+        nmob = myci.mo_occ[1].size
+        nocca = numpy.count_nonzero(myci.mo_occ[0] > 0)
+        noccb = numpy.count_nonzero(myci.mo_occ[1] > 0)
+        rdm1a = numpy.zeros((nmoa,nmoa), dtype=dm1a.dtype)
+        rdm1b = numpy.zeros((nmob,nmob), dtype=dm1b.dtype)
+        rdm1a[numpy.diag_indices(nocca)] = norm
+        rdm1b[numpy.diag_indices(noccb)] = norm
+        moidx = myci.get_frozen_mask()
+        moidxa = numpy.where(moidx[0])[0]
+        moidxb = numpy.where(moidx[1])[0]
+        rdm1a[moidxa[:,None],moidxa] = dm1a
+        rdm1b[moidxb[:,None],moidxb] = dm1b
+        dm1a = rdm1a
+        dm1b = rdm1b
+    return dm1a, dm1b
+
 
 class UCISD(cisd.CISD):
+
+    def vector_size(self):
+        norba, norbb = self.nmo
+        nocca, noccb = self.nocc
+        nvira = norba - nocca
+        nvirb = norbb - noccb
+        nooa = nocca * (nocca-1) // 2
+        nvva = nvira * (nvira-1) // 2
+        noob = noccb * (noccb-1) // 2
+        nvvb = nvirb * (nvirb-1) // 2
+        size = (1 + nocca*nvira + noccb*nvirb +
+                nocca*noccb*nvira*nvirb + nooa*nvva + noob*nvvb)
+        return size
 
     get_nocc = uccsd.get_nocc
     get_nmo = uccsd.get_nmo
@@ -689,6 +858,7 @@ class UCISD(cisd.CISD):
 
     make_rdm1 = make_rdm1
     make_rdm2 = make_rdm2
+    trans_rdm1 = trans_rdm1
 
     def nuc_grad_method(self):
         from pyscf.grad import ucisd

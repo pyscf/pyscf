@@ -53,7 +53,11 @@ def kernel(localizer, mo_coeff=None, callback=None, verbose=None):
         conv_tol_grad = localizer.conv_tol_grad
 
     if mo_coeff is None:
-        u0 = localizer.get_init_guess(localizer.init_guess)
+        if hasattr(localizer, 'mol') and localizer.mol.natm == 0:
+            # For customized Hamiltonian
+            u0 = localizer.get_init_guess('random')
+        else:
+            u0 = localizer.get_init_guess(localizer.init_guess)
     else:
         u0 = localizer.get_init_guess(None)
 

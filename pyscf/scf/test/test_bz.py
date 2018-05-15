@@ -42,8 +42,12 @@ mol.basis = {"H": 'ccpvdz',
              "C": 'ccpvdz',}
 mol.build()
 
+def tearDownModule():
+    global mol
+    del mol
 
-class KnowValues(unittest.TestCase):
+
+class KnownValues(unittest.TestCase):
     def test_nr_rhf(self):
         rhf = scf.RHF(mol)
         rhf.conv_tol = 1e-11

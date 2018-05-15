@@ -152,6 +152,15 @@ def make_vmat(pcm, r_vdw, lebedev_order, lmax, LX, LS):
     return vmat
 
 
+mol = gto.Mole()
+mol.atom = ''' O                  0.00000000    0.00000000   -0.11081188
+               H                 -0.00000000   -0.84695236    0.59109389
+               H                 -0.00000000    0.89830571    0.52404783 '''
+mol.basis = '3-21g'
+mol.verbose = 5
+mol.output = '/dev/null'
+mol.build()
+
 class KnownValues(unittest.TestCase):
     def test_ddcosmo_scf(self):
         mol = gto.M(atom=''' H 0 0 0 ''', charge=1, basis='sto3g', verbose=7,
@@ -218,19 +227,7 @@ class KnownValues(unittest.TestCase):
         ylm = numpy.vstack(sph.real_sph_vec(r, lmax, True))
         self.assertTrue(abs(ylmref - ylm).max() < 1e-14)
 
-    def setUp(self):
-        mol = gto.Mole()
-        mol.atom = ''' O                  0.00000000    0.00000000   -0.11081188
-                       H                 -0.00000000   -0.84695236    0.59109389
-                       H                 -0.00000000    0.89830571    0.52404783 '''
-        mol.basis = '3-21g'
-        mol.verbose = 5
-        mol.output = '/dev/null'
-        mol.build()
-        self.mol = mol
-
     def test_L_x(self):
-        mol = self.mol
         pcm = ddcosmo.DDCOSMO(mol)
         r_vdw = ddcosmo.get_atomic_radii(pcm)
         n = mol.natm * (pcm.lmax+1)**2
@@ -246,7 +243,6 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(abs(Lref.dot(n)-L.dot(n)).max() < 1e-12)
 
     def test_phi(self):
-        mol = self.mol
         pcm = ddcosmo.DDCOSMO(mol)
         r_vdw = ddcosmo.get_atomic_radii(pcm)
         fi = ddcosmo.make_fi(pcm, r_vdw)
@@ -266,7 +262,6 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(abs(phi - phi1).max() < 1e-12)
 
     def test_psi_vmat(self):
-        mol = self.mol
         pcm = ddcosmo.DDCOSMO(mol)
         pcm.lmax = 2
         r_vdw = ddcosmo.get_atomic_radii(pcm)

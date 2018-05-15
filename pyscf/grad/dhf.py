@@ -69,8 +69,7 @@ def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
     log.debug(str(de))
     return de
 
-def grad_nuc(mol, atmlst=None):
-    return rhf_grad.grad_nuc(mol, atmlst)
+grad_nuc = rhf_grad.grad_nuc
 
 def get_hcore(mol):
     n2c = mol.nao_2c()
@@ -99,11 +98,8 @@ def get_ovlp(mol):
     s1e[:,n2c:,n2c:] = t * (.5/c**2)
     return -s1e
 
-def make_rdm1e(mo_energy, mo_coeff, mo_occ):
-    return rhf_grad.make_rdm1e(mo_energy, mo_coeff, mo_occ)
+make_rdm1e = rhf_grad.make_rdm1e
 
-def get_veff(mol, dm, level='SSSS'):
-    return get_coulomb_hf(mol, dm, level)
 def get_coulomb_hf(mol, dm, level='SSSS'):
     '''Dirac-Hartree-Fock Coulomb repulsion'''
     if level.upper() == 'LLLL':
@@ -125,6 +121,7 @@ def get_coulomb_hf(mol, dm, level='SSSS'):
         logger.info(mol, 'Compute Gradients: (LL|LL) + (SS|LL) + (SS|SS)')
         vj, vk = _call_vhf1(mol, dm)
     return -(vj - vk)
+get_veff = get_coulomb_hf
 
 
 class Gradients(rhf_grad.Gradients):
@@ -135,7 +132,9 @@ class Gradients(rhf_grad.Gradients):
             self.level = 'SSSS'
         else:
             #self.level = 'NOSS'
-            self.level = 'LLLL'
+            #self.level = 'LLLL'
+            raise NotImplementedError
+        self._keys = self._keys.union(['level'])
 
     def get_hcore(self, mol=None):
         if mol is None: mol = self.mol
@@ -165,18 +164,6 @@ class Gradients(rhf_grad.Gradients):
     def get_ovlp(self, mol=None):
         if mol is None: mol = self.mol
         return get_ovlp(mol)
-
-    def _grad_rinv(self, mol, ia):
-        n2c = mol.nao_2c()
-        n4c = n2c * 2
-        c = lib.param.LIGHT_SPEED
-        v = numpy.zeros((3,n4c,n4c), numpy.complex)
-        mol.set_rinv_origin(mol.atom_coord(ia))
-        vn = mol.atom_charge(ia) * mol.intor('int1e_iprinv_spinor', comp=3)
-        wn = mol.atom_charge(ia) * mol.intor('int1e_ipsprinvsp_spinor', comp=3)
-        v[:,:n2c,:n2c] = vn
-        v[:,n2c:,n2c:] = wn * (.25/c**2)
-        return -v
 
     def get_veff(self, mol, dm):
         return get_coulomb_hf(mol, dm, level=self.level)
@@ -233,22 +220,30 @@ def _call_vhf1(mol, dm):
 if __name__ == "__main__":
     from pyscf import gto
     from pyscf import scf
+    from pyscf import lib
 
-    h2o = gto.Mole()
-    h2o.verbose = 0
-    h2o.output = None#"out_h2o"
-    h2o.atom = [
-        ["O" , (0. , 0.     , 0.)],
-        [1   , (0. , -0.757 , 0.587)],
-        [1   , (0. , 0.757  , 0.587)] ]
-    h2o.basis = {"H": '6-31g',
-                 "O": '6-31g',}
-    h2o.build()
-    method = scf.dhf.UHF(h2o)
-    print(method.scf())
-    g = Gradients(method)
-    print(g.grad())
-#[[ 0   0               -2.40120097e-02]
-# [ 0   4.27565134e-03   1.20060029e-02]
-# [ 0  -4.27565134e-03   1.20060029e-02]]
+    with lib.light_speed(30):
+        h2o = gto.Mole()
+        h2o.verbose = 0
+        h2o.output = None#"out_h2o"
+        h2o.atom = [
+            ["O" , (0. , 0.     , 0.)],
+            [1   , (0. , -0.757 , 0.587)],
+            [1   , (0. , 0.757  , 0.587)] ]
+        h2o.basis = {"H": '6-31g',
+                     "O": '6-31g',}
+        h2o.build()
+        method = scf.dhf.UHF(h2o).run()
+        g = Gradients(method).kernel()
+        print(g)
 
+        ms = method.as_scanner()
+        h2o.set_geom_([["O" , (0. , 0.     ,-0.001)],
+                       [1   , (0. , -0.757 , 0.587)],
+                       [1   , (0. , 0.757  , 0.587)]], unit='Ang')
+        e1 = ms(h2o)
+        h2o.set_geom_([["O" , (0. , 0.     , 0.001)],
+                       [1   , (0. , -0.757 , 0.587)],
+                       [1   , (0. , 0.757  , 0.587)]], unit='Ang')
+        e2 = ms(h2o)
+        print(g[0,2], (e2-e1)/0.002*lib.param.BOHR)

@@ -36,14 +36,16 @@ from pyscf.mp.mp2 import get_nocc, get_nmo, get_frozen_mask, _mo_without_core
 from pyscf import __config__
 
 BLKMIN = getattr(__config__, 'cc_ccsd_blkmin', 4)
+MEMORYMIN = getattr(__config__, 'cc_ccsd_memorymin', 2000)
 
 
 # t1: ia
 # t2: ijab
-def kernel(mycc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
-           verbose=logger.INFO):
+def kernel(mycc, eris=None, t1=None, t2=None, max_cycle=50, tol=1e-8,
+           tolnormt=1e-6, verbose=None):
     log = logger.new_logger(mycc, verbose)
-
+    if eris is None:
+        eris = mycc.ao2mo(mycc.mo_coeff)
     if t1 is None and t2 is None:
         t1, t2 = mycc.get_init_guess(eris)
     elif t2 is None:
@@ -53,7 +55,9 @@ def kernel(mycc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
     eold = 0
     vec_old = 0
     eccsd = 0
-    if mycc.diis:
+    if isinstance(mycc.diis, lib.diis.DIIS):
+        adiis = mycc.diis
+    elif mycc.diis:
         adiis = lib.diis.DIIS(mycc, mycc.diis_file, incore=mycc.incore_complete)
         adiis.space = mycc.diis_space
     else:
@@ -66,12 +70,12 @@ def kernel(mycc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
                                   mycc.amplitudes_to_vector(t1, t2))
         if mycc.iterative_damping < 1.0:
             alpha = mycc.iterative_damping
-            t1, t2 = (1-alpha)*t1 + alpha*t1new, (1-alpha)*t2 + alpha*t2new
-        else:
-            t1, t2 = t1new, t2new
+            t1new = (1-alpha) * t1 + alpha * t1new
+            t2new *= alpha
+            t2new += (1-alpha) * t2
+        t1, t2 = t1new, t2new
         t1new = t2new = None
-        if mycc.diis:
-            t1, t2 = mycc.diis(t1, t2, istep, normt, eccsd-eold, adiis)
+        t1, t2 = mycc.run_diis(t1, t2, istep, normt, eccsd-eold, adiis)
         eold, eccsd = eccsd, mycc.energy(t1, t2, eris)
         log.info('cycle = %d  E(CCSD) = %.15g  dE = %.9g  norm(t1,t2) = %.6g',
                  istep+1, eccsd, eccsd - eold, normt)
@@ -179,16 +183,16 @@ def update_amps(mycc, t1, t2, eris):
         tau = None
         for q0, q1 in lib.prange(0, nvir, blksize):
             tmp = lib.einsum('jkca,ckib->jaib', t2[:,:,p0:p1,q0:q1], wVooV)
-            t2new[:,:,:,q0:q1] += tmp.transpose(0,2,3,1)
-            t2new[:,:,q0:q1,:] += tmp.transpose(0,2,1,3) * .5
+            t2new[:,:,q0:q1] += tmp.transpose(2,0,1,3)
+            t2new[:,:,q0:q1] += tmp.transpose(0,2,1,3) * .5
             tmp = None
 
         wVOov += eris_voov
         eris_VOov = eris_voov - eris_voov.transpose(0,2,1,3)*.5
         eris_voov = None
         for q0, q1 in lib.prange(0, nvir, blksize):
-            tau  = t2[:,:,:,q0:q1].transpose(0,2,1,3) * 2
-            tau -= t2[:,:,q0:q1,:].transpose(0,3,1,2)
+            tau  = t2[:,:,q0:q1].transpose(1,3,0,2) * 2
+            tau -= t2[:,:,q0:q1].transpose(0,3,1,2)
             tau -= numpy.einsum('ia,jb->ibja', t1[:,q0:q1]*2, t1)
             wVOov[:,:,:,q0:q1] += .5 * lib.einsum('aikc,kcjb->aijb', eris_VOov, tau)
             tau = None
@@ -300,15 +304,16 @@ def _add_vvvv(mycc, t1, t2, eris, out=None, with_ovvv=None, t2sym=None):
     '''t2sym: whether t2 has the symmetry t2[ijab]==t2[jiba] or
     t2[ijab]==-t2[jiab] or t2[ijab]==-t2[jiba]
     '''
-    if t2sym is None:  # Guess the symmetry of t2 amplitudes
-        if t2.shape[0] != t2.shape[1]:
-            t2sym = ''
-        elif abs(t2-t2.transpose(1,0,3,2)).max() < 1e-12:
-            t2sym = 'jiba'
-        elif abs(t2+t2.transpose(1,0,2,3)).max() < 1e-12:
-            t2sym = '-jiab'
-        elif abs(t2+t2.transpose(1,0,3,2)).max() < 1e-12:
-            t2sym = '-jiba'
+    #TODO: Guess the symmetry of t2 amplitudes
+    #if t2sym is None:
+    #    if t2.shape[0] != t2.shape[1]:
+    #        t2sym = ''
+    #    elif abs(t2-t2.transpose(1,0,3,2)).max() < 1e-12:
+    #        t2sym = 'jiba'
+    #    elif abs(t2+t2.transpose(1,0,2,3)).max() < 1e-12:
+    #        t2sym = '-jiab'
+    #    elif abs(t2+t2.transpose(1,0,3,2)).max() < 1e-12:
+    #        t2sym = '-jiba'
 
     if t2sym in ('jiba', '-jiba', '-jiab'):
         Ht2tril = _add_vvvv_tril(mycc, t1, t2, eris, with_ovvv=with_ovvv)
@@ -341,9 +346,8 @@ def _add_vvvv_tril(mycc, t1, t2, eris, out=None, with_ovvv=None):
     taux = tau
 
     if mycc.direct:   # AO-direct CCSD
-        if hasattr(eris, 'mo_coeff'):
-            mo = eris.mo_coeff
-        else:
+        mo = getattr(eris, 'mo_coeff', None)
+        if mo is None:  # If eris does not have the attribute mo_coeff
             mo = _mo_without_core(mycc, mycc.mo_coeff)
         nao, nmo = mo.shape
         aos = numpy.asarray(mo[:,nocc:].T, order='F')
@@ -379,7 +383,6 @@ def _add_vvvv_full(mycc, t1, t2, eris, out=None, with_ovvv=False):
     '''Ht2 = numpy.einsum('ijcd,acdb->ijab', t2, vvvv)
     without using symmetry t2[ijab] = t2[jiba] in t2 or Ht2
     '''
-    assert(not with_ovvv)
     time0 = time.clock(), time.time()
     log = logger.Logger(mycc.stdout, mycc.verbose)
     if t1 is None:
@@ -390,9 +393,10 @@ def _add_vvvv_full(mycc, t1, t2, eris, out=None, with_ovvv=False):
     max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
 
     if mycc.direct:   # AO-direct CCSD
-        if hasattr(eris, 'mo_coeff'):
-            mo = eris.mo_coeff
-        else:
+        if with_ovvv:
+            raise NotImplementedError
+        mo = getattr(eris, 'mo_coeff', None)
+        if mo is None:  # If eris does not have the attribute mo_coeff
             mo = _mo_without_core(mycc, mycc.mo_coeff)
         nocc, nvir = t2.shape[1:3]
         nao, nmo = mo.shape
@@ -405,12 +409,14 @@ def _add_vvvv_full(mycc, t1, t2, eris, out=None, with_ovvv=False):
         buf = buf.reshape(nocc**2,nao,nao)
         Ht2 = _ao2mo.nr_e2(buf, mo.conj(), (nocc,nmo,nocc,nmo), 's1', 's1')
     else:
+        assert(not with_ovvv)
         Ht2 = eris._contract_vvvv_t2(mycc, tau, mycc.direct, out, max_memory, log)
 
     return Ht2.reshape(t2.shape)
 
 
-def _contract_vvvv_t2(mycc, mol, vvvv, t2, out=None, max_memory=2000, verbose=None):
+def _contract_vvvv_t2(mycc, mol, vvvv, t2, out=None, max_memory=MEMORYMIN,
+                      verbose=None):
     '''Ht2 = numpy.einsum('ijcd,acbd->ijab', t2, vvvv)
 
     Args:
@@ -424,7 +430,8 @@ def _contract_vvvv_t2(mycc, mol, vvvv, t2, out=None, max_memory=2000, verbose=No
         return _contract_s1vvvv_t2(mycc, mol, vvvv, t2, out, max_memory, verbose)
 
 
-def _contract_s4vvvv_t2(mycc, mol, vvvv, t2, out=None, max_memory=2000, verbose=None):
+def _contract_s4vvvv_t2(mycc, mol, vvvv, t2, out=None, max_memory=MEMORYMIN,
+                        verbose=None):
     '''Ht2 = numpy.einsum('ijcd,acbd->ijab', t2, vvvv)
     where vvvv has to be real and has the 4-fold permutation symmetry
 
@@ -444,11 +451,8 @@ def _contract_s4vvvv_t2(mycc, mol, vvvv, t2, out=None, max_memory=2000, verbose=
     x2 = t2.reshape(-1,nvira,nvirb)
     nocc2 = x2.shape[0]
     nvir2 = nvira * nvirb
-    if out is None:
-        Ht2 = numpy.ndarray(x2.shape, dtype=x2.dtype, buffer=out)
-        Ht2[:] = 0
-    else:
-        Ht2 = numpy.zeros_like(x2)
+    Ht2 = numpy.ndarray(x2.shape, dtype=x2.dtype, buffer=out)
+    Ht2[:] = 0
 
     def contract_blk_(eri, i0, i1, j0, j1):
         ic = i1 - i0
@@ -540,7 +544,8 @@ def _contract_s4vvvv_t2(mycc, mol, vvvv, t2, out=None, max_memory=2000, verbose=
                 time0 = log.timer_debug1('vvvv [%d:%d]'%(p0,p1), *time0)
     return Ht2.reshape(t2.shape)
 
-def _contract_s1vvvv_t2(mycc, mol, vvvv, t2, out=None, max_memory=2000, verbose=None):
+def _contract_s1vvvv_t2(mycc, mol, vvvv, t2, out=None, max_memory=MEMORYMIN,
+                        verbose=None):
     '''Ht2 = numpy.einsum('ijcd,acdb->ijab', t2, vvvv)
     where vvvv can be real or complex and no permutation symmetry is available in vvvv.
 
@@ -548,9 +553,9 @@ def _contract_s1vvvv_t2(mycc, mol, vvvv, t2, out=None, max_memory=2000, verbose=
         vvvv : None or integral object
             if vvvv is None, contract t2 to AO-integrals using AO-direct algorithm
     '''
-    if vvvv is None:   # AO-direct CCSD
-        assert(t2.dtype == numpy.double)
-        return _contract_s4vvvv_t2(mycc, mol, vvvv, t2, False, out, max_memory, verbose)
+    # vvvv == None means AO-direct CCSD. It should redirect to
+    # _contract_s4vvvv_t2(mycc, mol, vvvv, t2, out, max_memory, verbose)
+    assert(vvvv is not None)
 
     time0 = time.clock(), time.time()
     log = logger.new_logger(mol, verbose)
@@ -654,6 +659,8 @@ def energy(mycc, t1=None, t2=None, eris=None):
         tau = t2[:,:,p0:p1] + numpy.einsum('ia,jb->ijab', t1[:,p0:p1], t1)
         e += 2 * numpy.einsum('ijab,iabj', tau, eris_ovvo)
         e -=     numpy.einsum('jiab,iabj', tau, eris_ovvo)
+    if abs(e.imag) > 1e-4:
+        logger.warn(mycc, 'Non-zero imaginary part found in CCSD energy %s', e)
     return e
 
 
@@ -679,12 +686,21 @@ def as_scanner(cc):
         >>> e_tot = cc_scanner(gto.M(atom='H 0 0 0; F 0 0 1.1'))
         >>> e_tot = cc_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
     '''
+    if isinstance(cc, lib.SinglePointScanner):
+        return cc
+
     logger.info(cc, 'Set %s as a scanner', cc.__class__)
+
     class CCSD_Scanner(cc.__class__, lib.SinglePointScanner):
         def __init__(self, cc):
             self.__dict__.update(cc.__dict__)
             self._scf = cc._scf.as_scanner()
-        def __call__(self, mol, **kwargs):
+        def __call__(self, mol_or_geom, **kwargs):
+            if isinstance(mol_or_geom, gto.Mole):
+                mol = mol_or_geom
+            else:
+                mol = self.mol.set_geom_(mol_or_geom, inplace=False)
+
             mf_scanner = self._scf
             mf_scanner(mol)
             self.mol = mol
@@ -752,6 +768,7 @@ class CCSD(lib.StreamObject):
     iterative_damping = getattr(__config__, 'cc_ccsd_CCSD_iterative_damping', 1.0)
     conv_tol_normt = getattr(__config__, 'cc_ccsd_CCSD_conv_tol_normt', 1e-5)
 
+    diis = getattr(__config__, 'cc_ccsd_CCSD_diis', True)
     diis_space = getattr(__config__, 'cc_ccsd_CCSD_diis_space', 6)
     diis_file = None
     diis_start_cycle = getattr(__config__, 'cc_ccsd_CCSD_diis_start_cycle', 0)
@@ -785,6 +802,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         self.max_memory = mf.max_memory
 
         self.frozen = frozen
+        self.incore_complete = self.incore_complete or self.mol.incore_anyway
 
 ##################################################
 # don't modify the following attributes, they are not input options
@@ -803,7 +821,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         self.chkfile = mf.chkfile
 
         keys = set(('max_cycle', 'conv_tol', 'iterative_damping',
-                    'conv_tol_normt', 'diis_space', 'diis_file',
+                    'conv_tol_normt', 'diis', 'diis_space', 'diis_file',
                     'diis_start_cycle', 'diis_start_energy_diff', 'direct',
                     'async_io', 'incore_complete', 'cc2'))
         self._keys = set(self.__dict__.keys()).union(keys)
@@ -852,6 +870,12 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         log.info('diis_start_energy_diff = %g', self.diis_start_energy_diff)
         log.info('max_memory %d MB (current use %d MB)',
                  self.max_memory, lib.current_memory()[0])
+        if (log.verbose >= logger.DEBUG1 and
+            self.__class__ == CCSD):
+            nocc = self.nocc
+            nvir = self.nmo - self.nocc
+            flops = _fp(nocc, nvir)
+            log.debug1('total FLOPs %s', flops)
         return self
 
     def get_init_guess(self, eris=None):
@@ -892,22 +916,22 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
             self.check_sanity()
         self.dump_flags()
 
-        if eris is None:
-            eris = self.ao2mo(self.mo_coeff)
         self.converged, self.e_corr, self.t1, self.t2 = \
                 kernel(self, eris, t1, t2, max_cycle=self.max_cycle,
                        tol=self.conv_tol, tolnormt=self.conv_tol_normt,
                        verbose=self.verbose)
+        self._finalize()
+        return self.e_corr, self.t1, self.t2
+
+    def _finalize(self):
+        '''Hook for dumping results and clearing up the object.'''
         if self.converged:
             logger.info(self, '%s converged', self.__class__.__name__)
         else:
             logger.note(self, '%s not converged', self.__class__.__name__)
-        if self._scf.e_tot == 0:
-            logger.note(self, 'E_corr = %.16g', self.e_corr)
-        else:
-            logger.note(self, 'E(%s) = %.16g  E_corr = %.16g',
-                        self.__class__.__name__, self.e_tot, self.e_corr)
-        return self.e_corr, self.t1, self.t2
+        logger.note(self, 'E(%s) = %.16g  E_corr = %.16g',
+                    self.__class__.__name__, self.e_tot, self.e_corr)
+        return self
 
     as_scanner = as_scanner
 
@@ -1022,7 +1046,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         mem_incore = (max(nao_pair**2, nmo**4) + nmo_pair**2) * 8/1e6
         mem_now = lib.current_memory()[0]
         if (self._scf._eri is not None and
-            (mem_incore+mem_now < self.max_memory) or self.mol.incore_anyway):
+            (mem_incore+mem_now < self.max_memory or self.incore_complete)):
             return _make_eris_incore(self, mo_coeff)
 
         elif hasattr(self._scf, 'with_df'):
@@ -1035,10 +1059,9 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         else:
             return _make_eris_outcore(self, mo_coeff)
 
-    def diis(self, t1, t2, istep, normt, de, adiis):
-        return self.diis_(t1, t2, istep, normt, de, adiis)
-    def diis_(self, t1, t2, istep, normt, de, adiis):
-        if (istep > self.diis_start_cycle and
+    def run_diis(self, t1, t2, istep, normt, de, adiis):
+        if (adiis and
+            istep >= self.diis_start_cycle and
             abs(de) < self.diis_start_energy_diff):
             vec = self.amplitudes_to_vector(t1, t2)
             t1, t2 = self.vector_to_amplitudes(adiis.update(vec))
@@ -1056,12 +1079,10 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
     def dump_chk(self, t1_t2=None, frozen=None, mo_coeff=None, mo_occ=None):
         if not self.chkfile:
             return self
-
-        if t1_t2 is None:
-            t1, t2 = self.t1, self.t2
-        else:
-            t1, t2 = t1_t2
+        if t1_t2 is None: t1_t2 = self.t1, self.t2
         if frozen is None: frozen = self.frozen
+
+        t1, t2 = t1_t2
         cc_chk = {'e_corr': self.e_corr,
                   't1': t1,
                   't2': t2,
@@ -1074,14 +1095,22 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
 
         lib.chkfile.save(self.chkfile, 'ccsd', cc_chk)
 
-    def density_fit(self):
-        raise NotImplementedError
+    def density_fit(self, auxbasis=None, with_df=None):
+        from pyscf.cc import dfccsd
+        mycc = dfccsd.RCCSD(self._scf, self.frozen, self.mo_coeff, self.mo_occ)
+        if with_df is not None:
+            mycc.with_df = with_df
+        if mycc.with_df.auxbasis != auxbasis:
+            import copy
+            mycc.with_df = copy.copy(mycc.with_df)
+            mycc.with_df.auxbasis = auxbasis
+        return mycc
 
     def nuc_grad_method(self):
         from pyscf.grad import ccsd
         return ccsd.Gradients(self)
 
-CC = CCSD
+CC = RCCSD = CCSD
 
 
 class _ChemistsERIs:
@@ -1112,13 +1141,12 @@ class _ChemistsERIs:
         self.mol = mycc.mol
 
         mo_e = self.fock.diagonal()
-        gap = abs(mo_e[:self.nocc,None] - mo_e[None,self.nocc:]).min()
-        if gap.size > 0:
-            gap = gap.min()
-        else:
-            gap = 1e9
-        if gap < 1e-5:
-            logger.warn(mycc, 'HOMO-LUMO gap %s too small for CCSD', gap)
+        try:
+            gap = abs(mo_e[:self.nocc,None] - mo_e[None,self.nocc:]).min()
+            if gap < 1e-5:
+                logger.warn(mycc, 'HOMO-LUMO gap %s too small for CCSD', gap)
+        except ValueError:  # gap.size == 0
+            pass
         return self
 
     def get_ovvv(self, *slices):
@@ -1129,8 +1157,8 @@ class _ChemistsERIs:
         nvir1 = ovvv.shape[2]
         return ovvv.reshape(nocc,nvir,nvir1,nvir1)
 
-    def _contract_vvvv_t2(self, mycc, t2, vvvv_or_direct=False, out=None, max_memory=2000,
-                          verbose=None):
+    def _contract_vvvv_t2(self, mycc, t2, vvvv_or_direct=False, out=None,
+                          max_memory=MEMORYMIN, verbose=None):
         if isinstance(vvvv_or_direct, numpy.ndarray):
             vvvv = vvvv_or_direct
         elif vvvv_or_direct:  # AO-direct contraction
@@ -1205,7 +1233,7 @@ def _make_eris_outcore(mycc, mo_coeff=None):
     eris._common_init_(mycc, mo_coeff)
 
     mol = mycc.mol
-    mo_coeff = eris.mo_coeff
+    mo_coeff = numpy.asarray(eris.mo_coeff, order='F')
     nocc = eris.nocc
     nao, nmo = mo_coeff.shape
     nvir = nmo - nocc
@@ -1236,23 +1264,22 @@ def _make_eris_outcore(mycc, mo_coeff=None):
 
     cput1 = time.clock(), time.time()
     if not mycc.direct:
-        max_memory = max(2000, mycc.max_memory-lib.current_memory()[0])
+        max_memory = max(MEMORYMIN, mycc.max_memory-lib.current_memory()[0])
         eris.feri2 = lib.H5TmpFile()
         ao2mo.full(mol, orbv, eris.feri2, max_memory=max_memory, verbose=log)
         eris.vvvv = eris.feri2['eri_mo']
         cput1 = log.timer_debug1('transforming vvvv', *cput1)
 
     fswap = lib.H5TmpFile()
-    mo_coeff = numpy.asarray(mo_coeff, order='F')
-    max_memory = max(2000, mycc.max_memory-lib.current_memory()[0])
+    max_memory = max(MEMORYMIN, mycc.max_memory-lib.current_memory()[0])
     int2e = mol._add_suffix('int2e')
-    ao2mo.outcore.half_e1(mol, (mo_coeff,mo_coeff[:,:nocc]), fswap, int2e,
+    ao2mo.outcore.half_e1(mol, (mo_coeff,orbo), fswap, int2e,
                           's4', 1, max_memory, verbose=log)
 
     ao_loc = mol.ao_loc_nr()
     nao_pair = nao * (nao+1) // 2
     blksize = int(min(8e9,max_memory*.5e6)/8/(nao_pair+nmo**2)/nocc)
-    blksize = max(1, min(nmo*nocc, blksize))
+    blksize = min(nmo, max(BLKMIN, blksize))
     fload = ao2mo.outcore._load_from_h5g
     def prefetch(p0, p1, rowmax, buf):
         p0, p1 = p1, min(rowmax, p1+blksize)

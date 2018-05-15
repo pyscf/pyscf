@@ -137,6 +137,9 @@ def search_ecp(basisfile, symb):
     symb = _std_symbol(symb)
     with open(basisfile, 'r') as fin:
         fdata = re.split(ECP_DELIMITER, fin.read())
+    if len(fdata) <= 1:
+        return []
+
     fdata = fdata[1].splitlines()
     for i, dat in enumerate(fdata):
         dat0 = dat.split(None, 1)
@@ -216,7 +219,7 @@ def _parse(raw_basis, optimize=True):
             try:
                 line = [float(x) for x in dat.replace('D','e').split()]
             except BaseException as e:
-                raise RuntimeError('\n' + e.message +
+                raise RuntimeError('\n' + str(e) +
                                    '\nor the required basis file not existed.')
             if key == 'SP':
                 basis_add[-2].append([line[0], line[1]])
@@ -230,34 +233,62 @@ def _parse(raw_basis, optimize=True):
     if optimize:
         basis_sorted = optimize_contraction(basis_sorted)
 
+    basis_sorted = remove_zero(basis_sorted)
     return basis_sorted
 
 def optimize_contraction(basis):
     '''
     Optimize contraction: segment contraction -> general contraction
     '''
-    bas_l = [[] for l in range(MAXL)]
+    basdic = {}
     for b in basis:
-        l = b[0]
-        ec = numpy.array(b[1:]).T
+        if isinstance(b[1], int):  # kappa = b[1]
+            key = tuple(b[:2])
+            ec = numpy.array(b[2:]).T
+        else:
+            key = tuple(b[:1])
+            ec = numpy.array(b[1:]).T
         es = ec[0]
         cs = [c for c in ec[1:]]
-        if bas_l[l]:
-            for e_cs in bas_l[l]:
+
+        if key not in basdic:
+            basdic[key] = []
+
+        if basdic[key]:
+            for e_cs in basdic[key]:
                 if numpy.array_equal(e_cs[0], es):
                     e_cs.extend(cs)
                     break
             else:
-                bas_l[l].append([es] + cs)
+                basdic[key].append([es] + cs)
         else:
-            bas_l[l].append([es] + cs)
+            basdic[key].append([es] + cs)
 
     basis = []
-    for l, b in enumerate(bas_l):
-        for e_cs in b:
-            b_l = [l] + numpy.array(e_cs).T.tolist()
-            basis.append(b_l)
+    for key in sorted(basdic.keys()):
+        l_kappa = list(key)
+        for e_cs in basdic[key]:
+            b = l_kappa + numpy.array(e_cs).T.tolist()
+            basis.append(b)
     return basis
+
+def remove_zero(basis):
+    '''
+    Remove the exponets if their contraction coefficients are all zeros.
+    '''
+    new_basis = []
+    for b in basis:
+        if isinstance(b[1], int):  # kappa = b[1]
+            key = list(b[:2])
+            ec = b[2:]
+        else:
+            key = list(b[:1])
+            ec = b[1:]
+
+        new_ec = [e_c for e_c in ec if any(c!=0 for c in e_c[1:])]
+        if new_ec:
+            new_basis.append(key + new_ec)
+    return new_basis
 
 def _parse_ecp(raw_ecp):
     ecp_add = []
@@ -281,7 +312,10 @@ def _parse_ecp(raw_ecp):
             line = dat.replace('D','e').split()
             l = int(line[0])
             by_ang[l].append([float(x) for x in line[1:]])
-    if nelec is not None:
+
+    if nelec is None:
+        return []
+    else:
         bsort = []
         for l in range(-1, MAXL):
             bsort.extend([b for b in ecp_add if b[0] == l])

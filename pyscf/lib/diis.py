@@ -25,9 +25,10 @@ import tempfile
 import numpy
 import scipy.linalg
 import h5py
-from . import parameters
-from . import logger
-from . import misc
+from pyscf.lib import parameters
+from pyscf.lib import logger
+from pyscf.lib import misc
+from pyscf.lib import numpy_helper
 from pyscf import __config__
 
 INCORE_SIZE = getattr(__config__, 'lib_diis_incore_size', 10000000)  # 80 MB
@@ -99,7 +100,8 @@ class DIIS(object):
     E_5 = -1.100153764878
     E_6 = -1.100153764878
     '''
-    def __init__(self, dev=None, filename=None, incore=False):
+    def __init__(self, dev=None, filename=None,
+                 incore=getattr(__config__, 'lib_diis_DIIS_incore', False)):
         if dev is not None:
             self.verbose = dev.verbose
             self.stdout = dev.stdout
@@ -122,14 +124,15 @@ class DIIS(object):
         self._err_vec_touched = False
 
     def _store(self, key, value):
-        if value.size < INCORE_SIZE or self.incore:
+        incore = value.size < INCORE_SIZE or self.incore
+        if incore:
             self._buffer[key] = value
 
         # save the error vector if filename is given, this file can be used to
         # restore the DIIS state
-        if (value.size >= INCORE_SIZE and not self.incore) or isinstance(self.filename, str):
+        if (not incore) or isinstance(self.filename, str):
             if self._diisfile is None:
-                self._diisfile = misc.H5TmpFile(self.filename)
+                self._diisfile = misc.H5TmpFile(self.filename, 'w')
             if key in self._diisfile:
                 self._diisfile[key][:] = value
             else:
@@ -171,14 +174,14 @@ class DIIS(object):
             xkey = 'x%d'%self._head
             self._store(xkey, x)
             if x.size < INCORE_SIZE or self.incore:
-                self._buffer[ekey] = x - self._xprev
-                if isinstance(self.filename, str):
-                    self._store(ekey, self._buffer[ekey])
-            else:
+                self._store(ekey, x - self._xprev)
+            else:  # not call _store to reduce memory footprint
                 if ekey not in self._diisfile:
                     self._diisfile.create_dataset(ekey, (x.size,), x.dtype)
-                for p0,p1 in prange(0, x.size, BLOCK_SIZE):
-                    self._diisfile[ekey][p0:p1] = x[p0:p1] - self._xprev[p0:p1]
+                edat = self._diisfile[ekey]
+                for p0, p1 in misc.prange(0, x.size, BLOCK_SIZE):
+                    edat[p0:p1] = x[p0:p1] - self._xprev[p0:p1]
+                self._diisfile.flush()
             self._head += 1
 
     def get_err_vec(self, idx):
@@ -221,42 +224,97 @@ class DIIS(object):
         for i in range(nd):
             tmp = 0
             dti = self.get_err_vec(i)
-            for p0,p1 in prange(0, dt.size, BLOCK_SIZE):
+            for p0, p1 in misc.prange(0, dt.size, BLOCK_SIZE):
                 tmp += numpy.dot(dt[p0:p1].conj(), dti[p0:p1])
             self._H[self._head,i+1] = tmp
             self._H[i+1,self._head] = tmp.conjugate()
         dt = None
-        h = self._H[:nd+1,:nd+1]
-        g = numpy.zeros(nd+1, x.dtype)
-        g[0] = 1
-
-        #try:
-        #    c = numpy.linalg.solve(h, g)
-        #except numpy.linalg.linalg.LinAlgError:
-        #    logger.warn(self, ' diis singular')
-        if 1:
-            w, v = scipy.linalg.eigh(h)
-            if numpy.any(abs(w)<1e-14):
-                logger.debug(self, 'Singularity found in DIIS error vector space.')
-                idx = abs(w)>1e-14
-                c = numpy.dot(v[:,idx]*(1./w[idx]), numpy.dot(v[:,idx].T.conj(), g))
-            else:
-                c = numpy.linalg.solve(h, g)
-        logger.debug1(self, 'diis-c %s', c)
 
         if self._xprev is None:
-            xnew = numpy.zeros_like(x.ravel())
+            xnew = self.extrapolate(nd)
         else:
             self._xprev = None # release memory first
-            self._xprev = xnew = numpy.zeros_like(x.ravel())
-
-        for i, ci in enumerate(c[1:]):
-            xi = self.get_vec(i)
-            for p0,p1 in prange(0, x.size, BLOCK_SIZE):
-                xnew[p0:p1] += xi[p0:p1] * ci
+            self._xprev = xnew = self.extrapolate(nd)
         return xnew.reshape(x.shape)
 
-def prange(start, end, step):
-    for i in range(start, end, step):
-        yield i, min(i+step, end)
+    def extrapolate(self, nd=None):
+        if nd is None:
+            nd = self.get_num_vec()
+
+        h = self._H[:nd+1,:nd+1]
+        g = numpy.zeros(nd+1, h.dtype)
+        g[0] = 1
+
+        w, v = scipy.linalg.eigh(h)
+        if numpy.any(abs(w)<1e-14):
+            logger.debug(self, 'Singularity found in DIIS error vector space.')
+            idx = abs(w)>1e-14
+            c = numpy.dot(v[:,idx]*(1./w[idx]), numpy.dot(v[:,idx].T.conj(), g))
+        else:
+            try:
+                c = numpy.linalg.solve(h, g)
+            except numpy.linalg.linalg.LinAlgError as e:
+                logger.warn(self, ' diis singular, eigh(h) %s', w)
+                raise e
+        logger.debug1(self, 'diis-c %s', c)
+
+        xnew = None
+        for i, ci in enumerate(c[1:]):
+            xi = self.get_vec(i)
+            if xnew is None:
+                xnew = numpy.zeros(xi.size, c.dtype)
+            for p0, p1 in misc.prange(0, xi.size, BLOCK_SIZE):
+                xnew[p0:p1] += xi[p0:p1] * ci
+        return xnew
+
+    def restore(self, filename, inplace=True):
+        '''Read diis contents from a diis file and replace the attributes of
+        current diis object if needed, then construct the vector.
+        '''
+        fdiis = misc.H5TmpFile(filename)
+        diis_keys = fdiis.keys()
+        x_keys = [k for k in diis_keys if k[0] == 'x']
+        e_keys = [k for k in diis_keys if k[0] == 'e']
+        # errvec may be incomplete if program is terminated when generating errvec.
+        # The last vector or errvec should be excluded.
+        nd = min(len(x_keys), len(e_keys))
+
+        if inplace:
+            self.filename = filename
+            self._diisfile = fdiis
+            if fdiis[x_keys[0]].size < INCORE_SIZE or self.incore:
+                for key in diis_keys:
+                    self._buffer[key] = numpy.asarray(fdiis[key])
+        else:
+            for key in diis_keys:
+                self._store(key, fdiis[key].value)
+
+        self._bookkeep = list(range(min(self.space, nd)))
+        self._head = nd
+        vecsize = 0
+
+        e_mat = []
+        for i in range(nd):
+            dti = numpy.asarray(self.get_err_vec(i))
+            vecsize = dti.size
+            for j in range(i+1):
+                dtj = self.get_err_vec(j)
+                assert(dtj.size == vecsize)
+                tmp = 0
+                for p0, p1 in misc.prange(0, vecsize, BLOCK_SIZE):
+                    tmp += numpy.dot(dti[p0:p1].conj(), dtj[p0:p1])
+                e_mat.append(tmp)
+            dti = dtj = None
+        e_mat = numpy_helper.unpack_tril(e_mat)
+
+        space = max(nd, self.space)
+        self._H = numpy.zeros((space+1,space+1), e_mat.dtype)
+        self._H[0,1:] = self._H[1:,0] = 1
+        self._H[1:nd+1,1:nd+1] = e_mat
+        return self
+
+
+def restore(filename):
+    '''Restore/construct diis object based on a diis file'''
+    return DIIS().restore(filename)
 

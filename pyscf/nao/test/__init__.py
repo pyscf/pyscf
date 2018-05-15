@@ -23,7 +23,7 @@ import shutil
 from importlib import import_module
 from glob import glob
 
-from pyscf.tools import devnull
+from os import devnull
 
 #
 #
@@ -124,9 +124,9 @@ def test(verbosity=1, testdir=None, stream=sys.stdout, files=None, siesta_exe='s
         for a, b in versions:
             print('{0:16}{1}'.format(a, b))
     
-    sys.stdout = devnull
+    sys.stdout = open(devnull, 'w')
     if verbosity == 0:
-        stream = devnull
+        stream = open(devnull, 'w')
     ttr = unittest.TextTestRunner(verbosity=verbosity, stream=stream)
 
     origcwd = os.getcwd()

@@ -65,6 +65,8 @@ def _geom_to_atom(mol, geom, include_ghost):
     return mol_atom
 
 def to_berny_log(pyscf_log):
+    '''Adapter to allow pyberny to use pyscf.logger
+    '''
     class BernyLogger(Logger):
         def __call__(self, msg, level=0):
             if level >= -self.verbosity:
@@ -88,6 +90,37 @@ def as_berny_solver(method, assert_convergence=ASSERT_CONV,
             raise RuntimeError('Nuclear gradients of %s not converged' % method)
 
         geom = yield energy, gradients
+
+def as_pyscf_method(mol, scan_function):
+    '''Creat an wrapper for the given scan_function, to make it work as a
+    pyscf gradients scanner. The wrapper can be passed to :func:`optimize`.
+
+    Args:
+        scan_function : [mol] => (e_tot, grad)
+
+    Examples::
+    >>> mol = gto.M(atom='H; H 1 1.2', basis='ccpvdz')
+    >>> scan_fn = scf.RHF(mol).nuc_grad_method().as_scanner()
+    >>> m = as_pyscf_method(mol, scan_fn)
+    >>> berny_solver.kernel(m)
+    '''
+    class OmniGrad(lib.GradScanner):
+        def __init__(self):
+            self.converged = True
+        def __call__(self, mol):
+            self.e_tot, grad = scan_function(mol)
+            return self.e_tot, grad
+    class Grad(object):
+        def as_scanner(self):
+            return OmniGrad()
+    class OmniMethod(object):
+        def __init__(self, mol):
+            self.mol = mol
+            self.verbose = mol.verbose
+            self.stdout = mol.stdout
+        def nuc_grad_method(self):
+            return Grad()
+    return OmniMethod(mol)
 
 
 def optimize(method, assert_convergence=ASSERT_CONV,
@@ -141,7 +174,7 @@ H       -0.0227 1.1812  -0.8852
     print(scf.RHF(mol1).kernel() - -153.222680852335)
 
     mf = dft.RKS(mol)
-    mf.xc = 'pbe'
+    mf.xc = 'pbe,'
     mf.conv_tol = 1e-7
     mol1 = optimize(mf)
 
@@ -150,4 +183,3 @@ H       -0.0227 1.1812  -0.8852
 
     mycc = cc.CCSD(scf.RHF(mol))
     mol1 = optimize(mycc)
-

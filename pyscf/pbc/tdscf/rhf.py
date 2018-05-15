@@ -38,6 +38,8 @@ class TDA(rhf.TDA):
     conv_tol = getattr(__config__, 'pbc_tdscf_rhf_TDA_conv_tol', 1e-6)
 
     def __init__(self, mf):
+        from pyscf.pbc import scf
+        assert(isinstance(mf, scf.khf.KSCF))
         self.cell = mf.cell
         rhf.TDA.__init__(self, mf)
 
@@ -190,6 +192,10 @@ class TDHF(TDA):
     def kernel(self, x0=None):
         '''TDHF diagonalization with non-Hermitian eigenvalue solver
         '''
+        logger.warn(self, 'PBC-TDDFT is an experimental feature. '
+                    'It is numerically sensitive to the accuracy of integrals '
+                    '(relating to cell.precision).')
+
         self.check_sanity()
         self.dump_flags()
 
@@ -230,17 +236,16 @@ def _get_eai(mo_energy, mo_occ):
     for k, occ in enumerate(mo_occ):
         occidx = occ >  0
         viridx = occ == 0
-        ai = lib.direct_sum('a-i->ai', mo_energy[k,viridx], mo_energy[k,occidx])
+        ai = lib.direct_sum('a-i->ai', mo_energy[k][viridx], mo_energy[k][occidx])
         eai.append(ai)
     return eai
 
 def _unpack(vo, mo_occ):
-    nmo = mo_occ.shape[-1]
-    nocc = numpy.sum(mo_occ > 0, axis=1)
     z = []
     ip = 0
-    for k, no in enumerate(nocc):
-        nv = nmo - no
+    for k, occ in enumerate(mo_occ):
+        no = numpy.count_nonzero(occ > 0)
+        nv = occ.size - no
         z.append(vo[ip:ip+nv*no].reshape(nv,no))
         ip += nv * no
     return z

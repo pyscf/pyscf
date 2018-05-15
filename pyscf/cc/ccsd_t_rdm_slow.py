@@ -167,5 +167,5 @@ if __name__ == '__main__':
     h1 = reduce(numpy.dot, (mf.mo_coeff.T, mf.get_hcore(), mf.mo_coeff))
     e3 =(numpy.einsum('ij,ji->', h1, dm1)
        + numpy.einsum('ijkl,ijkl->', eri_mo, dm2)*.5 + mf.mol.energy_nuc())
-    print e3ref, e3-(mf.e_tot+ecc)
+    print(e3ref, e3-(mf.e_tot+ecc))
 

@@ -330,6 +330,11 @@ def conc_cell(cell1, cell2):
         cell3._ecp = dict(cell2._ecp)
         cell3._ecp.update(cell1._ecp)
 
+    if not cell1._built:
+        logger.warn(cell1, 'Warning: intor envs of %s not initialized.', cell1)
+    if not cell2._built:
+        logger.warn(cell2, 'Warning: intor envs of %s not initialized.', cell2)
+    cell3._built = cell1._built or cell2._built
     return cell3
 
 def intor_cross(intor, cell1, cell2, comp=None, hermi=0, kpts=None, kpt=None,
@@ -677,7 +682,7 @@ def get_ewald_params(cell, precision=INTEGRAL_PRECISION, mesh=None):
         if mesh is None:
             mesh = cell.mesh
         mesh = _cut_mesh_for_ewald(cell, mesh)
-        Gmax = min(np.asarray(mesh)/2 * lib.norm(cell.reciprocal_vectors(), axis=1))
+        Gmax = min(np.asarray(mesh)//2 * lib.norm(cell.reciprocal_vectors(), axis=1))
         log_precision = np.log(precision/(4*np.pi*Gmax**2))
         ew_eta = np.sqrt(-Gmax**2/(4*log_precision))
         ew_cut = _estimate_rcut(ew_eta**2, 0, 1., precision)
@@ -1340,6 +1345,13 @@ class Cell(mole.Mole):
         self.mesh = [2*n+1 for n in x]
 
     @property
+    def drop_exponent(self):
+        return self.exp_to_discard
+    @drop_exponent.setter
+    def drop_exponent(self, x):
+        self.exp_to_discard = x
+
+    @property
     def nimgs(self):
         return self.get_bounding_sphere(self.rcut)
     @nimgs.setter
@@ -1438,7 +1450,7 @@ class Cell(mole.Mole):
         '''
         return 1./(2*np.pi)*np.dot(abs_kpts, self.lattice_vectors().T)
 
-    make_kpts = make_kpts
+    make_kpts = get_kpts = make_kpts
 
     def copy(self):
         return copy(self)
@@ -1491,6 +1503,11 @@ class Cell(mole.Mole):
 
         See also Mole.intor
         '''
+        if not self._built:
+            logger.warn(self, 'Warning: intor envs of %s not initialized.', self)
+            # FIXME: Whether to check _built and call build?  ._bas and .basis
+            # may not be consistent. calling .build() may leads to wrong intor env.
+            #self.build(False, False)
         return intor_cross(intor, self, self, comp, hermi, kpts, kpt, **kwargs)
 
     @lib.with_doc(pbc_eval_gto.__doc__)
@@ -1534,5 +1551,25 @@ class Cell(mole.Mole):
     def has_ecp(self):
         '''Whether pesudo potential is used in the system.'''
         return self.pseudo or self._pseudo or (len(self._ecpbas) > 0)
+
+    def apply(self, fn, *args, **kwargs):
+        if callable(fn):
+            return lib.StreamObject.apply(self, fn, *args, **kwargs)
+        elif isinstance(fn, (str, unicode)):
+            from pyscf.pbc import scf, dft, mp, cc, ci, tdscf
+            for mod in (scf, dft):
+                method = getattr(mod, fn.upper(), None)
+                if method is not None and callable(method):
+                    return method(self, *args, **kwargs)
+
+            for mod in (mp, cc, ci, tdscf):
+                method = getattr(mod, fn.upper(), None)
+                if method is not None and callable(method):
+                    return method(scf.HF(self).run(), *args, **kwargs)
+
+            raise ValueError('Unknown method %s' % fn)
+        else:
+            raise TypeError('First argument of .apply method must be a '
+                            'function or a string.')
 
 del(INTEGRAL_PRECISION, WRAP_AROUND, WITH_GAMMA, EXP_DELIMITER)

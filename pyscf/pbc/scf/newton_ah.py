@@ -292,7 +292,7 @@ def _unpack(vo, mo_occ):
 def newton(mf):
     from pyscf.soscf import newton_ah
     from pyscf.pbc import scf as pscf
-    if not isinstance(mf, (pscf.khf.KRHF, pscf.kuhf.KUHF)):
+    if not isinstance(mf, pscf.khf.KSCF):
 # Note for single k-point other than gamma point (mf.kpt != 0) mf object,
 # orbital hessian is approximated by gamma point hessian.
         return newton_ah.newton(mf)
@@ -300,12 +300,18 @@ def newton(mf):
     if isinstance(mf, newton_ah._CIAH_SOSCF):
         return mf
 
-    CIAH_KSCF = newton_ah.newton_SCF_class(mf)
+    if mf.__doc__ is None:
+        mf_doc = ''
+    else:
+        mf_doc = mf.__doc__
 
     if isinstance(mf, pscf.kuhf.KUHF):
-        class SecondOrderKUHF(CIAH_KSCF):
+        class SecondOrderKUHF(mf.__class__, newton_ah._CIAH_SOSCF):
+            __doc__ = mf_doc + newton_ah._CIAH_SOSCF.__doc__
+            __init__ = newton_ah._CIAH_SOSCF.__init__
+
             def build(self, cell=None):
-                CIAH_KSCF.build(self, cell)
+                newton_ah._CIAH_SOSCF.build(self, cell)
 
             gen_g_hop = gen_g_hop_uhf
 
@@ -341,9 +347,12 @@ def newton(mf):
         return SecondOrderKUHF(mf)
 
     else:
-        class SecondOrderKRHF(CIAH_KSCF):
+        class SecondOrderKRHF(mf.__class__, newton_ah._CIAH_SOSCF):
+            __doc__ = mf_doc + newton_ah._CIAH_SOSCF.__doc__
+            __init__ = newton_ah._CIAH_SOSCF.__init__
+
             def build(self, cell=None):
-                CIAH_KSCF.build(self, cell)
+                newton_ah._CIAH_SOSCF.build(self, cell)
 
             gen_g_hop = gen_g_hop_rhf
 

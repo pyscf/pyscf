@@ -31,7 +31,7 @@ na = fci.cistring.num_strings(norb, nelec[0])
 nb = fci.cistring.num_strings(norb, nelec[1])
 ci0 = numpy.random.random((na,nb))
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_contract(self):
         ci1ref = fci_slow.contract_1e(h1e, ci0, norb, nelec)
         ci1 = fci.direct_nosym.contract_1e(h1e, ci0, norb, nelec)

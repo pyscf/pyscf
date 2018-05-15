@@ -20,7 +20,6 @@ from pyscf.lib import logger
 from pyscf.pbc.mpitools import mpi_load_balancer
 from pyscf import lib
 from pyscf.pbc import lib as pbclib
-from pyscf.cc.ccsd import _cp
 from pyscf.pbc.tools.tril import tril_index, unpack_tril
 
 comm = MPI.COMM_WORLD
@@ -1556,3 +1555,5 @@ def WvoovR1(cc,t1,t2,eris,fint=None):
 
     return Wkaci
 
+def _cp(a):
+    return np.array(a, copy=False, order='C')

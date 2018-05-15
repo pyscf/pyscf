@@ -23,6 +23,7 @@ from pyscf.lib import logger
 from pyscf.mcscf import mc1step
 from pyscf.mcscf import mc2step
 from pyscf.mcscf import casci_symm
+from pyscf.mcscf import addons
 from pyscf import fci
 from pyscf import __config__
 
@@ -96,6 +97,22 @@ class SymAdaptedCASSCF(mc1step.CASSCF):
         mo = mc1step.CASSCF.rotate_mo(self, mo, u, log)
         mo = lib.tag_array(mo, orbsym=self.mo_coeff.orbsym)
         return mo
+
+    def sort_mo_by_irrep(self, cas_irrep_nocc,
+                         cas_irrep_ncore=None, mo_coeff=None, s=None):
+        '''Select active space based on symmetry information.
+        See also :func:`pyscf.mcscf.addons.sort_mo_by_irrep`
+        '''
+        if mo_coeff is None: mo_coeff = self.mo_coeff
+        return addons.sort_mo_by_irrep(self, mo_coeff, cas_irrep_nocc,
+                                       cas_irrep_ncore, s)
+
+    def newton(self):
+        from pyscf.mcscf import newton_casscf_symm
+        mc1 = newton_casscf_symm.CASSCF(self._scf, self.ncas, self.nelecas)
+        mc1.__dict__.update(self.__dict__)
+        mc1.max_cycle_micro = 10
+        return mc1
 
 CASSCF = SymAdaptedCASSCF
 

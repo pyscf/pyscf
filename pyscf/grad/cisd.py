@@ -20,6 +20,7 @@
 CISD analytical nuclear gradients
 '''
 
+import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.ci import cisd
@@ -29,7 +30,8 @@ from pyscf.grad import ccsd as ccsd_grad
 
 def kernel(myci, civec=None, eris=None, atmlst=None, mf_grad=None,
            verbose=logger.INFO):
-    if civec is None: civec = mycc.ci
+    if civec is None: civec = myci.ci
+    assert(not isinstance(civec, (list, tuple)))
     nocc = myci.nocc
     nmo = myci.nmo
     d1 = cisd._gamma1_intermediates(myci, civec, nmo, nocc)
@@ -40,7 +42,7 @@ def kernel(myci, civec=None, eris=None, atmlst=None, mf_grad=None,
                             d1, d2, verbose)
 
 
-def as_scanner(grad_ci):
+def as_scanner(grad_ci, state=0):
     '''Generating a nuclear gradients scanner/solver (for geometry optimizer).
 
     The returned solver is a function. This function requires one argument
@@ -56,22 +58,40 @@ def as_scanner(grad_ci):
 
     Examples::
 
-        >>> from pyscf import gto, scf, ci
-        >>> mol = gto.M(atom='H 0 0 0; F 0 0 1')
-        >>> ci_scanner = ci.CISD(scf.RHF(mol)).nuc_grad_method().as_scanner()
-        >>> e_tot, grad = ci_scanner(gto.M(atom='H 0 0 0; F 0 0 1.1'))
-        >>> e_tot, grad = ci_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
+    >>> from pyscf import gto, scf, ci
+    >>> mol = gto.M(atom='H 0 0 0; F 0 0 1')
+    >>> ci_scanner = ci.CISD(scf.RHF(mol)).nuc_grad_method().as_scanner()
+    >>> e_tot, grad = ci_scanner(gto.M(atom='H 0 0 0; F 0 0 1.1'))
+    >>> e_tot, grad = ci_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
     '''
-    logger.info(grad_ci, 'Set nuclear gradients of %s as a scanner', grad_ci.__class__)
+    from pyscf import gto
+    if isinstance(grad_ci, lib.GradScanner):
+        return grad_ci
+
+    logger.info(grad_ci, 'Create scanner for %s', grad_ci.__class__)
+
     class CISD_GradScanner(grad_ci.__class__, lib.GradScanner):
         def __init__(self, g):
-            self.__dict__.update(g.__dict__)
-            self.base = grad_ci.base.as_scanner()
-        def __call__(self, mol, **kwargs):
+            lib.GradScanner.__init__(self, g)
+        def __call__(self, mol_or_geom, state=state, **kwargs):
+            if isinstance(mol_or_geom, gto.Mole):
+                mol = mol_or_geom
+            else:
+                mol = self.mol.set_geom_(mol_or_geom, inplace=False)
+
             ci_scanner = self.base
+            if ci_scanner.nroots > 1 and state >= ci_scanner.nroots:
+                raise ValueError('State ID greater than the number of CISD roots')
+
             ci_scanner(mol)
+            if ci_scanner.nroots > 1:
+                civec = ci_scanner.ci[state]
+            else:
+                civec = ci_scanner.ci
+
             mf_grad = ci_scanner._scf.nuc_grad_method()
-            de = self.kernel(ci_scanner.ci, mf_grad=mf_grad)
+            self.mol = mol
+            de = self.kernel(civec, mf_grad=mf_grad, **kwargs)
             return ci_scanner.e_tot, de
         @property
         def converged(self):
@@ -85,15 +105,20 @@ class Gradients(lib.StreamObject):
         self.mol = myci.mol
         self.stdout = myci.stdout
         self.verbose = myci.verbose
-        self.atmlst = range(myci.mol.natm)
+        self.atmlst = None
         self.de = None
+        self._keys = set(self.__dict__.keys())
 
     def kernel(self, civec=None, eris=None, atmlst=None,
-               mf_grad=None, verbose=None, _kern=kernel):
+               mf_grad=None, state=0, verbose=None, _kern=kernel):
         log = logger.new_logger(self, verbose)
         myci = self.base
         if civec is None: civec = myci.ci
         if civec is None: civec = myci.kernel(eris=eris)
+        if isinstance(civec, (list, tuple)):
+            civec = civec[state]
+            logger.info(self, 'Multiple roots are found in CISD solver. '
+                        'Nuclear gradients of root %d are computed.', state)
         if atmlst is None:
             atmlst = self.atmlst
         else:

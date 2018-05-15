@@ -136,14 +136,13 @@ def _get_intor_and_comp(mol, eval_name, comp=None):
             eval_name = eval_name + '_sph'
 
     if comp is None:
-        try:
-            if '_spinor' in eval_name:
-                fname = eval_name.replace('_spinor', '')
-                comp = _GTO_EVAL_FUNCTIONS[fname][1]
-            else:
-                fname = eval_name.replace('_sph', '').replace('_cart', '')
-                comp = _GTO_EVAL_FUNCTIONS[fname][0]
-        except KeyError:
+        if '_spinor' in eval_name:
+            fname = eval_name.replace('_spinor', '')
+            comp = _GTO_EVAL_FUNCTIONS.get(fname, (None,None))[1]
+        else:
+            fname = eval_name.replace('_sph', '').replace('_cart', '')
+            comp = _GTO_EVAL_FUNCTIONS.get(fname, (None,None))[0]
+        if comp is None:
             warnings.warn('Function %s not found.  Set its comp to 1' % eval_name)
             comp = 1
     return eval_name, comp

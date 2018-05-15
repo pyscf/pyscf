@@ -30,7 +30,7 @@ IOBUF_ROW_MIN = getattr(__config__, 'ao2mo_outcore_row_min', 160)
 MAX_MEMORY = getattr(__config__, 'ao2mo_outcore_max_memory', 2000)  # 2GB
 
 
-def full(mol, mo_coeff, erifile, dataname='eri_mo', tmpdir=None,
+def full(mol, mo_coeff, erifile, dataname='eri_mo',
          intor='int2e', aosym='s4', comp=None,
          max_memory=MAX_MEMORY, ioblk_size=IOBLK_SIZE, verbose=logger.WARN,
          compact=True):
@@ -51,11 +51,6 @@ def full(mol, mo_coeff, erifile, dataname='eri_mo', tmpdir=None,
             different dataname, the existed integral file can be reused.  If
             the erifile contains the dataname, the new integrals data will
             overwrite the old one.
-        tmpdir : str
-            The directory where to temporarily store the intermediate data
-            (the half-transformed integrals).  By default, it's controlled by
-            shell environment variable ``TMPDIR``.  The disk space requirement
-            is about  comp*mo_coeffs[0].shape[1]*mo_coeffs[1].shape[1]*nao**2
         intor : str
             Name of the 2-electron integral.  Ref to :func:`getints_by_shell`
             for the complete list of available 2-electron integral names
@@ -113,11 +108,11 @@ def full(mol, mo_coeff, erifile, dataname='eri_mo', tmpdir=None,
     >>> view('full.h5')
     dataset ['eri_mo', 'new'], shape (3, 100, 55)
     '''
-    general(mol, (mo_coeff,)*4, erifile, dataname, tmpdir,
+    general(mol, (mo_coeff,)*4, erifile, dataname,
             intor, aosym, comp, max_memory, ioblk_size, verbose, compact)
     return erifile
 
-def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
+def general(mol, mo_coeffs, erifile, dataname='eri_mo',
             intor='int2e', aosym='s4', comp=None,
             max_memory=MAX_MEMORY, ioblk_size=IOBLK_SIZE, verbose=logger.WARN,
             compact=True):
@@ -140,11 +135,6 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
             different dataname, the existed integral file can be reused.  If
             the erifile contains the dataname, the new integrals data will
             overwrite the old one.
-        tmpdir : str
-            The directory where to temporarily store the intermediate data
-            (the half-transformed integrals).  By default, it's controlled by
-            shell environment variable ``TMPDIR``.  The disk space requirement
-            is about  comp*mo_coeffs[0].shape[1]*mo_coeffs[1].shape[1]*nao**2
         intor : str
             Name of the 2-electron integral.  Ref to :func:`getints_by_shell`
             for the complete list of available 2-electron integral names
@@ -222,9 +212,10 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
     nmok = mo_coeffs[2].shape[1]
     nmol = mo_coeffs[3].shape[1]
     nao = mo_coeffs[0].shape[0]
-    assert(nao == mol.nao_nr())
 
     intor, comp = gto.moleintor._get_intor_and_comp(mol._add_suffix(intor), comp)
+    assert(nao == mol.nao_nr('_cart' in intor))
+
     aosym = _stand_sym_code(aosym)
     if aosym in ('s4', 's2kl'):
         nao_pair = nao * (nao+1) // 2
@@ -255,33 +246,27 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
         assert(isinstance(erifile, h5py.Group))
         feri = erifile
 
-    if nij_pair == 0 or nkl_pair == 0:
-        chunks = None
-    elif comp == 1:
+    if comp == 1:
         chunks = (nmoj,nmol)
+        shape = (nij_pair,nkl_pair)
     else:
         chunks = (1,nmoj,nmol)
-
-    if comp == 1:
-        h5d_eri = feri.create_dataset(dataname, (nij_pair,nkl_pair),
-                                      'f8', chunks=chunks)
-    else:
-        h5d_eri = feri.create_dataset(dataname, (comp,nij_pair,nkl_pair),
-                                      'f8', chunks=chunks)
+        shape = (comp,nij_pair,nkl_pair)
 
     if nij_pair == 0 or nkl_pair == 0:
+        feri.create_dataset(dataname, shape, 'f8')
         if isinstance(erifile, str):
             feri.close()
         return erifile
+    else:
+        h5d_eri = feri.create_dataset(dataname, shape, 'f8', chunks=chunks)
+
     log.debug('MO integrals %s are saved in %s/%s', intor, erifile, dataname)
     log.debug('num. MO ints = %.8g, required disk %.8g MB',
               float(nij_pair)*nkl_pair*comp, nij_pair*nkl_pair*comp*8/1e6)
 
 # transform e1
-    if tmpdir is None:
-        tmpdir = lib.param.TMPDIR
-    swapfile = tempfile.NamedTemporaryFile(dir=tmpdir)
-    fswap = h5py.File(swapfile.name, 'w')
+    fswap = lib.H5TmpFile()
     half_e1(mol, mo_coeffs, fswap, intor, aosym, comp, max_memory, ioblk_size,
             log, compact)
 
@@ -316,7 +301,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
 
     klaoblks = len(fswap['0'])
     ijmoblks = int(numpy.ceil(float(nij_pair)/iobuflen)) * comp
-    ao_loc = mol.ao_loc_nr()
+    ao_loc = mol.ao_loc_nr('_cart' in intor)
     ti0 = time_1pass
     istep = 0
     with lib.call_in_background(load) as prefetch:
@@ -342,7 +327,7 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
                     log.debug1('step 2 [%d/%d] CPU time: %9.2f, Wall time: %9.2f',
                                istep, ijmoblks, ti1[0]-ti0[0], ti1[1]-ti0[1])
                     ti0 = ti1
-    fswap.close()
+    fswap = None
     if isinstance(erifile, str):
         feri.close()
 
@@ -428,18 +413,20 @@ def half_e1(mol, mo_coeffs, swapfile,
 # The buffer to hold AO integrals in C code, see line (@)
     aobuflen = max(int((mem_words - 2*comp*e1buflen*nij_pair) // (nao_pair*comp)),
                    IOBUF_ROW_MIN)
-    shranges = guess_shell_ranges(mol, (aosym in ('s4', 's2kl')), e1buflen, aobuflen)
+    ao_loc = mol.ao_loc_nr('_cart' in intor)
+    shranges = guess_shell_ranges(mol, (aosym in ('s4', 's2kl')), e1buflen,
+                                  aobuflen, ao_loc)
     if ao2mopt is None:
-        if intor == 'int2e':
+        if intor == 'int2e_cart' or intor == 'int2e_sph':
             ao2mopt = _ao2mo.AO2MOpt(mol, intor, 'CVHFnr_schwarz_cond',
                                      'CVHFsetnr_direct_scf')
         else:
             ao2mopt = _ao2mo.AO2MOpt(mol, intor)
 
-    if isinstance(swapfile, str):
-        fswap = h5py.File(swapfile, 'w')
-    else:
+    if isinstance(swapfile, h5py.Group):
         fswap = swapfile
+    else:
+        fswap = lib.H5TmpFile(swapfile)
     for icomp in range(comp):
         g = fswap.create_group(str(icomp)) # for h5py old version
 
@@ -483,8 +470,7 @@ def half_e1(mol, mo_coeffs, swapfile,
             async_write(istep, iobuf)
             buf2, buf_write = buf_write, buf2
 
-    if isinstance(swapfile, str):
-        fswap.close()
+    fswap = None
     return swapfile
 
 def _load_from_h5g(h5group, row0, row1, out):
@@ -526,11 +512,6 @@ def full_iofree(mol, mo_coeff, intor='int2e', aosym='s4', comp=None,
             different dataname, the existed integral file can be reused.  If
             the erifile contains the dataname, the new integrals data will
             overwrite the old one.
-        tmpdir : str
-            The directory where to temporarily store the intermediate data
-            (the half-transformed integrals).  By default, it's controlled by
-            shell environment variable ``TMPDIR``.  The disk space requirement
-            is about  comp*mo_coeffs[0].shape[1]*mo_coeffs[1].shape[1]*nao**2
         intor : str
             Name of the 2-electron integral.  Ref to :func:`getints_by_shell`
             for the complete list of available 2-electron integral names
@@ -588,16 +569,12 @@ def full_iofree(mol, mo_coeff, intor='int2e', aosym='s4', comp=None,
     >>> print(eri1.shape)
     (3, 100, 55)
     '''
-    erifile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
-    with h5py.File(erifile.name, 'w') as feri:
+    with lib.H5TmpFile() as feri:
         general(mol, (mo_coeff,)*4, feri, dataname='eri_mo',
                 intor=intor, aosym=aosym, comp=comp,
                 max_memory=max_memory, ioblk_size=ioblk_size,
                 verbose=verbose, compact=compact)
-        eri = numpy.asarray(feri['eri_mo'])
-        for key in feri.keys():
-            del(feri[key])
-        return eri
+        return numpy.asarray(feri['eri_mo'])
 
 def general_iofree(mol, mo_coeffs, intor='int2e', aosym='s4', comp=None,
                    max_memory=MAX_MEMORY, ioblk_size=IOBLK_SIZE,
@@ -677,16 +654,12 @@ def general_iofree(mol, mo_coeffs, intor='int2e', aosym='s4', comp=None,
     >>> print(eri1.shape)
     (3, 100, 55)
     '''
-    erifile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
-    with h5py.File(erifile.name, 'w') as feri:
+    with lib.H5TmpFile() as feri:
         general(mol, mo_coeffs, feri, dataname='eri_mo',
                 intor=intor, aosym=aosym, comp=comp,
                 max_memory=max_memory, ioblk_size=ioblk_size,
                 verbose=verbose, compact=compact)
-        eri = numpy.asarray(feri['eri_mo'])
-        for key in feri.keys():
-            del(feri[key])
-        return eri
+        return numpy.asarray(feri['eri_mo'])
 
 
 def iden_coeffs(mo1, mo2):
@@ -718,9 +691,8 @@ def guess_e2bufsize(ioblk_size, nrows, ncols):
 # based on the size of buffer, dynamic range of AO-shells for each buffer
 def guess_shell_ranges(mol, aosym, max_iobuf, max_aobuf=None, ao_loc=None,
                        compress_diag=True):
+    if ao_loc is None: ao_loc = mol.ao_loc_nr()
     max_iobuf = max(1, max_iobuf)
-    if ao_loc is None:
-        ao_loc = mol.ao_loc_nr()
 
     dims = ao_loc[1:] - ao_loc[:-1]
     dijs = (dims.reshape(-1,1) * dims)
@@ -796,7 +768,7 @@ if __name__ == '__main__':
     from pyscf.ao2mo import addons
     mol = gto.Mole()
     mol.verbose = 5
-    mol.output = 'out_outcore'
+    #mol.output = 'out_outcore'
     mol.atom = [
         ["O" , (0. , 0.     , 0.)],
         [1   , (0. , -0.757 , 0.587)],

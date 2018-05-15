@@ -107,7 +107,12 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
         dump_mat.dump_rec(mf.stdout, c, label, molabel, start=MO_BASE, **kwargs)
 
     dm = mf.make_rdm1(mo_coeff, mo_occ)
-    return mf.mulliken_meta(mol, dm, s=ovlp_ao, verbose=log)
+    if with_meta_lowdin:
+        pop_and_charge = mf.mulliken_meta(mol, dm, s=ovlp_ao, verbose=log)
+    else:
+        pop_and_charge = mf.mulliken_pop(mol, dm, s=ovlp_ao, verbose=log)
+    dip = mf.dip_moment(mol, dm, verbose=log)
+    return pop_and_charge, dip
 
 def get_irrep_nelec(mol, mo_coeff, mo_occ, s=None):
     '''Electron numbers for each irreducible representation.
@@ -363,6 +368,7 @@ class SymAdaptedRHF(hf.RHF):
         self._keys = self._keys.union(['irrep_nelec'])
 
     def build(self, mol=None):
+        if mol is None: mol = self.mol
         for irname in self.irrep_nelec:
             if irname not in self.mol.irrep_name:
                 logger.warn(self, 'No irrep %s', irname)
@@ -525,7 +531,11 @@ class SymAdaptedROHF(rohf.ROHF):
     def build(self, mol=None):
         if mol is None: mol = self.mol
         if mol.symmetry:
-            if self.nelec is None:
+            for irname in self.irrep_nelec:
+                if irname not in self.mol.irrep_name:
+                    logger.warn(self, 'No irrep %s', irname)
+
+            if getattr(self, 'nelec', None) is None:
                 nelec = self.mol.nelec
             else:
                 nelec = self.nelec
@@ -780,19 +790,29 @@ class SymAdaptedROHF(rohf.ROHF):
             dump_mat.dump_rec(self.stdout, c, label, molabel, start=MO_BASE, **kwargs)
 
         dm = self.make_rdm1(mo_coeff, mo_occ)
-        return self.mulliken_meta(mol, dm, s=ovlp_ao, verbose=verbose)
+        if with_meta_lowdin:
+            pop_and_charge = self.mulliken_meta(mol, dm, s=ovlp_ao, verbose=log)
+        else:
+            pop_and_charge = self.mulliken_pop(mol, dm, s=ovlp_ao, verbose=log)
+        dip = self.dip_moment(mol, dm, verbose=log)
+        return pop_and_charge, dip
 
     def get_irrep_nelec(self, mol=None, mo_coeff=None, mo_occ=None):
         from pyscf.scf import uhf_symm
         if mol is None: mol = self.mol
-        if mo_coeff is None: mo_coeff = (self.mo_coeff,self.mo_coeff)
-        if mo_occ is None: mo_occ = ((self.mo_occ>0), (self.mo_occ==2))
+        if mo_coeff is None: mo_coeff = self.mo_coeff
+        if mo_occ is None: mo_occ = self.mo_occ
+        if isinstance(mo_coeff, numpy.ndarray) and mo_coeff.ndim == 2:
+            mo_coeff = (mo_coeff, mo_coeff)
+        if isinstance(mo_occ, numpy.ndarray) and mo_occ.ndim == 1:
+            mo_occ = (numpy.array(mo_occ>0, dtype=numpy.double),
+                      numpy.array(mo_occ==2, dtype=numpy.double))
         return uhf_symm.get_irrep_nelec(mol, mo_coeff, mo_occ)
 
     @lib.with_doc(canonicalize.__doc__)
     def canonicalize(self, mo_coeff, mo_occ, fock=None):
         if not hasattr(fock, 'focka'):
-            fock = mf.get_fock(dm=dm)
+            fock = self.get_fock(dm=self.make_rdm1(mo_coeff, mo_occ))
         mo_e, mo_coeff = canonicalize(self, mo_coeff, mo_occ, fock)
         mo_ea = numpy.einsum('pi,pi->i', mo_coeff, fock.focka.dot(mo_coeff))
         mo_eb = numpy.einsum('pi,pi->i', mo_coeff, fock.fockb.dot(mo_coeff))
@@ -815,10 +835,7 @@ ROHF = SymAdaptedROHF
 
 def _dump_mo_energy(mol, mo_energy, mo_occ, ehomo, elumo, orbsym, title='',
                     verbose=logger.DEBUG):
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(mol.stdout, verbose)
+    log = logger.new_logger(mol, verbose)
     nirrep = mol.symm_orb.__len__()
     for i, ir in enumerate(mol.irrep_id):
         irname = mol.irrep_name[i]

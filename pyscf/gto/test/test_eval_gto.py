@@ -27,6 +27,10 @@ H 8. 0. 0.
 numpy.random.seed(1)
 r = numpy.random.random((100,3)) * 2
 
+def tearDownModule():
+    global mol, r
+    del mol, r
+
 class KnownValues(unittest.TestCase):
     def test_cart(self):
         val = mol.eval_gto('GTOval', r)

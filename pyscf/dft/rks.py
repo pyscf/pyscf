@@ -117,7 +117,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
             vj, vk = ks.get_jk(mol, ddm, hermi)
             vk *= hyb
             if abs(omega) > 1e-10:  # For range separated Coulomb operator
-                vklr = _get_k_lr(mol, ddm, omega)
+                vklr = _get_k_lr(mol, ddm, omega, hermi)
                 vklr *= (alpha - hyb)
                 vk += vklr
             vj += vhf_last.vj
@@ -126,7 +126,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
             vj, vk = ks.get_jk(mol, dm, hermi)
             vk *= hyb
             if abs(omega) > 1e-10:
-                vklr = _get_k_lr(mol, dm, omega)
+                vklr = _get_k_lr(mol, dm, omega, hermi)
                 vklr *= (alpha - hyb)
                 vk += vklr
         vxc += vj - vk * .5
@@ -142,7 +142,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     vxc = lib.tag_array(vxc, ecoul=ecoul, exc=exc, vj=vj, vk=vk)
     return vxc
 
-def _get_k_lr(mol, dm, omega=0):
+def _get_k_lr(mol, dm, omega=0, hermi=0):
     omega_bak = mol._env[gto.PTR_RANGE_OMEGA]
     mol.set_range_coulomb(omega)
 
@@ -296,7 +296,7 @@ def _dft_common_init_(mf):
     mf.small_rho_cutoff = getattr(__config__, 'dft_rks_RKS_small_rho_cutoff', 1e-7)
 ##################################################
 # don't modify the following attributes, they are not input options
-    mf._numint = numint._NumInt()
+    mf._numint = numint.NumInt()
     mf._keys = mf._keys.union(['xc', 'nlc', 'omega', 'grids', 'nlcgrids',
                                'small_rho_cutoff'])
 

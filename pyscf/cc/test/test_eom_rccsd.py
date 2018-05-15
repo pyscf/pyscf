@@ -37,28 +37,33 @@ mol.build()
 mf = scf.RHF(mol).run()
 mycc = rccsd.RCCSD(mf).run()
 
-mf1 = copy.copy(mf)
-no = mol.nelectron // 2
-n = mol.nao_nr()
-nv = n - no
-mf1.mo_occ = numpy.zeros(mol.nao_nr())
-mf1.mo_occ[:no] = 2
-numpy.random.seed(12)
-mf1.mo_coeff = numpy.random.random((n,n))
-dm = mf1.make_rdm1(mf1.mo_coeff, mf1.mo_occ)
-fockao = mf1.get_hcore() + mf1.get_veff(mol, dm)
-mf1.mo_energy = numpy.einsum('pi,pq,qi->i', mf1.mo_coeff, fockao, mf1.mo_coeff)
-idx = numpy.hstack([mf1.mo_energy[:no].argsort(), no+mf1.mo_energy[no:].argsort()])
-mf1.mo_coeff = mf1.mo_coeff[:,idx]
+def make_mycc1():
+    mf1 = copy.copy(mf)
+    no = mol.nelectron // 2
+    n = mol.nao_nr()
+    nv = n - no
+    mf1.mo_occ = numpy.zeros(mol.nao_nr())
+    mf1.mo_occ[:no] = 2
+    numpy.random.seed(12)
+    mf1.mo_coeff = numpy.random.random((n,n))
+    dm = mf1.make_rdm1(mf1.mo_coeff, mf1.mo_occ)
+    fockao = mf1.get_hcore() + mf1.get_veff(mol, dm)
+    mf1.mo_energy = numpy.einsum('pi,pq,qi->i', mf1.mo_coeff, fockao, mf1.mo_coeff)
+    idx = numpy.hstack([mf1.mo_energy[:no].argsort(), no+mf1.mo_energy[no:].argsort()])
+    mf1.mo_coeff = mf1.mo_coeff[:,idx]
 
-mycc1 = rccsd.RCCSD(mf1)
-eris1 = mycc1.ao2mo()
-numpy.random.seed(12)
-r1 = numpy.random.random((no,nv)) - .9
-r2 = numpy.random.random((no,no,nv,nv)) - .9
-r2 = r2 + r2.transpose(1,0,3,2)
-mycc1.t1 = r1*1e-5
-mycc1.t2 = r2*1e-5
+    mycc1 = rccsd.RCCSD(mf1)
+    eris1 = mycc1.ao2mo()
+    numpy.random.seed(12)
+    r1 = numpy.random.random((no,nv)) - .9
+    r2 = numpy.random.random((no,no,nv,nv)) - .9
+    r2 = r2 + r2.transpose(1,0,3,2)
+    mycc1.t1 = r1*1e-5
+    mycc1.t2 = r2*1e-5
+    return mf1, mycc1, eris1
+
+mf1, mycc1, eris1 = make_mycc1()
+no, nv = mycc1.t1.shape
 
 mycci = copy.copy(mycc1)
 erisi = copy.copy(eris1)
@@ -87,9 +92,16 @@ mycc3 = mycc3.set(max_memory=0, direct=True)
 mycc31 = mycc31.set(max_memory=0, direct=True)
 eris31 = mycc31.ao2mo()
 
+
+def tearDownModule():
+    global mol, mf, mycc, mf1, eris1, mycc1, mycci, erisi, mycc2, mycc21, eris21, mycc3, mycc31, eris31
+    del mol, mf, mycc, mf1, eris1, mycc1, mycci, erisi, mycc2, mycc21, eris21, mycc3, mycc31, eris31
+
 class KnownValues(unittest.TestCase):
     def test_ipccsd(self):
-        e,v = mycc.ipccsd(nroots=1)
+        eom = mycc.eomip_method()
+        e,v = eom.kernel(nroots=1, left=False, koopmans=False)
+        e = eom.eip
         self.assertAlmostEqual(e, 0.4335604332073799, 6)
 
         e,v = mycc.ipccsd(nroots=3)
@@ -138,7 +150,9 @@ class KnownValues(unittest.TestCase):
 
 
     def test_eaccsd(self):
-        e,v = mycc.eaccsd(nroots=1)
+        eom = mycc.eomea_method()
+        e,v = eom.kernel(nroots=1, left=False, koopmans=False)
+        e = eom.eea
         self.assertAlmostEqual(e, 0.16737886338859731, 6)
 
         e,v = mycc.eaccsd(nroots=3)
@@ -187,7 +201,9 @@ class KnownValues(unittest.TestCase):
 
 
     def test_eeccsd(self):
-        e,v = mycc.eeccsd(nroots=1)
+        eom = mycc.eomee_method()
+        e,v = eom.kernel(nroots=1, koopmans=False)
+        e = eom.eee
         self.assertAlmostEqual(e, 0.2757159395886167, 6)
 
         e,v = mycc.eeccsd(nroots=4)
@@ -209,10 +225,22 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[2], 0.2757159395886167, 6)
         self.assertAlmostEqual(e[3], 0.3005716731825082, 6)
 
+    def test_eomee_ccsd_singlet(self):
+        e, v = mycc.eomee_ccsd_singlet(nroots=1)
+        self.assertAlmostEqual(e, 0.3005716731825082, 6)
+
+    def test_eomee_ccsd_triplet(self):
+        e, v = mycc.eomee_ccsd_triplet(nroots=1)
+        self.assertAlmostEqual(e, 0.2757159395886167, 6)
+
+    def test_eomsf_ccsd(self):
+        e, v = mycc.eomsf_ccsd(nroots=1)
+        self.assertAlmostEqual(e, 0.2757159395886167, 6)
+
     def test_vector_to_amplitudes(self):
-        t1, t2 = mycc1.vector_to_amplitudes(mycc1.amplitudes_to_vector(r1,r2))
-        self.assertAlmostEqual(abs(r1-t1).sum(), 0, 9)
-        self.assertAlmostEqual(abs(r2-t2).sum(), 0, 9)
+        t1, t2 = mycc1.vector_to_amplitudes(mycc1.amplitudes_to_vector(mycc1.t1, mycc1.t2))
+        self.assertAlmostEqual(abs(mycc1.t1-t1).sum(), 0, 9)
+        self.assertAlmostEqual(abs(mycc1.t2-t2).sum(), 0, 9)
 
     def test_eomee_ccsd_matvec_singlet(self):
         numpy.random.seed(10)

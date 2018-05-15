@@ -16,6 +16,7 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+from functools import reduce
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
@@ -104,7 +105,7 @@ def label_symmetry_(mc, mo_coeff, ci0=None):
         mo_vir = symm.symmetrize_space(mc.mol, mo_coeff[:,nocc:     ], s=s, check=False)
         mo_coeff = numpy.hstack((mo_cor,mo_act,mo_vir))
         orbsym = symm.label_orb_symm(mc.mol, irrep_name,
-                                        mc.mol.symm_orb, mo_coeff, s=s)
+                                     mc.mol.symm_orb, mo_coeff, s=s)
     mo_coeff_with_orbsym = lib.tag_array(mo_coeff, orbsym=orbsym)
 
     active_orbsym = getattr(mc.fcisolver, 'orbsym', [])

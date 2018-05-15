@@ -31,6 +31,7 @@ from pyscf import ao2mo
 from pyscf.lib import logger
 from pyscf.grad import rhf as rhf_grad
 from pyscf.grad.mp2 import _shell_prange
+from pyscf.grad.casci import as_scanner
 
 
 def kernel(mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=None,
@@ -53,7 +54,7 @@ def kernel(mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=None,
     mo_core = mo_coeff[:,:ncore]
     mo_cas = mo_coeff[:,ncore:nocc]
 
-    casdm1, casdm2 = mc.fcisolver.make_rdm12(mc.ci, ncas, nelecas)
+    casdm1, casdm2 = mc.fcisolver.make_rdm12(ci, ncas, nelecas)
 
 # gfock = Generalized Fock, Adv. Chem. Phys., 69, 63
     dm_core = numpy.dot(mo_core, mo_core.T) * 2
@@ -85,7 +86,8 @@ def kernel(mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=None,
     dm2buf = dm2buf.reshape(ncas,ncas,nao_pair)
     casdm2 = casdm2_cc = None
 
-    atmlst = range(mol.natm)
+    if atmlst is None:
+        atmlst = range(mol.natm)
     aoslices = mol.aoslice_by_atom()
     de = numpy.zeros((len(atmlst),3))
 
@@ -111,9 +113,8 @@ def kernel(mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=None,
         de[k] += numpy.einsum('xij,ij->x', vhf1c[:,p0:p1], dm1[p0:p1]) * 2
         de[k] += numpy.einsum('xij,ij->x', vhf1a[:,p0:p1], dm_core[p0:p1]) * 2
 
-    de += rhf_grad.grad_nuc(mol)
+    de += rhf_grad.grad_nuc(mol, atmlst)
     return de
-
 
 def as_scanner(mcscf_grad):
     '''Generating a nuclear gradients scanner/solver (for geometry optimizer).
@@ -133,28 +134,30 @@ def as_scanner(mcscf_grad):
 
     >>> from pyscf import gto, scf, mcscf
     >>> mol = gto.M(atom='N 0 0 0; N 0 0 1.1', verbose=0)
-    >>> mc_scanner = mcscf.CASSCF(scf.RHF(mol), 4, 4).nuc_grad_method().as_scanner()
-    >>> etot, grad = mc_scanner(gto.M(atom='N 0 0 0; N 0 0 1.1'))
-    >>> etot, grad = mc_scanner(gto.M(atom='N 0 0 0; N 0 0 1.5'))
-
-    >>> mc_scanner = mcscf.CASCI(scf.RHF(mol), 4, 4).nuc_grad_method().as_scanner()
-    >>> etot, grad = mc_scanner(gto.M(atom='N 0 0 0; N 0 0 1.1'))
-    >>> etot, grad = mc_scanner(gto.M(atom='N 0 0 0; N 0 0 1.5'))
+    >>> mc_grad_scanner = mcscf.CASSCF(scf.RHF(mol), 4, 4).nuc_grad_method().as_scanner()
+    >>> etot, grad = mc_grad_scanner(gto.M(atom='N 0 0 0; N 0 0 1.1'))
+    >>> etot, grad = mc_grad_scanner(gto.M(atom='N 0 0 0; N 0 0 1.5'))
     '''
+    from pyscf import gto
+    if isinstance(mcscf_grad, lib.GradScanner):
+        return mcscf_grad
+
     logger.info(mcscf_grad, 'Create scanner for %s', mcscf_grad.__class__)
+
     class CASSCF_GradScanner(mcscf_grad.__class__, lib.GradScanner):
         def __init__(self, g):
-            self.__dict__.update(g.__dict__)
-            self.base = g.base.as_scanner()
-        def __call__(self, mol, **kwargs):
+            lib.GradScanner.__init__(self, g)
+        def __call__(self, mol_or_geom, **kwargs):
+            if isinstance(mol_or_geom, gto.Mole):
+                mol = mol_or_geom
+            else:
+                mol = self.mol.set_geom_(mol_or_geom, inplace=False)
+
             mc_scanner = self.base
             e_tot = mc_scanner(mol)
             self.mol = mol
             de = self.kernel(**kwargs)
             return e_tot, de
-        @property
-        def converged(self):
-            return self.base.converged
     return CASSCF_GradScanner(mcscf_grad)
 
 
@@ -166,7 +169,7 @@ class Gradients(lib.StreamObject):
         self.stdout = mc.stdout
         self.verbose = mc.verbose
         self.max_memory = mc.max_memory
-        self.atmlst = range(mc.mol.natm)
+        self.atmlst = None
         self.de = None
         self._keys = set(self.__dict__.keys())
 
@@ -189,6 +192,11 @@ class Gradients(lib.StreamObject):
             atmlst = self.atmlst
         else:
             self.atmlst = atmlst
+
+        if self.verbose >= logger.WARN:
+            self.check_sanity()
+        if self.verbose >= logger.INFO:
+            self.dump_flags()
 
         if self.verbose >= logger.WARN:
             self.check_sanity()

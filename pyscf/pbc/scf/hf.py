@@ -217,6 +217,9 @@ class SCF(mol_hf.SCF):
             depending the available memory, the 4-index integrals may be cached
             and J/K matrices are computed based on the 4-index integrals.
     '''
+
+    direct_scf = getattr(__config__, 'pbc_scf_SCF_direct_scf', False)
+
     def __init__(self, cell, kpt=np.zeros(3),
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         if not cell._built:
@@ -228,16 +231,26 @@ class SCF(mol_hf.SCF):
         self.with_df = df.FFTDF(cell)
         self.exxdiv = exxdiv
         self.kpt = kpt
-        self.direct_scf = False
 
         self._keys = self._keys.union(['cell', 'exxdiv', 'with_df'])
 
     @property
     def kpt(self):
+        if 'kpt' in self.__dict__:
+            # To handle the attribute kpt loaded from chkfile
+            self.kpt = self.__dict__.pop('kpt')
         return self.with_df.kpts.reshape(3)
     @kpt.setter
     def kpt(self, x):
         self.with_df.kpts = np.reshape(x, (-1,3))
+
+    def build(self, cell=None):
+        if 'kpt' in self.__dict__:
+            # To handle the attribute kpt loaded from chkfile
+            self.kpt = self.__dict__.pop('kpt')
+        if self.verbose >= logger.WARN:
+            self.check_sanity()
+        return self
 
     def dump_flags(self):
         mol_hf.SCF.dump_flags(self)
@@ -252,7 +265,9 @@ class SCF(mol_hf.SCF):
                         ' = -1/2 * Nelec*madelung/cell.vol = %.12g',
                         madelung*self.cell.nelectron * -.5)
         logger.info(self, 'DF object = %s', self.with_df)
-        self.with_df.dump_flags()
+        if not hasattr(self.with_df, 'build'):
+            # .dump_flags() is called in pbc.df.build function
+            self.with_df.dump_flags()
         return self
 
     def check_sanity(self):
@@ -443,6 +458,7 @@ class SCF(mol_hf.SCF):
     def sfx2c1e(self):
         from pyscf.pbc.x2c import sfx2c1e
         return sfx2c1e.sfx2c1e(self)
+    x2c = x2c1e = sfx2c1e
 
 class RHF(SCF, mol_hf.RHF):
     def convert_from_(self, mf):

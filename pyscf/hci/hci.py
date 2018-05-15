@@ -324,7 +324,8 @@ def select_strs_ctypes(myci, civec, h1, eri, jk, eri_sorted, jk_sorted, norb, ne
 
     str_add = numpy.empty((0,strs.shape[1]), dtype=numpy.uint64)
 
-    ndet_batch = int(myci.max_memory * 1024**2) // (8 * 4 * neleca * nelecb * (norb-neleca) * (norb-nelecb))
+    batch_size = max(1, 8 * 4 * neleca * nelecb * (norb-neleca) * (norb-nelecb))
+    ndet_batch = int(myci.max_memory * 1024**2) // batch_size
     nbatches = ndet // ndet_batch + 1
 
     for i in range(nbatches):

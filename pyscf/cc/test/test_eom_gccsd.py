@@ -31,49 +31,58 @@ mol.atom = [
 [1 , (0. , -0.757 , 0.587)],
 [1 , (0. , 0.757  , 0.587)]]
 mol.basis = '6-31g'
-#mol.verbose = 7
+mol.verbose = 7
 mol.output = '/dev/null'
 mol.build()
 mf = scf.RHF(mol).run()
 mycc = cc.GCCSD(mf).run()
 
-mol = gto.M()
-nocc, nvir = 8, 14
-nmo = nocc + nvir
-nmo_pair = nmo*(nmo+1)//2
-mf = scf.GHF(mol)
-numpy.random.seed(12)
-mf._eri = numpy.random.random(nmo_pair*(nmo_pair+1)//2)
-mf.mo_coeff = numpy.random.random((nmo,nmo))
-mf.mo_energy = numpy.arange(0., nmo)
-mf.mo_occ = numpy.zeros(nmo)
-mf.mo_occ[:nocc] = 1
-vhf = numpy.random.random((nmo,nmo)) + numpy.random.random((nmo,nmo))+1j
-vhf = vhf + vhf.conj().T
-mf.get_veff = lambda *args: vhf
-cinv = numpy.linalg.inv(mf.mo_coeff)
-mf.get_hcore = lambda *args: (reduce(numpy.dot, (cinv.T*mf.mo_energy, cinv)) - vhf)
-nmo_pair = nmo*(nmo//2+1)//4
-mf._eri = numpy.random.random(nmo_pair*(nmo_pair+1)//2)
-mycc1 = gccsd.GCCSD(mf)
-eris1 = mycc1.ao2mo()
-eris1.oooo = eris1.oooo + numpy.sin(eris1.oooo)*1j
-eris1.oooo = eris1.oooo + eris1.oooo.conj().transpose(2,3,0,1)
-eris1.ooov = eris1.ooov + numpy.sin(eris1.ooov)*1j
-eris1.oovv = eris1.oovv + numpy.sin(eris1.oovv)*1j
-eris1.ovov = eris1.ovov + numpy.sin(eris1.ovov)*1j
-eris1.ovvv = eris1.ovvv + numpy.sin(eris1.ovvv)*1j
-eris1.vvvv = eris1.vvvv + numpy.sin(eris1.vvvv)*1j
-eris1.vvvv = eris1.vvvv + eris1.vvvv.conj().transpose(2,3,0,1)
-a = numpy.random.random((nmo,nmo)) * .1
-eris1.fock += a + a.T
-t1 = numpy.random.random((nocc,nvir))*.1 + numpy.random.random((nocc,nvir))*.1j
-t2 = (numpy.random.random((nocc,nocc,nvir,nvir))*.1 +
-      numpy.random.random((nocc,nocc,nvir,nvir))*.1j)
-t2 = t2 - t2.transpose(0,1,3,2)
-t2 = t2 - t2.transpose(1,0,2,3)
-mycc1.t1 = t1
-mycc1.t2 = t2
+def make_mycc1():
+    mol = gto.M()
+    nocc, nvir = 8, 14
+    nmo = nocc + nvir
+    nmo_pair = nmo*(nmo+1)//2
+    mf = scf.GHF(mol)
+    numpy.random.seed(12)
+    mf._eri = numpy.random.random(nmo_pair*(nmo_pair+1)//2)
+    mf.mo_coeff = numpy.random.random((nmo,nmo))
+    mf.mo_energy = numpy.arange(0., nmo)
+    mf.mo_occ = numpy.zeros(nmo)
+    mf.mo_occ[:nocc] = 1
+    vhf = numpy.random.random((nmo,nmo)) + numpy.random.random((nmo,nmo))+1j
+    vhf = vhf + vhf.conj().T
+    mf.get_veff = lambda *args: vhf
+    cinv = numpy.linalg.inv(mf.mo_coeff)
+    mf.get_hcore = lambda *args: (reduce(numpy.dot, (cinv.T*mf.mo_energy, cinv)) - vhf)
+    nmo_pair = nmo*(nmo//2+1)//4
+    mf._eri = numpy.random.random(nmo_pair*(nmo_pair+1)//2)
+    mycc1 = gccsd.GCCSD(mf)
+    eris1 = mycc1.ao2mo()
+    eris1.oooo = eris1.oooo + numpy.sin(eris1.oooo)*1j
+    eris1.oooo = eris1.oooo + eris1.oooo.conj().transpose(2,3,0,1)
+    eris1.ooov = eris1.ooov + numpy.sin(eris1.ooov)*1j
+    eris1.oovv = eris1.oovv + numpy.sin(eris1.oovv)*1j
+    eris1.ovov = eris1.ovov + numpy.sin(eris1.ovov)*1j
+    eris1.ovvv = eris1.ovvv + numpy.sin(eris1.ovvv)*1j
+    eris1.vvvv = eris1.vvvv + numpy.sin(eris1.vvvv)*1j
+    eris1.vvvv = eris1.vvvv + eris1.vvvv.conj().transpose(2,3,0,1)
+    a = numpy.random.random((nmo,nmo)) * .1
+    eris1.fock += a + a.T
+    t1 = numpy.random.random((nocc,nvir))*.1 + numpy.random.random((nocc,nvir))*.1j
+    t2 = (numpy.random.random((nocc,nocc,nvir,nvir))*.1 +
+          numpy.random.random((nocc,nocc,nvir,nvir))*.1j)
+    t2 = t2 - t2.transpose(0,1,3,2)
+    t2 = t2 - t2.transpose(1,0,2,3)
+    mycc1.t1 = t1
+    mycc1.t2 = t2
+    return mycc1, eris1
+mycc1, eris1 = make_mycc1()
+nocc, nvir = mycc1.t1.shape
+
+def tearDownModule():
+    global mol, mf, mycc, eris1, mycc1
+    mol.stdout.close()
+    del mol, mf, mycc, eris1, mycc1
 
 class KnownValues(unittest.TestCase):
     def test_ipccsd(self):
@@ -120,7 +129,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[2], 0.28345228596676159, 6)
 
 
-    def test_eeccsd(self):
+    def test_eeccsd_high_cost(self):
         e,v = mycc.eeccsd(nroots=2)
         self.assertAlmostEqual(e[0], 0.28114507364237717, 6)
         self.assertAlmostEqual(e[1], 0.28114507364237717, 6)
@@ -132,7 +141,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[2], 0.28114507364237717, 6)
         self.assertAlmostEqual(e[3], 0.30819729785603989, 6)
 
-    def test_eeccsd_koopmans(self):
+    def test_eeccsd_koopmans_high_cost(self):
         e,v = mycc.eeccsd(nroots=4, koopmans=True)
         self.assertAlmostEqual(e[0], 0.28114507364237717, 6)
         self.assertAlmostEqual(e[1], 0.28114507364237717, 6)
@@ -147,9 +156,9 @@ class KnownValues(unittest.TestCase):
 
 
     def test_vector_to_amplitudes(self):
-        r1, r2 = mycc1.vector_to_amplitudes(mycc1.amplitudes_to_vector(t1, t2))
-        self.assertAlmostEqual(abs(t1-r1).max(), 0, 14)
-        self.assertAlmostEqual(abs(t2-r2).max(), 0, 14)
+        r1, r2 = mycc1.vector_to_amplitudes(mycc1.amplitudes_to_vector(mycc1.t1, mycc1.t2))
+        self.assertAlmostEqual(abs(mycc1.t1-r1).max(), 0, 14)
+        self.assertAlmostEqual(abs(mycc1.t2-r2).max(), 0, 14)
 
     def test_ip_matvec(self):
         numpy.random.seed(12)

@@ -18,19 +18,17 @@
 #
 
 import time
-import tempfile
 import numpy
 import os
 import numpy as np
 import h5py
 
-import mpi_kpoint_helper
+from pyscf.pbc.mpicc import mpi_kpoint_helper
 from pyscf import lib
 import pyscf.ao2mo
 from pyscf.lib import logger
 import pyscf.cc
 import pyscf.cc.ccsd
-from pyscf.cc.ccsd import _cp
 from pyscf.pbc.mpicc import kintermediates_rhf as imdk
 from pyscf.pbc.lib.linalg_helper import eigs
 from pyscf.lib.linalg_helper import eig
@@ -159,11 +157,13 @@ def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
     rsuccess, t1, t2 = read_amplitudes(t1.shape, t2.shape, t1, t2)
     eold = 0.0
     eccsd = 0.0
-    if cc.diis:
+    if isinstance(cc.diis, lib.diis.DIIS):
+        adiis = cc.diis
+    elif cc.diis:
         adiis = lib.diis.DIIS(cc, cc.diis_file)
         adiis.space = cc.diis_space
     else:
-        adiis = lambda t1,t2,*args: (t1,t2)
+        adiis = None
 
     conv = False
     for istep in range(max_cycle):
@@ -171,9 +171,9 @@ def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
         normt = safeNormDiff(t1new,t1) + safeNormDiff(t2new,t2)
         t1, t2 = t1new, t2new
         t1new = t2new = None
-        if cc.diis:
+        if adiis:
             if rank == 0:
-                t1, t2 = cc.diis(t1, t2, istep, normt, eccsd-eold, adiis)
+                t1, t2 = cc.run_diis(t1, t2, istep, normt, eccsd-eold, adiis)
             t1 = comm.bcast(t1, root=0)
             safeBcastInPlace(comm, t2)
         eold, eccsd = eccsd, energy_tril(cc, t1, t2, eris)
@@ -2604,16 +2604,6 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
         return np.array(e)
 
-    def diis(self, t1, t2, istep, normt, de, adiis):
-        return self.diis_(t1, t2, istep, normt, de, adiis)
-    def diis_(self, t1, t2, istep, normt, de, adiis):
-        if (istep > self.diis_start_cycle and
-            abs(de) < self.diis_start_energy_diff):
-            vec = self.amplitudes_to_vector(t1, t2)
-            t1, t2 = self.vector_to_amplitudes(adiis.update(vec))
-            logger.debug1(self, 'DIIS for step %d', istep)
-        return t1, t2
-
     def amplitudes_to_vector(self, t1, t2):
         return np.hstack((t1.ravel(), t2.ravel()))
 
@@ -2656,7 +2646,6 @@ class _ERIS:
         nocc = cc.nocc()
         nmo = cc.nmo()
         nvir = nmo - nocc
-        mem_incore, mem_outcore, mem_basic = pyscf.cc.ccsd._mem_usage(nocc, nvir)
         mem_now = pyscf.lib.current_memory()[0]
         fao2mo = cc._scf.with_df.ao2mo
 
@@ -3170,3 +3159,7 @@ class _IMDS:
 #
         #self.Wvvvo  = self.fint2['Wvvvo' ]
         self.WvvvoR1  = self.fint2['WvvvoR1' ]
+
+def _cp(a):
+    return np.array(a, copy=False, order='C')
+

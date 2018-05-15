@@ -22,6 +22,7 @@ Non-relativistic Hartree-Fock analytical nuclear gradients
 
 import time
 import numpy
+from pyscf import gto
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import _vhf
@@ -69,6 +70,8 @@ def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
     return de
 
 def _write(dev, mol, de, atmlst):
+    if atmlst is None:
+        atmlst = range(mol.natm)
     dev.stdout.write('         x                y                z\n')
     for k, ia in enumerate(atmlst):
         dev.stdout.write('%d %s  %15.10f  %15.10f  %15.10f\n' %
@@ -98,6 +101,30 @@ def get_hcore(mol):
     if mol.has_ecp():
         h += mol.intor('ECPscalar_ipnuc', comp=3)
     return -h
+
+def hcore_generator(mf, mol=None):
+    if mol is None: mol = mf.mol
+    with_x2c = getattr(mf.base, 'with_x2c', None)
+    if with_x2c:
+        hcore_deriv = with_x2c.hcore_deriv_generator(deriv=1)
+    else:
+        with_ecp = mol.has_ecp()
+        if with_ecp:
+            ecp_atoms = set(mol._ecpbas[:,gto.ATOM_OF])
+        else:
+            ecp_atoms = ()
+        aoslices = mol.aoslice_by_atom()
+        h1 = mf.get_hcore(mol)
+        def hcore_deriv(atm_id):
+            shl0, shl1, p0, p1 = aoslices[atm_id]
+            with mol.with_rinv_as_nucleus(atm_id):
+                vrinv = mol.intor('int1e_iprinv', comp=3) # <\nabla|1/r|>
+                vrinv *= -mol.atom_charge(atm_id)
+                if with_ecp and atm_id in ecp_atoms:
+                    vrinv += mol.intor('ECPscalar_iprinv', comp=3)
+            vrinv[:,p0:p1] += h1[:,p0:p1]
+            return vrinv + vrinv.transpose(0,2,1)
+    return hcore_deriv
 
 def get_ovlp(mol):
     return -mol.intor('int1e_ipovlp', comp=3)
@@ -142,26 +169,31 @@ def as_scanner(mf_grad):
 
     Examples::
 
-        >>> from pyscf import gto, scf, grad
-        >>> mol = gto.M(atom='H 0 0 0; F 0 0 1')
-        >>> hf_scanner = scf.RHF(mol).apply(grad.RHF).as_scanner()
-        >>> e_tot, grad = hf_scanner(gto.M(atom='H 0 0 0; F 0 0 1.1'))
-        >>> e_tot, grad = hf_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
+    >>> from pyscf import gto, scf, grad
+    >>> mol = gto.M(atom='H 0 0 0; F 0 0 1')
+    >>> hf_scanner = scf.RHF(mol).apply(grad.RHF).as_scanner()
+    >>> e_tot, grad = hf_scanner(gto.M(atom='H 0 0 0; F 0 0 1.1'))
+    >>> e_tot, grad = hf_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
     '''
+    if isinstance(mf_grad, lib.GradScanner):
+        return mf_grad
+
     logger.info(mf_grad, 'Create scanner for %s', mf_grad.__class__)
+
     class SCF_GradScanner(mf_grad.__class__, lib.GradScanner):
         def __init__(self, g):
-            self.__dict__.update(g.__dict__)
-            self.base = g.base.as_scanner()
-        def __call__(self, mol, **kwargs):
+            lib.GradScanner.__init__(self, g)
+        def __call__(self, mol_or_geom, **kwargs):
+            if isinstance(mol_or_geom, gto.Mole):
+                mol = mol_or_geom
+            else:
+                mol = self.mol.set_geom_(mol_or_geom, inplace=False)
+
             mf_scanner = self.base
             e_tot = mf_scanner(mol)
             self.mol = mol
             de = self.kernel(**kwargs)
             return e_tot, de
-        @property
-        def converged(self):
-            return self.base.converged
     return SCF_GradScanner(mf_grad)
 
 
@@ -177,8 +209,8 @@ class Gradients(lib.StreamObject):
 # the kernel function can be reused in the DFT gradients code.
         self.grid_response = False
 
-        self.atmlst = range(self.mol.natm)
-        self.de = numpy.zeros((0,3))
+        self.atmlst = None
+        self.de = None
         self._keys = set(self.__dict__.keys())
 
     def dump_flags(self):
@@ -196,25 +228,7 @@ class Gradients(lib.StreamObject):
         if mol is None: mol = self.mol
         return get_hcore(mol)
 
-    def hcore_generator(self, mol=None):
-        if mol is None: mol = self.mol
-        with_x2c = getattr(self.base, 'with_x2c', None)
-        if with_x2c:
-            hcore_deriv = with_x2c.hcore_deriv_generator(deriv=1)
-        else:
-            with_ecp = mol.has_ecp()
-            aoslices = mol.aoslice_by_atom()
-            h1 = self.get_hcore(mol)
-            def hcore_deriv(atm_id):
-                shl0, shl1, p0, p1 = aoslices[atm_id]
-                with mol.with_rinv_as_nucleus(atm_id):
-                    vrinv = mol.intor('int1e_iprinv', comp=3) # <\nabla|1/r|>
-                    if with_ecp:
-                        vrinv += mol.intor('ECPscalar_iprinv', comp=3)
-                    vrinv *= -mol.atom_charge(atm_id)
-                vrinv[:,p0:p1] += h1[:,p0:p1]
-                return vrinv + vrinv.transpose(0,2,1)
-        return hcore_deriv
+    hcore_generator = hcore_generator
 
     def get_ovlp(self, mol=None):
         if mol is None: mol = self.mol

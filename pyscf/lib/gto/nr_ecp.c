@@ -5196,20 +5196,23 @@ static int _loc_ecpbas(int *ecploc, int *ecpbas, int necpbas)
 {
         int i, l, atm_id;
         ecploc[0] = 0;
-        int nslots = 1;
+        int nslots = 0;
         int atm_last = ecpbas[ATOM_OF];
         int l_last = ecpbas[ANG_OF];
         for (i = 1; i < necpbas; i++) {
                 atm_id = ecpbas[ATOM_OF+i*BAS_SLOTS];
                 l = ecpbas[ANG_OF +i*BAS_SLOTS];
                 if (atm_id != atm_last || l != l_last) {
+                        nslots++;
                         ecploc[nslots] = i;
-                        nslots += 1;
                         atm_last = atm_id;
                         l_last = l;
                 }
         }
-        ecploc[nslots] = necpbas;
+        if (necpbas != 0) {
+                nslots++;
+                ecploc[nslots] = necpbas;  // store boundary at last
+        }
         return nslots;
 }
 
@@ -5266,6 +5269,9 @@ int ECPtype2_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
                   int *atm, int natm, int *bas, int nbas, double *env,
                   ECPOpt *opt, double *cache)
 {
+        if (necpbas == 0) {
+                return 0;
+        }
         const int ish = shls[0];
         const int jsh = shls[1];
         const int li = bas[ANG_OF+ish*BAS_SLOTS];
@@ -5305,7 +5311,7 @@ int ECPtype2_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
         double buf[nfi*(ECP_LMAX*2+1)*(lj+ECP_LMAX+1)];
         double dca, dcb, s;
         double *rc, *pradi, *pradj, *prur;
-        int has_value;
+        int has_value = 0;
         int ecp_lmax = 0;
         for (i = 0; i < necpbas; i++) {
                 ecp_lmax = MAX(ecp_lmax, ecpbas[ANG_OF +i*BAS_SLOTS]);
@@ -5502,6 +5508,9 @@ int ECPtype1_cart(double *gctr, int *shls, int *ecpbas, int necpbas,
                   int *atm, int natm, int *bas, int nbas, double *env,
                   ECPOpt *opt, double *cache)
 {
+        if (necpbas == 0) {
+                return 0;
+        }
         const int ish = shls[0];
         const int jsh = shls[1];
         const int li = bas[ANG_OF+ish*BAS_SLOTS];
@@ -5775,6 +5784,26 @@ void ECPscalar_distribute(double *out, double *gctr, const int *dims,
                 }
         }
 }
+void ECPscalar_distribute0(double *out, const int *dims,
+                           const int comp, const int di, const int dj)
+{
+        const int dij = di * dj;
+        int i, j, ni, icomp;
+        if (dims == NULL) {
+                for (i = 0; i < dij * comp; i++) {
+                        out[i] = 0;
+                }
+        } else {
+                ni = dims[0];
+                for (icomp = 0; icomp < comp; icomp++) {
+                        for (i = 0; i < di; i++) {
+                        for (j = 0; j < dj; j++) {
+                                out[i+j*ni] = 0;
+                        } }
+                        out += dims[0] * dims[1];
+                }
+        }
+}
 
 /*
  * For moleintor.getints function
@@ -5824,8 +5853,10 @@ int ECPscalar_sph(double *out, int *dims, int *shls, int *atm, int natm,
                 for (i = 0; i < dij; i++) {
                         buf1[i] = buf1[i] + buf2[i];
                 }
+                ECPscalar_distribute(out, buf1, dims, 1, di, dj);
+        } else {
+                ECPscalar_distribute0(out, dims, 1, di, dj);
         }
-        ECPscalar_distribute(out, buf1, dims, 1, di, dj);
 
         if (stack != NULL) {
                 free(stack);
@@ -5869,8 +5900,10 @@ int ECPscalar_cart(double *out, int *dims, int *shls, int *atm, int natm,
                 for (i = 0; i < dij; i++) {
                         buf1[i] = buf1[i] + buf2[i];
                 }
+                ECPscalar_distribute(out, buf1, dims, 1, di, dj);
+        } else {
+                ECPscalar_distribute0(out, dims, 1, di, dj);
         }
-        ECPscalar_distribute(out, buf1, dims, 1, di, dj);
 
         if (stack != NULL) {
                 free(stack);

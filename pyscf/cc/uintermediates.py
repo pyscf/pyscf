@@ -22,17 +22,6 @@ from pyscf.cc.rintermediates import _get_vvvv
 
 # uccsd intermediates has been moved to gccsd intermediates
 
-def make_tau(t2, t1a, t1b, fac=1, out=None):
-    #:tmp = einsum('ia,jb->ijab',t1a,t1b)
-    #:t1t1 = tmp - tmp.transpose(1,0,2,3) - tmp.transpose(0,1,3,2) + tmp.transpose(1,0,3,2)
-    #:tau1 = t2 + fac*0.50*t1t1
-    tau1  = np.einsum('ia,jb->ijab', t1a, t1b)
-    tau1 -= np.einsum('ia,jb->jiab', t1a, t1b)
-    tau1 = tau1 - tau1.transpose(0,1,3,2)
-    tau1 *= fac * .5
-    tau1 += t2
-    return tau1
-
 def _get_vvVV(eris):
     if eris.vvVV is None and hasattr(eris, 'VVL'):  # DF eris
         vvL = np.asarray(eris.vvL)

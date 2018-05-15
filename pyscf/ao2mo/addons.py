@@ -20,9 +20,9 @@ import ctypes
 import tempfile
 import numpy
 import h5py
-import pyscf.lib
+from pyscf import lib
 
-libao2mo = pyscf.lib.load_library('libao2mo')
+libao2mo = lib.load_library('libao2mo')
 
 class load(object):
     '''load 2e integrals from hdf5 file
@@ -40,17 +40,18 @@ class load(object):
         if isinstance(self.eri, str):
             self.feri = h5py.File(self.eri, 'r')
             return self.feri[self.dataname]
-        elif (hasattr(self.eri, 'read') or #isinstance(self.eri, file) or
-              isinstance(self.eri, tempfile._TemporaryFileWrapper)):
+        elif isinstance(self.eri, h5py.Group):
+            return self.eri[self.dataname]
+        elif isinstance(getattr(self.eri, 'name', None), str):
             self.feri = h5py.File(self.eri.name)
             return self.feri[self.dataname]
-        else:
+        elif isinstance(self.eri, numpy.ndarray):
             return self.eri
+        else:
+            raise RuntimeError('Unknown eri type %s', type(self.eri))
 
     def __exit__(self, type, value, traceback):
-        if (isinstance(self.eri, str) or
-            (hasattr(self.eri, 'read') or
-             isinstance(self.eri, tempfile._TemporaryFileWrapper))):
+        if self.feri is not None:
             self.feri.close()
 
 
@@ -104,50 +105,89 @@ def restore(symmetry, eri, norb, tao=None):
     if targetsym not in ('8', '4', '1', '2kl', '2ij'):
         raise ValueError('symmetry = %s' % symmetry)
 
+    if eri.dtype != numpy.double:
+        raise RuntimeError('Complex integrals not supported')
+
     eri = numpy.asarray(eri, order='C')
     npair = norb*(norb+1)//2
-    if eri.size == norb**4:
-        origsym = '1'
+    if eri.size == norb**4:  # s1
         if targetsym == '1':
-            eri = eri.reshape(norb,norb,norb,norb)
+            return eri.reshape(norb,norb,norb,norb)
         elif targetsym == '2kl':
-            raise KeyError('TODO')
+            eri = lib.pack_tril(eri.reshape(norb**2,norb,norb))
+            return eri.reshape(norb,norb,npair)
         elif targetsym == '2ij':
-            raise KeyError('TODO')
-    elif eri.size == npair**2:
-        origsym = '4'
+            eri = lib.pack_tril(eri.reshape(norb,norb,norb**2), axis=0)
+            return eri.reshape(npair,norb,norb)
+        else:
+            return _convert('1', targetsym, eri, norb)
+
+    elif eri.size == npair**2:  # s4
         if targetsym == '4':
-            eri = eri.reshape(npair,npair)
+            return eri.reshape(npair,npair)
         elif targetsym == '8':
-            return pyscf.lib.pack_tril(eri.reshape(npair,-1))
+            return lib.pack_tril(eri.reshape(npair,npair))
         elif targetsym == '2kl':
-            raise KeyError('TODO')
+            return lib.unpack_tril(eri, lib.SYMMETRIC, axis=0)
         elif targetsym == '2ij':
-            raise KeyError('TODO')
+            return lib.unpack_tril(eri, lib.SYMMETRIC, axis=-1)
+        else:
+            return _convert('4', targetsym, eri, norb)
+
     elif eri.size == npair*(npair+1)//2: # 8-fold
-        origsym = '8'
-        if targetsym == '4':
-            return pyscf.lib.unpack_tril(eri.ravel())
+        if targetsym == '8':
+            return eri.ravel()
+        elif targetsym == '4':
+            return lib.unpack_tril(eri.ravel(), lib.SYMMETRIC)
         elif targetsym == '2kl':
-            raise KeyError('TODO')
+            return lib.unpack_tril(lib.unpack_tril(eri.ravel()), lib.SYMMETRIC, axis=0)
         elif targetsym == '2ij':
-            raise KeyError('TODO')
-    elif eri.size == npair*norb**2 and eri.shape[0] == npair:
-        raise KeyError('TODO')
-    elif eri.size == npair*norb**2 and eri.shape[-1] == npair:
-        raise KeyError('TODO')
+            return lib.unpack_tril(lib.unpack_tril(eri.ravel()), lib.SYMMETRIC, axis=-1)
+        else:
+            return _convert('8', targetsym, eri, norb)
+
+    elif eri.size == npair*norb**2 and eri.shape[0] == npair:  # s2ij
+        if targetsym == '2ij':
+            return eri.reshape(npair,norb,norb)
+        elif targetsym == '8':
+            eri = lib.pack_tril(eri.reshape(npair,norb,norb))
+            return lib.pack_tril(eri)
+        elif targetsym == '4':
+            return lib.pack_tril(eri.reshape(npair,norb,norb))
+        elif targetsym == '1':
+            eri = lib.unpack_tril(eri.reshape(npair,norb**2), lib.SYMMETRIC, axis=0)
+            return eri.reshape(norb,norb,norb,norb)
+        elif targetsym == '2kl':
+            tril2sq = lib.square_mat_in_trilu_indices(norb)
+            trilidx = numpy.tril_indices(norb)
+            eri = lib.take_2d(eri.reshape(npair,norb**2), tril2sq.ravel(),
+                              trilidx[0]*norb+trilidx[1])
+            return eri.reshape(norb,norb,npair)
+
+    elif eri.size == npair*norb**2 and eri.shape[-1] == npair:  # s2kl
+        if targetsym == '2kl':
+            return eri.reshape(norb,norb,npair)
+        elif targetsym == '8':
+            eri = lib.pack_tril(eri.reshape(norb,norb,npair), axis=0)
+            return lib.pack_tril(eri)
+        elif targetsym == '4':
+            return lib.pack_tril(eri.reshape(norb,norb,npair), axis=0)
+        elif targetsym == '1':
+            eri = lib.unpack_tril(eri.reshape(norb**2,npair), lib.SYMMETRIC, axis=-1)
+            return eri.reshape(norb,norb,norb,norb)
+        elif targetsym == '2ij':
+            tril2sq = lib.square_mat_in_trilu_indices(norb)
+            trilidx = numpy.tril_indices(norb)
+            eri = lib.take_2d(eri.reshape(norb**2,npair),
+                              trilidx[0]*norb+trilidx[1], tril2sq.ravel())
+            return eri.reshape(npair,norb,norb)
+
     else:
-        raise ValueError('eri.size = %d, norb = %d' % (eri.size, norb))
+        raise RuntimeError('eri.size = %d, norb = %d' % (eri.size, norb))
 
-    if origsym == targetsym:
-        return eri
-
-    if numpy.iscomplexobj(eri):
-        raise RuntimeError('4-fold symmetry and 8-fold symmetry are not '
-                           'available for complex integrals')
-    else:
-        fn = getattr(libao2mo, 'AO2MOrestore_nr%sto%s'%(origsym,targetsym))
-
+def _convert(origsym, targetsym, eri, norb):
+    fn = getattr(libao2mo, 'AO2MOrestore_nr%sto%s'%(origsym,targetsym))
+    npair = norb*(norb+1)//2
     if targetsym == '1':
         eri1 = numpy.empty((norb,norb,norb,norb), dtype=eri.dtype)
     elif targetsym == '4':
@@ -164,7 +204,7 @@ def restore(symmetry, eri, norb, tao=None):
 def _stand_sym_code(sym):
     if isinstance(sym, int):
         return str(sym)
-    elif 's' == sym[0] or 'a' == sym[0]:
+    elif 's' == sym[0]:
         return sym[1:]
     else:
         return sym

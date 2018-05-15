@@ -27,6 +27,8 @@ from pyscf.cc import gintermediates as imd
 from pyscf.cc.addons import spatial2spin, spin2spatial
 from pyscf import __config__
 
+MEMORYMIN = getattr(__config__, 'cc_ccsd_memorymin', 2000)
+
 #einsum = np.einsum
 einsum = lib.einsum
 
@@ -106,9 +108,9 @@ def energy(cc, t1, t2, eris):
 vector_to_amplitudes = ccsd.vector_to_amplitudes_s4
 amplitudes_to_vector = ccsd.amplitudes_to_vector_s4
 
-def amplitudes_from_rccsd(t1, t2):
+def amplitudes_from_rccsd(t1, t2, orbspin=None):
     '''Convert spatial orbital T1,T2 to spin-orbital T1,T2'''
-    return spatial2spin(t1), spatial2spin(t2)
+    return spatial2spin(t1, orbspin), spatial2spin(t2, orbspin)
 
 
 class GCCSD(ccsd.CCSD):
@@ -149,7 +151,7 @@ class GCCSD(ccsd.CCSD):
             pt = gmp2.GMP2(self._scf, self.frozen, self.mo_coeff, self.mo_occ)
             self.e_corr, self.t2 = pt.kernel(eris=eris)
             nocc, nvir = self.t2.shape[1:3]
-            self.t1 = numpy.zeros((nocc,nvir))
+            self.t1 = np.zeros((nocc,nvir))
             return self.e_corr, self.t1, self.t2
 
         if eris is None: eris = self.ao2mo(self.mo_coeff)
@@ -171,6 +173,9 @@ class GCCSD(ccsd.CCSD):
         if nocc is None: nocc = self.nocc
         if nmo is None: nmo = self.nmo
         return vector_to_amplitudes(vec, nmo, nocc)
+
+    def amplitudes_from_rccsd(self, t1, t2, orbspin=None):
+        return amplitudes_from_rccsd(t1, t2, orbspin)
 
 
     def solve_lambda(self, t1=None, t2=None, l1=None, l2=None,
@@ -263,6 +268,12 @@ class GCCSD(ccsd.CCSD):
                 orbspin = orbspin[self.get_frozen_mask()]
         return spin2spatial(tx, orbspin)
 
+    def density_fit(self):
+        raise NotImplementedError
+
+    def nuc_grad_method(self):
+        raise NotImplementedError
+
 
 class _PhysicistsERIs:
     '''<pq||rs> = <pq|rs> - <pq|sr>'''
@@ -331,7 +342,7 @@ def _make_eris_incore(mycc, mo_coeff=None, ao2mofn=None):
         else:
             mo = mo_a + mo_b
             eri = ao2mo.kernel(mycc._scf._eri, mo)
-            if eri.size == nmo**4:
+            if eri.size == nmo**4:  # if mycc._scf._eri is a complex array
                 sym_forbid = (orbspin[:,None] != orbspin).ravel()
             else:  # 4-fold symmetry
                 sym_forbid = (orbspin[:,None] != orbspin)[np.tril_indices(nmo)]
@@ -381,7 +392,7 @@ def _make_eris_outcore(mycc, mo_coeff=None):
 
         max_memory = mycc.max_memory-lib.current_memory()[0]
         blksize = min(nocc, max(2, int(max_memory*1e6/8/(nmo**3*2))))
-        max_memory = max(2000, max_memory)
+        max_memory = max(MEMORYMIN, max_memory)
 
         fswap = lib.H5TmpFile()
         ao2mo.kernel(mycc.mol, (orbo_a,mo_a,mo_a,mo_a), fswap, 'aaaa',
@@ -455,7 +466,7 @@ def _make_eris_outcore(mycc, mo_coeff=None):
 
         max_memory = mycc.max_memory-lib.current_memory()[0]
         blksize = min(nocc, max(2, int(max_memory*1e6/8/(nmo**3*2))))
-        max_memory = max(2000, max_memory)
+        max_memory = max(MEMORYMIN, max_memory)
 
         fswap = lib.H5TmpFile()
         ao2mo.kernel(mycc.mol, (orbo,mo,mo,mo), fswap,

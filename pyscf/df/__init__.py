@@ -40,7 +40,7 @@ from .df import DF, DF4C
 from . import r_incore
 
 def density_fit(obj, *args, **kwargs):
-    '''Given SCF/MCSCF object, use density fitting to approximate the 2e
-    integrals.'''
+    '''Given SCF/MCSCF or post-HF object, use density fitting technique to
+    approximate the 2e integrals.'''
     return obj.density_fit(*args, **kwargs)
 

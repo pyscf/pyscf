@@ -191,11 +191,17 @@ def DMRG_COMPRESS_NEVPT(mc, maxM=500, root=0, nevptsolver=None, tol=1e-7,
 
     if nevptsolver is None:
         nevptsolver = default_nevpt_schedule(mol, maxM, tol)
-        nevptsolver.__dict__.update(mc.fcisolver.__dict__)
+        #nevptsolver.__dict__.update(mc.fcisolver.__dict__)
         nevptsolver.wfnsym = wfnsym
         nevptsolver.block_extra_keyword = mc.fcisolver.block_extra_keyword
     nevptsolver.nroots = nroots
     nevptsolver.executable = settings.BLOCKEXE_COMPRESS_NEVPT
+    if nevptsolver.executable == getattr(mc.fcisolver, 'executable', None):
+        logger.warn(mc, 'DMRG executable file for nevptsolver %s is the same '
+                    'to the executable file for DMRG solver %s. If they are '
+                    'both compiled by MPI compilers, they may cause error or '
+                    'random results in DMRG-NEVPT calculation.')
+
     nevpt_scratch = os.path.abspath(nevptsolver.scratchDirectory)
     dmrg_scratch = os.path.abspath(mc.fcisolver.scratchDirectory)
 
@@ -209,7 +215,7 @@ def DMRG_COMPRESS_NEVPT(mc, maxM=500, root=0, nevptsolver=None, tol=1e-7,
     with open(conf, 'r') as f:
         block_conf = f.readlines()
         block_conf = [l for l in block_conf if 'prefix' not in l]
-        block_conf = '\n'.join(block_conf)
+        block_conf = ''.join(block_conf)
 
     with h5py.File(nevpt_integral_file) as fh5:
         if 'dmrg.conf' in fh5:

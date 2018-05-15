@@ -30,6 +30,7 @@ from pyscf.lib import logger
 from pyscf.scf import hf
 from pyscf.scf import _vhf
 from pyscf.scf import chkfile
+from pyscf.data import nist
 from pyscf import __config__
 
 
@@ -76,9 +77,10 @@ def kernel(mf, conv_tol=1e-9, conv_tol_grad=None,
                      callback=callback, conv_check=conv_check)
 
 def get_jk_coulomb(mol, dm, hermi=1, coulomb_allow='SSSS',
-                   opt_llll=None, opt_ssll=None, opt_ssss=None):
+                   opt_llll=None, opt_ssll=None, opt_ssss=None, verbose=None):
+    log = logger.new_logger(mol, verbose)
     if coulomb_allow.upper() == 'LLLL':
-        logger.info(mol, 'Coulomb integral: (LL|LL)')
+        log.debug('Coulomb integral: (LL|LL)')
         j1, k1 = _call_veff_llll(mol, dm, hermi, opt_llll)
         n2c = j1.shape[1]
         vj = numpy.zeros_like(dm)
@@ -87,14 +89,14 @@ def get_jk_coulomb(mol, dm, hermi=1, coulomb_allow='SSSS',
         vk[...,:n2c,:n2c] = k1
     elif coulomb_allow.upper() == 'SSLL' \
       or coulomb_allow.upper() == 'LLSS':
-        logger.info(mol, 'Coulomb integral: (LL|LL) + (SS|LL)')
+        log.debug('Coulomb integral: (LL|LL) + (SS|LL)')
         vj, vk = _call_veff_ssll(mol, dm, hermi, opt_ssll)
         j1, k1 = _call_veff_llll(mol, dm, hermi, opt_llll)
         n2c = j1.shape[1]
         vj[...,:n2c,:n2c] += j1
         vk[...,:n2c,:n2c] += k1
     else: # coulomb_allow == 'SSSS'
-        logger.info(mol, 'Coulomb integral: (LL|LL) + (SS|LL) + (SS|SS)')
+        log.debug('Coulomb integral: (LL|LL) + (SS|LL) + (SS|SS)')
         vj, vk = _call_veff_ssll(mol, dm, hermi, opt_ssll)
         j1, k1 = _call_veff_llll(mol, dm, hermi, opt_llll)
         n2c = j1.shape[1]
@@ -104,9 +106,7 @@ def get_jk_coulomb(mol, dm, hermi=1, coulomb_allow='SSSS',
         vj[...,n2c:,n2c:] += j1
         vk[...,n2c:,n2c:] += k1
     return vj, vk
-
-def get_jk(mol, dm, hermi=1, coulomb_allow='SSSS'):
-    return get_jk_coulomb(mol, dm, hermi=hermi, coulomb_allow=coulomb_allow)
+get_jk = get_jk_coulomb
 
 
 def get_hcore(mol):
@@ -136,8 +136,7 @@ def get_ovlp(mol):
     s1e[n2c:,n2c:] = t * (.5/c)**2
     return s1e
 
-def make_rdm1(mo_coeff, mo_occ):
-    return numpy.dot(mo_coeff*mo_occ, mo_coeff.T.conj())
+make_rdm1 = hf.make_rdm1
 
 def init_guess_by_minao(mol):
     '''Initial guess in terms of the overlap to minimal basis.'''
@@ -146,8 +145,7 @@ def init_guess_by_minao(mol):
 
 def init_guess_by_1e(mol):
     '''Initial guess from one electron system.'''
-    mf = UHF(mol)
-    return mf.init_guess_by_1e(mol)
+    return UHF(mol).init_guess_by_1e(mol)
 
 def init_guess_by_atom(mol):
     '''Initial guess from atom calculation.'''
@@ -210,17 +208,15 @@ def init_guess_by_chkfile(mol, chkfile_name, project=None):
         dm = _proj_dmll(chk_mol, dm, mol)
     return dm
 
+
 def get_init_guess(mol, key='minao'):
-    if callable(key):
-        return key(mol)
-    elif key.lower() == '1e':
-        return init_guess_by_1e(mol)
-    elif key.lower() == 'atom':
-        return init_guess_by_atom(mol)
-    elif key.lower() == 'chkfile':
-        raise RuntimeError('Call pyscf.scf.hf.init_guess_by_chkfile instead')
-    else:
-        return init_guess_by_minao(mol)
+    '''Generate density matrix for initial guess
+
+    Kwargs:
+        key : str
+            One of 'minao', 'atom', 'hcore', '1e', 'chkfile'.
+    '''
+    return UHF(mol).get_init_guess(mol, key)
 
 def time_reversal_matrix(mol, mat):
     ''' T(A_ij) = A[T(i),T(j)]^*
@@ -249,14 +245,11 @@ def time_reversal_matrix(mol, mat):
     return tmat.T
 
 def analyze(mf, verbose=logger.DEBUG, **kwargs):
-    #from pyscf.tools import dump_mat
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(mf.stdout, verbose)
+    from pyscf.tools import dump_mat
+    log = logger.new_logger(mf, verbose)
     mo_energy = mf.mo_energy
     mo_occ = mf.mo_occ
-    #mo_coeff = mf.mo_coeff
+    mo_coeff = mf.mo_coeff
 
     log.info('**** MO energy ****')
     for i in range(len(mo_energy)):
@@ -266,12 +259,84 @@ def analyze(mf, verbose=logger.DEBUG, **kwargs):
         else:
             log.info('virtual MO #%d energy= %.15g occ= %g', \
                      i+1, mo_energy[i], mo_occ[i])
-#TODO    if mf.verbose >= logger.DEBUG:
-#TODO        log.debug(' ** MO coefficients **')
-#TODO        label = mf.mol.spinor_labels(True)
-#TODO        dump_mat.dump_rec(mf.stdout, mo_coeff, label, start=1)
-#TODO    dm = mf.make_rdm1(mo_coeff, mo_occ)
-#TODO    return mf.mulliken_pop(mf.mol, dm, mf.get_ovlp(), log)
+    mol = mf.mol
+    if mf.verbose >= logger.DEBUG1:
+        log.debug(' ** MO coefficients of large component of postive state (real part) **')
+        label = mol.spinor_labels()
+        n2c = mo_coeff.shape[0] // 2
+        dump_mat.dump_rec(mf.stdout, mo_coeff[n2c:,:n2c].real, label, start=1)
+    dm = mf.make_rdm1(mo_coeff, mo_occ)
+    pop_chg = mf.mulliken_pop(mol, dm, mf.get_ovlp(), log)
+    dip = mf.dip_moment(mol, dm, verbose=log)
+    return pop_chg, dip
+
+def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
+    r'''Mulliken population analysis
+
+    .. math:: M_{ij} = D_{ij} S_{ji}
+
+    Mulliken charges
+
+    .. math:: \delta_i = \sum_j M_{ij}
+
+    '''
+    if s is None: s = get_ovlp(mol)
+    log = logger.new_logger(mol, verbose)
+    pop = numpy.einsum('ij,ji->i', dm, s).real
+
+    log.info(' ** Mulliken pop  **')
+    for i, s in enumerate(mol.spinor_labels()):
+        log.info('pop of  %s %10.5f', s, pop[i])
+
+    log.note(' ** Mulliken atomic charges  **')
+    chg = numpy.zeros(mol.natm)
+    for i, s in enumerate(mol.spinor_labels(fmt=None)):
+        chg[s[0]] += pop[i]
+    chg = mol.atom_charges() - chg
+    for ia in range(mol.natm):
+        symb = mol.atom_symbol(ia)
+        log.note('charge of  %d%s =   %10.5f', ia, symb, chg[ia])
+    return pop, chg
+
+def dip_moment(mol, dm, unit='Debye', verbose=logger.NOTE, **kwargs):
+    r''' Dipole moment calculation
+
+    .. math::
+
+        \mu_x = -\sum_{\mu}\sum_{\nu} P_{\mu\nu}(\nu|x|\mu) + \sum_A Q_A X_A\\
+        \mu_y = -\sum_{\mu}\sum_{\nu} P_{\mu\nu}(\nu|y|\mu) + \sum_A Q_A Y_A\\
+        \mu_z = -\sum_{\mu}\sum_{\nu} P_{\mu\nu}(\nu|z|\mu) + \sum_A Q_A Z_A
+
+    where :math:`\mu_x, \mu_y, \mu_z` are the x, y and z components of dipole
+    moment
+
+    Args:
+         mol: an instance of :class:`Mole`
+         dm : a 2D ndarrays density matrices
+
+    Return:
+        A list: the dipole moment on x, y and z component
+    '''
+    log = logger.new_logger(mol, verbose)
+
+    charges = mol.atom_charges()
+    coords  = mol.atom_coords()
+    charge_center = numpy.einsum('i,ix->x', charges, coords)
+    with mol.with_common_orig(charge_center):
+        ll_dip = mol.intor_symmetric('int1e_r_spinor', comp=3)
+        ss_dip = mol.intor_symmetric('int1e_sprsp_spinor', comp=3)
+
+    n2c = mol.nao_2c()
+    c = lib.param.LIGHT_SPEED
+    dip = numpy.einsum('xij,ji->x', ll_dip, dm[:n2c,:n2c]).real
+    dip+= numpy.einsum('xij,ji->x', ss_dip, dm[n2c:,n2c:]).real * (.5/c**2)
+
+    if unit.upper() == 'DEBYE':
+        dip *= nist.AU2DEBYE
+        log.note('Dipole moment(X, Y, Z, Debye): %8.5f, %8.5f, %8.5f', *dip)
+    else:
+        log.note('Dipole moment(X, Y, Z, A.U.): %8.5f, %8.5f, %8.5f', *dip)
+    return dip
 
 def get_grad(mo_coeff, mo_occ, fock_ao):
     '''DHF Gradients'''
@@ -312,9 +377,8 @@ class UHF(hf.SCF):
         hf.SCF.__init__(self, mol)
         self._coulomb_now = 'SSSS' # 'SSSS' ~ LLLL+LLSS+SSSS
         self.opt = (None, None, None, None) # (opt_llll, opt_ssll, opt_ssss, opt_gaunt)
-
-        keys = set(('conv_tol', 'with_ssss', 'with_gaunt', 'with_breit'))
-        self._keys = set(self.__dict__.keys()).union(keys)
+        self._keys.update(('conv_tol', 'with_ssss', 'with_gaunt',
+                           'with_breit', 'opt'))
 
     def dump_flags(self):
         hf.SCF.dump_flags(self)
@@ -323,11 +387,13 @@ class UHF(hf.SCF):
         logger.info(self, 'light speed = %s', lib.param.LIGHT_SPEED)
         return self
 
+    @lib.with_doc(get_hcore.__doc__)
     def get_hcore(self, mol=None):
         if mol is None:
             mol = self.mol
         return get_hcore(mol)
 
+    @lib.with_doc(get_ovlp.__doc__)
     def get_ovlp(self, mol=None):
         if mol is None:
             mol = self.mol
@@ -368,16 +434,14 @@ class UHF(hf.SCF):
         if mo_energy[n2c] > -1.999 * c**2:
             mo_occ[n2c:n2c+mol.nelectron] = 1
         else:
-            n = 0
-            for i, e in enumerate(mo_energy):
-                if e > -1.999 * c**2 and n < mol.nelectron:
-                    mo_occ[i] = 1
-                    n += 1
+            lumo = mo_energy[mo_energy > -1.999 * c**2][mol.nelectron]
+            mo_occ[mo_energy > -1.999 * c**2] = 1
+            mo_occ[mo_energy >= lumo] = 0
         if self.verbose >= logger.INFO:
             logger.info(self, 'HOMO %d = %.12g  LUMO %d = %.12g',
                         n2c+mol.nelectron, mo_energy[n2c+mol.nelectron-1],
                         n2c+mol.nelectron+1, mo_energy[n2c+mol.nelectron])
-            logger.debug(self, 'NES  mo_energy = %s', mo_energy[:n2c])
+            logger.debug1(self, 'NES  mo_energy = %s', mo_energy[:n2c])
             logger.debug(self, 'PES  mo_energy = %s', mo_energy[n2c:])
         return mo_occ
 
@@ -416,30 +480,27 @@ class UHF(hf.SCF):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         t0 = (time.clock(), time.time())
-        verbose_bak, mol.verbose = mol.verbose, self.verbose
-        stdout_bak,  mol.stdout  = mol.stdout , self.stdout
+        log = logger.new_logger(self)
         if self.direct_scf and self.opt[0] is None:
             self.opt = self.init_direct_scf(mol)
         opt_llll, opt_ssll, opt_ssss, opt_gaunt = self.opt
 
         vj, vk = get_jk_coulomb(mol, dm, hermi, self._coulomb_now,
-                                opt_llll, opt_ssll, opt_ssss)
+                                opt_llll, opt_ssll, opt_ssss, log)
 
         if self.with_breit:
-            if 'SSSS' in self._coulomb_now.upper() or not self.with_ssss:
+            if 'SSSS' in self._coulomb_now.upper():
                 vj1, vk1 = _call_veff_gaunt_breit(mol, dm, hermi, opt_gaunt, True)
-                logger.info(self, 'Add Breit term')
+                log.debug('Add Breit term')
                 vj += vj1
                 vk += vk1
         elif self.with_gaunt and 'SS' in self._coulomb_now.upper():
-            logger.info(self, 'Add Gaunt term')
+            log.debug('Add Gaunt term')
             vj1, vk1 = _call_veff_gaunt_breit(mol, dm, hermi, opt_gaunt, False)
             vj += vj1
             vk += vk1
 
-        mol.verbose = verbose_bak
-        mol.stdout  = stdout_bak
-        logger.timer(self, 'vj and vk', *t0)
+        log.timer('vj and vk', *t0)
         return vj, vk
 
     def get_veff(self, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
@@ -473,11 +534,34 @@ class UHF(hf.SCF):
         if verbose is None: verbose = self.verbose
         return analyze(self, verbose)
 
-    def x2c(self):
-        import pyscf.x2c.x2c
-        x2chf = pyscf.x2c.x2c.UHF(self.mol)
+    @lib.with_doc(mulliken_pop.__doc__)
+    def mulliken_pop(self, mol=None, dm=None, s=None, verbose=logger.DEBUG):
+        if mol is None: mol = self.mol
+        if dm is None: dm = self.make_rdm1()
+        if s is None: s = self.get_ovlp(mol)
+        return mulliken_pop(mol, dm, s=s, verbose=verbose)
+
+    @lib.with_doc(dip_moment.__doc__)
+    def dip_moment(self, mol=None, dm=None, unit='Debye', verbose=logger.NOTE,
+                   **kwargs):
+        if mol is None: mol = self.mol
+        if dm is None: dm =self.make_rdm1()
+        return dip_moment(mol, dm, unit, verbose=verbose, **kwargs)
+
+    def sfx2c1e(self):
+        raise NotImplementedError
+    def x2c1e(self):
+        from pyscf.x2c import x2c
+        x2chf = x2c.UHF(self.mol)
+        x2c_keys = x2chf._keys
         x2chf.__dict__.update(self.__dict__)
+        x2chf._keys = self._keys.union(x2c_keys)
         return x2chf
+    x2c = x2c1e
+
+    def nuc_grad_method(self):
+        from pyscf.grad import dhf
+        return dhf.Gradients(self)
 DHF = UHF
 
 
@@ -512,29 +596,6 @@ class RHF(UHF):
         if mo_occ is None: mo_occ = self.mo_occ
         dm = make_rdm1(mo_coeff, mo_occ)
         return (dm + time_reversal_matrix(self.mol, dm)) * .5
-
-    def get_occ(self, mo_energy=None, mo_coeff=None):
-        if mo_energy is None: mo_energy = self.mo_energy
-        mol = self.mol
-        c = lib.param.LIGHT_SPEED
-        n4c = len(mo_energy)
-        n2c = n4c // 2
-        mo_occ = numpy.zeros(n2c * 2)
-        if mo_energy[n2c] > -1.999 * c**2:
-            mo_occ[n2c:n2c+mol.nelectron] = 1
-        else:
-            n = 0
-            for i, e in enumerate(mo_energy):
-                if e > -1.999 * c**2 and n < mol.nelectron:
-                    mo_occ[i] = 1
-                    n += 1
-        if self.verbose >= logger.INFO:
-            logger.info(self, 'HOMO %d = %.12g, LUMO %d = %.12g,',
-                        (n2c+mol.nelectron)//2, mo_energy[n2c+mol.nelectron-1],
-                        (n2c+mol.nelectron)//2+1, mo_energy[n2c+mol.nelectron])
-            logger.debug(self, 'NES  mo_energy = %s', mo_energy[:n2c])
-            logger.debug(self, 'PES  mo_energy = %s', mo_energy[n2c:])
-        return mo_occ
 
 
 def _jk_triu_(vj, vk, hermi):
@@ -672,8 +733,11 @@ def _call_veff_gaunt_breit(mol, dm, hermi=1, mf_opt=None, with_breit=False):
         return -vj*c1**2, -vk*c1**2
 
 def _proj_dmll(mol_nr, dm_nr, mol):
+    '''Project non-relativistic atomic density matrix to large component spinor
+    representation
+    '''
     from pyscf.scf import addons
-    proj = addons.project_mo_nr2r(mol_nr, 1, mol)
+    proj = addons.project_mo_nr2r(mol_nr, numpy.eye(mol_nr.nao_nr()), mol)
 
     n2c = proj.shape[0]
     n4c = n2c * 2

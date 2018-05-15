@@ -38,7 +38,6 @@ from pyscf.grad import tdrhf
 #
 def kernel(td_grad, x_y, singlet=True, atmlst=None,
            max_memory=2000, verbose=logger.INFO):
-    x, y = x_y
     log = logger.new_logger(td_grad, verbose)
     time0 = time.clock(), time.time()
 
@@ -50,6 +49,7 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
     nao, nmo = mo_coeff.shape
     nocc = (mo_occ>0).sum()
     nvir = nmo - nocc
+    x, y = x_y
     xpy = (x+y).reshape(nocc,nvir).T
     xmy = (x-y).reshape(nocc,nvir).T
     orbv = mo_coeff[:,nocc:]
@@ -120,7 +120,7 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
             vj, vk = mf.get_jk(mol, dm)
             veff = vj * 2 - hyb * vk + vindxc
             if abs(omega) > 1e-10:
-                veff -= rks._get_k_lr(mol, dm, omega) * (alpha-hyb)
+                veff -= rks._get_k_lr(mol, dm, omega, hermi=1) * (alpha-hyb)
         else:
             vj = mf.get_j(mol, dm)
             veff = vj * 2 + vindxc
@@ -173,7 +173,7 @@ def kernel(td_grad, x_y, singlet=True, atmlst=None,
         vk *= hyb
         if abs(omega) > 1e-10:
             with mol.with_range_coulomb(omega):
-                vk += ks_grad.get_k(mol, dm) * (alpha-hyb)
+                vk += td_grad.get_k(mol, dm) * (alpha-hyb)
         vj = vj.reshape(-1,3,nao,nao)
         vk = vk.reshape(-1,3,nao,nao)
         if singlet:
@@ -357,7 +357,7 @@ if __name__ == '__main__':
     mol.build()
 
     mf = dft.RKS(mol)
-    mf.xc = 'LDA'
+    mf.xc = 'LDA,'
     mf.grids.prune = False
     mf.conv_tol = 1e-14
 #    mf.grids.level = 6
@@ -399,7 +399,7 @@ if __name__ == '__main__':
 
     mol.set_geom_('H 0 0 1.804; F 0 0 0', unit='B')
     mf = dft.RKS(mol)
-    mf.xc = 'lda'
+    mf.xc = 'lda,'
     mf.conv_tol = 1e-14
     mf.kernel()
     td = tddft.TDA(mf)

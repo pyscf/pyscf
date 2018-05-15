@@ -23,6 +23,7 @@ from pyscf import cc
 from pyscf import ao2mo
 from pyscf.cc import ccsd
 from pyscf.cc import uccsd
+from pyscf.cc import gccsd
 from pyscf.cc import rccsd
 from pyscf.cc import dfccsd
 
@@ -40,6 +41,11 @@ mol.build()
 mf = scf.RHF(mol)
 mf.conv_tol_grad = 1e-8
 ehf = mf.kernel()
+
+def tearDownModule():
+    global mol, mf
+    mol.stdout.close()
+    del mol, mf
 
 
 class KnownValues(unittest.TestCase):
@@ -67,17 +73,6 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(mcc.ecc, -0.2133432312951, 8)
         self.assertAlmostEqual(abs(mcc.t2).sum(), 5.63970279799556984, 6)
 
-        nocc, nvir = t1.shape
-        tau = t2 + numpy.einsum('ia,jb->ijab', t1, t1)
-        ovvv = lib.unpack_tril(eris.ovvv).reshape(nocc,nvir,nvir,nvir)
-        tmp = -numpy.einsum('ijcd,ka,kdcb->ijba', tau, t1, ovvv)
-        t2a = tmp + tmp.transpose(1,0,3,2)
-        t2a += mcc._add_vvvv(t1, t2, eris)
-        mcc.direct = True
-        eris.vvvv = None
-        t2b = mcc._add_vvvv(t1, t2, eris)
-        self.assertTrue(numpy.allclose(t2a,t2b))
-
     def test_ccsd_frozen(self):
         mcc = cc.ccsd.CC(mf, frozen=range(1))
         mcc.conv_tol = 1e-10
@@ -95,7 +90,7 @@ class KnownValues(unittest.TestCase):
         mcc.kernel()
         self.assertAlmostEqual(mcc.ecc, -0.21303885376969361, 8)
 
-    def test_h2o_non_hf_orbital(self):
+    def test_h2o_non_hf_orbital_high_cost(self):
         nmo = mf.mo_energy.size
         nocc = mol.nelectron // 2
         nvir = nmo - nocc
@@ -161,15 +156,15 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e1, mcc.e_tot, 7)
 
     def test_scanner(self):
-        mol1 = mol.copy()
-        mol1.set_geom_('''
-        O   0.   0.       .1
-        H   0.   -0.757   0.587
-        H   0.   0.757    0.587''')
         cc_scanner = scf.RHF(mol).apply(cc.CCSD).as_scanner()
         cc_scanner.conv_tol = 1e-8
         self.assertAlmostEqual(cc_scanner(mol), -76.240108935038691, 6)
-        self.assertAlmostEqual(cc_scanner(mol1), -76.228972886940639, 6)
+        geom = '''
+        O   0.   0.       .1
+        H   0.   -0.757   0.587
+        H   0.   0.757    0.587'''
+        cc_scanner = cc_scanner.as_scanner()
+        self.assertAlmostEqual(cc_scanner(geom), -76.228972886940639, 6)
 
     def test_init(self):
         self.assertTrue(isinstance(cc.CCSD(mf), ccsd.CCSD))
@@ -187,6 +182,7 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(isinstance(cc.UCCSD(mf.newton().density_fit()), uccsd.UCCSD))
 #        self.assertTrue(not isinstance(cc.UCCSD(mf.newton().density_fit()), dfccsd.UCCSD))
 #        self.assertTrue(isinstance(cc.UCCSD(mf.density_fit().newton().density_fit()), dfccsd.UCCSD))
+        self.assertTrue(isinstance(cc.CCSD(scf.GHF(mol)), gccsd.GCCSD))
 
         umf = scf.convert_to_uhf(mf, scf.UHF(mol))
         self.assertTrue(isinstance(cc.CCSD(umf), uccsd.UCCSD))

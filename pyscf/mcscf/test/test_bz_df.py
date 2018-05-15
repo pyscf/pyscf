@@ -46,8 +46,12 @@ mf.scf()
 mo = mf.mo_coeff.copy()
 mo[:,[15,16,17,18]] = mf.mo_coeff[:,[17,18,15,16]]
 
+def tearDownModule():
+    global mol, mf
+    del mol, mf
 
-class KnowValues(unittest.TestCase):
+
+class KnownValues(unittest.TestCase):
     def test_mc2step_4o4e(self):
         mc = mcscf.approx_hessian(mcscf.CASSCF(mf, 4, 4), auxbasis='weigend')
         mc.conv_tol = 1e-8

@@ -183,7 +183,7 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
         de[k] -= numpy.einsum('xij,ij->x', s1[:,p0:p1], vhf_s1occ[p0:p1]) * 2
         de[k] -= numpy.einsum('xij,ij->x', vhf1[k], dm1p)
 
-    de += rhf_grad.grad_nuc(mol)
+    de += rhf_grad.grad_nuc(mol, atmlst)
     log.timer('%s gradients' % mycc.__class__.__name__, *time0)
     return de
 
@@ -204,18 +204,26 @@ def as_scanner(grad_cc):
 
     Examples::
 
-        >>> from pyscf import gto, scf, cc
-        >>> mol = gto.M(atom='H 0 0 0; F 0 0 1')
-        >>> cc_scanner = cc.CCSD(scf.RHF(mol)).nuc_grad_method().as_scanner()
-        >>> e_tot, grad = cc_scanner(gto.M(atom='H 0 0 0; F 0 0 1.1'))
-        >>> e_tot, grad = cc_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
+    >>> from pyscf import gto, scf, cc
+    >>> mol = gto.M(atom='H 0 0 0; F 0 0 1')
+    >>> cc_scanner = cc.CCSD(scf.RHF(mol)).nuc_grad_method().as_scanner()
+    >>> e_tot, grad = cc_scanner(gto.M(atom='H 0 0 0; F 0 0 1.1'))
+    >>> e_tot, grad = cc_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
     '''
-    logger.info(grad_cc, 'Set nuclear gradients of %s as a scanner', grad_cc.__class__)
+    from pyscf import gto
+    if isinstance(grad_cc, lib.GradScanner):
+        return grad_cc
+
+    logger.info(grad_cc, 'Create scanner for %s', grad_cc.__class__)
+
     class CCSD_GradScanner(grad_cc.__class__, lib.GradScanner):
         def __init__(self, g):
-            self.__dict__.update(g.__dict__)
-            self.base = g.base.as_scanner()
-        def __call__(self, mol, **kwargs):
+            lib.GradScanner.__init__(self, g)
+        def __call__(self, mol_or_geom, **kwargs):
+            if isinstance(mol_or_geom, gto.Mole):
+                mol = mol_or_geom
+            else:
+                mol = self.mol.set_geom_(mol_or_geom, inplace=False)
             # The following simple version also works.  But eris object is
             # recomputed in cc_scanner and solve_lambda.
             # cc = self.base
@@ -400,7 +408,7 @@ class Gradients(lib.StreamObject):
         self.mol = mycc.mol
         self.stdout = mycc.stdout
         self.verbose = mycc.verbose
-        self.atmlst = range(mycc.mol.natm)
+        self.atmlst = None
         self.de = None
         self._keys = set(self.__dict__.keys())
 
@@ -415,7 +423,7 @@ class Gradients(lib.StreamObject):
         if eris is None:
             eris = mycc.ao2mo()
         if t1 is None or t2 is None:
-            t1, t2 = mycc.kernel(eris=eris)
+            t1, t2 = mycc.kernel(eris=eris)[1:]
         if l1 is None or l2 is None:
             l1, l2 = mycc.solve_lambda(eris=eris)
         if atmlst is None:

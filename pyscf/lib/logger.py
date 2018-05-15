@@ -19,7 +19,6 @@
 
 '''
 Logging system
-**************
 
 Log level
 ---------
@@ -39,10 +38,10 @@ ERROR   1
 QUIET   0 
 ======= ======
 
-Big ``verbose`` value means more noise in the output file.
+Large value means more noise in the output file.
 
 .. note::
-    At log level 1 (ERROR) and 2 (WARN), the messages are also output to stderr.
+    Error and warning messages are written to stderr.
 
 Each Logger object has its own output destination and verbose level.  So
 multiple Logger objects can be created to manage the message system without
@@ -64,7 +63,8 @@ note level
 timer
 -----
 Logger object provides timer method for timing.  Set :attr:`TIMER_LEVEL` to
-control which level to output the timing.  It is 5 (DEBUG) by default.
+control at which level the timing information should be output.  It is 5
+(DEBUG) by default.
 
 >>> import sys, time
 >>> from pyscf import lib
@@ -183,6 +183,13 @@ def timer_debug1(rec, msg, cpu0=None, wall0=None):
         return rec._t0
 
 class Logger(object):
+    '''
+    Attributes:
+        stdout : file object or sys.stdout
+            The file to dump output message.
+        verbose : int
+            Large value means more noise in the output file.
+    '''
     def __init__(self, stdout=sys.stdout, verbose=NOTE):
         self.stdout = stdout
         self.verbose = verbose
@@ -203,6 +210,16 @@ class Logger(object):
     timer_debug1 = timer_debug1
 
 def new_logger(rec=None, verbose=None):
+    '''Create and return a :class:`Logger` object
+
+    Args:
+        rec : An object which carries the attributes stdout and verbose
+
+        verbose : a Logger object, or integer or None
+            The verbose level. If verbose is a Logger object, the Logger
+            object is returned. If verbose is not specified (None),
+            rec.verbose will be used in the new Logger object.
+    '''
     if isinstance(verbose, Logger):
         log = verbose
     elif isinstance(verbose, int):

@@ -44,7 +44,7 @@ def get_jk(mols, dms, scripts=['ijkl,ji->kl'], intor='int2e_sph',
 
     Kwargs:
         hermi : int
-            Whether J/K matrix is hermitian
+            Whether the returned J (K) matrix is hermitian
 
             | 0 : no hermitian or symmetric
             | 1 : hermitian
@@ -130,7 +130,7 @@ def get_jk(mols, dms, scripts=['ijkl,ji->kl'], intor='int2e_sph',
         bas_start = numpy.zeros(4, dtype=int)
         for m in range(1,4):
             first = mol_ids.index(mol_ids[m])
-            if first == m:  # the unique mol
+            if first == m:  # the unique mol, not repeated in mols
                 bas_start[m] = bas.shape[0]
                 atm, bas, env = gto.conc_env(atm, bas, env, mols[m]._atm,
                                              mols[m]._bas, mols[m]._env)
@@ -162,9 +162,6 @@ def get_jk(mols, dms, scripts=['ijkl,ji->kl'], intor='int2e_sph',
 
     vs = _vhf.direct_bindm(intor, aosym, descript, dms, comp, atm, bas, env,
                            shls_slice=shls_slice)
-    if single_script:
-        vs = vs[0]
-
     if hermi != 0:
         for v in vs:
             if v.ndim == 3:
@@ -172,6 +169,9 @@ def get_jk(mols, dms, scripts=['ijkl,ji->kl'], intor='int2e_sph',
                     pyscf.lib.hermi_triu(vi, hermi, inplace=True)
             else:
                 pyscf.lib.hermi_triu(v, hermi, inplace=True)
+
+    if single_script:
+        vs = vs[0]
     return vs
 
 jk_build = get_jk

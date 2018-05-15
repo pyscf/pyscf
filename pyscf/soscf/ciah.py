@@ -283,7 +283,7 @@ def _regular_step(heff, ovlp, xs, lindep, log):
         e, c = scipy.linalg.eigh(heff[1:,1:], ovlp[1:,1:])
     except scipy.linalg.LinAlgError:
         e, c = lib.safe_eigh(heff[1:,1:], ovlp[1:,1:], lindep)[:2]
-    if e[0] < -1e-5:
+    if numpy.any(e < -1e-5):
         log.debug('Negative hessians found %s', e[e<0])
 
     w, v, seig = lib.safe_eigh(heff, ovlp, lindep)
@@ -293,11 +293,15 @@ def _regular_step(heff, ovlp, xs, lindep, log):
         log.debug3('AH eigs %s', w)
         numpy.set_printoptions(8, linewidth=75)
 
-    if e[0] < -.1:
-        sel = 0
-    else:
-        idx = numpy.where(abs(v[0]) > 0.1)[0]
-        sel = idx[0]
+    #if e[0] < -.1:
+    #    sel = 0
+    #else:
+    # There exists systems that the first eigenvalue of AH is -inf.
+    # Dynamically choosing the eigenvectors may be better.
+    idx = numpy.where(abs(v[0]) > 0.1)[0]
+    sel = idx[0]
+    log.debug1('CIAH eigen-sel %s', sel)
+
     w_t = w[sel]
     xtrial = _dgemv(v[1:,sel]/v[0,sel], xs)
     return xtrial, w_t, v[:,sel], sel, seig

@@ -59,6 +59,12 @@ h2o.atom = [
 h2o.basis = {"H": '6-31g', "O": '6-31g',}
 h2o.build()
 
+def tearDownModule():
+    dft.numint.SWITCH_SIZE = 800
+    global mol, mf, h4, mf_h4, mol1, h2o
+    h2o.stdout.close()
+    del mol, mf, h4, mf_h4, mol1, h2o
+
 def finger(a):
     return numpy.dot(numpy.cos(numpy.arange(a.size)), a.ravel())
 
@@ -70,6 +76,15 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(finger(numpy.cos(non0)), 2.5961863522983433, 9)
 
     def test_dot_ao_dm(self):
+        dm = mf_h4.get_init_guess(key='minao')
+        ao_loc = h4.ao_loc_nr()
+        ao = mf_h4._numint.eval_ao(h4, mf_h4.grids.coords).copy() + 0j
+        nao = ao.shape[1]
+        v1 = dft.numint._dot_ao_dm(h4, ao, dm, mf_h4.grids.non0tab, (0,h4.nbas), ao_loc)
+        v2 = dft.numint._dot_ao_dm(h4, ao, dm, None, None, None)
+        self.assertAlmostEqual(abs(v1-v2).max(), 0, 9)
+
+    def test_dot_ao_dm_high_cost(self):
         non0tab = mf._numint.make_mask(mol, mf.grids.coords)
         ao = dft.numint.eval_ao(mol, mf.grids.coords)
         numpy.random.seed(1)
@@ -82,15 +97,16 @@ class KnownValues(unittest.TestCase):
                                      shls_slice=(0,mol.nbas), ao_loc=ao_loc)
         self.assertTrue(numpy.allclose(res0, res1))
 
+    def test_dot_ao_ao(self):
         dm = mf_h4.get_init_guess(key='minao')
         ao_loc = h4.ao_loc_nr()
         ao = mf_h4._numint.eval_ao(h4, mf_h4.grids.coords).copy() + 0j
-        nao = ao.shape[1]
-        v1 = dft.numint._dot_ao_dm(h4, ao, dm, mf_h4.grids.non0tab, (0,h4.nbas), ao_loc)
-        v2 = dft.numint._dot_ao_dm(h4, ao, dm, None, None, None)
+        nao = h4.nao_nr()
+        v1 = dft.numint._dot_ao_ao(h4, ao, ao, mf_h4.grids.non0tab, (0,h4.nbas), ao_loc)
+        v2 = dft.numint._dot_ao_ao(h4, ao, ao, None, None, None)
         self.assertAlmostEqual(abs(v1-v2).max(), 0, 9)
 
-    def test_dot_ao_ao(self):
+    def test_dot_ao_ao_high_cost(self):
         non0tab = mf.grids.make_mask(mol, mf.grids.coords)
         ao = dft.numint.eval_ao(mol, mf.grids.coords, deriv=1)
         nao = ao.shape[1]
@@ -99,14 +115,6 @@ class KnownValues(unittest.TestCase):
         res1 = dft.numint._dot_ao_ao(mol, ao[0], ao[1], non0tab,
                                      shls_slice=(0,mol.nbas), ao_loc=ao_loc)
         self.assertTrue(numpy.allclose(res0, res1))
-
-        dm = mf_h4.get_init_guess(key='minao')
-        ao_loc = h4.ao_loc_nr()
-        ao = mf_h4._numint.eval_ao(h4, mf_h4.grids.coords).copy() + 0j
-        nao = h4.nao_nr()
-        v1 = dft.numint._dot_ao_ao(h4, ao, ao, mf_h4.grids.non0tab, (0,h4.nbas), ao_loc)
-        v2 = dft.numint._dot_ao_ao(h4, ao, ao, None, None, None)
-        self.assertAlmostEqual(abs(v1-v2).max(), 0, 9)
 
     def test_eval_rho(self):
         numpy.random.seed(10)
@@ -135,7 +143,7 @@ class KnownValues(unittest.TestCase):
         rho0[4]+= rho0[5]*2
         rho0[5] *= .5
 
-        ni = dft.numint._NumInt()
+        ni = dft.numint.NumInt()
         rho1 = ni.eval_rho (mol, ao, dm, xctype='MGGA')
         rho2 = ni.eval_rho2(mol, ao, mo_coeff, mo_occ, xctype='MGGA')
         self.assertTrue(numpy.allclose(rho0, rho1))
@@ -193,7 +201,7 @@ class KnownValues(unittest.TestCase):
         numpy.random.seed(10)
         nao = mol.nao_nr()
         dms = numpy.random.random((2,nao,nao))
-        v = mf._numint.nr_vxc(mol, mf.grids, 'B88', dms, spin=0, hermi=0)[2]
+        v = mf._numint.nr_vxc(mol, mf.grids, 'B88,', dms, spin=0, hermi=0)[2]
         self.assertAlmostEqual(finger(v), -0.70124686853021512, 8)
 
         v = mf._numint.nr_vxc(mol, mf.grids, 'HF', dms, spin=0, hermi=0)[2]
@@ -203,9 +211,22 @@ class KnownValues(unittest.TestCase):
 
     def test_uks_vxc(self):
         numpy.random.seed(10)
+        nao = h2o.nao_nr()
+        dms = numpy.random.random((2,nao,nao))
+        grids = dft.gen_grid.Grids(h2o)
+        v = mf._numint.nr_vxc(h2o, grids, 'B88,', dms, spin=1)[2]
+        self.assertAlmostEqual(finger(v), -7.7508525240447348, 8)
+
+        v = mf._numint.nr_vxc(h2o, grids, 'HF', dms, spin=1)[2]
+        self.assertAlmostEqual(abs(v).max(), 0, 9)
+        v = mf._numint.nr_vxc(h2o, grids, '', dms, spin=1)[2]
+        self.assertAlmostEqual(abs(v).max(), 0, 9)
+
+    def test_uks_vxc_high_cost(self):
+        numpy.random.seed(10)
         nao = mol.nao_nr()
         dms = numpy.random.random((2,nao,nao))
-        v = mf._numint.nr_vxc(mol, mf.grids, 'B88', dms, spin=1)[2]
+        v = mf._numint.nr_vxc(mol, mf.grids, 'B88,', dms, spin=1)[2]
         self.assertAlmostEqual(finger(v), -0.73803886056633594, 8)
 
         v = mf._numint.nr_vxc(mol, mf.grids, 'HF', dms, spin=1)[2]
@@ -222,21 +243,21 @@ class KnownValues(unittest.TestCase):
         mo_occ[-2:] = -1
         dm0 = numpy.einsum('pi,i,qi->pq', mo_coeff, mo_occ, mo_coeff)
         dms = numpy.random.random((2,nao,nao))
-        ni = dft.numint._NumInt()
-        v = ni.nr_fxc(mol1, mf.grids, 'B88', dm0, dms, spin=0, hermi=0)
+        ni = dft.numint.NumInt()
+        v = ni.nr_fxc(mol1, mf.grids, 'B88,', dm0, dms, spin=0, hermi=0)
         self.assertAlmostEqual(finger(v), -7.5671368618070343, 8)
 
         # test cache_kernel
-        rvf = ni.cache_xc_kernel(mol1, mf.grids, 'B88', mo_coeff, mo_occ, spin=0)
-        v1 = dft.numint.nr_fxc(mol1, mf.grids, 'B88', dm0, dms, spin=0, hermi=0,
+        rvf = ni.cache_xc_kernel(mol1, mf.grids, 'B88,', mo_coeff, mo_occ, spin=0)
+        v1 = dft.numint.nr_fxc(mol1, mf.grids, 'B88,', dm0, dms, spin=0, hermi=0,
                                rho0=rvf[0], vxc=rvf[1], fxc=rvf[2])
         self.assertAlmostEqual(abs(v-v1).max(), 0, 8)
 
-        v = ni.nr_fxc(mol1, mf.grids, 'LDA', dm0, dms[0], spin=0, hermi=0)
+        v = ni.nr_fxc(mol1, mf.grids, 'LDA,', dm0, dms[0], spin=0, hermi=0)
         self.assertAlmostEqual(finger(v), -3.0019207112626876, 8)
         # test cache_kernel
-        rvf = ni.cache_xc_kernel(mol1, mf.grids, 'LDA', mo_coeff, mo_occ, spin=0)
-        v1 = dft.numint.nr_fxc(mol1, mf.grids, 'LDA', dm0, dms[0], spin=0, hermi=0,
+        rvf = ni.cache_xc_kernel(mol1, mf.grids, 'LDA,', mo_coeff, mo_occ, spin=0)
+        v1 = dft.numint.nr_fxc(mol1, mf.grids, 'LDA,', dm0, dms[0], spin=0, hermi=0,
                                rho0=rvf[0], vxc=rvf[1], fxc=rvf[2])
         self.assertAlmostEqual(abs(v-v1).max(), 0, 8)
 
@@ -254,33 +275,33 @@ class KnownValues(unittest.TestCase):
         mo_occ[-2:] = -1
         dm0 = numpy.einsum('pi,i,qi->pq', mo_coeff, mo_occ, mo_coeff)
         dms = numpy.random.random((2,nao,nao))
-        ni = dft.numint._NumInt()
+        ni = dft.numint.NumInt()
 
-        rvf = ni.cache_xc_kernel(mol1, mf.grids, 'B88', [mo_coeff,mo_coeff],
+        rvf = ni.cache_xc_kernel(mol1, mf.grids, 'B88,', [mo_coeff,mo_coeff],
                                  [mo_occ*.5]*2, spin=1)
-        v = dft.numint.nr_rks_fxc_st(ni, mol1, mf.grids, 'B88', dm0, dms, singlet=True)
+        v = dft.numint.nr_rks_fxc_st(ni, mol1, mf.grids, 'B88,', dm0, dms, singlet=True)
         self.assertAlmostEqual(finger(v), -7.5671368618070343*2, 8)
-        v1 = dft.numint.nr_rks_fxc_st(ni, mol1, mf.grids, 'B88', dm0, dms, singlet=True,
+        v1 = dft.numint.nr_rks_fxc_st(ni, mol1, mf.grids, 'B88,', dm0, dms, singlet=True,
                                       rho0=rvf[0], vxc=rvf[1], fxc=rvf[2])
         self.assertAlmostEqual(abs(v-v1).max(), 0, 8)
 
-        v = dft.numint.nr_rks_fxc_st(ni, mol1, mf.grids, 'B88', dm0, dms, singlet=False)
+        v = dft.numint.nr_rks_fxc_st(ni, mol1, mf.grids, 'B88,', dm0, dms, singlet=False)
         self.assertAlmostEqual(finger(v), -7.5671368618070343*2, 8)
-        v1 = dft.numint.nr_rks_fxc_st(ni, mol1, mf.grids, 'B88', dm0, dms, singlet=False,
+        v1 = dft.numint.nr_rks_fxc_st(ni, mol1, mf.grids, 'B88,', dm0, dms, singlet=False,
                                       rho0=rvf[0], vxc=rvf[1], fxc=rvf[2])
         self.assertAlmostEqual(abs(v-v1).max(), 0, 8)
 
-        rvf = ni.cache_xc_kernel(mol1, mf.grids, 'LDA', [mo_coeff,mo_coeff],
+        rvf = ni.cache_xc_kernel(mol1, mf.grids, 'LDA,', [mo_coeff,mo_coeff],
                                  [mo_occ*.5]*2, spin=1)
-        v = dft.numint.nr_rks_fxc_st(ni, mol1, mf.grids, 'LDA', dm0, dms[0], singlet=True)
+        v = dft.numint.nr_rks_fxc_st(ni, mol1, mf.grids, 'LDA,', dm0, dms[0], singlet=True)
         self.assertAlmostEqual(finger(v), -3.0019207112626876*2, 8)
-        v1 = dft.numint.nr_rks_fxc_st(ni, mol1, mf.grids, 'LDA', dm0, dms[0], singlet=True,
+        v1 = dft.numint.nr_rks_fxc_st(ni, mol1, mf.grids, 'LDA,', dm0, dms[0], singlet=True,
                                       rho0=rvf[0], vxc=rvf[1], fxc=rvf[2])
         self.assertAlmostEqual(abs(v-v1).max(), 0, 8)
 
-        v = dft.numint.nr_rks_fxc_st(ni, mol1, mf.grids, 'LDA', dm0, dms[0], singlet=False)
+        v = dft.numint.nr_rks_fxc_st(ni, mol1, mf.grids, 'LDA,', dm0, dms[0], singlet=False)
         self.assertAlmostEqual(finger(v), -3.0019207112626876*2, 8)
-        v1 = dft.numint.nr_rks_fxc_st(ni, mol1, mf.grids, 'LDA', dm0, dms[0], singlet=False,
+        v1 = dft.numint.nr_rks_fxc_st(ni, mol1, mf.grids, 'LDA,', dm0, dms[0], singlet=False,
                                       rho0=rvf[0], vxc=rvf[1], fxc=rvf[2])
         self.assertAlmostEqual(abs(v-v1).max(), 0, 8)
 
@@ -293,21 +314,21 @@ class KnownValues(unittest.TestCase):
         mo_occ[:,-2:] = -1
         dm0 = numpy.einsum('xpi,xi,xqi->xpq', mo_coeff, mo_occ, mo_coeff)
         dms = numpy.random.random((2,nao,nao))
-        ni = dft.numint._NumInt()
-        v = ni.nr_fxc(mol1, mf.grids, 'B88', dm0, dms, spin=1)
+        ni = dft.numint.NumInt()
+        v = ni.nr_fxc(mol1, mf.grids, 'B88,', dm0, dms, spin=1)
         self.assertAlmostEqual(finger(v), -10.316443204083185, 8)
 
         # test cache_kernel
-        rvf = ni.cache_xc_kernel(mol1, mf.grids, 'B88', mo_coeff, mo_occ, spin=1)
-        v1 = dft.numint.nr_fxc(mol1, mf.grids, 'B88', dm0, dms, hermi=0, spin=1,
+        rvf = ni.cache_xc_kernel(mol1, mf.grids, 'B88,', mo_coeff, mo_occ, spin=1)
+        v1 = dft.numint.nr_fxc(mol1, mf.grids, 'B88,', dm0, dms, hermi=0, spin=1,
                                rho0=rvf[0], vxc=rvf[1], fxc=rvf[2])
         self.assertAlmostEqual(abs(v-v1).max(), 0, 8)
 
-        v = ni.nr_fxc(mol1, mf.grids, 'LDA', dm0, dms[0], spin=1)
+        v = ni.nr_fxc(mol1, mf.grids, 'LDA,', dm0, dms[0], spin=1)
         self.assertAlmostEqual(finger(v), -5.6474405864697967, 8)
         # test cache_kernel
-        rvf = ni.cache_xc_kernel(mol1, mf.grids, 'LDA', mo_coeff, mo_occ, spin=1)
-        v1 = dft.numint.nr_fxc(mol1, mf.grids, 'LDA', dm0, dms[0], hermi=0, spin=1,
+        rvf = ni.cache_xc_kernel(mol1, mf.grids, 'LDA,', mo_coeff, mo_occ, spin=1)
+        v1 = dft.numint.nr_fxc(mol1, mf.grids, 'LDA,', dm0, dms[0], hermi=0, spin=1,
                                rho0=rvf[0], vxc=rvf[1], fxc=rvf[2])
         self.assertAlmostEqual(abs(v-v1).max(), 0, 8)
 
@@ -338,9 +359,9 @@ class KnownValues(unittest.TestCase):
         rho1 = [numpy.random.random((4,5))]*2
         weight = numpy.ones(5)
 
-        exc, vxc, fxc, kxc = dft.libxc.eval_xc('b88', rho0, 1, 0, 3)
+        exc, vxc, fxc, kxc = dft.libxc.eval_xc('b88,', rho0, 1, 0, 3)
         wva, wvb = dft.numint._uks_gga_wv1(rho0, rho1, vxc, fxc, weight)
-        exc, vxc, fxc, kxc = dft.libxc.eval_xc('b88', rho0[0]+rho0[1], 0, 0, 3)
+        exc, vxc, fxc, kxc = dft.libxc.eval_xc('b88,', rho0[0]+rho0[1], 0, 0, 3)
         wv = dft.numint._rks_gga_wv1(rho0[0]+rho0[1], rho1[0]+rho1[1], vxc, fxc, weight)
         self.assertAlmostEqual(abs(wv - wva).max(), 0, 10)
         self.assertAlmostEqual(abs(wv - wvb).max(), 0, 10)
@@ -351,9 +372,9 @@ class KnownValues(unittest.TestCase):
         rho1 = [numpy.random.random((4,5))]*2
         weight = numpy.ones(5)
 
-        exc, vxc, fxc, kxc = dft.libxc.eval_xc('b88', rho0, 1, 0, 3)
+        exc, vxc, fxc, kxc = dft.libxc.eval_xc('b88,', rho0, 1, 0, 3)
         wva, wvb = dft.numint._uks_gga_wv2(rho0, rho1, fxc, kxc, weight)
-        exc, vxc, fxc, kxc = dft.libxc.eval_xc('b88', rho0[0]+rho0[1], 0, 0, 3)
+        exc, vxc, fxc, kxc = dft.libxc.eval_xc('b88,', rho0[0]+rho0[1], 0, 0, 3)
         wv = dft.numint._rks_gga_wv2(rho0[0]+rho0[1], rho1[0]+rho1[1], fxc, kxc, weight)
         self.assertAlmostEqual(abs(wv - wva).max(), 0, 10)
         self.assertAlmostEqual(abs(wv - wvb).max(), 0, 10)

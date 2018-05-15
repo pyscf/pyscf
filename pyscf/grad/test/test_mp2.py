@@ -34,6 +34,11 @@ mf = scf.RHF(mol)
 mf.conv_tol_grad = 1e-8
 mf.kernel()
 
+def tearDownModule():
+    global mol, mf
+    mol.stdout.close()
+    del mol, mf
+
 
 class KnownValues(unittest.TestCase):
     def test_mp2_grad(self):
@@ -62,7 +67,8 @@ class KnownValues(unittest.TestCase):
             basis = '631g',
             unit='Bohr')
         mp_scanner(mol)
-        g1 = mp_scanner.nuc_grad_method().kernel()
+        g_scan = mp_scanner.nuc_grad_method().as_scanner()
+        g1 = g_scan(mol.atom)[1]
         self.assertAlmostEqual(g1[0,2], (e1-e0)*500, 6)
 
     def test_frozen(self):
@@ -76,7 +82,7 @@ class KnownValues(unittest.TestCase):
     def test_as_scanner(self):
         pt = mp.mp2.MP2(mf)
         pt.frozen = [0,1,10,11,12]
-        gscan = pt.nuc_grad_method().as_scanner()
+        gscan = pt.nuc_grad_method().as_scanner().as_scanner()
         e, g1 = gscan(mol)
         self.assertTrue(gscan.converged)
         self.assertAlmostEqual(e, -76.025166662910223, 9)

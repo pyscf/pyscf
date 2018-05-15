@@ -40,6 +40,7 @@ def gen_strings4orblist(orb_list, nelec):
     >>> [bin(x) for x in gen_strings4orblist((3,1,0,2),2)]
     [0b1010, 0b1001, 0b11, 0b1100, 0b110, 0b101]
     '''
+    orb_list = list(orb_list)
     if len(orb_list) > 63:
         return _gen_occslst(orb_list, nelec)
 
@@ -70,6 +71,7 @@ def gen_strings4orblist(orb_list, nelec):
 def _gen_occslst(orb_list, nelec):
     '''Generate occupied orbital list for each string.
     '''
+    orb_list = list(orb_list)
     assert(nelec >= 0)
     if nelec == 0:
         return numpy.zeros((1,nelec), dtype=numpy.int32)
@@ -87,7 +89,7 @@ def _gen_occslst(orb_list, nelec):
             for n in gen_occs_iter(restorb, nelec-1):
                 res.append(n + [thisorb])
         return res
-    occslst = gen_occs_iter(list(orb_list), nelec)
+    occslst = gen_occs_iter(orb_list, nelec)
     return numpy.asarray(occslst, dtype=numpy.int32).view(OIndexList)
 def _strs2occslst(strs, norb):
     na = len(strs)
@@ -250,7 +252,7 @@ def gen_linkstr_index_trilidx(orb_list, nocc, strs=None):
 def gen_cre_str_index_o0(orb_list, nelec):
     '''Slow version of gen_cre_str_index function'''
     cre_strs = gen_strings4orblist(orb_list, nelec+1)
-    if isinstance(strs, OIndexList):
+    if isinstance(cre_strs, OIndexList):
         raise NotImplementedError('System with 64 orbitals or more')
 
     credic = dict(zip(cre_strs,range(cre_strs.__len__())))
@@ -295,7 +297,7 @@ def gen_cre_str_index(orb_list, nelec):
 def gen_des_str_index_o0(orb_list, nelec):
     '''Slow version of gen_des_str_index function'''
     des_strs = gen_strings4orblist(orb_list, nelec-1)
-    if isinstance(strs, OIndexList):
+    if isinstance(des_strs, OIndexList):
         raise NotImplementedError('System with 64 orbitals or more')
 
     desdic = dict(zip(des_strs,range(des_strs.__len__())))
@@ -462,6 +464,23 @@ def strs2addr(norb, nelec, strings):
                         ctypes.c_int(count),
                         ctypes.c_int(norb), ctypes.c_int(nelec))
     return addrs
+
+def sub_addrs(norb, nelec, orbital_indices, sub_nelec=0):
+    '''The addresses of the determinants which include the specified orbital
+    indices. The size of the returned addresses is equal to the number of
+    determinants of (norb, nelec) system.
+    '''
+    assert(norb < 63)
+    if sub_nelec == 0:
+        strs = gen_strings4orblist(orbital_indices, nelec)
+        return strs2addr(norb, nelec, strs)
+    else:
+        strs = gen_strings4orblist(range(norb), nelec)
+        counts = numpy.zeros(len(strs), dtype=int)
+        for i in orbital_indices:
+            counts += (strs & (1<<i)) != 0
+        sub_strs = strs[counts == sub_nelec]
+        return strs2addr(norb, nelec, sub_strs)
 
 def tn_strs(norb, nelec, n):
     '''Generate strings for Tn amplitudes.  Eg n=1 (T1) has nvir*nocc strings,

@@ -49,7 +49,7 @@ def kernel(myci, civec=None, eris=None, atmlst=None, mf_grad=None,
     dvvvv = dvvvv + dvvvv.transpose(1,0,2,3)
     dvvvv = ao2mo.restore(4, dvvvv, nvira) * .5
     dvvVV = dvvVV + dvvVV.transpose(1,0,2,3)
-    dvvVV = lib.pack_tril(dvvVV[numpy.tril_indices(nvira)])
+    dvvVV = lib.pack_tril(dvvVV[numpy.tril_indices(nvira)]) * .5
     dVVVV = dVVVV + dVVVV.transpose(1,0,2,3)
     dVVVV = ao2mo.restore(4, dVVVV, nvirb) * .5
 

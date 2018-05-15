@@ -18,8 +18,10 @@
 
 import unittest
 import numpy
+from pyscf import lib
 from pyscf import gto, dft
-from pyscf import tddft
+from pyscf import tdscf
+from pyscf.grad import tdrks as tdrks_grad
 
 mol = gto.Mole()
 mol.verbose = 0
@@ -30,48 +32,72 @@ mol.atom = [
 mol.unit = 'B'
 mol.basis = '631g'
 mol.build()
+mf_lda = dft.RKS(mol).set(xc='LDA,')
+mf_lda.grids.prune = False
+mf_lda.kernel()
+mf_gga = dft.RKS(mol).set(xc='b88,')
+mf_gga.grids.prune = False
+mf_gga.kernel()
+
+def tearDownModule():
+    global mol, mf_lda
+    del mol, mf_lda
 
 class KnownValues(unittest.TestCase):
-    def test_tda_lda(self):
-        mf = dft.RKS(mol)
-        mf.xc = 'LDA'
-        mf.grids.prune = False
-        mf.scf()
-        td = tddft.TDA(mf).run(nstates=3)
+    def test_tda_singlet_lda(self):
+        td = tdscf.TDA(mf_lda).run(nstates=3)
         tdg = td.nuc_grad_method()
-        g1 = tdg.kernel(state=3)
+        g1 = tdrks_grad.kernel(tdg, td.xy[2])
+        g1 += tdg.grad_nuc()
         self.assertAlmostEqual(g1[0,2], -9.23916667e-02, 8)
 
-    def test_tda_b88(self):
-        mf = dft.RKS(mol)
-        mf.xc = 'b88'
-        mf.grids.prune = False
-        mf.scf()
-        td = tddft.TDA(mf).run(nstates=3)
+#    def test_tda_triplet_lda(self):
+#        td = tdscf.TDA(mf_lda).run(singlet=False, nstates=3)
+#        tdg = td.nuc_grad_method()
+#        g1 = tdg.kernel(state=3)
+#        self.assertAlmostEqual(g1[0,2], -9.23916667e-02, 8)
+
+    def test_tda_singlet_b88(self):
+        td = tdscf.TDA(mf_gga).run(nstates=3)
         tdg = td.nuc_grad_method()
         g1 = tdg.kernel(state=3)
         self.assertAlmostEqual(g1[0,2], -9.32506535e-02, 8)
 
+#    def test_tda_triplet_b88(self):
+#        td = tdscf.TDA(mf_gga).run(singlet=False, nstates=3)
+#        tdg = td.nuc_grad_method()
+#        g1 = tdg.kernel(state=3)
+#        self.assertAlmostEqual(g1[0,2], -9.32506535e-02, 8)
+
     def test_tddft_lda(self):
-        mf = dft.RKS(mol)
-        mf.xc = 'LDA'
-        mf.grids.prune = False
-        mf.scf()
-        td = tddft.TDDFT(mf).run(nstates=3)
+        td = tdscf.TDDFT(mf_lda).run(nstates=3)
         tdg = td.nuc_grad_method()
         g1 = tdg.kernel(state=3)
         self.assertAlmostEqual(g1[0,2], -1.31315477e-01, 8)
 
-    def test_tddft_b3lyp(self):
+    def test_tddft_b3lyp_high_cost(self):
         mf = dft.RKS(mol)
         mf.xc = 'b3lyp'
         mf._numint.libxc = dft.xcfun
         mf.grids.prune = False
         mf.scf()
-        td = tddft.TDDFT(mf).run(nstates=3)
+        td = tdscf.TDDFT(mf).run(nstates=3)
         tdg = td.nuc_grad_method()
         g1 = tdg.kernel(state=3)
         self.assertAlmostEqual(g1[0,2], -1.55778110e-01, 7)
+
+    def test_range_separated_high_cost(self):
+        mol = gto.M(atom="H; H 1 1.", basis='631g', verbose=0)
+        mf = dft.RKS(mol).set(xc='CAMB3LYP')
+        mf._numint.libxc = dft.xcfun
+        td = mf.apply(tdscf.TDA)
+        tdg_scanner = td.nuc_grad_method().as_scanner().as_scanner()
+        g = tdg_scanner(mol, state=3)[1]
+        self.assertAlmostEqual(lib.finger(g), 0.60109310253094916, 7)
+        smf = td.as_scanner()
+        e1 = smf(mol.set_geom_("H; H 1 1.001"))[2]
+        e2 = smf(mol.set_geom_("H; H 1 0.999"))[2]
+        self.assertAlmostEqual((e1-e2)/0.002*lib.param.BOHR, g[1,0], 4)
 
 
 if __name__ == "__main__":

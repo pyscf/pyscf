@@ -111,30 +111,31 @@ def make_rdm2(mp, t2=None):
 
         dm2 = numpy.zeros((nmo0,nmo0,nmo0,nmo0), dtype=t2.dtype) # Chemist notation
         dm2[oidx[:,None,None,None],vidx[:,None,None],oidx[:,None],vidx] = \
-                (t2.transpose(0,2,1,3) - t2.transpose(0,3,1,2)) * .5
+                t2.transpose(0,2,1,3)
         dm2[nocc0:,:nocc0,nocc0:,:nocc0] = \
                 dm2[:nocc0,nocc0:,:nocc0,nocc0:].transpose(1,0,3,2).conj()
     else:
-        dm2 = numpy.zeros((nmo0,nmo0,nmo0,nmo0), dtype=t2.dtype) # Chemist notation
-        dm2[:nocc,nocc:,:nocc,nocc:] = (t2.transpose(0,2,1,3) -
-                                        t2.transpose(0,3,1,2)).conj() * .5
+        dm2 = numpy.zeros((nmo0,nmo0,nmo0,nmo0), dtype=t2.dtype) # Chemist's notation
+        #dm2[:nocc,nocc:,:nocc,nocc:] = t2.transpose(0,2,1,3) * .5 - t2.transpose(0,3,1,2) * .5
+        # using t2.transpose(0,2,1,3) == -t2.transpose(0,3,1,2)
+        dm2[:nocc,nocc:,:nocc,nocc:] = t2.transpose(0,2,1,3)
         dm2[nocc:,:nocc,nocc:,:nocc] = dm2[:nocc,nocc:,:nocc,nocc:].transpose(1,0,3,2).conj()
 
     dm1 = make_rdm1(mp, t2)
     dm1[numpy.diag_indices(nocc0)] -= 1
 
     for i in range(nocc0):
-        dm2[i,i,:,:] += dm1
-        dm2[:,:,i,i] += dm1
-        dm2[:,i,i,:] -= dm1
-        dm2[i,:,:,i] -= dm1.conj()
+        dm2[i,i,:,:] += dm1.T
+        dm2[:,:,i,i] += dm1.T
+        dm2[:,i,i,:] -= dm1.T
+        dm2[i,:,:,i] -= dm1
 
     for i in range(nocc0):
         for j in range(nocc0):
             dm2[i,i,j,j] += 1
             dm2[i,j,j,i] -= 1
 
-    return dm2.transpose(1,0,3,2)
+    return dm2
 
 
 class GMP2(mp2.MP2):

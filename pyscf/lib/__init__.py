@@ -16,7 +16,7 @@
 #
 
 '''
-C code and some fundamental functions
+C extensions and helper functions
 '''
 
 from pyscf.lib import parameters

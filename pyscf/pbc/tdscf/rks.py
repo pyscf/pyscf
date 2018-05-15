@@ -34,6 +34,9 @@ TDA = rhf.TDA
 
 RPA = TDDFT = rhf.TDHF
 
+#TODO:
+TDDFTNoHybrid = TDDFT
+
 
 if __name__ == '__main__':
     from pyscf.pbc import gto
@@ -60,7 +63,7 @@ if __name__ == '__main__':
     #mf.with_df.auxbasis = 'weigend'
     #mf.with_df._cderi = 'eri3d-mdf.h5'
     #mf.with_df.build(with_j3c=False)
-    mf.xc = 'lda'
+    mf.xc = 'lda,'
     mf.kernel()
 #mesh=12 -10.3077341607895
 #mesh=5  -10.3086623157515

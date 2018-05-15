@@ -43,8 +43,13 @@ mf = scf.RHF(mol)
 mf.conv_tol = 1e-12
 mf.scf()
 
+def tearDownModule():
+    global mol, mf
+    mol.stdout.close()
+    del mol, mf
 
-class KnowValues(unittest.TestCase):
+
+class KnownValues(unittest.TestCase):
     def test_casci_4o4e(self):
         mc = mcscf.CASCI(mf, 4, 4)
         emc = mc.casci()[0]
