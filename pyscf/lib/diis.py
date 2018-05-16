@@ -240,6 +240,8 @@ class DIIS(object):
     def extrapolate(self, nd=None):
         if nd is None:
             nd = self.get_num_vec()
+        if nd == 0:
+            raise RuntimeError('No vector found in DIIS object.')
 
         h = self._H[:nd+1,:nd+1]
         g = numpy.zeros(nd+1, h.dtype)
@@ -247,7 +249,7 @@ class DIIS(object):
 
         w, v = scipy.linalg.eigh(h)
         if numpy.any(abs(w)<1e-14):
-            logger.debug(self, 'Singularity found in DIIS error vector space.')
+            logger.debug(self, 'Linear dependence found in DIIS error vectors.')
             idx = abs(w)>1e-14
             c = numpy.dot(v[:,idx]*(1./w[idx]), numpy.dot(v[:,idx].T.conj(), g))
         else:
@@ -272,16 +274,20 @@ class DIIS(object):
         current diis object if needed, then construct the vector.
         '''
         fdiis = misc.H5TmpFile(filename)
+        if inplace:
+            self.filename = filename
+            self._diisfile = fdiis
+
         diis_keys = fdiis.keys()
         x_keys = [k for k in diis_keys if k[0] == 'x']
         e_keys = [k for k in diis_keys if k[0] == 'e']
         # errvec may be incomplete if program is terminated when generating errvec.
         # The last vector or errvec should be excluded.
         nd = min(len(x_keys), len(e_keys))
+        if nd == 0:
+            return self
 
         if inplace:
-            self.filename = filename
-            self._diisfile = fdiis
             if fdiis[x_keys[0]].size < INCORE_SIZE or self.incore:
                 for key in diis_keys:
                     self._buffer[key] = numpy.asarray(fdiis[key])

@@ -666,6 +666,19 @@ def energy(mycc, t1=None, t2=None, eris=None):
         logger.warn(mycc, 'Non-zero imaginary part found in CCSD energy %s', e)
     return e
 
+def restore_from_diis_(mycc, diis_file):
+    '''Reuse an existed DIIS object in the CCSD calculation.
+
+    The CCSD amplitudes will be restored from the DIIS object to generate t1
+    and t2 amplitudes. The t1/t2 amplitudes of the CCSD object will be
+    overwritten by the generated t1 and t2 amplitudes. The amplitudes vector
+    and error vector will be reused in the CCSD calculation.
+    '''
+    mycc.diis = lib.diis.restore(diis_file)
+    ccvec = mycc.diis.extrapolate()
+    mycc.t1, mycc.t2 = mycc.vector_to_amplitudes(ccvec)
+    return mycc
+
 
 def as_scanner(cc):
     '''Generating a scanner/solver for CCSD PES.
@@ -938,6 +951,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         return self
 
     as_scanner = as_scanner
+    restore_from_diis_ = restore_from_diis_
 
 
     def solve_lambda(self, t1=None, t2=None, l1=None, l2=None,

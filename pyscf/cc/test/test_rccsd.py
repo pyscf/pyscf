@@ -180,6 +180,11 @@ class KnownValues(unittest.TestCase):
         cc1.kernel(t1, t2)
         self.assertAlmostEqual(cc1.e_corr, ref, 8)
 
+        cc2 = cc.CCSD(mf)
+        cc2.restore_from_diis_(ftmp.name)
+        self.assertAlmostEqual(abs(cc1.t1 - cc2.t1).max(), 0, 9)
+        self.assertAlmostEqual(abs(cc1.t2 - cc2.t2).max(), 0, 9)
+
     def test_iterative_dampling(self):
         ftmp = tempfile.NamedTemporaryFile()
         cc1 = cc.CCSD(mf)

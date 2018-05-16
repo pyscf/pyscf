@@ -68,3 +68,9 @@ ccvec = mycc.diis.extrapolate()
 t1, t2 = mycc.vector_to_amplitudes(ccvec)
 mycc.kernel(t1, t2)
 
+# A shortcut is available for the code above
+mycc = cc.CCSD(mf)
+mycc.verbose = 4
+mycc.restore_from_diis_('ccdiis.h5')
+t1, t2 = mycc.t1, mycc.t2
+mycc.kernel(t1, t2)
