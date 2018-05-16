@@ -105,13 +105,13 @@ def get_roothaan_fock(focka_fockb, dma_dmb, s):
     pc = numpy.dot(dmb, s)
     po = numpy.dot(dma-dmb, s)
     pv = numpy.eye(nao) - numpy.dot(dma, s)
-    fock  = reduce(numpy.dot, (pc.T, fc, pc)) * .5
-    fock += reduce(numpy.dot, (po.T, fc, po)) * .5
-    fock += reduce(numpy.dot, (pv.T, fc, pv)) * .5
-    fock += reduce(numpy.dot, (po.T, fockb, pc))
-    fock += reduce(numpy.dot, (po.T, focka, pv))
-    fock += reduce(numpy.dot, (pv.T, fc, pc))
-    fock = fock + fock.T
+    fock  = reduce(numpy.dot, (pc.conj().T, fc, pc)) * .5
+    fock += reduce(numpy.dot, (po.conj().T, fc, po)) * .5
+    fock += reduce(numpy.dot, (pv.conj().T, fc, pv)) * .5
+    fock += reduce(numpy.dot, (po.conj().T, fockb, pc))
+    fock += reduce(numpy.dot, (po.conj().T, focka, pv))
+    fock += reduce(numpy.dot, (pv.conj().T, fc, pc))
+    fock = fock + fock.conj().T
     fock = lib.tag_array(fock, focka=focka, fockb=fockb)
     return fock
 

@@ -396,7 +396,7 @@ def project_dm_r2r(mol1, dm1, mol2):
         return lib.einsum('pi,nij,qj->npq', p21, dm1, p21.conj())
 
 
-def remove_linear_dep_(mf, threshold=1e-8, lindep=1e-14):
+def remove_linear_dep_(mf, threshold=1e-8, lindep=1e-10):
     '''
     Args:
         threshold : float
@@ -411,6 +411,8 @@ def remove_linear_dep_(mf, threshold=1e-8, lindep=1e-14):
     if cond < 1./lindep:
         return mf
 
+    logger.info(mf, 'Applying remove_linear_dep_ on SCF obejct.')
+    logger.debug(mf, 'Overlap condition number %g', cond)
     def eigh(h, s):
         d, t = numpy.linalg.eigh(s)
         x = t[:,d>threshold] / numpy.sqrt(d[d>threshold])
@@ -507,11 +509,9 @@ def _object_without_soscf(mf, known_class, remove_df=False):
 
     if obj is None:
         raise NotImplementedError(
-            "Incompatible object types. Mean-field `mf` class not found in `known_class` "
-            "type. \nThis can happen when running a (RHF/UHF/GHF/etc.) mean-field calculation "
-            "and having no known \nconversion to a (RHF/UHF/GHF/etc.) correlated "
-            "calculation. Change the correlated calculation between unrestricted/restricted? "
-            "\n\nmf = '%s'\n\nknown_class = '%s'" % (mf.__class__.__mro__, known_class))
+            "Incompatible object types. Mean-field `mf` class not found in "
+            "`known_class` type.\n\nmf = '%s'\n\nknown_class = '%s'" %
+            (mf.__class__.__mro__, known_class))
 
 # Mimic the initialization procedure to restore the Hamiltonian
     for cls in reversed(sub_classes):
