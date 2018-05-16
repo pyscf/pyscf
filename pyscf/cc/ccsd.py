@@ -257,7 +257,7 @@ def _add_ovvv_(mycc, t1, t2, eris, fvv, t1new, t2new, fswap):
         wVOov = numpy.zeros((nvir,nocc,nocc,nvir))
     else:
         wVOov = fswap.create_dataset('wVOov', (nvir,nocc,nocc,nvir), 'f8')
-    fwooVV = numpy.zeros((nocc,nocc,nvir,nvir))
+    wooVV = numpy.zeros((nocc,nocc*nvir_pair))
 
     buf = numpy.empty((blksize,nocc,nvir_pair))
     with lib.call_in_background(load_ovvv, sync=not mycc.async_io) as prefetch:
@@ -265,6 +265,10 @@ def _add_ovvv_(mycc, t1, t2, eris, fvv, t1new, t2new, fswap):
         for p0, p1 in lib.prange(0, nvir, blksize):
             eris_vovv, buf = buf[:p1-p0], numpy.empty_like(buf)
             prefetch(p1, min(nvir, p1+blksize))
+
+            #:wooVV -= numpy.einsum('jc,ciba->jiba', t1[:,p0:p1], eris_vovv)
+            lib.ddot(numpy.asarray(t1[:,p0:p1], order='C'),
+                     eris_vovv.reshape(p1-p0,-1), -1, wooVV, 1)
 
             eris_vovv = lib.unpack_tril(eris_vovv.reshape((p1-p0)*nocc,nvir_pair))
             eris_vovv = eris_vovv.reshape(p1-p0,nocc,nvir,nvir)
@@ -281,11 +285,6 @@ def _add_ovvv_(mycc, t1, t2, eris, fvv, t1new, t2new, fswap):
                     tau = tmp = None
                 eris_vvvo = None
 
-            #:fwooVV -= numpy.einsum('jc,ciba->jiba', t1[:,p0:p1], eris_vovv)
-            lib.ddot(numpy.asarray(t1[:,p0:p1], order='C'),
-                     eris_vovv.reshape(p1-p0,-1), -1,
-                     fwooVV.reshape(nocc,-1), 1)
-
             wVOov[p0:p1] += lib.einsum('biac,jc->bija', eris_vovv, t1)
 
             theta = t2[:,:,p0:p1].transpose(1,2,0,3) * 2
@@ -295,9 +294,14 @@ def _add_ovvv_(mycc, t1, t2, eris, fvv, t1new, t2new, fswap):
             time1 = log.timer_debug1('vovv [%d:%d]'%(p0, p1), *time1)
 
     if fswap is None:
-        return wVOov, fwooVV.transpose(2,1,0,3)
+        wooVV = lib.unpack_tril(wooVV.reshape(nocc**2,nvir_pair))
+        return wVOov, wooVV.reshape(nocc,nocc,nvir,nvir).transpose(2,1,0,3)
     else:
-        fswap['wVooV'] = fwooVV.transpose(2,1,0,3)
+        fswap.create_dataset('wVooV', (nvir,nocc,nocc,nvir), 'f8')
+        wooVV = wooVV.reshape(nocc,nocc,nvir_pair)
+        tril2sq = lib.square_mat_in_trilu_indices(nvir)
+        for p0, p1 in lib.prange(0, nvir, blksize):
+            fswap['wVooV'][p0:p1] = wooVV[:,:,tril2sq[p0:p1]].transpose(2,1,0,3)
         return fswap['wVOov'], fswap['wVooV']
 
 def _add_vvvv(mycc, t1, t2, eris, out=None, with_ovvv=None, t2sym=None):
