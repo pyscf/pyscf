@@ -1248,7 +1248,6 @@ def _make_eris_outcore(mycc, mo_coeff=None):
     eris.ovov = eris.feri1.create_dataset('ovov', (nocc,nvir,nocc,nvir), 'f8', chunks=(nocc,1,nocc,nvir))
     eris.ovvv = eris.feri1.create_dataset('ovvv', (nocc,nvir,nvpair), 'f8', chunks=(nocc,1,nvpair))
 
-    oovv = numpy.empty((nocc,nocc,nvir,nvir))
     def save_occ_frac(p0, p1, eri):
         eri = eri.reshape(p1-p0,nocc,nmo,nmo)
         eris.oooo[p0:p1] = eri[:,:,:nocc,:nocc]
