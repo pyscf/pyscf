@@ -17,78 +17,28 @@
 #
 
 '''
-Unrestricted Hartree-Fock for periodic systems at a single k-point
+Restricted open-shell Hartree-Fock for periodic systems at a single k-point
 
 See Also:
     pyscf/pbc/scf/khf.py : Hartree-Fock for periodic systems with k-point sampling
 '''
 
 import numpy as np
-from pyscf import lib
 from pyscf.lib import logger
-from pyscf.scf import uhf as mol_uhf
+from pyscf.scf import rohf as mol_rohf
 from pyscf.pbc.scf import hf as pbchf
-from pyscf.pbc.scf import addons
-from pyscf.pbc.scf import chkfile
+from pyscf.pbc.scf import uhf as pbcuhf
 from pyscf import __config__
 
 
-def init_guess_by_chkfile(cell, chkfile_name, project=None, kpt=None):
-    '''Read the HF results from checkpoint file and make the density matrix
-    for UHF initial guess.
+get_fock = mol_rohf.get_fock
+get_occ = mol_rohf.get_occ
+get_grad = mol_rohf.get_grad
+make_rdm1 = mol_rohf.make_rdm1
+energy_elec = mol_rohf.energy_elec
 
-    Returns:
-        Density matrix, (nao,nao) ndarray
-    '''
-    from pyscf import gto
-    chk_cell, scf_rec = chkfile.load_scf(chkfile_name)
-    if project is None:
-        project = not gto.same_basis_set(chk_cell, cell)
-
-    mo = scf_rec['mo_coeff']
-    mo_occ = scf_rec['mo_occ']
-    if kpt is None:
-        kpt = np.zeros(3)
-    if 'kpt' in scf_rec:
-        chk_kpt = scf_rec['kpt']
-    elif 'kpts' in scf_rec:
-        kpts = scf_rec['kpts'] # the closest kpt from KRHF results
-        where = np.argmin(lib.norm(kpts-kpt, axis=1))
-        chk_kpt = kpts[where]
-        if mo[0].ndim == 2:  # KRHF
-            mo = mo[where]
-            mo_occ = mo_occ[where]
-        else:
-            mo = mo[:,where]
-            mo_occ = mo_occ[:,where]
-    else:  # from molecular code
-        chk_kpt = np.zeros(3)
-
-    if project:
-        s = cell.pbc_intor('int1e_ovlp', kpt=kpt)
-    def fproj(mo):
-        if project:
-            mo = addons.project_mo_nr2nr(chk_cell, mo, cell, chk_kpt-kpt)
-            norm = np.einsum('pi,pi->i', mo.conj(), s.dot(mo))
-            mo /= np.sqrt(norm)
-        return mo
-
-    if mo.ndim == 2:
-        mo = fproj(mo)
-        mo_occa = (mo_occ>1e-8).astype(np.double)
-        mo_occb = mo_occ - mo_occa
-        dm = mol_uhf.make_rdm1([mo,mo], [mo_occa,mo_occb])
-    else:  # UHF
-        dm = mol_uhf.make_rdm1([fproj(mo[0]),fproj(mo[1])], mo_occ)
-
-    # Real DM for gamma point
-    if kpt is None or np.allclose(kpt, 0):
-        dm = dm.real
-    return dm
-
-
-class UHF(mol_uhf.UHF, pbchf.SCF):
-    '''UHF class for PBCs.
+class ROHF(mol_rohf.ROHF, pbchf.SCF):
+    '''ROHF class for PBCs.
     '''
 
     direct_scf = getattr(__config__, 'pbc_scf_SCF_direct_scf', False)
@@ -143,7 +93,7 @@ class UHF(mol_uhf.UHF, pbchf.SCF):
 
     def get_init_guess(self, cell=None, key='minao'):
         if cell is None: cell = self.cell
-        dm = mol_uhf.UHF.get_init_guess(self, cell, key)
+        dm = mol_rohf.ROHF.get_init_guess(self, cell, key)
         if cell.dimension < 3:
             if isinstance(dm, np.ndarray) and dm.ndim == 2:
                 ne = np.einsum('ij,ji', dm, self.get_ovlp(cell))
@@ -169,7 +119,7 @@ class UHF(mol_uhf.UHF, pbchf.SCF):
     def init_guess_by_chkfile(self, chk=None, project=True, kpt=None):
         if chk is None: chk = self.chkfile
         if kpt is None: kpt = self.kpt
-        return init_guess_by_chkfile(self.cell, chk, project, kpt)
+        return pbcuhf.init_guess_by_chkfile(self.cell, chk, project, kpt)
 
     dump_chk = pbchf.SCF.dump_chk
     _is_mem_enough = pbchf.SCF._is_mem_enough
@@ -181,7 +131,8 @@ class UHF(mol_uhf.UHF, pbchf.SCF):
 
     def convert_from_(self, mf):
         '''Convert given mean-field object to RHF/ROHF'''
-        addons.convert_to_uhf(mf, self)
+        from pyscf.pbc.scf import addons
+        addons.convert_to_rhf(mf, self)
         return self
 
     stability = None

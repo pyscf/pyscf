@@ -217,6 +217,8 @@ def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
         level_shift_factor = mf.level_shift
     if damp_factor is None:
         damp_factor = mf.damp
+    if s1e is None: s1e = mf.get_ovlp()
+    if dm is None: dm = self.make_rdm1()
 
     if isinstance(level_shift_factor, (tuple, list, numpy.ndarray)):
         shifta, shiftb = level_shift_factor

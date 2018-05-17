@@ -193,6 +193,12 @@ def init_guess_by_chkfile(cell, chkfile_name, project=None, kpt=None):
     dm = uhf.init_guess_by_chkfile(cell, chkfile_name, project, kpt)
     return dm[0] + dm[1]
 
+get_fock = mol_hf.get_fock
+get_occ = mol_hf.get_occ
+get_grad = mol_hf.get_grad
+make_rdm1 = mol_hf.make_rdm1
+energy_elec = mol_hf.energy_elec
+
 
 class SCF(mol_hf.SCF):
     '''SCF base class adapted for PBCs.

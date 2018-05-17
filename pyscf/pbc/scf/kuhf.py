@@ -58,21 +58,29 @@ def make_rdm1(mo_coeff_kpts, mo_occ_kpts):
               make_dm(mo_coeff_kpts[1], mo_occ_kpts[1]))
     return lib.asarray(dm_kpts).reshape(2,nkpts,nao,nao)
 
-def get_fock(mf, h1e_kpts, s_kpts, vhf_kpts, dm_kpts, cycle=-1, diis=None,
+def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
              diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
+    h1e_kpts, s_kpts, vhf_kpts, dm_kpts = h1e, s1e, vhf, dm
+    if h1e_kpts is None: h1e_kpts = mf.get_hcore()
+    if vhf_kpts is None: vhf_kpts = mf.get_veff(mf.cell, dm_kpts)
+    f_kpts = h1e_kpts + vhf_kpts
+    if cycle < 0 and diis is None:  # Not inside the SCF iteration
+        return f_kpts
+
     if diis_start_cycle is None:
         diis_start_cycle = mf.diis_start_cycle
     if level_shift_factor is None:
         level_shift_factor = mf.level_shift
     if damp_factor is None:
         damp_factor = mf.damp
+    if s_kpts is None: s_kpts = mf.get_ovlp()
+    if dm_kpts is None: dm_kpts = mf.make_rdm1()
 
     if isinstance(level_shift_factor, (tuple, list, np.ndarray)):
         shifta, shiftb = level_shift_factor
     else:
         shifta = shiftb = level_shift_factor
 
-    f_kpts = h1e_kpts + vhf_kpts
     if diis and cycle >= diis_start_cycle:
         f_kpts = diis.update(s_kpts, dm_kpts, f_kpts, mf, h1e_kpts, vhf_kpts)
     if abs(level_shift_factor) > 1e-4:
@@ -182,15 +190,13 @@ def canonicalize(mf, mo_coeff_kpts, mo_occ_kpts, fock=None):
     '''Canonicalization diagonalizes the UHF Fock matrix within occupied,
     virtual subspaces separatedly (without change occupancy).
     '''
-    mo_coeff_kpts = np.asarray(mo_coeff_kpts)
-    mo_occ_kpts = np.asarray(mo_occ_kpts)
     if fock is None:
         dm = mf.make_rdm1(mo_coeff_kpts, mo_occ_kpts)
         fock = mf.get_hcore() + mf.get_jk(mf.cell, dm)
 
-    def eig_(fock, mo_coeff_kpts, idx, es, cs):
+    def eig_(fock, mo_coeff, idx, es, cs):
         if np.count_nonzero(idx) > 0:
-            orb = mo_coeff_kpts[:,idx]
+            orb = mo_coeff[:,idx]
             f1 = reduce(np.dot, (orb.T.conj(), fock, orb))
             e, c = scipy.linalg.eigh(f1)
             es[idx] = e
@@ -291,6 +297,49 @@ def init_guess_by_chkfile(cell, chkfile_name, project=None, kpts=None):
         dm = dm.real
     return dm
 
+def _get_init_guess(kmf, cell=None, key='minao'):
+    if cell is None:
+        cell = kmf.cell
+    dm_kpts = None
+    if key.lower() == '1e':
+        dm_kpts = kmf.init_guess_by_1e(cell)
+    elif getattr(cell, 'natm', 0) == 0:
+        logger.info(kmf, 'No atom found in cell. Use 1e initial guess')
+        dm_kpts = kmf.init_guess_by_1e(cell)
+    elif key.lower() == 'atom':
+        dm = kmf.init_guess_by_atom(cell)
+    elif key.lower().startswith('chk'):
+        try:
+            dm_kpts = kmf.from_chk()
+        except (IOError, KeyError):
+            logger.warn(kmf, 'Fail to read %s. Use MINAO initial guess',
+                        kmf.chkfile)
+            dm = kmf.init_guess_by_minao(cell)
+    else:
+        dm = kmf.init_guess_by_minao(cell)
+
+    if dm_kpts is None:
+        nao = dm[0].shape[-1]
+        nkpts = len(kmf.kpts)
+        dm_kpts = lib.asarray([dm]*nkpts).reshape(nkpts,2,nao,nao)
+        dm_kpts = dm_kpts.transpose(1,0,2,3)
+        dm_kpts[0,:] *= 1.01
+        dm_kpts[1,:] *= 0.99  # To break spin symmetry
+        assert dm_kpts.shape[0]==2
+
+    if cell.dimension < 3:
+        ne = np.einsum('xkij,kji->xk', dm_kpts, kmf.get_ovlp(cell))
+        nelec = np.asarray(cell.nelec).reshape(2,1)
+        if np.any(abs(ne - nelec) > 1e-7):
+            logger.warn(kmf, 'Big error detected in the electron number '
+                        'of initial guess density matrix (Ne/cell = %g)!\n'
+                        '  This can cause huge error in Fock matrix and '
+                        'lead to instability in SCF for low-dimensional '
+                        'systems.\n  DM is normalized to correct number '
+                        'of electrons', ne.mean())
+            dm_kpts *= (nelec/ne).reshape(2,-1,1,1)
+    return dm_kpts
+
 
 class KUHF(pbcuhf.UHF, khf.KSCF):
     '''UHF class with k-point sampling.
@@ -314,48 +363,7 @@ class KUHF(pbcuhf.UHF, khf.KSCF):
     build = khf.KSCF.build
     check_sanity = khf.KSCF.check_sanity
 
-    def get_init_guess(self, cell=None, key='minao'):
-        if cell is None:
-            cell = self.cell
-        dm_kpts = None
-        if key.lower() == '1e':
-            dm_kpts = self.init_guess_by_1e(cell)
-        elif getattr(cell, 'natm', 0) == 0:
-            logger.info(self, 'No atom found in cell. Use 1e initial guess')
-            dm_kpts = self.init_guess_by_1e(cell)
-        elif key.lower() == 'atom':
-            dm = self.init_guess_by_atom(cell)
-        elif key.lower().startswith('chk'):
-            try:
-                dm_kpts = self.from_chk()
-            except (IOError, KeyError):
-                logger.warn(self, 'Fail in reading %s. Use MINAO initial guess',
-                            self.chkfile)
-                dm = self.init_guess_by_minao(cell)
-        else:
-            dm = self.init_guess_by_minao(cell)
-
-        if dm_kpts is None:
-            nao = dm[0].shape[-1]
-            nkpts = len(self.kpts)
-            dm_kpts = lib.asarray([dm]*nkpts).reshape(nkpts,2,nao,nao)
-            dm_kpts = dm_kpts.transpose(1,0,2,3)
-            dm_kpts[0,:] *= 1.01
-            dm_kpts[1,:] *= 0.99  # To break spin symmetry
-            assert dm_kpts.shape[0]==2
-
-        if cell.dimension < 3:
-            ne = np.einsum('xkij,kji->xk', dm_kpts, self.get_ovlp(cell))
-            nelec = np.asarray(cell.nelec).reshape(2,1)
-            if np.any(abs(ne - nelec) > 1e-7):
-                logger.warn(self, 'Big error detected in the electron number '
-                            'of initial guess density matrix (Ne/cell = %g)!\n'
-                            '  This can cause huge error in Fock matrix and '
-                            'lead to instability in SCF for low-dimensional '
-                            'systems.\n  DM is normalized to correct number '
-                            'of electrons', ne.mean())
-                dm_kpts *= (nelec/ne).reshape(2,-1,1,1)
-        return dm_kpts
+    get_init_guess = _get_init_guess
 
     get_hcore = khf.KSCF.get_hcore
     get_ovlp = khf.KSCF.get_ovlp
@@ -427,8 +435,7 @@ class KUHF(pbcuhf.UHF, khf.KSCF):
         fock = self.get_hcore(cell, kpts_band)
         fock = fock + self.get_veff(cell, dm_kpts, kpts=kpts, kpts_band=kpts_band)
         s1e = self.get_ovlp(cell, kpts_band)
-        e_a, c_a = khf.KSCF.eig(self, fock[0], s1e)
-        e_b, c_b = khf.KSCF.eig(self, fock[1], s1e)
+        (e_a,e_b), (c_a,c_b) = self.eig(fock, s1e)
         if single_kpt_band:
             e_a = e_a[0]
             e_b = e_b[0]

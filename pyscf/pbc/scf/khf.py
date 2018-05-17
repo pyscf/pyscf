@@ -127,16 +127,24 @@ def get_jk(mf, cell, dm_kpts, kpts, kpts_band=None):
     '''
     return df.FFTDF(cell).get_jk(dm_kpts, kpts, kpts_band, exxdiv=mf.exxdiv)
 
-def get_fock(mf, h1e_kpts, s_kpts, vhf_kpts, dm_kpts, cycle=-1, diis=None,
+def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
              diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
+    h1e_kpts, s_kpts, vhf_kpts, dm_kpts = h1e, s1e, vhf, dm
+    if h1e_kpts is None: h1e_kpts = mf.get_hcore()
+    if vhf_kpts is None: vhf_kpts = mf.get_veff(mf.cell, dm_kpts)
+    f_kpts = h1e_kpts + vhf_kpts
+    if cycle < 0 and diis is None:  # Not inside the SCF iteration
+        return f
+
     if diis_start_cycle is None:
         diis_start_cycle = mf.diis_start_cycle
     if level_shift_factor is None:
         level_shift_factor = mf.level_shift
     if damp_factor is None:
         damp_factor = mf.damp
+    if s_kpts is None: s_kpts = mf.get_ovlp()
+    if dm_kpts is None: dm_kpts = mf.make_rdm1()
 
-    f_kpts = h1e_kpts + vhf_kpts
     if diis and cycle >= diis_start_cycle:
         f_kpts = diis.update(s_kpts, dm_kpts, f_kpts, mf, h1e_kpts, vhf_kpts)
     if abs(level_shift_factor) > 1e-4:
@@ -247,10 +255,11 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
     if with_meta_lowdin:
         return mf.mulliken_meta(mf.cell, dm, s=ovlp_ao, verbose=verbose)
     else:
-        return mf.mulliken_pop(mf.cell, dm, s=ovlp_ao, verbose=verbose)
+        raise NotImplementedError
+        #return mf.mulliken_pop(mf.cell, dm, s=ovlp_ao, verbose=verbose)
 
 
-def mulliken_meta(cell, dm_ao, verbose=logger.DEBUG,
+def mulliken_meta(cell, dm_ao_kpts, verbose=logger.DEBUG,
                   pre_orth_method=PRE_ORTH_METHOD, s=None):
     '''Mulliken population analysis, based on meta-Lowdin AOs.
 
@@ -263,14 +272,14 @@ def mulliken_meta(cell, dm_ao, verbose=logger.DEBUG,
     log = logger.new_logger(cell, verbose)
     log.note('Analyze output for the gamma point')
     log.note("KRHF mulliken_meta")
-    dm_ao_gamma = dm_ao[0,:,:].real
+    dm_ao_gamma = dm_ao_kpts[0,:,:].real
     s_gamma = s[0,:,:].real
     c = orth.restore_ao_character(cell, pre_orth_method)
     orth_coeff = orth.orth_ao(cell, 'meta_lowdin', pre_orth_ao=c, s=s_gamma)
     c_inv = np.dot(orth_coeff.T, s_gamma)
     dm = reduce(np.dot, (c_inv, dm_ao_gamma, c_inv.T.conj()))
 
-    log.note(' ** Mulliken pop alpha/beta on meta-lowdin orthogonal AOs **')
+    log.note(' ** Mulliken pop on meta-lowdin orthogonal AOs **')
     return hf.mulliken_pop(cell, dm, np.eye(orth_coeff.shape[0]), log)
 
 
@@ -421,7 +430,7 @@ class KSCF(pbchf.SCF):
             try:
                 dm_kpts = self.from_chk()
             except (IOError, KeyError):
-                logger.warn(self, 'Fail in reading %s. Use MINAO initial guess',
+                logger.warn(self, 'Fail to read %s. Use MINAO initial guess',
                             self.chkfile)
                 dm = self.init_guess_by_minao(cell)
         else:

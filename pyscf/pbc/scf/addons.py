@@ -231,7 +231,8 @@ def canonical_occ_(mf):
         for nm,s in zip(['alpha','beta'],[0,1]):
             logger.info(mf, nm+' HOMO = %.12g  LUMO = %.12g', homo[s], lumo[s])
             if homo[s] > lumo[s]:
-                logger.warn(mf, "WARNING! HOMO is greater than LUMO! This may result in errors with canonical occupation.")
+                logger.warn(mf, "WARNING! HOMO is greater than LUMO! "
+                            "This may lead to incorrect canonical occupation.")
 
         return mo_occ_kpts
 
@@ -258,10 +259,14 @@ def convert_to_uhf(mf, out=None):
                     raise NotImplementedError(
                         "No conversion from %s to uhf object" % cls)
 
-            known_cls = {dft.krks.KRKS : dft.kuks.KUKS,
-                         scf.khf.KRHF  : scf.kuhf.KUHF,
-                         dft.rks.RKS   : dft.uks.UKS  ,
-                         scf.hf.RHF    : scf.uhf.UHF  }
+            known_cls = {dft.krks.KRKS  : dft.kuks.KUKS,
+                         dft.kroks.KROKS: dft.kuks.KUKS,
+                         scf.khf.KRHF   : scf.kuhf.KUHF,
+                         scf.krohf.KROHF: scf.kuhf.KUHF,
+                         dft.rks.RKS    : dft.uks.UKS  ,
+                         dft.roks.ROKS  : dft.uks.UKS  ,
+                         scf.hf.RHF     : scf.uhf.UHF  ,
+                         scf.rohf.ROHF  : scf.uhf.UHF  ,}
             out = mol_addons._object_without_soscf(mf, known_cls, False)
     else:
         assert(isinstance(out, (scf.uhf.UHF, scf.kuhf.KUHF)))
@@ -286,10 +291,16 @@ def convert_to_rhf(mf, out=None):
                     raise NotImplementedError(
                         "No conversion from %s to rhf object" % cls)
 
-            known_cls = {dft.kuks.KUKS : dft.krks.KRKS,
-                         scf.kuhf.KUHF : scf.khf.KRHF ,
-                         dft.uks.UKS   : dft.rks.RKS  ,
-                         scf.uhf.UHF   : scf.hf.RHF   }
+            if hasattr(mf, 'nelec') and mf.nelec[0] != mf.nelec[1]:
+                known_cls = {dft.kuks.KUKS : dft.krks.KROKS,
+                             scf.kuhf.KUHF : scf.khf.KROHF ,
+                             dft.uks.UKS   : dft.rks.ROKS  ,
+                             scf.uhf.UHF   : scf.hf.ROHF   }
+            else:
+                known_cls = {dft.kuks.KUKS : dft.krks.KRKS,
+                             scf.kuhf.KUHF : scf.khf.KRHF ,
+                             dft.uks.UKS   : dft.rks.RKS  ,
+                             scf.uhf.UHF   : scf.hf.RHF   }
             out = mol_addons._object_without_soscf(mf, known_cls, False)
     else:
         assert(isinstance(out, (scf.hf.RHF, scf.khf.KRHF)))

@@ -757,9 +757,8 @@ def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
         level_shift_factor = mf.level_shift
     if damp_factor is None:
         damp_factor = mf.damp
-
-    if s1e is None:
-        s1e = mf.get_ovlp()
+    if s1e is None: s1e = mf.get_ovlp()
+    if dm is None: dm = self.make_rdm1()
 
     if 0 <= cycle < diis_start_cycle-1 and abs(damp_factor) > 1e-4:
         f = damping(s1e, dm*.5, f, damp_factor)

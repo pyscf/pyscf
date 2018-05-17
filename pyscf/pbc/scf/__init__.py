@@ -22,20 +22,24 @@
 from pyscf.pbc.scf import hf
 rhf = hf
 from pyscf.pbc.scf import uhf
+from pyscf.pbc.scf import rohf
 from pyscf.pbc.scf import ghf
 from pyscf.pbc.scf import khf
 krhf = khf
 from pyscf.pbc.scf import kuhf
+from pyscf.pbc.scf import krohf
 from pyscf.pbc.scf import kghf
 from pyscf.pbc.scf import newton_ah
 from pyscf.pbc.scf import addons
 
 RHF = rhf.RHF
 UHF = uhf.UHF
+ROHF = rohf.ROHF
 GHF = ghf.GHF
 
 KRHF = krhf.KRHF
 KUHF = kuhf.KUHF
+KROHF = krohf.KROHF
 KGHF = kghf.KGHF
 
 newton = newton_ah.newton

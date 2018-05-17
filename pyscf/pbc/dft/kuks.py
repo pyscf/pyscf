@@ -86,6 +86,19 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     vxc = lib.tag_array(vxc, ecoul=ecoul, exc=exc, vj=None, vk=None)
     return vxc
 
+def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf=None):
+    if h1e_kpts is None: h1e_kpts = mf.get_hcore(mf.cell, mf.kpts)
+    if dm_kpts is None: dm_kpts = mf.make_rdm1()
+    if vhf is None or getattr(vhf, 'ecoul', None) is None:
+        vhf = mf.get_veff(mf.cell, dm_kpts)
+
+    weight = 1./len(h1e_kpts)
+    e1 = weight *(np.einsum('kij,kji', h1e_kpts, dm_kpts[0]) +
+                  np.einsum('kij,kji', h1e_kpts, dm_kpts[1])).real
+    tot_e = e1 + vhf.ecoul + vhf.exc
+    logger.debug(mf, 'E1 = %s  Ecoul = %s  Exc = %s', e1, vhf.ecoul, vhf.exc)
+    return tot_e, vhf.ecoul + vhf.exc
+
 
 class KUKS(kuhf.KUHF):
     '''RKS class adapted for PBCs with k-point sampling.
@@ -101,18 +114,7 @@ class KUKS(kuhf.KUHF):
 
     get_veff = get_veff
 
-    def energy_elec(self, dm_kpts=None, h1e_kpts=None, vhf=None):
-        if h1e_kpts is None: h1e_kpts = self.get_hcore(self.cell, self.kpts)
-        if dm_kpts is None: dm_kpts = self.make_rdm1()
-        if vhf is None or getattr(vhf, 'ecoul', None) is None:
-            vhf = self.get_veff(self.cell, dm_kpts)
-
-        weight = 1./len(h1e_kpts)
-        e1 = weight *(np.einsum('kij,kji', h1e_kpts, dm_kpts[0]) +
-                      np.einsum('kij,kji', h1e_kpts, dm_kpts[1])).real
-        tot_e = e1 + vhf.ecoul + vhf.exc
-        logger.debug(self, 'E1 = %s  Ecoul = %s  Exc = %s', e1, vhf.ecoul, vhf.exc)
-        return tot_e, vhf.ecoul + vhf.exc
+    energy_elec = energy_elec
 
     define_xc_ = rks.define_xc_
 

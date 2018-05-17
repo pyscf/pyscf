@@ -814,9 +814,10 @@ class SymAdaptedROHF(rohf.ROHF):
         if not hasattr(fock, 'focka'):
             fock = self.get_fock(dm=self.make_rdm1(mo_coeff, mo_occ))
         mo_e, mo_coeff = canonicalize(self, mo_coeff, mo_occ, fock)
-        mo_ea = numpy.einsum('pi,pi->i', mo_coeff, fock.focka.dot(mo_coeff))
-        mo_eb = numpy.einsum('pi,pi->i', mo_coeff, fock.fockb.dot(mo_coeff))
-        mo_e = lib.tag_array(mo_e, mo_ea=mo_ea, mo_eb=mo_eb)
+        if hasattr(fock, 'focka'):
+            mo_ea = numpy.einsum('pi,pi->i', mo_coeff, fock.focka.dot(mo_coeff))
+            mo_eb = numpy.einsum('pi,pi->i', mo_coeff, fock.fockb.dot(mo_coeff))
+            mo_e = lib.tag_array(mo_e, mo_ea=mo_ea, mo_eb=mo_eb)
         return mo_e, mo_coeff
 
     def get_orbsym(self, mo_coeff=None):

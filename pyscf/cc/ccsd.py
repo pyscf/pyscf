@@ -53,8 +53,9 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_cycle=50, tol=1e-8,
 
     cput1 = cput0 = (time.clock(), time.time())
     eold = 0
-    vec_old = 0
-    eccsd = 0
+    eccsd = mycc.energy(t1, t2, eris)
+    log.info('Init E(CCSD) = %.15g', eccsd)
+
     if isinstance(mycc.diis, lib.diis.DIIS):
         adiis = mycc.diis
     elif mycc.diis:
@@ -666,7 +667,7 @@ def energy(mycc, t1=None, t2=None, eris=None):
         logger.warn(mycc, 'Non-zero imaginary part found in CCSD energy %s', e)
     return e
 
-def restore_from_diis_(mycc, diis_file):
+def restore_from_diis_(mycc, diis_file, inplace=True):
     '''Reuse an existed DIIS object in the CCSD calculation.
 
     The CCSD amplitudes will be restored from the DIIS object to generate t1
@@ -674,9 +675,13 @@ def restore_from_diis_(mycc, diis_file):
     overwritten by the generated t1 and t2 amplitudes. The amplitudes vector
     and error vector will be reused in the CCSD calculation.
     '''
-    mycc.diis = lib.diis.restore(diis_file)
-    ccvec = mycc.diis.extrapolate()
+    adiis = lib.diis.DIIS(mycc, mycc.diis_file, incore=mycc.incore_complete)
+    adiis.restore(diis_file, inplace=inplace)
+
+    ccvec = adiis.extrapolate()
     mycc.t1, mycc.t2 = mycc.vector_to_amplitudes(ccvec)
+    if inplace:
+        mycc.diis = adiis
     return mycc
 
 
