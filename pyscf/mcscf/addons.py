@@ -65,12 +65,20 @@ def sort_mo(casscf, mo_coeff, caslst, base=BASE):
     -109.007378939813691
     '''
     ncore = casscf.ncore
+    def ext_list(nmo, caslst):
+        mask = numpy.ones(nmo, dtype=bool)
+        mask[caslst] = False
+        idx = numpy.where(mask)[0]
+        if len(idx) + casscf.ncas != nmo:
+            raise ValueError('Active space size is incompatible with caslist. '
+                             'ncas = %d.  caslist %s' % (casscf.ncas, caslst))
+        return idx
+
     if isinstance(ncore, (int, numpy.integer)):
-        assert(casscf.ncas == len(caslst))
         nmo = mo_coeff.shape[1]
         if base != 0:
             caslst = [i-base for i in caslst]
-        idx = numpy.asarray([i for i in range(nmo) if i not in caslst])
+        idx = ext_list(nmo, caslst)
         mo = numpy.hstack((mo_coeff[:,idx[:ncore]],
                            mo_coeff[:,caslst],
                            mo_coeff[:,idx[ncore:]]))
@@ -84,22 +92,19 @@ def sort_mo(casscf, mo_coeff, caslst, base=BASE):
 
     else: # UHF-based CASSCF
         if isinstance(caslst[0], (int, numpy.integer)):
-            assert(casscf.ncas == len(caslst))
             if base != 0:
                 caslsta = [i-1 for i in caslst]
                 caslst = (caslsta, caslsta)
         else: # two casspace lists, for alpha and beta
-            assert(casscf.ncas == len(caslst[0]))
-            assert(casscf.ncas == len(caslst[1]))
             if base != 0:
                 caslst = ([i-base for i in caslst[0]],
                           [i-base for i in caslst[1]])
         nmo = mo_coeff[0].shape[1]
-        idxa = numpy.asarray([i for i in range(nmo) if i not in caslst[0]])
+        idxa = ext_list(nmo, caslst[0])
         mo_a = numpy.hstack((mo_coeff[0][:,idxa[:ncore[0]]],
                              mo_coeff[0][:,caslst[0]],
                              mo_coeff[0][:,idxa[ncore[0]:]]))
-        idxb = numpy.asarray([i for i in range(nmo) if i not in caslst[1]])
+        idxb = ext_list(nmo, caslst[1])
         mo_b = numpy.hstack((mo_coeff[1][:,idxb[:ncore[1]]],
                              mo_coeff[1][:,caslst[1]],
                              mo_coeff[1][:,idxb[ncore[1]:]]))
