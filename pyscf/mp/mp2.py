@@ -35,6 +35,9 @@ WITH_T2 = getattr(__config__, 'mp_mp2_with_t2', True)
 def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2,
            verbose=logger.NOTE):
     if mo_energy is None or mo_coeff is None:
+        if mp.mo_energy is None or mp.mo_coeff is None:
+            raise RuntimeError('mo_coeff, mo_energy are not initialized.\n'
+                               'You may need to call mf.kernel() to generate them.')
         mo_coeff = None
         mo_energy = _mo_energy_without_core(mp, mp.mo_energy)
     else:
@@ -355,6 +358,7 @@ class MP2(lib.StreamObject):
             log.info('frozen orbitals %s', self.frozen)
         log.info('max_memory %d MB (current use %d MB)',
                  self.max_memory, lib.current_memory()[0])
+        return self
 
     @property
     def emp2(self):
@@ -371,11 +375,6 @@ class MP2(lib.StreamObject):
             with_t2 : bool
                 Whether to generate and hold t2 amplitudes in memory.
         '''
-        if mo_energy is not None: self.mo_energy = mo_energy
-        if mo_coeff is not None: self.mo_coeff = mo_coeff
-        if self.mo_energy is None or self.mo_coeff is None:
-            raise RuntimeError('mo_coeff, mo_energy are not initialized.\n'
-                               'You may need to call mf.kernel() to generate them.')
         if self.verbose >= logger.WARN:
             self.check_sanity()
         self.dump_flags()
@@ -432,9 +431,8 @@ def _mem_usage(nocc, nvir):
 class _ChemistsERIs:
     def __init__(self, mp, mo_coeff=None):
         if mo_coeff is None:
-            self.mo_coeff = _mo_without_core(mp, mp.mo_coeff)
-        else:
-            self.mo_coeff = _mo_without_core(mp, mo_coeff)
+            mo_coeff = mp.mo_coeff
+        self.mo_coeff = _mo_without_core(mp, mo_coeff)
 
 def _make_eris(mp, mo_coeff=None, ao2mofn=None, verbose=None):
     log = logger.new_logger(mp, verbose)

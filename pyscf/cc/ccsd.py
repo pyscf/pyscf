@@ -665,7 +665,7 @@ def energy(mycc, t1=None, t2=None, eris=None):
         e -=     numpy.einsum('jiab,iabj', tau, eris_ovvo)
     if abs(e.imag) > 1e-4:
         logger.warn(mycc, 'Non-zero imaginary part found in CCSD energy %s', e)
-    return e
+    return e.real
 
 def restore_from_diis_(mycc, diis_file, inplace=True):
     '''Reuse an existed DIIS object in the CCSD calculation.
