@@ -54,13 +54,13 @@ static void permute(double *out, double *w, int n)
 }
 
 /*
- * t2T = t2.transpose(2,3,0,1)
+ * t2T = t2.transpose(2,3,1,0)
  * ov = vv_op[:,nocc:]
  * oo = vv_op[:,:nocc]
- * w = numpy.einsum('if,fjk->ijk', ov, t2T[:,c])
- * w-= numpy.einsum('ijm,mk->ijk', vooo[a], t2T[b,c])
+ * w = numpy.einsum('if,fjk->ijk', ov, t2T[c])
+ * w-= numpy.einsum('ijm,mk->ijk', vooo[a], t2T[c,b])
  * v = numpy.einsum('ij,k->ijk', oo, t1T[c]*.5)
- * v+= numpy.einsum('ij,k->ijk', t2T[a,b], fov[:,c]*.5)
+ * v+= numpy.einsum('ij,k->ijk', t2T[b,a], fov[:,c]*.5)
  * v+= w
  */
 static void get_wv(double *w, double *v, double *fvohalf, double *vooo,
@@ -69,24 +69,23 @@ static void get_wv(double *w, double *v, double *fvohalf, double *vooo,
 {
         const double D0 = 0;
         const double D1 = 1;
-        const double DN1 = -1;
+        const double DN1 =-1;
         const char TRANS_N = 'N';
         const int nmo = nocc + nvir;
         const int noo = nocc * nocc;
         const size_t nooo = nocc * noo;
         const size_t nvoo = nvir * noo;
-        const int _nvoo = nvoo;
         int i, j, k, n;
         double *pt2T;
 
         dgemm_(&TRANS_N, &TRANS_N, &noo, &nocc, &nvir,
-               &D1, t2T+c*noo, &_nvoo, vv_op+nocc, &nmo,
+               &D1, t2T+c*nvoo, &noo, vv_op+nocc, &nmo,
                &D0, w, &noo);
         dgemm_(&TRANS_N, &TRANS_N, &nocc, &noo, &nocc,
-               &DN1, t2T+b*nvoo+c*noo, &nocc, vooo+a*nooo, &nocc,
+               &DN1, t2T+c*nvoo+b*noo, &nocc, vooo+a*nooo, &nocc,
                &D1, w, &nocc);
 
-        pt2T = t2T + a * nvoo + b * noo;
+        pt2T = t2T + b * nvoo + a * noo;
         for (n = 0, i = 0; i < nocc; i++) {
         for (j = 0; j < nocc; j++) {
         for (k = 0; k < nocc; k++, n++) {
@@ -107,7 +106,6 @@ static void sym_wv(double *w, double *v, double *fvohalf, double *vooo,
         const int noo = nocc * nocc;
         const size_t nooo = nocc * noo;
         const size_t nvoo = nvir * noo;
-        const int _nvoo = nvoo;
         int a_irrep = orbsym[nocc+a];
         int b_irrep = orbsym[nocc+b];
         int c_irrep = orbsym[nocc+c];
@@ -122,8 +120,8 @@ static void sym_wv(double *w, double *v, double *fvohalf, double *vooo,
 
         memset(w, 0, sizeof(double)*nooo);
 /* symmetry adapted
- * w = numpy.einsum('if,fjk->ijk', ov, t2T[:,c]) */
-        pt2T = t2T + c * noo;
+ * w = numpy.einsum('if,fjk->ijk', ov, t2T[c]) */
+        pt2T = t2T + c * nvoo;
         for (ir = 0; ir < nirrep; ir++) {
                 i0 = o_ir_loc[ir];
                 i1 = o_ir_loc[ir+1];
@@ -141,7 +139,7 @@ static void sym_wv(double *w, double *v, double *fvohalf, double *vooo,
                                 if (djk > 0) {
 
         dgemm_(&TRANS_N, &TRANS_N, &djk, &di, &df,
-               &D1, pt2T+f0*nvoo+jk0, &_nvoo, vv_op+i0*nmo+nocc+f0, &nmo,
+               &D1, pt2T+f0*noo+jk0, &noo, vv_op+i0*nmo+nocc+f0, &nmo,
                &D0, buf, &djk);
         for (n = 0, i = o_ir_loc[ir]; i < o_ir_loc[ir+1]; i++) {
         for (jr = 0; jr < nirrep; jr++) {
@@ -158,7 +156,7 @@ static void sym_wv(double *w, double *v, double *fvohalf, double *vooo,
 
 /* symmetry adapted
  * w-= numpy.einsum('ijm,mk->ijk', eris_vooo[a], t2T[c,b]) */
-        pt2T = t2T + b * nvoo + c * noo;
+        pt2T = t2T + c * nvoo + b * noo;
         vooo += a * nooo;
         mk0 = oo_ir_loc[bc_irrep];
         for (mr = 0; mr < nirrep; mr++) {
@@ -194,7 +192,7 @@ static void sym_wv(double *w, double *v, double *fvohalf, double *vooo,
                 }
         }
 
-        pt2T = t2T + a * nvoo + b * noo;
+        pt2T = t2T + b * nvoo + a * noo;
         for (n = 0, i = 0; i < nocc; i++) {
         for (j = 0; j < nocc; j++) {
         for (k = 0; k < nocc; k++, n++) {
@@ -428,7 +426,7 @@ void CCsd_t_contract(double *e_tot,
                 fvohalf[k] = fvo[k] * .5;
         }
         double e = 0;
-#pragma omp for schedule (dynamic, 32)
+#pragma omp for schedule (dynamic, 16)
         for (k = 0; k < njobs; k++) {
                 a = jobs[k].a;
                 b = jobs[k].b;
@@ -478,18 +476,17 @@ static void zget_wv(double complex *w, double complex *v, double complex *fvohal
         const int noo = nocc * nocc;
         const size_t nooo = nocc * noo;
         const size_t nvoo = nvir * noo;
-        const int _nvoo = nvoo;
         int i, j, k, n;
         double complex *pt2T;
 
         zgemm_(&TRANS_N, &TRANS_N, &noo, &nocc, &nvir,
-               &D1, t2T+c*noo, &_nvoo, vv_op+nocc, &nmo,
+               &D1, t2T+c*nvoo, &noo, vv_op+nocc, &nmo,
                &D0, w, &noo);
         zgemm_(&TRANS_N, &TRANS_N, &nocc, &noo, &nocc,
-               &DN1, t2T+b*nvoo+c*noo, &nocc, vooo+a*nooo, &nocc,
+               &DN1, t2T+c*nvoo+b*noo, &nocc, vooo+a*nooo, &nocc,
                &D1, w, &nocc);
 
-        pt2T = t2T + a * nvoo + b * noo;
+        pt2T = t2T + b * nvoo + a * noo;
         for (n = 0, i = 0; i < nocc; i++) {
         for (j = 0; j < nocc; j++) {
         for (k = 0; k < nocc; k++, n++) {
@@ -622,7 +619,7 @@ void CCsd_t_zcontract(double complex *e_tot,
                 fvohalf[k] = fvo[k] * .5;
         }
         double complex e = 0;
-#pragma omp for schedule (dynamic, 32)
+#pragma omp for schedule (dynamic, 16)
         for (k = 0; k < njobs; k++) {
                 a = jobs[k].a;
                 b = jobs[k].b;
@@ -638,3 +635,198 @@ void CCsd_t_zcontract(double complex *e_tot,
 }
 }
 
+
+/*****************************************************************************
+ *
+ * mpi4pyscf
+ *
+ *****************************************************************************/
+static void MPICCget_wv(double *w, double *v, double *fvohalf, double *vooo,
+                        double *vv_op, double *t1Thalf,
+                        double *t2T_a, double *t2T_c,
+                        int nocc, int nvir, int a, int b, int c,
+                        int a0, int b0, int c0)
+{
+        const double D0 = 0;
+        const double D1 = 1;
+        const double DN1 = -1;
+        const char TRANS_N = 'N';
+        const int nmo = nocc + nvir;
+        const int noo = nocc * nocc;
+        const size_t nooo = nocc * noo;
+        const size_t nvoo = nvir * noo;
+        int i, j, k, n;
+        double *pt2T;
+
+        dgemm_(&TRANS_N, &TRANS_N, &noo, &nocc, &nvir,
+               &D1, t2T_c+(c-c0)*nvoo, &noo, vv_op+nocc, &nmo,
+               &D0, w, &noo);
+        dgemm_(&TRANS_N, &TRANS_N, &nocc, &noo, &nocc,
+               &DN1, t2T_c+(c-c0)*nvoo+b*noo, &nocc, vooo+(a-a0)*nooo, &nocc,
+               &D1, w, &nocc);
+
+        pt2T = t2T_a + (a-a0) * nvoo + b * noo;
+        for (n = 0, i = 0; i < nocc; i++) {
+        for (j = 0; j < nocc; j++) {
+        for (k = 0; k < nocc; k++, n++) {
+                v[n] = w[n] + vv_op[i*nmo+j] * t1Thalf[c*nocc+k];
+                v[n]+= pt2T[i*nocc+j] * fvohalf[c*nocc+k];
+        } } }
+}
+
+static double MPICCcontract6(int nocc, int nvir, int a, int b, int c,
+                             double *mo_energy, double *t1T, double *fvo,
+                             int *slices, double **data_ptrs, double *cache1)
+{
+        const int a0 = slices[0];
+        const int a1 = slices[1];
+        const int b0 = slices[2];
+        const int b1 = slices[3];
+        const int c0 = slices[4];
+        const int c1 = slices[5];
+        const int da = a1 - a0;
+        const int db = b1 - b0;
+        const int dc = c1 - c0;
+        const int nooo = nocc * nocc * nocc;
+        const int nmo = nocc + nvir;
+        const size_t nop = nocc * nmo;
+        double *vvop_ab = data_ptrs[0] + ((a-a0)*db+b-b0) * nop;
+        double *vvop_ac = data_ptrs[1] + ((a-a0)*dc+c-c0) * nop;
+        double *vvop_ba = data_ptrs[2] + ((b-b0)*da+a-a0) * nop;
+        double *vvop_bc = data_ptrs[3] + ((b-b0)*dc+c-c0) * nop;
+        double *vvop_ca = data_ptrs[4] + ((c-c0)*da+a-a0) * nop;
+        double *vvop_cb = data_ptrs[5] + ((c-c0)*db+b-b0) * nop;
+        double *vooo_a = data_ptrs[6];
+        double *vooo_b = data_ptrs[7];
+        double *vooo_c = data_ptrs[8];
+        double *t2T_a = data_ptrs[9 ];
+        double *t2T_b = data_ptrs[10];
+        double *t2T_c = data_ptrs[11];
+
+        double *v0 = cache1;
+        double *v1 = v0 + nooo;
+        double *v2 = v1 + nooo;
+        double *v3 = v2 + nooo;
+        double *v4 = v3 + nooo;
+        double *v5 = v4 + nooo;
+        double *w0 = v5 + nooo;
+        double *w1 = w0 + nooo;
+        double *w2 = w1 + nooo;
+        double *w3 = w2 + nooo;
+        double *w4 = w3 + nooo;
+        double *w5 = w4 + nooo;
+        double *z0 = w5 + nooo;
+        double *z1 = z0 + nooo;
+        double *z2 = z1 + nooo;
+        double *z3 = z2 + nooo;
+        double *z4 = z3 + nooo;
+        double *z5 = z4 + nooo;
+        double *denorm = z5 + nooo;
+        int i;
+
+        MPICCget_wv(w0, v0, fvo, vooo_a, vvop_ab, t1T, t2T_a, t2T_c, nocc, nvir, a, b, c, a0, b0, c0);
+        MPICCget_wv(w1, v1, fvo, vooo_a, vvop_ac, t1T, t2T_a, t2T_b, nocc, nvir, a, c, b, a0, c0, b0);
+        MPICCget_wv(w2, v2, fvo, vooo_b, vvop_ba, t1T, t2T_b, t2T_c, nocc, nvir, b, a, c, b0, a0, c0);
+        MPICCget_wv(w3, v3, fvo, vooo_b, vvop_bc, t1T, t2T_b, t2T_a, nocc, nvir, b, c, a, b0, c0, a0);
+        MPICCget_wv(w4, v4, fvo, vooo_c, vvop_ca, t1T, t2T_c, t2T_b, nocc, nvir, c, a, b, c0, a0, b0);
+        MPICCget_wv(w5, v5, fvo, vooo_c, vvop_cb, t1T, t2T_c, t2T_a, nocc, nvir, c, b, a, c0, b0, a0);
+        permute(z0, v0, nocc);
+        permute(z1, v1, nocc);
+        permute(z2, v2, nocc);
+        permute(z3, v3, nocc);
+        permute(z4, v4, nocc);
+        permute(z5, v5, nocc);
+
+        _ccsd_t_get_denorm(denorm, mo_energy, nocc, a, b, c);
+        if (a == c) {
+                for (i = 0; i < nooo; i++) {
+                        denorm[i] *= 1./6;
+                }
+        } else if (a == b || b == c) {
+                for (i = 0; i < nooo; i++) {
+                        denorm[i] *= .5;
+                }
+        }
+        for (i = 0; i < nooo; i++) {
+                z0[i] *= denorm[i];
+                z1[i] *= denorm[i];
+                z2[i] *= denorm[i];
+                z3[i] *= denorm[i];
+                z4[i] *= denorm[i];
+                z5[i] *= denorm[i];
+        }
+
+        double et = 0;
+        et += _ccsd_t_permute_contract(z0, z1, z2, z3, z4, z5, w0, nocc);
+        et += _ccsd_t_permute_contract(z1, z0, z4, z5, z2, z3, w1, nocc);
+        et += _ccsd_t_permute_contract(z2, z3, z0, z1, z5, z4, w2, nocc);
+        et += _ccsd_t_permute_contract(z3, z2, z5, z4, z0, z1, w3, nocc);
+        et += _ccsd_t_permute_contract(z4, z5, z1, z0, z3, z2, w4, nocc);
+        et += _ccsd_t_permute_contract(z5, z4, z3, z2, z1, z0, w5, nocc);
+        return et;
+}
+
+size_t _MPICCsd_t_gen_jobs(CacheJob *jobs, int nocc, int nvir,
+                           int *slices, double **data_ptrs)
+{
+        const int a0 = slices[0];
+        const int a1 = slices[1];
+        const int b0 = slices[2];
+        const int b1 = slices[3];
+        const int c0 = slices[4];
+        const int c1 = slices[5];
+        size_t m, a, b, c;
+
+        m = 0;
+        for (a = a0; a < a1; a++) {
+        for (b = b0; b < MIN(b1, a+1); b++) {
+        for (c = c0; c < MIN(c1, b+1); c++, m++) {
+                jobs[m].a = a;
+                jobs[m].b = b;
+                jobs[m].c = c;
+        } } }
+        return m;
+}
+
+void MPICCsd_t_contract(double *e_tot, double *mo_energy, double *t1T,
+                        double *fvo, int nocc, int nvir,
+                        int *slices, double **data_ptrs)
+{
+        const int a0 = slices[0];
+        const int a1 = slices[1];
+        const int b0 = slices[2];
+        const int b1 = slices[3];
+        const int c0 = slices[4];
+        const int c1 = slices[5];
+        int da = a1 - a0;
+        int db = b1 - b0;
+        int dc = c1 - c0;
+        CacheJob *jobs = malloc(sizeof(CacheJob) * da*db*dc);
+        size_t njobs = _MPICCsd_t_gen_jobs(jobs, nocc, nvir, slices, data_ptrs);
+#pragma omp parallel default(none) \
+        shared(njobs, nocc, nvir, mo_energy, t1T, fvo, jobs, e_tot, slices, data_ptrs)
+{
+        int a, b, c;
+        size_t k;
+        double *cache1 = malloc(sizeof(double) * (nocc*nocc*nocc*19+2));
+        double *t1Thalf = malloc(sizeof(double) * nvir*nocc * 2);
+        double *fvohalf = t1Thalf + nvir*nocc;
+        for (k = 0; k < nvir*nocc; k++) {
+                t1Thalf[k] = t1T[k] * .5;
+                fvohalf[k] = fvo[k] * .5;
+        }
+        double e = 0;
+#pragma omp for schedule (dynamic, 16)
+        for (k = 0; k < njobs; k++) {
+                a = jobs[k].a;
+                b = jobs[k].b;
+                c = jobs[k].c;
+                e += MPICCcontract6(nocc, nvir, a, b, c, mo_energy, t1Thalf,
+                                    fvohalf, slices, data_ptrs, cache1);
+        }
+        free(t1Thalf);
+        free(cache1);
+#pragma omp critical
+        *e_tot += e;
+}
+}

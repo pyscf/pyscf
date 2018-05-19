@@ -190,21 +190,24 @@ def _sort_t2_vooo_(mycc, orbsym, t1, t2, eris):
         o_sym = orbsym[o_sorted]
         oo_sym = (o_sym[:,None] ^ o_sym).ravel()
         oo_sorted = _irrep_argsort(oo_sym)
-        #:vooo = eris.ovoo.transpose(1,0,3,2)
+        #:vooo = eris.ovoo.transpose(1,0,2,3)
         #:vooo = vooo[v_sorted][:,o_sorted][:,:,o_sorted][:,:,:,o_sorted]
         #:vooo = vooo.reshape(nvir,-1,nocc)[:,oo_sorted]
         oo_idx = numpy.arange(nocc**2).reshape(nocc,nocc)[o_sorted][:,o_sorted]
         oo_idx = oo_idx.ravel()[oo_sorted]
-        ooo_idx = (oo_idx[:,None]*nocc+o_sorted).ravel()
-        vooo = lib.take_2d(vooo.reshape(nvir,-1), v_sorted, ooo_idx)
+        oo_idx = (oo_idx[:,None]*nocc+o_sorted).ravel()
+        vooo = lib.take_2d(vooo.reshape(nvir,-1), v_sorted, oo_idx)
         vooo = vooo.reshape(nvir,nocc,nocc,nocc)
 
         #:t2T = t2.transpose(2,3,1,0)
         #:t2T = ref_t2T[v_sorted][:,v_sorted][:,:,o_sorted][:,:,:,o_sorted]
         #:t2T = ref_t2T.reshape(nvir,nvir,-1)[:,:,oo_sorted]
         t2T = lib.transpose(t2.reshape(nocc**2,-1))
+        oo_idx = numpy.arange(nocc**2).reshape(nocc,nocc).T[o_sorted][:,o_sorted]
+        oo_idx = oo_idx.ravel()[oo_sorted]
         vv_idx = (v_sorted[:,None]*nvir+v_sorted).ravel()
         t2T = lib.take_2d(t2T.reshape(nvir**2,nocc**2), vv_idx, oo_idx, out=t2)
+        t2T = t2T.reshape(nvir,nvir,nocc,nocc)
         def restore_t2_inplace(t2T):
             tmp = numpy.zeros((nvir**2,nocc**2), dtype=t2T.dtype)
             lib.takebak_2d(tmp, t2T.reshape(nvir**2,nocc**2), vv_idx, oo_idx)
@@ -213,10 +216,12 @@ def _sort_t2_vooo_(mycc, orbsym, t1, t2, eris):
     else:
         fvo = eris.fock[nocc:,:nocc].copy()
         t1T = t1.T.copy()
-        t2T = lib.transpose(t2.copy('C').reshape(nocc**2,nvir**2), out=t2)
+        t2T = lib.transpose(t2.reshape(nocc**2,nvir**2))
+        t2T = lib.transpose(t2T.reshape(nvir**2,nocc,nocc), axes=(0,2,1), out=t2)
         mo_energy = numpy.asarray(eris.fock.diagonal().real, order='C')
         def restore_t2_inplace(t2T):
-            t2 = lib.transpose(t2T.copy().reshape(nvir**2,nocc**2), out=t2T)
+            tmp = lib.transpose(t2T.reshape(nvir**2,nocc,nocc), axes=(0,2,1))
+            t2 = lib.transpose(tmp.reshape(nvir**2,nocc**2), out=t2T)
             return t2.reshape(nocc,nocc,nvir,nvir)
     t2T = t2T.reshape(nvir,nvir,nocc,nocc)
     return mo_energy, t1T, t2T, vooo, fvo, restore_t2_inplace

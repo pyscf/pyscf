@@ -126,10 +126,10 @@ class KnownValues(unittest.TestCase):
         oo_sym = (o_sym[:,None] ^ o_sym).ravel()
         oo_sorted = numpy.hstack([numpy.where(oo_sym == i)[0] for i in range(8)])
 
-        ref_t2T = t2.transpose(2,3,0,1)
+        ref_t2T = t2.transpose(2,3,1,0)
         ref_t2T = ref_t2T[v_sorted][:,v_sorted][:,:,o_sorted][:,:,:,o_sorted]
         ref_t2T = ref_t2T.reshape(nvir,nvir,-1)[:,:,oo_sorted].reshape(nvir,nvir,nocc,nocc)
-        ref_vooo = numpy.asarray(eris.ovoo).transpose(1,0,3,2)
+        ref_vooo = numpy.asarray(eris.ovoo).transpose(1,0,2,3)
         ref_vooo = ref_vooo[v_sorted][:,o_sorted][:,:,o_sorted][:,:,:,o_sorted]
         ref_vooo = ref_vooo.reshape(nvir,-1,nocc)[:,oo_sorted].reshape(nvir,nocc,nocc,nocc)
 
