@@ -54,13 +54,13 @@ static void permute(double *out, double *w, int n)
 }
 
 /*
- * t2T = t2.transpose(2,3,1,0)
+ * t2T = t2.transpose(2,3,0,1)
  * ov = vv_op[:,nocc:]
  * oo = vv_op[:,:nocc]
- * w = numpy.einsum('if,fjk->ijk', ov, t2T[c])
- * w-= numpy.einsum('ijm,mk->ijk', vooo[a], t2T[c,b])
+ * w = numpy.einsum('if,fjk->ijk', ov, t2T[:,c])
+ * w-= numpy.einsum('ijm,mk->ijk', vooo[a], t2T[b,c])
  * v = numpy.einsum('ij,k->ijk', oo, t1T[c]*.5)
- * v+= numpy.einsum('ij,k->ijk', t2T[b,a], fov[:,c]*.5)
+ * v+= numpy.einsum('ij,k->ijk', t2T[a,b], fov[:,c]*.5)
  * v+= w
  */
 static void get_wv(double *w, double *v, double *fvohalf, double *vooo,
@@ -69,23 +69,24 @@ static void get_wv(double *w, double *v, double *fvohalf, double *vooo,
 {
         const double D0 = 0;
         const double D1 = 1;
-        const double DN1 =-1;
+        const double DN1 = -1;
         const char TRANS_N = 'N';
         const int nmo = nocc + nvir;
         const int noo = nocc * nocc;
         const size_t nooo = nocc * noo;
         const size_t nvoo = nvir * noo;
+        const int _nvoo = nvoo;
         int i, j, k, n;
         double *pt2T;
 
         dgemm_(&TRANS_N, &TRANS_N, &noo, &nocc, &nvir,
-               &D1, t2T+c*nvoo, &noo, vv_op+nocc, &nmo,
+               &D1, t2T+c*noo, &_nvoo, vv_op+nocc, &nmo,
                &D0, w, &noo);
         dgemm_(&TRANS_N, &TRANS_N, &nocc, &noo, &nocc,
-               &DN1, t2T+c*nvoo+b*noo, &nocc, vooo+a*nooo, &nocc,
+               &DN1, t2T+b*nvoo+c*noo, &nocc, vooo+a*nooo, &nocc,
                &D1, w, &nocc);
 
-        pt2T = t2T + b * nvoo + a * noo;
+        pt2T = t2T + a * nvoo + b * noo;
         for (n = 0, i = 0; i < nocc; i++) {
         for (j = 0; j < nocc; j++) {
         for (k = 0; k < nocc; k++, n++) {
@@ -104,8 +105,9 @@ static void sym_wv(double *w, double *v, double *fvohalf, double *vooo,
         const char TRANS_N = 'N';
         const int nmo = nocc + nvir;
         const int noo = nocc * nocc;
-        const int nooo = nocc * noo;
-        const int nvoo = nvir * noo;
+        const size_t nooo = nocc * noo;
+        const size_t nvoo = nvir * noo;
+        const int _nvoo = nvoo;
         int a_irrep = orbsym[nocc+a];
         int b_irrep = orbsym[nocc+b];
         int c_irrep = orbsym[nocc+c];
@@ -120,8 +122,8 @@ static void sym_wv(double *w, double *v, double *fvohalf, double *vooo,
 
         memset(w, 0, sizeof(double)*nooo);
 /* symmetry adapted
- * w = numpy.einsum('if,fjk->ijk', ov, t2T[c]) */
-        pt2T = t2T + c * nvoo;
+ * w = numpy.einsum('if,fjk->ijk', ov, t2T[:,c]) */
+        pt2T = t2T + c * noo;
         for (ir = 0; ir < nirrep; ir++) {
                 i0 = o_ir_loc[ir];
                 i1 = o_ir_loc[ir+1];
@@ -139,7 +141,7 @@ static void sym_wv(double *w, double *v, double *fvohalf, double *vooo,
                                 if (djk > 0) {
 
         dgemm_(&TRANS_N, &TRANS_N, &djk, &di, &df,
-               &D1, pt2T+f0*noo+jk0, &noo, vv_op+i0*nmo+nocc+f0, &nmo,
+               &D1, pt2T+f0*nvoo+jk0, &_nvoo, vv_op+i0*nmo+nocc+f0, &nmo,
                &D0, buf, &djk);
         for (n = 0, i = o_ir_loc[ir]; i < o_ir_loc[ir+1]; i++) {
         for (jr = 0; jr < nirrep; jr++) {
@@ -156,7 +158,7 @@ static void sym_wv(double *w, double *v, double *fvohalf, double *vooo,
 
 /* symmetry adapted
  * w-= numpy.einsum('ijm,mk->ijk', eris_vooo[a], t2T[c,b]) */
-        pt2T = t2T + c * nvoo + b * noo;
+        pt2T = t2T + b * nvoo + c * noo;
         vooo += a * nooo;
         mk0 = oo_ir_loc[bc_irrep];
         for (mr = 0; mr < nirrep; mr++) {
@@ -192,7 +194,7 @@ static void sym_wv(double *w, double *v, double *fvohalf, double *vooo,
                 }
         }
 
-        pt2T = t2T + b * nvoo + a * noo;
+        pt2T = t2T + a * nvoo + b * noo;
         for (n = 0, i = 0; i < nocc; i++) {
         for (j = 0; j < nocc; j++) {
         for (k = 0; k < nocc; k++, n++) {
@@ -476,17 +478,18 @@ static void zget_wv(double complex *w, double complex *v, double complex *fvohal
         const int noo = nocc * nocc;
         const size_t nooo = nocc * noo;
         const size_t nvoo = nvir * noo;
+        const int _nvoo = nvoo;
         int i, j, k, n;
         double complex *pt2T;
 
         zgemm_(&TRANS_N, &TRANS_N, &noo, &nocc, &nvir,
-               &D1, t2T+c*nvoo, &noo, vv_op+nocc, &nmo,
+               &D1, t2T+c*noo, &_nvoo, vv_op+nocc, &nmo,
                &D0, w, &noo);
         zgemm_(&TRANS_N, &TRANS_N, &nocc, &noo, &nocc,
-               &DN1, t2T+c*nvoo+b*noo, &nocc, vooo+a*nooo, &nocc,
+               &DN1, t2T+b*nvoo+c*noo, &nocc, vooo+a*nooo, &nocc,
                &D1, w, &nocc);
 
-        pt2T = t2T + b * nvoo + a * noo;
+        pt2T = t2T + a * nvoo + b * noo;
         for (n = 0, i = 0; i < nocc; i++) {
         for (j = 0; j < nocc; j++) {
         for (k = 0; k < nocc; k++, n++) {

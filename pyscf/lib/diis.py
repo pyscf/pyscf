@@ -165,6 +165,9 @@ class DIIS(object):
 # as the diff of the current vec and previous returned vec (._xprev)
 # So store the first trial vec as the previous returned vec
             self._xprev = x
+            self._store('xprev', x)
+            if 'xprev' not in self._buffer:  # not incore
+                self._xprev = self._diisfile['xprev']
 
         else:
             if self._head >= self.space:
@@ -174,7 +177,7 @@ class DIIS(object):
             xkey = 'x%d'%self._head
             self._store(xkey, x)
             if x.size < INCORE_SIZE or self.incore:
-                self._store(ekey, x - self._xprev)
+                self._store(ekey, x - numpy.asarray(self._xprev))
             else:  # not call _store to reduce memory footprint
                 if ekey not in self._diisfile:
                     self._diisfile.create_dataset(ekey, (x.size,), x.dtype)
@@ -235,6 +238,10 @@ class DIIS(object):
         else:
             self._xprev = None # release memory first
             self._xprev = xnew = self.extrapolate(nd)
+
+            self._store('xprev', xnew)
+            if 'xprev' not in self._buffer:  # not incore
+                self._xprev = self._diisfile['xprev']
         return xnew.reshape(x.shape)
 
     def extrapolate(self, nd=None):
@@ -291,9 +298,20 @@ class DIIS(object):
             if fdiis[x_keys[0]].size < INCORE_SIZE or self.incore:
                 for key in diis_keys:
                     self._buffer[key] = numpy.asarray(fdiis[key])
+
+            if 'xprev' in diis_keys:
+                self._xprev = fdiis['xprev']
+
         else:
             for key in diis_keys:
                 self._store(key, fdiis[key].value)
+
+            if 'xprev' in diis_keys:
+                self._store('xprev', numpy.asarray(fdiis['xprev']))
+                if 'xprev' in self._buffer:  # incore
+                    self._xprev = self._buffer['xprev']
+                else:
+                    self._xprev = self._diisfile['xprev']
 
         self._bookkeep = list(range(min(self.space, nd)))
         self._head = nd
