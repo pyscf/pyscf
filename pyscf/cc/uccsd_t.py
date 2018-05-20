@@ -64,12 +64,12 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     mem_now = lib.current_memory()[0]
     max_memory = max(0, mycc.max_memory - mem_now)
     # aaa
-    bufsize = max(1, int((max_memory*1e6/8-nocca**3*100)*.7/(nocca*nmoa)))
+    bufsize = max(8, int((max_memory*.5e6/8-nocca**3*100)*.4/(nocca*nmoa)))
     log.debug('max_memory %d MB (%d MB in use)', max_memory, mem_now)
     orbsym = numpy.zeros(nocca, dtype=int)
     contract = _gen_contract_aaa(t1aT, t2aaT, eris_vooo, eris.focka, orbsym, log)
-    for a0, a1 in reversed(list(lib.prange_tril(0, nvira, bufsize))):
-        with lib.call_in_background(contract, sync=not mycc.async_io) as ctr:
+    with lib.call_in_background(contract, sync=not mycc.async_io) as ctr:
+        for a0, a1 in reversed(list(lib.prange_tril(0, nvira, bufsize))):
             cache_row_a = numpy.asarray(eris_vvop[a0:a1,:a1], order='C')
             if a0 == 0:
                 cache_col_a = cache_row_a
@@ -78,7 +78,7 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
             ctr(et_sum, a0, a1, a0, a1, (cache_row_a,cache_col_a,
                                          cache_row_a,cache_col_a))
 
-            for b0, b1 in lib.prange_tril(0, a0, bufsize/6):
+            for b0, b1 in lib.prange_tril(0, a0, bufsize/8):
                 cache_row_b = numpy.asarray(eris_vvop[b0:b1,:b1], order='C')
                 if b0 == 0:
                     cache_col_b = cache_row_b
@@ -86,17 +86,15 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
                     cache_col_b = numpy.asarray(eris_vvop[:b0,b0:b1], order='C')
                 ctr(et_sum, a0, a1, b0, b1, (cache_row_a,cache_col_a,
                                              cache_row_b,cache_col_b))
-                cache_row_b = cache_col_b = None
-            cache_row_a = cache_col_a = None
     cpu1 = log.timer_debug1('contract_aaa', *cpu1)
 
     # bbb
-    bufsize = max(1, int((max_memory*1e6/8-noccb**3*100)*.7/(noccb*nmob)))
+    bufsize = max(8, int((max_memory*.5e6/8-noccb**3*100)*.4/(noccb*nmob)))
     log.debug('max_memory %d MB (%d MB in use)', max_memory, mem_now)
     orbsym = numpy.zeros(noccb, dtype=int)
     contract = _gen_contract_aaa(t1bT, t2bbT, eris_VOOO, eris.fockb, orbsym, log)
-    for a0, a1 in reversed(list(lib.prange_tril(0, nvirb, bufsize))):
-        with lib.call_in_background(contract, sync=not mycc.async_io) as ctr:
+    with lib.call_in_background(contract, sync=not mycc.async_io) as ctr:
+        for a0, a1 in reversed(list(lib.prange_tril(0, nvirb, bufsize))):
             cache_row_a = numpy.asarray(eris_VVOP[a0:a1,:a1], order='C')
             if a0 == 0:
                 cache_col_a = cache_row_a
@@ -105,7 +103,7 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
             ctr(et_sum, a0, a1, a0, a1, (cache_row_a,cache_col_a,
                                          cache_row_a,cache_col_a))
 
-            for b0, b1 in lib.prange_tril(0, a0, bufsize/6):
+            for b0, b1 in lib.prange_tril(0, a0, bufsize/8):
                 cache_row_b = numpy.asarray(eris_VVOP[b0:b1,:b1], order='C')
                 if b0 == 0:
                     cache_col_b = cache_row_b
@@ -113,8 +111,6 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
                     cache_col_b = numpy.asarray(eris_VVOP[:b0,b0:b1], order='C')
                 ctr(et_sum, a0, a1, b0, b1, (cache_row_a,cache_col_a,
                                              cache_row_b,cache_col_b))
-                cache_row_b = cache_col_b = None
-            cache_row_a = cache_col_a = None
     cpu1 = log.timer_debug1('contract_bbb', *cpu1)
 
     # Cache t2abT in t2ab to reduce memory footprint
@@ -122,22 +118,20 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     t2abT = lib.transpose(t2ab.copy().reshape(nocca*noccb,nvira*nvirb), out=t2ab)
     t2abT = t2abT.reshape(nvira,nvirb,nocca,noccb)
     # baa
-    bufsize = max(1, int((max_memory*.9e6/8-noccb*nocca**2*7)*.3/nocca*nmob))
+    bufsize = int(max(12, (max_memory*.5e6/8-noccb*nocca**2*8)*.7/(nocca*nmob)))
     ts = t1aT, t1bT, t2aaT, t2abT
     fock = (eris.focka, eris.fockb)
     vooo = (eris_vooo, eris_vOoO, eris_VoOo)
     contract = _gen_contract_baa(ts, vooo, fock, orbsym, log)
-    for a0, a1 in lib.prange(0, nvirb, int(bufsize/nvira+1)):
-        with lib.call_in_background(contract, sync=not mycc.async_io) as ctr:
+    with lib.call_in_background(contract, sync=not mycc.async_io) as ctr:
+        for a0, a1 in lib.prange(0, nvirb, int(bufsize/nvira+1)):
             cache_row_a = numpy.asarray(eris_VvOp[a0:a1,:], order='C')
             cache_col_a = numpy.asarray(eris_vVoP[:,a0:a1], order='C')
-            for b0, b1 in lib.prange_tril(0, nvira, bufsize):
+            for b0, b1 in lib.prange_tril(0, nvira, bufsize/6/2):
                 cache_row_b = numpy.asarray(eris_vvop[b0:b1,:b1], order='C')
                 cache_col_b = numpy.asarray(eris_vvop[:b0,b0:b1], order='C')
                 ctr(et_sum, a0, a1, b0, b1, (cache_row_a,cache_col_a,
                                              cache_row_b,cache_col_b))
-                cache_row_b = cache_col_b = None
-            cache_row_a = cache_col_a = None
     cpu1 = log.timer_debug1('contract_baa', *cpu1)
 
     t2baT = numpy.ndarray((nvirb,nvira,noccb,nocca), buffer=t2abT,
@@ -152,13 +146,11 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
         with lib.call_in_background(contract, sync=not mycc.async_io) as ctr:
             cache_row_a = numpy.asarray(eris_vVoP[a0:a1,:], order='C')
             cache_col_a = numpy.asarray(eris_VvOp[:,a0:a1], order='C')
-            for b0, b1 in lib.prange_tril(0, nvirb, bufsize):
+            for b0, b1 in lib.prange_tril(0, nvirb, bufsize/6/2):
                 cache_row_b = numpy.asarray(eris_VVOP[b0:b1,:b1], order='C')
                 cache_col_b = numpy.asarray(eris_VVOP[:b0,b0:b1], order='C')
                 ctr(et_sum, a0, a1, b0, b1, (cache_row_a,cache_col_a,
                                              cache_row_b,cache_col_b))
-                cache_row_b = cache_col_b = None
-            cache_row_a = cache_col_a = None
     cpu1 = log.timer_debug1('contract_abb', *cpu1)
 
     # Restore t2ab
