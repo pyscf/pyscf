@@ -36,11 +36,11 @@ UHF = uhf.UHF
 ROHF = rohf.ROHF
 GHF = ghf.GHF
 
-def RHF(cell, *args):
+def RHF(cell, *args, **kwargs):
     if cell.spin == 0:
-        return rhf.RHF(cell, *args)
+        return rhf.RHF(cell, *args, **kwargs)
     else:
-        return rohf.ROHF(cell, *args)
+        return rohf.ROHF(cell, *args, **kwargs)
 RHF.__doc__ = rhf.RHF.__doc__
 
 KRHF = krhf.KRHF  # KRHF supports cell.spin != 0 if number of k-points is even
