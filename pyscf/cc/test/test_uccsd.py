@@ -348,7 +348,9 @@ class KnownValues(unittest.TestCase):
         eris = uccsd._ChemistsERIs()
         eris.vvVV = numpy.random.random((nvira_pair,nvirb_pair))
         eris.mol = mol
-        vt2 = eris._contract_vvVV_t2(myucc, t2, eris.vvVV, max_memory=0)
+        myucc.max_memory, bak = 0, myucc.max_memory
+        vt2 = eris._contract_vvVV_t2(myucc, t2, eris.vvVV)
+        myucc.max_memory = bak
         self.assertAlmostEqual(lib.finger(vt2), 12.00904827896089, 11)
         idxa = lib.square_mat_in_trilu_indices(nvira)
         idxb = lib.square_mat_in_trilu_indices(nvirb)
@@ -365,7 +367,9 @@ class KnownValues(unittest.TestCase):
         t2 = numpy.random.random((noccb,noccb,nvirb,nvirb))
         t2 = t2 - t2.transpose(0,1,3,2)
         t2 = t2 - t2.transpose(1,0,3,2)
-        vt2 = eris._contract_VVVV_t2(myucc, t2, eris.VVVV, max_memory=0)
+        myucc.max_memory, bak = 0, myucc.max_memory
+        vt2 = eris._contract_VVVV_t2(myucc, t2, eris.VVVV)
+        myucc.max_memory = bak
         self.assertAlmostEqual(lib.finger(vt2), 47.903883794299404-50.501573400833429j, 11)
         ref = lib.einsum('acbd,ijcd->ijab', eris.VVVV, t2)
         self.assertAlmostEqual(abs(vt2 - ref).max(), 0, 11)

@@ -286,7 +286,7 @@ def _add_ovvv_(mycc, t1, t2, eris, fvv, t1new, t2new, fswap):
     wooVV = numpy.zeros((nocc,nocc*nvir_pair))
 
     max_memory = mycc.max_memory - lib.current_memory()[0]
-    unit = nocc*nvir**2*3 + nocc**2*nvir + 1
+    unit = nocc*nvir**2*2.5 + nocc**2*nvir + 2
     blksize = min(nvir, max(BLKMIN, int((max_memory*.95e6/8-wooVV.size)/unit)))
     log.debug1('max_memory %d MB,  nocc,nvir = %d,%d  blksize = %d',
                max_memory, nocc, nvir, blksize)
@@ -393,8 +393,7 @@ def _add_vvvv_tril(mycc, t1, t2, eris, out=None, with_ovvv=None):
         tau = tau.reshape(nocc2,nao,nao)
         time0 = log.timer_debug1('vvvv-tau', *time0)
 
-        max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
-        buf = eris._contract_vvvv_t2(mycc, tau, mycc.direct, out, max_memory, log)
+        buf = eris._contract_vvvv_t2(mycc, tau, mycc.direct, out, log)
         buf = buf.reshape(nocc2,nao,nao)
         Ht2tril = _ao2mo.nr_e2(buf, mo.conj(), (nocc,nmo,nocc,nmo), 's1', 's1')
         Ht2tril = Ht2tril.reshape(nocc2,nvir,nvir)
@@ -413,8 +412,7 @@ def _add_vvvv_tril(mycc, t1, t2, eris, out=None, with_ovvv=None):
             Ht2tril -= tmp.reshape(nocc2,nvir,nvir)
     else:
         assert(not with_ovvv)
-        max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
-        Ht2tril = eris._contract_vvvv_t2(mycc, tau, mycc.direct, out, max_memory, log)
+        Ht2tril = eris._contract_vvvv_t2(mycc, tau, mycc.direct, out, log)
     return Ht2tril
 
 def _add_vvvv_full(mycc, t1, t2, eris, out=None, with_ovvv=False):
@@ -428,7 +426,6 @@ def _add_vvvv_full(mycc, t1, t2, eris, out=None, with_ovvv=False):
     else:
         tau = numpy.einsum('ia,jb->ijab', t1, t1)
         tau += t2
-    max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
 
     if mycc.direct:   # AO-direct CCSD
         if with_ovvv:
@@ -443,18 +440,17 @@ def _add_vvvv_full(mycc, t1, t2, eris, out=None, with_ovvv=False):
         tau = tau.reshape(nocc,nocc,nao,nao)
         time0 = log.timer_debug1('vvvv-tau mo2ao', *time0)
 
-        buf = eris._contract_vvvv_t2(mycc, tau, mycc.direct, out, max_memory, log)
+        buf = eris._contract_vvvv_t2(mycc, tau, mycc.direct, out, log)
         buf = buf.reshape(nocc**2,nao,nao)
         Ht2 = _ao2mo.nr_e2(buf, mo.conj(), (nocc,nmo,nocc,nmo), 's1', 's1')
     else:
         assert(not with_ovvv)
-        Ht2 = eris._contract_vvvv_t2(mycc, tau, mycc.direct, out, max_memory, log)
+        Ht2 = eris._contract_vvvv_t2(mycc, tau, mycc.direct, out, log)
 
     return Ht2.reshape(t2.shape)
 
 
-def _contract_vvvv_t2(mycc, mol, vvvv, t2, out=None, max_memory=MEMORYMIN,
-                      verbose=None):
+def _contract_vvvv_t2(mycc, mol, vvvv, t2, out=None, verbose=None):
     '''Ht2 = numpy.einsum('ijcd,acbd->ijab', t2, vvvv)
 
     Args:
@@ -463,13 +459,12 @@ def _contract_vvvv_t2(mycc, mol, vvvv, t2, out=None, max_memory=MEMORYMIN,
     '''
     if vvvv is None or len(vvvv.shape) == 2:
         # AO-direct or vvvv in 4-fold symmetry
-        return _contract_s4vvvv_t2(mycc, mol, vvvv, t2, out, max_memory, verbose)
+        return _contract_s4vvvv_t2(mycc, mol, vvvv, t2, out, verbose)
     else:
-        return _contract_s1vvvv_t2(mycc, mol, vvvv, t2, out, max_memory, verbose)
+        return _contract_s1vvvv_t2(mycc, mol, vvvv, t2, out, verbose)
 
 
-def _contract_s4vvvv_t2(mycc, mol, vvvv, t2, out=None, max_memory=MEMORYMIN,
-                        verbose=None):
+def _contract_s4vvvv_t2(mycc, mol, vvvv, t2, out=None, verbose=None):
     '''Ht2 = numpy.einsum('ijcd,acbd->ijab', t2, vvvv)
     where vvvv has to be real and has the 4-fold permutation symmetry
 
@@ -506,6 +501,7 @@ def _contract_s4vvvv_t2(mycc, mol, vvvv, t2, out=None, max_memory=MEMORYMIN,
                    x2.reshape(-1,nvir2), eri.reshape(-1,jc*nvirb),
                    Ht2.reshape(-1,nvir2), 1, 1, j0*nvirb, 0, i0*nvirb)
 
+    max_memory = max(MEMORYMIN, mycc.max_memory - lib.current_memory()[0])
     if vvvv is None:   # AO-direct CCSD
         ao_loc = mol.ao_loc_nr()
         assert(nvira == nvirb == ao_loc[-1])
@@ -513,7 +509,7 @@ def _contract_s4vvvv_t2(mycc, mol, vvvv, t2, out=None, max_memory=MEMORYMIN,
         intor = mol._add_suffix('int2e')
         ao2mopt = _ao2mo.AO2MOpt(mol, intor, 'CVHFnr_schwarz_cond',
                                  'CVHFsetnr_direct_scf')
-        blksize = max(BLKMIN, numpy.sqrt(max_memory*.95e6/8/nvirb**2/2))
+        blksize = max(BLKMIN, numpy.sqrt(max_memory*.9e6/8/nvirb**2/2.5))
         blksize = int(min((nvira+3)/4, blksize))
         sh_ranges = ao2mo.outcore.balance_partition(ao_loc, blksize)
         blksize = max(x[2] for x in sh_ranges)
@@ -555,7 +551,7 @@ def _contract_s4vvvv_t2(mycc, mol, vvvv, t2, out=None, max_memory=MEMORYMIN,
     else:
         nvir_pair = nvirb * (nvirb+1) // 2
         unit = nvira*nvir_pair*2 + nvirb**2*nvira/4 + 1
-        blksize = max(BLKMIN, numpy.sqrt(max_memory*.95e6/8/unit))
+        blksize = numpy.sqrt(max(BLKMIN**2, max_memory*.95e6/8/unit))
         blksize = int(min((nvira+3)/4, blksize))
 
         tril2sq = lib.square_mat_in_trilu_indices(nvira)
@@ -581,8 +577,7 @@ def _contract_s4vvvv_t2(mycc, mol, vvvv, t2, out=None, max_memory=MEMORYMIN,
                 time0 = log.timer_debug1('vvvv [%d:%d]'%(p0,p1), *time0)
     return Ht2.reshape(t2.shape)
 
-def _contract_s1vvvv_t2(mycc, mol, vvvv, t2, out=None, max_memory=MEMORYMIN,
-                        verbose=None):
+def _contract_s1vvvv_t2(mycc, mol, vvvv, t2, out=None, verbose=None):
     '''Ht2 = numpy.einsum('ijcd,acdb->ijab', t2, vvvv)
     where vvvv can be real or complex and no permutation symmetry is available in vvvv.
 
@@ -591,7 +586,7 @@ def _contract_s1vvvv_t2(mycc, mol, vvvv, t2, out=None, max_memory=MEMORYMIN,
             if vvvv is None, contract t2 to AO-integrals using AO-direct algorithm
     '''
     # vvvv == None means AO-direct CCSD. It should redirect to
-    # _contract_s4vvvv_t2(mycc, mol, vvvv, t2, out, max_memory, verbose)
+    # _contract_s4vvvv_t2(mycc, mol, vvvv, t2, out, verbose)
     assert(vvvv is not None)
 
     time0 = time.clock(), time.time()
@@ -603,6 +598,7 @@ def _contract_s1vvvv_t2(mycc, mol, vvvv, t2, out=None, max_memory=MEMORYMIN,
     dtype = numpy.result_type(t2, vvvv)
     Ht2 = numpy.ndarray(x2.shape, dtype=dtype, buffer=out)
 
+    max_memory = mycc.max_memory - lib.current_memory()[0]
     unit = nvirb**2*nvira*2 + nocc2*nvirb + 1
     blksize = min(nvira, max(BLKMIN, int(max_memory*1e6/8/unit)))
 
@@ -1213,15 +1209,14 @@ class _ChemistsERIs:
         nvir1 = ovvv.shape[2]
         return ovvv.reshape(nocc,nvir,nvir1,nvir1)
 
-    def _contract_vvvv_t2(self, mycc, t2, vvvv_or_direct=False, out=None,
-                          max_memory=MEMORYMIN, verbose=None):
+    def _contract_vvvv_t2(self, mycc, t2, vvvv_or_direct=False, out=None, verbose=None):
         if isinstance(vvvv_or_direct, numpy.ndarray):
             vvvv = vvvv_or_direct
         elif vvvv_or_direct:  # AO-direct contraction
             vvvv = None
         else:
             vvvv = self.vvvv
-        return _contract_vvvv_t2(mycc, self.mol, vvvv, t2, out, max_memory, verbose)
+        return _contract_vvvv_t2(mycc, self.mol, vvvv, t2, out, verbose)
 
     def _contract_vvvv_oov(self, mycc, r2, out=None):
         raise NotImplementedError

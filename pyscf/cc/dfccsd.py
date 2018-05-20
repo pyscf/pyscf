@@ -44,8 +44,7 @@ class RCCSD(ccsd.CCSD):
         return ccsd.CCSD._add_vvvv(self, t1, t2, eris, out, with_ovvv, t2sym)
 
 
-def _contract_vvvv_t2(mycc, mol, vvL, t2, out=None, max_memory=MEMORYMIN,
-                      verbose=None):
+def _contract_vvvv_t2(mycc, mol, vvL, t2, out=None, verbose=None):
     '''Ht2 = numpy.einsum('ijcd,acdb->ijab', t2, vvvv)
 
     Args:
@@ -64,6 +63,7 @@ def _contract_vvvv_t2(mycc, mol, vvL, t2, out=None, max_memory=MEMORYMIN,
     Ht2 = numpy.ndarray(x2.shape, buffer=out)
     Ht2[:] = 0
 
+    max_memory = max(MEMORYMIN, mycc.max_memory - lib.current_memory()[0])
     def contract_blk_(eri, i0, i1, j0, j1):
         ic = i1 - i0
         jc = j1 - j0
@@ -78,7 +78,7 @@ def _contract_vvvv_t2(mycc, mol, vvL, t2, out=None, max_memory=MEMORYMIN,
                    x2.reshape(-1,nvir2), eri.reshape(-1,jc*nvirb),
                    Ht2.reshape(-1,nvir2), 1, 1, j0*nvirb, 0, i0*nvirb)
 
-#TODO: check if vvL can be entirely load into memory
+#TODO: check if vvL can be entirely loaded into memory
     nvir_pair = nvirb * (nvirb+1) // 2
     dmax = numpy.sqrt(max_memory*.7e6/8/nvirb**2/2)
     dmax = int(min((nvira+3)//4, max(ccsd.BLKMIN, dmax)))
@@ -111,10 +111,9 @@ def _contract_vvvv_t2(mycc, mol, vvL, t2, out=None, max_memory=MEMORYMIN,
 
 
 class _ChemistsERIs(ccsd._ChemistsERIs):
-    def _contract_vvvv_t2(self, mycc, t2, direct=False, out=None,
-                          max_memory=MEMORYMIN, verbose=None):
+    def _contract_vvvv_t2(self, mycc, t2, direct=False, out=None, verbose=None):
         assert(not direct)
-        return _contract_vvvv_t2(mycc, self.mol, self.vvL, t2, out, max_memory, verbose)
+        return _contract_vvvv_t2(mycc, self.mol, self.vvL, t2, out, verbose)
 
 def _make_df_eris(cc, mo_coeff=None):
     cput0 = (time.clock(), time.time())

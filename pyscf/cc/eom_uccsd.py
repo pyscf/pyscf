@@ -738,19 +738,19 @@ def eomsf_ccsd_matvec(eom, vector, imds=None):
         orbva = eris.mo_coeff[0][:,nocca:]
         orbvb = eris.mo_coeff[1][:,noccb:]
         tau2baaa = lib.einsum('ijab,pa,qb->ijpq', tau2baaa, .5*orbva, orbva)
-        tmp = eris._contract_vvvv_t2(eom._cc, tau2baaa, True, max_memory=max_memory)
+        tmp = eris._contract_vvvv_t2(eom._cc, tau2baaa, True)
         Hr2baaa += lib.einsum('ijpq,pa,qb->ijab', tmp, orbva.conj(), orbva.conj())
         tmp = None
 
         tau2abbb = lib.einsum('ijab,pa,qb->ijpq', tau2abbb, .5*orbvb, orbvb)
-        tmp = eris._contract_VVVV_t2(eom._cc, tau2abbb, True, max_memory=max_memory)
+        tmp = eris._contract_VVVV_t2(eom._cc, tau2abbb, True)
         Hr2abbb += lib.einsum('ijpq,pa,qb->ijab', tmp, orbvb.conj(), orbvb.conj())
         tmp = None
     else:
         tau2baaa *= .5
-        Hr2baaa += eris._contract_vvvv_t2(eom._cc, tau2baaa, False, max_memory=max_memory)
+        Hr2baaa += eris._contract_vvvv_t2(eom._cc, tau2baaa, False)
         tau2abbb *= .5
-        Hr2abbb += eris._contract_VVVV_t2(eom._cc, tau2abbb, False, max_memory=max_memory)
+        Hr2abbb += eris._contract_VVVV_t2(eom._cc, tau2abbb, False)
 
     tau2bbab *= .5
     Hr2bbab += eom._cc._add_vvVV(None, tau2bbab, eris)

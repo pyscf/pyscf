@@ -218,11 +218,11 @@ class KnownValues(unittest.TestCase):
         l1new, l2new = gccsd_lambda.update_lambda(myccg, t1, t2, l1, l2, erig, imds)
         l1new = myccg.spin2spatial(l1new, orbspin)
         l2new = myccg.spin2spatial(l2new, orbspin)
-        self.assertAlmostEqual(abs(l1new[0] - l1new_ref[0]).max(), 0, 12)
-        self.assertAlmostEqual(abs(l1new[1] - l1new_ref[1]).max(), 0, 12)
-        self.assertAlmostEqual(abs(l2new[0] - l2new_ref[0]).max(), 0, 12)
-        self.assertAlmostEqual(abs(l2new[1] - l2new_ref[1]).max(), 0, 12)
-        self.assertAlmostEqual(abs(l2new[2] - l2new_ref[2]).max(), 0, 12)
+        self.assertAlmostEqual(abs(l1new[0] - l1new_ref[0]).max(), 0, 11)
+        self.assertAlmostEqual(abs(l1new[1] - l1new_ref[1]).max(), 0, 11)
+        self.assertAlmostEqual(abs(l2new[0] - l2new_ref[0]).max(), 0, 11)
+        self.assertAlmostEqual(abs(l2new[1] - l2new_ref[1]).max(), 0, 11)
+        self.assertAlmostEqual(abs(l2new[2] - l2new_ref[2]).max(), 0, 11)
 
 
 if __name__ == "__main__":
