@@ -37,7 +37,7 @@ get_grad = mol_rohf.get_grad
 make_rdm1 = mol_rohf.make_rdm1
 energy_elec = mol_rohf.energy_elec
 
-class ROHF(mol_rohf.ROHF, pbchf.SCF):
+class ROHF(mol_rohf.ROHF, pbchf.RHF):
     '''ROHF class for PBCs.
     '''
 

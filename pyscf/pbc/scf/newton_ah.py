@@ -349,6 +349,9 @@ def newton(mf):
     elif isinstance(mf, pscf.krohf.KROHF):
         raise NotImplementedError
 
+    elif isinstance(mf, pscf.kghf.KGHF):
+        raise NotImplementedError
+
     else:
         class SecondOrderKRHF(mf.__class__, newton_ah._CIAH_SOSCF):
             __doc__ = mf_doc + newton_ah._CIAH_SOSCF.__doc__

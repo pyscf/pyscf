@@ -72,10 +72,11 @@ def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
     if s_kpts is None: s_kpts = mf.get_ovlp()
     if dm_kpts is None: dm_kpts = mf.make_rdm1()
 
+    dm_sf = dm_kpts[0] + dm_kpts[1]
     if diis and cycle >= diis_start_cycle:
-        f_kpts = diis.update(s_kpts, dm_kpts, f_kpts, mf, h1e_kpts, vhf_kpts)
+        f_kpts = diis.update(s_kpts, dm_sf, f_kpts, mf, h1e_kpts, vhf_kpts)
     if abs(level_shift_factor) > 1e-4:
-        f_kpts = [hf.level_shift(s, dm_kpts[k], f_kpts[k], level_shift_factor)
+        f_kpts = [hf.level_shift(s, dm_sf[k]*.5, f_kpts[k], level_shift_factor)
                   for k, s in enumerate(s_kpts)]
     f_kpts = lib.tag_array(lib.asarray(f_kpts), focka=focka, fockb=fockb)
     return f_kpts
@@ -253,7 +254,7 @@ def canonicalize(mf, mo_coeff_kpts, mo_occ_kpts, fock=None):
 init_guess_by_chkfile = kuhf.init_guess_by_chkfile
 
 
-class KROHF(pbcrohf.ROHF, khf.KSCF):
+class KROHF(pbcrohf.ROHF, khf.KRHF):
     '''UHF class with k-point sampling.
     '''
     conv_tol = getattr(__config__, 'pbc_scf_KSCF_conv_tol', 1e-7)
@@ -275,7 +276,44 @@ class KROHF(pbcrohf.ROHF, khf.KSCF):
     build = khf.KSCF.build
     check_sanity = khf.KSCF.check_sanity
 
-    get_init_guess = kuhf._get_init_guess
+#    get_init_guess = khf.KSCF.get_init_guess
+
+    def get_init_guess(self, cell=None, key='minao'):
+        if cell is None:
+            cell = self.cell
+        dm_kpts = None
+        if key.lower() == '1e':
+            dm_kpts = self.init_guess_by_1e(cell)
+        elif getattr(cell, 'natm', 0) == 0:
+            logger.info(self, 'No atom found in cell. Use 1e initial guess')
+            dm_kpts = self.init_guess_by_1e(cell)
+        elif key.lower() == 'atom':
+            dm = self.init_guess_by_atom(cell)
+        elif key.lower().startswith('chk'):
+            try:
+                dm_kpts = self.from_chk()
+            except (IOError, KeyError):
+                logger.warn(self, 'Fail to read %s. Use MINAO initial guess',
+                            self.chkfile)
+                dm = self.init_guess_by_minao(cell)
+        else:
+            dm = self.init_guess_by_minao(cell)
+
+        if dm_kpts is None:
+            dm_kpts = lib.asarray([dm]*len(self.kpts))
+
+        if cell.dimension < 3:
+            ne = np.einsum('xkij,kji->xk', dm_kpts, self.get_ovlp(cell))
+            nelec = np.asarray(cell.nelec).reshape(2,1)
+            if np.any(abs(ne - nelec) > 1e-7):
+                logger.warn(self, 'Big error detected in the electron number '
+                            'of initial guess density matrix (Ne/cell = %g)!\n'
+                            '  This can cause huge error in Fock matrix and '
+                            'lead to instability in SCF for low-dimensional '
+                            'systems.\n  DM is normalized to correct number '
+                            'of electrons', ne.mean())
+                dm_kpts *= (nelec/ne).reshape(2,-1,1,1)
+        return dm_kpts
 
     get_hcore = khf.KSCF.get_hcore
     get_ovlp = khf.KSCF.get_ovlp

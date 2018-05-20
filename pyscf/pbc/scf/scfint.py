@@ -32,7 +32,7 @@ import pyscf.pbc.scf
 from pyscf.pbc import gto as pgto
 
 print('This module is deporacted and will be removed in future release.  '
-      'Please use cell.pbc_intor and pbc.hf.get_hcore function instead.')
+      'Please use cell.pbc_intor and pbc.hf.get_hcore.')
 
 def get_hcore(cell, kpt=None):
     '''Get the core Hamiltonian AO matrix, following :func:`dft.rks.get_veff_`.'''

@@ -134,7 +134,7 @@ def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
     if vhf_kpts is None: vhf_kpts = mf.get_veff(mf.cell, dm_kpts)
     f_kpts = h1e_kpts + vhf_kpts
     if cycle < 0 and diis is None:  # Not inside the SCF iteration
-        return f
+        return f_kpts
 
     if diis_start_cycle is None:
         diis_start_cycle = mf.diis_start_cycle
@@ -620,6 +620,13 @@ class KSCF(pbchf.SCF):
     x2c = x2c1e = sfx2c1e
 
 class KRHF(KSCF, pbchf.RHF):
+    def sanity_check(self):
+        cell = self.cell
+        if cell.spin != 0 and len(self.kpts) % 2 != 0:
+            logger.warn(self, 'Problematic nelec %s and number of k-points %d '
+                        'found in KRHF method.', cell.nelec, len(self.kpts))
+        return KSCF.sanity_check(self)
+
     def convert_from_(self, mf):
         '''Convert given mean-field object to KRHF'''
         addons.convert_to_rhf(mf, self)
@@ -643,5 +650,4 @@ if __name__ == '__main__':
     mf = KRHF(cell, [2,1,1])
     mf.kernel()
     mf.analyze()
-
 

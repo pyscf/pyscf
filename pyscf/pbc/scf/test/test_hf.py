@@ -267,6 +267,40 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(lib.finger(v11), -0.30110964334164825+0.81409418199767414j, 9)
         self.assertAlmostEqual(lib.finger(v12), -2.1601376488983997-9.4070613374115908j, 9)
 
+    def test_init(self):
+        from pyscf.pbc import dft
+        cell_u = cell.copy()
+        cell_u.spin = 2
+        self.assertTrue(isinstance(pscf.RKS  (cell  ), dft.rks.RKS    ))
+        self.assertTrue(isinstance(pscf.RKS  (cell_u), dft.roks.ROKS  ))
+        self.assertTrue(isinstance(pscf.UKS  (cell  ), dft.uks.UKS    ))
+        self.assertTrue(isinstance(pscf.ROKS (cell  ), dft.roks.ROKS  ))
+        self.assertTrue(isinstance(pscf.KS   (cell  ), dft.rks.RKS    ))
+        self.assertTrue(isinstance(pscf.KS   (cell_u), dft.uks.UKS    ))
+        self.assertTrue(isinstance(pscf.KRKS (cell  ), dft.krks.KRKS  ))
+        self.assertTrue(isinstance(pscf.KRKS (cell_u), dft.krks.KRKS  ))
+        self.assertTrue(isinstance(pscf.KUKS (cell  ), dft.kuks.KUKS  ))
+        self.assertTrue(isinstance(pscf.KROKS(cell  ), dft.kroks.KROKS))
+        self.assertTrue(isinstance(pscf.KKS  (cell  ), dft.krks.KRKS  ))
+        self.assertTrue(isinstance(pscf.KKS  (cell_u), dft.kuks.KUKS  ))
+
+        self.assertTrue(isinstance(pscf.RHF  (cell  ), pscf.hf.RHF     ))
+        self.assertTrue(isinstance(pscf.RHF  (cell_u), pscf.rohf.ROHF  ))
+        self.assertTrue(isinstance(pscf.KRHF (cell  ), pscf.khf.KRHF   ))
+        self.assertTrue(isinstance(pscf.KRHF (cell_u), pscf.khf.KRHF   ))
+        self.assertTrue(isinstance(pscf.UHF  (cell  ), pscf.uhf.UHF    ))
+        self.assertTrue(isinstance(pscf.KUHF (cell_u), pscf.kuhf.KUHF  ))
+        self.assertTrue(isinstance(pscf.GHF  (cell  ), pscf.ghf.GHF    ))
+        self.assertTrue(isinstance(pscf.KGHF (cell_u), pscf.kghf.KGHF  ))
+        self.assertTrue(isinstance(pscf.ROHF (cell  ), pscf.rohf.ROHF  ))
+        self.assertTrue(isinstance(pscf.ROHF (cell_u), pscf.rohf.ROHF  ))
+        self.assertTrue(isinstance(pscf.KROHF(cell  ), pscf.krohf.KROHF))
+        self.assertTrue(isinstance(pscf.KROHF(cell_u), pscf.krohf.KROHF))
+        self.assertTrue(isinstance(pscf.HF   (cell  ), pscf.hf.RHF     ))
+        self.assertTrue(isinstance(pscf.HF   (cell_u), pscf.uhf.UHF    ))
+        self.assertTrue(isinstance(pscf.KHF  (cell  ), pscf.khf.KRHF   ))
+        self.assertTrue(isinstance(pscf.KHF  (cell_u), pscf.kuhf.KUHF  ))
+
 
 if __name__ == '__main__':
     print("Full Tests for pbc.scf.hf")

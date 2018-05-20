@@ -521,8 +521,8 @@ def _format_uks_dm(dms):
         mo_occ = dms.mo_occ
         if (isinstance(mo_coeff[0], numpy.ndarray) and
             mo_coeff[0].ndim < dma.ndim): # handle ROKS
-            mo_occa = numpy.array(mo_occ> 0, dtype=numpy.double)
-            mo_occb = numpy.array(mo_occ==2, dtype=numpy.double)
+            mo_occa = [numpy.array(occ> 0, dtype=numpy.double) for occ in mo_occ]
+            mo_occb = [numpy.array(occ==2, dtype=numpy.double) for occ in mo_occ]
             dma = lib.tag_array(dma, mo_coeff=mo_coeff, mo_occ=mo_occa)
             dmb = lib.tag_array(dmb, mo_coeff=mo_coeff, mo_occ=mo_occb)
         else:

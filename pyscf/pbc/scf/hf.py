@@ -466,11 +466,19 @@ class SCF(mol_hf.SCF):
         return sfx2c1e.sfx2c1e(self)
     x2c = x2c1e = sfx2c1e
 
+
 class RHF(SCF, mol_hf.RHF):
+
+    check_sanity = mol_hf.RHF.check_sanity
+    stability = mol_hf.RHF.stability
+
     def convert_from_(self, mf):
         '''Convert given mean-field object to RHF'''
         addons.convert_to_rhf(mf, self)
         return self
+
+    def nuc_grad_method(self):
+        raise NotImplementedError
 
 
 def _format_jks(vj, dm, kpts_band):

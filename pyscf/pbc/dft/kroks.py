@@ -24,12 +24,7 @@ import numpy as np
 from pyscf.lib import logger
 from pyscf.pbc.scf import krohf
 from pyscf.pbc.dft import rks
-from pyscf.pbc.dft import kuks
-
-
-get_veff = kuks.get_veff
-
-energy_elec = kuks.energy_elec
+from pyscf.pbc.dft.kuks import get_veff, energy_elec
 
 
 class KROKS(krohf.KROHF):
