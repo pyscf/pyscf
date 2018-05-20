@@ -216,7 +216,6 @@ class SHCI(pyscf.lib.StreamObject):
         log = logger.Logger(self.stdout, verbose)
         log.info( '******** SHCI flags ********' )
         log.info( 'executable = %s', self.executable)
-        log.info( 'SHCIEXE_COMPRESS_NEVPT = %s', settings.SHCIEXE_COMPRESS_NEVPT )
         log.info( 'mpiprefix = %s', self.mpiprefix )
         log.info( 'scratchDirectory = %s', self.scratchDirectory )
         log.info( 'integralFile = %s', os.path.join(self.runtimeDir, self.integralFile) )
