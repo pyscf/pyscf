@@ -64,7 +64,7 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     mem_now = lib.current_memory()[0]
     max_memory = max(0, mycc.max_memory - mem_now)
     # aaa
-    bufsize = max(8, int((max_memory*.5e6/8-nocca**3*100)*.4/(nocca*nmoa)))
+    bufsize = max(8, int((max_memory*.5e6/8-nocca**3*13*lib.num_threads())*.4/(nocca*nmoa)))
     log.debug('max_memory %d MB (%d MB in use)', max_memory, mem_now)
     orbsym = numpy.zeros(nocca, dtype=int)
     contract = _gen_contract_aaa(t1aT, t2aaT, eris_vooo, eris.focka, orbsym, log)
@@ -89,7 +89,7 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     cpu1 = log.timer_debug1('contract_aaa', *cpu1)
 
     # bbb
-    bufsize = max(8, int((max_memory*.5e6/8-noccb**3*100)*.4/(noccb*nmob)))
+    bufsize = max(8, int((max_memory*.5e6/8-noccb**3*13*lib.num_threads())*.4/(noccb*nmob)))
     log.debug('max_memory %d MB (%d MB in use)', max_memory, mem_now)
     orbsym = numpy.zeros(noccb, dtype=int)
     contract = _gen_contract_aaa(t1bT, t2bbT, eris_VOOO, eris.fockb, orbsym, log)

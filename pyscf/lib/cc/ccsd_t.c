@@ -263,12 +263,12 @@ static double contract6(int nocc, int nvir, int a, int b, int c,
         double *w4 = w3 + nooo;
         double *w5 = w4 + nooo;
         double *z0 = w5 + nooo;
-        double *z1 = z0 + nooo;
-        double *z2 = z1 + nooo;
-        double *z3 = z2 + nooo;
-        double *z4 = z3 + nooo;
-        double *z5 = z4 + nooo;
-        double *denorm = z5 + nooo;
+        double *z1 = v0;
+        double *z2 = v1;
+        double *z3 = v2;
+        double *z4 = v3;
+        double *z5 = v4;
+        double *denorm = v5;
         int i;
 
         if (nirrep == 1) {
@@ -418,7 +418,7 @@ void CCsd_t_contract(double *e_tot,
 {
         int a, b, c;
         size_t k;
-        double *cache1 = malloc(sizeof(double) * (nocc*nocc*nocc*19+2));
+        double *cache1 = malloc(sizeof(double) * (nocc*nocc*nocc*13+2));
         double *t1Thalf = malloc(sizeof(double) * nvir*nocc * 2);
         double *fvohalf = t1Thalf + nvir*nocc;
         for (k = 0; k < nvir*nocc; k++) {
@@ -539,12 +539,12 @@ zcontract6(int nocc, int nvir, int a, int b, int c,
         double complex *w4 = w3 + nooo;
         double complex *w5 = w4 + nooo;
         double complex *z0 = w5 + nooo;
-        double complex *z1 = z0 + nooo;
-        double complex *z2 = z1 + nooo;
-        double complex *z3 = z2 + nooo;
-        double complex *z4 = z3 + nooo;
-        double complex *z5 = z4 + nooo;
-        double *denorm = (double *)(z5 + nooo);
+        double complex *z1 = v0;
+        double complex *z2 = v1;
+        double complex *z3 = v2;
+        double complex *z4 = v3;
+        double complex *z5 = v4;
+        double *denorm = (double *)v5;
         int i;
 
         zget_wv(w0, v0, fvo, vooo, cache[0], t1T, t2T, nocc, nvir, a, b, c);
@@ -611,7 +611,7 @@ void CCsd_t_zcontract(double complex *e_tot,
 {
         int a, b, c;
         size_t k;
-        double complex *cache1 = malloc(sizeof(double complex) * (nocc*nocc*nocc*19+2));
+        double complex *cache1 = malloc(sizeof(double complex) * (nocc*nocc*nocc*13+2));
         double complex *t1Thalf = malloc(sizeof(double complex) * nvir*nocc * 2);
         double complex *fvohalf = t1Thalf + nvir*nocc;
         for (k = 0; k < nvir*nocc; k++) {
@@ -716,12 +716,12 @@ static double MPICCcontract6(int nocc, int nvir, int a, int b, int c,
         double *w4 = w3 + nooo;
         double *w5 = w4 + nooo;
         double *z0 = w5 + nooo;
-        double *z1 = z0 + nooo;
-        double *z2 = z1 + nooo;
-        double *z3 = z2 + nooo;
-        double *z4 = z3 + nooo;
-        double *z5 = z4 + nooo;
-        double *denorm = z5 + nooo;
+        double *z1 = v0;
+        double *z2 = v1;
+        double *z3 = v2;
+        double *z4 = v3;
+        double *z5 = v4;
+        double *denorm = v5;
         int i;
 
         MPICCget_wv(w0, v0, fvo, vooo_a, vvop_ab, t1T, t2T_a, t2T_c, nocc, nvir, a, b, c, a0, b0, c0);
@@ -808,7 +808,7 @@ void MPICCsd_t_contract(double *e_tot, double *mo_energy, double *t1T,
 {
         int a, b, c;
         size_t k;
-        double *cache1 = malloc(sizeof(double) * (nocc*nocc*nocc*19+2));
+        double *cache1 = malloc(sizeof(double) * (nocc*nocc*nocc*13+2));
         double *t1Thalf = malloc(sizeof(double) * nvir*nocc * 2);
         double *fvohalf = t1Thalf + nvir*nocc;
         for (k = 0; k < nvir*nocc; k++) {
