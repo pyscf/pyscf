@@ -17,7 +17,6 @@
  */
 
 #include <stdlib.h>
-#include <string.h>
 #include "config.h"
 #include "np_helper/np_helper.h"
 #include "vhf/fblas.h"
@@ -30,37 +29,39 @@ typedef struct {
         short _padding;
 } CacheJob;
 
+double _ccsd_t_get_energy(double *w, double *v, double *mo_energy, int nocc,
+                          int a, int b, int c, double fac);
+
 size_t _ccsd_t_gen_jobs(CacheJob *jobs, int nocc, int nvir,
                         int a0, int a1, int b0, int b1,
                         void *cache_row_a, void *cache_col_a,
                         void *cache_row_b, void *cache_col_b, size_t stride);
 
-double _ccsd_t_permute_contract(double *z0, double *z1, double *z2, double *z3,
-                                double *z4, double *z5, double *w, int n);
+void _make_permute_indices(int *idx, int n);
 
-void _ccsd_t_get_denorm(double *d3, double *mo_energy, int nocc,
-                        int a, int b, int c);
-
-double complex
-_ccsd_t_zpermute_contract(double complex *z0, double complex *z1,
-                          double complex *z2, double complex *z3,
-                          double complex *z4, double complex *z5,
-                          double complex *w, int n);
+double _ccsd_t_zget_energy(double complex *w, double complex *v,
+                           double *mo_energy, int nocc,
+                           int a, int b, int c, double fac);
 
 /*
  * w + w.transpose(1,2,0) + w.transpose(2,0,1)
  * - w.transpose(2,1,0) - w.transpose(0,2,1) - w.transpose(1,0,2)
  */
-static void permute(double *out, double *w, int n)
+static void add_and_permute(double *out, double *w, double *v, int n)
 {
         int nn = n * n;
+        int nnn = nn * n;
         int i, j, k;
+
+        for (i = 0; i < nnn; i++) {
+                v[i] += w[i];
+        }
 
         for (i = 0; i < n; i++) {
         for (j = 0; j < n; j++) {
         for (k = 0; k < n; k++) {
-                out[i*nn+j*n+k] = w[i*nn+j*n+k] + w[j*nn+k*n+i] + w[k*nn+i*n+j]
-                                - w[k*nn+j*n+i] - w[i*nn+k*n+j] - w[j*nn+i*n+k];
+                out[i*nn+j*n+k] = v[i*nn+j*n+k] + v[j*nn+k*n+i] + v[k*nn+i*n+j]
+                                - v[k*nn+j*n+i] - v[i*nn+k*n+j] - v[j*nn+i*n+k];
         } } }
 }
 
@@ -73,9 +74,10 @@ static void permute(double *out, double *w, int n)
  * v = numpy.einsum('ij,k->ijk', oo, t1T[c])
  * v+= w
  */
-static void get_wv(double *w, double *v, double *fvohalf, double *vooo,
+static void get_wv(double *w, double *v, double *cache,
+                   double *fvohalf, double *vooo,
                    double *vv_op, double *t1T, double *t2T,
-                   int nocc, int nvir, int a, int b, int c)
+                   int nocc, int nvir, int a, int b, int c, int *idx)
 {
         const double D0 = 0;
         const double D1 = 1;
@@ -91,24 +93,27 @@ static void get_wv(double *w, double *v, double *fvohalf, double *vooo,
 
         dgemm_(&TRANS_N, &TRANS_N, &noo, &nocc, &nvir,
                &DN1, t2T+c*nvoo, &noo, vv_op+nocc, &nmo,
-               &D0, w, &noo);
+               &D0, cache, &noo);
         dgemm_(&TRANS_N, &TRANS_T, &nocc, &noo, &nocc,
                &DN1, t2T+b*nvoo+c*noo, &nocc, vooo+a*nooo, &noo,
-               &D1, w, &nocc);
+               &D1, cache, &nocc);
 
         pt2T = t2T + a * nvoo + b * noo;
         for (n = 0, i = 0; i < nocc; i++) {
         for (j = 0; j < nocc; j++) {
         for (k = 0; k < nocc; k++, n++) {
-                v[n] = w[n] + vv_op[i*nmo+j] * t1T[c*nocc+k];
-                v[n]+= pt2T[i*nocc+j] * fvohalf[c*nocc+k];
+                w[idx[n]] += cache[n];
+                v[idx[n]] +=(vv_op[i*nmo+j] * t1T[c*nocc+k]
+                           + pt2T[i*nocc+j] * fvohalf[c*nocc+k]);
         } } }
 }
 
-static void sym_wv(double *w, double *v, double *fvohalf, double *vooo,
+static void sym_wv(double *w, double *v, double *cache,
+                   double *fvohalf, double *vooo,
                    double *vv_op, double *t1T, double *t2T,
                    int nocc, int nvir, int a, int b, int c, int nirrep,
-                   int *o_ir_loc, int *v_ir_loc, int *oo_ir_loc, int *orbsym)
+                   int *o_ir_loc, int *v_ir_loc, int *oo_ir_loc, int *orbsym,
+                   int *idx)
 {
         const double D0 = 0;
         const double D1 = 1;
@@ -126,10 +131,8 @@ static void sym_wv(double *w, double *v, double *fvohalf, double *vooo,
         int fr, f0, f1, df, mr, m0, m1, dm, mk0;
         int ir, i0, i1, di, kr, k0, k1, dk, jr;
         int ijr, ij0, ij1, dij, jkr, jk0, jk1, djk;
-        double *buf = v;
         double *pt2T;
 
-        memset(w, 0, sizeof(double)*nooo);
 /* symmetry adapted
  * w = numpy.einsum('if,fjk->ijk', ov, t2T[c]) */
         pt2T = t2T + c * nvoo;
@@ -151,13 +154,13 @@ static void sym_wv(double *w, double *v, double *fvohalf, double *vooo,
 
         dgemm_(&TRANS_N, &TRANS_N, &djk, &di, &df,
                &D1, pt2T+f0*noo+jk0, &noo, vv_op+i0*nmo+nocc+f0, &nmo,
-               &D0, buf, &djk);
+               &D0, cache, &djk);
         for (n = 0, i = o_ir_loc[ir]; i < o_ir_loc[ir+1]; i++) {
         for (jr = 0; jr < nirrep; jr++) {
                 kr = jkr ^ jr;
                 for (j = o_ir_loc[jr]; j < o_ir_loc[jr+1]; j++) {
                 for (k = o_ir_loc[kr]; k < o_ir_loc[kr+1]; k++, n++) {
-                        w[i*noo+j*nocc+k] -= buf[n];
+                        w[idx[i*noo+j*nocc+k]] -= cache[n];
                 } }
         } }
                                 }
@@ -188,13 +191,13 @@ static void sym_wv(double *w, double *v, double *fvohalf, double *vooo,
 
         dgemm_(&TRANS_N, &TRANS_N, &dk, &dij, &dm,
                &D1, pt2T+mk0, &dk, vooo+ij0*nocc+m0, &nocc,
-               &D0, buf, &dk);
+               &D0, cache, &dk);
         for (n = 0, ir = 0; ir < nirrep; ir++) {
                 jr = ijr ^ ir;
                 for (i = o_ir_loc[ir]; i < o_ir_loc[ir+1]; i++) {
                 for (j = o_ir_loc[jr]; j < o_ir_loc[jr+1]; j++) {
                 for (k = o_ir_loc[kr]; k < o_ir_loc[kr+1]; k++, n++) {
-                        w[i*noo+j*nocc+k] -= buf[n];
+                        w[idx[i*noo+j*nocc+k]] -= cache[n];
                 } }
         } }
                                 }
@@ -207,8 +210,8 @@ static void sym_wv(double *w, double *v, double *fvohalf, double *vooo,
         for (n = 0, i = 0; i < nocc; i++) {
         for (j = 0; j < nocc; j++) {
         for (k = 0; k < nocc; k++, n++) {
-                v[n] = w[n] + vv_op[i*nmo+j] * t1T[c*nocc+k];
-                v[n]+= pt2T[i*nocc+j] * fvohalf[c*nocc+k];
+                v[idx[n]] +=(vv_op[i*nmo+j] * t1T[c*nocc+k]
+                           + pt2T[i*nocc+j] * fvohalf[c*nocc+k]);
         } } }
 }
 
@@ -216,84 +219,58 @@ static double contract6_aaa(int nocc, int nvir, int a, int b, int c,
                             double *mo_energy, double *t1T, double *t2T,
                             int nirrep, int *o_ir_loc, int *v_ir_loc,
                             int *oo_ir_loc, int *orbsym, double *fvo,
-                            double *vooo, double *cache1, void **cache)
+                            double *vooo, double *cache1, void **cache,
+                            int *permute_idx)
 {
         int nooo = nocc * nocc * nocc;
-        double *denorm = cache1;
-        double *v0 = denorm + nooo;
-        double *v1 = v0 + nooo;
-        double *v2 = v1 + nooo;
-        double *v3 = v2 + nooo;
-        double *v4 = v3 + nooo;
-        double *v5 = v4 + nooo;
-        double *w0 = v5 + nooo;
-        double *w1 = w0 + nooo;
-        double *w2 = w1 + nooo;
-        double *w3 = w2 + nooo;
-        double *w4 = w3 + nooo;
-        double *w5 = w4 + nooo;
-        double *z0 = w5 + nooo;
-        double *z1 = z0 + nooo;
-        double *z2 = z1 + nooo;
-        double *z3 = z2 + nooo;
-        double *z4 = z3 + nooo;
-        double *z5 = z4 + nooo;
+        int *idx0 = permute_idx;
+        int *idx1 = idx0 + nooo;
+        int *idx2 = idx1 + nooo;
+        int *idx3 = idx2 + nooo;
+        int *idx4 = idx3 + nooo;
+        int *idx5 = idx4 + nooo;
+        double *v0 = cache1;
+        double *w0 = v0 + nooo;
+        double *z0 = w0 + nooo;
+        double *wtmp = z0;
         int i;
 
-        if (nirrep == 1) {
-                get_wv(w0, v0, fvo, vooo, cache[0], t1T, t2T, nocc, nvir, a, b, c);
-                get_wv(w1, v1, fvo, vooo, cache[1], t1T, t2T, nocc, nvir, a, c, b);
-                get_wv(w2, v2, fvo, vooo, cache[2], t1T, t2T, nocc, nvir, b, a, c);
-                get_wv(w3, v3, fvo, vooo, cache[3], t1T, t2T, nocc, nvir, b, c, a);
-                get_wv(w4, v4, fvo, vooo, cache[4], t1T, t2T, nocc, nvir, c, a, b);
-                get_wv(w5, v5, fvo, vooo, cache[5], t1T, t2T, nocc, nvir, c, b, a);
-        } else {
-                sym_wv(w0, v0, fvo, vooo, cache[0], t1T, t2T, nocc, nvir, a, b, c,
-                       nirrep, o_ir_loc, v_ir_loc, oo_ir_loc, orbsym);
-                sym_wv(w1, v1, fvo, vooo, cache[1], t1T, t2T, nocc, nvir, a, c, b,
-                       nirrep, o_ir_loc, v_ir_loc, oo_ir_loc, orbsym);
-                sym_wv(w2, v2, fvo, vooo, cache[2], t1T, t2T, nocc, nvir, b, a, c,
-                       nirrep, o_ir_loc, v_ir_loc, oo_ir_loc, orbsym);
-                sym_wv(w3, v3, fvo, vooo, cache[3], t1T, t2T, nocc, nvir, b, c, a,
-                       nirrep, o_ir_loc, v_ir_loc, oo_ir_loc, orbsym);
-                sym_wv(w4, v4, fvo, vooo, cache[4], t1T, t2T, nocc, nvir, c, a, b,
-                       nirrep, o_ir_loc, v_ir_loc, oo_ir_loc, orbsym);
-                sym_wv(w5, v5, fvo, vooo, cache[5], t1T, t2T, nocc, nvir, c, b, a,
-                       nirrep, o_ir_loc, v_ir_loc, oo_ir_loc, orbsym);
-        }
-        permute(z0, v0, nocc);
-        permute(z1, v1, nocc);
-        permute(z2, v2, nocc);
-        permute(z3, v3, nocc);
-        permute(z4, v4, nocc);
-        permute(z5, v5, nocc);
-
-        _ccsd_t_get_denorm(denorm, mo_energy, nocc, a, b, c);
-        if (a == c) {
-                for (i = 0; i < nooo; i++) {
-                        denorm[i] *= 1./6;
-                }
-        } else if (a == b || b == c) {
-                for (i = 0; i < nooo; i++) {
-                        denorm[i] *= .5;
-                }
-        }
         for (i = 0; i < nooo; i++) {
-                z0[i] *= denorm[i];
-                z1[i] *= denorm[i];
-                z2[i] *= denorm[i];
-                z3[i] *= denorm[i];
-                z4[i] *= denorm[i];
-                z5[i] *= denorm[i];
+                w0[i] = 0;
+                v0[i] = 0;
         }
 
-        double et = 0;
-        et += _ccsd_t_permute_contract(z0, z1, z2, z3, z4, z5, w0, nocc);
-        et += _ccsd_t_permute_contract(z1, z0, z4, z5, z2, z3, w1, nocc);
-        et += _ccsd_t_permute_contract(z2, z3, z0, z1, z5, z4, w2, nocc);
-        et += _ccsd_t_permute_contract(z3, z2, z5, z4, z0, z1, w3, nocc);
-        et += _ccsd_t_permute_contract(z4, z5, z1, z0, z3, z2, w4, nocc);
-        et += _ccsd_t_permute_contract(z5, z4, z3, z2, z1, z0, w5, nocc);
+        if (nirrep == 1) {
+                get_wv(w0, v0, wtmp, fvo, vooo, cache[0], t1T, t2T, nocc, nvir, a, b, c, idx0);
+                get_wv(w0, v0, wtmp, fvo, vooo, cache[1], t1T, t2T, nocc, nvir, a, c, b, idx1);
+                get_wv(w0, v0, wtmp, fvo, vooo, cache[2], t1T, t2T, nocc, nvir, b, a, c, idx2);
+                get_wv(w0, v0, wtmp, fvo, vooo, cache[3], t1T, t2T, nocc, nvir, b, c, a, idx3);
+                get_wv(w0, v0, wtmp, fvo, vooo, cache[4], t1T, t2T, nocc, nvir, c, a, b, idx4);
+                get_wv(w0, v0, wtmp, fvo, vooo, cache[5], t1T, t2T, nocc, nvir, c, b, a, idx5);
+        } else {
+                sym_wv(w0, v0, wtmp, fvo, vooo, cache[0], t1T, t2T, nocc, nvir, a, b, c,
+                       nirrep, o_ir_loc, v_ir_loc, oo_ir_loc, orbsym, idx0);
+                sym_wv(w0, v0, wtmp, fvo, vooo, cache[1], t1T, t2T, nocc, nvir, a, c, b,
+                       nirrep, o_ir_loc, v_ir_loc, oo_ir_loc, orbsym, idx1);
+                sym_wv(w0, v0, wtmp, fvo, vooo, cache[2], t1T, t2T, nocc, nvir, b, a, c,
+                       nirrep, o_ir_loc, v_ir_loc, oo_ir_loc, orbsym, idx2);
+                sym_wv(w0, v0, wtmp, fvo, vooo, cache[3], t1T, t2T, nocc, nvir, b, c, a,
+                       nirrep, o_ir_loc, v_ir_loc, oo_ir_loc, orbsym, idx3);
+                sym_wv(w0, v0, wtmp, fvo, vooo, cache[4], t1T, t2T, nocc, nvir, c, a, b,
+                       nirrep, o_ir_loc, v_ir_loc, oo_ir_loc, orbsym, idx4);
+                sym_wv(w0, v0, wtmp, fvo, vooo, cache[5], t1T, t2T, nocc, nvir, c, b, a,
+                       nirrep, o_ir_loc, v_ir_loc, oo_ir_loc, orbsym, idx5);
+        }
+        add_and_permute(z0, w0, v0, nocc);
+
+        double et;
+        if (a == c) {
+                et = _ccsd_t_get_energy(w0, z0, mo_energy, nocc, a, b, c, 1./6);
+        } else if (a == b || b == c) {
+                et = _ccsd_t_get_energy(w0, z0, mo_energy, nocc, a, b, c, .5);
+        } else {
+                et = _ccsd_t_get_energy(w0, z0, mo_energy, nocc, a, b, c, 1.);
+        }
         return et;
 }
 
@@ -318,13 +295,17 @@ void CCuccsd_t_aaa(double complex *e_tot,
                 fvohalf[i] = fvo[i] * .5;
         }
 
+        int *permute_idx = malloc(sizeof(int) * nocc*nocc*nocc * 6);
+        _make_permute_indices(permute_idx, nocc);
+
 #pragma omp parallel default(none) \
         shared(njobs, nocc, nvir, mo_energy, t1T, t2T, nirrep, o_ir_loc, \
-               v_ir_loc, oo_ir_loc, orbsym, vooo, fvohalf, jobs, e_tot)
+               v_ir_loc, oo_ir_loc, orbsym, vooo, fvohalf, jobs, e_tot, \
+               permute_idx)
 {
         int a, b, c;
         size_t k;
-        double *cache1 = malloc(sizeof(double) * (nocc*nocc*nocc*19+2));
+        double *cache1 = malloc(sizeof(double) * (nocc*nocc*nocc*3+2));
         double e = 0;
 #pragma omp for schedule (dynamic, 32)
         for (k = 0; k < njobs; k++) {
@@ -333,12 +314,14 @@ void CCuccsd_t_aaa(double complex *e_tot,
                 c = jobs[k].c;
                 e += contract6_aaa(nocc, nvir, a, b, c, mo_energy, t1T, t2T,
                                    nirrep, o_ir_loc, v_ir_loc, oo_ir_loc, orbsym,
-                                   fvohalf, vooo, cache1, jobs[k].cache);
+                                   fvohalf, vooo, cache1, jobs[k].cache,
+                                   permute_idx);
         }
         free(cache1);
 #pragma omp critical
         *e_tot += e;
 }
+        free(permute_idx);
 }
 
 
@@ -454,31 +437,22 @@ static void permute_baa(double *out, double *w, int nocca, int noccb)
                 out[n] = w[i*noo+j*nocca+k] - w[i*noo+k*nocca+j];
         } } }
 }
-static void get_denorm_baa(double *d3, double *mo_ea, double *mo_eb,
-                           int nocca, int noccb, int a, int b, int c)
-{
-        int i, j, k, n;
-        double abc = mo_eb[noccb+a] + mo_ea[nocca+b] + mo_ea[nocca+c];
 
-        for (n = 0, i = 0; i < noccb; i++) {
-        for (j = 0; j < nocca; j++) {
-        for (k = 0; k < nocca; k++, n++) {
-                d3[n] = 1./(mo_eb[i] + mo_ea[j] + mo_ea[k] - abc);
-        } } }
-}
-
-static double permute_contract_baa(double *z0, double *z1, double *w,
-                                   int nocca, int noccb)
+static double _get_energy_baa(double *z0, double *z1, double *w0, double *w1,
+                              double *mo_ea, double *mo_eb, int nocca, int noccb,
+                              int a, int b, int c, double fac)
 {
         int noo = nocca * nocca;
         int i, j, k;
+        double abc = mo_eb[noccb+a] + mo_ea[nocca+b] + mo_ea[nocca+c];
         double et = 0;
 
         for (i = 0; i < noccb; i++) {
         for (j = 0; j < nocca; j++) {
         for (k = 0; k < nocca; k++) {
-                et += z0[i*noo+j*nocca+k] * w[i*noo+j*nocca+k];
-                et += z1[i*noo+k*nocca+j] * w[i*noo+j*nocca+k];
+                et += (z0[i*noo+j*nocca+k] + z1[i*noo+k*nocca+j])
+                    * (w0[i*noo+j*nocca+k] + w1[i*noo+k*nocca+j])
+                    * fac / (mo_eb[i] + mo_ea[j] + mo_ea[k] - abc);
         } } }
         return et;
 }
@@ -488,14 +462,12 @@ static double contract6_baa(int nocca, int noccb, int nvira, int nvirb,
                             double **vs_ts, void **cache, double *cache1)
 {
         int nOoo = noccb * nocca * nocca;
-        double *denorm = cache1;
-        double *v0 = denorm + nOoo;
+        double *v0 = cache1;
         double *v1 = v0 + nOoo;
         double *w0 = v1 + nOoo;
         double *w1 = w0 + nOoo;
         double *z0 = w1 + nOoo;
-        double *z1 = z0 + nOoo;
-        int i;
+        double *z1 = v0;
 
         get_wv_baa(w0, v0, vs_ts, ((double **)cache)  , nocca, noccb, nvira, nvirb, a, b, c);
         get_wv_baa(w1, v1, vs_ts, ((double **)cache)+3, nocca, noccb, nvira, nvirb, a, c, b);
@@ -504,20 +476,12 @@ static double contract6_baa(int nocca, int noccb, int nvira, int nvirb,
 
         double *mo_ea = vs_ts[0];
         double *mo_eb = vs_ts[1];
-        get_denorm_baa(denorm, mo_ea, mo_eb, nocca, noccb, a, b, c);
+        double et;
         if (b == c) {
-                for (i = 0; i < nOoo; i++) {
-                        denorm[i] *= .5;
-                }
+                et = _get_energy_baa(z0, z1, w0, w1, mo_ea, mo_eb, nocca, noccb, a, b, c, .5);
+        } else {
+                et = _get_energy_baa(z0, z1, w0, w1, mo_ea, mo_eb, nocca, noccb, a, b, c, 1.);
         }
-        for (i = 0; i < nOoo; i++) {
-                z0[i] *= denorm[i];
-                z1[i] *= denorm[i];
-        }
-
-        double et = 0;
-        et += permute_contract_baa(z0, z1, w0, nocca, noccb);
-        et += permute_contract_baa(z1, z0, w1, nocca, noccb);
         return et;
 }
 
@@ -581,7 +545,7 @@ void CCuccsd_t_baa(double complex *e_tot,
 {
         int a, b, c;
         size_t k;
-        double *cache1 = malloc(sizeof(double) * (noccb*nocca*nocca*7+2));
+        double *cache1 = malloc(sizeof(double) * (noccb*nocca*nocca*5+1));
         double e = 0;
 #pragma omp for schedule (dynamic, 32)
         for (k = 0; k < njobs; k++) {
@@ -602,23 +566,29 @@ void CCuccsd_t_baa(double complex *e_tot,
 /*
  * Complex version of all functions
  */
-static void zpermute(double complex *out, double complex *w, int n)
+static void zadd_and_permute(double complex *out, double complex *w,
+                             double complex *v, int n)
 {
         int nn = n * n;
+        int nnn = nn * n;
         int i, j, k;
+
+        for (i = 0; i < nnn; i++) {
+                v[i] += w[i];
+        }
 
         for (i = 0; i < n; i++) {
         for (j = 0; j < n; j++) {
         for (k = 0; k < n; k++) {
-                out[i*nn+j*n+k] = w[i*nn+j*n+k] + w[j*nn+k*n+i] + w[k*nn+i*n+j]
-                                - w[k*nn+j*n+i] - w[i*nn+k*n+j] - w[j*nn+i*n+k];
+                out[i*nn+j*n+k] = v[i*nn+j*n+k] + v[j*nn+k*n+i] + v[k*nn+i*n+j]
+                                - v[k*nn+j*n+i] - v[i*nn+k*n+j] - v[j*nn+i*n+k];
         } } }
 }
 
-static void zget_wv(double complex *w, double complex *v,
+static void zget_wv(double complex *w, double complex *v, double complex *cache,
                     double complex *fvohalf, double complex *vooo,
                     double complex *vv_op, double complex *t1T, double complex *t2T,
-                    int nocc, int nvir, int a, int b, int c)
+                    int nocc, int nvir, int a, int b, int c, int *idx)
 {
         const double complex D0 = 0;
         const double complex D1 = 1;
@@ -634,17 +604,18 @@ static void zget_wv(double complex *w, double complex *v,
 
         zgemm_(&TRANS_N, &TRANS_N, &noo, &nocc, &nvir,
                &DN1, t2T+c*nvoo, &noo, vv_op+nocc, &nmo,
-               &D0, w, &noo);
+               &D0, cache, &noo);
         zgemm_(&TRANS_N, &TRANS_T, &nocc, &noo, &nocc,
                &DN1, t2T+b*nvoo+c*noo, &nocc, vooo+a*nooo, &noo,
-               &D1, w, &nocc);
+               &D1, cache, &nocc);
 
         pt2T = t2T + a * nvoo + b * noo;
         for (n = 0, i = 0; i < nocc; i++) {
         for (j = 0; j < nocc; j++) {
         for (k = 0; k < nocc; k++, n++) {
-                v[n] = w[n] + vv_op[i*nmo+j] * t1T[c*nocc+k];
-                v[n]+= pt2T[i*nocc+j] * fvohalf[c*nocc+k];
+                w[idx[n]] += cache[n];
+                v[idx[n]] +=(vv_op[i*nmo+j] * t1T[c*nocc+k]
+                           + pt2T[i*nocc+j] * fvohalf[c*nocc+k]);
         } } }
 }
 
@@ -653,69 +624,43 @@ zcontract6_aaa(int nocc, int nvir, int a, int b, int c,
                double *mo_energy, double complex *t1T, double complex *t2T,
                int nirrep, int *o_ir_loc, int *v_ir_loc,
                int *oo_ir_loc, int *orbsym, double complex *fvo,
-               double complex *vooo, double complex *cache1, void **cache)
+               double complex *vooo, double complex *cache1, void **cache,
+               int *permute_idx)
 {
         int nooo = nocc * nocc * nocc;
+        int *idx0 = permute_idx;
+        int *idx1 = idx0 + nooo;
+        int *idx2 = idx1 + nooo;
+        int *idx3 = idx2 + nooo;
+        int *idx4 = idx3 + nooo;
+        int *idx5 = idx4 + nooo;
         double complex *v0 = cache1;
-        double complex *v1 = v0 + nooo;
-        double complex *v2 = v1 + nooo;
-        double complex *v3 = v2 + nooo;
-        double complex *v4 = v3 + nooo;
-        double complex *v5 = v4 + nooo;
-        double complex *w0 = v5 + nooo;
-        double complex *w1 = w0 + nooo;
-        double complex *w2 = w1 + nooo;
-        double complex *w3 = w2 + nooo;
-        double complex *w4 = w3 + nooo;
-        double complex *w5 = w4 + nooo;
-        double complex *z0 = w5 + nooo;
-        double complex *z1 = z0 + nooo;
-        double complex *z2 = z1 + nooo;
-        double complex *z3 = z2 + nooo;
-        double complex *z4 = z3 + nooo;
-        double complex *z5 = z4 + nooo;
-        double *denorm = (double *)(z5 + nooo);
+        double complex *w0 = v0 + nooo;
+        double complex *z0 = w0 + nooo;
+        double complex *wtmp = z0;
         int i;
 
-        zget_wv(w0, v0, fvo, vooo, cache[0], t1T, t2T, nocc, nvir, a, b, c);
-        zget_wv(w1, v1, fvo, vooo, cache[1], t1T, t2T, nocc, nvir, a, c, b);
-        zget_wv(w2, v2, fvo, vooo, cache[2], t1T, t2T, nocc, nvir, b, a, c);
-        zget_wv(w3, v3, fvo, vooo, cache[3], t1T, t2T, nocc, nvir, b, c, a);
-        zget_wv(w4, v4, fvo, vooo, cache[4], t1T, t2T, nocc, nvir, c, a, b);
-        zget_wv(w5, v5, fvo, vooo, cache[5], t1T, t2T, nocc, nvir, c, b, a);
-        zpermute(z0, v0, nocc);
-        zpermute(z1, v1, nocc);
-        zpermute(z2, v2, nocc);
-        zpermute(z3, v3, nocc);
-        zpermute(z4, v4, nocc);
-        zpermute(z5, v5, nocc);
-
-        _ccsd_t_get_denorm(denorm, mo_energy, nocc, a, b, c);
-        if (a == c) {
-                for (i = 0; i < nooo; i++) {
-                        denorm[i] *= 1./6;
-                }
-        } else if (a == b || b == c) {
-                for (i = 0; i < nooo; i++) {
-                        denorm[i] *= .5;
-                }
-        }
         for (i = 0; i < nooo; i++) {
-                z0[i] = conj(z0[i]) * denorm[i];
-                z1[i] = conj(z1[i]) * denorm[i];
-                z2[i] = conj(z2[i]) * denorm[i];
-                z3[i] = conj(z3[i]) * denorm[i];
-                z4[i] = conj(z4[i]) * denorm[i];
-                z5[i] = conj(z5[i]) * denorm[i];
+                w0[i] = 0;
+                v0[i] = 0;
         }
 
-        double complex et = 0;
-        et += _ccsd_t_zpermute_contract(z0, z1, z2, z3, z4, z5, w0, nocc);
-        et += _ccsd_t_zpermute_contract(z1, z0, z4, z5, z2, z3, w1, nocc);
-        et += _ccsd_t_zpermute_contract(z2, z3, z0, z1, z5, z4, w2, nocc);
-        et += _ccsd_t_zpermute_contract(z3, z2, z5, z4, z0, z1, w3, nocc);
-        et += _ccsd_t_zpermute_contract(z4, z5, z1, z0, z3, z2, w4, nocc);
-        et += _ccsd_t_zpermute_contract(z5, z4, z3, z2, z1, z0, w5, nocc);
+        zget_wv(w0, v0, wtmp, fvo, vooo, cache[0], t1T, t2T, nocc, nvir, a, b, c, idx0);
+        zget_wv(w0, v0, wtmp, fvo, vooo, cache[1], t1T, t2T, nocc, nvir, a, c, b, idx1);
+        zget_wv(w0, v0, wtmp, fvo, vooo, cache[2], t1T, t2T, nocc, nvir, b, a, c, idx2);
+        zget_wv(w0, v0, wtmp, fvo, vooo, cache[3], t1T, t2T, nocc, nvir, b, c, a, idx3);
+        zget_wv(w0, v0, wtmp, fvo, vooo, cache[4], t1T, t2T, nocc, nvir, c, a, b, idx4);
+        zget_wv(w0, v0, wtmp, fvo, vooo, cache[5], t1T, t2T, nocc, nvir, c, b, a, idx5);
+        zadd_and_permute(z0, w0, v0, nocc);
+
+        double complex et;
+        if (a == c) {
+                et = _ccsd_t_zget_energy(w0, z0, mo_energy, nocc, a, b, c, 1./6);
+        } else if (a == b || b == c) {
+                et = _ccsd_t_zget_energy(w0, z0, mo_energy, nocc, a, b, c, .5);
+        } else {
+                et = _ccsd_t_zget_energy(w0, z0, mo_energy, nocc, a, b, c, 1.);
+        }
         return et;
 }
 
@@ -741,14 +686,18 @@ void CCuccsd_t_zaaa(double complex *e_tot,
                 fvohalf[i] = fvo[i] * .5;
         }
 
+        int *permute_idx = malloc(sizeof(int) * nocc*nocc*nocc * 6);
+        _make_permute_indices(permute_idx, nocc);
+
 #pragma omp parallel default(none) \
         shared(njobs, nocc, nvir, mo_energy, t1T, t2T, nirrep, o_ir_loc, \
-               v_ir_loc, oo_ir_loc, orbsym, vooo, fvohalf, jobs, e_tot)
+               v_ir_loc, oo_ir_loc, orbsym, vooo, fvohalf, jobs, e_tot, \
+               permute_idx)
 {
         int a, b, c;
         size_t k;
         double complex *cache1 = malloc(sizeof(double complex) *
-                                        (nocc*nocc*nocc*19+2));
+                                        (nocc*nocc*nocc*3+2));
         double complex e = 0;
 #pragma omp for schedule (dynamic, 32)
         for (k = 0; k < njobs; k++) {
@@ -757,12 +706,14 @@ void CCuccsd_t_zaaa(double complex *e_tot,
                 c = jobs[k].c;
                 e += zcontract6_aaa(nocc, nvir, a, b, c, mo_energy, t1T, t2T,
                                     nirrep, o_ir_loc, v_ir_loc, oo_ir_loc, orbsym,
-                                    fvohalf, vooo, cache1, jobs[k].cache);
+                                    fvohalf, vooo, cache1, jobs[k].cache,
+                                    permute_idx);
         }
         free(cache1);
 #pragma omp critical
         *e_tot += e;
 }
+        free(permute_idx);
 }
 
 
@@ -867,18 +818,22 @@ static void zpermute_baa(double complex *out, double complex *w, int nocca, int 
 }
 
 static double complex
-zpermute_contract_baa(double complex *z0, double complex *z1, double complex *w,
-                      int nocca, int noccb)
+_zget_energy_baa(double complex *z0, double complex *z1,
+                 double complex *w0, double complex *w1,
+                 double *mo_ea, double *mo_eb, int nocca, int noccb,
+                 int a, int b, int c, double fac)
 {
         int noo = nocca * nocca;
         int i, j, k;
+        double abc = mo_eb[noccb+a] + mo_ea[nocca+b] + mo_ea[nocca+c];
         double complex et = 0;
 
         for (i = 0; i < noccb; i++) {
         for (j = 0; j < nocca; j++) {
         for (k = 0; k < nocca; k++) {
-                et += z0[i*noo+j*nocca+k] * w[i*noo+j*nocca+k];
-                et += z1[i*noo+k*nocca+j] * w[i*noo+j*nocca+k];
+                et += conj(z0[i*noo+j*nocca+k] + z1[i*noo+k*nocca+j])
+                    * (w0[i*noo+j*nocca+k] + w1[i*noo+k*nocca+j])
+                    * (fac / (mo_eb[i] + mo_ea[j] + mo_ea[k] - abc));
         } } }
         return et;
 }
@@ -894,9 +849,7 @@ zcontract6_baa(int nocca, int noccb, int nvira, int nvirb,
         double complex *w0 = v1 + nOoo;
         double complex *w1 = w0 + nOoo;
         double complex *z0 = w1 + nOoo;
-        double complex *z1 = z0 + nOoo;
-        double *denorm = (double *)(z1 + nOoo);
-        int i;
+        double complex *z1 = v0;
 
         zget_wv_baa(w0, v0, vs_ts, ((double complex **)cache)  , nocca, noccb, nvira, nvirb, a, b, c);
         zget_wv_baa(w1, v1, vs_ts, ((double complex **)cache)+3, nocca, noccb, nvira, nvirb, a, c, b);
@@ -905,23 +858,14 @@ zcontract6_baa(int nocca, int noccb, int nvira, int nvirb,
 
         double *mo_ea = (double *)vs_ts[0];
         double *mo_eb = (double *)vs_ts[1];
-        get_denorm_baa(denorm, mo_ea, mo_eb, nocca, noccb, a, b, c);
+        double complex et;
         if (b == c) {
-                for (i = 0; i < nOoo; i++) {
-                        denorm[i] *= .5;
-                }
+                et = _zget_energy_baa(z0, z1, w0, w1, mo_ea, mo_eb, nocca, noccb, a, b, c, .5);
+        } else {
+                et = _zget_energy_baa(z0, z1, w0, w1, mo_ea, mo_eb, nocca, noccb, a, b, c, 1.);
         }
-        for (i = 0; i < nOoo; i++) {
-                z0[i] = conj(z0[i]) * denorm[i];
-                z1[i] = conj(z1[i]) * denorm[i];
-        }
-
-        double complex et = 0;
-        et += zpermute_contract_baa(z0, z1, w0, nocca, noccb);
-        et += zpermute_contract_baa(z1, z0, w1, nocca, noccb);
         return et;
 }
-
 
 
 void CCuccsd_t_zbaa(double complex *e_tot,
@@ -953,7 +897,7 @@ void CCuccsd_t_zbaa(double complex *e_tot,
         int a, b, c;
         size_t k;
         double complex *cache1 = malloc(sizeof(double complex) *
-                                        (noccb*nocca*nocca*7+2));
+                                        (noccb*nocca*nocca*5+1));
         double complex e = 0;
 #pragma omp for schedule (dynamic, 32)
         for (k = 0; k < njobs; k++) {

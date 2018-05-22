@@ -98,7 +98,7 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     # The rest 20% memory for cache b
     mem_now = lib.current_memory()[0]
     max_memory = max(0, mycc.max_memory - mem_now)
-    bufsize = (max_memory*.5e6/8-nocc**3*13*lib.num_threads())/(nocc*nmo)  #*.5 for async_io
+    bufsize = (max_memory*.5e6/8-nocc**3*3*lib.num_threads())/(nocc*nmo)  #*.5 for async_io
     bufsize *= .5  #*.5 upper triangular part is loaded
     bufsize *= .8  #*.8 for [a0:a1]/[b0:b1] partition
     bufsize = max(8, bufsize)
