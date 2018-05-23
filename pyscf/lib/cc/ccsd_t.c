@@ -404,7 +404,7 @@ void CCsd_t_contract(double *e_tot,
                 fvohalf[k] = fvo[k] * .5;
         }
         double e = 0;
-#pragma omp for schedule (dynamic, 16)
+#pragma omp for schedule (dynamic, 4)
         for (k = 0; k < njobs; k++) {
                 a = jobs[k].a;
                 b = jobs[k].b;
@@ -577,7 +577,7 @@ void CCsd_t_zcontract(double complex *e_tot,
                 fvohalf[k] = fvo[k] * .5;
         }
         double complex e = 0;
-#pragma omp for schedule (dynamic, 16)
+#pragma omp for schedule (dynamic, 4)
         for (k = 0; k < njobs; k++) {
                 a = jobs[k].a;
                 b = jobs[k].b;
@@ -756,7 +756,7 @@ void MPICCsd_t_contract(double *e_tot, double *mo_energy, double *t1T,
                 fvohalf[k] = fvo[k] * .5;
         }
         double e = 0;
-#pragma omp for schedule (dynamic, 16)
+#pragma omp for schedule (dynamic, 4)
         for (k = 0; k < njobs; k++) {
                 a = jobs[k].a;
                 b = jobs[k].b;

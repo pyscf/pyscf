@@ -478,7 +478,7 @@ def _contract_s4vvvv_t2(mycc, mol, vvvv, t2, out=None, verbose=None):
 
     _dgemm = lib.numpy_helper._dgemm
     time0 = time.clock(), time.time()
-    log = logger.new_logger(mol, verbose)
+    log = logger.new_logger(mycc, verbose)
 
     nvira, nvirb = t2.shape[-2:]
     x2 = t2.reshape(-1,nvira,nvirb)
@@ -590,7 +590,7 @@ def _contract_s1vvvv_t2(mycc, mol, vvvv, t2, out=None, verbose=None):
     assert(vvvv is not None)
 
     time0 = time.clock(), time.time()
-    log = logger.new_logger(mol, verbose)
+    log = logger.new_logger(mycc, verbose)
 
     nvira, nvirb = t2.shape[-2:]
     x2 = t2.reshape(-1,nvira,nvirb)

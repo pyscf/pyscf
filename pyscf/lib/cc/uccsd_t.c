@@ -307,7 +307,7 @@ void CCuccsd_t_aaa(double complex *e_tot,
         size_t k;
         double *cache1 = malloc(sizeof(double) * (nocc*nocc*nocc*3+2));
         double e = 0;
-#pragma omp for schedule (dynamic, 32)
+#pragma omp for schedule (dynamic, 4)
         for (k = 0; k < njobs; k++) {
                 a = jobs[k].a;
                 b = jobs[k].b;
@@ -547,7 +547,7 @@ void CCuccsd_t_baa(double complex *e_tot,
         size_t k;
         double *cache1 = malloc(sizeof(double) * (noccb*nocca*nocca*5+1));
         double e = 0;
-#pragma omp for schedule (dynamic, 32)
+#pragma omp for schedule (dynamic, 4)
         for (k = 0; k < njobs; k++) {
                 a = jobs[k].a;
                 b = jobs[k].b;
@@ -699,7 +699,7 @@ void CCuccsd_t_zaaa(double complex *e_tot,
         double complex *cache1 = malloc(sizeof(double complex) *
                                         (nocc*nocc*nocc*3+2));
         double complex e = 0;
-#pragma omp for schedule (dynamic, 32)
+#pragma omp for schedule (dynamic, 4)
         for (k = 0; k < njobs; k++) {
                 a = jobs[k].a;
                 b = jobs[k].b;
@@ -899,7 +899,7 @@ void CCuccsd_t_zbaa(double complex *e_tot,
         double complex *cache1 = malloc(sizeof(double complex) *
                                         (noccb*nocca*nocca*5+1));
         double complex e = 0;
-#pragma omp for schedule (dynamic, 32)
+#pragma omp for schedule (dynamic, 4)
         for (k = 0; k < njobs; k++) {
                 a = jobs[k].a;
                 b = jobs[k].b;

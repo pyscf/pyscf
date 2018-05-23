@@ -751,7 +751,7 @@ def balance_partition(ao_loc, blksize, start_id=0, stop_id=None):
     if stop_id is None:
         stop_id = len(ao_loc) - 1
     else:
-        stop_id = min(stop_id, len(ao_loc)-1)
+        stop_id = min(stop_id, start_id+len(ao_loc)-1)
     displs = lib.misc._blocksize_partition(ao_loc[start_id:stop_id+1], blksize)
     displs = [i+start_id for i in displs]
     tasks = []
