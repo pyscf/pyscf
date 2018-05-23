@@ -225,6 +225,8 @@ def atom_types(atoms, basis=None):
     '''symmetry inequivalent atoms'''
     atmgroup = {}
     for ia, a in enumerate(atoms):
+        if 'GHOST' in a[0]:
+            a = [a[0].replace('GHOST', 'X')] + a[1:]
         if a[0] in atmgroup:
             atmgroup[a[0]].append(ia)
         elif basis is None:
@@ -1974,15 +1976,9 @@ class Mole(lib.StreamObject):
             else:
                 self.topgroup, orig, axes = \
                         symm.detect_symm(self._atom, self._basis)
-                self.groupname, axes = symm.subgroup(self.topgroup, axes)
-                if isinstance(self.symmetry_subgroup, (str, unicode)):
-                    self.symmetry_subgroup = \
-                            str(symm.std_symb(self.symmetry_subgroup))
-                    assert(self.symmetry_subgroup in
-                           symm.param.SUBGROUP[self.groupname])
-                    if (self.symmetry_subgroup == 'Cs' and self.groupname == 'C2v'):
-                        raise RuntimeError('TODO: rotate mirror or axes')
-                    self.groupname = self.symmetry_subgroup
+                self.groupname, axes = symm.as_subgroup(self.topgroup, axes,
+                                                        self.symmetry_subgroup)
+
 # Note the internal _format is in Bohr
             self._atom = self.format_atom(self._atom, orig, axes, 'Bohr')
 
@@ -2010,7 +2006,7 @@ class Mole(lib.StreamObject):
                 eql_atoms = symm.symm_identical_atoms(self.groupname, self._atom)
             except RuntimeError:
                 raise RuntimeError('''Given symmetry and molecule structure not match.
-Note when symmetry attributes is assigned, the molecule needs to be put in the proper orientation.''')
+Note when symmetry attributes is assigned, the molecule needs to be placed in a proper orientation.''')
             self.symm_orb, self.irrep_id = \
                     symm.symm_adapted_basis(self, self.groupname, eql_atoms)
             self.irrep_name = [symm.irrep_id2name(self.groupname, ir)

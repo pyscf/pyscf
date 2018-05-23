@@ -228,7 +228,7 @@ def symmetrize_space(mol, mo, s=None,
 
 def std_symb(gpname):
     '''std_symb('d2h') returns D2h; std_symb('D2H') returns D2h'''
-    return gpname[0].upper() + gpname[1:].lower()
+    return str(gpname[0].upper() + gpname[1:].lower())
 
 def irrep_name2id(gpname, symb):
     '''Convert the irrep symbol to internal irrep ID

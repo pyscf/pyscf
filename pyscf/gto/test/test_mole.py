@@ -637,6 +637,18 @@ O    SP
         mol1.symmetry = 'Coov'
         self.assertRaises(RuntimeWarning, mol1.build)
 
+        mol1.atom = '''
+        C 0. 0. 0.7264
+        C 0. 0. -.7264
+        H 0.92419 0. 1.29252
+        H -.92419 0. 1.29252
+        H 0. 0.92419 -1.29252
+        H 0. -.92419 -1.29252'''
+        mol1.symmetry = True
+        mol1.symmetry_subgroup = 'C2v'
+        mol1.build()
+        self.assertAlmostEqual(lib.finger(mol1.atom_coords()), -0.5215310671099358, 9)
+
     def test_search_ao_label(self):
         mol1 = mol0.copy()
         mol1.atom = mol0.atom + ['Mg 1,1,1']
