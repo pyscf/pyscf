@@ -15,6 +15,8 @@
 
 import unittest
 import numpy
+import pyscf
+from pyscf import lib
 from pyscf import gto
 from pyscf import scf
 from pyscf import grad
@@ -41,7 +43,30 @@ class KnowValues(unittest.TestCase):
         charges = [1.00]
         mf = itrf.mm_charge(scf.RHF(mol), coords, charges).run()
         hfg = itrf.mm_charge_grad(grad.RHF(mf), coords, charges).run()
-        self.assertAlmostEqual(numpy.linalg.norm(hfg.de), 30.316453059873059, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(hfg.de), 26.978089280783195, 9)
+
+        mfs = mf.as_scanner()
+        e1 = mfs('''
+                 H              -0.00000000   -0.000    0.001
+                 H                 -0.00000000   -0.000    1.
+                 H                 -0.00000000   -0.82    0.
+                 H                 -0.91000000   -0.020    0.
+                 ''')
+        e2 = mfs('''
+                 H              -0.00000000   -0.000   -0.001
+                 H                 -0.00000000   -0.000    1.
+                 H                 -0.00000000   -0.82    0.
+                 H                 -0.91000000   -0.020    0.
+                 ''')
+        self.assertAlmostEqual((e1 - e2)/0.002*lib.param.BOHR, hfg.de[0,2], 5)
+
+        bak = pyscf.DEBUG
+        pyscf.DEBUG = 1
+        ref = hfg.get_hcore()
+        pyscf.DEBUG = 0
+        v = hfg.get_hcore()
+        self.assertAlmostEqual(abs(ref-v).max(), 0, 12)
+        pyscf.DEBUG = bak
 
 
 if __name__ == "__main__":

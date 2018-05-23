@@ -168,9 +168,9 @@ def mm_charge_grad(scf_grad, coords, charges, unit=None):
             else:
                 fakemol = gto.fakemol_for_charges(coords)
                 j3c = df.incore.aux_e2(mol, fakemol, intor='int3c2e_ip1',
-                                       aosym='s1', comp=3).reshape(3,nao,nao,-1)
+                                       aosym='s1', comp=3)
                 v = numpy.einsum('ipqk,k->ipq', j3c, charges)
-            return scf_grad.get_hcore(mol) - v
+            return scf_grad.get_hcore(mol) + v
 
         def grad_nuc(self, mol=None, atmlst=None):
             if mol is None: mol = scf_grad.mol
