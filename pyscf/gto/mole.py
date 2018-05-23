@@ -225,8 +225,8 @@ def atom_types(atoms, basis=None):
     '''symmetry inequivalent atoms'''
     atmgroup = {}
     for ia, a in enumerate(atoms):
-        if 'GHOST' in a[0]:
-            a = [a[0].replace('GHOST', 'X')] + a[1:]
+        if 'GHOST' in a[0].upper():
+            a = ['X'+a[0][5:]] + list(a[1:])
         if a[0] in atmgroup:
             atmgroup[a[0]].append(ia)
         elif basis is None:
@@ -1487,7 +1487,7 @@ def same_basis_set(mol1, mol2):
     for k in atomtypes1:
         if len(atomtypes1[k]) != len(atomtypes2[k]):
             return False
-        elif mol1._basis[k] != mol2._basis[k]:
+        elif mol1._basis.get(k, None) != mol2._basis.get(k, None):
             return False
     return True
 

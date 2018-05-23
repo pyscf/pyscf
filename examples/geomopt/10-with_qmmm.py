@@ -1,3 +1,9 @@
+#!/usr/bin/env python
+
+'''
+Optimize molecular geometry within the environment of QM/MM charges.
+'''
+
 import numpy
 from pyscf import gto, scf, cc, qmmm
 from pyscf.geomopt import berny_solver
