@@ -18,7 +18,6 @@
 #
 
 import time
-import numpy
 import numpy as np
 import h5py
 
@@ -42,62 +41,11 @@ einsum = lib.einsum
 # This is restricted (R)CCSD
 # Ref: Hirata, et al., J. Chem. Phys. 120, 2581 (2004)
 
-def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
-           max_memory=2000, verbose=logger.INFO):
-    """Exactly the same as pyscf.cc.ccsd.kernel, which calls a
-    *local* energy() function."""
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(cc.stdout, verbose)
-
-    #assert(isinstance(eris, pyscf.cc.ccsd._ChemistsERIs))
-    if t1 is None and t2 is None:
-        t1, t2 = cc.init_amps(eris)[1:]
-    elif t1 is None:
-        nocc = cc.nocc
-        nvir = cc.nmo - nocc
-        t1 = numpy.zeros((nocc,nvir), eris.dtype)
-    elif t2 is None:
-        t2 = cc.init_amps(eris)[2]
-
-    cput1 = cput0 = (time.clock(), time.time())
-    nkpts, nocc, nvir = t1.shape
-    eold = 0.0
-    eccsd = 0.0
-    if isinstance(cc.diis, lib.diis.DIIS):
-        adiis = cc.diis
-    elif cc.diis:
-        adiis = lib.diis.DIIS(cc, cc.diis_file)
-        adiis.space = cc.diis_space
-    else:
-        adiis = None
-
-    conv = False
-    for istep in range(max_cycle):
-        t1new, t2new = cc.update_amps(t1, t2, eris)
-        normt = cc.get_normt_diff(t1, t2, t1new, t2new)
-        if cc.iterative_damping < 1.0:
-            alpha = cc.iterative_damping
-            t1new = (1-alpha) * t1 + alpha * t1new
-            t2new *= alpha
-            t2new += (1-alpha) * t2
-        t1, t2 = t1new, t2new
-        t1new = t2new = None
-        t1, t2 = cc.run_diis(t1, t2, istep, normt, eccsd-eold, adiis)
-        eold, eccsd = eccsd, cc.energy(t1, t2, eris)
-        log.info('cycle = %d  E(KCCSD) = %.15g  dE = %.9g  norm(t1,t2) = %.6g',
-                 istep, eccsd, eccsd - eold, normt)
-        cput1 = log.timer('KCCSD iter', *cput1)
-        if abs(eccsd-eold) < tol and normt < tolnormt:
-            conv = True
-            break
-    log.timer('KCCSD', *cput0)
-    return conv, eccsd, t1, t2
+kernel = pyscf.cc.ccsd.kernel
 
 def get_normt_diff(cc, t1, t2, t1new, t2new):
     '''Calculates norm(t1 - t1new) + norm(t2 - t2new).'''
-    return numpy.linalg.norm(t1new-t1) + numpy.linalg.norm(t2new-t2)
+    return np.linalg.norm(t1new-t1) + np.linalg.norm(t2new-t2)
 
 def update_amps(cc, t1, t2, eris):
     time0 = time1 = time.clock(), time.time()
@@ -292,7 +240,7 @@ def energy(cc, t1, t2, eris):
     e = 0.0 + 1j*0.0
     for ki in range(nkpts):
         e += 2*einsum('ia,ia', fock[ki,:nocc,nocc:], t1[ki])
-    tau = t1t1 = numpy.zeros(shape=t2.shape, dtype=t2.dtype)
+    tau = t1t1 = np.zeros(shape=t2.shape, dtype=t2.dtype)
     for ki in range(nkpts):
         ka = ki
         for kj in range(nkpts):
@@ -326,7 +274,6 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         self.made_ea_imds = False
         self.ip_partition = None
         self.ea_partition = None
-        self.max_space = 20
 
         keys = set(['kpts', 'mo_energy', 'khelper', 'made_ee_imds',
                     'made_ip_imds', 'made_ea_imds', 'ip_partition',
@@ -350,14 +297,14 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         nocc = self.nocc
         nvir = self.nmo - nocc
         nkpts = self.nkpts
-        t1 = numpy.zeros((nkpts,nocc,nvir), dtype=eris.fock.dtype)
-        t2 = numpy.empty((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=eris.fock.dtype)
+        t1 = np.zeros((nkpts,nocc,nvir), dtype=eris.fock.dtype)
+        t2 = np.empty((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=eris.fock.dtype)
         foo = eris.fock[:,:nocc,:nocc].copy()
         fvv = eris.fock[:,nocc:,nocc:].copy()
 
         emp2 = 0
         kconserv = self.khelper.kconserv
-        touched = numpy.zeros((nkpts,nkpts,nkpts), dtype=bool)
+        touched = np.zeros((nkpts,nkpts,nkpts), dtype=bool)
         for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
             if touched[ki,kj,ka]:
                 continue
@@ -374,13 +321,13 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
             eris_ijba = eris.oovv[ki,kj,kb]
             t2[ki,kj,ka] = eris_ijab.conj() / eijab
             woovv = 2*eris_ijab - eris_ijba.transpose(0,1,3,2)
-            emp2 += numpy.einsum('ijab,ijab', t2[ki,kj,ka], woovv)
+            emp2 += np.einsum('ijab,ijab', t2[ki,kj,ka], woovv)
 
             if ka != kb:
                 eijba = eijab.transpose(0,1,3,2)
                 t2[ki,kj,kb] = eris_ijba.conj() / eijba
                 woovv = 2*eris_ijba - eris_ijab.transpose(0,1,3,2)
-                emp2 += numpy.einsum('ijab,ijab', t2[ki,kj,kb], woovv)
+                emp2 += np.einsum('ijab,ijab', t2[ki,kj,kb], woovv)
 
             touched[ki,kj,ka] = touched[ki,kj,kb] = True
 
@@ -409,22 +356,15 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         if mbpt2:
             cctyp = 'MBPT2'
             self.e_corr, self.t1, self.t2 = self.init_amps(eris)
-        else:
-            cctyp = 'CCSD'
-            self.converged, self.e_corr, self.t1, self.t2 = \
-                    kernel(self, eris, t1, t2, max_cycle=self.max_cycle,
-                           tol=self.conv_tol,
-                           tolnormt=self.conv_tol_normt,
-                           max_memory=self.max_memory, verbose=self.verbose)
-            if self.converged:
-                logger.info(self, 'CCSD converged')
-            else:
-                logger.info(self, 'CCSD not converged')
-        if self._scf.e_tot == 0:
-            logger.info(self, 'E_corr = %.16g', self.e_corr)
-        else:
-            logger.info(self, 'E(%s) = %.16g  E_corr = %.16g',
-                        cctyp, self.e_tot, self.e_corr)
+            return self.e_corr, self.t1, self.t2
+
+        cctyp = 'CCSD'
+        self.converged, self.e_corr, self.t1, self.t2 = \
+                kernel(self, eris, t1, t2, max_cycle=self.max_cycle,
+                       tol=self.conv_tol,
+                       tolnormt=self.conv_tol_normt,
+                       max_memory=self.max_memory, verbose=self.verbose)
+        self._finalize()
         return self.e_corr, self.t1, self.t2
 
     def ao2mo(self, mo_coeff=None):
@@ -971,16 +911,16 @@ def pad_frozen_kpt_mo_coeff(cc, mo_coeff):
     nao = mo_coeff[0].shape[0]
     dtype = mo_coeff[0].dtype
 
-    nocc_per_kpt = numpy.asarray(get_nocc(cc, per_kpoint=True))
-    nmo_per_kpt  = numpy.asarray(get_nmo(cc, per_kpoint=True))
+    nocc_per_kpt = np.asarray(get_nocc(cc, per_kpoint=True))
+    nmo_per_kpt  = np.asarray(get_nmo(cc, per_kpoint=True))
 
     padded_moidx = []
     for k in range(nkpts):
         kpt_nocc = nocc_per_kpt[k]
         kpt_nvir = nmo_per_kpt[k] - kpt_nocc
-        kpt_padded_moidx = numpy.concatenate((numpy.ones(kpt_nocc, dtype=numpy.bool),
-                                              numpy.zeros(nmo - kpt_nocc - kpt_nvir, dtype=numpy.bool),
-                                              numpy.ones(kpt_nvir, dtype=numpy.bool)))
+        kpt_padded_moidx = np.concatenate((np.ones(kpt_nocc, dtype=np.bool),
+                                           np.zeros(nmo - kpt_nocc - kpt_nvir, dtype=np.bool),
+                                           np.ones(kpt_nvir, dtype=np.bool)))
         padded_moidx.append(kpt_padded_moidx)
 
     mo_coeff = []
@@ -990,7 +930,7 @@ def pad_frozen_kpt_mo_coeff(cc, mo_coeff):
         kpt_moidx = moidx[k]
         kpt_padded_moidx = padded_moidx[k]
 
-        mo = numpy.zeros((nao, nmo), dtype=dtype)
+        mo = np.zeros((nao, nmo), dtype=dtype)
         mo[:, kpt_padded_moidx] = cc.mo_coeff[k][:, kpt_moidx]
         mo_coeff.append(mo)
 
@@ -1006,7 +946,7 @@ class _ERIS:#(pyscf.cc.ccsd._ChemistsERIs):
         nmo = cc.nmo
         nvir = nmo - nocc
 
-        #if any(nocc != numpy.count_nonzero(cc._scf.mo_occ[k]>0)
+        #if any(nocc != np.count_nonzero(cc._scf.mo_occ[k]>0)
         #       for k in range(nkpts)):
         #    raise NotImplementedError('Different occupancies found for different k-points')
 
@@ -1022,12 +962,12 @@ class _ERIS:#(pyscf.cc.ccsd._ChemistsERIs):
         # Re-make our fock MO matrix elements from density and fock AO
         dm = cc._scf.make_rdm1(cc.mo_coeff, cc.mo_occ)
         fockao = cc._scf.get_hcore() + cc._scf.get_veff(cc._scf.cell, dm)
-        self.fock = numpy.asarray([reduce(numpy.dot,
-                                  (mo_coeff[k].T.conj(),fockao[k], mo_coeff[k]))
-                                  for k, mo in enumerate(mo_coeff)])
+        self.fock = np.asarray([reduce(np.dot,
+                                       (mo_coeff[k].T.conj(),fockao[k], mo_coeff[k]))
+                                for k, mo in enumerate(mo_coeff)])
 
-        nocc_per_kpt = numpy.asarray(get_nocc(cc, per_kpoint=True))
-        nmo_per_kpt  = numpy.asarray(get_nmo(cc, per_kpoint=True))
+        nocc_per_kpt = np.asarray(get_nocc(cc, per_kpoint=True))
+        nmo_per_kpt  = np.asarray(get_nmo(cc, per_kpoint=True))
         nvir_per_kpt = nmo_per_kpt - nocc_per_kpt
         for kp in range(nkpts):
             mo_e = self.fock[kp].diagonal().real
@@ -1049,13 +989,13 @@ class _ERIS:#(pyscf.cc.ccsd._ChemistsERIs):
         if (method == 'incore' and (mem_incore+mem_now < cc.max_memory)
             or cc.mol.incore_anyway):
             log.info('using incore ERI storage')
-            self.oooo = numpy.zeros((nkpts,nkpts,nkpts,nocc,nocc,nocc,nocc), dtype=dtype)
-            self.ooov = numpy.zeros((nkpts,nkpts,nkpts,nocc,nocc,nocc,nvir), dtype=dtype)
-            self.oovv = numpy.zeros((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=dtype)
-            self.ovov = numpy.zeros((nkpts,nkpts,nkpts,nocc,nvir,nocc,nvir), dtype=dtype)
-            self.voov = numpy.zeros((nkpts,nkpts,nkpts,nvir,nocc,nocc,nvir), dtype=dtype)
-            self.vovv = numpy.zeros((nkpts,nkpts,nkpts,nvir,nocc,nvir,nvir), dtype=dtype)
-            self.vvvv = numpy.zeros((nkpts,nkpts,nkpts,nvir,nvir,nvir,nvir), dtype=dtype)
+            self.oooo = np.zeros((nkpts,nkpts,nkpts,nocc,nocc,nocc,nocc), dtype=dtype)
+            self.ooov = np.zeros((nkpts,nkpts,nkpts,nocc,nocc,nocc,nvir), dtype=dtype)
+            self.oovv = np.zeros((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=dtype)
+            self.ovov = np.zeros((nkpts,nkpts,nkpts,nocc,nvir,nocc,nvir), dtype=dtype)
+            self.voov = np.zeros((nkpts,nkpts,nkpts,nvir,nocc,nocc,nvir), dtype=dtype)
+            self.vovv = np.zeros((nkpts,nkpts,nkpts,nvir,nocc,nvir,nvir), dtype=dtype)
+            self.vvvv = np.zeros((nkpts,nkpts,nkpts,nvir,nvir,nvir,nvir), dtype=dtype)
 
             for (ikp,ikq,ikr) in khelper.symm_map.keys():
                 iks = kconserv[ikp,ikq,ikr]
@@ -1187,7 +1127,7 @@ def verify_eri_symmetry(nmo, nkpts, kconserv, eri):
                             for s in range(nmo):
                                 pqrs = eri[kp,kq,kr,p,q,r,s]
                                 rspq = eri[kr,ks,kp,r,s,p,q]
-                                diff = numpy.linalg.norm(pqrs - rspq).real
+                                diff = np.linalg.norm(pqrs - rspq).real
                                 if diff > 1e-5:
                                     print("** Warning: ERI diff at ")
                                     print("kp,kq,kr,ks,p,q,r,s =", kp, kq, kr, ks, p, q, r, s)
