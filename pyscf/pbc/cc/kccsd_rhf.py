@@ -361,9 +361,8 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         cctyp = 'CCSD'
         self.converged, self.e_corr, self.t1, self.t2 = \
                 kernel(self, eris, t1, t2, max_cycle=self.max_cycle,
-                       tol=self.conv_tol,
-                       tolnormt=self.conv_tol_normt,
-                       max_memory=self.max_memory, verbose=self.verbose)
+                       tol=self.conv_tol, tolnormt=self.conv_tol_normt,
+                       verbose=self.verbose)
         self._finalize()
         return self.e_corr, self.t1, self.t2
 
