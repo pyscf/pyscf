@@ -25,7 +25,10 @@ from pyscf import lib
 from pyscf.gto import mole
 from pyscf.lib import logger
 from pyscf.scf import hf
+from pyscf import __config__
 
+LINEAR_DEP_THRESHOLD = getattr(__config__, 'scf_addons_remove_linear_dep_threshold', 1e-8)
+LINEAR_DEP_TRIGGER = getattr(__config__, 'scf_addons_remove_linear_dep_trigger', 1e-10)
 
 def frac_occ_(mf, tol=1e-3):
     from pyscf.scf import uhf, rohf
@@ -396,7 +399,8 @@ def project_dm_r2r(mol1, dm1, mol2):
         return lib.einsum('pi,nij,qj->npq', p21, dm1, p21.conj())
 
 
-def remove_linear_dep_(mf, threshold=1e-8, lindep=1e-10):
+def remove_linear_dep_(mf, threshold=LINEAR_DEP_THRESHOLD,
+                       lindep=LINEAR_DEP_TRIGGER):
     '''
     Args:
         threshold : float
@@ -758,3 +762,5 @@ def get_ghf_orbspin(mo_energy, mo_occ, is_rhf=None):
         orbspin = numpy.append(numpy.array([0]*nocca+[1]*noccb)[oidx],
                                numpy.array([0]*nvira+[1]*nvirb)[vidx])
     return orbspin
+
+del(LINEAR_DEP_THRESHOLD, LINEAR_DEP_TRIGGER)

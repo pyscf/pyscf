@@ -80,9 +80,10 @@ class KnownValues(unittest.TestCase):
 
     def test_mc1step_4o4e_high_cost(self):
         mc = mcscf.CASSCF(mf, 4, 4)
-        mc.dynamic_micro_step = True
+        mcscf.mc1step.WITH_MICRO_SCHEDULER, bak = True, mcscf.mc1step.WITH_MICRO_SCHEDULER
         mc.conv_tol = 1e-8
         emc = mc.mc1step()[0]
+        mcscf.mc1step.WITH_MICRO_SCHEDULER = bak
         self.assertAlmostEqual(emc, -78.0103838390, 6)
 
 

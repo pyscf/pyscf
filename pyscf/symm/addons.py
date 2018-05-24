@@ -217,9 +217,9 @@ def symmetrize_space(mol, mo, s=None,
             mo1.append(numpy.dot(csym, u[:,abs(1-e) < 1e-6]))
     mo1 = numpy.hstack(mo1)
     if mo1.shape[1] != nmo:
-        raise ValueError('The input orbital space is not symmetrized.\n It is '
-                         'probably because the input mol and orbitals are of '
-                         'different orientation.')
+        raise ValueError('The input orbital space is not symmetrized.\n One '
+                         'possible reason is that the input mol and orbitals '
+                         'are of different orientation.')
     snorm = numpy.linalg.norm(reduce(numpy.dot, (mo1.T, s, mo1)) - numpy.eye(nmo))
     if check and snorm > 1e-6:
         raise ValueError('Orbitals are not orthogonalized')

@@ -50,3 +50,28 @@ mc.check_sanity = lambda *args: None
 
 mc.verbose = 4
 mc.kernel()
+
+
+#
+# Example 2: Mix FCI wavefunctions with different symmetry irreps
+#
+mol = gto.Mole()
+mol.build(atom='''
+ O     0.    0.000    0.1174
+ H     0.    0.757   -0.4696
+ H     0.   -0.757   -0.4696
+''', symmetry=True, basis='631g')
+
+mf = scf.RHF(mol).run()
+
+weights = [.5, .5]
+solver1 = fci.direct_spin1_symm.FCI(mol)
+solver1.wfnsym= 'A1'
+solver1.spin = 0
+solver2 = fci.direct_spin1_symm.FCI(mol)
+solver2.wfnsym= 'A2'
+solver2.spin = 0
+
+mc = mcscf.CASSCF(mf, 4, 4)
+mcscf.state_average_mix_(mc, [solver1, solver2], weights)
+mc.kernel()

@@ -13,6 +13,6 @@ from pyscf.pbc.cc import ccsd
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-def KRCCSD(mf, frozen=[]):
+def KRCCSD(mf, frozen=0):
     from pyscf.pbc.mpicc import kccsd_rhf
     return kccsd_rhf.RCCSD(mf, frozen)
