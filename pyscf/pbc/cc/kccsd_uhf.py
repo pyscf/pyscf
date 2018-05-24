@@ -37,9 +37,26 @@ def update_amps(cc, t1, t2, eris):
     time0 = time.clock(), time.time()
     log = logger.Logger(cc.stdout, cc.verbose)
 
+    t1a, t1b = t1
+    t2aa, t2ab, t2bb = t2
+    Ht1a = np.zeros_like(t1a)
+    Ht1b = np.zeros_like(t1b)
+    Ht2aa = np.zeros_like(t2aa)
+    Ht2ab = np.zeros_like(t2ab)
+    Ht2bb = np.zeros_like(t2bb)
+
     orbspin = eris._kccsd_eris.orbspin
     t1 = kccsd.spatial2spin(cc, t1, orbspin)
     t2 = kccsd.spatial2spin(cc, t2, orbspin)
+
+    nocca, nvira = t1a.shape[1:]
+    noccb, nvirb = t1b.shape[1:]
+    fvv_ = eris.fock[0][:,nocca:,nocca:]
+    fVV_ = eris.fock[1][:,noccb:,noccb:]
+    foo_ = eris.fock[0][:,:nocca,:nocca]
+    fOO_ = eris.fock[1][:,:noccb,:noccb]
+    fov_ = eris.fock[0][:,:nocca,nocca:]
+    fOV_ = eris.fock[1][:,:noccb,noccb:]
 
     #Ht1, Ht2 = kccsd.update_amps(cc, t1, t2, eris._kccsd_eris)
     eris, uccsd_eris = eris._kccsd_eris, eris
@@ -55,13 +72,17 @@ def update_amps(cc, t1, t2, eris):
     Fvv = imdk.cc_Fvv(cc, t1, t2, eris)
     Foo = imdk.cc_Foo(cc, t1, t2, eris)
     Fov = imdk.cc_Fov(cc, t1, t2, eris)
-    # lower-case alpha, upper-case for beta
-    #Fvv, FVV = _eri_spin2spatial(imdk.cc_Fvv(cc, t1, t2, eris), 'vv', uccsd_eris)
-    #Foo, FOO = _eri_spin2spatial(imdk.cc_Foo(cc, t1, t2, eris), 'oo', uccsd_eris)
-    #Fov, FOV = _eri_spin2spatial(imdk.cc_Fov(cc, t1, t2, eris), 'ov', uccsd_eris)
+    # Convert to UCCSD tensors and use them below
+    # lower-case o/v stand for alpha, upper-case O/V stand for beta. Fvv is
+    # the alpha part of Fock virtual-virtual block, FVV is beta part of Fock
+    # virtual-virtual block.
+    Fvv_, FVV_ = _eri_spin2spatial(imdk.cc_Fvv(cc, t1, t2, eris), 'vv', uccsd_eris)
+    Foo_, FOO_ = _eri_spin2spatial(imdk.cc_Foo(cc, t1, t2, eris), 'oo', uccsd_eris)
+    Fov_, FOV_ = _eri_spin2spatial(imdk.cc_Fov(cc, t1, t2, eris), 'ov', uccsd_eris)
     Woooo = imdk.cc_Woooo(cc, t1, t2, eris)
     Wvvvv = imdk.cc_Wvvvv(cc, t1, t2, eris)
     Wovvo = imdk.cc_Wovvo(cc, t1, t2, eris)
+    # Convert to UCCSD tensors and use them below
     #Woooo, WooOO, WOOoo, WOOOO = _eri_spin2spatial(imdk.cc_Woooo(cc, t1, t2, eris), 'oooo', uccsd_eris)
     #Wvvvv, WvvVV, WVVvv, WVVVV = _eri_spin2spatial(imdk.cc_Wvvvv(cc, t1, t2, eris), 'vvvv', uccsd_eris)
     #Wovvo, WovVO, WOVvo, WOVVO = _eri_spin2spatial(imdk.cc_Wovvo(cc, t1, t2, eris), 'ovvo', uccsd_eris)
@@ -70,6 +91,12 @@ def update_amps(cc, t1, t2, eris):
     for k in range(nkpts):
         Fvv[k] -= np.diag(np.diag(fvv[k]))
         Foo[k] -= np.diag(np.diag(foo[k]))
+
+    for k in range(nkpts):
+        Fvv_[k] -= np.diag(np.diag(fvv_[k]))
+        FVV_[k] -= np.diag(np.diag(fVV_[k]))
+        Foo_[k] -= np.diag(np.diag(foo_[k]))
+        FOO_[k] -= np.diag(np.diag(fOO_[k]))
 
     # Get the momentum conservation array
     # Note: chemist's notation for momentum conserving t2(ki,kj,ka,kb), even though
@@ -91,13 +118,18 @@ def update_amps(cc, t1, t2, eris):
         kj = kconserv[km, ke, kb]
         eris_vvvo[ke, kj, kb] = -eris.ovvv[km, kb, ke].transpose(2, 3, 1, 0).conj()
 
+    # Convert to UCCSD tensors and use them below
+    #eris_ovvo, eris_ovVO, eris_OVvo, eris_OVVO = _eri_spin2spatial(eris_ovvo, 'ovvo', uccsd_eris)
+    #eris_oovo, eris_ooVO, eris_OOvo, eris_OOVO = _eri_spin2spatial(eris_oovo, 'oovo', uccsd_eris)
+    #eris_vvvo, eris_vvVO, eris_VVvo, eris_VVVO = _eri_spin2spatial(eris_vvvo, 'vvvo', uccsd_eris)
+
     # T1 equation
     t1new = np.zeros(shape=t1.shape, dtype=t1.dtype)
     for ka in range(nkpts):
         ki = ka
         t1new[ka] += np.array(fov[ka, :, :]).conj()
-        t1new[ka] += einsum('ie,ae->ia', t1[ka], Fvv[ka])
-        t1new[ka] += -einsum('ma,mi->ia', t1[ka], Foo[ka])
+        #:t1new[ka] += einsum('ie,ae->ia', t1[ka], Fvv[ka])
+        #:t1new[ka] += -einsum('ma,mi->ia', t1[ka], Foo[ka])
         for km in range(nkpts):
             t1new[ka] += einsum('imae,me->ia', t2[ka, km, ka], Fov[km])
             t1new[ka] += -einsum('nf,naif->ia', t1[km], eris.ovov[km, ka, ki])
@@ -105,6 +137,13 @@ def update_amps(cc, t1, t2, eris):
                 ke = kconserv[km, ki, kn]
                 t1new[ka] += -0.5 * einsum('imef,maef->ia', t2[ki, km, ke], eris.ovvv[km, ka, ke])
                 t1new[ka] += -0.5 * einsum('mnae,nmei->ia', t2[km, kn, ka], eris_oovo[kn, km, ke])
+
+    for ka in range(nkpts):
+        Ht1a[ka] += einsum('ie,ae->ia', t1a[ka], Fvv_[ka])
+        Ht1b[ka] += einsum('ie,ae->ia', t1b[ka], FVV_[ka])
+        Ht1a[ka] -= einsum('ma,mi->ia', t1a[ka], Foo_[ka])
+        Ht1b[ka] -= einsum('ma,mi->ia', t1b[ka], FOO_[ka])
+    t1new += kccsd.spatial2spin(cc, (Ht1a, Ht1b), orbspin)
 
     # T2 equation
     t2new = np.array(eris.oovv).conj()
@@ -441,7 +480,7 @@ def _make_eris_incore(cc, mo_coeff=None):
     # Re-make our fock MO matrix elements from density and fock AO
     focka = [_kccsd_eris.fock[k][orbspin[k]==0][:,orbspin[k]==0] for k in range(nkpts)]
     fockb = [_kccsd_eris.fock[k][orbspin[k]==1][:,orbspin[k]==1] for k in range(nkpts)]
-    eris.fock = (focka, fockb)
+    eris.fock = (np.asarray(focka), np.asarray(fockb))
 
     kpts = cc.kpts
     nao = cell.nao
@@ -506,8 +545,7 @@ def _eri_spin2spatial(eri_spin, vvvv, eris):
         idx2a, idx2b = select_idx(vvvv[1])
 
         fa = np.zeros((nkpts,len(idx1a[0]),len(idx2a[0])), dtype=np.complex128)
-        fb = np.zeros((nkpts,len(idx1a[0]),len(idx2a[0])), dtype=np.complex128)
-        kconserv = kpts_helper.get_kconserv(eris.cell, eris.kpts)
+        fb = np.zeros((nkpts,len(idx1b[0]),len(idx2b[0])), dtype=np.complex128)
         for k in range(nkpts):
             fa[k] = eri_spin[k, idx1a[k][:,None],idx2a[k]]
             fb[k] = eri_spin[k, idx1b[k][:,None],idx2b[k]]
@@ -530,6 +568,54 @@ def _eri_spin2spatial(eri_spin, vvvv, eris):
         eri_bbaa[ki,kj,kk] = eri_spin[ki,kj,kk, idx1b[ki][:,None,None,None],idx2b[kj][:,None,None],idx3a[kk][:,None],idx4a[kl]]
         eri_bbbb[ki,kj,kk] = eri_spin[ki,kj,kk, idx1b[ki][:,None,None,None],idx2b[kj][:,None,None],idx3b[kk][:,None],idx4b[kl]]
     return eri_aaaa, eri_aabb, eri_bbaa, eri_bbbb
+
+def _eri_spatial2spin(eri_aa_ab_ba_bb, vvvv, eris):
+    orbspin = eris._kccsd_eris.orbspin
+    nocc_a, nocc_b = eris.nocc
+    nocc = nocc_a + nocc_b
+    idxoa = [np.where(orbspin[k][:nocc] == 0)[0] for k in range(nkpts)]
+    idxob = [np.where(orbspin[k][:nocc] == 1)[0] for k in range(nkpts)]
+    idxva = [np.where(orbspin[k][nocc:] == 0)[0] for k in range(nkpts)]
+    idxvb = [np.where(orbspin[k][nocc:] == 1)[0] for k in range(nkpts)]
+    nvir_a = len(idxva[0])
+    nvir_b = len(idxvb[0])
+
+    def select_idx(s):
+        if s.lower() == 'o':
+            return idxoa, idxob
+        else:
+            return idxva, idxvb
+
+    if len(vvvv) == 2:
+        idx1a, idx1b = select_idx(vvvv[0])
+        idx2a, idx2b = select_idx(vvvv[1])
+
+        fa, fb = eri_aa_ab_ba_bb
+        f = np.zeros((nkpts, len(idx1a[0])+len(idx1b[0]),
+                      len(idx2a[0])+len(idx2b[0])), dtype=np.complex128)
+        for k in range(nkpts):
+            f[k, idx1a[k][:,None],idx2a[k]] = fa[k]
+            f[k, idx1b[k][:,None],idx2b[k]] = fb[k]
+        return f
+
+    idx1a, idx1b = select_idx(vvvv[0])
+    idx2a, idx2b = select_idx(vvvv[1])
+    idx3a, idx3b = select_idx(vvvv[2])
+    idx4a, idx4b = select_idx(vvvv[3])
+
+    eri_aaaa, eri_aabb, eri_bbaa, eri_bbbb = eri_aa_ab_ba_bb
+    eri = np.zeros((nkpts,nkpts,nkpts, len(idx1a[0])+len(idx1b[0]),
+                    len(idx2a[0])+len(idx2b[0]),
+                    len(idx3a[0])+len(idx3b[0]),
+                    len(idx4a[0])+len(idx4b[0])), dtype=np.complex128)
+    kconserv = kpts_helper.get_kconserv(eris.cell, eris.kpts)
+    for ki, kj, kk in kpts_helper.loop_kkk(nkpts):
+        kl = kconserv[ki, kk, kj]
+        eri[ki,kj,kk, idx1a[ki][:,None,None,None],idx2a[kj][:,None,None],idx3a[kk][:,None],idx4a[kl]] = eri_aaaa[ki,kj,kk]
+        eri[ki,kj,kk, idx1a[ki][:,None,None,None],idx2a[kj][:,None,None],idx3b[kk][:,None],idx4b[kl]] = eri_aabb[ki,kj,kk]
+        eri[ki,kj,kk, idx1b[ki][:,None,None,None],idx2b[kj][:,None,None],idx3a[kk][:,None],idx4a[kl]] = eri_bbaa[ki,kj,kk]
+        eri[ki,kj,kk, idx1b[ki][:,None,None,None],idx2b[kj][:,None,None],idx3b[kk][:,None],idx4b[kl]] = eri_bbbb[ki,kj,kk]
+    return eri
 
 
 if __name__ == '__main__':
@@ -559,6 +645,8 @@ if __name__ == '__main__':
     kmf.mo_occ[1,:,:1] = 1
     kmf.mo_energy = (np.arange(nmo) +
                      np.random.random((2,3,nmo)) * .3)
+    kmf.mo_energy[kmf.mo_occ == 0] += 2
+
     mo = (np.random.random((2,3,nmo,nmo)) +
           np.random.random((2,3,nmo,nmo))*1j - .5-.5j)
     s = kmf.get_ovlp()
