@@ -14,7 +14,9 @@
 # limitations under the License.
 #
 # Authors: James D. McClain
-#          Timothy Berkelbach <tim.berkelbach@gmail.com>
+#          Mario Motta
+#          Yang Gao
+#          Qiming Sun <osirpt.sun@gmail.com>
 #
 
 import time
@@ -46,8 +48,9 @@ def update_amps(cc, t1, t2, eris):
     Ht2bb = np.zeros_like(t2bb)
 
     orbspin = eris._kccsd_eris.orbspin
-    t1 = kccsd.spatial2spin(cc, t1, orbspin)
-    t2 = kccsd.spatial2spin(cc, t2, orbspin)
+    kconserv = kpts_helper.get_kconserv(cc._scf.cell, cc.kpts)
+    t1 = kccsd.spatial2spin(t1, orbspin, kconserv)
+    t2 = kccsd.spatial2spin(t2, orbspin, kconserv)
 
     nocca, nvira = t1a.shape[1:]
     noccb, nvirb = t1b.shape[1:]
@@ -143,7 +146,7 @@ def update_amps(cc, t1, t2, eris):
         Ht1b[ka] += einsum('ie,ae->ia', t1b[ka], FVV_[ka])
         Ht1a[ka] -= einsum('ma,mi->ia', t1a[ka], Foo_[ka])
         Ht1b[ka] -= einsum('ma,mi->ia', t1b[ka], FOO_[ka])
-    t1new += kccsd.spatial2spin(cc, (Ht1a, Ht1b), orbspin)
+    t1new += kccsd.spatial2spin((Ht1a, Ht1b), orbspin, kconserv)
 
     # T2 equation
     t2new = np.array(eris.oovv).conj()
@@ -232,8 +235,8 @@ def update_amps(cc, t1, t2, eris):
 
         t2new[ki, kj, ka] /= eijab
 
-    Ht1 = kccsd.spin2spatial(cc, t1new, orbspin)
-    Ht2 = kccsd.spin2spatial(cc, t2new, orbspin)
+    Ht1 = kccsd.spin2spatial(t1new, orbspin, kconserv)
+    Ht2 = kccsd.spin2spatial(t2new, orbspin, kconserv)
 
     time0 = log.timer_debug1('update t1 t2', *time0)
     return Ht1, Ht2
@@ -252,8 +255,9 @@ def energy(cc, t1, t2, eris):
     from pyscf.pbc.cc import kccsd
 
     orbspin = eris.mo_coeff.orbspin
-    t1 = kccsd.spatial2spin(cc, t1, orbspin)
-    t2 = kccsd.spatial2spin(cc, t2, orbspin)
+    kconserv = kpts_helper.get_kconserv(cc._scf.cell, cc.kpts)
+    t1 = kccsd.spatial2spin(t1, orbspin, kconserv)
+    t2 = kccsd.spatial2spin(t2, orbspin, kconserv)
 
     nkpts, nocc, nvir = t1.shape
     fock = eris.fock
@@ -329,6 +333,32 @@ def get_frozen_mask(cc):
         raise NotImplementedError
 
     return moidxa, moisxb
+
+def amplitudes_to_vector(t1, t2):
+    return np.hstack((t1[0].ravel(), t1[1].ravel(),
+                      t2[0].ravel(), t2[1].ravel(), t2[2].ravel()))
+
+def vector_to_amplitudes(vec, nmo, nocc, nkpts=1):
+    nocca, noccb = nocc
+    nmoa, nmob = nmo
+    nvira, nvirb = nmoa - nocca, nmob - noccb
+
+    t1a = vec[:nkpts*nocca*nvira].reshape(nkpts,nocca,nvira)
+    vec = vec[nkpts*nocca*nvira:]
+
+    t1b = vec[:nkpts*noccb*nvirb].reshape(nkpts,noccb,nvirb)
+    vec = vec[nkpts*noccb*nvirb:]
+
+    t2aa = vec[:nkpts**3*nocca**2*nvira**2]
+    t2aa = t2aa.reshape(nkpts,nkpts,nkpts,nocca,nocca,nvira,nvira)
+    vec = vec[nkpts**3*nocca**2*nvira**2:]
+
+    t2ab = vec[:nkpts**3*nocca*noccb*nvira*nvirb]
+    t2ab = t2ab.reshape(nkpts,nkpts,nkpts,nocca,noccb,nvira,nvirb)
+    vec = vec[nkpts**3*nocca*noccb*nvira*nvirb:]
+
+    t2bb = vec.reshape(nkpts,nkpts,nkpts,noccb,noccb,nvirb,nvirb)
+    return (t1a,t1b), (t2aa,t2ab,t2bb)
 
 
 class KUCCSD(uccsd.UCCSD):
@@ -410,8 +440,8 @@ class KUCCSD(uccsd.UCCSD):
         self.emp2 = 0.25 * np.einsum('pqrijab,pqrijab', t2, eris_oovv).real
         self.emp2 /= nkpts
 
-        t1 = kccsd.spin2spatial(cc, t1, orbspin)
-        t2 = kccsd.spin2spatial(cc, t2, orbspin)
+        t1 = kccsd.spin2spatial(t1, orbspin, kconserv)
+        t2 = kccsd.spin2spatial(t2, orbspin, kconserv)
 
         logger.info(self, 'Init t2, MP2 energy = %.15g', self.emp2.real)
         logger.timer(self, 'init mp2', *time0)
@@ -419,33 +449,13 @@ class KUCCSD(uccsd.UCCSD):
 
 
     def amplitudes_to_vector(self, t1, t2):
-        return np.hstack((t1[0].ravel(), t1[1].ravel(),
-                          t2[0].ravel(), t2[1].ravel(), t2[2].ravel()))
+        return amplitudes_to_vector(t1, t2)
 
-    def vector_to_amplitudes(self, vec, nmo=None, nocc=None):
+    def vector_to_amplitudes(self, vec, nmo=None, nocc=None, nkpts=None):
         if nocc is None: nocc = self.nocc
         if nmo is None: nmo = self.nmo
-        nocca, noccb = nocc
-        nmoa, nmob = nmo
-        nvira, nvirb = nmoa - nocca, nmob - noccb
-        nkpts = self.nkpts
-
-        t1a = vec[:nkpts*nocca*nvira].reshape(nkpts,nocca,nvira)
-        vec = vec[nkpts*nocca*nvira:]
-
-        t1b = vec[:nkpts*noccb*nvirb].reshape(nkpts,noccb,nvirb)
-        vec = vec[nkpts*noccb*nvirb:]
-
-        t2aa = vec[:nkpts**3*nocca**2*nvira**2]
-        t2aa = t2aa.reshape(nkpts,nkpts,nkpts,nocca,nocca,nvira,nvira)
-        vec = vec[nkpts**3*nocca**2*nvira**2:]
-
-        t2ab = vec[:nkpts**3*nocca*noccb*nvira*nvirb]
-        t2ab = t2ab.reshape(nkpts,nkpts,nkpts,nocca,noccb,nvira,nvirb)
-        vec = vec[nkpts**3*nocca*noccb*nvira*nvirb:]
-
-        t2bb = vec.reshape(nkpts,nkpts,nkpts,noccb,noccb,nvirb,nvirb)
-        return (t1a,t1b), (t2aa,t2ab,t2bb)
+        if nkpts is None: nkpts = self.nkpts
+        return vector_to_amplitudes(vec, nmo, nocc, nkpts)
 
 UCCSD = KUCCSD
 
@@ -483,7 +493,7 @@ def _make_eris_incore(cc, mo_coeff=None):
     eris.fock = (np.asarray(focka), np.asarray(fockb))
 
     kpts = cc.kpts
-    nao = cell.nao
+    nao = _kccsd_eris.mo_coeff[0].shape[0] // 2
     kconserv = kpts_helper.get_kconserv(cc._scf.cell, cc.kpts)
     so_coeff = [mo[:nao] + mo[nao:] for mo in _kccsd_eris.mo_coeff]
 
@@ -527,6 +537,7 @@ def _eri_spin2spatial(eri_spin, vvvv, eris):
     orbspin = eris._kccsd_eris.orbspin
     nocc_a, nocc_b = eris.nocc
     nocc = nocc_a + nocc_b
+    nkpts = len(orbspin)
     idxoa = [np.where(orbspin[k][:nocc] == 0)[0] for k in range(nkpts)]
     idxob = [np.where(orbspin[k][:nocc] == 1)[0] for k in range(nkpts)]
     idxva = [np.where(orbspin[k][nocc:] == 0)[0] for k in range(nkpts)]
@@ -656,43 +667,66 @@ if __name__ == '__main__':
         kmf.mo_coeff[0,k] = lo.orth.vec_lowdin(mo[0,k], s[k])
         kmf.mo_coeff[1,k] = lo.orth.vec_lowdin(mo[1,k], s[k])
 
+    def rand_t1_t2(mycc):
+        nkpts = mycc.nkpts
+        nocca, noccb = mycc.nocc
+        nmoa, nmob = mycc.nmo
+        nvira, nvirb = nmoa - nocca, nmob - noccb
+        np.random.seed(1)
+        t1a = (np.random.random((nkpts,nocca,nvira)) +
+               np.random.random((nkpts,nocca,nvira))*1j - .5-.5j)
+        t1b = (np.random.random((nkpts,noccb,nvirb)) +
+               np.random.random((nkpts,noccb,nvirb))*1j - .5-.5j)
+        t2aa = (np.random.random((nkpts,nkpts,nkpts,nocca,nocca,nvira,nvira)) +
+                np.random.random((nkpts,nkpts,nkpts,nocca,nocca,nvira,nvira))*1j - .5-.5j)
+        kconserv = kpts_helper.get_kconserv(kmf.cell, kmf.kpts)
+        t2aa = t2aa - t2aa.transpose(0,2,1,4,3,5,6)
+        tmp = t2aa.copy()
+        for ki, kj, kk in kpts_helper.loop_kkk(nkpts):
+            kl = kconserv[ki, kk, kj]
+            t2aa[ki,kj,kk] = t2aa[ki,kj,kk] - tmp[ki,kj,kl].transpose(0,1,3,2)
+        t2ab = (np.random.random((nkpts,nkpts,nkpts,nocca,noccb,nvira,nvirb)) +
+                np.random.random((nkpts,nkpts,nkpts,nocca,noccb,nvira,nvirb))*1j - .5-.5j)
+        t2bb = (np.random.random((nkpts,nkpts,nkpts,noccb,noccb,nvirb,nvirb)) +
+                np.random.random((nkpts,nkpts,nkpts,noccb,noccb,nvirb,nvirb))*1j - .5-.5j)
+        t2bb = t2bb - t2bb.transpose(0,2,1,4,3,5,6)
+        tmp = t2bb.copy()
+        for ki, kj, kk in kpts_helper.loop_kkk(nkpts):
+            kl = kconserv[ki, kk, kj]
+            t2bb[ki,kj,kk] = t2bb[ki,kj,kk] - tmp[ki,kj,kl].transpose(0,1,3,2)
+
+        t1 = (t1a, t1b)
+        t2 = (t2aa, t2ab, t2bb)
+        return t1, t2
+
+    import time
     mycc = KUCCSD(kmf)
     eris = mycc.ao2mo()
-    nkpts = mycc.nkpts
-    nocca, noccb = mycc.nocc
-    nmoa, nmob = mycc.nmo
-    nvira, nvirb = nmoa - nocca, nmob - noccb
-
-    np.random.seed(1)
-    t1a = (np.random.random((nkpts,nocca,nvira)) +
-           np.random.random((nkpts,nocca,nvira))*1j - .5-.5j)
-    t1b = (np.random.random((nkpts,noccb,nvirb)) +
-           np.random.random((nkpts,noccb,nvirb))*1j - .5-.5j)
-    t2aa = (np.random.random((nkpts,nkpts,nkpts,nocca,nocca,nvira,nvira)) +
-            np.random.random((nkpts,nkpts,nkpts,nocca,nocca,nvira,nvira))*1j - .5-.5j)
-    kconserv = kpts_helper.get_kconserv(kmf.cell, kmf.kpts)
-    t2aa = t2aa - t2aa.transpose(0,2,1,4,3,5,6)
-    tmp = t2aa.copy()
-    for ki, kj, kk in kpts_helper.loop_kkk(nkpts):
-        kl = kconserv[ki, kk, kj]
-        t2aa[ki,kj,kk] = t2aa[ki,kj,kk] - tmp[ki,kj,kl].transpose(0,1,3,2)
-    t2ab = (np.random.random((nkpts,nkpts,nkpts,nocca,noccb,nvira,nvirb)) +
-            np.random.random((nkpts,nkpts,nkpts,nocca,noccb,nvira,nvirb))*1j - .5-.5j)
-    t2bb = (np.random.random((nkpts,nkpts,nkpts,noccb,noccb,nvirb,nvirb)) +
-            np.random.random((nkpts,nkpts,nkpts,noccb,noccb,nvirb,nvirb))*1j - .5-.5j)
-    t2bb = t2bb - t2bb.transpose(0,2,1,4,3,5,6)
-    tmp = t2bb.copy()
-    for ki, kj, kk in kpts_helper.loop_kkk(nkpts):
-        kl = kconserv[ki, kk, kj]
-        t2bb[ki,kj,kk] = t2bb[ki,kj,kk] - tmp[ki,kj,kl].transpose(0,1,3,2)
-
-    t1 = (t1a, t1b)
-    t2 = (t2aa, t2ab, t2bb)
+    t1, t2 = rand_t1_t2(mycc)
     Ht1, Ht2 = mycc.update_amps(t1, t2, eris)
-    print(lib.finger(Ht1[0]) - (-4.6893892974393623-1.5348163418323906j))
-    print(lib.finger(Ht1[1]) - (0.38360631203980317+3.8264980360124512j))
-    print(lib.finger(Ht2[0]) - (51.873350857105478 -36.810363407795016j))
-    print(lib.finger(Ht2[1]) - (-150.57868610511369+333.09680120768695j))
-    print(lib.finger(Ht2[2]) - (385.766152889095   -1040.2422778066575j))
+    print(lib.finger(Ht1[0]) - (-4.6893892974393614-1.5348163418323879j))
+    print(lib.finger(Ht1[1]) - (0.38360631203980139+3.8264980360124512j))
+    print(lib.finger(Ht2[0])*1e-2 - (.51873350857105478 -.36810363407795016j))
+    print(lib.finger(Ht2[1])*1e-2 - (-1.5057868610511369+3.3309680120768695j))
+    print(lib.finger(Ht2[2])*1e-3 - (.385766152889095-1.0402422778066575j))
 
+    kmf.mo_occ[0,:,:2] = 1
+    kmf.mo_occ[1,:,:2] = 1
+    mycc = KUCCSD(kmf)
+    eris = mycc.ao2mo()
+    t1, t2 = rand_t1_t2(mycc)
+    Ht1, Ht2 = mycc.update_amps(t1, t2, eris)
+    print(lib.finger(Ht1[0]) - (0.55789574089494964+1.7091300094790289j))
+    print(lib.finger(Ht1[1])*1e-2 - (.97100705137646841+3.9513513783996711j))
+    print(lib.finger(Ht2[0])*1e-2 - (.60993999091111931-1.1141373469561407j))
+    print(lib.finger(Ht2[1])*1e-2 - (2.1317369714545586-.23267047618176541j))
+    print(lib.finger(Ht2[2])*1e-2 - (3.1653187144164963-2.1699833757327607j))
 
+    from pyscf.pbc.cc import kccsd
+    kgcc = kccsd.GCCSD(scf.addons.convert_to_ghf(kmf))
+    kccsd_eris = kccsd._make_eris_incore(kgcc, kgcc._scf.mo_coeff)
+    r1 = kgcc.spatial2spin(t1)
+    r2 = kgcc.spatial2spin(t2)
+    r1, r2 = kgcc.update_amps(r1, r2, kccsd_eris)
+    print(abs(r1 - kgcc.spatial2spin(Ht1)).max())
+    print(abs(r2 - kgcc.spatial2spin(Ht2)).max())

@@ -214,17 +214,17 @@ def update_amps(cc, t1, t2, eris):
 
     return t1new, t2new
 
-def spatial2spin(cc, tx, orbspin=None):
+def spatial2spin(tx, orbspin, kconserv):
     '''Convert T1/T2 of spatial orbital representation to T1/T2 of
     spin-orbital representation
     '''
     if isinstance(tx, numpy.ndarray) and tx.ndim == 3:
         # KRCCSD t1 amplitudes
-        return spatial2spin(cc, (tx,tx), orbspin)
+        return spatial2spin((tx,tx), orbspin, kconserv)
     elif isinstance(tx, numpy.ndarray) and tx.ndim == 7:
         # KRCCSD t2 amplitudes
         t2aa = tx - tx.transpose(0,1,2,4,3,5,6)
-        return spatial2spin(cc, (t2aa,tx,t2aa), orbspin)
+        return spatial2spin((t2aa,tx,t2aa), orbspin, kconserv)
     elif len(tx) == 2:  # KUCCSD t1
         t1a, t1b = tx
         nocc_a, nvir_a = t1a.shape[1:]
@@ -232,13 +232,6 @@ def spatial2spin(cc, tx, orbspin=None):
     else:  # KUCCSD t2
         t2aa, t2ab, t2bb = tx
         nocc_a, nocc_b, nvir_a, nvir_b = t2ab.shape[3:]
-
-    if orbspin is None:
-        if hasattr(cc.mo_coeff[0], 'orbspin'):
-            orbspin = [mo.orbspin for mo in cc.mo_coeff]
-        if orbspin is not None:
-            orbspin = [orbspin[k][idx]
-                       for k, idx in enumerate(cc.get_frozen_mask())]
 
     nkpts = len(orbspin)
     nocc = nocc_a + nocc_b
@@ -258,7 +251,6 @@ def spatial2spin(cc, tx, orbspin=None):
 
     else:
         t2 = numpy.zeros((nkpts,nkpts,nkpts,nocc**2,nvir**2), dtype=t2aa.dtype)
-        kconserv = kpts_helper.get_kconserv(cc._scf.cell, cc.kpts)
         for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
             kb = kconserv[ki,ka,kj]
             idxoaa = idxoa[ki][:,None] * nocc + idxoa[kj]
@@ -284,25 +276,21 @@ def spatial2spin(cc, tx, orbspin=None):
         t2 = lib.tag_array(t2, orbspin=orbspin)
         return t2
 
-def spin2spatial(cc, tx, orbspin=None):
-    if orbspin is None:
-        if hasattr(cc.mo_coeff[0], 'orbspin'):
-            orbspin = [mo.orbspin for mo in cc.mo_coeff]
-        if orbspin is not None:
-            orbspin = [orbspin[k][idx]
-                       for k, idx in enumerate(cc.get_frozen_mask())]
-
-    nocc_a, nocc_b = cc.nocc
-    nmoa, nmob = cc.nmo
-    nvir_a, nvir_b = nmoa-nocc_a, nmob-nocc_b
-    nocc = nocc_a + nocc_b
-    nvir = nvir_a + nvir_b
+def spin2spatial(tx, orbspin, kconserv):
+    if tx.ndim == 3:  # t1
+        nocc, nvir = tx.shape[1:]
+    else:
+        nocc, nvir = tx.shape[4:6]
     nkpts = len(tx)
 
     idxoa = [numpy.where(orbspin[k][:nocc] == 0)[0] for k in range(nkpts)]
     idxob = [numpy.where(orbspin[k][:nocc] == 1)[0] for k in range(nkpts)]
     idxva = [numpy.where(orbspin[k][nocc:] == 0)[0] for k in range(nkpts)]
     idxvb = [numpy.where(orbspin[k][nocc:] == 1)[0] for k in range(nkpts)]
+    nocc_a = len(idxoa[0])
+    nocc_b = len(idxob[0])
+    nvir_a = len(idxva[0])
+    nvir_b = len(idxvb[0])
 
     if tx.ndim == 3:  # t1
         t1a = numpy.zeros((nkpts,nocc_a,nvir_a), dtype=tx.dtype)
@@ -317,7 +305,6 @@ def spin2spatial(cc, tx, orbspin=None):
         t2ab = numpy.zeros((nkpts,nkpts,nkpts,nocc_a,nocc_b,nvir_a,nvir_b), dtype=tx.dtype)
         t2bb = numpy.zeros((nkpts,nkpts,nkpts,nocc_b,nocc_b,nvir_b,nvir_b), dtype=tx.dtype)
         t2 = tx.reshape(nkpts,nkpts,nkpts,nocc**2,nvir**2)
-        kconserv = kpts_helper.get_kconserv(cc._scf.cell, cc.kpts)
         for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
             kb = kconserv[ki,ka,kj]
             idxoaa = idxoa[ki][:,None] * nocc + idxoa[kj]
@@ -424,8 +411,29 @@ class GCCSD(gccsd.GCCSD):
         t2 = vec[nov:].reshape(nkpts, nkpts, nkpts, nocc, nocc, nvir, nvir)
         return t1, t2
 
-    spatial2spin = spatial2spin
-    spin2spatial = spin2spatial
+    def spatial2spin(self, tx, orbspin=None, kconserv=None):
+        if orbspin is None:
+            if hasattr(self.mo_coeff[0], 'orbspin'):
+                orbspin = [self.mo_coeff[k].orbspin[idx]
+                           for k, idx in enumerate(self.get_frozen_mask())]
+            else:
+                orbspin = numpy.zeros((self.nkpts,self.nmo), dtype=int)
+                orbspin[:,1::2] = 1
+        if kconserv is None:
+            kconserv = kpts_helper.get_kconserv(self._scf.cell, self.kpts)
+        return spatial2spin(tx, orbspin, kconserv)
+
+    def spin2spatial(self, tx, orbspin=None, kconserv=None):
+        if orbspin is None:
+            if hasattr(self.mo_coeff[0], 'orbspin'):
+                orbspin = [self.mo_coeff[k].orbspin[idx]
+                           for k, idx in enumerate(self.get_frozen_mask())]
+            else:
+                orbspin = numpy.zeros((self.nkpts,self.nmo), dtype=int)
+                orbspin[:,1::2] = 1
+        if kconserv is None:
+            kconserv = kpts_helper.get_kconserv(self._scf.cell, self.kpts)
+        return spin2spatial(tx, orbspin, kconserv)
 
     def from_uccsd(self, t1, t2, orbspin=None):
         return self.spatial2spin(t1, orbspin), self.spatial2spin(t2, orbspin)
