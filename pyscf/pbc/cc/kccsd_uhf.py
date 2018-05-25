@@ -145,11 +145,13 @@ def update_amps(cc, t1, t2, eris):
     # eris_ovvo can be accessed constructed with _kccsd_eris_j.ovvo  and  eris._kccsd_eris_k.
     # eris_ovvo = uccsd_eris._kccsd_eris_j.ovvo - uccsd.eris._kccsd_eris_k.ovvo
     #
+    # Note _kccsd_eris_j.ovvo are in physicist's convention, transpose(0,2,1,3,5,4,6)
+    # to change it to chemist's notation which was required by _eri_spin2spatial function.
     # Relation between uccsd_eris integrals and _kccsd_eris_j.ovvo are
-    # uccsd_eris.ovvo, uccsd_eris.ovVO, uccsd_eris.OVvo, uccsd_eris.OVVO = _eri_spin2spatial(_kccsd_eris_j.ovvo, 'ovvo', eris)
+    # uccsd_eris.ovvo, uccsd_eris.ovVO, uccsd_eris.OVvo, uccsd_eris.OVVO = _eri_spin2spatial(_kccsd_eris_j.ovvo.transpose(0,2,1,3,5,4,6), 'ovvo', eris)
     #
     # Relation between uccsd_eris integrals and _kccsd_eris_k.ovvo are
-    # uccsd_eris.ovvo, uccsd_eris.ovVO, uccsd_eris.OVvo, uccsd_eris.OVVO = _eri_spin2spatial(_kccsd_eris_k.ovvo.transpose(0,2,1,3,5,4,6, 'ovvo', eris)
+    # uccsd_eris.ovvo, uccsd_eris.ovVO, uccsd_eris.OVvo, uccsd_eris.OVVO = _eri_spin2spatial(_kccsd_eris_k.ovvo.transpose(0,2,1,3,5,4,6), 'ovvo', eris)
     #
     # Similar transformation can be found for eris_oovo, eris_vvvo below.
 
