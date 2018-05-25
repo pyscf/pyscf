@@ -289,7 +289,7 @@ def tril_product(*iterables, **kwds):
         Specifying no `tril_idx` is equivalent to just a cartesian product.
 
         >>> list(tril_product(range(2), repeat=2))
-        [(0, 0), (0, 0), (0, 1), (0, 1), (1, 0), (1, 0), (1, 1), (1, 1)]
+        [(0, 0), (0, 1), (1, 0), (1, 1)]
 
         We can specify only sub-indices to satisfy a lower-triangular form:
 
@@ -314,6 +314,7 @@ def tril_product(*iterables, **kwds):
     for tup in itertools.product(*iterables, repeat=repeat):
         if ntril_idx == 0:
             yield tup
+            continue
 
         if all([tup[tril_idx[i]] >= tup[tril_idx[i+1]] for i in range(ntril_idx-1)]):
             yield tup
