@@ -187,6 +187,7 @@ def update_amps(cc, t1, t2, eris):
     eris_ovvo = np.zeros(shape=(nkpts, nkpts, nkpts, nocc, nvir, nvir, nocc), dtype=t2.dtype)
     eris_oovo = np.zeros(shape=(nkpts, nkpts, nkpts, nocc, nocc, nvir, nocc), dtype=t2.dtype)
     eris_vvvo = np.zeros(shape=(nkpts, nkpts, nkpts, nvir, nvir, nvir, nocc), dtype=t2.dtype)
+    eris_oovv = eris.oovv
     for km, kb, ke in kpts_helper.loop_kkk(nkpts):
         kj = kconserv[km, ke, kb]
         # <mb||je> -> -<mb||ej>
@@ -221,6 +222,17 @@ def update_amps(cc, t1, t2, eris):
         Ht1b[ka] += einsum('ie,ae->ia', t1b[ka], FVV_[ka])
         Ht1a[ka] -= einsum('ma,mi->ia', t1a[ka], Foo_[ka])
         Ht1b[ka] -= einsum('ma,mi->ia', t1b[ka], FOO_[ka])
+
+        for kn in range(nkpts):
+            # ka == ki; km == kf == kn
+            Ht1a[ka] += -1. * einsum('nf,niaf->ia', t1a[kn], uccsd_eris.oovv[kn, ka, ka])
+            Ht1a[ka] +=       einsum('nf,fnia->ia', t1a[kn], uccsd_eris.voov[kn, kn, ka])
+            Ht1a[ka] +=       einsum('NF,FNia->ia', t1b[kn], uccsd_eris.VOov[kn, kn, ka])
+
+            Ht1b[ka] += -1. * einsum('NF,NIAF->IA', t1b[kn], uccsd_eris.OOVV[kn, ka, ka])
+            Ht1b[ka] +=       einsum('NF,FNIA->IA', t1b[kn], uccsd_eris.VOOV[kn, kn, ka])
+            Ht1b[ka] +=       einsum('nf,fnIA->IA', t1a[kn], uccsd_eris.voOV[kn, kn, ka])
+
     t1new += kccsd.spatial2spin((Ht1a, Ht1b), orbspin, kconserv)
 
     # T2 equation
