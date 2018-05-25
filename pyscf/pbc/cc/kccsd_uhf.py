@@ -99,6 +99,9 @@ def update_amps(cc, t1, t2, eris):
     #   can be accessed vira uccsd_eris._kccsd_eris_k
     #Wovvo_J, Wovvo_K = kuhf_cc_Wovvo(cc, kccsd.spin2spatial(t1, orbspin, kconserv),
     #                       kccsd.spin2spatial(t2, orbspin, kconserv), uccsd_eris)
+    # * transpose(0,2,1,3,5,4,6) to transform the tensor to chemist's
+    #   convention,  function _eri_spin2spatial only supports spin-integral
+    #   tensor in chemist's convention
     Wovvo_J = imdk.cc_Wovvo(cc, t1, t2, uccsd_eris._kccsd_eris_j).transpose(0,2,1,3,5,4,6)
     Wovvo_K = imdk.cc_Wovvo(cc, t1, t2, uccsd_eris._kccsd_eris_k).transpose(0,2,1,3,5,4,6)
     assert(abs(Wovvo_J - Wovvo_K - Wovvo.transpose(0,2,1,3,5,4,6)).max())
@@ -112,7 +115,7 @@ def update_amps(cc, t1, t2, eris):
     Wovvo_J_, WovVO_J_, WOVvo_J_, WOVVO_J_, WoVVo_J_, WOvvO_J_ = uccsd_Wovvo_J
     Wovvo_K_, WovVO_K_, WOVvo_K_, WOVVO_K_, WoVVo_K_, WOvvO_K_ = uccsd_Wovvo_K
 
-    # Similar transformation can be applied on the spin-orbital Woooo tensor
+    # Similar transformation can be applied on the spin-orbital Woooo and Wvvvv tensors.
     # Many of UCCSD Woooo J and K tensors are equivalent by using permutation symmetry.
     # The number of unique tensors should be 3.
     Woooo_J = imdk.cc_Woooo(cc, t1, t2, uccsd_eris._kccsd_eris_j).transpose(0,2,1,3,5,4,6)
