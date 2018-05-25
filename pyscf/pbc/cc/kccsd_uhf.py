@@ -30,6 +30,7 @@ from pyscf.pbc import scf
 from pyscf.cc import uccsd
 from pyscf.pbc.lib import kpts_helper
 from pyscf import __config__
+from pyscf.pbc.cc import kintermediates_uhf
 
 einsum = lib.einsum
 
@@ -40,8 +41,8 @@ def update_amps(cc, t1, t2, eris):
     time0 = time.clock(), time.time()
     log = logger.Logger(cc.stdout, cc.verbose)
 
-    t1a, t1b = t1
-    t2aa, t2ab, t2bb = t2
+    t1a, t1b = uccsd_t1 = t1
+    t2aa, t2ab, t2bb = uccsd_t2 = t2
     Ht1a = np.zeros_like(t1a)
     Ht1b = np.zeros_like(t1b)
     Ht2aa = np.zeros_like(t2aa)
@@ -83,48 +84,95 @@ def update_amps(cc, t1, t2, eris):
     # lower-case o/v stand for alpha, upper-case O/V stand for beta. Fvv is
     # the alpha part of Fock virtual-virtual block, FVV is beta part of Fock
     # virtual-virtual block.
-    Fvv_, FVV_ = _eri_spin2spatial(imdk.cc_Fvv(cc, t1, t2, eris), 'vv', uccsd_eris)
-    Foo_, FOO_ = _eri_spin2spatial(imdk.cc_Foo(cc, t1, t2, eris), 'oo', uccsd_eris)
-    Fov_, FOV_ = _eri_spin2spatial(imdk.cc_Fov(cc, t1, t2, eris), 'ov', uccsd_eris)
-    Woooo = imdk.cc_Woooo(cc, t1, t2, eris)
-    Wvvvv = imdk.cc_Wvvvv(cc, t1, t2, eris)
-    Wovvo = imdk.cc_Wovvo(cc, t1, t2, eris)
+    #Fvv_, FVV_ = _eri_spin2spatial(imdk.cc_Fvv(cc, t1, t2, eris), 'vv', uccsd_eris)
+    #Foo_, FOO_ = _eri_spin2spatial(imdk.cc_Foo(cc, t1, t2, eris), 'oo', uccsd_eris)
+    #Fov_, FOV_ = _eri_spin2spatial(imdk.cc_Fov(cc, t1, t2, eris), 'ov', uccsd_eris)
+    Fvv_, FVV_ = kintermediates_uhf.cc_Fvv(cc, uccsd_t1, uccsd_t2, uccsd_eris)
+    Foo_, FOO_ = kintermediates_uhf.cc_Foo(cc, uccsd_t1, uccsd_t2, uccsd_eris)
+    Fov_, FOV_ = kintermediates_uhf.cc_Fov(cc, uccsd_t1, uccsd_t2, uccsd_eris)
 
-    # * Use spin2spatial functiont to transform gccsd tensor to uccsd tensors
-    #   Pass uccsd_eris to kuhf_cc_Wovvo, in which the anti-symmetrized
-    #   gccsd.eris spin-orbital tensors can be accessed via uccsd_eris._kccsd_eris.
-    # * cc_Wovvo function should return two types of ovvo intermediates: Wovvo_J and Wovvo_K
-    #   The J part of the gccsd.eris spin-orbital tensors can be accessed via
-    #   uccsd_eris._kccsd_eris_j. The K part of gccsd.eris spin-orbital tensor
-    #   can be accessed vira uccsd_eris._kccsd_eris_k
-    #Wovvo_J, Wovvo_K = kuhf_cc_Wovvo(cc, kccsd.spin2spatial(t1, orbspin, kconserv),
-    #                       kccsd.spin2spatial(t2, orbspin, kconserv), uccsd_eris)
-    # * transpose(0,2,1,3,5,4,6) to transform the tensor to chemist's
-    #   convention,  function _eri_spin2spatial only supports spin-integral
-    #   tensor in chemist's convention
-    Wovvo_J = imdk.cc_Wovvo(cc, t1, t2, uccsd_eris._kccsd_eris_j).transpose(0,2,1,3,5,4,6)
-    Wovvo_K = imdk.cc_Wovvo(cc, t1, t2, uccsd_eris._kccsd_eris_k).transpose(0,2,1,3,5,4,6)
-    assert(abs(Wovvo_J - Wovvo_K - Wovvo.transpose(0,2,1,3,5,4,6)).max())
-
-    uccsd_Wovvo_J = _eri_spin2spatial(Wovvo_J, 'ovvo', uccsd_eris, cross_ab=True)
-    uccsd_Wovvo_K = _eri_spin2spatial(Wovvo_K, 'ovvo', uccsd_eris, cross_ab=True)
-    assert(abs(Wovvo_J - _eri_spatial2spin(uccsd_Wovvo_J, 'ovvo', uccsd_eris, cross_ab=True)).max() < 1e-12)
-    assert(abs(Wovvo_K - _eri_spatial2spin(uccsd_Wovvo_K, 'ovvo', uccsd_eris, cross_ab=True)).max() < 1e-12)
-
-    # The 6 non-zero blocks of the spin-orbital Wovvo tensor are
-    Wovvo_J_, WovVO_J_, WOVvo_J_, WOVVO_J_, WoVVo_J_, WOvvO_J_ = uccsd_Wovvo_J
-    Wovvo_K_, WovVO_K_, WOVvo_K_, WOVVO_K_, WoVVo_K_, WOvvO_K_ = uccsd_Wovvo_K
-
-    # Similar transformation can be applied on the spin-orbital Woooo and Wvvvv tensors.
-    # Many of UCCSD Woooo J and K tensors are equivalent by using permutation symmetry.
-    # The number of unique tensors should be 3.
-    Woooo_J = imdk.cc_Woooo(cc, t1, t2, uccsd_eris._kccsd_eris_j).transpose(0,2,1,3,5,4,6)
-    Woooo_K = imdk.cc_Woooo(cc, t1, t2, uccsd_eris._kccsd_eris_k).transpose(0,2,1,3,5,4,6)
-    assert(abs(Woooo_J - Woooo_K - Woooo.transpose(0,2,1,3,5,4,6)).max())
-    uccsd_Woooo_J = _eri_spin2spatial(Woooo_J, 'oooo', uccsd_eris, cross_ab=True)
-    uccsd_Woooo_K = _eri_spin2spatial(Woooo_K, 'oooo', uccsd_eris, cross_ab=True)
+    # The UCCSD tensor Woooo_J_ or Woooo_K_ are kind of chemist's convention
+    uccsd_Woooo_J, uccsd_Woooo_K = kintermediates_uhf.cc_Woooo(cc, uccsd_t1, uccsd_t2, uccsd_eris)
     Woooo_J_, WooOO_J_, WOOoo_J_, WOOOO_J_, WoOOo_J_, WOooO_J_ = uccsd_Woooo_J
     Woooo_K_, WooOO_K_, WOOoo_K_, WOOOO_K_, WoOOo_K_, WOooO_K_ = uccsd_Woooo_K
+    # * transpose(0,2,1,3,5,4,6) to change back to physicist's convention.
+    #   Check whether the UCCSD tensors are the same to symmetry-allowed blocks
+    #   of spin-integral tensor Woooo
+    Woooo_J = _eri_spatial2spin(uccsd_Woooo_J, 'oooo', uccsd_eris, cross_ab=True).transpose(0,2,1,3,5,4,6)
+    Woooo_K = _eri_spatial2spin(uccsd_Woooo_K, 'oooo', uccsd_eris, cross_ab=True).transpose(0,2,1,3,5,4,6)
+
+    Woooo = imdk.cc_Woooo(cc, t1, t2, eris)  # For testing only
+    assert(abs(Woooo_J - Woooo_K - Woooo).max())
+
+    # The UCCSD tensor Wvvvv_J_ or Wvvvv_K_ are kind of chemist's convention
+    uccsd_Wvvvv_J, uccsd_Wvvvv_K = kintermediates_uhf.cc_Wvvvv(cc, uccsd_t1, uccsd_t2, uccsd_eris)
+    Wvvvv_J_, WvvVV_J_, WVVvv_J_, WVVVV_J_, WvVVv_J_, WVvvV_J_ = uccsd_Wvvvv_J
+    Wvvvv_K_, WvvVV_K_, WVVvv_K_, WVVVV_K_, WvVVv_K_, WVvvV_K_ = uccsd_Wvvvv_K
+    # * transpose(0,2,1,3,5,4,6) to change back to physicist's convention.
+    #   Check whether the UCCSD tensors are the same to symmetry-allowed blocks
+    #   of spin-integral tensor Woooo
+    Wvvvv_J = _eri_spatial2spin(uccsd_Wvvvv_J, 'vvvv', uccsd_eris, cross_ab=True).transpose(0,2,1,3,5,4,6)
+    Wvvvv_K = _eri_spatial2spin(uccsd_Wvvvv_K, 'vvvv', uccsd_eris, cross_ab=True).transpose(0,2,1,3,5,4,6)
+
+    Wvvvv = imdk.cc_Wvvvv(cc, t1, t2, eris)  # For testing only
+    assert(abs(Wvvvv_J - Wvvvv_K - Wvvvv).max())
+
+    # The UCCSD tensor Wvvvv_J_ or Wvvvv_K_ are kind of chemist's convention
+    uccsd_Wovvo_J, uccsd_Wovvo_K = kintermediates_uhf.cc_Wovvo(cc, uccsd_t1, uccsd_t2, uccsd_eris)
+    Wovvo_J_, WovVO_J_, WOVvo_J_, WOVVO_J_, WoVVo_J_, WOvvO_J_ = uccsd_Wovvo_J
+    Wovvo_K_, WovVO_K_, WOVvo_K_, WOVVO_K_, WoVVo_K_, WOvvO_K_ = uccsd_Wovvo_K
+    # * transpose(0,2,1,3,5,4,6) to change back to physicist's convention.
+    #   Check whether the UCCSD tensors are the same to symmetry-allowed blocks
+    #   of spin-integral tensor Woooo
+    Wovvo_J = _eri_spatial2spin(uccsd_Wovvo_J, 'ovvo', uccsd_eris, cross_ab=True).transpose(0,2,1,3,5,4,6)
+    Wovvo_K = _eri_spatial2spin(uccsd_Wovvo_K, 'ovvo', uccsd_eris, cross_ab=True).transpose(0,2,1,3,5,4,6)
+
+    Wovvo = imdk.cc_Wovvo(cc, t1, t2, eris)  # For testing only
+    assert(abs(Wovvo_J - Wovvo_K - Wovvo).max())
+
+#DELETEME    # * Use spin2spatial functiont to transform gccsd tensor to uccsd tensors
+#DELETEME    #   Pass uccsd_eris to kuhf_cc_Wovvo, in which the anti-symmetrized
+#DELETEME    #   gccsd.eris spin-orbital tensors can be accessed via uccsd_eris._kccsd_eris.
+#DELETEME    # * cc_Wovvo function should return two types of ovvo intermediates: Wovvo_J and Wovvo_K
+#DELETEME    #   The J part of the gccsd.eris spin-orbital tensors can be accessed via
+#DELETEME    #   uccsd_eris._kccsd_eris_j. The K part of gccsd.eris spin-orbital tensor
+#DELETEME    #   can be accessed vira uccsd_eris._kccsd_eris_k
+#DELETEME    #Wovvo_J, Wovvo_K = kuhf_cc_Wovvo(cc, kccsd.spin2spatial(t1, orbspin, kconserv),
+#DELETEME    #                       kccsd.spin2spatial(t2, orbspin, kconserv), uccsd_eris)
+#DELETEME    # * transpose(0,2,1,3,5,4,6) to transform the tensor to chemist's
+#DELETEME    #   convention,  function _eri_spin2spatial only supports spin-integral
+#DELETEME    #   tensor in chemist's convention
+#DELETEME    Wovvo_J = imdk.cc_Wovvo(cc, t1, t2, uccsd_eris._kccsd_eris_j).transpose(0,2,1,3,5,4,6)
+#DELETEME    Wovvo_K = imdk.cc_Wovvo(cc, t1, t2, uccsd_eris._kccsd_eris_k).transpose(0,2,1,3,5,4,6)
+#DELETEME    assert(abs(Wovvo_J - Wovvo_K - Wovvo.transpose(0,2,1,3,5,4,6)).max())
+#DELETEME
+#DELETEME    uccsd_Wovvo_J = _eri_spin2spatial(Wovvo_J, 'ovvo', uccsd_eris, cross_ab=True)
+#DELETEME    uccsd_Wovvo_K = _eri_spin2spatial(Wovvo_K, 'ovvo', uccsd_eris, cross_ab=True)
+#DELETEME    assert(abs(Wovvo_J - _eri_spatial2spin(uccsd_Wovvo_J, 'ovvo', uccsd_eris, cross_ab=True)).max() < 1e-12)
+#DELETEME    assert(abs(Wovvo_K - _eri_spatial2spin(uccsd_Wovvo_K, 'ovvo', uccsd_eris, cross_ab=True)).max() < 1e-12)
+#DELETEME
+#DELETEME    # The 6 non-zero blocks of the spin-orbital Wovvo tensor are
+#DELETEME    Wovvo_J_, WovVO_J_, WOVvo_J_, WOVVO_J_, WoVVo_J_, WOvvO_J_ = uccsd_Wovvo_J
+#DELETEME    Wovvo_K_, WovVO_K_, WOVvo_K_, WOVVO_K_, WoVVo_K_, WOvvO_K_ = uccsd_Wovvo_K
+
+#DELETEME    # Similar transformation can be applied on the spin-orbital Woooo and Wvvvv tensors.
+#DELETEME    # Many of UCCSD Woooo J and K tensors are equivalent by using permutation symmetry.
+#DELETEME    # The number of unique tensors should be 3.
+#DELETEME    Woooo_J = imdk.cc_Woooo(cc, t1, t2, uccsd_eris._kccsd_eris_j).transpose(0,2,1,3,5,4,6)
+#DELETEME    Woooo_K = imdk.cc_Woooo(cc, t1, t2, uccsd_eris._kccsd_eris_k).transpose(0,2,1,3,5,4,6)
+#DELETEME    assert(abs(Woooo_J - Woooo_K - Woooo.transpose(0,2,1,3,5,4,6)).max())
+#DELETEME    uccsd_Woooo_J = _eri_spin2spatial(Woooo_J, 'oooo', uccsd_eris, cross_ab=True)
+#DELETEME    uccsd_Woooo_K = _eri_spin2spatial(Woooo_K, 'oooo', uccsd_eris, cross_ab=True)
+#DELETEME    Woooo_J_, WooOO_J_, WOOoo_J_, WOOOO_J_, WoOOo_J_, WOooO_J_ = uccsd_Woooo_J
+#DELETEME    Woooo_K_, WooOO_K_, WOOoo_K_, WOOOO_K_, WoOOo_K_, WOooO_K_ = uccsd_Woooo_K
+
+#DELETEME    Wvvvv_J = imdk.cc_Wvvvv(cc, t1, t2, uccsd_eris._kccsd_eris_j).transpose(0,2,1,3,5,4,6)
+#DELETEME    Wvvvv_K = imdk.cc_Wvvvv(cc, t1, t2, uccsd_eris._kccsd_eris_k).transpose(0,2,1,3,5,4,6)
+#DELETEME    uccsd_Wvvvv_J = _eri_spin2spatial(Wvvvv_J, 'vvvv', uccsd_eris, cross_ab=True)
+#DELETEME    uccsd_Wvvvv_K = _eri_spin2spatial(Wvvvv_K, 'vvvv', uccsd_eris, cross_ab=True)
+#DELETEME    print abs(Wvvvv_J - Wvvvv_K - Wvvvv.transpose(0,2,1,3,5,4,6)).max(), 'vvvv'
+#DELETEME    assert(abs(Wvvvv_J - _eri_spatial2spin(uccsd_Wvvvv_J, 'vvvv', uccsd_eris, cross_ab=True)).max() < 1e-12)
+#DELETEME    assert(abs(Wvvvv_K - _eri_spatial2spin(uccsd_Wvvvv_K, 'vvvv', uccsd_eris, cross_ab=True)).max() < 1e-12)
 
     # Move energy terms to the other side
     for k in range(nkpts):
