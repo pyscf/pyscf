@@ -156,12 +156,13 @@ class GCCSD(ccsd.CCSD):
             self.t1 = np.zeros((nocc,nvir))
             return self.e_corr, self.t1, self.t2
 
-        if eris is None: eris = self.ao2mo(self.mo_coeff)
-        # Initialize orbspin so that we can attach the
+        # Initialize orbspin so that we can attach it to t1, t2
         if not hasattr(self.mo_coeff, 'orbspin'):
             orbspin = scf.ghf.guess_orbspin(self.mo_coeff)
             if not np.any(orbspin == -1):
                 self.mo_coeff = lib.tag_array(self.mo_coeff, orbspin=orbspin)
+        if eris is None: eris = self.ao2mo(self.mo_coeff)
+
         e_corr, self.t1, self.t2 = ccsd.CCSD.ccsd(self, t1, t2, eris)
         if hasattr(eris, 'orbspin') and eris.orbspin is not None:
             self.t1 = lib.tag_array(self.t1, orbspin=eris.orbspin)

@@ -389,10 +389,11 @@ def _make_eris_incore(cc, mo_coeff=None):
     #    raise NotImplementedError('Different occupancies found for different k-points')
 
     if mo_coeff is None:
-        # If mo_coeff is not canonical orbital
-        # TODO does this work for k-points? changed to conjugate.
-        raise NotImplementedError
         mo_coeff = cc.mo_coeff
+    #else:
+    #    # If mo_coeff is not canonical orbital
+    #    # TODO does this work for k-points? changed to conjugate.
+    #    raise NotImplementedError
     nao = mo_coeff[0].shape[0]
     dtype = mo_coeff[0].dtype
 
