@@ -17,6 +17,7 @@
 #          Mario Motta
 #          Yang Gao
 #          Qiming Sun <osirpt.sun@gmail.com>
+#          Jason Yu
 #
 
 import time
@@ -75,6 +76,9 @@ def update_amps(cc, t1, t2, eris):
     Fvv = imdk.cc_Fvv(cc, t1, t2, eris)
     Foo = imdk.cc_Foo(cc, t1, t2, eris)
     Fov = imdk.cc_Fov(cc, t1, t2, eris)
+    # Fvv_, FVV_ = UCCSD_imdk.cc_Fvv(cc, kccsd.spin2spatial(t1, orbspin, kconserv), t2, uccsd_eris)  # MM
+    # Foo_, FOO_ = UCCSD_imdk.cc_Foo(cc, kccsd.spin2spatial(t1, orbspin, kconserv), t2, eris)  # MM
+    # Fov_, FOV_ = UCCSD_imdk.cc_Fov(cc, t1, t2, eris)  # MM
     # Convert to UCCSD tensors and use them below
     # lower-case o/v stand for alpha, upper-case O/V stand for beta. Fvv is
     # the alpha part of Fock virtual-virtual block, FVV is beta part of Fock
@@ -85,10 +89,39 @@ def update_amps(cc, t1, t2, eris):
     Woooo = imdk.cc_Woooo(cc, t1, t2, eris)
     Wvvvv = imdk.cc_Wvvvv(cc, t1, t2, eris)
     Wovvo = imdk.cc_Wovvo(cc, t1, t2, eris)
-    # Convert to UCCSD tensors and use them below
-    #Woooo, WooOO, WOOoo, WOOOO = _eri_spin2spatial(imdk.cc_Woooo(cc, t1, t2, eris), 'oooo', uccsd_eris)
-    #Wvvvv, WvvVV, WVVvv, WVVVV = _eri_spin2spatial(imdk.cc_Wvvvv(cc, t1, t2, eris), 'vvvv', uccsd_eris)
-    #Wovvo, WovVO, WOVvo, WOVVO = _eri_spin2spatial(imdk.cc_Wovvo(cc, t1, t2, eris), 'ovvo', uccsd_eris)
+
+    # * Use spin2spatial functiont to transform gccsd tensor to uccsd tensors
+    #   Pass uccsd_eris to kuhf_cc_Wovvo, in which the anti-symmetrized
+    #   gccsd.eris spin-orbital tensors can be accessed via uccsd_eris._kccsd_eris.
+    # * cc_Wovvo function should return two types of ovvo intermediates: Wovvo_J and Wovvo_K
+    #   The J part of the gccsd.eris spin-orbital tensors can be accessed via
+    #   uccsd_eris._kccsd_eris_j. The K part of gccsd.eris spin-orbital tensor
+    #   can be accessed vira uccsd_eris._kccsd_eris_k
+    #Wovvo_J, Wovvo_K = kuhf_cc_Wovvo(cc, kccsd.spin2spatial(t1, orbspin, kconserv),
+    #                       kccsd.spin2spatial(t2, orbspin, kconserv), uccsd_eris)
+    Wovvo_J = imdk.cc_Wovvo(cc, t1, t2, uccsd_eris._kccsd_eris_j).transpose(0,2,1,3,5,4,6)
+    Wovvo_K = imdk.cc_Wovvo(cc, t1, t2, uccsd_eris._kccsd_eris_k).transpose(0,2,1,3,5,4,6)
+    assert(abs(Wovvo_J - Wovvo_K - Wovvo.transpose(0,2,1,3,5,4,6)).max())
+
+    uccsd_Wovvo_J = _eri_spin2spatial(Wovvo_J, 'ovvo', uccsd_eris, cross_ab=True)
+    uccsd_Wovvo_K = _eri_spin2spatial(Wovvo_K, 'ovvo', uccsd_eris, cross_ab=True)
+    assert(abs(Wovvo_J - _eri_spatial2spin(uccsd_Wovvo_J, 'ovvo', uccsd_eris, cross_ab=True)).max() < 1e-12)
+    assert(abs(Wovvo_K - _eri_spatial2spin(uccsd_Wovvo_K, 'ovvo', uccsd_eris, cross_ab=True)).max() < 1e-12)
+
+    # The 6 non-zero blocks of the spin-orbital Wovvo tensor are
+    Wovvo_J_, WovVO_J_, WOVvo_J_, WOVVO_J_, WoVVo_J_, WOvvO_J_ = uccsd_Wovvo_J
+    Wovvo_K_, WovVO_K_, WOVvo_K_, WOVVO_K_, WoVVo_K_, WOvvO_K_ = uccsd_Wovvo_K
+
+    # Similar transformation can be applied on the spin-orbital Woooo tensor
+    # Many of UCCSD Woooo J and K tensors are equivalent by using permutation symmetry.
+    # The number of unique tensors should be 3.
+    Woooo_J = imdk.cc_Woooo(cc, t1, t2, uccsd_eris._kccsd_eris_j).transpose(0,2,1,3,5,4,6)
+    Woooo_K = imdk.cc_Woooo(cc, t1, t2, uccsd_eris._kccsd_eris_k).transpose(0,2,1,3,5,4,6)
+    assert(abs(Woooo_J - Woooo_K - Woooo.transpose(0,2,1,3,5,4,6)).max())
+    uccsd_Woooo_J = _eri_spin2spatial(Woooo_J, 'oooo', uccsd_eris, cross_ab=True)
+    uccsd_Woooo_K = _eri_spin2spatial(Woooo_K, 'oooo', uccsd_eris, cross_ab=True)
+    Woooo_J_, WooOO_J_, WOOoo_J_, WOOOO_J_, WoOOo_J_, WOooO_J_ = uccsd_Woooo_J
+    Woooo_K_, WooOO_K_, WOOoo_K_, WOOOO_K_, WoOOo_K_, WOooO_K_ = uccsd_Woooo_K
 
     # Move energy terms to the other side
     for k in range(nkpts):
@@ -106,6 +139,17 @@ def update_amps(cc, t1, t2, eris):
     # integrals are in physics notation
     kconserv = kpts_helper.get_kconserv(cc._scf.cell, cc.kpts)
 
+    # eris_ovvo can be accessed constructed with _kccsd_eris_j.ovvo  and  eris._kccsd_eris_k.
+    # eris_ovvo = uccsd_eris._kccsd_eris_j.ovvo - uccsd.eris._kccsd_eris_k.ovvo
+    #
+    # Relation between uccsd_eris integrals and _kccsd_eris_j.ovvo are
+    # uccsd_eris.ovvo, uccsd_eris.ovVO, uccsd_eris.OVvo, uccsd_eris.OVVO = _eri_spin2spatial(_kccsd_eris_j.ovvo, 'ovvo', eris)
+    #
+    # Relation between uccsd_eris integrals and _kccsd_eris_k.ovvo are
+    # uccsd_eris.ovvo, uccsd_eris.ovVO, uccsd_eris.OVvo, uccsd_eris.OVVO = _eri_spin2spatial(_kccsd_eris_k.ovvo.transpose(0,2,1,3,5,4,6, 'ovvo', eris)
+    #
+    # Similar transformation can be found for eris_oovo, eris_vvvo below.
+
     eris_ovvo = np.zeros(shape=(nkpts, nkpts, nkpts, nocc, nvir, nvir, nocc), dtype=t2.dtype)
     eris_oovo = np.zeros(shape=(nkpts, nkpts, nkpts, nocc, nocc, nvir, nocc), dtype=t2.dtype)
     eris_vvvo = np.zeros(shape=(nkpts, nkpts, nkpts, nvir, nvir, nvir, nocc), dtype=t2.dtype)
@@ -120,11 +164,6 @@ def update_amps(cc, t1, t2, eris):
         # let kj = ka as a dummy variable
         kj = kconserv[km, ke, kb]
         eris_vvvo[ke, kj, kb] = -eris.ovvv[km, kb, ke].transpose(2, 3, 1, 0).conj()
-
-    # Convert to UCCSD tensors and use them below
-    #eris_ovvo, eris_ovVO, eris_OVvo, eris_OVVO = _eri_spin2spatial(eris_ovvo, 'ovvo', uccsd_eris)
-    #eris_oovo, eris_ooVO, eris_OOvo, eris_OOVO = _eri_spin2spatial(eris_oovo, 'oovo', uccsd_eris)
-    #eris_vvvo, eris_vvVO, eris_VVvo, eris_VVVO = _eri_spin2spatial(eris_vvvo, 'vvvo', uccsd_eris)
 
     # T1 equation
     t1new = np.zeros(shape=t1.shape, dtype=t1.dtype)
@@ -360,6 +399,8 @@ def vector_to_amplitudes(vec, nmo, nocc, nkpts=1):
     t2bb = vec.reshape(nkpts,nkpts,nkpts,noccb,noccb,nvirb,nvirb)
     return (t1a,t1b), (t2aa,t2ab,t2bb)
 
+#def contract_vvvv(cc, eris, tau
+
 
 class KUCCSD(uccsd.UCCSD):
 
@@ -461,6 +502,7 @@ UCCSD = KUCCSD
 
 
 def _make_eris_incore(cc, mo_coeff=None):
+    import copy
     from pyscf.pbc import scf
     from pyscf.pbc.cc import kccsd
     cput0 = (time.clock(), time.time())
@@ -511,6 +553,7 @@ def _make_eris_incore(cc, mo_coeff=None):
         eri_kpt[:, (orbspin[kr][:, None] != orbspin[ks]).ravel()] = 0
         eri_kpt = eri_kpt.reshape(nmo, nmo, nmo, nmo)
         eri[kp, kq, kr] = eri_kpt
+    # In chemist's notation
     oooo = eri[:, :, :, :nocc, :nocc, :nocc, :nocc] / nkpts
     ooov = eri[:, :, :, :nocc, :nocc, :nocc, nocc:] / nkpts
     ovoo = eri[:, :, :, :nocc, nocc:, :nocc, :nocc] / nkpts
@@ -519,6 +562,7 @@ def _make_eris_incore(cc, mo_coeff=None):
     ovvv = eri[:, :, :, :nocc, nocc:, nocc:, nocc:] / nkpts
     voov = eri[:, :, :, nocc:, :nocc, :nocc, nocc:] / nkpts
     vovv = eri[:, :, :, nocc:, :nocc, nocc:, nocc:] / nkpts
+    vvov = eri[:, :, :, nocc:, nocc:, :nocc, nocc:] / nkpts
     vvvv = eri[:, :, :, nocc:, nocc:, nocc:, nocc:] / nkpts
 
     eris.oooo, eris.ooOO, eris.OOoo, eris.OOOO = _eri_spin2spatial(oooo, 'oooo', eris)
@@ -530,10 +574,30 @@ def _make_eris_incore(cc, mo_coeff=None):
     eris.vovv, eris.voVV, eris.VOvv, eris.VOVV = _eri_spin2spatial(vovv, 'vovv', eris)
     eris.vvvv, eris.vvVV, eris.VVvv, eris.VVVV = _eri_spin2spatial(vvvv, 'vvvv', eris)
 
+    # For testing only
+    eris._kccsd_eris_j = copy.copy(_kccsd_eris)
+    eris._kccsd_eris_j.oooo = oooo.transpose(0,2,1,3,5,4,6)
+    eris._kccsd_eris_j.ooov = ooov.transpose(0,2,1,3,5,4,6)
+    eris._kccsd_eris_j.oovo = ovoo.transpose(0,2,1,3,5,4,6)
+    eris._kccsd_eris_j.ovov = oovv.transpose(0,2,1,3,5,4,6)
+    eris._kccsd_eris_j.oovv = ovov.transpose(0,2,1,3,5,4,6)
+    eris._kccsd_eris_j.ovvv = ovvv.transpose(0,2,1,3,5,4,6)
+    eris._kccsd_eris_j.voov = voov.transpose(0,2,1,3,5,4,6)
+    eris._kccsd_eris_j.vvvv = vvvv.transpose(0,2,1,3,5,4,6)
+    eris._kccsd_eris_k = copy.copy(_kccsd_eris)
+    eris._kccsd_eris_k.oooo = oooo.transpose(2,1,0,5,4,3,6).transpose(0,2,1,3,5,4,6)
+    eris._kccsd_eris_k.ooov = ooov.transpose(2,1,0,5,4,3,6).transpose(0,2,1,3,5,4,6)
+    eris._kccsd_eris_k.oovo = ovoo.transpose(2,1,0,5,4,3,6).transpose(0,2,1,3,5,4,6)
+    eris._kccsd_eris_k.ovov = voov.transpose(2,1,0,5,4,3,6).transpose(0,2,1,3,5,4,6)
+    eris._kccsd_eris_k.oovv = ovov.transpose(2,1,0,5,4,3,6).transpose(0,2,1,3,5,4,6)
+    eris._kccsd_eris_k.ovvv = vvov.transpose(2,1,0,5,4,3,6).transpose(0,2,1,3,5,4,6)
+    eris._kccsd_eris_k.voov = oovv.transpose(2,1,0,5,4,3,6).transpose(0,2,1,3,5,4,6)
+    eris._kccsd_eris_k.vvvv = vvvv.transpose(2,1,0,5,4,3,6).transpose(0,2,1,3,5,4,6)
+
     log.timer('CCSD integral transformation', *cput0)
     return eris
 
-def _eri_spin2spatial(eri_spin, vvvv, eris):
+def _eri_spin2spatial(chemist_eri_spin, vvvv, eris, cross_ab=False):
     orbspin = eris._kccsd_eris.orbspin
     nocc_a, nocc_b = eris.nocc
     nocc = nocc_a + nocc_b
@@ -558,8 +622,8 @@ def _eri_spin2spatial(eri_spin, vvvv, eris):
         fa = np.zeros((nkpts,len(idx1a[0]),len(idx2a[0])), dtype=np.complex128)
         fb = np.zeros((nkpts,len(idx1b[0]),len(idx2b[0])), dtype=np.complex128)
         for k in range(nkpts):
-            fa[k] = eri_spin[k, idx1a[k][:,None],idx2a[k]]
-            fb[k] = eri_spin[k, idx1b[k][:,None],idx2b[k]]
+            fa[k] = chemist_eri_spin[k, idx1a[k][:,None],idx2a[k]]
+            fb[k] = chemist_eri_spin[k, idx1b[k][:,None],idx2b[k]]
         return fa, fb
 
     idx1a, idx1b = select_idx(vvvv[0])
@@ -571,16 +635,25 @@ def _eri_spin2spatial(eri_spin, vvvv, eris):
     eri_aabb = np.zeros((nkpts,nkpts,nkpts,len(idx1a[0]),len(idx2a[0]),len(idx3b[0]),len(idx4b[0])), dtype=np.complex128)
     eri_bbaa = np.zeros((nkpts,nkpts,nkpts,len(idx1b[0]),len(idx2b[0]),len(idx3a[0]),len(idx4a[0])), dtype=np.complex128)
     eri_bbbb = np.zeros((nkpts,nkpts,nkpts,len(idx1b[0]),len(idx2b[0]),len(idx3b[0]),len(idx4b[0])), dtype=np.complex128)
+    if cross_ab:
+        eri_abba = np.zeros((nkpts,nkpts,nkpts,len(idx1a[0]),len(idx2b[0]),len(idx3b[0]),len(idx4a[0])), dtype=np.complex128)
+        eri_baab = np.zeros((nkpts,nkpts,nkpts,len(idx1b[0]),len(idx2a[0]),len(idx3a[0]),len(idx4b[0])), dtype=np.complex128)
     kconserv = kpts_helper.get_kconserv(eris.cell, eris.kpts)
     for ki, kj, kk in kpts_helper.loop_kkk(nkpts):
-        kl = kconserv[ki, kk, kj]
-        eri_aaaa[ki,kj,kk] = eri_spin[ki,kj,kk, idx1a[ki][:,None,None,None],idx2a[kj][:,None,None],idx3a[kk][:,None],idx4a[kl]]
-        eri_aabb[ki,kj,kk] = eri_spin[ki,kj,kk, idx1a[ki][:,None,None,None],idx2a[kj][:,None,None],idx3b[kk][:,None],idx4b[kl]]
-        eri_bbaa[ki,kj,kk] = eri_spin[ki,kj,kk, idx1b[ki][:,None,None,None],idx2b[kj][:,None,None],idx3a[kk][:,None],idx4a[kl]]
-        eri_bbbb[ki,kj,kk] = eri_spin[ki,kj,kk, idx1b[ki][:,None,None,None],idx2b[kj][:,None,None],idx3b[kk][:,None],idx4b[kl]]
-    return eri_aaaa, eri_aabb, eri_bbaa, eri_bbbb
+        kl = kconserv[ki, kj, kk]
+        eri_aaaa[ki,kj,kk] = chemist_eri_spin[ki,kj,kk, idx1a[ki][:,None,None,None],idx2a[kj][:,None,None],idx3a[kk][:,None],idx4a[kl]]
+        eri_aabb[ki,kj,kk] = chemist_eri_spin[ki,kj,kk, idx1a[ki][:,None,None,None],idx2a[kj][:,None,None],idx3b[kk][:,None],idx4b[kl]]
+        eri_bbaa[ki,kj,kk] = chemist_eri_spin[ki,kj,kk, idx1b[ki][:,None,None,None],idx2b[kj][:,None,None],idx3a[kk][:,None],idx4a[kl]]
+        eri_bbbb[ki,kj,kk] = chemist_eri_spin[ki,kj,kk, idx1b[ki][:,None,None,None],idx2b[kj][:,None,None],idx3b[kk][:,None],idx4b[kl]]
+        if cross_ab:
+            eri_abba[ki,kj,kk] = chemist_eri_spin[ki,kj,kk, idx1a[ki][:,None,None,None],idx2b[kj][:,None,None],idx3b[kk][:,None],idx4a[kl]]
+            eri_baab[ki,kj,kk] = chemist_eri_spin[ki,kj,kk, idx1b[ki][:,None,None,None],idx2a[kj][:,None,None],idx3a[kk][:,None],idx4b[kl]]
+    if cross_ab:
+        return eri_aaaa, eri_aabb, eri_bbaa, eri_bbbb, eri_abba, eri_baab
+    else:
+        return eri_aaaa, eri_aabb, eri_bbaa, eri_bbbb
 
-def _eri_spatial2spin(eri_aa_ab_ba_bb, vvvv, eris):
+def _eri_spatial2spin(eri_aa_ab_ba_bb, vvvv, eris, cross_ab=False):
     orbspin = eris._kccsd_eris.orbspin
     nocc_a, nocc_b = eris.nocc
     nocc = nocc_a + nocc_b
@@ -614,18 +687,24 @@ def _eri_spatial2spin(eri_aa_ab_ba_bb, vvvv, eris):
     idx3a, idx3b = select_idx(vvvv[2])
     idx4a, idx4b = select_idx(vvvv[3])
 
-    eri_aaaa, eri_aabb, eri_bbaa, eri_bbbb = eri_aa_ab_ba_bb
+    if cross_ab:
+        eri_aaaa, eri_aabb, eri_bbaa, eri_bbbb, eri_abba, eri_baab = eri_aa_ab_ba_bb
+    else:
+        eri_aaaa, eri_aabb, eri_bbaa, eri_bbbb = eri_aa_ab_ba_bb
     eri = np.zeros((nkpts,nkpts,nkpts, len(idx1a[0])+len(idx1b[0]),
                     len(idx2a[0])+len(idx2b[0]),
                     len(idx3a[0])+len(idx3b[0]),
                     len(idx4a[0])+len(idx4b[0])), dtype=np.complex128)
     kconserv = kpts_helper.get_kconserv(eris.cell, eris.kpts)
     for ki, kj, kk in kpts_helper.loop_kkk(nkpts):
-        kl = kconserv[ki, kk, kj]
+        kl = kconserv[ki, kj, kk]
         eri[ki,kj,kk, idx1a[ki][:,None,None,None],idx2a[kj][:,None,None],idx3a[kk][:,None],idx4a[kl]] = eri_aaaa[ki,kj,kk]
         eri[ki,kj,kk, idx1a[ki][:,None,None,None],idx2a[kj][:,None,None],idx3b[kk][:,None],idx4b[kl]] = eri_aabb[ki,kj,kk]
         eri[ki,kj,kk, idx1b[ki][:,None,None,None],idx2b[kj][:,None,None],idx3a[kk][:,None],idx4a[kl]] = eri_bbaa[ki,kj,kk]
         eri[ki,kj,kk, idx1b[ki][:,None,None,None],idx2b[kj][:,None,None],idx3b[kk][:,None],idx4b[kl]] = eri_bbbb[ki,kj,kk]
+        if cross_ab:
+            eri[ki,kj,kk, idx1a[ki][:,None,None,None],idx2b[kj][:,None,None],idx3b[kk][:,None],idx4a[kl]] = eri_abba[ki,kj,kk]
+            eri[ki,kj,kk, idx1b[ki][:,None,None,None],idx2a[kj][:,None,None],idx3a[kk][:,None],idx4b[kl]] = eri_baab[ki,kj,kk]
     return eri
 
 
@@ -699,7 +778,6 @@ if __name__ == '__main__':
         t2 = (t2aa, t2ab, t2bb)
         return t1, t2
 
-    import time
     mycc = KUCCSD(kmf)
     eris = mycc.ao2mo()
     t1, t2 = rand_t1_t2(mycc)
