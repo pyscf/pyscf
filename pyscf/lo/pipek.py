@@ -58,14 +58,14 @@ def atomic_pops(mol, mo_coeff, method='meta_lowdin'):
 
     if method.lower() == 'mulliken':
         for i, (b0, b1, p0, p1) in enumerate(mol.offset_nr_by_atom()):
-            csc = reduce(numpy.dot, (mo_coeff[p0:p1].T, s[p0:p1], mo_coeff))
-            proj[i] = (csc + csc.T) * .5
+            csc = reduce(numpy.dot, (mo_coeff[p0:p1].conj().T, s[p0:p1], mo_coeff))
+            proj[i] = (csc + csc.conj().T) * .5
 
     elif method.lower() in ('lowdin', 'meta_lowdin'):
         c = orth.restore_ao_character(mol, 'ANO')
-        csc = reduce(lib.dot, (mo_coeff.T, s, orth.orth_ao(mol, method, c, s=s)))
+        csc = reduce(lib.dot, (mo_coeff.conj().T, s, orth.orth_ao(mol, method, c, s=s)))
         for i, (b0, b1, p0, p1) in enumerate(mol.offset_nr_by_atom()):
-            proj[i] = numpy.dot(csc[:,p0:p1], csc[:,p0:p1].T)
+            proj[i] = numpy.dot(csc[:,p0:p1], csc[:,p0:p1].conj().T)
     else:
         raise KeyError('method = %s' % method)
 
@@ -91,11 +91,11 @@ class PipekMezey(boys.Boys):
         pop = self.atomic_pops(self.mol, mo_coeff, self.pop_method)
         if self.exponent == 2:
             g0 = numpy.einsum('xii,xip->pi', pop, pop)
-            g = -self.pack_uniq_var(g0-g0.T) * 2
+            g = -self.pack_uniq_var(g0-g0.conj().T) * 2
         elif self.exponent == 4:
             pop3 = numpy.einsum('xii->xi', pop)**3
             g0 = numpy.einsum('xi,xip->pi', pop3, pop)
-            g = -self.pack_uniq_var(g0-g0.T) * 4
+            g = -self.pack_uniq_var(g0-g0.conj().T) * 4
         else:
             raise NotImplementedError('exponent %s' % self.exponent)
 
@@ -106,22 +106,22 @@ class PipekMezey(boys.Boys):
         h_diag+= numpy.einsum('xip,xpi->pi', pop, pop) * 2
         h_diag = -self.pack_uniq_var(h_diag) * 2
 
-        g0 = g0 + g0.T
+        g0 = g0 + g0.conj().T
         if self.exponent == 2:
             def h_op(x):
                 x = self.unpack_uniq_var(x)
                 norb = x.shape[0]
-                hx = lib.dot(x.T, g0.T)
+                hx = lib.dot(x.T, g0.T).conj()
                 hx+= numpy.einsum('xip,xi->pi', pop, numpy.einsum('qi,xiq->xi', x, pop)) * 2
                 hx-= numpy.einsum('xpp,xip->pi', pop,
                                   lib.dot(pop.reshape(-1,norb), x).reshape(-1,norb,norb)) * 2
                 hx-= numpy.einsum('xip,xp->pi', pop, numpy.einsum('qp,xpq->xp', x, pop)) * 2
-                return -self.pack_uniq_var(hx-hx.T)
+                return -self.pack_uniq_var(hx-hx.conj().T)
         else:
             def h_op(x):
                 x = self.unpack_uniq_var(x)
                 norb = x.shape[0]
-                hx = lib.dot(x.T, g0.T) * 2
+                hx = lib.dot(x.T, g0.T).conj() * 2
                 pop2 = numpy.einsum('xii->xi', pop)**2
                 pop3 = numpy.einsum('xii->xi', pop)**3
                 tmp = numpy.einsum('qi,xiq->xi', x, pop) * pop2
@@ -130,7 +130,7 @@ class PipekMezey(boys.Boys):
                                   lib.dot(pop.reshape(-1,norb), x).reshape(-1,norb,norb)) * 4
                 tmp = numpy.einsum('qp,xpq->xp', x, pop) * pop2
                 hx-= numpy.einsum('xip,xp->pi', pop, tmp) * 12
-                return -self.pack_uniq_var(hx-hx.T)
+                return -self.pack_uniq_var(hx-hx.conj().T)
 
         return g, h_op, h_diag
 
@@ -140,11 +140,11 @@ class PipekMezey(boys.Boys):
         pop = self.atomic_pops(self.mol, mo_coeff, self.pop_method)
         if self.exponent == 2:
             g0 = numpy.einsum('xii,xip->pi', pop, pop)
-            g = -self.pack_uniq_var(g0-g0.T) * 2
+            g = -self.pack_uniq_var(g0-g0.conj().T) * 2
         else:
             pop3 = numpy.einsum('xii->xi', pop)**3
             g0 = numpy.einsum('xi,xip->pi', pop3, pop)
-            g = -self.pack_uniq_var(g0-g0.T) * 4
+            g = -self.pack_uniq_var(g0-g0.conj().T) * 4
         return g
 
     def cost_function(self, u=None):
