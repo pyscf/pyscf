@@ -33,6 +33,7 @@ from pyscf.pbc.cc import kintermediates_rhf as imdk
 from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM
 from pyscf.lib import linalg_helper
 from pyscf.pbc.lib import kpts_helper
+from pyscf.pbc.lib.kpts_helper import member, gamma_point
 from pyscf import __config__
 
 #einsum = np.einsum
@@ -144,26 +145,13 @@ def update_amps(cc, t1, t2, eris):
     fimd = None
     time1 = log.timer_debug1('t2 oooo', *time1)
 
-    mem_now = lib.current_memory()[0]
-    if (nvir**4*nkpts**3)*16/1e6 + mem_now < cc.max_memory*.9:
-        Wvvvv = imdk.cc_Wvvvv(t1, t2, eris, kconserv)
-    else:
-        fimd = lib.H5TmpFile()
-        Wvvvv = fimd.create_dataset('vvvv', (nkpts,nkpts,nkpts,nvir,nvir,nvir,nvir), t1.dtype.char)
-        Wvvvv = imdk.cc_Wvvvv(t1, t2, eris, kconserv, Wvvvv)
+    # einsum('abcd,ijcd->ijab', Wvvvv, tau)
+    add_vvvv_(cc, t2new, t1, t2, eris)
 
     for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
         kb = kconserv[ki,ka,kj]
-        t2new_tmp = np.zeros((nocc,nocc,nvir,nvir), dtype=t2.dtype)
-        for kc in range(nkpts):
-            kd = kconserv[ka,kc,kb]
-            tau_term = t2[ki,kj,kc].copy()
-            if ki == kc and kj == kd:
-                tau_term += einsum('ic,jd->ijcd',t1[ki],t1[kj])
-            t2new_tmp += 0.5 * einsum('abcd,ijcd->ijab',Wvvvv[ka,kb,kc],tau_term)
 
-        t2new_tmp += einsum('ac,ijcb->ijab',Lvv[ka],t2[ki,kj,ka])
-
+        t2new_tmp  = einsum('ac,ijcb->ijab', Lvv[ka],t2[ki,kj,ka])
         t2new_tmp += einsum('ki,kjab->ijab',-Loo[ki],t2[ki,kj,ka])
 
         kc = kconserv[ka,ki,kb]
@@ -259,6 +247,73 @@ def energy(cc, t1, t2, eris):
     return e.real
 
 
+def add_vvvv_(cc, Ht2, t1, t2, eris):
+    nocc = cc.nocc
+    nmo = cc.nmo
+    nvir = nmo - nocc
+    nkpts = cc.nkpts
+    kconserv = cc.khelper.kconserv
+
+    mem_now = lib.current_memory()[0]
+    if cc.direct and hasattr(eris, 'Lpv'):
+        def get_Wvvvv(ka, kb, kc):
+            kd = kconserv[ka,kc,kb]
+            Lbd = (eris.Lpv[kb,kd,:,nocc:] -
+                   lib.einsum('Lkd,kb->Lbd', eris.Lpv[kb,kd,:,:nocc], t1[kb]))
+            Wvvvv = lib.einsum('Lac,Lbd->abcd', eris.Lpv[ka,kc,:,nocc:], Lbd)
+            Lbd = None
+            kcbd = lib.einsum('Lkc,Lbd->kcbd', eris.Lpv[ka,kc,:,:nocc],
+                              eris.Lpv[kb,kd,:,nocc:])
+            Wvvvv -= einsum('kcbd,ka->abcd', kcbd, t1[ka])
+            Wvvvv *= (1./nkpts)
+            return Wvvvv
+
+    elif (nvir**4*nkpts**3)*16/1e6 + mem_now < cc.max_memory*.9:
+        _Wvvvv = imdk.cc_Wvvvv(t1, t2, eris, kconserv)
+        def get_Wvvvv(ka, kb, kc):
+            return _Wvvvv[ka,kb,kc]
+    else:
+        fimd = lib.H5TmpFile()
+        _Wvvvv = fimd.create_dataset('vvvv', (nkpts,nkpts,nkpts,nvir,nvir,nvir,nvir), t1.dtype.char)
+        _Wvvvv = imdk.cc_Wvvvv(t1, t2, eris, kconserv, Wvvvv)
+        def get_Wvvvv(ka, kb, kc):
+            return _Wvvvv[ka,kb,kc]
+
+    #:Ps = kconserve_pmatrix(cc.nkpts, cc.khelper.kconserv)
+    #:Wvvvv = einsum('xyzakcd,ykb->xyzabcd', eris.vovv, -t1)
+    #:Wvvvv = Wvvvv + einsum('xyzabcd,xyzw->yxwbadc', Wvvvv, Ps)
+    #:Wvvvv += eris.vvvv
+    #:
+    #:tau = t2.copy()
+    #:idx = np.arange(nkpts)
+    #:tau[idx,:,idx] += einsum('xic,yjd->xyijcd', t1, t1)
+    #:Ht2 += einsum('xyuijcd,zwuabcd,xyuv,zwuv->xyzijab', tau, Wvvvv, Ps, Ps)
+    for ka, kb, kc in kpts_helper.loop_kkk(nkpts):
+        kd = kconserv[ka,kc,kb]
+        Wvvvv = get_Wvvvv(ka, kb, kc)
+        for ki in range(nkpts):
+            kj = kconserv[ka,ki,kb]
+            tau = t2[ki,kj,kc].copy()
+            if ki == kc and kj == kd:
+                tau += np.einsum('ic,jd->ijcd', t1[ki], t1[kj])
+            Ht2[ki,kj,ka] += lib.einsum('abcd,ijcd->ijab', Wvvvv, tau)
+    return Ht2
+
+# Ps is Permutation transformation matrix
+# The physical meaning of Ps matrix is the conservation of moment.
+# Given the four indices in Ps, the element shows whether moment conservation
+# holds (1) or not (0)
+def kconserve_pmatrix(nkpts, kconserv):
+    Ps = np.zeros((nkpts,nkpts,nkpts,nkpts))
+    for ki in range(nkpts):
+        for kj in range(nkpts):
+            for ka in range(nkpts):
+                # Chemist's notation for momentum conserving t2(ki,kj,ka,kb)
+                kb = kconserv[ki,ka,kj]
+                Ps[ki,kj,ka,kb] = 1
+    return Ps
+
+
 class RCCSD(pyscf.cc.ccsd.CCSD):
 
     max_space = getattr(__config__, 'pbc_cc_kccsd_rhf_KRCCSD_max_space', 20)
@@ -274,10 +329,11 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         self.made_ea_imds = False
         self.ip_partition = None
         self.ea_partition = None
+        self.direct = True  # If possible, use GDF to compute Wvvvv on-the-fly
 
         keys = set(['kpts', 'mo_energy', 'khelper', 'made_ee_imds',
                     'made_ip_imds', 'made_ea_imds', 'ip_partition',
-                    'ea_partition', 'max_space'])
+                    'ea_partition', 'max_space', 'direct'])
         self._keys = self._keys.union(keys)
 
     @property
@@ -938,6 +994,7 @@ def pad_frozen_kpt_mo_coeff(cc, mo_coeff):
 class _ERIS:#(pyscf.cc.ccsd._ChemistsERIs):
     def __init__(self, cc, mo_coeff=None, method='incore',
                  ao2mofn=pyscf.ao2mo.outcore.general_iofree):
+        from pyscf.pbc import df
         cput0 = (time.clock(), time.time())
         moidx = get_frozen_mask(cc)
         nkpts = cc.nkpts
@@ -950,13 +1007,10 @@ class _ERIS:#(pyscf.cc.ccsd._ChemistsERIs):
         #    raise NotImplementedError('Different occupancies found for different k-points')
 
         if mo_coeff is None:
-            # If mo_coeff is not canonical orbital
-            # TODO does this work for k-points? changed to conjugate.
-            raise NotImplementedError
             mo_coeff = cc.mo_coeff
         dtype = mo_coeff[0].dtype
 
-        mo_coeff = pad_frozen_kpt_mo_coeff(cc, mo_coeff)
+        mo_coeff = self.mo_coeff = pad_frozen_kpt_mo_coeff(cc, mo_coeff)
 
         # Re-make our fock MO matrix elements from density and fock AO
         dm = cc._scf.make_rdm1(cc.mo_coeff, cc.mo_occ)
@@ -1023,7 +1077,9 @@ class _ERIS:#(pyscf.cc.ccsd._ChemistsERIs):
             self.ovov = self.feri1.create_dataset('ovov', (nkpts,nkpts,nkpts,nocc,nvir,nocc,nvir), dtype.char)
             self.voov = self.feri1.create_dataset('voov', (nkpts,nkpts,nkpts,nvir,nocc,nocc,nvir), dtype.char)
             self.vovv = self.feri1.create_dataset('vovv', (nkpts,nkpts,nkpts,nvir,nocc,nvir,nvir), dtype.char)
-            self.vvvv = self.feri1.create_dataset('vvvv', (nkpts,nkpts,nkpts,nvir,nvir,nvir,nvir), dtype.char)
+
+            if not (cc.direct and type(cc._scf.with_df) is df.GDF):
+                self.vvvv = self.feri1.create_dataset('vvvv', (nkpts,nkpts,nkpts,nvir,nvir,nvir,nvir), dtype.char)
 
             # <ij|pq>  = (ip|jq)
             cput1 = time.clock(), time.time()
@@ -1056,6 +1112,7 @@ class _ERIS:#(pyscf.cc.ccsd._ChemistsERIs):
                         if mo_coeff[0].dtype == np.float: buf_kpt = buf_kpt.real
                         buf_kpt = buf_kpt.reshape(nocc,nmo,nvir,nmo).transpose(0,2,1,3)
                         self.ovov[kp,kr,kq,:,:,:,:] = buf_kpt[:,:,:nocc,nocc:] / nkpts
+#TODO: compute vovv on the fly
                         self.vovv[kr,kp,ks,:,:,:,:] = buf_kpt[:,:,nocc:,nocc:].transpose(1,0,3,2) / nkpts
                         self.voov[kr,kp,ks,:,:,:,:] = buf_kpt[:,:,nocc:,:nocc].transpose(1,0,3,2) / nkpts
             cput1 = log.timer_debug1('transforming ovpq', *cput1)
@@ -1080,23 +1137,29 @@ class _ERIS:#(pyscf.cc.ccsd._ChemistsERIs):
             #cput1 = log.timer_debug1('transforming vvvv', *cput1)
 
             cput1 = time.clock(), time.time()
-            for (ikp,ikq,ikr) in khelper.symm_map.keys():
-                iks = kconserv[ikp,ikq,ikr]
-                orbv_p = mo_coeff[ikp][:,nocc:]
-                orbv_q = mo_coeff[ikq][:,nocc:]
-                orbv_r = mo_coeff[ikr][:,nocc:]
-                orbv_s = mo_coeff[iks][:,nocc:]
-                mem_now = lib.current_memory()[0]
-                if nvir**4 * 16 / 1e6 + mem_now < cc.max_memory:
+            mem_now = lib.current_memory()[0]
+            if cc.direct and type(cc._scf.with_df) is df.GDF:
+                _init_df_eris(cc, self)
+
+            elif nvir**4 * 16 / 1e6 + mem_now < cc.max_memory:
+                for (ikp,ikq,ikr) in khelper.symm_map.keys():
+                    iks = kconserv[ikp,ikq,ikr]
+                    orbv_p = mo_coeff[ikp][:,nocc:]
+                    orbv_q = mo_coeff[ikq][:,nocc:]
+                    orbv_r = mo_coeff[ikr][:,nocc:]
+                    orbv_s = mo_coeff[iks][:,nocc:]
                     # unit cell is small enough to handle vvvv in-core
                     buf_kpt = fao2mo((orbv_p,orbv_q,orbv_r,orbv_s),
-                                     (cc.kpts[ikp],cc.kpts[ikq],cc.kpts[ikr],cc.kpts[iks]), compact=False)
+                                     cc.kpts[[ikp,ikq,ikr,iks]], compact=False)
                     if dtype == np.float: buf_kpt = buf_kpt.real
                     buf_kpt = buf_kpt.reshape((nvir,nvir,nvir,nvir))
                     for (kp,kq,kr) in khelper.symm_map[(ikp,ikq,ikr)]:
                         buf_kpt_symm = khelper.transform_symm(buf_kpt,kp,kq,kr).transpose(0,2,1,3)
                         self.vvvv[kp,kr,kq] = buf_kpt_symm / nkpts
-                else:
+            else:
+                raise MemoryError('Minimal memory requirements %s MB'
+                                  % (mem_now + nvir**4/1e6*16*2))
+                for (ikp,ikq,ikr) in khelper.symm_map.keys():
                     for a in range(nvir):
                         orbva_p = orbv_p[:,a].reshape(-1,1)
                         buf_kpt = fao2mo((orbva_p,orbv_q,orbv_r,orbv_s),
@@ -1112,6 +1175,54 @@ class _ERIS:#(pyscf.cc.ccsd._ChemistsERIs):
             cput1 = log.timer_debug1('transforming vvvv', *cput1)
 
         log.timer('CCSD integral transformation', *cput0)
+
+def _init_df_eris(cc, eris):
+    from pyscf.ao2mo import _ao2mo
+    if cc._scf.with_df._cderi is None:
+        cc._scf.with_df.build()
+
+    nocc = mycc.nocc
+    nmo = mycc.nmo
+    nvir = nmo - nocc
+    nao = cc._scf.cell.nao_nr()
+
+    kpts = cc.kpts
+    nkpts = len(kpts)
+    naux = cc._scf.with_df.get_naoaux()
+    if gamma_point(kpts):
+        dtype = np.double
+    else:
+        dtype = np.complex128
+    dtype = np.result_type(dtype, *eris.mo_coeff)
+    eris.Lpv = np.empty((nkpts,nkpts,naux,nmo,nvir), dtype=dtype)
+
+    with h5py.File(cc._scf.with_df._cderi, 'r') as f:
+        kptij_lst = f['j3c-kptij'].value
+        tao = []
+        ao_loc = None
+        for ki, kpti in enumerate(kpts):
+            for kj, kptj in enumerate(kpts):
+                kpti_kptj = np.array((kpti,kptj))
+                k_id = member(kpti_kptj, kptij_lst)
+                if len(k_id) > 0:
+                    Lpq = np.asarray(f['j3c/' + str(k_id[0])])
+                else:
+                    kptji = kpti_kptj[[1,0]]
+                    k_id = member(kptji, kptij_lst)
+                    Lpq = np.asarray(f['j3c/' + str(k_id[0])])
+                    Lpq = lib.transpose(Lpq.reshape(naux,nao,nao), axes=(0,2,1))
+                    Lpq = Lpq.conj()
+
+                mo = np.hstack((eris.mo_coeff[ki], eris.mo_coeff[kj][:,nocc:]))
+                mo = np.asarray(mo, dtype=dtype, order='F')
+                if dtype == np.double:
+                    _ao2mo.nr_e2(Lpq, mo, (0, nmo, nmo, nmo+nvir), aosym='s2',
+                                 out=eris.Lpv[ki,kj])
+                else:
+                    if Lpq.size != naux*nao**2: # aosym = 's2'
+                        Lpq = lib.unpack_tril(Lpq).astype(np.complex128)
+                    _ao2mo.r_e2(Lpq, mo, (0, nmo, nmo, nmo+nvir), tao, ao_loc,
+                                out=eris.Lpv[ki,kj])
 
 def verify_eri_symmetry(nmo, nkpts, kconserv, eri):
     # Check ERI symmetry
@@ -1273,4 +1384,59 @@ if __name__ == '__main__':
     mycc = cc.KRCCSD(kmf)
     ecc, t1, t2 = mycc.kernel()
     print(ecc - -0.155298393321855)
+
+    ####
+    cell = gto.Cell()
+    cell.atom='''
+    He 0.000000000000   0.000000000000   0.000000000000
+    He 1.685068664391   1.685068664391   1.685068664391
+    '''
+    cell.basis = [[0, (1., 1.)], [0, (.5, 1.)]]
+    cell.a = '''
+    0.000000000, 3.370137329, 3.370137329
+    3.370137329, 0.000000000, 3.370137329
+    3.370137329, 3.370137329, 0.000000000'''
+    cell.unit = 'B'
+    cell.build()
+
+    np.random.seed(2)
+    # Running HF and CCSD with 1x1x2 Monkhorst-Pack k-point mesh
+    kmf = scf.KRHF(cell, kpts=cell.make_kpts([1,1,3]), exxdiv=None)
+    nmo = cell.nao_nr()
+    kmf.mo_occ = np.zeros((3,nmo))
+    kmf.mo_occ[:,:2] = 2
+    kmf.mo_energy = np.arange(nmo) + np.random.random((3,nmo)) * .3
+    kmf.mo_energy[kmf.mo_occ == 0] += 2
+    kmf.mo_coeff = (np.random.random((3,nmo,nmo)) +
+                    np.random.random((3,nmo,nmo))*1j - .5-.5j)
+
+    def rand_t1_t2(mycc):
+        nkpts = mycc.nkpts
+        nocc = mycc.nocc
+        nmo = mycc.nmo
+        nvir = nmo - nocc
+        np.random.seed(1)
+        t1 = (np.random.random((nkpts,nocc,nvir)) +
+              np.random.random((nkpts,nocc,nvir))*1j - .5-.5j)
+        t2 = (np.random.random((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir)) +
+              np.random.random((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir))*1j - .5-.5j)
+        kconserv = kpts_helper.get_kconserv(kmf.cell, kmf.kpts)
+        Ps = kconserve_pmatrix(nkpts, kconserv)
+        t2 = t2 + np.einsum('xyzijab,xyzw->yxwjiba', t2, Ps)
+        return t1, t2
+
+    mycc = KRCCSD(kmf)
+    eris = mycc.ao2mo()
+    t1, t2 = rand_t1_t2(mycc)
+    Ht1, Ht2 = mycc.update_amps(t1, t2, eris)
+    print(lib.finger(Ht1) - (-4.6808039711608824+9.4962987225515789j))
+    print(lib.finger(Ht2) - (18.613685230812546+114.66975731912211j))
+
+    kmf = kmf.density_fit(auxbasis=[[0, (2., 1.)], [0, (1., 1.)], [0, (.5, 1.)]])
+    mycc = KRCCSD(kmf)
+    eris = _ERIS(mycc, mycc.mo_coeff, method='outcore')
+    t1, t2 = rand_t1_t2(mycc)
+    Ht1, Ht2 = mycc.update_amps(t1, t2, eris)
+    print(lib.finger(Ht1) - (-4.4008067861386051+9.3371971566362504j))
+    print(lib.finger(Ht2) - (39.362264347152305+143.5247348826129j))
 
