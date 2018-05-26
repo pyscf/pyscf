@@ -33,9 +33,10 @@ einsum = lib.einsum
 
 ### Section (a)
 
-def make_tau(cc, t2, t1a, t1b, fac=1., out=None):
-    nkpts, nocc, nvir = t1a.shape
-    tau1 = t2.copy()
+def make_tau(cc, t2, t1, t1p, fac=1., out=None):
+    nkpts, nocc, nvir = t1.shape
+    tau1 = numpy.ndarray(t2.shape, dtype=t2.dtype, buffer=out)
+    tau1[:] = t2
     kconserv = kpts_helper.get_kconserv(cc._scf.cell, cc.kpts)
     for ki in range(nkpts):
         for ka in range(nkpts):
@@ -43,13 +44,13 @@ def make_tau(cc, t2, t1a, t1b, fac=1., out=None):
                     kb = kconserv[ki,ka,kj]
                     tmp = numpy.zeros((nocc,nocc,nvir,nvir),dtype=t2.dtype)
                     if ki == ka and kj == kb:
-                        tmp += einsum('ia,jb->ijab',t1a[ki],t1b[kj])
+                        tmp += einsum('ia,jb->ijab',t1[ki],t1p[kj])
                     if ki == kb and kj == ka:
-                        tmp -= einsum('ib,ja->ijab',t1a[ki],t1b[kj])
+                        tmp -= einsum('ib,ja->ijab',t1[ki],t1p[kj])
                     if kj == ka and ki == kb:
-                        tmp -= einsum('ja,ib->ijab',t1a[kj],t1b[ki])
+                        tmp -= einsum('ja,ib->ijab',t1[kj],t1p[ki])
                     if kj == kb and ki == ka:
-                        tmp += einsum('jb,ia->ijab',t1a[kj],t1b[ki])
+                        tmp += einsum('jb,ia->ijab',t1[kj],t1p[ki])
                     tau1[ki,kj,ka] += fac*0.5*tmp
     return tau1
 
