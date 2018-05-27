@@ -153,6 +153,7 @@ def nr_e2(eri, mo_coeff, orbs_slice, aosym='s1', mosym='s1', out=None,
     assert(aosym in ('s4', 's2ij', 's2kl', 's2', 's1'))
     assert(mosym in ('s2', 's1'))
     mo_coeff = numpy.asfortranarray(mo_coeff)
+    assert(mo_coeff.dtype == numpy.double)
     nao = mo_coeff.shape[0]
     k0, k1, l0, l1 = orbs_slice
     kc = k1 - k0
@@ -261,7 +262,7 @@ def r_e2(eri, mo_coeff, orbs_slice, tao, ao_loc, aosym='s1', out=None):
     assert(eri.flags.c_contiguous)
     assert(aosym in ('s4', 's2ij', 's2kl', 's1', 'a2ij', 'a2kl', 'a4ij',
                      'a4kl', 'a4'))
-    mo_coeff = numpy.asfortranarray(mo_coeff)
+    mo_coeff = numpy.asarray(mo_coeff, dtype=numpy.complex128, order='F')
     nao = mo_coeff.shape[0]
     k0, k1, l0, l1 = orbs_slice
     kc = k1 - k0
@@ -274,7 +275,7 @@ def r_e2(eri, mo_coeff, orbs_slice, tao, ao_loc, aosym='s1', out=None):
         fmmm = _fpointer('AO2MOmmm_r_igtj')
 
     nrow = eri.shape[0]
-    out = numpy.ndarray((nrow,kl_count), dtype=numpy.complex, buffer=out)
+    out = numpy.ndarray((nrow,kl_count), dtype=numpy.complex128, buffer=out)
     if out.size == 0:
         return out
 
