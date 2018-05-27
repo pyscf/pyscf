@@ -18,10 +18,10 @@
 #
 
 import time
+from functools import reduce
 import numpy as np
 import h5py
 
-from functools import reduce
 from pyscf import lib
 import pyscf.ao2mo
 from pyscf.lib import logger
@@ -147,6 +147,7 @@ def update_amps(cc, t1, t2, eris):
 
     # einsum('abcd,ijcd->ijab', Wvvvv, tau)
     add_vvvv_(cc, t2new, t1, t2, eris)
+    time1 = log.timer_debug1('t2 vvvv', *time1)
 
     for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
         kb = kconserv[ki,ka,kj]
@@ -165,9 +166,6 @@ def update_amps(cc, t1, t2, eris):
         t2new_tmp -= einsum('akij,kb->ijab',tmp2,t1[kb])
         t2new[ki,kj,ka] += t2new_tmp
         t2new[kj,ki,kb] += t2new_tmp.transpose(1,0,3,2)
-    Wvvvv = None
-    fimd = None
-    time1 = log.timer_debug1('t2 vvvv', *time1)
 
     mem_now = lib.current_memory()[0]
     if (nocc**2*nvir**2*nkpts**3)*16/1e6*2 + mem_now < cc.max_memory*.9:
@@ -256,6 +254,16 @@ def add_vvvv_(cc, Ht2, t1, t2, eris):
 
     mem_now = lib.current_memory()[0]
     if cc.direct and hasattr(eris, 'Lpv'):
+        #: If memory is not enough to hold eris.Lpv
+        #:def get_Wvvvv(ka, kb, kc):
+        #:    kd = kconserv[ka,kc,kb]
+        #:    v = cc._scf.with_df.ao2mo([eris.mo_coeff[k] for k in [ka,kc,kb,kd]],
+        #:                              cc.kpts[[ka,kc,kb,kd]]).reshape([nmo]*4)
+        #:    Wvvvv  = lib.einsum('kcbd,ka->abcd', v[:nocc,nocc:,nocc:,nocc:], -t1[ka])
+        #:    Wvvvv += lib.einsum('ackd,kb->abcd', v[nocc:,nocc:,:nocc,nocc:], -t1[kb])
+        #:    Wvvvv += v[nocc:,nocc:,nocc:,nocc:].transpose(0,2,1,3)
+        #:    Wvvvv *= (1./nkpts)
+        #:    return Wvvvv
         def get_Wvvvv(ka, kb, kc):
             kd = kconserv[ka,kc,kb]
             Lbd = (eris.Lpv[kb,kd,:,nocc:] -
@@ -264,7 +272,7 @@ def add_vvvv_(cc, Ht2, t1, t2, eris):
             Lbd = None
             kcbd = lib.einsum('Lkc,Lbd->kcbd', eris.Lpv[ka,kc,:,:nocc],
                               eris.Lpv[kb,kd,:,nocc:])
-            Wvvvv -= einsum('kcbd,ka->abcd', kcbd, t1[ka])
+            Wvvvv -= lib.einsum('kcbd,ka->abcd', kcbd, t1[ka])
             Wvvvv *= (1./nkpts)
             return Wvvvv
 
@@ -297,6 +305,7 @@ def add_vvvv_(cc, Ht2, t1, t2, eris):
             if ki == kc and kj == kd:
                 tau += np.einsum('ic,jd->ijcd', t1[ki], t1[kj])
             Ht2[ki,kj,ka] += lib.einsum('abcd,ijcd->ijab', Wvvvv, tau)
+    fimd = None
     return Ht2
 
 # Ps is Permutation transformation matrix
@@ -1223,6 +1232,7 @@ def _init_df_eris(cc, eris):
                         Lpq = lib.unpack_tril(Lpq).astype(np.complex128)
                     _ao2mo.r_e2(Lpq, mo, (0, nmo, nmo, nmo+nvir), tao, ao_loc,
                                 out=eris.Lpv[ki,kj])
+    return eris
 
 def verify_eri_symmetry(nmo, nkpts, kconserv, eri):
     # Check ERI symmetry
@@ -1432,11 +1442,11 @@ if __name__ == '__main__':
     print(lib.finger(Ht1) - (-4.6808039711608824+9.4962987225515789j))
     print(lib.finger(Ht2) - (18.613685230812546+114.66975731912211j))
 
-    kmf = kmf.density_fit(auxbasis=[[0, (2., 1.)], [0, (1., 1.)], [0, (.5, 1.)]])
+    kmf = kmf.density_fit(auxbasis=[[0, (1., 1.)], [0, (.5, 1.)]])
     mycc = KRCCSD(kmf)
     eris = _ERIS(mycc, mycc.mo_coeff, method='outcore')
     t1, t2 = rand_t1_t2(mycc)
     Ht1, Ht2 = mycc.update_amps(t1, t2, eris)
-    print(lib.finger(Ht1) - (-4.4008067861386051+9.3371971566362504j))
-    print(lib.finger(Ht2) - (39.362264347152305+143.5247348826129j))
+    print(lib.finger(Ht1) - (-3.6611794882508244+9.2241044317516554j))
+    print(lib.finger(Ht2) - (-196.88536721771101-432.29569128644886j))
 

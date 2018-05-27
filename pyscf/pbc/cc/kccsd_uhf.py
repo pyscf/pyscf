@@ -21,14 +21,16 @@
 #
 
 import time
-import numpy as np
 from functools import reduce
+import numpy as np
+import h5py
 
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc import scf
 from pyscf.cc import uccsd
 from pyscf.pbc.lib import kpts_helper
+from pyscf.pbc.lib.kpts_helper import member, gamma_point
 from pyscf import __config__
 from pyscf.pbc.cc import kintermediates_uhf
 
@@ -104,19 +106,6 @@ def update_amps(cc, t1, t2, eris):
     Woooo = imdk.cc_Woooo(cc, t1, t2, eris)  # For testing only
     assert(abs(Woooo_J - Woooo_K - Woooo).max() < 1e-12)
 
-#TODELETE    # The UCCSD tensor Wvvvv_J_ or Wvvvv_K_ are kind of chemist's convention
-#TODELETE    uccsd_Wvvvv_J, uccsd_Wvvvv_K = kintermediates_uhf.cc_Wvvvv(cc, uccsd_t1, uccsd_t2, uccsd_eris)
-#TODELETE    Wvvvv_J_, WvvVV_J_, WVVvv_J_, WVVVV_J_, WvVVv_J_, WVvvV_J_ = uccsd_Wvvvv_J
-#TODELETE    Wvvvv_K_, WvvVV_K_, WVVvv_K_, WVVVV_K_, WvVVv_K_, WVvvV_K_ = uccsd_Wvvvv_K
-#TODELETE    # * transpose(0,2,1,3,5,4,6) to change back to physicist's convention.
-#TODELETE    #   Check whether the UCCSD tensors are the same to symmetry-allowed blocks
-#TODELETE    #   of spin-integral tensor Woooo
-#TODELETE    Wvvvv_J = _eri_spatial2spin(uccsd_Wvvvv_J, 'vvvv', uccsd_eris, cross_ab=True).transpose(0,2,1,3,5,4,6)
-#TODELETE    Wvvvv_K = _eri_spatial2spin(uccsd_Wvvvv_K, 'vvvv', uccsd_eris, cross_ab=True).transpose(0,2,1,3,5,4,6)
-#TODELETE
-#TODELETE    Wvvvv = imdk.cc_Wvvvv(cc, t1, t2, eris)  # For testing only
-#TODELETE    assert(abs(Wvvvv_J - Wvvvv_K - Wvvvv).max() < 1e-12)
-
     # The UCCSD tensor Wvvvv_J_ or Wvvvv_K_ are kind of chemist's convention
     uccsd_Wovvo_J, uccsd_Wovvo_K = kintermediates_uhf.cc_Wovvo(cc, uccsd_t1, uccsd_t2, uccsd_eris)
     Wovvo_J_, WovVO_J_, WOVvo_J_, WOVVO_J_, WoVVo_J_, WOvvO_J_ = uccsd_Wovvo_J
@@ -165,14 +154,6 @@ def update_amps(cc, t1, t2, eris):
 #DELETEME    uccsd_Woooo_K = _eri_spin2spatial(Woooo_K, 'oooo', uccsd_eris, cross_ab=True)
 #DELETEME    Woooo_J_, WooOO_J_, WOOoo_J_, WOOOO_J_, WoOOo_J_, WOooO_J_ = uccsd_Woooo_J
 #DELETEME    Woooo_K_, WooOO_K_, WOOoo_K_, WOOOO_K_, WoOOo_K_, WOooO_K_ = uccsd_Woooo_K
-
-#DELETEME    Wvvvv_J = imdk.cc_Wvvvv(cc, t1, t2, uccsd_eris._kccsd_eris_j).transpose(0,2,1,3,5,4,6)
-#DELETEME    Wvvvv_K = imdk.cc_Wvvvv(cc, t1, t2, uccsd_eris._kccsd_eris_k).transpose(0,2,1,3,5,4,6)
-#DELETEME    uccsd_Wvvvv_J = _eri_spin2spatial(Wvvvv_J, 'vvvv', uccsd_eris, cross_ab=True)
-#DELETEME    uccsd_Wvvvv_K = _eri_spin2spatial(Wvvvv_K, 'vvvv', uccsd_eris, cross_ab=True)
-#DELETEME    print abs(Wvvvv_J - Wvvvv_K - Wvvvv.transpose(0,2,1,3,5,4,6)).max(), 'vvvv'
-#DELETEME    assert(abs(Wvvvv_J - _eri_spatial2spin(uccsd_Wvvvv_J, 'vvvv', uccsd_eris, cross_ab=True)).max() < 1e-12)
-#DELETEME    assert(abs(Wvvvv_K - _eri_spatial2spin(uccsd_Wvvvv_K, 'vvvv', uccsd_eris, cross_ab=True)).max() < 1e-12)
 
     # Move energy terms to the other side
     for k in range(nkpts):
@@ -458,18 +439,103 @@ def vector_to_amplitudes(vec, nmo, nocc, nkpts=1):
     t2bb = vec.reshape(nkpts,nkpts,nkpts,noccb,noccb,nvirb,nvirb)
     return (t1a,t1b), (t2aa,t2ab,t2bb)
 
-def add_vvvv_(cc, t2new, t1, t2, eris):
+def add_vvvv_(cc, Ht2, t1, t2, eris):
+    nocca, noccb = cc.nocc
+    nmoa, nmob = cc.nmo
+    nvira, nvirb = nmoa - nocca, nmob - noccb
+    nkpts = cc.nkpts
+    kconserv = cc.khelper.kconserv
+
+    t1a, t1b = t1
+    t2aa, t2ab, t2bb = t2
+    Ht2aa, Ht2ab, Ht2bb = Ht2
+
+    if cc.direct and hasattr(eris, 'Lpv'):
+        def get_Wvvvv(ka, kc, kb):
+            kd = kconserv[ka,kc,kb]
+
+            Lbd = (eris.Lpv[kb,kd,:,nocca:] -
+                   lib.einsum('Lkd,kb->Lbd', eris.Lpv[kb,kd,:,:nocca], t1a[kb]))
+            Wvvvv = lib.einsum('Lac,Lbd->acbd', eris.Lpv[ka,kc,:,nocca:], Lbd)
+            kcbd = lib.einsum('Lkc,Lbd->kcbd', eris.Lpv[ka,kc,:,:nocca],
+                              eris.Lpv[kb,kd,:,nocca:])
+            Wvvvv -= lib.einsum('kcbd,ka->acbd', kcbd, t1a[ka])
+
+            LBD = (eris.LPV[kb,kd,:,noccb:] -
+                   lib.einsum('Lkd,kb->Lbd', eris.LPV[kb,kd,:,:noccb], t1b[kb]))
+
+            WvvVV = lib.einsum('Lac,Lbd->acbd', eris.Lpv[ka,kc,:,nocca:], LBD)
+            kcbd = lib.einsum('Lkc,Lbd->kcbd', eris.Lpv[ka,kc,:,:nocca],
+                              eris.LPV[kb,kd,:,noccb:])
+            WvvVV -= lib.einsum('kcbd,ka->acbd', kcbd, t1a[ka])
+
+            WVVVV = lib.einsum('Lac,Lbd->acbd', eris.LPV[ka,kc,:,noccb:], LBD)
+            kcbd = lib.einsum('Lkc,Lbd->kcbd', eris.LPV[ka,kc,:,:noccb],
+                              eris.LPV[kb,kd,:,noccb:])
+            WVVVV -= lib.einsum('kcbd,ka->acbd', kcbd, t1b[ka])
+
+            Wvvvv *= (1./nkpts)
+            WvvVV *= (1./nkpts)
+            WVVVV *= (1./nkpts)
+            return Wvvvv, WvvVV, WVVVV
+
+        for ka, kb, kc in kpts_helper.loop_kkk(nkpts):
+            kd = kconserv[ka,kc,kb]
+            Wvvvv, WvvVV, WVVVV = get_Wvvvv(ka, kc, kb)
+            for ki in range(nkpts):
+                kj = kconserv[ka,ki,kb]
+                tauaa = t2aa[ki,kj,kc].copy()
+                tauab = t2ab[ki,kj,kc].copy()
+                taubb = t2bb[ki,kj,kc].copy()
+                if ki == kc and kj == kd:
+                    tauaa += np.einsum('ic,jd->ijcd', t1a[ki], t1a[kj])
+                    tauab += np.einsum('ic,jd->ijcd', t1a[ki], t1b[kj])
+                    taubb += np.einsum('ic,jd->ijcd', t1b[ki], t1b[kj])
+                if ki == kd and kj == kc:
+                    tauaa -= np.einsum('id,jc->ijcd', t1a[ki], t1a[kj])
+                    taubb -= np.einsum('id,jc->ijcd', t1b[ki], t1b[kj])
+
+                tmp = lib.einsum('acbd,ijcd->ijab', Wvvvv, tauaa) * .5
+                Ht2aa[ki,kj,ka] += tmp
+                Ht2aa[ki,kj,kb] -= tmp.transpose(0,1,3,2)
+
+                tmp = lib.einsum('acbd,ijcd->ijab', WVVVV, taubb) * .5
+                Ht2bb[ki,kj,ka] += tmp
+                Ht2bb[ki,kj,kb] -= tmp.transpose(0,1,3,2)
+
+                Ht2ab[ki,kj,ka] += lib.einsum('acbd,ijcd->ijab', WvvVV, tauab)
+            Wvvvv = WvvVV = WVVVV = None
+    else:
+        _Wvvvv, _WvvVV, _WVVVV = kintermediates_uhf.cc_Wvvvv(cc, t1, t2, eris)
+        def get_Wvvvv(ka, kc, kb):
+            return _Wvvvv[ka,kc,kb], _WvvVV[ka,kc,kb], _WVVVV[ka,kc,kb]
+
+        #:Ht2aa += np.einsum('xyuijef,zuwaebf,xyuv,zwuv->xyzijab', tauaa, _Wvvvv, P, P) * .5
+        #:Ht2bb += np.einsum('xyuijef,zuwaebf,xyuv,zwuv->xyzijab', taubb, _WVVVV, P, P) * .5
+        #:Ht2ab += np.einsum('xyuiJeF,zuwaeBF,xyuv,zwuv->xyziJaB', tauab, _WvvVV, P, P)
+        for ka, kb, kc in kpts_helper.loop_kkk(nkpts):
+            kd = kconserv[ka,kc,kb]
+            Wvvvv, WvvVV, WVVVV = get_Wvvvv(ka, kc, kb)
+            for ki in range(nkpts):
+                kj = kconserv[ka,ki,kb]
+                tauaa = t2aa[ki,kj,kc].copy()
+                tauab = t2ab[ki,kj,kc].copy()
+                taubb = t2bb[ki,kj,kc].copy()
+                if ki == kc and kj == kd:
+                    tauaa += np.einsum('ic,jd->ijcd', t1a[ki], t1a[kj])
+                    tauab += np.einsum('ic,jd->ijcd', t1a[ki], t1b[kj])
+                    taubb += np.einsum('ic,jd->ijcd', t1b[ki], t1b[kj])
+                if ki == kd and kj == kc:
+                    tauaa -= np.einsum('id,jc->ijcd', t1a[ki], t1a[kj])
+                    taubb -= np.einsum('id,jc->ijcd', t1b[ki], t1b[kj])
+
+                Ht2aa[ki,kj,ka] += lib.einsum('acbd,ijcd->ijab', Wvvvv, tauaa) * .5
+                Ht2bb[ki,kj,ka] += lib.einsum('acbd,ijcd->ijab', WVVVV, taubb) * .5
+                Ht2ab[ki,kj,ka] += lib.einsum('acbd,ijcd->ijab', WvvVV, tauab)
+        _Wvvvv = _WvvVV = _WVVVV = None
+
     tauaa, tauab, taubb = kintermediates_uhf.make_tau(cc, t2, t1, t1)
-    Wvvvv, WvvVV, WVVVV = kintermediates_uhf.cc_Wvvvv(cc, t1, t2, eris)
-
-    kconserv = kpts_helper.get_kconserv(cc._scf.cell, cc.kpts)
-    P = kintermediates_uhf.kconserv_mat(nkpts, kconserv)
-
-    Ht2aa, Ht2ab, Ht2bb = t2new
-    Ht2aa += np.einsum('xyuijef,zuwaebf,xyuv,zwuv->xyzijab', tauaa, Wvvvv, P, P) * .5
-    Ht2bb += np.einsum('xyuijef,zuwaebf,xyuv,zwuv->xyzijab', taubb, WVVVV, P, P) * .5
-    Ht2ab += np.einsum('xyuiJeF,zuwaeBF,xyuv,zwuv->xyziJaB', tauab, WvvVV, P, P)
-
+    P = kintermediates_uhf.kconserv_mat(cc.nkpts, cc.khelper.kconserv)
     eris_ovov = eris.ovov - eris.ovov.transpose(2,1,0,5,4,3,6)
     eris_ovOV = eris.ovOV
     eris_OVOV = eris.OVOV - eris.OVOV.transpose(2,1,0,5,4,3,6)
@@ -479,6 +545,7 @@ def add_vvvv_(cc, t2new, t1, t2, eris):
     Ht2aa += np.einsum('xuyminj,xywmnab,xyuv->uvwijab', minj, tauaa, P) * .125
     Ht2bb += np.einsum('xuyminj,xywmnab,xyuv->uvwijab', MINJ, taubb, P) * .125
     Ht2ab += np.einsum('xuymiNJ,xywmNaB,xyuv->uvwiJaB', miNJ, tauab, P) * .5
+    return (Ht2aa, Ht2ab, Ht2bb)
 
 
 class KUCCSD(uccsd.UCCSD):
@@ -491,8 +558,9 @@ class KUCCSD(uccsd.UCCSD):
         self.kpts = mf.kpts
         self.mo_energy = mf.mo_energy
         self.khelper = kpts_helper.KptsHelper(mf.cell, self.kpts)
+        self.direct = True  # If possible, use GDF to compute Wvvvv on-the-fly
 
-        keys = set(['kpts', 'mo_energy', 'khelper', 'max_space'])
+        keys = set(['kpts', 'mo_energy', 'khelper', 'max_space', 'direct'])
         self._keys = self._keys.union(keys)
 
     @property
@@ -589,7 +657,7 @@ def _make_eris_incore(cc, mo_coeff=None):
     eris = uccsd._ChemistsERIs()
     if mo_coeff is None:
         mo_coeff = cc.mo_coeff
-    eris.mo_coeff = mo_coeff
+    eris.mo_coeff = mo_coeff  # TODO: handle frozen orbitals
     eris.nocc = cc.nocc
     eris.cell = cc._scf.cell  # TODO: delete later
     eris.kpts = cc.kpts  # TODO: delete later
@@ -675,6 +743,65 @@ def _make_eris_incore(cc, mo_coeff=None):
     eris._kccsd_eris_k.vvvv = vvvv.transpose(2,1,0,5,4,3,6).transpose(0,2,1,3,5,4,6)
 
     log.timer('CCSD integral transformation', *cput0)
+    return eris
+
+def _make_df_eris(cc, mo_coeff=None):
+    from pyscf.ao2mo import _ao2mo
+    if cc._scf.with_df._cderi is None:
+        cc._scf.with_df.build()
+
+    eris = _make_eris_incore(cc, mo_coeff)
+
+    nocca, noccb = mycc.nocc
+    nmoa, nmob = mycc.nmo
+    nvira, nvirb = nmoa - nocca, nmob - noccb
+    nao = cc._scf.cell.nao_nr()
+    mo_kpts_a, mo_kpts_b = eris.mo_coeff
+
+    kpts = cc.kpts
+    nkpts = len(kpts)
+    naux = cc._scf.with_df.get_naoaux()
+    if gamma_point(kpts):
+        dtype = np.double
+    else:
+        dtype = np.complex128
+    dtype = np.result_type(dtype, *mo_kpts_a)
+    eris.Lpv = np.empty((nkpts,nkpts,naux,nmoa,nvira), dtype=dtype)
+    eris.LPV = np.empty((nkpts,nkpts,naux,nmob,nvirb), dtype=dtype)
+
+    with h5py.File(cc._scf.with_df._cderi, 'r') as f:
+        kptij_lst = f['j3c-kptij'].value
+        tao = []
+        ao_loc = None
+        for ki, kpti in enumerate(kpts):
+            for kj, kptj in enumerate(kpts):
+                kpti_kptj = np.array((kpti,kptj))
+                k_id = member(kpti_kptj, kptij_lst)
+                if len(k_id) > 0:
+                    Lpq = np.asarray(f['j3c/' + str(k_id[0])])
+                else:
+                    kptji = kpti_kptj[[1,0]]
+                    k_id = member(kptji, kptij_lst)
+                    Lpq = np.asarray(f['j3c/' + str(k_id[0])])
+                    Lpq = lib.transpose(Lpq.reshape(naux,nao,nao), axes=(0,2,1))
+                    Lpq = Lpq.conj()
+
+                mo_a = np.hstack((mo_kpts_a[ki], mo_kpts_a[kj][:,nocca:]))
+                mo_b = np.hstack((mo_kpts_b[ki], mo_kpts_b[kj][:,noccb:]))
+                mo_a = np.asarray(mo_a, dtype=dtype, order='F')
+                mo_b = np.asarray(mo_b, dtype=dtype, order='F')
+                if dtype == np.double:
+                    _ao2mo.nr_e2(Lpq, mo_a, (0, nmoa, nmoa, nmoa+nvira), aosym='s2',
+                                 out=eris.Lpv[ki,kj])
+                    _ao2mo.nr_e2(Lpq, mo_b, (0, nmob, nmob, nmob+nvirb), aosym='s2',
+                                 out=eris.LPV[ki,kj])
+                else:
+                    if Lpq.size != naux*nao**2: # aosym = 's2'
+                        Lpq = lib.unpack_tril(Lpq).astype(np.complex128)
+                    _ao2mo.r_e2(Lpq, mo_a, (0, nmoa, nmoa, nmoa+nvira), tao, ao_loc,
+                                out=eris.Lpv[ki,kj])
+                    _ao2mo.r_e2(Lpq, mo_b, (0, nmob, nmob, nmob+nvirb), tao, ao_loc,
+                                out=eris.LPV[ki,kj])
     return eris
 
 def _eri_spin2spatial(chemist_eri_spin, vvvv, eris, cross_ab=False):
@@ -814,8 +941,7 @@ if __name__ == '__main__':
     kmf.mo_occ = np.zeros((2,3,nmo))
     kmf.mo_occ[0,:,:3] = 1
     kmf.mo_occ[1,:,:1] = 1
-    kmf.mo_energy = (np.arange(nmo) +
-                     np.random.random((2,3,nmo)) * .3)
+    kmf.mo_energy = np.arange(nmo) + np.random.random((2,3,nmo)) * .3
     kmf.mo_energy[kmf.mo_occ == 0] += 2
 
     mo = (np.random.random((2,3,nmo,nmo)) +
@@ -869,17 +995,17 @@ if __name__ == '__main__':
     print(lib.finger(Ht2[1])*1e-2 - (-1.5057868610511369+3.3309680120768695j))
     print(lib.finger(Ht2[2])*1e-3 - (.385766152889095-1.0402422778066575j))
 
-    kmf.mo_occ[0,:,:2] = 1
-    kmf.mo_occ[1,:,:2] = 1
+    kmf.mo_occ[:] = 0
+    kmf.mo_occ[:,:,:2] = 1
     mycc = KUCCSD(kmf)
     eris = mycc.ao2mo()
     t1, t2 = rand_t1_t2(mycc)
     Ht1, Ht2 = mycc.update_amps(t1, t2, eris)
-    print(lib.finger(Ht1[0]) - (0.55789574089494964+1.7091300094790289j))
-    print(lib.finger(Ht1[1])*1e-2 - (.97100705137646841+3.9513513783996711j))
-    print(lib.finger(Ht2[0])*1e-2 - (.60993999091111931-1.1141373469561407j))
-    print(lib.finger(Ht2[1])*1e-2 - (2.1317369714545586-.23267047618176541j))
-    print(lib.finger(Ht2[2])*1e-2 - (3.1653187144164963-2.1699833757327607j))
+    print(lib.finger(Ht1[0]) - (2.3663612686894631+0.93585409788959595j))
+    print(lib.finger(Ht1[1])*1e-2 - (-.48786168557261647+.031181942806962635j))
+    print(lib.finger(Ht2[0])*1e-2 - (-3.2818245462150117+2.7383426949245199j))
+    print(lib.finger(Ht2[1])*1e-2 - (-2.2878795639778727-.60314288803774488j))
+    print(lib.finger(Ht2[2])*1e-2 - (1.928402103997542+0.0048111885456076209j))
 
     from pyscf.pbc.cc import kccsd
     kgcc = kccsd.GCCSD(scf.addons.convert_to_ghf(kmf))
@@ -889,3 +1015,16 @@ if __name__ == '__main__':
     r1, r2 = kgcc.update_amps(r1, r2, kccsd_eris)
     print(abs(r1 - kgcc.spatial2spin(Ht1)).max())
     print(abs(r2 - kgcc.spatial2spin(Ht2)).max())
+    exit()
+
+    kmf = kmf.density_fit(auxbasis=[[0, (1., 1.)], [0, (.5, 1.)]])
+    mycc = KUCCSD(kmf)
+    eris = _make_df_eris(mycc, mycc.mo_coeff)
+    t1, t2 = rand_t1_t2(mycc)
+    Ht1, Ht2 = mycc.update_amps(t1, t2, eris)
+    print(lib.finger(Ht1[0]) - ( 3.2412614893504239+2.487872155796655j ))
+    print(lib.finger(Ht1[1]) - (-120.08698135789332+59.727046329721581j))
+    print(lib.finger(Ht2[0]) - (166.90071890205581 -286.39533394717927j))
+    print(lib.finger(Ht2[1]) - (-89.519006457003485-155.39147303085161j))
+    print(lib.finger(Ht2[2]) - (73.209755559438719 -72.656744862262784j))
+

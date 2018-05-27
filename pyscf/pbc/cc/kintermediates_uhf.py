@@ -112,9 +112,7 @@ def cc_Woooo(cc, t1, t2, uccsd_eris):
 
 def cc_Wvvvv(cc, t1, t2, eris):
     t1a, t1b = t1
-    nkpts = len(t1a)
-    kconserv = kpts_helper.get_kconserv(cc._scf.cell, cc.kpts)
-    P = kconserv_mat(nkpts, kconserv)
+    P = kconserv_mat(cc.nkpts, cc.khelper.kconserv)
 
     tauaa, tauab, taubb = make_tau(cc, t2, t1, t1)
     Wvvvv = eris.vvvv.copy()
