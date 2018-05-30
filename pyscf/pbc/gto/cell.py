@@ -394,7 +394,7 @@ def intor_cross(intor, cell1, cell2, comp=None, hermi=0, kpts=None, kpt=None,
         ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt, cpbcopt,
         atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(pcell.natm),
         bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(pcell.nbas),
-        env.ctypes.data_as(ctypes.c_void_p))
+        env.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(env.size))
 
     mat = []
     for k, kpt in enumerate(kpts_lst):

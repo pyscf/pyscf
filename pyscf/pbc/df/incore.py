@@ -202,7 +202,7 @@ def wrap_int3c(cell, auxcell, intor='int3c2e', aosym='s1', comp=1,
             atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(cell.natm),
             bas.ctypes.data_as(ctypes.c_void_p),
             ctypes.c_int(nbas),  # need to pass cell.nbas to libpbc.PBCnr3c_drv
-            env.ctypes.data_as(ctypes.c_void_p))
+            env.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(env.size))
         return out
     return int3c
 

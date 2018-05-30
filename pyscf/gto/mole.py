@@ -2811,6 +2811,7 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
 
     @lib.with_doc(moleintor.getints_by_shell.__doc__)
     def intor_by_shell(self, intor, shells, comp=None):
+        intor = self._add_suffix(intor)
         if 'ECP' in intor:
             assert(self._ecp is not None)
             bas = numpy.vstack((self._bas, self._ecpbas))

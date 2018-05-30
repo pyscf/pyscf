@@ -901,7 +901,7 @@ void PBCnr3c_drv(int (*intor)(), void (*fill)(), double complex *eri,
                  double *Ls, double complex *expkL, int *kptij_idx,
                  int *shls_slice, int *ao_loc,
                  CINTOpt *cintopt, PBCOpt *pbcopt,
-                 int *atm, int natm, int *bas, int nbas, double *env)
+                 int *atm, int natm, int *bas, int nbas, double *env, int nenv)
 {
         const int ish0 = shls_slice[0];
         const int ish1 = shls_slice[1];
@@ -936,12 +936,9 @@ void PBCnr3c_drv(int (*intor)(), void (*fill)(), double complex *eri,
 #pragma omp parallel default(none) \
         shared(intor, fill, eri, nkpts_ij, nkpts, comp, nimgs, \
                Ls, expkL_r, expkL_i, kptij_idx, shls_slice, ao_loc, cintopt, pbcopt, \
-               atm, natm, bas, nbas, env, count)
+               atm, natm, bas, nbas, env, nenv, count)
 {
         int ish, jsh, ij;
-        int nenv = PBCsizeof_env(shls_slice, atm, natm, bas, nbas, env);
-        nenv = MAX(nenv, PBCsizeof_env(shls_slice+2, atm, natm, bas, nbas, env));
-        nenv = MAX(nenv, PBCsizeof_env(shls_slice+4, atm, natm, bas, nbas, env));
         double *env_loc = malloc(sizeof(double)*nenv);
         memcpy(env_loc, env, sizeof(double)*nenv);
         double *buf = malloc(sizeof(double)*(count+cache_size));
@@ -1097,7 +1094,7 @@ void PBCnr2c_drv(int (*intor)(), void (*fill)(), double complex *out,
                  double *Ls, double complex *expkL,
                  int *shls_slice, int *ao_loc,
                  CINTOpt *cintopt, PBCOpt *pbcopt,
-                 int *atm, int natm, int *bas, int nbas, double *env)
+                 int *atm, int natm, int *bas, int nbas, double *env, int nenv)
 {
         const int jsh0 = shls_slice[2];
         const int jsh1 = shls_slice[3];
@@ -1115,11 +1112,9 @@ void PBCnr2c_drv(int (*intor)(), void (*fill)(), double complex *out,
 #pragma omp parallel default(none) \
         shared(intor, fill, out, nkpts, comp, nimgs, \
                Ls, expkL_r, expkL_i, shls_slice, ao_loc, cintopt, pbcopt, \
-               atm, natm, bas, nbas, env)
+               atm, natm, bas, nbas, env, nenv)
 {
         int jsh;
-        int nenv = PBCsizeof_env(shls_slice, atm, natm, bas, nbas, env);
-        nenv = MAX(nenv, PBCsizeof_env(shls_slice+2, atm, natm, bas, nbas, env));
         double *env_loc = malloc(sizeof(double)*nenv);
         memcpy(env_loc, env, sizeof(double)*nenv);
         size_t count = nkpts * OF_CMPLX + nimgs;
