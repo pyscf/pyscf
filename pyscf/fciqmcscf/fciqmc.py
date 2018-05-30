@@ -156,7 +156,8 @@ class FCIQMCCI(object):
         execute_fciqmc(self)
         if self.verbose >= logger.DEBUG1:
             out_file = self.outputFileCurrent
-            logger.debug1(self, open(out_file))
+            with open(out_file) as f:
+                logger.debug1(self, f.read())
         rdm_energy = read_energy(self)
 
         return rdm_energy, None
