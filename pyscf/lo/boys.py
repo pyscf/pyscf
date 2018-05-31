@@ -108,21 +108,21 @@ def dipole_integral(mol, mo_coeff):
     # Set to charge center for physical significance of <r>
     charge_center = numpy.einsum('z,zx->x', mol.atom_charges(), mol.atom_coords())
     with mol.with_common_origin(charge_center):
-        dip = numpy.asarray([reduce(lib.dot, (mo_coeff.T, x, mo_coeff))
+        dip = numpy.asarray([reduce(lib.dot, (mo_coeff.conj().T, x, mo_coeff))
                              for x in mol.intor_symmetric('int1e_r', comp=3)])
     return dip
 
 def atomic_init_guess(mol, mo_coeff):
     s = mol.intor_symmetric('int1e_ovlp')
     c = orth.orth_ao(mol, s=s)
-    mo = reduce(numpy.dot, (c.T, s, mo_coeff))
+    mo = reduce(numpy.dot, (c.conj().T, s, mo_coeff))
     nmo = mo_coeff.shape[1]
 # Find the AOs which have largest overlap to MOs
-    idx = numpy.argsort(numpy.einsum('pi,pi->p', mo, mo))
+    idx = numpy.argsort(numpy.einsum('pi,pi->p', mo.conj(), mo))
     nmo = mo.shape[1]
     idx = idx[-nmo:]
     u, w, vh = numpy.linalg.svd(mo[idx])
-    return lib.dot(vh, u.T)
+    return lib.dot(vh, u.conj().T)
 
 class Boys(ciah.CIAHOptimizer):
 
@@ -172,7 +172,7 @@ class Boys(ciah.CIAHOptimizer):
         mo_coeff = lib.dot(self.mo_coeff, u)
         dip = dipole_integral(self.mol, mo_coeff)
         g0 = numpy.einsum('xii,xip->pi', dip, dip)
-        g = -self.pack_uniq_var(g0-g0.T) * 2
+        g = -self.pack_uniq_var(g0-g0.conj().T) * 2
 
         h_diag = numpy.einsum('xii,xpp->pi', dip, dip) * 2
         h_diag-= g0.diagonal() + g0.diagonal().reshape(-1,1)
@@ -195,7 +195,7 @@ class Boys(ciah.CIAHOptimizer):
         #:idx = numpy.tril_indices(nmo, -1)
         #:h = h[idx][:,idx[0],idx[1]]
 
-        g0 = g0 + g0.T
+        g0 = g0 + g0.conj().T
         def h_op(x):
             x = self.unpack_uniq_var(x)
             norb = x.shape[0]
@@ -213,7 +213,7 @@ class Boys(ciah.CIAHOptimizer):
             #:hx-= numpy.einsum('jk,xkj,xjp->pj', x, dip, dip) * 2
             #:return -self.pack_uniq_var(hx)
             #:hx = numpy.einsum('iq,qp->pi', g0, x)
-            hx = lib.dot(x.T, g0.T)
+            hx = lib.dot(x.T, g0.T).conj()
             #:hx+= numpy.einsum('qi,xiq,xip->pi', x, dip, dip) * 2
             hx+= numpy.einsum('xip,xi->pi', dip, numpy.einsum('qi,xiq->xi', x, dip)) * 2
             #:hx-= numpy.einsum('qp,xpp,xiq->pi', x, dip, dip) * 2
@@ -221,7 +221,7 @@ class Boys(ciah.CIAHOptimizer):
                               lib.dot(dip.reshape(-1,norb), x).reshape(3,norb,norb)) * 2
             #:hx-= numpy.einsum('qp,xip,xpq->pi', x, dip, dip) * 2
             hx-= numpy.einsum('xip,xp->pi', dip, numpy.einsum('qp,xpq->xp', x, dip)) * 2
-            return -self.pack_uniq_var(hx-hx.T)
+            return -self.pack_uniq_var(hx-hx.conj().T)
 
         return g, h_op, h_diag
 
@@ -230,7 +230,7 @@ class Boys(ciah.CIAHOptimizer):
         mo_coeff = lib.dot(self.mo_coeff, u)
         dip = dipole_integral(self.mol, mo_coeff)
         g0 = numpy.einsum('xii,xip->pi', dip, dip)
-        g = -self.pack_uniq_var(g0-g0.T) * 2
+        g = -self.pack_uniq_var(g0-g0.conj().T) * 2
         return g
 
     def cost_function(self, u=None):
