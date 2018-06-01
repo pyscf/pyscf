@@ -966,7 +966,7 @@ if __name__ == '__main__':
         t2aa = (np.random.random((nkpts,nkpts,nkpts,nocca,nocca,nvira,nvira)) +
                 np.random.random((nkpts,nkpts,nkpts,nocca,nocca,nvira,nvira))*1j - .5-.5j)
         kconserv = kpts_helper.get_kconserv(kmf.cell, kmf.kpts)
-        t2aa = t2aa - t2aa.transpose(0,2,1,4,3,5,6)
+        t2aa = t2aa - t2aa.transpose(1,0,2,4,3,5,6)
         tmp = t2aa.copy()
         for ki, kj, kk in kpts_helper.loop_kkk(nkpts):
             kl = kconserv[ki, kk, kj]
@@ -975,7 +975,7 @@ if __name__ == '__main__':
                 np.random.random((nkpts,nkpts,nkpts,nocca,noccb,nvira,nvirb))*1j - .5-.5j)
         t2bb = (np.random.random((nkpts,nkpts,nkpts,noccb,noccb,nvirb,nvirb)) +
                 np.random.random((nkpts,nkpts,nkpts,noccb,noccb,nvirb,nvirb))*1j - .5-.5j)
-        t2bb = t2bb - t2bb.transpose(0,2,1,4,3,5,6)
+        t2bb = t2bb - t2bb.transpose(1,0,2,4,3,5,6)
         tmp = t2bb.copy()
         for ki, kj, kk in kpts_helper.loop_kkk(nkpts):
             kl = kconserv[ki, kk, kj]
@@ -989,11 +989,11 @@ if __name__ == '__main__':
     eris = mycc.ao2mo()
     t1, t2 = rand_t1_t2(mycc)
     Ht1, Ht2 = mycc.update_amps(t1, t2, eris)
-    print(lib.finger(Ht1[0]) - (-4.6893892974393614-1.5348163418323879j))
-    print(lib.finger(Ht1[1]) - (0.38360631203980139+3.8264980360124512j))
-    print(lib.finger(Ht2[0])*1e-2 - (.51873350857105478 -.36810363407795016j))
-    print(lib.finger(Ht2[1])*1e-2 - (-1.5057868610511369+3.3309680120768695j))
-    print(lib.finger(Ht2[2])*1e-3 - (.385766152889095-1.0402422778066575j))
+    print(lib.finger(Ht1[0]) - (-1.2692088297292825-12.893074780897923j))
+    print(lib.finger(Ht1[1]) - (-11.831413366451148+19.95758532598137j ))
+    print(lib.finger(Ht2[0])*1e-2 - (0.97436765562779959 +0.16548728742427826j ))
+    print(lib.finger(Ht2[1])*1e-2 - (-1.7752605990115735 +4.2106261874056212j  ))
+    print(lib.finger(Ht2[2])*1e-3 - (-0.52223406190978494-0.91888685193234421j))
 
     kmf.mo_occ[:] = 0
     kmf.mo_occ[:,:,:2] = 1
@@ -1001,11 +1001,11 @@ if __name__ == '__main__':
     eris = mycc.ao2mo()
     t1, t2 = rand_t1_t2(mycc)
     Ht1, Ht2 = mycc.update_amps(t1, t2, eris)
-    print(lib.finger(Ht1[0]) - (2.3663612686894631+0.93585409788959595j))
-    print(lib.finger(Ht1[1])*1e-2 - (-.48786168557261647+.031181942806962635j))
-    print(lib.finger(Ht2[0])*1e-2 - (-3.2818245462150117+2.7383426949245199j))
-    print(lib.finger(Ht2[1])*1e-2 - (-2.2878795639778727-.60314288803774488j))
-    print(lib.finger(Ht2[2])*1e-2 - (1.928402103997542+0.0048111885456076209j))
+    print(lib.finger(Ht1[0]) - (3.7571382837650931+3.6719235677672519j))
+    print(lib.finger(Ht1[1])*1e-2 - (-0.42270622344333642+0.65025799860663025j))
+    print(lib.finger(Ht2[0])*1e-2 - (2.5124103335695689  -1.3180553113575906j ))
+    print(lib.finger(Ht2[1])*1e-2 - (-2.4427382960124304 +0.15329780363467621j))
+    print(lib.finger(Ht2[2])*1e-2 - (3.0683780903085842  +2.580910132273615j  ))
 
     from pyscf.pbc.cc import kccsd
     kgcc = kccsd.GCCSD(scf.addons.convert_to_ghf(kmf))
@@ -1022,9 +1022,8 @@ if __name__ == '__main__':
     eris = _make_df_eris(mycc, mycc.mo_coeff)
     t1, t2 = rand_t1_t2(mycc)
     Ht1, Ht2 = mycc.update_amps(t1, t2, eris)
-    print(lib.finger(Ht1[0]) - ( 3.2412614893504239+2.487872155796655j ))
-    print(lib.finger(Ht1[1]) - (-120.08698135789332+59.727046329721581j))
-    print(lib.finger(Ht2[0]) - (166.90071890205581 -286.39533394717927j))
-    print(lib.finger(Ht2[1]) - (-89.519006457003485-155.39147303085161j))
-    print(lib.finger(Ht2[2]) - (73.209755559438719 -72.656744862262784j))
-
+    print(lib.finger(Ht1[0]) - (3.6569734813260473 +3.8092774902489754j))
+    print(lib.finger(Ht1[1]) - (-105.8651917884019 +219.86020519421155j))
+    print(lib.finger(Ht2[0]) - (-265.25767382882208+215.41888861285341j))
+    print(lib.finger(Ht2[1]) - (-115.13953446128346-49.303887916188629j))
+    print(lib.finger(Ht2[2]) - (122.51835547779413 +33.85757422327751j ))
