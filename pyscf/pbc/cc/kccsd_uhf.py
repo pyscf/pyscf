@@ -223,15 +223,46 @@ def update_amps(cc, t1, t2, eris):
         Ht1a[ka] -= einsum('ma,mi->ia', t1a[ka], Foo_[ka])
         Ht1b[ka] -= einsum('ma,mi->ia', t1b[ka], FOO_[ka])
 
-        for kn in range(nkpts):
-            # ka == ki; km == kf == kn
-            Ht1a[ka] += -1. * einsum('nf,niaf->ia', t1a[kn], uccsd_eris.oovv[kn, ka, ka])
-            Ht1a[ka] +=       einsum('nf,fnia->ia', t1a[kn], uccsd_eris.voov[kn, kn, ka])
-            Ht1a[ka] +=       einsum('NF,FNia->ia', t1b[kn], uccsd_eris.VOov[kn, kn, ka])
+        for km in range(nkpts):
+            # ka == ki; km == kf == km
+            # <ma||if> = [mi|af] - [mf|ai]
+            #         => [mi|af] - [fm|ia]
+            Ht1a[ka] += einsum('mf,aimf->ia', t1a[km], uccsd_eris.voov[ka, ka, km])
+            Ht1a[ka] += - 1. * einsum('mf,afmi->ia', t1a[km], uccsd_eris.vvoo[ka, km, km])
+            Ht1a[ka] += einsum('MF,aiMF->ia', t1b[km], uccsd_eris.voOV[ka, ka, km])
 
-            Ht1b[ka] += -1. * einsum('NF,NIAF->IA', t1b[kn], uccsd_eris.OOVV[kn, ka, ka])
-            Ht1b[ka] +=       einsum('NF,FNIA->IA', t1b[kn], uccsd_eris.VOOV[kn, kn, ka])
-            Ht1b[ka] +=       einsum('nf,fnIA->IA', t1a[kn], uccsd_eris.voOV[kn, kn, ka])
+            # miaf - mfai => miaf - fmia
+            Ht1b[ka] += einsum('MF,AIMF->IA', t1b[km], uccsd_eris.VOOV[ka, ka, km])
+            Ht1b[ka] += - 1. * einsum('MF,AFMI->IA', t1b[km], uccsd_eris.VVOO[ka, km, km])
+            Ht1b[ka] += einsum('mf,AImf->IA', t1a[km], uccsd_eris.VOov[ka, ka, km])
+
+            for kf in range(nkpts):
+                ki = ka
+                ke = kconserv[ki, kf, km]
+                #Ht1a[ka] +=   0.5 * einsum('imef,aemf->ia', t2aa[ki, km, ke], uccsd_eris.vvov[ka, ke, km])
+                #Ht1a[ka] += - 0.5 * einsum('imef,afme->ia', t2aa[ki, km, ke], uccsd_eris.vvov[ka, kf, km])
+                #Ht1a[ka] +=   0.5 * einsum('iMeF,aeMF->ia', t2ab[ki, km, ke], uccsd_eris.vvOV[ka, ke, km])
+
+                #Ht1b[ka] +=   0.5 * einsum('IMEF,AEMF->IA', t2bb[ki, km, ke], uccsd_eris.VVOV[ka, ke, km])
+                #Ht1b[ka] += - 0.5 * einsum('IMEF,AFME->IA', t2bb[ki, km, ke], uccsd_eris.VVOV[ka, kf, km])
+                #Ht1b[ka] +=   0.5 * einsum('mIfE,AEmf->IA', t2ab[km, ki, kf], uccsd_eris.VVov[ka, ke, km])
+
+                #print 'ki, km, ke, kf', ki, km, ke, kf
+                #print np.linalg.norm(t2bb[ki, km, ke] - t2bb[km, ki, kf].transpose(1, 0, 3, 2))
+                print('diff',
+                      np.linalg.norm(t2bb[ki, km, kf] - t2bb[km, ki, ke].transpose(1, 0, 3, 2))
+                      )
+                #print max(abs(t2bb[ki, km, ke] - t2bb[km, ki, kf].transpose(1, 0, 3, 2)))
+
+    #print 't1new'
+    #print t1new
+    #print 'ht1a'
+    #print Ht1a
+    #print 'ht1b'
+    #print Ht1b
+
+            #for kn in range(nkpts):
+            #    ke = kconserv[km, ki, kn]
 
     t1new += kccsd.spatial2spin((Ht1a, Ht1b), orbspin, kconserv)
 
