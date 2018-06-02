@@ -213,6 +213,8 @@ def update_amps(cc, t1, t2, eris):
                 #t1new[ka] += -0.5 * einsum('imef,maef->ia', t2[ki, km, ke], eris.ovvv[km, ka, ke])
                 t1new[ka] += -0.5 * einsum('mnae,nmei->ia', t2[km, kn, ka], eris_oovo[kn, km, ke])
 
+    Ht1a, Ht1b = kccsd.spin2spatial(t1new, orbspin, kconserv)
+
     for ka in range(nkpts):
         Ht1a[ka] += einsum('ie,ae->ia', t1a[ka], Fvv_[ka])
         Ht1b[ka] += einsum('ie,ae->ia', t1b[ka], FVV_[ka])
@@ -242,9 +244,6 @@ def update_amps(cc, t1, t2, eris):
                 Ht1b[ka] +=   0.5 * einsum('IMEF,AEMF->IA', t2bb[ki, km, ke], uccsd_eris.VVOV[ka, ke, km])
                 Ht1b[ka] +=   1.0 * einsum('mIfE,AEmf->IA', t2ab[km, ki, kf], uccsd_eris.VVov[ka, ke, km])
                 Ht1b[ka] += - 0.5 * einsum('IMEF,AFME->IA', t2bb[ki, km, ke], uccsd_eris.VVOV[ka, kf, km])
-
-
-    t1new += kccsd.spatial2spin((Ht1a, Ht1b), orbspin, kconserv)
 
     for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
         # Chemist's notation for momentum conserving t2(ki,kj,ka,kb)
@@ -332,125 +331,86 @@ def update_amps(cc, t1, t2, eris):
             # =>  kn = ka - km + kb
             kn = kconserv[ka, km, kb]
             t2new[ki, kj, ka] += 0.5 * einsum('mnab,mnij->ijab', tau[km, kn, ka], Woooo[km, kn, ki])
-#            ke = km
-#            t2new[ki, kj, ka] += 0.5 * einsum('ijef,abef->ijab', tau[ki, kj, ke], Wvvvv[ka, kb, ke])
 
-    P = kintermediates_uhf.kconserv_mat(cc.nkpts, cc.khelper.kconserv)
-    tmpaa = einsum('xwzimae,wvumebj,xwzv,wuvy->xyzijab', t2aa, Wovvo_J_, P, P)
-    tmpaa+= einsum('xwziMaE,wvuMEbj,xwzv,wuvy->xyzijab', t2ab, WOVvo_J_, P, P)
-    tmpaa-= einsum('xwzimae,wvumebj,xwzv,wuvy->xyzijab', t2aa, Wovvo_K_, P, P)
-    tmpaa-= einsum('xwziMaE,wvuMEbj,xwzv,wuvy->xyzijab', t2ab, WOVvo_K_, P, P)
-    tmpaa+= einsum('xie,zma,zwumjbe,zuwx,xyzu->xyzijab', t1a, t1a, uccsd_eris.oovv, P, P)
-    tmpaa-= einsum('xie,zma,uwzbjme,zuwx,xyzu->xyzijab', t1a, t1a, uccsd_eris.voov, P, P)
-    Ht2aa += tmpaa
-    Ht2aa -= np.einsum('xyzijab,xyzu->xyuijba', tmpaa, P)
-    Ht2aa -= np.einsum('xyzijab,xyzu->yxzjiab', tmpaa, P)
-    Ht2aa += np.einsum('xyzijab,xyzu->yxujiba', tmpaa, P)
-    tmpbb = einsum('xwzimae,wvumebj,xwzv,wuvy->xyzijab', t2bb, WOVVO_J_, P, P)
-    tmpbb+= einsum('wxvMiEa,wvuMEbj,xwzv,wuvy->xyzijab', t2ab, WovVO_J_, P, P)
-    tmpbb-= einsum('xwzimae,wvumebj,xwzv,wuvy->xyzijab', t2bb, WOVVO_K_, P, P)
-    tmpbb-= einsum('wxvMiEa,wvuMEbj,xwzv,wuvy->xyzijab', t2ab, WovVO_K_, P, P)
-    tmpbb+= einsum('xie,zma,zwumjbe,zuwx,xyzu->xyzijab', t1b, t1b, uccsd_eris.OOVV, P, P)
-    tmpbb-= einsum('xie,zma,uwzbjme,zuwx,xyzu->xyzijab', t1b, t1b, uccsd_eris.VOOV, P, P)
-    Ht2bb += tmpbb
-    Ht2bb -= np.einsum('xyzijab,xyzu->xyuijba', tmpbb, P)
-    Ht2bb -= np.einsum('xyzijab,xyzu->yxzjiab', tmpbb, P)
-    Ht2bb += np.einsum('xyzijab,xyzu->yxujiba', tmpbb, P)
-
-    tmpab = einsum('xwzimae,wvumeBJ,xwzv,wuvy->xyziJaB', t2aa, WovVO_J_, P, P)
-    tmpab+= einsum('xwziMaE,wvuMEBJ,xwzv,wuvy->xyziJaB', t2ab, WOVVO_J_, P, P)
-    tmpab-= einsum('xwzimae,wvumeBJ,xwzv,wuvy->xyziJaB', t2aa, WovVO_K_, P, P)
-    tmpab-= einsum('xwziMaE,wvuMEBJ,xwzv,wuvy->xyziJaB', t2ab, WOVVO_K_, P, P)
-    tmpab-= einsum('xie,zma,uwzBJme,zuwx,xyzu->xyziJaB', t1a, t1a, uccsd_eris.VOov, P, P)
-
-    tmpba = einsum('wxvmIeA,wvumebj,xwzv,wuvy->xyzIjAb', t2ab, Wovvo_J_, P, P)
-    tmpba+= einsum('wxvMIEA,wvuMEbj,xwzv,wuvy->xyzIjAb', t2bb, WOVvo_J_, P, P)
-    tmpba-= einsum('wxvmIeA,wvumebj,xwzv,wuvy->xyzIjAb', t2ab, Wovvo_K_, P, P)
-    tmpba-= einsum('wxvMIEA,wvuMEbj,xwzv,wuvy->xyzIjAb', t2bb, WOVvo_K_, P, P)
-    tmpba-= einsum('xIE,zMA,uwzbjME,zuwx,xyzu->xyzIjAb', t1b, t1b, uccsd_eris.voOV, P, P)
-
-    tmpabba =-einsum('xwviMeA,wvuMebJ,xwzv,wuvy->xyziJAb', t2ab, WOvvO_J_, P, P)
-    tmpabba+= einsum('xwviMeA,wvuMebJ,xwzv,wuvy->xyziJAb', t2ab, WOvvO_K_, P, P)
-    tmpabba+= einsum('xie,zMA,zwuMJbe,zuwx,xyzu->xyziJAb', t1a, t1b, uccsd_eris.OOvv, P, P)
-
-    tmpbaab =-einsum('wxzmIaE,wvumEBj,xwzv,wuvy->xyzIjaB', t2ab, WoVVo_J_, P, P)
-    tmpbaab+= einsum('wxzmIaE,wvumEBj,xwzv,wuvy->xyzIjaB', t2ab, WoVVo_K_, P, P)
-    tmpbaab+= einsum('xIE,zma,zwumjBE,zuwx,xyzu->xyzIjaB', t1b, t1a, uccsd_eris.ooVV, P, P)
-
-    Ht2ab += tmpab
-    Ht2ab -= np.einsum('xyzijab,xyzu->xyuijba', tmpabba, P)
-    Ht2ab -= np.einsum('xyzijab,xyzu->yxzjiab', tmpbaab, P)
-    Ht2ab += np.einsum('xyzijab,xyzu->yxujiba', tmpba, P)
-
-    Ht2aa += np.einsum('xie,yuxjbea,yxuz->xyzijab', t1a, uccsd_eris.ovvv.conj(), P)
-    Ht2ab += np.einsum('xie,yuxJBea,yxuz->xyziJaB', t1a, uccsd_eris.OVvv.conj(), P)
-    Ht2bb += np.einsum('xie,yuxjbea,yxuz->xyzijab', t1b, uccsd_eris.OVVV.conj(), P)
-    Ht2aa -= np.einsum('xie,yzxjaeb,yxzu->xyzijab', t1a, uccsd_eris.ovvv.conj(), P)
-    Ht2bb -= np.einsum('xie,yzxjaeb,yxzu->xyzijab', t1b, uccsd_eris.OVVV.conj(), P)
-    Ht2aa -= np.einsum('yje,xuyibea,xyuz->xyzijab', t1a, uccsd_eris.ovvv.conj(), P)
-    Ht2bb -= np.einsum('yje,xuyibea,xyuz->xyzijab', t1b, uccsd_eris.OVVV.conj(), P)
-    Ht2aa += np.einsum('yje,xzyiaeb,xyzu->xyzijab', t1a, uccsd_eris.ovvv.conj(), P)
-    Ht2ab += np.einsum('yJE,xzyiaEB,xyzu->xyziJaB', t1b, uccsd_eris.ovVV.conj(), P)
-    Ht2bb += np.einsum('yje,xzyiaeb,xyzu->xyzijab', t1b, uccsd_eris.OVVV.conj(), P)
-#?    u2aa  = np.einsum('xie,yuxjbea,yxuz->xyzijab', t1a, uccsd_eris.ovvv.conj(), P)
-#?    u2bb  = np.einsum('xie,yuxjbea,yxuz->xyzijab', t1b, uccsd_eris.OVVV.conj(), P)
-#?    u2ab  = np.einsum('xIE,yuxjaEB,yxuz->xyzjIaB', t1b, uccsd_eris.ovVV.conj(), P)
-#?    u2ab += np.einsum('xie,yuxJBea,yxuz->xyziJaB', t1a, uccsd_eris.OVvv.conj(), P)
-#?    u2aa *= .5
-#?    u2bb *= .5
-#?    u2aa = u2aa - u2aa.transpose(1,0,2,4,3,5,6)
-#?    u2aa = u2aa - np.einsum('xyzijab,xyzu->xyuijba', u2aa, P)
-#?    u2bb = u2bb - u2bb.transpose(1,0,2,4,3,5,6)
-#?    u2bb = u2bb - np.einsum('xyzijab,xyzu->xyuijba', u2bb, P)
-#?    Ht2aa += u2aa
-#?    Ht2bb += u2bb
-#?    Ht2ab += u2ab
-
-    #:t2new -= np.einsum('zma,xyzijmb->xyzijab', t1, uccsd_eris._kccsd_eris_j.ooov.conj())
-    #:t2new += np.einsum('zma,xyzijmb->xyzijab', t1, uccsd_eris._kccsd_eris_k.ooov.conj())
-    #:t2new += np.einsum('umb,xyuijma,xyuz->xyzijab', t1, uccsd_eris._kccsd_eris_j.ooov.conj(), P)
-    #:t2new -= np.einsum('umb,xyuijma,xyuz->xyzijab', t1, uccsd_eris._kccsd_eris_k.ooov.conj(), P)
-    Ht2aa -= np.einsum('zma,xzyimjb->xyzijab', t1a, uccsd_eris.ooov.conj())
-    Ht2ab -= np.einsum('zma,xzyimjb->xyzijab', t1a, uccsd_eris.ooOV.conj())
-    Ht2bb -= np.einsum('zma,xzyimjb->xyzijab', t1b, uccsd_eris.OOOV.conj())
-    Ht2aa += np.einsum('zma,yzxjmib->xyzijab', t1a, uccsd_eris.ooov.conj())
-    Ht2bb += np.einsum('zma,yzxjmib->xyzijab', t1b, uccsd_eris.OOOV.conj())
-    Ht2aa += np.einsum('umb,xuyimja,xyuz->xyzijab', t1a, uccsd_eris.ooov.conj(), P)
-    Ht2bb += np.einsum('umb,xuyimja,xyuz->xyzijab', t1b, uccsd_eris.OOOV.conj(), P)
-    Ht2aa -= np.einsum('umb,yuxjmia,xyuz->xyzijab', t1a, uccsd_eris.ooov.conj(), P)
-    Ht2ab -= np.einsum('umb,yuxjmia,xyuz->xyzijab', t1b, uccsd_eris.OOov.conj(), P)
-    Ht2bb -= np.einsum('umb,yuxjmia,xyuz->xyzijab', t1b, uccsd_eris.OOOV.conj(), P)
+    u2aa, u2ab, u2bb = kccsd.spin2spatial(t2new, orbspin, kconserv)
+    Ht2aa += u2aa
+    Ht2ab += u2ab
+    Ht2bb += u2bb
 
     tau = None
     add_vvvv_(cc, (Ht2aa, Ht2ab, Ht2bb), uccsd_t1, uccsd_t2, uccsd_eris)
-    t2new += kccsd.spatial2spin((Ht2aa, Ht2ab, Ht2bb), orbspin, kconserv)
+
+    P = kintermediates_uhf.kconserv_mat(cc.nkpts, cc.khelper.kconserv)
+    Ht2ab += einsum('xwzimae,wvumeBJ,xwzv,wuvy->xyziJaB', t2aa, WovVO_J_-WovVO_K_, P, P)
+    Ht2ab += einsum('xwziMaE,wvuMEBJ,xwzv,wuvy->xyziJaB', t2ab, WOVVO_J_-WOVVO_K_, P, P)
+    Ht2ab -= einsum('xie,zma,uwzBJme,zuwx,xyzu->xyziJaB', t1a, t1a, uccsd_eris.VOov, P, P)
+
+    Ht2ab += einsum('wxvmIeA,wvumebj,xwzv,wuvy->yxujIbA', t2ab, Wovvo_J_-Wovvo_K_, P, P)
+    Ht2ab += einsum('wxvMIEA,wvuMEbj,xwzv,wuvy->yxujIbA', t2bb, WOVvo_J_-WOVvo_K_, P, P)
+    Ht2ab -= einsum('xIE,zMA,uwzbjME,zuwx,xyzu->yxujIbA', t1b, t1b, uccsd_eris.voOV, P, P)
+
+    Ht2ab += einsum('xwviMeA,wvuMebJ,xwzv,wuvy->xyuiJbA', t2ab, WOvvO_J_-WOvvO_K_, P, P)
+    Ht2ab -= einsum('xie,zMA,zwuMJbe,zuwx,xyzu->xyuiJbA', t1a, t1b, uccsd_eris.OOvv, P, P)
+
+    Ht2ab += einsum('wxzmIaE,wvumEBj,xwzv,wuvy->yxzjIaB', t2ab, WoVVo_J_-WoVVo_K_, P, P)
+    Ht2ab -= einsum('xIE,zma,zwumjBE,zuwx,xyzu->yxzjIaB', t1b, t1a, uccsd_eris.ooVV, P, P)
+
+    u2aa  = einsum('xwzimae,wvumebj,xwzv,wuvy->xyzijab', t2aa, Wovvo_J_-Wovvo_K_, P, P)
+    u2aa += einsum('xwziMaE,wvuMEbj,xwzv,wuvy->xyzijab', t2ab, WOVvo_J_-WOVvo_K_, P, P)
+    u2aa += einsum('xie,zma,zwumjbe,zuwx,xyzu->xyzijab', t1a, t1a, uccsd_eris.oovv, P, P)
+    u2aa -= einsum('xie,zma,uwzbjme,zuwx,xyzu->xyzijab', t1a, t1a, uccsd_eris.voov, P, P)
+    u2aa += np.einsum('xie,yuxjbea,yxuz->xyzijab', t1a, uccsd_eris.ovvv.conj(), P)
+    u2aa -= np.einsum('zma,xzyimjb->xyzijab', t1a, uccsd_eris.ooov.conj())
+    u2aa = u2aa - u2aa.transpose(1,0,2,4,3,5,6)
+    u2aa = u2aa - np.einsum('xyzijab,xyzu->xyuijba', u2aa, P)
+    Ht2aa += u2aa
+
+    u2bb  = einsum('xwzimae,wvumebj,xwzv,wuvy->xyzijab', t2bb, WOVVO_J_-WOVVO_K_, P, P)
+    u2bb += einsum('wxvMiEa,wvuMEbj,xwzv,wuvy->xyzijab', t2ab, WovVO_J_-WovVO_K_, P, P)
+    u2bb += einsum('xie,zma,zwumjbe,zuwx,xyzu->xyzijab', t1b, t1b, uccsd_eris.OOVV, P, P)
+    u2bb -= einsum('xie,zma,uwzbjme,zuwx,xyzu->xyzijab', t1b, t1b, uccsd_eris.VOOV, P, P)
+    u2bb += np.einsum('xie,yuxjbea,yxuz->xyzijab', t1b, uccsd_eris.OVVV.conj(), P)
+    u2bb -= np.einsum('zma,xzyimjb->xyzijab', t1b, uccsd_eris.OOOV.conj())
+    u2bb = u2bb - u2bb.transpose(1,0,2,4,3,5,6)
+    u2bb = u2bb - np.einsum('xyzijab,xyzu->xyuijba', u2bb, P)
+    Ht2bb += u2bb
+
+    Ht2ab += np.einsum('xie,yuxJBea,yxuz->xyziJaB', t1a, uccsd_eris.OVvv.conj(), P)
+    Ht2ab += np.einsum('yJE,xzyiaEB,xyzu->xyziJaB', t1b, uccsd_eris.ovVV.conj(), P)
+    Ht2ab -= np.einsum('zma,xzyimjb->xyzijab', t1a, uccsd_eris.ooOV.conj())
+    Ht2ab -= np.einsum('umb,yuxjmia,xyuz->xyzijab', t1b, uccsd_eris.OOov.conj(), P)
 
     mo_ea_v = [uccsd_eris.fock[0][k,nocca:,nocca:].diagonal() for k in range(nkpts)]
     mo_eb_v = [uccsd_eris.fock[1][k,noccb:,noccb:].diagonal() for k in range(nkpts)]
     mo_ea_o = [uccsd_eris.fock[0][k,:nocca,:nocca].diagonal() for k in range(nkpts)]
     mo_eb_o = [uccsd_eris.fock[1][k,:noccb,:noccb].diagonal() for k in range(nkpts)]
-    Ht1a, Ht1b = kccsd.spin2spatial(t1new, orbspin, kconserv)
-    for ki in range(nkpts):
-        Ht1a[ki] /= (mo_ea_o[ki][:,None] - mo_ea_v[ki])
-        Ht1b[ki] /= (mo_eb_o[ki][:,None] - mo_eb_v[ki])
 
-    eijab = np.zeros(shape=(nocc, nocc, nvir, nvir), dtype=t2new.dtype)
-    kconserv = kpts_helper.get_kconserv(cc._scf.cell, cc.kpts)
+    eia = []
+    eIA = []
+    for ki in range(nkpts):
+        eia.append([mo_ea_o[ki][:,None] - mo_ea_v[ka] for ka in range(nkpts)])
+        eIA.append([mo_eb_o[ki][:,None] - mo_eb_v[ka] for ka in range(nkpts)])
+
+    for ki in range(nkpts):
+        Ht1a[ki] /= eia[ki][ki]
+        Ht1b[ki] /= eIA[ki][ki]
+
     for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
         kb = kconserv[ki, ka, kj]
-        eijab = (foo[ki].diagonal()[:, None, None, None] + foo[kj].diagonal()[None, :, None, None] -
-                 fvv[ka].diagonal()[None, None, :, None] - fvv[kb].diagonal()[None, None, None, :])
-        # Due to padding; see above discussion concerning t1new in update_amps()
-        idx = np.where(abs(eijab) < LOOSE_ZERO_TOL)[0]
-        eijab[idx] = LARGE_DENOM
+        eijab = eia[ki][ka][:,None,:,None] + eia[kj][kb][:,None,:]
+        eijab[abs(eijab) < LOOSE_ZERO_TOL] = LARGE_DENOM
+        Ht2aa[ki,kj,ka] /= eijab
 
-        t2new[ki, kj, ka] /= eijab
+        eijab = eia[ki][ka][:,None,:,None] + eIA[kj][kb][:,None,:]
+        eijab[abs(eijab) < LOOSE_ZERO_TOL] = LARGE_DENOM
+        Ht2ab[ki,kj,ka] /= eijab
 
-    Ht1 = Ht1a, Ht1b#kccsd.spin2spatial(t1new, orbspin, kconserv)
-    Ht2 = kccsd.spin2spatial(t2new, orbspin, kconserv)
+        eijab = eIA[ki][ka][:,None,:,None] + eIA[kj][kb][:,None,:]
+        eijab[abs(eijab) < LOOSE_ZERO_TOL] = LARGE_DENOM
+        Ht2bb[ki,kj,ka] /= eijab
 
     time0 = log.timer_debug1('update t1 t2', *time0)
-    return Ht1, Ht2
+    return (Ht1a, Ht1b), (Ht2aa, Ht2ab, Ht2bb)
 
 
 def get_normt_diff(cc, t1, t2, t1new, t2new):
