@@ -48,7 +48,7 @@ def rand_t1_t2(cell, kpts, nocc, nvir):
     t2aa = (numpy.random.random((nkpts,nkpts,nkpts,nocca,nocca,nvira,nvira)) +
             numpy.random.random((nkpts,nkpts,nkpts,nocca,nocca,nvira,nvira))*1j - .5-.5j)
     kconserv = kpts_helper.get_kconserv(cell, kpts)
-    t2aa = t2aa - t2aa.transpose(0,2,1,4,3,5,6)
+    t2aa = t2aa - t2aa.transpose(1,0,2,4,3,5,6)
     tmp = t2aa.copy()
     for ki, kj, kk in kpts_helper.loop_kkk(nkpts):
         kl = kconserv[ki, kk, kj]
@@ -57,7 +57,7 @@ def rand_t1_t2(cell, kpts, nocc, nvir):
             numpy.random.random((nkpts,nkpts,nkpts,nocca,noccb,nvira,nvirb))*1j - .5-.5j)
     t2bb = (numpy.random.random((nkpts,nkpts,nkpts,noccb,noccb,nvirb,nvirb)) +
             numpy.random.random((nkpts,nkpts,nkpts,noccb,noccb,nvirb,nvirb))*1j - .5-.5j)
-    t2bb = t2bb - t2bb.transpose(0,2,1,4,3,5,6)
+    t2bb = t2bb - t2bb.transpose(1,0,2,4,3,5,6)
     tmp = t2bb.copy()
     for ki, kj, kk in kpts_helper.loop_kkk(nkpts):
         kl = kconserv[ki, kk, kj]
