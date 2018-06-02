@@ -186,6 +186,7 @@ def update_amps(cc, t1, t2, eris):
 
     eris_oovo = np.zeros(shape=(nkpts, nkpts, nkpts, nocc, nocc, nvir, nocc), dtype=t2.dtype)
     eris_vvvo = np.zeros(shape=(nkpts, nkpts, nkpts, nvir, nvir, nvir, nocc), dtype=t2.dtype)
+    eris_oovv = eris.oovv
     for km, kb, ke in kpts_helper.loop_kkk(nkpts):
         kj = kconserv[km, ke, kb]
         # <mn||je> -> -<mn||ej>
@@ -205,12 +206,11 @@ def update_amps(cc, t1, t2, eris):
         #:t1new[ka] += -einsum('ma,mi->ia', t1[ka], Foo[ka])
         for km in range(nkpts):
             t1new[ka] += einsum('imae,me->ia', t2[ka, km, ka], Fov[km])
-            #t1new[ka] += -einsum('nf,naif->ia', t1[km], eris.ovov[km, ka, ki])
-            t1new[ka] += -einsum('nf,naif->ia', t1[km], uccsd_eris._kccsd_eris_j.ovov[km, ka, ki])
-            t1new[ka] -= -einsum('nf,naif->ia', t1[km], uccsd_eris._kccsd_eris_k.ovov[km, ka, ki])
+            #t1new[ka] += -einsum('nf,naif->ia', t1[km], uccsd_eris._kccsd_eris_j.ovov[km, ka, ki])
+            #t1new[ka] -= -einsum('nf,naif->ia', t1[km], uccsd_eris._kccsd_eris_k.ovov[km, ka, ki])
             for kn in range(nkpts):
                 ke = kconserv[km, ki, kn]
-                t1new[ka] += -0.5 * einsum('imef,maef->ia', t2[ki, km, ke], eris.ovvv[km, ka, ke])
+                #t1new[ka] += -0.5 * einsum('imef,maef->ia', t2[ki, km, ke], eris.ovvv[km, ka, ke])
                 t1new[ka] += -0.5 * einsum('mnae,nmei->ia', t2[km, kn, ka], eris_oovo[kn, km, ke])
 
     for ka in range(nkpts):
@@ -218,7 +218,89 @@ def update_amps(cc, t1, t2, eris):
         Ht1b[ka] += einsum('ie,ae->ia', t1b[ka], FVV_[ka])
         Ht1a[ka] -= einsum('ma,mi->ia', t1a[ka], Foo_[ka])
         Ht1b[ka] -= einsum('ma,mi->ia', t1b[ka], FOO_[ka])
+
+        for km in range(nkpts):
+            # ka == ki; km == kf == km
+            # <ma||if> = [mi|af] - [mf|ai]
+            #         => [mi|af] - [fm|ia]
+            Ht1a[ka] += einsum('mf,aimf->ia', t1a[km], uccsd_eris.voov[ka, ka, km])
+            Ht1a[ka] += - 1. * einsum('mf,afmi->ia', t1a[km], uccsd_eris.vvoo[ka, km, km])
+            Ht1a[ka] += einsum('MF,aiMF->ia', t1b[km], uccsd_eris.voOV[ka, ka, km])
+
+            # miaf - mfai => miaf - fmia
+            Ht1b[ka] += einsum('MF,AIMF->IA', t1b[km], uccsd_eris.VOOV[ka, ka, km])
+            Ht1b[ka] += - 1. * einsum('MF,AFMI->IA', t1b[km], uccsd_eris.VVOO[ka, km, km])
+            Ht1b[ka] += einsum('mf,AImf->IA', t1a[km], uccsd_eris.VOov[ka, ka, km])
+
+            for kf in range(nkpts):
+                ki = ka
+                ke = kconserv[ki, kf, km]
+                Ht1a[ka] +=   0.5 * einsum('imef,aemf->ia', t2aa[ki, km, ke], uccsd_eris.vvov[ka, ke, km])
+                Ht1a[ka] +=   1.0 * einsum('iMeF,aeMF->ia', t2ab[ki, km, ke], uccsd_eris.vvOV[ka, ke, km])
+                Ht1a[ka] += - 0.5 * einsum('imef,afme->ia', t2aa[ki, km, ke], uccsd_eris.vvov[ka, kf, km])
+
+                Ht1b[ka] +=   0.5 * einsum('IMEF,AEMF->IA', t2bb[ki, km, ke], uccsd_eris.VVOV[ka, ke, km])
+                Ht1b[ka] +=   1.0 * einsum('mIfE,AEmf->IA', t2ab[km, ki, kf], uccsd_eris.VVov[ka, ke, km])
+                Ht1b[ka] += - 0.5 * einsum('IMEF,AFME->IA', t2bb[ki, km, ke], uccsd_eris.VVOV[ka, kf, km])
+
+
     t1new += kccsd.spatial2spin((Ht1a, Ht1b), orbspin, kconserv)
+
+    for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
+        # Chemist's notation for momentum conserving t2(ki,kj,ka,kb)
+        kb = kconserv[ki, ka, kj]
+
+        # Fvv equation
+        Ftmpa_kb = Fvv_[kb] - 0.5 * einsum('mb,me->be', t1a[kb], Fov_[kb])
+        Ftmpb_kb = FVV_[kb] - 0.5 * einsum('MB,ME->BE', t1b[kb], FOV_[kb])
+
+        Ftmpa_ka = Fvv_[ka] - 0.5 * einsum('mb,me->be', t1a[ka], Fov_[ka])
+        Ftmpb_ka = FVV_[ka] - 0.5 * einsum('MB,ME->BE', t1b[ka], FOV_[ka])
+
+        tmp = einsum('ijae,be->ijab', t2aa[ki, kj, ka], Ftmpa_kb)
+        Ht2aa[ki, kj, ka] += tmp
+
+        tmp = einsum('IJAE,BE->IJAB', t2bb[ki, kj, ka], Ftmpb_kb)
+        Ht2bb[ki, kj, ka] += tmp
+
+        tmp = einsum('iJaE,BE->iJaB', t2ab[ki, kj, ka], Ftmpb_kb)
+        Ht2ab[ki, kj, ka] += tmp
+
+        tmp = einsum('iJeB,ae->iJaB', t2ab[ki, kj, ka], Ftmpa_ka)
+        Ht2ab[ki, kj, ka] += tmp
+
+        #P(ab)
+        tmp = einsum('ijbe,ae->ijab', t2aa[ki, kj, kb], Ftmpa_ka)
+        Ht2aa[ki, kj, ka] -= tmp
+
+        tmp = einsum('IJBE,AE->IJAB', t2bb[ki, kj, kb], Ftmpb_ka)
+        Ht2bb[ki, kj, ka] -= tmp
+
+        # Foo equation
+        Ftmpa_kj = Foo_[kj] + 0.5 * einsum('je,me->mj', t1a[kj], Fov_[kj])
+        Ftmpb_kj = FOO_[kj] + 0.5 * einsum('JE,ME->MJ', t1b[kj], FOV_[kj])
+
+        Ftmpa_ki = Foo_[ki] + 0.5 * einsum('je,me->mj', t1a[ki], Fov_[ki])
+        Ftmpb_ki = FOO_[ki] + 0.5 * einsum('JE,ME->MJ', t1b[ki], FOV_[ki])
+
+        tmp = einsum('imab,mj->ijab', t2aa[ki, kj, ka], Ftmpa_kj)
+        Ht2aa[ki, kj, ka] -= tmp
+
+        tmp = einsum('IMAB,MJ->IJAB', t2bb[ki, kj, ka], Ftmpb_kj)
+        Ht2bb[ki, kj, ka] -= tmp
+
+        tmp = einsum('iMaB,MJ->iJaB', t2ab[ki, kj, ka], Ftmpb_kj)
+        Ht2ab[ki, kj, ka] -= tmp
+
+        tmp = einsum('mJaB,mi->iJaB', t2ab[ki, kj, ka], Ftmpa_ki)
+        Ht2ab[ki, kj, ka] -= tmp
+
+        #P(ij)
+        tmp = einsum('jmab,mi->ijab', t2aa[kj, ki, ka], Ftmpa_ki)
+        Ht2aa[ki, kj, ka] += tmp
+
+        tmp = einsum('JMAB,MI->IJAB', t2bb[kj, ki, ka], Ftmpb_ki)
+        Ht2bb[ki, kj, ka] += tmp
 
     # T2 equation
     t2new = np.array(eris.oovv).conj()
@@ -226,23 +308,23 @@ def update_amps(cc, t1, t2, eris):
         # Chemist's notation for momentum conserving t2(ki,kj,ka,kb)
         kb = kconserv[ki, ka, kj]
 
-        Ftmp = Fvv[kb] - 0.5 * einsum('mb,me->be', t1[kb], Fov[kb])
-        tmp = einsum('ijae,be->ijab', t2[ki, kj, ka], Ftmp)
-        t2new[ki, kj, ka] += tmp
+        #Ftmp = Fvv[kb] - 0.5 * einsum('mb,me->be', t1[kb], Fov[kb])
+        #tmp = einsum('ijae,be->ijab', t2[ki, kj, ka], Ftmp)
+        #t2new[ki, kj, ka] += tmp
 
-        #t2new[ki,kj,kb] -= tmp.transpose(0,1,3,2)
-        Ftmp = Fvv[ka] - 0.5 * einsum('ma,me->ae', t1[ka], Fov[ka])
-        tmp = einsum('ijbe,ae->ijab', t2[ki, kj, kb], Ftmp)
-        t2new[ki, kj, ka] -= tmp
+        ##t2new[ki,kj,kb] -= tmp.transpose(0,1,3,2)
+        #Ftmp = Fvv[ka] - 0.5 * einsum('ma,me->ae', t1[ka], Fov[ka])
+        #tmp = einsum('ijbe,ae->ijab', t2[ki, kj, kb], Ftmp)
+        #t2new[ki, kj, ka] -= tmp
 
-        Ftmp = Foo[kj] + 0.5 * einsum('je,me->mj', t1[kj], Fov[kj])
-        tmp = einsum('imab,mj->ijab', t2[ki, kj, ka], Ftmp)
-        t2new[ki, kj, ka] -= tmp
+        #Ftmp = Foo[kj] + 0.5 * einsum('je,me->mj', t1[kj], Fov[kj])
+        #tmp = einsum('imab,mj->ijab', t2[ki, kj, ka], Ftmp)
+        #t2new[ki, kj, ka] -= tmp
 
-        #t2new[kj,ki,ka] += tmp.transpose(1,0,2,3)
-        Ftmp = Foo[ki] + 0.5 * einsum('ie,me->mi', t1[ki], Fov[ki])
-        tmp = einsum('jmab,mi->ijab', t2[kj, ki, ka], Ftmp)
-        t2new[ki, kj, ka] += tmp
+        ##t2new[kj,ki,ka] += tmp.transpose(1,0,2,3)
+        #Ftmp = Foo[ki] + 0.5 * einsum('ie,me->mi', t1[ki], Fov[ki])
+        #tmp = einsum('jmab,mi->ijab', t2[kj, ki, ka], Ftmp)
+        #t2new[ki, kj, ka] += tmp
 
         for km in range(nkpts):
             # Wminj
@@ -755,6 +837,7 @@ def _make_eris_incore(cc, mo_coeff=None):
     ooov = eri[:, :, :, :nocc, :nocc, :nocc, nocc:] / nkpts
     ovoo = eri[:, :, :, :nocc, nocc:, :nocc, :nocc] / nkpts
     oovv = eri[:, :, :, :nocc, :nocc, nocc:, nocc:] / nkpts
+    vvoo = eri[:, :, :, nocc:, nocc:, :nocc, :nocc] / nkpts
     ovov = eri[:, :, :, :nocc, nocc:, :nocc, nocc:] / nkpts
     ovvv = eri[:, :, :, :nocc, nocc:, nocc:, nocc:] / nkpts
     voov = eri[:, :, :, nocc:, :nocc, :nocc, nocc:] / nkpts
@@ -766,9 +849,11 @@ def _make_eris_incore(cc, mo_coeff=None):
     eris.ooov, eris.ooOV, eris.OOov, eris.OOOV = _eri_spin2spatial(ooov, 'ooov', eris)
     eris.ovoo, eris.ovOO, eris.OVoo, eris.OVOO = _eri_spin2spatial(ovoo, 'ovoo', eris)
     eris.oovv, eris.ooVV, eris.OOvv, eris.OOVV = _eri_spin2spatial(oovv, 'oovv', eris)
+    eris.vvoo, eris.vvOO, eris.VVoo, eris.VVOO = _eri_spin2spatial(vvoo, 'vvoo', eris)
     eris.ovov, eris.ovOV, eris.OVov, eris.OVOV = _eri_spin2spatial(ovov, 'ovov', eris)
     eris.voov, eris.voOV, eris.VOov, eris.VOOV = _eri_spin2spatial(voov, 'voov', eris)
     eris.vovv, eris.voVV, eris.VOvv, eris.VOVV = _eri_spin2spatial(vovv, 'vovv', eris)
+    eris.vvov, eris.vvOV, eris.VVov, eris.VVOV = _eri_spin2spatial(vvov, 'vvov', eris)
     eris.ovvv, eris.ovVV, eris.OVvv, eris.OVVV = _eri_spin2spatial(ovvv, 'ovvv', eris)
     eris.vvvv, eris.vvVV, eris.VVvv, eris.VVVV = _eri_spin2spatial(vvvv, 'vvvv', eris)
 
