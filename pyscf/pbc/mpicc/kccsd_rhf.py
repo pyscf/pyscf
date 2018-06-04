@@ -945,7 +945,7 @@ def energy_tril(cc, t1, t2, eris):
 
 class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
 
-    def __init__(self, mf, frozen=0, mo_energy=None, mo_coeff=None, mo_occ=None):
+    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
         pyscf.pbc.cc.kccsd_rhf.RCCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
         self.kconserv = kpts_helper.get_kconserv(mf.cell, mf.kpts)
 
@@ -2701,9 +2701,7 @@ class _ERIS:
             BLKSIZE = (1,nkpts_blksize,nkpts,)
             if rank == 0:
                 log.info("ERI oopq blksize = (%3d %3d %3d)" % BLKSIZE)
-            print 'loader getting ready'
             loader = mpi_load_balancer.load_balancer(BLKSIZE=BLKSIZE)
-            print 'loader done'
             loader.set_ranges((range(nkpts),range(nkpts),range(nkpts),))
 
             def get_norbitals_from_string(string):
