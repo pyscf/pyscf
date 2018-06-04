@@ -13,7 +13,9 @@
 # limitations under the License.
 
 add_library(dft SHARED 
-  CxLebedevGrid.c grid_basis.c nr_numint.c r_numint.c)
+  CxLebedevGrid.c grid_basis.c nr_numint.c r_numint.c
+  #numint_uniform_grid.c
+  )
 
 set_target_properties(dft PROPERTIES
   LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}

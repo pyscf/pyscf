@@ -14,7 +14,7 @@
 # limitations under the License.
 
 '''
-Python XC functional implementation. The backup module in case libxc and xcfun
+Python XC functional implementation, the backup module if neither libxc nor xcfun
 libraries are not available
 '''
 

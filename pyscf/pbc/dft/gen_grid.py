@@ -59,7 +59,7 @@ def make_mask(cell, coords, relativity=0, shls_slice=None, verbose=None):
                            cell._env.ctypes.data_as(ctypes.c_void_p))
     return non0tab
 
-class UniformGrids(object):
+class UniformGrids(lib.StreamObject):
     '''Uniform Grid class.'''
 
     def __init__(self, cell):
