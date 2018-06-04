@@ -35,6 +35,8 @@
 #define HERMITIAN       1
 #define ANTIHERMI       2
 #define SYMMETRIC       3
+#define OF_CMPLX        2
+#define EXPCUTOFF15     40
 
 #define SQUARE(x)       (*(x) * *(x) + *(x+1) * *(x+1) + *(x+2) * *(x+2))
 
@@ -56,21 +58,52 @@ static const int _CUM_LEN_CART[] = {
         1, 4, 10, 20, 35, 56, 84, 120, 165, 220, 286, 364, 455, 560, 680, 816,
 };
 
+/*
+ * rcut is the distance over which the integration (from rcut to infty) is
+ * smaller than the required precision
+ * integral ~= \int_{rcut}^infty r^{l+2} exp(-alpha r^2) dr
+ * * if l is odd:
+ *   integral <= exp(-alpha {rcut}^2) [rcut^{l+1}/(2 alpha)
+ *                                     + (l+1) rcut^{l-1}/(2 alpha)^2
+ *                                     + ... + (l+1)!!/(2 alpha)^{(l+1)/2+1}]
+ * * if l is even:
+ *   integral <  exp(-alpha {rcut}^2) [rcut^{l+2}/(2 alpha)
+ *                                     + (l+2) rcut^{l}/(2 alpha)^2
+ *                                     + ... + (l+2)!!/(2 alpha)^{l/2+2}]
+ */
 static double gto_rcut(double alpha, int l, double c, double log_prec)
 {
+        log_prec -= 7;  // Add penalty 1e-3 for integral factors and coefficients
+        double log_c = log(fabs(c));
+        double prod = 0;
         double r = 5.;
-        double log_r = log(r);
-        double log_c = 0;//log(abs(c));
-        log_r = .5 * log(((l+2) * log_r + log_c - log_prec) / alpha);
-        r = sqrt(((l+2) * log_r + log_c - log_prec) / alpha);
+//TODO:        double log_2a = log(2*alpha);
+//TODO:        double log_r = log(r);
+//TODO:
+//TODO:        if (2*log_r + log_2a > 0) {
+//TODO:                prod = (l+2) * log_r - log_2a;
+//TODO:                prod = MAX(prod, 0);
+//TODO:        } else {
+//TODO:                prod = -(l*.5+2) * log_2a;
+//TODO:        }
+        prod += log_c - log_prec;
+        if (prod > 0) {
+                r = sqrt(prod / alpha);
+        } else {
+                r = 0;
+        }
         return r;
 }
 
 static void _cartesian_components(double *xs_exp, int *img_slice, int *grid_slice,
                                   double *a, double xi, double xij, double aij,
                                   int periodic, int nx_per_cell, int topl,
-                                  double edge0, double edge1, double *cache)
+                                  double x_frac, double cutoff, double heights_inv,
+                                  double *cache)
 {
+        double edge0 = x_frac - cutoff * heights_inv;
+        double edge1 = x_frac + cutoff * heights_inv;
+
         int nimg0 = 0;
         int nimg1 = 1;
         if (periodic) {
@@ -80,8 +113,16 @@ static void _cartesian_components(double *xs_exp, int *img_slice, int *grid_slic
 
         int nx0 = (int)floor(edge0 * nx_per_cell);
         int nx1 = (int)ceil (edge1 * nx_per_cell);
-        nx0 = MAX(nx0, nimg0 * nx_per_cell);
-        nx1 = MIN(nx1, nimg1 * nx_per_cell);
+        // to ensure nx0, nx1 in unit cell
+        if (periodic) {
+                nx0 = (nx0 + nimg1 * nx_per_cell) % nx_per_cell;
+                nx1 = (nx1 + nimg1 * nx_per_cell) % nx_per_cell;
+        } else {
+                nx0 = MIN(nx0, nx_per_cell);
+                nx0 = MAX(nx0, 0);
+                nx1 = MIN(nx1, nx_per_cell);
+                nx1 = MAX(nx1, 0);
+        }
         img_slice[0] = nimg0;
         img_slice[1] = nimg1;
         grid_slice[0] = nx0;
@@ -90,44 +131,67 @@ static void _cartesian_components(double *xs_exp, int *img_slice, int *grid_slic
         int nimg = nimg1 - nimg0;
         int nmx = nimg * nx_per_cell;
 
-        double img0_x = *a * nimg0;
-        double dx = *a / nx_per_cell;
-        double x0xij = img0_x - xij;
-        double x0xi = img0_x - xi;
-        double x;
-
-        double *gridx = cache;
-        double *xs_all = cache + nimg * nx_per_cell;
-
         int i, m, l;
         double *px0;
 
-        for (i = 0; i < nmx; i++) {
-                x = x0xij + i * dx;
-                xs_all[i] = exp(-aij * x * x);
+        double *gridx = cache;
+        double *xs_all = cache + nimg * nx_per_cell;
+        if (!periodic) {
+                xs_all = xs_exp;
         }
 
-        for (i = 0; i < nmx; i++) {
-                gridx[i] = x0xi + i * dx;
+        int grid_close_to_xij = (int)(x_frac * nx_per_cell);
+        double img0_x = *a * nimg0;
+        double dx = *a / nx_per_cell;
+        double base_x = img0_x + dx * grid_close_to_xij;
+        double x0xij = base_x - xij;
+        double exp_dxdx = exp(-aij * dx * dx);
+        double exp_2dxdx = exp_dxdx * exp_dxdx;
+        double exp_x0 = exp(-2 * aij * x0xij * dx) * exp_dxdx;
+
+        xs_all[grid_close_to_xij] = exp(-aij * x0xij * x0xij);
+        for (i = grid_close_to_xij+1; i < nmx; i++) {
+                xs_all[i] = xs_all[i-1] * exp_x0;
+                exp_x0 *= exp_2dxdx;
         }
-        for (l = 1; l <= topl; l++) {
-                px0 = xs_all + (l-1) * nmx;
+
+        exp_x0 = exp(2 * aij * x0xij * dx) * exp_dxdx;
+        for (i = grid_close_to_xij-1; i >= 0; i--) {
+                xs_all[i] = xs_all[i+1] * exp_x0;
+                exp_x0 *= exp_2dxdx;
+        }
+
+        if (topl > 0) {
+                double x0xi = img0_x - xi;
                 for (i = 0; i < nmx; i++) {
-                        px0[nmx+i] = px0[i] * gridx[i];
+                        gridx[i] = x0xi + i * dx;
                 }
-        }
-
-        for (i = 0; i < nx_per_cell*(topl+1); i++) {
-                xs_exp[i] = 0;
-        }
-        for (l = 0; l <= topl; l++) {
-                for (m = 0; m < nimg; m++) {
-                        px0 = xs_all + l * nmx + m*nx_per_cell;
-                        for (i = 0; i < nx_per_cell; i++) {
-                                xs_exp[l*nx_per_cell+i] += px0[i];
+                for (l = 1; l <= topl; l++) {
+                        px0 = xs_all + (l-1) * nmx;
+                        for (i = 0; i < nmx; i++) {
+                                px0[nmx+i] = px0[i] * gridx[i];
                         }
                 }
         }
+
+        if (periodic) {
+                for (l = 0; l <= topl; l++) {
+                        px0 = xs_all + l * nmx;
+                        for (i = 0; i < nx_per_cell; i++) {
+                                xs_exp[i] = px0[i];
+                        }
+                        for (m = 1; m < nimg; m++) {
+                                px0 = xs_all + l * nmx + m*nx_per_cell;
+                                for (i = 0; i < nx_per_cell; i++) {
+                                        xs_exp[l*nx_per_cell+i] += px0[i];
+                                }
+                        }
+                }
+        }
+}
+static int _has_overlap(int nx0, int nx1, int nx_per_cell)
+{
+        return nx0 < nx1;
 }
 
 void GTOnumint_3d_orth(double *out, int floorl, int topl,
@@ -156,12 +220,6 @@ void GTOnumint_3d_orth(double *out, int floorl, int topl,
         double xheights_inv = b[0];
         double yheights_inv = b[4];
         double zheights_inv = b[8];
-        double xedge0 = x_frac - cutoff * xheights_inv;
-        double xedge1 = x_frac + cutoff * xheights_inv;
-        double yedge0 = y_frac - cutoff * yheights_inv;
-        double yedge1 = y_frac + cutoff * yheights_inv;
-        double zedge0 = z_frac - cutoff * zheights_inv;
-        double zedge1 = z_frac + cutoff * zheights_inv;
 
         double *xs_exp = cache;
         double *ys_exp = xs_exp + (topl+1) * mesh[0];
@@ -170,12 +228,15 @@ void GTOnumint_3d_orth(double *out, int floorl, int topl,
 
         int img_slice[6];
         int grid_slice[6];
-        _cartesian_components(xs_exp, img_slice, grid_slice, a, ri[0], rij[0], aij,
-                              (dimension>=1), mesh[0], topl, xedge0, xedge1, cache);
-        _cartesian_components(ys_exp, img_slice+2, grid_slice+2, a+4, ri[1], rij[1], aij,
-                              (dimension>=2), mesh[1], topl, yedge0, yedge1, cache);
-        _cartesian_components(zs_exp, img_slice+4, grid_slice+4, a+8, ri[2], rij[2], aij,
-                              (dimension>=3), mesh[2], topl, zedge0, zedge1, cache);
+        _cartesian_components(xs_exp, img_slice, grid_slice, a,
+                              ri[0], rij[0], aij, (dimension>=1), mesh[0], topl,
+                              x_frac, cutoff, xheights_inv, cache);
+        _cartesian_components(ys_exp, img_slice+2, grid_slice+2, a+4,
+                              ri[1], rij[1], aij, (dimension>=2), mesh[1], topl,
+                              y_frac, cutoff, yheights_inv, cache);
+        _cartesian_components(zs_exp, img_slice+4, grid_slice+4, a+8,
+                              ri[2], rij[2], aij, (dimension>=3), mesh[2], topl,
+                              z_frac, cutoff, zheights_inv, cache);
 
         int nimgx0 = img_slice[0];
         int nimgx1 = img_slice[1];
@@ -193,8 +254,7 @@ void GTOnumint_3d_orth(double *out, int floorl, int topl,
         int ny1 = grid_slice[3];
         int nz0 = grid_slice[4];
         int nz1 = grid_slice[5];
-        int ngridx = nx1 - nx0;
-        int ngridy = ny1 - ny0;
+        int ngridx, ngridy;
 
         const char TRANS_N = 'N';
         const double D0 = 0;
@@ -211,24 +271,41 @@ void GTOnumint_3d_orth(double *out, int floorl, int topl,
         double val;
 
         if (nimgx == 1) {
+                ngridx = nx1 - nx0;
                 dgemm_(&TRANS_N, &TRANS_N, &xcols, &l1, &ngridx,
-                       &fac, weights, &xcols, xs_exp+nx0, mesh,
+                       &fac, weights+nx0*xcols, &xcols, xs_exp+nx0, mesh,
                        &D0, weightyz, &xcols);
-        //TODO:} elif (nimgx == 2 && nx0_nx1_overlap) {
+        } else if (nimgx == 2 && !_has_overlap(nx0, nx1, mesh[0])) {
+                dgemm_(&TRANS_N, &TRANS_N, &xcols, &l1, &nx1,
+                       &fac, weights, &xcols, xs_exp, mesh,
+                       &D0, weightyz, &xcols);
+                ngridx = mesh[0] - nx0;
+                dgemm_(&TRANS_N, &TRANS_N, &xcols, &l1, &ngridx,
+                       &fac, weights+nx0*xcols, &xcols, xs_exp+nx0, mesh,
+                       &D1, weightyz, &xcols);
         } else {
                 dgemm_(&TRANS_N, &TRANS_N, &xcols, &l1, mesh,
                        &fac, weights, &xcols, xs_exp, mesh,
                        &D0, weightyz, &xcols);
         }
 
-        // TODO: merge the loop of lz?
         if (nimgy == 1) {
+                ngridy = ny1 - ny0;
                 for (lx = 0; lx <= topl; lx++) {
                         dgemm_(&TRANS_N, &TRANS_N, &ycols, &l1, &ngridy,
-                               &D1, weightyz+lx*xcols, &ycols, ys_exp+ny0, mesh+1,
+                               &D1, weightyz+lx*xcols+ny0*ycols, &ycols, ys_exp+ny0, mesh+1,
                                &D0, weightz+lx*l1*ycols, &ycols);
                 }
-        //TODO:} elif (nimgy == 2 && ny0_ny1_overlap) {
+        } else if (nimgy == 2 && !_has_overlap(ny0, ny1, mesh[1])) {
+                ngridy = mesh[1] - ny0;
+                for (lx = 0; lx <= topl; lx++) {
+                        dgemm_(&TRANS_N, &TRANS_N, &ycols, &l1, &ny1,
+                               &D1, weightyz+lx*xcols, &ycols, ys_exp, mesh+1,
+                               &D0, weightz+lx*l1*ycols, &ycols);
+                        dgemm_(&TRANS_N, &TRANS_N, &ycols, &l1, &ngridy,
+                               &D1, weightyz+lx*xcols+ny0*ycols, &ycols, ys_exp+ny0, mesh+1,
+                               &D1, weightz+lx*l1*ycols, &ycols);
+                }
         } else {
                 for (lx = 0; lx <= topl; lx++) {
                         dgemm_(&TRANS_N, &TRANS_N, &ycols, &l1, mesh+1,
@@ -250,6 +327,7 @@ void GTOnumint_3d_orth(double *out, int floorl, int topl,
                         }
                         out[n] = val;
                 } } }
+        //TODO:} elif (nimgz == 2 && ny0_ny1_overlap) {
         } else {
                 for (n = 0, l = floorl; l <= topl; l++) {
                 for (lx = l; lx >= 0; lx--) {
@@ -303,6 +381,16 @@ static void plain_prim_to_ctr(double *gc, const size_t nf, double *gp,
         }
 }
 
+static double max_pgto_coeff(double *coeff, int nprim, int nctr, int prim_id)
+{
+        int i;
+        double maxc = 0;
+        for (i = 0; i < nctr; i++) {
+                maxc = MAX(maxc, fabs(coeff[i*nprim+prim_id]));
+        }
+        return maxc;
+}
+
 int GTOnumint1e_loop(double *out, double fac, double log_prec,
                      int dimension, double *a, double *b,
                      int *mesh, double *weights,
@@ -337,13 +425,23 @@ int GTOnumint1e_loop(double *out, double fac, double log_prec,
         const int len_g1d = _CUM_LEN_CART[i_l+j_l] - offset_g1d;
         const size_t leni = len_g1d * i_ctr;
         const size_t lenj = len_g1d * i_ctr * j_ctr;
-        double *gctrj = malloc(sizeof(double)*(lenj + leni +  len_g1d + nf+10000));
+        double *gctrj = cache;
         double *gctri = gctrj + lenj;
         double *g = gctri + leni;
+        double *log_iprim_max = g + len_g1d;
+        double *log_jprim_max = log_iprim_max + i_prim;
+        cache += lenj + leni + len_g1d + i_prim + j_prim;
+
+        for (ip = 0; ip < i_prim; ip++) {
+                log_iprim_max[ip] = log(max_pgto_coeff(ci, i_prim, i_ctr, ip));
+        }
+        for (jp = 0; jp < j_prim; jp++) {
+                log_jprim_max[jp] = log(max_pgto_coeff(cj, j_prim, j_ctr, jp));
+        }
 
         double rrij = CINTsquare_dist(ri, rj);
         double fac1 = fac * CINTcommon_fac_sp(i_l) * CINTcommon_fac_sp(j_l);
-        double logc;
+        double logcc;
 
         *jempty = 1;
         for (jp = 0; jp < j_prim; jp++) {
@@ -351,14 +449,14 @@ int GTOnumint1e_loop(double *out, double fac, double log_prec,
                 for (ip = 0; ip < i_prim; ip++) {
                         aij = ai[ip] + aj[jp];
                         eij = (ai[ip] * aj[jp] / aij) * rrij;
-                        if (eij > EXPCUTOFF) {
+                        logcc = log_iprim_max[ip] + log_jprim_max[jp];
+                        if (eij-logcc > EXPCUTOFF15) { //(eij > EXPCUTOFF)?
                                 continue;
                         }
 
                         fac1i = fac1 * exp(-eij);
-                        logc = log_prec - 10; // TODO: estimate log(c)
                         GTOnumint_3d_orth(g, i_l, i_l+j_l, ai[ip], aj[jp],
-                                          fac1i, logc, dimension,
+                                          fac1i, logcc+log_prec, dimension,
                                           a, b, mesh, weights, envs, cache);
                         plain_prim_to_ctr(gctri, len_g1d, g,
                                           i_prim, i_ctr, ci+ip, *iempty);
@@ -376,24 +474,43 @@ int GTOnumint1e_loop(double *out, double fac, double log_prec,
                         GTOplain_vrr2d(out+n*nf, gctrj+n*len_g1d, cache, envs);
                 }
         }
-        free(gctrj);
 
         return !*jempty;
 }
 
-int GTO_numint1e_drv(double *out, int *dims, void (*f_c2s)(),
-                     double fac, double log_prec,
-                     int dimension, double *a, double *b,
-                     int *mesh, double *weights, CINTEnvVars *envs)
+static int _cache_size(int *mesh, CINTEnvVars *envs)
 {
         const int i_ctr = envs->x_ctr[0];
         const int j_ctr = envs->x_ctr[1];
         const int n_comp = envs->ncomp_e1 * envs->ncomp_tensor;
         const size_t nc = envs->nf * i_ctr * j_ctr;
-        double *gctr = malloc(sizeof(double) * (nc * n_comp + 1000000));
-        double *cache = gctr + nc * n_comp;
-        size_t n;
+        const int l = envs->i_l + envs->j_l;
+        const int l1 = l + 1;
+        size_t cache_size = 0;
+        cache_size += _CUM_LEN_CART[l] * (1 + i_ctr + i_ctr * j_ctr);
+        cache_size += l1 * (mesh[0] + mesh[1] + mesh[2]);
+        cache_size += l1 * mesh[1] * mesh[2];
+        cache_size += l1 * l1 * mesh[2];
+        cache_size += 20; // i_prim + j_prim
+        return nc * n_comp + MAX(cache_size, envs->nf * 8 * OF_CMPLX);
+}
 
+int GTO_numint1e_drv(double *out, int *dims, void (*f_c2s)(),
+                     double fac, double log_prec, int dimension,
+                     double *a, double *b, int *mesh, double *weights,
+                     CINTEnvVars *envs, double *cache)
+{
+        if (out == NULL) {
+                return _cache_size(mesh, envs);
+        }
+
+        const int i_ctr = envs->x_ctr[0];
+        const int j_ctr = envs->x_ctr[1];
+        const int n_comp = envs->ncomp_e1 * envs->ncomp_tensor;
+        const size_t nc = envs->nf * i_ctr * j_ctr;
+        double *gctr = cache;
+        cache += nc * n_comp;
+        size_t n;
         int has_value = GTOnumint1e_loop(gctr, fac, log_prec, dimension,
                                          a, b, mesh, weights, envs, cache);
         if (!has_value) {
@@ -418,32 +535,50 @@ int GTO_numint1e_drv(double *out, int *dims, void (*f_c2s)(),
                         (*f_c2s)(out+nout*n, gctr+nc*n, dims, envs, cache);
                 }
         }
-        free(gctr);
         return has_value;
 }
 
 int NUMINT1e_ovlp_cart(double *out, int *dims, int *shls,
                       int *atm, int natm, int *bas, int nbas, double *env,
                       double log_prec, int dimension, double *a, double *b,
-                      int *mesh, double *weights)
+                      int *mesh, double *weights, double *cache)
 {
         CINTEnvVars envs;
         int ng[] = {0, 0, 0, 0, 0, 1, 0, 1};
         CINTinit_int1e_EnvVars(&envs, ng, shls, atm, natm, bas, nbas, env);
         return GTO_numint1e_drv(out, dims, &c2s_cart_1e, 1., log_prec,
-                                dimension, a, b, mesh, weights, &envs);
+                                dimension, a, b, mesh, weights, &envs, cache);
 }
 
 int NUMINT1e_ovlp_sph(double *out, int *dims, int *shls,
                       int *atm, int natm, int *bas, int nbas, double *env,
                       double log_prec, int dimension, double *a, double *b,
-                      int *mesh, double *weights)
+                      int *mesh, double *weights, double *cache)
 {
         CINTEnvVars envs;
         int ng[] = {0, 0, 0, 0, 0, 1, 0, 1};
         CINTinit_int1e_EnvVars(&envs, ng, shls, atm, natm, bas, nbas, env);
         return GTO_numint1e_drv(out, dims, &c2s_sph_1e, 1., log_prec,
-                                dimension, a, b, mesh, weights, &envs);
+                                dimension, a, b, mesh, weights, &envs, cache);
+}
+
+static int _max_cache_size(int (*intor)(), int *shls_slice,
+                           int *atm, int natm, int *bas, int nbas, double *env,
+                           double *a, double *b, int *mesh, double *weights)
+{
+        int i, n;
+        int i0 = MIN(shls_slice[0], shls_slice[2]);
+        int i1 = MAX(shls_slice[1], shls_slice[3]);
+        int shls[2];
+        int cache_size = 0;
+        for (i = i0; i < i1; i++) {
+                shls[0] = i;
+                shls[1] = i;
+                n = (*intor)(NULL, NULL, shls, atm, natm, bas, nbas, env,
+                             0., 3, a, b, mesh, weights, NULL);
+                cache_size = MAX(cache_size, n);
+        }
+        return cache_size;
 }
 
 void NUMINT1e_fill2c(int (*intor)(), double *mat,
@@ -462,6 +597,9 @@ void NUMINT1e_fill2c(int (*intor)(), double *mat,
         const int njsh = jsh1 - jsh0;
         const size_t naoi = ao_loc[ish1] - ao_loc[ish0];
         const size_t naoj = ao_loc[jsh1] - ao_loc[jsh0];
+        const int cache_size = _max_cache_size(intor, shls_slice,
+                                               atm, natm, bas, nbas, env,
+                                               a, b, mesh, weights);
 #pragma omp parallel default(none) \
         shared(intor, mat, comp, hermi, ao_loc, \
                log_prec, dimension, a, b, mesh, weights, \
@@ -470,6 +608,7 @@ void NUMINT1e_fill2c(int (*intor)(), double *mat,
         int dims[] = {naoi, naoj};
         int ish, jsh, ij, i0, j0;
         int shls[2];
+        double *cache = malloc(sizeof(double) * cache_size);
 #pragma omp for schedule(dynamic)
         for (ij = 0; ij < nish*njsh; ij++) {
                 ish = ij / njsh;
@@ -486,8 +625,9 @@ void NUMINT1e_fill2c(int (*intor)(), double *mat,
                 i0 = ao_loc[ish] - ao_loc[ish0];
                 j0 = ao_loc[jsh] - ao_loc[jsh0];
                 (*intor)(mat+j0*naoi+i0, dims, shls, atm, natm, bas, nbas, env,
-                         log_prec, dimension, a, b, mesh, weights);
+                         log_prec, dimension, a, b, mesh, weights, cache);
         }
+        free(cache);
 }
         if (hermi != PLAIN) { // lower triangle of F-array
                 int ic;
@@ -496,3 +636,4 @@ void NUMINT1e_fill2c(int (*intor)(), double *mat,
                 }
         }
 }
+
