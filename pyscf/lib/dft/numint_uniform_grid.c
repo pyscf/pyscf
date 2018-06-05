@@ -13,7 +13,7 @@
     limitations under the License.
 
  *
- * Numerical integration on uniform grids
+ * Fast numerical integration on uniform grids
  *
  * Author: Qiming Sun <osirpt.sun@gmail.com>
  */
@@ -62,31 +62,48 @@ static const int _CUM_LEN_CART[] = {
  * rcut is the distance over which the integration (from rcut to infty) is
  * smaller than the required precision
  * integral ~= \int_{rcut}^infty r^{l+2} exp(-alpha r^2) dr
+ *
  * * if l is odd:
- *   integral <= exp(-alpha {rcut}^2) [rcut^{l+1}/(2 alpha)
- *                                     + (l+1) rcut^{l-1}/(2 alpha)^2
- *                                     + ... + (l+1)!!/(2 alpha)^{(l+1)/2+1}]
- * * if l is even:
- *   integral <  exp(-alpha {rcut}^2) [rcut^{l+2}/(2 alpha)
- *                                     + (l+2) rcut^{l}/(2 alpha)^2
- *                                     + ... + (l+2)!!/(2 alpha)^{l/2+2}]
+ *   integral = \sum_n (l+1)!!/(l+3-2n)!! * rcut^{l+3-2n}/(2 alpha)^n
+ *                     * exp(-alpha {rcut}^2)
+ *
+ * * elif l is even and rcut > 1:
+ *   integral < [\sum_{n<=l/2+1} (l+1)!!/(l+3-2n)!! * rcut^{l+3-2n}/(2 alpha)^n
+ *               + 1/(2 alpha)^(l/2+2)] * exp(-alpha {rcut}^2)
+ *
+ * * elif l is even and rcut < 1:
+ *   integral < [\sum_{n<=l/2+1} (l+1)!!/(l+3-2n)!! * rcut^{l+3-2n}/(2 alpha)^n] * exp(-alpha {rcut}^2)
+ *              + (l+1)!! / (2 alpha)^{l/2+1} * \sqrt(pi/alpha)/2
  */
 static double gto_rcut(double alpha, int l, double c, double log_prec)
 {
-        log_prec -= 7;  // Add penalty 1e-3 for integral factors and coefficients
+        // Add penalty 1e-2 for other integral factors and coefficients
+        log_prec -= 5 + log(4*M_PI);
+
         double log_c = log(fabs(c));
         double prod = 0;
         double r = 5.;
-//TODO:        double log_2a = log(2*alpha);
-//TODO:        double log_r = log(r);
-//TODO:
-//TODO:        if (2*log_r + log_2a > 0) {
-//TODO:                prod = (l+2) * log_r - log_2a;
-//TODO:                prod = MAX(prod, 0);
-//TODO:        } else {
-//TODO:                prod = -(l*.5+2) * log_2a;
-//TODO:        }
+        double log_2a = log(2*alpha);
+        double log_r = log(r);
+
+        if (2*log_r + log_2a > 1) { // r^2 >~ 3/(2a)
+                prod = (l+1) * log_r - log_2a;
+        } else {
+                prod = -(l+4)/2 * log_2a;
+        }
+
+        //log_r = .5 * (prod / alpha);
+        //if (2*log_r + log_2a > 1) {
+        //        prod = (l+1) * log_r - log_2a;
+        //} else {
+        //        prod = -(l+4)/2 * log_2a;
+        //}
+
         prod += log_c - log_prec;
+        if (prod < alpha) {
+                // if rcut < 1, estimataion based on exp^{-a*rcut^2}
+                prod = log_c - log_prec;
+        }
         if (prod > 0) {
                 r = sqrt(prod / alpha);
         } else {
