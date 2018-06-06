@@ -425,25 +425,38 @@ def get_normt_diff(cc, t1, t2, t1new, t2new):
 def energy(cc, t1, t2, eris):
     from pyscf.pbc.cc import kccsd
 
-    orbspin = eris.mo_coeff.orbspin
-    kconserv = kpts_helper.get_kconserv(cc._scf.cell, cc.kpts)
-    t1 = kccsd.spatial2spin(t1, orbspin, kconserv)
-    t2 = kccsd.spatial2spin(t2, orbspin, kconserv)
+    orbspin = eris._kccsd_eris.orbspin
+    t1a, t1b = t1
+    t2aa, t2ab, t2bb = t2
 
-    nkpts, nocc, nvir = t1.shape
-    fock = eris.fock
-    eris_oovv = eris.oovv.copy()
-    e = 0.0 + 0j
+    kka, noa, nva = t1a.shape
+    kkb, nob, nvb = t1b.shape
+    assert(kka == kkb)
+    nkbps = kka
+    s = 0.0 + 0j
+    fa, fb = eris.fock
     for ki in range(nkpts):
-        e += einsum('ia,ia', fock[ki, :nocc, nocc:], t1[ki, :, :])
-    t1t1 = np.zeros(shape=t2.shape, dtype=t2.dtype)
+        s += einsum('ia,ia', fa[ki, :noa, noa:], t1a[ki, :, :])
+        s += einsum('ia,ia', fb[ki, :nob, nob:], t1b[ki, :, :])
+    t1t1aa = np.zeros(shape=t2aa.shape, dtype=t2aa.dtype)
+    t1t1ab = np.zeros(shape=t2ab.shape, dtype=t2ab.dtype)
+    t1t1bb = np.zeros(shape=t2bb.shape, dtype=t2bb.dtype)
     for ki in range(nkpts):
         ka = ki
         for kj in range(nkpts):
-            #kb = kj
-            t1t1[ki, kj, ka, :, :, :, :] = einsum('ia,jb->ijab', t1[ki, :, :], t1[kj, :, :])
-    tau = t2 + 2 * t1t1
-    e += 0.25 * np.dot(tau.flatten(), eris_oovv.flatten())
+            t1t1aa[ki, kj, ka, :, :, :, :] = einsum('ia,jb->ijab', t1a[ki, :, :], t1a[kj, :, :])
+            t1t1ab[ki, kj, ka, :, :, :, :] = einsum('ia,jb->ijab', t1a[ki, :, :], t1b[kj, :, :])
+            t1t1bb[ki, kj, ka, :, :, :, :] = einsum('ia,jb->ijab', t1b[ki, :, :], t1b[kj, :, :])
+    tauaa = t2aa + 2*t1t1aa
+    tauab = t2ab + t1t1ab
+    taubb = t2bb + 2*t1t1bb
+    d = 0.0 + 0.j
+    d += 0.25*(einsum('xzyiajb,xyzijab->',eris.ovov,tauaa)
+            - einsum('yzxjaib,xyzijab->',eris.ovov,tauaa))
+    d += einsum('xzyiajb,xyzijab->',eris.ovOV,tauab)
+    d += 0.25*(einsum('xzyiajb,xyzijab->',eris.OVOV,taubb)
+            - einsum('yzxjaib,xyzijab->',eris.OVOV,taubb))
+    e = s + d
     e /= nkpts
     if abs(e.imag) > 1e-4:
         logger.warn(cc, 'Non-zero imaginary part found in KCCSD energy %s', e)
@@ -1109,7 +1122,10 @@ if __name__ == '__main__':
     kccsd_eris = kccsd._make_eris_incore(kgcc, kgcc._scf.mo_coeff)
     r1 = kgcc.spatial2spin(t1)
     r2 = kgcc.spatial2spin(t2)
+    ge = kccsd.energy(kgcc, r1, r2, kccsd_eris)
     r1, r2 = kgcc.update_amps(r1, r2, kccsd_eris)
+    ue = energy(mycc, t1, t2, eris)
+    print(abs(ge - ue))
     print(abs(r1 - kgcc.spatial2spin(Ht1)).max())
     print(abs(r2 - kgcc.spatial2spin(Ht2)).max())
     exit()
