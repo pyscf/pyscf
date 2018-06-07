@@ -33,7 +33,7 @@ import scipy.linalg
 import h5py
 from pyscf.pbc.scf import hf as pbchf
 from pyscf import lib
-from pyscf.scf import hf
+from pyscf.scf import hf as mol_hf
 from pyscf.lib import logger
 from pyscf.pbc.gto import ecp
 from pyscf.pbc.scf import addons
@@ -86,7 +86,14 @@ def get_hcore(mf, cell=None, kpts=None):
     '''
     if cell is None: cell = mf.cell
     if kpts is None: kpts = mf.kpts
-    return lib.asarray([pbchf.get_hcore(cell, k) for k in kpts])
+    if cell.pseudo:
+        nuc = lib.asarray(mf.with_df.get_pp(kpts))
+    else:
+        nuc = lib.asarray(mf.with_df.get_nuc(kpts))
+    if len(cell._ecpbas) > 0:
+        nuc += lib.asarray(ecp.ecp_int(cell, kpts))
+    t = lib.asarray(cell.pbc_intor('int1e_kin', 1, 1, kpts))
+    return nuc + t
 
 
 def get_j(mf, cell, dm_kpts, kpts, kpts_band=None):
@@ -148,7 +155,7 @@ def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
     if diis and cycle >= diis_start_cycle:
         f_kpts = diis.update(s_kpts, dm_kpts, f_kpts, mf, h1e_kpts, vhf_kpts)
     if abs(level_shift_factor) > 1e-4:
-        f_kpts = [hf.level_shift(s, dm_kpts[k], f_kpts[k], level_shift_factor)
+        f_kpts = [mol_hf.level_shift(s, dm_kpts[k], f_kpts[k], level_shift_factor)
                   for k, s in enumerate(s_kpts)]
     return lib.asarray(f_kpts)
 
@@ -158,7 +165,7 @@ def get_fermi(mf, mo_energy_kpts=None, mo_occ_kpts=None):
     if mo_energy_kpts is None: mo_energy_kpts = mf.mo_energy
     if mo_occ_kpts is None: mo_occ_kpts = mf.mo_occ
     nocc = np.count_nonzero(mo_occ_kpts != 0)
-    fermi = np.sort(mo_energy_kpts.ravel())[nocc-1]
+    fermi = np.sort(np.hstack(mo_energy_kpts))[nocc-1]
     return fermi
 
 def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
@@ -206,7 +213,7 @@ def get_grad(mo_coeff_kpts, mo_occ_kpts, fock):
     in sequential patches of the 1D array
     '''
     nkpts = len(mo_occ_kpts)
-    grad_kpts = [hf.get_grad(mo_coeff_kpts[k], mo_occ_kpts[k], fock[k])
+    grad_kpts = [mol_hf.get_grad(mo_coeff_kpts[k], mo_occ_kpts[k], fock[k])
                  for k in range(nkpts)]
     return np.hstack(grad_kpts)
 
@@ -218,7 +225,7 @@ def make_rdm1(mo_coeff_kpts, mo_occ_kpts):
         dm_kpts : (nkpts, nao, nao) ndarray
     '''
     nkpts = len(mo_occ_kpts)
-    dm_kpts = [hf.make_rdm1(mo_coeff_kpts[k], mo_occ_kpts[k])
+    dm_kpts = [mol_hf.make_rdm1(mo_coeff_kpts[k], mo_occ_kpts[k])
                for k in range(nkpts)]
     return lib.asarray(dm_kpts)
 
@@ -280,7 +287,7 @@ def mulliken_meta(cell, dm_ao_kpts, verbose=logger.DEBUG,
     dm = reduce(np.dot, (c_inv, dm_ao_gamma, c_inv.T.conj()))
 
     log.note(' ** Mulliken pop on meta-lowdin orthogonal AOs **')
-    return hf.mulliken_pop(cell, dm, np.eye(orth_coeff.shape[0]), log)
+    return mol_hf.mulliken_pop(cell, dm, np.eye(orth_coeff.shape[0]), log)
 
 
 def canonicalize(mf, mo_coeff_kpts, mo_occ_kpts, fock=None):
@@ -339,7 +346,7 @@ class KSCF(pbchf.SCF):
             sys.stderr.write('Warning: cell.build() is not called in input\n')
             cell.build()
         self.cell = cell
-        hf.SCF.__init__(self, cell)
+        mol_hf.SCF.__init__(self, cell)
 
         self.with_df = df.FFTDF(cell)
         self.exxdiv = exxdiv
@@ -371,7 +378,7 @@ class KSCF(pbchf.SCF):
         return self.mo_occ
 
     def dump_flags(self):
-        hf.SCF.dump_flags(self)
+        mol_hf.SCF.dump_flags(self)
         logger.info(self, '\n')
         logger.info(self, '******** PBC SCF flags ********')
         logger.info(self, 'N kpts = %d', len(self.kpts))
@@ -395,7 +402,7 @@ class KSCF(pbchf.SCF):
         return self
 
     def check_sanity(self):
-        hf.SCF.check_sanity(self)
+        mol_hf.SCF.check_sanity(self)
         self.with_df.check_sanity()
         if (isinstance(self.exxdiv, str) and self.exxdiv.lower() != 'ewald' and
             isinstance(self.with_df, df.df.DF)):
@@ -456,20 +463,9 @@ class KSCF(pbchf.SCF):
         if cell.dimension < 3:
             logger.warn(self, 'Hcore initial guess is not recommended in '
                         'the SCF of low-dimensional systems.')
-        return hf.SCF.init_guess_by_1e(self, cell)
+        return mol_hf.SCF.init_guess_by_1e(self, cell)
 
-    def get_hcore(self, cell=None, kpts=None):
-        if cell is None: cell = self.cell
-        if kpts is None: kpts = self.kpts
-        if cell.pseudo:
-            nuc = lib.asarray(self.with_df.get_pp(kpts))
-        else:
-            nuc = lib.asarray(self.with_df.get_nuc(kpts))
-        if len(cell._ecpbas) > 0:
-            nuc += lib.asarray(ecp.ecp_int(cell, kpts))
-        t = lib.asarray(cell.pbc_intor('int1e_kin', 1, 1, kpts))
-        return nuc + t
-
+    get_hcore = get_hcore
     get_ovlp = get_ovlp
     get_fock = get_fock
     get_occ = get_occ
@@ -580,7 +576,7 @@ class KSCF(pbchf.SCF):
 
     def dump_chk(self, envs):
         if self.chkfile:
-            hf.SCF.dump_chk(self, envs)
+            mol_hf.SCF.dump_chk(self, envs)
             with h5py.File(self.chkfile) as fh5:
                 fh5['scf/kpts'] = self.kpts
         return self
@@ -620,12 +616,12 @@ class KSCF(pbchf.SCF):
     x2c = x2c1e = sfx2c1e
 
 class KRHF(KSCF, pbchf.RHF):
-    def sanity_check(self):
+    def check_sanity(self):
         cell = self.cell
         if cell.spin != 0 and len(self.kpts) % 2 != 0:
             logger.warn(self, 'Problematic nelec %s and number of k-points %d '
                         'found in KRHF method.', cell.nelec, len(self.kpts))
-        return KSCF.sanity_check(self)
+        return KSCF.check_sanity(self)
 
     def convert_from_(self, mf):
         '''Convert given mean-field object to KRHF'''

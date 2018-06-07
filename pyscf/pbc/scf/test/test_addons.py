@@ -103,6 +103,17 @@ class KnowValues(unittest.TestCase):
         occ = mf.get_occ(mo_energy)
         self.assertAlmostEqual(mf.entropy, 0.42189309944541731, 9)
 
+    def test_project_mo_nr2nr(self):
+        nao = cell.nao_nr()
+        kpts = cell.make_kpts([3,1,1])
+        nkpts = 3
+        c = numpy.random.random((3,nao,nao)) + numpy.random.random((3,nao,nao)) * 1j
+        c1 = pscf.addons.project_mo_nr2nr(cell, c[0], cell)
+        self.assertAlmostEqual(abs(c[0]-c1).max(), 0, 12)
+
+        c1 = numpy.array(pscf.addons.project_mo_nr2nr(cell, c, cell, kpts=kpts))
+        self.assertAlmostEqual(abs(c-c1).max(), 0, 12)
+
     def test_convert_to_scf(self):
         from pyscf.pbc import dft
         from pyscf.pbc import df
@@ -237,6 +248,8 @@ class KnowValues(unittest.TestCase):
         self.assertTrue (isinstance(mf1.convert_from_(pscf.KUHF(cell2).mix_density_fit()).with_df, df.mdf.MDF))
         self.assertTrue (isinstance(mf1.convert_from_(kmf_r), pscf.krohf.KROHF))
         self.assertRaises(AssertionError, mf1.convert_from_, pscf.UHF(cell1))
+        self.assertTrue(isinstance(pscf.addons.convert_to_rhf(pscf.KROHF(cell2)), pscf.krohf.KROHF))
+        #self.assertTrue(isinstance(pscf.addons.convert_to_rhf(pscf.KROHF(cell2).newton()), pscf.krohf.KROHF))
 
         mf1 = pscf.kuhf.KUHF(cell1)
         self.assertTrue (isinstance(mf1.convert_from_(kmf_r), pscf.kuhf.KUHF))

@@ -1661,12 +1661,12 @@ class SCF(lib.StreamObject):
 class RHF(SCF):
     __doc__ = SCF.__doc__
 
-    def sanity_check(self):
+    def check_sanity(self):
         mol = self.mol
         if mol.nelectron != 1 and mol.spin != 0:
             logger.warn(self, 'Invalid number of electrons %d for RHF method.',
                         mol.nelectron)
-        return SCF.sanity_check(self)
+        return SCF.check_sanity(self)
 
     @lib.with_doc(get_jk.__doc__)
     def get_jk(self, mol=None, dm=None, hermi=1):

@@ -351,7 +351,7 @@ class KUHF(pbcuhf.UHF, khf.KSCF):
             assert dm_kpts.shape[0]==2
 
         if cell.dimension < 3:
-            ne = np.einsum('xkij,kji->xk', dm_kpts, self.get_ovlp(cell))
+            ne = np.einsum('xkij,kji->xk', dm_kpts, self.get_ovlp(cell)).real
             nelec = np.asarray(cell.nelec).reshape(2,1)
             if np.any(abs(ne - nelec) > 1e-7):
                 logger.warn(self, 'Big error detected in the electron number '

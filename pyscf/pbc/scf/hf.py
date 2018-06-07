@@ -72,7 +72,6 @@ def get_hcore(cell, kpt=np.zeros(3)):
         hcore += get_nuc(cell, kpt)
     if len(cell._ecpbas) > 0:
         hcore += ecp.ecp_int(cell, kpt)
-
     return hcore
 
 
@@ -172,7 +171,7 @@ def get_bands(mf, kpts_band, cell=None, dm=None, kpt=None):
     mo_energy = []
     mo_coeff = []
     for k in range(nkpts):
-        e, c = mf._eigh(fock[k], s1e[k])
+        e, c = mf.eig(fock[k], s1e[k])
         mo_energy.append(e)
         mo_coeff.append(c)
 
@@ -429,7 +428,7 @@ class SCF(mol_hf.SCF):
         if cell.dimension < 3:
             logger.warn(self, 'Hcore initial guess is not recommended in '
                         'the SCF of low-dimensional systems.')
-        return mol_hf.SCF.init_guess_by_1e(cell)
+        return mol_hf.SCF.init_guess_by_1e(self, cell)
 
     def init_guess_by_chkfile(self, chk=None, project=None, kpt=None):
         if chk is None: chk = self.chkfile
