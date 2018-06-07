@@ -694,11 +694,10 @@ def get_ewald_params(cell, precision=INTEGRAL_PRECISION, mesh=None):
         ew_eta = np.sqrt(max(np.log(4*np.pi*ew_cut**2/precision)/ew_cut**2, .1))
     return ew_eta, ew_cut
 
-# roughly 4 grids per axis
 def _cut_mesh_for_ewald(cell, mesh):
     mesh = np.copy(mesh)
     mesh_max = np.asarray(np.linalg.norm(cell.lattice_vectors(), axis=1) * 2,
-                          dtype=int)
+                          dtype=int)  # roughly 2 grids per bohr
     mesh_max[cell.dimension:] = mesh[cell.dimension:]
     mesh_max[mesh_max<80] = 80
     mesh[mesh>mesh_max] = mesh_max[mesh>mesh_max]

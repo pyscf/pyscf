@@ -78,7 +78,9 @@ def make_modrho_basis(cell, auxbasis=None, drop_eta=1.):
         if numpy.any(es < drop_eta):
             cs = cs[es>=drop_eta]
             es = es[es>=drop_eta]
-            np, ndrop = len(es), ndrop+np-len(es)
+            # An extra smooth basis that has overlap to planewaves
+            np = min(np, len(es)+1)
+            ndrop += auxcell.bas_nprim(ib) - np
 
         if np > 0:
             pe = auxcell._bas[ib,gto.PTR_EXP]
