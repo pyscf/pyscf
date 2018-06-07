@@ -291,8 +291,8 @@ class ZeroFieldSplitting(lib.StreamObject):
         self.mo10 = None
         self.mo_e10 = None
         self._keys = set(self.__dict__.keys())
-        logger.warn(self, 'This module is experimental. '
-                    'Features/implementations may be changed in the future.')
+        logger.warn(self, 'UHF-ZFS is an experimental feature. It is still in '
+                    'testing\nFeatures and APIs may be changed in the future.')
 
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)

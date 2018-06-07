@@ -651,7 +651,8 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
     log = logger.new_logger(mf, verbose)
     mol = mf._scf.mol
     if mol != mf.mol:
-        logger.warn(mf, 'dual-basis SOSCF is an experimental feature.')
+        logger.warn(mf, 'dual-basis SOSCF is an experimental feature. It is '
+                    'still in testing.')
 
     if conv_tol_grad is None:
         conv_tol_grad = numpy.sqrt(conv_tol)

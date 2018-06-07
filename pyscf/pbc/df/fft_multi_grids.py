@@ -1,3 +1,4 @@
+import sys
 import time
 import copy
 import numpy
@@ -15,6 +16,8 @@ from pyscf.pbc.df import fft
 from pyscf.pbc.df import ft_ao
 from pyscf import __config__
 
+sys.stderr.write('WARN: multigrid is an experimental feature. It is still in '
+                 'testing\nFeatures and APIs may be changed in the future.\n')
 
 BLKSIZE = numint.BLKSIZE
 EXTRA_PREC = getattr(__config__, 'pbc_gto_eval_gto_extra_precision', 1e-1)

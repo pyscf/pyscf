@@ -17,8 +17,7 @@
 #
 
 '''
-Unrestricted Dirac Hartree-Fock hyperfine coupling tensor
-(In testing)
+Dirac Hartree-Fock hyperfine coupling tensor (In testing)
 
 Refs: JCP, 134, 044111
 '''
@@ -91,6 +90,11 @@ def kernel(hfcobj, with_gaunt=False, verbose=None):
     return numpy.asarray(hfc)
 
 class HyperfineCoupling(dhf_ssc.SSC):
+    def __init__(self, mf):
+        dhf_ssc.SSC.__init__(self, mf)
+        lib.logger.warn(self, 'DHF-HFC is an experimental feature. It is '
+                        'still in testing.\nFeatures and APIs may be changed '
+                        'in the future.')
     kernel = kernel
 
 HFC = HyperfineCoupling
