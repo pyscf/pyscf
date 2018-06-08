@@ -5,15 +5,16 @@ PySCF 1.6 alpha (2018-09-??)
   - PBC gamma point ROHF/ROKS
   - PBC KROHF/KROKS for k-point sampling
   - DFT Coulomb and XC integrals with multigrid
+  - Periodic UCCSD with k-point sampling
 
 
-PySCF 1.5 (2018-06-??)
+PySCF 1.5 (2018-06-08)
 ----------------------
 * Added
   - Fake PySCF method adapter for arbitrary energy/gradients function in
     berny_solver wrapper
   - Function to restore DIIS object from DIIS file
-  - CCSD restart function
+  - Restart function to restore CCSD calculations
 * Improved
   - CASSCF optimization step size
   - State-averaged CASSCF output message
@@ -22,21 +23,21 @@ PySCF 1.5 (2018-06-??)
   - Frozen orbitals for KRCCSD
   - PBC-TDDFT eigenvalue filter to keeps more eigenvalues which has small
     imaginary part
-  - FCI convergence tolerance.
+  - FCI convergence tolerance
   - Conversion between KRHF, KUHF, and KGHF
   - In the SOSCF solver, the diagonalization code to handle singularity in Hessian
   - In the Scanner function, to support an input of geometry (string or list)
   - SCF convergence hook
   - Density_fit hooks in mp2, cisd, and ccsd modules
-  - Warning for gapless system in ccsd module
+  - Warning for gapless system in ccsd
   - Energy cutoff for PBC GDF method.
   - XC functional parser to support '-' in XC name and XC functional
     abbreviations (SVWN, BLYP, PBE, M05, etc.)
   - Orbital frozen in core and virtual space for KMP2 and KCCSD modules
 * Bugfix
-  - The ghost atom is treated as a regular atom in berny_solver wrapper.
+  - The ghost atom is now treated as a regular atom in berny_solver wrapper.
   - QM/MM nuclear gradients
-  - Updating 6-31+G* basis which is now the EMSL published basis
+  - Updating 6-31+G* basis which is now equivalent to the EMSL published basis
   - Symmetry detection code to discover D2d, D4d, D6d group
   - xcfun O3LYP functional which is now the same to libxc definition (but
     different to the equation in the original paper)
@@ -47,7 +48,7 @@ PySCF 1.5 (2018-06-??)
   - Filling up the upper triangular part for symmetry Hamiltonian in fcidump.read
   - The attributes kpts and kpt of PBC SCF class when SCF data are loaded from
     chkfile
-  - Nulcear Hessian in ECP and all-electron mixed systems
+  - Nuclear Hessian in ECP and all-electron mixed systems
   - Natural orbitals of state-averaged CASSCF
 
 
@@ -67,7 +68,7 @@ PySCF 1.5 alpha (2018-03-21)
 ----------------------------
 * Added
   - ddCOSMO solvent model
-  - VV10 NLC functional for finite size systems
+  - VV10 NLC functional for molecule
   - range-separated hybrid features for RKS and UKS, including
     > Analytical nuclear gradients
     > Second order SCF
@@ -75,7 +76,7 @@ PySCF 1.5 alpha (2018-03-21)
     > TDDFT
     > TDDFT gradients
     > NMR
-  - IBO for molecular and PBC systems
+  - IAO and IBO for molecular and PBC systems
   - UHF analytical nuclear Hessian
   - UKS analytical nuclear Hessian
   - FFT for low-dimension (2D) PBC systems
@@ -104,18 +105,19 @@ PySCF 1.5 alpha (2018-03-21)
   - Natural transition orbital analysis
   - direct-RPA (no exchange, aka TDH)
   - direct-TDA (TDA without exchange)
+  - Function to set OpenMP threads
 * Improved
-  - Supported to set omp threads in FCI solver
+  - Independent OpenMP threads in FCI solver
   - Supported even number of grids in pbc calculations
   - Performance of UCCSD lambda solver
-  - The function to make SCF initial guess from the chkfile of the
-    molecule with different geometry
+  - The function to get SCF initial guess from the chkfile of the molecule with
+    different geometry
   - The mcscf natural orbitals in the state-average calculation
   - Performance of ECP integrals
   - Prescreening for PBC 3-center integrals
   - Performance and memory efficiency of G0W0
   - KMP2 memory efficiency
-  - Efficiency to evaluate the value of AO with PBC
+  - Efficiency to evaluate the value of periodic AO on grids
   - libxc parser to support the customized Range-separated XC functionals
 
 

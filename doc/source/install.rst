@@ -143,9 +143,9 @@ are required by PySCF.  They can be downloaded from github::
     $ git checkout origin/cint3
     $ cd .. && tar czf libcint.tar.gz libcint
 
-    $ git clone https://github.com/sunqm/xcfun.git
+    $ git clone https://github.com/dftlibs/xcfun.git
     $ cd xcfun
-    $ git checkout origin/stable-1.x
+    $ git checkout 355f42497a9cd17d16ae91da1f1aaaf93756ae8b
     $ cd .. && tar czf xcfun.tar.gz xcfun
 
 libxc-3.* can be found in http://octopus-code.org/wiki/Main_Page or

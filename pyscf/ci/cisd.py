@@ -617,6 +617,13 @@ class CISD(lib.StreamObject):
         return numpy.asarray(self.e_corr) + self._scf.e_tot
 
     @property
+    def nstates(self):
+        return self.nroots
+    @nstates.setter
+    def nstates(self, x):
+        self.nroots = x
+
+    @property
     def nocc(self):
         return self.get_nocc()
     @nocc.setter

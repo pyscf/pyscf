@@ -96,6 +96,10 @@ class RTTDSCF(lib.StreamObject):
         end = time.time()
         logger.info(self,"Propagation time: %f", end-start)
 
+        logger.warn(self, 'RT-TDSCF is an experimental feature. It is '
+                    'still in testing.\nFeatures and APIs may be changed '
+                    'in the future.')
+
 
     def auxmol_set(self, mol, auxbas = "weigend"):
         """

@@ -30,7 +30,7 @@ python:
 #    system_site_packages: true
 
 before_install:
-  - sudo apt-get -qq install gcc gfortran libblas-dev cmake curl
+  - sudo apt-get -qq install gcc libblas-dev cmake curl
   - pip install numpy scipy h5py nose nose-exclude nose-timer
 
 install:
