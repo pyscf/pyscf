@@ -6,7 +6,8 @@
 '''
 The default XC functional library (libxc) supports the energy and nuclear
 gradients for range separated functionals.  Nuclear Hessian and TDDFT gradients
-need xcfun library.
+need xcfun library.  See also example 32-xcfun_as_default.py for how to set
+xcfun library as the default XC functional library.
 '''
 
 from pyscf import gto, dft
@@ -22,7 +23,8 @@ mf.nuc_grad_method().kernel()
 from pyscf.hessian import uks as uks_hess
 # Switching to xcfun library on the fly
 mf._numint.libxc = dft.xcfun
-uks_hess.Hessian(mf).kernel()
+hess = uks_hess.Hessian(mf).kernel()
+print(hess.reshape(2,3,2,3))
 
 
 from pyscf import tdscf
