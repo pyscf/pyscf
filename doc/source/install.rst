@@ -173,7 +173,7 @@ packages should be compiled with the flags::
         -DCMAKE_INSTALL_PREFIX:PATH=/opt -DCMAKE_INSTALL_LIBDIR:PATH=lib ..
     $ make && make install
 
-Next compile PySCF::
+Next, compile PySCF::
 
     $ cd pyscf/pyscf/lib
     $ mkdir build && cd build
