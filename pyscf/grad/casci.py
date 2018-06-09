@@ -239,6 +239,7 @@ class Gradients(lib.StreamObject):
         self.stdout = mc.stdout
         self.verbose = mc.verbose
         self.max_memory = mc.max_memory
+        self.state = 0  # of which the gradients to be computed.
         self.atmlst = None
         self.de = None
         self._keys = set(self.__dict__.keys())
@@ -250,19 +251,27 @@ class Gradients(lib.StreamObject):
             log.warn('Ground state CASCI not converged')
         log.info('******** %s for %s ********',
                  self.__class__, self.base.__class__)
+        if self.state != 0 and self.base.fcisolver.nroots > 1:
+            log.info('State ID = %d', self.state)
         log.info('max_memory %d MB (current use %d MB)',
                  self.max_memory, lib.current_memory()[0])
         return self
 
     def kernel(self, mo_coeff=None, ci=None, atmlst=None, mf_grad=None,
-               state=0, verbose=None):
+               state=None, verbose=None):
         cput0 = (time.clock(), time.time())
         log = logger.new_logger(self, verbose)
         if ci is None: ci = self.base.ci
         if isinstance(ci, (list, tuple)):
+            if state is None:
+                state = self.state
+            else:
+                self.state = state
+
             ci = ci[state]
             logger.info(self, 'Multiple roots are found in CASCI solver. '
                         'Nuclear gradients of root %d are computed.', state)
+
         if atmlst is None:
             atmlst = self.atmlst
         else:
