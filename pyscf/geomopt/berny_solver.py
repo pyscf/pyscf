@@ -107,30 +107,17 @@ def as_pyscf_method(mol, scan_function):
     >>> m = as_pyscf_method(mol, scan_fn)
     >>> berny_solver.kernel(m)
     '''
-    class OmniGrad(lib.GradScanner):
-        def __init__(self, g):
-            self.base = g.base
+    class OmniGradScanner(lib.GradScanner):
         def __call__(self, mol):
-            self.e_tot, grad = scan_function(mol)
-            return self.e_tot, grad
+            self._e_tot, grad = scan_function(mol)
+            return self._e_tot, grad
+        @property
+        def e_tot(self):
+            return self._e_tot
         @property
         def converged(self):
             return True
-
-    class Grad(object):
-        def __init__(self, base):
-            self.base = base
-        def as_scanner(self):
-            return OmniGrad(self)
-
-    class OmniMethod(object):
-        def __init__(self, mol):
-            self.mol = mol
-            self.verbose = mol.verbose
-            self.stdout = mol.stdout
-        def nuc_grad_method(self):
-            return Grad(self)
-    return OmniMethod(mol)
+    return OmniGradScanner()
 
 
 def optimize(method, assert_convergence=ASSERT_CONV,

@@ -43,7 +43,7 @@ Installation with conda
 
 If you have `Conda <https://conda.io/docs/>`_ 
 (or `Anaconda <https://www.continuum.io/downloads#linux>`_)
-environment, PySCF package can be installed through Conda cloud::
+environment, PySCF package can be installed with Conda cloud::
 
   $ conda install -c pyscf pyscf
 

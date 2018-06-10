@@ -38,6 +38,8 @@ print(g)
 #
 # Use gradients scanner.
 #
+# Note the returned gradients are based on atomic unit.
+#
 g_scanner = myci.nuc_grad_method().as_scanner(state=3)
 e, g = g_scanner(mol)
 print('Gradients of the 3rd excited state')
@@ -46,6 +48,8 @@ print(g)
 #
 # Specify state ID for the gradients of another state.
 #
+# Unless explicitly specified as an input argument of set_geom_ function,
+# set_geom_ function will use the same unit as the one specified in mol.unit.
 mol.set_geom_('''O   0.   0.      0.1
                  H   0.  -0.757   0.587
                  H   0.   0.757   0.587''')
