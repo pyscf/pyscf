@@ -8,7 +8,8 @@ See also pyscf/examples/df/01-auxbasis.py for more auxiliary basis input
 methods.
 '''
 
-from pyscf.gto import mole
+import numpy as np
+from pyscf import gto as mol_gto
 from pyscf.pbc import gto, scf, cc, df
 
 cell = gto.Cell()
@@ -79,4 +80,36 @@ auxbasis = {'C':
 mf = scf.RHF(cell).density_fit(auxbasis=auxbasis)
 mf.with_df.eta = 0.1
 mf.kernel()
+
+
+#
+# The 3-index density fitting tensor can be loaded from the _cderi file.
+# Using the 3-index tensor, the 4-center integrals can be constructed:
+#    (pq|rs) = \sum_L A_lpq A_lrs
+#
+# The 3-index tensor for gamma point can be accessed with the code snippet
+# below.  Assuming in the first pass, the GDF 3-index tensors are saved with
+# the following code
+#
+mf = scf.RHF(cell, cell.make_kpts([2,2,2])).density_fit(auxbasis=auxbasis)
+mf.with_df._cderi_to_save = 'pbc_gdf.h5'
+mf.kernel()
+
+#
+# In the second pass, the GDF 3-index tensor can be accessed with a GDF
+# object.
+#
+a_gdf = df.GDF(cell)
+a_gdf._cderi = 'pbc_gdf.h5'
+naux = a_gdf.get_naoaux()
+nao = cell.nao
+A_lpq = np.empty((naux,nao,nao))
+kpt = np.zeros(3)
+p1 = 0
+for LpqR, LpqI in a_gdf.sr_loop((kpt,kpt), compact=False):
+    p0, p1 = p1, p1 + LpqR.shape[0]
+    A_lpq[p0:p1] = LpqR.reshape(-1,nao,nao)
+
+from pyscf import lib
+eri = lib.einsum('lpq,lrs->pqrs', A_lpq, A_lrs)
 
