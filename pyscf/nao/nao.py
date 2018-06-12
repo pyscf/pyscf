@@ -137,6 +137,8 @@ class nao():
     self.mu2orb_s = np.zeros((self.nbas+1), dtype=np.int64)
     for sp,mu_s in zip(self.atom2sp,self.atom2mu_s):
       for mu,j in enumerate(self.ao_log.sp_mu2j[sp]): self.mu2orb_s[mu_s+mu+1] = self.mu2orb_s[mu_s+mu] + 2*j+1
+    self.sp_mu2j = self.ao_log.sp_mu2j
+    self.nkpoints = 1
     return self
 
   #

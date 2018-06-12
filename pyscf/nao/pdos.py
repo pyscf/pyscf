@@ -40,7 +40,11 @@ def pdos(mf, zomegas, nkpoints=1):
   """ Compute the Partial Density of States (resolved in angular momentum of the orbitals) using the eigenvalues and eigenvectors in wfsx """
   
   jmx = mf.ao_log.jmx
-  over = mf.hsx.s4_csr.toarray()
+  if hasattr(mf, 'hsx') :
+    over = mf.hsx.s4_csr.toarray()
+  else:
+	over = mf.overlap_lil().toarray()
+
   orb2j = mf.get_orb2j()
   
   pdos = zeros((jmx+1,len(zomegas)))
