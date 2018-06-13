@@ -1755,10 +1755,10 @@ class Mole(lib.StreamObject):
         self.ecp = {}
 ##################################################
 # don't modify the following private variables, they are not input options
-        self._atm = numpy.zeros((0,6))
-        self._bas = numpy.zeros((0,8))
-        self._env = [0] * PTR_ENV_START
-        self._ecpbas = numpy.zeros((0,8))
+        self._atm = numpy.zeros((0,6), dtype=numpy.int32)
+        self._bas = numpy.zeros((0,8), dtype=numpy.int32)
+        self._env = numpy.zeros(0)
+        self._ecpbas = numpy.zeros((0,8), dtype=numpy.int32)
 
         self.stdout = sys.stdout
         self.groupname = 'C1'
@@ -1982,9 +1982,10 @@ class Mole(lib.StreamObject):
 # Note the internal _format is in Bohr
             self._atom = self.format_atom(self._atom, orig, axes, 'Bohr')
 
-        self._env[PTR_LIGHT_SPEED] = param.LIGHT_SPEED
+        env = [0] * PTR_ENV_START
+        env[PTR_LIGHT_SPEED] = param.LIGHT_SPEED
         self._atm, self._bas, self._env = \
-                self.make_env(self._atom, self._basis, self._env, self.nucmod)
+                self.make_env(self._atom, self._basis, env, self.nucmod)
         self._atm, self._ecpbas, self._env = \
                 self.make_ecp_env(self._atm, self._ecp, self._env)
 
@@ -2366,6 +2367,7 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
             mol = self
         else:
             mol = copy.copy(self)
+            mol._env = mol._env.copy()
         if unit is None:
             unit = mol.unit
         if symmetry is None:
@@ -2379,7 +2381,6 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
                     unit = 1./param.BOHR
             else:
                 unit = 1./unit
-            mol._env = mol._env.copy()
             ptr = mol._atm[:,PTR_COORD]
             mol._env[ptr+0] = unit * atoms_or_coords[:,0]
             mol._env[ptr+1] = unit * atoms_or_coords[:,1]
