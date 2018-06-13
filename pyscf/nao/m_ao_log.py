@@ -54,9 +54,17 @@ class ao_log_c(log_mesh_c):
 
   Examples:
   '''
-  def __init__(self):
+  def __init__(self, **kw):
     """ Initializes numerical orbitals  """
     log_mesh_c.__init__(self)
+    if 'ao_log' in kw : # this is creating a deepcopy of all attributes
+      import copy
+      ao = kw['ao_log']
+      for a in ao.__dict__.keys():
+        try:
+          setattr(self, a, copy.deepcopy(getattr(ao, a)))
+        except:
+          pass
     return
     
   def init_ao_log_gto_suggest_mesh(self, rcut_tol=1e-7, **kw):

@@ -43,7 +43,7 @@ def pdos(mf, zomegas, nkpoints=1):
   if hasattr(mf, 'hsx') :
     over = mf.hsx.s4_csr.toarray()
   else:
-	over = mf.overlap_lil().toarray()
+    over = mf.overlap_lil().toarray()
 
   orb2j = mf.get_orb2j()
   

@@ -16,6 +16,7 @@ def ao_log_hartree_lap_libnao(ao):
       ao_pot with respective radial parts
   """
   from ctypes import POINTER, c_double, c_int64
+  from pyscf.nao.m_ao_log import ao_log_c
   from pyscf.nao.m_libnao import libnao
 
   libnao.ao_hartree_lap.argtypes = (
@@ -26,8 +27,8 @@ def ao_log_hartree_lap_libnao(ao):
     POINTER(c_int64),  # mu2j
     POINTER(c_double)) # mu2vh(nr,nmult)
 
-  ao_pot = copy.deepcopy(ao)
-  
+  ao_pot = ao_log_c(ao_log=ao)
+
   rr = np.require(ao.rr, dtype=c_double, requirements='C')  
   for sp in range(ao.nspecies):
     mu2j = np.require(ao.sp_mu2j[sp], dtype=c_int64, requirements='C')
