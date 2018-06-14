@@ -21,6 +21,7 @@ mf = scf.RHF(mol).run()
 #
 mycc = cc.CCSD(mf)
 mycc.direct = True
+mycc.frozen = 1 # frozen core
 mycc.kernel()
-print('CCSD correlation energy', mycc.e_corr)
+print('CCSD correlation energy =', mycc.e_corr)
 

@@ -1,3 +1,17 @@
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 cmake_minimum_required (VERSION 2.8)
 project (pyscf)
 
@@ -9,6 +23,7 @@ if (CMAKE_COMPILER_IS_GNUCC) # Does it skip the link flag on old OsX?
     set(CMAKE_SHARED_LINKER_FLAGS "-Wl,--no-as-needed")
   endif()
 endif()
+set(CMAKE_C_FLAGS "-Wall ${CMAKE_C_FLAGS}")
 
 if (${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION}.${CMAKE_PATCH_VERSION} VERSION_GREATER 3.0.0)
   cmake_policy(SET CMP0042 NEW)
@@ -16,26 +31,16 @@ endif()
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
-find_package(BLAS)
-check_function_exists(ffsll HAVE_FFS)
-
-find_package(OpenMP)
-if(OPENMP_FOUND)
-  set(HAVE_OPENMP 1)
-else ()
-  set(OpenMP_C_FLAGS " ")
-endif()
-
-#find_package(PythonInterp REQUIRED)
-#find_package(PythonLibs REQUIRED)
-#execute_process(COMMAND ${PYTHON_EXECUTABLE} -c "import numpy; print(numpy.get_include())"
-#  OUTPUT_VARIABLE NUMPY_INCLUDE)
-#include_directories(${PYTHON_INCLUDE_DIRS} ${NUMPY_INCLUDE})
-
 # Architecture specified cmake flags.  See also the templates in
 # pyscf/lib/cmake_arch_config
 if(EXISTS "${PROJECT_SOURCE_DIR}/cmake.arch.inc")
   include("${PROJECT_SOURCE_DIR}/cmake.arch.inc")
+endif()
+
+if (NOT BLAS_LIBRARIES)
+#enable_language(Fortran)
+find_package(BLAS)
+check_function_exists(ffsll HAVE_FFS)
 endif()
 
 if (NOT BLAS_LIBRARIES)
@@ -57,6 +62,19 @@ endif()
 # will automatically load all settings specified in cmake.arch.inc
 #
 
+find_package(OpenMP)
+if(OPENMP_FOUND)
+  set(HAVE_OPENMP 1)
+else ()
+  set(OpenMP_C_FLAGS " ")
+endif()
+
+#find_package(PythonInterp REQUIRED)
+#find_package(PythonLibs REQUIRED)
+#execute_process(COMMAND ${PYTHON_EXECUTABLE} -c "import numpy; print(numpy.get_include())"
+#  OUTPUT_VARIABLE NUMPY_INCLUDE)
+#include_directories(${PYTHON_INCLUDE_DIRS} ${NUMPY_INCLUDE})
+
 
 include(ExternalProject)
 option(BUILD_LIBCINT "Using libcint for analytical gaussian integral" ON)
@@ -65,7 +83,7 @@ if(BUILD_LIBCINT)
 if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/cint.h")
   ExternalProject_Add(libcint
     GIT_REPOSITORY https://github.com/sunqm/libcint.git
-    GIT_TAG v3.0.7
+    GIT_TAG v3.0.12
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
     CMAKE_ARGS -DWITH_F12=${WITH_F12} -DWITH_RANGE_COULOMB=1 -DWITH_COULOMB_ERF=1
@@ -87,6 +105,17 @@ configure_file(
 # to find config.h
 include_directories("${PROJECT_BINARY_DIR}")
 
+# See also https://gitlab.kitware.com/cmake/community/wikis/doc/cmake/RPATH-handling
+if (WIN32)
+  #?
+elseif (APPLE)
+  #TODO: test me set(CMAKE_MACOSX_RPATH On)
+else ()
+  set(CMAKE_SKIP_BUILD_RPATH  True)
+  set(CMAKE_BUILD_WITH_INSTALL_RPATH True)
+  set(CMAKE_INSTALL_RPATH "\$ORIGIN:\$ORIGIN/deps/lib")
+endif ()
+
 add_subdirectory(np_helper)
 add_subdirectory(gto)
 add_subdirectory(vhf)
@@ -107,18 +136,21 @@ option(BUILD_LIBXC "Download and build libxc library" ON)
 option(BUILD_XCFUN "Download and build xcfun library" ON)
 
 if(NOT DISABLE_DFT)
-if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/lib/libxc.so.4" AND
+if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xc.h" AND
     ENABLE_LIBXC AND BUILD_LIBXC)
+  if(UNIX AND NOT APPLE)
+    set(LIBM "LIBS=-lm")
+  endif()
   ExternalProject_Add(libxc
     #GIT_REPOSITORY https://gitlab.com/libxc/libxc/
     #GIT_TAG master
-    URL http://www.tddft.org/programs/octopus/down.php?file=libxc/libxc-3.0.0.tar.gz
-    #URL http://www.sunqm.net/pyscf/files/src/libxc-3.0.0.tar.gz
+    URL http://www.tddft.org/programs/octopus/down.php?file=libxc/3.0.1/libxc-3.0.1.tar.gz
+    #URL http://www.sunqm.net/pyscf/files/src/libxc-3.0.1.tar.gz
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
     BUILD_IN_SOURCE 1
-    CONFIGURE_COMMAND ./configure --prefix=<INSTALL_DIR> --libdir=<INSTALL_DIR>/lib
-          --enable-shared --disable-static --disable-fortran LIBS=-lm
+    CONFIGURE_COMMAND <SOURCE_DIR>/configure --prefix=<INSTALL_DIR> --libdir=<INSTALL_DIR>/lib
+          --enable-shared --disable-static --disable-fortran ${LIBM}
           CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER}
 
 ## For git checkout
@@ -128,16 +160,19 @@ if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/lib/libxc.so.4" AND
   )
 endif() # ENABLE_LIBXC
 
-if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xcfun.h" AND
-    ENABLE_XCFUN AND BUILD_XCFUN)
+#if(NOT EXISTS "${PROJECT_SOURCE_DIR}/deps/include/xcfun.h" AND
+#    ENABLE_XCFUN AND BUILD_XCFUN)
+if(ENABLE_XCFUN AND BUILD_XCFUN)
   ExternalProject_Add(libxcfun
     GIT_REPOSITORY https://github.com/dftlibs/xcfun.git
     GIT_TAG 355f42497a9cd17d16ae91da1f1aaaf93756ae8b
+    PATCH_COMMAND patch -p1 < ${PROJECT_SOURCE_DIR}/libxcfun.patch
     PREFIX ${PROJECT_BINARY_DIR}/deps
     INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
     CMAKE_ARGS -DCMAKE_BUILD_TYPE=RELEASE -DBUILD_SHARED_LIBS=1
             -DXC_MAX_ORDER=3 -DENABLE_TESTALL=0
             -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
+            -DENABLE_FORTRAN_INTERFACE=OFF
   )
 endif() # ENABLE_XCFUN
 add_subdirectory(dft)
@@ -163,4 +198,3 @@ endif() # ENABLE_TBLIS
 if(EXISTS "${PROJECT_SOURCE_DIR}/cmake.user.inc")
   include("${PROJECT_SOURCE_DIR}/cmake.user.inc")
 endif()
-

@@ -1,3 +1,18 @@
+#!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 from functools import reduce
 import unittest
 import numpy
@@ -14,7 +29,7 @@ ci0 = numpy.random.random((na,na))
 ci0 = ci0 + ci0.T
 rdm1, rdm2 = fci.direct_spin1.make_rdm12(ci0, norb, nelec)
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_rdm3(self):
         dm3ref = make_dm3_o0(ci0, norb, nelec)
         dm1, dm2, dm3 = fci.rdm.make_dm123('FCI3pdm_kern_spin0', ci0, ci0, norb, nelec)
@@ -67,7 +82,7 @@ class KnowValues(unittest.TestCase):
         self.assertTrue(numpy.allclose(dm3a, numpy.einsum('mnijklpp->mnijkl',dm4b)/5))
 
     def test_tdm2(self):
-        dm1 = numpy.einsum('ij,ijkl->kl', ci0, _trans1(ci0, norb, nelec))
+        dm1 = numpy.einsum('ij,ijkl->lk', ci0, _trans1(ci0, norb, nelec))
         self.assertTrue(numpy.allclose(rdm1, dm1))
 
         dm2 = numpy.einsum('ij,ijklmn->klmn', ci0, _trans2(ci0, norb, nelec))
@@ -86,7 +101,7 @@ class KnowValues(unittest.TestCase):
 
         t1 = _trans1(ci1, norb, nelec)
         t2 = _trans2(ci1, norb, nelec)
-        dm1a = numpy.einsum('ij,ijpq->pq', ci, t1)
+        dm1a = numpy.einsum('ij,ijpq->qp', ci, t1)
         dm2a = numpy.einsum('ij,ijpqrs->pqrs', ci, t2)
         self.assertTrue(numpy.allclose(dm1a, dm1))
         dm1a, dm2a = fci.rdm.reorder_rdm(dm1a, dm2a)
@@ -95,7 +110,7 @@ class KnowValues(unittest.TestCase):
     def test_full_alpha(self):
         nelec = (6,3)
         norb = 6
-        npair = norb*(norb+1)/2
+        npair = norb*(norb+1)//2
         numpy.random.seed(12)
         h1 = numpy.random.random((norb,norb))
         h1 = h1 + h1.T
@@ -113,7 +128,7 @@ class KnowValues(unittest.TestCase):
     def test_0beta(self):
         nelec = (3,0)
         norb = 6
-        npair = norb*(norb+1)/2
+        npair = norb*(norb+1)//2
         numpy.random.seed(12)
         h1 = numpy.random.random((norb,norb))
         h1 = h1 + h1.T

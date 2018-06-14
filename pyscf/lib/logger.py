@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -6,7 +19,6 @@
 
 '''
 Logging system
-**************
 
 Log level
 ---------
@@ -26,10 +38,10 @@ ERROR   1
 QUIET   0 
 ======= ======
 
-Big ``verbose`` value means more noise in the output file.
+Large value means more noise in the output file.
 
 .. note::
-    At log level 1 (ERROR) and 2 (WARN), the messages are also output to stderr.
+    Error and warning messages are written to stderr.
 
 Each Logger object has its own output destination and verbose level.  So
 multiple Logger objects can be created to manage the message system without
@@ -51,7 +63,8 @@ note level
 timer
 -----
 Logger object provides timer method for timing.  Set :attr:`TIMER_LEVEL` to
-control which level to output the timing.  It is 5 (DEBUG) by default.
+control at which level the timing information should be output.  It is 5
+(DEBUG) by default.
 
 >>> import sys, time
 >>> from pyscf import lib
@@ -68,6 +81,7 @@ import sys
 import time
 
 from pyscf.lib import parameters as param
+import pyscf.__config__
 
 DEBUG4 = param.VERBOSE_DEBUG + 4
 DEBUG3 = param.VERBOSE_DEBUG + 3
@@ -86,7 +100,7 @@ CRIT   = param.VERBOSE_CRIT
 ALERT  = param.VERBOSE_ALERT
 PANIC  = param.VERBOSE_PANIC
 
-TIMER_LEVEL  = param.TIMER_LEVEL
+TIMER_LEVEL  = getattr(pyscf.__config__, 'TIMER_LEVEL', DEBUG)
 
 sys.verbose = NOTE
 
@@ -169,6 +183,13 @@ def timer_debug1(rec, msg, cpu0=None, wall0=None):
         return rec._t0
 
 class Logger(object):
+    '''
+    Attributes:
+        stdout : file object or sys.stdout
+            The file to dump output message.
+        verbose : int
+            Large value means more noise in the output file.
+    '''
     def __init__(self, stdout=sys.stdout, verbose=NOTE):
         self.stdout = stdout
         self.verbose = verbose
@@ -189,6 +210,16 @@ class Logger(object):
     timer_debug1 = timer_debug1
 
 def new_logger(rec=None, verbose=None):
+    '''Create and return a :class:`Logger` object
+
+    Args:
+        rec : An object which carries the attributes stdout and verbose
+
+        verbose : a Logger object, or integer or None
+            The verbose level. If verbose is a Logger object, the Logger
+            object is returned. If verbose is not specified (None),
+            rec.verbose will be used in the new Logger object.
+    '''
     if isinstance(verbose, Logger):
         log = verbose
     elif isinstance(verbose, int):

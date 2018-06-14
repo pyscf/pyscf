@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -11,7 +24,7 @@ import time
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.dft import rks_grad
+from pyscf.grad import rks as rks_grad
 from pyscf.hessian import rhf as rhf_hess
 from pyscf.hessian import uhf as uhf_hess
 from pyscf.hessian import rks as rks_hess
@@ -25,7 +38,7 @@ def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     time0 = t1 = (time.clock(), time.time())
 
     mol = hessobj.mol
-    mf = hessobj._scf
+    mf = hessobj.base
     if mo_energy is None: mo_energy = mf.mo_energy
     if mo_occ is None:    mo_occ = mf.mo_occ
     if mo_coeff is None:  mo_coeff = mf.mo_coeff
@@ -188,9 +201,9 @@ def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
     moccb = mo_coeff[1][:,mo_occ[1]>0]
     dm0a = numpy.dot(mocca, mocca.T)
     dm0b = numpy.dot(moccb, moccb.T)
-    hcore_deriv = hessobj._scf.nuc_grad_method().hcore_generator(mol)
+    hcore_deriv = hessobj.base.nuc_grad_method().hcore_generator(mol)
 
-    mf = hessobj._scf
+    mf = hessobj.base
     ni = mf._numint
     ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
     omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=mol.spin)
@@ -262,7 +275,7 @@ YYY, YYZ, YZZ, ZZZ = 16, 17, 18, 19
 
 def _get_vxc_diag(hessobj, mo_coeff, mo_occ, max_memory):
     mol = hessobj.mol
-    mf = hessobj._scf
+    mf = hessobj.base
     if hessobj.grids is not None:
         grids = hessobj.grids
     else:
@@ -339,7 +352,7 @@ def _get_vxc_diag(hessobj, mo_coeff, mo_occ, max_memory):
 
 def _get_vxc_deriv2(hessobj, mo_coeff, mo_occ, max_memory):
     mol = hessobj.mol
-    mf = hessobj._scf
+    mf = hessobj.base
     if hessobj.grids is not None:
         grids = hessobj.grids
     else:
@@ -457,7 +470,7 @@ def _get_vxc_deriv2(hessobj, mo_coeff, mo_occ, max_memory):
 
 def _get_vxc_deriv1(hessobj, mo_coeff, mo_occ, max_memory):
     mol = hessobj.mol
-    mf = hessobj._scf
+    mf = hessobj.base
     if hessobj.grids is not None:
         grids = hessobj.grids
     else:

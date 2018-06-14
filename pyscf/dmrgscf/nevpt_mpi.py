@@ -1,7 +1,20 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
 #
-# Author: Sheng Guo <shengg@princeton.edu>
-#         Qiming Sun <osirpt.sun@gmail.com>
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Authors: Sheng Guo
+#          Qiming Sun <osirpt.sun@gmail.com>
 #
 
 import os
@@ -78,8 +91,6 @@ def write_chk(mc,root,chkfile):
     fh5['mc/wfnsym']   =       mc.fcisolver.wfnsym
     if hasattr(mc.mo_coeff, 'orbsym'):
         fh5.create_dataset('mc/orbsym',data=mc.mo_coeff.orbsym)
-    else :
-        fh5.create_dataset('mc/orbsym',data=[])
 
     if hasattr(mc.mo_coeff, 'orbsym') and mc.mol.symmetry:
         orbsym = numpy.asarray(mc.mo_coeff.orbsym)
@@ -180,11 +191,17 @@ def DMRG_COMPRESS_NEVPT(mc, maxM=500, root=0, nevptsolver=None, tol=1e-7,
 
     if nevptsolver is None:
         nevptsolver = default_nevpt_schedule(mol, maxM, tol)
-        nevptsolver.__dict__.update(mc.fcisolver.__dict__)
+        #nevptsolver.__dict__.update(mc.fcisolver.__dict__)
         nevptsolver.wfnsym = wfnsym
         nevptsolver.block_extra_keyword = mc.fcisolver.block_extra_keyword
     nevptsolver.nroots = nroots
     nevptsolver.executable = settings.BLOCKEXE_COMPRESS_NEVPT
+    if nevptsolver.executable == getattr(mc.fcisolver, 'executable', None):
+        logger.warn(mc, 'DMRG executable file for nevptsolver %s is the same '
+                    'to the executable file for DMRG solver %s. If they are '
+                    'both compiled by MPI compilers, they may cause error or '
+                    'random results in DMRG-NEVPT calculation.')
+
     nevpt_scratch = os.path.abspath(nevptsolver.scratchDirectory)
     dmrg_scratch = os.path.abspath(mc.fcisolver.scratchDirectory)
 
@@ -198,7 +215,7 @@ def DMRG_COMPRESS_NEVPT(mc, maxM=500, root=0, nevptsolver=None, tol=1e-7,
     with open(conf, 'r') as f:
         block_conf = f.readlines()
         block_conf = [l for l in block_conf if 'prefix' not in l]
-        block_conf = '\n'.join(block_conf)
+        block_conf = ''.join(block_conf)
 
     with h5py.File(nevpt_integral_file) as fh5:
         if 'dmrg.conf' in fh5:
@@ -325,7 +342,10 @@ def _write_integral_file(mc_chkfile, nevpt_scratch, comm):
     if rank == 0:
         fh5 = h5py.File(mc_chkfile, 'r')
         def load(key):
-            return comm.bcast(fh5[key].value)
+            if key in fh5:
+                return comm.bcast(fh5[key].value)
+            else:
+                return comm.bcast([])
     else:
         def load(key):
             return comm.bcast(None)

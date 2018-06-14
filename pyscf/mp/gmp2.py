@@ -1,3 +1,17 @@
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 '''
 GMP2 in spin-orbital form
 E(MP2) = 1/4 <ij||ab><ab||ij>/(ei+ej-ea-eb)
@@ -10,8 +24,12 @@ from pyscf import ao2mo
 from pyscf.lib import logger
 from pyscf.mp import mp2
 from pyscf import scf
+from pyscf import __config__
 
-def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=True,
+WITH_T2 = getattr(__config__, 'mp_gmp2_with_t2', True)
+
+
+def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2,
            verbose=logger.NOTE):
     if mo_energy is None or mo_coeff is None:
         mo_coeff = None
@@ -29,7 +47,7 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=True,
     eia = mo_energy[:nocc,None] - mo_energy[None,nocc:]
 
     if with_t2:
-        t2 = numpy.empty((nocc,nocc,nvir,nvir))
+        t2 = numpy.empty((nocc,nocc,nvir,nvir), dtype=eris.oovv.dtype)
     else:
         t2 = None
 
@@ -44,8 +62,19 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=True,
     return emp2.real, t2
 
 def make_rdm1(mp, t2=None):
-    if t2 is None: t2 = mp.t2
+    r'''
+    One-particle density matrix in the molecular spin-orbital representation
+    (the occupied-virtual blocks from the orbital response contribution are
+    not included).
+
+    dm1[p,q] = <q^\dagger p>  (p,q are spin-orbitals)
+
+    The convention of 1-pdm is based on McWeeney's book, Eq (5.4.20).
+    The contraction between 1-particle Hamiltonian and rdm1 is
+    E = einsum('pq,qp', h1, rdm1)
+    '''
     from pyscf.cc import gccsd_rdm
+    if t2 is None: t2 = mp.t2
     doo, dvv = _gamma1_intermediates(mp, t2)
     nocc, nvir = t2.shape[1:3]
     dov = numpy.zeros((nocc,nvir))
@@ -59,6 +88,16 @@ def _gamma1_intermediates(mp, t2):
 
 # spin-orbital rdm2 in Chemist's notation
 def make_rdm2(mp, t2=None):
+    r'''
+    Two-particle density matrix in the molecular spin-orbital representation
+
+    dm2[p,q,r,s] = <p^\dagger r^\dagger s q>
+
+    where p,q,r,s are spin-orbitals. p,q correspond to one particle and r,s
+    correspond to another particle.  The contraction between ERIs (in
+    Chemist's notation) and rdm2 is
+    E = einsum('pqrs,pqrs', eri, rdm2)
+    '''
     if t2 is None: t2 = mp.t2
     nmo = nmo0 = mp.nmo
     nocc = nocc0 = mp.nocc
@@ -70,23 +109,25 @@ def make_rdm2(mp, t2=None):
         oidx = numpy.where(moidx & (mp.mo_occ > 0))[0]
         vidx = numpy.where(moidx & (mp.mo_occ ==0))[0]
 
-        dm2 = numpy.zeros((nmo0,nmo0,nmo0,nmo0)) # Chemist notation
+        dm2 = numpy.zeros((nmo0,nmo0,nmo0,nmo0), dtype=t2.dtype) # Chemist notation
         dm2[oidx[:,None,None,None],vidx[:,None,None],oidx[:,None],vidx] = \
-                (t2.transpose(0,2,1,3) - t2.transpose(0,3,1,2)) * .5
+                t2.transpose(0,2,1,3)
         dm2[nocc0:,:nocc0,nocc0:,:nocc0] = \
                 dm2[:nocc0,nocc0:,:nocc0,nocc0:].transpose(1,0,3,2).conj()
     else:
-        dm2 = numpy.zeros((nmo0,nmo0,nmo0,nmo0)) # Chemist notation
-        dm2[:nocc,nocc:,:nocc,nocc:] = (t2.transpose(0,2,1,3) - t2.transpose(0,3,1,2)) * .5
+        dm2 = numpy.zeros((nmo0,nmo0,nmo0,nmo0), dtype=t2.dtype) # Chemist's notation
+        #dm2[:nocc,nocc:,:nocc,nocc:] = t2.transpose(0,2,1,3) * .5 - t2.transpose(0,3,1,2) * .5
+        # using t2.transpose(0,2,1,3) == -t2.transpose(0,3,1,2)
+        dm2[:nocc,nocc:,:nocc,nocc:] = t2.transpose(0,2,1,3)
         dm2[nocc:,:nocc,nocc:,:nocc] = dm2[:nocc,nocc:,:nocc,nocc:].transpose(1,0,3,2).conj()
 
     dm1 = make_rdm1(mp, t2)
     dm1[numpy.diag_indices(nocc0)] -= 1
 
     for i in range(nocc0):
-        dm2[i,i,:,:] += dm1
-        dm2[:,:,i,i] += dm1
-        dm2[:,i,i,:] -= dm1
+        dm2[i,i,:,:] += dm1.T
+        dm2[:,:,i,i] += dm1.T
+        dm2[:,i,i,:] -= dm1.T
         dm2[i,:,:,i] -= dm1
 
     for i in range(nocc0):
@@ -103,7 +144,7 @@ class GMP2(mp2.MP2):
         mp2.MP2.__init__(self, mf, frozen, mo_coeff, mo_occ)
 
     @lib.with_doc(mp2.MP2.kernel.__doc__)
-    def kernel(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=True):
+    def kernel(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2):
         return mp2.MP2.kernel(self, mo_energy, mo_coeff, eris, with_t2, kernel)
 
     def ao2mo(self, mo_coeff=None):
@@ -149,30 +190,33 @@ def _make_eris_incore(mp, mo_coeff=None, ao2mofn=None, verbose=None):
     nocc = mp.nocc
     nao, nmo = eris.mo_coeff.shape
     nvir = nmo - nocc
-    orboa = eris.mo_coeff[:nao//2,:nocc]
-    orbob = eris.mo_coeff[nao//2:,:nocc]
-    orbva = eris.mo_coeff[:nao//2,nocc:]
-    orbvb = eris.mo_coeff[nao//2:,nocc:]
     orbspin = eris.orbspin
 
-    if not callable(ao2mofn):
-        ao2mofn = lambda *args: ao2mo.kernel(mp._scf._eri, *args)
-
-    if orbspin is None:
-        eri  = ao2mofn((orboa,orbva,orboa,orbva)).reshape(nocc,nvir,nocc,nvir)
-        eri += ao2mofn((orbob,orbvb,orbob,orbvb)).reshape(nocc,nvir,nocc,nvir)
-        eri1 = ao2mofn((orboa,orbva,orbob,orbvb)).reshape(nocc,nvir,nocc,nvir)
-        eri += eri1
-        eri += eri1.transpose(2,3,0,1)
+    if callable(ao2mofn):
+        orbo = eris.mo_coeff[:,:nocc]
+        orbv = eris.mo_coeff[:,nocc:]
+        orbo = lib.tag_array(orbo, orbspin=orbspin)
+        eri = ao2mofn((orbo,orbv,orbo,orbv)).reshape(nocc,nvir,nocc,nvir)
     else:
-        co = orboa + orbob
-        cv = orbva + orbvb
-        eri = ao2mofn((co,cv,co,cv)).reshape(nocc,nvir,nocc,nvir)
-        sym_forbid = (orbspin[:nocc,None] != orbspin[nocc:])
-        eri[sym_forbid,:,:] = 0
-        eri[:,:,sym_forbid] = 0
+        orboa = eris.mo_coeff[:nao//2,:nocc]
+        orbob = eris.mo_coeff[nao//2:,:nocc]
+        orbva = eris.mo_coeff[:nao//2,nocc:]
+        orbvb = eris.mo_coeff[nao//2:,nocc:]
+        if orbspin is None:
+            eri  = ao2mo.kernel(mp._scf._eri, (orboa,orbva,orboa,orbva))
+            eri += ao2mo.kernel(mp._scf._eri, (orbob,orbvb,orbob,orbvb))
+            eri1 = ao2mo.kernel(mp._scf._eri, (orboa,orbva,orbob,orbvb))
+            eri += eri1
+            eri += eri1.T
+            eri = eri.reshape(nocc,nvir,nocc,nvir)
+        else:
+            co = orboa + orbob
+            cv = orbva + orbvb
+            eri = ao2mo.kernel(mp._scf._eri, (co,cv,co,cv)).reshape(nocc,nvir,nocc,nvir)
+            sym_forbid = (orbspin[:nocc,None] != orbspin[nocc:])
+            eri[sym_forbid,:,:] = 0
+            eri[:,:,sym_forbid] = 0
 
-    eri = eri.reshape(nocc,nvir,nocc,nvir)
     eris.oovv = eri.transpose(0,2,1,3) - eri.transpose(0,2,3,1)
     return eris
 
@@ -240,6 +284,8 @@ def _make_eris_outcore(mp, mo_coeff=None, verbose=None):
     cput0 = log.timer_debug1('transforming oovv', *cput0)
     return eris
 
+del(WITH_T2)
+
 
 if __name__ == '__main__':
     from pyscf import scf
@@ -277,6 +323,6 @@ if __name__ == '__main__':
     h1 = reduce(numpy.dot, (mo_a.T.conj(), hcore, mo_a))
     h1+= reduce(numpy.dot, (mo_b.T.conj(), hcore, mo_b))
     e1 = numpy.einsum('ij,ji', h1, dm1)
-    e1+= numpy.einsum('ijkl,jilk', eri, dm2) * .5
+    e1+= numpy.einsum('ijkl,ijkl', eri, dm2) * .5
     e1+= mol.energy_nuc()
     print(e1 - pt.e_tot)

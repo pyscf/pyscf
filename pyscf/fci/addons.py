@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 import sys
 import copy
@@ -6,8 +19,14 @@ import numpy
 from pyscf import lib
 from pyscf.fci import cistring
 from pyscf import symm
+from pyscf import __config__
 
-def large_ci(ci, norb, nelec, tol=.1, return_strs=True):
+LARGE_CI_TOL = getattr(__config__, 'fci_addons_large_ci_tol', 0.1)
+RETURN_STRS = getattr(__config__, 'fci_addons_large_ci_return_strs', True)
+PENALTY = getattr(__config__, 'fci_addons_fix_spin_shift', 0.2)
+
+
+def large_ci(ci, norb, nelec, tol=LARGE_CI_TOL, return_strs=RETURN_STRS):
     '''Search for the largest CI coefficients
     '''
     neleca, nelecb = _unpack(nelec)
@@ -314,7 +333,7 @@ def cylindrical_init_guess(mol, norb, nelec, orbsym, wfnsym=0, singlet=True,
                     ci_1[addr_y_a,addr_x_b] =-numpy.sqrt(.5)
             else:
                 # TODO: Other direct-product to direct-sum transofromation
-                # involves CG coefficients.
+                # which involves CG coefficients.
                 ci_1[addra,addrb] = 1
             ci0.append(ci_1.ravel())
             iroot += 1
@@ -374,6 +393,7 @@ def _guess_wfnsym(ci, strsa, strsb, orbsym):
     stra = strsa[idx // nb]
     strb = strsb[idx % nb ]
 
+    orbsym = numpy.asarray(orbsym) % 10  # convert to D2h irreps
     airrep = 0
     birrep = 0
     for i, ir in enumerate(orbsym):
@@ -624,7 +644,7 @@ def overlap(bra, ket, norb, nelec, s=None):
         bra = transform_ci_for_orbital_rotation(bra, norb, nelec, s)
     return numpy.dot(bra.ravel().conj(), ket.ravel())
 
-def fix_spin_(fciobj, shift=.2, ss=None, **kwargs):
+def fix_spin_(fciobj, shift=PENALTY, ss=None, **kwargs):
     r'''If FCI solver cannot stay on spin eigenfunction, this function can
     add a shift to the states which have wrong spin.
 
@@ -644,6 +664,7 @@ def fix_spin_(fciobj, shift=.2, ss=None, **kwargs):
     Returns
             A modified FCI object based on fciobj.
     '''
+    import types
     from pyscf.fci import spin_op
     from pyscf.fci import direct_spin0
     if 'ss_value' in kwargs:
@@ -653,7 +674,9 @@ def fix_spin_(fciobj, shift=.2, ss=None, **kwargs):
     else:
         ss_value = ss
 
-    fciobj.davidson_only = True
+    if (not isinstance(fciobj, types.ModuleType)
+        and 'contract_2e' in getattr(fciobj, '__dict__', {})):
+        del fciobj.contract_2e  # To avoid initialize twice
     old_contract_2e = fciobj.contract_2e
     def contract_2e(eri, fcivec, norb, nelec, link_index=None, **kwargs):
         if isinstance(nelec, (int, numpy.number)):
@@ -682,6 +705,8 @@ def fix_spin_(fciobj, shift=.2, ss=None, **kwargs):
         ci0 = old_contract_2e(eri, fcivec, norb, nelec, link_index, **kwargs)
         ci1 += ci0.reshape(fcivec.shape)
         return ci1
+
+    fciobj.davidson_only = True
     fciobj.contract_2e = contract_2e
     return fciobj
 def fix_spin(fciobj, shift=.1, ss=None):
@@ -712,33 +737,39 @@ def transform_ci_for_orbital_rotation(ci, norb, nelec, u):
     else:
         ua, ub = u
 
-    # Unitary transformation array trans_ci is the overlap between two sets of CI basis.
-    occ_masks = (strsa[:,None] & one_particle_strs) != 0
-    trans_ci_a = numpy.zeros((na,na))
-    #for i in range(na): # for old basis
-    #    for j in range(na):
-    #        uij = u[occ_masks[i]][:,occ_masks[j]]
-    #        trans_ci_a[i,j] = numpy.linalg.det(uij)
-    occ_idx_all_strs = numpy.where(occ_masks)[1]
-    for i in range(na):
-        ui = ua[occ_masks[i]].T.copy()
-        minors = numpy.take(ui, occ_idx_all_strs, axis=0).reshape(na,neleca,neleca)
-        trans_ci_a[i,:] = numpy.linalg.det(minors)
+    if neleca == 0:
+        trans_ci_a = numpy.ones((1,1))
+    else:
+        # Unitary transformation array trans_ci is the overlap between two sets of CI basis.
+        occ_masks = (strsa[:,None] & one_particle_strs) != 0
+        trans_ci_a = numpy.zeros((na,na))
+        #for i in range(na): # for old basis
+        #    for j in range(na):
+        #        uij = u[occ_masks[i]][:,occ_masks[j]]
+        #        trans_ci_a[i,j] = numpy.linalg.det(uij)
+        occ_idx_all_strs = numpy.where(occ_masks)[1]
+        for i in range(na):
+            ui = ua[occ_masks[i]].T.copy()
+            minors = numpy.take(ui, occ_idx_all_strs, axis=0).reshape(na,neleca,neleca)
+            trans_ci_a[i,:] = numpy.linalg.det(minors)
 
     if neleca == nelecb and numpy.allclose(ua, ub):
         trans_ci_b = trans_ci_a
     else:
-        occ_masks = (strsb[:,None] & one_particle_strs) != 0
-        trans_ci_b = numpy.zeros((nb,nb))
-        #for i in range(nb):
-        #    for j in range(nb):
-        #        uij = u[occ_masks[i]][:,occ_masks[j]]
-        #        trans_ci_b[i,j] = numpy.linalg.det(uij)
-        occ_idx_all_strs = numpy.where(occ_masks)[1]
-        for i in range(nb):
-            ui = ub[occ_masks[i]].T.copy()
-            minors = numpy.take(ui, occ_idx_all_strs, axis=0).reshape(nb,nelecb,nelecb)
-            trans_ci_b[i,:] = numpy.linalg.det(minors)
+        if nelecb == 0:
+            trans_ci_b = numpy.ones((1,1))
+        else:
+            occ_masks = (strsb[:,None] & one_particle_strs) != 0
+            trans_ci_b = numpy.zeros((nb,nb))
+            #for i in range(nb):
+            #    for j in range(nb):
+            #        uij = u[occ_masks[i]][:,occ_masks[j]]
+            #        trans_ci_b[i,j] = numpy.linalg.det(uij)
+            occ_idx_all_strs = numpy.where(occ_masks)[1]
+            for i in range(nb):
+                ui = ub[occ_masks[i]].T.copy()
+                minors = numpy.take(ui, occ_idx_all_strs, axis=0).reshape(nb,nelecb,nelecb)
+                trans_ci_b[i,:] = numpy.linalg.det(minors)
 
     # Transform old basis to new basis for all alpha-electron excitations
     ci = lib.dot(trans_ci_a.T, ci.reshape(na,nb))
@@ -757,6 +788,8 @@ def _unpack(nelec, spin=None):
         neleca = nelec - nelecb
         nelec = neleca, nelecb
     return nelec
+
+del(LARGE_CI_TOL, RETURN_STRS, PENALTY)
 
 
 if __name__ == '__main__':

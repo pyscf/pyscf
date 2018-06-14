@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -15,8 +28,6 @@ from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
 
 libri = lib.load_library('libri')
-
-OCCDROP = 1e-12
 
 def density_fit(mf, auxbasis=None, with_df=None):
     '''For the given SCF object, update the J, K matrix constructor with
@@ -66,12 +77,6 @@ def density_fit(mf, auxbasis=None, with_df=None):
                                    'It cannot be initialized twice.')
         return mf
 
-    mf_class = mf.__class__
-    if mf_class.__doc__ is None:
-        doc = ''
-    else:
-        doc = mf_class.__doc__
-
     if with_df is None:
         if isinstance(mf, dhf.UHF):
             with_df = df.DF4C(mf.mol)
@@ -82,15 +87,21 @@ def density_fit(mf, auxbasis=None, with_df=None):
         with_df.verbose = mf.verbose
         with_df.auxbasis = auxbasis
 
+    mf_class = mf.__class__
     class DFHF(mf_class, _DFHF):
-        __doc__ = doc + \
-        '''
+        __doc__ = '''
+        Density fitting SCF class
+
         Attributes for density-fitting SCF:
             auxbasis : str or basis dict
                 Same format to the input attribute mol.basis.
                 The default basis 'weigend+etb' means weigend-coulomb-fit basis
                 for light elements and even-tempered basis for heavy elements.
-        '''
+            with_df : DF object
+                Set mf.with_df = None to switch off density fitting mode.
+
+        See also the documents of class %s for other SCF attributes.
+        ''' % mf_class
         def __init__(self, mf):
             self.__dict__.update(mf.__dict__)
             self._eri = None
@@ -134,15 +145,6 @@ def density_fit(mf, auxbasis=None, with_df=None):
         def _cderi(self, x):
             self.with_df._cderi = x
 
-        @property
-        def _tag_df(self):
-            sys.stderr.write('WARN: Deprecated attribute ._tag_df will be removed in future release. '
-                             'It is replaced by attribute .with_df\n')
-            if self.with_df:
-                return True
-            else:
-                return False
-
     return DFHF(mf)
 
 # A tag to label the derived SCF class
@@ -170,10 +172,11 @@ def get_jk(dfobj, dm, hermi=1, vhfopt=None, with_j=True, with_k=True):
 
     if not with_k:
         dmtril = []
+        idx = numpy.arange(nao)
         for k in range(nset):
-            dmtril.append(lib.pack_tril(dms[k]+dms[k].T))
-            i = numpy.arange(nao)
-            dmtril[k][i*(i+1)//2+i] *= .5
+            dm = lib.pack_tril(dms[k]+dms[k].T)
+            dm[idx*(idx+1)//2+idx] *= .5
+            dmtril.append(dm)
         for eri1 in dfobj.loop():
             naux, nao_pair = eri1.shape
             for k in range(nset):
@@ -268,6 +271,7 @@ def r_get_jk(dfobj, dms, hermi=1):
     n2c = ao_loc[-1]
 
     def fjk(dm):
+        dm = numpy.asarray(dm, dtype=numpy.complex128)
         fmmm = libri.RIhalfmmm_r_s2_bra_noconj
         fdrv = _ao2mo.libao2mo.AO2MOr_e2_drv
         ftrans = libri.RItranse2_r_s2

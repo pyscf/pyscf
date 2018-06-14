@@ -1,6 +1,17 @@
 #!/usr/bin/env python
-# $Id$
-# -*- coding: utf-8
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 '''
 density fitting MP2,  3-center integrals incore.
@@ -14,8 +25,12 @@ from pyscf.ao2mo import _ao2mo
 from pyscf import df
 from pyscf.mp import mp2
 #from pyscf.mp.mp2 import make_rdm1, make_rdm2, make_rdm1_ao
+from pyscf import __config__
 
-def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=True,
+WITH_T2 = getattr(__config__, 'mp_dfmp2_with_t2', True)
+
+
+def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2,
            verbose=logger.NOTE):
     if mo_energy is None or mo_coeff is None:
         mo_coeff = mp2._mo_without_core(mp, mp.mo_coeff)
@@ -47,15 +62,16 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=True,
 
 class DFMP2(mp2.MP2):
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+        mp2.MP2.__init__(self, mf, frozen, mo_coeff, mo_occ)
         if hasattr(mf, 'with_df') and mf.with_df:
-            self.with_df = None
+            self.with_df = mf.with_df
         else:
             self.with_df = df.DF(mf.mol)
             self.with_df.auxbasis = df.make_auxbasis(mf.mol, mp2fit=True)
-        mp2.MP2.__init__(self, mf, frozen, mo_coeff, mo_occ)
+        self._keys.update(['with_df'])
 
     @lib.with_doc(mp2.MP2.kernel.__doc__)
-    def kernel(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=True):
+    def kernel(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2):
         return mp2.MP2.kernel(self, mo_energy, mo_coeff, eris, with_t2, kernel)
 
     def loop_ao2mo(self, mo_coeff, nocc):
@@ -63,10 +79,7 @@ class DFMP2(mp2.MP2):
         nmo = mo.shape[1]
         ijslice = (0, nocc, nocc, nmo)
         Lov = None
-        if self.with_df is None:
-            with_df = self._scf.with_df
-        else:
-            with_df = self.with_df
+        with_df = self.with_df
 
         nvir = nmo - nocc
         naux = with_df.get_naoaux()
@@ -85,6 +98,8 @@ class DFMP2(mp2.MP2):
 #    def make_rdm2(self, t2=None):
 #        if t2 is None: t2 = self.t2
 #        return make_rdm2(self, t2, self.verbose)
+
+del(WITH_T2)
 
 
 if __name__ == '__main__':

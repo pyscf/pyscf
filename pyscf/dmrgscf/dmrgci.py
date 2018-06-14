@@ -1,8 +1,21 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
 #
-# Author: Sandeep Sharma <sanshar@gmail.com>
-#         Sheng Guo <shengg@princeton.edu>
-#         Qiming Sun <osirpt.sun@gmail.com>
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Authors: Sandeep Sharma <sanshar@gmail.com>
+#          Sheng Guo
+#          Qiming Sun <osirpt.sun@gmail.com>
 #
 
 '''
@@ -17,29 +30,37 @@ import time
 import tempfile
 from subprocess import check_call, check_output, STDOUT, CalledProcessError
 import numpy
-import pyscf.tools
-import pyscf.lib
+from pyscf import lib
+from pyscf import tools
 from pyscf.lib import logger
-from pyscf.lib import chkfile
+from pyscf import ao2mo
 from pyscf import mcscf
 from pyscf.dmrgscf import dmrg_sym
 
-import pyscf.lib
+from pyscf import __config__
 
-libunpack = pyscf.lib.load_library('libicmpspt')
+libunpack = lib.load_library('libicmpspt')
 
 
 try:
     from pyscf.dmrgscf import settings
 except ImportError:
-    import sys
-    sys.stderr.write('''settings.py not found.  Please create %s
-''' % os.path.join(os.path.dirname(__file__), 'settings.py'))
-    raise ImportError
+    settings = lambda: None
+    settings.BLOCKEXE = getattr(__config__, 'dmrgscf_BLOCKEXE', None)
+    settings.BLOCKEXE_COMPRESS_NEVPT = \
+            getattr(__config__, 'dmrgscf_BLOCKEXE_COMPRESS_NEVPT', None)
+    settings.BLOCKSCRATCHDIR = getattr(__config__, 'dmrgscf_BLOCKSCRATCHDIR', None)
+    settings.BLOCKRUNTIMEDIR = getattr(__config__, 'dmrgscf_BLOCKRUNTIMEDIR', None)
+    settings.MPIPREFIX = getattr(__config__, 'dmrgscf_MPIPREFIX', None)
+    settings.BLOCKVERSION = getattr(__config__, 'dmrgscf_BLOCKVERSION', None)
+    if (settings.BLOCKEXE is None or settings.BLOCKSCRATCHDIR is None):
+        import sys
+        sys.stderr.write('settings.py not found.  Please create %s\n'
+                         % os.path.join(os.path.dirname(__file__), 'settings.py'))
+        raise ImportError('settings.py not found')
 
 
-
-class DMRGCI(pyscf.lib.StreamObject):
+class DMRGCI(lib.StreamObject):
     '''Block program interface and the object to hold Block program input parameters.
 
     Attributes:
@@ -274,7 +295,7 @@ class DMRGCI(pyscf.lib.StreamObject):
                 twopdm[i,j,k,l] = 2.0 * float(linesp[4])
 
         # (this is coherent with previous statement about indexes) (right?)
-        onepdm = numpy.einsum('ikjj->ik', twopdm)
+        onepdm = numpy.einsum('ikjj->ki', twopdm)
         onepdm /= (nelectrons-1)
         return onepdm, twopdm
 
@@ -322,7 +343,7 @@ class DMRGCI(pyscf.lib.StreamObject):
                 twopdm[i,j,k,l] = 2.0 * float(linesp[4])
 
         # (this is coherent with previous statement about indexes) (right?)
-        onepdm = numpy.einsum('ikjj->ik', twopdm)
+        onepdm = numpy.einsum('ikjj->ki', twopdm)
         onepdm /= (nelectrons-1)
         return onepdm, twopdm
 
@@ -364,7 +385,7 @@ class DMRGCI(pyscf.lib.StreamObject):
         # (this is coherent with previous statement about indexes)
         twopdm = numpy.einsum('ijkklm->ijlm',threepdm)
         twopdm /= (nelectrons-2)
-        onepdm = numpy.einsum('ijjk->ik', twopdm)
+        onepdm = numpy.einsum('ijjk->ki', twopdm)
         onepdm /= (nelectrons-1)
         return onepdm, twopdm, threepdm
 
@@ -383,7 +404,7 @@ class DMRGCI(pyscf.lib.StreamObject):
         threepdm += numpy.einsum('jm,kinl->ijklmn',numpy.identity(norb),twopdm)
 
         twopdm =(numpy.einsum('iklj->ijkl',twopdm)
-               + numpy.einsum('il,jk->ijkl',onepdm,numpy.identity(norb)))
+               + numpy.einsum('li,jk->ijkl',onepdm,numpy.identity(norb)))
 
         return onepdm, twopdm, threepdm
 
@@ -809,22 +830,22 @@ def writeIntegralFile(DMRGCI, h1eff, eri_cas, ncas, nelec, ecore=0):
         orbsym = numpy.asarray(DMRGCI.orbsym) % 10
         pair_irrep = (orbsym.reshape(-1,1) ^ orbsym)[numpy.tril_indices(ncas)]
         sym_forbid = pair_irrep.reshape(-1,1) != pair_irrep.ravel()
-        eri_cas = pyscf.ao2mo.restore(4, eri_cas, ncas)
+        eri_cas = ao2mo.restore(4, eri_cas, ncas)
         eri_cas[sym_forbid] = 0
-        eri_cas = pyscf.ao2mo.restore(8, eri_cas, ncas)
+        eri_cas = ao2mo.restore(8, eri_cas, ncas)
 # Then convert the pyscf internal irrep-ID to molpro irrep-ID
         orbsym = numpy.asarray(dmrg_sym.convert_orbsym(DMRGCI.groupname, orbsym))
     else:
         orbsym = []
-        eri_cas = pyscf.ao2mo.restore(8, eri_cas, ncas)
+        eri_cas = ao2mo.restore(8, eri_cas, ncas)
     if not os.path.exists(DMRGCI.scratchDirectory):
         os.makedirs(DMRGCI.scratchDirectory)
     if not os.path.exists(DMRGCI.runtimeDir):
         os.makedirs(DMRGCI.runtimeDir)
 
-    pyscf.tools.fcidump.from_integrals(integralFile, h1eff, eri_cas, ncas,
-                                       neleca+nelecb, ecore, ms=abs(neleca-nelecb),
-                                       orbsym=orbsym)
+    tools.fcidump.from_integrals(integralFile, h1eff, eri_cas, ncas,
+                                 neleca+nelecb, ecore, ms=abs(neleca-nelecb),
+                                 orbsym=orbsym)
     return integralFile
 
 
@@ -895,7 +916,7 @@ def block_version(blockexe):
         return version
 
     try:
-        msg = check_output([blockexe, '-v'], stderr=STDOUT)
+        msg = check_output([blockexe, '-v'], stderr=STDOUT).decode()
         version = '1.1.0'
         for line in msg.split('\n'):
             if line.startswith('Block '):
@@ -907,7 +928,7 @@ def block_version(blockexe):
         f1.write('memory 1 m\n')
         f1.flush()
         try:
-            msg = check_output([blockexe, f1.name], stderr=STDOUT)
+            msg = check_output([blockexe, f1.name], stderr=STDOUT).decode()
         except CalledProcessError as err:
             if 'Unrecognized option :: memory' in err.output:
                 version = '1.1.1'

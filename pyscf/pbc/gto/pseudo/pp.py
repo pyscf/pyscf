@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Timothy Berkelbach <tim.berkelbach@gmail.com>
 #
@@ -14,6 +27,7 @@ import numpy as np
 import scipy.linalg
 import scipy.special
 from pyscf import lib
+from pyscf.gto import mole
 
 def get_alphas(cell, low_dim_ft_type=None):
     '''alpha parameters from the non-divergent Hartree+Vloc G=0 term.
@@ -297,12 +311,9 @@ def cart2polar(rvec):
 def get_pp(cell, kpt=np.zeros(3), low_dim_ft_type=None):
     '''Get the periodic pseudotential nuc-el AO matrix
     '''
-    import pyscf.dft
     from pyscf.pbc import tools
-    from pyscf.pbc.dft import gen_grid
-    from pyscf.pbc.dft import numint
-    coords = gen_grid.gen_uniform_grids(cell)
-    aoR = numint.eval_ao(cell, coords, kpt)
+    coords = cell.get_uniform_grids()
+    aoR = cell.pbc_eval_gto('GTOval', coords, kpt=kpt)
     nao = cell.nao_nr()
 
     SI = cell.get_SI()
@@ -319,15 +330,15 @@ def get_pp(cell, kpt=np.zeros(3), low_dim_ft_type=None):
                       cell.mesh, np.exp(-1j*np.dot(coords, kpt))).T
     ngrids = len(aokG)
 
-    fakemol = pyscf.gto.Mole()
-    fakemol._atm = np.zeros((1,pyscf.gto.ATM_SLOTS), dtype=np.int32)
-    fakemol._bas = np.zeros((1,pyscf.gto.BAS_SLOTS), dtype=np.int32)
-    ptr = pyscf.gto.PTR_ENV_START
+    fakemol = mole.Mole()
+    fakemol._atm = np.zeros((1,mole.ATM_SLOTS), dtype=np.int32)
+    fakemol._bas = np.zeros((1,mole.BAS_SLOTS), dtype=np.int32)
+    ptr = mole.PTR_ENV_START
     fakemol._env = np.zeros(ptr+10)
-    fakemol._bas[0,pyscf.gto.NPRIM_OF ] = 1
-    fakemol._bas[0,pyscf.gto.NCTR_OF  ] = 1
-    fakemol._bas[0,pyscf.gto.PTR_EXP  ] = ptr+3
-    fakemol._bas[0,pyscf.gto.PTR_COEFF] = ptr+4
+    fakemol._bas[0,mole.NPRIM_OF ] = 1
+    fakemol._bas[0,mole.NCTR_OF  ] = 1
+    fakemol._bas[0,mole.PTR_EXP  ] = ptr+3
+    fakemol._bas[0,mole.PTR_COEFF] = ptr+4
     Gv = np.asarray(cell.Gv+kpt)
     G_rad = lib.norm(Gv, axis=1)
 
@@ -341,10 +352,10 @@ def get_pp(cell, kpt=np.zeros(3), low_dim_ft_type=None):
             rl, nl, hl = proj
             if nl > 0:
                 hl = np.asarray(hl)
-                fakemol._bas[0,pyscf.gto.ANG_OF] = l
+                fakemol._bas[0,mole.ANG_OF] = l
                 fakemol._env[ptr+3] = .5*rl**2
                 fakemol._env[ptr+4] = rl**(l+1.5)*np.pi**1.25
-                pYlm_part = pyscf.dft.numint.eval_ao(fakemol, Gv, deriv=0)
+                pYlm_part = fakemol.eval_gto('GTOval', Gv)
 
                 pYlm = np.empty((nl,l*2+1,ngrids))
                 for k in range(nl):
@@ -366,5 +377,5 @@ def get_pp(cell, kpt=np.zeros(3), low_dim_ft_type=None):
 def get_jvloc_G0(cell, kpt=np.zeros(3), low_dim_ft_type=None):
     '''Get the (separately divergent) Hartree + Vloc G=0 contribution.
     '''
-    ovlp = cell.pbc_intor('int1e_ovlp_sph', hermi=1, kpts=kpt)
+    ovlp = cell.pbc_intor('int1e_ovlp', hermi=1, kpts=kpt)
     return 1./cell.vol * np.sum(get_alphas(cell, low_dim_ft_type)) * ovlp

@@ -1,8 +1,22 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+import warnings
 import ctypes
 import numpy
 from pyscf import lib
@@ -17,7 +31,7 @@ PTR_EXP    = 5
 PTR_COEFF  = 6
 BAS_SLOTS  = 8
 
-def getints(intor_name, atm, bas, env, shls_slice=None, comp=1, hermi=0,
+def getints(intor_name, atm, bas, env, shls_slice=None, comp=None, hermi=0,
             aosym='s1', ao_loc=None, cintopt=None, out=None):
     r'''1e and 2e integral generator.
 
@@ -194,7 +208,8 @@ def getints(intor_name, atm, bas, env, shls_slice=None, comp=1, hermi=0,
      [[ 0.10289944  0.48176097]
       [-0.48176097 -0.10289944]]]
     '''
-    intor_name = ascint3(intor_name)
+    intor_name, comp = _get_intor_and_comp(intor_name, comp)
+
     if (intor_name.startswith('int1e') or
         intor_name.startswith('ECP') or
         intor_name.startswith('int2c2e')):
@@ -207,7 +222,190 @@ def getints(intor_name, atm, bas, env, shls_slice=None, comp=1, hermi=0,
         return getints3c(intor_name, atm, bas, env, shls_slice, comp,
                          aosym, ao_loc, cintopt, out)
     else:
-        raise RuntimeError('Unknown intor %s' % intor_name)
+        raise KeyError('Unknown intor %s' % intor_name)
+
+def _get_intor_and_comp(intor_name, comp=None):
+    intor_name = ascint3(intor_name)
+    if comp is None:
+        try:
+            if '_spinor' in intor_name:
+                fname = intor_name.replace('_spinor', '')
+                comp = _INTOR_FUNCTIONS[fname][1]
+            else:
+                fname = intor_name.replace('_sph', '').replace('_cart', '')
+                comp = _INTOR_FUNCTIONS[fname][0]
+        except KeyError:
+            warnings.warn('Function %s not found.  Set its comp to 1' % intor_name)
+            comp = 1
+    return intor_name, comp
+
+_INTOR_FUNCTIONS = {
+#   Functiona name              : (comp-for-scalar, comp-for-spinor)
+    'int1e_ovlp'                : (1, 1),
+    'int1e_nuc'                 : (1, 1),
+    'int1e_kin'                 : (1, 1),
+    'int1e_ia01p'               : (3, 3),
+    'int1e_giao_irjxp'          : (3, 3),
+    'int1e_cg_irxp'             : (3, 3),
+    'int1e_giao_a11part'        : (9, 9),
+    'int1e_cg_a11part'          : (9, 9),
+    'int1e_a01gp'               : (9, 9),
+    'int1e_igkin'               : (3, 3),
+    'int1e_igovlp'              : (3, 3),
+    'int1e_ignuc'               : (3, 3),
+    'int1e_pnucp'               : (1, 1),
+    'int1e_z'                   : (1, 1),
+    'int1e_zz'                  : (1, 1),
+    'int1e_r'                   : (3, 3),
+    'int1e_r2'                  : (1, 1),
+    'int1e_rr'                  : (9, 9),
+    'int1e_z_origj'             : (1, 1),
+    'int1e_zz_origj'            : (1, 1),
+    'int1e_r_origj'             : (3, 3),
+    'int1e_rr_origj'            : (9, 9),
+    'int1e_r2_origj'            : (1, 1),
+    'int1e_r4_origj'            : (1, 1),
+    'int1e_p4'                  : (1, 1),
+    'int1e_prinvp'              : (1, 1),
+    'int1e_prinvxp'             : (3, 3),
+    'int1e_pnucxp'              : (3, 3),
+    'int2e_p1vxp1'              : (3, 3),
+    'int2e'                     : (1, 1),
+    'int2e_ig1'                 : (3, 3),
+    'int2e_ig1ig2'              : (9, 9),
+    'int2e_ip1v_rc1'            : (9, 9),
+    'int2e_ip1v_r1'             : (9, 9),
+    'int2e_ipvg1_xp1'           : (9, 9),
+    'int2e_ipvg2_xp1'           : (9, 9),
+    'int1e_inuc_rcxp'           : (3, 3),
+    'int1e_inuc_rxp'            : (3, 3),
+    'int1e_sigma'               : (12,3),
+    'int1e_spsigmasp'           : (12,3),
+    'int1e_srsr'                : (4, 1),
+    'int1e_sr'                  : (4, 1),
+    'int1e_srsp'                : (4, 1),
+    'int1e_spsp'                : (4, 1),
+    'int1e_sp'                  : (4, 1),
+    'int1e_spnucsp'             : (4, 1),
+    'int1e_sprinvsp'            : (4, 1),
+    'int1e_srnucsr'             : (4, 1),
+    'int1e_govlp'               : (3, 3),
+    'int1e_gnuc'                : (3, 3),
+    'int1e_cg_sa10sa01'         : (36,9),
+    'int1e_cg_sa10sp'           : (12,3),
+    'int1e_cg_sa10nucsp'        : (12,3),
+    'int1e_giao_sa10sa01'       : (36,9),
+    'int1e_giao_sa10sp'         : (12,3),
+    'int1e_giao_sa10nucsp'      : (12,3),
+    'int1e_sa01sp'              : (12,3),
+    'int1e_spgsp'               : (12,3),
+    'int1e_spgnucsp'            : (12,3),
+    'int1e_spgsa01'             : (36,9),
+    'int2e_spsp1'               : (4, 1),
+    'int2e_spsp1spsp2'          : (16,1),
+    'int2e_srsr1'               : (4, 1),
+    'int2e_srsr1srsr2'          : (16,1),
+    'int2e_cg_sa10sp1'          : (12,3),
+    'int2e_cg_sa10sp1spsp2'     : (48,3),
+    'int2e_giao_sa10sp1'        : (12,3),
+    'int2e_giao_sa10sp1spsp2'   : (48,3),
+    'int2e_g1'                  : (12,3),
+    'int2e_spgsp1'              : (12,3),
+    'int2e_g1spsp2'             : (12,3),
+    'int2e_spgsp1spsp2'         : (48,3),
+    'int2e_pp1'                 : (1, 1),
+    'int2e_pp2'                 : (1, 1),
+    'int2e_pp1pp2'              : (1, 1),
+    'int1e_spspsp'              : (4, 1),
+    'int1e_spnuc'               : (4, 1),
+    'int2e_spv1'                : (4, 1),
+    'int2e_vsp1'                : (4, 1),
+    'int2e_spsp2'               : (4, 1),
+    'int2e_spv1spv2'            : (16,1),
+    'int2e_vsp1spv2'            : (16,1),
+    'int2e_spv1vsp2'            : (16,1),
+    'int2e_vsp1vsp2'            : (16,1),
+    'int2e_spv1spsp2'           : (16,1),
+    'int2e_vsp1spsp2'           : (16,1),
+    'int1e_ipovlp'              : (3, 3),
+    'int1e_ipkin'               : (3, 3),
+    'int1e_ipnuc'               : (3, 3),
+    'int1e_iprinv'              : (3, 3),
+    'int1e_rinv'                : (1, 1),
+    'int1e_ipspnucsp'           : (12,3),
+    'int1e_ipsprinvsp'          : (12,3),
+    'int1e_ippnucp'             : (3, 3),
+    'int1e_ipprinvp'            : (3, 3),
+    'int2e_ip1'                 : (3, 3),
+    'int2e_ip2'                 : (3, 3),
+    'int2e_ipspsp1'             : (12,3),
+    'int2e_ip1spsp2'            : (12,3),
+    'int2e_ipspsp1spsp2'        : (48,3),
+    'int2e_ipsrsr1'             : (12,3),
+    'int2e_ip1srsr2'            : (12,3),
+    'int2e_ipsrsr1srsr2'        : (48,3),
+    'int2e_ssp1ssp2'            : (16,1),
+    'int2e_ssp1sps2'            : (16,1),
+    'int2e_sps1ssp2'            : (16,1),
+    'int2e_sps1sps2'            : (16,1),
+    'int2e_cg_ssa10ssp2'        : (48,3),
+    'int2e_giao_ssa10ssp2'      : (18,3),
+    'int2e_gssp1ssp2'           : (18,3),
+    'int2e_gauge_r1_ssp1ssp2'   : (None, 1),
+    'int2e_gauge_r1_ssp1sps2'   : (None, 1),
+    'int2e_gauge_r1_sps1ssp2'   : (None, 1),
+    'int2e_gauge_r1_sps1sps2'   : (None, 1),
+    'int2e_gauge_r2_ssp1ssp2'   : (None, 1),
+    'int2e_gauge_r2_ssp1sps2'   : (None, 1),
+    'int2e_gauge_r2_sps1ssp2'   : (None, 1),
+    'int2e_gauge_r2_sps1sps2'   : (None, 1),
+    'int1e_ipipovlp'            : (9, 9),
+    'int1e_ipovlpip'            : (9, 9),
+    'int1e_ipipkin'             : (9, 9),
+    'int1e_ipkinip'             : (9, 9),
+    'int1e_ipipnuc'             : (9, 9),
+    'int1e_ipnucip'             : (9, 9),
+    'int1e_ipiprinv'            : (9, 9),
+    'int1e_iprinvip'            : (9, 9),
+    'int2e_ipip1'               : (9, 9),
+    'int2e_ipvip1'              : (9, 9),
+    'int2e_ip1ip2'              : (9, 9),
+    'int1e_ipippnucp'           : (9, 9),
+    'int1e_ippnucpip'           : (9, 9),
+    'int1e_ipipprinvp'          : (9, 9),
+    'int1e_ipprinvpip'          : (9, 9),
+    'int1e_ipipspnucsp'         : (36,9),
+    'int1e_ipspnucspip'         : (36,9),
+    'int1e_ipipsprinvsp'        : (36,9),
+    'int1e_ipsprinvspip'        : (36,9),
+    'int3c2e'                   : (1, 1),
+    'int3c2e_ip1'               : (3, 3),
+    'int3c2e_ip2'               : (3, 3),
+    'int3c2e_pvp1'              : (1, 1),
+    'int3c2e_pvxp1'             : (3, 3),
+    'int2c2e_ip1'               : (3, 3),
+    'int2c2e_ip2'               : (3, 3),
+    'int3c2e_ig1'               : (3, 3),
+    'int3c2e_spsp1'             : (4, 1),
+    'int3c2e_ipspsp1'           : (12,3),
+    'int3c2e_spsp1ip2'          : (12,3),
+    'int3c2e_ipip1'             : (9, 9),
+    'int3c2e_ipvip1'            : (9, 9),
+    'int3c2e_ip1ip2'            : (9, 9),
+    'int2c2e_ip1ip2'            : (9, 9),
+    'int3c1e'                   : (1, 1),
+    'int3c1e_p2'                : (1, 1),
+    'int3c1e_iprinv'            : (3, 3),
+    'int2c2e'                   : (1, 1),
+    'int2e_yp'                  : (1, 1),
+    'int2e_stg'                 : (1, 1),
+    'int2e_coulerf'             : (1, 1),
+    'ECPscalar'                 : (1, None),
+    'ECPscalar_ipnuc'           : (3, None),
+    'ECPscalar_iprinv'          : (3, None),
+    'ECPscalar_igrinv'          : (3, None),
+    'ECPscalar_iprinvip'        : (9, None),
+}
 
 def getints2c(intor_name, atm, bas, env, shls_slice=None, comp=1, hermi=0,
               ao_loc=None, cintopt=None, out=None):
@@ -263,6 +461,10 @@ def getints3c(intor_name, atm, bas, env, shls_slice=None, comp=1,
     nbas = bas.shape[0]
     if shls_slice is None:
         shls_slice = (0, nbas, 0, nbas, 0, nbas)
+        if 'ssc' in intor_name or 'spinor' in intor_name:
+            bas = numpy.asarray(numpy.vstack((bas,bas)), dtype=numpy.int32)
+            shls_slice = (0, nbas, 0, nbas, nbas, nbas*2)
+            nbas = bas.shape[0]
     else:
         assert(shls_slice[1] <= nbas and
                shls_slice[3] <= nbas and
@@ -271,11 +473,11 @@ def getints3c(intor_name, atm, bas, env, shls_slice=None, comp=1,
     i0, i1, j0, j1, k0, k1 = shls_slice[:6]
     if ao_loc is None:
         ao_loc = make_loc(bas, intor_name)
-        if k0 > j1 and k0 > i1:
-            if 'ssc' in intor_name:
-                ao_loc[k0-1:] = ao_loc[k0] + make_loc(bas[k0:], 'cart')
-            elif 'spinor' in intor_name:
-                ao_loc[k0-1:] = ao_loc[k0] + make_loc(bas[k0:], intor_name)
+        if 'ssc' in intor_name:
+            ao_loc[k0:] = ao_loc[k0] + make_loc(bas[k0:], 'cart')
+        elif 'spinor' in intor_name:
+            # The auxbasis for electron-2 is in real spherical representation
+            ao_loc[k0:] = ao_loc[k0] + make_loc(bas[k0:], 'sph')
 
     naok = ao_loc[k1] - ao_loc[k0]
 
@@ -316,7 +518,6 @@ def getints3c(intor_name, atm, bas, env, shls_slice=None, comp=1,
 def getints4c(intor_name, atm, bas, env, shls_slice=None, comp=1,
               aosym='s1', ao_loc=None, cintopt=None, out=None):
     aosym = _stand_sym_code(aosym)
-
     atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
     bas = numpy.asarray(bas, dtype=numpy.int32, order='C')
     env = numpy.asarray(env, dtype=numpy.double, order='C')
@@ -326,12 +527,14 @@ def getints4c(intor_name, atm, bas, env, shls_slice=None, comp=1,
     natm = atm.shape[0]
     nbas = bas.shape[0]
 
+    if '_spinor' in intor_name:
+        assert(aosym == 's1')
+
     ao_loc = make_loc(bas, intor_name)
     if cintopt is None:
         cintopt = make_cintopt(atm, bas, env, intor_name)
 
     if aosym == 's8':
-        assert('_spinor' not in intor_name)
         assert(shls_slice is None)
         from pyscf.scf import _vhf
         nao = ao_loc[-1]
@@ -358,28 +561,35 @@ def getints4c(intor_name, atm, bas, env, shls_slice=None, comp=1,
         naok = ao_loc[k1] - ao_loc[k0]
         naol = ao_loc[l1] - ao_loc[l0]
         if aosym in ('s4', 's2ij'):
-            nij = naoi * (naoi + 1) // 2
+            nij = [naoi * (naoi + 1) // 2]
             assert(numpy.all(ao_loc[i0:i1]-ao_loc[i0] == ao_loc[j0:j1]-ao_loc[j0]))
         else:
-            nij = naoi * naoj
+            nij = [naoi, naoj]
         if aosym in ('s4', 's2kl'):
-            nkl = naok * (naok + 1) // 2
+            nkl = [naok * (naok + 1) // 2]
             assert(numpy.all(ao_loc[k0:k1]-ao_loc[k0] == ao_loc[l0:l1]-ao_loc[l0]))
         else:
-            nkl = naok * naol
-        if comp == 1:
-            out = numpy.ndarray((nij,nkl), buffer=out)
+            nkl = [naok, naol]
+        shape = [comp] + nij + nkl
+
+        if '_spinor' in intor_name:
+            drv = libcgto.GTOr4c_drv
+            fill = libcgto.GTOr4c_fill_s1
+            out = numpy.ndarray(shape[::-1], dtype=numpy.complex, buffer=out, order='F')
+            out = numpy.rollaxis(out, -1, 0)
         else:
-            out = numpy.ndarray((comp,nij,nkl), buffer=out)
+            drv = libcgto.GTOnr2e_fill_drv
+            fill = getattr(libcgto, 'GTOnr2e_fill_'+aosym)
+            out = numpy.ndarray(shape, buffer=out)
 
         prescreen = lib.c_null_ptr()
-        drv = libcgto.GTOnr2e_fill_drv
-        drv(getattr(libcgto, intor_name),
-            getattr(libcgto, 'GTOnr2e_fill_'+aosym), prescreen,
+        drv(getattr(libcgto, intor_name), fill, prescreen,
             out.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(comp),
             (ctypes.c_int*8)(*shls_slice),
             ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt,
             c_atm, ctypes.c_int(natm), c_bas, ctypes.c_int(nbas), c_env)
+        if comp == 1:
+            out = out[0]
         return out
 
 def getints_by_shell(intor_name, shls, atm, bas, env, comp=1):
@@ -415,7 +625,8 @@ def getints_by_shell(intor_name, shls, atm, bas, env, comp=1):
       [[[[-0.        ]]]]
       [[[[-0.08760462]]]]]
     '''
-    intor_name = ascint3(intor_name)
+    intor_name, comp = _get_intor_and_comp(intor_name, comp)
+
     atm = numpy.asarray(atm, dtype=numpy.int32, order='C')
     bas = numpy.asarray(bas, dtype=numpy.int32, order='C')
     env = numpy.asarray(env, dtype=numpy.double, order='C')
@@ -523,15 +734,27 @@ def make_cintopt(atm, bas, env, intor):
     natm = c_atm.shape[0]
     nbas = c_bas.shape[0]
     cintopt = lib.c_null_ptr()
-    foptinit = getattr(libcgto, intor+'_optimizer')
-    foptinit(ctypes.byref(cintopt),
-             c_atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(natm),
-             c_bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
-             c_env.ctypes.data_as(ctypes.c_void_p))
-    return ctypes.cast(cintopt, _cintoptHandler)
+    # TODO: call specific ECP optimizers for each intor.
+    if intor[:3] == 'ECP':
+        foptinit = libcgto.ECPscalar_optimizer
+        foptinit(ctypes.byref(cintopt),
+                 c_atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(natm),
+                 c_bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
+                 c_env.ctypes.data_as(ctypes.c_void_p))
+        return ctypes.cast(cintopt, _ecpoptHandler)
+    else:
+        foptinit = getattr(libcgto, intor+'_optimizer')
+        foptinit(ctypes.byref(cintopt),
+                 c_atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(natm),
+                 c_bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
+                 c_env.ctypes.data_as(ctypes.c_void_p))
+        return ctypes.cast(cintopt, _cintoptHandler)
 class _cintoptHandler(ctypes.c_void_p):
     def __del__(self):
         libcgto.CINTdel_optimizer(ctypes.byref(self))
+class _ecpoptHandler(ctypes.c_void_p):
+    def __del__(self):
+        libcgto.ECPdel_optimizer(ctypes.byref(self))
 
 def _stand_sym_code(sym):
     if isinstance(sym, int):
@@ -545,9 +768,7 @@ def ascint3(intor_name):
     '''convert cint2 function name to cint3 function name'''
     if intor_name.startswith('cint'):
         intor_name = intor_name[1:]
-    if not (intor_name.endswith('_cart') or
-            intor_name.endswith('_sph') or
-            intor_name.endswith('_spinor')):
+    if not intor_name.endswith(('_sph', '_cart', '_spinor', '_ssc')):
         intor_name = intor_name + '_spinor'
     return intor_name
 

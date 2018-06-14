@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -92,6 +105,7 @@ XC = XC_CODES = {
 'LDA'           : 0,  # SLATERX
 'VWN'           : 3,  # VWN5C
 'VWN5'          : 3,  # VWN5C
+'VWN3'          : 2,  # VWN3C
 'SVWN'          : 'SLATERX + VWN5',
 'B88'           : 6,  # BECKECORRX
 'LYP'           : 16,
@@ -105,37 +119,96 @@ XC = XC_CODES = {
 'BPW91'         : 'B88 + PW91C',
 'BPW92'         : 'B88 + PW92C',
 'OLYP'          : '2.4832*SLATER - 1.43169*OPTX + LYP',  # CPL, 341, 319
-'KT1'           : '1.006*SLATER - .006*KTX + VWN5',  # JCP, 119, 3015
-'KT2'           : '1.07773*SLATER - .006*KTX + 0.576727*VWN5',  # JCP, 119, 3015
-'KT3'           : '2.021452*SLATER - .004*KTX - .925452*OPTX + .864409*LYP',  # JCP, 121, 5654
+'KT1'           : 'SLATERX - 0.006*KTX',  # Keal-Tozer 1, JCP, 119, 3015
+'KT2XC'         : '1.07173*SLATER - .006*KTX + 0.576727*VWN5',  # Keal-Tozer 2, JCP, 119, 3015
+'KT3XC'         : 'SLATERX*1.092 + KTX*-0.004 + OPTXCORR*-0.925452 + LYPC*0.864409',  # Keal-Tozer 3, JCP, 121, 5654
+# == '2.021452*SLATER - .004*KTX - .925452*OPTX + .864409*LYP',
 'PBE0'          : '.25*HF + .75*PBEX + PBEC',  # Perdew-Burke-Ernzerhof, JCP, 110, 6158
 'PBE1PBE'       : 'PBE0',
 'PBEH'          : 'PBE0',
-'B3P86'         : '.2*HF + .08*SLATER + .72*B88 + .81*P86C + .19*VWN5',
-'B3P86G'        : '.2*HF + .08*SLATER + .72*B88 + .81*P86C + .19*VWN3',
-'B3PW91'        : '.2*HF + .08*SLATER + .72*B88 + .81*PW91C + .19*VWN5',
-'B3PW91G'       : '.2*HF + .08*SLATER + .72*B88 + .81*PW91C + .19*VWN3',
+'B3P86'         : '.2*HF + .08*SLATER + .72*B88 + .81*P86C + .19*VWN5C',
+'B3P86G'        : '.2*HF + .08*SLATER + .72*B88 + .81*P86C + .19*VWN3C',
+'B3PW91'        : '.2*HF + .08*SLATER + .72*B88 + .81*PW91C + .19*VWN5C',
+'B3PW91G'       : '.2*HF + .08*SLATER + .72*B88 + .81*PW91C + .19*VWN3C',
 # Note, use VWN5 for B3LYP. It is different to the libxc default B3LYP
 'B3LYP'         : 'B3LYP5',
-'B3LYP5'        : '.2*HF + .08*SLATER + .72*B88 + .81*LYP + .19*VWN5',
-'B3LYPG'        : '.2*HF + .08*SLATER + .72*B88 + .81*LYP + .19*VWN3', # B3LYP-VWN3 used by Gaussian and libxc
-'O3LYP'         : '.1161*HF + .1129*SLATER + .8133*OPTX + .81*LYP + .19*VWN5',  # Mol. Phys. 99 607
-# RSH(alpha; beta; mu): Range-separated-hybrid functional
-# libxc-omega == mu, libxc-alpha == alpha+beta, libxc-beta == -beta
-'CAMB3LYP'      : 'RSH(.19;.46;.33) + BECKECAMX + VWN5C*0.19 + LYPC*0.81',
+'B3LYP5'        : '.2*HF + .08*SLATER + .72*B88 + .81*LYP + .19*VWN5C',
+'B3LYPG'        : '.2*HF + .08*SLATER + .72*B88 + .81*LYP + .19*VWN3C', # B3LYP-VWN3 used by Gaussian and libxc
+#'O3LYP'         : '.1161*HF + .9262*SLATER + .8133*OPTXCORR + .81*LYP + .19*VWN5C',  # Mol. Phys. 99 607
+#'O3LYPG'        : '.1161*HF + .9262*SLATER + .8133*OPTXCORR + .81*LYP + .19*VWN3C',
+# libxc implementation as below, see also discussion in https://gitlab.com/libxc/libxc/issues/47
+#'O3LYP'         : '.1161*HF + .9262*SLATER + 1.164393477*OPTXCORR + .81*LYP + .19*VWN5C', #1.164393477 = .8133*1.43169
+#'O3LYPG'        : '.1161*HF + .9262*SLATER + 1.164393477*OPTXCORR + .81*LYP + .19*VWN3C',
+'O3LYP'         : '.1161*HF + 0.071006917*SLATER + .8133*OPTX, .81*LYP + .19*VWN5',  # libxc implementation
+'X3LYP'         : '.218*HF + .073*SLATER + 0.542385*B88 + .166615*PW91X + .871*LYP + .129*VWN5C',  # Xu, PNAS, 101, 2673
+'X3LYPG'        : '.218*HF + .073*SLATER + 0.542385*B88 + .166615*PW91X + .871*LYP + .129*VWN3C',
+# Range-separated-hybrid functional: (alpha+beta)*SR_HF(0.33) + alpha*LR_HF(0.33)
+# Note default mu of xcfun is 0.4. It can cause discrepancy for CAMB3LYP
+'CAMB3LYP'      : '0.19*SR_HF(0.33) + 0.65*LR_HF(0.33) + BECKECAMX + VWN5C*0.19 + LYPC*0.81',
 'CAM_B3LYP'     : 'CAMB3LYP',
-'KT1'           : 'SLATERX - 0.006*KTX + VWN5C',                                     # Keal-Tozer 1
-'KT2'           : 'SLATERX*1.07173 - 0.006*KTX + VWN5C*0.576727',                    # Keal-Tozer 2
-'KT3'           : 'SLATERX*1.092 + KTX*-0.004 + OPTXCORR*-0.925452 + LYPC*0.864409', # Keal-Tozer 3
 'LDAERF'        : 'LDAERFX + LDAERFC',  # Short-range exchange and correlation LDA functional
 'B97XC'         : 'B97X + B97C + HF*0.1943',
 'B97_1XC'       : 'B97_1X + B97_1C + HF*0.21',
 'B97_2XC'       : 'B97_2X + B97_2C + HF*0.21',
-'OLYP'          : 'LYPC + OPTX',  # LYP correlation and OPTX exchange"
 'M05XC'         : '.28*HF + .72*M05X + M05C',
 'TPSSH'         : '0.1*HF + 0.9*TPSSX + TPSSC',
 'TF'            : 'TFK',
 }
+
+# Some XC functionals have conventional name, like M06-L means M06-L for X
+# functional and M06-L for C functional, PBE mean PBE-X plus PBE-C. If the
+# conventional name was placed in the XC_CODES, it may lead to recursive
+# reference when parsing the xc description.  These names (as exceptions of
+# XC_CODES) are listed in XC_ALIAS below and they should be treated as a
+# shortcut for XC functional.
+XC_ALIAS = {
+    # Conventional name : name in XC_CODES
+    'BLYP'              : 'B88,LYP',
+    'BP86'              : 'B88,P86',
+    'PW91'              : 'PW91,PW91',
+    'PBE'               : 'PBE,PBE',
+    'REVPBE'            : 'REVPBE,PBE',
+    'PBESOL'            : 'PBESOL,PBESOL',
+#    'PKZB'              : 'PKZB,PKZB',
+    'TPSS'              : 'TPSS,TPSS',
+    'REVTPSS'           : 'REVTPSS,REVTPSS',
+#    'SCAN'              : 'SCAN,SCAN',
+#    'SOGGA'             : 'SOGGA,PBE',
+    'BLOC'              : 'BLOC,TPSSLOC',
+    'OLYP'              : 'OPTX,LYP',
+    'RPBE'              : 'RPBE,PBE',
+    'BPBE'              : 'B88,PBE',
+#    'MPW91'             : 'MPW91,PW91',
+    'HFLYP'             : 'HF,LYP',
+#    'HFPW92'            : 'HF,PWMOD',
+#    'SPW92'             : 'SLATER,PWMOD',
+    'SVWN'              : 'SLATER,VWN',
+#    'MS0'               : 'MS0,REGTPSS',
+#    'MS1'               : 'MS1,REGTPSS',
+#    'MS2'               : 'MS2,REGTPSS',
+#    'MS2H'              : 'MS2H,REGTPSS',
+#    'MVS'               : 'MVS,REGTPSS',
+#    'MVSH'              : 'MVSH,REGTPSS',
+#    'SOGGA11'           : 'SOGGA11,SOGGA11',
+#    'SOGGA11-X'         : 'SOGGA11X,SOGGA11X',
+    'KT1'               : 'KT1,VWN',
+#    'DLDF'              : 'DLDF,DLDF',
+#    'GAM'               : 'GAM,GAM',
+    'M06-L'             : 'M06L,M06L',
+#    'M11-L'             : 'M11L,M11L',
+#    'MN12-L'            : 'MN12L,MN12L',
+#    'MN15-L'            : 'MN15L,MN15L',
+#    'N12'               : 'N12,N12',
+#    'N12-SX'            : 'N12SX,N12SX',
+#    'MN12-SX'           : 'MN12SX,MN12SX',
+#    'MN15'              : 'MN15,MN15',
+#    'MBEEF'             : 'MBEEF,PBESOL',
+#    'SCAN0'             : 'SCAN0,SCAN',
+#    'PBEOP'             : 'PBE,OPPBE',
+#    'BOP'               : 'B88,OPB88',
+}
+XC_ALIAS.update([(key.replace('-',''), XC_ALIAS[key])
+                 for key in XC_ALIAS if '-' in key])
 
 LDA_IDS = set([0, 2, 3, 13, 14, 15, 24, 28, 45])
 GGA_IDS = set([1, 4, 5, 6, 7, 8, 9, 16, 17, 18, 19, 20, 21, 22, 23, 25, 26,
@@ -145,7 +218,8 @@ MGGA_IDS =set([10, 11, 12, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41,
                42, 43, 56, 60, 65])
 HYB_XC = set(('PBE0'    , 'PBE1PBE' , 'B3PW91'  , 'B3P86'   , 'B3LYP'   ,
               'B3PW91G' , 'B3P86G'  , 'B3LYPG'  , 'O3LYP'   , 'CAMB3LYP',
-              'B97XC'   , 'B97_1XC' , 'B97_2XC' , 'M05XC'   , 'TPSSH'   ,))
+              'B97XC'   , 'B97_1XC' , 'B97_2XC' , 'M05XC'   , 'TPSSH'   ,
+              'HFLYP'))
 RSH_XC = set(('CAMB3LYP',))
 MAX_DERIV_ORDER = 3
 
@@ -210,15 +284,10 @@ def nlc_coeff(xc_code):
 def rsh_coeff(xc_code):
     '''Get Range-separated-hybrid coefficients
     '''
-    if isinstance(xc_code, str):
-        xc_code = xc_code.replace(' ','').upper()
-        if xc_code in RSH_XC:
-            xc_code = XC_CODES[xc_code]
-        if 'RSH' in xc_code:
-            token = xc_code[xc_code.index('RSH')+4:].split(')', 1)[0]
-            alpha, beta, mu = [float(x) for x in token.split(';')]
-            return mu, alpha+beta, -beta
-    return 0, 0, 0
+    hyb, fn_facs = parse_xc(xc_code)
+    hyb, alpha, omega = hyb
+    beta = hyb - alpha
+    return omega, alpha, beta
 
 def max_deriv_order(xc_code):
     hyb, fn_facs = parse_xc(xc_code)
@@ -234,14 +303,15 @@ def test_deriv_order(xc_code, deriv, raise_error=False):
 def hybrid_coeff(xc_code, spin=0):
     if is_nlc(xc_code):
         return 0
-    return parse_xc(xc_code)[0]
+    hyb, fn_facs = parse_xc(xc_code)
+    return hyb[0]
 
 def parse_xc_name(xc_name):
     fn_facs = parse_xc(xc_name)[1]
     return fn_facs[0][0], fn_facs[1][0]
 
 def parse_xc(description):
-    '''Rules to input functional description:
+    r'''Rules to input functional description:
 
     * The given functional description must be a one-line string.
     * The functional description is case-insensitive.
@@ -249,47 +319,85 @@ def parse_xc(description):
       first part describes the exchange functional, the second is the correlation
       functional.
 
-      - If "," was not appeared in string, the entire string is considered as
-        X functional.
-      - To neglect X functional (just apply C functional), leave blank in the
-        first part, eg description=',vwn' for pure VWN functional
+      - If "," was not in string, the entire string is considered as a
+        compound XC functional (including both X and C functionals, such as b3lyp).
+      - To input only X functional (without C functional), leave the second
+        part blank. E.g. description='slater,' means pure LDA functional.
+      - To neglect X functional (just apply C functional), leave the first
+        part blank. E.g. description=',vwn' means pure VWN functional.
+      - If compound XC functional is specified, no matter whehter it is in the
+        X part (the string in front of comma) or the C part (the string behind
+        comma), both X and C functionals of the compound XC functional will be
+        used.
 
     * The functional name can be placed in arbitrary order.  Two name needs to
       be separated by operators "+" or "-".  Blank spaces are ignored.
       NOTE the parser only reads operators "+" "-" "*".  / is not in support.
-    * A functional name is associated with one factor.  If the factor is not
-      given, it is assumed equaling 1.
-    * String "HF" stands for exact exchange (HF K matrix).  It is allowed to
-      put in C functional part.
-    * Be careful with the xcfun convention on GGA functional, in which the LDA
-      contribution is included.
+    * A functional name can have at most one factor.  If the factor is not
+      given, it is set to 1.  Compound functional can be scaled as a unit. For
+      example '0.5*b3lyp' is equivalent to
+      'HF*0.1 + .04*LDA + .36*B88, .405*LYP + .095*VWN'
+    * String "HF" stands for exact exchange (HF K matrix).  Putting "HF" in
+      correlation functional part is the same to putting "HF" in exchange
+      part.
+    * String "RSH" means range-separated operator. Its format is
+      RSH(alpha; beta; omega).  Another way to input RSH is to use keywords
+      SR_HF and LR_HF: "SR_HF(0.1) * alpha_plus_beta" and "LR_HF(0.1) *
+      alpha" where the number in parenthesis is the value of omega.
+    * Be careful with the convention on GGA functional, in which the LDA
+      contribution has been included.
     '''
-
+    hyb = [0, 0, 0]  # hybrid, alpha, omega
     if isinstance(description, int):
         return 0, [(description, 1.)]
     elif not isinstance(description, str): #isinstance(description, (tuple,list)):
         return parse_xc('%s,%s' % tuple(description))
 
-    if ',' in description:
-        x_code, c_code = description.replace(' ','').upper().split(',')
-    else:
-        x_code, c_code = description.replace(' ','').upper(), ''
-
-    hyb = [0]
+    def assign_omega(omega, hyb_or_sr, lr=0):
+        if hyb[2] == omega or omega == 0:
+            hyb[0] += hyb_or_sr
+            hyb[1] += lr
+        elif hyb[2] == 0:
+            hyb[0] += hyb_or_sr
+            hyb[1] += lr
+            hyb[2] = omega
+        else:
+            raise ValueError('Different values of omega found for RSH functionals')
     fn_facs = []
     def parse_token(token, suffix):
         if token:
+            if token[0] == '-':
+                sign = -1
+                token = token[1:]
+            else:
+                sign = 1
             if '*' in token:
                 fac, key = token.split('*')
                 if fac[0].isalpha():
                     fac, key = key, fac
-                fac = float(fac)
+                fac = sign * float(fac)
             else:
-                fac, key = 1, token
+                fac, key = sign, token
+
             if key[:3] == 'RSH':
-                hyb[0] += float(key[4:-1].split(';')[0])
+# RSH(alpha; beta; omega): Range-separated-hybrid functional
+                alpha, beta, omega = [float(x) for x in key[4:-1].split(';')]
+                assign_omega(omega, fac*(alpha+beta), fac*alpha)
             elif key == 'HF':
                 hyb[0] += fac
+                hyb[1] += fac  # also add to LR_HF
+            elif 'SR_HF' in key or 'SRHF' in key:
+                if '(' in key:
+                    omega = float(key.split('(')[1].split(')')[0])
+                    assign_omega(omega, fac, 0)
+                else:  # Assuming this omega the same to the existing omega
+                    hyb[0] += fac
+            elif 'LR_HF' in key:
+                if '(' in key:
+                    omega = float(key.split('(')[1].split(')')[0])
+                    assign_omega(omega, 0, fac)
+                else:
+                    hyb[1] += fac  # == alpha
             elif key.isdigit():
                 fn_facs.append((int(key), fac))
             else:
@@ -301,8 +409,9 @@ def parse_xc(description):
                     raise KeyError('Unknown XC key %s' % key)
                 if isinstance(x_id, str):
                     hyb1, fn_facs1 = parse_xc(x_id)
-# Recursively scale the composed functional, to support '0.5*b3lyp'
-                    hyb[0] += hyb1 * fac
+# Recursively scale the composed functional, to support e.g. '0.5*b3lyp'
+                    if hyb1[0] != 0 or hyb1[1] != 0:
+                        assign_omega(hyb1[2], hyb1[0]*fac, hyb1[1]*fac)
                     fn_facs.extend([(xid, c*fac) for xid, c in fn_facs1])
                 elif x_id is None:
                     raise NotImplementedError(key)
@@ -321,19 +430,34 @@ def parse_xc(description):
                 n += 1
         return list(zip(fn_ids, facs))
 
+    description = description.replace(' ','').upper()
+    if description in XC_ALIAS:
+        description = XC_ALIAS[description]
+
+    if '-' in description:  # To handle e.g. M06-L
+        for key in _NAME_WITH_DASH:
+            if key in description:
+                description = description.replace(key, _NAME_WITH_DASH[key])
+
     if ',' in description:
+        x_code, c_code = description.split(',')
         for token in x_code.replace('-', '+-').split('+'):
             parse_token(token, 'X')
         for token in c_code.replace('-', '+-').split('+'):
             parse_token(token, 'C')
     else:
-        try:
-            for token in x_code.replace('-', '+-').split('+'):
-                parse_token(token, 'XC')
-        except KeyError:
-            for token in x_code.replace('-', '+-').split('+'):
-                parse_token(token, 'X')
-    return hyb[0], remove_dup(fn_facs)
+        for token in description.replace('-', '+-').split('+'):
+            parse_token(token, 'XC')
+    if hyb[2] == 0: # No omega is assigned. LR_HF is 0 for normal Coulomb operator
+        hyb[1] = 0
+    return hyb, remove_dup(fn_facs)
+
+_NAME_WITH_DASH = {'SR-HF'  : 'SR_HF',
+                   'LR-HF'  : 'LR_HF',
+                   'M06-L'  : 'M06L',
+                   'M05-2X' : 'M052X',
+                   'M06-HF' : 'M06HF',
+                   'M06-2X' : 'M062X',}
 
 
 def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, verbose=None):
@@ -791,7 +915,7 @@ def define_xc_(ni, description, xctype='LDA', hyb=0, rsh=(0,0,0)):
     '''Define XC functional.  See also :func:`eval_xc` for the rules of input description.
 
     Args:
-        ni : an instance of :class:`_NumInt`
+        ni : an instance of :class:`NumInt`
 
         description : str
             A string to describe the linear combination of different XC functionals.
@@ -863,4 +987,4 @@ if __name__ == '__main__':
     print(mf.kernel() - -76.3969707800463)
 
     mf.xc = 'b3lyp'
-    print(mf.kernel() - -76.3969707800463)
+    print(mf.kernel() - -76.3777689410509)

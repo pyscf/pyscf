@@ -1,16 +1,37 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
-# Analytical integration
-# J. Chem. Phys. 65, 3826
-# J. Chem. Phys. 111, 8778
-# J. Comput. Phys. 44, 289
-#
-# Numerical integration
-# J. Comput. Chem. 27, 1009
-# Chem. Phys. Lett. 296, 445
-#
+
+'''
+Effective core potential (ECP)
+
+This module exposes some ecp integration functions from the C implementation.
+
+Reference for ecp integral computation
+* Analytical integration
+J. Chem. Phys. 65, 3826
+J. Chem. Phys. 111, 8778
+J. Comput. Phys. 44, 289
+
+* Numerical integration
+J. Comput. Chem. 27, 1009
+Chem. Phys. Lett. 296, 445
+'''
+
 
 import ctypes
 import numpy
@@ -31,13 +52,15 @@ def type1_by_shell(mol, shls, cart=False):
         di = (li*2+1) * mol.bas_nctr(shls[0])
         dj = (lj*2+1) * mol.bas_nctr(shls[1])
     buf = numpy.empty((di,dj), order='F')
+    cache = numpy.empty(buf.size*5)
     fn(buf.ctypes.data_as(ctypes.c_void_p),
        (ctypes.c_int*2)(*shls),
        mol._ecpbas.ctypes.data_as(ctypes.c_void_p),
        ctypes.c_int(len(mol._ecpbas)),
        mol._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.natm),
        mol._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.nbas),
-       mol._env.ctypes.data_as(ctypes.c_void_p), lib.c_null_ptr())
+       mol._env.ctypes.data_as(ctypes.c_void_p), lib.c_null_ptr(),
+       cache.ctypes.data_as(ctypes.c_void_p))
     return buf
 
 def type2_by_shell(mol, shls, cart=False):
@@ -52,13 +75,15 @@ def type2_by_shell(mol, shls, cart=False):
         di = (li*2+1) * mol.bas_nctr(shls[0])
         dj = (lj*2+1) * mol.bas_nctr(shls[1])
     buf = numpy.empty((di,dj), order='F')
+    cache = numpy.empty(buf.size*5)
     fn(buf.ctypes.data_as(ctypes.c_void_p),
        (ctypes.c_int*2)(*shls),
        mol._ecpbas.ctypes.data_as(ctypes.c_void_p),
        ctypes.c_int(len(mol._ecpbas)),
        mol._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.natm),
        mol._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.nbas),
-       mol._env.ctypes.data_as(ctypes.c_void_p), lib.c_null_ptr())
+       mol._env.ctypes.data_as(ctypes.c_void_p), lib.c_null_ptr(),
+       cache.ctypes.data_as(ctypes.c_void_p))
     return buf
 
 def core_configuration(nelec_core):

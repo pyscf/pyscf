@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -15,6 +28,10 @@ from pyscf.lib import logger
 from pyscf.scf import hf
 from pyscf.scf import uhf
 import pyscf.scf.chkfile
+from pyscf import __config__
+
+WITH_META_LOWDIN = getattr(__config__, 'scf_analyze_with_meta_lowdin', True)
+MO_BASE = getattr(__config__, 'MO_BASE', 1)
 
 
 def init_guess_by_minao(mol):
@@ -33,6 +50,7 @@ def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
     See also :func:`get_roothaan_fock`
     '''
     if h1e is None: h1e = mf.get_hcore()
+    if s1e is None: s1e = mf.get_ovlp()
     if vhf is None: vhf = mf.get_veff(dm=dm)
     if dm is None: dm = mf.make_rdm1()
     if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
@@ -58,7 +76,9 @@ def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
         raise NotImplementedError('ROHF Fock-damping')
     if diis and cycle >= diis_start_cycle:
         f = diis.update(s1e, dm_tot, f, mf, h1e, vhf)
-    f = hf.level_shift(s1e, dm_tot*.5, f, level_shift_factor)
+    if abs(level_shift_factor) > 1e-4:
+        f = hf.level_shift(s1e, dm_tot*.5, f, level_shift_factor)
+    f = lib.tag_array(f, focka=focka, fockb=fockb)
     return f
 
 def get_roothaan_fock(focka_fockb, dma_dmb, s):
@@ -86,13 +106,13 @@ def get_roothaan_fock(focka_fockb, dma_dmb, s):
     pc = numpy.dot(dmb, s)
     po = numpy.dot(dma-dmb, s)
     pv = numpy.eye(nao) - numpy.dot(dma, s)
-    fock  = reduce(numpy.dot, (pc.T, fc, pc)) * .5
-    fock += reduce(numpy.dot, (po.T, fc, po)) * .5
-    fock += reduce(numpy.dot, (pv.T, fc, pv)) * .5
-    fock += reduce(numpy.dot, (po.T, fockb, pc))
-    fock += reduce(numpy.dot, (po.T, focka, pv))
-    fock += reduce(numpy.dot, (pv.T, fc, pc))
-    fock = fock + fock.T
+    fock  = reduce(numpy.dot, (pc.conj().T, fc, pc)) * .5
+    fock += reduce(numpy.dot, (po.conj().T, fc, po)) * .5
+    fock += reduce(numpy.dot, (pv.conj().T, fc, pv)) * .5
+    fock += reduce(numpy.dot, (po.conj().T, fockb, pc))
+    fock += reduce(numpy.dot, (po.conj().T, focka, pv))
+    fock += reduce(numpy.dot, (pv.conj().T, fc, pc))
+    fock = fock + fock.conj().T
     fock = lib.tag_array(fock, focka=focka, fockb=fockb)
     return fock
 
@@ -119,7 +139,7 @@ def get_occ(mf, mo_energy=None, mo_coeff=None):
         mo_ea = mo_eb = mo_energy
     nmo = mo_ea.size
     mo_occ = numpy.zeros(nmo)
-    if mf.nelec is None:
+    if getattr(mf, 'nelec', None) is None:
         nelec = mf.mol.nelec
     else:
         nelec = mf.nelec
@@ -132,12 +152,10 @@ def get_occ(mf, mo_energy=None, mo_coeff=None):
         ehomo = max(mo_energy[mo_occ> 0])
         elumo = min(mo_energy[mo_occ==0])
         if ehomo+1e-3 > elumo:
-            logger.warn(mf.mol, 'HOMO %.15g >= LUMO %.15g',
-                        ehomo, elumo)
+            logger.warn(mf, 'HOMO %.15g >= LUMO %.15g', ehomo, elumo)
         else:
-            logger.info(mf, '  HOMO = %.15g  LUMO = %.15g',
-                        ehomo, elumo)
-        if nopen > 0:
+            logger.info(mf, '  HOMO = %.15g  LUMO = %.15g', ehomo, elumo)
+        if nopen > 0 and mf.verbose >= logger.DEBUG:
             core_idx = mo_occ == 2
             open_idx = mo_occ == 1
             vir_idx = mo_occ == 0
@@ -152,31 +170,23 @@ def get_occ(mf, mo_energy=None, mo_coeff=None):
                 logger.debug(mf, '  1-occ =         %18.15g | %18.15g | %18.15g',
                              mo_energy[i], mo_ea[i], mo_eb[i])
 
-        numpy.set_printoptions(threshold=nmo)
-        logger.debug(mf, '  Roothaan mo_energy =\n%s', mo_energy)
-        logger.debug1(mf, '  alpha mo_energy =\n%s', mo_ea)
-        logger.debug1(mf, '  beta  mo_energy =\n%s', mo_eb)
-        numpy.set_printoptions(threshold=1000)
+        if mf.verbose >= logger.DEBUG:
+            numpy.set_printoptions(threshold=nmo)
+            logger.debug(mf, '  Roothaan mo_energy =\n%s', mo_energy)
+            logger.debug1(mf, '  alpha mo_energy =\n%s', mo_ea)
+            logger.debug1(mf, '  beta  mo_energy =\n%s', mo_eb)
+            numpy.set_printoptions(threshold=1000)
     return mo_occ
 
 def _fill_rohf_occ(mo_energy, mo_energy_a, mo_energy_b, ncore, nopen):
     mo_occ = numpy.zeros_like(mo_energy)
     open_idx = []
-    try:
-        core_sort = numpy.argpartition(mo_energy, ncore-1)
-        core_idx = core_sort[:ncore]
-        if nopen > 0:
-            open_idx = core_sort[ncore:]
-# Fill up open shell based on alpha orbital energy
-            open_sort = numpy.argpartition(mo_energy_a[open_idx], nopen-1)
-            open_idx = open_idx[open_sort[:nopen]]
-    except AttributeError:
-        core_sort = numpy.argsort(mo_energy)
-        core_idx = core_sort[:ncore]
-        if nopen > 0:
-            open_idx = core_sort[ncore:]
-            open_sort = numpy.argsort(mo_energy_a[open_idx])
-            open_idx = open_idx[open_sort[:nopen]]
+    core_sort = numpy.argsort(mo_energy)
+    core_idx = core_sort[:ncore]
+    if nopen > 0:
+        open_idx = core_sort[ncore:]
+        open_sort = numpy.argsort(mo_energy_a[open_idx])
+        open_idx = open_idx[open_sort[:nopen]]
     mo_occ[core_idx] = 2
     mo_occ[open_idx] = 1
     return mo_occ
@@ -197,7 +207,7 @@ def get_grad(mo_coeff, mo_occ, fock):
     if hasattr(fock, 'focka'):
         focka = fock.focka
         fockb = fock.fockb
-    elif fock.ndim == 3:
+    elif isinstance(fock, (tuple, list)) or getattr(fock, 'ndim', None) == 3:
         focka, fockb = fock
     else:
         focka = fockb = fock
@@ -226,11 +236,10 @@ def energy_elec(mf, dm=None, h1e=None, vhf=None):
     logger.debug(mf, 'Ecoul = %.15g', ecoul)
     return ee, ecoul
 
-# pass in a set of density matrix in dm as (alpha,alpha,...,beta,beta,...)
-def get_veff(mol, dm, dm_last=0, vhf_last=0, hermi=1, vhfopt=None):
-    return uhf.get_veff(mol, dm, dm_last, vhf_last, hermi, vhfopt)
+get_veff = uhf.get_veff
 
-def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=True, **kwargs):
+def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
+            **kwargs):
     '''Analyze the given SCF object:  print orbital energies, occupancies;
     print orbital coefficients; Mulliken population analysis
     '''
@@ -248,10 +257,11 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=True, **kwargs):
             log.note('                Roothaan           | alpha              | beta')
             for i,c in enumerate(mo_occ):
                 log.note('MO #%-3d energy= %-18.15g | %-18.15g | %-18.15g occ= %g',
-                         i+1, mo_energy[i], mo_ea[i], mo_eb[i], c)
+                         i+MO_BASE, mo_energy[i], mo_ea[i], mo_eb[i], c)
         else:
             for i,c in enumerate(mo_occ):
-                log.note('MO #%-3d energy= %-18.15g occ= %g', i+1, mo_energy[i], c)
+                log.note('MO #%-3d energy= %-18.15g occ= %g',
+                         i+MO_BASE, mo_energy[i], c)
 
     ovlp_ao = mf.get_ovlp()
     if log.verbose >= logger.DEBUG:
@@ -263,12 +273,17 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=True, **kwargs):
         else:
             log.debug(' ** MO coefficients (expansion on AOs) **')
             c = mo_coeff
-        dump_mat.dump_rec(mf.stdout, c, label, start=1, **kwargs)
+        dump_mat.dump_rec(mf.stdout, c, label, start=MO_BASE, **kwargs)
     dm = mf.make_rdm1(mo_coeff, mo_occ)
     if with_meta_lowdin:
-        return mf.mulliken_meta(mf.mol, dm, s=ovlp_ao, verbose=log)
+        pop_and_charge = mf.mulliken_meta(mf.mol, dm, s=ovlp_ao, verbose=log)
     else:
-        return mf.mulliken_pop(mf.mol, dm, s=ovlp_ao, verbose=log)
+        pop_and_charge = mf.mulliken_pop(mf.mol, dm, s=ovlp_ao, verbose=log)
+    dip = mf.dip_moment(mf.mol, dm, verbose=log)
+    return pop_and_charge, dip
+
+mulliken_pop = hf.mulliken_pop
+mulliken_meta = hf.mulliken_meta
 
 def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     '''Canonicalization diagonalizes the Fock matrix within occupied, open,
@@ -278,10 +293,14 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
         dm = mf.make_rdm1(mo_coeff, mo_occ)
         fock = mf.get_fock(dm=dm)
     mo_e, mo_coeff = hf.canonicalize(mf, mo_coeff, mo_occ, fock)
-    mo_ea = numpy.einsum('pi,pi->i', mo_coeff, fock.focka.dot(mo_coeff))
-    mo_eb = numpy.einsum('pi,pi->i', mo_coeff, fock.fockb.dot(mo_coeff))
-    mo_e = lib.tag_array(mo_e, mo_ea=mo_ea, mo_eb=mo_eb)
+    if hasattr(fock, 'focka'):
+        mo_ea = numpy.einsum('pi,pi->i', mo_coeff, fock.focka.dot(mo_coeff))
+        mo_eb = numpy.einsum('pi,pi->i', mo_coeff, fock.fockb.dot(mo_coeff))
+        mo_e = lib.tag_array(mo_e, mo_ea=mo_ea, mo_eb=mo_eb)
     return mo_e, mo_coeff
+
+dip_moment = hf.dip_moment
+
 
 # use UHF init_guess, get_veff, diis, and intermediates such as fock, vhf, dm
 # keep mo_energy, mo_coeff, mo_occ as RHF structure
@@ -296,13 +315,13 @@ class ROHF(hf.RHF):
 
     def dump_flags(self):
         hf.SCF.dump_flags(self)
-        if hasattr(self, 'nelectron_alpha'):
+        if hasattr(self, 'nelectron_alpha'):  # pragma: no cover
             logger.warn(self, 'Note the API updates: attribute nelectron_alpha was replaced by attribute nelec')
             #raise RuntimeError('API updates')
             self.nelec = (self.nelectron_alpha,
                           self.mol.nelectron-self.nelectron_alpha)
             delattr(self, 'nelectron_alpha')
-        if self.nelec is None:
+        if getattr(self, 'nelec', None) is None:
             nelec = self.mol.nelec
         else:
             nelec = self.nelec
@@ -315,7 +334,7 @@ class ROHF(hf.RHF):
 
     def init_guess_by_atom(self, mol=None):
         if mol is None: mol = self.mol
-        logger.info(self, 'Initial guess from superpostion of atomic densties.')
+        logger.info(self, 'Initial guess from the superpostion of atomic densties.')
         return init_guess_by_atom(mol)
 
     def init_guess_by_1e(self, mol=None):
@@ -376,13 +395,27 @@ class ROHF(hf.RHF):
         return vhf
 
     @lib.with_doc(analyze.__doc__)
-    def analyze(self, verbose=None, with_meta_lowdin=True, **kwargs):
+    def analyze(self, verbose=None, with_meta_lowdin=WITH_META_LOWDIN,
+                **kwargs):
         if verbose is None: verbose = self.verbose
         return analyze(self, verbose, with_meta_lowdin, **kwargs)
 
     canonicalize = canonicalize
 
-    def stability(self, internal=True, external=False, verbose=None):
+    def spin_square(self, mo_coeff=None, s=None):
+        '''Spin square and multiplicity of RHF determinant'''
+        if getattr(self, 'nelec', None) is None:
+            neleca, nelecb = self.mol.nelec
+        else:
+            neleca, nelecb = self.nelec
+        ms = (neleca - nelecb) * .5
+        ss = ms * (ms + 1)
+        return ss, ms*2+1
+
+    def stability(self,
+                  internal=getattr(__config__, 'scf_stability_internal', True),
+                  external=getattr(__config__, 'scf_stability_external', False),
+                  verbose=None):
         '''
         ROHF/ROKS stability analysis.
 
@@ -419,3 +452,4 @@ class HF1e(ROHF):
         self._finalize()
         return self.e_tot
 
+del(WITH_META_LOWDIN)

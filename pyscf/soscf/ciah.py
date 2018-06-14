@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -9,24 +22,32 @@ import numpy
 import scipy.linalg
 from pyscf import lib
 from pyscf.lib import logger
+from pyscf import __config__
+
 
 def expmat(a):
     return scipy.linalg.expm(a)
 
 class CIAHOptimizer(lib.StreamObject):
+
+    conv_tol_grad = getattr(__config__, 'soscf_ciah_CIAHOptimizer_conv_tol_grad', 1e-4)
+    max_stepsize = getattr(__config__, 'soscf_ciah_CIAHOptimizer_max_stepsize', .05)
+    max_iters = getattr(__config__, 'soscf_ciah_CIAHOptimizer_max_iters', 10)
+    kf_interval = getattr(__config__, 'soscf_ciah_CIAHOptimizer_kf_interval', 5)
+    kf_trust_region = getattr(__config__, 'soscf_ciah_CIAHOptimizer_kf_trust_region', 5)
+    ah_start_tol = getattr(__config__, 'soscf_ciah_CIAHOptimizer_ah_start_tol', 5.)
+    ah_start_cycle = getattr(__config__, 'soscf_ciah_CIAHOptimizer_ah_start_cycle', 1)
+    ah_level_shift = getattr(__config__, 'soscf_ciah_CIAHOptimizer_ah_level_shift', 0)
+    ah_conv_tol = getattr(__config__, 'soscf_ciah_CIAHOptimizer_ah_conv_tol', 1e-12)
+    ah_lindep = getattr(__config__, 'soscf_ciah_CIAHOptimizer_ah_lindep', 1e-14)
+    ah_max_cycle = getattr(__config__, 'soscf_ciah_CIAHOptimizer_ah_max_cycle', 30)
+    ah_trust_region = getattr(__config__, 'soscf_ciah_CIAHOptimizer_ah_trust_region', 3.)
+
     def __init__(self):
-        self.conv_tol_grad = 1e-4
-        self.max_stepsize = .05
-        self.max_iters = 10
-        self.kf_interval = 5
-        self.kf_trust_region = 5
-        self.ah_start_tol = 5.
-        self.ah_start_cycle = 1
-        self.ah_level_shift = 0#1e-4
-        self.ah_conv_tol = 1e-12
-        self.ah_lindep = 1e-14
-        self.ah_max_cycle = 30
-        self.ah_trust_region = 3.
+        self._keys = set(('conv_tol_grad', 'max_stepsize', 'max_iters',
+                          'kf_interval', 'kf_trust_region', 'ah_start_tol',
+                          'ah_start_cycle', 'ah_level_shift', 'ah_conv_tol',
+                          'ah_lindep', 'ah_max_cycle', 'ah_trust_region'))
 
     def gen_g_hop(self, u):
         pass
@@ -242,7 +263,7 @@ def davidson_cc(h_op, g_op, precond, x0, tol=1e-10, xs=[], ax=[],
         dx = hx + g*v_t[0] - w_t * v_t[0]*xtrial
         norm_dx = numpy.linalg.norm(dx)
         log.debug1('... AH step %d  index= %d  |dx|= %.5g  eig= %.5g  v[0]= %.5g  lindep= %.5g', \
-                   istep+1, index, norm_dx, w_t, v_t[0], s0)
+                   istep+1, index, norm_dx, w_t, v_t[0].real, s0)
         hx *= 1/v_t[0] # == h_op(xtrial)
         if (abs(w_t-wlast) < tol and norm_dx < toloose) or s0 < lindep:
             # Avoid adding more trial vectors if hessian converged
@@ -262,7 +283,7 @@ def _regular_step(heff, ovlp, xs, lindep, log):
         e, c = scipy.linalg.eigh(heff[1:,1:], ovlp[1:,1:])
     except scipy.linalg.LinAlgError:
         e, c = lib.safe_eigh(heff[1:,1:], ovlp[1:,1:], lindep)[:2]
-    if e[0] < -1e-5:
+    if numpy.any(e < -1e-5):
         log.debug('Negative hessians found %s', e[e<0])
 
     w, v, seig = lib.safe_eigh(heff, ovlp, lindep)
@@ -272,11 +293,15 @@ def _regular_step(heff, ovlp, xs, lindep, log):
         log.debug3('AH eigs %s', w)
         numpy.set_printoptions(8, linewidth=75)
 
-    if e[0] < -.1:
-        sel = 0
-    else:
-        idx = numpy.where(abs(v[0]) > 0.1)[0]
-        sel = idx[0]
+    #if e[0] < -.1:
+    #    sel = 0
+    #else:
+    # There exists systems that the first eigenvalue of AH is -inf.
+    # Dynamically choosing the eigenvectors may be better.
+    idx = numpy.where(abs(v[0]) > 0.1)[0]
+    sel = idx[0]
+    log.debug1('CIAH eigen-sel %s', sel)
+
     w_t = w[sel]
     xtrial = _dgemv(v[1:,sel]/v[0,sel], xs)
     return xtrial, w_t, v[:,sel], sel, seig

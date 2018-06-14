@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -10,20 +23,21 @@ import numpy
 import scipy.linalg
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.scf import rhf_grad
-from pyscf.dft import rks_grad
+from pyscf.grad import rhf as rhf_grad
+from pyscf.grad import rks as rks_grad
 from pyscf.grad import uhf as uhf_grad
 from pyscf.dft import numint, gen_grid
+from pyscf import __config__
 
 
 def get_veff(ks_grad, mol=None, dm=None):
     '''Coulomb + XC functional
     '''
     if mol is None: mol = ks_grad.mol
-    if dm is None: dm = ks_grad._scf.make_rdm1()
+    if dm is None: dm = ks_grad.base.make_rdm1()
     t0 = (time.clock(), time.time())
 
-    mf = ks_grad._scf
+    mf = ks_grad.base
     ni = mf._numint
     if ks_grad.grids is not None:
         grids = ks_grad.grids
@@ -40,11 +54,11 @@ def get_veff(ks_grad, mol=None, dm=None):
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, ks_grad.max_memory*.9-mem_now)
     if ks_grad.grid_response:
-        exc, vxc = get_vxc_full_response(ni, mol, mf.grids, mf.xc, dm,
+        exc, vxc = get_vxc_full_response(ni, mol, grids, mf.xc, dm,
                                          max_memory=max_memory,
                                          verbose=ks_grad.verbose)
     else:
-        exc, vxc = get_vxc(ni, mol, mf.grids, mf.xc, dm,
+        exc, vxc = get_vxc(ni, mol, grids, mf.xc, dm,
                            max_memory=max_memory, verbose=ks_grad.verbose)
     nao = vxc.shape[-1]
     t0 = logger.timer(ks_grad, 'vxc', *t0)
@@ -179,6 +193,9 @@ def get_vxc_full_response(ni, mol, grids, xc_code, dms, relativity=0, hermi=1,
 
 
 class Gradients(uhf_grad.Gradients):
+
+    grid_response = getattr(__config__, 'grad_uks_Gradients_grid_response', False)
+
     def __init__(self, mf):
         uhf_grad.Gradients.__init__(self, mf)
         self.grids = None

@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -13,10 +26,13 @@ Note when diffuse functions are used in fitting basis, it is easy to cause
 linear dependence (non-positive definite) issue under PBC.
 
 Ref:
+J. Chem. Phys. 147, 164119 (2017)
 '''
 
+import os
 import time
 import copy
+import warnings
 import tempfile
 import numpy
 import h5py
@@ -27,6 +43,7 @@ from pyscf.lib import logger
 from pyscf.df import addons
 from pyscf.df.outcore import _guess_shell_ranges
 from pyscf.pbc.gto.cell import _estimate_rcut
+from pyscf.pbc import gto as pbcgto
 from pyscf.pbc import tools
 from pyscf.pbc.df import outcore
 from pyscf.pbc.df import ft_ao
@@ -36,8 +53,10 @@ from pyscf.pbc.df import df_ao2mo
 from pyscf.pbc.df.aft import estimate_eta, get_nuc
 from pyscf.pbc.df.df_jk import zdotCN, zdotNN, zdotNC
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, member, unique
+from pyscf import __config__
 
-LINEAR_DEP_THR = 1e-9
+LINEAR_DEP_THR = getattr(__config__, 'pbc_df_df_DF_lindep', 1e-9)
+
 
 def make_modrho_basis(cell, auxbasis=None, drop_eta=1.):
     auxcell = addons.make_auxmol(cell, auxbasis)
@@ -60,11 +79,11 @@ def make_modrho_basis(cell, auxbasis=None, drop_eta=1.):
             cs = cs[es>=drop_eta]
             es = es[es>=drop_eta]
             np, ndrop = len(es), ndrop+np-len(es)
+
+        if np > 0:
             pe = auxcell._bas[ib,gto.PTR_EXP]
             auxcell._bas[ib,gto.NPRIM_OF] = np
             auxcell._env[pe:pe+np] = es
-
-        if np > 0:
 # int1 is the multipole value. l*2+2 is due to the radial part integral
 # \int (r^l e^{-ar^2} * Y_{lm}) (r^l Y_{lm}) r^2 dr d\Omega
             int1 = gto.gaussian_int(l*2+2, es)
@@ -74,6 +93,7 @@ def make_modrho_basis(cell, auxbasis=None, drop_eta=1.):
 # simplify the formulism of \int \bar{\rho}, see function auxbar.
             cs = numpy.einsum('pi,i->pi', cs, half_sph_norm/s)
             auxcell._env[ptr:ptr+np*nc] = cs.T.reshape(-1)
+
             steep_shls.append(ib)
 
             r = _estimate_rcut(es, l, abs(cs).max(axis=1), cell.precision)
@@ -124,7 +144,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
     log = logger.Logger(mydf.stdout, mydf.verbose)
     max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
     fused_cell, fuse = fuse_auxcell(mydf, auxcell)
-    outcore.aux_e2(cell, fused_cell, cderi_file, 'int3c2e_sph', aosym='s2',
+    outcore.aux_e2(cell, fused_cell, cderi_file, 'int3c2e', aosym='s2',
                    kptij_lst=kptij_lst, dataname='j3c', max_memory=max_memory)
     t1 = log.timer_debug1('3c2e', *t1)
 
@@ -143,7 +163,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
     log.debug('Num uniq kpts %d', len(uniq_kpts))
     log.debug2('uniq_kpts %s', uniq_kpts)
     # j2c ~ (-kpt_ji | kpt_ji)
-    j2c = fused_cell.pbc_intor('int2c2e_sph', hermi=1, kpts=uniq_kpts)
+    j2c = fused_cell.pbc_intor('int2c2e', hermi=1, kpts=uniq_kpts)
     feri = h5py.File(cderi_file)
 
 # An alternative method to evalute j2c. This method might have larger numerical error?
@@ -170,13 +190,21 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
 #        feri['j2c/%d'%k] = fuse(fuse(j2c[k]).T).T
 #        aoaux = LkR = LkI = coulG = None
 
+    if cell.dimension == 1 or cell.dimension == 2:
+        plain_ints = _gaussian_int(fused_cell)
+
     max_memory = max(2000, mydf.max_memory - lib.current_memory()[0])
     blksize = max(2048, int(max_memory*.5e6/16/fused_cell.nao_nr()))
     log.debug2('max_memory %s (MB)  blocksize %s', max_memory, blksize)
     for k, kpt in enumerate(uniq_kpts):
         coulG = numpy.sqrt(mydf.weighted_coulG(kpt, False, mesh))
         for p0, p1 in lib.prange(0, ngrids, blksize):
-            aoaux = ft_ao.ft_ao(fused_cell, Gv[p0:p1], None, b, gxyz[p0:p1], Gvbase, kpt).T
+            aoaux = ft_ao.ft_ao(fused_cell, Gv[p0:p1], None, b, gxyz[p0:p1], Gvbase, kpt)
+            if (cell.dimension == 1 or cell.dimension == 2) and is_zero(kpt):
+                G0idx, SI_on_z = pbcgto.cell._SI_for_uniform_model_charge(cell, Gv[p0:p1])
+                aoaux[G0idx] -= numpy.einsum('g,i->gi', SI_on_z, plain_ints)
+
+            aoaux = aoaux.T
             LkR = aoaux.real * coulG[p0:p1]
             LkI = aoaux.imag * coulG[p0:p1]
             aoaux = None
@@ -203,9 +231,16 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
 
         shls_slice = (auxcell.nbas, fused_cell.nbas)
         Gaux = ft_ao.ft_ao(fused_cell, Gv, shls_slice, b, gxyz, Gvbase, kpt)
-        Gaux *= mydf.weighted_coulG(kpt, False, mesh).reshape(-1,1)
+        if (cell.dimension == 1 or cell.dimension == 2) and is_zero(kpt):
+            G0idx, SI_on_z = pbcgto.cell._SI_for_uniform_model_charge(cell, Gv)
+            s = plain_ints[-Gaux.shape[1]:]  # Only compensated Gaussians
+            Gaux[G0idx] -= numpy.einsum('g,i->gi', SI_on_z, s)
+
+        wcoulG = mydf.weighted_coulG(kpt, False, mesh)
+        Gaux *= wcoulG.reshape(-1,1)
         kLR = Gaux.real.copy('C')
         kLI = Gaux.imag.copy('C')
+        Gaux = None
         j2c = numpy.asarray(feri['j2c/%d'%uniq_kptji_id])
         try:
             j2c = scipy.linalg.cholesky(j2c, lower=True)
@@ -231,10 +266,9 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
             aosym = 's2'
             nao_pair = nao*(nao+1)//2
 
-            vbar = fuse(mydf.auxbar(fused_cell))
-            ovlp = cell.pbc_intor('int1e_ovlp_sph', hermi=1, kpts=adapted_kptjs)
-            for k, ji in enumerate(adapted_ji_idx):
-                ovlp[k] = lib.pack_tril(ovlp[k])
+            vbar = mydf.auxbar(fused_cell)
+            ovlp = cell.pbc_intor('int1e_ovlp', hermi=1, kpts=adapted_kptjs)
+            ovlp = [lib.pack_tril(s) for s in ovlp]
         else:
             aosym = 's1'
             nao_pair = nao**2
@@ -267,10 +301,9 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
             j3cI = []
             for k, idx in enumerate(adapted_ji_idx):
                 v = numpy.asarray(feri['j3c/%d'%idx][:,col0:col1])
-                if is_zero(kpt):
-                    for i, c in enumerate(vbar):
-                        if c != 0:
-                            v[i] -= c * ovlp[k][col0:col1]
+                if is_zero(kpt) and cell.dimension == 3:
+                    for i in numpy.where(vbar != 0)[0]:
+                        v[i] -= vbar[i] * ovlp[k][col0:col1]
                 j3cR.append(numpy.asarray(v.real, order='C'))
                 if is_zero(kpt) and gamma_point(adapted_kptjs[k]):
                     j3cI.append(None)
@@ -278,11 +311,31 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
                     j3cI.append(numpy.asarray(v.imag, order='C'))
             v = None
 
-            shls_slice = (bstart, bend, 0, bend)
+            if aosym == 's2':
+                shls_slice = (bstart, bend, 0, bend)
+            else:
+                shls_slice = (bstart, bend, 0, cell.nbas)
             for p0, p1 in lib.prange(0, ngrids, Gblksize):
                 dat = ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
                                             b, gxyz[p0:p1], Gvbase, kpt,
                                             adapted_kptjs, out=buf)
+
+                if (cell.dimension == 1 or cell.dimension == 2) and is_zero(kpt):
+                    G0idx, SI_on_z = pbcgto.cell._SI_for_uniform_model_charge(cell, Gv[p0:p1])
+                    if SI_on_z.size > 0:
+                        for k, aoao in enumerate(dat):
+                            aoao[G0idx] -= numpy.einsum('g,i->gi', SI_on_z, ovlp[k])
+                            aux = fuse(ft_ao.ft_ao(fused_cell, Gv[p0:p1][G0idx]).T)
+                            vG_mod = numpy.einsum('ig,g,g->i', aux.conj(),
+                                                  wcoulG[p0:p1][G0idx], SI_on_z)
+                            if gamma_point(adapted_kptjs[k]):
+                                j3cR[k][:naux] -= vG_mod[:,None].real * ovlp[k]
+                            else:
+                                tmp = vG_mod[:,None] * ovlp[k]
+                                j3cR[k][:naux] -= tmp.real
+                                j3cI[k][:naux] -= tmp.imag
+                            tmp = aux = vG_mod
+
                 nG = p1 - p0
                 for k, ji in enumerate(adapted_ji_idx):
                     aoao = dat[k].reshape(nG,ncol)
@@ -338,16 +391,21 @@ class GDF(aft.AFTDF):
         else:
             ke_cutoff = tools.mesh_to_cutoff(cell.lattice_vectors(), cell.mesh)
             ke_cutoff = ke_cutoff[:cell.dimension].min()
-            self.eta = min(aft.estimate_eta_for_ke_cutoff(cell, ke_cutoff, cell.precision),
-                           estimate_eta(cell, cell.precision))
-            ke_cutoff = aft.estimate_ke_cutoff_for_eta(cell, self.eta, cell.precision)
-            self.mesh = tools.cutoff_to_mesh(cell.lattice_vectors(), ke_cutoff)
-            self.mesh[cell.dimension:] = cell.mesh[cell.dimension:]
+            eta_cell = aft.estimate_eta_for_ke_cutoff(cell, ke_cutoff, cell.precision)
+            eta_guess = estimate_eta(cell, cell.precision)
+            if eta_cell < eta_guess:
+                self.eta = eta_cell
+                self.mesh = cell.mesh
+            else:
+                self.eta = eta_guess
+                ke_cutoff = aft.estimate_ke_cutoff_for_eta(cell, self.eta, cell.precision)
+                self.mesh = tools.cutoff_to_mesh(cell.lattice_vectors(), ke_cutoff)
+                self.mesh[cell.dimension:] = cell.mesh[cell.dimension:]
 
 # Not input options
         self.exxdiv = None  # to mimic KRHF/KUHF object in function get_coulG
         self.auxcell = None
-        self.blockdim = 240
+        self.blockdim = getattr(__config__, 'pbc_df_df_DF_blockdim', 240)
         self.linear_dep_threshold = LINEAR_DEP_THR
         self._j_only = False
 # If _cderi_to_save is specified, the 3C-integral tensor will be saved in this file.
@@ -366,11 +424,20 @@ class GDF(aft.AFTDF):
             self.auxcell = None
             self._cderi = None
 
+    @property
+    def gs(self):
+        return [n//2 for n in self.mesh]
+    @gs.setter
+    def gs(self, x):
+        warnings.warn('Attribute .gs is deprecated. It is replaced by attribute .mesh.\n'
+                      'mesh = the number of PWs (=2*gs+1) for each direction.')
+        self.mesh = [2*n+1 for n in x]
+
     def dump_flags(self, log=None):
         log = logger.new_logger(self, log)
         log.info('\n')
         log.info('******** %s flags ********', self.__class__)
-        log.info('mesh = %s', self.mesh)
+        log.info('mesh = %s (%d PWs)', self.mesh, numpy.prod(self.mesh))
         if self.auxcell is None:
             log.info('auxbasis = %s', self.auxbasis)
         else:
@@ -428,11 +495,17 @@ class GDF(aft.AFTDF):
         if with_j3c:
             if isinstance(self._cderi_to_save, str):
                 cderi = self._cderi_to_save
-                if isinstance(self._cderi, str):
-                    logger.warn(self, 'Value of _cderi is ignored. DF '
-                                'integrals will be saved in file %s .', cderi)
             else:
                 cderi = self._cderi_to_save.name
+            if isinstance(self._cderi, str):
+                if self._cderi == cderi and os.path.isfile(cderi):
+                    logger.warn(self, 'DF integrals in %s (specified by '
+                                '._cderi) is overwritten by GDF '
+                                'initialization. ', cderi)
+                else:
+                    logger.warn(self, 'Value of ._cderi is ignored. '
+                                'DF integrals will be saved in file %s .',
+                                cderi)
             self._cderi = cderi
             t1 = (time.clock(), time.time())
             self._make_j3c(self.cell, self.auxcell, kptij_lst, cderi)
@@ -480,6 +553,12 @@ class GDF(aft.AFTDF):
                     norms = half_sph_norm/gto.gaussian_int(2, es)
                     cs = numpy.einsum('i,ij->ij', 1/norms, fused_cell._libcint_ctr_coeff(i))
                     vbar[aux_loc[i]:aux_loc[i+1]] = numpy.einsum('in,i->n', cs, -1/es)
+# TODO: fused_cell.cart and l%2 == 0: # 6d 10f ...
+# Normalization coefficients are different in the same shell for cartesian
+# basis. E.g. the d-type functions, the 5 d-type orbitals are normalized wrt
+# the integral \int r^2 * r^2 e^{-a r^2} dr.  The s-type 3s orbital should be
+# normalized wrt the integral \int r^0 * r^2 e^{-a r^2} dr. The different
+# normalization was not built in the basis.
         vbar *= numpy.pi/fused_cell.vol
         return vbar
 
@@ -534,9 +613,6 @@ class GDF(aft.AFTDF):
             for b0, b1 in lib.prange(0, naux, blksize):
                 LpqR, LpqI = load(j3c, b0, b1, LpqR, LpqI)
                 yield LpqR, LpqI
-
-    def prange(self, start, stop, step):
-        return lib.prange(start, stop, step)
 
     weighted_coulG = aft.weighted_coulG
     _int_nuc_vloc = aft._int_nuc_vloc
@@ -617,17 +693,61 @@ def fuse_auxcell(mydf, auxcell):
         l  = chgcell.bas_angular(i)
         modchg_offset[ia,l] = smooth_loc[i]
 
-    def fuse(Lpq):
-        Lpq, chgLpq = Lpq[:naux], Lpq[naux:]
-        for i in range(auxcell.nbas):
-            l  = auxcell.bas_angular(i)
-            ia = auxcell.bas_atom(i)
-            p0 = modchg_offset[ia,l]
-            if p0 >= 0:
-                nd = (aux_loc[i+1] - aux_loc[i]) // auxcell.bas_nctr(i)
-                for i0, i1 in lib.prange(aux_loc[i], aux_loc[i+1], nd):
-                    Lpq[i0:i1] -= chgLpq[p0:p0+nd]
-        return Lpq
+    if auxcell.cart:
+# Normalization coefficients are different in the same shell for cartesian
+# basis. E.g. the d-type functions, the 5 d-type orbitals are normalized wrt
+# the integral \int r^2 * r^2 e^{-a r^2} dr.  The s-type 3s orbital should be
+# normalized wrt the integral \int r^0 * r^2 e^{-a r^2} dr. The different
+# normalization was not built in the basis.  There two ways to surmount this
+# problem.  First is to transform the cartesian basis and scale the 3s (for
+# d functions), 4p (for f functions) ... then transform back. The second is to
+# remove the 3s, 4p functions. The function below is the second solution
+        import ctypes
+        c2s_fn = gto.moleintor.libcgto.CINTc2s_ket_sph
+        aux_loc_sph = auxcell.ao_loc_nr(cart=False)
+        naux_sph = aux_loc_sph[-1]
+        def fuse(Lpq):
+            Lpq, chgLpq = Lpq[:naux], Lpq[naux:]
+            if Lpq.ndim == 1:
+                npq = 1
+                Lpq_sph = numpy.empty(naux_sph, dtype=Lpq.dtype)
+            else:
+                npq = Lpq.shape[1]
+                Lpq_sph = numpy.empty((naux_sph,npq), dtype=Lpq.dtype)
+            if Lpq.dtype == numpy.complex:
+                npq *= 2  # c2s_fn supports double only, *2 to handle complex
+            for i in range(auxcell.nbas):
+                l  = auxcell.bas_angular(i)
+                ia = auxcell.bas_atom(i)
+                p0 = modchg_offset[ia,l]
+                if p0 >= 0:
+                    nd = (l+1) * (l+2) // 2
+                    c0, c1 = aux_loc[i], aux_loc[i+1]
+                    s0, s1 = aux_loc_sph[i], aux_loc_sph[i+1]
+                    for i0, i1 in lib.prange(c0, c1, nd):
+                        Lpq[i0:i1] -= chgLpq[p0:p0+nd]
+
+                    if l < 2:
+                        Lpq_sph[s0:s1] = Lpq[c0:c1]
+                    else:
+                        Lpq_cart = numpy.asarray(Lpq[c0:c1], order='C')
+                        c2s_fn(Lpq_sph[s0:s1].ctypes.data_as(ctypes.c_void_p),
+                               ctypes.c_int(npq * auxcell.bas_nctr(i)),
+                               Lpq_cart.ctypes.data_as(ctypes.c_void_p),
+                               ctypes.c_int(l))
+            return Lpq_sph
+    else:
+        def fuse(Lpq):
+            Lpq, chgLpq = Lpq[:naux], Lpq[naux:]
+            for i in range(auxcell.nbas):
+                l  = auxcell.bas_angular(i)
+                ia = auxcell.bas_atom(i)
+                p0 = modchg_offset[ia,l]
+                if p0 >= 0:
+                    nd = l * 2 + 1
+                    for i0, i1 in lib.prange(aux_loc[i], aux_loc[i+1], nd):
+                        Lpq[i0:i1] -= chgLpq[p0:p0+nd]
+            return Lpq
     return fused_cell, fuse
 
 
@@ -670,3 +790,7 @@ class _load_and_unpack(object):
         v = numpy.asarray(self.dat[s])
         v = lib.transpose(v.reshape(-1,nao,nao), axes=(0,2,1)).conj()
         return v.reshape(-1,nao**2)
+
+def _gaussian_int(cell):
+    r'''Regular gaussian integral \int g(r) dr^3'''
+    return ft_ao.ft_ao(cell, numpy.zeros((1,3)))[0].real

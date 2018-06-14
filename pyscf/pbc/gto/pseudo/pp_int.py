@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -55,14 +68,14 @@ def get_pp_loc_part2(cell, kpts=None):
         kpts_lst = numpy.reshape(kpts, (-1,3))
     nkpts = len(kpts_lst)
 
-    intors = ('int3c2e_sph', 'int3c1e_sph', 'int3c1e_r2_origk_sph',
-              'int3c1e_r4_origk_sph', 'int3c1e_r6_origk_sph')
+    intors = ('int3c2e', 'int3c1e', 'int3c1e_r2_origk',
+              'int3c1e_r4_origk', 'int3c1e_r6_origk')
     kptij_lst = numpy.hstack((kpts_lst,kpts_lst)).reshape(-1,2,3)
     buf = 0
     for cn in range(1, 5):
         fakecell = fake_cell_vloc(cell, cn)
         if fakecell.nbas > 0:
-            v = incore.aux_e2(cell, fakecell, intors[cn], aosym='s2',
+            v = incore.aux_e2(cell, fakecell, intors[cn], aosym='s2', comp=1,
                               kptij_lst=kptij_lst)
             buf += numpy.einsum('...i->...', v)
 
@@ -235,6 +248,7 @@ def _int_vnl(cell, fakecell, hl_blocks, kpts):
     def int_ket(_bas, intor):
         if len(_bas) == 0:
             return []
+        intor = cell._add_suffix(intor)
         atm, bas, env = gto.conc_env(cell._atm, cell._bas, cell._env,
                                      fakecell._atm, _bas, fakecell._env)
         atm = numpy.asarray(atm, dtype=numpy.int32)
@@ -257,15 +271,15 @@ def _int_vnl(cell, fakecell, hl_blocks, kpts):
             Ls.ctypes.data_as(ctypes.c_void_p),
             expkL.ctypes.data_as(ctypes.c_void_p),
             (ctypes.c_int*4)(*(shls_slice[:4])),
-            ao_loc.ctypes.data_as(ctypes.c_void_p), intopt,
+            ao_loc.ctypes.data_as(ctypes.c_void_p), intopt, lib.c_null_ptr(),
             atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(natm),
             bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
-            env.ctypes.data_as(ctypes.c_void_p))
+            env.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(env.size))
         return out
 
     hl_dims = numpy.asarray([len(hl) for hl in hl_blocks])
-    out = (int_ket(fakecell._bas[hl_dims>0], 'int1e_ovlp_sph'),
-           int_ket(fakecell._bas[hl_dims>1], 'int1e_r2_origi_sph'),
-           int_ket(fakecell._bas[hl_dims>2], 'int1e_r4_origi_sph'))
+    out = (int_ket(fakecell._bas[hl_dims>0], 'int1e_ovlp'),
+           int_ket(fakecell._bas[hl_dims>1], 'int1e_r2_origi'),
+           int_ket(fakecell._bas[hl_dims>2], 'int1e_r4_origi'))
     return out
 

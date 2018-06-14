@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 import unittest
 import copy
@@ -137,8 +150,40 @@ def grids_response(grids):
         w0[p0:p1] = vol * pbecke[ia] / z
     return coords_all, w0, w1
 
+mol = gto.Mole()
+mol.verbose = 5
+mol.output = '/dev/null'
+mol.atom.extend([
+    ["O" , (0. , 0.     , 0.)],
+    [1   , (0. , -0.757 , 0.587)],
+    [1   , (0. , 0.757  , 0.587)] ])
+mol.basis = '6-31g'
+mol.build()
+mf = dft.RKS(mol)
+mf.conv_tol = 1e-14
+mf.kernel()
+
+def tearDownModule():
+    global mol, mf
+    mol.stdout.close()
+    del mol, mf
 
 class KnownValues(unittest.TestCase):
+    def test_finite_diff_rks_grad(self):
+        g = mf.nuc_grad_method().kernel()
+        self.assertAlmostEqual(lib.finger(g), -0.049887866191414401, 6)
+
+        mf_scanner = mf.as_scanner()
+        e1 = mf_scanner(mol.set_geom_('O  0. 0. 0.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
+        e2 = mf_scanner(mol.set_geom_('O  0. 0. -.0001; 1  0. -0.757 0.587; 1  0. 0.757 0.587'))
+        self.assertAlmostEqual(g[0,2], (e1-e2)/2e-4*lib.param.BOHR, 4)
+
+    def test_different_grids_for_grad(self):
+        grids1 = dft.gen_grid.Grids(mol)
+        grids1.level = 1
+        g = mf.nuc_grad_method().set(grids=grids1).kernel()
+        self.assertAlmostEqual(lib.finger(g), -0.049837230292484727, 6)
+
     def test_grid_response(self):
         mol1 = gto.Mole()
         mol1.verbose = 0
@@ -262,7 +307,7 @@ class KnownValues(unittest.TestCase):
         grids1 = dft.gen_grid.Grids(mol1)
         grids1.atom_grid = (20,86)
         grids1.build(with_non0tab=False)
-        xc = 'lda'
+        xc = 'lda,'
         exc0 = dft.numint.nr_rks(mf0._numint, mol0, grids0, xc, dm0)[1]
         exc1 = dft.numint.nr_rks(mf1._numint, mol1, grids1, xc, dm0)[1]
 
@@ -286,7 +331,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(dexc_t, exc1_approx[2], 2)
         self.assertAlmostEqual(dexc_t, exc1_full[2], 5)
 
-        xc = 'pbe'
+        xc = 'pbe,'
         exc0 = dft.numint.nr_rks(mf0._numint, mol0, grids0, xc, dm0)[1]
         exc1 = dft.numint.nr_rks(mf1._numint, mol1, grids1, xc, dm0)[1]
 

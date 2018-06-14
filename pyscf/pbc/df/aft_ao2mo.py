@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -18,10 +31,14 @@ from pyscf.pbc import tools
 from pyscf.pbc.df.df_jk import zdotNN, zdotCN, zdotNC
 from pyscf.pbc.df.fft_ao2mo import _format_kpts, _iskconserv
 from pyscf.pbc.df.df_ao2mo import _mo_as_complex, _dtrans, _ztrans
+from pyscf.pbc.df.df_ao2mo import warn_pbc2d_eri
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point
+from pyscf import __config__
 
 
-def get_eri(mydf, kpts=None, compact=True):
+def get_eri(mydf, kpts=None,
+            compact=getattr(__config__, 'pbc_df_ao2mo_get_eri_compact', True)):
+    warn_pbc2d_eri(mydf)
     cell = mydf.cell
     nao = cell.nao_nr()
     kptijkl = _format_kpts(kpts)
@@ -96,11 +113,14 @@ def get_eri(mydf, kpts=None, compact=True):
 #       rho_rs = 1/N \sum_{Tr,Ts} \int exp( i(G+k_{pq})*r) r(r-Tr) s(r-Ts) dr
 #              = \sum_{Ts} exp(i k_s*Ts) \int exp( i(G+k_{pq})*r) r(r) s(r-Ts) dr
 # rho_pq can be directly evaluated by AFT (function pw_loop)
-# rho_rs needs to be evaluated indirectly
 #       rho_pq = pw_loop(k_q, G+k_{pq})
+# Assuming r(r) and s(r) are real functions, rho_rs is evaluated
 #       rho_rs = 1/N \sum_{Tr,Ts} \int exp( i(G+k_{pq})*r) r(r-Tr) s(r-Ts) dr
 #              = conj(\sum_{Ts} exp(-i k_s*Ts) \int exp(-i(G+k_{pq})*r) r(r) s(r-Ts) dr)
 #              = conj( pw_loop(-k_s, G+k_{pq}) )
+#
+# TODO: For complex AO function r(r) and s(r), pw_loop function needs to be
+# extended to include Gv vector in the arguments
         for (pqkR, pqkI, p0, p1), (rskR, rskI, q0, q1) in \
                 lib.izip(mydf.pw_loop(mesh, kptijkl[:2], q, max_memory=max_memory*.5),
                          mydf.pw_loop(mesh,-kptijkl[2:], q, max_memory=max_memory*.5)):
@@ -111,7 +131,9 @@ def get_eri(mydf, kpts=None, compact=True):
         return (eriR+eriI*1j)
 
 
-def general(mydf, mo_coeffs, kpts=None, compact=True):
+def general(mydf, mo_coeffs, kpts=None,
+            compact=getattr(__config__, 'pbc_df_ao2mo_general_compact', True)):
+    warn_pbc2d_eri(mydf)
     cell = mydf.cell
     kptijkl = _format_kpts(kpts)
     kpti, kptj, kptk, kptl = kptijkl
@@ -211,7 +233,7 @@ def general(mydf, mo_coeffs, kpts=None, compact=True):
 
 
 def get_ao_pairs_G(mydf, kpts=numpy.zeros((2,3)), q=None, shls_slice=None,
-                   compact=False):
+                   compact=getattr(__config__, 'pbc_df_ao_pairs_compact', False)):
     '''Calculate forward Fourier tranform (G|ij) of all AO pairs.
 
     Returns:
@@ -248,7 +270,8 @@ def get_ao_pairs_G(mydf, kpts=numpy.zeros((2,3)), q=None, shls_slice=None,
         ao_pairs_G[p0:p1] = pqkR.T + pqkI.T * 1j
     return ao_pairs_G
 
-def get_mo_pairs_G(mydf, mo_coeffs, kpts=numpy.zeros((2,3)), q=None, compact=False):
+def get_mo_pairs_G(mydf, mo_coeffs, kpts=numpy.zeros((2,3)), q=None,
+                   compact=getattr(__config__, 'pbc_df_mo_pairs_compact', False)):
     '''Calculate forward fourier transform (G|ij) of all MO pairs.
 
     Args:

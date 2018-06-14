@@ -1,4 +1,18 @@
-/*
+/* Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+  
+   Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+ 
+        http://www.apache.org/licenses/LICENSE-2.0
+ 
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+ *
  * Author: Qiming Sun <osirpt.sun@gmail.com>
  *
  * xcfun Library from
@@ -19,15 +33,16 @@ static int eval_xc(xc_functional fun, int deriv, enum xc_vars vars,
         int outlen = xc_output_length(fun);
 
         //xc_eval_vec(fun, np, rho, ncol, output, outlen);
-#pragma omp parallel default(none) shared(fun, rho, output, np, ncol, outlen)
+#pragma omp parallel default(none) \
+        shared(fun, rho, output, np, ncol, outlen)
 {
         int i;
 #pragma omp for nowait schedule(static)
         for (i=0; i < np; i++) {
                 xc_eval(fun, rho+i*ncol, output+i*outlen);
         }
-        return outlen;
 }
+        return outlen;
 }
 
 void XCFUN_eval_xc(int nfn, int *fn_id, double *fac,

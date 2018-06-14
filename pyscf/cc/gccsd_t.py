@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -22,19 +35,20 @@ def kernel(cc, eris, t1=None, t2=None, verbose=logger.INFO):
     nocc, nvir = t1.shape
 
     bcei = numpy.asarray(eris.ovvv).conj().transpose(3,2,1,0)
-    majk = numpy.asarray(eris.ooov).transpose(2,3,0,1)
-    bcjk = numpy.asarray(eris.oovv).transpose(2,3,0,1)
-    fov = eris.fock[:nocc,nocc:]
+    majk = numpy.asarray(eris.ooov).conj().transpose(2,3,0,1)
+    bcjk = numpy.asarray(eris.oovv).conj().transpose(2,3,0,1)
+    fvo = eris.fock[nocc:,:nocc]
     mo_e = eris.fock.diagonal().real
     eijk = lib.direct_sum('i+j+k->ijk', mo_e[:nocc], mo_e[:nocc], mo_e[:nocc])
     eabc = lib.direct_sum('a+b+c->abc', mo_e[nocc:], mo_e[nocc:], mo_e[nocc:])
 
     t2T = t2.transpose(2,3,0,1)
+    t1T = t1.T
     def get_wv(a, b, c):
         w  = numpy.einsum('ejk,ei->ijk', t2T[a,:], bcei[b,c])
         w -= numpy.einsum('im,mjk->ijk', t2T[b,c], majk[:,a])
-        v  = numpy.einsum('i,jk->ijk', t1 [:,a], bcjk[b,c])
-        v += numpy.einsum('i,jk->ijk', fov[:,a], t2T [b,c])
+        v  = numpy.einsum('i,jk->ijk', t1T[a], bcjk[b,c])
+        v += numpy.einsum('i,jk->ijk', fvo[a], t2T [b,c])
         v += w
         w = w + w.transpose(2,0,1) + w.transpose(1,2,0)
         return w, v
@@ -50,7 +64,7 @@ def kernel(cc, eris, t1=None, t2=None, verbose=logger.INFO):
                 w = wabc + wcab - wbac
                 v = vabc + vcab - vbac
                 w /= eijk - eabc[a,b,c]
-                et += numpy.einsum('ijk,ijk', w, v)
+                et += numpy.einsum('ijk,ijk', w, v.conj())
     et /= 2
     return et
 

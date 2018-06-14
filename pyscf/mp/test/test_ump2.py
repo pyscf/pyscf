@@ -1,4 +1,18 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import unittest
 from functools import reduce
 import numpy
@@ -20,13 +34,17 @@ mol.spin = 2
 mol.build()
 mf = scf.UHF(mol)
 mf.conv_tol = 1e-14
-ehf = mf.scf()
+mf.scf()
+
+def tearDownModule():
+    global mol, mf
+    del mol, mf
 
 
 class KnownValues(unittest.TestCase):
     def test_ump2(self):
         pt = mp.MP2(mf)
-        emp2, t2 = pt.kernel()
+        emp2, t2 = pt.kernel(mf.mo_energy, mf.mo_coeff)
         self.assertAlmostEqual(emp2, -0.16575150552336643, 9)
 
         pt.max_memory = 1
@@ -41,6 +59,7 @@ class KnownValues(unittest.TestCase):
         dm2 = pt.make_rdm2()
         gpt = mp.GMP2(mf).run()
         dm1ref = gpt.make_rdm1()
+        dm2ref = gpt.make_rdm2()
         ia = gpt._scf.mo_coeff.orbspin == 0
         ib = gpt._scf.mo_coeff.orbspin == 1
         mo_a, mo_b = mf.mo_coeff
@@ -50,8 +69,11 @@ class KnownValues(unittest.TestCase):
 
         self.assertTrue(numpy.allclose(dm1[0], dm1ref[ia][:,ia]))
         self.assertTrue(numpy.allclose(dm1[1], dm1ref[ib][:,ib]))
-        hcore = mf.get_hcore()
+        self.assertTrue(numpy.allclose(dm2[0], dm2ref[ia][:,ia][:,:,ia][:,:,:,ia]))
+        self.assertTrue(numpy.allclose(dm2[2], dm2ref[ib][:,ib][:,:,ib][:,:,:,ib]))
+        self.assertTrue(numpy.allclose(dm2[1], dm2ref[ia][:,ia][:,:,ib][:,:,:,ib]))
 
+        hcore = mf.get_hcore()
         eriaa = ao2mo.kernel(mf._eri, mo_a, compact=False).reshape([nmoa]*4)
         eribb = ao2mo.kernel(mf._eri, mo_b, compact=False).reshape([nmob]*4)
         eriab = ao2mo.kernel(mf._eri, (mo_a,mo_a,mo_b,mo_b), compact=False)
@@ -60,9 +82,9 @@ class KnownValues(unittest.TestCase):
         h1b = reduce(numpy.dot, (mo_b.T.conj(), hcore, mo_b))
         e1 = numpy.einsum('ij,ji', h1a, dm1[0])
         e1+= numpy.einsum('ij,ji', h1b, dm1[1])
-        e1+= numpy.einsum('ijkl,jilk', eriaa, dm2[0]) * .5
-        e1+= numpy.einsum('ijkl,jilk', eriab, dm2[1])
-        e1+= numpy.einsum('ijkl,jilk', eribb, dm2[2]) * .5
+        e1+= numpy.einsum('ijkl,ijkl', eriaa, dm2[0]) * .5
+        e1+= numpy.einsum('ijkl,ijkl', eriab, dm2[1])
+        e1+= numpy.einsum('ijkl,ijkl', eribb, dm2[2]) * .5
         e1+= mol.energy_nuc()
         self.assertAlmostEqual(e1, pt.e_tot, 9)
 
@@ -71,8 +93,8 @@ class KnownValues(unittest.TestCase):
         h1b = reduce(numpy.dot, (mo_b.T, hcore+vhf[1], mo_b))
         dm1[0][numpy.diag_indices(nocca)] -= 1
         dm1[1][numpy.diag_indices(noccb)] -= 1
-        e = numpy.einsum('pq,pq', h1a, dm1[0])
-        e+= numpy.einsum('pq,pq', h1b, dm1[1])
+        e = numpy.einsum('pq,qp', h1a, dm1[0])
+        e+= numpy.einsum('pq,qp', h1b, dm1[1])
         self.assertAlmostEqual(e, -emp2, 9)
 
     def test_ump2_contract_eri_dm(self):
@@ -93,9 +115,9 @@ class KnownValues(unittest.TestCase):
         h1b = reduce(numpy.dot, (mo_b.T.conj(), hcore, mo_b))
         e1 = numpy.einsum('ij,ji', h1a, dm1a)
         e1+= numpy.einsum('ij,ji', h1b, dm1b)
-        e1+= numpy.einsum('ijkl,jilk', eriaa, dm2aa) * .5
-        e1+= numpy.einsum('ijkl,jilk', eriab, dm2ab)
-        e1+= numpy.einsum('ijkl,jilk', eribb, dm2bb) * .5
+        e1+= numpy.einsum('ijkl,ijkl', eriaa, dm2aa) * .5
+        e1+= numpy.einsum('ijkl,ijkl', eriab, dm2ab)
+        e1+= numpy.einsum('ijkl,ijkl', eribb, dm2bb) * .5
         e1+= mol.energy_nuc()
         self.assertAlmostEqual(e1, pt.e_tot, 9)
 
@@ -165,6 +187,76 @@ class KnownValues(unittest.TestCase):
         pt = mp.ump2.UMP2(mf.density_fit('weigend'))
         e2 = pt.kernel()[0]
         self.assertAlmostEqual(e1, e2, 9)
+
+    def test_rdm_complex(self):
+        mol = gto.M()
+        mol.verbose = 0
+        nocca,noccb = 3,2
+        nvira,nvirb = 4,5
+        mf = scf.UHF(mol)
+        nmo = nocca + nvira
+        numpy.random.seed(1)
+        eri_aa = (numpy.random.random((nmo,nmo,nmo,nmo)) +
+                  numpy.random.random((nmo,nmo,nmo,nmo))* 1j - (.5+.5j))
+        eri_aa = eri_aa + eri_aa.transpose(1,0,3,2).conj()
+        eri_aa = eri_aa + eri_aa.transpose(2,3,0,1)
+        eri_aa *= .1
+        eri_bb = (numpy.random.random((nmo,nmo,nmo,nmo)) +
+                  numpy.random.random((nmo,nmo,nmo,nmo))* 1j - (.5+.5j))
+        eri_bb = eri_bb + eri_bb.transpose(1,0,3,2).conj()
+        eri_bb = eri_bb + eri_bb.transpose(2,3,0,1)
+        eri_bb *= .1
+        eri_ab = (numpy.random.random((nmo,nmo,nmo,nmo)) +
+                  numpy.random.random((nmo,nmo,nmo,nmo))* 1j - (.5+.5j))
+        eri_ab = eri_ab + eri_ab.transpose(1,0,3,2).conj()
+        eri_ab *= .1
+
+        eris = lambda: None
+        eris.ovov = eri_aa[:nocca,nocca:,:nocca,nocca:].reshape(nocca*nvira,nocca*nvira)
+        eris.OVOV = eri_bb[:noccb,noccb:,:noccb,noccb:].reshape(noccb*nvirb,noccb*nvirb)
+        eris.ovOV = eri_ab[:nocca,nocca:,:noccb,noccb:].reshape(nocca*nvira,noccb*nvirb)
+
+        mo_energy = [numpy.arange(nmo), numpy.arange(nmo)+.1]
+        mo_occ = numpy.zeros((2,nmo))
+        mo_occ[0,:nocca] = 1
+        mo_occ[1,:noccb] = 1
+        dm = [numpy.diag(mo_occ[0]), numpy.diag(mo_occ[1])]
+        vja = numpy.einsum('ijkl,lk->ij', eri_aa, dm[0])
+        vja+= numpy.einsum('ijkl,lk->ij', eri_ab, dm[1])
+        vjb = numpy.einsum('ijkl,lk->ij', eri_bb, dm[1])
+        vjb+= numpy.einsum('klij,lk->ij', eri_ab, dm[0])
+        vka = numpy.einsum('ijkl,jk->il', eri_aa, dm[0])
+        vkb = numpy.einsum('ijkl,jk->il', eri_bb, dm[1])
+        vhf = (vja - vka, vjb - vkb)
+        hcore = (numpy.diag(mo_energy[0]) - vhf[0],
+                 numpy.diag(mo_energy[1]) - vhf[1])
+        mf.get_hcore = lambda *args: hcore
+        mf.get_ovlp = lambda *args: numpy.eye(nmo)
+        mf.mo_energy = mo_energy
+        mf.mo_coeff = [numpy.eye(nmo)]*2
+        mf.mo_occ = mo_occ
+        mf.e_tot = numpy.einsum('ij,ji', hcore[0], dm[0])
+        mf.e_tot+= numpy.einsum('ij,ji', hcore[1], dm[1])
+        mf.e_tot+= numpy.einsum('ij,ji', vhf[0], dm[0]) * .5
+        mf.e_tot+= numpy.einsum('ij,ji', vhf[1], dm[1]) * .5
+        pt = mp.MP2(mf)
+        pt.ao2mo = lambda *args, **kwargs: eris
+        pt.kernel(eris=eris)
+        dm1 = pt.make_rdm1()
+        dm2 = pt.make_rdm2()
+
+        e1 = numpy.einsum('ij,ji', hcore[0], dm1[0])
+        e1+= numpy.einsum('ij,ji', hcore[1], dm1[1])
+        e1+= numpy.einsum('ijkl,ijkl', eri_aa, dm2[0]) * .5
+        e1+= numpy.einsum('ijkl,ijkl', eri_ab, dm2[1])
+        e1+= numpy.einsum('ijkl,ijkl', eri_bb, dm2[2]) * .5
+        self.assertAlmostEqual(e1, pt.e_tot, 12)
+
+        self.assertAlmostEqual(abs(dm2[0]-dm2[0].transpose(1,0,3,2).conj()).max(), 0, 9)
+        self.assertAlmostEqual(abs(dm2[0]-dm2[0].transpose(2,3,0,1)       ).max(), 0, 9)
+        self.assertAlmostEqual(abs(dm2[1]-dm2[1].transpose(1,0,3,2).conj()).max(), 0, 9)
+        self.assertAlmostEqual(abs(dm2[2]-dm2[2].transpose(1,0,3,2).conj()).max(), 0, 9)
+        self.assertAlmostEqual(abs(dm2[2]-dm2[2].transpose(2,3,0,1)       ).max(), 0, 9)
 
 
 

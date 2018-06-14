@@ -1,7 +1,20 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
 #
-# Author: Paul J. Robinson <pjrobinson@ucla.edu>
-#         Qiming Sun <osirpt.sun@gmail.com>
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Authors: Paul J. Robinson <pjrobinson@ucla.edu>
+#          Qiming Sun <osirpt.sun@gmail.com>
 #
 
 '''
@@ -20,6 +33,8 @@ import scipy.linalg
 from pyscf.lib import logger
 from pyscf.lo import iao
 from pyscf.lo import orth, pipek
+from pyscf import __config__
+
 
 def ibo(mol, orbocc, iaos=None, exponent=4, grad_tol=1e-8, max_iter=200,
         verbose=logger.NOTE):
@@ -50,13 +65,12 @@ def ibo(mol, orbocc, iaos=None, exponent=4, grad_tol=1e-8, max_iter=200,
     Returns:
         IBOs in the big basis (the basis defined in mol object).
     '''
-    from pyscf.pbc import gto as pbcgto
     log = logger.new_logger(mol, verbose)
     assert(exponent in (2, 4))
 
-    if isinstance(mol, pbcgto.Cell):
+    if hasattr(mol, 'pbc_intor'):  # whether mol object is a cell
         if isinstance(orbocc, numpy.ndarray) and orbocc.ndim == 2:
-            ovlpS = mol.pbc_intor('int1e_ovlp')
+            ovlpS = mol.pbc_intor('int1e_ovlp', hermi=1)
         else:
             raise NotImplementedError('k-points crystal orbitals')
     else:
@@ -161,7 +175,9 @@ def ibo(mol, orbocc, iaos=None, exponent=4, grad_tol=1e-8, max_iter=200,
     return numpy.dot(iaos, (orth.vec_lowdin(CIb)))
 
 
-def PipekMezey(mol, orbocc, iaos=None, s=None, exponent=4):
+EXPONENT = getattr(__config__, 'lo_ibo_PipekMezey_exponent', 4)
+
+def PipekMezey(mol, orbocc, iaos=None, s=None, exponent=EXPONENT):
     '''
     Note this localization is slightly different to Knizia's implementation.
     The localization here reserves orthogonormality during optimization.
@@ -180,10 +196,9 @@ def PipekMezey(mol, orbocc, iaos=None, s=None, exponent=4):
     >>> pm = ibo.PM(mol, mf.mo_coeff[:,mf.mo_occ>0])
     >>> loc_orb = pm.kernel()
     '''
-    from pyscf.pbc import gto as pbcgto
-    if isinstance(mol, pbcgto.Cell):
+    if hasattr(mol, 'pbc_intor'):  # whether mol object is a cell
         if isinstance(orbocc, numpy.ndarray) and orbocc.ndim == 2:
-            s = mol.pbc_intor('int1e_ovlp')
+            s = mol.pbc_intor('int1e_ovlp', hermi=1)
         else:
             raise NotImplementedError('k-points crystal orbitals')
     else:
@@ -216,6 +231,8 @@ def PipekMezey(mol, orbocc, iaos=None, s=None, exponent=4):
     pm.exponent = exponent
     return pm
 PM = Pipek = PipekMezey
+
+del(EXPONENT)
 
 
 '''

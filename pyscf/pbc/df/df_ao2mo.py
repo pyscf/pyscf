@@ -1,8 +1,22 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+import warnings
 import numpy
 from pyscf import lib
 from pyscf import ao2mo
@@ -11,9 +25,12 @@ from pyscf.ao2mo.incore import iden_coeffs, _conc_mos
 from pyscf.pbc.df.df_jk import zdotNN, zdotCN, zdotNC
 from pyscf.pbc.df.fft_ao2mo import _format_kpts, _iskconserv
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point
+from pyscf import __config__
 
 
-def get_eri(mydf, kpts=None, compact=True):
+def get_eri(mydf, kpts=None,
+            compact=getattr(__config__, 'pbc_df_ao2mo_get_eri_compact', True)):
+    warn_pbc2d_eri(mydf)
     if mydf._cderi is None:
         mydf.build()
 
@@ -86,7 +103,9 @@ def get_eri(mydf, kpts=None, compact=True):
         return eriR + eriI*1j
 
 
-def general(mydf, mo_coeffs, kpts=None, compact=True):
+def general(mydf, mo_coeffs, kpts=None,
+            compact=getattr(__config__, 'pbc_df_ao2mo_general_compact', True)):
+    warn_pbc2d_eri(mydf)
     if mydf._cderi is None:
         mydf.build()
 
@@ -211,6 +230,20 @@ def _ztrans(Lpq, zij, moij, ijslice, Lrs, zkl, mokl, klslice, sym):
     else:
         zkl = _ao2mo.r_e2(Lrs, mokl, klslice, tao, ao_loc, out=zkl)
     return zij, zkl
+
+
+class PBC2DIntegralsWarning(RuntimeWarning):
+    pass
+def warn_pbc2d_eri(mydf):
+    if mydf.cell.dimension in (1, 2):
+        with warnings.catch_warnings():
+            warnings.simplefilter('once', PBC2DIntegralsWarning)
+            warnings.warn('\nAFT/GDF/MDF 2-electron integrals for 1D '
+                          'and 2D PBC systems were designed for SCF methods.\n'
+                          'The treatment to remove G=0 component may not be '
+                          'proper for post-HF calculations.  It is still in '
+                          'testing\n')
+
 
 if __name__ == '__main__':
     from pyscf.pbc import gto as pgto

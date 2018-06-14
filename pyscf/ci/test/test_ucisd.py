@@ -1,74 +1,42 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import unittest
 import numpy
 import scipy.linalg
+from functools import reduce
 
 from pyscf import gto
 from pyscf import lib
 from pyscf import scf
 from pyscf import fci
 from pyscf import ci
-from pyscf import ao2mo
 from pyscf.ci import ucisd
+from pyscf import ao2mo
 
 
 class KnownValues(unittest.TestCase):
-    def test_contract(self):
-        '''cross check with GCISD'''
-        mol = gto.M()
-        mol.nelectron = 6
-        nocc, nvir = mol.nelectron//2, 4
-        nmo = nocc + nvir
-        nmo_pair = nmo*(nmo+1)//2
-        mf = scf.UHF(mol)
-        numpy.random.seed(12)
-        mf._eri = numpy.random.random(nmo_pair*(nmo_pair+1)//2) * .2
-        mf.mo_coeff = numpy.random.random((2,nmo,nmo))
-        mf.mo_energy = [numpy.arange(0., nmo)]*2
-        mf.mo_occ = numpy.zeros((2,nmo))
-        mf.mo_occ[:,:nocc] = 1
-        h1 = numpy.random.random((nmo,nmo)) * .1
-        h1 = h1 + h1.T + numpy.arange(nmo)
-        mf.get_hcore = lambda *args: h1
-
-        mf1 = scf.addons.convert_to_ghf(mf)
-        mf1.get_hcore = lambda *args: scipy.linalg.block_diag(h1, h1)
-        gci = ci.GCISD(mf1)
-        c2 = numpy.random.random((nocc*2,nocc*2,nvir*2,nvir*2)) * .1 - .1
-        c2 = c2 - c2.transpose(0,1,3,2)
-        c2 = c2 - c2.transpose(1,0,2,3)
-        c1 = numpy.random.random((nocc*2,nvir*2)) * .1
-        c0 = .5
-        civec = gci.amplitudes_to_cisdvec(c0, c1, c2)
-        civecref = gci.contract(civec, gci.ao2mo())
-        c0ref, c1ref, c2ref = gci.cisdvec_to_amplitudes(civecref)
-        c1ref = gci.spin2spatial(c1ref)
-        c2ref = gci.spin2spatial(c2ref)
-
-        c1 = gci.spin2spatial(c1)
-        c2 = gci.spin2spatial(c2)
-        myci = ci.UCISD(mf)
-        civec = myci.amplitudes_to_cisdvec(c0, c1, c2)
-        cinew = myci.contract(civec, myci.ao2mo())
-        c0new, c1new, c2new = myci.cisdvec_to_amplitudes(cinew)
-        self.assertAlmostEqual(abs(c0new   -c0ref   ).max(), 0, 12)
-        self.assertAlmostEqual(abs(c1new[0]-c1ref[0]).max(), 0, 12)
-        self.assertAlmostEqual(abs(c1new[1]-c1ref[1]).max(), 0, 12)
-        self.assertAlmostEqual(abs(c2new[0]-c2ref[0]).max(), 0, 12)
-        self.assertAlmostEqual(abs(c2new[1]-c2ref[1]).max(), 0, 12)
-        self.assertAlmostEqual(abs(c2new[2]-c2ref[2]).max(), 0, 12)
-        self.assertAlmostEqual(lib.finger(cinew), -123.57726507299601, 9)
-
     def test_from_fcivec(self):
-        mol = gto.M()
+        myci = scf.UHF(gto.M()).apply(ci.CISD)
         nocca, noccb = nelec = (3,2)
         nvira, nvirb = 5, 6
-        nmo = (8,8)
+        myci.nocc = nocc = nocca, noccb
+        nmo = 8
+        myci.nmo = (nmo,nmo)
         numpy.random.seed(12)
-        civec = numpy.random.random(1+nocca*nvira+noccb*nvirb
-                                    +nocca*(nocca-1)//2*nvira*(nvira-1)//2
-                                    +noccb*(noccb-1)//2*nvirb*(nvirb-1)//2
-                                    +nocca*noccb*nvira*nvirb)
+        civec = numpy.random.random(myci.vector_size())
         ci0 = ucisd.to_fcivec(civec, nmo, nelec)
         self.assertAlmostEqual(abs(civec-ucisd.from_fcivec(ci0, nmo, nelec)).max(), 0, 9)
 
@@ -83,10 +51,10 @@ class KnownValues(unittest.TestCase):
         c1 = (c1a, c1b)
         c2 = (c2aa, c2ab, c2bb)
         cisdvec = ucisd.amplitudes_to_cisdvec(1., c1, c2)
-        fcivec = ucisd.to_fcivec(cisdvec, (nmo,nmo), (nocc,nocc))
-        cisdvec1 = ucisd.from_fcivec(fcivec, (nmo,nmo), (nocc,nocc))
+        fcivec = ucisd.to_fcivec(cisdvec, nmo, nocc*2)
+        cisdvec1 = ucisd.from_fcivec(fcivec, nmo, nocc*2)
         self.assertAlmostEqual(abs(cisdvec-cisdvec1).max(), 0, 12)
-        ci1 = ucisd.to_fcivec(cisdvec1, (nmo,nmo), (nocc,nocc))
+        ci1 = ucisd.to_fcivec(cisdvec1, nmo, (nocc,nocc))
         self.assertAlmostEqual(abs(fcivec-ci1).max(), 0, 12)
 
     def test_h4(self):
@@ -183,7 +151,7 @@ class KnownValues(unittest.TestCase):
         h1b = reduce(numpy.dot, (mf.mo_coeff[1].T, mf.get_hcore(), mf.mo_coeff[1]))
         h2e = fci.direct_uhf.absorb_h1e((h1a,h1b), (eri_aa,eri_ab,eri_bb),
                                         h1a.shape[0], mol.nelec, .5)
-        nmo = (mf.mo_coeff[0].shape[1],mf.mo_coeff[1].shape[1])
+        nmo = mf.mo_coeff[0].shape[1]
         fcivec = myci.to_fcivec(cisdvec, nmo, mol.nelec)
         hci1 = fci.direct_uhf.contract_2e(h2e, fcivec, h1a.shape[0], mol.nelec)
         hci1 -= ehf0 * fcivec
@@ -196,9 +164,9 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(ecisd, -0.037067274690894436, 9)
         self.assertTrue(myci.e_tot-mol.energy_nuc() - efci < 0.002)
 
-    def test_rdm(self):
+    def test_rdm_h4(self):
         mol = gto.Mole()
-        mol.verbose = 5
+        mol.verbose = 7
         mol.output = '/dev/null'
         mol.atom = [
             ['O', ( 0., 0.    , 0.   )],
@@ -214,7 +182,7 @@ class KnownValues(unittest.TestCase):
 
         nmoa = nmob = nmo = mf.mo_coeff[1].shape[1]
         nocc = (6,4)
-        ci0 = myci.to_fcivec(civec, (nmoa,nmob), nocc)
+        ci0 = myci.to_fcivec(civec, nmo, nocc)
         ref1, ref2 = fci.direct_uhf.make_rdm12s(ci0, nmo, nocc)
         rdm1 = myci.make_rdm1(civec)
         rdm2 = myci.make_rdm2(civec)
@@ -224,11 +192,11 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(rdm2[1]-ref2[1]).max(), 0, 6)
         self.assertAlmostEqual(abs(rdm2[2]-ref2[2]).max(), 0, 6)
 
-        dm1a = numpy.einsum('ijkk->ij', rdm2[0]) / (mol.nelectron-1)
-        dm1a+= numpy.einsum('ijkk->ij', rdm2[1]) / (mol.nelectron-1)
+        dm1a = numpy.einsum('ijkk->ji', rdm2[0]) / (mol.nelectron-1)
+        dm1a+= numpy.einsum('ijkk->ji', rdm2[1]) / (mol.nelectron-1)
         self.assertAlmostEqual(abs(rdm1[0] - dm1a).max(), 0, 9)
-        dm1b = numpy.einsum('kkij->ij', rdm2[2]) / (mol.nelectron-1)
-        dm1b+= numpy.einsum('kkij->ij', rdm2[1]) / (mol.nelectron-1)
+        dm1b = numpy.einsum('kkij->ji', rdm2[2]) / (mol.nelectron-1)
+        dm1b+= numpy.einsum('kkij->ji', rdm2[1]) / (mol.nelectron-1)
         self.assertAlmostEqual(abs(rdm1[1] - dm1b).max(), 0, 9)
 
         eri_aa = ao2mo.kernel(mf._eri, mf.mo_coeff[0], compact=False).reshape([nmoa]*4)
@@ -264,8 +232,37 @@ class KnownValues(unittest.TestCase):
         ecisd, civec = myci.kernel()
         self.assertAlmostEqual(ecisd, -0.04754878399464485, 8)
 
+    def test_trans_rdm_with_frozen(self):
+        mol = gto.M(atom='''
+        O   0.   0.       .0
+        H   0.   -0.757   0.587
+        H   0.   0.757    0.587''', basis='sto3g')
+        mf = scf.UHF(mol).run()
+
+        def check_frozen(frozen):
+            myci = ci.UCISD(mf)
+            myci.frozen = frozen
+            myci.nroots = 2
+            myci.kernel()
+            nocc = myci.nocc
+            nmo = myci.nmo
+            norb = mf.mo_coeff[0].shape[1]
+            nfroz = len(frozen[0])
+            cibra = (myci.ci[0] + myci.ci[1]) * numpy.sqrt(.5)
+            fcibra = ucisd.to_fcivec(cibra, norb, mol.nelec, myci.frozen)
+            fciket = ucisd.to_fcivec(myci.ci[1], norb, mol.nelec, myci.frozen)
+            fcidm1 = fci.direct_spin1.trans_rdm1s(fcibra, fciket, norb, mol.nelec)
+            cidm1  = myci.trans_rdm1(cibra, myci.ci[1], nmo, nocc)
+            self.assertAlmostEqual(abs(fcidm1[0]-cidm1[0]).max(), 0, 12)
+            self.assertAlmostEqual(abs(fcidm1[1]-cidm1[1]).max(), 0, 12)
+
+        check_frozen([[5], [6]])
+        check_frozen([[3], [5]])
+        check_frozen([[1,3], [2,5]])
+        check_frozen([[2,5], [5]])
+
 
 if __name__ == "__main__":
-    print("Full Tests for CISD")
+    print("Full Tests for UCISD")
     unittest.main()
 

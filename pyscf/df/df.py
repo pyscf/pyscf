@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -21,6 +34,7 @@ from pyscf.df import addons
 from pyscf.df import df_jk
 from pyscf.ao2mo import _ao2mo
 from pyscf.ao2mo.incore import _conc_mos, iden_coeffs
+from pyscf import __config__
 
 class DF(lib.StreamObject):
     r'''
@@ -70,8 +84,8 @@ class DF(lib.StreamObject):
         self._cderi_to_save = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
 # If _cderi is specified, the 3C-integral tensor will be read from this file
         self._cderi = None
-        self._call_count = 0
-        self.blockdim = 240
+        self._call_count = getattr(__config__, 'df_df_DF_call_count', None)
+        self.blockdim = getattr(__config__, 'df_df_DF_blockdim', 240)
         self._keys = set(self.__dict__.keys())
 
     @property
@@ -95,7 +109,7 @@ class DF(lib.StreamObject):
         if isinstance(self._cderi, str):
             log.info('_cderi = %s  where DF integrals are loaded (readonly).',
                      self._cderi)
-        elif isinstance(self._cderi_to_save, str):
+        if isinstance(self._cderi_to_save, str):
             log.info('_cderi_to_save = %s', self._cderi_to_save)
         else:
             log.info('_cderi_to_save = %s', self._cderi_to_save.name)
@@ -154,10 +168,15 @@ class DF(lib.StreamObject):
                 yield eri1
 
     def prange(self, start, end, step):
-        self._call_count += 1
-        if self._call_count % 2 == 1:
-            for i in reversed(range(start, end, step)):
-                yield i, min(i+step, end)
+        if isinstance(self._call_count, int):
+            self._call_count += 1
+            if self._call_count % 2 == 1:
+                for i in reversed(range(start, end, step)):
+                    yield i, min(i+step, end)
+            else:
+                for i in range(start, end, step):
+                    yield i, min(i+step, end)
+
         else:
             for i in range(start, end, step):
                 yield i, min(i+step, end)
@@ -182,7 +201,8 @@ class DF(lib.StreamObject):
         return ao2mo.restore(8, ao_eri, nao)
     get_ao_eri = get_eri
 
-    def ao2mo(self, mo_coeffs, compact=True):
+    def ao2mo(self, mo_coeffs,
+              compact=getattr(__config__, 'df_df_DF_ao2mo_compact', True)):
         if isinstance(mo_coeffs, numpy.ndarray) and mo_coeffs.ndim == 2:
             mo_coeffs = (mo_coeffs,) * 4
         ijmosym, nij_pair, moij, ijslice = _conc_mos(mo_coeffs[0], mo_coeffs[1], compact)
@@ -200,19 +220,6 @@ class DF(lib.StreamObject):
             lib.dot(Lij.T, Lkl, 1, mo_eri, 1)
         return mo_eri
     get_mo_eri = ao2mo
-
-    def update_mf(self, mf):
-        return df_jk.density_fit(mf, self.auxbasis, self)
-
-    def update_mc(self, mc):
-        from pyscf.mcscf import df
-        return df.density_fit(mc, self.auxbasis, self)
-
-    def update_mp2(self):
-        pass
-
-    def update(self):
-        pass
 
 
 class DF4C(DF):
@@ -250,5 +257,5 @@ class DF4C(DF):
         return df_jk.r_get_jk(self, dm, hermi)
 
     def ao2mo(self, mo_coeffs):
-        pass
+        raise NotImplementedError
 

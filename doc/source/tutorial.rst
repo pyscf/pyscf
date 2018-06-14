@@ -4,6 +4,11 @@
 Tutorial
 ********
 
+This tutorial shows how to use PySCF package in the perspective of method
+development. It involves some knowledge of coding in Python.  An Ipython
+notebook of user-guide can be found in
+https://github.com/nmardirossian/PySCF_Tutorial.
+
 Quick setup
 ===========
 
@@ -633,7 +638,7 @@ Density fitting
 Customizing Hamiltonian
 -----------------------
 
-.. literalinclude:: ../../examples/scf/40-hf_with_given_hamiltonian.py
+.. literalinclude:: ../../examples/scf/40-customizing_hamiltonian.py
 
 Symmetry in CASSCF
 ------------------

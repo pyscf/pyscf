@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -15,6 +28,7 @@ from pyscf.scf import dhf
 from pyscf.dft import rks
 from pyscf.dft import gen_grid
 from pyscf.dft import r_numint
+from pyscf import __config__
 
 
 def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
@@ -110,10 +124,14 @@ class UKS(dhf.UHF):
         dhf.UHF.__init__(self, mol)
         self.xc = 'LDA,VWN'
         self.grids = gen_grid.Grids(self.mol)
-        self.small_rho_cutoff = 1e-7  # Use rho to filter grids
+        self.grids.level = getattr(__config__, 'dft_rks_RKS_grids_level',
+                                   self.grids.level)
+        # Use rho to filter grids
+        self.small_rho_cutoff = getattr(__config__, 'dft_rks_RKS_small_rho_cutoff',
+                                        1e-7)
 ##################################################
 # don't modify the following attributes, they are not input options
-        self._numint = r_numint._RNumInt()
+        self._numint = r_numint.RNumInt()
         self._keys = self._keys.union(['xc', 'grids', 'small_rho_cutoff'])
 
     def dump_flags(self):
@@ -125,6 +143,15 @@ class UKS(dhf.UHF):
     get_veff = get_veff
     energy_elec = energy_elec
     define_xc_ = rks.define_xc_
+
+    def x2c1e(self):
+        from pyscf.x2c import x2c
+        x2chf = x2c.UKS(self.mol)
+        x2c_keys = x2chf._keys
+        x2chf.__dict__.update(self.__dict__)
+        x2chf._keys = self._keys.union(x2c_keys)
+        return x2chf
+    x2c = x2c1e
 
 DKS = UKS
 
@@ -141,5 +168,8 @@ if __name__ == '__main__':
     mol.build()
 
     m = DKS(mol)
-    print(m.scf())
+    print(m.kernel())
+
+    m = DKS(mol).x2c()
+    print(m.kernel())
 

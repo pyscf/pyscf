@@ -1,4 +1,17 @@
-import numpy
+#!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 ELEMENTS = ['X',  # Ghost
     'H' , 'He', 'Li', 'Be', 'B' , 'C' , 'N' , 'O' , 'F' , 'Ne',
@@ -564,7 +577,7 @@ N_CORE_SHELLS = [
 ]
 
 
-N_VALENCE_SHELLS = [
+N_CORE_VALENCE_SHELLS = [
     '0s0p0d0f',         #  0  GHOST
     '1s0p0d0f',         #  1  H
     '1s0p0d0f',         #  2  He
@@ -685,4 +698,81 @@ N_VALENCE_SHELLS = [
     '7s6p4d2f',         #117  Ts
     '7s6p4d2f',         #118  Og
 ]
+
+
+########################################
+#
+# Some functions to format atomic symbol
+#
+########################################
+
+# For code compatiblity in python-2 and python-3
+import sys
+if sys.version_info >= (3,):
+    unicode = str
+del(sys)
+
+def _rm_digit(symb):
+    if symb.isalpha():
+        return symb
+    else:
+        return ''.join([i for i in symb if i.isalpha()])
+
+_ELEMENTS_UPPER = dict((x.upper(),x) for x in ELEMENTS)
+_ELEMENTS_UPPER['GHOST'] = 'Ghost'
+
+def charge(symb_or_chg):
+    if isinstance(symb_or_chg, (str, unicode)):
+        a = symb_or_chg.upper()
+        if ('GHOST' in a or ('X' in a and 'XE' not in a)):
+            return 0
+        else:
+            return ELEMENTS_PROTON[str(_rm_digit(a))]
+    else:
+        return symb_or_chg
+
+def _symbol(symb_or_chg):
+    if isinstance(symb_or_chg, (str, unicode)):
+        return str(symb_or_chg)
+    else:
+        return ELEMENTS[symb_or_chg]
+
+def _std_symbol(symb_or_chg):
+    if isinstance(symb_or_chg, (str, unicode)):
+        rawsymb = str(_rm_digit(symb_or_chg)).upper()
+        if len(rawsymb) > 1 and symb_or_chg[0] == 'X' and symb_or_chg[:2].upper() != 'XE':
+            rawsymb = rawsymb[1:]
+            return 'X-' + _ELEMENTS_UPPER[rawsymb]
+        elif len(rawsymb) > 5 and rawsymb[:5] == 'GHOST':
+            rawsymb = rawsymb[5:]
+            return 'GHOST-' + _ELEMENTS_UPPER[rawsymb]
+        else:
+            return _ELEMENTS_UPPER[rawsymb]
+    else:
+        return ELEMENTS[symb_or_chg]
+
+def _atom_symbol(symb_or_chg):
+    if isinstance(symb_or_chg, int):
+        symb = ELEMENTS[symb_or_chg]
+    else:
+        a = str(symb_or_chg.strip())
+        if a.isdigit():
+            symb = ELEMENTS[int(a)]
+        else:
+            rawsymb = _rm_digit(a)
+            if len(rawsymb) > 1 and a[0] == 'X' and a[:2].upper() != 'XE':
+                rawsymb = rawsymb[1:]
+            elif len(rawsymb) > 5 and rawsymb[:5].upper() == 'GHOST':
+                rawsymb = rawsymb[5:]
+            stdsymb = _ELEMENTS_UPPER[rawsymb.upper()]
+            symb = a.replace(rawsymb, stdsymb)
+    return symb
+
+def is_ghost_atom(symb_or_chg):
+    if isinstance(symb_or_chg, int):
+        return symb_or_chg == 0
+    elif 'GHOST' in symb_or_chg.upper():
+        return True
+    else:
+        return symb_or_chg[0] == 'X' and symb_or_chg[:2].upper() != 'XE'
 

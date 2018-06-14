@@ -1,3 +1,18 @@
+#!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 '''
 A Python interface to mimic numpy.einsum
 '''
@@ -48,14 +63,18 @@ def _contract(subscripts, *tensors, **kwargs):
         alpha (number) : Default is 1
         beta (number) :  Default is 0
     '''
+    a = numpy.asarray(tensors[0])
+    b = numpy.asarray(tensors[1])
+    if not kwargs and (a.size < 2000 or b.size < 2000):
+        return numpy_einsum(subscripts, a, b)
+
+    c_dtype = kwargs.get('dtype', numpy.result_type(a, b))
+    if (not (numpy.issubdtype(c_dtype, numpy.floating) or
+             numpy.issubdtype(c_dtype, numpy.complexfloating))):
+        return numpy_einsum(subscripts, a, b)
+
     sub_idx = re.split(',|->', subscripts)
     indices  = ''.join(sub_idx)
-    c_dtype = kwargs.get('dtype', numpy.result_type(*tensors))
-    if ('...' in subscripts or
-        not (numpy.issubdtype(c_dtype, numpy.float) or
-             numpy.issubdtype(c_dtype, numpy.complex))):
-        return numpy_einsum(subscripts, *tensors)
-
     if '->' not in subscripts:
         # Find chararacters which appear only once in the subscripts for c_descr
         for x in set(indices):
@@ -68,8 +87,8 @@ def _contract(subscripts, *tensors, **kwargs):
     c_dtype = numpy.result_type(c_dtype, alpha, beta)
     alpha = numpy.asarray(alpha, dtype=c_dtype)
     beta  = numpy.asarray(beta , dtype=c_dtype)
-    a = numpy.asarray(tensors[0], dtype=c_dtype)
-    b = numpy.asarray(tensors[1], dtype=c_dtype)
+    a = numpy.asarray(a, dtype=c_dtype)
+    b = numpy.asarray(b, dtype=c_dtype)
 
     a_shape = a.shape
     b_shape = b.shape
@@ -110,6 +129,9 @@ def _contract(subscripts, *tensors, **kwargs):
     return c
 
 def einsum(subscripts, *tensors, **kwargs):
+    if '...' in subscripts:
+        return numpy_einsum(subscripts, *tensors, **kwargs)
+
     subscripts = subscripts.replace(' ','')
     if len(tensors) <= 1:
         out = numpy_einsum(subscripts, *tensors, **kwargs)

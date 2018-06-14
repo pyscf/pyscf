@@ -1,13 +1,31 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+'''
+Spin-free lambda equation of RHF-CCSD(T)
+
+Ref:
+JCP, 147, 044104
+'''
+
 import time
 import ctypes
-import tempfile
 import numpy
-import h5py
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.cc import ccsd
@@ -18,62 +36,66 @@ from pyscf.cc import ccsd_lambda
 
 def kernel(mycc, eris=None, t1=None, t2=None, l1=None, l2=None,
            max_cycle=50, tol=1e-8, verbose=logger.INFO):
-    if eris is None: eris = mycc.ao2mo()
     return ccsd_lambda.kernel(mycc, eris, t1, t2, l1, l2, max_cycle, tol,
                               verbose, make_intermediates, update_lambda)
 
-
-# l2, t2 as ijab
 def make_intermediates(mycc, t1, t2, eris):
-    saved = ccsd_lambda.make_intermediates(mycc, t1, t2, eris)
+    imds = ccsd_lambda.make_intermediates(mycc, t1, t2, eris)
 
     nocc, nvir = t1.shape
-    eris_ovvv = numpy.asarray(eris.ovvv)
-    eris_ovvv = lib.unpack_tril(eris_ovvv.reshape(nocc*nvir,-1))
-    eris_ovvv = eris_ovvv.reshape(nocc,nvir,nvir,nvir)
-    mo_e = eris.fock.diagonal()
-    eia = lib.direct_sum('i-a->ia',mo_e[:nocc], mo_e[nocc:])
-    d3 = lib.direct_sum('ia,jb,kc->ijkabc', eia, eia, eia)
+    eris_ovvv = numpy.asarray(eris.get_ovvv())
     eris_ovoo = numpy.asarray(eris.ovoo)
-    eris_ovov = numpy.asarray(eris.ovvo).transpose(0,1,3,2)
-    w =(numpy.einsum('iabf,kjcf->ijkabc', eris_ovvv, t2)
-      - numpy.einsum('iajm,mkbc->ijkabc', eris_ovoo, t2)) / d3
-    v = numpy.einsum('iajb,kc->ijkabc', eris_ovov, t1) / d3 * .5
-    w = p6_(w)
-    v = p6_(v)
-    rwv = r6_(w*2+v)
-    jov = numpy.einsum('jbkc,ijkabc->ia', eris_ovov, r6_(w))
-    joovv = numpy.einsum('iabf,ijkabc->kjcf', eris_ovvv, rwv)
-    joovv-= numpy.einsum('iajm,ijkabc->mkbc', eris_ovoo, rwv)
-    joovv = joovv + joovv.transpose(1,0,3,2)
-
-    saved.jov = jov
-    saved.joovv = joovv
-    return saved
-
-
-def update_lambda(mycc, t1, t2, l1, l2, eris=None, saved=None):
-    if eris is None: eris = mycc.ao2mo()
-    if saved is None: saved = make_intermediates(mycc, t1, t2, eris)
-
-    nocc, nvir = t1.shape
-    l1, l2 = ccsd_lambda.update_lambda(mycc, t1, t2, l1, l2, eris, saved)
+    eris_ovov = numpy.asarray(eris.ovov)
 
     mo_e = eris.fock.diagonal()
     eia = lib.direct_sum('i-a->ia', mo_e[:nocc], mo_e[nocc:])
-    l1 += saved.jov/eia * .5
+    d3 = lib.direct_sum('ia,jb,kc->ijkabc', eia, eia, eia)
 
-    eijab = lib.direct_sum('ia+jb->ijab', eia, eia)
-    l2 += (saved.joovv*(2./3)+saved.joovv.transpose(1,0,2,3)*(1./3)) / eijab
+    def p6(t):
+        t1 = t + t.transpose(0,2,1,3,5,4)
+        return t1 + t1.transpose(1,0,2,4,3,5) + t1.transpose(1,2,0,4,5,3)
+
+    def r6(w):
+        return (4 * w + w.transpose(0,1,2,4,5,3) + w.transpose(0,1,2,5,3,4)
+                - 2 * w.transpose(0,1,2,5,4,3) - 2 * w.transpose(0,1,2,3,5,4)
+                - 2 * w.transpose(0,1,2,4,3,5))
+
+    w =(numpy.einsum('iafb,kjcf->ijkabc', eris_ovvv.conj(), t2)
+      - numpy.einsum('iajm,mkbc->ijkabc', eris_ovoo.conj(), t2)) / d3
+    v =(numpy.einsum('iajb,kc->ijkabc', eris_ovov.conj(), t1)
+      + numpy.einsum('ck,ijab->ijkabc', eris.fock[nocc:,:nocc], t2)) / d3
+    w = p6(w)
+    v = p6(v)
+
+    imds.l1_t = numpy.einsum('jbkc,ijkabc->ia', eris_ovov, r6(w)).conj() / eia * .5
+
+    def as_r6(m):
+        # When making derivative over t2, r6 should be called on the 6-index
+        # tensor. It gives the equation for lambda2, but not corresponding to
+        # the lambda equation used by RCCSD-lambda code.  A transformation was
+        # applied in RCCSD-lambda equation  F(lambda)_{ijab} = 0:
+        #       2/3 * # F(lambda)_{ijab} + 1/3 * F(lambda)_{jiab} = 0
+        # Combining this transformation with r6 operation, leads to the
+        # transformation code below
+        return m * 2 - m.transpose(0,1,2,5,4,3) - m.transpose(0,1,2,3,5,4)
+
+    m = as_r6(w * 2 + v * .5)
+    joovv = numpy.einsum('kfbe,ijkaef->ijab', eris_ovvv, m.conj())
+    joovv-= numpy.einsum('ncmj,imnabc->ijab', eris_ovoo, m.conj())
+    joovv = joovv + joovv.transpose(1,0,3,2)
+    rw = as_r6(w)
+    joovv+= numpy.einsum('kc,ijkabc->ijab', eris.fock[:nocc,nocc:], rw.conj())
+    imds.l2_t = joovv / lib.direct_sum('ia+jb->ijab', eia, eia)
+
+    return imds
+
+def update_lambda(mycc, t1, t2, l1, l2, eris=None, imds=None):
+    if eris is None: eris = mycc.ao2mo()
+    if imds is None: imds = make_intermediates(mycc, t1, t2, eris)
+    l1, l2 = ccsd_lambda.update_lambda(mycc, t1, t2, l1, l2, eris, imds)
+    l1 += imds.l1_t
+    l2 += imds.l2_t
     return l1, l2
-
-def p6_(t):
-    t1 = t + t.transpose(0,2,1,3,5,4)
-    return t1 + t1.transpose(1,0,2,4,3,5) + t1.transpose(1,2,0,4,5,3)
-def r6_(w):
-    return (4 * w + w.transpose(0,1,2,4,5,3) + w.transpose(0,1,2,5,3,4)
-            - 2 * w.transpose(0,1,2,5,4,3) - 2 * w.transpose(0,1,2,3,5,4)
-            - 2 * w.transpose(0,1,2,4,3,5))
 
 
 if __name__ == '__main__':
@@ -98,7 +120,7 @@ if __name__ == '__main__':
     mcc = ccsd.CCSD(rhf)
     mcc.conv_tol = 1e-12
     ecc, t1, t2 = mcc.kernel()
-    #conv, l1, l2 = mcc.solve_lambda()
+    #l1, l2 = mcc.solve_lambda()
     #print(numpy.linalg.norm(l1)-0.0132626841292)
     #print(numpy.linalg.norm(l2)-0.212575609057)
 

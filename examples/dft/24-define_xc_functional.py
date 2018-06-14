@@ -5,8 +5,8 @@ Input a XC functional which was not implemented in pyscf.
 
 See also
 * The definition of define_xc_ function in pyscf/dft/libxc.py
-* dft.libxc for API of function eval_xc;
-* dft.numint._NumInt class for its methods eval_xc, hybrid_coeff and _xc_type.
+* pyscf/dft/libxc.py for API of function eval_xc;
+* dft.numint.NumInt class for its methods eval_xc, hybrid_coeff and _xc_type.
   These methods controls the XC functional evaluation;
 * Example 24-custom_xc_functional.py to customize XC functionals using the
   functionals provided by Libxc or XcFun library.
@@ -37,6 +37,13 @@ def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, verbose=None):
     vxc = (vrho, vgamma, vlapl, vtau)
     fxc = None  # 2nd order functional derivative
     kxc = None  # 3rd order functional derivative
+
+    # Mix with existing functionals
+    pbe_xc = dft.libxc.eval_xc('pbe,pbe', rho, spin, relativity, deriv,
+                               verbose)
+    exc += pbe_xc[0] * 0.5
+    vrho += pbe_xc[1][0] * 0.5
+    vgamma += pbe_xc[1][1] * 0.5
     return exc, vxc, fxc, kxc
 
 mf = dft.RKS(mol)
@@ -46,7 +53,8 @@ mf.kernel()
 
 # half exact exchange in which 40% of the exchange is computed with short
 # range part of the range-separation Coulomb operator (omega = 0.8)
-rsh_coeff = (0.8, 0.5-0.2, 0.2)
+beta = 0.2
+rsh_coeff = (0.8, hybrid_coeff-beta, beta)
 mf = dft.RKS(mol)
 mf = mf.define_xc_(eval_xc, 'GGA', rsh=rsh_coeff)
 mf.verbose = 4

@@ -1,9 +1,24 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
-# Foster-Boys localization
-#
+
+'''
+Foster-Boys localization
+'''
 
 import sys
 import time
@@ -14,6 +29,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.soscf import ciah
 from pyscf.lo import orth
+from pyscf import __config__
 
 
 def kernel(localizer, mo_coeff=None, callback=None, verbose=None):
@@ -37,7 +53,11 @@ def kernel(localizer, mo_coeff=None, callback=None, verbose=None):
         conv_tol_grad = localizer.conv_tol_grad
 
     if mo_coeff is None:
-        u0 = localizer.get_init_guess(localizer.init_guess)
+        if hasattr(localizer, 'mol') and localizer.mol.natm == 0:
+            # For customized Hamiltonian
+            u0 = localizer.get_init_guess('random')
+        else:
+            u0 = localizer.get_init_guess(localizer.init_guess)
     else:
         u0 = localizer.get_init_guess(None)
 
@@ -88,40 +108,45 @@ def dipole_integral(mol, mo_coeff):
     # Set to charge center for physical significance of <r>
     charge_center = numpy.einsum('z,zx->x', mol.atom_charges(), mol.atom_coords())
     with mol.with_common_origin(charge_center):
-        dip = numpy.asarray([reduce(lib.dot, (mo_coeff.T, x, mo_coeff))
+        dip = numpy.asarray([reduce(lib.dot, (mo_coeff.conj().T, x, mo_coeff))
                              for x in mol.intor_symmetric('int1e_r', comp=3)])
     return dip
 
 def atomic_init_guess(mol, mo_coeff):
     s = mol.intor_symmetric('int1e_ovlp')
     c = orth.orth_ao(mol, s=s)
-    mo = reduce(numpy.dot, (c.T, s, mo_coeff))
+    mo = reduce(numpy.dot, (c.conj().T, s, mo_coeff))
     nmo = mo_coeff.shape[1]
 # Find the AOs which have largest overlap to MOs
-    idx = numpy.argsort(numpy.einsum('pi,pi->p', mo, mo))
+    idx = numpy.argsort(numpy.einsum('pi,pi->p', mo.conj(), mo))
     nmo = mo.shape[1]
     idx = idx[-nmo:]
     u, w, vh = numpy.linalg.svd(mo[idx])
-    return lib.dot(vh, u.T)
+    return lib.dot(vh, u.conj().T)
 
 class Boys(ciah.CIAHOptimizer):
+
+    conv_tol = getattr(__config__, 'lo_boys_Boys_conv_tol', 1e-6)
+    conv_tol_grad = getattr(__config__, 'lo_boys_Boys_conv_tol_grad', None)
+    max_cycle = getattr(__config__, 'lo_boys_Boys_max_cycle', 100)
+    max_iters = getattr(__config__, 'lo_boys_Boys_max_iters', 20)
+    max_stepsize = getattr(__config__, 'lo_boys_Boys_max_stepsize', .05)
+    ah_trust_region = getattr(__config__, 'lo_boys_Boys_ah_trust_region', 3)
+    ah_start_tol = getattr(__config__, 'lo_boys_Boys_ah_start_tol', 1e9)
+    ah_max_cycle = getattr(__config__, 'lo_boys_Boys_ah_max_cycle', 40)
+    init_guess = getattr(__config__, 'lo_boys_Boys_init_guess', 'atomic')
+
     def __init__(self, mol, mo_coeff=None):
         ciah.CIAHOptimizer.__init__(self)
         self.mol = mol
         self.stdout = mol.stdout
         self.verbose = mol.verbose
-        self.conv_tol = 1e-6
-        self.conv_tol_grad = None
-        self.max_cycle = 100
-        self.max_iters = 20
-        self.max_stepsize = .05
-        self.ah_trust_region = 3
-        self.ah_start_tol = 1e9
-        self.ah_max_cycle = 40
-        self.init_guess = 'atomic'
+        self.mo_coeff = mo_coeff
 
-        self.mo_coeff = numpy.asarray(mo_coeff, order='C')
-        self._keys = set(self.__dict__.keys())
+        keys = set(('conv_tol', 'conv_tol_grad', 'max_cycle', 'max_iters',
+                    'max_stepsize', 'ah_trust_region', 'ah_start_tol',
+                    'ah_max_cycle', 'init_guess'))
+        self._keys = set(self.__dict__.keys()).union(keys)
 
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)
@@ -147,7 +172,7 @@ class Boys(ciah.CIAHOptimizer):
         mo_coeff = lib.dot(self.mo_coeff, u)
         dip = dipole_integral(self.mol, mo_coeff)
         g0 = numpy.einsum('xii,xip->pi', dip, dip)
-        g = -self.pack_uniq_var(g0-g0.T) * 2
+        g = -self.pack_uniq_var(g0-g0.conj().T) * 2
 
         h_diag = numpy.einsum('xii,xpp->pi', dip, dip) * 2
         h_diag-= g0.diagonal() + g0.diagonal().reshape(-1,1)
@@ -170,7 +195,7 @@ class Boys(ciah.CIAHOptimizer):
         #:idx = numpy.tril_indices(nmo, -1)
         #:h = h[idx][:,idx[0],idx[1]]
 
-        g0 = g0 + g0.T
+        g0 = g0 + g0.conj().T
         def h_op(x):
             x = self.unpack_uniq_var(x)
             norb = x.shape[0]
@@ -188,7 +213,7 @@ class Boys(ciah.CIAHOptimizer):
             #:hx-= numpy.einsum('jk,xkj,xjp->pj', x, dip, dip) * 2
             #:return -self.pack_uniq_var(hx)
             #:hx = numpy.einsum('iq,qp->pi', g0, x)
-            hx = lib.dot(x.T, g0.T)
+            hx = lib.dot(x.T, g0.T).conj()
             #:hx+= numpy.einsum('qi,xiq,xip->pi', x, dip, dip) * 2
             hx+= numpy.einsum('xip,xi->pi', dip, numpy.einsum('qi,xiq->xi', x, dip)) * 2
             #:hx-= numpy.einsum('qp,xpp,xiq->pi', x, dip, dip) * 2
@@ -196,7 +221,7 @@ class Boys(ciah.CIAHOptimizer):
                               lib.dot(dip.reshape(-1,norb), x).reshape(3,norb,norb)) * 2
             #:hx-= numpy.einsum('qp,xip,xpq->pi', x, dip, dip) * 2
             hx-= numpy.einsum('xip,xp->pi', dip, numpy.einsum('qp,xpq->xp', x, dip)) * 2
-            return -self.pack_uniq_var(hx-hx.T)
+            return -self.pack_uniq_var(hx-hx.conj().T)
 
         return g, h_op, h_diag
 
@@ -205,7 +230,7 @@ class Boys(ciah.CIAHOptimizer):
         mo_coeff = lib.dot(self.mo_coeff, u)
         dip = dipole_integral(self.mol, mo_coeff)
         g0 = numpy.einsum('xii,xip->pi', dip, dip)
-        g = -self.pack_uniq_var(g0-g0.T) * 2
+        g = -self.pack_uniq_var(g0-g0.conj().T) * 2
         return g
 
     def cost_function(self, u=None):
@@ -214,8 +239,8 @@ class Boys(ciah.CIAHOptimizer):
         dip = dipole_integral(self.mol, mo_coeff)
         r2 = self.mol.intor_symmetric('int1e_r2')
         r2 = numpy.einsum('pi,pi->', mo_coeff, lib.dot(r2, mo_coeff))
-        val = r2 - numpy.einsum('xii,xii->', dip, dip)
-        return val * 2
+        val = r2 - numpy.einsum('xii,xii->', dip, dip) * 2
+        return val
 
     def get_init_guess(self, key='atomic'):
         '''Generate initial guess for localization.
@@ -239,7 +264,7 @@ class Boys(ciah.CIAHOptimizer):
 
     kernel = kernel
 
-BF = Boys
+FB = BF = Boys
 
 
 if __name__ == '__main__':

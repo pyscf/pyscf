@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -11,11 +24,11 @@ import time
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.scf import rhf_grad
+from pyscf.grad import rhf as rhf_grad
 
 
 def grad_elec(mf_grad, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
-    mf = mf_grad._scf
+    mf = mf_grad.base
     mol = mf_grad.mol
     if mo_energy is None: mo_energy = mf.mo_energy
     if mo_occ is None:    mo_occ = mf.mo_occ
@@ -72,13 +85,13 @@ class Gradients(rhf_grad.Gradients):
     '''
     def get_veff(self, mol=None, dm=None):
         if mol is None: mol = self.mol
-        if dm is None: dm = self._scf.make_rdm1()
+        if dm is None: dm = self.base.make_rdm1()
         return get_veff(self, mol, dm)
 
     def make_rdm1e(self, mo_energy=None, mo_coeff=None, mo_occ=None):
-        if mo_energy is None: mo_energy = self._scf.mo_energy
-        if mo_coeff is None: mo_coeff = self._scf.mo_coeff
-        if mo_occ is None: mo_occ = self._scf.mo_occ
+        if mo_energy is None: mo_energy = self.base.mo_energy
+        if mo_coeff is None: mo_coeff = self.base.mo_coeff
+        if mo_occ is None: mo_occ = self.base.mo_occ
         return make_rdm1e(mo_energy, mo_coeff, mo_occ)
 
     grad_elec = grad_elec

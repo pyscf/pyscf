@@ -1,4 +1,16 @@
-
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 # 3. Use proper functions provided by PySCF
 #   * Switch between df.incore and df.outcore according to system memory
 #   *   (Koh: Is there an identical function in outcore? which one, incore or outcore, is used when need of more memory?)
@@ -34,7 +46,7 @@ def matrixpower(A,p,PrintCondition=False):
     """ Raise a Hermitian Matrix to a possibly fractional power. """
     u,s,v = np.linalg.svd(A)
     if (PrintCondition):
-        print "matrixpower: Minimal Eigenvalue =", np.min(s)
+        print("matrixpower: Minimal Eigenvalue =", np.min(s))
     for i in range(len(s)):
         if (abs(s[i]) < np.power(10.0,-14.0)):
             s[i] = np.power(10.0,-14.0)
@@ -83,6 +95,10 @@ class RTTDSCF(lib.StreamObject):
         self.prop(fmat, c_am, v_lm, rho, output)
         end = time.time()
         logger.info(self,"Propagation time: %f", end-start)
+
+        logger.warn(self, 'RT-TDSCF is an experimental feature. It is '
+                    'still in testing.\nFeatures and APIs may be changed '
+                    'in the future.')
 
 
     def auxmol_set(self, mol, auxbas = "weigend"):

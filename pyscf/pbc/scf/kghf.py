@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -16,6 +29,7 @@ from pyscf.pbc.scf import khf
 from pyscf.pbc.scf import ghf as pbcghf
 from pyscf.pbc.scf import addons
 from pyscf.pbc.df.df_jk import _format_jks
+from pyscf import __config__
 
 
 def get_jk(mf, cell=None, dm_kpts=None, hermi=0, kpts=None, kpts_band=None,
@@ -100,7 +114,8 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
 class KGHF(pbcghf.GHF, khf.KSCF):
     '''GHF class for PBCs.
     '''
-    def __init__(self, cell, kpts=np.zeros((1,3)), exxdiv='ewald'):
+    def __init__(self, cell, kpts=np.zeros((1,3)),
+                 exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         khf.KSCF.__init__(self, cell, kpts, exxdiv)
 
     def get_hcore(self, cell=None, kpts=None):
@@ -153,6 +168,9 @@ class KGHF(pbcghf.GHF, khf.KSCF):
         '''Convert given mean-field object to RHF/ROHF'''
         addons.convert_to_ghf(mf, self)
         return self
+
+    density_fit = khf.KSCF.density_fit
+    newton = khf.KSCF.newton
 
     x2c = None
     stability = None

@@ -1,3 +1,17 @@
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import unittest
 import numpy
 from pyscf.pbc import gto as pbcgto
@@ -107,6 +121,40 @@ class KnownValues(unittest.TestCase):
         kpts = cell.make_kpts([2,3,5])
         mad1 = tools.madelung(cell, kpts)
         self.assertAlmostEqual(mad0-mad1, 0, 9)
+
+    def test_fft(self):
+        n = 31
+        a = numpy.random.random([2,n,n,n])
+        ref = numpy.fft.fftn(a, axes=(1,2,3)).ravel()
+        v = tools.fft(a, [n,n,n]).ravel()
+        self.assertAlmostEqual(abs(ref-v).max(), 0, 10)
+
+        a = numpy.random.random([2,n,n,8])
+        ref = numpy.fft.fftn(a, axes=(1,2,3)).ravel()
+        v = tools.fft(a, [n,n,8]).ravel()
+        self.assertAlmostEqual(abs(ref-v).max(), 0, 10)
+
+        a = numpy.random.random([2,8,n,8])
+        ref = numpy.fft.fftn(a, axes=(1,2,3)).ravel()
+        v = tools.fft(a, [8,n,8]).ravel()
+        self.assertAlmostEqual(abs(ref-v).max(), 0, 10)
+
+    def test_ifft(self):
+        n = 31
+        a = numpy.random.random([2,n,n,n])
+        ref = numpy.fft.ifftn(a, axes=(1,2,3)).ravel()
+        v = tools.ifft(a, [n,n,n]).ravel()
+        self.assertAlmostEqual(abs(ref-v).max(), 0, 10)
+
+        a = numpy.random.random([2,n,n,8])
+        ref = numpy.fft.ifftn(a, axes=(1,2,3)).ravel()
+        v = tools.ifft(a, [n,n,8]).ravel()
+        self.assertAlmostEqual(abs(ref-v).max(), 0, 10)
+
+        a = numpy.random.random([2,8,n,8])
+        ref = numpy.fft.ifftn(a, axes=(1,2,3)).ravel()
+        v = tools.ifft(a, [8,n,8]).ravel()
+        self.assertAlmostEqual(abs(ref-v).max(), 0, 10)
 
 
 if __name__ == '__main__':

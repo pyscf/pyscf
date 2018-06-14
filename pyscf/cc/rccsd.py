@@ -1,7 +1,27 @@
-'''
-Restricted CCSD for complex integrals
+#!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Author: Timothy Berkelbach <tim.berkelbach@gmail.com>
+#
 
-note MO integrals are treated in chemist's notation
+'''
+Restricted CCSD implementation which supports both real and complex integrals.
+The 4-index integrals are saved on disk entirely (without using any symmetry).
+This code is slower than the pyscf.cc.ccsd implementation.
+
+Note MO integrals are treated in chemist's notation
 
 Ref: Hirata et al., J. Chem. Phys. 120, 2581 (2004)
 '''
@@ -13,7 +33,13 @@ from pyscf import lib
 from pyscf import ao2mo
 from pyscf.lib import logger
 from pyscf.cc import ccsd
+from pyscf.cc import _ccsd
 from pyscf.cc import rintermediates as imd
+from pyscf.mp import mp2
+from pyscf import __config__
+
+BLKMIN = getattr(__config__, 'cc_ccsd_blkmin', 4)
+MEMORYMIN = getattr(__config__, 'cc_ccsd_memorymin', 2000)
 
 def update_amps(cc, t1, t2, eris):
     # Ref: Hirata et al., J. Chem. Phys. 120, 2581 (2004) Eqs.(35)-(36)
@@ -43,7 +69,7 @@ def update_amps(cc, t1, t2, eris):
     t1new += fov.conj()
     t1new += 2*np.einsum('kcai,kc->ia', eris.ovvo, t1)
     t1new +=  -np.einsum('kiac,kc->ia', eris.oovv, t1)
-    eris_ovvv = np.asarray(eris.ovvv)
+    eris_ovvv = np.asarray(eris.get_ovvv())
     t1new += 2*lib.einsum('kdac,ikcd->ia', eris_ovvv, t2)
     t1new +=  -lib.einsum('kcad,ikcd->ia', eris_ovvv, t2)
     t1new += 2*lib.einsum('kdac,kd,ic->ia', eris_ovvv, t1, t1)
@@ -56,7 +82,7 @@ def update_amps(cc, t1, t2, eris):
 
     # T2 equation
     tmp2  = lib.einsum('kibc,ka->abic', eris.oovv, -t1)
-    tmp2 += np.asarray(eris.ovvv).conj().transpose(1,3,0,2)
+    tmp2 += np.asarray(eris_ovvv).conj().transpose(1,3,0,2)
     tmp = lib.einsum('abic,jc->ijab', tmp2, t1)
     t2new = tmp + tmp.transpose(1,0,3,2)
     tmp2  = lib.einsum('kcai,jc->akij', eris.ovvo, t1)
@@ -115,7 +141,12 @@ def update_amps(cc, t1, t2, eris):
     return t1new, t2new
 
 
-def energy(cc, t1, t2, eris):
+def energy(cc, t1=None, t2=None, eris=None):
+    '''RCCSD correlation energy'''
+    if t1 is None: t1 = cc.t1
+    if t2 is None: t2 = cc.t2
+    if eris is None: eris = cc.ao2mo()
+
     nocc, nvir = t1.shape
     fock = eris.fock
     e = 2*np.einsum('ia,ia', fock[:nocc,nocc:], t1)
@@ -124,6 +155,8 @@ def energy(cc, t1, t2, eris):
     eris_ovov = np.asarray(eris.ovov)
     e += 2*np.einsum('ijab,iajb', tau, eris_ovov)
     e +=  -np.einsum('ijab,ibja', tau, eris_ovov)
+    if abs(e.imag) > 1e-4:
+        logger.warn(cc, 'Non-zero imaginary part found in RCCSD energy %s', e)
     return e.real
 
 
@@ -132,10 +165,6 @@ class RCCSD(ccsd.CCSD):
 
     Ground-state CCSD is performed in optimized ccsd.CCSD and EOM is performed here.
     '''
-    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
-        ccsd.CCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
-        self.max_space = 20
-        self._keys = self._keys.union(['max_space'])
 
     def init_amps(self, eris):
         nocc = self.nocc
@@ -148,7 +177,7 @@ class RCCSD(ccsd.CCSD):
         t2 = eris_ovov.transpose(0,2,1,3).conj() / eijab
         self.emp2  = 2*np.einsum('ijab,iajb', t2, eris_ovov)
         self.emp2 -=   np.einsum('ijab,ibja', t2, eris_ovov)
-        logger.info(self, 'Init t2, MP2 energy = %.15g', self.emp2)
+        logger.info(self, 'Init t2, MP2 energy = %.15g', self.emp2.real)
         return self.emp2, t1, t2
 
     def kernel(self, t1=None, t2=None, eris=None, mbpt2=False):
@@ -161,10 +190,10 @@ class RCCSD(ccsd.CCSD):
                 Use one-shot MBPT2 approximation to CCSD.
         '''
         if mbpt2:
-            pt = ccsd.mp2.MP2(self._scf, self.frozen, self.mo_coeff, self.mo_occ)
+            pt = mp2.MP2(self._scf, self.frozen, self.mo_coeff, self.mo_occ)
             self.e_corr, self.t2 = pt.kernel(eris=eris)
             nocc, nvir = self.t2.shape[1:3]
-            self.t1 = numpy.zeros((nocc,nvir))
+            self.t1 = np.zeros((nocc,nvir))
             return self.e_corr, self.t1, self.t2
 
         if eris is None:
@@ -196,45 +225,37 @@ class RCCSD(ccsd.CCSD):
     energy = energy
     update_amps = update_amps
 
-    def _add_vvvv(self, t1, t2, eris, out=None, with_ovvv=False, t2sym=None):
-        assert(not self.direct)
-        return ccsd.CCSD._add_vvvv(self, t1, t2, eris, out, with_ovvv, t2sym)
+    def solve_lambda(self, t1=None, t2=None, l1=None, l2=None,
+                     eris=None):
+        from pyscf.cc import rccsd_lambda
+        if t1 is None: t1 = self.t1
+        if t2 is None: t2 = self.t2
+        if eris is None: eris = self.ao2mo(self.mo_coeff)
+        self.converged_lambda, self.l1, self.l2 = \
+                rccsd_lambda.kernel(self, eris, t1, t2, l1, l2,
+                                    max_cycle=self.max_cycle,
+                                    tol=self.conv_tol_normt,
+                                    verbose=self.verbose)
+        return self.l1, self.l2
 
-def _contract_vvvv_t2(mol, vvvv, t2, out=None, max_memory=2000, verbose=None):
-    '''Ht2 = numpy.einsum('ijcd,acbd->ijab', t2, vvvv)
+    def ccsd_t(self, t1=None, t2=None, eris=None):
+#?        # Note
+#?        assert(t1.dtype == np.double)
+#?        assert(t2.dtype == np.double)
+        return ccsd.CCSD.ccsd_t(self, t1, t2, eris)
 
-    Args:
-        vvvv : None or integral object
-            if vvvv is None, contract t2 to AO-integrals using AO-direct algorithm
-    '''
-    if vvvv is None:   # AO-direct CCSD
-        assert(t2.dtype == np.double)
-        return ccsd._contract_vvvv_t2(mol, vvvv, t2, out, max_memory, verbose)
+    def density_fit(self, auxbasis=None, with_df=None):
+        raise NotImplementedError
 
-    time0 = time.clock(), time.time()
-    log = logger.new_logger(mol, verbose)
-
-    nvira, nvirb = t2.shape[-2:]
-    x2 = t2.reshape(-1,nvira,nvirb)
-    nocc2 = x2.shape[0]
-    Ht2 = np.ndarray(x2.shape, buffer=out)
-
-    unit = nvirb**2*nvira*2 + nocc2*nvirb
-    blksize = min(nvira, max(ccsd.BLKMIN, int(max_memory*1e6/8/unit)))
-
-    for p0,p1 in lib.prange(0, nvira, blksize):
-        Ht2[:,p0:p1] = lib.einsum('xcd,acbd->xab', x2, vvvv[p0:p1])
-        time0 = log.timer_debug1('vvvv [%d:%d]' % (p0,p1), *time0)
-    return Ht2.reshape(t2.shape)
 
 class _ChemistsERIs(ccsd._ChemistsERIs):
-    def _contract_vvvv_t2(self, t2, direct=False, out=None, max_memory=2000,
-                          verbose=None):
-        if direct:
-            vvvv = None
+
+    def get_ovvv(self, *slices):
+        '''To access a subblock of ovvv tensor'''
+        if slices:
+            return self.ovvv[slices]
         else:
-            vvvv = self.vvvv
-        return _contract_vvvv_t2(self.mol, vvvv, t2, out, max_memory, verbose)
+            return self.ovvv
 
 def _make_eris_incore(mycc, mo_coeff=None, ao2mofn=None):
     cput0 = (time.clock(), time.time())
@@ -281,7 +302,7 @@ def _make_eris_outcore(mycc, mo_coeff=None):
     eris.ovvv = eris.feri1.create_dataset('ovvv', (nocc,nvir,nvir,nvir), 'f8', chunks=(nocc,1,nvir,nvir))
     eris.oovv = eris.feri1.create_dataset('oovv', (nocc,nocc,nvir,nvir), 'f8', chunks=(nocc,nocc,1,nvir))
     eris.vvvv = eris.feri1.create_dataset('vvvv', (nvir,nvir,nvir,nvir), 'f8')
-    max_memory = max(2000, mycc.max_memory-lib.current_memory()[0])
+    max_memory = max(MEMORYMIN, mycc.max_memory-lib.current_memory()[0])
 
     ftmp = lib.H5TmpFile()
     ao2mo.full(mol, mo_coeff, ftmp, max_memory=max_memory, verbose=log)
@@ -296,7 +317,7 @@ def _make_eris_outcore(mycc, mo_coeff=None):
     oo = oovv = None
 
     tril2sq = lib.square_mat_in_trilu_indices(nmo)
-    blksize = min(nvir, max(2, int(max_memory*1e6/8/nmo**3/2)))
+    blksize = min(nvir, max(BLKMIN, int(max_memory*1e6/8/nmo**3/2)))
     for p0, p1 in lib.prange(0, nvir, blksize):
         q0, q1 = p0+nocc, p1+nocc
         off0 = q0*(q0+1)//2
@@ -321,6 +342,7 @@ def _make_eris_outcore(mycc, mo_coeff=None):
 if __name__ == '__main__':
     from pyscf import scf
     from pyscf import gto
+    from pyscf.cc import gccsd
 
     mol = gto.Mole()
     mol.atom = [
@@ -360,3 +382,72 @@ if __name__ == '__main__':
     print(e[1] - 0.2757159395886167)
     print(e[2] - 0.2757159395886167)
     print(e[3] - 0.3005716731825082)
+
+
+    mol = gto.Mole()
+    mol.verbose = 0
+    mol.atom = [
+        [8 , (0. , 0.     , 0.)],
+        [1 , (0. , -0.757 , 0.587)],
+        [1 , (0. , 0.757  , 0.587)]]
+    mol.basis = '631g'
+    mol.build()
+    mf = scf.RHF(mol)
+    mf.conv_tol = 1e-16
+    mf.scf()
+    mo_coeff = mf.mo_coeff + np.sin(mf.mo_coeff) * .01j
+    nao = mo_coeff.shape[0]
+    eri = ao2mo.restore(1, mf._eri, nao)
+    eri0 = lib.einsum('pqrs,pi,qj,rk,sl->ijkl', eri, mo_coeff.conj(), mo_coeff,
+                      mo_coeff.conj(), mo_coeff)
+
+    nocc, nvir = 5, nao-5
+    eris = _ChemistsERIs(mol)
+    eris.oooo = eri0[:nocc,:nocc,:nocc,:nocc].copy()
+    eris.ovoo = eri0[:nocc,nocc:,:nocc,:nocc].copy()
+    eris.oovv = eri0[:nocc,:nocc,nocc:,nocc:].copy()
+    eris.ovvo = eri0[:nocc,nocc:,nocc:,:nocc].copy()
+    eris.ovov = eri0[:nocc,nocc:,:nocc,nocc:].copy()
+    eris.ovvv = eri0[:nocc,nocc:,nocc:,nocc:].copy()
+    eris.vvvv = eri0[nocc:,nocc:,nocc:,nocc:].copy()
+    eris.fock = np.diag(mf.mo_energy)
+
+    np.random.seed(1)
+    t1 = np.random.random((nocc,nvir)) + np.random.random((nocc,nvir))*.1j - .5
+    t2 = np.random.random((nocc,nocc,nvir,nvir)) - .5
+    t2 = t2 + np.sin(t2) * .1j
+    t2 = t2 + t2.transpose(1,0,3,2)
+
+    mycc = RCCSD(mf)
+    t1new_ref, t2new_ref = update_amps(mycc, t1, t2, eris)
+
+    orbspin = np.zeros(nao*2, dtype=int)
+    orbspin[1::2] = 1
+    eri1 = np.zeros([nao*2]*4, dtype=np.complex)
+    eri1[0::2,0::2,0::2,0::2] = \
+    eri1[0::2,0::2,1::2,1::2] = \
+    eri1[1::2,1::2,0::2,0::2] = \
+    eri1[1::2,1::2,1::2,1::2] = eri0
+    eri1 = eri1.transpose(0,2,1,3) - eri1.transpose(0,2,3,1)
+    erig = gccsd._PhysicistsERIs(mol)
+    nocc *= 2
+    nvir *= 2
+    erig.oooo = eri1[:nocc,:nocc,:nocc,:nocc].copy()
+    erig.ooov = eri1[:nocc,:nocc,:nocc,nocc:].copy()
+    erig.ovov = eri1[:nocc,nocc:,:nocc,nocc:].copy()
+    erig.ovvo = eri1[:nocc,nocc:,nocc:,:nocc].copy()
+    erig.oovv = eri1[:nocc,:nocc,nocc:,nocc:].copy()
+    erig.ovvv = eri1[:nocc,nocc:,nocc:,nocc:].copy()
+    erig.vvvv = eri1[nocc:,nocc:,nocc:,nocc:].copy()
+    mo_e = np.array([mf.mo_energy]*2)
+    erig.fock = np.diag(mo_e.T.ravel())
+
+    myccg = gccsd.GCCSD(scf.addons.convert_to_ghf(mf))
+    t1, t2 = myccg.amplitudes_from_ccsd(t1, t2)
+    t1new, t2new = gccsd.update_amps(myccg, t1, t2, erig)
+    print(abs(t1new[0::2,0::2]-t1new_ref).max())
+    t2aa = t2new[0::2,0::2,0::2,0::2]
+    t2ab = t2new[0::2,1::2,0::2,1::2]
+    print(abs(t2ab-t2new_ref).max())
+    print(abs(t2ab-t2ab.transpose(1,0,2,3) - t2aa).max())
+

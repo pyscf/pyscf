@@ -1,7 +1,22 @@
-/*
- * Copyright (C) 2016-  Qiming Sun <osirpt.sun@gmail.com>
+/* Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+  
+   Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+ 
+        http://www.apache.org/licenses/LICENSE-2.0
+ 
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+ *
+ * Author: Qiming Sun <osirpt.sun@gmail.com>
  */
 
+#include <stdlib.h>
 #include <string.h>
 #include <math.h>
 #include <complex.h>
@@ -15,9 +30,9 @@ double exp_cephes(double x);
 double CINTcommon_fac_sp(int l);
 
 int GTOcontract_exp0(double *ectr, double *coord, double *alpha, double *coeff,
-                     int l, int nprim, int nctr, int ngrids, double fac)
+                     int l, int nprim, int nctr, size_t ngrids, double fac)
 {
-        int i, j, k;
+        size_t i, j, k;
         double arr, maxc, eprim;
         double logcoeff[nprim];
         double rr[ngrids];
@@ -71,9 +86,10 @@ int GTOcontract_exp0(double *ectr, double *coord, double *alpha, double *coeff,
 void GTOshell_eval_grid_cart(double *gto, double *ri, double *exps,
                              double *coord, double *alpha, double *coeff,
                              double *env, int l, int np, int nc,
-                             int nao, int ngrids, int blksize)
+                             size_t nao, size_t ngrids, size_t blksize)
 {
-        int lx, ly, lz, i, k, n = 0;
+        int lx, ly, lz;
+        size_t i, k;
         double ce[3];
         double xpows[8*blksize];
         double ypows[8*blksize];
@@ -187,9 +203,9 @@ void GTOshell_eval_grid_cart(double *gto, double *ri, double *exps,
 }
 
 int GTOcontract_exp1(double *ectr, double *coord, double *alpha, double *coeff,
-                     int l, int nprim, int nctr, int ngrids, double fac)
+                     int l, int nprim, int nctr, size_t ngrids, double fac)
 {
-        int i, j, k;
+        size_t i, j, k;
         double arr, maxc, eprim;
         double logcoeff[nprim];
         double rr[ngrids];
@@ -240,11 +256,11 @@ int GTOcontract_exp1(double *ectr, double *coord, double *alpha, double *coeff,
 void GTOshell_eval_grid_ip_cart(double *gto, double *ri, double *exps,
                                 double *coord, double *alpha, double *coeff,
                                 double *env, int l, int np, int nc,
-                                int nao, int ngrids, int blksize)
+                                size_t nao, size_t ngrids, size_t blksize)
 {
-        const int degen = (l+1)*(l+2)/2;
-        const int gtosize = nao * ngrids;
-        int lx, ly, lz, i, k, n, is0;
+        const size_t degen = (l+1)*(l+2)/2;
+        int lx, ly, lz;
+        size_t i, k, n;
         double ax, ay, az, tmp;
         double ce[6];
         double rre[10];
@@ -258,8 +274,8 @@ void GTOshell_eval_grid_ip_cart(double *gto, double *ri, double *exps,
         double *gridy = coord+BLKSIZE;
         double *gridz = coord+BLKSIZE*2;
         double *gtox = gto;
-        double *gtoy = gto + gtosize;
-        double *gtoz = gto + gtosize * 2;
+        double *gtoy = gto + nao * ngrids;
+        double *gtoz = gto + nao * ngrids * 2;
         double *exps_2a = exps + NPRIMAX*BLKSIZE;
 
         switch (l) {

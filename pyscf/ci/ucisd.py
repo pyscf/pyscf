@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -15,13 +28,14 @@ from pyscf.lib import logger
 from pyscf.cc import uccsd
 from pyscf.cc import uccsd_rdm
 from pyscf.ci import cisd
+from pyscf.fci import cistring
 from pyscf.cc.ccsd import _unpack_4fold
 
 def make_diagonal(myci, eris):
     nocca = eris.nocca
     noccb = eris.noccb
     nmoa = eris.focka.shape[0]
-    nmob = eris.focka.shape[1]
+    nmob = eris.fockb.shape[1]
     nvira = nmoa - nocca
     nvirb = nmob - noccb
     jdiag_aa = numpy.zeros((nmoa,nmoa))
@@ -122,6 +136,8 @@ def contract(myci, civec, eris):
     foob = eris.fockb[:noccb,:noccb]
     fova = eris.focka[:nocca,nocca:]
     fovb = eris.fockb[:noccb,noccb:]
+    fvoa = eris.focka[nocca:,:nocca]
+    fvob = eris.fockb[noccb:,:noccb]
     fvva = eris.focka[nocca:,nocca:]
     fvvb = eris.fockb[noccb:,noccb:]
 
@@ -132,25 +148,29 @@ def contract(myci, civec, eris):
     eris_ooVV = _cp(eris.ooVV)
     eris_OOvv = _cp(eris.OOvv)
     eris_OOVV = _cp(eris.OOVV)
-    eris_ovvo = _cp(eris.ovvo)
-    eris_ovVO = _cp(eris.ovVO)
-    eris_OVVO = _cp(eris.OVVO)
+    eris_ovov = _cp(eris.ovov)
+    eris_ovOV = _cp(eris.ovOV)
+    eris_OVOV = _cp(eris.OVOV)
     #:t2 += eris.oovv * c0
-    t2aa += .25 * c0 * eris_ovvo.transpose(0,3,1,2)
-    t2aa -= .25 * c0 * eris_ovvo.transpose(0,3,2,1)
-    t2bb += .25 * c0 * eris_OVVO.transpose(0,3,1,2)
-    t2bb -= .25 * c0 * eris_OVVO.transpose(0,3,2,1)
-    t2ab += c0 * eris_ovVO.transpose(0,3,1,2)
+    t2aa += .25 * c0 * eris_ovov.conj().transpose(0,2,1,3)
+    t2aa -= .25 * c0 * eris_ovov.conj().transpose(0,2,3,1)
+    t2bb += .25 * c0 * eris_OVOV.conj().transpose(0,2,1,3)
+    t2bb -= .25 * c0 * eris_OVOV.conj().transpose(0,2,3,1)
+    t2ab += c0 * eris_ovOV.conj().transpose(0,2,1,3)
     #:t0 += numpy.einsum('ijab,ijab', eris.oovv, c2) * .25
-    t0 += numpy.einsum('iabj,ijab', eris_ovvo, c2aa) * .25
-    t0 -= numpy.einsum('jabi,ijab', eris_ovvo, c2aa) * .25
-    t0 += numpy.einsum('iabj,ijab', eris_OVVO, c2bb) * .25
-    t0 -= numpy.einsum('jabi,ijab', eris_OVVO, c2bb) * .25
-    t0 += numpy.einsum('iabj,ijab', eris_ovVO, c2ab)
+    t0 += numpy.einsum('iajb,ijab', eris_ovov, c2aa) * .25
+    t0 -= numpy.einsum('jaib,ijab', eris_ovov, c2aa) * .25
+    t0 += numpy.einsum('iajb,ijab', eris_OVOV, c2bb) * .25
+    t0 -= numpy.einsum('jaib,ijab', eris_OVOV, c2bb) * .25
+    t0 += numpy.einsum('iajb,ijab', eris_ovOV, c2ab)
+    eris_ovov = eris_ovOV = eris_OVOV = None
 
     #:tmp = einsum('imae,mbej->ijab', c2, eris.ovvo)
     #:tmp = tmp - tmp.transpose(0,1,3,2)
     #:t2 += tmp - tmp.transpose(1,0,2,3)
+    eris_ovvo = _cp(eris.ovvo)
+    eris_ovVO = _cp(eris.ovVO)
+    eris_OVVO = _cp(eris.OVVO)
     ovvo = eris_ovvo - eris_oovv.transpose(0,3,2,1)
     OVVO = eris_OVVO - eris_OOVV.transpose(0,3,2,1)
     t2aa += lib.einsum('imae,jbem->ijab', c2aa, ovvo)
@@ -208,8 +228,7 @@ def contract(myci, civec, eris):
     if nvira > 0 and nocca > 0:
         blksize = max(int(max_memory*1e6/8/(nvira**2*nocca*2)), 2)
         for p0,p1 in lib.prange(0, nvira, blksize):
-            ovvv = _cp(eris.ovvv[:,p0:p1]).reshape(nocca*(p1-p0),-1)
-            ovvv = lib.unpack_tril(ovvv).reshape(nocca,p1-p0,nvira,nvira)
+            ovvv = eris.get_ovvv(slice(None), slice(p0,p1))
             t1a += lib.einsum('mief,mefa->ia', c2aa[:,:,p0:p1], ovvv)
             t2aa[:,:,p0:p1] += lib.einsum('mbae,ie->miba', ovvv, c1a)
             ovvv = None
@@ -217,8 +236,7 @@ def contract(myci, civec, eris):
     if nvirb > 0 and noccb > 0:
         blksize = max(int(max_memory*1e6/8/(nvirb**2*noccb*2)), 2)
         for p0,p1 in lib.prange(0, nvirb, blksize):
-            OVVV = _cp(eris.OVVV[:,p0:p1]).reshape(noccb*(p1-p0),-1)
-            OVVV = lib.unpack_tril(OVVV).reshape(noccb,p1-p0,nvirb,nvirb)
+            OVVV = eris.get_OVVV(slice(None), slice(p0,p1))
             t1b += lib.einsum('MIEF,MEFA->IA', c2bb[:,:,p0:p1], OVVV)
             t2bb[:,:,p0:p1] += lib.einsum('mbae,ie->miba', OVVV, c1b)
             OVVV = None
@@ -226,8 +244,7 @@ def contract(myci, civec, eris):
     if nvirb > 0 and nocca > 0:
         blksize = max(int(max_memory*1e6/8/(nvirb**2*nocca*2)), 2)
         for p0,p1 in lib.prange(0, nvira, blksize):
-            ovVV = _cp(eris.ovVV[:,p0:p1]).reshape(nocca*(p1-p0),-1)
-            ovVV = lib.unpack_tril(ovVV).reshape(nocca,p1-p0,nvirb,nvirb)
+            ovVV = eris.get_ovVV(slice(None), slice(p0,p1))
             t1b += lib.einsum('mIeF,meAF->IA', c2ab[:,:,p0:p1], ovVV)
             t2ab[:,:,p0:p1] += lib.einsum('maBE,IE->mIaB', ovVV, c1b)
             ovVV = None
@@ -235,8 +252,7 @@ def contract(myci, civec, eris):
     if nvira > 0 and noccb > 0:
         blksize = max(int(max_memory*1e6/8/(nvira**2*noccb*2)), 2)
         for p0,p1 in lib.prange(0, nvirb, blksize):
-            OVvv = _cp(eris.OVvv[:,p0:p1]).reshape(noccb*(p1-p0),-1)
-            OVvv = lib.unpack_tril(OVvv).reshape(noccb,p1-p0,nvira,nvira)
+            OVvv = eris.get_OVvv(slice(None), slice(p0,p1))
             t1a += lib.einsum('iMfE,MEaf->ia', c2ab[:,:,:,p0:p1], OVvv)
             t2ab[:,:,:,p0:p1] += lib.einsum('MBae,ie->iMaB', OVvv, c1a)
             OVvv = None
@@ -266,13 +282,13 @@ def contract(myci, civec, eris):
     t2ab -= lib.einsum('iMaB,MJ->iJaB', c2ab, foob)
     t2ab -= lib.einsum('mIaB,mj->jIaB', c2ab, fooa)
 
-    #:tmp = numpy.einsum('ia,jb->ijab', c1, fov)
+    #:tmp = numpy.einsum('ia,bj->ijab', c1, fvo)
     #:tmp = tmp - tmp.transpose(0,1,3,2)
     #:t2 += tmp - tmp.transpose(1,0,2,3)
-    t2aa += numpy.einsum('ia,jb->ijab', c1a, fova)
-    t2bb += numpy.einsum('ia,jb->ijab', c1b, fovb)
-    t2ab += numpy.einsum('ia,jb->ijab', c1a, fovb)
-    t2ab += numpy.einsum('ia,jb->jiba', c1b, fova)
+    t2aa += numpy.einsum('ia,bj->ijab', c1a, fvoa)
+    t2bb += numpy.einsum('ia,bj->ijab', c1b, fvob)
+    t2ab += numpy.einsum('ia,bj->ijab', c1a, fvob)
+    t2ab += numpy.einsum('ia,bj->jiba', c1b, fvoa)
 
     t2aa = t2aa - t2aa.transpose(0,1,3,2)
     t2aa = t2aa - t2aa.transpose(1,0,2,3)
@@ -287,9 +303,9 @@ def contract(myci, civec, eris):
     t2bb += lib.einsum('mnab,minj->ijab', c2bb, eris_OOOO)
     t2ab += lib.einsum('mNaB,miNJ->iJaB', c2ab, eris_ooOO)
 
-    #:t1 += fov * c0
-    t1a += fova * c0
-    t1b += fovb * c0
+    #:t1 += fov.conj() * c0
+    t1a += fova.conj() * c0
+    t1b += fovb.conj() * c0
     #:t0  = numpy.einsum('ia,ia', fov, c1)
     t0 += numpy.einsum('ia,ia', fova, c1a)
     t0 += numpy.einsum('ia,ia', fovb, c1b)
@@ -310,7 +326,7 @@ def amplitudes_to_cisdvec(c0, c1, c2):
     size = (1, nocca*nvira, noccb*nvirb, nocca*noccb*nvira*nvirb,
             len(ooidxa)*len(vvidxa), len(ooidxb)*len(vvidxb))
     loc = numpy.cumsum(size)
-    civec = numpy.empty(loc[-1])
+    civec = numpy.empty(loc[-1], dtype=c2ab.dtype)
     civec[0] = c0
     civec[loc[0]:loc[1]] = c1a.ravel()
     civec[loc[1]:loc[2]] = c1b.ravel()
@@ -339,22 +355,42 @@ def cisdvec_to_amplitudes(civec, nmo, nocc):
     c2bb = _unpack_4fold(civec[loc[4]:loc[5]], noccb, nvirb)
     return c0, (c1a,c1b), (c2aa,c2ab,c2bb)
 
-def to_fcivec(cisdvec, nmo, nocc):
-    from pyscf import fci
+def to_fcivec(cisdvec, norb, nelec, frozen=0):
     from pyscf.ci.gcisd import t2strs
-    norba, norbb = nmo
-    assert(norba == norbb)
-    nocca, noccb = nocc
-    nvira = norba - nocca
-    nvirb = norbb - noccb
+    if isinstance(nelec, (int, numpy.number)):
+        nelecb = nelec//2
+        neleca = nelec - nelecb
+    else:
+        neleca, nelecb = nelec
+
+    frozena_mask = numpy.zeros(norb, dtype=bool)
+    frozenb_mask = numpy.zeros(norb, dtype=bool)
+    if isinstance(frozen, (int, numpy.integer)):
+        nfroza = nfrozb = frozen
+        frozena_mask[:frozen] = True
+        frozenb_mask[:frozen] = True
+    else:
+        nfroza = len(frozen[0])
+        nfrozb = len(frozen[1])
+        frozena_mask[frozen[0]] = True
+        frozenb_mask[frozen[1]] = True
+
+#    if nfroza != nfrozb:
+#        raise NotImplementedError
+    nocca = numpy.count_nonzero(~frozena_mask[:neleca])
+    noccb = numpy.count_nonzero(~frozenb_mask[:nelecb])
+    nmo = nmoa, nmob = norb - nfroza, norb - nfrozb
+    nocc = nocca, noccb
+    nvira, nvirb = nmoa - nocca, nmob - noccb
+
     c0, c1, c2 = cisdvec_to_amplitudes(cisdvec, nmo, nocc)
     c1a, c1b = c1
     c2aa, c2ab, c2bb = c2
-    t1addra, t1signa = cisd.t1strs(norba, nocca)
-    t1addrb, t1signb = cisd.t1strs(norbb, noccb)
+    t1addra, t1signa = cisd.t1strs(nmoa, nocca)
+    t1addrb, t1signb = cisd.t1strs(nmob, noccb)
 
-    na = fci.cistring.num_strings(norba, nocca)
-    nb = fci.cistring.num_strings(norbb, noccb)
+    na = cistring.num_strings(nmoa, nocca)
+    nb = cistring.num_strings(nmob, noccb)
     fcivec = numpy.zeros((na,nb))
     fcivec[0,0] = c0
     fcivec[t1addra,0] = c1a[::-1].T.ravel() * t1signa
@@ -367,28 +403,79 @@ def to_fcivec(cisdvec, nmo, nocc):
         ooidx = numpy.tril_indices(nocca, -1)
         vvidx = numpy.tril_indices(nvira, -1)
         c2aa = c2aa[ooidx][:,vvidx[0],vvidx[1]]
-        t2addra, t2signa = t2strs(norba, nocca)
+        t2addra, t2signa = t2strs(nmoa, nocca)
         fcivec[t2addra,0] = c2aa[::-1].T.ravel() * t2signa
     if noccb > 1 and nvirb > 1:
         ooidx = numpy.tril_indices(noccb, -1)
         vvidx = numpy.tril_indices(nvirb, -1)
         c2bb = c2bb[ooidx][:,vvidx[0],vvidx[1]]
-        t2addrb, t2signb = t2strs(norbb, noccb)
+        t2addrb, t2signb = t2strs(nmob, noccb)
         fcivec[0,t2addrb] = c2bb[::-1].T.ravel() * t2signb
-    return fcivec
 
-def from_fcivec(ci0, nmo, nocc):
-    from pyscf import fci
+    if nfroza == nfrozb == 0:
+        return fcivec
+
+    assert(norb < 63)
+
+    strsa = cistring.gen_strings4orblist(range(norb), neleca)
+    strsb = cistring.gen_strings4orblist(range(norb), nelecb)
+    na = len(strsa)
+    nb = len(strsb)
+    count_a = numpy.zeros(na, dtype=int)
+    count_b = numpy.zeros(nb, dtype=int)
+    parity_a = numpy.zeros(na, dtype=bool)
+    parity_b = numpy.zeros(nb, dtype=bool)
+    core_a_mask = numpy.ones(na, dtype=bool)
+    core_b_mask = numpy.ones(nb, dtype=bool)
+
+    for i in range(norb):
+        if frozena_mask[i]:
+            if i < neleca:
+                core_a_mask &= (strsa & (1<<i)) != 0
+                parity_a ^= (count_a & 1) == 1
+            else:
+                core_a_mask &= (strsa & (1<<i)) == 0
+        else:
+            count_a += (strsa & (1<<i)) != 0
+
+        if frozenb_mask[i]:
+            if i < nelecb:
+                core_b_mask &= (strsb & (1<<i)) != 0
+                parity_b ^= (count_b & 1) == 1
+            else:
+                core_b_mask &= (strsb & (1<<i)) == 0
+        else:
+            count_b += (strsb & (1<<i)) != 0
+
+    sub_strsa = strsa[core_a_mask & (count_a == nocca)]
+    sub_strsb = strsb[core_b_mask & (count_b == noccb)]
+    addrsa = cistring.strs2addr(norb, neleca, sub_strsa)
+    addrsb = cistring.strs2addr(norb, nelecb, sub_strsb)
+    fcivec1 = numpy.zeros((na,nb))
+    fcivec1[addrsa[:,None],addrsb] = fcivec
+    fcivec1[parity_a,:] *= -1
+    fcivec1[:,parity_b] *= -1
+    return fcivec1
+
+def from_fcivec(ci0, norb, nelec, frozen=0):
     from pyscf.ci.gcisd import t2strs
-    norba, norbb = nmo
-    nocca, noccb = nocc
+    if frozen is not 0:
+        raise NotImplementedError
+    if isinstance(nelec, (int, numpy.number)):
+        nelecb = nelec//2
+        neleca = nelec - nelecb
+    else:
+        neleca, nelecb = nelec
+
+    norba = norbb = norb
+    nocc = nocca, noccb = neleca, nelecb
     nvira = norba - nocca
     nvirb = norbb - noccb
     t1addra, t1signa = cisd.t1strs(norba, nocca)
     t1addrb, t1signb = cisd.t1strs(norbb, noccb)
 
-    na = fci.cistring.num_strings(norba, nocca)
-    nb = fci.cistring.num_strings(norbb, noccb)
+    na = cistring.num_strings(norba, nocca)
+    nb = cistring.num_strings(norbb, noccb)
     ci0 = ci0.reshape(na,nb)
     c0 = ci0[0,0]
     c1a = ((ci0[t1addra,0] * t1signa).reshape(nvira,nocca).T)[::-1]
@@ -408,7 +495,15 @@ def from_fcivec(ci0, nmo, nocc):
 
 
 def make_rdm1(myci, civec=None, nmo=None, nocc=None):
-    '''1-particle density matrix
+    r'''
+    One-particle spin density matrices dm1a, dm1b in MO basis (the
+    occupied-virtual blocks due to the orbital response contribution are not
+    included).
+
+    dm1a[p,q] = <q_alpha^\dagger p_alpha>
+    dm1b[p,q] = <q_beta^\dagger p_beta>
+
+    The convention of 1-pdm is based on McWeeney's book, Eq (5.4.20).
     '''
     if civec is None: civec = myci.ci
     if nmo is None: nmo = myci.nmo
@@ -417,7 +512,26 @@ def make_rdm1(myci, civec=None, nmo=None, nocc=None):
     return uccsd_rdm._make_rdm1(myci, d1, with_frozen=True)
 
 def make_rdm2(myci, civec=None, nmo=None, nocc=None):
-    '''2-particle density matrix in chemist's notation
+    r'''
+    Two-particle spin density matrices dm2aa, dm2ab, dm2bb in MO basis
+
+    dm2aa[p,q,r,s] = <q_alpha^\dagger s_alpha^\dagger r_alpha p_alpha>
+    dm2ab[p,q,r,s] = <q_alpha^\dagger s_beta^\dagger r_beta p_alpha>
+    dm2bb[p,q,r,s] = <q_beta^\dagger s_beta^\dagger r_beta p_beta>
+
+    (p,q correspond to one particle and r,s correspond to another particle)
+    Two-particle density matrix should be contracted to integrals with the
+    pattern below to compute energy
+
+    E = numpy.einsum('pqrs,pqrs', eri_aa, dm2_aa)
+    E+= numpy.einsum('pqrs,pqrs', eri_ab, dm2_ab)
+    E+= numpy.einsum('pqrs,rspq', eri_ba, dm2_ab)
+    E+= numpy.einsum('pqrs,pqrs', eri_bb, dm2_bb)
+
+    where eri_aa[p,q,r,s] = (p_alpha q_alpha | r_alpha s_alpha )
+    eri_ab[p,q,r,s] = ( p_alpha q_alpha | r_beta s_beta )
+    eri_ba[p,q,r,s] = ( p_beta q_beta | r_alpha s_alpha )
+    eri_bb[p,q,r,s] = ( p_beta q_beta | r_beta s_beta )
     '''
     if civec is None: civec = myci.ci
     if nmo is None: nmo = myci.nmo
@@ -433,12 +547,14 @@ def _gamma1_intermediates(myci, civec, nmo, nocc):
     c1a, c1b = c1
     c2aa, c2ab, c2bb = c2
 
-    dova = c0 * c1a
-    dovb = c0 * c1b
-    dova += numpy.einsum('jb,ijab->ia', c1a.conj(), c2aa)
-    dova += numpy.einsum('jb,ijab->ia', c1b.conj(), c2ab)
-    dovb += numpy.einsum('jb,ijab->ia', c1b.conj(), c2bb)
-    dovb += numpy.einsum('jb,jiba->ia', c1a.conj(), c2ab)
+    dvoa = c0.conj() * c1a.T
+    dvob = c0.conj() * c1b.T
+    dvoa += numpy.einsum('jb,ijab->ai', c1a.conj(), c2aa)
+    dvoa += numpy.einsum('jb,ijab->ai', c1b.conj(), c2ab)
+    dvob += numpy.einsum('jb,ijab->ai', c1b.conj(), c2bb)
+    dvob += numpy.einsum('jb,jiba->ai', c1a.conj(), c2ab)
+    dova = dvoa.T.conj()
+    dovb = dvob.T.conj()
 
     dooa  =-numpy.einsum('ia,ka->ik', c1a.conj(), c1a)
     doob  =-numpy.einsum('ia,ka->ik', c1b.conj(), c1b)
@@ -447,14 +563,13 @@ def _gamma1_intermediates(myci, civec, nmo, nocc):
     doob -= numpy.einsum('ijab,ikab->jk', c2bb.conj(), c2bb) * .5
     doob -= numpy.einsum('ijab,ikab->jk', c2ab.conj(), c2ab)
 
-    dvva  = numpy.einsum('ia,ic->ca', c1a, c1a.conj())
-    dvvb  = numpy.einsum('ia,ic->ca', c1b, c1b.conj())
-    dvva += numpy.einsum('ijab,ijac->cb', c2aa, c2aa.conj()) * .5
-    dvva += numpy.einsum('ijba,ijca->cb', c2ab, c2ab.conj())
-    dvvb += numpy.einsum('ijba,ijca->cb', c2bb, c2bb.conj()) * .5
-    dvvb += numpy.einsum('ijab,ijac->cb', c2ab, c2ab.conj())
-    return ((dooa, doob), (dova, dovb), (dova.conj().T, dovb.conj().T),
-            (dvva, dvvb))
+    dvva  = numpy.einsum('ia,ic->ac', c1a, c1a.conj())
+    dvvb  = numpy.einsum('ia,ic->ac', c1b, c1b.conj())
+    dvva += numpy.einsum('ijab,ijac->bc', c2aa, c2aa.conj()) * .5
+    dvva += numpy.einsum('ijba,ijca->bc', c2ab, c2ab.conj())
+    dvvb += numpy.einsum('ijba,ijca->bc', c2bb, c2bb.conj()) * .5
+    dvvb += numpy.einsum('ijab,ijac->bc', c2ab, c2ab.conj())
+    return (dooa, doob), (dova, dovb), (dvoa, dvob), (dvva, dvvb)
 
 def _gamma2_intermediates(myci, civec, nmo, nocc):
     nmoa, nmob = nmo
@@ -463,19 +578,19 @@ def _gamma2_intermediates(myci, civec, nmo, nocc):
     c1a, c1b = c1
     c2aa, c2ab, c2bb = c2
 
-    goovv = c0 * c2aa * .5
-    goOvV = c0 * c2ab
-    gOOVV = c0 * c2bb * .5
+    goovv = c0 * c2aa.conj() * .5
+    goOvV = c0 * c2ab.conj()
+    gOOVV = c0 * c2bb.conj() * .5
 
-    govvv = numpy.einsum('ia,ikcd->kadc', c1a.conj(), c2aa) * .5
-    gOvVv = numpy.einsum('ia,ikcd->kadc', c1a.conj(), c2ab)
-    goVvV = numpy.einsum('ia,kidc->kadc', c1b.conj(), c2ab)
-    gOVVV = numpy.einsum('ia,ikcd->kadc', c1b.conj(), c2bb) * .5
+    govvv = numpy.einsum('ia,ikcd->kadc', c1a, c2aa.conj()) * .5
+    gOvVv = numpy.einsum('ia,ikcd->kadc', c1a, c2ab.conj())
+    goVvV = numpy.einsum('ia,kidc->kadc', c1b, c2ab.conj())
+    gOVVV = numpy.einsum('ia,ikcd->kadc', c1b, c2bb.conj()) * .5
 
-    gooov = numpy.einsum('ia,klac->klic', c1a.conj(), c2aa) *-.5
-    goOoV =-numpy.einsum('ia,klac->klic', c1a.conj(), c2ab)
-    gOoOv =-numpy.einsum('ia,lkca->klic', c1b.conj(), c2ab)
-    gOOOV = numpy.einsum('ia,klac->klic', c1b.conj(), c2bb) *-.5
+    gooov = numpy.einsum('ia,klac->klic', c1a, c2aa.conj()) *-.5
+    goOoV =-numpy.einsum('ia,klac->klic', c1a, c2ab.conj())
+    gOoOv =-numpy.einsum('ia,lkca->klic', c1b, c2ab.conj())
+    gOOOV = numpy.einsum('ia,klac->klic', c1b, c2bb.conj()) *-.5
 
     goooo = numpy.einsum('ijab,klab->ijkl', c2aa.conj(), c2aa) * .25
     goOoO = numpy.einsum('ijab,klab->ijkl', c2ab.conj(), c2ab)
@@ -544,14 +659,111 @@ def _gamma2_intermediates(myci, civec, nmo, nocc):
             (dovvv, dovVV, dOVvv, dOVVV),
             (dooov, dooOV, dOOov, dOOOV))
 
+def trans_rdm1(myci, cibra, ciket, nmo=None, nocc=None):
+    r'''
+    One-particle spin density matrices dm1a, dm1b in MO basis (the
+    occupied-virtual blocks due to the orbital response contribution are not
+    included).
+
+    dm1a[p,q] = <q_alpha^\dagger p_alpha>
+    dm1b[p,q] = <q_beta^\dagger p_beta>
+
+    The convention of 1-pdm is based on McWeeney's book, Eq (5.4.20).
+    '''
+    if nmo is None: nmo = myci.nmo
+    if nocc is None: nocc = myci.nocc
+    c0bra, c1bra, c2bra = myci.cisdvec_to_amplitudes(cibra, nmo, nocc)
+    c0ket, c1ket, c2ket = myci.cisdvec_to_amplitudes(ciket, nmo, nocc)
+
+    nmoa, nmob = nmo
+    nocca, noccb = nocc
+    bra1a, bra1b = c1bra
+    bra2aa, bra2ab, bra2bb = c2bra
+    ket1a, ket1b = c1ket
+    ket2aa, ket2ab, ket2bb = c2ket
+
+    dvoa = c0bra.conj() * ket1a.T
+    dvob = c0bra.conj() * ket1b.T
+    dvoa += numpy.einsum('jb,ijab->ai', bra1a.conj(), ket2aa)
+    dvoa += numpy.einsum('jb,ijab->ai', bra1b.conj(), ket2ab)
+    dvob += numpy.einsum('jb,ijab->ai', bra1b.conj(), ket2bb)
+    dvob += numpy.einsum('jb,jiba->ai', bra1a.conj(), ket2ab)
+
+    dova = c0ket * bra1a.conj()
+    dovb = c0ket * bra1b.conj()
+    dova += numpy.einsum('jb,ijab->ia', ket1a.conj(), bra2aa)
+    dova += numpy.einsum('jb,ijab->ia', ket1b.conj(), bra2ab)
+    dovb += numpy.einsum('jb,ijab->ia', ket1b.conj(), bra2bb)
+    dovb += numpy.einsum('jb,jiba->ia', ket1a.conj(), bra2ab)
+
+    dooa  =-numpy.einsum('ia,ka->ik', bra1a.conj(), ket1a)
+    doob  =-numpy.einsum('ia,ka->ik', bra1b.conj(), ket1b)
+    dooa -= numpy.einsum('ijab,ikab->jk', bra2aa.conj(), ket2aa) * .5
+    dooa -= numpy.einsum('jiab,kiab->jk', bra2ab.conj(), ket2ab)
+    doob -= numpy.einsum('ijab,ikab->jk', bra2bb.conj(), ket2bb) * .5
+    doob -= numpy.einsum('ijab,ikab->jk', bra2ab.conj(), ket2ab)
+
+    dvva  = numpy.einsum('ia,ic->ac', ket1a, bra1a.conj())
+    dvvb  = numpy.einsum('ia,ic->ac', ket1b, bra1b.conj())
+    dvva += numpy.einsum('ijab,ijac->bc', ket2aa, bra2aa.conj()) * .5
+    dvva += numpy.einsum('ijba,ijca->bc', ket2ab, bra2ab.conj())
+    dvvb += numpy.einsum('ijba,ijca->bc', ket2bb, bra2bb.conj()) * .5
+    dvvb += numpy.einsum('ijab,ijac->bc', ket2ab, bra2ab.conj())
+
+    dm1a = numpy.empty((nmoa,nmoa), dtype=dooa.dtype)
+    dm1a[:nocca,:nocca] = dooa
+    dm1a[:nocca,nocca:] = dova
+    dm1a[nocca:,:nocca] = dvoa
+    dm1a[nocca:,nocca:] = dvva
+    norm = numpy.dot(cibra, ciket)
+    dm1a[numpy.diag_indices(nocca)] += norm
+
+    dm1b = numpy.empty((nmob,nmob), dtype=dooa.dtype)
+    dm1b[:noccb,:noccb] = doob
+    dm1b[:noccb,noccb:] = dovb
+    dm1b[noccb:,:noccb] = dvob
+    dm1b[noccb:,noccb:] = dvvb
+    dm1b[numpy.diag_indices(noccb)] += norm
+
+    if not (myci.frozen is 0 or myci.frozen is None):
+        nmoa = myci.mo_occ[0].size
+        nmob = myci.mo_occ[1].size
+        nocca = numpy.count_nonzero(myci.mo_occ[0] > 0)
+        noccb = numpy.count_nonzero(myci.mo_occ[1] > 0)
+        rdm1a = numpy.zeros((nmoa,nmoa), dtype=dm1a.dtype)
+        rdm1b = numpy.zeros((nmob,nmob), dtype=dm1b.dtype)
+        rdm1a[numpy.diag_indices(nocca)] = norm
+        rdm1b[numpy.diag_indices(noccb)] = norm
+        moidx = myci.get_frozen_mask()
+        moidxa = numpy.where(moidx[0])[0]
+        moidxb = numpy.where(moidx[1])[0]
+        rdm1a[moidxa[:,None],moidxa] = dm1a
+        rdm1b[moidxb[:,None],moidxb] = dm1b
+        dm1a = rdm1a
+        dm1b = rdm1b
+    return dm1a, dm1b
+
 
 class UCISD(cisd.CISD):
+
+    def vector_size(self):
+        norba, norbb = self.nmo
+        nocca, noccb = self.nocc
+        nvira = norba - nocca
+        nvirb = norbb - noccb
+        nooa = nocca * (nocca-1) // 2
+        nvva = nvira * (nvira-1) // 2
+        noob = noccb * (noccb-1) // 2
+        nvvb = nvirb * (nvirb-1) // 2
+        size = (1 + nocca*nvira + noccb*nvirb +
+                nocca*noccb*nvira*nvirb + nooa*nvva + noob*nvvb)
+        return size
 
     get_nocc = uccsd.get_nocc
     get_nmo = uccsd.get_nmo
     get_frozen_mask = uccsd.get_frozen_mask
 
-    def get_init_guess(self, eris=None):
+    def get_init_guess(self, eris=None, nroots=1, diag=None):
         if eris is None: eris = self.ao2mo(self.mo_coeff)
         nocca = eris.nocca
         noccb = eris.noccb
@@ -559,33 +771,54 @@ class UCISD(cisd.CISD):
         mo_eb = eris.fockb.diagonal()
         eia_a = mo_ea[:nocca,None] - mo_ea[None,nocca:]
         eia_b = mo_eb[:noccb,None] - mo_eb[None,noccb:]
-        t1a = eris.focka[:nocca,nocca:] / eia_a
-        t1b = eris.fockb[:noccb,noccb:] / eia_b
+        t1a = eris.focka[:nocca,nocca:].conj() / eia_a
+        t1b = eris.fockb[:noccb,noccb:].conj() / eia_b
 
-        eris_ovvo = _cp(eris.ovvo)
-        eris_ovVO = _cp(eris.ovVO)
-        eris_OVVO = _cp(eris.OVVO)
-        t2aa = eris_ovvo.transpose(0,3,1,2) - eris_ovvo.transpose(0,3,2,1)
-        t2bb = eris_OVVO.transpose(0,3,1,2) - eris_OVVO.transpose(0,3,2,1)
-        t2ab = eris_ovVO.transpose(0,3,1,2).copy()
+        eris_ovov = _cp(eris.ovov)
+        eris_ovOV = _cp(eris.ovOV)
+        eris_OVOV = _cp(eris.OVOV)
+        t2aa = eris_ovov.transpose(0,2,1,3) - eris_ovov.transpose(0,2,3,1)
+        t2bb = eris_OVOV.transpose(0,2,1,3) - eris_OVOV.transpose(0,2,3,1)
+        t2ab = eris_ovOV.transpose(0,2,1,3).copy()
+        t2aa = t2aa.conj()
+        t2ab = t2ab.conj()
+        t2bb = t2bb.conj()
         t2aa /= lib.direct_sum('ia+jb->ijab', eia_a, eia_a)
         t2ab /= lib.direct_sum('ia+jb->ijab', eia_a, eia_b)
         t2bb /= lib.direct_sum('ia+jb->ijab', eia_b, eia_b)
 
-        emp2  = numpy.einsum('ia,ia', eris.focka[:nocca,nocca:], t1a)
-        emp2 += numpy.einsum('ia,ia', eris.fockb[:noccb,noccb:], t1b)
-        emp2 += numpy.einsum('iabj,ijab', eris_ovvo, t2aa) * .25
-        emp2 -= numpy.einsum('jabi,ijab', eris_ovvo, t2aa) * .25
-        emp2 += numpy.einsum('iabj,ijab', eris_OVVO, t2bb) * .25
-        emp2 -= numpy.einsum('jabi,ijab', eris_OVVO, t2bb) * .25
-        emp2 += numpy.einsum('iabj,ijab', eris_ovVO, t2ab)
-        self.emp2 = emp2
+        emp2  = numpy.einsum('iajb,ijab', eris_ovov, t2aa) * .25
+        emp2 -= numpy.einsum('jaib,ijab', eris_ovov, t2aa) * .25
+        emp2 += numpy.einsum('iajb,ijab', eris_OVOV, t2bb) * .25
+        emp2 -= numpy.einsum('jaib,ijab', eris_OVOV, t2bb) * .25
+        emp2 += numpy.einsum('iajb,ijab', eris_ovOV, t2ab)
+        self.emp2 = emp2.real
         logger.info(self, 'Init t2, MP2 energy = %.15g', self.emp2)
 
         if abs(emp2) < 1e-3 and (abs(t1a).sum()+abs(t1b).sum()) < 1e-3:
             t1a = 1e-1 / eia_a
             t1b = 1e-1 / eia_b
-        return self.emp2, amplitudes_to_cisdvec(1, (t1a,t1b), (t2aa,t2ab,t2bb))
+
+        ci_guess = amplitudes_to_cisdvec(1, (t1a,t1b), (t2aa,t2ab,t2bb))
+
+        if nroots > 1:
+            civec_size = ci_guess.size
+            ci1_size = t1a.size + t1b.size
+            dtype = ci_guess.dtype
+            nroots = min(ci1_size+1, nroots)
+
+            if diag is None:
+                idx = range(1, nroots)
+            else:
+                idx = diag[:ci1_size+1].argsort()[1:nroots]  # exclude HF determinant
+
+            ci_guess = [ci_guess]
+            for i in idx:
+                g = numpy.zeros(civec_size, dtype)
+                g[i] = 1.0
+                ci_guess.append(g)
+
+        return self.emp2, ci_guess
 
     contract = contract
     make_diagonal = make_diagonal
@@ -625,10 +858,11 @@ class UCISD(cisd.CISD):
 
     make_rdm1 = make_rdm1
     make_rdm2 = make_rdm2
+    trans_rdm1 = trans_rdm1
 
     def nuc_grad_method(self):
-        from pyscf.ci import ucisd_grad
-        return ucisd_grad.Gradients(self)
+        from pyscf.grad import ucisd
+        return ucisd.Gradients(self)
 
 CISD = UCISD
 
@@ -674,8 +908,8 @@ if __name__ == '__main__':
           numpy.einsum('ijkl,ijkl', eri_bb, rdm2[2]) * .5)
     print(ecisd + mf.e_tot - mol.energy_nuc() - e2)   # = 0
 
-    print(abs(rdm1[0] - (numpy.einsum('ijkk->ij', rdm2[0]) +
-                         numpy.einsum('ijkk->ij', rdm2[1]))/(mol.nelectron-1)).sum())
-    print(abs(rdm1[1] - (numpy.einsum('ijkk->ij', rdm2[2]) +
-                         numpy.einsum('kkij->ij', rdm2[1]))/(mol.nelectron-1)).sum())
+    print(abs(rdm1[0] - (numpy.einsum('ijkk->ji', rdm2[0]) +
+                         numpy.einsum('ijkk->ji', rdm2[1]))/(mol.nelectron-1)).sum())
+    print(abs(rdm1[1] - (numpy.einsum('ijkk->ji', rdm2[2]) +
+                         numpy.einsum('kkij->ji', rdm2[1]))/(mol.nelectron-1)).sum())
 

@@ -6,9 +6,9 @@
   - 4-component relativistic Dirac-Hartree-Fock
   - Density fitting HF
   - Second order SCF
-  - General JK contraction function
+  - General J/K build function
   - DIIS, EDIIS, ADIIS and second order solver
-  - SCF wavefunction stability analysis
+  - SCF wavefunction (RHF, UHF, GHF) stability analysis
   - Generalized Hartree-Fock (GHF)
 
 
@@ -19,14 +19,31 @@
   - Density fitting DFT
   - General XC functional evaluator (for Libxc or XcFun)
   - General AO evaluator
+  - VV10 NLC functional for finite size systems
+  - range-separated hybrid features for RKS and UKS, including
+    > Analytical nuclear gradients
+    > Second order SCF
+    > Hessian and frequency
+    > TDDFT
+    > TDDFT nuclear gradients
+    > NMR
 
 
-* TDDFT
+* TDSCF/TDDFT
 
-  - TDHF (and density-fitting TDHF)
-  - TDDFT (and density-fitting TDDFT)
-  - TDHF nuclear gradients
-  - TDDFT nuclear gradients
+  - TDA (and density-fitting TDA) for RHF, UHF, RKS and UKS methods
+  - TDHF (and density-fitting TDHF) for RHF and UHF methods
+  - TDDFT (and density-fitting TDDFT) for RKS and UKS methods
+  - TDA nuclear gradients for RHF, UHF, RKS and UKS methods
+  - TDHF nuclear gradients for RHF and UHF methods
+  - TDDFT nuclear gradients for RKS and UKS methods
+  - Natural transition orbital analysis
+  - direct-RPA (no exchange, aka TDH)
+  - direct-TDA (TDA without exchange)
+
+
+* GW methods
+  - G0W0 approximation
 
 
 * General CASCI/CASSCF solver (up to ~3000 basis)
@@ -34,71 +51,81 @@
   - State-average CASCI/CASSCF
   - State-specific CASCI/CASSCF for excited states
   - Multiple roots CASCI
-  - Support DMRG as plugin CI solver to do DMRG-CASSCF
-  - Support FCIQMC as plugin CI solver to do FCIQMC-CASSCF
-  - UHF-based UCASSCF
+  - Support DMRG as plugin FCI solver to do DMRG-CASSCF
+  - Support FCIQMC as plugin FCI solver to do FCIQMC-CASSCF
+  - Support Selected CI algorithm as plugin FCI solver to do SHCI-CASSCF
+  - UCASSCF
   - Density-fitting CASSCF
   - DMET-CAS and AVAS active space constructor
+  - CASCI and CASSCF analytical nuclear gradients
 
 
 * MP2 (up to ~200 occupied, ~2000 virtual orbitals)
 
-  - Canonical MP2
-  - Density-fitting MP2
-  - MP2-F12
+  - Canonical RMP2, UMP2, GMP2
+  - Density-fitting RMP2
+  - RMP2, UMP2 and GMP2 1-particle and 2-particle density matrices
+  - RMP2 and UMP2 nuclear gradients
 
 
 * CCSD (up to ~100 occupied, ~1500 virtual orbitals)
 
   - canonical RCCSD, UCCSD
   - canonical RCCSD, UCCSD lambda solver
-  - RCCSD and UCCSD 1-particle and 2-particle density matrices
-  - CCSD gradients
-  - EOM-IP/EA/EE-CCSD
+  - RCCSD, UCCSD and GCCSD 1-particle and 2-particle density matrices
+  - RCCSD and UCCSD nuclear gradients
+  - EOM-IP/EA/EE-RCCSD and EOM-IP/EA/EE-UCCSD
   - RCC2
-  - Density-fitting CCSD
+  - Density-fitting RCCSD
 
 
 * CCSD(T)
 
-  - Canonical RCCSD(T) and UCCSD(T)
-  - Canonical RCCSD(T) 1- and 2-particle density matrices
-  - Canonical RCCSD(T) gradients
+  - RCCSD(T) and UCCSD(T)
+  - RCCSD(T), UCCSD(T) and GCCSD(T) 1- and 2-particle density matrices
+  - RCCSD(T) and UCCSD(T) analytical nuclear gradients
 
 
 * CI
 
-  - RCISD and UCISD
-  - RCISD and UCISD 1, 2-particle density matrices
+  - RCISD, UCISD and GCISD
+  - RCISD, UCISD and GCISD 1, 2-particle density matrices
   - Selected-CI
   - Selected-CI 1, 2-particle density matrices
+  - RCISD, UCISD and GCISD 1-particle transition density matrices
 
 
 * Full CI
 
-  - Direct-CI solver for spin degenerated Hamiltonian
-  - Direct-CI solver for spin non-degenerated Hamiltonian
+  - Direct-CI solver for spin degenerated Hamiltonian (RHF-FCI)
+  - Direct-CI solver for spin non-degenerated Hamiltonian (UHF-FCI)
   - 1, and 2-particle transition density matrices
   - 1, 2, 3, and 4-particle density matrices
   - CI wavefunction overlap
 
 
-* Nuclear Gradients
+* Analytical Nuclear Gradients
 
-  - Non-relativistic HF gradients
-  - 4-component DHF gradients
-  - Non-relativistic DFT gradients
-  - Non-relativistic CISD gradients
-  - Non-relativistic CCSD and CCSD(T) gradients
-  - Non-relativistic TDHF and TDDFT gradients
+  - Non-relativistic HF nuclear gradients
+  - 4-component DHF nuclear gradients
+  - Non-relativistic DFT nuclear gradients
+  - Non-relativistic CISD nuclear gradients
+  - Non-relativistic CCSD and CCSD(T) nuclear gradients
+  - Non-relativistic CASCI and CASSCF nuclear gradients
+  - Non-relativistic TDA, TDHF and TDDFT nuclear gradients
   - Non-relativistic nuclear gradients with SF-X2C-1e correction
+  - ECP nuclear gradients
+  - nuclear gradients for solvent model ddCOSMO
+  - Frozen orbitals for MP2, CISD, CCSD, CCSD(T), CASCI, CASSCF nuclear gradients
 
 
 * Nuclear Hessian
 
-  - Non-relativistic HF hessian
-  - Non-relativistic DFT hessian
+  - Non-relativistic HF nuclear hessian
+  - Non-relativistic DFT nuclear hessian
   - Non-relativistic nuclear hessian with SF-X2C-1e correction
+  - ECP nuclear hessian
+
 
 * Properties
 
@@ -115,29 +142,42 @@
 
 * MRPT
 
-  - Strongly contracted NEVPT2
+  - Strongly contracted NEVPT2 (SC-NEVPT2)
   - DMRG-NEVPT2
   - IC-MPS-PT2
 
 
 * Extended systems with periodic boundary condition
 
-  - gamma point RHF, UHF, RKS, UKS
+  - gamma point RHF, ROHF, UHF, RKS, ROKS, UKS
   - gamma point TDDFT, MP2, CCSD
-  - PBC RHF, UHF, RKS, UKS with k-point sampling
-  - PBC RCCSD and UCCSD with k-point sampling
-  - PBC k-point EOM-IP/EA-CCSD
+  - RHF, ROHF, UHF, GHF, RKS, ROKS, UKS with k-point sampling
+  - Restricted MP2 with k-point sampling
+  - KRCCSD (RCCSD with k-point sampling)
+  - KUCCSD
+  - KGCCSD (Generalized CCSD with k-point sampling)
+  - k-point GCCSD(T) and RCCSD(T)
+  - k-point EOM-IP/EA-CCSD
   - PBC AO integrals
   - PBC MO integral transformation
-  - PBC density fitting
-  - Smearing for mean-field calculation
+  - PBC density fitting and mixed-density fitting methods
+  - Smearing for mean-field methods
   - Low-dimensional (0D, 1D, 2D) PBC systems
-  - (restricted and unrestricted) TDHF and TDDFT with k-point sampling
+  - (restricted and unrestricted) TDA, TDHF and TDDFT with k-point sampling
+  - Multigrid DFT
+
+
+* Relativistic effects
+
+  - 4-component HF with Dirac-Coulomb Hamiltonian (DHF)
+  - 4-component DHF with Gaunt and Breit corrections
+  - 2-component X2C HF
+  - 4-component and 2-component Kohn-Sham DFT (LDA only)
 
 
 * AO integrals
 
-  - Interface to call Libcint library
+  - Interface to access all AO integrals of Libcint library
   - 1-electron real-GTO and spinor-GTO integrals
   - 2-electron real-GTO and spinor-GTO integrals
   - 3-center 1-electron real-GTO and spinor-GTO integrals
@@ -154,21 +194,25 @@
     Libcint library
   - Support for 4-index integral transformation with 4 different orbitals
   - PBC 2-electron MO integrals
+  - Integral transformation for (4-component and 2-compoent relativistic) spinor
+    integrals
 
 
 * Localizer
 
   - Boys
   - Edmiston
-  - Meta-Lowdin
-  - Natural atomic orbital (NAO)
-  - Intrinsic atomic orbital (IAO)
-  - Pipek-Mezey
+  - Meta-Lowdin for both finite size and PBC systems
+  - Natural atomic orbital (NAO) for both finite size and PBC systems
+  - Intrinsic atomic orbital (IAO) for both finite size and PBC systems
+  - Pipek-Mezey for both finite size and PBC systems
+  - Intrinsic bond orbital (IBO) for both finite size and PBC systems
 
 
 * Geometry optimization
 
-  - HF, DFT, RCCSD, RCISD with pyberny geometry optimizer
+  - HF, DFT, CCSD, CCSD(T), CISD, CASCI, CASSCF and TDSCF/TDDFT with pyberny
+    geometry optimizer
 
 
 * D2h symmetry and linear molecule symmetry
@@ -180,9 +224,18 @@
   - Function to symmetrize given orbital space
 
 
+* Solvent model
+  - ddCOSMO
+  - ddPCM
+  - ddCOSMO analytical nuclear gradients
+
+
 * Tools
 
-  - fcidump
-  - molden
-  - cubegen
+  - fcidump writer
+  - molden writer and reader
+  - cubegen writer
   - Molpro XML reader
+  - (GAMESS-format) wfn writer
+  - Vasp CHGCAR-format writer
+

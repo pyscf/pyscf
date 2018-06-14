@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -9,13 +22,15 @@ import copy
 import numpy
 from pyscf import lib
 from pyscf import gto
-from pyscf import dft
 from pyscf.lib import logger
 from pyscf.pbc import tools
 from pyscf.pbc.gto import pseudo, estimate_ke_cutoff, error_for_ke_cutoff
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import fft_ao2mo
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point
+from pyscf import __config__
+
+KE_SCALING = getattr(__config__, 'pbc_df_aft_ke_cutoff_scaling', 0.75)
 
 
 def get_nuc(mydf, kpts=None):
@@ -36,8 +51,12 @@ def get_nuc(mydf, kpts=None):
     vneG = rhoG * coulG
     vneR = tools.ifft(vneG, mydf.mesh).real
 
-    vne = [lib.dot(aoR.T.conj()*vneR, aoR)
-           for k, aoR in mydf.aoR_loop(mesh, kpts_lst)]
+    vne = [0] * len(kpts_lst)
+    for ao_ks_etc, p0, p1 in mydf.aoR_loop(mydf.grids, kpts_lst):
+        ao_ks = ao_ks_etc[0]
+        for k, ao in enumerate(ao_ks):
+            vne[k] += lib.dot(ao.T.conj()*vneR[p0:p1], ao)
+        ao = ao_ks = None
 
     if kpts is None or numpy.shape(kpts) == (3,):
         vne = vne[0]
@@ -64,8 +83,12 @@ def get_pp(mydf, kpts=None):
 
     # vpploc evaluated in real-space
     vpplocR = tools.ifft(vpplocG, mesh).real
-    vpp = [lib.dot(aoR.T.conj()*vpplocR, aoR)
-           for k, aoR in mydf.aoR_loop(mesh, kpts_lst)]
+    vpp = [0] * len(kpts_lst)
+    for ao_ks_etc, p0, p1 in mydf.aoR_loop(mydf.grids, kpts_lst):
+        ao_ks = ao_ks_etc[0]
+        for k, ao in enumerate(ao_ks):
+            vpp[k] += lib.dot(ao.T.conj()*vpplocR[p0:p1], ao)
+        ao = ao_ks = None
 
     # vppnonloc evaluated in reciprocal space
     fakemol = gto.Mole()
@@ -97,7 +120,7 @@ def get_pp(mydf, kpts=None):
                     fakemol._bas[0,gto.ANG_OF] = l
                     fakemol._env[ptr+3] = .5*rl**2
                     fakemol._env[ptr+4] = rl**(l+1.5)*numpy.pi**1.25
-                    pYlm_part = dft.numint.eval_ao(fakemol, Gk, deriv=0)
+                    pYlm_part = fakemol.eval_gto('GTOval', Gk)
 
                     p0, p1 = p1, p1+nl*(l*2+1)
                     # pYlm is real, SI[ia] is complex
@@ -139,33 +162,37 @@ def get_pp(mydf, kpts=None):
 class FFTDF(lib.StreamObject):
     '''Density expansion on plane waves
     '''
-    def __init__(self, cell, kpts=numpy.zeros((1,3)), low_dim_ft_type=None):
+    def __init__(self, cell, kpts=numpy.zeros((1,3))):
+        from pyscf.pbc.dft import gen_grid
         from pyscf.pbc.dft import numint
         self.cell = cell
         self.stdout = cell.stdout
         self.verbose = cell.verbose
         self.max_memory = cell.max_memory
-        self.low_dim_ft_type = low_dim_ft_type
-        if low_dim_ft_type is not None:
-            logger.warn(self, 'Setting low_dim_ft_type inside cell class.  Change me in '
-                              'future implementation \n')
-            cell.low_dim_ft_type = low_dim_ft_type
+        self.low_dim_ft_type = cell.low_dim_ft_type
 
         self.kpts = kpts
-        self.mesh = cell.mesh
+        self.grids = gen_grid.UniformGrids(cell)
 
-        self.blockdim = 240 # to mimic molecular DF object
-        self.non0tab = None
+        # to mimic molecular DF object
+        self.blockdim = getattr(__config__, 'pbc_df_df_DF_blockdim', 240)
 
 # Not input options
         self.exxdiv = None  # to mimic KRHF/KUHF object in function get_coulG
-        self._numint = numint._KNumInt()
+        self._numint = numint.KNumInt()
         self._keys = set(self.__dict__.keys())
+
+    @property
+    def mesh(self):
+        return self.grids.mesh
+    @mesh.setter
+    def mesh(self, mesh):
+        self.grids.mesh = mesh
 
     def dump_flags(self):
         logger.info(self, '\n')
         logger.info(self, '******** %s flags ********', self.__class__)
-        logger.info(self, 'mesh = %s', self.mesh)
+        logger.info(self, 'mesh = %s (%d PWs)', self.mesh, numpy.prod(self.mesh))
         logger.info(self, 'len(kpts) = %d', len(self.kpts))
         logger.debug1(self, '    kpts = %s', self.kpts)
         return self
@@ -174,11 +201,11 @@ class FFTDF(lib.StreamObject):
         lib.StreamObject.check_sanity(self)
         cell = self.cell
         if cell.dimension < 2:
-            raise RuntimeError('FFTDF method does not support low-dimension '
+            raise RuntimeError('FFTDF method does not support 0D/1D low-dimension '
                                'PBC system.  DF, MDF or AFTDF methods should '
                                'be used.\nSee also examples/pbc/31-low_dimensional_pbc.py')
         if cell.dimension == 2 and self.low_dim_ft_type is None:
-            raise RuntimeError('FFTDF method only supports low_dim_ft_type of None '
+            raise RuntimeError('FFTDF method does not support low_dim_ft_type of None '
                                'for 2D systems.  Supported types include \'analytic_2d_1\'. '
                                '\nSee also examples/pbc/32-graphene.py')
 
@@ -195,7 +222,7 @@ class FFTDF(lib.StreamObject):
         else:
             ke_cutoff = numpy.min(cell.ke_cutoff)
         ke_guess = estimate_ke_cutoff(cell, cell.precision)
-        if ke_cutoff < ke_guess*.7:
+        if ke_cutoff < ke_guess * KE_SCALING:
             mesh_guess = tools.cutoff_to_mesh(cell.lattice_vectors(), ke_guess)
             logger.warn(self, 'ke_cutoff/mesh (%g / %s) is not enough for FFTDF '
                         'to get integral accuracy %g.\nCoulomb integral error '
@@ -204,8 +231,18 @@ class FFTDF(lib.StreamObject):
                         error_for_ke_cutoff(cell, ke_cutoff), ke_guess, mesh_guess)
         return self
 
-    def aoR_loop(self, mesh=None, kpts=None, kpts_band=None):
-        cell = self.cell
+    def aoR_loop(self, grids=None, kpts=None, deriv=0):
+        if grids is None:
+            grids = self.grids
+            cell = self.cell
+        else:
+            cell = grids.cell
+        if grids.non0tab is None:
+            grids.build(with_non0tab=True)
+
+        if kpts is None: kpts = self.kpts
+        kpts = numpy.asarray(kpts)
+
         if cell.dimension < 2:
             raise RuntimeError('FFTDF method does not support low-dimension '
                                'PBC system.  DF, MDF or AFTDF methods should '
@@ -215,32 +252,15 @@ class FFTDF(lib.StreamObject):
                                'for 2D systems.  Supported types include \'analytic_2d_1\'. '
                                '\nSee also examples/pbc/32-graphene.py')
 
-        if kpts is None: kpts = self.kpts
-        kpts = numpy.asarray(kpts)
-
-        if mesh is None:
-            mesh = numpy.asarray(self.mesh)
-        else:
-            mesh = numpy.asarray(mesh)
-            if any(mesh != self.mesh):
-                self.non0tab = None
-            self.mesh = mesh
-
+        max_memory = max(2000, self.max_memory-lib.current_memory()[0])
         ni = self._numint
-        coords = cell.gen_uniform_grids(mesh)
-        if self.non0tab is None:
-            self.non0tab = ni.make_mask(cell, coords)
-        if kpts_band is None:
-            aoR = ni.eval_ao(cell, coords, kpts, non0tab=self.non0tab)
-            for k in range(len(kpts)):
-                yield k, aoR[k]
-        else:
-            aoR = ni.eval_ao(cell, coords, kpts_band, non0tab=self.non0tab)
-            if kpts_band.ndim == 1:
-                yield 0, aoR
-            else:
-                for k in range(len(kpts_band)):
-                    yield k, aoR[k]
+        nao = cell.nao_nr()
+        p1 = 0
+        for ao_k1_etc in ni.block_loop(cell, grids, nao, deriv, kpts,
+                                       max_memory=max_memory):
+            coords = ao_k1_etc[4]
+            p0, p1 = p1, p1 + coords.shape[0]
+            yield ao_k1_etc, p0, p1
 
     get_pp = get_pp
     get_nuc = get_nuc
@@ -317,4 +337,7 @@ if __name__ == '__main__':
     k = numpy.ones(3)*.25
     df = FFTDF(cell)
     v1 = get_pp(df, k)
+    print(lib.finger(v1) - (1.8428463642697195-0.10478381725330854j))
+    v1 = get_nuc(df, k)
+    print(lib.finger(v1) - (2.3454744614944714-0.12528407127454744j))
 

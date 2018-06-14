@@ -1,3 +1,17 @@
+#!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -9,9 +23,12 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.symm import basis
 from pyscf.symm import param
+from pyscf import __config__
 
 
-def label_orb_symm(mol, irrep_name, symm_orb, mo, s=None, check=True, tol=1e-9):
+def label_orb_symm(mol, irrep_name, symm_orb, mo, s=None,
+                   check=getattr(__config__, 'symm_addons_label_orb_symm_check', True),
+                   tol=getattr(__config__, 'symm_addons_label_orb_symm_tol', 1e-9)):
     '''Label the symmetry of given orbitals
 
     irrep_name can be either the symbol or the ID of the irreducible
@@ -79,7 +96,8 @@ def label_orb_symm(mol, irrep_name, symm_orb, mo, s=None, check=True, tol=1e-9):
                 logger.debug(mol, 'norm = %s', largest_norm[orbidx])
     return orbsym
 
-def symmetrize_orb(mol, mo, orbsym=None, s=None, check=False):
+def symmetrize_orb(mol, mo, orbsym=None, s=None,
+                   check=getattr(__config__, 'symm_addons_symmetrize_orb_check', False)):
     '''Symmetrize the given orbitals.
 
     This function is different to the :func:`symmetrize_space`:  In this
@@ -139,7 +157,8 @@ def symmetrize_orb(mol, mo, orbsym=None, s=None, check=False):
         mo1[:,idx] = numpy.dot(csym, sc)
     return mo1
 
-def symmetrize_space(mol, mo, s=None, check=True):
+def symmetrize_space(mol, mo, s=None,
+                     check=getattr(__config__, 'symm_addons_symmetrize_space_check', True)):
     '''Symmetrize the given orbital space.
 
     This function is different to the :func:`symmetrize_orb`:  In this function,
@@ -198,9 +217,9 @@ def symmetrize_space(mol, mo, s=None, check=True):
             mo1.append(numpy.dot(csym, u[:,abs(1-e) < 1e-6]))
     mo1 = numpy.hstack(mo1)
     if mo1.shape[1] != nmo:
-        raise ValueError('The input orbital space is not symmetrized.\n It is '
-                         'probably because the input mol and orbitals are of '
-                         'different orientation.')
+        raise ValueError('The input orbital space is not symmetrized.\n One '
+                         'possible reason is that the input mol and orbitals '
+                         'are of different orientation.')
     snorm = numpy.linalg.norm(reduce(numpy.dot, (mo1.T, s, mo1)) - numpy.eye(nmo))
     if check and snorm > 1e-6:
         raise ValueError('Orbitals are not orthogonalized')
@@ -209,7 +228,7 @@ def symmetrize_space(mol, mo, s=None, check=True):
 
 def std_symb(gpname):
     '''std_symb('d2h') returns D2h; std_symb('D2H') returns D2h'''
-    return gpname[0].upper() + gpname[1:].lower()
+    return str(gpname[0].upper() + gpname[1:].lower())
 
 def irrep_name2id(gpname, symb):
     '''Convert the irrep symbol to internal irrep ID

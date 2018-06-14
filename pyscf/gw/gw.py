@@ -1,333 +1,365 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
 #
-# Author: Timothy Berkelbach 
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Authors: Timothy Berkelbach <tim.berkelbach@gmail.com>
+#          Qiming Sun <osirpt.sun@gmail.com>
 #
 
 '''
-Spin-orbital G0W0
+G0W0 approximation
 '''
 
+import time
+import tempfile
+import numpy
 import numpy as np
-import scipy.linalg
+import h5py
 from scipy.optimize import newton
 
+from pyscf import lib
 from pyscf.lib import logger
-import pyscf.ao2mo
+from pyscf import ao2mo
+from pyscf import dft
+from pyscf.mp.mp2 import get_nocc, get_nmo, get_frozen_mask
+from pyscf import __config__
 
+einsum = lib.einsum
 
-def kernel(gw, so_energy, so_coeff, verbose=logger.NOTE):
-    '''Get the GW-corrected spatial orbital energies.
+def kernel(gw, mo_energy, mo_coeff, td_e, td_xy, eris=None,
+           orbs=None, verbose=logger.NOTE):
+    '''GW-corrected quasiparticle orbital energies
 
-    Note: Works in spin-orbitals but returns energies for spatial orbitals.
-
-    Args:
-        gw : instance of :class:`GW`
-        so_energy : (nso,) ndarray
-        so_coeff : (nso,nso) ndarray
-        
     Returns:
-        egw : (nso/2,) ndarray
-            The GW-corrected spatial orbital energies.
+        A list :  converged, mo_energy, mo_coeff
     '''
-    print("# --- Performing RPA calculation ...",)
-    e_rpa, t_rpa = rpa(gw, method=gw.screening)
-    print("done.")
-    print("# --- Calculating GW QP corrections ...",)
-    egw = np.zeros(gw.nso/2)
-    for p in range(0,gw.nso,2): 
-        def quasiparticle(omega):
-            sigma_c_ppw, sigma_x_ppw = sigma(gw, p, p, omega, e_rpa, t_rpa)
-            sigma_ppw = sigma_c_ppw + sigma_x_ppw
-            return omega - gw.e_mf[p] - (sigma_ppw.real - gw.v_mf[p,p])
-        try:
-            egw[p/2] = newton(quasiparticle, gw.e_mf[p], tol=1e-6, maxiter=100)
-        except RuntimeError:
-            print("Newton-Raphson unconverged, setting GW eval to MF eval.")
-            egw[p/2] = gw.e_mf[p]
-        print(egw[p/2])
-    print("done.")
+    # mf must be DFT; for HF use xc = 'hf'
+    mf = gw._scf
+    assert(isinstance(mf, (dft.rks.RKS      , dft.uks.UKS,
+                           dft.roks.ROKS    , dft.uks.UKS,
+                           dft.rks_symm.RKS , dft.uks_symm.UKS,
+                           dft.rks_symm.ROKS, dft.uks_symm.UKS)))
+    assert(gw.frozen is 0 or gw.frozen is None)
 
-    return egw
+    if eris is None:
+        eris = gw.ao2mo(mo_coeff)
+    if orbs is None:
+        orbs = range(gw.nmo)
 
+    v_mf = mf.get_veff() - mf.get_j()
+    v_mf = reduce(numpy.dot, (mo_coeff.T, v_mf, mo_coeff))
 
-def sigma(gw, p, q, omegas, e_rpa, t_rpa, vir_sgn=1):
-    if not isinstance(omegas, (list,tuple,np.ndarray)):
-        single_point = True
-        omegas = [omegas]
-    else:
-        single_point = False
-
-    # This usually takes the longest:
-    if gw._M is None:
-        gw._M = get_m_rpa(gw, e_rpa, t_rpa)
-
-    nso = gw.nso
     nocc = gw.nocc
+    nmo = gw.nmo
+    nvir = nmo-nocc
 
-    sigma_c = []
-    sigma_x = []
-    for omega in omegas:
-        sigma_cw = 0.
-        sigma_xw = 0.
-        for L in range(len(e_rpa)):
-            for i in range(nocc):
-                sigma_cw += gw._M[i,q,L]*gw._M[i,p,L]/(
-                            omega - gw.e_mf[i] + e_rpa[L] - 1j*gw.eta )
-            for a in range(nocc, nso):
-                sigma_cw += gw._M[a,q,L]*gw._M[a,p,L]/(
-                            omega - gw.e_mf[a] - e_rpa[L] + vir_sgn*1j*gw.eta )
-        for i in range(nocc):
-            sigma_xw += -gw.eri[p,i,i,q]
+    vk_oo = -np.einsum('piiq->pq', eris.oooo)
+    vk_ov = -np.einsum('piiq->pq', eris.ooov)
+    vk_vv = -np.einsum('ipqi->pq', eris.ovvo).conj()
+    vk = np.array(np.bmat([[vk_oo, vk_ov],[vk_ov.T, vk_vv]]))
 
-        sigma_c.append(sigma_cw)
-        sigma_x.append(sigma_xw)
+    nexc = len(td_e)
+    # factor of 2 for normalization, see tddft/rhf.py
+    td_xy = 2*np.asarray(td_xy) # (nexc, 2, nvir, nocc)
+    td_z = np.sum(td_xy, axis=1).reshape(nexc,nvir,nocc)
+    tdm_oo = einsum('vai,iapq->vpq', td_z, eris.ovoo)
+    tdm_ov = einsum('vai,iapq->vpq', td_z, eris.ovov)
+    tdm_vv = einsum('vai,iapq->vpq', td_z, eris.ovvv)
+    tdm = []
+    for oo,ov,vv in zip(tdm_oo,tdm_ov,tdm_vv):
+        tdm.append(np.array(np.bmat([[oo, ov],[ov.T, vv]])))
+    tdm = np.asarray(tdm)
 
-    if single_point:
-        return sigma_c[0], sigma_x[0]
-    else:
-        return sigma_c, sigma_x
-
-
-def g0(gw, omega):
-    '''Return the 0th order GF matrix [G0]_{pq} in the basis of MF eigenvectors.'''
-    g0 = np.zeros((gw.nso,gw.nso), dtype=np.complex128)
-    for p in range(gw.nso):
-        if p < gw.nocc: sgn = -1
-        else: sgn = +1
-        g0[p,p] = 1.0/(omega - gw.e_mf[p] + 1j*sgn*gw.eta)
-    return g0
-
-
-def get_m_rpa(gw, e_rpa, t_rpa):
-    '''Get the (intermediate) M_{pq,L} tensor.
-
-    M_{pq,L} = \sum_{ia} ( (eps_a-eps_i)/erpa_L )^{1/2} T_{ai,L} (ai|pq)
-    '''
-    nso = gw.nso
-    nocc = gw.nocc
-    nvir = nso - nocc
-    t_by_e = t_rpa.copy()
-    for L in range(len(e_rpa)):
-        t_by_e[:,L] /= np.sqrt(e_rpa[L])
-    sqrt_eps = np.zeros(nocc*nvir)
-    eri_product = np.zeros((nocc*nvir, nso, nso))
-    ai = 0
-    for i in range(nocc):
-        for a in range(nocc,nso):
-            sqrt_eps[ai] = np.sqrt(gw.e_mf[a]-gw.e_mf[i])
-            eri_product[ai,:,:] = gw.eri[a,i,:,:]
-            ai += 1
-    M = np.einsum('a,al,apq->pql', sqrt_eps, t_by_e, eri_product)
-    return M 
-
-
-def rpa(gw, using_tda=False, using_casida=True, method='TDH'):
-    '''Get the RPA eigenvalues and eigenvectors.
-
-    Q^\dagger = \sum_{ia} X_{ia} a^+ i - Y_{ia} i^+ a
-    Leads to the RPA eigenvalue equations:
-      [ A  B ][X] = omega [ 1  0 ][X]
-      [ B  A ][Y]         [ 0 -1 ][Y]
-    which is equivalent to
-      [ A  B ][X] = omega [ 1  0 ][X]
-      [-B -A ][Y] =       [ 0  1 ][Y]
-    
-    See, e.g. Stratmann, Scuseria, and Frisch, 
-              J. Chem. Phys., 109, 8218 (1998)
-    '''
-    A, B = rpa_AB_matrices(gw, method=method)
-
-    if using_tda:
-        ham_rpa = A
-        e, x = eig(ham_rpa)
-        return e, x
-    else:
-        if not using_casida:
-            ham_rpa = np.array(np.bmat([[A,B],[-B,-A]]))
-            assert is_positive_def(ham_rpa)
-            e, xy = eig_asymm(ham_rpa)
-            return e, xy
+    conv = True
+    mo_energy = np.zeros_like(gw._scf.mo_energy)
+    for p in orbs:
+        tdm_p = tdm[:,:,p]
+        if gw.linearized:
+            de = 1e-6
+            ep = gw._scf.mo_energy[p]
+            #TODO: analytic sigma derivative
+            sigma = get_sigma_element(gw, ep, tdm_p, tdm_p, td_e).real
+            dsigma = get_sigma_element(gw, ep+de, tdm_p, tdm_p, td_e).real - sigma
+            zn = 1.0/(1-dsigma/de)
+            e = ep + zn*(sigma.real + vk[p,p] - v_mf[p,p])
+            mo_energy[p] = e
         else:
-            assert is_positive_def(A-B)
-            sqrt_A_minus_B = scipy.linalg.sqrtm(A-B)
-            ham_rpa = np.dot(sqrt_A_minus_B, np.dot((A+B),sqrt_A_minus_B))
-            esq, t = eig(ham_rpa)
-            print('np.sqrt(esq)', np.sqrt(esq)*27.2114)
+            def quasiparticle(omega):
+                sigma = get_sigma_element(gw, omega, tdm_p, tdm_p, td_e)
+                return omega - gw._scf.mo_energy[p] - (sigma.real + vk[p,p] - v_mf[p,p])
+            try:
+                e = newton(quasiparticle, gw._scf.mo_energy[p], tol=1e-6, maxiter=100)
+                mo_energy[p] = e
+            except RuntimeError:
+                conv = False
+    mo_coeff = gw._scf.mo_coeff
 
-            AmB = A[::2,::2]-B[::2,::2]
-            n = len(AmB)
-            print(__name__)
-            for i in range(n): print(AmB[i,i])
-            
-            return np.sqrt(esq), t
+    if gw.verbose >= logger.DEBUG:
+        numpy.set_printoptions(threshold=nmo)
+        logger.debug(gw, '  GW mo_energy =\n%s', mo_energy)
+        numpy.set_printoptions(threshold=1000)
+
+    return conv, mo_energy, mo_coeff
 
 
-def rpa_AB_matrices(gw, method='TDH'):
-    '''Get the RPA A and B matrices, using TDH, TDHF, or TDDFT.
-    '''
-    assert method in ('TDH','TDHF','TDDFT')
-    nso = gw.nso
+def get_sigma_element(gw, omega, tdm_p, tdm_q, td_e, eta=None, vir_sgn=1):
+    if eta is None:
+        eta = gw.eta
+
     nocc = gw.nocc
-    nvir = nso - nocc
-
-    dim_rpa = nocc*nvir
-    A = np.zeros((dim_rpa,dim_rpa))
-    B = np.zeros((dim_rpa,dim_rpa))
-
-    ai = 0
-    for i in range(nocc):
-        for a in range(nocc,nso):
-            A[ai,ai] = gw.e_mf[a] - gw.e_mf[i]
-            bj = 0
-            for j in range(nocc): 
-                for b in range(nocc,nso):
-                    A[ai,bj] += gw.eri[a,i,j,b]
-                    B[ai,bj] += gw.eri[a,i,b,j]
-                    if method == 'TDHF':
-                        A[ai,bj] -= gw.eri[a,b,j,i]
-                        B[ai,bj] -= gw.eri[a,j,b,i]
-                    bj += 1 
-            ai += 1 
-
-    assert np.allclose(A, A.transpose())
-    assert np.allclose(B, B.transpose())
-
-    return A, B
+    evi = lib.direct_sum('v-i->vi', td_e, gw._scf.mo_energy[:nocc])
+    eva = lib.direct_sum('v+a->va', td_e, gw._scf.mo_energy[nocc:])
+    sigma =  np.sum( tdm_p[:,:nocc]*tdm_q[:,:nocc]/(omega + evi - 1j*eta) )
+    sigma += np.sum( tdm_p[:,nocc:]*tdm_q[:,nocc:]/(omega - eva + vir_sgn*1j*eta) )
+    return sigma
 
 
-def eig(h, s=None):
-    e, c = scipy.linalg.eigh(h,s)
-    return e, c
+def get_g(omega, mo_energy, mo_occ, eta):
+    sgn = mo_occ - 1
+    return 1.0/(omega - mo_energy + 1j*eta*sgn)
 
 
-def eig_asymm(h):
-    '''Diagonalize a real, *asymmetrix* matrix and return sorted results.
-    
-    Return the eigenvalues and eigenvectors (column matrix) 
-    sorted from lowest to highest eigenvalue.
+class GW(lib.StreamObject):
+    '''non-relativistic restricted GW
+
+    Saved results
+
+        mo_energy :
+            Orbital energies
+        mo_coeff
+            Orbital coefficients
     '''
-    e, c = np.linalg.eig(h)
-    if np.allclose(e.imag, 0*e.imag):
-        e = np.real(e)
-    else:
-        print("WARNING: Eigenvalues are complex, will be returned as such.")
 
-    idx = e.argsort()
-    e = e[idx]
-    c = c[:,idx]
+    eta = getattr(__config__, 'gw_gw_GW_eta', 1e-3)
+    linearized = getattr(__config__, 'gw_gw_GW_linearized', False)
 
-    return e, c
-
-
-def is_positive_def(A):
-    try:
-        np.linalg.cholesky(A)
-        return True
-    except np.linalg.LinAlgError:
-        return False
-
-
-class GW(object):
-    def __init__(self, mf, ao2mofn=pyscf.ao2mo.outcore.general_iofree,
-                 screening='TDH', eta=1e-2):
-        assert screening in ('TDH', 'TDHF', 'TDDFT')
+    def __init__(self, mf, tdmf, frozen=0):
         self.mol = mf.mol
         self._scf = mf
+        self._tdscf = tdmf
         self.verbose = self.mol.verbose
         self.stdout = self.mol.stdout
         self.max_memory = mf.max_memory
 
-        self.nocc = self.mol.nelectron
-        try:
-            # DFT
-            mf.xc = mf.xc
-            v_mf = mf.get_veff() - mf.get_j()
-        except AttributeError:
-            # HF
-            v_mf = -mf.get_k()
-        if mf.mo_occ[0] == 2:
-            # RHF, convert to spin-orbitals
-            nso = 2*len(mf.mo_energy)
-            self.nso = nso
-            self.e_mf = np.zeros(nso)
-            self.e_mf[0::2] = self.e_mf[1::2] = mf.mo_energy
-            b = np.zeros((nso/2,nso))
-            b[:,0::2] = b[:,1::2] = mf.mo_coeff
-            self.v_mf = 0.5 * reduce(np.dot, (b.T, v_mf, b))
-            self.v_mf[::2,1::2] = self.v_mf[1::2,::2] = 0
-            eri = ao2mofn(mf.mol, (b,b,b,b),
-                          compact=False).reshape(nso,nso,nso,nso)
-            eri[::2,1::2] = eri[1::2,::2] = eri[:,:,::2,1::2] = eri[:,:,1::2,::2] = 0
-            # Integrals are in "chemist's notation"
-            # eri[i,j,k,l] = (ij|kl) = \int i(1) j(1) 1/r12 k(r2) l(r2)
-            print("Imag part of ERIs =", np.linalg.norm(eri.imag))
-            self.eri = eri.real
-        else:
-            # ROHF or UHF, these are already spin-orbitals
-            print("\n*** Only supporting restricted calculations right now! ***\n")
-            raise NotImplementedError
-            nso = len(mf.mo_energy)
-            self.nso = nso
-            self.e_mf = mf.mo_energy
-            b = mf.mo_coeff
-            self.v_mf = reduce(np.dot, (b.T, v_mf, b))
-            eri = ao2mofn(mf.mol, (b,b,b,b),
-                          compact=False).reshape(nso,nso,nso,nso)
-            self.eri = eri
+        #TODO: implement frozen orbs
+        #self.frozen = frozen
+        self.frozen = 0
 
-        print("There are %d spin-orbitals"%(self.nso))
+##################################################
+# don't modify the following attributes, they are not input options
+        self._nocc = None
+        self._nmo = None
+        self.mo_energy = None
+        self.mo_coeff = mf.mo_coeff
+        self.mo_occ = mf.mo_occ
 
-        self.screening = screening
-        self.eta = eta
-        self._M = None
+        keys = set(('eta', 'linearized'))
+        self._keys = set(self.__dict__.keys()).union(keys)
 
-        self.egw = None
+    def dump_flags(self):
+        log = logger.Logger(self.stdout, self.verbose)
+        log.info('')
+        log.info('******** %s flags ********', self.__class__)
+        log.info('method = %s', self.__class__.__name__)
+        nocc = self.nocc
+        nvir = self.nmo - nocc
+        log.info('GW nocc = %d, nvir = %d', nocc, nvir)
+        if self.frozen is not 0:
+            log.info('frozen orbitals %s', str(self.frozen))
+        logger.info(self, 'use perturbative linearized QP eqn = %s', self.linearized)
+        return self
 
-    def kernel(self, mo_energy=None, mo_coeff=None):
+    @property
+    def nocc(self):
+        return self.get_nocc()
+    @nocc.setter
+    def nocc(self, n):
+        self._nocc = n
+
+    @property
+    def nmo(self):
+        return self.get_nmo()
+    @nmo.setter
+    def nmo(self, n):
+        self._nmo = n
+
+    get_nocc = get_nocc
+    get_nmo = get_nmo
+    get_frozen_mask = get_frozen_mask
+
+    def get_g0(self, omega, eta=None):
+        if eta is None:
+            eta = self.eta
+        return get_g(omega, self._scf.mo_energy, self.mo_occ, eta)
+
+    def get_g(self, omega, eta=None):
+        if eta is None:
+            eta = self.eta
+        return get_g(omega, self.mo_energy, self.mo_occ, eta)
+
+    def kernel(self, mo_energy=None, mo_coeff=None, td_e=None, td_xy=None,
+               eris=None, orbs=None):
         if mo_coeff is None:
             mo_coeff = self._scf.mo_coeff
         if mo_energy is None:
             mo_energy = self._scf.mo_energy
+        if td_e is None:
+            td_e = self._tdscf.e
+        if td_xy is None:
+            td_xy = self._tdscf.xy
 
-        self.egw = kernel(self, mo_energy, mo_coeff, verbose=self.verbose)
-        logger.log(self, 'GW bandgap = %.15g', self.egw[self.nocc/2]-self.egw[self.nocc/2-1])
-        return self.egw
+        cput0 = (time.clock(), time.time())
+        self.dump_flags()
+        self.converged, self.mo_energy, self.mo_coeff = \
+                kernel(self, mo_energy, mo_coeff, td_e, td_xy,
+                       eris=eris, orbs=orbs, verbose=self.verbose)
 
-    def sigma(self, p, q, omegas, e_rpa, t_rpa, vir_sgn=1):
-        return sigma(self, p, q, omegas, e_rpa, t_rpa, vir_sgn)
+        logger.timer(self, 'GW', *cput0)
+        return self.mo_energy
 
-    def g0(self, omega):
-        return g0(self, omega)
+    def ao2mo(self, mo_coeff=None):
+        return _ERIS(self, mo_coeff)
 
-    def get_m_rpa(self, e_rpa, t_rpa):
-        return get_m_rpa(self, e_rpa, t_rpa)
 
-    def rpa(self, using_tda=False, using_casida=True, method='TDH'):
-        return rpa(self, using_tda, using_casida, method)
+def _mem_usage(nocc, nvir):
+    incore = (nocc+nvir)**4
+    # Roughly, factor of two for safety
+    incore *= 2
+    basic = nocc*nvir**3
+    outcore = basic
+    return incore*8/1e6, outcore*8/1e6, basic*8/1e6
 
-    def rpa_AB_matrices(self, method='TDH'):
-        return rpa_AB_matrices(self, method)
+
+class _ERIS:
+    '''Almost identical to rccsd ERIS except ovvv is dense and no vvvv.
+    '''
+    def __init__(self, cc, mo_coeff=None, method='incore',
+                 ao2mofn=ao2mo.full):
+        cput0 = (time.clock(), time.time())
+        moidx = get_frozen_mask(cc)
+        if mo_coeff is None:
+            self.mo_coeff = mo_coeff = cc.mo_coeff[:,moidx]
+        else:  # If mo_coeff is not canonical orbital
+            self.mo_coeff = mo_coeff = mo_coeff[:,moidx]
+        dm = cc._scf.make_rdm1(cc.mo_coeff, cc.mo_occ)
+        fockao = cc._scf.get_hcore() + cc._scf.get_veff(cc.mol, dm)
+        self.fock = reduce(numpy.dot, (mo_coeff.T, fockao, mo_coeff))
+
+        nocc = cc.nocc
+        nmo = cc.nmo
+        nvir = nmo - nocc
+        mem_incore, mem_outcore, mem_basic = _mem_usage(nocc, nvir)
+        mem_now = lib.current_memory()[0]
+
+        log = logger.Logger(cc.stdout, cc.verbose)
+        if (method == 'incore' and (mem_incore+mem_now < cc.max_memory)
+            or cc.mol.incore_anyway):
+            if ao2mofn == ao2mo.full:
+                if cc._scf._eri is not None:
+                    eri = ao2mo.restore(1, ao2mofn(cc._scf._eri, mo_coeff), nmo)
+                else:
+                    eri = ao2mo.restore(1, ao2mofn(cc._scf.mol, mo_coeff, compact=0), nmo)
+            else:
+                eri = ao2mofn(cc._scf.mol, (mo_coeff,mo_coeff,mo_coeff,mo_coeff), compact=0)
+                if mo_coeff.dtype == np.float: eri = eri.real
+                eri = eri.reshape((nmo,)*4)
+
+            self.dtype = eri.dtype
+            self.oooo = eri[:nocc,:nocc,:nocc,:nocc].copy()
+            self.ooov = eri[:nocc,:nocc,:nocc,nocc:].copy()
+            self.ovoo = eri[:nocc,nocc:,:nocc,:nocc].copy()
+            self.oovo = eri[:nocc,:nocc,nocc:,:nocc].copy()
+            self.ovov = eri[:nocc,nocc:,:nocc,nocc:].copy()
+            self.oovv = eri[:nocc,:nocc,nocc:,nocc:].copy()
+            self.ovvo = eri[:nocc,nocc:,nocc:,:nocc].copy()
+            self.ovvv = eri[:nocc,nocc:,nocc:,nocc:].copy()
+
+        elif hasattr(cc._scf, 'with_df') and cc._scf.with_df:
+            raise NotImplementedError
+
+        else:
+            orbo = mo_coeff[:,:nocc]
+            self.dtype = mo_coeff.dtype
+            ds_type = mo_coeff.dtype.char
+            self.feri = lib.H5TmpFile()
+            self.oooo = self.feri.create_dataset('oooo', (nocc,nocc,nocc,nocc), ds_type)
+            self.ooov = self.feri.create_dataset('ooov', (nocc,nocc,nocc,nvir), ds_type)
+            self.ovoo = self.feri.create_dataset('ovoo', (nocc,nvir,nocc,nocc), ds_type)
+            self.oovo = self.feri.create_dataset('oovo', (nocc,nocc,nvir,nocc), ds_type)
+            self.ovov = self.feri.create_dataset('ovov', (nocc,nvir,nocc,nvir), ds_type)
+            self.oovv = self.feri.create_dataset('oovv', (nocc,nocc,nvir,nvir), ds_type)
+            self.ovvo = self.feri.create_dataset('ovvo', (nocc,nvir,nvir,nocc), ds_type)
+            self.ovvv = self.feri.create_dataset('ovvv', (nocc,nvir,nvir,nvir), ds_type)
+
+            cput1 = time.clock(), time.time()
+            # <ij||pq> = <ij|pq> - <ij|qp> = (ip|jq) - (iq|jp)
+            tmpfile2 = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
+            ao2mo.general(cc.mol, (orbo,mo_coeff,mo_coeff,mo_coeff), tmpfile2.name, 'aa')
+            with h5py.File(tmpfile2.name) as f:
+                buf = numpy.empty((nmo,nmo,nmo))
+                for i in range(nocc):
+                    lib.unpack_tril(f['aa'][i*nmo:(i+1)*nmo], out=buf)
+                    self.oooo[i] = buf[:nocc,:nocc,:nocc]
+                    self.ooov[i] = buf[:nocc,:nocc,nocc:]
+                    self.ovoo[i] = buf[nocc:,:nocc,:nocc]
+                    self.ovov[i] = buf[nocc:,:nocc,nocc:]
+                    self.oovo[i] = buf[:nocc,nocc:,:nocc]
+                    self.oovv[i] = buf[:nocc,nocc:,nocc:]
+                    self.ovvo[i] = buf[nocc:,nocc:,:nocc]
+                    self.ovvv[i] = buf[nocc:,nocc:,nocc:]
+                del(f['aa'])
+                buf = None
+
+            cput1 = log.timer_debug1('transforming oopq, ovpq', *cput1)
+
+        log.timer('GW integral transformation', *cput0)
+
 
 if __name__ == '__main__':
-    from pyscf import scf, gto
+    from pyscf import gto, dft, tddft
     mol = gto.Mole()
     mol.verbose = 5
-    #mol.atom = [['Ne' , (0., 0., 0.)]]
-    #mol.basis = {'Ne': 'cc-pvdz'}
-    # This is from G2/97 i.e. MP2/6-31G*
-    mol.atom = [['C' , (0.,      0., 0.)],
-                ['O' , (1.15034, 0., 0.)]]
+    mol.atom = [
+        [8 , (0. , 0.     , 0.)],
+        [1 , (0. , -0.757 , 0.587)],
+        [1 , (0. , 0.757  , 0.587)]]
     mol.basis = 'cc-pvdz'
     mol.build()
-    mf = scf.RHF(mol)
-    print(mf.scf())
 
-    gw = GW(mf)
-    egw = gw.kernel()
-
-    for emf, eqp in zip(mf.mo_energy, egw):
-        print("%0.6f %0.6f"%(emf, eqp))
+    mf = dft.RKS(mol)
+    mf.xc = 'hf'
+    mf.kernel()
 
     nocc = mol.nelectron//2
-    ehomo = egw[nocc-1] 
-    print("GW -IP = GW HOMO =", ehomo, "au =", ehomo*27.211, "eV")
+    nmo = mf.mo_energy.size
+    nvir = nmo-nocc
+
+    td = tddft.dRPA(mf)
+    td.nstates = min(100, nocc*nvir)
+    td.kernel()
+
+    gw = GW(mf, td)
+    gw.kernel()
+    print(gw.mo_energy)
+# [-20.10555946  -1.2264067   -0.68160939  -0.53066326  -0.44679868
+#   0.17291986   0.24457082   0.74758227   0.80045129   1.11748735
+#   1.1508353    1.19081928   1.40406947   1.43593681   1.63324734
+#   1.81839838   1.86943727   2.37827782   2.48829939   3.26028229
+#   3.3247595    3.4958492    3.77735135   4.14572189]
+
+    gw.linearized = True
+    gw.kernel(orbs=[nocc-1,nocc])
+    print(gw.mo_energy[nocc-1] - -0.44684106)
+    print(gw.mo_energy[nocc] - 0.17292032)
+

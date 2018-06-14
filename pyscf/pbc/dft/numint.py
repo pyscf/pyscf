@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Timothy Berkelbach <tim.berkelbach@gmail.com>
 #         Qiming Sun <osirpt.sun@gmail.com>
@@ -77,7 +90,7 @@ def eval_ao_kpts(cell, coords, kpts=None, deriv=0, relativity=0,
     '''
     if kpts is None:
         if 'kpt' in kwargs:
-            sys.stderr.write('WARN: _KNumInt.eval_ao function finds keyword '
+            sys.stderr.write('WARN: KNumInt.eval_ao function finds keyword '
                              'argument "kpt" and converts it to "kpts"\n')
             kpts = kwargs['kpt']
         else:
@@ -86,9 +99,9 @@ def eval_ao_kpts(cell, coords, kpts=None, deriv=0, relativity=0,
 
     comp = (deriv+1)*(deriv+2)*(deriv+3)//6
     if cell.cart:
-        feval = 'PBCval_cart_deriv%d' % deriv
+        feval = 'GTOval_cart_deriv%d' % deriv
     else:
-        feval = 'PBCval_sph_deriv%d' % deriv
+        feval = 'GTOval_sph_deriv%d' % deriv
     return cell.pbc_eval_gto(feval, coords, comp, kpts,
                              shls_slice=shls_slice, non0tab=non0tab, out=out)
 
@@ -273,7 +286,7 @@ def nr_rks(ni, cell, grids, xc_code, dms, spin=0, relativity=0, hermi=0,
     Faster function uses eval_rho2 which is not yet implemented.
 
     Args:
-        ni : an instance of :class:`_NumInt` or :class:`_KNumInt`
+        ni : an instance of :class:`NumInt` or :class:`KNumInt`
 
         cell : instance of :class:`Mole` or :class:`Cell`
 
@@ -373,7 +386,7 @@ def nr_uks(ni, cell, grids, xc_code, dms, spin=1, relativity=0, hermi=0,
     Faster function uses eval_rho2 which is not yet implemented.
 
     Args:
-        ni : an instance of :class:`_NumInt` or :class:`_KNumInt`
+        ni : an instance of :class:`NumInt` or :class:`KNumInt`
 
         cell : instance of :class:`Mole` or :class:`Cell`
 
@@ -508,8 +521,8 @@ def _format_uks_dm(dms):
         mo_occ = dms.mo_occ
         if (isinstance(mo_coeff[0], numpy.ndarray) and
             mo_coeff[0].ndim < dma.ndim): # handle ROKS
-            mo_occa = numpy.array(mo_occ> 0, dtype=numpy.double)
-            mo_occb = numpy.array(mo_occ==2, dtype=numpy.double)
+            mo_occa = [numpy.array(occ> 0, dtype=numpy.double) for occ in mo_occ]
+            mo_occb = [numpy.array(occ==2, dtype=numpy.double) for occ in mo_occ]
             dma = lib.tag_array(dma, mo_coeff=mo_coeff, mo_occ=mo_occa)
             dmb = lib.tag_array(dmb, mo_coeff=mo_coeff, mo_occ=mo_occb)
         else:
@@ -526,7 +539,7 @@ def nr_rks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
     '''Contract RKS XC kernel matrix with given density matrices
 
     Args:
-        ni : an instance of :class:`_NumInt` or :class:`_KNumInt`
+        ni : an instance of :class:`NumInt` or :class:`KNumInt`
 
         cell : instance of :class:`Mole` or :class:`Cell`
 
@@ -723,7 +736,7 @@ def nr_uks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
     '''Contract UKS XC kernel matrix with given density matrices
 
     Args:
-        ni : an instance of :class:`_NumInt` or :class:`_KNumInt`
+        ni : an instance of :class:`NumInt` or :class:`KNumInt`
 
         cell : instance of :class:`Mole` or :class:`Cell`
 
@@ -899,8 +912,8 @@ def get_rho(ni, cell, dm, grids, kpt=numpy.zeros(3), max_memory=2000):
     return rho
 
 
-class _NumInt(numint._NumInt):
-    '''Generalization of pyscf's _NumInt class for a single k-point shift and
+class NumInt(numint.NumInt):
+    '''Generalization of pyscf's NumInt class for a single k-point shift and
     periodic images.
     '''
     def eval_ao(self, cell, coords, kpt=numpy.zeros(3), deriv=0, relativity=0,
@@ -937,7 +950,7 @@ class _NumInt(numint._NumInt):
                kpt=numpy.zeros(3), kpts_band=None, max_memory=2000, verbose=None):
         if kpts_band is not None:
 # To compute Vxc on kpts_band, convert the NumInt object to KNumInt object.
-            ni = _KNumInt()
+            ni = KNumInt()
             ni.__dict__.update(self.__dict__)
             nao = dms.shape[-1]
             return ni.nr_rks(cell, grids, xc_code, dms.reshape(-1,1,nao,nao),
@@ -951,7 +964,7 @@ class _NumInt(numint._NumInt):
                kpt=numpy.zeros(3), kpts_band=None, max_memory=2000, verbose=None):
         if kpts_band is not None:
 # To compute Vxc on kpts_band, convert the NumInt object to KNumInt object.
-            ni = _KNumInt()
+            ni = KNumInt()
             ni.__dict__.update(self.__dict__)
             nao = dms[0].shape[-1]
             return ni.nr_uks(cell, grids, xc_code, dms.reshape(-1,1,nao,nao),
@@ -982,14 +995,17 @@ class _NumInt(numint._NumInt):
                    kpts_band=None, max_memory=2000, non0tab=None, blksize=None):
         '''Define this macro to loop over grids by blocks.
         '''
-        if grids.coords is None:
+# For UniformGrids, grids.coords does not indicate whehter grids are initialized
+        if grids.non0tab is None:
             grids.build(with_non0tab=True)
-        ngrids = grids.weights.size
+        grids_coords = grids.coords
+        grids_weights = grids.weights
+        ngrids = grids_coords.shape[0]
         comp = (deriv+1)*(deriv+2)*(deriv+3)//6
 # NOTE to index grids.non0tab, the blksize needs to be the integer multiplier of BLKSIZE
         if blksize is None:
-            blksize = min(int(max_memory*1e6/(comp*2*nao*16*BLKSIZE))*BLKSIZE, ngrids)
-            blksize = max(blksize, BLKSIZE)
+            blksize = max(1, int(max_memory*1e6/(comp*2*nao*16*BLKSIZE)))*BLKSIZE
+            blksize = min(blksize, ngrids, BLKSIZE*1200)
         if non0tab is None:
             non0tab = grids.non0tab
         if non0tab is None:
@@ -1005,8 +1021,8 @@ class _NumInt(numint._NumInt):
 
         for ip0 in range(0, ngrids, blksize):
             ip1 = min(ngrids, ip0+blksize)
-            coords = grids.coords[ip0:ip1]
-            weight = grids.weights[ip0:ip1]
+            coords = grids_coords[ip0:ip1]
+            weight = grids_weights[ip0:ip1]
             non0 = non0tab[ip0//BLKSIZE:]
             ao_k2 = self.eval_ao(cell, coords, kpt2, deriv=deriv, non0tab=non0)
             if abs(kpt1-kpt2).sum() < 1e-9:
@@ -1017,7 +1033,7 @@ class _NumInt(numint._NumInt):
             ao_k1 = ao_k2 = None
 
     def _gen_rho_evaluator(self, cell, dms, hermi=0):
-        return numint._NumInt._gen_rho_evaluator(self, cell, dms, hermi)
+        return numint.NumInt._gen_rho_evaluator(self, cell, dms, hermi)
 
     nr_rks_fxc = nr_rks_fxc
     nr_uks_fxc = nr_uks_fxc
@@ -1025,18 +1041,19 @@ class _NumInt(numint._NumInt):
     get_rho = get_rho
 
     def rsh_and_hybrid_coeff(self, xc_code, spin=0):
-        omega, alpha, hyb = numint._NumInt.rsh_and_hybrid_coeff(self, xc_code, spin)
+        omega, alpha, hyb = numint.NumInt.rsh_and_hybrid_coeff(self, xc_code, spin)
         if abs(omega) > 1e-10:
             raise NotImplementedError
         return omega, alpha, hyb
+_NumInt = NumInt
 
 
-class _KNumInt(numint._NumInt):
-    '''Generalization of pyscf's _NumInt class for k-point sampling and
+class KNumInt(numint.NumInt):
+    '''Generalization of pyscf's NumInt class for k-point sampling and
     periodic images.
     '''
     def __init__(self, kpts=numpy.zeros((1,3))):
-        numint._NumInt.__init__(self)
+        numint.NumInt.__init__(self)
         self.kpts = numpy.reshape(kpts, (-1,3))
 
     def eval_ao(self, cell, coords, kpts=numpy.zeros((1,3)), deriv=0, relativity=0,
@@ -1097,7 +1114,7 @@ class _KNumInt(numint._NumInt):
                max_memory=2000, verbose=None, **kwargs):
         if kpts is None:
             if 'kpt' in kwargs:
-                sys.stderr.write('WARN: _KNumInt.nr_rks function finds keyword '
+                sys.stderr.write('WARN: KNumInt.nr_rks function finds keyword '
                                  'argument "kpt" and converts it to "kpts"\n')
                 kpts = kwargs['kpt']
             else:
@@ -1112,7 +1129,7 @@ class _KNumInt(numint._NumInt):
                max_memory=2000, verbose=None, **kwargs):
         if kpts is None:
             if 'kpt' in kwargs:
-                sys.stderr.write('WARN: _KNumInt.nr_uks function finds keyword '
+                sys.stderr.write('WARN: KNumInt.nr_uks function finds keyword '
                                  'argument "kpt" and converts it to "kpts"\n')
                 kpts = kwargs['kpt']
             else:
@@ -1126,7 +1143,8 @@ class _KNumInt(numint._NumInt):
                  non0tab=None, xctype='LDA', spin=0, verbose=None):
         nkpts = len(ao_kpts)
         nao = ao_kpts[0].shape[-1]
-        mat = numpy.empty((nkpts,nao,nao), dtype=numpy.complex128)
+        dtype = numpy.result_type(*ao_kpts)
+        mat = numpy.empty((nkpts,nao,nao), dtype=dtype)
         for k in range(nkpts):
             mat[k] = eval_mat(cell, ao_kpts[k], weight, rho, vxc,
                               non0tab, xctype, spin, verbose)
@@ -1135,7 +1153,8 @@ class _KNumInt(numint._NumInt):
     def _fxc_mat(self, cell, ao_kpts, wv, non0tab, xctype, ao_loc):
         nkpts = len(ao_kpts)
         nao = ao_kpts[0].shape[-1]
-        mat = numpy.empty((nkpts,nao,nao), dtype=numpy.complex128)
+        dtype = numpy.result_type(*ao_kpts)
+        mat = numpy.empty((nkpts,nao,nao), dtype=dtype)
         for k in range(nkpts):
             mat[k] = _fxc_mat(cell, ao_kpts[k], wv, non0tab, xctype, ao_loc)
         return mat
@@ -1146,13 +1165,15 @@ class _KNumInt(numint._NumInt):
         '''
         if grids.coords is None:
             grids.build(with_non0tab=True)
-        ngrids = grids.weights.size
+        grids_coords = grids.coords
+        grids_weights = grids.weights
+        ngrids = grids_coords.shape[0]
         nkpts = len(kpts)
         comp = (deriv+1)*(deriv+2)*(deriv+3)//6
 # NOTE to index grids.non0tab, the blksize needs to be the integer multiplier of BLKSIZE
         if blksize is None:
-            blksize = min(int(max_memory*1e6/(comp*2*nkpts*nao*16*BLKSIZE))*BLKSIZE, ngrids)
-            blksize = max(blksize, BLKSIZE)
+            blksize = max(1, int(max_memory*1e6/(comp*2*nkpts*nao*16*BLKSIZE)))*BLKSIZE
+            blksize = min(blksize, ngrids, BLKSIZE*1200)
         if non0tab is None:
             non0tab = grids.non0tab
         if non0tab is None:
@@ -1166,19 +1187,12 @@ class _KNumInt(numint._NumInt):
 
         for ip0 in range(0, ngrids, blksize):
             ip1 = min(ngrids, ip0+blksize)
-            coords = grids.coords[ip0:ip1]
-            weight = grids.weights[ip0:ip1]
+            coords = grids_coords[ip0:ip1]
+            weight = grids_weights[ip0:ip1]
             non0 = non0tab[ip0//BLKSIZE:]
-            ao_k2 = self.eval_ao(cell, coords, kpts, deriv=deriv, non0tab=non0)
-            if kpts_band is None:
-                ao_k1 = ao_k2
-            else:
-                new_kpts = [k for k,w in zip(kpts_band, where) if w is None]
-                new_ao = iter(self.eval_ao(cell, coords, new_kpts, deriv=deriv, non0tab=non0))
-                old_ao = (ao_k2[w] for w in where if not w is None)
-                ao_k1 = []
-                for w in where:
-                    ao_k1.append(next(new_ao) if w is None else next(old_ao))
+            ao_k1 = ao_k2 = self.eval_ao(cell, coords, kpts, deriv=deriv, non0tab=non0)
+            if kpts_band is not None:
+                ao_k1 = self.eval_ao(cell, coords, kpts_band, deriv=deriv, non0tab=non0)
             yield ao_k1, ao_k2, non0, weight, coords
             ao_k1 = ao_k2 = None
 
@@ -1214,8 +1228,8 @@ class _KNumInt(numint._NumInt):
     get_rho = get_rho
 
     def rsh_and_hybrid_coeff(self, xc_code, spin=0):
-        omega, alpha, hyb = numint._NumInt.rsh_and_hybrid_coeff(self, xc_code, spin)
+        omega, alpha, hyb = numint.NumInt.rsh_and_hybrid_coeff(self, xc_code, spin)
         if abs(omega) > 1e-10:
             raise NotImplementedError
         return omega, alpha, hyb
-
+_KNumInt = KNumInt

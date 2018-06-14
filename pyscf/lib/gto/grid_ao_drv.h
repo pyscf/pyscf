@@ -1,4 +1,18 @@
-/*
+/* Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+  
+   Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+ 
+        http://www.apache.org/licenses/LICENSE-2.0
+ 
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+ *
  * Author: Qiming Sun <osirpt.sun@gmail.com>
  */
 
@@ -34,28 +48,35 @@ inline static int _nonzero_in(double *exps, int count) {
 #include <complex.h>
 #include "cint.h"
 
+typedef int (*FPtr_exp)(double *ectr, double *coord, double *alpha, double *coeff,
+                        int l, int nprim, int nctr, size_t ngrids, double fac);
+typedef void (*FPtr_eval)(double *gto, double *ri, double *exps,
+                          double *coord, double *alpha, double *coeff,
+                          double *env, int l, int np, int nc,
+                          size_t nao, size_t ngrids, size_t blksize);
+
 void GTOnabla1(double *fx1, double *fy1, double *fz1,
                double *fx0, double *fy0, double *fz0, int l, double a);
 void GTOx1(double *fx1, double *fy1, double *fz1,
            double *fx0, double *fy0, double *fz0, int l, double *ri);
 int GTOprim_exp(double *eprim, double *coord, double *alpha, double *coeff,
-                int l, int nprim, int nctr, int ngrids, double fac);
+                int l, int nprim, int nctr, size_t ngrids, double fac);
 int GTOcontract_exp0(double *ectr, double *coord, double *alpha, double *coeff,
-                     int l, int nprim, int nctr, int ngrids, double fac);
+                     int l, int nprim, int nctr, size_t ngrids, double fac);
 int GTOcontract_exp1(double *ectr, double *coord, double *alpha, double *coeff,
-                     int l, int nprim, int nctr, int ngrids, double fac);
+                     int l, int nprim, int nctr, size_t ngrids, double fac);
 
-void GTOeval_sph_drv(void (*feval)(), int (*fexp)(), double fac,
+void GTOeval_sph_drv(FPtr_eval feval, FPtr_exp fexp, double fac,
                      int ngrids, int param[], int *shls_slice, int *ao_loc,
                      double *ao, double *coord, char *non0table,
                      int *atm, int natm, int *bas, int nbas, double *env);
 
-void GTOeval_cart_drv(void (*feval)(), int (*fexp)(), double fac,
+void GTOeval_cart_drv(FPtr_eval feval, FPtr_exp fexp, double fac,
                       int ngrids, int param[], int *shls_slice, int *ao_loc,
                       double *ao, double *coord, char *non0table,
                       int *atm, int natm, int *bas, int nbas, double *env);
 
-void GTOeval_spinor_drv(void (*feval)(), int (*fexp)(), void (*c2s)(), double fac,
+void GTOeval_spinor_drv(FPtr_eval feval, FPtr_exp fexp, void (*c2s)(), double fac,
                         int ngrids, int param[], int *shls_slice, int *ao_loc,
                         double complex *ao, double *coord, char *non0table,
                         int *atm, int natm, int *bas, int nbas, double *env);

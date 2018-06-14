@@ -1,21 +1,40 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 import unittest
+from pyscf import lib
 from pyscf import scf
 from pyscf import gto
 from pyscf import grad
+from pyscf import cc
 from pyscf.grad import rks, uks, roks
 
 mol = gto.Mole()
 mol.verbose = 7
 mol.output = '/dev/null'
-
 mol.atom = [
     [1   , (0. , 0.1, .817)],
     ["F" , (0. , 0. , 0.)], ]
 mol.basis = {"H": '6-31g',
              "F": '6-31g',}
 mol.build()
+
+def tearDownModule():
+    global mol
+    mol.stdout.close()
+    del mol
 
 def finger(mat):
     return abs(mat).sum()
@@ -31,7 +50,7 @@ class KnownValues(unittest.TestCase):
 
     def test_r_uhf(self):
         uhf = scf.dhf.UHF(mol)
-        uhf.conv_tol_grad = 1e-5
+        uhf.conv_tol = 1e-10
         uhf.scf()
         g = grad.DHF(uhf)
         self.assertAlmostEqual(finger(g.grad_elec()), 7.9216825870803245, 6)
@@ -45,13 +64,12 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(finger(g.grad_nuc()), 8.2887823210941249, 9)
 
     def test_ccsd(self):
-        from pyscf import cc
         rhf = scf.RHF(mol)
         rhf.set(conv_tol=1e-10).scf()
         mycc = cc.CCSD(rhf)
         mycc.kernel()
         mycc.solve_lambda()
-        g1 = grad.ccsd.kernel(mycc)
+        g1 = mycc.nuc_grad_method().kernel()
         self.assertAlmostEqual(finger(g1), 0.43305028391866857, 6)
 
     def test_rhf_scanner(self):
@@ -77,7 +95,6 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(finger(de), 0.12763259021187467, 6)
 
     def test_ccsd_scanner(self):
-        from pyscf import cc
         mol1 = mol.copy()
         mol1.set_geom_('''
         H   0.   0.   0.9

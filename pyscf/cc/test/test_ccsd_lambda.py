@@ -1,9 +1,55 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import copy
+import tempfile
 import unittest
 import numpy
-from pyscf import gto, scf, ao2mo
+from functools import reduce
+
+from pyscf import lib
+from pyscf import gto
+from pyscf import scf
+from pyscf import ao2mo
 from pyscf import cc
 from pyscf.cc import ccsd_lambda
+
+
+mol = gto.Mole()
+mol.verbose = 7
+mol.output = '/dev/null'
+mol.atom = [
+    [8 , (0. , 0.     , 0.)],
+    [1 , (0. , -0.757 , 0.587)],
+    [1 , (0. , 0.757  , 0.587)]]
+
+mol.basis = '631g'
+mol.build()
+mf = scf.RHF(mol)
+mf.conv_tol_grad = 1e-8
+mf.kernel()
+
+mycc = cc.ccsd.RCCSD(mf)
+mycc.conv_tol = 1e-10
+eris = mycc.ao2mo()
+mycc.kernel(eris=eris)
+
+def tearDownModule():
+    global mol, mf, mycc
+    mol.stdout.close()
+    del mol, mf, mycc
 
 
 class KnownValues(unittest.TestCase):
@@ -62,6 +108,33 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(numpy.dot(l2new.flatten(), numpy.arange(35**2)), 48427109.5409886, 7)
         self.assertAlmostEqual(numpy.dot(l2new.flatten(), numpy.sin(numpy.arange(35**2))), 137.758016736487, 8)
         self.assertAlmostEqual(numpy.dot(numpy.sin(l2new.flatten()), numpy.arange(35**2)), 507.656936701192, 8)
+
+    def test_restart(self):
+        ftmp = tempfile.NamedTemporaryFile()
+        cc1 = copy.copy(mycc)
+        cc1.max_cycle = 5
+        cc1.solve_lambda()
+        l1ref = cc1.l1
+        l2ref = cc1.l2
+
+        adiis = lib.diis.DIIS(mol)
+        adiis.filename = ftmp.name
+        cc1.diis = adiis
+        cc1.max_cycle = 3
+        cc1.solve_lambda(l1=None, l2=None)
+
+        l1, l2 = cc1.vector_to_amplitudes(adiis.extrapolate())
+        cc1.diis = None
+        cc1.max_cycle = 1
+        cc1.solve_lambda(l1=l1, l2=l2)
+        self.assertAlmostEqual(numpy.linalg.norm(cc1.l1-l1ref), 1.2423439785342171e-04, 7)
+        self.assertAlmostEqual(numpy.linalg.norm(cc1.l2-l2ref), 7.5807719698278025e-05, 7)
+
+        cc1.diis = adiis
+        cc1.max_cycle = 2
+        cc1.solve_lambda(l1=l1, l2=l2)
+        self.assertAlmostEqual(abs(cc1.l1-l1ref).max(), 0, 9)
+        self.assertAlmostEqual(abs(cc1.l2-l2ref).max(), 0, 9)
 
 if __name__ == "__main__":
     print("Full Tests for CCSD lambda")

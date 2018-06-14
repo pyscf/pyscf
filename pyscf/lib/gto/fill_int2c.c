@@ -1,5 +1,19 @@
-/*
+/* Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+  
+   Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+ 
+        http://www.apache.org/licenses/LICENSE-2.0
+ 
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
  *
+ * Author: Qiming Sun <osirpt.sun@gmail.com>
  */
 
 #include <stdlib.h>
@@ -37,7 +51,7 @@ void GTOint2c(int (*intor)(), double *mat, int comp, int hermi,
         shared(intor, mat, comp, hermi, ao_loc, opt, atm, natm, bas, nbas, env)
 {
         int dims[] = {naoi, naoj};
-        int ish, jsh, ij, di, dj, i0, j0;
+        int ish, jsh, ij, i0, j0;
         int shls[2];
         double *cache = malloc(sizeof(double) * cache_size);
 #pragma omp for schedule(dynamic, 4)
@@ -87,7 +101,7 @@ void GTOint2c_spinor(int (*intor)(), double complex *mat, int comp, int hermi,
         shared(intor, mat, comp, hermi, ao_loc, opt, atm, natm, bas, nbas, env)
 {
         int dims[] = {naoi, naoj};
-        int ish, jsh, ij, di, dj, i0, j0;
+        int ish, jsh, ij, i0, j0;
         int shls[2];
         double *cache = malloc(sizeof(double) * cache_size);
 #pragma omp for schedule(dynamic, 4)

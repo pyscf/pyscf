@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 import unittest
 from functools import reduce
@@ -45,12 +58,7 @@ class KnownValues(unittest.TestCase):
         b = ibo.PM(mol, mf.mo_coeff[:,mf.mo_occ>0], exponent=2).kernel()
         pop = pipek.atomic_pops(mol, b)
         z = numpy.einsum('xii,xii->', pop, pop)
-        self.assertAlmostEqual(z, 4.0573975932440476, 5)
-
-        b = ibo.PM(mol, b, exponent=4).kernel()
-        pop = pipek.atomic_pops(mol, b)
-        z = numpy.einsum('xii,xii->', pop, pop)
-        self.assertAlmostEqual(z, 4.0508136007117201, 5)
+        self.assertAlmostEqual(z, 3.9206879872618576, 5)
 
 
 if __name__ == "__main__":

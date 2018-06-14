@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Authors: Garnet Chan <gkc1000@gmail.com>
 #          Timothy Berkelbach <tim.berkelbach@gmail.com>
@@ -26,12 +39,15 @@ from pyscf.pbc.gto.pseudo import get_pp
 from pyscf.pbc.scf import chkfile
 from pyscf.pbc import df
 from pyscf.pbc.scf import addons
+from pyscf import __config__
 
 
 def get_ovlp(cell, kpt=np.zeros(3)):
     '''Get the overlap AO matrix.
     '''
-    s = cell.pbc_intor('int1e_ovlp_sph', hermi=1, kpts=kpt)
+# Avoid pbcopt's prescreening in the lattice sum, for better accuracy
+    s = cell.pbc_intor('int1e_ovlp', hermi=1, kpts=kpt,
+                       pbcopt=lib.c_null_ptr())
     cond = np.max(lib.cond(s))
     if cond * cell.precision > 1e2:
         prec = 1e2 / cond
@@ -56,14 +72,13 @@ def get_hcore(cell, kpt=np.zeros(3)):
         hcore += get_nuc(cell, kpt)
     if len(cell._ecpbas) > 0:
         hcore += ecp.ecp_int(cell, kpt)
-
     return hcore
 
 
 def get_t(cell, kpt=np.zeros(3)):
     '''Get the kinetic energy AO matrix.
     '''
-    return cell.pbc_intor('int1e_kin_sph', hermi=1, kpts=kpt)
+    return cell.pbc_intor('int1e_kin', hermi=1, kpts=kpt)
 
 
 def get_nuc(cell, kpt=np.zeros(3)):
@@ -156,7 +171,7 @@ def get_bands(mf, kpts_band, cell=None, dm=None, kpt=None):
     mo_energy = []
     mo_coeff = []
     for k in range(nkpts):
-        e, c = mf._eigh(fock[k], s1e[k])
+        e, c = mf.eig(fock[k], s1e[k])
         mo_energy.append(e)
         mo_coeff.append(c)
 
@@ -177,9 +192,15 @@ def init_guess_by_chkfile(cell, chkfile_name, project=None, kpt=None):
     dm = uhf.init_guess_by_chkfile(cell, chkfile_name, project, kpt)
     return dm[0] + dm[1]
 
+get_fock = mol_hf.get_fock
+get_occ = mol_hf.get_occ
+get_grad = mol_hf.get_grad
+make_rdm1 = mol_hf.make_rdm1
+energy_elec = mol_hf.energy_elec
+
 
 class SCF(mol_hf.SCF):
-    '''SCF class adapted for PBCs.
+    '''SCF base class adapted for PBCs.
 
     Attributes:
         kpt : (3,) ndarray
@@ -201,7 +222,11 @@ class SCF(mol_hf.SCF):
             depending the available memory, the 4-index integrals may be cached
             and J/K matrices are computed based on the 4-index integrals.
     '''
-    def __init__(self, cell, kpt=np.zeros(3), exxdiv='ewald'):
+
+    direct_scf = getattr(__config__, 'pbc_scf_SCF_direct_scf', False)
+
+    def __init__(self, cell, kpt=np.zeros(3),
+                 exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         if not cell._built:
             sys.stderr.write('Warning: cell.build() is not called in input\n')
             cell.build()
@@ -211,30 +236,43 @@ class SCF(mol_hf.SCF):
         self.with_df = df.FFTDF(cell)
         self.exxdiv = exxdiv
         self.kpt = kpt
-        self.direct_scf = False
 
         self._keys = self._keys.union(['cell', 'exxdiv', 'with_df'])
 
     @property
     def kpt(self):
+        if 'kpt' in self.__dict__:
+            # To handle the attribute kpt loaded from chkfile
+            self.kpt = self.__dict__.pop('kpt')
         return self.with_df.kpts.reshape(3)
     @kpt.setter
     def kpt(self, x):
         self.with_df.kpts = np.reshape(x, (-1,3))
+
+    def build(self, cell=None):
+        if 'kpt' in self.__dict__:
+            # To handle the attribute kpt loaded from chkfile
+            self.kpt = self.__dict__.pop('kpt')
+        if self.verbose >= logger.WARN:
+            self.check_sanity()
+        return self
 
     def dump_flags(self):
         mol_hf.SCF.dump_flags(self)
         logger.info(self, '******** PBC SCF flags ********')
         logger.info(self, 'kpt = %s', self.kpt)
         logger.info(self, 'Exchange divergence treatment (exxdiv) = %s', self.exxdiv)
-        if isinstance(self.exxdiv, str) and self.exxdiv.lower() == 'ewald':
+        if (self.cell.dimension == 3 and
+            isinstance(self.exxdiv, str) and self.exxdiv.lower() == 'ewald'):
             madelung = tools.pbc.madelung(self.cell, [self.kpt])
             logger.info(self, '    madelung (= occupied orbital energy shift) = %s', madelung)
             logger.info(self, '    Total energy shift due to Ewald probe charge'
                         ' = -1/2 * Nelec*madelung/cell.vol = %.12g',
                         madelung*self.cell.nelectron * -.5)
         logger.info(self, 'DF object = %s', self.with_df)
-        self.with_df.dump_flags()
+        if not hasattr(self.with_df, 'build'):
+            # .dump_flags() is called in pbc.df.build function
+            self.with_df.dump_flags()
         return self
 
     def check_sanity(self):
@@ -255,7 +293,7 @@ class SCF(mol_hf.SCF):
             nuc = self.with_df.get_nuc(kpt)
         if len(cell._ecpbas) > 0:
             nuc += ecp.ecp_int(cell, kpt)
-        return nuc + cell.pbc_intor('int1e_kin_sph', 1, 1, kpt)
+        return nuc + cell.pbc_intor('int1e_kin', 1, 1, kpt)
 
     def get_ovlp(self, cell=None, kpt=None):
         if cell is None: cell = self.cell
@@ -390,7 +428,7 @@ class SCF(mol_hf.SCF):
         if cell.dimension < 3:
             logger.warn(self, 'Hcore initial guess is not recommended in '
                         'the SCF of low-dimensional systems.')
-        return mol_hf.SCF.init_guess_by_1e(cell)
+        return mol_hf.SCF.init_guess_by_1e(self, cell)
 
     def init_guess_by_chkfile(self, chk=None, project=None, kpt=None):
         if chk is None: chk = self.chkfile
@@ -400,8 +438,8 @@ class SCF(mol_hf.SCF):
         return self.init_guess_by_chkfile(chk, project, kpt)
 
     def dump_chk(self, envs):
-        mol_hf.SCF.dump_chk(self, envs)
         if self.chkfile:
+            mol_hf.SCF.dump_chk(self, envs)
             with h5py.File(self.chkfile) as fh5:
                 fh5['scf/kpt'] = self.kpt
         return self
@@ -425,12 +463,21 @@ class SCF(mol_hf.SCF):
     def sfx2c1e(self):
         from pyscf.pbc.x2c import sfx2c1e
         return sfx2c1e.sfx2c1e(self)
+    x2c = x2c1e = sfx2c1e
+
 
 class RHF(SCF, mol_hf.RHF):
+
+    check_sanity = mol_hf.RHF.check_sanity
+    stability = mol_hf.RHF.stability
+
     def convert_from_(self, mf):
         '''Convert given mean-field object to RHF'''
         addons.convert_to_rhf(mf, self)
         return self
+
+    def nuc_grad_method(self):
+        raise NotImplementedError
 
 
 def _format_jks(vj, dm, kpts_band):

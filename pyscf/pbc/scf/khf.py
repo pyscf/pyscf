@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Authors: Garnet Chan <gkc1000@gmail.com>
 #          Timothy Berkelbach <tim.berkelbach@gmail.com>
@@ -20,13 +33,18 @@ import scipy.linalg
 import h5py
 from pyscf.pbc.scf import hf as pbchf
 from pyscf import lib
-from pyscf.scf import hf
+from pyscf.scf import hf as mol_hf
 from pyscf.lib import logger
 from pyscf.pbc.gto import ecp
 from pyscf.pbc.scf import addons
 from pyscf.pbc.scf import chkfile
 from pyscf.pbc import tools
 from pyscf.pbc import df
+from pyscf import __config__
+
+WITH_META_LOWDIN = getattr(__config__, 'pbc_scf_analyze_with_meta_lowdin', True)
+PRE_ORTH_METHOD = getattr(__config__, 'pbc_scf_analyze_pre_orth_method', 'ANO')
+CHECK_COULOMB_IMAG = getattr(__config__, 'pbc_scf_check_coulomb_imag', True)
 
 
 def get_ovlp(mf, cell=None, kpts=None):
@@ -40,7 +58,9 @@ def get_ovlp(mf, cell=None, kpts=None):
     '''
     if cell is None: cell = mf.cell
     if kpts is None: kpts = mf.kpts
-    s = cell.pbc_intor('int1e_ovlp_sph', hermi=1, kpts=kpts)
+# Avoid pbcopt's prescreening in the lattice sum, for better accuracy
+    s = cell.pbc_intor('int1e_ovlp', hermi=1, kpts=kpts,
+                       pbcopt=lib.c_null_ptr())
     cond = np.max(lib.cond(s))
     if cond * cell.precision > 1e2:
         prec = 1e2 / cond
@@ -66,7 +86,14 @@ def get_hcore(mf, cell=None, kpts=None):
     '''
     if cell is None: cell = mf.cell
     if kpts is None: kpts = mf.kpts
-    return lib.asarray([pbchf.get_hcore(cell, k) for k in kpts])
+    if cell.pseudo:
+        nuc = lib.asarray(mf.with_df.get_pp(kpts))
+    else:
+        nuc = lib.asarray(mf.with_df.get_nuc(kpts))
+    if len(cell._ecpbas) > 0:
+        nuc += lib.asarray(ecp.ecp_int(cell, kpts))
+    t = lib.asarray(cell.pbc_intor('int1e_kin', 1, 1, kpts))
+    return nuc + t
 
 
 def get_j(mf, cell, dm_kpts, kpts, kpts_band=None):
@@ -107,20 +134,28 @@ def get_jk(mf, cell, dm_kpts, kpts, kpts_band=None):
     '''
     return df.FFTDF(cell).get_jk(dm_kpts, kpts, kpts_band, exxdiv=mf.exxdiv)
 
-def get_fock(mf, h1e_kpts, s_kpts, vhf_kpts, dm_kpts, cycle=-1, diis=None,
+def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
              diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
+    h1e_kpts, s_kpts, vhf_kpts, dm_kpts = h1e, s1e, vhf, dm
+    if h1e_kpts is None: h1e_kpts = mf.get_hcore()
+    if vhf_kpts is None: vhf_kpts = mf.get_veff(mf.cell, dm_kpts)
+    f_kpts = h1e_kpts + vhf_kpts
+    if cycle < 0 and diis is None:  # Not inside the SCF iteration
+        return f_kpts
+
     if diis_start_cycle is None:
         diis_start_cycle = mf.diis_start_cycle
     if level_shift_factor is None:
         level_shift_factor = mf.level_shift
     if damp_factor is None:
         damp_factor = mf.damp
+    if s_kpts is None: s_kpts = mf.get_ovlp()
+    if dm_kpts is None: dm_kpts = mf.make_rdm1()
 
-    f_kpts = h1e_kpts + vhf_kpts
     if diis and cycle >= diis_start_cycle:
         f_kpts = diis.update(s_kpts, dm_kpts, f_kpts, mf, h1e_kpts, vhf_kpts)
     if abs(level_shift_factor) > 1e-4:
-        f_kpts = [hf.level_shift(s, dm_kpts[k], f_kpts[k], level_shift_factor)
+        f_kpts = [mol_hf.level_shift(s, dm_kpts[k], f_kpts[k], level_shift_factor)
                   for k, s in enumerate(s_kpts)]
     return lib.asarray(f_kpts)
 
@@ -130,7 +165,7 @@ def get_fermi(mf, mo_energy_kpts=None, mo_occ_kpts=None):
     if mo_energy_kpts is None: mo_energy_kpts = mf.mo_energy
     if mo_occ_kpts is None: mo_occ_kpts = mf.mo_occ
     nocc = np.count_nonzero(mo_occ_kpts != 0)
-    fermi = np.sort(mo_energy_kpts.ravel())[nocc-1]
+    fermi = np.sort(np.hstack(mo_energy_kpts))[nocc-1]
     return fermi
 
 def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
@@ -178,7 +213,7 @@ def get_grad(mo_coeff_kpts, mo_occ_kpts, fock):
     in sequential patches of the 1D array
     '''
     nkpts = len(mo_occ_kpts)
-    grad_kpts = [hf.get_grad(mo_coeff_kpts[k], mo_occ_kpts[k], fock[k])
+    grad_kpts = [mol_hf.get_grad(mo_coeff_kpts[k], mo_occ_kpts[k], fock[k])
                  for k in range(nkpts)]
     return np.hstack(grad_kpts)
 
@@ -190,7 +225,7 @@ def make_rdm1(mo_coeff_kpts, mo_occ_kpts):
         dm_kpts : (nkpts, nao, nao) ndarray
     '''
     nkpts = len(mo_occ_kpts)
-    dm_kpts = [hf.make_rdm1(mo_coeff_kpts[k], mo_occ_kpts[k])
+    dm_kpts = [mol_hf.make_rdm1(mo_coeff_kpts[k], mo_occ_kpts[k])
                for k in range(nkpts)]
     return lib.asarray(dm_kpts)
 
@@ -205,16 +240,16 @@ def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf_kpts=None):
     nkpts = len(dm_kpts)
     e1 = 1./nkpts * np.einsum('kij,kji', dm_kpts, h1e_kpts)
     e_coul = 1./nkpts * np.einsum('kij,kji', dm_kpts, vhf_kpts) * 0.5
-    if abs(e_coul.imag > 1.e-7):
-        raise RuntimeError("Coulomb energy has imaginary part, "
-                           "something is wrong!", e_coul.imag)
-    e1 = e1.real
-    e_coul = e_coul.real
-    logger.debug(mf, 'E_coul = %.15g', e_coul)
-    return e1+e_coul, e_coul
+    logger.debug(mf, 'E1 = %s  E_coul = %s', e1, e_coul)
+    if CHECK_COULOMB_IMAG and abs(e_coul.imag > mf.cell.precision*10):
+        logger.warn(mf, "Coulomb energy has imaginary part %s. "
+                    "Coulomb integrals (e-e, e-N) may not converge !",
+                    e_coul.imag)
+    return (e1+e_coul).real, e_coul.real
 
 
-def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=True, **kwargs):
+def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
+            **kwargs):
     '''Analyze the given SCF object:  print orbital energies, occupancies;
     print orbital coefficients; Mulliken population analysis; Dipole moment
     '''
@@ -227,11 +262,12 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=True, **kwargs):
     if with_meta_lowdin:
         return mf.mulliken_meta(mf.cell, dm, s=ovlp_ao, verbose=verbose)
     else:
-        return mf.mulliken_pop(mf.cell, dm, s=ovlp_ao, verbose=verbose)
+        raise NotImplementedError
+        #return mf.mulliken_pop(mf.cell, dm, s=ovlp_ao, verbose=verbose)
 
 
-def mulliken_meta(cell, dm_ao, verbose=logger.DEBUG, pre_orth_method='ANO',
-                  s=None):
+def mulliken_meta(cell, dm_ao_kpts, verbose=logger.DEBUG,
+                  pre_orth_method=PRE_ORTH_METHOD, s=None):
     '''Mulliken population analysis, based on meta-Lowdin AOs.
 
     Note this function only computes the Mulliken population for the gamma
@@ -243,15 +279,15 @@ def mulliken_meta(cell, dm_ao, verbose=logger.DEBUG, pre_orth_method='ANO',
     log = logger.new_logger(cell, verbose)
     log.note('Analyze output for the gamma point')
     log.note("KRHF mulliken_meta")
-    dm_ao_gamma = dm_ao[0,:,:].real
+    dm_ao_gamma = dm_ao_kpts[0,:,:].real
     s_gamma = s[0,:,:].real
     c = orth.restore_ao_character(cell, pre_orth_method)
     orth_coeff = orth.orth_ao(cell, 'meta_lowdin', pre_orth_ao=c, s=s_gamma)
     c_inv = np.dot(orth_coeff.T, s_gamma)
     dm = reduce(np.dot, (c_inv, dm_ao_gamma, c_inv.T.conj()))
 
-    log.note(' ** Mulliken pop alpha/beta on meta-lowdin orthogonal AOs **')
-    return hf.mulliken_pop(cell, dm, np.eye(orth_coeff.shape[0]), log)
+    log.note(' ** Mulliken pop on meta-lowdin orthogonal AOs **')
+    return mol_hf.mulliken_pop(cell, dm, np.eye(orth_coeff.shape[0]), log)
 
 
 def canonicalize(mf, mo_coeff_kpts, mo_occ_kpts, fock=None):
@@ -290,7 +326,7 @@ def init_guess_by_chkfile(cell, chkfile_name, project=None, kpts=None):
 
 
 class KSCF(pbchf.SCF):
-    '''SCF class with k-point sampling.
+    '''SCF base class with k-point sampling.
 
     Compared to molecular SCF, some members such as mo_coeff, mo_occ
     now have an additional first dimension for the k-points,
@@ -300,23 +336,30 @@ class KSCF(pbchf.SCF):
         kpts : (nks,3) ndarray
             The sampling k-points in Cartesian coordinates, in units of 1/Bohr.
     '''
-    def __init__(self, cell, kpts=np.zeros((1,3)), exxdiv='ewald'):
+    conv_tol = getattr(__config__, 'pbc_scf_KSCF_conv_tol', 1e-7)
+    conv_tol_grad = getattr(__config__, 'pbc_scf_KSCF_conv_tol_grad', None)
+    direct_scf = getattr(__config__, 'pbc_scf_SCF_direct_scf', False)
+
+    def __init__(self, cell, kpts=np.zeros((1,3)),
+                 exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         if not cell._built:
             sys.stderr.write('Warning: cell.build() is not called in input\n')
             cell.build()
         self.cell = cell
-        hf.SCF.__init__(self, cell)
+        mol_hf.SCF.__init__(self, cell)
 
         self.with_df = df.FFTDF(cell)
         self.exxdiv = exxdiv
         self.kpts = kpts
-        self.direct_scf = False
 
         self.exx_built = False
         self._keys = self._keys.union(['cell', 'exx_built', 'exxdiv', 'with_df'])
 
     @property
     def kpts(self):
+        if 'kpts' in self.__dict__:
+            # To handle the attribute kpt loaded from chkfile
+            self.kpt = self.__dict__.pop('kpts')
         return self.with_df.kpts
     @kpts.setter
     def kpts(self, x):
@@ -335,7 +378,7 @@ class KSCF(pbchf.SCF):
         return self.mo_occ
 
     def dump_flags(self):
-        hf.SCF.dump_flags(self)
+        mol_hf.SCF.dump_flags(self)
         logger.info(self, '\n')
         logger.info(self, '******** PBC SCF flags ********')
         logger.info(self, 'N kpts = %d', len(self.kpts))
@@ -345,18 +388,21 @@ class KSCF(pbchf.SCF):
         #    if self.exx_built is False:
         #        self.precompute_exx()
         #    logger.info(self, 'WS alpha = %s', self.exx_alpha)
-        if isinstance(self.exxdiv, str) and self.exxdiv.lower() == 'ewald':
+        if (self.cell.dimension == 3 and
+            isinstance(self.exxdiv, str) and self.exxdiv.lower() == 'ewald'):
             madelung = tools.pbc.madelung(self.cell, [self.kpts])
             logger.info(self, '    madelung (= occupied orbital energy shift) = %s', madelung)
             logger.info(self, '    Total energy shift due to Ewald probe charge'
                         ' = -1/2 * Nelec*madelung/cell.vol = %.12g',
                         madelung*self.cell.nelectron * -.5)
         logger.info(self, 'DF object = %s', self.with_df)
-        self.with_df.dump_flags()
+        if not hasattr(self.with_df, 'build'):
+            # .dump_flags() is called in pbc.df.build function
+            self.with_df.dump_flags()
         return self
 
     def check_sanity(self):
-        hf.SCF.check_sanity(self)
+        mol_hf.SCF.check_sanity(self)
         self.with_df.check_sanity()
         if (isinstance(self.exxdiv, str) and self.exxdiv.lower() != 'ewald' and
             isinstance(self.with_df, df.df.DF)):
@@ -365,26 +411,33 @@ class KSCF(pbchf.SCF):
         return self
 
     def build(self, cell=None):
-        hf.SCF.build(self, cell)
         #if self.exxdiv == 'vcut_ws':
         #    self.precompute_exx()
+
+        if 'kpts' in self.__dict__:
+            # To handle the attribute kpts loaded from chkfile
+            self.kpts = self.__dict__.pop('kpts')
+        if self.verbose >= logger.WARN:
+            self.check_sanity()
+        return self
 
     def get_init_guess(self, cell=None, key='minao'):
         if cell is None:
             cell = self.cell
         dm_kpts = None
-        if key.lower() == '1e':
+        key = key.lower()
+        if key == '1e' or key == 'hcore':
             dm_kpts = self.init_guess_by_1e(cell)
         elif getattr(cell, 'natm', 0) == 0:
             logger.info(self, 'No atom found in cell. Use 1e initial guess')
             dm_kpts = self.init_guess_by_1e(cell)
-        elif key.lower() == 'atom':
+        elif key == 'atom':
             dm = self.init_guess_by_atom(cell)
-        elif key.lower().startswith('chk'):
+        elif key[:3] == 'chk':
             try:
                 dm_kpts = self.from_chk()
             except (IOError, KeyError):
-                logger.warn(self, 'Fail in reading %s. Use MINAO initial guess',
+                logger.warn(self, 'Fail to read %s. Use MINAO initial guess',
                             self.chkfile)
                 dm = self.init_guess_by_minao(cell)
         else:
@@ -410,20 +463,9 @@ class KSCF(pbchf.SCF):
         if cell.dimension < 3:
             logger.warn(self, 'Hcore initial guess is not recommended in '
                         'the SCF of low-dimensional systems.')
-        return hf.SCF.init_guess_by_1e(self, cell)
+        return mol_hf.SCF.init_guess_by_1e(self, cell)
 
-    def get_hcore(self, cell=None, kpts=None):
-        if cell is None: cell = self.cell
-        if kpts is None: kpts = self.kpts
-        if cell.pseudo:
-            nuc = lib.asarray(self.with_df.get_pp(kpts))
-        else:
-            nuc = lib.asarray(self.with_df.get_nuc(kpts))
-        if len(cell._ecpbas) > 0:
-            nuc += lib.asarray(ecp.ecp_int(cell, kpts))
-        t = lib.asarray(cell.pbc_intor('int1e_kin_sph', 1, 1, kpts))
-        return nuc + t
-
+    get_hcore = get_hcore
     get_ovlp = get_ovlp
     get_fock = get_fock
     get_occ = get_occ
@@ -460,7 +502,8 @@ class KSCF(pbchf.SCF):
         vj, vk = self.get_jk(cell, dm_kpts, hermi, kpts, kpts_band)
         return vj - vk * .5
 
-    def analyze(self, verbose=None, with_meta_lowdin=True, **kwargs):
+    def analyze(self, verbose=None, with_meta_lowdin=WITH_META_LOWDIN,
+                **kwargs):
         if verbose is None: verbose = self.verbose
         return analyze(self, verbose, with_meta_lowdin, **kwargs)
 
@@ -532,14 +575,14 @@ class KSCF(pbchf.SCF):
         return self.init_guess_by_chkfile(chk, project, kpts)
 
     def dump_chk(self, envs):
-        hf.SCF.dump_chk(self, envs)
         if self.chkfile:
+            mol_hf.SCF.dump_chk(self, envs)
             with h5py.File(self.chkfile) as fh5:
                 fh5['scf/kpts'] = self.kpts
         return self
 
     def mulliken_meta(self, cell=None, dm=None, verbose=logger.DEBUG,
-                      pre_orth_method='ANO', s=None):
+                      pre_orth_method=PRE_ORTH_METHOD, s=None):
         if cell is None: cell = self.cell
         if dm is None: dm = self.make_rdm1()
         if s is None: s = self.get_ovlp(cell)
@@ -556,7 +599,10 @@ class KSCF(pbchf.SCF):
         from pyscf.pbc.df import mdf_jk
         return mdf_jk.density_fit(self, auxbasis, with_df)
 
-    def stability(self, internal=True, external=False, verbose=None):
+    def stability(self,
+                  internal=getattr(__config__, 'pbc_scf_KSCF_stability_internal', True),
+                  external=getattr(__config__, 'pbc_scf_KSCF_stability_external', False),
+                  verbose=None):
         from pyscf.pbc.scf.stability import rhf_stability
         return rhf_stability(self, internal, external, verbose)
 
@@ -567,12 +613,22 @@ class KSCF(pbchf.SCF):
     def sfx2c1e(self):
         from pyscf.pbc.x2c import sfx2c1e
         return sfx2c1e.sfx2c1e(self)
+    x2c = x2c1e = sfx2c1e
 
 class KRHF(KSCF, pbchf.RHF):
+    def check_sanity(self):
+        cell = self.cell
+        if cell.spin != 0 and len(self.kpts) % 2 != 0:
+            logger.warn(self, 'Problematic nelec %s and number of k-points %d '
+                        'found in KRHF method.', cell.nelec, len(self.kpts))
+        return KSCF.check_sanity(self)
+
     def convert_from_(self, mf):
         '''Convert given mean-field object to KRHF'''
         addons.convert_to_rhf(mf, self)
         return self
+
+del(WITH_META_LOWDIN, PRE_ORTH_METHOD)
 
 
 if __name__ == '__main__':
@@ -590,5 +646,4 @@ if __name__ == '__main__':
     mf = KRHF(cell, [2,1,1])
     mf.kernel()
     mf.analyze()
-
 

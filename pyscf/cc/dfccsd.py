@@ -1,16 +1,41 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 import time
-from functools import reduce
 import ctypes
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
+from pyscf import df
 from pyscf.cc import ccsd
 from pyscf.cc import _ccsd
+from pyscf import __config__
+
+MEMORYMIN = getattr(__config__, 'cc_ccsd_memorymin', 2000)
 
 class RCCSD(ccsd.CCSD):
+    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+        ccsd.CCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
+        if hasattr(mf, 'with_df') and mf.with_df:
+            self.with_df = mf.with_df
+        else:
+            self.with_df = df.DF(mf.mol)
+            self.with_df.auxbasis = df.make_auxbasis(mf.mol, mp2fit=True)
+        self._keys.update(['with_df'])
+
     def ao2mo(self, mo_coeff=None):
         return _make_df_eris(self, mo_coeff)
 
@@ -19,7 +44,7 @@ class RCCSD(ccsd.CCSD):
         return ccsd.CCSD._add_vvvv(self, t1, t2, eris, out, with_ovvv, t2sym)
 
 
-def _contract_vvvv_t2(mol, vvL, t2, out=None, max_memory=2000, verbose=None):
+def _contract_vvvv_t2(mycc, mol, vvL, t2, out=None, verbose=None):
     '''Ht2 = numpy.einsum('ijcd,acdb->ijab', t2, vvvv)
 
     Args:
@@ -38,6 +63,7 @@ def _contract_vvvv_t2(mol, vvL, t2, out=None, max_memory=2000, verbose=None):
     Ht2 = numpy.ndarray(x2.shape, buffer=out)
     Ht2[:] = 0
 
+    max_memory = max(MEMORYMIN, mycc.max_memory - lib.current_memory()[0])
     def contract_blk_(eri, i0, i1, j0, j1):
         ic = i1 - i0
         jc = j1 - j0
@@ -52,7 +78,7 @@ def _contract_vvvv_t2(mol, vvL, t2, out=None, max_memory=2000, verbose=None):
                    x2.reshape(-1,nvir2), eri.reshape(-1,jc*nvirb),
                    Ht2.reshape(-1,nvir2), 1, 1, j0*nvirb, 0, i0*nvirb)
 
-#TODO: check if vvL can be entirely load into memory
+#TODO: check if vvL can be entirely loaded into memory
     nvir_pair = nvirb * (nvirb+1) // 2
     dmax = numpy.sqrt(max_memory*.7e6/8/nvirb**2/2)
     dmax = int(min((nvira+3)//4, max(ccsd.BLKMIN, dmax)))
@@ -85,10 +111,9 @@ def _contract_vvvv_t2(mol, vvL, t2, out=None, max_memory=2000, verbose=None):
 
 
 class _ChemistsERIs(ccsd._ChemistsERIs):
-    def _contract_vvvv_t2(self, t2, direct=False, out=None, max_memory=2000,
-                          verbose=None):
+    def _contract_vvvv_t2(self, mycc, t2, direct=False, out=None, verbose=None):
         assert(not direct)
-        return _contract_vvvv_t2(self.mol, self.vvL, t2, out, max_memory, verbose)
+        return _contract_vvvv_t2(mycc, self.mol, self.vvL, t2, out, verbose)
 
 def _make_df_eris(cc, mo_coeff=None):
     cput0 = (time.clock(), time.time())
@@ -99,7 +124,7 @@ def _make_df_eris(cc, mo_coeff=None):
     nvir = nmo - nocc
     nocc_pair = nocc*(nocc+1)//2
     nvir_pair = nvir*(nvir+1)//2
-    with_df = cc._scf.with_df
+    with_df = cc.with_df
     naux = eris.naux = with_df.get_naoaux()
 
     eris.feri = lib.H5TmpFile()

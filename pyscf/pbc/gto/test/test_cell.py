@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -81,7 +94,7 @@ class KnownValues(unittest.TestCase):
         3.370137329  3.370137329  0.000000000''',
         mesh = [15]*3)
         rcut = max([cell.bas_rcut(ib, 1e-8) for ib in range(cell.nbas)])
-        self.assertEqual(cell.get_lattice_Ls(rcut=rcut).shape, (1217, 3))
+        self.assertEqual(cell.get_lattice_Ls(rcut=rcut).shape, (1097, 3))
         rcut = max([cell.bas_rcut(ib, 1e-9) for ib in range(cell.nbas)])
         self.assertEqual(cell.get_lattice_Ls(rcut=rcut).shape, (1241, 3))
 
@@ -138,7 +151,7 @@ class KnownValues(unittest.TestCase):
         cell.dimension = 2
         cell.rcut = 3.6
         cell.build()
-        self.assertAlmostEqual(cell.ewald(), 3898143.7149599856, 6)
+        self.assertAlmostEqual(cell.ewald(), -2.0207698225112987, 6)
 
     def test_ewald_1d(self):
         cell = pgto.Cell()
@@ -150,7 +163,7 @@ class KnownValues(unittest.TestCase):
         cell.dimension = 1
         cell.rcut = 3.6
         cell.build()
-        self.assertAlmostEqual(cell.ewald(), 70.875202620681918, 4)
+        self.assertAlmostEqual(cell.ewald(), 6.4055183018897317, 4)
 
     def test_ewald_0d(self):
         cell = pgto.Cell()
@@ -178,7 +191,7 @@ class KnownValues(unittest.TestCase):
         s1 = cl1.pbc_intor('int1e_ovlp_sph', hermi=1, kpts=kpts[0])
         self.assertAlmostEqual(finger(s1), 492.30658304804126, 4)
 
-    def test_ecp_pseudo_high_cost(self):
+    def test_ecp_pseudo(self):
         from pyscf.pbc.gto import ecp
         cell = pgto.M(
             a = np.eye(3)*5,
@@ -199,7 +212,7 @@ class KnownValues(unittest.TestCase):
         v1 = ecp.ecp_int(cell)
         mol = cell.to_mol()
         v0 = mol.intor('ECPscalar_sph')
-        self.assertAlmostEqual(abs(v0 - v1).sum(), 0.0289322453376, 10)
+        self.assertAlmostEqual(abs(v0 - v1).sum(), 0.029005926114411891, 8)
 
     def test_ecp_keyword_in_pseudo(self):
         cell = pgto.M(

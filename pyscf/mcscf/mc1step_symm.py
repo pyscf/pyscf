@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -10,7 +23,9 @@ from pyscf.lib import logger
 from pyscf.mcscf import mc1step
 from pyscf.mcscf import mc2step
 from pyscf.mcscf import casci_symm
+from pyscf.mcscf import addons
 from pyscf import fci
+from pyscf import __config__
 
 
 class SymAdaptedCASSCF(mc1step.CASSCF):
@@ -18,8 +33,22 @@ class SymAdaptedCASSCF(mc1step.CASSCF):
     def __init__(self, mf, ncas, nelecas, ncore=None, frozen=None):
         assert(mf.mol.symmetry)
         mc1step.CASSCF.__init__(self, mf, ncas, nelecas, ncore, frozen)
-        #self.fcisolver = fci.solver(mf.mol, self.nelecas[0]==self.nelecas[1], True)
-        self.fcisolver = fci.solver(mf.mol, False, True)
+        singlet = (getattr(__config__, 'mcscf_mc1step_CASCI_fcisolver_direct_spin0', False)
+                   and self.nelecas[0] == self.nelecas[1])
+        self.fcisolver = fci.solver(mf.mol, singlet, symm=True)
+        self.fcisolver.max_cycle = getattr(__config__,
+                                           'mcscf_mc1step_CASSCF_fcisolver_max_cycle', 50)
+        self.fcisolver.conv_tol = getattr(__config__,
+                                          'mcscf_mc1step_CASSCF_fcisolver_conv_tol', 1e-8)
+        self.fcisolver.lindep = getattr(__config__,
+                                        'mcscf_mc1step_CASCI_fcisolver_lindep', 1e-10)
+
+    @property
+    def wfnsym(self):
+        return self.fcisolver.wfnsym
+    @wfnsym.setter
+    def wfnsym(self, wfnsym):
+        self.fcisolver.wfnsym = wfnsym
 
     def mc1step(self, mo_coeff=None, ci0=None, callback=None):
         return self.kernel(mo_coeff, ci0, callback, mc1step.kernel)
@@ -38,15 +67,8 @@ class SymAdaptedCASSCF(mc1step.CASSCF):
         self.dump_flags()
         log = logger.Logger(self.stdout, self.verbose)
 
-        mo_coeff = self.mo_coeff = casci_symm.label_symmetry_(self, mo_coeff)
-
-        if (hasattr(self.fcisolver, 'wfnsym') and
-            self.fcisolver.wfnsym is None and
-            hasattr(self.fcisolver, 'guess_wfnsym')):
-            wfnsym = self.fcisolver.guess_wfnsym(self.ncas, self.nelecas, ci0,
-                                                 verbose=log)
-            wfnsym = symm.irrep_id2name(self.mol.groupname, wfnsym)
-            log.info('Active space CI wfn symmetry = %s', wfnsym)
+        # Initialize/overwrite self.fcisolver.orbsym and self.fcisolver.wfnsym
+        mo_coeff = self.mo_coeff = casci_symm.label_symmetry_(self, mo_coeff, ci0)
 
         self.converged, self.e_tot, self.e_cas, self.ci, \
                 self.mo_coeff, self.mo_energy = \
@@ -76,6 +98,22 @@ class SymAdaptedCASSCF(mc1step.CASSCF):
         mo = lib.tag_array(mo, orbsym=self.mo_coeff.orbsym)
         return mo
 
+    def sort_mo_by_irrep(self, cas_irrep_nocc,
+                         cas_irrep_ncore=None, mo_coeff=None, s=None):
+        '''Select active space based on symmetry information.
+        See also :func:`pyscf.mcscf.addons.sort_mo_by_irrep`
+        '''
+        if mo_coeff is None: mo_coeff = self.mo_coeff
+        return addons.sort_mo_by_irrep(self, mo_coeff, cas_irrep_nocc,
+                                       cas_irrep_ncore, s)
+
+    def newton(self):
+        from pyscf.mcscf import newton_casscf_symm
+        mc1 = newton_casscf_symm.CASSCF(self._scf, self.ncas, self.nelecas)
+        mc1.__dict__.update(self.__dict__)
+        mc1.max_cycle_micro = 10
+        return mc1
+
 CASSCF = SymAdaptedCASSCF
 
 def _symmetrize(mat, orbsym, groupname):
@@ -83,6 +121,10 @@ def _symmetrize(mat, orbsym, groupname):
     orbsym = numpy.asarray(orbsym)
     allowed = orbsym.reshape(-1,1) == orbsym
     mat1[allowed] = mat[allowed]
+
+    if groupname in ('Dooh', 'Coov'):
+        from pyscf.soscf import newton_ah
+        newton_ah._force_Ex_Ey_degeneracy_(mat1, orbsym)
     return mat1
 
 

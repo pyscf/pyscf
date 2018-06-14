@@ -1,6 +1,19 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
 #
-# Authors: James D. McClain <jmcclain@princeton.edu>
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Authors: James D. McClain
 #          Timothy Berkelbach <tim.berkelbach@gmail.com>
 #
 
@@ -87,16 +100,17 @@ def Lvv(t1,t2,eris,kconserv):
 
 ### Eqs. (42)-(45) "chi"
 
-def cc_Woooo(t1,t2,eris,kconserv):
+def cc_Woooo(t1, t2, eris, kconserv, out=None):
     nkpts, nocc, nvir = t1.shape
 
-    Wklij = np.array(eris.oooo, copy=True)
+    Wklij = _new(eris.oooo.shape, t1.dtype, out)
     for kk in range(nkpts):
         for kl in range(kk+1):
             for ki in range(nkpts):
                 kj = kconserv[kk,ki,kl]
-                Wklij[kk,kl,ki] += einsum('klic,jc->klij',eris.ooov[kk,kl,ki],t1[kj])
-                Wklij[kk,kl,ki] += einsum('lkjc,ic->klij',eris.ooov[kl,kk,kj],t1[ki])
+                oooo  = einsum('klic,jc->klij',eris.ooov[kk,kl,ki],t1[kj])
+                oooo += einsum('lkjc,ic->klij',eris.ooov[kl,kk,kj],t1[ki])
+                oooo += eris.oooo[kk,kl,ki]
 
                 # ==== Beginning of change ====
                 #
@@ -111,7 +125,8 @@ def cc_Woooo(t1,t2,eris,kconserv):
                 #        t2t[kc] += einsum('ic,jd->cdij',t1[ki],t1[kj])
                 t2t[ki] += einsum('ic,jd->cdij',t1[ki],t1[kj])
                 t2t = t2t.reshape(nkpts*nvir,nvir,nocc,nocc)
-                Wklij[kk,kl,ki] += einsum('cdkl,cdij->klij',vvoo,t2t)
+                oooo += einsum('cdkl,cdij->klij',vvoo,t2t)
+                Wklij[kk,kl,ki] = oooo
                 # =====   End of change  = ====
 
         # Be careful about making this term only after all the others are created
@@ -121,39 +136,20 @@ def cc_Woooo(t1,t2,eris,kconserv):
                 Wklij[kl,kk,kj] = Wklij[kk,kl,ki].transpose(1,0,3,2)
     return Wklij
 
-def cc_Wvvvv(t1,t2,eris,kconserv):
-    # Incore:
-    #nkpts, nocc, nvir = t1.shape
-    #Wabcd = np.array(eris.vvvv, copy=True)
-    #for ka in range(nkpts):
-    #    for kb in range(ka+1):
-    #        for kc in range(nkpts):
-    #            Wabcd[ka,kb,kc] += einsum('akcd,kb->abcd',eris.vovv[ka,kb,kc],-t1[kb])
-    #            Wabcd[ka,kb,kc] += einsum('kbcd,ka->abcd',eris.ovvv[ka,kb,kc],-t1[ka])
-    #
-    #    # Be careful about making this term only after all the others are created
-    #    for kb in range(ka+1):
-    #        for kc in range(nkpts):
-    #            kd = kconserv[ka,kc,kb]
-    #            Wabcd[kb,ka,kd] = Wabcd[ka,kb,kc].transpose(1,0,3,2)
-
-    ## HDF5
-    if t1.dtype == np.complex: ds_type = 'c16'
-    else: ds_type = 'f8'
-    _tmpfile1 = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
-    fimd = h5py.File(_tmpfile1.name)
+def cc_Wvvvv(t1, t2, eris, kconserv, out=None):
+    Wabcd = _new(eris.vvvv.shape, t1.dtype, out)
     nkpts, nocc, nvir = t1.shape
-    Wabcd = fimd.create_dataset('vvvv', (nkpts,nkpts,nkpts,nvir,nvir,nvir,nvir), ds_type) 
     for ka in range(nkpts):
         for kb in range(ka+1):
             for kc in range(nkpts):
                 kd = kconserv[ka,kc,kb]
                 # avoid transpose in loop
-                Wabcd[ka,kb,kc] = eris.vvvv[ka,kb,kc]
-                Wabcd[ka,kb,kc] += -einsum('akcd,kb->abcd',eris.vovv[ka,kb,kc],t1[kb])
-                Wabcd[ka,kb,kc] += -einsum('bkdc,ka->abcd',eris.vovv[kb,ka,kd],t1[ka])
+                vvvv  = einsum('akcd,kb->abcd', eris.vovv[ka,kb,kc], -t1[kb])
+                vvvv += einsum('bkdc,ka->abcd', eris.vovv[kb,ka,kd], -t1[ka])
+                vvvv += eris.vvvv[ka,kb,kc]
+                Wabcd[ka,kb,kc] = vvvv
 
-        # Be careful about making this term only after all the others are created
+        # Be careful: making this term only after all the others are created
         for kb in range(ka+1):
             for kc in range(nkpts):
                 kd = kconserv[ka,kc,kb]
@@ -161,15 +157,16 @@ def cc_Wvvvv(t1,t2,eris,kconserv):
 
     return Wabcd
 
-def cc_Wvoov(t1,t2,eris,kconserv):
+def cc_Wvoov(t1, t2, eris, kconserv, out=None):
+    Wakic = _new(eris.voov.shape, t1.dtype, out)
     nkpts, nocc, nvir = t1.shape
-    Wakic = np.array(eris.voov, copy=True)
     for ka in range(nkpts):
         for kk in range(nkpts):
             for ki in range(nkpts):
                 kc = kconserv[ka,ki,kk]
-                Wakic[ka,kk,ki] -= einsum('lkic,la->akic',eris.ooov[ka,kk,ki],t1[ka])
-                Wakic[ka,kk,ki] += einsum('akdc,id->akic',eris.vovv[ka,kk,ki],t1[ki])
+                voov  = einsum('akdc,id->akic',eris.vovv[ka,kk,ki],t1[ki])
+                voov -= einsum('lkic,la->akic',eris.ooov[ka,kk,ki],t1[ka])
+                voov += eris.voov[ka,kk,ki]
                 # ==== Beginning of change ====
                 #
                 #for kl in range(nkpts):
@@ -202,21 +199,23 @@ def cc_Wvoov(t1,t2,eris,kconserv):
                 Soovvf = Soovv.reshape(nkpts*nocc,nocc,nvir,nvir)
                 t2f    = t2[ki,:,ka].transpose(0,2,1,3,4).reshape(nkpts*nocc,nocc,nvir,nvir)
 
-                Wakic[ka,kk,ki] += 0.5*einsum('lkdc,liad->akic',Soovvf,t2f)
-                Wakic[ka,kk,ki] -= 0.5*einsum('lkdc,liad->akic',oovvf,t2f_1)
+                voov += 0.5*einsum('lkdc,liad->akic',Soovvf,t2f)
+                voov -= 0.5*einsum('lkdc,liad->akic',oovvf,t2f_1)
+                Wakic[ka,kk,ki] = voov
                 # =====   End of change  = ====
     return Wakic
 
-def cc_Wvovo(t1,t2,eris,kconserv):
+def cc_Wvovo(t1, t2, eris, kconserv, out=None):
     nkpts, nocc, nvir = t1.shape
-    Wakci = np.empty((nkpts,nkpts,nkpts,nvir,nocc,nvir,nocc),dtype=t1.dtype)
+    Wakci = _new((nkpts,nkpts,nkpts,nvir,nocc,nvir,nocc), t1.dtype, out)
+
     for ka in range(nkpts):
         for kk in range(nkpts):
             for kc in range(nkpts):
                 ki = kconserv[ka,kc,kk]
-                Wakci[ka,kk,kc] = np.array(eris.ovov[kk,ka,ki]).transpose(1,0,3,2)
-                Wakci[ka,kk,kc] -= einsum('klic,la->akci',eris.ooov[kk,ka,ki],t1[ka])
-                Wakci[ka,kk,kc] += einsum('akcd,id->akci',eris.vovv[ka,kk,kc],t1[ki])
+                vovo  = einsum('akcd,id->akci',eris.vovv[ka,kk,kc],t1[ki])
+                vovo -= einsum('klic,la->akci',eris.ooov[kk,ka,ki],t1[ka])
+                vovo += np.asarray(eris.ovov[kk,ka,ki]).transpose(1,0,3,2)
                 # ==== Beginning of change ====
                 #
                 #for kl in range(nkpts):
@@ -233,133 +232,144 @@ def cc_Wvovo(t1,t2,eris,kconserv):
                 t2f[ka] += 2*einsum('id,la->liad',t1[kd],t1[ka])
                 t2f = t2f.reshape(nkpts*nocc,nocc,nvir,nvir)
 
-                Wakci[ka,kk,kc] -= 0.5*einsum('lkcd,liad->akci',oovvf,t2f)
+                vovo -= 0.5*einsum('lkcd,liad->akci',oovvf,t2f)
+                Wakci[ka,kk,kc] = vovo
                 # =====   End of change  = ====
-
     return Wakci
 
-def Wooov(t1,t2,eris,kconserv):
+def Wooov(t1, t2, eris, kconserv, out=None):
     nkpts, nocc, nvir = t1.shape
-
-    Wklid = np.array(eris.ooov)
+    Wklid = _new(eris.ooov.shape, t1.dtype, out)
     for kk in range(nkpts):
         for kl in range(nkpts):
             for ki in range(nkpts):
-                Wklid[kk,kl,ki] += einsum('ic,klcd->klid',t1[ki],eris.oovv[kk,kl,ki])
+                ooov = einsum('ic,klcd->klid',t1[ki],eris.oovv[kk,kl,ki])
+                ooov += eris.ooov[kk,kl,ki]
+                Wklid[kk,kl,ki] = ooov
     return Wklid
 
-def Wvovv(t1,t2,eris,kconserv):
+def Wvovv(t1, t2, eris, kconserv, out=None):
     nkpts, nocc, nvir = t1.shape
-
-    Walcd = np.array(eris.vovv)
+    Walcd = _new(eris.vovv.shape, t1.dtype, out)
     for ka in range(nkpts):
         for kl in range(nkpts):
             for kc in range(nkpts):
-                Walcd[ka,kl,kc] += -einsum('ka,klcd->alcd',t1[ka],eris.oovv[ka,kl,kc])
+                vovv = einsum('ka,klcd->alcd', -t1[ka], eris.oovv[ka,kl,kc])
+                vovv += eris.vovv[ka,kl,kc]
+                Walcd[ka,kl,kc] = vovv
     return Walcd
 
-def W1ovvo(t1,t2,eris,kconserv):
+def W1ovvo(t1, t2, eris, kconserv, out=None):
     nkpts, nocc, nvir = t1.shape
-
-    Wkaci = np.empty((nkpts,nkpts,nkpts,nocc,nvir,nvir,nocc),dtype=t1.dtype)
+    Wkaci = _new((nkpts,nkpts,nkpts,nocc,nvir,nvir,nocc), t1.dtype, out)
     for kk in range(nkpts):
         for ka in range(nkpts):
             for kc in range(nkpts):
                 ki = kconserv[kk,kc,ka]
                 # ovvo[kk,ka,kc,ki] => voov[ka,kk,ki,kc]
-                Wkaci[kk,ka,kc] = np.array(eris.voov[ka,kk,ki]).transpose(1,0,3,2)
+                ovvo = np.asarray(eris.voov[ka,kk,ki]).transpose(1,0,3,2).copy()
                 for kl in range(nkpts):
                     kd = kconserv[ki,ka,kl]
                     St2 = 2.*t2[ki,kl,ka] - t2[kl,ki,ka].transpose(1,0,2,3)
-                    Wkaci[kk,ka,kc] +=  einsum('klcd,ilad->kaci',eris.oovv[kk,kl,kc],St2)
-                    Wkaci[kk,ka,kc] += -einsum('kldc,ilad->kaci',eris.oovv[kk,kl,kd],t2[ki,kl,ka])
+                    ovvo +=  einsum('klcd,ilad->kaci',eris.oovv[kk,kl,kc],St2)
+                    ovvo += -einsum('kldc,ilad->kaci',eris.oovv[kk,kl,kd],t2[ki,kl,ka])
+                Wkaci[kk,ka,kc] = ovvo
     return Wkaci
 
-def W2ovvo(t1,t2,eris,kconserv):
+def W2ovvo(t1, t2, eris, kconserv, out=None):
     nkpts, nocc, nvir = t1.shape
-
-    Wkaci = np.empty((nkpts,nkpts,nkpts,nocc,nvir,nvir,nocc),dtype=t1.dtype)
+    Wkaci = _new((nkpts,nkpts,nkpts,nocc,nvir,nvir,nocc), t1.dtype, out)
     WWooov = Wooov(t1,t2,eris,kconserv)
     for kk in range(nkpts):
         for ka in range(nkpts):
             for kc in range(nkpts):
                 ki = kconserv[kk,kc,ka]
-                Wkaci[kk,ka,kc] =  einsum('la,lkic->kaci',-t1[ka],WWooov[ka,kk,ki])
-                Wkaci[kk,ka,kc] += einsum('akdc,id->kaci',eris.vovv[ka,kk,ki],t1[ki])
+                ovvo =  einsum('la,lkic->kaci',-t1[ka],WWooov[ka,kk,ki])
+                ovvo += einsum('akdc,id->kaci',eris.vovv[ka,kk,ki],t1[ki])
+                Wkaci[kk,ka,kc] = ovvo
     return Wkaci
 
-def Wovvo(t1,t2,eris,kconserv):
-    return W1ovvo(t1,t2,eris,kconserv) + W2ovvo(t1,t2,eris,kconserv)
+def Wovvo(t1, t2, eris, kconserv, out=None):
+    Wovvo = W1ovvo(t1, t2, eris, kconserv, out)
+    for k, w2 in enumerate(W2ovvo(t1, t2, eris, kconserv)):
+        Wovvo[k] = Wovvo[k] + w2
+    return Wovvo
 
-def W1ovov(t1,t2,eris,kconserv):
+def W1ovov(t1, t2, eris, kconserv, out=None):
     nkpts, nocc, nvir = t1.shape
-
-    Wkbid = np.array(eris.ovov, copy=True)
+    Wkbid = _new(eris.ovov.shape, t1.dtype, out)
     for kk in range(nkpts):
         for kb in range(nkpts):
             for ki in range(nkpts):
                 kd = kconserv[kk,ki,kb]
                 #   kk + kl - kc - kd = 0
                 # => kc = kk - kd + kl
+                ovov = eris.ovov[kk,kb,ki].copy()
                 for kl in range(nkpts):
                     kc = kconserv[kk,kd,kl]
-                    Wkbid[kk,kb,ki] += -einsum('klcd,ilcb->kbid',eris.oovv[kk,kl,kc],t2[ki,kl,kc])
+                    ovov -= einsum('klcd,ilcb->kbid',eris.oovv[kk,kl,kc],t2[ki,kl,kc])
+                Wkbid[kk,kb,ki] = ovov
     return Wkbid
 
-def W2ovov(t1,t2,eris,kconserv):
+def W2ovov(t1, t2, eris, kconserv, out=None):
     nkpts, nocc, nvir = t1.shape
-
-    Wkbid = np.empty((nkpts,nkpts,nkpts,nocc,nvir,nocc,nvir),dtype=t1.dtype)
+    Wkbid = _new((nkpts,nkpts,nkpts,nocc,nvir,nocc,nvir), t1.dtype, out)
     WWooov = Wooov(t1,t2,eris,kconserv)
     for kk in range(nkpts):
         for kb in range(nkpts):
             for ki in range(nkpts):
                 kd = kconserv[kk,ki,kb]
-                Wkbid[kk,kb,ki] = einsum('klid,lb->kbid',WWooov[kk,kb,ki],-t1[kb])
-                Wkbid[kk,kb,ki] += einsum('bkdc,ic->kbid',eris.vovv[kb,kk,kd],t1[ki])
+                ovov = einsum('klid,lb->kbid',WWooov[kk,kb,ki],-t1[kb])
+                ovov += einsum('bkdc,ic->kbid',eris.vovv[kb,kk,kd],t1[ki])
+                Wkbid[kk,kb,ki] = ovov
     return Wkbid
 
-def Wovov(t1,t2,eris,kconserv):
-    return W1ovov(t1,t2,eris,kconserv) + W2ovov(t1,t2,eris,kconserv)
+def Wovov(t1, t2, eris, kconserv, out=None):
+    Wovov = W1ovov(t1, t2, eris, kconserv, out)
+    for k, w2 in enumerate(W2ovov(t1, t2, eris, kconserv)):
+        Wovov[k] = Wovov[k] + w2
+    return Wovov
 
-def Woooo(t1,t2,eris,kconserv):
+def Woooo(t1, t2, eris, kconserv, out=None):
     nkpts, nocc, nvir = t1.shape
-
-    Wklij = np.array(eris.oooo, copy=True)
+    Wklij = _new(eris.oooo.shape, t1.dtype, out)
     for kk in range(nkpts):
         for kl in range(nkpts):
             for ki in range(nkpts):
                 kj = kconserv[kk,ki,kl]
+                oooo  = einsum('klcd,ic,jd->klij',eris.oovv[kk,kl,ki],t1[ki],t1[kj])
+                oooo += einsum('klid,jd->klij',eris.ooov[kk,kl,ki],t1[kj])
+                oooo += einsum('lkjc,ic->klij',eris.ooov[kl,kk,kj],t1[ki])
+                oooo += eris.oooo[kk,kl,ki]
                 for kc in range(nkpts):
                     #kd = kconserv[kk,kc,kl]
-                    Wklij[kk,kl,ki] += einsum('klcd,ijcd->klij',eris.oovv[kk,kl,kc],t2[ki,kj,kc])
-                Wklij[kk,kl,ki] += einsum('klcd,ic,jd->klij',eris.oovv[kk,kl,ki],t1[ki],t1[kj])
-                Wklij[kk,kl,ki] += einsum('klid,jd->klij',eris.ooov[kk,kl,ki],t1[kj])
-                Wklij[kk,kl,ki] += einsum('lkjc,ic->klij',eris.ooov[kl,kk,kj],t1[ki])
+                    oooo += einsum('klcd,ijcd->klij',eris.oovv[kk,kl,kc],t2[ki,kj,kc])
+                Wklij[kk,kl,ki] = oooo
     return Wklij
 
-def Wvvvv(t1,t2,eris,kconserv):
+def Wvvvv(t1, t2, eris, kconserv, out=None):
     nkpts, nocc, nvir = t1.shape
+    Wabcd = _new(eris.vvvv.shape, t1.dtype, out)
 
-    Wabcd = np.array(eris.vvvv, copy=True)
     for ka in range(nkpts):
         for kb in range(nkpts):
             for kc in range(nkpts):
                 kd = kconserv[ka,kc,kb]
+                vvvv  = einsum('klcd,ka,lb->abcd',eris.oovv[ka,kb,kc],t1[ka],t1[kb])
+                vvvv += einsum('alcd,lb->abcd',eris.vovv[ka,kb,kc],-t1[kb])
+                vvvv += einsum('bkdc,ka->abcd',eris.vovv[kb,ka,kd],-t1[ka])
+                vvvv += eris.vvvv[ka,kb,kc]
                 for kk in range(nkpts):
                     # kk + kl - kc - kd = 0
                     # => kl = kc - kk + kd
                     kl = kconserv[kc,kk,kd]
-                    Wabcd[ka,kb,kc] += einsum('klcd,klab->abcd',eris.oovv[kk,kl,kc],t2[kk,kl,ka])
-                Wabcd[ka,kb,kc] += einsum('klcd,ka,lb->abcd',eris.oovv[ka,kb,kc],t1[ka],t1[kb])
-                Wabcd[ka,kb,kc] += einsum('alcd,lb->abcd',eris.vovv[ka,kb,kc],-t1[kb])
-                Wabcd[ka,kb,kc] += einsum('bkdc,ka->abcd',eris.vovv[kb,ka,kd],-t1[ka])
+                    vvvv += einsum('klcd,klab->abcd',eris.oovv[kk,kl,kc],t2[kk,kl,ka])
+                Wabcd[ka,kb,kc] = vvvv
     return Wabcd
 
-def Wvvvo(t1,t2,eris,kconserv,_Wvvvv=None):
+def Wvvvo(t1, t2, eris, kconserv, _Wvvvv=None, out=None):
     nkpts, nocc, nvir = t1.shape
-
-    Wabcj = np.empty((nkpts,nkpts,nkpts,nvir,nvir,nvir,nocc),dtype=t1.dtype)
+    Wabcj = _new((nkpts,nkpts,nkpts,nvir,nvir,nvir,nocc), t1.dtype, out)
     WW1ovov = W1ovov(t1,t2,eris,kconserv)
     WW1ovvo = W1ovvo(t1,t2,eris,kconserv)
     FFov = cc_Fov(t1,t2,eris,kconserv)
@@ -367,43 +377,44 @@ def Wvvvo(t1,t2,eris,kconserv,_Wvvvv=None):
         for kb in range(nkpts):
             for kc in range(nkpts):
                 kj = kconserv[ka,kc,kb]
-                # vvvo[ka,kb,kc,kj] <= vovv[kc,kj,ka,kb].transpose(2,3,0,1).conj()
-                Wabcj[ka,kb,kc] = np.array(eris.vovv[kc,kj,ka]).transpose(2,3,0,1).conj()
                 # Wvovo[ka,kl,kc,kj] <= Wovov[kl,ka,kj,kc].transpose(1,0,3,2)
-                Wabcj[ka,kb,kc] += einsum('alcj,lb->abcj',WW1ovov[kb,ka,kj].transpose(1,0,3,2),-t1[kb])
-                Wabcj[ka,kb,kc] += einsum('kbcj,ka->abcj',WW1ovvo[ka,kb,kc],-t1[ka])
+                vvvo  = einsum('alcj,lb->abcj',WW1ovov[kb,ka,kj].transpose(1,0,3,2),-t1[kb])
+                vvvo += einsum('kbcj,ka->abcj',WW1ovvo[ka,kb,kc],-t1[ka])
+                # vvvo[ka,kb,kc,kj] <= vovv[kc,kj,ka,kb].transpose(2,3,0,1).conj()
+                vvvo += np.asarray(eris.vovv[kc,kj,ka]).transpose(2,3,0,1).conj()
 
                 for kl in range(nkpts):
                     # ka + kl - kc - kd = 0
                     # => kd = ka - kc + kl
                     kd = kconserv[ka,kc,kl]
                     St2 = 2.*t2[kl,kj,kd] - t2[kl,kj,kb].transpose(0,1,3,2)
-                    Wabcj[ka,kb,kc] += einsum('alcd,ljdb->abcj',eris.vovv[ka,kl,kc], St2)
-                    Wabcj[ka,kb,kc] += einsum('aldc,ljdb->abcj',eris.vovv[ka,kl,kd], -t2[kl,kj,kd])
+                    vvvo += einsum('alcd,ljdb->abcj',eris.vovv[ka,kl,kc], St2)
+                    vvvo += einsum('aldc,ljdb->abcj',eris.vovv[ka,kl,kd], -t2[kl,kj,kd])
                     # kb - kc + kl = kd
                     kd = kconserv[kb,kc,kl]
-                    Wabcj[ka,kb,kc] += einsum('bldc,jlda->abcj',eris.vovv[kb,kl,kd], -t2[kj,kl,kd])
+                    vvvo += einsum('bldc,jlda->abcj',eris.vovv[kb,kl,kd], -t2[kj,kl,kd])
 
                     # kl + kk - kb - ka = 0
                     # => kk = kb + ka - kl
                     kk = kconserv[kb,kl,ka]
-                    Wabcj[ka,kb,kc] += einsum('lkjc,lkba->abcj',eris.ooov[kl,kk,kj],t2[kl,kk,kb])
-                Wabcj[ka,kb,kc] += einsum('lkjc,lb,ka->abcj',eris.ooov[kb,ka,kj],t1[kb],t1[ka])
-                Wabcj[ka,kb,kc] += einsum('lc,ljab->abcj',-FFov[kc],t2[kc,kj,ka])
+                    vvvo += einsum('lkjc,lkba->abcj',eris.ooov[kl,kk,kj],t2[kl,kk,kb])
+                vvvo += einsum('lkjc,lb,ka->abcj',eris.ooov[kb,ka,kj],t1[kb],t1[ka])
+                vvvo += einsum('lc,ljab->abcj',-FFov[kc],t2[kc,kj,ka])
+                Wabcj[ka,kb,kc] = vvvo
     # Check if t1=0 (HF+MBPT(2))
     # einsum will check, but don't make vvvv if you can avoid it!
-    if np.any(t1):
+    if np.any(t1 != 0):
         if _Wvvvv is None:
             _Wvvvv = Wvvvv(t1,t2,eris,kconserv)
         for ka in range(nkpts):
             for kb in range(nkpts):
                 for kc in range(nkpts):
                     kj = kconserv[ka,kc,kb]
-                    for a in range(nvir):
-                        Wabcj[ka,kb,kc,a] += einsum('bcd,jd->bcj',_Wvvvv[ka,kb,kc,a],t1[kj])
+                    Wabcj[ka,kb,kc] = (Wabcj[ka,kb,kc] +
+                                       einsum('abcd,jd->abcj',_Wvvvv[ka,kb,kc],t1[kj]))
     return Wabcj
 
-def Wovoo(t1,t2,eris,kconserv):
+def Wovoo(t1, t2, eris, kconserv, out=None):
     nkpts, nocc, nvir = t1.shape
 
     WW1ovov = W1ovov(t1,t2,eris,kconserv)
@@ -411,29 +422,38 @@ def Wovoo(t1,t2,eris,kconserv):
     WW1ovvo = W1ovvo(t1,t2,eris,kconserv)
     FFov = cc_Fov(t1,t2,eris,kconserv)
 
-    Wkbij = np.empty((nkpts,nkpts,nkpts,nocc,nvir,nocc,nocc),dtype=t1.dtype)
+    Wkbij = _new((nkpts,nkpts,nkpts,nocc,nvir,nocc,nocc), t1.dtype, out)
     for kk in range(nkpts):
         for kb in range(nkpts):
             for ki in range(nkpts):
                 kj = kconserv[kk,ki,kb]
-                Wkbij[kk,kb,ki] = np.array(eris.ooov[ki,kj,kk]).transpose(2,3,0,1).conj()
-                Wkbij[kk,kb,ki] += einsum('kbid,jd->kbij',WW1ovov[kk,kb,ki], t1[kj])
-                Wkbij[kk,kb,ki] += einsum('klij,lb->kbij',WWoooo[kk,kb,ki],-t1[kb])
-                Wkbij[kk,kb,ki] += einsum('kbcj,ic->kbij',WW1ovvo[kk,kb,ki],t1[ki])
+                ovoo  = einsum('kbid,jd->kbij',WW1ovov[kk,kb,ki], t1[kj])
+                ovoo += einsum('klij,lb->kbij',WWoooo[kk,kb,ki],-t1[kb])
+                ovoo += einsum('kbcj,ic->kbij',WW1ovvo[kk,kb,ki],t1[ki])
+                ovoo += np.array(eris.ooov[ki,kj,kk]).transpose(2,3,0,1).conj()
 
                 for kd in range(nkpts):
                     # kk + kl - ki - kd = 0
                     # => kl = ki - kk + kd
                     kl = kconserv[ki,kk,kd]
                     St2 = 2.*t2[kl,kj,kd] - t2[kj,kl,kd].transpose(1,0,2,3)
-                    Wkbij[kk,kb,ki] += einsum('klid,ljdb->kbij',  eris.ooov[kk,kl,ki], St2)
-                    Wkbij[kk,kb,ki] += einsum('lkid,ljdb->kbij', -eris.ooov[kl,kk,ki],t2[kl,kj,kd])
+                    ovoo += einsum('klid,ljdb->kbij',  eris.ooov[kk,kl,ki], St2)
+                    ovoo += einsum('lkid,ljdb->kbij', -eris.ooov[kl,kk,ki],t2[kl,kj,kd])
                     kl = kconserv[kb,ki,kd]
-                    Wkbij[kk,kb,ki] += einsum('lkjd,libd->kbij', -eris.ooov[kl,kk,kj],t2[kl,ki,kb])
+                    ovoo += einsum('lkjd,libd->kbij', -eris.ooov[kl,kk,kj],t2[kl,ki,kb])
 
                     # kb + kk - kd = kc
                     #kc = kconserv[kb,kd,kk]
-                    Wkbij[kk,kb,ki] += einsum('bkdc,jidc->kbij',eris.vovv[kb,kk,kd],t2[kj,ki,kd])
-                Wkbij[kk,kb,ki] += einsum('bkdc,jd,ic->kbij',eris.vovv[kb,kk,kj],t1[kj],t1[ki])
-                Wkbij[kk,kb,ki] += einsum('kc,ijcb->kbij',FFov[kk],t2[ki,kj,kk])
+                    ovoo += einsum('bkdc,jidc->kbij',eris.vovv[kb,kk,kd],t2[kj,ki,kd])
+                ovoo += einsum('bkdc,jd,ic->kbij',eris.vovv[kb,kk,kj],t1[kj],t1[ki])
+                ovoo += einsum('kc,ijcb->kbij',FFov[kk],t2[ki,kj,kk])
+                Wkbij[kk,kb,ki] = ovoo
     return Wkbij
+
+def _new(shape, dtype, out):
+    if out is None: # Incore:
+        out = np.empty(shape, dtype=dtype)
+    else:
+        assert(out.shape == shape)
+        assert(out.dtype == dtype)
+    return out

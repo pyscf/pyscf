@@ -1,3 +1,18 @@
+#!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 '''
 UMP2 with spatial integals
 '''
@@ -10,10 +25,14 @@ from pyscf import ao2mo
 from pyscf.lib import logger
 from pyscf.mp import mp2
 from pyscf.ao2mo import _ao2mo
+from pyscf import __config__
+
+WITH_T2 = getattr(__config__, 'mp_ump2_with_t2', True)
+
 
 # This is unrestricted (U)MP2, i.e. spin-orbital form.
 
-def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=True,
+def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2,
            verbose=logger.NOTE):
     if mo_energy is None or mo_coeff is None:
         moidx = mp.get_frozen_mask()
@@ -82,9 +101,9 @@ def get_nocc(mp):
         nocca = numpy.count_nonzero(mp.mo_occ[0] > 0) - frozen
         noccb = numpy.count_nonzero(mp.mo_occ[1] > 0) - frozen
         #assert(nocca > 0 and noccb > 0)
-    else:
+    elif isinstance(frozen[0], (int, numpy.integer, list, numpy.ndarray)):
         if len(frozen) > 0 and isinstance(frozen[0], (int, numpy.integer)):
-# The same frozen orbital indices for alpha and beta orbitals
+            # The same frozen orbital indices for alpha and beta orbitals
             frozen = [frozen, frozen]
         occidxa = mp.mo_occ[0] > 0
         occidxa[list(frozen[0])] = False
@@ -92,6 +111,8 @@ def get_nocc(mp):
         occidxb[list(frozen[1])] = False
         nocca = numpy.count_nonzero(occidxa)
         noccb = numpy.count_nonzero(occidxb)
+    else:
+        raise NotImplementedError
     return nocca, noccb
 
 def get_nmo(mp):
@@ -104,17 +125,19 @@ def get_nmo(mp):
     elif isinstance(frozen, (int, numpy.integer)):
         nmoa = mp.mo_occ[0].size - frozen
         nmob = mp.mo_occ[1].size - frozen
-    else:
+    elif isinstance(frozen[0], (int, numpy.integer, list, numpy.ndarray)):
         if isinstance(frozen[0], (int, numpy.integer)):
             frozen = (frozen, frozen)
-        nmoa = len(mp.mo_occ[0]) - len(frozen[0])
-        nmob = len(mp.mo_occ[1]) - len(frozen[1])
+        nmoa = len(mp.mo_occ[0]) - len(set(frozen[0]))
+        nmob = len(mp.mo_occ[1]) - len(set(frozen[1]))
+    else:
+        raise NotImplementedError
     return nmoa, nmob
 
 
 def get_frozen_mask(mp):
     '''Get boolean mask for the unrestricted reference orbitals.
-    
+
     In the returned boolean (mask) array of frozen orbital indices, the
     element is False if it corresonds to the frozen orbital.
     '''
@@ -130,16 +153,28 @@ def get_frozen_mask(mp):
     elif isinstance(frozen, (int, numpy.integer)):
         moidxa[:frozen] = False
         moidxb[:frozen] = False
-    else:
+    elif isinstance(frozen[0], (int, numpy.integer, list, numpy.ndarray)):
         if isinstance(frozen[0], (int, numpy.integer)):
             frozen = (frozen, frozen)
         moidxa[list(frozen[0])] = False
         moidxb[list(frozen[1])] = False
+    else:
+        raise NotImplementedError
     return moidxa,moidxb
 
 def make_rdm1(mp, t2=None):
-    if t2 is None: t2 = mp.t2
+    r'''
+    One-particle spin density matrices dm1a, dm1b in MO basis (the
+    occupied-virtual blocks due to the orbital response contribution are not
+    included).
+
+    dm1a[p,q] = <q_alpha^\dagger p_alpha>
+    dm1b[p,q] = <q_beta^\dagger p_beta>
+
+    The convention of 1-pdm is based on McWeeney's book, Eq (5.4.20).
+    '''
     from pyscf.cc import uccsd_rdm
+    if t2 is None: t2 = mp.t2
     doo, dvv = _gamma1_intermediates(mp, t2)
     nocca, noccb, nvira, nvirb = t2[1].shape
     dov = numpy.zeros((nocca,nvira))
@@ -154,15 +189,36 @@ def _gamma1_intermediates(mp, t2):
     doob  = lib.einsum('imef,jmef->ij', t2bb.conj(), t2bb) *-.5
     doob -= lib.einsum('mief,mjef->ij', t2ab.conj(), t2ab)
 
-    dvva  = lib.einsum('mnae,mnbe->ab', t2aa, t2aa.conj()) * .5
-    dvva += lib.einsum('mnae,mnbe->ab', t2ab, t2ab.conj())
-    dvvb  = lib.einsum('mnae,mnbe->ab', t2bb, t2bb.conj()) * .5
-    dvvb += lib.einsum('mnea,mneb->ab', t2ab, t2ab.conj())
+    dvva  = lib.einsum('mnae,mnbe->ba', t2aa.conj(), t2aa) * .5
+    dvva += lib.einsum('mnae,mnbe->ba', t2ab.conj(), t2ab)
+    dvvb  = lib.einsum('mnae,mnbe->ba', t2bb.conj(), t2bb) * .5
+    dvvb += lib.einsum('mnea,mneb->ba', t2ab.conj(), t2ab)
     return ((dooa, doob), (dvva, dvvb))
 
 
 # spin-orbital rdm2 in Chemist's notation
 def make_rdm2(mp, t2=None):
+    r'''
+    Two-particle spin density matrices dm2aa, dm2ab, dm2bb in MO basis
+
+    dm2aa[p,q,r,s] = <q_alpha^\dagger s_alpha^\dagger r_alpha p_alpha>
+    dm2ab[p,q,r,s] = <q_alpha^\dagger s_beta^\dagger r_beta p_alpha>
+    dm2bb[p,q,r,s] = <q_beta^\dagger s_beta^\dagger r_beta p_beta>
+
+    (p,q correspond to one particle and r,s correspond to another particle)
+    Two-particle density matrix should be contracted to integrals with the
+    pattern below to compute energy
+
+    E = numpy.einsum('pqrs,pqrs', eri_aa, dm2_aa)
+    E+= numpy.einsum('pqrs,pqrs', eri_ab, dm2_ab)
+    E+= numpy.einsum('pqrs,rspq', eri_ba, dm2_ab)
+    E+= numpy.einsum('pqrs,pqrs', eri_bb, dm2_bb)
+
+    where eri_aa[p,q,r,s] = (p_alpha q_alpha | r_alpha s_alpha )
+    eri_ab[p,q,r,s] = ( p_alpha q_alpha | r_beta s_beta )
+    eri_ba[p,q,r,s] = ( p_beta q_beta | r_alpha s_alpha )
+    eri_bb[p,q,r,s] = ( p_beta q_beta | r_beta s_beta )
+    '''
     if t2 is None: t2 = mp.t2
     nmoa, nmob = nmoa0, nmob0 = mp.nmo
     nocca, noccb = nocca0, noccb0 = mp.nocc
@@ -179,39 +235,35 @@ def make_rdm2(mp, t2=None):
         oidxb = numpy.where(moidxb & (mp.mo_occ[1] > 0))[0]
         vidxb = numpy.where(moidxb & (mp.mo_occ[1] ==0))[0]
 
-        dm2aa = numpy.zeros((nmoa0,nmoa0,nmoa0,nmoa0))
-        dm2ab = numpy.zeros((nmoa0,nmoa0,nmob0,nmob0))
-        dm2bb = numpy.zeros((nmob0,nmob0,nmob0,nmob0))
+        dm2aa = numpy.zeros((nmoa0,nmoa0,nmoa0,nmoa0), dtype=t2aa.dtype)
+        dm2ab = numpy.zeros((nmoa0,nmoa0,nmob0,nmob0), dtype=t2aa.dtype)
+        dm2bb = numpy.zeros((nmob0,nmob0,nmob0,nmob0), dtype=t2aa.dtype)
 
-        dm2aa[oidxa[:,None,None,None],vidxa[:,None,None],oidxa[:,None],vidxa] = \
-                (t2aa.transpose(0,2,1,3) - t2aa.transpose(0,3,1,2)) * .5
-        dm2aa[nocca0:,:nocca0,nocca0:,:nocca0] = \
-                dm2aa[:nocca0,nocca0:,:nocca0,nocca0:].transpose(1,0,3,2).conj()
+        tmp = t2aa.transpose(0,2,1,3)
+        dm2aa[oidxa[:,None,None,None],vidxa[:,None,None],oidxa[:,None],vidxa] = tmp
+        dm2aa[vidxa[:,None,None,None],oidxa[:,None,None],vidxa[:,None],oidxa] = tmp.conj().transpose(1,0,3,2)
 
-        dm2bb[oidxb[:,None,None,None],vidxb[:,None,None],oidxb[:,None],vidxb] = \
-                (t2bb.transpose(0,2,1,3) - t2bb.transpose(0,3,1,2)) * .5
-        dm2bb[noccb0:,:noccb0,noccb0:,:noccb0] = \
-                dm2bb[:noccb0,noccb0:,:noccb0,noccb0:].transpose(1,0,3,2).conj()
+        tmp = t2bb.transpose(0,2,1,3)
+        dm2bb[oidxb[:,None,None,None],vidxb[:,None,None],oidxb[:,None],vidxb] = tmp
+        dm2bb[vidxb[:,None,None,None],oidxb[:,None,None],vidxb[:,None],oidxb] = tmp.conj().transpose(1,0,3,2)
 
-        dm2ab[oidxa[:,None,None,None],vidxa[:,None,None],oidxb[:,None],vidxb] = \
-                t2ab.transpose(0,2,1,3)
-        dm2ab[nocca0:,:nocca0,noccb0:,:noccb0] = \
-                dm2ab[:nocca0,nocca0:,:noccb0,noccb0:].transpose(1,0,3,2).conj()
+        dm2ab[oidxa[:,None,None,None],vidxa[:,None,None],oidxb[:,None],vidxb] = t2ab.transpose(0,2,1,3)
+        dm2ab[vidxa[:,None,None,None],oidxa[:,None,None],vidxb[:,None],oidxb] = t2ab.conj().transpose(2,0,3,1)
+
     else:
+        dm2aa = numpy.zeros((nmoa0,nmoa0,nmoa0,nmoa0), dtype=t2aa.dtype)
+        dm2ab = numpy.zeros((nmoa0,nmoa0,nmob0,nmob0), dtype=t2aa.dtype)
+        dm2bb = numpy.zeros((nmob0,nmob0,nmob0,nmob0), dtype=t2aa.dtype)
 
-        dm2aa = numpy.zeros((nmoa0,nmoa0,nmoa0,nmoa0))
-        dm2ab = numpy.zeros((nmoa0,nmoa0,nmob0,nmob0))
-        dm2bb = numpy.zeros((nmob0,nmob0,nmob0,nmob0))
+#:tmp = (t2aa.transpose(0,2,1,3) - t2aa.transpose(0,3,1,2)) * .5
+#: t2aa.transpose(0,2,1,3) == -t2aa.transpose(0,3,1,2)
+        tmp = t2aa.transpose(0,2,1,3)
+        dm2aa[:nocca0,nocca0:,:nocca0,nocca0:] = tmp
+        dm2aa[nocca0:,:nocca0,nocca0:,:nocca0] = tmp.conj().transpose(1,0,3,2)
 
-        dm2aa[:nocca0,nocca0:,:nocca0,nocca0:] = \
-                (t2aa.transpose(0,2,1,3) - t2aa.transpose(0,3,1,2)) * .5
-        dm2aa[nocca0:,:nocca0,nocca0:,:nocca0] = \
-                dm2aa[:nocca0,nocca0:,:nocca0,nocca0:].transpose(1,0,3,2).conj()
-
-        dm2bb[:noccb0,noccb0:,:noccb0,noccb0:] = \
-                (t2bb.transpose(0,2,1,3) - t2bb.transpose(0,3,1,2)) * .5
-        dm2bb[noccb0:,:noccb0,noccb0:,:noccb0] = \
-                dm2bb[:noccb0,noccb0:,:noccb0,noccb0:].transpose(1,0,3,2).conj()
+        tmp = t2bb.transpose(0,2,1,3)
+        dm2bb[:noccb0,noccb0:,:noccb0,noccb0:] = tmp
+        dm2bb[noccb0:,:noccb0,noccb0:,:noccb0] = tmp.conj().transpose(1,0,3,2)
 
         dm2ab[:nocca0,nocca0:,:noccb0,noccb0:] = t2ab.transpose(0,2,1,3)
         dm2ab[nocca0:,:nocca0,noccb0:,:noccb0] = t2ab.transpose(2,0,3,1).conj()
@@ -221,17 +273,17 @@ def make_rdm2(mp, t2=None):
     dm1b[numpy.diag_indices(noccb0)] -= 1
 
     for i in range(nocca0):
-        dm2aa[i,i,:,:] += dm1a
-        dm2aa[:,:,i,i] += dm1a
-        dm2aa[:,i,i,:] -= dm1a
+        dm2aa[i,i,:,:] += dm1a.T
+        dm2aa[:,:,i,i] += dm1a.T
+        dm2aa[:,i,i,:] -= dm1a.T
         dm2aa[i,:,:,i] -= dm1a
-        dm2ab[i,i,:,:] += dm1b
+        dm2ab[i,i,:,:] += dm1b.T
     for i in range(noccb0):
-        dm2bb[i,i,:,:] += dm1b
-        dm2bb[:,:,i,i] += dm1b
-        dm2bb[:,i,i,:] -= dm1b
+        dm2bb[i,i,:,:] += dm1b.T
+        dm2bb[:,:,i,i] += dm1b.T
+        dm2bb[:,i,i,:] -= dm1b.T
         dm2bb[i,:,:,i] -= dm1b
-        dm2ab[:,:,i,i] += dm1a
+        dm2ab[:,:,i,i] += dm1a.T
 
     for i in range(nocca0):
         for j in range(nocca0):
@@ -255,7 +307,7 @@ class UMP2(mp2.MP2):
     get_frozen_mask = get_frozen_mask
 
     @lib.with_doc(mp2.MP2.kernel.__doc__)
-    def kernel(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=True):
+    def kernel(self, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2):
         return mp2.MP2.kernel(self, mo_energy, mo_coeff, eris, with_t2, kernel)
 
     def ao2mo(self, mo_coeff=None):
@@ -266,8 +318,8 @@ class UMP2(mp2.MP2):
     make_rdm2 = make_rdm2
 
     def nuc_grad_method(self):
-        from pyscf.mp import ump2_grad
-        return ump2_grad.Gradients(self)
+        from pyscf.grad import ump2
+        return ump2.Gradients(self)
 
 
 class _ChemistsERIs(mp2._ChemistsERIs):
@@ -473,6 +525,8 @@ def _ao2mo_ovov(mp, orbs, feri, max_memory=2000, verbose=None):
 
     time0 = log.timer('mp2 ao2mo_ovov pass2', *time0)
 
+del(WITH_T2)
+
 
 if __name__ == '__main__':
     from pyscf import scf
@@ -508,9 +562,9 @@ if __name__ == '__main__':
     h1b = reduce(numpy.dot, (mo_b.T.conj(), hcore, mo_b))
     e1 = numpy.einsum('ij,ji', h1a, dm1a)
     e1+= numpy.einsum('ij,ji', h1b, dm1b)
-    e1+= numpy.einsum('ijkl,jilk', eriaa, dm2aa) * .5
-    e1+= numpy.einsum('ijkl,jilk', eriab, dm2ab)
-    e1+= numpy.einsum('ijkl,jilk', eribb, dm2bb) * .5
+    e1+= numpy.einsum('ijkl,ijkl', eriaa, dm2aa) * .5
+    e1+= numpy.einsum('ijkl,ijkl', eriab, dm2ab)
+    e1+= numpy.einsum('ijkl,ijkl', eribb, dm2bb) * .5
     e1+= mol.energy_nuc()
     print(e1 - pt.e_tot)
 

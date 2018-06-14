@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Authors: Timothy Berkelbach <tim.berkelbach@gmail.com>
 #          Qiming Sun <osirpt.sun@gmail.com>
@@ -50,7 +63,8 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     ground_state = (isinstance(dm, np.ndarray) and dm.ndim == 3 and
                     kpts_band is None)
 
-    if ks.grids.coords is None:
+# For UniformGrids, grids.coords does not indicate whehter grids are initialized
+    if ks.grids.non0tab is None:
         ks.grids.build(with_non0tab=True)
         if ks.small_rho_cutoff > 1e-20 and ground_state:
             ks.grids = rks.prune_small_rho_grids_(ks, cell, dm, ks.grids, kpts)
@@ -92,14 +106,7 @@ class KRKS(khf.KRHF):
     '''
     def __init__(self, cell, kpts=np.zeros((1,3))):
         khf.KRHF.__init__(self, cell, kpts)
-        self.xc = 'LDA,VWN'
-        self.grids = gen_grid.UniformGrids(cell)
-        self.small_rho_cutoff = 1e-7  # Use rho to filter grids
-##################################################
-# don't modify the following attributes, they are not input options
-        # Note Do not refer to .with_df._numint because mesh/coords may be different
-        self._numint = numint._KNumInt(kpts)
-        self._keys = self._keys.union(['xc', 'grids', 'small_rho_cutoff'])
+        rks._dft_common_init_(self)
 
     def dump_flags(self):
         khf.KRHF.dump_flags(self)

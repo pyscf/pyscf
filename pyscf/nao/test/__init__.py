@@ -1,3 +1,17 @@
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 from __future__ import division, print_function
 import os
 import sys
@@ -9,7 +23,7 @@ import shutil
 from importlib import import_module
 from glob import glob
 
-from pyscf.tools import devnull
+from os import devnull
 
 #
 #
@@ -110,9 +124,9 @@ def test(verbosity=1, testdir=None, stream=sys.stdout, files=None, siesta_exe='s
         for a, b in versions:
             print('{0:16}{1}'.format(a, b))
     
-    sys.stdout = devnull
+    sys.stdout = open(devnull, 'w')
     if verbosity == 0:
-        stream = devnull
+        stream = open(devnull, 'w')
     ttr = unittest.TextTestRunner(verbosity=verbosity, stream=stream)
 
     origcwd = os.getcwd()

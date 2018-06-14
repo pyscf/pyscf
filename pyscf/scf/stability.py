@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -14,6 +27,7 @@ See also tddft/rhf.py and scf/newton_ah.py
 
 import numpy
 import scipy
+from functools import reduce
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import hf, hf_symm, uhf_symm
@@ -97,7 +111,27 @@ def rohf_stability(mf, internal=True, external=False, verbose=None):
     return mo_i, mo_e
 
 def ghf_stability(mf, verbose=None):
-    raise NotImplementedError
+    log = logger.new_logger(mf, verbose)
+    with_symmetry = True
+    g, hop, hdiag = newton_ah.gen_g_hop_ghf(mf, mf.mo_coeff, mf.mo_occ,
+                                            with_symmetry=with_symmetry)
+    def precond(dx, e, x0):
+        hdiagd = hdiag - e
+        hdiagd[abs(hdiagd)<1e-8] = 1e-8
+        return dx/hdiagd
+
+    x0 = numpy.zeros_like(g)
+    x0[g!=0] = 1. / hdiag[g!=0]
+    if not with_symmetry:  # allow to break point group symmetry
+        x0[numpy.argmin(hdiag)] = 1
+    e, v = lib.davidson(hop, x0, precond, tol=1e-4, verbose=log)
+    if e < -1e-5:
+        log.note('GHF wavefunction has an internal instablity')
+        mo = _rotate_mo(mf.mo_coeff, mf.mo_occ, v)
+    else:
+        log.note('GHF wavefunction is stable in the intenral stablity analysis')
+        mo = mf.mo_coeff
+    return mo
 
 def rhf_internal(mf, with_symmetry=True, verbose=None):
     log = logger.new_logger(mf, verbose)
@@ -425,6 +459,8 @@ def uhf_external(mf, with_symmetry=True, verbose=None):
         dx[nmo+viridxb[:,None],occidxa] = v[nvira*noccb:].reshape(nvirb,nocca)
         u = newton_ah.expmat(dx - dx.T)
         mo = numpy.dot(mo, u)
+        mo = numpy.hstack([mo[:,:nocca], mo[:,nmo:nmo+noccb],
+                           mo[:,nocca:nmo], mo[:,nmo+noccb:]])
     else:
         log.note('UHF/UKS wavefunction is stable in the UHF/UKS -> GHF/GKS stablity analysis')
     return mo

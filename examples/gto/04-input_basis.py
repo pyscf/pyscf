@@ -15,6 +15,7 @@ This example covers different ways to input basis
 '''
 
 import os
+import numpy
 from pyscf import gto
 
 dirnow = os.path.realpath(os.path.join(__file__, '..'))
@@ -191,7 +192,7 @@ mol = gto.M(
     atom = '''O 0 0 0; H1 0 1 0; H2 0 0 1''',
     basis = ('sto3g', 'ccpvdz', '3-21g',
              gto.etbs([(0, 4, 1.5, 2.2), (1, 2, 0.5, 2.2)]),
-            [[0, [1e3, 1.]]])
+            [[0, numpy.array([1e3, 1.])]])
 )
 print('nao = ', mol.nao_nr())
 
@@ -213,3 +214,24 @@ C    SP
 ''')]}
 )
 print('nao = ', mol.nao_nr())
+
+#
+# Optimize the basis contraction.  When optimize=True is specified in the
+# parse function, the segment contracted basis can be restructured to
+# general contracted basis.  This can improve integral performance.
+#
+mol = gto.M(
+    atom = '''O 0 0 0; H 0 1 0; H 0 0 1''',
+    basis = {'O': '631g',
+             'H': gto.basis.parse('''
+H    S
+      2.9412494             -0.09996723
+      0.6834831              0.39951283
+      0.2222899              0.70011547
+H    S
+      2.9412494             0.15591627
+      0.6834831             0.60768372
+      0.2222899             0.39195739
+''', optimize=True)}
+)
+print('num primitive GTOs = ', mol.npgto_nr())

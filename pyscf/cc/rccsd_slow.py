@@ -1,10 +1,24 @@
+#!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 '''
 Restricted CCSD
 
 Ref: Stanton et al., J. Chem. Phys. 94, 4334 (1990)
+Ref: Hirata et al., J. Chem. Phys. 120, 2581 (2004)
 '''
-
-# note MO integrals are treated in chemist's notation
 
 import time
 import numpy as np
@@ -19,8 +33,7 @@ from pyscf.lib import linalg_helper
 #einsum = np.einsum
 einsum = lib.einsum
 
-# This is restricted (R)CCSD
-# Ref: Hirata et al., J. Chem. Phys. 120, 2581 (2004)
+# note MO integrals are treated in chemist's notation
 
 def update_amps(cc, t1, t2, eris):
     # Ref: Hirata et al., J. Chem. Phys. 120, 2581 (2004) Eqs.(35)-(36)
@@ -1016,7 +1029,7 @@ class _IMDS:
 
         # 3 or 4 virtuals
         self.Wvovv = imd.Wvovv(t1,t2,eris)
-        if ea_partition == 'mp' and not np.any(t1):
+        if ea_partition == 'mp':
             self.Wvvvo = imd.Wvvvo(t1,t2,eris)
         else:
             self.Wvvvv = imd.Wvvvv(t1,t2,eris)

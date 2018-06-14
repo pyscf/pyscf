@@ -1,9 +1,25 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 from pyscf.lib.parameters import OUTPUT_DIGITS, OUTPUT_COLS
+from pyscf import __config__
+
+BASE = getattr(__config__, 'BASE', 0)
 
 def dump_tri(stdout, c, label=None,
-             ncol=OUTPUT_COLS, digits=OUTPUT_DIGITS, start=0):
+             ncol=OUTPUT_COLS, digits=OUTPUT_DIGITS, start=BASE):
     ''' Format print for the lower triangular part of an array
 
     Args:
@@ -72,7 +88,7 @@ def dump_tri(stdout, c, label=None,
                 stdout.write(('%12s' % label[ic+m+k]) + (fmt % tuple(v)))
 
 def dump_rec(stdout, c, label=None, label2=None,
-             ncol=OUTPUT_COLS, digits=OUTPUT_DIGITS, start=0):
+             ncol=OUTPUT_COLS, digits=OUTPUT_DIGITS, start=BASE):
     ''' Print an array in rectangular format
 
     Args:
@@ -139,7 +155,7 @@ def dump_rec(stdout, c, label=None, label2=None,
                 stdout.write(('%12s' % label[k]) + (fmt % tuple(v)))
 
 def dump_mo(mol, c, label=None,
-            ncol=OUTPUT_COLS, digits=OUTPUT_DIGITS, start=1):
+            ncol=OUTPUT_COLS, digits=OUTPUT_DIGITS, start=BASE):
     ''' Format print for orbitals
 
     Args:
@@ -173,6 +189,8 @@ def dump_mo(mol, c, label=None,
     if label is None:
         label = mol.ao_labels()
     dump_rec(mol.stdout, c, label, None, ncol, digits, start)
+
+del(BASE)
 
 
 if __name__ == '__main__':

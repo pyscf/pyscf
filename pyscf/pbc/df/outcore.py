@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -10,11 +23,14 @@ from pyscf import gto
 from pyscf.ao2mo.outcore import balance_segs
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, unique, KPT_DIFF_TOL
 from pyscf.pbc.df.incore import wrap_int3c
+from pyscf import __config__
+
+CHUNK_SIZE = getattr(__config__, 'pbc_df_outcore_chunk_size', 256)
 
 libpbc = lib.load_library('libpbc')
 
 
-def aux_e2(cell, auxcell, erifile, intor='int3c2e_sph', aosym='s2ij', comp=1,
+def aux_e2(cell, auxcell, erifile, intor='int3c2e', aosym='s2ij', comp=None,
            kptij_lst=None, dataname='eri_mo', shls_slice=None, max_memory=2000,
            verbose=0):
     r'''3-center AO integrals (ij|L) with double lattice sum:
@@ -25,7 +41,8 @@ def aux_e2(cell, auxcell, erifile, intor='int3c2e_sph', aosym='s2ij', comp=1,
         kptij_lst : (*,2,3) array
             A list of (kpti, kptj)
     '''
-    intor = gto.moleintor.ascint3(intor)
+    intor, comp = gto.moleintor._get_intor_and_comp(cell._add_suffix(intor), comp)
+
     if h5py.is_hdf5(erifile):
         feri = h5py.File(erifile)
         if dataname in feri:
@@ -43,7 +60,7 @@ def aux_e2(cell, auxcell, erifile, intor='int3c2e_sph', aosym='s2ij', comp=1,
         shls_slice = (0, cell.nbas, 0, cell.nbas, 0, auxcell.nbas)
 
     ao_loc = cell.ao_loc_nr()
-    aux_loc = auxcell.ao_loc_nr('ssc' in intor)[:shls_slice[5]+1]
+    aux_loc = auxcell.ao_loc_nr(auxcell.cart or 'ssc' in intor)[:shls_slice[5]+1]
     ni = ao_loc[shls_slice[1]] - ao_loc[shls_slice[0]]
     nj = ao_loc[shls_slice[3]] - ao_loc[shls_slice[2]]
     naux = aux_loc[shls_slice[5]] - aux_loc[shls_slice[4]]
@@ -73,7 +90,7 @@ def aux_e2(cell, auxcell, erifile, intor='int3c2e_sph', aosym='s2ij', comp=1,
             shape = (naux,nao_pair)
         else:
             shape = (comp,naux,nao_pair)
-        chunks = (min(256,naux), min(256,nao_pair))  # 512 KB
+        chunks = (min(CHUNK_SIZE,naux), min(CHUNK_SIZE,nao_pair))  # 512 KB
         feri.create_dataset(key, shape, dtype, chunks=chunks)
     if naux == 0:
         feri.close()

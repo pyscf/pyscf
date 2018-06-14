@@ -1,7 +1,22 @@
-/*
+/* Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+  
+   Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+ 
+        http://www.apache.org/licenses/LICENSE-2.0
+ 
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
  *
+ * Author: Qiming Sun <osirpt.sun@gmail.com>
  */
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
@@ -9,7 +24,6 @@
 #include <assert.h>
 #include "cint.h"
 #include "cvhf.h"
-#include "fblas.h"
 #include "optimizer.h"
 
 #define MAX(I,J)        ((I) > (J) ? (I) : (J))
@@ -65,7 +79,7 @@ int CVHFrkbllll_vkscreen(int *shls, CVHFOpt *opt,
         int idm;
         double qijkl = opt->q_cond[i*nbas+j] * opt->q_cond[k*nbas+l];
         double *pdmscond = opt->dm_cond + nbas*nbas;
-        for (idm = 0; idm < n_dm/2; idm++) {
+        for (idm = 0; idm < (n_dm+1)/2; idm++) {
 // note in _vhf.rdirect_mapdm, J and K share the same DM
                 dms_cond[idm*2+0] = pdmscond + idm*nbas*nbas; // for vj
                 dms_cond[idm*2+1] = pdmscond + idm*nbas*nbas; // for vk
@@ -117,7 +131,7 @@ int CVHFrkbssll_vkscreen(int *shls, CVHFOpt *opt,
         int idm;
         double qijkl = opt->q_cond[nbas*nbas*SS+i*nbas+j] * opt->q_cond[k*nbas+l];
         double *pdmscond = opt->dm_cond + 4*nbas*nbas;
-        int nset = n_dm / 3;
+        int nset = (n_dm+2) / 3;
         double *dmscondll = pdmscond + nset*nbas*nbas*LL;
         double *dmscondss = pdmscond + nset*nbas*nbas*SS;
         double *dmscondsl = pdmscond + nset*nbas*nbas*SL;
@@ -200,12 +214,14 @@ void CVHFrkbssss_direct_scf(CVHFOpt *opt, int (*intor)(), CINTOpt *cintopt,
         }
         opt->q_cond = (double *)malloc(sizeof(double) * nbas*nbas);
 
-        const int INC1 = 1;
-        int nn = nbas * nbas;
-        double c1 = .25/(env[PTR_LIGHT_SPEED]*env[PTR_LIGHT_SPEED]);
         assert(intor == &int2e_spsp1spsp2_spinor);
         set_qcond(intor, cintopt, opt->q_cond, ao_loc, atm, natm, bas, nbas, env);
-        dscal_(&nn, &c1, opt->q_cond, &INC1);
+        double c1 = .25/(env[PTR_LIGHT_SPEED]*env[PTR_LIGHT_SPEED]);
+        double *qcond = opt->q_cond;
+        int i;
+        for (i = 0; i < nbas*nbas; i++) {
+                qcond[i] *= c1;
+        }
 }
 
 
@@ -218,13 +234,15 @@ void CVHFrkbssll_direct_scf(CVHFOpt *opt, int (*intor)(), CINTOpt *cintopt,
         }
         opt->q_cond = (double *)malloc(sizeof(double) * nbas*nbas*2);
 
-        const int INC1 = 1;
-        int nn = nbas * nbas;
-        double c1 = 1/(.25/(env[PTR_LIGHT_SPEED]*env[PTR_LIGHT_SPEED]));
         set_qcond(&int2e_spinor, NULL, opt->q_cond, ao_loc, atm, natm, bas, nbas, env);
         set_qcond(&int2e_spsp1spsp2_spinor, NULL, opt->q_cond+nbas*nbas, ao_loc,
                   atm, natm, bas, nbas, env);
-        dscal_(&nn, &c1, opt->q_cond+nbas*nbas, &INC1);
+        double c1 = .25/(env[PTR_LIGHT_SPEED]*env[PTR_LIGHT_SPEED]);
+        double *qcond = opt->q_cond + nbas*nbas;
+        int i;
+        for (i = 0; i < nbas*nbas; i++) {
+                qcond[i] *= c1;
+        }
 }
 
 static void set_dmcond(double *dmcond, double *dmscond, double complex *dm,
@@ -291,6 +309,11 @@ void CVHFrkbssll_direct_scf_dm(CVHFOpt *opt, double complex *dm, int nset,
 {
         if (opt->dm_cond) {
                 free(opt->dm_cond);
+        }
+        if (nset < 3) {
+                fprintf(stderr, "At least 3 sets of DMs (dmll,dmss,dmsl) are "
+                        "required to set rkb prescreening\n");
+                exit(1);
         }
         nset = nset / 3;
         opt->dm_cond = (double *)malloc(sizeof(double)*nbas*nbas*4*(1+nset));

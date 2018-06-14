@@ -1,3 +1,17 @@
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import unittest
 import numpy
 from pyscf.pbc import gto
@@ -86,7 +100,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(finger(vk[6]), (3.6342630872923456-0.054892635365850449j)/8, 9)
         self.assertAlmostEqual(finger(vk[7]), (3.3483735224533548+0.040877095049528467j)/8, 9)
 
-    def test_aft_k1(self):
+    def test_aft_k1_high_cost(self):
         kpts = cell.get_abs_kpts([[-.25,-.25,-.25],
                                   [-.25,-.25, .25],
                                   [-.25, .25,-.25],

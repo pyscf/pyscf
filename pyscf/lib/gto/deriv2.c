@@ -1,7 +1,22 @@
-/*
- * Copyright (C) 2016-  Qiming Sun <osirpt.sun@gmail.com>
+/* Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+  
+   Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+ 
+        http://www.apache.org/licenses/LICENSE-2.0
+ 
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+ *
+ * Author: Qiming Sun <osirpt.sun@gmail.com>
  */
 
+#include <stdlib.h>
 #include <math.h>
 #include <complex.h>
 #include "gto/grid_ao_drv.h"
@@ -24,10 +39,12 @@ double CINTcommon_fac_sp(int l);
 void GTOshell_eval_grid_cart_deriv2(double *cgto, double *ri, double *exps,
                                     double *coord, double *alpha, double *coeff,
                                     double *env, int l, int np, int nc,
-                                    int nao, int ngrids, int bgrids)
+                                    size_t nao, size_t ngrids, size_t bgrids)
 {
-        const int degen = (l+1)*(l+2)/2;
-        int lx, ly, lz, i, j, j1, k, l1, n;
+        const size_t degen = (l+1)*(l+2)/2;
+        const size_t bgrids0 = (bgrids >= SIMDD) ? (bgrids+1-SIMDD) : 0;
+        int lx, ly, lz;
+        size_t i, j, j1, k, l1, n;
         double fx0[SIMDD*16];
         double fy0[SIMDD*16];
         double fz0[SIMDD*16];
@@ -62,7 +79,7 @@ void GTOshell_eval_grid_cart_deriv2(double *cgto, double *ri, double *exps,
                 } }
         }
 
-        for (i = 0; i < bgrids+1-SIMDD; i+=SIMDD) {
+        for (i = 0; i < bgrids0; i+=SIMDD) {
                 for (k = 0; k < np; k++) {
                         if (_nonzero_in(exps+k*BLKSIZE+i, SIMDD)) {
         for (n = 0; n < SIMDD; n++) {
@@ -195,10 +212,12 @@ void GTOval_spinor_deriv2(int ngrids, int *shls_slice, int *ao_loc,
 void GTOshell_eval_grid_cart_deriv3(double *cgto, double *ri, double *exps,
                                     double *coord, double *alpha, double *coeff,
                                     double *env, int l, int np, int nc,
-                                    int nao, int ngrids, int bgrids)
+                                    size_t nao, size_t ngrids, size_t bgrids)
 {
-        const int degen = (l+1)*(l+2)/2;
-        int lx, ly, lz, i, j, j1, k, l1, n;
+        const size_t degen = (l+1)*(l+2)/2;
+        const size_t bgrids0 = (bgrids >= SIMDD) ? (bgrids+1-SIMDD) : 0;
+        int lx, ly, lz;
+        size_t i, j, j1, k, l1, n;
         double fx0[SIMDD*16];
         double fy0[SIMDD*16];
         double fz0[SIMDD*16];
@@ -246,7 +265,7 @@ void GTOshell_eval_grid_cart_deriv3(double *cgto, double *ri, double *exps,
                 } }
         }
 
-        for (i = 0; i < bgrids+1-SIMDD; i+=SIMDD) {
+        for (i = 0; i < bgrids0; i+=SIMDD) {
                 for (k = 0; k < np; k++) {
                         if (_nonzero_in(exps+k*BLKSIZE+i, SIMDD)) {
         for (n = 0; n < SIMDD; n++) {
@@ -419,10 +438,12 @@ void GTOval_spinor_deriv3(int ngrids, int *shls_slice, int *ao_loc,
 void GTOshell_eval_grid_cart_deriv4(double *cgto, double *ri, double *exps,
                                     double *coord, double *alpha, double *coeff,
                                     double *env, int l, int np, int nc,
-                                    int nao, int ngrids, int bgrids)
+                                    size_t nao, size_t ngrids, size_t bgrids)
 {
-        const int degen = (l+1)*(l+2)/2;
-        int lx, ly, lz, i, j, j1, k, l1, n;
+        const size_t degen = (l+1)*(l+2)/2;
+        const size_t bgrids0 = (bgrids >= SIMDD) ? (bgrids+1-SIMDD) : 0;
+        int lx, ly, lz;
+        size_t i, j, j1, k, l1, n;
         double fx0[SIMDD*16];
         double fy0[SIMDD*16];
         double fz0[SIMDD*16];
@@ -488,7 +509,7 @@ void GTOshell_eval_grid_cart_deriv4(double *cgto, double *ri, double *exps,
                 } }
         }
 
-        for (i = 0; i < bgrids+1-SIMDD; i+=SIMDD) {
+        for (i = 0; i < bgrids0; i+=SIMDD) {
                 for (k = 0; k < np; k++) {
                         if (_nonzero_in(exps+k*BLKSIZE+i, SIMDD)) {
         for (n = 0; n < SIMDD; n++) {
@@ -724,10 +745,11 @@ void GTOval_spinor_deriv4(int ngrids, int *shls_slice, int *ao_loc,
 void GTOshell_eval_grid_cart_deriv1(double *gto, double *ri, double *exps,
                                     double *coord, double *alpha, double *coeff,
                                     double *env, int l, int np, int nc,
-                                    int nao, int ngrids, int bgrids)
+                                    size_t nao, size_t ngrids, size_t bgrids)
 {
-        const int degen = (l+1)*(l+2)/2;
-        int lx, ly, lz, i, k, n;
+        const size_t degen = (l+1)*(l+2)/2;
+        int lx, ly, lz;
+        size_t i, k, n;
         double ax, ay, az, tmp;
         double ce[6];
         double xpows_1less_in_power[64];
@@ -1017,8 +1039,6 @@ void GTOshell_eval_grid_cart_deriv1(double *gto, double *ri, double *exps,
         }
 }
 
-int GTOcontract_exp1(double *ectr, double *coord, double *alpha, double *coeff,
-                     int l, int nprim, int nctr, int ngrids, double fac);
 void GTOval_cart(int ngrids, int *shls_slice, int *ao_loc,
                  double *ao, double *coord, char *non0table,
                  int *atm, int natm, int *bas, int nbas, double *env);

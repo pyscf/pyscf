@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -16,6 +29,10 @@ from pyscf.cc import ccsd
 from pyscf.cc import ccsd_rdm
 from pyscf.fci import cistring
 from functools import reduce
+from pyscf import __config__
+
+BLKMIN = getattr(__config__, 'ci_cisd_blkmin', 4)
+
 
 def kernel(myci, eris, ci0=None, max_cycle=50, tol=1e-8, verbose=logger.INFO):
     log = logger.new_logger(myci, verbose)
@@ -25,7 +42,7 @@ def kernel(myci, eris, ci0=None, max_cycle=50, tol=1e-8, verbose=logger.INFO):
     diag -= ehf
 
     if ci0 is None:
-        ci0 = myci.get_init_guess(eris)[1]
+        ci0 = myci.get_init_guess(eris=eris, nroots=myci.nroots, diag=diag)[1]
 
     def op(xs):
         return [myci.contract(x, eris) for x in xs]
@@ -65,7 +82,7 @@ def make_diagonal(myci, eris):
     kdiag[:nocc,:nocc] = numpy.einsum('jiij->ij', eris.oooo)
     jdiag[:nocc,nocc:] = numpy.einsum('iijj->ij', eris.oovv)
     kdiag[:nocc,nocc:] = numpy.einsum('ijji->ij', eris.ovvo)
-    if eris.vvvv is not None:
+    if eris.vvvv is not None and len(eris.vvvv.shape) == 2:
         #:eris_vvvv = ao2mo.restore(1, eris.vvvv, nvir)
         #:jdiag1 = numpy.einsum('iijj->ij', eris_vvvv)
         diag_idx = numpy.arange(nvir)
@@ -108,28 +125,28 @@ def contract(myci, civec, eris):
     t1 += numpy.einsum('ib,ab->ia', c1, fvv)
     t1 -= numpy.einsum('ja,ji->ia', c1, foo)
 
-    t2 += lib.einsum('iklj,klab->ijab', _cp(eris.oooo)*.5, c2)
+    t2 += lib.einsum('kilj,klab->ijab', _cp(eris.oooo)*.5, c2)
     t2 += lib.einsum('ijac,bc->ijab', c2, fvv)
     t2 -= lib.einsum('kj,kiba->jiba', foo, c2)
     t2 += numpy.einsum('ia,jb->ijab', c1, fov)
 
-    unit = nocc*nvir**2 + nocc**2*nvir*3
-    max_memory = max(2000, myci.max_memory - lib.current_memory()[0])
-    blksize = min(nvir, max(ccsd.BLKMIN, int(max_memory/unit)))
+    unit = nocc*nvir**2 + nocc**2*nvir*3 + 1
+    max_memory = max(0, myci.max_memory - lib.current_memory()[0])
+    blksize = min(nvir, max(BLKMIN, int(max_memory*.9e6/8/unit)))
     log.debug1('max_memory %d MB,  nocc,nvir = %d,%d  blksize = %d',
                max_memory, nocc, nvir, blksize)
     nvir_pair = nvir * (nvir+1) // 2
     for p0, p1 in lib.prange(0, nvir, blksize):
         eris_oVoV = _cp(_cp(eris.oovv[:,:,p0:p1]).transpose(0,2,1,3))
-        tmp = lib.einsum('jbkc,ikca->jiba', eris_oVoV, c2)
+        tmp = lib.einsum('kbjc,ikca->jiba', eris_oVoV, c2)
         t2[:,:,p0:p1] -= tmp*.5
         t2[:,:,p0:p1] -= tmp.transpose(1,0,2,3)
         tmp = None
 
         eris_ovvo = _cp(eris.ovvo[:,p0:p1])
         t2[:,:,p0:p1] += eris_ovvo.transpose(0,3,1,2) * (c0*.5)
-        t1[:,p0:p1] += numpy.einsum('jb,iabj->ia', c1, eris_ovvo) * 2
-        t1[:,p0:p1] -= numpy.einsum('jb,iajb->ia', c1, eris_oVoV)
+        t1 += numpy.einsum('ia,iabj->jb', c1[:,p0:p1], eris_ovvo) * 2
+        t1[:,p0:p1] -= numpy.einsum('ib,iajb->ja', c1, eris_oVoV)
 
         ovov = -.5 * eris_oVoV
         ovov += eris_ovvo.transpose(3,1,0,2)
@@ -140,17 +157,16 @@ def contract(myci, civec, eris):
             t2[:,j] += lib.einsum('ckb,ckia->iab', ovov[j], theta)
         tmp = ovov = None
 
-        t1[:,p0:p1] += numpy.einsum('aijb,jb->ia', theta, fov)
+        t1 += numpy.einsum('aijb,ia->jb', theta, fov[:,p0:p1])
 
         eris_ovoo = _cp(eris.ovoo[:,p0:p1])
         t1 -= lib.einsum('bjka,jbki->ia', theta, eris_ovoo)
-        t2[:,:,p0:p1] -= lib.einsum('jbik,ka->jiba', eris_ovoo, c1)
+        t2[:,:,p0:p1] -= lib.einsum('jbik,ka->jiba', eris_ovoo.conj(), c1)
         eris_vooo = None
 
-        eris_ovvv = _cp(eris.ovvv[:,p0:p1]).reshape(-1,nvir_pair)
-        eris_ovvv = lib.unpack_tril(eris_ovvv).reshape(nocc,p1-p0,nvir,nvir)
+        eris_ovvv = eris.get_ovvv(slice(None), slice(p0,p1)).conj()
         t1 += lib.einsum('cjib,jcba->ia', theta, eris_ovvv)
-        t2[:,:,p0:p1] += lib.einsum('iabc,jc->ijab', eris_ovvv, c1)
+        t2[:,:,p0:p1] += lib.einsum('iacb,jc->ijab', eris_ovvv, c1)
         tmp = eris_ovvv = None
 
     #:t2 + t2.transpose(1,0,3,2)
@@ -197,19 +213,30 @@ def t1strs(norb, nelec):
             signs.append(cistring.cre_des_sign(a, i, hf_str))
     return numpy.asarray(addrs), numpy.asarray(signs)
 
-def to_fcivec(cisdvec, norb, nelec):
+def to_fcivec(cisdvec, norb, nelec, frozen=0):
     '''Convert CISD coefficients to FCI coefficients'''
     if isinstance(nelec, (int, numpy.number)):
         nelecb = nelec//2
         neleca = nelec - nelecb
     else:
         neleca, nelecb = nelec
-    nocc = neleca
-    nvir = norb - nocc
-    c0, c1, c2 = cisdvec_to_amplitudes(cisdvec, norb, nocc)
-    t1addr, t1sign = t1strs(norb, nocc)
+        assert(neleca == nelecb)
 
-    na = cistring.num_strings(norb, nocc)
+    frozen_mask = numpy.zeros(norb, dtype=bool)
+    if isinstance(frozen, (int, numpy.integer)):
+        nfroz = frozen
+        frozen_mask[:frozen] = True
+    else:
+        nfroz = len(frozen)
+        frozen_mask[frozen] = True
+
+    nocc = numpy.count_nonzero(~frozen_mask[:neleca])
+    nmo = norb - nfroz
+    nvir = nmo - nocc
+    c0, c1, c2 = cisdvec_to_amplitudes(cisdvec, nmo, nocc)
+    t1addr, t1sign = t1strs(nmo, nocc)
+
+    na = cistring.num_strings(nmo, nocc)
     fcivec = numpy.zeros((na,na))
     fcivec[0,0] = c0
     c1 = c1[::-1].T.ravel()
@@ -220,7 +247,7 @@ def to_fcivec(cisdvec, norb, nelec):
 
     if nocc > 1 and nvir > 1:
         hf_str = int('1'*nocc, 2)
-        for a in range(nocc, norb):
+        for a in range(nocc, nmo):
             for b in range(nocc, a):
                 for i in reversed(range(1, nocc)):
                     for j in reversed(range(i)):
@@ -229,12 +256,48 @@ def to_fcivec(cisdvec, norb, nelec):
                         c2aa*= cistring.cre_des_sign(b, j, hf_str)
                         c2aa*= cistring.cre_des_sign(a, i, str1)
                         str1^= (1 << i) | (1 << a)
-                        addr = cistring.str2addr(norb, nocc, str1)
+                        addr = cistring.str2addr(nmo, nocc, str1)
                         fcivec[0,addr] = fcivec[addr,0] = c2aa
-    return fcivec
 
-def from_fcivec(ci0, norb, nelec):
+    if nfroz == 0:
+        return fcivec
+
+    assert(norb < 63)
+
+    strs = cistring.gen_strings4orblist(range(norb), neleca)
+    na = len(strs)
+    count = numpy.zeros(na, dtype=int)
+    parity = numpy.zeros(na, dtype=bool)
+    core_mask = numpy.ones(na, dtype=bool)
+    # During the loop, count saves the number of occupied orbitals that
+    # lower (with small orbital ID) than the present orbital i.
+    # Moving all the frozen orbitals to the beginning of the orbital list
+    # (before the occupied orbitals) leads to parity odd (= True, with
+    # negative sign) or even (= False, with positive sign).
+    for i in range(norb):
+        if frozen_mask[i]:
+            if i < neleca:
+                # frozen occupied orbital should be occupied
+                core_mask &= (strs & (1<<i)) != 0
+                parity ^= (count & 1) == 1
+            else:
+                # frozen virtual orbital should not be occupied.
+                # parity is not needed since it's unoccupied
+                core_mask &= (strs & (1<<i)) == 0
+        else:
+            count += (strs & (1<<i)) != 0
+    sub_strs = strs[core_mask & (count == nocc)]
+    addrs = cistring.strs2addr(norb, neleca, sub_strs)
+    fcivec1 = numpy.zeros((na,na))
+    fcivec1[addrs[:,None],addrs] = fcivec
+    fcivec1[parity,:] *= -1
+    fcivec1[:,parity] *= -1
+    return fcivec1
+
+def from_fcivec(ci0, norb, nelec, frozen=0):
     '''Extract CISD coefficients from FCI coefficients'''
+    if frozen is not 0:
+        raise NotImplementedError
     if isinstance(nelec, (int, numpy.number)):
         nelecb = nelec//2
         neleca = nelec - nelecb
@@ -252,6 +315,16 @@ def from_fcivec(ci0, norb, nelec):
     return amplitudes_to_cisdvec(c0, c1[::-1], c2[::-1,::-1])
 
 def make_rdm1(myci, civec=None, nmo=None, nocc=None):
+    '''
+    Spin-traced one-particle density matrix in MO basis (the occupied-virtual
+    blocks from the orbital response contribution are not included).
+
+    dm1[p,q] = <q_alpha^\dagger p_alpha> + <q_beta^\dagger p_beta>
+
+    The convention of 1-pdm is based on McWeeney's book, Eq (5.4.20).
+    The contraction between 1-particle Hamiltonian and rdm1 is
+    E = einsum('pq,qp', h1, rdm1)
+    '''
     if civec is None: civec = myci.ci
     if nmo is None: nmo = myci.nmo
     if nocc is None: nocc = myci.nocc
@@ -259,7 +332,13 @@ def make_rdm1(myci, civec=None, nmo=None, nocc=None):
     return ccsd_rdm._make_rdm1(myci, d1, with_frozen=True)
 
 def make_rdm2(myci, civec=None, nmo=None, nocc=None):
-    '''spin-traced 2pdm in chemist's notation
+    r'''
+    Spin-traced two-particle density matrix in MO basis
+
+    dm2[p,q,r,s] = \sum_{sigma,tau} <p_sigma^\dagger r_tau^\dagger s_tau q_sigma>
+
+    Note the contraction between ERIs (in Chemist's notation) and rdm2 is
+    E = einsum('pqrs,pqrs', eri, rdm2)
     '''
     if civec is None: civec = myci.ci
     if nmo is None: nmo = myci.nmo
@@ -271,20 +350,21 @@ def make_rdm2(myci, civec=None, nmo=None, nocc=None):
 
 def _gamma1_intermediates(myci, civec, nmo, nocc):
     c0, c1, c2 = myci.cisdvec_to_amplitudes(civec, nmo, nocc)
-    dov = c0*c1
-    dov += numpy.einsum('jb,ijab->ia', c1, c2) * 2
-    dov -= numpy.einsum('jb,ijba->ia', c1, c2)
+    dvo = c0.conj() * c1.T
+    dvo += numpy.einsum('jb,ijab->ai', c1.conj(), c2) * 2
+    dvo -= numpy.einsum('jb,ijba->ai', c1.conj(), c2)
+    dov = dvo.T.conj()
 
     theta = c2*2 - c2.transpose(0,1,3,2)
-    doo  =-numpy.einsum('ia,ka->ik', c1, c1)
-    doo -= lib.einsum('ijab,ikab->jk', theta, c2)
-    dvv  = numpy.einsum('ia,ic->ca', c1, c1)
-    dvv += lib.einsum('ijab,ijac->cb', theta, c2)
-    return doo, dov, dov.T, dvv
+    doo  =-numpy.einsum('ia,ka->ik', c1.conj(), c1)
+    doo -= lib.einsum('ijab,ikab->jk', c2.conj(), theta)
+    dvv  = numpy.einsum('ia,ic->ac', c1, c1.conj())
+    dvv += lib.einsum('ijab,ijac->bc', theta, c2.conj())
+    return doo, dov, dvo, dvv
 
-def _gamma2_intermediates(myci, civec, nmo, nocc):
+def _gamma2_intermediates(myci, civec, nmo, nocc, compress_vvvv=False):
     f = lib.H5TmpFile()
-    _gamma2_outcore(myci, civec, nmo, nocc, f, False)
+    _gamma2_outcore(myci, civec, nmo, nocc, f, compress_vvvv)
     d2 = (f['dovov'].value, f['dvvvv'].value, f['doooo'].value, f['doovv'].value,
           f['dovvo'].value, None,             f['dovvv'].value, f['dooov'].value)
     return d2
@@ -297,44 +377,45 @@ def _gamma2_outcore(myci, civec, nmo, nocc, h5fobj, compress_vvvv=False):
     nvir_pair = nvir * (nvir+1) // 2
     c0, c1, c2 = myci.cisdvec_to_amplitudes(civec, nmo, nocc)
 
-    h5fobj['dovov'] = 2*c0*c2.transpose(0,2,1,3) - c0*c2.transpose(1,2,0,3)
+    h5fobj['dovov'] = (2*c0*c2.conj().transpose(0,2,1,3) -
+                       c0*c2.conj().transpose(1,2,0,3))
 
-    doooo = lib.einsum('ijab,klab->ijkl', c2, c2)
+    doooo = lib.einsum('ijab,klab->ijkl', c2.conj(), c2)
     h5fobj['doooo'] = doooo.transpose(0,2,1,3) - doooo.transpose(1,2,0,3)*.5
     doooo = None
 
-    dooov =-numpy.einsum('ia,klac->klic', c1*2, c2)
+    dooov =-lib.einsum('ia,klac->klic', c1*2, c2.conj())
     h5fobj['dooov'] = dooov.transpose(0,2,1,3)*2 - dooov.transpose(1,2,0,3)
     dooov = None
 
-    #:dvovv = numpy.einsum('ia,ikcd->akcd', c1, c2)
+    #:dvovv = numpy.einsum('ia,ikcd->akcd', c1, c2) * 2
     #:dvvvv = lib.einsum('ijab,ijcd->abcd', c2, c2)
     max_memory = max(0, myci.max_memory - lib.current_memory()[0])
-    unit = max(nocc**2*nvir*2+nocc*nvir**2*3, nvir**3*2+nocc*nvir**2)
-    blksize = min(nvir, max(ccsd.BLKMIN, int(max_memory*.95e6/8/unit)))
+    unit = max(nocc**2*nvir*2+nocc*nvir**2*3 + 1, nvir**3*2+nocc*nvir**2 + 1)
+    blksize = min(nvir, max(BLKMIN, int(max_memory*.95e6/8/unit)))
     iobuflen = int(256e6/8/blksize)
     log.debug1('rdm intermediates: block size = %d, nvir = %d in %d blocks',
                blksize, nocc, int((nvir+blksize-1)/blksize))
-    dovvv = h5fobj.create_dataset('dovvv', (nocc,nvir,nvir,nvir), 'f8',
+    dtype = numpy.result_type(civec).char
+    dovvv = h5fobj.create_dataset('dovvv', (nocc,nvir,nvir,nvir), dtype,
                                   chunks=(nocc,nvir,blksize,nvir))
     if compress_vvvv:
-        dvvvv = h5fobj.create_dataset('dvvvv', (nvir_pair,nvir_pair), 'f8')
+        dvvvv = h5fobj.create_dataset('dvvvv', (nvir_pair,nvir_pair), dtype)
     else:
-        dvvvv = h5fobj.create_dataset('dvvvv', (nvir,nvir,nvir,nvir), 'f8')
+        dvvvv = h5fobj.create_dataset('dvvvv', (nvir,nvir,nvir,nvir), dtype)
 
     for istep, (p0, p1) in enumerate(lib.prange(0, nvir, blksize)):
-        gvvvv = lib.einsum('ijab,ijcd->abcd', c2[:,:,p0:p1], c2)
+        theta = c2[:,:,p0:p1] - c2[:,:,p0:p1].transpose(1,0,2,3) * .5
+        gvvvv = lib.einsum('ijab,ijcd->abcd', theta.conj(), c2)
         if compress_vvvv:
 # symmetrize dvvvv because it does not affect the results of cisd_grad
-# dvvvv = gvvvv.transpose(0,2,1,3)-gvvvv.transpose(0,3,1,2)*.5
 # dvvvv = (dvvvv+dvvvv.transpose(0,1,3,2)) * .5
 # dvvvv = (dvvvv+dvvvv.transpose(1,0,2,3)) * .5
 # now dvvvv == dvvvv.transpose(0,1,3,2) == dvvvv.transpose(1,0,3,2)
             tmp = numpy.empty((nvir,nvir,nvir))
             tmpvvvv = numpy.empty((p1-p0,nvir,nvir_pair))
             for i in range(p1-p0):
-                tmp[:] = (gvvvv[i].transpose(1,0,2) -
-                          gvvvv[i].transpose(2,0,1)*.5)
+                tmp[:] = gvvvv[i].conj().transpose(1,0,2)
                 lib.pack_tril(tmp+tmp.transpose(0,2,1), out=tmpvvvv[i])
             # tril of (dvvvv[p0:p1,p0:p1]+dvvvv[p0:p1,p0:p1].T)
             for i in range(p0, p1):
@@ -352,27 +433,74 @@ def _gamma2_outcore(myci, civec, nmo, nocc, h5fobj, compress_vvvv=False):
             tmp = tmpvvvv = None
         else:
             for i in range(p0, p1):
-                dvvvv[i] = (gvvvv[i-p0].transpose(1,0,2) -
-                            gvvvv[i-p0].transpose(2,0,1)*.5)
+                dvvvv[i] = gvvvv[i-p0].conj().transpose(1,0,2)
 
-        gvovv = numpy.einsum('ia,ikcd->akcd', c1[:,p0:p1]*2, c2)
+        gvovv = numpy.einsum('ia,ikcd->akcd', c1[:,p0:p1].conj()*2, c2)
+        gvovv = gvovv.conj()
         dovvv[:,:,p0:p1] = gvovv.transpose(1,3,0,2)*2 - gvovv.transpose(1,2,0,3)
 
     theta = c2*2 - c2.transpose(1,0,2,3)
-    doovv  = numpy.einsum('ia,kc->ikca', c1, -c1)
-    doovv -= lib.einsum('kjcb,kica->jiab', c2, theta)
-    doovv -= lib.einsum('ikcb,jkca->ijab', c2, theta)
+    doovv  = numpy.einsum('ia,kc->ikca', c1.conj(), -c1)
+    doovv -= lib.einsum('kjcb,kica->jiab', c2.conj(), theta)
+    doovv -= lib.einsum('ikcb,jkca->ijab', c2.conj(), theta)
     h5fobj['doovv'] = doovv
     doovv = None
 
-    dovvo  = lib.einsum('ikac,jkbc->jbai', theta, theta)
-    dovvo += numpy.einsum('ia,kc->iack', c1, c1) * 2
+    dovvo  = lib.einsum('ikac,jkbc->iabj', theta.conj(), theta)
+    dovvo += numpy.einsum('ia,kc->iack', c1.conj(), c1) * 2
     h5fobj['dovvo'] = dovvo
     theta = dovvo = None
 
     dvvov = None
     return (h5fobj['dovov'], h5fobj['dvvvv'], h5fobj['doooo'], h5fobj['doovv'],
             h5fobj['dovvo'], dvvov          , h5fobj['dovvv'], h5fobj['dooov'])
+
+def trans_rdm1(myci, cibra, ciket, nmo=None, nocc=None):
+    '''
+    Spin-traced one-particle transition density matrix in MO basis.
+
+    dm1[p,q] = <q_alpha^\dagger p_alpha> + <q_beta^\dagger p_beta>
+
+    The convention of 1-pdm is based on McWeeney's book, Eq (5.4.20).
+    The contraction between 1-particle Hamiltonian and rdm1 is
+    E = einsum('pq,qp', h1, rdm1)
+    '''
+    if nmo is None: nmo = myci.nmo
+    if nocc is None: nocc = myci.nocc
+    c0bra, c1bra, c2bra = myci.cisdvec_to_amplitudes(cibra, nmo, nocc)
+    c0ket, c1ket, c2ket = myci.cisdvec_to_amplitudes(ciket, nmo, nocc)
+
+    dvo = c0bra.conj() * c1ket.T
+    dvo += numpy.einsum('jb,ijab->ai', c1bra.conj(), c2ket) * 2
+    dvo -= numpy.einsum('jb,ijba->ai', c1bra.conj(), c2ket)
+
+    dov = c0ket * c1bra.conj()
+    dov += numpy.einsum('jb,ijab->ia', c1ket, c2bra.conj()) * 2
+    dov -= numpy.einsum('jb,ijba->ia', c1ket, c2bra.conj())
+
+    theta = c2ket*2 - c2ket.transpose(0,1,3,2)
+    doo  =-numpy.einsum('ia,ka->ik', c1bra.conj(), c1ket)
+    doo -= lib.einsum('ijab,ikab->jk', c2bra.conj(), theta)
+    dvv  = numpy.einsum('ia,ic->ac', c1ket, c1bra.conj())
+    dvv += lib.einsum('ijab,ijac->bc', theta, c2bra.conj())
+
+    dm1 = numpy.empty((nmo,nmo), dtype=doo.dtype)
+    dm1[:nocc,:nocc] = doo * 2
+    dm1[:nocc,nocc:] = dov * 2
+    dm1[nocc:,:nocc] = dvo * 2
+    dm1[nocc:,nocc:] = dvv * 2
+    norm = dot(cibra, ciket, nmo, nocc)
+    dm1[numpy.diag_indices(nocc)] += 2 * norm
+
+    if not (myci.frozen is 0 or myci.frozen is None):
+        nmo = myci.mo_occ.size
+        nocc = numpy.count_nonzero(myci.mo_occ > 0)
+        rdm1 = numpy.zeros((nmo,nmo), dtype=dm1.dtype)
+        rdm1[numpy.diag_indices(nocc)] = 2 * norm
+        moidx = numpy.where(myci.get_frozen_mask())[0]
+        rdm1[moidx[:,None],moidx] = dm1
+        dm1 = rdm1
+    return dm1
 
 
 def as_scanner(ci):
@@ -397,12 +525,22 @@ def as_scanner(ci):
         >>> e_tot = ci_scanner(gto.M(atom='H 0 0 0; F 0 0 1.1'))
         >>> e_tot = ci_scanner(gto.M(atom='H 0 0 0; F 0 0 1.5'))
     '''
+    from pyscf import gto
+    if isinstance(ci, lib.SinglePointScanner):
+        return ci
+
     logger.info(ci, 'Set %s as a scanner', ci.__class__)
+
     class CISD_Scanner(ci.__class__, lib.SinglePointScanner):
         def __init__(self, ci):
             self.__dict__.update(ci.__dict__)
             self._scf = ci._scf.as_scanner()
-        def __call__(self, mol, **kwargs):
+        def __call__(self, mol_or_geom, **kwargs):
+            if isinstance(mol_or_geom, gto.Mole):
+                mol = mol_or_geom
+            else:
+                mol = self.mol.set_geom_(mol_or_geom, inplace=False)
+
             mf_scanner = self._scf
             mf_scanner(mol)
             self.mol = mol
@@ -414,6 +552,15 @@ def as_scanner(ci):
 
 
 class CISD(lib.StreamObject):
+
+    conv_tol = getattr(__config__, 'ci_cisd_CISD_conv_tol', 1e-9)
+    max_cycle = getattr(__config__, 'ci_cisd_CISD_max_cycle', 50)
+    max_space = getattr(__config__, 'ci_cisd_CISD_max_space', 12)
+    lindep = getattr(__config__, 'ci_cisd_CISD_lindep', 1e-14)
+    level_shift = getattr(__config__, 'ci_cisd_CISD_level_shift', 0)  # in preconditioner
+    direct = getattr(__config__, 'ci_cisd_CISD_direct', False)
+    async_io = getattr(__config__, 'ci_cisd_CISD_async_io', True)
+
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
         if 'dft' in str(mf.__module__):
              raise RuntimeError('CISD Warning: The first argument mf is a DFT object. '
@@ -428,16 +575,9 @@ class CISD(lib.StreamObject):
         self.stdout = self.mol.stdout
         self.max_memory = mf.max_memory
 
-        self.conv_tol = 1e-9
-        self.max_cycle = 50
-        self.max_space = 12
-        self.lindep = 1e-14
         self.nroots = 1
-        self.level_shift = 0  # in precond
-
         self.frozen = frozen
-        self.direct = False
-        self.chkfile = None
+        self.chkfile = mf.chkfile
 
 ##################################################
 # don't modify the following attributes, they are not input options
@@ -449,7 +589,10 @@ class CISD(lib.StreamObject):
         self.ci = None
         self._nocc = None
         self._nmo = None
-        self._keys = set(self.__dict__.keys())
+
+        keys = set(('conv_tol', 'max_cycle', 'max_space', 'lindep',
+                    'level_shift', 'direct'))
+        self._keys = set(self.__dict__.keys()).union(keys)
 
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)
@@ -474,6 +617,13 @@ class CISD(lib.StreamObject):
         return numpy.asarray(self.e_corr) + self._scf.e_tot
 
     @property
+    def nstates(self):
+        return self.nroots
+    @nstates.setter
+    def nstates(self, x):
+        self.nroots = x
+
+    @property
     def nocc(self):
         return self.get_nocc()
     @nocc.setter
@@ -486,6 +636,14 @@ class CISD(lib.StreamObject):
     @nmo.setter
     def nmo(self, n):
         self._nmo = n
+
+    def vector_size(self):
+        '''The size of the vector which was returned from
+        :func:`amplitudes_to_cisdvec`
+        '''
+        nocc = self.nocc
+        nvir = self.nmo - nocc
+        return 1 + nocc*nvir + (nocc*nvir)**2
 
     get_nocc = ccsd.get_nocc
     get_nmo = ccsd.get_nmo
@@ -503,6 +661,10 @@ class CISD(lib.StreamObject):
         self.converged, self.e_corr, self.ci = \
                 kernel(self, eris, ci0, max_cycle=self.max_cycle,
                        tol=self.conv_tol, verbose=self.verbose)
+        self._finalize()
+        return self.e_corr, self.ci
+
+    def _finalize(self):
         citype = self.__class__.__name__
         if numpy.all(self.converged):
             logger.info(self, '%s converged', citype)
@@ -514,9 +676,9 @@ class CISD(lib.StreamObject):
         else:
             logger.note(self, 'E(%s) = %.16g  E_corr = %.16g',
                         citype, self.e_tot, self.e_corr)
-        return self.e_corr, self.ci
+        return self
 
-    def get_init_guess(self, eris=None):
+    def get_init_guess(self, eris=None, nroots=1, diag=None):
         # MP2 initial guess
         if eris is None: eris = self.ao2mo(self.mo_coeff)
         nocc = self.nocc
@@ -532,8 +694,27 @@ class CISD(lib.StreamObject):
         logger.info(self, 'Init t2, MP2 energy = %.15g', self.emp2)
 
         if abs(self.emp2) < 1e-3 and abs(ci1).sum() < 1e-3:
+            # To avoid ci1 being stuck at local minimum
             ci1 = 1e-1 / e_ia
-        return self.emp2, amplitudes_to_cisdvec(ci0, ci1, ci2)
+
+        ci_guess = amplitudes_to_cisdvec(ci0, ci1, ci2)
+
+        if nroots > 1:
+            civec_size = ci_guess.size
+            dtype = ci_guess.dtype
+            nroots = min(ci1.size+1, nroots)  # Consider Koopmans' theorem only
+
+            if diag is None:
+                idx = range(1, nroots)
+            else:
+                idx = diag[:ci1.size+1].argsort()[1:nroots]  # exclude HF determinant
+
+            ci_guess = [ci_guess]
+            for i in idx:
+                g = numpy.zeros(civec_size, dtype)
+                g[i] = 1.0
+                ci_guess.append(g)
+        return self.emp2, ci_guess
 
     contract = contract
     make_diagonal = make_diagonal
@@ -567,18 +748,27 @@ class CISD(lib.StreamObject):
     def _add_vvvv(self, c2, eris, out=None, t2sym=None):
         return ccsd._add_vvvv(self, None, c2, eris, out, False, t2sym)
 
-    def to_fcivec(self, cisdvec, norb, nelec):
-        return to_fcivec(cisdvec, norb, nelec)
+    def to_fcivec(self, cisdvec, norb=None, nelec=None, frozen=0):
+        if norb is None: norb = self.nmo
+        if nelec is None: nelec = self.nocc*2
+        return to_fcivec(cisdvec, norb, nelec, frozen)
 
-    def from_fcivec(self, fcivec, norb, nelec):
+    def from_fcivec(self, fcivec, norb=None, nelec=None):
+        if norb is None: norb = self.nmo
+        if nelec is None: nelec = self.nocc*2
         return from_fcivec(fcivec, norb, nelec)
 
     make_rdm1 = make_rdm1
     make_rdm2 = make_rdm2
 
+    trans_rdm1 = trans_rdm1
+
     as_scanner = as_scanner
 
     def dump_chk(self, ci=None, frozen=None, mo_coeff=None, mo_occ=None):
+        if not self.chkfile:
+            return self
+
         if ci is None: ci = self.ci
         if frozen is None: frozen = self.frozen
         ci_chk = {'e_corr': self.e_corr,
@@ -590,11 +780,7 @@ class CISD(lib.StreamObject):
         if self._nmo is not None: ci_chk['_nmo'] = self._nmo
         if self._nocc is not None: ci_chk['_nocc'] = self._nocc
 
-        if self.chkfile is not None:
-            chkfile = self.chkfile
-        else:
-            chkfile = self._scf.chkfile
-        lib.chkfile.save(chkfile, 'cisd', ci_chk)
+        lib.chkfile.save(self.chkfile, 'cisd', ci_chk)
 
     def amplitudes_to_cisdvec(self, c0, c1, c2):
         return amplitudes_to_cisdvec(c0, c1, c2)
@@ -604,11 +790,15 @@ class CISD(lib.StreamObject):
         if nocc is None: nocc = self.nocc
         return cisdvec_to_amplitudes(civec, nmo, nocc)
 
-    def nuc_grad_method(self):
-        from pyscf.ci import cisd_grad
-        return cisd_grad.Gradients(self)
+    def density_fit(self):
+        raise NotImplementedError
 
-RCISD = CISD
+    def nuc_grad_method(self):
+        from pyscf.grad import cisd
+        return cisd.Gradients(self)
+
+class RCISD(CISD):
+    pass
 
 def _cp(a):
     return numpy.array(a, copy=False, order='C')
@@ -626,8 +816,7 @@ if __name__ == '__main__':
         ['O', ( 0., 0.    , 0.   )],
         ['H', ( 0., -0.757, 0.587)],
         ['H', ( 0., 0.757 , 0.587)],]
-    mol.basis = {'H': 'sto-3g',
-                 'O': 'sto-3g',}
+    mol.basis = 'sto3g'
     mol.build()
     mf = scf.RHF(mol).run()
     myci = CISD(mf)
@@ -643,8 +832,8 @@ if __name__ == '__main__':
     h2e = ao2mo.kernel(mf._eri, mf.mo_coeff)
     h2e = ao2mo.restore(1, h2e, nmo)
     e2 = (numpy.einsum('ij,ji', h1e, rdm1) +
-          numpy.einsum('ijkl,jilk', h2e, rdm2) * .5)
+          numpy.einsum('ijkl,ijkl', h2e, rdm2) * .5)
     print(ecisd + mf.e_tot - mol.energy_nuc() - e2)   # = 0
 
-    print(abs(rdm1 - numpy.einsum('ijkk->ij', rdm2)/(mol.nelectron-1)).sum())
+    print(abs(rdm1 - numpy.einsum('ijkk->ji', rdm2)/(mol.nelectron-1)).sum())
 

@@ -3,12 +3,14 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+'''
+Use callback method to save CASSCF orbitals in each iteration.
+
+See also pyscf/examples/scf/24-callback.py
+'''
+
 import numpy
 from pyscf import gto, scf, mcscf
-
-'''
-Use callback interface to save CASSCF orbitals for each iteration.
-'''
 
 mol = gto.M(
     atom = [

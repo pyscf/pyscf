@@ -1,16 +1,30 @@
-/*
-  Author: Sebastian Wouters <sebastianwouters@gmail.com>
+/* Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+  
+   Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
  
-  Date: August 3, 2015
+        http://www.apache.org/licenses/LICENSE-2.0
+ 
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
 
-  Augmented Hessian Newton-Raphson optimization of
-     1. either the Edmiston-Ruedenberg localization cost function
-     2. or the Boys localization cost function
-  in both cases with an analytic gradient and hessian
-
-  Reference: C. Edmiston and K. Ruedenberg, Reviews of Modern Physics 35, 457-464 (1963). http://dx.doi.org/10.1103/RevModPhys.35.457
-             http://sebwouters.github.io/CheMPS2/doxygen/classCheMPS2_1_1EdmistonRuedenberg.html
-*/
+ *
+ * Author: Sebastian Wouters <sebastianwouters@gmail.com>
+ *
+ *  Date: August 3, 2015
+ *
+ *  Augmented Hessian Newton-Raphson optimization of
+ *     1. either the Edmiston-Ruedenberg localization cost function
+ *     2. or the Boys localization cost function
+ *  in both cases with an analytic gradient and hessian
+ *
+ *  Reference: C. Edmiston and K. Ruedenberg, Reviews of Modern Physics 35, 457-464 (1963). http://dx.doi.org/10.1103/RevModPhys.35.457
+ *             http://sebwouters.github.io/CheMPS2/doxygen/classCheMPS2_1_1EdmistonRuedenberg.html
+ */
 
 #include <stdlib.h>
 

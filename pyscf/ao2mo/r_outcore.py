@@ -1,37 +1,47 @@
 #!/usr/bin/env python
-# $Id$
-# -*- coding: utf-8
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 import time
 import tempfile
 import numpy
 import h5py
 from pyscf import lib
+from pyscf import gto
 from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
 from pyscf.ao2mo import outcore
+from pyscf import __config__
 
-# default ioblk_size is 256 MB
+IOBLK_SIZE = getattr(__config__, 'ao2mo_outcore_ioblk_size', 256)  # 256 MB
+IOBUF_WORDS = getattr(__config__, 'ao2mo_outcore_iobuf_words', 1e8)  # 1.6 GB
+IOBUF_ROW_MIN = getattr(__config__, 'ao2mo_outcore_row_min', 160)
+MAX_MEMORY = getattr(__config__, 'ao2mo_outcore_max_memory', 4000)  # 4GB
 
-IOBUF_WORDS_PREFER = 1e8
-IOBUF_ROW_MIN = 160
-
-def full(mol, mo_coeff, erifile, dataname='eri_mo', tmpdir=None,
-         intor='int2e_spinor', aosym='s4', comp=1,
-         max_memory=4000, ioblk_size=256, verbose=logger.WARN):
-    general(mol, (mo_coeff,)*4, erifile, dataname, tmpdir,
+def full(mol, mo_coeff, erifile, dataname='eri_mo',
+         intor='int2e_spinor', aosym='s4', comp=None,
+         max_memory=MAX_MEMORY, ioblk_size=IOBLK_SIZE, verbose=logger.WARN):
+    general(mol, (mo_coeff,)*4, erifile, dataname,
             intor, aosym, comp, max_memory, ioblk_size, verbose)
     return erifile
 
-def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
-            intor='int2e_spinor', aosym='s4', comp=1,
-            max_memory=4000, ioblk_size=256, verbose=logger.WARN):
+def general(mol, mo_coeffs, erifile, dataname='eri_mo',
+            intor='int2e_spinor', aosym='s4', comp=None,
+            max_memory=MAX_MEMORY, ioblk_size=IOBLK_SIZE, verbose=logger.WARN):
     time_0pass = (time.clock(), time.time())
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(mol.stdout, verbose)
-
+    log = logger.new_logger(mol, verbose)
+    intor, comp = gto.moleintor._get_intor_and_comp(mol._add_suffix(intor), comp)
     klsame = iden_coeffs(mo_coeffs[2], mo_coeffs[3])
 
     nmoi = mo_coeffs[0].shape[1]
@@ -39,21 +49,22 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
     nmok = mo_coeffs[2].shape[1]
     nmol = mo_coeffs[3].shape[1]
     nao = mo_coeffs[0].shape[0]
-    aosym = _stand_sym_code(aosym)
+    aosym = outcore._stand_sym_code(aosym)
     if aosym in ('s1', 's2ij', 'a2ij'):
         nao_pair = nao * nao
     else:
-        nao_pair = guess_nao_pair(mol, nao)
+        nao_pair = _count_naopair(mol, nao)
 
     nij_pair = nmoi*nmoj
     nkl_pair = nmok*nmol
 
     if klsame and aosym in ('s4', 's2kl', 'a2kl', 'a4ij', 'a4kl', 'a4'):
         log.debug('k-mo == l-mo')
-        mokl = numpy.asarray(mo_coeffs[2], order='F')
+        mokl = numpy.asarray(mo_coeffs[2], dtype=numpy.complex128, order='F')
         klshape = (0, nmok, 0, nmok)
     else:
-        mokl = numpy.asarray(numpy.hstack((mo_coeffs[2],mo_coeffs[3])), order='F')
+        mokl = numpy.asarray(numpy.hstack((mo_coeffs[2],mo_coeffs[3])),
+                             dtype=numpy.complex128, order='F')
         klshape = (0, nmok, nmok, nmok+nmol)
 
     if isinstance(erifile, str):
@@ -66,26 +77,28 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
     else:
         assert(isinstance(erifile, h5py.Group))
         feri = erifile
+
     if comp == 1:
         chunks = (nmoj,nmol)
-        h5d_eri = feri.create_dataset(dataname, (nij_pair,nkl_pair),
-                                      'c16', chunks=chunks)
+        shape = (nij_pair, nkl_pair)
     else:
         chunks = (1,nmoj,nmol)
-        h5d_eri = feri.create_dataset(dataname, (comp,nij_pair,nkl_pair),
-                                      'c16', chunks=chunks)
+        shape = (comp, nij_pair, nkl_pair)
 
     if nij_pair == 0 or nkl_pair == 0:
-        feri.close()
+        feri.create_dataset(dataname, shape, 'c16')
+        if isinstance(erifile, str):
+            feri.close()
         return erifile
+    else:
+        h5d_eri = feri.create_dataset(dataname, shape, 'c16', chunks=chunks)
+
     log.debug('MO integrals %s are saved in %s/%s', intor, erifile, dataname)
     log.debug('num. MO ints = %.8g, required disk %.8g MB',
               float(nij_pair)*nkl_pair*comp, nij_pair*nkl_pair*comp*16/1e6)
 
 # transform e1
-    if tmpdir is None:
-        tmpdir = lib.param.TMPDIR
-    swapfile = tempfile.NamedTemporaryFile(dir=tmpdir)
+    swapfile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
     half_e1(mol, mo_coeffs, swapfile.name, intor, aosym, comp,
             max_memory, ioblk_size, log)
 
@@ -149,27 +162,25 @@ def general(mol, mo_coeffs, erifile, dataname='eri_mo', tmpdir=None,
 
 # swapfile will be overwritten if exists.
 def half_e1(mol, mo_coeffs, swapfile,
-            intor='int2e_spinor', aosym='s4', comp=1,
-            max_memory=4000, ioblk_size=256, verbose=logger.WARN, ao2mopt=None):
+            intor='int2e_spinor', aosym='s4', comp=None,
+            max_memory=MAX_MEMORY, ioblk_size=IOBLK_SIZE, verbose=logger.WARN,
+            ao2mopt=None):
     time0 = (time.clock(), time.time())
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(mol.stdout, verbose)
+    log = logger.new_logger(mol, verbose)
 
     ijsame = iden_coeffs(mo_coeffs[0], mo_coeffs[1])
 
     nmoi = mo_coeffs[0].shape[1]
     nmoj = mo_coeffs[1].shape[1]
     nao = mo_coeffs[0].shape[0]
-    aosym = _stand_sym_code(aosym)
+    aosym = outcore._stand_sym_code(aosym)
     if aosym in ('s1', 's2kl', 'a2kl'):
         nao_pair = nao * nao
     else:
-        nao_pair = guess_nao_pair(mol, nao)
+        nao_pair = _count_naopair(mol, nao)
     nij_pair = nmoi * nmoj
 
-    if  ijsame and aosym in ('s4', 's2ij', 'a2ij', 'a4ij', 'a4kl', 'a4'):
+    if ijsame and aosym in ('s4', 's2ij', 'a2ij', 'a4ij', 'a4kl', 'a4'):
         log.debug('i-mo == j-mo')
         moij = numpy.asarray(mo_coeffs[0], order='F')
         ijshape = (0, nmoi, 0, nmoi)
@@ -181,7 +192,7 @@ def half_e1(mol, mo_coeffs, swapfile,
             guess_e1bufsize(max_memory, ioblk_size, nij_pair, nao_pair, comp)
 # The buffer to hold AO integrals in C code
     aobuflen = int((mem_words - iobuf_words) // (nao*nao*comp))
-    shranges = outcore.guess_shell_ranges(mol, (aosym not in ('s1', 's2kl', 'a2kl')),
+    shranges = outcore.guess_shell_ranges(mol, (aosym not in ('s1', 's2ij', 'a2ij')),
                                           aobuflen, e1buflen, mol.ao_loc_2c(), False)
     if ao2mopt is None:
 #        if intor == 'int2e_spinor':
@@ -234,8 +245,8 @@ def half_e1(mol, mo_coeffs, swapfile,
     fswap.close()
     return swapfile
 
-def full_iofree(mol, mo_coeff, intor='int2e_spinor', aosym='s4', comp=1,
-                verbose=logger.WARN):
+def full_iofree(mol, mo_coeff, intor='int2e_spinor', aosym='s4', comp=None,
+                verbose=logger.WARN, **kwargs):
     erifile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
     general(mol, (mo_coeff,)*4, erifile.name, dataname='eri_mo',
             intor=intor, aosym=aosym, comp=comp,
@@ -243,8 +254,8 @@ def full_iofree(mol, mo_coeff, intor='int2e_spinor', aosym='s4', comp=1,
     with h5py.File(erifile.name, 'r') as feri:
         return numpy.asarray(feri['eri_mo'])
 
-def general_iofree(mol, mo_coeffs, intor='int2e_spinor', aosym='s4', comp=1,
-                   verbose=logger.WARN):
+def general_iofree(mol, mo_coeffs, intor='int2e_spinor', aosym='s4', comp=None,
+                   verbose=logger.WARN, **kwargs):
     erifile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
     general(mol, mo_coeffs, erifile.name, dataname='eri_mo',
             intor=intor, aosym=aosym, comp=comp,
@@ -266,8 +277,8 @@ def guess_e1bufsize(max_memory, ioblk_size, nij_pair, nao_pair, comp):
 # part of the max_memory is used to hold the AO integrals.  The iobuf is the
 # buffer to temporary hold the transformed integrals before streaming to disk.
 # iobuf is then divided to small blocks (ioblk_words) and streamed to disk.
-    if mem_words > 2e8:
-        iobuf_words = int(IOBUF_WORDS_PREFER) # 1.2GB
+    if mem_words > IOBUF_WORDS * 2:
+        iobuf_words = int(IOBUF_WORDS)
     else:
         iobuf_words = int(mem_words // 2)
     ioblk_words = int(min(ioblk_size*1e6/16, iobuf_words))
@@ -281,15 +292,7 @@ def guess_e2bufsize(ioblk_size, nrows, ncols):
     chunks = (IOBUF_ROW_MIN, ncols)
     return e2buflen, chunks
 
-def _stand_sym_code(sym):
-    if isinstance(sym, int):
-        return 's%d' % sym
-    elif 's' == sym[0] or 'a' == sym[0]:
-        return sym
-    else:
-        return 's' + sym
-
-def guess_nao_pair(mol, nao):
+def _count_naopair(mol, nao):
     ao_loc = mol.ao_loc_2c()
     nao_pair = 0
     for i in range(mol.nbas):
@@ -298,6 +301,8 @@ def guess_nao_pair(mol, nao):
             dj = ao_loc[j+1] - ao_loc[j]
             nao_pair += di * dj
     return nao_pair
+
+del(MAX_MEMORY)
 
 
 if __name__ == '__main__':

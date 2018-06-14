@@ -1,7 +1,26 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
 #
-#Author: Paul J. Robinson <pjrobinson@ucla.edu>
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
 #
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Author: Paul J. Robinson <pjrobinson@ucla.edu>
+#
+
+import warnings
+warnings.warn('This is an incomplete version of CDFT method. See also another '
+              'implementation of cDFT in '
+              'pyscf/examples/1-advanced/033-constrained_dft.py',
+              DeprecationWarning)
 
 '''
 This is a purpose built constrained dft implementation which allows the
@@ -102,7 +121,7 @@ if __name__ == '__main__':
     cell.build()
     cell.rcut*=2
 
-    print "running intial DFT calc to generate IAOs"
+    print("running intial DFT calc to generate IAOs")
     mf = dft.RKS(cell)
     mf.chkfile = 'graphene.chk'
     mf.init_guess = 'chkfile'
@@ -110,7 +129,7 @@ if __name__ == '__main__':
     mf.kernel()
 
     #we need to makVe the IAOs out of a converged calculation
-    print "generating IAOs"
+    print("generating IAOs")
     mo_occ = mf.mo_coeff[:,mf.mo_occ>0]
     a = lo.iao.iao(cell, mo_occ)
     # Orthogonalize IAO
@@ -120,7 +139,7 @@ if __name__ == '__main__':
     offset = 0.0001
     orbital =4
 
-    print "running constrained dft"
+    print("running constrained dft")
 
     mf  = cdft(mf,mf.cell,offset,orbital,basis=a)
     population = fast_iao_mullikan_pop(mf,a=a)
@@ -130,4 +149,4 @@ if __name__ == '__main__':
     result[1] = mf.e_tot
     result[2] = population[0][4]
 
-    print result
+    print(result)

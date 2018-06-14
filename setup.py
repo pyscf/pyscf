@@ -1,3 +1,18 @@
+#!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import os
 import sys
 import sysconfig
@@ -26,7 +41,7 @@ CLASSIFIERS = [
 'Development Status :: 5 - Production/Stable',
 'Intended Audience :: Science/Research',
 'Intended Audience :: Developers',
-'License :: OSI Approved :: BSD License',
+'License :: OSI Approved :: Apache Software License',
 'Programming Language :: C',
 'Programming Language :: Python',
 'Programming Language :: Python :: 2.7',
@@ -47,7 +62,7 @@ DESCRIPTION      = 'PySCF: Python-based Simulations of Chemistry Framework'
 #LONG_DESCRIPTION = ''
 URL              = 'http://www.pyscf.org'
 DOWNLOAD_URL     = 'http://github.com/sunqm/pyscf'
-LICENSE          = 'BSD 2-clause "Simplified" License (BSD2)'
+LICENSE          = 'Apache License 2.0'
 AUTHOR           = 'Qiming Sun'
 AUTHOR_EMAIL     = 'osirpt.sun@gmail.com'
 PLATFORMS        = ['Linux', 'Mac OS-X', 'Unix']
@@ -63,9 +78,11 @@ VERSION = get_version()
 if (sys.platform.startswith('linux') or
     sys.platform.startswith('cygwin') or
     sys.platform.startswith('gnukfreebsd')):
+    ostype = 'linux'
     so_ext = '.so'
     LD_LIBRARY_PATH = 'LD_LIBRARY_PATH'
 elif sys.platform.startswith('darwin'):
+    ostype = 'mac'
     so_ext = '.dylib'
     LD_LIBRARY_PATH = 'DYLD_LIBRARY_PATH'
     from distutils.sysconfig import get_config_vars
@@ -77,8 +94,8 @@ elif sys.platform.startswith('darwin'):
 # In some Python version, steuptools may correct these configs for OS X on the
 # fly by _customize_compiler_for_shlib function or setup_shlib_compiler function
 # in lib/pythonX.X/site-packages/setuptools/command/build_ext.py.
-# The hacks as below are to ensure that the OS X compiler does not generate
-# bundle libraries.  Relevant code:
+# The hacks below ensures that the OS X compiler does not generate bundle
+# libraries.  Relevant code:
 #    lib/pythonX.X/_sysconfigdata.py
 #    lib/pythonX.X/distutils/command/build_ext.py
 #    lib/pythonX.X/distutils/sysconfig.py,  get_config_vars()
@@ -86,11 +103,24 @@ elif sys.platform.startswith('darwin'):
 #    lib/pythonX.X/distutils/unixcompiler.py,  link()
     conf_vars['LDSHARED'] = conf_vars['LDSHARED'].replace('-bundle', '-dynamiclib')
     conf_vars['CCSHARED'] = " -dynamiclib"
-    conf_vars['SO'] = '.dylib'
+    # On Mac OS, sysconfig.get_config_vars()["EXT_SUFFIX"] was set to
+    # '.cpython-3*m-darwin.so'. numpy.ctypeslib module uses this parameter to
+    # determine the extension of an external library. Python distutlis module
+    # only generates the library with the extension '.so'.  It causes import
+    # error at the runtime.  numpy.ctypeslib treats '.dylib' as the native
+    # python extension.  Set 'EXT_SUFFIX' to '.dylib' can make distutlis
+    # generate the libraries with extension '.dylib'.  It can be loaded by
+    # numpy.ctypeslib
+    if sys.version_info[0] >= 3:  # python3
+        conf_vars['EXT_SUFFIX'] = '.dylib'
+    else:
+        conf_vars['SO'] = '.dylib'
 elif sys.platform.startswith('win'):
+    ostype = 'windows'
     so_ext = '.dll'
 else:
     raise OSError('Unknown platform')
+    ostype = None
 
 #if 'CC' in os.environ:
 #    compiler = os.environ['CC'].split()[0]
@@ -103,7 +133,7 @@ else:
 # default include and library path
 #
 def check_version(version_to_test, version_min):
-    return cmp(version_to_test.split('.'), version_min.split('.')) >= 0
+    return version_to_test.split('.') >= version_min.split('.')
 
 # version : the lowest version
 def search_lib_path(libname, extra_paths=None, version=None):
@@ -119,12 +149,21 @@ def search_lib_path(libname, extra_paths=None, version=None):
     for path in paths:
         full_libname = os.path.join(path, libname)
         if os.path.isfile(full_libname):
-            if version is None:
+            if version is None or ostype == 'mac':
                 return os.path.abspath(path)
+            #elif ostype == 'mac':
+            #    for f in os.listdir(path):
+            #        f_name = f[:len_libname+1-len(so_ext)]
+            #        f_version = f[len_libname+1-len(so_ext):-len(so_ext)]
+            #        if (f_name == libname[:len_libname+1-len(so_ext)] and f_version and
+            #            check_version(f_version, version)):
+            #            return os.path.abspath(path)
             else:
                 for f in os.listdir(path):
+                    f_name = f[:len_libname]
                     f_version = f[len_libname+1:]
-                    if f_version and check_version(f_version, version):
+                    if (f_name == libname and f_version and
+                        check_version(f_version, version)):
                         return os.path.abspath(path)
 
 def search_inc_path(incname, extra_paths=None):
@@ -159,15 +198,18 @@ if not blas_found:
                        for x in blas_libraries]
     blas_extra_link_flags = np_blas.get('extra_link_args', [])
     blas_extra_compile_flags = np_blas.get('extra_compile_args', [])
-    if None not in blas_path_guess:
-        blas_found = True
-        blas_lib_dir = list(set(blas_path_guess))
+    if ostype == 'mac':
+        if blas_extra_link_flags:
+            blas_found = True
+    else:
+        if None not in blas_path_guess:
+            blas_found = True
+            blas_lib_dir = list(set(blas_path_guess))
 
 if not blas_found:  # for MKL
-    mkl_path_guess = search_lib_path('libmkl_core'+so_ext, blas_lib_dir)
+    mkl_path_guess = search_lib_path('libmkl_rt'+so_ext, blas_lib_dir)
     if mkl_path_guess is not None:
-        blas_libraries = ['mkl_core', 'mkl_intel_lp64', 'mkl_gnu_thread',
-                          'mkl_sequential']
+        blas_libraries = ['mkl_rt']
         blas_lib_dir = [mkl_path_guess]
         blas_found = True
         print("Using MKL library in %s" % mkl_path_guess)
@@ -261,10 +303,12 @@ def make_src(relpath, srcs):
 #
 extensions = []
 if 1:
-    libcint_lib_path = search_lib_path('libcint'+so_ext, [os.path.join(pyscf_lib_dir, 'deps', 'lib'),
+    libcint_lib_path = search_lib_path('libcint'+so_ext, [pyscf_lib_dir,
+                                                          os.path.join(pyscf_lib_dir, 'deps', 'lib'),
                                                           os.path.join(pyscf_lib_dir, 'deps', 'lib64')],
                                        version='3.0')
-    libcint_inc_path = search_inc_path('cint.h', [os.path.join(pyscf_lib_dir, 'deps', 'include')])
+    libcint_inc_path = search_inc_path('cint.h', [pyscf_lib_dir,
+                                                  os.path.join(pyscf_lib_dir, 'deps', 'include')])
     if libcint_lib_path and libcint_inc_path:
         print("****************************************************************")
         print("* libcint found in %s." % libcint_lib_path)
@@ -288,7 +332,7 @@ autocode/hess.c autocode/intor1.c autocode/grad2.c'''
             default_include.append(os.path.join(pyscf_lib_dir, 'libcint','src'))
         else:
             print("****************************************************************")
-            print("*** WARNING: libcint library not found or found wrong version.")
+            print("*** WARNING: libcint library not found.")
             print("* You can download libcint library from http://github.com/sunqm/libcint")
             print("* May need to set PYSCF_INC_DIR if libcint library was not installed in the")
             print("* system standard install path (/usr, /usr/local, etc). Eg")
@@ -305,7 +349,7 @@ extensions += [
     make_ext('pyscf.lib.libcgto', 'gto',
              '''fill_int2c.c fill_nr_3c.c fill_r_3c.c fill_int2e.c ft_ao.c
              grid_ao_drv.c fastexp.c deriv1.c deriv2.c nr_ecp.c nr_ecp_deriv.c
-             autocode/auto_eval1.c''',
+             autocode/auto_eval1.c ft_ao_deriv.c fill_r_4c.c''',
              ['cint', 'np_helper']),
     make_ext('pyscf.lib.libcvhf', 'vhf',
              '''fill_nr_s8.c nr_incore.c nr_direct.c optimizer.c nr_direct_dot.c
@@ -327,11 +371,13 @@ extensions += [
     make_ext('pyscf.lib.libri', 'ri', 'r_df_incore.c',
              ['cint', 'ao2mo', 'np_helper']),
     make_ext('pyscf.lib.libhci', 'hci', 'hci.c', ['np_helper']),
-    make_ext('pyscf.lib.libpbc', 'pbc', 'ft_ao.c fill_ints.c grid_ao.c', ['cgto', 'cint']),
+    make_ext('pyscf.lib.libpbc', 'pbc', 'ft_ao.c optimizer.c fill_ints.c grid_ao.c',
+             ['cgto', 'cint']),
     make_ext('pyscf.lib.libmbd', os.path.join('extras', 'mbd'), 'dipole.c', []),
     make_ext('pyscf.lib.libdft', 'dft',
-             'CxLebedevGrid.c grid_basis.c nr_numint.c r_numint.c',
-             ['cvhf', 'cgto', 'cint']),
+             '''CxLebedevGrid.c grid_basis.c nr_numint.c r_numint.c
+             numint_uniform_grid.c''',
+             ['cvhf', 'cgto', 'cint', 'np_helper']),
 ]
 
 #
@@ -343,7 +389,8 @@ if 1:
                                                       os.path.join(pyscf_lib_dir, 'deps', 'lib'),
                                                       os.path.join(pyscf_lib_dir, 'deps', 'lib64')],
                                      version='4.0.0')
-    libxc_inc_path = search_inc_path('xc.h', [os.path.join(pyscf_lib_dir, 'deps', 'include')])
+    libxc_inc_path = search_inc_path('xc.h', [pyscf_lib_dir,
+                                              os.path.join(pyscf_lib_dir, 'deps', 'include')])
     if libxc_lib_path and libxc_inc_path:
         print("****************************************************************")
         print("* libxc found in %s." % libxc_lib_path)
@@ -370,8 +417,9 @@ if 1:
 if 1:
     xcfun_lib_path = search_lib_path('libxcfun'+so_ext, [pyscf_lib_dir,
                                                          os.path.join(pyscf_lib_dir, 'deps', 'lib'),
-                                                      os.path.join(pyscf_lib_dir, 'deps', 'lib64')])
-    xcfun_inc_path = search_inc_path('xcfun.h', [os.path.join(pyscf_lib_dir, 'deps', 'include')])
+                                                         os.path.join(pyscf_lib_dir, 'deps', 'lib64')])
+    xcfun_inc_path = search_inc_path('xcfun.h', [pyscf_lib_dir,
+                                                 os.path.join(pyscf_lib_dir, 'deps', 'include')])
     if xcfun_lib_path and xcfun_inc_path:
         print("****************************************************************")
         print("* xcfun found in %s." % xcfun_lib_path)
@@ -416,7 +464,8 @@ setup(
     author_email=AUTHOR_EMAIL,
     platforms=PLATFORMS,
     #package_dir={'pyscf': 'pyscf'},  # packages are under directory pyscf
-    package_data={'': ['*.so', '*.dylib', '*.dll', '*.dat']}, # any package contains *.so *.dat files
+    #include *.so *.dat files. They are now placed in MAINTAINER.in
+    #package_data={'': ['*.so', '*.dylib', '*.dll', '*.dat']},
     include_package_data=True,  # include everything in source control
     packages=find_packages(exclude=['*dmrgscf*', '*fciqmcscf*', '*icmpspt*',
                                     '*shciscf*', '*xianci*', '*nao*',

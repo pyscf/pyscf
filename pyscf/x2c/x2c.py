@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 
 import time
@@ -12,16 +25,17 @@ from pyscf.lib import logger
 from pyscf.scf import hf
 from pyscf.scf import dhf
 from pyscf.scf import _vhf
+from pyscf import __config__
 
 class X2C(lib.StreamObject):
     '''2-component X2c (including spin-free and spin-dependent terms) in
     the j-adapted spinor basis.
     '''
+    exp_drop = getattr(__config__, 'x2c_X2C_exp_drop', 0.2)
+    approx = getattr(__config__, 'x2c_X2C_approx', '1e')  # 'atom1e'
+    xuncontract = getattr(__config__, 'x2c_X2C_xuncontract', True)
+    basis = getattr(__config__, 'x2c_X2C_basis', None)
     def __init__(self, mol=None):
-        self.exp_drop = 0.2
-        self.approx = '1e'  # 'atom1e'
-        self.xuncontract = True
-        self.basis = None
         self.mol = mol
 
     def dump_flags(self):
@@ -150,7 +164,7 @@ def get_init_guess(mol, key='minao'):
         return init_guess_by_minao(mol)
 
 
-class UHF(hf.SCF):
+class X2C_UHF(hf.SCF):
     def __init__(self, mol):
         hf.SCF.__init__(self, mol)
         self.with_x2c = X2C(mol)
@@ -252,6 +266,27 @@ class UHF(hf.SCF):
     def analyze(self, verbose=None):
         if verbose is None: verbose = self.verbose
         return dhf.analyze(self, verbose)
+UHF = X2C_UHF
+
+try:
+    from pyscf.dft import rks, dks
+    class X2C_UKS(X2C_UHF):
+        def dump_flags(self):
+            hf.SCF.dump_flags(self)
+            logger.info(self, 'XC functionals = %s', self.xc)
+            logger.info(self, 'small_rho_cutoff = %g', self.small_rho_cutoff)
+            self.grids.dump_flags()
+            if self.with_x2c:
+                self.with_x2c.dump_flags()
+            return self
+
+        get_veff = dks.get_veff
+        energy_elec = rks.energy_elec
+        define_xc_ = rks.define_xc_
+
+    UKS = X2C_UKS
+except ImportError:
+    pass
 
 
 def _uncontract_mol(mol, xuncontract=False, exp_drop=0.2):
@@ -455,7 +490,7 @@ def _x2c1e_get_hcore(t, v, w, s, c):
 
 def _proj_dmll(mol_nr, dm_nr, mol):
     from pyscf.scf import addons
-    proj = addons.project_mo_nr2r(mol_nr, 1, mol)
+    proj = addons.project_mo_nr2r(mol_nr, numpy.eye(mol_nr.nao_nr()), mol)
     # *.5 because alpha and beta are summed in project_mo_nr2r
     dm_ll = reduce(numpy.dot, (proj, dm_nr*.5, proj.T.conj()))
     dm_ll = (dm_ll + dhf.time_reversal_matrix(mol, dm_ll)) * .5

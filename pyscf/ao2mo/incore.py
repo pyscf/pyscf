@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -6,6 +19,7 @@
 import sys
 import numpy
 import ctypes
+from pyscf import lib
 from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
 
@@ -106,22 +120,23 @@ def general(eri_ao, mo_coeffs, verbose=0, compact=True, **kwargs):
     (80, 80)
 
     '''
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(sys.stdout, verbose)
+    log = logger.new_logger(sys, verbose)
 
     nao = mo_coeffs[0].shape[0]
     nao_pair = nao*(nao+1)//2
-    assert(eri_ao.size in (nao_pair**2, nao_pair*(nao_pair+1)//2))
+
+    if eri_ao.size == nao**4:
+        return lib.einsum('pqrs,pi,qj,rk,sl->ijkl', eri_ao.reshape([nao]*4),
+                          mo_coeffs[0].conj(), mo_coeffs[1],
+                          mo_coeffs[2].conj(), mo_coeffs[3])
 
 # transform e1
     eri1 = half_e1(eri_ao, mo_coeffs, compact)
     klmosym, nkl_pair, mokl, klshape = _conc_mos(mo_coeffs[2], mo_coeffs[3], compact)
 
     if eri1.shape[0] == 0 or nkl_pair == 0:
-        # 0 dimension sometimes causes blas problem
-        return numpy.zeros((nij_pair,nkl_pair))
+        # 0 dimension causes error in certain BLAS implementations
+        return numpy.zeros((eri1.shape[0],nkl_pair))
 
 #    if nij_pair > nkl_pair:
 #        log.warn('low efficiency for AO to MO trans!')

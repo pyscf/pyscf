@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -25,11 +38,14 @@ from pyscf import ao2mo
 from pyscf.ao2mo.incore import iden_coeffs
 from pyscf.pbc import tools
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point
+from pyscf import __config__
 
 
-def get_eri(mydf, kpts=None, compact=False):
+def get_eri(mydf, kpts=None,
+            compact=getattr(__config__, 'pbc_df_ao2mo_get_eri_compact', True)):
     cell = mydf.cell
     nao = cell.nao_nr()
+    low_dim_ft_type = cell.low_dim_ft_type
     kptijkl = _format_kpts(kpts)
     if not _iskconserv(cell, kptijkl):
         lib.logger.warn(cell, 'fft_ao2mo: momentum conservation not found in '
@@ -38,7 +54,7 @@ def get_eri(mydf, kpts=None, compact=False):
 
     kpti, kptj, kptk, kptl = kptijkl
     q = kptj - kpti
-    coulG = tools.get_coulG(cell, q, mesh=mydf.mesh)
+    coulG = tools.get_coulG(cell, q, mesh=mydf.mesh, low_dim_ft_type=low_dim_ft_type)
     coords = cell.gen_uniform_grids(mydf.mesh)
     max_memory = mydf.max_memory - lib.current_memory()[0]
 
@@ -82,9 +98,11 @@ def get_eri(mydf, kpts=None, compact=False):
         return eri
 
 
-def general(mydf, mo_coeffs, kpts=None, compact=False):
+def general(mydf, mo_coeffs, kpts=None,
+            compact=getattr(__config__, 'pbc_df_ao2mo_general_compact', True)):
     '''General MO integral transformation'''
     cell = mydf.cell
+    low_dim_ft_type = cell.low_dim_ft_type
     kptijkl = _format_kpts(kpts)
     kpti, kptj, kptk, kptl = kptijkl
     if isinstance(mo_coeffs, numpy.ndarray) and mo_coeffs.ndim == 2:
@@ -97,7 +115,7 @@ def general(mydf, mo_coeffs, kpts=None, compact=False):
 
     allreal = not any(numpy.iscomplexobj(mo) for mo in mo_coeffs)
     q = kptj - kpti
-    coulG = tools.get_coulG(cell, q, mesh=mydf.mesh)
+    coulG = tools.get_coulG(cell, q, mesh=mydf.mesh, low_dim_ft_type=low_dim_ft_type)
     coords = cell.gen_uniform_grids(mydf.mesh)
     max_memory = mydf.max_memory - lib.current_memory()[0]
 
@@ -138,7 +156,7 @@ def _contract_compact(mydf, mos, coulG, max_memory):
     nmok = mokT.shape[0]
     wcoulG = coulG * (cell.vol/ngrids)
 
-    def fill(moT, i0, i1, buf):
+    def fill_orbital_pair(moT, i0, i1, buf):
         npair = i1*(i1+1)//2 - i0*(i0+1)//2
         out = numpy.ndarray((npair,ngrids), dtype=buf.dtype, buffer=buf)
         ij = 0
@@ -151,12 +169,12 @@ def _contract_compact(mydf, mos, coulG, max_memory):
     blksize = int(min(max(nmoi,nmok), (max_memory*1e6/8 - eri.size)/2/ngrids+1))
     buf = numpy.empty((blksize,ngrids))
     for p0, p1 in lib.prange_tril(0, nmoi, blksize):
-        mo_pairs_G = tools.fft(fill(moiT, p0, p1, buf), mydf.mesh)
+        mo_pairs_G = tools.fft(fill_orbital_pair(moiT, p0, p1, buf), mydf.mesh)
         mo_pairs_G*= wcoulG
         v = tools.ifft(mo_pairs_G, mydf.mesh)
         vR = numpy.asarray(v.real, order='C')
         for q0, q1 in lib.prange_tril(0, nmok, blksize):
-            mo_pairs = numpy.asarray(fill(mokT, q0, q1, buf), order='C')
+            mo_pairs = numpy.asarray(fill_orbital_pair(mokT, q0, q1, buf), order='C')
             eri[p0*(p0+1)//2:p1*(p1+1)//2,
                 q0*(q0+1)//2:q1*(q1+1)//2] = lib.ddot(vR, mo_pairs.T)
         v = None
@@ -172,6 +190,7 @@ def _contract_plain(mydf, mos, coulG, phase, max_memory):
     eri = numpy.empty((nmoi*nmoj,nmok*nmol), dtype=dtype)
 
     blksize = int(min(max(nmoi,nmok), (max_memory*1e6/16 - eri.size)/2/ngrids/max(nmoj,nmol)+1))
+    assert blksize > 0
     buf0 = numpy.empty((blksize,max(nmoj,nmol),ngrids), dtype=dtype)
     buf1 = numpy.ndarray((blksize,nmoj,ngrids), dtype=dtype, buffer=buf0)
     buf2 = numpy.ndarray((blksize,nmol,ngrids), dtype=dtype, buffer=buf0)
@@ -195,7 +214,7 @@ def _contract_plain(mydf, mos, coulG, phase, max_memory):
 
 
 def get_ao_pairs_G(mydf, kpts=numpy.zeros((2,3)), q=None, shls_slice=None,
-                   compact=False):
+                   compact=getattr(__config__, 'pbc_df_ao_pairs_compact', False)):
     '''Calculate forward (G|ij) FFT of all AO pairs.
 
     Returns:
@@ -257,7 +276,8 @@ def get_ao_pairs_G(mydf, kpts=numpy.zeros((2,3)), q=None, shls_slice=None,
 
     return ao_pairs_G
 
-def get_mo_pairs_G(mydf, mo_coeffs, kpts=numpy.zeros((2,3)), q=None, compact=False):
+def get_mo_pairs_G(mydf, mo_coeffs, kpts=numpy.zeros((2,3)), q=None,
+                   compact=getattr(__config__, 'pbc_df_mo_pairs_compact', False)):
     '''Calculate forward (G|ij) FFT of all MO pairs.
 
     Args:

@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -20,6 +33,12 @@ import ctypes
 import numpy
 import h5py
 from pyscf.lib import param
+from pyscf import __config__
+
+if h5py.version.version[:4] == '2.2.':
+    sys.stderr.write('h5py-%s is found in your environment. '
+                     'h5py-%s has bug in threading mode.\n'
+                     'Async-IO is disabled.\n' % ((h5py.version.version,)*2))
 
 c_double_p = ctypes.POINTER(ctypes.c_double)
 c_int_p = ctypes.POINTER(ctypes.c_int)
@@ -49,6 +68,7 @@ def load_library(libname):
 CLOCK_TICKS = os.sysconf("SC_CLK_TCK")
 PAGESIZE = os.sysconf("SC_PAGE_SIZE")
 def current_memory():
+    '''Return the size of used memory and allocated virtual memory (in MB)'''
     #import resource
     #return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1000
     if sys.platform.startswith('linux'):
@@ -59,8 +79,19 @@ def current_memory():
         return 0, 0
 
 def num_threads(n=None):
-    '''Set the number of OMP threads.  If argument is not given, the function
-    will return the total number of available OMP threads.'''
+    '''Set the number of OMP threads.  If argument is not specified, the
+    function will return the total number of available OMP threads.
+
+    Examples:
+
+    >>> from pyscf import lib
+    >>> print(lib.num_threads())
+    8
+    >>> lib.num_threads(4)
+    4
+    >>> print(lib.num_threads())
+    4
+    '''
     from pyscf.lib.numpy_helper import _np_helper
     if n is not None:
         _np_helper.set_omp_threads.restype = ctypes.c_int
@@ -74,11 +105,23 @@ def num_threads(n=None):
         return _np_helper.get_omp_threads()
 
 class with_omp_threads(object):
-    '''
-    Usage:
-        with lib.with_threads(2):
-            print(lib.num_threads())
-            ...
+    '''Using this macro to create a temporary context in which the number of
+    OpenMP threads are set to the required value. When the program exits the
+    context, the number OpenMP threads will be restored.
+
+    Args:
+        nthreads : int
+
+    Examples:
+
+    >>> from pyscf import lib
+    >>> print(lib.num_threads())
+    8
+    >>> with lib.with_omp_threads(2):
+    ...     print(lib.num_threads())
+    2
+    >>> print(lib.num_threads())
+    8
     '''
     def __init__(self, nthreads=None):
         self.nthreads = nthreads
@@ -178,11 +221,35 @@ def flatten(lst):
     return list(itertools.chain.from_iterable(lst))
 
 def prange(start, end, step):
-    for i in range(start, end, step):
-        yield i, min(i+step, end)
+    '''This function splits the number sequence between "start" and "end"
+    using uniform "step" length. It yields the boundary (start, end) for each
+    fragment.
+
+    Examples:
+
+    >>> for p0, p1 in lib.prange(0, 8, 2):
+    ...    print(p0, p1)
+    (0, 2)
+    (2, 4)
+    (4, 6)
+    (6, 8)
+    '''
+    if start < end:
+        for i in range(start, end, step):
+            yield i, min(i+step, end)
 
 def prange_tril(start, stop, blocksize):
-    '''for p0, p1 in prange_tril: p1*(p1+1)/2-p0*(p0+1)/2 < blocksize'''
+    '''Similar to :func:`prange`, yeilds start (p0) and end (p1) with the
+    restriction p1*(p1+1)/2-p0*(p0+1)/2 < blocksize
+
+    Examples:
+
+    >>> for p0, p1 in lib.prange_tril(0, 10, 25):
+    ...     print(p0, p1)
+    (0, 6)
+    (6, 9)
+    (9, 10)
+    '''
     if start >= stop:
         return []
     idx = numpy.arange(start, stop+1)
@@ -190,9 +257,73 @@ def prange_tril(start, stop, blocksize):
     displs = [x+start for x in _blocksize_partition(cum_costs, blocksize)]
     return zip(displs[:-1], displs[1:])
 
+
+def index_tril_to_pair(ij):
+    '''Given tril-index ij, compute the pair indices (i,j) which satisfy
+    ij = i * (i+1) / 2 + j
+    '''
+    i = (numpy.sqrt(2*ij+.25) - .5 + 1e-7).astype(int)
+    j = ij - i*(i+1)//2
+    return i, j
+
+
+def tril_product(*iterables, **kwds):
+    '''Cartesian product in lower-triangular form for multiple indices
+
+    For a given list of indices (`iterables`), this function yields all
+    indices such that the sub-indices given by the kwarg `tril_idx` satisfy a
+    lower-triangular form.  The lower-triangular form satisfies:
+
+    .. math:: i[tril_idx[0]] >= i[tril_idx[1]] >= ... >= i[tril_idx[len(tril_idx)-1]]
+
+    Args:
+        *iterables: Variable length argument list of indices for the cartesian product
+        **kwds: Arbitrary keyword arguments.  Acceptable keywords include:
+            repeat (int): Number of times to repeat the iterables
+            tril_idx (array_like): Indices to put into lower-triangular form.
+
+    Yields:
+        product (tuple): Tuple in lower-triangular form.
+
+    Examples:
+        Specifying no `tril_idx` is equivalent to just a cartesian product.
+
+        >>> list(tril_product(range(2), repeat=2))
+        [(0, 0), (0, 1), (1, 0), (1, 1)]
+
+        We can specify only sub-indices to satisfy a lower-triangular form:
+
+        >>> list(tril_product(range(2), repeat=3, tril_idx=[1,2]))
+        [(0, 0, 0), (0, 1, 0), (0, 1, 1), (1, 0, 0), (1, 1, 0), (1, 1, 1)]
+
+        We specify all indices to satisfy a lower-triangular form, useful for iterating over
+        the symmetry unique elements of occupied/virtual orbitals in a 3-particle operator:
+
+        >>> list(tril_product(range(3), repeat=3, tril_idx=[0,1,2]))
+        [(0, 0, 0), (1, 0, 0), (1, 1, 0), (1, 1, 1), (2, 0, 0), (2, 1, 0), (2, 1, 1), (2, 2, 0), (2, 2, 1), (2, 2, 2)]
+    '''
+    repeat = kwds.get('repeat', 1)
+    tril_idx = kwds.get('tril_idx', [])
+    niterables = len(iterables) * repeat
+    ntril_idx = len(tril_idx)
+
+    assert ntril_idx <= niterables, 'Cant have a greater number of tril indices than iterables!'
+    if ntril_idx > 0:
+        assert numpy.max(tril_idx) < niterables, 'Tril index out of bounds for %d iterables! idx = %s' % \
+                                                 (niterables, tril_idx)
+    for tup in itertools.product(*iterables, repeat=repeat):
+        if ntril_idx == 0:
+            yield tup
+            continue
+
+        if all([tup[tril_idx[i]] >= tup[tril_idx[i+1]] for i in range(ntril_idx-1)]):
+            yield tup
+        else:
+            pass
+
 def square_mat_in_trilu_indices(n):
     '''Return a n x n symmetric index matrix, in which the elements are the
-    indices of the unique elements of a tril vector 
+    indices of the unique elements of a tril vector
     [0 1 3 ... ]
     [1 2 4 ... ]
     [3 4 5 ... ]
@@ -203,85 +334,55 @@ def square_mat_in_trilu_indices(n):
     tril2sq[idx[0],idx[1]] = tril2sq[idx[1],idx[0]] = numpy.arange(n*(n+1)//2)
     return tril2sq
 
-class ctypes_stdout(object):
-    '''make c-printf output to string, but keep python print in /dev/pts/1.
-    Note it cannot correctly handle c-printf with GCC, don't know why.
-    Usage:
-        with ctypes_stdout() as stdout:
-            ...
-        print(stdout.read())
-    '''
-    def __enter__(self):
-        sys.stdout.flush()
-        self._contents = None
-        self.old_stdout_fileno = sys.stdout.fileno()
-        self.bak_stdout_fd = os.dup(self.old_stdout_fileno)
-        self.bak_stdout = sys.stdout
-        self.fd, self.ftmp = tempfile.mkstemp(dir='/dev/shm')
-        os.dup2(self.fd, self.old_stdout_fileno)
-        sys.stdout = os.fdopen(self.bak_stdout_fd, 'w')
-        return self
-    def __exit__(self, type, value, traceback):
-        sys.stdout.flush()
-        os.fsync(self.fd)
-        self._contents = open(self.ftmp, 'r').read()
-        os.dup2(self.bak_stdout_fd, self.old_stdout_fileno)
-        sys.stdout = self.bak_stdout # self.bak_stdout_fd is closed
-        #os.close(self.fd) is closed when os.fdopen is closed
-        os.remove(self.ftmp)
-    def read(self):
-        if self._contents:
-            return self._contents
-        else:
-            sys.stdout.flush()
-            #f = os.fdopen(self.fd, 'r') # need to rewind(0) before reading
-            #f.seek(0)
-            return open(self.ftmp, 'r').read()
-
 class capture_stdout(object):
     '''redirect all stdout (c printf & python print) into a string
-    Usage:
-        with capture_stdout() as stdout:
-            ...
-        print(stdout.read())
+
+    Examples:
+
+    >>> import os
+    >>> from pyscf import lib
+    >>> with lib.capture_stdout as out:
+    ...     os.system('ls')
+    >>> print(out.read())
     '''
+    #TODO: handle stderr
     def __enter__(self):
         sys.stdout.flush()
         self._contents = None
         self.old_stdout_fileno = sys.stdout.fileno()
         self.bak_stdout_fd = os.dup(self.old_stdout_fileno)
-        self.fd, self.ftmp = tempfile.mkstemp(dir='/dev/shm')
-        os.dup2(self.fd, self.old_stdout_fileno)
+        self.ftmp = tempfile.NamedTemporaryFile(dir=param.TMPDIR)
+        os.dup2(self.ftmp.file.fileno(), self.old_stdout_fileno)
         return self
     def __exit__(self, type, value, traceback):
         sys.stdout.flush()
-        self._contents = open(self.ftmp, 'r').read()
+        self.ftmp.file.seek(0)
+        self._contents = self.ftmp.file.read()
+        self.ftmp.close()
         os.dup2(self.bak_stdout_fd, self.old_stdout_fileno)
         os.close(self.bak_stdout_fd)
-        #os.close(self.fd) will be closed when os.fdopen is closed
-        os.remove(self.ftmp)
     def read(self):
         if self._contents:
             return self._contents
         else:
             sys.stdout.flush()
-            #f = os.fdopen(self.fd, 'r') # need to rewind(0) before reading
-            #f.seek(0)
-            return open(self.ftmp, 'r').read()
+            self.ftmp.file.seek(0)
+            return self.ftmp.file.read()
+ctypes_stdout = capture_stdout
 
 class quite_run(object):
-    '''output nothing
+    '''capture all stdout (c printf & python print) but output nothing
 
-    Examples
-    --------
-    with quite_run():
-        ...
+    Examples:
+
+    >>> import os
+    >>> from pyscf import lib
+    >>> with lib.quite_run():
+    ...     os.system('ls')
     '''
     def __enter__(self):
         sys.stdout.flush()
-        self.dirnow = os.getcwd()
-        self.tmpdir = tempfile.mkdtemp(dir='/dev/shm')
-        os.chdir(self.tmpdir)
+        #TODO: to handle the redirected stdout e.g. StringIO()
         self.old_stdout_fileno = sys.stdout.fileno()
         self.bak_stdout_fd = os.dup(self.old_stdout_fileno)
         self.fnull = open(os.devnull, 'wb')
@@ -290,8 +391,6 @@ class quite_run(object):
         sys.stdout.flush()
         os.dup2(self.bak_stdout_fd, self.old_stdout_fileno)
         self.fnull.close()
-        shutil.rmtree(self.tmpdir)
-        os.chdir(self.dirnow)
 
 
 # from pygeocoder
@@ -335,7 +434,7 @@ class StreamObject(object):
         '''
         Kernel function is the main driver of a method.  Every method should
         define the kernel function as the entry of the calculation.  Note the
-        return value of kernel function is not strictly defined.  It can be 
+        return value of kernel function is not strictly defined.  It can be
         anything related to the method (such as the energy, the wave-function,
         the DFT mesh grids etc.).
         '''
@@ -410,6 +509,12 @@ class StreamObject(object):
             check_sanity(self, self._keys, self.stdout)
         return self
 
+    def view(self, cls):
+        '''New view of object with the same attributes.'''
+        obj = cls.__new__(cls)
+        obj.__dict__.update(self.__dict__)
+        return obj
+
 _warn_once_registry = {}
 def check_sanity(obj, keysref, stdout=sys.stdout):
     '''Check misinput of class attributes, check whether a class method is
@@ -419,7 +524,7 @@ def check_sanity(obj, keysref, stdout=sys.stdout):
     objkeys = [x for x in obj.__dict__ if not x.startswith('_')]
     keysub = set(objkeys) - set(keysref)
     if keysub:
-        class_attr = set(dir(obj.__class__))
+        class_attr = set(obj.__class__.__dict__)
         keyin = keysub.intersection(class_attr)
         if keyin:
             msg = ('Overwritten attributes  %s  of %s\n' %
@@ -447,7 +552,7 @@ def with_doc(doc):
         def fn:
             ...
 
-    makes
+    is equivalent to
 
         fn.__doc__ = doc
     '''
@@ -539,25 +644,68 @@ class ProcessWithReturnValue(Process):
     def __init__(self, group=None, target=None, name=None, args=(),
                  kwargs=None):
         self._q = Queue()
+        self._e = None
         def qwrap(*args, **kwargs):
-            self._q.put(target(*args, **kwargs))
+            try:
+                self._q.put(target(*args, **kwargs))
+            except BaseException as e:
+                self._e = e
+                raise e
         Process.__init__(self, group, qwrap, name, args, kwargs)
     def join(self):
-        Process.join(self)
-        return self._q.get()
+        if self._e is not None:
+            raise ProcessRuntimeError('Error on process %s' % self)
+        else:
+            Process.join(self)
+            return self._q.get()
     get = join
+
+class ProcessRuntimeError(RuntimeError):
+    pass
 
 class ThreadWithReturnValue(Thread):
     def __init__(self, group=None, target=None, name=None, args=(),
                  kwargs=None):
         self._q = Queue()
+        self._e = None
         def qwrap(*args, **kwargs):
-            self._q.put(target(*args, **kwargs))
+            try:
+                self._q.put(target(*args, **kwargs))
+            except BaseException as e:
+                self._e = e
+                raise e
         Thread.__init__(self, group, qwrap, name, args, kwargs)
     def join(self):
-        Thread.join(self)
-        return self._q.get()
+        if self._e is not None:
+            raise ThreadRuntimeError('Error on thread %s' % self)
+        else:
+            Thread.join(self)
+# Note: If the return value of target is huge, Queue.get may raise
+# SystemError: NULL result without error in PyObject_Call
+# It is because return value is cached somewhere by pickle but pickle is
+# unable to handle huge amount of data.
+            return self._q.get()
     get = join
+
+class ThreadWithTraceBack(Thread):
+    def __init__(self, group=None, target=None, name=None, args=(),
+                 kwargs=None):
+        self._e = None
+        def qwrap(*args, **kwargs):
+            try:
+                target(*args, **kwargs)
+            except BaseException as e:
+                self._e = e
+                raise e
+        Thread.__init__(self, group, qwrap, name, args, kwargs)
+    def join(self):
+        if self._e is not None:
+            raise ThreadRuntimeError('Error on thread %s' % self)
+        else:
+            Thread.join(self)
+
+class ThreadRuntimeError(RuntimeError):
+    pass
 
 def background_thread(func, *args, **kwargs):
     '''applying function in background'''
@@ -574,19 +722,115 @@ def background_process(func, *args, **kwargs):
 bg = background = bg_thread = background_thread
 bp = bg_process = background_process
 
+ASYNC_IO = getattr(__config__, 'ASYNC_IO', True)
+class call_in_background(object):
+    '''Within this macro, function(s) can be executed asynchronously (the
+    given functions are executed in background).
+
+    Attributes:
+        sync (bool): Whether to run in synchronized mode.  The default value
+            is False (asynchoronized mode).
+
+    Examples:
+
+    >>> with call_in_background(fun) as async_fun:
+    ...     async_fun(a, b)  # == fun(a, b)
+    ...     do_something_else()
+
+    >>> with call_in_background(fun1, fun2) as (afun1, afun2):
+    ...     afun2(a, b)
+    ...     do_something_else()
+    ...     afun2(a, b)
+    ...     do_something_else()
+    ...     afun1(a, b)
+    ...     do_something_else()
+    '''
+
+    def __init__(self, *fns, **kwargs):
+        self.fns = fns
+        self.handler = None
+        self.sync = kwargs.get('sync', not ASYNC_IO)
+
+    if h5py.version.version[:4] == '2.2.': # h5py-2.2.* has bug in threading mode
+        # Disable back-ground mode
+        def __enter__(self):
+            if len(self.fns) == 1:
+                return self.fns[0]
+            else:
+                return self.fns
+
+    else:
+        def __enter__(self):
+            if self.sync or imp.lock_held():
+# Some modules like nosetests, coverage etc
+#   python -m unittest test_xxx.py  or  nosetests test_xxx.py
+# hang when Python multi-threading was used in the import stage due to (Python
+# import lock) bug in the threading module.  See also
+# https://github.com/paramiko/paramiko/issues/104
+# https://docs.python.org/2/library/threading.html#importing-in-threaded-code
+# Disable the asynchoronous mode for safe importing
+                def def_async_fn(fn):
+                    return fn
+
+            else:
+                # Enable back-ground mode
+                def def_async_fn(fn):
+                    def async_fn(*args, **kwargs):
+                        if self.handler is not None:
+                            self.handler.join()
+                        self.handler = ThreadWithTraceBack(target=fn, args=args,
+                                                           kwargs=kwargs)
+                        self.handler.start()
+                        return self.handler
+                    return async_fn
+
+            if len(self.fns) == 1:
+                return def_async_fn(self.fns[0])
+            else:
+                return [def_async_fn(fn) for fn in self.fns]
+
+    def __exit__(self, type, value, traceback):
+        if self.handler is not None:
+            self.handler.join()
+
 
 class H5TmpFile(h5py.File):
+    '''Create and return an HDF5 temporary file.
+
+    Kwargs:
+        filename : str or None
+            If a string is given, an HDF5 file of the given filename will be
+            created. The temporary file will exist even if the H5TmpFile
+            object is released.  If nothing is specified, the HDF5 temporary
+            file will be deleted when the H5TmpFile object is released.
+
+    The return object is an h5py.File object. The file will be automatically
+    deleted when it is closed or the object is released (unless filename is
+    specified).
+
+    Examples:
+
+    >>> from pyscf import lib
+    >>> ftmp = lib.H5TmpFile()
+    '''
     def __init__(self, filename=None, *args, **kwargs):
         if filename is None:
             tmpfile = tempfile.NamedTemporaryFile(dir=param.TMPDIR)
             filename = tmpfile.name
         h5py.File.__init__(self, filename, *args, **kwargs)
+#FIXME: Does GC flush/close the HDF5 file when releasing the resource?
+# To make HDF5 file reusable, file has to be closed or flushed
     def __del__(self):
-        self.close()
+        try:
+            self.close()
+        except ValueError:  # if close() is called twice
+            pass
 
-def finger(a):
+def fingerprint(a):
+    '''Fingerprint of numpy array'''
     a = numpy.asarray(a)
     return numpy.dot(numpy.cos(numpy.arange(a.size)), a.ravel())
+finger = fingerprint
 
 
 def ndpointer(*args, **kwargs):
@@ -600,66 +844,41 @@ def ndpointer(*args, **kwargs):
     return type(base.__name__, (base,), {'from_param': from_param})
 
 
-class call_in_background(object):
-    '''Asynchonously execute the given function
-
-    Usage:
-        with call_in_background(fun) as async_fun:
-            async_fun(a, b)  # == fun(a, b)
-            do_something_else()
-
-        with call_in_background(fun1, fun2) as (afun1, afun2):
-            afun2(a, b)
-            do_something_else()
-            afun2(a, b)
-            do_something_else()
-            afun1(a, b)
-            do_something_else()
-    '''
-    def __init__(self, *fns):
-        self.fns = fns
-        self.handler = None
-
-    def __enter__(self):
-        if imp.lock_held():
-# Some modules like nosetests, coverage etc
-#   python -m unittest test_xxx.py  or  nosetests test_xxx.py
-# hang when Python multi-threading was used in the import stage due to (Python
-# import lock) bug in the threading module.  See also
-# https://github.com/paramiko/paramiko/issues/104
-# https://docs.python.org/2/library/threading.html#importing-in-threaded-code
-# Disable the asynchoronous mode for safe importing
-            def def_async_fn(fn):
-                return fn
-
-        elif h5py.version.version[:4] == '2.2.':
-# h5py-2.2.* has bug in threading mode.
-            def def_async_fn(fn):
-                return fn
-
-        else:
-            def def_async_fn(fn):
-                def async_fn(*args, **kwargs):
-                    if self.handler is not None:
-                        self.handler.join()
-                    self.handler = Thread(target=fn, args=args, kwargs=kwargs)
-                    self.handler.start()
-                    return self.handler
-                return async_fn
-
-        if len(self.fns) == 1:
-            return def_async_fn(self.fns[0])
-        else:
-            return [def_async_fn(fn) for fn in self.fns]
-
-    def __exit__(self, type, value, traceback):
-        if self.handler is not None:
-            self.handler.join()
-
-
 # A tag to label the derived Scanner class
 class SinglePointScanner: pass
-class GradScanner: pass
+class GradScanner:
+    def __init__(self, g):
+        self.__dict__.update(g.__dict__)
+        self.base = g.base.as_scanner()
+    @property
+    def e_tot(self):
+        return self.base.e_tot
+    @property
+    def converged(self):
+# Some base methods like MP2 does not have the attribute converged
+        conv = getattr(self.base, 'converged', True)
+        return conv
+
+class light_speed(object):
+    '''Within the context of this macro, the environment varialbe LIGHT_SPEED
+    can be customized.
+
+    Examples:
+
+    >>> with light_speed(15.):
+    ...     print(lib.param.LIGHT_SPEED)
+    15.
+    >>> print(lib.param.LIGHT_SPEED)
+    137.03599967994
+    '''
+    def __init__(self, c):
+        self.bak = param.LIGHT_SPEED
+        self.c = c
+    def __enter__(self):
+        param.LIGHT_SPEED = self.c
+        return self.c
+    def __exit__(self, type, value, traceback):
+        param.LIGHT_SPEED = self.bak
 
 
 if __name__ == '__main__':

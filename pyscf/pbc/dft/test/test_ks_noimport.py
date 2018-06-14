@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Artem Pulkin <gpulkin@gmail.com>
 #
@@ -116,9 +129,9 @@ class BN(unittest.TestCase):
             verbose = 4,
         )
 
-    def test_bands(self):
+    def test_bands_high_cost(self):
         model = pbcdft.KRKS(self.cell, self.cell.make_kpts([3,3,1]))
-        model.xc = 'lda'
+        model.xc = 'lda,'
         model.kernel()
         e,w = model.get_bands(self.k_points_cartesian_bohr)
         e = numpy.asarray(e)
@@ -145,7 +158,7 @@ class BN(unittest.TestCase):
 #        model.with_df.auxbasis = None
 #        model.with_df.kpts = self.cell.make_kpts([3,3,1])
 #        model.with_df.kpts_band = self.k_points_cartesian_bohr
-#        model.xc = 'lda'
+#        model.xc = 'lda,'
 #        model.grids = pbcdft.BeckeGrids(self.cell)
 #        model.kernel()
 #        e,w = model.get_bands(self.k_points_cartesian_bohr)

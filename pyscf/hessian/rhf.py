@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -10,6 +23,7 @@ Non-relativistic RHF analytical Hessian
 import time
 import numpy
 from pyscf import lib
+from pyscf import gto
 from pyscf.lib import logger
 from pyscf.scf import _vhf
 from pyscf.scf import cphf
@@ -23,7 +37,7 @@ def hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     time0 = t1 = (time.clock(), time.time())
 
     mol = hessobj.mol
-    mf = hessobj._scf
+    mf = hessobj.base
     if mo_energy is None: mo_energy = mf.mo_energy
     if mo_occ is None:    mo_occ = mf.mo_occ
     if mo_coeff is None:  mo_coeff = mf.mo_coeff
@@ -83,7 +97,7 @@ def partial_hess_elec(hessobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     time0 = t1 = (time.clock(), time.time())
 
     mol = hessobj.mol
-    mf = hessobj._scf
+    mf = hessobj.base
     if mo_energy is None: mo_energy = mf.mo_energy
     if mo_occ is None:    mo_occ = mf.mo_occ
     if mo_coeff is None:  mo_coeff = mf.mo_coeff
@@ -161,7 +175,7 @@ def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
     nao, nmo = mo_coeff.shape
     mocc = mo_coeff[:,mo_occ>0]
     dm0 = numpy.dot(mocc, mocc.T) * 2
-    hcore_deriv = hessobj._scf.nuc_grad_method().hcore_generator(mol)
+    hcore_deriv = hessobj.base.nuc_grad_method().hcore_generator(mol)
 
     aoslices = mol.aoslice_by_atom()
     h1ao = [None] * mol.natm
@@ -341,7 +355,7 @@ def hess_nuc(mol, atmlst=None):
 def gen_hop(hobj, mo_energy=None, mo_coeff=None, mo_occ=None, verbose=None):
     log = logger.new_logger(hobj, verbose)
     mol = hobj.mol
-    mf = hobj._scf
+    mf = hobj.base
 
     if mo_energy is None: mo_energy = mf.mo_energy
     if mo_occ is None:    mo_occ = mf.mo_occ
@@ -406,7 +420,7 @@ class Hessian(lib.StreamObject):
         self.verbose = scf_method.verbose
         self.stdout = scf_method.stdout
         self.mol = scf_method.mol
-        self._scf = scf_method
+        self.base = scf_method
         self.chkfile = scf_method.chkfile
         self.max_memory = self.mol.max_memory
 
@@ -424,11 +438,15 @@ class Hessian(lib.StreamObject):
 
     def hcore_generator(self, mol=None):
         if mol is None: mol = self.mol
-        with_x2c = getattr(self._scf, 'with_x2c', None)
+        with_x2c = getattr(self.base, 'with_x2c', None)
         if with_x2c:
             return with_x2c.hcore_deriv_generator(deriv=2)
 
         with_ecp = mol.has_ecp()
+        if with_ecp:
+            ecp_atoms = set(mol._ecpbas[:,gto.ATOM_OF])
+        else:
+            ecp_atoms = ()
         aoslices = mol.aoslice_by_atom()
         nbas = mol.nbas
         nao = mol.nao_nr()
@@ -442,11 +460,11 @@ class Hessian(lib.StreamObject):
                 with mol.with_rinv_as_nucleus(iatm):
                     rinv2aa = mol.intor('int1e_ipiprinv', comp=9)
                     rinv2ab = mol.intor('int1e_iprinvip', comp=9)
-                    if with_ecp:
-                        rinv2aa += mol.intor('ECPscalar_ipiprinv', comp=9)
-                        rinv2ab += mol.intor('ECPscalar_iprinvip', comp=9)
                     rinv2aa *= zi
                     rinv2ab *= zi
+                    if with_ecp and iatm in ecp_atoms:
+                        rinv2aa += mol.intor('ECPscalar_ipiprinv', comp=9)
+                        rinv2ab += mol.intor('ECPscalar_iprinvip', comp=9)
                 rinv2aa = rinv2aa.reshape(3,3,nao,nao)
                 rinv2ab = rinv2ab.reshape(3,3,nao,nao)
                 hcore = -rinv2aa - rinv2ab
@@ -462,31 +480,31 @@ class Hessian(lib.StreamObject):
                     shls_slice = (jsh0, jsh1, 0, nbas)
                     rinv2aa = mol.intor('int1e_ipiprinv', comp=9, shls_slice=shls_slice)
                     rinv2ab = mol.intor('int1e_iprinvip', comp=9, shls_slice=shls_slice)
-                    if with_ecp:
+                    rinv2aa *= zi
+                    rinv2ab *= zi
+                    if with_ecp and iatm in ecp_atoms:
                         rinv2aa += mol.intor('ECPscalar_ipiprinv', comp=9, shls_slice=shls_slice)
                         rinv2ab += mol.intor('ECPscalar_iprinvip', comp=9, shls_slice=shls_slice)
-                    rinv2aa = zi * rinv2aa.reshape(3,3,j1-j0,nao)
-                    rinv2ab = zi * rinv2ab.reshape(3,3,j1-j0,nao)
-                    hcore[:,:,j0:j1] += rinv2aa
-                    hcore[:,:,j0:j1] += rinv2ab.transpose(1,0,2,3)
+                    hcore[:,:,j0:j1] += rinv2aa.reshape(3,3,j1-j0,nao)
+                    hcore[:,:,j0:j1] += rinv2ab.reshape(3,3,j1-j0,nao).transpose(1,0,2,3)
 
                 with mol.with_rinv_as_nucleus(jatm):
                     shls_slice = (ish0, ish1, 0, nbas)
                     rinv2aa = mol.intor('int1e_ipiprinv', comp=9, shls_slice=shls_slice)
                     rinv2ab = mol.intor('int1e_iprinvip', comp=9, shls_slice=shls_slice)
-                    if with_ecp:
+                    rinv2aa *= zj
+                    rinv2ab *= zj
+                    if with_ecp and jatm in ecp_atoms:
                         rinv2aa += mol.intor('ECPscalar_ipiprinv', comp=9, shls_slice=shls_slice)
                         rinv2ab += mol.intor('ECPscalar_iprinvip', comp=9, shls_slice=shls_slice)
-                    rinv2aa = zj * rinv2aa.reshape(3,3,i1-i0,nao)
-                    rinv2ab = zj * rinv2ab.reshape(3,3,i1-i0,nao)
-                    hcore[:,:,i0:i1] += rinv2aa
-                    hcore[:,:,i0:i1] += rinv2ab
+                    hcore[:,:,i0:i1] += rinv2aa.reshape(3,3,i1-i0,nao)
+                    hcore[:,:,i0:i1] += rinv2ab.reshape(3,3,i1-i0,nao)
             return hcore + hcore.conj().transpose(0,1,3,2)
         return get_hcore
 
     def solve_mo1(self, mo_energy, mo_coeff, mo_occ, h1ao_or_chkfile,
                   fx=None, atmlst=None, max_memory=4000, verbose=None):
-        return solve_mo1(self._scf, mo_energy, mo_coeff, mo_occ, h1ao_or_chkfile,
+        return solve_mo1(self.base, mo_energy, mo_coeff, mo_occ, h1ao_or_chkfile,
                          fx, atmlst, max_memory, verbose)
 
     def hess_nuc(self, mol=None, atmlst=None):
@@ -495,9 +513,9 @@ class Hessian(lib.StreamObject):
 
     def kernel(self, mo_energy=None, mo_coeff=None, mo_occ=None, atmlst=None):
         cput0 = (time.clock(), time.time())
-        if mo_energy is None: mo_energy = self._scf.mo_energy
-        if mo_coeff is None: mo_coeff = self._scf.mo_coeff
-        if mo_occ is None: mo_occ = self._scf.mo_occ
+        if mo_energy is None: mo_energy = self.base.mo_energy
+        if mo_coeff is None: mo_coeff = self.base.mo_coeff
+        if mo_occ is None: mo_occ = self.base.mo_occ
         if atmlst is None:
             atmlst = self.atmlst
         else:

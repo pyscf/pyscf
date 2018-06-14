@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 import unittest
 import numpy
@@ -40,6 +53,13 @@ h2o_p.spin = 1
 h2o_p.basis = '6-31g'
 h2o_p.build()
 
+def tearDownModule():
+    global h2o, h2o_n, h2o_p
+    h2o.stdout.close()
+    h2o_n.stdout.close()
+    h2o_p.stdout.close()
+    del h2o, h2o_n, h2o_p
+
 
 def finger(mat):
     return abs(mat).sum()
@@ -54,7 +74,7 @@ class KnownValues(unittest.TestCase):
 
     def test_r_uhf(self):
         uhf = scf.dhf.UHF(h2o)
-        uhf.conv_tol_grad = 1e-6
+        uhf.conv_tol = 1e-12
         uhf.kernel()
         g = grad.DHF(uhf)
         self.assertAlmostEqual(finger(g.grad_elec()), 10.126445612578864, 6)

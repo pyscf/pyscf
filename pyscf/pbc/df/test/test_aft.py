@@ -1,3 +1,17 @@
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import unittest
 import numpy
 import numpy as np
@@ -311,6 +325,7 @@ cell1.mesh = [21] * 3
 cell1.build()
 kdf0 = mdf.MDF(cell1)
 kdf0.auxbasis = 'weigend'
+kdf0.mesh = [21] * 3
 kdf0.kpts = kpts
 
 
@@ -318,7 +333,7 @@ def finger(a):
     w = np.cos(np.arange(a.size))
     return np.dot(w, a.ravel())
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_aft_get_nuc(self):
         df = aft.AFTDF(cell)
         v1 = df.get_nuc(kpts[0])
@@ -337,6 +352,21 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(finger(v1[3]), (-5.60115995450+0.275973062529j), 8)
 
     def test_aft_get_ao_eri(self):
+        df0 = fft.FFTDF(cell1)
+        df = aft.AFTDF(cell1)
+        eri0 = df0.get_ao_eri(compact=True)
+        eri1 = df.get_ao_eri(compact=True)
+        self.assertAlmostEqual(abs(eri0-eri1).max(), 0, 9)
+
+        eri0 = df0.get_ao_eri(kpts[0])
+        eri1 = df.get_ao_eri(kpts[0])
+        self.assertAlmostEqual(abs(eri0-eri1).max(), 0, 9)
+
+        eri0 = df0.get_ao_eri(kpts)
+        eri1 = df.get_ao_eri(kpts)
+        self.assertAlmostEqual(abs(eri0-eri1).max(), 0, 9)
+
+    def test_aft_get_ao_eri_high_cost(self):
         df0 = fft.FFTDF(cell)
         df = aft.AFTDF(cell)
         eri0 = df0.get_ao_eri(compact=True)
@@ -363,6 +393,8 @@ class KnowValues(unittest.TestCase):
         self.assertTrue(np.allclose(eri0000, ref, atol=1e-6, rtol=1e-6))
         self.assertAlmostEqual(finger(eri0000), 0.23714016293926865, 9)
 
+    def test_get_eri_gamma(self):
+        odf = aft.AFTDF(cell1)
         ref = kdf0.get_eri((kpts[0],kpts[0],kpts[0],kpts[0]))
         eri1111 = odf.get_eri((kpts[0],kpts[0],kpts[0],kpts[0]))
         self.assertTrue(np.allclose(eri1111, ref, atol=1e-6, rtol=1e-6))
@@ -405,16 +437,16 @@ class KnowValues(unittest.TestCase):
         odf = aft.AFTDF(cell1)
         ref = kdf0.get_eri(kpts)
         eri1111 = odf.get_eri(kpts)
-        self.assertTrue(np.allclose(eri1111, ref, atol=1e-8, rtol=1e-8))
+        self.assertAlmostEqual(abs(eri1111-ref).max(), 0, 9)
         self.assertAlmostEqual(finger(eri1111), (1.2917759427391706-0.013340252488069412j), 9)
 
         ref = fft.FFTDF(cell1).get_mo_eri([numpy.eye(cell1.nao_nr())]*4, kpts)
-        self.assertTrue(np.allclose(eri1111, ref, atol=1e-8, rtol=1e-8))
+        self.assertAlmostEqual(abs(eri1111-ref).max(), 0, 9)
 
     def test_get_mo_eri(self):
-        df0 = fft.FFTDF(cell)
-        odf = aft.AFTDF(cell)
-        nao = cell.nao_nr()
+        df0 = fft.FFTDF(cell1)
+        odf = aft.AFTDF(cell1)
+        nao = cell1.nao_nr()
         numpy.random.seed(5)
         mo =(numpy.random.random((nao,nao)) +
              numpy.random.random((nao,nao))*1j)

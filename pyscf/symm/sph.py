@@ -1,11 +1,24 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 '''
 Spherical harmonics
 '''
 
 import numpy
-from pyscf import gto
+import scipy.linalg
 from pyscf.symm.cg import cg_spin
 
 def real_sph_vec(r, lmax, reorder_p=False):
@@ -59,6 +72,7 @@ def multipoles(r, lmax, reorder_dipole=True):
         reorder_p : bool
             sort dipole to x,y,z
     '''
+    from pyscf import gto
 
 # libcint cart2sph transformation provide the capability to compute
 # multipole directly.  cart2sph function is fast for low angular moment.
@@ -133,7 +147,7 @@ def sph_real2pure(l):
 # |spinor> = (|real_sph>, |real_sph>) * / u_alpha \
 #                                       \ u_beta  /
 # Return 2D array U_{sph,spinor}
-def real2spinor(l):
+def sph2spinor(l):
     if l == 0:
         return numpy.array((0., 1.)).reshape(1,-1), \
                numpy.array((1., 0.)).reshape(1,-1)
@@ -164,34 +178,57 @@ def real2spinor(l):
             mla += 1
             mlb += 1
     return ua, ub
+real2spinor = sph2spinor
 
 # Returns 2D array U_{sph,spinor}
-def real2spinor_whole(mol):
+def sph2spinor_coeff(mol):
+    '''Transformation matrix that transforms real-spherical GTOs to spinor
+    GTOs for all basis functions
+
+    Examples::
+
+    >>> from pyscf import gto
+    >>> from pyscf.symm import sph
+    >>> mol = gto.M(atom='H 0 0 0; F 0 0 1', basis='ccpvtz')
+    >>> ca, cb = sph.sph2spinor_coeff(mol)
+    >>> s0 = mol.intor('int1e_ovlp_spinor')
+    >>> s1 = ca.conj().T.dot(mol.intor('int1e_ovlp_sph')).dot(ca)
+    >>> s1+= cb.conj().T.dot(mol.intor('int1e_ovlp_sph')).dot(cb)
+    >>> print(abs(s1-s0).max())
+    >>> 6.66133814775e-16
+    '''
     lmax = max([mol.bas_angular(i) for i in range(mol.nbas)])
     ualst = []
     ublst = []
     for l in range(lmax+1):
-        u1, u2 = real2spinor(l)
+        u1, u2 = sph2spinor(l)
         ualst.append(u1)
         ublst.append(u2)
 
-    ua = numpy.zeros((mol.nao_nr(),mol.nao_2c()), dtype=complex)
-    ub = numpy.zeros_like(ua)
-    p0 = 0
-    p1 = 0
+    ca = []
+    cb = []
     for ib in range(mol.nbas):
         l = mol.bas_angular(ib)
+        kappa = mol.bas_kappa(ib)
+        if kappa == 0:
+            ua = ualst[l]
+            ub = ublst[l]
+        elif kappa < 0:
+            ua = ualst[l][:,l*2:]
+            ub = ublst[l][:,l*2:]
+        else:
+            ua = ualst[l][:,:l*2]
+            ub = ublst[l][:,:l*2]
         nctr = mol.bas_nctr(ib)
-        n, m = ualst[l].shape
-        for ic in range(nctr):
-            ua[p0:p0+n,p1:p1+m] = ualst[l]
-            ub[p0:p0+n,p1:p1+m] = ublst[l]
-            p0 += n
-            p1 += m
-    return ua, ub
+        ca.extend([ua]*nctr)
+        cb.extend([ub]*nctr)
+    return scipy.linalg.block_diag(*ca), scipy.linalg.block_diag(*cb)
+real2spinor_whole = sph2spinor_coeff
 
 def cart2spinor(l):
-    raise RuntimeError('TODO')
+    '''Cartesian to spinor for angular moment l'''
+    from pyscf import gto
+    return gto.cart2spinor_l(l)
 
 
 if __name__ == '__main__':
@@ -200,5 +237,5 @@ if __name__ == '__main__':
         print(sph_real2pure(l))
 
     for l in range(3):
-        print(real2spinor(l)[0])
-        print(real2spinor(l)[1])
+        print(sph2spinor(l)[0])
+        print(sph2spinor(l)[1])

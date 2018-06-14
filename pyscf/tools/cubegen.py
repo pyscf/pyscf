@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #         Peter Koval <koval.peter@gmail.com>
@@ -6,7 +19,22 @@
 #
 
 '''
-Gaussian cube file format
+Gaussian cube file format.  Reference:
+http://paulbourke.net/dataformats/cube/
+http://gaussian.com/cubegen/
+
+The output cube file has the following format
+
+Comment line
+Comment line
+N_atom Ox Oy Oz         # number of atoms, followed by the coordinates of the origin
+N1 vx1 vy1 vz1          # number of grids along each axis, followed by the step size in x/y/z direction.
+N2 vx2 vy2 vz2          # ...
+N3 vx3 vy3 vz3          # ...
+Atom1 Z1 x y z          # Atomic number, charge, and coordinates of the atom
+...                     # ...
+AtomN ZN x y z          # ...
+Data on grids           # (N1*N2) lines of records, each line has N3 elements
 '''
 
 import numpy
@@ -14,9 +42,13 @@ import time
 import pyscf
 from pyscf import lib
 from pyscf.dft import numint
+from pyscf import __config__
+
+RESOLUTION = getattr(__config__, 'cubegen_resolution', None)
+BOX_MARGIN = getattr(__config__, 'cubegen_box_margin', 3.0)
 
 
-def density(mol, outfile, dm, nx=80, ny=80, nz=80):
+def density(mol, outfile, dm, nx=80, ny=80, nz=80, resolution=RESOLUTION):
     """Calculates electron density and write out in cube format.
 
     Args:
@@ -39,7 +71,7 @@ def density(mol, outfile, dm, nx=80, ny=80, nz=80):
             Number of grid point divisions in z direction.
     """
 
-    cc = Cube(mol, nx=nx, ny=ny, nz=nz)
+    cc = Cube(mol, nx, ny, nz, resolution)
 
     # Compute density on the .cube grid
     coords = cc.get_coords()
@@ -54,7 +86,7 @@ def density(mol, outfile, dm, nx=80, ny=80, nz=80):
     # Write out density to the .cube file
     cc.write(rho, outfile, comment='Electron density in real space (e/Bohr^3)')
 
-def orbital(mol, outfile, coeff, nx=80, ny=80, nz=80):
+def orbital(mol, outfile, coeff, nx=80, ny=80, nz=80, resolution=RESOLUTION):
     """Calculate orbital value on real space grid and write out in cube format.
 
     Args:
@@ -76,7 +108,7 @@ def orbital(mol, outfile, coeff, nx=80, ny=80, nz=80):
         nz : int
             Number of grid point divisions in z direction.
     """
-    cc = Cube(mol, nx=nx, ny=ny, nz=nz)
+    cc = Cube(mol, nx, ny, nz, resolution)
 
     # Compute density on the .cube grid
     coords = cc.get_coords()
@@ -92,7 +124,7 @@ def orbital(mol, outfile, coeff, nx=80, ny=80, nz=80):
     cc.write(orb_on_grid, outfile, comment='Orbital value in real space (1/Bohr^3)')
 
 
-def mep(mol, outfile, dm, nx=80, ny=80, nz=80):
+def mep(mol, outfile, dm, nx=80, ny=80, nz=80, resolution=RESOLUTION):
     """Calculates the molecular electrostatic potential (MEP) and write out in
     cube format.
 
@@ -115,7 +147,7 @@ def mep(mol, outfile, dm, nx=80, ny=80, nz=80):
         nz : int
             Number of grid point divisions in z direction.
     """
-    cc = Cube(mol, nx=nx, ny=ny, nz=nz)
+    cc = Cube(mol, nx, ny, nz, resolution)
 
     coords = cc.get_coords()
 
@@ -142,19 +174,25 @@ def mep(mol, outfile, dm, nx=80, ny=80, nz=80):
     cc.write(MEP, outfile, 'Molecular electrostatic potential in real space')
 
 
-class Cube():
+class Cube(object):
     '''  Read-write of the Gaussian CUBE files  '''
-    def __init__(self, mol, nx=80, ny=80, nz=80):
+    def __init__(self, mol, nx=80, ny=80, nz=80, resolution=RESOLUTION,
+                 margin=BOX_MARGIN):
+        self.mol = mol
+        coord = mol.atom_coords()
+        self.box = numpy.max(coord,axis=0) - numpy.min(coord,axis=0) + margin*2
+        self.boxorig = numpy.min(coord,axis=0) - margin
+        if resolution is not None:
+            nx, ny, nz = numpy.ceil(self.box / resolution).astype(int)
+
         self.nx = nx
         self.ny = ny
         self.nz = nz
-        self.mol = mol
-        coord = mol.atom_coords()
-        self.box = numpy.max(coord,axis=0) - numpy.min(coord,axis=0) + 6.0
-        self.boxorig = numpy.min(coord,axis=0) - 3.0
-        self.xs = numpy.arange(nx) * (self.box[0]/nx)
-        self.ys = numpy.arange(ny) * (self.box[1]/ny)
-        self.zs = numpy.arange(nz) * (self.box[2]/nz)
+        # .../(nx-1) to get symmetric mesh
+        # see also the discussion on https://github.com/sunqm/pyscf/issues/154
+        self.xs = numpy.arange(nx) * (self.box[0] / (nx - 1))
+        self.ys = numpy.arange(ny) * (self.box[1] / (ny - 1))
+        self.zs = numpy.arange(nz) * (self.box[2] / (nz - 1))
 
     def get_coords(self) :
         """  Result: set of coordinates to compute a field which is to be stored
@@ -197,6 +235,9 @@ class Cube():
                     for iz0, iz1 in lib.prange(0, self.nz, 6):
                         fmt = '%13.5E' * (iz1-iz0) + '\n'
                         f.write(fmt % tuple(field[ix,iy,iz0:iz1].tolist()))
+
+del(RESOLUTION, BOX_MARGIN)
+
 
 if __name__ == '__main__':
     from pyscf import gto, scf

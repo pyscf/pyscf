@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -30,9 +43,14 @@ import scipy.linalg
 from pyscf.gto import mole
 from pyscf.lib import norm
 from pyscf.lib import logger
-import pyscf.symm.param
+from pyscf.symm.param import OPERATOR_TABLE
+from pyscf import __config__
 
-TOLERANCE = 1e-5
+TOLERANCE = getattr(__config__, 'symm_geom_tol', 1e-5)
+
+# For code compatiblity in python-2 and python-3
+if sys.version_info >= (3,):
+    unicode = str
 
 def parallel_vectors(v1, v2, tol=TOLERANCE):
     if numpy.allclose(v1, 0, atol=tol) or numpy.allclose(v2, 0, atol=tol):
@@ -192,7 +210,7 @@ def detect_symm(atoms, basis=None, verbose=logger.WARN):
             if c2x is not None:
                 if rawsys.has_mirror(axes[2]):
                     gpname = 'D%dh' % n
-                elif rawsys.has_icenter():
+                elif rawsys.has_improper_rotation(axes[2], n):
                     gpname = 'D%dd' % n
                 else:
                     gpname = 'D%d' % n
@@ -203,8 +221,7 @@ def detect_symm(atoms, basis=None, verbose=logger.WARN):
                 axes = _make_axes(axes[2], mirrorx)
             elif rawsys.has_mirror(axes[2]):
                 gpname = 'C%dh' % n
-            elif all(rawsys.symmetric_for(numpy.dot(rotation_mat(axes[2], numpy.pi/n),
-                                                    householder(axes[2])))): # improper rotation
+            elif rawsys.has_improper_rotation(axes[2], n):
                 gpname = 'S%d' % (n*2)
             else:
                 gpname = 'C%d' % n
@@ -250,7 +267,7 @@ def detect_symm(atoms, basis=None, verbose=logger.WARN):
 
 # reduce to D2h and its subgroups
 # FIXME, CPL, 209, 506
-def subgroup(gpname, axes):
+def get_subgroup(gpname, axes):
     if gpname in ('D2h', 'D2' , 'C2h', 'C2v', 'C2' , 'Ci' , 'Cs' , 'C1'):
         return gpname, axes
     elif gpname in ('SO3',):
@@ -321,7 +338,32 @@ def subgroup(gpname, axes):
             else:
                 subname = 'C1'
         return subname, axes
+subgroup = get_subgroup
 
+def as_subgroup(topgroup, axes, subgroup=None):
+    from pyscf.symm import std_symb
+    from pyscf.symm.param import SUBGROUP
+
+    groupname, axes = get_subgroup(topgroup, axes)
+
+    if isinstance(subgroup, (str, unicode)):
+        subgroup = std_symb(subgroup)
+        if (groupname == 'D2' and re.search(r'D\d+d', topgroup) and
+            subgroup in ('C2v', 'Cs')):
+            # Special treatment for D2d, D4d, .... get_subgroup gives D2 by
+            # default while C2v is also D2d's subgroup.
+            groupname = 'C2v'
+            axes = numpy.einsum('ij,kj->ki', rotation_mat(axes[2], numpy.pi/4), axes)
+
+        if subgroup not in SUBGROUP[groupname]:
+            raise RuntimeError('%s not in Ablien subgroup of %s' %
+                               (subgroup, topgroup))
+
+        if subgroup == 'Cs' and groupname == 'C2v':
+            axes = numpy.einsum('ij,kj->ki', rotation_mat(axes[1], numpy.pi/2), axes)
+
+        groupname = subgroup
+    return groupname, axes
 
 def symm_ops(gpname, axes=None):
     if axes is not None:
@@ -373,7 +415,7 @@ def symm_identical_atoms(gpname, atoms):
 #        sys.stderr.write('WARN: Molecular charge center %s is not on (0,0,0)\n'
 #                        % center)
     opdic = symm_ops(gpname)
-    ops = [opdic[op] for op in pyscf.symm.param.OPERATOR_TABLE[gpname]]
+    ops = [opdic[op] for op in OPERATOR_TABLE[gpname]]
     coords = numpy.array([a[1] for a in atoms], dtype=float)
     idx = argsort_coords(coords)
     coords0 = coords[idx]
@@ -410,7 +452,7 @@ def check_given_symm(gpname, atoms, basis=None):
         return numpy.allclose(coords[:,:2], 0, atol=TOLERANCE)
 
     opdic = symm_ops(gpname)
-    ops = [opdic[op] for op in pyscf.symm.param.OPERATOR_TABLE[gpname]]
+    ops = [opdic[op] for op in OPERATOR_TABLE[gpname]]
     rawsys = SymmSys(atoms, basis)
     for lst in rawsys.atomtypes.values():
         coords = rawsys.atoms[lst,1:]
@@ -429,7 +471,7 @@ def shift_atom(atoms, orig, axis):
     c = numpy.dot(c - orig, numpy.array(axis).T)
     return [[atoms[i][0], c[i]] for i in range(len(atoms))]
 
-class RotationAxisNotFound(Exception):
+class RotationAxisNotFound(RuntimeError):
     pass
 
 class SymmSys(object):
@@ -453,7 +495,7 @@ class SymmSys(object):
             elif mole.is_ghost_atom(k):
                 if ksymb == 'X' or ksymb.upper() == 'GHOST':
                     fake_chgs.append([.3] * len(lst))
-                elif k[:2] == 'X-':
+                elif ksymb[0] == 'X':
                     fake_chgs.append([mole.charge(ksymb[1:])+.3] * len(lst))
                 elif ksymb[:5] == 'GHOST':
                     fake_chgs.append([mole.charge(ksymb[5:])+.3] * len(lst))
@@ -499,11 +541,15 @@ class SymmSys(object):
         return all(self.symmetric_for(-1))
 
     def has_rotation(self, axis, n):
-        op = rotation_mat(axis, numpy.pi*2/n)
+        op = rotation_mat(axis, numpy.pi*2/n).T
         return all(self.symmetric_for(op))
 
     def has_mirror(self, perp_vec):
-        return all(self.symmetric_for(householder(perp_vec)))
+        return all(self.symmetric_for(householder(perp_vec).T))
+
+    def has_improper_rotation(self, axis, n):
+        s_op = numpy.dot(householder(axis), rotation_mat(axis, numpy.pi/n)).T
+        return all(self.symmetric_for(s_op))
 
     def search_possible_rotations(self, zaxis=None):
         '''If zaxis is given, the rotation axis is parallel to zaxis'''
@@ -583,7 +629,7 @@ class SymmSys(object):
                     elif abs(d) < TOLERANCE: # plane which crosses the orig
                         r1 = r0[zcos==d][0]
                         maybe_c2x.append(r1)
-                        r2 = numpy.dot(r1, rotation_mat(zaxis, numpy.pi*2/n))
+                        r2 = numpy.dot(rotation_mat(zaxis, numpy.pi*2/n), r1)
                         if abs(r1+r2).sum() > TOLERANCE:
                             maybe_c2x.append(r1+r2)
                         else:
@@ -605,7 +651,7 @@ class SymmSys(object):
                 natm = len(lst)
                 r0 = self.atoms[lst[0],1:]
                 if natm > 1 and not parallel_vectors(r0, zaxis):
-                    r1 = numpy.dot(r0, rotation_mat(zaxis, numpy.pi*2/n))
+                    r1 = numpy.dot(rotation_mat(zaxis, numpy.pi*2/n), r0)
                     mirrorx = _normalize(r1-r0)
                     if self.has_mirror(mirrorx):
                         return mirrorx
@@ -661,7 +707,7 @@ def _search_i_group(rawsys):
     c5 = c5_axes[1]
     if numpy.dot(c5, zaxis) < 0:
         c5 = -c5
-    c5a = numpy.dot(zaxis, rotation_mat(zaxis, numpy.pi*6/5))
+    c5a = numpy.dot(rotation_mat(zaxis, numpy.pi*6/5), c5)
     xaxis = c5a + c5
     return gpname, _make_axes(zaxis, xaxis)
 
@@ -699,8 +745,8 @@ def _search_ot_group(rawsys):
         c3a = c3_axes[0]
         if numpy.dot(c3a, c3_axes[1]) > 0:
             c3a = -c3a
-        c3b = numpy.dot(c3_axes[1], rotation_mat(c3a, numpy.pi*2/3))
-        c3c = numpy.dot(c3_axes[1], rotation_mat(c3a,-numpy.pi*2/3))
+        c3b = numpy.dot(rotation_mat(c3a,-numpy.pi*2/3), c3_axes[1])
+        c3c = numpy.dot(rotation_mat(c3a, numpy.pi*2/3), c3_axes[1])
         zaxis, xaxis = c3a+c3b, c3a+c3c
         return gpname, _make_axes(zaxis, xaxis)
 

@@ -1,17 +1,31 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
 '''
-Extension to numpy module
+Extension to numpy and scipy
 '''
 
 import string
 import ctypes
-import numpy
 import math
 import re
+import numpy
+import scipy.linalg
 from pyscf.lib import misc
 
 try:
@@ -67,8 +81,9 @@ except (ImportError, OSError):
         # Call numpy.asarray because A or B may be HDF5 Datasets 
         A = numpy.asarray(A, order='A')
         B = numpy.asarray(B, order='A')
-        if A.size == 0 or B.size == 0:
+        if A.size < 2000 or B.size < 2000:
             return numpy.einsum(idx_str, *tensors)
+
         # Split the strings into a list of idx char's
         idxA, idxBC = idx_str.split(',')
         idxB, idxC = idxBC.split('->')
@@ -178,6 +193,17 @@ HERMITIAN = 1
 ANTIHERMI = 2
 SYMMETRIC = 3
 
+LeviCivita = numpy.zeros((3,3,3))
+LeviCivita[0,1,2] = LeviCivita[1,2,0] = LeviCivita[2,0,1] = 1
+LeviCivita[0,2,1] = LeviCivita[2,1,0] = LeviCivita[1,0,2] = -1
+
+PauliMatrices = numpy.array([[[0., 1.],
+                              [1., 0.]],  # x
+                             [[0.,-1j],
+                              [1j, 0.]],  # y
+                             [[1., 0.],
+                              [0.,-1.]]]) # z
+
 
 # 2d -> 1d or 3d -> 2d
 def pack_tril(mat, axis=-1, out=None):
@@ -189,6 +215,9 @@ def pack_tril(mat, axis=-1, out=None):
     >>> pack_tril(numpy.arange(9).reshape(3,3))
     [0 3 4 6 7 8]
     '''
+    if mat.size == 0:
+        return numpy.zeros(mat.shape+(0,), dtype=mat.dtype)
+
     if mat.ndim == 2:
         count, nd = 1, mat.shape[0]
         shape = nd*(nd+1)//2
@@ -344,23 +373,33 @@ def hermi_triu(mat, hermi=HERMITIAN, inplace=True):
      [ 6.  7.  8.]]
     '''
     assert(hermi == HERMITIAN or hermi == ANTIHERMI)
-    if not mat.flags.c_contiguous:
-        assert(not inplace)
-        mat = mat.copy(order='C')
+    if not inplace:
+        mat = mat.copy('A')
+    if mat.flags.c_contiguous:
+        buf = mat
+    elif mat.flags.f_contiguous:
+        buf = mat.T
+    else:
+        raise NotImplementedError
+
     nd = mat.shape[0]
+    assert(mat.size == nd**2)
+
     if mat.dtype == numpy.double:
         fn = _np_helper.NPdsymm_triu
     else:
         fn = _np_helper.NPzhermi_triu
     fn.restype = ctypes.c_void_p
-    fn(ctypes.c_int(nd), mat.ctypes.data_as(ctypes.c_void_p),
+    fn(ctypes.c_int(nd), buf.ctypes.data_as(ctypes.c_void_p),
        ctypes.c_int(hermi))
     return mat
 
 
 LINEAR_DEP_THRESHOLD = 1e-10
 def solve_lineq_by_SVD(a, b):
-    ''' a * x = b '''
+    '''Solving a * x = b.  If a is a singular matrix, its small SVD values are
+    neglected.
+    '''
     t, w, vH = numpy.linalg.svd(a)
     idx = []
     for i,wi in enumerate(w):
@@ -375,7 +414,7 @@ def solve_lineq_by_SVD(a, b):
     return x
 
 def take_2d(a, idx, idy, out=None):
-    '''a(idx,idy)
+    '''Equivalent to a[idx[:,None],idy] for a 2D array.
 
     Examples:
 
@@ -401,7 +440,8 @@ def take_2d(a, idx, idy, out=None):
     return out
 
 def takebak_2d(out, a, idx, idy):
-    '''Reverse operation of take_2d.  out(idx,idy) += a
+    '''Reverse operation of take_2d.  Equivalent to out[idx[:,None],idy] += a
+    for a 2D array.
 
     Examples:
 
@@ -428,7 +468,7 @@ def takebak_2d(out, a, idx, idy):
     return out
 
 def transpose(a, axes=None, inplace=False, out=None):
-    '''Transpose array for better memory efficiency
+    '''Transposing an array with better memory efficiency
 
     Examples:
 
@@ -490,7 +530,7 @@ def transpose(a, axes=None, inplace=False, out=None):
     return out
 
 def transpose_sum(a, inplace=False, out=None):
-    '''a + a.T for better memory efficiency
+    '''Computing a + a.T with better memory efficiency
 
     Examples:
 
@@ -501,7 +541,7 @@ def transpose_sum(a, inplace=False, out=None):
     return hermi_sum(a, inplace=inplace, out=out)
 
 def hermi_sum(a, axes=None, hermi=HERMITIAN, inplace=False, out=None):
-    '''a + a.T for better memory efficiency
+    '''Computing a + a.T.conj() with better memory efficiency
 
     Examples:
 
@@ -586,8 +626,7 @@ def ddot(a, b, alpha=1, c=None, beta=0):
     return _dgemm(trans_a, trans_b, m, n, k, a, b, c, alpha, beta)
 
 def zdot(a, b, alpha=1, c=None, beta=0):
-    '''Matrix-matrix multiplication for double complex arrays using Gauss's
-    complex multiplication algorithm
+    '''Matrix-matrix multiplication for double complex arrays
     '''
     m = a.shape[0]
     k = a.shape[1]
@@ -644,6 +683,7 @@ def dot(a, b, alpha=1, c=None, beta=0):
         ab = cr + ci*1j
 
     elif atype == numpy.complex128 and btype == numpy.complex128:
+        # Gauss's complex multiplication algorithm may affect numerical stability
         #k1 = ddot(a.real+a.imag, b.real.copy(), alpha)
         #k2 = ddot(a.real.copy(), b.imag-b.real, alpha)
         #k3 = ddot(a.imag.copy(), b.real+b.imag, alpha)
@@ -666,12 +706,16 @@ def dot(a, b, alpha=1, c=None, beta=0):
 # a, b, c in C-order
 def _dgemm(trans_a, trans_b, m, n, k, a, b, c, alpha=1, beta=0,
            offseta=0, offsetb=0, offsetc=0):
+    if a.size == 0 or b.size == 0:
+        if beta == 0:
+            c[:] = 0
+        else:
+            c[:] *= beta
+        return c
+
     assert(a.flags.c_contiguous)
     assert(b.flags.c_contiguous)
     assert(c.flags.c_contiguous)
-    assert(a.shape[1] > 0)
-    assert(b.shape[1] > 0)
-    assert(c.shape[1] > 0)
 
     _np_helper.NPdgemm(ctypes.c_char(trans_b.encode('ascii')),
                        ctypes.c_char(trans_a.encode('ascii')),
@@ -687,15 +731,19 @@ def _dgemm(trans_a, trans_b, m, n, k, a, b, c, alpha=1, beta=0,
     return c
 def _zgemm(trans_a, trans_b, m, n, k, a, b, c, alpha=1, beta=0,
            offseta=0, offsetb=0, offsetc=0):
+    if a.size == 0 or b.size == 0:
+        if beta == 0:
+            c[:] = 0
+        else:
+            c[:] *= beta
+        return c
+
     assert(a.flags.c_contiguous)
     assert(b.flags.c_contiguous)
     assert(c.flags.c_contiguous)
     assert(a.dtype == numpy.complex128)
     assert(b.dtype == numpy.complex128)
     assert(c.dtype == numpy.complex128)
-    assert(a.shape[1] > 0)
-    assert(b.shape[1] > 0)
-    assert(c.shape[1] > 0)
 
     _np_helper.NPzgemm(ctypes.c_char(trans_b.encode('ascii')),
                        ctypes.c_char(trans_a.encode('ascii')),
@@ -711,13 +759,9 @@ def _zgemm(trans_a, trans_b, m, n, k, a, b, c, alpha=1, beta=0,
                        (ctypes.c_double*2)(beta.real, beta.imag))
     return c
 
-def prange(start, end, step):
-    for i in range(start, end, step):
-        yield i, min(i+step, end)
-
 def asarray(a, dtype=None, order=None):
     '''Convert a list of N-dim arrays to a (N+1) dim array.  It is equivalent to
-    numpy.asarray function but more efficient.
+    numpy.asarray function.
     '''
     try:
         a0_shape = numpy.shape(a[0])
@@ -867,7 +911,7 @@ def direct_sum(subscripts, *operands):
             out = out.reshape(out.shape+(1,)*op.ndim) - op
 
     out = numpy.einsum('->'.join((''.join(src), dest)), out)
-    out.flags.writeable = True  # old numpy version has this issue
+    out.flags.writeable = True  # old numpy has this issue
     return out
 
 def condense(opname, a, locs):
@@ -898,6 +942,7 @@ def condense(opname, a, locs):
     return out
 
 def expm(a):
+    '''Equivalent to scipy.linalg.expm'''
     bs = [a.copy()]
     n = 0
     for n in range(1, 14):
@@ -921,9 +966,29 @@ def expm(a):
 
 
 class NPArrayWithTag(numpy.ndarray):
-    pass
+    # Initialize kwargs in function tag_array
+    #def __new__(cls, a, **kwargs):
+    #    obj = numpy.asarray(a).view(cls)
+    #    obj.__dict__.update(kwargs)
+    #    return obj
+# Customize __reduce__ and __setstate__ to keep tags after serialization
+# pickle.loads(pickle.dumps(tagarray)).  This is needed by mpi communication
+    def __reduce__(self):
+        pickled = numpy.ndarray.__reduce__(self)
+        state = pickled[2] + (self.__dict__,)
+        return (pickled[0], pickled[1], state)
+    def __setstate__(self, state):
+        numpy.ndarray.__setstate__(self, state[0:-1])
+        self.__dict__.update(state[-1])
+
 def tag_array(a, **kwargs):
-    if not isinstance(a, NPArrayWithTag):
+    '''Attach attributes to numpy ndarray. The attribute name and value are
+    obtained from the keyword arguments.
+    '''
+    # Do not check isinstance(a, xxx) here since a may be the object of a
+    # derived class of the immutable class (list, tuple, ndarray), which
+    # allows to update attributes dynamically.
+    if a.__class__ in (numpy.ndarray, tuple, list):
         a = numpy.asarray(a).view(NPArrayWithTag)
     a.__dict__.update(kwargs)
     return a
@@ -958,8 +1023,8 @@ if __name__ == '__main__':
         a[i,i] = a[i,i].real
     b = a-a.T.conj()
     b = numpy.array((b,b))
-    x = hermi_triu(b[0], hermi=2, inplace=0)
-    print(abs(b[0]-x).sum())
+    x = hermi_triu(b[0].T, hermi=2, inplace=0)
+    print(abs(b[0].T-x).sum())
     x = hermi_triu(b[1], hermi=2, inplace=0)
     print(abs(b[1]-x).sum())
     print(abs(x - unpack_tril(pack_tril(x), 2)).sum())

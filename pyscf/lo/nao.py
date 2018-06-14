@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -14,28 +27,47 @@ from functools import reduce
 import numpy
 import scipy.linalg
 from pyscf import lib
+from pyscf import scf
 from pyscf.gto import mole
 from pyscf.lo import orth
 from pyscf.lib import logger
 from pyscf.data import elements
+from pyscf import __config__
 
 # Note the valence space for Li, Be may need include 2p, Al..Cl may need 3d ...
 # This is No. of shells, not the atomic configuations
 #     core       core+valence
 # core+valence = lambda nuc, l: \
 #            int(numpy.ceil(elements.CONFIGURATION[nuc][l]/(4*l+2.)))
-AOSHELL = list(zip(elements.N_CORE_SHELLS,
-                   elements.N_VALENCE_SHELLS))
+AOSHELL = getattr(__config__, 'lo_nao_AOSHELL', None)
+if AOSHELL is None:
+    AOSHELL = list(zip(elements.N_CORE_SHELLS,
+                       elements.N_CORE_VALENCE_SHELLS))
 
 def prenao(mol, dm):
-    s = mol.intor_symmetric('int1e_ovlp')
+    if not (isinstance(dm, numpy.ndarray) and dm.ndim == 2):
+        # UHF or ROHF
+        dm = dm[0] + dm[1]
+
+    if hasattr(mol, 'pbc_intor'):  # whether mol object is a cell
+        s = mol.pbc_intor('int1e_ovlp', hermi=1)
+    else:
+        s = mol.intor_symmetric('int1e_ovlp')
+
     p = reduce(numpy.dot, (s, dm, s))
     return _prenao_sub(mol, p, s)[1]
 
 def nao(mol, mf, s=None, restore=True):
     if s is None:
-        s = mol.intor_symmetric('int1e_ovlp')
+        if hasattr(mol, 'pbc_intor'):  # whether mol object is a cell
+            s = mol.pbc_intor('int1e_ovlp', hermi=1)
+        else:
+            s = mol.intor_symmetric('int1e_ovlp')
+
     dm = mf.make_rdm1()
+    if isinstance(mf, (scf.uhf.UHF, scf.rohf.ROHF)):
+        dm = dm[0] + dm[1]
+
     p = reduce(numpy.dot, (s, dm, s))
     pre_occ, pre_nao = _prenao_sub(mol, p, s)
     cnao = _nao_sub(mol, pre_occ, pre_nao)
@@ -84,7 +116,11 @@ def _prenao_sub(mol, p, s):
 
 def _nao_sub(mol, pre_occ, pre_nao, s=None):
     if s is None:
-        s = mol.intor_symmetric('int1e_ovlp')
+        if hasattr(mol, 'pbc_intor'):  # whether mol object is a cell
+            s = mol.pbc_intor('int1e_ovlp', hermi=1)
+        else:
+            s = mol.intor_symmetric('int1e_ovlp')
+
     core_lst, val_lst, rydbg_lst = _core_val_ryd_list(mol)
     nbf = mol.nao_nr()
     pre_nao = pre_nao.astype(s.dtype)

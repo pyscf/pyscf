@@ -132,7 +132,7 @@ CASCI
 .. automodule:: pyscf.mcscf.casci_symm
    :members:
 
-.. automodule:: pyscf.mcscf.casci_uhf
+.. automodule:: pyscf.mcscf.ucasci
    :members:
 
 
@@ -145,13 +145,13 @@ CASSCF
 .. automodule:: pyscf.mcscf.mc1step_symm
    :members:
 
-.. automodule:: pyscf.mcscf.mc1step_uhf
+.. automodule:: pyscf.mcscf.umc1step
    :members:
 
 .. automodule:: pyscf.mcscf.mc_ao2mo
    :members:
 
-.. automodule:: pyscf.mcscf.mc_ao2mo_uhf
+.. automodule:: pyscf.mcscf.umc_ao2mo
    :members:
 
 

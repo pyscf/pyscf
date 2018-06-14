@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #         Jun Yang <junyang4711@gmail.com>
@@ -41,11 +54,11 @@ def _gamma1_intermediates(cc, t1, t2, l1, l2):
     xt2a += einsum('mnaf,mnef->ae', t2ab, l2ab)
     xt2a += einsum('ma,me->ae', t1a, l1a)
 
-    dova  = einsum('imae,me->ia', t2aa, l1a)
-    dova += einsum('imae,me->ia', t2ab, l1b)
-    dova -= einsum('mi,ma->ia', xt1a, t1a)
-    dova -= einsum('ie,ae->ia', t1a, xt2a)
-    dova += t1a
+    dvoa  = numpy.einsum('imae,me->ai', t2aa, l1a)
+    dvoa += numpy.einsum('imae,me->ai', t2ab, l1b)
+    dvoa -= einsum('mi,ma->ai', xt1a, t1a)
+    dvoa -= einsum('ie,ae->ai', t1a, xt2a)
+    dvoa += t1a.T
 
     xt1b  = einsum('mnef,inef->mi', l2bb, t2bb) * .5
     xt1b += einsum('nmef,nief->mi', l2ab, t2ab)
@@ -53,19 +66,20 @@ def _gamma1_intermediates(cc, t1, t2, l1, l2):
     xt2b += einsum('mnfa,mnfe->ae', t2ab, l2ab)
     xt2b += einsum('ma,me->ae', t1b, l1b)
 
-    dovb  = einsum('imae,me->ia', t2bb, l1b)
-    dovb += einsum('miea,me->ia', t2ab, l1a)
-    dovb -= einsum('mi,ma->ia', xt1b, t1b)
-    dovb -= einsum('ie,ae->ia', t1b, xt2b)
-    dovb += t1b
+    dvob  = numpy.einsum('imae,me->ai', t2bb, l1b)
+    dvob += numpy.einsum('miea,me->ai', t2ab, l1a)
+    dvob -= einsum('mi,ma->ai', xt1b, t1b)
+    dvob -= einsum('ie,ae->ai', t1b, xt2b)
+    dvob += t1b.T
 
-    dvoa = l1a.T.copy()
-    dvob = l1b.T.copy()
+    dova = l1a
+    dovb = l1b
 
     return ((dooa, doob), (dova, dovb), (dvoa, dvob), (dvva, dvvb))
 
 # gamma2 intermediates in Chemist's notation
-def _gamma2_intermediates(cc, t1, t2, l1, l2):
+#TODO: hold d2 intermediates in h5fobj
+def _gamma2_outcore(cc, t1, t2, l1, l2, h5fobj, compress_vvvv=False):
     t1a, t1b = t1
     t2aa, t2ab, t2bb = t2
     l1a, l1b = l1
@@ -297,35 +311,21 @@ def _gamma2_intermediates(cc, t1, t2, l1, l2):
     dOOvv =-(dOOvv + dOOvv.transpose(1,0,3,2).conj()) * .5
     dVVov = None
 
-    return ((dovov, dovOV, dOVov, dOVOV),
-            (dvvvv, dvvVV, dVVvv, dVVVV),
-            (doooo, dooOO, dOOoo, dOOOO),
-            (doovv, dooVV, dOOvv, dOOVV),
-            (dovvo, dovVO, dOVvo, dOVVO),
-            (dvvov, dvvOV, dVVov, dVVOV),
-            (dovvv, dovVV, dOVvv, dOVVV),
-            (dooov, dooOV, dOOov, dOOOV))
-
-def _gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj, compress_vvvv=False):
-    d2 = _gamma2_intermediates(mycc, t1, t2, l1, l2)
-    if not compress_vvvv:
-        return d2
-    dovov, dovOV, dOVov, dOVOV = d2[0]
-    dvvvv, dvvVV, dVVvv, dVVVV = d2[1]
-    doooo, dooOO, dOOoo, dOOOO = d2[2]
-    doovv, dooVV, dOOvv, dOOVV = d2[3]
-    dovvo, dovVO, dOVvo, dOVVO = d2[4]
-    dvvov, dvvOV, dVVov, dVVOV = d2[5]
-    dovvv, dovVV, dOVvv, dOVVV = d2[6]
-    dooov, dooOV, dOOov, dOOOV = d2[7]
-    nocca, nvira, noccb, nvirb = dovOV.shape
-
-    dvvvv = dvvvv + dvvvv.transpose(1,0,2,3)
-    dvvvv = ao2mo.restore(4, dvvvv, nvira) * .5
-    dvvVV = dvvVV + dvvVV.transpose(1,0,2,3)
-    dvvVV = lib.pack_tril(dvvVV[numpy.tril_indices(nvira)])
-    dVVVV = dVVVV + dVVVV.transpose(1,0,2,3)
-    dVVVV = ao2mo.restore(4, dVVVV, nvirb) * .5
+    if compress_vvvv:
+        nocca, noccb, nvira, nvirb = t2ab.shape
+        idxa = numpy.tril_indices(nvira)
+        idxa = idxa[0] * nvira + idxa[1]
+        idxb = numpy.tril_indices(nvirb)
+        idxb = idxb[0] * nvirb + idxb[1]
+        dvvvv = dvvvv + dvvvv.transpose(1,0,2,3)
+        dvvvv = lib.take_2d(dvvvv.reshape(nvira**2,nvira**2), idxa, idxa)
+        dvvvv *= .5
+        dvvVV = dvvVV + dvvVV.transpose(1,0,2,3)
+        dvvVV = lib.take_2d(dvvVV.reshape(nvira**2,nvirb**2), idxa, idxb)
+        dvvVV *= .5
+        dVVVV = dVVVV + dVVVV.transpose(1,0,2,3)
+        dVVVV = lib.take_2d(dVVVV.reshape(nvirb**2,nvirb**2), idxb, idxb)
+        dVVVV *= .5
 
     return ((dovov, dovOV, dOVov, dOVOV),
             (dvvvv, dvvVV, dVVvv, dVVVV),
@@ -335,13 +335,50 @@ def _gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj, compress_vvvv=False):
             (dvvov, dvvOV, dVVov, dVVOV),
             (dovvv, dovVV, dOVvv, dOVVV),
             (dooov, dooOV, dOOov, dOOOV))
+
+def _gamma2_intermediates(cc, t1, t2, l1, l2, compress_vvvv=False):
+    #TODO: h5fobj = lib.H5TmpFile()
+    h5fobj = None
+    d2 = _gamma2_outcore(cc, t1, t2, l1, l2, h5fobj, compress_vvvv)
+    return d2
 
 def make_rdm1(mycc, t1, t2, l1, l2):
+    r'''
+    One-particle spin density matrices dm1a, dm1b in MO basis (the
+    occupied-virtual blocks due to the orbital response contribution are not
+    included).
+
+    dm1a[p,q] = <q_alpha^\dagger p_alpha>
+    dm1b[p,q] = <q_beta^\dagger p_beta>
+
+    The convention of 1-pdm is based on McWeeney's book, Eq (5.4.20).
+    '''
     d1 = _gamma1_intermediates(mycc, t1, t2, l1, l2)
     return _make_rdm1(mycc, d1, with_frozen=True)
 
 # spin-orbital rdm2 in Chemist's notation
 def make_rdm2(mycc, t1, t2, l1, l2):
+    r'''
+    Two-particle spin density matrices dm2aa, dm2ab, dm2bb in MO basis
+
+    dm2aa[p,q,r,s] = <q_alpha^\dagger s_alpha^\dagger r_alpha p_alpha>
+    dm2ab[p,q,r,s] = <q_alpha^\dagger s_beta^\dagger r_beta p_alpha>
+    dm2bb[p,q,r,s] = <q_beta^\dagger s_beta^\dagger r_beta p_beta>
+
+    (p,q correspond to one particle and r,s correspond to another particle)
+    Two-particle density matrix should be contracted to integrals with the
+    pattern below to compute energy
+
+    E = numpy.einsum('pqrs,pqrs', eri_aa, dm2_aa)
+    E+= numpy.einsum('pqrs,pqrs', eri_ab, dm2_ab)
+    E+= numpy.einsum('pqrs,rspq', eri_ba, dm2_ab)
+    E+= numpy.einsum('pqrs,pqrs', eri_bb, dm2_bb)
+
+    where eri_aa[p,q,r,s] = (p_alpha q_alpha | r_alpha s_alpha )
+    eri_ab[p,q,r,s] = ( p_alpha q_alpha | r_beta s_beta )
+    eri_ba[p,q,r,s] = ( p_beta q_beta | r_alpha s_alpha )
+    eri_bb[p,q,r,s] = ( p_beta q_beta | r_beta s_beta )
+    '''
     d1 = _gamma1_intermediates(mycc, t1, t2, l1, l2)
     d2 = _gamma2_intermediates(mycc, t1, t2, l1, l2)
     return _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True)
@@ -356,7 +393,7 @@ def _make_rdm1(mycc, d1, with_frozen=True):
     nmoa = nocca + nvira
     nmob = noccb + nvirb
 
-    dm1a = numpy.empty((nmoa,nmoa))
+    dm1a = numpy.empty((nmoa,nmoa), dtype=doo.dtype)
     dm1a[:nocca,:nocca] = doo + doo.conj().T
     dm1a[:nocca,nocca:] = dov + dvo.conj().T
     dm1a[nocca:,:nocca] = dm1a[:nocca,nocca:].conj().T
@@ -364,7 +401,7 @@ def _make_rdm1(mycc, d1, with_frozen=True):
     dm1a *= .5
     dm1a[numpy.diag_indices(nocca)] += 1
 
-    dm1b = numpy.empty((nmob,nmob))
+    dm1b = numpy.empty((nmob,nmob), dtype=dOO.dtype)
     dm1b[:noccb,:noccb] = dOO + dOO.conj().T
     dm1b[:noccb,noccb:] = dOV + dVO.conj().T
     dm1b[noccb:,:noccb] = dm1b[:noccb,noccb:].conj().T
@@ -377,8 +414,8 @@ def _make_rdm1(mycc, d1, with_frozen=True):
         nmob = mycc.mo_occ[1].size
         nocca = numpy.count_nonzero(mycc.mo_occ[0] > 0)
         noccb = numpy.count_nonzero(mycc.mo_occ[1] > 0)
-        rdm1a = numpy.zeros((nmoa,nmoa))
-        rdm1b = numpy.zeros((nmob,nmob))
+        rdm1a = numpy.zeros((nmoa,nmoa), dtype=dm1a.dtype)
+        rdm1b = numpy.zeros((nmob,nmob), dtype=dm1b.dtype)
         rdm1a[numpy.diag_indices(nocca)] = 1
         rdm1b[numpy.diag_indices(noccb)] = 1
         moidx = mycc.get_frozen_mask()
@@ -403,9 +440,9 @@ def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True):
     nmoa = nocca + nvira
     nmob = noccb + nvirb
 
-    dm2aa = numpy.empty((nmoa,nmoa,nmoa,nmoa))
-    dm2ab = numpy.empty((nmoa,nmoa,nmob,nmob))
-    dm2bb = numpy.empty((nmob,nmob,nmob,nmob))
+    dm2aa = numpy.empty((nmoa,nmoa,nmoa,nmoa), dtype=doovv.dtype)
+    dm2ab = numpy.empty((nmoa,nmoa,nmob,nmob), dtype=doovv.dtype)
+    dm2bb = numpy.empty((nmob,nmob,nmob,nmob), dtype=doovv.dtype)
 
 # dm2aa
     dovov = numpy.asarray(dovov)
@@ -413,6 +450,7 @@ def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True):
     dm2aa[nocca:,:nocca,nocca:,:nocca] = dm2aa[:nocca,nocca:,:nocca,nocca:].transpose(1,0,3,2).conj()
     dovov = None
 
+    #assert(abs(doovv+dovvo.transpose(0,3,2,1)).max() == 0)
     dovvo = numpy.asarray(dovvo)
     dm2aa[:nocca,:nocca,nocca:,nocca:] =-dovvo.transpose(0,3,2,1)
     dm2aa[nocca:,nocca:,:nocca,:nocca] = dm2aa[:nocca,:nocca,nocca:,nocca:].transpose(2,3,0,1)
@@ -420,6 +458,8 @@ def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True):
     dm2aa[nocca:,:nocca,:nocca,nocca:] = dm2aa[:nocca,nocca:,nocca:,:nocca].transpose(1,0,3,2).conj()
     dovvo = None
 
+    if len(dvvvv.shape) == 2:
+        dvvvv = ao2mo.restore(1, dvvvv, nvira)
     dm2aa[nocca:,nocca:,nocca:,nocca:] = dvvvv
     dm2aa[:nocca,:nocca,:nocca,:nocca] = doooo
 
@@ -450,6 +490,8 @@ def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True):
     dm2bb[noccb:,:noccb,:noccb,noccb:] = dm2bb[:noccb,noccb:,noccb:,:noccb].transpose(1,0,3,2).conj()
     dOVVO = None
 
+    if len(dVVVV.shape) == 2:
+        dVVVV = ao2mo.restore(1, dVVVV, nvirb)
     dm2bb[noccb:,noccb:,noccb:,noccb:] = dVVVV
     dm2bb[:noccb,:noccb,:noccb,:noccb] = dOOOO
 
@@ -480,6 +522,13 @@ def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True):
     dm2ab[nocca:,:nocca,:noccb,noccb:] = dovVO.transpose(1,0,3,2).conj()
     dovVO = None
 
+    if len(dvvVV.shape) == 2:
+        idxa = numpy.tril_indices(nvira)
+        dvvVV1 = lib.unpack_tril(dvvVV)
+        dvvVV = numpy.empty((nvira,nvira,nvirb,nvirb))
+        dvvVV[idxa] = dvvVV1
+        dvvVV[idxa[1],idxa[0]] = dvvVV1
+        dvvVV1 = None
     dm2ab[nocca:,nocca:,noccb:,noccb:] = dvvVV
     dm2ab[:nocca,:nocca,:noccb,:noccb] = dooOO
 
@@ -505,9 +554,9 @@ def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True):
         nocca = numpy.count_nonzero(mycc.mo_occ[0] > 0)
         noccb = numpy.count_nonzero(mycc.mo_occ[1] > 0)
 
-        rdm2aa = numpy.zeros((nmoa,nmoa,nmoa,nmoa))
-        rdm2ab = numpy.zeros((nmoa,nmoa,nmob,nmob))
-        rdm2bb = numpy.zeros((nmob,nmob,nmob,nmob))
+        rdm2aa = numpy.zeros((nmoa,nmoa,nmoa,nmoa), dtype=dm2aa.dtype)
+        rdm2ab = numpy.zeros((nmoa,nmoa,nmob,nmob), dtype=dm2ab.dtype)
+        rdm2bb = numpy.zeros((nmob,nmob,nmob,nmob), dtype=dm2bb.dtype)
         moidxa, moidxb = mycc.get_frozen_mask()
         moidxa = numpy.where(moidxa)[0]
         moidxb = numpy.where(moidxb)[0]
@@ -530,13 +579,13 @@ def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True):
             dm2aa[i,i,:,:] += dm1a
             dm2aa[:,:,i,i] += dm1a
             dm2aa[:,i,i,:] -= dm1a
-            dm2aa[i,:,:,i] -= dm1a
+            dm2aa[i,:,:,i] -= dm1a.conj()
             dm2ab[i,i,:,:] += dm1b
         for i in range(noccb):
             dm2bb[i,i,:,:] += dm1b
             dm2bb[:,:,i,i] += dm1b
             dm2bb[:,i,i,:] -= dm1b
-            dm2bb[i,:,:,i] -= dm1b
+            dm2bb[i,:,:,i] -= dm1b.conj()
             dm2ab[:,:,i,i] += dm1a
 
         for i in range(nocca):
@@ -551,6 +600,9 @@ def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True):
             for j in range(noccb):
                 dm2ab[i,i,j,j] += 1
 
+    dm2aa = dm2aa.transpose(1,0,3,2)
+    dm2ab = dm2ab.transpose(1,0,3,2)
+    dm2bb = dm2bb.transpose(1,0,3,2)
     return dm2aa, dm2ab, dm2bb
 
 
@@ -589,9 +641,9 @@ if __name__ == '__main__':
     h1b = reduce(numpy.dot, (mo_b.T.conj(), hcore, mo_b))
     e1 = numpy.einsum('ij,ji', h1a, dm1a)
     e1+= numpy.einsum('ij,ji', h1b, dm1b)
-    e1+= numpy.einsum('ijkl,jilk', eriaa, dm2aa) * .5
-    e1+= numpy.einsum('ijkl,jilk', eriab, dm2ab)
-    e1+= numpy.einsum('ijkl,jilk', eribb, dm2bb) * .5
+    e1+= numpy.einsum('ijkl,ijkl', eriaa, dm2aa) * .5
+    e1+= numpy.einsum('ijkl,ijkl', eriab, dm2ab)
+    e1+= numpy.einsum('ijkl,ijkl', eribb, dm2bb) * .5
     e1+= mol.energy_nuc()
     print(e1 - mycc.e_tot)
 
@@ -608,7 +660,7 @@ if __name__ == '__main__':
     mol.spin = 2
     mol.basis = '6-31g'
     mol.build()
-    mf = scf.UHF(mol).run(conv_tol=1e-14)
+    mf = scf.UHF(mol).run(init_guess='hcore', conv_tol=1.)
     ehf0 = mf.e_tot - mol.energy_nuc()
     mycc = uccsd.UCCSD(mf).run()
     mycc.solve_lambda()

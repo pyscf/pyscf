@@ -1,4 +1,18 @@
-/*
+/* Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+  
+   Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+ 
+        http://www.apache.org/licenses/LICENSE-2.0
+ 
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+ *
  * Author: Qiming Sun <osirpt.sun@gmail.com>
  */
 
@@ -16,8 +30,9 @@ void VXCnr_ao_screen(unsigned char *non0table, double *coords, int ngrids,
                      int *atm, int natm, int *bas, int nbas, double *env)
 {
         const int nblk = (ngrids+BLKSIZE-1) / BLKSIZE;
-        int ib, i, j;
-        int np, nc, atm_id, bas_id;
+        int i, j;
+        int np, nc, atm_id;
+        size_t bas_id, ib;
         double rr, arr, maxc;
         double logcoeff[NPRIMAX];
         double dr[3];
@@ -68,7 +83,7 @@ void VXCgen_grid(double *out, double *coords, double *atm_coords,
 {
         const size_t Ngrids = ngrids;
         int i, j;
-        double dx, dy, dz, dist;
+        double dx, dy, dz;
         double *atom_dist = malloc(sizeof(double) * natm*natm);
         for (i = 0; i < natm; i++) {
                 for (j = 0; j < i; j++) {

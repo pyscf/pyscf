@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -6,6 +19,7 @@
 '''
 Gaussian and planewaves mixed density fitting
 Ref:
+J. Chem. Phys. 147, 164119 (2017)
 '''
 
 import time
@@ -17,6 +31,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.df.outcore import _guess_shell_ranges
 from pyscf.pbc import tools
+from pyscf.pbc import gto
 from pyscf.pbc.df import outcore
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import df
@@ -26,6 +41,7 @@ from pyscf.pbc.df.df_jk import zdotNN, zdotCN, zdotNC
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, unique
 from pyscf.pbc.df import mdf_jk
 from pyscf.pbc.df import mdf_ao2mo
+from pyscf import __config__
 
 
 # kpti == kptj: s2 symmetry
@@ -35,7 +51,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
     log = logger.Logger(mydf.stdout, mydf.verbose)
     max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
     fused_cell, fuse = fuse_auxcell(mydf, auxcell)
-    outcore.aux_e2(cell, fused_cell, cderi_file, 'int3c2e_sph', aosym='s2',
+    outcore.aux_e2(cell, fused_cell, cderi_file, 'int3c2e', aosym='s2',
                    kptij_lst=kptij_lst, dataname='j3c', max_memory=max_memory)
     t1 = log.timer_debug1('3c2e', *t1)
 
@@ -54,7 +70,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
     log.debug('Num uniq kpts %d', len(uniq_kpts))
     log.debug2('uniq_kpts %s', uniq_kpts)
     # j2c ~ (-kpt_ji | kpt_ji)
-    j2c = fused_cell.pbc_intor('int2c2e_sph', hermi=1, kpts=uniq_kpts)
+    j2c = fused_cell.pbc_intor('int2c2e', hermi=1, kpts=uniq_kpts)
     feri = h5py.File(cderi_file)
 
     for k, kpt in enumerate(uniq_kpts):
@@ -116,7 +132,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
             nao_pair = nao*(nao+1)//2
 
             vbar = fuse(mydf.auxbar(fused_cell))
-            ovlp = cell.pbc_intor('int1e_ovlp_sph', hermi=1, kpts=adapted_kptjs)
+            ovlp = cell.pbc_intor('int1e_ovlp', hermi=1, kpts=adapted_kptjs)
             for k, ji in enumerate(adapted_ji_idx):
                 ovlp[k] = lib.pack_tril(ovlp[k])
         else:
@@ -151,7 +167,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
             j3cI = []
             for k, idx in enumerate(adapted_ji_idx):
                 v = fuse(numpy.asarray(feri['j3c/%d'%idx][:,col0:col1]))
-                if is_zero(kpt):
+                if is_zero(kpt) and cell.dimension == 3:
                     for i, c in enumerate(vbar):
                         if c != 0:
                             v[i] -= c * ovlp[k][col0:col1]
@@ -162,7 +178,10 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
                     j3cI.append(numpy.asarray(v.imag, order='C'))
                 v = None
 
-            shls_slice = (bstart, bend, 0, bend)
+            if aosym == 's2':
+                shls_slice = (bstart, bend, 0, bend)
+            else:
+                shls_slice = (bstart, bend, 0, cell.nbas)
             for p0, p1 in lib.prange(0, ngrids, Gblksize):
                 dat = ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
                                             b, gxyz[p0:p1], Gvbase, kpt,
@@ -204,6 +223,36 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
     feri.close()
 
 
+# valence_exp = 1. is the Gaussian typicall sits in valence
+VALENCE_EXP = getattr(__config__, 'pbc_df_mdf_valence_exp', 1.0)
+def _mesh_for_valence(cell, valence_exp=VALENCE_EXP):
+    '''Energy cutoff estimation'''
+    b = cell.reciprocal_vectors()
+    if cell.dimension == 0:
+        w = 1
+    elif cell.dimension == 1:
+        w = numpy.linalg.norm(b[0]) / (2*numpy.pi)
+    elif cell.dimension == 2:
+        w = numpy.linalg.norm(numpy.cross(b[0], b[1])) / (2*numpy.pi)**2
+    else:
+        w = abs(numpy.linalg.det(b)) / (2*numpy.pi)**3
+
+    precision = cell.precision * 10
+    Ecut_max = 0
+    for i in range(cell.nbas):
+        l = cell.bas_angular(i)
+        es = cell.bas_exp(i).copy()
+        es[es>valence_exp] = valence_exp
+        cs = abs(cell.bas_ctr_coeff(i)).max(axis=1)
+        ke_guess = gto.cell._estimate_ke_cutoff(es, l, cs, precision, w)
+        Ecut_max = max(Ecut_max, ke_guess.max())
+    mesh = tools.cutoff_to_mesh(cell.lattice_vectors(), Ecut_max)
+    mesh = numpy.min((mesh, cell.mesh), axis=0)
+    mesh[cell.dimension:] = cell.mesh[cell.dimension:]
+    return mesh
+del(VALENCE_EXP)
+
+
 class MDF(df.DF):
     '''Gaussian and planewaves mixed density fitting
     '''
@@ -216,13 +265,13 @@ class MDF(df.DF):
         self.kpts = kpts  # default is gamma point
         self.kpts_band = None
         self._auxbasis = None
-        self.mesh = cell.mesh
+        self.mesh = _mesh_for_valence(cell)
         self.eta = None
 
 # Not input options
         self.exxdiv = None  # to mimic KRHF/KUHF object in function get_coulG
         self.auxcell = None
-        self.blockdim = 240
+        self.blockdim = getattr(__config__, 'df_df_DF_blockdim', 240)
         self.linear_dep_threshold = df.LINEAR_DEP_THR
         self._j_only = False
 # If _cderi_to_save is specified, the 3C-integral tensor will be saved in this file.

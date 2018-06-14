@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -35,7 +48,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     # ndim = 3 : dm.shape = ([alpha,beta], nao, nao)
     ground_state = (dm.ndim == 3 and dm.shape[0] == 2 and kpts_band is None)
 
-    if ks.grids.coords is None:
+    if ks.grids.non0tab is None:
         ks.grids.build(with_non0tab=True)
         if ks.small_rho_cutoff > 1e-20 and ground_state:
             ks.grids = rks.prune_small_rho_grids_(ks, cell, dm[0]+dm[1],
@@ -86,13 +99,7 @@ class UKS(pbcuhf.UHF):
     '''
     def __init__(self, cell, kpt=numpy.zeros(3)):
         pbcuhf.UHF.__init__(self, cell, kpt)
-        self.xc = 'LDA,VWN'
-        self.grids = gen_grid.UniformGrids(cell)
-        self.small_rho_cutoff = 1e-7  # Use rho to filter grids
-##################################################
-# don't modify the following attributes, they are not input options
-        self._numint = numint._NumInt()
-        self._keys = self._keys.union(['xc', 'grids', 'small_rho_cutoff'])
+        rks._dft_common_init_(self)
 
     def dump_flags(self):
         pbcuhf.UHF.dump_flags(self)

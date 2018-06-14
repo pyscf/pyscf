@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 import unittest
 import numpy
@@ -154,7 +167,7 @@ class KnowValues(unittest.TestCase):
         ref = ref.reshape(3,nao,nao,-1).transpose(0,3,1,2) * (cell1.vol/ngrids)
         self.assertAlmostEqual(abs(ref-dat).max(), 0, 7)
 
-    def test_ft_aoao_with_kpts(self):
+    def test_ft_aoao_with_kpts_high_cost(self):
         numpy.random.seed(1)
         kpti, kptj = numpy.random.random((2,3))
         dat = ft_ao.ft_aopair(cell, cell.Gv, kpti_kptj=(kpti,kptj))
@@ -174,6 +187,9 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(numpy.linalg.norm(ref[:,0,2:]-dat[:,0,2:])  , 0, 9)
         self.assertAlmostEqual(numpy.linalg.norm(ref[:,2:,0]-dat[:,2:,0])  , 0, 9)
 
+    def test_ft_aoao_pair_vs_fft(self):
+        numpy.random.seed(1)
+        kpti, kptj = numpy.random.random((2,3))
         coords = pdft.gen_grid.gen_uniform_grids(cell1)
         aoi = pdft.numint.eval_ao(cell1, coords, kpt=kpti)
         aoj = pdft.numint.eval_ao(cell1, coords, kpt=kptj)

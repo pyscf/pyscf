@@ -1,18 +1,39 @@
+#!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Author: Timothy Berkelbach <tim.berkelbach@gmail.com>
+#
+
 '''
 UCCSD with spatial integrals
 '''
 
 import time
 from functools import reduce
-import numpy
 import numpy as np
 
 from pyscf import lib
 from pyscf import ao2mo
 from pyscf.lib import logger
 from pyscf.cc import ccsd
+from pyscf.cc import rccsd
 from pyscf.ao2mo import _ao2mo
 from pyscf.mp import ump2
+from pyscf import __config__
+
+MEMORYMIN = getattr(__config__, 'cc_ccsd_memorymin', 2000)
 
 # This is unrestricted (U)CCSD, in spatial-orbital form.
 
@@ -43,28 +64,28 @@ def update_amps(cc, t1, t2, eris):
     u2aa *= .5
     u2bb *= .5
 
-    Fooa  = fooa - np.diag(np.diag(fooa))
-    Foob  = foob - np.diag(np.diag(foob))
-    Fvva  = fvva - np.diag(np.diag(fvva))
-    Fvvb  = fvvb - np.diag(np.diag(fvvb))
-    Fooa += .5 * lib.einsum('me,ie->mi', fova, t1a)
-    Foob += .5 * lib.einsum('me,ie->mi', fovb, t1b)
-    Fvva -= .5 * lib.einsum('me,ma->ae', fova, t1a)
-    Fvvb -= .5 * lib.einsum('me,ma->ae', fovb, t1b)
-    wovvo = np.zeros((nocca,nvira,nvira,nocca))
-    wOVVO = np.zeros((noccb,nvirb,nvirb,noccb))
-    woVvO = np.zeros((nocca,nvirb,nvira,noccb))
-    woVVo = np.zeros((nocca,nvirb,nvirb,nocca))
-    wOvVo = np.zeros((noccb,nvira,nvirb,nocca))
-    wOvvO = np.zeros((noccb,nvira,nvira,noccb))
+    Fooa =  .5 * lib.einsum('me,ie->mi', fova, t1a)
+    Foob =  .5 * lib.einsum('me,ie->mi', fovb, t1b)
+    Fvva = -.5 * lib.einsum('me,ma->ae', fova, t1a)
+    Fvvb = -.5 * lib.einsum('me,ma->ae', fovb, t1b)
+    Fooa += fooa - np.diag(np.diag(fooa))
+    Foob += foob - np.diag(np.diag(foob))
+    Fvva += fvva - np.diag(np.diag(fvva))
+    Fvvb += fvvb - np.diag(np.diag(fvvb))
+    dtype = u2aa.dtype
+    wovvo = np.zeros((nocca,nvira,nvira,nocca), dtype=dtype)
+    wOVVO = np.zeros((noccb,nvirb,nvirb,noccb), dtype=dtype)
+    woVvO = np.zeros((nocca,nvirb,nvira,noccb), dtype=dtype)
+    woVVo = np.zeros((nocca,nvirb,nvirb,nocca), dtype=dtype)
+    wOvVo = np.zeros((noccb,nvira,nvirb,nocca), dtype=dtype)
+    wOvvO = np.zeros((noccb,nvira,nvira,noccb), dtype=dtype)
 
     mem_now = lib.current_memory()[0]
-    max_memory = max(0, lib.param.MAX_MEMORY - mem_now)
+    max_memory = max(0, cc.max_memory - mem_now)
     if nvira > 0 and nocca > 0:
-        blksize = max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvira**3*3)))
+        blksize = max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvira**3*3+1)))
         for p0,p1 in lib.prange(0, nocca, blksize):
-            ovvv = np.asarray(eris.ovvv[p0:p1]).reshape((p1-p0)*nvira,-1)
-            ovvv = lib.unpack_tril(ovvv).reshape(-1,nvira,nvira,nvira)
+            ovvv = eris.get_ovvv(slice(p0,p1))  # ovvv = eris.ovvv[p0:p1]
             ovvv = ovvv - ovvv.transpose(0,3,2,1)
             Fvva += np.einsum('mf,mfae->ae', t1a[p0:p1], ovvv)
             wovvo[p0:p1] += lib.einsum('jf,mebf->mbej', t1a, ovvv)
@@ -75,10 +96,9 @@ def update_amps(cc, t1, t2, eris):
             ovvv = tmp1aa = None
 
     if nvirb > 0 and noccb > 0:
-        blksize = max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvirb**3*3)))
+        blksize = max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvirb**3*3+1)))
         for p0,p1 in lib.prange(0, noccb, blksize):
-            OVVV = np.asarray(eris.OVVV[p0:p1]).reshape((p1-p0)*nvirb,-1)
-            OVVV = lib.unpack_tril(OVVV).reshape(-1,nvirb,nvirb,nvirb)
+            OVVV = eris.get_OVVV(slice(p0,p1))  # OVVV = eris.OVVV[p0:p1]
             OVVV = OVVV - OVVV.transpose(0,3,2,1)
             Fvvb += np.einsum('mf,mfae->ae', t1b[p0:p1], OVVV)
             wOVVO[p0:p1] = lib.einsum('jf,mebf->mbej', t1b, OVVV)
@@ -89,10 +109,9 @@ def update_amps(cc, t1, t2, eris):
             OVVV = tmp1bb = None
 
     if nvirb > 0 and nocca > 0:
-        blksize = max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvira*nvirb**2*3)))
+        blksize = max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvira*nvirb**2*3+1)))
         for p0,p1 in lib.prange(0, nocca, blksize):
-            ovVV = np.asarray(eris.ovVV[p0:p1]).reshape((p1-p0)*nvira,-1)
-            ovVV = lib.unpack_tril(ovVV).reshape(-1,nvira,nvirb,nvirb)
+            ovVV = eris.get_ovVV(slice(p0,p1))  # ovVV = eris.ovVV[p0:p1]
             Fvvb += np.einsum('mf,mfAE->AE', t1a[p0:p1], ovVV)
             woVvO[p0:p1] = lib.einsum('JF,meBF->mBeJ', t1b, ovVV)
             woVVo[p0:p1] = lib.einsum('jf,mfBE->mBEj',-t1a, ovVV)
@@ -103,10 +122,9 @@ def update_amps(cc, t1, t2, eris):
             ovVV = tmp1ab = None
 
     if nvira > 0 and noccb > 0:
-        blksize = max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvirb*nocca**2*3)))
+        blksize = max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvirb*nvira**2*3+1)))
         for p0,p1 in lib.prange(0, noccb, blksize):
-            OVvv = np.asarray(eris.OVvv[p0:p1]).reshape((p1-p0)*nvirb,-1)
-            OVvv = lib.unpack_tril(OVvv).reshape(-1,nvirb,nvira,nvira)
+            OVvv = eris.get_OVvv(slice(p0,p1))  # OVvv = eris.OVvv[p0:p1]
             Fvva += np.einsum('MF,MFae->ae', t1b[p0:p1], OVvv)
             wOvVo[p0:p1] = lib.einsum('jf,MEbf->MbEj', t1a, OVvv)
             wOvvO[p0:p1] = lib.einsum('JF,MFbe->MbeJ',-t1b, OVvv)
@@ -288,10 +306,10 @@ def update_amps(cc, t1, t2, eris):
     u2ab -= lib.einsum('iMaB,MJ->iJaB', t2ab, Ftmpb)
     u2ab -= lib.einsum('mIaB,mj->jIaB', t2ab, Ftmpa)
 
-    eris_ovoo = numpy.asarray(eris.ovoo)
-    eris_OVOO = numpy.asarray(eris.OVOO)
-    eris_OVoo = numpy.asarray(eris.OVoo)
-    eris_ovOO = numpy.asarray(eris.ovOO)
+    eris_ovoo = np.asarray(eris.ovoo).conj()
+    eris_OVOO = np.asarray(eris.OVOO).conj()
+    eris_OVoo = np.asarray(eris.OVoo).conj()
+    eris_ovOO = np.asarray(eris.ovOO).conj()
     ovoo = eris_ovoo - eris_ovoo.transpose(2,1,0,3)
     OVOO = eris_OVOO - eris_OVOO.transpose(2,1,0,3)
     u2aa -= lib.einsum('ma,jbim->ijab', t1a, ovoo)
@@ -322,7 +340,12 @@ def update_amps(cc, t1, t2, eris):
     return t1new, t2new
 
 
-def energy(cc, t1, t2, eris):
+def energy(cc, t1=None, t2=None, eris=None):
+    '''UCCSD correlation energy'''
+    if t1 is None: t1 = cc.t1
+    if t2 is None: t2 = cc.t2
+    if eris is None: eris = cc.ao2mo()
+
     t1a, t1b = t1
     t2aa, t2ab, t2bb = t2
     nocca, noccb, nvira, nvirb = t2ab.shape
@@ -343,6 +366,8 @@ def energy(cc, t1, t2, eris):
     e += 0.5*np.einsum('ia,jb,iajb',t1b,t1b,eris_OVOV)
     e -= 0.5*np.einsum('ia,jb,ibja',t1b,t1b,eris_OVOV)
     e +=     np.einsum('ia,jb,iajb',t1a,t1b,eris_ovOV)
+    if abs(e.imag) > 1e-4:
+        logger.warn(cc, 'Non-zero imaginary part found in UCCSD energy %s', e)
     return e.real
 
 
@@ -372,7 +397,8 @@ def vector_to_amplitudes(vector, nmo, nocc):
     nov = nocc * nvir
     size = nov + nocc*(nocc-1)//2*nvir*(nvir-1)//2
     if vector.size == size:
-        return ccsd.vector_to_amplitudes_s4(vector, nmo, nocc)
+        #return ccsd.vector_to_amplitudes_s4(vector, nmo, nocc)
+        raise RuntimeError('Input vector is GCCSD vecotr')
     else:
         size = vector.size
         sizea = nocca * nvira + nocca*(nocca-1)//2*nvira*(nvira-1)//2
@@ -389,7 +415,7 @@ def amplitudes_from_rccsd(t1, t2):
 
 
 def _add_vvVV(mycc, t1, t2ab, eris, out=None):
-    '''Ht2 = np.einsum('ijcd,acdb->ijab', t2ab, vvvv)
+    '''Ht2 = np.einsum('iJcD,acBD->iJaB', t2ab, vvVV)
     without using symmetry in t2ab or Ht2
     '''
     time0 = time.clock(), time.time()
@@ -402,24 +428,28 @@ def _add_vvVV(mycc, t1, t2ab, eris, out=None):
     nocca, noccb, nvira, nvirb = t2ab.shape
 
     if mycc.direct:  # AO direct CCSD
-        if hasattr(eris, 'mo_coeff'):
+        if hasattr(eris, 'mo_coeff') and eris.mo_coeff is not None:
             mo_a, mo_b = eris.mo_coeff
         else:
             moidxa, moidxb = mycc.get_frozen_mask()
             mo_a = mycc.mo_coeff[0][:,moidxa]
             mo_b = mycc.mo_coeff[1][:,moidxb]
-        tau = lib.einsum('ijab,pa->ijpb', t2ab, mo_a[:,nocca:])
-        tau = lib.einsum('ijab,pb->ijap', tau, mo_b[:,noccb:])
+        # Note tensor t2ab may be t2bbab from eom_uccsd code.  In that
+        # particular case, nocca, noccb do not equal to the actual number of
+        # alpha/beta occupied orbitals. orbva and orbvb cannot be indexed as
+        # mo_a[:,nocca:] and mo_b[:,noccb:]
+        orbva = mo_a[:,-nvira:]
+        orbvb = mo_b[:,-nvirb:]
+        tau = lib.einsum('ijab,pa->ijpb', t2ab, orbva)
+        tau = lib.einsum('ijab,pb->ijap', tau, orbvb)
         time0 = logger.timer_debug1(mycc, 'vvvv-tau mo2ao', *time0)
-        max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
-        buf = eris._contract_vvvv_t2(tau, mycc.direct, out, max_memory, log)
-        mo = np.asarray(np.hstack((mo_a[:,nocca:], mo_b[:,noccb:])), order='F')
-        Ht2 = _ao2mo.nr_e2(buf.reshape(nocca*noccb,-1), mo,
+        buf = eris._contract_vvVV_t2(mycc, tau, mycc.direct, out, log)
+        mo = np.asarray(np.hstack((orbva, orbvb)), order='F')
+        Ht2 = _ao2mo.nr_e2(buf.reshape(nocca*noccb,-1), mo.conj(),
                            (0,nvira,nvira,nvira+nvirb), 's1', 's1')
         return Ht2.reshape(t2ab.shape)
     else:
-        max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
-        return eris._contract_vvvv_t2(t2ab, mycc.direct, out, max_memory, log)
+        return eris._contract_vvVV_t2(mycc, t2ab, mycc.direct, out, log)
 
 def _add_vvvv(mycc, t1, t2, eris, out=None, with_ovvv=False, t2sym=None):
     time0 = time.clock(), time.time()
@@ -432,49 +462,50 @@ def _add_vvvv(mycc, t1, t2, eris, out=None, with_ovvv=False, t2sym=None):
     noccb, nvirb = t2bb.shape[1:3]
 
     if mycc.direct:
-        assert(not with_ovvv)
-        if hasattr(eris, 'mo_coeff'):
+        assert(t2sym is None)
+        if with_ovvv:
+            raise NotImplementedError
+        if hasattr(eris, 'mo_coeff') and eris.mo_coeff is not None:
             mo_a, mo_b = eris.mo_coeff
         else:
             moidxa, moidxb = mycc.get_frozen_mask()
             mo_a = mycc.mo_coeff[0][:,moidxa]
             mo_b = mycc.mo_coeff[1][:,moidxb]
         nao = mo_a.shape[0]
-        otrila = numpy.tril_indices(nocca,-1)
-        otrilb = numpy.tril_indices(noccb,-1)
+        otrila = np.tril_indices(nocca,-1)
+        otrilb = np.tril_indices(noccb,-1)
         if nocca > 1:
             tauaa = lib.einsum('xab,pa->xpb', t2aa[otrila], mo_a[:,nocca:])
             tauaa = lib.einsum('xab,pb->xap', tauaa, mo_a[:,nocca:])
         else:
-            tauaa = numpy.zeros((0,nao,nao))
+            tauaa = np.zeros((0,nao,nao))
         if noccb > 1:
             taubb = lib.einsum('xab,pa->xpb', t2bb[otrilb], mo_b[:,noccb:])
             taubb = lib.einsum('xab,pb->xap', taubb, mo_b[:,noccb:])
         else:
-            taubb = numpy.zeros((0,nao,nao))
+            taubb = np.zeros((0,nao,nao))
         tauab = lib.einsum('ijab,pa->ijpb', t2ab, mo_a[:,nocca:])
         tauab = lib.einsum('ijab,pb->ijap', tauab, mo_b[:,noccb:])
-        tau = numpy.vstack((tauaa, taubb, tauab.reshape(nocca*noccb,nao,nao)))
+        tau = np.vstack((tauaa, taubb, tauab.reshape(nocca*noccb,nao,nao)))
         tauaa = taubb = tauab = None
         time0 = log.timer_debug1('vvvv-tau', *time0)
 
-        max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
-        buf = eris._contract_vvvv_t2(tau, mycc.direct, out, max_memory, log)
+        buf = ccsd._contract_vvvv_t2(mycc, mycc.mol, None, tau, out, log)
 
         mo = np.asarray(np.hstack((mo_a[:,nocca:], mo_b[:,noccb:])), order='F')
-        u2aa = numpy.zeros_like(t2aa)
+        u2aa = np.zeros_like(t2aa)
         if nocca > 1:
             u2tril = buf[:otrila[0].size]
-            u2tril = _ao2mo.nr_e2(u2tril.reshape(-1,nao**2), mo,
+            u2tril = _ao2mo.nr_e2(u2tril.reshape(-1,nao**2), mo.conj(),
                                   (0,nvira,0,nvira), 's1', 's1')
             u2tril = u2tril.reshape(otrila[0].size,nvira,nvira)
             u2aa[otrila[1],otrila[0]] = u2tril.transpose(0,2,1)
             u2aa[otrila] = u2tril
 
-        u2bb = numpy.zeros_like(t2bb)
+        u2bb = np.zeros_like(t2bb)
         if noccb > 1:
             u2tril = buf[otrila[0].size:otrila[0].size+otrilb[0].size]
-            u2tril = _ao2mo.nr_e2(u2tril.reshape(-1,nao**2), mo,
+            u2tril = _ao2mo.nr_e2(u2tril.reshape(-1,nao**2), mo.conj(),
                                   (nvira,nvira+nvirb,nvira,nvira+nvirb), 's1', 's1')
             u2tril = u2tril.reshape(otrilb[0].size,nvirb,nvirb)
             u2bb[otrilb[1],otrilb[0]] = u2tril.transpose(0,2,1)
@@ -485,35 +516,44 @@ def _add_vvvv(mycc, t1, t2, eris, out=None, with_ovvv=False, t2sym=None):
         u2ab = u2ab.reshape(t2ab.shape)
 
     else:
-        u2aa = ccsd._add_vvvv(mycc, None, t2aa, eris, None, with_ovvv, 'jiba')
-        fakeri = ccsd._ChemistsERIs()
-        fakeri.mo_coeff = eris.mo_coeff[1]
-        fakeri.vvvv = eris.VVVV
-        u2bb = ccsd._add_vvvv(mycc, None, t2bb, fakeri, None, with_ovvv, 'jiba')
-        fakeri.vvvv = eris.vvVV
-        fakeri.mol = eris.mol
-        u2ab = ccsd._add_vvvv(mycc, None, t2ab, fakeri, None, with_ovvv, False)
+        assert(not with_ovvv)
+        if t2sym is None:
+            tmp = eris._contract_vvvv_t2(mycc, t2aa[np.tril_indices(nocca)],
+                                         mycc.direct, None)
+            u2aa = ccsd._unpack_t2_tril(tmp, nocca, nvira, None, 'jiba')
+            tmp = eris._contract_VVVV_t2(mycc, t2bb[np.tril_indices(noccb)],
+                                         mycc.direct, None)
+            u2bb = ccsd._unpack_t2_tril(tmp, noccb, nvirb, None, 'jiba')
+            u2ab = eris._contract_vvVV_t2(mycc, t2ab, mycc.direct, None)
+        else:
+            u2aa = eris._contract_vvvv_t2(mycc, t2aa, mycc.direct, None)
+            u2bb = eris._contract_VVVV_t2(mycc, t2bb, mycc.direct, None)
+            u2ab = eris._contract_vvVV_t2(mycc, t2ab, mycc.direct, None)
 
     return u2aa,u2ab,u2bb
 
 
 class UCCSD(ccsd.CCSD):
-# argument frozen can be
+
+    conv_tol = getattr(__config__, 'cc_uccsd_UCCSD_conv_tol', 1e-7)
+    conv_tol_normt = getattr(__config__, 'cc_uccsd_UCCSD_conv_tol_normt', 1e-6)
+
+# Attribute frozen can be
 # * An integer : The same number of inner-most alpha and beta orbitals are frozen
 # * One list : Same alpha and beta orbital indices to be frozen
 # * A pair of list : First list is the orbital indices to be frozen for alpha
 #       orbitals, second list is for beta orbitals
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
         ccsd.CCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
-        # Spin-orbital CCSD needs a stricter tolerance than spatial-orbital
-        self.conv_tol_normt = 1e-6
 
     get_nocc = get_nocc
     get_nmo = get_nmo
     get_frozen_mask = get_frozen_mask
 
-    def init_amps(self, eris):
+    def init_amps(self, eris=None):
         time0 = time.clock(), time.time()
+        if eris is None:
+            eris = self.ao2mo(self.mo_coeff)
         nocca, noccb = self.nocc
 
         fooa = eris.focka[:nocca,:nocca]
@@ -563,10 +603,10 @@ class UCCSD(ccsd.CCSD):
         if mbpt2:
             pt = ump2.UMP2(self._scf, self.frozen, self.mo_coeff, self.mo_occ)
             self.e_corr, self.t2 = pt.kernel(eris=eris)
-            nocca, nvira = self.nocc
-            nmoa, nmoa = self.nmo
+            nocca, noccb = self.nocc
+            nmoa, nmob = self.nmo
             nvira, nvirb = nmoa-nocca, nmob-noccb
-            self.t1 = (numpy.zeros((nocca,nvira)), numpy.zeros((noccb,nvirb)))
+            self.t1 = (np.zeros((nocca,nvira)), np.zeros((noccb,nvirb)))
             return self.e_corr, self.t1, self.t2
 
         if eris is None: eris = self.ao2mo(self.mo_coeff)
@@ -626,7 +666,7 @@ class UCCSD(ccsd.CCSD):
         mem_incore = (max(nao_pair**2, nmoa**4) + nmo_pair**2) * 8/1e6
         mem_now = lib.current_memory()[0]
         if (self._scf._eri is not None and
-            (mem_incore+mem_now < self.max_memory) or self.mol.incore_anyway):
+            (mem_incore+mem_now < self.max_memory or self.incore_complete)):
             return _make_eris_incore(self, mo_coeff)
 
         elif hasattr(self._scf, 'with_df'):
@@ -655,9 +695,32 @@ class UCCSD(ccsd.CCSD):
         from pyscf.cc import eom_uccsd
         return eom_uccsd.EOMEE(self).kernel(nroots, koopmans, guess, eris)
 
+    def eomee_ccsd(self, nroots=1, koopmans=False, guess=None, eris=None):
+        from pyscf.cc import eom_uccsd
+        return eom_uccsd.EOMEESpinKeep(self).kernel(nroots, koopmans, guess, eris)
+
+    def eomsf_ccsd(self, nroots=1, koopmans=False, guess=None, eris=None):
+        from pyscf.cc import eom_uccsd
+        return eom_uccsd.EOMEESpinFlip(self).kernel(nroots, koopmans, guess, eris)
+
+    def eomip_method(self):
+        from pyscf.cc import eom_uccsd
+        return eom_uccsd.EOMIP(self)
+
+    def eomea_method(self):
+        from pyscf.cc import eom_uccsd
+        return eom_uccsd.EOMEA(self)
+
+    def eomee_method(self):
+        from pyscf.cc import eom_uccsd
+        return eom_uccsd.EOMEE(self)
+
+    def density_fit(self):
+        raise NotImplementedError
+
     def nuc_grad_method(self):
-        from pyscf.cc import uccsd_grad
-        return uccsd_grad.Gradients(self)
+        from pyscf.grad import uccsd
+        return uccsd.Gradients(self)
 
     def amplitudes_to_vector(self, t1, t2, out=None):
         return amplitudes_to_vector(t1, t2, out)
@@ -672,10 +735,8 @@ class UCCSD(ccsd.CCSD):
 
 
 class _ChemistsERIs(ccsd._ChemistsERIs):
-    def __init__(self):
-        ccsd._ChemistsERIs.__init__(self)
-
-        self.vvvv = None
+    def __init__(self, mol=None):
+        ccsd._ChemistsERIs.__init__(self, mol)
         self.OOOO = None
         self.OVOO = None
         self.OVOV = None
@@ -705,14 +766,72 @@ class _ChemistsERIs(ccsd._ChemistsERIs):
 # Note: Recomputed fock matrix since SCF may not be fully converged.
         dm = mycc._scf.make_rdm1(mycc.mo_coeff, mycc.mo_occ)
         fockao = mycc._scf.get_hcore() + mycc._scf.get_veff(mycc.mol, dm)
-        self.focka = reduce(numpy.dot, (mo_coeff[0].T, fockao[0], mo_coeff[0]))
-        self.fockb = reduce(numpy.dot, (mo_coeff[1].T, fockao[1], mo_coeff[1]))
+        self.focka = reduce(np.dot, (mo_coeff[0].conj().T, fockao[0], mo_coeff[0]))
+        self.fockb = reduce(np.dot, (mo_coeff[1].conj().T, fockao[1], mo_coeff[1]))
         self.fock = (self.focka, self.fockb)
         self.nocc = mycc.nocc
         self.nocca, self.noccb = self.nocc
         self.mol = mycc.mol
+
+        mo_ea = self.focka.diagonal()
+        mo_eb = self.fockb.diagonal()
+        gap_a = abs(mo_ea[:self.nocca,None] - mo_ea[None,self.nocca:])
+        gap_b = abs(mo_eb[:self.noccb,None] - mo_eb[None,self.noccb:])
+        if gap_a.size > 0:
+            gap_a = gap_a.min()
+        else:
+            gap_a = 1e9
+        if gap_b.size > 0:
+            gap_b = gap_b.min()
+        else:
+            gap_b = 1e9
+        if gap_a < 1e-5 or gap_b < 1e-5:
+            logger.warn(mycc, 'HOMO-LUMO gap (%s,%s) too small for UCCSD',
+                        gap_a, gap_b)
         return self
 
+    def get_ovvv(self, *slices):
+        return _get_ovvv_base(self.ovvv, *slices)
+
+    def get_ovVV(self, *slices):
+        return _get_ovvv_base(self.ovVV, *slices)
+
+    def get_OVvv(self, *slices):
+        return _get_ovvv_base(self.OVvv, *slices)
+
+    def get_OVVV(self, *slices):
+        return _get_ovvv_base(self.OVVV, *slices)
+
+    def _contract_VVVV_t2(self, mycc, t2, vvvv_or_direct=False, out=None, verbose=None):
+        if isinstance(vvvv_or_direct, np.ndarray):
+            vvvv = vvvv_or_direct
+        elif vvvv_or_direct:
+            vvvv = None
+        else:
+            vvvv = self.VVVV
+        return ccsd._contract_vvvv_t2(mycc, self.mol, vvvv, t2, out, verbose)
+
+    def _contract_vvVV_t2(self, mycc, t2, vvvv_or_direct=False, out=None, verbose=None):
+        if isinstance(vvvv_or_direct, np.ndarray):
+            vvvv = vvvv_or_direct
+        elif vvvv_or_direct:
+            vvvv = None
+        else:
+            vvvv = self.vvVV
+        return ccsd._contract_vvvv_t2(mycc, self.mol, vvvv, t2, out, verbose)
+
+def _get_ovvv_base(ovvv, *slices):
+    if len(ovvv.shape) == 3:  # DO NOT use .ndim here for h5py library
+                              # backward compatbility
+        ovw = np.asarray(ovvv[slices])
+        nocc, nvir, nvir_pair = ovw.shape
+        ovvv = lib.unpack_tril(ovw.reshape(nocc*nvir,nvir_pair))
+        nvir1 = ovvv.shape[2]
+        return ovvv.reshape(nocc,nvir,nvir1,nvir1)
+    elif slices:
+        return ovvv[slices]
+    else:
+        return ovvv
 
 def _make_eris_incore(mycc, mo_coeff=None, ao2mofn=None):
     cput0 = (time.clock(), time.time())
@@ -731,13 +850,12 @@ def _make_eris_incore(mycc, mo_coeff=None, ao2mofn=None):
     if callable(ao2mofn):
         eri_aa = ao2mofn(moa).reshape([nmoa]*4)
         eri_bb = ao2mofn(mob).reshape([nmob]*4)
-        eri_ab = ao2mofn((moa,moa,mob,mob)).reshape(nmoa,nmoa,nmob,nmob)
+        eri_ab = ao2mofn((moa,moa,mob,mob))
     else:
         eri_aa = ao2mo.restore(1, ao2mo.full(mycc._scf._eri, moa), nmoa)
         eri_bb = ao2mo.restore(1, ao2mo.full(mycc._scf._eri, mob), nmob)
         eri_ab = ao2mo.general(mycc._scf._eri, (moa,moa,mob,mob), compact=False)
-    eri_ba = lib.transpose(eri_ab)
-    assert(eri_aa.dtype == numpy.double)
+    eri_ba = eri_ab.reshape(nmoa,nmoa,nmob,nmob).transpose(2,3,0,1)
 
     eri_aa = eri_aa.reshape(nmoa,nmoa,nmoa,nmoa)
     eri_ab = eri_ab.reshape(nmoa,nmoa,nmob,nmob)
@@ -748,41 +866,51 @@ def _make_eris_incore(mycc, mo_coeff=None, ao2mofn=None):
     eris.ovov = eri_aa[:nocca,nocca:,:nocca,nocca:].copy()
     eris.oovv = eri_aa[:nocca,:nocca,nocca:,nocca:].copy()
     eris.ovvo = eri_aa[:nocca,nocca:,nocca:,:nocca].copy()
-    ovvv = eri_aa[:nocca,nocca:,nocca:,nocca:].reshape(nocca*nvira,nvira,nvira)
-    eris.ovvv = lib.pack_tril(ovvv).reshape(nocca,nvira,nvira*(nvira+1)//2)
-    ovvv = None
-    eris.vvvv = ao2mo.restore(4, eri_aa[nocca:,nocca:,nocca:,nocca:].copy(), nvira)
+    eris.ovvv = eri_aa[:nocca,nocca:,nocca:,nocca:].copy()
+    eris.vvvv = eri_aa[nocca:,nocca:,nocca:,nocca:].copy()
+
     eris.OOOO = eri_bb[:noccb,:noccb,:noccb,:noccb].copy()
     eris.OVOO = eri_bb[:noccb,noccb:,:noccb,:noccb].copy()
     eris.OVOV = eri_bb[:noccb,noccb:,:noccb,noccb:].copy()
     eris.OOVV = eri_bb[:noccb,:noccb,noccb:,noccb:].copy()
     eris.OVVO = eri_bb[:noccb,noccb:,noccb:,:noccb].copy()
-    OVVV = eri_bb[:noccb,noccb:,noccb:,noccb:].reshape(noccb*nvirb,nvirb,nvirb)
-    eris.OVVV = lib.pack_tril(OVVV).reshape(noccb,nvirb,nvirb*(nvirb+1)//2)
-    OVVV = None
-    eris.VVVV = ao2mo.restore(4, eri_bb[noccb:,noccb:,noccb:,noccb:].copy(), nvirb)
+    eris.OVVV = eri_bb[:noccb,noccb:,noccb:,noccb:].copy()
+    eris.VVVV = eri_bb[noccb:,noccb:,noccb:,noccb:].copy()
+
     eris.ooOO = eri_ab[:nocca,:nocca,:noccb,:noccb].copy()
     eris.ovOO = eri_ab[:nocca,nocca:,:noccb,:noccb].copy()
     eris.ovOV = eri_ab[:nocca,nocca:,:noccb,noccb:].copy()
     eris.ooVV = eri_ab[:nocca,:nocca,noccb:,noccb:].copy()
     eris.ovVO = eri_ab[:nocca,nocca:,noccb:,:noccb].copy()
-    ovVV = eri_ab[:nocca,nocca:,noccb:,noccb:].reshape(nocca*nvira,nvirb,nvirb)
-    eris.ovVV = lib.pack_tril(ovVV).reshape(nocca,nvira,nvirb*(nvirb+1)//2)
-    ovVV = None
-    vvVV = eri_ab[nocca:,nocca:,noccb:,noccb:].reshape(nvira**2,nvirb**2)
-    idxa = np.tril_indices(nvira)
-    idxb = np.tril_indices(nvirb)
-    eris.vvVV = lib.take_2d(vvVV, idxa[0]*nvira+idxa[1], idxb[0]*nvirb+idxb[1])
+    eris.ovVV = eri_ab[:nocca,nocca:,noccb:,noccb:].copy()
+    eris.vvVV = eri_ab[nocca:,nocca:,noccb:,noccb:].copy()
+
     #eris.OOoo = eri_ba[:noccb,:noccb,:nocca,:nocca].copy()
     eris.OVoo = eri_ba[:noccb,noccb:,:nocca,:nocca].copy()
     #eris.OVov = eri_ba[:noccb,noccb:,:nocca,nocca:].copy()
     eris.OOvv = eri_ba[:noccb,:noccb,nocca:,nocca:].copy()
     eris.OVvo = eri_ba[:noccb,noccb:,nocca:,:nocca].copy()
-    #eris.OVvv = eri_ba[:noccb,noccb:,nocca:,nocca:].copy()
-    OVvv = eri_ba[:noccb,noccb:,nocca:,nocca:].reshape(noccb*nvirb,nvira,nvira)
-    eris.OVvv = lib.pack_tril(OVvv).reshape(noccb,nvirb,nvira*(nvira+1)//2)
-    OVvv = None
+    eris.OVvv = eri_ba[:noccb,noccb:,nocca:,nocca:].copy()
     #eris.VVvv = eri_ba[noccb:,noccb:,nocca:,nocca:].copy()
+
+    if not callable(ao2mofn):
+        ovvv = eris.ovvv.reshape(nocca*nvira,nvira,nvira)
+        eris.ovvv = lib.pack_tril(ovvv).reshape(nocca,nvira,nvira*(nvira+1)//2)
+        eris.vvvv = ao2mo.restore(4, eris.vvvv, nvira)
+
+        OVVV = eris.OVVV.reshape(noccb*nvirb,nvirb,nvirb)
+        eris.OVVV = lib.pack_tril(OVVV).reshape(noccb,nvirb,nvirb*(nvirb+1)//2)
+        eris.VVVV = ao2mo.restore(4, eris.VVVV, nvirb)
+
+        ovVV = eris.ovVV.reshape(nocca*nvira,nvirb,nvirb)
+        eris.ovVV = lib.pack_tril(ovVV).reshape(nocca,nvira,nvirb*(nvirb+1)//2)
+        vvVV = eris.vvVV.reshape(nvira**2,nvirb**2)
+        idxa = np.tril_indices(nvira)
+        idxb = np.tril_indices(nvirb)
+        eris.vvVV = lib.take_2d(vvVV, idxa[0]*nvira+idxa[1], idxb[0]*nvirb+idxb[1])
+
+        OVvv = eris.OVvv.reshape(noccb*nvirb,nvira,nvira)
+        eris.OVvv = lib.pack_tril(OVvv).reshape(noccb,nvirb,nvira*(nvira+1)//2)
     return eris
 
 def _make_eris_outcore(mycc, mo_coeff=None):
@@ -834,51 +962,55 @@ def _make_eris_outcore(mycc, mo_coeff=None):
     mol = mycc.mol
     # <ij||pq> = <ij|pq> - <ij|qp> = (ip|jq) - (iq|jp)
     tmpf = lib.H5TmpFile()
-    ao2mo.general(mol, (orboa,moa,moa,moa), tmpf, 'aa')
-    buf = numpy.empty((nmoa,nmoa,nmoa))
-    for i in range(nocca):
-        lib.unpack_tril(tmpf['aa'][i*nmoa:(i+1)*nmoa], out=buf)
-        eris.oooo[i] = buf[:nocca,:nocca,:nocca]
-        eris.ovoo[i] = buf[nocca:,:nocca,:nocca]
-        eris.ovov[i] = buf[nocca:,:nocca,nocca:]
-        eris.oovv[i] = buf[:nocca,nocca:,nocca:]
-        eris.ovvo[i] = buf[nocca:,nocca:,:nocca]
-        eris.ovvv[i] = lib.pack_tril(buf[nocca:,nocca:,nocca:])
-    del(tmpf['aa'])
+    if nocca > 0:
+        ao2mo.general(mol, (orboa,moa,moa,moa), tmpf, 'aa')
+        buf = np.empty((nmoa,nmoa,nmoa))
+        for i in range(nocca):
+            lib.unpack_tril(tmpf['aa'][i*nmoa:(i+1)*nmoa], out=buf)
+            eris.oooo[i] = buf[:nocca,:nocca,:nocca]
+            eris.ovoo[i] = buf[nocca:,:nocca,:nocca]
+            eris.ovov[i] = buf[nocca:,:nocca,nocca:]
+            eris.oovv[i] = buf[:nocca,nocca:,nocca:]
+            eris.ovvo[i] = buf[nocca:,nocca:,:nocca]
+            eris.ovvv[i] = lib.pack_tril(buf[nocca:,nocca:,nocca:])
+        del(tmpf['aa'])
 
-    buf = numpy.empty((nmob,nmob,nmob))
-    ao2mo.general(mol, (orbob,mob,mob,mob), tmpf, 'bb')
-    for i in range(noccb):
-        lib.unpack_tril(tmpf['bb'][i*nmob:(i+1)*nmob], out=buf)
-        eris.OOOO[i] = buf[:noccb,:noccb,:noccb]
-        eris.OVOO[i] = buf[noccb:,:noccb,:noccb]
-        eris.OVOV[i] = buf[noccb:,:noccb,noccb:]
-        eris.OOVV[i] = buf[:noccb,noccb:,noccb:]
-        eris.OVVO[i] = buf[noccb:,noccb:,:noccb]
-        eris.OVVV[i] = lib.pack_tril(buf[noccb:,noccb:,noccb:])
-    del(tmpf['bb'])
+    if noccb > 0:
+        buf = np.empty((nmob,nmob,nmob))
+        ao2mo.general(mol, (orbob,mob,mob,mob), tmpf, 'bb')
+        for i in range(noccb):
+            lib.unpack_tril(tmpf['bb'][i*nmob:(i+1)*nmob], out=buf)
+            eris.OOOO[i] = buf[:noccb,:noccb,:noccb]
+            eris.OVOO[i] = buf[noccb:,:noccb,:noccb]
+            eris.OVOV[i] = buf[noccb:,:noccb,noccb:]
+            eris.OOVV[i] = buf[:noccb,noccb:,noccb:]
+            eris.OVVO[i] = buf[noccb:,noccb:,:noccb]
+            eris.OVVV[i] = lib.pack_tril(buf[noccb:,noccb:,noccb:])
+        del(tmpf['bb'])
 
-    buf = numpy.empty((nmoa,nmob,nmob))
-    ao2mo.general(mol, (orboa,moa,mob,mob), tmpf, 'ab')
-    for i in range(nocca):
-        lib.unpack_tril(tmpf['ab'][i*nmoa:(i+1)*nmoa], out=buf)
-        eris.ooOO[i] = buf[:nocca,:noccb,:noccb]
-        eris.ovOO[i] = buf[nocca:,:noccb,:noccb]
-        eris.ovOV[i] = buf[nocca:,:noccb,noccb:]
-        eris.ooVV[i] = buf[:nocca,noccb:,noccb:]
-        eris.ovVO[i] = buf[nocca:,noccb:,:noccb]
-        eris.ovVV[i] = lib.pack_tril(buf[nocca:,noccb:,noccb:])
-    del(tmpf['ab'])
+    if nocca > 0:
+        buf = np.empty((nmoa,nmob,nmob))
+        ao2mo.general(mol, (orboa,moa,mob,mob), tmpf, 'ab')
+        for i in range(nocca):
+            lib.unpack_tril(tmpf['ab'][i*nmoa:(i+1)*nmoa], out=buf)
+            eris.ooOO[i] = buf[:nocca,:noccb,:noccb]
+            eris.ovOO[i] = buf[nocca:,:noccb,:noccb]
+            eris.ovOV[i] = buf[nocca:,:noccb,noccb:]
+            eris.ooVV[i] = buf[:nocca,noccb:,noccb:]
+            eris.ovVO[i] = buf[nocca:,noccb:,:noccb]
+            eris.ovVV[i] = lib.pack_tril(buf[nocca:,noccb:,noccb:])
+        del(tmpf['ab'])
 
-    buf = numpy.empty((nmob,nmoa,nmoa))
-    ao2mo.general(mol, (orbob,mob,moa,moa), tmpf, 'ba')
-    for i in range(noccb):
-        lib.unpack_tril(tmpf['ba'][i*nmob:(i+1)*nmob], out=buf)
-        eris.OVoo[i] = buf[noccb:,:nocca,:nocca]
-        eris.OOvv[i] = buf[:noccb,nocca:,nocca:]
-        eris.OVvo[i] = buf[noccb:,nocca:,:nocca]
-        eris.OVvv[i] = lib.pack_tril(buf[noccb:,nocca:,nocca:])
-    del(tmpf['ba'])
+    if noccb > 0:
+        buf = np.empty((nmob,nmoa,nmoa))
+        ao2mo.general(mol, (orbob,mob,moa,moa), tmpf, 'ba')
+        for i in range(noccb):
+            lib.unpack_tril(tmpf['ba'][i*nmob:(i+1)*nmob], out=buf)
+            eris.OVoo[i] = buf[noccb:,:nocca,:nocca]
+            eris.OOvv[i] = buf[:noccb,nocca:,nocca:]
+            eris.OVvo[i] = buf[noccb:,nocca:,:nocca]
+            eris.OVvv[i] = lib.pack_tril(buf[noccb:,nocca:,nocca:])
+        del(tmpf['ba'])
     buf = None
     cput1 = logger.timer_debug1(mycc, 'transforming oopq, ovpq', *cput1)
 
@@ -920,81 +1052,10 @@ def make_tau_ab(t2ab, t1, r1, fac=1, out=None):
     return tau1ab
 
 
-def _cp(a):
-    return np.array(a, copy=False, order='C')
-
-
 if __name__ == '__main__':
     import copy
     from pyscf import scf
     from pyscf import gto
-
-    mol = gto.Mole()
-    nocca, noccb, nvira, nvirb = 5, 4, 12, 13
-    nvira_pair = nvira*(nvira+1)//2
-    nvirb_pair = nvirb*(nvirb+1)//2
-    np.random.seed(9)
-    t2 = np.random.random((nocca,noccb,nvira,nvirb))
-    eris = ccsd._ChemistsERIs()
-    eris.vvvv = np.random.random((nvira_pair,nvirb_pair))
-    eris.mol = mol
-    print(lib.finger(eris._contract_vvvv_t2(t2)) - 12.00904827896089)
-
-    mol = gto.Mole()
-    mol.atom = [
-        [8 , (0. , 0.     , 0.)],
-        [1 , (0. , -0.757 , 0.587)],
-        [1 , (0. , 0.757  , 0.587)]]
-    mol.basis = {'O':'cc-pvdz', 'H':'631g'}
-    mol.spin = 2
-    mol.build()
-    mf = scf.UHF(mol).run()
-
-    mf1 = copy.copy(mf)
-    nmo = mol.nao_nr()
-    mf1.mo_occ = np.zeros((2,nmo))
-    mf1.mo_occ[0,:6] = 1
-    mf1.mo_occ[1,:5] = 1
-    mycc = UCCSD(mf1)
-    nocca, noccb, nvira, nvirb = 6, 5, 12, 13
-    nvira_pair = nvira*(nvira+1)//2
-    nvirb_pair = nvirb*(nvirb+1)//2
-    np.random.seed(9)
-    eris = mycc.ao2mo()
-    fakeris = ccsd._ChemistsERIs()
-    fakeris.mo_coeff = eris.mo_coeff
-    fakeris.vvvv = eris.vvVV
-    fakeris.mol = mol
-    t2ab = np.random.random((nocca,noccb,nvira,nvirb))
-    t1a = np.zeros((nocca,nvira))
-    t1b = np.zeros((noccb,nvirb))
-    print(lib.finger(mycc._add_vvVV(None, t2ab, fakeris)) - 7.30721835320601)
-    fakeris.vvvv = None
-    mycc.direct = True
-    mycc.max_memory = 0
-    print(lib.finger(mycc._add_vvVV(None, t2ab, fakeris)) - 7.30721835320601)
-
-    mycc = UCCSD(mf)
-    eris = mycc.ao2mo()
-    ecc, t1, t2 = mycc.kernel(eris=eris)
-    print(ecc - -0.17009326207891234)
-
-    np.random.seed(4)
-    mo_coeff = np.random.random((2,18,18))-.5
-    eris = mycc.ao2mo(mo_coeff)
-    nocca, noccb, nvira, nvirb = 6, 4, 12, 14
-    t1 = (np.random.random((nocca,nvira)), np.random.random((noccb,nvirb)))
-    t2 = (np.random.random((nocca,nocca,nvira,nvira)),
-          np.random.random((nocca,noccb,nvira,nvirb)),
-          np.random.random((noccb,noccb,nvirb,nvirb)))
-    t1, t2 = mycc.vector_to_amplitudes(mycc.amplitudes_to_vector(t1, t2))
-    t1, t2 = mycc.update_amps(t1, t2, eris)
-    print(lib.finger(t1[0]) - -91.989448970105428)
-    print(lib.finger(t1[1]) -  1915.9181468793138)
-    print(lib.finger(t2[0]) - -16988.617144235213)
-    print(lib.finger(t2[1]) - -559.07800364396917)
-    print(lib.finger(t2[2]) - -406.15453424081329)
-    print(lib.finger(mycc.amplitudes_to_vector(t1, t2)) - 3559.9139511493886)
 
     mol = gto.Mole()
     mol.atom = [['O', (0.,   0., 0.)],

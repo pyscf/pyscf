@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -21,38 +34,28 @@ cell.build(unit = 'B',
            verbose = 0,
            basis='sto3g')
 
-class light_speed(object):
-    def __init__(self, c):
-        self.bak = lib.param.LIGHT_SPEED
-        self.c = c
-    def __enter__(self):
-        lib.param.LIGHT_SPEED = self.c
-        return self.c
-    def __exit__(self, type, value, traceback):
-        lib.param.LIGHT_SPEED = self.bak
-
 class KnownValues(unittest.TestCase):
     def test_hf(self):
-        with light_speed(2) as c:
+        with lib.light_speed(2) as c:
             mf = scf.RHF(cell).sfx2c1e()
-            mf.with_df = df.PWDF(cell)
+            mf.with_df = df.AFTDF(cell)
             dm = mf.get_init_guess()
             h1 = mf.get_hcore()
-            self.assertAlmostEqual(numpy.einsum('ij,ji', dm, h1), -0.47578184212352159+0j, 9)
+            self.assertAlmostEqual(numpy.einsum('ij,ji', dm, h1), -0.47578184212352159+0j, 8)
             kpts = cell.make_kpts([3,1,1])
             h1 = mf.get_hcore(kpt=kpts[1])
-            self.assertAlmostEqual(numpy.einsum('ij,ji', dm, h1), -0.09637799091491725+0j, 9)
+            self.assertAlmostEqual(numpy.einsum('ij,ji', dm, h1), -0.09637799091491725+0j, 8)
 
     def test_khf(self):
-        with light_speed(2) as c:
+        with lib.light_speed(2) as c:
             mf = scf.KRHF(cell).sfx2c1e()
-            mf.with_df = df.PWDF(cell)
+            mf.with_df = df.AFTDF(cell)
             mf.kpts = cell.make_kpts([3,1,1])
             dm = mf.get_init_guess()
             h1 = mf.get_hcore()
-            self.assertAlmostEqual(numpy.einsum('ij,ji', dm[0], h1[0]),-0.47578184212352159+0j, 9)
-            self.assertAlmostEqual(numpy.einsum('ij,ji', dm[1], h1[1]),-0.09637799091491725+0j, 9)
-            self.assertAlmostEqual(numpy.einsum('ij,ji', dm[2], h1[2]),-0.09637799091491725+0j, 9)
+            self.assertAlmostEqual(numpy.einsum('ij,ji', dm[0], h1[0]),-0.47578184212352159+0j, 8)
+            self.assertAlmostEqual(numpy.einsum('ij,ji', dm[1], h1[1]),-0.09637799091491725+0j, 8)
+            self.assertAlmostEqual(numpy.einsum('ij,ji', dm[2], h1[2]),-0.09637799091491725+0j, 8)
 
     def test_pnucp(self):
         cell1 = gto.Cell()

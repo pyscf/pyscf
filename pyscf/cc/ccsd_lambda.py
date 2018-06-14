@@ -1,7 +1,27 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
+
+'''
+Restricted CCSD implementation for real integrals.  Permutation symmetry for
+the 4-index integrals (ij|kl) = (ij|lk) = (ji|kl) are assumed.
+
+Note MO integrals are treated in chemist's notation
+'''
 
 import time
 from functools import reduce
@@ -28,10 +48,12 @@ def kernel(mycc, eris=None, t1=None, t2=None, l1=None, l2=None,
     if fupdate is None:
         fupdate = update_lambda
 
-    saved = fintermediates(mycc, t1, t2, eris)
+    imds = fintermediates(mycc, t1, t2, eris)
 
-    if mycc.diis:
-        adiis = lib.diis.DIIS(mycc, mycc.diis_file)
+    if isinstance(mycc.diis, lib.diis.DIIS):
+        adiis = mycc.diis
+    elif mycc.diis:
+        adiis = lib.diis.DIIS(mycc, mycc.diis_file, incore=mycc.incore_complete)
         adiis.space = mycc.diis_space
     else:
         adiis = None
@@ -39,13 +61,12 @@ def kernel(mycc, eris=None, t1=None, t2=None, l1=None, l2=None,
 
     conv = False
     for istep in range(max_cycle):
-        l1new, l2new = fupdate(mycc, t1, t2, l1, l2, eris, saved)
+        l1new, l2new = fupdate(mycc, t1, t2, l1, l2, eris, imds)
         normt = numpy.linalg.norm(mycc.amplitudes_to_vector(l1new, l2new) -
                                   mycc.amplitudes_to_vector(l1, l2))
         l1, l2 = l1new, l2new
         l1new = l2new = None
-        if mycc.diis:
-            l1, l2 = mycc.diis(l1, l2, istep, normt, 0, adiis)
+        l1, l2 = mycc.run_diis(l1, l2, istep, normt, 0, adiis)
         log.info('cycle = %d  norm(lambda1,lambda2) = %.6g', istep+1, normt)
         cput0 = log.timer('CCSD iter', *cput0)
         if normt < tol:
@@ -62,24 +83,24 @@ def make_intermediates(mycc, t1, t2, eris):
     nvir_pair = nvir*(nvir+1)//2
     foo = eris.fock[:nocc,:nocc]
     fov = eris.fock[:nocc,nocc:]
+    fvo = eris.fock[nocc:,:nocc]
     fvv = eris.fock[nocc:,nocc:]
 
-    class _Saved:
-        pass
-    saved = _Saved()
-    saved.ftmp = lib.H5TmpFile()
-    saved.woooo = saved.ftmp.create_dataset('woooo', (nocc,nocc,nocc,nocc), 'f8')
-    saved.wvooo = saved.ftmp.create_dataset('wvooo', (nvir,nocc,nocc,nocc), 'f8')
-    saved.wVOov = saved.ftmp.create_dataset('wVOov', (nvir,nocc,nocc,nvir), 'f8')
-    saved.wvOOv = saved.ftmp.create_dataset('wvOOv', (nvir,nocc,nocc,nvir), 'f8')
-    saved.wvvov = saved.ftmp.create_dataset('wvvov', (nvir,nvir,nocc,nvir), 'f8')
+    class _IMDS: pass
+    imds = _IMDS()
+    #TODO: mycc.incore_complete
+    imds.ftmp = lib.H5TmpFile()
+    imds.woooo = imds.ftmp.create_dataset('woooo', (nocc,nocc,nocc,nocc), 'f8')
+    imds.wvooo = imds.ftmp.create_dataset('wvooo', (nvir,nocc,nocc,nocc), 'f8')
+    imds.wVOov = imds.ftmp.create_dataset('wVOov', (nvir,nocc,nocc,nvir), 'f8')
+    imds.wvOOv = imds.ftmp.create_dataset('wvOOv', (nvir,nocc,nocc,nvir), 'f8')
+    imds.wvvov = imds.ftmp.create_dataset('wvvov', (nvir,nvir,nocc,nvir), 'f8')
 
-# As we don't have l2 in memory, hold tau temporarily in memory
     w1 = fvv - numpy.einsum('ja,jb->ba', fov, t1)
     w2 = foo + numpy.einsum('ib,jb->ij', fov, t1)
     w3 = numpy.einsum('kc,jkbc->bj', fov, t2) * 2 + fov.T
     w3 -= numpy.einsum('kc,kjbc->bj', fov, t2)
-    w3 += reduce(numpy.dot, (t1.T, fov, t1.T))
+    w3 += lib.einsum('kc,kb,jc->bj', fov, t1, t1)
     w4 = fov.copy()
 
     time1 = time.clock(), time.time()
@@ -91,27 +112,23 @@ def make_intermediates(mycc, t1, t2, eris):
 
     fswap = lib.H5TmpFile()
     for istep, (p0, p1) in enumerate(lib.prange(0, nvir, blksize)):
-        eris_vovv = _cp(eris.ovvv[:,p0:p1]).transpose(1,0,2)
-        eris_vovv = lib.unpack_tril(eris_vovv.reshape((p1-p0)*nocc,nvir_pair))
-        eris_vovv = eris_vovv.reshape(p1-p0,nocc,nvir,nvir)
-        fswap['vvov/%d'%istep] = eris_vovv.transpose(2,3,1,0)
+        eris_ovvv = eris.get_ovvv(slice(None), slice(p0,p1))
+        fswap['vvov/%d'%istep] = eris_ovvv.transpose(2,3,0,1)
 
     woooo = 0
     wvooo = numpy.zeros((nvir,nocc,nocc,nocc))
     for p0, p1 in lib.prange(0, nvir, blksize):
-        eris_vovv = _cp(eris.ovvv[:,p0:p1]).transpose(1,0,2)
-        eris_vovv = lib.unpack_tril(eris_vovv.reshape((p1-p0)*nocc,nvir_pair))
-        eris_vovv = eris_vovv.reshape(p1-p0,nocc,nvir,nvir)
+        eris_ovvv = eris.get_ovvv(slice(None), slice(p0,p1))
         eris_vvov = numpy.empty(((p1-p0),nvir,nocc,nvir))
         for istep, (q0, q1) in enumerate(lib.prange(0, nvir, blksize)):
             eris_vvov[:,:,:,q0:q1] = fswap['vvov/%d'%istep][p0:p1]
 
-        w1 += numpy.einsum('cjba,jc->ba', eris_vovv, t1[:,p0:p1]*2)
-        w1[:,p0:p1] -= numpy.einsum('ajbc,jc->ba', eris_vovv, t1)
+        w1 += numpy.einsum('jcba,jc->ba', eris_ovvv, t1[:,p0:p1]*2)
+        w1[:,p0:p1] -= numpy.einsum('jabc,jc->ba', eris_ovvv, t1)
         theta = t2[:,:,:,p0:p1] * 2 - t2[:,:,:,p0:p1].transpose(1,0,2,3)
-        w3 += lib.einsum('jkcd,dkcb->bj', theta, eris_vovv)
+        w3 += lib.einsum('jkcd,kdcb->bj', theta, eris_ovvv)
         theta = None
-        wVOov = lib.einsum('bjcd,kd->bjkc', eris_vovv, t1)
+        wVOov = lib.einsum('jbcd,kd->bjkc', eris_ovvv, t1)
         wvOOv = lib.einsum('cbjd,kd->cjkb', eris_vvov,-t1)
         g2vovv = eris_vvov.transpose(0,2,1,3) * 2 - eris_vvov.transpose(0,2,3,1)
         for i0, i1 in lib.prange(0, nocc, blksize):
@@ -120,17 +137,17 @@ def make_intermediates(mycc, t1, t2, eris):
         g2vovv = tau = None
 
         # Watch out memory usage here, due to the t2 transpose
-        wvvov  = lib.einsum('ajbd,jkcd->abkc', eris_vovv, t2) * -1.5
+        wvvov  = lib.einsum('jabd,jkcd->abkc', eris_ovvv, t2) * -1.5
         wvvov += eris_vvov.transpose(0,3,2,1) * 2
         wvvov -= eris_vvov
 
-        g2vvov = eris_vvov * 2 - eris_vovv.transpose(0,2,1,3)
+        g2vvov = eris_vvov * 2 - eris_ovvv.transpose(1,2,0,3)
         for i0, i1 in lib.prange(0, nocc, blksize):
             theta = t2[i0:i1] * 2 - t2[i0:i1].transpose(0,1,3,2)
             vackb = lib.einsum('acjd,kjbd->ackb', g2vvov, theta)
             wvvov[:,:,i0:i1] += vackb.transpose(0,3,2,1)
             wvvov[:,:,i0:i1] -= vackb * .5
-        g2vvov = eris_vovv = eris_vvov = theta = None
+        g2vvov = eris_ovvv = eris_vvov = theta = None
 
         eris_ovoo = _cp(eris.ovoo[:,p0:p1])
         w2 += numpy.einsum('kbij,kb->ij', eris_ovoo, t1[:,p0:p1]) * 2
@@ -180,8 +197,8 @@ def make_intermediates(mycc, t1, t2, eris):
         vOOv -= _cp(eris.oovv[:,:,p0:p1]).transpose(2,1,0,3)
         wVOov += VOov
         wvOOv += vOOv
-        saved.wVOov[p0:p1] = wVOov
-        saved.wvOOv[p0:p1] = wvOOv
+        imds.wVOov[p0:p1] = wVOov
+        imds.wvOOv[p0:p1] = wvOOv
         wOVov = wOvOv = None
 
         ov1 = vOOv*2 + VOov
@@ -198,12 +215,12 @@ def make_intermediates(mycc, t1, t2, eris):
         g2ovoo = eris_ovoo * 2 - eris_ovoo.transpose(2,1,0,3)
         tau = t2 + numpy.einsum('ia,jb->ijab', t1, t1)
         wvvov += lib.einsum('laki,klbc->abic', g2ovoo, tau)
-        saved.wvvov[p0:p1] = wvvov
+        imds.wvvov[p0:p1] = wvvov
         wvvov = ov1 = ov2 = g2ovoo = None
 
     woooo += _cp(eris.oooo).transpose(0,2,1,3)
-    saved.woooo[:] = woooo
-    saved.wvooo[:] = wvooo
+    imds.woooo[:] = woooo
+    imds.wvooo[:] = wvooo
     woooo = wvooo = None
 
     w3 += numpy.einsum('bc,jc->bj', w1, t1)
@@ -211,17 +228,17 @@ def make_intermediates(mycc, t1, t2, eris):
 
     fswap = None
 
-    saved.w1 = w1
-    saved.w2 = w2
-    saved.w3 = w3
-    saved.w4 = w4
-    saved.ftmp.flush()
-    return saved
+    imds.w1 = w1
+    imds.w2 = w2
+    imds.w3 = w3
+    imds.w4 = w4
+    imds.ftmp.flush()
+    return imds
 
 
 # update L1, L2
-def update_lambda(mycc, t1, t2, l1, l2, eris=None, saved=None):
-    if saved is None: saved = make_intermediates(mycc, t1, t2, eris)
+def update_lambda(mycc, t1, t2, l1, l2, eris=None, imds=None):
+    if imds is None: imds = make_intermediates(mycc, t1, t2, eris)
     time1 = time0 = time.clock(), time.time()
     log = logger.Logger(mycc.stdout, mycc.verbose)
     nocc, nvir = t1.shape
@@ -240,24 +257,23 @@ def update_lambda(mycc, t1, t2, l1, l2, eris=None, saved=None):
     mia1 -= numpy.einsum('bd,jd->jb', mba, t1)
     mia1 -= numpy.einsum('lj,lb->jb', mij, t1)
 
-    l2new = mycc._add_vvvv(numpy.zeros_like(l1), l2, eris,
-                           with_ovvv=False, t2sym='jiba')
+    l2new = mycc._add_vvvv(None, l2, eris, with_ovvv=False, t2sym='jiba')
+    l1new  = numpy.einsum('ijab,jb->ia', l2new, t1) * 2
+    l1new -= numpy.einsum('jiab,jb->ia', l2new, t1)
     l2new *= .5  # *.5 because of l2+l2.transpose(1,0,3,2) in the end
-    l1new  = numpy.einsum('ijab,jb->ia', l2new, t1) * 4
-    l1new -= numpy.einsum('jiab,jb->ia', l2new, t1) * 2
     tmp = tmp1 = None
 
     l1new += fov
-    l1new += numpy.einsum('ib,ba->ia', l1, saved.w1)
-    l1new -= numpy.einsum('ja,ij->ia', l1, saved.w2)
-    l1new -= numpy.einsum('ik,ka->ia', mij, saved.w4)
-    l1new -= numpy.einsum('ca,ic->ia', mba, saved.w4)
-    l1new += numpy.einsum('ijab,bj->ia', l2, saved.w3) * 2
-    l1new -= numpy.einsum('ijba,bj->ia', l2, saved.w3)
+    l1new += numpy.einsum('ib,ba->ia', l1, imds.w1)
+    l1new -= numpy.einsum('ja,ij->ia', l1, imds.w2)
+    l1new -= numpy.einsum('ik,ka->ia', mij, imds.w4)
+    l1new -= numpy.einsum('ca,ic->ia', mba, imds.w4)
+    l1new += numpy.einsum('ijab,bj->ia', l2, imds.w3) * 2
+    l1new -= numpy.einsum('ijba,bj->ia', l2, imds.w3)
 
-    l2new += numpy.einsum('ia,jb->ijab', l1, saved.w4)
-    l2new += lib.einsum('jibc,ca->jiba', l2, saved.w1)
-    l2new -= lib.einsum('jk,kiba->jiba', saved.w2, l2)
+    l2new += numpy.einsum('ia,jb->ijab', l1, imds.w4)
+    l2new += lib.einsum('jibc,ca->jiba', l2, imds.w1)
+    l2new -= lib.einsum('jk,kiba->jiba', imds.w2, l2)
 
     eris_ovoo = _cp(eris.ovoo)
     l1new -= numpy.einsum('iajk,kj->ia', eris_ovoo, mij1) * 2
@@ -278,20 +294,17 @@ def update_lambda(mycc, t1, t2, l1, l2, eris=None, saved=None):
 
     l1new -= numpy.einsum('jb,jiab->ia', l1, _cp(eris.oovv))
     for p0, p1 in lib.prange(0, nvir, blksize):
-        eris_vovv = _cp(eris.ovvv[:,p0:p1]).transpose(1,0,2)
-        eris_vovv = lib.unpack_tril(eris_vovv.reshape((p1-p0)*nocc,-1))
-        eris_vovv = eris_vovv.reshape(p1-p0,nocc,nvir,nvir)
-
-        l1new[:,p0:p1] += numpy.einsum('aibc,bc->ia', eris_vovv, mba1) * 2
-        l1new -= numpy.einsum('bica,bc->ia', eris_vovv, mba1[p0:p1])
-        l2new[:,:,p0:p1] += lib.einsum('bjac,ic->jiba', eris_vovv, l1)
-        m4 = lib.einsum('ijkd,akdb->ijab', l2t1, eris_vovv)
+        eris_ovvv = eris.get_ovvv(slice(None), slice(p0,p1))
+        l1new[:,p0:p1] += numpy.einsum('iabc,bc->ia', eris_ovvv, mba1) * 2
+        l1new -= numpy.einsum('ibca,bc->ia', eris_ovvv, mba1[p0:p1])
+        l2new[:,:,p0:p1] += lib.einsum('jbac,ic->jiba', eris_ovvv, l1)
+        m4 = lib.einsum('ijkd,kadb->ijab', l2t1, eris_ovvv)
         l2new[:,:,p0:p1] -= m4
         l1new[:,p0:p1] -= numpy.einsum('ijab,jb->ia', m4, t1) * 2
         l1new -= numpy.einsum('ijab,ia->jb', m4, t1[:,p0:p1]) * 2
         l1new[:,p0:p1] += numpy.einsum('jiab,jb->ia', m4, t1)
         l1new += numpy.einsum('jiab,ia->jb', m4, t1[:,p0:p1])
-        eris_vovv = m4buf = m4 = None
+        eris_ovvv = m4buf = m4 = None
 
         eris_voov = _cp(eris.ovvo[:,p0:p1].transpose(1,0,3,2))
         l1new[:,p0:p1] += numpy.einsum('jb,aijb->ia', l1, eris_voov) * 2
@@ -305,15 +318,15 @@ def update_lambda(mycc, t1, t2, l1, l2, eris=None, saved=None):
         l1new[:,p0:p1] += numpy.einsum('ijab,jb->ia', m4, t1) * 2
         l1new -= numpy.einsum('ijba,jb->ia', m4, t1[:,p0:p1])
 
-        saved_wvooo = _cp(saved.wvooo[p0:p1])
+        saved_wvooo = _cp(imds.wvooo[p0:p1])
         l1new -= lib.einsum('ckij,jkca->ia', saved_wvooo, l2[:,:,p0:p1])
-        saved_wvovv = _cp(saved.wvvov[p0:p1])
+        saved_wvovv = _cp(imds.wvvov[p0:p1])
         # Watch out memory usage here, due to the l2 transpose
         l1new[:,p0:p1] += lib.einsum('abkc,kibc->ia', saved_wvovv, l2)
         saved_wvooo = saved_wvovv = None
 
-        saved_wvOOv = _cp(saved.wvOOv[p0:p1])
-        tmp_voov = _cp(saved.wVOov[p0:p1]) * 2
+        saved_wvOOv = _cp(imds.wvOOv[p0:p1])
+        tmp_voov = _cp(imds.wVOov[p0:p1]) * 2
         tmp_voov += saved_wvOOv
         tmp = l2.transpose(0,2,1,3) - l2.transpose(0,3,1,2)*.5
         l2new[:,:,p0:p1] += lib.einsum('iakc,bjkc->jiba', tmp, tmp_voov)
@@ -324,7 +337,7 @@ def update_lambda(mycc, t1, t2, l1, l2, eris=None, saved=None):
         l2new[:,:,p0:p1] += tmp.transpose(1,0,2,3) * .5
         saved_wvOOv = tmp = None
 
-    saved_woooo = _cp(saved.woooo)
+    saved_woooo = _cp(imds.woooo)
     m3 = lib.einsum('ijkl,klab->ijab', saved_woooo, l2)
     l2new += m3 * .5
     l1new += numpy.einsum('ijab,jb->ia', m3, t1) * 2
@@ -393,15 +406,15 @@ if __name__ == '__main__':
     eris.vvvv = ao2mo.restore(4,eri0[nocc:,nocc:,nocc:,nocc:],nvir)
     eris.fock = fock0
 
-    saved = make_intermediates(mcc, t1, t2, eris)
-    l1new, l2new = update_lambda(mcc, t1, t2, l1, l2, eris, saved)
+    imds = make_intermediates(mcc, t1, t2, eris)
+    l1new, l2new = update_lambda(mcc, t1, t2, l1, l2, eris, imds)
     print(lib.finger(l1new) - -6699.5335665027187)
     print(lib.finger(l2new) - -514.7001243502192 )
     print(abs(l2new-l2new.transpose(1,0,3,2)).sum())
 
     mcc.max_memory = 0
-    saved = make_intermediates(mcc, t1, t2, eris)
-    l1new, l2new = update_lambda(mcc, t1, t2, l1, l2, eris, saved)
+    imds = make_intermediates(mcc, t1, t2, eris)
+    l1new, l2new = update_lambda(mcc, t1, t2, l1, l2, eris, imds)
     print(lib.finger(l1new) - -6699.5335665027187)
     print(lib.finger(l2new) - -514.7001243502192 )
     print(abs(l2new-l2new.transpose(1,0,3,2)).sum())

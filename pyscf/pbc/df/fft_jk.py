@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -7,11 +20,13 @@
 JK with discrete Fourier transformation
 '''
 
+import time
 import numpy as np
 from pyscf import lib
 from pyscf.pbc import tools
 from pyscf.pbc.dft import numint
 from pyscf.pbc.df.df_jk import _format_dms, _format_kpts_band, _format_jks
+from pyscf.pbc.df.df_jk import _ewald_exxdiv_3d
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point
 
 
@@ -45,9 +60,13 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None):
     ngrids = len(coulG)
 
     vR = rhoR = np.zeros((nset,ngrids))
-    for k, aoR in mydf.aoR_loop(mesh, kpts):
-        for i in range(nset):
-            rhoR[i] += numint.eval_rho(cell, aoR, dms[i,k])
+    for ao_ks_etc, p0, p1 in mydf.aoR_loop(mydf.grids, kpts):
+        ao_ks = ao_ks_etc[0]
+        for k, ao in enumerate(ao_ks):
+            for i in range(nset):
+                rhoR[i,p0:p1] += numint.eval_rho(cell, ao, dms[i,k])
+        ao = ao_ks = None
+
     for i in range(nset):
         rhoR[i] *= 1./nkpts
         rhoG = tools.fft(rhoR[i], mesh)
@@ -57,13 +76,16 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None):
     kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
     nband = len(kpts_band)
     weight = cell.vol / ngrids
+    vR *= weight
     if gamma_point(kpts_band):
-        vj_kpts = np.empty((nset,nband,nao,nao))
+        vj_kpts = np.zeros((nset,nband,nao,nao))
     else:
-        vj_kpts = np.empty((nset,nband,nao,nao), dtype=np.complex128)
-    for k, aoR in mydf.aoR_loop(mesh, kpts_band):
-        for i in range(nset):
-            vj_kpts[i,k] = weight * lib.dot(aoR.T.conj()*vR[i], aoR)
+        vj_kpts = np.zeros((nset,nband,nao,nao), dtype=np.complex128)
+    for ao_ks_etc, p0, p1 in mydf.aoR_loop(mydf.grids, kpts_band):
+        ao_ks = ao_ks_etc[0]
+        for k, ao in enumerate(ao_ks):
+            for i in range(nset):
+                vj_kpts[i,k] += lib.dot(ao.T.conj()*vR[i,p0:p1], ao)
 
     return _format_jks(vj_kpts, dm_kpts, input_band, kpts)
 
@@ -112,13 +134,14 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
     else:
         vk_kpts = np.zeros((nset,nband,nao,nao), dtype=np.complex128)
 
-    ao2_kpts = mydf._numint.eval_ao(cell, coords, kpts, non0tab=mydf.non0tab)
-    ao2_kpts = [np.asarray(ao.T, order='C') for ao in ao2_kpts]
+    coords = mydf.grids.coords
+    ao2_kpts = [np.asarray(ao.T, order='C')
+                for ao in mydf._numint.eval_ao(cell, coords, kpts=kpts)]
     if input_band is None:
         ao1_kpts = ao2_kpts
     else:
-        ao1_kpts = mydf._numint.eval_ao(cell, coords, kpts_band, non0tab=mydf.non0tab)
-        ao1_kpts = [np.asarray(ao.T, order='C') for ao in ao1_kpts]
+        ao1_kpts = [np.asarray(ao.T, order='C')
+                    for ao in mydf._numint.eval_ao(cell, coords, kpts=kpts_band)]
     if mo_coeff is not None and nset == 1:
         mo_coeff = [mo_coeff[k][:,occ>0] * np.sqrt(occ[occ>0])
                     for k, occ in enumerate(mo_occ)]
@@ -127,11 +150,13 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
     mem_now = lib.current_memory()[0]
     max_memory = mydf.max_memory - mem_now
     blksize = int(min(nao, max(1, (max_memory-mem_now)*1e6/16/4/ngrids/nao)))
-    lib.logger.debug1(mydf, 'max_memory %s  blksize %d', max_memory, blksize)
+    lib.logger.debug1(mydf, 'fft_jk: get_k_kpts max_memory %s  blksize %d',
+                      max_memory, blksize)
     ao1_dtype = np.result_type(*ao1_kpts)
     ao2_dtype = np.result_type(*ao2_kpts)
     vR_dm = np.empty((nset,nao,ngrids), dtype=vk_kpts.dtype)
 
+    t1 = (time.clock(), time.time())
     for k2, ao2T in enumerate(ao2_kpts):
         if ao2T.size == 0:
             continue
@@ -145,9 +170,17 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
 
         for k1, ao1T in enumerate(ao1_kpts):
             kpt1 = kpts_band[k1]
+
+            # If we have an ewald exxdiv, we add the G=0 correction near the
+            # end of the function to bypass any discretization errors
+            # that arise from the FFT.
             mydf.exxdiv = exxdiv
-            coulG = tools.get_coulG(cell, kpt2-kpt1, True, mydf, mesh,
-                                    low_dim_ft_type=low_dim_ft_type)
+            if exxdiv == 'ewald' or exxdiv is None:
+                coulG = tools.get_coulG(cell, kpt2-kpt1, False, mydf, mesh,
+                                        low_dim_ft_type=low_dim_ft_type)
+            else:
+                coulG = tools.get_coulG(cell, kpt2-kpt1, True, mydf, mesh,
+                                        low_dim_ft_type=low_dim_ft_type)
             if is_zero(kpt1-kpt2):
                 expmikr = np.array(1.)
             else:
@@ -169,6 +202,15 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
 
             for i in range(nset):
                 vk_kpts[i,k1] += weight * lib.dot(vR_dm[i], ao1T.T)
+        t1 = lib.logger.timer_debug1(mydf, 'get_k_kpts: make_kpt (%d,*)'%k2, *t1)
+
+    # Function _ewald_exxdiv_for_G0 to add back in the G=0 component to vk_kpts
+    # Note in the _ewald_exxdiv_G0 implementation, the G=0 treatments are
+    # different for 1D/2D and 3D systems.  The special treatments for 1D and 2D
+    # can only be used with AFTDF/GDF/MDF method.  In the FFTDF method, 1D, 2D
+    # and 3D should use the ewald probe charge correction.
+    if exxdiv == 'ewald':
+        _ewald_exxdiv_3d(cell, kpts, dms, vk_kpts, kpts_band=kpts_band)
 
     return _format_jks(vk_kpts, dm_kpts, input_band, kpts)
 

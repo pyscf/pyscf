@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -21,6 +34,11 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc.scf import addons
 from pyscf.pbc.scf import chkfile
+from pyscf import __config__
+
+WITH_META_LOWDIN = getattr(__config__, 'pbc_scf_analyze_with_meta_lowdin', True)
+PRE_ORTH_METHOD = getattr(__config__, 'pbc_scf_analyze_pre_orth_method', 'ANO')
+CHECK_COULOMB_IMAG = getattr(__config__, 'pbc_scf_check_coulomb_imag', True)
 
 
 canonical_occ = canonical_occ_ = addons.canonical_occ_
@@ -40,21 +58,29 @@ def make_rdm1(mo_coeff_kpts, mo_occ_kpts):
               make_dm(mo_coeff_kpts[1], mo_occ_kpts[1]))
     return lib.asarray(dm_kpts).reshape(2,nkpts,nao,nao)
 
-def get_fock(mf, h1e_kpts, s_kpts, vhf_kpts, dm_kpts, cycle=-1, diis=None,
+def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
              diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
+    h1e_kpts, s_kpts, vhf_kpts, dm_kpts = h1e, s1e, vhf, dm
+    if h1e_kpts is None: h1e_kpts = mf.get_hcore()
+    if vhf_kpts is None: vhf_kpts = mf.get_veff(mf.cell, dm_kpts)
+    f_kpts = h1e_kpts + vhf_kpts
+    if cycle < 0 and diis is None:  # Not inside the SCF iteration
+        return f_kpts
+
     if diis_start_cycle is None:
         diis_start_cycle = mf.diis_start_cycle
     if level_shift_factor is None:
         level_shift_factor = mf.level_shift
     if damp_factor is None:
         damp_factor = mf.damp
+    if s_kpts is None: s_kpts = mf.get_ovlp()
+    if dm_kpts is None: dm_kpts = mf.make_rdm1()
 
     if isinstance(level_shift_factor, (tuple, list, np.ndarray)):
         shifta, shiftb = level_shift_factor
     else:
         shifta = shiftb = level_shift_factor
 
-    f_kpts = h1e_kpts + vhf_kpts
     if diis and cycle >= diis_start_cycle:
         f_kpts = diis.update(s_kpts, dm_kpts, f_kpts, mf, h1e_kpts, vhf_kpts)
     if abs(level_shift_factor) > 1e-4:
@@ -127,17 +153,16 @@ def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf_kpts=None):
     e1+= 1./nkpts * np.einsum('kij,kji', dm_kpts[1], h1e_kpts)
     e_coul = 1./nkpts * np.einsum('kij,kji', dm_kpts[0], vhf_kpts[0]) * 0.5
     e_coul+= 1./nkpts * np.einsum('kij,kji', dm_kpts[1], vhf_kpts[1]) * 0.5
-    if abs(e_coul.imag > 1.e-10):
-        raise RuntimeError("Coulomb energy has imaginary part, "
-                           "something is wrong!", e_coul.imag)
-    e1 = e1.real
-    e_coul = e_coul.real
-    logger.debug(mf, 'E_coul = %.15g', e_coul)
-    return e1+e_coul, e_coul
+    logger.debug(mf, 'E1 = %s  E_coul = %s', e1, e_coul)
+    if CHECK_COULOMB_IMAG and abs(e_coul.imag > mf.cell.precision*10):
+        logger.warn(mf, "Coulomb energy has imaginary part %s. "
+                    "Coulomb integrals (e-e, e-N) may not converge !",
+                    e_coul.imag)
+    return (e1+e_coul).real, e_coul.real
 
 
-def mulliken_meta(cell, dm_ao_kpts, verbose=logger.DEBUG, pre_orth_method='ANO',
-                  s=None):
+def mulliken_meta(cell, dm_ao_kpts, verbose=logger.DEBUG,
+                  pre_orth_method=PRE_ORTH_METHOD, s=None):
     '''Mulliken population analysis, based on meta-Lowdin AOs.
 
     Note this function only computes the Mulliken population for the gamma
@@ -165,15 +190,13 @@ def canonicalize(mf, mo_coeff_kpts, mo_occ_kpts, fock=None):
     '''Canonicalization diagonalizes the UHF Fock matrix within occupied,
     virtual subspaces separatedly (without change occupancy).
     '''
-    mo_coeff_kpts = np.asarray(mo_coeff_kpts)
-    mo_occ_kpts = np.asarray(mo_occ_kpts)
     if fock is None:
         dm = mf.make_rdm1(mo_coeff_kpts, mo_occ_kpts)
         fock = mf.get_hcore() + mf.get_jk(mf.cell, dm)
 
-    def eig_(fock, mo_coeff_kpts, idx, es, cs):
+    def eig_(fock, mo_coeff, idx, es, cs):
         if np.count_nonzero(idx) > 0:
-            orb = mo_coeff_kpts[:,idx]
+            orb = mo_coeff[:,idx]
             f1 = reduce(np.dot, (orb.T.conj(), fock, orb))
             e, c = scipy.linalg.eigh(f1)
             es[idx] = e
@@ -278,7 +301,12 @@ def init_guess_by_chkfile(cell, chkfile_name, project=None, kpts=None):
 class KUHF(pbcuhf.UHF, khf.KSCF):
     '''UHF class with k-point sampling.
     '''
-    def __init__(self, cell, kpts=np.zeros((1,3)), exxdiv='ewald'):
+    conv_tol = getattr(__config__, 'pbc_scf_KSCF_conv_tol', 1e-7)
+    conv_tol_grad = getattr(__config__, 'pbc_scf_KSCF_conv_tol_grad', None)
+    direct_scf = getattr(__config__, 'pbc_scf_SCF_direct_scf', False)
+
+    def __init__(self, cell, kpts=np.zeros((1,3)),
+                 exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         khf.KSCF.__init__(self, cell, kpts, exxdiv)
         self.nelec = cell.nelec
         self._keys = self._keys.union(['nelec'])
@@ -289,12 +317,8 @@ class KUHF(pbcuhf.UHF, khf.KSCF):
                     'alpha = %d beta = %d', *self.nelec)
         return self
 
+    build = khf.KSCF.build
     check_sanity = khf.KSCF.check_sanity
-
-    def build(self, cell=None):
-        pbcuhf.UHF.build(self, cell)
-        #if self.exxdiv == 'vcut_ws':
-        #    self.precompute_exx()
 
     def get_init_guess(self, cell=None, key='minao'):
         if cell is None:
@@ -311,7 +335,7 @@ class KUHF(pbcuhf.UHF, khf.KSCF):
             try:
                 dm_kpts = self.from_chk()
             except (IOError, KeyError):
-                logger.warn(self, 'Fail in reading %s. Use MINAO initial guess',
+                logger.warn(self, 'Fail to read %s. Use MINAO initial guess',
                             self.chkfile)
                 dm = self.init_guess_by_minao(cell)
         else:
@@ -327,7 +351,7 @@ class KUHF(pbcuhf.UHF, khf.KSCF):
             assert dm_kpts.shape[0]==2
 
         if cell.dimension < 3:
-            ne = np.einsum('xkij,kji->xk', dm_kpts, self.get_ovlp(cell))
+            ne = np.einsum('xkij,kji->xk', dm_kpts, self.get_ovlp(cell)).real
             nelec = np.asarray(cell.nelec).reshape(2,1)
             if np.any(abs(ne - nelec) > 1e-7):
                 logger.warn(self, 'Big error detected in the electron number '
@@ -355,7 +379,8 @@ class KUHF(pbcuhf.UHF, khf.KSCF):
         return vhf
 
 
-    def analyze(self, verbose=None, with_meta_lowdin=True, **kwargs):
+    def analyze(self, verbose=None, with_meta_lowdin=WITH_META_LOWDIN,
+                **kwargs):
         if verbose is None: verbose = self.verbose
         return khf.analyze(self, verbose, with_meta_lowdin, **kwargs)
 
@@ -408,8 +433,7 @@ class KUHF(pbcuhf.UHF, khf.KSCF):
         fock = self.get_hcore(cell, kpts_band)
         fock = fock + self.get_veff(cell, dm_kpts, kpts=kpts, kpts_band=kpts_band)
         s1e = self.get_ovlp(cell, kpts_band)
-        e_a, c_a = khf.KSCF.eig(self, fock[0], s1e)
-        e_b, c_b = khf.KSCF.eig(self, fock[1], s1e)
+        (e_a,e_b), (c_a,c_b) = self.eig(fock, s1e)
         if single_kpt_band:
             e_a = e_a[0]
             e_b = e_b[0]
@@ -423,7 +447,7 @@ class KUHF(pbcuhf.UHF, khf.KSCF):
         return init_guess_by_chkfile(self.cell, chk, project, kpts)
 
     def mulliken_meta(self, cell=None, dm=None, verbose=logger.DEBUG,
-                      pre_orth_method='ANO', s=None):
+                      pre_orth_method=PRE_ORTH_METHOD, s=None):
         if cell is None: cell = self.cell
         if dm is None: dm = self.make_rdm1()
         if s is None: s = self.get_ovlp(cell)
@@ -463,9 +487,12 @@ class KUHF(pbcuhf.UHF, khf.KSCF):
     # mix_density_fit inherits from khf.KSCF.mix_density_fit
 
     newton = khf.KSCF.newton
-    x2c1e = khf.KSCF.x2c1e
+    x2c = x2c1e = sfx2c1e = khf.KSCF.sfx2c1e
 
-    def stability(self, internal=True, external=False, verbose=None):
+    def stability(self,
+                  internal=getattr(__config__, 'pbc_scf_KSCF_stability_internal', True),
+                  external=getattr(__config__, 'pbc_scf_KSCF_stability_external', False),
+                  verbose=None):
         from pyscf.pbc.scf.stability import uhf_stability
         return uhf_stability(self, internal, external, verbose)
 
@@ -473,6 +500,8 @@ class KUHF(pbcuhf.UHF, khf.KSCF):
         '''Convert given mean-field object to KUHF'''
         addons.convert_to_uhf(mf, self)
         return self
+
+del(WITH_META_LOWDIN, PRE_ORTH_METHOD)
 
 
 if __name__ == '__main__':
