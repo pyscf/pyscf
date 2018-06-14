@@ -13,39 +13,15 @@ class qchem_inter_rf(scf):
 
     nf = self.nfermi[0]
     nv = self.norbs-self.vstart[0]
-    self.FmE = np.add.outer(self.ksn2e[0,0,self.vstart[0]:],-self.ksn2e[0,0,:self.nfermi[0]])
+    self.FmE = np.add.outer(self.ksn2e[0,0,self.vstart[0]:],-self.ksn2e[0,0,:self.nfermi[0]]).T
     self.sqrt_FmE = np.sqrt(self.FmE).reshape([nv*nf])
-    self.kernel_qchem_inter_rf_pos()
-
-  def kernel_qchem_inter_rf_pos(self, **kw):
-    """ This is constructing the E_m-E_n and E_n-E_m matrices """
-    h_rpa = diagflat(self.FmE)
-    print(h_rpa.shape)
-
-    nf = self.nfermi[0]
-    nv = self.norbs-self.vstart[0]
-    vs = self.vstart[0]
-    neh = nf*nv
-    x = self.mo_coeff[0,0,:,:,0]
-    pab2v = self.pb.get_ac_vertex_array()
-    self.pmn2v = pmn2v = einsum('nb,pmb->pmn', x[:nf,:], einsum('ma,pab->pmb', x[vs:,:], pab2v))
-    pmn2c = einsum('qp,pmn->qmn', self.hkernel_den, pmn2v)
-    meri = einsum('pmn,pik->mnik', pmn2c, pmn2v).reshape((nf*nv,nf*nv))
-    print(meri.shape)
-    #meri.fill(0.0)
-    h_rpa = h_rpa+2.0*meri
-    esq, s2z = np.linalg.eigh(h_rpa)
-    print(abs(h_rpa-h_rpa.transpose()).sum())
-    print('esq', esq*27.2114)
-    
-    return 
+    self.kernel_qchem_inter_rf()
 
   def kernel_qchem_inter_rf_pos_neg(self, **kw):
     """ This is constructing the E_m-E_n and E_n-E_m matrices """
     h_rpa = diagflat(concatenate((ravel(self.FmE),-ravel(self.FmE))))
     print(h_rpa.shape)
 
-
     nf = self.nfermi[0]
     nv = self.norbs-self.vstart[0]
     vs = self.vstart[0]
@@ -55,15 +31,15 @@ class qchem_inter_rf(scf):
     self.pmn2v = pmn2v = einsum('nb,pmb->pmn', x[:nf,:], einsum('ma,pab->pmb', x[vs:,:], pab2v))
     pmn2c = einsum('qp,pmn->qmn', self.hkernel_den, pmn2v)
     meri = einsum('pmn,pik->mnik', pmn2c, pmn2v).reshape((nf*nv,nf*nv))
-    print(meri.shape)
-    meri.fill(0.0)
+    #print(meri.shape)
+    #meri.fill(0.0)
     h_rpa[:neh, :neh] = h_rpa[:neh, :neh]+meri
     h_rpa[:neh, neh:] = h_rpa[:neh, neh:]+meri
-    h_rpa[neh:, :neh] = h_rpa[neh:, :neh]+meri
-    h_rpa[neh:, neh:] = h_rpa[neh:, neh:]+meri
-    esq, s2z = np.linalg.eigh(h_rpa)
+    h_rpa[neh:, :neh] = h_rpa[neh:, :neh]-meri
+    h_rpa[neh:, neh:] = h_rpa[neh:, neh:]-meri
+    edif, s2z = np.linalg.eig(h_rpa)
     print(abs(h_rpa-h_rpa.transpose()).sum())
-    print('esq', esq*27.2114)
+    print('edif', edif.real*27.2114)
     
     return 
   
@@ -79,7 +55,9 @@ class qchem_inter_rf(scf):
     return rf
   
   def kernel_qchem_inter_rf(self, **kw):
+    from pyscf.gw.gw import rpa_AB_matrices
     """ This is constructing A B matrices and diagonalizes the problem """
+
     nf = self.nfermi[0]
     nv = self.norbs-self.vstart[0]
     vs = self.vstart[0]
@@ -88,17 +66,25 @@ class qchem_inter_rf(scf):
     pab2v = self.pb.get_ac_vertex_array()
     self.pmn2v = pmn2v = einsum('nb,pmb->pmn', x[:nf,:], einsum('ma,pab->pmb', x[vs:,:], pab2v))
     pmn2c = einsum('qp,pmn->qmn', self.hkernel_den, pmn2v)
-    meri = -einsum('pmn,pik->mnik', pmn2c, pmn2v)
+    meri = einsum('pmn,pik->mnik', pmn2c, pmn2v)
     #meri.fill(0.0)
 
     A = (diagflat( self.FmE ).reshape([nv,nf,nv,nf]) + meri).reshape([nv*nf,nv*nf])
     B = meri.reshape([nv*nf,nv*nf])
+
     assert np.allclose(A, A.transpose())
     assert np.allclose(B, B.transpose())
 
+    AmB = A-B
+    n = len(AmB)
+    print(__name__)
+    for i in range(n): print(i, AmB[i,i])
+    
     ham_rpa = np.multiply(self.sqrt_FmE[:,None], np.multiply(A+B, self.sqrt_FmE))
     esq, self.s2z = np.linalg.eigh(ham_rpa)
     self.s2omega = np.sqrt(esq)
+    print(self.s2omega*27.2114)
+
     self.s2z = self.s2z.T
     self.s2xpy = np.zeros_like(self.s2z)
     for s,(e2,z) in enumerate(zip(esq, self.s2z)):

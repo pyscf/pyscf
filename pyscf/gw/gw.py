@@ -152,6 +152,13 @@ def rpa(gw, using_tda=False, using_casida=True, method='TDH'):
             sqrt_A_minus_B = scipy.linalg.sqrtm(A-B)
             ham_rpa = np.dot(sqrt_A_minus_B, np.dot((A+B),sqrt_A_minus_B))
             esq, t = eig(ham_rpa)
+            print('np.sqrt(esq)', np.sqrt(esq)*27.2114)
+
+            AmB = A[::2,::2]-B[::2,::2]
+            n = len(AmB)
+            print(__name__)
+            for i in range(n): print(AmB[i,i])
+            
             return np.sqrt(esq), t
 
 
