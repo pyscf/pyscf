@@ -15,12 +15,12 @@
 from __future__ import print_function, division
 import unittest
 import numpy as np
+from pyscf.nao.m_csphar import csphar
 
 class KnowValues(unittest.TestCase):
 
   def test_csphar(self):
     """  """
-    from pyscf.nao.m_csphar import csphar
     from pyscf.nao.m_csphar_talman_libnao import csphar_talman_libnao, talman2world
     
     rvec = np.array([0.1, 0.2, -0.4])

@@ -14,13 +14,13 @@
 
 from __future__ import print_function, division
 import os,unittest,numpy as np
+from pyscf.nao import mf
+from pyscf.tools.cubegen import Cube
 
 class KnowValues(unittest.TestCase):
 
   def test_aos_libnao(self):
     """ Computing of the atomic orbitals """
-    from pyscf.nao import mf
-    from pyscf.tools.cubegen import Cube
    
     sv = mf(label='water', cd=os.path.dirname(os.path.abspath(__file__)))
     cc = Cube(sv, nx=20, ny=20, nz=20)

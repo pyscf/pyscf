@@ -15,6 +15,7 @@
 from __future__ import print_function, division
 import unittest
 from pyscf import gto
+from pyscf.nao import nao
 
 mol = gto.M(
     verbose = 1,
@@ -29,7 +30,6 @@ class KnowValues(unittest.TestCase):
 
   def test_dipole_coo(self):
     """ Test computation of dipole matrix elements """
-    from pyscf.nao import nao
     sv = nao(gto=mol)
     dipme = sv.dipole_coo()
     

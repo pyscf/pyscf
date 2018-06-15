@@ -14,6 +14,7 @@
 
 from __future__ import print_function, division
 import os,unittest,numpy as np
+from pyscf.nao import mf
 
 try:
   from ase import Atoms
@@ -44,7 +45,6 @@ class KnowValues(unittest.TestCase):
 
   def test_sv_after_gpaw(self):
     """ init ao_log_c with it radial orbitals from GPAW """
-    from pyscf.nao import mf
 
     if calc is None: return
 

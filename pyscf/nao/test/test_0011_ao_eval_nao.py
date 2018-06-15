@@ -16,6 +16,7 @@ from __future__ import print_function, division
 import unittest
 import numpy as np
 from pyscf import gto
+from pyscf.nao import nao
 
 mol = gto.M(
     verbose = 1,
@@ -29,7 +30,6 @@ mol = gto.M(
 class KnowValues(unittest.TestCase):
 
   def test_ao_eval(self):
-    from pyscf.nao import nao
     from pyscf.nao.m_ao_eval_libnao import ao_eval_libnao
     from pyscf.nao.m_ao_eval import ao_eval
     """  """

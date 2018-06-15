@@ -26,12 +26,13 @@ mol = gto.M(
     basis = 'cc-pvdz',
 )
 
+from pyscf.nao.m_prod_talman import prod_talman_c
+
 class KnowValues(unittest.TestCase):
 
   def test_prdred(self):
     """  """
     from pyscf.nao import nao
-    from pyscf.nao.m_prod_talman import prod_talman_c
     sv = nao(gto=mol)
     self.assertEqual(sv.sp2charge[0], 1)
     pt = prod_talman_c(sv.ao_log)

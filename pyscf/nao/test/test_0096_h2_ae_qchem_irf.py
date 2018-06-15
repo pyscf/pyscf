@@ -2,7 +2,7 @@ from __future__ import print_function, division
 import unittest, numpy as np
 from pyscf import gto, scf, dft
 from pyscf.gw import GW
-from pyscf.tddft import TDDFT
+from pyscf import tddft
 from pyscf.nao.qchem_inter_rf import qchem_inter_rf
 from pyscf.nao import tddft_iter
 
@@ -15,13 +15,18 @@ class KnowValues(unittest.TestCase):
     
   def test_qchem_irf(self):
     """ Test """
-    gto_hf = dft.DFT(mol, xc_code='LDA')
+    gto_hf = dft.RKS(mol)
     gto_hf.kernel()
-    print(gto_hf.mo_energy)
-    gto_gw = GW(gto_hf)
+    nocc = mol.nelectron//2
+    nmo = gto_hf.mo_energy.size
+    nvir = nmo-nocc    
+    gto_td = tddft.dRPA(gto_hf)
+    gto_td.nstates = min(100, nocc*nvir)
+    gto_td.kernel()
+    
+    gto_gw = GW(gto_hf, gto_td)
     gto_gw.kernel()
     
-
     nao_td  = tddft_iter(mf=gto_hf, gto=mol, xc_code='RPA')
     eps = 0.02
     omegas = np.arange(0.0,2.0,eps/2.0)+1j*eps
@@ -30,7 +35,7 @@ class KnowValues(unittest.TestCase):
     np.savetxt('NH.tddft_iter_rpa.omega.inter.pav.txt', data.T, fmt=['%f','%f'])
     
     np.set_printoptions(linewidth=180)
-    qrf = qchem_inter_rf(mf=gto_hf, gto=mol, pb_algorithm='fp', verbosity=1)
+    #qrf = qchem_inter_rf(mf=gto_hf, gto=mol, pb_algorithm='fp', verbosity=1)
     
 
 if __name__ == "__main__": unittest.main()

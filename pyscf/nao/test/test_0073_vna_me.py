@@ -1,12 +1,11 @@
 from __future__ import print_function, division
 import os,unittest,numpy as np
-
+from pyscf.nao import mf as mf_c
 
 class KnowValues(unittest.TestCase):
 
   def test_vneutral_atom_matrix_elements(self):
     """ reSCF then G0W0 """
-    from pyscf.nao import mf as mf_c
     
     dname = os.path.dirname(os.path.abspath(__file__))
     mf = mf_c(label='n2', cd=dname)

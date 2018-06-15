@@ -1,12 +1,11 @@
 from __future__ import print_function, division
 import os,unittest,numpy as np
-
+from pyscf.nao import gw as gw_c
 
 class KnowValues(unittest.TestCase):
 
   def test_scf_gw_perform_h2o(self):
     """ reSCF then G0W0 """
-    from pyscf.nao import gw as gw_c
     
     fc = \
       """-1.176137582599898090e+00

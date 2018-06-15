@@ -15,6 +15,11 @@
 from __future__ import print_function, division
 import os,unittest,numpy as np
 from pyscf import gto, scf
+from pyscf.tools import cubegen
+from pyscf.tools.cubegen import Cube
+from pyscf.dft import numint, gen_grid
+from pyscf.nao import mf as nao_mf
+
 mol = gto.M(atom='O 0.00000000,  0.000000,  0.000000; H 0.761561, 0.478993, 0.00000000,; H -0.761561, 0.478993, 0.00000000,', basis='6-31g*', verbose=0)
 mf = scf.RHF(mol)
 mf.scf()
@@ -24,14 +29,11 @@ class KnowValues(unittest.TestCase):
 
   def test_cubegen(self):
     """ Compute the density and store into a cube file  """
-    from pyscf.tools import cubegen
     cubegen.density(mol, 'h2o_den.cube', mf.make_rdm1(), nx=20, ny=20, nz=20)
     cubegen.mep(mol, 'h2o_pot.cube', mf.make_rdm1(), nx=20, ny=20, nz=20) #slow
 
   def test_cube_c(self):
     """ Compute the density and store into a cube file  """
-    from pyscf.tools.cubegen import Cube
-    from pyscf.dft import numint, gen_grid
 
     # Initialize the class cube_c
     cc = Cube(mol, nx=20, ny=20, nz=20)
@@ -53,10 +55,9 @@ class KnowValues(unittest.TestCase):
 
   def test_cube_sv(self):
     """ Compute the density and store into a cube file  """
-    from pyscf.nao import mf
     from pyscf.tools.cubegen import Cube
     
-    sv = mf(label='water', cd=os.path.dirname(os.path.abspath(__file__)))
+    sv = nao_mf(label='water', cd=os.path.dirname(os.path.abspath(__file__)))
     cc = Cube(sv, nx=50, ny=50, nz=50)
     dens = sv.dens_elec(cc.get_coords(), sv.make_rdm1())
     dens = dens[:,0].reshape(cc.nx,cc.ny,cc.nz)

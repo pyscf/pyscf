@@ -1,12 +1,11 @@
 from __future__ import print_function, division
 import os,unittest,numpy as np
-
+from pyscf.nao.scf import scf
 
 class KnowValues(unittest.TestCase):
 
   def test_rescf(self):
     """ reSCF """
-    from pyscf.nao.scf import scf
     
     dname = os.path.dirname(os.path.abspath(__file__))
     myhf = scf(label='water', cd=dname)

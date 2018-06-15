@@ -16,6 +16,7 @@ from __future__ import print_function, division
 import unittest
 from pyscf import gto
 import os
+from pyscf.nao import nao, prod_basis
 
 
 ag_s7l7_wonatoms = """
@@ -597,7 +598,6 @@ class KnowValues(unittest.TestCase):
 
   def test_ls_contributing(self):
     """ To test the list of contributing centers """
-    from pyscf.nao import nao, prod_basis
     sv = nao(gto=mol)
     pb = prod_basis()
     pb.sv = sv

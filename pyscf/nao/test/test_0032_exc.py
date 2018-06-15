@@ -14,14 +14,12 @@
 
 from __future__ import print_function, division
 import os,unittest,numpy as np
+from pyscf.nao import mf
 
 class KnowValues(unittest.TestCase):
 
   def test_exc(self):
     """ Compute exchange-correlation energy """
-    from timeit import default_timer as timer
-
-    from pyscf.nao import mf
     from timeit import default_timer as timer
     
     sv = mf(label='water', cd=os.path.dirname(os.path.abspath(__file__)))

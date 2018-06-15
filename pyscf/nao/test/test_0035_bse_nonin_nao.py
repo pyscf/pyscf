@@ -14,13 +14,13 @@
 
 from __future__ import print_function, division
 import os,unittest,numpy as np
+from pyscf.nao import bse_iter
 
 class KnowValues(unittest.TestCase):
 
   def test_bse_iter_nonin(self):
     """ Compute polarization with LDA TDDFT  """
     from timeit import default_timer as timer
-    from pyscf.nao import bse_iter
     
     dname = os.path.dirname(os.path.abspath(__file__))
     bse = bse_iter(label='water', cd=dname, iter_broadening=1e-2, xc_code='RPA', verbosity=0)

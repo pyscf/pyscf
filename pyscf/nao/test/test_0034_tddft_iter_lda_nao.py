@@ -14,12 +14,12 @@
 
 from __future__ import print_function, division
 import os,unittest,numpy as np
+from pyscf.nao import tddft_iter
 
 class KnowValues(unittest.TestCase):
 
   def test_tddft_iter_lda(self):
     """ Compute polarization with LDA TDDFT  """
-    from pyscf.nao import tddft_iter
     from timeit import default_timer as timer
     
     dname = os.path.dirname(os.path.abspath(__file__))

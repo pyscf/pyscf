@@ -14,12 +14,12 @@
 
 from __future__ import print_function, division
 import os,unittest,numpy as np
+from pyscf.nao import nao
 
 class KnowValues(unittest.TestCase):
 
   def test_openmx(self):
     """ Computing of the atomic orbitals """
-    from pyscf.nao import nao
    
     sv = nao(openmx='water', cd=os.path.dirname(os.path.abspath(__file__)))
     self.assertEqual(sv.natoms, 3)

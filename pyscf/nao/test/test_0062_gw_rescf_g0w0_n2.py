@@ -1,12 +1,11 @@
 from __future__ import print_function, division
 import os,unittest,numpy as np
-
+from pyscf.nao import gw as gw_c
 
 class KnowValues(unittest.TestCase):
 
   def test_rescf(self):
     """ Hartree-Fock than G0W0 N2 example is marked with level-ordering change """
-    from pyscf.nao import gw as gw_c
     
     dname = os.path.dirname(os.path.abspath(__file__))
     gw = gw_c(label='n2', cd=dname, verbosity=0, jcutoff=9, nff_ia=64, tol_ia=1e-6, rescf=True)

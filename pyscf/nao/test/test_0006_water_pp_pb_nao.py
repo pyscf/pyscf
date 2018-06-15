@@ -14,12 +14,12 @@
 
 from __future__ import print_function, division
 import unittest
+from pyscf.nao import mf
 
 class KnowValues(unittest.TestCase):
 
   def test_water_pp_pb(self):
     """ This is for initializing with SIESTA radial orbitals """
-    from pyscf.nao import mf
     from numpy import einsum, array
     import os
     dname = os.path.dirname(os.path.abspath(__file__))

@@ -14,12 +14,11 @@
 
 from __future__ import print_function
 import unittest
-
+from pyscf.nao.m_siesta_utils import get_siesta_command, get_pseudo
 
 class KnowValues(unittest.TestCase):
   
   def test_siesta2sv_df(self):
-    from pyscf.nao.m_siesta_utils import get_siesta_command, get_pseudo
     import subprocess
     import os
 

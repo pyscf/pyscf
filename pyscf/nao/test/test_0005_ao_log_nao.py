@@ -15,6 +15,8 @@
 from __future__ import print_function, division
 import unittest
 from pyscf import gto
+from pyscf.nao.m_siesta_ion_xml import siesta_ion_xml
+from pyscf.nao import ao_log_c
 
 mol = gto.M(
     verbose = 1,
@@ -29,8 +31,6 @@ class KnowValues(unittest.TestCase):
 
   def test_ao_log_sp2ion(self):
     """ This is for initializing with SIESTA radial orbitals """
-    from pyscf.nao.m_siesta_ion_xml import siesta_ion_xml
-    from pyscf.nao import ao_log_c
     import os
     dname = os.path.dirname(os.path.abspath(__file__))
     sp2ion = []

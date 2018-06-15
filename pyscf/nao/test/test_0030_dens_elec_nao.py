@@ -14,12 +14,12 @@
 
 from __future__ import print_function, division
 import os,unittest,numpy as np
+from pyscf.nao import mf
 
 class KnowValues(unittest.TestCase):
 
   def test_dens_elec(self):
     """ Compute density in coordinate space with scf, integrate and compare with number of electrons """
-    from pyscf.nao import mf
     from timeit import default_timer as timer
     
     sv = mf(label='water', cd=os.path.dirname(os.path.abspath(__file__)))

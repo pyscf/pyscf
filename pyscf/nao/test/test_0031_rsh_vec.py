@@ -14,12 +14,12 @@
 
 from __future__ import print_function, division
 import os,unittest,numpy as np
+from pyscf.nao.m_rsphar_libnao import rsphar_vec as rsphar_vec_libnao
 
 class KnowValues(unittest.TestCase):
 
   def test_rsh_vec(self):
     """ Compute real spherical harmonics via a vectorized algorithm """
-    from pyscf.nao.m_rsphar_libnao import rsphar_vec as rsphar_vec_libnao
     from pyscf.nao.m_rsphar_libnao import rsphar_exp_vec as rsphar_exp_vec_libnao
     from pyscf.nao.m_rsphar_vec import rsphar_vec as rsphar_vec_python
     from timeit import default_timer as timer

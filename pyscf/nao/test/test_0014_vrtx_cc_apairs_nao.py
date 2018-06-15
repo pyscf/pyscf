@@ -14,13 +14,13 @@
 
 from __future__ import print_function, division
 import unittest,os
+from pyscf.nao import mf, prod_basis
 
 
 class KnowValues(unittest.TestCase):
 
   def test_vrtx_cc_apairs(self):
     """ This is to test a batch generation vertices for bilocal atomic pairs. """
-    from pyscf.nao import mf, prod_basis
     from numpy import allclose
 
     dname = os.path.dirname(os.path.abspath(__file__))
