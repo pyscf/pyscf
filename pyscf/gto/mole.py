@@ -1757,7 +1757,8 @@ class Mole(lib.StreamObject):
 # don't modify the following private variables, they are not input options
         self._atm = numpy.zeros((0,6), dtype=numpy.int32)
         self._bas = numpy.zeros((0,8), dtype=numpy.int32)
-        self._env = numpy.zeros(0)
+        self._env = numpy.zeros(PTR_ENV_START)
+        self._env[PTR_LIGHT_SPEED] = param.LIGHT_SPEED
         self._ecpbas = numpy.zeros((0,8), dtype=numpy.int32)
 
         self.stdout = sys.stdout
@@ -1982,8 +1983,7 @@ class Mole(lib.StreamObject):
 # Note the internal _format is in Bohr
             self._atom = self.format_atom(self._atom, orig, axes, 'Bohr')
 
-        env = [0] * PTR_ENV_START
-        env[PTR_LIGHT_SPEED] = param.LIGHT_SPEED
+        env = self._env[:PTR_ENV_START]
         self._atm, self._bas, self._env = \
                 self.make_env(self._atom, self._basis, env, self.nucmod)
         self._atm, self._ecpbas, self._env = \
