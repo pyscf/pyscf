@@ -12,6 +12,7 @@ recursive-include pyscf *.dat
 recursive-include pyscf/lib/deps *.so*
 recursive-include pyscf/lib/deps *.dylib*
 include pyscf/lib/*.so*
+include pyscf/lib/*.dylib*
 
 recursive-exclude pyscf/lib *.c *.h
 recursive-exclude pyscf/lib *.cl

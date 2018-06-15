@@ -115,6 +115,7 @@ def mm_charge(scf_method, coords, charges, unit=None):
             return mm_charge_grad(scf_grad, coords, charges, 'Bohr')
 
     return QMMM()
+add_mm_charges = mm_charge
 
 def mm_charge_grad(scf_grad, coords, charges, unit=None):
     '''Apply the MM charges in the QM gradients' method.  It affects both the

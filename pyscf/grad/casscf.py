@@ -113,7 +113,7 @@ def kernel(mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=None,
         de[k] += numpy.einsum('xij,ij->x', vhf1c[:,p0:p1], dm1[p0:p1]) * 2
         de[k] += numpy.einsum('xij,ij->x', vhf1a[:,p0:p1], dm_core[p0:p1]) * 2
 
-    de += rhf_grad.grad_nuc(mol, atmlst)
+    de += mf_grad.grad_nuc(mol, atmlst)
     return de
 
 def as_scanner(mcscf_grad):

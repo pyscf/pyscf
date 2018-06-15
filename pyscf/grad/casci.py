@@ -173,7 +173,7 @@ def kernel(mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=None, verbose=None):
         de[k] -= numpy.einsum('xij,ij->x', s1[:,p0:p1], vhf_s1occ[p0:p1]) * 2
         de[k] -= numpy.einsum('xij,ji->x', s1[:,p0:p1], vhf_s1occ[:,p0:p1]) * 2
 
-    de += rhf_grad.grad_nuc(mol, atmlst)
+    de += mf_grad.grad_nuc(mol, atmlst)
     return de
 
 
