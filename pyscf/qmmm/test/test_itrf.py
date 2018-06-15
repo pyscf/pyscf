@@ -68,6 +68,24 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(abs(ref-v).max(), 0, 12)
         pyscf.DEBUG = bak
 
+    def test_hcore_cart(self):
+        coords = [(0.0,0.1,0.0)]
+        charges = [1.00]
+        mol = gto.M(
+            verbose = 0,
+            atom = '''C    0.000  -0.300    0.2
+                      Ne   0.310   0.820    0.1''',
+            basis = 'cc-pvdz',
+            cart = True)
+        mf = itrf.mm_charge(scf.RHF(mol), coords, charges)
+        h = mf.get_hcore()
+        self.assertAlmostEqual(lib.finger(h), -147.92831183612765, 9)
+
+        h = mf.nuc_grad_method().get_hcore()
+        self.assertEqual(h.shape, (3,30,30))
+        self.assertAlmostEqual(lib.finger(h), -178.29768724184771, 9)
+
+
 
 if __name__ == "__main__":
     print("Full Tests for qmmm")

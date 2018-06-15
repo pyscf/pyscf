@@ -58,6 +58,8 @@ def getints(intor_name, atm, bas, env, shls_slice=None, comp=None, hermi=0,
             "int1e_r_sph"                     ( \| rc \| \)
             "int1e_r2_sph"                    ( \| rc dot rc \| \)
             "int1e_rr_sph"                    ( \| rc rc \| \)
+            "int1e_rrr_sph"                   ( \| rc rc rc \| \)
+            "int1e_rrrr_sph"                  ( \| rc rc rc rc \| \)
             "int1e_pnucp_sph"                 (p* \| nuc dot p \| \)
             "int1e_prinvxp_sph"               (p* \| rinv cross p \| \)
             "int1e_ovlp_spinor"               ( \| \)
@@ -259,6 +261,8 @@ _INTOR_FUNCTIONS = {
     'int1e_r'                   : (3, 3),
     'int1e_r2'                  : (1, 1),
     'int1e_rr'                  : (9, 9),
+    'int1e_rrr'                 : (27, 27),
+    'int1e_rrrr'                : (81, 81),
     'int1e_z_origj'             : (1, 1),
     'int1e_zz_origj'            : (1, 1),
     'int1e_r_origj'             : (3, 3),

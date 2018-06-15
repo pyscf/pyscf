@@ -43,7 +43,7 @@ Installation with conda
 
 If you have `Conda <https://conda.io/docs/>`_ 
 (or `Anaconda <https://www.continuum.io/downloads#linux>`_)
-environment, PySCF package can be installed through Conda cloud::
+environment, PySCF package can be installed with Conda cloud::
 
   $ conda install -c pyscf pyscf
 
@@ -54,14 +54,14 @@ PySCF docker image
 The following command starts a container with the jupyter notebook server
 listening for HTTP connections on port 8888::
 
-  $ docker run -it -p 8888:8888 pyscf/pyscf-1.5b
+  $ docker run -it -p 8888:8888 pyscf/pyscf-1.5.0
 
 Then visit ``https://localhost:8888`` with your browser to use notebook and
 pyscf.
 
 Another way to use PySCF in docker container is to start an Ipython shell::
 
-  $ docker run -it pyscf/pyscf-1.5b start.sh ipython
+  $ docker run -it pyscf/pyscf-1.5.0 start.sh ipython
 
 
 Manual installation from github repo
@@ -173,7 +173,7 @@ packages should be compiled with the flags::
         -DCMAKE_INSTALL_PREFIX:PATH=/opt -DCMAKE_INSTALL_LIBDIR:PATH=lib ..
     $ make && make install
 
-Next compile PySCF::
+Next, compile PySCF::
 
     $ cd pyscf/pyscf/lib
     $ mkdir build && cd build

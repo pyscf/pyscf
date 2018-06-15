@@ -28,7 +28,6 @@ except ImportError:
 import copy
 import numpy
 from pyscf import lib
-from pyscf.geomopt.grad import gen_grad_scanner
 from pyscf import __config__
 
 INCLUDE_GHOST = getattr(__config__, 'geomopt_berny_solver_optimize_include_ghost', True)
@@ -75,7 +74,13 @@ def as_berny_solver(method, assert_convergence=ASSERT_CONV,
     '''Generate a solver for berny optimize function.
     '''
     mol = copy.copy(method.mol)
-    g_scanner = gen_grad_scanner(method)
+    if isinstance(method, lib.GradScanner):
+        g_scanner = method
+    elif hasattr(method, 'nuc_grad_method'):
+        g_scanner = method.nuc_grad_method().as_scanner()
+    else:
+        raise NotImplementedError('Nuclear gradients of %s not available' % method)
+
     if not include_ghost:
         g_scanner.atmlst = numpy.where(mol.atom_charges() != 0)[0]
 

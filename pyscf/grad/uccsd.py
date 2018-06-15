@@ -234,7 +234,7 @@ def kernel(mycc, t1=None, t2=None, l1=None, l2=None, eris=None, atmlst=None,
         de[k] -= numpy.einsum('xij,ij->x', vhf1[k,0], dm1pa)
         de[k] -= numpy.einsum('xij,ij->x', vhf1[k,1], dm1pb)
 
-    de += rhf_grad.grad_nuc(mol)
+    de += mf_grad.grad_nuc(mol)
     log.timer('%s gradients' % mycc.__class__.__name__, *time0)
     return de
 

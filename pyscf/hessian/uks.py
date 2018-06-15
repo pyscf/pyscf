@@ -318,7 +318,7 @@ def _get_vxc_diag(hessobj, mo_coeff, mo_occ, max_memory):
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory):
             rhoa = ni.eval_rho2(mol, ao[:4], mo_coeff[0], mo_occ[0], mask, 'GGA')
             rhob = ni.eval_rho2(mol, ao[:4], mo_coeff[1], mo_occ[1], mask, 'GGA')
-            vxc = ni.eval_xc(xc_code, (rhoa,rhob), 1, deriv=1)[1]
+            vxc = ni.eval_xc(mf.xc, (rhoa,rhob), 1, deriv=1)[1]
 
             wva, wvb = numint._uks_gga_wv0((rhoa,rhob), vxc, weight)
             # *2 because v.T is not applied.
