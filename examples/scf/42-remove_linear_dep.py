@@ -14,13 +14,14 @@ mol = gto.M(atom=['H 0 0 %f'%i for i in range(10)], unit='Bohr',
 #
 # The linear dependency can cause HF, MCSCF etc methods converging to wrong
 # answer. This example shows how to remove linear dependency from overlap
-# matrix and feed the linearly independent basis into HF, MCSCF calculation.
+# matrix and use the linearly independent basis in the HF, MCSCF calculations.
 #
 # There is a shortcut function to remove linear-dependency, eg
 #
 #       mf = scf.RHF(mol).apply(scf.addons.remove_linear_dep_)
 #
-# This example details the method we implemented
+# This example demonstrated how the linear dependency is removed in our
+# implementation.
 #
 
 #

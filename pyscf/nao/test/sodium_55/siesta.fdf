@@ -1,0 +1,34 @@
+SystemLabel                siesta
+
+%include "geometry.siesta.fdf"
+
+%block PAO.Basis      
+Na                1
+n=3   0   2 P   1
+  8.825  8.496
+  1.000  1.000
+%endblock PAO.Basis
+
+MD.TypeOfRun     CG
+XC.functional     GGA
+XC.authors     PBE
+MD.NumCGsteps     0
+
+MD.MaxForceTol     0.02   eV/Ang
+
+MeshCutOff     250   Ry
+DM.MixingWeight     0.01
+DM.Tolerance     0.0001
+DM.NumberPulay     4
+SolutionMethod     Diagon
+MaxSCFIterations     1500
+PAO.BasisType     split
+
+DM.UseSaveDM    .True.
+DM.MixSCF1      .True.
+
+PAO.EnergyShift     100   meV
+PAO.BasisSize     DZP
+WriteCoorXmol     .True.
+WriteDenchar     .True.
+COOP.Write     .True.

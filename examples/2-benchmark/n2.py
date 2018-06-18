@@ -56,8 +56,7 @@ for bas in ('3-21g', '6-31g*', 'cc-pVTZ', 'ANO-Roos-TZ'):
     cpu0 = log.timer('N2 %s MP2'%bas, *cpu0)
 
     mymc = mcscf.CASSCF(mf, 4, 4)
-    idx = [i for i,s in enumerate(mol.spheric_labels(1)) if
-           re.search('2p[xy]', s)]
+    idx = mol.search_ao_label('2p[xy]')
     mo = sort_mo(mymc, idx, mf.mo_coeff)
     mymc.kernel(mo)
     cpu0 = log.timer('N2 %s CASSCF'%bas, *cpu0)

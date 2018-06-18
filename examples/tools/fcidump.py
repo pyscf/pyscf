@@ -3,15 +3,15 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+'''
+Writing FCIDUMP file for given integrals or SCF orbitals
+'''
+
 from functools import reduce
 import numpy
 from pyscf import gto, scf, ao2mo
 from pyscf import tools
 from pyscf import symm
-
-'''
-Write FCIDUMP file
-'''
 
 mol = gto.M(
     atom = [['H', 0, 0, i] for i in range(6)],

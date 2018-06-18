@@ -1,0 +1,41 @@
+Needs testing:
+- Shifted Gamma pt calc (e.g. at Baldereschi pt)
+- pyscf.util.examples or pyscf.pbc.util.examples with a small database of
+  models and properties obtained with various codes.  These may then be used in
+  actual tests for comparison as well as in the examples section.
+  > example calculations of realistic (but small) models (no low-level coding);
+  > test free of external imports (ase);
+  > performance (which may also be compared to other codes) benchmark;
+
+
+Code doc and cleaning:
+- Test infrastructure and examples for
+  - K pt calcs
+  - band structure
+  - Gamma pt HFX
+- Initial guess: check which ones are correct for PBC / PP / KSCF
+
+Ease of calc:
+- Better cutoff fn for lattice sums (from integral Schwartz condition)
+- ASE DFT calculator interface
+
+Other Functionality:
+- q->0 term for (ia|jb) integral, by finite difference q calc
+- UHF code and UHF initial guess (specify mag. moment for AFM)
+- Gamma pt MP2
+  - check q->0, compare against VASP / CP2K 
+- IP/EA/EE-EOM-CCSD 
+  - General spin-orb -> spin-orb -> restricted
+
+- addon routines to compute finite size corrections to the energies
+
+Efficiency:
+- Time-reversal symmetry
+  - K pts in Brillouin zone
+  - Grid in FFT
+- Abelian cell symmetry (See symmetry class in GPAW)
+  - Lattice sums
+  - Grids
+- Profile code
+  - Integral screening
+

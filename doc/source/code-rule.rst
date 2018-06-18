@@ -3,8 +3,6 @@
 Code standard
 *************
 
-* New features first being placed in pyscf/future.
-
 * Code at least should work under python-2.7, gcc-4.8.
 
 * 90/10 functional/OOP, unless performance critical, functions are pure.

@@ -72,7 +72,7 @@ h   0.000000000000000 -2.509154418614532  0.000000000000000
 #    cpu0 = log.timer('C6H6 %s MP2'%bas, *cpu0)
 #
 #    mymc = mcscf.CASSCF(mf, 6, 6)
-#    idx = [i for i,s in enumerate(mol.spheric_labels(1)) if 'C 2pz' in s]
+#    idx = mol.search_ao_label('C 2pz')
 #    mo = sort_mo(mymc, idx, mf.mo_coeff)
 #    mymc.kernel(mo)
 #    cpu0 = log.timer('C6H6 %s CASSCF'%bas, *cpu0)

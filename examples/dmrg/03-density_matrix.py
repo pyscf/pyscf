@@ -3,14 +3,14 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+'''
+Block code for active space N-particle density matrices.
+'''
+
 from pyscf import gto
 from pyscf import scf
 from pyscf import mcscf
 from pyscf.dmrgscf import dmrgci
-
-'''
-Block code for active space N-particle density matrices.
-'''
 
 b = 1.2
 mol = gto.M(

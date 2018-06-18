@@ -1,46 +1,60 @@
-lib
-***
+:mod:`lib` --- Helper functions, parameters, and C extensions
+*************************************************************
 
-.. automodule:: pyscf.lib
+.. module:: lib
+   :synopsis: Helper functions, parameters, and C extensions.
  
 
-parameters
-==========
+:mod:`lib.parameters`
+=====================
 
-.. automodule:: pyscf.lib.parameters
+.. automodule:: lib.parameters
+
+
+:mod:`lib.logger`
+=================
+
+.. automodule:: lib.logger
+
+Logger object
+-------------
+.. autoclass:: lib.logger.Logger
+
+.. autofunction:: lib.logger.new_logger
+
+
+numpy extensions
+================
+
+.. automodule:: lib.numpy_helper
    :members:
 
 
-logger
-======
+scipy extensions
+================
 
-.. automodule:: pyscf.lib.logger
+.. automodule:: lib.linalg_helper
    :members:
 
 
-numpy helper
-============
+:mod:`lib.chkfile`
+==================
 
-.. automodule:: pyscf.lib.numpy_helper
-   :members:
+Chkfile is a HDF5 file.
 
-.. automodule:: pyscf.lib.linalg_helper
-   :members:
+Functions to access key/value in chkfile
+----------------------------------------
 
-
-chkfile
-=======
-
-.. automodule:: pyscf.lib.chkfile
-   :members:
+.. automodule:: lib.chkfile
+   :members: save, load, save_mol, load_mol
 
 
-Fast load
----------
+Quickly loading object from chkfile
+-----------------------------------
 
 The results of SCF and MCSCF methods are saved as a Python dictionary in
 the chkfile.  One can fast load the results and update the SCF and MCSCF
-objects using the python built in methods ``.__dict__.update``, eg::
+objects using the python built in methods ``.__dict__.update``, e.g.::
 
     from pyscf import gto, scf, mcscf, lib
     mol = gto.M(atom='N 0 0 0; N 1 1 1', basis='ccpvdz')
@@ -55,3 +69,41 @@ objects using the python built in methods ``.__dict__.update``, eg::
     mc = mcscf.CASCI(mf, 6, 6)
     mc.__dict__.update(lib.chkfile.load('n2.chk', 'mcscf'))
     mc.kernel()
+
+
+:mod:`lib.diis`
+===============
+
+.. automodule:: lib.diis
+   :members: DIIS, restore
+
+
+Other helper functions
+======================
+
+Background mode
+---------------
+.. autofunction:: lib.call_in_background
+
+
+Temporary HDF5 file
+-------------------
+.. autoclass:: lib.H5TmpFile
+
+
+OpenMP threads
+--------------
+.. autofunction:: lib.num_threads
+
+.. autoclass:: lib.with_omp_threads
+
+
+Capture stdout
+--------------
+.. autoclass:: lib.capture_stdout
+
+
+Other helper functions in :mod:`lib.misc`
+-----------------------------------------
+.. automodule:: lib.misc
+  :members: flatten, light_speed

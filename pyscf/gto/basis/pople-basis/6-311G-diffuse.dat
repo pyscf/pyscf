@@ -1,0 +1,76 @@
+#  6-311++G  EMSL  Basis Set Exchange Library  6/9/17 6:22 PM
+# Elements                             References
+# --------                             ----------
+# H, Li - Ne: R. Krishnan, J.S. Binkley, R. Seeger and J.A. Pople,
+# J. Chem. Phys. 72, 650 (1980)
+# Na - Ar:    A.D. McLean and G.S. Chandler J. Chem. Phys. 72, 5639, (1980).
+# K  - Ca:    J-P. Blaudeau, M. P. McGrath, L.A. Curtiss and L. Radom,
+# J. Chem. Phys. 107, 5016 (1997).
+# Diffuse functions:
+# H, Li-Cl: T. Clark, J. Chandrasekhar,  G.W. Spitznagel, P.V.R. Schleyer,
+# J. Comp. Chem. 4, 294 (1983).
+# 
+
+
+
+BASIS "ao basis" PRINT
+#BASIS SET: (6s) -> [4s]
+H    S
+      0.0360000              1.0000000        
+#BASIS SET: (12s,6p) -> [5s,4p]
+Li    SP
+      0.0074000              1.0000000              1.0000000        
+#BASIS SET: (12s,6p) -> [5s,4p]
+Be    SP
+      0.0207000              1.0000000              1.0000000        
+#BASIS SET: (12s,6p) -> [5s,4p]
+B    SP
+      0.0315000              1.0000000              1.0000000        
+#BASIS SET: (12s,6p) -> [5s,4p]
+C    SP
+      0.0438000              1.0000000              1.0000000        
+#BASIS SET: (12s,6p) -> [5s,4p]
+N    SP
+      0.0639000              1.0000000              1.0000000        
+#BASIS SET: (12s,6p) -> [5s,4p]
+O    SP
+      0.0845000              1.0000000              1.0000000        
+#BASIS SET: (12s,6p) -> [5s,4p]
+F    SP
+      0.1076000              1.0000000              1.0000000        
+#BASIS SET: (12s,6p) -> [5s,4p]
+Ne    SP
+      0.1300000              1.0000000              1.0000000        
+#BASIS SET: (14s,10p) -> [7s,6p]
+Na    SP
+      0.0076000              1.0000000              1.0000000        
+#BASIS SET: (14s,10p) -> [7s,6p]
+Mg    SP
+      0.0146000              1.0000000              1.0000000        
+#BASIS SET: (14s,10p) -> [7s,6p]
+Al    SP
+      0.0318000              1.0000000              1.0000000        
+#BASIS SET: (14s,10p) -> [7s,6p]
+Si    SP
+      0.0331000              1.0000000              1.0000000        
+#BASIS SET: (14s,10p) -> [7s,6p]
+P    SP
+      0.0348000              1.0000000              1.0000000        
+#BASIS SET: (14s,10p) -> [7s,6p]
+S    SP
+      0.0405000              1.0000000              1.0000000        
+#BASIS SET: (14s,11p) -> [7s,6p]
+Cl    SP
+      0.0483000              1.0000000              1.0000000        
+#BASIS SET: (14s,11p) -> [7s,6p]
+Ar    SP
+      0.0600000              1.0000000              1.0000000        
+#BASIS SET: (15s,12p,3d) -> [9s,8p,1d]
+K    SP
+      0.0047000              1.0000000              1.0000000        
+#BASIS SET: (15s,12p,3d) -> [9s,8p,1d]
+Ca    SP
+      0.0071000              1.0000000              1.0000000        
+END
+
+

@@ -23,10 +23,9 @@ ase_atom=Diamond(symbol='C', latticeconstant=3.5668)
 # Set up a cell; everything except atom; the ASE calculator will
 # set the atom variable
 cell = pbcgto.Cell()
-cell.h=ase_atom.cell
+cell.a=ase_atom.cell
 cell.basis = 'gth-szv'
 cell.pseudo = 'gth-pade'
-cell.gs=np.array([8,8,8])
 cell.verbose = 0
 
 # Set up the kind of calculation to be done

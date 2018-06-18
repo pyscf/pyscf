@@ -1,0 +1,182 @@
+#!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Authors: Timothy Berkelbach <tim.berkelbach@gmail.com>
+#          Qiming Sun <osirpt.sun@gmail.com>
+#
+
+'''
+Non-relativistic Restricted Kohn-Sham for periodic systems at a single k-point
+
+See Also:
+    pyscf.pbc.dft.krks.py : Non-relativistic Restricted Kohn-Sham for periodic
+                            systems with k-point sampling
+'''
+
+import time
+import numpy
+import pyscf.dft
+from pyscf import lib
+from pyscf.lib import logger
+from pyscf.pbc.scf import hf as pbchf
+from pyscf.pbc.scf import khf
+from pyscf.pbc.dft import gen_grid
+from pyscf.pbc.dft import numint
+from pyscf.dft.rks import define_xc_
+from pyscf import __config__
+
+
+def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
+             kpt=None, kpts_band=None):
+    '''Coulomb + XC functional
+
+    .. note::
+        This function will change the ks object.
+
+    Args:
+        ks : an instance of :class:`RKS`
+            XC functional are controlled by ks.xc attribute.  Attribute
+            ks.grids might be initialized.
+        dm : ndarray or list of ndarrays
+            A density matrix or a list of density matrices
+
+    Returns:
+        matrix Veff = J + Vxc.  Veff can be a list matrices, if the input
+        dm is a list of density matrices.
+    '''
+    if cell is None: cell = ks.cell
+    if dm is None: dm = ks.make_rdm1()
+    if kpt is None: kpt = ks.kpt
+    t0 = (time.clock(), time.time())
+
+    ground_state = (isinstance(dm, numpy.ndarray) and dm.ndim == 2
+                    and kpts_band is None)
+
+# For UniformGrids, grids.coords does not indicate whehter grids are initialized
+    if ks.grids.non0tab is None:
+        ks.grids.build(with_non0tab=True)
+        if ks.small_rho_cutoff > 1e-20 and ground_state:
+            ks.grids = prune_small_rho_grids_(ks, cell, dm, ks.grids, kpt)
+        t0 = logger.timer(ks, 'setting up grids', *t0)
+
+    if hermi == 2:  # because rho = 0
+        n, exc, vxc = 0, 0, 0
+    else:
+        n, exc, vxc = ks._numint.nr_rks(cell, ks.grids, ks.xc, dm, 0,
+                                        kpt, kpts_band)
+        logger.debug(ks, 'nelec by numeric integration = %s', n)
+        t0 = logger.timer(ks, 'vxc', *t0)
+
+    omega, alpha, hyb = ks._numint.rsh_and_hybrid_coeff(ks.xc, spin=cell.spin)
+    if abs(hyb) < 1e-10:
+        vj = ks.get_j(cell, dm, hermi, kpt, kpts_band)
+        vxc += vj
+    else:
+        if getattr(ks.with_df, '_j_only', False):  # for GDF and MDF
+            ks.with_df._j_only = False
+        vj, vk = ks.get_jk(cell, dm, hermi, kpt, kpts_band)
+        vxc += vj - vk * (hyb * .5)
+
+        if ground_state:
+            exc -= numpy.einsum('ij,ji', dm, vk).real * .5 * hyb*.5
+
+    if ground_state:
+        ecoul = numpy.einsum('ij,ji', dm, vj).real * .5
+    else:
+        ecoul = None
+
+    vxc = lib.tag_array(vxc, ecoul=ecoul, exc=exc, vj=None, vk=None)
+    return vxc
+
+
+def _patch_df_beckegrids(density_fit):
+    def new_df(self, auxbasis=None, mesh=None):
+        mf = density_fit(self, auxbasis, mesh)
+        mf.with_df._j_only = True
+        mf.grids = gen_grid.BeckeGrids(self.cell)
+        mf.grids.level = getattr(__config__, 'pbc_dft_rks_RKS_grids_level',
+                                 mf.grids.level)
+        return mf
+    return new_df
+
+NELEC_ERROR_TOL = getattr(__config__, 'pbc_dft_rks_prune_error_tol', 0.02)
+def prune_small_rho_grids_(ks, mol, dm, grids, kpts):
+    rho = ks._numint.get_rho(mol, dm, grids, kpts, ks.max_memory)
+    n = numpy.dot(rho, grids.weights)
+    if abs(n-mol.nelectron) < NELEC_ERROR_TOL*n:
+        rho *= grids.weights
+        idx = abs(rho) > ks.small_rho_cutoff / grids.weights.size
+        logger.debug(ks, 'Drop grids %d',
+                     grids.weights.size - numpy.count_nonzero(idx))
+        grids.coords  = numpy.asarray(grids.coords [idx], order='C')
+        grids.weights = numpy.asarray(grids.weights[idx], order='C')
+        grids.non0tab = grids.make_mask(mol, grids.coords)
+    return grids
+
+
+class RKS(pbchf.RHF):
+    '''RKS class adapted for PBCs.
+
+    This is a literal duplication of the molecular RKS class with some `mol`
+    variables replaced by `cell`.
+    '''
+    def __init__(self, cell, kpt=numpy.zeros(3)):
+        pbchf.RHF.__init__(self, cell, kpt)
+        _dft_common_init_(self)
+
+    def dump_flags(self):
+        pbchf.RHF.dump_flags(self)
+        logger.info(self, 'XC functionals = %s', self.xc)
+        self.grids.dump_flags()
+
+    get_veff = get_veff
+    energy_elec = pyscf.dft.rks.energy_elec
+    define_xc_ = define_xc_
+
+    density_fit = _patch_df_beckegrids(pbchf.RHF.density_fit)
+    mix_density_fit = _patch_df_beckegrids(pbchf.RHF.mix_density_fit)
+
+def _dft_common_init_(mf):
+    mf.xc = 'LDA,VWN'
+    mf.grids = gen_grid.UniformGrids(mf.cell)
+    # Use rho to filter grids
+    mf.small_rho_cutoff = getattr(__config__,
+                                  'pbc_dft_rks_RKS_small_rho_cutoff', 1e-7)
+##################################################
+# don't modify the following attributes, they are not input options
+    # Note Do not refer to .with_df._numint because mesh/coords may be different
+    if isinstance(mf, khf.KSCF):
+        mf._numint = numint.KNumInt(mf.kpts)
+    else:
+        mf._numint = numint.NumInt()
+    mf._keys = mf._keys.union(['xc', 'grids', 'small_rho_cutoff'])
+
+
+if __name__ == '__main__':
+    from pyscf.pbc import gto
+    cell = gto.Cell()
+    cell.unit = 'A'
+    cell.atom = 'C 0.,  0.,  0.; C 0.8917,  0.8917,  0.8917'
+    cell.a = '''0.      1.7834  1.7834
+                1.7834  0.      1.7834
+                1.7834  1.7834  0.    '''
+
+    cell.basis = 'gth-szv'
+    cell.pseudo = 'gth-pade'
+    cell.verbose = 7
+    cell.output = '/dev/null'
+    cell.build()
+    mf = RKS(cell)
+    print(mf.kernel())

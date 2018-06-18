@@ -25,7 +25,7 @@ cell = gto.M(
               C     0.8917  2.6751  2.6751''',
     basis = 'gth-szv',
     pseudo = 'gth-pade',
-    gs = [10]*3,
+    mesh = [20]*3,
     verbose = 4,
 )
 
@@ -39,7 +39,7 @@ kmf.kernel()
 kmf = dft.KRKS(cell, kpts)
 # Turn to the atomic grids if you like
 kmf.grids = dft.gen_grid.BeckeGrids(cell)
-kmf.xc = 'm06'
+kmf.xc = 'm06,m06'
 kmf.with_df = mpidf.FFTDF(cell, kpts)
 kmf.kernel()
 

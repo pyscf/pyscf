@@ -9,7 +9,7 @@ import numpy
 from pyscf.pbc import gto, scf, tools
 
 cell = gto.M(
-    h = numpy.eye(3)*3.5668,
+    a = numpy.eye(3)*3.5668,
     atom = '''C     0.      0.      0.    
               C     0.8917  0.8917  0.8917
               C     1.7834  1.7834  0.    
@@ -20,7 +20,6 @@ cell = gto.M(
               C     0.8917  2.6751  2.6751''',
     basis = 'gth-szv',
     pseudo = 'gth-pade',
-    gs = [10]*3,
     verbose = 4,
 )
 

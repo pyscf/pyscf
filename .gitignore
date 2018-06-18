@@ -59,8 +59,8 @@ CMakeCache.txt
 CMakeFiles
 Makefile
 cmake_install.cmake
-lib/deps
-lib/config.h
+pyscf/lib/deps
+pyscf/lib/config.h
 
 settings.py
 

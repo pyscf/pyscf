@@ -8,7 +8,6 @@ any modification.
 
 import numpy
 from pyscf.pbc import gto, scf
-from pyscf.pbc import df
 
 cell = gto.M(
     a = numpy.eye(3)*3.5668,
@@ -21,23 +20,11 @@ cell = gto.M(
               C     0.      1.7834  1.7834
               C     0.8917  2.6751  2.6751''',
     basis = '6-31g',
-    gs = [10]*3,
     verbose = 4,
 )
 
-#
-# Switch on incore_anyway flag to ensure that all 2e-integrals are held in
-# memory.  These integrals are needed by the post-HF methods.
-#
-# Note the "incore" version of molecule code is applied here. This limits the
-# system size.
-#
-cell.incore_anyway = True
-
-mydf = df.MDF(cell)
-mydf.auxbasis = 'weigend'
-mf = scf.RHF(cell)
-mf.with_df = mydf
+mf = scf.RHF(cell).density_fit()
+mf.with_df.mesh = [10]*3
 mf.kernel()
 
 #

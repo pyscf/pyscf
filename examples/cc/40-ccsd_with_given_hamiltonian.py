@@ -1,17 +1,21 @@
 #!/usr/bin/env python
-import numpy
-import scipy.linalg
-from pyscf import gto
-from pyscf import scf
-from pyscf import ao2mo
-from pyscf import cc
 
-#
-# 1D anti-PBC Hubbard model at half filling
-#
+'''
+Six-site 1D U/t=2 Hubbard-like model system with PBC at half filling.
+The model is gapped at the mean-field level
+'''
+
+import numpy
+from pyscf import gto, scf, ao2mo, cc
+
 mol = gto.M(verbose=4)
-mol.nelectron = 6
-n = 12
+n = 6
+mol.nelectron = n
+# Setting incore_anyway=True to ensure the customized Hamiltonian (the _eri
+# attribute) to be used in the post-HF calculations.  Without this parameter,
+# some post-HF method (particularly in the MO integral transformation) may
+# ignore the customized Hamiltonian if memory is not enough.
+mol.incore_anyway = True
 
 h1 = numpy.zeros((n,n))
 for i in range(n-1):
@@ -27,11 +31,12 @@ mf.get_ovlp = lambda *args: numpy.eye(n)
 mf._eri = ao2mo.restore(8, eri, n)
 mf.kernel()
 
-#
-# In PySCF, the faked Hamiltonians just need to be created once in mf object,
-# and can be used with mf object everywhere.  Here, the Hubbard model is
-# passed to CCSD object with the mf object.
-#
-mycc = cc.CCSD(mf)
-mycc.kernel()
 
+# In PySCF, the customized Hamiltonian needs to be created once in mf object.
+# The Hamiltonian will be used everywhere whenever possible.  Here, the model
+# Hamiltonian is passed to CCSD object via the mf object.
+
+mycc = cc.RCCSD(mf)
+mycc.kernel()
+e,v = mycc.ipccsd(nroots=3)
+print(e)

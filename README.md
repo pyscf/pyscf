@@ -1,14 +1,17 @@
-PySCF
-=====
+<div align="left">
+  <img src="https://github.com/sunqm/pyscf/blob/master/doc/logo/pyscf-logo.png" height="80px"/>
+</div>
 
-Python module for quantum chemistry
+Python-based Simulations of Chemistry Framework
+===============================================
+[![Build Status](https://travis-ci.org/sunqm/pyscf.svg?branch=master)](https://travis-ci.org/sunqm/pyscf)
 
-2017-02-15
+2018-06-08
 
-* [1.3 beta](https://github.com/sunqm/pyscf/tree/dev)
-* [Stable release 1.2.2](https://github.com/sunqm/pyscf/releases/tag/v1.2.2)
+* [Stable release 1.5.0](https://github.com/sunqm/pyscf/releases/tag/v1.5.0)
+* [1.6 alpha](https://github.com/sunqm/pyscf/tree/dev)
 * [Changelog](../master/CHANGELOG)
-* [Documentation](http://www.pyscf.org) ([PDF](http://www.sunqm.net/pyscf/files/pdf/PySCF-1.1.pdf))
+* [Documentation](http://www.pyscf.org)
 * [Installation](#installation)
 * [Features](../master/FEATURES)
 
@@ -18,25 +21,30 @@ Installation
 
 * Prerequisites
     - Cmake 2.8 or higher
-    - Python 2.6, 2.7, 3.2, 3.3, 3.4
+    - Python 2.6, 2.7, 3.4 or higher
     - Numpy 1.8.0 or higher
-    - Scipy 0.10 or higher (0.12.0 or higher for python 3.3, 3.4)
+    - Scipy 0.10 or higher (0.12.0 or higher for python 3.4 - 3.6)
     - h5py 2.3.0 or higher (requires HDF5 1.8.4 or higher)
 
 * Compile core module
 
-        cd lib
+        cd pyscf/lib
         mkdir build; cd build
         cmake ..
         make
 
-* To make python be able to find pyscf, edit environment variable
-  `PYTHONPATH`, e.g.  if pyscf is installed in /opt/pyscf
+  Note during the compilation, external libraries (libcint, libxc, xcfun) will
+  be downloaded and installed.  If you want to disable the automatic
+  downloading, this [document](http://sunqm.github.io/pyscf/install.html#installation-without-network)
+  shows how to manually build these packages and PySCF C libraries.
+
+* To export PySCF to Python, you need to set environment variable `PYTHONPATH`.
+  E.g.  if PySCF is installed in /opt, your `PYTHONPATH` should be
 
         export PYTHONPATH=/opt/pyscf:$PYTHONPATH
 
-* Use Intel MKL as BLAS library.  cmake with options
-  `-DBLA_VENDOR=Intel10_64lp_seq`
+* Using Intel MKL as BLAS library.  Enabling the cmake options
+  `-DBLA_VENDOR=Intel10_64lp_seq` when executing cmake
 
         cmake -DBLA_VENDOR=Intel10_64lp_seq ..
 
@@ -69,70 +77,90 @@ Installation
           GIT_REPOSITORY https://github.com/sunqm/qcint.git
           ...
 
+* Using pyberny (https://github.com/azag0/pyberny) as geometry optimizer.
+  After downloading pyberny
+
+      git clone https://github.com/azag0/pyberny /path/to/pyberny
+
+  edit the environment variable to make pyberny a python module
+
+      export PYTHONPATH=/path/to/pyberny:$PYTHONPATH
+
+
+Tutorials
+---------
+* An Ipython notebook of user-guide can be found in https://github.com/nmardirossian/PySCF_Tutorial.
+  This repository documents the basic structure of PySCF input script and the
+  use of regular methods which were routinely executed in most quantum chemistry
+  packages.  It also provides an implementation to drive PySCF program in a
+  simple manner.
+* Developer's tutorial can be found in the online documentation
+  http://sunqm.github.io/pyscf/tutorial.html#tutorial and the repository above
+  https://github.com/nmardirossian/PySCF_Tutorial/blob/master/dev_guide.ipynb
 
 
 Known problems
 --------------
 
-* Error message "Library not loaded: libcint.2.9.dylib" On OS X.
+* Error message "Library not loaded: libcint.3.0.dylib" On OS X.
+
   libcint.dylib is installed in  pyscf/lib/deps/lib  by default.  Add
   "/path/to/pyscf/lib/deps/lib"  to  `DYLD_LIBRARY_PATH`
 
-* On Mac OSX, error message of "import pyscf"
-```
-  OSError: dlopen(xxx/pyscf/lib/libcgto.dylib, 6): Library not loaded: libcint.2.8.dylib
-  Referenced from: xxx/pyscf/lib/libcgto.dylib
-  Reason: unsafe use of relative rpath libcint.2.8.dylib in xxx/pyscf/lib/libao2mo.dylib with restricted binary
-```
-
-  It is only observed on OSX 10.11.  One solution is to manually modify the relative path to absolute path
-
-        $ install_name_tool -change libcint.2.8.dylib xxx/pyscf/lib/deps/lib/libcint.2.8.dylib xxx/pyscf/lib/libcgto.dylib
-        $ install_name_tool -change libcint.2.8.dylib xxx/pyscf/lib/deps/lib/libcint.2.8.dylib xxx/pyscf/lib/libcvhf.dylib
-        $ install_name_tool -change libcint.2.8.dylib xxx/pyscf/lib/deps/lib/libcint.2.8.dylib xxx/pyscf/lib/libao2mo.dylib
-        ...
-
-  Running script pyscf/lib/_runme_to_fix_dylib_osx10.11.sh  can patch
-  all required dylib files.
 
 
-* Fails at runtime with error message
+* runtime error message
 ```
   OSError: ... mkl/lib/intel64/libmkl_avx.so: undefined symbol: ownLastTriangle_64fc
 ```
-
-  This problem relates to MKL v11.1 on intel64 architecture.  Currently,
-  there is no solution for the combination of Python + MKL 11.1 + AVX.
-  You need either change to other MKL version (10.*, 11.0, 11.2) or
-  disable mkl_avx:
-
-        cmake -DBLA_VENDOR=Intel10_64lp_seq .. -DDISABLE_AVX=1
-
-
-* Runtime error message
+  or
 ```
   MKL FATAL ERROR: Cannot load libmkl_avx.so or libmkl_def.so.
 ```
-  This is MKL 11.* bug for "dlopen" function.  Preloading the two libraries
-  works fine with most system:
+
+  This is a MKL 11.* bug when MKL is used with "dlopen" function.
+  Preloading MKL libraries can solve this problem on most systems:
 
 ```
-  export LD_PRELOAD=$MKLROOT/lib/intel64/libmkl_def.so:$MKLROOT/lib/intel64/libmkl_core.so
+  export LD_PRELOAD=$MKLROOT/lib/intel64/libmkl_def.so:$MKLROOT/lib/intel64/libmkl_sequential.so:$MKLROOT/lib/intel64/libmkl_core.so
 ```
 
   or 
 
 ```
-  export LD_PRELOAD=$MKLROOT/lib/intel64/libmkl_avx.so:$MKLROOT/lib/intel64/libmkl_core.so:$MKLROOT/lib/intel64/libmkl_sequential.so
+  export LD_PRELOAD=$MKLROOT/lib/intel64/libmkl_avx.so:$MKLROOT/lib/intel64/libmkl_core.so
 ```
 
 
 * h5py installation.
+
   If you got problems to install the latest h5py package,  you can try
   the old releases:
   https://www.hdfgroup.org/ftp/HDF5/releases/hdf5-1.8.12/
   https://github.com/h5py/h5py/archive/2.3.1.tar.gz
 
+
+* If you are using Intel compiler (version 16, 17), compilation may be stuck at
+```
+[ 95%] Building C object CMakeFiles/cint.dir/src/stg_roots.c.o
+```
+
+  This code is used by F12 integrals only.  If you do not need F12 methods,
+  the relevant compilation can be disabled, by searching `DWITH_F12` in file
+  lib/CMakeLists.txt  and setting it to `-DWITH_F12=0`.
+
+
+
+Citing PySCF
+------------
+
+The following paper should be cited in publications utilizing the PySCF program package:
+
+PySCF: the Python-based Simulations of Chemistry Framework,
+Q. Sun, T. C. Berkelbach, N. S. Blunt, G. H. Booth, S. Guo, Z. Li, J. Liu,
+J. McClain, E. R. Sayfutyarova, S. Sharma, S. Wouters, G. K.-L. Chan (2018),
+PySCF: the Python‐based simulations of chemistry framework.
+WIREs Comput. Mol. Sci., 8: e1340. doi:10.1002/wcms.1340
 
 
 Bug report

@@ -1,1 +1,1 @@
-../../future/dmrgscf/example/nevpt2.py
+../../pyscf/dmrgscf/example/nevpt2.py

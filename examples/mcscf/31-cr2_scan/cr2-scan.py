@@ -1,17 +1,18 @@
 #!/usr/bin/env python
-import numpy
-from pyscf import gto
-from pyscf import scf
-from pyscf import mcscf
 
 '''
 Scan Cr2 molecule singlet state dissociation curve.
 
-Simliar to the example mcscf/30-hf_scan, we need control the CASSCF initial
+Simliar tthe example mcscf/30-hf_scan, we need to control the CASSCF initial
 guess using functions project_init_guess and sort_mo.  In this example,
-sort_mo function is replaced by the symmetry-adapted version ``sort_mo_by_irrep``
-so that we can control the symmetry of active space in an simple manner.
+sort_mo function is replaced by the symmetry-adapted version
+``sort_mo_by_irrep``.
 '''
+
+import numpy
+from pyscf import gto
+from pyscf import scf
+from pyscf import mcscf
 
 ehf = []
 emc = []
@@ -28,13 +29,15 @@ def run(b, dm, mo, ci=None):
     mol.symmetry = 1
     mol.build()
     mf = scf.RHF(mol)
-    mf.level_shift_factor = .4
+    mf.level_shift = .4
     mf.max_cycle = 100
     mf.conv_tol = 1e-9
     ehf.append(mf.scf(dm))
 
     mc = mcscf.CASSCF(mf, 12, 12)
     mc.fcisolver.conv_tol = 1e-9
+    # FCI solver with multi-threads is not stable enough for this sytem
+    mc.fcisolver.threads = 1
     if mo is None:
         # the initial guess for b = 1.5
         ncore = {'A1g':5, 'A1u':5}  # Optional. Program will guess if not given
@@ -44,7 +47,7 @@ def run(b, dm, mo, ci=None):
         mo = mcscf.sort_mo_by_irrep(mc, mf.mo_coeff, ncas, ncore)
     else:
         mo = mcscf.project_init_guess(mc, mo)
-    emc.append(mc.kernel(mo)[0])
+    emc.append(mc.kernel(mo, ci)[0])
     mc.analyze()
     return mf.make_rdm1(), mc.mo_coeff, mc.ci
 

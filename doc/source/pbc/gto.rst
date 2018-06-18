@@ -2,67 +2,70 @@
 
 pbc.gto --- Crystal cell structure
 **********************************
-This module provides functions to setup the basic information of PBC
-calculation.  It is an analogy to the molecule basic module :mod:`pyscf.gto`.
-The basic :class:`Cell` class for crystal structure are defined in this module.
-Basis set, pseudo potentials are parsed in this module.
+This module provides functions to setup the basic information of a PBC calculation.  The
+:mod:`pyscf.pbc.gto` module is analogous to the basic molecular :mod:`pyscf.gto` module.
+The :class:`Cell` class for crystal structure unit cells is defined in this module and is
+analogous to the basic molecular :class:`Mole` class.  Among other details, the basis set
+and pseudopotentials are parsed in this module.
 
 :class:`Cell` class
 ===================
-We defined in this module the :class:`.Cell` class as an extension of molecular
-:class:`pyscf.gto.mole.Mole` class.  The :class:`Cell` object offers the same
-functionality as the :class:`Mole` object.  One can use :class:`Cell` object to
-access the structure, the basis functions, pseudo potentials, certain analytical
-periodic integrals.
+The :class:`.Cell` class is defined as an extension of the molecular
+:class:`pyscf.gto.mole.Mole` class.  The :class:`Cell` object offers much of the same
+functionality as the :class:`Mole` object.  For example, one can use the :class:`Cell`
+object to access the atomic structure, basis functions, pseudopotentials, and certain
+analytical periodic integrals.
 
-Similar to the input in molecule calculation, one need first create a
-:class:`Cell` object, after assigning the crystal parameters, one need call
-:func:`build` to initialize the :class:`Cell` object.  A shortcut function
-:func:`M` is available as module level to simplify the input.
+Similar to the input in a molecular calculation, one first creates a :class:`Cell` object.
+After assigning the crystal parameters, one calls :func:`build` to fully initialize the
+:class:`Cell` object.  A shortcut function :func:`M` is available at the module level to
+simplify the input.
 
 .. literalinclude:: ../../../examples/pbc/00-input_cell.py
 
-Addition to the basic parameters :attr:`atom`, :attr:`basis`, you need at least
-set lattice parameter :attr:`a`, dense of FFT-mesh :attr:`gs` to
-describe the cell.  Lattice vector .a is a 3x3 array. Each row of .a
-is a real space primitive vector.
+Beyond the basic parameters :attr:`atom` and :attr:`basis`, one needs to set the unit cell
+lattice vectors :attr:`a` (a 3x3 array, where each row is a real-space primitive vector)
+and the numbers of grid points in the FFT-mesh in each positive direction :attr:`gs` (a
+length-3 list or 1x3 array); the total number of grid points is 2 :attr:`gs` +1.
 
-In certain systems, it is convenient to choose the FFT-mesh based on the kinetic
+In certain cases, it is convenient to choose the FFT-mesh density based on the kinetic
 energy cutoff.  The :class:`Cell` class offers an alternative attribute
-:attr:`ke_cutoff` to set the FFT-mesh.  If :attr:`ke_cutoff` was set and
-:attr:`gs` is blank,  :class:`Cell` initialization function will convert the
-:attr:`ke_cutoff` to the FFT-mesh and overwrite the :attr:`gs` attribute in
-terms of the relation :math:`\mathbf{g} = \frac{\sqrt{2k_{cut}}}{2\pi}\mathbf{a}^T`.
-Aside from these parameters, the pseudo potential :attr:`pseudo` is another
-attribute commonly required by many calculations (see also :ref:`pseudo`).
+:attr:`ke_cutoff` that can be used to set the FFT-mesh.  If :attr:`ke_cutoff` is set and
+:attr:`gs` is ``None``, the :class:`Cell` initialization function will convert the
+:attr:`ke_cutoff` to the equivalent FFT-mesh 
+according to the relation :math:`\mathbf{g} = \frac{\sqrt{2E_{\mathrm{cut}}}}{2\pi}\mathbf{a}^T`
+and will overwrite the :attr:`gs` attribute.
 
-The input parameters ``.a`` and ``.pseudo`` are immutable in the :class:`Cell`
-object.  The input format might be different to the internal format required
-by the program.  Similar to the convention in :class:`Mole`, the internal Python
-data layer is created to hold the formatted ``.a`` and ``.pseudo`` parameters.
+Many PBC calculations are best performed using pseudopotentials, which are set via
+the :attr:`pseudo` attribute.  Pseudopotentials alleviate the need for impractically
+dense FFT-meshes, although they represent a potentially uncontrolled source of error.
+See :ref:`pseudo` for further details and a list of available pseudopotentials.
+
+The input parameters ``.a`` and ``.pseudo`` are immutable in the :class:`Cell` object.  We
+emphasize that the input format might be different from the internal format used by PySCF.
+Similar to the convention in :class:`Mole`, an internal Python data layer is created to
+hold the formatted ``.a`` and ``.pseudo`` parameters used as input.
 
 _pseudo
   The internal format to hold PBC pseudo potential parameters.  It is
   represented with nested Python lists only.
 
-There are some attributes of :class:`Cell` relevant to the calculation accuracy.
-They are :attr:`rcut` the radius to truncate for real space lattice
-summation, :attr:`ew_eta` and :attr:`ew_cut` the model charge and the energy
-cutoff to control the accuracy of Ewald summation.  Generally, we don't have to
-manually set these parameters in the :class:`Cell` initialization procedure.
-They are generated by the initialization function based on the attribute
-:attr:`precision` which is a raw parameter to control the effective accuracy of
-the calculation.
+Nuclear-nuclear interaction energies are evaluated by means of Ewald summation, which
+depends on three parameters: the truncation radius for real-space lattice sums
+:attr:`rcut`, the Gaussian model charge :attr:`ew_eta`, and the energy cutoff
+:attr:`ew_cut`.  Although they can be set manually, these parameters are by default chosen
+automatically according to the attribute :attr:`precision`, which likewise can be set
+manually or left to its default value.
 
 Besides the methods and parameters provided by :class:`Mole` class (see Chapter
-:ref:`gto`), There are some parameters constantly used in the code to access the
+:ref:`gto`), there are some parameters frequently used in the code to access the
 information of the crystal.
 
 kpts
   The scaled or absolute k-points (nkpts x 3 array). This variable is not held as an
-  attribute in `Cell` object.  `Cell` object provides functions to generate the
-  k-points and convert the k-points between the scaled (fractional) value and
-  absolute value::
+  attribute in :class:`Cell` object; instead, the :class:`Cell` object provides functions
+  to generate the k-points and convert the k-points between the scaled (fractional) value
+  and absolute value::
 
     # Generate k-points
     n_kpts_each_direction = [2,2,2]

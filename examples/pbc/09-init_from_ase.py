@@ -18,15 +18,14 @@ print(ase_atom.get_volume())
 cell = pbcgto.Cell()
 cell.verbose = 5
 cell.atom=pyscf_ase.ase_atoms_to_pyscf(ase_atom)
-cell.h=ase_atom.cell
+cell.a=ase_atom.cell
 cell.basis = 'gth-szv'
 cell.pseudo = 'gth-pade'
-cell.gs=np.array([10,10,10])
 cell.build()
 
 mf=pbcdft.RKS(cell)
 
 mf.xc='lda,vwn'
 
-print(mf.scf()) # [10,10,10]: -44.8811199336
+print(mf.kernel()) # [10,10,10]: -44.8811199336
 

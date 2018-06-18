@@ -1,0 +1,87 @@
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+vdw_params = {
+    "H": {"alpha_0": 4.5, "C6": 6.5, "R_vdw": 3.1},
+    "He": {"alpha_0": 1.38, "C6": 1.46, "R_vdw": 2.65},
+    "Li": {"alpha_0": 164.2, "C6": 1387., "R_vdw": 4.16},
+    "Be": {"alpha_0": 38., "C6": 214., "R_vdw": 4.17},
+    "B": {"alpha_0": 21., "C6": 99.5, "R_vdw": 3.89},
+    "C": {"alpha_0": 12., "C6": 46.6, "R_vdw": 3.59},
+    "N": {"alpha_0": 7.4, "C6": 24.2, "R_vdw": 3.34},
+    "O": {"alpha_0": 5.4, "C6": 15.6, "R_vdw": 3.19},
+    "F": {"alpha_0": 3.8, "C6": 9.52, "R_vdw": 3.04},
+    "Ne": {"alpha_0": 2.67, "C6": 6.38, "R_vdw": 2.91},
+    "Na": {"alpha_0": 162.7, "C6": 1556., "R_vdw": 3.73},
+    "Mg": {"alpha_0": 71., "C6": 627., "R_vdw": 4.27},
+    "Al": {"alpha_0": 60., "C6": 528., "R_vdw": 4.33},
+    "Si": {"alpha_0": 37., "C6": 305., "R_vdw": 4.2},
+    "P": {"alpha_0": 25., "C6": 185., "R_vdw": 4.01},
+    "S": {"alpha_0": 19.6, "C6": 134., "R_vdw": 3.86},
+    "Cl": {"alpha_0": 15., "C6": 94.6, "R_vdw": 3.71},
+    "Ar": {"alpha_0": 11.1, "C6": 64.3, "R_vdw": 3.55},
+    "K": {"alpha_0": 292.9, "C6": 3897., "R_vdw": 3.71},
+    "Ca": {"alpha_0": 160., "C6": 2221., "R_vdw": 4.65},
+    "Sc": {"alpha_0": 120., "C6": 1383., "R_vdw": 4.59},
+    "Ti": {"alpha_0": 98., "C6": 1044., "R_vdw": 4.51},
+    "V": {"alpha_0": 84., "C6": 832., "R_vdw": 4.44},
+    "Cr": {"alpha_0": 78., "C6": 602., "R_vdw": 3.99},
+    "Mn": {"alpha_0": 63., "C6": 552., "R_vdw": 3.97},
+    "Fe": {"alpha_0": 56., "C6": 482., "R_vdw": 4.23},
+    "Co": {"alpha_0": 50., "C6": 408., "R_vdw": 4.18},
+    "Ni": {"alpha_0": 48., "C6": 373., "R_vdw": 3.82},
+    "Cu": {"alpha_0": 42., "C6": 253., "R_vdw": 3.76},
+    "Zn": {"alpha_0": 40., "C6": 284., "R_vdw": 4.02},
+    "Ga": {"alpha_0": 60., "C6": 498., "R_vdw": 4.19},
+    "Ge": {"alpha_0": 41., "C6": 354., "R_vdw": 4.2},
+    "As": {"alpha_0": 29., "C6": 246., "R_vdw": 4.11},
+    "Se": {"alpha_0": 25., "C6": 210., "R_vdw": 4.04},
+    "Br": {"alpha_0": 20., "C6": 162., "R_vdw": 3.93},
+    "Kr": {"alpha_0": 16.8, "C6": 129.6, "R_vdw": 3.82},
+    "Rb": {"alpha_0": 319.2, "C6": 4691., "R_vdw": 3.72},
+    "Sr": {"alpha_0": 199., "C6": 3170., "R_vdw": 4.54},
+    "Y": {"alpha_0": 126.7370, "C6": 1968.580, "R_vdw": 4.81510},
+    "Zr": {"alpha_0": 119.97, "C6": 1677.91, "R_vdw": 4.53},
+    "Nb": {"alpha_0": 101.603, "C6": 1263.61, "R_vdw": 4.2365},
+    "Mo": {"alpha_0": 88.4225785, "C6": 1028.73, "R_vdw": 4.099},
+    "Tc": {"alpha_0": 80.083, "C6": 1390.87, "R_vdw": 4.076},
+    "Ru": {"alpha_0": 65.8950, "C6": 609.754, "R_vdw": 3.99530},
+    "Rh": {"alpha_0": 56.1, "C6": 469.0, "R_vdw": 3.95},
+    "Pd": {"alpha_0": 23.68, "C6": 157.5, "R_vdw": 3.66},
+    "Ag": {"alpha_0": 50.6, "C6": 339., "R_vdw": 3.82},
+    "Cd": {"alpha_0": 39.7, "C6": 452.0, "R_vdw": 3.99},
+    "In": {"alpha_0": 70.22, "C6": 707.046, "R_vdw": 4.23198},
+    "Sn": {"alpha_0": 55.95, "C6": 587.417, "R_vdw": 4.303},
+    "Sb": {"alpha_0": 43.67197, "C6": 459.322, "R_vdw": 4.276},
+    "Te": {"alpha_0": 37.65, "C6": 396.0, "R_vdw": 4.22},
+    "I": {"alpha_0": 35., "C6": 385., "R_vdw": 4.17},
+    "Xe": {"alpha_0": 27.3, "C6": 285.9, "R_vdw": 4.08},
+    "Cs": {"alpha_0": 427.12, "C6": 6582.08, "R_vdw": 3.78},
+    "Ba": {"alpha_0": 275.0, "C6": 5727.0, "R_vdw": 4.77},
+    "Hf": {"alpha_0": 99.52, "C6": 1274.8, "R_vdw": 4.21},
+    "Ta": {"alpha_0": 82.53, "C6": 1019.92, "R_vdw": 4.15},
+    "W": {"alpha_0": 71.041, "C6": 847.93, "R_vdw": 4.08},
+    "Re": {"alpha_0": 63.04, "C6": 710.2, "R_vdw": 4.02},
+    "Os": {"alpha_0": 55.055, "C6": 596.67, "R_vdw": 3.84},
+    "Ir": {"alpha_0": 42.51, "C6": 359.1, "R_vdw": 4.00},
+    "Pt": {"alpha_0": 39.68, "C6": 347.1, "R_vdw": 3.92},
+    "Au": {"alpha_0": 36.5, "C6": 298.0, "R_vdw": 3.86},
+    "Hg": {"alpha_0": 33.9, "C6": 392.0, "R_vdw": 3.98},
+    "Tl": {"alpha_0": 69.92, "C6": 717.44, "R_vdw": 3.91},
+    "Pb": {"alpha_0": 61.8, "C6": 697.0, "R_vdw": 4.31},
+    "Bi": {"alpha_0": 49.02, "C6": 571.0, "R_vdw": 4.32},
+    "Po": {"alpha_0": 45.013, "C6": 530.92, "R_vdw": 4.097},
+    "At": {"alpha_0": 38.93, "C6": 457.53, "R_vdw": 4.07},
+    "Rn": {"alpha_0": 33.54, "C6": 390.63, "R_vdw": 4.23}
+}

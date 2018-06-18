@@ -125,8 +125,12 @@ Placing the :attr:`with_df` attribute in SCF object to get the compatibility to
 molecule DF-SCF methods.
 
 
-Module functions
-================
+Stability analysis
+==================
+
+
+Program reference
+=================
 
 .. automodule:: pyscf.pbc.scf.hf
    :members:

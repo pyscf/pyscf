@@ -1,0 +1,44 @@
+#  6-311++G(3df,3pd)  EMSL  Basis Set Exchange Library  6/9/17 6:22 PM
+# Elements                             References
+# --------                             ----------
+# H, Li - Ne: R. Krishnan, J.S. Binkley, R. Seeger and J.A. Pople,
+#             J. Chem. Phys. 72, 650 (1980)
+# Na - Ar:    A.D. McLean and G.S. Chandler J. Chem. Phys. 72, 5639, (1980).
+# K  - Ca:    J-P. Blaudeau, M. P. McGrath, L.A. Curtiss and L. Radom,
+#             J. Chem. Phys. 107, 5016 (1997).
+# Ga - Kr:    L. A. Curtiss, M. P. McGrath, J-P. Blandeau, N. E. Davis, 
+#             R. C. Binning, Jr. L. Radom, J. Chem. Phys. 103, 6104 (1995).
+# I      :    M.N. Glukhovstev, A. pross, M.P. McGrath, L. Radom, J. Chem. Phys.
+#             103, 1878 (1995)
+#   
+
+# Elements                             References
+# --------                             ----------
+# H-Ne: M.J. Frisch, J.A. Pople and J.S. Binkley, J. Chem. Phys. 80, 3265 (1984)
+#   
+
+# Elements                             Reference
+# --------                             ----------
+# H, Li-Cl: T. Clark, J. Chandrasekhar,  G.W. Spitznagel, P.V.R. Schleyer, 
+#           J. Comp. Chem. 4, 294 (1983).
+#   
+
+
+BASIS "ao basis" PRINT
+#BASIS SET: (6s,3p,1d) -> [4s,3p,1d]
+H    P
+      3.0000000              1.0000000        
+H    P
+      0.7500000              1.0000000        
+H    P
+      0.1875000              1.0000000        
+#BASIS SET: (5s,3p,1d) -> [3s,3p,1d]
+He    P
+      3.0000000              1.0000000        
+He    P
+      0.7500000              1.0000000        
+He    P
+      0.1875000              1.0000000        
+END
+
+

@@ -1,0 +1,19 @@
+include MANIFEST.in
+include README.md setup.py CHANGELOG AUTHORS LICENSE
+
+prune pyscf/lib/build
+
+#include pyscf/lib/deps/lib/*.so.*
+#include pyscf/lib/deps/lib/*.dylib
+#include pyscf/lib/deps/lib/*.dll
+#include pyscf/lib/deps/include/*.h
+
+recursive-include pyscf *.dat
+recursive-include pyscf/lib/deps *.so*
+recursive-include pyscf/lib/deps *.dylib*
+include pyscf/lib/*.so*
+include pyscf/lib/*.dylib*
+
+recursive-exclude pyscf/lib *.c *.h
+recursive-exclude pyscf/lib *.cl
+

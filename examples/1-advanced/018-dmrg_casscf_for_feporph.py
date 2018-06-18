@@ -156,14 +156,17 @@ mf = scf.fast_newton(mf)
 #
 # CAS(16e, 20o)
 #
-# mcscf.density_fit approximates the orbital hessian.  It does not affect
+# mcscf.approx_hessian approximates the orbital hessian.  It does not affect
 # results.  The N-2pz orbitals introduces more entanglement to environment.
 # 5 bath orbitals which have the strongest entanglement to impurity are
 # considered in active space.
 #
-mc = mcscf.density_fit(dmrgscf.dmrgci.DMRGSCF(mf, 20, 16))
-idx = [i for i,s in enumerate(mol.spheric_labels(1))
-       if 'Fe 3d' in s or 'Fe 4d' in s or 'Fe 4s' in s or 'N 2pz' in s]
+mc = mcscf.approx_hessian(dmrgscf.dmrgci.DMRGSCF(mf, 20, 16))
+# Function mol.search_ao_label returns the indices of the required AOs
+# It is equivalent to the following expression
+#idx = [i for i,s in enumerate(mol.ao_labels())
+#       if 'Fe 3d' in s or 'Fe 4d' in s or 'Fe 4s' in s or 'N 2pz' in s]
+idx = mol.search_ao_label(['Fe 3d', 'Fe 4d', 'Fe 4s', 'N 2pz'])
 mo = dmet_cas(mc, mf.make_rdm1(), idx)
 
 mc.fcisolver.wfnsym = 'Ag'
@@ -200,9 +203,8 @@ mf = scf.fast_newton(mf)
 # active space, the larger active space, which includes 4s orbitals, does not
 # have such issue on MCSCF wfn.
 #
-mc = mcscf.density_fit(dmrgscf.dmrgci.DMRGSCF(mf, 20, 16))
-idx = [i for i,s in enumerate(mol.spheric_labels(1))
-       if 'Fe 3d' in s or 'Fe 4d' in s or 'Fe 4s' in s or 'N 2pz' in s]
+mc = mcscf.approx_hessian(dmrgscf.dmrgci.DMRGSCF(mf, 20, 16))
+idx = mol.search_ao_label(['Fe 3d', 'Fe 4d', 'Fe 4s', 'N 2pz'])
 mo = dmet_cas(mc, mf.make_rdm1(), idx3d)
 mc.fcisolver.wfnsym = 'B1g'
 mc.kernel(mo)

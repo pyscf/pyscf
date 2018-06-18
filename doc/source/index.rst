@@ -3,31 +3,32 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-PySCF --- Python-based simulations of chemistry framework
-=========================================================
+Welcome to PySCF documentation!
+===============================
 
-Pyscf is a quantum chemistry package written in python.  The package aims to
-provide a simple, light-weight and efficient platform for quantum chemistry
-code developing and calculation.  The program is developed in the principle of
+PySCF is a collection of electronic structure programs powered by Python.
+The package aims to provide a simple, light-weight, and efficient platform for
+quantum chemistry calculations and code development.  The program is developed
+with the following principles:
 
 * Easy to install, to use, to extend and to be embedded;
 
-* Minimal requirements on libraries (No Boost, MPI) and computing
-  resources (perhaps losing efficiency to reduce I/O);
+* Minimal requirements on libraries (no Boost or MPI) and computing
+  resources (perhaps sacrificing efficiency to reduce I/O);
 
-* 90/10 Python/C, only computational hot spots were written in C;
+* 90/10 Python/C (only computational hot spots are written in C);
 
-* 90/10 functional/OOP, unless performance critical, functions are pure.
+* 90/10 functional/OOP (unless performance critical, functions are pure).
 
 Contents
 --------
 
 .. toctree::
    :maxdepth: 2
+   :numbered:
 
    overview.rst
    tutorial.rst
-   advanced.rst
    install.rst
    gto.rst
    lib.rst
@@ -48,6 +49,7 @@ Contents
    hessian.rst
    pbc.rst
    lo.rst
+   advanced.rst
    qmmm.rst
    mrpt.rst
 
@@ -57,7 +59,7 @@ Contents
 
 
 You can also download the `PDF version
-<http://www.sunqm.net/pyscf/files/pdf/PySCF-1.3.pdf>`_ of this manual.
+<http://www.sunqm.net/pyscf/files/pdf/PySCF-1.4.pdf>`_ of this manual.
 
 
 .. Indices and tables

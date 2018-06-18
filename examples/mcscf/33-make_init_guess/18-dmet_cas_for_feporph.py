@@ -28,6 +28,10 @@ In this example, we use density matrix embedding theory
 #
 # Define DMET active space
 #
+# This function is defined here as a simplified implementation of dmet_cas
+# active space function.  It's recommended to use the mcscf.dmet_cas module to
+# generate the DMET active space.  See also 43-dmet_cas.py
+#
 ##################################################
 def dmet_cas(mc, dm, implst):
     from pyscf import lo
@@ -145,11 +149,14 @@ mf = scf.fast_newton(mf)
 #
 # CAS(8e, 11o)
 #
-# mcscf.density_fit approximates the orbital hessian.  It does not affect
+# mcscf.approx_hessian approximates the orbital hessian.  It does not affect
 # CASSCF results.
 #
-mc = mcscf.density_fit(mcscf.CASSCF(mf, 11, 8))
-idx = [i for i,s in enumerate(mol.spheric_labels(1)) if 'Fe 3d' in s or 'Fe 4d' in s]
+mc = mcscf.approx_hessian(mcscf.CASSCF(mf, 11, 8))
+# Function mol.search_ao_label returns the indices of the required AOs
+# It is equivalent to the following expression
+#idx = [i for i,s in enumerate(mol.ao_labels()) if 'Fe 3d' in s or 'Fe 4d' in s]
+idx = mol.search_ao_label(['Fe 3d', 'Fe 4d'])
 mo = dmet_cas(mc, mf.make_rdm1(), idx)
 
 mc.fcisolver.wfnsym = 'Ag'
@@ -187,10 +194,9 @@ mf = scf.fast_newton(mf)
 #
 # CAS(8e, 11o)
 #
-mc = mcscf.density_fit(mcscf.CASSCF(mf, 11, 8))
-idx3d = [i for i,s in enumerate(mol.spheric_labels(1)) if 'Fe 3d' in s]
-idx4d = [i for i,s in enumerate(mol.spheric_labels(1)) if 'Fe 4d' in s]
-mo = dmet_cas(mc, mf.make_rdm1(), idx3d+idx4d)
+mc = mcscf.approx_hessian(mcscf.CASSCF(mf, 11, 8))
+idx = mol.search_ao_label(['Fe 3d', 'Fe 4d'])
+mo = dmet_cas(mc, mf.make_rdm1(), idx)
 #
 # 1. Small spin contaimination is observed for the default FCI solver.
 #    Call fci.addons.fix_spin_ to force FCI wfn following the triplet state.
@@ -207,7 +213,7 @@ mo = dmet_cas(mc, mf.make_rdm1(), idx3d+idx4d)
 #
 fci.addons.fix_spin_(mc.fcisolver, ss=2)  # Triplet, ss = S*(S+1)
 mc.fcisolver.wfnsym = 'B1g'
-mc.frozen = range(mc.ncore+5, mc.ncore+10)  # 6th-10th active orbitals are Fe 4d
+mc.frozen = numpy.arange(mc.ncore+5, mc.ncore+10)  # 6th-10th active orbitals are Fe 4d
 mc.kernel(mo)
 mo = mc.mo_coeff
 
@@ -215,7 +221,7 @@ mo = mc.mo_coeff
 # Using the frozen-4d wfn as the initial guess,  we can converge the triplet
 # to the correct active space
 #
-mc = mcscf.density_fit(mcscf.CASSCF(mf, 11, 8))
+mc = mcscf.approx_hessian(mcscf.CASSCF(mf, 11, 8))
 fci.addons.fix_spin_(mc.fcisolver, ss=2)
 mc.fcisolver.wfnsym = 'B1g'
 mc.kernel(mo)

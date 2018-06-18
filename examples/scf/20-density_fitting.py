@@ -18,6 +18,10 @@ same way as the regular scf method.  The density fitting scf object is an
 independent object to the regular scf object which is to be decorated.  By
 doing so, density fitting can be applied anytime, anywhere in your script
 without affecting the exsited scf object.
+
+See also:
+examples/df/00-with_df.py
+examples/df/01-auxbasis.py 
 '''
 
 mol = gto.Mole()
@@ -31,16 +35,29 @@ mol.build(
 
 mf = scf.density_fit(scf.RHF(mol))
 energy = mf.kernel()
-print('E = %.12f, ref = -76.0259362997' % energy)
+print('E = %.12f, ref = -76.026744737355' % energy)
 
+#
+# Stream style: calling .density_fit method to return a DF-SCF object.
+#
+mf = scf.RHF(mol).density_fit()
+energy = mf.kernel()
+print('E = %.12f, ref = -76.026744737355' % energy)
 
+#
+# By default optimal auxiliary basis (if possible) or even-tempered gaussian
+# functions are used fitting basis.  You can assign with_df.auxbasis to change
+# the change the fitting basis.
+#
 mol.spin = 1
 mol.charge = 1
 mol.build(0, 0)
-
-mf = scf.density_fit(scf.UKS(mol))
-# the default auxiliary basis is Weigend Coulomb Fitting basis.
-mf.auxbasis = 'cc-pvdz-fit'
+mf = scf.UKS(mol).density_fit()
+mf.with_df.auxbasis = 'cc-pvdz-jkfit'
 energy = mf.kernel()
-print('E = %.12f, ref = -75.390940646297' % energy)
+print('E = %.12f, ref = -75.390366559552' % energy)
 
+# Switch off density fitting
+mf.with_df = False
+energy = mf.kernel()
+print('E = %.12f, ref = %.12f' % (energy, scf.UKS(mol).kernel()))

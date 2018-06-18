@@ -6,6 +6,10 @@ from pyscf.dft import numint
 
 '''
 Evaluate AO functions on given grid coordinates.
+
+See also
+pyscf/examples/gto/24-ao_value_on_grid.py
+pyscf/examples/pbc/30-ao_value_on_grid.py
 '''
 
 mol = gto.M(

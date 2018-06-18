@@ -1,11 +1,12 @@
 #!/usr/bin/env python
 
 '''
-Input a XC functional which is not defined in the Libxc or XcFun library.
+Input a XC functional which was not implemented in pyscf.
 
 See also
-* dft.libxc for API of function eval_xc;
-* dft.numint._NumInt class for its methods eval_xc, hybrid_coeff and _xc_type.
+* The definition of define_xc_ function in pyscf/dft/libxc.py
+* pyscf/dft/libxc.py for API of function eval_xc;
+* dft.numint.NumInt class for its methods eval_xc, hybrid_coeff and _xc_type.
   These methods controls the XC functional evaluation;
 * Example 24-custom_xc_functional.py to customize XC functionals using the
   functionals provided by Libxc or XcFun library.
@@ -22,28 +23,40 @@ mol = gto.M(
     basis = 'ccpvdz')
 
 # half-half exact exchange and GGA functional
-def hybrid_coeff(xc_code, spin=1):
-    return 0.5
-def _xc_type(xc_code):
-    return 'GGA'
+hybrid_coeff = 0.5
+
 def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, verbose=None):
     # A fictitious XC functional to demonstrate the usage
-    rho0, dx, dy, dz = rho[1:4]
+    rho0, dx, dy, dz = rho[:4]
     gamma = (dx**2 + dy**2 + dz**2)
-    exc = .1 * rho0**2 + .02 * (gamma+.001)**.5
-    vrho = .1 * 2 * rho0
+    exc = .01 * rho0**2 + .02 * (gamma+.001)**.5
+    vrho = .01 * 2 * rho0
     vgamma = .02 * .5 * (gamma+.001)**(-.5)
     vlapl = None
     vtau = None
     vxc = (vrho, vgamma, vlapl, vtau)
     fxc = None  # 2nd order functional derivative
     kxc = None  # 3rd order functional derivative
+
+    # Mix with existing functionals
+    pbe_xc = dft.libxc.eval_xc('pbe,pbe', rho, spin, relativity, deriv,
+                               verbose)
+    exc += pbe_xc[0] * 0.5
+    vrho += pbe_xc[1][0] * 0.5
+    vgamma += pbe_xc[1][1] * 0.5
     return exc, vxc, fxc, kxc
 
 mf = dft.RKS(mol)
-mf._numint.hybrid_coeff = hybrid_coeff
-mf._numint.eval_xc = eval_xc
-mf._numint._xc_type = _xc_type
-mf.xc = 'My XC'  # optional, only affect the output message
+mf = mf.define_xc_(eval_xc, 'GGA', hyb=hybrid_coeff)
 mf.verbose = 4
 mf.kernel()
+
+# half exact exchange in which 40% of the exchange is computed with short
+# range part of the range-separation Coulomb operator (omega = 0.8)
+beta = 0.2
+rsh_coeff = (0.8, hybrid_coeff-beta, beta)
+mf = dft.RKS(mol)
+mf = mf.define_xc_(eval_xc, 'GGA', rsh=rsh_coeff)
+mf.verbose = 4
+mf.kernel()
+

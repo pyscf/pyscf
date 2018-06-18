@@ -1,0 +1,6 @@
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ffast-math")
+
+set(BLAS_LIBRARIES "-L${MKLROOT}/lib/intel64/ -lmkl_intel_lp64 -lmkl_gnu_thread -lmkl_core -lmkl_def -lpthread -lm -ldl")
+set(LAPACK_LIBRARIES "-L${MKLROOT}/lib/intel64/ -lmkl_intel_lp64 -lmkl_gnu_thread -lmkl_core -lmkl_def -lpthread -lm -ldl")
+message("LAPACK libraries: ${LAPACK_LIBRARIES}")
+

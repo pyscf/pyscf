@@ -1,30 +1,27 @@
 .. _pbc:
 
-******************************************
-:mod:`pbc` --- Periodic boundary condition
-******************************************
-The :mod:`pbc` module provides the electronic structure implementation
-with the periodic boundary condition based on the periodic Gaussian
-basis functions.  The PBC program supports both all-electron and pseudo
-potential (including quantum chemistry ECP) descriptions.
+*******************************************
+pbc --- Periodic boundary conditions
+*******************************************
+The :mod:`pbc` module provides electronic structure implementations with periodic boundary
+conditions based on periodic Gaussian basis functions. The PBC implementation supports
+both all-electron and pseudopotential descriptions.
 
-The PBC implementation has tight relation to the molecular implementation.
-The module and function names and layouts of PBC code are the same to
-those of molecular code.  The PBC program supports the use of basis sets
-and the pseudo potential (PP) developed by quantum chemistry community.
-The program allows one mixing the PBC-specific basis sets and PP with
-the quantum chemistry basis sets and ECPs.  This feature offers high
-flexibility for the choice of basis sets, methods in the PBC calculations.
-Moreover, many post-mean-field methods defined in molecular code can be
-seamlessly mixed with the PBC gamma point calculations.  Eg, one can
-start from PBC gamma point Hartree-Fock calculation, followed by CCSD,
-TDHF methods etc which are implemented in the molecular code.
+In PySCF, the PBC implementation has a tight relation to the molecular implementation.
+The module names, function names, and layouts of the PBC code are the same as (or as close
+as possible to) those of the molecular code.  The PBC code supports the use (and mixing)
+of basis sets, pseudopotentials, and effective core potentials developed accross the
+materials science and quantum chemistry communites, offering great flexibility.  Moreover,
+many post-mean-field methods defined in the molecular code can be seamlessly mixed with
+PBC calculations performed at the gamma point.  For example, one can perform a gamma-point
+Hartree-Fock calculation in a supercell, followed by a CCSD(T) calculation, which is
+implemented in the molecular code.
 
-In the k-point sampling calculation, we make small changes on data structure
-based on the gamma point program and export K-HF, K-DFT methods.
-On top of the K-HF methods,  we developed the k-point CCSD, and k-point EOM-CCSD
-methods in which the computing work and data distribution are carefully
-optimized.
+In the PBC k-point calculations,
+we make small changes to the gamma-point data structures and export KHF
+and KDFT methods.  On top of these KSCF methods, we have implemented k-point CCSD and
+k-point EOM-CCSD methods.  Other post-mean-field methods can be analogously written to
+explicitly enforce translational symmetry through k-point sampling.
 
 The list of modules described in this chapter is:
 

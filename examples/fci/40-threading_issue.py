@@ -7,8 +7,9 @@
 Different number of OpenMP threads may lead to slightly different answers
 '''
 
+from functools import reduce
 import numpy
-from pyscf import gto, lo, fci, ao2mo, scf
+from pyscf import gto, lo, fci, ao2mo, scf, lib
 
 mol = gto.M(atom=[('H', 0, 0, i*1.8) for i in range(10)],
             basis = 'sto6g', unit='B')
@@ -34,3 +35,18 @@ e, ci = fci.direct_spin0.kernel(h1, h2, 10, 10, ecore=mol.energy_nuc(), ci0=ci,
                                 max_cycle=500, max_space=100, verbose=5)
 print(e)
 
+
+#
+# Reducing OMP threads can improve the numerical stability
+#
+
+# Set OMP_NUM_THREADS to 1
+lib.num_threads(1)
+
+e, ci = fci.direct_spin0.kernel(h1, h2, 10, 10, ecore=mol.energy_nuc(),
+                                max_cycle=500, max_space=100, verbose=5)
+print(e)
+
+e, ci = fci.direct_spin0.kernel(h1, h2, 10, 10, ecore=mol.energy_nuc(), ci0=ci,
+                                max_cycle=500, max_space=100, verbose=5)
+print(e)

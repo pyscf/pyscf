@@ -1,71 +1,451 @@
-PySCF 1.4 alpha (2017-07-?)
---------------------------
+PySCF 1.6 alpha (2018-09-??)
+----------------------------
 * Added
-  - Spinor-GTO evaluator
+  - X2C-UKS (LDA functional only)
+  - PBC gamma point ROHF/ROKS
+  - PBC KROHF/KROKS for k-point sampling
+  - DFT Coulomb and XC integrals with multigrid
+  - Periodic UCCSD with k-point sampling
+
+
+PySCF 1.5 (2018-06-08)
+----------------------
+* Added
+  - Fake PySCF method adapter for arbitrary energy/gradients function in
+    berny_solver wrapper
+  - Function to restore DIIS object from DIIS file
+  - Restart function to restore CCSD calculations
+* Improved
+  - CASSCF optimization step size
+  - State-averaged CASSCF output message
+  - RCCSD(T) and UCCSD(T) performance
+  - Reduced DIIS memory footprint
+  - Frozen orbitals for KRCCSD
+  - PBC-TDDFT eigenvalue filter to keeps more eigenvalues which has small
+    imaginary part
+  - FCI convergence tolerance
+  - Conversion between KRHF, KUHF, and KGHF
+  - In the SOSCF solver, the diagonalization code to handle singularity in Hessian
+  - In the Scanner function, to support an input of geometry (string or list)
+  - SCF convergence hook
+  - Density_fit hooks in mp2, cisd, and ccsd modules
+  - Warning for gapless system in ccsd
+  - Energy cutoff for PBC GDF method.
+  - XC functional parser to support '-' in XC name and XC functional
+    abbreviations (SVWN, BLYP, PBE, M05, etc.)
+  - Orbital frozen in core and virtual space for KMP2 and KCCSD modules
+* Bugfix
+  - The ghost atom is now treated as a regular atom in berny_solver wrapper.
+  - QM/MM nuclear gradients
+  - Updating 6-31+G* basis which is now equivalent to the EMSL published basis
+  - Symmetry detection code to discover D2d, D4d, D6d group
+  - xcfun O3LYP functional which is now the same to libxc definition (but
+    different to the equation in the original paper)
+  - xcfun cam-b3lyp functional interface
+  - HCI wrapper to handle the system without beta electrons
+  - Dimension error for spinor integrals in general JK-build function
+  - The orbital ordering of the returned orbitals of the UHF stability analysis
+  - Filling up the upper triangular part for symmetry Hamiltonian in fcidump.read
+  - The attributes kpts and kpt of PBC SCF class when SCF data are loaded from
+    chkfile
+  - Nuclear Hessian in ECP and all-electron mixed systems
+  - Natural orbitals of state-averaged CASSCF
+
+
+PySCF 1.5 beta (2018-04-15)
+---------------------------
+* Added
+  - ddCOSMO analytical nuclear gradients
+  - TDA and TDDFT analytical nuclear gradients for UHF and UKS
+  - CISD/GCISD/UCISD 1-particle transition density matrix
+* Improved
+  - Memory usage of KRHF-KCCSD and IP/EA-EOM-KCCSD
+* Bugfix
+  - Fock matrix of ddCOSMO and ddPCM method.
+
+
+PySCF 1.5 alpha (2018-03-21)
+----------------------------
+* Added
+  - ddCOSMO solvent model
+  - VV10 NLC functional for molecule
+  - range-separated hybrid features for RKS and UKS, including
+    > Analytical nuclear gradients
+    > Second order SCF
+    > Hessian and frequency
+    > TDDFT
+    > TDDFT gradients
+    > NMR
+  - IAO and IBO for molecular and PBC systems
+  - UHF analytical nuclear Hessian
+  - UKS analytical nuclear Hessian
+  - FFT for low-dimension (2D) PBC systems
+  - Generalized CCSD (GCCSD)
+  - Generalized CCSD lambda solver
+  - Generalized Hartree-Fock with PBC
+  - PBC GCCSD and RCCSD with k-point sampling
+  - PBC GCCSD(T) and RCCSD(T) with k-point sampling
+  - RCCSD(T) and UCCSD(T) for non-canonical HF orbitals
+  - RCISD and UCISD analytical nuclear gradients
+  - RCISD, UCISD analytical nuclear gradients for excited states
+  - RMP2 and UMP2 analytical nuclear gradients
+  - UCCSD analytical nuclear gradients
+  - Frozen orbitals in MP2, CISD, CCSD, CCSD(T) nuclear gradients
+  - SF-X2C-1E analytical nuclear gradients
+  - SF-X2C-1E analytical nuclear hessian
+  - Analytical nuclear gradients and hessian for ECP integrals
+  - GIAO-ECP integrals for NMR shielding
+  - Interface to pyWannier90
+  - Restricted MP2 with k-point sampling
+  - RCCSD(T), UCCSD(T) and GCCSD(T) 1-particle and 2-particle density matrices
+  - RCCSD(T), UCCSD(T) analytical nuclear gradients
+  - CASCI/CASSCF analytical nuclear gradients
+  - CASCI analytical nuclear gradients for excited states
+  - Cartesian GTO (6d 10f) basis in PBC calculations
+  - Natural transition orbital analysis
+  - direct-RPA (no exchange, aka TDH)
+  - direct-TDA (TDA without exchange)
+  - Function to set OpenMP threads
+* Improved
+  - Independent OpenMP threads in FCI solver
+  - Supported even number of grids in pbc calculations
+  - Performance of UCCSD lambda solver
+  - The function to get SCF initial guess from the chkfile of the molecule with
+    different geometry
+  - The mcscf natural orbitals in the state-average calculation
+  - Performance of ECP integrals
+  - Prescreening for PBC 3-center integrals
+  - Performance and memory efficiency of G0W0
+  - KMP2 memory efficiency
+  - Efficiency to evaluate the value of periodic AO on grids
+  - libxc parser to support the customized Range-separated XC functionals
+
+
+PySCF 1.4.7 (2018-04-15)
+------------------------
+* Bugfix
+  - Outcore ao2mo transform when basis functions are cartesian Gaussians
+  - Fix errors in dmrg-nevpt interface, which overwrite nevpt configure files by
+    variational dmrg configure files.
+  - The order of elements of a list that are loaded by chkfile.load
+
+
+PySCF 1.4.6 (2018-04-02)
+------------------------
+* Added
+  dip_moment method for ROHF class
+
+
+PySCF 1.4.5 (2018-03-23)
+------------------------
+* Bugfix
+  - Numerical grids not converged in ECP integrals
+  - Python3 compatibility in shci module
+
+
+PySCF 1.4.4 (2018-03-20)
+------------------------
+* Improved
+  - Non-Hermitian matrix diagonalization
+  - Symmetric grids in cubegen
+  - FCI initial guess when the system has Dooh or Doov symmetry
+  - Using stable sort when sorting orbital energies
+  - Attribute "e_tot" in the MP2 methods to access the total energy
+* Bugfix
+  - meta-GGA density in dft.numint.eval_rho2
+  - intor parser in ao2mo module
+  - ecp parser if ecp data not found
+  - 1-electron system for UCCSD
+  - Python-3 compatibility for dmrgscf module
+  - Handling the errors which were raised in the background threads
+  - UHF/ROHF density matrices in nao localization method
+
+
+PySCF 1.4.3 (2018-01-17)
+------------------------
+* Improved
+  - Assert convergence in geometry optimization
+  - Initial guess in SCF PES scanning
+  - Memory usage for generating Becke-grids in DFT
+* Bugfix
+  - XC parser to support the scaled compound functional
+  - In the second order SCF algorithm, removing level_shift
+  - k-point RCCSD for non-canonical HF reference
+  - ECP integrals
+
+
+PySCF 1.4.2 (2017-12-06)
+------------------------
+* Added
+  - Frank Jensen, Polarization consistent basis sets
+* Improved
+  - Memory usage of pbc KHF calculation when HF exchange is computed with FFTDF
+* Bugfix
+  - pyberny interface
+  - PBC GDF initialization for hybrid functional
+  - guess of wfn symmetry for given fci wfn
+  - Entropy of Gaussian smearing
+
+
+PySCF 1.4.1 (2017-11-12)
+------------------------
+* Bugfix
+  - meta-GGA functional detection code in XC parser
+  - Orbital symmetry label in mcscf initial guess projection
+  - Eigenvalue ordering for Davidson eigen solver
+  - Madelung constant of non-orthogonal lattice
+  - Convergence of Madelung constant for huge number of k-points samples
+  - basis parser for pople-type basis
+  - RCCSD when running large number of virtual orbitals on small memory machine
+
+PySCF 1.4 (2017-10-05)
+----------------------
+* Improved
+  - Kinetic energy cutoff estimation
+  - Density fitting default auxiliary basis
+  - Memory usage for FFTDF module
+  - libxc interface
+* Bugfix
+  - KUHF dimension error in smearing function
+  - SCF results inconsistency in chkfile and SOSCF solver
+  - OMP stack overflow in GTO basis evaluator
+  - Default grids in DFT gen_grid function for system with ECP/PP
+  - mol.intor function to generate STG and YP integrals in 8-fold symmetry
+  - TDDFT analytical gradients
+  - DMRG-CI runtime scratch path
+  - PBC GDF integrals for auxiliary basis with g functions
+  - post-HF initialization function when mean-field object is DF-SOSCF method
+  - Single orbital localization
+  - Race condition in MP2 IO
+
+
+PySCF 1.4 beta (2017-08-22)
+---------------------------
+* Added
+  - Generalized Hartree-Fock (GHF)
+  - Second order SCF solver for GHF
+  - non-relativistic UHF, UKS g-tensor (with various SOC approximations)
+  - non-relativistic UHF, UKS hyperfine coupling
+  - SHCI interface to Dice program
+  - spin-orbital CISD
+  - UCISD and UCISD 1- and 2-RDM
+  - Restricted CC2 method
+  - Density-fitting CCSD
+  - Heat-bath selected CI (HCI) spin-orbital 1- and 2-RDM
+  - "scanner" function for HF, DFT and CCSD to simplify energy or
+    gradients scanning for systems of different geometry.
+  - Interface to pyberny geometry optimizer (geometry optimization for
+    RHF, RKS and RCCSD are supported).
+* Improved
+  - U-CCSD(T) performance
+  - Package structure (following "The Hitchhiker's Guide to Python")
+  - ECP basis localization in Mulliken pop analysis
+  - Changing the CASCI/CASSCF default FCI solver (the default solver will not
+    use spin symmetry for singlet state)
+  - Supporting remove_linear_dep function to handle basis linear dependence in
+    k-point SCF
+  - cell.rcut estimation for better integral accuracy
+  - Convergence rates of PM localization
+  - MP2 and RCISD integral transformation performance
+  - Disk usage of CCSD-DIIS
+  - Input basis parser to support union basis set (eg mol.basis=(bas1,bas2))
+  - SCF initial guess for systems with pseudopotential (or ECP)
+  - SCF initial guess for low-dimension PBC systems
+* Bugfix
+  - wfnsym of FCI solver for Dooh symmetry
+  - In CIAH newton solver, the special treatment of negative hessian has
+    been revised.
+  - import lock which freezes threads for functions running in background
+
+
+PySCF 1.4 alpha (2017-07-24)
+----------------------------
+* Added
+  - General function to evaluate Spinor GTO on real space grids
   - Dirac-Kohn-Sham (LDA functional)
   - EDIIS and ADIIS
+  - Periodic CCSD with k-point sampling
+  - Periodic EOM-IP-CCSD and EOM-EA-CCSD for single k-point calculation
+  - spin-square value (per unit cell) of KUHF calculation
+  - Update interface to fciqmc for standalone executing
+  - Routines in fciqmc to read in the spinned one and two RDMs
+  - Heat-Bath CI
+  - Functions in dmrgci interface to access 3-pdm and 4-pdm
+  - Function get_fermi
+  - UCCSD lambda equation and 1,2-particle density matrix
+  - SCF wfn stability analysis
+  - Many-Body van der Waals Interactions (MBD)
+  - Second order SCF solver for periodic HF and DFT
+  - TDDFT for periodic k-point HF and DFT
+  - U-TDHF and U-TDDFT for molecular and crystal systems
+  - Many-body dispersion
+  - MP2-F12 and F12 basis and F12 RI basis
+  - Cartesian GTO (6d 10f) basis in molecular calculations
+  - CP2K's HF pseudopotential data
+  - Frozen core MP2
+  - Molecular electrostatic potential (MEP)
+  - CPHF and UCPHF solver
+  - Non-relativistic RHF, UHF 4-component UHF spin-spin coupling
+  - non-relativistic UHF, 4-component UHF g-tensor (in testing)
+  - non-relativistic UHF, 4-component UHF hyperfine coupling (in testing)
+  - non-relativistic UHF zero-field splitting (in testing)
 * Improved
   - Performance of PBC-Gaussian function evaluator
+  - Performance of analytical Fourier transformation for AO product
+  - Performance of PBC 3-center integrals
+  - Performance of PBC PP local-part integrals
+  - Numerical stability associated to OpenMP reduce function
+  - Performance of FCI 2-electron contraction function
+  - Basis parser for Pople style basis sets
+  - Arbitrary problem size in FCI solver
+  - Symmetry labels in orbital coefficients
+  - Disk usage of integral transformation in MP2
+  - Performance of J/K contractions in molecular density fitting code
+  - Input geometry parser for ghost atoms
+* Bugfix
+  - PBC super cell function.  Atoms was missing on the super cell boundary
+  - PBC dft atomic grids for low-dimension systems
+  - The missing occ-vir blocks of Fock matrix in UCCSD
+  - MGGA integration error
+* Removed
+  - Dependence to joblib library
 
 
-PySCF 1.3 (2017-04)
---------------------------
+PySCF 1.3.5 (2017-08-11)
+------------------------
+* Bugfix
+  - The undefined += operation (numpy issue #5241) in CISD and CCSD methods
+
+
+PySCF 1.3.4 (2017-08-08)
+------------------------
+* Improvements
+  - Handle ghost atom in HF initial guess.
+  - Remove special treatments on CIAH negative hessians which often cause convergence problem
+  - Memory usage in CISD
+  - Proper treatment of ECP/PP in Mulliken pop analysis
+* Bugfix
+  - For ROHF reference, CCSD function takes UCCSD method.
+  - Handle zero beta electrons in UCCSD.
+  - Fix bug in FCI solver when system has Dooh symmetry.
+  - Fix bug in KUHF gradients which affects newton SCF convergence.
+  - Fix bug in gradients of PM localization which affects convergence.
+  - Fix "hcore" initial guess for KHF.
+  - Fix bug in Mulliken pop analysis caused by wrong overlap matrix for PBC calculations.
+
+
+PySCF 1.3.3 (2017-07-05)
+------------------------
+* Bugfix
+  - GIAO contributions to the off diagonal part of NMR shielding tensor.
+  - Handle zero core electrons in ECP parser.
+  - Handle zero occupied orbitals in CCSD module.
+  - Handle 1-electron system in UHF.
+  - Fix orbital ordering in SCF canonicalization when point group symmetry is used.
+  - Fix the missing fov term in UCCSD intermediates.
+  - Fix pbc atomic grids for low dimensional system.
+  - Avoid negative hessian in second order SCF solver.
+  - Fix bug in fci solver when system has cylinder spatial symmetry
+  - Fix eval_rho for GGA functional for non-hermitian density matrix
+
+
+PySCF 1.3.2 (2017-06-05)
+------------------------
+* Bugfix
+  - CCSD frozen core when using AO-driven algorithm
+  - DFT UKS orbital hessian
+  - PBC gamma-point UHF exxdiv=ewald correction
+  - KUHF get_bands function
+
+
+PySCF 1.3.1 (2017-05-14)
+------------------------
+* Bugfix
+  - CISD output message for multiple roots
+  - UHF hessian function in the second order SCF solver
+  - Integer overflow in npdot
+  - Module import error in PBC second order SCF solver
+  - Update makefile due to the bugfix in libcint library
+
+
+PySCF 1.3 (2017-04-25)
+----------------------
 * Improved
   - Treatment of auxiliary basis linear dependence in PBC DF/MDF module
+  - Cutoff radius in real space lattice summation for better accuracy
+  - PBC get_bands to compute the bands of arbitrary input k-points
+  - Ewald sum convergence
+  - Atomic grids in PBC DFT calculation
+* Bugfix
+  - Analytical Fourier transformation for non-orthogonal lattice
+  - Spinor integral buffer size when kappa!=0
+  - AVAS active space when mol.symmetry is enabled
+  - Input parser for Gaussian nuclear model
+  - Sorting CISD RDM2 in Chemist's ordering
+  - runtimeDir in dmrg interface
+  - numpy.exp overflow in PBC smearing function
+  - The FFT-based MO integrals in compressed format
+  - Input parser to handle unicode
+  - UHF spin-square function for complex orbitals
+  - Setfault in FCI 4-particle transition density matrix
+* Removed
+  - The cache of PBC AO value on grids
+  - Split-fitting MDF module
 
 
 PySCF 1.3 beta (2017-02-15)
---------------------------
+---------------------------
 * Added
   - sf-X2C for PBC Hamiltonian
   - Overlap of two CI wavefunctions over different orbital bases
   - EOM-CCSD for user guess, Koopmans' excitations, etc
-  - approximate EOM-CCSD (MBPT2 ground state and partitioned EOM Hbar)
+  - Approximate EOM-CCSD (MBPT2 ground state and partitioned EOM Hbar)
   - AVAS method for constructing mcscf active space
   - Molpro XML file reader and interface to read Molpro orbitals
+  - UCCSD
 * Improved
   - EOM-EE-RCCSD and EOM-EE-UCCSD performance
   - memory usage of the non-symmetric Davidson solver in EOM-CCSD
 
 
 PySCF 1.3 alpha-2 (2017-01-04)
----------------------------
+------------------------------
 * Added
   - Supports for 1D, 2D PBC systems
 * Improved
-  - PBC integral transformation
-  - CASSCF state-average interface to handle different spins of sub-solver
+  - Integral transformation for PBC 2-electron integrals
+  - CASSCF state-average interface to handle sub-solvers of different spins
   - Numerical stability for Davidson diagonalization solver
-  - FCI numerical stability with multithreading
-  - FCI with spatial symmetry
+  - Numerical stability of FCI contraction function under multithreading environment
+  - FCI 2-electron contraction function with point group symmetry
 * Bugfix
   - X2C to use custom basis for X matrix
 
 
 PySCF 1.3 alpha-1 (2016-12-04)
----------------------------
+------------------------------
 * Added
   - Quantum chemistry ECP for solid
-  - AO-direct CCSD
+  - AO-direct RCCSD
   - CI coefficients transformation for one-particle basis rotation
-  - CIAH second order SCF solver for PBC KRHF and KUHF
+  - CIAH second order SCF solver for PBC KRHF and KUHF methods
   - CISD and CISD 1, 2-particle density matrices
   - Selected-CI and Selected-CI 1, 2-particle density matrices
   - Smearing for PBC mean-field calculation
   - PBC density fitting
 * Improved
-  - Optimized CCSD(T)
+  - Performance of CCSD(T)
   - Change the default kpts mesh (to always include gamma point)
   - PBC repeated images used by lattice summation
 
 
-PySCF 1.2.3 (2017-03-?)
+PySCF 1.2.3 (2017-04-24)
 ------------------------
 * Bugfix
   - PBC 2e integrals for wrap-around k-points
   - CI coefficients in GAMESS WFN format
   - Input parser for Gaussian nuclear model
-  - Density fitting outcore module for assigned auxliary basis
+  - Density fitting outcore module for user input auxiliary basis
 
 
 PySCF 1.2.2 (2017-02-15)
@@ -181,8 +561,8 @@ Version 1.1 alpha-2 (2016-3-8):
 * Added
   - CCSD(T) and CCSD(T) gradients
   - General JK contraction function
-  - HF Hessian
-  - DFT Hessian
+  - RHF analytical nuclear Hessian
+  - RKS analytical nuclear Hessian
   - Function to symmetrize given orbital space
   - General XC functional evaluator (using Libxc or Xcfun)
   - Intrinsic Atomic Orbital (IAO)

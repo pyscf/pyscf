@@ -12,7 +12,7 @@ from pyscf.pbc import gto, scf, dft
 import numpy
 
 cell = gto.Cell()
-# .h is a matrix for lattice vectors.  Note each column of .h denotes a direction
+# .a is a matrix for lattice vectors.
 cell.a = '''
 3.5668  0       0
 0       3.5668  0
@@ -27,7 +27,6 @@ cell.atom = '''C     0.      0.      0.
               C     0.8917  2.6751  2.6751'''
 cell.basis = 'gth-szv'
 cell.pseudo = 'gth-pade'
-cell.gs = [10]*3  # 10 grids on postive x direction, => 21^3 grids in total
 cell.verbose = 4
 cell.build()
 
@@ -36,7 +35,7 @@ ehf = mf.kernel()
 print("HF energy (per unit cell) = %.17g" % ehf)
 
 mf = dft.RKS(cell)
-mf.xc = 'm06'
+mf.xc = 'm06,m06'
 edft = mf.kernel()
 print("DFT energy (per unit cell) = %.17g" % edft)
 
@@ -47,3 +46,11 @@ mf = dft.RKS(cell)
 mf.grids = dft.gen_grid.BeckeGrids(cell)
 mf.xc = 'bp86'
 mf.kernel()
+
+#
+# Second order SCF solver can be used in the PBC SCF code the same way in the
+# molecular calculation
+#
+mf = scf.RHF(cell).newton()
+mf.kernel()
+

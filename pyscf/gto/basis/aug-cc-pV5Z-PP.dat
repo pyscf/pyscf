@@ -1,0 +1,100 @@
+#
+# K.A. Peterson and C. Puzzarini, Theor. Chem. Acc. 114, 283 (2005)
+# Pseudopotential parameters (rel) from D. Figgen, G. Rauhut, M. Dolg, and H. Stoll, Chem. Phys. 311, 227 (2005)
+# These can be downloaded from: http://www.theochem.uni-stuttgart.de/pseudopotentials/index.en.html
+# Note: the -PP basis sets should be used ONLY with the appropriate Stuttgart/Koeln pseudopotentials
+# Note: the -PP-nr basis sets should be used with the Stuttgart/Koeln ECPxxMHF (xx=10, 28, 60) pseudopotentials
+# Pseudopotential-based correlation consistent polarized  Valence Quintuple- Basis Set for Cu, Augmenting Functions
+#
+
+#BASIS SET:
+Cu s
+1.450000E-02 1.000000E+00
+Cu p
+1.250000E-02 1.000000E+00
+Cu d
+3.910000E-02 1.000000E+00
+Cu f
+1.777000E-01 1.000000E+00
+Cu g
+4.190000E-01 1.000000E+00
+Cu h
+8.725000E-01 1.000000E+00
+Cu i
+2.357600E+00 1.000000E+00
+#BASIS SET:
+Ag s
+1.310000E-02 1.000000E+00
+Ag p
+1.200000E-02 1.000000E+00
+Ag d
+3.600000E-02 1.000000E+00
+Ag f
+1.448000E-01 1.000000E+00
+Ag g
+2.596000E-01 1.000000E+00
+Ag h
+4.758000E-01 1.000000E+00
+Ag i
+1.208200E+00 1.000000E+00
+#BASIS SET:
+Au s
+1.580000E-02 1.000000E+00
+Au p
+1.210000E-02 1.000000E+00
+Au d
+3.010000E-02 1.000000E+00
+Au f
+1.095000E-01 1.000000E+00
+Au g
+2.065000E-01 1.000000E+00
+Au h
+3.525000E-01 1.000000E+00
+Au i
+8.919000E-01 1.000000E+00
+#BASIS SET:
+Zn s
+1.500000E-02 1.000000E+00
+Zn p
+1.300000E-02 1.000000E+00
+Zn d
+5.780000E-02 1.000000E+00
+Zn f
+2.073000E-01 1.000000E+00
+Zn g
+4.949000E-01 1.000000E+00
+Zn h
+1.033400E+00 1.000000E+00
+Zn i
+2.804600E+00 1.000000E+00
+#BASIS SET:
+Cd s
+1.340000E-02 1.000000E+00
+Cd p
+1.240000E-02 1.000000E+00
+Cd d
+4.190000E-02 1.000000E+00
+Cd f
+1.669000E-01 1.000000E+00
+Cd g
+2.957000E-01 1.000000E+00
+Cd h
+5.447000E-01 1.000000E+00
+Cd i
+1.400300E+00 1.000000E+00
+#BASIS SET:
+Hg s
+1.620000E-02 1.000000E+00
+Hg p
+1.180000E-02 1.000000E+00
+Hg d
+3.950000E-02 1.000000E+00
+Hg f
+1.258000E-01 1.000000E+00
+Hg g
+2.372000E-01 1.000000E+00
+Hg h
+3.915000E-01 1.000000E+00
+Hg i
+9.888000E-01 1.000000E+00
+END

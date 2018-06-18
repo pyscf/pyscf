@@ -1,0 +1,425 @@
+% From http://easyspin.org/documentation/isotopetable.html
+%
+% Atomic Data and Nuclear Data Tables
+% Volume 90, Issue 1, May 2005, Pages 75-176
+% Table of Nuclear Magnetic Dipole and Electric Quadrupole Moments
+
+
+
+
+%==============================================================
+% EasySpin nuclear isotope database
+%==============================================================
+% Contains all naturally occurring nuclei plus selected
+% radioactive ones, which are marked by * in column 3.
+% Line syntax:
+%  Column 1: #protons
+%  Column 2: #nucleons
+%  Column 3: radioactive *, stable -
+%  Column 4: symbol
+%  Column 5: name
+%  Column 6: spin quantum number
+%  Column 7: nuclear g factor gn
+%  Column 8: natural abundance, in percent
+%  Column 9: electric quadrupole moment, in barn (10^-28 m^2)
+%            NaN indicates 'not measured'
+%
+% Nuclear magnetic moments are taken from
+%   N.Stone
+%   Table of Nuclear Magnetic Dipole and Electric Quadrupole Moments
+%   International Atomic Energy Agency, INDC(NDS)-0658, February 2014
+%     (https://www-nds.iaea.org/publications/indc/indc-nds-0658.pdf)
+%  (Typo for Rh-103: Moment is factor of 10 too large)
+% 237Np, 239Pu, 243Am data from
+%   N.E.Holden
+%   Table of the Isotopes
+%   CRC Handbook of Physics and Chemistry, section 11-2
+%     (http://www.hbcponline.com//articles/11_02_92.pdf)
+%
+% Nuclear quadrupole moments are taken from
+%   N.Stone
+%   Table of Nuclear Quadrupole Moments
+%   International Atomic Energy Agency, INDC(NDS)-650, December 2013
+%     (https://www-nds.iaea.org/publications/indc/indc-nds-0650.pdf)
+%  (Typo for Ac-227: Sign should be +)
+% See also
+%   P.Pyykko
+%   Year-2008 Nuclear Quadrupole Moments
+%   Mol.Phys. 106(16-18), 1965-1974 (2008)
+%     (http://dx.doi.org/10.1080/00268970802018367)
+%   N.E.Holden
+%   Table of the Isotopes
+%   CRC Handbook of Physics and Chemistry, section 11-2
+%     (http://www.hbcponline.com//articles/11_02_92.pdf)
+%--------------------------------------------------------------
+% first period
+%--------------------------------------------------------------
+ 1   1 - H   hydrogen       0.5 +5.58569468 99.9885    0
+ 1   2 - H   hydrogen       1.0 +0.8574382   0.0115   +0.00286
+ 1   3 * H   hydrogen       0.5 +5.95799369  0.0       0
+ 2   3 - He  helium         0.5 -4.25499544  0.000137  0
+ 2   4 - He  helium         0.0  0.0        99.999863  0
+%--------------------------------------------------------------
+% second period
+%--------------------------------------------------------------
+ 3   6 - Li  lithium        1.0 +0.8220473   7.59     -0.000806
+ 3   7 - Li  lithium        1.5 +2.170951   92.41     -0.0400
+ 4   9 - Be  beryllium      1.5 -0.78495   100.0      +0.0529
+ 5  10 - B   boron          3.0 +0.600215   19.9      +0.0845
+ 5  11 - B   boron          1.5 +1.7924326  80.1      +0.04059
+ 6  12 - C   carbon         0.0  0.0        98.93      0
+ 6  13 - C   carbon         0.5 +1.4048236   1.07      0
+ 6  14 * C   carbon         3.0  0.273       0.0       NaN
+ 7  14 - N   nitrogen       1.0 +0.40376100 99.632    +0.02044
+ 7  15 - N   nitrogen       0.5 -0.56637768  0.368     0
+ 8  16 - O   oxygen         0.0  0.0        99.757     0
+ 8  17 - O   oxygen         2.5 -0.757516    0.038    -0.0256
+ 8  18 * O   oxygen         0.0  0.0         0.205     0
+ 9  19 - F   fluorine       0.5 +5.257736  100.0       0
+10  20 - Ne  neon           0.0  0.0        90.48      0
+10  21 - Ne  neon           1.5 -0.441198    0.27     +0.102
+10  22 - Ne  neon           0.0  0.0         9.25      0
+%--------------------------------------------------------------
+% third period
+%--------------------------------------------------------------
+11  22 * Na  sodium         3.0 +0.582       0.0      +0.180
+11  23 - Na  sodium         1.5 +1.478348  100.0      +0.104
+12  24 - Mg  magnesium      0.0  0.0        78.99      0
+12  25 - Mg  magnesium      2.5 -0.34218    10.00     +0.199
+12  26 - Mg  magnesium      0.0  0.0        11.01      0
+13  27 - Al  aluminium      2.5 +1.4566028 100.0      +0.1466
+14  28 - Si  silicon        0.0  0.0        92.2297    0
+14  29 - Si  silicon        0.5 -1.11058     4.6832    0
+14  30 - Si  silicon        0.0  0.0         3.0872    0
+15  31 - P   phosphorus     0.5 +2.26320   100.0       0
+16  32 - S   sulfur         0.0  0.0        94.93      0
+16  33 - S   sulfur         1.5 +0.429214    0.76     -0.0678
+16  34 - S   sulfur         0.0  0.0         4.29      0
+16  36 - S   sulfur         0.0  0.0         0.02      0
+17  35 - Cl  chlorine       1.5 +0.5479162  75.78     -0.0817
+17  36 * Cl  chlorine       2.0 +0.642735    0.0      -0.0178
+17  37 - Cl  chlorine       1.5 +0.4560824  24.22     -0.0644
+18  36 - Ar  argon          0.0  0.0         0.3365    0
+18  38 - Ar  argon          0.0  0.0         0.0632    0
+18  39 * Ar  argon          3.5 -0.4537      0.0      -0.12
+18  40 - Ar  argon          0.0  0.0        99.6003    0
+%--------------------------------------------------------------
+% fourth period, first row transition metals
+%--------------------------------------------------------------
+19  39 - K   potassium      1.5 +0.26098    93.2581   +0.0585
+19  40 - K   potassium      4.0 -0.324525    0.0117   -0.073
+19  41 - K   potassium      1.5 +0.1432467   6.7302   +0.0711
+20  40 - Ca  calcium        0.0  0.0         96.941    0
+20  41 * Ca  calcium        3.5 -0.4556517   0.0      -0.0665
+20  42 - Ca  calcium        0.0  0.0         0.647     0
+20  43 - Ca  calcium        3.5 -0.37637     0.135    -0.0408
+20  44 - Ca  calcium        0.0  0.0         2.086     0
+20  46 - Ca  calcium        0.0  0.0         0.004     0
+20  48 - Ca  calcium        0.0  0.0         0.187     0
+21  45 - Sc  scandium       3.5 +1.35899   100.0      -0.220
+22  46 - Ti  titanium       0.0  0.0         8.25      0
+22  47 - Ti  titanium       2.5 -0.31539     7.44     +0.302
+22  48 - Ti  titanium       0.0  0.0        73.72      0
+22  49 - Ti  titanium       3.5 -0.315477    5.41     +0.247
+22  50 - Ti  titanium       0.0  0.0         5.18      0
+23  50 - V   vanadium       6.0 +0.5576148   0.25     +0.21
+23  51 - V   vanadium       3.5 +1.47106    99.75     -0.043
+24  50 - Cr  chromium       0.0  0.0         4.345     0
+24  52 - Cr  chromium       0.0  0.0        83.789     0
+24  53 - Cr  chromium       1.5 -0.31636     9.501    -0.15
+24  54 - Cr  chromium       0.0  0.0         2.365     0
+25  53 * Mn  manganese      3.5 +1.439       0.0      +0.17
+25  55 - Mn  manganese      2.5 +1.3813    100.0      +0.330
+26  54 - Fe  iron           0.0  0.0         5.845     0
+26  56 - Fe  iron           0.0  0.0        91.754     0
+26  57 - Fe  iron           0.5 +0.1809      2.119     0
+26  58 - Fe  iron           0.0  0.0         0.282     0
+27  59 - Co  cobalt         3.5 +1.322     100.0      +0.42
+27  60 * Co  cobalt         5.0 +0.7598      0.0      +0.46
+28  58 - Ni  nickel         0.0  0.0        68.0769    0
+28  60 - Ni  nickel         0.0  0.0        26.2231    0
+28  61 - Ni  nickel         1.5 -0.50001     1.1399   +0.162
+28  62 - Ni  nickel         0.0  0.0         3.6345    0
+28  64 - Ni  nickel         0.0  0.0         0.9256    0
+29  63 - Cu  copper         1.5 +1.4824     69.17     -0.220
+29  65 - Cu  copper         1.5 +1.5878     30.83     -0.204
+30  64 - Zn  zinc           0.0  0.0        48.63      0
+30  66 - Zn  zinc           0.0  0.0        27.90      0
+30  67 - Zn  zinc           2.5 +0.350192    4.10     +0.150
+30  68 - Zn  zinc           0.0  0.0        18.75      0
+30  70 - Zn  zinc           0.0  0.0         0.62      0
+31  69 - Ga  gallium        1.5 +1.34439    60.108    +0.171
+31  71 - Ga  gallium        1.5 +1.70818    39.892    +0.107
+32  70 - Ge  germanium      0.0  0.0        20.84      0
+32  72 - Ge  germanium      0.0  0.0        27.54      0
+32  73 - Ge  germanium      4.5 -0.1954373   7.73     -0.19
+32  74 - Ge  germanium      0.0  0.0        36.28      0
+32  76 - Ge  germanium      0.0  0.0         7.61      0
+33  75 - As  arsenic        1.5 +0.95965   100.0      +0.314
+34  74 - Se  selenium       0.0  0.0         0.89      0
+34  76 - Se  selenium       0.0  0.0         9.37      0
+34  77 - Se  selenium       0.5 +1.07008     7.63      0
+34  78 - Se  selenium       0.0  0.0        23.77      0
+34  79 * Se  selenium       3.5 -0.29        0.0      +0.8
+34  80 - Se  selenium       0.0  0.0        49.61      0
+34  82 - Se  selenium       0.0  0.0         8.73      0
+35  79 - Br  bromine        1.5 +1.404267   50.69     +0.313
+35  81 - Br  bromine        1.5 +1.513708   49.31     +0.262
+36  78 - Kr  krypton        0.0  0.0         0.35      0
+36  80 - Kr  krypton        0.0  0.0         2.28      0
+36  82 - Kr  krypton        0.0  0.0        11.58      0
+36  83 - Kr  krypton        4.5 -0.215704   11.49     +0.259
+36  84 - Kr  krypton        0.0  0.0        57.00      0
+36  85 * Kr  krypton        4.5 -0.2233      0.0      +0.443
+36  86 - Kr  krypton        0.0  0.0        17.30      0
+%--------------------------------------------------------------
+% fifth period, second row transition metals
+%--------------------------------------------------------------
+37  85 - Rb  rubidium       2.5 +0.541192   72.17     +0.276
+37  87 - Rb  rubidium       1.5 +1.83421    27.83     +0.1335
+38  84 - Sr  strontium      0.0  0.0         0.56      0
+38  86 - Sr  strontium      0.0  0.0         9.86      0
+38  87 - Sr  strontium      4.5 -0.24284     7.00     +0.305
+38  88 - Sr  strontium      0.0  0.0        82.58      0
+39  89 - Y   yttrium        0.5 -0.2748308 100.0       0
+40  90 - Zr  zirconium      0.0  0.0        51.45      0
+40  91 - Zr  zirconium      2.5 -0.521448   11.22     -0.176
+40  92 - Zr  zirconium      0.0  0.0        17.15      0
+40  94 - Zr  zirconium      0.0  0.0        17.38      0
+40  96 - Zr  zirconium      0.0  0.0         2.80      0
+41  93 - Nb  niobium        4.5 +1.3712    100.0      -0.32
+42  92 - Mo  molybdenum     0.0  0.0        14.84      0
+42  94 - Mo  molybdenum     0.0  0.0         9.25      0
+42  95 - Mo  molybdenum     2.5 -0.3657     15.92     -0.022
+42  96 - Mo  molybdenum     0.0  0.0        16.68      0
+42  97 - Mo  molybdenum     2.5 -0.3734      9.55     +0.255
+42  98 - Mo  molybdenum     0.0  0.0        24.13      0
+42 100 - Mo  molybdenum     0.0  0.0         9.63      0
+43  99 * Tc  technetium     4.5 +1.2632      0.0      -0.129
+44  96 - Ru  ruthenium      0.0  0.0         5.54      0
+44  98 - Ru  ruthenium      0.0  0.0         1.87      0
+44  99 - Ru  ruthenium      2.5 -0.256      12.76     +0.079
+44 100 - Ru  ruthenium      0.0  0.0        12.60      0
+44 101 - Ru  ruthenium      2.5 -0.288      17.06     +0.46
+44 102 - Ru  ruthenium      0.0  0.0        31.55      0
+44 104 - Ru  ruthenium      0.0  0.0        18.62      0
+45 103 - Rh  rhodium        0.5 -0.1768    100.0       0
+46 102 - Pd  palladium      0.0  0.0         1.02      0
+46 104 - Pd  palladium      0.0  0.0        11.14      0
+46 105 - Pd  palladium      2.5 -0.257      22.33     +0.660
+46 106 - Pd  palladium      0.0  0.0        27.33      0
+46 108 - Pd  palladium      0.0  0.0        26.46      0
+46 110 - Pd  palladium      0.0  0.0        11.72      0
+47 107 - Ag  silver         0.5 -0.22714    51.839     0
+47 109 - Ag  silver         0.5 -0.26112    48.161     0
+48 106 - Cd  cadmium        0.0  0.0         1.25      0
+48 108 - Cd  cadmium        0.0  0.0         0.89      0
+48 110 - Cd  cadmium        0.0  0.0        12.49      0
+48 111 - Cd  cadmium        0.5 -1.18977    12.80      0
+48 112 - Cd  cadmium        0.0  0.0        24.13      0
+48 113 - Cd  cadmium        0.5 -1.244602   12.22      0
+48 114 - Cd  cadmium        0.0  0.0        28.73      0
+48 116 - Cd  cadmium        0.0  0.0         7.49      0
+49 113 - In  indium         4.5 +1.2286      4.29     +0.759
+49 115 - In  indium         4.5 +1.2313     95.71     +0.770
+50 112 - Sn  tin            0.0  0.0         0.97      0
+50 114 - Sn  tin            0.0  0.0         0.66      0
+50 115 - Sn  tin            0.5 -1.8377      0.34      0
+50 116 - Sn  tin            0.0  0.0        14.54      0
+50 117 - Sn  tin            0.5 -2.00208     7.68      0
+50 118 - Sn  tin            0.0  0.0        24.22      0
+50 119 - Sn  tin            0.5 -2.09456     8.59      0
+50 120 - Sn  tin            0.0  0.0        32.58      0
+50 122 - Sn  tin            0.0  0.0         4.63      0
+50 124 - Sn  tin            0.0  0.0         5.79      0
+51 121 - Sb  antimony       2.5 +1.3454     57.21     -0.543
+51 123 - Sb  antimony       3.5 +0.72851    42.79     -0.692
+51 125 * Sb  antimony       3.5 +0.751       0.0       NaN
+52 120 - Te  tellurium      0.0  0.0         0.09      0
+52 122 - Te  tellurium      0.0  0.0         2.55      0
+52 123 - Te  tellurium      0.5 -1.473896    0.89      0
+52 124 - Te  tellurium      0.0  0.0         4.74      0
+52 125 - Te  tellurium      0.5 -1.7770102   7.07      0
+52 126 - Te  tellurium      0.0  0.0        18.84      0
+52 128 - Te  tellurium      0.0  0.0        31.74      0
+52 130 - Te  tellurium      0.0  0.0        34.08      0
+53 127 - I   iodine         2.5 +1.12531   100.0      -0.696
+53 129 * I   iodine         3.5 +0.74886     0.0      -0.488
+54 124 - Xe  xenon          0.0  0.0         0.09      0
+54 126 - Xe  xenon          0.0  0.0         0.09      0
+54 128 - Xe  xenon          0.0  0.0         1.92      0
+54 129 - Xe  xenon          0.5 -1.55595    26.44      0
+54 130 - Xe  xenon          0.0  0.0         4.08      0
+54 131 - Xe  xenon          1.5 +0.461      21.18     -0.114
+54 132 - Xe  xenon          0.0  0.0        26.89      0
+54 134 - Xe  xenon          0.0  0.0        10.44      0
+54 136 - Xe  xenon          0.0  0.0         8.87      0
+%--------------------------------------------------------------
+% sixth period, third row transition metals, rare earths
+%--------------------------------------------------------------
+55 133 - Cs  caesium        3.5 +0.7377214 100.0      -0.00343
+55 134 * Cs  caesium        4.0 +0.74843     0.0      +0.37
+55 135 * Cs  caesium        3.5 +0.78069     0.0      +0.048
+55 137 * Cs  caesium        3.5 +0.81466     0.0      +0.048
+56 130 - Ba  barium         0.0  0.0         0.106     0
+56 132 - Ba  barium         0.0  0.0         0.101     0
+56 133 * Ba  barium         0.5 -1.5433      0.0       0
+56 134 - Ba  barium         0.0  0.0         2.417     0
+56 135 - Ba  barium         1.5 +0.55863     6.592    +0.160
+56 136 - Ba  barium         0.0  0.0         7.854     0
+56 137 - Ba  barium         1.5 +0.62491    11.232    +0.245
+56 138 - Ba  barium         0.0  0.0        71.698     0
+57 137 * La  lanthanum      3.5 +0.7714      0.0      +0.21
+57 138 - La  lanthanum      5.0 +0.742729    0.090    +0.39
+57 139 - La  lanthanum      3.5 +0.795156   99.910    +0.200
+58 136 - Ce  cerium         0.0  0.0         0.185     0
+58 138 - Ce  cerium         0.0  0.0         0.251     0
+58 140 - Ce  cerium         0.0  0.0        88.450     0
+58 142 - Ce  cerium         0.0  0.0        11.114     0
+59 141 - Pr  praesodymium   2.5 +1.7102    100.0      -0.077
+60 142 - Nd  neodymium      0.0  0.0        27.2       0
+60 143 - Nd  neodymium      3.5 -0.3043     12.2      -0.61
+60 144 - Nd  neodymium      0.0  0.0        23.8       0
+60 145 - Nd  neodymium      3.5 -0.187       8.3      -0.314
+60 146 - Nd  neodymium      0.0  0.0        17.2       0
+60 148 - Nd  neodymium      0.0  0.0         5.7       0
+60 150 - Nd  neodymium      0.0  0.0         5.6       0
+61 147 * Pm  promethium     3.5 +0.737       0.0      +0.74
+62 144 - Sm  samarium       0.0  0.0         3.07      0
+62 147 - Sm  samarium       3.5 -0.232      14.99     -0.26
+62 148 - Sm  samarium       0.0  0.0        11.24      0
+62 149 - Sm  samarium       3.5 -0.1908     13.82     +0.078
+62 150 - Sm  samarium       0.0  0.0         7.38      0
+62 151 * Sm  samarium       2.5 +0.1444      0.0      +0.71
+62 152 - Sm  samarium       0.0  0.0        26.75      0
+62 154 - Sm  samarium       0.0  0.0        22.75      0
+63 151 - Eu  europium       2.5 +1.3887     47.81     +0.903
+63 152 * Eu  europium       3.0 -0.6467      0.0      +2.72
+63 153 - Eu  europium       2.5 +0.6134     52.19     +2.41
+63 154 * Eu  europium       3.0 -0.6683      0.0      +2.85
+63 155 * Eu  europium       2.5 +0.608       0.0      +2.5
+64 152 - Gd  gadolinium     0.0  0.0         0.20      0
+64 154 - Gd  gadolinium     0.0  0.0         2.18      0
+64 155 - Gd  gadolinium     1.5 -0.1715     14.80     +1.27
+64 156 - Gd  gadolinium     0.0  0.0        20.47      0
+64 157 - Gd  gadolinium     1.5 -0.2265     15.65     +1.35
+64 158 - Gd  gadolinium     0.0  0.0        24.84      0
+64 160 - Gd  gadolinium     0.0  0.0        21.86      0
+65 157 * Tb  terbium        1.5 +1.34        0.0      +1.40
+65 159 - Tb  terbium        1.5 +1.343     100.0      +1.432
+65 160 * Tb  terbium        3.0 +0.5967      0.0      +3.85
+66 156 - Dy  dysprosium     0.0  0.0         0.06      0
+66 158 - Dy  dysprosium     0.0  0.0         0.10      0
+66 160 - Dy  dysprosium     0.0  0.0         2.34      0
+66 161 - Dy  dysprosium     2.5 -0.192      18.91     +2.51
+66 162 - Dy  dysprosium     0.0  0.0        25.51      0
+66 163 - Dy  dysprosium     2.5 +0.269      24.90     +2.65
+66 164 - Dy  dysprosium     0.0  0.0        28.18      0
+67 165 - Ho  holmium        3.5 +1.668     100.0      +3.58
+68 162 - Er  erbium         0.0  0.0         0.14      0
+68 164 - Er  erbium         0.0  0.0         1.61      0
+68 166 - Er  erbium         0.0  0.0        33.61      0
+68 167 - Er  erbium         3.5 -0.1611     22.93     +3.57
+68 168 - Er  erbium         0.0  0.0        26.78      0
+68 170 - Er  erbium         0.0  0.0        14.93      0
+69 169 - Tm  thulium        0.5 -0.462     100.0       0
+69 171 * Tm  thulium        0.5 -0.456       0.0       0
+70 168 - Yb  ytterbium      0.0  0.0         0.13      0
+70 170 - Yb  ytterbium      0.0  0.0         3.04      0
+70 171 - Yb  ytterbium      0.5 +0.98734    14.28      0
+70 172 - Yb  ytterbium      0.0  0.0        21.83      0
+70 173 - Yb  ytterbium      2.5 -0.2592     16.13     +2.80
+70 174 - Yb  ytterbium      0.0  0.0        31.83      0
+70 176 - Yb  ytterbium      0.0  0.0        12.76      0
+71 173 * Lu  lutetium       3.5 +0.6517      0.0      +3.53
+71 174 * Lu  lutetium       1.0 +1.988       0.0      +0.773
+71 175 - Lu  lutetium       3.5 +0.6378     97.41     +3.49
+71 176 - Lu  lutetium       7.0 +0.4517      2.59     +4.92
+72 174 - Hf  hafnium        0.0  0.0         0.16      0
+72 176 - Hf  hafnium        0.0  0.0         5.26      0
+72 177 - Hf  hafnium        3.5 +0.2267     18.60     +3.37
+72 178 - Hf  hafnium        0.0  0.0        27.28      0
+72 179 - Hf  hafnium        4.5 -0.1424     13.62     +3.79
+72 180 - Hf  hafnium        0.0  0.0        35.08      0
+73 180 - Ta  tantalum       0.0  0.0         0.012     0
+73 181 - Ta  tantalum       3.5 +0.67729    99.988    +3.17
+74 180 - W   tungsten       0.0  0.0         0.12      0
+74 182 - W   tungsten       0.0  0.0        26.50      0
+74 183 - W   tungsten       0.5 +0.2355695  14.31      0
+74 184 - W   tungsten       0.0  0.0        30.64      0
+74 186 - W   tungsten       0.0  0.0        28.43      0
+75 185 - Re  rhenium        2.5 +1.2748     37.40     +2.18
+75 187 - Re  rhenium        2.5 +1.2879     62.60     +2.07
+76 184 - Os  osmium         0.0  0.0         0.02      0
+76 186 - Os  osmium         0.0  0.0         1.59      0
+76 187 - Os  osmium         0.5 +0.1293038   1.96      0
+76 188 - Os  osmium         0.0  0.0        13.24      0
+76 189 - Os  osmium         1.5 +0.439956   16.15     +0.86
+76 190 - Os  osmium         0.0  0.0        26.26      0
+76 192 - Os  osmium         0.0  0.0        40.78      0
+77 191 - Ir  iridium        1.5 +0.1005     37.3      +0.816
+77 193 - Ir  iridium        1.5 +0.1091     62.7      +0.751
+78 190 - Pt  platinum       0.0  0.0         0.014     0
+78 192 - Pt  platinum       0.0  0.0         0.784     0
+78 194 - Pt  platinum       0.0  0.0        32.967     0
+78 195 - Pt  platinum       0.5 +1.2190     33.832     0
+78 196 - Pt  platinum       0.0  0.0        25.242     0
+78 198 - Pt  platinum       0.0  0.0         7.163     0
+79 197 - Au  gold           1.5 +0.097164  100.0      +0.547
+80 196 - Hg  mercury        0.0  0.0         0.15      0
+80 198 - Hg  mercury        0.0  0.0         9.97      0
+80 199 - Hg  mercury        0.5 +1.011771   16.87      0
+80 200 - Hg  mercury        0.0  0.0        23.10      0
+80 201 - Hg  mercury        1.5 -0.373484   13.18     +0.387
+80 202 - Hg  mercury        0.0  0.0        29.86      0
+80 204 - Hg  mercury        0.0  0.0         6.87      0
+81 203 - Tl  thallium       0.5 +3.24451574 29.524     0
+81 204 * Tl  thallium       2.0 +0.045       0.0       NaN
+81 205 - Tl  thallium       0.5 +3.2764292  70.476     0
+82 204 - Pb  lead           0.0  0.0         1.4       0
+82 206 - Pb  lead           0.0  0.0        24.1       0
+82 207 - Pb  lead           0.5 +1.18512    22.1       0
+82 208 - Pb  lead           0.0  0.0        52.4       0
+83 207 * Bi  bismuth        4.5 +0.9092      0.0      -0.76
+83 209 - Bi  bismuth        4.5 +0.9134    100.0      -0.516
+84 209 * Po  polonium       0.5 +1.5         0.0       0
+85   0 * At  astatine      -1.0  0.0         0.0       0
+86   0 * Rn  radon         -1.0  0.0         0.0       0
+%--------------------------------------------------------------
+% seventh period, rare earths
+%--------------------------------------------------------------
+87   0 * Fr  francium      -1.0  0.0         0.0       0
+88   0 * Ra  radium        -1.0  0.0         0.0       0
+89 227 * Ac  actinium       1.5 +0.73        0.0      +1.7
+90 229 * Th  thorium        2.5 +0.18        0.0      +4.3
+90 232 - Th  thorium        0.0  0.0       100.0       0
+91   0 - Pa  protactinium  -1.0  0.0       100.0       0
+92 234 * U   uranium        0.0  0.0         0.0055    0
+92 235 * U   uranium        3.5 -0.109       0.7200   +4.936
+92 238 * U   uranium        0.0  0.0        99.2745    0
+93 237 * Np  neptunium      2.5 +1.256       0.0      +3.87
+94 239 * Pu  plutonium      0.5 +0.406       0.0       0
+95 243 * Am  americium      2.5 +0.6         0.0      +2.86
+96   0 * Cm  curium        -1.0  0.0         0.0       0
+97   0 * Bk  berkelium     -1.0  0.0         0.0       0
+98   0 * Cf  californium   -1.0  0.0         0.0       0
+99   0 * Es  einsteinium   -1.0  0.0         0.0       0
+100  0 * Fm  fermium       -1.0  0.0         0.0       0
+101  0 * Md  mendelevium   -1.0  0.0         0.0       0
+102  0 * No  nobelium      -1.0  0.0         0.0       0
+103  0 * Lr  lawrencium    -1.0  0.0         0.0       0
+104  0 * Rf  rutherfordium -1.0  0.0         0.0       0
+105  0 * Db  dubnium       -1.0  0.0         0.0       0
+106  0 * Sg  seaborgium    -1.0  0.0         0.0       0
+107  0 * Bh  bohrium       -1.0  0.0         0.0       0
+108  0 * Hs  hassium       -1.0  0.0         0.0       0
+109  0 * Mt  meitnerium    -1.0  0.0         0.0       0
+110  0 * Ds  darmstadtium  -1.0  0.0         0.0       0
+111  0 * Rg  roentgenium   -1.0  0.0         0.0       0
+112  0 * Cn  copernicium   -1.0  0.0         0.0       0
+113  0 * Uut ununtrium     -1.0  0.0         0.0       0
+114  0 * Fl  flerovium     -1.0  0.0         0.0       0
+115  0 * Uup ununpentium   -1.0  0.0         0.0       0
+116  0 * Lv  livermorium   -1.0  0.0         0.0       0
+117  0 * Uus ununseptium   -1.0  0.0         0.0       0
+118  0 * Uuo ununoctium    -1.0  0.0         0.0       0

@@ -1,5 +1,5 @@
-ao2mo
-*****
+ao2mo --- Integral transformations
+**********************************
 
 .. automodule:: pyscf.ao2mo
  

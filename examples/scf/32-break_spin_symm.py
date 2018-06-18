@@ -3,13 +3,15 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+'''
+Break spin symmetry for UHF/UKS by initial guess.
+
+See also examples/dft/32-broken_symmetry_dft.py
+'''
+
 import numpy
 from pyscf import gto
 from pyscf import scf
-
-'''
-Break spin symmetry for UHF/UKS by initial guess.
-'''
 
 mol = gto.Mole()
 mol.verbose = 4

@@ -1,4 +1,4 @@
-:mod:`ci` --- Configuration interaction
+ci --- Configuration interaction
 ***************************************
 
 .. module:: ci

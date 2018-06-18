@@ -4,7 +4,7 @@
 #
 
 '''
-Use selected CI solver for given 1-electron and 2-electron Hamiltonian
+Use selected CI solver for the given 1-electron and 2-electron Hamiltonians
 '''
 
 import numpy
@@ -21,12 +21,12 @@ h2 = h2 + h2.transpose(0,1,3,2)
 h2 = h2 + h2.transpose(2,3,0,1)
 
 #
-# select_ci.kernel can handle all systems
+# A quick run with selected_ci.kernel
 #
-e, fcivec = fci.select_ci.kernel(h1, h2, norb, 8, verbose=5)
+e, fcivec = fci.selected_ci.kernel(h1, h2, norb, 8, verbose=5)
 
 #
-# SCI object offers more options to control the calculation.
+# More options of SCI object to control the calculation.
 #
 cisolver = fci.SCI()
 cisolver.max_cycle = 100
@@ -36,10 +36,10 @@ e, fcivec = cisolver.kernel(h1, h2, norb, (5,4))  # 5 alpha, 4 beta electrons
 e, fcivec = cisolver.kernel(h1, h2, norb, (3,1))  # 3 alpha, 1 beta electrons
 
 #
-# If you are sure the system ground state is singlet, you can use spin0 solver.
-# Spin symmetry is considered in spin0 solver to reduce cimputation cost.
+# If the ground state is singlet, you can use spin0 solver.  Spin symmetry is
+# considered in spin0 solver to reduce cimputational cost.
 #
-cisolver = fci.select_ci_spin0.SCI()
+cisolver = fci.selected_ci_spin0.SCI()
 cisolver.verbose = 5
 e, fcivec = cisolver.kernel(h1, h2, norb, 8)
 

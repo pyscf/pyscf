@@ -4,46 +4,33 @@
 Tutorial
 ********
 
+This tutorial shows how to use PySCF package in the perspective of method
+development. It involves some knowledge of coding in Python.  An Ipython
+notebook of user-guide can be found in
+https://github.com/nmardirossian/PySCF_Tutorial.
+
 Quick setup
 ===========
 
-The prerequisites of PySCF include `cmake <http://www.cmake.org>`_,
-`numpy <http://www.numpy.org/>`_, `scipy <http://www.scipy.org/>`_,
-and `h5py <http://www.h5py.org/>`_.  On the Ubuntu host, you can quickly
-install them::
+You can install PySCF from github repo::
 
   $ sudo apt-get install python-h5py python-scipy cmake
-
-Then download the latest version of `pyscf <https://github.com/sunqm/pyscf.git/>`_
-and build C extensions in :file:`pyscf/lib`::
-
   $ git clone https://github.com/sunqm/pyscf
-  $ cd pyscf/lib
+  $ cd pyscf/pyscf/lib
   $ mkdir build
   $ cd build
   $ cmake ..
   $ make
 
-Finally, update the Python runtime path :code:`PYTHONPATH` (assuming pyscf
-is put in /home/abc, replace it with your own path)::
+You may need to update the Python runtime searching path :code:`PYTHONPATH`
+(assuming the pyscf source code is put in /home/abc, replacing it with your own
+path)::
 
-  $ echo 'export PYTHONPATH=/home/abc:$PYTHONPATH' >> ~/.bashrc
+  $ echo 'export PYTHONPATH=/home/abc/pyscf:$PYTHONPATH' >> ~/.bashrc
   $ source ~/.bashrc
 
-To ensure the installation is successed, start a Python shell, and type::
-
-  >>> import pyscf
-
-If you got errors like::
-
-  ImportError: No module named pyscf
-
-It's very possible that you put ``/home/abc/pyscf`` in :code:`PYTHONPATH`.
-You need to remove the ``/pyscf`` in that string and try
-``import pyscf`` in the python shell again.
-
 .. note::  The quick setup does not provide the best performance.
-  Please see :ref:`installing` for the optimized libraries.
+  Please see :ref:`installing` for the installation with optimized libraries.
 
 
 A simple example
@@ -52,19 +39,18 @@ A simple example
 Here is an example to run HF calculation for hydrogen molecule::
 
   >>> from pyscf import gto, scf
-  >>> mol = gto.M(atom='H 0 0 0; H 0 0 1.2', basis='cc-pvdz')
+  >>> mol = gto.M(atom='H 0 0 0; H 0 0 1.2', basis='ccpvdz')
   >>> mf = scf.RHF(mol)
   >>> mf.kernel()
   converged SCF energy = -1.06111199785749
   -1.06111199786
 
 
-Input molecule
-==============
+Initializing a molecule
+=======================
 
-The first question is how to input a molecule in pyscf.  There are three
-ways to define and build a molecule.  The first is to use the keyword
-arguments of :func:`Mole.build` to initialize a molecule::
+There are three ways to define and initialize a molecule.  The first is to use
+the keyword arguments of :func:`Mole.build` to initialize a molecule::
 
   >>> from pyscf import gto
   >>> mol = gto.Mole()
@@ -95,158 +81,55 @@ They are used to hold the molecular geometry and basis sets.
 Geometry
 --------
 
-There are two ways to insert the geometry. The internal format of
-:attr:`Mole.atom` is a python list::
-
-  atom = [[atom1, (x, y, z)],
-          [atom2, (x, y, z)],
-          ...
-          [atomN, (x, y, z)]]
-
-You can input the geometry in this format.  Therefore, you are able to
-use all the possible feature provided by Python to construct the
-geometry::
+Molecular geometry can be input in Cartesian format::
 
   >>> mol = gto.Mole()
-  >>> mol.atom = [['O',(0, 0, 0)], ['H',(0, 1, 0)], ['H',(0, 0, 1)]]
-  >>> mol.atom.extend([['H', (i, i, i)] for i in range(1,5)])
+  >>> mol.atom = '''O 0, 0, 0
+  ... H   0  1  0; H 0, 0, 1'''
 
-Although the internal format is defined on the Python list, you can
-replace it with tuple, or numpy.ndarray for the coordinate part::
-
-  >>> mol.atom = (('O',numpy.zeros(3)), ['H', 0, 1, 0], ['H',[0, 0, 1]])
-
-The second way is to assign :attr:`~Mole.atom` a string like::
+The atoms in the molecule are represented by an element symbol plus three
+numbers for coordinates.  Different atoms should be separated by ``;`` or line
+break. In the same atom, ``,`` can be used to separate different items.
+Z-matrix input format is also supported by the input parser::
 
   >>> mol = gto.Mole()
-  >>> mol.atom = '''
-  >>> O 0 0 0
-  >>> H 0 1 0
-  >>> H 0 0 1;
-  >>> '''
-  >>> mol.atom += ';'.join(['H '+(' %f'%i)*3 for i in range(1,5)])
+  >>> mol.atom = '''O
+  ... H, 1, 1.2;  H   1 1.2   2 105'''
 
-There are a few requirements for the string format.  The string input
-takes ``;`` or ``\n`` to partition atoms, and `` `` or ``,`` to divide
-the atomic symbol and the coordinates.  Blank lines will be ignored.
-
-.. note:: Z-matrix string is not supported in the present version.
-
-To specify the atoms type, you can use the atomic symbol (case-insensitive),
-or the atomic nuclear charge::
-
-  >>> mol = gto.Mole()
-  >>> mol.atom = [[8,(0, 0, 0)], ['h',(0, 1, 0)], ['H',(0, 0, 1)]]
-
-If you want to label an atom to distinguish it from the rest, you can prefix
+Similarly,  different atoms need to be separated by ``;`` or line break.
+If you need to label an atom to distinguish it from the rest, you can prefix
 or suffix number or special characters ``1234567890~!@#$%^&*()_+.?:<>[]{}|``
-(execept ``,`` and ``;``) to an atomic symbol.  With this decoration, you can
-specify a basis set, or mass, or nuclear model for a particular atom
-without affect the rest same type atoms::
+(except ``,`` and ``;``) to an atomic symbol.  With this decoration, you can
+specify different basis sets, or masses, or nuclear models for different atoms::
 
   >>> mol = gto.Mole()
   >>> mol.atom = '''8 0 0 0; h:1 0 1 0; H@2 0 0'''
   >>> mol.basis = {'O': 'sto-3g', 'H': 'cc-pvdz', 'H@2': '6-31G'}
   >>> mol.build()
-  >>> print(mol.atom)
+  >>> print(mol._atom)
   [['O', [0.0, 0.0, 0.0]], ['H:1', [0.0, 1.0, 0.0]], ['H@2', [0.0, 0.0]]]
-
-No matter which format or symbol used for the input, :func:`Mole.build`
-will convert :attr:`Mole.atom` to the internal format::
-
-  >>> mol.atom = '''
-      O        0,   0, 0             ; 1 0.0 1 0
-      
-          H@2,0 0 1
-      '''
-  >>> mol.build()
-  >>> print(mol.atom)
-  [['O', [0.0, 0.0, 0.0]], ['H', [0.0, 1.0, 0.0]], ['H@2', [0.0, 0.0, 1.0]]]
 
 Basis set
 ---------
 
-There are four ways to assign basis sets.  One is to input the intenal format::
+The simplest way is to assign a string of basis name to :attr:`mol.basis`::
 
-  basis = {atom_type1:[[angular_momentum
-                        (GTO-exp1, contract-coeff11, contract-coeff12),
-                        (GTO-exp2, contract-coeff21, contract-coeff22),
-                        (GTO-exp3, contract-coeff31, contract-coeff32),
-                        ...],
-                       [angular_momentum
-                        (GTO-exp1, contract-coeff11, contract-coeff12),
-                        ...],
-                       ...],
-           atom_type2:[[angular_momentum, (...),],
-                       ...],
+  mol.basis = 'sto3g'
 
-like::
-
-  mol.basis = {'H': [[0,
-                      (19.2406000, 0.0328280),
-                      (2.8992000, 0.2312080),
-                      (0.6534000, 0.8172380),],
-                     [0,
-                      (0.1776000, 1.0000000),],
-                     [1,
-                      (1.0000000, 1.0000000),]],
-              }
-
-You can find more examples of internal format in :file:`pyscf/gto/basis/`.
-Some basis sets, e.g.  :file:`dzp_dunning.py`, are saved in the internal
-format.
-
-But the internal format is not easy to input.  So two functions
-:func:`basis.load` and :func:`basis.parse` are defined to simplify the
-workload.  They return the basis set of internal format::
-
-  mol.basis = {'H': gto.basis.load('sto3g', 'H')}
-
-:func:`basis.parse` can parse a basis string of NWChem format
-(https://bse.pnl.gov/bse/portal)::
-
-  mol.basis = {'O': gto.basis.parse('''
-  C    S
-       71.6168370              0.15432897       
-       13.0450960              0.53532814       
-        3.5305122              0.44463454       
-  C    SP
-        2.9412494             -0.09996723             0.15591627       
-        0.6834831              0.39951283             0.60768372       
-        0.2222899              0.70011547             0.39195739       
-  ''')}
-
-Things can be more convenient by inputing name of the baiss::
+This input will apply the specified basis set to all atoms.  The basis name in
+the string is case insensitive.  White space, dash and underscore in the basis
+name are all ignored.  If different basis sets are required for different
+elements,  a python ``dict`` can be assigned to the basis attribute::
 
   mol.basis = {'O': 'sto3g', 'H': '6-31g'}
 
-or specify one basis set universally for all atoms::
-
-  mol.basis = '6-31g'
-
-The package defined a 0-nuclear-charge atom, called "GHOST".  This phantom
-atom can be used to insert basis for BSSE correction with
-:func:`basis.load` and :func:`basis.parse`::
-
-  mol.basis = {'GHOST': gto.basis.load('cc-pvdz', 'O'), 'H': 'sto3g'}
-
-Like the requirements of geometry input, you can use atomic symbol
-(case-insensitive) or the atomic nuclear charge, as the keyword of the
-:attr:`~Mole.basis` dict.  Prefix and suffix of numbers and special
-characters are allowed.  If the decorated atomic symbol is appeared in
-:attr:`~Mole.atom` but not :attr:`~Mole.basis`, the basis parser will
-remove all decorations then seek the pure atomic symbol in
-:attr:`~Mole.basis` dict.  In the following example, ``6-31G`` basis
-will be assigned to the second H atom, but ``STO-3G`` will be used for
-the third atom::
-
-  mol.atom = [[8,(0, 0, 0)], ['h1',(0, 1, 0)], ['H2',(0, 0, 1)]]
-  mol.basis = {'O': 'sto-3g', 'H': 'sto3g', 'H1': '6-31G'}
+You can find more examples in section :ref:`input_basis` and in the file
+:file:`examples/gto/04-input_basis.py`.
 
 Other parameters
 ----------------
 
-You can assign more infomations to a molecular object::
+You can assign more informations to the molecular object::
 
   mol.symmetry = 1
   mol.charge = 1
@@ -255,41 +138,78 @@ You can assign more infomations to a molecular object::
   mol.mass = {'O1': 18, 'H': 2} 
 
 .. note::
-  :attr:`Mole.spin` is *2S*, the alpha and beta electron number difference.
+  :attr:`Mole.spin` is *2S*, the unpaired electrons = the difference between the
+  numbers of alpha and beta electrons.
 
-:class:`Mole` also defines some global options.  You can control the
-print level with :attr:`~Mole.verbose`::
+:class:`Mole` also defines some global parameters.  You can control the
+print level globally with :attr:`~Mole.verbose`::
 
   mol.verbose = 4
 
 The print level can be 0 (quite, no output) to 9 (very noise).  Mostly,
 the useful messages are printed at level 4 (info), and 5 (debug).
-You can also specify the place where to write the print messages::
+You can also specify the place where to write the output messages::
 
   mol.output = 'path/to/my_log.txt'
 
-Without assigning this variable, messages will be printed to
-:attr:`sys.stdout`.  You can control the memory usage::
+Without assigning this variable, messages will be dumped to :attr:`sys.stdout`.
+You can control the maximum memory usage globally::
 
   mol.max_memory = 1000 # MB
   
-The default size can be set in shell with environment variable `PYSCF_MAX_MEMORY`
+The default size can be defined with shell environment variable `PYSCF_MAX_MEMORY`
 
-:attr:`~Mole.verbose`, :attr:`~Mole.output` and :attr:`~Mole.max_memory`
-can be assgined from command line::
+:attr:`~Mole.output` and :attr:`~Mole.max_memory` can be assigned from command
+line::
 
-  $ python example.py --verbose -o /path/to/my_log.txt -m 1000
+  $ python example.py -o /path/to/my_log.txt -m 1000
 
-The command line arguments are parsed in :func:`Mole.build`.  By
-default, they have the highest priority, which means our settings in the
-script will be overwritten by the command line arguments.  To prevent
-that, we can call :func:`Mole.build` with::
 
-  mol.build(0, 0)
+Initializing a crystal
+======================
 
-The first 0 prevent :func:`~Mole.build` dumping the input file.  The
-second 0 prevent :func:`~Mole.build` parsing command line.
+Initialization a crystal unit cell is very similar to the initialization
+molecular object.  Here, :class:`pyscf.pbc.gto.Cell` class should be used
+instead of the :class:`pyscf.gto.Mole` class::
 
+  >>> from pyscf.pbc import gto
+  >>> cell = gto.Cell()
+  >>> cell.atom = '''H  0 0 0; H 1 1 1'''
+  >>> cell.basis = 'gth-dzvp'
+  >>> cell.pseudo = 'gth-pade'
+  >>> cell.a = numpy.eye(3) * 2
+  >>> cell.build()
+
+The crystal initialization requires an extra parameter :attr:`cell.a` which
+represents the lattice vectors. In the above example, we specified
+:attr:`cell.pseudo` for the pseudo-potential of the system which is an optional
+parameter.  The input format of basis set is the same to that of :class:`Mole`
+object.  The other attributes of :class:`Mole` object such as :attr:`verbose`,
+:attr:`max_memory`, :attr:`spin` can also be used in the crystal systems.
+More details of the crystal :class:`Cell` object and the relevant input
+parameters are documented in :ref:`pbc_gto`.
+
+1D and 2D systems
+-----------------
+
+PySCF PBC module supports the low-dimensional PBC systems.  You can initialize
+the attribute :attr:`cell.dimension` to specify the dimension of the system::
+
+  >>> from pyscf.pbc import gto
+  >>> cell = gto.Cell()
+  >>> cell.atom = '''H  0 0 0; H 1 1 0'''
+  >>> cell.basis = 'sto3g'
+  >>> cell.dimension = 2
+  >>> cell.a = numpy.eye(3) * 2
+  >>> cell.build()
+
+When :attr:`cell.dimension` is specified, a vacuum of infinite size will be
+applied on certain dimension(s).  More specifically, when :attr:`cell.dimension`
+is 2, the z-direction will be treated as infinite large and the xy-plane
+constitutes the periodic surface. When :attr:`cell.dimension` is 1, y and z axes
+are treated as vacuum thus wire is placed on the x axis.  When
+:attr:`cell.dimension` is 0, all three directions are vacuum.  The PBC system is
+actually the same to the molecular system.
 
 HF, MP2, MCSCF
 ==============
@@ -308,14 +228,15 @@ take oxygen molecule as the first example::
   >>> mol.basis = 'ccpvdz'
   >>> mol.build()
 
-Import non-relativistic Hartree-Fock::
+Apply non-relativistic Hartree-Fock::
 
   >>> from pyscf import scf
   >>> m = scf.RHF(mol)
   >>> print('E(HF) = %g' % m.kernel())
   E(HF) = -149.544214749
 
-But the ground state of oxygen molecule should be triplet::
+The ground state of oxygen molecule should be triplet.  So we change the spin to
+``2`` (2 more alpha electrons than beta electrons)::
 
   >>> o2_tri = mol.copy()
   >>> o2_tri.spin = 2
@@ -324,7 +245,7 @@ But the ground state of oxygen molecule should be triplet::
   >>> print(rhf3.kernel())
   -149.609461122
 
-or run with UHF::
+Run UHF::
 
   >>> uhf3 = scf.UHF(o2_tri)
   >>> print(uhf3.scf())
@@ -343,10 +264,9 @@ You can impose symmetry::
   >>> print(rhf3_sym.kernel())
   -149.609461122
 
-Here we rebuild the moleclue because the point group symmetry
-information, symmetry adapted orbitals, are initalized in
-:meth:`Mole.build`.  With a little more lines of code, we can check the
-occupancy for each irreducible representations::
+Here we rebuild the molecule because we need to initialize the point group
+symmetry information, symmetry adapted orbitals.  We can check the occupancy for
+each irreducible representations::
 
   >>> import numpy
   >>> from pyscf import symm
@@ -377,7 +297,8 @@ irreducible representations :attr:`Mole.irrep_id` and the symmetry
 adapted basis :attr:`Mole.symm_orb`.  For each :attr:`~Mole.irrep_id`,
 :attr:`Mole.irrep_name` gives the associated irrep symbol (A1, B1 ...).
 In the SCF calculation, you can control the symmetry of the wave
-function by assigning electron numbers `(alpha,beta)` for particular irreps::
+function by assigning the number of alpha electrons and beta electrons
+`(alpha,beta)` for some irreps::
 
   >>> rhf3_sym.irrep_nelec = {'B2g': (1,1), 'B3g': (1,1), 'B2u': (1,0), 'B3u': (1,0)}
   >>> rhf3_sym.kernel()
@@ -386,7 +307,8 @@ function by assigning electron numbers `(alpha,beta)` for particular irreps::
   >>> rhf3_sym.get_irrep_nelec()
   {'Ag' : (3, 3), 'B1g': (0, 0), 'B2g': (1, 1), 'B3g': (1, 1), 'Au' : (0, 0), 'B1u': (1, 0), 'B2u': (0, 1), 'B3u': (1, 0)}
 
-More informations can be found in the output file "o2.log".
+More informations of the calculation can be found in the output file ``o2.log``.
+
 
 MP2 and MO integral transformation
 ----------------------------------
@@ -395,11 +317,11 @@ Next, we compute the correlation energy with :mod:`mp.mp2`::
 
   >>> from pyscf import mp
   >>> mp2 = mp.MP2(m)
-  >>> print('E(MP2) = %.9g' % m.kernel()[0])
+  >>> print('E(MP2) = %.9g' % mp2.kernel()[0])
   E(MP2) = -0.379359288
 
 This is the correlation energy of singlet ground state.  For the triplet
-state, we can write our own function to compute the MP2 correlation energy
+state, we can write a function to compute the correlation energy
 
 .. math::
 
@@ -438,13 +360,12 @@ state, we can write our own function to compute the MP2 correlation energy
   >>> print('E(UMP2) = %.9g' % myump2(uhf3))
   -0.346926068
 
-In this example, we concatenate :math:`\alpha` and :math:`\beta`
-orbitals to fake the spin-orbitals.  After integral transformation, we
-zerod out the integrals of different spin.  Here, the :mod:`ao2mo`
-module provides the general 2-electron MO integral transformation.
-Using this module, you are able to do *arbitrary* integral
-transformation for *arbitrary* integrals. For example, the following
-code gives the ``(ov|vv)`` type integrals::
+In this example, we concatenate :math:`\alpha` and :math:`\beta` orbitals to
+mimic the spin-orbitals.  After integral transformation, we zeroed out the
+integrals of different spin.  Here, the :mod:`ao2mo` module provides the general
+2-electron MO integral transformation.  Using this module, you are able to do
+*arbitrary* integral transformation for *arbitrary* integrals. For example, the
+following code gives the ``(ov|vv)`` type integrals::
 
   >>> from pyscf import ao2mo
   >>> import h5py
@@ -475,7 +396,7 @@ analytical gradients of 2-electron integrals
   >>> co = mf.mo_coeff[:,:nocc]
   >>> cv = mf.mo_coeff[:,nocc:]
   >>> nvir = cv.shape[1]
-  >>> eri = ao2mo.general(mol, (co,cv,co,cv), intor='cint2e_ip1_sph', comp=3)
+  >>> eri = ao2mo.general(mol, (co,cv,co,cv), intor='int2e_ip1_sph', comp=3)
   >>> eri = eri.reshape(3, nocc, nvir, nocc, nvir)
   >>> print(eri.shape)
   (3, 8, 20, 8, 20)
@@ -485,7 +406,7 @@ CASCI and CASSCF
 ----------------
 
 The two classes :class:`mcscf.CASCI` and :class:`mcscf.CASSCF` provided
-by :mod:`mcscf` have the same initialization structure::
+by :mod:`mcscf` have the same initialization interface::
 
   >>> from pyscf import mcscf
   >>> mc = mcscf.CASCI(m, 4, 6)
@@ -497,12 +418,11 @@ by :mod:`mcscf` have the same initialization structure::
 
 In this example, the CAS space is (6e, 4o): the third argument for
 CASCI/CASSCF is the size of CAS space; the fourth argument is the number
-of electrons.  By default, the CAS solver splits the electron number
-according to the :attr:`Mole.spin` attribute.  In the above example, the
-number of alpha electron is equal to the number of beta electrons, since
-the ``mol`` object is initialized with ``spin=0``.  The spin
-multiplicity of the CASSCF/CASCI solver can be changed by the fourth
-argument::
+of electrons.  By default, the CAS solver determines the alpha-electron number
+and beta-electron number based on the attribute :attr:`Mole.spin`.  In the
+above example, the number of alpha electrons is equal to the number of beta
+electrons, since the ``mol`` object is initialized with ``spin=0``.  The spin
+multiplicity of the CASSCF/CASCI solver can be changed by the fourth argument::
 
   >>> mc = mcscf.CASSCF(m, 4, (4,2))
   >>> print('E(CASSCF) = %.9g' % mc.kernel()[0])
@@ -510,34 +430,34 @@ argument::
   >>> print('S^2 = %.7f, 2S+1 = %.7f' % mcscf.spin_square(mc))
   S^2 = 2.0000000, 2S+1 = 3.0000000
 
-The two integers in tuple stand for the number of alpha and beta
-electrons.  Although it is a triplet state, the solution might not be
-right since the CASSCF is based on the incorrect singlet HF ground
-state.  Using the ROHF ground state, we have::
+The two integers in the tuple represent the number of alpha and beta electrons.
+Although it is a triplet state, the solution might not be correct since the
+CASSCF is based on the incorrect singlet HF ground state.  Starting from the
+ROHF ground state, we have::
 
   >>> mc = mcscf.CASSCF(rhf3, 4, 6)
-  >>> print('E(CASSCF) = %.9g' % mc.mc1step()[0])
+  >>> print('E(CASSCF) = %.9g' % mc.kernel()[0])
   E(CASSCF) = -149.646746
 
-where we called :func:`mf.mc1step`, which is an alias name of ``mc.kernel``.
-The energy is lower than the RHF based wavefunction. Alternatively, we
-can also use the UHF ground state to start a CASSCF calculation::
+The energy is lower than the RHF initial guess.
+.. We can also use the UHF ground
+.. state to start a CASSCF calculation::
+.. 
+..   >>> mc = mcscf.CASSCF(uhf3, 4, 6)
+..   >>> print('E(CASSCF) = %.9g' % mc.kernel()[0])
+..   E(CASSCF) = -149.661324
+..   >>> print('S^2 = %.7f, 2S+1 = %.7f' % mcscf.spin_square(mc))
+..   S^2 = 3.9713105, 2S+1 = 4.1091656
+.. 
+.. Woo, the total energy is even lower.  But the spin is contaminated.
 
-  >>> mc = mcscf.CASSCF(uhf3, 4, 6)
-  >>> print('E(CASSCF) = %.9g' % mc.kernel()[0])
-  E(CASSCF) = -149.661324
-  >>> print('S^2 = %.7f, 2S+1 = %.7f' % mcscf.spin_square(mc))
-  S^2 = 3.9713105, 2S+1 = 4.1091656
 
-Woo, the total energy is even lower.  But the spin is contaminated.
-
-
-Restore previous calculation
-============================
-There is no `restart` mechanism in this package.  Alternatively,
-calculations can be "restored" by proper initial guess.  The initial
-guess can be prepared in many ways.  One is to read the ``chkpoint`` file
-which is generated in the previous or the other computations::
+Restore an old calculation
+==========================
+There is no `restart` mechanism available in PySCF package.  Calculations can be
+"restarted" by the proper initial guess.  For SCF, the initial guess can be
+prepared in many ways.  One is to read the ``chkpoint`` file
+which is generated in the previous or other calculations::
 
   >>> from pyscf import scf
   >>> mf = scf.RHF(mol)
@@ -545,56 +465,54 @@ which is generated in the previous or the other computations::
   >>> mf.init_guess = 'chkfile'
   >>> mf.kernel()
 
-``/path/to/chkfile`` can be found in the output of the other calculation
-(if mol.verbose >= 4, there is an entry "chkfile to save SCF result" to
-record the name of chkfile in the output).  By setting
-:attr:`chkfile` and :attr:`init_guess`, the SCF module can read the
-molecular orbitals stored in the given :attr:`chkfile` and rotate them to
-the proper basis sets.  There is another way to read the initial guess::
+``/path/to/chkfile`` can be found in the output in the calculation
+(if mol.verbose >= 4, the filename of the chkfile will be dumped in the output).
+By setting :attr:`chkfile` and :attr:`init_guess`, the SCF module can read the
+molecular orbitals from the given :attr:`chkfile` and rotate them to
+representation of the required basis.  The example
+:file:`examples/scf/15-initial_guess.py` records other methods to generate SCF
+initial guess.
+
+Initial guess can be fed to the calculation directly.  For example, we can read
+the initial guess form a chkfile and achieve the same effects as the on in the
+previous example::
 
   >>> from pyscf import scf
   >>> mf = scf.RHF(mol)
   >>> dm = scf.hf.from_chk(mol, '/path/to/chkfile')
   >>> mf.kernel(dm)
 
-:func:`scf.hf.from_chk` reads the chkpoint file and generated the
-corresponding density matrix.  The density matrix is then
-feed to :func:`mf.kernel`, which takes one parameter as the start point
-for SCF loops.
+:func:`scf.hf.from_chk` reads the chkpoint file and generates the corresponding
+density matrix represented in the required basis.
 
-The "chkfile" is not limited to the calculation based on the same
-molecular and same basis set.  One can also first do a cheap SCF (with
+Initial guess ``chkfile`` is not limited to the calculation based on the same
+molecular and same basis set.  One can first do a cheap SCF (with
 small basis sets) or a model SCF (dropping a few atoms, or charged
 system), then use :func:`scf.hf.from_chk` to project the
-results to the target basis sets.  :mod:`scf` provides other initial
-guess methods such as :func:`scf.hf.init_guess_by_minao`,
-:func:`scf.hf.init_guess_by_atom`, :func:`scf.hf.init_guess_by_1e` (you
-can use :func:`scf.hf.get_init_guess` function to call them).  If you
-like, you can mix all kinds of methods to make a initial guess for
-density matrix and feed it to :func:`mf.scf`
+results to the target basis sets.
 
-To restore CASSCF calculation, you need prepare either CASSCF orbitals
-or CI coefficients (not that useful unless doing DMRG-CASSCF) or both.
-For instance, see ``pyscf/examples/mcscf/13-restart.py``
+To restart a CASSCF calculation, you need prepare either CASSCF orbitals
+or CI coefficients (not that useful unless doing a DMRG-CASSCF calculation) or
+both.  For example:
 
 .. literalinclude:: ../../examples/mcscf/13-restart.py
 
 Access AO integrals
 ===================
 
-Libcint interface
------------------
+molecular integrals
+-------------------
 
-Pyscf uses `Libcint <https://github.com/sunqm/libcint>`_ library as the AO
-integral backend.  It provides simple interface functon :func:`getints_by_shell`
-to call the functions provided by ``Libcint``.  Now let's try to access
-3-center 2-electron integrals through the interface::
+PySCF uses `Libcint <https://github.com/sunqm/libcint>`_ library as the AO
+integral engine.  It provides simple interface function :func:`getints_by_shell`
+to evaluate integrals.  The following example evaluates 3-center 2-electron
+integrals with this function::
 
   import numpy
   from pyscf import gto, scf, df
   mol = gto.M(atom='O 0 0 0; h 0 -0.757 0.587; h 0 0.757 0.587', basis='cc-pvdz')
   auxmol = gto.M(atom='O 0 0 0; h 0 -0.757 0.587; h 0 0.757 0.587', basis='weigend')
-  atm, bas, env = gto.conc_env(mol._atm, mol._bas, mol._env, auxmol._atm, auxmol._bas, auxmol._env)
+  pmol = mol + auxmol
   nao = mol.nao_nr()
   naux = auxmol.nao_nr()
   eri3c = numpy.empty((nao,nao,naux))
@@ -605,22 +523,19 @@ to call the functions provided by ``Libcint``.  Now let's try to access
           pk = 0
           for k in range(mol.nbas, mol.nbas+auxmol.nbas):
               shls = (i, j, k)
-              buf = gto.getints_by_shell('cint3c2e_sph', shls, atm, bas, env)
+              buf = pmol.intor_by_shell('int3c2e_sph', shls)
               di, dj, dk = buf.shape
               eri3c[pi:pi+di,pj:pj+dj,pk:pk+dk] = buf
               pk += dk
           pj += dj
       pi += di
 
-Here we first read in the Weigend density fitting basis to ``auxmol``.  In
-libcint, all integral functions requires the same input arguments,
-``(buf, shells, atm, bas, env, opt)``.  So we use :func:`gto.conc_env`
-to concatenate the AO basis and the auxiliary fitting basis, and
-obtain one set of input arguments ``atm, bas, env``.  In the resultant
-``bas``, the first ``mol.nbas`` entries store the AO basis, and the following
-``auxmol.nbas`` are auxiliary basis.  Then the three nested loops run over all
-integrals for the three index integral `(ij|K)`.  Next, we compute the two
-center integrals::
+Here we load the Weigend density fitting basis to ``auxmol`` and append the
+basis to normal orbital basis which was initialized in ``mol``.  In the result
+``pmol`` object, the first ``mol.nbas`` shells are the orbital basis and
+the next ``auxmol.nbas`` are auxiliary basis.  The three nested loops run over
+all integrals for the three index integral `(ij|K)`.  Similarly, we can compute
+the two center Coulomb integrals::
 
   eri2c = numpy.empty((naux,naux))
   pk = 0
@@ -628,13 +543,14 @@ center integrals::
       pl = 0
       for l in range(mol.nbas, mol.nbas+auxmol.nbas):
           shls = (k, l)
-          buf = gto.getints_by_shell('cint2c2e_sph', shls, atm, bas, env)
+          buf = pmol.intor_by_shell('int2c2e_sph', shls)
           dk, dl = buf.shape
           eri2c[pk:pk+dk,pl:pl+dl] = buf
           pl += dl
       pk += dk
 
-Yes, we are ready to implement our own density fitting Hartree-Fock now!
+Now we can use the two-center integrals and three-center integrals to implement
+the density fitting Hartree-Fock code.
 
 .. code:: python
 
@@ -654,45 +570,78 @@ Yes, we are ready to implement our own density fitting Hartree-Fock now!
   mf.get_veff = get_vhf
   print('E(DF-HF) = %.12f, ref = %.12f' % (mf.kernel(), scf.density_fit(mf).kernel()))
 
-Hopefully, your screen will print out
+Your screen should output
 
   | E(DF-HF) = -76.025936299702, ref = -76.025936299702
 
-as mine.
 
+Evaluating the integrals with nested loops and :func:`mol.intor_by_shell` method is
+inefficient.  It is preferred to load integrals in bulk and this can be done
+with :func:`mol.intor` method::
 
-One electron AO integrals
--------------------------
+  eri2c = auxmol.intor('int2c2e_sph')
+  eri3c = pmol.intor('int3c2e_sph', shls_slice=(0,mol.nbas,0,mol.nbas,mol.nbas,mol.nbas+auxmol.nbas))
+  eri3c = eri3c.reshape(mol.nao_nr(), mol.nao_nr(), -1)
 
-There many ways to get the one-electron integrals from pyscf.  Apparently, one
-is to call :func:`getints_by_shell` like the previous example.  The other
-method is to call :func:`got.getints`::
+:func:`mol.intor` method can be used to evaluate one-electron integrals,
+two-electron integrals::
 
-  >>> from pyscf import gto
-  >>> mol = gto.M(atom='h 0 0 0; f 0 0 1', basis='sto-3g')
-  >>> hcore = gto.getints('cint1e_nuc_sph', mol.atm, mol.bas, mol.env) + gto.getints('cint1e_kin_sph', mol.atm, mol.bas, mol.env)
-  >>> ovlp = gto.getints('cint1e_ovlp_sph', mol.atm, mol.bas, mol.env)
-
-Actually, there is an even simpler function :class:`Mole.intor`::
-
-  >>> hcore = mol.intor('cint1e_nuc_sph') + mol.intor('cint1e_kin_sph')
-  >>> ovlp = mol.intor('cint1e_ovlp_sph')
+  hcore = mol.intor('int1e_nuc_sph') + mol.intor('int1e_kin_sph')
+  overlap = mol.intor('int1e_ovlp_sph')
+  eri = mol.intor('int2e_sph')
 
 There is a long list of supported AO integrals.  See :ref:`gto_moleintor`.
 
 
-More examples
-=============
+PBC AO integrals
+----------------
 
-Hartree-Fock with density fitting
+:func:`mol.intor` can only be used to evaluate the integrals with open boundary
+conditions.  When the periodic boundary conditions of crystal systems are
+studied, you need to use :func:`pbc.Cell.pbc_intor` function to evaluate the
+integrals of short-range operators, such as the overlap, kinetic matrix::
+
+  from pyscf.pbc import gto
+  cell = gto.Cell()
+  cell.atom = 'H 0 0 0; H 1 1 1'
+  cell.a = numpy.eye(3) * 2.
+  cell.build()
+  overlap = cell.pbc_intor('int1e_ovlp_sph')
+
+By default, :func:`pbc.Cell.pbc_intor` function returns the :math:`\Gamma`-point
+integrals.  If k-points are specified, function :func:`pbc.Cell.pbc_intor` can
+also evaluate the k-point integrals::
+
+  kpts = cell.make_kpts([2,2,2])  # 8 k-points
+  overlap = cell.pbc_intor('int1e_ovlp_sph', kpts=kpts)
+
+.. note:: :func:`pbc.Cell.pbc_intor` can only be used to evaluate the short-range
+  integrals.  PBC density fitting method has to be used to compute the
+  long-range operator such as nuclear attraction integrals, Coulomb integrals.
+
+The two-electron Coulomb integrals can be evaluated with PBC density fitting
+methods::
+
+    from pyscf.pbc import df
+    eri = df.DF(cell).get_eri()
+
+See also :ref:`pbc_df` for more details of the PBC density fitting module.
+
+
+Other features
+==============
+Density fitting
+---------------
 
 .. literalinclude:: ../../examples/scf/20-density_fitting.py
 
-Use :mod:`scf.hf.SCF` to simulate Hubbard model
+Customizing Hamiltonian
+-----------------------
 
-.. literalinclude:: ../../examples/scf/40-hf_with_given_hamiltonian.py
+.. literalinclude:: ../../examples/scf/40-customizing_hamiltonian.py
 
 Symmetry in CASSCF
+------------------
 
 .. literalinclude:: ../../examples/mcscf/21-nosymhf_then_symcasscf.py
 

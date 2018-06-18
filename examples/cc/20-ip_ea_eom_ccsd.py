@@ -6,11 +6,11 @@ Ground-state and IP/EA-EOM-CCSD for singlet (RHF) and triplet (UHF) O2.
 
 from pyscf import gto, scf, cc
 
-'''Singlet'''
+# Singlet
 
 mol = gto.Mole()
 mol.verbose = 5
-mol.atom = 'A'
+mol.unit = 'A'
 mol.atom = 'O 0 0 0; O 0 0 1.2'
 mol.basis = 'ccpvdz'
 mol.build()
@@ -25,8 +25,15 @@ mycc.ccsd()
 
 eip,cip = mycc.ipccsd(nroots=1)
 eea,cea = mycc.eaccsd(nroots=1)
+eee,cee = mycc.eeccsd(nroots=1)
 
-'''Triplet'''
+# S->S excitation
+eS = mycc.eomee_ccsd_singlet(nroots=1)[0]
+# S->T excitation
+eT = mycc.eomee_ccsd_triplet(nroots=1)[0]
+
+
+# Triplet
 
 mol.spin = 2
 mol.build()

@@ -1,4 +1,4 @@
-.. _pbc_df:
+.. _pbc_tools:
 
 pbc.tools --- PBC tools
 ***********************

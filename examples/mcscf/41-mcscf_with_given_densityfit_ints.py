@@ -9,6 +9,8 @@ from pyscf import gto, df, scf, mcscf
 
 '''
 Input Cholesky decomposed integrals for CASSCF
+
+See also examples/df/40-precompute_df_ints.py
 '''
 
 mol = gto.M(atom='H 0 0 0; F 0 0 1', basis='ccpvdz')
@@ -36,10 +38,10 @@ df.outcore.cholesky_eri(mol, ftmp.name, auxbasis='ccpvdz-fit')
 
 with h5py.File(ftmp.name, 'r') as file1:
     mf = scf.density_fit(scf.RHF(mol))
-# Note, here the integral object file1['eri_mo'] are not loaded in memory.
+# Note, here the integral object file1['j3c'] are not loaded in memory.
 # It is still the HDF5 array object held on disk.  The HDF5 array can be used
 # the same way as the regular numpy ndarray stored in memory.
-    mf.with_df._cderi = file1['eri_mo']
+    mf.with_df._cderi = file1['j3c']
     mf.kernel()
 
 # Note the mc object must be put inside the "with" statement block because it
