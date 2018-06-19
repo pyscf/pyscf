@@ -16,7 +16,7 @@ from __future__ import print_function, division
 import numpy as np
 import sys
 
-def system_vars_gpaw(self, calc, label="gpaw", chdir='.', **kvargs):
+def system_vars_gpaw(self, **kw):
   """
     Initialise system variables with gpaw inputs:
     Input parameters:
@@ -31,15 +31,17 @@ def system_vars_gpaw(self, calc, label="gpaw", chdir='.', **kvargs):
   from pyscf.nao.m_ao_log import ao_log_c
   import ase.units as units
 
-  self.label = label
-  self.chdir = '.'
+  #gpaw=calc, label="gpaw", chdir='.', **kvargs
+  self.gpaw = calc = kw['gpaw']
+  self.label = kw['label'] if 'label' in kw else 'gpaw'
+  self.chdir = kw['cd'] if 'cd' in kw else '.'
   self.verbose = logger.NOTE
   
   self.ao_log = ao_log_c().init_ao_log_gpaw(calc.setups)
   self.atom2coord = calc.get_atoms().get_positions()/units.Bohr
   self.natm = self.natoms = len(self.atom2coord)
   
-  self.atom2sp = np.array([self.ao_log.sp2key.index(key) for key in calc.setups.id_a], dtype=np.int64)
+  self.atom2sp = np.array([list(self.ao_log.sp2key).index(key) for key in calc.setups.id_a], dtype=np.int64)
   self.ucell = calc.atoms.get_cell()/units.Bohr
   self.norbs = calc.setups.nao
   self.norbs_sc = self.norbs

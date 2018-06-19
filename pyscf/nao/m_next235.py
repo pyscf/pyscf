@@ -16,6 +16,13 @@ def next235(base):
   assert(type(base)==float)
   next235 = 2 * int(base/2.0+.9999)
   if (next235<=0) : next235 = 2
-  
-  return(int(base))
+  while 100000:
+    numdiv = next235
+    while ((numdiv//2)*2 == numdiv): numdiv = numdiv//2
+    while ((numdiv//3)*3 == numdiv): numdiv = numdiv//3
+    while ((numdiv//5)*5 == numdiv): numdiv = numdiv//5
+    if numdiv == 1: return next235
+    next235 = next235 + 2
+  raise RuntimeError('too difficult to find...')
+   
   

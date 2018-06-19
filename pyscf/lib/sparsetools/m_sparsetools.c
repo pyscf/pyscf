@@ -16,7 +16,7 @@
 #include<stdio.h>
 #include<stdlib.h>
 #include <omp.h>
-#include <cblas.h>
+//#include <cblas.h>
 
 /*
 !
@@ -167,13 +167,14 @@ void scsc_matvecs(int n_row, int n_col, int n_vecs,
       int *Ap, int *Ai, float *Ax, float *Xx, float *Yx)
 {
   int i, j, ii;
+  printf("dcsc_matvecs not working in m_sparsetools.c\n");
+  exit(1);
   /*
   # pragma omp parallel \
   shared (n_row, n_col, n_vecs, Ap, Ai, Ax, Xx, Yx) \
   private (i, ii, j)
   {
     #pragma omp for
-    */
     for( j = 0; j < n_col; j++){
       for( ii = Ap[j]; ii < Ap[j+1]; ii++){
         i = Ai[ii];
@@ -182,19 +183,21 @@ void scsc_matvecs(int n_row, int n_col, int n_vecs,
       }
     }
   //}
+    */
 }
 
 void dcsc_matvecs(int n_row, int n_col, int n_vecs, 
       int *Ap, int *Ai, double *Ax, double *Xx, double *Yx)
 {
   int i, j, ii;
+  printf("dcsc_matvecs not working in m_sparsetools.c\n");
+  exit(1);
   /*
   # pragma omp parallel \
   shared (n_row, n_col, n_vecs, Ap, Ai, Ax, Xx, Yx) \
   private (i, ii, j)
   {
     #pragma omp for
-    */
     for( j = 0; j < n_col; j++){
       for( ii = Ap[j]; ii < Ap[j+1]; ii++){
         i = Ai[ii];
@@ -203,4 +206,5 @@ void dcsc_matvecs(int n_row, int n_col, int n_vecs,
       }
     }
   //}
+  */
 }

@@ -83,7 +83,7 @@ end subroutine ! siesta_wfsx_book_size
 !
 !
 !
-subroutine siesta_wfsx_book_read(fname_in, nreim, dat, ios) bind(c)
+subroutine siesta_wfsx_book_read(fname_in, nreim, dat, ios) bind(c, name="siesta_wfsx_book_read")
   use m_null2char, only : null2char
   implicit none
   !! external
@@ -135,7 +135,7 @@ end subroutine ! siesta_wfsx_book_read
 !
 !
 !
-subroutine siesta_wfsx_dread(fname_in, nreim, dat, ios) bind(c)
+subroutine siesta_wfsx_dread(fname_in, nreim, dat, ios) bind(c, name="siesta_wfsx_dread")
   use m_null2char, only : null2char
   implicit none
   !! external

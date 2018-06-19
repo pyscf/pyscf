@@ -1,0 +1,32 @@
+SystemLabel                siesta
+PAO.EnergyShift            50 meV
+PAO.BasisSize              DZP
+PAO.SoftDefault            .true.
+PAO.BasisType              split
+
+
+XC.functional     GGA 
+XC.authors        PBE 
+
+%include "geo.fdf"
+
+AtomCoorFormatOut  Ang
+
+DM.MixingWeight            0.01
+DM.Tolerance               0.0001
+DM.MixingWeight            0.25
+DM.NumberPulay             4
+MaxSCFIterations           400
+
+MD.TypeOfRun               CG 
+MD.NumCGsteps              0
+MD.MaxForceTol     0.02   eV/Ang
+
+SolutionMethod     Diagon
+
+MeshCutOff                250 Ry
+
+WriteCoorXmol     .True.
+WriteDenchar      .True.
+COOP.Write        .True.
+XML.Write         .True.
