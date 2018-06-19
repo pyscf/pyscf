@@ -24,13 +24,15 @@ from ctypes import c_char, c_int, sizeof, c_double
 #
 #
 #
-def openmx_import_scfout(self, label, cd):
+def openmx_import_scfout(self, **kw):
   """ Calls libopenmx to get the data and interpret it then """
   import struct
   from pyscf.nao.m_openmx_mat import openmx_mat_c
   
-  self.label=label
-  self.cd = cd
+  #label, cd
+  
+  self.label = label = kw['openmx'] if 'openmx' in kw else 'openmx'
+  self.cd = cd = kw['cd'] if 'cd' in kw else '.'
   
   fname = cd+'/'+label+'.scfout'
 

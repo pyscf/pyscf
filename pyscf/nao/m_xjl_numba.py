@@ -77,6 +77,7 @@ def get_bessel_xjl_numba(kk, dist, j, nr):
         bessel_pp[:, ip] = xj*p
     return bessel_pp
 
+#@nb.njit(parallel=True)
 @nb.jit(nopython=True)
 def calc_oo2co(bessel_pp, dg_jt, ao1_sp2info_sp1, ao1_sp2info_sp2,
         ao1_psi_log_mom_sp1, ao1_psi_log_mom_sp2,
@@ -99,7 +100,7 @@ def calc_oo2co(bessel_pp, dg_jt, ao1_sp2info_sp1, ao1_sp2info_sp2,
                 l2S[il2S] = 0.0
 
             for l3 in range( abs(l1-l2), l1+l2+1):
-                l2S[l3] = (f1f2_mom[:]*bessel_pp[l3,:]).sum() + f1f2_mom[0]*bessel_pp[l3,0]/dg_jt*0.995
+                l2S[l3] = (f1f2_mom[:]*bessel_pp[l3,:]).sum() + f1f2_mom[0]*bessel_pp[l3,0]/dg_jt
 
             #cS.fill(0.0)
             for icS1 in range(cS.shape[0]):

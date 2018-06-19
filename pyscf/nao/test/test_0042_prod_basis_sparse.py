@@ -14,11 +14,11 @@
 
 from __future__ import print_function, division
 from os.path import abspath, dirname
-from pyscf.nao import system_vars_c, prod_basis_c
+from pyscf.nao import mf
 import unittest, numpy as np
 
-sv = system_vars_c().init_siesta_xml(label='water', cd=dirname(abspath(__file__)))
-pb = prod_basis_c().init_prod_basis_pp_batch(sv)
+sv = mf(label='water', cd=dirname(abspath(__file__)))
+pb = sv.pb
 vab_arr_ref = pb.get_dp_vertex_array()
 
 class KnowValues(unittest.TestCase):
@@ -39,7 +39,5 @@ class KnowValues(unittest.TestCase):
     vab_arr = vab_s.toarray().reshape((pb.npdp,pb.norbs,pb.norbs))
     self.assertLess(abs(vab_arr-vab_arr_ref).sum()/vab_arr.size, 1e-15)
     
-if __name__ == "__main__":
-  print("Tests sparse tables generation facilities of the class prod_basis_c")
-  unittest.main()
+if __name__ == "__main__": unittest.main()
 

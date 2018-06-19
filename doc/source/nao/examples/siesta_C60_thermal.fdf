@@ -1,0 +1,38 @@
+SystemLabel                siesta
+PAO.EnergyShift            50 meV
+PAO.BasisSize              DZP
+PAO.SoftDefault            .true.
+PAO.BasisType              split
+
+
+XC.functional     GGA 
+XC.authors        PBE 
+
+WriteIonPlotFiles .false.
+WriteCoorXmol    .true.
+WriteMDXmol      .true.
+
+%include "C60_org.fdf"
+
+AtomCoorFormatOut  Ang
+
+DM.UseSaveDM               .true.
+DM.Tolerance               0.0001
+DM.MixingWeight            0.25
+MaxSCFIterations           400
+DM.NumberPulay             4
+
+MD.TypeOfRun               Nose 
+MD.InitialTemperature      300 K
+MD.TargetTemperature       300 K
+MD.NumCGsteps              5000
+MD.FinalTimeStep           5000
+UseSaveData               .true.
+
+MeshCutOff                250 Ry
+MD.UseSaveXV             .true.
+
+SaveRho                  .false.
+COOP.Write               .false.
+WriteDenchar             .false.
+

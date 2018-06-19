@@ -35,6 +35,11 @@ from pyscf import dft
 from pyscf.mp.mp2 import get_nocc, get_nmo, get_frozen_mask
 from pyscf import __config__
 
+try:
+  from functools import reduce
+except:
+  pass
+
 einsum = lib.einsum
 
 def kernel(gw, mo_energy, mo_coeff, td_e, td_xy, eris=None,

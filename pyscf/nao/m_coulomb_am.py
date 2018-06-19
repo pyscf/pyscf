@@ -55,46 +55,13 @@ def coulomb_am(self, sp1, R1, sp2, R2, **kvargs):
   f1f2_mom = np.zeros((self.nr))
   l2S = np.zeros((2*self.jmx+1), dtype = np.float64)
   _j = self.jmx
-
-#  use_numba = False
-
-#  import h5py
-#  import matplotlib.pyplot as plt
-#  fig = plt.figure(1, figsize=(15, 10))
-#  log_mom_fortran = h5py.File("pb_coul_aux.hdf5", "r")["sp_local2functs_mom"]
-#  psi_range = np.arange(self.ao1.psi_log_mom[0].shape[1])
-#  for sp in range(len(self.ao1.psi_log_mom)):
-#      for mu in range(self.ao1.psi_log_mom[sp].shape[0]):
-#        ax = fig.add_subplot(2, 3, mu+1)
-#        error = np.zeros(self.ao1.psi_log_mom[sp].shape[0])
-#        pyt = self.ao1.psi_log_mom[sp][mu, :]
-#        fort = log_mom_fortran["specie_{0}/ir_mu2v".format(sp+1)].value[mu, :]
-#        ax.plot(psi_range, pyt, "b", linewidth=3, label="python")
-#        ax_twin = ax.twinx()
-#        ax_twin.plot(psi_range, fort, "--g", linewidth=3, label="fortran mu")
-#        for mu2 in range(self.ao1.psi_log_mom[sp].shape[0]):
-#            fort = log_mom_fortran["specie_{0}/ir_mu2v".format(sp+1)].value[mu2, :]
-#            error[mu2] = np.sum(abs(fort-pyt))
-#        mu_fort = np.argmin(error)
-#        fort = log_mom_fortran["specie_{0}/ir_mu2v".format(sp+1)].value[mu_fort, :]
-#        ax.plot(psi_range, fort, "--r", linewidth=3, label="fortran mumod")
-#        ax.legend()
-#        ax.set_title("mu_python = {0}, mu_fort = {1}".format(mu+1, mu_fort+1), fontsize=20)
-#        #print("look fort: ", np.sum(abs(fort-pyt)))
-#
-#  fig.tight_layout()
-#  fig.savefig("psi_log_diff.pdf", format="pdf")
-#  #plt.show()
-#  #print("shape: ", self.ao1.psi_log_mom[0].shape)
-#  #sys.exit()
-      #self.ao1.psi_log_mom[sp] = log_mom_fortran["specie_{0}/ir_mu2v".format(sp+1)].value
-#  use_numba=False
+  dkappa = np.log(self.kk[self.nr-1]/self.kk[0])/(self.nr-1)
 
   if use_numba:
     bessel_pp = np.zeros((_j*2+1, self.nr))
     for L in range(2*_j+1):
         bessel_pp[L, :] = scipy.special.spherical_jn(L, dist*self.kk)*self.kk
-    calc_oo2co(bessel_pp, self.interp_pp.dg_jt, np.array(self.ao1.sp2info[sp1]),
+    calc_oo2co(bessel_pp, dkappa, np.array(self.ao1.sp2info[sp1]),
       np.array(self.ao1.sp2info[sp2]), self.ao1.psi_log_mom[sp1], self.ao1.psi_log_mom[sp2],
       self.njm, self._gaunt_iptr, self._gaunt_data, ylm, _j, self.jmx, self._tr_c2r,
       self._conj_c2r, l2S, cS, rS, cmat, oo2co)
@@ -103,16 +70,12 @@ def coulomb_am(self, sp1, R1, sp2, R2, **kvargs):
     for L in range(2*_j+1):
         bessel_pp[L, :] = scipy.special.spherical_jn(L, dist*self.kk)*self.kk
 
-    #print("##############################################")
     for mu2,l2,s2,f2 in self.ao1.sp2info[sp2]:
       for mu1,l1,s1,f1 in self.ao1.sp2info[sp1]:
         f1f2_mom = self.ao1.psi_log_mom[sp2][mu2,:] * self.ao1.psi_log_mom[sp1][mu1,:]
-        #print("mu1 = {0}, mu2 = {1}: sum(f1f2_mom) = ".format(mu1, mu2), np.sum(abs(f1f2_mom)))
         l2S.fill(0.0)
         for l3 in range( abs(l1-l2), l1+l2+1):
-          l2S[l3] = (f1f2_mom[:]*bessel_pp[l3,:]).sum() + f1f2_mom[0]*bessel_pp[l3,0]/self.interp_pp.dg_jt*0.995
-        #print("sum(S) = ", np.sum(abs(l2S)))
-
+          l2S[l3] = (f1f2_mom[:]*bessel_pp[l3,:]).sum() + f1f2_mom[0]*bessel_pp[l3,0]/dkappa
         cS.fill(0.0)
         for m1 in range(-l1,l1+1):
           for m2 in range(-l2,l2+1):

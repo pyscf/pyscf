@@ -27,5 +27,4 @@ class KnowValues(unittest.TestCase):
     ksn2f = fermi_dirac_occupations(telec, ksn2e, fermi_energy)
     self.assertAlmostEqual(ksn2f.sum(), 81.5)
     
-if __name__ == "__main__":
-  unittest.main()
+if __name__ == "__main__" : unittest.main()
