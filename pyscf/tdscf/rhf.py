@@ -502,13 +502,20 @@ def _contract_multipole(tdobj, ints, hermi=True, xy=None):
     orbo = mo_coeff[:,mo_occ==2]
     orbv = mo_coeff[:,mo_occ==0]
 
-    ints = numpy.einsum('...pq,pi,qj->...ij', ints, orbo.conj(), orbv)
-    pol = numpy.array([numpy.einsum('...ij,ij->...', ints, x) * 2 for x,y in xy])
+    nstates = len(xy)
+    pol_shape = ints.shape[:-2]
+    nao = ints.shape[-1]
+
+    #Incompatible to old numpy version
+    #ints = numpy.einsum('...pq,pi,qj->...ij', ints, orbo.conj(), orbv)
+    ints = lib.einsum('xpq,pi,qj->xij', ints.reshape(-1,nao,nao), orbo.conj(), orbv)
+    pol = numpy.array([numpy.einsum('xij,ij->x', ints, x) * 2 for x,y in xy])
     if isinstance(xy[0][1], numpy.ndarray):
         if hermi:
-            pol += [numpy.einsum('...ij,ij->...', ints, y) * 2 for x,y in xy]
+            pol += [numpy.einsum('xij,ij->x', ints, y) * 2 for x,y in xy]
         else:  # anti-Hermitian
-            pol -= [numpy.einsum('...ij,ij->...', ints, y) * 2 for x,y in xy]
+            pol -= [numpy.einsum('xij,ij->x', ints, y) * 2 for x,y in xy]
+    pol = pol.reshape((nstates,)+pol_shape)
     return pol
 
 def oscillator_strength(tdobj, e=None, xy=None, gauge='length', order=0):
