@@ -30,50 +30,9 @@ from pyscf.lib import misc
 
 try:
 # Import tblis before libnp_helper to avoid potential dl-loading conflicts
-    from pyscf.lib import tblis_einsum
-    einsum = tblis_einsum.einsum
+    from pyscf.lib.tblis_einsum import _contract
 
 except (ImportError, OSError):
-    def einsum(subscripts, *tensors, **kwargs):
-        '''Perform a more efficient einsum via reshaping to a matrix multiply.
-
-        Current differences compared to numpy.einsum:
-        This assumes that each repeated index is actually summed (i.e. no 'i,i->i')
-        and appears only twice (i.e. no 'ij,ik,il->jkl'). The output indices must
-        be explicitly specified (i.e. 'ij,j->i' and not 'ij,j').
-        '''
-
-        if '...' in subscripts:
-            return numpy.einsum(subscripts, *tensors, **kwargs)
-
-        if subscripts.count(',') <= 1:
-            return _contract(subscripts, *tensors, **kwargs)
-        else:
-            if '->' in subscripts:
-                indices_in, idx_final = subscripts.split('->')
-                indices_in = indices_in.split(',')
-            else:
-                idx_final = ''
-                indices_in = subscripts.split('->')[0].split(',')
-            tensors = list(tensors)
-            path = einsum_path(subscripts, *tensors, optimize=True)[0][1:]
-            for (a, b) in path[:-1]:
-                if a > b:
-                    a, b = b, a
-                B = tensors.pop(b)
-                A = tensors.pop(a)
-                idxB = indices_in.pop(b)
-                idxA = indices_in.pop(a)
-
-                rest_idx = ''.join(indices_in) + idx_final
-                idx_out = ''.join(set(idxA+idxB).intersection(set(rest_idx)))
-                C = _contract(idxA+','+idxB+'->'+idx_out, A, B)
-
-                indices_in.append(idx_out)
-                tensors.append(C)
-            return _contract(indices_in[0]+','+indices_in[1]+'->'+idx_final,
-                             *tensors, **kwargs)
-
     def _contract(subscripts, *tensors, **kwargs):
         DEBUG = kwargs.get('DEBUG', False)
 
@@ -189,10 +148,30 @@ except (ImportError, OSError):
 
         return dot(At,Bt).reshape(shapeCt, order='A').transpose(new_orderCt)
 
+
+_np_helper = misc.load_library('libnp_helper')
+
+BLOCK_DIM = 192
+PLAIN = 0
+HERMITIAN = 1
+ANTIHERMI = 2
+SYMMETRIC = 3
+
+LeviCivita = numpy.zeros((3,3,3))
+LeviCivita[0,1,2] = LeviCivita[1,2,0] = LeviCivita[2,0,1] = 1
+LeviCivita[0,2,1] = LeviCivita[2,1,0] = LeviCivita[1,0,2] = -1
+
+PauliMatrices = numpy.array([[[0., 1.],
+                              [1., 0.]],  # x
+                             [[0.,-1j],
+                              [1j, 0.]],  # y
+                             [[1., 0.],
+                              [0.,-1.]]]) # z
+
 if hasattr(numpy, 'einsum_path'):
-    einsum_path = numpy.einsum_path
+    _einsum_path = numpy.einsum_path
 else:
-    def einsum_path(subscripts, *operands, **kwargs):
+    def _einsum_path(subscripts, *operands, **kwargs):
         #indices  = re.split(',|->', subscripts)
         #indices_in = indices[:-1]
         #idx_final = indices[-1]
@@ -225,29 +204,49 @@ else:
         indices_in.pop(a)
         indices_in.pop(b)
         indices_in.append(idx_out)
-        path = einsum_path(",".join(indices_in)+"->"+idx_final,
-                           *operands, **kwargs)[0]
+        path = _einsum_path(",".join(indices_in)+"->"+idx_final,
+                            *operands, **kwargs)[0]
         return ['einsum_path', (a,b)] + path[1:], ''
 
+def einsum(subscripts, *tensors, **kwargs):
+    '''Perform a more efficient einsum via reshaping to a matrix multiply.
 
-_np_helper = misc.load_library('libnp_helper')
+    Current differences compared to numpy.einsum:
+    This assumes that each repeated index is actually summed (i.e. no 'i,i->i')
+    and appears only twice (i.e. no 'ij,ik,il->jkl'). The output indices must
+    be explicitly specified (i.e. 'ij,j->i' and not 'ij,j').
+    '''
+    subscripts = subscripts.replace(' ','')
+    if len(tensors) <= 1 or '...' in subscripts:
+        out = numpy.einsum(subscripts, *tensors, **kwargs)
+    elif len(tensors) <= 2:
+        out = _contract(subscripts, *tensors, **kwargs)
+    else:
+        if '->' in subscripts:
+            indices_in, idx_final = subscripts.split('->')
+            indices_in = indices_in.split(',')
+        else:
+            idx_final = ''
+            indices_in = subscripts.split('->')[0].split(',')
+        tensors = list(tensors)
+        einsum_path = _einsum_path(subscripts, *tensors, optimize=True)[0][1:]
+        for (a, b) in einsum_path[:-1]:
+            if a > b:
+                a, b = b, a
+            B = tensors.pop(b)
+            A = tensors.pop(a)
+            idxB = indices_in.pop(b)
+            idxA = indices_in.pop(a)
 
-BLOCK_DIM = 192
-PLAIN = 0
-HERMITIAN = 1
-ANTIHERMI = 2
-SYMMETRIC = 3
+            rest_idx = ''.join(indices_in) + idx_final
+            idx_out = ''.join(set(idxA+idxB).intersection(set(rest_idx)))
+            C = _contract(idxA+','+idxB+'->'+idx_out, A, B)
 
-LeviCivita = numpy.zeros((3,3,3))
-LeviCivita[0,1,2] = LeviCivita[1,2,0] = LeviCivita[2,0,1] = 1
-LeviCivita[0,2,1] = LeviCivita[2,1,0] = LeviCivita[1,0,2] = -1
-
-PauliMatrices = numpy.array([[[0., 1.],
-                              [1., 0.]],  # x
-                             [[0.,-1j],
-                              [1j, 0.]],  # y
-                             [[1., 0.],
-                              [0.,-1.]]]) # z
+            indices_in.append(idx_out)
+            tensors.append(C)
+        out = _contract(indices_in[0]+','+indices_in[1]+'->'+idx_final,
+                         *tensors, **kwargs)
+    return out
 
 
 # 2d -> 1d or 3d -> 2d

@@ -122,23 +122,6 @@ class KnownValues(unittest.TestCase):
         a = a - a.T
         self.assertAlmostEqual(abs(scipy.linalg.expm(a) - lib.expm(a)).max(), 0, 12)
 
-    def test_einsum(self):
-        a = numpy.random.random((30,40,5,10))
-        b = numpy.random.random((10,30,5,20))
-        c = numpy.random.random((10,20,20))
-        d = numpy.random.random((20,10))
-        f = lib.einsum('ijkl,xiky,ayp,px->ajl', a,b,c,d, optimize=True)
-        ref = lib.einsum('ijkl,xiky->jlxy', a,b)
-        ref = lib.einsum('jlxy,ayp->jlxap', ref,c)
-        ref = lib.einsum('jlxap,px->ajl', ref,d)
-        self.assertAlmostEqual(abs(ref-f).max(), 0, 9)
-
-        f = lib.einsum('ijkl,xiky,lyp,px->jl', a,b,c,d, optimize=True)
-        ref = lib.einsum('ijkl,xiky->jlxy', a, b)
-        ref = lib.einsum('jlxy,lyp->jlxp', ref, c)
-        ref = lib.einsum('jlxp,px->jl', ref, d)
-        self.assertAlmostEqual(abs(ref-f).max(), 0, 9)
-
 if __name__ == "__main__":
     print("Full Tests for numpy_helper")
     unittest.main()

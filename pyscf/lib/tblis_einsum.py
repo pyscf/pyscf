@@ -47,8 +47,6 @@ tblis_dtype = {
     numpy.dtype(numpy.complex128) : 3,
 }
 
-numpy_einsum = numpy.einsum
-
 def _contract(subscripts, *tensors, **kwargs):
     '''
     c = alpha * contract(a, b) + beta * c
@@ -66,12 +64,12 @@ def _contract(subscripts, *tensors, **kwargs):
     a = numpy.asarray(tensors[0])
     b = numpy.asarray(tensors[1])
     if not kwargs and (a.size < 2000 or b.size < 2000):
-        return numpy_einsum(subscripts, a, b)
+        return numpy.einsum(subscripts, a, b)
 
     c_dtype = kwargs.get('dtype', numpy.result_type(a, b))
     if (not (numpy.issubdtype(c_dtype, numpy.floating) or
              numpy.issubdtype(c_dtype, numpy.complexfloating))):
-        return numpy_einsum(subscripts, a, b)
+        return numpy.einsum(subscripts, a, b)
 
     sub_idx = re.split(',|->', subscripts)
     indices  = ''.join(sub_idx)
@@ -128,39 +126,3 @@ def _contract(subscripts, *tensors, **kwargs):
                        tblis_dtype[c_dtype], alpha, beta)
     return c
 
-def einsum(subscripts, *tensors, **kwargs):
-    if '...' in subscripts:
-        return numpy_einsum(subscripts, *tensors, **kwargs)
-
-    subscripts = subscripts.replace(' ','')
-    if len(tensors) <= 1:
-        out = numpy_einsum(subscripts, *tensors, **kwargs)
-    elif len(tensors) <= 2:
-        out = _contract(subscripts, *tensors, **kwargs)
-    else:
-        from pyscf.lib import einsum_path
-        if '->' in subscripts:
-            indices_in, idx_final = subscripts.split('->')
-            indices_in = indices_in.split(',')
-        else:
-            idx_final = ''
-            indices_in = subscripts.split('->')[0].split(',')
-        tensors = list(tensors)
-        path = einsum_path(subscripts, *tensors, optimize=True)[0][1:]
-        for (a, b) in path[:-1]:
-            if a < b:
-                a, b = b, a
-            A = tensors.pop(a)
-            B = tensors.pop(b)
-            idxA = indices_in.pop(a)
-            idxB = indices_in.pop(b)
-
-            rest_idx = ''.join(indices_in) + idx_final
-            idx_out = ''.join(set(idxA+idxB).intersection(set(rest_idx)))
-            C = _contract(idxA+','+idxB+'->'+idx_out, A, B)
-
-            indices_in.append(idx_out)
-            tensors.append(C)
-        out = _contract(indices_in[0]+','+indices_in[1]+'->'+idx_final,
-                        *tensors, **kwargs)
-    return out
