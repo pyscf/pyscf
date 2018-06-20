@@ -34,7 +34,7 @@ def siesta_xml(fname="siesta.xml"):
   atoms = coo.findall(pref+"atom")
   natoms = len(atoms)
   atom2ref = [atom.attrib["ref"] for atom in atoms]
-  atom2sp = [int(re.findall("\d+", ref)[0])-1 for ref in atom2ref]
+  atom2sp = [int(re.findall(r'\d+', ref)[0])-1 for ref in atom2ref]
   nspecies = len(set(atom2ref))
   atom2elem = [atom.attrib["elementType"] for atom in atoms]
 

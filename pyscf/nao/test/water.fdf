@@ -2,8 +2,8 @@ SystemName          Water
 SystemLabel         water
 
 %block ChemicalSpeciesLabel
- 1  8  O     
- 2  1  H
+ 1  8  O.water
+ 2  1  H.water
 %endblock ChemicalSpeciesLabel
 
 AtomicCoordinatesFormat  Ang
@@ -26,3 +26,4 @@ MaxSCFIterations           100
 
 COOP.Write     .true.
 WriteDenchar   .true.
+xml.write      .true.

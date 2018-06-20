@@ -43,6 +43,11 @@ def comp_coulomb_den(sv, ao_log=None, funct=coulomb_am, dtype=np.float64, **kvar
       oo2f = funct(me,sp1,rv1,sp2,rv2,**kvargs)
       res[s1:f1,s2:f2] = oo2f[:,:]
 
+  #np.savetxt("kernel_pyscf_dens.txt", res)
+  #print("sum(kernel) = ", np.sum(abs(res)))
+  #import sys
+  #sys.exit()
+
   return res
 
 #

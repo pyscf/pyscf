@@ -89,12 +89,12 @@ class prod_log_c(ao_log_c):
     self.init_log_mesh(sv.ao_log.rr, sv.ao_log.pp)
     self.auxmol = auxmol
     ao_log_c.__init__(self)
-    self.init_ao_log_gto_lm(auxmol, sv, sv.ao_log, rcut_tol)
-    j3c = aux_e2(sv.mol, auxmol, intor='cint3c2e_sph', aosym='s1')
-    nao = sv.mol.nao_nr()
-    naoaux = auxmol.nao_nr()
-    j3c = j3c.reshape(nao,nao,naoaux)
-    #print(nao, naoaux)
+    self.init_ao_log_gto_lm(gto=auxmol, nao=sv, lm=sv.ao_log, rcut_tol=1e-7)
+#    j3c = aux_e2(sv.mol, auxmol, intor='cint3c2e_sph', aosym='s1')
+#    nao = sv.mol.nao_nr()
+#    naoaux = auxmol.nao_nr()
+#    j3c = j3c.reshape(nao,nao,naoaux)
+#    print(nao, naoaux)
     return self
 
   def init_prod_log_dp(self, ao_log, tol_loc=1e-5):
@@ -208,6 +208,7 @@ class prod_log_c(ao_log_c):
      
 
     fname = "local2functs_vertex.hdf5"
+    print(__name__, "load prod log from: ", fname)
     File = h5py.File(fname, "r")
     for isp, atm_nb in enumerate(sp2charge):
         val = File["specie_{0}".format(atm_nb)]
@@ -224,7 +225,6 @@ class prod_log_c(ao_log_c):
         self.sp2norbs[isp] = mu2s[-1]
       
         self.psi_log.append(val["sp_local2functs/ir_mu2v"].value)
-        self.psi_log_rl.append(val["sp_local2functs_mom/ir_mu2v"].value)
       
         mu2ww = val["vertex"].value
         no = mu2ww.shape[1]
@@ -240,6 +240,13 @@ class prod_log_c(ao_log_c):
         mu2iww = np.array(self.sp2inv_vv[isp]*self.sp2vertex_csr[isp]).reshape([npf,no,no]) # lazy way of finding lambda
         self.sp2lambda.append(mu2iww)
 
+    self.psi_log_rl = []
+    for mu2ff,mu2j in zip(self.psi_log, self.sp_mu2j):
+      mu2ff_rl = np.zeros_like(mu2ff)
+      for mu,(ff,j) in enumerate(zip(mu2ff,mu2j)): 
+        mu2ff_rl[mu,:] = ff/self.rr**j
+      self.psi_log_rl.append(mu2ff_rl)
+      
     self.jmx = np.amax(np.array( [max(mu2j) for mu2j in self.sp_mu2j], dtype=np.int32))
     self.sp2rcut = np.array([np.amax(rcuts) for rcuts in self.sp_mu2rcut])
 

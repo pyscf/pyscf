@@ -15,12 +15,12 @@
 from __future__ import print_function, division
 import unittest
 import numpy as np
+from pyscf.nao.m_csphar import csphar
 
 class KnowValues(unittest.TestCase):
 
   def test_csphar(self):
     """  """
-    from pyscf.nao.m_csphar import csphar
     from pyscf.nao.m_csphar_talman_libnao import csphar_talman_libnao, talman2world
     
     rvec = np.array([0.1, 0.2, -0.4])
@@ -39,5 +39,4 @@ class KnowValues(unittest.TestCase):
        for y1,y2 in zip(ylm_py_ref, ylm_py):
          self.assertAlmostEqual(y1,y2)
 
-if __name__ == "__main__":
-  unittest.main()
+if __name__ == "__main__": unittest.main()

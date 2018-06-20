@@ -83,8 +83,8 @@ def siesta_ion_xml(fname):
             'delta':list of float
             'cutoff': list of float
             'data':list of np.arrayof shape (npts[i], 2)
-            'orbital': list of dictionnary
-            'projector': list of dictionnary
+            'orbital': list of dictionary
+            'projector': list of dictionary
 
     """
     doc = minidom.parse(fname)
@@ -111,11 +111,13 @@ def siesta_ion_xml(fname):
     #node = doc.getElementsByTagName("pao")
     #print('pao: ', node)
 
-    field = {'paos': 'orbital', 'kbs': 'projector', 'vna': None, 'chlocal': None, 'reduced_vlocal': None, 'core': None}
+    field = {'paos': 'orbital', 'kbs': 'projector', 'vna': None, 
+             'chlocal': None, 'reduced_vlocal': None, 'core': None}
     for k, v in field.items():
-      ion[k] = {}
-      if (len(doc.getElementsByTagName(k))>0):
-        extract_field_elements(ion[k], doc.getElementsByTagName(k)[0], field=v)
+        if (len(doc.getElementsByTagName(k))>0):
+            ion[k] = extract_field_elements(doc.getElementsByTagName(k)[0], field=v)
+        else:
+            ion[k] = None
     return ion
 
 def getNodeText(node):
@@ -151,23 +153,32 @@ def get_data_elements(name, dtype):
     else:
         raise ValueError('not implemented')
 
-def extract_field_elements(pao, doc, field=None):
+def extract_field_elements(doc, field=None):
     """
     extract the different pao element of the xml file
     Input Parameters:
     -----------------
-        pao (dict): dict containing the pao element
         field: field name of the node
         doc (minidom.parse)
     Output Parameters:
     ------------------
-        ion (dict): the following keys are added to the ion dict:
+        pao (dict): the following keys are added to the ion dict:
             npts
             delta
             cutoff
             data
             orbital
     """
+    if len(doc.getElementsByTagName('delta')) <1 :
+        return None
+
+    # checks if some of the values are null
+    for i, delt in enumerate(doc.getElementsByTagName('delta')):
+        if get_data_elements(delt, float) == 0.0:
+            return None
+
+    # if all(delta) > 0.0 then fill the dict
+    pao = {}
 
     pao['npaos'] = len(doc.getElementsByTagName('delta'))
     if pao['npaos'] != len(doc.getElementsByTagName('cutoff')) or\
@@ -209,8 +220,7 @@ def extract_field_elements(pao, doc, field=None):
       if len(pao[field]) != pao['npaos']:
         raise ValueError('Error reading ion file, len(' + field +') != npaos')
 
-    #for k, val in pao.items():
-    #  print(k + ': ', val)
+    return pao
 
 def extract_orbital(orb_xml):
     """

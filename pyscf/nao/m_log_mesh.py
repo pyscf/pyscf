@@ -104,38 +104,37 @@ class log_mesh_c():
     self.state = 'call an initialize method...'
     return
   
-  def init_log_mesh_gto(self, gto, rcut_tol=1e-7, nr=None, rmin=None, rmax=None, kmax=None):
+  def init_log_mesh_gto(self, **kw):
     """ Initialize an optimal logarithmic mesh based on Gaussian orbitals from pySCF"""
     #self.gto = gto cannot copy GTO object here... because python3 + deepcopy in m_ao_log_hartree fails
-    self.rcut_tol = rcut_tol
-    nr_def,rmin_def,rmax_def,kmax_def = get_default_log_mesh_param4gto(gto, rcut_tol)
-    self.nr   = nr_def   if nr is None else nr
-    self.rmin = rmin_def if rmin is None else rmin
-    self.rmax = rmax_def if rmax is None else rmax
-    self.kmax = kmax_def if kmax is None else kmax
+    gto = kw['gto']
+    self.rcut_tol = kw['rcut_tol'] if 'rcut_tol' in kw else 1e-7
+    nr_def,rmin_def,rmax_def,kmax_def = get_default_log_mesh_param4gto(gto, self.rcut_tol)
+    self.nr   = kw['nr'] if "nr" in kw else nr_def
+    self.rmin = kw['rmin'] if "rmin" in kw else rmin_def
+    self.rmax = kw['rmax'] if "rmax" in kw else rmax_def
+    self.kmax = kw['kmax'] if "kmax" in kw else kmax_def
     assert(self.rmin>0.0); assert(self.kmax>0.0); assert(self.nr>2); assert(self.rmax>self.rmin);
     self.rr,self.pp = log_mesh(self.nr, self.rmin, self.rmax, self.kmax)
     self.state = 'can be useful for something'
     return self
     
   
-  def init_log_mesh_ion(self, sp2ion, nr=None, rmin=None, rmax=None, kmax=None):
+  def init_log_mesh_ion(self, sp2ion, **kw):
     """ Initialize an optimal logarithmic mesh based on information from SIESTA ion files"""
     self.sp2ion = sp2ion
     nr_def,rmin_def,rmax_def,kmax_def = get_default_log_mesh_param4ion(sp2ion)
-    self.nr = nr_def if nr is None else nr
-    self.rmin = rmin_def if rmin is None else rmin
-    self.rmax = rmax_def if rmax is None else rmax
-    self.kmax = kmax_def if kmax is None else kmax
+    self.nr   = kw['nr'] if "nr" in kw else nr_def
+    self.rmin = kw['rmin'] if "rmin" in kw else rmin_def
+    self.rmax = kw['rmax'] if "rmax" in kw else rmax_def
+    self.kmax = kw['kmax'] if "kmax" in kw else kmax_def
     assert(self.rmin>0.0); assert(self.kmax>0.0); assert(self.nr>2); assert(self.rmax>self.rmin);
     self.rr,self.pp = log_mesh(self.nr, self.rmin, self.rmax, self.kmax)
     self.state = 'can be useful for something'
     return self
 
   def init_log_mesh_gpaw(self, setups, nr=None, rmin=None, rmax=None, kmax=None):
-    """
-        This initializes an optimal logarithmic mesh based on setups from GPAW
-    """
+    """ This initializes an optimal logarithmic mesh based on setups from GPAW"""
 
     #self.setups = setups same problem than in m_ao_log
     nr_def,rmin_def,rmax_def,kmax_def = get_default_log_mesh_param4gpaw(setups.setups)
