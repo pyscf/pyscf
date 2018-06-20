@@ -21,6 +21,7 @@ import numpy
 import itertools
 from numbers import Number
 
+from pyscf import lib
 
 class StrictCounter(Counter):
     def __neg__(self):
@@ -304,7 +305,10 @@ def e(*args):
     for i in args:
         if isinstance(i, Number) and i == 0:
             return 0
-    return numpy.einsum(*args, optimize=True)
+    try:
+        return numpy.einsum(*args, optimize=True)
+    except TypeError:
+        return lib.einsum(*args)
 
 
 def p_count(permutation, destination=None, debug=False):
@@ -371,28 +375,24 @@ def p(spec, tensor):
     """
     if isinstance(tensor, Number):
         return tensor
-    result = tensor.copy()
+    result = numpy.zeros_like(tensor)
 
-    perm_mask = list(i != '.' for i in spec)
-
+    perm_mask = numpy.array([i for i in spec]) != '.'
     all_indexes = numpy.arange(len(spec))
-    perm_indexes = all_indexes[perm_mask]
+    dims = all_indexes
 
     included = set()
-    base_spec = spec.translate(None, ".")
 
-    for i, order in enumerate(itertools.permutations(range(len(spec) - spec.count('.')))):
-        this_spec = ''.join(base_spec[_i] for _i in order)
-        if i > 0 and this_spec not in included:
-            dims = all_indexes.copy()
-            dims[perm_mask] = perm_indexes[list(order)]
-            perm_tensor = numpy.transpose(tensor, dims)
+    for order in itertools.permutations(all_indexes[perm_mask]):
+        this_spec = ''.join(spec[_i] for _i in order)
+        if this_spec not in included:
+            dims[perm_mask] = order
 
             if p_count(order) % 2 == 0:
-                result += perm_tensor
+                result += tensor.transpose(dims)
             else:
-                result -= perm_tensor
-        included.add(this_spec)
+                result -= tensor.transpose(dims)
+            included.add(this_spec)
     return result
 
 
@@ -412,10 +412,9 @@ def _ltri_ix(n, ndims):
         result = []
         for i in range(ndims-1, n):
             x = _ltri_ix(i, ndims-1)
-            result.append(numpy.concatenate(
-                (numpy.full(x.shape[0], i)[:, numpy.newaxis], x),
-                axis=1,
-            ))
+            x_arr = numpy.empty((x.shape[0],1), dtype=int)
+            x_arr[:] = i
+            result.append(numpy.concatenate((x_arr, x), axis=1,))
         return numpy.concatenate(result, axis=0)
 
 

@@ -21,8 +21,8 @@
 # Initial implementation includes ground-state, lambda, IP-EOM and EA-EOM kernels for CCS, CCSD, CCD and CCSDT
 # unrestricted (general) theory.
 
-from equations import *
-from pyscf_helpers import kernel_solve, kernel_eig, eris_hamiltonian, koopmans_guess_ip, koopmans_guess_ea
+from .equations import *
+from .pyscf_helpers import kernel_solve, kernel_eig, eris_hamiltonian, koopmans_guess_ip, koopmans_guess_ea
 
 from collections import OrderedDict
 

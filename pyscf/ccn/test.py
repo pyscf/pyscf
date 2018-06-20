@@ -15,9 +15,10 @@
 
 from . import cc
 
-from pyscf import gto, scf
+from pyscf import gto, scf, lib
 from pyscf.cc import gccsd, eom_gccsd
 
+import numpy
 from numpy import testing
 import unittest
 
@@ -143,10 +144,10 @@ class OTests(unittest.TestCase):
 
         cls.eomip = eom_gccsd.EOMIP(cls.ccsd)
         cls.eomip.conv_tol = 1e-12
-        cls.eomip.kernel(nroots=cls.nroots, koopmans=False)
+        cls.eomip.kernel(nroots=cls.nroots, koopmans=True)
         cls.eomea = eom_gccsd.EOMEA(cls.ccsd)
         cls.eomea.conv_tol = 1e-12
-        cls.eomea.kernel(nroots=cls.nroots, koopmans=False)
+        cls.eomea.kernel(nroots=cls.nroots, koopmans=True)
 
     def test_iter_s(self):
         """CCS iterations."""
@@ -155,7 +156,8 @@ class OTests(unittest.TestCase):
         # testing.assert_allclose(self.mf.e_tot + e1, -74.841686696943, atol=1e-4)
 
         import pyscf.cc
-        cc1 = pyscf.cc.UCCSD(self.mf, frozen=1)
+        mf = scf.RHF(self.mol).set(conv_tol = 1e-11).run()
+        cc1 = pyscf.cc.UCCSD(mf, frozen=1)
         old_update_amps = cc1.update_amps
         def update_amps(t1, t2, eris):
             t1, t2 = old_update_amps(t1, t2, eris)
@@ -281,3 +283,12 @@ class H2OTests(unittest.TestCase):
         values, vectors = cc.kernel_ea_sd(self.ccsd, self.ccsd.t1, self.ccsd.t2, nroots=self.nroots)
 
         testing.assert_allclose(values, self.eomea.e, atol=1e-12)
+
+class utilTests(unittest.TestCase):
+    def test_p(self):
+        numpy.random.seed(2)
+        a = numpy.random.random((3,3,3))
+        self.assertAlmostEqual(lib.finger(cc.p('a.c', a)), -1.1768882755852079, 12)
+        self.assertAlmostEqual(lib.finger(cc.p('.ab', a)), -1.9344875839983993, 12)
+        self.assertAlmostEqual(lib.finger(cc.p('abc', a)), -0.0055534783760265282, 14)
+        self.assertAlmostEqual(abs(cc.p('a.a', a) - a).max(), 0, 12)
