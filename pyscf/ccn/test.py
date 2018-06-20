@@ -1,4 +1,4 @@
-import cc
+from . import cc
 
 from pyscf import gto, scf
 from pyscf.cc import gccsd, eom_gccsd
@@ -128,16 +128,26 @@ class OTests(unittest.TestCase):
 
         cls.eomip = eom_gccsd.EOMIP(cls.ccsd)
         cls.eomip.conv_tol = 1e-12
-        cls.eomip.kernel(nroots=cls.nroots)
+        cls.eomip.kernel(nroots=cls.nroots, koopmans=False)
         cls.eomea = eom_gccsd.EOMEA(cls.ccsd)
         cls.eomea.conv_tol = 1e-12
-        cls.eomea.kernel(nroots=cls.nroots)
+        cls.eomea.kernel(nroots=cls.nroots, koopmans=False)
 
     def test_iter_s(self):
         """CCS iterations."""
         e1, t1 = cc.kernel_ground_state_s(self.ccsd)
-        # TODO: MRCC energy is way off expected
-        testing.assert_allclose(self.mf.e_tot + e1, -74.841686696943, atol=1e-4)
+        # # TODO: MRCC energy is way off expected
+        # testing.assert_allclose(self.mf.e_tot + e1, -74.841686696943, atol=1e-4)
+
+        import pyscf.cc
+        cc1 = pyscf.cc.UCCSD(self.mf, frozen=1)
+        old_update_amps = cc1.update_amps
+        def update_amps(t1, t2, eris):
+            t1, t2 = old_update_amps(t1, t2, eris)
+            return t1, (t2[0]*0, t2[1]*0, t2[2]*0)
+        cc1.update_amps = update_amps
+        cc1.kernel()
+        testing.assert_allclose(self.mf.e_tot + e1, cc1.e_tot, atol=1e-4)
 
     def test_iter_sd(self):
         """CCSD iterations."""
@@ -218,8 +228,19 @@ class H2OTests(unittest.TestCase):
     def test_iter_d(self):
         """CCD iterations."""
         e2, t2 = cc.kernel_ground_state_d(self.ccsd)
-        # TODO: MRCC energy is way off expected
-        testing.assert_allclose(self.mf.e_tot + e2, -76.177931897355, atol=1e-4)
+        # # TODO: MRCC energy is way off expected
+        # testing.assert_allclose(self.mf.e_tot + e2, -76.177931897355, atol=1e-4)
+
+        import pyscf.cc
+        cc1 = scf.RHF(self.mol).run(conv_tol = 1e-11).apply(pyscf.cc.CCSD)
+        cc1.frozen = 1
+        old_update_amps = cc1.update_amps
+        def update_amps(t1, t2, eris):
+            t1, t2 = old_update_amps(t1, t2, eris)
+            return t1*0, t2
+        cc1.update_amps = update_amps
+        cc1.kernel()
+        testing.assert_allclose(self.mf.e_tot + e2, cc1.e_tot, atol=1e-4)
 
     def _test_iter_sdt(self):
         """CCSDT iterations."""
