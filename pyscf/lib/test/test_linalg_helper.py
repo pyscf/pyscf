@@ -23,7 +23,7 @@ from pyscf import gto
 from pyscf import scf
 from pyscf import fci
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_davidson(self):
         mol = gto.Mole()
         mol.verbose = 0

@@ -138,12 +138,29 @@ def einsum(subscripts, *tensors, **kwargs):
     elif len(tensors) <= 2:
         out = _contract(subscripts, *tensors, **kwargs)
     else:
-        sub_idx = subscripts.split(',', 2)
-        res_idx = ''.join(set(sub_idx[0]+sub_idx[1]).intersection(sub_idx[2]))
-        res_idx = res_idx.replace(',','')
-        script0 = sub_idx[0] + ',' + sub_idx[1] + '->' + res_idx
-        subscripts = res_idx + ',' + sub_idx[2]
-        tensors = [_contract(script0, *tensors[:2])] + list(tensors[2:])
-        out = einsum(subscripts, *tensors, **kwargs)
-    return out
+        from pyscf.lib import einsum_path
+        if '->' in subscripts:
+            indices_in, idx_final = subscripts.split('->')
+            indices_in = indices_in.split(',')
+        else:
+            idx_final = ''
+            indices_in = subscripts.split('->')[0].split(',')
+        tensors = list(tensors)
+        path = einsum_path(subscripts, *tensors, optimize=True)[0][1:]
+        for (a, b) in path[:-1]:
+            if a < b:
+                a, b = b, a
+            A = tensors.pop(a)
+            B = tensors.pop(b)
+            idxA = indices_in.pop(a)
+            idxB = indices_in.pop(b)
 
+            rest_idx = ''.join(indices_in) + idx_final
+            idx_out = ''.join(set(idxA+idxB).intersection(set(rest_idx)))
+            C = _contract(idxA+','+idxB+'->'+idx_out, A, B)
+
+            indices_in.append(idx_out)
+            tensors.append(C)
+        out = _contract(indices_in[0]+','+indices_in[1]+'->'+idx_final,
+                        *tensors, **kwargs)
+    return out
