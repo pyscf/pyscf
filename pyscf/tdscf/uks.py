@@ -18,9 +18,10 @@
 
 from functools import reduce
 import numpy
+from pyscf import symm
 from pyscf import lib
-from pyscf.dft import numint
 from pyscf import dft
+from pyscf.dft import numint
 from pyscf.tdscf import uhf
 from pyscf.scf import uhf_symm
 from pyscf.data import nist
@@ -72,7 +73,12 @@ class TDDFTNoHybrid(TDA):
         orbvb = mo_coeff[1][:,viridxb]
 
         if wfnsym is not None and mol.symmetry:
+            if isinstance(wfnsym, str):
+                wfnsym = symm.irrep_name2id(mol.groupname, wfnsym)
             orbsyma, orbsymb = uhf_symm.get_orbsym(mol, mo_coeff)
+            wfnsym = wfnsym % 10  # convert to D2h subgroup
+            orbsyma = orbsyma % 10
+            orbsymb = orbsymb % 10
             sym_forbida = (orbsyma[occidxa,None] ^ orbsyma[viridxa]) != wfnsym
             sym_forbidb = (orbsymb[occidxb,None] ^ orbsymb[viridxb]) != wfnsym
             sym_forbid = numpy.hstack((sym_forbida.ravel(), sym_forbidb.ravel()))

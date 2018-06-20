@@ -67,6 +67,8 @@ class DMRGCI(lib.StreamObject):
         outputlevel : int
             Noise level for Block program output.
         maxIter : int
+        hf_occ : str
+            The initial HF wave function occupancies, in spin orbital.
 
         approx_maxIter : int
             To control the DMRG-CASSCF approximate DMRG solver accuracy.
@@ -107,6 +109,7 @@ class DMRGCI(lib.StreamObject):
         self.verbose = mol.verbose
         self.stdout = mol.stdout
         self.outputlevel = 2
+        self.hf_occ = 'integral'
 
         self.executable = settings.BLOCKEXE
         self.scratchDirectory = os.path.abspath(settings.BLOCKSCRATCHDIR)
@@ -784,7 +787,7 @@ def writeDMRGConfFile(DMRGCI, nelec, Restart,
     f.write('sweep_tol %8.4e\n'%DMRGCI.tol)
 
     f.write('outputlevel %s\n'%DMRGCI.outputlevel)
-    f.write('hf_occ integral\n')
+    f.write('hf_occ %s\n'%DMRGCI.hf_occ)
     if(with_2pdm and DMRGCI.twopdm):
         f.write('twopdm\n')
     if(DMRGCI.nonspinAdapted):

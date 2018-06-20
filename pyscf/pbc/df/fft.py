@@ -106,7 +106,7 @@ def get_pp(mydf, kpts=None):
     def vppnl_by_k(kpt):
         Gk = Gv + kpt
         G_rad = lib.norm(Gk, axis=1)
-        aokG = ft_ao.ft_ao(cell, Gv, kpt=kpt) * (ngrids/cell.vol)
+        aokG = ft_ao.ft_ao(cell, Gv, kpt=kpt) * (1/cell.vol)**.5
         vppnl = 0
         for ia in range(cell.natm):
             symb = cell.atom_symbol(ia)
@@ -145,7 +145,7 @@ def get_pp(mydf, kpts=None):
                         SPG_lm_aoG = SPG_lm_aoGs[p0:p1].reshape(nl,l*2+1,-1)
                         tmp = numpy.einsum('ij,jmp->imp', hl, SPG_lm_aoG)
                         vppnl += numpy.einsum('imp,imq->pq', SPG_lm_aoG.conj(), tmp)
-        return vppnl * (1./ngrids**2)
+        return vppnl * (1./cell.vol)
 
     for k, kpt in enumerate(kpts_lst):
         vppnl = vppnl_by_k(kpt)
