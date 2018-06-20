@@ -16,7 +16,7 @@
 # Author: Artem Pulkin
 #
 
-from util import meta, MetaArray, ltri_ix, p
+from .util import meta, MetaArray, ltri_ix, p
 
 from pyscf.lib.diis import DIIS
 from pyscf.lib.linalg_helper import davidson_nosym1 as davidson

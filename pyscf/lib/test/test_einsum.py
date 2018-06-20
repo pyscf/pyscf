@@ -126,6 +126,15 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(c0.dtype == c1.dtype)
         self.assertTrue(abs(c0-c1).max() < 1e-13)
 
+    def test_3operands2(self):
+        a = numpy.random.random(4)
+        ab = numpy.random.rand(4, 5)
+        b = numpy.random.random(5)
+        c0 = numpy.einsum('i,ij,j->ij', a, ab, b)
+        c1 = einsum('i,ij,j->ij', a, ab, b)
+        self.assertTrue(c0.dtype == c1.dtype)
+        self.assertTrue(abs(c0-c1).max() < 1e-13)
+
     def test_1operand(self):
         a = numpy.random.random((4,1,3,4)) + 1j
         c0 = numpy.einsum('abca->bc', a)
@@ -169,9 +178,8 @@ class KnownValues(unittest.TestCase):
         try:
             from pyscf.lib import tblis_einsum
             tblis_available = True
-        except ImportError:
+        except (ImportError, OSError):
             tblis_available = False
-            pass
 
         if tblis_available:
             a = numpy.random.random((5,4,6))

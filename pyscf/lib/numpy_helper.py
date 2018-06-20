@@ -185,28 +185,32 @@ else:
             indices = indices_in
 
         if len(indices_in) <= 2:
-            return ['einsum_path', (0, 1)], ''
+            idx_removed = set(indices_in[0]).intersection(set(indices_in[1]))
+            einsum_str = indices_in[1] + ',' + indices_in[0] + '->' + idx_final
+            return operands, [((1,0), idx_removed, einsum_str, idx_final)]
 
+        input_sets = [set(x) for x in indices_in]
         n_shared_max = 0
         for i in range(len(indices_in)):
             for j in range(i):
-                tmp = set(indices_in[i]).intersection(indices_in[j])
+                tmp = input_sets[i].intersection(input_sets[j])
                 n_shared_indices = len(tmp)
                 if n_shared_indices > n_shared_max:
                     n_shared_max = n_shared_indices
-                    shared_indices = tmp
+                    idx_removed = tmp
                     a,b = i,j
 
-        idxA, idxB = indices[a], indices[b]
-        idx_out = idxA + idxB
-        idx_out = "".join([x for x in idx_out if x not in shared_indices])
+        idxA = indices_in.pop(a)
+        idxB = indices_in.pop(b)
+        rest_idx = ''.join(indices_in) + idx_final
+        idx_out = input_sets[a].union(input_sets[b])
+        idx_out = ''.join(idx_out.intersection(set(rest_idx)))
 
-        indices_in.pop(a)
-        indices_in.pop(b)
         indices_in.append(idx_out)
-        path = _einsum_path(",".join(indices_in)+"->"+idx_final,
-                            *operands, **kwargs)[0]
-        return ['einsum_path', (a,b)] + path[1:], ''
+        einsum_str = idxA + ',' + idxB + '->' + idx_out
+        einsum_args = _einsum_path(','.join(indices_in)+'->'+idx_final)[1]
+        einsum_args.insert(0, ((a, b), idx_removed, einsum_str, indices_in))
+        return operands, einsum_args
 
 def einsum(subscripts, *tensors, **kwargs):
     '''Perform a more efficient einsum via reshaping to a matrix multiply.
@@ -222,6 +226,7 @@ def einsum(subscripts, *tensors, **kwargs):
     elif len(tensors) <= 2:
         out = _contract(subscripts, *tensors, **kwargs)
     else:
+        contract = kwargs.get('_contract', _contract)
         if '->' in subscripts:
             indices_in, idx_final = subscripts.split('->')
             indices_in = indices_in.split(',')
@@ -229,23 +234,12 @@ def einsum(subscripts, *tensors, **kwargs):
             idx_final = ''
             indices_in = subscripts.split('->')[0].split(',')
         tensors = list(tensors)
-        einsum_path = _einsum_path(subscripts, *tensors, optimize=True)[0][1:]
-        for (a, b) in einsum_path[:-1]:
-            if a > b:
-                a, b = b, a
-            B = tensors.pop(b)
-            A = tensors.pop(a)
-            idxB = indices_in.pop(b)
-            idxA = indices_in.pop(a)
-
-            rest_idx = ''.join(indices_in) + idx_final
-            idx_out = ''.join(set(idxA+idxB).intersection(set(rest_idx)))
-            C = _contract(idxA+','+idxB+'->'+idx_out, A, B)
-
-            indices_in.append(idx_out)
-            tensors.append(C)
-        out = _contract(indices_in[0]+','+indices_in[1]+'->'+idx_final,
-                         *tensors, **kwargs)
+        contraction_list = _einsum_path(subscripts, *tensors, optimize=True,
+                                        einsum_call=True)[1]
+        for (inds, idx_rm, einsum_str, remaining) in contraction_list:
+            tmp_operands = [tensors.pop(x) for x in inds]
+            out = contract(einsum_str, *tmp_operands)
+            tensors.append(out)
     return out
 
 
