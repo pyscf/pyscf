@@ -41,8 +41,8 @@ def gen_tda_operation(mf, fock_ao=None, wfnsym=None):
     '''(A+B)x
 
     Kwargs:
-        wfnsym : int
-            Point group symmetry for excited CIS wavefunction.
+        wfnsym : int or str
+            Point group symmetry irrep symbol or ID for excited CIS wavefunction.
     '''
     mol = mf.mol
     mo_coeff = mf.mo_coeff
@@ -64,7 +64,12 @@ def gen_tda_operation(mf, fock_ao=None, wfnsym=None):
     orbvb = mo_coeff[1][:,viridxb]
 
     if wfnsym is not None and mol.symmetry:
+        if isinstance(wfnsym, str):
+            wfnsym = symm.irrep_name2id(mol.groupname, wfnsym)
         orbsyma, orbsymb = uhf_symm.get_orbsym(mol, mo_coeff)
+        wfnsym = wfnsym % 10  # convert to D2h subgroup
+        orbsyma = orbsyma % 10
+        orbsymb = orbsymb % 10
         sym_forbida = (orbsyma[occidxa,None] ^ orbsyma[viridxa]) != wfnsym
         sym_forbidb = (orbsymb[occidxb,None] ^ orbsymb[viridxb]) != wfnsym
         sym_forbid = numpy.hstack((sym_forbida.ravel(), sym_forbidb.ravel()))
@@ -392,23 +397,23 @@ def get_nto(tdobj, state=1, threshold=OUTPUT_THRESHOLD, verbose=None):
         for ir in set(orbsyma):
             idx = numpy.where(o_sym_a == ir)[0]
             if idx.size > 0:
-                dm_oo = numpy.dot(cis_t1a[idx].T, cis_t1a[idx])
+                dm_oo = numpy.dot(cis_t1a[idx], cis_t1a[idx].T)
                 weights_o_a[idx], nto_o_a[idx[:,None],idx] = numpy.linalg.eigh(dm_oo)
 
             idx = numpy.where(v_sym_a == ir)[0]
             if idx.size > 0:
-                dm_vv = numpy.dot(cis_t1a[idx,:], cis_t1a[idx,:].T)
+                dm_vv = numpy.dot(cis_t1a[:,idx].T, cis_t1a[:,idx])
                 weights_v_a[idx], nto_v_a[idx[:,None],idx] = numpy.linalg.eigh(dm_vv)
 
         for ir in set(orbsymb):
             idx = numpy.where(o_sym_b == ir)[0]
             if idx.size > 0:
-                dm_oo = numpy.dot(cis_t1b[idx].T, cis_t1b[idx])
+                dm_oo = numpy.dot(cis_t1b[idx], cis_t1b[idx].T)
                 weights_o_b[idx], nto_o_b[idx[:,None],idx] = numpy.linalg.eigh(dm_oo)
 
             idx = numpy.where(v_sym_b == ir)[0]
             if idx.size > 0:
-                dm_vv = numpy.dot(cis_t1b[idx,:], cis_t1b[idx,:].T)
+                dm_vv = numpy.dot(cis_t1b[:,idx].T, cis_t1b[:,idx])
                 weights_v_b[idx], nto_v_b[idx[:,None],idx] = numpy.linalg.eigh(dm_vv)
 
         def sort(weights, nto, sym):
@@ -505,7 +510,8 @@ def analyze(tdobj, verbose=None):
 
     if mol.symmetry:
         orbsyma, orbsymb = uhf_symm.get_orbsym(mol, mo_coeff)
-        x_syma = (orbsyma[mo_occ[0]==1,None] & orbsyma[mo_occ[0]==0]).ravel()
+        orbsyma = orbsyma % 10
+        x_syma = (orbsyma[mo_occ[0]==1,None] ^ orbsyma[mo_occ[0]==0]).ravel()
     else:
         x_syma = None
 
@@ -621,6 +627,7 @@ class TDA(rhf.TDA):
         if nstates is None: nstates = self.nstates
         if wfnsym is None: wfnsym = self.wfnsym
 
+        mol = mf.mol
         mo_energy = mf.mo_energy
         mo_occ = mf.mo_occ
         occidxa = numpy.where(mo_occ[0]>0)[0]
@@ -631,7 +638,12 @@ class TDA(rhf.TDA):
         e_ai_b = (mo_energy[1][viridxb,None] - mo_energy[1][occidxb]).T
 
         if wfnsym is not None and mol.symmetry:
-            orbsyma, orbsymb = uhf_symm.get_orbsym(mol, mo_coeff)
+            if isinstance(wfnsym, str):
+                wfnsym = symm.irrep_name2id(mol.groupname, wfnsym)
+            orbsyma, orbsymb = uhf_symm.get_orbsym(mol, mf.mo_coeff)
+            wfnsym = wfnsym % 10  # convert to D2h subgroup
+            orbsyma = orbsyma % 10
+            orbsymb = orbsymb % 10
             e_ai_a[(orbsyma[occidxa,None] ^ orbsyma[viridxa]) != wfnsym] = 1e99
             e_ai_b[(orbsymb[occidxb,None] ^ orbsymb[viridxb]) != wfnsym] = 1e99
 
@@ -725,7 +737,12 @@ def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
     orbvb = mo_coeff[1][:,viridxb]
 
     if wfnsym is not None and mol.symmetry:
+        if isinstance(wfnsym, str):
+            wfnsym = symm.irrep_name2id(mol.groupname, wfnsym)
         orbsyma, orbsymb = uhf_symm.get_orbsym(mol, mo_coeff)
+        wfnsym = wfnsym % 10  # convert to D2h subgroup
+        orbsyma = orbsyma % 10
+        orbsymb = orbsymb % 10
         sym_forbida = (orbsyma[occidxa,None] ^ orbsyma[viridxa]) != wfnsym
         sym_forbidb = (orbsymb[occidxb,None] ^ orbsymb[viridxb]) != wfnsym
         sym_forbid = numpy.hstack((sym_forbida.ravel(), sym_forbidb.ravel()))
@@ -747,8 +764,8 @@ def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
         nz = len(xys)
         if wfnsym is not None and mol.symmetry:
             # shape(nz,2,-1): 2 ~ X,Y
-            xys = numpy.copy(zs).reshape(nz,2,-1)
-            xys[:,:,:,sym_forbid] = 0
+            xys = numpy.copy(xys).reshape(nz,2,-1)
+            xys[:,:,sym_forbid] = 0
         dms = numpy.empty((2,nz,nao,nao)) # 2 ~ alpha,beta
         for i in range(nz):
             x, y = xys[i].reshape(2,-1)
