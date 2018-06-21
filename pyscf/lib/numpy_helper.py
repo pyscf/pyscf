@@ -236,7 +236,8 @@ def einsum(subscripts, *tensors, **kwargs):
         tensors = list(tensors)
         contraction_list = _einsum_path(subscripts, *tensors, optimize=True,
                                         einsum_call=True)[1]
-        for inds, idx_rm, einsum_str, remaining in contraction_list:
+        for contraction in contraction_list:
+            inds, idx_rm, einsum_str, remaining = contraction[:4]
             tmp_operands = [tensors.pop(x) for x in inds]
             if len(tmp_operands) > 2:
                 out = numpy.einsum(einsum_str, *tmp_operands)
