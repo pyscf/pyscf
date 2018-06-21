@@ -69,7 +69,7 @@ class KnownValues(unittest.TestCase):
 
         numpy.random.seed(1)
         a = numpy.random.random((5050,20))
-        self.assertAlmostEqual(lib.finger(lib.unpack_tril(a, axis=0)), -103.03970592075423, 12)
+        self.assertAlmostEqual(lib.finger(lib.unpack_tril(a, axis=0)), -103.03970592075423, 10)
 
     def test_dot(self):
         a = numpy.random.random((400,400))
