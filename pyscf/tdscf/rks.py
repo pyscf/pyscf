@@ -23,8 +23,9 @@
 from functools import reduce
 import numpy
 from pyscf import lib
-from pyscf.dft import numint
+from pyscf import symm
 from pyscf import dft
+from pyscf.dft import numint
 from pyscf.tdscf import rhf
 from pyscf.scf import hf_symm
 from pyscf.ao2mo import _ao2mo
@@ -69,7 +70,10 @@ class TDDFTNoHybrid(TDA):
         orbo = mo_coeff[:,occidx]
 
         if wfnsym is not None and mol.symmetry:
-            orbsym = hf_symm.get_orbsym(mol, mo_coeff)
+            if isinstance(wfnsym, str):
+                wfnsym = symm.irrep_name2id(mol.groupname, wfnsym)
+            wfnsym = wfnsym % 10  # convert to D2h subgroup
+            orbsym = hf_symm.get_orbsym(mol, mo_coeff) % 10
             sym_forbid = (orbsym[occidx,None] ^ orbsym[viridx]) != wfnsym
 
         eai = (mo_energy[viridx].reshape(-1,1) - mo_energy[occidx]).T

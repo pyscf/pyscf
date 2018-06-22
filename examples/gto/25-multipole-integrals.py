@@ -5,9 +5,11 @@
 
 '''
 Multipole integrals.  (Be careful with the gauge origin of the multipole
-integrals.)
+integrals).  An implementation of multipoles (up to hexadecapole) can be found
+in
+https://github.com/cuanto/pyscf-scripts/blob/master/props/multipole_rhf.py
 
-See 20-ao_integrals for more examples to access integrals
+See also 20-ao_integrals for more examples to access integrals
 '''
 
 import numpy

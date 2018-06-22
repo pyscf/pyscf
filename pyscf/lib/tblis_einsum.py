@@ -47,8 +47,6 @@ tblis_dtype = {
     numpy.dtype(numpy.complex128) : 3,
 }
 
-numpy_einsum = numpy.einsum
-
 def _contract(subscripts, *tensors, **kwargs):
     '''
     c = alpha * contract(a, b) + beta * c
@@ -66,12 +64,12 @@ def _contract(subscripts, *tensors, **kwargs):
     a = numpy.asarray(tensors[0])
     b = numpy.asarray(tensors[1])
     if not kwargs and (a.size < 2000 or b.size < 2000):
-        return numpy_einsum(subscripts, a, b)
+        return numpy.einsum(subscripts, a, b)
 
     c_dtype = kwargs.get('dtype', numpy.result_type(a, b))
     if (not (numpy.issubdtype(c_dtype, numpy.floating) or
              numpy.issubdtype(c_dtype, numpy.complexfloating))):
-        return numpy_einsum(subscripts, a, b)
+        return numpy.einsum(subscripts, a, b)
 
     sub_idx = re.split(',|->', subscripts)
     indices  = ''.join(sub_idx)
@@ -127,23 +125,4 @@ def _contract(subscripts, *tensors, **kwargs):
                        c, c.ndim, c_shape, c_strides, c_descr.encode('ascii'),
                        tblis_dtype[c_dtype], alpha, beta)
     return c
-
-def einsum(subscripts, *tensors, **kwargs):
-    if '...' in subscripts:
-        return numpy_einsum(subscripts, *tensors, **kwargs)
-
-    subscripts = subscripts.replace(' ','')
-    if len(tensors) <= 1:
-        out = numpy_einsum(subscripts, *tensors, **kwargs)
-    elif len(tensors) <= 2:
-        out = _contract(subscripts, *tensors, **kwargs)
-    else:
-        sub_idx = subscripts.split(',', 2)
-        res_idx = ''.join(set(sub_idx[0]+sub_idx[1]).intersection(sub_idx[2]))
-        res_idx = res_idx.replace(',','')
-        script0 = sub_idx[0] + ',' + sub_idx[1] + '->' + res_idx
-        subscripts = res_idx + ',' + sub_idx[2]
-        tensors = [_contract(script0, *tensors[:2])] + list(tensors[2:])
-        out = einsum(subscripts, *tensors, **kwargs)
-    return out
 

@@ -30,52 +30,16 @@ from pyscf.lib import misc
 
 try:
 # Import tblis before libnp_helper to avoid potential dl-loading conflicts
-    from pyscf.lib import tblis_einsum
-    einsum = tblis_einsum.einsum
+    from pyscf.lib.tblis_einsum import _contract
 
 except (ImportError, OSError):
-    def einsum(idx_str, *tensors, **kwargs):
-        '''Perform a more efficient einsum via reshaping to a matrix multiply.
-
-        Current differences compared to numpy.einsum:
-        This assumes that each repeated index is actually summed (i.e. no 'i,i->i')
-        and appears only twice (i.e. no 'ij,ik,il->jkl'). The output indices must
-        be explicitly specified (i.e. 'ij,j->i' and not 'ij,j').
-        '''
-
+    def _contract(subscripts, *tensors, **kwargs):
         DEBUG = kwargs.get('DEBUG', False)
 
-        idx_str = idx_str.replace(' ','')
-        indices  = "".join(re.split(',|->',idx_str))
+        idx_str = subscripts.replace(' ','')
+        indices  = idx_str.replace(',', '').replace('->', '')
         if '->' not in idx_str or any(indices.count(x)>2 for x in set(indices)):
-            return numpy.einsum(idx_str,*tensors)
-
-        if idx_str.count(',') > 1:
-            indices  = re.split(',|->',idx_str)
-            indices_in = indices[:-1]
-            idx_final = indices[-1]
-            n_shared_max = 0
-            for i in range(len(indices_in)):
-                for j in range(i):
-                    tmp = list(set(indices_in[i]).intersection(indices_in[j]))
-                    n_shared_indices = len(tmp)
-                    if n_shared_indices > n_shared_max:
-                        n_shared_max = n_shared_indices
-                        shared_indices = tmp
-                        [a,b] = [i,j]
-            tensors = list(tensors)
-            A, B = tensors[a], tensors[b]
-            idxA, idxB = indices[a], indices[b]
-            idx_out = list(idxA+idxB)
-            idx_out = "".join([x for x in idx_out if x not in shared_indices])
-            C = einsum(idxA+","+idxB+"->"+idx_out, A, B)
-            indices_in.pop(a)
-            indices_in.pop(b)
-            indices_in.append(idx_out)
-            tensors.pop(a)
-            tensors.pop(b)
-            tensors.append(C)
-            return einsum(",".join(indices_in)+"->"+idx_final,*tensors)
+            return numpy.einsum(idx_str, *tensors)
 
         A, B = tensors
         # Call numpy.asarray because A or B may be HDF5 Datasets 
@@ -203,6 +167,84 @@ PauliMatrices = numpy.array([[[0., 1.],
                               [1j, 0.]],  # y
                              [[1., 0.],
                               [0.,-1.]]]) # z
+
+if hasattr(numpy, 'einsum_path'):
+    _einsum_path = numpy.einsum_path
+else:
+    def _einsum_path(subscripts, *operands, **kwargs):
+        #indices  = re.split(',|->', subscripts)
+        #indices_in = indices[:-1]
+        #idx_final = indices[-1]
+        if '->' in subscripts:
+            indices_in, idx_final = subscripts.split('->')
+            indices_in = indices_in.split(',')
+            indices = indices_in + [idx_final]
+        else:
+            idx_final = ''
+            indices_in = subscripts.split('->')[0].split(',')
+            indices = indices_in
+
+        if len(indices_in) <= 2:
+            idx_removed = set(indices_in[0]).intersection(set(indices_in[1]))
+            einsum_str = indices_in[1] + ',' + indices_in[0] + '->' + idx_final
+            return operands, [((1,0), idx_removed, einsum_str, idx_final)]
+
+        input_sets = [set(x) for x in indices_in]
+        n_shared_max = 0
+        for i in range(len(indices_in)):
+            for j in range(i):
+                tmp = input_sets[i].intersection(input_sets[j])
+                n_shared_indices = len(tmp)
+                if n_shared_indices > n_shared_max:
+                    n_shared_max = n_shared_indices
+                    idx_removed = tmp
+                    a,b = i,j
+
+        idxA = indices_in.pop(a)
+        idxB = indices_in.pop(b)
+        rest_idx = ''.join(indices_in) + idx_final
+        idx_out = input_sets[a].union(input_sets[b])
+        idx_out = ''.join(idx_out.intersection(set(rest_idx)))
+
+        indices_in.append(idx_out)
+        einsum_str = idxA + ',' + idxB + '->' + idx_out
+        einsum_args = _einsum_path(','.join(indices_in)+'->'+idx_final)[1]
+        einsum_args.insert(0, ((a, b), idx_removed, einsum_str, indices_in))
+        return operands, einsum_args
+
+def einsum(subscripts, *tensors, **kwargs):
+    '''Perform a more efficient einsum via reshaping to a matrix multiply.
+
+    Current differences compared to numpy.einsum:
+    This assumes that each repeated index is actually summed (i.e. no 'i,i->i')
+    and appears only twice (i.e. no 'ij,ik,il->jkl'). The output indices must
+    be explicitly specified (i.e. 'ij,j->i' and not 'ij,j').
+    '''
+    subscripts = subscripts.replace(' ','')
+    if len(tensors) <= 1 or '...' in subscripts:
+        out = numpy.einsum(subscripts, *tensors, **kwargs)
+    elif len(tensors) <= 2:
+        out = _contract(subscripts, *tensors, **kwargs)
+    else:
+        contract = kwargs.get('_contract', _contract)
+        if '->' in subscripts:
+            indices_in, idx_final = subscripts.split('->')
+            indices_in = indices_in.split(',')
+        else:
+            idx_final = ''
+            indices_in = subscripts.split('->')[0].split(',')
+        tensors = list(tensors)
+        contraction_list = _einsum_path(subscripts, *tensors, optimize=True,
+                                        einsum_call=True)[1]
+        for contraction in contraction_list:
+            inds, idx_rm, einsum_str, remaining = contraction[:4]
+            tmp_operands = [tensors.pop(x) for x in inds]
+            if len(tmp_operands) > 2:
+                out = numpy.einsum(einsum_str, *tmp_operands)
+            else:
+                out = contract(einsum_str, *tmp_operands)
+            tensors.append(out)
+    return out
 
 
 # 2d -> 1d or 3d -> 2d
@@ -994,92 +1036,12 @@ def tag_array(a, **kwargs):
     return a
 
 if __name__ == '__main__':
-    import scipy.linalg
-    a = numpy.random.random((400,900))
-    print(abs(a.T - transpose(a)).sum())
-    b = a[:400,:400]
-    c = numpy.copy(b)
-    print(abs(b.T - transpose(c,inplace=True)).sum())
-    a = a.reshape(40,10,-1)
-    print(abs(a.transpose(0,2,1) - transpose(a,(0,2,1))).sum())
-
-    a = numpy.random.random((3,400,400))
-    print(abs(a[0]+a[0].T - hermi_sum(a[0])).sum())
-    print(abs(a+a.transpose(0,2,1) - hermi_sum(a,(0,2,1))).sum())
-    print(abs(a+a.transpose(0,2,1) - hermi_sum(a,(0,2,1), inplace=True)).sum())
-    a = numpy.random.random((3,400,400)) + numpy.random.random((3,400,400)) * 1j
-    print(abs(a[0]+a[0].T.conj() - hermi_sum(a[0])).sum())
-    print(abs(a+a.transpose(0,2,1).conj() - hermi_sum(a,(0,2,1))).sum())
-    print(abs(a+a.transpose(0,2,1) - hermi_sum(a,(0,2,1),hermi=3)).sum())
-    print(abs(a+a.transpose(0,2,1).conj() - hermi_sum(a,(0,2,1),inplace=True)).sum())
-
-    a = numpy.random.random((400,400))
-    b = a + a.T.conj()
-    c = transpose_sum(a)
-    print(abs(b-c).sum())
-
-    a = a+a*.5j
-    for i in range(400):
-        a[i,i] = a[i,i].real
-    b = a-a.T.conj()
-    b = numpy.array((b,b))
-    x = hermi_triu(b[0].T, hermi=2, inplace=0)
-    print(abs(b[0].T-x).sum())
-    x = hermi_triu(b[1], hermi=2, inplace=0)
-    print(abs(b[1]-x).sum())
-    print(abs(x - unpack_tril(pack_tril(x), 2)).sum())
-    x = hermi_triu(a, hermi=1, inplace=0)
-    print(abs(x-x.T.conj()).sum())
-    xs = numpy.asarray((x,x,x))
-    print(abs(xs - unpack_tril(pack_tril(xs))).sum())
-    numpy.random.seed(1)
-    a = numpy.random.random((5050,20))
-    print(misc.finger(unpack_tril(a, axis=0)) - -103.03970592075423)
-
-    a = numpy.random.random((400,400))
-    b = numpy.random.random((400,400))
-    print(abs(dot(a  ,b  )-numpy.dot(a  ,b  )).sum())
-    print(abs(dot(a  ,b.T)-numpy.dot(a  ,b.T)).sum())
-    print(abs(dot(a.T,b  )-numpy.dot(a.T,b  )).sum())
-    print(abs(dot(a.T,b.T)-numpy.dot(a.T,b.T)).sum())
-
-    a = numpy.random.random((400,40))
-    b = numpy.random.random((40,400))
-    print(abs(dot(a  ,b  )-numpy.dot(a  ,b  )).sum())
-    print(abs(dot(b  ,a  )-numpy.dot(b  ,a  )).sum())
-    print(abs(dot(a.T,b.T)-numpy.dot(a.T,b.T)).sum())
-    print(abs(dot(b.T,a.T)-numpy.dot(b.T,a.T)).sum())
-    a = numpy.random.random((400,40))
-    b = numpy.random.random((400,40))
-    print(abs(dot(a  ,b.T)-numpy.dot(a  ,b.T)).sum())
-    print(abs(dot(b  ,a.T)-numpy.dot(b  ,a.T)).sum())
-    print(abs(dot(a.T,b  )-numpy.dot(a.T,b  )).sum())
-    print(abs(dot(b.T,a  )-numpy.dot(b.T,a  )).sum())
-
-    a = numpy.random.random((400,400))
-    b = numpy.random.random((400,400))
-    c = numpy.random.random((400,400))
-    d = numpy.random.random((400,400))
-    print(numpy.allclose(numpy.dot(a+b*1j, c+d*1j), dot(a+b*1j, c+d*1j)))
-    print(numpy.allclose(numpy.dot(a, c+d*1j), dot(a, c+d*1j)))
-    print(numpy.allclose(numpy.dot(a+b*1j, c), dot(a+b*1j, c)))
-
-    import itertools
-    arrs = (range(3,9), range(4))
-    cp = cartesian_prod(arrs)
-    for i,x in enumerate(itertools.product(*arrs)):
-        assert(numpy.allclose(x,cp[i]))
-
-    locs = numpy.arange(5)
-    a = numpy.random.random((locs[-1],locs[-1])) - .5
-    print(numpy.allclose(a, condense('sum', a, locs)))
-    print(numpy.allclose(a, condense('max', a, locs)))
-    print(numpy.allclose(a, condense('min', a, locs)))
-    print(numpy.allclose(abs(a), condense('abssum', a, locs)))
-    print(numpy.allclose(abs(a), condense('absmax', a, locs)))
-    print(numpy.allclose(abs(a), condense('absmin', a, locs)))
-    print(numpy.allclose(abs(a), condense('norm', a, locs)))
-
-    a = numpy.random.random((300,300)) * .1
-    a = a - a.T
-    print(abs(scipy.linalg.expm(a) - expm(a)).max())
+    a = numpy.random.random((30,40,5,10))
+    b = numpy.random.random((10,30,5,20))
+    c = numpy.random.random((10,20,20))
+    d = numpy.random.random((20,10))
+    f = einsum('ijkl,xiky,ayp,px->ajl', a,b,c,d, optimize=True)
+    ref = einsum('ijkl,xiky->jlxy', a, b)
+    ref = einsum('jlxy,ayp->jlxap', ref, c)
+    ref = einsum('jlxap,px->ajl', ref, d)
+    print(abs(ref-f).max())
