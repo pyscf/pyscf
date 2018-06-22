@@ -405,8 +405,11 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
             casdm1 = mc.fcisolver.make_rdm1(ci[0], mc.ncas, mc.nelecas)
         else:
             casdm1 = mc.fcisolver.make_rdm1(ci, mc.ncas, mc.nelecas)
-    if mc.frozen is not None:
-        nfrozen = mc.frozen
+    if hasattr(mc, 'property'):
+        if mc.frozen is not None:
+            nfrozen = mc.frozen
+        else:
+            nfrozen = 0
     else:
         nfrozen = 0
     ncore = mc.ncore
