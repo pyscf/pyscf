@@ -430,6 +430,14 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
     def ao2mo(self, mo_coeff=None):
         return _ERIS(self, mo_coeff)
 
+    def vector_size_ip(self):
+        nocc = self.nocc
+        nvir = self.nmo - nocc
+        nkpts = self.nkpts
+
+        size = nocc + nkpts**2 * nocc**2 * nvir
+        return size
+
     def ipccsd(self, nroots=1, koopmans=False, guess=None, partition=None,
                kptlist=None):
         '''Calculate (N-1)-electron charged excitations via IP-EOM-CCSD.
@@ -454,20 +462,24 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         nocc = self.nocc
         nvir = self.nmo - nocc
         nkpts = self.nkpts
-        size = nocc + nkpts*nkpts*nocc*nocc*nvir
-        nroots = min(nroots,size)
+        if kptlist is None:
+            kptlist = range(nkpts)
+        size = self.vector_size_ip()
+        for k,kshift in enumerate(kptlist):
+            self.kshift = kshift
+            nfrozen = np.sum(self.mask_frozen_ip(np.zeros(size, dtype=int), const=1))
+            nroots = min(nroots, size - nfrozen)
         if partition:
             partition = partition.lower()
             assert partition in ['mp','full']
         self.ip_partition = partition
-        if kptlist is None:
-            kptlist = range(nkpts)
         evals = np.zeros((len(kptlist),nroots), np.float)
         evecs = np.zeros((len(kptlist),nroots,size), np.complex)
 
         for k,kshift in enumerate(kptlist):
             self.kshift = kshift
             adiag = self.ipccsd_diag(kshift)
+            adiag = self.mask_frozen_ip(adiag, const=LARGE_DENOM)
             if partition == 'full':
                 self._ipccsd_diag_matrix2 = self.vector_to_amplitudes_ip(adiag)[1]
 
@@ -480,15 +492,19 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
             else:
                 guess = []
                 if koopmans:
-                    for n in range(nroots):
+                    foo_kshift = self.eris.fock[kshift,:nocc,:nocc]
+                    nonfrozen_idx = np.where(abs(foo_kshift.diagonal()) > LOOSE_ZERO_TOL)[0]
+                    for n in nonfrozen_idx[::-1][:nroots]:
                         g = np.zeros(size)
-                        g[self.nocc-n-1] = 1.0
+                        g[n] = 1.0
+                        g = self.mask_frozen_ip(g, const=0.0)
                         guess.append(g)
                 else:
                     idx = adiag.argsort()[:nroots]
                     for i in idx:
                         g = np.zeros(size)
                         g[i] = 1.0
+                        g = self.mask_frozen_ip(g, const=0.0)
                         guess.append(g)
 
             def precond(r, e0, x0):
@@ -529,6 +545,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
             self.imds.make_ip(self.ip_partition)
         imds = self.imds
 
+        vector = self.mask_frozen_ip(vector, const=0.0)
         r1,r2 = self.vector_to_amplitudes_ip(vector)
 
         t1,t2 = self.t1, self.t2
@@ -591,6 +608,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                             Hr2[ki,kj] += -einsum('c,ijcb->ijb',tmp,t2[ki,kj,kshift])
 
         vector = self.amplitudes_to_vector_ip(Hr1,Hr2)
+        vector = self.mask_frozen_ip(vector, const=0.0)
         return vector
 
     def ipccsd_diag(self, kshift=0):
@@ -681,6 +699,43 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         #                    index += 1
         return vector
 
+    def mask_frozen_ip(self, vector, const=LARGE_DENOM):
+        '''Replaces all frozen orbital indices of `vector` with the value `const`.'''
+        r1, r2 = self.vector_to_amplitudes_ip(vector)
+        nkpts, nocc, nvir = self.t1.shape
+        kconserv = self.khelper.kconserv
+        kshift = self.kshift
+
+        fock = self.eris.fock
+        foo = fock[:,:nocc,:nocc]
+        fvv = fock[:,nocc:,nocc:]
+        d0 = np.array(const, dtype=r2.dtype)
+
+        r1_mask_idx = abs(foo[kshift].diagonal()) < LOOSE_ZERO_TOL
+        r1[r1_mask_idx] = d0
+        for ki in range(nkpts):
+            imask_idx = abs(foo[ki].diagonal()) < LOOSE_ZERO_TOL
+            for kj in range(nkpts):
+                kb = kconserv[ki,kshift,kj]
+                jmask_idx = abs(foo[kj].diagonal()) < LOOSE_ZERO_TOL
+                bmask_idx = abs(fvv[kb].diagonal()) < LOOSE_ZERO_TOL
+
+                d0 = const * np.array(1.0, dtype=r2.dtype)
+                r2[ki, kj, imask_idx] = d0
+                r2[ki, kj, :, jmask_idx] = d0
+                r2[ki, kj, :, :, bmask_idx] = d0
+
+        vector = self.amplitudes_to_vector_ip(r1, r2)
+        return vector
+
+    def vector_size_ea(self):
+        nocc = self.nocc
+        nvir = self.nmo - nocc
+        nkpts = self.nkpts
+
+        size = nvir + nkpts**2 * nvir**2 * nocc
+        return size
+
     def eaccsd(self, nroots=1, koopmans=False, guess=None, partition=None,
                kptlist=None):
         '''Calculate (N+1)-electron charged excitations via EA-EOM-CCSD.
@@ -693,20 +748,24 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         nocc = self.nocc
         nvir = self.nmo - nocc
         nkpts = self.nkpts
-        size =  nvir + nkpts*nkpts*nocc*nvir*nvir
-        nroots = min(nroots,size)
+        if kptlist is None:
+            kptlist = range(nkpts)
+        size = self.vector_size_ea()
+        for k,kshift in enumerate(kptlist):
+            self.kshift = kshift
+            nfrozen = np.sum(self.mask_frozen_ea(np.zeros(size, dtype=int), const=1))
+            nroots = min(nroots, size - nfrozen)
         if partition:
             partition = partition.lower()
             assert partition in ['mp','full']
         self.ea_partition = partition
-        if kptlist is None:
-            kptlist = range(nkpts)
         evals = np.zeros((len(kptlist),nroots), np.float)
         evecs = np.zeros((len(kptlist),nroots,size), np.complex)
 
         for k,kshift in enumerate(kptlist):
             self.kshift = kshift
             adiag = self.eaccsd_diag(kshift)
+            adiag = self.mask_frozen_ea(adiag, const=LARGE_DENOM)
             if partition == 'full':
                 self._eaccsd_diag_matrix2 = self.vector_to_amplitudes_ea(adiag)[1]
 
@@ -719,15 +778,19 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
             else:
                 guess = []
                 if koopmans:
-                    for n in range(nroots):
+                    fvv_kshift = self.eris.fock[kshift,nocc:,nocc:]
+                    nonfrozen_idx = np.where(abs(fvv_kshift.diagonal()) > LOOSE_ZERO_TOL)[0]
+                    for n in nonfrozen_idx[:nroots]:
                         g = np.zeros(size)
                         g[n] = 1.0
+                        g = self.mask_frozen_ea(g, const=0.0)
                         guess.append(g)
                 else:
                     idx = adiag.argsort()[:nroots]
                     for i in idx:
                         g = np.zeros(size)
                         g[i] = 1.0
+                        g = self.mask_frozen_ea(g, const=0.0)
                         guess.append(g)
 
             def precond(r, e0, x0):
@@ -769,6 +832,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
             self.imds.make_ea(self.ea_partition)
         imds = self.imds
 
+        vector = self.mask_frozen_ea(vector, const=0.0)
         r1,r2 = self.vector_to_amplitudes_ea(vector)
 
         t1,t2 = self.t1, self.t2
@@ -836,6 +900,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                             Hr2[kj,ka] += -einsum('k,kjab->jab',tmp,t2[kshift,kj,ka])
 
         vector = self.amplitudes_to_vector_ea(Hr1,Hr2)
+        vector = self.mask_frozen_ea(vector, const=0.0)
         return vector
 
     def eaccsd_diag(self, kshift=0):
@@ -923,6 +988,36 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         #                    vector[index] = r2[kj,ka,j,a,b]
         #                    index += 1
         return vector
+
+    def mask_frozen_ea(self, vector, const=LARGE_DENOM):
+        '''Replaces all frozen orbital indices of `vector` with the value `const`.'''
+        r1, r2 = self.vector_to_amplitudes_ea(vector)
+        nkpts, nocc, nvir = self.t1.shape
+        kconserv = self.khelper.kconserv
+        kshift = self.kshift
+
+        fock = self.eris.fock
+        foo = fock[:,:nocc,:nocc]
+        fvv = fock[:,nocc:,nocc:]
+        d0 = np.array(const, dtype=r2.dtype)
+
+        r1_mask_idx = abs(fvv[kshift].diagonal()) < LOOSE_ZERO_TOL
+        r1[r1_mask_idx] = d0
+        for kj in range(nkpts):
+            jmask_idx = abs(foo[kj].diagonal()) < LOOSE_ZERO_TOL
+            for ka in range(nkpts):
+                kb = kconserv[kj,kshift,ka]
+                amask_idx = abs(fvv[ka].diagonal()) < LOOSE_ZERO_TOL
+                bmask_idx = abs(fvv[kb].diagonal()) < LOOSE_ZERO_TOL
+
+                d0 = const * np.array(1.0, dtype=r2.dtype)
+                r2[kj, ka, jmask_idx] = d0
+                r2[kj, ka, :, amask_idx] = d0
+                r2[kj, ka, :, :, bmask_idx] = d0
+
+        vector = self.amplitudes_to_vector_ea(r1, r2)
+        return vector
+
 
     def amplitudes_to_vector(self, t1, t2):
         return np.hstack((t1.ravel(), t2.ravel()))
