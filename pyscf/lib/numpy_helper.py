@@ -28,6 +28,8 @@ import numpy
 import scipy.linalg
 from pyscf.lib import misc
 
+EINSUM_MAX_SIZE = getattr(misc.__config__, 'lib_einsum_max_size', 2000)
+
 try:
 # Import tblis before libnp_helper to avoid potential dl-loading conflicts
     from pyscf.lib.tblis_einsum import _contract
@@ -45,13 +47,12 @@ except (ImportError, OSError):
         # Call numpy.asarray because A or B may be HDF5 Datasets 
         A = numpy.asarray(A, order='A')
         B = numpy.asarray(B, order='A')
-        if A.size < 2000 or B.size < 2000:
+        if A.size < EINSUM_MAX_SIZE or B.size < EINSUM_MAX_SIZE:
             return numpy.einsum(idx_str, *tensors)
 
         # Split the strings into a list of idx char's
         idxA, idxBC = idx_str.split(',')
         idxB, idxC = idxBC.split('->')
-        idxA, idxB, idxC = [list(x) for x in [idxA,idxB,idxC]]
         assert(len(idxA) == A.ndim)
         assert(len(idxB) == B.ndim)
 
@@ -62,24 +63,22 @@ except (ImportError, OSError):
             print(" idxC =", idxC)
 
         # Get the range for each index and put it in a dictionary
-        rangeA = dict()
-        rangeB = dict()
-        #rangeC = dict()
-        for idx,rnge in zip(idxA,A.shape):
-            rangeA[idx] = rnge
-        for idx,rnge in zip(idxB,B.shape):
-            rangeB[idx] = rnge
-        #for idx,rnge in zip(idxC,C.shape):
-        #    rangeC[idx] = rnge
-
+        rangeA = dict(zip(idxA, A.shape))
+        rangeB = dict(zip(idxB, B.shape))
+        #rangeC = dict(zip(idxC, C.shape))
         if DEBUG:
             print("rangeA =", rangeA)
             print("rangeB =", rangeB)
 
+        # duplicated indices 'in,ijj->n'
+        if len(rangeA) != A.ndim or len(rangeB) != B.ndim:
+            return numpy.einsum(idx_str, A, B)
+
         # Find the shared indices being summed over
-        shared_idxAB = list(set(idxA).intersection(idxB))
-        #if len(shared_idxAB) == 0:
-        #    return np.einsum(idx_str,A,B)
+        shared_idxAB = set(idxA).intersection(idxB)
+        if len(shared_idxAB) == 0: # Indices must overlap
+            return numpy.einsum(idx_str, A, B)
+
         idxAt = list(idxA)
         idxBt = list(idxB)
         inner_shape = 1
@@ -89,7 +88,7 @@ except (ImportError, OSError):
                 err = ('ERROR: In index string %s, the range of index %s is '
                        'different in A (%d) and B (%d)' %
                        (idx_str, n, rangeA[n], rangeB[n]))
-                raise RuntimeError(err)
+                raise ValueError(err)
 
             # Bring idx all the way to the right for A
             # and to the left (but preserve order) for B
@@ -220,13 +219,14 @@ def einsum(subscripts, *tensors, **kwargs):
     and appears only twice (i.e. no 'ij,ik,il->jkl'). The output indices must
     be explicitly specified (i.e. 'ij,j->i' and not 'ij,j').
     '''
+    contract = kwargs.pop('_contract', _contract)
+
     subscripts = subscripts.replace(' ','')
     if len(tensors) <= 1 or '...' in subscripts:
         out = numpy.einsum(subscripts, *tensors, **kwargs)
     elif len(tensors) <= 2:
         out = _contract(subscripts, *tensors, **kwargs)
     else:
-        contract = kwargs.get('_contract', _contract)
         if '->' in subscripts:
             indices_in, idx_final = subscripts.split('->')
             indices_in = indices_in.split(',')

@@ -47,6 +47,8 @@ tblis_dtype = {
     numpy.dtype(numpy.complex128) : 3,
 }
 
+EINSUM_MAX_SIZE = getattr(misc.__config__, 'lib_einsum_max_size', 2000)
+
 def _contract(subscripts, *tensors, **kwargs):
     '''
     c = alpha * contract(a, b) + beta * c
@@ -63,7 +65,7 @@ def _contract(subscripts, *tensors, **kwargs):
     '''
     a = numpy.asarray(tensors[0])
     b = numpy.asarray(tensors[1])
-    if not kwargs and (a.size < 2000 or b.size < 2000):
+    if not kwargs and (a.size < EINSUM_MAX_SIZE or b.size < EINSUM_MAX_SIZE):
         return numpy.einsum(subscripts, a, b)
 
     c_dtype = kwargs.get('dtype', numpy.result_type(a, b))
