@@ -1143,14 +1143,20 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         nocc = self.nocc
         nvir = self.nmo - nocc
         nkpts = self.nkpts
-        size =  nocc + nkpts*nkpts*nocc*nocc*nvir
         if kptlist is None:
             kptlist = range(nkpts)
-        evals = np.zeros((len(kptlist),nroots),np.complex)
-        evecs = np.zeros((len(kptlist),size,nroots),np.complex)
+        size = self.vector_size_ip()
+        for k,kshift in enumerate(kptlist):
+            self.kshift = kshift
+            nfrozen = np.sum(self.mask_frozen_ip(np.zeros(size, dtype=int), const=1))
+            nroots = min(nroots, size - nfrozen)
+        evals = np.zeros((len(kptlist),nroots), np.float)
+        evecs = np.zeros((len(kptlist),size,nroots), np.complex)
+
         for k,kshift in enumerate(kptlist):
             self.kshift = kshift
             diag = self.ipccsd_diag()
+            diag = self.mask_frozen_ip(diag, const=LARGE_DENOM)
             precond = lambda dx, e, x0: dx/(diag-e)
             # Initial guess from file
             amplitude_filename = "__ripccsd" + str(kshift) + "__.hdf5"
@@ -1171,6 +1177,7 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
 
     def ipccsd_matvec(self, vector):
         # Ref: Z. Tu, F. Wang, and X. Li, J. Chem. Phys. 136, 174102 (2012) Eqs.(8)-(9)
+        vector = self.mask_frozen_ip(vector, const=0.0)
         r1,r2 = self.vector_to_amplitudes_ip(vector)
         r1 = comm.bcast(r1, root=0)
         r2 = comm.bcast(r2, root=0)
@@ -1274,6 +1281,7 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         comm.Allreduce(MPI.IN_PLACE, Hr2, op=MPI.SUM)
 
         vector = self.amplitudes_to_vector_ip(Hr1,Hr2)
+        vector = self.mask_frozen_ip(vector, const=0.0)
         return vector
 
     def lipccsd(self, nroots=2*4, kptlist=None):
@@ -1282,11 +1290,16 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         nocc = self.nocc
         nvir = self.nmo - nocc
         nkpts = self.nkpts
-        size =  nocc + nkpts*nkpts*nocc*nocc*nvir
         if kptlist is None:
             kptlist = range(nkpts)
-        evals = np.zeros((len(kptlist),nroots),np.complex)
-        evecs = np.zeros((len(kptlist),size,nroots),np.complex)
+        size = self.vector_size_ip()
+        for k,kshift in enumerate(kptlist):
+            self.kshift = kshift
+            nfrozen = np.sum(self.mask_frozen_ip(np.zeros(size, dtype=int), const=1))
+            nroots = min(nroots, size - nfrozen)
+        evals = np.zeros((len(kptlist),nroots), np.float)
+        evecs = np.zeros((len(kptlist),size,nroots), np.complex)
+
         for k,kshift in enumerate(kptlist):
             self.kshift = kshift
             diag = self.ipccsd_diag()
@@ -1310,6 +1323,7 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
 
     def lipccsd_matvec(self, vector):
         # Ref: Z. Tu, F. Wang, and X. Li, J. Chem. Phys. 136, 174102 (2012) Eqs.(8)-(9)
+        vector = self.mask_frozen_ip(vector, const=0.0)
         r1,r2 = self.vector_to_amplitudes_ip(vector)
         r1 = comm.bcast(r1, root=0)
         r2 = comm.bcast(r2, root=0)
@@ -1452,6 +1466,7 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         comm.Allreduce(MPI.IN_PLACE, Hr2, op=MPI.SUM)
 
         vector = self.amplitudes_to_vector_ip(Hr1,Hr2)
+        vector = self.mask_frozen_ip(vector, const=0.0)
         return vector
 
 
@@ -1848,14 +1863,20 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         nocc = self.nocc
         nvir = self.nmo - nocc
         nkpts = self.nkpts
-        size =  nvir + nkpts*nkpts*nocc*nvir*nvir
         if kptlist is None:
             kptlist = range(nkpts)
-        evals = np.zeros((len(kptlist),nroots),np.complex)
-        evecs = np.zeros((len(kptlist),size,nroots),np.complex)
+        size = self.vector_size_ea()
+        for k,kshift in enumerate(kptlist):
+            self.kshift = kshift
+            nfrozen = np.sum(self.mask_frozen_ea(np.zeros(size, dtype=int), const=1))
+            nroots = min(nroots, size - nfrozen)
+        evals = np.zeros((len(kptlist),nroots), np.float)
+        evecs = np.zeros((len(kptlist),size,nroots), np.complex)
+
         for k,kshift in enumerate(kptlist):
             self.kshift = kshift
             diag = self.eaccsd_diag()
+            diag = self.mask_frozen_ea(diag, const=LARGE_DENOM)
             precond = lambda dx, e, x0: dx/(diag-e)
             # Initial guess from file
             amplitude_filename = "__reaccsd" + str(kshift) + "__.hdf5"
@@ -1876,6 +1897,7 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
 
     def eaccsd_matvec(self, vector):
         # Ref: Nooijen and Bartlett, J. Chem. Phys. 102, 3629 (1994) Eqs.(30)-(31)
+        vector = self.mask_frozen_ea(vector, const=0.0)
         r1,r2 = self.vector_to_amplitudes_ea(vector)
         r1 = comm.bcast(r1, root=0)
         r2 = comm.bcast(r2, root=0)
@@ -2000,6 +2022,7 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         comm.Allreduce(MPI.IN_PLACE, Hr2, op=MPI.SUM)
 
         vector = self.amplitudes_to_vector_ea(Hr1,Hr2)
+        vector = self.mask_frozen_ea(vector, const=0.0)
         return vector
 
     def leaccsd(self, nroots=2*4, kptlist=None):
@@ -2008,11 +2031,16 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         nocc = self.nocc
         nvir = self.nmo - nocc
         nkpts = self.nkpts
-        size =  nvir + nkpts*nkpts*nocc*nvir*nvir
         if kptlist is None:
             kptlist = range(nkpts)
-        evals = np.zeros((len(kptlist),nroots),np.complex)
-        evecs = np.zeros((len(kptlist),size,nroots),np.complex)
+        size = self.vector_size_ea()
+        for k,kshift in enumerate(kptlist):
+            self.kshift = kshift
+            nfrozen = np.sum(self.mask_frozen_ea(np.zeros(size, dtype=int), const=1))
+            nroots = min(nroots, size - nfrozen)
+        evals = np.zeros((len(kptlist),nroots), np.float)
+        evecs = np.zeros((len(kptlist),size,nroots), np.complex)
+
         for k,kshift in enumerate(kptlist):
             self.kshift = kshift
             diag = self.eaccsd_diag()
