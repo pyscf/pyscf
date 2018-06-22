@@ -156,6 +156,16 @@ class KnownValues(unittest.TestCase):
 
         self.assertAlmostEqual(ecc3, ecc3_bench, 6)
 
+        ew, ev = mycc.ipccsd(nroots=3, koopmans=True, kptlist=[1])
+        self.assertAlmostEqual(ew[0][0], -3.028339571372944, 6)
+        self.assertAlmostEqual(ew[0][1], -2.850636489429295, 6)
+        self.assertAlmostEqual(ew[0][2], -2.801491561537961, 6)
+
+        ew, ev = mycc.eaccsd(nroots=3, koopmans=True, kptlist=[1])
+        self.assertAlmostEqual(ew[0][0], 3.266064683223669, 6)
+        self.assertAlmostEqual(ew[0][1], 3.281390137070985, 6)
+        self.assertAlmostEqual(ew[0][2], 3.426297911456726, 6)
+
         check_gamma = False  # Turn me on to run the supercell calculation!
 
         if check_gamma:
@@ -166,11 +176,29 @@ class KnownValues(unittest.TestCase):
 
             mycc = pyscf.pbc.cc.RCCSD(kmf, frozen=[0, 3, 35])
             mycc.max_cycle = max_cycle
-            mycc.iterative_damping = 0.05
+            mycc.iterative_damping = 0.04
             ecc, t1, t2 = mycc.kernel()
 
             print('Gamma energy =', ecc/np.prod(nk))
-            print('K-point energy =', ecc3)
+            print('K-point energy =', ecc3_bench)
+
+            ew, ev = mycc.ipccsd(nroots=5)
+            # For cell mesh of [25, 25, 25], we get:
+            #
+            # EOM-CCSD root 0 E = -3.052456841625895
+            # EOM-CCSD root 1 E = -2.989798972232893
+            # EOM-CCSD root 2 E = -2.839646545189692
+            # EOM-CCSD root 3 E = -2.836645046801352
+            # EOM-CCSD root 4 E = -2.831020659800223
+
+            ew, ev = mycc.eaccsd(nroots=5)
+            # For cell mesh of [25, 25, 25], we get:
+            #
+            # EOM-CCSD root 0 E = 3.049774979170073
+            # EOM-CCSD root 1 E = 3.104127952392612
+            # EOM-CCSD root 2 E = 3.109435080273549
+            # EOM-CCSD root 3 E = 3.139400145624026
+            # EOM-CCSD root 4 E = 3.151896524990866
 
     def test_cu_metallic_high_cost(self):
         mesh = 7
