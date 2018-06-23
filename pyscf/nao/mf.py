@@ -296,6 +296,20 @@ class mf(nao):
     plt.ylim(-3.0,3.0)
     plt.show()
 
+  def get_vertex_pov(self):
+    """ Computes the occupied-virtual-product basis vertex"""
+    assert hasattr(self, 'pb')
+    pab = self.pb.get_ac_vertex_array()
+    pov = list()
+    nprd = pab.shape[0]
+    for s,occ in enumerate(self.mo_occ):
+      no = np.count_nonzero(occ>0.0)
+      nv = np.count_nonzero(occ==0.0)
+      assert nv+no==self.mo_coeff.shape[-2]
+      pov.append(np.zeros([nprd,no,nv], dtype=self.dtype))
+      pov[s] = np.einsum('oa,pab,vb->pov', self.mo_coeff[0,s,0:no,:,0], pab, self.mo_coeff[0,s,no:,:,0])
+    return pov
+
 #
 # Example of reading pySCF mean-field calculation.
 #

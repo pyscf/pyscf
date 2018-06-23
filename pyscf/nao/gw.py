@@ -6,6 +6,8 @@ from copy import copy
 from pyscf.nao.m_pack2den import pack2den_u, pack2den_l
 from timeit import default_timer as timer
 from pyscf.nao.m_rf0_den import rf0_den, rf0_cmplx_ref_blk, rf0_cmplx_ref, rf0_cmplx_vertex_dp, rf0_cmplx_vertex_ac
+from pyscf.nao.m_rf_den import rf_den
+from pyscf.nao.m_rf_den_pyscf import rf_den_pyscf
 
 class gw(scf):
   """ G0W0 with integration along imaginary axis """
@@ -23,7 +25,8 @@ class gw(scf):
     self.perform_gw = kw['perform_gw'] if 'perform_gw' in kw else False
     self.rescf = kw['rescf'] if 'rescf' in kw else False
     self.bsize = kw['bsize'] if 'bsize' in kw else min(40, self.norbs)
-
+    self.tdscf = kw['tdscf'] if 'tdscf' in kw else None
+    
     if self.nspin==1: self.nocc_0t = nocc_0t = np.array([int(self.nelec/2)])
     elif self.nspin==2: self.nocc_0t = nocc_0t = self.nelec
     else: raise RuntimeError('nspin>2?')
@@ -124,6 +127,10 @@ class gw(scf):
   rf0_cmplx_vertex_dp = rf0_cmplx_vertex_dp
   rf0_cmplx_vertex_ac = rf0_cmplx_vertex_ac
   rf0 = rf0_den
+  
+  rf = rf_den
+  
+  rf_pyscf = rf_den_pyscf
 
   def si_c(self, ww):
     from numpy.linalg import solve

@@ -558,6 +558,9 @@ class prod_basis():
       xyz2err.append([abs(dprd-dref).sum()/dref.size, np.amax(abs(dref-dprd))])
     return xyz2err
 
+  def get_nprod(self):
+    """ Number of (atom-centered) products """
+    return self.c2s[-1]
 #
 #
 #
