@@ -696,50 +696,69 @@ class KUCCSD(uccsd.UCCSD):
 
     def init_amps(self, eris):
         from pyscf.pbc.cc import kccsd
+        from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM
         time0 = time.clock(), time.time()
 
         nocca, noccb = self.nocc
         nmoa, nmob = self.nmo
         nvira, nvirb = nmoa - nocca, nmob - noccb
 
-        eris, uccsd_eris = eris._kccsd_eris, eris
-        orbspin = eris.orbspin
         nocc = nocca + noccb
         nvir = nvira + nvirb
 
         nkpts = self.nkpts
-        t1 = np.zeros((nkpts, nocc, nvir), dtype=np.complex128)
-        t2 = np.zeros((nkpts, nkpts, nkpts, nocc, nocc, nvir, nvir), dtype=np.complex128)
-        self.emp2 = 0
-        foo = eris.fock[:, :nocc, :nocc].copy()
-        fvv = eris.fock[:, nocc:, nocc:].copy()
-        fov = eris.fock[:, :nocc, nocc:].copy()
-        eris_oovv = eris.oovv.copy()
-        eia = np.zeros((nocc, nvir))
-        eijab = np.zeros((nocc, nocc, nvir, nvir))
+        t1a = np.zeros((nkpts, nocca, nvira), dtype=np.complex128)
+        t1b = np.zeros((nkpts, noccb, nvirb), dtype=np.complex128)
+        t1 = (t1a, t1b)
+        t2aa = np.zeros((nkpts, nkpts, nkpts, nocca, nocca, nvira, nvira), dtype=np.complex128)
+        t2ab = np.zeros((nkpts, nkpts, nkpts, nocca, noccb, nvira, nvirb), dtype=np.complex128)
+        t2bb = np.zeros((nkpts, nkpts, nkpts, noccb, noccb, nvirb, nvirb), dtype=np.complex128)
+        fa, fb = eris.fock
+        fooa = fa[:,:nocca,:nocca]
+        foob = fb[:,:noccb,:noccb]
+        fvva = fa[:,nocca:,nocca:]
+        fvvb = fb[:,noccb:,noccb:]
 
         kconserv = kpts_helper.get_kconserv(self._scf.cell, self.kpts)
         for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
             kb = kconserv[ki, ka, kj]
-            eijab = (foo[ki].diagonal()[:, None, None, None] + foo[kj].diagonal()[None, :, None, None] -
-                     fvv[ka].diagonal()[None, None, :, None] - fvv[kb].diagonal()[None, None, None, :])
+            Daa = (fooa[ki].diagonal()[:, None, None, None] + fooa[kj].diagonal()[None, :, None, None] -
+                     fvva[ka].diagonal()[None, None, :, None] - fvva[kb].diagonal()[None, None, None, :])
+            Dab = (fooa[ki].diagonal()[:, None, None, None] + foob[kj].diagonal()[None, :, None, None] -
+                     fvva[ka].diagonal()[None, None, :, None] - fvvb[kb].diagonal()[None, None, None, :])
+            Dbb = (foob[ki].diagonal()[:, None, None, None] + foob[kj].diagonal()[None, :, None, None] -
+                     fvvb[ka].diagonal()[None, None, :, None] - fvvb[kb].diagonal()[None, None, None, :])
+
             # Due to padding; see above discussion concerning t1new in update_amps()
-            idx = np.where(abs(eijab) < LOOSE_ZERO_TOL)[0]
-            eijab[idx] = LARGE_DENOM
+            idx = np.where(abs(Daa) < LOOSE_ZERO_TOL)[0]
+            Daa[idx] = LARGE_DENOM
+            idx = np.where(abs(Dab) < LOOSE_ZERO_TOL)[0]
+            Dab[idx] = LARGE_DENOM
+            idx = np.where(abs(Dbb) < LOOSE_ZERO_TOL)[0]
+            Dbb[idx] = LARGE_DENOM
 
-            t2[ki, kj, ka] = eris_oovv[ki, kj, ka] / eijab
+            t2aa[ki,kj,ka,:,:,:,:] = eris.ovov[ki,ka,kj,:,:,:,:].transpose((0,2,1,3))/Daa \
+                    - eris.ovov[kj,ka,ki,:,:,:,:].transpose((2,0,1,3))/Daa
+            t2ab[ki,kj,ka,:,:,:,:] = eris.ovOV[ki,ka,kj,:,:,:,:].transpose((0,2,1,3))/Dab
+            t2bb[ki,kj,ka,:,:,:,:] = eris.OVOV[ki,ka,kj,:,:,:,:].transpose((0,2,1,3))/Dbb \
+                    - eris.OVOV[kj,ka,ki,:,:,:,:].transpose((2,0,1,3))/Dbb
 
-        t2 = np.conj(t2)
-        self.emp2 = 0.25 * np.einsum('pqrijab,pqrijab', t2, eris_oovv).real
-        self.emp2 /= nkpts
+        t2aa = np.conj(t2aa)
+        t2ab = np.conj(t2ab)
+        t2bb = np.conj(t2bb)
+        t2 = (t2aa,t2ab,t2bb)
 
-        t1 = kccsd.spin2spatial(t1, orbspin, kconserv)
-        t2 = kccsd.spin2spatial(t2, orbspin, kconserv)
+        d = 0.0 + 0.j
+        d += 0.25*(einsum('xzyiajb,xyzijab->',eris.ovov,t2aa)
+                - einsum('yzxjaib,xyzijab->',eris.ovov,t2aa))
+        d += einsum('xzyiajb,xyzijab->',eris.ovOV,t2ab)
+        d += 0.25*(einsum('xzyiajb,xyzijab->',eris.OVOV,t2bb)
+                - einsum('yzxjaib,xyzijab->',eris.OVOV,t2bb))
+        self.emp2 = d/nkpts
 
         logger.info(self, 'Init t2, MP2 energy = %.15g', self.emp2.real)
         logger.timer(self, 'init mp2', *time0)
         return self.emp2, t1, t2
-
 
     def amplitudes_to_vector(self, t1, t2):
         return amplitudes_to_vector(t1, t2)
@@ -1128,6 +1147,14 @@ if __name__ == '__main__':
     print(abs(ge - ue))
     print(abs(r1 - kgcc.spatial2spin(Ht1)).max())
     print(abs(r2 - kgcc.spatial2spin(Ht2)).max())
+
+    e2,t1,t2 = mycc.init_amps(eris)
+    ge2,gt1,gt2 = kgcc.init_amps(kccsd_eris)
+    r1 = kgcc.spatial2spin(t1)
+    r2 = kgcc.spatial2spin(t2)
+    print(abs(e2 - ge2))
+    print(abs(r1 - gt1).max())
+    print(abs(r2 - gt2).max())
     exit()
 
     kmf = kmf.density_fit(auxbasis=[[0, (1., 1.)], [0, (.5, 1.)]])
