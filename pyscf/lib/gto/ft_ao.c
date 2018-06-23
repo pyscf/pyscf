@@ -282,8 +282,8 @@ static int vrr1d_withGv(double complex *g, double *rijri, double aij,
  * (10 + X*00 -> 01):
  *  gs + X*fs -> fp
  */
-static void plain_vrr2d_ket_inc1(double *out, const double *g,
-                                 double *rirj, int li, int lj)
+void GTOplain_vrr2d_ket_inc1(double *out, const double *g,
+                             double *rirj, int li, int lj)
 {
         if (lj == 0) {
                 memcpy(out, g, sizeof(double)*_LEN_CART[li]);
@@ -424,51 +424,11 @@ static void vrr2d_inc1_swapij(double complex *out, const double complex *g,
         }
 }
 
-/* (li+lj,0) => (li,lj) */
-void GTOplain_vrr2d(double *out, double *g, double *gbuf2, CINTEnvVars *envs)
-{
-        const int li = envs->li_ceil;
-        const int lj = envs->lj_ceil;
-        const int nmax = li + lj;
-        const double *ri = envs->ri;
-        const double *rj = envs->rj;
-        double *g00, *g01, *gswap, *pg00, *pg01;
-        int row_01, col_01, row_00, col_00;
-        int i, j;
-        double rirj[3];
-        rirj[0] = ri[0] - rj[0];
-        rirj[1] = ri[1] - rj[1];
-        rirj[2] = ri[2] - rj[2];
-
-        g00 = gbuf2;
-        g01 = g;
-        for (j = 1; j < lj; j++) {
-                gswap = g00;
-                g00 = g01;
-                g01 = gswap;
-                pg00 = g00;
-                pg01 = g01;
-                for (i = li; i <= nmax-j; i++) {
-                        plain_vrr2d_ket_inc1(pg01, pg00, rirj, i, j);
-                        row_01 = _LEN_CART[i];
-                        col_01 = _LEN_CART[j];
-                        row_00 = _LEN_CART[i  ];
-                        col_00 = _LEN_CART[j-1];
-                        pg00 += row_00*col_00;
-                        pg01 += row_01*col_01;
-                }
-        }
-        plain_vrr2d_ket_inc1(out, g01, rirj, li, lj);
-}
-
 static void vrr2d_withGv(double complex *out, double complex *g,
-                         double complex *gbuf2, CINTEnvVars *envs, size_t NGv)
+                         double complex *gbuf2, const int li, const int lj,
+                         const double *ri, const double *rj, size_t NGv)
 {
-        const int li = envs->li_ceil;
-        const int lj = envs->lj_ceil;
         const int nmax = li + lj;
-        const double *ri = envs->ri;
-        const double *rj = envs->rj;
         double complex *g00, *g01, *gswap, *pg00, *pg01;
         int row_01, col_01, row_00, col_00;
         int i, j;
@@ -499,13 +459,10 @@ static void vrr2d_withGv(double complex *out, double complex *g,
 }
 /* (0,li+lj) => (li,lj) */
 static void hrr2d_withGv(double complex *out, double complex *g,
-                         double complex *gbuf2, CINTEnvVars *envs, size_t NGv)
+                         double complex *gbuf2, const int li, const int lj,
+                         const double *ri, const double *rj, size_t NGv)
 {
-        const int li = envs->li_ceil;
-        const int lj = envs->lj_ceil;
         const int nmax = li + lj;
-        const double *ri = envs->ri;
-        const double *rj = envs->rj;
         double complex *g00, *g01, *gswap, *pg00, *pg01;
         int row_01, col_01, row_00, col_00;
         int i, j;
@@ -534,6 +491,95 @@ static void hrr2d_withGv(double complex *out, double complex *g,
         }
         vrr2d_inc1_swapij(out, g01, rjri, lj, li, NGv);
 }
+
+void GTOrr_nablax_i(double *out, double *li_up, double *li_down,
+                    int li, int lj, double ai)
+{
+        int di = _LEN_CART[li];
+        int di1 = _LEN_CART[li+1];
+        int dj = _LEN_CART[lj];
+        int li_1 = li - 1;
+        int i, j, lx, ly;
+        double fac = -2 * ai;
+
+        for (i = 0; i < di; i++) {
+                for (j = 0; j < dj; j++) {
+                        out[di*j+i] += li_up[di1*j+WHEREX_IF_L_INC1(i)] * fac;
+                }
+        }
+
+        if (li_1 >= 0) {
+                di1 = _LEN_CART[li_1];
+                for (i = 0, lx = li_1; lx >= 0; lx--) {
+                for (ly = li_1 - lx; ly >= 0; ly--, i++) {
+                        //lz = li_1 - lx - ly;
+                        fac = lx + 1;
+                        for (j = 0; j < dj; j++) {
+                                out[di*j+WHEREX_IF_L_INC1(i)] += li_down[di1*j+i] * fac;
+                        }
+                } }
+        }
+}
+
+void GTOrr_nablay_i(double *out, double *li_up, double *li_down,
+                    int li, int lj, double ai)
+{
+        int di = _LEN_CART[li];
+        int di1 = _LEN_CART[li+1];
+        int dj = _LEN_CART[lj];
+        int li_1 = li - 1;
+        int i, j, lx, ly;
+        double fac = -2 * ai;
+
+        for (i = 0; i < di; i++) {
+                for (j = 0; j < dj; j++) {
+                        out[di*j+i] += li_up[di1*j+WHEREY_IF_L_INC1(i)] * fac;
+                }
+        }
+
+        if (li_1 >= 0) {
+                di1 = _LEN_CART[li_1];
+                for (i = 0, lx = li_1; lx >= 0; lx--) {
+                for (ly = li_1 - lx; ly >= 0; ly--, i++) {
+                        //lz = li_1 - lx - ly;
+                        fac = ly + 1;
+                        for (j = 0; j < dj; j++) {
+                                out[di*j+WHEREY_IF_L_INC1(i)] += li_down[di1*j+i] * fac;
+                        }
+                } }
+        }
+}
+
+void GTOrr_nablaz_i(double *out, double *li_up, double *li_down,
+                    int li, int lj, double ai)
+{
+        int di = _LEN_CART[li];
+        int di1 = _LEN_CART[li+1];
+        int dj = _LEN_CART[lj];
+        int li_1 = li - 1;
+        int i, j, lx, ly, lz;
+        double fac = -2 * ai;
+
+        for (i = 0; i < di; i++) {
+                for (j = 0; j < dj; j++) {
+                        out[di*j+i] += li_up[di1*j+WHEREZ_IF_L_INC1(i)] * fac;
+                }
+        }
+
+        if (li_1 >= 0) {
+                di1 = _LEN_CART[li_1];
+                for (i = 0, lx = li_1; lx >= 0; lx--) {
+                for (ly = li_1 - lx; ly >= 0; ly--, i++) {
+                        lz = li_1 - lx - ly;
+                        fac = lz + 1;
+                        for (j = 0; j < dj; j++) {
+                                out[di*j+WHEREZ_IF_L_INC1(i)] += li_down[di1*j+i] * fac;
+                        }
+                } }
+        }
+}
+
+
 
 /*
  * Recursive relation
@@ -921,9 +967,11 @@ int GTO_aopair_early_contract(double complex *out, CINTEnvVars *envs,
                 g1d = gctrj;
                 for (n = 0; n < i_ctr*j_ctr; n++) {
                         if (i_l >= j_l) {
-                                vrr2d_withGv(out+n*nf*NGv, g1d, gctrj+lenj, envs, NGv);
+                                vrr2d_withGv(out+n*nf*NGv, g1d, gctrj+lenj,
+                                             envs->li_ceil, envs->lj_ceil, ri, rj, NGv);
                         } else {
-                                hrr2d_withGv(out+n*nf*NGv, g1d, gctrj+lenj, envs, NGv);
+                                hrr2d_withGv(out+n*nf*NGv, g1d, gctrj+lenj,
+                                             envs->li_ceil, envs->lj_ceil, ri, rj, NGv);
                         }
                         g1d += len_g1d * NGv;
                 }
