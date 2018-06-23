@@ -282,47 +282,6 @@ static int vrr1d_withGv(double complex *g, double *rijri, double aij,
  * (10 + X*00 -> 01):
  *  gs + X*fs -> fp
  */
-void GTOplain_vrr2d_ket_inc1(double *out, const double *g,
-                             double *rirj, int li, int lj)
-{
-        if (lj == 0) {
-                memcpy(out, g, sizeof(double)*_LEN_CART[li]);
-                return;
-        }
-        const int row_10 = _LEN_CART[li+1];
-        const int row_00 = _LEN_CART[li  ];
-        const int col_00 = _LEN_CART[lj-1];
-        const double *g00 = g;
-        const double *g10 = g + row_00*col_00;
-        int i, j;
-        const double *p00, *p10;
-        double *p01 = out;
-
-        for (j = STARTX_IF_L_DEC1(lj); j < _LEN_CART[lj-1]; j++) {
-                for (i = 0; i < row_00; i++) {
-                        p00 = g00 + (j*row_00+i);
-                        p10 = g10 + (j*row_10+WHEREX_IF_L_INC1(i));
-                        p01[i] = p10[0] + rirj[0] * p00[0];
-                }
-                p01 += row_00;
-        }
-        for (j = STARTY_IF_L_DEC1(lj); j < _LEN_CART[lj-1]; j++) {
-                for (i = 0; i < row_00; i++) {
-                        p00 = g00 + (j*row_00+i);
-                        p10 = g10 + (j*row_10+WHEREY_IF_L_INC1(i));
-                        p01[i] = p10[0] + rirj[1] * p00[0];
-                }
-                p01 += row_00;
-        }
-        j = STARTZ_IF_L_DEC1(lj);
-        if (j < _LEN_CART[lj-1]) {
-                for (i = 0; i < row_00; i++) {
-                        p00 = g00 + (j*row_00+i);
-                        p10 = g10 + (j*row_10+WHEREZ_IF_L_INC1(i));
-                        p01[i] = p10[0] + rirj[2] * p00[0];
-                }
-        }
-}
 
 static void vrr2d_ket_inc1_withGv(double complex *out, const double complex *g,
                                   double *rirj, int li, int lj, size_t NGv)
@@ -491,94 +450,6 @@ static void hrr2d_withGv(double complex *out, double complex *g,
         }
         vrr2d_inc1_swapij(out, g01, rjri, lj, li, NGv);
 }
-
-void GTOrr_nablax_i(double *out, double *li_up, double *li_down,
-                    int li, int lj, double ai)
-{
-        int di = _LEN_CART[li];
-        int di1 = _LEN_CART[li+1];
-        int dj = _LEN_CART[lj];
-        int li_1 = li - 1;
-        int i, j, lx, ly;
-        double fac = -2 * ai;
-
-        for (i = 0; i < di; i++) {
-                for (j = 0; j < dj; j++) {
-                        out[di*j+i] += li_up[di1*j+WHEREX_IF_L_INC1(i)] * fac;
-                }
-        }
-
-        if (li_1 >= 0) {
-                di1 = _LEN_CART[li_1];
-                for (i = 0, lx = li_1; lx >= 0; lx--) {
-                for (ly = li_1 - lx; ly >= 0; ly--, i++) {
-                        //lz = li_1 - lx - ly;
-                        fac = lx + 1;
-                        for (j = 0; j < dj; j++) {
-                                out[di*j+WHEREX_IF_L_INC1(i)] += li_down[di1*j+i] * fac;
-                        }
-                } }
-        }
-}
-
-void GTOrr_nablay_i(double *out, double *li_up, double *li_down,
-                    int li, int lj, double ai)
-{
-        int di = _LEN_CART[li];
-        int di1 = _LEN_CART[li+1];
-        int dj = _LEN_CART[lj];
-        int li_1 = li - 1;
-        int i, j, lx, ly;
-        double fac = -2 * ai;
-
-        for (i = 0; i < di; i++) {
-                for (j = 0; j < dj; j++) {
-                        out[di*j+i] += li_up[di1*j+WHEREY_IF_L_INC1(i)] * fac;
-                }
-        }
-
-        if (li_1 >= 0) {
-                di1 = _LEN_CART[li_1];
-                for (i = 0, lx = li_1; lx >= 0; lx--) {
-                for (ly = li_1 - lx; ly >= 0; ly--, i++) {
-                        //lz = li_1 - lx - ly;
-                        fac = ly + 1;
-                        for (j = 0; j < dj; j++) {
-                                out[di*j+WHEREY_IF_L_INC1(i)] += li_down[di1*j+i] * fac;
-                        }
-                } }
-        }
-}
-
-void GTOrr_nablaz_i(double *out, double *li_up, double *li_down,
-                    int li, int lj, double ai)
-{
-        int di = _LEN_CART[li];
-        int di1 = _LEN_CART[li+1];
-        int dj = _LEN_CART[lj];
-        int li_1 = li - 1;
-        int i, j, lx, ly, lz;
-        double fac = -2 * ai;
-
-        for (i = 0; i < di; i++) {
-                for (j = 0; j < dj; j++) {
-                        out[di*j+i] += li_up[di1*j+WHEREZ_IF_L_INC1(i)] * fac;
-                }
-        }
-
-        if (li_1 >= 0) {
-                di1 = _LEN_CART[li_1];
-                for (i = 0, lx = li_1; lx >= 0; lx--) {
-                for (ly = li_1 - lx; ly >= 0; ly--, i++) {
-                        lz = li_1 - lx - ly;
-                        fac = lz + 1;
-                        for (j = 0; j < dj; j++) {
-                                out[di*j+WHEREZ_IF_L_INC1(i)] += li_down[di1*j+i] * fac;
-                        }
-                } }
-        }
-}
-
 
 
 /*
@@ -1715,11 +1586,54 @@ void GTO_ft_fill_shls_drv(int (*intor)(), FPtr_eval_gz eval_gz,
 
 
 
+
 /*
- * Reversed vrr2d. This function is used by numint_uniform_grid.c
+ * Reversed vrr2d. They are used by numint_uniform_grid.c
  */
-static void reverse_vrr2d_ket_inc1(double *g01, double *g00,
-                                   double *rirj, int li, int lj)
+void GTOplain_vrr2d_ket_inc1(double *out, const double *g,
+                             double *rirj, int li, int lj)
+{
+        if (lj == 0) {
+                memcpy(out, g, sizeof(double)*_LEN_CART[li]);
+                return;
+        }
+        const int row_10 = _LEN_CART[li+1];
+        const int row_00 = _LEN_CART[li  ];
+        const int col_00 = _LEN_CART[lj-1];
+        const double *g00 = g;
+        const double *g10 = g + row_00*col_00;
+        int i, j;
+        const double *p00, *p10;
+        double *p01 = out;
+
+        for (j = STARTX_IF_L_DEC1(lj); j < _LEN_CART[lj-1]; j++) {
+                for (i = 0; i < row_00; i++) {
+                        p00 = g00 + (j*row_00+i);
+                        p10 = g10 + (j*row_10+WHEREX_IF_L_INC1(i));
+                        p01[i] = p10[0] + rirj[0] * p00[0];
+                }
+                p01 += row_00;
+        }
+        for (j = STARTY_IF_L_DEC1(lj); j < _LEN_CART[lj-1]; j++) {
+                for (i = 0; i < row_00; i++) {
+                        p00 = g00 + (j*row_00+i);
+                        p10 = g10 + (j*row_10+WHEREY_IF_L_INC1(i));
+                        p01[i] = p10[0] + rirj[1] * p00[0];
+                }
+                p01 += row_00;
+        }
+        j = STARTZ_IF_L_DEC1(lj);
+        if (j < _LEN_CART[lj-1]) {
+                for (i = 0; i < row_00; i++) {
+                        p00 = g00 + (j*row_00+i);
+                        p10 = g10 + (j*row_10+WHEREZ_IF_L_INC1(i));
+                        p01[i] = p10[0] + rirj[2] * p00[0];
+                }
+        }
+}
+
+void GTOreverse_vrr2d_ket_inc1(double *g01, double *g00,
+                               double *rirj, int li, int lj)
 {
         const int row_10 = _LEN_CART[li+1];
         const int row_00 = _LEN_CART[li  ];
@@ -1753,48 +1667,6 @@ static void reverse_vrr2d_ket_inc1(double *g01, double *g00,
                         p10 = g10 + (j*row_10+WHEREZ_IF_L_INC1(i));
                         p10[0] += g01[i];
                         p00[0] += g01[i] * rirj[2];
-                }
-        }
-}
-/* (li,lj) => (li+lj,0) */
-void GTOreverse_vrr2d_ket(double *g00, double *g01,
-                          int li, int lj, double *ri, double *rj)
-{
-        int nmax = li + lj;
-        double *out = g00;
-        double *gswap, *pg00, *pg01;
-        int row_01, col_01, row_00, col_00, row_g;
-        int i, j, n;
-        double rirj[3];
-        rirj[0] = ri[0] - rj[0];
-        rirj[1] = ri[1] - rj[1];
-        rirj[2] = ri[2] - rj[2];
-
-        for (j = lj; j > 0; j--) {
-                col_01 = _LEN_CART[j];
-                col_00 = _LEN_CART[j-1];
-                row_g = _CUM_LEN_CART[nmax+1-j] - _CUM_LEN_CART[li] + _LEN_CART[li];
-                for (n = 0; n < row_g*col_00; n++) {
-                        g00[n] = 0;
-                }
-                pg00 = g00;
-                pg01 = g01;
-                for (i = li; i <= nmax-j; i++) {
-                        reverse_vrr2d_ket_inc1(pg01, pg00, rirj, i, j);
-                        row_01 = _LEN_CART[i];
-                        row_00 = _LEN_CART[i];
-                        pg00 += row_00 * col_00;
-                        pg01 += row_01 * col_01;
-                }
-                gswap = g00;
-                g00 = g01;
-                g01 = gswap;
-        }
-
-        if (out != g01) {
-                row_g = _CUM_LEN_CART[nmax] - _CUM_LEN_CART[li] + _LEN_CART[li];
-                for (n = 0; n < row_g; n++) {
-                        out[n] = g01[n];
                 }
         }
 }
