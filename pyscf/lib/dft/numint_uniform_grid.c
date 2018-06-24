@@ -210,7 +210,7 @@ static double gto_rcut(double alpha, int l, double c, double log_prec)
 
 static int _has_overlap(int nx0, int nx1, int nx_per_cell)
 {
-        return nx0 + 3 < nx1;
+        return nx0 < nx1 + 3;
 }
 
 static int _num_grids_on_x(int nimgx, int nx0, int nx1, int nx_per_cell)
@@ -249,8 +249,11 @@ static int _orth_components(double *xs_exp, int *img_slice, int *grid_slice,
         int nx1 = (int)ceil (edge1 * nx_per_cell);
         // to ensure nx0, nx1 in unit cell
         if (periodic) {
-                nx0 = (nx0 + nimg1 * nx_per_cell) % nx_per_cell;
-                nx1 = (nx1 + nimg1 * nx_per_cell) % nx_per_cell;
+                nx0 = (nx0 - nimg0 * nx_per_cell) % nx_per_cell;
+                nx1 = (nx1 - nimg0 * nx_per_cell) % nx_per_cell;
+                if (nx1 == 0) {
+                        nx1 = nx_per_cell;
+                }
         } else {
                 nx0 = MIN(nx0, nx_per_cell);
                 nx0 = MAX(nx0, 0);
@@ -274,9 +277,11 @@ static int _orth_components(double *xs_exp, int *img_slice, int *grid_slice,
 
         double *gridx = cache;
         double *xs_all = cache + nimg * nx_per_cell;
-        int grid_close_to_xij = rint(xij_frac * nx_per_cell);
         if (nimg == 1) {
                 xs_all = xs_exp;
+        }
+        int grid_close_to_xij = rint(xij_frac * nx_per_cell) - nimg0*nx_per_cell;
+        if (!periodic) {
                 grid_close_to_xij = MIN(grid_close_to_xij, nx_per_cell);
                 grid_close_to_xij = MAX(grid_close_to_xij, 0);
         }
@@ -328,7 +333,7 @@ static int _orth_components(double *xs_exp, int *img_slice, int *grid_slice,
                 for (l = 0; l <= topl; l++) {
                         px0 = xs_all + l * nmx;
                         for (i = 0; i < nx_per_cell; i++) {
-                                xs_exp[i] = px0[i];
+                                xs_exp[l*nx_per_cell+i] = px0[i];
                         }
                         for (m = 1; m < nimg; m++) {
                                 px0 = xs_all + l * nmx + m*nx_per_cell;
@@ -955,12 +960,12 @@ static int _nonorth_components(double *xs_exp, int *img_slice, int *grid_slice,
         return nx;
 }
 
-static void _nonorth_dot_z(double *val, double *weights,
+static void _nonorth_dot_z(double *val, double *weights, int meshz,
                            int nz0, int nz1, int grid_close_to_zij,
                            double e_z0z0, double e_z0dz, double e_dzdz,
                            double _z0dz, double _dzdz)
 {
-        int iz;
+        int iz, iz1;
         if (e_z0z0 == 0) {
                 for (iz = 0; iz < nz1-nz0; iz++) {
                         val[iz] = 0;
@@ -973,8 +978,12 @@ static void _nonorth_dot_z(double *val, double *weights,
 
         exp_z0z0 = e_z0z0;
         exp_z0dz = e_z0dz * e_dzdz;
-        for (iz = grid_close_to_zij; iz < nz1; iz++) {
-                val[iz-nz0] = weights[iz] * exp_z0z0; //FIXME = weights[mod(iz,mesh[2])] * exp_z0z0;
+        iz1 = grid_close_to_zij % meshz + meshz;
+        for (iz = grid_close_to_zij-nz0; iz < nz1-nz0; iz++, iz1++) {
+                if (iz1 >= meshz) {
+                        iz1 -= meshz;
+                }
+                val[iz] = weights[iz1] * exp_z0z0;
                 exp_z0z0 *= exp_z0dz;
                 exp_z0dz *= exp_2dzdz;
         }
@@ -985,10 +994,14 @@ static void _nonorth_dot_z(double *val, double *weights,
         } else {
                 exp_z0dz = exp(_dzdz - _z0dz);
         }
-        for (iz = grid_close_to_zij-1; iz >= nz0; iz--) {
+        iz1 = (grid_close_to_zij-1) % meshz;
+        for (iz = grid_close_to_zij-nz0-1; iz >= 0; iz--, iz1--) {
+                if (iz1 < 0) {
+                        iz1 += meshz;
+                }
                 exp_z0z0 *= exp_z0dz;
                 exp_z0dz *= exp_2dzdz;
-                val[iz-nz0] = weights[iz] * exp_z0z0; //FIXME = weights[mod(iz,mesh[2])] * exp_z0z0;
+                val[iz] = weights[iz1] * exp_z0z0;
         }
 }
 
@@ -1002,15 +1015,6 @@ static void _nonorth_ints(double *out, double *weights, double fac, double aij,
         int l1 = topl + 1;
         int l1l1 = l1 * l1;
         int l1l1l1 = l1l1 * l1;
-        //int nimgx0 = img_slice[0];
-        //int nimgx1 = img_slice[1];
-        //int nimgy0 = img_slice[2];
-        //int nimgy1 = img_slice[3];
-        //int nimgz0 = img_slice[4];
-        //int nimgz1 = img_slice[5];
-        //int nimgx = nimgx1 - nimgx0;
-        //int nimgy = nimgy1 - nimgy0;
-        //int nimgz = nimgz1 - nimgz0;
         int nx0 = grid_slice[0];
         int nx1 = grid_slice[1];
         int ny0 = grid_slice[2];
@@ -1037,7 +1041,7 @@ static void _nonorth_ints(double *out, double *weights, double fac, double aij,
         double aa_yz = aij * (a[3] * a[6] + a[4] * a[7] + a[5] * a[8]);
         double aa_zz = aij * (a[6] * a[6] + a[7] * a[7] + a[8] * a[8]);
 
-        int ix, iy, n;
+        int ix, iy, ix1, iy1, n;
         double dx = 1. / mesh[0];
         double dy = 1. / mesh[1];
         double dz = 1. / mesh[2];
@@ -1086,8 +1090,11 @@ static void _nonorth_ints(double *out, double *weights, double fac, double aij,
         double exp_xyz0xyz0, exp_xyz0dz;
         double exp_y0dy, exp_z0z0, exp_z0dz;
 
-        // FIXME: consider the periodicity for [nx0:nx1]
-        for (ix = nx0; ix < nx1; ix++) {
+        ix1 = nx0 % mesh[0] + mesh[0];
+        for (ix = nx0; ix < nx1; ix++, ix1++) {
+                if (ix1 >= mesh[0]) {
+                        ix1 -= mesh[0];
+                }
                 x1xij = x0xij + ix*dx;
                 tmpx = x1xij * aa_xx + y0yij * aa_xy + z0zij * aa_xz;
                 tmpy = x1xij * aa_xy + y0yij * aa_yy + z0zij * aa_yz;
@@ -1118,25 +1125,14 @@ static void _nonorth_ints(double *out, double *weights, double fac, double aij,
                 exp_z0z0 = exp_xyz0xyz0;
                 exp_z0dz = exp_xyz0dz;
                 _z0dz = _xyz0dz;
-                for (iy = grid_close_to_yij; iy < ny1; iy++) {
-                        //pweights = weights + (ix * mesh[1] + iy) * mesh[2];
-                        //exp_z0z0p = exp_z0z0;
-                        //exp_z0dzp = exp_z0dz * exp_dzdz;
-                        //for (iz = grid_close_to_zij; iz < mesh[2]; iz++) {
-                        //        val += pweights[iz] * exp_z0z0p;
-                        //        exp_z0z0p *= exp_z0dzp;
-                        //        exp_z0dzp *= exp_2dzdz;
-                        //}
-                        //exp_z0z0p = exp_z0z0;
-                        //exp_z0dzp = exp_dzdz / exp_z0dz;
-                        //for (iz = grid_close_to_zij-1; iz >= 0; iz--) {
-                        //        exp_z0z0p *= exp_z0dzp;
-                        //        exp_z0dzp *= exp_2dzdz;
-                        //        val += pweights[iz] * exp_z0z0p;
-                        //}
-                        pweights = weights + (ix * mesh[1] + iy) * mesh[2]; // FIXME ix -> mod(ix,mesh[0]) for periodicity
+                iy1 = grid_close_to_yij % mesh[1] + mesh[1];
+                for (iy = grid_close_to_yij; iy < ny1; iy++, iy1++) {
+                        if (iy1 >= mesh[1]) {
+                                iy1 -= mesh[1];
+                        }
+                        pweights = weights + (ix1 * mesh[1] + iy1) * mesh[2];
                         _nonorth_dot_z(weight_yz+(iy-ny0)*ngridz, pweights,
-                                       nz0, nz1, grid_close_to_zij,
+                                       mesh[2], nz0, nz1, grid_close_to_zij,
                                        exp_z0z0, exp_z0dz, exp_dzdz, _z0dz, _dzdz);
                         _z0dz += _dydz;
                         exp_z0z0 *= exp_y0dy;
@@ -1148,7 +1144,11 @@ static void _nonorth_ints(double *out, double *weights, double fac, double aij,
                 exp_z0z0 = exp_xyz0xyz0;
                 exp_z0dz = exp_xyz0dz;
                 _z0dz = _xyz0dz;
-                for (iy = grid_close_to_yij-1; iy >= ny0; iy--) {
+                iy1 = (grid_close_to_yij-1) % mesh[1];
+                for (iy = grid_close_to_yij-1; iy >= ny0; iy--, iy1--) {
+                        if (iy1 < 0) {
+                                iy1 += mesh[1];
+                        }
                         exp_z0z0 *= exp_y0dy;
                         exp_y0dy *= exp_2dydy;
                         _z0dz -= _dydz;
@@ -1157,9 +1157,9 @@ static void _nonorth_ints(double *out, double *weights, double fac, double aij,
                         } else {
                                 exp_z0dz = exp(_z0dz);
                         }
-                        pweights = weights + (ix * mesh[1] + iy) * mesh[2];
+                        pweights = weights + (ix1 * mesh[1] + iy1) * mesh[2];
                         _nonorth_dot_z(weight_yz+(iy-ny0)*ngridz, pweights,
-                                       nz0, nz1, grid_close_to_zij,
+                                       mesh[2], nz0, nz1, grid_close_to_zij,
                                        exp_z0z0, exp_z0dz, exp_dzdz, _z0dz, _dzdz);
                 }
 
@@ -1421,12 +1421,18 @@ static int _max_cache_size(int (*fsize)(), int *shls_slice, int *bas, int *mesh)
         return cache_size+1000000;
 }
 
+static void shift_bas(double *env_loc, double *env, double *Ls, int ptr, int iL)
+{
+        env_loc[ptr+0] = env[ptr+0] + Ls[iL*3+0];
+        env_loc[ptr+1] = env[ptr+1] + Ls[iL*3+1];
+        env_loc[ptr+2] = env[ptr+2] + Ls[iL*3+2];
+}
+
+// Numerical integration for uncontracted Cartesian basis
 // F_mat needs to be initialized as 0
 void NUMINT_fill2c(int (*eval_ints)(), double *F_mat,
                    int comp, int hermi, int *shls_slice, int *ao_loc,
-//?double complex *out, int nkpts, int comp, int nimgs,
-//?double *Ls, double complex *expkL,
-                   double log_prec, int dimension,
+                   double log_prec, int dimension, int nimgs, double *Ls,
                    double *a, double *b, int *mesh, double *weights,
                    int *atm, int natm, int *bas, int nbas, double *env,
                    int nenv)
@@ -1441,17 +1447,27 @@ void NUMINT_fill2c(int (*eval_ints)(), double *F_mat,
         const int naoj = ao_loc[jsh1] - ao_loc[jsh0];
         const int cache_size = _max_cache_size(_nonorth_cache_size, shls_slice,
                                                bas, mesh);
+        if (dimension == 0) {
+                nimgs = 1;
+        }
 #pragma omp parallel default(none) \
         shared(eval_ints, F_mat, comp, hermi, ao_loc, \
-               log_prec, dimension, a, b, mesh, weights, \
-               atm, natm, bas, nbas, env)
+               log_prec, dimension, nimgs, Ls, a, b, mesh, weights, \
+               atm, natm, bas, nbas, env, nenv)
 {
+        int ncij = comp * naoi * naoj;
+        int nijsh = nish * njsh;
         int dims[] = {naoi, naoj};
-        int ish, jsh, ij, i0, j0;
+        int ish, jsh, ij, ijm, m, i0, j0;
         int shls[2];
         double *cache = malloc(sizeof(double) * cache_size);
+        double *env_loc = malloc(sizeof(double)*nenv);
+        memcpy(env_loc, env, sizeof(double)*nenv);
+        int ptrxyz;
 #pragma omp for schedule(dynamic)
-        for (ij = 0; ij < nish*njsh; ij++) {
+        for (ijm = 0; ijm < nimgs*nijsh; ijm++) {
+                m = ijm / nijsh;
+                ij = ijm % nijsh;
                 ish = ij / njsh;
                 jsh = ij % njsh;
                 if (hermi != PLAIN && ish > jsh) {
@@ -1465,12 +1481,16 @@ void NUMINT_fill2c(int (*eval_ints)(), double *F_mat,
                 shls[1] = jsh;
                 i0 = ao_loc[ish] - ao_loc[ish0];
                 j0 = ao_loc[jsh] - ao_loc[jsh0];
-                _apply_ints(eval_ints, F_mat+j0*naoi+i0, dims, comp,
+                if (dimension != 0) {
+                        ptrxyz = atm(PTR_COORD, bas(ATOM_OF,jsh));
+                        shift_bas(env_loc, env, Ls, ptrxyz, m);
+                }
+                _apply_ints(eval_ints, F_mat+m*ncij+j0*naoi+i0, dims, comp,
                             1., log_prec, dimension, a, b, mesh, weights,
-                            shls, atm, bas, env,
-                            cache);
+                            shls, atm, bas, env_loc, cache);
         }
         free(cache);
+        free(env_loc);
 }
         if (hermi != PLAIN) { // lower triangle of F-array
                 int ic;
