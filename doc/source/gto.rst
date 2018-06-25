@@ -39,10 +39,10 @@ Also, :attr:`~Mole.atom` can be a string of Cartesian format or Z-matrix format:
 
   >>> mol = gto.Mole()
   >>> mol.atom = '''
-  >>> O 0 0 0
-  >>> H 0 1 0
-  >>> H 0 0 1;
-  >>> '''
+  ... O 0 0 0
+  ... H 0 1 0
+  ... H 0 0 1;
+  ... '''
 
 There are a few requirements for the string format.  The string input
 takes ``;`` or ``\n`` to partition atoms. White space and ``,`` are used to
