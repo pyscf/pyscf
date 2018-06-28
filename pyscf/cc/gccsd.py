@@ -217,6 +217,18 @@ class GCCSD(ccsd.CCSD):
         from pyscf.cc import eom_gccsd
         return eom_gccsd.EOMEE(self).kernel(nroots, koopmans, guess, eris)
 
+    def eomip_method(self):
+        from pyscf.cc import eom_gccsd
+        return eom_gccsd.EOMIP(self)
+
+    def eomea_method(self):
+        from pyscf.cc import eom_gccsd
+        return eom_gccsd.EOMEA(self)
+
+    def eomee_method(self):
+        from pyscf.cc import eom_gccsd
+        return eom_gccsd.EOMEE(self)
+
     def make_rdm1(self, t1=None, t2=None, l1=None, l2=None):
         '''Un-relaxed 1-particle density matrix in MO space'''
         from pyscf.cc import gccsd_rdm
