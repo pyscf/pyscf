@@ -219,6 +219,21 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.finger(vec1), 62.767648620751018, 9)
         self.assertAlmostEqual(lib.finger(vec2), 156.2976365433517, 9)
 
+    def test_ucc_eomee_init_guess(self):
+        uee = eom_uccsd.EOMEESpinKeep(ucc1)
+        diag = uee.get_diag()[0]
+        guess = uee.get_init_guess(nroots=1, koopmans=False, diag=diag)
+        self.assertAlmostEqual(lib.finger(guess[0]), -0.99525784369029358, 9)
+
+        guess = uee.get_init_guess(nroots=1, koopmans=True, diag=diag)
+        self.assertAlmostEqual(lib.finger(guess[0]), -0.84387013299273794, 9)
+
+        guess = uee.get_init_guess(nroots=4, koopmans=False, diag=diag)
+        self.assertAlmostEqual(lib.finger(guess), -0.98261980006133565, 9)
+
+        guess = uee.get_init_guess(nroots=4, koopmans=True, diag=diag)
+        self.assertAlmostEqual(lib.finger(guess), -0.38124032366955651, 9)
+
     def test_ucc_eomsf_ccsd_matvec(self):
         numpy.random.seed(10)
         myeom = eom_uccsd.EOMEESpinFlip(ucc1)
