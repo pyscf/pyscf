@@ -1002,9 +1002,17 @@ class EOMEESpinKeep(EOMEE):
             nocca, noccb = self.nocc
             nmoa, nmob = self.nmo
             nvira, nvirb = nmoa-nocca, nmob-noccb
+# amplitudes are compressed by the function amplitudes_to_vector_ee. sizea is
+# the offset in the compressed vector that points to the amplitudes R1_beta
+# The addresses of R1_alpha and R1_beta are not contiguous in the compressed
+# vector.
             sizea = nocca * nvira + nocca*(nocca-1)//2*nvira*(nvira-1)//2
             diag = np.append(diag[:nocca*nvira], diag[sizea:sizea+noccb*nvirb])
-        idx = diag.argsort()
+            addr = np.append(np.arange(nocca*nvira),
+                             np.arange(sizea,sizea+noccb*nvirb))
+            idx = addr[diag.argsort()]
+        else:
+            idx = diag.argsort()
 
         size = self.vector_size()
         dtype = getattr(diag, 'dtype', np.double)

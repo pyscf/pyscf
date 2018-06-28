@@ -142,16 +142,16 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[3], 0.30819728420902842, 6)
 
     def test_eomee_ccsd_spin_keep(self):
-        e, v = ucc.eomee_ccsd(nroots=2)
+        e, v = ucc.eomee_ccsd(nroots=2, koopmans=False)
         self.assertAlmostEqual(e[0], 0.28114509667240556, 6)
         self.assertAlmostEqual(e[1], 0.30819728420902842, 6)
 
         e, v = ucc.eomee_ccsd(nroots=2, koopmans=True)
         self.assertAlmostEqual(e[0], 0.28114509667240556, 6)
-        self.assertAlmostEqual(e[1], 0.30820449082272194, 6)
+        self.assertAlmostEqual(e[1], 0.30819728420902842, 6)
 
     def test_eomsf_ccsd(self):
-        e, v = ucc.eomsf_ccsd(nroots=2)
+        e, v = ucc.eomsf_ccsd(nroots=2, koopmans=False)
         self.assertAlmostEqual(e[0], 0.28114509667240556, 6)
         self.assertAlmostEqual(e[1], 0.28114509667240556, 6)
 
