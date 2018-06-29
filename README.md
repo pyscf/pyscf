@@ -6,9 +6,9 @@ Python-based Simulations of Chemistry Framework
 ===============================================
 [![Build Status](https://travis-ci.org/sunqm/pyscf.svg?branch=master)](https://travis-ci.org/sunqm/pyscf)
 
-2018-06-08
+2018-06-28
 
-* [Stable release 1.5.0](https://github.com/sunqm/pyscf/releases/tag/v1.5.0)
+* [Stable release 1.5.1](https://github.com/sunqm/pyscf/releases/tag/v1.5.1)
 * [1.6 alpha](https://github.com/sunqm/pyscf/tree/dev)
 * [Changelog](../master/CHANGELOG)
 * [Documentation](http://www.pyscf.org)
