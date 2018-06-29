@@ -171,7 +171,7 @@ def _make_df_eris(cc, mo_coeff=None):
     eris.oovv[:] = lib.unpack_tril(oovv_tril).reshape(nocc,nocc,nvir,nvir)
     oovv_tril = Loo = None
 
-    Lov = Lov.reshape(naux,nvir,nocc)
+    Lov = Lov.reshape(naux,nocc,nvir)
     vblk = max(nocc, int((max_memory*.15e6/8)/(nocc*nvir_pair)))
     vvblk = min(nvir_pair, max(4, int((max_memory*.8e6/8)/(vblk*nocc+naux))))
     eris.ovvv = eris.feri.create_dataset('ovvv', (nocc,nvir,nvir_pair), 'f8',
