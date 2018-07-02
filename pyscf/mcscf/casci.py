@@ -405,6 +405,13 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
             casdm1 = mc.fcisolver.make_rdm1(ci[0], mc.ncas, mc.nelecas)
         else:
             casdm1 = mc.fcisolver.make_rdm1(ci, mc.ncas, mc.nelecas)
+    if hasattr(mc, 'property'):
+        if mc.frozen is not None:
+            nfrozen = mc.frozen
+        else:
+            nfrozen = 0
+    else:
+        nfrozen = 0
     ncore = mc.ncore
     nocc = ncore + mc.ncas
     nmo = mo_coeff.shape[1]
@@ -421,17 +428,19 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
 # may cause problem for external CI solver eg DMRG.
         mo_coeff1 = numpy.empty_like(mo_coeff)
         mo_coeff1[:,ncore:nocc] = mo_coeff[:,ncore:nocc]
+        if nfrozen > 0:
+            mo_coeff1[:,:nfrozen] = mo_coeff[:,:nfrozen]
         log.info('Density matrix diagonal elements %s', casdm1.diagonal())
-    if ncore > 0:
+    if ncore - nfrozen > 0:
         # note the last two args of ._eig for mc1step_symm
         # mc._eig function is called to handle symmetry adapated fock
-        w, c1 = mc._eig(fock[:ncore,:ncore], 0, ncore)
+        w, c1 = mc._eig(fock[nfrozen:ncore,nfrozen:ncore], nfrozen, ncore)
         if sort:
             idx = numpy.argsort(w.round(9), kind='mergesort')
             w = w[idx]
             c1 = c1[:,idx]
-        mo_coeff1[:,:ncore] = numpy.dot(mo_coeff[:,:ncore], c1)
-        mo_energy[:ncore] = w
+        mo_coeff1[:,nfrozen:ncore] = numpy.dot(mo_coeff[:,nfrozen:ncore], c1)
+        mo_energy[nfrozen:ncore] = w
     if nmo-nocc > 0:
         w, c1 = mc._eig(fock[nocc:,nocc:], nocc, nmo)
         if sort:
