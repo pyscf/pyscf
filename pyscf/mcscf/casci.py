@@ -405,33 +405,43 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
             casdm1 = mc.fcisolver.make_rdm1(ci[0], mc.ncas, mc.nelecas)
         else:
             casdm1 = mc.fcisolver.make_rdm1(ci, mc.ncas, mc.nelecas)
+
+    frozen = getattr(mc, 'frozen', None)
+    if frozen is not None:
+        if isinstance(frozen, (int, numpy.integer)):
+            nfrozen = frozen
+        else:
+            raise NotImplementedError
+    else:
+        nfrozen = 0
+
     ncore = mc.ncore
     nocc = ncore + mc.ncas
     nmo = mo_coeff.shape[1]
     fock_ao = mc.get_fock(mo_coeff, ci, eris, casdm1, verbose)
-    fock = reduce(numpy.dot, (mo_coeff.T, fock_ao, mo_coeff))
-    mo_energy = fock.diagonal().copy()
     if cas_natorb:
         mo_coeff1, ci, occ = mc.cas_natorb(mo_coeff, ci, eris, sort, casdm1,
                                            verbose, with_meta_lowdin)
-        ma = mo_coeff1[:,ncore:nocc]
-        mo_energy[ncore:nocc] = numpy.einsum('ji,ji->i', ma, fock_ao.dot(ma))
     else:
 # Keep the active space unchanged by default.  The rotation in active space
 # may cause problem for external CI solver eg DMRG.
-        mo_coeff1 = numpy.empty_like(mo_coeff)
-        mo_coeff1[:,ncore:nocc] = mo_coeff[:,ncore:nocc]
+        mo_coeff1 = mo_coeff.copy()
         log.info('Density matrix diagonal elements %s', casdm1.diagonal())
-    if ncore > 0:
+
+    fock = reduce(numpy.dot, (mo_coeff1.T, fock_ao, mo_coeff1))
+    mo_energy = fock.diagonal().copy()
+
+    if ncore - nfrozen > 0:
         # note the last two args of ._eig for mc1step_symm
         # mc._eig function is called to handle symmetry adapated fock
-        w, c1 = mc._eig(fock[:ncore,:ncore], 0, ncore)
+        w, c1 = mc._eig(fock[nfrozen:ncore,nfrozen:ncore], nfrozen, ncore)
         if sort:
             idx = numpy.argsort(w.round(9), kind='mergesort')
             w = w[idx]
             c1 = c1[:,idx]
-        mo_coeff1[:,:ncore] = numpy.dot(mo_coeff[:,:ncore], c1)
-        mo_energy[:ncore] = w
+        mo_coeff1[:,nfrozen:ncore] = numpy.dot(mo_coeff[:,nfrozen:ncore], c1)
+        mo_energy[nfrozen:ncore] = w
+
     if nmo-nocc > 0:
         w, c1 = mc._eig(fock[nocc:,nocc:], nocc, nmo)
         if sort:
