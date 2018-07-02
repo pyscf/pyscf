@@ -90,8 +90,7 @@ def aux_e2(cell, auxcell, erifile, intor='int3c2e', aosym='s2ij', comp=None,
             shape = (naux,nao_pair)
         else:
             shape = (comp,naux,nao_pair)
-        chunks = (min(CHUNK_SIZE,naux), min(CHUNK_SIZE,nao_pair))  # 512 KB
-        feri.create_dataset(key, shape, dtype, chunks=chunks)
+        feri.create_dataset(key, shape, dtype)
     if naux == 0:
         feri.close()
         return erifile
