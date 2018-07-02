@@ -669,11 +669,15 @@ class NEVPT(lib.StreamObject):
                                'CASCI calculation is required for NEVPT2 method. '
                                'See examples/mrpt/41-for_state_average.py.')
 
+        if hasattr(self._mc, 'frozen') and self._mc.frozen is not None:
+            raise NotImplementedError
+
         if isinstance(self.verbose, logger.Logger):
             log = self.verbose
         else:
             log = logger.Logger(self.stdout, self.verbose)
         time0 = (time.clock(), time.time())
+
         #By defaut, _mc is canonicalized for the first root.
         #For SC-NEVPT based on compressed MPS perturber functions, the _mc was already canonicalized.
         if (not self.canonicalized):
