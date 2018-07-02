@@ -406,15 +406,6 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
         else:
             casdm1 = mc.fcisolver.make_rdm1(ci, mc.ncas, mc.nelecas)
 
-    frozen = getattr(mc, 'frozen', None)
-    if frozen is not None:
-        if isinstance(frozen, (int, numpy.integer)):
-            nfrozen = frozen
-        else:
-            raise NotImplementedError
-    else:
-        nfrozen = 0
-
     ncore = mc.ncore
     nocc = ncore + mc.ncas
     nmo = mo_coeff.shape[1]
@@ -431,32 +422,46 @@ def canonicalize(mc, mo_coeff=None, ci=None, eris=None, sort=False,
     fock = reduce(numpy.dot, (mo_coeff1.T, fock_ao, mo_coeff1))
     mo_energy = fock.diagonal().copy()
 
-    if ncore - nfrozen > 0:
-        # note the last two args of ._eig for mc1step_symm
-        # mc._eig function is called to handle symmetry adapated fock
-        w, c1 = mc._eig(fock[nfrozen:ncore,nfrozen:ncore], nfrozen, ncore)
-        if sort:
-            idx = numpy.argsort(w.round(9), kind='mergesort')
-            w = w[idx]
-            c1 = c1[:,idx]
-        mo_coeff1[:,nfrozen:ncore] = numpy.dot(mo_coeff[:,nfrozen:ncore], c1)
-        mo_energy[nfrozen:ncore] = w
-
-    if nmo-nocc > 0:
-        w, c1 = mc._eig(fock[nocc:,nocc:], nocc, nmo)
-        if sort:
-            idx = numpy.argsort(w.round(9), kind='mergesort')
-            w = w[idx]
-            c1 = c1[:,idx]
-        mo_coeff1[:,nocc:] = numpy.dot(mo_coeff[:,nocc:], c1)
-        mo_energy[nocc:] = w
+    mask = numpy.ones(nmo, dtype=bool)
+    frozen = getattr(mc, 'frozen', None)
+    if frozen is not None:
+        if isinstance(frozen, (int, numpy.integer)):
+            mask[:frozen] = False
+        else:
+            mask[frozen] = False
+    core_idx = numpy.where(mask[:ncore])[0]
+    vir_idx = numpy.where(mask[nocc:])[0] + nocc
 
     if hasattr(mo_coeff, 'orbsym'):
+        orbsym = mo_coeff.orbsym
+    else:
+        orbsym = numpy.zeros(nmo, dtype=int)
+
+    if len(core_idx) > 0:
+        # note the last two args of ._eig for mc1step_symm
+        # mc._eig function is called to handle symmetry adapated fock
+        w, c1 = mc._eig(fock[core_idx[:,None],core_idx], 0, ncore,
+                        orbsym[core_idx])
         if sort:
-            orbsym = symm.label_orb_symm(mc.mol, mc.mol.irrep_id,
-                                         mc.mol.symm_orb, mo_coeff1)
-        else:
-            orbsym = mo_coeff.orbsym
+            idx = numpy.argsort(w.round(9), kind='mergesort')
+            w = w[idx]
+            c1 = c1[:,idx]
+            orbsym[core_idx] = orbsym[core_idx][idx]
+        mo_coeff1[:,core_idx] = numpy.dot(mo_coeff1[:,core_idx], c1)
+        mo_energy[core_idx] = w
+
+    if len(vir_idx) > 0:
+        w, c1 = mc._eig(fock[vir_idx[:,None],vir_idx], nocc, nmo,
+                        orbsym[vir_idx])
+        if sort:
+            idx = numpy.argsort(w.round(9), kind='mergesort')
+            w = w[idx]
+            c1 = c1[:,idx]
+            orbsym[vir_idx] = orbsym[vir_idx][idx]
+        mo_coeff1[:,vir_idx] = numpy.dot(mo_coeff1[:,vir_idx], c1)
+        mo_energy[vir_idx] = w
+
+    if hasattr(mo_coeff, 'orbsym'):
         mo_coeff1 = lib.tag_array(mo_coeff1, orbsym=orbsym)
 
     if log.verbose >= logger.DEBUG:
