@@ -529,16 +529,15 @@ def make_rdm2s(civec_strs, norb, nelec, link_index=None, **kwargs):
         cd_indexa, dd_indexa, cd_indexb, dd_indexb = link_index
     na, nlinka = cd_indexa.shape[:2]
     nb, nlinkb = cd_indexb.shape[:2]
-    ma, mlinka = dd_indexa.shape[:2]
-    mb, mlinkb = dd_indexb.shape[:2]
 
     fcivec = ci_coeff.reshape(na,nb)
     # (bb|aa) and (aa|bb)
     dm2ab = rdm.make_rdm12_spin1('FCItdm12kern_ab', fcivec, fcivec,
                                  norb, nelec, (cd_indexa,cd_indexb), 0)[1]
     # (aa|aa)
+    dm2aa = numpy.zeros([norb]*4)
     if nelec[0] > 1:
-        dm2aa = numpy.empty([norb]*4)
+        ma, mlinka = dd_indexa.shape[:2]
         libfci.SCIrdm2_aaaa(libfci.SCIrdm2kern_aaaa,
                             dm2aa.ctypes.data_as(ctypes.c_void_p),
                             fcivec.ctypes.data_as(ctypes.c_void_p),
@@ -548,8 +547,9 @@ def make_rdm2s(civec_strs, norb, nelec, link_index=None, **kwargs):
                             ctypes.c_int(ma), ctypes.c_int(mlinka),
                             dd_indexa.ctypes.data_as(ctypes.c_void_p))
     # (bb|bb)
+    dm2bb = numpy.zeros([norb]*4)
     if nelec[1] > 1:
-        dm2bb = numpy.empty([norb]*4)
+        mb, mlinkb = dd_indexb.shape[:2]
         fcivecT = lib.transpose(fcivec)
         libfci.SCIrdm2_aaaa(libfci.SCIrdm2kern_aaaa,
                             dm2bb.ctypes.data_as(ctypes.c_void_p),
