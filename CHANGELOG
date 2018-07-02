@@ -9,6 +9,12 @@ PySCF 1.6 alpha (2018-09-??)
   - perturbative DMRG method
 
 
+PySCF 1.5.2
+-----------
+* Bugfix
+  - selected_ci 2-particle density matrices for two electron systems
+
+
 PySCF 1.5.1 (2018-07-01)
 ------------------------
 * Improved
