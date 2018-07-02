@@ -9,11 +9,12 @@ PySCF 1.6 alpha (2018-09-??)
   - perturbative DMRG method
 
 
-PySCF 1.5.1 (2018-06-28)
+PySCF 1.5.1 (2018-07-01)
 ------------------------
 * Improved
   - the memory usage for a large number of MM particles (issue #193)
 * Bugfix
+  - Frozen orbitals in MCSCF canonicalization
   - Dimension error when initializing DF-CCSD integral tensor
   - EOM-EE-UCCSD initial guess and intermediates (issue #199)
   - mpi ip/eaccsd w/ frozen orbitals

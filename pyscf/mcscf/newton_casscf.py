@@ -675,8 +675,6 @@ class CASSCF(mc1step.CASSCF):
             self.fcisolver.dump_flags(self.verbose)
         except AttributeError:
             pass
-        if hasattr(self, 'max_orb_stepsize'):
-            log.warn('Attribute "max_orb_stepsize" was replaced by "max_stepsize"')
         if self.mo_coeff is None:
             log.warn('Orbital for CASCI is not specified.  You probably need '
                      'call SCF.kernel() to initialize orbitals.')

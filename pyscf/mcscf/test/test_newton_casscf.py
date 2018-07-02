@@ -33,7 +33,7 @@ mol.atom = [
 ]
 mol.basis = 'sto-3g'
 mol.build()
-mf = scf.RHF(mol).run(conv_tol=1e-14)
+mf = scf.RHF(mol).newton().run()
 mc = newton_casscf.CASSCF(mf, 4, 4)
 mc.fcisolver = fci.direct_spin1.FCI(mol)
 mc.kernel()
@@ -58,7 +58,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.finger(hop(x)), 73.358310983341198, 8)
 
     def test_get_grad(self):
-        self.assertAlmostEqual(mc.e_tot, -3.6268060760105141, 9)
+        self.assertAlmostEqual(mc.e_tot, -3.6268060783098397, 9)
         self.assertAlmostEqual(abs(mc.get_grad()).max(), 0, 5)
 
 if __name__ == "__main__":
