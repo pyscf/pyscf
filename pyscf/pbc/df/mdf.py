@@ -51,8 +51,8 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
     log = logger.Logger(mydf.stdout, mydf.verbose)
     max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
     fused_cell, fuse = fuse_auxcell(mydf, auxcell)
-    outcore.aux_e2(cell, fused_cell, cderi_file, 'int3c2e', aosym='s2',
-                   kptij_lst=kptij_lst, dataname='j3c', max_memory=max_memory)
+    outcore._aux_e2(cell, fused_cell, cderi_file, 'int3c2e', aosym='s2',
+                    kptij_lst=kptij_lst, dataname='j3c', max_memory=max_memory)
     t1 = log.timer_debug1('3c2e', *t1)
 
     nao = cell.nao_nr()
@@ -72,6 +72,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
     # j2c ~ (-kpt_ji | kpt_ji)
     j2c = fused_cell.pbc_intor('int2c2e', hermi=1, kpts=uniq_kpts)
     feri = h5py.File(cderi_file)
+    nsegs = len(feri['j3c/0'])
 
     for k, kpt in enumerate(uniq_kpts):
         aoaux = ft_ao.ft_ao(fused_cell, Gv, None, b, gxyz, Gvbase, kpt).T
@@ -139,6 +140,8 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
             aosym = 's1'
             nao_pair = nao**2
 
+        fswap = lib.H5TmpFile()
+
         mem_now = lib.current_memory()[0]
         log.debug2('memory = %s', mem_now)
         max_memory = max(2000, mydf.max_memory-mem_now)
@@ -166,7 +169,8 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
             j3cR = []
             j3cI = []
             for k, idx in enumerate(adapted_ji_idx):
-                v = fuse(numpy.asarray(feri['j3c/%d'%idx][:,col0:col1]))
+                v = [feri['j3c/%d/%d'%(idx,i)][0,col0:col1].T for i in range(nsegs)]
+                v = fuse(numpy.vstack(v))
                 if is_zero(kpt) and cell.dimension == 3:
                     for i, c in enumerate(vbar):
                         if c != 0:
@@ -209,11 +213,12 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
                     v = scipy.linalg.solve_triangular(j2c, v, lower=True, overwrite_b=True)
                 else:
                     v = lib.dot(j2c, v)
-                feri['j3c/%d'%ji][:naux0,col0:col1] = v
+                fswap['%d/%d'%(k,istep)] = v
 
         del(feri['j2c/%d'%uniq_kptji_id])
+        nsteps = len(shranges)
         for k, ji in enumerate(adapted_ji_idx):
-            v = feri['j3c/%d'%ji][:naux0]
+            v = numpy.hstack([fswap['%d/%d'%(k,i)] for i in range(nsteps)])
             del(feri['j3c/%d'%ji])
             feri['j3c/%d'%ji] = v
 
