@@ -39,12 +39,12 @@ def finger(a):
     return numpy.dot(w, a.ravel())
 
 class KnowValues(unittest.TestCase):
-    def test_aux_e2(self):
+    def test_aux_e1(self):
         tmpfile = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
         numpy.random.seed(1)
         kptij_lst = numpy.random.random((3,2,3))
         kptij_lst[0] = 0
-        outcore.aux_e2(cell, cell, tmpfile.name, aosym='s2', comp=1,
+        outcore.aux_e1(cell, cell, tmpfile.name, aosym='s2', comp=1,
                        kptij_lst=kptij_lst, verbose=0)
         refk = incore.aux_e2(cell, cell, aosym='s2', kptij_lst=kptij_lst)
         with h5py.File(tmpfile.name, 'r') as f:

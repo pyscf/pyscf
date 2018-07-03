@@ -51,8 +51,8 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
     log = logger.Logger(mydf.stdout, mydf.verbose)
     max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
     fused_cell, fuse = fuse_auxcell(mydf, auxcell)
-    outcore.aux_e2(cell, fused_cell, cderi_file, 'int3c2e', aosym='s2',
-                   kptij_lst=kptij_lst, dataname='j3c', max_memory=max_memory)
+    outcore._aux_e2(cell, fused_cell, cderi_file, 'int3c2e', aosym='s2',
+                    kptij_lst=kptij_lst, dataname='j3c', max_memory=max_memory)
     t1 = log.timer_debug1('3c2e', *t1)
 
     nao = cell.nao_nr()
@@ -72,6 +72,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
     # j2c ~ (-kpt_ji | kpt_ji)
     j2c = fused_cell.pbc_intor('int2c2e', hermi=1, kpts=uniq_kpts)
     feri = h5py.File(cderi_file)
+    nsegs = len(feri['j3c/0'])
 
     for k, kpt in enumerate(uniq_kpts):
         aoaux = ft_ao.ft_ao(fused_cell, Gv, None, b, gxyz, Gvbase, kpt).T
@@ -139,49 +140,26 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
             aosym = 's1'
             nao_pair = nao**2
 
+        fswap = lib.H5TmpFile()
+
         mem_now = lib.current_memory()[0]
         log.debug2('memory = %s', mem_now)
         max_memory = max(2000, mydf.max_memory-mem_now)
         # nkptj for 3c-coulomb arrays plus 1 Lpq array
-        buflen = min(max(int(max_memory*.6*1e6/16/naux/(nkptj+1)), 1), nao_pair)
+        buflen = min(max(int(max_memory*.38e6/16/naux/(nkptj+1)), 1), nao_pair)
         shranges = _guess_shell_ranges(cell, buflen, aosym)
         buflen = max([x[2] for x in shranges])
         # +1 for a pqkbuf
         if aosym == 's2':
-            Gblksize = max(16, int(max_memory*.2*1e6/16/buflen/(nkptj+1)))
+            Gblksize = max(16, int(max_memory*.1e6/16/buflen/(nkptj+1)))
         else:
-            Gblksize = max(16, int(max_memory*.4*1e6/16/buflen/(nkptj+1)))
+            Gblksize = max(16, int(max_memory*.2e6/16/buflen/(nkptj+1)))
         Gblksize = min(Gblksize, ngrids, 16384)
         pqkRbuf = numpy.empty(buflen*Gblksize)
         pqkIbuf = numpy.empty(buflen*Gblksize)
         # buf for ft_aopair
         buf = numpy.empty((nkptj,buflen*Gblksize), dtype=numpy.complex128)
-
-        col1 = 0
-        for istep, sh_range in enumerate(shranges):
-            log.debug1('int3c2e [%d/%d], AO [%d:%d], ncol = %d', \
-                       istep+1, len(shranges), *sh_range)
-            bstart, bend, ncol = sh_range
-            col0, col1 = col1, col1+ncol
-            j3cR = []
-            j3cI = []
-            for k, idx in enumerate(adapted_ji_idx):
-                v = fuse(numpy.asarray(feri['j3c/%d'%idx][:,col0:col1]))
-                if is_zero(kpt) and cell.dimension == 3:
-                    for i, c in enumerate(vbar):
-                        if c != 0:
-                            v[i] -= c * ovlp[k][col0:col1]
-                j3cR.append(numpy.asarray(v.real, order='C'))
-                if is_zero(kpt) and gamma_point(adapted_kptjs[k]):
-                    j3cI.append(None)
-                else:
-                    j3cI.append(numpy.asarray(v.imag, order='C'))
-                v = None
-
-            if aosym == 's2':
-                shls_slice = (bstart, bend, 0, bend)
-            else:
-                shls_slice = (bstart, bend, 0, cell.nbas)
+        def pw_contract(istep, shls_slice, j3cR, j3cI):
             for p0, p1 in lib.prange(0, ngrids, Gblksize):
                 dat = ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
                                             b, gxyz[p0:p1], Gvbase, kpt,
@@ -209,11 +187,41 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
                     v = scipy.linalg.solve_triangular(j2c, v, lower=True, overwrite_b=True)
                 else:
                     v = lib.dot(j2c, v)
-                feri['j3c/%d'%ji][:naux0,col0:col1] = v
+                fswap['%d/%d'%(k,istep)] = v
+
+        with lib.call_in_background(pw_contract) as compute:
+            col1 = 0
+            for istep, sh_range in enumerate(shranges):
+                log.debug1('int3c2e [%d/%d], AO [%d:%d], ncol = %d', \
+                           istep+1, len(shranges), *sh_range)
+                bstart, bend, ncol = sh_range
+                col0, col1 = col1, col1+ncol
+                j3cR = []
+                j3cI = []
+                for k, idx in enumerate(adapted_ji_idx):
+                    v = [feri['j3c/%d/%d'%(idx,i)][0,col0:col1].T for i in range(nsegs)]
+                    v = fuse(numpy.vstack(v))
+                    if is_zero(kpt) and cell.dimension == 3:
+                        for i, c in enumerate(vbar):
+                            if c != 0:
+                                v[i] -= c * ovlp[k][col0:col1]
+                    j3cR.append(numpy.asarray(v.real, order='C'))
+                    if is_zero(kpt) and gamma_point(adapted_kptjs[k]):
+                        j3cI.append(None)
+                    else:
+                        j3cI.append(numpy.asarray(v.imag, order='C'))
+                    v = None
+
+                if aosym == 's2':
+                    shls_slice = (bstart, bend, 0, bend)
+                else:
+                    shls_slice = (bstart, bend, 0, cell.nbas)
+                compute(istep, shls_slice, j3cR, j3cI)
 
         del(feri['j2c/%d'%uniq_kptji_id])
+        nsteps = len(shranges)
         for k, ji in enumerate(adapted_ji_idx):
-            v = feri['j3c/%d'%ji][:naux0]
+            v = numpy.hstack([fswap['%d/%d'%(k,i)] for i in range(nsteps)])
             del(feri['j3c/%d'%ji])
             feri['j3c/%d'%ji] = v
 

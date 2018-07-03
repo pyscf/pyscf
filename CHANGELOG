@@ -11,6 +11,8 @@ PySCF 1.6 alpha (2018-09-??)
 
 PySCF 1.5.2
 -----------
+* Improved
+  - IO performance of pbc.GDF initialization
 * Bugfix
   - selected_ci 2-particle density matrices for two electron systems
 
