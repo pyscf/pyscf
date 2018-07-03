@@ -15,12 +15,20 @@ from pyscf.pbc import tools as pbc_tools
 from pyscf.pbc import scf
 
 
-def get_phase(cell, kpts, kmesh):
+def get_phase(cell, kpts, kmesh=None):
     '''
-    phase of each k-points when transforming unitcell to supercell
+    The unitary transformation that transforms the supercell basis k-mesh
+    adapted basis.
     '''
 
     latt_vec = cell.lattice_vectors()
+    if kmesh is None:
+        # Guess kmesh
+        scaled_k = cell.get_scaled_kpts(kpts).round(8)
+        kmesh = (len(np.unique(scaled_k[:,0])),
+                 len(np.unique(scaled_k[:,1])),
+                 len(np.unique(scaled_k[:,2])))
+
     R_rel_a = np.arange(kmesh[0])
     R_rel_b = np.arange(kmesh[1])
     R_rel_c = np.arange(kmesh[2])
@@ -35,7 +43,44 @@ def get_phase(cell, kpts, kmesh):
     scell = pbc_tools.super_cell(cell, kmesh)
     return scell, phase
 
-def k2gamma(kmf, kmesh):
+def mo_k2gamma(cell, mo_energy, mo_coeff, kpts, kmesh=None):
+    scell, phase = get_phase(cell, kpts, kmesh)
+
+    E_g = np.hstack(mo_energy)
+    C_k = np.asarray(mo_coeff)
+    Nk, Nao, Nmo = C_k.shape
+    NR = phase.shape[0]
+
+    # Transform AO indices
+    C_gamma = np.einsum('Rk, kum -> Rukm', phase, C_k)
+    C_gamma = C_gamma.reshape(Nao*NR, Nk*Nmo)
+
+    E_sort_idx = np.argsort(E_g)
+    E_g = E_g[E_sort_idx]
+    C_gamma = C_gamma[:,E_sort_idx]
+    s = scell.pbc_intor('int1e_ovlp')
+    assert(abs(reduce(np.dot, (C_gamma.conj().T, s, C_gamma))
+               - np.eye(Nmo*Nk)).max() < 1e-7)
+
+    # Transform MO indices
+    E_k_degen = abs(E_g[1:] - E_g[:-1]).max() < 1e-5
+    if np.any(E_k_degen):
+        degen_mask = np.append(False, E_k_degen) | np.append(E_k_degen, False)
+        shift = min(E_g[degen_mask]) - .1
+        f = np.dot(C_gamma[:,degen_mask] * (E_g[degen_mask] - shift),
+                   C_gamma[:,degen_mask].conj().T)
+        assert(abs(f.imag).max() < 1e-5)
+
+        e, na_orb = la.eigh(f.real, s, type=2)
+        C_gamma[:,degen_mask] = na_orb[:, e>0]
+
+    assert(abs(C_gamma.imag).max() < 1e-5)
+    C_gamma = C_gamma.real
+    assert(abs(reduce(np.dot, (C_gamma.conj().T, s, C_gamma))
+               - np.eye(Nmo*Nk)).max() < 1e-7)
+    return scell, E_g, C_gamma
+
+def k2gamma(kmf, kmesh=None):
     r'''
     convert the k-sampled mean-field object to the corresponding supercell
     gamma-point mean-field object.
@@ -45,44 +90,16 @@ def k2gamma(kmf, kmesh):
          \e^{\ii \veck\cdot\vecR} C^{\veck}_{\mu  m}
     '''
 
-    scell, phase = get_phase(kmf.cell, kmf.kpts, kmesh)
+    scell, E_g, C_gamma = mo_k2gamma(kmf.cell, kmf.mo_energy,
+                                     kmf.mo_coeff, kmf.kpts, kmesh)
 
-    E_k = np.asarray(kmf.mo_energy).ravel()
-    C_k = np.asarray(kmf.mo_coeff)
-    Nk, Nao, Nmo = C_k.shape
-    NR = phase.shape[0]
-
-    C_gamma = np.einsum('Rk, kum -> Rukm', phase, C_k)
-    C_gamma = C_gamma.reshape(Nao*NR, Nk*Nmo)
-
-    E_k_sort_idx = np.argsort(E_k)
-    E_k = E_k[E_k_sort_idx]
-    C_gamma = C_gamma[:,E_k_sort_idx]
-
-    s = scell.pbc_intor('int1e_ovlp')
-    assert(abs(reduce(np.dot, (C_gamma.conj().T, s, C_gamma))
-               - np.eye(Nmo*Nk)).max() < 1e-7)
-    E_k_degen = abs(E_k[1:] - E_k[:-1]).max() < 1e-5
-    if np.any(E_k_degen):
-        degen_mask = np.append(False, E_k_degen) | np.append(E_k_degen, False)
-        assert(abs(C_gamma[:,~degen_mask].imag).max() < 1e-5)
-
-        shift = min(E_k[degen_mask]) - .1
-        f = np.dot(C_gamma[:,degen_mask] * (E_k[degen_mask] - shift),
-                   C_gamma[:,degen_mask].conj().T)
-        assert(abs(f.imag).max() < 1e-5)
-
-        e, na_orb = la.eigh(f.real, s, type=2)
-        C_gamma[:,degen_mask] = na_orb[:, e>0]
-
-    C_gamma = C_gamma.real
-    assert(abs(reduce(np.dot, (C_gamma.conj().T, s, C_gamma))
-               - np.eye(Nmo*Nk)).max() < 1e-7)
+    E_sort_idx = np.argsort(np.hstack(kmf.mo_energy))
+    mo_occ = np.hstack(kmf.mo_occ)[E_sort_idx]
 
     mf = scf.RHF(scell)
     mf.mo_coeff = C_gamma
-    mf.mo_energy = E_k
-    mf.mo_occ = np.hstack(kmf.mo_occ)[E_k_sort_idx]
+    mf.mo_energy = E_g
+    mf.mo_occ = mo_occ
     return mf
 
 
@@ -104,11 +121,17 @@ if __name__ == '__main__':
     kpts = cell.make_kpts(kmesh)
 
     print("Transform k-point integrals to supercell integral")
-    scell, phase = get_phase(cell, kpts, kmesh)
+    scell, phase = get_phase(cell, kpts)
+    NR, Nk = phase.shape
+    nao = cell.nao
     s_k = cell.pbc_intor('int1e_ovlp', kpts=kpts)
     s = scell.pbc_intor('int1e_ovlp')
-    s1 = np.einsum('Rk,kij,Sk->RiSj', phase.conj(), s_k, phase)
+    s1 = np.einsum('Rk,kij,Sk->RiSj', phase, s_k, phase.conj())
     print(abs(s-s1.reshape(s.shape)).max())
+
+    s = scell.pbc_intor('int1e_ovlp').reshape(NR,nao,NR,nao)
+    s1 = np.einsum('Rk,RiSj,Sk->kij', phase.conj(), s, phase)
+    print(abs(s1-s_k).max())
 
     kmf = dft.KRKS(cell, kpts)
     ekpt = kmf.run()
