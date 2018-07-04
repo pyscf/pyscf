@@ -438,18 +438,19 @@ def getints2c(intor_name, atm, bas, env, shls_slice=None, comp=1, hermi=0,
                    hermi != lib.ANTIHERMI)
         drv_name = 'GTOint2c_spinor'
 
-    if cintopt is None:
-        cintopt = make_cintopt(atm, bas, env, intor_name)
-#    cintopt = lib.c_null_ptr()
+    if mat.size > 0:
+        if cintopt is None:
+            cintopt = make_cintopt(atm, bas, env, intor_name)
+#        cintopt = lib.c_null_ptr()
 
-    fn = getattr(libcgto, drv_name)
-    fn(getattr(libcgto, intor_name), mat.ctypes.data_as(ctypes.c_void_p),
-       ctypes.c_int(comp), ctypes.c_int(hermi),
-       (ctypes.c_int*4)(*(shls_slice[:4])),
-       ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt,
-       atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(natm),
-       bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
-       env.ctypes.data_as(ctypes.c_void_p))
+        fn = getattr(libcgto, drv_name)
+        fn(getattr(libcgto, intor_name), mat.ctypes.data_as(ctypes.c_void_p),
+           ctypes.c_int(comp), ctypes.c_int(hermi),
+           (ctypes.c_int*4)(*(shls_slice[:4])),
+           ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt,
+           atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(natm),
+           bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
+           env.ctypes.data_as(ctypes.c_void_p))
 
     mat = mat.transpose(2,0,1)
     if comp == 1:
@@ -503,16 +504,17 @@ def getints3c(intor_name, atm, bas, env, shls_slice=None, comp=1,
         drv = libcgto.GTOnr3c_drv
         fill = getattr(libcgto, 'GTOnr3c_fill_'+aosym)
 
-    if cintopt is None:
-        cintopt = make_cintopt(atm, bas, env, intor_name)
+    if mat.size > 0:
+        if cintopt is None:
+            cintopt = make_cintopt(atm, bas, env, intor_name)
 
-    drv(getattr(libcgto, intor_name), fill,
-        mat.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(comp),
-        (ctypes.c_int*6)(*(shls_slice[:6])),
-        ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt,
-        atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(natm),
-        bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
-        env.ctypes.data_as(ctypes.c_void_p))
+        drv(getattr(libcgto, intor_name), fill,
+            mat.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(comp),
+            (ctypes.c_int*6)(*(shls_slice[:6])),
+            ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt,
+            atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(natm),
+            bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
+            env.ctypes.data_as(ctypes.c_void_p))
 
     mat = numpy.rollaxis(mat, -1, 0)
     if comp == 1:
@@ -530,13 +532,10 @@ def getints4c(intor_name, atm, bas, env, shls_slice=None, comp=1,
     c_env = env.ctypes.data_as(ctypes.c_void_p)
     natm = atm.shape[0]
     nbas = bas.shape[0]
+    ao_loc = make_loc(bas, intor_name)
 
     if '_spinor' in intor_name:
         assert(aosym == 's1')
-
-    ao_loc = make_loc(bas, intor_name)
-    if cintopt is None:
-        cintopt = make_cintopt(atm, bas, env, intor_name)
 
     if aosym == 's8':
         assert(shls_slice is None)
@@ -544,6 +543,11 @@ def getints4c(intor_name, atm, bas, env, shls_slice=None, comp=1,
         nao = ao_loc[-1]
         nao_pair = nao*(nao+1)//2
         out = numpy.ndarray((nao_pair*(nao_pair+1)//2), buffer=out)
+        if nao_pair == 0:
+            return out
+
+        if cintopt is None:
+            cintopt = make_cintopt(atm, bas, env, intor_name)
         drv = _vhf.libcvhf.GTO2e_cart_or_sph
         drv(getattr(libcgto, intor_name), cintopt,
             out.ctypes.data_as(ctypes.c_void_p),
@@ -586,12 +590,16 @@ def getints4c(intor_name, atm, bas, env, shls_slice=None, comp=1,
             fill = getattr(libcgto, 'GTOnr2e_fill_'+aosym)
             out = numpy.ndarray(shape, buffer=out)
 
-        prescreen = lib.c_null_ptr()
-        drv(getattr(libcgto, intor_name), fill, prescreen,
-            out.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(comp),
-            (ctypes.c_int*8)(*shls_slice),
-            ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt,
-            c_atm, ctypes.c_int(natm), c_bas, ctypes.c_int(nbas), c_env)
+        if out.size > 0:
+            if cintopt is None:
+                cintopt = make_cintopt(atm, bas, env, intor_name)
+            prescreen = lib.c_null_ptr()
+            drv(getattr(libcgto, intor_name), fill, prescreen,
+                out.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(comp),
+                (ctypes.c_int*8)(*shls_slice),
+                ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt,
+                c_atm, ctypes.c_int(natm), c_bas, ctypes.c_int(nbas), c_env)
+
         if comp == 1:
             out = out[0]
         return out
