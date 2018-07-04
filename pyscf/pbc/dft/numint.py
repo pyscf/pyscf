@@ -1210,8 +1210,9 @@ class KNumInt(numint.NumInt):
                                       non0tab, xctype)
         else:
             if isinstance(dms, numpy.ndarray) and dms.ndim == 3:
-                nao = dms.shape[-1]
                 dms = [dms]
+            elif isinstance(dms[0], numpy.ndarray) and dms[0].ndim == 2:
+                dms = [numpy.asarray(dms)]
             if not hermi:
                 #       dm.shape = (nkpts, nao, nao)
                 dms = [(dm+dm.conj().transpose(0,2,1))*.5 for dm in dms]
