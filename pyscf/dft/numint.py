@@ -615,7 +615,7 @@ def _scale_ao(ao, wv, out=None):
     comp, nao, ngrids = ao.shape
     aow = numpy.ndarray((nao,ngrids), dtype=ao.dtype, buffer=out).T
 
-    if 1 or not ao.flags.c_contiguous:
+    if not ao.flags.c_contiguous:
         aow = numpy.einsum('nip,np->pi', ao, wv, out=aow)
     elif aow.dtype == numpy.double:
         libdft.VXC_dscale_ao(aow.ctypes.data_as(ctypes.c_void_p),

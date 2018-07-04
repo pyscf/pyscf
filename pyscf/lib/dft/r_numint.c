@@ -178,19 +178,17 @@ void VXC_zscale_ao(double complex *aow, double complex *ao, double *wv,
         size_t Ngrids = ngrids;
         size_t ao_size = nao * Ngrids;
         int i, j, ic;
+        double complex *pao = ao;
 #pragma omp for schedule(static)
         for (i = 0; i < nao; i++) {
-        for (j = 0; j < Ngrids; j++) {
-                aow[i*Ngrids+j] = ao[i*Ngrids+j] * wv[j];
-        } }
-
-#pragma omp for schedule(static)
-        for (i = 0; i < nao; i++) {
+                pao = ao + i * Ngrids;
+                for (j = 0; j < Ngrids; j++) {
+                        aow[i*Ngrids+j] = pao[j] * wv[j];
+                }
                 for (ic = 1; ic < comp; ic++) {
                 for (j = 0; j < Ngrids; j++) {
-                        aow[i*Ngrids+j] += ao[ic*ao_size+j] * wv[ic*Ngrids+j];
+                        aow[i*Ngrids+j] += pao[ic*ao_size+j] * wv[ic*Ngrids+j];
                 } }
-                ao += Ngrids;
         }
 }
 }
