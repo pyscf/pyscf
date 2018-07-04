@@ -76,6 +76,12 @@ class ROHF(mol_rohf.ROHF, pbchf.RHF):
         if kpt is None: kpt = self.kpt
         if isinstance(dm, np.ndarray) and dm.ndim == 2:
             dm = np.asarray((dm*.5,dm*.5))
+        if hasattr(dm, 'mo_coeff'):
+            mo_coeff = dm.mo_coeff
+            mo_occ_a = (dm.mo_occ > 0).astype(np.double)
+            mo_occ_b = (dm.mo_occ ==2).astype(np.double)
+            dm = lib.tag_array(dm, mo_coeff=(mo_coeff,mo_coeff),
+                               mo_occ=(mo_occ_a,mo_occ_b))
         vj, vk = self.get_jk(cell, dm, hermi, kpt, kpts_band)
         vhf = vj[0] + vj[1] - vk
         return vhf
