@@ -52,6 +52,8 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None):
     mesh = mydf.mesh
     low_dim_ft_type = mydf.low_dim_ft_type
 
+    ni = mydf._numint
+    make_rho, nset, nao = ni._gen_rho_evaluator(cell, dm_kpts, hermi)
     dm_kpts = lib.asarray(dm_kpts, order='C')
     dms = _format_dms(dm_kpts, kpts)
     nset, nkpts, nao = dms.shape[:3]
@@ -61,14 +63,12 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None):
 
     vR = rhoR = np.zeros((nset,ngrids))
     for ao_ks_etc, p0, p1 in mydf.aoR_loop(mydf.grids, kpts):
-        ao_ks = ao_ks_etc[0]
-        for k, ao in enumerate(ao_ks):
-            for i in range(nset):
-                rhoR[i,p0:p1] += numint.eval_rho(cell, ao, dms[i,k])
+        ao_ks, mask = ao_ks_etc[0], ao_ks_etc[2]
+        for i in range(nset):
+            rhoR[i,p0:p1] += make_rho(i, ao_ks, mask, 'LDA')
         ao = ao_ks = None
 
     for i in range(nset):
-        rhoR[i] *= 1./nkpts
         rhoG = tools.fft(rhoR[i], mesh)
         vG = coulG * rhoG
         vR[i] = tools.ifft(vG, mesh).real
@@ -81,11 +81,11 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None):
         vj_kpts = np.zeros((nset,nband,nao,nao))
     else:
         vj_kpts = np.zeros((nset,nband,nao,nao), dtype=np.complex128)
+    rho = None
     for ao_ks_etc, p0, p1 in mydf.aoR_loop(mydf.grids, kpts_band):
-        ao_ks = ao_ks_etc[0]
-        for k, ao in enumerate(ao_ks):
-            for i in range(nset):
-                vj_kpts[i,k] += lib.dot(ao.T.conj()*vR[i,p0:p1], ao)
+        ao_ks, mask = ao_ks_etc[0], ao_ks_etc[2]
+        for i in range(nset):
+            vj_kpts[i] += ni.eval_mat(cell, ao_ks, 1., None, vR[i,p0:p1], mask, 'LDA')
 
     return _format_jks(vj_kpts, dm_kpts, input_band, kpts)
 
