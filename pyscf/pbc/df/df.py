@@ -293,7 +293,13 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
         pqkIbuf = numpy.empty(buflen*Gblksize)
         # buf for ft_aopair
         buf = numpy.empty(nkptj*buflen*Gblksize, dtype=numpy.complex128)
-        def pw_contract(istep, shls_slice, j3cR, j3cI):
+        def pw_contract(istep, sh_range, j3cR, j3cI):
+            bstart, bend, ncol = sh_range
+            if aosym == 's2':
+                shls_slice = (bstart, bend, 0, bend)
+            else:
+                shls_slice = (bstart, bend, 0, cell.nbas)
+
             for p0, p1 in lib.prange(0, ngrids, Gblksize):
                 dat = ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
                                             b, gxyz[p0:p1], Gvbase, kpt,
@@ -361,13 +367,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
                     else:
                         j3cI.append(numpy.asarray(v.imag, order='C'))
                 v = None
-
-                if aosym == 's2':
-                    shls_slice = (bstart, bend, 0, bend)
-                else:
-                    shls_slice = (bstart, bend, 0, cell.nbas)
-
-                compute(istep, shls_slice, j3cR, j3cI)
+                compute(istep, sh_range, j3cR, j3cI)
 
         del(feri['j2c/%d'%uniq_kptji_id])
         nsteps = len(shranges)
