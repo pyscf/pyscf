@@ -31,12 +31,6 @@ endif()
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
-# Architecture specified cmake flags.  See also the templates in
-# pyscf/lib/cmake_arch_config
-if(EXISTS "${PROJECT_SOURCE_DIR}/cmake.arch.inc")
-  include("${PROJECT_SOURCE_DIR}/cmake.arch.inc")
-endif()
-
 if (NOT BLAS_LIBRARIES)
 #enable_language(Fortran)
 find_package(BLAS)
@@ -129,6 +123,12 @@ add_subdirectory(ri)
 add_subdirectory(hci)
 add_subdirectory(pbc)
 add_subdirectory(extras/mbd)
+
+# Architecture specified cmake flags.  See also the templates in
+# pyscf/lib/cmake_arch_config
+if(EXISTS "${PROJECT_SOURCE_DIR}/cmake.arch.inc")
+  include("${PROJECT_SOURCE_DIR}/cmake.arch.inc")
+endif()
 
 option(ENABLE_LIBXC "Using libxc for XC functional library" ON)
 option(ENABLE_XCFUN "Using xcfun for XC functional library" ON)
