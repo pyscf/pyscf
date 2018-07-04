@@ -165,13 +165,16 @@ def eval_rho(mol, ao, dm, non0tab=None, xctype='LDA', hermi=0, verbose=None):
     ao_loc = mol.ao_loc_nr()
     if xctype == 'LDA' or xctype == 'HF':
         c0 = _dot_ao_dm(mol, ao, dm, non0tab, shls_slice, ao_loc)
-        rho = numpy.einsum('pi,pi->p', ao, c0)
+        #:rho = numpy.einsum('pi,pi->p', ao, c0)
+        rho = _contract_rho(ao, c0)
     elif xctype in ('GGA', 'NLC'):
         rho = numpy.empty((4,ngrids))
         c0 = _dot_ao_dm(mol, ao[0], dm, non0tab, shls_slice, ao_loc)
-        rho[0] = numpy.einsum('pi,pi->p', c0, ao[0])
+        #:rho[0] = numpy.einsum('pi,pi->p', c0, ao[0])
+        rho[0] = _contract_rho(c0, ao[0])
         for i in range(1, 4):
-            rho[i] = numpy.einsum('pi,pi->p', c0, ao[i])
+            #:rho[i] = numpy.einsum('pi,pi->p', c0, ao[i])
+            rho[i] = _contract_rho(c0, ao[i])
             rho[i] *= 2 # *2 for +c.c. in the next two lines
             #c1 = _dot_ao_dm(mol, ao[i], dm, non0tab, shls_slice, ao_loc)
             #rho[i] += numpy.einsum('pi,pi->p', c1, ao[0])
@@ -179,15 +182,19 @@ def eval_rho(mol, ao, dm, non0tab=None, xctype='LDA', hermi=0, verbose=None):
         # rho[4] = \nabla^2 rho, rho[5] = 1/2 |nabla f|^2
         rho = numpy.empty((6,ngrids))
         c0 = _dot_ao_dm(mol, ao[0], dm, non0tab, shls_slice, ao_loc)
-        rho[0] = numpy.einsum('pi,pi->p', ao[0], c0)
+        #:rho[0] = numpy.einsum('pi,pi->p', ao[0], c0)
+        rho[0] = _contract_rho(ao[0], c0)
         rho[5] = 0
         for i in range(1, 4):
-            rho[i] = numpy.einsum('pi,pi->p', c0, ao[i]) * 2 # *2 for +c.c.
+            #:rho[i] = numpy.einsum('pi,pi->p', c0, ao[i]) * 2 # *2 for +c.c.
+            rho[i] = _contract_rho(c0, ao[i]) * 2
             c1 = _dot_ao_dm(mol, ao[i], dm.T, non0tab, shls_slice, ao_loc)
-            rho[5] += numpy.einsum('pi,pi->p', c1, ao[i])
+            #:rho[5] += numpy.einsum('pi,pi->p', c1, ao[i])
+            rho[5] += _contract_rho(c1, ao[i])
         XX, YY, ZZ = 4, 7, 9
         ao2 = ao[XX] + ao[YY] + ao[ZZ]
-        rho[4] = numpy.einsum('pi,pi->p', c0, ao2)
+        #:rho[4] = numpy.einsum('pi,pi->p', c0, ao2)
+        rho[4] = _contract_rho(c0, ao2)
         rho[4] += rho[5]
         rho[4] *= 2
         rho[5] *= .5
@@ -243,28 +250,35 @@ def eval_rho2(mol, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
         cpos = numpy.einsum('ij,j->ij', mo_coeff[:,pos], numpy.sqrt(mo_occ[pos]))
         if xctype == 'LDA' or xctype == 'HF':
             c0 = _dot_ao_dm(mol, ao, cpos, non0tab, shls_slice, ao_loc)
-            rho = numpy.einsum('pi,pi->p', c0, c0)
+            #:rho = numpy.einsum('pi,pi->p', c0, c0)
+            rho = _contract_rho(c0, c0)
         elif xctype in ('GGA', 'NLC'):
             rho = numpy.empty((4,ngrids))
             c0 = _dot_ao_dm(mol, ao[0], cpos, non0tab, shls_slice, ao_loc)
-            rho[0] = numpy.einsum('pi,pi->p', c0, c0)
+            #:rho[0] = numpy.einsum('pi,pi->p', c0, c0)
+            rho[0] = _contract_rho(c0, c0)
             for i in range(1, 4):
                 c1 = _dot_ao_dm(mol, ao[i], cpos, non0tab, shls_slice, ao_loc)
-                rho[i] = numpy.einsum('pi,pi->p', c0, c1) * 2 # *2 for +c.c.
+                #:rho[i] = numpy.einsum('pi,pi->p', c0, c1) * 2 # *2 for +c.c.
+                rho[i] = _contract_rho(c0, c1) * 2
         else: # meta-GGA
             # rho[4] = \nabla^2 rho, rho[5] = 1/2 |nabla f|^2
             rho = numpy.empty((6,ngrids))
             c0 = _dot_ao_dm(mol, ao[0], cpos, non0tab, shls_slice, ao_loc)
-            rho[0] = numpy.einsum('pi,pi->p', c0, c0)
+            #:rho[0] = numpy.einsum('pi,pi->p', c0, c0)
+            rho[0] = _contract_rho(c0, c0)
             rho[5] = 0
             for i in range(1, 4):
                 c1 = _dot_ao_dm(mol, ao[i], cpos, non0tab, shls_slice, ao_loc)
-                rho[i] = numpy.einsum('pi,pi->p', c0, c1) * 2 # *2 for +c.c.
-                rho[5] += numpy.einsum('pi,pi->p', c1, c1)
+                #:rho[i] = numpy.einsum('pi,pi->p', c0, c1) * 2 # *2 for +c.c.
+                #:rho[5] += numpy.einsum('pi,pi->p', c1, c1)
+                rho[i] = _contract_rho(c0, c1) * 2
+                rho[5] += _contract_rho(c1, c1)
             XX, YY, ZZ = 4, 7, 9
             ao2 = ao[XX] + ao[YY] + ao[ZZ]
             c1 = _dot_ao_dm(mol, ao2, cpos, non0tab, shls_slice, ao_loc)
-            rho[4] = numpy.einsum('pi,pi->p', c0, c1)
+            #:rho[4] = numpy.einsum('pi,pi->p', c0, c1)
+            rho[4] = _contract_rho(c0, c1)
             rho[4] += rho[5]
             rho[4] *= 2
 
@@ -282,25 +296,32 @@ def eval_rho2(mol, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
         cneg = numpy.einsum('ij,j->ij', mo_coeff[:,neg], numpy.sqrt(-mo_occ[neg]))
         if xctype == 'LDA' or xctype == 'HF':
             c0 = _dot_ao_dm(mol, ao, cneg, non0tab, shls_slice, ao_loc)
-            rho -= numpy.einsum('pi,pi->p', c0, c0)
+            #:rho -= numpy.einsum('pi,pi->p', c0, c0)
+            rho -= _contract_rho(c0, c0)
         elif xctype == 'GGA':
             c0 = _dot_ao_dm(mol, ao[0], cneg, non0tab, shls_slice, ao_loc)
-            rho[0] -= numpy.einsum('pi,pi->p', c0, c0)
+            #:rho[0] -= numpy.einsum('pi,pi->p', c0, c0)
+            rho[0] -= _contract_rho(c0, c0)
             for i in range(1, 4):
                 c1 = _dot_ao_dm(mol, ao[i], cneg, non0tab, shls_slice, ao_loc)
-                rho[i] -= numpy.einsum('pi,pi->p', c0, c1) * 2 # *2 for +c.c.
+                #:rho[i] -= numpy.einsum('pi,pi->p', c0, c1) * 2 # *2 for +c.c.
+                rho[i] -= _contract_rho(c0, c1) * 2 # *2 for +c.c.
         else:
             c0 = _dot_ao_dm(mol, ao[0], cneg, non0tab, shls_slice, ao_loc)
-            rho[0] -= numpy.einsum('pi,pi->p', c0, c0)
+            #:rho[0] -= numpy.einsum('pi,pi->p', c0, c0)
+            rho[0] -= _contract_rho(c0, c0)
             rho5 = 0
             for i in range(1, 4):
                 c1 = _dot_ao_dm(mol, ao[i], cneg, non0tab, shls_slice, ao_loc)
-                rho[i] -= numpy.einsum('pi,pi->p', c0, c1) * 2 # *2 for +c.c.
-                rho5 += numpy.einsum('pi,pi->p', c1, c1)
+                #:rho[i] -= numpy.einsum('pi,pi->p', c0, c1) * 2 # *2 for +c.c.
+                #:rho5 += numpy.einsum('pi,pi->p', c1, c1)
+                rho[i] -= _contract_rho(c0, c1) * 2 # *2 for +c.c.
+                rho5 += _contract_rho(c1, c1)
             XX, YY, ZZ = 4, 7, 9
             ao2 = ao[XX] + ao[YY] + ao[ZZ]
             c1 = _dot_ao_dm(mol, ao2, cneg, non0tab, shls_slice, ao_loc)
-            rho[4] -= numpy.einsum('pi,pi->p', c0, c1) * 2
+            #:rho[4] -= numpy.einsum('pi,pi->p', c0, c1) * 2
+            rho[4] -= _contract_rho(c0, c1) * 2
             rho[4] -= rho5 * 2
 
             rho[5] -= rho5 * .5
@@ -446,8 +467,8 @@ def eval_mat(mol, ao, weight, rho, vxc,
         else:
             vrho = vxc
         # *.5 because return mat + mat.T
-        aow = numpy.empty_like(ao)
-        aow = numpy.einsum('pi,p->pi', ao, .5*weight*vrho, out=aow)
+        #:aow = numpy.einsum('pi,p->pi', ao, .5*weight*vrho)
+        aow = _scale_ao(ao, .5*weight*vrho)
         mat = _dot_ao_ao(mol, ao, aow, non0tab, shls_slice, ao_loc)
     else:
         #wv = weight * vsigma * 2
@@ -476,8 +497,8 @@ def eval_mat(mol, ao, weight, rho, vxc,
                 vsigma = vsigma.T
                 wv[1:4] = rho_a[1:4] * (weight * vsigma[0] * 2)  # sigma_uu
                 wv[1:4]+= rho_b[1:4] * (weight * vsigma[1])      # sigma_ud
-        aow = numpy.empty_like(ao[0])
-        aow = numpy.einsum('npi,np->pi', ao[:4], wv, out=aow)
+        #:aow = numpy.einsum('npi,np->pi', ao[:4], wv)
+        aow = _scale_ao(ao[:4], wv)
         mat = _dot_ao_ao(mol, ao[0], aow, non0tab, shls_slice, ao_loc)
 
 # JCP, 138, 244108
@@ -494,7 +515,8 @@ def eval_mat(mol, ao, weight, rho, vxc,
                 vlapl = vlapl[0]
             XX, YY, ZZ = 4, 7, 9
             ao2 = ao[XX] + ao[YY] + ao[ZZ]
-            aow = numpy.einsum('pi,p->pi', ao2, .5 * weight * vlapl, out=aow)
+            #:aow = numpy.einsum('pi,p->pi', ao2, .5 * weight * vlapl, out=aow)
+            aow = _scale_ao(ao2, .5 * weight * vlapl, out=aow)
             mat += _dot_ao_ao(mol, ao[0], aow, non0tab, shls_slice, ao_loc)
 
         if spin != 0:
@@ -502,11 +524,14 @@ def eval_mat(mol, ao, weight, rho, vxc,
                 vtau = vtau.T
             vtau = vtau[0]
         wv = weight * (.25*vtau + vlapl)
-        aow = numpy.einsum('pi,p->pi', ao[1], wv, out=aow)
+        #:aow = numpy.einsum('pi,p->pi', ao[1], wv, out=aow)
+        aow = _scale_ao(ao[1], wv, out=aow)
         mat += _dot_ao_ao(mol, ao[1], aow, non0tab, shls_slice, ao_loc)
-        aow = numpy.einsum('pi,p->pi', ao[2], wv, out=aow)
+        #:aow = numpy.einsum('pi,p->pi', ao[2], wv, out=aow)
+        aow = _scale_ao(ao[2], wv, out=aow)
         mat += _dot_ao_ao(mol, ao[2], aow, non0tab, shls_slice, ao_loc)
-        aow = numpy.einsum('pi,p->pi', ao[3], wv, out=aow)
+        #:aow = numpy.einsum('pi,p->pi', ao[3], wv, out=aow)
+        aow = _scale_ao(ao[3], wv, out=aow)
         mat += _dot_ao_ao(mol, ao[3], aow, non0tab, shls_slice, ao_loc)
 
     return mat + mat.T.conj()
@@ -549,7 +574,7 @@ def _dot_ao_dm(mol, ao, dm, non0tab, shls_slice, ao_loc, out=None):
     '''return numpy.dot(ao, dm)'''
     ngrids, nao = ao.shape
     if nao < SWITCH_SIZE:
-        return lib.dot(ao, dm)
+        return lib.dot(dm.T, ao.T).T
 
     if not ao.flags.f_contiguous:
         ao = lib.transpose(ao)
@@ -576,6 +601,63 @@ def _dot_ao_dm(mol, ao, dm, non0tab, shls_slice, ao_loc, out=None):
        ctypes.c_int(ngrids), ctypes.c_int(mol.nbas),
        pnon0tab, pshls_slice, pao_loc)
     return vm
+
+def _scale_ao(ao, wv, out=None):
+    #:aow = numpy.einsum('npi,np->pi', ao[:4], wv)
+    if wv.ndim == 2:
+        ao = ao.transpose(0,2,1)
+    else:
+        ngrids, nao = ao.shape
+        ao = ao.T.reshape(1,nao,ngrids)
+        wv = wv.reshape(1,ngrids)
+
+    wv = numpy.asarray(wv, order='C')
+    comp, nao, ngrids = ao.shape
+    aow = numpy.ndarray((nao,ngrids), dtype=ao.dtype, buffer=out).T
+
+    if 1 or not ao.flags.c_contiguous:
+        aow = numpy.einsum('nip,np->pi', ao, wv, out=aow)
+    elif aow.dtype == numpy.double:
+        libdft.VXC_dscale_ao(aow.ctypes.data_as(ctypes.c_void_p),
+                             ao.ctypes.data_as(ctypes.c_void_p),
+                             wv.ctypes.data_as(ctypes.c_void_p),
+                             ctypes.c_int(comp), ctypes.c_int(nao),
+                             ctypes.c_int(ngrids))
+    elif aow.dtype == numpy.complex128:
+        libdft.VXC_zscale_ao(aow.ctypes.data_as(ctypes.c_void_p),
+                             ao.ctypes.data_as(ctypes.c_void_p),
+                             wv.ctypes.data_as(ctypes.c_void_p),
+                             ctypes.c_int(comp), ctypes.c_int(nao),
+                             ctypes.c_int(ngrids))
+    else:
+        aow = numpy.einsum('nip,np->pi', ao, wv, out=aow)
+    return aow
+
+def _contract_rho(bra, ket):
+    #:rho  = numpy.einsum('pi,pi->p', bra.real, ket.real)
+    #:rho += numpy.einsum('pi,pi->p', bra.imag, ket.imag)
+    bra = bra.T
+    ket = ket.T
+    nao, ngrids = bra.shape
+    rho = numpy.empty(ngrids)
+
+    if not (bra.flags.c_contiguous and ket.flags.c_contiguous):
+        rho  = numpy.einsum('ip,ip->p', bra.real, ket.real)
+        rho += numpy.einsum('ip,ip->p', bra.imag, ket.imag)
+    elif bra.dtype == numpy.double and ket.dtype == numpy.double:
+        libdft.VXC_dcontract_rho(rho.ctypes.data_as(ctypes.c_void_p),
+                                 bra.ctypes.data_as(ctypes.c_void_p),
+                                 ket.ctypes.data_as(ctypes.c_void_p),
+                                 ctypes.c_int(nao), ctypes.c_int(ngrids))
+    elif bra.dtype == numpy.complex128 and ket.dtype == numpy.complex128:
+        libdft.VXC_zcontract_rho(rho.ctypes.data_as(ctypes.c_void_p),
+                                 bra.ctypes.data_as(ctypes.c_void_p),
+                                 ket.ctypes.data_as(ctypes.c_void_p),
+                                 ctypes.c_int(nao), ctypes.c_int(ngrids))
+    else:
+        rho  = numpy.einsum('ip,ip->p', bra.real, ket.real)
+        rho += numpy.einsum('ip,ip->p', bra.imag, ket.imag)
+    return rho
 
 def nr_vxc(mol, grids, xc_code, dms, spin=0, relativity=0, hermi=0,
            max_memory=2000, verbose=None):
@@ -687,7 +769,8 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
                 nelec[idm] += den.sum()
                 excsum[idm] += numpy.dot(den, exc)
                 # *.5 because vmat + vmat.T
-                aow = numpy.einsum('pi,p->pi', ao, .5*weight*vrho, out=aow)
+                #:aow = numpy.einsum('pi,p->pi', ao, .5*weight*vrho, out=aow)
+                aow = _scale_ao(ao, .5*weight*vrho, out=aow)
                 vmat[idm] += _dot_ao_ao(mol, ao, aow, mask, shls_slice, ao_loc)
                 rho = exc = vxc = vrho = None
     elif xctype == 'GGA':
@@ -704,7 +787,8 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
                 excsum[idm] += numpy.dot(den, exc)
 # ref eval_mat function
                 wv = _rks_gga_wv0(rho, vxc, weight)
-                aow = numpy.einsum('npi,np->pi', ao, wv, out=aow)
+                #:aow = numpy.einsum('npi,np->pi', ao, wv, out=aow)
+                aow = _scale_ao(ao, wv, out=aow)
                 vmat[idm] += _dot_ao_ao(mol, ao[0], aow, mask, shls_slice, ao_loc)
                 rho = exc = vxc = wv = None
     elif xctype == 'NLC':
@@ -745,7 +829,8 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
                 excsum[idm] += numpy.dot(den, exc)
 # ref eval_mat function
                 wv = _rks_gga_wv0(rho, vxc, weight)
-                aow = numpy.einsum('npi,np->pi', ao, wv, out=aow)
+                #:aow = numpy.einsum('npi,np->pi', ao, wv, out=aow)
+                aow = _scale_ao(ao, wv, out=aow)
                 vmat[idm] += _dot_ao_ao(mol, ao[0], aow, mask, shls_slice, ao_loc)
                 rho = exc = vxc = wv = None
         vvrho = vvweight = vvcoords = None
@@ -766,7 +851,8 @@ def nr_rks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
                 excsum[idm] += numpy.dot(den, exc)
 
                 wv = _rks_gga_wv0(rho, vxc, weight)
-                aow = numpy.einsum('npi,np->pi', ao[:4], wv, out=aow)
+                #:aow = numpy.einsum('npi,np->pi', ao[:4], wv, out=aow)
+                aow = _scale_ao(ao[:4], wv, out=aow)
                 vmat[idm] += _dot_ao_ao(mol, ao[0], aow, mask, shls_slice, ao_loc)
 
 # FIXME: .5 * .5   First 0.5 for v+v.T symmetrization.
@@ -864,9 +950,11 @@ def nr_uks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
                 excsum[idm] += numpy.dot(den, exc)
 
                 # *.5 due to +c.c. in the end
-                aow = numpy.einsum('pi,p->pi', ao, .5*weight*vrho[:,0], out=aow)
+                #:aow = numpy.einsum('pi,p->pi', ao, .5*weight*vrho[:,0], out=aow)
+                aow = _scale_ao(ao, .5*weight*vrho[:,0], out=aow)
                 vmat[0,idm] += _dot_ao_ao(mol, ao, aow, mask, shls_slice, ao_loc)
-                aow = numpy.einsum('pi,p->pi', ao, .5*weight*vrho[:,1], out=aow)
+                #:aow = numpy.einsum('pi,p->pi', ao, .5*weight*vrho[:,1], out=aow)
+                aow = _scale_ao(ao, .5*weight*vrho[:,1], out=aow)
                 vmat[1,idm] += _dot_ao_ao(mol, ao, aow, mask, shls_slice, ao_loc)
                 rho_a = rho_b = exc = vxc = vrho = None
     elif xctype == 'GGA':
@@ -888,9 +976,11 @@ def nr_uks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
                 excsum[idm] += numpy.dot(den, exc)
 
                 wva, wvb = _uks_gga_wv0((rho_a,rho_b), vxc, weight)
-                aow = numpy.einsum('npi,np->pi', ao, wva, out=aow)
+                #:aow = numpy.einsum('npi,np->pi', ao, wva, out=aow)
+                aow = _scale_ao(ao, wva, out=aow)
                 vmat[0,idm] += _dot_ao_ao(mol, ao[0], aow, mask, shls_slice, ao_loc)
-                aow = numpy.einsum('npi,np->pi', ao, wvb, out=aow)
+                #:aow = numpy.einsum('npi,np->pi', ao, wvb, out=aow)
+                aow = _scale_ao(ao, wvb, out=aow)
                 vmat[1,idm] += _dot_ao_ao(mol, ao[0], aow, mask, shls_slice, ao_loc)
                 rho_a = rho_b = exc = vxc = wva = wvb = None
     elif xctype == 'MGGA':
@@ -915,9 +1005,11 @@ def nr_uks(ni, mol, grids, xc_code, dms, relativity=0, hermi=0,
                 excsum[idm] += numpy.dot(den, exc)
 
                 wva, wvb = _uks_gga_wv0((rho_a,rho_b), vxc, weight)
-                aow = numpy.einsum('npi,np->pi', ao[:4], wva, out=aow)
+                #:aow = numpy.einsum('npi,np->pi', ao[:4], wva, out=aow)
+                aow = _scale_ao(ao[:4], wva, out=aow)
                 vmat[0,idm] += _dot_ao_ao(mol, ao[0], aow, mask, shls_slice, ao_loc)
-                aow = numpy.einsum('npi,np->pi', ao[:4], wvb, out=aow)
+                #:aow = numpy.einsum('npi,np->pi', ao[:4], wvb, out=aow)
+                aow = _scale_ao(ao[:4], wvb, out=aow)
                 vmat[1,idm] += _dot_ao_ao(mol, ao[0], aow, mask, shls_slice, ao_loc)
 
 # FIXME: .5 * .5   First 0.5 for v+v.T symmetrization.
@@ -1030,7 +1122,8 @@ def nr_rks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
 
             for i in range(nset):
                 rho1 = make_rho(i, ao, mask, 'LDA')
-                aow = numpy.einsum('pi,p->pi', ao, weight*frr*rho1, out=aow)
+                #:aow = numpy.einsum('pi,p->pi', ao, weight*frr*rho1, out=aow)
+                aow = _scale_ao(ao, weight*frr*rho1, out=aow)
                 vmat[i] += _dot_ao_ao(mol, aow, ao, mask, shls_slice, ao_loc)
                 rho1 = None
 
@@ -1055,7 +1148,8 @@ def nr_rks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
             for i in range(nset):
                 rho1 = make_rho(i, ao, mask, 'GGA')
                 wv = _rks_gga_wv1(rho, rho1, vxc0, fxc0, weight)
-                aow = numpy.einsum('npi,np->pi', ao, wv, out=aow)
+                #:aow = numpy.einsum('npi,np->pi', ao, wv, out=aow)
+                aow = _scale_ao(ao, wv, out=aow)
                 vmat[i] += _dot_ao_ao(mol, aow, ao[0], mask, shls_slice, ao_loc)
                 rho1 = sigma1 = None
 
@@ -1121,7 +1215,8 @@ def nr_rks_fxc_st(ni, mol, grids, xc_code, dm0, dms_alpha, relativity=0, singlet
 
             for i in range(nset):
                 rho1 = make_rho(i, ao, mask, 'LDA')
-                aow = numpy.einsum('pi,p->pi', ao, weight*frho*rho1, out=aow)
+                #:aow = numpy.einsum('pi,p->pi', ao, weight*frho*rho1, out=aow)
+                aow = _scale_ao(ao, weight*frho*rho1, out=aow)
                 vmat[i] += _dot_ao_ao(mol, aow, ao, mask, shls_slice, ao_loc)
                 rho1 = None
 
@@ -1169,7 +1264,8 @@ def nr_rks_fxc_st(ni, mol, grids, xc_code, dm0, dms_alpha, relativity=0, singlet
                 # rho1[1:] = \nabla(|b><j|) z_{bj}
                 rho1 = make_rho(i, ao, mask, 'GGA')
                 wv = _rks_gga_wv1(rho, rho1, (None,fgamma), (frho,frhogamma,fgg), weight)
-                aow = numpy.einsum('npi,np->pi', ao, wv, out=aow)
+                #:aow = numpy.einsum('npi,np->pi', ao, wv, out=aow)
+                aow = _scale_ao(ao, wv, out=aow)
                 vmat[i] += _dot_ao_ao(mol, aow, ao[0], mask, shls_slice, ao_loc)
                 rho1 = sigma1 = None
 
@@ -1309,11 +1405,13 @@ def nr_uks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
                 rho1b = make_rhob(i, ao, mask, xctype)
                 wv = u_u * rho1a + u_d * rho1b
                 wv *= weight
-                aow = numpy.einsum('pi,p->pi', ao, wv, out=aow)
+                #:aow = numpy.einsum('pi,p->pi', ao, wv, out=aow)
+                aow = _scale_ao(ao, wv, out=aow)
                 vmat[0,i] += _dot_ao_ao(mol, aow, ao, mask, shls_slice, ao_loc)
                 wv = u_d * rho1a + d_d * rho1b
                 wv *= weight
-                aow = numpy.einsum('pi,p->pi', ao, wv, out=aow)
+                #:aow = numpy.einsum('pi,p->pi', ao, wv, out=aow)
+                aow = _scale_ao(ao, wv, out=aow)
                 vmat[1,i] += _dot_ao_ao(mol, aow, ao, mask, shls_slice, ao_loc)
 
     elif xctype == 'GGA':
@@ -1340,9 +1438,11 @@ def nr_uks_fxc(ni, mol, grids, xc_code, dm0, dms, relativity=0, hermi=0,
                 rho1a = make_rhoa(i, ao, mask, xctype)
                 rho1b = make_rhob(i, ao, mask, xctype)
                 wva, wvb = _uks_gga_wv1((rho0a,rho0b), (rho1a,rho1b), vxc0, fxc0, weight)
-                aow = numpy.einsum('npi,np->pi', ao, wva, out=aow)
+                #:aow = numpy.einsum('npi,np->pi', ao, wva, out=aow)
+                aow = _scale_ao(ao, wva, out=aow)
                 vmat[0,i] += _dot_ao_ao(mol, aow, ao[0], mask, shls_slice, ao_loc)
-                aow = numpy.einsum('npi,np->pi', ao, wvb, out=aow)
+                #:aow = numpy.einsum('npi,np->pi', ao, wvb, out=aow)
+                aow = _scale_ao(ao, wvb, out=aow)
                 vmat[1,i] += _dot_ao_ao(mol, aow, ao[0], mask, shls_slice, ao_loc)
 
         for i in range(nset):  # for (\nabla\mu) \nu + \mu (\nabla\nu)

@@ -23,6 +23,7 @@ import numpy
 from pyscf import lib
 from pyscf.dft import numint
 from pyscf.dft.numint import eval_mat, _dot_ao_ao, _dot_ao_dm
+from pyscf.dft.numint import _scale_ao, _contract_rho
 from pyscf.dft.numint import OCCDROP
 from pyscf.pbc.dft.gen_grid import libpbc, make_mask, BLKSIZE
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, member
@@ -147,9 +148,10 @@ def eval_rho(cell, ao, dm, non0tab=None, xctype='LDA', hermi=0, verbose=None):
         dm = dm.astype(numpy.complex128)
 
         def dot_bra(bra, aodm):
-            rho  = numpy.einsum('pi,pi->p', bra.real, aodm.real)
-            rho += numpy.einsum('pi,pi->p', bra.imag, aodm.imag)
-            return rho
+            #:rho  = numpy.einsum('pi,pi->p', bra.real, aodm.real)
+            #:rho += numpy.einsum('pi,pi->p', bra.imag, aodm.imag)
+            #:return rho
+            return _contract_rho(bra, aodm)
 
         if xctype == 'LDA' or xctype == 'HF':
             c0 = _dot_ao_dm(cell, ao, dm, non0tab, shls_slice, ao_loc)
@@ -201,9 +203,10 @@ def eval_rho2(cell, ao, mo_coeff, mo_occ, non0tab=None, xctype='LDA',
     # complex orbitals or density matrix
     if numpy.iscomplexobj(ao) or numpy.iscomplexobj(mo_coeff):
         def dot(bra, ket):
-            rho  = numpy.einsum('pi,pi->p', bra.real, ket.real)
-            rho += numpy.einsum('pi,pi->p', bra.imag, ket.imag)
-            return rho
+            #:rho  = numpy.einsum('pi,pi->p', bra.real, ket.real)
+            #:rho += numpy.einsum('pi,pi->p', bra.imag, ket.imag)
+            #:return rho
+            return _contract_rho(bra, ket)
 
         shls_slice = (0, cell.nbas)
         ao_loc = cell.ao_loc_nr()
@@ -857,12 +860,12 @@ def _fxc_mat(cell, ao, wv, non0tab, xctype, ao_loc):
     shls_slice = (0, cell.nbas)
 
     if xctype == 'LDA' or xctype == 'HF':
-        ngrids, nao = ao.shape
-        aow = numpy.einsum('pi,p->pi', ao, wv)
+        #:aow = numpy.einsum('pi,p->pi', ao, wv)
+        aow = _scale_ao(ao, wv)
         mat = _dot_ao_ao(cell, ao, aow, non0tab, shls_slice, ao_loc)
     else:
-        ngrids, nao = ao[0].shape
-        aow = numpy.einsum('npi,np->pi', ao, wv)
+        #:aow = numpy.einsum('npi,np->pi', ao, wv)
+        aow = _scale_ao(ao, wv)
         mat = _dot_ao_ao(cell, ao[0], aow, non0tab, shls_slice, ao_loc)
     return mat
 
@@ -1210,8 +1213,9 @@ class KNumInt(numint.NumInt):
                                       non0tab, xctype)
         else:
             if isinstance(dms, numpy.ndarray) and dms.ndim == 3:
-                nao = dms.shape[-1]
                 dms = [dms]
+            elif isinstance(dms[0], numpy.ndarray) and dms[0].ndim == 2:
+                dms = [numpy.asarray(dms)]
             if not hermi:
                 #       dm.shape = (nkpts, nao, nao)
                 dms = [(dm+dm.conj().transpose(0,2,1))*.5 for dm in dms]
