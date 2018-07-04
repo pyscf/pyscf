@@ -1200,7 +1200,7 @@ class KNumInt(numint.NumInt):
         if hasattr(dms, 'mo_coeff'):
             mo_coeff = dms.mo_coeff
             mo_occ = dms.mo_occ
-            if isinstance(dms, numpy.ndarray) and dms.ndim == 3:
+            if isinstance(dms[0], numpy.ndarray) and dms[0].ndim == 2:
                 mo_coeff = [mo_coeff]
                 mo_occ = [mo_occ]
             nao = cell.nao_nr()
@@ -1209,9 +1209,7 @@ class KNumInt(numint.NumInt):
                 return self.eval_rho2(cell, ao, mo_coeff[idm], mo_occ[idm],
                                       non0tab, xctype)
         else:
-            if isinstance(dms, numpy.ndarray) and dms.ndim == 3:
-                dms = [dms]
-            elif isinstance(dms[0], numpy.ndarray) and dms[0].ndim == 2:
+            if isinstance(dms[0], numpy.ndarray) and dms[0].ndim == 2:
                 dms = [numpy.asarray(dms)]
             if not hermi:
                 #       dm.shape = (nkpts, nao, nao)

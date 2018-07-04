@@ -23,35 +23,45 @@ Restricted open-shell Kohn-Sham for periodic systems at a single k-point
 import time
 import numpy
 import pyscf.dft
-from pyscf.pbc.scf import rohf as pbcrohf
-from pyscf.lib import logger
+from pyscf import lib
+from pyscf.pbc.scf import rohf
 from pyscf.pbc.dft import rks
 from pyscf.pbc.dft import uks
 
 
-get_veff = uks.get_veff
+@lib.with_doc(uks.get_veff.__doc__)
+def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
+             kpt=None, kpts_band=None):
+    if hasattr(dm, 'mo_coeff'):
+        mo_coeff = dm.mo_coeff
+        mo_occ_a = (dm.mo_occ > 0).astype(np.double)
+        mo_occ_b = (dm.mo_occ ==2).astype(np.double)
+        dm = lib.tag_array(dm, mo_coeff=(mo_coeff,mo_coeff),
+                           mo_occ=(mo_occ_a,mo_occ_b))
+    return uks.get_veff(ks, cell, dm, dm_last, vhf_last, hermi, kpt, kpts_band)
 
-class ROKS(pbcrohf.ROHF):
+
+class ROKS(rohf.ROHF):
     '''UKS class adapted for PBCs.
 
     This is a literal duplication of the molecular UKS class with some `mol`
     variables replaced by `cell`.
     '''
     def __init__(self, cell, kpt=numpy.zeros(3)):
-        pbcrohf.ROHF.__init__(self, cell, kpt)
+        rohf.ROHF.__init__(self, cell, kpt)
         rks._dft_common_init_(self)
 
     def dump_flags(self):
-        pbcrohf.ROHF.dump_flags(self)
-        logger.info(self, 'XC functionals = %s', self.xc)
+        rohf.ROHF.dump_flags(self)
+        lib.logger.info(self, 'XC functionals = %s', self.xc)
         self.grids.dump_flags()
 
     get_veff = get_veff
     energy_elec = pyscf.dft.uks.energy_elec
     define_xc_ = rks.define_xc_
 
-    density_fit = rks._patch_df_beckegrids(pbcrohf.ROHF.density_fit)
-    mix_density_fit = rks._patch_df_beckegrids(pbcrohf.ROHF.mix_density_fit)
+    density_fit = rks._patch_df_beckegrids(rohf.ROHF.density_fit)
+    mix_density_fit = rks._patch_df_beckegrids(rohf.ROHF.mix_density_fit)
 
 
 if __name__ == '__main__':
