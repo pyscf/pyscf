@@ -3037,7 +3037,7 @@ class _IMDS:
         blksize = max(int(max_memory*1e6/8/(nvirb*nvira**2*3)), 2)
         for i0,i1 in lib.prange(0, nocca, blksize):
             wvOvV = self.wvOvV[:,i0:i1]
-            for p0,p1 in lib.prange(0, nocca, blksize):
+            for p0,p1 in lib.prange(0, noccb, blksize):
                 OVvv = np.asarray(eris.OVvv[p0:p1]).reshape((p1-p0)*nvirb,-1)
                 OVvv = lib.unpack_tril(OVvv).reshape(-1,nvirb,nvira,nvira)
                 if p0 == i0:
