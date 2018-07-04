@@ -76,11 +76,11 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         if (ks._eri is None and ks.direct_scf and
             getattr(vhf_last, 'vj', None) is not None):
             ddm = numpy.asarray(dm) - numpy.asarray(dm_last)
-            vj = ks.get_j(mol, ddm, hermi)
+            vj = ks.get_j(mol, ddm[0]+ddm[1], hermi)
             vj += vhf_last.vj
         else:
-            vj = ks.get_j(mol, dm, hermi)
-        vxc += vj[0] + vj[1]
+            vj = ks.get_j(mol, dm[0]+dm[1], hermi)
+        vxc += vj
     else:
         if (ks._eri is None and ks.direct_scf and
             getattr(vhf_last, 'vk', None) is not None):
@@ -91,22 +91,23 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
                 vklr = rks._get_k_lr(mol, ddm, omega, hermi)
                 vklr *= (alpha - hyb)
                 vk += vklr
-            vj += vhf_last.vj
+            vj = vj[0] + vj[1] + vhf_last.vj
             vk += vhf_last.vk
         else:
             vj, vk = ks.get_jk(mol, dm, hermi)
+            vj = vj[0] + vj[1]
             vk *= hyb
             if abs(omega) > 1e-10:
                 vklr = rks._get_k_lr(mol, dm, omega, hermi)
                 vklr *= (alpha - hyb)
                 vk += vklr
-        vxc += vj[0] + vj[1] - vk
+        vxc += vj - vk
 
         if ground_state:
             exc -=(numpy.einsum('ij,ji', dm[0], vk[0]) +
                    numpy.einsum('ij,ji', dm[1], vk[1])) * .5
     if ground_state:
-        ecoul = numpy.einsum('ij,ji', dm[0]+dm[1], vj[0]+vj[1]) * .5
+        ecoul = numpy.einsum('ij,ji', dm[0]+dm[1], vj) * .5
     else:
         ecoul = None
 
