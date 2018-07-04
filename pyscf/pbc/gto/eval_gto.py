@@ -151,11 +151,12 @@ def eval_gto(cell, eval_name, coords, comp=None, kpts=None, kpt=None,
 
     ao_kpts = []
     for k, kpt in enumerate(kpts_lst):
-        v = out[k].transpose(0,2,1)
+        v = out[k]
+        if abs(kpt).sum() < 1e-9:
+            v = numpy.asarray(v.real, order='C')
+        v = v.transpose(0,2,1)
         if comp == 1:
             v = v[0]
-        if abs(kpt).sum() < 1e-9:
-            v = v.real.copy(order='F')
         ao_kpts.append(v)
 
     if kpts is None or numpy.shape(kpts) == (3,):  # A single k-point
