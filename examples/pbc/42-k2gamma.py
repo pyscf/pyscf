@@ -78,7 +78,14 @@ def mo_k2gamma(cell, mo_energy, mo_coeff, kpts, kmesh=None):
     C_gamma = C_gamma.real
     assert(abs(reduce(np.dot, (C_gamma.conj().T, s, C_gamma))
                - np.eye(Nmo*Nk)).max() < 1e-7)
-    return scell, E_g, C_gamma
+
+    s_k = cell.pbc_intor('int1e_ovlp', kpts=kpts)
+    # overlap between k-point unitcell and gamma-point supercell
+    s_k_g = np.einsum('kuv,Rk->kuRv', s_k, phase.conj()).reshape(Nk,Nao,NR*Nao)
+    # The unitary transformation from k-adapted orbitals to gamma-point orbitals
+    mo_phase = lib.einsum('kum,kuv,vi->kmi', C_k.conj(), s_k_g, C_gamma)
+
+    return scell, E_g, C_gamma, mo_phase
 
 def k2gamma(kmf, kmesh=None):
     r'''
@@ -91,7 +98,7 @@ def k2gamma(kmf, kmesh=None):
     '''
 
     scell, E_g, C_gamma = mo_k2gamma(kmf.cell, kmf.mo_energy,
-                                     kmf.mo_coeff, kmf.kpts, kmesh)
+                                     kmf.mo_coeff, kmf.kpts, kmesh)[:3]
 
     E_sort_idx = np.argsort(np.hstack(kmf.mo_energy))
     mo_occ = np.hstack(kmf.mo_occ)[E_sort_idx]
