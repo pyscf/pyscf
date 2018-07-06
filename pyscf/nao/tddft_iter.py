@@ -94,15 +94,17 @@ class tddft_iter(chi0_matvec):
     self.comega_current = comega
     veff_op = LinearOperator((self.nprod,self.nprod), matvec=self.vext2veff_matvec, dtype=self.dtypeComplex)
 
-    if self.scipy_ver > 0:
+    if self.res_method == "relative" or self.res_method == "absolute":
         from pyscf.nao.m_lgmres import lgmres
         resgm, info = lgmres(veff_op, np.require(vext, dtype=self.dtypeComplex, 
             requirements='C'), x0=x0, tol=self.tddft_iter_tol, maxiter=self.maxiter, res=self.res_method)
-    else:
+    elif self.res_method == "both":
         # use the non-modified lgmres scipy version
         from scipy.sparse.linalg import lgmres
         resgm, info = lgmres(veff_op, np.require(vext, dtype=self.dtypeComplex, 
             requirements='C'), x0=x0, tol=self.tddft_iter_tol, maxiter=self.maxiter)
+    else:
+        raise ValueError("wrong input for res_method")
 
     if info != 0:
         print("LGMRES Warning: info = {0}".format(info))
