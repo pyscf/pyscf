@@ -668,20 +668,6 @@ def dot(a, b, alpha=1, c=None, beta=0):
             c.real = ddot(a, b, alpha, cr, beta)
             return c
 
-    if atype == numpy.float64 and btype == numpy.complex128:
-        br = numpy.asarray(b.real, order='C')
-        bi = numpy.asarray(b.imag, order='C')
-        cr = ddot(a, br, alpha)
-        ci = ddot(a, bi, alpha)
-        ab = cr + ci*1j
-
-    elif atype == numpy.complex128 and btype == numpy.float64:
-        ar = numpy.asarray(a.real, order='C')
-        ai = numpy.asarray(a.imag, order='C')
-        cr = ddot(ar, b, alpha)
-        ci = ddot(ai, b, alpha)
-        ab = cr + ci*1j
-
     elif atype == numpy.complex128 and btype == numpy.complex128:
         # Gauss's complex multiplication algorithm may affect numerical stability
         #k1 = ddot(a.real+a.imag, b.real.copy(), alpha)
@@ -690,18 +676,49 @@ def dot(a, b, alpha=1, c=None, beta=0):
         #ab = k1-k3 + (k1+k2)*1j
         return zdot(a, b, alpha, c, beta)
 
-    else:
-        ab = numpy.dot(a, b) * alpha
+    elif atype == numpy.float64 and btype == numpy.complex128:
+        if b.flags.f_contiguous:
+            order = 'F'
+        else:
+            order = 'C'
+        cr = ddot(a, numpy.asarray(b.real, order=order), alpha)
+        ci = ddot(a, numpy.asarray(b.imag, order=order), alpha)
+        ab = numpy.ndarray(cr.shape, dtype=numpy.complex128, buffer=c)
+        if c is None or beta == 0:
+            ab.real = cr
+            ab.imag = ci
+        else:
+            ab *= beta
+            ab.real += cr
+            ab.imag += ci
+        return ab
 
-    if c is None:
-        c = ab
+    elif atype == numpy.complex128 and btype == numpy.float64:
+        if a.flags.f_contiguous:
+            order = 'F'
+        else:
+            order = 'C'
+        cr = ddot(numpy.asarray(a.real, order=order), b, alpha)
+        ci = ddot(numpy.asarray(a.imag, order=order), b, alpha)
+        ab = numpy.ndarray(cr.shape, dtype=numpy.complex128, buffer=c)
+        if c is None or beta == 0:
+            ab.real = cr
+            ab.imag = ci
+        else:
+            ab *= beta
+            ab.real += cr
+            ab.imag += ci
+        return ab
+
     else:
-        if beta == 0:
-            c[:] = 0
+        if c is None:
+            c = numpy.dot(a, b) * alpha
+        elif beta == 0:
+            c[:] = numpy.dot(a, b) * alpha
         else:
             c *= beta
-        c += ab
-    return c
+            c += numpy.dot(a, b) * alpha
+        return c
 
 # a, b, c in C-order
 def _dgemm(trans_a, trans_b, m, n, k, a, b, c, alpha=1, beta=0,
