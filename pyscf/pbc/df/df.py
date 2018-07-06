@@ -144,7 +144,21 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
     log = logger.Logger(mydf.stdout, mydf.verbose)
     max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
     fused_cell, fuse = fuse_auxcell(mydf, auxcell)
-    outcore._aux_e2(cell, fused_cell, cderi_file, 'int3c2e', aosym='s2',
+
+    # The ideal way to hold the temporary integrals is to store them in the
+    # cderi_file and overwrite them inplace in the second pass.  The current
+    # HDF5 library does not have an efficient way to manage free space in
+    # overwriting.  It often leads to the cderi_file ~2 times larger than the
+    # necessary size.  For now, dumping the DF integral intermediates to a
+    # separated temporary file can avoid this issue.  The DF intermediates may
+    # be terribly huge. The temporary file should be placed in the same disk
+    # as cderi_file.
+    swapfile = tempfile.NamedTemporaryFile(dir=os.path.dirname(cderi_file))
+    fswap = lib.H5TmpFile(swapfile.name)
+    # Unlink swapfile to avoid trash
+    swapfile = None
+
+    outcore._aux_e2(cell, fused_cell, fswap, 'int3c2e', aosym='s2',
                     kptij_lst=kptij_lst, dataname='j3c-junk', max_memory=max_memory)
     t1 = log.timer_debug1('3c2e', *t1)
 
@@ -164,7 +178,6 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
     log.debug2('uniq_kpts %s', uniq_kpts)
     # j2c ~ (-kpt_ji | kpt_ji)
     j2c = fused_cell.pbc_intor('int2c2e', hermi=1, kpts=uniq_kpts)
-    fswap = lib.H5TmpFile()
 
 # An alternative method to evalute j2c. This method might have larger numerical error?
 #    chgcell = make_modchg_basis(auxcell, mydf.eta)
@@ -221,8 +234,9 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
         fswap['j2c/%d'%k] = fuse(fuse(j2c[k]).T).T
     j2c = coulG = None
 
-    feri = h5py.File(cderi_file)
-    nsegs = len(feri['j3c-junk/0'])
+    feri = h5py.File(cderi_file, 'w')
+    feri['j3c-kptij'] = kptij_lst
+    nsegs = len(fswap['j3c-junk/0'])
     def make_kpt(uniq_kptji_id):  # kpt = kptj - kpti
         kpt = uniq_kpts[uniq_kptji_id]
         log.debug1('kpt = %s', kpt)
@@ -355,7 +369,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
                 j3cR = []
                 j3cI = []
                 for k, idx in enumerate(adapted_ji_idx):
-                    v = numpy.vstack([feri['j3c-junk/%d/%d'%(idx,i)][0,col0:col1].T
+                    v = numpy.vstack([fswap['j3c-junk/%d/%d'%(idx,i)][0,col0:col1].T
                                       for i in range(nsegs)])
                     if is_zero(kpt) and cell.dimension == 3:
                         for i in numpy.where(vbar != 0)[0]:
@@ -368,13 +382,11 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
                 v = None
                 compute(istep, sh_range, j3cR, j3cI)
         for ji in adapted_ji_idx:
-            del(feri['j3c-junk/%d'%ji])
+            del(fswap['j3c-junk/%d'%ji])
 
     for k, kpt in enumerate(uniq_kpts):
         make_kpt(k)
 
-    feri['j3c-kptij'] = feri['j3c-junk-kptij']
-    del(feri['j3c-junk'])
     feri.close()
 
 

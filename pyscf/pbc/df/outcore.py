@@ -42,14 +42,16 @@ def aux_e1(cell, auxcell, erifile, intor='int3c2e', aosym='s2ij', comp=None,
     '''
     intor, comp = gto.moleintor._get_intor_and_comp(cell._add_suffix(intor), comp)
 
-    if h5py.is_hdf5(erifile):
+    if isinstance(erifile, h5py.Group):
+        feri = erifile
+    elif h5py.is_hdf5(erifile):
         feri = h5py.File(erifile)
-        if dataname in feri:
-            del(feri[dataname])
-        if dataname+'-kptij' in feri:
-            del(feri[dataname+'-kptij'])
     else:
         feri = h5py.File(erifile, 'w')
+    if dataname in feri:
+        del(feri[dataname])
+    if dataname+'-kptij' in feri:
+        del(feri[dataname+'-kptij'])
 
     if kptij_lst is None:
         kptij_lst = numpy.zeros((1,2,3))
@@ -137,7 +139,8 @@ def aux_e1(cell, auxcell, erifile, intor='int3c2e', aosym='s2ij', comp=None,
                     h5dat[icomp,naux0:naux0+nrow] = v
         naux0 += nrow
 
-    feri.close()
+    if not isinstance(erifile, h5py.Group):
+        feri.close()
     return erifile
 
 
@@ -158,14 +161,16 @@ def _aux_e2(cell, auxcell, erifile, intor='int3c2e', aosym='s2ij', comp=None,
     '''
     intor, comp = gto.moleintor._get_intor_and_comp(cell._add_suffix(intor), comp)
 
-    if h5py.is_hdf5(erifile):
+    if isinstance(erifile, h5py.Group):
+        feri = erifile
+    elif h5py.is_hdf5(erifile):
         feri = h5py.File(erifile)
-        if dataname in feri:
-            del(feri[dataname])
-        if dataname+'-kptij' in feri:
-            del(feri[dataname+'-kptij'])
     else:
         feri = h5py.File(erifile, 'w')
+    if dataname in feri:
+        del(feri[dataname])
+    if dataname+'-kptij' in feri:
+        del(feri[dataname+'-kptij'])
 
     if kptij_lst is None:
         kptij_lst = numpy.zeros((1,2,3))
@@ -244,7 +249,8 @@ def _aux_e2(cell, auxcell, erifile, intor='int3c2e', aosym='s2ij', comp=None,
             bsave(istep, int3c(sub_slice, mat))
             buf, buf1 = buf1, buf
 
-    feri.close()
+    if not isinstance(erifile, h5py.Group):
+        feri.close()
     return erifile
 
 
