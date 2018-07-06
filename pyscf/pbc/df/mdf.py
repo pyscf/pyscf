@@ -52,7 +52,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
     max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
     fused_cell, fuse = fuse_auxcell(mydf, auxcell)
     outcore._aux_e2(cell, fused_cell, cderi_file, 'int3c2e', aosym='s2',
-                    kptij_lst=kptij_lst, dataname='j3c', max_memory=max_memory)
+                    kptij_lst=kptij_lst, dataname='j3c-junk', max_memory=max_memory)
     t1 = log.timer_debug1('3c2e', *t1)
 
     nao = cell.nao_nr()
@@ -71,8 +71,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
     log.debug2('uniq_kpts %s', uniq_kpts)
     # j2c ~ (-kpt_ji | kpt_ji)
     j2c = fused_cell.pbc_intor('int2c2e', hermi=1, kpts=uniq_kpts)
-    feri = h5py.File(cderi_file)
-    nsegs = len(feri['j3c/0'])
+    fswap = lib.H5TmpFile()
 
     for k, kpt in enumerate(uniq_kpts):
         aoaux = ft_ao.ft_ao(fused_cell, Gv, None, b, gxyz, Gvbase, kpt).T
@@ -91,10 +90,12 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
              # aoaux ~ kpt_ij, aoaux.conj() ~ kpt_kl
             j2cR, j2cI = zdotCN(kLR.T, kLI.T, kLR, kLI)
             j2c_k -= j2cR + j2cI * 1j
-        feri['j2c/%d'%k] = j2c_k
+        fswap['j2c/%d'%k] = j2c_k
         aoaux = kLR = kLI = j2cR = j2cI = coulG = None
     j2c = None
 
+    feri = h5py.File(cderi_file)
+    nsegs = len(feri['j3c-junk/0'])
     def make_kpt(uniq_kptji_id):  # kpt = kptj - kpti
         kpt = uniq_kpts[uniq_kptji_id]
         log.debug1('kpt = %s', kpt)
@@ -108,7 +109,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
         Gaux *= mydf.weighted_coulG(kpt, False, mesh)
         kLR = Gaux.T.real.copy('C')
         kLI = Gaux.T.imag.copy('C')
-        j2c = numpy.asarray(feri['j2c/%d'%uniq_kptji_id])
+        j2c = numpy.asarray(fswap['j2c/%d'%uniq_kptji_id])
 # Note large difference may be found in results between the CD/eig treatments.
 # In some systems, small integral errors can lead to different treatments of
 # linear dependency which can be observed in the total energy/orbital energy
@@ -139,8 +140,6 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
         else:
             aosym = 's1'
             nao_pair = nao**2
-
-        fswap = lib.H5TmpFile()
 
         mem_now = lib.current_memory()[0]
         log.debug2('memory = %s', mem_now)
@@ -193,7 +192,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
                     v = scipy.linalg.solve_triangular(j2c, v, lower=True, overwrite_b=True)
                 else:
                     v = lib.dot(j2c, v)
-                fswap['%d/%d'%(k,istep)] = v
+                feri['j3c/%d/%d'%(ji,istep)] = v
 
         with lib.call_in_background(pw_contract) as compute:
             col1 = 0
@@ -205,7 +204,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
                 j3cR = []
                 j3cI = []
                 for k, idx in enumerate(adapted_ji_idx):
-                    v = [feri['j3c/%d/%d'%(idx,i)][0,col0:col1].T for i in range(nsegs)]
+                    v = [feri['j3c-junk/%d/%d'%(idx,i)][0,col0:col1].T for i in range(nsegs)]
                     v = fuse(numpy.vstack(v))
                     if is_zero(kpt) and cell.dimension == 3:
                         for i, c in enumerate(vbar):
@@ -218,17 +217,14 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
                         j3cI.append(numpy.asarray(v.imag, order='C'))
                     v = None
                 compute(istep, sh_range, j3cR, j3cI)
-
-        del(feri['j2c/%d'%uniq_kptji_id])
-        nsteps = len(shranges)
-        for k, ji in enumerate(adapted_ji_idx):
-            v = numpy.hstack([fswap['%d/%d'%(k,i)] for i in range(nsteps)])
-            del(feri['j3c/%d'%ji])
-            feri['j3c/%d'%ji] = v
+        for ji in adapted_ji_idx:
+            del(feri['j3c-junk/%d'%ji])
 
     for k, kpt in enumerate(uniq_kpts):
         make_kpt(k)
 
+    feri['j3c-kptij'] = feri['j3c-junk-kptij']
+    del(feri['j3c-junk'])
     feri.close()
 
 

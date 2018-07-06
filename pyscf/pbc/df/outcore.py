@@ -149,8 +149,8 @@ def _aux_e2(cell, auxcell, erifile, intor='int3c2e', aosym='s2ij', comp=None,
     Three-index integral tensor (kptij_idx, nao_pair, naux) or four-index
     integral tensor (kptij_idx, comp, nao_pair, naux) are stored on disk.
 
-    **This function should be used by df and mdf initialization function
-    _make_j3c only**
+    **This function should be only used by df and mdf initialization function
+    _make_j3c**
 
     Args:
         kptij_lst : (*,2,3) array
@@ -212,12 +212,23 @@ def _aux_e2(cell, auxcell, erifile, intor='int3c2e', aosym='s2ij', comp=None,
 
     int3c = wrap_int3c(cell, auxcell, intor, aosym, comp, kptij_lst)
 
+    kptis = kptij_lst[:,0]
+    kptjs = kptij_lst[:,1]
+    kpt_ji = kptjs - kptis
+    uniq_kpts, uniq_index, uniq_inverse = unique(kpt_ji)
+# sorted_ij_idx: Sort and group the kptij_lst according to the ordering in
+# df._make_j3c to reduce the data fragment in the hdf5 file.  When datasets
+# are written to hdf5, they are saved sequentially. If the integral data are
+# saved as the order of kptij_lst, removing the datasets in df._make_j3c will
+# lead to holes that can not be reused.
+    sorted_ij_idx = numpy.hstack([numpy.where(uniq_inverse == k)[0]
+                                  for k, kpt in enumerate(uniq_kpts)])
     tril_idx = numpy.tril_indices(ni)
     tril_idx = tril_idx[0] * ni + tril_idx[1]
     def save(istep, mat):
-        for k, kptij in enumerate(kptij_lst):
+        for k in sorted_ij_idx:
             v = mat[k]
-            if gamma_point(kptij):
+            if gamma_point(kptij_lst[k]):
                 v = v.real
             if aosym_ks2[k] and nao_pair == ni**2:
                 v = v[:,tril_idx]
