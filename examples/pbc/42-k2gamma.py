@@ -110,6 +110,34 @@ def k2gamma(kmf, kmesh=None):
     return mf
 
 
+def to_supercell_ao_integrals(cell, kpts, ao_ints):
+    '''Transform from the unitcell k-point AO integrals to the supercell
+    gamma-point AO integrals.
+    '''
+    scell, phase = get_phase(cell, kpts)
+    NR, Nk = phase.shape
+    nao = cell.nao
+    scell_ints = np.einsum('Rk,kij,Sk->RiSj', phase, ao_ints, phase.conj())
+    return scell_ints.reshape(NR*nao,NR*nao).real
+
+
+def to_supercell_mo_integrals(kmf, mo_ints):
+    '''Transform from the unitcell k-point MO integrals to the supercell
+    gamma-point MO integrals.
+    '''
+    cell = kmf.cell
+    kpts = kmf.kpts
+
+    mo_k = np.array(kmf.mo_coeff)
+    Nk, nao, nmo = mo_k.shape
+    e_k = np.array(kmf.mo_energy)
+    scell, E_g, C_gamma, mo_phase = mo_k2gamma(cell, e_k, mo_k, kpts)
+
+    scell_ints = lib.einsum('xui,xuv,xvj->ij', mo_phase.conj(), mo_ints, mo_phase)
+    assert(abs(scell_ints.imag).max() < 1e-7)
+    return scell_ints.real
+
+
 if __name__ == '__main__':
     from pyscf.pbc import gto, dft
     cell = gto.Cell()
