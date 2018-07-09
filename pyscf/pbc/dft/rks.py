@@ -67,7 +67,8 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
 # For UniformGrids, grids.coords does not indicate whehter grids are initialized
     if ks.grids.non0tab is None:
         ks.grids.build(with_non0tab=True)
-        if ks.small_rho_cutoff > 1e-20 and ground_state:
+        if (isinstance(ks.grids, gen_grid.BeckeGrids) and
+            ks.small_rho_cutoff > 1e-20 and ground_state):
             ks.grids = prune_small_rho_grids_(ks, cell, dm, ks.grids, kpt)
         t0 = logger.timer(ks, 'setting up grids', *t0)
 

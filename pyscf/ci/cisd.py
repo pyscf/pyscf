@@ -546,6 +546,8 @@ def as_scanner(ci):
             self.mol = mol
             self.mo_coeff = mf_scanner.mo_coeff
             self.mo_occ = mf_scanner.mo_occ
+# FIXME: Whether to use the initial guess from last step? If root flips, large
+# errors may be found in the solutions
             self.kernel(self.ci, **kwargs)[0]
             return self.e_tot
     return CISD_Scanner(ci)

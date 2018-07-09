@@ -378,7 +378,7 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
             xt, x0 = _qr(x0, dot), None
             max_dx_last = 1e9
             if SORT_EIG_BY_SIMILARITY:
-                conv = numpy.array([False] * nroots)
+                conv = [False] * nroots
         elif len(xt) > 1:
             xt = _qr(xt, dot)
             xt = xt[:40]  # 40 trial vectors at most
@@ -519,7 +519,7 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         if callable(callback):
             callback(locals())
 
-    return conv, e, x0
+    return numpy.asarray(conv), e, x0
 
 
 def eigh(a, *args, **kwargs):
@@ -700,7 +700,7 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
             xt, x0 = _qr(x0, dot), None
             max_dx_last = 1e9
             if SORT_EIG_BY_SIMILARITY:
-                conv = numpy.array([False] * nroots)
+                conv = [False] * nroots
         elif len(xt) > 1:
             xt = _qr(xt, dot)
             xt = xt[:40]  # 40 trial vectors at most
@@ -845,9 +845,9 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         e, v, idx = pick(w, v, nroots, x0)
         xl = _gen_x0(vl[:,idx[:nroots]].conj(), xs)
         x0 = _gen_x0(v[:,:nroots], xs)
-        return conv, e[:nroots], xl, x0
+        return numpy.asarray(conv), e[:nroots], xl, x0
     else:
-        return conv, e, x0
+        return numpy.asarray(conv), e, x0
 
 def dgeev(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
           lindep=DAVIDSON_LINDEP, max_memory=MAX_MEMORY,

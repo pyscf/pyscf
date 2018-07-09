@@ -83,20 +83,27 @@ def as_scanner(grad_ci, state=0):
             if ci_scanner.nroots > 1 and state >= ci_scanner.nroots:
                 raise ValueError('State ID greater than the number of CISD roots')
 
+# TODO: Check root flip
             ci_scanner(mol)
             if ci_scanner.nroots > 1:
+                e_tot = ci_scanner.e_tot[state]
                 civec = ci_scanner.ci[state]
             else:
+                e_tot = ci_scanner.e_tot
                 civec = ci_scanner.ci
 
             mf_grad = ci_scanner._scf.nuc_grad_method()
             self.mol = mol
             de = self.kernel(civec, mf_grad=mf_grad, **kwargs)
-            return ci_scanner.e_tot, de
+            return e_tot, de
         @property
         def converged(self):
             ci_scanner = self.base
-            return all((ci_scanner._scf.converged, ci_scanner.converged))
+            if ci_scanner.nroots > 1:
+                ci_conv = ci_scanner.converged[state]
+            else:
+                ci_conv = ci_scanner.converged
+            return all((ci_scanner._scf.converged, ci_conv))
     return CISD_GradScanner(grad_ci)
 
 class Gradients(lib.StreamObject):
