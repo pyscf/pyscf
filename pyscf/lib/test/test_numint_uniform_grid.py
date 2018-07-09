@@ -8,11 +8,13 @@ from pyscf.pbc import gto
 from pyscf.dft.numint import libdft
 from pyscf.pbc.dft import gen_grid
 
+PTR_EXPDROP = 16
 def eval_mat(cell, weights, shls_slice=None, comp=1, hermi=0,
-             xctype='LDA', kpts=None):
+             xctype='LDA', kpts=None, offset=None, submesh=None):
     assert(all(cell._bas[:,gto.mole.NPRIM_OF] == 1))
     atm, bas, env = gto.conc_env(cell._atm, cell._bas, cell._env,
                                  cell._atm, cell._bas, cell._env)
+    env[PTR_EXPDROP] = 1e-18
     ao_loc = gto.moleintor.make_loc(bas, 'cart')
     if shls_slice is None:
         shls_slice = (0, cell.nbas, 0, cell.nbas)
@@ -28,21 +30,24 @@ def eval_mat(cell, weights, shls_slice=None, comp=1, hermi=0,
         Ls = numpy.zeros((1,3))
     nimgs = len(Ls)
 
+    mesh = cell.mesh
     weights = numpy.asarray(weights, order='C')
     if xctype.upper() == 'LDA':
-        if weights.ndim > 1:
-            comp *= weights.shape[0]
+        weights = weights.reshape(-1, numpy.prod(mesh))
     elif xctype.upper() == 'GGA':
-        if weights.ndim > 2:
-            comp *= weights.shape[1]
+        if hermi == 1:
+            raise RuntimeError('hermi=1 is not supported by GGA functional')
+        weights = weights.reshape(-1, 4, numpy.prod(mesh))
     else:
         raise NotImplementedError
-
-    out = numpy.zeros((nimgs,comp,naoj,naoi))
+    n_mat = weights.shape[0]
 
     a = cell.lattice_vectors()
     b = numpy.linalg.inv(a.T)
-    mesh = numpy.asarray(cell.mesh, dtype=numpy.int32)
+    if offset is None:
+        offset = (0, 0, 0)
+    if submesh is None:
+        submesh = mesh
 
     if abs(a-numpy.diag(a.diagonal())).max() < 1e-12:
         lattice_type = '_orth'
@@ -50,33 +55,45 @@ def eval_mat(cell, weights, shls_slice=None, comp=1, hermi=0,
         lattice_type = '_nonorth'
     eval_fn = 'NUMINTeval_' + xctype.lower() + lattice_type
     drv = libdft.NUMINT_fill2c
-    drv(getattr(libdft, eval_fn),
-        out.ctypes.data_as(ctypes.c_void_p),
-        ctypes.c_int(comp), ctypes.c_int(hermi),
-        (ctypes.c_int*4)(i0, i1, j0, j1),
-        ao_loc.ctypes.data_as(ctypes.c_void_p),
-        ctypes.c_double(numpy.log(cell.precision)),
-        ctypes.c_int(cell.dimension),
-        ctypes.c_int(nimgs),
-        Ls.ctypes.data_as(ctypes.c_void_p),
-        a.ctypes.data_as(ctypes.c_void_p),
-        b.ctypes.data_as(ctypes.c_void_p),
-        mesh.ctypes.data_as(ctypes.c_void_p),
-        weights.ctypes.data_as(ctypes.c_void_p),
-        atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(len(atm)),
-        bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(len(bas)),
-        env.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(len(env)))
+    def make_mat(weights):
+        if comp == 1:
+            mat = numpy.zeros((nimgs,naoj,naoi))
+        else:
+            mat = numpy.zeros((nimgs,comp,naoj,naoi))
+        drv(getattr(libdft, eval_fn),
+            weights.ctypes.data_as(ctypes.c_void_p),
+            mat.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(comp), ctypes.c_int(hermi),
+            (ctypes.c_int*4)(i0, i1, j0, j1),
+            ao_loc.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_double(numpy.log(cell.precision)),
+            ctypes.c_int(cell.dimension),
+            ctypes.c_int(nimgs),
+            Ls.ctypes.data_as(ctypes.c_void_p),
+            a.ctypes.data_as(ctypes.c_void_p),
+            b.ctypes.data_as(ctypes.c_void_p),
+            (ctypes.c_int*3)(*offset), (ctypes.c_int*3)(*submesh),
+            (ctypes.c_int*3)(*mesh),
+            atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(len(atm)),
+            bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(len(bas)),
+            env.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(len(env)))
+        return mat
 
-    if cell.dimension == 0:
-        out = out[0].transpose(0,2,1)
-    elif kpts is None:
-        out = out.sum(axis=0).transpose(0,2,1)
-    else:
-        expkL = numpy.exp(1j*kpts.reshape(-1,3).dot(Ls.T))
-        out = numpy.dot(expkL, out.reshape(nimgs,-1))
-        out = out.reshape(-1,comp,naoj,naoi).transpose(1,0,3,2)
+    out = []
+    for wv in weights:
+        if cell.dimension == 0:
+            mat = numpy.rollaxis(make_mat(wv)[0], -1, -2)
+        elif kpts is None:
+            mat = numpy.rollaxis(make_mat(wv).sum(axis=0), -1, -2)
+        else:
+            mat = make_mat(wv)
+            mat_shape = mat.shape
+            expkL = numpy.exp(1j*kpts.reshape(-1,3).dot(Ls.T))
+            mat = numpy.dot(expkL, mat.reshape(nimgs,-1))
+            mat = numpy.rollaxis(mat.reshape((-1,)+mat_shape[1:]), -1, -2)
+        out.append(mat)
 
-    if comp == 1:
+    if n_mat == 1:
         out = out[0]
     return out
 
@@ -84,10 +101,12 @@ def uncontract(cell):
     pcell, contr_coeff = cell.to_uncontracted_cartesian_basis()
     return pcell, scipy.linalg.block_diag(*contr_coeff)
 
-def eval_rho(cell, dm, shls_slice=None, hermi=0, xctype='LDA', kpts=None):
+def eval_rho(cell, dm, shls_slice=None, hermi=0, xctype='LDA', kpts=None,
+             offset=None, submesh=None):
     assert(all(cell._bas[:,gto.mole.NPRIM_OF] == 1))
     atm, bas, env = gto.conc_env(cell._atm, cell._bas, cell._env,
                                  cell._atm, cell._bas, cell._env)
+    env[PTR_EXPDROP] = 1e-18
     ao_loc = gto.moleintor.make_loc(bas, 'cart')
     if shls_slice is None:
         shls_slice = (0, cell.nbas, 0, cell.nbas)
@@ -105,37 +124,22 @@ def eval_rho(cell, dm, shls_slice=None, hermi=0, xctype='LDA', kpts=None):
     else:
         Ls = numpy.zeros((1,3))
 
-    has_imag = False
-    if cell.dimension == 0:
-        nkpts = nimgs = 1
-        dm = dm.reshape(1,-1,naoi,naoj).transpose(0,1,3,2)
-    elif kpts is None:
+    if cell.dimension == 0 or kpts is None:
         nkpts, nimgs = 1, Ls.shape[0]
-        dm = dm.reshape(1,-1,naoi,naoj).transpose(0,1,3,2)
-        dm = numpy.vstack([dm]*nimgs)
+        dm = dm.reshape(-1,1,naoi,naoj).transpose(0,1,3,2)
     else:
-        # FIXME: has_imag?
-        has_imag = (hermi == 0 and abs(kpts).max() > 1e-8)
-        dm = dm.reshape(-1,naoi,naoj)
-        if xctype.upper() == 'LDA' and abs(dm - dm.transpose(0,2,1).conj()).max() < 1e-9:
-            has_imag = False
-
         expkL = numpy.exp(1j*kpts.reshape(-1,3).dot(Ls.T))
         nkpts, nimgs = expkL.shape
-        dm = dm.reshape(-1,nkpts,naoi,naoj).transpose(1,0,3,2)
-        dm = numpy.dot(expkL.T, dm.reshape(nkpts,-1)).reshape(nimgs,-1,naoj,naoi)
-        if has_imag:
-            dm = numpy.concatenate((dm.real, dm.imag), axis=1)
-        else:
-            dm = dm.real
-    dm = numpy.asarray(dm, order='C')
-    n_dm = dm.shape[1]
+        dm = dm.reshape(-1,nkpts,naoi,naoj).transpose(0,1,3,2)
+    n_dm = dm.shape[0]
 
     a = cell.lattice_vectors()
     b = numpy.linalg.inv(a.T)
     mesh = numpy.asarray(cell.mesh, dtype=numpy.int32)
-    offset = (0, 0, 0)
-    ngrids = mesh
+    if offset is None:
+        offset = (0, 0, 0)
+    if submesh is None:
+        submesh = mesh
 
     if abs(a-numpy.diag(a.diagonal())).max() < 1e-12:
         lattice_type = '_orth'
@@ -143,40 +147,64 @@ def eval_rho(cell, dm, shls_slice=None, hermi=0, xctype='LDA', kpts=None):
         lattice_type = '_nonorth'
     if xctype.upper() == 'LDA':
         comp = 1
-        rho = numpy.zeros((n_dm, numpy.prod(ngrids)))
     elif xctype.upper() == 'GGA':
+        if hermi == 1:
+            raise RuntimeError('hermi=1 is not supported by GGA functional')
         comp = 4
-        rho = numpy.zeros((n_dm, comp, numpy.prod(ngrids)))
     else:
         raise NotImplementedError('meta-GGA')
     eval_fn = 'NUMINTrho_' + xctype.lower() + lattice_type
     drv = libdft.NUMINT_rho_drv
-    if n_dm > 1:
-        raise NotImplementedError("n_dm > 1")
-    if hermi == 1:
-        raise NotImplementedError("hermi == 1")
-    drv(getattr(libdft, eval_fn),
-        rho.ctypes.data_as(ctypes.c_void_p),
-        (ctypes.c_int*3)(*offset),
-        (ctypes.c_int*3)(*ngrids),
-        dm.ctypes.data_as(ctypes.c_void_p),
-        ctypes.c_int(n_dm), ctypes.c_int(comp), ctypes.c_int(hermi),
-        (ctypes.c_int*4)(i0, i1, j0, j1),
-        ao_loc.ctypes.data_as(ctypes.c_void_p),
-        ctypes.c_double(numpy.log(cell.precision)),
-        ctypes.c_int(cell.dimension),
-        ctypes.c_int(nimgs),
-        Ls.ctypes.data_as(ctypes.c_void_p),
-        a.ctypes.data_as(ctypes.c_void_p),
-        b.ctypes.data_as(ctypes.c_void_p),
-        mesh.ctypes.data_as(ctypes.c_void_p),
-        atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(len(atm)),
-        bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(len(bas)),
-        env.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(len(env)))
+    def make_rho(dm):
+        if comp == 1:
+            rho = numpy.zeros((numpy.prod(submesh)))
+        else:
+            rho = numpy.zeros((comp, numpy.prod(submesh)))
+        drv(getattr(libdft, eval_fn),
+            rho.ctypes.data_as(ctypes.c_void_p),
+            dm.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_int(comp), ctypes.c_int(hermi),
+            (ctypes.c_int*4)(i0, i1, j0, j1),
+            ao_loc.ctypes.data_as(ctypes.c_void_p),
+            ctypes.c_double(numpy.log(cell.precision)),
+            ctypes.c_int(cell.dimension),
+            ctypes.c_int(nimgs),
+            Ls.ctypes.data_as(ctypes.c_void_p),
+            a.ctypes.data_as(ctypes.c_void_p),
+            b.ctypes.data_as(ctypes.c_void_p),
+            (ctypes.c_int*3)(*offset), (ctypes.c_int*3)(*submesh),
+            mesh.ctypes.data_as(ctypes.c_void_p),
+            atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(len(atm)),
+            bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(len(bas)),
+            env.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(len(env)))
+        return rho
 
-    if has_imag:
-        n_dm /= 2
-        rho = rho[:n_dm] + rho[n_dm:] * 1j
+    rho = []
+    for dm_i in dm:
+        if cell.dimension == 0:
+            # make a copy because the dm may be overwritten in the
+            # NUMINT_rho_drv inplace
+            rho.append(make_rho(numpy.array(dm_i, order='C', copy=True)))
+        elif kpts is None:
+            rho.append(make_rho(numpy.repeat(dm_i, nimgs, axis=0)))
+        else:
+            dm_i = numpy.dot(expkL.T, dm_i.reshape(nkpts,-1)).reshape(nimgs,naoj,naoi)
+            dmR = numpy.asarray(dm_i.real, order='C')
+            dmI = numpy.asarray(dm_i.imag, order='C')
+
+            has_imag = (hermi == 0 and abs(dmI).max() > 1e-8)
+            if (has_imag and xctype.upper() == 'LDA' and
+                naoi == naoj and
+# For hermitian density matrices, the anti-symmetry character of the imaginary
+# part of the density matrices can be found by rearranging the repeated images.
+                abs(dmI + dmI[::-1].transpose(0,2,1)).max() < 1e-8):
+                has_imag = False
+
+            if has_imag:
+                rho.append(make_rho(dmR) + make_rho(dmI)*1j)
+            else:
+                rho.append(make_rho(dmR))
+            dmR = dmI = None
 
     if n_dm == 1:
         rho = rho[0]
@@ -212,7 +240,10 @@ kpts = (numpy.random.random((2,3))-.5) * 2
 nkpts = len(kpts)
 nao = cell_orth.nao
 dm = numpy.random.random((nkpts,nao,nao))
-dm = dm + dm.transpose(0,2,1) # FIXME when kpts != 0 and dm is not hermitian
+dm = dm + dm.transpose(0,2,1)
+
+# FIXME when kpts != 0 and dm is not hermitian
+dm_kpts = cell_orth.pbc_intor('int1e_ovlp', kpts=kpts)
 
 grids_orth = gen_grid.UniformGrids(cell_orth)
 grids_north = gen_grid.UniformGrids(cell_north)
@@ -222,7 +253,7 @@ ao_kpts_north = cell_north.pbc_eval_gto('GTOval_sph_deriv1', grids_north.coords,
 ao_orth = mol_orth.eval_gto('GTOval_sph_deriv1', grids_orth.coords, kpts=kpts)
 ao_north = mol_north.eval_gto('GTOval_sph_deriv1', grids_north.coords, kpts=kpts)
 ao_gamma_orth = cell_orth.pbc_eval_gto('GTOval_sph_deriv1', grids_orth.coords)
-ao_gamma_north = cell_orth.pbc_eval_gto('GTOval_sph_deriv1', grids_orth.coords)
+ao_gamma_north = cell_north.pbc_eval_gto('GTOval_sph_deriv1', grids_north.coords)
 
 def tearDownModule():
     global cell_orth, cell_north, mol_orth, mol_north
@@ -237,9 +268,9 @@ class KnownValues(unittest.TestCase):
         out = numpy.einsum('pi,kpq,qj->kij', contr_coeff, out, contr_coeff)
         self.assertAlmostEqual(abs(out-ref).max(), 0, 9)
 
-        #out = eval_mat(pcell, vxc[0], hermi=1, kpts=kpts)
-        #out = numpy.einsum('pi,kpq,qj->kij', contr_coeff, out, contr_coeff)
-        #self.assertAlmostEqual(abs(out-ref).max(), 0, 9)
+        out = eval_mat(pcell, vxc[0], hermi=1, kpts=kpts)
+        out = numpy.einsum('pi,kpq,qj->kij', contr_coeff, out, contr_coeff)
+        self.assertAlmostEqual(abs(out-ref).max(), 0, 9)
 
     def test_pbc_orth_gga_ints(self):
         ref = numpy.array([numpy.einsum('ngi,gj,ng->ij', ao.conj(), ao[0], vxc)
@@ -250,6 +281,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(out-ref).max(), 0, 9)
 
         #out = eval_mat(pcell, vxc, xctype='GGA', hermi=1, kpts=kpts)
+        self.assertRaises(RuntimeError, eval_mat, pcell, vxc, xctype='GGA', hermi=1, kpts=kpts)
         #out = numpy.einsum('pi,kpq,qj->kij', contr_coeff, out, contr_coeff)
         #self.assertAlmostEqual(abs(out-ref).max(), 0, 9)
 
@@ -262,9 +294,9 @@ class KnownValues(unittest.TestCase):
         out = numpy.einsum('pi,kpq,qj->kij', contr_coeff, out, contr_coeff)
         self.assertAlmostEqual(abs(out-ref).max(), 0, 9)
 
-        #out = eval_mat(pcell, w, hermi=1, kpts=kpts)
-        #out = numpy.einsum('pi,kpq,qj->kij', contr_coeff, out, contr_coeff)
-        #self.assertAlmostEqual(abs(out-ref).max(), 0, 9)
+        out = eval_mat(pcell, w, hermi=1, kpts=kpts)
+        out = numpy.einsum('pi,kpq,qj->kij', contr_coeff, out, contr_coeff)
+        self.assertAlmostEqual(abs(out-ref).max(), 0, 9)
 
     def test_pbc_nonorth_lda_ints(self):
         ref = numpy.array([numpy.einsum('gi,gj,g->ij', ao[0].conj(), ao[0], vxc[0])
@@ -274,9 +306,9 @@ class KnownValues(unittest.TestCase):
         out = numpy.einsum('pi,kpq,qj->kij', contr_coeff, out, contr_coeff)
         self.assertAlmostEqual(abs(out-ref).max(), 0, 9)
 
-        #out = eval_mat(pcell, vxc[0], hermi=1, kpts=kpts)
-        #out = numpy.einsum('pi,kpq,qj->kij', contr_coeff, out, contr_coeff)
-        #self.assertAlmostEqual(abs(out-ref).max(), 0, 9)
+        out = eval_mat(pcell, vxc[0], hermi=1, kpts=kpts)
+        out = numpy.einsum('pi,kpq,qj->kij', contr_coeff, out, contr_coeff)
+        self.assertAlmostEqual(abs(out-ref).max(), 0, 9)
 
     def test_pbc_nonorth_gga_ints(self):
         ref = numpy.array([numpy.einsum('ngi,gj,ng->ij', ao.conj(), ao[0], vxc)
@@ -287,6 +319,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(out-ref).max(), 0, 9)
 
         #out = eval_mat(pcell, vxc, xctype='GGA', hermi=1, kpts=kpts)
+        self.assertRaises(RuntimeError, eval_mat, pcell, vxc, xctype='GGA', hermi=1, kpts=kpts)
         #out = numpy.einsum('pi,kpq,qj->kij', contr_coeff, out, contr_coeff)
         #self.assertAlmostEqual(abs(out-ref).max(), 0, 9)
 
@@ -299,9 +332,9 @@ class KnownValues(unittest.TestCase):
         out = numpy.einsum('pi,kpq,qj->kij', contr_coeff, out, contr_coeff)
         self.assertAlmostEqual(abs(out-ref).max(), 0, 9)
 
-        #out = eval_mat(pcell, w, hermi=1, kpts=kpts)
-        #out = numpy.einsum('pi,kpq,qj->kij', contr_coeff, out, contr_coeff)
-        #self.assertAlmostEqual(abs(out-ref).max(), 0, 9)
+        out = eval_mat(pcell, w, hermi=1, kpts=kpts)
+        out = numpy.einsum('pi,kpq,qj->kij', contr_coeff, out, contr_coeff)
+        self.assertAlmostEqual(abs(out-ref).max(), 0, 9)
 
     def test_orth_lda_ints(self):
         ao = ao_orth
@@ -311,9 +344,9 @@ class KnownValues(unittest.TestCase):
         out = numpy.einsum('pi,pq,qj->ij', contr_coeff, out, contr_coeff)
         self.assertAlmostEqual(abs(out-ref).max(), 0, 9)
 
-        #out = eval_mat(pcell, vxc[0], hermi=1)
-        #out = numpy.einsum('pi,pq,qj->ij', contr_coeff, out, contr_coeff)
-        #self.assertAlmostEqual(abs(out-ref).max(), 0, 9)
+        out = eval_mat(pcell, vxc[0], hermi=1)
+        out = numpy.einsum('pi,pq,qj->ij', contr_coeff, out, contr_coeff)
+        self.assertAlmostEqual(abs(out-ref).max(), 0, 9)
 
     def test_orth_gga_ints(self):
         ao = ao_orth
@@ -331,6 +364,10 @@ class KnownValues(unittest.TestCase):
         out = numpy.einsum('pi,pq,qj->ij', contr_coeff, out, contr_coeff)
         self.assertAlmostEqual(abs(out-ref).max(), 0, 9)
 
+        out = eval_mat(pcell, vxc[0], hermi=1)
+        out = numpy.einsum('pi,pq,qj->ij', contr_coeff, out, contr_coeff)
+        self.assertAlmostEqual(abs(out-ref).max(), 0, 9)
+
     def test_nonorth_gga_ints(self):
         ao = ao_north
         ref = numpy.einsum('ngi,gj,ng->ij', ao, ao[0], vxc)
@@ -345,10 +382,25 @@ class KnownValues(unittest.TestCase):
         pcell, contr_coeff = uncontract(cell_orth)
         dm1 = numpy.einsum('pi,kij,qj->kpq', contr_coeff, dm, contr_coeff)
         out = eval_rho(pcell, dm1, kpts=kpts)
-        self.assertAlmostEqual(abs(out-ref).max(), 0, 8)
+        self.assertTrue(out.dtype == numpy.double)
+        self.assertAlmostEqual(abs(out-ref).max(), 0, 9)
 
-        #out = eval_rho(pcell, dm1, hermi=1, kpts=kpts)
-        #self.assertAlmostEqual(abs(out-ref).max(), 0, 8)
+        out = eval_rho(pcell, dm1, hermi=1, kpts=kpts)
+        self.assertTrue(out.dtype == numpy.double)
+        self.assertAlmostEqual(abs(out-ref).max(), 0, 9)
+
+    def test_pbc_orth_lda_rho_kpts(self):
+        ref = sum([numpy.einsum('gi,ij,gj->g', ao[0], dm_kpts[k], ao[0].conj())
+                   for k,ao in enumerate(ao_kpts_orth)])
+        pcell, contr_coeff = uncontract(cell_orth)
+        dm1 = numpy.einsum('pi,kij,qj->kpq', contr_coeff, dm_kpts, contr_coeff)
+        out = eval_rho(pcell, dm1, kpts=kpts)
+        self.assertTrue(out.dtype == numpy.double)
+        self.assertAlmostEqual(abs(out-ref).max(), 0, 9)
+
+        out = eval_rho(pcell, dm1, hermi=1, kpts=kpts)
+        self.assertTrue(out.dtype == numpy.double)
+        self.assertAlmostEqual(abs(out-ref).max(), 0, 9)
 
     def test_pbc_orth_gga_rho(self):
         ao = ao_gamma_orth
@@ -356,17 +408,22 @@ class KnownValues(unittest.TestCase):
         pcell, contr_coeff = uncontract(cell_orth)
         dm1 = numpy.einsum('pi,ij,qj->pq', contr_coeff, dm[0], contr_coeff)
         out = eval_rho(pcell, dm1, xctype='GGA')
-        self.assertAlmostEqual(abs(out-ref).max(), 0, 8)
+        self.assertTrue(out.dtype == numpy.double)
+        self.assertAlmostEqual(abs(out-ref).max(), 0, 9)
 
-        #ref = sum([numpy.einsum('ngi,ij,gj->ng', ao, dm[k], ao[0].conj())
-        #           for k,ao in enumerate(ao_kpts_orth)])
-        #dm1 = numpy.einsum('pi,kij,qj->kpq', contr_coeff, dm, contr_coeff)
-        #out = eval_rho(pcell, dm1, kpts=kpts, xctype='GGA')
-        #self.assertAlmostEqual(abs(out-ref.real).max(), 0, 8)
-        #self.assertAlmostEqual(abs(out-ref).max(), 0, 8)
+        ref = sum([numpy.einsum('ngi,ij,gj->ng', ao, dm[k], ao[0].conj())
+                   for k,ao in enumerate(ao_kpts_orth)])
+        dm1 = numpy.einsum('pi,kij,qj->kpq', contr_coeff, dm, contr_coeff)
+        out = eval_rho(pcell, dm1, kpts=kpts, xctype='GGA')
+        self.assertAlmostEqual(abs(out-ref).max(), 0, 9)
 
-        #out = eval_rho(pcell, dm1, hermi=1, kpts=kpts, xctype='GGA')
-        #self.assertAlmostEqual(abs(out-ref).max(), 0, 9)
+    def test_pbc_orth_gga_rho_kpts(self):
+        pcell, contr_coeff = uncontract(cell_orth)
+        ref = sum([numpy.einsum('ngi,ij,gj->ng', ao, dm_kpts[k], ao[0].conj())
+                   for k,ao in enumerate(ao_kpts_orth)])
+        dm1 = numpy.einsum('pi,kij,qj->kpq', contr_coeff, dm_kpts, contr_coeff)
+        out = eval_rho(pcell, dm1, kpts=kpts, xctype='GGA')
+        self.assertAlmostEqual(abs(out-ref).max(), 0, 9)
 
     def test_pbc_nonorth_lda_rho(self):
         ref = sum([numpy.einsum('gi,ij,gj->g', ao[0], dm[k], ao[0].conj())
@@ -376,25 +433,31 @@ class KnownValues(unittest.TestCase):
         out = eval_rho(pcell, dm1, kpts=kpts)
         self.assertAlmostEqual(abs(out-ref).max(), 0, 9)
 
-        #out = eval_rho(pcell, hermi=1, dm1, kpts=kpts)
-        #self.assertAlmostEqual(abs(out-ref).max(), 0, 9)
+        out = eval_rho(pcell, dm1, hermi=1, kpts=kpts)
+        self.assertTrue(out.dtype == numpy.double)
+        self.assertAlmostEqual(abs(out-ref).max(), 0, 9)
 
     def test_pbc_nonorth_gga_rho(self):
         ao = ao_gamma_north
         ref = numpy.einsum('ngi,ij,gj->ng', ao, dm[0], ao[0].conj())
-        pcell, contr_coeff = uncontract(cell_orth)
+        pcell, contr_coeff = uncontract(cell_north)
         dm1 = numpy.einsum('pi,ij,qj->pq', contr_coeff, dm[0], contr_coeff)
         out = eval_rho(pcell, dm1, xctype='GGA')
-        self.assertAlmostEqual(abs(out-ref).max(), 0, 8)
+        self.assertAlmostEqual(abs(out-ref).max(), 0, 9)
 
-        #ref = sum([numpy.einsum('ngi,ij,gj->ng', ao, dm[k], ao[0].conj())
-        #           for k,ao in enumerate(ao_kpts_north)])
-        #dm1 = numpy.einsum('pi,kij,qj->kpq', contr_coeff, dm, contr_coeff)
-        #out = eval_rho(pcell, dm1, kpts=kpts, xctype='GGA')
-        #self.assertAlmostEqual(abs(out-ref).max(), 0, 9)
+        ref = sum([numpy.einsum('ngi,ij,gj->ng', ao, dm[k], ao[0].conj())
+                   for k,ao in enumerate(ao_kpts_north)])
+        dm1 = numpy.einsum('pi,kij,qj->kpq', contr_coeff, dm, contr_coeff)
+        out = eval_rho(pcell, dm1, kpts=kpts, xctype='GGA')
+        self.assertAlmostEqual(abs(out-ref).max(), 0, 9)
 
-        #out = eval_rho(pcell, dm1, hermi=1, kpts=kpts, xctype='GGA')
-        #self.assertAlmostEqual(abs(out-ref).max(), 0, 9)
+    def test_pbc_nonorth_gga_rho_kpts(self):
+        pcell, contr_coeff = uncontract(cell_north)
+        ref = sum([numpy.einsum('ngi,ij,gj->ng', ao, dm_kpts[k], ao[0].conj())
+                   for k,ao in enumerate(ao_kpts_north)])
+        dm1 = numpy.einsum('pi,kij,qj->kpq', contr_coeff, dm_kpts, contr_coeff)
+        out = eval_rho(pcell, dm1, kpts=kpts, xctype='GGA')
+        self.assertAlmostEqual(abs(out-ref).max(), 0, 9)
 
     def test_orth_lda_rho(self):
         ao = ao_orth
@@ -404,8 +467,8 @@ class KnownValues(unittest.TestCase):
         out = eval_rho(pcell, dm1)
         self.assertAlmostEqual(abs(out-ref).max(), 0, 9)
 
-        #out = eval_rho(pcell, dm1, hermi=1)
-        #self.assertAlmostEqual(abs(out-ref).max(), 0, 9)
+        out = eval_rho(pcell, dm1, hermi=1)
+        self.assertAlmostEqual(abs(out-ref).max(), 0, 9)
 
     def test_orth_gga_rho(self):
         ao = ao_orth
@@ -416,6 +479,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(out-ref).max(), 0, 9)
 
         #out = eval_rho(pcell, dm1, hermi=1, xctype='GGA')
+        self.assertRaises(RuntimeError, eval_rho, pcell, dm1, xctype='GGA', hermi=1)
         #self.assertAlmostEqual(abs(out-ref).max(), 0, 9)
 
     def test_nonorth_lda_rho(self):
@@ -426,8 +490,8 @@ class KnownValues(unittest.TestCase):
         out = eval_rho(pcell, dm1)
         self.assertAlmostEqual(abs(out-ref).max(), 0, 9)
 
-        #out = eval_rho(pcell, dm1, hermi=1)
-        #self.assertAlmostEqual(abs(out-ref).max(), 0, 9)
+        out = eval_rho(pcell, dm1, hermi=1)
+        self.assertAlmostEqual(abs(out-ref).max(), 0, 9)
 
     def test_nonorth_gga_rho(self):
         ao = ao_north
@@ -438,9 +502,8 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(abs(out-ref).max(), 0, 9)
 
         #out = eval_rho(pcell, dm1, hermi=1, xctype='GGA')
+        self.assertRaises(RuntimeError, eval_rho, pcell, dm1, xctype='GGA', hermi=1)
         #self.assertAlmostEqual(abs(out-ref).max(), 0, 9)
-
-#TODO: test multiple dms and vxcs
 
 
 if __name__ == '__main__':

@@ -41,10 +41,11 @@
 #define ANTIHERMI       2
 #define SYMMETRIC       3
 #define OF_CMPLX        2
-#define EXPCUTOFF15     40
+#define EIJCUTOFF       60
 #define EXPMAX          700
 #define EXPMIN          -700
 #define MAX_THREADS     256
+#define PTR_EXPDROP     16
 
 #define SQUARE(x)       (*(x) * *(x) + *(x+1) * *(x+1) + *(x+2) * *(x+2))
 
@@ -203,7 +204,7 @@ static double gto_rcut(double alpha, int l, double c, double log_prec)
         if (prod > 0) {
                 r = sqrt(prod / alpha);
         } else {
-                r = 0;
+                r = 1e-9;
         }
         return r;
 }
@@ -229,7 +230,8 @@ static int _num_grids_on_x(int nimgx, int nx0, int nx1, int nx_per_cell)
 static int _orth_components(double *xs_exp, int *img_slice, int *grid_slice,
                             double a, double b, double cutoff,
                             double xi, double xj, double ai, double aj,
-                            int periodic, int nx_per_cell, int topl, double *cache)
+                            int periodic, int nx_per_cell, int topl,
+                            int offset, int submesh, double *cache)
 {
         double aij = ai + aj;
         double xij = (ai * xi + aj * xj) / aij;
@@ -237,6 +239,15 @@ static int _orth_components(double *xs_exp, int *img_slice, int *grid_slice,
         double xij_frac = xij * heights_inv;
         double edge0 = xij_frac - cutoff * heights_inv;
         double edge1 = xij_frac + cutoff * heights_inv;
+        if (edge0 == edge1) {
+// cutoff may be so small that it does not provide difference to edge0 and
+// edge1. When edge0 and edge1 are right on the edge of the box (== integer),
+// nimg0 may be equal to nimg1 and nimg can be 0.  Skip this extreme condition.
+                return 0;
+        }
+        if (offset != 0 || submesh != nx_per_cell) {
+                periodic = 0;
+        }
 
         int nimg0 = 0;
         int nimg1 = 1;
@@ -244,29 +255,38 @@ static int _orth_components(double *xs_exp, int *img_slice, int *grid_slice,
                 nimg0 = (int)floor(edge0);
                 nimg1 = (int)ceil (edge1);
         }
+        int nimg = nimg1 - nimg0;
+
+        int nmx0 = nimg0 * nx_per_cell;
+        int nmx1 = nimg1 * nx_per_cell;
+        int nmx = nmx1 - nmx0;
 
         int nx0 = (int)floor(edge0 * nx_per_cell);
         int nx1 = (int)ceil (edge1 * nx_per_cell);
-        // to ensure nx0, nx1 in unit cell
+        int nx0_edge;
+        int nx1_edge;
+        // to ensure nx0, nx1 being inside the unit cell
         if (periodic) {
-                nx0 = (nx0 - nimg0 * nx_per_cell) % nx_per_cell;
-                nx1 = (nx1 - nimg0 * nx_per_cell) % nx_per_cell;
+                nx0_edge = nx0 - nmx0;
+                nx1_edge = nx1 - nmx0;
+                nx0 = nx0_edge % nx_per_cell;
+                nx1 = nx1_edge % nx_per_cell;
                 if (nx1 == 0) {
                         nx1 = nx_per_cell;
                 }
         } else {
-                nx0 = MIN(nx0, nx_per_cell);
-                nx0 = MAX(nx0, 0);
-                nx1 = MIN(nx1, nx_per_cell);
-                nx1 = MAX(nx1, 0);
+                nx0 = MIN(nx0, offset + submesh);
+                nx0 = MAX(nx0, offset);
+                nx1 = MIN(nx1, offset + submesh);
+                nx1 = MAX(nx1, offset);
+                nx0_edge = nx0;
+                nx1_edge = nx1;
         }
         img_slice[0] = nimg0;
         img_slice[1] = nimg1;
         grid_slice[0] = nx0;
         grid_slice[1] = nx1;
 
-        int nimg = nimg1 - nimg0;
-        int nmx = nimg * nx_per_cell;
         int ngridx = _num_grids_on_x(nimg, nx0, nx1, nx_per_cell);
         if (ngridx == 0) {
                 return 0;
@@ -276,11 +296,14 @@ static int _orth_components(double *xs_exp, int *img_slice, int *grid_slice,
         double *px0;
 
         double *gridx = cache;
-        double *xs_all = cache + nimg * nx_per_cell;
+        double *xs_all = cache + nmx;
         if (nimg == 1) {
                 xs_all = xs_exp;
+        } else {
+                nx0_edge = 0;
+                nx1_edge = nmx;
         }
-        int grid_close_to_xij = rint(xij_frac * nx_per_cell) - nimg0*nx_per_cell;
+        int grid_close_to_xij = rint(xij_frac * nx_per_cell) - nmx0;
         if (!periodic) {
                 grid_close_to_xij = MIN(grid_close_to_xij, nx_per_cell);
                 grid_close_to_xij = MAX(grid_close_to_xij, 0);
@@ -302,7 +325,7 @@ static int _orth_components(double *xs_exp, int *img_slice, int *grid_slice,
         double exp_x0dx = exp(_x0dx + _dxdx);
         double exp_x0x0 = exp(_x0x0);
 
-        for (i = grid_close_to_xij; i < nmx; i++) {
+        for (i = grid_close_to_xij; i < nx1_edge; i++) {
                 xs_all[i] = exp_x0x0;
                 exp_x0x0 *= exp_x0dx;
                 exp_x0dx *= exp_2dxdx;
@@ -310,7 +333,7 @@ static int _orth_components(double *xs_exp, int *img_slice, int *grid_slice,
 
         exp_x0dx = exp(_dxdx - _x0dx);
         exp_x0x0 = exp(_x0x0);
-        for (i = grid_close_to_xij-1; i >= 0; i--) {
+        for (i = grid_close_to_xij-1; i >= nx0_edge; i--) {
                 exp_x0x0 *= exp_x0dx;
                 exp_x0dx *= exp_2dxdx;
                 xs_all[i] = exp_x0x0;
@@ -318,12 +341,12 @@ static int _orth_components(double *xs_exp, int *img_slice, int *grid_slice,
 
         if (topl > 0) {
                 double x0xi = img0_x - xi;
-                for (i = 0; i < nmx; i++) {
+                for (i = nx0_edge; i < nx1_edge; i++) {
                         gridx[i] = x0xi + i * dx;
                 }
                 for (l = 1; l <= topl; l++) {
                         px0 = xs_all + (l-1) * nmx;
-                        for (i = 0; i < nmx; i++) {
+                        for (i = nx0_edge; i < nx1_edge; i++) {
                                 px0[nmx+i] = px0[i] * gridx[i];
                         }
                 }
@@ -347,7 +370,8 @@ static int _orth_components(double *xs_exp, int *img_slice, int *grid_slice,
 }
 
 static int _init_orth_data(double **xs_exp, double **ys_exp, double **zs_exp,
-                           int *img_slice, int *grid_slice, int *mesh,
+                           int *img_slice, int *grid_slice,
+                           int *offset, int *submesh, int *mesh,
                            int topl, int dimension, double cutoff,
                            double ai, double aj, double *ri, double *rj,
                            double *a, double *b, double *cache)
@@ -361,21 +385,24 @@ static int _init_orth_data(double **xs_exp, double **ys_exp, double **zs_exp,
 
         int ngridx = _orth_components(*xs_exp, img_slice, grid_slice,
                                       a[0], b[0], cutoff, ri[0], rj[0], ai, aj,
-                                      (dimension>=1), mesh[0], topl, cache);
+                                      (dimension>=1), mesh[0], topl,
+                                      offset[0], submesh[0], cache);
         if (ngridx == 0) {
                 return 0;
         }
 
         int ngridy = _orth_components(*ys_exp, img_slice+2, grid_slice+2,
                                       a[4], b[4], cutoff, ri[1], rj[1], ai, aj,
-                                      (dimension>=2), mesh[1], topl, cache);
+                                      (dimension>=2), mesh[1], topl,
+                                      offset[1], submesh[1], cache);
         if (ngridy == 0) {
                 return 0;
         }
 
         int ngridz = _orth_components(*zs_exp, img_slice+4, grid_slice+4,
                                       a[8], b[8], cutoff, ri[2], rj[2], ai, aj,
-                                      (dimension>=3), mesh[2], topl, cache);
+                                      (dimension>=3), mesh[2], topl,
+                                      offset[2], submesh[2], cache);
         if (ngridz == 0) {
                 return 0;
         }
@@ -385,9 +412,9 @@ static int _init_orth_data(double **xs_exp, double **ys_exp, double **zs_exp,
 
 static void _orth_ints(double *out, double *weights,
                        int floorl, int topl, double fac,
-                       int *mesh, int *img_slice, int *grid_slice,
                        double *xs_exp, double *ys_exp, double *zs_exp,
-                       double *cache)
+                       int *img_slice, int *grid_slice,
+                       int *offset, int *submesh, int *mesh, double *cache)
 {
         int l1 = topl + 1;
         int nimgx0 = img_slice[0];
@@ -479,7 +506,22 @@ static void _orth_ints(double *out, double *weights,
                         }
                         out[n] = val;
                 } } }
-        //TODO:} elif (nimgz == 2 && !_has_overlap(nz0, nz1, mesh[2])) {
+        } else if (nimgz == 2 && !_has_overlap(nz0, nz1, mesh[2])) {
+                for (n = 0, l = floorl; l <= topl; l++) {
+                for (lx = l; lx >= 0; lx--) {
+                for (ly = l - lx; ly >= 0; ly--, n++) {
+                        lz = l - lx - ly;
+                        pz = zs_exp + lz * mesh[2];
+                        pweightz = weightz + (lx * l1 + ly) * mesh[2];
+                        val = 0;
+                        for (i = 0; i < nz1; i++) {
+                                val += pweightz[i] * pz[i];
+                        }
+                        for (i = nz0; i < mesh[2]; i++) {
+                                val += pweightz[i] * pz[i];
+                        }
+                        out[n] = val;
+                } } }
         } else {
                 for (n = 0, l = floorl; l <= topl; l++) {
                 for (lx = l; lx >= 0; lx--) {
@@ -496,11 +538,11 @@ static void _orth_ints(double *out, double *weights,
         }
 }
 
-int NUMINTeval_lda_orth(double *out, int comp,
+int NUMINTeval_lda_orth(double *weights, double *out, int comp,
                         int li, int lj, double ai, double aj,
                         double *ri, double *rj, double fac, double log_prec,
-                        int dimension, double *a, double *b, int *mesh,
-                        double *weights, double *cache)
+                        int dimension, double *a, double *b,
+                        int *offset, int *submesh, int *mesh, double *cache)
 {
         int floorl = li;
         int topl = li + lj;
@@ -512,8 +554,8 @@ int NUMINTeval_lda_orth(double *out, int comp,
         int img_slice[6];
         int grid_slice[6];
         double *xs_exp, *ys_exp, *zs_exp;
-        int data_size = _init_orth_data(&xs_exp, &ys_exp, &zs_exp,
-                                        img_slice, grid_slice, mesh,
+        int data_size = _init_orth_data(&xs_exp, &ys_exp, &zs_exp, img_slice,
+                                        grid_slice, offset, submesh, mesh,
                                         topl, dimension, cutoff,
                                         ai, aj, ri, rj, a, b, cache);
         if (data_size == 0) {
@@ -521,8 +563,8 @@ int NUMINTeval_lda_orth(double *out, int comp,
         }
         cache += data_size;
 
-        _orth_ints(g3d, weights, floorl, topl, fac, mesh, img_slice, grid_slice,
-                   xs_exp, ys_exp, zs_exp, cache);
+        _orth_ints(g3d, weights, floorl, topl, fac, xs_exp, ys_exp, zs_exp,
+                   img_slice, grid_slice, offset, submesh, mesh, cache);
 
         cache = g3d + _MAX_RR_SIZE[topl];
         _plain_vrr2d(out, g3d, cache, li, lj, ri, rj);
@@ -660,11 +702,11 @@ static void _plain_vrr2d_updown(double *out_up, double *out_down,
         GTOplain_vrr2d_ket_inc1(out_up, g01, rirj, li+1, lj);
 }
 
-int NUMINTeval_gga_orth(double *out, int comp,
+int NUMINTeval_gga_orth(double *weights, double *out, int comp,
                         int li, int lj, double ai, double aj,
                         double *ri, double *rj, double fac, double log_prec,
-                        int dimension, double *a, double *b, int *mesh,
-                        double *weights, double *cache)
+                        int dimension, double *a, double *b,
+                        int *offset, int *submesh, int *mesh, double *cache)
 {
         int floorl = MAX(li - 1, 0);
         int topl = li + 1 + lj;
@@ -678,8 +720,8 @@ int NUMINTeval_gga_orth(double *out, int comp,
         int img_slice[6];
         int grid_slice[6];
         double *xs_exp, *ys_exp, *zs_exp;
-        int data_size = _init_orth_data(&xs_exp, &ys_exp, &zs_exp,
-                                        img_slice, grid_slice, mesh,
+        int data_size = _init_orth_data(&xs_exp, &ys_exp, &zs_exp, img_slice,
+                                        grid_slice, offset, submesh, mesh,
                                         topl, dimension, cutoff,
                                         ai, aj, ri, rj, a, b, cache);
         if (data_size == 0) {
@@ -691,22 +733,22 @@ int NUMINTeval_gga_orth(double *out, int comp,
         double *vx = weights + ngrids;
         double *vy = vx + ngrids;
         double *vz = vy + ngrids;
-        _orth_ints(g3d, weights, li, li+lj, fac, mesh, img_slice, grid_slice,
-                   xs_exp, ys_exp, zs_exp, cache);
+        _orth_ints(g3d, weights, li, li+lj, fac, xs_exp, ys_exp, zs_exp,
+                   img_slice, grid_slice, offset, submesh, mesh, cache);
         _plain_vrr2d(out, g3d, cache, li, lj, ri, rj);
 
-        _orth_ints(g3d, vx, floorl, topl, fac, mesh, img_slice, grid_slice,
-                   xs_exp, ys_exp, zs_exp, cache);
+        _orth_ints(g3d, vx, floorl, topl, fac, xs_exp, ys_exp, zs_exp,
+                   img_slice, grid_slice, offset, submesh, mesh, cache);
         _plain_vrr2d_updown(out_up, out_down, g3d, cache, li, lj, ri, rj);
         _rr_nablax_i(out, out_up, out_down, li, lj, ai);
 
-        _orth_ints(g3d, vy, floorl, topl, fac, mesh, img_slice, grid_slice,
-                   xs_exp, ys_exp, zs_exp, cache);
+        _orth_ints(g3d, vy, floorl, topl, fac, xs_exp, ys_exp, zs_exp,
+                   img_slice, grid_slice, offset, submesh, mesh, cache);
         _plain_vrr2d_updown(out_up, out_down, g3d, cache, li, lj, ri, rj);
         _rr_nablay_i(out, out_up, out_down, li, lj, ai);
 
-        _orth_ints(g3d, vz, floorl, topl, fac, mesh, img_slice, grid_slice,
-                   xs_exp, ys_exp, zs_exp, cache);
+        _orth_ints(g3d, vz, floorl, topl, fac, xs_exp, ys_exp, zs_exp,
+                   img_slice, grid_slice, offset, submesh, mesh, cache);
         _plain_vrr2d_updown(out_up, out_down, g3d, cache, li, lj, ri, rj);
         _rr_nablaz_i(out, out_up, out_down, li, lj, ai);
         return 1;
@@ -913,9 +955,15 @@ static int _nonorth_components(double *xs_exp, int *img_slice, int *grid_slice,
         double heights_inv = sqrt(SQUARE(b));
         double edge0 = xij_frac - cutoff * heights_inv;
         double edge1 = xij_frac + cutoff * heights_inv;
+        if (offset != 0 || submesh != nx_per_cell) {
+                periodic = 0;
+        }
 
         int nimg0 = 0;
         int nimg1 = 1;
+// If submesh is not identical to mesh, it means the product of the basis
+// functions should be completely inside the unit cell. Only one image needs to
+// be considered.
         if (periodic) {
                 nimg0 = (int)floor(edge0);
                 nimg1 = (int)ceil (edge1);
@@ -1232,18 +1280,17 @@ static int _init_nonorth_data(double **xs_exp, double **ys_exp, double **zs_exp,
 }
 
 
-int NUMINTeval_lda_nonorth(double *out, int comp,
+int NUMINTeval_lda_nonorth(double *weights, double *out, int comp,
                            int li, int lj, double ai, double aj,
                            double *ri, double *rj, double fac, double log_prec,
-                           int dimension, double *a, double *b, int *mesh,
-                           double *weights, double *cache)
+                           int dimension, double *a, double *b,
+                           int *offset, int *submesh, int *mesh, double *cache)
 {
         int floorl = li;
         int topl = li + lj;
         int l1 = topl + 1;
         double aij = ai + aj;
         double cutoff = gto_rcut(aij, topl, fac, log_prec);
-        int offset[3] = {0, 0, 0};
         int img_slice[6];
         int grid_slice[6];
         double ri_frac[3];
@@ -1273,18 +1320,17 @@ int NUMINTeval_lda_nonorth(double *out, int comp,
         return 1;
 }
 
-int NUMINTeval_gga_nonorth(double *out, int comp,
+int NUMINTeval_gga_nonorth(double *weights, double *out, int comp,
                            int li, int lj, double ai, double aj,
                            double *ri, double *rj, double fac, double log_prec,
-                           int dimension, double *a, double *b, int *mesh,
-                           double *weights, double *cache)
+                           int dimension, double *a, double *b,
+                           int *offset, int *submesh, int *mesh, double *cache)
 {
         int floorl = MAX(li - 1, 0);
         int topl = li + 1 + lj;
         int l1 = topl + 1;
         double aij = ai + aj;
         double cutoff = gto_rcut(aij, topl, fac, log_prec);
-        int offset[3] = {0, 0, 0};
         int img_slice[6];
         int grid_slice[6];
         double ri_frac[3];
@@ -1342,11 +1388,11 @@ int NUMINTeval_gga_nonorth(double *out, int comp,
         return 1;
 }
 
-static void _apply_ints(int (*eval_ints)(), double *mat, int *dims,
-                        int comp, double fac, double log_prec,
-                        int dimension, double *a, double *b, int *mesh,
-                        double *weights, int *shls, int *atm, int *bas,
-                        double *env, double *cache)
+static void _apply_ints(int (*eval_ints)(), double *weights, double *mat,
+                        int *dims, int comp, double fac,
+                        double log_prec, int dimension, double *a, double *b,
+                        int *offset, int *submesh, int *mesh, int *shls,
+                        int *atm, int *bas, double *env, double *cache)
 {
         int i_sh = shls[0];
         int j_sh = shls[1];
@@ -1361,8 +1407,11 @@ static void _apply_ints(int (*eval_ints)(), double *mat, int *dims,
         double aij = ai + aj;
         double rrij = CINTsquare_dist(ri, rj);
         double eij = (ai * aj / aij) * rrij;
+        if (eij > EIJCUTOFF) {
+                return;
+        }
         fac *= exp(-eij) * ci * cj * CINTcommon_fac_sp(li) * CINTcommon_fac_sp(lj);
-        if (fac < 1e-40) { //if (eij > EXPCUTOFF15) {
+        if (fac < env[PTR_EXPDROP]) {
                 return;
         }
 
@@ -1371,8 +1420,9 @@ static void _apply_ints(int (*eval_ints)(), double *mat, int *dims,
         double *out = cache;
         cache += comp * di * dj;
 
-        int value = (*eval_ints)(out, comp, li, lj, ai, aj, ri, rj, fac, log_prec,
-                                 dimension, a, b, mesh, weights, cache);
+        int value = (*eval_ints)(weights, out, comp, li, lj, ai, aj, ri, rj,
+                                 fac, log_prec, dimension, a, b,
+                                 offset, submesh, mesh, cache);
         if (value != 0) {
                 int naoi = dims[0];
                 int naoj = dims[1];
@@ -1428,10 +1478,10 @@ static void shift_bas(double *env_loc, double *env, double *Ls, int ptr, int iL)
 
 // Numerical integration for uncontracted Cartesian basis
 // F_mat needs to be initialized as 0
-void NUMINT_fill2c(int (*eval_ints)(), double *F_mat,
+void NUMINT_fill2c(int (*eval_ints)(), double *weights, double *F_mat,
                    int comp, int hermi, int *shls_slice, int *ao_loc,
                    double log_prec, int dimension, int nimgs, double *Ls,
-                   double *a, double *b, int *mesh, double *weights,
+                   double *a, double *b, int *offset, int *submesh, int *mesh,
                    int *atm, int natm, int *bas, int nbas, double *env,
                    int nenv)
 {
@@ -1449,14 +1499,14 @@ void NUMINT_fill2c(int (*eval_ints)(), double *F_mat,
                 nimgs = 1;
         }
 #pragma omp parallel default(none) \
-        shared(eval_ints, F_mat, comp, hermi, ao_loc, \
-               log_prec, dimension, nimgs, Ls, a, b, mesh, weights, \
+        shared(eval_ints, weights, F_mat, comp, hermi, ao_loc, \
+               log_prec, dimension, nimgs, Ls, a, b, offset, submesh, mesh, \
                atm, natm, bas, nbas, env, nenv)
 {
         int ncij = comp * naoi * naoj;
         int nijsh = nish * njsh;
         int dims[] = {naoi, naoj};
-        int ish, jsh, ij, ijm, m, i0, j0;
+        int ish, jsh, ij, ijm, m, mm, i0, j0, ic;
         int shls[2];
         double *cache = malloc(sizeof(double) * cache_size);
         double *env_loc = malloc(sizeof(double)*nenv);
@@ -1483,19 +1533,34 @@ void NUMINT_fill2c(int (*eval_ints)(), double *F_mat,
                         ptrxyz = atm(PTR_COORD, bas(ATOM_OF,jsh));
                         shift_bas(env_loc, env, Ls, ptrxyz, m);
                 }
-                _apply_ints(eval_ints, F_mat+m*ncij+j0*naoi+i0, dims, comp,
-                            1., log_prec, dimension, a, b, mesh, weights,
+                _apply_ints(eval_ints, weights, F_mat+m*ncij+j0*naoi+i0,
+                            dims, comp, 1., log_prec, dimension, a, b,
+                            offset, submesh, mesh,
                             shls, atm, bas, env_loc, cache);
         }
         free(cache);
         free(env_loc);
-}
+
         if (hermi != PLAIN) { // lower triangle of F-array
-                int ic;
-                for (ic = 0; ic < comp; ic++) {
-                        NPdsymm_triu(naoi, F_mat+ic*naoi*naoi, hermi);
+                double *pmat, *pmat1;
+// Note hermitian character of the matrices can only be found by rearranging the
+// repeated images:
+//     mat - mat[::-1].transpose(0,2,1) == 0
+#pragma omp for schedule(static)
+                for (m = 0; m < nimgs; m++) {
+                        mm = nimgs - 1 - m;
+                        for (ic = 0; ic < comp; ic++) {
+                                pmat = F_mat + ((size_t)m*comp+ic) * naoi * naoi;
+                                pmat1 = F_mat + ((size_t)mm*comp+ic) * naoi * naoi;
+                                for (j0 = 1; j0 < naoi; j0++) {
+                                        for (i0 = 0; i0 < j0; i0++) {
+                                                pmat[i0*naoi+j0] = pmat1[j0*naoi+i0];
+                                        }
+                                }
+                        }
                 }
         }
+}
 }
 
 
@@ -1563,8 +1628,8 @@ static void _cart_to_xyz(double *dm_xyz, double *dm_cart,
         } } }
 }
 
-static void _orth_rho(double *rho, int *offset, int *submesh, double *dm_xyz,
-                      double fac, int topl,
+static void _orth_rho(double *rho, double *dm_xyz,
+                      double fac, int topl, int *offset, int *submesh,
                       int *mesh, int *img_slice, int *grid_slice,
                       double *xs_exp, double *ys_exp, double *zs_exp,
                       double *cache)
@@ -1600,45 +1665,61 @@ static void _orth_rho(double *rho, int *offset, int *submesh, double *dm_xyz,
         int xcols = submesh[1] * submesh[2];
         double *xyr = cache;
         double *xqr = xyr + l1l1 * submesh[2];
-        int l;
+        int i, l;
 
+        if (nimgz == 1) {
+                for (l = 0; l <= topl; l++) {
+                        for (i = 0; i < nz0-offset[2]; i++) {
+                                zs_exp[l*mesh[2]+i] = 0;
+                        }
+                        for (i = nz1-offset[2]; i < submesh[2]; i++) {
+                                zs_exp[l*mesh[2]+i] = 0;
+                        }
+                }
+        } else if (nimgz == 2 && !_has_overlap(nz0, nz1, mesh[2])) {
+                for (l = 0; l <= topl; l++) {
+                        for (i = nz1-offset[2]; i < nz0-offset[2]; i++) {
+                                zs_exp[l*mesh[2]+i] = 0;
+                        }
+                }
+        }
         dgemm_(&TRANS_N, &TRANS_N, submesh+2, &l1l1, &l1,
                &fac, zs_exp+offset[2], mesh+2, dm_xyz, &l1,
                &D0, xyr, submesh+2);
 
-//        if (nimgy == 1) {
-//                for (l = 0; l <= topl; l++) {
-//                        for (i = 0; i < (ny0-offset[1])*submesh[2]; i++) {
-//                                xqr[l*xcols+i] = 0;
-//                        }
-//                        for (i = (ny1-offset[1])*submesh[2]; i < xcols; i++) {
-//                                xqr[l*xcols+i] = 0;
-//                        }
-//                        dgemm_(&TRANS_N, &TRANS_T, submesh+2, &ngridy, &l1,
-//                               &D1, xyr+l*l1*submesh[2], submesh+2, ys_exp+ny0, mesh+1,
-//                               &D0, xqr+l*xcols+(ny0-offset[1])*submesh[2], submesh+2);
-//                }
-//        } else if (nimgy == 2 && !_has_overlap(ny0, ny1, mesh[1])) {
-//                for (l = 0; l <= topl; l++) {
-//                        ngridy = ny1 - offset[1];
-//                        dgemm_(&TRANS_N, &TRANS_T, submesh+2, &ngridy, &l1,
-//                               &D1, xyr+l*l1*submesh[2], submesh+2, ys_exp+offset[1], mesh+1,
-//                               &D0, xqr+l*xcols, submesh+2);
-//                        for (i = (ny1-offset[1])*submesh[2]; i < (ny0-offset[1])*submesh[2]; i++) {
-//                                xqr[l*xcols+i] = 0;
-//                        }
-//                        ngridy = offset[1] + submesh[1] - ny0;
-//                        dgemm_(&TRANS_N, &TRANS_T, submesh+2, &ngridy, &l1,
-//                               &D1, xyr+l*l1*submesh[2], submesh+2, ys_exp+ny0, mesh+1,
-//                               &D0, xqr+l*xcols+(ny0-offset[1])*submesh[2], submesh+2);
-//                }
-//        } else {
+        if (nimgy == 1) {
+                for (l = 0; l <= topl; l++) {
+                        for (i = 0; i < (ny0-offset[1])*submesh[2]; i++) {
+                                xqr[l*xcols+i] = 0;
+                        }
+                        for (i = (ny1-offset[1])*submesh[2]; i < xcols; i++) {
+                                xqr[l*xcols+i] = 0;
+                        }
+                        dgemm_(&TRANS_N, &TRANS_T, submesh+2, &ngridy, &l1,
+                               &D1, xyr+l*l1*submesh[2], submesh+2, ys_exp+ny0, mesh+1,
+                               &D0, xqr+l*xcols+(ny0-offset[1])*submesh[2], submesh+2);
+                }
+        } else if (nimgy == 2 && !_has_overlap(ny0, ny1, mesh[1])) {
+                for (l = 0; l <= topl; l++) {
+                        ngridy = ny1 - offset[1];
+                        dgemm_(&TRANS_N, &TRANS_T, submesh+2, &ngridy, &l1,
+                               &D1, xyr+l*l1*submesh[2], submesh+2, ys_exp+offset[1], mesh+1,
+                               &D0, xqr+l*xcols, submesh+2);
+                        for (i = (ny1-offset[1])*submesh[2]; i < (ny0-offset[1])*submesh[2]; i++) {
+                                xqr[l*xcols+i] = 0;
+                        }
+                        ngridy = offset[1] + submesh[1] - ny0;
+                        dgemm_(&TRANS_N, &TRANS_T, submesh+2, &ngridy, &l1,
+                               &D1, xyr+l*l1*submesh[2], submesh+2, ys_exp+ny0, mesh+1,
+                               &D0, xqr+l*xcols+(ny0-offset[1])*submesh[2], submesh+2);
+                }
+        } else {
                 for (l = 0; l <= topl; l++) {
                         dgemm_(&TRANS_N, &TRANS_T, submesh+2, submesh+1, &l1,
                                &D1, xyr+l*l1*submesh[2], submesh+2, ys_exp+offset[1], mesh+1,
                                &D0, xqr+l*xcols, submesh+2);
                 }
-//        }
+        }
 
         if (nimgx == 1) {
                 dgemm_(&TRANS_N, &TRANS_T, &xcols, &ngridx, &l1,
@@ -1675,12 +1756,11 @@ static void _dm_vrr6d(double *dm_cart, double *dm, int naoi,
         GTOreverse_vrr2d_ket(dm_cart, dm_6d, li, lj, ri, rj);
 }
 
-void NUMINTrho_lda_orth(double *rho, int *offset, int *submesh,
-                        double *dm, int n_dm, int naoi, int li, int lj,
-                        double ai, double aj, double *ri, double *rj,
-                        double fac, double log_prec,
-                        int dimension, double *a, double *b, int *mesh,
-                        double *cache)
+void NUMINTrho_lda_orth(double *rho, double *dm, int comp, int naoi,
+                        int li, int lj, double ai, double aj,
+                        double *ri, double *rj, double fac, double log_prec,
+                        int dimension, double *a, double *b,
+                        int *offset, int *submesh, int *mesh, double *cache)
 {
         int topl = li + lj;
         int l1 = topl + 1;
@@ -1689,8 +1769,8 @@ void NUMINTrho_lda_orth(double *rho, int *offset, int *submesh,
         int img_slice[6];
         int grid_slice[6];
         double *xs_exp, *ys_exp, *zs_exp;
-        int data_size = _init_orth_data(&xs_exp, &ys_exp, &zs_exp,
-                                        img_slice, grid_slice, mesh,
+        int data_size = _init_orth_data(&xs_exp, &ys_exp, &zs_exp, img_slice,
+                                        grid_slice, offset, submesh, mesh,
                                         topl, dimension, cutoff,
                                         ai, aj, ri, rj, a, b, cache);
         if (data_size == 0) {
@@ -1706,16 +1786,15 @@ void NUMINTrho_lda_orth(double *rho, int *offset, int *submesh,
         memset(dm_xyz, 0, sizeof(double) * l1l1l1);
         _cart_to_xyz(dm_xyz, dm_cart, li, topl, l1);
 
-        _orth_rho(rho, offset, submesh, dm_xyz, fac, topl,
-                  mesh, img_slice, grid_slice, xs_exp, ys_exp, zs_exp, cache);
+        _orth_rho(rho, dm_xyz, fac, topl, offset, submesh, mesh,
+                  img_slice, grid_slice, xs_exp, ys_exp, zs_exp, cache);
 }
 
-void NUMINTrho_gga_orth(double *rho, int *offset, int *submesh,
-                        double *dm, int n_dm, int naoi, int li, int lj,
-                        double ai, double aj, double *ri, double *rj,
-                        double fac, double log_prec,
-                        int dimension, double *a, double *b, int *mesh,
-                        double *cache)
+void NUMINTrho_gga_orth(double *rho, double *dm, int comp, int naoi,
+                        int li, int lj, double ai, double aj,
+                        double *ri, double *rj, double fac, double log_prec,
+                        int dimension, double *a, double *b,
+                        int *offset, int *submesh, int *mesh, double *cache)
 {
         int topl = li + 1 + lj;
         int l1 = topl + 1;
@@ -1724,8 +1803,8 @@ void NUMINTrho_gga_orth(double *rho, int *offset, int *submesh,
         int img_slice[6];
         int grid_slice[6];
         double *xs_exp, *ys_exp, *zs_exp;
-        int data_size = _init_orth_data(&xs_exp, &ys_exp, &zs_exp,
-                                        img_slice, grid_slice, mesh,
+        int data_size = _init_orth_data(&xs_exp, &ys_exp, &zs_exp, img_slice,
+                                        grid_slice, offset, submesh, mesh,
                                         topl, dimension, cutoff,
                                         ai, aj, ri, rj, a, b, cache);
         if (data_size == 0) {
@@ -1748,8 +1827,8 @@ void NUMINTrho_gga_orth(double *rho, int *offset, int *submesh,
         lx = l1 - 1;
         memset(dm_xyz, 0, sizeof(double) * lx * lx * lx);
         _cart_to_xyz(dm_xyz, dm_cart, li, topl-1, lx);
-        _orth_rho(rho, offset, submesh, dm_xyz, fac, li+lj,
-                  mesh, img_slice, grid_slice, xs_exp, ys_exp, zs_exp, cache);
+        _orth_rho(rho, dm_xyz, fac, li+lj, offset, submesh, mesh,
+                  img_slice, grid_slice, xs_exp, ys_exp, zs_exp, cache);
 
         int di1 = _LEN_CART[li+1];
         int li_1 = li - 1;
@@ -1776,8 +1855,8 @@ void NUMINTrho_gga_orth(double *rho, int *offset, int *submesh,
                 GTOreverse_vrr2d_ket(dm_cart, dm_6d, li_1, lj, ri, rj);
                 _cart_to_xyz(dm_xyz, dm_cart, li_1, topl-2, l1);
         }
-        _orth_rho(rhox, offset, submesh, dm_xyz, fac, topl,
-                  mesh, img_slice, grid_slice, xs_exp, ys_exp, zs_exp, cache);
+        _orth_rho(rhox, dm_xyz, fac, topl, offset, submesh, mesh,
+                  img_slice, grid_slice, xs_exp, ys_exp, zs_exp, cache);
 
         memset(dm_6d, 0, sizeof(double) * _LEN_CART[li+1] * dj);
         for (i = 0; i < di; i++) {
@@ -1799,8 +1878,8 @@ void NUMINTrho_gga_orth(double *rho, int *offset, int *submesh,
                 GTOreverse_vrr2d_ket(dm_cart, dm_6d, li_1, lj, ri, rj);
                 _cart_to_xyz(dm_xyz, dm_cart, li_1, topl-2, l1);
         }
-        _orth_rho(rhoy, offset, submesh, dm_xyz, fac, topl,
-                  mesh, img_slice, grid_slice, xs_exp, ys_exp, zs_exp, cache);
+        _orth_rho(rhoy, dm_xyz, fac, topl, offset, submesh, mesh,
+                  img_slice, grid_slice, xs_exp, ys_exp, zs_exp, cache);
 
         memset(dm_6d, 0, sizeof(double) * _LEN_CART[li+1] * dj);
         for (i = 0; i < di; i++) {
@@ -1823,8 +1902,8 @@ void NUMINTrho_gga_orth(double *rho, int *offset, int *submesh,
                 GTOreverse_vrr2d_ket(dm_cart, dm_6d, li_1, lj, ri, rj);
                 _cart_to_xyz(dm_xyz, dm_cart, li_1, topl-2, l1);
         }
-        _orth_rho(rhoz, offset, submesh, dm_xyz, fac, topl,
-                  mesh, img_slice, grid_slice, xs_exp, ys_exp, zs_exp, cache);
+        _orth_rho(rhoz, dm_xyz, fac, topl, offset, submesh, mesh,
+                  img_slice, grid_slice, xs_exp, ys_exp, zs_exp, cache);
 }
 
 static void _nonorth_rho_z(double *rho, double *rhoz, int offset, int meshz,
@@ -1921,7 +2000,7 @@ static void _nonorth_rho_z_with_mask(double *rho, double *rhoz, char *skip,
 static int _make_grid_mask(char *skip, int nx0, int nx1, int mesh,
                            int offset, int submesh)
 {
-        if (offset == 0 && offset+submesh == mesh) { // allows nimg > 1
+        if (offset == 0 && submesh == mesh) { // allows nimg > 1
                 return 0;
         } else if (offset <= nx0 && nx1 <= offset+submesh) { // requires nimg == 1
                 return 0;
@@ -1959,12 +2038,12 @@ if (with_z_mask) { \
                        exp_z0z0, exp_z0dz, exp_dzdz, _z0dz, _dzdz); \
 }
 
-static void _nonorth_rho(double *rho, int *offset, int *submesh, double *dm_xyz,
+static void _nonorth_rho(double *rho, double *dm_xyz,
                          double fac, double aij, int topl, int dimension,
                          double *a, double *rij_frac,
-                         int *mesh, int *img_slice, int *grid_slice,
                          double *xs_exp, double *ys_exp, double *zs_exp,
-                         double *cache)
+                         int *img_slice, int *grid_slice,
+                         int *offset, int *submesh, int *mesh, double *cache)
 {
         int l1 = topl + 1;
         int l1l1 = l1 * l1;
@@ -2135,11 +2214,11 @@ static void _nonorth_rho(double *rho, int *offset, int *submesh, double *dm_xyz,
         }
 }
 
-void NUMINTrho_lda_nonorth(double *rho, int *offset, int *submesh,
-                           double *dm, int n_dm, int naoi, int li, int lj,
-                           double ai, double aj, double *ri, double *rj,
-                           double fac, double log_prec, int dimension,
-                           double *a, double *b, int *mesh, double *cache)
+void NUMINTrho_lda_nonorth(double *rho, double *dm, int comp, int naoi,
+                           int li, int lj, double ai, double aj,
+                           double *ri, double *rj, double fac, double log_prec,
+                           int dimension, double *a, double *b,
+                           int *offset, int *submesh, int *mesh, double *cache)
 {
         int floorl = li;
         int topl = li + lj;
@@ -2169,9 +2248,9 @@ void NUMINTrho_lda_nonorth(double *rho, int *offset, int *submesh,
         double *dm_cache = dm_cart + _CUM_LEN_CART[topl];
         _dm_vrr6d(dm_cart, dm, naoi, li, lj, ri, rj, dm_cart+_MAX_RR_SIZE[topl]);
         _reverse_affine_trans(dm_xyz, dm_cart, a, floorl, topl, dm_cache);
-        _nonorth_rho(rho, offset, submesh, dm_xyz, fac, aij, topl, dimension,
-                     a, rij_frac, mesh, img_slice, grid_slice,
-                     xs_exp, ys_exp, zs_exp, cache);
+        _nonorth_rho(rho, dm_xyz, fac, aij, topl, dimension,
+                     a, rij_frac, xs_exp, ys_exp, zs_exp,
+                     img_slice, grid_slice, offset, submesh, mesh, cache);
 }
 
 static void _merge_dm_xyz_updown(double *dm_xyz, double *dm_xyz1, int l1)
@@ -2187,11 +2266,11 @@ static void _merge_dm_xyz_updown(double *dm_xyz, double *dm_xyz1, int l1)
         } } }
 }
 
-void NUMINTrho_gga_nonorth(double *rho, int *offset, int *submesh,
-                           double *dm, int n_dm, int naoi, int li, int lj,
-                           double ai, double aj, double *ri, double *rj,
-                           double fac, double log_prec, int dimension,
-                           double *a, double *b, int *mesh, double *cache)
+void NUMINTrho_gga_nonorth(double *rho, double *dm, int comp, int naoi,
+                           int li, int lj, double ai, double aj,
+                           double *ri, double *rj, double fac, double log_prec,
+                           int dimension, double *a, double *b,
+                           int *offset, int *submesh, int *mesh, double *cache)
 {
         int topl = li + 1 + lj;
         int l1 = topl + 1;
@@ -2230,9 +2309,9 @@ void NUMINTrho_gga_nonorth(double *rho, int *offset, int *submesh,
         _dm_vrr6d(dm_cart, dm, naoi, li, lj, ri, rj, dm_6d);
         lx = l1 - 1;
         _reverse_affine_trans(dm_xyz, dm_cart, a, li, li+lj, dm_6d);
-        _nonorth_rho(rho, offset, submesh, dm_xyz, fac, aij, li+lj, dimension,
-                     a, rij_frac, mesh, img_slice, grid_slice,
-                     xs_exp, ys_exp, zs_exp, cache);
+        _nonorth_rho(rho, dm_xyz, fac, aij, li+lj, dimension,
+                     a, rij_frac, xs_exp, ys_exp, zs_exp,
+                     img_slice, grid_slice, offset, submesh, mesh, cache);
 
         int di1 = _LEN_CART[li+1];
         int li_1 = li - 1;
@@ -2259,9 +2338,9 @@ void NUMINTrho_gga_nonorth(double *rho, int *offset, int *submesh,
                 _reverse_affine_trans(dm_xyz1, dm_cart, a, li_1, topl-2, dm_6d);
                 _merge_dm_xyz_updown(dm_xyz, dm_xyz1, l1);
         }
-        _nonorth_rho(rhox, offset, submesh, dm_xyz, fac, aij, topl, dimension,
-                     a, rij_frac, mesh, img_slice, grid_slice,
-                     xs_exp, ys_exp, zs_exp, cache);
+        _nonorth_rho(rhox, dm_xyz, fac, aij, topl, dimension,
+                     a, rij_frac, xs_exp, ys_exp, zs_exp,
+                     img_slice, grid_slice, offset, submesh, mesh, cache);
 
         memset(dm_6d, 0, sizeof(double) * _LEN_CART[li+1] * dj);
         for (i = 0; i < di; i++) {
@@ -2283,9 +2362,9 @@ void NUMINTrho_gga_nonorth(double *rho, int *offset, int *submesh,
                 _reverse_affine_trans(dm_xyz1, dm_cart, a, li_1, topl-2, dm_6d);
                 _merge_dm_xyz_updown(dm_xyz, dm_xyz1, l1);
         }
-        _nonorth_rho(rhoy, offset, submesh, dm_xyz, fac, aij, topl, dimension,
-                     a, rij_frac, mesh, img_slice, grid_slice,
-                     xs_exp, ys_exp, zs_exp, cache);
+        _nonorth_rho(rhoy, dm_xyz, fac, aij, topl, dimension,
+                     a, rij_frac, xs_exp, ys_exp, zs_exp,
+                     img_slice, grid_slice, offset, submesh, mesh, cache);
 
         memset(dm_6d, 0, sizeof(double) * _LEN_CART[li+1] * dj);
         for (i = 0; i < di; i++) {
@@ -2308,14 +2387,15 @@ void NUMINTrho_gga_nonorth(double *rho, int *offset, int *submesh,
                 _reverse_affine_trans(dm_xyz1, dm_cart, a, li_1, topl-2, dm_6d);
                 _merge_dm_xyz_updown(dm_xyz, dm_xyz1, l1);
         }
-        _nonorth_rho(rhoz, offset, submesh, dm_xyz, fac, aij, topl, dimension,
-                     a, rij_frac, mesh, img_slice, grid_slice,
-                     xs_exp, ys_exp, zs_exp, cache);
+        _nonorth_rho(rhoz, dm_xyz, fac, aij, topl, dimension,
+                     a, rij_frac, xs_exp, ys_exp, zs_exp,
+                     img_slice, grid_slice, offset, submesh, mesh, cache);
 }
 
-static void _apply_rho(void (*eval_rho)(), double *rho, int *offset, int *submesh,
-                       double *dm, int n_dm, int *dims, double log_prec,
-                       int dimension, double *a, double *b, int *mesh, int *shls,
+static void _apply_rho(void (*eval_rho)(), double *rho, double *dm,
+                       int *dims, int comp,
+                       double log_prec, int dimension, double *a, double *b,
+                       int *offset, int *submesh, int *mesh, int *shls,
                        int *atm, int natm, int *bas, int nbas, double *env,
                        double *cache)
 {
@@ -2333,13 +2413,17 @@ static void _apply_rho(void (*eval_rho)(), double *rho, int *offset, int *submes
         double aij = ai + aj;
         double rrij = CINTsquare_dist(ri, rj);
         double eij = (ai * aj / aij) * rrij;
+        if (eij > EIJCUTOFF) {
+                return;
+        }
         double fac = exp(-eij) * ci * cj * CINTcommon_fac_sp(li) * CINTcommon_fac_sp(lj);
-        if (fac < 1e-40) {
+        if (fac < env[PTR_EXPDROP]) {
                 return;
         }
 
-        (*eval_rho)(rho, offset, submesh, dm, n_dm, naoi, li, lj, ai, aj, ri, rj,
-                    fac, log_prec, dimension, a, b, mesh, cache);
+        (*eval_rho)(rho, dm, comp, naoi, li, lj, ai, aj, ri, rj,
+                    fac, log_prec, dimension, a, b,
+                    offset, submesh, mesh, cache);
 }
 
 static int _rho_cache_size(int l, int comp, int *mesh)
@@ -2358,12 +2442,12 @@ static int _rho_cache_size(int l, int comp, int *mesh)
 /*
  * F_dm are a set of uncontracted cartesian density matrices
  */
-void NUMINT_rho_drv(void (*eval_rho)(), double *rho, int *offset, int *submesh,
-                    double *F_dm, int n_dm, int comp,
-                    int hermi, int *shls_slice, int *ao_loc,
+void NUMINT_rho_drv(void (*eval_rho)(), double *rho, double *F_dm,
+                    int comp, int hermi, int *shls_slice, int *ao_loc,
                     double log_prec, int dimension, int nimgs, double *Ls,
-                    double *a, double *b, int *mesh,
-                    int *atm, int natm, int *bas, int nbas, double *env, int nenv)
+                    double *a, double *b, int *offset, int *submesh, int *mesh,
+                    int *atm, int natm, int *bas, int nbas, double *env,
+                    int nenv)
 {
         const int ish0 = shls_slice[0];
         const int ish1 = shls_slice[1];
@@ -2387,22 +2471,53 @@ void NUMINT_rho_drv(void (*eval_rho)(), double *rho, int *offset, int *submesh,
         }
         double *rhobufs[MAX_THREADS];
 #pragma omp parallel default(none) \
-        shared(eval_rho, rho, offset, submesh, F_dm, n_dm, comp, hermi, ao_loc, \
-               log_prec, dimension, a, b, mesh, rhobufs, nimgs, Ls, \
+        shared(eval_rho, rho, F_dm, comp, hermi, ao_loc, \
+               log_prec, dimension, a, b, offset, submesh, mesh, rhobufs, nimgs, Ls, \
                atm, natm, bas, nbas, env, nenv)
 {
-        int ncij = n_dm * naoi * naoj;
+        int ncij = naoi * naoj;
         int nijsh = nish * njsh;
         int dims[] = {naoi, naoj};
-        int ish, jsh, ij, ijm, m, i0, j0;
-        int i, j, k;
+        int ish, jsh, ij, ijm, m, mm, i0, j0;
         int shls[2];
         double *cache = malloc(sizeof(double) * cache_size);
         double *env_loc = malloc(sizeof(double)*nenv);
         memcpy(env_loc, env, sizeof(double)*nenv);
         int ptrxyz;
-        double *rho_priv = calloc(n_dm*comp*ngrids, sizeof(double));
-        rhobufs[omp_get_thread_num()] = rho_priv;
+        int thread_id = omp_get_thread_num();
+        double *rho_priv, *pdm, *pdm1;
+        if (thread_id == 0) {
+                rho_priv = rho;
+                memset(rho, 0, sizeof(double) * comp*ngrids);
+        } else {
+                rho_priv = calloc(comp*ngrids, sizeof(double));
+        }
+        rhobufs[thread_id] = rho_priv;
+        if (hermi) {
+// Note hermitian character of the density matrices can only be found by
+// rearranging the repeated images:
+//     dmR - dmR[::-1].transpose(0,2,1) == 0
+#pragma omp for schedule(static)
+                for (m = 0; m < nimgs; m++) {
+                        mm = nimgs - 1 - m; // index of the mirrored images
+                        pdm  = F_dm + ((size_t)m) * naoi * naoi;
+                        pdm1 = F_dm + ((size_t)mm) * naoi * naoi;
+                        for (j0 = 1; j0 < naoi; j0++) {
+                                for (i0 = 0; i0 < j0; i0++) {
+                                        pdm[j0*naoi+i0] += pdm1[i0*naoi+j0];
+                                }
+                        }
+                }
+#pragma omp for schedule(static)
+                for (m = 0; m < nimgs; m++) {
+                        pdm = F_dm + ((size_t)m) * naoi * naoi;
+                        for (j0 = 0; j0 < naoi; j0++) {
+                                for (i0 = j0+1; i0 < naoi; i0++) {
+                                        pdm[j0*naoi+i0] = 0;
+                                }
+                        }
+                }
+        }
 
 #pragma omp for schedule(dynamic)
         for (ijm = 0; ijm < nimgs*nijsh; ijm++) {
@@ -2411,7 +2526,6 @@ void NUMINT_rho_drv(void (*eval_rho)(), double *rho, int *offset, int *submesh,
                 ish = ij / njsh;
                 jsh = ij % njsh;
                 if (hermi != PLAIN && ish > jsh) {
-                        // fill up only upper triangle of F-array
                         continue;
                 }
 
@@ -2425,32 +2539,16 @@ void NUMINT_rho_drv(void (*eval_rho)(), double *rho, int *offset, int *submesh,
                         ptrxyz = atm(PTR_COORD, bas(ATOM_OF,ish));
                         shift_bas(env_loc, env, Ls, ptrxyz, m);
                 }
-                _apply_rho(eval_rho, rho_priv, offset, submesh,
-                           F_dm+m*ncij+j0*naoi+i0, n_dm, dims,
-                           log_prec, dimension, a, b, mesh,
-                           shls, atm, natm, bas, nbas, env_loc, cache);
+                _apply_rho(eval_rho, rho_priv, F_dm+m*ncij+j0*naoi+i0,
+                           dims, comp, log_prec, dimension, a, b,
+                           offset, submesh, mesh, shls,
+                           atm, natm, bas, nbas, env_loc, cache);
         }
         NPomp_dsum_reduce_inplace(rhobufs, comp*ngrids);
-#pragma omp master
-        {
-                int ic;
-                double *p0, *p1, *prho, *prho_priv;
-                for (ic = 0; ic < n_dm*comp; ic++) {
-                        prho = rho + (offset[0] * mesh[1] + offset[1]) * mesh[2] + offset[2];
-                        prho_priv = rho_priv + ic * ngrids;
-                        for (i = 0; i < submesh[0]; i++) {
-                        for (j = 0; j < submesh[1]; j++) {
-                                p1 = prho + (i * mesh[1] + j) * mesh[2];
-                                p0 = prho_priv + (i * submesh[1] + j) * submesh[2];
-                                for (k = 0; k < submesh[2]; k++) {
-                                        p1[k] += p0[k];
-                                }
-                        } }
-                        rho += ((size_t)mesh[0]) * mesh[1] * mesh[2];
-                }
-        }
         free(cache);
         free(env_loc);
-        free(rho_priv);
+        if (thread_id != 0) {
+                free(rho_priv);
+        }
 }
 }
