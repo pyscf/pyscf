@@ -1,3 +1,17 @@
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import unittest
 import numpy as np
 import pyscf.dft
@@ -41,7 +55,7 @@ def get_pp_loc_part2(cell, kpt=np.zeros(3)):
                                 np.dot(cexp, cfacs[:nexp])) )
 
     vpplocG = -np.sum(SI * vlocG, axis=0)
-    vpplocR = tools.ifft(vpplocG, cell.gs).real
+    vpplocR = tools.ifft(vpplocG, cell.mesh).real
     vpploc = np.dot(aoR.T.conj(), vpplocR.reshape(-1,1)*aoR)
     if aoR.dtype == np.double:
         return vpploc.real
@@ -54,8 +68,8 @@ def get_pp_nl(cell, kpt=np.zeros(3)):
     nao = cell.nao_nr()
     SI = cell.get_SI()
     aokG = tools.fftk(np.asarray(aoR.T, order='C'),
-                      cell.gs, np.exp(-1j*np.dot(coords, kpt))).T
-    ngs = len(aokG)
+                      cell.mesh, np.exp(-1j*np.dot(coords, kpt))).T
+    ngrids = len(aokG)
 
     fakemol = pyscf.gto.Mole()
     fakemol._atm = np.zeros((1,pyscf.gto.ATM_SLOTS), dtype=np.int32)
@@ -84,7 +98,7 @@ def get_pp_nl(cell, kpt=np.zeros(3)):
                 fakemol._env[ptr+4] = rl**(l+1.5)*np.pi**1.25
                 pYlm_part = pyscf.dft.numint.eval_ao(fakemol, Gv, deriv=0)
 
-                pYlm = np.empty((nl,l*2+1,ngs))
+                pYlm = np.empty((nl,l*2+1,ngrids))
                 for k in range(nl):
                     qkl = pseudo.pp._qli(G_rad*rl, l, k)
                     pYlm[k] = pYlm_part.T * qkl
@@ -93,7 +107,7 @@ def get_pp_nl(cell, kpt=np.zeros(3)):
                 SPG_lm_aoG = np.einsum('nmg,gp->nmp', SPG_lmi, aokG)
                 tmp = np.einsum('ij,jmp->imp', hl, SPG_lm_aoG)
                 vppnl += np.einsum('imp,imq->pq', SPG_lm_aoG.conj(), tmp)
-    vppnl *= (1./ngs**2)
+    vppnl *= (1./ngrids**2)
 
     if aoR.dtype == np.double:
         return vppnl.real
@@ -113,15 +127,15 @@ def get_pp(cell, kpt=np.zeros(3)):
     vpplocG = -np.sum(SI * vlocG, axis=0)
 
     # vpploc evaluated in real-space
-    vpplocR = tools.ifft(vpplocG, cell.gs)
+    vpplocR = tools.ifft(vpplocG, cell.mesh)
     vpploc = np.dot(aoR.T.conj(), vpplocR.reshape(-1,1)*aoR)
 
     # vppnonloc evaluated in reciprocal space
     aokG = np.empty(aoR.shape, np.complex128)
     expmikr = np.exp(-1j*np.dot(coords,kpt))
     for i in range(nao):
-        aokG[:,i] = tools.fftk(aoR[:,i], cell.gs, expmikr)
-    ngs = len(aokG)
+        aokG[:,i] = tools.fftk(aoR[:,i], cell.mesh, expmikr)
+    ngrids = len(aokG)
 
     vppnl = np.zeros((nao,nao), dtype=np.complex128)
     hs, projGs = pseudo.get_projG(cell, kpt)
@@ -139,7 +153,7 @@ def get_pp(cell, kpt=np.zeros(3)):
                         vppnl += h[i,j]*np.einsum('p,q->pq',
                                                    SPG_lm_aoG[i,:].conj(),
                                                    SPG_lm_aoG[j,:])
-    vppnl *= (1./ngs**2)
+    vppnl *= (1./ngrids**2)
 
     ovlp = cell.pbc_intor('int1e_ovlp_sph', hermi=1, kpts=kpt)
     vpploc += 1./cell.vol * np.sum(pseudo.get_alphas(cell)) * ovlp
@@ -149,11 +163,11 @@ def get_pp(cell, kpt=np.zeros(3)):
 class KnowValues(unittest.TestCase):
     def test_pp_int(self):
         L = 2.
-        n = 10
+        n = 20
         cell = pbcgto.Cell()
         cell.atom = 'He  1.  .1  .3; He  .0  .8  1.1'
         cell.a = np.eye(3) * L
-        cell.gs = [n] * 3
+        cell.mesh = [n] * 3
         cell.basis = { 'He': [[0, (0.8, 1.0)],
                               [1, (1.2, 1.0)]
                              ]}
@@ -175,21 +189,21 @@ He
         ref = get_pp_nl(cell)
         dat = pp_int.get_pp_nl(cell)
         self.assertTrue(dat.dtype == np.double)
-        self.assertAlmostEqual(np.linalg.norm(ref-dat), 0, 12)
+        self.assertAlmostEqual(np.linalg.norm(ref-dat), 0, 11)
 
         ref = get_pp_nl(cell, kpt)
         dat = pp_int.get_pp_nl(cell, (kpt,kpt))
         self.assertTrue(dat.dtype == np.complex128)
-        self.assertAlmostEqual(np.linalg.norm(ref-dat[0]), 0, 12)
-        self.assertAlmostEqual(np.linalg.norm(ref-dat[1]), 0, 12)
+        self.assertAlmostEqual(np.linalg.norm(ref-dat[0]), 0, 11)
+        self.assertAlmostEqual(np.linalg.norm(ref-dat[1]), 0, 11)
 
         ref = get_pp_loc_part2(cell)
         dat = pp_int.get_pp_loc_part2(cell)
-        self.assertAlmostEqual(np.linalg.norm(ref-dat), 0, 12)
+        self.assertAlmostEqual(np.linalg.norm(ref-dat), 0, 11)
 
         ref = get_pp_loc_part2(cell, kpt)
         dat = pp_int.get_pp_loc_part2(cell, kpt)
-        self.assertAlmostEqual(np.linalg.norm(ref-dat), 0, 12)
+        self.assertAlmostEqual(np.linalg.norm(ref-dat), 0, 11)
 
     def test_pp_loc_part2(self):
         cell = pbcgto.Cell()
@@ -198,18 +212,18 @@ He
                       'C' :'gth-szv',}
         cell.pseudo = {'C':'gth-pade'}
         cell.a = np.eye(3) * 2.5
-        cell.gs = [15] * 3
+        cell.mesh = [30] * 3
         cell.build()
         np.random.seed(1)
         kpt = np.random.random(3)
 
         ref = get_pp_loc_part2(cell)
         dat = pp_int.get_pp_loc_part2(cell)
-        self.assertAlmostEqual(np.linalg.norm(ref-dat), 0, 12)
+        self.assertAlmostEqual(np.linalg.norm(ref-dat), 0, 11)
 
         ref = get_pp_loc_part2(cell, kpt)
         dat = pp_int.get_pp_loc_part2(cell, kpt)
-        self.assertAlmostEqual(np.linalg.norm(ref-dat), 0, 12)
+        self.assertAlmostEqual(np.linalg.norm(ref-dat), 0, 11)
 
     def test_pp(self):
         cell = pbcgto.Cell()
@@ -218,7 +232,7 @@ He
         cell.a = np.diag([4, 4, 4])
         cell.basis = 'gth-szv'
         cell.pseudo = 'gth-pade'
-        cell.gs = [10, 10, 10]
+        cell.mesh = [20]*3
         cell.build()
 
         np.random.seed(1)

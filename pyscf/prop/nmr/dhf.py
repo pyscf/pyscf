@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -16,8 +29,11 @@ from pyscf.lib import logger
 from pyscf import scf
 from pyscf.scf import _vhf
 from pyscf.prop.nmr import rhf as rhf_nmr
+from pyscf.data import nist
 
 def dia(mol, dm0, gauge_orig=None, shielding_nuc=None, mb='RMB'):
+    '''Note the side effects of set_common_origin'''
+
     if shielding_nuc is None:
         shielding_nuc = range(mol.natm)
     if gauge_orig is not None:
@@ -106,6 +122,8 @@ def make_h10giao(mol, dm0, with_gaunt=False, verbose=logger.WARN):
 
 def make_h10rkb(mol, dm0, gauge_orig=None, with_gaunt=False,
                 verbose=logger.WARN):
+    '''Note the side effects of set_common_origin'''
+
     if gauge_orig is not None:
         mol.set_common_origin(gauge_orig)
     if isinstance(verbose, logger.Logger):
@@ -130,6 +148,8 @@ def make_h10rkb(mol, dm0, gauge_orig=None, with_gaunt=False,
 #TODO the uncouupled force
 def make_h10rmb(mol, dm0, gauge_orig=None, with_gaunt=False,
                 verbose=logger.WARN):
+    '''Note the side effects of set_common_origin'''
+
     if gauge_orig is not None:
         mol.set_common_origin(gauge_orig)
     if isinstance(verbose, logger.Logger):
@@ -184,6 +204,8 @@ def make_h10(mol, dm0, gauge_orig=None, mb='RMB', with_gaunt=False,
     return h1
 
 def make_s10(mol, gauge_orig=None, mb='RMB'):
+    '''Note the side effects of set_common_origin'''
+
     if gauge_orig is not None:
         mol.set_common_origin(gauge_orig)
     n2c = mol.nao_2c()
@@ -227,10 +249,11 @@ class NMR(rhf_nmr.NMR):
             self.check_sanity()
 
         t0 = (time.clock(), time.time())
-        msc_dia = self.dia() * rhf_nmr.UNIT_PPM
+        unit_ppm = nist.ALPHA**2 * 1e6
+        msc_dia = self.dia() * unit_ppm
         t0 = logger.timer(self, 'h11', *t0)
         msc_para, para_pos, para_neg, para_occ = \
-                [x*rhf_nmr.UNIT_PPM for x in self.para(mo10=mo1)]
+                [x*unit_ppm for x in self.para(mo10=mo1)]
         e11 = msc_para + msc_dia
 
         logger.timer(self, 'NMR shielding', *cput0)
@@ -279,13 +302,15 @@ class NMR(rhf_nmr.NMR):
             h1 = make_h10rkb(mol, dm0, gauge_orig,
                              with_gaunt=self._scf.with_gaunt, verbose=log)
         t0 = log.timer('%s h1'%self.mb, *t0)
-        scf.chkfile.dump(self.chkfile, 'nmr/h1', h1)
+        if self.chkfile:
+            lib.chkfile.dump(self.chkfile, 'nmr/h1', h1)
 
         if gauge_orig is None:
             h1 += make_h10giao(mol, dm0,
                                with_gaunt=self._scf.with_gaunt, verbose=log)
         t0 = log.timer('GIAO', *t0)
-        scf.chkfile.dump(self.chkfile, 'nmr/h1giao', h1)
+        if self.chkfile:
+            lib.chkfile.dump(self.chkfile, 'nmr/h1giao', h1)
         return h1
 
     def make_s10(self, mol=None, gauge_orig=None):

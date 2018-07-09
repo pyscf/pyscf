@@ -1,10 +1,24 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import ctypes
 import unittest
 import numpy
 import scipy.special
 import scipy.misc
-import pyscf.lib
+from pyscf import lib
 from pyscf import gto
 from pyscf.dft import radi
 
@@ -387,7 +401,7 @@ def c2s_bra(l, gcart):
              gcart.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(l))
         return gsph
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_bessel(self):
         rs = radi.gauss_chebyshev(99)[0]
         bessel1 = numpy.empty(8)
@@ -410,16 +424,16 @@ class KnowValues(unittest.TestCase):
     def test_rad_part(self):
         rs, ws = radi.gauss_chebyshev(99)
         ur0 = rad_part(mol, mol._ecpbas, rs)
-        ecpshls = numpy.array(numpy.append(numpy.arange(len(mol._ecpbas)),-1), dtype=numpy.int32)
         ur1 = numpy.empty_like(ur0)
         libecp.ECPrad_part(ur1.ctypes.data_as(ctypes.c_void_p),
                            rs.ctypes.data_as(ctypes.c_void_p),
-                           ctypes.c_int(len(rs)), ctypes.c_int(1),
-                           ecpshls.ctypes.data_as(ctypes.c_void_p),
+                           ctypes.c_int(0), ctypes.c_int(len(rs)), ctypes.c_int(1),
+                           (ctypes.c_int*2)(0, len(mol._ecpbas)),
                            mol._ecpbas.ctypes.data_as(ctypes.c_void_p),
                            mol._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.natm),
                            mol._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.nbas),
-                           mol._env.ctypes.data_as(ctypes.c_void_p))
+                           mol._env.ctypes.data_as(ctypes.c_void_p),
+                           lib.c_null_ptr())
         self.assertTrue(numpy.allclose(ur0, ur1))
 
     def test_type2_ang_part(self):
@@ -475,10 +489,12 @@ class KnowValues(unittest.TestCase):
                                 mol._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.natm),
                                 mol._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.nbas),
                                 mol._env.ctypes.data_as(ctypes.c_void_p),
-                                cache.ctypes.data_as(ctypes.c_void_p))
+                                lib.c_null_ptr(), cache.ctypes.data_as(ctypes.c_void_p))
             if not numpy.allclose(mat0, mat1, atol=1e-8):
                 print(i, j, 'error = ', numpy.linalg.norm(mat0-mat1))
             self.assertTrue(numpy.allclose(mat0, mat1, atol=1e-6))
+            mat2 = gto.ecp.type2_by_shell(mol, shls)
+            self.assertTrue(numpy.allclose(mat0, mat2, atol=1e-6))
         for i in range(mol.nbas):
             for j in range(mol.nbas):
                 gen_type2((i,j))
@@ -551,10 +567,12 @@ class KnowValues(unittest.TestCase):
                                 mol._atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.natm),
                                 mol._bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(mol.nbas),
                                 mol._env.ctypes.data_as(ctypes.c_void_p),
-                                cache.ctypes.data_as(ctypes.c_void_p))
+                                lib.c_null_ptr(), cache.ctypes.data_as(ctypes.c_void_p))
             if not numpy.allclose(mat0, mat1, atol=1e-8):
                 print(i, j, numpy.linalg.norm(mat0-mat1))
             self.assertTrue(numpy.allclose(mat0, mat1, atol=1e-6))
+            mat2 = gto.ecp.type1_by_shell(mol, shls)
+            self.assertTrue(numpy.allclose(mat0, mat2, atol=1e-6))
         for i in range(mol.nbas):
             for j in range(mol.nbas):
                 gen_type1((i,j))

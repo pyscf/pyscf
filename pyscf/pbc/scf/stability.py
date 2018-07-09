@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -70,8 +83,8 @@ def _rotate_mo(mo_coeff, mo_occ, dx):
     return mo
 
 def _gen_hop_rhf_external(mf, verbose=None):
-#FIXME: numerically unstable with small gs?
-#TODO: Add a warning message for small gs.
+#FIXME: numerically unstable with small mesh?
+#TODO: Add a warning message for small mesh.
     from pyscf.pbc.dft import numint
     from pyscf.pbc.tddft.rhf import _unpack
     cell = mf.cell
@@ -273,7 +286,7 @@ if __name__ == '__main__':
 
     cell.basis = 'gth-szv'
     cell.pseudo = 'gth-pade'
-    cell.gs = [12]*3
+    cell.mesh = [25]*3
     cell.build()
     kpts = cell.make_kpts([2,1,1])
     mf = scf.KRHF(cell, kpts).set(exxdiv=None)

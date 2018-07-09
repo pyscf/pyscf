@@ -1,3 +1,17 @@
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import unittest
 import numpy
 import numpy as np
@@ -67,14 +81,14 @@ def get_mo_pairs_G(cell, mo_coeffs, kpts=None, q=None):
             product |ij).
 
     Returns:
-        mo_pairs_G : (ngs, nmoi*nmoj) ndarray
+        mo_pairs_G : (ngrids, nmoi*nmoj) ndarray
             The FFT of the real-space MO pairs.
     '''
     coords = gen_grid.gen_uniform_grids(cell)
     if kpts is None:
         q = np.zeros(3)
         aoR = numint.eval_ao(cell, coords)
-        ngs = aoR.shape[0]
+        ngrids = aoR.shape[0]
 
         if np.array_equal(mo_coeffs[0], mo_coeffs[1]):
             nmoi = nmoj = mo_coeffs[0].shape[1]
@@ -90,7 +104,7 @@ def get_mo_pairs_G(cell, mo_coeffs, kpts=None, q=None):
             q = kpts[1]-kpts[0]
         aoR_ki = numint.eval_ao(cell, coords, kpt=kpts[0])
         aoR_kj = numint.eval_ao(cell, coords, kpt=kpts[1])
-        ngs = aoR_ki.shape[0]
+        ngrids = aoR_ki.shape[0]
 
         nmoi = mo_coeffs[0].shape[1]
         nmoj = mo_coeffs[1].shape[1]
@@ -98,13 +112,13 @@ def get_mo_pairs_G(cell, mo_coeffs, kpts=None, q=None):
         mojR = einsum('ri,ia->ra', aoR_kj, mo_coeffs[1])
 
     #mo_pairs_R = einsum('ri,rj->rij', np.conj(moiR), mojR)
-    mo_pairs_G = np.zeros([ngs,nmoi*nmoj], np.complex128)
+    mo_pairs_G = np.zeros([ngrids,nmoi*nmoj], np.complex128)
 
     fac = np.exp(-1j*np.dot(coords, q))
-    for i in xrange(nmoi):
-        for j in xrange(nmoj):
+    for i in range(nmoi):
+        for j in range(nmoj):
             mo_pairs_R_ij = np.conj(moiR[:,i])*mojR[:,j]
-            mo_pairs_G[:,i*nmoj+j] = tools.fftk(mo_pairs_R_ij, cell.gs, fac)
+            mo_pairs_G[:,i*nmoj+j] = tools.fftk(mo_pairs_R_ij, cell.mesh, fac)
 
     return mo_pairs_G
 
@@ -119,14 +133,14 @@ def get_mo_pairs_invG(cell, mo_coeffs, kpts=None, q=None):
             product |ij).
 
     Returns:
-        mo_pairs_invG : (ngs, nmoi*nmoj) ndarray
+        mo_pairs_invG : (ngrids, nmoi*nmoj) ndarray
             The inverse FFTs of the real-space MO pairs.
     '''
     coords = gen_grid.gen_uniform_grids(cell)
     if kpts is None:
         q = np.zeros(3)
         aoR = numint.eval_ao(cell, coords)
-        ngs = aoR.shape[0]
+        ngrids = aoR.shape[0]
 
         if np.array_equal(mo_coeffs[0], mo_coeffs[1]):
             nmoi = nmoj = mo_coeffs[0].shape[1]
@@ -142,7 +156,7 @@ def get_mo_pairs_invG(cell, mo_coeffs, kpts=None, q=None):
             q = kpts[1]-kpts[0]
         aoR_ki = numint.eval_ao(cell, coords, kpt=kpts[0])
         aoR_kj = numint.eval_ao(cell, coords, kpt=kpts[1])
-        ngs = aoR_ki.shape[0]
+        ngrids = aoR_ki.shape[0]
 
         nmoi = mo_coeffs[0].shape[1]
         nmoj = mo_coeffs[1].shape[1]
@@ -150,13 +164,13 @@ def get_mo_pairs_invG(cell, mo_coeffs, kpts=None, q=None):
         mojR = einsum('ri,ia->ra', aoR_kj, mo_coeffs[1])
 
     #mo_pairs_R = einsum('ri,rj->rij', np.conj(moiR), mojR)
-    mo_pairs_invG = np.zeros([ngs,nmoi*nmoj], np.complex128)
+    mo_pairs_invG = np.zeros([ngrids,nmoi*nmoj], np.complex128)
 
     fac = np.exp(1j*np.dot(coords, q))
-    for i in xrange(nmoi):
-        for j in xrange(nmoj):
+    for i in range(nmoi):
+        for j in range(nmoj):
             mo_pairs_R_ij = np.conj(moiR[:,i])*mojR[:,j]
-            mo_pairs_invG[:,i*nmoj+j] = np.conj(tools.fftk(np.conj(mo_pairs_R_ij), cell.gs, fac))
+            mo_pairs_invG[:,i*nmoj+j] = np.conj(tools.fftk(np.conj(mo_pairs_R_ij), cell.mesh, fac))
 
     return mo_pairs_invG
 
@@ -171,14 +185,14 @@ def get_mo_pairs_G_old(cell, mo_coeffs, kpts=None, q=None):
             product |ij).
 
     Returns:
-        mo_pairs_G, mo_pairs_invG : (ngs, nmoi*nmoj) ndarray
+        mo_pairs_G, mo_pairs_invG : (ngrids, nmoi*nmoj) ndarray
             The FFTs of the real-space MO pairs.
     '''
     coords = gen_grid.gen_uniform_grids(cell)
     if kpts is None:
         q = np.zeros(3)
         aoR = numint.eval_ao(cell, coords)
-        ngs = aoR.shape[0]
+        ngrids = aoR.shape[0]
 
         if np.array_equal(mo_coeffs[0], mo_coeffs[1]):
             nmoi = nmoj = mo_coeffs[0].shape[1]
@@ -194,7 +208,7 @@ def get_mo_pairs_G_old(cell, mo_coeffs, kpts=None, q=None):
             q = kpts[1]-kpts[0]
         aoR_ki = numint.eval_ao(cell, coords, kpt=kpts[0])
         aoR_kj = numint.eval_ao(cell, coords, kpt=kpts[1])
-        ngs = aoR_ki.shape[0]
+        ngrids = aoR_ki.shape[0]
 
         nmoi = mo_coeffs[0].shape[1]
         nmoj = mo_coeffs[1].shape[1]
@@ -202,14 +216,14 @@ def get_mo_pairs_G_old(cell, mo_coeffs, kpts=None, q=None):
         mojR = einsum('ri,ia->ra', aoR_kj, mo_coeffs[1])
 
     mo_pairs_R = np.einsum('ri,rj->rij', np.conj(moiR), mojR)
-    mo_pairs_G = np.zeros([ngs,nmoi*nmoj], np.complex128)
-    mo_pairs_invG = np.zeros([ngs,nmoi*nmoj], np.complex128)
+    mo_pairs_G = np.zeros([ngrids,nmoi*nmoj], np.complex128)
+    mo_pairs_invG = np.zeros([ngrids,nmoi*nmoj], np.complex128)
 
     fac = np.exp(-1j*np.dot(coords, q))
-    for i in xrange(nmoi):
-        for j in xrange(nmoj):
-            mo_pairs_G[:,i*nmoj+j] = tools.fftk(mo_pairs_R[:,i,j], cell.gs, fac)
-            mo_pairs_invG[:,i*nmoj+j] = np.conj(tools.fftk(np.conj(mo_pairs_R[:,i,j]), cell.gs,
+    for i in range(nmoi):
+        for j in range(nmoj):
+            mo_pairs_G[:,i*nmoj+j] = tools.fftk(mo_pairs_R[:,i,j], cell.mesh, fac)
+            mo_pairs_invG[:,i*nmoj+j] = np.conj(tools.fftk(np.conj(mo_pairs_R[:,i,j]), cell.mesh,
                                                                    fac.conj()))
 
     return mo_pairs_G, mo_pairs_invG
@@ -225,8 +239,8 @@ def assemble_eri(cell, orb_pair_invG1, orb_pair_G2, q=None):
         q = np.zeros(3)
 
     coulqG = tools.get_coulG(cell, -1.0*q)
-    ngs = orb_pair_invG1.shape[0]
-    Jorb_pair_G2 = np.einsum('g,gn->gn',coulqG,orb_pair_G2)*(cell.vol/ngs**2)
+    ngrids = orb_pair_invG1.shape[0]
+    Jorb_pair_G2 = np.einsum('g,gn->gn',coulqG,orb_pair_G2)*(cell.vol/ngrids**2)
     eri = np.dot(orb_pair_invG1.T, Jorb_pair_G2)
     return eri
 
@@ -237,32 +251,32 @@ def get_ao_pairs_G(cell, kpt=np.zeros(3)):
         cell : instance of :class:`Cell`
 
     Returns:
-        ao_pairs_G, ao_pairs_invG : (ngs, nao*(nao+1)/2) ndarray
+        ao_pairs_G, ao_pairs_invG : (ngrids, nao*(nao+1)/2) ndarray
             The FFTs of the real-space AO pairs.
 
     '''
     coords = gen_grid.gen_uniform_grids(cell)
     aoR = numint.eval_ao(cell, coords, kpt) # shape = (coords, nao)
-    ngs, nao = aoR.shape
+    ngrids, nao = aoR.shape
     gamma_point = abs(kpt).sum() < 1e-9
     if gamma_point:
         npair = nao*(nao+1)//2
-        ao_pairs_G = np.empty([ngs, npair], np.complex128)
+        ao_pairs_G = np.empty([ngrids, npair], np.complex128)
 
         ij = 0
         for i in range(nao):
             for j in range(i+1):
                 ao_ij_R = np.conj(aoR[:,i]) * aoR[:,j]
-                ao_pairs_G[:,ij] = tools.fft(ao_ij_R, cell.gs)
-                #ao_pairs_invG[:,ij] = ngs*tools.ifft(ao_ij_R, cell.gs)
+                ao_pairs_G[:,ij] = tools.fft(ao_ij_R, cell.mesh)
+                #ao_pairs_invG[:,ij] = ngrids*tools.ifft(ao_ij_R, cell.mesh)
                 ij += 1
         ao_pairs_invG = ao_pairs_G.conj()
     else:
-        ao_pairs_G = np.zeros([ngs, nao,nao], np.complex128)
+        ao_pairs_G = np.zeros([ngrids, nao,nao], np.complex128)
         for i in range(nao):
             for j in range(nao):
                 ao_ij_R = np.conj(aoR[:,i]) * aoR[:,j]
-                ao_pairs_G[:,i,j] = tools.fft(ao_ij_R, cell.gs)
+                ao_pairs_G[:,i,j] = tools.fft(ao_ij_R, cell.mesh)
         ao_pairs_invG = ao_pairs_G.transpose(0,2,1).conj().reshape(-1,nao**2)
         ao_pairs_G = ao_pairs_G.reshape(-1,nao**2)
     return ao_pairs_G, ao_pairs_invG
@@ -304,11 +318,11 @@ def get_j(cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3), kpts_band=None):
         kpt2 = kpt
         aoR_k1 = numint.eval_ao(cell, coords, kpt1)
         aoR_k2 = numint.eval_ao(cell, coords, kpt2)
-    ngs, nao = aoR_k1.shape
+    ngrids, nao = aoR_k1.shape
 
     def contract(dm):
         vjR_k2 = get_vjR(cell, dm, aoR_k2)
-        vj = (cell.vol/ngs) * np.dot(aoR_k1.T.conj(), vjR_k2.reshape(-1,1)*aoR_k1)
+        vj = (cell.vol/ngrids) * np.dot(aoR_k1.T.conj(), vjR_k2.reshape(-1,1)*aoR_k1)
         return vj
 
     if dm.ndim == 2:
@@ -334,16 +348,16 @@ def get_jk(mf, cell, dm, hermi=1, vhfopt=None, kpt=np.zeros(3), kpts_band=None):
 
     vkR_k1k2 = get_vkR(mf, cell, aoR_k1, aoR_k2, kpt1, kpt2)
 
-    ngs, nao = aoR_k1.shape
+    ngrids, nao = aoR_k1.shape
     def contract(dm):
         vjR_k2 = get_vjR(cell, dm, aoR_k2)
-        vj = (cell.vol/ngs) * np.dot(aoR_k1.T.conj(), vjR_k2.reshape(-1,1)*aoR_k1)
+        vj = (cell.vol/ngrids) * np.dot(aoR_k1.T.conj(), vjR_k2.reshape(-1,1)*aoR_k1)
 
-        #:vk = (cell.vol/ngs) * np.einsum('rs,Rp,Rqs,Rr->pq', dm, aoR_k1.conj(),
+        #:vk = (cell.vol/ngrids) * np.einsum('rs,Rp,Rqs,Rr->pq', dm, aoR_k1.conj(),
         #:                                vkR_k1k2, aoR_k2)
         aoR_dm_k2 = np.dot(aoR_k2, dm)
         tmp_Rq = np.einsum('Rqs,Rs->Rq', vkR_k1k2, aoR_dm_k2)
-        vk = (cell.vol/ngs) * np.dot(aoR_k1.T.conj(), tmp_Rq)
+        vk = (cell.vol/ngrids) * np.dot(aoR_k1.T.conj(), tmp_Rq)
         return vj, vk
 
     if dm.ndim == 2:
@@ -359,10 +373,10 @@ def get_vjR(cell, dm, aoR):
     coulG = tools.get_coulG(cell)
 
     rhoR = numint.eval_rho(cell, aoR, dm)
-    rhoG = tools.fft(rhoR, cell.gs)
+    rhoG = tools.fft(rhoR, cell.mesh)
 
     vG = coulG*rhoG
-    vR = tools.ifft(vG, cell.gs)
+    vR = tools.ifft(vG, cell.mesh)
     if rhoR.dtype == np.double:
         vR = vR.real
     return vR
@@ -373,16 +387,16 @@ def get_vkR(mf, cell, aoR_k1, aoR_k2, kpt1, kpt2):
     where {i,k1} = exp^{i k1 r) |i> , {j,k2} = exp^{-i k2 r) <j|
     '''
     coords = gen_grid.gen_uniform_grids(cell)
-    ngs, nao = aoR_k1.shape
+    ngrids, nao = aoR_k1.shape
 
     expmikr = np.exp(-1j*np.dot(kpt1-kpt2,coords.T))
     coulG = tools.get_coulG(cell, kpt1-kpt2, exx=True, mf=mf)
     def prod(ij):
         i, j = divmod(ij, nao)
         rhoR = aoR_k1[:,i] * aoR_k2[:,j].conj()
-        rhoG = tools.fftk(rhoR, cell.gs, expmikr)
+        rhoG = tools.fftk(rhoR, cell.mesh, expmikr)
         vG = coulG*rhoG
-        vR = tools.ifftk(vG, cell.gs, expmikr.conj())
+        vR = tools.ifftk(vG, cell.mesh, expmikr.conj())
         return vR
 
     if aoR_k1.dtype == np.double and aoR_k2.dtype == np.double:
@@ -395,11 +409,11 @@ def get_vkR(mf, cell, aoR_k1, aoR_k2, kpt1, kpt2):
 def get_j_kpts(mf, cell, dm_kpts, kpts, kpts_band=None):
     coords = gen_grid.gen_uniform_grids(cell)
     nkpts = len(kpts)
-    ngs = len(coords)
+    ngrids = len(coords)
     dm_kpts = np.asarray(dm_kpts)
     nao = dm_kpts.shape[-1]
 
-    ni = numint._KNumInt(kpts)
+    ni = numint.KNumInt(kpts)
     aoR_kpts = ni.eval_ao(cell, coords, kpts)
     if kpts_band is not None:
         aoR_kband = numint.eval_ao(cell, coords, kpts_band)
@@ -409,7 +423,7 @@ def get_j_kpts(mf, cell, dm_kpts, kpts, kpts_band=None):
 
     vjR = [get_vjR(cell, dms[i], aoR_kpts) for i in range(nset)]
     if kpts_band is not None:
-        vj_kpts = [cell.vol/ngs * lib.dot(aoR_kband.T.conj()*vjR[i], aoR_kband)
+        vj_kpts = [cell.vol/ngrids * lib.dot(aoR_kband.T.conj()*vjR[i], aoR_kband)
                    for i in range(nset)]
         if dm_kpts.ndim == 3:  # One set of dm_kpts for KRHF
             vj_kpts = vj_kpts[0]
@@ -417,7 +431,7 @@ def get_j_kpts(mf, cell, dm_kpts, kpts, kpts_band=None):
     else:
         vj_kpts = []
         for i in range(nset):
-            vj = [cell.vol/ngs * lib.dot(aoR_k.T.conj()*vjR[i], aoR_k)
+            vj = [cell.vol/ngrids * lib.dot(aoR_k.T.conj()*vjR[i], aoR_k)
                   for aoR_k in aoR_kpts]
             vj_kpts.append(lib.asarray(vj))
         return lib.asarray(vj_kpts).reshape(dm_kpts.shape)
@@ -426,14 +440,14 @@ def get_j_kpts(mf, cell, dm_kpts, kpts, kpts_band=None):
 def get_jk_kpts(mf, cell, dm_kpts, kpts, kpts_band=None):
     coords = gen_grid.gen_uniform_grids(cell)
     nkpts = len(kpts)
-    ngs = len(coords)
+    ngrids = len(coords)
     dm_kpts = np.asarray(dm_kpts)
     nao = dm_kpts.shape[-1]
 
     dms = dm_kpts.reshape(-1,nkpts,nao,nao)
     nset = dms.shape[0]
 
-    ni = numint._KNumInt(kpts)
+    ni = numint.KNumInt(kpts)
     aoR_kpts = ni.eval_ao(cell, coords, kpts)
     if kpts_band is not None:
         aoR_kband = numint.eval_ao(cell, coords, kpts_band)
@@ -441,26 +455,26 @@ def get_jk_kpts(mf, cell, dm_kpts, kpts, kpts_band=None):
 # J
     vjR = [get_vjR_kpts(cell, dms[i], aoR_kpts) for i in range(nset)]
     if kpts_band is not None:
-        vj_kpts = [cell.vol/ngs * lib.dot(aoR_kband.T.conj()*vjR[i], aoR_kband)
+        vj_kpts = [cell.vol/ngrids * lib.dot(aoR_kband.T.conj()*vjR[i], aoR_kband)
                    for i in range(nset)]
     else:
         vj_kpts = []
         for i in range(nset):
-            vj = [cell.vol/ngs * lib.dot(aoR_k.T.conj()*vjR[i], aoR_k)
+            vj = [cell.vol/ngrids * lib.dot(aoR_k.T.conj()*vjR[i], aoR_k)
                   for aoR_k in aoR_kpts]
             vj_kpts.append(lib.asarray(vj))
     vj_kpts = lib.asarray(vj_kpts)
     vjR = None
 
 # K
-    weight = 1./nkpts * (cell.vol/ngs)
+    weight = 1./nkpts * (cell.vol/ngrids)
     vk_kpts = np.zeros_like(vj_kpts)
     if kpts_band is not None:
         for k2, kpt2 in enumerate(kpts):
             aoR_dms = [lib.dot(aoR_kpts[k2], dms[i,k2]) for i in range(nset)]
             vkR_k1k2 = get_vkR(mf, cell, aoR_kband, aoR_kpts[k2],
                                kpts_band, kpt2)
-            #:vk_kpts = 1./nkpts * (cell.vol/ngs) * np.einsum('rs,Rp,Rqs,Rr->pq',
+            #:vk_kpts = 1./nkpts * (cell.vol/ngrids) * np.einsum('rs,Rp,Rqs,Rr->pq',
             #:            dm_kpts[k2], aoR_kband.conj(),
             #:            vkR_k1k2, aoR_kpts[k2])
             for i in range(nset):
@@ -491,10 +505,10 @@ def get_vjR_kpts(cell, dm_kpts, aoR_kpts):
     rhoR = 0
     for k in range(nkpts):
         rhoR += 1./nkpts*numint.eval_rho(cell, aoR_kpts[k], dm_kpts[k])
-    rhoG = tools.fft(rhoR, cell.gs)
+    rhoG = tools.fft(rhoR, cell.mesh)
 
     vG = coulG*rhoG
-    vR = tools.ifft(vG, cell.gs)
+    vR = tools.ifft(vG, cell.mesh)
     if rhoR.dtype == np.double:
         vR = vR.real
     return vR
@@ -518,7 +532,7 @@ def get_nuc(cell, kpt=np.zeros(3)):
     SI = cell.get_SI()
     coulG = tools.get_coulG(cell)
     vneG = -np.dot(chargs,SI) * coulG
-    vneR = tools.ifft(vneG, cell.gs).real
+    vneR = tools.ifft(vneG, cell.mesh).real
 
     vne = np.dot(aoR.T.conj(), vneR.reshape(-1,1)*aoR)
     return vne
@@ -540,7 +554,7 @@ cell.basis = {'He': [(0, (2.5, 1)), (0, (1., 1))],
               'C' :'gth-szv',}
 cell.pseudo = {'C':'gth-pade'}
 cell.a = np.eye(3) * 2.5
-cell.gs = [10] * 3
+cell.mesh = [21] * 3
 cell.build()
 np.random.seed(1)
 kpts = np.random.random((4,3))
@@ -551,7 +565,7 @@ cell1 = pgto.Cell()
 cell1.atom = 'He 1. .5 .5; He .1 1.3 2.1'
 cell1.basis = {'He': [(0, (2.5, 1)), (0, (1., 1))]}
 cell1.a = np.eye(3) * 2.5
-cell1.gs = [10] * 3
+cell1.mesh = [21] * 3
 cell1.build()
 
 cell2 = pgto.Cell()
@@ -560,7 +574,7 @@ He   1.3    .2       .3
 He    .1    .1      1.1 '''
 cell2.basis = {'He': [[0, [0.8, 1]],
                       [1, [0.6, 1]]]}
-cell2.gs = [8]*3
+cell2.mesh = [17]*3
 cell2.a = numpy.array(([2.0,  .9, 0. ],
                        [0.1, 1.9, 0.4],
                        [0.8, 0  , 2.1]))

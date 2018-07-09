@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -33,8 +46,8 @@ def mm_charge(scf_method, coords, charges, unit=None):
 
     Note:
         1. if MM charge and X2C correction are used together, function mm_charge
-        needs to be applied after X2C decoration (scf.sfx2c function), eg
-        mf = mm_charge(scf.sfx2c(scf.RHF(mol)), [(0.5,0.6,0.8)], [-0.5]).
+        needs to be applied after X2C decoration (.x2c method), eg
+        mf = mm_charge(scf.RHF(mol).x2c()), [(0.5,0.6,0.8)], [-0.5]).
         2. Once mm_charge function is applied on the SCF object, it
         affects all the post-HF calculations eg MP2, CCSD, MCSCF etc
 
@@ -73,13 +86,19 @@ def mm_charge(scf_method, coords, charges, unit=None):
                     mol.set_rinv_origin(coords[i])
                     v += mol.intor('int1e_rinv') * -q
             else:
-                fakemol = _make_fakemol(coords)
                 if mol.cart:
                     intor = 'int3c2e_cart'
                 else:
                     intor = 'int3c2e_sph'
-                j3c = df.incore.aux_e2(mol, fakemol, intor=intor, aosym='s2ij')
-                v = lib.unpack_tril(numpy.einsum('xk,k->x', j3c, -charges))
+                nao = mol.nao
+                max_memory = self.max_memory - lib.current_memory()[0]
+                blksize = int(max(max_memory*1e6/8/nao**2, 400))
+                v = 0
+                for i0, i1 in lib.prange(0, charges.size, blksize):
+                    fakemol = gto.fakemol_for_charges(coords[i0:i1])
+                    j3c = df.incore.aux_e2(mol, fakemol, intor=intor, aosym='s2ij')
+                    v += numpy.einsum('xk,k->x', j3c, -charges[i0:i1])
+                v = lib.unpack_tril(v)
             return h1e + v
 
         def energy_nuc(self):
@@ -96,6 +115,7 @@ def mm_charge(scf_method, coords, charges, unit=None):
             return mm_charge_grad(scf_grad, coords, charges, 'Bohr')
 
     return QMMM()
+add_mm_charges = mm_charge
 
 def mm_charge_grad(scf_grad, coords, charges, unit=None):
     '''Apply the MM charges in the QM gradients' method.  It affects both the
@@ -153,11 +173,19 @@ def mm_charge_grad(scf_grad, coords, charges, unit=None):
                     mol.set_rinv_origin(coords[i])
                     v += mol.intor('int1e_iprinv', comp=3) * q
             else:
-                fakemol = _make_fakemol(coords)
-                j3c = df.incore.aux_e2(mol, fakemol, intor='int3c2e_ip1',
-                                       aosym='s1', comp=3).reshape(3,nao,nao,-1)
-                v = numpy.einsum('ipqk,k->ipq', j3c, charges)
-            return scf_grad.get_hcore(mol) - v
+                if mol.cart:
+                    intor = 'int3c2e_ip1_cart'
+                else:
+                    intor = 'int3c2e_ip1_sph'
+                nao = mol.nao
+                max_memory = self.max_memory - lib.current_memory()[0]
+                blksize = int(max(max_memory*1e6/8/nao**2, 400))
+                v = 0
+                for i0, i1 in lib.prange(0, charges.size, blksize):
+                    fakemol = gto.fakemol_for_charges(coords[i0:i1])
+                    j3c = df.incore.aux_e2(mol, fakemol, intor, aosym='s1', comp=3)
+                    v += numpy.einsum('ipqk,k->ipq', j3c, charges[i0:i1])
+            return scf_grad.get_hcore(mol) + v
 
         def grad_nuc(self, mol=None, atmlst=None):
             if mol is None: mol = scf_grad.mol
@@ -180,31 +208,6 @@ class _QMMM:
 class _QMMMGrad:
     pass
 
-def _make_fakemol(coords):
-    nbas = coords.shape[0]
-    fakeatm = numpy.zeros((nbas,gto.ATM_SLOTS), dtype=numpy.int32)
-    fakebas = numpy.zeros((nbas,gto.BAS_SLOTS), dtype=numpy.int32)
-    fakeenv = [0] * gto.PTR_ENV_START
-    ptr = gto.PTR_ENV_START
-    fakeatm[:,gto.PTR_COORD] = numpy.arange(ptr, ptr+nbas*3, 3)
-    fakeenv.append(coords.ravel())
-    ptr += nbas*3
-    fakebas[:,gto.ATOM_OF] = numpy.arange(nbas)
-    fakebas[:,gto.NPRIM_OF] = 1
-    fakebas[:,gto.NCTR_OF] = 1
-# approximate point charge with gaussian distribution exp(-1e16*r^2)
-    fakebas[:,gto.PTR_EXP] = ptr
-    fakebas[:,gto.PTR_COEFF] = ptr+1
-    expnt = 1e16
-    fakeenv.append([expnt, 1/(2*numpy.sqrt(numpy.pi)*gto.mole._gaussian_int(2,expnt))])
-    ptr += 2
-    fakemol = gto.Mole()
-    fakemol._atm = fakeatm
-    fakemol._bas = fakebas
-    fakemol._env = numpy.hstack(fakeenv)
-    fakemol._built = True
-    return fakemol
-
 if __name__ == '__main__':
     from pyscf import scf, cc, grad
     mol = gto.Mole()
@@ -219,16 +222,28 @@ if __name__ == '__main__':
     charges = [-0.5]
     mf = mm_charge(scf.RHF(mol), coords, charges)
     print(mf.kernel()) # -76.3206550372
-    mycc = cc.ccsd.CCSD(mf)
-    mycc.conv_tol = 1e-10
-    mycc.conv_tol_normt = 1e-10
-    ecc, t1, t2 = mycc.kernel() # ecc = -0.228939687075
-    l1, l2 = mycc.solve_lambda()[1:]
 
-    hfg = mm_charge_grad(grad.RHF(mf), coords, charges)
-    g1 = grad.ccsd.kernel(mycc, t1, t2, l1, l2, mf_grad=hfg)
-    print(g1)
-# [[-0.50179182 -0.61489747 -0.96396085]
-#  [-0.077348   -0.23457358  0.02839861]
-#  [-0.44182244  0.14559838 -0.22348068]]
+    mfs = mf.as_scanner()
+    e1 = mfs(''' O                  0.00100000    0.00000000   -0.11081188
+             H                 -0.00000000   -0.84695236    0.59109389
+             H                 -0.00000000    0.89830571    0.52404783 ''')
+    e2 = mfs(''' O                 -0.00100000    0.00000000   -0.11081188
+             H                 -0.00000000   -0.84695236    0.59109389
+             H                 -0.00000000    0.89830571    0.52404783 ''')
+    print((e1 - e2)/0.002 * lib.param.BOHR)
+    mf.nuc_grad_method().kernel()
+
+
+    mycc = cc.ccsd.CCSD(mf)
+    ecc, t1, t2 = mycc.kernel() # ecc = -0.228939687075
+
+    mycc.nuc_grad_method().kernel()
+    ccs = mycc.as_scanner()
+    e1 = ccs(''' O                  0.00100000    0.00000000   -0.11081188
+             H                 -0.00000000   -0.84695236    0.59109389
+             H                 -0.00000000    0.89830571    0.52404783 ''')
+    e2 = ccs(''' O                 -0.00100000    0.00000000   -0.11081188
+             H                 -0.00000000   -0.84695236    0.59109389
+             H                 -0.00000000    0.89830571    0.52404783 ''')
+    print((e1 - e2)/0.002 * lib.param.BOHR)
 

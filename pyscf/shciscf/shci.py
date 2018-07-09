@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Sandeep Sharma <sanshar@gmail.com>
 #         James Smith <james.smith9113@gmail.com>
@@ -26,10 +39,17 @@ ndpointer = numpy.ctypeslib.ndpointer
 try:
    from pyscf.shciscf import settings
 except ImportError:
-    import sys
-    sys.stderr.write('''settings.py not found.  Please create %s
-''' % os.path.join(os.path.dirname(__file__), 'settings.py'))
-    raise ImportError
+    from pyscf import __config__
+    settings = lambda: None
+    settings.SHCIEXE = getattr(__config__, 'shci_SHCIEXE', None)
+    settings.SHCISCRATCHDIR = getattr(__config__, 'shci_SHCISCRATCHDIR', None)
+    settings.SHCIRUNTIMEDIR = getattr(__config__, 'shci_SHCIRUNTIMEDIR', None)
+    settings.MPIPREFIX = getattr(__config__, 'shci_MPIPREFIX', None)
+    if (settings.SHCIEXE is None or settings.SHCISCRATCHDIR is None):
+        import sys
+        sys.stderr.write('settings.py not found.  Please create %s\n'
+                         % os.path.join(os.path.dirname(__file__), 'settings.py'))
+        raise ImportError('settings.py not found')
 
 # Libraries
 from pyscf.lib import load_library
@@ -79,6 +99,7 @@ class SHCI(pyscf.lib.StreamObject):
         davidsonTol: double
         epsilon2: double
         epsilon2Large: double
+        targetError: double
         sampleN: int
         epsilon1: vector<double>
         onlyperturbative: bool
@@ -138,7 +159,8 @@ class SHCI(pyscf.lib.StreamObject):
         # Standard SHCI Input parameters
         self.davidsonTol = 5.e-5
         self.epsilon2 = 1.e-7
-        self.epsilon2Large = 1.e-4
+        self.epsilon2Large = 1000.
+        self.targetError = 1.e-4
         self.sampleN = 200
         self.epsilon1 = None
         self.onlyperturbative = False
@@ -159,6 +181,8 @@ class SHCI(pyscf.lib.StreamObject):
         self.sweep_epsilon = []
         self.maxIter = 6
         self.restart = False
+        self.num_thrds = num_thrds
+        self.orbsym = []
         self.onlywriteIntegral = False
         self.spin = None
         self.orbsym = []
@@ -190,6 +214,13 @@ class SHCI(pyscf.lib.StreamObject):
     def generate_schedule(self):
         return self
 
+    @property
+    def threads(self):
+        return self.num_thrds
+    @threads.setter
+    def threads(self, x):
+        self.num_thrds = x
+
     def dump_flags(self, verbose=None):
         if verbose is None:
             verbose = self.verbose
@@ -197,8 +228,6 @@ class SHCI(pyscf.lib.StreamObject):
         log.info('')
         log.info('******** SHCI flags ********')
         log.info('executable             = %s', self.executable)
-       #log.info('SHCIEXE_COMPRESS_NEVPT = %s', settings.SHCIEXE_COMPRESS_NEVPT)
-       #
         log.info('mpiprefix              = %s', self.mpiprefix)
         log.info('scratchDirectory       = %s', self.scratchDirectory)
         log.info('integralFile           = %s', os.path.join(self.runtimeDir, self.integralFile))
@@ -246,19 +275,19 @@ class SHCI(pyscf.lib.StreamObject):
         r2RDM(twopdm, norb, os.path.join(self.scratchDirectory, "node0", file2pdm))
 
         # Symmetry addon
-        if (self.groupname == 'Dooh' or self.groupname == 'Cooh') and self.useExtraSymm:
-          nRows, rowIndex, rowCoeffs = DinfhtoD2h(self, norb, nelec)
-          twopdmcopy = 1.*twopdm
-          twopdm = 0.*twopdm
-          transformRDMDinfh(norb, numpy.ascontiguousarray(nRows,      numpy.int32),
-                                  numpy.ascontiguousarray(rowIndex,   numpy.int32),
-                                  numpy.ascontiguousarray(rowCoeffs,  numpy.float64),
-                                  numpy.ascontiguousarray(twopdmcopy, numpy.float64),
-                                  numpy.ascontiguousarray(twopdm,     numpy.float64))
-          twopdmcopy = None
+        if (self.groupname == 'Dooh' or self.groupname == 'Coov') and self.useExtraSymm:
+           nRows, rowIndex, rowCoeffs = DinfhtoD2h(self, norb, nelec)
+           twopdmcopy = 1.*twopdm
+           twopdm = 0.*twopdm
+           transformRDMDinfh(norb, numpy.ascontiguousarray(nRows,      numpy.int32),
+                                   numpy.ascontiguousarray(rowIndex,   numpy.int32),
+                                   numpy.ascontiguousarray(rowCoeffs,  numpy.float64),
+                                   numpy.ascontiguousarray(twopdmcopy, numpy.float64),
+                                   numpy.ascontiguousarray(twopdm,     numpy.float64))
+           twopdmcopy = None
 
         # (This is coherent with previous statement about indexes)
-        onepdm = numpy.einsum('ikjj->ik', twopdm)
+        onepdm = numpy.einsum('ikjj->ki', twopdm)
         onepdm /= (nelectrons-1)
         return onepdm, twopdm
 
@@ -284,7 +313,7 @@ class SHCI(pyscf.lib.StreamObject):
         r2RDM(twopdm, norb, os.path.join(self.scratchDirectory, "node0", file2pdm))
 
         # (This is coherent with previous statement about indexes)
-        onepdm = numpy.einsum('ikjj->ik', twopdm)
+        onepdm = numpy.einsum('ikjj->ki', twopdm)
         onepdm /= (nelectrons-1)
         return onepdm, twopdm
 
@@ -333,7 +362,7 @@ class SHCI(pyscf.lib.StreamObject):
         # (This is coherent with previous statement about indexes)
         twopdm = numpy.einsum('ijkklm->ijlm',threepdm)
         twopdm /= (nelectrons-2)
-        onepdm = numpy.einsum('ijjk->ik', twopdm)
+        onepdm = numpy.einsum('ijjk->ki', twopdm)
         onepdm /= (nelectrons-1)
         end = time.time()
         print('......reading the RDM took    %10.2f sec' %(end-start))
@@ -354,7 +383,7 @@ class SHCI(pyscf.lib.StreamObject):
         threepdm += numpy.einsum('jm,kinl->ijklmn',numpy.identity(norb),twopdm)
 
         twopdm =(numpy.einsum('iklj->ijkl',twopdm)
-               + numpy.einsum('il,jk->ijkl',onepdm,numpy.identity(norb)))
+               + numpy.einsum('li,jk->ijkl',onepdm,numpy.identity(norb)))
 
         return onepdm, twopdm, threepdm
 
@@ -715,9 +744,9 @@ def writeSHCIConfFile(SHCI, nelec, Restart):
              if (i != len(SHCI.initialStates)-1):
                 f.write('\n')
        elif SHCI.irrep_nelec is None:
-          for i in range(nelec[0]):
+          for i in range(int(nelec[0])):
              f.write('%i '%(2*i))
-          for i in range(nelec[1]):
+          for i in range(int(nelec[1])):
              f.write('%i '%(2*i+1))
        else:
           from pyscf import symm
@@ -781,6 +810,7 @@ def writeSHCIConfFile(SHCI, nelec, Restart):
        f.write( 'nPTiter %d\n' %SHCI.nPTiter )
     f.write( 'epsilon2 %g\n' %SHCI.epsilon2 )
     f.write( 'epsilon2Large %g\n' %SHCI.epsilon2Large )
+    f.write( 'targetError %g\n' %SHCI.targetError )
     f.write( 'sampleN %i\n' %SHCI.sampleN )
 
     # Miscellaneous Keywords
@@ -800,113 +830,106 @@ def writeSHCIConfFile(SHCI, nelec, Restart):
 
 
 def D2htoDinfh(SHCI, norb, nelec):
-   from pyscf import symm
-   from pyscf.dmrgscf import dmrg_sym
+    coeffs = numpy.zeros(shape=(norb, norb)).astype(complex)
+    nRows = numpy.zeros(shape=(norb,), dtype=int)
+    rowIndex = numpy.zeros(shape=(2*norb,), dtype=int)
+    rowCoeffs = numpy.zeros(shape=(2*norb,), dtype=float)
+    orbsym1 = numpy.zeros(shape=(norb,), dtype=int)
 
-   coeffs = numpy.zeros(shape=(norb, norb)).astype(complex);
-   nRows = numpy.zeros(shape=(norb,), dtype=int)
-   rowIndex = numpy.zeros(shape=(2*norb,), dtype=int)
-   rowCoeffs = numpy.zeros(shape=(2*norb,), dtype=float)
+    orbsym = numpy.asarray(SHCI.orbsym)
+    A_irrep_ids = set([0,1,4,5])
+    E_irrep_ids = set(orbsym).difference(A_irrep_ids)
 
-   i, orbsym, ncore = 0, [0]*len(SHCI.orbsym), len(SHCI.orbsym)-norb
-
-   while i < norb:
-      symbol = symm.basis.linearmole_irrep_id2symb(SHCI.groupname, SHCI.orbsym[i+ncore])
-      if (symbol[0] == 'A'):
-         coeffs[i, i] = 1.0
-         orbsym[i] = 1
-         nRows[i] = 1
-         rowIndex[2*i] = i
-         rowCoeffs[2*i] = 1.
-         if len(symbol) == 3 and symbol[2] == 'u':
-            orbsym[i] = 2
-      else:
-         if (i == norb-1):
-            print("the orbitals dont have dinfh symmetry")
-            exit(0)
-         l = int(symbol[1])
-         orbsym[i], orbsym[i+1] = 2*l+3, -(2*l+3)
-         if ( len(symbol) == 4 and symbol[2] == 'u'):
-            orbsym[i], orbsym[i+1] = orbsym[i]+1, orbsym[i+1]-1
-         if (symbol[3] == 'x'):
-            m1, m2 = 1., -1.
-         else:
-            m1, m2 = -1., 1.
-
-
-         nRows[i] = 2
-         if m1 > 0 :
-            coeffs[i, i], coeffs[i, i+1] = ((-1)**l)*1.0/(2.0**0.5), ((-1)**l)*1.0j/(2.0**0.5)
-            rowIndex[2*i], rowIndex[2*i+1] = i, i+1
-         else:
-            coeffs[i, i+1], coeffs[i, i] = ((-1)**l)*1.0/(2.0**0.5), ((-1)**l)*1.0j/(2.0**0.5)
-            rowIndex[2*i], rowIndex[2*i+1] = i+1, i
-
-         rowCoeffs[2*i], rowCoeffs[2*i+1] = ((-1)**l)*1.0/(2.0**0.5), ((-1)**l)*1.0/(2.0**0.5)
-         i = i+1
-
-         nRows[i] = 2
-         if (m1 > 0):  #m2 is the complex number
-            rowIndex[2*i] = i-1
-            rowIndex[2*i+1] = i
-            rowCoeffs[2*i], rowCoeffs[2*i+1] = 1.0/(2.0**0.5), -1.0/(2.0**0.5)
-            coeffs[i, i-1], coeffs[i, i] = 1.0/(2.0**0.5), -1.0j/(2.0**0.5)
-         else:
+    # A1g/A2g/A1u/A2u for Dooh or A1/A2 for Coov
+    for ir in A_irrep_ids:
+        is_gerade = ir in (0, 1)
+        for i in numpy.where(orbsym == ir)[0]:
+            coeffs[i,i] = 1.0
+            nRows[i] = 1
             rowIndex[2*i] = i
-            rowIndex[2*i+1] = i-1
-            rowCoeffs[2*i], rowCoeffs[2*i+1] = 1.0/(2.0**0.5), -1.0/(2.0**0.5)
-            coeffs[i, i], coeffs[i, i-1] = 1.0/(2.0**0.5), -1.0j/(2.0**0.5)
+            rowCoeffs[2*i] = 1.
+            if is_gerade:  # A1g/A2g for Dooh or A1/A2 for Coov
+                orbsym1[i] = 1
+            else:  # A1u/A2u for Dooh
+                orbsym1[i] = 2
 
-      i = i+1
+    # See L146 of pyscf/symm/basis.py
+    Ex_irrep_ids = [ir for ir in E_irrep_ids if (ir%10) in (0,2,5,7)]
+    for ir in Ex_irrep_ids:
+        is_gerade = (ir % 10) in (0, 2)
+        if is_gerade:
+            # See L146 of basis.py
+            Ex = numpy.where(orbsym == ir)[0]
+            Ey = numpy.where(orbsym == ir+1)[0]
+        else:
+            Ex = numpy.where(orbsym == ir)[0]
+            Ey = numpy.where(orbsym == ir-1)[0]
 
-   return coeffs, nRows, rowIndex, rowCoeffs, orbsym
+        if ir % 10 in (0, 5):
+            l = (ir // 10) * 2
+        else:
+            l = (ir // 10) * 2 + 1
+
+        for ix, iy in zip(Ex, Ey):
+            nRows[ix] = nRows[iy] = 2
+            if is_gerade:
+                orbsym1[ix], orbsym1[iy] = 2*l+3, -(2*l+3)
+            else:
+                orbsym1[ix], orbsym1[iy] = 2*l+4, -(2*l+4)
+
+            rowIndex[2*ix], rowIndex[2*ix+1] = ix, iy
+            rowIndex[2*iy], rowIndex[2*iy+1] = ix, iy
+
+            coeffs[ix,ix], coeffs[ix,iy] = ((-1)**l)*1.0/(2.0**0.5), ((-1)**l)*1.0j/(2.0**0.5)
+            coeffs[iy,ix], coeffs[iy,iy] = 1.0/(2.0**0.5), -1.0j/(2.0**0.5)
+            rowCoeffs[2*ix], rowCoeffs[2*ix+1] = ((-1)**l)*1.0/(2.0**0.5), ((-1)**l)*1.0/(2.0**0.5)
+            rowCoeffs[2*iy], rowCoeffs[2*iy+1] = 1.0/(2.0**0.5), -1.0/(2.0**0.5)
+
+    return coeffs, nRows, rowIndex, rowCoeffs, orbsym1
 
 
 def DinfhtoD2h(SHCI, norb, nelec):
-   from pyscf import symm
-   from pyscf.dmrgscf import dmrg_sym
+    nRows = numpy.zeros(shape=(norb,), dtype=int)
+    rowIndex = numpy.zeros(shape=(2*norb,), dtype=int)
+    rowCoeffs = numpy.zeros(shape=(4*norb,), dtype=float)
 
-   nRows = numpy.zeros(shape=(norb,), dtype=int)
-   rowIndex = numpy.zeros(shape=(2*norb,), dtype=int)
-   rowCoeffs = numpy.zeros(shape=(4*norb,), dtype=float)
+    orbsym = numpy.asarray(SHCI.orbsym)
+    A_irrep_ids = set([0,1,4,5])
+    E_irrep_ids = set(orbsym).difference(A_irrep_ids)
 
-   i, ncore = 0, len(SHCI.orbsym)-norb
+    for ir in A_irrep_ids:
+        for i in numpy.where(orbsym == ir)[0]:
+            nRows[i] = 1
+            rowIndex[2*i] = i
+            rowCoeffs[4*i] = 1.
 
-   while i < norb:
-      symbol = symm.basis.linearmole_irrep_id2symb(SHCI.groupname, SHCI.orbsym[i+ncore])
-      if (symbol[0] == 'A'):
-         nRows[i] = 1
-         rowIndex[2*i] = i
-         rowCoeffs[4*i] = 1.
-      else:
-         l = int(symbol[1])
+    # See L146 of pyscf/symm/basis.py
+    Ex_irrep_ids = [ir for ir in E_irrep_ids if (ir%10) in (0,2,5,7)]
+    for ir in Ex_irrep_ids:
+        is_gerade = (ir % 10) in (0, 2)
+        if is_gerade:
+            # See L146 of basis.py
+            Ex = numpy.where(orbsym == ir)[0]
+            Ey = numpy.where(orbsym == ir+1)[0]
+        else:
+            Ex = numpy.where(orbsym == ir)[0]
+            Ey = numpy.where(orbsym == ir-1)[0]
 
-         if (symbol[3] == 'x'):
-            m1, m2 = 1., -1.
-         else:
-            m1, m2 = -1., 1.
+        if ir % 10 in (0, 5):
+            l = (ir // 10) * 2
+        else:
+            l = (ir // 10) * 2 + 1
 
+        for ix, iy in zip(Ex, Ey):
+            nRows[ix] = nRows[iy] = 2
 
-         nRows[i] = 2
-         rowIndex[2*i], rowIndex[2*i+1] = i, i+1
-         if m1 > 0 :
-            rowCoeffs[4*i], rowCoeffs[4*i+2] = ((-1)**l)*1.0/(2.0**0.5), 1.0/(2.0**0.5)
-         else:
-            rowCoeffs[4*i+1], rowCoeffs[4*i+3] = -((-1)**l)*1.0/(2.0**0.5), 1.0/(2.0**0.5)
+            rowIndex[2*ix], rowIndex[2*ix+1] = ix, iy
+            rowIndex[2*iy], rowIndex[2*iy+1] = ix, iy
 
-         i = i+1
+            rowCoeffs[4*ix], rowCoeffs[4*ix+2] = ((-1)**l)*1.0/(2.0**0.5), 1.0/(2.0**0.5)
+            rowCoeffs[4*iy+1], rowCoeffs[4*iy+3] = -((-1)**l)*1.0/(2.0**0.5), 1.0/(2.0**0.5)
 
-         nRows[i] = 2
-         rowIndex[2*i], rowIndex[2*i+1] = i-1, i
-         if (m1 > 0):  #m2 is the complex number
-            rowCoeffs[4*i+1], rowCoeffs[4*i+3] = -((-1)**l)*1.0/(2.0**0.5), 1.0/(2.0**0.5)
-         else:
-            rowCoeffs[4*i], rowCoeffs[4*i+2] = ((-1)**l)*1.0/(2.0**0.5), 1.0/(2.0**0.5)
-
-
-      i = i+1
-
-   return nRows, rowIndex, rowCoeffs
+    return nRows, rowIndex, rowCoeffs
 
 def writeIntegralFile(SHCI, h1eff, eri_cas, norb, nelec, ecore=0):
     if isinstance(nelec, (int, numpy.integer)):
@@ -926,7 +949,6 @@ def writeIntegralFile(SHCI, h1eff, eri_cas, norb, nelec, ecore=0):
     from pyscf.dmrgscf import dmrg_sym
 
     if (SHCI.groupname == 'Dooh' or SHCI.groupname == 'Coov') and SHCI.useExtraSymm:
-       eri_cas = pyscf.ao2mo.restore(1, eri_cas, norb)
        coeffs, nRows, rowIndex, rowCoeffs, orbsym = D2htoDinfh(SHCI, norb, nelec)
 
        newintt = numpy.tensordot(coeffs.conj(), h1eff, axes=([1],[0]))
@@ -935,9 +957,8 @@ def writeIntegralFile(SHCI, h1eff, eri_cas, norb, nelec, ecore=0):
        for i in range(norb):
           for j in range(norb):
              newint1r[i,j] = newint1[i,j].real
-       eri_cas = pyscf.ao2mo.restore(1, eri_cas, norb)
-       int2 = 1.0*eri_cas
-       eri_cas = 0.0*eri_cas
+       int2 = pyscf.ao2mo.restore(1, eri_cas, norb)
+       eri_cas = numpy.zeros_like(int2)
 
        transformDinfh(norb, numpy.ascontiguousarray(nRows, numpy.int32),
                       numpy.ascontiguousarray(rowIndex, numpy.int32),
@@ -954,7 +975,6 @@ def writeIntegralFile(SHCI, h1eff, eri_cas, norb, nelec, ecore=0):
        if SHCI.groupname is not None and SHCI.orbsym is not []:
           orbsym = dmrg_sym.convert_orbsym(SHCI.groupname, SHCI.orbsym)
        else:
-          eri_cas = pyscf.ao2mo.restore(8, eri_cas, norb)
           orbsym = [1]*norb
 
        eri_cas = pyscf.ao2mo.restore(8, eri_cas, norb)
@@ -1130,13 +1150,13 @@ def get_kint(mol):
    return kint.reshape(3,nb,nb,nb,nb)
 
 def writeSOCIntegrals(mc, ncasorbs=None, rdm1=None, pictureChange1e="bp", pictureChange2e="bp", uncontract=True):
-       from pyscf import scf
+       from pyscf.x2c import x2c, sfx2c1e
        from pyscf.lib.parameters import LIGHT_SPEED
        LIGHT_SPEED = 137.0359895000
        alpha = 1.0/LIGHT_SPEED
 
        if (uncontract):
-          xmol, contr_coeff = scf.x2c.X2C().get_xmol(mc.mol)
+          xmol, contr_coeff = x2c.X2C().get_xmol(mc.mol)
        else:
           xmol, contr_coeff = mc.mol, numpy.eye(mc.mo_coeff.shape[0])
 
@@ -1153,7 +1173,7 @@ def writeSOCIntegrals(mc, ncasorbs=None, rdm1=None, pictureChange1e="bp", pictur
        np, nc = contr_coeff.shape[0], contr_coeff.shape[1]
 
        hso1e = numpy.zeros((3, np, np))
-       h1e_1c, x, rp = scf.x2c.SpinFreeX2C(mc.mol).get_hxr(mc.mol, uncontract=uncontract)
+       h1e_1c, x, rp = sfx2c1e.SpinFreeX2C(mc.mol).get_hxr(mc.mol, uncontract=uncontract)
 
        #two electron terms
        if (pictureChange2e == "bp") :
@@ -1183,7 +1203,7 @@ def writeSOCIntegrals(mc, ncasorbs=None, rdm1=None, pictureChange1e="bp", pictur
           wso = (alpha)**2*0.5*get_wso(xmol)
           hso1e += get_hso1e(wso, x, rp)
        elif (pictureChange1e == "x2cn") :
-          h1e_2c = scf.x2c.get_hcore(xmol)
+          h1e_2c = x2c.get_hcore(xmol)
 
           for i in range(np):
              for j in range(np):

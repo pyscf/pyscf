@@ -53,7 +53,7 @@ cell.a = '''
 3.370137329, 0.000000000, 3.370137329
 3.370137329, 3.370137329, 0.000000000'''
 cell.unit = 'B'
-cell.gs = [5]*3
+cell.mesh = [10]*3
 #cell.verbose = 4
 cell.build()
 kpts = cell.make_kpts([2,2,2])

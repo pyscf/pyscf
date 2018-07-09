@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -6,6 +19,7 @@
 '''
 Density fitting with Gaussian basis
 Ref:
+J. Chem. Phys. 147, 164119 (2017)
 '''
 
 import time
@@ -15,9 +29,11 @@ import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc import tools
+from pyscf.pbc import gto
+from pyscf.pbc.df import ft_ao
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, member
 
-def density_fit(mf, auxbasis=None, gs=None, with_df=None):
+def density_fit(mf, auxbasis=None, mesh=None, with_df=None):
     '''Generte density-fitting SCF object
 
     Args:
@@ -25,8 +41,8 @@ def density_fit(mf, auxbasis=None, gs=None, with_df=None):
             Same format to the input attribute mol.basis.  If auxbasis is
             None, auxiliary basis based on AO basis (if possible) or
             even-tempered Gaussian basis will be used.
-        gs : tuple
-            number of grids in each (+)direction
+        mesh : tuple
+            number of grids in each direction
         with_df : DF object
     '''
     from pyscf.pbc.df import df
@@ -41,11 +57,12 @@ def density_fit(mf, auxbasis=None, gs=None, with_df=None):
         with_df.stdout = mf.stdout
         with_df.verbose = mf.verbose
         with_df.auxbasis = auxbasis
-        if gs is not None:
-            with_df.gs = gs
+        if mesh is not None:
+            with_df.mesh = mesh
 
     mf = copy.copy(mf)
     mf.with_df = with_df
+    mf._eri = None
     return mf
 
 
@@ -181,15 +198,17 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
                            pLqR.reshape(nao,-1).T, pLqI.reshape(nao,-1).T,
                            1, vkR[i,ki], vkI[i,ki], 1)
 
-    if kpts_band is None:  # normal k-points HF/DFT
+    if kpts_band is kpts:  # normal k-points HF/DFT
         for ki in range(nkpts):
             for kj in range(ki):
                 make_kpt(ki, kj, True)
             make_kpt(ki, ki, False)
+            t1 = log.timer_debug1('get_k_kpts: make_kpt ki>=kj (%d,*)'%ki, *t1)
     else:
         for ki in range(nkpts):
             for kj in range(nband):
                 make_kpt(ki, kj, False)
+            t1 = log.timer_debug1('get_k_kpts: make_kpt (%d,*)'%ki, *t1)
 
     if (gamma_point(kpts) and gamma_point(kpts_band) and
         not numpy.iscomplexobj(dm_kpts)):
@@ -384,7 +403,14 @@ def zdotNC(aR, aI, bR, bI, alpha=1, cR=None, cI=None, beta=0):
     return cR, cI
 
 def _ewald_exxdiv_for_G0(cell, kpts, dms, vk, kpts_band=None):
-    s = cell.pbc_intor('int1e_ovlp_sph', hermi=1, kpts=kpts)
+    if (cell.dimension == 1 or
+        (cell.dimension == 2 and cell.low_dim_ft_type is None)):
+        return _ewald_exxdiv_1d2d(cell, kpts, dms, vk, kpts_band)
+    else:
+        return _ewald_exxdiv_3d(cell, kpts, dms, vk, kpts_band)
+
+def _ewald_exxdiv_3d(cell, kpts, dms, vk, kpts_band=None):
+    s = cell.pbc_intor('int1e_ovlp', hermi=1, kpts=kpts)
     madelung = tools.pbc.madelung(cell, kpts)
     if kpts is None:
         for i,dm in enumerate(dms):
@@ -393,17 +419,67 @@ def _ewald_exxdiv_for_G0(cell, kpts, dms, vk, kpts_band=None):
         if kpts_band is None or is_zero(kpts_band-kpts):
             for i,dm in enumerate(dms):
                 vk[i] += madelung * reduce(numpy.dot, (s, dm, s))
-    else:  # kpts.shape == (*,3)
-        if kpts_band is None:
-            for k in range(len(kpts)):
+
+    elif kpts_band is None or numpy.array_equal(kpts, kpts_band):
+        for k in range(len(kpts)):
+            for i,dm in enumerate(dms):
+                vk[i,k] += madelung * reduce(numpy.dot, (s[k], dm[k], s[k]))
+    else:
+        for k, kpt in enumerate(kpts):
+            for kp in member(kpt, kpts_band.reshape(-1,3)):
                 for i,dm in enumerate(dms):
-                    vk[i,k] += madelung * reduce(numpy.dot, (s[k], dm[k], s[k]))
-        else:
-            kpts_band = kpts_band.reshape(-1,3)
-            for k, kpt in enumerate(kpts):
-                for kp in member(kpt, kpts_band):
-                    for i,dm in enumerate(dms):
-                        vk[i,kp] += madelung * reduce(numpy.dot, (s[k], dm[k], s[k]))
+                    vk[i,kp] += madelung * reduce(numpy.dot, (s[k], dm[k], s[k]))
+
+def _ewald_exxdiv_1d2d(cell, kpts, dms, vk, kpts_band=None):
+    s = cell.pbc_intor('int1e_ovlp', hermi=1, kpts=kpts)
+    madelung = tools.pbc.madelung(cell, kpts)
+
+    Gv, Gvbase, kws = cell.get_Gv_weights(cell.mesh)
+    G0idx, SI_on_z = gto.cell._SI_for_uniform_model_charge(cell, Gv)
+    coulG = 4*numpy.pi / numpy.linalg.norm(Gv[G0idx], axis=1)**2
+    wcoulG = coulG * kws[G0idx]
+    aoao_ij = ft_ao._ft_aopair_kpts(cell, Gv[G0idx], kptjs=kpts)
+    aoao_kl = ft_ao._ft_aopair_kpts(cell,-Gv[G0idx], kptjs=kpts)
+
+    def _contract_(vk, dms, s, aoao_ij, aoao_kl, kweight):
+        # Without removing aoao(Gx=0,Gy=0), the summation of vk and ewald probe
+        # charge correction (as _ewald_exxdiv_3d did) gives the reasonable
+        # finite value for vk.  Here madelung constant and vk were calculated
+        # without (Gx=0,Gy=0).  The code below restores the (Gx=0,Gy=0) part.
+        madelung_mod = numpy.einsum('g,g,g', SI_on_z.conj(), wcoulG, SI_on_z)
+        tmp_ij = numpy.einsum('gij,g,g->ij', aoao_ij, wcoulG, SI_on_z.conj())
+        tmp_kl = numpy.einsum('gij,g,g->ij', aoao_kl, wcoulG, SI_on_z       )
+        for i,dm in enumerate(dms):
+            #:aoaomod_ij = aoao_ij - numpy.einsum('g,ij->gij', SI_on_z       , s)
+            #:aoaomod_kl = aoao_kl - numpy.einsum('g,ij->gij', SI_on_z.conj(), s)
+            #:ktmp  = kweight * lib.einsum('gij,jk,g,gkl->il', aoao_ij   , dm, wcoulG, aoao_kl   )
+            #:ktmp -= kweight * lib.einsum('gij,jk,g,gkl->il', aoaomod_ij, dm, wcoulG, aoaomod_kl)
+            #:ktmp += (madelung - kweight*wcoulG.sum()) * reduce(numpy.dot, (s, dm, s))
+            ktmp  = kweight * lib.einsum('ij,jk,kl->il', tmp_ij, dm, s)
+            ktmp += kweight * lib.einsum('ij,jk,kl->il', s, dm, tmp_kl)
+            ktmp += ((madelung - kweight*wcoulG.sum() - kweight * madelung_mod)
+                     * reduce(numpy.dot, (s, dm, s)))
+            if vk.dtype == numpy.double:
+                vk[i] += ktmp.real
+            else:
+                vk[i] += ktmp
+
+    if kpts is None:
+        _contract_(vk, dms, s, aoao_ij[0], aoao_kl[0], 1)
+
+    elif numpy.shape(kpts) == (3,):
+        if kpts_band is None or is_zero(kpts_band-kpts):
+            _contract_(vk, dms, s, aoao_ij[0], aoao_kl[0], 1)
+
+    elif kpts_band is None or numpy.array_equal(kpts, kpts_band):
+        nkpts = len(kpts)
+        for k in range(nkpts):
+            _contract_(vk[:,k], dms[:,k], s[k], aoao_ij[k], aoao_kl[k], 1./nkpts)
+    else:
+        nkpts = len(kpts)
+        for k, kpt in enumerate(kpts):
+            for kp in member(kpt, kpts_band.reshape(-1,3)):
+                _contract_(vk[:,kp], dms[:,k], s[k], aoao_ij[k], aoao_kl[k], 1./nkpts)
 
 
 if __name__ == '__main__':
@@ -411,10 +487,10 @@ if __name__ == '__main__':
     import pyscf.pbc.scf as pscf
 
     L = 5.
-    n = 5
+    n = 11
     cell = pgto.Cell()
     cell.a = numpy.diag([L,L,L])
-    cell.gs = numpy.array([n,n,n])
+    cell.mesh = numpy.array([n,n,n])
 
     cell.atom = '''C    3.    2.       3.
                    C    1.    1.       1.'''
@@ -435,7 +511,7 @@ if __name__ == '__main__':
     #mf.with_df = mdf.MDF(cell)
     #mf.auxbasis = auxbasis
     mf = density_fit(mf, auxbasis)
-    mf.with_df.gs = (5,) * 3
+    mf.with_df.mesh = (n,) * 3
     vj = mf.with_df.get_jk(dm, exxdiv=mf.exxdiv, with_k=False)[0]
     print(numpy.einsum('ij,ji->', vj, dm), 'ref=46.698942480902062')
     vj, vk = mf.with_df.get_jk(dm, exxdiv=mf.exxdiv)
@@ -447,7 +523,7 @@ if __name__ == '__main__':
     from pyscf.pbc.df import DF
     with_df = DF(cell, kpts)
     with_df.auxbasis = 'weigend'
-    with_df.gs = [5] * 3
+    with_df.mesh = [n] * 3
     dms = numpy.array([dm]*len(kpts))
     vj, vk = with_df.get_jk(dms, exxdiv=mf.exxdiv, kpts=kpts)
     print(numpy.einsum('ij,ji->', vj[0], dms[0]) - 46.69784067248350)

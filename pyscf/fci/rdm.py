@@ -1,12 +1,28 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 '''FCI 1, 2, 3, 4-particle density matrices.
-'''
 
-# Note the index difference to the mean-field density matrix.  Here,
-#         dm[p,q,r,s,...] = <p^+ q r^+ s ... >
-# rather than the mean-field DM
-#         dm[p,q] = < q^+ p >
+Note the 1-particle density matrix has the same convention as the mean-field
+1-particle density matrix (see McWeeney's book Eq 5.4.20), which is
+        dm[p,q] = < q^+ p >
+The contraction between 1-particle Hamiltonian and 1-pdm is
+        E = einsum('pq,qp', h1, 1pdm)
+Different conventions are used in the high order density matrices:
+        dm[p,q,r,s,...] = < p^+ r^+ ... s q >
+'''
 
 import ctypes
 import numpy
@@ -20,13 +36,14 @@ def reorder_rdm(rdm1, rdm2, inplace=False):
     if not inplace:
         rdm2 = rdm2.copy()
     for k in range(nmo):
-        rdm2[:,k,k,:] -= rdm1
+        rdm2[:,k,k,:] -= rdm1.T
     #return rdm1, rdm2
     rdm2 = lib.transpose_sum(rdm2.reshape(nmo*nmo,-1), inplace=True) * .5
     return rdm1, rdm2.reshape(nmo,nmo,nmo,nmo)
 
-# dm_pq = <|p^+ q|>
+# dm[p,q] = <|q^+ p|>
 def make_rdm1_ms0(fname, cibra, ciket, norb, nelec, link_index=None):
+    assert(cibra is not None and ciket is not None)
     cibra = numpy.asarray(cibra, order='C')
     ciket = numpy.asarray(ciket, order='C')
     if link_index is None:
@@ -46,10 +63,11 @@ def make_rdm1_ms0(fname, cibra, ciket, norb, nelec, link_index=None):
        ctypes.c_int(nlink), ctypes.c_int(nlink),
        link_index.ctypes.data_as(ctypes.c_void_p),
        link_index.ctypes.data_as(ctypes.c_void_p))
-    return rdm1
+    return rdm1.T
 
-# NOTE the rdm2 is calculated as <p^+ q r^+ s>, call reorder_rdm to transform
-# to the normal rdm2, which is defined as <p^+ r^+ q s>
+# NOTE rdm1 in this function is calculated as rdm1[p,q] = <q^+ p>;
+# rdm2 is calculated as <p^+ q r^+ s>. Call reorder_rdm to transform to the
+# normal rdm2, which is  dm2[p,q,r,s] = <p^+ r^+ s q>.
 # symm = 1: bra, ket symmetry
 # symm = 2: particle permutation symmetry
 def make_rdm12_ms0(fname, cibra, ciket, norb, nelec, link_index=None, symm=0):
@@ -60,17 +78,15 @@ def make_rdm12_ms0(fname, cibra, ciket, norb, nelec, link_index=None, symm=0):
     link_index = (link_index, link_index)
     return make_rdm12_spin1(fname, cibra, ciket, norb, nelec, link_index, symm)
 
-def make_rdm1(fname, cibra, ciket, norb, nelec, link_index=None):
-    return make_rdm1_ms0(fname, cibra, ciket, norb, nelec, link_index)
-
-def make_rdm12(fname, cibra, ciket, norb, nelec, link_index=None, symm=0):
-    return make_rdm12_ms0(fname, cibra, ciket, norb, nelec, link_index, symm)
+make_rdm1 = make_rdm1_ms0
+make_rdm12 = make_rdm12_ms0
 
 ###################################################
 #
 # nelec and link_index are tuples of (alpha,beta)
 #
 def make_rdm1_spin1(fname, cibra, ciket, norb, nelec, link_index=None):
+    assert(cibra is not None and ciket is not None)
     cibra = numpy.asarray(cibra, order='C')
     ciket = numpy.asarray(ciket, order='C')
     if link_index is None:
@@ -94,13 +110,15 @@ def make_rdm1_spin1(fname, cibra, ciket, norb, nelec, link_index=None):
        ctypes.c_int(nlinka), ctypes.c_int(nlinkb),
        link_indexa.ctypes.data_as(ctypes.c_void_p),
        link_indexb.ctypes.data_as(ctypes.c_void_p))
-    return rdm1
+    return rdm1.T
 
-# NOTE the rdm2 is calculated as <p^+ q r^+ s>, call reorder_rdm to transform
-# to the normal rdm2, which is defined as <p^+ r^+ q s>
+# NOTE rdm1 in this function is calculated as rdm1[p,q] = <q^+ p>;
+# rdm2 is calculated as <p^+ q r^+ s>. Call reorder_rdm to transform to the
+# normal rdm2, which is  dm2[p,q,r,s] = <p^+ r^+ s q>.
 # symm = 1: bra, ket symmetry
 # symm = 2: particle permutation symmetry
 def make_rdm12_spin1(fname, cibra, ciket, norb, nelec, link_index=None, symm=0):
+    assert(cibra is not None and ciket is not None)
     cibra = numpy.asarray(cibra, order='C')
     ciket = numpy.asarray(ciket, order='C')
     if link_index is None:
@@ -127,27 +145,26 @@ def make_rdm12_spin1(fname, cibra, ciket, norb, nelec, link_index=None, symm=0):
                         link_indexa.ctypes.data_as(ctypes.c_void_p),
                         link_indexb.ctypes.data_as(ctypes.c_void_p),
                         ctypes.c_int(symm))
-    return rdm1, rdm2
+    return rdm1.T, rdm2
 
 
 ##############################
 #
 # 3-particle and 4-particle density matrix for RHF-FCI wfn
 #
-# NOTE the dm3 is calculated as <p^+ q r^+ s t^+ u>
+# NOTE the dm3[p,q,r,s,t,u] is calculated as <p^+ q r^+ s t^+ u>
 # call reorder_dm123 to transform dm3 to regular 3-pdm
 def make_dm123(fname, cibra, ciket, norb, nelec):
     r'''Spin traced 1, 2 and 3-particle density matrices.
 
     .. note::
-        In this function, 2pdm is :math:`\langle p^\dagger q r^\dagger s\rangle`;
-        3pdm is :math:`\langle p^\dagger q r^\dagger s t^\dagger u\rangle`.
+        In this function, 2pdm[p,q,r,s] is :math:`\langle p^\dagger q r^\dagger s\rangle`;
+        3pdm[p,q,r,s,t,u] is :math:`\langle p^\dagger q r^\dagger s t^\dagger u\rangle`.
+
         After calling reorder_dm123, the 2pdm and 3pdm are transformed to
-        standard definition:
-        2pdm = :math:`\langle p^\dagger q^\dagger r s\rangle` but is
-        stored as [p,s,q,r];
-        3pdm = :math:`\langle p^\dagger q^\dagger r^\dagger s t u\rangle`,
-        stored as [p,u,q,t,r,s].
+        the normal density matrices:
+        2pdm[p,r,q,s] = :math:`\langle p^\dagger q^\dagger s r\rangle`
+        3pdm[p,s,q,t,r,u] = :math:`\langle p^\dagger q^\dagger r^\dagger u t s\rangle`.
     '''
     cibra = numpy.asarray(cibra, order='C')
     ciket = numpy.asarray(ciket, order='C')
@@ -173,7 +190,7 @@ def make_dm123(fname, cibra, ciket, norb, nelec):
                        link_indexa.ctypes.data_as(ctypes.c_void_p),
                        link_indexb.ctypes.data_as(ctypes.c_void_p))
     rdm3 = _complete_dm3_(rdm2, rdm3)
-    return rdm1, rdm2, rdm3
+    return rdm1.T, rdm2, rdm3
 def _complete_dm3_(dm2, dm3):
 # fci_4pdm.c assumed symmetry p >= r >= t for 3-pdm <p^+ q r^+ s t^+ u>
 # Using E^r_sE^p_q = E^p_qE^r_s - \delta_{qr}E^p_s + \delta_{ps}E^r_q to
@@ -207,17 +224,15 @@ def make_dm1234(fname, cibra, ciket, norb, nelec):
     r'''Spin traced 1, 2, 3 and 4-particle density matrices.
 
     .. note::
-        In this function, 2pdm is :math:`\langle p^\dagger q r^\dagger s\rangle`;
-        3pdm is :math:`\langle p^\dagger q r^\dagger s t^\dagger u\rangle`;
-        4pdm is :math:`\langle p^\dagger q r^\dagger s t^\dagger u v^\dagger w\rangle`.
-        After calling reorder_dm1234, the 2pdm and 3pdm and 4pdm are transformed to
-        standard definition:
-        2pdm = :math:`\langle p^\dagger q^\dagger s r\rangle` but is
-        stored as [p,r,q,s];
-        3pdm = :math:`\langle p^\dagger q^\dagger r^\dagger u t s\rangle`,
-        stored as [p,s,q,t,r,u];
-        4pdm = :math:`\langle p^\dagger q^\dagger r^\dagger s^dagger w v u t\rangle`,
-        stored as [p,t,q,u,r,v,s,w].
+        In this function, 2pdm[p,q,r,s] is :math:`\langle p^\dagger q r^\dagger s\rangle`;
+        3pdm[p,q,r,s,t,u] is :math:`\langle p^\dagger q r^\dagger s t^\dagger u\rangle`;
+        4pdm[p,q,r,s,t,u,v,w] is :math:`\langle p^\dagger q r^\dagger s t^\dagger u v^\dagger w\rangle`.
+
+        After calling reorder_dm123, the 2pdm and 3pdm are transformed to
+        the normal density matrices:
+        2pdm[p,r,q,s] = :math:`\langle p^\dagger q^\dagger s r\rangle`
+        3pdm[p,s,q,t,r,u] = :math:`\langle p^\dagger q^\dagger r^\dagger u t s\rangle`.
+        4pdm[p,t,q,u,r,v,s,w] = :math:`\langle p^\dagger q^\dagger r^\dagger s^dagger w v u t\rangle`.
     '''
     cibra = numpy.asarray(cibra, order='C')
     ciket = numpy.asarray(ciket, order='C')
@@ -246,7 +261,7 @@ def make_dm1234(fname, cibra, ciket, norb, nelec):
                        link_indexb.ctypes.data_as(ctypes.c_void_p))
     rdm3 = _complete_dm3_(rdm2, rdm3)
     rdm4 = _complete_dm4_(rdm3, rdm4)
-    return rdm1, rdm2, rdm3, rdm4
+    return rdm1.T, rdm2, rdm3, rdm4
 def _complete_dm4_(dm3, dm4):
 # fci_4pdm.c assumed symmetry p >= r >= t >= v for 4-pdm <p^+ q r^+ s t^+ u v^+ w>
 # Using E^r_sE^p_q = E^p_qE^r_s - \delta_{qr}E^p_s + \delta_{ps}E^r_q to
@@ -299,7 +314,7 @@ def reorder_dm12(rdm1, rdm2, inplace=True):
     return reorder_rdm(rdm1, rdm2, inplace)
 
 # <p^+ q r^+ s t^+ u> => <p^+ r^+ t^+ u s q>
-# rdm2 is <p^+ q r^+ s>
+# rdm2[p,q,r,s] is <p^+ q r^+ s>
 def reorder_dm123(rdm1, rdm2, rdm3, inplace=True):
     rdm1, rdm2 = reorder_rdm(rdm1, rdm2, inplace)
     if not inplace:
@@ -310,7 +325,7 @@ def reorder_dm123(rdm1, rdm2, rdm3, inplace=True):
         rdm3[:,:,:,q,q,:] -= rdm2
         rdm3[:,q,:,:,q,:] -= rdm2.transpose(0,2,3,1)
         for s in range(norb):
-            rdm3[:,q,q,s,s,:] -= rdm1
+            rdm3[:,q,q,s,s,:] -= rdm1.T
     return rdm1, rdm2, rdm3
 
 
@@ -337,7 +352,7 @@ def reorder_dm1234(rdm1, rdm2, rdm3, rdm4, inplace=True):
             rdm4[:,:,:,s,s,q,q,:] -= rdm2
             rdm4[:,q,q,s,s,:,:,:] -= rdm2
             for u in range(norb):
-                rdm4[:,q,q,s,s,u,u,:] -= rdm1
+                rdm4[:,q,q,s,s,u,u,:] -= rdm1.T
     return rdm1, rdm2, rdm3, rdm4
 
 def _unpack_nelec(nelec, spin=None):

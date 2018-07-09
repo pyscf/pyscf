@@ -1,11 +1,24 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 import unittest
 import numpy
 from pyscf.fci import cistring
 
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_strings4orblist(self):
         ref = ['0b1010', '0b100010', '0b101000', '0b10000010', '0b10001000',
                '0b10100000']
@@ -67,6 +80,29 @@ class KnowValues(unittest.TestCase):
     def test_tn_strs(self):
         self.assertEqual(t1strs(7, 3), cistring.tn_strs(7, 3, 1).tolist())
         self.assertEqual(t2strs(7, 3), cistring.tn_strs(7, 3, 2).tolist())
+
+    def test_sub_addrs(self):
+        addrs = cistring.sub_addrs(6, 3, (0,2,3,5))
+        self.assertEqual([bin(x) for x in cistring.addrs2str(6, 3, addrs)],
+                         ['0b1101', '0b100101', '0b101001', '0b101100'])
+
+        addrs = cistring.sub_addrs(6, 3, (3,0,5,2))
+        self.assertEqual([bin(x) for x in cistring.addrs2str(6, 3, addrs)],
+                         ['0b101001', '0b1101', '0b101100', '0b100101'])
+
+        addrs = cistring.sub_addrs(6, 3, (3,0,5,2), 2)
+        self.assertEqual([bin(x) for x in cistring.addrs2str(6, 3, addrs)],
+                         ['0b111', '0b1011', '0b1110', '0b10101', '0b11001', '0b11100',
+                          '0b100011', '0b100110', '0b101010', '0b110001', '0b110100', '0b111000'])
+
+        addrs = cistring.sub_addrs(6, 3, (0,2,3,5), 2)
+        self.assertEqual([bin(x) for x in cistring.addrs2str(6, 3, addrs)],
+                         ['0b111', '0b1011', '0b1110', '0b10101', '0b11001', '0b11100',
+                          '0b100011', '0b100110', '0b101010', '0b110001', '0b110100', '0b111000'])
+
+        addrs = cistring.sub_addrs(6, 3, (0,2,3,5), 1)
+        self.assertEqual([bin(x) for x in cistring.addrs2str(6, 3, addrs)],
+                         ['0b10011', '0b10110', '0b11010', '0b110010'])
 
 def t1strs(norb, nelec):
     nocc = nelec

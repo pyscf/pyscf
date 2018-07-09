@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -6,58 +19,10 @@
 '''radii grids'''
 
 import numpy
-from pyscf.lib.parameters import BOHR
+from pyscf.data import radii
 
-#########################
-# JCP 41 3199 (1964).
-BRAGG_RADII = 1/BOHR * numpy.array((0,  # Ghost atom
-        0.35,                                     1.40,             # 1s
-        1.45, 1.05, 0.85, 0.70, 0.65, 0.60, 0.50, 1.50,             # 2s2p
-        1.80, 1.50, 1.25, 1.10, 1.00, 1.00, 1.00, 1.80,             # 3s3p
-        2.20, 1.80,                                                 # 4s
-        1.60, 1.40, 1.35, 1.40, 1.40, 1.40, 1.35, 1.35, 1.35, 1.35, # 3d
-                    1.30, 1.25, 1.15, 1.15, 1.15, 1.90,             # 4p
-        2.35, 2.00,                                                 # 5s
-        1.80, 1.55, 1.45, 1.45, 1.35, 1.30, 1.35, 1.40, 1.60, 1.55, # 4d
-                    1.55, 1.45, 1.45, 1.40, 1.40, 2.10,             # 5p
-        2.60, 2.15,                                                 # 6s
-        1.95, 1.85, 1.85, 1.85, 1.85, 1.85, 1.85,                   # La, Ce-Eu
-        1.80, 1.75, 1.75, 1.75, 1.75, 1.75, 1.75, 1.75,             # Gd, Tb-Lu
-              1.55, 1.45, 1.35, 1.35, 1.30, 1.35, 1.35, 1.35, 1.50, # 5d
-                    1.90, 1.80, 1.60, 1.90, 1.45, 2.10,             # 6p
-        1.80, 2.15,                                                 # 7s
-        1.95, 1.80, 1.80, 1.75, 1.75, 1.75, 1.75,
-        1.75, 1.75, 1.75, 1.75, 1.75, 1.75, 1.75,
-        1.75, 1.75, 1.75, 1.75, 1.75, 1.75, 1.75, 1.75, 1.75, 1.75,
-                    1.75, 1.75, 1.75, 1.75, 1.75, 1.75,
-        1.75, 1.75,
-        1.75, 1.75, 1.75, 1.75, 1.75, 1.75, 1.75, 1.75, 1.75, 1.75))
-
-# from Gerald Knizia's CtDftGrid, which is based on
-#       http://en.wikipedia.org/wiki/Covalent_radius
-# and
-#       Beatriz Cordero, Veronica Gomez, Ana E. Platero-Prats, Marc Reves,
-#       Jorge Echeverria, Eduard Cremades, Flavia Barragan and Santiago
-#       Alvarez.  Covalent radii revisited. Dalton Trans., 2008, 2832-2838,
-#       doi:10.1039/b801115j
-COVALENT_RADII = 1/BOHR * numpy.array((0,  # Ghost atom
-        0.31,                                     0.28,             # 1s
-        1.28, 0.96, 0.84, 0.73, 0.71, 0.66, 0.57, 0.58,             # 2s2p
-        1.66, 1.41, 1.21, 1.11, 1.07, 1.05, 1.02, 1.06,             # 3s3p
-        2.03, 1.76,                                                 # 4s
-        1.70, 1.60, 1.53, 1.39, 1.50, 1.42, 1.38, 1.24, 1.32, 1.22, # 3d
-                    1.22, 1.20, 1.19, 1.20, 1.20, 1.16,             # 4p
-        2.20, 1.95,                                                 # 5s
-        1.90, 1.75, 1.64, 1.54, 1.47, 1.46, 1.42, 1.39, 1.45, 1.44, # 4d
-                    1.42, 1.39, 1.39, 1.38, 1.39, 1.40,             # 5p
-        2.44, 2.15,                                                 # 6s
-        2.07, 2.04, 2.03, 2.01, 1.99, 1.98, 1.98,                   # La, Ce-Eu
-        1.96, 1.94, 1.92, 1.92, 1.89, 1.90, 1.87, 1.87,             # Gd, Tb-Lu
-              1.75, 1.70, 1.62, 1.51, 1.44, 1.41, 1.36, 1.36, 1.32, # 5d
-                    1.45, 1.46, 1.48, 1.40, 1.50, 1.50,             # 6p
-        2.60, 2.21,                                                 # 7s
-        2.15, 2.06, 2.00, 1.96, 1.90, 1.87, 1.80, 1.69))
-
+BRAGG_RADII = radii.BRAGG
+COVALENT_RADII = radii.COVALENT
 
 # P.M.W. Gill, B.G. Johnson, J.A. Pople, Chem. Phys. Letters 209 (1993) 506-512
 SG1RADII = numpy.array((
@@ -71,7 +36,8 @@ SG1RADII = numpy.array((
 def murray(n, *args, **kwargs):
     raise RuntimeError('Not implemented')
 
-def becke(n, charge, **kwargs):
+# Gauss-Chebyshev of the first kind,  and the transformed interval [0,\infty)
+def becke(n, charge, *args, **kwargs):
     '''Becke, JCP, 88, 2547 (1988)'''
     if charge == 1:
         rm = BRAGG_RADII[charge]
@@ -97,8 +63,9 @@ def delley(n, *args, **kwargs):
         dri = rfac * (-2.0*i*(step)**2) / ((1-(i*step)**2)) # d xi / dr
         dr[i-1] = dri
     return r, dr
+gauss_legendre = delley
 
-def mura_knowles(n, charge=None, **kwargs):
+def mura_knowles(n, charge=None, *args, **kwargs):
     '''Mura-Knowles (JCP, 104, 9848) log3 quadrature radial grids'''
     r = numpy.empty(n)
     dr = numpy.empty(n)
@@ -129,7 +96,9 @@ def gauss_chebyshev(n, *args, **kwargs):
 
 
 def treutler_ahlrichs(n, *args, **kwargs):
-    '''Treutler-Ahlrichs (JCP 102, 346 (M4)) radial grids'''
+    '''
+    Treutler-Ahlrichs (JCP 102, 346 (M4)) radial grids
+    '''
     r = numpy.empty(n)
     dr = numpy.empty(n)
     step = numpy.pi / (n+1)
@@ -187,13 +156,4 @@ def treutler_atomic_radii_adjust(mol, atomic_radii):
         g1 += g
         return g1
     return fadjust
-
-def _inter_distance(mol):
-# see gto.mole.energy_nuc
-    coords = mol.atom_coords()
-    rr = numpy.dot(coords, coords.T)
-    rd = rr.diagonal()
-    rr = rd[:,None] + rd - rr*2
-    rr[numpy.diag_indices_from(rr)] = 0
-    return numpy.sqrt(rr)
 

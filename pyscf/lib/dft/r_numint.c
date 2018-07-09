@@ -1,4 +1,18 @@
-/*
+/* Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+  
+   Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+ 
+        http://www.apache.org/licenses/LICENSE-2.0
+ 
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+ *
  * Author: Qiming Sun <osirpt.sun@gmail.com>
  */
 
@@ -31,7 +45,7 @@ static void dot_ao_dm(double complex *vm, double complex *ao, double complex *dm
         double complex beta = 0;
 
         if (has0) {
-                int box_id, bas_id, blen, i, j;
+                int box_id, blen, i, j;
                 size_t b0;
                 for (box_id = 0; box_id < nbox; box_id++) {
                         if (!empty[box_id]) {
@@ -134,7 +148,7 @@ void VXCzdot_ao_ao(double complex *vv, double complex *ao1, double complex *ao2,
                non0table, shls_slice, ao_loc)
 {
         int ip, ib;
-        double complex *v_priv = calloc(nao*nao, sizeof(double complex));
+        double complex *v_priv = calloc(nao*nao+2, sizeof(double complex));
 #pragma omp for nowait schedule(static)
         for (ib = 0; ib < nblk; ib++) {
                 ip = ib * BLKSIZE;

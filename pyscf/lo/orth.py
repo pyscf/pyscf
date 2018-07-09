@@ -1,6 +1,20 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
+#
 
 import copy
 from functools import reduce
@@ -9,6 +23,12 @@ import scipy.linalg
 from pyscf.lib import param
 from pyscf.lib import logger
 from pyscf import gto
+from pyscf import __config__
+
+REF_BASIS = getattr(__config__, 'lo_orth_pre_orth_ao_method', 'ANO')
+ORTH_METHOD = getattr(__config__, 'lo_orth_orth_ao_method', 'meta_lowdin')
+PROJECT_ECP_BASIS = getattr(__config__, 'lo_orth_project_ecp_basis', True)
+
 
 def lowdin(s):
     ''' new basis is |mu> c^{lowdin}_{mu i} '''
@@ -42,7 +62,7 @@ def weight_orth(s, weight):
     return weight[:,None] * c
 
 
-def pre_orth_ao(mol, method='ANO'):
+def pre_orth_ao(mol, method=REF_BASIS):
     '''Restore AO characters.  Possible methods include the ANO/MINAO
     projection or fraction-averaged atomic RHF calculation'''
     if method.upper() in ('ANO', 'MINAO'):
@@ -99,7 +119,7 @@ def project_to_atomic_orbitals(mol, basname):
         ano_idx = numpy.hstack(ano_idx)
         ecp_occ = numpy.zeros(atm_ecp.nao_nr())
         ecp_occ[ecp_idx] = numpy.hstack(ecp_occ_tmp)
-        nelec_valence_left = int(gto.mole._charge(stdsymb) - nelec_core
+        nelec_valence_left = int(gto.mole.charge(stdsymb) - nelec_core
                                  - sum(ecp_occ[ecp_idx]))
         if nelec_valence_left > 0:
             logger.warn(mol, 'Characters of %d valence electrons are not identified.\n'
@@ -129,9 +149,10 @@ def project_to_atomic_orbitals(mol, basname):
         atm._atm, atm._bas, atm._env = \
                 atm.make_env([[stdsymb,(0,0,0)]], {stdsymb:mol._basis[symb]}, [])
         atm.cart = mol.cart
+        atm._built = True
         s0 = atm.intor_symmetric('int1e_ovlp')
 
-        if 'GHOST' in symb.upper():
+        if gto.is_ghost_atom(symb):
             aos[symb] = numpy.diag(1./numpy.sqrt(s0.diagonal()))
             continue
 
@@ -139,8 +160,15 @@ def project_to_atomic_orbitals(mol, basname):
         atmp._atm, atmp._bas, atmp._env = \
                 atmp.make_env([[stdsymb,(0,0,0)]], {stdsymb:basis_add}, [])
         atmp.cart = mol.cart
+        atmp._built = True
 
         if symb in nelec_ecp_dic and nelec_ecp_dic[symb] > 0:
+            if not PROJECT_ECP_BASIS:
+# If ECP basis has good atomic character, ECP basis can be used in the
+# localization/population analysis directly. Otherwise project ECP basis to
+# ANO basis.
+                continue
+
             ecpcore = core_configuration(nelec_ecp_dic[symb])
 # Comparing to ANO valence basis, to check whether the ECP basis set has
 # reasonable AO-character contraction.  The ANO valence AO should have
@@ -151,7 +179,7 @@ def project_to_atomic_orbitals(mol, basname):
         else:
             ecpcore = [0] * 4
 
-        ano = project_mo_nr2nr(atmp, 1, atm)
+        ano = project_mo_nr2nr(atmp, numpy.eye(atmp.nao_nr()), atm)
         rm_ano = numpy.eye(ano.shape[0]) - reduce(numpy.dot, (ano, ano.T, s0))
         c = rm_ano.copy()
         for l in range(param.L_MAX):
@@ -221,7 +249,7 @@ def pre_orth_ao_atm_scf(mol):
     return c
 
 
-def orth_ao(mf_or_mol, method='meta_lowdin', pre_orth_ao=None, scf_method=None,
+def orth_ao(mf_or_mol, method=ORTH_METHOD, pre_orth_ao=None, scf_method=None,
             s=None):
     '''Orthogonalize AOs
 
@@ -242,11 +270,14 @@ def orth_ao(mf_or_mol, method='meta_lowdin', pre_orth_ao=None, scf_method=None,
             mf = mf_or_mol
 
     if s is None:
-        s = mol.intor_symmetric('int1e_ovlp')
+        if hasattr(mol, 'pbc_intor'):  # whether mol object is a cell
+            s = mol.pbc_intor('int1e_ovlp', hermi=1)
+        else:
+            s = mol.intor_symmetric('int1e_ovlp')
 
     if pre_orth_ao is None:
 #        pre_orth_ao = numpy.eye(mol.nao_nr())
-        pre_orth_ao = project_to_atomic_orbitals(mol, 'ANO')
+        pre_orth_ao = project_to_atomic_orbitals(mol, REF_BASIS)
 
     if method.lower() == 'lowdin':
         s1 = reduce(numpy.dot, (pre_orth_ao.conj().T, s, pre_orth_ao))
@@ -263,6 +294,9 @@ def orth_ao(mf_or_mol, method='meta_lowdin', pre_orth_ao=None, scf_method=None,
         if c_orth[i,i] < 0:
             c_orth[:,i] *= -1
     return c_orth
+
+del(ORTH_METHOD)
+
 
 if __name__ == '__main__':
     from pyscf import gto

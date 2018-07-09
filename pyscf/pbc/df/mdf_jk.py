@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -6,6 +19,7 @@
 '''
 Exact density fitting with Gaussian and planewaves
 Ref:
+J. Chem. Phys. 147, 164119 (2017)
 '''
 
 import copy
@@ -18,7 +32,7 @@ from pyscf.pbc.df import aft_jk
 # real space, long range part in reciprocal space.
 #
 
-def density_fit(mf, auxbasis=None, gs=None, with_df=None):
+def density_fit(mf, auxbasis=None, mesh=None, with_df=None):
     '''Generte density-fitting SCF object
 
     Args:
@@ -26,8 +40,8 @@ def density_fit(mf, auxbasis=None, gs=None, with_df=None):
             Same format to the input attribute mol.basis.  If auxbasis is
             None, auxiliary basis based on AO basis (if possible) or
             even-tempered Gaussian basis will be used.
-        gs : tuple
-            number of grids in each (+)direction
+        mesh : tuple
+            number of grids in each direction
         with_df : MDF object
     '''
     from pyscf.pbc.df import mdf
@@ -42,11 +56,12 @@ def density_fit(mf, auxbasis=None, gs=None, with_df=None):
         with_df.stdout = mf.stdout
         with_df.verbose = mf.verbose
         with_df.auxbasis = auxbasis
-        if gs is not None:
-            with_df.gs = gs
+        if mesh is not None:
+            with_df.mesh = mesh
 
     mf = copy.copy(mf)
     mf.with_df = with_df
+    mf._eri = None
     return mf
 
 
@@ -84,10 +99,10 @@ if __name__ == '__main__':
     import pyscf.pbc.scf as pscf
 
     L = 5.
-    n = 5
+    n = 11
     cell = pgto.Cell()
     cell.a = numpy.diag([L,L,L])
-    cell.gs = numpy.array([n,n,n])
+    cell.mesh = numpy.array([n,n,n])
 
     cell.atom = '''C    3.    2.       3.
                    C    1.    1.       1.'''
@@ -98,13 +113,13 @@ if __name__ == '__main__':
     cell.verbose = 0
     cell.build(0,0)
     cell.verbose = 5
-    #print(cell.nimgs)
+    #print cell.nimgs
     #cell.nimgs = [4,4,4]
 
     mf = pscf.RHF(cell)
     auxbasis = 'weigend'
     mf = density_fit(mf, auxbasis)
-    mf.with_df.gs = (5,) * 3
+    mf.with_df.mesh = (n,) * 3
     dm = mf.get_init_guess()
     vj = get_jk(mf.with_df, dm, exxdiv=mf.exxdiv, with_k=False)[0]
     print(numpy.einsum('ij,ji->', vj, dm), 'ref=46.698951141791')
@@ -116,7 +131,7 @@ if __name__ == '__main__':
     from pyscf.pbc.df import MDF
     with_df = MDF(cell, kpts)
     with_df.auxbasis = 'weigend'
-    with_df.gs = [5] * 3
+    with_df.mesh = [n] * 3
     dms = numpy.array([dm]*len(kpts))
     vj, vk = with_df.get_jk(dms, exxdiv=mf.exxdiv, kpts=kpts)
     print(numpy.einsum('ij,ji->', vj[0], dms[0]), - 46.69784775484954)

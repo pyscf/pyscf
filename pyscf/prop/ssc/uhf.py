@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -18,11 +31,12 @@ from pyscf.lib import logger
 from pyscf.scf import ucphf
 from pyscf.ao2mo import _ao2mo
 from pyscf.dft import numint
-from pyscf.scf.newton_ah import _gen_uhf_response
+from pyscf.soscf.newton_ah import _gen_uhf_response
 from pyscf.prop.nmr import uhf as uhf_nmr
 from pyscf.prop.ssc import rhf as rhf_ssc
 from pyscf.prop.ssc.rhf import _uniq_atoms, _dm1_mo2ao, _write
-from pyscf.prop.ssc.parameters import get_nuc_g_factor
+from pyscf.data import nist
+from pyscf.data.gyro import get_nuc_g_factor
 
 NUMINT_GRIDS = 30
 
@@ -51,7 +65,7 @@ def make_pso(sscobj, mol, mo1, mo_coeff, mo_occ, nuc_pair=None):
         e = numpy.einsum('xij,yij->xy', h1a[atm1dic[i]], mo1a[atm2dic[j]]) * 2
         e+= numpy.einsum('xij,yij->xy', h1b[atm1dic[i]], mo1b[atm2dic[j]]) * 2
         para.append(e)
-    return numpy.asarray(para) * lib.param.ALPHA**4
+    return numpy.asarray(para) * nist.ALPHA**4
 
 def make_h1_pso(mol, mo_coeff, mo_occ, atmlst):
     # Imaginary part of H01 operator
@@ -92,7 +106,7 @@ def make_fc(sscobj, nuc_pair=None):
         ex += numpy.einsum('ij,ij', h1ba[at1], mo1ba[at2]) * 2
         ey = ex
         para.append(numpy.diag([ex,ey,ez]))
-    return numpy.asarray(para) * lib.param.ALPHA**4
+    return numpy.asarray(para) * nist.ALPHA**4
 
 # See also the UHF to GHF stability analysis
 def solve_mo1_fc(sscobj, h1):
@@ -216,7 +230,7 @@ def make_fcsd(sscobj, nuc_pair=None):
         e+= numpy.einsum('xij,yij->xy', h1aa[at1,2], mo1aa[at2,2])
         e+= numpy.einsum('xij,yij->xy', h1bb[at1,2], mo1bb[at2,2])
         para.append(e*2)  # *2 for +c.c.
-    return numpy.asarray(para) * lib.param.ALPHA**4
+    return numpy.asarray(para) * nist.ALPHA**4
 
 def make_h1_fc(mol, mo_coeff, mo_occ, atmlst):
     coords = mol.atom_coords()
@@ -307,8 +321,8 @@ class SpinSpinCoupling(uhf_nmr.NMR):
         logger.timer(self, 'spin-spin coupling', *cput0)
 
         if self.verbose > logger.QUIET:
-            nuc_mag = .5 * (lib.param.E_MASS/lib.param.PROTON_MASS)  # e*hbar/2m
-            au2Hz = lib.param.HARTREE2J / lib.param.PLANCK
+            nuc_mag = .5 * (nist.E_MASS/nist.PROTON_MASS)  # e*hbar/2m
+            au2Hz = nist.HARTREE2J / nist.PLANCK
             #logger.debug('Unit AU -> Hz %s', au2Hz*nuc_mag**2)
             iso_ssc = au2Hz * nuc_mag ** 2 * numpy.einsum('kii->k', e11) / 3
             natm = mol.natm

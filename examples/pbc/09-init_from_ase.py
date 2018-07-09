@@ -27,5 +27,5 @@ mf=pbcdft.RKS(cell)
 
 mf.xc='lda,vwn'
 
-print(mf.scf()) # [10,10,10]: -44.8811199336
+print(mf.kernel()) # [10,10,10]: -44.8811199336
 

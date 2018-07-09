@@ -1,10 +1,24 @@
 #!/usr/bin/env python
-# -*- coding: utf-8
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
 # Author: Qiming Sun <osirpt.sun@gmail.com>
+#
 
 '''
-Non-relativistic and relativistic Hartree-Fock
-==============================================
+Hartree-Fock
+============
 
 Simple usage::
 
@@ -104,11 +118,15 @@ from pyscf.scf.diis import DIIS, CDIIS, EDIIS, ADIIS
 from pyscf.scf.uhf import spin_square
 from pyscf.scf.hf import get_init_guess
 from pyscf.scf.addons import *
-from pyscf.scf import x2c
-from pyscf.scf.x2c import sfx2c1e, sfx2c
-from pyscf.scf import newton_ah
 
 
+def HF(mol, *args):
+    __doc__ = '''This is a wrap function to decide which SCF class to use, RHF or UHF\n
+    ''' + hf.SCF.__doc__
+    if mol.nelectron == 1 or mol.spin == 0:
+        return RHF(mol, *args)
+    else:
+        return UHF(mol, *args)
 
 def RHF(mol, *args):
     __doc__ = '''This is a wrap function to decide which SCF class to use, RHF or ROHF\n
@@ -169,15 +187,22 @@ def DHF(mol, *args):
 
 def X2C(mol, *args):
     '''X2C UHF (in testing)'''
+    from pyscf.x2c import x2c
     return x2c.UHF(mol, *args)
+
+def sfx2c1e(mf):
+    return mf.sfx2c1e()
+sfx2c = sfx2c1e
 
 def density_fit(mf, auxbasis=None, with_df=None):
     return mf.density_fit(auxbasis, with_df)
 
-newton = newton_ah.newton
+def newton(mf):
+    from pyscf.soscf import newton_ah
+    return newton_ah.newton(mf)
 
 def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None,
-                auxbasis=None, projectbasis=None, **newton_kwargs):
+                auxbasis=None, dual_basis=None, **newton_kwargs):
     '''This is a wrap function which combines several operations. This
     function first setup the initial guess
     from density fitting calculation then use  for
@@ -188,11 +213,12 @@ def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None,
     import copy
     from pyscf.lib import logger
     from pyscf import df
+    from pyscf.soscf import newton_ah
     if auxbasis is None:
         auxbasis = df.addons.aug_etb_for_dfbasis(mf.mol, 'ahlrichs', beta=2.5)
-    if projectbasis:
+    if dual_basis:
         mf1 = newton(mf)
-        pmol = mf1.mol = newton_ah.project_mol(mf.mol, projectbasis)
+        pmol = mf1.mol = newton_ah.project_mol(mf.mol, dual_basis)
         mf1 = density_fit(mf1, auxbasis)
     else:
         mf1 = density_fit(newton(mf), auxbasis)
@@ -219,7 +245,7 @@ def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None,
         logger.note(mf, '========================================================')
         logger.note(mf, 'Generating initial guess with DIIS-SCF for newton solver')
         logger.note(mf, '========================================================')
-        if projectbasis:
+        if dual_basis:
             mf0 = copy.copy(mf)
             mf0.mol = pmol
             mf0 = density_fit(mf0, auxbasis)
@@ -240,15 +266,17 @@ def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None,
 # approx_grids.
             mf0.small_rho_cutoff = mf.small_rho_cutoff * 10
         mf0.kernel()
+        mf1.with_df = mf0.with_df
         mo_coeff, mo_occ = mf0.mo_coeff, mf0.mo_occ
 
-        if projectbasis:
+        if dual_basis:
             if mo_occ.ndim == 2:
                 mo_coeff =(project_mo_nr2nr(pmol, mo_coeff[0], mf.mol),
                            project_mo_nr2nr(pmol, mo_coeff[1], mf.mol))
             else:
                 mo_coeff = project_mo_nr2nr(pmol, mo_coeff, mf.mol)
             mo_coeff, mo_occ = mf1.from_dm(mf.make_rdm1(mo_coeff,mo_occ))
+        mf0 = None
 
         logger.note(mf, '============================')
         logger.note(mf, 'Generating initial guess end')
@@ -270,12 +298,16 @@ def fast_newton(mf, mo_coeff=None, mo_occ=None, dm0=None,
 #    mf.kernel = mf_kernel
     return mf
 
-def fast_scf(mf):
+def fast_scf(mf):  # pragma: no cover
     from pyscf.lib import logger
     logger.warn(mf, 'NOTE function fast_scf will be removed in the next release. '
                 'Use function fast_newton instead')
     return fast_newton(mf)
 
+
+def KS(mol, *args):
+    from pyscf import dft
+    return dft.KS(mol)
 
 def RKS(mol, *args):
     from pyscf import dft
@@ -283,9 +315,9 @@ def RKS(mol, *args):
 
 def ROKS(mol, *args):
     from pyscf import dft
-    return dft.ROKS(mol)
+    return dft.ROKS(mol, *args)
 
 def UKS(mol, *args):
     from pyscf import dft
-    return dft.UKS(mol)
+    return dft.UKS(mol, *args)
 

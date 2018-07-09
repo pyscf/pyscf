@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 import unittest
 from functools import reduce
@@ -555,7 +568,7 @@ c0[-1,-1] = 1e-4
 e0, ci0 = fci.direct_spin0.kernel(h1, h2, norb, nelec, ci0=c0)
 
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_spin_squre(self):
         ss = fci.spin_op.spin_square(ci0, norb, nelec)
         self.assertAlmostEqual(ss[0], 6, 9)
@@ -574,7 +587,7 @@ class KnowValues(unittest.TestCase):
         ss = fci.spin_op.spin_square(ci1, 6, (3,2), mo_coeff=(numpy.eye(6),v))[0]
         self.assertAlmostEqual(ss, 3.75, 8)
 
-    def test_contract_ss(self):
+    def test_contract_ss_high_cost(self):
         self.assertAlmostEqual(e0, -25.4538751043, 9)
         nelec = (6,4)
         na = fci.cistring.num_strings(norb, nelec[0])

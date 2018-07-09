@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -22,7 +35,8 @@ from pyscf.scf import cphf
 from pyscf.prop.nmr import dhf as dhf_nmr
 from pyscf.prop.ssc import rhf as rhf_ssc
 from pyscf.prop.ssc.rhf import _write
-from pyscf.prop.ssc.parameters import get_nuc_g_factor
+from pyscf.data import nist
+from pyscf.data.gyro import get_nuc_g_factor
 
 NUMINT_GRIDS = 30
 
@@ -48,7 +62,7 @@ def make_dia(sscobj, mol, dm0, nuc_pair=None, mb='RMB'):
             a01int = sa01sa01_integral(mol, mol.atom_coord(ia), mol.atom_coord(ja))
             ssc_dia[k] = numpy.einsum('xyij,ji', a01int, dm0[:n2c,:n2c]).real
 
-    return ssc_dia * lib.param.ALPHA**4
+    return ssc_dia * nist.ALPHA**4
 
 def sa01sa01_integral(mol, orig1, orig2):
     '''vec{r}_A/r_A^3 times sigma vec{r}_B/r_B^3 times sigma'''
@@ -147,7 +161,7 @@ def make_para(sscobj, mol, mo1, mo_coeff, mo_occ, nuc_pair=None):
     for i,j in nuc_pair:
         e = numpy.einsum('xij,yij->xy', h1[atm1dic[i]], mo1[atm2dic[j]].conj()) * 2
         para.append(e.real)
-    return numpy.asarray(para) * lib.param.ALPHA**4
+    return numpy.asarray(para) * nist.ALPHA**4
 
 def make_h1(mol, mo_coeff, mo_occ, atmlst):
     orbo = mo_coeff[:,mo_occ> 0]
@@ -198,8 +212,8 @@ class SpinSpinCoupling(dhf_nmr.NMR):
         logger.timer(self, 'spin-spin coupling', *cput0)
 
         if self.verbose > logger.QUIET:
-            nuc_mag = .5 * (lib.param.E_MASS/lib.param.PROTON_MASS)  # e*hbar/2m
-            au2Hz = lib.param.HARTREE2J / lib.param.PLANCK
+            nuc_mag = .5 * (nist.E_MASS/nist.PROTON_MASS)  # e*hbar/2m
+            au2Hz = nist.HARTREE2J / nist.PLANCK
             #logger.debug('Unit AU -> Hz %s', au2Hz*nuc_mag**2)
             iso_ssc = au2Hz * nuc_mag ** 2 * numpy.einsum('kii->k', e11) / 3
             natm = mol.natm

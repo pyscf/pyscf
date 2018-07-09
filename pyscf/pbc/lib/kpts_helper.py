@@ -1,17 +1,32 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Authors: Qiming Sun <osirpt.sun@gmail.com>
-#          James D. McClain <jmcclain@princeton.edu>
+#          James D. McClain
 #          Timothy Berkelbach <tim.berkelbach@gmail.com>
 #
 
+import itertools
 from collections import OrderedDict
 import numpy as np
 import scipy.linalg
+from pyscf import lib
+from pyscf import __config__
 
-import pyscf.lib
+KPT_DIFF_TOL = getattr(__config__, 'pbc_lib_kpts_helper_kpt_diff_tol', 1e-6)
 
-KPT_DIFF_TOL = 1e-6
 
 def is_zero(kpt):
     return abs(np.asarray(kpt)).sum() < KPT_DIFF_TOL
@@ -40,44 +55,120 @@ def unique(kpts):
             n += 1
     return np.asarray(uniq_kpts), np.asarray(uniq_index), uniq_inverse
 
+def loop_kkk(nkpts):
+    range_nkpts = range(nkpts)
+    return itertools.product(range_nkpts, range_nkpts, range_nkpts)
+
 def get_kconserv(cell, kpts):
-    '''Get the momentum conservation array for a set of k-points.
+    r'''Get the momentum conservation array for a set of k-points.
 
     Given k-point indices (k, l, m) the array kconserv[k,l,m] returns
     the index n that satifies momentum conservation,
 
-       k(k) - k(l) = - k(m) + k(n)
+        (k(k) - k(l) + k(m) - k(n)) \dot a = 2n\pi
 
     This is used for symmetry e.g. integrals of the form
         [\phi*[k](1) \phi[l](1) | \phi*[m](2) \phi[n](2)]
     are zero unless n satisfies the above.
     '''
     nkpts = kpts.shape[0]
-    KLMN = np.zeros([nkpts,nkpts,nkpts], np.int)
-    kvecs = cell.reciprocal_vectors()
+    a = cell.lattice_vectors() / (2*np.pi)
 
-    for K, kvK in enumerate(kpts):
-        for L, kvL in enumerate(kpts):
-            for M, kvM in enumerate(kpts):
-                # Here we find where kvN = kvM + kvL - kvK (mod K)
-                temp = range(-1,2)
-                xyz = pyscf.lib.cartesian_prod((temp,temp,temp))
-                found = 0
-                kvMLK = kvK - kvL + kvM
-                kvN = kvMLK
-                for ishift in range(len(xyz)):
-                    kvN = kvMLK + np.dot(xyz[ishift],kvecs)
-                    finder = np.where(np.logical_and(kpts < kvN + 1.e-12,
-                                                     kpts > kvN - 1.e-12).sum(axis=1)==3)
-                    # The k-point should be the same in all 3 indices as kvN
-                    if len(finder[0]) > 0:
-                        KLMN[K, L, M] = finder[0][0]
-                        found = 1
-                        break
+    kconserv = np.zeros((nkpts,nkpts,nkpts), dtype=int)
+    kvMLK = kpts[:,None,None,:] - kpts[:,None,:] + kpts
+    for N, kvN in enumerate(kpts):
+        kvMLKN = np.einsum('klmx,wx->mlkw', kvMLK - kvN, a)
+        # check whether (1/(2pi) k_{KLMN} dot a) is an integer
+        kvMLKN_int = np.rint(kvMLKN)
+        mask = np.einsum('klmw->mlk', abs(kvMLKN - kvMLKN_int)) < 1e-9
+        kconserv[mask] = N
+    return kconserv
 
-                if found == 0:
-                    raise RuntimeError('Momentum-conserving k-point not found')
-    return KLMN
+
+    if kconserv is None:
+        kconserv = get_kconserv(cell, kpts)
+
+    arr_offset = []
+    arr_size = []
+    offset = 0
+    for kk, kl, km in loop_kkk(nkpts):
+        kn = kconserv[kk, kl, km]
+
+        # Get array size for these k-points and add offset
+        size = np.prod([norb_per_kpt[x] for x in [kk, kl, km, kn]])
+
+        arr_size.append(size)
+        arr_offset.append(offset)
+
+        offset += size
+    return arr_offset, arr_size, (arr_size[-1] + arr_offset[-1])
+
+
+def check_kpt_antiperm_symmetry(array, idx1, idx2, tolerance=1e-8):
+    '''Checks antipermutational symmetry for k-point array.
+
+    Checks whether an array with k-point symmetry has antipermutational symmetry
+    with respect to switching the particle indices `idx1`, `idx2`. The particle
+    indices switches both the orbital index and k-point index associated with
+    the two indices.
+
+    Note:
+        One common reason for not obeying antipermutational symmetry in a calculation
+        involving FFTs is that the grid to perform the FFT may be too coarse.  This
+        symmetry is present in operators in spin-orbital form and 'spin-free'
+        operators.
+
+    array (:obj:`ndarray`): array to test permutational symmetry, where for
+        an n-particle array, the first (2n-1) array elements are kpoint indices
+        while the final 2n array elements are orbital indices.
+    idx1 (int): first index
+    idx2 (int): second index
+
+    Examples:
+        For a 3-particle array, such as the T3 amplitude
+            t3[ki, kj, kk, ka, kb, i, j, a, b, c],
+        setting `idx1 = 0` and `idx2 = 1` would switch the orbital indices i, j as well
+        as the kpoint indices ki, kj.
+
+        >>> nkpts, nocc, nvir = 3, 4, 5
+        >>> t2 = numpy.random.random_sample((nkpts, nkpts, nkpts, nocc, nocc, nvir, nvir))
+        >>> t2 = t2 + t2.transpose(1,0,2,4,3,5,6)
+        >>> check_kpt_antiperm_symmetry(t2, 0, 1)
+        True
+    '''
+    # Checking to make sure bounds of idx1 and idx2 are O.K.
+    assert(idx1 >= 0 and idx2 >= 0 and 'indices to swap must be non-negative!')
+
+    array_shape_len = len(array.shape)
+    nparticles = (array_shape_len + 1) / 4
+    assert(idx1 < (2 * nparticles - 1) and idx2 < (2 * nparticles - 1) and
+           'This function does not support the swapping of the last k-point index '
+           '(This k-point is implicitly not indexed due to conservation of momentum '
+           'between k-points.).')
+
+    if (nparticles > 3):
+        raise NotImplementedError('Currently set up for only up to 3 particle '
+                                  'arrays. Input array has %d particles.')
+
+    kpt_idx1 = idx1
+    kpt_idx2 = idx2
+
+    # Start of the orbital index, located after k-point indices
+    orb_idx1 = (2 * nparticles - 1) + idx1
+    orb_idx2 = (2 * nparticles - 1) + idx2
+
+    # Sign of permutation
+    sign = (-1)**(abs(idx1 - idx2) + 1)
+    out_array_indices = np.arange(array_shape_len)
+
+    out_array_indices[kpt_idx1], out_array_indices[kpt_idx2] = \
+            out_array_indices[kpt_idx2], out_array_indices[kpt_idx1]
+    out_array_indices[orb_idx1], out_array_indices[orb_idx2] = \
+            out_array_indices[orb_idx2], out_array_indices[orb_idx1]
+    antisymmetric = (np.linalg.norm(array + array.transpose(out_array_indices)) <
+                     tolerance)
+    return antisymmetric
+
 
 def get_kconserv3(cell, kpts, kijkab):
     '''Get the momentum conservation array for a set of k-points.
@@ -85,55 +176,35 @@ def get_kconserv3(cell, kpts, kijkab):
     This function is similar to get_kconserv, but instead finds the 'kc'
     that satisfies momentum conservation for 5 k-points,
 
-    kc = ki + kj + kk - ka - kb (mod G),
+        (ki + kj + kk - ka - kb - kc) dot a = 2n\pi
 
-    where these kpoints are stored in kijkab[ki,kj,kk,ka,kb].
+    where these kpoints are stored in kijkab[ki, kj, kk, ka, kb].
     '''
     nkpts = kpts.shape[0]
-    KLMN = np.zeros([nkpts,nkpts,nkpts], np.int)
-    kvecs = 2*np.pi*scipy.linalg.inv(cell._h)
-    kijkab = np.array(kijkab)
+    a = cell.lattice_vectors() / (2*np.pi)
 
-    # Finds which indices in ijkab are integers and which are lists
-    # TODO: try to see if it works for more than 1 list
-    idx_sum = np.array([not(isinstance(x,int) or isinstance(x,np.int)) for x in kijkab])
-    idx_range = kijkab[idx_sum]
-    min_idx_range = np.zeros(5,dtype=int)
-    min_idx_range = np.array([min(x) for x in idx_range])
-    out_array_shape = tuple([len(x) for x in idx_range])
-    out_array = np.zeros(shape=out_array_shape,dtype=int)
-    kpqrst_idx = np.zeros(5,dtype=int)
+    kpts_i, kpts_j, kpts_k, kpts_a, kpts_b = \
+            [kpts[x].reshape(-1,3) for x in kijkab]
+    shape = [np.size(x) for x in kijkab]
+    kconserv = np.zeros(shape, dtype=int)
 
-    # Order here matters! Search for most ``obvious" translation first to
-    # get into 1st BZ, i.e. no translation!
-    temp = [0,-1,1,-2,2]
-    xyz = pyscf.lib.cartesian_prod((temp,temp,temp))
-    kshift = np.dot(xyz,kvecs)
+    kv_kab = kpts_k[:,None,None,:] - kpts_a[:,None,:] - kpts_b
+    for i, kpti in enumerate(kpts_i):
+        for j, kptj in enumerate(kpts_j):
+            kv_ijkab = kv_kab + kpti + kptj
+            for c, kptc in enumerate(kpts):
+                s = np.einsum('kabx,wx->kabw', kv_ijkab - kptc, a)
+                s_int = np.rint(s)
+                mask = np.einsum('kabw->kab', abs(s - s_int)) < 1e-9
+                kconserv[i,j,mask] = c
 
-    for L, kvL in enumerate(pyscf.lib.cartesian_prod(idx_range)):
-        kpqrst_idx[idx_sum], kpqrst_idx[~idx_sum] = kvL, kijkab[~idx_sum]
-        idx = tuple(kpqrst_idx[idx_sum]-min_idx_range)
-
-        kvec = kpts[kpqrst_idx]
-        kvec = kvec[0:3].sum(axis=0) - kvec[3:5].sum(axis=0)
-
-        found = 0
-        kvNs = kvec + kshift
-        for ishift in range(len(xyz)):
-            kvN = kvNs[ishift]
-            finder = np.where(np.logical_and(kpts < kvN + 1.e-12, kpts > kvN - 1.e-12).sum(axis=1)==3)
-            # The k-point kvN is the one that conserves momentum
-            if len(finder[0]) > 0:
-                found = 1
-                out_array[idx] = finder[0][0]
-                break
-
-        if found == 0:
-            raise RuntimeError('Momentum-conserving k-point not found')
-    return out_array
+    new_shape = [shape[i] for i, x in enumerate(kijkab)
+                 if not isinstance(x, (int,np.int))]
+    kconserv = kconserv.reshape(new_shape)
+    return kconserv
 
 
-class KptsHelper(pyscf.lib.StreamObject):
+class KptsHelper(lib.StreamObject):
     def __init__(self, cell, kpts):
         '''Helper class for handling k-points in correlated calculations.
 
@@ -149,7 +220,7 @@ class KptsHelper(pyscf.lib.StreamObject):
         self.kconserv = get_kconserv(cell, kpts)
         nkpts = len(kpts)
         temp = range(0,nkpts)
-        kptlist = pyscf.lib.cartesian_prod((temp,temp,temp))
+        kptlist = lib.cartesian_prod((temp,temp,temp))
         completed = np.zeros((nkpts,nkpts,nkpts), dtype=bool)
 
         self._operation = np.zeros((nkpts,nkpts,nkpts), dtype=int)
@@ -166,15 +237,15 @@ class KptsHelper(pyscf.lib.StreamObject):
                 self._operation[kp,kq,kr] = 0
                 self.symm_map[kpt].append((kp,kq,kr))
 
-                completed[kr,ks,kp] = True 
+                completed[kr,ks,kp] = True
                 self._operation[kr,ks,kp] = 1 #.transpose(2,3,0,1)
                 self.symm_map[kpt].append((kr,ks,kp))
 
-                completed[kq,kp,ks] = True 
+                completed[kq,kp,ks] = True
                 self._operation[kq,kp,ks] = 2 #np.conj(.transpose(1,0,3,2))
                 self.symm_map[kpt].append((kq,kp,ks))
 
-                completed[ks,kr,kq] = True 
+                completed[ks,kr,kq] = True
                 self._operation[ks,kr,kq] = 3 #np.conj(.transpose(3,2,1,0))
                 self.symm_map[kpt].append((ks,kr,kq))
 
@@ -197,6 +268,4 @@ class KptsHelper(pyscf.lib.StreamObject):
             return np.conj(eri_kpt.transpose(1,0,3,2))
         if operation == 3:
             return np.conj(eri_kpt.transpose(3,2,1,0))
-
-
 

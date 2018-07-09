@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -95,11 +108,13 @@ class NMR(rhf_nmr.NMR):
 
             h1 = -.5 * mol.intor('int1e_giao_irjxp', 3)
             h1 -= mol.intor_asymmetric('int1e_ignuc', 3)
+            if mol.has_ecp():
+                h1 -= mol.intor_asymmetric('ECPscalar_ignuc', 3)
             h1 -= mol.intor('int1e_igkin', 3)
 
             mf = self._scf
             ni = mf._numint
-            hyb = ni.hybrid_coeff(mf.xc, spin=mol.spin)
+            omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
 
             mem_now = lib.current_memory()[0]
             max_memory = max(2000, mf.max_memory*.9-mem_now)
@@ -112,14 +127,18 @@ class NMR(rhf_nmr.NMR):
             if abs(hyb) > 1e-10:
                 vj, vk = rhf_nmr.get_jk(mol, dm0)
                 h1 += vj - .5 * hyb * vk
+                if abs(omega) > 1e-10:
+                    with mol.with_range_coulomb(omega):
+                        h1 -= .5*(alpha-hyb) * rhf_nmr.get_jk(mol, dm0)[1]
             else:
                 vj = _vhf.direct_mapdm(intor, 'a4ij', 'lk->s1ij',
                                        dm0, 3, mol._atm, mol._bas, mol._env)
                 h1 -= vj
         else:
-            mol.set_common_origin(gauge_orig)
-            h1 = -.5 * mol.intor('int1e_cg_irxp', 3)
-        lib.chkfile.dump(self.chkfile, 'nmr/h1', h1)
+            with mol.with_common_origin(gauge_orig):
+                h1 = -.5 * mol.intor('int1e_cg_irxp', 3)
+        if self.chkfile:
+            lib.chkfile.dump(self.chkfile, 'nmr/h1', h1)
         return h1
 
     def solve_mo1(self, mo_energy=None, mo_occ=None, h1=None, s1=None,

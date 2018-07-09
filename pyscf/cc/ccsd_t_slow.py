@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -30,19 +43,22 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
 
     nocc, nvir = t1.shape
     nmo = nocc + nvir
-    e_occ, e_vir = mycc._scf.mo_energy[:nocc], mycc._scf.mo_energy[nocc:]
+    mo_e = eris.fock.diagonal()
+    e_occ, e_vir = mo_e[:nocc], mo_e[nocc:]
     eijk = lib.direct_sum('i,j,k->ijk', e_occ, e_occ, e_occ)
 
-    eris_ovvv = lib.unpack_tril(eris.ovvv.reshape(nocc*nvir,-1))
-    eris_vvov = eris_ovvv.reshape(nocc,nvir,nvir,nvir).transpose(1,2,0,3)
-    eris_vooo = eris.ovoo.transpose(1,0,2,3)
-    eris_vvoo = eris.ovov.transpose(1,3,0,2)
+    eris_vvov = eris.get_ovvv().conj().transpose(1,3,0,2)
+    eris_vooo = eris.ovoo.conj().transpose(1,0,3,2)
+    eris_vvoo = eris.ovov.conj().transpose(1,3,0,2)
+    fvo = eris.fock[nocc:,:nocc]
     def get_w(a, b, c):
         w = numpy.einsum('if,fkj->ijk', eris_vvov[a,b], t2T[c,:])
         w-= numpy.einsum('ijm,mk->ijk', eris_vooo[a,:], t2T[b,c])
         return w
     def get_v(a, b, c):
-        return numpy.einsum('ij,k->ijk', eris_vvoo[a,b], t1T[c])
+        v = numpy.einsum('ij,k->ijk', eris_vvoo[a,b], t1T[c])
+        v+= numpy.einsum('ij,k->ijk', t2T[a,b], fvo[c])
+        return v
 
     et = 0
     for a in range(nvir):
@@ -73,47 +89,47 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
                 zcab = r3(wcab + .5 * vcab) / d3
                 zcba = r3(wcba + .5 * vcba) / d3
 
-                et+= numpy.einsum('ijk,ijk', wabc, zabc)
-                et+= numpy.einsum('ikj,ijk', wacb, zabc)
-                et+= numpy.einsum('jik,ijk', wbac, zabc)
-                et+= numpy.einsum('jki,ijk', wbca, zabc)
-                et+= numpy.einsum('kij,ijk', wcab, zabc)
-                et+= numpy.einsum('kji,ijk', wcba, zabc)
+                et+= numpy.einsum('ijk,ijk', wabc, zabc.conj())
+                et+= numpy.einsum('ikj,ijk', wacb, zabc.conj())
+                et+= numpy.einsum('jik,ijk', wbac, zabc.conj())
+                et+= numpy.einsum('jki,ijk', wbca, zabc.conj())
+                et+= numpy.einsum('kij,ijk', wcab, zabc.conj())
+                et+= numpy.einsum('kji,ijk', wcba, zabc.conj())
 
-                et+= numpy.einsum('ijk,ijk', wacb, zacb)
-                et+= numpy.einsum('ikj,ijk', wabc, zacb)
-                et+= numpy.einsum('jik,ijk', wcab, zacb)
-                et+= numpy.einsum('jki,ijk', wcba, zacb)
-                et+= numpy.einsum('kij,ijk', wbac, zacb)
-                et+= numpy.einsum('kji,ijk', wbca, zacb)
+                et+= numpy.einsum('ijk,ijk', wacb, zacb.conj())
+                et+= numpy.einsum('ikj,ijk', wabc, zacb.conj())
+                et+= numpy.einsum('jik,ijk', wcab, zacb.conj())
+                et+= numpy.einsum('jki,ijk', wcba, zacb.conj())
+                et+= numpy.einsum('kij,ijk', wbac, zacb.conj())
+                et+= numpy.einsum('kji,ijk', wbca, zacb.conj())
 
-                et+= numpy.einsum('ijk,ijk', wbac, zbac)
-                et+= numpy.einsum('ikj,ijk', wbca, zbac)
-                et+= numpy.einsum('jik,ijk', wabc, zbac)
-                et+= numpy.einsum('jki,ijk', wacb, zbac)
-                et+= numpy.einsum('kij,ijk', wcba, zbac)
-                et+= numpy.einsum('kji,ijk', wcab, zbac)
+                et+= numpy.einsum('ijk,ijk', wbac, zbac.conj())
+                et+= numpy.einsum('ikj,ijk', wbca, zbac.conj())
+                et+= numpy.einsum('jik,ijk', wabc, zbac.conj())
+                et+= numpy.einsum('jki,ijk', wacb, zbac.conj())
+                et+= numpy.einsum('kij,ijk', wcba, zbac.conj())
+                et+= numpy.einsum('kji,ijk', wcab, zbac.conj())
 
-                et+= numpy.einsum('ijk,ijk', wbca, zbca)
-                et+= numpy.einsum('ikj,ijk', wbac, zbca)
-                et+= numpy.einsum('jik,ijk', wcba, zbca)
-                et+= numpy.einsum('jki,ijk', wcab, zbca)
-                et+= numpy.einsum('kij,ijk', wabc, zbca)
-                et+= numpy.einsum('kji,ijk', wacb, zbca)
+                et+= numpy.einsum('ijk,ijk', wbca, zbca.conj())
+                et+= numpy.einsum('ikj,ijk', wbac, zbca.conj())
+                et+= numpy.einsum('jik,ijk', wcba, zbca.conj())
+                et+= numpy.einsum('jki,ijk', wcab, zbca.conj())
+                et+= numpy.einsum('kij,ijk', wabc, zbca.conj())
+                et+= numpy.einsum('kji,ijk', wacb, zbca.conj())
 
-                et+= numpy.einsum('ijk,ijk', wcab, zcab)
-                et+= numpy.einsum('ikj,ijk', wcba, zcab)
-                et+= numpy.einsum('jik,ijk', wacb, zcab)
-                et+= numpy.einsum('jki,ijk', wabc, zcab)
-                et+= numpy.einsum('kij,ijk', wbca, zcab)
-                et+= numpy.einsum('kji,ijk', wbac, zcab)
+                et+= numpy.einsum('ijk,ijk', wcab, zcab.conj())
+                et+= numpy.einsum('ikj,ijk', wcba, zcab.conj())
+                et+= numpy.einsum('jik,ijk', wacb, zcab.conj())
+                et+= numpy.einsum('jki,ijk', wabc, zcab.conj())
+                et+= numpy.einsum('kij,ijk', wbca, zcab.conj())
+                et+= numpy.einsum('kji,ijk', wbac, zcab.conj())
 
-                et+= numpy.einsum('ijk,ijk', wcba, zcba)
-                et+= numpy.einsum('ikj,ijk', wcab, zcba)
-                et+= numpy.einsum('jik,ijk', wbca, zcba)
-                et+= numpy.einsum('jki,ijk', wbac, zcba)
-                et+= numpy.einsum('kij,ijk', wacb, zcba)
-                et+= numpy.einsum('kji,ijk', wabc, zcba)
+                et+= numpy.einsum('ijk,ijk', wcba, zcba.conj())
+                et+= numpy.einsum('ikj,ijk', wcab, zcba.conj())
+                et+= numpy.einsum('jik,ijk', wbca, zcba.conj())
+                et+= numpy.einsum('jki,ijk', wbac, zcba.conj())
+                et+= numpy.einsum('kij,ijk', wacb, zcba.conj())
+                et+= numpy.einsum('kji,ijk', wabc, zcba.conj())
     et *= 2
     log.info('CCSD(T) correction = %.15g', et)
     return et
@@ -132,7 +148,7 @@ if __name__ == '__main__':
     mol = gto.M()
     numpy.random.seed(12)
     nocc, nvir = 5, 12
-    eris = lambda :None
+    eris = cc.ccsd._ChemistsERIs()
     eris.ovvv = numpy.random.random((nocc,nvir,nvir*(nvir+1)//2)) * .1
     eris.ovoo = numpy.random.random((nocc,nvir,nocc,nocc)) * .1
     eris.ovov = numpy.random.random((nocc,nvir,nocc,nvir)) * .1
@@ -141,8 +157,9 @@ if __name__ == '__main__':
     t2 = t2 + t2.transpose(1,0,3,2)
     mf = scf.RHF(mol)
     mcc = cc.CCSD(mf)
-    mcc._scf.mo_energy = numpy.arange(nocc+nvir)
-    print(kernel(mcc, eris, t1, t2) + 8.4953387936460398)
+    f = numpy.random.random((nocc+nvir,nocc+nvir)) * .1
+    eris.fock = f+f.T + numpy.diag(numpy.arange(nocc+nvir))
+    print(kernel(mcc, eris, t1, t2) - -8.0038781018306828)
 
     mol = gto.Mole()
     mol.atom = [
@@ -156,9 +173,8 @@ if __name__ == '__main__':
     rhf.conv_tol = 1e-14
     rhf.scf()
     mcc = cc.CCSD(rhf)
-    mcc.conv_tol = 1e-14
+    mcc.conv_tol = 1e-12
     mcc.ccsd()
 
     e3a = kernel(mcc, mcc.ao2mo())
     print(e3a - -0.0033300722698513989)
-

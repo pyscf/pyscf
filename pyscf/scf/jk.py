@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -20,7 +33,7 @@ from pyscf.scf import _vhf
 
 
 def get_jk(mols, dms, scripts=['ijkl,ji->kl'], intor='int2e_sph',
-           aosym='s1', comp=1, hermi=0, shls_slice=None, verbose=logger.WARN):
+           aosym='s1', comp=None, hermi=0, shls_slice=None, verbose=logger.WARN):
     '''Compute J/K matrices for the given density matrix
 
     Args:
@@ -31,7 +44,7 @@ def get_jk(mols, dms, scripts=['ijkl,ji->kl'], intor='int2e_sph',
 
     Kwargs:
         hermi : int
-            Whether J/K matrix is hermitian
+            Whether the returned J (K) matrix is hermitian
 
             | 0 : no hermitian or symmetric
             | 1 : hermitian
@@ -54,7 +67,7 @@ def get_jk(mols, dms, scripts=['ijkl,ji->kl'], intor='int2e_sph',
 
         comp : int
             Components of the integrals, e.g. cint2e_ip_sph has 3 components.
-        scripts : a list of strings
+        scripts : string or a list of strings
             Contraction description (following numpy.einsum convention) based on
             letters [ijkl].  Each script will be one-to-one applied to each
             entry of dms.  So it must have the same number of elements as the
@@ -104,6 +117,7 @@ def get_jk(mols, dms, scripts=['ijkl,ji->kl'], intor='int2e_sph',
     ...                 shls_slice=(0,1,0,1,0,mol.nbas,0,mol.nbas))
     '''
     if isinstance(mols, (tuple, list)):
+        intor, comp = gto.moleintor._get_intor_and_comp(mols[0]._add_suffix(intor), comp)
         assert(len(mols) == 4)
         assert(mols[0].cart == mols[1].cart == mols[2].cart == mols[3].cart)
         if shls_slice is None:
@@ -116,7 +130,7 @@ def get_jk(mols, dms, scripts=['ijkl,ji->kl'], intor='int2e_sph',
         bas_start = numpy.zeros(4, dtype=int)
         for m in range(1,4):
             first = mol_ids.index(mol_ids[m])
-            if first == m:  # the unique mol
+            if first == m:  # the unique mol, not repeated in mols
                 bas_start[m] = bas.shape[0]
                 atm, bas, env = gto.conc_env(atm, bas, env, mols[m]._atm,
                                              mols[m]._bas, mols[m]._env)
@@ -125,11 +139,13 @@ def get_jk(mols, dms, scripts=['ijkl,ji->kl'], intor='int2e_sph',
             shls_slice[m] += bas_start[m]
         shls_slice = shls_slice.flatten()
     else:
+        intor, comp = gto.moleintor._get_intor_and_comp(mols._add_suffix(intor), comp)
         atm, bas, env = mols._atm, mols._bas, mols._env
         if shls_slice is None:
             shls_slice = (0, mols.nbas) * 4
 
-    if isinstance(scripts, str):
+    single_script = isinstance(scripts, str)
+    if single_script:
         scripts = [scripts]
     if isinstance(dms, numpy.ndarray) and dms.ndim == 2:
         dms = [dms]
@@ -153,6 +169,9 @@ def get_jk(mols, dms, scripts=['ijkl,ji->kl'], intor='int2e_sph',
                     pyscf.lib.hermi_triu(vi, hermi, inplace=True)
             else:
                 pyscf.lib.hermi_triu(v, hermi, inplace=True)
+
+    if single_script:
+        vs = vs[0]
     return vs
 
 jk_build = get_jk

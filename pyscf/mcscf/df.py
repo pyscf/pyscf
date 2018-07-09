@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -68,8 +81,8 @@ def density_fit(casscf, auxbasis=None, with_df=None):
             casscf_class.dump_flags(self)
             logger.info(self, 'DFCASCI/DFCASSCF: density fitting for JK matrix and 2e integral transformation')
 
-        def ao2mo(self, mo_coeff):
-            if self.with_df:
+        def ao2mo(self, mo_coeff=None):
+            if self.with_df and 'CASSCF' in casscf_class.__name__:
                 return _ERIS(self, mo_coeff, self.with_df)
             else:
                 return casscf_class.ao2mo(self, mo_coeff)
@@ -323,8 +336,6 @@ def _mem_usage(ncore, ncas, nmo):
     nvir = nmo - ncore
     outcore = basic = ncas**2*nmo**2*2 * 8/1e6
     incore = outcore + (ncore+ncas)*nmo**3*4/1e6
-    if outcore > 10000:
-        sys.stderr.write('Be careful with the virtual memorty address space `ulimit -v`\n')
     return incore, outcore, basic
 
 def prange(start, end, step):

@@ -34,10 +34,9 @@ nvir = len(mf.mo_energy) - nocc
 co = mf.mo_coeff[:,:nocc]
 cv = mf.mo_coeff[:,nocc:]
 # Note the AO integrals cint2e_ip1_sph have 3 components (x,y,z) and only have
-# permutation symmetry k>=l.  We pass in comp=3 and aosym='s2kl' to describe
-# the AO integrals feature.
+# permutation symmetry k>=l.
 ao2mo.kernel(mol, (co,cv,co,cv), gradtmp.name, intor='cint2e_ip1_sph',
-             aosym='s2kl', comp=3)#, verbose=5)
+             aosym='s2kl')#, verbose=5)
 feri = h5py.File(gradtmp.name, 'r')
 grad = feri['eri_mo']
 print('gradient integrals (d/dR i j|kl) have shape %s == (3,%dx%d,%dx%d)'
@@ -59,19 +58,19 @@ print('gradient integrals (d/dR i j|kl) have shape %s == (3,%dx%d,%dx%d)'
 orb = mf.mo_coeff
 hesstmp = tempfile.NamedTemporaryFile()
 ao2mo.kernel(mol, orb, hesstmp.name, intor='cint2e_ipvip1_sph',
-             dataname='hessints1', aosym='s4', comp=9)
+             dataname='hessints1', aosym='s4')
 with ao2mo.load(hesstmp, 'hessints1') as eri:
     print('(d/dR i d/dR j| kl) have shape %s due to the 4-fold permutation '
           'symmetry i >= j, k >= l' % str(eri.shape))
 
 ao2mo.kernel(mol, orb, hesstmp.name, intor='cint2e_ipip1_sph',
-             dataname='hessints2', aosym='s2kl', comp=9)
+             dataname='hessints2', aosym='s2kl')
 feri = h5py.File(hesstmp.name, 'r')
 print('(d/dR d/dR i j| kl) have shape %s due to the 2-fold permutation '
       'symmetry k >= l' % str(feri['hessints2'].shape))
 feri.close()
 
 with ao2mo.load(ao2mo.kernel(mol, orb, hesstmp.name, intor='cint2e_ip1ip2_sph',
-                             aosym='s1', comp=9)) as eri:
+                             aosym='s1')) as eri:
     print('(d/dR i j|d/dR k l) have shape %s because there is no permutation '
           'symmetry' % str(eri.shape))

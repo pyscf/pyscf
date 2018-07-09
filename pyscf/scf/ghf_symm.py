@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -16,9 +29,14 @@ from pyscf.lib import logger
 from pyscf.scf import hf_symm
 from pyscf.scf import ghf
 from pyscf.scf import chkfile
+from pyscf import __config__
+
+WITH_META_LOWDIN = getattr(__config__, 'scf_analyze_with_meta_lowdin', True)
+MO_BASE = getattr(__config__, 'MO_BASE', 1)
 
 
-def analyze(mf, verbose=logger.DEBUG, **kwargs):
+def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
+            **kwargs):
     mol = mf.mol
     if not mol.symmetry:
         return ghf.analyze(mf, verbose, **kwargs)
@@ -47,10 +65,16 @@ def analyze(mf, verbose=logger.DEBUG, **kwargs):
             else:
                 irorbcnt[j] = 1
             log.note('MO #%d (%s #%d), energy= %.15g occ= %g',
-                     k+1, irname_full[j], irorbcnt[j], mo_energy[k], mo_occ[k])
+                     k+MO_BASE, irname_full[j], irorbcnt[j], mo_energy[k],
+                     mo_occ[k])
 
     dm = mf.make_rdm1(mo_coeff, mo_occ)
-    return mf.mulliken_meta(mol, dm, s=ovlp_ao, verbose=log)
+    dip = mf.dip_moment(mol, dm, verbose=log)
+    if with_meta_lowdin:
+        pop_and_chg = mf.mulliken_meta(mol, dm, s=ovlp_ao, verbose=log)
+    else:
+        pop_and_chg = mf.mulliken_pop(mol, dm, s=ovlp_ao, verbose=log)
+    return pop_and_chg, dip
 
 def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     '''Canonicalization diagonalizes the UHF Fock matrix in occupied, virtual
@@ -169,7 +193,7 @@ class GHF(ghf.GHF):
             ir_idx = numpy.where(orbsym == ir)[0]
             if irname in self.irrep_nelec:
                 n = self.irrep_nelec[irname]
-                occ_sort = numpy.argsort(mo_energy[ir_idx].round(9))
+                occ_sort = numpy.argsort(mo_energy[ir_idx].round(9), kind='mergesort')
                 occ_idx  = ir_idx[occ_sort[:n]]
                 mo_occ[occ_idx] = 1
                 nelec_fix += n
@@ -178,7 +202,7 @@ class GHF(ghf.GHF):
         assert(nelec_float >= 0)
         if nelec_float > 0:
             rest_idx = numpy.where(rest_idx)[0]
-            occ_sort = numpy.argsort(mo_energy[rest_idx].round(9))
+            occ_sort = numpy.argsort(mo_energy[rest_idx].round(9), kind='mergesort')
             occ_idx  = rest_idx[occ_sort[:nelec_float]]
             mo_occ[occ_idx] = 1
 
@@ -211,6 +235,8 @@ class GHF(ghf.GHF):
     def _finalize(self):
         ghf.GHF._finalize(self)
 
+        # Using mergesort because it is stable. We don't want to change the
+        # ordering of the symmetry labels when two orbitals are degenerated.
         o_sort = numpy.argsort(self.mo_energy[self.mo_occ> 0].round(9), kind='mergesort')
         v_sort = numpy.argsort(self.mo_energy[self.mo_occ==0].round(9), kind='mergesort')
         orbsym = get_orbsym(self.mol, self.mo_coeff)

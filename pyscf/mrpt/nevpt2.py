@@ -1,7 +1,20 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
 #
-# Author: Sheng Guo <shengg@princeton.edu>
-#         Qiming Sun <osirpt.sun@gmail.com>
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Authors: Sheng Guo
+#          Qiming Sun <osirpt.sun@gmail.com>
 #
 
 import os
@@ -656,11 +669,15 @@ class NEVPT(lib.StreamObject):
                                'CASCI calculation is required for NEVPT2 method. '
                                'See examples/mrpt/41-for_state_average.py.')
 
+        if hasattr(self._mc, 'frozen') and self._mc.frozen is not None:
+            raise NotImplementedError
+
         if isinstance(self.verbose, logger.Logger):
             log = self.verbose
         else:
             log = logger.Logger(self.stdout, self.verbose)
         time0 = (time.clock(), time.time())
+
         #By defaut, _mc is canonicalized for the first root.
         #For SC-NEVPT based on compressed MPS perturber functions, the _mc was already canonicalized.
         if (not self.canonicalized):

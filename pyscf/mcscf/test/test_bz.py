@@ -1,4 +1,18 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import unittest
 from pyscf import scf
 from pyscf import gto
@@ -29,8 +43,13 @@ mf = scf.RHF(mol)
 mf.conv_tol = 1e-12
 mf.scf()
 
+def tearDownModule():
+    global mol, mf
+    mol.stdout.close()
+    del mol, mf
 
-class KnowValues(unittest.TestCase):
+
+class KnownValues(unittest.TestCase):
     def test_casci_4o4e(self):
         mc = mcscf.CASCI(mf, 4, 4)
         emc = mc.casci()[0]
@@ -45,7 +64,7 @@ class KnowValues(unittest.TestCase):
         mc = mcscf.CASSCF(mf, 4, 4)
         mc.conv_tol = 1e-8
         emc = mc.mc2step()[0]
-        self.assertAlmostEqual(emc, -230.66273838160367, 6)
+        self.assertAlmostEqual(emc, -230.66407828691274, 6)
 
     def test_mc2step_9o8e(self):
         mc = mcscf.CASSCF(mf, 9, 8)
@@ -58,14 +77,14 @@ class KnowValues(unittest.TestCase):
         mc = mcscf.CASSCF(mf, 4, 4)
         mc.conv_tol = 1e-8
         emc = mc.mc1step()[0]
-        self.assertAlmostEqual(emc, -230.66273838160367, 6)
+        self.assertAlmostEqual(emc, -230.66407828691274, 6)
 
     def test_mc1step_9o8e(self):
         mc = mcscf.CASSCF(mf, 9, 8)
         mc.conv_tol = 1e-8
         mo = mc.sort_mo([16,17,20,21,22,23,26,27,30])
         emc = mc.mc1step(mo)[0]
-        self.assertAlmostEqual(emc, -230.72211519779304, 6)
+        self.assertAlmostEqual(emc, -230.72680452746368, 6)
 
 
 if __name__ == "__main__":

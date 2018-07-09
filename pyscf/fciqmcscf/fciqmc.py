@@ -1,7 +1,20 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
 #
-# Author: George Booth <george.booth24@gmail.com>
-#         Qiming Sun <osirpt.sun@gmail.com>
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Authors: George Booth
+#          Qiming Sun <osirpt.sun@gmail.com>
 #
 
 import os, sys
@@ -156,7 +169,8 @@ class FCIQMCCI(object):
         execute_fciqmc(self)
         if self.verbose >= logger.DEBUG1:
             out_file = self.outputFileCurrent
-            logger.debug1(self, open(out_file))
+            with open(out_file) as f:
+                logger.debug1(self, f.read())
         rdm_energy = read_energy(self)
 
         return rdm_energy, None
@@ -254,7 +268,7 @@ def run_standalone(fciqmcci, scf_obj, orbs=None, restart=None):
         orbsym = []
 
 #    eri = pyscf.ao2mo.outcore.full(fciqmcci.mol, orbs, verbose=0)
-    # Lookup and return the relevant 1-electron integrals, and print(out)
+    # Lookup and return the relevant 1-electron integrals, and print out
     # the FCIDUMP file.
     if tUHF:
         write_uhf_integrals_neci(fciqmcci,scf_obj,nmo,nelec,orbs,orbsym,tol=tol)
@@ -661,7 +675,8 @@ def read_neci_2dms(fciqmcci, norb, nelec, filename_aa='TwoRDM_aaaa.1',
         assert(numpy.allclose(dm2ab[l,k,j,i],-val) or dm2ab[l,k,j,i] == 0.0)
         dm2ab[l,k,j,i] = -val
         # Time reversal sym
-#        print(i,j,k,l,val,dm2ab[j,i,l,k], numpy.allclose(dm2ab[j,i,l,k],-val), dm2ab[j,i,l,k] == 0.0)
+#        print(i,j,k,l,val,dm2ab[j,i,l,k],
+#        numpy.allclose(dm2ab[j,i,l,k],-val), dm2ab[j,i,l,k] == 0.0)
         assert(numpy.allclose(dm2ab[j,i,l,k],-val) or dm2ab[j,i,l,k] == 0.0)
         dm2ab[j,i,l,k] = -val
         assert(numpy.allclose(dm2ab[k,l,i,j],-val) or dm2ab[k,l,i,j] == 0.0)

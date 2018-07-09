@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -18,8 +31,30 @@ from pyscf.lib import parameters
 from pyscf.lib import logger
 from pyscf.lib import numpy_helper
 from pyscf.lib import misc
+from pyscf import __config__
 
-def safe_eigh(h, s, lindep=1e-15):
+SAFE_EIGH_LINDEP = getattr(__config__, 'lib_linalg_helper_safe_eigh_lindep', 1e-15)
+DAVIDSON_LINDEP = getattr(__config__, 'lib_linalg_helper_davidson_lindep', 1e-14)
+DSOLVE_LINDEP = getattr(__config__, 'lib_linalg_helper_dsolve_lindep', 1e-15)
+MAX_MEMORY = getattr(__config__, 'lib_linalg_helper_davidson_max_memory', 2000)  # 2GB
+
+# sort by similarity has problem which flips the ordering of eigenvalues when
+# the initial guess is closed to excited state.  In this situation, function
+# _sort_by_similarity may mark the excited state as the first eigenvalue and
+# freeze the first eigenvalue.
+SORT_EIG_BY_SIMILARITY = \
+        getattr(__config__, 'lib_linalg_helper_davidson_sort_eig_by_similiarity', False)
+# Projecting out converged eigenvectors has problems when conv_tol is loose.
+# In this situation, the converged eigenvectors may be updated in the
+# following iterations.  Projecting out the converged eigenvectors may lead to
+# large errors to the yet converged eigenvectors.
+PROJECT_OUT_CONV_EIGS = \
+        getattr(__config__, 'lib_linalg_helper_davidson_project_out_eigs', False)
+
+FOLLOW_STATE = getattr(__config__, 'lib_linalg_helper_davidson_follow_state', False)
+
+
+def safe_eigh(h, s, lindep=SAFE_EIGH_LINDEP):
     '''Solve generalized eigenvalue problem  h v = w s v.
 
     .. note::
@@ -131,20 +166,11 @@ def eigh_by_blocks(h, s=None, labels=None):
     idx = numpy.argsort(es)
     return es[idx], cs[:,idx]
 
-# sort by similarity has problem which flips the ordering of eigenvalues when
-# the initial guess is closed to excited state.  In this situation, function
-# _sort_by_similarity may mark the excited state as the first eigenvalue and
-# freeze the first eigenvalue.
-SORT_EIG_BY_SIMILARITY = False
-# Projecting out converged eigenvectors has problems when conv_tol is loose.
-# In this situation, the converged eigenvectors may be updated in the
-# following iterations.  Projecting out the converged eigenvectors may lead to
-# large errors to the yet converged eigenvectors.
-PROJECT_OUT_CONV_EIGS = False
-# default max_memory 2000 MB
 def davidson(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
-             lindep=1e-14, max_memory=2000, dot=numpy.dot, callback=None,
-             nroots=1, lessio=False, verbose=logger.WARN, follow_state=False):
+             lindep=DAVIDSON_LINDEP, max_memory=MAX_MEMORY,
+             dot=numpy.dot, callback=None,
+             nroots=1, lessio=False, pick=None, verbose=logger.WARN,
+             follow_state=FOLLOW_STATE):
     '''Davidson diagonalization method to solve  a c = e c.  Ref
     [1] E.R. Davidson, J. Comput. Phys. 17 (1), 87-94 (1975).
     [2] http://people.inf.ethz.ch/arbenz/ewp/Lnotes/chapter11.pdf
@@ -194,6 +220,8 @@ def davidson(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
             other is to call aop(x0).  The default is the first method which
             needs more IO and less computational cost.  When IO is slow, the
             second method can be considered.
+        pick : function(w,v,nroots) => (e[idx], w[:,idx], idx)
+            Function to filter eigenvalues and eigenvectors.
         follow_state : bool
             If the solution dramatically changes in two iterations, clean the
             subspace and restart the iteration with the old solution.  It can
@@ -219,7 +247,7 @@ def davidson(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
     '''
     e, x = davidson1(lambda xs: [aop(x) for x in xs],
                      x0, precond, tol, max_cycle, max_space, lindep,
-                     max_memory, dot, callback, nroots, lessio, verbose,
+                     max_memory, dot, callback, nroots, lessio, pick, verbose,
                      follow_state)[1:]
     if nroots == 1:
         return e[0], x[0]
@@ -227,8 +255,10 @@ def davidson(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         return e, x
 
 def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
-             lindep=1e-14, max_memory=2000, dot=numpy.dot, callback=None,
-             nroots=1, lessio=False, verbose=logger.WARN, follow_state=False):
+             lindep=DAVIDSON_LINDEP, max_memory=MAX_MEMORY,
+             dot=numpy.dot, callback=None,
+             nroots=1, lessio=False, pick=None, verbose=logger.WARN,
+             follow_state=FOLLOW_STATE, tol_residual=None):
     '''Davidson diagonalization method to solve  a c = e c.  Ref
     [1] E.R. Davidson, J. Comput. Phys. 17 (1), 87-94 (1975).
     [2] http://people.inf.ethz.ch/arbenz/ewp/Lnotes/chapter11.pdf
@@ -236,7 +266,7 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
     Args:
         aop : function([x]) => [array_like_x]
             Matrix vector multiplication :math:`y_{ki} = \sum_{j}a_{ij}*x_{jk}`.
-        x0 : 1D array or a list of 1D array
+        x0 : 1D array or a list of 1D arrays or a function to generate x0 array(s)
             Initial guess.  The initial guess vector(s) are just used as the
             initial subspace bases.  If the subspace is smaller than "nroots",
             eg 10 roots and one initial guess, all eigenvectors are chosen as
@@ -277,6 +307,8 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
             other is to call aop(x0).  The default is the first method which
             needs more IO and less computational cost.  When IO is slow, the
             second method can be considered.
+        pick : function(w,v,nroots) => (e[idx], w[:,idx], idx)
+            Function to filter eigenvalues and eigenvectors.
         follow_state : bool
             If the solution dramatically changes in two iterations, clean the
             subspace and restart the iteration with the old solution.  It can
@@ -307,9 +339,14 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
     else:
         log = logger.Logger(sys.stdout, verbose)
 
-    toloose = numpy.sqrt(tol)
+    if tol_residual is None:
+        toloose = numpy.sqrt(tol)
+    else:
+        toloose = tol_residual
     log.debug1('tol %g  toloose %g', tol, toloose)
 
+    if callable(x0):  # lazy initialization to reduce memory footprint
+        x0 = x0()
     if isinstance(x0, numpy.ndarray) and x0.ndim == 1:
         x0 = [x0]
     #max_cycle = min(max_cycle, x0[0].size)
@@ -341,7 +378,7 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
             xt, x0 = _qr(x0, dot), None
             max_dx_last = 1e9
             if SORT_EIG_BY_SIMILARITY:
-                conv = numpy.array([False] * nroots)
+                conv = [False] * nroots
         elif len(xt) > 1:
             xt = _qr(xt, dot)
             xt = xt[:40]  # 40 trial vectors at most
@@ -370,8 +407,11 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
                 for k in range(rnow):
                     heff[head+k,i] = dot(xt[k].conj(), ax[i])
                     heff[i,head+k] = heff[head+k,i].conj()
+        axt = None
 
         w, v = scipy.linalg.eigh(heff[:space,:space])
+        if callable(pick):
+            w, v, idx = pick(w, v, nroots, locals())
         if SORT_EIG_BY_SIMILARITY:
             e, v = _sort_by_similarity(w, v, nroots, conv, vlast, emin)
             if elast.size != e.size:
@@ -382,6 +422,7 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
             e = w[:nroots]
             v = v[:,:nroots]
 
+        x0 = None
         x0 = _gen_x0(v, xs)
         if lessio:
             ax0 = aop(x0)
@@ -400,7 +441,8 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
                                   k, dx_norm[k], ek, de[k])
                         conv[k] = True
         else:
-            elast, conv_last = _sort_elast(elast, conv_last, vlast, v, fresh_start)
+            elast, conv_last = _sort_elast(elast, conv_last, vlast, v,
+                                           fresh_start, log)
             de = e - elast
             dx_norm = []
             xt = []
@@ -477,7 +519,7 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         if callable(callback):
             callback(locals())
 
-    return conv, e, x0
+    return numpy.asarray(conv), e, x0
 
 
 def eigh(a, *args, **kwargs):
@@ -499,7 +541,7 @@ def pick_real_eigs(w, v, nroots, x0):
     abs_imag = abs(w.imag)
     max_imag_tol = max(1e-4,min(abs_imag)*1.1)
     realidx = numpy.where((abs_imag < max_imag_tol))[0]
-    if len(realidx) < nroots:
+    if len(realidx) < nroots and w.size >= nroots:
         idx = w.real.argsort()
         warnings.warn('%d eigenvalues with imaginary part > 0.01\n' %
                       numpy.count_nonzero(abs_imag > 1e-2))
@@ -508,9 +550,10 @@ def pick_real_eigs(w, v, nroots, x0):
     return w[idx].real, v[:,idx].real, idx
 
 def eig(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
-        lindep=1e-14, max_memory=2000, dot=numpy.dot, callback=None,
+        lindep=DAVIDSON_LINDEP, max_memory=MAX_MEMORY,
+        dot=numpy.dot, callback=None,
         nroots=1, lessio=False, left=False, pick=pick_real_eigs,
-        verbose=logger.WARN, follow_state=False):
+        verbose=logger.WARN, follow_state=FOLLOW_STATE):
     '''Davidson diagonalization to solve the non-symmetric eigenvalue problem
 
     Args:
@@ -608,21 +651,28 @@ def eig(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
 davidson_nosym = eig
 
 def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
-                    lindep=1e-14, max_memory=2000, dot=numpy.dot, callback=None,
+                    lindep=DAVIDSON_LINDEP, max_memory=MAX_MEMORY,
+                    dot=numpy.dot, callback=None,
                     nroots=1, lessio=False, left=False, pick=pick_real_eigs,
-                    verbose=logger.WARN, follow_state=False):
+                    verbose=logger.WARN, follow_state=FOLLOW_STATE,
+                    tol_residual=None):
     if isinstance(verbose, logger.Logger):
         log = verbose
     else:
         log = logger.Logger(sys.stdout, verbose)
 
-    toloose = numpy.sqrt(tol)
+    if tol_residual is None:
+        toloose = numpy.sqrt(tol)
+    else:
+        toloose = tol_residual
     log.debug1('tol %g  toloose %g', tol, toloose)
 
+    if callable(x0):
+        x0 = x0()
     if isinstance(x0, numpy.ndarray) and x0.ndim == 1:
         x0 = [x0]
     #max_cycle = min(max_cycle, x0[0].size)
-    max_space = max_space + nroots * 3
+    max_space = max_space + nroots * 4
     # max_space*2 for holding ax and xs, nroots*2 for holding axt and xt
     _incore = max_memory*1e6/x0[0].nbytes > max_space*2+nroots * 3
     lessio = lessio and not _incore
@@ -650,7 +700,7 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
             xt, x0 = _qr(x0, dot), None
             max_dx_last = 1e9
             if SORT_EIG_BY_SIMILARITY:
-                conv = numpy.array([False] * nroots)
+                conv = [False] * nroots
         elif len(xt) > 1:
             xt = _qr(xt, dot)
             xt = xt[:40]  # 40 trial vectors at most
@@ -681,16 +731,16 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
                 heff[i,head+k] = dot(xi.conj(), axt[k])
 
         w, v = scipy.linalg.eig(heff[:space,:space])
-        e, v, idx = pick(w, v, nroots, locals())
+        w, v, idx = pick(w, v, nroots, locals())
         if SORT_EIG_BY_SIMILARITY:
-            e, v = _sort_by_similarity(e, v, nroots, conv, vlast, emin,
+            e, v = _sort_by_similarity(w, v, nroots, conv, vlast, emin,
                                        heff[:space,:space])
             if e.size != elast.size:
                 de = e
             else:
                 de = e - elast
         else:
-            e = e[:nroots]
+            e = w[:nroots]
             v = v[:,:nroots]
 
         x0 = _gen_x0(v, xs)
@@ -711,7 +761,8 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
                                   k, dx_norm[k], ek, de[k])
                         conv[k] = True
         else:
-            elast, conv_last = _sort_elast(elast, conv_last, vlast, v, fresh_start)
+            elast, conv_last = _sort_elast(elast, conv_last, vlast, v,
+                                           fresh_start, log)
             de = e - elast
             dx_norm = []
             xt = []
@@ -794,12 +845,13 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         e, v, idx = pick(w, v, nroots, x0)
         xl = _gen_x0(vl[:,idx[:nroots]].conj(), xs)
         x0 = _gen_x0(v[:,:nroots], xs)
-        return conv, e[:nroots], xl, x0
+        return numpy.asarray(conv), e[:nroots], xl, x0
     else:
-        return conv, e, x0
+        return numpy.asarray(conv), e, x0
 
 def dgeev(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
-          lindep=1e-14, max_memory=2000, dot=numpy.dot, callback=None,
+          lindep=DAVIDSON_LINDEP, max_memory=MAX_MEMORY,
+          dot=numpy.dot, callback=None,
           nroots=1, lessio=False, verbose=logger.WARN):
     '''Davidson diagonalization method to solve  A c = e B c.
 
@@ -862,8 +914,9 @@ def dgeev(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
         return e, x0
 
 def dgeev1(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
-          lindep=1e-14, max_memory=2000, dot=numpy.dot, callback=None,
-          nroots=1, lessio=False, verbose=logger.WARN):
+          lindep=DAVIDSON_LINDEP, max_memory=MAX_MEMORY,
+          dot=numpy.dot, callback=None,
+          nroots=1, lessio=False, verbose=logger.WARN, tol_residual=None):
     '''Davidson diagonalization method to solve  A c = e B c.
 
     Args:
@@ -919,12 +972,15 @@ def dgeev1(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
     else:
         log = logger.Logger(sys.stdout, verbose)
 
-    toloose = numpy.sqrt(tol) * 1e-2
+    if tol_residual is None:
+        toloose = numpy.sqrt(tol) * 1e-2
+    else:
+        toloose = tol_residual
 
     if isinstance(x0, numpy.ndarray) and x0.ndim == 1:
         x0 = [x0]
     #max_cycle = min(max_cycle, x0[0].size)
-    max_space = max_space + nroots * 2
+    max_space = max_space + nroots * 3
     # max_space*3 for holding ax, bx and xs, nroots*3 for holding axt, bxt and xt
     _incore = max_memory*1e6/x0[0].nbytes > max_space*3+nroots*3
     lessio = lessio and not _incore
@@ -1074,7 +1130,7 @@ def dgeev1(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
 
 
 def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
-           lindep=1e-15, callback=None, hermi=False, verbose=logger.WARN):
+           lindep=DSOLVE_LINDEP, callback=None, hermi=False, verbose=logger.WARN):
     '''Krylov subspace method to solve  (1+a) x = b.  Ref:
     J. A. Pople et al, Int. J.  Quantum. Chem.  Symp. 13, 225 (1979).
 
@@ -1182,11 +1238,14 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
 
 
 def dsolve(aop, b, precond, tol=1e-12, max_cycle=30, dot=numpy.dot,
-           lindep=1e-16, verbose=0):
+           lindep=DSOLVE_LINDEP, verbose=0, tol_residual=None):
     '''Davidson iteration to solve linear equation.  It works bad.
     '''
 
-    toloose = numpy.sqrt(tol)
+    if tol_residual is None:
+        toloose = numpy.sqrt(tol)
+    else:
+        toloose = tol_residual
 
     xs = [precond(b)]
     ax = [aop(xs[-1])]
@@ -1264,12 +1323,25 @@ def _sort_by_similarity(w, v, nroots, conv, vlast, emin=None, heff=None):
     c = v[:,sorted_idx]
     return e, c
 
-def _sort_elast(elast, conv_last, vlast, v, fresh_start):
+def _sort_elast(elast, conv_last, vlast, v, fresh_start, log):
+    '''
+    Eigenstates may be flipped during the Davidson iterations.  Reorder the
+    eigenvalues of last iteration to make them comparable to the eigenvalues
+    of the current iterations.
+    '''
     if fresh_start:
         return elast, conv_last
     head, nroots = vlast.shape
     ovlp = abs(numpy.dot(v[:head].conj().T, vlast))
     idx = numpy.argmax(ovlp, axis=1)
+
+    if log.verbose >= logger.DEBUG:
+        ordering_diff = (idx != numpy.arange(len(idx)))
+        if numpy.any(ordering_diff):
+            log.debug('Old state -> New state')
+            for i in numpy.where(ordering_diff)[0]:
+                log.debug('  %3d     ->   %3d ', idx[i], i)
+
     return [elast[i] for i in idx], [conv_last[i] for i in idx]
 
 
@@ -1304,6 +1376,8 @@ class _Xlist(list):
     def pop(self, index):
         key = self.index.pop(index)
         del(self.scr_h5[key])
+
+del(SAFE_EIGH_LINDEP, DAVIDSON_LINDEP, DSOLVE_LINDEP, MAX_MEMORY)
 
 
 if __name__ == '__main__':

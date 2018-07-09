@@ -1,0 +1,58 @@
+SystemName          sodium_chain_20
+
+PAO.SplitNorm 0.2
+
+XML.write .true.
+
+DM.UseSaveDM               .true.  # .false. by default
+DM.AllowReuse              .true.  # .true. by default
+DM.AllowExtrapolation      .false. # .true. is default
+DM.NumberPullay            5       # 0      is default
+DM.MixingWeight            0.03    # 0.25   is default
+MaxSCFIterations           200     # 50     is default
+MeshCutoff                 170 Ry  # 100    is default
+SolutionMethod             diagon  # diagon is default
+
+AtomicCoordinatesFormat  Ang
+
+NumberOfAtoms             20
+NumberOfSpecies            1
+ 
+%block ChemicalSpeciesLabel
+          1          11 Na
+%endblock ChemicalSpeciesLabel
+ 
+AtomicCoordinatesFormat  Ang
+AtomCoorFormatOut        Ang
+%block AtomicCoordinatesAndAtomicSpecies
+ -28.500000000    0.000000000    0.000000000    1
+ -25.500000000    0.000000000    0.000000000    1
+ -22.500000000    0.000000000    0.000000000    1
+ -19.500000000    0.000000000    0.000000000    1
+ -16.500000000    0.000000000    0.000000000    1
+ -13.500000000    0.000000000    0.000000000    1
+ -10.500000000    0.000000000    0.000000000    1
+  -7.500000000    0.000000000    0.000000000    1
+  -4.500000000    0.000000000    0.000000000    1
+  -1.500000000    0.000000000    0.000000000    1
+   1.500000000    0.000000000    0.000000000    1
+   4.500000000    0.000000000    0.000000000    1
+   7.500000000    0.000000000    0.000000000    1
+  10.500000000    0.000000000    0.000000000    1
+  13.500000000    0.000000000    0.000000000    1
+  16.500000000    0.000000000    0.000000000    1
+  19.500000000    0.000000000    0.000000000    1
+  22.500000000    0.000000000    0.000000000    1
+  25.500000000    0.000000000    0.000000000    1
+  28.500000000    0.000000000    0.000000000    1
+%endblock AtomicCoordinatesAndAtomicSpecies
+
+### Molecular dynamics 
+ElectronicTemperature      300 K
+MD.TypeOfRun               CG
+MD.NumCGsteps              0
+MD.UseSaveXV              .false.      # .false. is default
+
+COOP.Write     .true.
+WriteDenchar   .true.
+

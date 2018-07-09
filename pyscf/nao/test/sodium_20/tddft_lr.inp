@@ -1,0 +1,50 @@
+nr           256      !! Number of radial grid points.
+akmx         100
+rmax      20.0000    
+rmin     0.100000E-02
+
+do_tddft_iter  1 
+do_tddft_casida  1
+
+check_get_jdp_domiprod 1
+
+
+metric_type     2     !! Type of metric to use in generation of dominant products basis: 1 -- ordinary, 2 -- Coulomb.
+eigmin_local    1E-5  !! Threshold for local products.
+eigmin_bilocal  1E-7  !! Threshold for bilocal products.
+
+normalize_dp 1
+
+chi0_v_algorithm   1
+
+h_method         ANGULAR_MOMENTUM (older)
+h_output_type    FULLMAT
+
+xc_functional     LDA
+xc_authors        PZ
+xc_ord_lebedev    14   !! 1...31.        Order of Lebedev grid
+xc_ord_gl         48   !! 6,12,24,48,96. Order of Gauss-Legendre method
+xc_output_type    FULLMAT
+
+nff          512       !! Number of frequency points.
+io_units      eV       !! input/output units for frequency/energy range, eV, Rydberg, nm ...
+omega_max_win1   8.0   !! Limit for target window.
+omega_max_win2   0.0   !! Negative for automatic choice.
+tddft_save_dn      0
+
+solver          3      !! Lanczos -- 1 or GMRES -- 2 solver to use
+gmres_krylov    12     !! Dimension of Krylov subspace in polarizability calculation. Restart parameter
+gmres_eps      1e-3    !! Tolerance for solving the linear system
+gmres_itermax   25     !! Maximal number of iterations to reach gmres_itermax
+gmres_verbose   0      !! if different to 0, the writes information in fort.xx
+
+ihartree     1     !! use Hartree potential     ?
+iexchange    1     !! use exchange potential    ?
+icorrelation 1     !! use correlation potential ?
+
+check_basis   1   !! Test a product basis by computing overlaps and dipoles
+diag_hs       1   !! Diagonalise (HX=ESX) for testing or not
+verbosity     1   !! Verbosity 
+
+format_input    text
+format_output   text

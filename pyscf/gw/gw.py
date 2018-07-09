@@ -1,6 +1,20 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
 #
-# Author: Timothy Berkelbach
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Authors: Timothy Berkelbach <tim.berkelbach@gmail.com>
+#          Qiming Sun <osirpt.sun@gmail.com>
 #
 
 '''
@@ -9,7 +23,6 @@ G0W0 approximation
 
 import time
 import tempfile
-from functools import reduce
 import numpy
 import numpy as np
 import h5py
@@ -19,7 +32,8 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf import ao2mo
 from pyscf import dft
-from pyscf.mp.mp2 import _mo_energy_without_core, _mo_without_core, _active_idx
+from pyscf.mp.mp2 import get_nocc, get_nmo, get_frozen_mask
+from pyscf import __config__
 
 einsum = lib.einsum
 
@@ -126,6 +140,10 @@ class GW(lib.StreamObject):
         mo_coeff
             Orbital coefficients
     '''
+
+    eta = getattr(__config__, 'gw_gw_GW_eta', 1e-3)
+    linearized = getattr(__config__, 'gw_gw_GW_linearized', False)
+
     def __init__(self, mf, tdmf, frozen=0):
         self.mol = mf.mol
         self._scf = mf
@@ -137,8 +155,6 @@ class GW(lib.StreamObject):
         #TODO: implement frozen orbs
         #self.frozen = frozen
         self.frozen = 0
-        self.eta = 1e-3
-        self.linearized = False
 
 ##################################################
 # don't modify the following attributes, they are not input options
@@ -147,7 +163,9 @@ class GW(lib.StreamObject):
         self.mo_energy = None
         self.mo_coeff = mf.mo_coeff
         self.mo_occ = mf.mo_occ
-        self._keys = set(self.__dict__.keys())
+
+        keys = set(('eta', 'linearized'))
+        self._keys = set(self.__dict__.keys()).union(keys)
 
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)
@@ -164,25 +182,21 @@ class GW(lib.StreamObject):
 
     @property
     def nocc(self):
-        if self._nocc is not None:
-            return self._nocc
-        elif isinstance(self.frozen, (int, numpy.integer)):
-            return int(self.mo_occ.sum()) // 2 - self.frozen
-        elif self.frozen:
-            occ_idx = self.mo_occ > 0
-            occ_idx[numpy.asarray(self.frozen)] = False
-            return numpy.count_nonzero(occ_idx)
-        else:
-            return int(self.mo_occ.sum()) // 2
+        return self.get_nocc()
+    @nocc.setter
+    def nocc(self, n):
+        self._nocc = n
 
     @property
     def nmo(self):
-        if self._nmo is not None:
-            return self._nmo
-        if isinstance(self.frozen, (int, numpy.integer)):
-            return len(self.mo_occ) - self.frozen
-        else:
-            return len(self.mo_occ) - len(self.frozen)
+        return self.get_nmo()
+    @nmo.setter
+    def nmo(self, n):
+        self._nmo = n
+
+    get_nocc = get_nocc
+    get_nmo = get_nmo
+    get_frozen_mask = get_frozen_mask
 
     def get_g0(self, omega, eta=None):
         if eta is None:
@@ -233,7 +247,7 @@ class _ERIS:
     def __init__(self, cc, mo_coeff=None, method='incore',
                  ao2mofn=ao2mo.full):
         cput0 = (time.clock(), time.time())
-        moidx = _active_idx(cc)
+        moidx = get_frozen_mask(cc)
         if mo_coeff is None:
             self.mo_coeff = mo_coeff = cc.mo_coeff[:,moidx]
         else:  # If mo_coeff is not canonical orbital

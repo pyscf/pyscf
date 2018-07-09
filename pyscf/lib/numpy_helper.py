@@ -1,18 +1,189 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+'''
+Extension to numpy and scipy
+'''
+
 import string
 import ctypes
-import numpy
 import math
 import re
+import numpy
+import scipy.linalg
 from pyscf.lib import misc
 
-'''
-Extension to numpy module
-'''
+try:
+# Import tblis before libnp_helper to avoid potential dl-loading conflicts
+    from pyscf.lib import tblis_einsum
+    einsum = tblis_einsum.einsum
+
+except (ImportError, OSError):
+    def einsum(idx_str, *tensors, **kwargs):
+        '''Perform a more efficient einsum via reshaping to a matrix multiply.
+
+        Current differences compared to numpy.einsum:
+        This assumes that each repeated index is actually summed (i.e. no 'i,i->i')
+        and appears only twice (i.e. no 'ij,ik,il->jkl'). The output indices must
+        be explicitly specified (i.e. 'ij,j->i' and not 'ij,j').
+        '''
+
+        DEBUG = kwargs.get('DEBUG', False)
+
+        idx_str = idx_str.replace(' ','')
+        indices  = "".join(re.split(',|->',idx_str))
+        if '->' not in idx_str or any(indices.count(x)>2 for x in set(indices)):
+            return numpy.einsum(idx_str,*tensors)
+
+        if idx_str.count(',') > 1:
+            indices  = re.split(',|->',idx_str)
+            indices_in = indices[:-1]
+            idx_final = indices[-1]
+            n_shared_max = 0
+            for i in range(len(indices_in)):
+                for j in range(i):
+                    tmp = list(set(indices_in[i]).intersection(indices_in[j]))
+                    n_shared_indices = len(tmp)
+                    if n_shared_indices > n_shared_max:
+                        n_shared_max = n_shared_indices
+                        shared_indices = tmp
+                        [a,b] = [i,j]
+            tensors = list(tensors)
+            A, B = tensors[a], tensors[b]
+            idxA, idxB = indices[a], indices[b]
+            idx_out = list(idxA+idxB)
+            idx_out = "".join([x for x in idx_out if x not in shared_indices])
+            C = einsum(idxA+","+idxB+"->"+idx_out, A, B)
+            indices_in.pop(a)
+            indices_in.pop(b)
+            indices_in.append(idx_out)
+            tensors.pop(a)
+            tensors.pop(b)
+            tensors.append(C)
+            return einsum(",".join(indices_in)+"->"+idx_final,*tensors)
+
+        A, B = tensors
+        # Call numpy.asarray because A or B may be HDF5 Datasets 
+        A = numpy.asarray(A, order='A')
+        B = numpy.asarray(B, order='A')
+        if A.size < 2000 or B.size < 2000:
+            return numpy.einsum(idx_str, *tensors)
+
+        # Split the strings into a list of idx char's
+        idxA, idxBC = idx_str.split(',')
+        idxB, idxC = idxBC.split('->')
+        idxA, idxB, idxC = [list(x) for x in [idxA,idxB,idxC]]
+        assert(len(idxA) == A.ndim)
+        assert(len(idxB) == B.ndim)
+
+        if DEBUG:
+            print("*** Einsum for", idx_str)
+            print(" idxA =", idxA)
+            print(" idxB =", idxB)
+            print(" idxC =", idxC)
+
+        # Get the range for each index and put it in a dictionary
+        rangeA = dict()
+        rangeB = dict()
+        #rangeC = dict()
+        for idx,rnge in zip(idxA,A.shape):
+            rangeA[idx] = rnge
+        for idx,rnge in zip(idxB,B.shape):
+            rangeB[idx] = rnge
+        #for idx,rnge in zip(idxC,C.shape):
+        #    rangeC[idx] = rnge
+
+        if DEBUG:
+            print("rangeA =", rangeA)
+            print("rangeB =", rangeB)
+
+        # Find the shared indices being summed over
+        shared_idxAB = list(set(idxA).intersection(idxB))
+        #if len(shared_idxAB) == 0:
+        #    return np.einsum(idx_str,A,B)
+        idxAt = list(idxA)
+        idxBt = list(idxB)
+        inner_shape = 1
+        insert_B_loc = 0
+        for n in shared_idxAB:
+            if rangeA[n] != rangeB[n]:
+                err = ('ERROR: In index string %s, the range of index %s is '
+                       'different in A (%d) and B (%d)' %
+                       (idx_str, n, rangeA[n], rangeB[n]))
+                raise RuntimeError(err)
+
+            # Bring idx all the way to the right for A
+            # and to the left (but preserve order) for B
+            idxA_n = idxAt.index(n)
+            idxAt.insert(len(idxAt)-1, idxAt.pop(idxA_n))
+
+            idxB_n = idxBt.index(n)
+            idxBt.insert(insert_B_loc, idxBt.pop(idxB_n))
+            insert_B_loc += 1
+
+            inner_shape *= rangeA[n]
+
+        if DEBUG:
+            print("shared_idxAB =", shared_idxAB)
+            print("inner_shape =", inner_shape)
+
+        # Transpose the tensors into the proper order and reshape into matrices
+        new_orderA = [idxA.index(idx) for idx in idxAt]
+        new_orderB = [idxB.index(idx) for idx in idxBt]
+
+        if DEBUG:
+            print("Transposing A as", new_orderA)
+            print("Transposing B as", new_orderB)
+            print("Reshaping A as (-1,", inner_shape, ")")
+            print("Reshaping B as (", inner_shape, ",-1)")
+
+        shapeCt = list()
+        idxCt = list()
+        for idx in idxAt:
+            if idx in shared_idxAB:
+                break
+            shapeCt.append(rangeA[idx])
+            idxCt.append(idx)
+        for idx in idxBt:
+            if idx in shared_idxAB:
+                continue
+            shapeCt.append(rangeB[idx])
+            idxCt.append(idx)
+        new_orderCt = [idxCt.index(idx) for idx in idxC]
+
+        if A.size == 0 or B.size == 0:
+            shapeCt = [shapeCt[i] for i in new_orderCt]
+            return numpy.zeros(shapeCt, dtype=numpy.result_type(A,B))
+
+        At = A.transpose(new_orderA)
+        Bt = B.transpose(new_orderB)
+
+        if At.flags.f_contiguous:
+            At = numpy.asarray(At.reshape(-1,inner_shape), order='F')
+        else:
+            At = numpy.asarray(At.reshape(-1,inner_shape), order='C')
+        if Bt.flags.f_contiguous:
+            Bt = numpy.asarray(Bt.reshape(inner_shape,-1), order='F')
+        else:
+            Bt = numpy.asarray(Bt.reshape(inner_shape,-1), order='C')
+
+        return dot(At,Bt).reshape(shapeCt, order='A').transpose(new_orderCt)
+
 
 _np_helper = misc.load_library('libnp_helper')
 
@@ -21,6 +192,17 @@ PLAIN = 0
 HERMITIAN = 1
 ANTIHERMI = 2
 SYMMETRIC = 3
+
+LeviCivita = numpy.zeros((3,3,3))
+LeviCivita[0,1,2] = LeviCivita[1,2,0] = LeviCivita[2,0,1] = 1
+LeviCivita[0,2,1] = LeviCivita[2,1,0] = LeviCivita[1,0,2] = -1
+
+PauliMatrices = numpy.array([[[0., 1.],
+                              [1., 0.]],  # x
+                             [[0.,-1j],
+                              [1j, 0.]],  # y
+                             [[1., 0.],
+                              [0.,-1.]]]) # z
 
 
 # 2d -> 1d or 3d -> 2d
@@ -33,6 +215,9 @@ def pack_tril(mat, axis=-1, out=None):
     >>> pack_tril(numpy.arange(9).reshape(3,3))
     [0 3 4 6 7 8]
     '''
+    if mat.size == 0:
+        return numpy.zeros(mat.shape+(0,), dtype=mat.dtype)
+
     if mat.ndim == 2:
         count, nd = 1, mat.shape[0]
         shape = nd*(nd+1)//2
@@ -86,9 +271,6 @@ def unpack_tril(tril, filltriu=HERMITIAN, axis=-1, out=None):
      [ 3.  4.  5.]]
     '''
     tril = numpy.asarray(tril, order='C')
-    if tril.size == 0:
-        return numpy.zeros(tril.shape+(0,), dtype=tril.dtype)
-
     if tril.ndim == 1:
         count, nd = 1, tril.size
         nd = int(numpy.sqrt(nd*2))
@@ -99,7 +281,18 @@ def unpack_tril(tril, filltriu=HERMITIAN, axis=-1, out=None):
         nd = int(numpy.sqrt(nd*2))
         shape = (count,nd,nd)
 
-    if tril.ndim == 1 or axis == -1 or axis == tril.ndim-1:
+    if (numpy.issubdtype(tril.dtype, numpy.integer) and
+        (filltriu == HERMITIAN or filltriu == SYMMETRIC)):
+        idx = numpy.tril_indices(nd)
+        idxy = numpy.empty((nd,nd), dtype=numpy.int)
+        idxy[idx[0],idx[1]] = idxy[idx[1],idx[0]] = numpy.arange(nd*(nd+1)//2)
+        out = numpy.take(tril, idxy.ravel(), axis=axis, out=out)
+        if axis == 0 and tril.ndim == 1:
+            return out.reshape(nd,nd,-1)
+        else:
+            return out.reshape(shape)
+
+    elif tril.ndim == 1 or axis == -1 or axis == tril.ndim-1:
         out = numpy.ndarray(shape, tril.dtype, buffer=out)
         if tril.dtype == numpy.double:
             fn = _np_helper.NPdunpack_tril_2d
@@ -124,8 +317,11 @@ def unpack_tril(tril, filltriu=HERMITIAN, axis=-1, out=None):
                 out[i,j] = tril[ij]
                 out[j,i] =-tril[ij].conj()
         elif filltriu == SYMMETRIC:
-            for ij,(i,j) in enumerate(zip(*idx)):
-                out[i,j] = out[j,i] = tril[ij]
+            #:for ij,(i,j) in enumerate(zip(*idx)):
+            #:    out[i,j] = out[j,i] = tril[ij]
+            idxy = numpy.empty((nd,nd), dtype=numpy.int)
+            idxy[idx[0],idx[1]] = idxy[idx[1],idx[0]] = numpy.arange(nd*(nd+1)//2)
+            numpy.take(tril, idxy, axis=0, out=out)
         else:
             out[idx] = tril
         return out
@@ -177,23 +373,33 @@ def hermi_triu(mat, hermi=HERMITIAN, inplace=True):
      [ 6.  7.  8.]]
     '''
     assert(hermi == HERMITIAN or hermi == ANTIHERMI)
-    if not mat.flags.c_contiguous:
-        assert(not inplace)
-        mat = mat.copy(order='C')
+    if not inplace:
+        mat = mat.copy('A')
+    if mat.flags.c_contiguous:
+        buf = mat
+    elif mat.flags.f_contiguous:
+        buf = mat.T
+    else:
+        raise NotImplementedError
+
     nd = mat.shape[0]
+    assert(mat.size == nd**2)
+
     if mat.dtype == numpy.double:
         fn = _np_helper.NPdsymm_triu
     else:
         fn = _np_helper.NPzhermi_triu
     fn.restype = ctypes.c_void_p
-    fn(ctypes.c_int(nd), mat.ctypes.data_as(ctypes.c_void_p),
+    fn(ctypes.c_int(nd), buf.ctypes.data_as(ctypes.c_void_p),
        ctypes.c_int(hermi))
     return mat
 
 
 LINEAR_DEP_THRESHOLD = 1e-10
 def solve_lineq_by_SVD(a, b):
-    ''' a * x = b '''
+    '''Solving a * x = b.  If a is a singular matrix, its small SVD values are
+    neglected.
+    '''
     t, w, vH = numpy.linalg.svd(a)
     idx = []
     for i,wi in enumerate(w):
@@ -208,7 +414,7 @@ def solve_lineq_by_SVD(a, b):
     return x
 
 def take_2d(a, idx, idy, out=None):
-    '''a(idx,idy)
+    '''Equivalent to a[idx[:,None],idy] for a 2D array.
 
     Examples:
 
@@ -234,7 +440,8 @@ def take_2d(a, idx, idy, out=None):
     return out
 
 def takebak_2d(out, a, idx, idy):
-    '''Reverse operation of take_2d.  out(idx,idy) += a
+    '''Reverse operation of take_2d.  Equivalent to out[idx[:,None],idy] += a
+    for a 2D array.
 
     Examples:
 
@@ -261,7 +468,7 @@ def takebak_2d(out, a, idx, idy):
     return out
 
 def transpose(a, axes=None, inplace=False, out=None):
-    '''Transpose array for better memory efficiency
+    '''Transposing an array with better memory efficiency
 
     Examples:
 
@@ -323,7 +530,7 @@ def transpose(a, axes=None, inplace=False, out=None):
     return out
 
 def transpose_sum(a, inplace=False, out=None):
-    '''a + a.T for better memory efficiency
+    '''Computing a + a.T with better memory efficiency
 
     Examples:
 
@@ -334,7 +541,7 @@ def transpose_sum(a, inplace=False, out=None):
     return hermi_sum(a, inplace=inplace, out=out)
 
 def hermi_sum(a, axes=None, hermi=HERMITIAN, inplace=False, out=None):
-    '''a + a.T for better memory efficiency
+    '''Computing a + a.T.conj() with better memory efficiency
 
     Examples:
 
@@ -352,11 +559,11 @@ def hermi_sum(a, axes=None, hermi=HERMITIAN, inplace=False, out=None):
             na = a.shape[0]
             for c0, c1 in misc.prange(0, na, BLOCK_DIM):
                 for r0, r1 in misc.prange(0, c0, BLOCK_DIM):
-                    tmp = a[r0:r1,c0:c1] + a[c0:c1,r0:r1].T.conj()
+                    tmp = a[r0:r1,c0:c1] + a[c0:c1,r0:r1].conj().T
                     out[c0:c1,r0:r1] = tmp.T.conj()
                     out[r0:r1,c0:c1] = tmp
                 # diagonal blocks
-                tmp = a[c0:c1,c0:c1] + a[c0:c1,c0:c1].T.conj()
+                tmp = a[c0:c1,c0:c1] + a[c0:c1,c0:c1].conj().T
                 out[c0:c1,c0:c1] = tmp
             return out
         else:
@@ -419,8 +626,7 @@ def ddot(a, b, alpha=1, c=None, beta=0):
     return _dgemm(trans_a, trans_b, m, n, k, a, b, c, alpha, beta)
 
 def zdot(a, b, alpha=1, c=None, beta=0):
-    '''Matrix-matrix multiplication for double complex arrays using Gauss's
-    complex multiplication algorithm
+    '''Matrix-matrix multiplication for double complex arrays
     '''
     m = a.shape[0]
     k = a.shape[1]
@@ -462,39 +668,57 @@ def dot(a, b, alpha=1, c=None, beta=0):
             c.real = ddot(a, b, alpha, cr, beta)
             return c
 
-    if atype == numpy.float64 and btype == numpy.complex128:
-        br = numpy.asarray(b.real, order='C')
-        bi = numpy.asarray(b.imag, order='C')
-        cr = ddot(a, br, alpha)
-        ci = ddot(a, bi, alpha)
-        ab = cr + ci*1j
-
-    elif atype == numpy.complex128 and btype == numpy.float64:
-        ar = numpy.asarray(a.real, order='C')
-        ai = numpy.asarray(a.imag, order='C')
-        cr = ddot(ar, b, alpha)
-        ci = ddot(ai, b, alpha)
-        ab = cr + ci*1j
-
     elif atype == numpy.complex128 and btype == numpy.complex128:
+        # Gauss's complex multiplication algorithm may affect numerical stability
         #k1 = ddot(a.real+a.imag, b.real.copy(), alpha)
         #k2 = ddot(a.real.copy(), b.imag-b.real, alpha)
         #k3 = ddot(a.imag.copy(), b.real+b.imag, alpha)
         #ab = k1-k3 + (k1+k2)*1j
         return zdot(a, b, alpha, c, beta)
 
-    else:
-        ab = numpy.dot(a, b) * alpha
+    elif atype == numpy.float64 and btype == numpy.complex128:
+        if b.flags.f_contiguous:
+            order = 'F'
+        else:
+            order = 'C'
+        cr = ddot(a, numpy.asarray(b.real, order=order), alpha)
+        ci = ddot(a, numpy.asarray(b.imag, order=order), alpha)
+        ab = numpy.ndarray(cr.shape, dtype=numpy.complex128, buffer=c)
+        if c is None or beta == 0:
+            ab.real = cr
+            ab.imag = ci
+        else:
+            ab *= beta
+            ab.real += cr
+            ab.imag += ci
+        return ab
 
-    if c is None:
-        c = ab
+    elif atype == numpy.complex128 and btype == numpy.float64:
+        if a.flags.f_contiguous:
+            order = 'F'
+        else:
+            order = 'C'
+        cr = ddot(numpy.asarray(a.real, order=order), b, alpha)
+        ci = ddot(numpy.asarray(a.imag, order=order), b, alpha)
+        ab = numpy.ndarray(cr.shape, dtype=numpy.complex128, buffer=c)
+        if c is None or beta == 0:
+            ab.real = cr
+            ab.imag = ci
+        else:
+            ab *= beta
+            ab.real += cr
+            ab.imag += ci
+        return ab
+
     else:
-        if beta == 0:
-            c[:] = 0
+        if c is None:
+            c = numpy.dot(a, b) * alpha
+        elif beta == 0:
+            c[:] = numpy.dot(a, b) * alpha
         else:
             c *= beta
-        c += ab
-    return c
+            c += numpy.dot(a, b) * alpha
+        return c
 
 # a, b, c in C-order
 def _dgemm(trans_a, trans_b, m, n, k, a, b, c, alpha=1, beta=0,
@@ -552,14 +776,9 @@ def _zgemm(trans_a, trans_b, m, n, k, a, b, c, alpha=1, beta=0,
                        (ctypes.c_double*2)(beta.real, beta.imag))
     return c
 
-def prange(start, end, step):
-    if start < end:
-        for i in range(start, end, step):
-            yield i, min(i+step, end)
-
 def asarray(a, dtype=None, order=None):
     '''Convert a list of N-dim arrays to a (N+1) dim array.  It is equivalent to
-    numpy.asarray function but more efficient.
+    numpy.asarray function.
     '''
     try:
         a0_shape = numpy.shape(a[0])
@@ -568,20 +787,23 @@ def asarray(a, dtype=None, order=None):
         pass
     return numpy.asarray(a, dtype, order)
 
-def norm(x, ord=None, axis=None):
-    '''numpy.linalg.norm for numpy 1.6.*
-    '''
-    if axis is None or ord is not None:
-        return numpy.linalg.norm(x, ord)
-    else:
-        x = numpy.asarray(x)
-        axes = string.ascii_lowercase[:x.ndim]
-        target = axes.replace(axes[axis], '')
-        descr = '%s,%s->%s' % (axes, axes, target)
-        xx = numpy.einsum(descr, x.real, x.real)
-        if numpy.iscomplexobj(x):
-            xx += numpy.einsum(descr, x.imag, x.imag)
-        return numpy.sqrt(xx)
+from distutils.version import LooseVersion
+if LooseVersion(numpy.__version__) <= LooseVersion('1.6.0'):
+    def norm(x, ord=None, axis=None):
+        '''numpy.linalg.norm for numpy 1.6.*
+        '''
+        if axis is None or ord is not None:
+            return numpy.linalg.norm(x, ord)
+        else:
+            x = numpy.asarray(x)
+            axes = string.ascii_lowercase[:x.ndim]
+            target = axes.replace(axes[axis], '')
+            descr = '%s,%s->%s' % (axes, axes, target)
+            xx = numpy.einsum(descr, x.conj(), x)
+            return numpy.sqrt(xx.real)
+else:
+    norm = numpy.linalg.norm
+del(LooseVersion)
 
 def cond(x, p=None):
     '''Compute the condition number'''
@@ -706,7 +928,7 @@ def direct_sum(subscripts, *operands):
             out = out.reshape(out.shape+(1,)*op.ndim) - op
 
     out = numpy.einsum('->'.join((''.join(src), dest)), out)
-    out.flags.writeable = True  # old numpy version has this issue
+    out.flags.writeable = True  # old numpy has this issue
     return out
 
 def condense(opname, a, locs):
@@ -737,6 +959,7 @@ def condense(opname, a, locs):
     return out
 
 def expm(a):
+    '''Equivalent to scipy.linalg.expm'''
     bs = [a.copy()]
     n = 0
     for n in range(1, 14):
@@ -758,152 +981,32 @@ def expm(a):
         y, buf = buf, y
     return y
 
-def einsum(idx_str, *tensors):
-    '''Perform a more efficient einsum via reshaping to a matrix multiply.
-
-    Current differences compared to numpy.einsum:
-    This assumes that each repeated index is actually summed (i.e. no 'i,i->i')
-    and appears only twice (i.e. no 'ij,ik,il->jkl'). The output indices must
-    be explicitly specified (i.e. 'ij,j->i' and not 'ij,j').
-    '''
-
-    DEBUG = False
-
-    idx_str = idx_str.replace(' ','')
-    indices  = "".join(re.split(',|->',idx_str))
-    if '->' not in idx_str or any(indices.count(x)>2 for x in set(indices)):
-        return numpy.einsum(idx_str,*tensors)
-
-    if idx_str.count(',') > 1:
-        indices  = re.split(',|->',idx_str)
-        indices_in = indices[:-1]
-        idx_final = indices[-1]
-        n_shared_max = 0
-        for i in range(len(indices_in)):
-            for j in range(i):
-                tmp = list(set(indices_in[i]).intersection(indices_in[j]))
-                n_shared_indices = len(tmp)
-                if n_shared_indices > n_shared_max:
-                    n_shared_max = n_shared_indices
-                    shared_indices = tmp
-                    [a,b] = [i,j]
-        tensors = list(tensors)
-        A, B = tensors[a], tensors[b]
-        idxA, idxB = indices[a], indices[b]
-        idx_out = list(idxA+idxB)
-        idx_out = "".join([x for x in idx_out if x not in shared_indices])
-        C = einsum(idxA+","+idxB+"->"+idx_out, A, B)
-        indices_in.pop(a)
-        indices_in.pop(b)
-        indices_in.append(idx_out)
-        tensors.pop(a)
-        tensors.pop(b)
-        tensors.append(C)
-        return einsum(",".join(indices_in)+"->"+idx_final,*tensors)
-
-    A, B = tensors
-    # A or B might be HDF5 Datasets
-    A = numpy.array(A, copy=False)
-    B = numpy.array(B, copy=False)
-    if A.size < 3000 or B.size < 3000:
-        return numpy.einsum(idx_str, *tensors)
-
-    # Split the strings into a list of idx char's
-    idxA, idxBC = idx_str.split(',')
-    idxB, idxC = idxBC.split('->')
-    idxA, idxB, idxC = [list(x) for x in [idxA,idxB,idxC]]
-
-    if DEBUG:
-        print("*** Einsum for", idx_str)
-        print(" idxA =", idxA)
-        print(" idxB =", idxB)
-        print(" idxC =", idxC)
-
-    # Get the range for each index and put it in a dictionary
-    rangeA = dict()
-    rangeB = dict()
-    #rangeC = dict()
-    for idx,rnge in zip(idxA,A.shape):
-        rangeA[idx] = rnge
-    for idx,rnge in zip(idxB,B.shape):
-        rangeB[idx] = rnge
-    #for idx,rnge in zip(idxC,C.shape):
-    #    rangeC[idx] = rnge
-
-    if DEBUG:
-        print("rangeA =", rangeA)
-        print("rangeB =", rangeB)
-
-    # Find the shared indices being summed over
-    shared_idxAB = list(set(idxA).intersection(idxB))
-    #if len(shared_idxAB) == 0:
-    #    return np.einsum(idx_str,A,B)
-    idxAt = list(idxA)
-    idxBt = list(idxB)
-    inner_shape = 1
-    insert_B_loc = 0
-    for n in shared_idxAB:
-        if rangeA[n] != rangeB[n]:
-            print("ERROR: In index string", idx_str, ", the range of index", n, "is different in A (%d) and B (%d)"%(
-                    rangeA[n], rangeB[n]))
-            raise SystemExit
-
-        # Bring idx all the way to the right for A
-        # and to the left (but preserve order) for B
-        idxA_n = idxAt.index(n)
-        idxAt.insert(len(idxAt)-1, idxAt.pop(idxA_n))
-
-        idxB_n = idxBt.index(n)
-        idxBt.insert(insert_B_loc, idxBt.pop(idxB_n))
-        insert_B_loc += 1
-
-        inner_shape *= rangeA[n]
-
-    if DEBUG:
-        print("shared_idxAB =", shared_idxAB)
-        print("inner_shape =", inner_shape)
-
-    # Transpose the tensors into the proper order and reshape into matrices
-    new_orderA = list()
-    for idx in idxAt:
-        new_orderA.append(idxA.index(idx))
-    new_orderB = list()
-    for idx in idxBt:
-        new_orderB.append(idxB.index(idx))
-
-    if DEBUG:
-        print("Transposing A as", new_orderA)
-        print("Transposing B as", new_orderB)
-        print("Reshaping A as (-1,", inner_shape, ")")
-        print("Reshaping B as (", inner_shape, ",-1)")
-
-    At = A.transpose(new_orderA).reshape(-1,inner_shape)
-    Bt = B.transpose(new_orderB).reshape(inner_shape,-1)
-
-    shapeCt = list()
-    idxCt = list()
-    for idx in idxAt:
-        if idx in shared_idxAB:
-            break
-        shapeCt.append(rangeA[idx])
-        idxCt.append(idx)
-    for idx in idxBt:
-        if idx in shared_idxAB:
-            continue
-        shapeCt.append(rangeB[idx])
-        idxCt.append(idx)
-
-    new_orderCt = list()
-    for idx in idxC:
-        new_orderCt.append(idxCt.index(idx))
-
-    return numpy.dot(At,Bt).reshape(shapeCt).transpose(new_orderCt)
-
 
 class NPArrayWithTag(numpy.ndarray):
-    pass
+    # Initialize kwargs in function tag_array
+    #def __new__(cls, a, **kwargs):
+    #    obj = numpy.asarray(a).view(cls)
+    #    obj.__dict__.update(kwargs)
+    #    return obj
+# Customize __reduce__ and __setstate__ to keep tags after serialization
+# pickle.loads(pickle.dumps(tagarray)).  This is needed by mpi communication
+    def __reduce__(self):
+        pickled = numpy.ndarray.__reduce__(self)
+        state = pickled[2] + (self.__dict__,)
+        return (pickled[0], pickled[1], state)
+    def __setstate__(self, state):
+        numpy.ndarray.__setstate__(self, state[0:-1])
+        self.__dict__.update(state[-1])
+
 def tag_array(a, **kwargs):
-    a = numpy.asarray(a).view(NPArrayWithTag)
+    '''Attach attributes to numpy ndarray. The attribute name and value are
+    obtained from the keyword arguments.
+    '''
+    # Do not check isinstance(a, xxx) here since a may be the object of a
+    # derived class of the immutable class (list, tuple, ndarray), which
+    # allows to update attributes dynamically.
+    if a.__class__ in (numpy.ndarray, tuple, list):
+        a = numpy.asarray(a).view(NPArrayWithTag)
     a.__dict__.update(kwargs)
     return a
 
@@ -937,8 +1040,8 @@ if __name__ == '__main__':
         a[i,i] = a[i,i].real
     b = a-a.T.conj()
     b = numpy.array((b,b))
-    x = hermi_triu(b[0], hermi=2, inplace=0)
-    print(abs(b[0]-x).sum())
+    x = hermi_triu(b[0].T, hermi=2, inplace=0)
+    print(abs(b[0].T-x).sum())
     x = hermi_triu(b[1], hermi=2, inplace=0)
     print(abs(b[1]-x).sum())
     print(abs(x - unpack_tril(pack_tril(x), 2)).sum())
@@ -946,6 +1049,9 @@ if __name__ == '__main__':
     print(abs(x-x.T.conj()).sum())
     xs = numpy.asarray((x,x,x))
     print(abs(xs - unpack_tril(pack_tril(xs))).sum())
+    numpy.random.seed(1)
+    a = numpy.random.random((5050,20))
+    print(misc.finger(unpack_tril(a, axis=0)) - -103.03970592075423)
 
     a = numpy.random.random((400,400))
     b = numpy.random.random((400,400))

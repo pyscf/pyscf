@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Authors: Timothy Berkelbach <tim.berkelbach@gmail.com>
 #          Qiming Sun <osirpt.sun@gmail.com>
@@ -18,9 +31,11 @@ import pyscf.dft
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc.scf import hf as pbchf
+from pyscf.pbc.scf import khf
 from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import numint
 from pyscf.dft.rks import define_xc_
+from pyscf import __config__
 
 
 def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
@@ -49,9 +64,11 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     ground_state = (isinstance(dm, numpy.ndarray) and dm.ndim == 2
                     and kpts_band is None)
 
-    if ks.grids.coords is None:
+# For UniformGrids, grids.coords does not indicate whehter grids are initialized
+    if ks.grids.non0tab is None:
         ks.grids.build(with_non0tab=True)
-        if ks.small_rho_cutoff > 1e-20 and ground_state:
+        if (isinstance(ks.grids, gen_grid.BeckeGrids) and
+            ks.small_rho_cutoff > 1e-20 and ground_state):
             ks.grids = prune_small_rho_grids_(ks, cell, dm, ks.grids, kpt)
         t0 = logger.timer(ks, 'setting up grids', *t0)
 
@@ -63,7 +80,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         logger.debug(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
 
-    hyb = ks._numint.hybrid_coeff(ks.xc, spin=cell.spin)
+    omega, alpha, hyb = ks._numint.rsh_and_hybrid_coeff(ks.xc, spin=cell.spin)
     if abs(hyb) < 1e-10:
         vj = ks.get_j(cell, dm, hermi, kpt, kpts_band)
         vxc += vj
@@ -86,18 +103,22 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
 
 
 def _patch_df_beckegrids(density_fit):
-    def new_df(self, auxbasis=None, gs=None):
-        mf = density_fit(self, auxbasis, gs)
+    def new_df(self, auxbasis=None, mesh=None):
+        mf = density_fit(self, auxbasis, mesh)
         mf.with_df._j_only = True
         mf.grids = gen_grid.BeckeGrids(self.cell)
+        mf.grids.level = getattr(__config__, 'pbc_dft_rks_RKS_grids_level',
+                                 mf.grids.level)
         return mf
     return new_df
 
-NELEC_ERROR_TOL = 0.01
+NELEC_ERROR_TOL = getattr(__config__, 'pbc_dft_rks_prune_error_tol', 0.02)
 def prune_small_rho_grids_(ks, mol, dm, grids, kpts):
-    n, idx = ks._numint.large_rho_indices(mol, dm, grids,
-                                          ks.small_rho_cutoff, kpts)
+    rho = ks._numint.get_rho(mol, dm, grids, kpts, ks.max_memory)
+    n = numpy.dot(rho, grids.weights)
     if abs(n-mol.nelectron) < NELEC_ERROR_TOL*n:
+        rho *= grids.weights
+        idx = abs(rho) > ks.small_rho_cutoff / grids.weights.size
         logger.debug(ks, 'Drop grids %d',
                      grids.weights.size - numpy.count_nonzero(idx))
         grids.coords  = numpy.asarray(grids.coords [idx], order='C')
@@ -114,13 +135,7 @@ class RKS(pbchf.RHF):
     '''
     def __init__(self, cell, kpt=numpy.zeros(3)):
         pbchf.RHF.__init__(self, cell, kpt)
-        self.xc = 'LDA,VWN'
-        self.grids = gen_grid.UniformGrids(cell)
-        self.small_rho_cutoff = 1e-7  # Use rho to filter grids
-##################################################
-# don't modify the following attributes, they are not input options
-        self._numint = numint._NumInt()
-        self._keys = self._keys.union(['xc', 'grids', 'small_rho_cutoff'])
+        _dft_common_init_(self)
 
     def dump_flags(self):
         pbchf.RHF.dump_flags(self)
@@ -133,6 +148,21 @@ class RKS(pbchf.RHF):
 
     density_fit = _patch_df_beckegrids(pbchf.RHF.density_fit)
     mix_density_fit = _patch_df_beckegrids(pbchf.RHF.mix_density_fit)
+
+def _dft_common_init_(mf):
+    mf.xc = 'LDA,VWN'
+    mf.grids = gen_grid.UniformGrids(mf.cell)
+    # Use rho to filter grids
+    mf.small_rho_cutoff = getattr(__config__,
+                                  'pbc_dft_rks_RKS_small_rho_cutoff', 1e-7)
+##################################################
+# don't modify the following attributes, they are not input options
+    # Note Do not refer to .with_df._numint because mesh/coords may be different
+    if isinstance(mf, khf.KSCF):
+        mf._numint = numint.KNumInt(mf.kpts)
+    else:
+        mf._numint = numint.NumInt()
+    mf._keys = mf._keys.union(['xc', 'grids', 'small_rho_cutoff'])
 
 
 if __name__ == '__main__':

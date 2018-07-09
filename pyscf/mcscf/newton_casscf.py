@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -17,11 +30,10 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.mcscf import casci, mc1step
 from pyscf.mcscf.casci import get_fock, cas_natorb, canonicalize
-from pyscf.mcscf import mc_ao2mo
 from pyscf.mcscf import chkfile
 from pyscf import ao2mo
 from pyscf import scf
-from pyscf.scf import ciah
+from pyscf.soscf import ciah
 from pyscf import fci
 
 
@@ -367,7 +379,7 @@ def update_orb_ci(casscf, mo, ci0, eris, x0_guess=None,
                             casscf.max_cycle_micro-int(numpy.log(norm_gkf+1e-7)*2))
             log.debug1('Set max_cycle %d', max_cycle)
             ikf += 1
-            if stat.imic > 3 and norm_gall > norm_gkf*casscf.ah_trust_region:
+            if stat.imic > 3 and norm_gall > norm_gkf*casscf.ah_grad_trust_region:
                 g_all = g_all - hdxi
                 dr -= dxi
                 norm_gall = numpy.linalg.norm(g_all)
@@ -393,10 +405,10 @@ def update_orb_ci(casscf, mo, ci0, eris, x0_guess=None,
                           '|g-correction|= %4.3g',
                           norm_gkf1, norm_gorb, norm_gci, norm_dg)
 
-                if (norm_dg < norm_gall*casscf.ah_trust_region  # kf not too diff
+                if (norm_dg < norm_gall*casscf.ah_grad_trust_region  # kf not too diff
                     #or norm_gkf1 < norm_gkf  # grad is decaying
                     # close to solution
-                    or norm_gkf1 < conv_tol_grad*casscf.ah_trust_region):
+                    or norm_gkf1 < conv_tol_grad*casscf.ah_grad_trust_region):
                     g_all = g_kf = g_kf1
                     g_kf1 = None
                     norm_gall = norm_gkf = norm_gkf1
@@ -417,11 +429,14 @@ def update_orb_ci(casscf, mo, ci0, eris, x0_guess=None,
 
 def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
            ci0=None, callback=None, verbose=logger.NOTE, dump_chk=True):
-    '''CASSCF solver
+    '''Second order CASSCF driver
     '''
     log = logger.new_logger(casscf, verbose)
+    log.warn('SO-CASSCF (Second order CASSCF) is an experimental feature. '
+             'It has bad performance for large system.')
+
     cput0 = (time.clock(), time.time())
-    log.debug('Start newton CASSCF')
+    log.debug('Start SO-CASSCF (newton CASSCF)')
     if callback is None:
         callback = casscf.callback
 
@@ -429,14 +444,14 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
     nmo = mo_coeff.shape[1]
     #TODO: lazy evaluate eris, to leave enough memory for FCI solver
     eris = casscf.ao2mo(mo)
-    e_tot, e_ci, fcivec = casscf.casci(mo, ci0, eris, log, locals())
+    e_tot, e_cas, fcivec = casscf.casci(mo, ci0, eris, log, locals())
     if casscf.ncas == nmo and not casscf.internal_rotation:
         if casscf.canonicalization:
             log.debug('CASSCF canonicalization')
             mo, fcivec, mo_energy = casscf.canonicalize(mo, fcivec, eris,
                                                         casscf.sorting_mo_energy,
                                                         casscf.natorb, verbose=log)
-        return True, e_tot, e_ci, fcivec, mo, mo_energy
+        return True, e_tot, e_cas, fcivec, mo, mo_energy
 
     casdm1 = casscf.fcisolver.make_rdm1(fcivec, casscf.ncas, casscf.nelecas)
     if conv_tol_grad is None:
@@ -466,7 +481,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
         eris = casscf.ao2mo(mo)
         t2m = log.timer('update eri', *t2m)
 
-        e_tot, e_ci, fcivec = casscf.casci(mo, fcivec, eris, log, locals())
+        e_tot, e_cas, fcivec = casscf.casci(mo, fcivec, eris, log, locals())
         log.timer('CASCI solver', *t2m)
         t2m = t1m = log.timer('macro iter %d'%imacro, *t1m)
 
@@ -501,7 +516,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
         casscf.dump_chk(locals())
 
     log.timer('newton CASSCF', *cput0)
-    return conv, e_tot, e_ci, fcivec, mo, mo_energy
+    return conv, e_tot, e_cas, fcivec, mo, mo_energy
 
 
 class CASSCF(mc1step.CASSCF):
@@ -601,7 +616,7 @@ class CASSCF(mc1step.CASSCF):
         self.ah_lindep = 1e-14
         self.ah_start_tol = 5e2
         self.ah_start_cycle = 3
-        self.ah_trust_region = 3.
+        self.ah_grad_trust_region = 3.
 
         self.kf_trust_region = 3.
         self.kf_interval = 5
@@ -647,7 +662,7 @@ class CASSCF(mc1step.CASSCF):
         log.info('augmented hessian ah_level shift = %d', self.ah_level_shift)
         log.info('augmented hessian ah_start_tol = %g', self.ah_start_tol)
         log.info('augmented hessian ah_start_cycle = %d', self.ah_start_cycle)
-        log.info('augmented hessian ah_trust_region = %g', self.ah_trust_region)
+        log.info('augmented hessian ah_grad_trust_region = %g', self.ah_grad_trust_region)
         log.info('kf_trust_region = %g', self.kf_trust_region)
         log.info('kf_interval = %d', self.kf_interval)
         log.info('natorb = %s', self.natorb)
@@ -660,8 +675,6 @@ class CASSCF(mc1step.CASSCF):
             self.fcisolver.dump_flags(self.verbose)
         except AttributeError:
             pass
-        if hasattr(self, 'max_orb_stepsize'):
-            log.warn('Attribute "max_orb_stepsize" was replaced by "max_stepsize"')
         if self.mo_coeff is None:
             log.warn('Orbital for CASCI is not specified.  You probably need '
                      'call SCF.kernel() to initialize orbitals.')
@@ -678,14 +691,14 @@ class CASSCF(mc1step.CASSCF):
         else:
             fcasci = mc1step._fake_h_for_fast_casci(self, mo_coeff, eris)
 
-        e_tot, e_ci, fcivec = casci.kernel(fcasci, mo_coeff, ci0, log)
-        if not isinstance(e_ci, (float, numpy.number)):
+        e_tot, e_cas, fcivec = casci.kernel(fcasci, mo_coeff, ci0, log)
+        if not isinstance(e_cas, (float, numpy.number)):
             raise RuntimeError('Multiple roots are detected in fcisolver.  '
                                'CASSCF does not know which state to optimize.\n'
                                'See also  mcscf.state_average  or  mcscf.state_specific  for excited states.')
 
         if envs is not None and log.verbose >= logger.INFO:
-            log.debug('CAS space CI energy = %.15g', e_ci)
+            log.debug('CAS space CI energy = %.15g', e_cas)
 
             if hasattr(self.fcisolver,'spin_square'):
                 ss = self.fcisolver.spin_square(fcivec, self.ncas, self.nelecas)
@@ -711,7 +724,7 @@ class CASSCF(mc1step.CASSCF):
                 else:
                     log.info('CASCI E = %.15g  dE = %.8g  S^2 = %.7f',
                              e_tot, e_tot-elast, ss[0])
-        return e_tot, e_ci, fcivec
+        return e_tot, e_cas, fcivec
 
     def update_ao2mo(self, mo):
         raise DeprecationWarning('update_ao2mo was obseleted since pyscf v1.0.  '

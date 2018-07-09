@@ -1,4 +1,18 @@
-/*
+/* Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+ *
  * Author: Qiming Sun <osirpt.sun@gmail.com>
  */
 
@@ -49,7 +63,6 @@ static void _ft_fill_k(int (*intor)(), int (*eval_aopair)(), void (*eval_gz)(),
         const int dij = di * dj;
         const char TRANS_N = 'N';
         const double complex Z1 = 1;
-        const double complex Z0 = 0;
 
         int jptrxyz = atm[PTR_COORD+bas[ATOM_OF+jsh*BAS_SLOTS]*ATM_SLOTS];
         int shls[2] = {ish, jsh};
@@ -57,7 +70,7 @@ static void _ft_fill_k(int (*intor)(), int (*eval_aopair)(), void (*eval_gz)(),
         double complex *bufk = buf;
         double complex *bufL = buf + dij*blksize * comp * nkpts;
         double complex *pbuf;
-        int gs0, gs1, dg, dijg, empty;
+        int gs0, gs1, dg, dijg;
         int jL0, jLcount, jL;
         int i;
 
@@ -77,7 +90,6 @@ static void _ft_fill_k(int (*intor)(), int (*eval_aopair)(), void (*eval_gz)(),
                                 if ((*intor)(pbuf, shls, dims, eval_aopair, eval_gz,
                                              Z1, sGv, b, sgxyz, gs, dg,
                                              atm, natm, bas, nbas, env_loc)) {
-                                        empty = 0;
                                 } else {
                                         for (i = 0; i < dijg; i++) {
                                                 pbuf[i] = 0;
@@ -204,7 +216,6 @@ static void sort_s2_igtj(double complex *out, double complex *in,
         const int ish0 = shls_slice[0];
         const int ish1 = shls_slice[1];
         const int jsh0 = shls_slice[2];
-        const int jsh1 = shls_slice[3];
         const size_t off0 = ao_loc[ish0] * (ao_loc[ish0] + 1) / 2;
         const size_t nij = ao_loc[ish1] * (ao_loc[ish1] + 1) / 2 - off0;
         const size_t nijg = nij * NGv;
@@ -246,7 +257,6 @@ static void sort_s2_ieqj(double complex *out, double complex *in,
         const int ish0 = shls_slice[0];
         const int ish1 = shls_slice[1];
         const int jsh0 = shls_slice[2];
-        const int jsh1 = shls_slice[3];
         const size_t off0 = ao_loc[ish0] * (ao_loc[ish0] + 1) / 2;
         const size_t nij = ao_loc[ish1] * (ao_loc[ish1] + 1) / 2 - off0;
         const size_t nijg = nij * NGv;
@@ -388,7 +398,7 @@ static int subgroupGv(double *sGv, int *sgxyz, double *Gv, int *gxyz,
         int dij = dimax * djmax;
         int gblksize = 0xfffffff8 & (bufsize / dij);
 
-        int gs0, gs1, dg;
+        int gs0, dg;
         for (gs0 = 0; gs0 < nGv; gs0 += gblksize) {
                 dg = MIN(nGv-gs0, gblksize);
                 for (i = 0; i < 3; i++) {

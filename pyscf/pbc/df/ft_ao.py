@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -21,7 +34,7 @@ libpbc = lib.load_library('libpbc')
 #
 def ft_aopair(cell, Gv, shls_slice=None, aosym='s1',
               b=None, gxyz=None, Gvbase=None, kpti_kptj=numpy.zeros((2,3)),
-              q=None, intor='GTO_ft_ovlp_sph', comp=1, verbose=None):
+              q=None, intor='GTO_ft_ovlp', comp=1, verbose=None):
     r'''
     FT transform AO pair
     \sum_T exp(-i k_j * T) \int exp(-i(G+q)r) i(r) j(r-T) dr^3
@@ -37,7 +50,7 @@ def ft_aopair(cell, Gv, shls_slice=None, aosym='s1',
 # gxyz is the index for Gvbase
 def _ft_aopair_kpts(cell, Gv, shls_slice=None, aosym='s1',
                     b=None, gxyz=None, Gvbase=None, q=numpy.zeros(3),
-                    kptjs=numpy.zeros((1,3)), intor='GTO_ft_ovlp_sph', comp=1,
+                    kptjs=numpy.zeros((1,3)), intor='GTO_ft_ovlp', comp=1,
                     out=None):
     r'''
     FT transform AO pair
@@ -46,8 +59,12 @@ def _ft_aopair_kpts(cell, Gv, shls_slice=None, aosym='s1',
     The return array holds the AO pair
     corresponding to the kpoints given by kptjs
     '''
+
+    intor = cell._add_suffix(intor)
+
     q = numpy.reshape(q, 3)
     kptjs = numpy.asarray(kptjs, order='C').reshape(-1,3)
+    Gv = numpy.asarray(Gv, order='C').reshape(-1,3)
     nGv = Gv.shape[0]
     GvT = numpy.asarray(Gv.T, order='C')
     GvT += q.reshape(-1,1)
@@ -56,7 +73,7 @@ def _ft_aopair_kpts(cell, Gv, shls_slice=None, aosym='s1',
 # backward compatibility for pyscf-1.2, in which the argument Gvbase is gs
         or (Gvbase is not None and isinstance(Gvbase[0], (int, numpy.integer)))):
         p_gxyzT = lib.c_null_ptr()
-        p_gs = (ctypes.c_int*3)(0,0,0)
+        p_mesh = (ctypes.c_int*3)(0,0,0)
         p_b = (ctypes.c_double*1)(0)
         eval_gz = 'GTO_Gv_general'
     else:
@@ -68,7 +85,7 @@ def _ft_aopair_kpts(cell, Gv, shls_slice=None, aosym='s1',
         p_gxyzT = gxyzT.ctypes.data_as(ctypes.c_void_p)
         b = numpy.hstack((b.ravel(), q) + Gvbase)
         p_b = b.ctypes.data_as(ctypes.c_void_p)
-        p_gs = (ctypes.c_int*3)(*[len(x) for x in Gvbase])
+        p_mesh = (ctypes.c_int*3)(*[len(x) for x in Gvbase])
 
     Ls = cell.get_lattice_Ls()
     expkL = numpy.exp(1j * numpy.dot(kptjs, Ls.T))
@@ -99,7 +116,7 @@ def _ft_aopair_kpts(cell, Gv, shls_slice=None, aosym='s1',
         shape = (nkpts, comp, nij, nGv)
 
     drv = libpbc.PBC_ft_latsum_drv
-    intor = getattr(libpbc, intor)
+    cintor = getattr(libpbc, intor)
     eval_gz = getattr(libpbc, eval_gz)
     if nkpts == 1:
         fill = getattr(libpbc, 'PBC_ft_fill_nk1'+aosym)
@@ -107,11 +124,11 @@ def _ft_aopair_kpts(cell, Gv, shls_slice=None, aosym='s1',
         fill = getattr(libpbc, 'PBC_ft_fill_k'+aosym)
     out = numpy.ndarray(shape, dtype=numpy.complex128, buffer=out)
 
-    drv(intor, eval_gz, fill, out.ctypes.data_as(ctypes.c_void_p),
+    drv(cintor, eval_gz, fill, out.ctypes.data_as(ctypes.c_void_p),
         ctypes.c_int(nkpts), ctypes.c_int(comp), ctypes.c_int(nimgs),
         Ls.ctypes.data_as(ctypes.c_void_p), expkL.ctypes.data_as(ctypes.c_void_p),
         (ctypes.c_int*4)(*shls_slice), ao_loc.ctypes.data_as(ctypes.c_void_p),
-        GvT.ctypes.data_as(ctypes.c_void_p), p_b, p_gxyzT, p_gs, ctypes.c_int(nGv),
+        GvT.ctypes.data_as(ctypes.c_void_p), p_b, p_gxyzT, p_mesh, ctypes.c_int(nGv),
         atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(cell.natm),
         bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(cell.nbas),
         env.ctypes.data_as(ctypes.c_void_p))
@@ -138,10 +155,10 @@ if __name__ == '__main__':
     from pyscf.pbc import tools
 
     L = 5.
-    n = 10
+    n = 20
     cell = pgto.Cell()
     cell.a = numpy.diag([L,L,L])
-    cell.gs = numpy.array([n,n,n])
+    cell.mesh = numpy.array([n,n,n])
 
     cell.atom = '''C    1.3    .2       .3
                    C     .1    .1      1.1
@@ -157,17 +174,17 @@ if __name__ == '__main__':
     ao2 = ft_aopair(cell, cell.Gv)
     nao = cell.nao_nr()
     coords = pyscf.pbc.dft.gen_grid.gen_uniform_grids(cell)
-    aoR = pyscf.pbc.dft.numint.eval_ao(cell, coords)
+    aoR = cell.pbc_eval_gto('GTOval', coords)
     aoR2 = numpy.einsum('ki,kj->kij', aoR.conj(), aoR)
-    ngs = aoR.shape[0]
+    ngrids = aoR.shape[0]
 
     for i in range(nao):
         for j in range(nao):
-            ao2ref = tools.fft(aoR2[:,i,j], cell.gs) * cell.vol/ngs
+            ao2ref = tools.fft(aoR2[:,i,j], cell.mesh) * cell.vol/ngrids
             print(i, j, numpy.linalg.norm(ao2ref - ao2[:,i,j]))
 
     aoG = ft_ao(cell, cell.Gv)
     for i in range(nao):
-        aoref = tools.fft(aoR[:,i], cell.gs) * cell.vol/ngs
+        aoref = tools.fft(aoR[:,i], cell.mesh) * cell.vol/ngrids
         print(i, numpy.linalg.norm(aoref - aoG[:,i]))
 

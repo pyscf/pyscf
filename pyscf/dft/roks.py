@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -7,10 +20,23 @@
 Non-relativistic restricted open-shell Kohn-Sham
 '''
 
-from pyscf.lib import logger
+import numpy
+from pyscf import lib
 from pyscf.scf import rohf
-from pyscf.dft.uks import get_veff, energy_elec
+from pyscf.dft.uks import energy_elec
 from pyscf.dft import rks
+from pyscf.dft import uks
+
+
+@lib.with_doc(uks.get_veff.__doc__)
+def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
+    if hasattr(dm, 'mo_coeff'):
+        mo_coeff = dm.mo_coeff
+        mo_occ_a = (dm.mo_occ > 0).astype(numpy.double)
+        mo_occ_b = (dm.mo_occ ==2).astype(numpy.double)
+        dm = lib.tag_array(dm, mo_coeff=(mo_coeff,mo_coeff),
+                           mo_occ=(mo_occ_a,mo_occ_b))
+    return uks.get_veff(ks, mol, dm, dm_last, vhf_last, hermi)
 
 
 class ROKS(rohf.ROHF):
@@ -22,12 +48,16 @@ class ROKS(rohf.ROHF):
 
     def dump_flags(self):
         rohf.ROHF.dump_flags(self)
-        logger.info(self, 'XC functionals = %s', self.xc)
+        lib.logger.info(self, 'XC functionals = %s', self.xc)
         self.grids.dump_flags()
 
     get_veff = get_veff
     energy_elec = energy_elec
     define_xc_ = rks.define_xc_
+
+    def nuc_grad_method(self):
+        from pyscf.grad import roks
+        return roks.Gradients(self)
 
 
 if __name__ == '__main__':
@@ -42,7 +72,7 @@ if __name__ == '__main__':
     #mol.grids = { 'He': (10, 14),}
     mol.build()
 
-    m = ROKS(mol)
+    m = ROKS(mol).run()
     m.xc = 'b88,lyp'
     print(m.scf())  # -2.8978518405
 

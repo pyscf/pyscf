@@ -1,5 +1,18 @@
 #!/usr/bin/env python
-# File: gen_grid.py
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
@@ -18,6 +31,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf import gto
 from pyscf.dft import radi
+from pyscf import __config__
 
 libdft = lib.load_library('libdft')
 BLKSIZE = 128  # needs to be the same to lib/gto/grid_ao_drv.c
@@ -132,9 +146,7 @@ def nwchem_prune(nuc, rads, n_ang, radii=radi.BRAGG_RADII):
         (0.1   , 0.4, 0.8, 2.5)))
     leb_ngrid = LEBEDEV_NGRID[4:]  # [38, 50, 74, 86, ...]
     if n_ang < 50:
-        angs = numpy.empty(len(rads), dtype=int)
-        angs[:] = n_ang
-        return angs
+        return numpy.repeat(n_ang, len(rads))
     elif n_ang == 50:
         leb_l = numpy.array([1, 2, 2, 2, 1])
     else:
@@ -185,34 +197,26 @@ def treutler_prune(nuc, rads, n_ang, radii=None):
 # Stratmann, Scuseria, Frisch. CPL, 257, 213 (1996), eq.11
 def stratmann(g):
     '''Stratmann, Scuseria, Frisch. CPL, 257, 213 (1996)'''
-    a = .64  # comment after eq. 14
-    if isinstance(g, numpy.ndarray):
-        ma = g/a
-        ma2 = ma * ma
-        g1 = (1/16.)*(ma*(35 + ma2*(-35 + ma2*(21 - 5 *ma2))))
-        g1[g<=-a] = -1
-        g1[g>= a] =  1
-        return g1
-    else:
-        if g <= -a:
-            g = -1
-        elif g >= a:
-            g = 1
-        else:
-            ma = g/a
-            ma2 = ma*ma
-            g = (1/16.)*(ma*(35 + ma2*(-35 + ma2*(21 - 5 *ma2))))
-        return g
+    a = .64  # for eq. 14
+    g = numpy.asarray(g)
+    ma = g/a
+    ma2 = ma * ma
+    g1 = numpy.asarray((1/16.)*(ma*(35 + ma2*(-35 + ma2*(21 - 5 *ma2)))))
+    g1[g<=-a] = -1
+    g1[g>= a] =  1
+    return g1
 
 def original_becke(g):
     '''Becke, JCP, 88, 2547 (1988)'''
-    g = (3 - g**2) * g * .5
-    g = (3 - g**2) * g * .5
-    g = (3 - g**2) * g * .5
-    return g
+#    This funciton has been optimized in the C code VXCgen_grid
+#    g = (3 - g**2) * g * .5
+#    g = (3 - g**2) * g * .5
+#    g = (3 - g**2) * g * .5
+#    return g
+    pass
 
 def gen_atomic_grids(mol, atom_grid={}, radi_method=radi.gauss_chebyshev,
-                     level=3, prune=nwchem_prune):
+                     level=3, prune=nwchem_prune, **kwargs):
     '''Generate number of radial grids and angular grids for the given molecule.
 
     Returns:
@@ -228,22 +232,24 @@ def gen_atomic_grids(mol, atom_grid={}, radi_method=radi.gauss_chebyshev,
         symb = mol.atom_symbol(ia)
 
         if symb not in atom_grids_tab:
-            chg = gto.mole._charge(symb)
+            chg = gto.charge(symb)
             if symb in atom_grid:
                 n_rad, n_ang = atom_grid[symb]
                 if n_ang not in LEBEDEV_NGRID:
                     if n_ang in LEBEDEV_ORDER:
+                        logger.warn(mol, 'n_ang %d for atom %d %s is not '
+                                    'the supported Lebedev angular grids. '
+                                    'Set n_ang to %d', n_ang, ia, symb,
+                                    LEBEDEV_ORDER[n_ang])
                         n_ang = LEBEDEV_ORDER[n_ang]
                     else:
                         raise ValueError('Unsupported angular grids %d' % n_ang)
             else:
                 n_rad = _default_rad(chg, level)
                 n_ang = _default_ang(chg, level)
-            rad, dr = radi_method(n_rad, chg)
-            rad_weight = 4*numpy.pi * rad*rad * dr
-            # atomic_scale = 1
-            # rad *= atomic_scale
-            # rad_weight *= atomic_scale
+            rad, dr = radi_method(n_rad, chg, ia, **kwargs)
+
+            rad_weight = 4*numpy.pi * rad**2 * dr
 
             if callable(prune):
                 angs = prune(chg, rad, n_ang)
@@ -284,11 +290,11 @@ def gen_partition(mol, atom_grids_tab,
     else:
         f_radii_adjust = None
     atm_coords = numpy.asarray(mol.atom_coords() , order='C')
-    atm_dist = radi._inter_distance(mol)
-    if (becke_scheme == original_becke and
-        (f_radii_adjust is None or
-         radii_adjust in (radi.treutler_atomic_radii_adjust,
-                          radi.becke_atomic_radii_adjust))):
+    atm_dist = gto.inter_distance(mol)
+    if (becke_scheme is original_becke and
+        (radii_adjust is radi.treutler_atomic_radii_adjust or
+         radii_adjust is radi.becke_atomic_radii_adjust or
+         f_radii_adjust is None)):
         if f_radii_adjust is None:
             p_radii_table = lib.c_null_ptr()
         else:
@@ -359,20 +365,20 @@ def make_mask(mol, coords, relativity=0, shls_slice=None, verbose=None):
         is the number of shells.
     '''
     coords = numpy.asarray(coords, order='F')
-    natm = ctypes.c_int(mol._atm.shape[0])
-    nbas = ctypes.c_int(mol.nbas)
     ngrids = len(coords)
     if shls_slice is None:
         shls_slice = (0, mol.nbas)
-    assert(shls_slice == (0, mol.nbas))
+    nbas = shls_slice[1] - shls_slice[0]
 
-    non0tab = numpy.empty(((ngrids+BLKSIZE-1)//BLKSIZE, mol.nbas),
+    non0tab = numpy.empty(((ngrids+BLKSIZE-1)//BLKSIZE, nbas),
                           dtype=numpy.uint8)
     libdft.VXCnr_ao_screen(non0tab.ctypes.data_as(ctypes.c_void_p),
                            coords.ctypes.data_as(ctypes.c_void_p),
                            ctypes.c_int(ngrids),
-                           mol._atm.ctypes.data_as(ctypes.c_void_p), natm,
-                           mol._bas.ctypes.data_as(ctypes.c_void_p), nbas,
+                           mol._atm.ctypes.data_as(ctypes.c_void_p),
+                           ctypes.c_int(mol.natm),
+                           mol._bas[shls_slice[0]:].ctypes.data_as(ctypes.c_void_p),
+                           ctypes.c_int(nbas),
                            mol._env.ctypes.data_as(ctypes.c_void_p))
     return non0tab
 
@@ -438,29 +444,58 @@ class Grids(lib.StreamObject):
         >>> grids.build()
         '''
     def __init__(self, mol):
+        import sys
         self.mol = mol
         self.stdout = mol.stdout
         self.verbose = mol.verbose
-        self.atomic_radii = radi.BRAGG_RADII
-        #self.atomic_radii = radi.COVALENT_RADII
-        self.radii_adjust = radi.treutler_atomic_radii_adjust
-        #self.radii_adjust = radi.becke_atomic_radii_adjust
-        #self.radii_adjust = None # to switch off atomic radii adjustment
-        self.radi_method = radi.treutler
-        #self.radi_method = radi.gauss_chebyshev
-        #self.becke_scheme = stratmann
-        self.becke_scheme = original_becke
-        self.level = 3
-        self.prune = nwchem_prune
         self.symmetry = mol.symmetry
         self.atom_grid = {}
         self.non0tab = None
+
+        cur_mod = sys.modules[__name__]
+        def _load_conf(mod, name, default):
+            var = getattr(__config__, name, None)
+            if var is None:
+                return default
+            elif callable(var):
+                return var
+            elif mod is None:
+                return cur_mod[var]
+            else:
+                return getattr(mod, var)
+
+        self.atomic_radii = _load_conf(radi, 'dft_gen_grid_Grids_atomic_radii',
+                                       radi.BRAGG_RADII)
+        #self.atomic_radii = radi.COVALENT_RADII
+
+        self.radii_adjust = _load_conf(radi, 'dft_gen_grid_Grids_radii_adjust',
+                                       radi.treutler_atomic_radii_adjust)
+        #self.radii_adjust = radi.becke_atomic_radii_adjust
+        #self.radii_adjust = None # to switch off atomic radii adjustment
+
+        self.radi_method = _load_conf(radi, 'dft_gen_grid_Grids_radi_method',
+                                      radi.treutler)
+        #self.radi_method = radi.gauss_chebyshev
+        #self.radi_method = radi.mura_knowles
+        #self.radi_method = radi.delley
+
+        self.becke_scheme = _load_conf(None, 'dft_gen_grid_Grids_becke_scheme',
+                                       original_becke)
+        #self.becke_scheme = stratmann
+
+        self.prune = _load_conf(None, 'dft_gen_grid_Grids_prune', nwchem_prune)
+
+        self.level = getattr(__config__, 'dft_gen_grid_Grids_level', 3)
 
 ##################################################
 # don't modify the following attributes, they are not input options
         self.coords  = None
         self.weights = None
         self._keys = set(self.__dict__.keys())
+
+    @property
+    def size(self):
+        return getattr(self.weights, 'size', 0)
 
     def dump_flags(self):
         logger.info(self, 'radial grids: %s', self.radi_method.__doc__)
@@ -476,13 +511,13 @@ class Grids(lib.StreamObject):
             logger.info(self, 'User specified grid scheme %s', str(self.atom_grid))
         return self
 
-    def build(self, mol=None, with_non0tab=False):
+    def build(self, mol=None, with_non0tab=False, **kwargs):
         if mol is None: mol = self.mol
         if self.verbose >= logger.WARN:
             self.check_sanity()
         atom_grids_tab = self.gen_atomic_grids(mol, self.atom_grid,
                                                self.radi_method,
-                                               self.level, self.prune)
+                                               self.level, self.prune, **kwargs)
         self.coords, self.weights = \
                 self.gen_partition(mol, atom_grids_tab,
                                    self.radii_adjust, self.atomic_radii,
@@ -492,14 +527,7 @@ class Grids(lib.StreamObject):
         else:
             self.non0tab = None
         logger.info(self, 'tot grids = %d', len(self.weights))
-        return self.coords, self.weights
-    def setup_grids(self, mol=None):
-        import warnings
-        with warnings.catch_warnings():
-            warnings.simplefilter("once")
-            warnings.warn('API updates: setup_grids method is depercated '
-                          'and will be removed in future release.\n')
-        return self.build(mol)
+        return self
 
     def kernel(self, mol=None, with_non0tab=False):
         self.dump_flags()
@@ -507,13 +535,13 @@ class Grids(lib.StreamObject):
 
     @lib.with_doc(gen_atomic_grids.__doc__)
     def gen_atomic_grids(self, mol, atom_grid=None, radi_method=None,
-                         level=None, prune=None):
+                         level=None, prune=None, **kwargs):
         ''' See gen_grid.gen_atomic_grids function'''
         if atom_grid is None: atom_grid = self.atom_grid
         if radi_method is None: radi_method = self.radi_method
         if level is None: level = self.level
         if prune is None: prune = self.prune
-        return gen_atomic_grids(mol, atom_grid, self.radi_method, level, prune)
+        return gen_atomic_grids(mol, atom_grid, self.radi_method, level, prune, **kwargs)
 
     @lib.with_doc(gen_partition.__doc__)
     def gen_partition(self, mol, atom_grids_tab,
@@ -523,13 +551,6 @@ class Grids(lib.StreamObject):
         return gen_partition(mol, atom_grids_tab, radii_adjust, atomic_radii,
                              becke_scheme)
 
-    @property
-    def prune_scheme(self):
-        import sys
-        sys.stderr.write('WARN: Attribute .prune_scheme will be removed in PySCF v1.1. '
-                         'Please use .prune instead\n')
-        return self.prune
-
     @lib.with_doc(make_mask.__doc__)
     def make_mask(self, mol=None, coords=None, relativity=0, shls_slice=None,
                   verbose=None):
@@ -538,41 +559,44 @@ class Grids(lib.StreamObject):
         return make_mask(mol, coords, relativity, shls_slice, verbose)
 
 
+_default_rad = getattr(__config__, 'dft_gen_grid_Grids_default_rad', None)
+if _default_rad is None:
+    def _default_rad(nuc, level=3):
+        '''Number of radial grids '''
+        tab   = numpy.array( (2 , 10, 18, 36, 54, 86, 118))
+        #           Period    1   2   3   4   5   6   7         # level
+        grids = numpy.array((( 10, 15, 20, 30, 35, 40, 50),     # 0
+                             ( 30, 40, 50, 60, 65, 70, 75),     # 1
+                             ( 40, 60, 65, 75, 80, 85, 90),     # 2
+                             ( 50, 75, 80, 90, 95,100,105),     # 3
+                             ( 60, 90, 95,105,110,115,120),     # 4
+                             ( 70,105,110,120,125,130,135),     # 5
+                             ( 80,120,125,135,140,145,150),     # 6
+                             ( 90,135,140,150,155,160,165),     # 7
+                             (100,150,155,165,170,175,180),     # 8
+                             (200,200,200,200,200,200,200),))   # 9
+        period = (nuc > tab).sum()
+        return grids[level,period]
 
-def _default_rad(nuc, level=3):
-    '''Number of radial grids '''
-    tab   = numpy.array( (2 , 10, 18, 36, 54, 86, 118))
-    #           Period    1   2   3   4   5   6   7         # level
-    grids = numpy.array((( 10, 15, 20, 30, 35, 40, 50),     # 0
-                         ( 30, 40, 50, 60, 65, 70, 75),     # 1
-                         ( 40, 60, 65, 75, 80, 85, 90),     # 2
-                         ( 50, 75, 80, 90, 95,100,105),     # 3
-                         ( 60, 90, 95,105,110,115,120),     # 4
-                         ( 70,105,110,120,125,130,135),     # 5
-                         ( 80,120,125,135,140,145,150),     # 6
-                         ( 90,135,140,150,155,160,165),     # 7
-                         (100,150,155,165,170,175,180),     # 8
-                         (200,200,200,200,200,200,200),))   # 9
-    period = (nuc > tab).sum()
-    return grids[level,period]
-
-def _default_ang(nuc, level=3):
-    '''Order of angular grids. See LEBEDEV_ORDER for the mapping of
-    the order and the number of angular grids'''
-    tab   = numpy.array( (2 , 10, 18, 36, 54, 86, 118))
-    #           Period    1   2   3   4   5   6   7         # level
-    order = numpy.array(((11, 15, 17, 17, 17, 17, 17 ),     # 0
-                         (17, 23, 23, 23, 23, 23, 23 ),     # 1
-                         (23, 29, 29, 29, 29, 29, 29 ),     # 2
-                         (29, 29, 35, 35, 35, 35, 35 ),     # 3
-                         (35, 41, 41, 41, 41, 41, 41 ),     # 4
-                         (41, 47, 47, 47, 47, 47, 47 ),     # 5
-                         (47, 53, 53, 53, 53, 53, 53 ),     # 6
-                         (53, 59, 59, 59, 59, 59, 59 ),     # 7
-                         (59, 59, 59, 59, 59, 59, 59 ),     # 8
-                         (65, 65, 65, 65, 65, 65, 65 ),))   # 9
-    period = (nuc > tab).sum()
-    return LEBEDEV_ORDER[order[level,period]]
+_default_ang = getattr(__config__, 'dft_gen_grid_Grids_default_ang', None)
+if _default_ang is None:
+    def _default_ang(nuc, level=3):
+        '''Order of angular grids. See LEBEDEV_ORDER for the mapping of
+        the order and the number of angular grids'''
+        tab   = numpy.array( (2 , 10, 18, 36, 54, 86, 118))
+        #           Period    1   2   3   4   5   6   7         # level
+        order = numpy.array(((11, 15, 17, 17, 17, 17, 17 ),     # 0
+                             (17, 23, 23, 23, 23, 23, 23 ),     # 1
+                             (23, 29, 29, 29, 29, 29, 29 ),     # 2
+                             (29, 29, 35, 35, 35, 35, 35 ),     # 3
+                             (35, 41, 41, 41, 41, 41, 41 ),     # 4
+                             (41, 47, 47, 47, 47, 47, 47 ),     # 5
+                             (47, 53, 53, 53, 53, 53, 53 ),     # 6
+                             (53, 59, 59, 59, 59, 59, 59 ),     # 7
+                             (59, 59, 59, 59, 59, 59, 59 ),     # 8
+                             (65, 65, 65, 65, 65, 65, 65 ),))   # 9
+        period = (nuc > tab).sum()
+        return LEBEDEV_ORDER[order[level,period]]
 
 def prange(start, end, step):
     for i in range(start, end, step):

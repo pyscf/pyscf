@@ -1,4 +1,18 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import unittest
 from pyscf import scf
 from pyscf import gto
@@ -32,8 +46,12 @@ mf.scf()
 mo = mf.mo_coeff.copy()
 mo[:,[15,16,17,18]] = mf.mo_coeff[:,[17,18,15,16]]
 
+def tearDownModule():
+    global mol, mf
+    del mol, mf
 
-class KnowValues(unittest.TestCase):
+
+class KnownValues(unittest.TestCase):
     def test_mc2step_4o4e(self):
         mc = mcscf.approx_hessian(mcscf.CASSCF(mf, 4, 4), auxbasis='weigend')
         mc.conv_tol = 1e-8

@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -23,9 +36,10 @@ from pyscf.lib import logger
 from pyscf.scf import cphf
 from pyscf.ao2mo import _ao2mo
 from pyscf.dft import numint
-from pyscf.scf.newton_ah import _gen_rhf_response
+from pyscf.soscf.newton_ah import _gen_rhf_response
 from pyscf.prop.nmr import rhf as rhf_nmr
-from pyscf.prop.ssc.parameters import get_nuc_g_factor
+from pyscf.data import nist
+from pyscf.data.gyro import get_nuc_g_factor
 
 NUMINT_GRIDS = 30
 
@@ -39,7 +53,7 @@ def make_dso(sscobj, mol, dm0, nuc_pair=None):
         a11 = -numpy.einsum('xyij,ji->xy', h11, dm0)
         a11 = a11 - a11.trace() * numpy.eye(3)
         ssc_dia.append(a11)
-    return numpy.asarray(ssc_dia) * lib.param.ALPHA**4
+    return numpy.asarray(ssc_dia) * nist.ALPHA**4
 
 def dso_integral(mol, orig1, orig2):
     '''Integral of vec{r}vec{r}/(|r-orig1|^3 |r-orig2|^3)
@@ -85,7 +99,7 @@ def make_pso(sscobj, mol, mo1, mo_coeff, mo_occ, nuc_pair=None):
         # PSO = -Tr(Im[h1_ov], Im[mo1_vo]) + cc = 2 * Tr(Im[h1_vo], Im[mo1_vo])
         e = numpy.einsum('xij,yij->xy', h1[atm1dic[i]], mo1[atm2dic[j]])
         para.append(e*4)  # *4 for +c.c. and double occupnacy
-    return numpy.asarray(para) * lib.param.ALPHA**4
+    return numpy.asarray(para) * nist.ALPHA**4
 
 def make_h1_pso(mol, mo_coeff, mo_occ, atmlst):
     # Imaginary part of H01 operator
@@ -118,7 +132,7 @@ def make_fc(sscobj, nuc_pair=None):
         at2 = atm2dic[j]
         e = numpy.einsum('ij,ij', h1[at1], mo1[at2])
         para.append(e*4)  # *4 for +c.c. and for double occupancy
-    return numpy.einsum(',k,xy->kxy', lib.param.ALPHA**4, para, numpy.eye(3))
+    return numpy.einsum(',k,xy->kxy', nist.ALPHA**4, para, numpy.eye(3))
 
 def solve_mo1_fc(sscobj, h1):
     cput1 = (time.clock(), time.time())
@@ -174,7 +188,7 @@ def make_fcsd(sscobj, nuc_pair=None):
         at2 = atm2dic[j]
         e = numpy.einsum('xwij,ywij->xy', h1[at1], mo1[at2])
         para.append(e*4)  # *4 for +c.c. and for double occupancy
-    return numpy.asarray(para) * lib.param.ALPHA**4
+    return numpy.asarray(para) * nist.ALPHA**4
 
 
 def make_h1_fc(mol, mo_coeff, mo_occ, atmlst):
@@ -276,8 +290,8 @@ class SpinSpinCoupling(rhf_nmr.NMR):
         logger.timer(self, 'spin-spin coupling', *cput0)
 
         if self.verbose > logger.QUIET:
-            nuc_mag = .5 * (lib.param.E_MASS/lib.param.PROTON_MASS)  # e*hbar/2m
-            au2Hz = lib.param.HARTREE2J / lib.param.PLANCK
+            nuc_mag = .5 * (nist.E_MASS/nist.PROTON_MASS)  # e*hbar/2m
+            au2Hz = nist.HARTREE2J / nist.PLANCK
             #logger.debug('Unit AU -> Hz %s', au2Hz*nuc_mag**2)
             iso_ssc = au2Hz * nuc_mag ** 2 * numpy.einsum('kii->k', e11) / 3
             natm = mol.natm

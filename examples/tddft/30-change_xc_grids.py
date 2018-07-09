@@ -44,7 +44,7 @@ mf1 = copy.copy(mf)
 mf1.xc = 'lda,vwn'
 mf1.grids = dft.Grids(mol)
 mf1.grids.level = 2
-mf1._numint = numint._NumInt()
+mf1._numint = numint.NumInt()
 mf1._numint.libxc = dft.xcfun
 td = tddft.TDDFT(mf1)
 print(td.kernel()[0] * 27.2114)

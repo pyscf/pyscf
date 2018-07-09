@@ -30,6 +30,12 @@ kpts = cell.make_kpts(nks)
 # AO value for a single k-point
 #
 ao = dft.numint.eval_ao(cell, coords, kpt=kpts[1], deriv=0)
+# or
+ao = cell.pbc_eval_gto('GTOval', coords, kpt=kpts[1])
+# Note cell.eval_gto and cell.pbc_eval_gto are different.  Their relations are
+# like cell.intor and cell.pbc_intor.  cell.eval_gto only returns the value of
+# non-PBC GTOs on the given grids while cell.pbc_eval_gto is the PBC-GTO
+# version which includes the lattice summation over repeated images
 
 #
 # AO value for k-points, the first index runs over k-points

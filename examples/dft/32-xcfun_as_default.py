@@ -19,7 +19,7 @@ mf = dft.RKS(mol)
 mf._numint.libxc = dft.xcfun
 mf.xc = 'b88,lyp'
 mf.kernel()
-grad.RKS(mf).run()
+mf.nuc_grad_method().run()
 
 #
 # Scheme 2: Change the default XC library globally.  All DFT calculations will
@@ -29,4 +29,4 @@ dft.numint.libxc = dft.xcfun
 mf = dft.RKS(mol)
 mf.xc = 'b88,lyp'
 mf.kernel()
-grad.RKS(mf).run()
+mf.nuc_grad_method().run()

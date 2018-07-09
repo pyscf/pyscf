@@ -1,9 +1,24 @@
 #!/usr/bin/env python
-# -*- coding: utf-8
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
-# Burkatzi-Filippi-Dolg  pseudo potential
-#
+
+'''
+Parsers for basis set associated with Burkatzi-Filippi-Dolg  pseudo potential
+'''
 
 import os
 
@@ -109,14 +124,14 @@ def search_seg(basisfile, symb):
 if __name__ == '__main__':
     #print(parse('Li', 'vtz'))
     #print(parse_ecp('Ga'))
-    from pyscf.lib import parameters as param
+    from pyscf.data import elements
     from pyscf.gto.basis import parse_nwchem
 
 #    for bastype in 'vdz', 'vtz', 'vqz', 'v5z':
 #        dat = []
-#        for atom in param.ELEMENTS[1:]:
+#        for atom in elements.ELEMENTS[1:]:
 #            try:
-#                bas = parse(atom[0], bastype)
+#                bas = parse(atom, bastype)
 #                dat.append(parse_nwchem.convert_basis_to_nwchem(atom[0], bas))
 #            except RuntimeError:
 #                pass
@@ -128,9 +143,9 @@ if __name__ == '__main__':
 #            f.write('END\n')
 
     dat = []
-    for atom in param.ELEMENTS[1:]:
+    for atom in elements.ELEMENTS[1:]:
         try:
-            ecp = parse_ecp(atom[0])
+            ecp = parse_ecp(atom)
             dat.append(parse_nwchem.convert_ecp_to_nwchem(atom[0], ecp))
         except RuntimeError:
             pass

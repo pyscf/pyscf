@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 import sys
 import time
@@ -72,7 +85,7 @@ def work_share_partition(tasks, interval=.02, loadmin=1):
                 comm.send(load, 0, tag=INQUIRY)
             if comm.Iprobe(source=0, tag=TASK):
                 tasks.append(comm.recv(source=0, tag=TASK))
-                if tasks[-1] == 'OUT_OF_TASK':
+                if isinstance(tasks[-1], str) and tasks[-1] == 'OUT_OF_TASK':
                     return
             time.sleep(interval)
 
@@ -82,7 +95,7 @@ def work_share_partition(tasks, interval=.02, loadmin=1):
     while True:
         if tasks:
             task = tasks.pop(0)
-            if task == 'OUT_OF_TASK':
+            if isinstance(task, str) and task == 'OUT_OF_TASK':
                 tasks_handler.join()
                 return
             yield task
@@ -95,11 +108,11 @@ def work_stealing_partition(tasks, interval=.0001):
             time.sleep(interval)
             while comm.Iprobe(source=MPI.ANY_SOURCE, tag=INQUIRY):
                 src, req = comm.recv(source=MPI.ANY_SOURCE, tag=INQUIRY)
-                if req == 'STOP_DAEMON':
+                if isinstance(req, str) and req == 'STOP_DAEMON':
                     return
                 elif tasks:
                     comm.send(tasks.pop(), src, tag=TASK)
-                elif src == 0 and req == 'ALL_DONE':
+                elif src == 0 and isinstance(req, str) and req == 'ALL_DONE':
                     comm.send(out_of_task[0], src, tag=TASK)
                 elif out_of_task[0]:
                     comm.send('OUT_OF_TASK', src, tag=TASK)
@@ -140,10 +153,10 @@ def work_stealing_partition(tasks, interval=.0001):
         while True:
             comm.send((rank,None), proc, tag=INQUIRY)
             task = comm.recv(source=proc, tag=TASK)
-            if task == 'OUT_OF_TASK':
+            if isinstance(task, str) and task == 'OUT_OF_TASK':
                 prepare_to_stop()
                 return
-            elif task == 'BYPASS':
+            elif isinstance(task, str) and task == 'BYPASS':
                 if proc == proc_last:
                     prepare_to_stop()
                     return
@@ -156,7 +169,7 @@ def work_stealing_partition(tasks, interval=.0001):
 
 def bcast(buf, root=0):
     buf = numpy.asarray(buf, order='C')
-    shape, dtype = comm.bcast((buf.shape, buf.dtype))
+    shape, dtype = comm.bcast((buf.shape, buf.dtype.char))
     if rank != root:
         buf = numpy.empty(shape, dtype=dtype)
     comm.Bcast(buf, root)

@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -24,7 +37,9 @@ from pyscf.prop.gtensor.uks import get_vxc_soc
 def make_h1_soc2e(hfcobj, dm0):
     mf = hfcobj._scf
     ni = mf._numint
-    hyb = ni.hybrid_coeff(mf.xc, spin=mol.spin)
+    omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=mol.spin)
+    if abs(omega) > 1e-10:
+        raise NotImplementedError
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, mf.max_memory*.9-mem_now)
     v1 = get_vxc_soc(ni, mol, mf.grids, mf.xc, dm0,

@@ -40,9 +40,9 @@ methods :func:`get_hcore`, :func:`get_ovlp` and attribute :attr:`_eri` of SCF cl
 new Hamiltonian.  E.g. the user-defined
 Hamiltonian for Hartree-Fock
 
-.. literalinclude:: ../../examples/scf/40-hf_with_given_hamiltonian.py
+.. literalinclude:: ../../examples/scf/40-customizing_hamiltonian.py
 
 and the user-defined Hamiltonian for CASSCF
 
-.. literalinclude:: ../../examples/mcscf/40-casscf_with_given_hamiltonian.py
+.. literalinclude:: ../../examples/mcscf/40-customizing_hamiltonian.py
 

@@ -1,4 +1,18 @@
-/*
+/* Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+  
+   Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+ 
+        http://www.apache.org/licenses/LICENSE-2.0
+ 
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+ *
  * Author: Qiming Sun <osirpt.sun@gmail.com>
  */
 
@@ -203,9 +217,9 @@ void GTOeval_cart_iter(FPtr_eval feval,  FPtr_exp fexp, double fac,
         const int atmstart = bas[sh0*BAS_SLOTS+ATOM_OF];
         const int atmend = bas[(sh1-1)*BAS_SLOTS+ATOM_OF]+1;
         const int atmcount = atmend - atmstart;
-        int i, k, l, np, nc, atm_id, bas_id, deg, ao_id;
+        int i, l, np, nc, atm_id, bas_id, deg, ao_id;
         double fac1;
-        double *p_exp, *pcoeff, *pcoord, *pcart, *ri, *pao;
+        double *p_exp, *pcoeff, *pcoord, *ri;
         double *grid2atm = buf; // [atm_id,xyz,grid]
         double *eprim = grid2atm + atmcount*3*BLKSIZE;
 
@@ -249,7 +263,7 @@ void GTOeval_spinor_iter(FPtr_eval feval, FPtr_exp fexp, void (*c2s)(), double f
         const int atmstart = bas[sh0*BAS_SLOTS+ATOM_OF];
         const int atmend = bas[(sh1-1)*BAS_SLOTS+ATOM_OF]+1;
         const int atmcount = atmend - atmstart;
-        int i, k, l, np, nc, atm_id, bas_id, deg, kappa, dcart, ao_id;
+        int i, l, np, nc, atm_id, bas_id, deg, kappa, dcart, ao_id;
         size_t off, di;
         double fac1;
         double *p_exp, *pcoeff, *pcoord, *pcart, *ri;
@@ -341,7 +355,7 @@ void GTOeval_loop(void (*fiter)(), FPtr_eval feval, FPtr_exp fexp, double fac,
         size_t aoff, bgrids;
         int ncart = NCTR_CART * param[TENSOR] * param[POS_E1];
         double *buf = malloc(sizeof(double) * BLKSIZE*(NPRIMAX*2+ncart));
-#pragma omp for schedule(static)
+#pragma omp for schedule(dynamic, 4)
         for (k = 0; k < nblk*nshblk; k++) {
                 iloc = k / nblk;
                 ish = shloc[iloc];
@@ -399,7 +413,7 @@ void GTOeval_spinor_drv(FPtr_eval feval, FPtr_exp fexp, void (*c2s)(), double fa
         size_t aoff, bgrids;
         int ncart = NCTR_CART * param[TENSOR] * param[POS_E1];
         double *buf = malloc(sizeof(double) * BLKSIZE*(NPRIMAX*2+ncart));
-#pragma omp for schedule(static)
+#pragma omp for schedule(dynamic, 4)
         for (k = 0; k < nblk*nshblk; k++) {
                 iloc = k / nblk;
                 ish = shloc[iloc];

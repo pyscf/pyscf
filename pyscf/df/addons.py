@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -10,6 +23,12 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf import gto
 from pyscf import ao2mo
+from pyscf.data import elements
+from pyscf import __config__
+
+DFBASIS = getattr(__config__, 'df_addons_aug_etb_beta', 'weigend')
+ETB_BETA = getattr(__config__, 'df_addons_aug_dfbasis', 2.0)
+FIRST_ETB_ELEMENT = getattr(__config__, 'df_addons_aug_start_at', 36)  # 'Rb'
 
 # For code compatiblity in python-2 and python-3
 if sys.version_info >= (3,):
@@ -59,21 +78,22 @@ class load(ao2mo.load):
         ao2mo.load.__init__(self, eri, dataname)
 
 
-def aug_etb_for_dfbasis(mol, dfbasis='weigend', beta=2.3, start_at='Rb'):
+def aug_etb_for_dfbasis(mol, dfbasis=DFBASIS, beta=ETB_BETA,
+                        start_at=FIRST_ETB_ELEMENT):
     '''augment weigend basis with even-tempered gaussian basis
     exps = alpha*beta^i for i = 1..N
     '''
-    nuc_start = gto.mole._charge(start_at)
+    nuc_start = gto.charge(start_at)
     uniq_atoms = set([a[0] for a in mol._atom])
 
     newbasis = {}
     for symb in uniq_atoms:
-        nuc_charge = gto.mole._charge(symb)
+        nuc_charge = gto.charge(symb)
         if nuc_charge < nuc_start:
             newbasis[symb] = dfbasis
         #?elif symb in mol._ecp:
         else:
-            conf = lib.parameters.ELEMENTS[nuc_charge][2]
+            conf = elements.CONFIGURATION[nuc_charge]
             max_shells = 4 - conf.count(0)
             emin_by_l = [1e99] * 8
             emax_by_l = [0] * 8
@@ -112,7 +132,7 @@ def aug_etb_for_dfbasis(mol, dfbasis='weigend', beta=2.3, start_at='Rb'):
 
     return newbasis
 
-def aug_etb(mol, beta=2.3):
+def aug_etb(mol, beta=ETB_BETA):
     '''To generate the even-tempered auxiliary Gaussian basis'''
     return aug_etb_for_dfbasis(mol, beta=beta, start_at=0)
 
@@ -168,7 +188,7 @@ def make_auxmol(mol, auxbasis=None):
     required elements not defined in the optimized auxiliary basis),
     even-tempered Gaussian basis set will be generated.
 
-    See also the paper JCTC, 13, 554 about the generation of auxiliary fitting basis.
+    See also the paper JCTC, 13, 554 about generating auxiliary fitting basis.
     '''
     pmol = copy.copy(mol)  # just need shallow copy
 
@@ -197,3 +217,5 @@ def make_auxmol(mol, auxbasis=None):
     logger.debug(mol, 'num shells = %d, num cGTOs = %d',
                  pmol.nbas, pmol.nao_nr())
     return pmol
+
+del(DFBASIS, ETB_BETA, FIRST_ETB_ELEMENT)

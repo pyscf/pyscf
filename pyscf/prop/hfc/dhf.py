@@ -1,11 +1,23 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
 '''
-Unrestricted Dirac Hartree-Fock hyperfine coupling tensor
-(In testing)
+Dirac Hartree-Fock hyperfine coupling tensor (In testing)
 
 Refs: JCP, 134, 044111
 '''
@@ -14,7 +26,8 @@ from functools import reduce
 import numpy
 from pyscf import lib
 from pyscf.prop.ssc import dhf as dhf_ssc
-from pyscf.prop.ssc.parameters import get_nuc_g_factor
+from pyscf.data import nist
+from pyscf.data.gyro import get_nuc_g_factor
 
 # TODO: 3 SCF for sx, sy, sz
 
@@ -47,11 +60,11 @@ def kernel(hfcobj, with_gaunt=False, verbose=None):
     hfc = []
     for atm_id in range(mol.natm):
         symb = mol.atom_symbol(atm_id)
-        nuc_mag = .5 * (lib.param.E_MASS/lib.param.PROTON_MASS)  # e*hbar/2m
+        nuc_mag = .5 * (nist.E_MASS/nist.PROTON_MASS)  # e*hbar/2m
         nuc_gyro = get_nuc_g_factor(symb) * nuc_mag
-        e_gyro = .5 * lib.param.G_ELECTRON
-        au2MHz = lib.param.HARTREE2J / lib.param.PLANCK * 1e-6
-        fac = lib.param.ALPHA**2 * nuc_gyro * e_gyro * au2MHz
+        e_gyro = .5 * nist.G_ELECTRON
+        au2MHz = nist.HARTREE2J / nist.PLANCK * 1e-6
+        fac = nist.ALPHA**2 * nuc_gyro * e_gyro * au2MHz
         #logger.debug('factor (MHz) %s', fac)
 
         h01 = make_h01(mol, 0)
@@ -77,6 +90,11 @@ def kernel(hfcobj, with_gaunt=False, verbose=None):
     return numpy.asarray(hfc)
 
 class HyperfineCoupling(dhf_ssc.SSC):
+    def __init__(self, mf):
+        dhf_ssc.SSC.__init__(self, mf)
+        lib.logger.warn(self, 'DHF-HFC is an experimental feature. It is '
+                        'still in testing.\nFeatures and APIs may be changed '
+                        'in the future.')
     kernel = kernel
 
 HFC = HyperfineCoupling

@@ -1,3 +1,17 @@
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import numpy as np
 import time
 import pyscf.pbc.tools as tools
@@ -6,7 +20,6 @@ from pyscf.lib import logger
 from pyscf.pbc.mpitools import mpi_load_balancer
 from pyscf import lib
 from pyscf.pbc import lib as pbclib
-from pyscf.cc.ccsd import _cp
 from pyscf.pbc.tools.tril import tril_index, unpack_tril
 
 comm = MPI.COMM_WORLD
@@ -261,7 +274,7 @@ def cc_Wvoov(cc,t1,t2,eris,feri2=None):
         if good2go is False:
             break
         ranges0, ranges1, ranges2 = loader.get_blocks_from_data(data)
-        ix = sum([[min(x),max(x)+1] for x in ranges0,ranges1,ranges2], [])
+        ix = sum([[min(x),max(x)+1] for x in (ranges0,ranges1,ranges2)], [])
 
         #eris_ooov = eris.ooov[ix[0]:ix[1], ix[2]:ix[3], ix[4]:ix[5]]
         for iterka, ka in enumerate(ranges0):
@@ -440,7 +453,7 @@ def Wooov(cc,t1,t2,eris,fint=None):
             break
         ranges0, ranges1, ranges2 = loader.get_blocks_from_data(data)
 
-        s0,s1,s2 = [slice(min(x),max(x)+1) for x in ranges0,ranges1,ranges2]
+        s0,s1,s2 = [slice(min(x),max(x)+1) for x in (ranges0,ranges1,ranges2)]
         eris_ooov_kli = _cp(eris.ooov[s0,s1,s2])
         eris_oovv_kli = _cp(eris.oovv[s0,s1,s2])
 
@@ -489,7 +502,7 @@ def Wvovv(cc,t1,t2,eris,fint=None):
             break
         ranges0, ranges1, ranges2 = loader.get_blocks_from_data(data)
 
-        s0,s1,s2 = [slice(min(x),max(x)+1) for x in ranges0,ranges1,ranges2]
+        s0,s1,s2 = [slice(min(x),max(x)+1) for x in (ranges0,ranges1,ranges2)]
         eris_vovv_alc = _cp(eris.vovv[s0,s1,s2])
         eris_oovv_alc = _cp(eris.oovv[s0,s1,s2])
 
@@ -537,7 +550,7 @@ def W1ovvo(cc,t1,t2,eris,fint=None):
             break
         ranges0, ranges1, ranges2 = loader.get_blocks_from_data(data)
 
-        s0,s1,s2 = [slice(min(x),max(x)+1) for x in ranges0,ranges1,ranges2]
+        s0,s1,s2 = [slice(min(x),max(x)+1) for x in (ranges0,ranges1,ranges2)]
 
         eris_ovvo_kac = _cp(eris.ovvo[s0,s1,s2])
         eris_oovv_kXc = _cp(eris.oovv[s0,:,s2])
@@ -598,7 +611,7 @@ def W2ovvo(cc,t1,t2,eris,fint=None):
             break
         ranges0, ranges1, ranges2 = loader.get_blocks_from_data(data)
 
-        s0,s1,s2 = [slice(min(x),max(x)+1) for x in ranges0,ranges1,ranges2]
+        s0,s1,s2 = [slice(min(x),max(x)+1) for x in (ranges0,ranges1,ranges2)]
 
         Wooov_akX     = _cp(WWooov[s1,s0])
         eris_ovvv_kac = _cp(eris.ovvv[s0,s1,s2])
@@ -653,7 +666,7 @@ def Wovvo(cc,t1,t2,eris,fint=None):
             break
         ranges0, ranges1, ranges2 = loader.get_blocks_from_data(data)
 
-        s0,s1,s2 = [slice(min(x),max(x)+1) for x in ranges0,ranges1,ranges2]
+        s0,s1,s2 = [slice(min(x),max(x)+1) for x in (ranges0,ranges1,ranges2)]
         Wkaci[s0,s1,s2] = _cp(W1kaci[s0,s1,s2]) + _cp(W2kaci[s0,s1,s2])
 
         loader.slave_finished()
@@ -693,7 +706,7 @@ def W1ovov(cc,t1,t2,eris,fint=None):
             break
         ranges0, ranges1, ranges2 = loader.get_blocks_from_data(data)
 
-        s0,s1,s2 = [slice(min(x),max(x)+1) for x in ranges0,ranges1,ranges2]
+        s0,s1,s2 = [slice(min(x),max(x)+1) for x in (ranges0,ranges1,ranges2)]
         eris_ovov = _cp(eris.ovov[s0,s1,s2])
 
         for iterkk,kk in enumerate(ranges0):
@@ -743,7 +756,7 @@ def W2ovov(cc,t1,t2,eris,fint=None):
             break
         ranges0, ranges1, ranges2 = loader.get_blocks_from_data(data)
 
-        s0,s1,s2 = [slice(min(x),max(x)+1) for x in ranges0,ranges1,ranges2]
+        s0,s1,s2 = [slice(min(x),max(x)+1) for x in (ranges0,ranges1,ranges2)]
         eris_ovvv  = _cp(eris.ovvv[s0,s1,s2])
         WWooov_kbi = _cp(WWooov[s0,s1,s2])
 
@@ -794,7 +807,7 @@ def Wovov(cc,t1,t2,eris,fint=None):
             break
         ranges0, ranges1, ranges2 = loader.get_blocks_from_data(data)
 
-        s0,s1,s2 = [slice(min(x),max(x)+1) for x in ranges0,ranges1,ranges2]
+        s0,s1,s2 = [slice(min(x),max(x)+1) for x in (ranges0,ranges1,ranges2)]
 
         Wkbid[s0,s1,s2] = _cp(WW1ovov[s0,s1,s2]) + _cp(WW2ovov[s0,s1,s2])
 
@@ -839,7 +852,7 @@ def WovovRev(cc,t1,t2,eris,fint=None):
             break
         ranges0, ranges1, ranges2 = loader.get_blocks_from_data(data)
 
-        s0,s1,s2 = [slice(min(x),max(x)+1) for x in ranges0,ranges1,ranges2]
+        s0,s1,s2 = [slice(min(x),max(x)+1) for x in (ranges0,ranges1,ranges2)]
 
         Wkbid[s2,s1,s0] = (_cp(WW1ovov[s0,s1,s2]) + _cp(WW2ovov[s0,s1,s2])).transpose(2,1,0,3,4,5,6)
 
@@ -884,7 +897,7 @@ def Woooo(cc,t1,t2,eris,fint=None):
             break
         ranges0, ranges1, ranges2 = loader.get_blocks_from_data(data)
 
-        s0,s1,s2 = [slice(min(x),max(x)+1) for x in ranges0,ranges1,ranges2]
+        s0,s1,s2 = [slice(min(x),max(x)+1) for x in (ranges0,ranges1,ranges2)]
         eris_oovv_klX = _cp(eris.oovv[s0,s1,s2])
         eris_oooo_kli = _cp(eris.oooo[s0,s1,s2])
         eris_ooov_klX = _cp(eris.ooov[s0,s1,s2])
@@ -943,7 +956,7 @@ def WooooS(cc,t1,t2,eris,fint=None):
             break
         ranges0, ranges1, ranges2 = loader.get_blocks_from_data(data)
 
-        s0,s1,s2 = [slice(min(x),max(x)+1) for x in ranges0,ranges1,ranges2]
+        s0,s1,s2 = [slice(min(x),max(x)+1) for x in (ranges0,ranges1,ranges2)]
         eris_oovv_klX = _cp(eris.oovv[s0,s1,s2])
         eris_oooo_kli = _cp(eris.oooo[s0,s1,s2])
         eris_ooov_klX = _cp(eris.ooov[s0,s1,s2])
@@ -1002,7 +1015,7 @@ def Wvvvv(cc,t1,t2,eris,fint=None):
             break
         ranges0, ranges1, ranges2 = loader.get_blocks_from_data(data)
 
-        s0,s1,s2 = [slice(min(x),max(x)+1) for x in ranges0,ranges1,ranges2]
+        s0,s1,s2 = [slice(min(x),max(x)+1) for x in (ranges0,ranges1,ranges2)]
         eris_vovv = _cp(eris.vovv[s0,s1,s2])
         eris_ovvv = _cp(eris.ovvv[s0,s1,s2])
         eris_oovv_abc = _cp(eris.oovv[s0,s1,s2])
@@ -1080,7 +1093,7 @@ def Wvvvo(cc,t1,t2,eris,fint=None):
             break
         ranges0, ranges1, ranges2 = loader.get_blocks_from_data(data)
 
-        s0,s1,s2 = [slice(min(x),max(x)+1) for x in ranges0,ranges1,ranges2]
+        s0,s1,s2 = [slice(min(x),max(x)+1) for x in (ranges0,ranges1,ranges2)]
         eris_vovv_aXc = _cp(eris.vovv[s0,:,s2])
         eris_ovvv_Xac = _cp(eris.ovvv[:,s0,s2])
         eris_ovvv_Xbc = _cp(eris.ovvv[:,s1,s2])
@@ -1175,7 +1188,7 @@ def WvvvoR1(cc,t1,t2,eris,fint=None):
             break
         ranges0, ranges1, ranges2 = loader.get_blocks_from_data(data)
 
-        s0,s1,s2 = [slice(min(x),max(x)+1) for x in ranges0,ranges1,ranges2]
+        s0,s1,s2 = [slice(min(x),max(x)+1) for x in (ranges0,ranges1,ranges2)]
         eris_vovv_aXc = _cp(eris.vovv[s0,:,s2])
         eris_ovvv_Xac = _cp(eris.ovvv[:,s0,s2])
         eris_ovvv_Xbc = _cp(eris.ovvv[:,s1,s2])
@@ -1290,7 +1303,7 @@ def Wovoo(cc,t1,t2,eris,fint=None):
             break
         ranges0, ranges1, ranges2 = loader.get_blocks_from_data(data)
 
-        s0,s1,s2 = [slice(min(x),max(x)+1) for x in ranges0,ranges1,ranges2]
+        s0,s1,s2 = [slice(min(x),max(x)+1) for x in (ranges0,ranges1,ranges2)]
         WW1ovov_kbi = _cp(WW1ovov[s0,s1,s2])
         WWoooo_kbi  = _cp(WWoooo[s0,s1,s2])
         #WW1ovvo_kbi = _cp(WW1ovvo[s0,s1,s2])
@@ -1370,7 +1383,7 @@ def W1voov(cc,t1,t2,eris,fint=None):
             break
         ranges0, ranges1, ranges2 = loader.get_blocks_from_data(data)
 
-        s0,s1,s2 = [slice(min(x),max(x)+1) for x in ranges0,ranges1,ranges2]
+        s0,s1,s2 = [slice(min(x),max(x)+1) for x in (ranges0,ranges1,ranges2)]
 
         eris_ovvo_kac = _cp(eris.ovvo[s0,s1,s2])
         eris_oovv_kXc = _cp(eris.oovv[s0,:,s2])
@@ -1432,7 +1445,7 @@ def W2voov(cc,t1,t2,eris,fint=None):
             break
         ranges0, ranges1, ranges2 = loader.get_blocks_from_data(data)
 
-        s0,s1,s2 = [slice(min(x),max(x)+1) for x in ranges0,ranges1,ranges2]
+        s0,s1,s2 = [slice(min(x),max(x)+1) for x in (ranges0,ranges1,ranges2)]
 
         Wooov_akX     = _cp(WWooov[s1,s0])
         eris_ovvv_kac = _cp(eris.ovvv[s0,s1,s2])
@@ -1487,7 +1500,7 @@ def Wvoov(cc,t1,t2,eris,fint=None):
             break
         ranges0, ranges1, ranges2 = loader.get_blocks_from_data(data)
 
-        s0,s1,s2 = [slice(min(x),max(x)+1) for x in ranges0,ranges1,ranges2]
+        s0,s1,s2 = [slice(min(x),max(x)+1) for x in (ranges0,ranges1,ranges2)]
         Wkaci[s0,s1,s2] = _cp(W1kaci[s0,s1,s2]) + _cp(W2kaci[s0,s1,s2])
 
         loader.slave_finished()
@@ -1530,7 +1543,7 @@ def WvoovR1(cc,t1,t2,eris,fint=None):
             break
         ranges0, ranges1, ranges2 = loader.get_blocks_from_data(data)
 
-        s0,s1,s2 = [slice(min(x),max(x)+1) for x in ranges0,ranges1,ranges2]
+        s0,s1,s2 = [slice(min(x),max(x)+1) for x in (ranges0,ranges1,ranges2)]
         Wkaci[s2,s0,s1] = (_cp(W1kaci[s0,s1,s2]) + _cp(W2kaci[s0,s1,s2])).transpose(2,0,1,3,4,5,6)
 
         loader.slave_finished()
@@ -1542,3 +1555,5 @@ def WvoovR1(cc,t1,t2,eris,fint=None):
 
     return Wkaci
 
+def _cp(a):
+    return np.array(a, copy=False, order='C')

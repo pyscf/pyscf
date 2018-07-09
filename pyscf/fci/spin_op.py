@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 import ctypes
 from functools import reduce
@@ -82,17 +95,17 @@ def spin_square(fcivec, norb, nelec, mo_coeff=None, ovlp=1):
     # if ovlp=1, ssz = (neleca-nelecb)**2 * .25
     (dm1a, dm1b), (dm2aa, dm2ab, dm2bb) = \
             direct_spin1.make_rdm12s(fcivec, norb, nelec)
-    ssz =(numpy.einsum('jilk,ij,kl->', dm2aa, ovlpaa, ovlpaa)
-        - numpy.einsum('jilk,ij,kl->', dm2ab, ovlpaa, ovlpbb)
-        + numpy.einsum('jilk,ij,kl->', dm2bb, ovlpbb, ovlpbb)
-        - numpy.einsum('jilk,ij,kl->', dm2ab, ovlpaa, ovlpbb)) * .25 \
+    ssz =(numpy.einsum('ijkl,ij,kl->', dm2aa, ovlpaa, ovlpaa)
+        - numpy.einsum('ijkl,ij,kl->', dm2ab, ovlpaa, ovlpbb)
+        + numpy.einsum('ijkl,ij,kl->', dm2bb, ovlpbb, ovlpbb)
+        - numpy.einsum('ijkl,ij,kl->', dm2ab, ovlpaa, ovlpbb)) * .25 \
         +(numpy.einsum('ji,ij->', dm1a, ovlpaa)
         + numpy.einsum('ji,ij->', dm1b, ovlpbb)) *.25
 
     dm2abba = -dm2ab.transpose(0,3,2,1)  # alpha^+ beta^+ alpha beta
     dm2baab = -dm2ab.transpose(2,1,0,3)  # beta^+ alpha^+ beta alpha
-    ssxy =(numpy.einsum('jilk,ij,kl->', dm2abba, ovlpba, ovlpab)
-         + numpy.einsum('jilk,ij,kl->', dm2baab, ovlpab, ovlpba)
+    ssxy =(numpy.einsum('ijkl,ij,kl->', dm2baab, ovlpba, ovlpab)
+         + numpy.einsum('ijkl,ij,kl->', dm2abba, ovlpab, ovlpba)
          + numpy.einsum('ji,ij->', dm1a, ovlpaa)
          + numpy.einsum('ji,ij->', dm1b, ovlpbb)) * .5
     ss = ssxy + ssz
@@ -111,11 +124,18 @@ def spin_square0(fcivec, norb, nelec):
     return ss, multip
 
 def local_spin(fcivec, norb, nelec, mo_coeff=None, ovlp=1, aolst=[]):
-    '''Local spin expectation value, which is defined as
+    r'''Local spin expectation value, which is defined as
 
-    <CI|ao><ao|S^2|CI>
+    <CI|(local S^2)|CI>
 
-    For a complete list of AOs, I = \sum |ao><ao|, it becomes <CI|S^2|CI>
+    The local S^2 operator only couples the orbitals specified in aolst. The
+    cross term which involves the interaction between the local part (in aolst)
+    and non-local part (not in aolst) is not included. As a result, the value
+    of local_spin is not additive. In other words, if local_spin is computed
+    twice with the complementary aolst in the two runs, the summation does not
+    equal to the S^2 of the entire system.
+
+    For a complete list of AOs, the value of local_spin is equivalent to <CI|S^2|CI>
     '''
     if isinstance(ovlp, numpy.ndarray):
         nao = ovlp.shape[0]

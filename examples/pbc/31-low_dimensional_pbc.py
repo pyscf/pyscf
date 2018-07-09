@@ -39,7 +39,7 @@ e = []
 cell = pbcgto.Cell()
 cell.build(unit = 'B',
            a = numpy.eye(3),
-           gs = [10]*3,
+           mesh = [20]*3,
            atom = '''H 0 0 0; H 0 0 1.8''',
            dimension = 0,
            verbose = 0,
@@ -80,7 +80,7 @@ L = 4
 cell = pbcgto.Cell()
 cell.build(unit = 'B',
            a = [[L,0,0],[0,1,0],[0,0,1]],
-           gs = [5,10,10],
+           mesh = [10,20,20],
            atom = 'H 0 0 0; H 0 0 1.8',
            dimension=1,
            verbose = 0,
@@ -115,12 +115,17 @@ e = []
 L = 4
 cell = pbcgto.Cell()
 cell.build(unit = 'B',
-           a = [[L,0,0],[0,L,0],[0,0,1]],
-           gs = [5,5,10],
+           a = [[L,0,0],[0,L,0],[0,0,8.]],
+           mesh = [10,10,20],
            atom = 'H 0 0 0; H 0 0 1.8',
            dimension=2,
            verbose = 0,
            basis='sto3g')
+
+mf = pbchf.KRHF(cell.copy().set(low_dim_ft_type='analytic_2d_1'))
+mf.kpts = cell.make_kpts([4,4,1])
+e.append(mf.kernel())
+
 mf = pbchf.KRHF(cell)
 mf.with_df = pdf.AFTDF(cell)
 mf.kpts = cell.make_kpts([4,4,1])
@@ -136,6 +141,6 @@ mol = tools.super_cell(cell, [4,4,1]).to_mol()
 mf = scf.RHF(mol)
 e.append(mf.kernel()/16)
 
-print('2D:  AFT      DF       MDF       super-mole')
+print('2D:  FFT      AFT      DF       MDF       super-mole')
 print(e)
 

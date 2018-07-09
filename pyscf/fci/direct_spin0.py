@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -103,7 +116,7 @@ def kernel(h1e, eri, norb, nelec, ci0=None, level_shift=1e-3, tol=1e-10,
                                   davidson_only, pspace_size, ecore=ecore, **kwargs)
     return e, c
 
-# dm_pq = <|p^+ q|>
+# dm[p,q] = <|q^+ p|>
 @lib.with_doc(direct_spin1.make_rdm1.__doc__)
 def make_rdm1(fcivec, norb, nelec, link_index=None):
     rdm1 = rdm.make_rdm1('FCImake_rdm1a', fcivec, fcivec,
@@ -115,7 +128,7 @@ def make_rdm1(fcivec, norb, nelec, link_index=None):
 def make_rdm1s(fcivec, norb, nelec, link_index=None):
     rdm1 = rdm.make_rdm1('FCImake_rdm1a', fcivec, fcivec,
                          norb, nelec, link_index)
-    return (rdm1, rdm1)
+    return rdm1, rdm1
 
 # Chemist notation
 @lib.with_doc(direct_spin1.make_rdm12.__doc__)
@@ -130,7 +143,7 @@ def make_rdm12(fcivec, norb, nelec, link_index=None, reorder=True):
         dm1, dm2 = rdm.reorder_rdm(dm1, dm2, True)
     return dm1, dm2
 
-# dm_pq = <I|p^+ q|J>
+# dm[p,q] = <I|q^+ p|J>
 @lib.with_doc(direct_spin1.trans_rdm1s.__doc__)
 def trans_rdm1s(cibra, ciket, norb, nelec, link_index=None):
     if link_index is None:
@@ -151,7 +164,7 @@ def trans_rdm1(cibra, ciket, norb, nelec, link_index=None):
     rdm1a, rdm1b = trans_rdm1s(cibra, ciket, norb, nelec, link_index)
     return rdm1a + rdm1b
 
-# dm_pq,rs = <I|p^+ q r^+ s|J>
+# dm[p,q,r,s] = <I|p^+ q r^+ s|J>
 @lib.with_doc(direct_spin1.trans_rdm12.__doc__)
 def trans_rdm12(cibra, ciket, norb, nelec, link_index=None, reorder=True):
     dm1, dm2 = rdm.make_rdm12('FCItdm12kern_sf', cibra, ciket,
@@ -267,18 +280,20 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
 #TODO: check spin of initial guess
     if ci0 is None:
         if hasattr(fci, 'get_init_guess'):
-            ci0 = fci.get_init_guess(norb, nelec, nroots, hdiag)
+            ci0 = lambda: fci.get_init_guess(norb, nelec, nroots, hdiag)
         else:
-            ci0 = []
-            for i in range(nroots):
-                x = numpy.zeros(na,na)
-                if addr[i] == 0:
-                    x[0,0] = 1
-                else:
-                    addra = addr[i] // na
-                    addrb = addr[i] % na
-                    x[addra,addrb] = x[addrb,addra] = numpy.sqrt(.5)
-                ci0.append(x.ravel())
+            def ci0():
+                x0 = []
+                for i in range(nroots):
+                    x = numpy.zeros(na,na)
+                    if addr[i] == 0:
+                        x[0,0] = 1
+                    else:
+                        addra = addr[i] // na
+                        addrb = addr[i] % na
+                        x[addra,addrb] = x[addrb,addra] = numpy.sqrt(.5)
+                    x0.append(x.ravel())
+                return x0
     else:
         if isinstance(ci0, numpy.ndarray) and ci0.size == na*na:
             ci0 = [ci0.ravel()]
@@ -291,13 +306,14 @@ def kernel_ms0(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
     if max_space is None: max_space = fci.max_space
     if max_memory is None: max_memory = fci.max_memory
     if verbose is None: verbose = logger.Logger(fci.stdout, fci.verbose)
+    tol_residual = getattr(fci, 'conv_tol_residual', None)
 
     with lib.with_omp_threads(fci.threads):
         #e, c = lib.davidson(hop, ci0, precond, tol=fci.conv_tol, lindep=fci.lindep)
         e, c = fci.eig(hop, ci0, precond, tol=tol, lindep=lindep,
                        max_cycle=max_cycle, max_space=max_space, nroots=nroots,
                        max_memory=max_memory, verbose=verbose, follow_state=True,
-                       **kwargs)
+                       tol_residual=tol_residual, **kwargs)
     if nroots > 1:
         return e+ecore, [_check_(ci.reshape(na,na)) for ci in c]
     else:
@@ -332,10 +348,13 @@ class FCISolver(direct_spin1.FCISolver):
                orbsym=None, wfnsym=None, ecore=0, **kwargs):
         if self.verbose >= logger.WARN:
             self.check_sanity()
-        e, ci = kernel_ms0(self, h1e, eri, norb, nelec, ci0, None,
+        self.norb = norb
+        self.nelec = nelec
+        self.eci, self.ci = \
+                kernel_ms0(self, h1e, eri, norb, nelec, ci0, None,
                            tol, lindep, max_cycle, max_space, nroots,
                            davidson_only, pspace_size, ecore=ecore, **kwargs)
-        return e, ci
+        return self.eci, self.ci
 
     def energy(self, h1e, eri, fcivec, norb, nelec, link_index=None):
         h2e = self.absorb_h1e(h1e, eri, norb, nelec, .5)

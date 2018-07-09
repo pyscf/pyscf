@@ -1,7 +1,20 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
 #
-# Author: Sheng Guo <shengg@princeton.edu>
-#         Qiming Sun <osirpt.sun@gmail.com>
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Authors: Sheng Guo
+#          Qiming Sun <osirpt.sun@gmail.com>
 #
 
 import os
@@ -183,6 +196,12 @@ def DMRG_COMPRESS_NEVPT(mc, maxM=500, root=0, nevptsolver=None, tol=1e-7,
         nevptsolver.block_extra_keyword = mc.fcisolver.block_extra_keyword
     nevptsolver.nroots = nroots
     nevptsolver.executable = settings.BLOCKEXE_COMPRESS_NEVPT
+    if nevptsolver.executable == getattr(mc.fcisolver, 'executable', None):
+        logger.warn(mc, 'DMRG executable file for nevptsolver %s is the same '
+                    'to the executable file for DMRG solver %s. If they are '
+                    'both compiled by MPI compilers, they may cause error or '
+                    'random results in DMRG-NEVPT calculation.')
+
     nevpt_scratch = os.path.abspath(nevptsolver.scratchDirectory)
     dmrg_scratch = os.path.abspath(mc.fcisolver.scratchDirectory)
 

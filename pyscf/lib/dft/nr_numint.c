@@ -1,15 +1,28 @@
-/*
+/* Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+ *
  * Author: Qiming Sun <osirpt.sun@gmail.com>
  */
 
 #include <stdlib.h>
-#include <stdio.h>
 #include <string.h>
-#include "cint.h"
+#include <assert.h>
+#include "config.h"
 #include "gto/grid_ao_drv.h"
 #include "np_helper/np_helper.h"
 #include "vhf/fblas.h"
-#include <assert.h>
 
 #define BOXSIZE         56
 
@@ -59,7 +72,7 @@ static void dot_ao_dm(double *vm, double *ao, double *dm,
         double beta = 0;
 
         if (has0) {
-                int box_id, bas_id, blen, i, j;
+                int box_id, blen, i, j;
                 size_t b0;
 
                 for (box_id = 0; box_id < nbox; box_id++) {
@@ -163,7 +176,7 @@ void VXCdot_ao_ao(double *vv, double *ao1, double *ao2,
                non0table, shls_slice, ao_loc)
 {
         int ip, ib;
-        double *v_priv = calloc(nao*nao, sizeof(double));
+        double *v_priv = calloc(nao*nao+2, sizeof(double));
 #pragma omp for nowait schedule(static)
         for (ib = 0; ib < nblk; ib++) {
                 ip = ib * BLKSIZE;

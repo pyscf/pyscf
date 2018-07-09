@@ -30,7 +30,7 @@ def run(b, dm_guess, mo_guess, ci=None):
     mol.symmetry = True
     mol.build()
 
-    mf = scf.sfx2c1e(scf.RHF(mol))
+    mf = scf.RHF(mol).x2c()
     mf.max_cycle = 100
     mf.conv_tol = 1e-9
     mf.kernel(dm_guess)

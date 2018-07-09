@@ -1,4 +1,18 @@
-/*
+/* Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+  
+   Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+ 
+        http://www.apache.org/licenses/LICENSE-2.0
+ 
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+ *
  * Authors: Qiming Sun <osirpt.sun@gmail.com>
  *          Susi Lehtola <susi.lehtola@gmail.com>
  *
@@ -383,6 +397,27 @@ double LIBXC_hybrid_coeff(int xc_id)
         return factor;
 }
 
+void LIBXC_nlc_coeff(int xc_id, double *nlc_pars) {
+
+        xc_func_type func;
+        if(xc_func_init(&func, xc_id, XC_UNPOLARIZED) != 0){
+                fprintf(stderr, "XC functional %d not found\n", xc_id);
+                exit(1);
+        }
+        XC(nlc_coef)(&func, &nlc_pars[0], &nlc_pars[1]);
+        xc_func_end(&func);
+}
+
+void LIBXC_rsh_coeff(int xc_id, double *rsh_pars) {
+
+        xc_func_type func;
+        if(xc_func_init(&func, xc_id, XC_UNPOLARIZED) != 0){
+                fprintf(stderr, "XC functional %d not found\n", xc_id);
+                exit(1);
+        }
+        XC(hyb_cam_coef)(&func, &rsh_pars[0], &rsh_pars[1], &rsh_pars[2]);
+        xc_func_end(&func);
+}
 
 /*
  * XC_FAMILY_LDA           1

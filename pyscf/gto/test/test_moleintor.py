@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 import unittest
 import numpy
@@ -50,11 +63,16 @@ C    D
 mol.ecp = {'C1': 'LANL2DZ'}
 mol.build()
 
+def tearDownModule():
+    global mol
+    del mol
+
+
 def finger(mat):
     return abs(mat).sum()
 
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_intor_nr(self):
         nao = mol.nao_nr()
         s0 = numpy.empty((3,nao,nao))
@@ -102,9 +120,9 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(finger(s), 1592.2297864313475, 11)
 
     def test_intor_r_comp(self):
-        s = mol.intor('int1e_ipkin_spinor', comp=3)
+        s = mol.intor('int1e_ipkin_spinor')
         self.assertAlmostEqual(finger(s), 4409.86758420756, 10)
-        s1 = mol.intor_asymmetric('int1e_ipkin_spinor', comp=3)
+        s1 = mol.intor_asymmetric('int1e_ipkin_spinor')
         self.assertTrue(numpy.allclose(s1,s))
 
     def test_intor_nr2e(self):
@@ -129,24 +147,26 @@ class KnowValues(unittest.TestCase):
                     kp += dk
                 jp += dj
             ip += di
+        buf = mol1.intor_by_shell('int2e_sph', (i,j,k,l))
+        self.assertEqual(buf.ndim, 4)
 
-        eri1 = mol1.intor('int2e_ip1_sph', comp=3).reshape(3,13,13,13,13)
+        eri1 = mol1.intor('int2e_ip1_sph').reshape(3,13,13,13,13)
         self.assertTrue(numpy.allclose(eri0, eri1))
 
         idx = numpy.tril_indices(13)
         naopair = nao * (nao+1) // 2
-        ref = eri0[:,idx[0],idx[1]].reshape(3,naopair,-1)
+        ref = eri0[:,idx[0],idx[1]]
         eri1 = mol1.intor('int2e_ip1_sph', comp=3, aosym='s2ij')
         self.assertTrue(numpy.allclose(ref, eri1))
 
         idx = numpy.tril_indices(13)
-        ref = eri0[:,:,:,idx[0],idx[1]].reshape(3,-1,naopair)
+        ref = eri0[:,:,:,idx[0],idx[1]]
         eri1 = mol1.intor('int2e_ip1_sph', comp=3, aosym='s2kl')
         self.assertTrue(numpy.allclose(ref, eri1))
 
         idx = numpy.tril_indices(13)
-        ref = eri0[:,idx[0],idx[1]][:,:,idx[0],idx[1]].reshape(3,-1,naopair)
-        eri1 = mol1.intor('int2e_ip1_sph', comp=3, aosym='s4')
+        ref = eri0[:,idx[0],idx[1]][:,:,idx[0],idx[1]]
+        eri1 = mol1.intor('int2e_ip1_sph', comp=3, aosym='4')
         self.assertTrue(numpy.allclose(ref, eri1))
 
 
@@ -179,12 +199,41 @@ class KnowValues(unittest.TestCase):
         eri1 = mol1.intor('int2e_ip1_sph', comp=3, aosym='s4', shls_slice=shls_slice)
         self.assertTrue(numpy.allclose(ref, eri1))
 
+        eri1 = mol1.intor('int2e_ip1_sph', comp=3, aosym='s1', shls_slice=(2,4,1,3))
+        self.assertEqual(eri1.shape, (3,4,2,13,13))
+        self.assertTrue(numpy.allclose(eri0[:,2:6,1:3], eri1))
+
+    def test_intor_r2e(self):
+        mol1 = gto.M(atom=[[1   , (0. , -0.7 , 0.)],
+                           [1   , (0. ,  0.7 , 0.)]],
+                     basis = '631g')
+        nao = mol1.nao_2c()
+        eri0 = numpy.empty((3,nao,nao,nao,nao), dtype=numpy.complex)
+        ip = 0
+        for i in range(mol1.nbas):
+            jp = 0
+            for j in range(mol1.nbas):
+                kp = 0
+                for k in range(mol1.nbas):
+                    lp = 0
+                    for l in range(mol1.nbas):
+                        buf = mol1.intor_by_shell('int2e_ip1_spinor', (i,j,k,l), comp=3)
+                        di,dj,dk,dl = buf.shape[1:]
+                        eri0[:,ip:ip+di,jp:jp+dj,kp:kp+dk,lp:lp+dl] = buf
+                        lp += dl
+                    kp += dk
+                jp += dj
+            ip += di
+
+    def test_input_cint(self):
+        '''Compatibility to old cint functions
+        '''
+        self.assertEqual(gto.moleintor.ascint3('cint2e'), 'int2e_spinor')
+        self.assertEqual(gto.moleintor.ascint3('cint2e_sph'), 'int2e_sph')
 
     def test_rinv_with_zeta(self):
-        mol.set_rinv_orig((.2,.3,.4))
-        mol.set_rinv_zeta(2.2)
-        v1 = mol.intor('int1e_rinv_sph')
-        mol.set_rinv_zeta(0)
+        with mol.with_rinv_orig((.2,.3,.4)), mol.with_rinv_zeta(2.2):
+            v1 = mol.intor('int1e_rinv_sph')
         pmol = gto.M(atom='Ghost .2 .3 .4', unit='b', basis={'Ghost':[[0,(2.2*.5, 1)]]})
         pmol._atm, pmol._bas, pmol._env = \
             gto.conc_env(mol._atm, mol._bas, mol._env,
@@ -217,6 +266,8 @@ class KnowValues(unittest.TestCase):
                     kp += dk
                 jp += dj
             ip += di
+        buf = mol.intor_by_shell('int3c1e_sph', (i,j,k))
+        self.assertEqual(buf.ndim, 3)
 
         eri1 = mol.intor('int3c1e_sph')
         self.assertTrue(numpy.allclose(eri0, eri1))
@@ -233,16 +284,32 @@ class KnowValues(unittest.TestCase):
         self.assertTrue(numpy.allclose(eri0[2:7,6:15], eri1))
 
         eri1 = mol.intor('int3c2e_ip1_sph', comp=3, shls_slice=(2,5,4,9,0,mol.nbas))
+        self.assertEqual(eri1.shape, (3,5,9,nao))
         self.assertAlmostEqual(finger(eri1), 642.70512922279079, 11)
+
+        eri1 = mol.intor('int3c2e_spinor')
+        self.assertEqual(eri1.shape, (nao*2,nao*2,nao))
+        self.assertAlmostEqual(finger(eri1), 9462.9659834308495, 11)
+
+#        eri1 = mol.intor('int3c2e_spinor_ssc')
+#        self.assertEqual(eri1.shape, (nao*2,nao*2,20))
+#        self.assertAlmostEqual(finger(eri1), 1227.1971656655824, 11)
 
     def test_nr_s8(self):
         mol = gto.M(atom="He 0 0 0; Ne 3 0 0", basis='ccpvdz')
         eri0 = mol.intor('int2e_sph', aosym='s8')
         self.assertAlmostEqual(lib.finger(eri0), -10.685918926843847, 9)
 
-        eri1 = mol.intor('int2e_yp_sph', aosym='s8')
+        eri1 = mol.intor('int2e_yp_sph', aosym=8)
         self.assertAlmostEqual(lib.finger(eri1), -10.685918926843847, 9)
         self.assertAlmostEqual(abs(eri0-eri1).max(), 0, 9)
+
+    def test_unknonw(self):
+        self.assertRaises(KeyError, mol.intor, 'int4c3e')
+
+    def test_nr_2c2e(self):
+        mat = mol.intor('int2c2e')
+        self.assertAlmostEqual(lib.finger(mat), -460.83033192375615, 9)
 
 
 if __name__ == "__main__":

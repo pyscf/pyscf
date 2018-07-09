@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -11,61 +24,124 @@ from functools import reduce
 import numpy
 import scipy.linalg
 from pyscf import lib
+from pyscf import gto
 from pyscf.lib import logger
 from pyscf.scf import hf
 from pyscf.scf import uhf
 from pyscf.scf import chkfile
+from pyscf import __config__
+
+WITH_META_LOWDIN = getattr(__config__, 'scf_analyze_with_meta_lowdin', True)
+PRE_ORTH_METHOD = getattr(__config__, 'scf_analyze_pre_orth_method', 'ANO')
+MO_BASE = getattr(__config__, 'MO_BASE', 1)
+
+
+def init_guess_by_chkfile(mol, chkfile_name, project=None):
+    '''Read SCF chkfile and make the density matrix for GHF initial guess.
+
+    Kwargs:
+        project : None or bool
+            Whether to project chkfile's orbitals to the new basis.  Note when
+            the geometry of the chkfile and the given molecule are very
+            different, this projection can produce very poor initial guess.
+            In PES scanning, it is recommended to swith off project.
+
+            If project is set to None, the projection is only applied when the
+            basis sets of the chkfile's molecule are different to the basis
+            sets of the given molecule (regardless whether the geometry of
+            the two molecules are different).  Note the basis sets are
+            considered to be different if the two molecules are derived from
+            the same molecule with different ordering of atoms.
+    '''
+    from pyscf.scf import addons
+    chk_mol, scf_rec = chkfile.load_scf(chkfile_name)
+    if project is None:
+        project = not gto.same_basis_set(chk_mol, mol)
+
+    # Check whether the two molecules are similar enough
+    def inertia_momentum(mol):
+        im = gto.inertia_momentum(mol._atom, mol.atom_charges(),
+                                  mol.atom_coords())
+        return scipy.linalg.eigh(im)[0]
+    if abs(inertia_momentum(mol) - inertia_momentum(chk_mol)).sum() > 0.5:
+        logger.warn(mol, "Large deviations found between the input "
+                    "molecule and the molecule from chkfile\n"
+                    "Initial guess density matrix may have large error.")
+
+    if project:
+        s = hf.get_ovlp(mol)
+
+    def fproj(mo):
+        if project:
+            mo = addons.project_mo_nr2nr(chk_mol, mo, mol)
+            norm = numpy.einsum('pi,pi->i', mo.conj(), s.dot(mo))
+            mo /= numpy.sqrt(norm)
+        return mo
+
+    nao = chk_mol.nao_nr()
+    mo = scf_rec['mo_coeff']
+    mo_occ = scf_rec['mo_occ']
+    if hasattr(mo[0], 'ndim') and mo[0].ndim == 1:  # RHF/GHF/DHF
+        if nao*2 == mo.shape[0]:  # GHF or DHF
+            if project:
+                raise NotImplementedError('Project initial guess from '
+                                          'different geometry')
+            else:
+                dm = hf.make_rdm1(mo, mo_occ)
+        else:  # RHF
+            mo_coeff = fproj(mo)
+            mo_occa = (mo_occ>1e-8).astype(numpy.double)
+            mo_occb = mo_occ - mo_occa
+            dma, dmb = uhf.make_rdm1([mo_coeff]*2, (mo_occa, mo_occb))
+            dm = scipy.linalg.block_diag(dma, dmb)
+    else: #UHF
+        if hasattr(mo[0][0], 'ndim') and mo[0][0].ndim == 2:  # KUHF
+            logger.warn(mol, 'k-point UHF results are found.  Density matrix '
+                        'at Gamma point is used for the molecular SCF initial guess')
+            mo = mo[0]
+        dma, dmb = uhf.make_rdm1([fproj(mo[0]),fproj(mo[1])], mo_occ)
+        dm = scipy.linalg.block_diag(dma, dmb)
+    return dm
+
 
 def get_jk(mol, dm, hermi=0,
            with_j=True, with_k=True, jkbuild=hf.get_jk):
 
-    nao = mol.nao_nr()
-    if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
-        n_dm = 1
-        dmaa = dm[:nao,:nao]
-        dmab = dm[nao:,:nao]
-        dmbb = dm[nao:,nao:]
-        dms = (dmaa, dmbb, dmab)
-    else:
-        n_dm = len(dm)
-        dms =([dmi[:nao,:nao] for dmi in dm]
-            + [dmi[nao:,nao:] for dmi in dm]
-            + [dmi[nao:,:nao] for dmi in dm])
-    dms = numpy.asarray(dms)
-    if dm[0].dtype == numpy.complex128:
+    dm = numpy.asarray(dm)
+    nso = dm.shape[-1]
+    nao = nso // 2
+    dms = dm.reshape(-1,nso,nso)
+    n_dm = dms.shape[0]
+
+    dmaa = dms[:,:nao,:nao]
+    dmab = dms[:,nao:,:nao]
+    dmbb = dms[:,nao:,nao:]
+    dms = numpy.vstack((dmaa, dmbb, dmab))
+    if dm.dtype == numpy.complex128:
         dms = numpy.vstack((dms.real, dms.imag))
         hermi = 0
 
     j1, k1 = jkbuild(mol, dms, hermi)
+    j1 = j1.reshape(-1,n_dm,nao,nao)
+    k1 = k1.reshape(-1,n_dm,nao,nao)
 
-    if dm[0].dtype == numpy.complex128:
-        if with_j: j1 = j1[:n_dm*3] + j1[n_dm*3:] * 1j
-        if with_k: k1 = k1[:n_dm*3] + k1[n_dm*3:] * 1j
+    if dm.dtype == numpy.complex128:
+        if with_j: j1 = j1[:3] + j1[3:] * 1j
+        if with_k: k1 = k1[:3] + k1[3:] * 1j
 
     vj = vk = None
     if with_j:
-        vj = numpy.zeros_like(dm)
-        if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
-            j1 = j1.reshape(3,nao,nao)
-            vj[:nao,:nao] = vj[nao:,nao:] = j1[0] + j1[1]
-        else:
-            j1 = j1.reshape(3,n_dm,nao,nao)
-            vj[:,:nao,:nao] = vj[:,nao:,nao:] = j1[0] + j1[1]
+        vj = numpy.zeros((n_dm,nso,nso), dm.dtype)
+        vj[:,:nao,:nao] = vj[:,nao:,nao:] = j1[0] + j1[1]
+        vj = vj.reshape(dm.shape)
 
     if with_k:
-        vk = numpy.zeros_like(dm)
-        if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
-            k1 = k1.reshape(3,nao,nao)
-            vk[:nao,:nao] = k1[0]
-            vk[nao:,nao:] = k1[1]
-            vk[:nao,nao:] = k1[2]
-            vk[nao:,:nao] = k1[2].T.conj()
-        else:
-            k1 = k1.reshape(3,n_dm,nao,nao)
-            vk[:,:nao,:nao] = k1[0]
-            vk[:,nao:,nao:] = k1[1]
-            vk[:,:nao,nao:] = k1[2]
-            vk[:,nao:,:nao] = k1[2].transpose(0,2,1).conj()
+        vk = numpy.zeros((n_dm,nso,nso), dm.dtype)
+        vk[:,:nao,:nao] = k1[0]
+        vk[:,nao:,nao:] = k1[1]
+        vk[:,:nao,nao:] = k1[2]
+        vk[:,nao:,:nao] = k1[2].transpose(0,2,1).conj()
+        vk = vk.reshape(dm.shape)
 
     return vj, vk
 
@@ -193,10 +269,10 @@ def spin_square(mo, s=1):
         s = s[:nao,:nao]
     mo_a = mo[:nao]
     mo_b = mo[nao:]
-    saa = reduce(numpy.dot, (mo_a.T.conj(), s, mo_a))
-    sbb = reduce(numpy.dot, (mo_b.T.conj(), s, mo_b))
-    sab = reduce(numpy.dot, (mo_a.T.conj(), s, mo_b))
-    sba = sab.T.conj()
+    saa = reduce(numpy.dot, (mo_a.conj().T, s, mo_a))
+    sbb = reduce(numpy.dot, (mo_b.conj().T, s, mo_b))
+    sab = reduce(numpy.dot, (mo_a.conj().T, s, mo_b))
+    sba = sab.conj().T
     nocc_a = saa.trace()
     nocc_b = sbb.trace()
     ssxy = (nocc_a+nocc_b) * .5
@@ -209,25 +285,27 @@ def spin_square(mo, s=1):
     s = numpy.sqrt(ss+.25) - .5
     return ss, s*2+1
 
-def analyze(mf, verbose=logger.DEBUG, **kwargs):
+def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
+            **kwargs):
     '''Analyze the given SCF object:  print orbital energies, occupancies;
     print orbital coefficients; Mulliken population analysis; Dipole moment
     '''
+    log = logger.new_logger(mf, verbose)
     mo_energy = mf.mo_energy
     mo_occ = mf.mo_occ
     mo_coeff = mf.mo_coeff
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(mf.stdout, verbose)
 
     log.note('**** MO energy ****')
     for i,c in enumerate(mo_occ):
-        log.note('MO #%-3d energy= %-18.15g occ= %g', i+1, mo_energy[i], c)
+        log.note('MO #%-3d energy= %-18.15g occ= %g', i+MO_BASE, mo_energy[i], c)
     ovlp_ao = mf.get_ovlp()
     dm = mf.make_rdm1(mo_coeff, mo_occ)
-    return (mf.mulliken_meta(mf.mol, dm, s=ovlp_ao, verbose=log),
-            mf.dip_moment(mf.mol, dm, verbose=log))
+    dip = mf.dip_moment(mf.mol, dm, verbose=log)
+    if with_meta_lowdin:
+        pop_and_chg = mf.mulliken_meta(mf.mol, dm, s=ovlp_ao, verbose=log)
+    else:
+        pop_and_chg = mf.mulliken_pop(mf.mol, dm, s=ovlp_ao, verbose=log)
+    return pop_and_chg, dip
 
 def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
     '''Mulliken population analysis
@@ -240,8 +318,8 @@ def mulliken_pop(mol, dm, s=None, verbose=logger.DEBUG):
         s = s[:nao,:nao]
     return uhf.mulliken_pop(mol, (dma,dmb), s, verbose)
 
-def mulliken_meta(mol, dm_ao, verbose=logger.DEBUG, pre_orth_method='ANO',
-                  s=None):
+def mulliken_meta(mol, dm_ao, verbose=logger.DEBUG,
+                  pre_orth_method=PRE_ORTH_METHOD, s=None):
     '''Mulliken population analysis, based on meta-Lowdin AOs.
     '''
     nao = mol.nao_nr()
@@ -278,6 +356,22 @@ def dip_moment(mol, dm, unit_symbol='Debye', verbose=logger.NOTE):
 
 canonicalize = hf.canonicalize
 
+def guess_orbspin(mo_coeff):
+    '''Guess the orbital spin (alpha 0, beta 1, unknown -1) based on the
+    orbital coefficients
+    '''
+    nao, nmo = mo_coeff.shape
+    mo_a = mo_coeff[:nao//2]
+    mo_b = mo_coeff[nao//2:]
+    # When all coefficients on alpha AOs are close to 0, it's a beta orbital
+    bidx = numpy.all(abs(mo_a) < 1e-14, axis=0)
+    aidx = numpy.all(abs(mo_b) < 1e-14, axis=0)
+    orbspin = numpy.empty(nmo, dtype=int)
+    orbspin[:] = -1
+    orbspin[aidx] = 0
+    orbspin[bidx] = 1
+    return orbspin
+
 class GHF(hf.SCF):
     __doc__ = hf.SCF.__doc__ + '''
 
@@ -294,8 +388,8 @@ class GHF(hf.SCF):
 
     def get_ovlp(self, mol=None):
         if mol is None: mol = self.mol
-        hcore = hf.get_ovlp(mol)
-        return scipy.linalg.block_diag(hcore, hcore)
+        s = hf.get_ovlp(mol)
+        return scipy.linalg.block_diag(s, s)
 
     get_occ = get_occ
 
@@ -309,15 +403,18 @@ class GHF(hf.SCF):
                                mo_coeff[:,viridx]))
         return g.T.ravel()
 
+    @lib.with_doc(hf.SCF.init_guess_by_minao.__doc__)
     def init_guess_by_minao(self, mol=None):
         return _from_rhf_init_dm(hf.SCF.init_guess_by_minao(self, mol))
 
+    @lib.with_doc(hf.SCF.init_guess_by_atom.__doc__)
     def init_guess_by_atom(self, mol=None):
         return _from_rhf_init_dm(hf.SCF.init_guess_by_atom(self, mol))
 
-    def init_guess_by_chkfile(self, chkfile=None, project=True):
-        dma, dmb = uhf.init_guess_by_chkfile(mol, chkfile, project)
-        return scipy.linalg.block_diag(dma, dmb)
+    @lib.with_doc(hf.SCF.init_guess_by_chkfile.__doc__)
+    def init_guess_by_chkfile(self, chkfile=None, project=None):
+        if chkfile is None: chkfile = self.chkfile
+        return init_guess_by_chkfile(self.mol, chkfile, project)
 
     def get_jk(self, mol=None, dm=None, hermi=0):
         if mol is None: mol = self.mol
@@ -373,7 +470,7 @@ class GHF(hf.SCF):
         return mulliken_pop(mol, dm, s=s, verbose=verbose)
 
     def mulliken_meta(self, mol=None, dm=None, verbose=logger.DEBUG,
-                      pre_orth_method='ANO', s=None):
+                      pre_orth_method=PRE_ORTH_METHOD, s=None):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         if s is None: s = self.get_ovlp(mol)
@@ -392,10 +489,10 @@ class GHF(hf.SCF):
         return det_ovlp(mo1, mo2, occ1, occ2, ovlp)
 
     @lib.with_doc(dip_moment.__doc__)
-    def dip_moment(self, mol=None, dm=None, unit_symbol=None, verbose=logger.NOTE):
+    def dip_moment(self, mol=None, dm=None, unit_symbol='Debye',
+                   verbose=logger.NOTE):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
-        if unit_symbol is None: unit_symbol='Debye'
         return dip_moment(mol, dm, unit_symbol, verbose=verbose)
 
     def _finalize(self):
@@ -411,9 +508,16 @@ class GHF(hf.SCF):
                         self.e_tot, self.max_cycle, ss, s)
         return self
 
+    def convert_from_(self, mf):
+        '''Create GHF object based on the RHF/UHF object'''
+        from pyscf.scf import addons
+        return addons.convert_to_ghf(mf, out=self)
+
     def stability(self, verbose=None):
         from pyscf.scf.stability import ghf_stability
         return ghf_stability(self, verbose)
+
+    nuc_grad_method = None
 
 def _from_rhf_init_dm(dm, breaksym=True):
     dma = dm * .5
@@ -423,6 +527,8 @@ def _from_rhf_init_dm(dm, breaksym=True):
         idx, idy = numpy.diag_indices(nao)
         dm[idx+nao,idy] = dm[idx,idy+nao] = dma.diagonal() * .05
     return dm
+
+del(PRE_ORTH_METHOD)
 
 
 if __name__ == '__main__':

@@ -4,11 +4,12 @@
 
 Python-based Simulations of Chemistry Framework
 ===============================================
+[![Build Status](https://travis-ci.org/sunqm/pyscf.svg?branch=master)](https://travis-ci.org/sunqm/pyscf)
 
-2018-04-02
+2018-07-01
 
-* [Stable release 1.4.7](https://github.com/sunqm/pyscf/releases/tag/v1.4.7)
-* [1.5 alpha](https://github.com/sunqm/pyscf/releases/tag/v1.5-alpha)
+* [Stable release 1.5.1](https://github.com/sunqm/pyscf/releases/tag/v1.5.1)
+* [1.6 alpha](https://github.com/sunqm/pyscf/tree/dev)
 * [Changelog](../master/CHANGELOG)
 * [Documentation](http://www.pyscf.org)
 * [Installation](#installation)
@@ -81,9 +82,21 @@ Installation
 
       git clone https://github.com/azag0/pyberny /path/to/pyberny
 
-  edit the environment variable to make pyscf find pyberny
+  edit the environment variable to make pyberny a python module
 
       export PYTHONPATH=/path/to/pyberny:$PYTHONPATH
+
+
+Tutorials
+---------
+* An Ipython notebook of user-guide can be found in https://github.com/nmardirossian/PySCF_Tutorial.
+  This repository documents the basic structure of PySCF input script and the
+  use of regular methods which were routinely executed in most quantum chemistry
+  packages.  It also provides an implementation to drive PySCF program in a
+  simple manner.
+* Developer's tutorial can be found in the online documentation
+  http://sunqm.github.io/pyscf/tutorial.html#tutorial and the repository above
+  https://github.com/nmardirossian/PySCF_Tutorial/blob/master/dev_guide.ipynb
 
 
 Known problems
@@ -94,22 +107,6 @@ Known problems
   libcint.dylib is installed in  pyscf/lib/deps/lib  by default.  Add
   "/path/to/pyscf/lib/deps/lib"  to  `DYLD_LIBRARY_PATH`
 
-* On Mac OSX, error message of "import pyscf"
-```
-  OSError: dlopen(xxx/pyscf/lib/libcgto.dylib, 6): Library not loaded: libcint.3.0.dylib
-  Referenced from: xxx/pyscf/lib/libcgto.dylib
-  Reason: unsafe use of relative rpath libcint.3.0.dylib in xxx/pyscf/lib/libao2mo.dylib with restricted binary
-```
-
-  It is only observed on OSX 10.11.  One solution is to manually modify the runtime path
-
-        $ install_name_tool -change libcint.3.0.dylib xxx/pyscf/lib/deps/lib/libcint.3.0.dylib xxx/pyscf/lib/libcgto.dylib
-        $ install_name_tool -change libcint.3.0.dylib xxx/pyscf/lib/deps/lib/libcint.3.0.dylib xxx/pyscf/lib/libcvhf.dylib
-        $ install_name_tool -change libcint.3.0.dylib xxx/pyscf/lib/deps/lib/libcint.3.0.dylib xxx/pyscf/lib/libao2mo.dylib
-        ...
-
-  Running script pyscf/lib/_runme_to_fix_dylib_osx10.11.sh  can patch
-  all required dylib files.
 
 
 * runtime error message
@@ -159,10 +156,11 @@ Citing PySCF
 
 The following paper should be cited in publications utilizing the PySCF program package:
 
-* PySCF: the Python-based Simulations of Chemistry Framework,
-  Q. Sun, T. C. Berkelbach, N. S. Blunt, G. H. Booth, S.  Guo, Z. Li, J. Liu,
-  J. McClain, E. R. Sayfutyarova, S. Sharma, S. Wouters, G. K.-L. Chan,
-  WIREs Comput Mol Sci 2017, DOI: 10.1002/wcms.1340
+PySCF: the Python-based Simulations of Chemistry Framework,
+Q. Sun, T. C. Berkelbach, N. S. Blunt, G. H. Booth, S. Guo, Z. Li, J. Liu,
+J. McClain, E. R. Sayfutyarova, S. Sharma, S. Wouters, G. K.-L. Chan (2018),
+PySCF: the Python‐based simulations of chemistry framework.
+WIREs Comput. Mol. Sci., 8: e1340. doi:10.1002/wcms.1340
 
 
 Bug report

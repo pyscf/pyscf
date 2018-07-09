@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -36,6 +49,7 @@ from pyscf.fci import cistring
 from pyscf.fci import rdm
 from pyscf.fci import spin_op
 from pyscf.fci.spin_op import contract_ss
+from pyscf import __config__
 
 libfci = lib.load_library('libfci')
 
@@ -230,7 +244,14 @@ def energy(h1e, eri, fcivec, norb, nelec, link_index=None):
 
 
 def make_rdm1s(fcivec, norb, nelec, link_index=None):
-    '''Spin searated 1-particle density matrices, (alpha,beta)
+    '''Spin separated 1-particle density matrices.
+    The return values include two density matrices: (alpha,alpha), (beta,beta)
+
+    dm1[p,q] = <q^\dagger p>
+
+    The convention is based on McWeeney's book, Eq (5.4.20).
+    The contraction between 1-particle Hamiltonian and rdm1 is
+    E = einsum('pq,qp', h1, rdm1)
     '''
     if link_index is None:
         neleca, nelecb = _unpack_nelec(nelec)
@@ -244,19 +265,31 @@ def make_rdm1s(fcivec, norb, nelec, link_index=None):
     return rdm1a, rdm1b
 
 def make_rdm1(fcivec, norb, nelec, link_index=None):
-    '''spin-traced 1-particle density matrix
+    '''Spin-traced one-particle density matrix
+
+    dm1[p,q] = <q_alpha^\dagger p_alpha> + <q_beta^\dagger p_beta>
+
+    The convention is based on McWeeney's book, Eq (5.4.20)
+    The contraction between 1-particle Hamiltonian and rdm1 is
+    E = einsum('pq,qp', h1, rdm1)
     '''
     rdm1a, rdm1b = make_rdm1s(fcivec, norb, nelec, link_index)
     return rdm1a + rdm1b
 
 def make_rdm12s(fcivec, norb, nelec, link_index=None, reorder=True):
-    r'''Spin searated 1- and 2-particle density matrices,
-    (alpha,beta) for 1-particle density matrices.
+    r'''Spin separated 1- and 2-particle density matrices.
+    The return values include two lists, a list of 1-particle density matrices
+    and a list of 2-particle density matrices.  The density matrices are:
+    (alpha,alpha), (beta,beta) for 1-particle density matrices;
     (alpha,alpha,alpha,alpha), (alpha,alpha,beta,beta),
     (beta,beta,beta,beta) for 2-particle density matrices.
 
-    NOTE the 2pdm is :math:`\langle p^\dagger q^\dagger s r\rangle` but is
-    stored as [p,r,q,s]
+    1pdm[p,q] = :math:`\langle q^\dagger p\rangle`;
+    2pdm[p,q,r,s] = :math:`\langle p^\dagger r^\dagger s q\rangle`.
+
+    Energy should be computed as
+    E = einsum('pq,qp', h1, 1pdm) + 1/2 * einsum('pqrs,pqrs', eri, 2pdm)
+    where h1[p,q] = <p|h|q> and eri[p,q,r,s] = (pq|rs)
     '''
     dm1a, dm2aa = rdm.make_rdm12_spin1('FCIrdm12kern_a', fcivec, fcivec,
                                        norb, nelec, link_index, 1)
@@ -270,10 +303,18 @@ def make_rdm12s(fcivec, norb, nelec, link_index=None, reorder=True):
     return (dm1a, dm1b), (dm2aa, dm2ab, dm2bb)
 
 def make_rdm12(fcivec, norb, nelec, link_index=None, reorder=True):
-    r'''Spin traced 1- and 2-particle density matrices,
+    r'''Spin traced 1- and 2-particle density matrices.
 
-    NOTE the 2pdm is :math:`\langle p^\dagger q^\dagger s r\rangle` but is
-    stored as [p,r,q,s]
+    1pdm[p,q] = :math:`\langle q_\alpha^\dagger p_\alpha \rangle +
+                       \langle q_\beta^\dagger  p_\beta \rangle`;
+    2pdm[p,q,r,s] = :math:`\langle p_\alpha^\dagger r_\alpha^\dagger s_\alpha q_\alpha\rangle +
+                           \langle p_\beta^\dagger  r_\alpha^\dagger s_\alpha q_\beta\rangle +
+                           \langle p_\alpha^\dagger r_\beta^\dagger  s_\beta  q_\alpha\rangle +
+                           \langle p_\beta^\dagger  r_\beta^\dagger  s_\beta  q_\beta\rangle`.
+
+    Energy should be computed as
+    E = einsum('pq,qp', h1, 1pdm) + 1/2 * einsum('pqrs,pqrs', eri, 2pdm)
+    where h1[p,q] = <p|h|q> and eri[p,q,r,s] = (pq|rs)
     '''
     #(dm1a, dm1b), (dm2aa, dm2ab, dm2bb) = \
     #        make_rdm12s(fcivec, norb, nelec, link_index, reorder)
@@ -285,7 +326,11 @@ def make_rdm12(fcivec, norb, nelec, link_index=None, reorder=True):
     return dm1, dm2
 
 def trans_rdm1s(cibra, ciket, norb, nelec, link_index=None):
-    '''Spin separated transition 1-particle density matrices
+    r'''Spin separated transition 1-particle density matrices.
+    The return values include two density matrices: (alpha,alpha), (beta,beta).
+    See also function :func:`make_rdm1s`
+
+    1pdm[p,q] = :math:`\langle q^\dagger p \rangle`
     '''
     rdm1a = rdm.make_rdm1_spin1('FCItrans_rdm1a', cibra, ciket,
                                 norb, nelec, link_index)
@@ -293,15 +338,27 @@ def trans_rdm1s(cibra, ciket, norb, nelec, link_index=None):
                                 norb, nelec, link_index)
     return rdm1a, rdm1b
 
-# spacial part of DM
 def trans_rdm1(cibra, ciket, norb, nelec, link_index=None):
-    '''Spin traced transition 1-particle density matrices
+    r'''Spin traced transition 1-particle transition density matrices.
+
+    1pdm[p,q] = :math:`\langle q_\alpha^\dagger p_\alpha \rangle
+                       + \langle q_\beta^\dagger p_\beta \rangle`
     '''
     rdm1a, rdm1b = trans_rdm1s(cibra, ciket, norb, nelec, link_index)
     return rdm1a + rdm1b
 
 def trans_rdm12s(cibra, ciket, norb, nelec, link_index=None, reorder=True):
-    '''Spin separated transition 1- and 2-particle density matrices.
+    r'''Spin separated 1- and 2-particle transition density matrices.
+    The return values include two lists, a list of 1-particle transition
+    density matrices and a list of 2-particle transition density matrices.
+    The density matrices are:
+    (alpha,alpha), (beta,beta) for 1-particle transition density matrices;
+    (alpha,alpha,alpha,alpha), (alpha,alpha,beta,beta),
+    (beta,beta,alpha,alpha), (beta,beta,beta,beta) for 2-particle transition
+    density matrices.
+
+    1pdm[p,q] = :math:`\langle q^\dagger p\rangle`;
+    2pdm[p,q,r,s] = :math:`\langle p^\dagger r^\dagger s q\rangle`.
     '''
     dm1a, dm2aa = rdm.make_rdm12_spin1('FCItdm12kern_a', cibra, ciket,
                                        norb, nelec, link_index, 2)
@@ -318,7 +375,10 @@ def trans_rdm12s(cibra, ciket, norb, nelec, link_index=None, reorder=True):
     return (dm1a, dm1b), (dm2aa, dm2ab, dm2ba, dm2bb)
 
 def trans_rdm12(cibra, ciket, norb, nelec, link_index=None, reorder=True):
-    '''Spin traced transition 1- and 2-particle density matrices.
+    r'''Spin traced transition 1- and 2-particle transition density matrices.
+
+    1pdm[p,q] = :math:`\langle q^\dagger p\rangle`;
+    2pdm[p,q,r,s] = :math:`\langle p^\dagger r^\dagger s q\rangle`.
     '''
     #(dm1a, dm1b), (dm2aa, dm2ab, dm2ba, dm2bb) = \
     #        trans_rdm12s(cibra, ciket, norb, nelec, link_index, reorder)
@@ -409,13 +469,15 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
 
     if ci0 is None:
         if hasattr(fci, 'get_init_guess'):
-            ci0 = fci.get_init_guess(norb, nelec, nroots, hdiag)
+            ci0 = lambda: fci.get_init_guess(norb, nelec, nroots, hdiag)
         else:
-            ci0 = []
-            for i in range(nroots):
-                x = numpy.zeros(na*nb)
-                x[addr[i]] = 1
-                ci0.append(x)
+            def ci0():  # lazy initialization to reduce memory footprint
+                x0 = []
+                for i in range(nroots):
+                    x = numpy.zeros(na*nb)
+                    x[addr[i]] = 1
+                    x0.append(x)
+                return x0
     else:
         if isinstance(ci0, numpy.ndarray) and ci0.size == na*nb:
             ci0 = [ci0.ravel()]
@@ -428,13 +490,14 @@ def kernel_ms1(fci, h1e, eri, norb, nelec, ci0=None, link_index=None,
     if max_space is None: max_space = fci.max_space
     if max_memory is None: max_memory = fci.max_memory
     if verbose is None: verbose = logger.Logger(fci.stdout, fci.verbose)
+    tol_residual = getattr(fci, 'conv_tol_residual', None)
 
     with lib.with_omp_threads(fci.threads):
         #e, c = lib.davidson(hop, ci0, precond, tol=fci.conv_tol, lindep=fci.lindep)
         e, c = fci.eig(hop, ci0, precond, tol=tol, lindep=lindep,
                        max_cycle=max_cycle, max_space=max_space, nroots=nroots,
                        max_memory=max_memory, verbose=verbose, follow_state=True,
-                       **kwargs)
+                       tol_residual=tol_residual, **kwargs)
     if nroots > 1:
         return e+ecore, [ci.reshape(na,nb) for ci in c]
     else:
@@ -509,6 +572,10 @@ class FCISolver(lib.StreamObject):
 
     Saved results
 
+        eci : float or a list of float
+            FCI energy(ies)
+        ci : nparray
+            FCI wfn vector(s)
         converged : bool (or a list of bool for multiple roots)
             Whether davidson iteration is converged
 
@@ -524,6 +591,26 @@ class FCISolver(lib.StreamObject):
     >>> print(e)
     -14.4197890826
     '''
+
+    max_cycle = getattr(__config__, 'fci_direct_spin1_FCI_max_cycle', 100)
+    max_space = getattr(__config__, 'fci_direct_spin1_FCI_max_space', 12)
+    conv_tol = getattr(__config__, 'fci_direct_spin1_FCI_conv_tol', 1e-10)
+    conv_tol_residual = getattr(__config__, 'fci_direct_spin1_FCI_conv_tol_residual', None)
+    lindep = getattr(__config__, 'fci_direct_spin1_FCI_lindep', 1e-14)
+
+    # level shift in precond
+    level_shift = getattr(__config__, 'fci_direct_spin1_FCI_level_shift', 1e-3)
+
+    # force the diagonlization use davidson iteration.  When the CI space
+    # is small, the solver exactly diagonlizes the Hamiltonian.  But this
+    # solution will ignore the initial guess.  Setting davidson_only can
+    # enforce the solution on the initial guess state
+    davidson_only = getattr(__config__, 'fci_direct_spin1_FCI_davidson_only', False)
+
+    pspace_size = getattr(__config__, 'fci_direct_spin1_FCI_pspace_size', 400)
+    threads = getattr(__config__, 'fci_direct_spin1_FCI_threads', None)
+    lessio = getattr(__config__, 'fci_direct_spin1_FCI_lessio', False)
+
     def __init__(self, mol=None):
         if mol is None:
             self.stdout = sys.stdout
@@ -534,28 +621,34 @@ class FCISolver(lib.StreamObject):
             self.verbose = mol.verbose
             self.max_memory = mol.max_memory
         self.mol = mol
-        self.max_cycle = 100
-        self.max_space = 12
-        self.conv_tol = 1e-10
-        self.lindep = 1e-14
-# level shift in precond
-        self.level_shift = 1e-3
-        # force the diagonlization use davidson iteration.  When the CI space
-        # is small, the solver exactly diagonlizes the Hamiltonian.  But this
-        # solution will ignore the initial guess.  Setting davidson_only can
-        # enforce the solution on the initial guess state
-        self.davidson_only = False
         self.nroots = 1
-        self.pspace_size = 400
         self.spin = None
 # Initialize symmetry attributes for the compatibility with direct_spin1_symm
 # solver.  They are not used by direct_spin1 solver.
         self.orbsym = None
         self.wfnsym = None
-        self.threads = None
 
         self.converged = False
-        self._keys = set(self.__dict__.keys())
+        self.norb = None
+        self.nelec = None
+        self.eci = None
+        self.ci = None
+
+        keys = set(('max_cycle', 'max_space', 'conv_tol', 'lindep',
+                    'level_shift', 'davidson_only', 'pspace_size', 'threads',
+                    'lessio'))
+        self._keys = set(self.__dict__.keys()).union(keys)
+
+    @property
+    def e_tot(self):
+        return self.eci
+
+    @property
+    def nstates(self):
+        return self.nroots
+    @nstates.setter
+    def nstates(self, x):
+        self.nroots = x
 
     def dump_flags(self, verbose=None):
         if verbose is None: verbose = self.verbose
@@ -598,13 +691,9 @@ class FCISolver(lib.StreamObject):
             self.converged = True
             return scipy.linalg.eigh(op)
 
-        if kwargs['nroots'] == 1 and x0[0].size > 6.5e7: # 500MB
-            lessio = True
-        else:
-            lessio = False
         self.converged, e, ci = \
                 lib.davidson1(lambda xs: [op(x) for x in xs],
-                              x0, precond, lessio=lessio, **kwargs)
+                              x0, precond, lessio=self.lessio, **kwargs)
         if kwargs['nroots'] == 1:
             self.converged = self.converged[0]
             e = e[0]
@@ -629,9 +718,13 @@ class FCISolver(lib.StreamObject):
                orbsym=None, wfnsym=None, ecore=0, **kwargs):
         if self.verbose >= logger.WARN:
             self.check_sanity()
-        return kernel_ms1(self, h1e, eri, norb, nelec, ci0, None,
-                          tol, lindep, max_cycle, max_space, nroots,
-                          davidson_only, pspace_size, ecore=ecore, **kwargs)
+        self.norb = norb
+        self.nelec = nelec
+        self.eci, self.ci = \
+                kernel_ms1(self, h1e, eri, norb, nelec, ci0, None,
+                           tol, lindep, max_cycle, max_space, nroots,
+                           davidson_only, pspace_size, ecore=ecore, **kwargs)
+        return self.eci, self.ci
 
     @lib.with_doc(energy.__doc__)
     def energy(self, h1e, eri, fcivec, norb, nelec, link_index=None):
@@ -651,6 +744,7 @@ class FCISolver(lib.StreamObject):
 
     @lib.with_doc(make_rdm1.__doc__)
     def make_rdm1(self, fcivec, norb, nelec, link_index=None):
+        nelec = _unpack_nelec(nelec, self.spin)
         return make_rdm1(fcivec, norb, nelec, link_index)
 
     @lib.with_doc(make_rdm12s.__doc__)
@@ -694,7 +788,9 @@ class FCISolver(lib.StreamObject):
         nelec = _unpack_nelec(nelec, self.spin)
         return trans_rdm12(cibra, ciket, norb, nelec, link_index, reorder)
 
-    def large_ci(self, fcivec, norb, nelec, tol=.1, return_strs=True):
+    def large_ci(self, fcivec, norb, nelec,
+                 tol=getattr(__config__, 'fci_addons_large_ci_tol', .1),
+                 return_strs=getattr(__config__, 'fci_addons_large_ci_return_strs', True)):
         from pyscf.fci import addons
         nelec = _unpack_nelec(nelec, self.spin)
         return addons.large_ci(fcivec, norb, nelec, tol, return_strs)

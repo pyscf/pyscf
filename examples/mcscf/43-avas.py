@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 #
-# Author: Qiming Sun <osirpt.sun@gmail.com>
+# Author: Elvira R. Sayfutyarova <elviras@princeton.edu>
+#         Qiming Sun <osirpt.sun@gmail.com>
 #
 
 '''
@@ -42,10 +43,9 @@ H      1.347694   -1.854942    1.638208
 '''
 mol.basis = 'cc-pvtz-dk'
 mol.spin = 0
-mol.verbose = 4
 mol.build()
 
-mf = scf.sfx2c1e(scf.ROHF(mol))
+mf = scf.ROHF(mol).x2c()
 mf.kernel()
 
 #
@@ -57,16 +57,11 @@ from pyscf.mcscf import avas
 ao_labels = ['Fe 3d', 'C 2pz']
 norb, ne_act, orbs = avas.avas(mf, ao_labels, canonicalize=False)
 
-
-#==================================================================================
-#             run CASSCF with this active space for 7 singlet and 6 triplet states
-#==================================================================================
-
 weights = numpy.ones(13)/13
-solver1 = fci.addons.fix_spin(fci.direct_spin1.FCI(mol), ss=2)
+solver1 = fci.addons.fix_spin(fci.direct_spin1.FCI(mol), ss=2) # <S^2> = 2 for Triplet
 solver1.spin = 2
 solver1.nroots = 6
-solver2 = fci.addons.fix_spin(fci.direct_spin1.FCI(mol), ss=0)
+solver2 = fci.addons.fix_spin(fci.direct_spin1.FCI(mol), ss=0) # <S^2> = 0 for Singlet
 solver2.spin = 0
 solver2.nroots = 7
 
@@ -75,5 +70,4 @@ mycas.chkfile ='fecp2_3dpz.chk'
 mcscf.state_average_mix_(mycas, [solver1, solver2], weights)
 mycas.verbose = 6
 mycas.kernel(orbs)
-
 

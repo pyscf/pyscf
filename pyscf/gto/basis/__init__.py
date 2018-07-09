@@ -1,6 +1,20 @@
 #!/usr/bin/env python
-# -*- coding: utf-8
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
 # Author: Qiming Sun <osirpt.sun@gmail.com>
+#
 
 import os
 import sys
@@ -9,6 +23,7 @@ if sys.version_info < (2,7):
 else:
     import importlib
 from pyscf.gto.basis import parse_nwchem
+from pyscf import __config__
 
 ALIAS = {
     'ano'        : 'ano.dat'        ,
@@ -158,8 +173,11 @@ ALIAS = {
     'tzv'        : 'tzv.dat'        ,
     'weigend'    : 'weigend_cfit.dat',
     'weigend+etb': 'weigend_cfit.dat',
+    'weigendcfit': 'weigend_cfit.dat',
     'demon'      : 'demon_cfit.dat' ,
+    'demoncfit'  : 'demon_cfit.dat' ,
     'ahlrichs'   : 'ahlrichs_cfit.dat',
+    'ahlrichscfit': 'ahlrichs_cfit.dat',
     'ccpvtzfit'  : 'cc-pvtz_fit.dat',
     'ccpvdzfit'  : 'cc-pvdz_fit.dat',
     'ccpwcvtzmp2fit': 'cc-pwCVTZ_MP2FIT.dat',
@@ -295,37 +313,20 @@ def _parse_pople_basis(basis, symb):
     else:
         return tuple([ALIAS[mbas]] + convert(extension.split(',')[0]))
 
-def parse(string, symb=None):
-    '''Parse the NWChem format basis or ECP text, return an internal basis (ECP)
-    format which can be assigned to :attr:`Mole.basis` or :attr:`Mole.ecp`
-
-    Args:
-        string : Blank linke and the lines of "BASIS SET" and "END" will be ignored
-
-    Examples:
-
-    >>> mol = gto.Mole()
-    >>> mol.basis = {'O': gto.basis.parse("""
-    ... #BASIS SET: (6s,3p) -> [2s,1p]
-    ... C    S
-    ...      71.6168370              0.15432897
-    ...      13.0450960              0.53532814
-    ...       3.5305122              0.44463454
-    ... C    SP
-    ...       2.9412494             -0.09996723             0.15591627
-    ...       0.6834831              0.39951283             0.60768372
-    ...       0.2222899              0.70011547             0.39195739
-    ... """)}
-    '''
+OPTIMIZE_CONTRACTION = getattr(__config__, 'gto_basis_parse_optimize', False)
+def parse(string, symb=None, optimize=OPTIMIZE_CONTRACTION):
     if 'ECP' in string:
         return parse_nwchem.parse_ecp(string, symb)
     else:
-        return parse_nwchem.parse(string, symb)
+        return parse_nwchem.parse(string, symb, optimize)
+parse.__doc__ = parse_nwchem.parse.__doc__
 
 def parse_ecp(string, symb=None):
+    # TODO: catch KeyError and provide suggestion for the possible keys
     return parse_nwchem.parse_ecp(string, symb)
+parse_ecp.__doc__ = parse_nwchem.parse_ecp.__doc__
 
-def load(filename_or_basisname, symb):
+def load(filename_or_basisname, symb, optimize=OPTIMIZE_CONTRACTION):
     '''Convert the basis of the given symbol to internal format
 
     Args:
@@ -345,7 +346,7 @@ def load(filename_or_basisname, symb):
     if os.path.isfile(filename_or_basisname):
         # read basis from given file
         try:
-            return parse_nwchem.load(filename_or_basisname, symb)
+            return parse_nwchem.load(filename_or_basisname, symb, optimize)
         except RuntimeError:
             with open(filename_or_basisname, 'r') as fin:
                 return parse_nwchem.parse(fin.read(), symb)
@@ -355,9 +356,12 @@ def load(filename_or_basisname, symb):
         try:
             return parse_nwchem.parse(filename_or_basisname, symb)
         except KeyError:
-            return parse_nwchem.parse(filename_or_basisname)
+            try:
+                return parse_nwchem.parse(filename_or_basisname)
+            except IndexError:
+                raise KeyError('Invalid basis name %s' % filename_or_basisname)
         except IndexError:
-            raise RuntimeError('Basis %s not found' % filename_or_basisname)
+            raise KeyError('Basis %s not found' % filename_or_basisname)
 
     if name in ALIAS:
         basmod = ALIAS[name]
@@ -367,11 +371,11 @@ def load(filename_or_basisname, symb):
         raise RuntimeError('Basis %s not found' % filename_or_basisname)
 
     if 'dat' in basmod:
-        b = parse_nwchem.load(os.path.join(_BASIS_DIR, basmod), symb)
+        b = parse_nwchem.load(os.path.join(_BASIS_DIR, basmod), symb, optimize)
     elif isinstance(basmod, (tuple, list)) and isinstance(basmod[0], str):
         b = []
         for f in basmod:
-            b += parse_nwchem.load(os.path.join(_BASIS_DIR, f), symb)
+            b += parse_nwchem.load(os.path.join(_BASIS_DIR, f), symb, optimize)
     else:
         if sys.version_info < (2,7):
             fp, pathname, description = imp.find_module(basmod, __path__)
@@ -404,3 +408,5 @@ def load_ecp(filename_or_basisname, symb):
 
 def _format_basis_name(basisname):
     return basisname.lower().replace('-', '').replace('_', '').replace(' ', '')
+
+del(OPTIMIZE_CONTRACTION)

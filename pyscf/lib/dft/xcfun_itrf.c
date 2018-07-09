@@ -1,4 +1,18 @@
-/*
+/* Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+  
+   Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+ 
+        http://www.apache.org/licenses/LICENSE-2.0
+ 
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+ *
  * Author: Qiming Sun <osirpt.sun@gmail.com>
  *
  * xcfun Library from
@@ -9,75 +23,26 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <xcfun.h>
+#include "config.h"
 
-static enum xcfun_parameters CONVERT2ENUM[] = {
-        XC_SLATERX,
-        XC_VWN5C,
-        XC_BECKEX,
-        XC_BECKECORRX,
-        XC_BECKESRX,
-        XC_OPTX,
-        XC_LYPC,
-        XC_PBEX,
-        XC_REVPBEX,
-        XC_RPBEX,
-        XC_PBEC,
-        XC_SPBEC,
-        XC_VWN_PBEC,
-        XC_LDAERFX,
-        XC_LDAERFC,
-        XC_LDAERFC_JT,
-        XC_RANGESEP_MU,
-        XC_KTX,
-        XC_TFK,
-        XC_PW91X,
-        XC_PW91K,
-        XC_PW92C,
-        XC_M05X,
-        XC_M05X2X,
-        XC_M06X,
-        XC_M06X2X,
-        XC_M06LX,
-        XC_M06HFX,
-        XC_BRX,
-        XC_M05X2C,
-        XC_M05C,
-        XC_M06C,
-        XC_M06LC,
-        XC_M06X2C,
-        XC_TPSSC,
-        XC_TPSSX,
-        XC_REVTPSSC,
-        XC_REVTPSSX,
-};
-
-/*
- * XC_LDA      0 // Local density
- * XC_GGA      1 // Local density & gradient
- * XC_MGGA     2 // Local density, gradient and kinetic energy density
- * XC_MLGGA    3 // Local density, gradient, laplacian and kinetic energy density
- */
-int XCFUN_xc_type(int fn_id)
+static int eval_xc(xc_functional fun, int deriv, enum xc_vars vars,
+                   int np, int ncol, double *rho, double *output)
 {
-        xc_functional fun = xc_new_functional();
-        assert(fn_id < XC_NR_PARAMS);
-        xc_set_param(fun, CONVERT2ENUM[fn_id], 1);
-        int type = xc_get_type(fun);
-        xc_free_functional(fun);
-        return type;
-}
+        xc_eval_setup(fun, vars, XC_PARTIAL_DERIVATIVES, deriv);
+        assert(ncol == xc_input_length(fun));
+        int outlen = xc_output_length(fun);
 
-int XCFUN_input_length(int nfn, int *fn_id, double *fac)
+        //xc_eval_vec(fun, np, rho, ncol, output, outlen);
+#pragma omp parallel default(none) \
+        shared(fun, rho, output, np, ncol, outlen)
 {
         int i;
-        xc_functional fun = xc_new_functional();
-        for (i = 0; i < nfn; i++) {
-                assert(fn_id[i] < XC_NR_PARAMS);
-                xc_set_param(fun, CONVERT2ENUM[fn_id[i]], fac[i]);
+#pragma omp for nowait schedule(static)
+        for (i=0; i < np; i++) {
+                xc_eval(fun, rho+i*ncol, output+i*outlen);
         }
-        int nvar = xc_input_length(fun);
-        xc_free_functional(fun);
-        return nvar;
+}
+        return outlen;
 }
 
 void XCFUN_eval_xc(int nfn, int *fn_id, double *fac,
@@ -87,32 +52,16 @@ void XCFUN_eval_xc(int nfn, int *fn_id, double *fac,
         int i, outlen;
         double *rho;
         double *gxu, *gyu, *gzu, *gxd, *gyd, *gzd, *tau_u, *tau_d;
+        const char *name;
+
         xc_functional fun = xc_new_functional();
         for (i = 0; i < nfn; i++) {
-                assert(fn_id[i] < XC_NR_PARAMS);
-                xc_set_param(fun, CONVERT2ENUM[fn_id[i]], fac[i]);
+                name = xc_enumerate_parameters(fn_id[i]);
+                xc_set(fun, name, fac[i]);
         }
 
         if (spin == 0) {
-                xc_set_mode(fun, XC_VARS_N);
-                outlen = xc_output_length(fun, deriv);
-                switch (xc_get_type(fun)) {
-                case XC_LDA:
-                        xc_eval_vec(fun, deriv, np, rho_u, 1, output, outlen);
-                        break;
-                case XC_GGA:
-                        rho = malloc(sizeof(double) * np*2);
-                        gxu = rho_u + np;
-                        gyu = rho_u + np * 2;
-                        gzu = rho_u + np * 3;
-                        for (i = 0; i < np; i++) {
-                                rho[i*2+0] = rho_u[i];
-                                rho[i*2+1] = gxu[i]*gxu[i] + gyu[i]*gyu[i] + gzu[i]*gzu[i];
-                        }
-                        xc_eval_vec(fun, deriv, np, rho, 2, output, outlen);
-                        free(rho);
-                        break;
-                case XC_MGGA:
+                if (xc_is_metagga(fun)) {
                         rho = malloc(sizeof(double) * np*3);
                         gxu = rho_u + np;
                         gyu = rho_u + np * 2;
@@ -123,49 +72,29 @@ void XCFUN_eval_xc(int nfn, int *fn_id, double *fac,
                                 rho[i*3+1] = gxu[i]*gxu[i] + gyu[i]*gyu[i] + gzu[i]*gzu[i];
                                 rho[i*3+2] = tau_u[i];
                         }
-                        xc_eval_vec(fun, deriv, np, rho, 3, output, outlen);
+                        outlen = eval_xc(fun, deriv, XC_N_GNN_TAUN, np, 3, rho, output);
                         free(rho);
-                        break;
-                default:  // XC_MLGGA:
-                        fprintf(stderr, "MLGGA not implemented in xcfun\n");
-                        exit(1);
+                } else if (xc_is_gga(fun)) {
+                        rho = malloc(sizeof(double) * np*2);
+                        gxu = rho_u + np;
+                        gyu = rho_u + np * 2;
+                        gzu = rho_u + np * 3;
+                        for (i = 0; i < np; i++) {
+                                rho[i*2+0] = rho_u[i];
+                                rho[i*2+1] = gxu[i]*gxu[i] + gyu[i]*gyu[i] + gzu[i]*gzu[i];
+                        }
+                        outlen = eval_xc(fun, deriv, XC_N_GNN, np, 2, rho, output);
+                        free(rho);
+                } else { // LDA
+                        rho = rho_u;
+                        outlen = eval_xc(fun, deriv, XC_N, np, 1, rho, output);
                 }
 // xcfun computed rho*Exc[rho] for zeroth order deriviative instead of Exc[rho]
                 for (i = 0; i < np; i++) {
                         output[i*outlen] /= rho_u[i] + 1e-150;
                 }
         } else {
-                xc_set_mode(fun, XC_VARS_AB);
-                outlen = xc_output_length(fun, deriv);
-                switch (xc_get_type(fun)) {
-                case XC_LDA:
-                        rho = malloc(sizeof(double) * np*2);
-                        for (i = 0; i < np; i++) {
-                                rho[i*2+0] = rho_u[i];
-                                rho[i*2+1] = rho_d[i];
-                        }
-                        xc_eval_vec(fun, deriv, np, rho, 2, output, outlen);
-                        free(rho);
-                        break;
-                case XC_GGA:
-                        rho = malloc(sizeof(double) * np*5);
-                        gxu = rho_u + np;
-                        gyu = rho_u + np * 2;
-                        gzu = rho_u + np * 3;
-                        gxd = rho_d + np;
-                        gyd = rho_d + np * 2;
-                        gzd = rho_d + np * 3;
-                        for (i = 0; i < np; i++) {
-                                rho[i*5+0] = rho_u[i];
-                                rho[i*5+1] = rho_d[i];
-                                rho[i*5+2] = gxu[i]*gxu[i] + gyu[i]*gyu[i] + gzu[i]*gzu[i];
-                                rho[i*5+3] = gxu[i]*gxd[i] + gyu[i]*gyd[i] + gzu[i]*gzd[i];
-                                rho[i*5+4] = gxd[i]*gxd[i] + gyd[i]*gyd[i] + gzd[i]*gzd[i];
-                        }
-                        xc_eval_vec(fun, deriv, np, rho, 5, output, outlen);
-                        free(rho);
-                        break;
-                case XC_MGGA:
+                if (xc_is_metagga(fun)) {
                         rho = malloc(sizeof(double) * np*7);
                         gxu = rho_u + np;
                         gyu = rho_u + np * 2;
@@ -184,12 +113,33 @@ void XCFUN_eval_xc(int nfn, int *fn_id, double *fac,
                                 rho[i*7+5] = tau_u[i];
                                 rho[i*7+6] = tau_d[i];
                         }
-                        xc_eval_vec(fun, deriv, np, rho, 7, output, outlen);
+                        outlen = eval_xc(fun, deriv, XC_A_B_GAA_GAB_GBB_TAUA_TAUB, np, 7, rho, output);
                         free(rho);
-                        break;
-                default:  // XC_MLGGA:
-                        fprintf(stderr, "MLGGA not implemented in xcfun\n");
-                        exit(1);
+                } else if (xc_is_gga(fun)) {
+                        rho = malloc(sizeof(double) * np*5);
+                        gxu = rho_u + np;
+                        gyu = rho_u + np * 2;
+                        gzu = rho_u + np * 3;
+                        gxd = rho_d + np;
+                        gyd = rho_d + np * 2;
+                        gzd = rho_d + np * 3;
+                        for (i = 0; i < np; i++) {
+                                rho[i*5+0] = rho_u[i];
+                                rho[i*5+1] = rho_d[i];
+                                rho[i*5+2] = gxu[i]*gxu[i] + gyu[i]*gyu[i] + gzu[i]*gzu[i];
+                                rho[i*5+3] = gxu[i]*gxd[i] + gyu[i]*gyd[i] + gzu[i]*gzd[i];
+                                rho[i*5+4] = gxd[i]*gxd[i] + gyd[i]*gyd[i] + gzd[i]*gzd[i];
+                        }
+                        outlen = eval_xc(fun, deriv, XC_A_B_GAA_GAB_GBB, np, 5, rho, output);
+                        free(rho);
+                } else { // LDA
+                        rho = malloc(sizeof(double) * np*2);
+                        for (i = 0; i < np; i++) {
+                                rho[i*2+0] = rho_u[i];
+                                rho[i*2+1] = rho_d[i];
+                        }
+                        outlen = eval_xc(fun, deriv, XC_A_B, np, 2, rho, output);
+                        free(rho);
                 }
                 for (i = 0; i < np; i++) {
                         output[i*outlen] /= rho_u[i] + rho_d[i] + 1e-150;
@@ -198,3 +148,22 @@ void XCFUN_eval_xc(int nfn, int *fn_id, double *fac,
         xc_free_functional(fun);
 }
 
+/*
+ * XC_LDA      0 // Local density
+ * XC_GGA      1 // Local density & gradient
+ * XC_MGGA     2 // Local density, gradient and kinetic energy density
+ */
+int XCFUN_xc_type(int fn_id)
+{
+        xc_functional fun = xc_new_functional();
+        const char *name = xc_enumerate_parameters(fn_id);
+        xc_set(fun, name, 1.);
+        int type = 0;
+        if (xc_is_metagga(fun)) {
+                type = 2;
+        } else if (xc_is_gga(fun)) {
+                type = 1;
+        }
+        xc_free_functional(fun);
+        return type;
+}

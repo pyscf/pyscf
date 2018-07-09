@@ -1,4 +1,20 @@
-/*
+/* Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+  
+   Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+ 
+        http://www.apache.org/licenses/LICENSE-2.0
+ 
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+ *
+ * Author: Qiming Sun <osirpt.sun@gmail.com>
+ *
  * Paticle permutation symmetry for 2e Hamiltonian only
  * h2e[i,j,k,l] == h2e[k,l,i,j]
  * h2e[i,j,k,l] =/= h2e[j,i,k,l] =/= h2e[i,j,l,k] ...
@@ -187,8 +203,8 @@ void FCIcontract_2es1(double *eri, double *ci0, double *ci1,
                clinka, clinkb)
 {
         int strk, ib, blen;
-        double *t1buf = malloc(sizeof(double) * STRB_BLKSIZE*norb*norb*2);
-        double *ci1buf = malloc(sizeof(double) * na*STRB_BLKSIZE);
+        double *t1buf = malloc(sizeof(double) * (STRB_BLKSIZE*norb*norb*2+2));
+        double *ci1buf = malloc(sizeof(double) * (na*STRB_BLKSIZE+2));
         for (ib = 0; ib < nb; ib += STRB_BLKSIZE) {
                 blen = MIN(STRB_BLKSIZE, nb-ib);
                 memset(ci1buf, 0, sizeof(double) * na*blen);

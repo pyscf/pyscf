@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 import sys
 import ctypes
@@ -62,7 +75,7 @@ def trans_e1_incore(eri_ao, mo, ncore, ncas):
 
 
 # level = 1: ppaa, papa and jpc, kpc
-# level = 2 or 3: ppaa, papa
+# level > 1: ppaa, papa only.  It affects accuracy of hdiag
 def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
                      max_memory=None, level=1, verbose=logger.WARN):
     time0 = (time.clock(), time.time())
@@ -135,7 +148,7 @@ def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
                  ctypes.POINTER(ctypes.c_void_p)(), ctypes.c_int(0))
             p0 = 0
             for ij in range(sh_range[0], sh_range[1]):
-                i,j = _ao2mo._extract_pair(ij)
+                i,j = lib.index_tril_to_pair(ij)
                 i0 = ao_loc[i]
                 j0 = ao_loc[j]
                 i1 = ao_loc[i+1]
@@ -183,7 +196,7 @@ def trans_e1_outcore(mol, mo, ncore, ncas, erifile,
                 bufpa.reshape(sh_range[2],nmo,ncas)[:,ncore:nocc].reshape(-1,ncas**2).T
         p0 = 0
         for ij in range(sh_range[0], sh_range[1]):
-            i,j = _ao2mo._extract_pair(ij)
+            i,j = lib.index_tril_to_pair(ij)
             i0 = ao_loc[i]
             j0 = ao_loc[j]
             i1 = ao_loc[i+1]
@@ -294,8 +307,6 @@ def _mem_usage(ncore, ncas, nmo):
     nvir = nmo - ncore
     outcore = basic = ncas**2*nmo**2*2 * 8/1e6
     incore = outcore + (ncore+ncas)*nmo**3*4/1e6
-    if outcore > 10000:
-        sys.stderr.write('Be careful with the virtual memorty address space `ulimit -v`\n')
     return incore, outcore, basic
 
 def prange(start, end, step):

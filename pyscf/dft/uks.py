@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -12,6 +25,7 @@ import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import uhf
+from pyscf.scf import jk
 from pyscf.dft import rks
 
 
@@ -34,41 +48,66 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         if ks.small_rho_cutoff > 1e-20 and ground_state:
             ks.grids = rks.prune_small_rho_grids_(ks, mol, dm[0]+dm[1], ks.grids)
         t0 = logger.timer(ks, 'setting up grids', *t0)
+    if ks.nlc != '':
+        if ks.nlcgrids.coords is None:
+            ks.nlcgrids.build(with_non0tab=True)
+            if ks.small_rho_cutoff > 1e-20 and ground_state:
+                ks.nlcgrids = rks.prune_small_rho_grids_(ks, mol, dm[0]+dm[1], ks.nlcgrids)
+            t0 = logger.timer(ks, 'setting up nlc grids', *t0)
 
+    ni = ks._numint
     if hermi == 2:  # because rho = 0
         n, exc, vxc = (0,0), 0, 0
     else:
-        n, exc, vxc = ks._numint.nr_uks(mol, ks.grids, ks.xc, dm)
+        n, exc, vxc = ni.nr_uks(mol, ks.grids, ks.xc, dm)
+        if ks.nlc != '':
+            assert('VV10' in ks.nlc.upper())
+            _, enlc, vnlc = ni.nr_rks(mol, ks.nlcgrids, ks.xc+'__'+ks.nlc, dm[0]+dm[1])
+            exc += enlc
+            vxc += vnlc
         logger.debug(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
 
-    hyb = ks._numint.hybrid_coeff(ks.xc, spin=mol.spin)
-    if abs(hyb) < 1e-10:
+    #enabling range-separated hybrids
+    omega, alpha, hyb = ni.rsh_and_hybrid_coeff(ks.xc, spin=mol.spin)
+
+    if abs(hyb) < 1e-10 and abs(alpha) < 1e-10:
         vk = None
         if (ks._eri is None and ks.direct_scf and
             getattr(vhf_last, 'vj', None) is not None):
             ddm = numpy.asarray(dm) - numpy.asarray(dm_last)
-            vj = ks.get_j(mol, ddm, hermi)
+            vj = ks.get_j(mol, ddm[0]+ddm[1], hermi)
             vj += vhf_last.vj
         else:
-            vj = ks.get_j(mol, dm, hermi)
-        vxc += vj[0] + vj[1]
+            vj = ks.get_j(mol, dm[0]+dm[1], hermi)
+        vxc += vj
     else:
         if (ks._eri is None and ks.direct_scf and
             getattr(vhf_last, 'vk', None) is not None):
             ddm = numpy.asarray(dm) - numpy.asarray(dm_last)
             vj, vk = ks.get_jk(mol, ddm, hermi)
-            vj += vhf_last.vj
+            vk *= hyb
+            if abs(omega) > 1e-10:
+                vklr = rks._get_k_lr(mol, ddm, omega, hermi)
+                vklr *= (alpha - hyb)
+                vk += vklr
+            vj = vj[0] + vj[1] + vhf_last.vj
             vk += vhf_last.vk
         else:
             vj, vk = ks.get_jk(mol, dm, hermi)
-        vxc += vj[0] + vj[1] - vk * hyb
+            vj = vj[0] + vj[1]
+            vk *= hyb
+            if abs(omega) > 1e-10:
+                vklr = rks._get_k_lr(mol, dm, omega, hermi)
+                vklr *= (alpha - hyb)
+                vk += vklr
+        vxc += vj - vk
 
         if ground_state:
             exc -=(numpy.einsum('ij,ji', dm[0], vk[0]) +
-                   numpy.einsum('ij,ji', dm[1], vk[1])) * hyb * .5
+                   numpy.einsum('ij,ji', dm[1], vk[1])) * .5
     if ground_state:
-        ecoul = numpy.einsum('ij,ji', dm[0]+dm[1], vj[0]+vj[1]) * .5
+        ecoul = numpy.einsum('ij,ji', dm[0]+dm[1], vj) * .5
     else:
         ecoul = None
 
@@ -99,12 +138,18 @@ class UKS(uhf.UHF):
     def dump_flags(self):
         uhf.UHF.dump_flags(self)
         logger.info(self, 'XC functionals = %s', self.xc)
+        if self.nlc!='':
+            logger.info(self, 'NLC functional = %s', self.nlc)
         logger.info(self, 'small_rho_cutoff = %g', self.small_rho_cutoff)
         self.grids.dump_flags()
 
     get_veff = get_veff
     energy_elec = energy_elec
     define_xc_ = rks.define_xc_
+
+    def nuc_grad_method(self):
+        from pyscf.grad import uks
+        return uks.Gradients(self)
 
 
 if __name__ == '__main__':

@@ -1,3 +1,17 @@
+#!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -8,7 +22,7 @@ Generate symmetry adapted basis
 
 from functools import reduce
 import numpy
-from pyscf.gto import mole
+from pyscf.data.elements import _symbol, _rm_digit
 from pyscf.symm import geom
 from pyscf.symm import param
 
@@ -101,17 +115,17 @@ def dump_symm_adapted_basis(mol, so):
     raise RuntimeError('TODO')
 
 def symmetrize_matrix(mat, so):
-    return [reduce(numpy.dot, (c.T,mat,c)) for c in so]
+    return [reduce(numpy.dot, (c.conj().T,mat,c)) for c in so]
 
 def _basis_offset_for_atoms(atoms, basis_tab):
     basoff = [0]
     n = 0
     for at in atoms:
-        symb = mole._symbol(at[0])
+        symb = _symbol(at[0])
         if symb in basis_tab:
             bas0 = basis_tab[symb]
         else:
-            bas0 = basis_tab[mole._rm_digit(symb)]
+            bas0 = basis_tab[_rm_digit(symb)]
         for b in bas0:
             angl = b[0]
             n += _num_contract(b) * (angl*2+1)
@@ -419,7 +433,8 @@ def linearmole_symm_adapted_basis(mol, gpname, eql_atom_ids=None):
 
 
 if __name__ == "__main__":
-    h2o = mole.Mole()
+    from pyscf import gto
+    h2o = gto.Mole()
     h2o.verbose = 0
     h2o.output = None
     h2o.atom = [['O' , (1. , 0.    , 0.   ,)],
@@ -429,27 +444,27 @@ if __name__ == "__main__":
                  'O': 'cc-pvdz',}
     h2o.build()
     gpname, origin, axes = geom.detect_symm(h2o._atom)
-    atoms = mole.format_atom(h2o._atom, origin, axes)
+    atoms = gto.format_atom(h2o._atom, origin, axes)
     h2o.build(False, False, atom=atoms)
     print(gpname)
     eql_atoms = geom.symm_identical_atoms(gpname, atoms)
     print(symm_adapted_basis(h2o, gpname, eql_atoms)[1])
 
-    mol = mole.M(
+    mol = gto.M(
         atom = [['H', (0,0,0)], ['H', (0,0,-1)], ['H', (0,0,1)]],
         basis = 'ccpvtz', charge=1)
     gpname, orig, axes = geom.detect_symm(mol._atom)
-    atoms = mole.format_atom(mol._atom, orig, axes)
+    atoms = gto.format_atom(mol._atom, orig, axes)
     mol.build(False, False, atom=atoms)
     print(gpname)
     eql_atoms = geom.symm_identical_atoms(gpname, atoms)
     print(symm_adapted_basis(mol, gpname, eql_atoms)[1])
 
-    mol = mole.M(
+    mol = gto.M(
         atom = [['H', (0,0,0)], ['H', (0,0,-1)], ['He', (0,0,1)]],
         basis = 'ccpvtz')
     gpname, orig, axes = geom.detect_symm(mol._atom)
-    atoms = mole.format_atom(mol._atom, orig, axes)
+    atoms = gto.format_atom(mol._atom, orig, axes)
     mol.build(False, False, atom=atoms)
     print(gpname)
     eql_atoms = geom.symm_identical_atoms(gpname, atoms)

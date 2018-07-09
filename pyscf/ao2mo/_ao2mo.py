@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 import ctypes
 import _ctypes
@@ -41,6 +54,9 @@ class AO2MOpt(object):
                       c_atm.ctypes.data_as(ctypes.c_void_p), natm,
                       c_bas.ctypes.data_as(ctypes.c_void_p), nbas,
                       c_env.ctypes.data_as(ctypes.c_void_p))
+
+    def __del__(self):
+        libao2mo.CVHFdel_optimizer(ctypes.byref(self._this))
 
 
 # if out is not None, transform AO to MO in-place
@@ -113,11 +129,7 @@ def nr_e1(eri, mo_coeff, orbs_slice, aosym='s1', mosym='s1', out=None):
             fmmm = _fpointer('AO2MOmmm_nr_s1_igtj')
 
     nrow = eri.shape[0]
-
-    if out is None:
-        out = numpy.empty((nrow,ij_count))
-    else:
-        out = numpy.ndarray((nrow,ij_count), buffer=out)
+    out = numpy.ndarray((nrow,ij_count), buffer=out)
     if out.size == 0:
         return out
 
@@ -141,6 +153,7 @@ def nr_e2(eri, mo_coeff, orbs_slice, aosym='s1', mosym='s1', out=None,
     assert(aosym in ('s4', 's2ij', 's2kl', 's2', 's1'))
     assert(mosym in ('s2', 's1'))
     mo_coeff = numpy.asfortranarray(mo_coeff)
+    assert(mo_coeff.dtype == numpy.double)
     nao = mo_coeff.shape[0]
     k0, k1, l0, l1 = orbs_slice
     kc = k1 - k0
@@ -163,11 +176,7 @@ def nr_e2(eri, mo_coeff, orbs_slice, aosym='s1', mosym='s1', out=None,
             fmmm = _fpointer('AO2MOmmm_nr_s1_igtj')
 
     nrow = eri.shape[0]
-
-    if out is None:
-        out = numpy.empty((nrow,kl_count))
-    else:
-        out = numpy.ndarray((nrow,kl_count), buffer=out)
+    out = numpy.ndarray((nrow,kl_count), buffer=out)
     if out.size == 0:
         return out
 
@@ -216,11 +225,7 @@ def r_e1(intor, mo_coeff, orbs_slice, sh_range, atm, bas, env,
     else:
         fmmm = _fpointer('AO2MOmmm_r_igtj')
 
-    if out is None:
-        out = numpy.empty((comp,nkl,ij_count), dtype=numpy.complex)
-    else:
-        out = numpy.ndarray((comp,nkl,nao_pair), dtype=numpy.complex,
-                            buffer=out)
+    out = numpy.ndarray((comp,nkl,ij_count), dtype=numpy.complex, buffer=out)
     if out.size == 0:
         return out
 
@@ -257,7 +262,7 @@ def r_e2(eri, mo_coeff, orbs_slice, tao, ao_loc, aosym='s1', out=None):
     assert(eri.flags.c_contiguous)
     assert(aosym in ('s4', 's2ij', 's2kl', 's1', 'a2ij', 'a2kl', 'a4ij',
                      'a4kl', 'a4'))
-    mo_coeff = numpy.asfortranarray(mo_coeff)
+    mo_coeff = numpy.asarray(mo_coeff, dtype=numpy.complex128, order='F')
     nao = mo_coeff.shape[0]
     k0, k1, l0, l1 = orbs_slice
     kc = k1 - k0
@@ -270,12 +275,7 @@ def r_e2(eri, mo_coeff, orbs_slice, tao, ao_loc, aosym='s1', out=None):
         fmmm = _fpointer('AO2MOmmm_r_igtj')
 
     nrow = eri.shape[0]
-
-    if out is None:
-        out = numpy.empty((nrow,kl_count), dtype=numpy.complex)
-    else:
-        out = numpy.ndarray((nrow,kl_count), dtype=numpy.complex,
-                            buffer=out)
+    out = numpy.ndarray((nrow,kl_count), dtype=numpy.complex128, buffer=out)
     if out.size == 0:
         return out
 
@@ -299,16 +299,4 @@ def r_e2(eri, mo_coeff, orbs_slice, tao, ao_loc, aosym='s1', out=None):
          (ctypes.c_int*4)(*orbs_slice),
          tao.ctypes.data_as(ctypes.c_void_p), c_ao_loc, c_nbas)
     return out
-
-
-def _get_num_threads():
-    libao2mo.omp_get_num_threads.restype = ctypes.c_int
-    nthreads = libao2mo.omp_get_num_threads()
-    return nthreads
-
-# ij = i * (i+1) / 2 + j
-def _extract_pair(ij):
-    i = int(numpy.sqrt(2*ij+.25) - .5 + 1e-7)
-    j = ij - i*(i+1)//2
-    return i,j
 

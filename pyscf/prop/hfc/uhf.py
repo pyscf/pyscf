@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -19,10 +32,11 @@ from pyscf.lib import logger
 from pyscf.dft import numint
 from pyscf.prop.nmr import uhf as uhf_nmr
 from pyscf.prop.ssc import uhf as uhf_ssc
-from pyscf.prop.ssc.parameters import get_nuc_g_factor
 from pyscf.prop.ssc.rhf import _dm1_mo2ao
 from pyscf.prop.zfs.uhf import koseki_charge
 from pyscf.prop.gtensor.uhf import align, get_jk
+from pyscf.data import nist
+from pyscf.data.gyro import get_nuc_g_factor
 
 def make_fcsd(hfcobj, dm0, hfc_nuc=None, verbose=None):
     log = logger.new_logger(hfcobj, verbose)
@@ -36,10 +50,10 @@ def make_fcsd(hfcobj, dm0, hfc_nuc=None, verbose=None):
     spindm = dma - dmb
     effspin = mol.spin * .5
 
-    e_gyro = .5 * lib.param.G_ELECTRON
-    nuc_mag = .5 * (lib.param.E_MASS/lib.param.PROTON_MASS)  # e*hbar/2m
-    au2MHz = lib.param.HARTREE2J / lib.param.PLANCK * 1e-6
-    fac = lib.param.ALPHA**2 / 2 / effspin * e_gyro * au2MHz
+    e_gyro = .5 * nist.G_ELECTRON
+    nuc_mag = .5 * (nist.E_MASS/nist.PROTON_MASS)  # e*hbar/2m
+    au2MHz = nist.HARTREE2J / nist.PLANCK * 1e-6
+    fac = nist.ALPHA**2 / 2 / effspin * e_gyro * au2MHz
 
     coords = mol.atom_coords()
     ao = numint.eval_ao(mol, coords)
@@ -73,10 +87,10 @@ def make_pso_soc(hfcobj, hfc_nuc=None):
     mo_coeff = mf.mo_coeff
     mo_occ = mf.mo_occ
     effspin = mol.spin * .5
-    e_gyro = .5 * lib.param.G_ELECTRON
-    nuc_mag = .5 * (lib.param.E_MASS/lib.param.PROTON_MASS)  # e*hbar/2m
-    au2MHz = lib.param.HARTREE2J / lib.param.PLANCK * 1e-6
-    fac = lib.param.ALPHA**4 / 4 / effspin * e_gyro * au2MHz
+    e_gyro = .5 * nist.G_ELECTRON
+    nuc_mag = .5 * (nist.E_MASS/nist.PROTON_MASS)  # e*hbar/2m
+    au2MHz = nist.HARTREE2J / nist.PLANCK * 1e-6
+    fac = nist.ALPHA**4 / 4 / effspin * e_gyro * au2MHz
 
     occidxa = mo_occ[0] > 0
     occidxb = mo_occ[1] > 0

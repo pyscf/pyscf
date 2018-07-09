@@ -9,11 +9,10 @@ Access AO integrals
 Mole.intor and Mole.intor_by_shell functions can generate AO integrals.
 Calling Mole.intor with the integral function name returns a integral matrix
 for all basis functions defined in Mole.  If the integral operator has many
-compenents eg gradients,  keyword argument comp=* needs to be specified to
-tell the function how many components the integrals have.
+compenents eg gradients.
+
 Mole.intor_by_shell function generates the integrals for the given shell
-indices.  Keyword argument comp=* is also required when the integral operator
-has multiple components.
+indices.
 
 See pyscf/gto/moleintor.py file for the complete list of supported integrals.
 '''
@@ -31,16 +30,17 @@ mf.kernel()
 dm = mf.make_rdm1()
 
 # Overlap, kinetic, nuclear attraction
-s = mol.intor('cint1e_ovlp_sph')
-t = mol.intor('cint1e_kin_sph')
-v = mol.intor('cint1e_nuc_sph')
-# Overlap, kinetic, nuclear attraction gradients (against electron coordinates)
-s1 = mol.intor('cint1e_ipovlp_sph', comp=3)
-t1 = mol.intor('cint1e_ipkin_sph' , comp=3)
-v1 = mol.intor('cint1e_ipnuc_sph' , comp=3)
+s = mol.intor('int1e_ovlp')
+t = mol.intor('int1e_kin')
+v = mol.intor('int1e_nuc')
+# Overlap, kinetic, nuclear attraction gradients (against electron coordinates
+# on bra)
+s1 = mol.intor('int1e_ipovlp')  # (3,N,N) array, 3 for x,y,z components
+t1 = mol.intor('int1e_ipkin' )  # (3,N,N) array, 3 for x,y,z components
+v1 = mol.intor('int1e_ipnuc' )  # (3,N,N) array, 3 for x,y,z components
 
-print('Dipole %s' % numpy.einsum('xij,ij->x',
-                                 mol.intor('cint1e_r_sph', comp=3), dm))
+mol.set_common_origin([0,0,0])  # Set gauge origin before computing dipole integrals
+print('Dipole %s' % numpy.einsum('xij,ji->x', mol.intor('int1e_r'), dm))
 
 #
 # AO overlap between two molecules
@@ -50,7 +50,7 @@ mol1 = gto.M(
     atom = 'H 0 1 0; H 1 0 0',
     basis = 'ccpvdz'
 )
-s = gto.intor_cross('cint1e_ovlp_sph', mol, mol1)
+s = gto.intor_cross('int1e_ovlp', mol, mol1)
 print('overlap shape (%d, %d)' % s.shape)
 
 #
@@ -58,11 +58,21 @@ print('overlap shape (%d, %d)' % s.shape)
 # AO integral matrix.  s8 means 8-fold symmetry, s2kl means 2-fold symmetry
 # for the symmetry between kl in (ij|kl)
 #
-eri = mol.intor('cint2e_sph', aosym='s8')
+eri = mol.intor('int2e', aosym='s8')
+
 #
-# 2e gradient integrals on first atom only
+# 2e gradient integrals (against electronic coordinates) on bra of first atom.
+# aosym=s2kl indicates that the permutation symmetry is used on k,l indices of
+# (ij|kl). The resultant eri is a 3-dimension array (3, N*N, N*(N+1)/2) where
+# N is the number of AO orbitals.
 #
-eri = mol.intor('cint2e_ip1_sph', aosym='s2kl')
+eri = mol.intor('int2e_ip1', aosym='s2kl')
+#
+# Settting aosym=s1 (the default flag) leads to a 3-dimension (3, N*N, N*N)
+# eri array.
+#
+nao = mol.nao_nr()
+eri = mol.intor('int2e_ip1').reshape(3,nao,nao,nao,nao)
 
 #
 # 2e integral gradients on certain atom
@@ -82,8 +92,8 @@ for i in range(mol.nbas):
                 pl = 0
                 for l in range(mol.nbas):
                     shls = (i, j, k, l)
-                    buf = mol.intor_by_shell('cint2e_ip1_sph', shls, comp=3)
-                    di, dj, dk, dl = buf.shape[1:]
+                    buf = mol.intor_by_shell('int2e_ip1_sph', shls)
+                    comp_3, di, dj, dk, dl = buf.shape
                     eri1[:,pi:pi+di,pj:pj+dj,pk:pk+dk,pl:pl+dl] = buf
                     pl += dl
                 pk += dk
@@ -95,7 +105,7 @@ print('integral shape %s' % str(eri1.shape))
 # Generate a sub-block of AO integrals.  The sub-block (ij|kl) contains the
 # shells 2:5 for basis i, 0:2 for j, 0:4 for k and 1:3 for l
 #
-sub_eri = mol.intor('int2e_sph', shls_slice=(2,5,0,2,0,4,1,3))
+sub_eri = mol.intor('int2e', shls_slice=(2,5,0,2,0,4,1,3))
 # This statement is equivalent to
 dims = []
 for i in range(mol.nbas):
@@ -132,7 +142,7 @@ mol = gto.M(atom=[['H', 0,0,i] for i in range(10)])
 atom_idx = [0,2,4]  # The disjoint atoms
 sub_mol = mol.copy()
 sub_mol._bas = mol._bas[atom_idx]
-sub_eri = sub_mol.intor('int2e_sph', aosym='s1')
+sub_eri = sub_mol.intor('int2e', aosym='s1')
 
 # This statement is equivalent to
 sub_nao = 0

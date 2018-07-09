@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -10,18 +23,18 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf import gto
 from pyscf.df import addons
+from pyscf import __config__
 
 
-def format_aux_basis(mol, auxbasis='weigend+etb'):
-    '''See also pyscf.df.addons.make_auxmol.
+LINEAR_DEP_THR = getattr(__config__, 'df_df_DF_lindep', 1e-12)
 
-    This funciton is defined for backward compatibility.
-    '''
-    return addons.make_auxmol(mol, auxbasis)
+
+# This funciton is aliased for backward compatibility.
+format_aux_basis = addons.make_auxmol
 
 
 # (ij|L)
-def aux_e2(mol, auxmol, intor='int3c2e_sph', aosym='s1', comp=1, out=None):
+def aux_e2(mol, auxmol, intor='int3c2e_sph', aosym='s1', comp=None, out=None):
     '''3-center AO integrals (ij|L), where L is the auxiliary basis.
     '''
     pmol = gto.mole.conc_mol(mol, auxmol)
@@ -29,17 +42,18 @@ def aux_e2(mol, auxmol, intor='int3c2e_sph', aosym='s1', comp=1, out=None):
     return pmol.intor(intor, comp, aosym=aosym, shls_slice=shls_slice, out=out)
 
 # (L|ij)
-def aux_e1(mol, auxmol, intor='int3c2e_sph', aosym='s1', comp=1, out=None):
+def aux_e1(mol, auxmol, intor='int3c2e_sph', aosym='s1', comp=None, out=None):
     '''3-center 2-electron AO integrals (L|ij), where L is the auxiliary basis.
     '''
-    if comp == 1:
-        out = aux_e2(mol, auxmol, intor, aosym, comp, out).T
+    out = aux_e2(mol, auxmol, intor, aosym, comp, out)
+    if out.ndim == 2:  # comp == 1
+        out = out.T
     else:
-        out = aux_e2(mol, auxmol, intor, aosym, comp, out).transpose(0,2,1)
+        out = out.transpose(0,2,1)
     return out
 
 
-def fill_2c2e(mol, auxmol, intor='int2c2e_sph', comp=1, hermi=1, out=None):
+def fill_2c2e(mol, auxmol, intor='int2c2e_sph', comp=None, hermi=1, out=None):
     '''2-center 2-electron AO integrals for auxiliary basis (auxmol)
     '''
     return auxmol.intor(intor, comp=comp, hermi=hermi, out=out)
@@ -64,18 +78,22 @@ def cholesky_eri(mol, auxbasis='weigend+etb', auxmol=None,
     naux = j2c.shape[0]
     log.debug('size of aux basis %d', naux)
     t1 = log.timer('2c2e', *t0)
-    try:
-        low = scipy.linalg.cholesky(j2c, lower=True)
-    except scipy.linalg.LinAlgError:
-        j2c[numpy.diag_indices(j2c.shape[1])] += 1e-14
-        low = scipy.linalg.cholesky(j2c, lower=True)
-    j2c = None
-    t1 = log.timer('Cholesky 2c2e', *t1)
 
     j3c = fauxe2(mol, auxmol, intor=int3c, aosym=aosym).reshape(-1,naux)
     t1 = log.timer('3c2e', *t1)
-    cderi = scipy.linalg.solve_triangular(low, j3c.T, lower=True,
-                                          overwrite_b=True)
+
+    try:
+        low = scipy.linalg.cholesky(j2c, lower=True)
+        j2c = None
+        t1 = log.timer('Cholesky 2c2e', *t1)
+        cderi = scipy.linalg.solve_triangular(low, j3c.T, lower=True,
+                                              overwrite_b=True)
+    except scipy.linalg.LinAlgError:
+        w, v = scipy.linalg.eigh(j2c)
+        idx = w > LINEAR_DEP_THR
+        v = (v[:,idx] / numpy.sqrt(w[idx]))
+        cderi = lib.dot(v.T, j3c.T)
+
     j3c = None
     if cderi.flags.f_contiguous:
         cderi = lib.transpose(cderi.T)

@@ -49,7 +49,7 @@ mf.stability()
 # Also the initial guess orbitals from stability analysis can be used as with
 # second order SCF solver
 #
-mf = scf.newton(mf).run(mo1, mf.mo_occ)
+mf = mf.newton().run(mo1, mf.mo_occ)
 mf.stability()
 
 #

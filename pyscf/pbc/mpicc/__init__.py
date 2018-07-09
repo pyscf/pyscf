@@ -1,15 +1,23 @@
-from pyscf.pbc.mpicc import ccsd
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
-#def CCSD(mf, frozen=[]):
-#    return ccsd.CCSD(mf, frozen)
+from pyscf.pbc.cc import ccsd
+from pyscf.pbc import scf
 
-#def RCCSD(mf, frozen=[]):
-#    return ccsd.RCCSD(mf, frozen)
-
-#def KCCSD(mf, frozen=[]):
-#    from pyscf.pbc.mpicc import kccsd
-#    return kccsd.CCSD(mf, frozen)
-
-def KRCCSD(mf, frozen=[]):
+def KRCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
     from pyscf.pbc.mpicc import kccsd_rhf
+    mf = scf.addons.convert_to_rhf(mf)
     return kccsd_rhf.RCCSD(mf, frozen)
+
+KCCSD = KRCCSD

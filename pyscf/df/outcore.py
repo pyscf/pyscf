@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -14,6 +27,11 @@ from pyscf.lib import logger
 from pyscf import ao2mo
 from pyscf.ao2mo import _ao2mo
 from pyscf.df.addons import make_auxmol
+from pyscf import __config__
+
+IOBLK_SIZE = getattr(__config__, 'df_outcore_ioblk_size', 256)  # 256 MB
+MAX_MEMORY = getattr(__config__, 'df_outcore_max_memory', 2000)  # 2GB
+LINEAR_DEP_THR = getattr(__config__, 'df_df_DF_lindep', 1e-12)
 
 #
 # for auxe1 (P|ij)
@@ -21,16 +39,15 @@ from pyscf.df.addons import make_auxmol
 
 def cholesky_eri(mol, erifile, auxbasis='weigend+etb', dataname='j3c', tmpdir=None,
                  int3c='int3c2e_sph', aosym='s2ij', int2c='int2c2e_sph', comp=1,
-                 max_memory=2000, ioblk_size=256, auxmol=None, verbose=0):
+                 max_memory=MAX_MEMORY, ioblk_size=IOBLK_SIZE, auxmol=None,
+                 verbose=logger.NOTE):
     '''3-center 2-electron AO integrals
     '''
     assert(aosym in ('s1', 's2ij'))
     assert(comp == 1)
+    log = logger.new_logger(mol, verbose)
     time0 = (time.clock(), time.time())
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(mol.stdout, verbose)
+
     if auxmol is None:
         auxmol = make_auxmol(mol, auxbasis)
 
@@ -43,19 +60,14 @@ def cholesky_eri(mol, erifile, auxbasis='weigend+etb', dataname='j3c', tmpdir=No
     time1 = log.timer('generate (ij|L) 1 pass', *time0)
 
     nao = mol.nao_nr()
-    naoaux = auxmol.nao_nr()
-    aosym = _stand_sym_code(aosym)
+    # Cannot let naoaux = auxmol.nao_nr() if auxbasis has linear dependence
+    naoaux = fswap['%s/0/0'%dataname].shape[0]
     if aosym == 's1':
         nao_pair = nao * nao
     else:
         nao_pair = nao * (nao+1) // 2
 
-    if h5py.is_hdf5(erifile):
-        feri = h5py.File(erifile)
-        if dataname in feri:
-            del(feri[dataname])
-    else:
-        feri = h5py.File(erifile, 'w')
+    feri = _create_h5file(erifile, dataname)
     if comp == 1:
         chunks = (min(int(16e3/nao),naoaux), nao) # 128K
         h5d_eri = feri.create_dataset(dataname, (naoaux,nao_pair), 'f8',
@@ -73,7 +85,7 @@ def cholesky_eri(mol, erifile, auxbasis='weigend+etb', dataname='j3c', tmpdir=No
     ti0 = time1
     for icomp in range(comp):
         istep = 0
-        for row0, row1 in prange(0, naoaux, iolen):
+        for row0, row1 in lib.prange(0, naoaux, iolen):
             nrow = row1 - row0
             istep += 1
 
@@ -98,15 +110,14 @@ def cholesky_eri(mol, erifile, auxbasis='weigend+etb', dataname='j3c', tmpdir=No
 # store cderi in blocks
 def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='j3c',
                    int3c='int3c2e_sph', aosym='s2ij', int2c='int2c2e_sph',
-                   comp=1, ioblk_size=256, auxmol=None, verbose=logger.NOTE):
+                   comp=1, ioblk_size=IOBLK_SIZE, auxmol=None,
+                   verbose=logger.NOTE):
     '''3-center 2-electron AO integrals
     '''
     assert(aosym in ('s1', 's2ij'))
+    log = logger.new_logger(mol, verbose)
     time0 = (time.clock(), time.time())
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(mol.stdout, verbose)
+
     if auxmol is None:
         auxmol = make_auxmol(mol, auxbasis)
     j2c = auxmol.intor(int2c, hermi=1)
@@ -114,19 +125,18 @@ def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='j3c',
     time1 = log.timer('2c2e', *time0)
     try:
         low = scipy.linalg.cholesky(j2c, lower=True)
+        tag = 'cd'
     except scipy.linalg.LinAlgError:
-        j2c[numpy.diag_indices(j2c.shape[1])] += 1e-14
-        low = scipy.linalg.cholesky(j2c, lower=True)
+        w, v = scipy.linalg.eigh(j2c)
+        idx = w > LINEAR_DEP_THR
+        low = (v[:,idx] / numpy.sqrt(w[idx]))
+        v = None
+        tag = 'eig'
     j2c = None
     naux = low.shape[0]
     time1 = log.timer('Cholesky 2c2e', *time1)
 
-    if h5py.is_hdf5(erifile):
-        feri = h5py.File(erifile)
-        if dataname in feri:
-            del(feri[dataname])
-    else:
-        feri = h5py.File(erifile, 'w')
+    feri = _create_h5file(erifile, dataname)
     for icomp in range(comp):
         feri.create_group('%s/%d'%(dataname,icomp)) # for h5py old version
 
@@ -135,7 +145,11 @@ def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='j3c',
             b = lib.transpose(b.T, axes=(0,2,1)).reshape(naux,-1)
         else:
             b = b.reshape((-1,naux)).T
-        cderi = scipy.linalg.solve_triangular(low, b, lower=True, overwrite_b=True)
+        if tag == 'cd':
+            cderi = scipy.linalg.solve_triangular(low, b, lower=True,
+                                                  overwrite_b=True)
+        else:
+            cderi = lib.dot(low.T, b)
         feri[label] = cderi
 
     int3c = gto.moleintor.ascint3(int3c)
@@ -180,15 +194,12 @@ def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='j3c',
 
 def general(mol, mo_coeffs, erifile, auxbasis='weigend+etb', dataname='eri_mo', tmpdir=None,
             int3c='int3c2e_sph', aosym='s2ij', int2c='int2c2e_sph', comp=1,
-            max_memory=2000, ioblk_size=256, verbose=0, compact=True):
+            max_memory=MAX_MEMORY, ioblk_size=IOBLK_SIZE, verbose=0, compact=True):
     ''' Transform ij of (ij|L) to MOs.
     '''
     assert(aosym in ('s1', 's2ij'))
     time0 = (time.clock(), time.time())
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(mol.stdout, verbose)
+    log = logger.new_logger(mol, verbose)
 
     if tmpdir is None:
         tmpdir = lib.param.TMPDIR
@@ -203,7 +214,6 @@ def general(mol, mo_coeffs, erifile, auxbasis='weigend+etb', dataname='eri_mo', 
     nao = mo_coeffs[0].shape[0]
     auxmol = make_auxmol(mol, auxbasis)
     naoaux = auxmol.nao_nr()
-    aosym = _stand_sym_code(aosym)
     if aosym == 's1':
         nao_pair = nao * nao
         aosym_as_nr_e2 = 's1'
@@ -215,12 +225,7 @@ def general(mol, mo_coeffs, erifile, auxbasis='weigend+etb', dataname='eri_mo', 
             ao2mo.incore._conc_mos(mo_coeffs[0], mo_coeffs[1],
                                    compact and aosym != 's1')
 
-    if h5py.is_hdf5(erifile):
-        feri = h5py.File(erifile)
-        if dataname in feri:
-            del(feri[dataname])
-    else:
-        feri = h5py.File(erifile, 'w')
+    feri = _create_h5file(erifile, dataname)
     if comp == 1:
         chunks = (min(int(64e3/nmoj),naoaux), nmoj) # 512K
         h5d_eri = feri.create_dataset(dataname, (naoaux,nij_pair), 'f8',
@@ -237,7 +242,7 @@ def general(mol, mo_coeffs, erifile, auxbasis='weigend+etb', dataname='eri_mo', 
     ti0 = time1
     for icomp in range(comp):
         istep = 0
-        for row0, row1 in prange(0, naoaux, iolen):
+        for row0, row1 in lib.prange(0, naoaux, iolen):
             nrow = row1 - row0
             istep += 1
 
@@ -265,15 +270,6 @@ def general(mol, mo_coeffs, erifile, auxbasis='weigend+etb', dataname='eri_mo', 
     log.timer('AO->MO CD eri transformation', *time0)
     return erifile
 
-
-def iden_coeffs(mo1, mo2):
-    return (id(mo1) == id(mo2)) \
-            or (mo1.shape==mo2.shape and numpy.allclose(mo1,mo2))
-
-def prange(start, end, step):
-    for i in range(start, end, step):
-        yield i, min(i+step, end)
-
 def _guess_shell_ranges(mol, buflen, aosym):
     from pyscf.ao2mo.outcore import balance_partition
     ao_loc = mol.ao_loc_nr()
@@ -283,13 +279,16 @@ def _guess_shell_ranges(mol, buflen, aosym):
         nao = ao_loc[-1]
         return balance_partition(ao_loc*nao, buflen)
 
-def _stand_sym_code(sym):
-    if isinstance(sym, int):
-        return 's%d' % sym
-    elif 's' == sym[0] or 'a' == sym[0]:
-        return sym
+def _create_h5file(erifile, dataname):
+    if h5py.is_hdf5(erifile):
+        feri = h5py.File(erifile)
+        if dataname in feri:
+            del(feri[dataname])
     else:
-        return 's' + sym
+        feri = h5py.File(erifile, 'w')
+    return feri
+
+del(MAX_MEMORY)
 
 
 if __name__ == '__main__':

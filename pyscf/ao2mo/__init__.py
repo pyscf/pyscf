@@ -1,6 +1,20 @@
 #!/usr/bin/env python
-# -*- coding: utf-8
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
 # Author: Qiming Sun <osirpt.sun@gmail.com>
+#
 
 '''
 General Integral transformation module
@@ -21,7 +35,6 @@ from pyscf.ao2mo import incore
 from pyscf.ao2mo import outcore
 from pyscf.ao2mo import r_outcore
 from pyscf.ao2mo.addons import load, restore
-from pyscf import gto
 
 def full(eri_or_mol, mo_coeff, *args, **kwargs):
     r'''MO integral transformation. The four indices (ij|kl) are transformed
@@ -49,12 +62,6 @@ def full(eri_or_mol, mo_coeff, *args, **kwargs):
             different dataname, the existed integral file can be reused.  If
             the erifile contains the dataname, the new integrals data will
             overwrite the old one.
-        tmpdir : str
-            *Note* this argument is effective when eri_or_mol is Mole object.
-            The directory where to temporarily store the intermediate data
-            (the half-transformed integrals).  By default, it's controlled by
-            shell environment variable ``TMPDIR``.  The disk space requirement
-            is about  comp*mo_coeffs[0].shape[1]*mo_coeffs[1].shape[1]*nao**2
         intor : str
             *Note* this argument is effective when eri_or_mol is Mole object.
             Name of the 2-electron integral.  Ref to :func:`getints_by_shell`
@@ -136,8 +143,7 @@ def full(eri_or_mol, mo_coeff, *args, **kwargs):
     if isinstance(eri_or_mol, numpy.ndarray):
         return incore.full(eri_or_mol, mo_coeff, *args, **kwargs)
     else:
-        if ('intor' in kwargs and
-            '_spinor' in gto.moleintor.ascint3(kwargs['intor'])):
+        if ('intor' in kwargs and '_spinor' in kwargs['intor']):
             mod = r_outcore
         else:
             mod = outcore
@@ -148,7 +154,7 @@ def full(eri_or_mol, mo_coeff, *args, **kwargs):
                 fn = getattr(mod, 'full')
             elif isinstance(args[0], tempfile._TemporaryFileWrapper):
                 fn = getattr(mod, 'full')
-                args = [args[0].name] + args[1:]  # take the tmpfile name
+                args = (args[0].name,) + args[1:]  # take the tmpfile name
         return fn(eri_or_mol, mo_coeff, *args, **kwargs)
 
 def general(eri_or_mol, mo_coeffs, *args, **kwargs):
@@ -178,12 +184,6 @@ def general(eri_or_mol, mo_coeffs, *args, **kwargs):
             different dataname, the existed integral file can be reused.  If
             the erifile contains the dataname, the new integrals data will
             overwrite the old one.
-        tmpdir : str
-            *Note* this argument is effective when eri_or_mol is Mole object.
-            The directory where to temporarily store the intermediate data
-            (the half-transformed integrals).  By default, it's controlled by
-            shell environment variable ``TMPDIR``.  The disk space requirement
-            is about  comp*mo_coeffs[0].shape[1]*mo_coeffs[1].shape[1]*nao**2
         intor : str
             *Note* this argument is effective when eri_or_mol is Mole object.
             Name of the 2-electron integral.  Ref to :func:`getints_by_shell`
@@ -292,7 +292,7 @@ def general(eri_or_mol, mo_coeffs, *args, **kwargs):
     if isinstance(eri_or_mol, numpy.ndarray):
         return incore.general(eri_or_mol, mo_coeffs, *args, **kwargs)
     else:
-        if 'intor' in kwargs and ('_sph' not in kwargs['intor']):
+        if 'intor' in kwargs and '_spinor' in kwargs['intor']:
             mod = r_outcore
         else:
             mod = outcore
@@ -303,7 +303,7 @@ def general(eri_or_mol, mo_coeffs, *args, **kwargs):
                 fn = getattr(mod, 'general')
             elif isinstance(args[0], tempfile._TemporaryFileWrapper):
                 fn = getattr(mod, 'general')
-                args = [args[0].name] + args[1:]  # take the tmpfile name
+                args = (args[0].name,) + args[1:]  # take the tmpfile name
         return fn(eri_or_mol, mo_coeffs, *args, **kwargs)
 
 def kernel(eri_or_mol, mo_coeffs, *args, **kwargs):

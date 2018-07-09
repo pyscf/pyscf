@@ -1,9 +1,24 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 from functools import reduce
 import numpy
+from pyscf import __config__
 
-DEFAULT_FLOAT_FORMAT = ' %.16g'
+DEFAULT_FLOAT_FORMAT = getattr(__config__, 'fcidump_float_format', ' %.16g')
+TOL = getattr(__config__, 'fcidump_write_tol', 1e-15)
 
 def write_head(fout, nmo, nelec, ms=0, orbsym=None):
     if not isinstance(nelec, (int, numpy.number)):
@@ -18,7 +33,7 @@ def write_head(fout, nmo, nelec, ms=0, orbsym=None):
     fout.write(' &END\n')
 
 
-def write_eri(fout, eri, nmo, tol=1e-15, float_format=DEFAULT_FLOAT_FORMAT):
+def write_eri(fout, eri, nmo, tol=TOL, float_format=DEFAULT_FLOAT_FORMAT):
     npair = nmo*(nmo+1)//2
     output_format = float_format + ' %4d %4d %4d %4d\n'
     if eri.ndim == 2: # 4-fold symmetry
@@ -49,7 +64,7 @@ def write_eri(fout, eri, nmo, tol=1e-15, float_format=DEFAULT_FLOAT_FORMAT):
                         kl += 1
                 ij += 1
 
-def write_hcore(fout, h, nmo, tol=1e-15, float_format=DEFAULT_FLOAT_FORMAT):
+def write_hcore(fout, h, nmo, tol=TOL, float_format=DEFAULT_FLOAT_FORMAT):
     h = h.reshape(nmo,nmo)
     output_format = float_format + ' %4d %4d  0  0\n'
     for i in range(nmo):
@@ -58,7 +73,7 @@ def write_hcore(fout, h, nmo, tol=1e-15, float_format=DEFAULT_FLOAT_FORMAT):
                 fout.write(output_format % (h[i,j], i+1, j+1))
 
 
-def from_chkfile(output, chkfile, tol=1e-15, float_format=DEFAULT_FLOAT_FORMAT):
+def from_chkfile(output, chkfile, tol=TOL, float_format=DEFAULT_FLOAT_FORMAT):
     '''Read SCF results from PySCF chkfile and transform 1-electron,
     2-electron integrals using the SCF orbitals.  The transformed integrals is
     written to FCIDUMP'''
@@ -85,7 +100,7 @@ def from_chkfile(output, chkfile, tol=1e-15, float_format=DEFAULT_FLOAT_FORMAT):
         fout.write(output_format % mol.energy_nuc())
 
 def from_integrals(output, h1e, h2e, nmo, nelec, nuc=0, ms=0, orbsym=[],
-                   tol=1e-15, float_format=DEFAULT_FLOAT_FORMAT):
+                   tol=TOL, float_format=DEFAULT_FLOAT_FORMAT):
     '''Convert the given 1-electron and 2-electron integrals to FCIDUMP format'''
     with open(output, 'w') as fout:
         write_head(fout, nmo, nelec, ms, orbsym)
@@ -148,6 +163,11 @@ def read(filename):
                 dic['ECORE'] = float(dat[0])
         dat = finp.readline().split()
 
+    idx, idy = numpy.tril_indices(norb, -1)
+    if numpy.linalg.norm(h1e[idy,idx]) == 0:
+        h1e[idy,idx] = h1e[idx,idy]
+    elif numpy.linalg.norm(h1e[idx,idy]) == 0:
+        h1e[idx,idy] = h1e[idy,idx]
     dic['H1'] = h1e
     dic['H2'] = h2e
     finp.close()

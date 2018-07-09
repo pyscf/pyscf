@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Timothy Berkelbach <tim.berkelbach@gmail.com>
 #
@@ -10,7 +23,7 @@ import pyscf.pbc.gto as pbcgto
 import pyscf.pbc.dft as pbcdft
 import pyscf.pbc.tools
 
-def make_primitive_cell(ngs):
+def make_primitive_cell(mesh):
     cell = pbcgto.Cell()
     cell.unit = 'A'
     cell.atom = 'C 0.,  0.,  0.; C 0.8917,  0.8917,  0.8917'
@@ -20,7 +33,7 @@ def make_primitive_cell(ngs):
 
     cell.basis = 'gth-szv'
     cell.pseudo = 'gth-pade'
-    cell.gs = np.array([ngs,ngs,ngs])
+    cell.mesh = mesh
 
     #cell.nimgs = np.array([7,7,7])
     cell.verbose = 0
@@ -29,7 +42,7 @@ def make_primitive_cell(ngs):
 
 class KnowValues(unittest.TestCase):
     def xtest_gamma(self):
-        cell = make_primitive_cell(8)
+        cell = make_primitive_cell([17]*3)
         mf = pbcdft.RKS(cell)
         mf.xc = 'lda,vwn'
         #mf.verbose = 7
@@ -37,7 +50,7 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(e1, -10.2214263103747, 8)
 
     def xtest_kpt_222(self):
-        cell = make_primitive_cell(8)
+        cell = make_primitive_cell([17]*3)
         abs_kpts = cell.make_kpts([2,2,2], wrap_around=True)
         kmf = pbcdft.KRKS(cell, abs_kpts)
         kmf.xc = 'lda,vwn'
@@ -47,11 +60,11 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(e1, -11.3536435234900, 8)
 
     def test_kpt_vs_supercell(self):
-        ngs = 5
+        n = 11
         nk = (3, 1, 1)
         # Comparison is only perfect for odd-numbered supercells and kpt sampling
         assert all(np.array(nk) % 2 == np.array([1,1,1]))
-        cell = make_primitive_cell(ngs)
+        cell = make_primitive_cell([n]*3)
         abs_kpts = cell.make_kpts(nk, wrap_around=True)
         kmf = pbcdft.KRKS(cell, abs_kpts)
         kmf.xc = 'lda,vwn'
@@ -60,10 +73,6 @@ class KnowValues(unittest.TestCase):
         ekpt = kmf.scf()
 
         supcell = pyscf.pbc.tools.super_cell(cell, nk)
-        supcell.gs = np.array([nk[0]*ngs + (nk[0]-1)//2,
-                               nk[1]*ngs + (nk[1]-1)//2,
-                               nk[2]*ngs + (nk[2]-1)//2])
-        #supcell.verbose = 7
         supcell.build()
 
         mf = pbcdft.RKS(supcell)

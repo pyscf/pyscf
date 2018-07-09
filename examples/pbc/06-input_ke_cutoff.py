@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 
 '''
-Input ke_cutoff (kinetic energy cutoff) or gs (#grids) for FFT-based Coulomb
+Input ke_cutoff (kinetic energy cutoff) or mesh (#grids) for FFT-based Coulomb
 integral.
 
-If ke_cutoff and gs are not specified in the input, they will be are chosen
+If ke_cutoff and mesh are not specified in the input, they will be chosen
 automatically in cell.build function based on the basis set.  You can set
-ke_cutoff or gs to control the performance/accuracy of Coulomb integrals.
+ke_cutoff or mesh to control the performance/accuracy of Coulomb integrals.
 '''
 
 import numpy
@@ -26,9 +26,8 @@ cell.basis = 'gth-szv'
 cell.pseudo = 'gth-pade'
 cell.a = numpy.eye(3)*3.5668
 
-cell.gs = [12,12,12]  # 12 grids on positive x direction, => 25^3 grids in total
+cell.mesh = [25,25,25]  # 25 grids on each direction, => 25^3 grids in total
 cell.build()
 
-cell.ke_cutoff = 40 # Eh ~ gs = [10,10,10] ~ 21^3 grids in total
+cell.ke_cutoff = 40 # Eh ~ mesh = [20,20,20] ~ 21^3 grids in total
 cell.build()
-

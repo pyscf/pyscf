@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+# Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 #
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
@@ -6,7 +19,8 @@
 import numpy
 from pyscf import gto
 from pyscf.lib import logger
-import pyscf.lib.parameters as param
+from pyscf.lib import param
+from pyscf.data import elements
 from pyscf.scf import hf
 
 
@@ -20,7 +34,7 @@ def get_atm_nrhf(mol):
         atm.stdout = mol.stdout
         atm.atom = atm._atom = [[a, (0, 0, 0)]]
         atm._basis = {a: b}
-        atm.nelectron = gto.mole._charge(a)
+        atm.nelectron = gto.charge(a)
         atm.spin = atm.nelectron % 2
         atm._atm, atm._bas, atm._env = \
                 atm.make_env(atm._atom, atm._basis, atm._env)
@@ -105,9 +119,9 @@ class AtomSphericAverageRHF(hf.RHF):
         return hf.kernel(self, *args, dump_chk=False, **kwargs)
 
 def frac_occ(symb, l):
-    nuc = gto.mole._charge(symb)
-    if l < 4 and param.ELEMENTS[nuc][2][l] > 0:
-        ne = param.ELEMENTS[nuc][2][l]
+    nuc = gto.charge(symb)
+    if l < 4 and elements.CONFIGURATION[nuc][l] > 0:
+        ne = elements.CONFIGURATION[nuc][l]
         nd = (l * 2 + 1) * 2
         ndocc = ne.__floordiv__(nd)
         frac = (float(ne) / nd - ndocc) * 2

@@ -21,7 +21,7 @@ mol.basis = {'Cr': 'ccpvdz-dk'}
 mol.symmetry = True
 mol.build()
 
-m = scf.sfx2c1e(scf.RHF(mol)).run(conv_tol=1e-9, chkfile='hf_chk-%s'%b, level_shift=0.5)
+m = scf.RHF(mol).x2c().run(conv_tol=1e-9, chkfile='hf_chk-%s'%b, level_shift=0.5)
 #
 # Note: stream operations are used here.  This one line code is equivalent to
 # the following serial statements.
