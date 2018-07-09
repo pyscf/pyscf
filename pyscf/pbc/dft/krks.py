@@ -31,7 +31,6 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc.scf import khf
 from pyscf.pbc.dft import gen_grid
-from pyscf.pbc.dft import numint
 from pyscf.pbc.dft import rks
 
 
@@ -66,7 +65,8 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
 # For UniformGrids, grids.coords does not indicate whehter grids are initialized
     if ks.grids.non0tab is None:
         ks.grids.build(with_non0tab=True)
-        if ks.small_rho_cutoff > 1e-20 and ground_state:
+        if (isinstance(ks.grids, gen_grid.BeckeGrids) and
+            ks.small_rho_cutoff > 1e-20 and ground_state):
             ks.grids = rks.prune_small_rho_grids_(ks, cell, dm, ks.grids, kpts)
         t0 = logger.timer(ks, 'setting up grids', *t0)
 

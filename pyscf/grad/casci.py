@@ -219,8 +219,10 @@ def as_scanner(mcscf_grad, state=0):
                 state >= mc_scanner.fcisolver.nroots):
                 raise ValueError('State ID greater than the number of CASCI roots')
 
+# TODO: Check root flip
             e_tot = mc_scanner(mol)
             if mc_scanner.fcisolver.nroots > 1:
+                e_tot = e_tot[state]
                 ci = mc_scanner.ci[state]
             else:
                 ci = mc_scanner.ci

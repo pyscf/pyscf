@@ -25,7 +25,6 @@ except ImportError:
     raise ImportError('Geometry optimizer pyberny not found.\npyberny library '
                       'can be found on github https://github.com/azag0/pyberny')
 
-import copy
 import numpy
 from pyscf import lib
 from pyscf import __config__
@@ -73,7 +72,7 @@ def as_berny_solver(method, assert_convergence=ASSERT_CONV,
                     include_ghost=INCLUDE_GHOST):
     '''Generate a solver for berny optimize function.
     '''
-    mol = copy.copy(method.mol)
+    mol = method.mol.copy()
     if isinstance(method, lib.GradScanner):
         g_scanner = method
     elif hasattr(method, 'nuc_grad_method'):
@@ -137,7 +136,7 @@ def optimize(method, assert_convergence=ASSERT_CONV,
              include_ghost=INCLUDE_GHOST, **kwargs):
     '''Optimize the geometry with the given method.
     '''
-    mol = copy.copy(method.mol)
+    mol = method.mol.copy()
     if 'log' in kwargs:
         log = lib.logger.new_logger(method, kwargs['log'])
     elif 'verbose' in kwargs:

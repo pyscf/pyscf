@@ -31,7 +31,6 @@ from pyscf import ao2mo
 from pyscf.lib import logger
 from pyscf.grad import rhf as rhf_grad
 from pyscf.grad.mp2 import _shell_prange
-from pyscf.grad.casci import as_scanner
 
 
 def kernel(mc, mo_coeff=None, ci=None, atmlst=None, mf_grad=None,
