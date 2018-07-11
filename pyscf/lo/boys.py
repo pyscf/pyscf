@@ -258,7 +258,7 @@ class Boys(ciah.CIAHOptimizer):
         if (isinstance(key, str) and key.lower().startswith('rand')
             or numpy.linalg.norm(self.get_grad(u0)) < 1e-5):
             # Add noise to kick initial guess out of saddle point
-            dr = numpy.cos(numpy.arange((nmo-1)*nmo//2)) * 1e-3
+            dr = numpy.cos(numpy.arange((nmo-1)*nmo//2)) * 1e-1
             u0 = self.extract_rotation(dr)
         return u0
 
