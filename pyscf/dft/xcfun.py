@@ -782,6 +782,8 @@ def _eval_xc(fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
     else:
         rho_u = numpy.asarray(rho[0], order='C')
         rho_d = numpy.asarray(rho[1], order='C')
+    assert(rho_u.dtype == numpy.double)
+    assert(rho_d.dtype == numpy.double)
 
     if rho_u.ndim == 2:
         ngrids = rho_u.shape[1]
