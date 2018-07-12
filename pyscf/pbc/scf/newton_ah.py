@@ -356,7 +356,7 @@ def newton(mf):
         class SecondOrderKRHF(mf.__class__, newton_ah._CIAH_SOSCF):
             __doc__ = mf_doc + newton_ah._CIAH_SOSCF.__doc__
             __init__ = newton_ah._CIAH_SOSCF.__init__
-            dump_flags = _CIAH_SOSCF.dump_flags
+            dump_flags = newton_ah._CIAH_SOSCF.dump_flags
             build = newton_ah._CIAH_SOSCF.build
             kernel = newton_ah._CIAH_SOSCF.kernel
 
