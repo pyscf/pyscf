@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from ase.lattice import bulk
 from ase.dft.kpoints import special_points, get_bandpath
 c = bulk('C', 'diamond', a=3.5668)
-print c.get_volume()
+print(c.get_volume())
 
 cell = pbcgto.Cell()
 cell.atom = pyscf_ase.ase_atoms_to_pyscf(c)
@@ -32,7 +32,7 @@ band_kpts = cell.get_abs_kpts(band_kpts)
 #
 
 mf = pbcdft.RKS(cell)
-print mf.kernel()
+print(mf.kernel())
 
 e_kn = mf.get_bands(band_kpts)[0]
 vbmax = -99

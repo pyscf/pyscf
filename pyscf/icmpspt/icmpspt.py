@@ -579,13 +579,13 @@ def writeNEVPTIntegralsLEGACY(mc, E1, E2, E1eff, aaavsplit, nfro):
     energyE0 += numpy.einsum('ij,ji', dmcore, mc.get_hcore()) \
                   + numpy.einsum('ij,ji', dmcore, vj-0.5*vk) * .5
     energyE0 += mc.mol.energy_nuc()
-    print "Energy = ", energyE0
+    print("Energy = ", energyE0)
 
     dmcore = numpy.dot(mo[:,:ncor], mo[:,:ncor].T)*2
     vj, vk = mc._scf.get_jk(mc.mol, dmcore)
     energy_core = numpy.einsum('ij,ji', dmcore, mc.get_hcore()) \
                   + numpy.einsum('ij,ji', dmcore, vj-0.5*vk) * .5
-    print energy_core
+    print(energy_core)
 
     # Write "FCIDUMP_aaav0" and "FCIDUMP_aaac"
     if (False):
@@ -664,7 +664,7 @@ def writeMRLCCIntegralsLEGACY(mc, E1, E2, nfro):
 
     energyE0 += energy_core
     energyE0 += mc.mol.energy_nuc()
-    print "Energy = ", energyE0
+    print("Energy = ", energyE0)
 
     # Write "FCIDUMP_aaav0" and "FCIDUMP_aaac"
     if (False):

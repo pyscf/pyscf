@@ -463,14 +463,14 @@ class DMRGCI(lib.StreamObject):
           # - BLOCK just writes a list of all values, this is directly read
           #   using "unpackE3_BLOCK" (see below)
           if 'stackblock' in settings.BLOCKEXE:
-            print 'Reading binary 3RDM from STACKBLOCK'
+            print('Reading binary 3RDM from STACKBLOCK')
             fname = os.path.join(self.scratchDirectory,"node0", "spatial_threepdm.%d.%d.bin" %(state, state))
             fnameout = os.path.join(self.scratchDirectory,"node0", "spatial_threepdm.%d.%d.bin.unpack" %(state, state))
             libunpack.unpackE3(ctypes.c_char_p(fname), ctypes.c_char_p(fnameout), ctypes.c_int(norb))
             E3 = numpy.fromfile(fnameout, dtype=numpy.dtype('Float64'))
             E3 = numpy.reshape(E3, (norb, norb, norb, norb, norb, norb), order='F')
           else:
-            print 'Reading binary 3RDM from BLOCK'
+            print('Reading binary 3RDM from BLOCK')
             fname = os.path.join(self.scratchDirectory,"node0", "spatial_threepdm.%d.%d.bin" %(state, state))
             E3 = self.unpackE3_BLOCK(fname,norb)
 
@@ -479,7 +479,7 @@ class DMRGCI(lib.StreamObject):
         # and are stored here as E3[i1,j2,k3,n1,m2,l3]
         # This is done with SQA in mind.
         else:
-          print 'Reading text-file 3RDM'
+          print('Reading text-file 3RDM')
           fname = os.path.join(self.scratchDirectory,"node0", "spatial_threepdm.%d.%d.txt" %(state, state))
           f = open(fname, 'r')
           lines = f.readlines()
@@ -542,14 +542,14 @@ class DMRGCI(lib.StreamObject):
           # - BLOCK just writes a list of all values, this is directly read
           #   using "unpackE4_BLOCK" (see below)
           if 'stackblock' in settings.BLOCKEXE:
-            print 'Reading binary 4RDM from STACKBLOCK'
+            print('Reading binary 4RDM from STACKBLOCK')
             fname = os.path.join(self.scratchDirectory,"node0", "spatial_fourpdm.%d.%d.bin" %(state, state))
             fnameout = os.path.join(self.scratchDirectory,"node0", "spatial_fourpdm.%d.%d.bin.unpack" %(state, state))
             libunpack.unpackE4(ctypes.c_char_p(fname), ctypes.c_char_p(fnameout), ctypes.c_int(norb))
             E4 = numpy.fromfile(fnameout, dtype=numpy.dtype('Float64'))
             E4 = numpy.reshape(E4, (norb, norb, norb, norb, norb, norb, norb, norb), order='F')
           else:
-            print 'Reading binary 4RDM from BLOCK'
+            print('Reading binary 4RDM from BLOCK')
             fname = os.path.join(self.scratchDirectory,"node0", "spatial_fourpdm.%d.%d.bin" %(state, state))
             E4 = self.unpackE4_BLOCK(fname,norb)
 
