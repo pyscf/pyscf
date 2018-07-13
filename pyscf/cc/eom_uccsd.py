@@ -25,15 +25,292 @@ from pyscf.cc import eom_rccsd
 from pyscf.cc import eom_gccsd
 from pyscf.cc import addons
 
-
 ########################################
 # EOM-IP-CCSD
 ########################################
 
+def vector_to_amplitudes_ip(vector, nmo, nocc):
+    '''For spin orbitals'''
+    nvir = nmo - nocc
+    r1 = vector[:nocc].copy()
+    r2 = np.zeros((nocc,nocc,nvir), dtype=vector.dtype)
+    idx, idy = np.tril_indices(nocc, -1)
+    r2[idx,idy] = vector[nocc:].reshape(nocc*(nocc-1)//2,nvir)
+    r2[idy,idx] =-vector[nocc:].reshape(nocc*(nocc-1)//2,nvir)
+    return r1, r2
+
+def amplitudes_to_vector_ip(r1, r2):
+    '''For spin orbitals'''
+    nocc = r1.size
+    return np.hstack((r1, r2[np.tril_indices(nocc, -1)].ravel()))
+
+def spatial2spin_ip(r1, r2):
+    '''Convert R1/R2 of spatial orbital representation to R1/R2 of
+    spin-orbital representation
+    '''
+    r1a, r1b = r1
+    r2aaa, r2baa, r2abb, r2bbb = r2
+    nocc_a, nvir_a = r2aaa.shape[1:]
+    nocc_b, nvir_b = r2bbb.shape[1:]
+
+    orbspin = np.zeros((nocc_a+nvir_a)*2, dtype=int)
+    orbspin[1::2] = 1
+
+    nocc = nocc_a + nocc_b
+    nvir = nvir_a + nvir_b
+    idxoa = np.where(orbspin[:nocc] == 0)[0]
+    idxob = np.where(orbspin[:nocc] == 1)[0]
+    idxva = np.where(orbspin[nocc:] == 0)[0]
+    idxvb = np.where(orbspin[nocc:] == 1)[0]
+
+    r1 = np.zeros((nocc), dtype=r1a.dtype)
+    r1[idxoa] = r1a
+    r1[idxob] = r1b
+
+    r2 = np.zeros((nocc**2, nvir), dtype=r2aaa.dtype)
+    idxoaa = idxoa[:,None] * nocc + idxoa
+    idxoab = idxoa[:,None] * nocc + idxob
+    idxoba = idxob[:,None] * nocc + idxoa
+    idxobb = idxob[:,None] * nocc + idxob
+    idxvaa = idxva[:,None] * nvir + idxva
+    idxvab = idxva[:,None] * nvir + idxvb
+    idxvba = idxvb[:,None] * nvir + idxva
+    idxvbb = idxvb[:,None] * nvir + idxvb
+    r2aaa = r2aaa.reshape(nocc_a*nocc_a, nvir_a)
+    r2baa = r2baa.reshape(nocc_b*nocc_a, nvir_a)
+    r2abb = r2abb.reshape(nocc_a*nocc_b, nvir_b)
+    r2bbb = r2bbb.reshape(nocc_b*nocc_b, nvir_b)
+    lib.takebak_2d(r2, r2aaa, idxoaa.ravel(), idxva.ravel())
+    lib.takebak_2d(r2, r2baa, idxoba.ravel(), idxva.ravel())
+    lib.takebak_2d(r2, r2abb, idxoab.ravel(), idxvb.ravel())
+    lib.takebak_2d(r2, r2bbb, idxobb.ravel(), idxvb.ravel())
+    r2aba = -r2baa
+    r2bab = -r2abb
+    lib.takebak_2d(r2, r2aba, idxoab.T.ravel(), idxva.ravel())
+    lib.takebak_2d(r2, r2bab, idxoba.T.ravel(), idxvb.ravel())
+    return r1, r2.reshape(nocc, nocc, nvir)
+
+def spin2spatial_ip(r1, r2, orbspin):
+    nocc, nvir = r2.shape[1:]
+
+    idxoa = np.where(orbspin[:nocc] == 0)[0]
+    idxob = np.where(orbspin[:nocc] == 1)[0]
+    idxva = np.where(orbspin[nocc:] == 0)[0]
+    idxvb = np.where(orbspin[nocc:] == 1)[0]
+    nocc_a = len(idxoa)
+    nocc_b = len(idxob)
+    nvir_a = len(idxva)
+    nvir_b = len(idxvb)
+
+    r1a = r1[idxoa]
+    r1b = r1[idxob]
+
+    idxoaa = idxoa[:,None] * nocc + idxoa
+    idxoab = idxoa[:,None] * nocc + idxob
+    idxoba = idxob[:,None] * nocc + idxoa
+    idxobb = idxob[:,None] * nocc + idxob
+    idxvaa = idxva[:,None] * nvir + idxva
+    idxvab = idxva[:,None] * nvir + idxvb
+    idxvba = idxvb[:,None] * nvir + idxva
+    idxvbb = idxvb[:,None] * nvir + idxvb
+
+    r2 = r2.reshape(nocc**2, nvir)
+    r2aaa = lib.take_2d(r2, idxoaa.ravel(), idxva.ravel())
+    r2baa = lib.take_2d(r2, idxoba.ravel(), idxva.ravel())
+    r2abb = lib.take_2d(r2, idxoab.ravel(), idxvb.ravel())
+    r2bbb = lib.take_2d(r2, idxobb.ravel(), idxvb.ravel())
+
+    r2aaa = r2aaa.reshape(nocc_a, nocc_a, nvir_a)
+    r2baa = r2baa.reshape(nocc_b, nocc_a, nvir_a)
+    r2abb = r2abb.reshape(nocc_a, nocc_b, nvir_b)
+    r2bbb = r2bbb.reshape(nocc_b, nocc_b, nvir_b)
+    return [r1a, r1b], [r2aaa, r2baa, r2abb, r2bbb]
+
+
+def ipccsd_matvec(eom, vector, imds=None, diag=None):
+    '''For spin orbitals'''
+    # Ref: Tu, Wang, and Li, J. Chem. Phys. 136, 174102 (2012) Eqs.(8)-(9)
+    if imds is None: imds = eom.make_imds()
+    nocc = eom.nocc
+    nmo = eom.nmo
+    r1, r2 = vector_to_amplitudes_ip(vector, nmo, nocc)
+    [r1a, r1b], [r2aaa, r2baa, r2abb, r2bbb] = spin2spatial_ip(r1, r2, eom._cc.mo_coeff.orbspin)
+
+    Wooov_spatial = _eri_spin2spatial(imds.Wooov, 'ooov', eom._cc.mo_coeff.orbspin, nocc)
+    Woooo_spatial = _eri_spin2spatial(imds.Woooo, 'oooo', eom._cc.mo_coeff.orbspin, nocc)
+    Woooo, WooOO, WOOoo, WOOOO = Woooo_spatial
+
+    Foo_spatial = _eri_spin2spatial(imds.Foo, 'oo', eom._cc.mo_coeff.orbspin, nocc)
+    Foo_spin = _eri_spatial2spin(Foo_spatial, 'oo', eom._cc.mo_coeff.orbspin, nocc)
+
+    Fov_spatial = _eri_spin2spatial(imds.Fov, 'ov', eom._cc.mo_coeff.orbspin, nocc)
+    Fov_spin = _eri_spatial2spin(Fov_spatial, 'ov', eom._cc.mo_coeff.orbspin, nocc)
+
+    Fvv_spatial = _eri_spin2spatial(imds.Fvv, 'vv', eom._cc.mo_coeff.orbspin, nocc)
+    Fvv_spin = _eri_spatial2spin(Fvv_spatial, 'vv', eom._cc.mo_coeff.orbspin, nocc)
+
+    # Eq. (8)
+    Hr1 = -np.einsum('mi,m->i', Foo_spin, r1)
+    Hr1 += np.einsum('me,mie->i', Fov_spin, r2)
+    Hr1 += -0.5*np.einsum('nmie,mne->i', imds.Wooov, r2)
+    # Eq. (9)
+    Hr2 =  lib.einsum('ae,ije->ija', Fvv_spin, r2)
+    tmp1 = lib.einsum('mi,mja->ija', Foo_spin, r2)
+    Hr2 -= tmp1 - tmp1.transpose(1,0,2)
+    Hr2 -= np.einsum('maji,m->ija', imds.Wovoo, r1)
+    Hr2 += 0.5*lib.einsum('mnij,mna->ija', imds.Woooo, r2)
+    tmp2 = lib.einsum('maei,mje->ija', imds.Wovvo, r2)
+    Hr2 += tmp2 - tmp2.transpose(1,0,2)
+    Hr2 += 0.5*lib.einsum('mnef,mnf,ijae->ija', imds.Woovv, r2, imds.t2)
+
+    Hr1a = np.zeros_like(r1a)
+    Hr1b = np.zeros_like(r1b)
+
+    Hr2aaa = np.zeros_like(r2aaa)
+    Hr2baa = np.zeros_like(r2baa)
+    Hr2abb = np.zeros_like(r2abb)
+    Hr2bbb = np.zeros_like(r2bbb)
+
+    # Woooo term
+    Hr2aaa += 0.5*lib.einsum('minj,mna->ija', (Woooo - Woooo.transpose(1, 0, 3, 2)), r2aaa - r2aaa.transpose(1, 0, 2))
+    Hr2abb += lib.einsum('miNJ,mNA->iJA', WooOO, r2abb)
+    Hr2bbb += 0.5*lib.einsum('MINJ,MNA->IJA', (WOOOO - WOOOO.transpose(1, 0, 3, 2)), r2bbb - r2bbb.transpose(1, 0, 2))
+    Hr2baa += lib.einsum('MInj,Mna->Ija', WOOoo, r2baa)
+
+    new_Hr1, new_Hr2 = spatial2spin_ip([Hr1a, Hr1b], [Hr2aaa, Hr2baa, Hr2abb, Hr2bbb])
+    vector = amplitudes_to_vector_ip(Hr1, Hr2)
+    vector += amplitudes_to_vector_ip(new_Hr1, new_Hr2)
+    return vector
+
+def ipccsd_diag(eom, imds=None):
+    if imds is None: imds = eom.make_imds()
+    t1, t2 = imds.t1, imds.t2
+    nocc, nvir = t1.shape
+
+    Hr1 = -np.diag(imds.Foo)
+    Hr2 = np.zeros((nocc,nocc,nvir), dtype=t1.dtype)
+    for i in range(nocc):
+        for j in range(nocc):
+            for a in range(nvir):
+                Hr2[i,j,a] += imds.Fvv[a,a]
+                Hr2[i,j,a] += -imds.Foo[i,i]
+                Hr2[i,j,a] += -imds.Foo[j,j]
+                Hr2[i,j,a] += 0.5*(imds.Woooo[i,j,i,j]-imds.Woooo[j,i,i,j])
+                Hr2[i,j,a] += imds.Wovvo[i,a,a,i]
+                Hr2[i,j,a] += imds.Wovvo[j,a,a,j]
+                Hr2[i,j,a] += 0.5*(np.dot(imds.Woovv[i,j,:,a], t2[i,j,a,:])
+                                  -np.dot(imds.Woovv[j,i,:,a], t2[i,j,a,:]))
+
+    vector = amplitudes_to_vector_ip(Hr1, Hr2)
+    return vector
+
+def _eri_spin2spatial(chemist_eri_spin, eri_label, orbspin, nocc):
+    idxoa = np.where(orbspin[:nocc] == 0)[0]
+    idxob = np.where(orbspin[:nocc] == 1)[0]
+    idxva = np.where(orbspin[nocc:] == 0)[0]
+    idxvb = np.where(orbspin[nocc:] == 1)[0]
+    nvir_a = len(idxva)
+    nvir_b = len(idxvb)
+    nocc_a = len(idxoa)
+    nocc_b = len(idxob)
+
+    def select_idx(s):
+        if s.lower() == 'o':
+            return idxoa, idxob
+        else:
+            return idxva, idxvb
+
+    if len(eri_label) == 2:
+        idx1a, idx1b = select_idx(eri_label[0])
+        idx2a, idx2b = select_idx(eri_label[1])
+
+        fa = np.zeros((len(idx1a),len(idx2a)), dtype=np.complex128)
+        fb = np.zeros((len(idx1b),len(idx2b)), dtype=np.complex128)
+        fa = chemist_eri_spin[idx1a[:,None],idx2a]
+        fb = chemist_eri_spin[idx1b[:,None],idx2b]
+        return fa, fb
+
+    idx1a, idx1b = select_idx(eri_label[0])
+    idx2a, idx2b = select_idx(eri_label[1])
+    idx3a, idx3b = select_idx(eri_label[2])
+    idx4a, idx4b = select_idx(eri_label[3])
+
+    eri_aaaa = np.zeros((len(idx1a),len(idx2a),len(idx3a),len(idx4a)), dtype=chemist_eri_spin.dtype)
+    eri_aabb = np.zeros((len(idx1a),len(idx2a),len(idx3b),len(idx4b)), dtype=chemist_eri_spin.dtype)
+    eri_bbaa = np.zeros((len(idx1b),len(idx2b),len(idx3a),len(idx4a)), dtype=chemist_eri_spin.dtype)
+    eri_bbbb = np.zeros((len(idx1b),len(idx2b),len(idx3b),len(idx4b)), dtype=chemist_eri_spin.dtype)
+
+    eri_aaaa = chemist_eri_spin[idx1a[:,None,None,None],idx2a[:,None,None],idx3a[:,None],idx4a]
+    eri_aabb = chemist_eri_spin[idx1a[:,None,None,None],idx2a[:,None,None],idx3b[:,None],idx4b]
+    eri_bbaa = chemist_eri_spin[idx1b[:,None,None,None],idx2b[:,None,None],idx3a[:,None],idx4a]
+    eri_bbbb = chemist_eri_spin[idx1b[:,None,None,None],idx2b[:,None,None],idx3b[:,None],idx4b]
+    return eri_aaaa, eri_aabb, eri_bbaa, eri_bbbb
+
+
+def _eri_spatial2spin(eri_aa_ab_ba_bb, eri_label, orbspin, nocc):
+    idxoa = np.where(orbspin[:nocc] == 0)[0]
+    idxob = np.where(orbspin[:nocc] == 1)[0]
+    idxva = np.where(orbspin[nocc:] == 0)[0]
+    idxvb = np.where(orbspin[nocc:] == 1)[0]
+    nvir_a = len(idxva)
+    nvir_b = len(idxvb)
+    nocc_a = len(idxoa)
+    nocc_b = len(idxob)
+
+    def select_idx(s):
+        if s.lower() == 'o':
+            return idxoa, idxob
+        else:
+            return idxva, idxvb
+
+    if len(eri_label) == 2:
+        idx1a, idx1b = select_idx(eri_label[0])
+        idx2a, idx2b = select_idx(eri_label[1])
+
+        fa, fb = eri_aa_ab_ba_bb
+        f = np.zeros((len(idx1a)+len(idx1b),
+                      len(idx2a)+len(idx2b)), dtype=fa.dtype)
+        f[idx1a[:,None],idx2a] = fa
+        f[idx1b[:,None],idx2b] = fb
+        return f
+
+    idx1a, idx1b = select_idx(eri_label[0])
+    idx2a, idx2b = select_idx(eri_label[1])
+    idx3a, idx3b = select_idx(eri_label[2])
+    idx4a, idx4b = select_idx(eri_label[3])
+
+    eri_aaaa, eri_aabb, eri_bbaa, eri_bbbb = eri_aa_ab_ba_bb
+    eri = np.zeros((len(idx1a)+len(idx1b),
+                    len(idx2a)+len(idx2b),
+                    len(idx3a)+len(idx3b),
+                    len(idx4a)+len(idx4b)), dtype=eri_aa_ab_ba_bb[0].dtype)
+    eri[idx1a[:,None,None,None],idx2a[:,None,None],idx3a[:,None],idx4a] = eri_aaaa
+    eri[idx1a[:,None,None,None],idx2a[:,None,None],idx3b[:,None],idx4b] = eri_aabb
+    eri[idx1b[:,None,None,None],idx2b[:,None,None],idx3a[:,None],idx4a] = eri_bbaa
+    eri[idx1b[:,None,None,None],idx2b[:,None,None],idx3b[:,None],idx4b] = eri_bbbb
+    return eri
+
+
 class EOMIP(eom_gccsd.EOMIP):
+    matvec = ipccsd_matvec
+    l_matvec = None
+    get_diag = ipccsd_diag
+    ipccsd_star = None
+
     def __init__(self, cc):
+        self._cc = cc
         gcc = addons.convert_to_gccsd(cc)
         eom_gccsd.EOMIP.__init__(self, gcc)
+
+    def vector_size(self):
+        nocc = self.nocc
+        nvir = self.nmo - nocc
+        return nocc + nocc*(nocc-1)/2*nvir
+
+    #def make_imds(self, eris=None):
+    #    imds = _IMDS(self._cc, eris)
+    #    imds.make_ip()
+    #    return imds
 
 ########################################
 # EOM-EA-CCSD
@@ -1661,3 +1938,29 @@ class _IMDS:
         self.made_ee_imds = True
         log.timer('EOM-CCSD EE intermediates', *cput0)
 
+if __name__ == '__main__':
+    from pyscf import scf
+    from pyscf import gto
+    from pyscf.cc import rccsd
+
+    mol = gto.Mole()
+    mol.atom = [
+        [8 , (0. , 0.     , 0.)],
+        [1 , (0. , -0.757 , 0.587)],
+        [1 , (0. , 0.757  , 0.587)]]
+    mol.basis = 'sto-3g'
+    mol.verbose = 7
+    mol.spin = 0
+    mol.build()
+    mf = scf.RHF(mol).run(conv_tol=1e-14)
+
+    mycc = rccsd.RCCSD(mf)
+    ecc, t1, t2 = mycc.kernel()
+    print(ecc - -0.21334326214236796)
+
+    myeom = EOMIP(mycc)
+    print("IP energies... (right eigenvector)")
+    e,v = myeom.ipccsd(nroots=2)
+    assert(abs(e[0] - 0.3092874788775446) < 1e-10)
+    #print(e[1] - 0.3092874632094273)
+    #print(e[2] - 0.4011171508707691)
