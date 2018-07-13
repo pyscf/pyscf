@@ -309,9 +309,9 @@ def newton(mf):
         class SecondOrderKUHF(mf.__class__, newton_ah._CIAH_SOSCF):
             __doc__ = mf_doc + newton_ah._CIAH_SOSCF.__doc__
             __init__ = newton_ah._CIAH_SOSCF.__init__
-
-            def build(self, cell=None):
-                newton_ah._CIAH_SOSCF.build(self, cell)
+            dump_flags = newton_ah._CIAH_SOSCF.dump_flags
+            build = newton_ah._CIAH_SOSCF.build
+            kernel = newton_ah._CIAH_SOSCF.kernel
 
             gen_g_hop = gen_g_hop_uhf
 
@@ -356,9 +356,9 @@ def newton(mf):
         class SecondOrderKRHF(mf.__class__, newton_ah._CIAH_SOSCF):
             __doc__ = mf_doc + newton_ah._CIAH_SOSCF.__doc__
             __init__ = newton_ah._CIAH_SOSCF.__init__
-
-            def build(self, cell=None):
-                newton_ah._CIAH_SOSCF.build(self, cell)
+            dump_flags = newton_ah._CIAH_SOSCF.dump_flags
+            build = newton_ah._CIAH_SOSCF.build
+            kernel = newton_ah._CIAH_SOSCF.kernel
 
             gen_g_hop = gen_g_hop_rhf
 

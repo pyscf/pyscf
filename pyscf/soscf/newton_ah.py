@@ -950,6 +950,9 @@ def newton(mf):
     class SecondOrderRHF(mf.__class__, _CIAH_SOSCF):
         __doc__ = mf_doc + _CIAH_SOSCF.__doc__
         __init__ = _CIAH_SOSCF.__init__
+        dump_flags = _CIAH_SOSCF.dump_flags
+        build = _CIAH_SOSCF.build
+        kernel = _CIAH_SOSCF.kernel
 
         def gen_g_hop(self, mo_coeff, mo_occ, fock_ao=None, h1e=None):
             return gen_g_hop_rhf(self, mo_coeff, mo_occ, fock_ao, h1e)
@@ -976,6 +979,8 @@ def newton(mf):
         class SecondOrderUHF(mf.__class__, _CIAH_SOSCF):
             __doc__ = mf_doc + _CIAH_SOSCF.__doc__
             __init__ = _CIAH_SOSCF.__init__
+            dump_flags = _CIAH_SOSCF.dump_flags
+            build = _CIAH_SOSCF.build
 
             def gen_g_hop(self, mo_coeff, mo_occ, fock_ao=None, h1e=None):
                 return gen_g_hop_uhf(self, mo_coeff, mo_occ, fock_ao, h1e)
@@ -1021,12 +1026,24 @@ def newton(mf):
                 if hasattr(self, '_scf') and self._scf.mol != self.mol:
                     s = self._scf.get_ovlp()
                 return self._scf.spin_square(mo_coeff, s)
+
+            def kernel(self, mo_coeff=None, mo_occ=None, dm0=None):
+                if isinstance(mo_coeff, numpy.ndarray) and mo_coeff.ndim == 2:
+                    mo_coeff = (mo_coeff, mo_coeff)
+                if isinstance(mo_occ, numpy.ndarray) and mo_occ.ndim == 1:
+                    mo_occ = (numpy.asarray(mo_occ >0, dtype=numpy.double),
+                              numpy.asarray(mo_occ==2, dtype=numpy.double))
+                return _CIAH_SOSCF.kernel(self, mo_coeff, mo_occ)
+
         return SecondOrderUHF(mf)
 
     elif isinstance(mf, scf.ghf.GHF):
         class SecondOrderGHF(mf.__class__, _CIAH_SOSCF):
             __doc__ = mf_doc + _CIAH_SOSCF.__doc__
             __init__ = _CIAH_SOSCF.__init__
+            dump_flags = _CIAH_SOSCF.dump_flags
+            build = _CIAH_SOSCF.build
+            kernel = _CIAH_SOSCF.kernel
 
             def gen_g_hop(self, mo_coeff, mo_occ, fock_ao=None, h1e=None):
                 return gen_g_hop_ghf(self, mo_coeff, mo_occ, fock_ao, h1e)
