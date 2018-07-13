@@ -136,31 +136,35 @@ def ipccsd_matvec(eom, vector, imds=None, diag=None):
     r1, r2 = vector_to_amplitudes_ip(vector, nmo, nocc)
     [r1a, r1b], [r2aaa, r2baa, r2abb, r2bbb] = spin2spatial_ip(r1, r2, eom._cc.mo_coeff.orbspin)
 
-    Wooov_spatial = _eri_spin2spatial(imds.Wooov, 'ooov', eom._cc.mo_coeff.orbspin, nocc)
-    Woooo_spatial = _eri_spin2spatial(imds.Woooo, 'oooo', eom._cc.mo_coeff.orbspin, nocc)
+    Wooov_spatial = _eri_spin2spatial(imds.Wooov.transpose((0,2,1,3)), 'ooov', eom._cc.mo_coeff.orbspin, nocc)
+    Woooo_spatial = _eri_spin2spatial(imds.Woooo.transpose((0,2,1,3)), 'oooo', eom._cc.mo_coeff.orbspin, nocc)
+    Woovo_spatial = _eri_spin2spatial(imds.Wovoo.transpose((0,2,1,3)), 'oovo', eom._cc.mo_coeff.orbspin, nocc)
     Woooo, WooOO, WOOoo, WOOOO = Woooo_spatial
+    Woovo, WooVO, WOOvo, WOOVO = Woovo_spatial
 
     Foo_spatial = _eri_spin2spatial(imds.Foo, 'oo', eom._cc.mo_coeff.orbspin, nocc)
     Foo_spin = _eri_spatial2spin(Foo_spatial, 'oo', eom._cc.mo_coeff.orbspin, nocc)
+    Foo, FOO = Foo_spatial
 
     Fov_spatial = _eri_spin2spatial(imds.Fov, 'ov', eom._cc.mo_coeff.orbspin, nocc)
     Fov_spin = _eri_spatial2spin(Fov_spatial, 'ov', eom._cc.mo_coeff.orbspin, nocc)
 
     Fvv_spatial = _eri_spin2spatial(imds.Fvv, 'vv', eom._cc.mo_coeff.orbspin, nocc)
     Fvv_spin = _eri_spatial2spin(Fvv_spatial, 'vv', eom._cc.mo_coeff.orbspin, nocc)
+    Fvv, FVV = Fvv_spatial
 
     # Eq. (8)
     Hr1 = -np.einsum('mi,m->i', Foo_spin, r1)
     Hr1 += np.einsum('me,mie->i', Fov_spin, r2)
     Hr1 += -0.5*np.einsum('nmie,mne->i', imds.Wooov, r2)
-    # Eq. (9)
-    Hr2 =  lib.einsum('ae,ije->ija', Fvv_spin, r2)
-    tmp1 = lib.einsum('mi,mja->ija', Foo_spin, r2)
-    Hr2 -= tmp1 - tmp1.transpose(1,0,2)
-    Hr2 -= np.einsum('maji,m->ija', imds.Wovoo, r1)
-    Hr2 += 0.5*lib.einsum('mnij,mna->ija', imds.Woooo, r2)
+    # Eq. (9) # start here
+    #Hr2 =  lib.einsum('ae,ije->ija', Fvv_spin, r2)
+    #tmp1 = lib.einsum('mi,mja->ija', Foo_spin, r2)
+    #Hr2 = -tmp1 + tmp1.transpose(1,0,2)
+    #Hr2 = -(np.einsum('maji,m->ija', imds.Wovoo, r1))
+    #Hr2 += 0.5*lib.einsum('mnij,mna->ija', imds.Woooo, r2)
     tmp2 = lib.einsum('maei,mje->ija', imds.Wovvo, r2)
-    Hr2 += tmp2 - tmp2.transpose(1,0,2)
+    Hr2 = tmp2 - tmp2.transpose(1,0,2)
     Hr2 += 0.5*lib.einsum('mnef,mnf,ijae->ija', imds.Woovv, r2, imds.t2)
 
     Hr1a = np.zeros_like(r1a)
@@ -171,10 +175,32 @@ def ipccsd_matvec(eom, vector, imds=None, diag=None):
     Hr2abb = np.zeros_like(r2abb)
     Hr2bbb = np.zeros_like(r2bbb)
 
+    # Fvv term
+    Hr2aaa += lib.einsum('ae,ije->ija', Fvv, r2aaa)
+    Hr2abb += lib.einsum('ae,ije->ija', FVV, r2abb)
+    Hr2bbb += lib.einsum('ae,ije->ija', FVV, r2bbb)
+    Hr2baa += lib.einsum('ae,ije->ija', Fvv, r2baa)
+
+    # Foo term
+    tmpa = lib.einsum('mi,mja->ija', Foo, r2aaa)
+    Hr2aaa -= tmpa - tmpa.transpose((1,0,2))
+    Hr2abb -= lib.einsum('mi,mja->ija',Foo,r2abb)
+    Hr2abb -= lib.einsum('mj,ima->ija',FOO,r2abb)
+    Hr2baa -= lib.einsum('mi,mja->ija',FOO,r2baa)
+    Hr2baa -= lib.einsum('mj,ima->ija',Foo,r2baa)
+    tmpb = lib.einsum('mi,mja->ija', FOO, r2bbb)
+    Hr2bbb -= tmpb - tmpb.transpose((1,0,2))
+
+    # Wovoo term
+    Hr2aaa += -(np.einsum('mjai,m->ija', Woovo, r1a))
+    Hr2abb += (np.einsum('miaj,m->ija', WooVO, r1a))
+    Hr2baa += (np.einsum('miaj,m->ija', WOOvo, r1b))
+    Hr2bbb += -(np.einsum('mjai,m->ija', WOOVO, r1b))
+
     # Woooo term
-    Hr2aaa += 0.5*lib.einsum('minj,mna->ija', (Woooo - Woooo.transpose(1, 0, 3, 2)), r2aaa - r2aaa.transpose(1, 0, 2))
+    Hr2aaa += 0.5*lib.einsum('minj,mna->ija', Woooo, r2aaa)
     Hr2abb += lib.einsum('miNJ,mNA->iJA', WooOO, r2abb)
-    Hr2bbb += 0.5*lib.einsum('MINJ,MNA->IJA', (WOOOO - WOOOO.transpose(1, 0, 3, 2)), r2bbb - r2bbb.transpose(1, 0, 2))
+    Hr2bbb += 0.5*lib.einsum('MINJ,MNA->IJA', WOOOO, r2bbb)
     Hr2baa += lib.einsum('MInj,Mna->Ija', WOOoo, r2baa)
 
     new_Hr1, new_Hr2 = spatial2spin_ip([Hr1a, Hr1b], [Hr2aaa, Hr2baa, Hr2abb, Hr2bbb])
