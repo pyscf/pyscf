@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 
 from ase.lattice import bulk
 from ase.dft.kpoints import special_points, get_bandpath
+
 c = bulk('C', 'diamond', a=3.5668)
 print(c.get_volume())
 
@@ -37,7 +38,7 @@ print(mf.kernel())
 e_kn = mf.get_bands(band_kpts)[0]
 vbmax = -99
 for en in e_kn:
-    vb_k = en[cell.nelectron/2-1]
+    vb_k = en[cell.nelectron//2-1]
     if vb_k > vbmax:
         vbmax = vb_k
 e_kn = [en - vbmax for en in e_kn]
@@ -47,12 +48,12 @@ e_kn = [en - vbmax for en in e_kn]
 #
 
 kmf = pbcdft.KRKS(cell, cell.make_kpts([2,2,2]))
-print kmf.kernel()
+print(kmf.kernel())
 
 e_kn_2 = kmf.get_bands(band_kpts)[0]
 vbmax = -99
 for en in e_kn_2:
-    vb_k = en[cell.nelectron/2-1]
+    vb_k = en[cell.nelectron//2-1]
     if vb_k > vbmax:
         vbmax = vb_k
 e_kn_2 = [en - vbmax for en in e_kn_2]
