@@ -18,6 +18,7 @@ import unittest
 import tempfile
 from functools import reduce
 import numpy
+import scipy.linalg
 from pyscf import gto
 from pyscf import lib
 import pyscf.lib.parameters as param
@@ -782,6 +783,19 @@ O    SP
         v = pmol.intor('int3c2e', comp=1, shls_slice=shls_slice)
         v = numpy.einsum('pqk->pq', v)
         self.assertAlmostEqual(abs(vref-v).max(), 0, 12)
+
+    def test_to_uncontracted_cartesian_basis(self):
+        pmol, ctr_coeff = mol0.to_uncontracted_cartesian_basis()
+        c = scipy.linalg.block_diag(*ctr_coeff)
+        s = reduce(numpy.dot, (c.T, pmol.intor('int1e_ovlp'), c))
+        self.assertAlmostEqual(abs(s-mol0.intor('int1e_ovlp')).max(), 0, 9)
+
+        mol0.cart = True
+        pmol, ctr_coeff = mol0.to_uncontracted_cartesian_basis()
+        c = scipy.linalg.block_diag(*ctr_coeff)
+        s = reduce(numpy.dot, (c.T, pmol.intor('int1e_ovlp'), c))
+        self.assertAlmostEqual(abs(s-mol0.intor('int1e_ovlp')).max(), 0, 9)
+        mol0.cart = False
 
 
 if __name__ == "__main__":

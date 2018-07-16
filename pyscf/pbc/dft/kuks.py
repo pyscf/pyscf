@@ -30,7 +30,6 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc.scf import kuhf
 from pyscf.pbc.dft import gen_grid
-from pyscf.pbc.dft import numint
 from pyscf.pbc.dft import rks
 
 
@@ -49,7 +48,8 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
 
     if ks.grids.non0tab is None:
         ks.grids.build(with_non0tab=True)
-        if ks.small_rho_cutoff > 1e-20 and ground_state:
+        if (isinstance(ks.grids, gen_grid.BeckeGrids) and
+            ks.small_rho_cutoff > 1e-20 and ground_state):
             ks.grids = rks.prune_small_rho_grids_(ks, cell, dm[0]+dm[1],
                                                   ks.grids, kpts)
         t0 = logger.timer(ks, 'setting up grids', *t0)
@@ -66,20 +66,21 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
 
     omega, alpha, hyb = ks._numint.rsh_and_hybrid_coeff(ks.xc, spin=cell.spin)
     if abs(hyb) < 1e-10:
-        vj = ks.get_j(cell, dm, hermi, kpts, kpts_band)
-        vxc += vj[0] + vj[1]
+        vj = ks.get_j(cell, dm[0]+dm[1], hermi, kpts, kpts_band)
+        vxc += vj
     else:
         if getattr(ks.with_df, '_j_only', False):  # for GDF and MDF
             ks.with_df._j_only = False
         vj, vk = ks.get_jk(cell, dm, hermi, kpts, kpts_band)
-        vxc += vj[0] + vj[1] - vk * hyb
+        vj = vj[0] + vj[1]
+        vxc += vj - vk * hyb
 
         if ground_state:
             exc -= (np.einsum('Kij,Kji', dm[0], vk[0]) +
                     np.einsum('Kij,Kji', dm[1], vk[1])).real * hyb * .5 * weight
 
     if ground_state:
-        ecoul = np.einsum('Kij,Kji', dm[0]+dm[1], vj[0]+vj[1]).real * .5 * weight
+        ecoul = np.einsum('Kij,Kji', dm[0]+dm[1], vj).real * .5 * weight
     else:
         ecoul = None
 

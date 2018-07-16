@@ -196,3 +196,54 @@ void VXCdot_ao_ao(double *vv, double *ao1, double *ao2,
                 NPdsymm_triu(nao, vv, hermi);
         }
 }
+
+// 'nip,np->ip'
+void VXC_dscale_ao(double *aow, double *ao, double *wv,
+                   int comp, int nao, int ngrids)
+{
+#pragma omp parallel default(none) \
+        shared(aow, ao, wv, comp, nao, ngrids)
+{
+        size_t Ngrids = ngrids;
+        size_t ao_size = nao * Ngrids;
+        int i, j, ic;
+        double *pao = ao;
+#pragma omp for schedule(static)
+        for (i = 0; i < nao; i++) {
+                pao = ao + i * Ngrids;
+                for (j = 0; j < Ngrids; j++) {
+                        aow[i*Ngrids+j] = pao[j] * wv[j];
+                }
+                for (ic = 1; ic < comp; ic++) {
+                for (j = 0; j < Ngrids; j++) {
+                        aow[i*Ngrids+j] += pao[ic*ao_size+j] * wv[ic*Ngrids+j];
+                } }
+        }
+}
+}
+
+// 'ip,ip->p'
+void VXC_dcontract_rho(double *rho, double *bra, double *ket,
+                       int nao, int ngrids)
+{
+#pragma omp parallel default(none) \
+        shared(rho, bra, ket, nao, ngrids)
+{
+        size_t Ngrids = ngrids;
+        int nthread = omp_get_num_threads();
+        int blksize = MAX((Ngrids+nthread-1) / nthread, 1);
+        int ib, b0, b1, i, j;
+#pragma omp for
+        for (ib = 0; ib < nthread; ib++) {
+                b0 = ib * blksize;
+                b1 = MIN(b0 + blksize, ngrids);
+                for (j = b0; j < b1; j++) {
+                        rho[j] = bra[j] * ket[j];
+                }
+                for (i = 1; i < nao; i++) {
+                for (j = b0; j < b1; j++) {
+                        rho[j] += bra[i*Ngrids+j] * ket[i*Ngrids+j];
+                } }
+        }
+}
+}

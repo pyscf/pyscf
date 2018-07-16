@@ -34,6 +34,7 @@ def get_jk(mf, cell=None, dm=None, hermi=0, kpt=None, kpts_band=None,
            with_j=True, with_k=True):
     if cell is None: cell = mf.cell
     if dm is None: dm = mf.make_rdm1()
+    if kpt is None: kpt = mf.kpt
 
     dm = np.asarray(dm)
     nso = dm.shape[-1]

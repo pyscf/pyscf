@@ -3,6 +3,11 @@ import numpy
 from pyscf import lib
 einsum = lib.einsum
 
+lib.numpy_helper.EINSUM_MAX_SIZE, bak = 0, lib.numpy_helper.EINSUM_MAX_SIZE
+
+def tearDownModule():
+    lib.numpy_helper.EINSUM_MAX_SIZE = bak
+
 class KnownValues(unittest.TestCase):
     def test_d_d(self):
         a = numpy.random.random((7,1,3,4))
@@ -172,6 +177,35 @@ class KnownValues(unittest.TestCase):
         b = numpy.random.random((2,4,7))
         c0 = numpy.einsum('...jkj,jlp->...jp', a, b)
         c1 = einsum('...jkj,jlp->...jp', a, b)
+        self.assertTrue(abs(c0-c1).max() < 1e-13)
+
+    def test_contraction5(self):
+        x = numpy.random.random((8,6))
+        y = numpy.random.random((8,6,6))
+        c0 = numpy.einsum("in,ijj->n", x, y)
+        c1 = einsum("in,ijj->n", x, y)
+        self.assertTrue(abs(c0-c1).max() < 1e-13)
+
+        x = numpy.random.random((6,6))
+        y = numpy.random.random((8,8))
+        c0 = numpy.einsum("ii,jj->", x, y)
+        c1 = einsum("ii,jj->", x, y)
+        self.assertTrue(abs(c0-c1).max() < 1e-13)
+
+        x = numpy.random.random((6))
+        y = numpy.random.random((8))
+        c0 = numpy.einsum("i,j->", x, y)
+        c1 = einsum("i,j->", x, y)
+        self.assertTrue(abs(c0-c1).max() < 1e-13)
+
+        c0 = numpy.einsum("i,i->", x, x)
+        c1 = einsum("i,i->", x, x)
+        self.assertTrue(abs(c0-c1).max() < 1e-13)
+
+        x = numpy.random.random((6,8))
+        y = numpy.random.random((8,6))
+        c0 = numpy.einsum("ij,ji->", x, y)
+        c1 = einsum("ij,ji->", x, y)
         self.assertTrue(abs(c0-c1).max() < 1e-13)
 
     def test_contract(self):

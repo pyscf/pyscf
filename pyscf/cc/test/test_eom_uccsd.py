@@ -26,6 +26,7 @@ from pyscf import ao2mo
 from pyscf.cc import gccsd
 from pyscf.cc import uccsd
 from pyscf.cc import eom_uccsd
+from pyscf.cc import eom_gccsd
 
 mol = gto.Mole()
 mol.verbose = 0
@@ -141,7 +142,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[3], 0.30819728420902842, 6)
 
     def test_eomee_ccsd_spin_keep(self):
-        e, v = ucc.eomee_ccsd(nroots=2)
+        e, v = ucc.eomee_ccsd(nroots=2, koopmans=False)
         self.assertAlmostEqual(e[0], 0.28114509667240556, 6)
         self.assertAlmostEqual(e[1], 0.30819728420902842, 6)
 
@@ -150,7 +151,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[1], 0.30819728420902842, 6)
 
     def test_eomsf_ccsd(self):
-        e, v = ucc.eomsf_ccsd(nroots=2)
+        e, v = ucc.eomsf_ccsd(nroots=2, koopmans=False)
         self.assertAlmostEqual(e[0], 0.28114509667240556, 6)
         self.assertAlmostEqual(e[1], 0.28114509667240556, 6)
 
@@ -181,25 +182,77 @@ class KnownValues(unittest.TestCase):
 
     def test_ucc_eomee_ccsd_matvec(self):
         numpy.random.seed(10)
-        r1 = numpy.random.random((no,nv)) - .9
-        r2 = numpy.random.random((no,no,nv,nv)) - .9
-        r1 = cc.addons.spin2spatial(r1, orbspin)
-        r2 = cc.addons.spin2spatial(r2, orbspin)
-        vec = eom_uccsd.amplitudes_to_vector_ee(r1,r2)
-        vec1 = eom_uccsd.eomee_ccsd_matvec(eom_uccsd.EOMEE(ucc1), vec)
-        self.assertAlmostEqual(lib.finger(vec1), 275.11801889278121, 9)
+        r1 = [numpy.random.random((nocca,nvira))-.9,
+              numpy.random.random((noccb,nvirb))-.9]
+        r2 = [numpy.random.random((nocca,nocca,nvira,nvira))-.9,
+              numpy.random.random((nocca,noccb,nvira,nvirb))-.9,
+              numpy.random.random((noccb,noccb,nvirb,nvirb))-.9]
+        r2[0] = r2[0] - r2[0].transpose(1,0,2,3)
+        r2[0] = r2[0] - r2[0].transpose(0,1,3,2)
+        r2[2] = r2[2] - r2[2].transpose(1,0,2,3)
+        r2[2] = r2[2] - r2[2].transpose(0,1,3,2)
 
-    def test_ucc_eomee_ccsd_diag(self):
+        gcc1 = cc.addons.convert_to_gccsd(ucc1)
+        gr1 = gcc1.spatial2spin(r1)
+        gr2 = gcc1.spatial2spin(r2)
+        gee1 = eom_gccsd.EOMEE(gcc1)
+        gvec = eom_gccsd.amplitudes_to_vector_ee(gr1, gr2)
+        vecref = eom_gccsd.eeccsd_matvec(gee1, gvec)
+
+        vec = eom_uccsd.amplitudes_to_vector_ee(r1,r2)
+        uee1 = eom_uccsd.EOMEESpinKeep(ucc1)
+        vec1 = eom_uccsd.eomee_ccsd_matvec(uee1, vec)
+
+        uv = eom_uccsd.amplitudes_to_vector_ee(r1, r2)
+        gv = eom_gccsd.amplitudes_to_vector_ee(gr1, gr2)
+        r1, r2 = uee1.vector_to_amplitudes(uee1.matvec(uv))
+        gr1, gr2 = gee1.vector_to_amplitudes(gee1.matvec(gv))
+
+        r1, r2 = uee1.vector_to_amplitudes(vec1)
+        gr1, gr2 = gee1.vector_to_amplitudes(vecref)
+        self.assertAlmostEqual(float(abs(gr1-gcc1.spatial2spin(r1)).max()), 0, 9)
+        self.assertAlmostEqual(float(abs(gr2-gcc1.spatial2spin(r2)).max()), 0, 9)
+        self.assertAlmostEqual(lib.finger(vec1), 49.499911123484523, 9)
+
+    def test_ucc_eomee_ccsd_diag(self):  # FIXME: compare to EOMEE-GCCSD diag
         vec1, vec2 = eom_uccsd.EOMEE(ucc1).get_diag()
-        self.assertAlmostEqual(lib.finger(vec1),-36.776800901625307, 9)
-        self.assertAlmostEqual(lib.finger(vec2), 106.70096636265369, 9)
+        self.assertAlmostEqual(lib.finger(vec1), 62.767648620751018, 9)
+        self.assertAlmostEqual(lib.finger(vec2), 156.2976365433517, 9)
+
+    def test_ucc_eomee_init_guess(self):
+        uee = eom_uccsd.EOMEESpinKeep(ucc1)
+        diag = uee.get_diag()[0]
+        guess = uee.get_init_guess(nroots=1, koopmans=False, diag=diag)
+        self.assertAlmostEqual(lib.finger(guess[0]), -0.99525784369029358, 9)
+
+        guess = uee.get_init_guess(nroots=1, koopmans=True, diag=diag)
+        self.assertAlmostEqual(lib.finger(guess[0]), -0.84387013299273794, 9)
+
+        guess = uee.get_init_guess(nroots=4, koopmans=False, diag=diag)
+        self.assertAlmostEqual(lib.finger(guess), -0.98261980006133565, 9)
+
+        guess = uee.get_init_guess(nroots=4, koopmans=True, diag=diag)
+        self.assertAlmostEqual(lib.finger(guess), -0.38124032366955651, 9)
 
     def test_ucc_eomsf_ccsd_matvec(self):
         numpy.random.seed(10)
         myeom = eom_uccsd.EOMEESpinFlip(ucc1)
         vec = numpy.random.random(myeom.vector_size()) - .9
         vec1 = eom_uccsd.eomsf_ccsd_matvec(myeom, vec)
-        self.assertAlmostEqual(lib.finger(vec1), -588.66159772500009, 8)
+        self.assertAlmostEqual(lib.finger(vec1), -1655.5564756993756, 8)
+
+        r1, r2 = myeom.vector_to_amplitudes(vec)
+        gr1 = eom_uccsd.spatial2spin_eomsf(r1, orbspin)
+        gr2 = eom_uccsd.spatial2spin_eomsf(r2, orbspin)
+        gvec = eom_gccsd.amplitudes_to_vector_ee(gr1, gr2)
+
+        gcc1 = cc.addons.convert_to_gccsd(ucc1)
+        gee1 = eom_gccsd.EOMEE(gcc1)
+        vecref = eom_gccsd.eeccsd_matvec(gee1, gvec)
+        gr1, gr2 = gee1.vector_to_amplitudes(vecref)
+        v1, v2 = myeom.vector_to_amplitudes(vec1)
+        self.assertAlmostEqual(float(abs(gr1-eom_uccsd.spatial2spin_eomsf(v1, orbspin)).max()), 0, 9)
+        self.assertAlmostEqual(float(abs(gr2-eom_uccsd.spatial2spin_eomsf(v2, orbspin)).max()), 0, 9)
 
 #    def test_ucc_eomip_matvec(self):
 #
@@ -212,13 +265,13 @@ class KnownValues(unittest.TestCase):
     def test_eomee1(self):
         self.assertAlmostEqual(ucc0.e_corr, -0.10805861805688141, 6)
         e,v = ucc0.eeccsd(nroots=4)
-        self.assertAlmostEqual(e[0],-0.278489819261417580, 6)
-        self.assertAlmostEqual(e[1], 0.004260352893874781, 6)
-        self.assertAlmostEqual(e[2], 0.034029986071974654, 6)
-        self.assertAlmostEqual(e[3], 0.091401096410169247, 6)
+        self.assertAlmostEqual(e[0],-0.28757438579564343, 6)
+        self.assertAlmostEqual(e[1], 7.0932490003970672e-05, 6)
+        self.assertAlmostEqual(e[2], 0.026861582690761672, 6)
+        self.assertAlmostEqual(e[3], 0.091111388761653589, 6)
 
         e,v = ucc0.eeccsd(nroots=4, guess=v[:4])
-        self.assertAlmostEqual(e[3], 0.091401096410169247, 6)
+        self.assertAlmostEqual(e[3], 0.091111388761653589, 6)
 
     def test_vector_to_amplitudes_eomsf(self):
         eomsf = eom_uccsd.EOMEESpinFlip(ucc0)

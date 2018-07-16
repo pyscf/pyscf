@@ -88,9 +88,11 @@ class SymAdaptedCASSCF(mc1step.CASSCF):
         # self.mo_coeff.orbsym is initialized in kernel function
         return _symmetrize(mask, self.mo_coeff.orbsym, self.mol.groupname)
 
-    def _eig(self, mat, b0, b1):
+    def _eig(self, mat, b0, b1, orbsym=None):
         # self.mo_coeff.orbsym is initialized in kernel function
-        return casci_symm.eig(mat, numpy.array(self.mo_coeff.orbsym[b0:b1]))
+        if orbsym is None:
+            orbsym = self.mo_coeff.orbsym[b0:b1]
+        return casci_symm.eig(mat, orbsym)
 
     def rotate_mo(self, mo, u, log=None):
         '''Rotate orbitals with the given unitary matrix'''

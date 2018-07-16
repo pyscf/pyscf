@@ -1002,9 +1002,17 @@ class EOMEESpinKeep(EOMEE):
             nocca, noccb = self.nocc
             nmoa, nmob = self.nmo
             nvira, nvirb = nmoa-nocca, nmob-noccb
+# amplitudes are compressed by the function amplitudes_to_vector_ee. sizea is
+# the offset in the compressed vector that points to the amplitudes R1_beta
+# The addresses of R1_alpha and R1_beta are not contiguous in the compressed
+# vector.
             sizea = nocca * nvira + nocca*(nocca-1)//2*nvira*(nvira-1)//2
             diag = np.append(diag[:nocca*nvira], diag[sizea:sizea+noccb*nvirb])
-        idx = diag.argsort()
+            addr = np.append(np.arange(nocca*nvira),
+                             np.arange(sizea,sizea+noccb*nvirb))
+            idx = addr[diag.argsort()]
+        else:
+            idx = diag.argsort()
 
         size = self.vector_size()
         dtype = getattr(diag, 'dtype', np.double)
@@ -1219,8 +1227,10 @@ class _IMDS:
         OVOV = eris_OVOV - eris_OVOV.transpose(0,3,2,1)
         self.Fova = np.einsum('nf,menf->me', t1a,      ovov)
         self.Fova+= np.einsum('NF,meNF->me', t1b, eris_ovOV)
+        self.Fova += fova
         self.Fovb = np.einsum('nf,menf->me', t1b,      OVOV)
         self.Fovb+= np.einsum('nf,nfME->ME', t1a, eris_ovOV)
+        self.Fovb += fovb
         tilaa, tilab, tilbb = uccsd.make_tau(t2,t1,t1,fac=0.5)
         self.Fooa  = lib.einsum('inef,menf->mi', tilaa, eris_ovov)
         self.Fooa += lib.einsum('iNeF,meNF->mi', tilab, eris_ovOV)
@@ -1561,8 +1571,8 @@ class _IMDS:
         #:eris_OVvv = lib.unpack_tril(np.asarray(eris.OVvv).reshape(noccb*nvirb,-1)).reshape(noccb,nvirb,nvira,nvira)
         #:self.wvOvV -= lib.einsum('MFbe,MIAF->eIbA', eris_OVvv, t2bb)
         #:self.wvOvV += eris_OVvv.transpose(2,0,3,1).conj()
-        blksize = min(nocca, max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvira**3*6))))
-        for i0,i1 in lib.prange(0, nocca, blksize):
+        blksize = min(noccb, max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvira**3*6))))
+        for i0,i1 in lib.prange(0, noccb, blksize):
             wvOvV = self.wvOvV[:,i0:i1]
             for p0,p1 in lib.prange(0, nocca, blksize):
                 ovVV = eris.get_ovVV(slice(p0,p1))  # ovVV = eris.ovVV[p0:p1]
@@ -1575,8 +1585,8 @@ class _IMDS:
                 ovvv = None
             self.wvOvV[:,i0:i1] = wvOvV
 
-        blksize = min(nocca, max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvirb*nvira**2*3))))
-        for i0,i1 in lib.prange(0, nocca, blksize):
+        blksize = min(noccb, max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvirb*nvira**2*3))))
+        for i0,i1 in lib.prange(0, noccb, blksize):
             wvOvV = self.wvOvV[:,i0:i1]
             for p0,p1 in lib.prange(0, noccb, blksize):
                 OVvv = eris.get_OVvv(slice(p0,p1))  # OVvv = eris.OVvv[p0:p1]
@@ -1624,7 +1634,7 @@ class _IMDS:
         #:self.wVoVv -= lib.einsum('mfBE,miaf->EiBa', eris_ovVV, t2aa)
         #:self.wVoVv += eris_ovVV.transpose(2,0,3,1).conj()
         blksize = min(noccb, max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvirb**3*6))))
-        for i0,i1 in lib.prange(0, noccb, blksize):
+        for i0,i1 in lib.prange(0, nocca, blksize):
             wVoVv = self.wVoVv[:,i0:i1]
             for p0,p1 in lib.prange(0, noccb, blksize):
                 OVvv = eris.get_OVvv(slice(p0,p1))  # OVvv = eris.OVvv[p0:p1]
@@ -1637,10 +1647,10 @@ class _IMDS:
                 OVVV = None
             self.wVoVv[:,i0:i1] = wVoVv
 
-        blksize = min(noccb, max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvira*nvirb**2*3))))
-        for i0,i1 in lib.prange(0, noccb, blksize):
+        blksize = min(nocca, max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvira*nvirb**2*3))))
+        for i0,i1 in lib.prange(0, nocca, blksize):
             wVoVv = self.wVoVv[:,i0:i1]
-            for p0,p1 in lib.prange(0, noccb, blksize):
+            for p0,p1 in lib.prange(0, nocca, blksize):
                 ovVV = eris.get_ovVV(slice(p0,p1))  # ovVV = eris.ovVV[p0:p1]
                 if p0 == i0:
                     wVoVv += ovVV.transpose(2,0,3,1).conj()

@@ -58,8 +58,6 @@ def contract_2e(eri, civec_strs, norb, nelec, link_index=None, orbsym=None):
     cd_indexa, dd_indexa, cd_indexb, dd_indexb = link_index
     na, nlinka = cd_indexa.shape[:2]
     nb, nlinkb = cd_indexb.shape[:2]
-    ma, mlinka = dd_indexa.shape[:2]
-    mb, mlinkb = dd_indexb.shape[:2]
 
     eri = ao2mo.restore(1, eri, norb)
     eri1 = eri.transpose(0,2,1,3) - eri.transpose(0,2,3,1)
@@ -71,6 +69,7 @@ def contract_2e(eri, civec_strs, norb, nelec, link_index=None, orbsym=None):
     fcivec = ci_coeff.reshape(na,nb)
     # (bb|bb)
     if nelec[1] > 1:
+        mb, mlinkb = dd_indexb.shape[:2]
         fcivecT = lib.transpose(fcivec)
         ci1T = numpy.zeros((nb,na))
         libfci.SCIcontract_2e_aaaa_symm(eri1.ctypes.data_as(ctypes.c_void_p),
@@ -87,6 +86,7 @@ def contract_2e(eri, civec_strs, norb, nelec, link_index=None, orbsym=None):
         ci1 = numpy.zeros_like(fcivec)
     # (aa|aa)
     if nelec[0] > 1:
+        ma, mlinka = dd_indexa.shape[:2]
         libfci.SCIcontract_2e_aaaa_symm(eri1.ctypes.data_as(ctypes.c_void_p),
                                         fcivec.ctypes.data_as(ctypes.c_void_p),
                                         ci1.ctypes.data_as(ctypes.c_void_p),

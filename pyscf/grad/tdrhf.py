@@ -189,9 +189,21 @@ def as_scanner(td_grad, state=1):
             td_scanner = self.base
             td_scanner(mol)
             self.mol = mol
+# TODO: Check root flip.  Maybe avoid the initial guess in TDHF otherwise
+# large error may be found in the excited states amplitudes
             de = self.kernel(state=state, **kwargs)
-            return self.e_tot, de
-    return TDSCF_GradScanner(td_grad)
+            e_tot = self.e_tot[state-1]
+            return e_tot, de
+        @property
+        def converged(self):
+            td_scanner = self.base
+            return all((td_scanner._scf.converged,
+                        td_scanner.converged[self.state]))
+
+    if state == 0:
+        return td_grad.base._scf.nuc_grad_method().as_scanner()
+    else:
+        return TDSCF_GradScanner(td_grad)
 
 
 class Gradients(rhf_grad.Gradients):

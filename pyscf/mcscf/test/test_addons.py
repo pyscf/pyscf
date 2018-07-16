@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import copy
 import unittest
 from functools import reduce
 import numpy
@@ -83,12 +84,30 @@ class KnownValues(unittest.TestCase):
         numpy.random.seed(1)
         f1 = numpy.random.random(mcr.mo_coeff.shape)
         u1 = numpy.linalg.svd(f1)[0]
-        mo, ci, mo_e = mcr.canonicalize(numpy.dot(mcr.mo_coeff, u1))
+        mo1 = numpy.dot(mcr.mo_coeff, u1)
+        mo1 = lib.tag_array(mo1, orbsym=mcr.mo_coeff.orbsym)
+        mo, ci, mo_e = mcr.canonicalize(mo1)
         e1 = numpy.einsum('ji,jk,ki', mo, f1, mo)
         self.assertAlmostEqual(e1, 44.2658681077, 7)
-        mo, ci, mo_e = mcr.canonicalize(numpy.dot(mcr.mo_coeff, u1), eris=mcr.ao2mo(mcr.mo_coeff))
+        self.assertAlmostEqual(lib.finger(mo_e), 5.1364166175063097, 7)
+
+        mo, ci, mo_e = mcr.canonicalize(mo1, eris=mcr.ao2mo(mcr.mo_coeff))
         e1 = numpy.einsum('ji,jk,ki', mo, f1, mo)
         self.assertAlmostEqual(e1, 44.2658681077, 7)
+        self.assertAlmostEqual(lib.finger(mo_e), 4.1206025804989173, 7)
+
+        mcr1 = copy.copy(mcr)
+        mcr1.frozen = 2
+        mo, ci, mo_e = mcr1.canonicalize(mo1)
+        self.assertAlmostEqual(lib.finger(mo_e), 6.6030999409178577, 7)
+
+        mcr1.frozen = [0,1]
+        mo, ci, mo_e = mcr1.canonicalize(mo1)
+        self.assertAlmostEqual(lib.finger(mo_e), 6.6030999409178577, 7)
+
+        mcr1.frozen = [1,12]
+        mo, ci, mo_e = mcr1.canonicalize(mo1)
+        self.assertAlmostEqual(lib.finger(mo_e), 5.2182584355788162, 7)
 
     def test_canonicalize(self):
         mo, ci, mo_e = mcr.canonicalize()

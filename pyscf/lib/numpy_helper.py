@@ -28,126 +28,14 @@ import numpy
 import scipy.linalg
 from pyscf.lib import misc
 
+EINSUM_MAX_SIZE = getattr(misc.__config__, 'lib_einsum_max_size', 2000)
+
 try:
 # Import tblis before libnp_helper to avoid potential dl-loading conflicts
-    from pyscf.lib.tblis_einsum import _contract
-
+    from pyscf.lib import tblis_einsum
+    FOUND_TBLIS = True
 except (ImportError, OSError):
-    def _contract(subscripts, *tensors, **kwargs):
-        DEBUG = kwargs.get('DEBUG', False)
-
-        idx_str = subscripts.replace(' ','')
-        indices  = idx_str.replace(',', '').replace('->', '')
-        if '->' not in idx_str or any(indices.count(x)>2 for x in set(indices)):
-            return numpy.einsum(idx_str, *tensors)
-
-        A, B = tensors
-        # Call numpy.asarray because A or B may be HDF5 Datasets 
-        A = numpy.asarray(A, order='A')
-        B = numpy.asarray(B, order='A')
-        if A.size < 2000 or B.size < 2000:
-            return numpy.einsum(idx_str, *tensors)
-
-        # Split the strings into a list of idx char's
-        idxA, idxBC = idx_str.split(',')
-        idxB, idxC = idxBC.split('->')
-        idxA, idxB, idxC = [list(x) for x in [idxA,idxB,idxC]]
-        assert(len(idxA) == A.ndim)
-        assert(len(idxB) == B.ndim)
-
-        if DEBUG:
-            print("*** Einsum for", idx_str)
-            print(" idxA =", idxA)
-            print(" idxB =", idxB)
-            print(" idxC =", idxC)
-
-        # Get the range for each index and put it in a dictionary
-        rangeA = dict()
-        rangeB = dict()
-        #rangeC = dict()
-        for idx,rnge in zip(idxA,A.shape):
-            rangeA[idx] = rnge
-        for idx,rnge in zip(idxB,B.shape):
-            rangeB[idx] = rnge
-        #for idx,rnge in zip(idxC,C.shape):
-        #    rangeC[idx] = rnge
-
-        if DEBUG:
-            print("rangeA =", rangeA)
-            print("rangeB =", rangeB)
-
-        # Find the shared indices being summed over
-        shared_idxAB = list(set(idxA).intersection(idxB))
-        #if len(shared_idxAB) == 0:
-        #    return np.einsum(idx_str,A,B)
-        idxAt = list(idxA)
-        idxBt = list(idxB)
-        inner_shape = 1
-        insert_B_loc = 0
-        for n in shared_idxAB:
-            if rangeA[n] != rangeB[n]:
-                err = ('ERROR: In index string %s, the range of index %s is '
-                       'different in A (%d) and B (%d)' %
-                       (idx_str, n, rangeA[n], rangeB[n]))
-                raise RuntimeError(err)
-
-            # Bring idx all the way to the right for A
-            # and to the left (but preserve order) for B
-            idxA_n = idxAt.index(n)
-            idxAt.insert(len(idxAt)-1, idxAt.pop(idxA_n))
-
-            idxB_n = idxBt.index(n)
-            idxBt.insert(insert_B_loc, idxBt.pop(idxB_n))
-            insert_B_loc += 1
-
-            inner_shape *= rangeA[n]
-
-        if DEBUG:
-            print("shared_idxAB =", shared_idxAB)
-            print("inner_shape =", inner_shape)
-
-        # Transpose the tensors into the proper order and reshape into matrices
-        new_orderA = [idxA.index(idx) for idx in idxAt]
-        new_orderB = [idxB.index(idx) for idx in idxBt]
-
-        if DEBUG:
-            print("Transposing A as", new_orderA)
-            print("Transposing B as", new_orderB)
-            print("Reshaping A as (-1,", inner_shape, ")")
-            print("Reshaping B as (", inner_shape, ",-1)")
-
-        shapeCt = list()
-        idxCt = list()
-        for idx in idxAt:
-            if idx in shared_idxAB:
-                break
-            shapeCt.append(rangeA[idx])
-            idxCt.append(idx)
-        for idx in idxBt:
-            if idx in shared_idxAB:
-                continue
-            shapeCt.append(rangeB[idx])
-            idxCt.append(idx)
-        new_orderCt = [idxCt.index(idx) for idx in idxC]
-
-        if A.size == 0 or B.size == 0:
-            shapeCt = [shapeCt[i] for i in new_orderCt]
-            return numpy.zeros(shapeCt, dtype=numpy.result_type(A,B))
-
-        At = A.transpose(new_orderA)
-        Bt = B.transpose(new_orderB)
-
-        if At.flags.f_contiguous:
-            At = numpy.asarray(At.reshape(-1,inner_shape), order='F')
-        else:
-            At = numpy.asarray(At.reshape(-1,inner_shape), order='C')
-        if Bt.flags.f_contiguous:
-            Bt = numpy.asarray(Bt.reshape(inner_shape,-1), order='F')
-        else:
-            Bt = numpy.asarray(Bt.reshape(inner_shape,-1), order='C')
-
-        return dot(At,Bt).reshape(shapeCt, order='A').transpose(new_orderCt)
-
+    FOUND_TBLIS = False
 
 _np_helper = misc.load_library('libnp_helper')
 
@@ -212,6 +100,123 @@ else:
         einsum_args.insert(0, ((a, b), idx_removed, einsum_str, indices_in))
         return operands, einsum_args
 
+def _contract(subscripts, *tensors, **kwargs):
+    idx_str = subscripts.replace(' ','')
+    indices  = idx_str.replace(',', '').replace('->', '')
+    if '->' not in idx_str or any(indices.count(x)>2 for x in set(indices)):
+        return numpy.einsum(idx_str, *tensors)
+
+    A, B = tensors
+    # Call numpy.asarray because A or B may be HDF5 Datasets 
+    A = numpy.asarray(A, order='A')
+    B = numpy.asarray(B, order='A')
+    if A.size < EINSUM_MAX_SIZE or B.size < EINSUM_MAX_SIZE:
+        return numpy.einsum(idx_str, *tensors)
+
+    C_dtype = numpy.result_type(A, B)
+    if FOUND_TBLIS and C_dtype == numpy.double:
+        # tblis is slow for complex type
+        return tblis_einsum._contract(idx_str, A, B, **kwargs)
+
+    DEBUG = kwargs.get('DEBUG', False)
+
+    # Split the strings into a list of idx char's
+    idxA, idxBC = idx_str.split(',')
+    idxB, idxC = idxBC.split('->')
+    assert(len(idxA) == A.ndim)
+    assert(len(idxB) == B.ndim)
+
+    if DEBUG:
+        print("*** Einsum for", idx_str)
+        print(" idxA =", idxA)
+        print(" idxB =", idxB)
+        print(" idxC =", idxC)
+
+    # Get the range for each index and put it in a dictionary
+    rangeA = dict(zip(idxA, A.shape))
+    rangeB = dict(zip(idxB, B.shape))
+    #rangeC = dict(zip(idxC, C.shape))
+    if DEBUG:
+        print("rangeA =", rangeA)
+        print("rangeB =", rangeB)
+
+    # duplicated indices 'in,ijj->n'
+    if len(rangeA) != A.ndim or len(rangeB) != B.ndim:
+        return numpy.einsum(idx_str, A, B)
+
+    # Find the shared indices being summed over
+    shared_idxAB = set(idxA).intersection(idxB)
+    if len(shared_idxAB) == 0: # Indices must overlap
+        return numpy.einsum(idx_str, A, B)
+
+    idxAt = list(idxA)
+    idxBt = list(idxB)
+    inner_shape = 1
+    insert_B_loc = 0
+    for n in shared_idxAB:
+        if rangeA[n] != rangeB[n]:
+            err = ('ERROR: In index string %s, the range of index %s is '
+                   'different in A (%d) and B (%d)' %
+                   (idx_str, n, rangeA[n], rangeB[n]))
+            raise ValueError(err)
+
+        # Bring idx all the way to the right for A
+        # and to the left (but preserve order) for B
+        idxA_n = idxAt.index(n)
+        idxAt.insert(len(idxAt)-1, idxAt.pop(idxA_n))
+
+        idxB_n = idxBt.index(n)
+        idxBt.insert(insert_B_loc, idxBt.pop(idxB_n))
+        insert_B_loc += 1
+
+        inner_shape *= rangeA[n]
+
+    if DEBUG:
+        print("shared_idxAB =", shared_idxAB)
+        print("inner_shape =", inner_shape)
+
+    # Transpose the tensors into the proper order and reshape into matrices
+    new_orderA = [idxA.index(idx) for idx in idxAt]
+    new_orderB = [idxB.index(idx) for idx in idxBt]
+
+    if DEBUG:
+        print("Transposing A as", new_orderA)
+        print("Transposing B as", new_orderB)
+        print("Reshaping A as (-1,", inner_shape, ")")
+        print("Reshaping B as (", inner_shape, ",-1)")
+
+    shapeCt = list()
+    idxCt = list()
+    for idx in idxAt:
+        if idx in shared_idxAB:
+            break
+        shapeCt.append(rangeA[idx])
+        idxCt.append(idx)
+    for idx in idxBt:
+        if idx in shared_idxAB:
+            continue
+        shapeCt.append(rangeB[idx])
+        idxCt.append(idx)
+    new_orderCt = [idxCt.index(idx) for idx in idxC]
+
+    if A.size == 0 or B.size == 0:
+        shapeCt = [shapeCt[i] for i in new_orderCt]
+        return numpy.zeros(shapeCt, dtype=C_dtype)
+
+    At = A.transpose(new_orderA)
+    Bt = B.transpose(new_orderB)
+
+    if At.flags.f_contiguous:
+        At = numpy.asarray(At.reshape(-1,inner_shape), order='F')
+    else:
+        At = numpy.asarray(At.reshape(-1,inner_shape), order='C')
+    if Bt.flags.f_contiguous:
+        Bt = numpy.asarray(Bt.reshape(inner_shape,-1), order='F')
+    else:
+        Bt = numpy.asarray(Bt.reshape(inner_shape,-1), order='C')
+
+    return dot(At,Bt).reshape(shapeCt, order='A').transpose(new_orderCt)
+
 def einsum(subscripts, *tensors, **kwargs):
     '''Perform a more efficient einsum via reshaping to a matrix multiply.
 
@@ -220,13 +225,14 @@ def einsum(subscripts, *tensors, **kwargs):
     and appears only twice (i.e. no 'ij,ik,il->jkl'). The output indices must
     be explicitly specified (i.e. 'ij,j->i' and not 'ij,j').
     '''
+    contract = kwargs.pop('_contract', _contract)
+
     subscripts = subscripts.replace(' ','')
     if len(tensors) <= 1 or '...' in subscripts:
         out = numpy.einsum(subscripts, *tensors, **kwargs)
     elif len(tensors) <= 2:
         out = _contract(subscripts, *tensors, **kwargs)
     else:
-        contract = kwargs.get('_contract', _contract)
         if '->' in subscripts:
             indices_in, idx_final = subscripts.split('->')
             indices_in = indices_in.split(',')
@@ -710,20 +716,6 @@ def dot(a, b, alpha=1, c=None, beta=0):
             c.real = ddot(a, b, alpha, cr, beta)
             return c
 
-    if atype == numpy.float64 and btype == numpy.complex128:
-        br = numpy.asarray(b.real, order='C')
-        bi = numpy.asarray(b.imag, order='C')
-        cr = ddot(a, br, alpha)
-        ci = ddot(a, bi, alpha)
-        ab = cr + ci*1j
-
-    elif atype == numpy.complex128 and btype == numpy.float64:
-        ar = numpy.asarray(a.real, order='C')
-        ai = numpy.asarray(a.imag, order='C')
-        cr = ddot(ar, b, alpha)
-        ci = ddot(ai, b, alpha)
-        ab = cr + ci*1j
-
     elif atype == numpy.complex128 and btype == numpy.complex128:
         # Gauss's complex multiplication algorithm may affect numerical stability
         #k1 = ddot(a.real+a.imag, b.real.copy(), alpha)
@@ -732,18 +724,49 @@ def dot(a, b, alpha=1, c=None, beta=0):
         #ab = k1-k3 + (k1+k2)*1j
         return zdot(a, b, alpha, c, beta)
 
-    else:
-        ab = numpy.dot(a, b) * alpha
+    elif atype == numpy.float64 and btype == numpy.complex128:
+        if b.flags.f_contiguous:
+            order = 'F'
+        else:
+            order = 'C'
+        cr = ddot(a, numpy.asarray(b.real, order=order), alpha)
+        ci = ddot(a, numpy.asarray(b.imag, order=order), alpha)
+        ab = numpy.ndarray(cr.shape, dtype=numpy.complex128, buffer=c)
+        if c is None or beta == 0:
+            ab.real = cr
+            ab.imag = ci
+        else:
+            ab *= beta
+            ab.real += cr
+            ab.imag += ci
+        return ab
 
-    if c is None:
-        c = ab
+    elif atype == numpy.complex128 and btype == numpy.float64:
+        if a.flags.f_contiguous:
+            order = 'F'
+        else:
+            order = 'C'
+        cr = ddot(numpy.asarray(a.real, order=order), b, alpha)
+        ci = ddot(numpy.asarray(a.imag, order=order), b, alpha)
+        ab = numpy.ndarray(cr.shape, dtype=numpy.complex128, buffer=c)
+        if c is None or beta == 0:
+            ab.real = cr
+            ab.imag = ci
+        else:
+            ab *= beta
+            ab.real += cr
+            ab.imag += ci
+        return ab
+
     else:
-        if beta == 0:
-            c[:] = 0
+        if c is None:
+            c = numpy.dot(a, b) * alpha
+        elif beta == 0:
+            c[:] = numpy.dot(a, b) * alpha
         else:
             c *= beta
-        c += ab
-    return c
+            c += numpy.dot(a, b) * alpha
+        return c
 
 # a, b, c in C-order
 def _dgemm(trans_a, trans_b, m, n, k, a, b, c, alpha=1, beta=0,

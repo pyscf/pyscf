@@ -274,6 +274,37 @@ class KnownValues(unittest.TestCase):
         #self.assertAlmostEqual(abs(dm2[1]-dm2ref[1]).sum(), 0, 9)
         #self.assertAlmostEqual(abs(dm2[2]-dm2ref[2]).sum(), 0, 9)
 
+    def test_rdm_2e(self):
+        norb, nelec = 10, 1
+        strs = cistring.gen_strings4orblist(range(norb), nelec)
+        numpy.random.seed(11)
+        mask = numpy.random.random(len(strs)) > .6
+        strsa = strs[mask]
+        mask = numpy.random.random(len(strs)) > .7
+        strsb = strs[mask]
+        ci_strs = (strsa, strsb)
+        ci_coeff = selected_ci._as_SCIvector(numpy.random.random((len(strsa),len(strsb))), ci_strs)
+        ci0 = selected_ci.to_fci(ci_coeff, norb, (nelec,nelec))
+        dm1ref, dm2ref = direct_spin1.make_rdm12s(ci0, norb, (nelec,nelec))
+        dm1 = selected_ci.make_rdm1s(ci_coeff, norb, (nelec,nelec))
+        self.assertAlmostEqual(abs(dm1[0]-dm1ref[0]).sum(), 0, 9)
+        self.assertAlmostEqual(abs(dm1[1]-dm1ref[1]).sum(), 0, 9)
+        dm2 = selected_ci.make_rdm2s(ci_coeff, norb, (nelec,nelec))
+        self.assertAlmostEqual(abs(dm2[0]-dm2ref[0]).sum(), 0, 9)
+        self.assertAlmostEqual(abs(dm2[1]-dm2ref[1]).sum(), 0, 9)
+        self.assertAlmostEqual(abs(dm2[2]-dm2ref[2]).sum(), 0, 9)
+
+        ci1_coeff = selected_ci._as_SCIvector(numpy.random.random((len(strsa),len(strsb))), ci_strs)
+        ci1 = selected_ci.to_fci(ci1_coeff, norb, (nelec,nelec))
+        dm1ref, dm2ref = direct_spin1.trans_rdm12s(ci1, ci0, norb, (nelec,nelec))
+        dm1 = selected_ci.trans_rdm1s(ci1_coeff, ci_coeff, norb, (nelec,nelec))
+        self.assertAlmostEqual(abs(dm1[0]-dm1ref[0]).sum(), 0, 9)
+        self.assertAlmostEqual(abs(dm1[1]-dm1ref[1]).sum(), 0, 9)
+        #dm2 = selected_ci.trans_rdm1s(ci1_coeff, ci_coeff, norb, (nelec,nelec))
+        #self.assertAlmostEqual(abs(dm2[0]-dm2ref[0]).sum(), 0, 9)
+        #self.assertAlmostEqual(abs(dm2[1]-dm2ref[1]).sum(), 0, 9)
+        #self.assertAlmostEqual(abs(dm2[2]-dm2ref[2]).sum(), 0, 9)
+
     def test_spin_square(self):
         norb, nelec = 10, 4
         strs = cistring.gen_strings4orblist(range(norb), nelec)

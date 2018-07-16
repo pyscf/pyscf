@@ -383,8 +383,15 @@ class ROHF(hf.RHF):
         if dm is None: dm = self.make_rdm1()
         if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
             dm = numpy.array((dm*.5, dm*.5))
+
         if (self._eri is not None or not self.direct_scf or
             mol.incore_anyway or self._is_mem_enough()):
+            if hasattr(dm, 'mo_coeff'):
+                mo_coeff = dm.mo_coeff
+                mo_occ_a = (dm.mo_occ > 0).astype(numpy.double)
+                mo_occ_b = (dm.mo_occ ==2).astype(numpy.double)
+                dm = lib.tag_array(dm, mo_coeff=(mo_coeff,mo_coeff),
+                                   mo_occ=(mo_occ_a,mo_occ_b))
             vj, vk = self.get_jk(mol, dm, hermi)
             vhf = vj[0] + vj[1] - vk
         else:

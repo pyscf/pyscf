@@ -48,3 +48,17 @@ emc = mc.casci(mo)[0]
 
 print('E(CAS) = %.12f, ref = -75.982521066893' % emc)
 
+
+#
+# Universal spin multiplicity can be assigned to the state-averaged FCI
+# solver.  If some states break the required spin, e.g. in the following
+# example, a quintet may appear in the solution, the mcscf.fix_spin_ method
+# can be called to force the spin symmetry (see also the example
+# 18-spatial_spin_symmetry.py).
+#
+mc = mcscf.CASSCF(mf, 6, 8)
+mc = mc.state_average_([.25, .25, .25, .25])
+mc.fcisolver.spin = 2
+mc.fix_spin_(ss=2)
+mc.kernel()
+
