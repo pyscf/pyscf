@@ -217,7 +217,11 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
     if Gv is None:
         Gv = cell.get_Gv(mesh)
 
-    kG = k + Gv
+    if abs(k).sum() > 1e-9:
+        kG = k + Gv
+    else:
+        kG = Gv
+
     equal2boundary = np.zeros(Gv.shape[0], dtype=bool)
     if wrap_around and abs(k).sum() > 1e-9:
         # Here we 'wrap around' the high frequency k+G vectors into their lower

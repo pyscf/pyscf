@@ -577,7 +577,7 @@ def get_Gv(cell, mesh=None, **kwargs):
     gxyz = lib.cartesian_prod((gx, gy, gz))
 
     b = cell.reciprocal_vectors()
-    Gv = np.dot(gxyz, b)
+    Gv = lib.ddot(gxyz, b)
     return Gv
 
 def get_Gv_weights(cell, mesh=None, **kwargs):

@@ -897,18 +897,13 @@ def cartesian_prod(arrays, out=None):
     dtype = numpy.result_type(*arrays)
     nd = len(arrays)
     dims = [nd] + [len(x) for x in arrays]
-
-    if out is None:
-        out = numpy.empty(dims, dtype)
-    else:
-        out = numpy.ndarray(dims, dtype, buffer=out)
-    tout = out.reshape(dims)
+    out = numpy.ndarray(dims, dtype, buffer=out)
 
     shape = [-1] + [1] * nd
     for i, arr in enumerate(arrays):
-        tout[i] = arr.reshape(shape[:nd-i])
+        out[i] = arr.reshape(shape[:nd-i])
 
-    return tout.reshape(nd,-1).T
+    return out.reshape(nd,-1).T
 
 def direct_sum(subscripts, *operands):
     '''Apply the summation over many operands with the einsum fashion.

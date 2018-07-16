@@ -394,7 +394,7 @@ class KnownValues(unittest.TestCase):
                    for k,ao in enumerate(ao_kpts_orth)])
         pcell, contr_coeff = uncontract(cell_orth)
         dm1 = numpy.einsum('pi,kij,qj->kpq', contr_coeff, dm_kpts, contr_coeff)
-        out = eval_rho(pcell, dm1, kpts=kpts)
+        out = eval_rho(pcell, dm1, hermi=0, kpts=kpts)
         self.assertTrue(out.dtype == numpy.double)
         self.assertAlmostEqual(abs(out-ref).max(), 0, 9)
 
