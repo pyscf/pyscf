@@ -27,7 +27,7 @@ from functools import reduce
 
 from pyscf import lib
 from pyscf.gto import ATOM_OF, ANG_OF, NPRIM_OF, PTR_EXP, PTR_COEFF
-from pyscf.dft.numint import libdft
+from pyscf.dft.numint import libdft, _scale_ao
 from pyscf.pbc import tools
 from pyscf.pbc import gto
 from pyscf.pbc.gto import pseudo
@@ -44,23 +44,24 @@ from pyscf import __config__
 #                 'testing\nFeatures and APIs may be changed in the future.\n')
 
 BLKSIZE = numint.BLKSIZE
-EXTRA_PREC = getattr(__config__, 'pbc_gto_eval_gto_extra_precision', 1e-1)
+EXTRA_PREC = getattr(__config__, 'pbc_gto_eval_gto_extra_precision', 1e-2)
 TO_EVEN_GRIDS = getattr(__config__, 'pbc_dft_multigrid_to_even', False)
-RMAX_FACTOR = getattr(__config__, 'pbc_dft_multigrid_rmax_factor', 1.2)
+RMAX_FACTOR = getattr(__config__, 'pbc_dft_multigrid_rmax_factor', 1.1)
 RMAX_RATIO = getattr(__config__, 'pbc_dft_multigrid_rmax_ratio', 0.7)
 R_RATIO_SUBLOOP = getattr(__config__, 'pbc_dft_multigrid_r_ratio_subloop', 0.6)
 
-# RHOG_HIGH_DERIV=True will compute the high order derivatives of electron
-# density in real space and FT to reciprocal space.  Set RHOG_HIGH_DERIV=False
+# RHOG_HIGH_ORDER=True will compute the high order derivatives of electron
+# density in real space and FT to reciprocal space.  Set RHOG_HIGH_ORDER=False
 # to approximate the density derivatives in reciprocal space (without
 # evaluating the high order derivatives in real space).
-RHOG_HIGH_DERIV = getattr(__config__, 'pbc_dft_multigrid_rhog_high_deriv', False)
+RHOG_HIGH_ORDER = getattr(__config__, 'pbc_dft_multigrid_rhog_high_order', False)
 
 WITH_J = getattr(__config__, 'pbc_dft_multigrid_with_j', False)
 J_IN_XC = getattr(__config__, 'pbc_dft_multigrid_j_in_xc', True)
 
 PTR_EXPDROP = 16
 EXPDROP = getattr(__config__, 'pbc_dft_multigrid_expdrop', 1e-14)
+
 
 def eval_mat(cell, weights, shls_slice=None, comp=1, hermi=0,
              xctype='LDA', kpts=None, mesh=None, offset=None, submesh=None):
@@ -94,7 +95,7 @@ def eval_mat(cell, weights, shls_slice=None, comp=1, hermi=0,
             n_mat = weights.shape[0]
     elif xctype.upper() == 'GGA':
         if hermi == 1:
-            raise RuntimeError('hermi=1 is not supported by GGA functional')
+            raise RuntimeError('hermi=1 is not supported for GGA functional')
         if weights.ndim == 2:
             weights = weights.reshape(-1, 4, numpy.prod(mesh))
         else:
@@ -145,6 +146,8 @@ def eval_mat(cell, weights, shls_slice=None, comp=1, hermi=0,
             mat = numpy.rollaxis(make_mat(wv)[0], -1, -2)
         elif kpts is None or gamma_point(kpts):
             mat = numpy.rollaxis(make_mat(wv).sum(axis=0), -1, -2)
+            if getattr(kpts, 'ndim', None) == 2:
+                mat = mat.reshape((1,)+mat.shape)
         else:
             mat = make_mat(wv)
             mat_shape = mat.shape
@@ -158,7 +161,8 @@ def eval_mat(cell, weights, shls_slice=None, comp=1, hermi=0,
     return out
 
 def eval_rho(cell, dm, shls_slice=None, hermi=0, xctype='LDA', kpts=None,
-             mesh=None, offset=None, submesh=None, ignore_imag=False):
+             mesh=None, offset=None, submesh=None, ignore_imag=False,
+             out=None):
     assert(all(cell._bas[:,gto.mole.NPRIM_OF] == 1))
     atm, bas, env = gto.conc_env(cell._atm, cell._bas, cell._env,
                                  cell._atm, cell._bas, cell._env)
@@ -207,17 +211,17 @@ def eval_rho(cell, dm, shls_slice=None, hermi=0, xctype='LDA', kpts=None,
         comp = 1
     elif xctype.upper() == 'GGA':
         if hermi == 1:
-            raise RuntimeError('hermi=1 is not supported by GGA functional')
+            raise RuntimeError('hermi=1 is not supported for GGA functional')
         comp = 4
     else:
         raise NotImplementedError('meta-GGA')
+    if comp == 1:
+        shape = (numpy.prod(submesh),)
+    else:
+        shape = (comp, numpy.prod(submesh))
     eval_fn = 'NUMINTrho_' + xctype.lower() + lattice_type
     drv = libdft.NUMINT_rho_drv
-    def make_rho(dm):
-        if comp == 1:
-            rho = numpy.zeros((numpy.prod(submesh)))
-        else:
-            rho = numpy.zeros((comp, numpy.prod(submesh)))
+    def make_rho_(rho, dm):
         drv(getattr(libdft, eval_fn),
             rho.ctypes.data_as(ctypes.c_void_p),
             dm.ctypes.data_as(ctypes.c_void_p),
@@ -238,13 +242,19 @@ def eval_rho(cell, dm, shls_slice=None, hermi=0, xctype='LDA', kpts=None,
         return rho
 
     rho = []
-    for dm_i in dm:
+    for i, dm_i in enumerate(dm):
+        if out is None:
+            rho_i = numpy.zeros(shape)
+        else:
+            rho_i = out[i]
+            assert(rho_i.size == numpy.prod(shape))
+
         if cell.dimension == 0:
             # make a copy because the dm may be overwritten in the
             # NUMINT_rho_drv inplace
-            rho.append(make_rho(numpy.array(dm_i, order='C', copy=True)))
+            make_rho_(rho_i, numpy.array(dm_i, order='C', copy=True))
         elif kpts is None or gamma_point(kpts):
-            rho.append(make_rho(numpy.repeat(dm_i, nimgs, axis=0)))
+            make_rho_(rho_i, numpy.repeat(dm_i, nimgs, axis=0))
         else:
             dm_i = lib.dot(expkL.T, dm_i.reshape(nkpts,-1)).reshape(nimgs,naoj,naoi)
             dmR = numpy.asarray(dm_i.real, order='C')
@@ -263,10 +273,18 @@ def eval_rho(cell, dm, shls_slice=None, hermi=0, xctype='LDA', kpts=None,
             dm_i = None
 
             if has_imag:
-                rho.append(make_rho(dmR) + make_rho(dmI)*1j)
+                if out is None:
+                    rho_i  = make_rho(rho_i, dmI)*1j
+                    rho_i += make_rho(numpy.zeros(shape), dmR)
+                else:
+                    out[i]  = make_rho(numpy.zeros(shape), dmI)*1j
+                    out[i] += make_rho(numpy.zeros(shape), dmR)
             else:
-                rho.append(make_rho(dmR))
+                assert(rho_i.dtype == numpy.double)
+                make_rho_(rho_i, dmR)
             dmR = dmI = None
+
+        rho.append(rho_i)
 
     if n_dm == 1:
         rho = rho[0]
@@ -407,7 +425,9 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None):
     dm_kpts = numpy.asarray(dm_kpts)
     rhoG = _eval_rhoG(mydf, dm_kpts, hermi, kpts, deriv=0)
     coulG = tools.get_coulG(cell, mesh=cell.mesh, low_dim_ft_type=mydf.low_dim_ft_type)
-    vG = numpy.einsum('ng,g->ng', rhoG[:,0], coulG)
+    #:vG = numpy.einsum('ng,g->ng', rhoG[:,0], coulG)
+    vG = rhoG[:,0]
+    vG *= coulG
 
     kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
     vj_kpts = _get_j_pass2(mydf, vG, kpts_band)
@@ -445,19 +465,19 @@ def _eval_rhoG(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), deriv=0):
     ni = mydf._numint
     nx, ny, nz = cell.mesh
     rhoG = numpy.zeros((nset*rhodim,nx,ny,nz), dtype=numpy.complex128)
-    for grids_high, grids_low in tasks:
-        h_cell = grids_high.cell
-        mesh = tuple(grids_high.mesh)
+    for grids_dense, grids_sparse in tasks:
+        h_cell = grids_dense.cell
+        mesh = tuple(grids_dense.mesh)
         ngrids = numpy.prod(mesh)
         log.debug('mesh %s  rcut %g', mesh, h_cell.rcut)
 
-        if grids_low is None:
+        if grids_sparse is None:
             # The first pass handles all diffused functions using the regular
             # matrix multiplication code.
             rho = numpy.zeros((nset,rhodim,ngrids))
-            idx_h = grids_high.ao_idx
+            idx_h = grids_dense.ao_idx
             dms_hh = numpy.asarray(dms[:,:,idx_h[:,None],idx_h], order='C')
-            for ao_h_etc, p0, p1 in mydf.aoR_loop(grids_high, kpts, deriv):
+            for ao_h_etc, p0, p1 in mydf.aoR_loop(grids_dense, kpts, deriv):
                 ao_h, mask = ao_h_etc[0], ao_h_etc[2]
                 for k in range(nkpts):
                     for i in range(nset):
@@ -466,13 +486,13 @@ def _eval_rhoG(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), deriv=0):
                         rho[i,:,p0:p1] += rho_sub.real
                 ao_h = ao_h_etc = None
         else:
-            idx_h = grids_high.ao_idx
-            idx_l = grids_low.ao_idx
+            idx_h = grids_dense.ao_idx
+            idx_l = grids_sparse.ao_idx
             idx_t = numpy.append(idx_h, idx_l)
             dms_ht = numpy.asarray(dms[:,:,idx_h[:,None],idx_t], order='C')
             dms_lh = numpy.asarray(dms[:,:,idx_l[:,None],idx_h], order='C')
 
-            t_cell = h_cell + grids_low.cell
+            t_cell = h_cell + grids_sparse.cell
             nshells_h = _pgto_shells(h_cell)
             nshells_t = _pgto_shells(t_cell)
             t_cell, t_coeff = t_cell.to_uncontracted_cartesian_basis()
@@ -490,7 +510,7 @@ def _eval_rhoG(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), deriv=0):
                     #:rho = eval_rho(t_cell, pgto_dms, shls_slice, 0, 'LDA', kpts,
                     #:               offset=None, submesh=None, ignore_imag=True)
                     rho = _eval_rho_bra(t_cell, pgto_dms, shls_slice, 0,
-                                        'LDA', kpts, grids_high, True, log)
+                                        'LDA', kpts, grids_dense, True, log)
 
                 else:
                     pgto_dms = lib.einsum('nkij,pi,qj->nkpq', dms_ht, h_coeff, t_coeff)
@@ -498,13 +518,13 @@ def _eval_rhoG(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), deriv=0):
                     #:rho = eval_rho(t_cell, pgto_dms, shls_slice, 0, 'LDA', kpts,
                     #:               offset=None, submesh=None)
                     rho = _eval_rho_bra(t_cell, pgto_dms, shls_slice, 0,
-                                        'LDA', kpts, grids_high, True, log)
+                                        'LDA', kpts, grids_dense, True, log)
                     pgto_dms = lib.einsum('nkij,pi,qj->nkpq', dms_lh, l_coeff, h_coeff)
                     shls_slice = (nshells_h, nshells_t, 0, nshells_h)
                     #:rho += eval_rho(t_cell, pgto_dms, shls_slice, 0, 'LDA', kpts,
                     #:                offset=None, submesh=None)
                     rho += _eval_rho_ket(t_cell, pgto_dms, shls_slice, 0,
-                                         'LDA', kpts, grids_high, True, log)
+                                         'LDA', kpts, grids_dense, True, log)
 
             elif deriv == 1:
                 h_coeff = scipy.linalg.block_diag(*t_coeff[:h_cell.nbas])
@@ -516,14 +536,14 @@ def _eval_rhoG(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), deriv=0):
                 #:rho = eval_rho(t_cell, pgto_dms, shls_slice, 0, 'GGA', kpts,
                 #:               ignore_imag=ignore_imag)
                 rho = _eval_rho_bra(t_cell, pgto_dms, shls_slice, 0, 'GGA',
-                                    kpts, grids_high, ignore_imag, log)
+                                    kpts, grids_dense, ignore_imag, log)
 
                 pgto_dms = lib.einsum('nkij,pi,qj->nkpq', dms_lh, l_coeff, h_coeff)
                 shls_slice = (nshells_h, nshells_t, 0, nshells_h)
                 #:rho += eval_rho(t_cell, pgto_dms, shls_slice, 0, 'GGA', kpts,
                 #:                ignore_imag=ignore_imag)
                 rho += _eval_rho_ket(t_cell, pgto_dms, shls_slice, 0, 'GGA',
-                                     kpts, grids_high, ignore_imag, log)
+                                     kpts, grids_dense, ignore_imag, log)
                 if hermi == 1:
                     # \nabla \chi_i DM(i,j) \chi_j was computed above.
                     # *2 for \chi_i DM(i,j) \nabla \chi_j
@@ -531,12 +551,14 @@ def _eval_rhoG(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), deriv=0):
                 else:
                     raise NotImplementedError
 
-        rho = rho.reshape(nset*rhodim, -1) * 1./nkpts
-        rho_freq = tools.fft(rho, mesh) * cell.vol/ngrids
-        gx = numpy.fft.fftfreq(mesh[0], 1./mesh[0]).astype(int)
-        gy = numpy.fft.fftfreq(mesh[1], 1./mesh[1]).astype(int)
-        gz = numpy.fft.fftfreq(mesh[2], 1./mesh[2]).astype(int)
-        rhoG[:,gx[:,None,None],gy[:,None],gz] += rho_freq.reshape((-1,)+mesh)
+        weight = 1./nkpts * cell.vol/ngrids
+        rho_freq = tools.fft(rho.reshape(nset*rhodim, -1), mesh)
+        rho_freq *= weight
+        gx = numpy.fft.fftfreq(mesh[0], 1./mesh[0]).astype(numpy.int32)
+        gy = numpy.fft.fftfreq(mesh[1], 1./mesh[1]).astype(numpy.int32)
+        gz = numpy.fft.fftfreq(mesh[2], 1./mesh[2]).astype(numpy.int32)
+        #:rhoG[:,gx[:,None,None],gy[:,None],gz] += rho_freq.reshape((-1,)+mesh)
+        _takebak_4d(rhoG, rho_freq.reshape((-1,) + mesh), (None, gx, gy, gz))
 
     return rhoG.reshape(nset,rhodim,ngrids)
 
@@ -558,7 +580,7 @@ def _eval_rho_bra(cell, dms, shls_slice, hermi, xctype, kpts, grids,
                        mesh, ignore_imag=ignore_imag)
         return numpy.reshape(rho, (nset, rhodim, numpy.prod(mesh)))
 
-    if hermi == 1:
+    if hermi == 1 or ignore_imag:
         rho = numpy.zeros((nset, rhodim) + tuple(mesh))
     else:
         rho = numpy.zeros((nset, rhodim) + tuple(mesh), dtype=numpy.complex128)
@@ -567,13 +589,12 @@ def _eval_rho_bra(cell, dms, shls_slice, hermi, xctype, kpts, grids,
     ish0, ish1, jsh0, jsh1 = shls_slice
     nshells_j = jsh1 - jsh0
     pcell = copy.copy(cell)
+    rest_dms = []
+    rest_bas = []
     i1 = 0
     for atm_id in set(cell._bas[ish0:ish1,ATOM_OF]):
         atm_bas_idx = numpy.where(cell._bas[ish0:ish1,ATOM_OF] == atm_id)[0]
         _bas_i = cell._bas[atm_bas_idx]
-        pcell._bas = numpy.vstack((_bas_i, cell._bas[jsh0:jsh1]))
-        nshells_i = len(atm_bas_idx)
-        sub_slice = (0, nshells_i, nshells_i, nshells_i+nshells_j)
         l = _bas_i[:,ANG_OF]
         i0, i1 = i1, i1 + sum((l+1)*(l+2)//2)
         sub_dms = dms[:,:,i0:i1]
@@ -583,21 +604,41 @@ def _eval_rho_bra(cell, dms, shls_slice, hermi, xctype, kpts, grids,
         frac_edge1 = b.dot(atom_position + rcut)
 
         if (numpy.all(0 < frac_edge0) and numpy.all(frac_edge1 < 1)):
+            pcell._bas = numpy.vstack((_bas_i, cell._bas[jsh0:jsh1]))
+            nshells_i = len(atm_bas_idx)
+            sub_slice = (0, nshells_i, nshells_i, nshells_i+nshells_j)
+
             offset = (frac_edge0 * mesh).astype(int)
             mesh1 = numpy.ceil(frac_edge1 * mesh).astype(int)
             submesh = mesh1 - offset
             log.debug1('atm %d  rcut %f  offset %s submesh %s',
                        atm_id, rcut, offset, submesh)
             rho1 = eval_rho(pcell, sub_dms, sub_slice, hermi, xctype, kpts,
-                             mesh, offset, submesh, ignore_imag=ignore_imag)
-            rho[:,:,offset[0]:mesh1[0],offset[1]:mesh1[1],offset[2]:mesh1[2]] += \
-                    numpy.reshape(rho1, (nset, rhodim) + tuple(submesh))
+                            mesh, offset, submesh, ignore_imag=ignore_imag)
+            #:rho[:,:,offset[0]:mesh1[0],offset[1]:mesh1[1],offset[2]:mesh1[2]] += \
+            #:        numpy.reshape(rho1, (nset, rhodim) + tuple(submesh))
+            gx = numpy.arange(offset[0], mesh1[0], dtype=numpy.int32)
+            gy = numpy.arange(offset[1], mesh1[1], dtype=numpy.int32)
+            gz = numpy.arange(offset[2], mesh1[2], dtype=numpy.int32)
+            _takebak_5d(rho, numpy.reshape(rho1, (nset,rhodim)+tuple(submesh)),
+                        (None, None, gx, gy, gz))
         else:
             log.debug1('atm %d  rcut %f  over 2 images', atm_id, rcut)
-            rho1 = eval_rho(pcell, sub_dms, sub_slice, hermi, xctype, kpts,
-                            mesh, ignore_imag=ignore_imag)
-            rho += numpy.reshape(rho1, rho.shape)
-        rho1 = None
+            #:rho1 = eval_rho(pcell, sub_dms, sub_slice, hermi, xctype, kpts,
+            #:                mesh, ignore_imag=ignore_imag)
+            #:rho += numpy.reshape(rho1, rho.shape)
+            # or
+            #:eval_rho(pcell, sub_dms, sub_slice, hermi, xctype, kpts,
+            #:         mesh, ignore_imag=ignore_imag, out=rho)
+            rest_bas.append(_bas_i)
+            rest_dms.append(sub_dms)
+    if rest_bas:
+        pcell._bas = numpy.vstack(rest_bas + [cell._bas[jsh0:jsh1]])
+        nshells_i = sum(len(x) for x in rest_bas)
+        sub_slice = (0, nshells_i, nshells_i, nshells_i+nshells_j)
+        sub_dms = numpy.concatenate(rest_dms, axis=2)
+        eval_rho(pcell, sub_dms, sub_slice, hermi, xctype, kpts,
+                 mesh, ignore_imag=ignore_imag, out=rho)
     return rho.reshape((nset, rhodim, numpy.prod(mesh)))
 
 def _eval_rho_ket(cell, dms, shls_slice, hermi, xctype, kpts, grids,
@@ -617,7 +658,7 @@ def _eval_rho_ket(cell, dms, shls_slice, hermi, xctype, kpts, grids,
                        mesh, ignore_imag=ignore_imag)
         return numpy.reshape(rho, (nset, rhodim, numpy.prod(mesh)))
 
-    if hermi == 1:
+    if hermi == 1 or ignore_imag:
         rho = numpy.zeros((nset, rhodim) + tuple(mesh))
     else:
         rho = numpy.zeros((nset, rhodim) + tuple(mesh), dtype=numpy.complex128)
@@ -626,13 +667,12 @@ def _eval_rho_ket(cell, dms, shls_slice, hermi, xctype, kpts, grids,
     ish0, ish1, jsh0, jsh1 = shls_slice
     nshells_i = ish1 - ish0
     pcell = copy.copy(cell)
+    rest_dms = []
+    rest_bas = []
     j1 = 0
     for atm_id in set(cell._bas[jsh0:jsh1,ATOM_OF]):
         atm_bas_idx = numpy.where(cell._bas[jsh0:jsh1,ATOM_OF] == atm_id)[0]
         _bas_j = cell._bas[atm_bas_idx]
-        pcell._bas = numpy.vstack((cell._bas[ish0:ish1], _bas_j))
-        nshells_j = len(atm_bas_idx)
-        sub_slice = (0, nshells_i, nshells_i, nshells_i+nshells_j)
         l = _bas_j[:,ANG_OF]
         j0, j1 = j1, j1 + sum((l+1)*(l+2)//2)
         sub_dms = dms[:,:,:,j0:j1]
@@ -642,21 +682,40 @@ def _eval_rho_ket(cell, dms, shls_slice, hermi, xctype, kpts, grids,
         frac_edge1 = b.dot(atom_position + rcut)
 
         if (numpy.all(0 < frac_edge0) and numpy.all(frac_edge1 < 1)):
+            pcell._bas = numpy.vstack((cell._bas[ish0:ish1], _bas_j))
+            nshells_j = len(atm_bas_idx)
+            sub_slice = (0, nshells_i, nshells_i, nshells_i+nshells_j)
+
             offset = (edge0 * mesh).astype(int)
             mesh1 = numpy.ceil(edge1 * mesh).astype(int)
             submesh = mesh1 - offset
             log.debug1('atm %d  rcut %f  offset %s submesh %s',
                        atm_id, rcut, offset, submesh)
             rho1 = eval_rho(pcell, sub_dms, sub_slice, hermi, xctype, kpts,
-                             mesh, offset, submesh, ignore_imag=ignore_imag)
-            rho[:,:,offset[0]:mesh1[0],offset[1]:mesh1[1],offset[2]:mesh1[2]] += \
-                    numpy.reshape(rho1, (nset, rhodim) + tuple(submesh))
+                            mesh, offset, submesh, ignore_imag=ignore_imag)
+            #:rho[:,:,offset[0]:mesh1[0],offset[1]:mesh1[1],offset[2]:mesh1[2]] += \
+            #:        numpy.reshape(rho1, (nset, rhodim) + tuple(submesh))
+            gx = numpy.arange(offset[0], mesh1[0], dtype=numpy.int32)
+            gy = numpy.arange(offset[1], mesh1[1], dtype=numpy.int32)
+            gz = numpy.arange(offset[2], mesh1[2], dtype=numpy.int32)
+            _takebak_5d(rho, numpy.reshape(rho1, (nset,rhodim)+tuple(submesh)),
+                        (None, None, gx, gy, gz))
         else:
             log.debug1('atm %d  rcut %f  over 2 images', atm_id, rcut)
-            rho1 = eval_rho(pcell, sub_dms, sub_slice, hermi, xctype, kpts,
-                            mesh, ignore_imag=ignore_imag)
-            rho += numpy.reshape(rho1, rho.shape)
-        rho1 = None
+            #:rho1 = eval_rho(pcell, sub_dms, sub_slice, hermi, xctype, kpts,
+            #:                mesh, ignore_imag=ignore_imag)
+            #:rho += numpy.reshape(rho1, rho.shape)
+            #:eval_rho(pcell, sub_dms, sub_slice, hermi, xctype, kpts,
+            #:         mesh, ignore_imag=ignore_imag, out=rho)
+            rest_bas.append(_bas_j)
+            rest_dms.append(sub_dms)
+    if rest_bas:
+        pcell._bas = numpy.vstack([cell._bas[ish0:ish1]] + rest_bas)
+        nshells_j = sum(len(x) for x in rest_bas)
+        sub_slice = (0, nshells_i, nshells_i, nshells_i+nshells_j)
+        sub_dms = numpy.concatenate(rest_dms, axis=3)
+        eval_rho(pcell, sub_dms, sub_slice, hermi, xctype, kpts,
+                 mesh, ignore_imag=ignore_imag, out=rho)
     return rho.reshape((nset, rhodim, numpy.prod(mesh)))
 
 
@@ -680,21 +739,23 @@ def _get_j_pass2(mydf, vG, kpts=numpy.zeros((1,3)), verbose=None):
         vj_kpts = numpy.zeros((nset,nkpts,nao,nao), dtype=numpy.complex128)
 
     ni = mydf._numint
-    for grids_high, grids_low in tasks:
-        mesh = grids_high.mesh
+    for grids_dense, grids_sparse in tasks:
+        mesh = grids_dense.mesh
         ngrids = numpy.prod(mesh)
         log.debug('mesh %s', mesh)
 
-        gx = numpy.fft.fftfreq(mesh[0], 1./mesh[0]).astype(int)
-        gy = numpy.fft.fftfreq(mesh[1], 1./mesh[1]).astype(int)
-        gz = numpy.fft.fftfreq(mesh[2], 1./mesh[2]).astype(int)
-        sub_vG = vG[:,gx[:,None,None],gy[:,None],gz].reshape(nset,ngrids)
+        gx = numpy.fft.fftfreq(mesh[0], 1./mesh[0]).astype(numpy.int32)
+        gy = numpy.fft.fftfreq(mesh[1], 1./mesh[1]).astype(numpy.int32)
+        gz = numpy.fft.fftfreq(mesh[2], 1./mesh[2]).astype(numpy.int32)
+        #:sub_vG = vG[:,gx[:,None,None],gy[:,None],gz].reshape(nset,ngrids)
+        sub_vG = _take_4d(vG, (None, gx, gy, gz)).reshape(nset,ngrids)
 
         vR = tools.ifft(sub_vG, mesh).real.reshape(nset,ngrids)
+        vR = numpy.asarray(vR, order='C')
 
-        idx_h = grids_high.ao_idx
-        if grids_low is None:
-            for ao_h_etc, p0, p1 in mydf.aoR_loop(grids_high, kpts):
+        idx_h = grids_dense.ao_idx
+        if grids_sparse is None:
+            for ao_h_etc, p0, p1 in mydf.aoR_loop(grids_dense, kpts):
                 ao_h = ao_h_etc[0]
                 for k in range(nkpts):
                     for i in range(nset):
@@ -702,13 +763,13 @@ def _get_j_pass2(mydf, vG, kpts=numpy.zeros((1,3)), verbose=None):
                         vj_kpts[i,k,idx_h[:,None],idx_h] += vj_sub
                 ao_h = ao_h_etc = None
         else:
-            idx_h = grids_high.ao_idx
-            idx_l = grids_low.ao_idx
+            idx_h = grids_dense.ao_idx
+            idx_l = grids_sparse.ao_idx
             idx_t = numpy.append(idx_h, idx_l)
             naoh = len(idx_h)
 
-            h_cell = grids_high.cell
-            l_cell = grids_low.cell
+            h_cell = grids_dense.cell
+            l_cell = grids_sparse.cell
             t_cell = h_cell + l_cell
             t_cell, t_coeff = t_cell.to_uncontracted_cartesian_basis()
             nshells_h = _pgto_shells(h_cell)
@@ -747,39 +808,40 @@ def _get_gga_pass2(mydf, vG, kpts=numpy.zeros((1,3)), verbose=None):
     else:
         veff = numpy.zeros((nset,nkpts,nao,nao), dtype=numpy.complex128)
 
-    for grids_high, grids_low in mydf.tasks:
-        mesh = grids_high.mesh
+    for grids_dense, grids_sparse in mydf.tasks:
+        mesh = grids_dense.mesh
         ngrids = numpy.prod(mesh)
         log.debug('mesh %s', mesh)
 
-        gx = numpy.fft.fftfreq(mesh[0], 1./mesh[0]).astype(int)
-        gy = numpy.fft.fftfreq(mesh[1], 1./mesh[1]).astype(int)
-        gz = numpy.fft.fftfreq(mesh[2], 1./mesh[2]).astype(int)
-        sub_vG = vG[:,:,gx[:,None,None],gy[:,None],gz].reshape(-1,ngrids)
+        gx = numpy.fft.fftfreq(mesh[0], 1./mesh[0]).astype(numpy.int32)
+        gy = numpy.fft.fftfreq(mesh[1], 1./mesh[1]).astype(numpy.int32)
+        gz = numpy.fft.fftfreq(mesh[2], 1./mesh[2]).astype(numpy.int32)
+        #:sub_vG = vG[:,:,gx[:,None,None],gy[:,None],gz].reshape(-1,ngrids)
+        sub_vG = _take_5d(vG, (None, None, gx, gy, gz)).reshape(-1,ngrids)
         wv = tools.ifft(sub_vG, mesh).real.reshape(nset,4,ngrids)
+        wv = numpy.asarray(wv, order='C')
 
-        if grids_low is None:
-            idx_h = grids_high.ao_idx
+        if grids_sparse is None:
+            idx_h = grids_dense.ao_idx
             wv[:,0] *= .5
             naoh = len(idx_h)
-            for ao_h_etc, p0, p1 in mydf.aoR_loop(grids_high, kpts, deriv=1):
+            for ao_h_etc, p0, p1 in mydf.aoR_loop(grids_dense, kpts, deriv=1):
                 ao_h = ao_h_etc[0]
                 for k in range(nkpts):
-                    aow = numpy.einsum('npi,mnp->pmi', ao_h[k][:4], wv)
-                    aow = aow.reshape(ngrids,-1)
-                    v = lib.dot(aow.conj().T, ao_h[k][0])
-                    v = v.reshape(nset,naoh,naoh)
-                    veff[:,k,idx_h[:,None],idx_h] += v + v.conj().transpose(0,2,1)
+                    for i in range(nset):
+                        aow = _scale_ao(ao_h[k], wv[i])
+                        v = lib.dot(aow.conj().T, ao_h[k][0])
+                        veff[i,k,idx_h[:,None],idx_h] += v + v.conj().T
                 ao_h = ao_h_etc = None
         else:
             wv[:,0] *= .5
-            idx_h = grids_high.ao_idx
-            idx_l = grids_low.ao_idx
+            idx_h = grids_dense.ao_idx
+            idx_l = grids_sparse.ao_idx
             idx_t = numpy.append(idx_h, idx_l)
             naoh = len(idx_h)
 
-            h_cell = grids_high.cell
-            l_cell = grids_low.cell
+            h_cell = grids_dense.cell
+            l_cell = grids_sparse.cell
             t_cell = h_cell + l_cell
             t_cell, t_coeff = t_cell.to_uncontracted_cartesian_basis()
             nshells_h = _pgto_shells(h_cell)
@@ -844,7 +906,7 @@ def rks_j_xc(mydf, dm_kpts, xc_code, hermi=1, kpts=numpy.zeros((1,3)),
 
     elif xctype == 'GGA':
         deriv = 1
-        if RHOG_HIGH_DERIV:
+        if RHOG_HIGH_ORDER:
             rhoG = _eval_rhoG(mydf, dm_kpts, hermi, kpts, deriv)
         else:
             Gv = cell.Gv
@@ -962,7 +1024,7 @@ def uks_j_xc(mydf, dm_kpts, xc_code, hermi=1, kpts=numpy.zeros((1,3)),
 
     elif xctype == 'GGA':
         deriv = 1
-        if RHOG_HIGH_DERIV:
+        if RHOG_HIGH_ORDER:
             rhoG = _eval_rhoG(mydf, dm_kpts, hermi, kpts, deriv)
         else:
             Gv = cell.Gv
@@ -1063,14 +1125,14 @@ def multi_grids_tasks(cell, fft_mesh=None, verbose=None):
     rcuts_pgto, kecuts_pgto = _primitive_gto_cutoff(cell)
     ao_loc = cell.ao_loc_nr()
 
-    def make_cell_high_exp(shls_high, r0, r1):
-        cell_high = copy.copy(cell)
-        cell_high._bas = cell._bas.copy()
-        cell_high._env = cell._env.copy()
+    def make_cell_dense_exp(shls_dense, r0, r1):
+        cell_dense = copy.copy(cell)
+        cell_dense._bas = cell._bas.copy()
+        cell_dense._env = cell._env.copy()
 
         rcut_atom = [0] * cell.natm
         ke_cutoff = 0
-        for ib in shls_high:
+        for ib in shls_dense:
             rc = rcuts_pgto[ib]
             idx = numpy.where((r1 <= rc) & (rc < r0))[0]
             np1 = len(idx)
@@ -1080,26 +1142,26 @@ def multi_grids_tasks(cell, fft_mesh=None, verbose=None):
                 pexp = cell._bas[ib,PTR_EXP]
                 pcoeff = cell._bas[ib,PTR_COEFF]
                 cs1 = cs[idx]
-                cell_high._env[pcoeff:pcoeff+cs1.size] = cs1.T.ravel()
-                cell_high._env[pexp:pexp+np1] = cell.bas_exp(ib)[idx]
-                cell_high._bas[ib,NPRIM_OF] = np1
+                cell_dense._env[pcoeff:pcoeff+cs1.size] = cs1.T.ravel()
+                cell_dense._env[pexp:pexp+np1] = cell.bas_exp(ib)[idx]
+                cell_dense._bas[ib,NPRIM_OF] = np1
 
             ke_cutoff = max(ke_cutoff, kecuts_pgto[ib][idx].max())
 
             ia = cell.bas_atom(ib)
             rcut_atom[ia] = max(rcut_atom[ia], rc[idx].max())
-        cell_high._bas = cell_high._bas[shls_high]
+        cell_dense._bas = cell_dense._bas[shls_dense]
         ao_idx = numpy.hstack([numpy.arange(ao_loc[i], ao_loc[i+1])
-                               for i in shls_high])
-        cell_high.rcut = max(rcut_atom)
-        return cell_high, ao_idx, ke_cutoff, rcut_atom
+                               for i in shls_dense])
+        cell_dense.rcut = max(rcut_atom)
+        return cell_dense, ao_idx, ke_cutoff, rcut_atom
 
-    def make_cell_low_exp(shls_low, r0, r1):
-        cell_low = copy.copy(cell)
-        cell_low._bas = cell._bas.copy()
-        cell_low._env = cell._env.copy()
+    def make_cell_sparse_exp(shls_sparse, r0, r1):
+        cell_sparse = copy.copy(cell)
+        cell_sparse._bas = cell._bas.copy()
+        cell_sparse._env = cell._env.copy()
 
-        for ib in shls_low:
+        for ib in shls_sparse:
             idx = numpy.where(r0 <= rcuts_pgto[ib])[0]
             np1 = len(idx)
             cs = cell._libcint_ctr_coeff(ib)
@@ -1108,63 +1170,63 @@ def multi_grids_tasks(cell, fft_mesh=None, verbose=None):
                 pexp = cell._bas[ib,PTR_EXP]
                 pcoeff = cell._bas[ib,PTR_COEFF]
                 cs1 = cs[idx]
-                cell_low._env[pcoeff:pcoeff+cs1.size] = cs1.T.ravel()
-                cell_low._env[pexp:pexp+np1] = cell.bas_exp(ib)[idx]
-                cell_low._bas[ib,NPRIM_OF] = np1
-        cell_low._bas = cell_low._bas[shls_low]
+                cell_sparse._env[pcoeff:pcoeff+cs1.size] = cs1.T.ravel()
+                cell_sparse._env[pexp:pexp+np1] = cell.bas_exp(ib)[idx]
+                cell_sparse._bas[ib,NPRIM_OF] = np1
+        cell_sparse._bas = cell_sparse._bas[shls_sparse]
         ao_idx = numpy.hstack([numpy.arange(ao_loc[i], ao_loc[i+1])
-                               for i in shls_low])
-        return cell_low, ao_idx
+                               for i in shls_sparse])
+        return cell_sparse, ao_idx
 
     tasks = []
     a = cell.lattice_vectors()
     rmax = a.max() * RMAX_FACTOR
-    n_delimeter = int(numpy.log(0.01/rmax) / numpy.log(RMAX_RATIO))
+    n_delimeter = int(numpy.log(0.005/rmax) / numpy.log(RMAX_RATIO))
     rcut_delimeter = rmax * (RMAX_RATIO ** numpy.arange(n_delimeter))
     for r0, r1 in zip(numpy.append(1e9, rcut_delimeter),
                       numpy.append(rcut_delimeter, 0)):
         # shells which have high exps (small rcut)
-        shls_high = [ib for ib, rc in enumerate(rcuts_pgto)
+        shls_dense = [ib for ib, rc in enumerate(rcuts_pgto)
                      if numpy.any((r1 <= rc) & (rc < r0))]
-        if len(shls_high) == 0:
+        if len(shls_dense) == 0:
             continue
-        cell_high, ao_idx_high, ke_cutoff, rcut_atom = \
-                make_cell_high_exp(shls_high, r0, r1)
+        cell_dense, ao_idx_dense, ke_cutoff, rcut_atom = \
+                make_cell_dense_exp(shls_dense, r0, r1)
 
         mesh = tools.cutoff_to_mesh(a, ke_cutoff)
         if TO_EVEN_GRIDS:
             mesh = (mesh+1)//2 * 2  # to the nearest even number
         if numpy.all(mesh >= fft_mesh):
             # Including all rest shells
-            shls_high = [ib for ib, rc in enumerate(rcuts_pgto)
-                         if numpy.any(rc < r0)]
-            cell_high, ao_idx_high = make_cell_high_exp(shls_high, r0, 0)[:2]
-        cell_high.mesh = mesh = numpy.min([mesh, fft_mesh], axis=0)
+            shls_dense = [ib for ib, rc in enumerate(rcuts_pgto)
+                          if numpy.any(rc < r0)]
+            cell_dense, ao_idx_dense = make_cell_dense_exp(shls_dense, r0, 0)[:2]
+        cell_dense.mesh = mesh = numpy.min([mesh, fft_mesh], axis=0)
 
-        grids_high = gen_grid.UniformGrids(cell_high)
-        grids_high.ao_idx = ao_idx_high
-        #grids_high.rcuts_pgto = [rcuts_pgto[i] for i in shls_high]
+        grids_dense = gen_grid.UniformGrids(cell_dense)
+        grids_dense.ao_idx = ao_idx_dense
+        #grids_dense.rcuts_pgto = [rcuts_pgto[i] for i in shls_dense]
 
         # shells which have low exps (big rcut)
-        shls_low = [ib for ib, rc in enumerate(rcuts_pgto)
-                     if numpy.any(r0 <= rc)]
-        if len(shls_low) == 0:
-            cell_low = None
-            ao_idx_low = []
+        shls_sparse = [ib for ib, rc in enumerate(rcuts_pgto)
+                       if numpy.any(r0 <= rc)]
+        if len(shls_sparse) == 0:
+            cell_sparse = None
+            ao_idx_sparse = []
         else:
-            cell_low, ao_idx_low = make_cell_low_exp(shls_low, r0, r1)
-            cell_low.mesh = mesh
+            cell_sparse, ao_idx_sparse = make_cell_sparse_exp(shls_sparse, r0, r1)
+            cell_sparse.mesh = mesh
 
-        if cell_low is None:
-            grids_low = None
+        if cell_sparse is None:
+            grids_sparse = None
         else:
-            grids_low = gen_grid.UniformGrids(cell_low)
-            grids_low.ao_idx = ao_idx_low
+            grids_sparse = gen_grid.UniformGrids(cell_sparse)
+            grids_sparse.ao_idx = ao_idx_sparse
 
-        log.debug('mesh %s nao high/low %d %d  rcut %g',
-                  mesh, len(ao_idx_high), len(ao_idx_low), cell_high.rcut)
+        log.debug('mesh %s nao dense/sparse %d %d  rcut %g',
+                  mesh, len(ao_idx_dense), len(ao_idx_sparse), cell_dense.rcut)
 
-        tasks.append([grids_high, grids_low])
+        tasks.append([grids_dense, grids_sparse])
         if numpy.all(mesh >= fft_mesh):
             break
     return tasks
@@ -1240,21 +1302,72 @@ class MultiGridFFTDF(fft.FFTDF):
 def _pgto_shells(cell):
     return cell._bas[:,NPRIM_OF].sum()
 
+def _take_4d(a, indices):
+    a_shape = a.shape
+    ranges = []
+    for i, s in enumerate(indices):
+        if s is None:
+            idx = numpy.arange(a_shape[i], dtype=numpy.int32)
+        else:
+            idx = numpy.asarray(s, dtype=numpy.int32)
+            idx[idx < 0] += a_shape[i]
+        ranges.append(idx)
+    idx = ranges[0][:,None] * a_shape[1] + ranges[1]
+    idy = ranges[2][:,None] * a_shape[3] + ranges[3]
+    a = a.reshape(a_shape[0]*a_shape[1], a_shape[2]*a_shape[3])
+    out = lib.take_2d(a, idx.ravel(), idy.ravel())
+    return out.reshape([len(s) for s in ranges])
+
+def _takebak_4d(out, a, indices):
+    out_shape = out.shape
+    a_shape = a.shape
+    ranges = []
+    for i, s in enumerate(indices):
+        if s is None:
+            idx = numpy.arange(a_shape[i], dtype=numpy.int32)
+        else:
+            idx = numpy.asarray(s, dtype=numpy.int32)
+            idx[idx < 0] += out_shape[i]
+        assert(len(idx) == a_shape[i])
+        ranges.append(idx)
+    idx = ranges[0][:,None] * out_shape[1] + ranges[1]
+    idy = ranges[2][:,None] * out_shape[3] + ranges[3]
+    nx = idx.size
+    ny = idy.size
+    out = out.reshape(out_shape[0]*out_shape[1], out_shape[2]*out_shape[3])
+    lib.takebak_2d(out, a.reshape(nx,ny), idx.ravel(), idy.ravel())
+    return out
+
+def _take_5d(a, indices):
+    a_shape = a.shape
+    a = a.reshape((a_shape[0]*a_shape[1],) + a_shape[2:])
+    indices = (None,) + indices[2:]
+    return _take_4d(a, indices)
+
+def _takebak_5d(out, a, indices):
+    a_shape = a.shape
+    out_shape = out.shape
+    a = a.reshape((a_shape[0]*a_shape[1],) + a_shape[2:])
+    out = out.reshape((out_shape[0]*out_shape[1],) + out_shape[2:])
+    indices = (None,) + indices[2:]
+    return _takebak_4d(out, a, indices)
+
 
 if __name__ == '__main__':
     from pyscf.pbc import gto, scf, dft
     from pyscf.pbc import df
     from pyscf.pbc.df import fft_jk
+    numpy.random.seed(22)
     cell = gto.M(
-        a = numpy.eye(3)*3.5668,
+        a = numpy.eye(3)*3.5668 + numpy.random.random((3,3)),
         atom = '''C     0.      0.      0.    
                   C     0.8917  0.8917  0.8917
-#                  C     1.7834  1.7834  0.    
-#                  C     2.6751  2.6751  0.8917
-#                  C     1.7834  0.      1.7834
-#                  C     2.6751  0.8917  2.6751
-#                  C     0.      1.7834  1.7834
-#                  C     0.8917  2.6751  2.6751''',
+                  C     1.7834  1.7834  0.    
+                  C     2.6751  2.6751  0.8917
+                  C     1.7834  0.      1.7834
+                  C     2.6751  0.8917  2.6751
+                  C     0.      1.7834  1.7834
+                  C     0.8917  2.6751  2.6751''',
         #basis = 'sto3g',
         #basis = 'ccpvdz',
         basis = 'gth-dzvp',
@@ -1265,46 +1378,54 @@ if __name__ == '__main__':
         #verbose = 5,
         #mesh = [15]*3,
         #precision=1e-6
+        pseudo = 'gth-pade'
     )
     multi_grids_tasks(cell, cell.mesh, 5)
 
-    mydf = df.FFTDF(cell)
     nao = cell.nao_nr()
     numpy.random.seed(1)
     kpts = cell.make_kpts([3,1,1])
+    MultiGridFFTDF(cell).get_pp()
+    exit()
+    #MultiGridFFTDF(cell).get_pp(kpts)
+
     dm = numpy.random.random((len(kpts),nao,nao)) * .2
     dm += numpy.eye(nao)
     dm = dm + dm.transpose(0,2,1)
     #dm = cell.pbc_intor('int1e_ovlp', kpts=kpts)
     t0 = time.time()
-    print(time.clock())
+    #print(time.clock())
     ref = -12.3081960302+5.12330442322j
+    ref = -7.24693684646+8.47418441584j
+    #mydf = df.FFTDF(cell)
     #ref = fft_jk.get_j_kpts(mydf, dm, kpts=kpts)
     print(time.clock(), time.time()-t0)
     mydf = MultiGridFFTDF(cell)
     v = get_j_kpts(mydf, dm, kpts=kpts)
-    print lib.finger(v)
+    #ref = numpy.load('ref.npy')
     print(time.clock(), time.time()-t0)
-    #print('diff', abs(ref-v).max(), lib.finger(v)-lib.finger(ref))
+    #print('diff', abs(ref-v).max())
     print('diff', lib.finger(v)-ref)
-    #print('diff', abs(ref-v).max(), lib.finger(v)-lib.finger(ref))
+    exit()
 
     print(time.clock())
     #xc = 'lda,vwn'
     xc = 'pbe'
 #    mydf = df.FFTDF(cell)
 #    mydf.grids.build()
-#    n, exc, ref = mydf._numint.nr_rks(cell, mydf.grids, xc, dm, 0, kpts)
-    ref = 1.6070627548365986+0.029077655473597641j
+    n, exc, ref = mydf._numint.nr_rks(cell, mydf.grids, xc, dm, 0, kpts)
     print(time.clock())
     mydf = MultiGridFFTDF(cell)
     n, exc, vxc, vj = rks_j_xc(mydf, dm, xc, kpts=kpts, j_in_xc=False, with_j=False)
     print(time.clock())
-    #print('diff', abs(ref-vxc).max(), lib.finger(vxc)-lib.finger(ref))
-    print('diff', lib.finger(vxc)-ref)
+    print('diff', abs(ref-vxc).max())
+    #print('diff', lib.finger(vxc)-ref)
     n, exc, vxc, vj = uks_j_xc(mydf, [dm*.5]*2, xc, kpts=kpts, j_in_xc=False, with_j=False)
-    print('diff', lib.finger(vxc[0])-ref)
-    print('diff', lib.finger(vxc[1])-ref)
+    print('diff', abs(ref-vxc[0]).max())
+    print('diff', abs(ref-vxc[1]).max())
+    #print('diff', lib.finger(vxc[0])-ref)
+    #print('diff', lib.finger(vxc[1])-ref)
+    print(time.clock())
     exit()
 
     cell1 = gto.Cell()

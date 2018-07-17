@@ -251,9 +251,13 @@ static int _orth_components(double *xs_exp, int *img_slice, int *grid_slice,
         if (periodic) {
                 nimg0 = (int)floor(edge0);
                 nimg1 = (int)ceil (edge1);
-        }
-        if (offset != 0 || submesh != nx_per_cell) {
-                nimg1 = nimg0 + 1;
+                if ((nimg1 != nimg0 + 1) &&
+                    (offset != 0 || submesh != nx_per_cell)) {
+                        nimg0 = (int)floor(xij_frac);
+                        nimg1 = nimg0 + 1;
+                        edge0 = MAX(edge0, nimg0);
+                        edge1 = MIN(edge1, nimg1);
+                }
         }
         int nimg = nimg1 - nimg0;
 
@@ -2536,7 +2540,7 @@ void NUMINT_rho_drv(void (*eval_rho)(), double *rho, double *F_dm,
                 i0 = ao_loc[ish] - ao_loc[ish0];
                 j0 = ao_loc[jsh] - ao_loc[jsh0];
                 if (dimension != 0) {
-                        ptrxyz = atm(PTR_COORD, bas(ATOM_OF,ish));
+                        ptrxyz = atm(PTR_COORD, bas(ATOM_OF,jsh));
                         shift_bas(env_loc, env, Ls, ptrxyz, m);
                 }
                 _apply_rho(eval_rho, rho_priv, F_dm+m*ncij+j0*naoi+i0,
