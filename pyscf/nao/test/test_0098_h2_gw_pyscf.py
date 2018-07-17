@@ -27,7 +27,8 @@ class KnowValues(unittest.TestCase):
     """ This is interacting polarizability with SIESTA starting point """
     from pyscf import gto, tddft, scf
     
-    mol = gto.M( verbose = 5, atom = '''H 0.0 0.0 -0.3707;  H 0.0 0.0 0.3707''', basis = 'cc-pvdz',)
+    mol = gto.M( verbose = 2,
+      atom = '''H 0.0 0.0 -0.3707;  H 0.0 0.0 0.3707''', basis = 'cc-pvdz',)
 
     gto_hf = scf.RKS(mol)
     gto_hf.xc = 'hf'
@@ -42,31 +43,31 @@ class KnowValues(unittest.TestCase):
     gto_gw = GW(gto_hf, gto_td)
     gto_gw.kernel()
 
-
     ww = np.arange(0.0,4.0,0.01)+1j*0.02
     pxx_xpy = -polariz_inter_xx(gto_hf, mol, gto_td, ww).imag
     data = np.array([ww.real*27.2114, pxx_xpy])
     fname = dname+'/h2_rpa_xpy_0098.omega.inter.pxx.txt'
     np.savetxt(fname, data.T, fmt=['%f','%f'])
-    print(fname)
+    data_ref = np.loadtxt(fname+'-ref')
+    self.assertTrue(np.allclose(data_ref,data.T, rtol=0.1, atol=1e-05))
     
     gw_nao = gw(gto=mol, mf=gto_hf, tdscf=gto_td)
     x  = gw_nao.moms1[:,0]
     
-    rf_gto = gw_nao.rf_pyscf( ww )
     rf_nao = gw_nao.rf( ww )
-
     pxx_nao = np.einsum('p,wpq,q->w', x, -rf_nao.imag, x)
     data = np.array([ww.real*27.2114, pxx_nao])
     fname = dname+'/h2_rpa_nao_0098.omega.inter.pxx.txt'
     np.savetxt(fname, data.T, fmt=['%f','%f'])
-    print(fname)
+    data_ref = np.loadtxt(fname+'-ref')
+    self.assertTrue(np.allclose(data_ref,data.T, rtol=0.1, atol=1e-05))
 
+    rf_gto = gw_nao.rf_pyscf( ww )
     pxx_gto = np.einsum('p,wpq,q->w', x, -rf_gto.imag, x)
     data = np.array([ww.real*27.2114, pxx_gto])
     fname = dname+'/h2_rpa_gto_0098.omega.inter.pxx.txt'
     np.savetxt(fname, data.T, fmt=['%f','%f'])
-    print(fname)
-
+    data_ref = np.loadtxt(fname+'-ref')
+    self.assertTrue(np.allclose(data_ref,data.T, rtol=0.1, atol=1e-05))
 
 if __name__ == "__main__": unittest.main()

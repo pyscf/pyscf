@@ -1,28 +1,24 @@
 from __future__ import print_function, division
-import sys, numpy as np
-from numpy import stack, dot, zeros, einsum, array
-from timeit import default_timer as timer
-
-def rf_ov_subr(self, ww):
-  """ Full matrix interacting response from tdscf class in occupied-virtual indices, for a given frequency"""
-  nov = self.tdscf.xy[0][0].size
-  rf_ov = np.zeros([len(ww), nov], dtype=self.dtypeComplex)
-  for e,(x,y) in zip(self.tdscf.e, self.tdscf.xy):
-    for iw,w in enumerate(ww):
-      xpy = -(x+y)
-      xmy =  (x-y)
-      rf_ov[iw] = rf_ov[iw] + 2*xpy/(w-e)-2*xpy/(w+e)
-  return rf_ov
+from numpy import dot, zeros, einsum, array, sqrt, where
 
 def rf_den_pyscf(self, ww):
-  """ Full matrix interacting response from  class"""
-  assert hasattr(self, 'tdscf')
+  """ Full matrix interacting response from tdscf class"""
+  assert hasattr(self, 'tdscf') 
   pov = self.get_vertex_pov()[0]
   nprd = pov.shape[0]
-  rf_ov = rf_ov_subr(self, ww).reshape([len(ww),pov.shape[2],pov.shape[1]])
-  rf = np.zeros([len(ww),nprd,nprd], dtype=self.dtypeComplex)
-  for iw, ov in enumerate(rf_ov):
-    rf[iw] = np.einsum('pov,vo,qov->pq', pov, ov, pov)
+  nov = pov.shape[1]*pov.shape[2]
+  pov = pov.reshape([nprd,nov])
+
+  rf = zeros([len(ww),nprd,nprd], dtype=self.dtypeComplex)
+
+  for e,(x,y) in zip(self.tdscf.e, self.tdscf.xy):
+    xpy = (2*(x+y)).reshape(nov)
+    pI = dot(pov,xpy)
+    ppqI = einsum('p,q->pq', pI, pI)
+
+    for iw,w in enumerate(ww):
+      rf[iw] = rf[iw] + ppqI * ( 1.0/(w-e)-1.0/(w+e) )
+
   return rf
 
 
