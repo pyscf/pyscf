@@ -218,7 +218,7 @@ cell_orth = gto.M(atom='H1 1 1 0; H2 0 0 1',
                                [2, (.7, .8, .2), (.2, .2, 1)]]},
                   unit='B',
                   mesh=[7,6,5],
-                  a=numpy.eye(3)*4)
+                  a=numpy.eye(3)*8)
 
 mol_orth = cell_orth.copy()
 mol_orth.dimension = 0
@@ -230,7 +230,7 @@ cell_north = gto.M(atom='H1 1 1 0; H2 0 0 1',
                                 [2, (.7, .8, .2), (.2, .2, 1)]]},
                    unit='B',
                    mesh=[7,6,5],
-                   a=numpy.eye(3)*4+numpy.random.rand(3,3)*.3)
+                   a=numpy.eye(3)*8+numpy.random.rand(3,3))
 
 mol_north = cell_north.copy()
 mol_north.dimension = 0
@@ -288,7 +288,7 @@ class KnownValues(unittest.TestCase):
     def test_pbc_orth_overlap(self):
         ref = cell_orth.pbc_intor('int1e_ovlp', kpts=kpts)
         pcell, contr_coeff = uncontract(cell_orth)
-        pcell.mesh = [9]*3
+        pcell.mesh = [30]*3
         w = gen_grid.UniformGrids(pcell).weights
         out = eval_mat(pcell, w, hermi=0, kpts=kpts)
         out = numpy.einsum('pi,kpq,qj->kij', contr_coeff, out, contr_coeff)
@@ -326,7 +326,7 @@ class KnownValues(unittest.TestCase):
     def test_pbc_nonorth_overlap(self):
         ref = cell_north.pbc_intor('int1e_ovlp', kpts=kpts)
         pcell, contr_coeff = uncontract(cell_north)
-        pcell.mesh = [9]*3
+        pcell.mesh = [30]*3
         w = gen_grid.UniformGrids(pcell).weights
         out = eval_mat(pcell, w, hermi=0, kpts=kpts)
         out = numpy.einsum('pi,kpq,qj->kij', contr_coeff, out, contr_coeff)
@@ -387,6 +387,40 @@ class KnownValues(unittest.TestCase):
 
         out = eval_rho(pcell, dm1, hermi=1, kpts=kpts)
         self.assertTrue(out.dtype == numpy.double)
+        self.assertAlmostEqual(abs(out-ref).max(), 0, 9)
+
+    def test_pbc_orth_lda_rho_submesh(self):
+        cell = gto.M(atom='H 2 3 4; H 3 4 3',
+                  basis=[[0, (2.2, 1)],
+                         [1, (1.9, 1)]],
+                  unit='B',
+                  mesh=[7,6,5],
+                  a=numpy.eye(3)*8)
+        grids = cell.get_uniform_grids()
+        ao = cell.pbc_eval_gto('GTOval', grids)
+        nao = cell.nao_nr()
+        dm = numpy.random.random((nao,nao))
+        dm = dm + dm.T
+        ref = numpy.einsum('gi,ij,gj->g', ao, dm, ao.conj())
+        ref = ref.reshape(cell.mesh)[1:6,1:5,1:4].ravel()
+        out = eval_rho(cell, dm, offset=[1,1,1], submesh=[5,4,3])
+        self.assertAlmostEqual(abs(out-ref).max(), 0, 9)
+
+    def test_pbc_nonorth_lda_rho_submesh(self):
+        cell = gto.M(atom='H 2 3 4; H 3 4 3',
+                  basis=[[0, (2.2, 1)],
+                         [1, (1.9, 1)]],
+                  unit='B',
+                  mesh=[7,6,5],
+                  a=numpy.eye(3)*8+numpy.random.rand(3,3))
+        grids = cell.get_uniform_grids()
+        ao = cell.pbc_eval_gto('GTOval', grids)
+        nao = cell.nao_nr()
+        dm = numpy.random.random((nao,nao))
+        dm = dm + dm.T
+        ref = numpy.einsum('gi,ij,gj->g', ao, dm, ao.conj())
+        ref = ref.reshape(cell.mesh)[1:6,1:5,1:4].ravel()
+        out = eval_rho(cell, dm, offset=[1,1,1], submesh=[5,4,3])
         self.assertAlmostEqual(abs(out-ref).max(), 0, 9)
 
     def test_pbc_orth_lda_rho_kpts(self):

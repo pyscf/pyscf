@@ -245,15 +245,15 @@ static int _orth_components(double *xs_exp, int *img_slice, int *grid_slice,
 // nimg0 may be equal to nimg1 and nimg can be 0.  Skip this extreme condition.
                 return 0;
         }
-        if (offset != 0 || submesh != nx_per_cell) {
-                periodic = 0;
-        }
 
         int nimg0 = 0;
         int nimg1 = 1;
         if (periodic) {
                 nimg0 = (int)floor(edge0);
                 nimg1 = (int)ceil (edge1);
+        }
+        if (offset != 0 || submesh != nx_per_cell) {
+                nimg1 = nimg0 + 1;
         }
         int nimg = nimg1 - nimg0;
 
@@ -1669,16 +1669,16 @@ static void _orth_rho(double *rho, double *dm_xyz,
 
         if (nimgz == 1) {
                 for (l = 0; l <= topl; l++) {
-                        for (i = 0; i < nz0-offset[2]; i++) {
+                        for (i = offset[2]; i < nz0; i++) {
                                 zs_exp[l*mesh[2]+i] = 0;
                         }
-                        for (i = nz1-offset[2]; i < submesh[2]; i++) {
+                        for (i = nz1; i < offset[2]+submesh[2]; i++) {
                                 zs_exp[l*mesh[2]+i] = 0;
                         }
                 }
         } else if (nimgz == 2 && !_has_overlap(nz0, nz1, mesh[2])) {
                 for (l = 0; l <= topl; l++) {
-                        for (i = nz1-offset[2]; i < nz0-offset[2]; i++) {
+                        for (i = nz1; i < nz0; i++) {
                                 zs_exp[l*mesh[2]+i] = 0;
                         }
                 }
@@ -2441,6 +2441,7 @@ static int _rho_cache_size(int l, int comp, int *mesh)
 
 /*
  * F_dm are a set of uncontracted cartesian density matrices
+ * Note rho is updated inplace.
  */
 void NUMINT_rho_drv(void (*eval_rho)(), double *rho, double *F_dm,
                     int comp, int hermi, int *shls_slice, int *ao_loc,
@@ -2488,7 +2489,6 @@ void NUMINT_rho_drv(void (*eval_rho)(), double *rho, double *F_dm,
         double *rho_priv, *pdm, *pdm1;
         if (thread_id == 0) {
                 rho_priv = rho;
-                memset(rho, 0, sizeof(double) * comp*ngrids);
         } else {
                 rho_priv = calloc(comp*ngrids, sizeof(double));
         }
