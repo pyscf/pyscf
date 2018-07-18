@@ -1243,8 +1243,11 @@ class MultiGridFFTDF(fft.FFTDF):
     get_nuc = get_nuc
 
     def get_jk(self, dm, hermi=1, kpts=None, kpts_band=None,
-               with_j=True, with_k=False, **kwargs):
-        assert(not with_k)
+               with_j=True, with_k=False, exxdiv='ewald'):
+        from pyscf.pbc.df import fft_jk
+        if with_k:
+            logger.warn(self, 'MultiGridFFTDF does not support HFX. '
+                        'The code of FFTDF is called.')
 
         if kpts is None:
             if numpy.all(self.kpts == 0): # Gamma-point J/K by default
@@ -1256,14 +1259,15 @@ class MultiGridFFTDF(fft.FFTDF):
 
         vj = vk = None
         if kpts.shape == (3,):
-            #vj, vk = fft_jk.get_jk(self, dm, hermi, kpts, kpts_band,
-            #                       with_j, with_k, exxdiv)
+            if with_k:
+                vk = fft_jk.get_jk(self, dm, hermi, kpts, kpts_band,
+                                   False, True, exxdiv)[1]
             vj = get_j_kpts(self, dm, hermi, kpts.reshape(1,3), kpts_band)
             if kpts_band is None:
                 vj = vj[...,0,:,:]
         else:
-            #if with_k:
-            #    vk = fft_jk.get_k_kpts(self, dm, hermi, kpts, kpts_band, exxdiv)
+            if with_k:
+                vk = fft_jk.get_k_kpts(self, dm, hermi, kpts, kpts_band, exxdiv)
             if with_j:
                 vj = get_j_kpts(self, dm, hermi, kpts, kpts_band)
         return vj, vk
@@ -1273,110 +1277,12 @@ class MultiGridFFTDF(fft.FFTDF):
     uks_j_xc = uks_j_xc
 
 def multigrid(mf):
+    '''Use MultiGridFFTDF to replace the default FFTDF integration method in
+    the DFT object.
+    '''
     from pyscf.pbc import dft
-    m_df = MultiGridFFTDF(mf.cell)
-    m_df.__dict__.update(mf.with_df.__dict__)
-    mf.with_df = m_df
-
-    if isinstance(mf, dft.kuks.KUKS):
-        def get_veff(cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
-                     kpts=None, kpts_band=None):
-            if cell is None: cell = mf.cell
-            if dm is None: dm = mf.make_rdm1()
-            if kpts is None: kpts = mf.kpts
-            t0 = (time.clock(), time.time())
-            n, exc, vxc = m_df.uks_j_xc(dm, mf.xc, kpts=kpts, kpts_band=kpts_band,
-                                        with_j=False, j_in_xc=True)[:3]
-            logger.debug(mf, 'nelec by numeric integration = %s', n)
-            t0 = logger.timer(mf, 'vxc', *t0)
-            return vxc
-
-    elif isinstance(mf, dft.kroks.KROKS):
-        def get_veff(cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
-                     kpts=None, kpts_band=None):
-            if cell is None: cell = mf.cell
-            if dm is None: dm = mf.make_rdm1()
-            if kpts is None: kpts = mf.kpts
-            if hasattr(dm, 'mo_coeff'):
-                mo_coeff = dm.mo_coeff
-                mo_occ_a = [(x > 0).astype(numpy.double) for x in dm.mo_occ]
-                mo_occ_b = [(x ==2).astype(numpy.double) for x in dm.mo_occ]
-                dm = lib.tag_array(dm, mo_coeff=(mo_coeff,mo_coeff),
-                                   mo_occ=(mo_occ_a,mo_occ_b))
-
-            t0 = (time.clock(), time.time())
-            n, exc, vxc = m_df.uks_j_xc(dm, mf.xc, kpts=kpts, kpts_band=kpts_band,
-                                        with_j=False, j_in_xc=True)[:3]
-            logger.debug(mf, 'nelec by numeric integration = %s', n)
-            t0 = logger.timer(mf, 'vxc', *t0)
-            return vxc
-
-    elif isinstance(mf, dft.krks.KRKS):
-        def get_veff(cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
-                     kpts=None, kpts_band=None):
-            if cell is None: cell = mf.cell
-            if dm is None: dm = mf.make_rdm1()
-            if kpts is None: kpts = mf.kpts
-            t0 = (time.clock(), time.time())
-            n, exc, vxc = m_df.rks_j_xc(dm, mf.xc, kpts=kpts, kpts_band=kpts_band,
-                                        with_j=False, j_in_xc=True)[:3]
-            logger.debug(mf, 'nelec by numeric integration = %s', n)
-            t0 = logger.timer(mf, 'vxc', *t0)
-            return vxc
-
-    elif isinstance(mf, dft.uks.UKS):
-        def get_veff(cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
-                     kpt=None, kpts_band=None):
-            if cell is None: cell = mf.cell
-            if dm is None: dm = mf.make_rdm1()
-            if kpt is None: kpt = mf.kpt
-            t0 = (time.clock(), time.time())
-            n, exc, vxc = m_df.uks_j_xc(dm, mf.xc, kpts=kpt.reshape(1,3),
-                                        kpts_band=kpts_band,
-                                        with_j=False, j_in_xc=True)[:3]
-            logger.debug(mf, 'nelec by numeric integration = %s', n)
-            t0 = logger.timer(mf, 'vxc', *t0)
-            return vxc
-
-    elif isinstance(mf, dft.roks.ROKS):
-        def get_veff(cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
-                     kpt=None, kpts_band=None):
-            if cell is None: cell = mf.cell
-            if dm is None: dm = mf.make_rdm1()
-            if kpt is None: kpt = mf.kpt
-            if hasattr(dm, 'mo_coeff'):
-                mo_coeff = dm.mo_coeff
-                mo_occ_a = (dm.mo_occ > 0).astype(numpy.double)
-                mo_occ_b = (dm.mo_occ ==2).astype(numpy.double)
-                dm = lib.tag_array(dm, mo_coeff=(mo_coeff,mo_coeff),
-                                   mo_occ=(mo_occ_a,mo_occ_b))
-
-            t0 = (time.clock(), time.time())
-            n, exc, vxc = m_df.uks_j_xc(dm, mf.xc, kpts=kpt.reshape(1,3),
-                                        kpts_band=kpts_band,
-                                        with_j=False, j_in_xc=True)[:3]
-            logger.debug(mf, 'nelec by numeric integration = %s', n)
-            t0 = logger.timer(mf, 'vxc', *t0)
-            return vxc
-
-    elif isinstance(mf, dft.rks.RKS):
-        def get_veff(cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
-                     kpt=None, kpts_band=None):
-            if cell is None: cell = mf.cell
-            if dm is None: dm = mf.make_rdm1()
-            if kpt is None: kpt = mf.kpt
-            t0 = (time.clock(), time.time())
-            n, exc, vxc = m_df.rks_j_xc(dm, mf.xc, kpts=kpt.reshape(1,3),
-                                        kpts_band=kpts_band,
-                                        with_j=False, j_in_xc=True)[:3]
-            logger.debug(mf, 'nelec by numeric integration = %s', n)
-            t0 = logger.timer(mf, 'vxc', *t0)
-            return vxc
-
-    else:
-        raise RuntimeError('MultiGridFFTDF does not support SCF object %s' % mf)
-
-    mf.get_veff = get_veff
+    mf.with_df, old_df = MultiGridFFTDF(mf.cell), mf.with_df
+    mf.with_df.__dict__.update(old_df.__dict__)
     return mf
 
 

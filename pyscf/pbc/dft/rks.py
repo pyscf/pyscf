@@ -35,6 +35,7 @@ from pyscf.pbc.scf import khf
 from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import numint
 from pyscf.dft.rks import define_xc_
+from pyscf.pbc.dft import multigrid
 from pyscf import __config__
 
 
@@ -60,6 +61,14 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     if dm is None: dm = ks.make_rdm1()
     if kpt is None: kpt = ks.kpt
     t0 = (time.clock(), time.time())
+
+    if isinstance(ks.with_df, multigrid.MultiGridFFTDF):
+        n, exc, vxc = ks.with_df.rks_j_xc(dm, ks.xc, kpts=kpt.reshape(1,3),
+                                          kpts_band=kpts_band,
+                                          with_j=False, j_in_xc=True)[:3]
+        logger.debug(ks, 'nelec by numeric integration = %s', n)
+        t0 = logger.timer(ks, 'vxc', *t0)
+        return vxc
 
     ground_state = (isinstance(dm, numpy.ndarray) and dm.ndim == 2
                     and kpts_band is None)

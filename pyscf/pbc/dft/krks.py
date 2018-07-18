@@ -32,6 +32,7 @@ from pyscf.lib import logger
 from pyscf.pbc.scf import khf
 from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import rks
+from pyscf.pbc.dft import multigrid
 
 
 def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
@@ -57,6 +58,14 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     if dm is None: dm = ks.make_rdm1()
     if kpts is None: kpts = ks.kpts
     t0 = (time.clock(), time.time())
+
+    if isinstance(ks.with_df, multigrid.MultiGridFFTDF):
+        n, exc, vxc = ks.with_df.rks_j_xc(dm, ks.xc, kpts=kpts,
+                                          kpts_band=kpts_band,
+                                          with_j=False, j_in_xc=True)[:3]
+        logger.debug(ks, 'nelec by numeric integration = %s', n)
+        t0 = logger.timer(ks, 'vxc', *t0)
+        return vxc
 
     # ndim = 3 : dm.shape = (nkpts, nao, nao)
     ground_state = (isinstance(dm, np.ndarray) and dm.ndim == 3 and
