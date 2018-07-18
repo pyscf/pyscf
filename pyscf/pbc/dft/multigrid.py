@@ -26,6 +26,7 @@ import scipy.linalg
 from functools import reduce
 
 from pyscf import lib
+from pyscf.lib import logger
 from pyscf.gto import ATOM_OF, ANG_OF, NPRIM_OF, PTR_EXP, PTR_COEFF
 from pyscf.dft.numint import libdft, _scale_ao
 from pyscf.pbc import tools
@@ -56,9 +57,6 @@ R_RATIO_SUBLOOP = getattr(__config__, 'pbc_dft_multigrid_r_ratio_subloop', 0.6)
 # to approximate the density derivatives in reciprocal space (without
 # evaluating the high order derivatives in real space).
 RHOG_HIGH_ORDER = getattr(__config__, 'pbc_dft_multigrid_rhog_high_order', False)
-
-WITH_J = getattr(__config__, 'pbc_dft_multigrid_with_j', False)
-J_IN_XC = getattr(__config__, 'pbc_dft_multigrid_j_in_xc', True)
 
 PTR_EXPDROP = 16
 EXPDROP = getattr(__config__, 'pbc_dft_multigrid_expdrop', 1e-12)
@@ -687,8 +685,8 @@ def _eval_rho_ket(cell, dms, shls_slice, hermi, xctype, kpts, grids,
             nshells_j = len(atm_bas_idx)
             sub_slice = (0, nshells_i, nshells_i, nshells_i+nshells_j)
 
-            offset = (edge0 * mesh).astype(int)
-            mesh1 = numpy.ceil(edge1 * mesh).astype(int)
+            offset = (frac_edge0 * mesh).astype(int)
+            mesh1 = numpy.ceil(frac_edge1 * mesh).astype(int)
             submesh = mesh1 - offset
             log.debug1('atm %d  rcut %f  offset %s submesh %s',
                        atm_id, rcut, offset, submesh)
@@ -870,7 +868,7 @@ def _get_gga_pass2(mydf, vG, kpts=numpy.zeros((1,3)), verbose=None):
 
 
 def rks_j_xc(mydf, dm_kpts, xc_code, hermi=1, kpts=numpy.zeros((1,3)),
-             kpts_band=None, with_j=WITH_J, j_in_xc=J_IN_XC):
+             kpts_band=None, with_j=False, j_in_xc=False):
     '''Compute the XC energy and RKS XC matrix at sampled k-points.
 
     Args:
@@ -944,15 +942,6 @@ def rks_j_xc(mydf, dm_kpts, xc_code, hermi=1, kpts=numpy.zeros((1,3)),
             vrho, vsigma = vxc[:2]
             wv[0]  = vrho
             wv[1:4] = rhoR[i,1:4] * (vsigma * 2)
-        else:
-            vrho, vsigma, vlapl, vtau = vxc
-            wv = numpy.empty((5,ngrids))
-            wv[0]  = vrho
-            wv[1:4] = rhoR[i,1:4] * (vsigma * 2)
-            if vlapl is None:
-                wv[4] = .5*vtau
-            else:
-                wv[4] = (.5*vtau + 2*vlapl)
 
         nelec[i] += rhoR[i,0].sum() * weight
         excsum[i] += (rhoR[i,0]*exc).sum() * weight
@@ -987,7 +976,7 @@ def rks_j_xc(mydf, dm_kpts, xc_code, hermi=1, kpts=numpy.zeros((1,3)),
 # Note uks_j_xc handles only one set of KUKS density matrices (alpha, beta) in
 # each call (rks_j_xc supports multiple sets of KRKS density matrices)
 def uks_j_xc(mydf, dm_kpts, xc_code, hermi=1, kpts=numpy.zeros((1,3)),
-             kpts_band=None, with_j=WITH_J, j_in_xc=J_IN_XC):
+             kpts_band=None, with_j=False, j_in_xc=False):
     '''Compute the XC energy and UKS XC matrix at sampled k-points.
 
     Args:
@@ -1069,22 +1058,6 @@ def uks_j_xc(mydf, dm_kpts, xc_code, hermi=1, kpts=numpy.zeros((1,3)),
         wvb[0]  = vrho[:,1]
         wvb[1:4] = rhoR[1,1:4] * (vsigma[:,2] * 2)  # sigma_dd
         wvb[1:4]+= rhoR[0,1:4] *  vsigma[:,1]       # sigma_ud
-    else:
-        vrho, vsigma, vlapl, vtau = vxc
-        wva = numpy.empty((5,ngrids))
-        wvb = numpy.empty((5,ngrids))
-        wva[0]  = vrho[:,0]
-        wva[1:4] = rhoR[0,1:4] * (vsigma[:,0] * 2)  # sigma_uu
-        wva[1:4]+= rhoR[1,1:4] *  vsigma[:,1]       # sigma_ud
-        wvb[0]  = vrho[:,1]
-        wvb[1:4] = rhoR[1,1:4] * (vsigma[:,2] * 2)  # sigma_dd
-        wvb[1:4]+= rhoR[0,1:4] *  vsigma[:,1]       # sigma_ud
-        if vlapl is None:
-            wvb[4] = .5*vtau[:,1]
-            wva[4] = .5*vtau[:,0]
-        else:
-            wva[4] = (.5*vtau[:,0] + 2*vlapl[:,0])
-            wvb[4] = (.5*vtau[:,1] + 2*vlapl[:,1])
 
     nelec[0] += rhoR[0,0].sum() * weight
     nelec[1] += rhoR[1,0].sum() * weight
@@ -1093,11 +1066,7 @@ def uks_j_xc(mydf, dm_kpts, xc_code, hermi=1, kpts=numpy.zeros((1,3)),
     wv_freq = tools.fft(numpy.vstack((wva,wvb)), mesh) * weight
     wv_freq = wv_freq.reshape(2,-1,*mesh)
     if j_in_xc:
-        wv_freq[:,0] += vG.reshape(nset,*mesh)
-
-    if nset == 1:
-        nelec = nelec[0]
-        excsum = excsum[0]
+        wv_freq[:,0] += vG.reshape(*mesh)
     rhoR = rhoG = None
 
     kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
@@ -1272,12 +1241,11 @@ class MultiGridFFTDF(fft.FFTDF):
     get_nuc = get_nuc
 
     def get_jk(self, dm, hermi=1, kpts=None, kpts_band=None,
-               with_j=True, with_k=True, exxdiv='ewald'):
+               with_j=True, with_k=False, **kwargs):
         assert(not with_k)
 
         if kpts is None:
-            if numpy.all(self.kpts == 0):
-                # Gamma-point calculation by default
+            if numpy.all(self.kpts == 0): # Gamma-point J/K by default
                 kpts = numpy.zeros(3)
             else:
                 kpts = self.kpts
@@ -1301,6 +1269,113 @@ class MultiGridFFTDF(fft.FFTDF):
     get_j_kpts = get_j_kpts
     rks_j_xc = rks_j_xc
     uks_j_xc = uks_j_xc
+
+def multigrid(mf):
+    from pyscf.pbc import dft
+    m_df = MultiGridFFTDF(mf.cell)
+    m_df.__dict__.update(mf.with_df.__dict__)
+    mf.with_df = m_df
+
+    if isinstance(mf, dft.kuks.KUKS):
+        def get_veff(cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
+                     kpts=None, kpts_band=None):
+            if cell is None: cell = mf.cell
+            if dm is None: dm = mf.make_rdm1()
+            if kpts is None: kpts = mf.kpts
+            t0 = (time.clock(), time.time())
+            n, exc, vxc = m_df.uks_j_xc(dm, mf.xc, kpts=kpts, kpts_band=kpts_band,
+                                        with_j=False, j_in_xc=True)[:3]
+            logger.debug(mf, 'nelec by numeric integration = %s', n)
+            t0 = logger.timer(mf, 'vxc', *t0)
+            return vxc
+
+    elif isinstance(mf, dft.kroks.KROKS):
+        def get_veff(cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
+                     kpts=None, kpts_band=None):
+            if cell is None: cell = mf.cell
+            if dm is None: dm = mf.make_rdm1()
+            if kpts is None: kpts = mf.kpts
+            if hasattr(dm, 'mo_coeff'):
+                mo_coeff = dm.mo_coeff
+                mo_occ_a = [(x > 0).astype(numpy.double) for x in dm.mo_occ]
+                mo_occ_b = [(x ==2).astype(numpy.double) for x in dm.mo_occ]
+                dm = lib.tag_array(dm, mo_coeff=(mo_coeff,mo_coeff),
+                                   mo_occ=(mo_occ_a,mo_occ_b))
+
+            t0 = (time.clock(), time.time())
+            n, exc, vxc = m_df.uks_j_xc(dm, mf.xc, kpts=kpts, kpts_band=kpts_band,
+                                        with_j=False, j_in_xc=True)[:3]
+            logger.debug(mf, 'nelec by numeric integration = %s', n)
+            t0 = logger.timer(mf, 'vxc', *t0)
+            return vxc
+
+    elif isinstance(mf, dft.krks.KRKS):
+        def get_veff(cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
+                     kpts=None, kpts_band=None):
+            if cell is None: cell = mf.cell
+            if dm is None: dm = mf.make_rdm1()
+            if kpts is None: kpts = mf.kpts
+            t0 = (time.clock(), time.time())
+            n, exc, vxc = m_df.rks_j_xc(dm, mf.xc, kpts=kpts, kpts_band=kpts_band,
+                                        with_j=False, j_in_xc=True)[:3]
+            logger.debug(mf, 'nelec by numeric integration = %s', n)
+            t0 = logger.timer(mf, 'vxc', *t0)
+            return vxc
+
+    elif isinstance(mf, dft.uks.UKS):
+        def get_veff(cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
+                     kpt=None, kpts_band=None):
+            if cell is None: cell = mf.cell
+            if dm is None: dm = mf.make_rdm1()
+            if kpt is None: kpt = mf.kpt
+            t0 = (time.clock(), time.time())
+            n, exc, vxc = m_df.uks_j_xc(dm, mf.xc, kpts=kpt.reshape(1,3),
+                                        kpts_band=kpts_band,
+                                        with_j=False, j_in_xc=True)[:3]
+            logger.debug(mf, 'nelec by numeric integration = %s', n)
+            t0 = logger.timer(mf, 'vxc', *t0)
+            return vxc
+
+    elif isinstance(mf, dft.roks.ROKS):
+        def get_veff(cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
+                     kpt=None, kpts_band=None):
+            if cell is None: cell = mf.cell
+            if dm is None: dm = mf.make_rdm1()
+            if kpt is None: kpt = mf.kpt
+            if hasattr(dm, 'mo_coeff'):
+                mo_coeff = dm.mo_coeff
+                mo_occ_a = (dm.mo_occ > 0).astype(numpy.double)
+                mo_occ_b = (dm.mo_occ ==2).astype(numpy.double)
+                dm = lib.tag_array(dm, mo_coeff=(mo_coeff,mo_coeff),
+                                   mo_occ=(mo_occ_a,mo_occ_b))
+
+            t0 = (time.clock(), time.time())
+            n, exc, vxc = m_df.uks_j_xc(dm, mf.xc, kpts=kpt.reshape(1,3),
+                                        kpts_band=kpts_band,
+                                        with_j=False, j_in_xc=True)[:3]
+            logger.debug(mf, 'nelec by numeric integration = %s', n)
+            t0 = logger.timer(mf, 'vxc', *t0)
+            return vxc
+
+    elif isinstance(mf, dft.rks.RKS):
+        def get_veff(cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
+                     kpt=None, kpts_band=None):
+            if cell is None: cell = mf.cell
+            if dm is None: dm = mf.make_rdm1()
+            if kpt is None: kpt = mf.kpt
+            t0 = (time.clock(), time.time())
+            n, exc, vxc = m_df.rks_j_xc(dm, mf.xc, kpts=kpt.reshape(1,3),
+                                        kpts_band=kpts_band,
+                                        with_j=False, j_in_xc=True)[:3]
+            logger.debug(mf, 'nelec by numeric integration = %s', n)
+            t0 = logger.timer(mf, 'vxc', *t0)
+            return vxc
+
+    else:
+        raise RuntimeError('MultiGridFFTDF does not support SCF object %s' % mf)
+
+    mf.get_veff = get_veff
+    return mf
 
 
 def _pgto_shells(cell):
@@ -1363,7 +1438,7 @@ if __name__ == '__main__':
     from pyscf.pbc.df import fft_jk
     numpy.random.seed(22)
     cell = gto.M(
-        a = numpy.eye(3)*3.5668 + numpy.random.random((3,3)),
+        a = numpy.eye(3)*3.5668,
         atom = '''C     0.      0.      0.    
                   C     0.8917  0.8917  0.8917
                   C     1.7834  1.7834  0.    
@@ -1375,10 +1450,7 @@ if __name__ == '__main__':
         #basis = 'sto3g',
         #basis = 'ccpvdz',
         basis = 'gth-dzvp',
-        #basis = 'unc-gth-szv',
         #basis = 'gth-szv',
-        #basis = [#[0, (3,1)],
-        #         [0, (0.2, 1)]],
         #verbose = 5,
         #mesh = [15]*3,
         #precision=1e-6
@@ -1389,80 +1461,13 @@ if __name__ == '__main__':
     nao = cell.nao_nr()
     numpy.random.seed(1)
     kpts = cell.make_kpts([3,1,1])
-    #MultiGridFFTDF(cell).get_pp()
-    #MultiGridFFTDF(cell).get_pp(kpts)
 
     dm = numpy.random.random((len(kpts),nao,nao)) * .2
     dm += numpy.eye(nao)
     dm = dm + dm.transpose(0,2,1)
-    #dm = scf.KRHF(cell, kpts).get_init_guess()
-    #dm = cell.pbc_intor('int1e_ovlp', kpts=kpts)
-    t0 = time.time()
-    #print(time.clock())
-    ref = -12.3081960302+5.12330442322j
-    ref = -7.24693684646+8.47418441584j
-#    #ref = numpy.load('ref.npy')
-#    #out = fft_jk.get_j_kpts(df.FFTDF(cell), dm, kpts=kpts)
-#    #print abs(ref-out).max()
-#    print(time.clock(), time.time()-t0)
-#    mydf = MultiGridFFTDF(cell)
-#    v = get_j_kpts(mydf, dm, kpts=kpts)
-#    #ref = numpy.load('ref.npy')
-#    print(time.clock(), time.time()-t0)
-#    #print('diff', abs(ref-v).max())
-#    print('diff', lib.finger(v)-ref)
-#    exit()
 
-    print(time.clock())
-    #xc = 'lda,vwn'
-    xc = 'pbe'
-    #mydf = df.FFTDF(cell)
-    #n, exc, ref = mydf._numint.nr_rks(cell, mydf.grids, xc, dm, 0, kpts)
-    ref = numpy.load('ref.npy')
-    print(time.clock())
-    mydf = MultiGridFFTDF(cell)
-    n, exc, vxc, vj = rks_j_xc(mydf, dm, xc, kpts=kpts, j_in_xc=False, with_j=False)
-    print(time.clock())
-    print('diff', abs(ref-vxc).max())
-    exit()
-    #print('diff', lib.finger(vxc)-ref)
-    n, exc, vxc, vj = uks_j_xc(mydf, [dm*.5]*2, xc, kpts=kpts, j_in_xc=False, with_j=False)
-    print('diff', abs(ref-vxc[0]).max())
-    print('diff', abs(ref-vxc[1]).max())
-    #print('diff', lib.finger(vxc[0])-ref)
-    #print('diff', lib.finger(vxc[1])-ref)
-    print(time.clock())
-    exit()
+    mf = dft.KRKS(cell)
+    ref = mf.get_veff(cell, dm, kpts=kpts)[0]
+    out = multigrid(mf).get_veff(cell, dm, kpts=kpts)
+    print(abs(ref-out).max())
 
-    cell1 = gto.Cell()
-    cell1.verbose = 0
-    cell1.atom = 'C 0 0 0; C 1 1 1; C 0 2 2; C 2 0 2'
-    cell1.a = numpy.diag([4, 4, 4])
-    cell1.basis = 'gth-szv'
-    cell1.pseudo = 'gth-pade'
-    cell1.mesh = [20]*3
-    cell1.build()
-    k = numpy.ones(3)*.25
-    mydf = MultiGridFFTDF(cell1)
-    v1 = get_pp(mydf, k)
-    print(lib.finger(v1) - (1.8428463642697195-0.10478381725330854j))
-    v1 = get_nuc(mydf, k)
-    print(lib.finger(v1) - (2.3454744614944714-0.12528407127454744j))
-
-    kpts = cell.make_kpts([2,2,2])
-    mf = dft.KRKS(cell, kpts)
-    mf.verbose = 4
-    mf.with_df = MultiGridFFTDF(cell, kpts)
-    mf.xc = xc = 'lda,vwn'
-    def get_veff(cell, dm, dm_last=0, vhf_last=0, hermi=1,
-                 kpts=None, kpts_band=None):
-        if kpts is None:
-            kpts = mf.with_df.kpts
-        n, exc, vxc, vj = mf.with_df.rks_j_xc(dm, mf.xc, kpts=kpts, kpts_band=kpts_band)
-        weight = 1./len(kpts)
-        ecoul = numpy.einsum('Kij,Kji', dm, vj).real * .5 * weight
-        vxc += vj
-        vxc = lib.tag_array(vxc, ecoul=ecoul, exc=exc, vj=None, vk=None)
-        return vxc
-    mf.get_veff = get_veff
-    mf.kernel()

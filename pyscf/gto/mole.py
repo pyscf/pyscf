@@ -387,7 +387,9 @@ def format_basis(basis_tab):
         atom_basis = basis_tab[atom]
         if isinstance(atom_basis, (str, unicode)):
             bset = convert(str(atom_basis), stdsymb)
-        elif any(isinstance(x, (str, unicode)) for x in atom_basis):
+        elif (any(isinstance(x, (str, unicode)) for x in atom_basis)
+              # The first element is the basis of internal format
+              or not isinstance(atom_basis[0][0], int)):
             bset = []
             for rawb in atom_basis:
                 if isinstance(rawb, (str, unicode)):

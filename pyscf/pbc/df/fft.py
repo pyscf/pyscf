@@ -269,8 +269,7 @@ class FFTDF(lib.StreamObject):
                with_j=True, with_k=True, exxdiv='ewald'):
         from pyscf.pbc.df import fft_jk
         if kpts is None:
-            if numpy.all(self.kpts == 0):
-                # Gamma-point calculation by default
+            if numpy.all(self.kpts == 0): # Gamma-point J/K by default
                 kpts = numpy.zeros(3)
             else:
                 kpts = self.kpts

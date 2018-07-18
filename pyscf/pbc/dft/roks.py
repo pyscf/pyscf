@@ -34,8 +34,8 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
              kpt=None, kpts_band=None):
     if hasattr(dm, 'mo_coeff'):
         mo_coeff = dm.mo_coeff
-        mo_occ_a = (dm.mo_occ > 0).astype(np.double)
-        mo_occ_b = (dm.mo_occ ==2).astype(np.double)
+        mo_occ_a = (dm.mo_occ > 0).astype(numpy.double)
+        mo_occ_b = (dm.mo_occ ==2).astype(numpy.double)
         dm = lib.tag_array(dm, mo_coeff=(mo_coeff,mo_coeff),
                            mo_occ=(mo_occ_a,mo_occ_b))
     return uks.get_veff(ks, cell, dm, dm_last, vhf_last, hermi, kpt, kpts_band)

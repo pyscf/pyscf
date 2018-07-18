@@ -1,11 +1,9 @@
-import ctypes
 import unittest
 import numpy
 import scipy.linalg
 
 from pyscf import lib
 from pyscf.pbc import gto
-from pyscf.dft.numint import libdft
 from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import multigrid
 
