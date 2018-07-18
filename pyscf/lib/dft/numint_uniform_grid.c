@@ -246,18 +246,18 @@ static int _orth_components(double *xs_exp, int *img_slice, int *grid_slice,
                 return 0;
         }
 
+        if (offset != 0 || submesh != nx_per_cell) {
+// |i> is the steep function and centered inside image 0. Moving |j> all around
+// will not change the center of |ij>. The periodic system can be treated as
+// non-periodic system so that only one image needs to be considered.
+                periodic = 0;
+        }
+
         int nimg0 = 0;
         int nimg1 = 1;
         if (periodic) {
                 nimg0 = (int)floor(edge0);
                 nimg1 = (int)ceil (edge1);
-                if ((nimg1 != nimg0 + 1) &&
-                    (offset != 0 || submesh != nx_per_cell)) {
-                        nimg0 = (int)floor(xij_frac);
-                        nimg1 = nimg0 + 1;
-                        edge0 = MAX(edge0, nimg0);
-                        edge1 = MIN(edge1, nimg1);
-                }
         }
         int nimg = nimg1 - nimg0;
 
@@ -1028,11 +1028,93 @@ static void _nonorth_dot_z(double *val, double *weights, int meshz,
 
         exp_z0z0 = e_z0z0;
         exp_z0dz = e_z0dz * e_dzdz;
-        iz1 = grid_close_to_zij % meshz + meshz;
-        for (iz = grid_close_to_zij-nz0; iz < nz1-nz0; iz++, iz1++) {
-                if (iz1 >= meshz) {
-                        iz1 -= meshz;
+
+        //:iz1 = grid_close_to_zij % meshz + meshz;
+        //:for (iz = grid_close_to_zij-nz0; iz < nz1-nz0; iz++, iz1++) {
+        //:        if (iz1 >= meshz) {
+        //:                iz1 -= meshz;
+        //:        }
+        //:        val[iz] = weights[iz1] * exp_z0z0;
+        //:        exp_z0z0 *= exp_z0dz;
+        //:        exp_z0dz *= exp_2dzdz;
+        //:}
+        iz1 = grid_close_to_zij % meshz;
+        if (iz1 < 0) {
+                iz1 += meshz;
+        }
+        iz = grid_close_to_zij-nz0;
+        while (iz+meshz-iz1 < nz1-nz0) {
+                for (; iz1 < meshz; iz1++, iz++) {
+                        val[iz] = weights[iz1] * exp_z0z0;
+                        exp_z0z0 *= exp_z0dz;
+                        exp_z0dz *= exp_2dzdz;
                 }
+                iz1 = 0;
+        }
+        for (; iz < nz1-nz0; iz++, iz1++) {
+                val[iz] = weights[iz1] * exp_z0z0;
+                exp_z0z0 *= exp_z0dz;
+                exp_z0dz *= exp_2dzdz;
+        }
+
+        exp_z0z0 = e_z0z0;
+        if (e_z0dz != 0) {
+                exp_z0dz = e_dzdz / e_z0dz;
+        } else {
+                exp_z0dz = exp(_dzdz - _z0dz);
+        }
+        //:iz1 = (grid_close_to_zij-1) % meshz;
+        //:for (iz = grid_close_to_zij-nz0-1; iz >= 0; iz--, iz1--) {
+        //:        if (iz1 < 0) {
+        //:                iz1 += meshz;
+        //:        }
+        //:        exp_z0z0 *= exp_z0dz;
+        //:        exp_z0dz *= exp_2dzdz;
+        //:        val[iz] = weights[iz1] * exp_z0z0;
+        //:}
+        iz1 = (grid_close_to_zij-1) % meshz;
+        if (iz1 < 0) {
+                iz1 += meshz;
+        }
+        iz = grid_close_to_zij-nz0 - 1;
+        while (iz-iz1 >= 0) {
+                for (; iz1 >= 0; iz1--, iz--) {
+                        exp_z0z0 *= exp_z0dz;
+                        exp_z0dz *= exp_2dzdz;
+                        val[iz] = weights[iz1] * exp_z0z0;
+                }
+                iz1 = meshz - 1;
+        }
+        for (; iz >= 0; iz--, iz1--) {
+                exp_z0z0 *= exp_z0dz;
+                exp_z0dz *= exp_2dzdz;
+                val[iz] = weights[iz1] * exp_z0z0;
+        }
+}
+
+static void _nonorth_dot_z_1img(double *val, double *weights, int meshz,
+                                int nz0, int nz1, int grid_close_to_zij,
+                                double e_z0z0, double e_z0dz, double e_dzdz,
+                                double _z0dz, double _dzdz)
+{
+        int iz, iz1;
+        if (e_z0z0 == 0) {
+                for (iz = 0; iz < nz1-nz0; iz++) {
+                        val[iz] = 0;
+                }
+                return;
+        }
+
+        double exp_2dzdz = e_dzdz * e_dzdz;
+        double exp_z0z0, exp_z0dz;
+
+        exp_z0z0 = e_z0z0;
+        exp_z0dz = e_z0dz * e_dzdz;
+        iz1 = grid_close_to_zij % meshz;
+        if (iz1 < 0) {
+                iz1 += meshz;
+        }
+        for (iz = grid_close_to_zij-nz0; iz < nz1-nz0; iz++, iz1++) {
                 val[iz] = weights[iz1] * exp_z0z0;
                 exp_z0z0 *= exp_z0dz;
                 exp_z0dz *= exp_2dzdz;
@@ -1045,10 +1127,10 @@ static void _nonorth_dot_z(double *val, double *weights, int meshz,
                 exp_z0dz = exp(_dzdz - _z0dz);
         }
         iz1 = (grid_close_to_zij-1) % meshz;
+        if (iz1 < 0) {
+                iz1 += meshz;
+        }
         for (iz = grid_close_to_zij-nz0-1; iz >= 0; iz--, iz1--) {
-                if (iz1 < 0) {
-                        iz1 += meshz;
-                }
                 exp_z0z0 *= exp_z0dz;
                 exp_z0dz *= exp_2dzdz;
                 val[iz] = weights[iz1] * exp_z0z0;
@@ -1074,6 +1156,15 @@ static void _nonorth_ints(double *out, double *weights, double fac, double aij,
         int ngridx = nx1 - nx0;
         int ngridy = ny1 - ny0;
         int ngridz = nz1 - nz0;
+        //int nimgx0 = img_slice[0];
+        //int nimgx1 = img_slice[1];
+        //int nimgy0 = img_slice[2];
+        //int nimgy1 = img_slice[3];
+        int nimgz0 = img_slice[4];
+        int nimgz1 = img_slice[5];
+        //int nimgx = nimgx1 - nimgx0;
+        //int nimgy = nimgy1 - nimgy0;
+        int nimgz = nimgz1 - nimgz0;
 
         const char TRANS_T = 'T';
         const char TRANS_N = 'N';
@@ -1182,9 +1273,15 @@ static void _nonorth_ints(double *out, double *weights, double fac, double aij,
                                 iy1 -= mesh[1];
                         }
                         pweights = weights + (ix1 * mesh[1] + iy1) * mesh[2];
-                        _nonorth_dot_z(weight_yz+(iy-ny0)*ngridz, pweights,
-                                       mesh[2], nz0, nz1, grid_close_to_zij,
-                                       exp_z0z0, exp_z0dz, exp_dzdz, _z0dz, _dzdz);
+if (nimgz == 1) {
+        _nonorth_dot_z_1img(weight_yz+(iy-ny0)*ngridz, pweights,
+                            mesh[2], nz0, nz1, grid_close_to_zij,
+                            exp_z0z0, exp_z0dz, exp_dzdz, _z0dz, _dzdz);
+} else {
+        _nonorth_dot_z(weight_yz+(iy-ny0)*ngridz, pweights,
+                       mesh[2], nz0, nz1, grid_close_to_zij,
+                       exp_z0z0, exp_z0dz, exp_dzdz, _z0dz, _dzdz);
+}
                         _z0dz += _dydz;
                         exp_z0z0 *= exp_y0dy;
                         exp_z0dz *= exp_dydz;
@@ -1209,9 +1306,15 @@ static void _nonorth_ints(double *out, double *weights, double fac, double aij,
                                 exp_z0dz = exp(_z0dz);
                         }
                         pweights = weights + (ix1 * mesh[1] + iy1) * mesh[2];
-                        _nonorth_dot_z(weight_yz+(iy-ny0)*ngridz, pweights,
-                                       mesh[2], nz0, nz1, grid_close_to_zij,
-                                       exp_z0z0, exp_z0dz, exp_dzdz, _z0dz, _dzdz);
+if (nimgz == 1) {
+        _nonorth_dot_z_1img(weight_yz+(iy-ny0)*ngridz, pweights,
+                            mesh[2], nz0, nz1, grid_close_to_zij,
+                            exp_z0z0, exp_z0dz, exp_dzdz, _z0dz, _dzdz);
+} else {
+        _nonorth_dot_z(weight_yz+(iy-ny0)*ngridz, pweights,
+                       mesh[2], nz0, nz1, grid_close_to_zij,
+                       exp_z0z0, exp_z0dz, exp_dzdz, _z0dz, _dzdz);
+}
                 }
 
                 dgemm_(&TRANS_N, &TRANS_N, &ngridz, &l1, &ngridy,
@@ -1953,6 +2056,49 @@ static void _nonorth_rho_z(double *rho, double *rhoz, int offset, int meshz,
         }
 }
 
+static void _nonorth_rho_z_1img(double *rho, double *rhoz, int offset, int meshz,
+                                int nz0, int nz1, int grid_close_to_zij,
+                                double e_z0z0, double e_z0dz, double e_dzdz,
+                                double _z0dz, double _dzdz)
+{
+        if (e_z0z0 == 0) {
+                return;
+        }
+
+        double exp_2dzdz = e_dzdz * e_dzdz;
+        double exp_z0z0, exp_z0dz;
+        int iz, iz1;
+
+        rho -= offset;  // for the original indexing rho[iz1-offset]
+        exp_z0z0 = e_z0z0;
+        exp_z0dz = e_z0dz * e_dzdz;
+        iz1 = grid_close_to_zij % meshz;
+        if (iz1 < 0) {
+                iz1 += meshz;
+        }
+        for (iz = grid_close_to_zij-nz0; iz < nz1-nz0; iz++, iz1++) {
+                rho[iz1] += rhoz[iz] * exp_z0z0;
+                exp_z0z0 *= exp_z0dz;
+                exp_z0dz *= exp_2dzdz;
+        }
+
+        exp_z0z0 = e_z0z0;
+        if (e_z0dz != 0) {
+                exp_z0dz = e_dzdz / e_z0dz;
+        } else {
+                exp_z0dz = exp(_dzdz - _z0dz);
+        }
+        iz1 = (grid_close_to_zij-1) % meshz;
+        if (iz1 < 0) {
+                iz1 += meshz;
+        }
+        for (iz = grid_close_to_zij-nz0-1; iz >= 0; iz--, iz1--) {
+                exp_z0z0 *= exp_z0dz;
+                exp_z0dz *= exp_2dzdz;
+                rho[iz1] += rhoz[iz] * exp_z0z0;
+        }
+}
+
 static void _nonorth_rho_z_with_mask(double *rho, double *rhoz, char *skip,
                                      int offset, int submeshz, int meshz,
                                      int nz0, int nz1, int grid_close_to_zij,
@@ -2025,23 +2171,6 @@ static int _make_grid_mask(char *skip, int nx0, int nx1, int mesh,
         return 1;
 }
 
-#define CALL_RHO_Z \
-dgemm_(&TRANS_N, &TRANS_T, &ngridz, &inc1, &l1, \
-       &D1, xqr+iy*ngridz, &xcols, xs_exp+ix, &ngridx, \
-       &D0, rhoz, &ngridz); \
-prho = rho + ((ix1-offset[0])*submesh[1] + iy1-offset[1]) * submesh[2]; \
-if (with_z_mask) { \
-        _nonorth_rho_z_with_mask(prho, rhoz, z_skip, \
-                                 offset[2], submesh[2], mesh[2], \
-                                 nz0, nz1, grid_close_to_zij, \
-                                 exp_z0z0, exp_z0dz, exp_dzdz, \
-                                 _z0dz, _dzdz); \
-} else { \
-        _nonorth_rho_z(prho, rhoz, offset[2], mesh[2], \
-                       nz0, nz1, grid_close_to_zij, \
-                       exp_z0z0, exp_z0dz, exp_dzdz, _z0dz, _dzdz); \
-}
-
 static void _nonorth_rho(double *rho, double *dm_xyz,
                          double fac, double aij, int topl, int dimension,
                          double *a, double *rij_frac,
@@ -2060,6 +2189,15 @@ static void _nonorth_rho(double *rho, double *dm_xyz,
         int ngridx = nx1 - nx0;
         int ngridy = ny1 - ny0;
         int ngridz = nz1 - nz0;
+        //int nimgx0 = img_slice[0];
+        //int nimgx1 = img_slice[1];
+        //int nimgy0 = img_slice[2];
+        //int nimgy1 = img_slice[3];
+        int nimgz0 = img_slice[4];
+        int nimgz1 = img_slice[5];
+        //int nimgx = nimgx1 - nimgx0;
+        //int nimgy = nimgy1 - nimgy0;
+        int nimgz = nimgz1 - nimgz0;
 
         const char TRANS_T = 'T';
         const char TRANS_N = 'N';
@@ -2182,7 +2320,25 @@ static void _nonorth_rho(double *rho, double *dm_xyz,
                                 iy1 -= mesh[1];
                         }
                         if (!with_y_mask || !y_skip[iy]) {
-                                CALL_RHO_Z;
+dgemm_(&TRANS_N, &TRANS_T, &ngridz, &inc1, &l1,
+       &D1, xqr+iy*ngridz, &xcols, xs_exp+ix, &ngridx,
+       &D0, rhoz, &ngridz);
+prho = rho + ((ix1-offset[0])*submesh[1] + iy1-offset[1]) * submesh[2];
+if (nimgz == 1) {
+        _nonorth_rho_z_1img(prho, rhoz, offset[2], mesh[2],
+                            nz0, nz1, grid_close_to_zij,
+                            exp_z0z0, exp_z0dz, exp_dzdz, _z0dz, _dzdz);
+} else if (with_z_mask) {
+        _nonorth_rho_z_with_mask(prho, rhoz, z_skip,
+                                 offset[2], submesh[2], mesh[2],
+                                 nz0, nz1, grid_close_to_zij,
+                                 exp_z0z0, exp_z0dz, exp_dzdz,
+                                 _z0dz, _dzdz);
+} else {
+        _nonorth_rho_z(prho, rhoz, offset[2], mesh[2],
+                       nz0, nz1, grid_close_to_zij,
+                       exp_z0z0, exp_z0dz, exp_dzdz, _z0dz, _dzdz);
+}
                         }
                         _z0dz += _dydz;
                         exp_z0z0 *= exp_y0dy;
@@ -2212,7 +2368,25 @@ static void _nonorth_rho(double *rho, double *dm_xyz,
                                 iy1 += mesh[1];
                         }
                         if (!with_y_mask || !y_skip[iy]) {
-                                CALL_RHO_Z;
+dgemm_(&TRANS_N, &TRANS_T, &ngridz, &inc1, &l1,
+       &D1, xqr+iy*ngridz, &xcols, xs_exp+ix, &ngridx,
+       &D0, rhoz, &ngridz);
+prho = rho + ((ix1-offset[0])*submesh[1] + iy1-offset[1]) * submesh[2];
+if (nimgz == 1) {
+        _nonorth_rho_z_1img(prho, rhoz, offset[2], mesh[2],
+                            nz0, nz1, grid_close_to_zij,
+                            exp_z0z0, exp_z0dz, exp_dzdz, _z0dz, _dzdz);
+} else if (with_z_mask) {
+        _nonorth_rho_z_with_mask(prho, rhoz, z_skip,
+                                 offset[2], submesh[2], mesh[2],
+                                 nz0, nz1, grid_close_to_zij,
+                                 exp_z0z0, exp_z0dz, exp_dzdz,
+                                 _z0dz, _dzdz);
+} else {
+        _nonorth_rho_z(prho, rhoz, offset[2], mesh[2],
+                       nz0, nz1, grid_close_to_zij,
+                       exp_z0z0, exp_z0dz, exp_dzdz, _z0dz, _dzdz);
+}
                         }
                 }
         }

@@ -46,7 +46,8 @@ from pyscf import __config__
 BLKSIZE = numint.BLKSIZE
 EXTRA_PREC = getattr(__config__, 'pbc_gto_eval_gto_extra_precision', 1e-2)
 TO_EVEN_GRIDS = getattr(__config__, 'pbc_dft_multigrid_to_even', False)
-RMAX_FACTOR = getattr(__config__, 'pbc_dft_multigrid_rmax_factor', 1.1)
+RMAX_FACTOR_ORTH = getattr(__config__, 'pbc_dft_multigrid_rmax_factor_orth', 1.1)
+RMAX_FACTOR_NONORTH = getattr(__config__, 'pbc_dft_multigrid_rmax_factor_nonorth', 0.5)
 RMAX_RATIO = getattr(__config__, 'pbc_dft_multigrid_rmax_ratio', 0.7)
 R_RATIO_SUBLOOP = getattr(__config__, 'pbc_dft_multigrid_r_ratio_subloop', 0.6)
 
@@ -60,7 +61,7 @@ WITH_J = getattr(__config__, 'pbc_dft_multigrid_with_j', False)
 J_IN_XC = getattr(__config__, 'pbc_dft_multigrid_j_in_xc', True)
 
 PTR_EXPDROP = 16
-EXPDROP = getattr(__config__, 'pbc_dft_multigrid_expdrop', 1e-14)
+EXPDROP = getattr(__config__, 'pbc_dft_multigrid_expdrop', 1e-12)
 
 
 def eval_mat(cell, weights, shls_slice=None, comp=1, hermi=0,
@@ -68,7 +69,7 @@ def eval_mat(cell, weights, shls_slice=None, comp=1, hermi=0,
     assert(all(cell._bas[:,gto.mole.NPRIM_OF] == 1))
     atm, bas, env = gto.conc_env(cell._atm, cell._bas, cell._env,
                                  cell._atm, cell._bas, cell._env)
-    env[PTR_EXPDROP] = min(cell.precision*.1, EXPDROP)
+    env[PTR_EXPDROP] = min(cell.precision*EXTRA_PREC, EXPDROP)
     ao_loc = gto.moleintor.make_loc(bas, 'cart')
     if shls_slice is None:
         shls_slice = (0, cell.nbas, 0, cell.nbas)
@@ -166,7 +167,7 @@ def eval_rho(cell, dm, shls_slice=None, hermi=0, xctype='LDA', kpts=None,
     assert(all(cell._bas[:,gto.mole.NPRIM_OF] == 1))
     atm, bas, env = gto.conc_env(cell._atm, cell._bas, cell._env,
                                  cell._atm, cell._bas, cell._env)
-    env[PTR_EXPDROP] = min(cell.precision*.1, EXPDROP)
+    env[PTR_EXPDROP] = min(cell.precision*EXTRA_PREC, EXPDROP)
     ao_loc = gto.moleintor.make_loc(bas, 'cart')
     if shls_slice is None:
         shls_slice = (0, cell.nbas, 0, cell.nbas)
@@ -274,11 +275,11 @@ def eval_rho(cell, dm, shls_slice=None, hermi=0, xctype='LDA', kpts=None,
 
             if has_imag:
                 if out is None:
-                    rho_i  = make_rho(rho_i, dmI)*1j
-                    rho_i += make_rho(numpy.zeros(shape), dmR)
+                    rho_i  = make_rho_(rho_i, dmI)*1j
+                    rho_i += make_rho_(numpy.zeros(shape), dmR)
                 else:
-                    out[i]  = make_rho(numpy.zeros(shape), dmI)*1j
-                    out[i] += make_rho(numpy.zeros(shape), dmR)
+                    out[i]  = make_rho_(numpy.zeros(shape), dmI)*1j
+                    out[i] += make_rho_(numpy.zeros(shape), dmR)
             else:
                 assert(rho_i.dtype == numpy.double)
                 make_rho_(rho_i, dmR)
@@ -463,7 +464,7 @@ def _eval_rhoG(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), deriv=0):
     ignore_imag = (hermi == 1)
 
     ni = mydf._numint
-    nx, ny, nz = cell.mesh
+    nx, ny, nz = mydf.mesh
     rhoG = numpy.zeros((nset*rhodim,nx,ny,nz), dtype=numpy.complex128)
     for grids_dense, grids_sparse in tasks:
         h_cell = grids_dense.cell
@@ -560,7 +561,7 @@ def _eval_rhoG(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), deriv=0):
         #:rhoG[:,gx[:,None,None],gy[:,None],gz] += rho_freq.reshape((-1,)+mesh)
         _takebak_4d(rhoG, rho_freq.reshape((-1,) + mesh), (None, gx, gy, gz))
 
-    return rhoG.reshape(nset,rhodim,ngrids)
+    return rhoG.reshape(nset,rhodim,-1)
 
 
 def _eval_rho_bra(cell, dms, shls_slice, hermi, xctype, kpts, grids,
@@ -1180,7 +1181,10 @@ def multi_grids_tasks(cell, fft_mesh=None, verbose=None):
 
     tasks = []
     a = cell.lattice_vectors()
-    rmax = a.max() * RMAX_FACTOR
+    if abs(a-numpy.diag(a.diagonal())).max() < 1e-12:
+        rmax = a.max() * RMAX_FACTOR_ORTH
+    else:
+        rmax = a.max() * RMAX_FACTOR_NONORTH
     n_delimeter = int(numpy.log(0.005/rmax) / numpy.log(RMAX_RATIO))
     rcut_delimeter = rmax * (RMAX_RATIO ** numpy.arange(n_delimeter))
     for r0, r1 in zip(numpy.append(1e9, rcut_delimeter),
@@ -1385,40 +1389,42 @@ if __name__ == '__main__':
     nao = cell.nao_nr()
     numpy.random.seed(1)
     kpts = cell.make_kpts([3,1,1])
-    MultiGridFFTDF(cell).get_pp()
-    exit()
+    #MultiGridFFTDF(cell).get_pp()
     #MultiGridFFTDF(cell).get_pp(kpts)
 
     dm = numpy.random.random((len(kpts),nao,nao)) * .2
     dm += numpy.eye(nao)
     dm = dm + dm.transpose(0,2,1)
+    #dm = scf.KRHF(cell, kpts).get_init_guess()
     #dm = cell.pbc_intor('int1e_ovlp', kpts=kpts)
     t0 = time.time()
     #print(time.clock())
     ref = -12.3081960302+5.12330442322j
     ref = -7.24693684646+8.47418441584j
-    #mydf = df.FFTDF(cell)
-    #ref = fft_jk.get_j_kpts(mydf, dm, kpts=kpts)
-    print(time.clock(), time.time()-t0)
-    mydf = MultiGridFFTDF(cell)
-    v = get_j_kpts(mydf, dm, kpts=kpts)
-    #ref = numpy.load('ref.npy')
-    print(time.clock(), time.time()-t0)
-    #print('diff', abs(ref-v).max())
-    print('diff', lib.finger(v)-ref)
-    exit()
+#    #ref = numpy.load('ref.npy')
+#    #out = fft_jk.get_j_kpts(df.FFTDF(cell), dm, kpts=kpts)
+#    #print abs(ref-out).max()
+#    print(time.clock(), time.time()-t0)
+#    mydf = MultiGridFFTDF(cell)
+#    v = get_j_kpts(mydf, dm, kpts=kpts)
+#    #ref = numpy.load('ref.npy')
+#    print(time.clock(), time.time()-t0)
+#    #print('diff', abs(ref-v).max())
+#    print('diff', lib.finger(v)-ref)
+#    exit()
 
     print(time.clock())
     #xc = 'lda,vwn'
     xc = 'pbe'
-#    mydf = df.FFTDF(cell)
-#    mydf.grids.build()
-    n, exc, ref = mydf._numint.nr_rks(cell, mydf.grids, xc, dm, 0, kpts)
+    #mydf = df.FFTDF(cell)
+    #n, exc, ref = mydf._numint.nr_rks(cell, mydf.grids, xc, dm, 0, kpts)
+    ref = numpy.load('ref.npy')
     print(time.clock())
     mydf = MultiGridFFTDF(cell)
     n, exc, vxc, vj = rks_j_xc(mydf, dm, xc, kpts=kpts, j_in_xc=False, with_j=False)
     print(time.clock())
     print('diff', abs(ref-vxc).max())
+    exit()
     #print('diff', lib.finger(vxc)-ref)
     n, exc, vxc, vj = uks_j_xc(mydf, [dm*.5]*2, xc, kpts=kpts, j_in_xc=False, with_j=False)
     print('diff', abs(ref-vxc[0]).max())

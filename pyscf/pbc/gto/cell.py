@@ -459,12 +459,24 @@ def bas_rcut(cell, bas_id, precision=INTEGRAL_PRECISION):
 
 def _estimate_ke_cutoff(alpha, l, c, precision=INTEGRAL_PRECISION, weight=1.):
     '''Energy cutoff estimation'''
+    #if l == 0:
+    #    log_k0 = 2.5 + np.log(alpha) / 2
+    #    log_rest = np.log(2*alpha*16*np.pi**2*c**4/precision)
+    #    Ecut = (log_rest - log_k0) * 2 * alpha
+    #    Ecut[Ecut <= 0] = .5
+    #    log_k0 = .5 * np.log(Ecut*2)
+    #    Ecut = (log_rest - log_k0) * 2 * alpha
+    #    Ecut[Ecut <= 0] = .5
+    #    return Ecut
+
     log_k0 = 2.5 + np.log(alpha) / 2
     l2fac2 = scipy.misc.factorial2(l*2+1)
-    log_rest = np.log(precision*l2fac2**2*(4*alpha)**(l*2+1) / (32*np.pi**2*c**4*weight))
+    log_rest = np.log(precision*l2fac2**2*(4*alpha)**(l*2+1) / (32*np.pi**2*c**4))
     Ecut = 2*alpha * (log_k0*(4*l+3) - log_rest)
-    log_k0 = .5 * np.log(abs(Ecut)*2)
+    Ecut[Ecut <= 0] = .5
+    log_k0 = .5 * np.log(Ecut*2)
     Ecut = 2*alpha * (log_k0*(4*l+3) - log_rest)
+    Ecut[Ecut <= 0] = .5
     return Ecut
 
 def estimate_ke_cutoff(cell, precision=INTEGRAL_PRECISION):
