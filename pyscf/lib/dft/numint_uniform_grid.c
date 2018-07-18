@@ -246,21 +246,24 @@ static int _orth_components(double *xs_exp, int *img_slice, int *grid_slice,
                 return 0;
         }
 
+        int nimg0 = 0;
+        int nimg1 = 1;
+// If submesh is not identical to mesh, it means the product of the basis
+// functions should be completely inside the unit cell. Only one image needs to
+// be considered.
         if (offset != 0 || submesh != nx_per_cell) {
 // |i> is the steep function and centered inside image 0. Moving |j> all around
 // will not change the center of |ij>. The periodic system can be treated as
 // non-periodic system so that only one image needs to be considered.
-                periodic = 0;
-        }
-
-        int nimg0 = 0;
-        int nimg1 = 1;
-        if (periodic) {
+                nimg0 = (int)floor(xij_frac);
+                nimg1 = nimg0 + 1;
+                edge0 = MAX(edge0, nimg0);
+                edge1 = MIN(edge1, nimg1);
+        } else if (periodic) {
                 nimg0 = (int)floor(edge0);
                 nimg1 = (int)ceil (edge1);
         }
         int nimg = nimg1 - nimg0;
-
         int nmx0 = nimg0 * nx_per_cell;
         int nmx1 = nimg1 * nx_per_cell;
         int nmx = nmx1 - nmx0;
@@ -308,10 +311,8 @@ static int _orth_components(double *xs_exp, int *img_slice, int *grid_slice,
                 nx1_edge = nmx;
         }
         int grid_close_to_xij = rint(xij_frac * nx_per_cell) - nmx0;
-        if (!periodic) {
-                grid_close_to_xij = MIN(grid_close_to_xij, nx_per_cell);
-                grid_close_to_xij = MAX(grid_close_to_xij, 0);
-        }
+        grid_close_to_xij = MIN(grid_close_to_xij, nx1_edge);
+        grid_close_to_xij = MAX(grid_close_to_xij, nx0_edge);
 
         double img0_x = a * nimg0;
         double dx = a / nx_per_cell;
@@ -959,8 +960,11 @@ static int _nonorth_components(double *xs_exp, int *img_slice, int *grid_slice,
         double heights_inv = sqrt(SQUARE(b));
         double edge0 = xij_frac - cutoff * heights_inv;
         double edge1 = xij_frac + cutoff * heights_inv;
-        if (offset != 0 || submesh != nx_per_cell) {
-                periodic = 0;
+        if (edge0 == edge1) {
+// cutoff may be so small that it does not provide difference to edge0 and
+// edge1. When edge0 and edge1 are right on the edge of the box (== integer),
+// nimg0 may be equal to nimg1 and nimg can be 0.  Skip this extreme condition.
+                return 0;
         }
 
         int nimg0 = 0;
@@ -968,19 +972,29 @@ static int _nonorth_components(double *xs_exp, int *img_slice, int *grid_slice,
 // If submesh is not identical to mesh, it means the product of the basis
 // functions should be completely inside the unit cell. Only one image needs to
 // be considered.
-        if (periodic) {
+        if (offset != 0 || submesh != nx_per_cell) {
+// |i> is the steep function and centered inside image 0. Moving |j> all around
+// will not change the center of |ij>. The periodic system can be treated as
+// non-periodic system so that only one image needs to be considered.
+                nimg0 = (int)floor(xij_frac);
+                nimg1 = nimg0 + 1;
+                edge0 = MAX(edge0, nimg0);
+                edge1 = MIN(edge1, nimg1);
+        } else if (periodic) {
                 nimg0 = (int)floor(edge0);
                 nimg1 = (int)ceil (edge1);
         }
+        int nimg = nimg1 - nimg0;
+        int nmx0 = nimg0 * nx_per_cell;
 
         int nx0 = (int)floor(edge0 * nx_per_cell);
         int nx1 = (int)ceil (edge1 * nx_per_cell);
-        if (!periodic) {
+        if (nimg == 1) {
                 // to ensure nx0, nx1 in unit cell
-                nx0 = MIN(nx0, offset + submesh);
-                nx0 = MAX(nx0, offset);
-                nx1 = MIN(nx1, offset + submesh);
-                nx1 = MAX(nx1, offset);
+                nx0 = MIN(nx0, nmx0 + offset + submesh);
+                nx0 = MAX(nx0, nmx0 + offset);
+                nx1 = MIN(nx1, nmx0 + offset + submesh);
+                nx1 = MAX(nx1, nmx0 + offset);
         }
 
         img_slice[0] = nimg0;
@@ -1196,18 +1210,12 @@ static void _nonorth_ints(double *out, double *weights, double fac, double aij,
         //int grid_close_to_xij = rint(rij_frac[0] * mesh[0]);
         int grid_close_to_yij = rint(rij_frac[1] * mesh[1]);
         int grid_close_to_zij = rint(rij_frac[2] * mesh[2]);
-        //if (dimension < 1) {
-        //        grid_close_to_xij = MIN(grid_close_to_xij, mesh[0]);
-        //        grid_close_to_xij = MAX(grid_close_to_xij, 0);
-        //}
-        if (dimension < 2) {
-                grid_close_to_yij = MIN(grid_close_to_yij, mesh[1]);
-                grid_close_to_yij = MAX(grid_close_to_yij, 0);
-        }
-        if (dimension < 3) {
-                grid_close_to_zij = MIN(grid_close_to_zij, mesh[2]);
-                grid_close_to_zij = MAX(grid_close_to_zij, 0);
-        }
+        //grid_close_to_xij = MIN(grid_close_to_xij, nx1);
+        //grid_close_to_xij = MAX(grid_close_to_xij, nx0);
+        grid_close_to_yij = MIN(grid_close_to_yij, ny1);
+        grid_close_to_yij = MAX(grid_close_to_yij, ny0);
+        grid_close_to_zij = MIN(grid_close_to_zij, nz1);
+        grid_close_to_zij = MAX(grid_close_to_zij, nz0);
 
         double img0_x = 0;
         double img0_y = 0;
@@ -2224,18 +2232,12 @@ static void _nonorth_rho(double *rho, double *dm_xyz,
         //int grid_close_to_xij = rint(rij_frac[0] * mesh[0]);
         int grid_close_to_yij = rint(rij_frac[1] * mesh[1]);
         int grid_close_to_zij = rint(rij_frac[2] * mesh[2]);
-        //if (dimension < 1) {
-        //        grid_close_to_xij = MIN(grid_close_to_xij, mesh[0]);
-        //        grid_close_to_xij = MAX(grid_close_to_xij, 0);
-        //}
-        if (dimension < 2) {
-                grid_close_to_yij = MIN(grid_close_to_yij, mesh[1]);
-                grid_close_to_yij = MAX(grid_close_to_yij, 0);
-        }
-        if (dimension < 3) {
-                grid_close_to_zij = MIN(grid_close_to_zij, mesh[2]);
-                grid_close_to_zij = MAX(grid_close_to_zij, 0);
-        }
+        //grid_close_to_xij = MIN(grid_close_to_xij, nx1);
+        //grid_close_to_xij = MAX(grid_close_to_xij, nx0);
+        grid_close_to_yij = MIN(grid_close_to_yij, ny1);
+        grid_close_to_yij = MAX(grid_close_to_yij, ny0);
+        grid_close_to_zij = MIN(grid_close_to_zij, nz1);
+        grid_close_to_zij = MAX(grid_close_to_zij, nz0);
 
         double img0_x = 0;
         double img0_y = 0;
@@ -2714,7 +2716,7 @@ void NUMINT_rho_drv(void (*eval_rho)(), double *rho, double *F_dm,
                 i0 = ao_loc[ish] - ao_loc[ish0];
                 j0 = ao_loc[jsh] - ao_loc[jsh0];
                 if (dimension != 0) {
-                        ptrxyz = atm(PTR_COORD, bas(ATOM_OF,jsh));
+                        ptrxyz = atm(PTR_COORD, bas(ATOM_OF,ish));
                         shift_bas(env_loc, env, Ls, ptrxyz, m);
                 }
                 _apply_rho(eval_rho, rho_priv, F_dm+m*ncij+j0*naoi+i0,

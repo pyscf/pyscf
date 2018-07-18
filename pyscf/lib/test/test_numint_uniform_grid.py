@@ -225,8 +225,8 @@ class KnownValues(unittest.TestCase):
         dm = numpy.random.random((nao,nao))
         dm = dm + dm.T
         ref = numpy.einsum('gi,ij,gj->g', ao, dm, ao.conj())
-        ref = ref.reshape(cell.mesh)[1:6,1:5,1:4].ravel()
-        out = eval_rho(cell, dm, offset=[1,1,1], submesh=[5,4,3])
+        ref = ref.reshape(cell.mesh)[1:6,2:5,2:4].ravel()
+        out = eval_rho(cell, dm, offset=[1,2,2], submesh=[5,3,2])
         self.assertAlmostEqual(abs(out-ref).max(), 0, 9)
 
     def test_pbc_orth_lda_rho_kpts(self):
