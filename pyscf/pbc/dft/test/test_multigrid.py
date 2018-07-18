@@ -113,6 +113,8 @@ class KnownValues(unittest.TestCase):
         ref = mf.get_veff(cell_he, numpy.array((dm_he,dm_he)), kpts=kpts)
         out = multigrid.multigrid(mf).get_veff(cell_he, (dm_he,dm_he), kpts=kpts)
         self.assertAlmostEqual(float(abs(ref-out).max()), 0, 9)
+        self.assertAlmostEqual(abs(ref.exc-out.exc).max(), 0, 9)
+        self.assertAlmostEqual(abs(ref.ecoul-out.ecoul).max(), 0, 9)
 
     def test_multigrid_krks(self):
         mf = dft.KRKS(cell_he)
@@ -120,6 +122,8 @@ class KnownValues(unittest.TestCase):
         ref = mf.get_veff(cell_he, dm_he, kpts=kpts)
         out = multigrid.multigrid(mf).get_veff(cell_he, dm_he, kpts=kpts)
         self.assertAlmostEqual(float(abs(ref-out).max()), 0, 9)
+        self.assertAlmostEqual(abs(ref.exc-out.exc).max(), 0, 9)
+        self.assertAlmostEqual(abs(ref.ecoul-out.ecoul).max(), 0, 9)
 
     def test_multigrid_kroks(self):
         mf = dft.KROKS(cell_he)
@@ -133,6 +137,8 @@ class KnownValues(unittest.TestCase):
         ref = mf.get_veff(cell_he, dm1, kpts=kpts)
         out = multigrid.multigrid(mf).get_veff(cell_he, dm1, kpts=kpts)
         self.assertAlmostEqual(float(abs(ref-out).max()), 0, 9)
+        self.assertAlmostEqual(abs(ref.exc-out.exc).max(), 0, 9)
+        self.assertAlmostEqual(abs(ref.ecoul-out.ecoul).max(), 0, 9)
 
     def test_multigrid_uks(self):
         mf = dft.UKS(cell_he)
@@ -140,6 +146,8 @@ class KnownValues(unittest.TestCase):
         ref = mf.get_veff(cell_he, numpy.array((dm_he[0],dm_he[0])))
         out = multigrid.multigrid(mf).get_veff(cell_he, (dm_he[0], dm_he[0]))
         self.assertAlmostEqual(float(abs(ref-out).max()), 0, 9)
+        self.assertAlmostEqual(abs(ref.exc-out.exc).max(), 0, 9)
+        self.assertAlmostEqual(abs(ref.ecoul-out.ecoul).max(), 0, 9)
 
     def test_multigrid_rks(self):
         mf = dft.RKS(cell_he)
@@ -147,6 +155,8 @@ class KnownValues(unittest.TestCase):
         ref = mf.get_veff(cell_he, dm_he[0])
         out = multigrid.multigrid(mf).get_veff(cell_he, dm_he[0])
         self.assertAlmostEqual(float(abs(ref-out).max()), 0, 9)
+        self.assertAlmostEqual(abs(ref.exc-out.exc).max(), 0, 9)
+        self.assertAlmostEqual(abs(ref.ecoul-out.ecoul).max(), 0, 9)
 
     def test_multigrid_roks(self):
         mf = dft.ROKS(cell_he)
@@ -160,6 +170,8 @@ class KnownValues(unittest.TestCase):
         ref = mf.get_veff(cell_he, dm1)
         out = multigrid.multigrid(mf).get_veff(cell_he, dm1)
         self.assertAlmostEqual(float(abs(ref-out).max()), 0, 9)
+        self.assertAlmostEqual(abs(ref.exc-out.exc).max(), 0, 9)
+        self.assertAlmostEqual(abs(ref.ecoul-out.ecoul).max(), 0, 9)
 
     def test_orth_rks_gga_kpts(self):
         xc = 'b88,'

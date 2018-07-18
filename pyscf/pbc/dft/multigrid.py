@@ -923,6 +923,7 @@ def rks_j_xc(mydf, dm_kpts, xc_code, hermi=1, kpts=numpy.zeros((1,3)),
     vG = numpy.einsum('ng,g->ng', rhoG[:,0], coulG)
     ecoul = .5 * numpy.einsum('ng,ng->n', rhoG[:,0].real, vG.real)
     ecoul+= .5 * numpy.einsum('ng,ng->n', rhoG[:,0].imag, vG.imag)
+    ecoul /= cell.vol
     log.debug('Coulomb energy %s', ecoul)
 
     weight = cell.vol / ngrids
@@ -1032,6 +1033,7 @@ def uks_j_xc(mydf, dm_kpts, xc_code, hermi=1, kpts=numpy.zeros((1,3)),
     vG = numpy.einsum('ng,g->g', rhoG[:,0], coulG)
     ecoul = .5 * numpy.einsum('ng,g->', rhoG[:,0].real, vG.real)
     ecoul+= .5 * numpy.einsum('ng,g->', rhoG[:,0].imag, vG.imag)
+    ecoul /= cell.vol
     log.debug('Coulomb energy %s', ecoul)
 
     weight = cell.vol / ngrids
