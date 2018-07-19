@@ -946,21 +946,22 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
         nelec[i] += rhoR[i,0].sum() * weight
         excsum[i] += (rhoR[i,0]*exc).sum() * weight
         wv_freq.append(tools.fft(wv, mesh))
-
+    rhoR = rhoG = None
     wv_freq = numpy.asarray(wv_freq).reshape(nset,-1,*mesh)
-    if with_j:
-        wv_freq[:,0] += vG.reshape(nset,*mesh)
 
     if nset == 1:
         ecoul = ecoul[0]
         nelec = nelec[0]
         excsum = excsum[0]
-    rhoR = rhoG = None
 
     kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
     if xctype == 'LDA':
+        if with_j:
+            wv_freq[:,0] += vG.reshape(nset,*mesh)
         veff = _get_j_pass2(mydf, wv_freq, kpts_band, verbose=log)
     elif xctype == 'GGA':
+        if with_j:  # *.5 because v+v.T.conj() is evaluated in _get_gga_pass2
+            wv_freq[:,0] += vG.reshape(nset,*mesh) * .5
         veff = _get_gga_pass2(mydf, wv_freq, kpts_band, verbose=log)
     veff = _format_jks(veff, dm_kpts, input_band, kpts)
 
@@ -1050,14 +1051,16 @@ def nr_uks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     excsum += (rhoR[1,0]*exc).sum() * weight
     wv_freq = tools.fft(numpy.vstack((wva,wvb)), mesh)
     wv_freq = wv_freq.reshape(2,-1,*mesh)
-    if with_j:
-        wv_freq[:,0] += vG.reshape(*mesh)
     rhoR = rhoG = None
 
     kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
     if xctype == 'LDA':
+        if with_j:
+            wv_freq[:,0] += vG.reshape(*mesh)
         veff = _get_j_pass2(mydf, wv_freq, kpts_band, verbose=log)
     elif xctype == 'GGA':
+        if with_j:  # *.5 because v+v.T.conj() is evaluated in _get_gga_pass2
+            wv_freq[:,0] += vG.reshape(*mesh) * .5
         veff = _get_gga_pass2(mydf, wv_freq, kpts_band, verbose=log)
     veff = _format_jks(veff, dm_kpts, input_band, kpts)
 
@@ -1650,7 +1653,7 @@ if __name__ == '__main__':
     dm = dm + dm.transpose(0,2,1)
 
     mf = dft.KRKS(cell)
-    ref = mf.get_veff(cell, dm, kpts=kpts)[0]
+    ref = mf.get_veff(cell, dm, kpts=kpts)
     out = multigrid(mf).get_veff(cell, dm, kpts=kpts)
     print(abs(ref-out).max())
 

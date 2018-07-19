@@ -179,9 +179,10 @@ class KnownValues(unittest.TestCase):
         xc = 'b88,'
         mydf = df.FFTDF(cell_orth)
         ni = dft.numint.KNumInt()
-        n, exc0, ref = ni.nr_rks(cell_orth, mydf.grids, xc, dm, 0, kpts=kpts)
+        n, exc0, ref = ni.nr_rks(cell_orth, mydf.grids, xc, dm, hermi=1, kpts=kpts)
+        ref += mydf.get_jk(dm, hermi=1, with_k=False, kpts=kpts)[0]
         mydf = multigrid.MultiGridFFTDF(cell_orth)
-        n, exc1, vxc = multigrid.nr_rks(mydf, xc, dm, kpts=kpts, with_j=False)
+        n, exc1, vxc = multigrid.nr_rks(mydf, xc, dm, hermi=1, kpts=kpts, with_j=True)
         self.assertAlmostEqual(float(abs(ref-vxc).max()), 0, 9)
         self.assertAlmostEqual(abs(exc0-exc1).max(), 0, 8)
 
@@ -190,8 +191,10 @@ class KnownValues(unittest.TestCase):
         mydf = df.FFTDF(cell_orth)
         ni = dft.numint.NumInt()
         n, exc0, ref = ni.nr_uks(cell_orth, mydf.grids, xc, dm1, 0)
+        vj = mydf.get_jk(dm1, with_k=False)[0]
+        ref += vj[0] + vj[1]
         mydf = multigrid.MultiGridFFTDF(cell_orth)
-        n, exc1, vxc = multigrid.nr_uks(mydf, xc, dm1, hermi=0, with_j=False)
+        n, exc1, vxc = multigrid.nr_uks(mydf, xc, dm1, hermi=0, with_j=True)
         self.assertAlmostEqual(float(abs(ref-vxc).max()), 0, 9)
         self.assertAlmostEqual(abs(exc0-exc1).max(), 0, 9)
 
@@ -200,8 +203,10 @@ class KnownValues(unittest.TestCase):
         mydf = df.FFTDF(cell_orth)
         ni = dft.numint.NumInt()
         n, exc0, ref = ni.nr_uks(cell_orth, mydf.grids, xc, dm1, 0)
+        vj = mydf.get_jk(dm1, with_k=False)[0]
+        ref += vj[0] + vj[1]
         mydf = multigrid.MultiGridFFTDF(cell_orth)
-        n, exc1, vxc = multigrid.nr_uks(mydf, xc, dm1, hermi=0)
+        n, exc1, vxc = multigrid.nr_uks(mydf, xc, dm1, hermi=0, with_j=True)
         self.assertAlmostEqual(float(abs(ref-vxc).max()), 0, 9)
         self.assertAlmostEqual(abs(exc0-exc1).max(), 0, 8)
 
@@ -355,7 +360,8 @@ class KnownValues(unittest.TestCase):
 
         mf.xc = 'lda,'
         ref = dft.numint.nr_uks_fxc(ni, cell_he, mydf.grids, mf.xc, dm_he, dm1)
-        ref += mydf.get_jk(dm1[0]+dm1[1], with_k=False)[0]
+        vj = mydf.get_jk(dm1, with_k=False)[0]
+        ref += vj[0] + vj[1]
         v = multigrid._gen_uhf_response(mf, dm_he, with_j=True)(dm1)
         self.assertEqual(ref.dtype, v.dtype)
         self.assertEqual(ref.shape, v.shape)
@@ -363,7 +369,8 @@ class KnownValues(unittest.TestCase):
 
         mf.xc = 'b88,'
         ref = dft.numint.nr_uks_fxc(ni, cell_he, mydf.grids, mf.xc, dm_he, dm1)
-        ref += mydf.get_jk(dm1[0]+dm1[1], with_k=False)[0]
+        vj = mydf.get_jk(dm1, with_k=False)[0]
+        ref += vj[0] + vj[1]
         v = multigrid._gen_uhf_response(mf, dm_he, with_j=True)(dm1)
         self.assertEqual(ref.dtype, v.dtype)
         self.assertEqual(ref.shape, v.shape)
