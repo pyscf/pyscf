@@ -1523,7 +1523,7 @@ class MultiGridFFTDF(fft.FFTDF):
         from pyscf.pbc.df import fft_jk
         if with_k:
             logger.warn(self, 'MultiGridFFTDF does not support HFX. '
-                        'The code of FFTDF is called.')
+                        'The FFTDF get_jk function is called.')
 
         if kpts is None:
             if numpy.all(self.kpts == 0): # Gamma-point J/K by default
@@ -1555,7 +1555,9 @@ def multigrid(mf):
     '''
     from pyscf.pbc import dft
     mf.with_df, old_df = MultiGridFFTDF(mf.cell), mf.with_df
+    keys = mf.with_df._keys
     mf.with_df.__dict__.update(old_df.__dict__)
+    mf.with_df._keys = keys
     return mf
 
 
