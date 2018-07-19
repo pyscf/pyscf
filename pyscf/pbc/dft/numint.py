@@ -782,8 +782,8 @@ def nr_uks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
     if ((xctype == 'LDA' and fxc is None) or
         (xctype == 'GGA' and rho0 is None)):
         dm0a, dm0b = _format_uks_dm(dms)
-        make_rho0a = ni._gen_rho_evaluator(cell, dm0a, 1)
-        make_rho0b = ni._gen_rho_evaluator(cell, dm0b, 1)
+        make_rho0a = ni._gen_rho_evaluator(cell, dm0a, 1)[0]
+        make_rho0b = ni._gen_rho_evaluator(cell, dm0b, 1)[0]
 
     shls_slice = (0, cell.nbas)
     ao_loc = cell.ao_loc_nr()
