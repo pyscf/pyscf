@@ -48,9 +48,9 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     hybrid = abs(hyb) > 1e-10
 
     if not hybrid and isinstance(ks.with_df, multigrid.MultiGridFFTDF):
-        n, exc, vxc = multigrid.uks_j_xc(ks.with_df, dm, ks.xc, hermi,
-                                         kpts, kpts_band,
-                                         with_j=False, j_in_xc=True)[:3]
+        n, exc, vxc = multigrid.nr_uks(ks.with_df, ks.xc, dm, hermi,
+                                       kpts, kpts_band,
+                                       with_j=True, return_j=False)
         logger.debug(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
         return vxc

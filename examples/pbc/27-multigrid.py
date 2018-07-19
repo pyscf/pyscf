@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 '''
-Use multigrid to accelerate DFT numerical integration.
+Use multi-grid to accelerate DFT numerical integration.
 '''
 
 import numpy
@@ -25,9 +25,29 @@ cell = gto.M(
     #pseudo = 'gth-pade'
 )
 
+mf = dft.UKS(cell)
+mf.xc = 'lda,vwn'
+
+#
+# There are two ways to enable multigrid numerical integration
+#
+# Method 1: use multigrid.multigrid function to update SCF object
+#
+mf = multigrid.multigrid(mf)
+mf.kernel()
+
+#
+# Method 2: MultiGridFFTDF is a DF object.  It can be enabled by overwriting
+# the default with_df object.
+#
 kpts = cell.make_kpts([4,4,4])
 mf = dft.KRKS(cell, kpts)
 mf.xc = 'lda,vwn'
+mf.with_df = multigrid.MultiGridFFTDF(cell, kpts)
+mf.kernel()
 
-multigrid.multigrid(mf).kernel()
-
+#
+# MultiGridFFTDF can be used with second order SCF solver.
+#
+mf = mf.newton()
+mf.kernel()

@@ -879,9 +879,10 @@ def _get_gga_pass2(mydf, vG, kpts=numpy.zeros((1,3)), verbose=None):
     return veff
 
 
-def rks_j_xc(mydf, dm_kpts, xc_code, hermi=1, kpts=numpy.zeros((1,3)),
-             kpts_band=None, with_j=False, j_in_xc=False):
+def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
+           kpts_band=None, with_j=False, return_j=False, verbose=None):
     '''Compute the XC energy and RKS XC matrix at sampled k-points.
+    multigrid version of function pbc.dft.numint.nr_rks.
 
     Args:
         dm_kpts : (nkpts, nao, nao) ndarray or a list of (nkpts,nao,nao) ndarray
@@ -900,7 +901,8 @@ def rks_j_xc(mydf, dm_kpts, xc_code, hermi=1, kpts=numpy.zeros((1,3)),
         vj : (nkpts, nao, nao) ndarray
             or list of vj if the input dm_kpts is a list of DMs
     '''
-    log = logger.Logger(mydf.stdout, mydf.verbose)
+    if kpts is None: kpts = mydf.kpts
+    log = logger.new_logger(mydf, verbose)
     cell = mydf.cell
     dm_kpts = lib.asarray(dm_kpts, order='C')
     dms = _format_dms(dm_kpts, kpts)
@@ -946,7 +948,7 @@ def rks_j_xc(mydf, dm_kpts, xc_code, hermi=1, kpts=numpy.zeros((1,3)),
         wv_freq.append(tools.fft(wv, mesh))
 
     wv_freq = numpy.asarray(wv_freq).reshape(nset,-1,*mesh)
-    if j_in_xc:
+    if with_j:
         wv_freq[:,0] += vG.reshape(nset,*mesh)
 
     if nset == 1:
@@ -962,21 +964,22 @@ def rks_j_xc(mydf, dm_kpts, xc_code, hermi=1, kpts=numpy.zeros((1,3)),
         veff = _get_gga_pass2(mydf, wv_freq, kpts_band, verbose=log)
     veff = _format_jks(veff, dm_kpts, input_band, kpts)
 
-    if with_j:
+    if return_j:
         vj = _get_j_pass2(mydf, vG, kpts_band, verbose=log)
         vj = _format_jks(veff, dm_kpts, input_band, kpts)
     else:
         vj = None
 
-    veff = lib.tag_array(veff, ecoul=ecoul, exc=excsum, vj=None, vk=None)
-    return nelec, excsum, veff, vj
+    veff = lib.tag_array(veff, ecoul=ecoul, exc=excsum, vj=vj, vk=None)
+    return nelec, excsum, veff
 
 
-# Note uks_j_xc handles only one set of KUKS density matrices (alpha, beta) in
-# each call (rks_j_xc supports multiple sets of KRKS density matrices)
-def uks_j_xc(mydf, dm_kpts, xc_code, hermi=1, kpts=numpy.zeros((1,3)),
-             kpts_band=None, with_j=False, j_in_xc=False):
+# Note nr_uks handles only one set of KUKS density matrices (alpha, beta) in
+# each call (nr_rks supports multiple sets of KRKS density matrices)
+def nr_uks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
+           kpts_band=None, with_j=False, return_j=False, verbose=None):
     '''Compute the XC energy and UKS XC matrix at sampled k-points.
+    multigrid version of function pbc.dft.numint.nr_uks
 
     Args:
         dm_kpts : (nkpts, nao, nao) ndarray or a list of (nkpts,nao,nao) ndarray
@@ -995,7 +998,9 @@ def uks_j_xc(mydf, dm_kpts, xc_code, hermi=1, kpts=numpy.zeros((1,3)),
         vj : (nkpts, nao, nao) ndarray
             or list of vj if the input dm_kpts is a list of DMs
     '''
-    log = logger.Logger(mydf.stdout, mydf.verbose)
+    if kpts is None:
+        kpts = mydf.kpts
+    log = logger.new_logger(mydf, verbose)
     cell = mydf.cell
     dm_kpts = lib.asarray(dm_kpts, order='C')
     dms = _format_dms(dm_kpts, kpts)
@@ -1045,7 +1050,7 @@ def uks_j_xc(mydf, dm_kpts, xc_code, hermi=1, kpts=numpy.zeros((1,3)),
     excsum += (rhoR[1,0]*exc).sum() * weight
     wv_freq = tools.fft(numpy.vstack((wva,wvb)), mesh)
     wv_freq = wv_freq.reshape(2,-1,*mesh)
-    if j_in_xc:
+    if with_j:
         wv_freq[:,0] += vG.reshape(*mesh)
     rhoR = rhoG = None
 
@@ -1056,17 +1061,20 @@ def uks_j_xc(mydf, dm_kpts, xc_code, hermi=1, kpts=numpy.zeros((1,3)),
         veff = _get_gga_pass2(mydf, wv_freq, kpts_band, verbose=log)
     veff = _format_jks(veff, dm_kpts, input_band, kpts)
 
-    if with_j:
+    if return_j:
         vj = _get_j_pass2(mydf, vG, kpts_band, verbose=log)
         vj = _format_jks(veff, dm_kpts, input_band, kpts)
     else:
         vj = None
 
-    veff = lib.tag_array(veff, ecoul=ecoul, exc=excsum, vj=None, vk=None)
-    return nelec, excsum, veff, vj
+    veff = lib.tag_array(veff, ecoul=ecoul, exc=excsum, vj=vj, vk=None)
+    return nelec, excsum, veff
 
-def nr_rks_fxc(mydf, xc_code, dm0, dms, hermi=0,
+
+def nr_rks_fxc(mydf, xc_code, dm0, dms, hermi=1, with_j=False,
                rho0=None, vxc=None, fxc=None, kpts=None, verbose=None):
+    '''multigrid version of function pbc.dft.numint.nr_rks_fxc
+    '''
     if kpts is None:
         kpts = numpy.zeros((1,3))
     log = logger.new_logger(mydf, verbose)
@@ -1080,26 +1088,35 @@ def nr_rks_fxc(mydf, xc_code, dm0, dms, hermi=0,
 
     ni = mydf._numint
     xctype = ni._xc_type(xc_code)
+    if xctype == 'LDA':
+        deriv = 0
+    elif xctype == 'GGA':
+        deriv = 1
+    else:
+        deriv = 2
+
     weight = cell.vol / ngrids
     if rho0 is None:
-        if xctype == 'LDA':
-            deriv = 0
-        elif xctype == 'GGA':
-            deriv = 1
         rhoG = _eval_rhoG(mydf, dm0, hermi, kpts, deriv)
         rho0 = tools.ifft(rhoG.reshape(-1,ngrids), mesh).real * (1./weight)
 
     if vxc is None or fxc is None:
         vxc, fxc = ni.eval_xc(xc_code, rho0, spin=0, deriv=2)[1:3]
 
-    rho1 = _eval_rhoG(mydf, dms, hermi, kpts, deriv)
-    rho1 = tools.ifft(rho1.reshape(-1,ngrids), mesh).real * (1./weight)
+    rhoG = _eval_rhoG(mydf, dms, hermi, kpts, deriv)
+    rho1 = tools.ifft(rhoG.reshape(-1,ngrids), mesh).real * (1./weight)
     rho1 = rho1.reshape(nset,-1,ngrids)
+    if with_j:
+        coulG = tools.get_coulG(cell, mesh=mesh, low_dim_ft_type=mydf.low_dim_ft_type)
+        vG = rhoG[:,0] * coulG
+        vG = vG.reshape(nset, *mesh)
 
     if xctype == 'LDA':
         frr = fxc[0]
         wv = weight * frr * rho1
         wv = tools.fft(wv.reshape(-1,ngrids), mesh).reshape(nset,-1,*mesh)
+        if with_j:
+            wv[:,0] += vG
         veff = _get_j_pass2(mydf, wv, kpts, verbose=log)
 
     elif xctype == 'GGA':
@@ -1107,13 +1124,17 @@ def nr_rks_fxc(mydf, xc_code, dm0, dms, hermi=0,
               for i in range(nset)]
         wv = numpy.vstack(wv).reshape(-1,ngrids)
         wv = tools.fft(wv, mesh).reshape(nset,-1,*mesh)
+        if with_j:
+            wv[:,0] += vG * .5
         veff = _get_gga_pass2(mydf, wv, kpts, verbose=log)
 
     return veff.reshape(dm_kpts.shape)
 
 
-def nr_rks_fxc_st(mydf, xc_code, dm0, dms_alpha, hermi=0, singlet=True,
+def nr_rks_fxc_st(mydf, xc_code, dm0, dms_alpha, hermi=1, singlet=True, with_j=False,
                   rho0=None, vxc=None, fxc=None, kpts=None, verbose=None):
+    '''multigrid version of function pbc.dft.numint.nr_rks_fxc_st
+    '''
     if kpts is None:
         kpts = numpy.zeros((1,3))
     log = logger.new_logger(mydf, verbose)
@@ -1127,12 +1148,15 @@ def nr_rks_fxc_st(mydf, xc_code, dm0, dms_alpha, hermi=0, singlet=True,
 
     ni = mydf._numint
     xctype = ni._xc_type(xc_code)
+    if xctype == 'LDA':
+        deriv = 0
+    elif xctype == 'GGA':
+        deriv = 1
+    else:
+        deriv = 2
+
     weight = cell.vol / ngrids
     if rho0 is None:
-        if xctype == 'LDA':
-            deriv = 0
-        elif xctype == 'GGA':
-            deriv = 1
         rhoG = _eval_rhoG(mydf, dm0, hermi, kpts, deriv)
         # *.5 to get alpha density
         rho0 = tools.ifft(rhoG.reshape(-1,ngrids), mesh).real * (.5/weight)
@@ -1141,9 +1165,13 @@ def nr_rks_fxc_st(mydf, xc_code, dm0, dms_alpha, hermi=0, singlet=True,
     if vxc is None or fxc is None:
         vxc, fxc = ni.eval_xc(xc_code, rho0, spin=1, deriv=2)[1:3]
 
-    rho1 = _eval_rhoG(mydf, dms, hermi, kpts, deriv)
-    rho1 = tools.ifft(rho1.reshape(-1,ngrids), mesh).real * (1./weight)
+    rhoG = _eval_rhoG(mydf, dms, hermi, kpts, deriv)
+    rho1 = tools.ifft(rhoG.reshape(-1,ngrids), mesh).real * (1./weight)
     rho1 = rho1.reshape(nset,-1,ngrids)
+    if with_j:
+        coulG = tools.get_coulG(cell, mesh=mesh, low_dim_ft_type=mydf.low_dim_ft_type)
+        vG = rhoG[:,0] * coulG
+        vG = vG.reshape(nset, *mesh)
 
     if xctype == 'LDA':
         u_u, u_d, d_d = fxc[0].T
@@ -1153,6 +1181,8 @@ def nr_rks_fxc_st(mydf, xc_code, dm0, dms_alpha, hermi=0, singlet=True,
             frho = u_u - u_d
         wv = weight * frho * rho1
         wv = tools.fft(wv.reshape(-1,ngrids), mesh).reshape(nset,-1,*mesh)
+        if with_j:
+            wv[:,0] += vG
         veff = _get_j_pass2(mydf, wv, kpts, verbose=log)
 
     elif xctype == 'GGA':
@@ -1176,13 +1206,17 @@ def nr_rks_fxc_st(mydf, xc_code, dm0, dms_alpha, hermi=0, singlet=True,
               for i in range(nset)]
         wv = numpy.asarray(wv).reshape(-1,ngrids)
         wv = tools.fft(wv, mesh).reshape(nset,-1,*mesh)
+        if with_j:
+            wv[:,0] += vG * .5
         veff = _get_gga_pass2(mydf, wv, kpts, verbose=log)
 
     return veff.reshape(dm_kpts.shape)
 
 
-def nr_uks_fxc(mydf, xc_code, dm0, dms, hermi=0,
+def nr_uks_fxc(mydf, xc_code, dm0, dms, hermi=1, with_j=False,
                rho0=None, vxc=None, fxc=None, kpts=None, verbose=None):
+    '''multigrid version of function pbc.dft.numint.nr_uks_fxc
+    '''
     if kpts is None:
         kpts = numpy.zeros((1,3))
     log = logger.new_logger(mydf, verbose)
@@ -1197,12 +1231,15 @@ def nr_uks_fxc(mydf, xc_code, dm0, dms, hermi=0,
 
     ni = mydf._numint
     xctype = ni._xc_type(xc_code)
+    if xctype == 'LDA':
+        deriv = 0
+    elif xctype == 'GGA':
+        deriv = 1
+    else:
+        deriv = 2
+
     weight = cell.vol / ngrids
     if rho0 is None:
-        if xctype == 'LDA':
-            deriv = 0
-        elif xctype == 'GGA':
-            deriv = 1
         rhoG = _eval_rhoG(mydf, dm0, hermi, kpts, deriv)
         rho0 = tools.ifft(rhoG.reshape(-1,ngrids), mesh).real * (1./weight)
         rho0 = rho0.reshape(nset,-1,ngrids)
@@ -1210,9 +1247,13 @@ def nr_uks_fxc(mydf, xc_code, dm0, dms, hermi=0,
     if vxc is None or fxc is None:
         vxc, fxc = ni.eval_xc(xc_code, rho0, spin=1, deriv=2)[1:3]
 
-    rho1 = _eval_rhoG(mydf, dms, hermi, kpts, deriv)
-    rho1 = tools.ifft(rho1.reshape(-1,ngrids), mesh).real * (1./weight)
+    rhoG = _eval_rhoG(mydf, dms, hermi, kpts, deriv)
+    rho1 = tools.ifft(rhoG.reshape(-1,ngrids), mesh).real * (1./weight)
     rho1 = rho1.reshape(nset,-1,ngrids)
+    if with_j:
+        coulG = tools.get_coulG(cell, mesh=mesh, low_dim_ft_type=mydf.low_dim_ft_type)
+        vG = (rhoG[0,0] + rhoG[1,0]) * coulG
+        vG = vG.reshape(mesh)
 
     if xctype == 'LDA':
         u_u, u_d, d_d = fxc[0].T
@@ -1220,15 +1261,107 @@ def nr_uks_fxc(mydf, xc_code, dm0, dms, hermi=0,
                             u_d * rho1[0] + d_d * rho1[1]])
         wv *= weight
         wv = tools.fft(wv.reshape(-1,ngrids), mesh).reshape(nset,-1,*mesh)
+        if with_j:
+            wv[:,0] += vG
         veff = _get_j_pass2(mydf, wv, kpts, verbose=log)
 
     elif xctype == 'GGA':
         wv = numint._uks_gga_wv1(rho0, rho1, vxc, fxc, weight)
         wv = numpy.vstack(wv).reshape(-1,ngrids)
         wv = tools.fft(wv, mesh).reshape(nset,-1,*mesh)
+        if with_j:
+            wv[:,0] += vG * .5
         veff = _get_gga_pass2(mydf, wv, kpts, verbose=log)
 
     return veff.reshape(dm_kpts.shape)
+
+
+def cache_xc_kernel(mydf, xc_code, dm, spin=0, kpts=None):
+    '''Compute the 0th order density, Vxc and fxc.  They can be used in TDDFT,
+    DFT hessian module etc.
+    '''
+    if kpts is None:
+        kpts = numpy.zeros((1,3))
+    cell = mydf.cell
+    mesh = mydf.mesh
+    ngrids = numpy.prod(mesh)
+
+    ni = mydf._numint
+    xctype = ni._xc_type(xc_code)
+    if xctype == 'LDA':
+        deriv = 0
+        comp = 1
+    elif xctype == 'GGA':
+        deriv = 1
+        comp = 4
+    else:
+        deriv = 2
+
+    hermi = 1
+    weight = cell.vol / ngrids
+    rhoG = _eval_rhoG(mydf, dm, hermi, kpts, deriv)
+    rho = tools.ifft(rhoG.reshape(-1,ngrids), mesh).real * (1./weight)
+    if spin == 0:
+        rho = rho.reshape(comp,ngrids)
+    else:
+        rho = rho.reshape(2,comp,ngrids)
+
+    vxc, fxc = ni.eval_xc(xc_code, rho, spin=spin, deriv=2)[1:3]
+    return rho, vxc, fxc
+
+def _gen_rhf_response(mf, dm0, singlet=None, hermi=0):
+    '''multigrid version of function pbc.scf.newton_ah._gen_rhf_response
+    '''
+    #assert(isinstance(mf, dft.krks.KRKS))
+    cell = mf.cell
+    if hasattr(mf, 'kpts'):
+        kpts = mf.kpts
+    else:
+        kpts = mf.kpt.reshape(1,3)
+    ni = mf._numint
+    if singlet is None:  # for newton solver
+        rho0, vxc, fxc = cache_xc_kernel(mf.with_df, mf.xc, dm0, 0, kpts)
+    else:
+        rho0, vxc, fxc = cache_xc_kernel(mf.with_df, mf.xc, [dm0*.5]*2, 1, kpts)
+    dm0 = None
+
+    def vind(dm1):
+        if hermi == 2:
+            return numpy.zeros_like(dm1)
+
+        if singlet is None:  # Without specify singlet, general case
+            v1 = nr_rks_fxc(mf.with_df, mf.xc, dm0, dm1, hermi,
+                            True, rho0, vxc, fxc, kpts)
+        elif singlet:
+            v1 = nr_rks_fxc_st(mf.with_df, mf.xc, dm0, dm1, hermi, singlet,
+                               True, rho0, vxc, fxc, kpts)
+        else:
+            v1 = nr_rks_fxc_st(mf.with_df, mf.xc, dm0, dm1, hermi, singlet,
+                               False, rho0, vxc, fxc, kpts)
+        return v1
+    return vind
+
+def _gen_uhf_response(mf, dm0, with_j=True, hermi=0):
+    '''multigrid version of function pbc.scf.newton_ah._gen_uhf_response
+    '''
+    #assert(isinstance(mf, dft.kuks.KUKS))
+    cell = mf.cell
+    if hasattr(mf, 'kpts'):
+        kpts = mf.kpts
+    else:
+        kpts = mf.kpt.reshape(1,3)
+    ni = mf._numint
+    rho0, vxc, fxc = cache_xc_kernel(mf.with_df, mf.xc, dm0, 1, kpts)
+    dm0 = None
+
+    def vind(dm1):
+        if hermi == 2:
+            return numpy.zeros_like(dm1)
+
+        v1 = nr_uks_fxc(mf.with_df, mf.xc, dm0, dm1, hermi,
+                        with_j, rho0, vxc, fxc, kpts)
+        return v1
+    return vind
 
 
 def multi_grids_tasks(cell, fft_mesh=None, verbose=None):

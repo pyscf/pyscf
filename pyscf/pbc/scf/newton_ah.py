@@ -135,7 +135,7 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
 
 def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                       singlet=None, hermi=0, max_memory=None):
-    from pyscf.pbc.dft import numint
+    from pyscf.pbc.dft import numint, multigrid
     assert(isinstance(mf, khf.KRHF))
 
     if mo_coeff is None: mo_coeff = mf.mo_coeff
@@ -148,6 +148,13 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
 
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=cell.spin)
         hybrid = abs(hyb) > 1e-10
+        if abs(omega) > 1e-10:  # For range separated Coulomb
+            raise NotImplementedError
+
+        if not hybrid and isinstance(mf.with_df, multigrid.MultiGridFFTDF):
+            dm0 = mf.make_rdm1(mo_coeff, mo_occ)
+            return multigrid._gen_rhf_response(mf, dm0, singlet, hermi)
+
         if singlet is None:  # for newton solver
             rho0, vxc, fxc = ni.cache_xc_kernel(cell, mf.grids, mf.xc, mo_coeff,
                                                 mo_occ, 0, kpts)
@@ -225,7 +232,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
 
 def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
                       with_j=True, hermi=0, max_memory=None):
-    from pyscf.pbc.dft import numint
+    from pyscf.pbc.dft import numint, multigrid
     assert(isinstance(mf, kuhf.KUHF))
 
     if mo_coeff is None: mo_coeff = mf.mo_coeff
@@ -238,6 +245,13 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
 
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=cell.spin)
         hybrid = abs(hyb) > 1e-10
+        if abs(omega) > 1e-10:  # For range separated Coulomb
+            raise NotImplementedError
+
+        if not hybrid and isinstance(mf.with_df, multigrid.MultiGridFFTDF):
+            dm0 = mf.make_rdm1(mo_coeff, mo_occ)
+            return multigrid._gen_uhf_response(mf, dm0, with_j, hermi)
+
         rho0, vxc, fxc = ni.cache_xc_kernel(cell, mf.grids, mf.xc,
                                             mo_coeff, mo_occ, 1, kpts)
         #dm0 =(numpy.dot(mo_coeff[0]*mo_occ[0], mo_coeff[0].T.conj()),
