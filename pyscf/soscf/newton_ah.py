@@ -307,7 +307,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
             mem_now = lib.current_memory()[0]
             max_memory = max(2000, mf.max_memory*.8-mem_now)
 
-        if singlet is None:
+        if singlet is None:  # Without specify singlet, general case
             def vind(dm1):
                 # The singlet hessian
                 if hermi == 2:
@@ -350,7 +350,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                 elif hermi != 2:
                     v1 += mf.get_j(mol, dm1, hermi=hermi)
                 return v1
-        else:
+        else:  # triplet
             def vind(dm1):
                 if hermi == 2:
                     v1 = numpy.zeros_like(dm1)

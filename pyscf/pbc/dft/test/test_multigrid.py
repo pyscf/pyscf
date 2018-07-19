@@ -50,7 +50,7 @@ cell_he = gto.M(atom='He 0 0 0',
                 basis=[[0, ( 1, 1, .1), (.5, .1, 1)],
                        [1, (.8, 1)]],
                 unit='B',
-                mesh=[8]*3,
+                mesh=[18]*3,
                 a=numpy.eye(3)*5)
 
 kpts = numpy.random.random((2,3))
@@ -59,8 +59,10 @@ dm = numpy.random.random((len(kpts),nao,nao)) * .2
 dm1 = dm + numpy.eye(nao)
 dm = dm1 + dm1.transpose(0,2,1)
 
-dm_he = numpy.random.random((len(kpts), cell_he.nao, cell_he.nao))
+he_nao = cell_he.nao
+dm_he = numpy.random.random((len(kpts), he_nao, he_nao))
 dm_he = dm_he + dm_he.transpose(0,2,1)
+dm_he = dm_he * .2 + numpy.eye(he_nao)
 
 def tearDownModule():
     global cell_orth, cell_nonorth, cell_he
@@ -103,7 +105,8 @@ class KnownValues(unittest.TestCase):
         ni = dft.numint.KNumInt()
         n, exc0, ref = ni.nr_rks(cell_orth, mydf.grids, xc, dm, 0, kpts=kpts)
         mydf = multigrid.MultiGridFFTDF(cell_orth)
-        n, exc1, vxc, vj = mydf.rks_j_xc(dm, xc, kpts=kpts, j_in_xc=False, with_j=False)
+        n, exc1, vxc, vj = multigrid.rks_j_xc(mydf, dm, xc, kpts=kpts,
+                                              j_in_xc=False, with_j=False)
         self.assertAlmostEqual(float(abs(ref-vxc).max()), 0, 9)
         self.assertAlmostEqual(abs(exc0-exc1).max(), 0, 9)
 
@@ -179,7 +182,8 @@ class KnownValues(unittest.TestCase):
         ni = dft.numint.KNumInt()
         n, exc0, ref = ni.nr_rks(cell_orth, mydf.grids, xc, dm, 0, kpts=kpts)
         mydf = multigrid.MultiGridFFTDF(cell_orth)
-        n, exc1, vxc, vj = mydf.rks_j_xc(dm, xc, kpts=kpts, j_in_xc=False, with_j=False)
+        n, exc1, vxc, vj = multigrid.rks_j_xc(mydf, dm, xc, kpts=kpts,
+                                              j_in_xc=False, with_j=False)
         self.assertAlmostEqual(float(abs(ref-vxc).max()), 0, 9)
         self.assertAlmostEqual(abs(exc0-exc1).max(), 0, 8)
 
@@ -189,7 +193,8 @@ class KnownValues(unittest.TestCase):
         ni = dft.numint.NumInt()
         n, exc0, ref = ni.nr_uks(cell_orth, mydf.grids, xc, dm1, 0)
         mydf = multigrid.MultiGridFFTDF(cell_orth)
-        n, exc1, vxc, vj = mydf.uks_j_xc(dm1, xc, hermi=0, j_in_xc=False, with_j=False)
+        n, exc1, vxc, vj = multigrid.uks_j_xc(mydf, dm1, xc, hermi=0,
+                                              j_in_xc=False, with_j=False)
         self.assertAlmostEqual(float(abs(ref-vxc).max()), 0, 9)
         self.assertAlmostEqual(abs(exc0-exc1).max(), 0, 9)
 
@@ -199,7 +204,8 @@ class KnownValues(unittest.TestCase):
         ni = dft.numint.NumInt()
         n, exc0, ref = ni.nr_uks(cell_orth, mydf.grids, xc, dm1, 0)
         mydf = multigrid.MultiGridFFTDF(cell_orth)
-        n, exc1, vxc, vj = mydf.uks_j_xc(dm1, xc, hermi=0, j_in_xc=False, with_j=False)
+        n, exc1, vxc, vj = multigrid.uks_j_xc(mydf, dm1, xc, hermi=0,
+                                              j_in_xc=False, with_j=False)
         self.assertAlmostEqual(float(abs(ref-vxc).max()), 0, 9)
         self.assertAlmostEqual(abs(exc0-exc1).max(), 0, 8)
 
@@ -207,7 +213,8 @@ class KnownValues(unittest.TestCase):
         numpy.random.seed(9)
         dm = numpy.random.random(dm1.shape) + numpy.random.random(dm1.shape) * 1j
         mydf = multigrid.MultiGridFFTDF(cell_orth)
-        rhoG = multigrid._eval_rhoG(mydf, dm, hermi=0, kpts=kpts, deriv=0)
+        rhoG = multigrid._eval_rhoG(mydf, dm, hermi=0, kpts=kpts, deriv=0,
+                                    rhog_high_order=True)
         self.assertTrue(rhoG.dtype == numpy.complex128)
 
         mydf = df.FFTDF(cell_orth)
@@ -220,7 +227,8 @@ class KnownValues(unittest.TestCase):
 
     def test_eval_rhoG_orth_gga(self):
         mydf = multigrid.MultiGridFFTDF(cell_orth)
-        rhoG = multigrid._eval_rhoG(mydf, dm, hermi=1, kpts=kpts, deriv=1)
+        rhoG = multigrid._eval_rhoG(mydf, dm, hermi=1, kpts=kpts, deriv=1,
+                                    rhog_high_order=True)
 
         mydf = df.FFTDF(cell_orth)
         ni = dft.numint.KNumInt()
@@ -232,7 +240,8 @@ class KnownValues(unittest.TestCase):
 
     def test_eval_rhoG_nonorth_gga(self):
         mydf = multigrid.MultiGridFFTDF(cell_nonorth)
-        rhoG = multigrid._eval_rhoG(mydf, dm, hermi=1, kpts=kpts, deriv=1)
+        rhoG = multigrid._eval_rhoG(mydf, dm, hermi=1, kpts=kpts, deriv=1,
+                                    rhog_high_order=True)
 
         mydf = df.FFTDF(cell_nonorth)
         ni = dft.numint.KNumInt()
@@ -241,6 +250,93 @@ class KnownValues(unittest.TestCase):
         rhoR = tools.ifft(rhoG[0], cell_nonorth.mesh).real
         rhoR *= numpy.prod(cell_nonorth.mesh)/cell_nonorth.vol
         self.assertAlmostEqual(abs(rhoR-ref).max(), 0, 5)
+
+    def test_nr_rks_fxc(self):
+        numpy.random.seed(9)
+        dm1 = numpy.random.random(dm_he.shape)
+        dm1 = dm1 + dm1.transpose(0,2,1)
+        mydf = df.FFTDF(cell_he)
+        ni = dft.numint.KNumInt()
+        mg_df = multigrid.MultiGridFFTDF(cell_he)
+
+        xc = 'lda,'
+        ref = dft.numint.nr_rks_fxc(ni, cell_he, mydf.grids, xc, dm_he, dm1,
+                                    kpts=kpts)
+        v = multigrid.nr_rks_fxc(mg_df, xc, dm_he, dm1, kpts=kpts)
+        self.assertEqual(ref.dtype, v.dtype)
+        self.assertEqual(ref.shape, v.shape)
+        self.assertAlmostEqual(abs(v-ref).max(), 0, 9)
+
+        xc = 'b88,'
+        ref = dft.numint.nr_rks_fxc(ni, cell_he, mydf.grids, xc, dm_he, dm1,
+                                    kpts=kpts)
+        v = multigrid.nr_rks_fxc(mg_df, xc, dm_he, dm1, kpts=kpts)
+        self.assertEqual(ref.dtype, v.dtype)
+        self.assertEqual(ref.shape, v.shape)
+        self.assertAlmostEqual(abs(v-ref).max(), 0, 6)
+
+    def test_nr_rks_fxc_st(self):
+        numpy.random.seed(9)
+        dm1 = numpy.random.random(dm_he.shape)
+        dm1 = dm1 + dm1.transpose(0,2,1)
+        mydf = df.FFTDF(cell_he)
+        ni = dft.numint.KNumInt()
+        mg_df = multigrid.MultiGridFFTDF(cell_he)
+
+        xc = 'lda,'
+        ref = dft.numint.nr_rks_fxc_st(ni, cell_he, mydf.grids, xc, dm_he, dm1,
+                                       singlet=True, kpts=kpts)
+        v = multigrid.nr_rks_fxc_st(mg_df, xc, dm_he, dm1, singlet=True, kpts=kpts)
+        self.assertEqual(ref.dtype, v.dtype)
+        self.assertEqual(ref.shape, v.shape)
+        self.assertAlmostEqual(abs(v-ref).max(), 0, 9)
+
+        xc = 'b88,'
+        ref = dft.numint.nr_rks_fxc_st(ni, cell_he, mydf.grids, xc, dm_he, dm1,
+                                       singlet=True, kpts=kpts)
+        v = multigrid.nr_rks_fxc_st(mg_df, xc, dm_he, dm1, singlet=True, kpts=kpts)
+        self.assertEqual(ref.dtype, v.dtype)
+        self.assertEqual(ref.shape, v.shape)
+        self.assertAlmostEqual(abs(v-ref).max(), 0, 6)
+
+        xc = 'lda,'
+        ref = dft.numint.nr_rks_fxc_st(ni, cell_he, mydf.grids, xc, dm_he, dm1,
+                                       singlet=False, kpts=kpts)
+        v = multigrid.nr_rks_fxc_st(mg_df, xc, dm_he, dm1, singlet=False, kpts=kpts)
+        self.assertEqual(ref.dtype, v.dtype)
+        self.assertEqual(ref.shape, v.shape)
+        self.assertAlmostEqual(abs(v-ref).max(), 0, 9)
+
+        xc = 'b88,'
+        ref = dft.numint.nr_rks_fxc_st(ni, cell_he, mydf.grids, xc, dm_he, dm1,
+                                       singlet=False, kpts=kpts)
+        v = multigrid.nr_rks_fxc_st(mg_df, xc, dm_he, dm1, singlet=False, kpts=kpts)
+        self.assertEqual(ref.dtype, v.dtype)
+        self.assertEqual(ref.shape, v.shape)
+        self.assertAlmostEqual(abs(v-ref).max(), 0, 6)
+
+    def test_nr_uks_fxc(self):
+        numpy.random.seed(9)
+        dm1 = numpy.random.random(dm_he.shape)
+        dm1 = dm1 + dm1.transpose(0,2,1)
+        mydf = df.FFTDF(cell_he)
+        ni = dft.numint.NumInt()
+        mg_df = multigrid.MultiGridFFTDF(cell_he)
+
+        xc = 'lda,'
+        ref = dft.numint.nr_uks_fxc(ni, cell_he, mydf.grids, xc, dm_he, dm1)
+        v = multigrid.nr_uks_fxc(mg_df, xc, dm_he, dm1)
+        self.assertEqual(ref.dtype, v.dtype)
+        self.assertEqual(ref.shape, v.shape)
+        self.assertAlmostEqual(abs(v-ref).max(), 0, 9)
+
+        xc = 'b88,'
+        ref = dft.numint.nr_uks_fxc(ni, cell_he, mydf.grids, xc, dm_he, dm1)
+        v = multigrid.nr_uks_fxc(mg_df, xc, dm_he, dm1)
+        self.assertEqual(ref.dtype, v.dtype)
+        self.assertEqual(ref.shape, v.shape)
+        self.assertAlmostEqual(abs(v-ref).max(), 0, 7)
+
 
 if __name__ == '__main__':
     print("Full Tests for multigrid")

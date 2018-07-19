@@ -147,6 +147,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
 
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=cell.spin)
+        hybrid = abs(hyb) > 1e-10
         if singlet is None:  # for newton solver
             rho0, vxc, fxc = ni.cache_xc_kernel(cell, mf.grids, mf.xc, mo_coeff,
                                                 mo_occ, 0, kpts)
@@ -160,7 +161,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
             mem_now = lib.current_memory()[0]
             max_memory = max(2000, mf.max_memory*.8-mem_now)
 
-        if singlet is None:
+        if singlet is None:  # Without specify singlet, general case
             def vind(dm1):
                 # The singlet hessian
                 if hermi == 2:
@@ -168,7 +169,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                 else:
                     v1 = ni.nr_rks_fxc(cell, mf.grids, mf.xc, dm0, dm1, 0, hermi,
                                        rho0, vxc, fxc, kpts, max_memory=max_memory)
-                if abs(hyb) > 1e-10:
+                if hybrid:
                     if hermi != 2:
                         vj, vk = mf.get_jk(cell, dm1, hermi=hermi, kpts=kpts)
                         v1 += vj - .5 * hyb * vk
@@ -188,7 +189,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                                               True, rho0, vxc, fxc, kpts,
                                               max_memory=max_memory)
                     v1 *= .5
-                if abs(hyb) > 1e-10:
+                if hybrid:
                     if hermi != 2:
                         vj, vk = mf.get_jk(cell, dm1, hermi=hermi, kpts=kpts)
                         v1 += vj - .5 * hyb * vk
@@ -197,7 +198,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                 elif hermi != 2:
                     v1 += mf.get_j(cell, dm1, hermi=hermi, kpts=kpts)
                 return v1
-        else:
+        else:  # triplet
             def vind(dm1):
                 if hermi == 2:
                     v1 = numpy.zeros_like(dm1)
@@ -207,7 +208,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                                               False, rho0, vxc, fxc, kpts,
                                               max_memory=max_memory)
                     v1 *= .5
-                if abs(hyb) > 1e-10:
+                if hybrid:
                     v1 += -.5 * hyb * mf.get_k(cell, dm1, hermi=hermi, kpts=kpts)
                 return v1
 
@@ -236,6 +237,7 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
 
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=cell.spin)
+        hybrid = abs(hyb) > 1e-10
         rho0, vxc, fxc = ni.cache_xc_kernel(cell, mf.grids, mf.xc,
                                             mo_coeff, mo_occ, 1, kpts)
         #dm0 =(numpy.dot(mo_coeff[0]*mo_occ[0], mo_coeff[0].T.conj()),
@@ -252,7 +254,7 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
             else:
                 v1 = ni.nr_uks_fxc(cell, mf.grids, mf.xc, dm0, dm1, 0, hermi,
                                    rho0, vxc, fxc, kpts, max_memory=max_memory)
-            if abs(hyb) < 1e-10:
+            if not hybrid:
                 if with_j:
                     vj = mf.get_j(cell, dm1, hermi=hermi, kpts=kpts)
                     v1 += vj[0] + vj[1]

@@ -21,7 +21,6 @@
 import copy
 import numpy
 from pyscf import lib
-from pyscf import gto
 from pyscf.lib import logger
 from pyscf.pbc import tools
 from pyscf.pbc.gto import pseudo, estimate_ke_cutoff, error_for_ke_cutoff
@@ -65,6 +64,7 @@ def get_nuc(mydf, kpts=None):
 def get_pp(mydf, kpts=None):
     '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.
     '''
+    from pyscf import gto
     cell = mydf.cell
     if kpts is None:
         kpts_lst = numpy.zeros((1,3))

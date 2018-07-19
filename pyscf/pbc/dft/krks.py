@@ -59,10 +59,13 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     if kpts is None: kpts = ks.kpts
     t0 = (time.clock(), time.time())
 
-    if isinstance(ks.with_df, multigrid.MultiGridFFTDF):
-        n, exc, vxc = ks.with_df.rks_j_xc(dm, ks.xc, kpts=kpts,
-                                          kpts_band=kpts_band,
-                                          with_j=False, j_in_xc=True)[:3]
+    omega, alpha, hyb = ks._numint.rsh_and_hybrid_coeff(ks.xc, spin=cell.spin)
+    hybrid = abs(hyb) > 1e-10
+
+    if not hybrid and isinstance(ks.with_df, multigrid.MultiGridFFTDF):
+        n, exc, vxc = multigrid.rks_j_xc(ks.with_df, dm, ks.xc, hermi,
+                                         kpts, kpts_band,
+                                         with_j=False, j_in_xc=True)[:3]
         logger.debug(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
         return vxc
@@ -88,8 +91,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         t0 = logger.timer(ks, 'vxc', *t0)
 
     weight = 1./len(kpts)
-    omega, alpha, hyb = ks._numint.rsh_and_hybrid_coeff(ks.xc, spin=cell.spin)
-    if abs(hyb) < 1e-10:
+    if not hybrid:
         vj = ks.get_j(cell, dm, hermi, kpts, kpts_band)
         vxc += vj
     else:

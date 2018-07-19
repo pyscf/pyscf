@@ -973,7 +973,9 @@ def eval_xc(xc_code, rho, spin=0, relativity=0, deriv=1, verbose=None):
         xc_code : str
             A string to describe the linear combination of different XC functionals.
             The X and C functional are separated by comma like '.8*LDA+.2*B86,VWN'.
-            If "HF" was appeared in the string, it stands for the exact exchange.
+            If "HF" (exact exchange) is appeared in the string, the HF part will
+            be skipped.  If an empty string "" is given, the returns exc, vxc,...
+            will be vectors of zeros.
         rho : ndarray
             Shape of ((*,N)) for electron density (and derivatives) if spin = 0;
             Shape of ((*,N),(*,N)) for alpha/beta electron density (and derivatives) if spin > 0;
@@ -1064,7 +1066,9 @@ def _eval_xc(fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
         warnings.warn('Libxc functionals %s have large discrepancy to xcfun '
                       'library.\n' % problem_xc)
 
-    if all((is_lda(x) for x in fn_ids)):
+    n = len(fn_ids)
+    if (n == 0 or  # xc_code = '' or xc_code = 'HF', an empty functional
+        all((is_lda(x) for x in fn_ids))):
         if spin == 0:
             nvar = 1
         else:
@@ -1089,7 +1093,6 @@ def _eval_xc(fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
     else:
         outbuf = numpy.empty((outlen,ngrids))
 
-    n = len(fn_ids)
     _itrf.LIBXC_eval_xc(ctypes.c_int(n),
                         (ctypes.c_int*n)(*fn_ids), (ctypes.c_double*n)(*facs),
                         ctypes.c_int(nspin),
