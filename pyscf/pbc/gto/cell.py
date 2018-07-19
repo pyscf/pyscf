@@ -306,10 +306,17 @@ def conc_cell(cell1, cell2):
     cell3.a = cell1.a
     cell3.mesh = np.max((cell1.mesh, cell2.mesh), axis=0)
 
-    if cell1.ke_cutoff is None or cell2.ke_cutoff is None:
+    ke_cutoff1 = cell1.ke_cutoff
+    ke_cutoff2 = cell2.ke_cutoff
+    if ke_cutoff1 is None and ke_cutoff2 is None:
         cell3.ke_cutoff = None
     else:
-        cell3.ke_cutoff = max(cell1.ke_cutoff, cell2.ke_cutoff)
+        if ke_cutoff1 is None:
+            ke_cutoff1 = estimate_ke_cutoff(cell1, cell1.precision)
+        if ke_cutoff2 is None:
+            ke_cutoff2 = estimate_ke_cutoff(cell2, cell2.precision)
+        cell3.ke_cutoff = max(ke_cutoff1, ke_cutoff2)
+
     cell3.precision = min(cell1.precision, cell2.precision)
     cell3.dimension = max(cell1.dimension, cell2.dimension)
     cell3.low_dim_ft_type = cell1.low_dim_ft_type or cell2.low_dim_ft_type
