@@ -29,7 +29,9 @@ def rf0_den(self, ww):
             zxvx[iw,:,0:mbf-mbs,0:nbf-nbs] = (xvx * fmn)* (1.0/ (comega - emn) - 1.0 / (comega + emn))
       
           rf0 += einsum('wpmn,qmn->wpq', zxvx[...,0:mbf-mbs,0:nbf-nbs], xvx)
-
+  
+  rf0 = rf0 / self.nspin
+  
   return rf0
 
 

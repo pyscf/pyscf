@@ -5,7 +5,6 @@
 
 '''
 A simple example to run HF calculation.
-
 .kernel() function is the simple way to call HF driver.
 .analyze() function calls the Mulliken population analysis etc.
 '''
