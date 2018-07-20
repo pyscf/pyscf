@@ -204,7 +204,7 @@ static double gto_rcut(double alpha, int l, double c, double log_prec)
         if (prod > 0) {
                 r = sqrt(prod / alpha);
         } else {
-                r = 1e-9;
+                r = 0;
         }
         return r;
 }
@@ -274,20 +274,27 @@ static int _orth_components(double *xs_exp, int *img_slice, int *grid_slice,
         int nx1_edge;
         // to ensure nx0, nx1 being inside the unit cell
         if (periodic) {
-                nx0_edge = nx0 - nmx0;
-                nx1_edge = nx1 - nmx0;
-                nx0 = nx0_edge % nx_per_cell;
-                nx1 = nx1_edge % nx_per_cell;
+                nx0 = (nx0 - nmx0) % nx_per_cell;
+                nx1 = (nx1 - nmx0) % nx_per_cell;
                 if (nx1 == 0) {
                         nx1 = nx_per_cell;
                 }
-        } else {
+        }
+        // If only 1 image is required, after drawing the grids to the unit cell
+        // as above, the periodic system can be treated as a non-periodic
+        // system, which requires [nx0:nx1] being inside submesh.  It is
+        // necessary because xij+/-cutoff may be out of the submesh for periodic
+        // systems when offset and submesh are specified.
+        if (nimg == 1) {
                 nx0 = MIN(nx0, offset + submesh);
                 nx0 = MAX(nx0, offset);
                 nx1 = MIN(nx1, offset + submesh);
                 nx1 = MAX(nx1, offset);
                 nx0_edge = nx0;
                 nx1_edge = nx1;
+        } else {
+                nx0_edge = 0;
+                nx1_edge = nmx;
         }
         img_slice[0] = nimg0;
         img_slice[1] = nimg1;
@@ -306,9 +313,6 @@ static int _orth_components(double *xs_exp, int *img_slice, int *grid_slice,
         double *xs_all = cache + nmx;
         if (nimg == 1) {
                 xs_all = xs_exp;
-        } else {
-                nx0_edge = 0;
-                nx1_edge = nmx;
         }
         int grid_close_to_xij = rint(xij_frac * nx_per_cell) - nmx0;
         grid_close_to_xij = MIN(grid_close_to_xij, nx1_edge);
@@ -990,7 +994,6 @@ static int _nonorth_components(double *xs_exp, int *img_slice, int *grid_slice,
         int nx0 = (int)floor(edge0 * nx_per_cell);
         int nx1 = (int)ceil (edge1 * nx_per_cell);
         if (nimg == 1) {
-                // to ensure nx0, nx1 in unit cell
                 nx0 = MIN(nx0, nmx0 + offset + submesh);
                 nx0 = MAX(nx0, nmx0 + offset);
                 nx1 = MIN(nx1, nmx0 + offset + submesh);
