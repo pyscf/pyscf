@@ -49,6 +49,10 @@ RMAX_FACTOR_ORTH = getattr(__config__, 'pbc_dft_multigrid_rmax_factor_orth', 1.1
 RMAX_FACTOR_NONORTH = getattr(__config__, 'pbc_dft_multigrid_rmax_factor_nonorth', 0.5)
 RMAX_RATIO = getattr(__config__, 'pbc_dft_multigrid_rmax_ratio', 0.7)
 R_RATIO_SUBLOOP = getattr(__config__, 'pbc_dft_multigrid_r_ratio_subloop', 0.6)
+INIT_MESH_ORTH = getattr(__config__, 'pbc_dft_multigrid_init_mesh_orth', (12,12,12))
+INIT_MESH_NONORTH = getattr(__config__, 'pbc_dft_multigrid_init_mesh_nonorth', (32,32,32))
+KE_RATIO = getattr(__config__, 'pbc_dft_multigrid_ke_ratio', 1.3)
+TASKS_TYPE = getattr(__config__, 'pbc_dft_multigrid_tasks_type', 'ke_cut') # 'rcut'
 
 # RHOG_HIGH_ORDER=True will compute the high order derivatives of electron
 # density in real space and FT to reciprocal space.  Set RHOG_HIGH_ORDER=False
@@ -1368,6 +1372,12 @@ def _gen_uhf_response(mf, dm0, with_j=True, hermi=0):
 
 
 def multi_grids_tasks(cell, fft_mesh=None, verbose=None):
+    if TASKS_TYPE == 'rcut':
+        return multi_grids_tasks_for_rcut(cell, fft_mesh, verbose)
+    else:
+        return multi_grids_tasks_for_ke_cut(cell, fft_mesh, verbose)
+
+def multi_grids_tasks_for_rcut(cell, fft_mesh=None, verbose=None):
     log = logger.new_logger(cell, verbose)
     if fft_mesh is None:
         fft_mesh = cell.mesh
@@ -1469,6 +1479,133 @@ def multi_grids_tasks(cell, fft_mesh=None, verbose=None):
             ao_idx_sparse = []
         else:
             cell_sparse, ao_idx_sparse = make_cell_sparse_exp(shls_sparse, r0, r1)
+            cell_sparse.mesh = mesh
+
+        if cell_sparse is None:
+            grids_sparse = None
+        else:
+            grids_sparse = gen_grid.UniformGrids(cell_sparse)
+            grids_sparse.ao_idx = ao_idx_sparse
+
+        log.debug('mesh %s nao dense/sparse %d %d  rcut %g',
+                  mesh, len(ao_idx_dense), len(ao_idx_sparse), cell_dense.rcut)
+
+        tasks.append([grids_dense, grids_sparse])
+        if numpy.all(mesh >= fft_mesh):
+            break
+    return tasks
+
+def multi_grids_tasks_for_ke_cut(cell, fft_mesh=None, verbose=None):
+    log = logger.new_logger(cell, verbose)
+    if fft_mesh is None:
+        fft_mesh = cell.mesh
+
+    # Split shells based on rcut
+    rcuts_pgto, kecuts_pgto = _primitive_gto_cutoff(cell)
+    ao_loc = cell.ao_loc_nr()
+
+    def make_cell_dense_exp(shls_dense, ke0, ke1):
+        cell_dense = copy.copy(cell)
+        cell_dense._bas = cell._bas.copy()
+        cell_dense._env = cell._env.copy()
+
+        rcut_atom = [0] * cell.natm
+        ke_cutoff = 0
+        for ib in shls_dense:
+            ke = kecuts_pgto[ib]
+            idx = numpy.where((ke0 < ke) & (ke <= ke1))[0]
+            np1 = len(idx)
+            cs = cell._libcint_ctr_coeff(ib)
+            np, nc = cs.shape
+            if np1 < np:  # no pGTO splitting within the shell
+                pexp = cell._bas[ib,PTR_EXP]
+                pcoeff = cell._bas[ib,PTR_COEFF]
+                cs1 = cs[idx]
+                cell_dense._env[pcoeff:pcoeff+cs1.size] = cs1.T.ravel()
+                cell_dense._env[pexp:pexp+np1] = cell.bas_exp(ib)[idx]
+                cell_dense._bas[ib,NPRIM_OF] = np1
+
+            ke_cutoff = max(ke_cutoff, ke[idx].max())
+
+            ia = cell.bas_atom(ib)
+            rcut_atom[ia] = max(rcut_atom[ia], rcuts_pgto[ib][idx].max())
+        cell_dense._bas = cell_dense._bas[shls_dense]
+        ao_idx = numpy.hstack([numpy.arange(ao_loc[i], ao_loc[i+1])
+                               for i in shls_dense])
+        cell_dense.rcut = max(rcut_atom)
+        return cell_dense, ao_idx, ke_cutoff, rcut_atom
+
+    def make_cell_sparse_exp(shls_sparse, ke0, ke1):
+        cell_sparse = copy.copy(cell)
+        cell_sparse._bas = cell._bas.copy()
+        cell_sparse._env = cell._env.copy()
+
+        for ib in shls_sparse:
+            idx = numpy.where(kecuts_pgto[ib] <= ke0)[0]
+            np1 = len(idx)
+            cs = cell._libcint_ctr_coeff(ib)
+            np, nc = cs.shape
+            if np1 < np:  # no pGTO splitting within the shell
+                pexp = cell._bas[ib,PTR_EXP]
+                pcoeff = cell._bas[ib,PTR_COEFF]
+                cs1 = cs[idx]
+                cell_sparse._env[pcoeff:pcoeff+cs1.size] = cs1.T.ravel()
+                cell_sparse._env[pexp:pexp+np1] = cell.bas_exp(ib)[idx]
+                cell_sparse._bas[ib,NPRIM_OF] = np1
+        cell_sparse._bas = cell_sparse._bas[shls_sparse]
+        ao_idx = numpy.hstack([numpy.arange(ao_loc[i], ao_loc[i+1])
+                               for i in shls_sparse])
+        return cell_sparse, ao_idx
+
+    a = cell.lattice_vectors()
+    if abs(a-numpy.diag(a.diagonal())).max() < 1e-12:
+        init_mesh = INIT_MESH_ORTH
+    else:
+        init_mesh = INIT_MESH_NONORTH
+    ke_cutoff_min = tools.mesh_to_cutoff(cell.lattice_vectors(), init_mesh)
+    ke_cutoff_max = max([ke.max() for ke in kecuts_pgto])
+    ke1 = ke_cutoff_min.min()
+    ke_delimeter = [0, ke1]
+    while ke1 < ke_cutoff_max:
+        ke1 *= KE_RATIO
+        ke_delimeter.append(ke1)
+
+    tasks = []
+    for ke0, ke1 in zip(ke_delimeter[:-1], ke_delimeter[1:]):
+        # shells which have high exps (small rcut)
+        shls_dense = [ib for ib, ke in enumerate(kecuts_pgto)
+                     if numpy.any((ke0 < ke) & (ke <= ke1))]
+        if len(shls_dense) == 0:
+            continue
+
+        mesh = tools.cutoff_to_mesh(a, ke1)
+        if TO_EVEN_GRIDS:
+            mesh = (mesh+1)//2 * 2  # to the nearest even number
+
+        if numpy.all(mesh >= fft_mesh):
+            # Including all rest shells
+            shls_dense = [ib for ib, ke in enumerate(kecuts_pgto)
+                          if numpy.any(ke0 < ke)]
+            cell_dense, ao_idx_dense = make_cell_dense_exp(shls_dense, ke0,
+                                                           ke_cutoff_max+1)[:2]
+        else:
+            cell_dense, ao_idx_dense, ke_cutoff, rcut_atom = \
+                    make_cell_dense_exp(shls_dense, ke0, ke1)
+
+        cell_dense.mesh = mesh = numpy.min([mesh, fft_mesh], axis=0)
+
+        grids_dense = gen_grid.UniformGrids(cell_dense)
+        grids_dense.ao_idx = ao_idx_dense
+        #grids_dense.rcuts_pgto = [rcuts_pgto[i] for i in shls_dense]
+
+        # shells which have low exps (big rcut)
+        shls_sparse = [ib for ib, ke in enumerate(kecuts_pgto)
+                       if numpy.any(ke <= ke0)]
+        if len(shls_sparse) == 0:
+            cell_sparse = None
+            ao_idx_sparse = []
+        else:
+            cell_sparse, ao_idx_sparse = make_cell_sparse_exp(shls_sparse, ke0, ke1)
             cell_sparse.mesh = mesh
 
         if cell_sparse is None:
