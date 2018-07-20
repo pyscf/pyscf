@@ -35,6 +35,7 @@ cell_orth = gto.M(
               C     1.8     1.8     1.8   ''',
     basis = 'gth-dzv',
     pseudo = 'gth-pade',
+    precision = 1e-9,
     mesh = [48] * 3,
 )
 cell_nonorth = gto.M(
@@ -43,6 +44,7 @@ cell_nonorth = gto.M(
               C     0.8917  0.8917  0.8917''',
     basis = 'gth-dzv',
     pseudo = 'gth-pade',
+    precision = 1e-9,
     mesh = [44,43,42],
 )
 
@@ -50,6 +52,7 @@ cell_he = gto.M(atom='He 0 0 0',
                 basis=[[0, ( 1, 1, .1), (.5, .1, 1)],
                        [1, (.8, 1)]],
                 unit='B',
+                precision = 1e-9,
                 mesh=[18]*3,
                 a=numpy.eye(3)*5)
 
@@ -84,7 +87,7 @@ class KnownValues(unittest.TestCase):
     def test_orth_get_nuc_kpts(self):
         ref = df.FFTDF(cell_orth).get_nuc(kpts)
         out = multigrid.MultiGridFFTDF(cell_orth).get_nuc(kpts)
-        self.assertAlmostEqual(abs(ref-out).max(), 0, 8)
+        self.assertAlmostEqual(abs(ref-out).max(), 0, 9)
 
     def test_orth_get_j_kpts(self):
         ref = df.FFTDF(cell_orth).get_jk(dm, kpts=kpts, with_k=False)[0]
@@ -175,7 +178,7 @@ class KnownValues(unittest.TestCase):
         out = multigrid.multigrid(mf).get_veff(cell_he, dm1)
         self.assertAlmostEqual(float(abs(ref-out).max()), 0, 9)
         self.assertAlmostEqual(abs(ref.exc-out.exc).max(), 0, 9)
-        self.assertAlmostEqual(abs(ref.ecoul-out.ecoul).max(), 0, 9)
+        self.assertAlmostEqual(abs(ref.ecoul-out.ecoul).max(), 0, 8)
 
     def test_orth_rks_gga_kpts(self):
         xc = 'b88,'
