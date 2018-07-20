@@ -174,12 +174,9 @@ static void _plain_vrr2d(double *out, double *g, double *gbuf2, int li, int lj,
  */
 static double gto_rcut(double alpha, int l, double c, double log_prec)
 {
-        // Add penalty 1e-2 for other integral factors and coefficients
-        log_prec -= 5 + log(4*M_PI);
-
         double log_c = log(fabs(c));
         double prod = 0;
-        double r = 5.;
+        double r = 10.;
         double log_2a = log(2*alpha);
         double log_r = log(r);
 

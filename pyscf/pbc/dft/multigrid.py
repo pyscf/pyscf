@@ -111,6 +111,9 @@ def eval_mat(cell, weights, shls_slice=None, comp=1, hermi=0,
         offset = (0, 0, 0)
     if submesh is None:
         submesh = mesh
+    # log_prec is used to estimate the gto_rcut. Add EXTRA_PREC to count
+    # the factors and coefficients in the integral
+    log_prec = numpy.log(cell.precision * EXTRA_PREC)
 
     if abs(a-numpy.diag(a.diagonal())).max() < 1e-12:
         lattice_type = '_orth'
@@ -129,7 +132,7 @@ def eval_mat(cell, weights, shls_slice=None, comp=1, hermi=0,
             ctypes.c_int(comp), ctypes.c_int(hermi),
             (ctypes.c_int*4)(i0, i1, j0, j1),
             ao_loc.ctypes.data_as(ctypes.c_void_p),
-            ctypes.c_double(numpy.log(cell.precision)),
+            ctypes.c_double(log_prec),
             ctypes.c_int(cell.dimension),
             ctypes.c_int(nimgs),
             Ls.ctypes.data_as(ctypes.c_void_p),
@@ -204,6 +207,7 @@ def eval_rho(cell, dm, shls_slice=None, hermi=0, xctype='LDA', kpts=None,
         offset = (0, 0, 0)
     if submesh is None:
         submesh = mesh
+    log_prec = numpy.log(cell.precision * EXTRA_PREC)
 
     if abs(a-numpy.diag(a.diagonal())).max() < 1e-12:
         lattice_type = '_orth'
@@ -231,7 +235,7 @@ def eval_rho(cell, dm, shls_slice=None, hermi=0, xctype='LDA', kpts=None,
             ctypes.c_int(comp), ctypes.c_int(hermi),
             (ctypes.c_int*4)(i0, i1, j0, j1),
             ao_loc.ctypes.data_as(ctypes.c_void_p),
-            ctypes.c_double(numpy.log(cell.precision)),
+            ctypes.c_double(log_prec),
             ctypes.c_int(cell.dimension),
             ctypes.c_int(nimgs),
             Ls.ctypes.data_as(ctypes.c_void_p),
