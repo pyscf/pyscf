@@ -23,6 +23,7 @@ G0W0 approximation
 
 import time
 import tempfile
+from functools import reduce
 import numpy
 import numpy as np
 import h5py

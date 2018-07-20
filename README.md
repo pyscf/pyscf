@@ -6,10 +6,10 @@ Python-based Simulations of Chemistry Framework
 ===============================================
 [![Build Status](https://travis-ci.org/sunqm/pyscf.svg?branch=master)](https://travis-ci.org/sunqm/pyscf)
 
-2018-04-15
+2018-07-01
 
-* [Stable release 1.4.7](https://github.com/sunqm/pyscf/releases/tag/v1.4.7)
-* [1.5 beta](https://github.com/sunqm/pyscf/releases/tag/v1.5-beta)
+* [Stable release 1.5.1](https://github.com/sunqm/pyscf/releases/tag/v1.5.1)
+* [1.6 alpha](https://github.com/sunqm/pyscf/tree/dev)
 * [Changelog](../master/CHANGELOG)
 * [Documentation](http://www.pyscf.org)
 * [Installation](#installation)
@@ -101,6 +101,10 @@ Tutorials
 
 Known problems
 --------------
+
+* mkl-2018.0.0-intel_3 from intelpython gives segfault update to mkl-2018.0.1-intel_4 or superior relaease
+
+        conda update mkl
 
 * Error message "Library not loaded: libcint.3.0.dylib" On OS X.
 

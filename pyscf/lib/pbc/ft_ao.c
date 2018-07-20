@@ -1,11 +1,11 @@
 /* Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
-  
+
    Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
     You may obtain a copy of the License at
- 
+
         http://www.apache.org/licenses/LICENSE-2.0
- 
+
     Unless required by applicable law or agreed to in writing, software
     distributed under the License is distributed on an "AS IS" BASIS,
     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -70,7 +70,7 @@ static void _ft_fill_k(int (*intor)(), int (*eval_aopair)(), void (*eval_gz)(),
         double complex *bufk = buf;
         double complex *bufL = buf + dij*blksize * comp * nkpts;
         double complex *pbuf;
-        int gs0, gs1, dg, dijg, empty;
+        int gs0, gs1, dg, dijg;
         int jL0, jLcount, jL;
         int i;
 

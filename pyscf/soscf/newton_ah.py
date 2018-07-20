@@ -294,6 +294,14 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                         'deriviative is not available. Its contribution is '
                         'not included in the response function.')
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
+        hybrid = abs(hyb) > 1e-10
+
+        # mf can be pbc.dft.RKS object with multigrid
+        if (not hybrid and
+            'MultiGridFFTDF' == getattr(mf, 'with_df', None).__class__.__name__):
+            from pyscf.pbc.dft import multigrid
+            dm0 = mf.make_rdm1(mo_coeff, mo_occ)
+            return multigrid._gen_rhf_response(mf, dm0, singlet, hermi)
 
         if singlet is None:  # for newton solver
             rho0, vxc, fxc = ni.cache_xc_kernel(mol, mf.grids, mf.xc,
@@ -307,7 +315,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
             mem_now = lib.current_memory()[0]
             max_memory = max(2000, mf.max_memory*.8-mem_now)
 
-        if singlet is None:
+        if singlet is None:  # Without specify singlet, general case
             def vind(dm1):
                 # The singlet hessian
                 if hermi == 2:
@@ -315,7 +323,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                 else:
                     v1 = ni.nr_rks_fxc(mol, mf.grids, mf.xc, dm0, dm1, 0, hermi,
                                        rho0, vxc, fxc, max_memory=max_memory)
-                if abs(hyb) > 1e-10:
+                if hybrid:
                     if hermi != 2:
                         vj, vk = mf.get_jk(mol, dm1, hermi=hermi)
                         vk *= hyb
@@ -338,7 +346,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                                               True, rho0, vxc, fxc,
                                               max_memory=max_memory)
                     v1 *= .5
-                if abs(hyb) > 1e-10:
+                if hybrid:
                     if hermi != 2:
                         vj, vk = mf.get_jk(mol, dm1, hermi=hermi)
                         vk *= hyb
@@ -350,7 +358,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                 elif hermi != 2:
                     v1 += mf.get_j(mol, dm1, hermi=hermi)
                 return v1
-        else:
+        else:  # triplet
             def vind(dm1):
                 if hermi == 2:
                     v1 = numpy.zeros_like(dm1)
@@ -360,7 +368,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                                               False, rho0, vxc, fxc,
                                               max_memory=max_memory)
                     v1 *= .5
-                if abs(hyb) > 1e-10:
+                if hybrid:
                     vk = mf.get_k(mol, dm1, hermi=hermi)
                     vk *= hyb
                     if abs(omega) > 1e-10:  # For range separated Coulomb
@@ -387,7 +395,6 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
     mol = mf.mol
     if hasattr(mf, 'xc') and hasattr(mf, '_numint'):
         from pyscf.dft import rks
-        from pyscf.dft import numint
         ni = mf._numint
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
         if getattr(mf, 'nlc', '') != '':
@@ -395,6 +402,14 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
                         'deriviative is not available. Its contribution is '
                         'not included in the response function.')
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
+        hybrid = abs(hyb) > 1e-10
+
+        # mf can be pbc.dft.UKS object with multigrid
+        if (not hybrid and
+            'MultiGridFFTDF' == getattr(mf, 'with_df', None).__class__.__name__):
+            from pyscf.pbc.dft import multigrid
+            dm0 = mf.make_rdm1(mo_coeff, mo_occ)
+            return multigrid._gen_uhf_response(mf, dm0, with_j, hermi)
 
         rho0, vxc, fxc = ni.cache_xc_kernel(mol, mf.grids, mf.xc,
                                             mo_coeff, mo_occ, 1)
@@ -412,7 +427,7 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
             else:
                 v1 = ni.nr_uks_fxc(mol, mf.grids, mf.xc, dm0, dm1, 0, hermi,
                                    rho0, vxc, fxc, max_memory=max_memory)
-            if abs(hyb) < 1e-10:
+            if not hybrid:
                 if with_j:
                     vj = mf.get_j(mol, dm1, hermi=hermi)
                     v1 += vj[0] + vj[1]
@@ -494,14 +509,12 @@ def project_mol(mol, dual_basis={}):
 # changed and insert the mo_coeff to g_op, h_op.
 # Seems the high order terms do not help optimization?
 def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
-                  conv_tol_grad=None, verbose=None):
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(mf.stdout, mf.verbose)
+                  conv_tol_grad=None, max_stepsize=None, verbose=None):
+    log = logger.new_logger(mf, verbose)
 
     if conv_tol_grad is None:
         conv_tol_grad = numpy.sqrt(mf.conv_tol*.1)
+#TODO: dynamically adjust max_stepsize, as done in mc1step.py
 
     t2m = (time.clock(), time.time())
     g_orb, h_op, h_diag = mf.gen_g_hop(mo_coeff, mo_occ, fock_ao)
@@ -653,7 +666,8 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
     log = logger.new_logger(mf, verbose)
     mol = mf._scf.mol
     if mol != mf.mol:
-        logger.warn(mf, 'dual-basis SOSCF is an experimental feature.')
+        logger.warn(mf, 'dual-basis SOSCF is an experimental feature. It is '
+                    'still in testing.')
 
     if conv_tol_grad is None:
         conv_tol_grad = numpy.sqrt(conv_tol)
@@ -667,8 +681,9 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
     dm = mf.make_rdm1(mo_coeff, mo_occ)
 # call mf._scf.get_veff, to avoid density_fit module polluting get_veff function
     vhf = mf._scf.get_veff(mol, dm)
+    e_tot = mf._scf.energy_tot(dm, h1e, vhf)
     fock = mf.get_fock(h1e, s1e, vhf, dm, level_shift_factor=0)
-    log.info('Initial guess |g|= %g',
+    log.info('Initial guess E= %.15g  |g|= %g', e_tot,
              numpy.linalg.norm(mf._scf.get_grad(mo_coeff, mo_occ, fock)))
 # NOTE: DO NOT change the initial guess mo_occ, mo_coeff
     mo_energy, mo_tmp = mf.eig(fock, s1e)
@@ -951,6 +966,9 @@ def newton(mf):
     class SecondOrderRHF(mf.__class__, _CIAH_SOSCF):
         __doc__ = mf_doc + _CIAH_SOSCF.__doc__
         __init__ = _CIAH_SOSCF.__init__
+        dump_flags = _CIAH_SOSCF.dump_flags
+        build = _CIAH_SOSCF.build
+        kernel = _CIAH_SOSCF.kernel
 
         def gen_g_hop(self, mo_coeff, mo_occ, fock_ao=None, h1e=None):
             return gen_g_hop_rhf(self, mo_coeff, mo_occ, fock_ao, h1e)
@@ -977,6 +995,8 @@ def newton(mf):
         class SecondOrderUHF(mf.__class__, _CIAH_SOSCF):
             __doc__ = mf_doc + _CIAH_SOSCF.__doc__
             __init__ = _CIAH_SOSCF.__init__
+            dump_flags = _CIAH_SOSCF.dump_flags
+            build = _CIAH_SOSCF.build
 
             def gen_g_hop(self, mo_coeff, mo_occ, fock_ao=None, h1e=None):
                 return gen_g_hop_uhf(self, mo_coeff, mo_occ, fock_ao, h1e)
@@ -1022,12 +1042,24 @@ def newton(mf):
                 if hasattr(self, '_scf') and self._scf.mol != self.mol:
                     s = self._scf.get_ovlp()
                 return self._scf.spin_square(mo_coeff, s)
+
+            def kernel(self, mo_coeff=None, mo_occ=None, dm0=None):
+                if isinstance(mo_coeff, numpy.ndarray) and mo_coeff.ndim == 2:
+                    mo_coeff = (mo_coeff, mo_coeff)
+                if isinstance(mo_occ, numpy.ndarray) and mo_occ.ndim == 1:
+                    mo_occ = (numpy.asarray(mo_occ >0, dtype=numpy.double),
+                              numpy.asarray(mo_occ==2, dtype=numpy.double))
+                return _CIAH_SOSCF.kernel(self, mo_coeff, mo_occ)
+
         return SecondOrderUHF(mf)
 
     elif isinstance(mf, scf.ghf.GHF):
         class SecondOrderGHF(mf.__class__, _CIAH_SOSCF):
             __doc__ = mf_doc + _CIAH_SOSCF.__doc__
             __init__ = _CIAH_SOSCF.__init__
+            dump_flags = _CIAH_SOSCF.dump_flags
+            build = _CIAH_SOSCF.build
+            kernel = _CIAH_SOSCF.kernel
 
             def gen_g_hop(self, mo_coeff, mo_occ, fock_ao=None, h1e=None):
                 return gen_g_hop_ghf(self, mo_coeff, mo_occ, fock_ao, h1e)

@@ -306,7 +306,17 @@ def conc_cell(cell1, cell2):
     cell3.a = cell1.a
     cell3.mesh = np.max((cell1.mesh, cell2.mesh), axis=0)
 
-    cell3.ke_cutoff = max(cell1.mesh, cell2.mesh)
+    ke_cutoff1 = cell1.ke_cutoff
+    ke_cutoff2 = cell2.ke_cutoff
+    if ke_cutoff1 is None and ke_cutoff2 is None:
+        cell3.ke_cutoff = None
+    else:
+        if ke_cutoff1 is None:
+            ke_cutoff1 = estimate_ke_cutoff(cell1, cell1.precision)
+        if ke_cutoff2 is None:
+            ke_cutoff2 = estimate_ke_cutoff(cell2, cell2.precision)
+        cell3.ke_cutoff = max(ke_cutoff1, ke_cutoff2)
+
     cell3.precision = min(cell1.precision, cell2.precision)
     cell3.dimension = max(cell1.dimension, cell2.dimension)
     cell3.low_dim_ft_type = cell1.low_dim_ft_type or cell2.low_dim_ft_type
@@ -338,7 +348,7 @@ def conc_cell(cell1, cell2):
     return cell3
 
 def intor_cross(intor, cell1, cell2, comp=None, hermi=0, kpts=None, kpt=None,
-                **kwargs):
+                shls_slice=None, **kwargs):
     r'''1-electron integrals from two cells like
 
     .. math::
@@ -362,10 +372,14 @@ def intor_cross(intor, cell1, cell2, comp=None, hermi=0, kpts=None, kpt=None,
     pcell._atm, pcell._bas, pcell._env = \
     atm, bas, env = conc_env(cell1._atm, cell1._bas, cell1._env,
                              cell2._atm, cell2._bas, cell2._env)
-    shls_slice = (0, cell1.nbas, cell1.nbas, pcell.nbas)
+    if shls_slice is None:
+        shls_slice = (0, cell1.nbas, 0, cell2.nbas)
+    i0, i1, j0, j1 = shls_slice[:4]
+    j0 += cell1.nbas
+    j1 += cell1.nbas
     ao_loc = moleintor.make_loc(bas, intor)
-    ni = ao_loc[shls_slice[1]] - ao_loc[shls_slice[0]]
-    nj = ao_loc[shls_slice[3]] - ao_loc[shls_slice[2]]
+    ni = ao_loc[i1] - ao_loc[i0]
+    nj = ao_loc[j1] - ao_loc[j0]
     out = np.empty((nkpts,comp,ni,nj), dtype=np.complex128)
 
     if hermi == 0:
@@ -390,11 +404,11 @@ def intor_cross(intor, cell1, cell2, comp=None, hermi=0, kpts=None, kpt=None,
         ctypes.c_int(nkpts), ctypes.c_int(comp), ctypes.c_int(len(Ls)),
         Ls.ctypes.data_as(ctypes.c_void_p),
         expkL.ctypes.data_as(ctypes.c_void_p),
-        (ctypes.c_int*4)(*(shls_slice[:4])),
+        (ctypes.c_int*4)(i0, i1, j0, j1),
         ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt, cpbcopt,
         atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(pcell.natm),
         bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(pcell.nbas),
-        env.ctypes.data_as(ctypes.c_void_p))
+        env.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(env.size))
 
     mat = []
     for k, kpt in enumerate(kpts_lst):
@@ -455,12 +469,24 @@ def bas_rcut(cell, bas_id, precision=INTEGRAL_PRECISION):
 
 def _estimate_ke_cutoff(alpha, l, c, precision=INTEGRAL_PRECISION, weight=1.):
     '''Energy cutoff estimation'''
+    #if l == 0:
+    #    log_k0 = 2.5 + np.log(alpha) / 2
+    #    log_rest = np.log(2*alpha*16*np.pi**2*c**4/precision)
+    #    Ecut = (log_rest - log_k0) * 2 * alpha
+    #    Ecut[Ecut <= 0] = .5
+    #    log_k0 = .5 * np.log(Ecut*2)
+    #    Ecut = (log_rest - log_k0) * 2 * alpha
+    #    Ecut[Ecut <= 0] = .5
+    #    return Ecut
+
     log_k0 = 2.5 + np.log(alpha) / 2
     l2fac2 = scipy.misc.factorial2(l*2+1)
-    log_rest = np.log(precision*l2fac2**2*(4*alpha)**(l*2+1) / (32*np.pi**2*c**4*weight))
+    log_rest = np.log(precision*l2fac2**2*(4*alpha)**(l*2+1) / (32*np.pi**2*c**4))
     Ecut = 2*alpha * (log_k0*(4*l+3) - log_rest)
-    log_k0 = .5 * np.log(abs(Ecut)*2)
+    Ecut[Ecut <= 0] = .5
+    log_k0 = .5 * np.log(Ecut*2)
     Ecut = 2*alpha * (log_k0*(4*l+3) - log_rest)
+    Ecut[Ecut <= 0] = .5
     return Ecut
 
 def estimate_ke_cutoff(cell, precision=INTEGRAL_PRECISION):
@@ -573,7 +599,7 @@ def get_Gv(cell, mesh=None, **kwargs):
     gxyz = lib.cartesian_prod((gx, gy, gz))
 
     b = cell.reciprocal_vectors()
-    Gv = np.dot(gxyz, b)
+    Gv = lib.ddot(gxyz, b)
     return Gv
 
 def get_Gv_weights(cell, mesh=None, **kwargs):
@@ -683,8 +709,8 @@ def get_ewald_params(cell, precision=INTEGRAL_PRECISION, mesh=None):
             mesh = cell.mesh
         mesh = _cut_mesh_for_ewald(cell, mesh)
         Gmax = min(np.asarray(mesh)//2 * lib.norm(cell.reciprocal_vectors(), axis=1))
-        log_precision = np.log(precision/(4*np.pi*Gmax**2))
-        ew_eta = np.sqrt(-Gmax**2/(4*log_precision))
+        log_precision = np.log(precision/(4*np.pi*(Gmax+1e-100)**2))
+        ew_eta = np.sqrt(-Gmax**2/(4*log_precision)) + 1e-100
         ew_cut = _estimate_rcut(ew_eta**2, 0, 1., precision)
     else:
 # Non-uniform PW grids are used for low-dimensional ewald summation.  The cutoff
@@ -694,11 +720,10 @@ def get_ewald_params(cell, precision=INTEGRAL_PRECISION, mesh=None):
         ew_eta = np.sqrt(max(np.log(4*np.pi*ew_cut**2/precision)/ew_cut**2, .1))
     return ew_eta, ew_cut
 
-# roughly 4 grids per axis
 def _cut_mesh_for_ewald(cell, mesh):
     mesh = np.copy(mesh)
     mesh_max = np.asarray(np.linalg.norm(cell.lattice_vectors(), axis=1) * 2,
-                          dtype=int)
+                          dtype=int)  # roughly 2 grids per bohr
     mesh_max[cell.dimension:] = mesh[cell.dimension:]
     mesh_max[mesh_max<80] = 80
     mesh[mesh>mesh_max] = mesh_max[mesh>mesh_max]
@@ -1494,7 +1519,7 @@ class Cell(mole.Mole):
     __add__ = conc_cell
 
     def pbc_intor(self, intor, comp=None, hermi=0, kpts=None, kpt=None,
-                  **kwargs):
+                  shls_slice=None, **kwargs):
         r'''One-electron integrals with PBC.
 
         .. math::
@@ -1508,7 +1533,8 @@ class Cell(mole.Mole):
             # FIXME: Whether to check _built and call build?  ._bas and .basis
             # may not be consistent. calling .build() may leads to wrong intor env.
             #self.build(False, False)
-        return intor_cross(intor, self, self, comp, hermi, kpts, kpt, **kwargs)
+        return intor_cross(intor, self, self, comp, hermi, kpts, kpt,
+                           shls_slice, **kwargs)
 
     @lib.with_doc(pbc_eval_gto.__doc__)
     def pbc_eval_gto(self, eval_name, coords, comp=None, kpts=None, kpt=None,

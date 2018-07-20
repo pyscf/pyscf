@@ -24,9 +24,9 @@ See Also:
 '''
 
 import numpy as np
-import pyscf.scf.uhf as mol_uhf
 from pyscf import lib
 from pyscf.lib import logger
+from pyscf.scf import uhf as mol_uhf
 from pyscf.pbc.scf import hf as pbchf
 from pyscf.pbc.scf import addons
 from pyscf.pbc.scf import chkfile
@@ -96,13 +96,17 @@ class UHF(mol_uhf.UHF, pbchf.SCF):
     def __init__(self, cell, kpt=np.zeros(3),
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         pbchf.SCF.__init__(self, cell, kpt, exxdiv)
-        self.nelec = cell.nelec
+        self.nelec = None
         self._keys = self._keys.union(['nelec'])
 
     def dump_flags(self):
         pbchf.SCF.dump_flags(self)
+        if self.nelec is None:
+            nelec = self.cell.nelec
+        else:
+            nelec = self.nelec
         logger.info(self, 'number of electrons per unit cell  '
-                    'alpha = %d beta = %d', *self.nelec)
+                    'alpha = %d beta = %d', *nelec)
         return self
 
     build = pbchf.SCF.build
@@ -135,16 +139,44 @@ class UHF(mol_uhf.UHF, pbchf.SCF):
             mo_coeff : (nao, nmo) ndarray or a list of (nao,nmo) ndarray
                 Band orbitals psi_n(k)
         '''
-        raise NotImplementedError
+        if cell is None: cell = self.cell
+        if dm is None: dm = self.make_rdm1()
+        if kpt is None: kpt = self.kpt
+
+        kpts_band = np.asarray(kpts_band)
+        single_kpt_band = (hasattr(kpts_band, 'ndim') and kpts_band.ndim == 1)
+        kpts_band = kpts_band.reshape(-1,3)
+
+        fock = self.get_hcore(cell, kpts_band)
+        focka, fockb = fock + self.get_veff(cell, dm, kpt=kpt, kpts_band=kpts_band)
+        s1e = self.get_ovlp(cell, kpts_band)
+        nkpts = len(kpts_band)
+        e_a = []
+        e_b = []
+        c_a = []
+        c_b = []
+        for k in range(nkpts):
+            e, c = self.eig((focka[k], fockb[k]), s1e[k])
+            e_a.append(e[0])
+            e_b.append(e[1])
+            c_a.append(c[0])
+            c_b.append(c[1])
+        mo_energy = (e_a, e_b)
+        mo_coeff = (c_a, c_b)
+
+        if single_kpt_band:
+            mo_energy = (mo_energy[0][0], mo_energy[1][0])
+            mo_coeff = (mo_coeff[0][0], mo_coeff[1][0])
+        return mo_energy, mo_coeff
 
     def get_init_guess(self, cell=None, key='minao'):
         if cell is None: cell = self.cell
         dm = mol_uhf.UHF.get_init_guess(self, cell, key)
         if cell.dimension < 3:
             if isinstance(dm, np.ndarray) and dm.ndim == 2:
-                ne = np.einsum('ij,ji', dm, self.get_ovlp(cell))
+                ne = np.einsum('ij,ji->', dm, self.get_ovlp(cell))
             else:
-                ne = np.einsum('xij,ji', dm, self.get_ovlp(cell))
+                ne = np.einsum('xij,ji->', dm, self.get_ovlp(cell))
             if abs(ne - cell.nelectron).sum() > 1e-7:
                 logger.warn(self, 'Big error detected in the electron number '
                             'of initial guess density matrix (Ne/cell = %g)!\n'
@@ -160,7 +192,7 @@ class UHF(mol_uhf.UHF, pbchf.SCF):
         if cell.dimension < 3:
             logger.warn(self, 'Hcore initial guess is not recommended in '
                         'the SCF of low-dimensional systems.')
-        return mol_uhf.UHF.init_guess_by_1e(cell)
+        return mol_uhf.UHF.init_guess_by_1e(self, cell)
 
     def init_guess_by_chkfile(self, chk=None, project=True, kpt=None):
         if chk is None: chk = self.chkfile

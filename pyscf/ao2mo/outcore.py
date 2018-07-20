@@ -678,7 +678,7 @@ def guess_e1bufsize(max_memory, ioblk_size, nij_pair, nao_pair, comp):
     iobuf_words = max(int(mem_words//6), IOBUF_WORDS)
     ioblk_words = int(min(ioblk_size*1e6/8, iobuf_words))
 
-    e1buflen = int(min(iobuf_words/(comp*nij_pair), mem_words*.66/(comp*nao_pair)))
+    e1buflen = int(mem_words*.66/(comp*(nij_pair*2+nao_pair)))
     e1buflen = max(e1buflen, IOBUF_ROW_MIN)
     return e1buflen, mem_words, iobuf_words, ioblk_words
 
@@ -751,7 +751,7 @@ def balance_partition(ao_loc, blksize, start_id=0, stop_id=None):
     if stop_id is None:
         stop_id = len(ao_loc) - 1
     else:
-        stop_id = min(stop_id, len(ao_loc)-1)
+        stop_id = min(stop_id, start_id+len(ao_loc)-1)
     displs = lib.misc._blocksize_partition(ao_loc[start_id:stop_id+1], blksize)
     displs = [i+start_id for i in displs]
     tasks = []

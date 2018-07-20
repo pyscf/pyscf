@@ -53,8 +53,9 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_cycle=50, tol=1e-8,
 
     cput1 = cput0 = (time.clock(), time.time())
     eold = 0
-    vec_old = 0
-    eccsd = 0
+    eccsd = mycc.energy(t1, t2, eris)
+    log.info('Init E(CCSD) = %.15g', eccsd)
+
     if isinstance(mycc.diis, lib.diis.DIIS):
         adiis = mycc.diis
     elif mycc.diis:
@@ -134,29 +135,44 @@ def update_amps(mycc, t1, t2, eris):
         wVOov = fwVOov[p0:p1]
         wVooV = fwVooV[p0:p1]
         eris_ovoo = eris.ovoo[:,p0:p1]
-        foo += numpy.einsum('kc,kcji->ij', 2*t1[:,p0:p1], eris_ovoo)
-        foo += numpy.einsum('kc,icjk->ij',  -t1[:,p0:p1], eris_ovoo)
-        tmp = lib.einsum('la,jaik->lkji', t1[:,p0:p1], eris_ovoo)
-        woooo += tmp + tmp.transpose(1,0,3,2)
-        tmp = None
+        eris_oovv = numpy.empty((nocc,nocc,p1-p0,nvir))
+        def load_oovv(p0, p1):
+            eris_oovv[:] = eris.oovv[:,:,p0:p1]
+        with lib.call_in_background(load_oovv) as prefetch_oovv:
+            #:eris_oovv = eris.oovv[:,:,p0:p1]
+            prefetch_oovv(p0, p1)
+            foo += numpy.einsum('kc,kcji->ij', 2*t1[:,p0:p1], eris_ovoo)
+            foo += numpy.einsum('kc,icjk->ij',  -t1[:,p0:p1], eris_ovoo)
+            tmp = lib.einsum('la,jaik->lkji', t1[:,p0:p1], eris_ovoo)
+            woooo += tmp + tmp.transpose(1,0,3,2)
+            tmp = None
 
-        wVOov -= lib.einsum('jbik,ka->bjia', eris_ovoo, t1)
-        t2new[:,:,p0:p1] += wVOov.transpose(1,2,0,3)
+            wVOov -= lib.einsum('jbik,ka->bjia', eris_ovoo, t1)
+            t2new[:,:,p0:p1] += wVOov.transpose(1,2,0,3)
 
-        wVooV += lib.einsum('kbij,ka->bija', eris_ovoo, t1)
-        eris_ovoo = None
+            wVooV += lib.einsum('kbij,ka->bija', eris_ovoo, t1)
+            eris_ovoo = None
+        load_oovv = prefetch_oovv = None
 
-        eris_oovv = eris.oovv[:,:,p0:p1]
-        t1new[:,p0:p1] -= numpy.einsum('jb,jiab->ia', t1, eris_oovv)
-        wVooV -= eris_oovv.transpose(2,0,1,3)
+        eris_ovvo = numpy.empty((nocc,p1-p0,nvir,nocc))
+        def load_ovvo(p0, p1):
+            eris_ovvo[:] = eris.ovvo[:,p0:p1]
+        with lib.call_in_background(load_ovvo) as prefetch_ovvo:
+            #:eris_ovvo = eris.ovvo[:,p0:p1]
+            prefetch_ovvo(p0, p1)
+            t1new[:,p0:p1] -= numpy.einsum('jb,jiab->ia', t1, eris_oovv)
+            wVooV -= eris_oovv.transpose(2,0,1,3)
+            wVOov += wVooV*.5  #: bjia + bija*.5
+        load_ovvo = prefetch_ovvo = None
 
-        eris_voov = eris.ovvo[:,p0:p1].transpose(1,0,3,2)
-        t2new[:,:,p0:p1] += eris_voov.transpose(1,2,0,3) * .5
+        t2new[:,:,p0:p1] += (eris_ovvo*0.5).transpose(0,3,1,2)
+        eris_voov = eris_ovvo.conj().transpose(1,0,3,2)
         t1new[:,p0:p1] += 2*numpy.einsum('jb,aijb->ia', t1, eris_voov)
+        eris_ovvo = None
 
         tmp  = lib.einsum('ic,kjbc->ibkj', t1, eris_oovv)
         tmp += lib.einsum('bjkc,ic->jbki', eris_voov, t1)
-        t2new[:,:,p0:p1] -= numpy.einsum('ka,jbki->jiba', t1, tmp)
+        t2new[:,:,p0:p1] -= lib.einsum('ka,jbki->jiba', t1, tmp)
         eris_oovv = tmp = None
 
         fov[:,p0:p1] += numpy.einsum('kc,aikc->ia', t1, eris_voov) * 2
@@ -170,38 +186,56 @@ def update_amps(mycc, t1, t2, eris):
         foo += lib.einsum('aikb,kjab->ij', eris_voov, theta)
         tau = theta = None
 
-        wVOov += wVooV*.5  #: bjia + bija*.5
-
         tau = t2[:,:,p0:p1] + numpy.einsum('ia,jb->ijab', t1[:,p0:p1], t1)
         woooo += lib.einsum('ijab,aklb->ijkl', tau, eris_voov)
         tau = None
 
-        for q0, q1 in lib.prange(0, nvir, blksize):
-            tau  = t2[:,:,q0:q1] * .5
-            tau += numpy.einsum('ia,jb->ijab', t1[:,q0:q1], t1)
-            wVooV += lib.einsum('bkic,jkca->bija', eris_voov[:,:,:,q0:q1], tau)
-        tau = None
-        for q0, q1 in lib.prange(0, nvir, blksize):
-            tmp = lib.einsum('jkca,ckib->jaib', t2[:,:,p0:p1,q0:q1], wVooV)
+        def update_wVooV(q0, q1, tau):
+            wVooV[:] += lib.einsum('bkic,jkca->bija', eris_voov[:,:,:,q0:q1], tau)
+        with lib.call_in_background(update_wVooV) as update_wVooV:
+            for q0, q1 in lib.prange(0, nvir, blksize):
+                tau  = t2[:,:,q0:q1] * .5
+                tau += numpy.einsum('ia,jb->ijab', t1[:,q0:q1], t1)
+                #:wVooV += lib.einsum('bkic,jkca->bija', eris_voov[:,:,:,q0:q1], tau)
+                update_wVooV(q0, q1, tau)
+        tau = update_wVooV = None
+        def update_t2(q0, q1, tmp):
             t2new[:,:,q0:q1] += tmp.transpose(2,0,1,3)
-            t2new[:,:,q0:q1] += tmp.transpose(0,2,1,3) * .5
-            tmp = None
+            tmp *= .5
+            t2new[:,:,q0:q1] += tmp.transpose(0,2,1,3)
+        with lib.call_in_background(update_t2) as update_t2:
+            for q0, q1 in lib.prange(0, nvir, blksize):
+                tmp = lib.einsum('jkca,ckib->jaib', t2[:,:,p0:p1,q0:q1], wVooV)
+                #:t2new[:,:,q0:q1] += tmp.transpose(2,0,1,3)
+                #:tmp *= .5
+                #:t2new[:,:,q0:q1] += tmp.transpose(0,2,1,3)
+                update_t2(q0, q1, tmp)
+                tmp = None
 
         wVOov += eris_voov
-        eris_VOov = eris_voov - eris_voov.transpose(0,2,1,3)*.5
+        eris_VOov = -.5 * eris_voov.transpose(0,2,1,3)
+        eris_VOov += eris_voov
         eris_voov = None
-        for q0, q1 in lib.prange(0, nvir, blksize):
-            tau  = t2[:,:,q0:q1].transpose(1,3,0,2) * 2
-            tau -= t2[:,:,q0:q1].transpose(0,3,1,2)
-            tau -= numpy.einsum('ia,jb->ibja', t1[:,q0:q1]*2, t1)
+        def update_wVOov(q0, q1, tau):
             wVOov[:,:,:,q0:q1] += .5 * lib.einsum('aikc,kcjb->aijb', eris_VOov, tau)
-            tau = None
-        for q0, q1 in lib.prange(0, nvir, blksize):
-            theta  = t2[:,:,p0:p1,q0:q1] * 2
-            theta -= t2[:,:,p0:p1,q0:q1].transpose(1,0,2,3)
+        with lib.call_in_background(update_wVOov) as update_wVOov:
+            for q0, q1 in lib.prange(0, nvir, blksize):
+                tau  = t2[:,:,q0:q1].transpose(1,3,0,2) * 2
+                tau -= t2[:,:,q0:q1].transpose(0,3,1,2)
+                tau -= numpy.einsum('ia,jb->ibja', t1[:,q0:q1]*2, t1)
+                #:wVOov[:,:,:,q0:q1] += .5 * lib.einsum('aikc,kcjb->aijb', eris_VOov, tau)
+                update_wVOov(q0, q1, tau)
+                tau = None
+        def update_t2(q0, q1, theta):
             t2new[:,:,q0:q1] += lib.einsum('kica,ckjb->ijab', theta, wVOov)
-            theta = None
-        eris_VOov = wVOov = wVooV = None
+        with lib.call_in_background(update_t2) as update_t2:
+            for q0, q1 in lib.prange(0, nvir, blksize):
+                theta  = t2[:,:,p0:p1,q0:q1] * 2
+                theta -= t2[:,:,p0:p1,q0:q1].transpose(1,0,2,3)
+                #:t2new[:,:,q0:q1] += lib.einsum('kica,ckjb->ijab', theta, wVOov)
+                update_t2(q0, q1, theta)
+                theta = None
+        eris_VOov = wVOov = wVooV = update_wVOov = update_t2new = None
         time1 = log.timer_debug1('voov [%d:%d]'%(p0, p1), *time1)
     fwVOov = fwVooV = fswap = None
 
@@ -210,7 +244,8 @@ def update_amps(mycc, t1, t2, eris):
         t1new += numpy.einsum('jb,ijba->ia', fov[:,p0:p1], theta)
         t1new -= lib.einsum('jbki,kjba->ia', eris.ovoo[:,p0:p1], theta)
 
-        tau = t2[:,:,p0:p1] + numpy.einsum('ia,jb->ijab', t1[:,p0:p1], t1)
+        tau = numpy.einsum('ia,jb->ijab', t1[:,p0:p1], t1)
+        tau += t2[:,:,p0:p1]
         t2new[:,:,p0:p1] += .5 * lib.einsum('ijkl,klab->ijab', woooo, tau)
         theta = tau = None
 
@@ -242,29 +277,33 @@ def _add_ovvv_(mycc, t1, t2, eris, fvv, t1new, t2new, fswap):
     time1 = time.clock(), time.time()
     log = logger.Logger(mycc.stdout, mycc.verbose)
     nocc, nvir = t1.shape
-
-    max_memory = mycc.max_memory - lib.current_memory()[0]
-    unit = nocc*nvir**2*3 + nocc**2*nvir + 1
-    blksize = min(nvir, max(BLKMIN, int((max_memory*.9e6/8-t2.size)/unit)))
-    log.debug1('max_memory %d MB,  nocc,nvir = %d,%d  blksize = %d',
-               max_memory, nocc, nvir, blksize)
     nvir_pair = nvir * (nvir+1) // 2
-    def load_ovvv(p0, p1, buf):
-        if p0 < p1:
-            buf[:p1-p0] = eris.ovvv[:,p0:p1].transpose(1,0,2)
 
     if fswap is None:
         wVOov = numpy.zeros((nvir,nocc,nocc,nvir))
     else:
         wVOov = fswap.create_dataset('wVOov', (nvir,nocc,nocc,nvir), 'f8')
-    fwooVV = numpy.zeros((nocc,nocc,nvir,nvir))
+    wooVV = numpy.zeros((nocc,nocc*nvir_pair))
+
+    max_memory = mycc.max_memory - lib.current_memory()[0]
+    unit = nocc*nvir**2*2.5 + nocc**2*nvir + 2
+    blksize = min(nvir, max(BLKMIN, int((max_memory*.95e6/8-wooVV.size)/unit)))
+    log.debug1('max_memory %d MB,  nocc,nvir = %d,%d  blksize = %d',
+               max_memory, nocc, nvir, blksize)
+    def load_ovvv(p0, p1):
+        if p0 < p1:
+            buf[:p1-p0] = eris.ovvv[:,p0:p1].transpose(1,0,2)
 
     buf = numpy.empty((blksize,nocc,nvir_pair))
     with lib.call_in_background(load_ovvv, sync=not mycc.async_io) as prefetch:
-        load_ovvv(0, blksize, buf)
+        load_ovvv(0, blksize)
         for p0, p1 in lib.prange(0, nvir, blksize):
             eris_vovv, buf = buf[:p1-p0], numpy.empty_like(buf)
-            prefetch(p1, min(nvir, p1+blksize), buf)
+            prefetch(p1, min(nvir, p1+blksize))
+
+            #:wooVV -= numpy.einsum('jc,ciba->jiba', t1[:,p0:p1], eris_vovv)
+            lib.ddot(numpy.asarray(t1[:,p0:p1], order='C'),
+                     eris_vovv.reshape(p1-p0,-1), -1, wooVV, 1)
 
             eris_vovv = lib.unpack_tril(eris_vovv.reshape((p1-p0)*nocc,nvir_pair))
             eris_vovv = eris_vovv.reshape(p1-p0,nocc,nvir,nvir)
@@ -281,12 +320,7 @@ def _add_ovvv_(mycc, t1, t2, eris, fvv, t1new, t2new, fswap):
                     tau = tmp = None
                 eris_vvvo = None
 
-            #:fwooVV -= numpy.einsum('jc,ciba->jiba', t1[:,p0:p1], eris_vovv)
-            lib.ddot(numpy.asarray(t1[:,p0:p1], order='C'),
-                     eris_vovv.reshape(p1-p0,-1), -1,
-                     fwooVV.reshape(nocc,-1), 1)
-
-            wVOov[p0:p1] += lib.einsum('biac,jc->bija', eris_vovv, t1)
+            wVOov[p0:p1] = lib.einsum('biac,jc->bija', eris_vovv, t1)
 
             theta = t2[:,:,p0:p1].transpose(1,2,0,3) * 2
             theta -= t2[:,:,p0:p1].transpose(0,2,1,3)
@@ -295,9 +329,14 @@ def _add_ovvv_(mycc, t1, t2, eris, fvv, t1new, t2new, fswap):
             time1 = log.timer_debug1('vovv [%d:%d]'%(p0, p1), *time1)
 
     if fswap is None:
-        return wVOov, fwooVV.transpose(2,1,0,3)
+        wooVV = lib.unpack_tril(wooVV.reshape(nocc**2,nvir_pair))
+        return wVOov, wooVV.reshape(nocc,nocc,nvir,nvir).transpose(2,1,0,3)
     else:
-        fswap['wVooV'] = fwooVV.transpose(2,1,0,3)
+        fswap.create_dataset('wVooV', (nvir,nocc,nocc,nvir), 'f8')
+        wooVV = wooVV.reshape(nocc,nocc,nvir_pair)
+        tril2sq = lib.square_mat_in_trilu_indices(nvir)
+        for p0, p1 in lib.prange(0, nvir, blksize):
+            fswap['wVooV'][p0:p1] = wooVV[:,:,tril2sq[p0:p1]].transpose(2,1,0,3)
         return fswap['wVOov'], fswap['wVooV']
 
 def _add_vvvv(mycc, t1, t2, eris, out=None, with_ovvv=None, t2sym=None):
@@ -343,7 +382,6 @@ def _add_vvvv_tril(mycc, t1, t2, eris, out=None, with_ovvv=None):
             p0, p1 = p1, p1 + i+1
             tau[p0:p1] = numpy.einsum('a,jb->jab', t1[i], t1[:i+1])
             tau[p0:p1] += t2[i,:i+1]
-    taux = tau
 
     if mycc.direct:   # AO-direct CCSD
         mo = getattr(eris, 'mo_coeff', None)
@@ -355,8 +393,7 @@ def _add_vvvv_tril(mycc, t1, t2, eris, out=None, with_ovvv=None):
         tau = tau.reshape(nocc2,nao,nao)
         time0 = log.timer_debug1('vvvv-tau', *time0)
 
-        max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
-        buf = eris._contract_vvvv_t2(mycc, tau, mycc.direct, out, max_memory, log)
+        buf = eris._contract_vvvv_t2(mycc, tau, mycc.direct, out, log)
         buf = buf.reshape(nocc2,nao,nao)
         Ht2tril = _ao2mo.nr_e2(buf, mo.conj(), (nocc,nmo,nocc,nmo), 's1', 's1')
         Ht2tril = Ht2tril.reshape(nocc2,nvir,nvir)
@@ -375,8 +412,7 @@ def _add_vvvv_tril(mycc, t1, t2, eris, out=None, with_ovvv=None):
             Ht2tril -= tmp.reshape(nocc2,nvir,nvir)
     else:
         assert(not with_ovvv)
-        max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
-        Ht2tril = eris._contract_vvvv_t2(mycc, taux, mycc.direct, out, max_memory, log)
+        Ht2tril = eris._contract_vvvv_t2(mycc, tau, mycc.direct, out, log)
     return Ht2tril
 
 def _add_vvvv_full(mycc, t1, t2, eris, out=None, with_ovvv=False):
@@ -390,7 +426,6 @@ def _add_vvvv_full(mycc, t1, t2, eris, out=None, with_ovvv=False):
     else:
         tau = numpy.einsum('ia,jb->ijab', t1, t1)
         tau += t2
-    max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
 
     if mycc.direct:   # AO-direct CCSD
         if with_ovvv:
@@ -405,18 +440,17 @@ def _add_vvvv_full(mycc, t1, t2, eris, out=None, with_ovvv=False):
         tau = tau.reshape(nocc,nocc,nao,nao)
         time0 = log.timer_debug1('vvvv-tau mo2ao', *time0)
 
-        buf = eris._contract_vvvv_t2(mycc, tau, mycc.direct, out, max_memory, log)
+        buf = eris._contract_vvvv_t2(mycc, tau, mycc.direct, out, log)
         buf = buf.reshape(nocc**2,nao,nao)
         Ht2 = _ao2mo.nr_e2(buf, mo.conj(), (nocc,nmo,nocc,nmo), 's1', 's1')
     else:
         assert(not with_ovvv)
-        Ht2 = eris._contract_vvvv_t2(mycc, tau, mycc.direct, out, max_memory, log)
+        Ht2 = eris._contract_vvvv_t2(mycc, tau, mycc.direct, out, log)
 
     return Ht2.reshape(t2.shape)
 
 
-def _contract_vvvv_t2(mycc, mol, vvvv, t2, out=None, max_memory=MEMORYMIN,
-                      verbose=None):
+def _contract_vvvv_t2(mycc, mol, vvvv, t2, out=None, verbose=None):
     '''Ht2 = numpy.einsum('ijcd,acbd->ijab', t2, vvvv)
 
     Args:
@@ -425,13 +459,12 @@ def _contract_vvvv_t2(mycc, mol, vvvv, t2, out=None, max_memory=MEMORYMIN,
     '''
     if vvvv is None or len(vvvv.shape) == 2:
         # AO-direct or vvvv in 4-fold symmetry
-        return _contract_s4vvvv_t2(mycc, mol, vvvv, t2, out, max_memory, verbose)
+        return _contract_s4vvvv_t2(mycc, mol, vvvv, t2, out, verbose)
     else:
-        return _contract_s1vvvv_t2(mycc, mol, vvvv, t2, out, max_memory, verbose)
+        return _contract_s1vvvv_t2(mycc, mol, vvvv, t2, out, verbose)
 
 
-def _contract_s4vvvv_t2(mycc, mol, vvvv, t2, out=None, max_memory=MEMORYMIN,
-                        verbose=None):
+def _contract_s4vvvv_t2(mycc, mol, vvvv, t2, out=None, verbose=None):
     '''Ht2 = numpy.einsum('ijcd,acbd->ijab', t2, vvvv)
     where vvvv has to be real and has the 4-fold permutation symmetry
 
@@ -445,7 +478,7 @@ def _contract_s4vvvv_t2(mycc, mol, vvvv, t2, out=None, max_memory=MEMORYMIN,
 
     _dgemm = lib.numpy_helper._dgemm
     time0 = time.clock(), time.time()
-    log = logger.new_logger(mol, verbose)
+    log = logger.new_logger(mycc, verbose)
 
     nvira, nvirb = t2.shape[-2:]
     x2 = t2.reshape(-1,nvira,nvirb)
@@ -468,6 +501,7 @@ def _contract_s4vvvv_t2(mycc, mol, vvvv, t2, out=None, max_memory=MEMORYMIN,
                    x2.reshape(-1,nvir2), eri.reshape(-1,jc*nvirb),
                    Ht2.reshape(-1,nvir2), 1, 1, j0*nvirb, 0, i0*nvirb)
 
+    max_memory = max(MEMORYMIN, mycc.max_memory - lib.current_memory()[0])
     if vvvv is None:   # AO-direct CCSD
         ao_loc = mol.ao_loc_nr()
         assert(nvira == nvirb == ao_loc[-1])
@@ -475,7 +509,7 @@ def _contract_s4vvvv_t2(mycc, mol, vvvv, t2, out=None, max_memory=MEMORYMIN,
         intor = mol._add_suffix('int2e')
         ao2mopt = _ao2mo.AO2MOpt(mol, intor, 'CVHFnr_schwarz_cond',
                                  'CVHFsetnr_direct_scf')
-        blksize = max(BLKMIN, numpy.sqrt(max_memory*.95e6/8/nvirb**2/2))
+        blksize = max(BLKMIN, numpy.sqrt(max_memory*.9e6/8/nvirb**2/2.5))
         blksize = int(min((nvira+3)/4, blksize))
         sh_ranges = ao2mo.outcore.balance_partition(ao_loc, blksize)
         blksize = max(x[2] for x in sh_ranges)
@@ -517,13 +551,15 @@ def _contract_s4vvvv_t2(mycc, mol, vvvv, t2, out=None, max_memory=MEMORYMIN,
     else:
         nvir_pair = nvirb * (nvirb+1) // 2
         unit = nvira*nvir_pair*2 + nvirb**2*nvira/4 + 1
-        blksize = max(BLKMIN, numpy.sqrt(max_memory*.95e6/8/unit))
+        blksize = numpy.sqrt(max(BLKMIN**2, max_memory*.95e6/8/unit))
         blksize = int(min((nvira+3)/4, blksize))
 
         tril2sq = lib.square_mat_in_trilu_indices(nvira)
         loadbuf = numpy.empty((blksize,blksize,nvirb,nvirb))
-        def block_contract(wwbuf, i0, i1):
+        def block_contract(i0, i1):
             off0 = i0*(i0+1)//2
+            off1 = i1*(i1+1)//2
+            wwbuf = numpy.asarray(vvvv[off0:off1], order='C')
             for j0, j1 in lib.prange(0, i1, blksize):
                 eri = wwbuf[tril2sq[i0:i1,j0:j1]-off0]
                 tmp = numpy.ndarray((i1-i0,nvirb,j1-j0,nvirb), buffer=loadbuf)
@@ -537,15 +573,11 @@ def _contract_s4vvvv_t2(mycc, mol, vvvv, t2, out=None, max_memory=MEMORYMIN,
             readbuf = numpy.empty((blksize,nvira,nvir_pair))
             readbuf1 = numpy.empty_like(readbuf)
             for p0, p1 in lib.prange(0, nvira, blksize):
-                off0 = p0*(p0+1)//2
-                off1 = p1*(p1+1)//2
-                buf = numpy.asarray(vvvv[off0:off1], order='C')
-                bcontract(buf, p0, p1)
+                bcontract(p0, p1)
                 time0 = log.timer_debug1('vvvv [%d:%d]'%(p0,p1), *time0)
     return Ht2.reshape(t2.shape)
 
-def _contract_s1vvvv_t2(mycc, mol, vvvv, t2, out=None, max_memory=MEMORYMIN,
-                        verbose=None):
+def _contract_s1vvvv_t2(mycc, mol, vvvv, t2, out=None, verbose=None):
     '''Ht2 = numpy.einsum('ijcd,acdb->ijab', t2, vvvv)
     where vvvv can be real or complex and no permutation symmetry is available in vvvv.
 
@@ -554,11 +586,11 @@ def _contract_s1vvvv_t2(mycc, mol, vvvv, t2, out=None, max_memory=MEMORYMIN,
             if vvvv is None, contract t2 to AO-integrals using AO-direct algorithm
     '''
     # vvvv == None means AO-direct CCSD. It should redirect to
-    # _contract_s4vvvv_t2(mycc, mol, vvvv, t2, out, max_memory, verbose)
+    # _contract_s4vvvv_t2(mycc, mol, vvvv, t2, out, verbose)
     assert(vvvv is not None)
 
     time0 = time.clock(), time.time()
-    log = logger.new_logger(mol, verbose)
+    log = logger.new_logger(mycc, verbose)
 
     nvira, nvirb = t2.shape[-2:]
     x2 = t2.reshape(-1,nvira,nvirb)
@@ -566,6 +598,7 @@ def _contract_s1vvvv_t2(mycc, mol, vvvv, t2, out=None, max_memory=MEMORYMIN,
     dtype = numpy.result_type(t2, vvvv)
     Ht2 = numpy.ndarray(x2.shape, dtype=dtype, buffer=out)
 
+    max_memory = mycc.max_memory - lib.current_memory()[0]
     unit = nvirb**2*nvira*2 + nocc2*nvirb + 1
     blksize = min(nvira, max(BLKMIN, int(max_memory*1e6/8/unit)))
 
@@ -661,7 +694,24 @@ def energy(mycc, t1=None, t2=None, eris=None):
         e -=     numpy.einsum('jiab,iabj', tau, eris_ovvo)
     if abs(e.imag) > 1e-4:
         logger.warn(mycc, 'Non-zero imaginary part found in CCSD energy %s', e)
-    return e
+    return e.real
+
+def restore_from_diis_(mycc, diis_file, inplace=True):
+    '''Reuse an existed DIIS object in the CCSD calculation.
+
+    The CCSD amplitudes will be restored from the DIIS object to generate t1
+    and t2 amplitudes. The t1/t2 amplitudes of the CCSD object will be
+    overwritten by the generated t1 and t2 amplitudes. The amplitudes vector
+    and error vector will be reused in the CCSD calculation.
+    '''
+    adiis = lib.diis.DIIS(mycc, mycc.diis_file, incore=mycc.incore_complete)
+    adiis.restore(diis_file, inplace=inplace)
+
+    ccvec = adiis.extrapolate()
+    mycc.t1, mycc.t2 = mycc.vector_to_amplitudes(ccvec)
+    if inplace:
+        mycc.diis = adiis
+    return mycc
 
 
 def as_scanner(cc):
@@ -879,10 +929,11 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         return self
 
     def get_init_guess(self, eris=None):
-        if eris is None: eris = self.ao2mo(self.mo_coeff)
         return self.init_amps(eris)[1:]
-    def init_amps(self, eris):
+    def init_amps(self, eris=None):
         time0 = time.clock(), time.time()
+        if eris is None:
+            eris = self.ao2mo(self.mo_coeff)
         mo_e = eris.fock.diagonal()
         nocc = self.nocc
         nvir = mo_e.size - nocc
@@ -934,6 +985,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         return self
 
     as_scanner = as_scanner
+    restore_from_diis_ = restore_from_diis_
 
 
     def solve_lambda(self, t1=None, t2=None, l1=None, l2=None,
@@ -1157,15 +1209,14 @@ class _ChemistsERIs:
         nvir1 = ovvv.shape[2]
         return ovvv.reshape(nocc,nvir,nvir1,nvir1)
 
-    def _contract_vvvv_t2(self, mycc, t2, vvvv_or_direct=False, out=None,
-                          max_memory=MEMORYMIN, verbose=None):
+    def _contract_vvvv_t2(self, mycc, t2, vvvv_or_direct=False, out=None, verbose=None):
         if isinstance(vvvv_or_direct, numpy.ndarray):
             vvvv = vvvv_or_direct
         elif vvvv_or_direct:  # AO-direct contraction
             vvvv = None
         else:
             vvvv = self.vvvv
-        return _contract_vvvv_t2(mycc, self.mol, vvvv, t2, out, max_memory, verbose)
+        return _contract_vvvv_t2(mycc, self.mol, vvvv, t2, out, verbose)
 
     def _contract_vvvv_oov(self, mycc, r2, out=None):
         raise NotImplementedError
@@ -1246,9 +1297,8 @@ def _make_eris_outcore(mycc, mo_coeff=None):
     eris.ovoo = eris.feri1.create_dataset('ovoo', (nocc,nvir,nocc,nocc), 'f8', chunks=(nocc,1,nocc,nocc))
     eris.ovvo = eris.feri1.create_dataset('ovvo', (nocc,nvir,nvir,nocc), 'f8', chunks=(nocc,1,nvir,nocc))
     eris.ovov = eris.feri1.create_dataset('ovov', (nocc,nvir,nocc,nvir), 'f8', chunks=(nocc,1,nocc,nvir))
-    eris.ovvv = eris.feri1.create_dataset('ovvv', (nocc,nvir,nvpair), 'f8', chunks=(nocc,1,nvpair))
+    eris.ovvv = eris.feri1.create_dataset('ovvv', (nocc,nvir,nvpair), 'f8')
 
-    oovv = numpy.empty((nocc,nocc,nvir,nvir))
     def save_occ_frac(p0, p1, eri):
         eri = eri.reshape(p1-p0,nocc,nmo,nmo)
         eris.oooo[p0:p1] = eri[:,:,:nocc,:nocc]
@@ -1280,33 +1330,38 @@ def _make_eris_outcore(mycc, mo_coeff=None):
     nao_pair = nao * (nao+1) // 2
     blksize = int(min(8e9,max_memory*.5e6)/8/(nao_pair+nmo**2)/nocc)
     blksize = min(nmo, max(BLKMIN, blksize))
-    fload = ao2mo.outcore._load_from_h5g
-    def prefetch(p0, p1, rowmax, buf):
-        p0, p1 = p1, min(rowmax, p1+blksize)
-        if p0 < p1:
-            fload(fswap['0'], p0*nocc, p1*nocc, buf)
+    log.debug1('blksize %d', blksize)
+    cput2 = cput1
 
+    fload = ao2mo.outcore._load_from_h5g
     buf = numpy.empty((blksize*nocc,nao_pair))
     buf_prefetch = numpy.empty_like(buf)
+    def prefetch(p0, p1, rowmax):
+        p0, p1 = p1, min(rowmax, p1+blksize)
+        if p0 < p1:
+            fload(fswap['0'], p0*nocc, p1*nocc, buf_prefetch)
+
     outbuf = numpy.empty((blksize*nocc,nmo**2))
     with lib.call_in_background(prefetch, sync=not mycc.async_io) as bprefetch:
         fload(fswap['0'], 0, min(nocc,blksize)*nocc, buf_prefetch)
         for p0, p1 in lib.prange(0, nocc, blksize):
             nrow = (p1 - p0) * nocc
             buf, buf_prefetch = buf_prefetch, buf
-            bprefetch(p0, p1, nocc, buf_prefetch)
+            bprefetch(p0, p1, nocc)
             dat = ao2mo._ao2mo.nr_e2(buf[:nrow], mo_coeff, (0,nmo,0,nmo),
                                      's4', 's1', out=outbuf, ao_loc=ao_loc)
             save_occ_frac(p0, p1, dat)
+        cput2 = log.timer_debug1('transforming oopp', *cput2)
 
         fload(fswap['0'], nocc**2, min(nmo,nocc+blksize)*nocc, buf_prefetch)
         for p0, p1 in lib.prange(0, nvir, blksize):
             nrow = (p1 - p0) * nocc
             buf, buf_prefetch = buf_prefetch, buf
-            bprefetch(nocc+p0, nocc+p1, nmo, buf_prefetch)
+            bprefetch(nocc+p0, nocc+p1, nmo)
             dat = ao2mo._ao2mo.nr_e2(buf[:nrow], mo_coeff, (0,nmo,0,nmo),
                                      's4', 's1', out=outbuf, ao_loc=ao_loc)
             save_vir_frac(p0, p1, dat)
+            cput2 = log.timer_debug1('transforming ovpp [%d:%d]'%(p0,p1), *cput2)
 
     cput1 = log.timer_debug1('transforming oppp', *cput1)
     log.timer('CCSD integral transformation', *cput0)

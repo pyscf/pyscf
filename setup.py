@@ -207,10 +207,9 @@ if not blas_found:
             blas_lib_dir = list(set(blas_path_guess))
 
 if not blas_found:  # for MKL
-    mkl_path_guess = search_lib_path('libmkl_core'+so_ext, blas_lib_dir)
+    mkl_path_guess = search_lib_path('libmkl_rt'+so_ext, blas_lib_dir)
     if mkl_path_guess is not None:
-        blas_libraries = ['mkl_core', 'mkl_intel_lp64', 'mkl_gnu_thread',
-                          'mkl_sequential']
+        blas_libraries = ['mkl_rt']
         blas_lib_dir = [mkl_path_guess]
         blas_found = True
         print("Using MKL library in %s" % mkl_path_guess)
@@ -350,7 +349,7 @@ extensions += [
     make_ext('pyscf.lib.libcgto', 'gto',
              '''fill_int2c.c fill_nr_3c.c fill_r_3c.c fill_int2e.c ft_ao.c
              grid_ao_drv.c fastexp.c deriv1.c deriv2.c nr_ecp.c nr_ecp_deriv.c
-             autocode/auto_eval1.c ft_ao_deriv.c''',
+             autocode/auto_eval1.c ft_ao_deriv.c fill_r_4c.c''',
              ['cint', 'np_helper']),
     make_ext('pyscf.lib.libcvhf', 'vhf',
              '''fill_nr_s8.c nr_incore.c nr_direct.c optimizer.c nr_direct_dot.c
@@ -376,7 +375,8 @@ extensions += [
              ['cgto', 'cint']),
     make_ext('pyscf.lib.libmbd', os.path.join('extras', 'mbd'), 'dipole.c', []),
     make_ext('pyscf.lib.libdft', 'dft',
-             'CxLebedevGrid.c grid_basis.c nr_numint.c r_numint.c',
+             '''CxLebedevGrid.c grid_basis.c nr_numint.c r_numint.c
+             numint_uniform_grid.c''',
              ['cvhf', 'cgto', 'cint', 'np_helper']),
 ]
 

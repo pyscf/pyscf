@@ -18,6 +18,7 @@ import unittest
 import tempfile
 from functools import reduce
 import numpy
+import scipy.linalg
 from pyscf import gto
 from pyscf import lib
 import pyscf.lib.parameters as param
@@ -637,6 +638,18 @@ O    SP
         mol1.symmetry = 'Coov'
         self.assertRaises(RuntimeWarning, mol1.build)
 
+        mol1.atom = '''
+        C 0. 0. 0.7264
+        C 0. 0. -.7264
+        H 0.92419 0. 1.29252
+        H -.92419 0. 1.29252
+        H 0. 0.92419 -1.29252
+        H 0. -.92419 -1.29252'''
+        mol1.symmetry = True
+        mol1.symmetry_subgroup = 'C2v'
+        mol1.build()
+        self.assertAlmostEqual(lib.finger(mol1.atom_coords()), -0.5215310671099358, 9)
+
     def test_search_ao_label(self):
         mol1 = mol0.copy()
         mol1.atom = mol0.atom + ['Mg 1,1,1']
@@ -770,6 +783,19 @@ O    SP
         v = pmol.intor('int3c2e', comp=1, shls_slice=shls_slice)
         v = numpy.einsum('pqk->pq', v)
         self.assertAlmostEqual(abs(vref-v).max(), 0, 12)
+
+    def test_to_uncontracted_cartesian_basis(self):
+        pmol, ctr_coeff = mol0.to_uncontracted_cartesian_basis()
+        c = scipy.linalg.block_diag(*ctr_coeff)
+        s = reduce(numpy.dot, (c.T, pmol.intor('int1e_ovlp'), c))
+        self.assertAlmostEqual(abs(s-mol0.intor('int1e_ovlp')).max(), 0, 9)
+
+        mol0.cart = True
+        pmol, ctr_coeff = mol0.to_uncontracted_cartesian_basis()
+        c = scipy.linalg.block_diag(*ctr_coeff)
+        s = reduce(numpy.dot, (c.T, pmol.intor('int1e_ovlp'), c))
+        self.assertAlmostEqual(abs(s-mol0.intor('int1e_ovlp')).max(), 0, 9)
+        mol0.cart = False
 
 
 if __name__ == "__main__":

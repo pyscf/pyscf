@@ -189,9 +189,21 @@ def as_scanner(td_grad, state=1):
             td_scanner = self.base
             td_scanner(mol)
             self.mol = mol
+# TODO: Check root flip.  Maybe avoid the initial guess in TDHF otherwise
+# large error may be found in the excited states amplitudes
             de = self.kernel(state=state, **kwargs)
-            return self.e_tot, de
-    return TDSCF_GradScanner(td_grad)
+            e_tot = self.e_tot[state-1]
+            return e_tot, de
+        @property
+        def converged(self):
+            td_scanner = self.base
+            return all((td_scanner._scf.converged,
+                        td_scanner.converged[self.state]))
+
+    if state == 0:
+        return td_grad.base._scf.nuc_grad_method().as_scanner()
+    else:
+        return TDSCF_GradScanner(td_grad)
 
 
 class Gradients(rhf_grad.Gradients):
@@ -207,6 +219,7 @@ class Gradients(rhf_grad.Gradients):
         self._scf = td._scf  # needed by hcore_generator
         self.chkfile = td.chkfile
         self.max_memory = td.max_memory
+        self.state = 1  # of which the gradients to be computed.
         self.atmlst = None
         self.de = None
         keys = set(('cphf_max_cycle', 'cphf_conv_tol'))
@@ -220,6 +233,7 @@ class Gradients(rhf_grad.Gradients):
         log.info('cphf_conv_tol = %g', self.cphf_conv_tol)
         log.info('cphf_max_cycle = %d', self.cphf_max_cycle)
         log.info('chkfile = %s', self.chkfile)
+        log.info('State ID = %d', self.state)
         log.info('max_memory %d MB (current use %d MB)',
                  self.max_memory, lib.current_memory()[0])
         log.info('\n')
@@ -228,19 +242,26 @@ class Gradients(rhf_grad.Gradients):
     def grad_elec(self, xy, singlet, atmlst=None):
         return kernel(self, xy, singlet, atmlst, self.max_memory, self.verbose)
 
-    def kernel(self, xy=None, state=1, singlet=None, atmlst=None):
+    def kernel(self, xy=None, state=None, singlet=None, atmlst=None):
         '''
         Args:
             state : int
                 Excited state ID.  state = 1 means the first excited state.
         '''
-        if state == 0:
-            logger.warn(self, 'state=0 found in the input. '
-                        'Gradients of ground state is computed.')
-            return self.base._scf.nuc_grad_method().kernel(atmlst=atmlst)
-
         cput0 = (time.clock(), time.time())
-        if xy is None: xy = self.base.xy[state-1]
+        if xy is None:
+            if state is None:
+                state = self.state
+            else:
+                self.state = state
+
+            if state == 0:
+                logger.warn(self, 'state=0 found in the input. '
+                            'Gradients of ground state is computed.')
+                return self.base._scf.nuc_grad_method().kernel(atmlst=atmlst)
+
+            xy = self.base.xy[state-1]
+
         if singlet is None: singlet = self.base.singlet
         if atmlst is None:
             atmlst = self.atmlst

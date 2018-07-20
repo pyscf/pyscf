@@ -205,39 +205,44 @@ def canonical_occ_(mf):
     This is for KUHF objects.
     Each k-point has a fixed number of up and down electrons in this,
     which results in a finite size error for metallic systems
-    but can accelerate convergence '''
+    but can accelerate convergence.
+    '''
     from pyscf.pbc.scf import kuhf
     assert(isinstance(mf, kuhf.KUHF))
 
-    def get_occ(mo_energy_kpts=None,mo_coeff=None):
+    def get_occ(mo_energy_kpts=None, mo_coeff=None):
         if mo_energy_kpts is None: mo_energy_kpts = mf.mo_energy
-        mo_energy_kpts = numpy.asarray(mo_energy_kpts)
-        mo_occ_kpts = numpy.zeros_like(mo_energy_kpts)
-        logger.debug1(mf, "mo_occ_kpts.shape", mo_occ_kpts.shape)
 
-        nkpts = len(mo_energy_kpts[0])
+        if getattr(mf, 'nelec', None) is None:
+            nelec = mf.cell.nelec
+        else:
+            nelec = mf.nelec
+
         homo=[-1e8,-1e8]
         lumo=[1e8,1e8]
-
-        for k in range(nkpts):
-            for s in [0,1]:
-                e_idx = numpy.argsort(mo_energy_kpts[s,k])
-                e_sort = mo_energy_kpts[s,k][e_idx]
-                n = mf.nelec[s]
-                mo_occ_kpts[s,k,e_idx[:n]]=1
-                homo[s]=max(homo[s],e_sort[n-1])
-                lumo[s]=min(lumo[s],e_sort[n])
+        mo_occ_kpts = [[], []]
+        for s in [0,1]:
+            for k, mo_energy in enumerate(mo_energy_kpts[s]):
+                e_idx = numpy.argsort(mo_energy)
+                e_sort = mo_energy[e_idx]
+                n = nelec[s]
+                mo_occ = numpy.zeros_like(mo_energy)
+                mo_occ[e_idx[:n]] = 1
+                homo[s] = max(homo[s], e_sort[n-1])
+                lumo[s] = min(lumo[s], e_sort[n])
+                mo_occ_kpts[s].append(mo_occ)
 
         for nm,s in zip(['alpha','beta'],[0,1]):
             logger.info(mf, nm+' HOMO = %.12g  LUMO = %.12g', homo[s], lumo[s])
             if homo[s] > lumo[s]:
-                logger.warn(mf, "WARNING! HOMO is greater than LUMO! This may result in errors with canonical occupation.")
+                logger.warn(mf, "WARNING! HOMO is greater than LUMO! "
+                            "This may lead to incorrect canonical occupation.")
 
         return mo_occ_kpts
 
-    mf.get_occ=get_occ
+    mf.get_occ = get_occ
     return mf
-canonical_occ=canonical_occ_
+canonical_occ = canonical_occ_
 
 
 def convert_to_uhf(mf, out=None):
@@ -258,13 +263,21 @@ def convert_to_uhf(mf, out=None):
                     raise NotImplementedError(
                         "No conversion from %s to uhf object" % cls)
 
-            known_cls = {dft.krks.KRKS : dft.kuks.KUKS,
-                         scf.khf.KRHF  : scf.kuhf.KUHF,
-                         dft.rks.RKS   : dft.uks.UKS  ,
-                         scf.hf.RHF    : scf.uhf.UHF  }
+            known_cls = {dft.krks.KRKS  : dft.kuks.KUKS,
+                         dft.kroks.KROKS: dft.kuks.KUKS,
+                         scf.khf.KRHF   : scf.kuhf.KUHF,
+                         scf.krohf.KROHF: scf.kuhf.KUHF,
+                         dft.rks.RKS    : dft.uks.UKS  ,
+                         dft.roks.ROKS  : dft.uks.UKS  ,
+                         scf.hf.RHF     : scf.uhf.UHF  ,
+                         scf.rohf.ROHF  : scf.uhf.UHF  ,}
             out = mol_addons._object_without_soscf(mf, known_cls, False)
     else:
         assert(isinstance(out, (scf.uhf.UHF, scf.kuhf.KUHF)))
+        if isinstance(mf, scf.khf.KSCF):
+            assert(isinstance(out, scf.khf.KSCF))
+        else:
+            assert(not isinstance(out, scf.khf.KSCF))
 
     return mol_addons.convert_to_uhf(mf, out, False)
 
@@ -276,7 +289,25 @@ def convert_to_rhf(mf, out=None):
     from pyscf.pbc import scf
     from pyscf.pbc import dft
 
-    if out is None:
+    if getattr(mf, 'nelec', None) is None:
+        nelec = mf.cell.nelec
+    else:
+        nelec = mf.nelec
+
+    if out is not None:
+        assert(isinstance(out, (scf.hf.RHF, scf.khf.KRHF)))
+        if isinstance(mf, scf.khf.KSCF):
+            assert(isinstance(out, scf.khf.KSCF))
+        else:
+            assert(not isinstance(out, scf.khf.KSCF))
+
+    elif nelec[0] != nelec[1] and isinstance(mf, scf.rohf.ROHF):
+        if hasattr(mf, '_scf'):
+            return mol_addons._update_mf_without_soscf(mf, copy.copy(mf._scf), False)
+        else:
+            return copy.copy(mf)
+
+    else:
         if isinstance(mf, (scf.hf.RHF, scf.khf.KRHF)):
             return copy.copy(mf)
         else:
@@ -286,13 +317,21 @@ def convert_to_rhf(mf, out=None):
                     raise NotImplementedError(
                         "No conversion from %s to rhf object" % cls)
 
-            known_cls = {dft.kuks.KUKS : dft.krks.KRKS,
-                         scf.kuhf.KUHF : scf.khf.KRHF ,
-                         dft.uks.UKS   : dft.rks.RKS  ,
-                         scf.uhf.UHF   : scf.hf.RHF   }
+            if nelec[0] == nelec[1]:
+                known_cls = {dft.kuks.KUKS : dft.krks.KRKS,
+                             scf.kuhf.KUHF : scf.khf.KRHF ,
+                             dft.uks.UKS   : dft.rks.RKS  ,
+                             scf.uhf.UHF   : scf.hf.RHF   ,
+                             dft.kroks.KROKS : dft.krks.KRKS,
+                             scf.krohf.KROHF : scf.khf.KRHF ,
+                             dft.roks.ROKS   : dft.rks.RKS  ,
+                             scf.rohf.ROHF   : scf.hf.RHF   }
+            else:
+                known_cls = {dft.kuks.KUKS : dft.krks.KROKS,
+                             scf.kuhf.KUHF : scf.khf.KROHF ,
+                             dft.uks.UKS   : dft.rks.ROKS  ,
+                             scf.uhf.UHF   : scf.hf.ROHF   }
             out = mol_addons._object_without_soscf(mf, known_cls, False)
-    else:
-        assert(isinstance(out, (scf.hf.RHF, scf.khf.KRHF)))
 
     return mol_addons.convert_to_rhf(mf, out, False)
 
@@ -308,11 +347,17 @@ def convert_to_ghf(mf, out=None):
     from pyscf.scf import addons as mol_addons
     from pyscf.pbc import scf
 
+    if out is not None:
+        assert(isinstance(out, (scf.ghf.GHF, scf.kghf.KGHF)))
+        if isinstance(mf, scf.khf.KSCF):
+            assert(isinstance(out, scf.khf.KSCF))
+        else:
+            assert(not isinstance(out, scf.khf.KSCF))
+
     if isinstance(mf, scf.ghf.GHF):
         if out is None:
             return copy.copy(mf)
         else:
-            assert(isinstance(out, (scf.ghf.GHF, scf.ghf.KGHF)))
             out.__dict__.update(mf.__dict__)
             return out
 
@@ -364,10 +409,13 @@ def convert_to_ghf(mf, out=None):
 
             return mf1
 
-        return update_mo_(mf, scf.kghf.KGHF(mf.cell))
+        if out is None:
+            out = scf.kghf.KGHF(mf.cell)
+        return update_mo_(mf, out)
 
     else:
-        out = scf.ghf.GHF(mf.cell)
+        if out is None:
+            out = scf.ghf.GHF(mf.cell)
         return mol_addons.convert_to_ghf(mf, out, False)
 
 def convert_to_khf(mf, out=None):

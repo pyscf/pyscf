@@ -14,6 +14,7 @@
 
 from __future__ import print_function, division
 import os,unittest,numpy as np
+from pyscf.nao import ao_log_c
 
 try:
   from ase import Atoms
@@ -40,7 +41,6 @@ class KnowValues(unittest.TestCase):
 
   def test_ao_log_after_gpaw(self):
     """ init ao_log_c with it radial orbitals from GPAW """
-    from pyscf.nao import ao_log_c
     if calc is None: return
     self.assertTrue(hasattr(calc, 'setups'))
     aos = ao_log_c().init_ao_log_gpaw(calc.setups)

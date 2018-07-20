@@ -188,6 +188,31 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.finger(rdm2[0]), -1.6247203743431637, 7)
         self.assertAlmostEqual(lib.finger(rdm2[1]), -0.44062825991527471, 7)
 
+    def test_with_qmmm_scanner(self):
+        from pyscf import qmmm
+        mol = gto.Mole()
+        mol.atom = ''' O                  0.00000000    0.00000000   -0.11081188
+                       H                 -0.00000000   -0.84695236    0.59109389
+                       H                 -0.00000000    0.89830571    0.52404783 '''
+        mol.verbose = 0
+        mol.basis = '6-31g'
+        mol.build()
+
+        coords = [(0.5,0.6,0.1)]
+        #coords = [(0.0,0.0,0.0)]
+        charges = [-0.1]
+        mf = qmmm.add_mm_charges(scf.RHF(mol), coords, charges)
+        ccs = cc.ccsd.CCSD(mf).as_scanner()
+        e1 = ccs(''' O                  0.00100000    0.00000000   -0.11081188
+                 H                 -0.00000000   -0.84695236    0.59109389
+                 H                 -0.00000000    0.89830571    0.52404783 ''')
+        e2 = ccs(''' O                 -0.00100000    0.00000000   -0.11081188
+                 H                 -0.00000000   -0.84695236    0.59109389
+                 H                 -0.00000000    0.89830571    0.52404783 ''')
+        ref = (e1 - e2)/0.002 * lib.param.BOHR
+        g = ccs.nuc_grad_method().kernel()
+        self.assertAlmostEqual(g[0,0], ref, 5)
+
 
 if __name__ == "__main__":
     print("Tests for CCSD gradients")

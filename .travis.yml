@@ -1,7 +1,7 @@
 # More syntax details at: https://docs.travis-ci.com/user/customizing-the-build
 # Workaround present for https://github.com/sunqm/pyscf/issues/71
 
-sudo: false
+sudo: required
 language: python
 group: deprecated-2017Q4
 os: linux
@@ -30,7 +30,7 @@ python:
 #    system_site_packages: true
 
 before_install:
-  - sudo apt-get -qq install gcc gfortran libblas-dev cmake curl
+  - sudo apt-get -qq install gcc libblas-dev cmake curl
   - pip install numpy scipy h5py nose nose-exclude nose-timer
 
 install:

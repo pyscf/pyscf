@@ -757,9 +757,8 @@ def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
         level_shift_factor = mf.level_shift
     if damp_factor is None:
         damp_factor = mf.damp
-
-    if s1e is None:
-        s1e = mf.get_ovlp()
+    if s1e is None: s1e = mf.get_ovlp()
+    if dm is None: dm = self.make_rdm1()
 
     if 0 <= cycle < diis_start_cycle-1 and abs(damp_factor) > 1e-4:
         f = damping(s1e, dm*.5, f, damp_factor)
@@ -1269,7 +1268,7 @@ class SCF(lib.StreamObject):
         self.callback = None
 
         self.opt = None
-        self._eri = None
+        self._eri = None # Note: self._eri requires large amount of memory
 
         keys = set(('conv_tol', 'conv_tol_grad', 'max_cycle', 'init_guess',
                     'DIIS', 'diis', 'diis_space', 'diis_start_cycle',
@@ -1662,12 +1661,12 @@ class SCF(lib.StreamObject):
 class RHF(SCF):
     __doc__ = SCF.__doc__
 
-    def __init__(self, mol):
-        if mol.nelectron != 1 and (mol.nelectron % 2) != 0:
-            logger.warn(self, 'Invalid electron number %d for RHF method.',
+    def check_sanity(self):
+        mol = self.mol
+        if mol.nelectron != 1 and mol.spin != 0:
+            logger.warn(self, 'Invalid number of electrons %d for RHF method.',
                         mol.nelectron)
-# Note: self._eri requires large amount of memory
-        SCF.__init__(self, mol)
+        return SCF.check_sanity(self)
 
     @lib.with_doc(get_jk.__doc__)
     def get_jk(self, mol=None, dm=None, hermi=1):

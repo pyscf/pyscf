@@ -61,9 +61,11 @@ class SymAdaptedCASCI(casci.CASCI):
         mo_coeff = self.mo_coeff = label_symmetry_(self, mo_coeff, ci0)
         return casci.CASCI.kernel(self, mo_coeff, ci0)
 
-    def _eig(self, mat, b0, b1):
+    def _eig(self, mat, b0, b1, orbsym=None):
         # self.mo_coeff.orbsym is initialized in kernel function
-        return eig(mat, numpy.array(self.mo_coeff.orbsym[b0:b1]))
+        if orbsym is None:
+            orbsym = self.mo_coeff.orbsym[b0:b1]
+        return eig(mat, orbsym)
 
     def sort_mo_by_irrep(self, cas_irrep_nocc,
                          cas_irrep_ncore=None, mo_coeff=None, s=None):

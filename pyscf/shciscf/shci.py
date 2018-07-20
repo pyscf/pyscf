@@ -32,7 +32,6 @@ import pyscf.tools
 import pyscf.lib
 from pyscf.lib import logger
 from pyscf.lib import chkfile
-from pyscf.lib import load_library
 from pyscf import mcscf
 ndpointer = numpy.ctypeslib.ndpointer
 
@@ -53,6 +52,7 @@ except ImportError:
         raise ImportError('settings.py not found')
 
 # Libraries
+from pyscf.lib import load_library
 libE3unpack = load_library('libicmpspt')
 # TODO: Organize this better.
 shciLib = load_library('libshciscf')
@@ -82,7 +82,7 @@ fcidumpFromIntegral.argtypes = [ctypes.c_char_p,
                                 ctypes.c_size_t,
                                 ctypes.c_double,
                                 ndpointer(ctypes.c_int32, flags="C_CONTIGUOUS"),
-                                ctypes.c_size_t,
+                                ctypes.c_size_t
 ]
 
 r2RDM = shciLib.r2RDM
@@ -130,9 +130,7 @@ class SHCI(pyscf.lib.StreamObject):
 
     Examples:
 
-
     '''
-
     def __init__(self, mol=None, maxM=None, tol=None, num_thrds=1, memory=None):
         self.mol = mol
         if mol is None:
@@ -144,7 +142,6 @@ class SHCI(pyscf.lib.StreamObject):
         self.outputlevel = 2
 
         self.executable = settings.SHCIEXE
-        #self.QDPTexecutable = settings.SHCIQDPTEXE
         self.scratchDirectory = settings.SHCISCRATCHDIR
         self.mpiprefix = settings.MPIPREFIX
         self.memory = memory
@@ -156,8 +153,8 @@ class SHCI(pyscf.lib.StreamObject):
             self.runtimeDir = settings.SHCIRUNTIMEDIR
         else:
             self.runtimeDir = '.'
+        self.extraline = []
 
-        self.spin = None
         # TODO: Organize into pyscf and SHCI parameters
         # Standard SHCI Input parameters
         self.davidsonTol = 5.e-5
@@ -170,7 +167,7 @@ class SHCI(pyscf.lib.StreamObject):
         self.fullrestart = False
         self.dE = 1.e-8
         self.eps = None
-        self.prefix = "."
+        self.prefix = os.path.join(self.scratchDirectory,"node0")
         self.stochastic = True
         self.nblocks = 1
         self.excitation = 1000
@@ -187,21 +184,35 @@ class SHCI(pyscf.lib.StreamObject):
         self.num_thrds = num_thrds
         self.orbsym = []
         self.onlywriteIntegral = False
-        self.orbsym = None
+        self.spin = None
+        self.orbsym = []
         if mol is None:
-           self.groupname = None
+          self.groupname = None
         else:
-           if mol.symmetry:
-              self.groupname = mol.groupname
-           else:
-              self.groupname = None
+          if mol.symmetry:
+            self.groupname = mol.groupname
+          else:
+            self.groupname = None
+        ##################################################
+        # don't modify the following attributes, if you do not finish part of calculation, which can be reused.
+        #DO NOT CHANGE these parameters, unless you know the code in details
+        self.twopdm = True #By default, 2rdm is calculated after the calculations of wave function.
+        self.shci_extra_keyword = [] #For shci advanced user only.
+        self.has_fourpdm = False
+        self.has_threepdm = False
+        self.has_nevpt = False
+        # This flag _restart is set by the program internally, to control when to make
+        # SHCI restart calculation.
         self._restart = False
+        self.generate_schedule()
         self.returnInt = False
         self._keys = set(self.__dict__.keys())
         self.irrep_nelec = None
         self.useExtraSymm = False
         self.initialStates = None
-        self.extraline = ""
+
+    def generate_schedule(self):
+        return self
 
     @property
     def threads(self):
@@ -214,53 +225,70 @@ class SHCI(pyscf.lib.StreamObject):
         if verbose is None:
             verbose = self.verbose
         log = logger.Logger(self.stdout, verbose)
-        log.info( '******** SHCI flags ********' )
-        log.info( 'executable = %s', self.executable)
-        log.info( 'SHCIEXE_COMPRESS_NEVPT = %s', settings.SHCIEXE_COMPRESS_NEVPT )
-        log.info( 'mpiprefix = %s', self.mpiprefix )
-        log.info( 'scratchDirectory = %s', self.scratchDirectory )
-        log.info( 'integralFile = %s', os.path.join(self.runtimeDir, self.integralFile) )
-        log.info( 'configFile = %s', os.path.join(self.runtimeDir, self.configFile) )
-        log.info( 'outputFile = %s', os.path.join(self.runtimeDir, self.outputFile) )
-        log.info( 'maxIter = %d', self.maxIter )
-        log.info( 'nPTiter = %i', self.nPTiter )
-        log.info( 'Stochastic = %r', self.stochastic )
-        log.info( 'num_thrds = %d', self.num_thrds )
-        log.info( 'memory = %s', self.memory )
+        log.info('')
+        log.info('******** SHCI flags ********')
+        log.info('executable             = %s', self.executable)
+        log.info('mpiprefix              = %s', self.mpiprefix)
+        log.info('scratchDirectory       = %s', self.scratchDirectory)
+        log.info('integralFile           = %s', os.path.join(self.runtimeDir, self.integralFile))
+        log.info('configFile             = %s', os.path.join(self.runtimeDir, self.configFile))
+        log.info('outputFile             = %s', os.path.join(self.runtimeDir, self.outputFile))
+        log.info('maxIter                = %d', self.maxIter)
+        log.info('sweep_iter             = %s', '['+','.join(['{:>5}' for item in self.sweep_iter]).format(*self.sweep_iter)+']')
+        log.info('sweep_epsilon          = %s', '['+','.join(['{:>5}' for item in self.sweep_epsilon]).format(*self.sweep_epsilon)+']')
+        log.info('nPTiter                = %i', self.nPTiter)
+        log.info('Stochastic             = %r', self.stochastic)
+        log.info('restart                = %s', str(self.restart or self._restart))
+        log.info('fullrestart            = %s', str(self.fullrestart))
+        log.info('num_thrds              = %d', self.num_thrds)
+        log.info('memory                 = %s', self.memory)
+        log.info('')
         return self
 
+    # ABOUT RDMs AND INDEXES: -----------------------------------------------------------------------
+    #   There is two ways to stored an RDM
+    #   (the numbers help keep track of creation/annihilation that go together):
+    #     E3[i1,j2,k3,l3,m2,n1] is the way DICE outputs text and bin files
+    #     E3[i1,j2,k3,l1,m2,n3] is the way the tensors need to be written for SQA and ICPT
+    #
+    #   --> See various remarks in the pertinent functions below.
+    # -----------------------------------------------------------------------------------------------
+
     def make_rdm1(self, state, norb, nelec, link_index=None, **kwargs):
-# Avoid calling self.make_rdm12 because it may be overloaded
-        return SHCI.make_rdm12(self, state, norb, nelec, link_index, **kwargs)[0]
+        # Avoid calling self.make_rdm12 because it may be overloaded
+        return self.make_rdm12(state, norb, nelec, link_index, **kwargs)[0]
 
     def make_rdm12(self, state, norb, nelec, link_index=None, **kwargs):
         nelectrons = 0
         if isinstance(nelec, (int, numpy.integer)):
-            nelectrons = nelec
+          nelectrons = nelec
         else:
-            nelectrons = nelec[0]+nelec[1]
+          nelectrons = nelec[0]+nelec[1]
 
+        # The 2RDMs written by "SHCIrdm::saveRDM" in DICE
+        # are written as E2[i1,j2,k1,l2]
+        # and stored here as E2[i1,k1,j2,l2] (for PySCF purposes)
+        # This is NOT done with SQA in mind.
         twopdm = numpy.zeros( (norb, norb, norb, norb) )
-        file2pdm = "%s/spatialRDM.%d.%d.txt"%(self.prefix,state, state)
+        file2pdm = "spatialRDM.%d.%d.txt" %(state, state)
         file2pdm = file2pdm.encode()  # .encode for python3 compatibility
-        r2RDM( twopdm, norb, file2pdm )
+        r2RDM(twopdm, norb, os.path.join(self.scratchDirectory, "node0", file2pdm))
 
+        # Symmetry addon
         if (self.groupname == 'Dooh' or self.groupname == 'Coov') and self.useExtraSymm:
            nRows, rowIndex, rowCoeffs = DinfhtoD2h(self, norb, nelec)
            twopdmcopy = 1.*twopdm
            twopdm = 0.*twopdm
-           transformRDMDinfh(norb, numpy.ascontiguousarray(nRows, numpy.int32),
-                             numpy.ascontiguousarray(rowIndex, numpy.int32),
-                             numpy.ascontiguousarray(rowCoeffs, numpy.float64),
-                             numpy.ascontiguousarray(twopdmcopy, numpy.float64),
-                             numpy.ascontiguousarray(twopdm, numpy.float64))
+           transformRDMDinfh(norb, numpy.ascontiguousarray(nRows,      numpy.int32),
+                                   numpy.ascontiguousarray(rowIndex,   numpy.int32),
+                                   numpy.ascontiguousarray(rowCoeffs,  numpy.float64),
+                                   numpy.ascontiguousarray(twopdmcopy, numpy.float64),
+                                   numpy.ascontiguousarray(twopdm,     numpy.float64))
            twopdmcopy = None
 
-
-
+        # (This is coherent with previous statement about indexes)
         onepdm = numpy.einsum('ikjj->ki', twopdm)
         onepdm /= (nelectrons-1)
-
         return onepdm, twopdm
 
     def trans_rdm1(self, statebra, stateket, norb, nelec, link_index=None, **kwargs):
@@ -276,22 +304,35 @@ class SHCI(pyscf.lib.StreamObject):
         writeSHCIConfFile(self, nelec, True)
         executeSHCI(self)
 
+        # The 2RDMs written by "SHCIrdm::saveRDM" in DICE
+        # are written as E2[i1,j2,k1,l2]
+        # and stored here as E2[i1,k1,j2,l2] (for PySCF purposes)
+        # This is NOT done with SQA in mind.
         twopdm = numpy.zeros( (norb, norb, norb, norb) )
-        file2pdm = "spatialRDM.%d.%d.txt" % ( root, root )
-        r2RDM( twopdm, norb, file2pdm )
+        file2pdm = "spatialRDM.%d.%d.txt" %(root, root)
+        r2RDM(twopdm, norb, os.path.join(self.scratchDirectory, "node0", file2pdm))
 
+        # (This is coherent with previous statement about indexes)
         onepdm = numpy.einsum('ikjj->ki', twopdm)
         onepdm /= (nelectrons-1)
         return onepdm, twopdm
 
     def make_rdm123(self, state, norb, nelec, link_index=None, **kwargs):
         if self.has_threepdm == False:
-            writeSHCIConfFile(self, nelec, True )
+            writeSHCIConfFile(self, nelec, True)
             if self.verbose >= logger.DEBUG1:
                 inFile = os.path.join(self.runtimeDir, self.configFile)
                 logger.debug1(self, 'SHCI Input conf')
                 logger.debug1(self, open(inFile, 'r').read())
+
+            start = time.time()
+            mpisave=self.mpiprefix
+            #self.mpiprefix=""
             executeSHCI(self)
+            self.mpiprefix=mpisave
+            end = time.time()
+            print('......production of RDMs took %10.2f sec' %(end-start))
+
             if self.verbose >= logger.DEBUG1:
                 outFile = os.path.join(self.runtimeDir, self.outputFile)
                 logger.debug1(self, open(outFile).read())
@@ -303,21 +344,28 @@ class SHCI(pyscf.lib.StreamObject):
         else:
             nelectrons = nelec[0]+nelec[1]
 
+        # The 3RDMs written by "SHCIrdm::save3RDM" in DICE
+        # are written as E3[i1,j2,k3,l3,m2,n1]
+        # and are also stored here as E3[i1,j2,k3,l3,m2,n1]
+        # This is NOT done with SQA in mind.
+        start = time.time()
         threepdm = numpy.zeros( (norb, norb, norb, norb, norb, norb) )
-        file3pdm = "spatial_threepdm.%d.%d.txt" %(state, state)
+        file3pdm = "spatial3RDM.%d.%d.txt" %(state, state)
         with open(os.path.join(self.scratchDirectory, "node0", file3pdm), "r") as f:
-            norb_read = int(f.readline().split()[0])
-            assert(norb_read == norb)
+          norb_read = int(f.readline().split()[0])
+          assert(norb_read == norb)
+          for line in f:
+              linesp = line.split()
+              i,j,k, l,m,n = [int(x) for x in linesp[:6]]
+              threepdm[i,j,k,l,m,n] = float(linesp[6])
 
-            for line in f:
-                linesp = line.split()
-                i, j, k, l, m, n = [int(x) for x in linesp[:6]]
-                threepdm[i,j,k,l,m,n] = float(linesp[6])
-
+        # (This is coherent with previous statement about indexes)
         twopdm = numpy.einsum('ijkklm->ijlm',threepdm)
         twopdm /= (nelectrons-2)
         onepdm = numpy.einsum('ijjk->ki', twopdm)
         onepdm /= (nelectrons-1)
+        end = time.time()
+        print('......reading the RDM took    %10.2f sec' %(end-start))
         return onepdm, twopdm, threepdm
 
     def _make_dm123(self, state, norb, nelec, link_index=None, **kwargs):
@@ -344,15 +392,23 @@ class SHCI(pyscf.lib.StreamObject):
 
         if self.has_threepdm == False:
             self.twopdm = False
-            self.extraline.append('threepdm\n')
+            self.extraline.append('DoThreeRDM')
 
-            writeSHCIConfFile(self, nelec, True)
+            writeSHCIConfFile(self, nelec, False)
             if self.verbose >= logger.DEBUG1:
                 inFile = self.configFile
                 #inFile = os.path.join(self.scratchDirectory,self.configFile)
                 logger.debug1(self, 'SHCI Input conf')
                 logger.debug1(self, open(inFile, 'r').read())
+
+            start = time.time()
+            mpisave=self.mpiprefix
+            #self.mpiprefix=""
             executeSHCI(self)
+            self.mpiprefix=mpisave
+            end = time.time()
+            print('......production of RDMs took %10.2f sec' %(end-start))
+
             if self.verbose >= logger.DEBUG1:
                 outFile = self.outputFile
                 #outFile = os.path.join(self.scratchDirectory,self.outputFile)
@@ -360,40 +416,174 @@ class SHCI(pyscf.lib.StreamObject):
             self.has_threepdm = True
             self.extraline.pop()
 
-        nelectrons = 0
-        if isinstance(nelec, (int, numpy.integer)):
-            nelectrons = nelec
-        else:
-            nelectrons = nelec[0]+nelec[1]
-
+        # The 3RDMS binary files written by "SHCIrdm::save3RDM" in DICE
+        # are written as E3[i1,j2,k3,l3,m2,n1]
+        # and are stored here as E3[i1,j2,k3,n1,m2,l3]
+        # This is done with SQA in mind.
+        start = time.time()
         if (filetype == "binary") :
-            fname = os.path.join('%s/%s/'%(self.scratchDirectory,"node0"), "spatial_threepdm.%d.%d.bin" %(state, state))
-            fnameout = os.path.join('%s/%s/'%(self.scratchDirectory,"node0"), "spatial_threepdm.%d.%d.bin.unpack" %(state, state))
-            libE3unpack.unpackE3(ctypes.c_char_p(fname.encode()),
-                                 ctypes.c_char_p(fnameout.encode()),
-                                 ctypes.c_int(norb))
+          print('Reading binary 3RDM from DICE')
+          fname = os.path.join(self.scratchDirectory,"node0", "spatial3RDM.%d.%d.bin" %(state, state))
+          E3 = self.unpackE3_DICE(fname,norb)
 
-            E3 = numpy.fromfile(fnameout, dtype=numpy.dtype('Float64'))
-            E3 = numpy.reshape(E3, (norb, norb, norb, norb, norb, norb), order='F')
+        # The 3RDMs text files written by "SHCIrdm::save3RDM" in DICE
+        # are written as E3[i1,j2,k3,l3,m2,n1]
+        # and are stored here as E3[i1,j2,k3,n1,m2,l3]
+        # This is done with SQA in mind.
+        else:
+          print('Reading text-file 3RDM')
+          fname = os.path.join(self.scratchDirectory,"node0", "spatial3RDM.%d.%d.txt" %(state, state))
+          f = open(fname, 'r')
+          lines = f.readlines()
+          E3 = numpy.zeros(shape=(norb, norb, norb, norb, norb, norb), dtype=dt, order='F')
+          assert(int(lines[0])==norb)
+          for line in lines[1:]:
+            linesp = line.split()
+            if (len(linesp) != 7) :
+                continue
+            a,b,c, d,e,f, integral = int(linesp[0]), int(linesp[1]), int(linesp[2]),\
+                                     int(linesp[3]), int(linesp[4]), int(linesp[5]), float(linesp[6])
+            self.populate(E3, [a,b,c,  f,e,d], integral)
+        end = time.time()
+        print('......reading the RDM took    %10.2f sec' %(end-start))
+        print('')
+        return E3
 
-        else :
-            fname = os.path.join('%s/%s/'%(self.scratchDirectory,"node0"), "spatial_threepdm.%d.%d.txt" %(state, state))
+        #if (filetype == "binary") :
+        #    fname = os.path.join('%s/%s/'%(self.scratchDirectory,"node0"), "spatial_threepdm.%d.%d.bin" %(state, state))
+        #    fnameout = os.path.join('%s/%s/'%(self.scratchDirectory,"node0"), "spatial_threepdm.%d.%d.bin.unpack" %(state, state))
+        #    libE3unpack.unpackE3(ctypes.c_char_p(fname.encode()),
+        #                         ctypes.c_char_p(fnameout.encode()),
+        #                         ctypes.c_int(norb))
+
+    def make_rdm4(self, state, norb, nelec, dt=numpy.dtype('Float64'), filetype = "binary", link_index=None, **kwargs):
+        import os
+
+        if self.has_fourpdm == False:
+            self.twopdm = False
+            self.threepdm = False
+            self.extraline.append('DoThreeRDM')
+            self.extraline.append('DoFourRDM')
+
+            writeSHCIConfFile(self, nelec, False)
+            if self.verbose >= logger.DEBUG1:
+              inFile = self.configFile
+              #inFile = os.path.join(self.scratchDirectory,self.configFile)
+              logger.debug1(self, 'SHCI Input conf')
+              logger.debug1(self, open(inFile, 'r').read())
+
+            start = time.time()
+            mpisave=self.mpiprefix
+            #self.mpiprefix=""
+            executeSHCI(self)
+            self.mpiprefix=mpisave
+            end = time.time()
+            print('......production of RDMs took %10.2f sec' %(end-start))
+
+            if self.verbose >= logger.DEBUG1:
+                outFile = self.outputFile
+                #outFile = os.path.join(self.scratchDirectory,self.outputFile)
+                logger.debug1(self, open(outFile).read())
+            self.has_fourpdm = True
+            self.has_threepdm = True
+            self.extraline.pop()
+
+        # The 4RDMS binary files written by "SHCIrdm::save3RDM" in DICE
+        # are written as E4[i1,j2,k3,l4,m4,n3,o2,p1]
+        # and are stored here as E4[i1,j2,k3,l4,p1,o2,n3,m4]
+        # This is done with SQA in mind.
+        start = time.time()
+        if (filetype == "binary") :
+          print('Reading binary 4RDM from DICE')
+          fname = os.path.join(self.scratchDirectory,"node0", "spatial4RDM.%d.%d.bin" %(state, state))
+          E4 = self.unpackE4_DICE(fname,norb)
+
+        # The 4RDMs text files written by "SHCIrdm::save3RDM" in DICE
+        # are written as E4[i1,j2,k3,l4,m4,n3,o2,p1]
+        # and are stored here as E4[i1,j2,k3,l4,p1,o2,n3,m4]
+        # This is done with SQA in mind.
+        else:
+            print('Reading text-file 4RDM')
+            fname = os.path.join(self.scratchDirectory,"node0", "spatial4RDM.%d.%d.txt" %(state, state))
             f = open(fname, 'r')
             lines = f.readlines()
-            E3 = numpy.zeros(shape=(norb, norb, norb, norb, norb, norb), dtype=dt)
+            E4 = numpy.zeros(shape=(norb, norb, norb, norb, norb, norb, norb, norb), dtype=dt, order='F')
+            assert(int(lines[0])==norb)
             for line in lines[1:]:
-                linesp = line.split()
-                if (len(linesp) != 7) :
-                    continue
-                a, b, c, d, e, f, integral = int(linesp[0]), int(linesp[1]), int(linesp[2]), int(linesp[3]), int(linesp[4]), int(linesp[5]), float(linesp[6])
-                E3[a,b,c, f,e,d] = integral
-                E3[a,c,b, f,d,e] = integral
-                E3[b,a,c, e,f,d] = integral
-                E3[b,c,a, e,d,f] = integral
-                E3[c,a,b, d,f,e] = integral
-                E3[c,b,a, d,e,f] = integral
+              linesp = line.split()
+              if (len(linesp) != 9) :
+                  continue
+              a,b,c,d, e,f,g,h, integral = int(linesp[0]), int(linesp[1]), int(linesp[2]), int(linesp[3]),\
+                                           int(linesp[4]), int(linesp[5]), int(linesp[6]), int(linesp[7]), float(linesp[8])
+              self.populate(E4, [a,b,c,d,  h,g,f,e], integral)
+        end = time.time()
+        print('......reading the RDM took    %10.2f sec' %(end-start))
+        print('')
+        return E4
 
+    def populate(self, array, list, value):
+        dim=len(list)/2
+        up=list[:dim]
+        dn=list[dim:]
+        import itertools
+        for t in itertools.permutations(range(dim), dim):
+          updn=[up[i] for i in t]+[dn[i] for i in t]
+          array[tuple(updn)] = value
+
+    def unpackE3_DICE(self,fname,norb):
+        # The 3RDMs written by "SHCIrdm::save3RDM" in DICE
+        # are written as E3[i1,j2,k3,l3,m2,n1]
+        # and are stored here as E3[i1,j2,k3,n1,m2,l3]
+        # This is done with SQA in mind.
+        E3=numpy.zeros((norb,norb,norb,norb,norb,norb), order='F')
+        fil=open(fname,"rb")
+        print("[fil.seek(not_really_understood)]: HOW DANGEROUS IS THAT ???!?!?!?")
+        #fil.seek(93) # HOW DANGEROUS IS THAT ???!?!?!?
+        fil.seek(53)  # HOW DANGEROUS IS THAT ???!?!?!?
+        for a in range(norb):
+          for b in range(norb):
+            for c in range(norb):
+              for d in range(norb):
+                for e in range(norb):
+                  for f in range(norb):
+                    (value,)=struct.unpack('d',fil.read(8))
+                    E3[a,b,c,  f,e,d]=value
+        try:
+          (value,)=struct.unpack('c',fil.read(1))
+          print("MORE bytes TO READ!")
+        except:
+          print("AT LEAST, NO MORE bytes TO READ!")
+        #exit(0)
+        fil.close()
         return E3
+
+    def unpackE4_DICE(self,fname,norb):
+        # The 4RDMs written by "SHCIrdm::save4RDM" in DICE
+        # are written as E4[i1,j2,k3,l4,m4,n3,o2,p1]
+        # and are stored here as E4[i1,j2,k3,l4,p1,o2,n3,m4]
+        # This is done with SQA in mind.
+        E4=numpy.zeros((norb,norb,norb,norb,norb,norb,norb,norb), order='F')
+        fil=open(fname,"rb")
+        print("[fil.seek(not_really_understood)]: HOW DANGEROUS IS THAT ???!?!?!?")
+        fil.seek(53) # HOW DANGEROUS IS THAT ???!?!?!?
+        for a in range(norb):
+          for b in range(norb):
+            for c in range(norb):
+              for d in range(norb):
+                for e in range(norb):
+                  for f in range(norb):
+                    for g in range(norb):
+                      for h in range(norb):
+                        (value,)=struct.unpack('d',fil.read(8))
+                        E4[a,b,c,d,  h,g,f,e]=value
+        try:
+          (value,)=struct.unpack('c',fil.read(1))
+          print("MORE bytes TO READ!")
+        except:
+          print("AT LEAST, NO MORE bytes TO READ!")
+        #exit(0)
+        fil.close()
+        return E4
 
     def clearSchedule(self):
         self.scheduleSweeps = []
@@ -445,7 +635,7 @@ class SHCI(pyscf.lib.StreamObject):
         if 'orbsym' in kwargs:
             self.orbsym = kwargs['orbsym']
         writeIntegralFile(self, h1e, eri, norb, nelec, ecore)
-        writeSHCIConfFile(self, nelec, fciRestart )
+        writeSHCIConfFile(self, nelec, fciRestart)
         if self.verbose >= logger.DEBUG1:
             inFile = os.path.join(self.runtimeDir, self.configFile)
             logger.debug1(self, 'SHCI Input conf')
@@ -533,12 +723,13 @@ def make_sched( SHCI ):
 
     return schedStr
 
-def writeSHCIConfFile( SHCI, nelec, Restart ):
+def writeSHCIConfFile(SHCI, nelec, Restart):
     confFile = os.path.join(SHCI.runtimeDir, SHCI.configFile)
 
     f = open(confFile, 'w')
 
     # Reference determinant section
+    f.write('#system\n')
     f.write('nocc %i\n'%(nelec[0]+nelec[1]))
     if SHCI.__class__.__name__ == 'FakeCISolver':
        for i in range(nelec[0]):
@@ -592,6 +783,7 @@ def writeSHCIConfFile( SHCI, nelec, Restart ):
     f.write( 'nroots %r\n' % SHCI.nroots )
 
     # Variational Keyword Section
+    f.write('#variational\n')
     if (not Restart):
        schedStr = make_sched( SHCI )
        f.write( schedStr )
@@ -602,37 +794,38 @@ def writeSHCIConfFile( SHCI, nelec, Restart ):
 
     f.write( 'davidsonTol %g\n' %SHCI.davidsonTol )
     f.write( 'dE %g\n' %SHCI.dE )
-    if (SHCI.DoRDM):
-       f.write( 'DoRDM\n')
+
+    # Sets maxiter to 6 more than the last iter in sweep_iter[] if restarted.
+    if (not Restart):
+       f.write( 'maxiter %i\n' %(SHCI.sweep_iter[-1]+6) )
+    else:
+       f.write('maxiter 10\n')
+       f.write('fullrestart\n')
 
     # Perturbative Keyword Section
+    f.write('#pt\n')
     if( SHCI.stochastic == False ):
         f.write( 'deterministic \n' )
     else:
        f.write( 'nPTiter %d\n' %SHCI.nPTiter )
-
     f.write( 'epsilon2 %g\n' %SHCI.epsilon2 )
     f.write( 'epsilon2Large %g\n' %SHCI.epsilon2Large )
     f.write( 'targetError %g\n' %SHCI.targetError )
     f.write( 'sampleN %i\n' %SHCI.sampleN )
 
     # Miscellaneous Keywords
+    f.write('#misc\n')
     f.write( 'noio \n' )
-
     if (SHCI.prefix != "") :
        if not os.path.exists(SHCI.prefix):
-          os.makedirs(SHCI.prefix)
+         os.makedirs(SHCI.prefix)
        f.write( 'prefix %s\n' %(SHCI.prefix))
-
-    # Sets maxiter to 6 more than the last iter in sweep_iter[] if restarted.
-    if (not Restart):
-       f.write( 'maxiter %i\n' %(SHCI.sweep_iter[-1]+6) )
-    else:
-       f.write('maxiter 6\n')
-       f.write('fullrestart\n')
+    if (SHCI.DoRDM):
+       f.write( 'DoRDM\n')
+    for line in SHCI.extraline:
+        f.write('%s\n'%line)
 
     f.write('\n') # SHCI requires that there is an extra line.
-    f.write('%s\n'%(SHCI.extraline))
     f.close()
 
 
@@ -791,7 +984,6 @@ def writeIntegralFile(SHCI, h1eff, eri_cas, norb, nelec, ecore=0):
                             ecore, numpy.asarray(orbsym, dtype=numpy.int32),
                             abs(neleca-nelecb) )
 
-
 def executeSHCI(SHCI):
     file1 = os.path.join(SHCI.runtimeDir, "%s/shci.e"%(SHCI.prefix))
     if os.path.exists(file1):
@@ -802,9 +994,22 @@ def executeSHCI(SHCI):
         cmd = ' '.join((SHCI.mpiprefix, SHCI.executable, inFile))
         cmd = "%s > %s 2>&1" % (cmd, outFile)
         check_call(cmd, shell=True)
+        #save_output(SHCI)
     except CalledProcessError as err:
         logger.error(SHCI, cmd)
         raise err
+
+#def save_output(SHCI):
+#  for i in range(50):
+#    if os.path.exists(os.path.join(SHCI.runtimeDir, "output%02d.dat"%(i))):
+#      continue
+#    else:
+#      import shutil
+#      shutil.copy2(os.path.join(SHCI.runtimeDir, "output.dat"),os.path.join(SHCI.runtimeDir, "output%02d.dat"%(i)))
+#      shutil.copy2(os.path.join(SHCI.runtimeDir, "%s/shci.e"%(SHCI.prefix)), os.path.join(SHCI.runtimeDir, "shci%02d.e"%(i)))
+#      #print('BM copied into "output%02d.dat"'%(i))
+#      #print('BM copied into "shci%02d.e"'%(i))
+#      break
 
 def readEnergy(SHCI):
     file1 = open(os.path.join(SHCI.runtimeDir, "%s/shci.e"%(SHCI.prefix)), "rb")
@@ -831,16 +1036,16 @@ def SHCISCF(mf, norb, nelec, maxM=1000, tol=1.e-8, *args, **kwargs):
     -74.414908818611522
     '''
 
+
+
     mc = mcscf.CASSCF(mf, norb, nelec, *args, **kwargs)
     mc.fcisolver = SHCI(mf.mol, maxM, tol=tol)
-    # TODO
-    #mc.callback = mc.fcisolver.restart_scheduler_()
+    #mc.callback = mc.fcisolver.restart_scheduler_() #TODO
     if mc.chkfile == mc._scf._chkfile.name:
         # Do not delete chkfile after mcscf
         mc.chkfile = tempfile.mktemp(dir=settings.SHCISCRATCHDIR)
         if not os.path.exists(settings.SHCISCRATCHDIR):
             os.makedirs(settings.SHCISCRATCHDIR)
-
     return mc
 
 
@@ -858,7 +1063,7 @@ def get_wso(mol):
       zA  = mol.atom_charge(iatom)
       xyz = mol.atom_coord(iatom)
       mol.set_rinv_orig(xyz)
-      wso += zA*mol.intor('cint1e_prinvxp_sph', 3) # sign due to integration by part                                                                            
+      wso += zA*mol.intor('cint1e_prinvxp_sph', 3) # sign due to integration by part
    return wso
 
 def get_p(dm,x,rp):
@@ -939,9 +1144,9 @@ def get_kint(mol):
    ddint = mol.intor('int2e_ip1ip2_sph',9).reshape(3,3,nq)
 
    kint = numpy.zeros((3,nq))
-   kint[0] = ddint[1,2]-ddint[2,1]# x = yz - zy                                                                                                                 
-   kint[1] = ddint[2,0]-ddint[0,2]# y = zx - xz                                                                                                                 
-   kint[2] = ddint[0,1]-ddint[1,0]# z = xy - yx                                                                                                              
+   kint[0] = ddint[1,2]-ddint[2,1]# x = yz - zy
+   kint[1] = ddint[2,0]-ddint[0,2]# y = zx - xz
+   kint[2] = ddint[0,1]-ddint[1,0]# z = xy - yx
    return kint.reshape(3,nb,nb,nb,nb)
 
 def writeSOCIntegrals(mc, ncasorbs=None, rdm1=None, pictureChange1e="bp", pictureChange2e="bp", uncontract=True):
@@ -970,11 +1175,11 @@ def writeSOCIntegrals(mc, ncasorbs=None, rdm1=None, pictureChange1e="bp", pictur
        hso1e = numpy.zeros((3, np, np))
        h1e_1c, x, rp = sfx2c1e.SpinFreeX2C(mc.mol).get_hxr(mc.mol, uncontract=uncontract)
 
-       #two electron terms       
+       #two electron terms
        if (pictureChange2e == "bp") :
           h2ao = -(alpha)**2*0.5*xmol.intor('cint2e_p1vxp1_sph', comp=3, aosym='s1')
           h2ao = h2ao.reshape(3, np, np, np, np)
-          hso1e += 1.*(numpy.einsum('ijklm,lm->ijk', h2ao, dm) 
+          hso1e += 1.*(numpy.einsum('ijklm,lm->ijk', h2ao, dm)
                       - 1.5*(numpy.einsum('ijklm, kl->ijm', h2ao, dm)
                              +numpy.einsum('ijklm,mj->ilk', h2ao, dm) ) )
        elif (pictureChange2e == "x2c"):
@@ -1138,11 +1343,11 @@ if __name__ == '__main__':
     # Open and get the energy from the binary energy file hci.e.
     # Open and get the energy from the
     with open( mch.fcisolver.outputFile, 'r' ) as f:
-    	lines = f.readlines()
+      lines = f.readlines()
 
     e_PT = float( lines[ len(lines) - 1 ].split()[2] )
 
-    # e_PT = shci.readEnergy( mch.fcisolver )
+    #e_PT = shci.readEnergy( mch.fcisolver )
 
     # Comparison Calculations
     del_PT = e_PT - e_noPT

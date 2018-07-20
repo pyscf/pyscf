@@ -83,20 +83,27 @@ def as_scanner(grad_ci, state=0):
             if ci_scanner.nroots > 1 and state >= ci_scanner.nroots:
                 raise ValueError('State ID greater than the number of CISD roots')
 
+# TODO: Check root flip
             ci_scanner(mol)
             if ci_scanner.nroots > 1:
+                e_tot = ci_scanner.e_tot[state]
                 civec = ci_scanner.ci[state]
             else:
+                e_tot = ci_scanner.e_tot
                 civec = ci_scanner.ci
 
             mf_grad = ci_scanner._scf.nuc_grad_method()
             self.mol = mol
             de = self.kernel(civec, mf_grad=mf_grad, **kwargs)
-            return ci_scanner.e_tot, de
+            return e_tot, de
         @property
         def converged(self):
             ci_scanner = self.base
-            return all((ci_scanner._scf.converged, ci_scanner.converged))
+            if ci_scanner.nroots > 1:
+                ci_conv = ci_scanner.converged[state]
+            else:
+                ci_conv = ci_scanner.converged
+            return all((ci_scanner._scf.converged, ci_conv))
     return CISD_GradScanner(grad_ci)
 
 class Gradients(lib.StreamObject):
@@ -105,24 +112,47 @@ class Gradients(lib.StreamObject):
         self.mol = myci.mol
         self.stdout = myci.stdout
         self.verbose = myci.verbose
+        self.state = 0  # of which the gradients to be computed.
         self.atmlst = None
         self.de = None
         self._keys = set(self.__dict__.keys())
 
+    def dump_flags(self):
+        log = logger.Logger(self.stdout, self.verbose)
+        log.info('\n')
+        if not self.base.converged:
+            log.warn('Ground state HF not converged')
+        log.info('******** %s for %s ********',
+                 self.__class__, self.base.__class__)
+        if self.state != 0 and self.base.nroots > 1:
+            log.info('State ID = %d', self.state)
+        return self
+
     def kernel(self, civec=None, eris=None, atmlst=None,
-               mf_grad=None, state=0, verbose=None, _kern=kernel):
+               mf_grad=None, state=None, verbose=None, _kern=kernel):
         log = logger.new_logger(self, verbose)
         myci = self.base
         if civec is None: civec = myci.ci
         if civec is None: civec = myci.kernel(eris=eris)
         if isinstance(civec, (list, tuple)):
+            if state is None:
+                state = self.state
+            else:
+                self.state = state
+
             civec = civec[state]
             logger.info(self, 'Multiple roots are found in CISD solver. '
                         'Nuclear gradients of root %d are computed.', state)
+
         if atmlst is None:
             atmlst = self.atmlst
         else:
             self.atmlst = atmlst
+
+        if self.verbose >= logger.WARN:
+            self.check_sanity()
+        if self.verbose >= logger.INFO:
+            self.dump_flags()
 
         self.de = _kern(myci, civec, eris, atmlst, mf_grad, log)
         self._finalize()

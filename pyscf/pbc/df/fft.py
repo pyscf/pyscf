@@ -21,7 +21,6 @@
 import copy
 import numpy
 from pyscf import lib
-from pyscf import gto
 from pyscf.lib import logger
 from pyscf.pbc import tools
 from pyscf.pbc.gto import pseudo, estimate_ke_cutoff, error_for_ke_cutoff
@@ -65,6 +64,7 @@ def get_nuc(mydf, kpts=None):
 def get_pp(mydf, kpts=None):
     '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.
     '''
+    from pyscf import gto
     cell = mydf.cell
     if kpts is None:
         kpts_lst = numpy.zeros((1,3))
@@ -106,7 +106,7 @@ def get_pp(mydf, kpts=None):
     def vppnl_by_k(kpt):
         Gk = Gv + kpt
         G_rad = lib.norm(Gk, axis=1)
-        aokG = ft_ao.ft_ao(cell, Gv, kpt=kpt) * (ngrids/cell.vol)
+        aokG = ft_ao.ft_ao(cell, Gv, kpt=kpt) * (1/cell.vol)**.5
         vppnl = 0
         for ia in range(cell.natm):
             symb = cell.atom_symbol(ia)
@@ -145,7 +145,7 @@ def get_pp(mydf, kpts=None):
                         SPG_lm_aoG = SPG_lm_aoGs[p0:p1].reshape(nl,l*2+1,-1)
                         tmp = numpy.einsum('ij,jmp->imp', hl, SPG_lm_aoG)
                         vppnl += numpy.einsum('imp,imq->pq', SPG_lm_aoG.conj(), tmp)
-        return vppnl * (1./ngrids**2)
+        return vppnl * (1./cell.vol)
 
     for k, kpt in enumerate(kpts_lst):
         vppnl = vppnl_by_k(kpt)
@@ -269,8 +269,7 @@ class FFTDF(lib.StreamObject):
                with_j=True, with_k=True, exxdiv='ewald'):
         from pyscf.pbc.df import fft_jk
         if kpts is None:
-            if numpy.all(self.kpts == 0):
-                # Gamma-point calculation by default
+            if numpy.all(self.kpts == 0): # Gamma-point J/K by default
                 kpts = numpy.zeros(3)
             else:
                 kpts = self.kpts

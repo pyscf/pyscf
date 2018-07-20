@@ -76,7 +76,8 @@ def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
         raise NotImplementedError('ROHF Fock-damping')
     if diis and cycle >= diis_start_cycle:
         f = diis.update(s1e, dm_tot, f, mf, h1e, vhf)
-    f = hf.level_shift(s1e, dm_tot*.5, f, level_shift_factor)
+    if abs(level_shift_factor) > 1e-4:
+        f = hf.level_shift(s1e, dm_tot*.5, f, level_shift_factor)
     f = lib.tag_array(f, focka=focka, fockb=fockb)
     return f
 
@@ -105,13 +106,13 @@ def get_roothaan_fock(focka_fockb, dma_dmb, s):
     pc = numpy.dot(dmb, s)
     po = numpy.dot(dma-dmb, s)
     pv = numpy.eye(nao) - numpy.dot(dma, s)
-    fock  = reduce(numpy.dot, (pc.T, fc, pc)) * .5
-    fock += reduce(numpy.dot, (po.T, fc, po)) * .5
-    fock += reduce(numpy.dot, (pv.T, fc, pv)) * .5
-    fock += reduce(numpy.dot, (po.T, fockb, pc))
-    fock += reduce(numpy.dot, (po.T, focka, pv))
-    fock += reduce(numpy.dot, (pv.T, fc, pc))
-    fock = fock + fock.T
+    fock  = reduce(numpy.dot, (pc.conj().T, fc, pc)) * .5
+    fock += reduce(numpy.dot, (po.conj().T, fc, po)) * .5
+    fock += reduce(numpy.dot, (pv.conj().T, fc, pv)) * .5
+    fock += reduce(numpy.dot, (po.conj().T, fockb, pc))
+    fock += reduce(numpy.dot, (po.conj().T, focka, pv))
+    fock += reduce(numpy.dot, (pv.conj().T, fc, pc))
+    fock = fock + fock.conj().T
     fock = lib.tag_array(fock, focka=focka, fockb=fockb)
     return fock
 
@@ -154,7 +155,7 @@ def get_occ(mf, mo_energy=None, mo_coeff=None):
             logger.warn(mf, 'HOMO %.15g >= LUMO %.15g', ehomo, elumo)
         else:
             logger.info(mf, '  HOMO = %.15g  LUMO = %.15g', ehomo, elumo)
-        if nopen > 0:
+        if nopen > 0 and mf.verbose >= logger.DEBUG:
             core_idx = mo_occ == 2
             open_idx = mo_occ == 1
             vir_idx = mo_occ == 0
@@ -169,11 +170,12 @@ def get_occ(mf, mo_energy=None, mo_coeff=None):
                 logger.debug(mf, '  1-occ =         %18.15g | %18.15g | %18.15g',
                              mo_energy[i], mo_ea[i], mo_eb[i])
 
-        numpy.set_printoptions(threshold=nmo)
-        logger.debug(mf, '  Roothaan mo_energy =\n%s', mo_energy)
-        logger.debug1(mf, '  alpha mo_energy =\n%s', mo_ea)
-        logger.debug1(mf, '  beta  mo_energy =\n%s', mo_eb)
-        numpy.set_printoptions(threshold=1000)
+        if mf.verbose >= logger.DEBUG:
+            numpy.set_printoptions(threshold=nmo)
+            logger.debug(mf, '  Roothaan mo_energy =\n%s', mo_energy)
+            logger.debug1(mf, '  alpha mo_energy =\n%s', mo_ea)
+            logger.debug1(mf, '  beta  mo_energy =\n%s', mo_eb)
+            numpy.set_printoptions(threshold=1000)
     return mo_occ
 
 def _fill_rohf_occ(mo_energy, mo_energy_a, mo_energy_b, ncore, nopen):
@@ -205,7 +207,7 @@ def get_grad(mo_coeff, mo_occ, fock):
     if hasattr(fock, 'focka'):
         focka = fock.focka
         fockb = fock.fockb
-    elif getattr(fock, 'ndim', None) == 3:
+    elif isinstance(fock, (tuple, list)) or getattr(fock, 'ndim', None) == 3:
         focka, fockb = fock
     else:
         focka = fockb = fock
@@ -280,6 +282,9 @@ def analyze(mf, verbose=logger.DEBUG, with_meta_lowdin=WITH_META_LOWDIN,
     dip = mf.dip_moment(mf.mol, dm, verbose=log)
     return pop_and_charge, dip
 
+mulliken_pop = hf.mulliken_pop
+mulliken_meta = hf.mulliken_meta
+
 def canonicalize(mf, mo_coeff, mo_occ, fock=None):
     '''Canonicalization diagonalizes the Fock matrix within occupied, open,
     virtual subspaces separatedly (without change occupancy).
@@ -288,9 +293,10 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
         dm = mf.make_rdm1(mo_coeff, mo_occ)
         fock = mf.get_fock(dm=dm)
     mo_e, mo_coeff = hf.canonicalize(mf, mo_coeff, mo_occ, fock)
-    mo_ea = numpy.einsum('pi,pi->i', mo_coeff, fock.focka.dot(mo_coeff))
-    mo_eb = numpy.einsum('pi,pi->i', mo_coeff, fock.fockb.dot(mo_coeff))
-    mo_e = lib.tag_array(mo_e, mo_ea=mo_ea, mo_eb=mo_eb)
+    if hasattr(fock, 'focka'):
+        mo_ea = numpy.einsum('pi,pi->i', mo_coeff, fock.focka.dot(mo_coeff))
+        mo_eb = numpy.einsum('pi,pi->i', mo_coeff, fock.fockb.dot(mo_coeff))
+        mo_e = lib.tag_array(mo_e, mo_ea=mo_ea, mo_eb=mo_eb)
     return mo_e, mo_coeff
 
 dip_moment = hf.dip_moment
@@ -377,8 +383,15 @@ class ROHF(hf.RHF):
         if dm is None: dm = self.make_rdm1()
         if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
             dm = numpy.array((dm*.5, dm*.5))
+
         if (self._eri is not None or not self.direct_scf or
             mol.incore_anyway or self._is_mem_enough()):
+            if hasattr(dm, 'mo_coeff'):
+                mo_coeff = dm.mo_coeff
+                mo_occ_a = (dm.mo_occ > 0).astype(numpy.double)
+                mo_occ_b = (dm.mo_occ ==2).astype(numpy.double)
+                dm = lib.tag_array(dm, mo_coeff=(mo_coeff,mo_coeff),
+                                   mo_occ=(mo_occ_a,mo_occ_b))
             vj, vk = self.get_jk(mol, dm, hermi)
             vhf = vj[0] + vj[1] - vk
         else:

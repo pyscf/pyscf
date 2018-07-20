@@ -13,7 +13,7 @@
 !  limitations under the License.
 
 module m_wigner_rotation
-  use m_log, only : die
+  use m_die, only : die
 
 #include "m_define_macro.F90"
 
@@ -80,10 +80,13 @@ subroutine make_complex_J(j,Jx,Jy,Jz)
   complex(8), dimension(-j:j,-j:j), intent(out) :: Jx, Jy, Jz
   ! Intern
   integer :: m
-  complex(8), dimension(-j:j,-j:j) :: Jplus,Jminus
+  !complex(8), dimension(-j:j,-j:j) :: Jplus,Jminus
+  complex(8), allocatable :: Jplus(:,:), Jminus(:,:)
   complex(8) :: imag_unit
   imag_unit=cmplx(0.d0,1.d0,8)
   
+  allocate(Jplus(-j:j,-j:j))
+  allocate(Jminus(-j:j,-j:j))
   !write(*,*) 'Enter make_complex_J'
 
   Jplus=0.d0
@@ -98,6 +101,9 @@ subroutine make_complex_J(j,Jx,Jy,Jz)
   do m=-j,j; Jz(m,m)=m; enddo
   !write(*,*) 'Exit make_complex_J'
 
+  _dealloc(Jplus)
+  _dealloc(Jminus)
+  
 end subroutine !make_complex_J
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -144,8 +150,8 @@ subroutine wigner_matrix(theta,phi,d_Wigner)
   
   implicit none
   ! Extern
-  complex(8), intent(inout), allocatable :: d_Wigner(:, :)!d_Wigner(-j:j,-j:j)
   real(8), intent(in) :: theta,phi
+  complex(8), intent(inout), allocatable :: d_Wigner(:,:)!d_Wigner(-j:j,-j:j)
 
   ! Intern
   integer::j, k
@@ -180,6 +186,15 @@ subroutine wigner_matrix(theta,phi,d_Wigner)
   dy=matmul(   transpose(X),matmul(diagonal_theta,conjg(X))    )  
   d_Wigner=matmul(dz,dy)
 
+  _dealloc(Jx)
+  _dealloc(Jy)
+  _dealloc(Jz)
+  _dealloc(diagonal_theta)
+  _dealloc(dy)
+  _dealloc(dz)
+  _dealloc(eigenvalues)
+  _dealloc(X)
+  
 end subroutine !wigner_matrix
 
 
@@ -196,11 +211,14 @@ subroutine wigner_matrix_inv(j,theta,phi,d_Wigner_inv)
   real(8), intent(in)::theta,phi
 
   ! Intern
-  complex(8), allocatable :: d_Wigner(:, :)
-  complex(8), Dimension(1:2*j+1,1:2*j+1):: aux, inverse_aux
+  complex(8), allocatable :: d_Wigner(:,:), aux(:,:), inverse_aux(:,:)
+  !complex(8), Dimension(1:2*j+1,1:2*j+1):: aux, inverse_aux
+  
   logical::success
 
   allocate(d_Wigner(-j:j, -j:j))
+  allocate(aux(2*j+1,2*j+1))
+  allocate(inverse_aux(2*j+1,2*j+1))
   d_Wigner = 0
 
   call wigner_matrix(theta,phi,d_Wigner)
@@ -211,23 +229,30 @@ subroutine wigner_matrix_inv(j,theta,phi,d_Wigner_inv)
   if (.not. success) then
     _die(' Wigner_matrix_inv: sucess=false')
   endif
+  _dealloc(d_Wigner)
+  _dealloc(aux)
+  _dealloc(inverse_aux)
   
 end subroutine wigner_matrix_inv
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-Subroutine Real_Wigner_matrix(j,theta,phi,d_r)
-  Implicit None
+subroutine Real_Wigner_matrix(j,theta,phi,d_r)
+  implicit none
   ! Extern: 
-  Integer::j
-  real(8):: theta,phi 
-  real(8), Dimension(-j:j,-j:j)::d_r
+  integer, intent(in) :: j
+  real(8), intent(in) :: theta,phi 
+  real(8), intent(inout) :: d_r(-j:j,-j:j)
   ! Intern: 
-  complex(8), Dimension(-j:j,-j:j)::real_from_complex
-  complex(8), Dimension(-j:j,-j:j)::complex_from_real
-  complex(8), allocatable :: d_c(:, :)
-  Integer::i
+  !complex(8), Dimension(-j:j,-j:j)::real_from_complex
+  !complex(8), Dimension(-j:j,-j:j)::complex_from_real
+  
+  complex(8), allocatable :: d_c(:, :), real_from_complex(:,:), complex_from_real(:,:)
+  integer :: i
 
   allocate(d_c(-j:j, -j:j))
+  allocate(real_from_complex(-j:j, -j:j))
+  allocate(complex_from_real(-j:j, -j:j))
+  
   d_c = 0
   real_from_complex=0.d0
   real_from_complex(0,0)=1.d0
@@ -238,13 +263,18 @@ Subroutine Real_Wigner_matrix(j,theta,phi,d_r)
      real_from_complex(-i, i)= ((-1D0)**i) *cmplx(0.d0, -sqrt(2.d0)/2,8)
   enddo
 
-   complex_from_real=transpose(conjg(real_from_complex))
+  complex_from_real=transpose(conjg(real_from_complex))
+  
 
-  Call  Wigner_matrix(theta,phi,d_c)
+  call  Wigner_matrix(theta,phi,d_c)
   d_r= real(    matmul(real_from_complex,     matmul(conjg(d_c),complex_from_real)     ))
 
+  _dealloc(d_c)
+  _dealloc(real_from_complex)
+  _dealloc(complex_from_real)
+  
   ! ist hier die falsche Phase ? 
-End Subroutine Real_Wigner_matrix
+end subroutine Real_Wigner_matrix
 
 
 !
@@ -261,9 +291,14 @@ subroutine simplified_wigner(translation, j, wigner, inverse_wigner)
 
   ! Intern 
   real(8) :: norm, phi, theta
-  real(8), dimension(2*j+1,2*j+1) :: aux, inverse_aux
-  real(8), dimension(-j:j,-j:j) :: dd
+  !real(8), dimension(2*j+1,2*j+1) :: aux, inverse_aux
+  !real(8), dimension(-j:j,-j:j) :: dd
+  real(8), allocatable :: aux(:,:), inverse_aux(:,:), dd(:,:)
   logical::success
+  
+  allocate(aux(2*j+1,2*j+1))
+  allocate(inverse_aux(2*j+1,2*j+1))
+  allocate(dd(-j:j,-j:j))
 
   ! write(*,*) 'Enter simplified_Wigner'
   if (j==0) then
@@ -288,7 +323,11 @@ subroutine simplified_wigner(translation, j, wigner, inverse_wigner)
   else 
      print*, 'j<0? ', j
      _die('simplified_wigner: j<0 ?')
-  endif ! j>0	
+  endif ! j>0
+  
+  _dealloc(aux)
+  _dealloc(inverse_aux)
+  _dealloc(dd)
   ! write(*,*) 'Exit simplified_Wigner'
 
 end subroutine !simplified_wigner

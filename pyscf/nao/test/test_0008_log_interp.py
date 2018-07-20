@@ -60,5 +60,4 @@ class KnowValues(unittest.TestCase):
     #plt.legend()
     #plt.show()
     
-if __name__ == "__main__":
-  unittest.main()
+if __name__ == "__main__": unittest.main()

@@ -17,8 +17,7 @@
 #
 
 '''
-Unrestricted Dirac Hartree-Fock g-tensor
-(In testing)
+Dirac Hartree-Fock g-tensor (In testing)
 
 Refs: TCA, 129, 715
 '''
@@ -75,6 +74,11 @@ def kernel(gobj, gauge_orig=None, mb='RKB', with_gaunt=False, verbose=None):
     return g
 
 class GTensor(dhf_nmr.NMR):
+    def __init__(self, mf):
+        dhf_nmr.NMR.__init__(self, mf)
+        lib.logger.warn(self, 'DHF-gtensor is an experimental feature. It is '
+                        'still in testing.\nFeatures and APIs may be changed '
+                        'in the future.')
     kernel = kernel
 
 if __name__ == '__main__':

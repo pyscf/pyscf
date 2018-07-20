@@ -225,6 +225,8 @@ def atom_types(atoms, basis=None):
     '''symmetry inequivalent atoms'''
     atmgroup = {}
     for ia, a in enumerate(atoms):
+        if 'GHOST' in a[0].upper():
+            a = ['X'+a[0][5:]] + list(a[1:])
         if a[0] in atmgroup:
             atmgroup[a[0]].append(ia)
         elif basis is None:
@@ -385,7 +387,9 @@ def format_basis(basis_tab):
         atom_basis = basis_tab[atom]
         if isinstance(atom_basis, (str, unicode)):
             bset = convert(str(atom_basis), stdsymb)
-        elif any(isinstance(x, (str, unicode)) for x in atom_basis):
+        elif (any(isinstance(x, (str, unicode)) for x in atom_basis)
+              # The first element is the basis of internal format
+              or not isinstance(atom_basis[0][0], int)):
             bset = []
             for rawb in atom_basis:
                 if isinstance(rawb, (str, unicode)):
@@ -400,12 +404,12 @@ def format_basis(basis_tab):
             raise RuntimeError('Basis not found for  %s' % symb)
     return fmt_basis
 
-def uncontract_basis(_basis):
+def uncontracted_basis(_basis):
     '''Uncontract internal format _basis
 
     Examples:
 
-    >>> gto.uncontract_basis(gto.load('sto3g', 'He'))
+    >>> gto.uncontract(gto.load('sto3g', 'He'))
     [[0, [6.3624213899999997, 1]], [0, [1.1589229999999999, 1]], [0, [0.31364978999999998, 1]]]
     '''
     ubasis = []
@@ -419,7 +423,58 @@ def uncontract_basis(_basis):
             for p in b[1:]:
                 ubasis.append([angl, [p[0], 1]])
     return ubasis
-uncontract = uncontract_basis
+uncontract = uncontracted_basis
+
+def to_uncontracted_cartesian_basis(mol):
+    '''Decontract the basis of a Mole or a Cell.  Returns a Mole (Cell) object
+    with the uncontracted basis environment and a list of coefficients that
+    transform the uncontracted cartesian basis to the original basis.  Each
+    element in the list corresponds to one shell of the original Mole (Cell).
+
+    Examples:
+
+    >>> mol = gto.M(atom='Ne', basis='ccpvdz')
+    >>> pmol, ctr_coeff = mol.to_uncontracted_cartesian_basis()
+    >>> c = scipy.linalg.block_diag(*ctr_coeff)
+    >>> s = reduce(numpy.dot, (c.T, pmol.intor('int1e_ovlp'), c))
+    >>> abs(s-mol.intor('int1e_ovlp')).max()
+    0.0
+    '''
+    import copy
+    lmax = mol._bas[:,ANG_OF].max()
+    if mol.cart:
+        c2s = [numpy.eye((l+1)*(l+2)//2) for l in range(lmax+1)]
+    else:
+        c2s = [cart2sph(l, normalized='sp') for l in range(lmax+1)]
+
+    pmol = copy.copy(mol)
+    pmol.cart = True
+    _bas = []
+    _env = mol._env.copy()
+    contr_coeff = []
+    for ib in range(mol.nbas):
+        l = mol._bas[ib,ANG_OF]
+        ncart = (l+1)*(l+2)//2
+        es = mol.bas_exp(ib)
+        cs = mol._libcint_ctr_coeff(ib)
+        np, nc = cs.shape
+        norm = gto_norm(l, es)
+        c = numpy.einsum('pi,p,xm->pxim', cs, 1./norm, c2s[l])
+        contr_coeff.append(c.reshape(np*ncart,-1))
+
+        pexp = mol._bas[ib,PTR_EXP]
+        pc = mol._bas[ib,PTR_COEFF]
+        bs = numpy.empty((np,8), dtype=numpy.int32)
+        bs[:] = mol._bas[ib]
+        bs[:,NCTR_OF] = bs[:,NPRIM_OF] = 1
+        bs[:,PTR_EXP] = numpy.arange(pexp, pexp+np)
+        bs[:,PTR_COEFF] = numpy.arange(pc, pc+np)
+        _env[pc:pc+np] = norm
+        _bas.append(bs)
+
+    pmol._bas = numpy.asarray(numpy.vstack(_bas), dtype=numpy.int32)
+    pmol._env = _env
+    return pmol, contr_coeff
 
 def format_ecp(ecp_tab):
     r'''Convert the input :attr:`ecp` (dict) to the internal data format::
@@ -1485,7 +1540,7 @@ def same_basis_set(mol1, mol2):
     for k in atomtypes1:
         if len(atomtypes1[k]) != len(atomtypes2[k]):
             return False
-        elif mol1._basis[k] != mol2._basis[k]:
+        elif mol1._basis.get(k, None) != mol2._basis.get(k, None):
             return False
     return True
 
@@ -1753,10 +1808,11 @@ class Mole(lib.StreamObject):
         self.ecp = {}
 ##################################################
 # don't modify the following private variables, they are not input options
-        self._atm = numpy.zeros((0,6))
-        self._bas = numpy.zeros((0,8))
-        self._env = [0] * PTR_ENV_START
-        self._ecpbas = numpy.zeros((0,8))
+        self._atm = numpy.zeros((0,6), dtype=numpy.int32)
+        self._bas = numpy.zeros((0,8), dtype=numpy.int32)
+        self._env = numpy.zeros(PTR_ENV_START)
+        self._env[PTR_LIGHT_SPEED] = param.LIGHT_SPEED
+        self._ecpbas = numpy.zeros((0,8), dtype=numpy.int32)
 
         self.stdout = sys.stdout
         self.groupname = 'C1'
@@ -1974,21 +2030,15 @@ class Mole(lib.StreamObject):
             else:
                 self.topgroup, orig, axes = \
                         symm.detect_symm(self._atom, self._basis)
-                self.groupname, axes = symm.subgroup(self.topgroup, axes)
-                if isinstance(self.symmetry_subgroup, (str, unicode)):
-                    self.symmetry_subgroup = \
-                            str(symm.std_symb(self.symmetry_subgroup))
-                    assert(self.symmetry_subgroup in
-                           symm.param.SUBGROUP[self.groupname])
-                    if (self.symmetry_subgroup == 'Cs' and self.groupname == 'C2v'):
-                        raise RuntimeError('TODO: rotate mirror or axes')
-                    self.groupname = self.symmetry_subgroup
+                self.groupname, axes = symm.as_subgroup(self.topgroup, axes,
+                                                        self.symmetry_subgroup)
+
 # Note the internal _format is in Bohr
             self._atom = self.format_atom(self._atom, orig, axes, 'Bohr')
 
-        self._env[PTR_LIGHT_SPEED] = param.LIGHT_SPEED
+        env = self._env[:PTR_ENV_START]
         self._atm, self._bas, self._env = \
-                self.make_env(self._atom, self._basis, self._env, self.nucmod)
+                self.make_env(self._atom, self._basis, env, self.nucmod)
         self._atm, self._ecpbas, self._env = \
                 self.make_ecp_env(self._atm, self._ecp, self._env)
 
@@ -2010,7 +2060,7 @@ class Mole(lib.StreamObject):
                 eql_atoms = symm.symm_identical_atoms(self.groupname, self._atom)
             except RuntimeError:
                 raise RuntimeError('''Given symmetry and molecule structure not match.
-Note when symmetry attributes is assigned, the molecule needs to be put in the proper orientation.''')
+Note when symmetry attributes is assigned, the molecule needs to be placed in a proper orientation.''')
             self.symm_orb, self.irrep_id = \
                     symm.symm_adapted_basis(self, self.groupname, eql_atoms)
             self.irrep_name = [symm.irrep_id2name(self.groupname, ir)
@@ -2370,6 +2420,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
             mol = self
         else:
             mol = copy.copy(self)
+            mol._env = mol._env.copy()
         if unit is None:
             unit = mol.unit
         if symmetry is None:
@@ -2383,7 +2434,6 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
                     unit = 1./param.BOHR
             else:
                 unit = 1./unit
-            mol._env = mol._env.copy()
             ptr = mol._atm[:,PTR_COORD]
             mol._env[ptr+0] = unit * atoms_or_coords[:,0]
             mol._env[ptr+1] = unit * atoms_or_coords[:,1]
@@ -2815,6 +2865,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
 
     @lib.with_doc(moleintor.getints_by_shell.__doc__)
     def intor_by_shell(self, intor, shells, comp=None):
+        intor = self._add_suffix(intor)
         if 'ECP' in intor:
             assert(self._ecp is not None)
             bas = numpy.vstack((self._bas, self._ecpbas))
@@ -2850,6 +2901,8 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
 
     condense_to_shell = condense_to_shell
 
+    to_uncontracted_cartesian_basis = to_uncontracted_cartesian_basis
+
     __add__ = conc_mol
 
     def cart2sph_coeff(self, normalized='sp'):
@@ -2865,7 +2918,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
                 and p basis are normalized.  'all' means all Cartesian functions are
                 normalized.  None means none of the Cartesian functions are normalized.
 
-        Examples::
+        Examples:
 
         >>> mol = gto.M(atom='H 0 0 0; F 0 0 1', basis='ccpvtz')
         >>> c = mol.cart2sph_coeff()
@@ -2886,7 +2939,7 @@ Note when symmetry attributes is assigned, the molecule needs to be put in the p
         '''Transformation matrix that transforms real-spherical GTOs to spinor
         GTOs for all basis functions
 
-        Examples::
+        Examples:
 
         >>> mol = gto.M(atom='H 0 0 0; F 0 0 1', basis='ccpvtz')
         >>> ca, cb = mol.sph2spinor_coeff()

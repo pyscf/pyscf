@@ -1,4 +1,3 @@
-from pyscf.pbc.cc import ccsd
 # Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,6 +12,12 @@ from pyscf.pbc.cc import ccsd
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-def KRCCSD(mf, frozen=[]):
+from pyscf.pbc.cc import ccsd
+from pyscf.pbc import scf
+
+def KRCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
     from pyscf.pbc.mpicc import kccsd_rhf
+    mf = scf.addons.convert_to_rhf(mf)
     return kccsd_rhf.RCCSD(mf, frozen)
+
+KCCSD = KRCCSD

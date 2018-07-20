@@ -36,7 +36,7 @@ def ecp_int(cell, kpts=None):
         kpts_lst = numpy.reshape(kpts, (-1,3))
 
     cell, contr_coeff = gto.cell._split_basis(cell)
-    lib.logger.debug1(cell, 'nao %d -> nao %d', contr_coeff.shape)
+    lib.logger.debug1(cell, 'nao %d -> nao %d', *(contr_coeff.shape))
 
     ecpcell = gto.Cell()
     ecpcell._atm = cell._atm

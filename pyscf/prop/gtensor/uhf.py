@@ -24,7 +24,7 @@ Refs:
     JCP, 115, 11080
     JCP, 119, 10489
 Note g-tensor = 1/muB d^2 E/ dB dS
-In some literature, muB is not explicitly presented in the perturbation formula
+In some literature, muB is not explicitly presented in the perturbation formula.
 '''
 
 import time

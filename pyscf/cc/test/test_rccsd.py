@@ -180,6 +180,11 @@ class KnownValues(unittest.TestCase):
         cc1.kernel(t1, t2)
         self.assertAlmostEqual(cc1.e_corr, ref, 8)
 
+        cc2 = cc.CCSD(mf)
+        cc2.restore_from_diis_(ftmp.name)
+        self.assertAlmostEqual(abs(cc1.t1 - cc2.t1).max(), 0, 9)
+        self.assertAlmostEqual(abs(cc1.t2 - cc2.t2).max(), 0, 9)
+
     def test_iterative_dampling(self):
         ftmp = tempfile.NamedTemporaryFile()
         cc1 = cc.CCSD(mf)
@@ -332,7 +337,9 @@ class KnownValues(unittest.TestCase):
         vvvv = numpy.random.random((nvir_pair,nvir_pair)) - .5
         eris.vvvv = vvvv + vvvv.T
         eris.mol = mol
-        vt2 = eris._contract_vvvv_t2(mycc, t2, eris.vvvv, max_memory=0)
+        mycc.max_memory, bak = 0, mycc.max_memory
+        vt2 = eris._contract_vvvv_t2(mycc, t2, eris.vvvv)
+        mycc.max_memory = bak
         self.assertAlmostEqual(lib.finger(vt2), -39.572579908080087, 11)
         vvvv = ao2mo.restore(1, eris.vvvv, nvir)
         ref = lib.einsum('acbd,ijcd->ijab', vvvv, t2)
@@ -345,7 +352,9 @@ class KnownValues(unittest.TestCase):
         vvvv = vvvv + vvvv.transpose(2,3,0,1)
         eris.vvvv = vvvv
         eris.mol = mol
-        vt2 = eris._contract_vvvv_t2(mycc, t2, eris.vvvv, max_memory=0)
+        mycc.max_memory, bak = 0, mycc.max_memory
+        vt2 = eris._contract_vvvv_t2(mycc, t2, eris.vvvv)
+        mycc.max_memory = bak
         self.assertAlmostEqual(lib.finger(vt2), 23.502736435296871+113.90422480013488j, 11)
         ref = lib.einsum('acbd,ijcd->ijab', eris.vvvv, t2)
         self.assertAlmostEqual(abs(vt2 - ref).max(), 0, 11)

@@ -56,6 +56,7 @@ class lsofcsr_c():
     self.lsofcsr = lsofcsr(coo3, dtype=dtype, shape=shape, axis=axis)
     self.shape = shape
     self.axis = axis
+    self.dtype = dtype
 
   def __getitem__(self, i):
     return self.lsofcsr[i] 

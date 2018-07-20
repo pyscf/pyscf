@@ -151,7 +151,7 @@ class DIIS(object):
     def push_vec(self, x):
         x = x.ravel()
 
-        if len(self._bookkeep) >= self.space:
+        while len(self._bookkeep) >= self.space:
             self._bookkeep.pop(0)
 
         if self._err_vec_touched:
@@ -165,6 +165,9 @@ class DIIS(object):
 # as the diff of the current vec and previous returned vec (._xprev)
 # So store the first trial vec as the previous returned vec
             self._xprev = x
+            self._store('xprev', x)
+            if 'xprev' not in self._buffer:  # not incore
+                self._xprev = self._diisfile['xprev']
 
         else:
             if self._head >= self.space:
@@ -174,7 +177,7 @@ class DIIS(object):
             xkey = 'x%d'%self._head
             self._store(xkey, x)
             if x.size < INCORE_SIZE or self.incore:
-                self._store(ekey, x - self._xprev)
+                self._store(ekey, x - numpy.asarray(self._xprev))
             else:  # not call _store to reduce memory footprint
                 if ekey not in self._diisfile:
                     self._diisfile.create_dataset(ekey, (x.size,), x.dtype)
@@ -235,11 +238,17 @@ class DIIS(object):
         else:
             self._xprev = None # release memory first
             self._xprev = xnew = self.extrapolate(nd)
+
+            self._store('xprev', xnew)
+            if 'xprev' not in self._buffer:  # not incore
+                self._xprev = self._diisfile['xprev']
         return xnew.reshape(x.shape)
 
     def extrapolate(self, nd=None):
         if nd is None:
             nd = self.get_num_vec()
+        if nd == 0:
+            raise RuntimeError('No vector found in DIIS object.')
 
         h = self._H[:nd+1,:nd+1]
         g = numpy.zeros(nd+1, h.dtype)
@@ -247,7 +256,7 @@ class DIIS(object):
 
         w, v = scipy.linalg.eigh(h)
         if numpy.any(abs(w)<1e-14):
-            logger.debug(self, 'Singularity found in DIIS error vector space.')
+            logger.debug(self, 'Linear dependence found in DIIS error vectors.')
             idx = abs(w)>1e-14
             c = numpy.dot(v[:,idx]*(1./w[idx]), numpy.dot(v[:,idx].T.conj(), g))
         else:
@@ -272,24 +281,39 @@ class DIIS(object):
         current diis object if needed, then construct the vector.
         '''
         fdiis = misc.H5TmpFile(filename)
+        if inplace:
+            self.filename = filename
+            self._diisfile = fdiis
+
         diis_keys = fdiis.keys()
         x_keys = [k for k in diis_keys if k[0] == 'x']
         e_keys = [k for k in diis_keys if k[0] == 'e']
         # errvec may be incomplete if program is terminated when generating errvec.
         # The last vector or errvec should be excluded.
         nd = min(len(x_keys), len(e_keys))
+        if nd == 0:
+            return self
 
         if inplace:
-            self.filename = filename
-            self._diisfile = fdiis
             if fdiis[x_keys[0]].size < INCORE_SIZE or self.incore:
                 for key in diis_keys:
                     self._buffer[key] = numpy.asarray(fdiis[key])
+
+            if 'xprev' in diis_keys:
+                self._xprev = fdiis['xprev']
+
         else:
             for key in diis_keys:
                 self._store(key, fdiis[key].value)
 
-        self._bookkeep = list(range(min(self.space, nd)))
+            if 'xprev' in diis_keys:
+                self._store('xprev', numpy.asarray(fdiis['xprev']))
+                if 'xprev' in self._buffer:  # incore
+                    self._xprev = self._buffer['xprev']
+                else:
+                    self._xprev = self._diisfile['xprev']
+
+        self._bookkeep = list(range(nd))
         self._head = nd
         vecsize = 0
 

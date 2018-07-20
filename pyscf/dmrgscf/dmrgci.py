@@ -21,7 +21,6 @@
 '''
 DMRG solver for CASCI and CASSCF.
 '''
-
 import ctypes
 import os
 import sys
@@ -36,12 +35,13 @@ from pyscf.lib import logger
 from pyscf import ao2mo
 from pyscf import mcscf
 from pyscf.dmrgscf import dmrg_sym
-
 from pyscf import __config__
 
+# Libraries
+import pyscf.lib
 libunpack = lib.load_library('libicmpspt')
 
-
+# Settings
 try:
     from pyscf.dmrgscf import settings
 except ImportError:
@@ -67,6 +67,8 @@ class DMRGCI(lib.StreamObject):
         outputlevel : int
             Noise level for Block program output.
         maxIter : int
+        hf_occ : str
+            The initial HF wave function occupancies, in spin orbital.
 
         approx_maxIter : int
             To control the DMRG-CASSCF approximate DMRG solver accuracy.
@@ -102,11 +104,16 @@ class DMRGCI(lib.StreamObject):
     >>> mc.kernel()
     -74.379770619390698
     '''
-    def __init__(self, mol, maxM=None, tol=None, num_thrds=1, memory=None):
+    def __init__(self, mol=None, maxM=None, tol=None, num_thrds=1, memory=None):
         self.mol = mol
-        self.verbose = mol.verbose
-        self.stdout = mol.stdout
+        if mol is None:
+            self.stdout = sys.stdout
+            self.verbose = logger.NOTE
+        else:
+            self.stdout = mol.stdout
+            self.verbose = mol.verbose
         self.outputlevel = 2
+        self.hf_occ = 'integral'
 
         self.executable = settings.BLOCKEXE
         self.scratchDirectory = os.path.abspath(settings.BLOCKSCRATCHDIR)
@@ -137,7 +144,6 @@ class DMRGCI(lib.StreamObject):
             self.maxM = 1000
         else:
             self.maxM = maxM
-
         self.num_thrds= num_thrds
         self.startM =  None
         self.restart = False
@@ -148,27 +154,27 @@ class DMRGCI(lib.StreamObject):
         self.scheduleNoises = []
         self.onlywriteIntegral = False
         self.spin = 0
-
         self.orbsym = []
-        if mol.symmetry:
-            self.groupname = mol.groupname
+        if mol is None:
+          self.groupname = None
         else:
+          if mol.symmetry:
+            self.groupname = mol.groupname
+          else:
             self.groupname = None
-
-##################################################
-# don't modify the following attributes, if you do not finish part of calculation, which can be reused.
-
+        ##################################################
+        # don't modify the following attributes, if you do not finish part of calculation, which can be reused.
         #DO NOT CHANGE these parameters, unless you know the code in details
         self.twopdm = True #By default, 2rdm is calculated after the calculations of wave function.
         self.block_extra_keyword = [] #For Block advanced user only.
         self.has_fourpdm = False
         self.has_threepdm = False
         self.has_nevpt = False
-# This flag _restart is set by the program internally, to control when to make
-# Block restart calculation.
+        # This flag _restart is set by the program internally, to control when to make
+        # Block restart calculation.
         self._restart = False
         self.generate_schedule()
-
+        self.returnInt = False
         self._keys = set(self.__dict__.keys())
 
 
@@ -180,7 +186,6 @@ class DMRGCI(lib.StreamObject):
         self.num_thrds = x
 
     def generate_schedule(self):
-
         if self.startM is None:
             if self.maxM < 200:
                 self.startM = 50
@@ -217,33 +222,34 @@ class DMRGCI(lib.StreamObject):
             self.maxIter = self.twodot_to_onedot + 12
         return self
 
-
     def dump_flags(self, verbose=None):
         if verbose is None:
             verbose = self.verbose
         log = logger.Logger(self.stdout, verbose)
+        log.info('')
         log.info('******** Block flags ********')
-        log.info('executable = %s', self.executable)
-        log.info('Block version %s', block_version(self.executable))
-        log.info('BLOCKEXE_COMPRESS_NEVPT = %s', settings.BLOCKEXE_COMPRESS_NEVPT)
-        log.info('mpiprefix = %s', self.mpiprefix)
-        log.info('scratchDirectory = %s', self.scratchDirectory)
-        log.info('integralFile = %s', os.path.join(self.runtimeDir, self.integralFile))
-        log.info('configFile = %s', os.path.join(self.runtimeDir, self.configFile))
-        log.info('outputFile = %s', os.path.join(self.runtimeDir, self.outputFile))
-        log.info('maxIter = %d', self.maxIter)
-        log.info('scheduleSweeps = %s', str(self.scheduleSweeps))
-        log.info('scheduleMaxMs = %s', str(self.scheduleMaxMs))
-        log.info('scheduleTols = %s', str(self.scheduleTols))
-        log.info('scheduleNoises = %s', str(self.scheduleNoises))
-        log.info('twodot_to_onedot = %d', self.twodot_to_onedot)
-        log.info('tol = %g', self.tol)
-        log.info('maxM = %d', self.maxM)
-        log.info('fullrestart = %s', str(self.restart or self._restart))
-        log.info('dmrg switch tol =%s', self.dmrg_switch_tol)
-        log.info('wfnsym = %s', self.wfnsym)
-        log.info('num_thrds = %d', self.num_thrds)
-        log.info('memory = %s', self.memory)
+        log.info('executable             = %s', self.executable)
+        log.info('BLOCKEXE_COMPRESS_NEVPT= %s', settings.BLOCKEXE_COMPRESS_NEVPT)
+        log.info('Block version          = %s', block_version(self.executable))
+        log.info('mpiprefix              = %s', self.mpiprefix)
+        log.info('scratchDirectory       = %s', self.scratchDirectory)
+        log.info('integralFile           = %s', os.path.join(self.runtimeDir, self.integralFile))
+        log.info('configFile             = %s', os.path.join(self.runtimeDir, self.configFile))
+        log.info('outputFile             = %s', os.path.join(self.runtimeDir, self.outputFile))
+        log.info('maxIter                = %d', self.maxIter)
+        log.info('scheduleSweeps         = %s', str(self.scheduleSweeps))
+        log.info('scheduleMaxMs          = %s', str(self.scheduleMaxMs))
+        log.info('scheduleTols           = %s', str(self.scheduleTols))
+        log.info('scheduleNoises         = %s', str(self.scheduleNoises))
+        log.info('twodot_to_onedot       = %d', self.twodot_to_onedot)
+        log.info('tol                    = %g', self.tol)
+        log.info('maxM                   = %d', self.maxM)
+        log.info('dmrg switch tol        = %s', self.dmrg_switch_tol)
+        log.info('wfnsym                 = %s', self.wfnsym)
+        log.info('fullrestart            = %s', str(self.restart or self._restart))
+        log.info('num_thrds              = %d', self.num_thrds)
+        log.info('memory                 = %s', self.memory)
+        log.info('')
         return self
 
     # ABOUT RDMs AND INDEXES: -----------------------------------------------------------------------
@@ -262,42 +268,11 @@ class DMRGCI(lib.StreamObject):
             neleca = nelec - nelecb
         else :
             neleca, nelecb = nelec
-        dm1, dm2 = DMRGCI.make_rdm12(self, state, norb, nelec, link_index, **kwargs)
+        dm1, dm2 = self.make_rdm12(state, norb, nelec, link_index, **kwargs)
         dm1n = (2-(neleca+nelecb)/2.) * dm1 - numpy.einsum('pkkq->pq', dm2)
         dm1n *= 1./(neleca-nelecb+1)
         dm1a, dm1b = (dm1+dm1n)*.5, (dm1-dm1n)*.5
         return dm1a, dm1b
-
-    def make_rdm1(self, state, norb, nelec, link_index=None, **kwargs):
-        # Avoid calling self.make_rdm12 because it may be overloaded
-        return DMRGCI.make_rdm12(self, state, norb, nelec, link_index, **kwargs)[0]
-
-    def make_rdm12(self, state, norb, nelec, link_index=None, **kwargs):
-        nelectrons = 0
-        if isinstance(nelec, (int, numpy.integer)):
-            nelectrons = nelec
-        else:
-            nelectrons = nelec[0]+nelec[1]
-
-        twopdm = numpy.zeros( (norb, norb, norb, norb) )
-        file2pdm = "spatial_twopdm.%d.%d.txt" %(state, state)
-        # The 2RDMs written by "save_spatial_twopdm_text" in BLOCK and STACKBLOCK
-        # are written as E2[i1,j2,k2,l1] (right?)
-        # and stored here as E2[i1,l1,j2,k2] (weird?)
-        # This is NOT done with SQA in mind.
-        with open(os.path.join(self.scratchDirectory, "node0", file2pdm), "r") as f:
-            norb_read = int(f.readline().split()[0])
-            assert(norb_read == norb)
-
-            for line in f:
-                linesp = line.split()
-                i, k, l, j = [int(x) for x in linesp[:4]]
-                twopdm[i,j,k,l] = 2.0 * float(linesp[4])
-
-        # (this is coherent with previous statement about indexes) (right?)
-        onepdm = numpy.einsum('ikjj->ki', twopdm)
-        onepdm /= (nelectrons-1)
-        return onepdm, twopdm
 
     def trans_rdm1s(self, statebra, stateket, norb, nelec, link_index=None, **kwargs):
         # Ref: IJQC, 109, 3552 Eq (3)
@@ -306,14 +281,44 @@ class DMRGCI(lib.StreamObject):
             neleca = nelec - nelecb
         else :
             neleca, nelecb = nelec
-        dm1, dm2 = DMRGCI.trans_rdm12(self, statebra, stateket, norb, nelec, link_index, **kwargs)
+        dm1, dm2 = self.trans_rdm12(statebra, stateket, norb, nelec, link_index, **kwargs)
         dm1n = (2-(neleca+nelecb)/2.) * dm1 - numpy.einsum('pkkq->pq', dm2)
         dm1n *= 1./(neleca-nelecb+1)
         dm1a, dm1b = (dm1+dm1n)*.5, (dm1-dm1n)*.5
         return dm1a, dm1b
 
+    def make_rdm1(self, state, norb, nelec, link_index=None, **kwargs):
+        # Avoid calling self.make_rdm12 because it may be overloaded
+        return self.make_rdm12(state, norb, nelec, link_index, **kwargs)[0]
+
+    def make_rdm12(self, state, norb, nelec, link_index=None, **kwargs):
+        nelectrons = 0
+        if isinstance(nelec, (int, numpy.integer)):
+          nelectrons = nelec
+        else:
+          nelectrons = nelec[0]+nelec[1]
+
+        # The 2RDMs written by "save_spatial_twopdm_text" in BLOCK and STACKBLOCK
+        # are written as E2[i1,j2,k2,l1]
+        # and stored here as E2[i1,l1,j2,k2] (for PySCF purposes)
+        # This is NOT done with SQA in mind.
+        twopdm = numpy.zeros( (norb, norb, norb, norb) )
+        file2pdm = "spatial_twopdm.%d.%d.txt" %(state, state)
+        with open(os.path.join(self.scratchDirectory, "node0", file2pdm), "r") as f:
+            norb_read = int(f.readline().split()[0])
+            assert(norb_read == norb)
+            for line in f:
+                linesp = line.split()
+                i, k, l, j = [int(x) for x in linesp[:4]]
+                twopdm[i,j,k,l] = 2.0 * float(linesp[4])
+
+        # (This is coherent with previous statement about indexes)
+        onepdm = numpy.einsum('ikjj->ki', twopdm)
+        onepdm /= (nelectrons-1)
+        return onepdm, twopdm
+
     def trans_rdm1(self, statebra, stateket, norb, nelec, link_index=None, **kwargs):
-        return DMRGCI.trans_rdm12(self, statebra, stateket, norb, nelec, link_index, **kwargs)[0]
+        return self.trans_rdm12(statebra, stateket, norb, nelec, link_index, **kwargs)[0]
 
     def trans_rdm12(self, statebra, stateket, norb, nelec, link_index=None, **kwargs):
         nelectrons = 0
@@ -322,40 +327,47 @@ class DMRGCI(lib.StreamObject):
         else:
             nelectrons = nelec[0]+nelec[1]
 
-        writeDMRGConfFile(self, nelec, True, with_2pdm=False,
-                          extraline=['restart_tran_twopdm',
-                                     'specificpdm %d %d' % (statebra, stateket)])
+        writeDMRGConfFile(self, nelec, True,\
+                          with_2pdm=False, extraline=['restart_tran_twopdm',
+                                                      'specificpdm %d %d' % (statebra, stateket)])
         executeBLOCK(self)
 
+        # The 2RDMs written by "save_spatial_twopdm_text" in BLOCK and STACKBLOCK
+        # are written as E2[i1,j2,k2,l1]
+        # and stored here as E2[i1,l1,j2,k2] (for PySCF purposes)
+        # This is NOT done with SQA in mind.
         twopdm = numpy.zeros( (norb, norb, norb, norb) )
         file2pdm = "spatial_twopdm.%d.%d.txt" %(statebra, stateket)
-        # The 2RDMs written by "save_spatial_twopdm_text" in BLOCK and STACKBLOCK
-        # are written as E2[i1,j2,k2,l1] (right?)
-        # and stored here as E2[i1,l1,j2,k2] (weird?)
-        # This is NOT done with SQA in mind.
         with open(os.path.join(self.scratchDirectory, "node0", file2pdm), "r") as f:
             norb_read = int(f.readline().split()[0])
             assert(norb_read == norb)
-
             for line in f:
                 linesp = line.split()
                 i, k, l, j = [int(x) for x in linesp[:4]]
                 twopdm[i,j,k,l] = 2.0 * float(linesp[4])
 
-        # (this is coherent with previous statement about indexes) (right?)
+        # (This is coherent with previous statement about indexes)
         onepdm = numpy.einsum('ikjj->ki', twopdm)
         onepdm /= (nelectrons-1)
         return onepdm, twopdm
 
     def make_rdm123(self, state, norb, nelec, link_index=None, **kwargs):
         if self.has_threepdm == False:
-            writeDMRGConfFile(self, nelec, True,
+            writeDMRGConfFile(self, nelec, True,\
                               with_2pdm=False, extraline=['restart_threepdm'])
             if self.verbose >= logger.DEBUG1:
                 inFile = os.path.join(self.runtimeDir, self.configFile)
                 logger.debug1(self, 'Block Input conf')
                 logger.debug1(self, open(inFile, 'r').read())
+
+            start = time.time()
+            mpisave=self.mpiprefix
+            #self.mpiprefix=""
             executeBLOCK(self)
+            self.mpiprefix=mpisave
+            end = time.time()
+            print('......production of RDMs took %10.2f sec' %(end-start))
+
             if self.verbose >= logger.DEBUG1:
                 outFile = os.path.join(self.runtimeDir, self.outputFile)
                 logger.debug1(self, open(outFile).read())
@@ -367,26 +379,28 @@ class DMRGCI(lib.StreamObject):
         else:
             nelectrons = nelec[0]+nelec[1]
 
-        threepdm = numpy.zeros( (norb, norb, norb, norb, norb, norb) )
-        file3pdm = "spatial_threepdm.%d.%d.txt" %(state, state)
         # The 3RDMs written by "Threepdm_container::save_spatial_npdm_text" in BLOCK and STACKBLOCK
         # are written as E3[i1,j2,k3,l3,m2,n1]
         # and are also stored here as E3[i1,j2,k3,l3,m2,n1]
         # This is NOT done with SQA in mind.
+        start = time.time()
+        threepdm = numpy.zeros( (norb, norb, norb, norb, norb, norb) )
+        file3pdm = "spatial_threepdm.%d.%d.txt" %(state, state)
         with open(os.path.join(self.scratchDirectory, "node0", file3pdm), "r") as f:
-            norb_read = int(f.readline().split()[0])
-            assert(norb_read == norb)
+          norb_read = int(f.readline().split()[0])
+          assert(norb_read == norb)
+          for line in f:
+              linesp = line.split()
+              i,j,k, l,m,n = [int(x) for x in linesp[:6]]
+              threepdm[i,j,k,l,m,n] = float(linesp[6])
 
-            for line in f:
-                linesp = line.split()
-                i, j, k, l, m, n = [int(x) for x in linesp[:6]]
-                threepdm[i,j,k,l,m,n] = float(linesp[6])
-
-        # (this is coherent with previous statement about indexes)
+        # (This is coherent with previous statement about indexes)
         twopdm = numpy.einsum('ijkklm->ijlm',threepdm)
         twopdm /= (nelectrons-2)
         onepdm = numpy.einsum('ijjk->ki', twopdm)
         onepdm /= (nelectrons-1)
+        end = time.time()
+        print('......reading the RDM took    %10.2f sec' %(end-start))
         return onepdm, twopdm, threepdm
 
     def _make_dm123(self, state, norb, nelec, link_index=None, **kwargs):
@@ -421,7 +435,15 @@ class DMRGCI(lib.StreamObject):
                 #inFile = os.path.join(self.scratchDirectory,self.configFile)
                 logger.debug1(self, 'Block Input conf')
                 logger.debug1(self, open(inFile, 'r').read())
+
+            start = time.time()
+            mpisave=self.mpiprefix
+            #self.mpiprefix=""
             executeBLOCK(self)
+            self.mpiprefix=mpisave
+            end = time.time()
+            print('......production of RDMs took %10.2f sec' %(end-start))
+
             if self.verbose >= logger.DEBUG1:
                 outFile = self.outputFile
                 #outFile = os.path.join(self.scratchDirectory,self.outputFile)
@@ -429,48 +451,49 @@ class DMRGCI(lib.StreamObject):
             self.has_threepdm = True
             self.extraline.pop()
 
-        # The binary files coming from STACKBLOCK and BLOCK are different
-        # - STACKBLOCK uses the 6-fold symmetry, this must be unpacked
-        #   using "libunpack.unpackE3" (see lib/icmpspt/icmpspt.c)
-        # - BLOCK just writes a list of all values, this is directly read
-        #   using "unpackE3_BLOCK" (see below)
+        # The 3RDMS binary files written by STACKBLOCK and BLOCK
+        # are written as E3[i1,j2,k3,l3,m2,n1]
+        # and are stored here as E3[i1,j2,k3,n1,m2,l3]
+        # This is done with SQA in mind.
+        start = time.time()
         if (filetype == "binary") :
+          # The binary files coming from STACKBLOCK and BLOCK are different
+          # - STACKBLOCK uses the 6-fold symmetry, this must be unpacked
+          #   using "libunpack.unpackE3" (see lib/icmpspt/icmpspt.c)
+          # - BLOCK just writes a list of all values, this is directly read
+          #   using "unpackE3_BLOCK" (see below)
+          if 'stackblock' in settings.BLOCKEXE:
+            print('Reading binary 3RDM from STACKBLOCK')
             fname = os.path.join(self.scratchDirectory,"node0", "spatial_threepdm.%d.%d.bin" %(state, state))
-            if 'stackblock' in settings.BLOCKEXE:
-              print('Reading binary 3RDM from STACKBLOCK')
-              fnameout = os.path.join(self.scratchDirectory,"node0", "spatial_threepdm.%d.%d.bin.unpack" %(state, state))
-              libunpack.unpackE3(ctypes.c_char_p(fname), ctypes.c_char_p(fnameout), ctypes.c_int(norb))
-              E3 = numpy.fromfile(fnameout, dtype=numpy.dtype('Float64'))
-              E3 = numpy.reshape(E3, (norb, norb, norb, norb, norb, norb), order='F')
-            else:
-              print('Reading binary 3RDM from BLOCK')
-              E3 = DMRGCI.unpackE3_BLOCK(self,fname,norb)
+            fnameout = os.path.join(self.scratchDirectory,"node0", "spatial_threepdm.%d.%d.bin.unpack" %(state, state))
+            libunpack.unpackE3(ctypes.c_char_p(fname), ctypes.c_char_p(fnameout), ctypes.c_int(norb))
+            E3 = numpy.fromfile(fnameout, dtype=numpy.dtype('Float64'))
+            E3 = numpy.reshape(E3, (norb, norb, norb, norb, norb, norb), order='F')
+          else:
+            print('Reading binary 3RDM from BLOCK')
+            fname = os.path.join(self.scratchDirectory,"node0", "spatial_threepdm.%d.%d.bin" %(state, state))
+            E3 = self.unpackE3_BLOCK(fname,norb)
 
-        # The 3RDMs written by "Threepdm_container::save_spatial_npdm_text" in BLOCK and STACKBLOCK
+        # The 3RDMs text files written by "Threepdm_container::save_spatial_npdm_text" in BLOCK and STACKBLOCK
         # are written as E3[i1,j2,k3,l3,m2,n1]
         # and are stored here as E3[i1,j2,k3,n1,m2,l3]
         # This is done with SQA in mind.
         else:
-            print('Reading text-file 3RDM')
-            fname = os.path.join(self.scratchDirectory,"node0", "spatial_threepdm.%d.%d.txt" %(state, state))
-            f = open(fname, 'r')
-            lines = f.readlines()
-            E3 = numpy.zeros(shape=(norb, norb, norb, norb, norb, norb), dtype=dt, order='F')
-            assert(int(lines[0])==norb)
-            for line in lines[1:]:
-              linesp = line.split()
-              if (len(linesp) != 7) :
-                  continue
-              a, b, c, d, e, f, integral = int(linesp[0]), int(linesp[1]), int(linesp[2]), int(linesp[3]), int(linesp[4]), int(linesp[5]), float(linesp[6])
-              if (False):
-                E3[a,b,c, f,e,d] = integral
-                E3[a,c,b, f,d,e] = integral
-                E3[b,a,c, e,f,d] = integral
-                E3[b,c,a, e,d,f] = integral
-                E3[c,a,b, d,f,e] = integral
-                E3[c,b,a, d,e,f] = integral
-              else:
-                self.populate(E3, [a,b,c,  f,e,d], integral)
+          print('Reading text-file 3RDM')
+          fname = os.path.join(self.scratchDirectory,"node0", "spatial_threepdm.%d.%d.txt" %(state, state))
+          f = open(fname, 'r')
+          lines = f.readlines()
+          E3 = numpy.zeros(shape=(norb, norb, norb, norb, norb, norb), dtype=dt, order='F')
+          assert(int(lines[0])==norb)
+          for line in lines[1:]:
+            linesp = line.split()
+            if (len(linesp) != 7) :
+                continue
+            a,b,c, d,e,f, integral = int(linesp[0]), int(linesp[1]), int(linesp[2]),\
+                                     int(linesp[3]), int(linesp[4]), int(linesp[5]), float(linesp[6])
+            self.populate(E3, [a,b,c,  f,e,d], integral)
+        end = time.time()
+        print('......reading the RDM took    %10.2f sec' %(end-start))
         print('')
         return E3
 
@@ -480,16 +503,24 @@ class DMRGCI(lib.StreamObject):
         if self.has_fourpdm == False:
             self.twopdm = False
             self.threepdm = False
-            self.extraline.append('threepdm\n')
-            self.extraline.append('fourpdm\n')
+            self.extraline.append('threepdm')
+            self.extraline.append('fourpdm')
 
             writeDMRGConfFile(self, nelec, False)
             if self.verbose >= logger.DEBUG1:
-                inFile = self.configFile
-                #inFile = os.path.join(self.scratchDirectory,self.configFile)
-                logger.debug1(self, 'Block Input conf')
-                logger.debug1(self, open(inFile, 'r').read())
+              inFile = self.configFile
+              #inFile = os.path.join(self.scratchDirectory,self.configFile)
+              logger.debug1(self, 'Block Input conf')
+              logger.debug1(self, open(inFile, 'r').read())
+
+            start = time.time()
+            mpisave=self.mpiprefix
+            #self.mpiprefix=""
             executeBLOCK(self)
+            self.mpiprefix=mpisave
+            end = time.time()
+            print('......production of RDMs took %10.2f sec' %(end-start))
+
             if self.verbose >= logger.DEBUG1:
                 outFile = self.outputFile
                 #outFile = os.path.join(self.scratchDirectory,self.outputFile)
@@ -498,25 +529,31 @@ class DMRGCI(lib.StreamObject):
             self.has_threepdm = True
             self.extraline.pop()
 
-        # The binary files coming from STACKBLOCK and BLOCK are different:
-        # - STACKBLOCK does not have 4RDM
-        #   If it had, it would probably come in a 8-fold symmetr which must unpacked
-        #   using "libunpack.unpackE4" (see lib/icmpspt/icmpspt.c)
-        # - BLOCK just writes a list of all values, this is directly read
-        #   using "unpackE4_BLOCK" (see below)
+        # The 4RDMS binary files written by STACKBLOCK and BLOCK
+        # are written as E4[i1,j2,k3,l4,m4,n3,o2,p1]
+        # and are stored here as E4[i1,j2,k3,l4,p1,o2,n3,m4]
+        # This is done with SQA in mind.
+        start = time.time()
         if (filetype == "binary") :
+          # The binary files coming from STACKBLOCK and BLOCK are different:
+          # - STACKBLOCK does not have 4RDM
+          #   If it had, it would probably come in a 8-fold symmetr which must unpacked
+          #   using "libunpack.unpackE4" (see lib/icmpspt/icmpspt.c)
+          # - BLOCK just writes a list of all values, this is directly read
+          #   using "unpackE4_BLOCK" (see below)
+          if 'stackblock' in settings.BLOCKEXE:
+            print('Reading binary 4RDM from STACKBLOCK')
             fname = os.path.join(self.scratchDirectory,"node0", "spatial_fourpdm.%d.%d.bin" %(state, state))
-            if 'stackblock' in settings.BLOCKEXE:
-              print('Reading binary 4RDM from STACKBLOCK')
-              fnameout = os.path.join(self.scratchDirectory,"node0", "spatial_fourpdm.%d.%d.bin.unpack" %(state, state))
-              libunpack.unpackE4(ctypes.c_char_p(fname), ctypes.c_char_p(fnameout), ctypes.c_int(norb))
-              E4 = numpy.fromfile(fnameout, dtype=numpy.dtype('Float64'))
-              E4 = numpy.reshape(E4, (norb, norb, norb, norb, norb, norb, norb, norb), order='F')
-            else:
-              print('Reading binary 4RDM from BLOCK')
-              E4 = DMRGCI.unpackE4_BLOCK(self,fname,norb)
+            fnameout = os.path.join(self.scratchDirectory,"node0", "spatial_fourpdm.%d.%d.bin.unpack" %(state, state))
+            libunpack.unpackE4(ctypes.c_char_p(fname), ctypes.c_char_p(fnameout), ctypes.c_int(norb))
+            E4 = numpy.fromfile(fnameout, dtype=numpy.dtype('Float64'))
+            E4 = numpy.reshape(E4, (norb, norb, norb, norb, norb, norb, norb, norb), order='F')
+          else:
+            print('Reading binary 4RDM from BLOCK')
+            fname = os.path.join(self.scratchDirectory,"node0", "spatial_fourpdm.%d.%d.bin" %(state, state))
+            E4 = self.unpackE4_BLOCK(fname,norb)
 
-        # The 4RDMs written by "Fourpdm_container::save_spatial_npdm_text" in BLOCK and STACKBLOCK
+        # The 4RDMs text files written by "Fourpdm_container::save_spatial_npdm_text" in BLOCK and STACKBLOCK
         # are written as E4[i1,j2,k3,l4,m4,n3,o2,p1]
         # and are stored here as E4[i1,j2,k3,l4,p1,o2,n3,m4]
         # This is done with SQA in mind.
@@ -531,24 +568,11 @@ class DMRGCI(lib.StreamObject):
               linesp = line.split()
               if (len(linesp) != 9) :
                   continue
-              a, b, c, d, e, f, g, h, integral = int(linesp[0]), int(linesp[1]), int(linesp[2]), int(linesp[3]), int(linesp[4]), int(linesp[5]), int(linesp[6]), int(linesp[7]), float(linesp[8])
-              if (False):
-                up_indexes=[a,b,c,d]
-                dn_indexes=[h,g,f,e]
-                for i in range(4):
-                  for j in range(4):
-                    if (i==j):
-                      continue
-                    for k in range(4):
-                      if ((i==k)or(j==k)):
-                        continue
-                      for l in range(4):
-                        if ((i==l)or(j==l)or(k==l)):
-                          continue
-                        E4[up_indexes[i],up_indexes[j],up_indexes[k],up_indexes[l],\
-                           dn_indexes[i],dn_indexes[j],dn_indexes[k],dn_indexes[l]] = integral
-              else:
-                self.populate(E4, [a,b,c,d,  h,g,f,e], integral)
+              a,b,c,d, e,f,g,h, integral = int(linesp[0]), int(linesp[1]), int(linesp[2]), int(linesp[3]),\
+                                           int(linesp[4]), int(linesp[5]), int(linesp[6]), int(linesp[7]), float(linesp[8])
+              self.populate(E4, [a,b,c,d,  h,g,f,e], integral)
+        end = time.time()
+        print('......reading the RDM took    %10.2f sec' %(end-start))
         print('')
         return E4
 
@@ -568,7 +592,9 @@ class DMRGCI(lib.StreamObject):
         # This is done with SQA in mind.
         E3=numpy.zeros((norb,norb,norb,norb,norb,norb), order='F')
         fil=open(fname,"rb")
-        fil.seek(93)
+        print("[fil.seek(not_really_understood)]: HOW DANGEROUS IS THAT ???!?!?!?")
+        #fil.seek(93) # HOW DANGEROUS IS THAT ???!?!?!?
+        fil.seek(53)  # HOW DANGEROUS IS THAT ???!?!?!?
         for a in range(norb):
           for b in range(norb):
             for c in range(norb):
@@ -577,6 +603,12 @@ class DMRGCI(lib.StreamObject):
                   for f in range(norb):
                     (value,)=struct.unpack('d',fil.read(8))
                     E3[a,b,c,  f,e,d]=value
+        try:
+          (value,)=struct.unpack('c',fil.read(1))
+          print("MORE bytes TO READ!")
+        except:
+          print("AT LEAST, NO MORE bytes TO READ!")
+        #exit(0)
         fil.close()
         return E3
 
@@ -587,7 +619,8 @@ class DMRGCI(lib.StreamObject):
         # This is done with SQA in mind.
         E4=numpy.zeros((norb,norb,norb,norb,norb,norb,norb,norb), order='F')
         fil=open(fname,"rb")
-        fil.seek(109)
+        print("[fil.seek(not_really_understood)]: HOW DANGEROUS IS THAT ???!?!?!?")
+        fil.seek(109) # HOW DANGEROUS IS THAT ???!?!?!?
         for a in range(norb):
           for b in range(norb):
             for c in range(norb):
@@ -598,6 +631,12 @@ class DMRGCI(lib.StreamObject):
                       for h in range(norb):
                         (value,)=struct.unpack('d',fil.read(8))
                         E4[a,b,c,d,  h,g,f,e]=value
+        try:
+          (value,)=struct.unpack('c',fil.read(1))
+          print("MORE bytes TO READ!")
+        except:
+          print("AT LEAST, NO MORE bytes TO READ!")
+        #exit(0)
         fil.close()
         return E4
 
@@ -661,6 +700,8 @@ class DMRGCI(lib.StreamObject):
                 else :
                     calc_e = [0.0] * self.nroots
             return calc_e, roots
+        if self.returnInt:
+            return h1e, eri
 
         executeBLOCK(self)
         if self.verbose >= logger.DEBUG1:
@@ -784,7 +825,7 @@ def writeDMRGConfFile(DMRGCI, nelec, Restart,
     f.write('sweep_tol %8.4e\n'%DMRGCI.tol)
 
     f.write('outputlevel %s\n'%DMRGCI.outputlevel)
-    f.write('hf_occ integral\n')
+    f.write('hf_occ %s\n'%DMRGCI.hf_occ)
     if(with_2pdm and DMRGCI.twopdm):
         f.write('twopdm\n')
     if(DMRGCI.nonspinAdapted):
@@ -823,6 +864,8 @@ def writeIntegralFile(DMRGCI, h1eff, eri_cas, ncas, nelec, ecore=0):
         nelecb = nelec - neleca
     else :
         neleca, nelecb = nelec
+
+    # The name of the FCIDUMP file, default is "FCIDUMP".
     integralFile = os.path.join(DMRGCI.runtimeDir, DMRGCI.integralFile)
     if DMRGCI.groupname is not None and DMRGCI.orbsym is not []:
 # First removing the symmetry forbidden integrals. This has been done using
@@ -833,6 +876,8 @@ def writeIntegralFile(DMRGCI, h1eff, eri_cas, ncas, nelec, ecore=0):
         eri_cas = ao2mo.restore(4, eri_cas, ncas)
         eri_cas[sym_forbid] = 0
         eri_cas = ao2mo.restore(8, eri_cas, ncas)
+       #orbsym = numpy.asarray(dmrg_sym.convert_orbsym(DMRGCI.groupname, DMRGCI.orbsym))
+       #eri_cas = pyscf.ao2mo.restore(8, eri_cas, ncas)
 # Then convert the pyscf internal irrep-ID to molpro irrep-ID
         orbsym = numpy.asarray(dmrg_sym.convert_orbsym(DMRGCI.groupname, orbsym))
     else:
@@ -873,7 +918,6 @@ def readEnergy(DMRGCI):
         return calc_e[0]
     else:
         return numpy.asarray(calc_e)
-
 
 def DMRGSCF(mf, norb, nelec, maxM=1000, tol=1.e-8, *args, **kwargs):
     '''Shortcut function to setup CASSCF using the DMRG solver.  The DMRG

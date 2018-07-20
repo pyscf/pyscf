@@ -14,12 +14,12 @@
 
 from __future__ import print_function, division
 import unittest
+from pyscf.nao.m_thrj import thrj, thrj_nobuf
 
 class KnowValues(unittest.TestCase):
 
   def test_thrj(self):
     """  """
-    from pyscf.nao.m_thrj import thrj, thrj_nobuf
     from sympy.physics.wigner import wigner_3j
     for l1 in range(0,3):
       for l2 in range(0,3):
@@ -34,5 +34,4 @@ class KnowValues(unittest.TestCase):
                 self.assertAlmostEqual(w3j1, w3j2)
                 self.assertAlmostEqual(w3j2, w3j3)
           
-if __name__ == "__main__":
-  unittest.main()
+if __name__ == "__main__": unittest.main()

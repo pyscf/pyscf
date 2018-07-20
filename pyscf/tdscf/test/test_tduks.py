@@ -33,6 +33,9 @@ mol.spin = 2
 mol.basis = '631g'
 mol.build()
 
+mf = scf.UHF(mol).run()
+td_hf = tdscf.TDHF(mf).run()
+
 mf_lda = dft.UKS(mol).set(xc='lda', conv_tol=1e-12)
 mf_lda.grids.prune = None
 mf_lda = mf_lda.newton().run()
@@ -62,6 +65,11 @@ def diagonalize(a, b, nroots=4):
     lowest_e = numpy.sort(e[e.real > 0].real)[:nroots]
     lowest_e = lowest_e[lowest_e > 1e-3]
     return lowest_e
+
+def tearDownModule():
+    global mol, mf, td_hf, mf_lda, mf_bp86, mf_b3lyp
+    mol.stdout.close()
+    del mol, mf, td_hf, mf_lda, mf_bp86, mf_b3lyp
 
 class KnownValues(unittest.TestCase):
     def test_nohbrid_lda(self):
@@ -255,21 +263,86 @@ class KnownValues(unittest.TestCase):
         pmol = copy.copy(mol)
         pmol.symmetry = True
         pmol.build(0, 0)
-        mf = scf.UHF(mol).run()
-        td = tdscf.TDA(mf).run()
+        mf = scf.UHF(pmol).run()
+        td = tdscf.TDA(mf).run(nstates=3)
         w, nto = td.get_nto(state=0)
         self.assertAlmostEqual(w[0][0], 0.00018520143461016, 9)
         self.assertAlmostEqual(w[1][0], 0.99963372674044326, 9)
         self.assertAlmostEqual(lib.finger(w[0]), 0.00027305600430816, 9)
         self.assertAlmostEqual(lib.finger(w[1]), 0.99964370569529093, 9)
 
+        w, nto = td.get_nto(state=-1)
+        self.assertAlmostEqual(w[0][0], 0.00236940007134660, 9)
+        self.assertAlmostEqual(w[1][0], 0.99759687228056182, 9)
+
     def test_analyze(self):
-        mf = scf.UHF(mol).run()
-        td = tdscf.TDHF(mf).run()
-        f = td.oscillator_strength(gauge='length')
+        f = td_hf.oscillator_strength(gauge='length')
         self.assertAlmostEqual(lib.finger(f), 0.16147450863004867, 7)
-        f = td.oscillator_strength(gauge='velocity', order=2)
+        f = td_hf.oscillator_strength(gauge='velocity', order=2)
         self.assertAlmostEqual(lib.finger(f), 0.19750347627735745, 7)
+        td_hf.analyze()
+
+    def test_init(self):
+        hf = scf.UHF(mol)
+        ks = scf.UKS(mol)
+        kshf = scf.UKS(mol).set(xc='HF')
+
+        self.assertTrue(isinstance(tdscf.TDA(hf), tdscf.uhf.TDA))
+        self.assertTrue(isinstance(tdscf.TDA(ks), tdscf.uks.TDA))
+        self.assertTrue(isinstance(tdscf.TDA(kshf), tdscf.uks.TDA))
+
+        self.assertTrue(isinstance(tdscf.RPA(hf), tdscf.uhf.TDHF))
+        self.assertTrue(isinstance(tdscf.RPA(ks), tdscf.uks.TDDFTNoHybrid))
+        self.assertTrue(isinstance(tdscf.RPA(kshf), tdscf.uks.TDDFT))
+
+        self.assertTrue(isinstance(tdscf.TDDFT(hf), tdscf.uhf.TDHF))
+        self.assertTrue(isinstance(tdscf.TDDFT(ks), tdscf.uks.TDDFTNoHybrid))
+        self.assertTrue(isinstance(tdscf.TDDFT(kshf), tdscf.uks.TDDFT))
+
+        self.assertRaises(RuntimeError, tdscf.dRPA, hf)
+        self.assertTrue(isinstance(tdscf.dRPA(kshf), tdscf.uks.dRPA))
+        self.assertTrue(isinstance(tdscf.dRPA(ks), tdscf.uks.dRPA))
+
+        self.assertRaises(RuntimeError, tdscf.dTDA, hf)
+        self.assertTrue(isinstance(tdscf.dTDA(kshf), tdscf.uks.dTDA))
+        self.assertTrue(isinstance(tdscf.dTDA(ks), tdscf.uks.dTDA))
+
+    def test_tda_with_wfnsym(self):
+        pmol = mol.copy()
+        pmol.symmetry = True
+        pmol.build(0, 0)
+
+        mf = dft.UKS(pmol).run()
+        td = tdscf.uks.TDA(mf)
+        td.wfnsym = 'B1'
+        es = td.kernel(nstates=3)[0]
+        self.assertAlmostEqual(lib.finger(es), 0.16350926466999033, 6)
+        td.analyze()
+
+    def test_tdhf_with_wfnsym(self):
+        pmol = mol.copy()
+        pmol.symmetry = True
+        pmol.build()
+
+        mf = scf.UHF(pmol).run()
+        td = tdscf.uhf.TDHF(mf)
+        td.wfnsym = 'B1'
+        td.nroots = 3
+        es = td.kernel()[0]
+        self.assertAlmostEqual(lib.finger(es), 0.11306948533259675, 6)
+        td.analyze()
+
+    def test_tddft_with_wfnsym(self):
+        pmol = mol.copy()
+        pmol.symmetry = True
+        pmol.build()
+
+        mf = dft.UKS(pmol).run()
+        td = tdscf.uks.TDDFTNoHybrid(mf)
+        td.wfnsym = 'B1'
+        td.nroots = 3
+        es = td.kernel()[0]
+        self.assertAlmostEqual(lib.finger(es), 0.15403661700414412, 6)
         td.analyze()
 
 

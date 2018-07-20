@@ -65,12 +65,20 @@ def sort_mo(casscf, mo_coeff, caslst, base=BASE):
     -109.007378939813691
     '''
     ncore = casscf.ncore
+    def ext_list(nmo, caslst):
+        mask = numpy.ones(nmo, dtype=bool)
+        mask[caslst] = False
+        idx = numpy.where(mask)[0]
+        if len(idx) + casscf.ncas != nmo:
+            raise ValueError('Active space size is incompatible with caslist. '
+                             'ncas = %d.  caslist %s' % (casscf.ncas, caslst))
+        return idx
+
     if isinstance(ncore, (int, numpy.integer)):
-        assert(casscf.ncas == len(caslst))
         nmo = mo_coeff.shape[1]
         if base != 0:
             caslst = [i-base for i in caslst]
-        idx = numpy.asarray([i for i in range(nmo) if i not in caslst])
+        idx = ext_list(nmo, caslst)
         mo = numpy.hstack((mo_coeff[:,idx[:ncore]],
                            mo_coeff[:,caslst],
                            mo_coeff[:,idx[ncore:]]))
@@ -84,22 +92,19 @@ def sort_mo(casscf, mo_coeff, caslst, base=BASE):
 
     else: # UHF-based CASSCF
         if isinstance(caslst[0], (int, numpy.integer)):
-            assert(casscf.ncas == len(caslst))
             if base != 0:
                 caslsta = [i-1 for i in caslst]
                 caslst = (caslsta, caslsta)
         else: # two casspace lists, for alpha and beta
-            assert(casscf.ncas == len(caslst[0]))
-            assert(casscf.ncas == len(caslst[1]))
             if base != 0:
                 caslst = ([i-base for i in caslst[0]],
                           [i-base for i in caslst[1]])
         nmo = mo_coeff[0].shape[1]
-        idxa = numpy.asarray([i for i in range(nmo) if i not in caslst[0]])
+        idxa = ext_list(nmo, caslst[0])
         mo_a = numpy.hstack((mo_coeff[0][:,idxa[:ncore[0]]],
                              mo_coeff[0][:,caslst[0]],
                              mo_coeff[0][:,idxa[ncore[0]:]]))
-        idxb = numpy.asarray([i for i in range(nmo) if i not in caslst[1]])
+        idxb = ext_list(nmo, caslst[1])
         mo_b = numpy.hstack((mo_coeff[1][:,idxb[:ncore[1]]],
                              mo_coeff[1][:,caslst[1]],
                              mo_coeff[1][:,idxb[ncore[1]:]]))
@@ -608,6 +613,7 @@ def state_average_(casscf, weights=(0.5,0.5)):
                         (casscf.fcisolver, fcibase_class.__base__.__module__,
                          fcibase_class.__base__.__name__))
     has_spin_square = hasattr(casscf.fcisolver, 'spin_square')
+    e_states = [None]
 
     class FakeCISolver(fcibase_class, StateAverageFCISolver):
         def __init__(self, mol=None):
@@ -617,6 +623,7 @@ def state_average_(casscf, weights=(0.5,0.5)):
 # but undefined in fcibase object
             e, c = fcibase_class.kernel(self, h1, h2, norb, nelec, ci0,
                                         nroots=self.nroots, **kwargs)
+            e_states[0] = e
             if casscf.verbose >= logger.DEBUG:
                 if has_spin_square:
                     for i, ei in enumerate(e):
@@ -667,6 +674,26 @@ def state_average_(casscf, weights=(0.5,0.5)):
     fcisolver.__dict__.update(casscf.fcisolver.__dict__)
     fcisolver.nroots = len(weights)
     casscf.fcisolver = fcisolver
+
+    old_finalize = casscf._finalize
+    def _finalize():
+        old_finalize()
+        casscf.e_tot = e_states[0]
+        logger.note(casscf, 'CASCI energy for each state')
+        if has_spin_square:
+            ncas = casscf.ncas
+            nelecas = casscf.nelecas
+            for i, ei in enumerate(casscf.e_tot):
+                ss = fcibase_class.spin_square(casscf.fcisolver, casscf.ci[i],
+                                               ncas, nelecas)[0]
+                logger.note(casscf, '  State %d weight %g  E = %.15g S^2 = %.7f',
+                            i, weights[i], ei, ss)
+        else:
+            for i, ei in enumerate(casscf.e_tot):
+                logger.note(casscf, '  State %d weight %g  E = %.15g',
+                            i, weights[i], ei)
+        return casscf
+    casscf._finalize = _finalize
     return casscf
 state_average = state_average_
 
@@ -742,6 +769,7 @@ def state_average_mix_(casscf, fcisolvers, weights=(0.5,0.5)):
     assert(nroots == len(weights))
     has_spin_square = all(hasattr(solver, 'spin_square')
                           for solver in fcisolvers)
+    e_states = [None]
 
     def collect(items):
         items = list(items)
@@ -764,6 +792,8 @@ def state_average_mix_(casscf, fcisolvers, weights=(0.5,0.5)):
                 yield solver, ci0[i]
             p0 += solver.nroots
     def get_nelec(solver, nelec):
+        # FCISolver does not need this function. Some external solver may not
+        # have the function to handle nelec and spin
         if solver.spin is not None:
             nelec = numpy.sum(nelec)
             nelec = (nelec+solver.spin)//2, (nelec-solver.spin)//2
@@ -772,7 +802,7 @@ def state_average_mix_(casscf, fcisolvers, weights=(0.5,0.5)):
     class FakeCISolver(fcibase_class, StateAverageFCISolver):
         def kernel(self, h1, h2, norb, nelec, ci0=None, verbose=0, **kwargs):
 # Note self.orbsym is initialized lazily in mc1step_symm.kernel function
-            log = logger.new_logger(sys, verbose)
+            log = logger.new_logger(self, verbose)
             es = []
             cs = []
             for solver, c0 in loop_solver(fcisolvers, ci0):
@@ -784,6 +814,8 @@ def state_average_mix_(casscf, fcisolvers, weights=(0.5,0.5)):
                 else:
                     es.extend(e)
                     cs.extend(c)
+            e_states[0] = es
+
             if log.verbose >= logger.DEBUG:
                 if has_spin_square:
                     ss, multip = collect(solver.spin_square(c0, norb, get_nelec(solver, nelec))
@@ -843,6 +875,26 @@ def state_average_mix_(casscf, fcisolvers, weights=(0.5,0.5)):
     fcisolver.__dict__.update(casscf.fcisolver.__dict__)
     fcisolver.fcisolvers = fcisolvers
     casscf.fcisolver = fcisolver
+
+    old_finalize = casscf._finalize
+    def _finalize():
+        old_finalize()
+        casscf.e_tot = e_states[0]
+        logger.note(casscf, 'CASCI energy for each state')
+        if has_spin_square:
+            ncas = casscf.ncas
+            nelecas = casscf.nelecas
+            ss, multip = collect(solver.spin_square(c0, ncas, get_nelec(solver, nelecas))
+                                 for solver, c0 in loop_civecs(fcisolvers, casscf.ci))
+            for i, ei in enumerate(casscf.e_tot):
+                logger.note(casscf, '  State %d weight %g  E = %.15g S^2 = %.7f',
+                            i, weights[i], ei, ss[i])
+        else:
+            for i, ei in enumerate(casscf.e_tot):
+                logger.note(casscf, '  State %d weight %g  E = %.15g',
+                            i, weights[i], ei)
+        return casscf
+    casscf._finalize = _finalize
     return casscf
 state_average_mix = state_average_mix_
 

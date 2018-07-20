@@ -274,7 +274,7 @@ def _int_vnl(cell, fakecell, hl_blocks, kpts):
             ao_loc.ctypes.data_as(ctypes.c_void_p), intopt, lib.c_null_ptr(),
             atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(natm),
             bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(nbas),
-            env.ctypes.data_as(ctypes.c_void_p))
+            env.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(env.size))
         return out
 
     hl_dims = numpy.asarray([len(hl) for hl in hl_blocks])

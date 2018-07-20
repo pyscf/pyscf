@@ -34,6 +34,16 @@
 #                                                      - 4 * delta_{vw} * f_{op}
 #                                                      + 4 * [ 4 * (vo|wp) - (vw|op) - (vp|wo) ]
 #
+import sys
+sys.stderr.write('''
+Warning
+
+tools/rhf_newtonraphson.py has been removed since PySCF-1.5. It is replaced by
+the SOSCF module in pyscf/soscf module.  For SCF calculations, SOSCF method
+can be created by calling the .newton() method of RHF/UHF/GHF class.
+
+''')
+exit()
 
 from pyscf import gto, scf
 from pyscf.lib import logger

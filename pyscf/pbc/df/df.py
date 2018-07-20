@@ -144,8 +144,22 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
     log = logger.Logger(mydf.stdout, mydf.verbose)
     max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
     fused_cell, fuse = fuse_auxcell(mydf, auxcell)
-    outcore.aux_e2(cell, fused_cell, cderi_file, 'int3c2e', aosym='s2',
-                   kptij_lst=kptij_lst, dataname='j3c', max_memory=max_memory)
+
+    # The ideal way to hold the temporary integrals is to store them in the
+    # cderi_file and overwrite them inplace in the second pass.  The current
+    # HDF5 library does not have an efficient way to manage free space in
+    # overwriting.  It often leads to the cderi_file ~2 times larger than the
+    # necessary size.  For now, dumping the DF integral intermediates to a
+    # separated temporary file can avoid this issue.  The DF intermediates may
+    # be terribly huge. The temporary file should be placed in the same disk
+    # as cderi_file.
+    swapfile = tempfile.NamedTemporaryFile(dir=os.path.dirname(cderi_file))
+    fswap = lib.H5TmpFile(swapfile.name)
+    # Unlink swapfile to avoid trash
+    swapfile = None
+
+    outcore._aux_e2(cell, fused_cell, fswap, 'int3c2e', aosym='s2',
+                    kptij_lst=kptij_lst, dataname='j3c-junk', max_memory=max_memory)
     t1 = log.timer_debug1('3c2e', *t1)
 
     nao = cell.nao_nr()
@@ -164,7 +178,6 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
     log.debug2('uniq_kpts %s', uniq_kpts)
     # j2c ~ (-kpt_ji | kpt_ji)
     j2c = fused_cell.pbc_intor('int2c2e', hermi=1, kpts=uniq_kpts)
-    feri = h5py.File(cderi_file)
 
 # An alternative method to evalute j2c. This method might have larger numerical error?
 #    chgcell = make_modchg_basis(auxcell, mydf.eta)
@@ -187,7 +200,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
 #            j2cR, j2cI = zdotCN(LkR, LkI, LkR.T, LkI.T)
 #            j2caux[naux:,naux:] -= j2cR + j2cI * 1j
 #            j2c[k] = j2c[k][:naux,:naux] - fuse(fuse(j2caux.T).T)
-#        feri['j2c/%d'%k] = fuse(fuse(j2c[k]).T).T
+#        fswap['j2c/%d'%k] = fuse(fuse(j2c[k]).T).T
 #        aoaux = LkR = LkI = coulG = None
 
     if cell.dimension == 1 or cell.dimension == 2:
@@ -218,9 +231,12 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
                 j2c[k][naux:] -= j2cR + j2cI * 1j
                 j2c[k][:naux,naux:] = j2c[k][naux:,:naux].T.conj()
             LkR = LkI = None
-        feri['j2c/%d'%k] = fuse(fuse(j2c[k]).T).T
+        fswap['j2c/%d'%k] = fuse(fuse(j2c[k]).T).T
     j2c = coulG = None
 
+    feri = h5py.File(cderi_file, 'w')
+    feri['j3c-kptij'] = kptij_lst
+    nsegs = len(fswap['j3c-junk/0'])
     def make_kpt(uniq_kptji_id):  # kpt = kptj - kpti
         kpt = uniq_kpts[uniq_kptji_id]
         log.debug1('kpt = %s', kpt)
@@ -241,7 +257,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
         kLR = Gaux.real.copy('C')
         kLI = Gaux.imag.copy('C')
         Gaux = None
-        j2c = numpy.asarray(feri['j2c/%d'%uniq_kptji_id])
+        j2c = numpy.asarray(fswap['j2c/%d'%uniq_kptji_id])
         try:
             j2c = scipy.linalg.cholesky(j2c, lower=True)
             j2ctag = 'CD'
@@ -277,44 +293,26 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
         log.debug2('memory = %s', mem_now)
         max_memory = max(2000, mydf.max_memory-mem_now)
         # nkptj for 3c-coulomb arrays plus 1 Lpq array
-        buflen = min(max(int(max_memory*.6*1e6/16/naux/(nkptj+1)), 1), nao_pair)
+        buflen = min(max(int(max_memory*.38e6/16/naux/(nkptj+1)), 1), nao_pair)
         shranges = _guess_shell_ranges(cell, buflen, aosym)
         buflen = max([x[2] for x in shranges])
         # +1 for a pqkbuf
         if aosym == 's2':
-            Gblksize = max(16, int(max_memory*.2*1e6/16/buflen/(nkptj+1)))
+            Gblksize = max(16, int(max_memory*.1e6/16/buflen/(nkptj+1)))
         else:
-            Gblksize = max(16, int(max_memory*.4*1e6/16/buflen/(nkptj+1)))
+            Gblksize = max(16, int(max_memory*.2e6/16/buflen/(nkptj+1)))
         Gblksize = min(Gblksize, ngrids, 16384)
         pqkRbuf = numpy.empty(buflen*Gblksize)
         pqkIbuf = numpy.empty(buflen*Gblksize)
         # buf for ft_aopair
         buf = numpy.empty(nkptj*buflen*Gblksize, dtype=numpy.complex128)
-
-        col1 = 0
-        for istep, sh_range in enumerate(shranges):
-            log.debug1('int3c2e [%d/%d], AO [%d:%d], ncol = %d', \
-                       istep+1, len(shranges), *sh_range)
+        def pw_contract(istep, sh_range, j3cR, j3cI):
             bstart, bend, ncol = sh_range
-            col0, col1 = col1, col1+ncol
-            j3cR = []
-            j3cI = []
-            for k, idx in enumerate(adapted_ji_idx):
-                v = numpy.asarray(feri['j3c/%d'%idx][:,col0:col1])
-                if is_zero(kpt) and cell.dimension == 3:
-                    for i in numpy.where(vbar != 0)[0]:
-                        v[i] -= vbar[i] * ovlp[k][col0:col1]
-                j3cR.append(numpy.asarray(v.real, order='C'))
-                if is_zero(kpt) and gamma_point(adapted_kptjs[k]):
-                    j3cI.append(None)
-                else:
-                    j3cI.append(numpy.asarray(v.imag, order='C'))
-            v = None
-
             if aosym == 's2':
                 shls_slice = (bstart, bend, 0, bend)
             else:
                 shls_slice = (bstart, bend, 0, cell.nbas)
+
             for p0, p1 in lib.prange(0, ngrids, Gblksize):
                 dat = ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
                                             b, gxyz[p0:p1], Gvbase, kpt,
@@ -359,13 +357,32 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
                     v = scipy.linalg.solve_triangular(j2c, v, lower=True, overwrite_b=True)
                 else:
                     v = lib.dot(j2c, v)
-                feri['j3c/%d'%ji][:naux0,col0:col1] = v
+                feri['j3c/%d/%d'%(ji,istep)] = v
 
-        del(feri['j2c/%d'%uniq_kptji_id])
-        for k, ji in enumerate(adapted_ji_idx):
-            v = feri['j3c/%d'%ji][:naux0]
-            del(feri['j3c/%d'%ji])
-            feri['j3c/%d'%ji] = v
+        with lib.call_in_background(pw_contract) as compute:
+            col1 = 0
+            for istep, sh_range in enumerate(shranges):
+                log.debug1('int3c2e [%d/%d], AO [%d:%d], ncol = %d', \
+                           istep+1, len(shranges), *sh_range)
+                bstart, bend, ncol = sh_range
+                col0, col1 = col1, col1+ncol
+                j3cR = []
+                j3cI = []
+                for k, idx in enumerate(adapted_ji_idx):
+                    v = numpy.vstack([fswap['j3c-junk/%d/%d'%(idx,i)][0,col0:col1].T
+                                      for i in range(nsegs)])
+                    if is_zero(kpt) and cell.dimension == 3:
+                        for i in numpy.where(vbar != 0)[0]:
+                            v[i] -= vbar[i] * ovlp[k][col0:col1]
+                    j3cR.append(numpy.asarray(v.real, order='C'))
+                    if is_zero(kpt) and gamma_point(adapted_kptjs[k]):
+                        j3cI.append(None)
+                    else:
+                        j3cI.append(numpy.asarray(v.imag, order='C'))
+                v = None
+                compute(istep, sh_range, j3cR, j3cI)
+        for ji in adapted_ji_idx:
+            del(fswap['j3c-junk/%d'%ji])
 
     for k, kpt in enumerate(uniq_kpts):
         make_kpt(k)
@@ -670,7 +687,8 @@ class GDF(aft.AFTDF):
 # object when self._cderi is provided.
         if self._cderi is None:
             self.build()
-        with addons.load(self._cderi, 'j3c/0') as feri:
+        # self._cderi['j3c/k_id/seg_id']
+        with addons.load(self._cderi, 'j3c/0/0') as feri:
             return feri.shape[0]
 
 DF = GDF
@@ -764,7 +782,9 @@ class _load3c(object):
         kptij_lst = self.feri['%s-kptij'%self.label].value
         k_id = member(kpti_kptj, kptij_lst)
         if len(k_id) > 0:
-            dat = self.feri['%s/%d' % (self.label,k_id[0])]
+            #:dat = self.feri['%s/%d' % (self.label, k_id[0])]
+            group = self.feri['%s/%d' % (self.label, k_id[0])]
+            dat = numpy.hstack([group[str(i)] for i in range(len(group))])
         else:
             # swap ki,kj due to the hermiticity
             kptji = kpti_kptj[[1,0]]
@@ -774,7 +794,9 @@ class _load3c(object):
                                    'You need to update the attribute .kpts then call '
                                    '.build() to initialize %s.'
                                    % (self.label, kpti_kptj, self.label))
-            dat = self.feri['%s/%d' % (self.label, k_id[0])]
+            #:dat = self.feri['%s/%d' % (self.label, k_id[0])]
+            group = self.feri['%s/%d' % (self.label, k_id[0])]
+            dat = numpy.hstack([group[str(i)] for i in range(len(group))])
             dat = _load_and_unpack(dat)
         return dat
 

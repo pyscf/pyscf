@@ -144,6 +144,7 @@ def wrap_int3c(cell, auxcell, intor='int3c2e', aosym='s1', comp=1,
                                  auxcell._atm, auxcell._bas, auxcell._env)
     Ls = cell.get_lattice_Ls()
     nimgs = len(Ls)
+    nbas = cell.nbas
 
     kpti = kptij_lst[:,0]
     kptj = kptij_lst[:,1]
@@ -173,7 +174,10 @@ def wrap_int3c(cell, auxcell, intor='int3c2e', aosym='s1', comp=1,
     fill = 'PBCnr3c_fill_%s%s' % (kk_type, aosym[:2])
     drv = libpbc.PBCnr3c_drv
     if cintopt is None:
-        cintopt = _vhf.make_cintopt(atm, bas, env, intor)
+        if nbas > 0:
+            cintopt = _vhf.make_cintopt(atm, bas, env, intor)
+        else:
+            cintopt = lib.c_null_ptr()
 # Remove the precomputed pair data because the pair data corresponds to the
 # integral of cell #0 while the lattice sum moves shls to all repeated images.
         if intor[:3] != 'ECP':
@@ -185,7 +189,6 @@ def wrap_int3c(cell, auxcell, intor='int3c2e', aosym='s1', comp=1,
     else:
         cpbcopt = lib.c_null_ptr()
 
-    nbas = cell.nbas
     def int3c(shls_slice, out):
         shls_slice = (shls_slice[0], shls_slice[1],
                       nbas+shls_slice[2], nbas+shls_slice[3],
@@ -202,7 +205,7 @@ def wrap_int3c(cell, auxcell, intor='int3c2e', aosym='s1', comp=1,
             atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(cell.natm),
             bas.ctypes.data_as(ctypes.c_void_p),
             ctypes.c_int(nbas),  # need to pass cell.nbas to libpbc.PBCnr3c_drv
-            env.ctypes.data_as(ctypes.c_void_p))
+            env.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(env.size))
         return out
     return int3c
 

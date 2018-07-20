@@ -643,6 +643,13 @@ class FCISolver(lib.StreamObject):
     def e_tot(self):
         return self.eci
 
+    @property
+    def nstates(self):
+        return self.nroots
+    @nstates.setter
+    def nstates(self, x):
+        self.nroots = x
+
     def dump_flags(self, verbose=None):
         if verbose is None: verbose = self.verbose
         log = logger.Logger(self.stdout, verbose)

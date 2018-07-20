@@ -17,8 +17,7 @@
 #
 
 '''
-domain decomposition PCM
-(In testing)
+domain decomposition PCM (In testing)
 
 See also
 JCP, 144, 054101
@@ -144,6 +143,12 @@ def make_A(pcmobj, r_vdw, ylm_1sph, ui):
     return Amat
 
 class DDPCM(ddcosmo.DDCOSMO):
+    def __init__(self, mol):
+        ddcosmo.DDCOSMO.__init__(self, mol)
+        logger.warn(self, 'ddPCM is an experimental feature. It is '
+                    'still in testing.\nFeatures and APIs may be changed '
+                    'in the future.')
+
     gen_solver = as_solver = gen_ddpcm_solver
 
     def regularize_xt(self, t, eta, scale=1):

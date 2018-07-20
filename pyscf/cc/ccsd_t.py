@@ -98,10 +98,13 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
     # The rest 20% memory for cache b
     mem_now = lib.current_memory()[0]
     max_memory = max(0, mycc.max_memory - mem_now)
-    bufsize = max(1, (max_memory*1e6/8-nocc**3*100)*.7/(nocc*nmo))
+    bufsize = (max_memory*.5e6/8-nocc**3*3*lib.num_threads())/(nocc*nmo)  #*.5 for async_io
+    bufsize *= .5  #*.5 upper triangular part is loaded
+    bufsize *= .8  #*.8 for [a0:a1]/[b0:b1] partition
+    bufsize = max(8, bufsize)
     log.debug('max_memory %d MB (%d MB in use)', max_memory, mem_now)
-    for a0, a1 in reversed(list(lib.prange_tril(0, nvir, bufsize))):
-        with lib.call_in_background(contract, sync=not mycc.async_io) as async_contract:
+    with lib.call_in_background(contract, sync=not mycc.async_io) as async_contract:
+        for a0, a1 in reversed(list(lib.prange_tril(0, nvir, bufsize))):
             cache_row_a = numpy.asarray(eris_vvop[a0:a1,:a1], order='C')
             if a0 == 0:
                 cache_col_a = cache_row_a
@@ -110,7 +113,7 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
             async_contract(a0, a1, a0, a1, (cache_row_a,cache_col_a,
                                             cache_row_a,cache_col_a))
 
-            for b0, b1 in lib.prange_tril(0, a0, bufsize/6):
+            for b0, b1 in lib.prange_tril(0, a0, bufsize/8):
                 cache_row_b = numpy.asarray(eris_vvop[b0:b1,:b1], order='C')
                 if b0 == 0:
                     cache_col_b = cache_row_b
@@ -118,8 +121,6 @@ def kernel(mycc, eris, t1=None, t2=None, verbose=logger.NOTE):
                     cache_col_b = numpy.asarray(eris_vvop[:b0,b0:b1], order='C')
                 async_contract(a0, a1, b0, b1, (cache_row_a,cache_col_a,
                                                 cache_row_b,cache_col_b))
-                cache_row_b = cache_col_b = None
-            cache_row_a = cache_col_a = None
 
     t2 = restore_t2_inplace(t2T)
     et_sum *= 2
@@ -150,6 +151,7 @@ def _sort_eri(mycc, eris, nocc, nvir, vvop, log):
     max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
     max_memory = min(8000, max_memory*.9)
     blksize = min(nvir, max(16, int(max_memory*1e6/8/(nvir*nocc*nmo))))
+    log.debug1('_sort_eri max_memory %g  blksize %d', max_memory, blksize)
     dtype = vvop.dtype
     with lib.call_in_background(vvop.__setitem__, sync=not mycc.async_io) as save:
         bufopv = numpy.empty((nocc,nmo,nvir), dtype=dtype)

@@ -145,7 +145,7 @@ class KnownValues(unittest.TestCase):
         mc1 = mcscf.CASSCF(m, 4, 4).state_average_((0.5,0.5))
         mc1.natorb = True
         mc1.kernel()
-        self.assertAlmostEqual(mc1.e_tot, -108.80445340617777, 8)
+        self.assertAlmostEqual(numpy.dot(mc1.e_tot, [.5,.5]), -108.80445340617777, 8)
         mo_occ = lib.chkfile.load(mc1.chkfile, 'mcscf/mo_occ')[5:9]
         self.assertAlmostEqual(lib.finger(mo_occ), 1.8748844779923917, 4)
         dm1 = mc1.analyze()

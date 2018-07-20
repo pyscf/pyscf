@@ -72,7 +72,6 @@ def get_hcore(cell, kpt=np.zeros(3)):
         hcore += get_nuc(cell, kpt)
     if len(cell._ecpbas) > 0:
         hcore += ecp.ecp_int(cell, kpt)
-
     return hcore
 
 
@@ -172,7 +171,7 @@ def get_bands(mf, kpts_band, cell=None, dm=None, kpt=None):
     mo_energy = []
     mo_coeff = []
     for k in range(nkpts):
-        e, c = mf._eigh(fock[k], s1e[k])
+        e, c = mf.eig(fock[k], s1e[k])
         mo_energy.append(e)
         mo_coeff.append(c)
 
@@ -192,6 +191,12 @@ def init_guess_by_chkfile(cell, chkfile_name, project=None, kpt=None):
     from pyscf.pbc.scf import uhf
     dm = uhf.init_guess_by_chkfile(cell, chkfile_name, project, kpt)
     return dm[0] + dm[1]
+
+get_fock = mol_hf.get_fock
+get_occ = mol_hf.get_occ
+get_grad = mol_hf.get_grad
+make_rdm1 = mol_hf.make_rdm1
+energy_elec = mol_hf.energy_elec
 
 
 class SCF(mol_hf.SCF):
@@ -423,7 +428,7 @@ class SCF(mol_hf.SCF):
         if cell.dimension < 3:
             logger.warn(self, 'Hcore initial guess is not recommended in '
                         'the SCF of low-dimensional systems.')
-        return mol_hf.SCF.init_guess_by_1e(cell)
+        return mol_hf.SCF.init_guess_by_1e(self, cell)
 
     def init_guess_by_chkfile(self, chk=None, project=None, kpt=None):
         if chk is None: chk = self.chkfile
@@ -460,11 +465,19 @@ class SCF(mol_hf.SCF):
         return sfx2c1e.sfx2c1e(self)
     x2c = x2c1e = sfx2c1e
 
+
 class RHF(SCF, mol_hf.RHF):
+
+    check_sanity = mol_hf.RHF.check_sanity
+    stability = mol_hf.RHF.stability
+
     def convert_from_(self, mf):
         '''Convert given mean-field object to RHF'''
         addons.convert_to_rhf(mf, self)
         return self
+
+    def nuc_grad_method(self):
+        raise NotImplementedError
 
 
 def _format_jks(vj, dm, kpts_band):

@@ -105,7 +105,7 @@ void NPdgemm(const char trans_a, const char trans_b,
                 free(cpriv);
 }
 
-        } else if (m > n+4) { // parallelize m
+        } else if (m > n*2) { // parallelize m
 
 #pragma omp parallel default(none) shared(a, b, c)
 {
@@ -231,7 +231,7 @@ void NPzgemm(const char trans_a, const char trans_b,
                 free(cpriv);
 }
 
-        } else if (m > n+4) { // parallelize m
+        } else if (m > n*2) { // parallelize m
 
 #pragma omp parallel default(none) shared(a, b, c, alpha, beta)
 {

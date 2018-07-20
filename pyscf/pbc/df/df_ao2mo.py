@@ -238,10 +238,11 @@ def warn_pbc2d_eri(mydf):
     if mydf.cell.dimension in (1, 2):
         with warnings.catch_warnings():
             warnings.simplefilter('once', PBC2DIntegralsWarning)
-            warnings.warn('\nAFT/GDF/MDF based 2-electron integrals for 1D '
+            warnings.warn('\nAFT/GDF/MDF 2-electron integrals for 1D '
                           'and 2D PBC systems were designed for SCF methods.\n'
                           'The treatment to remove G=0 component may not be '
-                          'proper for post-HF calculations.\n')
+                          'proper for post-HF calculations.  It is still in '
+                          'testing\n')
 
 
 if __name__ == '__main__':

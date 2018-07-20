@@ -169,6 +169,9 @@ class KGHF(pbcghf.GHF, khf.KSCF):
         addons.convert_to_ghf(mf, self)
         return self
 
+    density_fit = khf.KSCF.density_fit
+    newton = khf.KSCF.newton
+
     x2c = None
     stability = None
     nuc_grad_method = None

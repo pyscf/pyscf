@@ -30,8 +30,8 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc.scf import kuhf
 from pyscf.pbc.dft import gen_grid
-from pyscf.pbc.dft import numint
 from pyscf.pbc.dft import rks
+from pyscf.pbc.dft import multigrid
 
 
 def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
@@ -44,12 +44,24 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     if kpts is None: kpts = ks.kpts
     t0 = (time.clock(), time.time())
 
+    omega, alpha, hyb = ks._numint.rsh_and_hybrid_coeff(ks.xc, spin=cell.spin)
+    hybrid = abs(hyb) > 1e-10
+
+    if not hybrid and isinstance(ks.with_df, multigrid.MultiGridFFTDF):
+        n, exc, vxc = multigrid.nr_uks(ks.with_df, ks.xc, dm, hermi,
+                                       kpts, kpts_band,
+                                       with_j=True, return_j=False)
+        logger.debug(ks, 'nelec by numeric integration = %s', n)
+        t0 = logger.timer(ks, 'vxc', *t0)
+        return vxc
+
     # ndim = 4 : dm.shape = ([alpha,beta], nkpts, nao, nao)
     ground_state = (dm.ndim == 4 and dm.shape[0] == 2 and kpts_band is None)
 
     if ks.grids.non0tab is None:
         ks.grids.build(with_non0tab=True)
-        if ks.small_rho_cutoff > 1e-20 and ground_state:
+        if (isinstance(ks.grids, gen_grid.BeckeGrids) and
+            ks.small_rho_cutoff > 1e-20 and ground_state):
             ks.grids = rks.prune_small_rho_grids_(ks, cell, dm[0]+dm[1],
                                                   ks.grids, kpts)
         t0 = logger.timer(ks, 'setting up grids', *t0)
@@ -64,27 +76,40 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
 
     weight = 1./len(kpts)
 
-    omega, alpha, hyb = ks._numint.rsh_and_hybrid_coeff(ks.xc, spin=cell.spin)
-    if abs(hyb) < 1e-10:
-        vj = ks.get_j(cell, dm, hermi, kpts, kpts_band)
-        vxc += vj[0] + vj[1]
+    if not hybrid:
+        vj = ks.get_j(cell, dm[0]+dm[1], hermi, kpts, kpts_band)
+        vxc += vj
     else:
         if getattr(ks.with_df, '_j_only', False):  # for GDF and MDF
             ks.with_df._j_only = False
         vj, vk = ks.get_jk(cell, dm, hermi, kpts, kpts_band)
-        vxc += vj[0] + vj[1] - vk * hyb
+        vj = vj[0] + vj[1]
+        vxc += vj - vk * hyb
 
         if ground_state:
             exc -= (np.einsum('Kij,Kji', dm[0], vk[0]) +
                     np.einsum('Kij,Kji', dm[1], vk[1])).real * hyb * .5 * weight
 
     if ground_state:
-        ecoul = np.einsum('Kij,Kji', dm[0]+dm[1], vj[0]+vj[1]).real * .5 * weight
+        ecoul = np.einsum('Kij,Kji', dm[0]+dm[1], vj).real * .5 * weight
     else:
         ecoul = None
 
     vxc = lib.tag_array(vxc, ecoul=ecoul, exc=exc, vj=None, vk=None)
     return vxc
+
+def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf=None):
+    if h1e_kpts is None: h1e_kpts = mf.get_hcore(mf.cell, mf.kpts)
+    if dm_kpts is None: dm_kpts = mf.make_rdm1()
+    if vhf is None or getattr(vhf, 'ecoul', None) is None:
+        vhf = mf.get_veff(mf.cell, dm_kpts)
+
+    weight = 1./len(h1e_kpts)
+    e1 = weight *(np.einsum('kij,kji', h1e_kpts, dm_kpts[0]) +
+                  np.einsum('kij,kji', h1e_kpts, dm_kpts[1])).real
+    tot_e = e1 + vhf.ecoul + vhf.exc
+    logger.debug(mf, 'E1 = %s  Ecoul = %s  Exc = %s', e1, vhf.ecoul, vhf.exc)
+    return tot_e, vhf.ecoul + vhf.exc
 
 
 class KUKS(kuhf.KUHF):
@@ -101,18 +126,7 @@ class KUKS(kuhf.KUHF):
 
     get_veff = get_veff
 
-    def energy_elec(self, dm_kpts=None, h1e_kpts=None, vhf=None):
-        if h1e_kpts is None: h1e_kpts = self.get_hcore(self.cell, self.kpts)
-        if dm_kpts is None: dm_kpts = self.make_rdm1()
-        if vhf is None or getattr(vhf, 'ecoul', None) is None:
-            vhf = self.get_veff(self.cell, dm_kpts)
-
-        weight = 1./len(h1e_kpts)
-        e1 = weight *(np.einsum('kij,kji', h1e_kpts, dm_kpts[0]) +
-                      np.einsum('kij,kji', h1e_kpts, dm_kpts[1])).real
-        tot_e = e1 + vhf.ecoul + vhf.exc
-        logger.debug(self, 'E1 = %s  Ecoul = %s  Exc = %s', e1, vhf.ecoul, vhf.exc)
-        return tot_e, vhf.ecoul + vhf.exc
+    energy_elec = energy_elec
 
     define_xc_ = rks.define_xc_
 

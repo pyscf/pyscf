@@ -166,7 +166,8 @@ def _contract_compact(mydf, mos, coulG, max_memory):
         return out
 
     eri = numpy.empty((nmoi*(nmoi+1)//2,nmok*(nmok+1)//2))
-    blksize = int(min(max(nmoi,nmok), (max_memory*1e6/8 - eri.size)/2/ngrids+1))
+    blksize = int(min(max(nmoi*(nmoi+1)//2, nmok*(nmok+1)//2),
+                      (max_memory*1e6/8 - eri.size)/2/ngrids+1))
     buf = numpy.empty((blksize,ngrids))
     for p0, p1 in lib.prange_tril(0, nmoi, blksize):
         mo_pairs_G = tools.fft(fill_orbital_pair(moiT, p0, p1, buf), mydf.mesh)

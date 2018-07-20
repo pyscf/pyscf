@@ -15,11 +15,34 @@
 from pyscf.pbc.dft.gen_grid import UniformGrids, BeckeGrids
 from pyscf.pbc.dft import rks
 from pyscf.pbc.dft import uks
+from pyscf.pbc.dft import roks
 from pyscf.pbc.dft import krks
 from pyscf.pbc.dft import kuks
+from pyscf.pbc.dft import kroks
 
-RKS = rks.RKS
 UKS = uks.UKS
+ROKS = roks.ROKS
+
 KRKS = krks.KRKS
 KUKS = kuks.KUKS
+KROKS = kroks.KROKS
+
+def RKS(cell, *args, **kwargs):
+    if cell.spin == 0:
+        return rks.RKS(cell, *args, **kwargs)
+    else:
+        return roks.ROKS(cell, *args, **kwargs)
+RKS.__doc__ = rks.RKS.__doc__
+
+def KS(cell, *args, **kwargs):
+    if cell.spin == 0:
+        return rks.RKS(cell, *args, **kwargs)
+    else:
+        return uks.UKS(cell, *args, **kwargs)
+
+def KKS(cell, *args, **kwargs):
+    if cell.spin == 0:
+        return krks.KRKS(cell, *args, **kwargs)
+    else:
+        return kuks.KUKS(cell, *args, **kwargs)
 

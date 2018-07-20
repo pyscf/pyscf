@@ -84,16 +84,20 @@ typedef struct {
         double al;
 
 // Other definitions in CINTEnvVars are different in libcint and qcint.
-// They should not used in this function.
+// They should not be used in this function.
 } CINTEnvVars;
 #endif
+
+typedef void (*FPtr_eval_gz)(double complex *out, double aij, double *rij,
+                             double complex fac, double *Gv, double *b,
+                             int *gxyz, int *gs, size_t NGv);
 
 void GTO_ft_init1e_envs(CINTEnvVars *envs, const int *ng, const int *shls,
                         const int *atm, const int natm,
                         const int *bas, const int nbas, const double *env);
 
 int GTO_ft_aopair_drv(double complex *out, int *dims,
-                      int (*eval_aopair)(), void (*eval_gz)(), void (*c2s)(),
+                      int (*eval_aopair)(), FPtr_eval_gz eval_gz, void (*c2s)(),
                       double complex fac, double *Gv, double *b, int *gxyz,
                       int *gs, size_t NGv, CINTEnvVars *envs);
 
@@ -102,15 +106,19 @@ void GTO_ft_c2s_cart(double complex *out, double complex *gctr,
 void GTO_ft_c2s_sph(double complex *out, double complex *gctr,
                     int *dims, CINTEnvVars *envs, size_t NGv);
 
+int GTO_aopair_early_contract(double complex *out, CINTEnvVars *envs,
+                              FPtr_eval_gz eval_gz, double complex fac,
+                              double *Gv, double *b, int *gxyz, int *gs, size_t NGv);
 int GTO_aopair_lazy_contract(double complex *gctr, CINTEnvVars *envs,
-                             void (*eval_gz)(), double complex fac,
+                             FPtr_eval_gz eval_gz, double complex fac,
                              double *Gv, double *b, int *gxyz, int *gs,size_t NGv);
 
 int GTO_ft_ovlp_cart(double complex *out, int *shls, int *dims,
-                     int (*eval_aopair)(), void (*eval_gz)(), double complex fac,
+                     int (*eval_aopair)(), FPtr_eval_gz eval_gz, double complex fac,
                      double *Gv, double *b, int *gxyz, int *gs, int nGv,
                      int *atm, int natm, int *bas, int nbas, double *env);
 int GTO_ft_ovlp_sph(double complex *out, int *shls, int *dims,
-                    int (*eval_aopair)(), void (*eval_gz)(), double complex fac,
+                    int (*eval_aopair)(), FPtr_eval_gz eval_gz, double complex fac,
                     double *Gv, double *b, int *gxyz, int *gs, int nGv,
                     int *atm, int natm, int *bas, int nbas, double *env);
+

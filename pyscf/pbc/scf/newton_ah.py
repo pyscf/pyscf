@@ -135,7 +135,7 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None):
 
 def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                       singlet=None, hermi=0, max_memory=None):
-    from pyscf.pbc.dft import numint
+    from pyscf.pbc.dft import numint, multigrid
     assert(isinstance(mf, khf.KRHF))
 
     if mo_coeff is None: mo_coeff = mf.mo_coeff
@@ -147,6 +147,14 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
 
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=cell.spin)
+        hybrid = abs(hyb) > 1e-10
+        if abs(omega) > 1e-10:  # For range separated Coulomb
+            raise NotImplementedError
+
+        if not hybrid and isinstance(mf.with_df, multigrid.MultiGridFFTDF):
+            dm0 = mf.make_rdm1(mo_coeff, mo_occ)
+            return multigrid._gen_rhf_response(mf, dm0, singlet, hermi)
+
         if singlet is None:  # for newton solver
             rho0, vxc, fxc = ni.cache_xc_kernel(cell, mf.grids, mf.xc, mo_coeff,
                                                 mo_occ, 0, kpts)
@@ -160,7 +168,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
             mem_now = lib.current_memory()[0]
             max_memory = max(2000, mf.max_memory*.8-mem_now)
 
-        if singlet is None:
+        if singlet is None:  # Without specify singlet, general case
             def vind(dm1):
                 # The singlet hessian
                 if hermi == 2:
@@ -168,7 +176,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                 else:
                     v1 = ni.nr_rks_fxc(cell, mf.grids, mf.xc, dm0, dm1, 0, hermi,
                                        rho0, vxc, fxc, kpts, max_memory=max_memory)
-                if abs(hyb) > 1e-10:
+                if hybrid:
                     if hermi != 2:
                         vj, vk = mf.get_jk(cell, dm1, hermi=hermi, kpts=kpts)
                         v1 += vj - .5 * hyb * vk
@@ -188,7 +196,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                                               True, rho0, vxc, fxc, kpts,
                                               max_memory=max_memory)
                     v1 *= .5
-                if abs(hyb) > 1e-10:
+                if hybrid:
                     if hermi != 2:
                         vj, vk = mf.get_jk(cell, dm1, hermi=hermi, kpts=kpts)
                         v1 += vj - .5 * hyb * vk
@@ -197,7 +205,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                 elif hermi != 2:
                     v1 += mf.get_j(cell, dm1, hermi=hermi, kpts=kpts)
                 return v1
-        else:
+        else:  # triplet
             def vind(dm1):
                 if hermi == 2:
                     v1 = numpy.zeros_like(dm1)
@@ -207,7 +215,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                                               False, rho0, vxc, fxc, kpts,
                                               max_memory=max_memory)
                     v1 *= .5
-                if abs(hyb) > 1e-10:
+                if hybrid:
                     v1 += -.5 * hyb * mf.get_k(cell, dm1, hermi=hermi, kpts=kpts)
                 return v1
 
@@ -224,7 +232,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
 
 def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
                       with_j=True, hermi=0, max_memory=None):
-    from pyscf.pbc.dft import numint
+    from pyscf.pbc.dft import numint, multigrid
     assert(isinstance(mf, kuhf.KUHF))
 
     if mo_coeff is None: mo_coeff = mf.mo_coeff
@@ -236,6 +244,14 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
 
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=cell.spin)
+        hybrid = abs(hyb) > 1e-10
+        if abs(omega) > 1e-10:  # For range separated Coulomb
+            raise NotImplementedError
+
+        if not hybrid and isinstance(mf.with_df, multigrid.MultiGridFFTDF):
+            dm0 = mf.make_rdm1(mo_coeff, mo_occ)
+            return multigrid._gen_uhf_response(mf, dm0, with_j, hermi)
+
         rho0, vxc, fxc = ni.cache_xc_kernel(cell, mf.grids, mf.xc,
                                             mo_coeff, mo_occ, 1, kpts)
         #dm0 =(numpy.dot(mo_coeff[0]*mo_occ[0], mo_coeff[0].T.conj()),
@@ -252,7 +268,7 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
             else:
                 v1 = ni.nr_uks_fxc(cell, mf.grids, mf.xc, dm0, dm1, 0, hermi,
                                    rho0, vxc, fxc, kpts, max_memory=max_memory)
-            if abs(hyb) < 1e-10:
+            if not hybrid:
                 if with_j:
                     vj = mf.get_j(cell, dm1, hermi=hermi, kpts=kpts)
                     v1 += vj[0] + vj[1]
@@ -309,9 +325,9 @@ def newton(mf):
         class SecondOrderKUHF(mf.__class__, newton_ah._CIAH_SOSCF):
             __doc__ = mf_doc + newton_ah._CIAH_SOSCF.__doc__
             __init__ = newton_ah._CIAH_SOSCF.__init__
-
-            def build(self, cell=None):
-                newton_ah._CIAH_SOSCF.build(self, cell)
+            dump_flags = newton_ah._CIAH_SOSCF.dump_flags
+            build = newton_ah._CIAH_SOSCF.build
+            kernel = newton_ah._CIAH_SOSCF.kernel
 
             gen_g_hop = gen_g_hop_uhf
 
@@ -346,13 +362,19 @@ def newton(mf):
 
         return SecondOrderKUHF(mf)
 
+    elif isinstance(mf, pscf.krohf.KROHF):
+        raise NotImplementedError
+
+    elif isinstance(mf, pscf.kghf.KGHF):
+        raise NotImplementedError
+
     else:
         class SecondOrderKRHF(mf.__class__, newton_ah._CIAH_SOSCF):
             __doc__ = mf_doc + newton_ah._CIAH_SOSCF.__doc__
             __init__ = newton_ah._CIAH_SOSCF.__init__
-
-            def build(self, cell=None):
-                newton_ah._CIAH_SOSCF.build(self, cell)
+            dump_flags = newton_ah._CIAH_SOSCF.dump_flags
+            build = newton_ah._CIAH_SOSCF.build
+            kernel = newton_ah._CIAH_SOSCF.kernel
 
             gen_g_hop = gen_g_hop_rhf
 

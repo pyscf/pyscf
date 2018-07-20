@@ -33,6 +33,9 @@ from pyscf import scf
 from pyscf.soscf import ciah
 from pyscf import __config__
 
+WITH_MICRO_SCHEDULER = getattr(__config__, 'mcscf_mc1step_CASSCF_with_micro_scheduler', False)
+WITH_STEPSIZE_SCHEDULER = getattr(__config__, 'mcscf_mc1step_CASSCF_with_stepsize_scheduler', True)
+
 # ref. JCP, 82, 5053;  JCP, 73, 2342
 
 # gradients, hessian operator and hessian diagonal
@@ -327,7 +330,7 @@ def rotate_orb_cc(casscf, mo, fcivec, fcasdm1, fcasdm2, eris, x0_guess=None,
 
 def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
            ci0=None, callback=None, verbose=logger.NOTE, dump_chk=True):
-    '''CASSCF solver
+    '''quasi-newton CASSCF optimization driver
     '''
     log = logger.new_logger(casscf, verbose)
     cput0 = (time.clock(), time.time())
@@ -1136,18 +1139,23 @@ class CASSCF(casci.CASCI):
         return mo
 
     def micro_cycle_scheduler(self, envs):
-        #log_norm_ddm = numpy.log(envs['norm_ddm'])
-        #return max(self.max_cycle_micro, int(self.max_cycle_micro-1-log_norm_ddm))
-        return self.max_cycle_micro
+        if not WITH_MICRO_SCHEDULER:
+            return self.max_cycle_micro
+
+        log_norm_ddm = numpy.log(envs['norm_ddm'])
+        return max(self.max_cycle_micro, int(self.max_cycle_micro-1-log_norm_ddm))
 
     def max_stepsize_scheduler(self, envs):
+        if not WITH_STEPSIZE_SCHEDULER:
+            return self.max_stepsize
+
         if self._max_stepsize is None:
             self._max_stepsize = self.max_stepsize
-        if envs['de'] > self.conv_tol:  # Avoid total energy increasing
-            self._max_stepsize *= .5
+        if envs['de'] > -self.conv_tol:  # Avoid total energy increasing
+            self._max_stepsize *= .3
             logger.debug(self, 'set max_stepsize to %g', self._max_stepsize)
         else:
-            self._max_stepsize = numpy.sqrt(self.max_stepsize*self.max_stepsize)
+            self._max_stepsize = (self.max_stepsize*self._max_stepsize)**.5
         return self._max_stepsize
 
     def ah_scheduler(self, envs):

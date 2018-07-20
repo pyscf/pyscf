@@ -31,8 +31,8 @@ from pyscf import lib
 from pyscf.pbc.scf import uhf as pbcuhf
 from pyscf.lib import logger
 from pyscf.pbc.dft import gen_grid
-from pyscf.pbc.dft import numint
 from pyscf.pbc.dft import rks
+from pyscf.pbc.dft import multigrid
 
 
 def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
@@ -45,12 +45,24 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     if kpt is None: kpt = ks.kpt
     t0 = (time.clock(), time.time())
 
+    omega, alpha, hyb = ks._numint.rsh_and_hybrid_coeff(ks.xc, spin=cell.spin)
+    hybrid = abs(hyb) > 1e-10
+
+    if not hybrid and isinstance(ks.with_df, multigrid.MultiGridFFTDF):
+        n, exc, vxc = multigrid.nr_uks(ks.with_df, ks.xc, dm, hermi,
+                                       kpt.reshape(1,3), kpts_band,
+                                       with_j=True, return_j=False)
+        logger.debug(ks, 'nelec by numeric integration = %s', n)
+        t0 = logger.timer(ks, 'vxc', *t0)
+        return vxc
+
     # ndim = 3 : dm.shape = ([alpha,beta], nao, nao)
     ground_state = (dm.ndim == 3 and dm.shape[0] == 2 and kpts_band is None)
 
     if ks.grids.non0tab is None:
         ks.grids.build(with_non0tab=True)
-        if ks.small_rho_cutoff > 1e-20 and ground_state:
+        if (isinstance(ks.grids, gen_grid.BeckeGrids) and
+            ks.small_rho_cutoff > 1e-20 and ground_state):
             ks.grids = rks.prune_small_rho_grids_(ks, cell, dm[0]+dm[1],
                                                   ks.grids, kpt)
         t0 = logger.timer(ks, 'setting up grids', *t0)
@@ -68,22 +80,22 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         logger.debug(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
 
-    omega, alpha, hyb = ks._numint.rsh_and_hybrid_coeff(ks.xc, spin=cell.spin)
-    if abs(hyb) < 1e-10:
-        vj = ks.get_j(cell, dm, hermi, kpt, kpts_band)
-        vxc += vj[0] + vj[1]
+    if not hybrid:
+        vj = ks.get_j(cell, dm[0]+dm[1], hermi, kpt, kpts_band)
+        vxc += vj
     else:
         if getattr(ks.with_df, '_j_only', False):  # for GDF and MDF
             ks.with_df._j_only = False
         vj, vk = ks.get_jk(cell, dm, hermi, kpt, kpts_band)
-        vxc += vj[0] + vj[1] - vk * hyb
+        vj = vj[0] + vj[1]
+        vxc += vj - vk * hyb
 
         if ground_state:
             exc -=(numpy.einsum('ij,ji', dm[0], vk[0]) +
                    numpy.einsum('ij,ji', dm[1], vk[1])).real * hyb * .5
 
     if ground_state:
-        ecoul = numpy.einsum('ij,ji', dm[0]+dm[1], vj[0]+vj[1]).real * .5
+        ecoul = numpy.einsum('ij,ji', dm[0]+dm[1], vj).real * .5
     else:
         ecoul = None
 

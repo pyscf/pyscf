@@ -17,8 +17,8 @@
 #
 
 '''
-Non-relativistic and relativistic Hartree-Fock
-==============================================
+Hartree-Fock
+============
 
 Simple usage::
 

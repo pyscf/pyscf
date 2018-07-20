@@ -48,6 +48,7 @@ Contents
    grad.rst
    hessian.rst
    pbc.rst
+   nao.rst
    lo.rst
    advanced.rst
    qmmm.rst

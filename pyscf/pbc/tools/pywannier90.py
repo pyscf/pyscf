@@ -13,9 +13,19 @@
 # limitations under the License.
 
 '''
+There are two options to call wannier90 in PySCF.  One is the pyWannier90.py
+interface as implemented in this file.
+
+(1)
 pyWannier90: Wannier90 for PySCF
 Hung Q. Pham
 email: pqh3.14@gmail.com
+
+(2)
+Another wannier90 python interface is available on the repo:
+    https://github.com/zhcui/wannier90
+Contact its author "Zhihao Cui" <zcui@caltech.edu> for more details of
+installation and implementations.
 '''
 
 # This is the only place needed to be modified

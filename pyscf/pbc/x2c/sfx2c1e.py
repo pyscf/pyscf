@@ -14,8 +14,7 @@
 # limitations under the License.
 
 '''
-spin-free X2C correction for extended systems
-(In testing)
+spin-free X2C correction for extended systems (experimental feature)
 '''
 
 import time

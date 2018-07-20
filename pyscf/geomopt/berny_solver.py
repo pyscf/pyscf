@@ -25,10 +25,8 @@ except ImportError:
     raise ImportError('Geometry optimizer pyberny not found.\npyberny library '
                       'can be found on github https://github.com/azag0/pyberny')
 
-import copy
 import numpy
 from pyscf import lib
-from pyscf.geomopt.grad import gen_grad_scanner
 from pyscf import __config__
 
 INCLUDE_GHOST = getattr(__config__, 'geomopt_berny_solver_optimize_include_ghost', True)
@@ -38,7 +36,10 @@ ASSERT_CONV = getattr(__config__, 'geomopt_berny_solver_optimize_assert_converge
 def to_berny_geom(mol, include_ghost=INCLUDE_GHOST):
     atom_charges = mol.atom_charges()
     if include_ghost:
-        species = [mol.atom_symbol(i) if z != 0 else 'Ghost'
+        # Symbol Ghost is not supported in current version of pyberny
+        #species = [mol.atom_symbol(i) if z != 0 else 'Ghost'
+        #           for i,z in enumerate(atom_charges)]
+        species = [mol.atom_symbol(i) if z != 0 else 'H'
                    for i,z in enumerate(atom_charges)]
         coords = mol.atom_coords() * lib.param.BOHR
     else:
@@ -49,20 +50,14 @@ def to_berny_geom(mol, include_ghost=INCLUDE_GHOST):
 
 def _geom_to_atom(mol, geom, include_ghost):
     atoms = list(geom)
-    atmlst = numpy.where(mol.atom_charges() != 0)[0]
-    atom_charges = mol.atom_charges() * lib.param.BOHR
-    atom_coords = mol.atom_coords()
-
-    mol_atom = []
-    for k, i in enumerate(atmlst):
-        if atom_charges[i] == 0:
-            mol_atom.append((mol.atom_symbol(i), atom_coords[i]))
-        else:
-            if include_ghost:
-                mol_atom.append(atoms[i])
-            else:
-                mol_atom.append(atoms[k])
-    return mol_atom
+    position = numpy.array([x[1] for x in atoms])
+    if include_ghost:
+        atom_coords = position / lib.param.BOHR
+    else:
+        atmlst = numpy.where(mol.atom_charges() != 0)[0]
+        atom_coords = mol.atom_coords()
+        atom_coords[atmlst] = position / lib.param.BOHR
+    return atom_coords
 
 def to_berny_log(pyscf_log):
     '''Adapter to allow pyberny to use pyscf.logger
@@ -77,14 +72,21 @@ def as_berny_solver(method, assert_convergence=ASSERT_CONV,
                     include_ghost=INCLUDE_GHOST):
     '''Generate a solver for berny optimize function.
     '''
-    mol = copy.copy(method.mol)
-    g_scanner = gen_grad_scanner(method)
+    mol = method.mol.copy()
+    if isinstance(method, lib.GradScanner):
+        g_scanner = method
+    elif hasattr(method, 'nuc_grad_method'):
+        g_scanner = method.nuc_grad_method().as_scanner()
+    else:
+        raise NotImplementedError('Nuclear gradients of %s not available' % method)
+
     if not include_ghost:
         g_scanner.atmlst = numpy.where(mol.atom_charges() != 0)[0]
 
     geom = yield
+    cout = 0
     while True:
-        mol.set_geom_(_geom_to_atom(mol, geom, include_ghost))
+        mol.set_geom_(_geom_to_atom(mol, geom, include_ghost), unit='Bohr')
         energy, gradients = g_scanner(mol)
         if assert_convergence and not g_scanner.converged:
             raise RuntimeError('Nuclear gradients of %s not converged' % method)
@@ -105,21 +107,28 @@ def as_pyscf_method(mol, scan_function):
     >>> berny_solver.kernel(m)
     '''
     class OmniGrad(lib.GradScanner):
-        def __init__(self):
-            self.converged = True
+        def __init__(self, g):
+            self.base = g.base
         def __call__(self, mol):
             self.e_tot, grad = scan_function(mol)
             return self.e_tot, grad
+        @property
+        def converged(self):
+            return True
+
     class Grad(object):
+        def __init__(self, base):
+            self.base = base
         def as_scanner(self):
-            return OmniGrad()
+            return OmniGrad(self)
+
     class OmniMethod(object):
         def __init__(self, mol):
             self.mol = mol
             self.verbose = mol.verbose
             self.stdout = mol.stdout
         def nuc_grad_method(self):
-            return Grad()
+            return Grad(self)
     return OmniMethod(mol)
 
 
@@ -127,7 +136,7 @@ def optimize(method, assert_convergence=ASSERT_CONV,
              include_ghost=INCLUDE_GHOST, **kwargs):
     '''Optimize the geometry with the given method.
     '''
-    mol = copy.copy(method.mol)
+    mol = method.mol.copy()
     if 'log' in kwargs:
         log = lib.logger.new_logger(method, kwargs['log'])
     elif 'verbose' in kwargs:
@@ -145,7 +154,7 @@ def optimize(method, assert_convergence=ASSERT_CONV,
     for geom in optimizer:
         energy, gradients = solver.send(geom)
         optimizer.send((energy, gradients))
-    mol.set_geom_(_geom_to_atom(mol, geom, include_ghost))
+    mol.set_geom_(_geom_to_atom(mol, geom, include_ghost), unit='Bohr')
     return mol
 kernel = optimize
 

@@ -24,8 +24,9 @@ def leggauss_ab(n=96, a=-1.0, b=1.0):
   return x,w
 
 def gauss_legendre(n, charge=None, atom_id=None, **kwargs):
-    '''
-    Generates the Gauss-Legendre knots and weights
+    ''' 
+      Generates the Gauss-Legendre knots and weights for using in 3D grids in pySCF
+      For an example see m_ao_matelem.py
     '''
     if 'atom2rcut' in kwargs and atom_id is not None:
         rcut = kwargs['atom2rcut'][atom_id]

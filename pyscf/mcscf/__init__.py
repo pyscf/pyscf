@@ -85,9 +85,9 @@ The Following attributes are used for CASSCF
         (NOTE although the default step size is small enough for many systems,
         it happens that the orbital optimizor crosses the barriar of local
         minimum and converge to the neighbour solution, e.g. the CAS(4,4) for
-        C2H4 in the test files.  In these cases, one need to fine the
-        optimization by reducing max_stepsize, max_ci_stepsize and
-        max_cycle_micro, max_cycle_micro_inner and ah_start_tol.)
+        C2H4 in the test files.  In these systems, adjusting max_stepsize,
+        max_ci_stepsize and max_cycle_micro, max_cycle_micro_inner and
+        ah_start_tol may be helpful)
 
         >>> mc = mcscf.CASSCF(mf, 6, 6)
         >>> mc.max_stepsize = .01

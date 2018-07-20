@@ -379,7 +379,7 @@ def update_orb_ci(casscf, mo, ci0, eris, x0_guess=None,
                             casscf.max_cycle_micro-int(numpy.log(norm_gkf+1e-7)*2))
             log.debug1('Set max_cycle %d', max_cycle)
             ikf += 1
-            if stat.imic > 3 and norm_gall > norm_gkf*casscf.ah_trust_region:
+            if stat.imic > 3 and norm_gall > norm_gkf*casscf.ah_grad_trust_region:
                 g_all = g_all - hdxi
                 dr -= dxi
                 norm_gall = numpy.linalg.norm(g_all)
@@ -405,10 +405,10 @@ def update_orb_ci(casscf, mo, ci0, eris, x0_guess=None,
                           '|g-correction|= %4.3g',
                           norm_gkf1, norm_gorb, norm_gci, norm_dg)
 
-                if (norm_dg < norm_gall*casscf.ah_trust_region  # kf not too diff
+                if (norm_dg < norm_gall*casscf.ah_grad_trust_region  # kf not too diff
                     #or norm_gkf1 < norm_gkf  # grad is decaying
                     # close to solution
-                    or norm_gkf1 < conv_tol_grad*casscf.ah_trust_region):
+                    or norm_gkf1 < conv_tol_grad*casscf.ah_grad_trust_region):
                     g_all = g_kf = g_kf1
                     g_kf1 = None
                     norm_gall = norm_gkf = norm_gkf1
@@ -616,7 +616,7 @@ class CASSCF(mc1step.CASSCF):
         self.ah_lindep = 1e-14
         self.ah_start_tol = 5e2
         self.ah_start_cycle = 3
-        self.ah_trust_region = 3.
+        self.ah_grad_trust_region = 3.
 
         self.kf_trust_region = 3.
         self.kf_interval = 5
@@ -662,7 +662,7 @@ class CASSCF(mc1step.CASSCF):
         log.info('augmented hessian ah_level shift = %d', self.ah_level_shift)
         log.info('augmented hessian ah_start_tol = %g', self.ah_start_tol)
         log.info('augmented hessian ah_start_cycle = %d', self.ah_start_cycle)
-        log.info('augmented hessian ah_trust_region = %g', self.ah_trust_region)
+        log.info('augmented hessian ah_grad_trust_region = %g', self.ah_grad_trust_region)
         log.info('kf_trust_region = %g', self.kf_trust_region)
         log.info('kf_interval = %d', self.kf_interval)
         log.info('natorb = %s', self.natorb)
@@ -675,8 +675,6 @@ class CASSCF(mc1step.CASSCF):
             self.fcisolver.dump_flags(self.verbose)
         except AttributeError:
             pass
-        if hasattr(self, 'max_orb_stepsize'):
-            log.warn('Attribute "max_orb_stepsize" was replaced by "max_stepsize"')
         if self.mo_coeff is None:
             log.warn('Orbital for CASCI is not specified.  You probably need '
                      'call SCF.kernel() to initialize orbitals.')

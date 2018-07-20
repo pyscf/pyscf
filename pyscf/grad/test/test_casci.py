@@ -369,6 +369,31 @@ class KnownValues(unittest.TestCase):
             e2 = mcs('N 0 0 0; N 0 0 1.199; H 1 1 0; H 1 1 1.2')
             self.assertAlmostEqual(g1[1,2], (e1-e2)/0.002*lib.param.BOHR, 5)
 
+    def test_with_qmmm_scanner(self):
+        from pyscf import qmmm
+        mol = gto.Mole()
+        mol.atom = ''' O                  0.00000000    0.00000000   -0.11081188
+                       H                 -0.00000000   -0.84695236    0.59109389
+                       H                 -0.00000000    0.89830571    0.52404783 '''
+        mol.verbose = 0
+        mol.basis = '6-31g'
+        mol.build()
+
+        coords = [(0.5,0.6,0.1)]
+        #coords = [(0.0,0.0,0.0)]
+        charges = [-0.1]
+        mf = qmmm.add_mm_charges(scf.RHF(mol), coords, charges)
+        mc = mcscf.CASCI(mf, 4, 4).as_scanner()
+        e1 = mc(''' O                  0.00100000    0.00000000   -0.11081188
+                 H                 -0.00000000   -0.84695236    0.59109389
+                 H                 -0.00000000    0.89830571    0.52404783 ''')
+        e2 = mc(''' O                 -0.00100000    0.00000000   -0.11081188
+                 H                 -0.00000000   -0.84695236    0.59109389
+                 H                 -0.00000000    0.89830571    0.52404783 ''')
+        ref = (e1 - e2)/0.002 * lib.param.BOHR
+        g = mc.nuc_grad_method().kernel()
+        self.assertAlmostEqual(g[0,0], ref, 4)
+
 
 if __name__ == "__main__":
     print("Tests for CASCI gradients")

@@ -6,9 +6,9 @@
   - 4-component relativistic Dirac-Hartree-Fock
   - Density fitting HF
   - Second order SCF
-  - General JK contraction function
+  - General J/K build function
   - DIIS, EDIIS, ADIIS and second order solver
-  - SCF wavefunction stability analysis
+  - SCF wavefunction (RHF, UHF, GHF) stability analysis
   - Generalized Hartree-Fock (GHF)
 
 
@@ -149,12 +149,13 @@
 
 * Extended systems with periodic boundary condition
 
-  - gamma point RHF, UHF, RKS, UKS
+  - gamma point RHF, ROHF, UHF, RKS, ROKS, UKS
   - gamma point TDDFT, MP2, CCSD
-  - RHF, UHF, GHF, RKS, UKS with k-point sampling
+  - RHF, ROHF, UHF, GHF, RKS, ROKS, UKS with k-point sampling
   - Restricted MP2 with k-point sampling
-  - RCCSD with k-point sampling (KRCCSD)
-  - Generalized CCSD with k-point sampling (KGCCSD)
+  - KRCCSD (RCCSD with k-point sampling)
+  - KUCCSD
+  - KGCCSD (Generalized CCSD with k-point sampling)
   - k-point GCCSD(T) and RCCSD(T)
   - k-point EOM-IP/EA-CCSD
   - PBC AO integrals
@@ -163,11 +164,20 @@
   - Smearing for mean-field methods
   - Low-dimensional (0D, 1D, 2D) PBC systems
   - (restricted and unrestricted) TDA, TDHF and TDDFT with k-point sampling
+  - Multigrid DFT
+
+
+* Relativistic effects
+
+  - 4-component HF with Dirac-Coulomb Hamiltonian (DHF)
+  - 4-component DHF with Gaunt and Breit corrections
+  - 2-component X2C HF
+  - 4-component and 2-component Kohn-Sham DFT (LDA only)
 
 
 * AO integrals
 
-  - Interface to call Libcint library
+  - Interface to access all AO integrals of Libcint library
   - 1-electron real-GTO and spinor-GTO integrals
   - 2-electron real-GTO and spinor-GTO integrals
   - 3-center 1-electron real-GTO and spinor-GTO integrals
@@ -184,6 +194,8 @@
     Libcint library
   - Support for 4-index integral transformation with 4 different orbitals
   - PBC 2-electron MO integrals
+  - Integral transformation for (4-component and 2-compoent relativistic) spinor
+    integrals
 
 
 * Localizer

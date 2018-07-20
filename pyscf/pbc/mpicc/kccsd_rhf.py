@@ -29,14 +29,18 @@ import pyscf.ao2mo
 from pyscf.lib import logger
 import pyscf.cc
 import pyscf.cc.ccsd
+from pyscf.pbc.mp.kmp2 import get_frozen_mask, get_nocc, get_nmo
 from pyscf.pbc.mpicc import kintermediates_rhf as imdk
 from pyscf.pbc.lib.linalg_helper import eigs
 from pyscf.lib.linalg_helper import eig
 from pyscf.pbc.mpitools.mpi_helper import generate_max_task_list, safeAllreduceInPlace, safeNormDiff, safeBcastInPlace
+from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM
 from pyscf.lib.numpy_helper import cartesian_prod
 from pyscf.pbc.mpitools import mpi_load_balancer, mpi
 from pyscf.pbc.tools.tril import tril_index, unpack_tril
 from pyscf.pbc.lib import kpts_helper
+import pyscf.pbc.cc.kccsd_rhf
+from pyscf.pbc.cc.kccsd_rhf import pad_frozen_kpt_mo_coeff
 
 from mpi4py import MPI
 
@@ -130,63 +134,10 @@ def write_eom_amplitudes(vec, filename="reom_amplitudes.hdf5"):
         feri.close()
     return
 
-
-# This is restricted (R)CCSD
-# following Hirata, ..., Barlett, J. Chem. Phys. 120, 2581 (2004)
-
-def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
-           max_memory=2000, verbose=logger.INFO):
-    """Exactly the same as pyscf.cc.ccsd.kernel, which calls a
-    *local* energy() function."""
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(cc.stdout, verbose)
-
-    if t1 is None and t2 is None:
-        t1, t2 = cc.init_amps(eris)[1:]
-    elif t1 is None:
-        nocc = cc.nocc()
-        nvir = cc.nmo() - nocc
-        t1 = numpy.zeros((nocc,nvir), eris.dtype)
-    elif t2 is None:
-        t2 = cc.init_amps(eris)[2]
-
-    cput1 = cput0 = (time.clock(), time.time())
-    nkpts, nocc, nvir = t1.shape
-    rsuccess, t1, t2 = read_amplitudes(t1.shape, t2.shape, t1, t2)
-    eold = 0.0
-    eccsd = 0.0
-    if isinstance(cc.diis, lib.diis.DIIS):
-        adiis = cc.diis
-    elif cc.diis:
-        adiis = lib.diis.DIIS(cc, cc.diis_file)
-        adiis.space = cc.diis_space
-    else:
-        adiis = None
-
-    conv = False
-    for istep in range(max_cycle):
-        t1new, t2new = cc.update_amps(t1, t2, eris, max_memory)
-        normt = safeNormDiff(t1new,t1) + safeNormDiff(t2new,t2)
-        t1, t2 = t1new, t2new
-        t1new = t2new = None
-        if adiis:
-            if rank == 0:
-                t1, t2 = cc.run_diis(t1, t2, istep, normt, eccsd-eold, adiis)
-            t1 = comm.bcast(t1, root=0)
-            safeBcastInPlace(comm, t2)
-        eold, eccsd = eccsd, energy_tril(cc, t1, t2, eris)
-        write_amplitudes(t1, t2)
-        if rank == 0:
-            log.info('istep = %d  E(CCSD) = %.15g  dE = %.9g  norm(t1,t2) = %.6g',
-                     istep, eccsd, eccsd - eold, normt)
-            cput1 = log.timer('CCSD iter', *cput1)
-        if abs(eccsd-eold) < tol and normt < tolnormt:
-            conv = True
-            break
-    log.timer('CCSD', *cput0)
-    return conv, eccsd, t1, t2
+def get_normt_diff(cc, t1, t2, t1new, t2new):
+    '''Calculates norm(t1 - t1new) + norm(t2 - t2new).'''
+    normt = safeNormDiff(t1new, t1) + safeNormDiff(t2new, t2)  # Blocking; saves memory
+    return normt
 
 def update_t1(cc,t1,t2,eris,ints1e):
     nkpts, nocc, nvir = t1.shape
@@ -297,6 +248,9 @@ def update_t1(cc,t1,t2,eris,ints1e):
 
     comm.Allreduce(MPI.IN_PLACE, t1new, op=MPI.SUM)
     return t1new
+
+# This is restricted (R)CCSD
+# following Hirata, ..., Barlett, J. Chem. Phys. 120, 2581 (2004)
 
 def update_amps(cc, t1, t2, eris, max_memory=2000):
     time0 = time.clock(), time.time()
@@ -908,42 +862,28 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     comm.Barrier()
     cput2 = log.timer_debug1('transforming Wovov (aj)', *cput2)
 
-    #t2new = numpy.zeros((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir),dtype=ds_type)
-    #for ki in range(nkpts):
-    #    for kj in range(nkpts):
-    #        if ki <= kj:
-    #            for ka in range(nkpts):
-    #                t2new[ki,kj,ka] += t2new_tril[tril_index(ki,kj),ka]
-
     comm.Barrier()
-    #comm.Allreduce(MPI.IN_PLACE, t2new, op=MPI.SUM)
-    #safeAllreduce(comm, t2new)
     safeAllreduceInPlace(comm, t2new_tril)
-    #comm.Allreduce(MPI.IN_PLACE, t2new_tril, op=MPI.SUM)
-
-    #for kj in range(nkpts):
-    #    for ki in range(kj):
-    #        for ka in range(nkpts):
-    #            kb = kconserv[ki,ka,kj]
-    #            t2new[kj,ki,kb] += t2new[ki,kj,ka].transpose(1,0,3,2)
 
     eia = numpy.zeros(shape=t1new.shape, dtype=t1new.dtype)
     for ki in range(nkpts):
-        for i in range(nocc):
-            for a in range(nvir):
-                eia[ki,i,a] = foo[ki,i,i] - fvv[ki,a,a]
-        t1new[ki] /= eia[ki]
+        eia = foo[ki].diagonal()[:,None] - fvv[ki].diagonal()
+        # When padding the occupied/virtual arrays, some fock elements will be zero
+        eia[abs(eia) < LOOSE_ZERO_TOL] = LARGE_DENOM
+        t1new[ki] /= eia
 
-    for ki in range(nkpts):
-      for kj in range(nkpts):
-        for ka in range(nkpts):
-            kb = kconserv[ki,ka,kj]
-            eia = numpy.diagonal(foo[ki]).reshape(-1,1) - numpy.diagonal(fvv[ka])
-            ejb = numpy.diagonal(foo[kj]).reshape(-1,1) - numpy.diagonal(fvv[kb])
-            eijab = pyscf.lib.direct_sum('ia,jb->ijab',eia,ejb)
-    #        t2new[ki,kj,ka] /= eijab
-            if ki <= kj:
-                t2new_tril[tril_index(ki,kj),ka] /= eijab
+    for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
+        if ki > kj:
+            continue
+
+        kb = kconserv[ki,ka,kj]
+        eia = np.diagonal(foo[ki]).reshape(-1,1) - np.diagonal(fvv[ka])
+        ejb = np.diagonal(foo[kj]).reshape(-1,1) - np.diagonal(fvv[kb])
+        eijab = eia[:,None,:,None] + ejb[:,None,:]
+        # Due to padding; see above discussion concerning t1new in update_amps()
+        eijab[abs(eijab) < LOOSE_ZERO_TOL] = LARGE_DENOM
+
+        t2new_tril[tril_index(ki,kj),ka] /= eijab
 
     time0 = log.timer_debug1('update t1 t2', *time0)
 
@@ -1003,28 +943,16 @@ def energy_tril(cc, t1, t2, eris):
     e /= nkpts
     return e.real
 
-class RCCSD(pyscf.cc.ccsd.CCSD):
+class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
 
-    def __init__(self, mf, frozen=[], mo_energy=None, mo_coeff=None, mo_occ=None):
-        pyscf.cc.ccsd.CCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
-        self.kpts = mf.kpts
-        self.mo_energy = mf.mo_energy
-        self.nkpts = len(self.kpts)
+    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+        pyscf.pbc.cc.kccsd_rhf.RCCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
         self.kconserv = kpts_helper.get_kconserv(mf.cell, mf.kpts)
-        self.khelper = mpi_kpoint_helper.unique_pqr_list(mf.cell, mf.kpts)
-        self.made_ee_imds = False
-        self.made_ip_imds = False
-        self.made_ea_imds = False
-
-    def dump_flags(self):
-        pyscf.cc.ccsd.CCSD.dump_flags(self)
-        logger.info(self, '\n')
-        logger.info(self, '******** EOM CC flags ********')
 
     def _init_amps_tril(self, eris):
         time0 = time.clock(), time.time()
-        nocc = self.nocc()
-        nvir = self.nmo() - nocc
+        nocc = self.nocc
+        nvir = self.nmo - nocc
         nkpts = self.nkpts
         t1 = numpy.zeros((nkpts,nocc,nvir), dtype=numpy.complex128)
         tril_shape = ((nkpts)*(nkpts+1))/2
@@ -1057,6 +985,10 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                             eia = numpy.diagonal(foo[ki]).reshape(-1,1) - numpy.diagonal(fvv[ka])
                             ejb = numpy.diagonal(foo[kj]).reshape(-1,1) - numpy.diagonal(fvv[kb])
                             eijab = pyscf.lib.direct_sum('ia,jb->ijab',eia,ejb)
+                            # Due to padding; see above discussion concerning t1new in update_amps()
+                            idx = abs(eijab) < LOOSE_ZERO_TOL
+                            eijab[idx] = LARGE_DENOM
+
                             oovv_ijab = numpy.array(eris.oovv[ki,kj,ka])
                             oovv_ijba = numpy.array(eris.oovv[ki,kj,kb]).transpose(0,1,3,2)
                             woovv = 2.*oovv_ijab - oovv_ijba
@@ -1073,9 +1005,8 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                             oovv_ijab = numpy.array(eris.oovv[ki,kj,ka])
                             oovv_ijba = numpy.array(eris.oovv[ki,kj,kb]).transpose(0,1,3,2)
                             woovv = 2.*oovv_ijab - oovv_ijba
-                            #woovv = (2*eris_oovv[ki,kj,ka] - eris_oovv[ki,kj,kb].transpose(0,1,3,2))
-                            #t2[ki,kj,ka] = numpy.conj(eris_oovv[ki,kj,ka] / eijab)
-                            t2_tril[tril_index(kj,ki),kb] = numpy.conj(oovv_ijab / eijab)
+
+                            t2_tril[tril_index(kj,ki),kb] = numpy.conj(oovv_ijab.transpose(0,1,3,2) / eijab)
                             local_mp2 += numpy.dot(t2_tril[tril_index(kj,ki),kb].flatten(),woovv.flatten())
             loader.slave_finished()
 
@@ -1091,8 +1022,8 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
     def _init_amps(self, eris):
         time0 = time.clock(), time.time()
-        nocc = self.nocc()
-        nvir = self.nmo() - nocc
+        nocc = self.nocc
+        nvir = self.nmo - nocc
         nkpts = self.nkpts
         t1 = numpy.zeros((nkpts,nocc,nvir), dtype=numpy.complex128)
         t2 = numpy.zeros((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=numpy.complex128)
@@ -1125,44 +1056,10 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
     def init_amps(self, eris):
         return self._init_amps_tril(eris)
 
-    def nocc(self):
-        # Spin orbitals
-        # TODO: Possibly change this to make it work with k-points with frozen
-        #       As of right now it works, but just not sure how the frozen list will work
-        #       with it
-        self._nocc = int(self.mo_occ[0].sum()) // 2
-        #self._nocc = (self._nocc // self.nkpts)
-        return self._nocc
+    get_normt_diff = get_normt_diff
 
-    def nmo(self):
-        # TODO: Change this for frozen at k-points, seems like it should work
-        if isinstance(self.frozen, (int, numpy.integer)):
-            self._nmo = len(self.mo_occ[0]) - self.frozen
-        else:
-            if len(self.frozen) > 0:
-                self._nmo = len(self.mo_occ[0]) - len(self.frozen[0])
-            else:
-                self._nmo = len(self.mo_occ[0])
-        return self._nmo
-
-    def ccsd(self, t1=None, t2=None, mo_coeff=None, eris=None):
-        if eris is None: eris = self.ao2mo(mo_coeff)
-        self.eris = eris
-        self.converged, self.e_corr, self.t1, self.t2 = \
-                kernel(self, eris, t1, t2, max_cycle=self.max_cycle,
-                       tol=self.conv_tol,
-                       tolnormt=self.conv_tol_normt,
-                       max_memory=self.max_memory, verbose=self.verbose)
-        if self.converged:
-            logger.info(self, 'CCSD converged')
-        else:
-            logger.info(self, 'CCSD not converge')
-        if self._scf.e_tot == 0:
-            logger.info(self, 'E_corr = %.16g', self.e_corr)
-        else:
-            logger.info(self, 'E(CCSD) = %.16g  E_corr = %.16g',
-                        self.e_corr+self._scf.e_tot, self.e_corr)
-        return self.e_corr, self.t1, self.t2
+    def energy(self, t1, t2, eris):
+        return energy_tril(self, t1, t2, eris)
 
     def ao2mo(self, mo_coeff=None):
         return _ERIS(self, mo_coeff)
@@ -1243,17 +1140,23 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
     def ipccsd(self, nroots=2*4, kptlist=None):
         time0 = time.clock(), time.time()
         log = logger.Logger(self.stdout, self.verbose)
-        nocc = self.nocc()
-        nvir = self.nmo() - nocc
+        nocc = self.nocc
+        nvir = self.nmo - nocc
         nkpts = self.nkpts
-        size =  nocc + nkpts*nkpts*nocc*nocc*nvir
         if kptlist is None:
             kptlist = range(nkpts)
-        evals = np.zeros((len(kptlist),nroots),np.complex)
-        evecs = np.zeros((len(kptlist),size,nroots),np.complex)
+        size = self.vector_size_ip()
+        for k,kshift in enumerate(kptlist):
+            self.kshift = kshift
+            nfrozen = np.sum(self.mask_frozen_ip(np.zeros(size, dtype=int), const=1))
+            nroots = min(nroots, size - nfrozen)
+        evals = np.zeros((len(kptlist),nroots), np.float)
+        evecs = np.zeros((len(kptlist),size,nroots), np.complex)
+
         for k,kshift in enumerate(kptlist):
             self.kshift = kshift
             diag = self.ipccsd_diag()
+            diag = self.mask_frozen_ip(diag, const=LARGE_DENOM)
             precond = lambda dx, e, x0: dx/(diag-e)
             # Initial guess from file
             amplitude_filename = "__ripccsd" + str(kshift) + "__.hdf5"
@@ -1274,6 +1177,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
     def ipccsd_matvec(self, vector):
         # Ref: Z. Tu, F. Wang, and X. Li, J. Chem. Phys. 136, 174102 (2012) Eqs.(8)-(9)
+        vector = self.mask_frozen_ip(vector, const=0.0)
         r1,r2 = self.vector_to_amplitudes_ip(vector)
         r1 = comm.bcast(r1, root=0)
         r2 = comm.bcast(r2, root=0)
@@ -1377,19 +1281,25 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         comm.Allreduce(MPI.IN_PLACE, Hr2, op=MPI.SUM)
 
         vector = self.amplitudes_to_vector_ip(Hr1,Hr2)
+        vector = self.mask_frozen_ip(vector, const=0.0)
         return vector
 
     def lipccsd(self, nroots=2*4, kptlist=None):
         time0 = time.clock(), time.time()
         log = logger.Logger(self.stdout, self.verbose)
-        nocc = self.nocc()
-        nvir = self.nmo() - nocc
+        nocc = self.nocc
+        nvir = self.nmo - nocc
         nkpts = self.nkpts
-        size =  nocc + nkpts*nkpts*nocc*nocc*nvir
         if kptlist is None:
             kptlist = range(nkpts)
-        evals = np.zeros((len(kptlist),nroots),np.complex)
-        evecs = np.zeros((len(kptlist),size,nroots),np.complex)
+        size = self.vector_size_ip()
+        for k,kshift in enumerate(kptlist):
+            self.kshift = kshift
+            nfrozen = np.sum(self.mask_frozen_ip(np.zeros(size, dtype=int), const=1))
+            nroots = min(nroots, size - nfrozen)
+        evals = np.zeros((len(kptlist),nroots), np.float)
+        evecs = np.zeros((len(kptlist),size,nroots), np.complex)
+
         for k,kshift in enumerate(kptlist):
             self.kshift = kshift
             diag = self.ipccsd_diag()
@@ -1413,6 +1323,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
     def lipccsd_matvec(self, vector):
         # Ref: Z. Tu, F. Wang, and X. Li, J. Chem. Phys. 136, 174102 (2012) Eqs.(8)-(9)
+        vector = self.mask_frozen_ip(vector, const=0.0)
         r1,r2 = self.vector_to_amplitudes_ip(vector)
         r1 = comm.bcast(r1, root=0)
         r2 = comm.bcast(r2, root=0)
@@ -1555,12 +1466,13 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         comm.Allreduce(MPI.IN_PLACE, Hr2, op=MPI.SUM)
 
         vector = self.amplitudes_to_vector_ip(Hr1,Hr2)
+        vector = self.mask_frozen_ip(vector, const=0.0)
         return vector
 
 
     def vector_to_amplitudes_ip(self,vector):
-        nocc = self.nocc()
-        nvir = self.nmo() - nocc
+        nocc = self.nocc
+        nvir = self.nmo - nocc
         nkpts = self.nkpts
 
         r1 = vector[:nocc].copy()
@@ -1577,8 +1489,8 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         return [r1,r2]
 
     def amplitudes_to_vector_ip(self,r1,r2):
-        nocc = self.nocc()
-        nvir = self.nmo() - nocc
+        nocc = self.nocc
+        nvir = self.nmo - nocc
         nkpts = self.nkpts
         size = nocc + nkpts*nkpts*nocc*nocc*nvir
 
@@ -1597,8 +1509,8 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
     def ipccsd_star(self, ipccsd_evals, ipccsd_evecs, lipccsd_evecs):
         nproc = comm.Get_size()
-        nocc = self.nocc()
-        nvir = self.nmo() - nocc
+        nocc = self.nocc
+        nvir = self.nmo - nocc
         nkpts = self.nkpts
         kconserv = self.kconserv
         eris = self.eris
@@ -1948,17 +1860,23 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
     def eaccsd(self, nroots=2*4, kptlist=None):
         time0 = time.clock(), time.time()
         log = logger.Logger(self.stdout, self.verbose)
-        nocc = self.nocc()
-        nvir = self.nmo() - nocc
+        nocc = self.nocc
+        nvir = self.nmo - nocc
         nkpts = self.nkpts
-        size =  nvir + nkpts*nkpts*nocc*nvir*nvir
         if kptlist is None:
             kptlist = range(nkpts)
-        evals = np.zeros((len(kptlist),nroots),np.complex)
-        evecs = np.zeros((len(kptlist),size,nroots),np.complex)
+        size = self.vector_size_ea()
+        for k,kshift in enumerate(kptlist):
+            self.kshift = kshift
+            nfrozen = np.sum(self.mask_frozen_ea(np.zeros(size, dtype=int), const=1))
+            nroots = min(nroots, size - nfrozen)
+        evals = np.zeros((len(kptlist),nroots), np.float)
+        evecs = np.zeros((len(kptlist),size,nroots), np.complex)
+
         for k,kshift in enumerate(kptlist):
             self.kshift = kshift
             diag = self.eaccsd_diag()
+            diag = self.mask_frozen_ea(diag, const=LARGE_DENOM)
             precond = lambda dx, e, x0: dx/(diag-e)
             # Initial guess from file
             amplitude_filename = "__reaccsd" + str(kshift) + "__.hdf5"
@@ -1979,6 +1897,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
     def eaccsd_matvec(self, vector):
         # Ref: Nooijen and Bartlett, J. Chem. Phys. 102, 3629 (1994) Eqs.(30)-(31)
+        vector = self.mask_frozen_ea(vector, const=0.0)
         r1,r2 = self.vector_to_amplitudes_ea(vector)
         r1 = comm.bcast(r1, root=0)
         r2 = comm.bcast(r2, root=0)
@@ -2103,19 +2022,25 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         comm.Allreduce(MPI.IN_PLACE, Hr2, op=MPI.SUM)
 
         vector = self.amplitudes_to_vector_ea(Hr1,Hr2)
+        vector = self.mask_frozen_ea(vector, const=0.0)
         return vector
 
     def leaccsd(self, nroots=2*4, kptlist=None):
         time0 = time.clock(), time.time()
         log = logger.Logger(self.stdout, self.verbose)
-        nocc = self.nocc()
-        nvir = self.nmo() - nocc
+        nocc = self.nocc
+        nvir = self.nmo - nocc
         nkpts = self.nkpts
-        size =  nvir + nkpts*nkpts*nocc*nvir*nvir
         if kptlist is None:
             kptlist = range(nkpts)
-        evals = np.zeros((len(kptlist),nroots),np.complex)
-        evecs = np.zeros((len(kptlist),size,nroots),np.complex)
+        size = self.vector_size_ea()
+        for k,kshift in enumerate(kptlist):
+            self.kshift = kshift
+            nfrozen = np.sum(self.mask_frozen_ea(np.zeros(size, dtype=int), const=1))
+            nroots = min(nroots, size - nfrozen)
+        evals = np.zeros((len(kptlist),nroots), np.float)
+        evecs = np.zeros((len(kptlist),size,nroots), np.complex)
+
         for k,kshift in enumerate(kptlist):
             self.kshift = kshift
             diag = self.eaccsd_diag()
@@ -2255,8 +2180,8 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         return vector
 
     def vector_to_amplitudes_ea(self,vector):
-        nocc = self.nocc()
-        nvir = self.nmo() - nocc
+        nocc = self.nocc
+        nvir = self.nmo - nocc
         nkpts = self.nkpts
 
         r1 = vector[:nvir].copy()
@@ -2273,8 +2198,8 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         return [r1,r2]
 
     def amplitudes_to_vector_ea(self,r1,r2):
-        nocc = self.nocc()
-        nvir = self.nmo() - nocc
+        nocc = self.nocc
+        nvir = self.nmo - nocc
         nkpts = self.nkpts
         size = nvir + nkpts*nkpts*nocc*nvir*nvir
 
@@ -2292,8 +2217,8 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         return vector
 
     def eaccsd_star(self, eaccsd_evals, eaccsd_evecs, leaccsd_evecs):
-        nocc = self.nocc()
-        nvir = self.nmo() - nocc
+        nocc = self.nocc
+        nvir = self.nmo - nocc
         nkpts = self.nkpts
         kconserv = self.kconserv
         eris = self.eris
@@ -2608,8 +2533,8 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         return np.hstack((t1.ravel(), t2.ravel()))
 
     def vector_to_amplitudes(self, vec, nmo=None, nocc=None):
-        if nocc is None: nocc = self.nocc()
-        if nmo is None: nmo = self.nmo()
+        if nocc is None: nocc = self.nocc
+        if nmo is None: nmo = self.nmo
         nvir = nmo - nocc
         nkpts = self.nkpts
         nov = nkpts*nocc*nvir
@@ -2620,39 +2545,46 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 class _ERIS:
     def __init__(self, cc, mo_coeff=None, method='incore'):
         cput0 = (time.clock(), time.time())
-        moidx = numpy.ones(np.array(cc.mo_occ).shape, dtype=numpy.bool)
+        moidx = get_frozen_mask(cc)
         nkpts = cc.nkpts
-        nmo = cc.nmo()
-        mo_dtype = np.array(cc.mo_coeff).dtype
-        #TODO check that this and kccsd work for frozen
-        if isinstance(cc.frozen, (int, numpy.integer)):
-            moidx[:,:cc.frozen] = False
-        elif len(cc.frozen) > 0:
-            moidx[:,numpy.asarray(cc.frozen)] = False
-        if mo_coeff is None:
-            self.mo_coeff = numpy.zeros((nkpts,nmo,nmo),dtype=mo_dtype)
-            for kp in range(nkpts):
-                self.mo_coeff[kp] = cc.mo_coeff[kp][:,moidx[kp]]
-            mo_coeff = self.mo_coeff
-            self.fock = numpy.zeros((nkpts,nmo,nmo),dtype=mo_dtype)
-            for kp in range(nkpts):
-                self.fock[kp] = numpy.diag(cc.mo_energy[kp][moidx[kp]]).astype(mo_dtype)
-        else:  # If mo_coeff is not canonical orbital
-            self.mo_coeff = mo_coeff = mo_coeff[:,:,moidx]
-            dm = cc._scf.make_rdm1(cc.mo_coeff, cc.mo_occ)
-            fockao = cc._scf.get_hcore() + cc._scf.get_veff(cc.mol, dm)
-            self.fock = reduce(numpy.dot, (mo_coeff.T, fockao, mo_coeff))
-
-        nocc = cc.nocc()
-        nmo = cc.nmo()
+        nocc = cc.nocc
+        nmo = cc.nmo
         nvir = nmo - nocc
+
+        if mo_coeff is None:
+            # If mo_coeff is not canonical orbital
+            # TODO does this work for k-points? changed to conjugate.
+            raise NotImplementedError
+            mo_coeff = cc.mo_coeff
+        dtype = mo_coeff[0].dtype
+
+        # If we have frozen orbitals then get back the fock/mo_coeff with appropriate padding
+        mo_coeff = pad_frozen_kpt_mo_coeff(cc, mo_coeff)
+
+        # Re-make our fock MO matrix elements from density and fock AO
+        dm = cc._scf.make_rdm1(cc.mo_coeff, cc.mo_occ)
+        fockao = cc._scf.get_hcore() + cc._scf.get_veff(cc._scf.cell, dm)
+        self.fock = numpy.asarray([reduce(numpy.dot,
+                                  (mo_coeff[k].T.conj(), fockao[k], mo_coeff[k]))
+                                  for k, mo in enumerate(mo_coeff)])
+
+        nocc_per_kpt = numpy.asarray(get_nocc(cc, per_kpoint=True))
+        nmo_per_kpt  = numpy.asarray(get_nmo(cc, per_kpoint=True))
+        nvir_per_kpt = nmo_per_kpt - nocc_per_kpt
+        for kp in range(nkpts):
+            mo_e = self.fock[kp].diagonal().real
+            gap = abs(mo_e[:nocc_per_kpt[kp]][:, None] -
+                      mo_e[-nvir_per_kpt[kp]:]).min()
+            if gap < 1e-5:
+                logger.warn(cc, 'HOMO-LUMO gap %s too small for KCCSD at '
+                            'k-point %d %s. May cause issues in convergence.',
+                            gap, kp, cc.kpts[kp])
+
         mem_now = pyscf.lib.current_memory()[0]
         fao2mo = cc._scf.with_df.ao2mo
 
         kconserv = cc.kconserv
         khelper = cc.khelper
-        unique_klist = khelper.get_uniqueList()
-        nUnique_klist = khelper.nUnique
 
         log = logger.Logger(cc.stdout, cc.verbose)
         if False:
@@ -2748,7 +2680,7 @@ class _ERIS:
                 self.ovvvRev  = self.feri1['ovvvRev']
 
                 log.warn('using oovv integrals in memory')
-                new_oovv = numpy.empty( (nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=mo_coeff.dtype)
+                new_oovv = numpy.empty( (nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=dtype)
                 for kp in range(nkpts):
                     for kq in range(nkpts):
                         for kr in range(nkpts):
@@ -2764,7 +2696,7 @@ class _ERIS:
 
             self.feri1 = h5py.File(_tmpfile1_name, 'w', driver='mpio', comm=MPI.COMM_WORLD)
 
-            ds_type = mo_coeff.dtype
+            ds_type = dtype
 
             self.oooo  = self.feri1.create_dataset('oooo',  (nkpts,nkpts,nkpts,nocc,nocc,nocc,nocc), dtype=ds_type)
             self.ooov  = self.feri1.create_dataset('ooov',  (nkpts,nkpts,nkpts,nocc,nocc,nocc,nvir), dtype=ds_type)
@@ -2800,6 +2732,40 @@ class _ERIS:
             loader = mpi_load_balancer.load_balancer(BLKSIZE=BLKSIZE)
             loader.set_ranges((range(nkpts),range(nkpts),range(nkpts),))
 
+            def get_norbitals_from_string(string):
+                '''Converts a string representing a block of integrals to number of orbitals in that block
+
+                A list of conversions is as follows:
+                    'p'    - number of molecule orbitals
+                    'o'    - number of occupied orbitals
+                    'v'    - number of virtual orbitals
+                    'k'    - number of k-points
+                '''
+                if len(string) == 0:
+                    return 0
+
+                chars, counts = np.unique(list(string), return_counts=True)
+                norbitals = 1.
+                for ic, c in enumerate(chars):
+                    if c == 'p':
+                        norbitals *= nmo
+                    elif c == 'o':
+                        norbitals *= nocc
+                    elif c == 'v':
+                        norbitals *= nvir
+                    elif c == 'k':
+                        norbitals *= nkpts
+                    else:
+                        raise ValueError('String %s not allowed.')
+
+                return norbitals
+
+            #array_size = [nkpts, nkpts, nkpts]
+            #task_list = generate_max_task_list(array_size,
+            #                blk_mem_size=1e9*2*16*get_norbitals_from_string('kkoopp'),
+            #                priority_list=[3,2,1])
+            #                        for kirange, kjrange in mpi.work_stealing_partition(task_list):
+
             tmp_block_shape = BLKSIZE + (nocc,nocc,nmo,nmo)
             tmp_block = numpy.empty(shape=tmp_block_shape,dtype=ds_type)
             cput1 = time.clock(), time.time()
@@ -2814,9 +2780,9 @@ class _ERIS:
                     for kq in ranges2:
                         for kr in ranges1:
                             ks = kconserv[kp,kq,kr]
-                            orbo_p = mo_coeff[kp,:,:nocc]
-                            orbo_r = mo_coeff[kr,:,:nocc]
-                            eri_kpt = fao2mo((orbo_p,mo_coeff[kq,:,:],orbo_r,mo_coeff[ks,:,:]),
+                            orbo_p = mo_coeff[kp][:,:nocc]
+                            orbo_r = mo_coeff[kr][:,:nocc]
+                            eri_kpt = fao2mo((orbo_p,mo_coeff[kq][:,:],orbo_r,mo_coeff[ks][:,:]),
                                              (cc.kpts[kp],cc.kpts[kq],cc.kpts[kr],cc.kpts[ks]))
                             eri_kpt = eri_kpt.reshape(nocc,nmo,nocc,nmo)
                             eri_kpt = eri_kpt.transpose(0,2,1,3) / nkpts
@@ -2865,9 +2831,9 @@ class _ERIS:
                     for kq in ranges2:
                        for kr in ranges1:
                             ks = kconserv[kp,kq,kr]
-                            orbo_p = mo_coeff[kp,:,:nocc]
-                            orbv_r = mo_coeff[kr,:,nocc:]
-                            eri_kpt = fao2mo((orbo_p,mo_coeff[kq,:,:],orbv_r,mo_coeff[ks,:,:]),
+                            orbo_p = mo_coeff[kp][:,:nocc]
+                            orbv_r = mo_coeff[kr][:,nocc:]
+                            eri_kpt = fao2mo((orbo_p,mo_coeff[kq][:,:],orbv_r,mo_coeff[ks][:,:]),
                                              (cc.kpts[kp],cc.kpts[kq],cc.kpts[kr],cc.kpts[ks]))
                             eri_kpt = eri_kpt.reshape(nocc,nmo,nvir,nmo)
                             eri_kpt = eri_kpt.transpose(0,2,1,3) / nkpts
@@ -2904,6 +2870,8 @@ class _ERIS:
 
             mem = 0.5e9
             pre = 1.*nvir*nvir*nvir*nvir*16
+            unique_klist = khelper.symm_map.keys()
+            nUnique_klist = len(unique_klist)
             nkpts_blksize = min(max(int(numpy.floor(mem/pre)),1),nUnique_klist)
 
             BLKSIZE = (nkpts_blksize,)
@@ -2927,9 +2895,11 @@ class _ERIS:
                         log.info("vvvv transform is %4.2f percent complete" % (1.*indices/nUnique_klist*100))
                     kp, kq, kr = unique_klist[indices]
                     ks = kconserv[kp,kq,kr]
-                    orbva_p = mo_coeff[kp,:,nocc:]
-                    orbv = mo_coeff[:,:,nocc:]
-                    eri_kpt = fao2mo((orbva_p,orbv[kq],orbv[kr],orbv[ks]),
+                    orbv_p = mo_coeff[kp][:,nocc:]
+                    orbv_q = mo_coeff[kq][:,nocc:]
+                    orbv_r = mo_coeff[kr][:,nocc:]
+                    orbv_s = mo_coeff[ks][:,nocc:]
+                    eri_kpt = fao2mo((orbv_p,orbv_q,orbv_r,orbv_s),
                                      (cc.kpts[kp],cc.kpts[kq],cc.kpts[kr],cc.kpts[ks]))
                     eri_kpt = eri_kpt.reshape(nvir,nvir,nvir,nvir)
                     eri_kpt = eri_kpt.transpose(0,2,1,3) / nkpts
@@ -2969,7 +2939,7 @@ class _ERIS:
             self.ovvvRev  = self.feri1['ovvvRev']
 
             log.warn('using oovv integrals in memory')
-            new_oovv = numpy.empty( (nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=mo_coeff.dtype)
+            new_oovv = numpy.empty( (nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=dtype)
             for kp in range(nkpts):
                 for kq in range(nkpts):
                     for kr in range(nkpts):
@@ -2982,6 +2952,8 @@ class _ERIS:
         if hasattr(self, 'feri1'):
             #for key in self.feri1.keys(): del(self.feri1[key])
             self.feri1.close()
+
+CCSD = RCCSD
 
 class _IMDS:
     def __init__(self, cc):

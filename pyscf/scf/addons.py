@@ -25,7 +25,10 @@ from pyscf import lib
 from pyscf.gto import mole
 from pyscf.lib import logger
 from pyscf.scf import hf
+from pyscf import __config__
 
+LINEAR_DEP_THRESHOLD = getattr(__config__, 'scf_addons_remove_linear_dep_threshold', 1e-8)
+LINEAR_DEP_TRIGGER = getattr(__config__, 'scf_addons_remove_linear_dep_trigger', 1e-10)
 
 def frac_occ_(mf, tol=1e-3):
     from pyscf.scf import uhf, rohf
@@ -396,7 +399,8 @@ def project_dm_r2r(mol1, dm1, mol2):
         return lib.einsum('pi,nij,qj->npq', p21, dm1, p21.conj())
 
 
-def remove_linear_dep_(mf, threshold=1e-8, lindep=1e-14):
+def remove_linear_dep_(mf, threshold=LINEAR_DEP_THRESHOLD,
+                       lindep=LINEAR_DEP_TRIGGER):
     '''
     Args:
         threshold : float
@@ -411,6 +415,8 @@ def remove_linear_dep_(mf, threshold=1e-8, lindep=1e-14):
     if cond < 1./lindep:
         return mf
 
+    logger.info(mf, 'Applying remove_linear_dep_ on SCF obejct.')
+    logger.debug(mf, 'Overlap condition number %g', cond)
     def eigh(h, s):
         d, t = numpy.linalg.eigh(s)
         x = t[:,d>threshold] / numpy.sqrt(d[d>threshold])
@@ -449,19 +455,21 @@ def convert_to_uhf(mf, out=None, remove_df=False):
 
     def update_mo_(mf, mf1):
         if mf.mo_energy is not None:
-            mf1.mo_energy = numpy.array((mf.mo_energy, mf.mo_energy))
-            mf1.mo_coeff = (mf.mo_coeff, mf.mo_coeff)
-            if hasattr(mf.mo_coeff, 'orbsym'):
-                orbsym = mf.mo_coeff.orbsym
-                mf1.mo_coeff = (lib.tag_array(mf1.mo_coeff[0], orbsym=orbsym),
-                                lib.tag_array(mf1.mo_coeff[1], orbsym=orbsym))
-            if getattr(mf.mo_occ, 'ndim', None) == 1:  # RHF
-                mf1.mo_occ = numpy.array((mf.mo_occ>0, mf.mo_occ==2), dtype=numpy.double)
-            elif getattr(mf.mo_occ[0], 'ndim', None) == 1:  # UHF
+            if isinstance(mf, scf.uhf.UHF):
                 mf1.mo_occ = mf.mo_occ
+                mf1.mo_coeff = mf.mo_coeff
+                mf1.mo_energy = mf.mo_energy
+            elif not hasattr(mf, 'kpts'):  # UHF
+                mf1.mo_occ = numpy.array((mf.mo_occ>0, mf.mo_occ==2), dtype=numpy.double)
+                mf1.mo_energy = (mf.mo_energy, mf.mo_energy)
+                mf1.mo_coeff = (mf.mo_coeff, mf.mo_coeff)
             else:  # This to handle KRHF object
-                mf1.mo_occ = [numpy.array((occ>0, occ==2), dtype=numpy.double)
-                              for occ in mf.mo_occ]
+                mf1.mo_occ = ([numpy.asarray(occ> 0, dtype=numpy.double)
+                               for occ in mf.mo_occ],
+                              [numpy.asarray(occ==2, dtype=numpy.double)
+                               for occ in mf.mo_occ])
+                mf1.mo_energy = (mf.mo_energy, mf.mo_energy)
+                mf1.mo_coeff = (mf.mo_coeff, mf.mo_coeff)
         return mf1
 
     if isinstance(mf, scf.ghf.GHF):
@@ -507,11 +515,9 @@ def _object_without_soscf(mf, known_class, remove_df=False):
 
     if obj is None:
         raise NotImplementedError(
-            "Incompatible object types. Mean-field `mf` class not found in `known_class` "
-            "type. \nThis can happen when running a (RHF/UHF/GHF/etc.) mean-field calculation "
-            "and having no known \nconversion to a (RHF/UHF/GHF/etc.) correlated "
-            "calculation. Change the correlated calculation between unrestricted/restricted? "
-            "\n\nmf = '%s'\n\nknown_class = '%s'" % (mf.__class__.__mro__, known_class))
+            "Incompatible object types. Mean-field `mf` class not found in "
+            "`known_class` type.\n\nmf = '%s'\n\nknown_class = '%s'" %
+            (mf.__class__.__mro__, known_class))
 
 # Mimic the initialization procedure to restore the Hamiltonian
     for cls in reversed(sub_classes):
@@ -566,17 +572,26 @@ def convert_to_rhf(mf, out=None, remove_df=False):
 
     def update_mo_(mf, mf1):
         if mf.mo_energy is not None:
-            mf1.mo_energy = mf.mo_energy[0]
-            mf1.mo_coeff =  mf.mo_coeff[0]
-            if hasattr(mf.mo_coeff[0], 'orbsym'):
-                mf1.mo_coeff = lib.tag_array(mf1.mo_coeff, orbsym=mf.mo_coeff[0].orbsym)
-            if getattr(mf.mo_occ, 'ndim', None) == 1:
+            if isinstance(mf, scf.hf.RHF): # RHF/ROHF/KRHF/KROHF
                 mf1.mo_occ = mf.mo_occ
-            elif getattr(mf.mo_occ[0], 'ndim', None) == 1:  # UHF
+                mf1.mo_coeff = mf.mo_coeff
+                mf1.mo_energy = mf.mo_energy
+            elif not hasattr(mf, 'kpts'):  # UHF
                 mf1.mo_occ = mf.mo_occ[0] + mf.mo_occ[1]
-            else:  # This to handle KUHF object
+                mf1.mo_energy = mf.mo_energy[0]
+                mf1.mo_coeff =  mf.mo_coeff[0]
+                if hasattr(mf.mo_coeff[0], 'orbsym'):
+                    mf1.mo_coeff = lib.tag_array(mf1.mo_coeff, orbsym=mf.mo_coeff[0].orbsym)
+            else:  # KUHF
                 mf1.mo_occ = [occa+occb for occa, occb in zip(*mf.mo_occ)]
+                mf1.mo_energy = mf.mo_energy[0]
+                mf1.mo_coeff =  mf.mo_coeff[0]
         return mf1
+
+    if getattr(mf, 'nelec', None) is None:
+        nelec = mf.mol.nelec
+    else:
+        nelec = mf.nelec
 
     if isinstance(mf, scf.ghf.GHF):
         raise NotImplementedError
@@ -585,17 +600,28 @@ def convert_to_rhf(mf, out=None, remove_df=False):
         assert(isinstance(out, scf.hf.RHF))
         out = _update_mf_without_soscf(mf, out, remove_df)
 
-    elif isinstance(mf, scf.hf.RHF):
+    elif (isinstance(mf, scf.hf.RHF) or
+          (nelec[0] != nelec[1] and isinstance(mf, scf.rohf.ROHF))):
         if hasattr(mf, '_scf'):
             return _update_mf_without_soscf(mf, copy.copy(mf._scf), remove_df)
         else:
             return copy.copy(mf)
 
     else:
-        known_cls = {scf.uhf.UHF      : scf.rohf.ROHF,
-                     scf.uhf_symm.UHF : scf.hf_symm.ROHF,
-                     dft.uks.UKS      : dft.roks.ROKS,
-                     dft.uks_symm.UKS : dft.rks_symm.ROKS}
+        if nelec[0] == nelec[1]:
+            known_cls = {scf.uhf.UHF      : scf.hf.RHF      ,
+                         scf.uhf_symm.UHF : scf.hf_symm.RHF ,
+                         dft.uks.UKS      : dft.rks.RKS     ,
+                         dft.uks_symm.UKS : dft.rks_symm.RKS,
+                         scf.rohf.ROHF    : scf.hf.RHF      ,
+                         scf.hf_symm.ROHF : scf.hf_symm.RHF ,
+                         dft.roks.ROKS    : dft.rks.RKS     ,
+                         dft.rks_symm.ROKS: dft.rks_symm.RKS}
+        else:
+            known_cls = {scf.uhf.UHF      : scf.rohf.ROHF    ,
+                         scf.uhf_symm.UHF : scf.hf_symm.ROHF ,
+                         dft.uks.UKS      : dft.roks.ROKS    ,
+                         dft.uks_symm.UKS : dft.rks_symm.ROKS}
         out = _object_without_soscf(mf, known_cls, remove_df)
 
     return update_mo_(mf, out)
@@ -736,3 +762,5 @@ def get_ghf_orbspin(mo_energy, mo_occ, is_rhf=None):
         orbspin = numpy.append(numpy.array([0]*nocca+[1]*noccb)[oidx],
                                numpy.array([0]*nvira+[1]*nvirb)[vidx])
     return orbspin
+
+del(LINEAR_DEP_THRESHOLD, LINEAR_DEP_TRIGGER)

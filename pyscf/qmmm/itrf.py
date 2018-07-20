@@ -86,13 +86,19 @@ def mm_charge(scf_method, coords, charges, unit=None):
                     mol.set_rinv_origin(coords[i])
                     v += mol.intor('int1e_rinv') * -q
             else:
-                fakemol = gto.fakemol_for_charges(coords)
                 if mol.cart:
                     intor = 'int3c2e_cart'
                 else:
                     intor = 'int3c2e_sph'
-                j3c = df.incore.aux_e2(mol, fakemol, intor=intor, aosym='s2ij')
-                v = lib.unpack_tril(numpy.einsum('xk,k->x', j3c, -charges))
+                nao = mol.nao
+                max_memory = self.max_memory - lib.current_memory()[0]
+                blksize = int(max(max_memory*1e6/8/nao**2, 400))
+                v = 0
+                for i0, i1 in lib.prange(0, charges.size, blksize):
+                    fakemol = gto.fakemol_for_charges(coords[i0:i1])
+                    j3c = df.incore.aux_e2(mol, fakemol, intor=intor, aosym='s2ij')
+                    v += numpy.einsum('xk,k->x', j3c, -charges[i0:i1])
+                v = lib.unpack_tril(v)
             return h1e + v
 
         def energy_nuc(self):
@@ -109,6 +115,7 @@ def mm_charge(scf_method, coords, charges, unit=None):
             return mm_charge_grad(scf_grad, coords, charges, 'Bohr')
 
     return QMMM()
+add_mm_charges = mm_charge
 
 def mm_charge_grad(scf_grad, coords, charges, unit=None):
     '''Apply the MM charges in the QM gradients' method.  It affects both the
@@ -166,11 +173,19 @@ def mm_charge_grad(scf_grad, coords, charges, unit=None):
                     mol.set_rinv_origin(coords[i])
                     v += mol.intor('int1e_iprinv', comp=3) * q
             else:
-                fakemol = gto.fakemol_for_charges(coords)
-                j3c = df.incore.aux_e2(mol, fakemol, intor='int3c2e_ip1',
-                                       aosym='s1', comp=3).reshape(3,nao,nao,-1)
-                v = numpy.einsum('ipqk,k->ipq', j3c, charges)
-            return scf_grad.get_hcore(mol) - v
+                if mol.cart:
+                    intor = 'int3c2e_ip1_cart'
+                else:
+                    intor = 'int3c2e_ip1_sph'
+                nao = mol.nao
+                max_memory = self.max_memory - lib.current_memory()[0]
+                blksize = int(max(max_memory*1e6/8/nao**2, 400))
+                v = 0
+                for i0, i1 in lib.prange(0, charges.size, blksize):
+                    fakemol = gto.fakemol_for_charges(coords[i0:i1])
+                    j3c = df.incore.aux_e2(mol, fakemol, intor, aosym='s1', comp=3)
+                    v += numpy.einsum('ipqk,k->ipq', j3c, charges[i0:i1])
+            return scf_grad.get_hcore(mol) + v
 
         def grad_nuc(self, mol=None, atmlst=None):
             if mol is None: mol = scf_grad.mol
@@ -207,16 +222,28 @@ if __name__ == '__main__':
     charges = [-0.5]
     mf = mm_charge(scf.RHF(mol), coords, charges)
     print(mf.kernel()) # -76.3206550372
-    mycc = cc.ccsd.CCSD(mf)
-    mycc.conv_tol = 1e-10
-    mycc.conv_tol_normt = 1e-10
-    ecc, t1, t2 = mycc.kernel() # ecc = -0.228939687075
-    l1, l2 = mycc.solve_lambda()[1:]
 
-    hfg = mm_charge_grad(grad.RHF(mf), coords, charges)
-    g1 = grad.ccsd.kernel(mycc, t1, t2, l1, l2, mf_grad=hfg)
-    print(g1)
-# [[-0.50179182 -0.61489747 -0.96396085]
-#  [-0.077348   -0.23457358  0.02839861]
-#  [-0.44182244  0.14559838 -0.22348068]]
+    mfs = mf.as_scanner()
+    e1 = mfs(''' O                  0.00100000    0.00000000   -0.11081188
+             H                 -0.00000000   -0.84695236    0.59109389
+             H                 -0.00000000    0.89830571    0.52404783 ''')
+    e2 = mfs(''' O                 -0.00100000    0.00000000   -0.11081188
+             H                 -0.00000000   -0.84695236    0.59109389
+             H                 -0.00000000    0.89830571    0.52404783 ''')
+    print((e1 - e2)/0.002 * lib.param.BOHR)
+    mf.nuc_grad_method().kernel()
+
+
+    mycc = cc.ccsd.CCSD(mf)
+    ecc, t1, t2 = mycc.kernel() # ecc = -0.228939687075
+
+    mycc.nuc_grad_method().kernel()
+    ccs = mycc.as_scanner()
+    e1 = ccs(''' O                  0.00100000    0.00000000   -0.11081188
+             H                 -0.00000000   -0.84695236    0.59109389
+             H                 -0.00000000    0.89830571    0.52404783 ''')
+    e2 = ccs(''' O                 -0.00100000    0.00000000   -0.11081188
+             H                 -0.00000000   -0.84695236    0.59109389
+             H                 -0.00000000    0.89830571    0.52404783 ''')
+    print((e1 - e2)/0.002 * lib.param.BOHR)
 

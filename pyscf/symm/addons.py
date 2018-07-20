@@ -158,7 +158,8 @@ def symmetrize_orb(mol, mo, orbsym=None, s=None,
     return mo1
 
 def symmetrize_space(mol, mo, s=None,
-                     check=getattr(__config__, 'symm_addons_symmetrize_space_check', True)):
+                     check=getattr(__config__, 'symm_addons_symmetrize_space_check', True),
+                     tol=getattr(__config__, 'symm_addons_symmetrize_space_tol', 1e-7)):
     '''Symmetrize the given orbital space.
 
     This function is different to the :func:`symmetrize_orb`:  In this function,
@@ -192,8 +193,8 @@ def symmetrize_space(mol, mo, s=None,
         s = mol.intor_symmetric('int1e_ovlp')
     nmo = mo.shape[1]
     s_mo = numpy.dot(s, mo)
-    if check:
-        assert(numpy.allclose(numpy.dot(mo.T.conj(), s_mo), numpy.eye(nmo)))
+    if check and abs(numpy.dot(mo.conj().T, s_mo) - numpy.eye(nmo)).max() > tol:
+            raise ValueError('Orbitals are not orthogonalized')
 
     mo1 = []
     for i, csym in enumerate(mol.symm_orb):
@@ -217,18 +218,18 @@ def symmetrize_space(mol, mo, s=None,
             mo1.append(numpy.dot(csym, u[:,abs(1-e) < 1e-6]))
     mo1 = numpy.hstack(mo1)
     if mo1.shape[1] != nmo:
-        raise ValueError('The input orbital space is not symmetrized.\n It is '
-                         'probably because the input mol and orbitals are of '
-                         'different orientation.')
-    snorm = numpy.linalg.norm(reduce(numpy.dot, (mo1.T, s, mo1)) - numpy.eye(nmo))
-    if check and snorm > 1e-6:
+        raise ValueError('The input orbital space is not symmetrized.\n One '
+                         'possible reason is that the input mol and orbitals '
+                         'are of different orientation.')
+    if (check and
+        abs(reduce(numpy.dot, (mo1.conj().T, s, mo1)) - numpy.eye(nmo)).max() > tol):
         raise ValueError('Orbitals are not orthogonalized')
     idx = mo_mapping.mo_1to1map(reduce(numpy.dot, (mo.T, s, mo1)))
     return mo1[:,idx]
 
 def std_symb(gpname):
     '''std_symb('d2h') returns D2h; std_symb('D2H') returns D2h'''
-    return gpname[0].upper() + gpname[1:].lower()
+    return str(gpname[0].upper() + gpname[1:].lower())
 
 def irrep_name2id(gpname, symb):
     '''Convert the irrep symbol to internal irrep ID
