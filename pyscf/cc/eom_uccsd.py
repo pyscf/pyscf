@@ -434,12 +434,10 @@ def spatial2spin_ea(r1, r2, orbspin=None):
     lib.takebak_2d(r2, r2aba, idxoa.ravel(), idxvba.ravel())
     lib.takebak_2d(r2, r2bab, idxob.ravel(), idxvab.ravel())
     lib.takebak_2d(r2, r2bbb, idxob.ravel(), idxvbb.ravel())
-    #r2aab = -r2aba
-    #r2bba = -r2bab
-    #lib.takebak_2d(r2, -r2aba.reshape(nocc_a, nvir_b, nvir_a).transpose(0, 2, 1).reshape(nocc_a, -1),
-    #               idxoa.ravel(), idxvab.ravel())
-    #lib.takebak_2d(r2, -r2bab.reshape(nocc_b, nvir_a, nvir_b).transpose(0, 2, 1).reshape(nocc_b, -1),
-    #               idxob.ravel(), idxvba.ravel())
+    r2aab = -r2aba
+    r2bba = -r2bab
+    lib.takebak_2d(r2, r2aab, idxoa.ravel(), idxvab.T.ravel())
+    lib.takebak_2d(r2, r2bba, idxob.ravel(), idxvba.T.ravel())
     return r1, r2.reshape(nocc, nvir, nvir)
 
 def spin2spatial_ea(r1, r2, orbspin):
@@ -519,7 +517,7 @@ def eaccsd_matvec(eom, vector, imds=None, diag=None):
     #r2aab = np.zeros((nocc_a, nvir_a, nvir_b), dtype=r2.dtype)
     #r2baa = np.zeros((nocc_b, nvir_a, nvir_a), dtype=r2.dtype)
     #r2abb = np.zeros((nocc_a, nvir_b, nvir_b), dtype=r2.dtype)
-    ##print np.linalg.norm(r2)
+
     #r2 = r2.reshape(nocc, nvir**2)
     #r2bba = lib.take_2d(r2, idxob.ravel(), idxvba.ravel())
     #r2aab = lib.take_2d(r2, idxoa.ravel(), idxvab.ravel())
@@ -543,6 +541,8 @@ def eaccsd_matvec(eom, vector, imds=None, diag=None):
     #print np.linalg.norm(lib.take_2d(new_r2, idxoa.ravel(), idxvaa.ravel()).ravel() - r2aaa.ravel())
     #print np.linalg.norm(lib.take_2d(new_r2, idxoa.ravel(), idxvba.ravel()).ravel() - r2aba.ravel())
     #print np.linalg.norm(lib.take_2d(new_r2, idxoa.ravel(), idxvab.ravel()).ravel() - r2aab.ravel())
+    #print np.linalg.norm(lib.take_2d(r2, idxoa.ravel(), idxvab.ravel()).ravel() -
+    #                     lib.take_2d(new_r2, idxoa.ravel(), idxvab.ravel()).ravel())
     #print np.linalg.norm(lib.take_2d(new_r2, idxoa.ravel(), idxvbb.ravel()).ravel())
 
     #print np.linalg.norm(lib.take_2d(new_r2, idxob.ravel(), idxvab.ravel()).ravel() - r2bab.ravel())
@@ -2348,20 +2348,20 @@ def enforce_symm_2p_spin(r1, r2, orbspin, excitation):
     idxvbb = idxvb[:,None] * nvir + idxvb
 
     if excitation == 'ip':
+        r2 = r2 - r2.transpose(1, 0, 2)
+
         r2 = r2.reshape(nocc**2, nvir)
         r2[idxobb.ravel()[:, None], idxva.ravel()] = 0.0
         r2[idxoaa.ravel()[:, None], idxvb.ravel()] = 0.0
         r2 = r2.reshape(nocc, nocc, nvir)
 
-        r2 = r2 - r2.transpose(1, 0, 2)
-
     if excitation == 'ea':
+        r2 = r2 - r2.transpose(0, 2, 1)
+
         r2 = r2.reshape(nocc, nvir**2)
         r2[idxoa.ravel(), idxvbb.ravel()[:, None]] = 0.0
         r2[idxob.ravel(), idxvaa.ravel()[:, None]] = 0.0
         r2 = r2.reshape(nocc, nvir, nvir)
-
-        r2 = r2 - r2.transpose(0, 2, 1)
 
     return r1, r2
 
@@ -2444,7 +2444,7 @@ if __name__ == '__main__':
     #Hr1, Hr2 = myeom.vector_to_amplitudes(Hvector)
 
     #from pyscf.lib import finger
-    #print abs(finger(Hvector) - (-4.00030518144+11.8603597063j))
+    #print abs(finger(Hvector) - (10.4846030761+36.6222173009j))
 
     # EOM-EA
     myeom = EOMEA(mygcc)
