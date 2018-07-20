@@ -501,6 +501,10 @@ def eaccsd_matvec(eom, vector, imds=None, diag=None):
     nvir_b = len(idxvb)
 
     [r1a, r1b], [r2aaa, r2aba, r2bab, r2bbb] = spin2spatial_ea(r1, r2, orbspin)
+    r2aaa = r2[np.ix_(idxoa,idxva,idxva)]
+    r2aba = r2[np.ix_(idxoa,idxvb,idxva)]
+    r2bab = r2[np.ix_(idxob,idxva,idxvb)]
+    r2bbb = r2[np.ix_(idxob,idxvb,idxvb)]
 
     # DONT MIND ME :) just for checking...
 
@@ -584,8 +588,8 @@ def eaccsd_matvec(eom, vector, imds=None, diag=None):
     tmp1 = lib.einsum('ac,jcb->jab', imds.Fvv, r2)
     Hr2 += tmp1 - tmp1.transpose(0,2,1)
     Hr2 -= lib.einsum('lj,lab->jab', imds.Foo, r2)
-    tmp2 = lib.einsum('lbdj,lad->jab', imds.Wovvo, r2)
-    Hr2 += tmp2 - tmp2.transpose(0,2,1)
+    #tmp2 = lib.einsum('lbdj,lad->jab', imds.Wovvo, r2)
+    #Hr2 += tmp2 - tmp2.transpose(0,2,1)
     Hr2 += 0.5*lib.einsum('abcd,jcd->jab', imds.Wvvvv, r2)
     Hr2 -= 0.5*lib.einsum('klcd,lcd,kjab->jab', imds.Woovv, r2, imds.t2)
 
@@ -596,6 +600,23 @@ def eaccsd_matvec(eom, vector, imds=None, diag=None):
     Hr2aba = np.zeros_like(r2aba)
     Hr2bab = np.zeros_like(r2bab)
     Hr2bbb = np.zeros_like(r2bbb)
+
+    # Wovvo
+    tmp2aa = lib.einsum('ldbj,lad->jab', Wovvo, r2aaa)
+    tmp2aa += lib.einsum('ldbj,lad->jab', WOVvo, r2bab)
+    Hr2aaa += tmp2aa - tmp2aa.transpose(0,2,1)
+
+    Hr2bab += lib.einsum('ldbj,lad->jab',WovVO, r2aaa)
+    Hr2bab += lib.einsum('ldbj,lad->jab',WOVVO, r2bab)
+    Hr2bab -= lib.einsum('ljad,ldb->jab',WOOvv, r2bab)
+
+    Hr2aba += lib.einsum('ldbj,lad->jab',WOVvo, r2bbb)
+    Hr2aba += lib.einsum('ldbj,lad->jab',Wovvo, r2aba)
+    Hr2aba -= lib.einsum('ljad,ldb->jab',WooVV, r2aba)
+
+    tmp2bb = lib.einsum('ldbj,lad->jab', WOVVO, r2bbb)
+    tmp2bb += lib.einsum('ldbj,lad->jab', WovVO, r2aba)
+    Hr2bbb += tmp2bb - tmp2bb.transpose(0,2,1)
 
     new_Hr1, new_Hr2 = spatial2spin_ea([Hr1a, Hr1b], [Hr2aaa, Hr2aba, Hr2bab, Hr2bbb], orbspin)
     vector = amplitudes_to_vector_ea(Hr1, Hr2)
