@@ -1122,8 +1122,10 @@ class _ERIS:#(pyscf.cc.ccsd._ChemistsERIs):
                                   for k, mo in enumerate(mo_coeff)])
 
         nocc_per_kpt = numpy.asarray(get_nocc(cc, per_kpoint=True))
+        print nocc_per_kpt
         nmo_per_kpt  = numpy.asarray(get_nmo(cc, per_kpoint=True))
         nvir_per_kpt = nmo_per_kpt - nocc_per_kpt
+        print self.fock
         for kp in range(nkpts):
             mo_e = self.fock[kp].diagonal().real
             gap = abs(mo_e[:nocc_per_kpt[kp]][:, None] -

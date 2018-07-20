@@ -170,18 +170,19 @@ def ipccsd_matvec(eom, vector, imds=None, diag=None):
     Fvv, FVV = Fvv_spatial
 
     # Eq. (8)
-    Hr1 = -np.einsum('mi,m->i', Foo_spin, r1)
-    Hr1 += np.einsum('me,mie->i', Fov_spin, r2)
-    Hr1 += -0.5*np.einsum('nmie,mne->i', imds.Wooov, r2)
-    # Eq. (9) # start here
-    Hr2 = 0.0 * lib.einsum('ae,ije->ija', Fvv_spin, r2)
-    #tmp1 = lib.einsum('mi,mja->ija', Foo_spin, r2)
-    #Hr2 += -tmp1 + tmp1.transpose(1,0,2)
-    #Hr2 += -(np.einsum('maji,m->ija', imds.Wovoo, r1))
+    #Hr1 = -np.einsum('mi,m->i', Foo_spin, r1)
+    #Hr1 = np.einsum('me,mie->i', Fov_spin, r2)
+    Hr1 = -0.5*np.einsum('nmie,mne->i', imds.Wooov, r2)
+    Hr1 = np.zeros(Hr1.shape)
+    # Eq. (9)
+    Hr2 =  lib.einsum('ae,ije->ija', Fvv_spin, r2)
+    tmp1 = lib.einsum('mi,mja->ija', Foo_spin, r2)
+    Hr2 -= tmp1 - tmp1.transpose(1,0,2)
+    Hr2 -= np.einsum('maji,m->ija', imds.Wovoo, r1)
     #Hr2 += 0.5*lib.einsum('mnij,mna->ija', imds.Woooo, r2)
-    #tmp2 = lib.einsum('maei,mje->ija', imds.Wovvo, r2)
-    #Hr2 += tmp2 - tmp2.transpose(1,0,2)
-    #Hr2 += 0.5*lib.einsum('mnef,mnf,ijae->ija', imds.Woovv, r2, imds.t2)
+    tmp2 = lib.einsum('maei,mje->ija', imds.Wovvo, r2)
+    Hr2 += tmp2 - tmp2.transpose(1,0,2)
+    Hr2 += 0.5*lib.einsum('mnef,mnf,ijae->ija', imds.Woovv, r2, imds.t2)
 
     Hr1a = np.zeros_like(r1a)
     Hr1b = np.zeros_like(r1b)
@@ -227,6 +228,26 @@ def ipccsd_matvec(eom, vector, imds=None, diag=None):
     Hr2abb += lib.einsum('MEBJ,iME->iJB', WOVVO, r2abb)
     Hr2abb += lib.einsum('meBJ,ime->iJB', WovVO, r2aaa)
     Hr2abb += -lib.einsum('miBE,mJE->iJB', WooVV, r2abb)
+    
+    #First term in Eq 44)
+    Hr1a += -np.einsum('mi,m->i', Foo_spatial[0], r1a)
+    Hr1b += -np.einsum('MI,M->I', Foo_spatial[1], r1b) 
+    
+    Hr1a += np.einsum('me,mie->i', Fov_spatial[0], r2aaa)
+    Hr1a -= np.einsum('ME,iME->i', Fov_spatial[0], r2abb)
+    Hr1b += np.einsum('ME,MIE->I', Fov_spatial[1], r2bbb)
+    Hr1b -= np.einsum('me,Ime->I', Fov_spatial[1], r2baa)
+
+    Hr1a += -0.5*np.einsum('nime,mne->i', Wooov, r2aaa)
+    Hr1a +=  np.einsum('NIme,Nme->I', WOOov, r2baa)
+    Hr1a += -0.5*np.einsum('NIME,MNE->I', WOOOV, r2bbb)
+    Hr1a +=  np.einsum('niME,nME->i', WooOV, r2abb)
+   
+    # Woooo term
+    Hr2aaa += 0.5*lib.einsum('minj,mna->ija', Woooo, r2aaa)
+    Hr2abb += lib.einsum('miNJ,mNA->iJA', WooOO, r2abb)
+    Hr2bbb += 0.5*lib.einsum('MINJ,MNA->IJA', WOOOO, r2bbb)
+    Hr2baa += lib.einsum('MInj,Mna->Ija', WOOoo, r2baa)
 
     Hr2baa += lib.einsum('meaj,Ime->Ija', Wovvo, r2baa)
     Hr2baa += lib.einsum('MEaj,IME->Ija', WOVvo, r2bbb)
@@ -259,19 +280,42 @@ def ipccsd_diag(eom, imds=None):
     t1, t2 = imds.t1, imds.t2
     nocc, nvir = t1.shape
 
+    Fvv_spatial = _eri_spin2spatial(imds.Fvv, 'vv', eom._cc.mo_coeff.orbspin, nocc)
+    Foo_spatial = _eri_spin2spatial(imds.Foo, 'oo', eom._cc.mo_coeff.orbspin, nocc)
+
     Hr1 = -np.diag(imds.Foo)
     Hr2 = np.zeros((nocc,nocc,nvir), dtype=t1.dtype)
     for i in range(nocc):
         for j in range(nocc):
+            iterator=0
+            for a in range(nvir/2):
+                #Hr2[i,j,a] += imds.Fvv[a,a]
+                for b in range(nvir/2):
+                    Hr2[i,j,iterator] += Fvv_spatial[b][a,a]
+                    iterator+=1
+        
             for a in range(nvir):
-                Hr2[i,j,a] += imds.Fvv[a,a]
-                Hr2[i,j,a] += -imds.Foo[i,i]
+                #Hr2[i,j,a] += -imds.Foo[i,i]
                 Hr2[i,j,a] += -imds.Foo[j,j]
                 Hr2[i,j,a] += 0.5*(imds.Woooo[i,j,i,j]-imds.Woooo[j,i,i,j])
                 Hr2[i,j,a] += imds.Wovvo[i,a,a,i]
                 Hr2[i,j,a] += imds.Wovvo[j,a,a,j]
                 Hr2[i,j,a] += 0.5*(np.dot(imds.Woovv[i,j,:,a], t2[i,j,a,:])
                                   -np.dot(imds.Woovv[j,i,:,a], t2[i,j,a,:]))
+    for i in range(nocc/2):
+       for j in range(nocc/2):
+          iterator = 0
+          for a in range(nvir):
+             for b in range(nvir/2):
+                if i < 5 and j < 5:
+                   Hr2[i,j,a] -= Foo_spatial[b][i,i]
+                   #Hr2[i,j,a] -= Foo_spatial[b][j,j]
+                   iterator += 1
+                else:
+                   Hr2[i,j,a] -= Foo_spatial[b][i-(nocc/2), i-(nocc/2)]
+                   #Hr2[i,j,a] -= Foo_spatial[b][j-(nocc/2), j-(nocc/2)]
+                   iterator += 1   
+            
 
     vector = amplitudes_to_vector_ip(Hr1, Hr2)
     return vector
