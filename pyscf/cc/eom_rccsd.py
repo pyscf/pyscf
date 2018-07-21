@@ -399,7 +399,7 @@ class EOMIP(EOM):
         return nocc + nocc*nocc*nvir
 
     def make_imds(self, eris=None):
-        imds = _IMDS(self._cc, eris)
+        imds = _IMDS(self._cc, eris=eris)
         imds.make_ip(self.partition)
         return imds
 
@@ -678,7 +678,7 @@ class EOMEA(EOM):
         return nvir + nocc*nvir*nvir
 
     def make_imds(self, eris=None):
-        imds = _IMDS(self._cc, eris)
+        imds = _IMDS(self._cc, eris=eris)
         imds.make_ea(self.partition)
         return imds
 
@@ -1305,7 +1305,7 @@ class EOMEE(EOM):
         return nocc*nvir + nocc*nocc*nvir*nvir
 
     def make_imds(self, eris=None):
-        imds = _IMDS(self._cc, eris)
+        imds = _IMDS(self._cc, eris=eris)
         imds.make_ee()
         return imds
 
