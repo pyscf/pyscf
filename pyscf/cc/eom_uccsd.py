@@ -580,9 +580,9 @@ def eaccsd_matvec(eom, vector, imds=None, diag=None):
     Fvv, FVV = Fvv_spatial
 
     # Eq. (30)
-    Hr1  = np.einsum('ac,c->a', imds.Fvv, r1)
-    Hr1 += np.einsum('ld,lad->a', imds.Fov, r2)
-    Hr1 += 0.5*np.einsum('alcd,lcd->a', imds.Wvovv, r2)
+    #Hr1  = np.einsum('ac,c->a', imds.Fvv, r1)
+    #Hr1 += np.einsum('ld,lad->a', imds.Fov, r2)
+    Hr1 = 0.5*np.einsum('alcd,lcd->a', imds.Wvovv, r2)
     # Eq. (31)
     Hr2 = np.einsum('abcj,c->jab', imds.Wvvvo, r1)
     tmp1 = lib.einsum('ac,jcb->jab', imds.Fvv, r2)
@@ -600,7 +600,17 @@ def eaccsd_matvec(eom, vector, imds=None, diag=None):
     Hr2aba = np.zeros_like(r2aba)
     Hr2bab = np.zeros_like(r2bab)
     Hr2bbb = np.zeros_like(r2bbb)
+    
+    # Fvv terms
+    Hr1a += np.einsum('ac,c->a', Fvv_spatial[0], r1a)
+    Hr1b += np.einsum('AC,C->A', Fvv_spatial[1], r1b)
 
+    # Fov terms
+    Hr1a += np.einsum('ld,lad->a', Fov_spatial[0], r2aaa)
+    Hr1a += np.einsum('LD,LaD->a', Fov_spatial[1], r2bab)
+    Hr1b += np.einsum('ld,lAd->A', Fov_spatial[0], r2aba)
+    Hr1b += np.einsum('LD,LAD->A', Fov_spatial[1], r2bbb)
+    
     # Wovvo
     tmp2aa = lib.einsum('ldbj,lad->jab', Wovvo, r2aaa)
     tmp2aa += lib.einsum('ldbj,lad->jab', WOVvo, r2bab)
