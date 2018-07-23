@@ -1547,7 +1547,7 @@ class _IMDS:
         tmp = None
         ovoo = eris_ovoo*2 - eris_ovoo.transpose(2,1,0,3)
         self.woVoO += lib.einsum('nemi,njeb->mbij', ovoo, theta) * .5
-        self.woOoV = eris_ovoo.transpose(2,0,3,1).copy()
+        self.woOoV = np.array(eris_ovoo.transpose(2,0,3,1), dtype=t1.dtype)
         self.Foo += np.einsum('ne,nemi->mi', t1, ovoo)
         ovoo = None
 
