@@ -112,7 +112,7 @@ def eval_mat(cell, weights, shls_slice=None, comp=1, hermi=0,
     if submesh is None:
         submesh = mesh
     # log_prec is used to estimate the gto_rcut. Add EXTRA_PREC to count
-    # the factors and coefficients in the integral
+    # other possible factors and coefficients in the integral.
     log_prec = numpy.log(cell.precision * EXTRA_PREC)
 
     if abs(a-numpy.diag(a.diagonal())).max() < 1e-12:
@@ -456,7 +456,7 @@ def _eval_rhoG(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), deriv=0,
         log.debug('Multigrid ntasks %s', len(tasks))
 
     assert(deriv < 2)
-    hermi = hermi and abs(dms - dms.transpose(0,1,3,2).conj()).max() < 1e-9
+    #hermi = hermi and abs(dms - dms.transpose(0,1,3,2).conj()).max() < 1e-9
     gga_high_order = False
     if deriv == 0:
         xctype = 'LDA'

@@ -8,7 +8,8 @@ from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import multigrid
 
 from pyscf.pbc.dft.multigrid import eval_mat, eval_rho
-multigrid.EXPDROP = 1e-18
+multigrid.EXPDROP = 1e-14
+multigrid.EXTRA_PREC = 1e-3
 
 def uncontract(cell):
     pcell, contr_coeff = cell.to_uncontracted_cartesian_basis()
