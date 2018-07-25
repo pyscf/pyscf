@@ -620,7 +620,7 @@ def eaccsd_matvec(eom, vector, imds=None, diag=None):
     #Hr1 += np.einsum('ld,lad->a', imds.Fov, r2)
     Hr1 = 0.5*np.einsum('alcd,lcd->a', imds.Wvovv, r2)
     # Eq. (31)
-    Hr2 = np.einsum('abcj,c->jab', imds.Wvvvo, r1)
+    Hr2 = 0.0 * np.einsum('abcj,c->jab', imds.Wvvvo, r1)
     #tmp1 = lib.einsum('ac,jcb->jab', imds.Fvv, r2)
     #Hr2 += tmp1 - tmp1.transpose(0,2,1)
     #Hr2 -= lib.einsum('lj,lab->jab', imds.Foo, r2)
@@ -646,6 +646,12 @@ def eaccsd_matvec(eom, vector, imds=None, diag=None):
     Hr1a += np.einsum('LD,LaD->a', imds1.FOV, r2bab)
     Hr1b += np.einsum('ld,lAd->A', imds1.Fov, r2aba)
     Hr1b += np.einsum('LD,LAD->A', imds1.FOV, r2bbb)
+
+    # Wvvvo 
+    Hr2aaa += np.einsum('acbj,c->jab',Wvvvo, r1a)
+    Hr2bbb += np.einsum('ACBJ,C->JAB',WVVVO, r1b)
+    Hr2bab += np.einsum('acBJ,c->JaB',WvvVO, r1a)
+    Hr2aba += np.einsum('ACbj,C->jAb',WVVvo, r1b)
 
     # Wovvo
     tmp2aa = lib.einsum('ldbj,lad->jab', imds1.Wovvo, r2aaa)
