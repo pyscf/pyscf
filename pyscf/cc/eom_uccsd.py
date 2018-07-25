@@ -627,7 +627,7 @@ def eaccsd_matvec(eom, vector, imds=None, diag=None):
     #tmp2 = lib.einsum('lbdj,lad->jab', imds.Wovvo, r2)
     #Hr2 += tmp2 - tmp2.transpose(0,2,1)
     #Hr2 += 0.5*lib.einsum('abcd,jcd->jab', imds.Wvvvv, r2)
-    Hr2 -= 0.5*lib.einsum('klcd,lcd,kjab->jab', imds.Woovv, r2, imds.t2)
+    #Hr2 -= 0.5*lib.einsum('klcd,lcd,kjab->jab', imds.Woovv, r2, imds.t2)
 
     Hr1a = np.zeros_like(r1a)
     Hr1b = np.zeros_like(r1b)
@@ -687,9 +687,27 @@ def eaccsd_matvec(eom, vector, imds=None, diag=None):
     Hr2bab += lib.einsum('acbd,jcd->jab', WvvVV, r2bab)
     Hr2bbb += 0.5*lib.einsum('acbd,jcd->jab', WVVVV, r2bbb)
    
-    #Hr2 -= 0.5*lib.einsum('klcd,lcd,kjab->jab', imds.Woovv, r2, imds.t2)
+    # Woovv term
+    Wovov = np.asarray(eom._cc._ucc_eris.ovov)
+    Wovov = Wovov - Wovov.transpose(0,3,2,1)
+    WOVOV = np.asarray(eom._cc._ucc_eris.OVOV)
+    WOVOV = WOVOV - WOVOV.transpose(0,3,2,1)
+    WovOV = np.asarray(eom._cc._ucc_eris.ovOV)
+    WOVov = np.conj(WovOV).transpose(2, 3, 0, 1)
+
+    Hr2aaa -= 0.5 * lib.einsum('kcld,lcd,kjab->jab', Wovov, r2aaa, t2aa)
+    Hr2bab -= 0.5 * lib.einsum('kcld,lcd,kJaB->JaB', Wovov, r2aaa, t2ab)
+
+    Hr2aba -= lib.einsum('KCld,lCd,KjAb->jAb', WOVov, r2aba, t2ba)
+    Hr2aaa -= lib.einsum('kcLD,LcD,kjab->jab', WovOV, r2bab, t2aa)
+
+    Hr2aba -= 0.5 * lib.einsum('KCLD,LCD,KjAb->jAb', WOVOV, r2bbb, t2ba)
+    Hr2bbb -= 0.5 * lib.einsum('KCLD,LCD,KJAB->JAB', WOVOV, r2bbb, t2bb)
     
+    Hr2bbb -= lib.einsum('KCld,lCd,KJAB->JAB', WOVov, r2aba, t2bb)
+    Hr2bab -= lib.einsum('kcLD,LcD,kJaB->JaB', WovOV, r2bab, t2ab) 
  
+
     new_Hr1, new_Hr2 = spatial2spin_ea([Hr1a, Hr1b], [Hr2aaa, Hr2aba, Hr2bab, Hr2bbb], orbspin)
     vector = amplitudes_to_vector_ea(Hr1, Hr2)
     vector += amplitudes_to_vector_ea(new_Hr1, new_Hr2)
