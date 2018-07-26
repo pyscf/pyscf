@@ -516,60 +516,6 @@ def eaccsd_matvec(eom, vector, imds=None, diag=None):
     nvir_b = len(idxvb)
 
     [r1a, r1b], [r2aaa, r2aba, r2bab, r2bbb] = spin2spatial_ea(r1, r2, orbspin)
-    r2aaa = r2[np.ix_(idxoa,idxva,idxva)]
-    r2aba = r2[np.ix_(idxoa,idxvb,idxva)]
-    r2bab = r2[np.ix_(idxob,idxva,idxvb)]
-    r2bbb = r2[np.ix_(idxob,idxvb,idxvb)]
-
-    # DONT MIND ME :) just for checking...
-
-    #idxoaa = idxoa[:,None] * nocc + idxoa
-    #idxoab = idxoa[:,None] * nocc + idxob
-    #idxoba = idxob[:,None] * nocc + idxoa
-    #idxobb = idxob[:,None] * nocc + idxob
-    #idxvaa = idxva[:,None] * nvir + idxva
-    #idxvab = idxva[:,None] * nvir + idxvb
-    #idxvba = idxvb[:,None] * nvir + idxva
-    #idxvbb = idxvb[:,None] * nvir + idxvb
-
-    #r2bba = np.zeros((nocc_b, nvir_b, nvir_a), dtype=r2.dtype)
-    #r2aab = np.zeros((nocc_a, nvir_a, nvir_b), dtype=r2.dtype)
-    #r2baa = np.zeros((nocc_b, nvir_a, nvir_a), dtype=r2.dtype)
-    #r2abb = np.zeros((nocc_a, nvir_b, nvir_b), dtype=r2.dtype)
-
-    #r2 = r2.reshape(nocc, nvir**2)
-    #r2bba = lib.take_2d(r2, idxob.ravel(), idxvba.ravel())
-    #r2aab = lib.take_2d(r2, idxoa.ravel(), idxvab.ravel())
-    #r2baa = lib.take_2d(r2, idxob.ravel(), idxvaa.ravel())
-    #r2abb = lib.take_2d(r2, idxoa.ravel(), idxvbb.ravel())
-    #r2 = r2.reshape(nocc, nvir, nvir)
-
-    #print 'r2aaa norm', np.linalg.norm(r2aaa)
-    #print 'aaa', np.linalg.norm(lib.take_2d(r2, idxoa.ravel(), idxvaa.ravel()).ravel() - r2aaa.ravel())
-    #print 'bab', np.linalg.norm(lib.take_2d(r2, idxob.ravel(), idxvab.ravel()).ravel() - r2bab.ravel())
-    #print 'bbb', np.linalg.norm(lib.take_2d(r2, idxob.ravel(), idxvbb.ravel()).ravel() - r2bbb.ravel())
-    #print 'aba', np.linalg.norm(lib.take_2d(r2, idxoa.ravel(), idxvba.ravel()).ravel() - r2aba.ravel())
-
-    #new_r1, new_r2 = spatial2spin_ea([r1a, r1b], [r2aaa, r2aba, r2bab, r2bbb], orbspin)
-    #print 'new_r2', np.linalg.norm(new_r2)
-
-    #print 'r1 diff', np.linalg.norm(new_r1 - r1)
-    #print 'r2 diff', np.linalg.norm(new_r2 - r2)
-    #r2 = r2.reshape(nocc, nvir**2)
-    #new_r2 = new_r2.reshape(nocc, nvir**2)
-    #print np.linalg.norm(lib.take_2d(new_r2, idxoa.ravel(), idxvaa.ravel()).ravel() - r2aaa.ravel())
-    #print np.linalg.norm(lib.take_2d(new_r2, idxoa.ravel(), idxvba.ravel()).ravel() - r2aba.ravel())
-    #print np.linalg.norm(lib.take_2d(new_r2, idxoa.ravel(), idxvab.ravel()).ravel() - r2aab.ravel())
-    #print np.linalg.norm(lib.take_2d(r2, idxoa.ravel(), idxvab.ravel()).ravel() -
-    #                     lib.take_2d(new_r2, idxoa.ravel(), idxvab.ravel()).ravel())
-    #print np.linalg.norm(lib.take_2d(new_r2, idxoa.ravel(), idxvbb.ravel()).ravel())
-
-    #print np.linalg.norm(lib.take_2d(new_r2, idxob.ravel(), idxvab.ravel()).ravel() - r2bab.ravel())
-    #print np.linalg.norm(lib.take_2d(new_r2, idxob.ravel(), idxvbb.ravel()).ravel() - r2bbb.ravel())
-    #print np.linalg.norm(lib.take_2d(new_r2, idxob.ravel(), idxvba.ravel()).ravel() - r2bba.ravel())
-    #print np.linalg.norm(lib.take_2d(new_r2, idxob.ravel(), idxvaa.ravel()).ravel())
-    ##print 'r2aaa diff', np.linalg.norm(r2[idxoa.ravel(), idxvaa.ravel()[:, None]].ravel() - r2aaa.ravel())
-    #exit()
 
     imds1 = _IMDS(eom._cc._ucc)
     imds1.make_ea()
@@ -631,9 +577,6 @@ def eaccsd_matvec(eom, vector, imds=None, diag=None):
 
     Hr1a = np.zeros_like(r1a)
     Hr1b = np.zeros_like(r1b)
-
-    Hr1a += np.einsum('ac,c->a', Fvv, r1a)
-    Hr1b += np.einsum('AC,C->A', FVV, r1b)
 
     Hr2aaa = np.zeros_like(r2aaa)
     Hr2aba = np.zeros_like(r2aba)
