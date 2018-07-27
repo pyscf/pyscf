@@ -619,6 +619,106 @@ def check_antisymm_34(cc, kpts, integrals):
     if diff > 1e-5:
         print("Energy cutoff (or cell.mesh) is not enough to converge AO integrals.")
 
+imd = imdk
+class _IMDS:
+    # Identical to molecular rccsd_slow
+    def __init__(self, cc):
+        self.verbose = cc.verbose
+        self.stdout = cc.stdout
+        self.t1 = cc.t1
+        self.t2 = cc.t2
+        self.eris = cc.eris
+        self.kconserv = cc.khelper.kconserv
+        self.made_ip_imds = False
+        self.made_ea_imds = False
+        self._made_shared_2e = False
+        self._fimd = None
+
+    def _make_shared_1e(self):
+        cput0 = (time.clock(), time.time())
+        log = logger.Logger(self.stdout, self.verbose)
+
+        t1,t2,eris = self.t1, self.t2, self.eris
+        kconserv = self.kconserv
+        self.Loo = imd.Loo(t1,t2,eris,kconserv)
+        self.Lvv = imd.Lvv(t1,t2,eris,kconserv)
+        self.Fov = imd.cc_Fov(t1,t2,eris,kconserv)
+
+        log.timer('EOM-CCSD shared one-electron intermediates', *cput0)
+
+    def _make_shared_2e(self):
+        cput0 = (time.clock(), time.time())
+        log = logger.Logger(self.stdout, self.verbose)
+
+        t1,t2,eris = self.t1, self.t2, self.eris
+        kconserv = self.kconserv
+
+        # TODO: check whether to hold Wovov Wovvo in memory
+        if self._fimd is None:
+            self._fimd = lib.H5TmpFile()
+        nkpts, nocc, nvir = t1.shape
+        self._fimd.create_dataset('ovov', (nkpts,nkpts,nkpts,nocc,nvir,nocc,nvir), t1.dtype.char)
+        self._fimd.create_dataset('ovvo', (nkpts,nkpts,nkpts,nocc,nvir,nvir,nocc), t1.dtype.char)
+
+        # 2 virtuals
+        self.Wovov = imd.Wovov(t1,t2,eris,kconserv, self._fimd['ovov'])
+        self.Wovvo = imd.Wovvo(t1,t2,eris,kconserv, self._fimd['ovvo'])
+        self.Woovv = eris.oovv
+
+        log.timer('EOM-CCSD shared two-electron intermediates', *cput0)
+
+    def make_ip(self, ip_partition=None):
+        self._make_shared_1e()
+        if self._made_shared_2e is False and ip_partition != 'mp':
+            self._make_shared_2e()
+            self._made_shared_2e = True
+
+        cput0 = (time.clock(), time.time())
+        log = logger.Logger(self.stdout, self.verbose)
+
+        t1,t2,eris = self.t1, self.t2, self.eris
+        kconserv = self.kconserv
+
+        nkpts, nocc, nvir = t1.shape
+        self._fimd.create_dataset('oooo', (nkpts,nkpts,nkpts,nocc,nocc,nocc,nocc), t1.dtype.char)
+        self._fimd.create_dataset('ooov', (nkpts,nkpts,nkpts,nocc,nocc,nocc,nvir), t1.dtype.char)
+        self._fimd.create_dataset('ovoo', (nkpts,nkpts,nkpts,nocc,nvir,nocc,nocc), t1.dtype.char)
+
+        # 0 or 1 virtuals
+        if ip_partition != 'mp':
+            self.Woooo = imd.Woooo(t1,t2,eris,kconserv, self._fimd['oooo'])
+        self.Wooov = imd.Wooov(t1,t2,eris,kconserv, self._fimd['ooov'])
+        self.Wovoo = imd.Wovoo(t1,t2,eris,kconserv, self._fimd['ovoo'])
+        self.made_ip_imds = True
+        log.timer('EOM-CCSD IP intermediates', *cput0)
+
+    def make_ea(self, ea_partition=None):
+        self._make_shared_1e()
+        if self._made_shared_2e is False and ea_partition != 'mp':
+            self._make_shared_2e()
+            self._made_shared_2e = True
+
+        cput0 = (time.clock(), time.time())
+        log = logger.Logger(self.stdout, self.verbose)
+
+        t1,t2,eris = self.t1, self.t2, self.eris
+        kconserv = self.kconserv
+
+        nkpts, nocc, nvir = t1.shape
+        self._fimd.create_dataset('vovv', (nkpts,nkpts,nkpts,nvir,nocc,nvir,nvir), t1.dtype.char)
+        self._fimd.create_dataset('vvvo', (nkpts,nkpts,nkpts,nvir,nvir,nvir,nocc), t1.dtype.char)
+        self._fimd.create_dataset('vvvv', (nkpts,nkpts,nkpts,nvir,nvir,nvir,nvir), t1.dtype.char)
+
+        # 3 or 4 virtuals
+        self.Wvovv = imd.Wvovv(t1,t2,eris,kconserv, self._fimd['vovv'])
+        if ea_partition == 'mp' and np.all(t1 == 0):
+            self.Wvvvo = imd.Wvvvo(t1,t2,eris,kconserv, self._fimd['vvvo'])
+        else:
+            self.Wvvvv = imd.Wvvvv(t1,t2,eris,kconserv, self._fimd['vvvv'])
+            self.Wvvvo = imd.Wvvvo(t1,t2,eris,kconserv,self.Wvvvv, self._fimd['vvvo'])
+        self.made_ea_imds = True
+        log.timer('EOM-CCSD EA intermediates', *cput0)
+
 if __name__ == '__main__':
     from pyscf.pbc import gto, scf, cc
 

@@ -197,52 +197,95 @@ def cc_Wovvo_jk(cc, t1, t2, eris):
 
 ### Section (b)
 
-def Fvv(t1,t2,eris):
-    ccFov = cc_Fov(t1,t2,eris)
-    Fae = cc_Fvv(t1,t2,eris) - 0.5*einsum('ma,me->ae',t1,ccFov)
+def Fvv(cc,t1,t2,eris):
+    nkpts, nocc, nvir = t1.shape
+    ccFov = cc_Fov(cc,t1,t2,eris)
+    Fae = cc_Fvv(cc,t1,t2,eris)
+    for km in range(nkpts):
+        Fae[km] -= 0.5*einsum('ma,me->ae', t1[km], ccFov[km])
     return Fae
 
-def Foo(t1,t2,eris):
-    ccFov = cc_Fov(t1,t2,eris)
-    Fmi = cc_Foo(t1,t2,eris) + 0.5*einsum('ie,me->mi',t1,ccFov)
+def Foo(cc,t1,t2,eris):
+    nkpts, nocc, nvir = t1.shape
+    ccFov = cc_Fov(cc,t1,t2,eris)
+    Fmi = cc_Foo(cc,t1,t2,eris)
+    for km in range(nkpts):
+        Fmi[km] += 0.5*einsum('ie,me->mi',t1[km],ccFov[km])
     return Fmi
 
-def Fov(t1,t2,eris):
-    Fme = cc_Fov(t1,t2,eris)
+def Fov(cc,t1,t2,eris):
+    nkpts, nocc, nvir = t1.shape
+    Fme = cc_Fov(cc,t1,t2,eris)
     return Fme
 
-def Woooo(t1,t2,eris):
+def Woooo(cc,t1,t2,eris):
+    nkpts, nocc, nvir = t1.shape
+    kconserv = kpts_helper.get_kconserv(cc._scf.cell, cc.kpts)
     tau = make_tau(cc,t2,t1,t1)
-    Wmnij = cc_Woooo(t1,t2,eris) + 0.25*einsum('ijef,mnef->mnij',tau,eris.oovv)
+    Wmnij = cc_Woooo(cc,t1,t2,eris)
+    for km in range(nkpts):
+        for kn in range(nkpts):
+            for ki in range(nkpts):
+                kj = kconserv[km ,ki, kn]
+                Wmnij[km, kn, ki] += 0.25*einsum('xijef,xmnef->mnij',tau[ki, kj, :],
+                                                 eris.oovv[km, kn, :])
     return Wmnij
 
-def Wvvvv(t1,t2,eris):
-    tau = make_tau(cc,nt2,t1,t1)
-    Wabef = cc_Wvvvv(t1,t2,eris) + 0.25*einsum('mnab,mnef->abef',tau,eris.oovv)
+def Wvvvv(cc,t1,t2,eris):
+    nkpts, nocc, nvir = t1.shape
+    kconserv = kpts_helper.get_kconserv(cc._scf.cell, cc.kpts)
+    tau = make_tau(cc,t2,t1,t1)
+    Wabef = cc_Wvvvv(cc,t1,t2,eris)
+    for ka, kb, ke in kpts_helper.loop_kkk(nkpts):
+        kf = kconserv[ka, ke, kb]
+        for km in range(nkpts):
+            kn = kconserv[ka, km, kb]
+            Wabef[ka, kb, ke] += 0.25*einsum('mnab,mnef->abef',tau[km, kn, ka],
+                                             eris.oovv[km, kn, ke])
     return Wabef
 
-def Wovvo(t1,t2,eris):
-    Wmbej = cc_Wovvo(t1,t2,eris) - 0.5*einsum('jnfb,mnef->mbej',t2,eris.oovv)
+def Wovvo(cc,t1,t2,eris):
+    nkpts, nocc, nvir = t1.shape
+    kconserv = kpts_helper.get_kconserv(cc._scf.cell, cc.kpts)
+    Wmbej = cc_Wovvo(cc,t1,t2,eris)
+    for km, kb, ke in kpts_helper.loop_kkk(nkpts):
+        kj = kconserv[km, ke, kb]
+        for kn in range(nkpts):
+            kf = kconserv[km, ke, kn]
+            Wmbej[km, kb, ke] -= 0.5*einsum('jnfb,mnef->mbej',t2[kj, kn, kf],
+                                            eris.oovv[km, kn, ke])
     return Wmbej
 
 # Indices in the following can be safely permuted.
 
-def Wooov(t1,t2,eris):
-    Wmnie = eris.ooov + einsum('if,mnfe->mnie',t1,eris.oovv)
+def Wooov(cc,t1,t2,eris):
+    nkpts, nocc, nvir = t1.shape
+    kconserv = kpts_helper.get_kconserv(cc._scf.cell, cc.kpts)
+    Wmnie = eris.ooov
+    for km, kn, ki in kpts_helper.loop_kkk(nkpts):
+        kf = ki
+        Wmnie[km, kn, ki] += einsum('if,mnfe->mnie',t1[ki], eris.oovv[km, kn, kf])
     return Wmnie
 
-def Wvovv(t1,t2,eris):
+def Wvovv(cc,t1,t2,eris):
+    nkpts, nocc, nvir = t1.shape
+    kconserv = kpts_helper.get_kconserv(cc._scf.cell, cc.kpts)
     eris_vovv = -eris.ovvv.transpose(1,0,2,3)
-    Wamef = eris_vovv - einsum('na,nmef->amef',t1,eris.oovv)
+    Wamef = eris_vovv
+    for ka, km, ke in kpts_helper.loop_kkk(nkpts):
+        kn = ka
+        Wamef[ka, km, ke] -= einsum('na,nmef->amef',t1[kn],eris.oovv[kn, km, ke])
     return Wamef
 
-def Wovoo(t1,t2,eris):
+def Wovoo(cc,t1,t2,eris):
+    nkpts, nocc, nvir = t1.shape
+    kconserv = kpts_helper.get_kconserv(cc._scf.cell, cc.kpts)
     eris_ovvo = -eris.ovov.transpose(0,1,3,2)
     tmp1 = einsum('mnie,jnbe->mbij',eris.ooov,t2)
     tmp2 = ( einsum('ie,mbej->mbij',t1,eris_ovvo)
             - einsum('ie,njbf,mnef->mbij',t1,t2,eris.oovv) )
-    FFov = Fov(t1,t2,eris)
-    WWoooo = Woooo(t1,t2,eris)
+    FFov = Fov(cc,t1,t2,eris)
+    WWoooo = Woooo(cc,t1,t2,eris)
     tau = make_tau(cc,t2,t1,t1)
     Wmbij = ( eris.ovoo - einsum('me,ijbe->mbij',FFov,t2)
               - einsum('nb,mnij->mbij',t1,WWoooo)
@@ -252,6 +295,8 @@ def Wovoo(t1,t2,eris):
     return Wmbij
 
 def Wvvvo(t1,t2,eris):
+    nkpts, nocc, nvir = t1.shape
+    kconserv = kpts_helper.get_kconserv(cc._scf.cell, cc.kpts)
     eris_ovvo = -eris.ovov.transpose(0,1,3,2)
     eris_vvvo = eris.ovvv.transpose(2,3,1,0).conj()
     eris_oovo = -eris.ooov.transpose(0,1,3,2)

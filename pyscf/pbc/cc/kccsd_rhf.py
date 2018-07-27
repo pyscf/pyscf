@@ -473,7 +473,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
             self.kshift = kshift
             adiag = self.ipccsd_diag(kshift)
             if partition == 'full':
-                self._ipccsd_diag_matrix2 = self.vector_to_amplitudes_ip(adiag)[1]
+                eom._ipccsd_diag_matrix2 = eom.vector_to_amplitudes_ip(adiag)[1]
 
             user_guess = False
             if guess:
@@ -519,11 +519,12 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
             if nroots == 1:
                 evals_k, evecs_k = [evals_k], [evecs_k]
             for n, en, vn in zip(range(nroots), evals_k, evecs_k):
-                logger.info(self, 'IP root %d E = %.16g  qpwt = %0.6g',
-                            n, en, np.linalg.norm(vn[:self.nocc])**2)
-        log.timer('IP-CCSD', *cput0)
-        self.eip = evals
-        return self.eip, evecs
+                r1, r2 = eom.vector_to_amplitudes(vn)
+                qp_weight = np.linalg.norm(r1)**2
+                logger.info(self, 'EOM-CCSD root %d E = %.16g  qpwt = %0.6g',
+                            n, en, qp_weight)
+        log.timer('EOM-CCSD', *cput0)
+        return evals_k, evecs_k
 
     def ipccsd_matvec(self, vector):
         # Ref: Nooijen and Snijders, J. Chem. Phys. 102, 1681 (1995) Eqs.(8)-(9)
