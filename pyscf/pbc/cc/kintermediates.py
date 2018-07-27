@@ -174,6 +174,27 @@ def cc_Wovvo(cc,t1,t2,eris):
                                                    eris.oovv[km,kn,ke])
     return Wmbej
 
+def cc_Wovvo_jk(cc, t1, t2, eris):
+    nkpts, nocc, nvir = t1.shape
+    kconserv = kpts_helper.get_kconserv(cc._scf.cell, cc.kpts)
+    eris_ovvo = numpy.zeros(shape=(nkpts,nkpts,nkpts,nocc,nvir,nvir,nocc),dtype=t2.dtype)
+    eris_oovo = numpy.zeros(shape=(nkpts,nkpts,nkpts,nocc,nocc,nvir,nocc),dtype=t2.dtype)
+    Wmbej = eris.ovvo.copy()
+    for km in range(nkpts):
+        for kb in range(nkpts):
+            for ke in range(nkpts):
+                kj = kconserv[km,ke,kb]
+                Wmbej[km,kb,ke] += einsum('jf,mbef->mbej',t1[kj,:,:],eris.ovvv[km,kb,ke])
+                Wmbej[km,kb,ke] += -einsum('nb,mnej->mbej',t1[kb,:,:],eris.oovo[km,kb,ke])
+                for kn in range(nkpts):
+                    kf = kconserv[km,ke,kn]
+                    Wmbej[km,kb,ke] += -0.5*einsum('jnfb,mnef->mbej',t2[kj,kn,kf],
+                                                   eris.oovv[km,kn,ke])
+                    if kn == kb and kf == kj:
+                        Wmbej[km,kb,ke] += -einsum('jf,nb,mnef->mbej',t1[kj],t1[kn],
+                                                   eris.oovv[km,kn,ke])
+    return Wmbej
+
 ### Section (b)
 
 def Fvv(t1,t2,eris):
@@ -246,4 +267,3 @@ def Wvvvo(t1,t2,eris):
                     - tmp1 + tmp1.transpose(1,0,2,3)
                     - tmp2 + tmp2.transpose(1,0,2,3) )
     return Wabei
-

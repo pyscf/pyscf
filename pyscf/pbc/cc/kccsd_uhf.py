@@ -93,16 +93,18 @@ def update_amps(cc, t1, t2, eris):
     Foo_, FOO_ = kintermediates_uhf.cc_Foo(cc, uccsd_t1, uccsd_t2, uccsd_eris)
     Fov_, FOV_ = kintermediates_uhf.cc_Fov(cc, uccsd_t1, uccsd_t2, uccsd_eris)
 
-    # The UCCSD tensor Woooo_J_ or Woooo_K_ are kind of chemist's convention
+    # The UCCSD tensor Woooo_J_ and Woooo_K_ are in physicist's notation
     uccsd_Woooo_J, uccsd_Woooo_K = kintermediates_uhf.cc_Woooo(cc, uccsd_t1, uccsd_t2, uccsd_eris)
     Woooo_J_, WooOO_J_, WOOoo_J_, WOOOO_J_, WoOOo_J_, WOooO_J_ = uccsd_Woooo_J
     Woooo_K_, WooOO_K_, WOOoo_K_, WOOOO_K_, WoOOo_K_, WOooO_K_ = uccsd_Woooo_K
+    # transpose(0,2,1,3,5,4,6) to make uccsd_Woooo_J suitable for _eri_spatial2spin function
+    uccsd_Woooo_J = (Woooo_J_.transpose(0,2,1,3,5,4,6), WooOO_J_.transpose(0,2,1,3,5,4,6), WOOoo_J_.transpose(0,2,1,3,5,4,6), WOOOO_J_.transpose(0,2,1,3,5,4,6), WoOOo_J_.transpose(0,2,1,3,5,4,6), WOooO_J_.transpose(0,2,1,3,5,4,6))
+    uccsd_Woooo_K = (Woooo_K_.transpose(0,2,1,3,5,4,6), WooOO_K_.transpose(0,2,1,3,5,4,6), WOOoo_K_.transpose(0,2,1,3,5,4,6), WOOOO_K_.transpose(0,2,1,3,5,4,6), WoOOo_K_.transpose(0,2,1,3,5,4,6), WOooO_K_.transpose(0,2,1,3,5,4,6))
     # * transpose(0,2,1,3,5,4,6) to change back to physicist's convention.
     #   Check whether the UCCSD tensors are the same to symmetry-allowed blocks
     #   of spin-integral tensor Woooo
     Woooo_J = _eri_spatial2spin(uccsd_Woooo_J, 'oooo', uccsd_eris, cross_ab=True).transpose(0,2,1,3,5,4,6)
     Woooo_K = _eri_spatial2spin(uccsd_Woooo_K, 'oooo', uccsd_eris, cross_ab=True).transpose(0,2,1,3,5,4,6)
-
     Woooo = imdk.cc_Woooo(cc, t1, t2, eris)  # For testing only
     assert(abs(Woooo_J - Woooo_K - Woooo).max() < 1e-12)
 
@@ -110,6 +112,9 @@ def update_amps(cc, t1, t2, eris):
     uccsd_Wovvo_J, uccsd_Wovvo_K = kintermediates_uhf.cc_Wovvo(cc, uccsd_t1, uccsd_t2, uccsd_eris)
     Wovvo_J_, WovVO_J_, WOVvo_J_, WOVVO_J_, WoVVo_J_, WOvvO_J_ = uccsd_Wovvo_J
     Wovvo_K_, WovVO_K_, WOVvo_K_, WOVVO_K_, WoVVo_K_, WOvvO_K_ = uccsd_Wovvo_K
+    # transpose(0,2,1,3,5,4,6) to make uccsd_Woooo_J suitable for _eri_spatial2spin function
+    uccsd_Wovvo_J = (Wovvo_J_.transpose(0,2,1,3,5,4,6), WovVO_J_.transpose(0,2,1,3,5,4,6), WOVvo_J_.transpose(0,2,1,3,5,4,6), WOVVO_J_.transpose(0,2,1,3,5,4,6), WoVVo_J_.transpose(0,2,1,3,5,4,6), WOvvO_J_.transpose(0,2,1,3,5,4,6))
+    uccsd_Wovvo_K = (Wovvo_K_.transpose(0,2,1,3,5,4,6), WovVO_K_.transpose(0,2,1,3,5,4,6), WOVvo_K_.transpose(0,2,1,3,5,4,6), WOVVO_K_.transpose(0,2,1,3,5,4,6), WoVVo_K_.transpose(0,2,1,3,5,4,6), WOvvO_K_.transpose(0,2,1,3,5,4,6))
     # * transpose(0,2,1,3,5,4,6) to change back to physicist's convention.
     #   Check whether the UCCSD tensors are the same to symmetry-allowed blocks
     #   of spin-integral tensor Woooo
@@ -118,7 +123,7 @@ def update_amps(cc, t1, t2, eris):
 
     Wovvo = imdk.cc_Wovvo(cc, t1, t2, eris)  # For testing only
     assert(abs(Wovvo_J - Wovvo_K - Wovvo).max() < 1e-12)
-
+    print("cc_Woooo and cc_Wovvo done")
 #DELETEME    # * Use spin2spatial functiont to transform gccsd tensor to uccsd tensors
 #DELETEME    #   Pass uccsd_eris to kuhf_cc_Wovvo, in which the anti-symmetrized
 #DELETEME    #   gccsd.eris spin-orbital tensors can be accessed via uccsd_eris._kccsd_eris.
@@ -836,6 +841,9 @@ def _make_eris_incore(cc, mo_coeff=None):
     vovv = eri[:, :, :, nocc:, :nocc, nocc:, nocc:] / nkpts
     vvov = eri[:, :, :, nocc:, nocc:, :nocc, nocc:] / nkpts
     vvvv = eri[:, :, :, nocc:, nocc:, nocc:, nocc:] / nkpts
+    ovvo = eri[:, :, :, :nocc, nocc:, nocc:, :nocc] / nkpts
+    ovvv = eri[:, :, :, :nocc, nocc:, nocc:, nocc:] / nkpts
+    vvoo = eri[:, :, :, nocc:, nocc:, :nocc, :nocc] / nkpts
 
     eris.oooo, eris.ooOO, eris.OOoo, eris.OOOO = _eri_spin2spatial(oooo, 'oooo', eris)
     eris.ooov, eris.ooOV, eris.OOov, eris.OOOV = _eri_spin2spatial(ooov, 'ooov', eris)
@@ -848,6 +856,9 @@ def _make_eris_incore(cc, mo_coeff=None):
     eris.vvov, eris.vvOV, eris.VVov, eris.VVOV = _eri_spin2spatial(vvov, 'vvov', eris)
     eris.ovvv, eris.ovVV, eris.OVvv, eris.OVVV = _eri_spin2spatial(ovvv, 'ovvv', eris)
     eris.vvvv, eris.vvVV, eris.VVvv, eris.VVVV = _eri_spin2spatial(vvvv, 'vvvv', eris)
+    eris.ovvo, eris.ovVO, eris.OVvo, eris.OVVO = _eri_spin2spatial(ovvo, 'ovvo', eris)
+    eris.ovvv, eris.ovVV, eris.OVvv, eris.OVVV = _eri_spin2spatial(ovvv, 'ovvv', eris)
+    eris.vvoo, eris.vvOO, eris.VVoo, eris.VVOO = _eri_spin2spatial(vvoo, 'vvoo', eris)
 
     # For testing only
     eris._kccsd_eris_j = copy.copy(_kccsd_eris)
@@ -860,6 +871,9 @@ def _make_eris_incore(cc, mo_coeff=None):
     eris._kccsd_eris_j.ovvv = ovvv.transpose(0,2,1,3,5,4,6)
     eris._kccsd_eris_j.voov = voov.transpose(0,2,1,3,5,4,6)
     eris._kccsd_eris_j.vvvv = vvvv.transpose(0,2,1,3,5,4,6)
+    eris._kccsd_eris_j.ovvo = ovvo.transpose(0,2,1,3,5,4,6)
+    eris._kccsd_eris_j.oovo = ovoo.transpose(0,2,1,3,5,4,6)
+
     eris._kccsd_eris_k = copy.copy(_kccsd_eris)
     eris._kccsd_eris_k.oooo = oooo.transpose(2,1,0,5,4,3,6).transpose(0,2,1,3,5,4,6)
     eris._kccsd_eris_k.ooov = ooov.transpose(2,1,0,5,4,3,6).transpose(0,2,1,3,5,4,6)
@@ -870,6 +884,8 @@ def _make_eris_incore(cc, mo_coeff=None):
     eris._kccsd_eris_k.ovvv = vvov.transpose(2,1,0,5,4,3,6).transpose(0,2,1,3,5,4,6)
     eris._kccsd_eris_k.voov = oovv.transpose(2,1,0,5,4,3,6).transpose(0,2,1,3,5,4,6)
     eris._kccsd_eris_k.vvvv = vvvv.transpose(2,1,0,5,4,3,6).transpose(0,2,1,3,5,4,6)
+    eris._kccsd_eris_k.ovvo = vvoo.transpose(2,1,0,5,4,3,6).transpose(0,2,1,3,5,4,6)
+    eris._kccsd_eris_k.oovo = ovoo.transpose(2,1,0,5,4,3,6).transpose(0,2,1,3,5,4,6)
 
     log.timer('CCSD integral transformation', *cput0)
     return eris
@@ -1033,12 +1049,27 @@ def _eri_spatial2spin(eri_aa_ab_ba_bb, vvvv, eris, cross_ab=False):
                     len(idx3a[0])+len(idx3b[0]),
                     len(idx4a[0])+len(idx4b[0])), dtype=np.complex128)
     kconserv = kpts_helper.get_kconserv(eris.cell, eris.kpts)
+    #print(eri_aaaa.shape, eri_aabb.shape, eri_bbaa.shape, eri_bbbb.shape, eri_abba.shape, eri_baab.shape)
+    #print(np.array(idx1a).shape,np.array(idx1b).shape)
+    #print(np.array(idx2a).shape,np.array(idx2b).shape)
+    #print(np.array(idx3a).shape,np.array(idx3b).shape)
+    #print(np.array(idx4a).shape,np.array(idx4b).shape)
     for ki, kj, kk in kpts_helper.loop_kkk(nkpts):
         kl = kconserv[ki, kj, kk]
+        #print(idx1a[ki][:,None,None,None])
+        #print(idx2a[kj][:,None,None])
+        #print(idx3a[kk][:,None])
+        #print(idx4a[kl])
         eri[ki,kj,kk, idx1a[ki][:,None,None,None],idx2a[kj][:,None,None],idx3a[kk][:,None],idx4a[kl]] = eri_aaaa[ki,kj,kk]
         eri[ki,kj,kk, idx1a[ki][:,None,None,None],idx2a[kj][:,None,None],idx3b[kk][:,None],idx4b[kl]] = eri_aabb[ki,kj,kk]
         eri[ki,kj,kk, idx1b[ki][:,None,None,None],idx2b[kj][:,None,None],idx3a[kk][:,None],idx4a[kl]] = eri_bbaa[ki,kj,kk]
         eri[ki,kj,kk, idx1b[ki][:,None,None,None],idx2b[kj][:,None,None],idx3b[kk][:,None],idx4b[kl]] = eri_bbbb[ki,kj,kk]
+
+        #eri[ki,kj,kk, idx1a[ki][:,None,None,None],idx2a[kj][:,None,None],idx3b[kk][:,None],idx4b[kl]] = eri_aabb[ki,kj,kk]
+        #eri[ki,kj,kk, idx1b[ki][:,None,None,None],idx2b[kj][:,None,None],idx3a[kk][:,None],idx4a[kl]] = eri_bbaa[ki,kj,kk]
+        #eri[ki,kj,kk, idx1b[ki][:,None,None,None],idx2b[kj][:,None,None],idx3b[kk][:,None],idx4b[kl]] = eri_bbbb[ki,kj,kk]
+        #### modified by Yang
+
         if cross_ab:
             eri[ki,kj,kk, idx1a[ki][:,None,None,None],idx2b[kj][:,None,None],idx3b[kk][:,None],idx4a[kl]] = eri_abba[ki,kj,kk]
             eri[ki,kj,kk, idx1b[ki][:,None,None,None],idx2a[kj][:,None,None],idx3a[kk][:,None],idx4b[kl]] = eri_baab[ki,kj,kk]
@@ -1117,6 +1148,50 @@ if __name__ == '__main__':
     mycc = KUCCSD(kmf)
     eris = mycc.ao2mo()
     t1, t2 = rand_t1_t2(mycc)
+    ####### This block compare the uccsd cc_Woooo and cc_Wovvo intermediates with the reference from gccsd
+    from numpy.linalg import norm
+    from kintermediates_uhf import cc_Wovvo_ref, cc_Wovvo, cc_Woooo_ref, cc_Woooo
+    Wovvo_J_ref, Wovvo_K_ref = cc_Wovvo_ref(mycc, t1, t2, eris)
+    J_aaaa_ref, J_aabb_ref, J_bbaa_ref, J_bbbb_ref, J_abba_ref, J_baab_ref = Wovvo_J_ref
+    K_aaaa_ref, K_aabb_ref, K_bbaa_ref, K_bbbb_ref, K_abba_ref, K_baab_ref = Wovvo_K_ref
+    Wovvo_J, Wovvo_K = cc_Wovvo(mycc, t1, t2, eris)
+    J_aaaa, J_aabb, J_bbaa, J_bbbb, J_abba, J_baab = Wovvo_J
+    K_aaaa, K_aabb, K_bbaa, K_bbbb, K_abba, K_baab = Wovvo_K
+    print("examing errors for cc_Wovvo....\n")
+    print(norm(J_aaaa_ref.transpose(0,2,1,3,5,4,6) - J_aaaa))
+    print(norm(J_bbbb_ref.transpose(0,2,1,3,5,4,6) - J_bbbb))
+    print(norm(J_aabb_ref.transpose(0,2,1,3,5,4,6) - J_aabb))
+    print(norm(J_bbaa_ref.transpose(0,2,1,3,5,4,6) - J_bbaa))
+    print(norm(J_abba_ref.transpose(0,2,1,3,5,4,6) - J_abba))
+    print(norm(J_baab_ref.transpose(0,2,1,3,5,4,6) - J_baab))
+
+    print(norm(K_aaaa_ref.transpose(0,2,1,3,5,4,6) - K_aaaa))
+    print(norm(K_bbbb_ref.transpose(0,2,1,3,5,4,6) - K_bbbb))
+    print(norm(K_aabb_ref.transpose(0,2,1,3,5,4,6) - K_aabb))
+    print(norm(K_bbaa_ref.transpose(0,2,1,3,5,4,6) - K_bbaa))
+    print(norm(K_abba_ref.transpose(0,2,1,3,5,4,6) - K_abba))
+    print(norm(K_baab_ref.transpose(0,2,1,3,5,4,6) - K_baab))
+
+    Woooo_J_ref, Woooo_K_ref = cc_Woooo_ref(mycc, t1, t2, eris)
+    J_aaaa_ref, J_aabb_ref, J_bbaa_ref, J_bbbb_ref, J_abba_ref, J_baab_ref = Woooo_J_ref
+    K_aaaa_ref, K_aabb_ref, K_bbaa_ref, K_bbbb_ref, K_abba_ref, K_baab_ref = Woooo_K_ref
+    Woooo_J, Woooo_K = cc_Woooo(mycc, t1, t2, eris)
+    J_aaaa, J_aabb, J_bbaa, J_bbbb, J_abba, J_baab = Woooo_J
+    K_aaaa, K_aabb, K_bbaa, K_bbbb, K_abba, K_baab = Woooo_K
+    print("examing errors for cc_Woooo....\n")
+    print(norm(J_aaaa_ref.transpose(0,2,1,3,5,4,6) - J_aaaa))
+    print(norm(J_bbbb_ref.transpose(0,2,1,3,5,4,6) - J_bbbb))
+    print(norm(J_aabb_ref.transpose(0,2,1,3,5,4,6) - J_aabb))
+    print(norm(J_bbaa_ref.transpose(0,2,1,3,5,4,6) - J_bbaa))
+    print(norm(J_abba_ref.transpose(0,2,1,3,5,4,6) - J_abba))
+    print(norm(J_baab_ref.transpose(0,2,1,3,5,4,6) - J_baab))
+
+    print(norm(K_aaaa_ref.transpose(0,2,1,3,5,4,6) - K_aaaa))
+    print(norm(K_bbbb_ref.transpose(0,2,1,3,5,4,6) - K_bbbb))
+    print(norm(K_aabb_ref.transpose(0,2,1,3,5,4,6) - K_aabb))
+    print(norm(K_bbaa_ref.transpose(0,2,1,3,5,4,6) - K_bbaa))
+    print(norm(K_abba_ref.transpose(0,2,1,3,5,4,6) - K_abba))
+    print(norm(K_baab_ref.transpose(0,2,1,3,5,4,6) - K_baab))
     Ht1, Ht2 = mycc.update_amps(t1, t2, eris)
     print(lib.finger(Ht1[0]) - (-1.2692088297292825-12.893074780897923j))
     print(lib.finger(Ht1[1]) - (-11.831413366451148+19.95758532598137j ))
