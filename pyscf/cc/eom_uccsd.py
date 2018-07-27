@@ -565,6 +565,7 @@ def eaccsd_matvec(eom, vector, imds=None, diag=None):
     #Hr1  = np.einsum('ac,c->a', imds.Fvv, r1)
     #Hr1 += np.einsum('ld,lad->a', imds.Fov, r2)
     Hr1 = 0.5*np.einsum('alcd,lcd->a', imds.Wvovv, r2)
+
     # Eq. (31)
     Hr2 = 0.0 * np.einsum('abcj,c->jab', imds.Wvvvo, r1)
     #tmp1 = lib.einsum('ac,jcb->jab', imds.Fvv, r2)
@@ -592,6 +593,12 @@ def eaccsd_matvec(eom, vector, imds=None, diag=None):
     Hr1a += np.einsum('LD,LaD->a', imds1.FOV, r2bab)
     Hr1b += np.einsum('ld,lAd->A', imds1.Fov, r2aba)
     Hr1b += np.einsum('LD,LAD->A', imds1.FOV, r2bbb)
+
+    # Wvovv
+    Hr1a += 0.5*lib.einsum('acld,lcd->a', Wvvov, r2aaa)
+    Hr1a +=     lib.einsum('acLD,LcD->a', WvvOV, r2bab)
+    Hr1b += 0.5*lib.einsum('ACLD,LCD->A', WVVOV, r2bbb)
+    Hr1b +=     lib.einsum('ACld,lCd->A', WVVov, r2aba)
 
     # Wvvvo
     Hr2aaa += np.einsum('acbj,c->jab',Wvvvo, r1a)
@@ -661,7 +668,7 @@ def eaccsd_matvec(eom, vector, imds=None, diag=None):
 
 
     new_Hr1, new_Hr2 = spatial2spin_ea([Hr1a, Hr1b], [Hr2aaa, Hr2aba, Hr2bab, Hr2bbb], orbspin)
-    vector = amplitudes_to_vector_ea(Hr1, Hr2)
+    #vector = amplitudes_to_vector_ea(Hr1, Hr2)
     vector += amplitudes_to_vector_ea(new_Hr1, new_Hr2)
     return vector
 
