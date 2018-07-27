@@ -669,7 +669,7 @@ def eaccsd_matvec(eom, vector, imds=None, diag=None):
 
     new_Hr1, new_Hr2 = spatial2spin_ea([Hr1a, Hr1b], [Hr2aaa, Hr2aba, Hr2bab, Hr2bbb], orbspin)
     #vector = amplitudes_to_vector_ea(Hr1, Hr2)
-    vector += amplitudes_to_vector_ea(new_Hr1, new_Hr2)
+    vector = amplitudes_to_vector_ea(new_Hr1, new_Hr2)
     return vector
 
 def eaccsd_diag(eom, imds=None):
