@@ -556,7 +556,7 @@ def Wvvov(t1, t2, eris):
     WAEMF = WAEMF - WAEMF.transpose(0,3,2,1)
     return Waemf, WaeMF, WAEmf, WAEMF
 
-def Wvvvo(t1, t2, eris, Wvvvv=None):
+def Wvvvo(t1, t2, eris):
     t1a, t1b = t1
     t2aa, t2ab, t2bb = t2
     nocca, noccb, nvira, nvirb = t2ab.shape
