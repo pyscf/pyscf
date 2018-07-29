@@ -3,36 +3,31 @@ from functools import reduce
 
 from pyscf import lib
 from pyscf.pbc.lib import kpts_helper
-einsum=lib.einsum
 
-def make_tau(cc, t2, t1, fac=1.):
-    t1a, t1b = t1
+einsum = lib.einsum
+
+def make_tau(cc, t2, t1, t1p, fac=1.):
     t2aa, t2ab, t2bb = t2
-    nkpts, nocc_a, nvir_a = t1a.shape
-    nocc_b, nvir_b = t1b.shape[1:]
-    tau_aa = t2aa.copy()
-    tau_ab = t2ab.copy()
-    tau_bb = t2bb.copy()
+    nkpts = len(t2aa)
 
-    kconserv = kpts_helper.get_kconserv(cc._scf.cell, cc.kpts)
+    tauaa = t2aa.copy()
+    tauab = t2ab.copy()
+    taubb = t2bb.copy()
     for ki in range(nkpts):
-        for ka in range(nkpts):
-            for kj in range(nkpts):
-                    kb = kconserv[ki,ka,kj]
-                    tmp_aa = np.zeros((nocc_a,nocc_a,nvir_a,nvir_a),dtype=t2aa.dtype)
-                    tmp_ab = np.zeros((nocc_a,nocc_b,nvir_a,nvir_b),dtype=t2ab.dtype)
-                    tmp_bb = np.zeros((nocc_b,nocc_b,nvir_b,nvir_b),dtype=t2bb.dtype)
-                    if ki == ka and kj == kb:
-                        tmp_aa += 2*einsum('ia,jb->ijab', t1a[ki],t1a[kj])
-                        tmp_bb += 2*einsum('ia,jb->ijab', t1b[ki],t1b[kj])
-                        tmp_ab += 2*einsum('ia,jb->ijab', t1a[ki],t1b[kj])
-                    if ki == kb and kj == ka:
-                        tmp_aa -= 2*einsum('ib,ja->ijab', t1a[ki],t1a[kj])
-                        tmp_bb -= 2*einsum('ib,ja->ijab', t1b[ki],t1b[kj])
-                    tau_aa[ki,kj,ka] += fac*0.5*tmp_aa
-                    tau_ab[ki,kj,ka] += fac*0.5*tmp_ab
-                    tau_bb[ki,kj,ka] += fac*0.5*tmp_bb
-    return tau_aa, tau_ab, tau_bb
+        for kj in range(nkpts):
+            tauaa[ki,kj,ki] += np.einsum('ia,jb->ijab', fac*.5*t1[0][ki], t1p[0][kj])
+            tauaa[ki,kj,kj] -= np.einsum('ib,ja->ijab', fac*.5*t1[0][ki], t1p[0][kj])
+            tauaa[ki,kj,kj] -= np.einsum('ja,ib->ijab', fac*.5*t1[0][kj], t1p[0][ki])
+            tauaa[ki,kj,ki] += np.einsum('jb,ia->ijab', fac*.5*t1[0][kj], t1p[0][ki])
+
+            taubb[ki,kj,ki] += np.einsum('ia,jb->ijab', fac*.5*t1[1][ki], t1p[1][kj])
+            taubb[ki,kj,kj] -= np.einsum('ib,ja->ijab', fac*.5*t1[1][ki], t1p[1][kj])
+            taubb[ki,kj,kj] -= np.einsum('ja,ib->ijab', fac*.5*t1[1][kj], t1p[1][ki])
+            taubb[ki,kj,ki] += np.einsum('jb,ia->ijab', fac*.5*t1[1][kj], t1p[1][ki])
+
+            tauab[ki,kj,ki] += np.einsum('ia,jb->ijab', fac*.5*t1[0][ki], t1p[1][kj])
+            tauab[ki,kj,ki] += np.einsum('jb,ia->ijab', fac*.5*t1[1][kj], t1p[0][ki])
+    return tauaa, tauab, taubb
 
 def cc_Fvv(cc, t1, t2, uccsd_eris):
     from pyscf.pbc.cc import kccsd_uhf
@@ -96,9 +91,10 @@ def cc_Fov(cc, t1, t2, uccsd_eris):
     return Fov, FOV
 
 def cc_Woooo(cc, t1, t2, uccsd_eris):
-
-    '''
-    This function returns the Js and Ks intermediates for Wmnij intermediates in physicist's notation, eg,[km,kn,ki,m,n,i,j]. abba and baab for cross excitation in chemist's notation, eg, abba->(alpha:mj, beta:ni)
+    ''' This function returns the Js and Ks intermediates for Wmnij
+    intermediates in physicist's notation, eg,[km,kn,ki,m,n,i,j]. abba and
+    baab for cross excitation in chemist's notation, eg,
+    abba->(alpha:mj, beta:ni)
     '''
 
     t1a, t1b = t1
@@ -114,20 +110,16 @@ def cc_Woooo(cc, t1, t2, uccsd_eris):
     Wmnij_abbaJ = np.zeros([nkpts,nkpts,nkpts,nocca,noccb,noccb,nocca], dtype=Wmnij_aabbJ.dtype)
     Wmnij_baabJ = np.zeros([nkpts,nkpts,nkpts,noccb,nocca,nocca,noccb], dtype=Wmnij_aabbJ.dtype)
 
-    P = np.zeros((nkpts,nkpts,nkpts,nkpts))
-    kconserv = kpts_helper.get_kconserv(cc._scf.cell, cc.kpts)
-    for ki in range(nkpts):
-        for kj in range(nkpts):
-            for ka in range(nkpts):
-                kb = kconserv[ki,ka,kj]
-                P[ki,kj,ka,kb] = 1
-    t2ba = einsum('abcijkl,abcd->badjilk',t2ab, P)
-    tau_aa, tau_ab, tau_bb = make_tau(cc, t2, t1)
-    tau_ba = einsum('badjilk,abcd->abcijkl',tau_ab, P)
+    kconserv = cc.khelper.kconserv
+    P = kconserv_mat(cc.nkpts, cc.khelper.kconserv)
+    tau_aa, tau_ab, tau_bb = make_tau(cc, t2, t1, t1)
+    tau_ba = np.einsum('badjilk,abcd->abcijkl', tau_ab, P)
     for km in range(nkpts):
         for kn in range(nkpts):
-            tmp_aaaaJ = einsum('xje, ymnie->yxmnij', t1a, uccsd_eris.ooov.transpose(0,2,1,3,5,4,6)[km,kn]) - einsum('yie, xmnje->yxmnij', t1a, uccsd_eris.ooov.transpose(0,2,1,3,5,4,6)[km,kn])
-            tmp_bbbbJ = einsum('xje, ymnie->yxmnij', t1b, uccsd_eris.OOOV.transpose(0,2,1,3,5,4,6)[km,kn]) - einsum('yie, xmnje->yxmnij', t1b, uccsd_eris.OOOV.transpose(0,2,1,3,5,4,6)[km,kn])
+            tmp_aaaaJ = einsum('xje, ymnie->yxmnij', t1a, uccsd_eris.ooov.transpose(0,2,1,3,5,4,6)[km,kn])
+            tmp_aaaaJ-= einsum('yie, xmnje->yxmnij', t1a, uccsd_eris.ooov.transpose(0,2,1,3,5,4,6)[km,kn])
+            tmp_bbbbJ = einsum('xje, ymnie->yxmnij', t1b, uccsd_eris.OOOV.transpose(0,2,1,3,5,4,6)[km,kn])
+            tmp_bbbbJ-= einsum('yie, xmnje->yxmnij', t1b, uccsd_eris.OOOV.transpose(0,2,1,3,5,4,6)[km,kn])
             tmp_aabbJ = einsum('xje, ymnie->yxmnij', t1b, uccsd_eris.ooOV.transpose(0,2,1,3,5,4,6)[km,kn])
             tmp_bbaaJ = einsum('xje, ymnie->yxmnij', t1a, uccsd_eris.OOov.transpose(0,2,1,3,5,4,6)[km,kn])
             tmp_abbaJ = -einsum('yie,xmjne->yxmnij', t1b, uccsd_eris.ooOV[km,:,kn])
@@ -153,38 +145,15 @@ def cc_Woooo(cc, t1, t2, uccsd_eris):
                 Wmnij_baabJ[km,kn,ki] -=0.25*einsum('yijfe,ynfme->mnij', tau_ab[ki,kj], uccsd_eris.ovOV[kn,:,km])
 
     ##### Symmetry relations in Wmnij
-    Wmnij_aaaaK = Wmnij_aaaaJ.transpose(1,0,2,4,3,5,6).copy()
-    Wmnij_bbbbK = Wmnij_bbbbJ.transpose(1,0,2,4,3,5,6).copy()
-    Wmnij_aabbK = Wmnij_baabJ.transpose(1,0,2,4,3,5,6).copy()
-    Wmnij_bbaaK = Wmnij_abbaJ.transpose(1,0,2,4,3,5,6).copy()
-    Wmnij_abbaK = Wmnij_bbaaJ.transpose(1,0,2,4,3,5,6).copy()
-    Wmnij_baabK = Wmnij_aabbJ.transpose(1,0,2,4,3,5,6).copy()
+    Wmnij_aaaaK = Wmnij_aaaaJ.transpose(1,0,2,4,3,5,6)
+    Wmnij_bbbbK = Wmnij_bbbbJ.transpose(1,0,2,4,3,5,6)
+    Wmnij_aabbK = Wmnij_baabJ.transpose(1,0,2,4,3,5,6)
 
-    Wmnij_J = (Wmnij_aaaaJ, Wmnij_aabbJ, Wmnij_bbaaJ, Wmnij_bbbbJ, Wmnij_abbaJ, Wmnij_baabJ)
-    Wmnij_K = (Wmnij_aaaaK, Wmnij_aabbK, Wmnij_bbaaK, Wmnij_bbbbK, Wmnij_abbaK, Wmnij_baabK)
-    return (Wmnij_J, Wmnij_K)
+    Woooo = Wmnij_aaaaJ.transpose(0,2,1,3,5,4,6) - Wmnij_aaaaK.transpose(0,2,1,3,5,4,6)
+    WooOO = Wmnij_aabbJ.transpose(0,2,1,3,5,4,6) - Wmnij_aabbK.transpose(0,2,1,3,5,4,6)
+    WOOOO = Wmnij_bbbbJ.transpose(0,2,1,3,5,4,6) - Wmnij_bbbbK.transpose(0,2,1,3,5,4,6)
+    return Woooo, WooOO, WOOOO
 
-def cc_Woooo_ref(cc, t1, t2, uccsd_eris):
-    from pyscf.pbc.cc import kccsd_uhf
-    from pyscf.pbc.cc import kccsd
-    from pyscf.pbc.cc import kintermediates
-    from pyscf.pbc.lib import kpts_helper
-    orbspin = uccsd_eris._kccsd_eris.orbspin
-    kconserv = kpts_helper.get_kconserv(cc._scf.cell, cc.kpts)
-
-    t1a, t1b = t1
-    t2aa, t2ab, t2bb = t2
-    t1 = kccsd.spatial2spin((t1a, t1b), orbspin, kconserv)
-    t2 = kccsd.spatial2spin((t2aa, t2ab, t2bb), orbspin, kconserv)
-
-    Woooo_J = kintermediates.cc_Woooo(cc, t1, t2, uccsd_eris._kccsd_eris_j).transpose(0,2,1,3,5,4,6)
-    Woooo_K = kintermediates.cc_Woooo(cc, t1, t2, uccsd_eris._kccsd_eris_k).transpose(0,2,1,3,5,4,6)
-
-    uccsd_Woooo_J = kccsd_uhf._eri_spin2spatial(Woooo_J, 'oooo', uccsd_eris, cross_ab=True)
-    uccsd_Woooo_K = kccsd_uhf._eri_spin2spatial(Woooo_K, 'oooo', uccsd_eris, cross_ab=True)
-    # Woooo_J_, WooOO_J_, WOOoo_J_, WOOOO_J_, WoOOo_J_, WOooO_J_ = uccsd_Woooo_J
-    # Woooo_K_, WooOO_K_, WOOoo_K_, WOOOO_K_, WoOOo_K_, WOooO_K_ = uccsd_Woooo_K
-    return uccsd_Woooo_J, uccsd_Woooo_K
 
 def cc_Wvvvv(cc, t1, t2, eris):
     t1a, t1b = t1
@@ -207,10 +176,10 @@ def cc_Wvvvv(cc, t1, t2, eris):
     return Wvvvv, WvvVV, WVVVV
 
 def cc_Wovvo(cc, t1, t2, uccsd_eris):
-
     '''
-    This function returns the Js and Ks intermediates for Wmnij intermediates in physicist's notation, eg,[km,kn,ki,m,n,i,j]. abba and baab stands for cross excitation in chemist's notation, eg, abba->(alpha:mj, beta:ni)
-
+    This function returns the Js and Ks intermediates for Wmnij intermediates
+    in physicist's notation, eg,[km,kn,ki,m,n,i,j]. abba and baab stands for
+    cross excitation in chemist's notation, eg, abba->(alpha:mj, beta:ni)
     '''
 
     t1a, t1b = t1
@@ -219,10 +188,11 @@ def cc_Wovvo(cc, t1, t2, uccsd_eris):
     noccb, nvirb = t1b.shape[1:]
     kconserv = kpts_helper.get_kconserv(cc._scf.cell, cc.kpts)
 
-    Wmbej_aaaaJ = uccsd_eris.ovvo.transpose(0,2,1,3,5,4,6).copy()
-    Wmbej_aabbJ = uccsd_eris.ovVO.transpose(0,2,1,3,5,4,6).copy()
-    Wmbej_bbaaJ = uccsd_eris.OVvo.transpose(0,2,1,3,5,4,6).copy()
-    Wmbej_bbbbJ = uccsd_eris.OVVO.transpose(0,2,1,3,5,4,6).copy()
+    P = kconserv_mat(cc.nkpts, cc.khelper.kconserv)
+    Wmbej_aaaaJ = np.einsum('xyzaijb,xzyw->ywxibaj', uccsd_eris.voov.conj(), P)
+    Wmbej_aabbJ = np.einsum('xyzaijb,xzyw->ywxibaj', uccsd_eris.voOV.conj(), P)
+    Wmbej_bbaaJ = np.einsum('xyzaijb,xzyw->ywxibaj', uccsd_eris.VOov.conj(), P)
+    Wmbej_bbbbJ = np.einsum('xyzaijb,xzyw->ywxibaj', uccsd_eris.VOOV.conj(), P)
     Wmbej_abbaJ = np.zeros([nkpts, nkpts, nkpts, nocca, nvirb, nvirb, nocca], dtype = Wmbej_aaaaJ.dtype)
     Wmbej_baabJ = np.zeros([nkpts, nkpts, nkpts, noccb, nvira, nvira, noccb], dtype = Wmbej_aaaaJ.dtype)
 
@@ -283,39 +253,13 @@ def cc_Wovvo(cc, t1, t2, uccsd_eris):
                         Wmbej_abbaK[km,kb,ke] += -einsum('jf,nb,mnef->mbej',t1a[kj],t1b[kn], uccsd_eris.OVov.transpose(2,1,0,5,4,3,6).transpose(0,2,1,3,5,4,6)[km,kn,ke])
                         Wmbej_baabK[km,kb,ke] += -einsum('jf,nb,mnef->mbej',t1b[kj],t1a[kn], uccsd_eris.ovOV.transpose(2,1,0,5,4,3,6).transpose(0,2,1,3,5,4,6)[km,kn,ke])
 
-
-    Wmbej_J = (Wmbej_aaaaJ, Wmbej_aabbJ, Wmbej_bbaaJ, Wmbej_bbbbJ, Wmbej_abbaJ, Wmbej_baabJ)
-    Wmbej_K = (Wmbej_aaaaK, Wmbej_aabbK, Wmbej_bbaaK, Wmbej_bbbbK, Wmbej_abbaK, Wmbej_baabK)
-    return (Wmbej_J, Wmbej_K)
-
-
-
-
-def cc_Wovvo_ref(cc, t1, t2, uccsd_eris):
-    '''
-    reference from general ccsd
-    '''
-    from pyscf.pbc.cc import kccsd_uhf
-    from pyscf.pbc.cc import kccsd
-    from pyscf.pbc.cc import kintermediates
-    from pyscf.pbc.lib import kpts_helper
-    orbspin = uccsd_eris._kccsd_eris.orbspin
-    kconserv = kpts_helper.get_kconserv(cc._scf.cell, cc.kpts)
-
-    t1a, t1b = t1
-    t2aa, t2ab, t2bb = t2
-    t1 = kccsd.spatial2spin((t1a, t1b), orbspin, kconserv)
-    t2 = kccsd.spatial2spin((t2aa, t2ab, t2bb), orbspin, kconserv)
-
-    Wovvo_J = kintermediates.cc_Wovvo_jk(cc, t1, t2, uccsd_eris._kccsd_eris_j).transpose(0,2,1,3,5,4,6)
-    Wovvo_K = kintermediates.cc_Wovvo_jk(cc, t1, t2, uccsd_eris._kccsd_eris_k).transpose(0,2,1,3,5,4,6)
-
-    uccsd_Wovvo_J = kccsd_uhf._eri_spin2spatial(Wovvo_J, 'ovvo', uccsd_eris, cross_ab=True)
-    uccsd_Wovvo_K = kccsd_uhf._eri_spin2spatial(Wovvo_K, 'ovvo', uccsd_eris, cross_ab=True)
-
-    # Wovvo_J = _eri_spatial2spin(uccsd_Wovvo_J, 'ovvo', uccsd_eris, cross_ab=True).transpose(0,2,1,3,5,4,6)
-    # Wovvo_K = _eri_spatial2spin(uccsd_Wovvo_K, 'ovvo', uccsd_eris, cross_ab=True).transpose(0,2,1,3,5,4,6)
-    return uccsd_Wovvo_J, uccsd_Wovvo_K
+    Wovvo = Wmbej_aaaaJ.transpose(0,2,1,3,5,4,6) - Wmbej_aaaaK.transpose(0,2,1,3,5,4,6)
+    WovVO = Wmbej_aabbJ.transpose(0,2,1,3,5,4,6) - Wmbej_aabbK.transpose(0,2,1,3,5,4,6)
+    WOVvo = Wmbej_bbaaJ.transpose(0,2,1,3,5,4,6) - Wmbej_bbaaK.transpose(0,2,1,3,5,4,6)
+    WOVVO = Wmbej_bbbbJ.transpose(0,2,1,3,5,4,6) - Wmbej_bbbbK.transpose(0,2,1,3,5,4,6)
+    WoVVo = Wmbej_abbaJ.transpose(0,2,1,3,5,4,6) - Wmbej_abbaK.transpose(0,2,1,3,5,4,6)
+    WOvvO = Wmbej_baabJ.transpose(0,2,1,3,5,4,6) - Wmbej_baabK.transpose(0,2,1,3,5,4,6)
+    return Wovvo, WovVO, WOVvo, WOVVO, WoVVo, WOvvO
 
 def kconserv_mat(nkpts, kconserv):
     P = np.zeros((nkpts,nkpts,nkpts,nkpts))

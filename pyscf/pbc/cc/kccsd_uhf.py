@@ -18,6 +18,7 @@
 #          Yang Gao
 #          Qiming Sun <osirpt.sun@gmail.com>
 #          Jason Yu
+#          Alec White
 #
 
 import time
@@ -65,7 +66,6 @@ def update_amps(cc, t1, t2, eris):
     fov_ = eris.fock[0][:,:nocca,nocca:]
     fOV_ = eris.fock[1][:,:noccb,noccb:]
 
-    #Ht1, Ht2 = kccsd.update_amps(cc, t1, t2, eris._kccsd_eris)
     eris, uccsd_eris = eris._kccsd_eris, eris
     nkpts, nocc, nvir = t1.shape
     fock = eris.fock
@@ -74,91 +74,13 @@ def update_amps(cc, t1, t2, eris):
     foo = fock[:, :nocc, :nocc].copy()
     fvv = fock[:, nocc:, nocc:].copy()
 
-    tau = imdk.make_tau(cc, t2, t1, t1)
-
     Fvv = imdk.cc_Fvv(cc, t1, t2, eris)
     Foo = imdk.cc_Foo(cc, t1, t2, eris)
     Fov = imdk.cc_Fov(cc, t1, t2, eris)
-    # Fvv_, FVV_ = UCCSD_imdk.cc_Fvv(cc, kccsd.spin2spatial(t1, orbspin, kconserv), t2, uccsd_eris)  # MM
-    # Foo_, FOO_ = UCCSD_imdk.cc_Foo(cc, kccsd.spin2spatial(t1, orbspin, kconserv), t2, eris)  # MM
-    # Fov_, FOV_ = UCCSD_imdk.cc_Fov(cc, t1, t2, eris)  # MM
-    # Convert to UCCSD tensors and use them below
-    # lower-case o/v stand for alpha, upper-case O/V stand for beta. Fvv is
-    # the alpha part of Fock virtual-virtual block, FVV is beta part of Fock
-    # virtual-virtual block.
-    #Fvv_, FVV_ = _eri_spin2spatial(imdk.cc_Fvv(cc, t1, t2, eris), 'vv', uccsd_eris)
-    #Foo_, FOO_ = _eri_spin2spatial(imdk.cc_Foo(cc, t1, t2, eris), 'oo', uccsd_eris)
-    #Fov_, FOV_ = _eri_spin2spatial(imdk.cc_Fov(cc, t1, t2, eris), 'ov', uccsd_eris)
+
     Fvv_, FVV_ = kintermediates_uhf.cc_Fvv(cc, uccsd_t1, uccsd_t2, uccsd_eris)
     Foo_, FOO_ = kintermediates_uhf.cc_Foo(cc, uccsd_t1, uccsd_t2, uccsd_eris)
     Fov_, FOV_ = kintermediates_uhf.cc_Fov(cc, uccsd_t1, uccsd_t2, uccsd_eris)
-
-    # The UCCSD tensor Woooo_J_ and Woooo_K_ are in physicist's notation
-    uccsd_Woooo_J, uccsd_Woooo_K = kintermediates_uhf.cc_Woooo(cc, uccsd_t1, uccsd_t2, uccsd_eris)
-    Woooo_J_, WooOO_J_, WOOoo_J_, WOOOO_J_, WoOOo_J_, WOooO_J_ = uccsd_Woooo_J
-    Woooo_K_, WooOO_K_, WOOoo_K_, WOOOO_K_, WoOOo_K_, WOooO_K_ = uccsd_Woooo_K
-    # transpose(0,2,1,3,5,4,6) to make uccsd_Woooo_J suitable for _eri_spatial2spin function
-    uccsd_Woooo_J = (Woooo_J_.transpose(0,2,1,3,5,4,6), WooOO_J_.transpose(0,2,1,3,5,4,6), WOOoo_J_.transpose(0,2,1,3,5,4,6), WOOOO_J_.transpose(0,2,1,3,5,4,6), WoOOo_J_.transpose(0,2,1,3,5,4,6), WOooO_J_.transpose(0,2,1,3,5,4,6))
-    uccsd_Woooo_K = (Woooo_K_.transpose(0,2,1,3,5,4,6), WooOO_K_.transpose(0,2,1,3,5,4,6), WOOoo_K_.transpose(0,2,1,3,5,4,6), WOOOO_K_.transpose(0,2,1,3,5,4,6), WoOOo_K_.transpose(0,2,1,3,5,4,6), WOooO_K_.transpose(0,2,1,3,5,4,6))
-    # * transpose(0,2,1,3,5,4,6) to change back to physicist's convention.
-    #   Check whether the UCCSD tensors are the same to symmetry-allowed blocks
-    #   of spin-integral tensor Woooo
-    Woooo_J = _eri_spatial2spin(uccsd_Woooo_J, 'oooo', uccsd_eris, cross_ab=True).transpose(0,2,1,3,5,4,6)
-    Woooo_K = _eri_spatial2spin(uccsd_Woooo_K, 'oooo', uccsd_eris, cross_ab=True).transpose(0,2,1,3,5,4,6)
-    Woooo = imdk.cc_Woooo(cc, t1, t2, eris)  # For testing only
-    assert(abs(Woooo_J - Woooo_K - Woooo).max() < 1e-12)
-
-    # The UCCSD tensor Wvvvv_J_ or Wvvvv_K_ are kind of chemist's convention
-    uccsd_Wovvo_J, uccsd_Wovvo_K = kintermediates_uhf.cc_Wovvo(cc, uccsd_t1, uccsd_t2, uccsd_eris)
-    Wovvo_J_, WovVO_J_, WOVvo_J_, WOVVO_J_, WoVVo_J_, WOvvO_J_ = uccsd_Wovvo_J
-    Wovvo_K_, WovVO_K_, WOVvo_K_, WOVVO_K_, WoVVo_K_, WOvvO_K_ = uccsd_Wovvo_K
-    # transpose(0,2,1,3,5,4,6) to make uccsd_Woooo_J suitable for _eri_spatial2spin function
-    uccsd_Wovvo_J = (Wovvo_J_.transpose(0,2,1,3,5,4,6), WovVO_J_.transpose(0,2,1,3,5,4,6), WOVvo_J_.transpose(0,2,1,3,5,4,6), WOVVO_J_.transpose(0,2,1,3,5,4,6), WoVVo_J_.transpose(0,2,1,3,5,4,6), WOvvO_J_.transpose(0,2,1,3,5,4,6))
-    uccsd_Wovvo_K = (Wovvo_K_.transpose(0,2,1,3,5,4,6), WovVO_K_.transpose(0,2,1,3,5,4,6), WOVvo_K_.transpose(0,2,1,3,5,4,6), WOVVO_K_.transpose(0,2,1,3,5,4,6), WoVVo_K_.transpose(0,2,1,3,5,4,6), WOvvO_K_.transpose(0,2,1,3,5,4,6))
-    # * transpose(0,2,1,3,5,4,6) to change back to physicist's convention.
-    #   Check whether the UCCSD tensors are the same to symmetry-allowed blocks
-    #   of spin-integral tensor Woooo
-    Wovvo_J = _eri_spatial2spin(uccsd_Wovvo_J, 'ovvo', uccsd_eris, cross_ab=True).transpose(0,2,1,3,5,4,6)
-    Wovvo_K = _eri_spatial2spin(uccsd_Wovvo_K, 'ovvo', uccsd_eris, cross_ab=True).transpose(0,2,1,3,5,4,6)
-
-    Wovvo = imdk.cc_Wovvo(cc, t1, t2, eris)  # For testing only
-    assert(abs(Wovvo_J - Wovvo_K - Wovvo).max() < 1e-12)
-    print("cc_Woooo and cc_Wovvo done")
-#DELETEME    # * Use spin2spatial functiont to transform gccsd tensor to uccsd tensors
-#DELETEME    #   Pass uccsd_eris to kuhf_cc_Wovvo, in which the anti-symmetrized
-#DELETEME    #   gccsd.eris spin-orbital tensors can be accessed via uccsd_eris._kccsd_eris.
-#DELETEME    # * cc_Wovvo function should return two types of ovvo intermediates: Wovvo_J and Wovvo_K
-#DELETEME    #   The J part of the gccsd.eris spin-orbital tensors can be accessed via
-#DELETEME    #   uccsd_eris._kccsd_eris_j. The K part of gccsd.eris spin-orbital tensor
-#DELETEME    #   can be accessed vira uccsd_eris._kccsd_eris_k
-#DELETEME    #Wovvo_J, Wovvo_K = kuhf_cc_Wovvo(cc, kccsd.spin2spatial(t1, orbspin, kconserv),
-#DELETEME    #                       kccsd.spin2spatial(t2, orbspin, kconserv), uccsd_eris)
-#DELETEME    # * transpose(0,2,1,3,5,4,6) to transform the tensor to chemist's
-#DELETEME    #   convention,  function _eri_spin2spatial only supports spin-integral
-#DELETEME    #   tensor in chemist's convention
-#DELETEME    Wovvo_J = imdk.cc_Wovvo(cc, t1, t2, uccsd_eris._kccsd_eris_j).transpose(0,2,1,3,5,4,6)
-#DELETEME    Wovvo_K = imdk.cc_Wovvo(cc, t1, t2, uccsd_eris._kccsd_eris_k).transpose(0,2,1,3,5,4,6)
-#DELETEME    assert(abs(Wovvo_J - Wovvo_K - Wovvo.transpose(0,2,1,3,5,4,6)).max())
-#DELETEME
-#DELETEME    uccsd_Wovvo_J = _eri_spin2spatial(Wovvo_J, 'ovvo', uccsd_eris, cross_ab=True)
-#DELETEME    uccsd_Wovvo_K = _eri_spin2spatial(Wovvo_K, 'ovvo', uccsd_eris, cross_ab=True)
-#DELETEME    assert(abs(Wovvo_J - _eri_spatial2spin(uccsd_Wovvo_J, 'ovvo', uccsd_eris, cross_ab=True)).max() < 1e-12)
-#DELETEME    assert(abs(Wovvo_K - _eri_spatial2spin(uccsd_Wovvo_K, 'ovvo', uccsd_eris, cross_ab=True)).max() < 1e-12)
-#DELETEME
-#DELETEME    # The 6 non-zero blocks of the spin-orbital Wovvo tensor are
-#DELETEME    Wovvo_J_, WovVO_J_, WOVvo_J_, WOVVO_J_, WoVVo_J_, WOvvO_J_ = uccsd_Wovvo_J
-#DELETEME    Wovvo_K_, WovVO_K_, WOVvo_K_, WOVVO_K_, WoVVo_K_, WOvvO_K_ = uccsd_Wovvo_K
-
-#DELETEME    # Similar transformation can be applied on the spin-orbital Woooo and Wvvvv tensors.
-#DELETEME    # Many of UCCSD Woooo J and K tensors are equivalent by using permutation symmetry.
-#DELETEME    # The number of unique tensors should be 3.
-#DELETEME    Woooo_J = imdk.cc_Woooo(cc, t1, t2, uccsd_eris._kccsd_eris_j).transpose(0,2,1,3,5,4,6)
-#DELETEME    Woooo_K = imdk.cc_Woooo(cc, t1, t2, uccsd_eris._kccsd_eris_k).transpose(0,2,1,3,5,4,6)
-#DELETEME    assert(abs(Woooo_J - Woooo_K - Woooo.transpose(0,2,1,3,5,4,6)).max())
-#DELETEME    uccsd_Woooo_J = _eri_spin2spatial(Woooo_J, 'oooo', uccsd_eris, cross_ab=True)
-#DELETEME    uccsd_Woooo_K = _eri_spin2spatial(Woooo_K, 'oooo', uccsd_eris, cross_ab=True)
-#DELETEME    Woooo_J_, WooOO_J_, WOOoo_J_, WOOOO_J_, WoOOo_J_, WOooO_J_ = uccsd_Woooo_J
-#DELETEME    Woooo_K_, WooOO_K_, WOOoo_K_, WOOOO_K_, WoOOo_K_, WOooO_K_ = uccsd_Woooo_K
 
     # Move energy terms to the other side
     for k in range(nkpts):
@@ -172,22 +94,7 @@ def update_amps(cc, t1, t2, eris):
         FOO_[k] -= np.diag(np.diag(fOO_[k]))
 
     # Get the momentum conservation array
-    # Note: chemist's notation for momentum conserving t2(ki,kj,ka,kb), even though
-    # integrals are in physics notation
     kconserv = kpts_helper.get_kconserv(cc._scf.cell, cc.kpts)
-
-    # eris_ovvo can be accessed constructed with _kccsd_eris_j.ovvo  and  eris._kccsd_eris_k.
-    # eris_ovvo = uccsd_eris._kccsd_eris_j.ovvo - uccsd.eris._kccsd_eris_k.ovvo
-    #
-    # Note _kccsd_eris_j.ovvo are in physicist's convention, transpose(0,2,1,3,5,4,6)
-    # to change it to chemist's notation which was required by _eri_spin2spatial function.
-    # Relation between uccsd_eris integrals and _kccsd_eris_j.ovvo are
-    # uccsd_eris.ovvo, uccsd_eris.ovVO, uccsd_eris.OVvo, uccsd_eris.OVVO = _eri_spin2spatial(_kccsd_eris_j.ovvo.transpose(0,2,1,3,5,4,6), 'ovvo', eris)
-    #
-    # Relation between uccsd_eris integrals and _kccsd_eris_k.ovvo are
-    # uccsd_eris.ovvo, uccsd_eris.ovVO, uccsd_eris.OVvo, uccsd_eris.OVVO = _eri_spin2spatial(_kccsd_eris_k.ovvo.transpose(1,0,2,4,3,5,6).transpose(0,2,1,3,5,4,6), 'ovvo', eris)
-    #
-    # Similar transformation can be found for eris_oovo, eris_vvvo below.
 
     eris_oovo = np.zeros(shape=(nkpts, nkpts, nkpts, nocc, nocc, nvir, nocc), dtype=t2.dtype)
     eris_vvvo = np.zeros(shape=(nkpts, nkpts, nkpts, nvir, nvir, nvir, nocc), dtype=t2.dtype)
@@ -251,7 +158,6 @@ def update_amps(cc, t1, t2, eris):
                 Ht1b[ka] += - 0.5 * einsum('IMEF,AFME->IA', t2bb[ki, km, ke], uccsd_eris.VVOV[ka, kf, km])
 
     for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
-        # Chemist's notation for momentum conserving t2(ki,kj,ka,kb)
         kb = kconserv[ki, ka, kj]
 
         # Fvv equation
@@ -307,61 +213,44 @@ def update_amps(cc, t1, t2, eris):
         Ht2bb[ki, kj, ka] += tmp
 
     # T2 equation
-    t2new = np.array(eris.oovv).conj()
-    for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
-        # Chemist's notation for momentum conserving t2(ki,kj,ka,kb)
-        kb = kconserv[ki, ka, kj]
-
-        #Ftmp = Fvv[kb] - 0.5 * einsum('mb,me->be', t1[kb], Fov[kb])
-        #tmp = einsum('ijae,be->ijab', t2[ki, kj, ka], Ftmp)
-        #t2new[ki, kj, ka] += tmp
-
-        ##t2new[ki,kj,kb] -= tmp.transpose(0,1,3,2)
-        #Ftmp = Fvv[ka] - 0.5 * einsum('ma,me->ae', t1[ka], Fov[ka])
-        #tmp = einsum('ijbe,ae->ijab', t2[ki, kj, kb], Ftmp)
-        #t2new[ki, kj, ka] -= tmp
-
-        #Ftmp = Foo[kj] + 0.5 * einsum('je,me->mj', t1[kj], Fov[kj])
-        #tmp = einsum('imab,mj->ijab', t2[ki, kj, ka], Ftmp)
-        #t2new[ki, kj, ka] -= tmp
-
-        ##t2new[kj,ki,ka] += tmp.transpose(1,0,2,3)
-        #Ftmp = Foo[ki] + 0.5 * einsum('ie,me->mi', t1[ki], Fov[ki])
-        #tmp = einsum('jmab,mi->ijab', t2[kj, ki, ka], Ftmp)
-        #t2new[ki, kj, ka] += tmp
-
-        for km in range(nkpts):
-            # Wminj
-            #   - km - kn + ka + kb = 0
-            # =>  kn = ka - km + kb
-            kn = kconserv[ka, km, kb]
-            t2new[ki, kj, ka] += 0.5 * einsum('mnab,mnij->ijab', tau[km, kn, ka], Woooo[km, kn, ki])
-
-    u2aa, u2ab, u2bb = kccsd.spin2spatial(t2new, orbspin, kconserv)
-    Ht2aa += u2aa
-    Ht2ab += u2ab
-    Ht2bb += u2bb
-
-    tau = None
-    add_vvvv_(cc, (Ht2aa, Ht2ab, Ht2bb), uccsd_t1, uccsd_t2, uccsd_eris)
+    eris_ovov = np.asarray(uccsd_eris.ovov)
+    eris_OVOV = np.asarray(uccsd_eris.OVOV)
+    eris_ovOV = np.asarray(uccsd_eris.ovOV)
+    Ht2aa += (eris_ovov.transpose(0,2,1,3,5,4,6) - eris_ovov.transpose(2,0,1,5,3,4,6)).conj()
+    Ht2bb += (eris_OVOV.transpose(0,2,1,3,5,4,6) - eris_OVOV.transpose(2,0,1,5,3,4,6)).conj()
+    Ht2ab += eris_ovOV.transpose(0,2,1,3,5,4,6).conj()
 
     P = kintermediates_uhf.kconserv_mat(cc.nkpts, cc.khelper.kconserv)
-    Ht2ab += einsum('xwzimae,wvumeBJ,xwzv,wuvy->xyziJaB', t2aa, WovVO_J_-WovVO_K_, P, P)
-    Ht2ab += einsum('xwziMaE,wvuMEBJ,xwzv,wuvy->xyziJaB', t2ab, WOVVO_J_-WOVVO_K_, P, P)
+    tauaa, tauab, taubb = kintermediates_uhf.make_tau(cc, uccsd_t2, uccsd_t1, uccsd_t1)
+    Woooo, WooOO, WOOOO = kintermediates_uhf.cc_Woooo(cc, uccsd_t1, uccsd_t2, uccsd_eris)
+    # Add the contributions from Wvvvv
+    Woooo += .5 * np.einsum('xwymenf,uvwijef,xywz,uvwz->xuyminj', eris_ovov, tauaa, P, P)
+    WOOOO += .5 * np.einsum('xwymenf,uvwijef,xywz,uvwz->xuyminj', eris_OVOV, taubb, P, P)
+    WooOO += .5 * np.einsum('xwymeNF,uvwiJeF,xywz,uvwz->xuymiNJ', eris_ovOV, tauab, P, P)
+    Ht2aa += np.einsum('xuyminj,xywmnab,xyuv->uvwijab', Woooo, tauaa, P) * .5
+    Ht2bb += np.einsum('xuyminj,xywmnab,xyuv->uvwijab', WOOOO, taubb, P) * .5
+    Ht2ab += np.einsum('xuymiNJ,xywmNaB,xyuv->uvwiJaB', WooOO, tauab, P)
+
+    add_vvvv_(cc, (Ht2aa, Ht2ab, Ht2bb), uccsd_t1, uccsd_t2, uccsd_eris)
+
+    Wovvo, WovVO, WOVvo, WOVVO, WoVVo, WOvvO = \
+            kintermediates_uhf.cc_Wovvo(cc, uccsd_t1, uccsd_t2, uccsd_eris)
+    Ht2ab += einsum('xwzimae,wvumeBJ,xwzv,wuvy->xyziJaB', t2aa, WovVO, P, P)
+    Ht2ab += einsum('xwziMaE,wvuMEBJ,xwzv,wuvy->xyziJaB', t2ab, WOVVO, P, P)
     Ht2ab -= einsum('xie,zma,uwzBJme,zuwx,xyzu->xyziJaB', t1a, t1a, uccsd_eris.VOov, P, P)
 
-    Ht2ab += einsum('wxvmIeA,wvumebj,xwzv,wuvy->yxujIbA', t2ab, Wovvo_J_-Wovvo_K_, P, P)
-    Ht2ab += einsum('wxvMIEA,wvuMEbj,xwzv,wuvy->yxujIbA', t2bb, WOVvo_J_-WOVvo_K_, P, P)
+    Ht2ab += einsum('wxvmIeA,wvumebj,xwzv,wuvy->yxujIbA', t2ab, Wovvo, P, P)
+    Ht2ab += einsum('wxvMIEA,wvuMEbj,xwzv,wuvy->yxujIbA', t2bb, WOVvo, P, P)
     Ht2ab -= einsum('xIE,zMA,uwzbjME,zuwx,xyzu->yxujIbA', t1b, t1b, uccsd_eris.voOV, P, P)
 
-    Ht2ab += einsum('xwviMeA,wvuMebJ,xwzv,wuvy->xyuiJbA', t2ab, WOvvO_J_-WOvvO_K_, P, P)
+    Ht2ab += einsum('xwviMeA,wvuMebJ,xwzv,wuvy->xyuiJbA', t2ab, WOvvO, P, P)
     Ht2ab -= einsum('xie,zMA,zwuMJbe,zuwx,xyzu->xyuiJbA', t1a, t1b, uccsd_eris.OOvv, P, P)
 
-    Ht2ab += einsum('wxzmIaE,wvumEBj,xwzv,wuvy->yxzjIaB', t2ab, WoVVo_J_-WoVVo_K_, P, P)
+    Ht2ab += einsum('wxzmIaE,wvumEBj,xwzv,wuvy->yxzjIaB', t2ab, WoVVo, P, P)
     Ht2ab -= einsum('xIE,zma,zwumjBE,zuwx,xyzu->yxzjIaB', t1b, t1a, uccsd_eris.ooVV, P, P)
 
-    u2aa  = einsum('xwzimae,wvumebj,xwzv,wuvy->xyzijab', t2aa, Wovvo_J_-Wovvo_K_, P, P)
-    u2aa += einsum('xwziMaE,wvuMEbj,xwzv,wuvy->xyzijab', t2ab, WOVvo_J_-WOVvo_K_, P, P)
+    u2aa  = einsum('xwzimae,wvumebj,xwzv,wuvy->xyzijab', t2aa, Wovvo, P, P)
+    u2aa += einsum('xwziMaE,wvuMEbj,xwzv,wuvy->xyzijab', t2ab, WOVvo, P, P)
     u2aa += einsum('xie,zma,zwumjbe,zuwx,xyzu->xyzijab', t1a, t1a, uccsd_eris.oovv, P, P)
     u2aa -= einsum('xie,zma,uwzbjme,zuwx,xyzu->xyzijab', t1a, t1a, uccsd_eris.voov, P, P)
     u2aa += np.einsum('xie,yuxjbea,yxuz->xyzijab', t1a, uccsd_eris.ovvv.conj(), P)
@@ -370,8 +259,8 @@ def update_amps(cc, t1, t2, eris):
     u2aa = u2aa - np.einsum('xyzijab,xyzu->xyuijba', u2aa, P)
     Ht2aa += u2aa
 
-    u2bb  = einsum('xwzimae,wvumebj,xwzv,wuvy->xyzijab', t2bb, WOVVO_J_-WOVVO_K_, P, P)
-    u2bb += einsum('wxvMiEa,wvuMEbj,xwzv,wuvy->xyzijab', t2ab, WovVO_J_-WovVO_K_, P, P)
+    u2bb  = einsum('xwzimae,wvumebj,xwzv,wuvy->xyzijab', t2bb, WOVVO, P, P)
+    u2bb += einsum('wxvMiEa,wvuMEbj,xwzv,wuvy->xyzijab', t2ab, WovVO, P, P)
     u2bb += einsum('xie,zma,zwumjbe,zuwx,xyzu->xyzijab', t1b, t1b, uccsd_eris.OOVV, P, P)
     u2bb -= einsum('xie,zma,uwzbjme,zuwx,xyzu->xyzijab', t1b, t1b, uccsd_eris.VOOV, P, P)
     u2bb += np.einsum('xie,yuxjbea,yxuz->xyzijab', t1b, uccsd_eris.OVVV.conj(), P)
@@ -531,22 +420,17 @@ def vector_to_amplitudes(vec, nmo, nocc, nkpts=1):
     nocca, noccb = nocc
     nmoa, nmob = nmo
     nvira, nvirb = nmoa - nocca, nmob - noccb
+    sizes = (nkpts*nocca*nvira, nkpts*noccb*nvirb,
+             nkpts**3*nocca**2*nvira**2, nkpts**3*nocca*noccb*nvira*nvirb,
+             nkpts**3*noccb**2*nvirb**2)
+    sections = np.cumsum(sizes[:-1])
+    t1a, t1b, t2aa, t2ab, t2bb = np.split(vec, sections)
 
-    t1a = vec[:nkpts*nocca*nvira].reshape(nkpts,nocca,nvira)
-    vec = vec[nkpts*nocca*nvira:]
-
-    t1b = vec[:nkpts*noccb*nvirb].reshape(nkpts,noccb,nvirb)
-    vec = vec[nkpts*noccb*nvirb:]
-
-    t2aa = vec[:nkpts**3*nocca**2*nvira**2]
+    t1a = t1a.reshape(nkpts,nocca,nvira)
+    t1b = t1b.reshape(nkpts,noccb,nvirb)
     t2aa = t2aa.reshape(nkpts,nkpts,nkpts,nocca,nocca,nvira,nvira)
-    vec = vec[nkpts**3*nocca**2*nvira**2:]
-
-    t2ab = vec[:nkpts**3*nocca*noccb*nvira*nvirb]
     t2ab = t2ab.reshape(nkpts,nkpts,nkpts,nocca,noccb,nvira,nvirb)
-    vec = vec[nkpts**3*nocca*noccb*nvira*nvirb:]
-
-    t2bb = vec.reshape(nkpts,nkpts,nkpts,noccb,noccb,nvirb,nvirb)
+    t2bb = t2bb.reshape(nkpts,nkpts,nkpts,noccb,noccb,nvirb,nvirb)
     return (t1a,t1b), (t2aa,t2ab,t2bb)
 
 def add_vvvv_(cc, Ht2, t1, t2, eris):
@@ -644,17 +528,15 @@ def add_vvvv_(cc, Ht2, t1, t2, eris):
                 Ht2ab[ki,kj,ka] += lib.einsum('acbd,ijcd->ijab', WvvVV, tauab)
         _Wvvvv = _WvvVV = _WVVVV = None
 
-    tauaa, tauab, taubb = kintermediates_uhf.make_tau(cc, t2, t1, t1)
-    P = kintermediates_uhf.kconserv_mat(cc.nkpts, cc.khelper.kconserv)
-    eris_ovov = eris.ovov - eris.ovov.transpose(2,1,0,5,4,3,6)
-    eris_ovOV = eris.ovOV
-    eris_OVOV = eris.OVOV - eris.OVOV.transpose(2,1,0,5,4,3,6)
-    minj = np.einsum('xwymenf,uvwijef,xywz,uvwz->xuyminj', eris_ovov, tauaa, P, P)
-    MINJ = np.einsum('xwymenf,uvwijef,xywz,uvwz->xuyminj', eris_OVOV, taubb, P, P)
-    miNJ = np.einsum('xwymeNF,uvwiJeF,xywz,uvwz->xuymiNJ', eris_ovOV, tauab, P, P)
-    Ht2aa += np.einsum('xuyminj,xywmnab,xyuv->uvwijab', minj, tauaa, P) * .125
-    Ht2bb += np.einsum('xuyminj,xywmnab,xyuv->uvwijab', MINJ, taubb, P) * .125
-    Ht2ab += np.einsum('xuymiNJ,xywmNaB,xyuv->uvwiJaB', miNJ, tauab, P) * .5
+    # Contractions below are merged to Woooo intermediates
+    # tauaa, tauab, taubb = kintermediates_uhf.make_tau(cc, t2, t1, t1)
+    # P = kintermediates_uhf.kconserv_mat(cc.nkpts, cc.khelper.kconserv)
+    # minj = np.einsum('xwymenf,uvwijef,xywz,uvwz->xuyminj', eris.ovov, tauaa, P, P)
+    # MINJ = np.einsum('xwymenf,uvwijef,xywz,uvwz->xuyminj', eris.OVOV, taubb, P, P)
+    # miNJ = np.einsum('xwymeNF,uvwiJeF,xywz,uvwz->xuymiNJ', eris.ovOV, tauab, P, P)
+    # Ht2aa += np.einsum('xuyminj,xywmnab,xyuv->uvwijab', minj, tauaa, P) * .25
+    # Ht2bb += np.einsum('xuyminj,xywmnab,xyuv->uvwijab', MINJ, taubb, P) * .25
+    # Ht2ab += np.einsum('xuymiNJ,xywmNaB,xyuv->uvwiJaB', miNJ, tauab, P) * .5
     return (Ht2aa, Ht2ab, Ht2bb)
 
 
@@ -1049,27 +931,12 @@ def _eri_spatial2spin(eri_aa_ab_ba_bb, vvvv, eris, cross_ab=False):
                     len(idx3a[0])+len(idx3b[0]),
                     len(idx4a[0])+len(idx4b[0])), dtype=np.complex128)
     kconserv = kpts_helper.get_kconserv(eris.cell, eris.kpts)
-    #print(eri_aaaa.shape, eri_aabb.shape, eri_bbaa.shape, eri_bbbb.shape, eri_abba.shape, eri_baab.shape)
-    #print(np.array(idx1a).shape,np.array(idx1b).shape)
-    #print(np.array(idx2a).shape,np.array(idx2b).shape)
-    #print(np.array(idx3a).shape,np.array(idx3b).shape)
-    #print(np.array(idx4a).shape,np.array(idx4b).shape)
     for ki, kj, kk in kpts_helper.loop_kkk(nkpts):
         kl = kconserv[ki, kj, kk]
-        #print(idx1a[ki][:,None,None,None])
-        #print(idx2a[kj][:,None,None])
-        #print(idx3a[kk][:,None])
-        #print(idx4a[kl])
         eri[ki,kj,kk, idx1a[ki][:,None,None,None],idx2a[kj][:,None,None],idx3a[kk][:,None],idx4a[kl]] = eri_aaaa[ki,kj,kk]
         eri[ki,kj,kk, idx1a[ki][:,None,None,None],idx2a[kj][:,None,None],idx3b[kk][:,None],idx4b[kl]] = eri_aabb[ki,kj,kk]
         eri[ki,kj,kk, idx1b[ki][:,None,None,None],idx2b[kj][:,None,None],idx3a[kk][:,None],idx4a[kl]] = eri_bbaa[ki,kj,kk]
         eri[ki,kj,kk, idx1b[ki][:,None,None,None],idx2b[kj][:,None,None],idx3b[kk][:,None],idx4b[kl]] = eri_bbbb[ki,kj,kk]
-
-        #eri[ki,kj,kk, idx1a[ki][:,None,None,None],idx2a[kj][:,None,None],idx3b[kk][:,None],idx4b[kl]] = eri_aabb[ki,kj,kk]
-        #eri[ki,kj,kk, idx1b[ki][:,None,None,None],idx2b[kj][:,None,None],idx3a[kk][:,None],idx4a[kl]] = eri_bbaa[ki,kj,kk]
-        #eri[ki,kj,kk, idx1b[ki][:,None,None,None],idx2b[kj][:,None,None],idx3b[kk][:,None],idx4b[kl]] = eri_bbbb[ki,kj,kk]
-        #### modified by Yang
-
         if cross_ab:
             eri[ki,kj,kk, idx1a[ki][:,None,None,None],idx2b[kj][:,None,None],idx3b[kk][:,None],idx4a[kl]] = eri_abba[ki,kj,kk]
             eri[ki,kj,kk, idx1b[ki][:,None,None,None],idx2a[kj][:,None,None],idx3a[kk][:,None],idx4b[kl]] = eri_baab[ki,kj,kk]
@@ -1148,50 +1015,6 @@ if __name__ == '__main__':
     mycc = KUCCSD(kmf)
     eris = mycc.ao2mo()
     t1, t2 = rand_t1_t2(mycc)
-    ####### This block compare the uccsd cc_Woooo and cc_Wovvo intermediates with the reference from gccsd
-    from numpy.linalg import norm
-    from kintermediates_uhf import cc_Wovvo_ref, cc_Wovvo, cc_Woooo_ref, cc_Woooo
-    Wovvo_J_ref, Wovvo_K_ref = cc_Wovvo_ref(mycc, t1, t2, eris)
-    J_aaaa_ref, J_aabb_ref, J_bbaa_ref, J_bbbb_ref, J_abba_ref, J_baab_ref = Wovvo_J_ref
-    K_aaaa_ref, K_aabb_ref, K_bbaa_ref, K_bbbb_ref, K_abba_ref, K_baab_ref = Wovvo_K_ref
-    Wovvo_J, Wovvo_K = cc_Wovvo(mycc, t1, t2, eris)
-    J_aaaa, J_aabb, J_bbaa, J_bbbb, J_abba, J_baab = Wovvo_J
-    K_aaaa, K_aabb, K_bbaa, K_bbbb, K_abba, K_baab = Wovvo_K
-    print("examing errors for cc_Wovvo....\n")
-    print(norm(J_aaaa_ref.transpose(0,2,1,3,5,4,6) - J_aaaa))
-    print(norm(J_bbbb_ref.transpose(0,2,1,3,5,4,6) - J_bbbb))
-    print(norm(J_aabb_ref.transpose(0,2,1,3,5,4,6) - J_aabb))
-    print(norm(J_bbaa_ref.transpose(0,2,1,3,5,4,6) - J_bbaa))
-    print(norm(J_abba_ref.transpose(0,2,1,3,5,4,6) - J_abba))
-    print(norm(J_baab_ref.transpose(0,2,1,3,5,4,6) - J_baab))
-
-    print(norm(K_aaaa_ref.transpose(0,2,1,3,5,4,6) - K_aaaa))
-    print(norm(K_bbbb_ref.transpose(0,2,1,3,5,4,6) - K_bbbb))
-    print(norm(K_aabb_ref.transpose(0,2,1,3,5,4,6) - K_aabb))
-    print(norm(K_bbaa_ref.transpose(0,2,1,3,5,4,6) - K_bbaa))
-    print(norm(K_abba_ref.transpose(0,2,1,3,5,4,6) - K_abba))
-    print(norm(K_baab_ref.transpose(0,2,1,3,5,4,6) - K_baab))
-
-    Woooo_J_ref, Woooo_K_ref = cc_Woooo_ref(mycc, t1, t2, eris)
-    J_aaaa_ref, J_aabb_ref, J_bbaa_ref, J_bbbb_ref, J_abba_ref, J_baab_ref = Woooo_J_ref
-    K_aaaa_ref, K_aabb_ref, K_bbaa_ref, K_bbbb_ref, K_abba_ref, K_baab_ref = Woooo_K_ref
-    Woooo_J, Woooo_K = cc_Woooo(mycc, t1, t2, eris)
-    J_aaaa, J_aabb, J_bbaa, J_bbbb, J_abba, J_baab = Woooo_J
-    K_aaaa, K_aabb, K_bbaa, K_bbbb, K_abba, K_baab = Woooo_K
-    print("examing errors for cc_Woooo....\n")
-    print(norm(J_aaaa_ref.transpose(0,2,1,3,5,4,6) - J_aaaa))
-    print(norm(J_bbbb_ref.transpose(0,2,1,3,5,4,6) - J_bbbb))
-    print(norm(J_aabb_ref.transpose(0,2,1,3,5,4,6) - J_aabb))
-    print(norm(J_bbaa_ref.transpose(0,2,1,3,5,4,6) - J_bbaa))
-    print(norm(J_abba_ref.transpose(0,2,1,3,5,4,6) - J_abba))
-    print(norm(J_baab_ref.transpose(0,2,1,3,5,4,6) - J_baab))
-
-    print(norm(K_aaaa_ref.transpose(0,2,1,3,5,4,6) - K_aaaa))
-    print(norm(K_bbbb_ref.transpose(0,2,1,3,5,4,6) - K_bbbb))
-    print(norm(K_aabb_ref.transpose(0,2,1,3,5,4,6) - K_aabb))
-    print(norm(K_bbaa_ref.transpose(0,2,1,3,5,4,6) - K_bbaa))
-    print(norm(K_abba_ref.transpose(0,2,1,3,5,4,6) - K_abba))
-    print(norm(K_baab_ref.transpose(0,2,1,3,5,4,6) - K_baab))
     Ht1, Ht2 = mycc.update_amps(t1, t2, eris)
     print(lib.finger(Ht1[0]) - (-1.2692088297292825-12.893074780897923j))
     print(lib.finger(Ht1[1]) - (-11.831413366451148+19.95758532598137j ))
@@ -1222,14 +1045,6 @@ if __name__ == '__main__':
     print(abs(ge - ue))
     print(abs(r1 - kgcc.spatial2spin(Ht1)).max())
     print(abs(r2 - kgcc.spatial2spin(Ht2)).max())
-
-    e2,t1,t2 = mycc.init_amps(eris)
-    ge2,gt1,gt2 = kgcc.init_amps(kccsd_eris)
-    r1 = kgcc.spatial2spin(t1)
-    r2 = kgcc.spatial2spin(t2)
-    print(abs(e2 - ge2))
-    print(abs(r1 - gt1).max())
-    print(abs(r2 - gt2).max())
     exit()
 
     kmf = kmf.density_fit(auxbasis=[[0, (1., 1.)], [0, (.5, 1.)]])
