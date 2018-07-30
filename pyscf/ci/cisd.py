@@ -554,6 +554,46 @@ def as_scanner(ci):
 
 
 class CISD(lib.StreamObject):
+    '''restricted CISD
+
+    Attributes:
+        verbose : int
+            Print level.  Default value equals to :class:`Mole.verbose`
+        max_memory : float or int
+            Allowed memory in MB.  Default value equals to :class:`Mole.max_memory`
+        conv_tol : float
+            converge threshold.  Default is 1e-9.
+        max_cycle : int
+            max number of iterations.  Default is 50.
+        max_space : int
+            Davidson diagonalization space size.  Default is 12.
+        direct : bool
+            AO-direct CISD. Default is False.
+        async_io : bool
+            Allow for asynchronous function execution. Default is True.
+        frozen : int or list
+            If integer is given, the inner-most orbitals are frozen from CI
+            amplitudes.  Given the orbital indices (0-based) in a list, both
+            occupied and virtual orbitals can be frozen in CI calculation.
+
+            >>> mol = gto.M(atom = 'H 0 0 0; F 0 0 1.1', basis = 'ccpvdz')
+            >>> mf = scf.RHF(mol).run()
+            >>> # freeze 2 core orbitals
+            >>> myci = ci.CISD(mf).set(frozen = 2).run()
+            >>> # freeze 2 core orbitals and 3 high lying unoccupied orbitals
+            >>> myci.set(frozen = [0,1,16,17,18]).run()
+
+    Saved results
+
+        converged : bool
+            CISD converged or not
+        e_corr : float
+            CISD correlation correction
+        e_tot : float
+            Total CCSD energy (HF + correlation)
+        ci :
+            CI wavefunction coefficients
+    '''
 
     conv_tol = getattr(__config__, 'ci_cisd_CISD_conv_tol', 1e-9)
     max_cycle = getattr(__config__, 'ci_cisd_CISD_max_cycle', 50)
@@ -565,8 +605,12 @@ class CISD(lib.StreamObject):
 
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
         if 'dft' in str(mf.__module__):
-             raise RuntimeError('CISD Warning: The first argument mf is a DFT object. '
-                                'CISD calculation should be initialized with HF object.')
+            raise RuntimeError('CISD Warning: The first argument mf is a DFT object. '
+                               'CISD calculation should be initialized with HF object.\n'
+                               'DFT object can be converted to HF object with '
+                               'the code below:\n'
+                               '    mf_hf = scf.RHF(mol)\n'
+                               '    mf_hf.__dict__.update(mf_dft.__dict__)\n')
 
         if mo_coeff is None: mo_coeff = mf.mo_coeff
         if mo_occ   is None: mo_occ   = mf.mo_occ
