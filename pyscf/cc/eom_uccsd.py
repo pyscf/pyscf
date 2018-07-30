@@ -564,7 +564,7 @@ def eaccsd_matvec(eom, vector, imds=None, diag=None):
     # Eq. (30)
     #Hr1  = np.einsum('ac,c->a', imds.Fvv, r1)
     #Hr1 += np.einsum('ld,lad->a', imds.Fov, r2)
-    Hr1 = 0.5*np.einsum('alcd,lcd->a', imds.Wvovv, r2)
+    #Hr1 = 0.5*np.einsum('alcd,lcd->a', imds.Wvovv, r2)
 
     # Eq. (31)
     Hr2 = 0.0 * np.einsum('abcj,c->jab', imds.Wvvvo, r1)
@@ -669,19 +669,44 @@ def eaccsd_matvec(eom, vector, imds=None, diag=None):
 
     new_Hr1, new_Hr2 = spatial2spin_ea([Hr1a, Hr1b], [Hr2aaa, Hr2aba, Hr2bab, Hr2bbb], orbspin)
     #vector = amplitudes_to_vector_ea(Hr1, Hr2)
-    vector += amplitudes_to_vector_ea(new_Hr1, new_Hr2)
+    vector = amplitudes_to_vector_ea(new_Hr1, new_Hr2)
     return vector
 
 def eaccsd_diag(eom, imds=None):
+
     if imds is None: imds = eom.make_imds()
-    t1, t2 = imds.t1, imds.t2
-    nocc, nvir = t1.shape
+    t1,t2 = imds.t1, imds.t2
+
+    imds1 = _IMDS(eom._cc._ucc)
+    imds1.make_ea()
+
+    t1_new, t2_new = imds1.t1, imds1.t2
+    t1a, t1b = t1_new
+    t2aa, t2ab, t2bb = t2_new
+
+    nocc_a, nvir_a = t1a.shape
+    nocc_b, nvir_b = t1b.shape
+    dtype = np.result_type(t1a,t1b,t2aa,t2ab,t2bb)
+
+    nocc=nocca+noccb
+    nvir=nvira+nvirb
+
+    Wvvvv_spatial = _eri_spin2spatial(imds.Wvvvv.transpose((0, 2, 1, 3)), 'vvvv', orbspin, nocc)
+    Wvvvv, WvvVV, WVVvv, WVVVV = Wvvvv_spatial
 
     Hr1 = np.diag(imds.Fvv)
     Hr2 = np.zeros((nocc,nvir,nvir),dtype=t1.dtype)
+
+    Hr1a = np.diag(imds1.Fvv)
+    Hr1b = np.diag(imds1.FVV)
+    Hr2aaa = np.zeros((nocca,nvira,nvira),dtype=dtype)
+    Hr2bab = np.zeros((noccb,nvira,nvirb),dtype=dtype)
+    Hr2aba = np.zeros((nocca,nvirb,nvira),dtype=dtype)
+    Hr2bbb = np.zeros((noccb,nvirb,nvirb),dtype=dtype)
+
     for a in range(nvir):
         _Wvvvva = np.array(imds.Wvvvv[a])
-        for b in range(a):
+        for b in range(nvir):
             for j in range(nocc):
                Hr2[j,a,b] += imds.Fvv[a,a]
                Hr2[j,a,b] += imds.Fvv[b,b]
@@ -689,16 +714,58 @@ def eaccsd_diag(eom, imds=None):
                Hr2[j,a,b] += imds.Wovvo[j,b,b,j]
                Hr2[j,a,b] += imds.Wovvo[j,a,a,j]
                Hr2[j,a,b] += 0.5*(_Wvvvva[b,a,b]-_Wvvvva[b,b,a])
-               Hr2[j,a,b] += -0.5*(np.dot(imds.Woovv[:,j,a,b], t2[:,j,a,b])
-                                  -np.dot(imds.Woovv[:,j,b,a], t2[:,j,a,b]))
+               #Hr2[j,a,b] += -0.5*(np.dot(imds.Woovv[:,j,a,b], t2[:,j,a,b])
+               #                   -np.dot(imds.Woovv[:,j,b,a], t2[:,j,a,b]))
+  
 
-    vector = amplitudes_to_vector_ea(Hr1, Hr2)
+    [Hr1a_E, Hr1b_E], [Hr2aaa_E, Hr2aba_E, Hr2bab_E, Hr2bbb_E] = spin2spatial_ea(Hr1, Hr2, orbspin)
+
+    Hr2bab = np.zeros((nocc_b,nvir_a,nvir_b),dtype=t1.dtype)
+    for a in range(nvir_a):
+        WvvVVa = np.array(WvvVV[a])
+        for b in range(nvir_b):
+            for j in range(nocc_b):
+                #a=i, b=j, j=a
+                Hr2bab[j,a,b]=-imds1.FOO[j,j]+imds1.Fvv[a,a]+imds1.FVV[b,b] \
+                +(WvvVVa[a,b,b]) \
+                +imds1.WoVVo[j,a,a,j] \
+                +imds1.WOVVO[j,b,b,j] \
+                #-np.dot(imds1.WovOV[:,a,j,b], t2ab[:,j,a,b])
+
+    Hr2bbb = np.zeros((nocc_b,nvir_b,nvir_b),dtype=t1.dtype)
+    for a in range(nvir_b):
+        WVVVVa = np.array(Wvvvv[a])
+        for b in range(nvir_b):
+            WVVVVb = np.array(Wvvvv[b])
+            for j in range(nocc_b):
+                Hr2bbb[j,a,b]=-imds1.FOO[j,j]+imds1.Fvv[a,a]+imds1.FVV[b,b] \
+                +0.5*(WVVVV[b,b,a]-WVVVV[a,a,b]) \
+                +imds1.WOVVO[j,b,b,j] \
+                +imds1.WOVVO[j,a,a,j] \
+                #-(np.dot((imds1.WOVOV[:,b,j,a]-imds1.WOVOV[:,a,j,b]),t2bb[:,j,b,a]))
+
+
+    print 'Hr1a',np.abs(Hr1a - Hr1a_E).max()
+    print 'Hr1b',np.abs(Hr1b - Hr1b_E).max()
+
+    print 'Hr2aaa', np.abs(Hr2aaa - Hr2aaa_E).max()
+    print 'Hr2aba', np.abs(Hr2aba - Hr2aba_E).max()
+    print 'Hr2bab', np.abs(Hr2bab - Hr2bab_E).max()
+    print 'Hr2bbb', np.abs(Hr2bbb - Hr2bbb_E).max()
+ 
+    quit()
+ 
+    #new_Hr1, new_Hr2 = spatial2spin_ea([Hr1a, Hr1b], [Hr2aaa, Hr2aba, Hr2bab, Hr2bbb], orbspin)
+    #vector = amplitudes_to_vector_ea(Hr1, Hr2)
+    #vector += amplitudes_to_vector_ea(new_Hr1, new_Hr2)
     return vector
+     
 
 class EOMEA(eom_gccsd.EOMEA):
     matvec = eaccsd_matvec
     l_matvec = None
     get_diag = eaccsd_diag
+
 
     def __init__(self, cc):
         self._cc = cc  # DELETEME
@@ -2593,7 +2660,10 @@ if __name__ == '__main__':
     Hr1, Hr2 = myeom.vector_to_amplitudes(Hvector)
 
     from pyscf.lib import finger
-    print abs(finger(Hvector) - (73.184362712694437+6.3533546408964732j))
+    #print abs(finger(Hvector) - (73.184362712694437+6.3533546408964732j))
+
+    print('diag', finger(myeom.get_diag())-(14.650078695081339-8.304921628783845j))
+
     #mycc = KUCCSD(kmf)
     #eris = mycc.ao2mo()
     #t1, t2 = rand_t1_t2(mycc)
