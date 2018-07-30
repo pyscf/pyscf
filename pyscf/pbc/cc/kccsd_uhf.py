@@ -300,8 +300,7 @@ def update_amps(cc, t1, t2, eris):
         Ht2ab[ky,kx,kz] -= lib.einsum('ie, ma, mjbe->jiab', t1b[kx], t1a[kz], uccsd_eris.ooVV[kz,kw,ku])
 
     #Left this in to keep proper shape, need to replace later
-    ####################### INCOMPLETE ##########################
-    u2aa  = 0.0 * einsum('xwzimae,wvumebj,xwzv,wuvy->xyzijab', t2aa, Wovvo, P, P)
+    u2aa  = np.zeros_like(t2aa)
     #u2aa += einsum('xwziMaE,wvuMEbj,xwzv,wuvy->xyzijab', t2ab, WOVvo_J_-WOVvo_K_, P, P)
 
     for kx, kw, kz in kpts_helper.loop_kkk(nkpts):
