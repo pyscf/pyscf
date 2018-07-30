@@ -39,6 +39,9 @@ cis_b = fcivec[0, t1addrs] * t1signs
 #    alpha,alpha -> alpha,alpha
 #    alpha,beta  -> alpha,beta
 #    beta ,beta  -> beta ,beta
+# For alpha,alpha -> alpha,alpha excitations, the redundant coefficients are
+# excluded. The number of coefficients is nocc*(nocc-1)//2 * nvir*(nvir-1)//2,
+# which corresponds to C2_{ijab}, i > j and a > b.
 cid_aa = fcivec[t2addrs, 0] * t2signs
 cid_bb = fcivec[0, t2addrs] * t2signs
 cid_ab = numpy.einsum('ij,i,j->ij', fcivec[t1addrs[:,None], t1addrs], t1signs, t1signs)
@@ -48,6 +51,9 @@ cid_ab = numpy.einsum('ij,i,j->ij', fcivec[t1addrs[:,None], t1addrs], t1signs, t
 #    alpha,alpha,beta  -> alpha,alpha,beta
 #    alpha,beta ,beta  -> alpha,beta ,beta
 #    beta ,beta ,beta  -> beta ,beta ,beta
+# For alpha,alpha,alpha -> alpha,alpha,alpha excitations, the number of
+# coefficients is nocc*(nocc-1)*(nocc-2)//6 * nvir*(nvir-1)*(nvir-2)//6.
+# It corresponds to C3_{ijkabc}, i > j > k and a > b > c.
 cit_aaa = fcivec[t3addrs, 0] * t3signs
 cit_bbb = fcivec[0, t3addrs] * t3signs
 cit_aab = numpy.einsum('ij,i,j->ij', fcivec[t2addrs[:,None], t1addrs], t2signs, t1signs)
@@ -59,6 +65,8 @@ cit_abb = numpy.einsum('ij,i,j->ij', fcivec[t1addrs[:,None], t2addrs], t1signs, 
 #    alpha,alpha,beta ,beta  -> alpha,alpha,beta ,beta
 #    alpha,beta ,beta ,beta  -> alpha,beta ,beta ,beta
 #    beta ,beta ,beta ,beta  -> beta ,beta ,beta ,beta
+# For alpha,alpha,alpha,alpha -> alpha,alpha,alpha,alpha excitations, the
+# coefficients corresponds to C4_{ijklabcd}, i > j > k > l and a > b > c > d.
 ciq_aaaa = fcivec[t4addrs, 0] * t4signs
 ciq_bbbb = fcivec[0, t4addrs] * t4signs
 ciq_aaab = numpy.einsum('ij,i,j->ij', fcivec[t3addrs[:,None], t1addrs], t3signs, t1signs)
