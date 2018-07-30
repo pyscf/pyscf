@@ -34,8 +34,12 @@ def write_head(fout, nmo, nelec, ms=0, orbsym=None):
 
 
 def write_eri(fout, eri, nmo, tol=TOL, float_format=DEFAULT_FLOAT_FORMAT):
+    from pyscf import ao2mo
     npair = nmo*(nmo+1)//2
     output_format = float_format + ' %4d %4d %4d %4d\n'
+    if eri.size == nmo**4:
+        eri = ao2mo.restore(8, eri, nmo)
+
     if eri.ndim == 2: # 4-fold symmetry
         assert(eri.size == npair**2)
         ij = 0

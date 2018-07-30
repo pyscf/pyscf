@@ -141,6 +141,9 @@ def ipccsd_matvec(eom, vector, imds=None, diag=None):
     [r1a, r1b], [r2aaa, r2baa, r2abb, r2bbb] = spin2spatial_ip(r1, r2, orbspin)
     new_r1, new_r2 = spatial2spin_ip([r1a, r1b], [r2aaa, r2baa, r2abb, r2bbb], orbspin)
 
+    print "spin-resolved occupations"
+    print r1a.shape,r1b.shape
+
     imds1 = _IMDS(eom._cc._ucc)
     imds1.make_ip() #eom._make_imds()
 
@@ -268,6 +271,22 @@ def ipccsd_diag(eom, imds=None):
     t1, t2 = imds.t1, imds.t2
     nocc, nvir = t1.shape
 
+    orbspin = imds.eris.orbspin
+
+    idxoa = np.where(orbspin[:nocc] == 0)[0]
+    idxob = np.where(orbspin[:nocc] == 1)[0]
+    idxva = np.where(orbspin[nocc:] == 0)[0]
+    idxvb = np.where(orbspin[nocc:] == 1)[0]
+    nocc_a = len(idxoa)
+    nocc_b = len(idxob)
+    nvir_a = len(idxva)
+    nvir_b = len(idxvb)
+  
+    imds1 = _IMDS(eom._cc._ucc)
+    imds1.make_ip()
+
+    #-------------- ip_Gccsd
+
     Hr1 = -np.diag(imds.Foo)
     Hr2 = np.zeros((nocc,nocc,nvir), dtype=t1.dtype)
     for i in range(nocc):
@@ -281,6 +300,66 @@ def ipccsd_diag(eom, imds=None):
                 Hr2[i,j,a] += imds.Wovvo[j,a,a,j]
                 Hr2[i,j,a] += 0.5*(np.dot(imds.Woovv[i,j,:,a], t2[i,j,a,:])
                                   -np.dot(imds.Woovv[j,i,:,a], t2[i,j,a,:]))
+
+    [Hr1a_E, Hr1b_E], [Hr2aaa_E, Hr2baa_E, Hr2abb_E, Hr2bbb_E] = spin2spatial_ip(Hr1, Hr2, orbspin)
+
+    #-------------- ip_Uccsd
+
+    t2aa, t2ab, t2ba, t2bb = _eri_spin2spatial(eom._gcc.t2.transpose(0, 2, 1, 3), 'ovov', orbspin, nocc)
+    t2aa, t2ab, t2ba, t2bb = [x.transpose(0, 2, 1, 3) for x in [t2aa, t2ab, t2ba, t2bb]]
+
+    Hr1a = -np.diag(imds1.Foo)
+    Hr1b = -np.diag(imds1.FOO)
+
+    Hr2aaa = np.zeros((nocc_a,nocc_a,nvir_a),dtype=t1.dtype)
+    for i in range(nocc_a):
+     for j in range(nocc_a):
+      for a in range(nvir_a):
+       Hr2aaa[i,j,a]=imds1.Fvv[a,a]-imds1.Foo[i,i]-imds1.Foo[j,j] \
+       +0.5*(imds1.Woooo[i,i,j,j]-imds1.Woooo[j,i,i,j]) \
+       +imds1.Wovvo[i,a,a,i] \
+       +imds1.Wovvo[j,a,a,j] \
+       -(np.dot(imds1.Wovov[j,a,i,:]-imds1.Wovov[i,a,j,:],t2aa[j,i,a,:]))
+
+    Hr2baa = np.zeros((nocc_b,nocc_a,nvir_a),dtype=t1.dtype)
+    for i in range(nocc_b):
+     for j in range(nocc_a):
+      for a in range(nvir_a):
+       Hr2baa[i,j,a]=imds1.Fvv[a,a]-imds1.FOO[i,i]-imds1.Foo[j,j] \
+       +(imds1.WooOO[j,j,i,i]) \
+       +imds1.WOvvO[i,a,a,i] \
+       +imds1.Wovvo[j,a,a,j] \
+       -np.dot(imds1.WovOV[j,a,i,:], t2ab[j,i,a,:])
+
+    Hr2abb = np.zeros((nocc_a,nocc_b,nvir_b),dtype=t1.dtype)
+    for i in range(nocc_a):
+     for j in range(nocc_b):
+      for a in range(nvir_b):
+       Hr2abb[i,j,a]=imds1.FVV[a,a]-imds1.Foo[i,i]-imds1.FOO[j,j] \
+       +(imds1.WooOO[i,i,j,j]) \
+       +imds1.WoVVo[i,a,a,i] \
+       +imds1.WOVVO[j,a,a,j] \
+       -np.dot(imds1.WovOV[i,:,j,a], t2ab[i,j,:,a])
+
+    Hr2bbb = np.zeros((nocc_b,nocc_b,nvir_b),dtype=t1.dtype)
+    for i in range(nocc_b):
+     for j in range(nocc_b):
+      for a in range(nvir_b):
+       Hr2bbb[i,j,a]=imds1.FVV[a,a]-imds1.FOO[i,i]-imds1.FOO[j,j] \
+       +0.5*(imds1.WOOOO[i,i,j,j]-imds1.WOOOO[j,i,i,j]) \
+       +imds1.WOVVO[i,a,a,i] \
+       +imds1.WOVVO[j,a,a,j] \
+       -(np.dot(imds1.WOVOV[j,a,i,:]-imds1.WOVOV[i,a,j,:],t2bb[j,i,a,:]))
+
+    print "Hr1a",np.abs(Hr1a-Hr1a_E).max()
+    print "Hr1b",np.abs(Hr1b-Hr1b_E).max()
+    
+    print "Hr2aaa",np.abs(Hr2aaa-Hr2aaa_E).max()
+    print "Hr2baa",np.abs(Hr2baa-Hr2baa_E).max()
+    print "Hr2abb",np.abs(Hr2abb-Hr2abb_E).max()
+    print "Hr2bbb",np.abs(Hr2bbb-Hr2bbb_E).max()
+
+    new_Hr1, new_Hr2 = spatial2spin_ip([Hr1a, Hr1b], [Hr2aaa, Hr2baa, Hr2abb, Hr2bbb], orbspin)
 
     vector = amplitudes_to_vector_ip(Hr1, Hr2)
     return vector
@@ -514,6 +593,9 @@ def eaccsd_matvec(eom, vector, imds=None, diag=None):
     nocc_b = len(idxob)
     nvir_a = len(idxva)
     nvir_b = len(idxvb)
+
+    #print "spin-resolved occupations"
+    #print nocc_a,nocc_b,nvir_a,nvir_b
 
     [r1a, r1b], [r2aaa, r2aba, r2bab, r2bbb] = spin2spatial_ea(r1, r2, orbspin)
 
@@ -2620,7 +2702,6 @@ if __name__ == '__main__':
     mygcc._ucc_eris = eris
     eris = gccsd._make_eris_incore(mygcc)#, ao2mofn=my_ao2mo)
 
-    '''
     ## EOM-IP
     myeom = EOMIP(mygcc)
 
@@ -2641,23 +2722,22 @@ if __name__ == '__main__':
     print('hr', finger(Hvector) - (-68.264338687416853+97.002495782541587j))
     print('diag', finger(myeom.get_diag()) - (-7.1631734204883486+9.954456690293334j))
     exit()
-    '''
 
     # EOM-EA
-    myeom = EOMEA(mygcc)
+    #myeom = EOMEA(mygcc)
 
-    imds = myeom.make_imds(eris=eris)
-    orbspin = imds.eris.orbspin
+   # imds = myeom.make_imds(eris=eris)
+   # orbspin = imds.eris.orbspin
 
-    np.random.seed(1)
-    r1 = np.random.rand(nvir)*1j + np.random.rand(nvir) - 0.5 - 0.5*1j
-    r2 = np.random.rand(nocc * nvir**2)*1j + np.random.rand(nocc * nvir**2) - 0.5 - 0.5*1j
-    r2 = r2.reshape(nocc, nvir, nvir)
-    r1, r2 = enforce_symm_2p_spin_ea(r1, r2, orbspin)
+   # np.random.seed(1)
+   # r1 = np.random.rand(nvir)*1j + np.random.rand(nvir) - 0.5 - 0.5*1j
+   # r2 = np.random.rand(nocc * nvir**2)*1j + np.random.rand(nocc * nvir**2) - 0.5 - 0.5*1j
+   # r2 = r2.reshape(nocc, nvir, nvir)
+   # r1, r2 = enforce_symm_2p_spin_ea(r1, r2, orbspin)
 
-    vector = myeom.amplitudes_to_vector(r1, r2).astype(np.complex128)
-    Hvector = myeom.matvec(vector, imds=imds)
-    Hr1, Hr2 = myeom.vector_to_amplitudes(Hvector)
+   # vector = myeom.amplitudes_to_vector(r1, r2).astype(np.complex128)
+   # Hvector = myeom.matvec(vector, imds=imds)
+   # Hr1, Hr2 = myeom.vector_to_amplitudes(Hvector)
 
     from pyscf.lib import finger
     #print abs(finger(Hvector) - (73.184362712694437+6.3533546408964732j))
@@ -2673,9 +2753,9 @@ if __name__ == '__main__':
     #ecc, t1, t2 = mycc.kernel()
     #print(ecc - -0.21334326214236796)
 
-    #myeom = EOMIP(mycc)
-    #print("IP energies... (right eigenvector)")
-    #e,v = myeom.ipccsd(nroots=2)
+   # myeom = EOMIP(mycc)
+   # print("IP energies... (right eigenvector)")
+   # e,v = myeom.ipccsd(nroots=2)
     #assert(abs(e[0] - 0.3092874788775446) < 1e-10)
     #print 0.35362137
     #print(e[1] - 0.3092874632094273)
