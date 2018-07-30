@@ -235,44 +235,158 @@ def update_amps(cc, t1, t2, eris):
 
     Wovvo, WovVO, WOVvo, WOVVO, WoVVo, WOvvO = \
             kintermediates_uhf.cc_Wovvo(cc, uccsd_t1, uccsd_t2, uccsd_eris)
-    Ht2ab += einsum('xwzimae,wvumeBJ,xwzv,wuvy->xyziJaB', t2aa, WovVO, P, P)
-    Ht2ab += einsum('xwziMaE,wvuMEBJ,xwzv,wuvy->xyziJaB', t2ab, WOVVO, P, P)
-    Ht2ab -= einsum('xie,zma,uwzBJme,zuwx,xyzu->xyziJaB', t1a, t1a, uccsd_eris.VOov, P, P)
 
-    Ht2ab += einsum('wxvmIeA,wvumebj,xwzv,wuvy->yxujIbA', t2ab, Wovvo, P, P)
-    Ht2ab += einsum('wxvMIEA,wvuMEbj,xwzv,wuvy->yxujIbA', t2bb, WOVvo, P, P)
-    Ht2ab -= einsum('xIE,zMA,uwzbjME,zuwx,xyzu->yxujIbA', t1b, t1b, uccsd_eris.voOV, P, P)
+    
+    P = kintermediates_uhf.kconserv_mat(cc.nkpts, cc.khelper.kconserv)
+    #Ht2ab += einsum('xwzimae,wvumeBJ,xwzv,wuvy->xyziJaB', t2aa, WovVO_J_-WovVO_K_, P, P)
+    #Ht2ab += einsum('xwziMaE,wvuMEBJ,xwzv,wuvy->xyziJaB', t2ab, WOVVO_J_-WOVVO_K_, P, P)
+    #Ht2ab -= einsum('xie,zma,uwzBJme,zuwx,xyzu->xyziJaB', t1a, t1a, uccsd_eris.VOov, P, P)
 
-    Ht2ab += einsum('xwviMeA,wvuMebJ,xwzv,wuvy->xyuiJbA', t2ab, WOvvO, P, P)
-    Ht2ab -= einsum('xie,zMA,zwuMJbe,zuwx,xyzu->xyuiJbA', t1a, t1b, uccsd_eris.OOvv, P, P)
+    for kx, kw, kz in kpts_helper.loop_kkk(nkpts):
+        kv = kconserv[kx, kz, kw]
+        for ku in range(nkpts):
+            ky = kconserv[kw, kv, ku]
+            Ht2ab[kx, ky, kz] += lib.einsum('imae,mebj->ijab', t2aa[kx,kw,kz], WovVO[kw,kv,ku])
+            Ht2ab[kx, ky, kz] += lib.einsum('imae,mebj->ijab', t2ab[kx,kw,kz], WOVVO[kw,kv,ku])
+            
+    for kz, ku, kw in kpts_helper.loop_kkk(nkpts):
+        kx = kconserv[kz,kw,ku]
+        ky = kconserv[kz,kx,ku]
+        Ht2ab[kx, ky, kz] -= lib.einsum('ie, ma, bjme->ijab', t1a[kx], t1a[kz], uccsd_eris.VOov[ku, kw, kz]) 
 
-    Ht2ab += einsum('wxzmIaE,wvumEBj,xwzv,wuvy->yxzjIaB', t2ab, WoVVo, P, P)
-    Ht2ab -= einsum('xIE,zma,zwumjBE,zuwx,xyzu->yxzjIaB', t1b, t1a, uccsd_eris.ooVV, P, P)
+    #Ht2ab += einsum('wxvmIeA,wvumebj,xwzv,wuvy->yxujIbA', t2ab, Wovvo_J_-Wovvo_K_, P, P)
+    #Ht2ab += einsum('wxvMIEA,wvuMEbj,xwzv,wuvy->yxujIbA', t2bb, WOVvo_J_-WOVvo_K_, P, P)
+    #Ht2ab -= einsum('xIE,zMA,uwzbjME,zuwx,xyzu->yxujIbA', t1b, t1b, uccsd_eris.voOV, P, P)
+    
+    for kx, kw, kz in kpts_helper.loop_kkk(nkpts):
+        kv = kconserv[kx, kz, kw]
+        for ku in range(nkpts):
+            ky = kconserv[kw, kv, ku]
+            Ht2ab[ky,kx,ku] += lib.einsum('miea, mebj-> jiba', t2ab[kw,kx,kv], Wovvo[kw,kv,ku])
+            Ht2ab[ky,kx,ku] += lib.einsum('miea, mebj-> jiba', t2bb[kw,kx,kv], WOVvo[kw,kv,ku])
+    
+    for kz, ku, kw in kpts_helper.loop_kkk(nkpts):
+        kx = kconserv[kz, kw, ku]
+        ky = kconserv[kz, kx, ku]
+        Ht2ab[ky,kx,ku] -= lib.einsum('ie, ma, bjme->jiba', t1b[kx], t1b[kz], uccsd_eris.voOV[ku,kw,kz])
 
-    u2aa  = einsum('xwzimae,wvumebj,xwzv,wuvy->xyzijab', t2aa, Wovvo, P, P)
-    u2aa += einsum('xwziMaE,wvuMEbj,xwzv,wuvy->xyzijab', t2ab, WOVvo, P, P)
-    u2aa += einsum('xie,zma,zwumjbe,zuwx,xyzu->xyzijab', t1a, t1a, uccsd_eris.oovv, P, P)
-    u2aa -= einsum('xie,zma,uwzbjme,zuwx,xyzu->xyzijab', t1a, t1a, uccsd_eris.voov, P, P)
-    u2aa += np.einsum('xie,yuxjbea,yxuz->xyzijab', t1a, uccsd_eris.ovvv.conj(), P)
-    u2aa -= np.einsum('zma,xzyimjb->xyzijab', t1a, uccsd_eris.ooov.conj())
+
+    #Ht2ab += einsum('xwviMeA,wvuMebJ,xwzv,wuvy->xyuiJbA', t2ab, WOvvO_J_-WOvvO_K_, P, P)
+    #Ht2ab -= einsum('xie,zMA,zwuMJbe,zuwx,xyzu->xyuiJbA', t1a, t1b, uccsd_eris.OOvv, P, P)
+
+    for kx, kw, kz in kpts_helper.loop_kkk(nkpts):
+        kv = kconserv[kx, kz, kw]
+        for ku in range(nkpts):
+            ky = kconserv[kw, kv, ku]
+            Ht2ab[kx,ky,ku] += lib.einsum('imea,mebj->ijba', t2ab[kx,kw,kv],WOvvO[kw,kv,ku])
+    
+    for kz,ku,kw in kpts_helper.loop_kkk(nkpts):
+        kx = kconserv[kz, kw, ku]
+        ky = kconserv[kz, kx, ku]
+        Ht2ab[kx,ky,ku] -= lib.einsum('ie, ma, mjbe->ijba', t1a[kx], t1b[kz], uccsd_eris.OOvv[kz, kw, ku])
+
+    #Ht2ab += einsum('wxzmIaE,wvumEBj,xwzv,wuvy->yxzjIaB', t2ab, WoVVo_J_-WoVVo_K_, P, P)
+    #Ht2ab -= einsum('xIE,zma,zwumjBE,zuwx,xyzu->yxzjIaB', t1b, t1a, uccsd_eris.ooVV, P, P)
+
+    for kx, kw, kz in kpts_helper.loop_kkk(nkpts):
+        kv = kconserv[kx, kz, kw]
+        for ku in range(nkpts):
+            ky = kconserv[kw, kv, ku]
+            Ht2ab[ky, kx, kz] += lib.einsum('miae,mebj->jiab', t2ab[kw,kx,kz], WoVVo[kw,kv,ku])
+
+    for kz, ku, kw in kpts_helper.loop_kkk(nkpts):
+        kx = kconserv[kz,kw,ku]
+        ky = kconserv[kz,kx,ku]
+        Ht2ab[ky,kx,kz] -= lib.einsum('ie, ma, mjbe->jiab', t1b[kx], t1a[kz], uccsd_eris.ooVV[kz,kw,ku])
+
+    #Left this in to keep proper shape, need to replace later
+    ####################### INCOMPLETE ##########################
+    u2aa  = 0.0 * einsum('xwzimae,wvumebj,xwzv,wuvy->xyzijab', t2aa, Wovvo, P, P)
+    #u2aa += einsum('xwziMaE,wvuMEbj,xwzv,wuvy->xyzijab', t2ab, WOVvo_J_-WOVvo_K_, P, P)
+
+    for kx, kw, kz in kpts_helper.loop_kkk(nkpts):
+        kv = kconserv[kx, kz, kw]
+        for ku in range(nkpts):
+            ky = kconserv[kw, kv, ku]
+            u2aa[kx,ky,kz] += lib.einsum('imae, mebj->ijab', t2aa[kx,kw,kz], Wovvo[kw,kv,ku])
+            u2aa[kx,ky,kz] += lib.einsum('imae, mebj->ijab', t2ab[kx,kw,kz], WOVvo[kw,kv,ku])
+
+    #u2aa += einsum('xie,zma,zwumjbe,zuwx,xyzu->xyzijab', t1a, t1a, uccsd_eris.oovv, P, P)
+    #u2aa -= einsum('xie,zma,uwzbjme,zuwx,xyzu->xyzijab', t1a, t1a, uccsd_eris.voov, P, P)
+
+    for kz, ku, kw in kpts_helper.loop_kkk(nkpts):
+        kx = kconserv[kz,kw,ku]
+        ky = kconserv[kz,kx,ku]
+        u2aa[kx,ky,kz] += lib.einsum('ie,ma,mjbe->ijab',t1a[kx],t1a[kz],uccsd_eris.oovv[kz,kw,ku])
+        u2aa[kx,ky,kz] -= lib.einsum('ie,ma,bjme->ijab',t1a[kx],t1a[kz],uccsd_eris.voov[ku,kw,kz])
+
+
+    #u2aa += np.einsum('xie,yuxjbea,yxuz->xyzijab', t1a, uccsd_eris.ovvv.conj(), P)
+    #u2aa -= np.einsum('zma,xzyimjb->xyzijab', t1a, uccsd_eris.ooov.conj())
+
+    for ky, kx, ku in kpts_helper.loop_kkk(nkpts):
+        kz = kconserv[ky, ku, kx]
+        u2aa[kx, ky, kz] += lib.einsum('ie, jbea->ijab', t1a[kx], uccsd_eris.ovvv.conj()[ky,ku,kx])
+        u2aa[kx, ky, kz] -= lib.einsum('ma, imjb->ijab', t1a[kz], uccsd_eris.ooov.conj()[kx,kz,ky])
+
     u2aa = u2aa - u2aa.transpose(1,0,2,4,3,5,6)
     u2aa = u2aa - np.einsum('xyzijab,xyzu->xyuijba', u2aa, P)
     Ht2aa += u2aa
 
     u2bb  = einsum('xwzimae,wvumebj,xwzv,wuvy->xyzijab', t2bb, WOVVO, P, P)
-    u2bb += einsum('wxvMiEa,wvuMEbj,xwzv,wuvy->xyzijab', t2ab, WovVO, P, P)
-    u2bb += einsum('xie,zma,zwumjbe,zuwx,xyzu->xyzijab', t1b, t1b, uccsd_eris.OOVV, P, P)
-    u2bb -= einsum('xie,zma,uwzbjme,zuwx,xyzu->xyzijab', t1b, t1b, uccsd_eris.VOOV, P, P)
-    u2bb += np.einsum('xie,yuxjbea,yxuz->xyzijab', t1b, uccsd_eris.OVVV.conj(), P)
-    u2bb -= np.einsum('zma,xzyimjb->xyzijab', t1b, uccsd_eris.OOOV.conj())
+
+    #u2bb += einsum('wxvMiEa,wvuMEbj,xwzv,wuvy->xyzijab', t2ab, WovVO_J_-WovVO_K_, P, P)
+    #u2bb += einsum('xie,zma,zwumjbe,zuwx,xyzu->xyzijab', t1b, t1b, uccsd_eris.OOVV, P, P)
+    #u2bb -= einsum('xie,zma,uwzbjme,zuwx,xyzu->xyzijab', t1b, t1b, uccsd_eris.VOOV, P, P)
+
+    u2bb = np.zeros((u2bb.shape),dtype=complex)
+
+    for kx, kw, kz in kpts_helper.loop_kkk(nkpts):
+        kv = kconserv[kx, kz, kw]
+        for ku in range(nkpts):
+            ky = kconserv[kw,kv, ku]
+            u2bb[kx, ky, kz] += lib.einsum('imae,mebj->ijab', t2bb[kx,kw,kz], WOVVO[kw,kv,ku])
+            u2bb[kx, ky, kz] += lib.einsum('miea, mebj-> ijab', t2ab[kw,kx,kv],WovVO[kw,kv,ku])
+
+    for kz, ku, kw in kpts_helper.loop_kkk(nkpts):
+        kx = kconserv[kz, kw, ku]
+        ky = kconserv[kz, kx, ku]
+        u2bb[kx, ky, kz] += lib.einsum('ie, ma, mjbe->ijab',t1b[kx],t1b[kz],uccsd_eris.OOVV[kz,kw,ku])
+        u2bb[kx, ky, kz] -= lib.einsum('ie, ma, bjme->ijab', t1b[kx], t1b[kz],uccsd_eris.VOOV[ku,kw,kz])
+
+    #u2bb += np.einsum('xie,yuxjbea,yxuz->xyzijab', t1b, uccsd_eris.OVVV.conj(), P)
+    #u2bb -= np.einsum('zma,xzyimjb->xyzijab', t1b, uccsd_eris.OOOV.conj())
+
+    for ky, kx, ku in kpts_helper.loop_kkk(nkpts):
+        kz = kconserv[ky, ku, kx]
+        u2bb[kx,ky,kz] += lib.einsum('ie,jbea->ijab', t1b[kx], uccsd_eris.OVVV.conj()[ky,ku,kx])
+
+    for kx, kz, ky in kpts_helper.loop_kkk(nkpts):
+        u2bb[kx,ky,kz] -= lib.einsum('ma, imjb-> ijab', t1b[kz], uccsd_eris.OOOV.conj()[kx,kz,ky])
+
     u2bb = u2bb - u2bb.transpose(1,0,2,4,3,5,6)
+
+    # Not sure how to handle this contraction
+    ############# INCOMPLETE ################
     u2bb = u2bb - np.einsum('xyzijab,xyzu->xyuijba', u2bb, P)
     Ht2bb += u2bb
 
-    Ht2ab += np.einsum('xie,yuxJBea,yxuz->xyziJaB', t1a, uccsd_eris.OVvv.conj(), P)
-    Ht2ab += np.einsum('yJE,xzyiaEB,xyzu->xyziJaB', t1b, uccsd_eris.ovVV.conj(), P)
-    Ht2ab -= np.einsum('zma,xzyimjb->xyzijab', t1a, uccsd_eris.ooOV.conj())
-    Ht2ab -= np.einsum('umb,yuxjmia,xyuz->xyzijab', t1b, uccsd_eris.OOov.conj(), P)
+    #Ht2ab += np.einsum('xie,yuxJBea,yxuz->xyziJaB', t1a, uccsd_eris.OVvv.conj(), P)
+    #Ht2ab += np.einsum('yJE,xzyiaEB,xyzu->xyziJaB', t1b, uccsd_eris.ovVV.conj(), P)
+    #Ht2ab -= np.einsum('zma,xzyimjb->xyzijab', t1a, uccsd_eris.ooOV.conj())
+    #Ht2ab -= np.einsum('umb,yuxjmia,xyuz->xyzijab', t1b, uccsd_eris.OOov.conj(), P)
+
+    for ky, kx, ku in kpts_helper.loop_kkk(nkpts):
+        kz = kconserv[ky,ku,kx]
+        Ht2ab[kx,ky,kz] += lib.einsum('ie, jbea-> ijab', t1a[kx], uccsd_eris.OVvv.conj()[ky,ku,kx])
+        Ht2ab[kx,ky,kz] += lib.einsum('je, iaeb-> ijab', t1b[ky], uccsd_eris.ovVV.conj()[kx,kz,ky])
+
+    for kx, kz, ky in kpts_helper.loop_kkk(nkpts):
+        Ht2ab[kx,ky,kz] -= lib.einsum('ma, imjb->ijab', t1a[kz], uccsd_eris.ooOV.conj()[kx,kz,ky])
+
+    for kx, ky, ku in kpts_helper.loop_kkk(nkpts):
+        kz = kconserv[kx, ku, ky]
+        Ht2ab[kx,ky,kz] -= lib.einsum('mb,jmia->ijab',t1b[ku],uccsd_eris.OOov.conj()[ky,ku,kx])
 
     mo_ea_v = [uccsd_eris.fock[0][k,nocca:,nocca:].diagonal() for k in range(nkpts)]
     mo_eb_v = [uccsd_eris.fock[1][k,noccb:,noccb:].diagonal() for k in range(nkpts)]
