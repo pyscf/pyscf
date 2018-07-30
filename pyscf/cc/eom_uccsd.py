@@ -765,6 +765,7 @@ def eaccsd_diag(eom, imds=None):
     t1_new, t2_new = imds1.t1, imds1.t2
     t1a, t1b = t1_new
     t2aa, t2ab, t2bb = t2_new
+    t2ba = t2ab.transpose(1,0,3,2)
 
     nocc_a, nvir_a = t1a.shape
     nocc_b, nvir_b = t1b.shape
@@ -796,35 +797,64 @@ def eaccsd_diag(eom, imds=None):
                Hr2[j,a,b] += imds.Wovvo[j,b,b,j]
                Hr2[j,a,b] += imds.Wovvo[j,a,a,j]
                Hr2[j,a,b] += 0.5*(_Wvvvva[b,a,b]-_Wvvvva[b,b,a])
-               #Hr2[j,a,b] += -0.5*(np.dot(imds.Woovv[:,j,a,b], t2[:,j,a,b])
-               #                   -np.dot(imds.Woovv[:,j,b,a], t2[:,j,a,b]))
+               Hr2[j,a,b] += -0.5*(np.dot(imds.Woovv[:,j,a,b], t2[:,j,a,b])
+                                  -np.dot(imds.Woovv[:,j,b,a], t2[:,j,a,b]))
   
 
     [Hr1a_E, Hr1b_E], [Hr2aaa_E, Hr2aba_E, Hr2bab_E, Hr2bbb_E] = spin2spatial_ea(Hr1, Hr2, orbspin)
 
+    Hr2aaa = np.zeros((nocc_a,nvir_a,nvir_a),dtype=t1.dtype)
+    for j in range(nocc_a):
+        for a in range(nvir_a):
+            Wvvvva = np.array(Wvvvv[a])
+            for b in range(nvir_a):
+                Hr2aaa[j,a,b] += imds1.Fvv[a,a]
+                Hr2aaa[j,a,b] += imds1.Fvv[b,b]
+                Hr2aaa[j,a,b] += -imds1.Foo[j,j]
+                Hr2aaa[j,a,b] += imds1.Wovvo[j,b,b,j]
+                Hr2aaa[j,a,b] += imds1.Wovvo[j,a,a,j]
+                Hr2aaa[j,a,b] += 0.5*(Wvvvva[a,b,b]-Wvvvva[b,b,a])
+                Hr2aaa[j,a,b] += -np.dot(imds1.Wovov[:,a,j,b]-imds1.Wovov[:,b,j,a], t2aa[:,j,a,b])
+
+    Hr2aba = np.zeros((nocc_a, nvir_b, nvir_a),dtype=t1.dtype)
+    for j in range(nocc_a):
+        for a in range(nvir_b):
+            WVVvva = np.array(WVVvv[a])
+            for b in range(nvir_a):
+                Hr2aba[j,a,b] += imds1.FVV[a,a]
+                Hr2aba[j,a,b] += imds1.Fvv[b,b]
+                Hr2aba[j,a,b] += -imds1.Foo[j,j]
+                Hr2aba[j,a,b] += imds1.Wovvo[j,b,b,j]
+                Hr2aba[j,a,b] += imds1.WoVVo[j,a,a,j]
+                Hr2aba[j,a,b] += WVVvva[a,b,b]
+                Hr2aba[j,a,b] -= np.dot(imds1.WOVov[:,a,j,b], t2ba[:,j,a,b])
+
+
     Hr2bab = np.zeros((nocc_b,nvir_a,nvir_b),dtype=t1.dtype)
-    for a in range(nvir_a):
-        WvvVVa = np.array(WvvVV[a])
-        for b in range(nvir_b):
+    for a in range(nvir_b):
+        for b in range(nvir_a):
+            WvvVVb = np.array(WvvVV[b])
             for j in range(nocc_b):
-                #a=i, b=j, j=a
-                Hr2bab[j,a,b]=-imds1.FOO[j,j]+imds1.Fvv[a,a]+imds1.FVV[b,b] \
-                +(WvvVVa[a,b,b]) \
-                +imds1.WoVVo[j,a,a,j] \
-                +imds1.WOVVO[j,b,b,j] \
-                #-np.dot(imds1.WovOV[:,a,j,b], t2ab[:,j,a,b])
+                Hr2bab[j,b,a] = -imds1.FOO[j,j]
+                Hr2bab[j,b,a] += imds1.Fvv[b,b]
+                Hr2bab[j,b,a] += imds1.FVV[a,a] 
+                Hr2bab[j,b,a] += (WvvVVb[b,a,a]) 
+                Hr2bab[j,b,a] += imds1.WOVVO[j,a,a,j] 
+                Hr2bab[j,b,a] += imds1.WOvvO[j,b,b,j] 
+                Hr2bab[j,b,a] -= np.dot(imds1.WovOV[:,b,j,a], t2ab[:,j,b,a])
 
     Hr2bbb = np.zeros((nocc_b,nvir_b,nvir_b),dtype=t1.dtype)
     for a in range(nvir_b):
-        WVVVVa = np.array(Wvvvv[a])
+        WVVVVa = np.array(WVVVV[a])
         for b in range(nvir_b):
-            WVVVVb = np.array(Wvvvv[b])
             for j in range(nocc_b):
-                Hr2bbb[j,a,b]=-imds1.FOO[j,j]+imds1.Fvv[a,a]+imds1.FVV[b,b] \
-                +0.5*(WVVVV[b,b,a]-WVVVV[a,a,b]) \
-                +imds1.WOVVO[j,b,b,j] \
-                +imds1.WOVVO[j,a,a,j] \
-                #-(np.dot((imds1.WOVOV[:,b,j,a]-imds1.WOVOV[:,a,j,b]),t2bb[:,j,b,a]))
+                Hr2bbb[j,a,b] = -imds1.FOO[j,j]
+                Hr2bbb[j,a,b] += imds1.FVV[a,a]
+                Hr2bbb[j,a,b] += imds1.FVV[b,b]
+                Hr2bbb[j,a,b] += 0.5*(WVVVVa[a,b,b]-WVVVVa[b,b,a]) 
+                Hr2bbb[j,a,b] += imds1.WOVVO[j,b,b,j] 
+                Hr2bbb[j,a,b] += imds1.WOVVO[j,a,a,j]
+                Hr2bbb[j,a,b] -= (np.dot((imds1.WOVOV[:,a,j,b]-imds1.WOVOV[:,b,j,a]),t2bb[:,j,a,b]))
 
 
     print 'Hr1a',np.abs(Hr1a - Hr1a_E).max()
@@ -835,13 +865,8 @@ def eaccsd_diag(eom, imds=None):
     print 'Hr2bab', np.abs(Hr2bab - Hr2bab_E).max()
     print 'Hr2bbb', np.abs(Hr2bbb - Hr2bbb_E).max()
  
-    quit()
- 
-    #new_Hr1, new_Hr2 = spatial2spin_ea([Hr1a, Hr1b], [Hr2aaa, Hr2aba, Hr2bab, Hr2bbb], orbspin)
-    #vector = amplitudes_to_vector_ea(Hr1, Hr2)
-    #vector += amplitudes_to_vector_ea(new_Hr1, new_Hr2)
-    return vector
-     
+    exit()
+
 
 class EOMEA(eom_gccsd.EOMEA):
     matvec = eaccsd_matvec
@@ -1941,7 +1966,7 @@ class _IMDS:
                 uintermediates.Wovvo(t1, t2, eris)
         self.Wovov = eris.ovov
         self.WovOV = eris.ovOV
-        self.WOVov = None
+        self.WOVov = self.WovOV.transpose(2,3,0,1)
         self.WOVOV = eris.OVOV
 
         self._made_shared = True
@@ -2703,46 +2728,47 @@ if __name__ == '__main__':
     eris = gccsd._make_eris_incore(mygcc)#, ao2mofn=my_ao2mo)
 
     ## EOM-IP
-    myeom = EOMIP(mygcc)
+    #myeom = EOMIP(mygcc)
+
+    #imds = myeom.make_imds(eris=eris)
+    #orbspin = imds.eris.orbspin
+
+    #np.random.seed(1)
+    #r1 = np.random.rand(nocc)*1j + np.random.rand(nocc) - 0.5 - 0.5*1j
+    #r2 = np.random.rand(nocc**2 * nvir)*1j + np.random.rand(nocc**2 * nvir) - 0.5 - 0.5*1j
+    #r2 = r2.reshape(nocc, nocc, nvir)
+    #r1, r2 = enforce_symm_2p_spin_ip(r1, r2, orbspin)
+
+    #vector = myeom.amplitudes_to_vector(r1, r2).astype(np.complex128)
+    #Hvector = myeom.matvec(vector, imds=imds)
+    #Hr1, Hr2 = myeom.vector_to_amplitudes(Hvector)
+
+    #from pyscf.lib import finger
+    #print('hr', finger(Hvector) - (-68.264338687416853+97.002495782541587j))
+    #print('diag', finger(myeom.get_diag()) - (-7.1631734204883486+9.954456690293334j))
+    #exit()
+
+    #EOM-EA
+    myeom = EOMEA(mygcc)
 
     imds = myeom.make_imds(eris=eris)
     orbspin = imds.eris.orbspin
 
     np.random.seed(1)
-    r1 = np.random.rand(nocc)*1j + np.random.rand(nocc) - 0.5 - 0.5*1j
-    r2 = np.random.rand(nocc**2 * nvir)*1j + np.random.rand(nocc**2 * nvir) - 0.5 - 0.5*1j
-    r2 = r2.reshape(nocc, nocc, nvir)
-    r1, r2 = enforce_symm_2p_spin_ip(r1, r2, orbspin)
+    r1 = np.random.rand(nvir)*1j + np.random.rand(nvir) - 0.5 - 0.5*1j
+    r2 = np.random.rand(nocc * nvir**2)*1j + np.random.rand(nocc * nvir**2) - 0.5 - 0.5*1j
+    r2 = r2.reshape(nocc, nvir, nvir)
+    r1, r2 = enforce_symm_2p_spin_ea(r1, r2, orbspin)
 
     vector = myeom.amplitudes_to_vector(r1, r2).astype(np.complex128)
     Hvector = myeom.matvec(vector, imds=imds)
     Hr1, Hr2 = myeom.vector_to_amplitudes(Hvector)
 
     from pyscf.lib import finger
-    print('hr', finger(Hvector) - (-68.264338687416853+97.002495782541587j))
-    print('diag', finger(myeom.get_diag()) - (-7.1631734204883486+9.954456690293334j))
+    print abs(finger(Hvector) - (73.184362712694437+6.3533546408964732j))
+    print('diag', finger(myeom.get_diag()) - (14.650078695081339-8.304921628783845j))
     exit()
 
-    # EOM-EA
-    #myeom = EOMEA(mygcc)
-
-   # imds = myeom.make_imds(eris=eris)
-   # orbspin = imds.eris.orbspin
-
-   # np.random.seed(1)
-   # r1 = np.random.rand(nvir)*1j + np.random.rand(nvir) - 0.5 - 0.5*1j
-   # r2 = np.random.rand(nocc * nvir**2)*1j + np.random.rand(nocc * nvir**2) - 0.5 - 0.5*1j
-   # r2 = r2.reshape(nocc, nvir, nvir)
-   # r1, r2 = enforce_symm_2p_spin_ea(r1, r2, orbspin)
-
-   # vector = myeom.amplitudes_to_vector(r1, r2).astype(np.complex128)
-   # Hvector = myeom.matvec(vector, imds=imds)
-   # Hr1, Hr2 = myeom.vector_to_amplitudes(Hvector)
-
-    from pyscf.lib import finger
-    #print abs(finger(Hvector) - (73.184362712694437+6.3533546408964732j))
-
-    print('diag', finger(myeom.get_diag())-(14.650078695081339-8.304921628783845j))
 
     #mycc = KUCCSD(kmf)
     #eris = mycc.ao2mo()
