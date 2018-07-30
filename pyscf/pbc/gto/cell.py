@@ -756,8 +756,14 @@ def ewald(cell, ew_eta=None, ew_cut=None):
     See Also:
         pyscf.pbc.gto.get_ewald_params
     '''
+    # If lattice parameter is not set, the cell object is treated as a mole
+    # object. The nuclear repulsion energy is computed.
+    if cell.a is None:
+        return mole.energy_nuc(cell)
+
     if cell.natm == 0:
         return 0
+
     if ew_eta is None: ew_eta = cell.ew_eta
     if ew_cut is None: ew_cut = cell.ew_cut
     chargs = cell.atom_charges()
@@ -1147,8 +1153,6 @@ class Cell(mole.Mole):
         if ke_cutoff is not None: self.ke_cutoff = ke_cutoff
         if low_dim_ft_type is not None: self.low_dim_ft_type = low_dim_ft_type
 
-        assert(self.a is not None)
-
         if 'unit' in kwargs:
             self.unit = kwargs['unit']
 
@@ -1173,7 +1177,7 @@ class Cell(mole.Mole):
             else:
                 self._pseudo = self.format_pseudo(self.pseudo)
 
-        # Do regular Mole.build with usual kwargs
+        # Do regular Mole.build
         _built = self._built
         mole.Mole.build(self, False, parse_arg, *args, **kwargs)
 
@@ -1249,6 +1253,13 @@ class Cell(mole.Mole):
             logger.info(self, 'Discarded %d diffused primitive functions, '
                         '%d contracted functions', nprim_drop, nctr_drop)
             #logger.debug1(self, 'Old shells %s', steep_shls)
+
+        # The rest initialization requires lattice parameters.  If .a is not
+        # set, pass the rest initialization.
+        if self.a is None:
+            if dump_input and not _built and self.verbose > logger.NOTE:
+                self.dump_input()
+            return self
 
         if self.rcut is None:
             self.rcut = max([self.bas_rcut(ib, self.precision)
@@ -1545,10 +1556,11 @@ class Cell(mole.Mole):
         '''Return a Mole object using the same atoms and basis functions as
         the Cell object.
         '''
-        mol = mole.Mole()
-        cell_dic = [(key, getattr(self, key)) for key in mol.__dict__.keys()]
-        mol.__dict__.update(cell_dic)
-        return mol
+        #FIXME: should cell be converted to mole object?  If cell is converted
+        # and a mole object is returned, many attributes (e.g. the GTH basis,
+        # gth-PP) will not be recognized by mole.build function.
+        self.a = None
+        return self
 
     def has_ecp(self):
         '''Whether pesudo potential is used in the system.'''
