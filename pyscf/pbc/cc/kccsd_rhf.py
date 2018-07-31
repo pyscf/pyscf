@@ -466,8 +466,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
             kptlist = range(nkpts)
         size = self.vector_size_ip()
         for k,kshift in enumerate(kptlist):
-            self.kshift = kshift
-            nfrozen = np.sum(self.mask_frozen_ip(np.zeros(size, dtype=int), const=1))
+            nfrozen = np.sum(self.mask_frozen_ip(np.zeros(size, dtype=int), kshift, const=1))
             nroots = min(nroots, size - nfrozen)
         if partition:
             partition = partition.lower()
@@ -477,9 +476,8 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         evecs = np.zeros((len(kptlist),nroots,size), np.complex)
 
         for k,kshift in enumerate(kptlist):
-            self.kshift = kshift
             adiag = self.ipccsd_diag(kshift)
-            adiag = self.mask_frozen_ip(adiag, const=LARGE_DENOM)
+            adiag = self.mask_frozen_ip(adiag, kshift, const=LARGE_DENOM)
             if partition == 'full':
                 self._ipccsd_diag_matrix2 = self.vector_to_amplitudes_ip(adiag)[1]
 
@@ -497,14 +495,14 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                     for n in nonfrozen_idx[::-1][:nroots]:
                         g = np.zeros(size)
                         g[n] = 1.0
-                        g = self.mask_frozen_ip(g, const=0.0)
+                        g = self.mask_frozen_ip(g, kshift, const=0.0)
                         guess.append(g)
                 else:
                     idx = adiag.argsort()[:nroots]
                     for i in idx:
                         g = np.zeros(size)
                         g[i] = 1.0
-                        g = self.mask_frozen_ip(g, const=0.0)
+                        g = self.mask_frozen_ip(g, kshift, const=0.0)
                         guess.append(g)
 
             def precond(r, e0, x0):
@@ -516,11 +514,11 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                     x0 = linalg_helper._gen_x0(envs['v'], envs['xs'])
                     idx = np.argmax( np.abs(np.dot(np.array(guess).conj(),np.array(x0).T)), axis=1 )
                     return w[idx].real, v[:,idx].real, idx
-                evals_k, evecs_k = eig(self.ipccsd_matvec, guess, precond, pick=pickeig,
+                evals_k, evecs_k = eig(lambda _arg: self.ipccsd_matvec(_arg, kshift), guess, precond, pick=pickeig,
                                        tol=self.conv_tol, max_cycle=self.max_cycle,
                                        max_space=self.max_space, nroots=nroots, verbose=self.verbose)
             else:
-                evals_k, evecs_k = eig(self.ipccsd_matvec, guess, precond,
+                evals_k, evecs_k = eig(lambda _arg: self.ipccsd_matvec(_arg, kshift), guess, precond,
                                        tol=self.conv_tol, max_cycle=self.max_cycle,
                                        max_space=self.max_space, nroots=nroots, verbose=self.verbose)
 
@@ -537,7 +535,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         self.eip = evals
         return self.eip, evecs
 
-    def ipccsd_matvec(self, vector):
+    def ipccsd_matvec(self, vector, kshift):
         # Ref: Nooijen and Snijders, J. Chem. Phys. 102, 1681 (1995) Eqs.(8)-(9)
         if not hasattr(self,'imds'):
             self.imds = _IMDS(self)
@@ -545,12 +543,11 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
             self.imds.make_ip(self.ip_partition)
         imds = self.imds
 
-        vector = self.mask_frozen_ip(vector, const=0.0)
+        vector = self.mask_frozen_ip(vector, kshift, const=0.0)
         r1,r2 = self.vector_to_amplitudes_ip(vector)
 
         t1,t2 = self.t1, self.t2
         nkpts = self.nkpts
-        kshift = self.kshift
         kconserv = self.khelper.kconserv
 
         # 1h-1h block
@@ -608,10 +605,10 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                             Hr2[ki,kj] += -einsum('c,ijcb->ijb',tmp,t2[ki,kj,kshift])
 
         vector = self.amplitudes_to_vector_ip(Hr1,Hr2)
-        vector = self.mask_frozen_ip(vector, const=0.0)
+        vector = self.mask_frozen_ip(vector, kshift, const=0.0)
         return vector
 
-    def ipccsd_diag(self, kshift=0):
+    def ipccsd_diag(self, kshift):
         if not hasattr(self,'imds'):
             self.imds = _IMDS(self)
         if not self.imds.made_ip_imds:
@@ -699,12 +696,11 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         #                    index += 1
         return vector
 
-    def mask_frozen_ip(self, vector, const=LARGE_DENOM):
+    def mask_frozen_ip(self, vector, kshift, const=LARGE_DENOM):
         '''Replaces all frozen orbital indices of `vector` with the value `const`.'''
         r1, r2 = self.vector_to_amplitudes_ip(vector)
         nkpts, nocc, nvir = self.t1.shape
         kconserv = self.khelper.kconserv
-        kshift = self.kshift
 
         fock = self.eris.fock
         foo = fock[:,:nocc,:nocc]
@@ -752,8 +748,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
             kptlist = range(nkpts)
         size = self.vector_size_ea()
         for k,kshift in enumerate(kptlist):
-            self.kshift = kshift
-            nfrozen = np.sum(self.mask_frozen_ea(np.zeros(size, dtype=int), const=1))
+            nfrozen = np.sum(self.mask_frozen_ea(np.zeros(size, dtype=int), kshift, const=1))
             nroots = min(nroots, size - nfrozen)
         if partition:
             partition = partition.lower()
@@ -763,9 +758,8 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         evecs = np.zeros((len(kptlist),nroots,size), np.complex)
 
         for k,kshift in enumerate(kptlist):
-            self.kshift = kshift
             adiag = self.eaccsd_diag(kshift)
-            adiag = self.mask_frozen_ea(adiag, const=LARGE_DENOM)
+            adiag = self.mask_frozen_ea(adiag, kshift, const=LARGE_DENOM)
             if partition == 'full':
                 self._eaccsd_diag_matrix2 = self.vector_to_amplitudes_ea(adiag)[1]
 
@@ -783,14 +777,14 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                     for n in nonfrozen_idx[:nroots]:
                         g = np.zeros(size)
                         g[n] = 1.0
-                        g = self.mask_frozen_ea(g, const=0.0)
+                        g = self.mask_frozen_ea(g, kshift, const=0.0)
                         guess.append(g)
                 else:
                     idx = adiag.argsort()[:nroots]
                     for i in idx:
                         g = np.zeros(size)
                         g[i] = 1.0
-                        g = self.mask_frozen_ea(g, const=0.0)
+                        g = self.mask_frozen_ea(g, kshift, const=0.0)
                         guess.append(g)
 
             def precond(r, e0, x0):
@@ -802,11 +796,11 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                     x0 = linalg_helper._gen_x0(envs['v'], envs['xs'])
                     idx = np.argmax( np.abs(np.dot(np.array(guess).conj(),np.array(x0).T)), axis=1 )
                     return w[idx].real, v[:,idx].real, idx
-                evals_k, evecs_k = eig(self.eaccsd_matvec, guess, precond, pick=pickeig,
+                evals_k, evecs_k = eig(lambda _arg: self.eaccsd_matvec(_arg, kshift), guess, precond, pick=pickeig,
                                        tol=self.conv_tol, max_cycle=self.max_cycle,
                                        max_space=self.max_space, nroots=nroots, verbose=self.verbose)
             else:
-                evals_k, evecs_k = eig(self.eaccsd_matvec, guess, precond,
+                evals_k, evecs_k = eig(lambda _arg: self.eaccsd_matvec(_arg, kshift), guess, precond,
                                        tol=self.conv_tol, max_cycle=self.max_cycle,
                                        max_space=self.max_space, nroots=nroots, verbose=self.verbose)
 
@@ -824,7 +818,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         self.eea = evals
         return self.eea, evecs
 
-    def eaccsd_matvec(self, vector):
+    def eaccsd_matvec(self, vector, kshift):
         # Ref: Nooijen and Bartlett, J. Chem. Phys. 102, 3629 (1994) Eqs.(30)-(31)
         if not hasattr(self,'imds'):
             self.imds = _IMDS(self)
@@ -832,12 +826,11 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
             self.imds.make_ea(self.ea_partition)
         imds = self.imds
 
-        vector = self.mask_frozen_ea(vector, const=0.0)
+        vector = self.mask_frozen_ea(vector, kshift, const=0.0)
         r1,r2 = self.vector_to_amplitudes_ea(vector)
 
         t1,t2 = self.t1, self.t2
         nkpts = self.nkpts
-        kshift = self.kshift
         kconserv = self.khelper.kconserv
 
         # Eq. (30)
@@ -900,10 +893,10 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                             Hr2[kj,ka] += -einsum('k,kjab->jab',tmp,t2[kshift,kj,ka])
 
         vector = self.amplitudes_to_vector_ea(Hr1,Hr2)
-        vector = self.mask_frozen_ea(vector, const=0.0)
+        vector = self.mask_frozen_ea(vector, kshift, const=0.0)
         return vector
 
-    def eaccsd_diag(self, kshift=0):
+    def eaccsd_diag(self, kshift):
         if not hasattr(self,'imds'):
             self.imds = _IMDS(self)
         if not self.imds.made_ea_imds:
@@ -989,12 +982,11 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         #                    index += 1
         return vector
 
-    def mask_frozen_ea(self, vector, const=LARGE_DENOM):
+    def mask_frozen_ea(self, vector, kshift, const=LARGE_DENOM):
         '''Replaces all frozen orbital indices of `vector` with the value `const`.'''
         r1, r2 = self.vector_to_amplitudes_ea(vector)
         nkpts, nocc, nvir = self.t1.shape
         kconserv = self.khelper.kconserv
-        kshift = self.kshift
 
         fock = self.eris.fock
         foo = fock[:,:nocc,:nocc]
@@ -1430,3 +1422,6 @@ if __name__ == '__main__':
     ecc, t1, t2 = mycc.kernel()
     print(ecc - -0.155298393321855)
 
+    e_ip, _ = mycc.ipccsd(kptlist=(0,))
+    e_ea, _ = mycc.eaccsd(kptlist=(0,))
+    print e_ip, e_ea
