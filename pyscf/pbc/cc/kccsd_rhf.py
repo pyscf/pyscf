@@ -1424,4 +1424,4 @@ if __name__ == '__main__':
 
     e_ip, _ = mycc.ipccsd(kptlist=(0,))
     e_ea, _ = mycc.eaccsd(kptlist=(0,))
-    print e_ip, e_ea
+    print(e_ip, e_ea)
