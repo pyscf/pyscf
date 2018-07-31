@@ -337,6 +337,7 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(isinstance(scf.RKS(mol_u), dft.roks.ROKS))
         self.assertTrue(isinstance(scf.UKS(mol_r), dft.uks.UKS))
         self.assertTrue(isinstance(scf.ROKS(mol_r), dft.roks.ROKS))
+        self.assertTrue(isinstance(scf.GKS(mol_r), dft.gks.GKS))
         self.assertTrue(isinstance(scf.KS(mol_r), dft.rks.RKS))
         self.assertTrue(isinstance(scf.KS(mol_u), dft.uks.UKS))
 
