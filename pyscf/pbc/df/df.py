@@ -58,7 +58,7 @@ from pyscf import __config__
 LINEAR_DEP_THR = getattr(__config__, 'pbc_df_df_DF_lindep', 1e-9)
 
 
-def make_modrho_basis(cell, auxbasis=None, drop_eta=1.):
+def make_modrho_basis(cell, auxbasis=None, drop_eta=None):
     auxcell = addons.make_auxmol(cell, auxbasis)
 
 # Note libcint library will multiply the norm of the integration over spheric
@@ -75,7 +75,7 @@ def make_modrho_basis(cell, auxbasis=None, drop_eta=1.):
         ptr = auxcell._bas[ib,gto.PTR_COEFF]
         cs = auxcell._env[ptr:ptr+np*nc].reshape(nc,np).T
 
-        if numpy.any(es < drop_eta):
+        if drop_eta is not None and numpy.any(es < drop_eta):
             cs = cs[es>=drop_eta]
             es = es[es>=drop_eta]
             np, ndrop = len(es), ndrop+np-len(es)
@@ -402,6 +402,8 @@ class GDF(aft.AFTDF):
         self.kpts = kpts  # default is gamma point
         self.kpts_band = None
         self._auxbasis = None
+
+        # Search for optimized eta and mesh here.
         if cell.dimension == 0:
             self.eta = 0.2
             self.mesh = cell.mesh
@@ -418,6 +420,15 @@ class GDF(aft.AFTDF):
                 ke_cutoff = aft.estimate_ke_cutoff_for_eta(cell, self.eta, cell.precision)
                 self.mesh = tools.cutoff_to_mesh(cell.lattice_vectors(), ke_cutoff)
                 self.mesh[cell.dimension:] = cell.mesh[cell.dimension:]
+
+        # exp_to_discard to remove diffused fitting functions. The diffused
+        # fitting functions may cause linear dependency in DF metric. Removing
+        # the fitting functions whose exponents are smaller than exp_to_discard
+        # can improve the linear dependency issue. However, this parameter
+        # affects the quality of the auxiliary basis. The default value of
+        # this parameter was set to 0.2 in v1.5.1 or older and was changed to
+        # 0 since v1.5.2.
+        self.exp_to_discard = cell.exp_to_discard
 
 # Not input options
         self.exxdiv = None  # to mimic KRHF/KUHF object in function get_coulG
@@ -460,6 +471,7 @@ class GDF(aft.AFTDF):
         else:
             log.info('auxbasis = %s', self.auxcell.basis)
         log.info('eta = %s', self.eta)
+        log.info('exp_to_discard = %s', self.exp_to_discard)
         if isinstance(self._cderi, str):
             log.info('_cderi = %s  where DF integrals are loaded (readonly).',
                      self._cderi)
@@ -490,7 +502,8 @@ class GDF(aft.AFTDF):
         self.check_sanity()
         self.dump_flags()
 
-        self.auxcell = make_modrho_basis(self.cell, self.auxbasis, self.eta)
+        self.auxcell = make_modrho_basis(self.cell, self.auxbasis,
+                                         self.exp_to_discard)
 
         if self.kpts_band is None:
             kpts = self.kpts
