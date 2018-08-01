@@ -796,6 +796,8 @@ class _load3c(object):
                                    % (self.label, kpti_kptj, self.label))
             #:dat = self.feri['%s/%d' % (self.label, k_id[0])]
             group = self.feri['%s/%d' % (self.label, k_id[0])]
+#TODO: put the numpy.hstack() call in _load_and_unpack class to lazily load
+# the 3D tensor if it is too big.
             dat = numpy.hstack([group[str(i)] for i in range(len(group))])
             dat = _load_and_unpack(dat)
         return dat

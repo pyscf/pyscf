@@ -82,7 +82,7 @@ class KnownValues(unittest.TestCase):
         kcc = pyscf.pbc.cc.kccsd_rhf.RCCSD(mf)
         e0 = kcc.kernel()[0]
 
-        mf = pbcscf.RHF(cell, kpt=kpts[0]).run()
+        mf = pbcscf.RHF(cell, kpt=kpts[0]).run(conv_tol=1e-9)
         mycc = pyscf.pbc.cc.RCCSD(mf)
         e1 = mycc.kernel()[0]
         self.assertAlmostEqual(e0, e1, 7)
