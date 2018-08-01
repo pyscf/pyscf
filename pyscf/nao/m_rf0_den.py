@@ -15,7 +15,8 @@ def rf0_den(self, ww):
 
   for sn in range(self.nspin):
     nn = list(range(0,self.nfermi[sn],self.bsize))+[self.nfermi[sn]]
-    for sm in range(self.nspin):
+    for sm in range(1):
+      sm = sn
       mm = list(range(self.vstart[sm],self.norbs,self.bsize))+[self.norbs]
     
       for nbs,nbf in zip(nn,nn[1:]):
@@ -30,7 +31,7 @@ def rf0_den(self, ww):
       
           rf0 += einsum('wpmn,qmn->wpq', zxvx[...,0:mbf-mbs,0:nbf-nbs], xvx)
   
-  rf0 = rf0 / self.nspin
+  #rf0 = rf0 / self.nspin
   
   return rf0
 
