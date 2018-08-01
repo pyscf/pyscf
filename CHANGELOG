@@ -13,6 +13,7 @@ PySCF 1.5.2
 -----------
 * Improved
   - IO performance of pbc.GDF initialization
+  - Default linear dependence treatment in GDF to improve accuracy
 * Bugfix
   - selected_ci 2-particle density matrices for two electron systems
 
