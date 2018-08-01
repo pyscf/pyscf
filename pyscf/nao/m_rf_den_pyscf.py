@@ -15,7 +15,9 @@ def rf_den_pyscf(self, ww):
     xpy = (2*(x+y)).reshape(nov)
     pI = dot(pov,xpy)
     ppqI = einsum('p,q->pq', pI, pI)
-
+    
+    print(e)
+    
     for iw,w in enumerate(ww):
       rf[iw] = rf[iw] + ppqI * ( 1.0/(w-e)-1.0/(w+e) )
 

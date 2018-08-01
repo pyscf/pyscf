@@ -90,7 +90,9 @@ def rf0_cmplx_ref(self, ww):
       for iw,comega in enumerate(ww):
         zvxx_a[iw,:] = vxx_a * (fn - fm)/ (comega - (em - en))
       rf0 += einsum('wa,b->wab', zvxx_a, vxx_a)
-
+  
+  rf0 = rf0 / self.nspin
+  
   t2 = timer()
   if self.verbosity>0: print(__name__, 'rf0_ref_loop', t2-t1)
   return rf0

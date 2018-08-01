@@ -148,6 +148,17 @@ class gw(scf):
 
     return si0
 
+  def si_c_via_diagrpa(self, ww):
+    """ 
+    This method computes the correlation part of the screened interaction W_c
+    via the interacting response function. The interacting response function,
+    in turn, is computed by diagonalizing RPA Hamiltonian.
+    """
+    rf = si0 = self.rf_pyscf(ww)
+    for iw,r in enumerate(rf):
+      si0[iw] = dot(self.kernel_sq, dot(r, self.kernel_sq))
+    return si0
+
   def get_snmw2sf(self):
     """ 
     This computes a spectral function of the GW correction.

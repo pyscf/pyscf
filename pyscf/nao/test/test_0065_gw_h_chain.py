@@ -19,7 +19,7 @@ class KnowValues(unittest.TestCase):
     ww = np.arange(0.0, 1.0, 0.1)+1j*0.2
     rf0 = b.rf0_den(ww)
     rf0_ref = b.rf0_cmplx_ref(ww)
-    print(__name__, len(b.x), '|diff|', abs(rf0_ref-rf0).sum()/rf0.size)
+    #print(__name__, len(b.x), '|diff|', abs(rf0_ref-rf0).sum()/rf0.size)
     self.assertTrue(abs(rf0_ref-rf0).sum()/rf0.size<1e-12)
     
         

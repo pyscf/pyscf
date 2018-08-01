@@ -23,7 +23,7 @@ class KnowValues(unittest.TestCase):
     from timeit import default_timer as timer
 
     dname = os.path.dirname(os.path.abspath(__file__))
-    bse = bse_iter(label='water', cd=dname, iter_broadening=1e-2, xc_code='RPA', verbosity=0)
+    bse = bse_iter(label='water', cd=dname, iter_broadening=1e-2, xc_code='RPA', verbosity=2)
     omegas = np.linspace(0.0,2.0,150)+1j*bse.eps
     
     pxx = np.zeros(len(omegas))

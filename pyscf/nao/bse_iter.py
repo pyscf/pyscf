@@ -50,7 +50,7 @@ class bse_iter(gw):
       self.kernel_4p -= 0.5*einsum('abcd->bcad', self.kernel_4p.reshape([n,n,n,n])).reshape([n*n,n*n])
       self.si_aa_comega = None
     elif xc=='RPA' or xc=='LDA' or xc=='GGA':
-      pass
+      self.kernel_4p_w = self.kernel_4p
     else :
       print(' ?? xc_code ', self.xc_code, xc)
       raise RuntimeError('??? xc_code ???')
