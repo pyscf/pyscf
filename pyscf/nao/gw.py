@@ -204,12 +204,11 @@ class gw(scf):
     for s,ww in enumerate(sn2w):
       x = self.mo_coeff[0,s,:,:,0]
       for nl,(n,w) in enumerate(zip(self.nn[s],ww)):
-      #for nl,(n,w) in enumerate(zip(self.nn,ww)):
         lsos = self.lsofs_inside_contour(self.ksn2e[0,s,:],w,self.dw_excl)
         zww = array([pole[0] for pole in lsos])
+        #print(__name__, s,n,w, 'len lsos', len(lsos))
         si_ww = self.si_c(ww=zww)
         xv = dot(v_pab,x[n])
-        #print(__name__, 's,n,w', s,n,w)
         for pole,si in zip(lsos, si_ww.real):
           xvx = dot(xv, x[pole[1]])
           contr = dot(xvx, dot(si, xvx))
@@ -265,16 +264,17 @@ class gw(scf):
   def g0w0_eigvals(self):
     """ This computes the G0W0 corrections to the eigenvalues """
     sn2eval_gw = [np.copy(self.ksn2e[0,s,nn]) for s,nn in enumerate(self.nn) ]
-    #print(__name__, 'sn2eval_gw', sn2eval_gw)
     sn2eval_gw_prev = copy(sn2eval_gw)
-    self.nn_conv = []
+
+    self.nn_conv = []  # self.nn_conv -- list of states to converge, spin-resolved.
     for nocc_0t,nocc_conv,nvrt_conv in zip(self.nocc_0t, self.nocc_conv, self.nvrt_conv):
-      self.nn_conv.append( range(max(nocc_0t-nocc_conv,0), min(nocc_0t+nvrt_conv,self.norbs))) # lofs for convergence
+      self.nn_conv.append( range(max(nocc_0t-nocc_conv,0), min(nocc_0t+nvrt_conv,self.norbs)))
 
     # iterations to converge the     
     for i in range(self.niter_max_ev):
       sn2i = self.gw_corr_int(sn2eval_gw)
       sn2r = self.gw_corr_res(sn2eval_gw)
+      
       sn2eval_gw = [evhf[nn]+n2i+n2r for s,(evhf,n2i,n2r,nn) in enumerate(zip(self.h0_vh_x_expval,sn2i,sn2r,self.nn)) ]
       sn2mismatch = zeros((self.nspin,self.norbs))
       for s, nn in enumerate(self.nn): sn2mismatch[s,nn] = sn2eval_gw[s][:]-sn2eval_gw_prev[s][:]
@@ -284,9 +284,9 @@ class gw(scf):
 
       if self.verbosity>0:
         np.set_printoptions(linewidth=1000)
-        print(__name__, 'iter_ev =', i, 'err =', err, 'sn2eval_gw =')
+        #print(__name__, 'iter_ev =', i, 'err =', err, 'sn2eval_gw =')
         for s,n2ev in enumerate(sn2eval_gw):
-          print(s, n2ev)
+          print(s, n2ev[0:5], sn2i[s][0:5], sn2r[s][0:5])
         
       if err<self.tol_ev : break
     return sn2eval_gw
@@ -299,13 +299,14 @@ class gw(scf):
       print(__name__, '.h0_vh_x_expval: ')
       print(self.h0_vh_x_expval)
 
-    if not hasattr(self, 'sn2eval_gw'): self.sn2eval_gw = self.g0w0_eigvals()
-
+    if not hasattr(self,'sn2eval_gw'): self.sn2eval_gw=self.g0w0_eigvals() # Comp. GW-corrections
+    
+    # Update mo_energy_gw, mo_coeff_gw after the computation is done
     self.mo_energy_gw = np.copy(self.mo_energy)
     self.mo_coeff_gw = np.copy(self.mo_coeff)
-    #print(self.sn2eval_gw.shape, type(self.sn2eval_gw))
+    #print(len(self.sn2eval_gw), type(self.sn2eval_gw))
     #print(self.nn, type(self.nn))
-    #print(self.mo_energy_g0w0.shape, type(self.mo_energy_g0w0))
+    #print(self.mo_energy_gw.shape, type(self.mo_energy_gw))
     for s,nn in enumerate(self.nn):
       self.mo_energy_gw[0,s,nn] = self.sn2eval_gw[s]
       nn_occ = [n for n in nn if n<self.nocc_0t[s]]

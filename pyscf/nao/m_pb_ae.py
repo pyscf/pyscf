@@ -29,7 +29,8 @@ def pb_ae(self, sv, tol_loc=1e-5, tol_biloc=1e-6, ac_rcut_ratio=1.0):
   for ia1,n1 in enumerate(sv.atom2s[1:]-sv.atom2s[0:-1]):
     for ia2,n2 in enumerate(sv.atom2s[ia1+2:]-sv.atom2s[ia1+1:-1]):
       ia2 += ia1+1
-      mol2 = gto.Mole(atom=[sv._atom[ia1], sv._atom[ia2]], basis=sv.basis, unit='bohr').build()
+      z1pz2 = sv.atom_charge(ia1)+sv.atom_charge(ia2)
+      mol2 = gto.Mole(atom=[sv._atom[ia1], sv._atom[ia2]], basis=sv.basis, unit='bohr', spin = z1pz2 % 2).build()
       bs = get_atom2bas_s(mol2._bas)
       ss = (bs[0],bs[1], bs[1],bs[2], bs[0],bs[1], bs[1],bs[2])
       eri = mol2.intor('cint2e_sph', shls_slice=ss).reshape(n1,n2,n1,n2)
@@ -62,7 +63,8 @@ def pb_ae(self, sv, tol_loc=1e-5, tol_biloc=1e-6, ac_rcut_ratio=1.0):
       for c,s,f in zip(lc2c,lc2s,lc2s[1:]):
         n3 = sv.atom2s[c+1]-sv.atom2s[c]
         lcd = self.prod_log.sp2lambda[sv.atom2sp[c]]
-        mol3 = gto.Mole(atom=[sv._atom[ia1], sv._atom[ia2], sv._atom[c]], basis=sv.basis, unit='bohr', spin=1).build()
+        z1pz2pz3 = sv.atom_charge(ia1)+sv.atom_charge(ia2)+sv.atom_charge(c)
+        mol3 = gto.Mole(atom=[sv._atom[ia1], sv._atom[ia2], sv._atom[c]], basis=sv.basis, unit='bohr', spin=z1pz2pz3 % 2).build()
         bs = get_atom2bas_s(mol3._bas)
         ss = (bs[2],bs[3], bs[2],bs[3], bs[0],bs[1], bs[1],bs[2])
         tci_ao = mol3.intor('cint2e_sph', shls_slice=ss).reshape(n3,n3,n1,n2)
