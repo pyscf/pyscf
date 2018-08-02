@@ -4,7 +4,8 @@ from numpy import stack, dot, zeros, einsum, array
 from timeit import default_timer as timer
 
 def rf0_den(self, ww):
-  """ Full matrix response in the basis of atom-centered product functions, and spin-resolved, or better said spin-summed """
+  """ Full matrix response in the basis of atom-centered product functions for parallel spins"""
+  
   rf0 = np.zeros((len(ww), self.nprod, self.nprod), dtype=self.dtypeComplex)
   if hasattr(self, 'pab2v_den'):
     v = self.pab2v_den
@@ -13,32 +14,27 @@ def rf0_den(self, ww):
   
   zxvx = zeros((len(ww),self.nprod,self.bsize,self.bsize), dtype=self.dtypeComplex)
 
-  for sn in range(self.nspin):
-    nn = list(range(0,self.nfermi[sn],self.bsize))+[self.nfermi[sn]]
-    for sm in range(1):
-      sm = sn
-      mm = list(range(self.vstart[sm],self.norbs,self.bsize))+[self.norbs]
+  for s in range(self.nspin):
+    nn = list(range(0,self.nfermi[s],self.bsize))+[self.nfermi[s]]
+    mm = list(range(self.vstart[s],self.norbs,self.bsize))+[self.norbs]
     
-      for nbs,nbf in zip(nn,nn[1:]):
-        vx = dot(v, self.x[sn,nbs:nbf,:].T)
-        for mbs,mbf in zip(mm,mm[1:]):
-          xvx = einsum('mb,bpn->pmn', self.x[sm,mbs:mbf,:],vx)
-          fmn = np.add.outer(-self.ksn2f[0,sm,mbs:mbf], self.ksn2f[0,sn,nbs:nbf])
-          emn = np.add.outer( self.ksn2e[0,sm,mbs:mbf],-self.ksn2e[0,sn,nbs:nbf])
-          zxvx.fill(0.0)
-          for iw,comega in enumerate(ww):
-            zxvx[iw,:,0:mbf-mbs,0:nbf-nbs] = (xvx * fmn)* (1.0/ (comega - emn) - 1.0 / (comega + emn))
+    for nbs,nbf in zip(nn,nn[1:]):
+      vx = dot(v, self.x[s,nbs:nbf,:].T)
+      for mbs,mbf in zip(mm,mm[1:]):
+        xvx = einsum('mb,bpn->pmn', self.x[s,mbs:mbf,:],vx)
+        fmn = np.add.outer(-self.ksn2f[0,s,mbs:mbf], self.ksn2f[0,s,nbs:nbf])
+        emn = np.add.outer( self.ksn2e[0,s,mbs:mbf],-self.ksn2e[0,s,nbs:nbf])
+        zxvx.fill(0.0)
+        for iw,comega in enumerate(ww):
+          zxvx[iw,:,0:mbf-mbs,0:nbf-nbs] = (xvx * fmn)* (1.0/ (comega - emn) - 1.0 / (comega + emn))
       
-          rf0 += einsum('wpmn,qmn->wpq', zxvx[...,0:mbf-mbs,0:nbf-nbs], xvx)
-  
-  #rf0 = rf0 / self.nspin
+        rf0 += einsum('wpmn,qmn->wpq', zxvx[...,0:mbf-mbs,0:nbf-nbs], xvx)
   
   return rf0
 
 
 def rf0_cmplx_ref_blk(self, ww):
-  """ Full matrix response in the basis of atom-centered product functions, and spin-resolved,
-  or better said spin-summed """
+  """ Full matrix response in the basis of atom-centered product functions """
   rf0 = np.zeros((len(ww), self.nprod, self.nprod), dtype=self.dtypeComplex)
   v = einsum('pab->apb', self.pb.get_ac_vertex_array())
   #print('v.shape', v.shape)
@@ -71,9 +67,9 @@ def rf0_cmplx_ref_blk(self, ww):
   if self.verbosity>0: print(__name__, 'rf0_ref_blk', t2-t1)
   return rf0
 
+
 def rf0_cmplx_ref(self, ww):
-  """ Full matrix response in the basis of atom-centered product functions, and spin-resolved,
-  or better said spin-summed """
+  """ Full matrix response in the basis of atom-centered product functions """
   rf0 = np.zeros((len(ww), self.nprod, self.nprod), dtype=self.dtypeComplex)
   v = self.pb.get_ac_vertex_array()
   
@@ -81,18 +77,17 @@ def rf0_cmplx_ref(self, ww):
   if self.verbosity>1: print(__name__, 'self.ksn2e', self.ksn2e, len(ww))
       
   zvxx_a = zeros((len(ww), self.nprod), dtype=self.dtypeComplex)
-  sn2e = self.ksn2e.reshape((self.nspin*self.norbs))
-  sn2f = self.ksn2f.reshape((self.nspin*self.norbs))
-  sn2x = self.x.reshape((self.nspin*self.norbs,self.norbs))
-  for en,fn,xn in zip(sn2e, sn2f, sn2x):
-    vx = dot(v, xn)
-    for em,fm,xm in zip(sn2e,sn2f,sn2x):
-      vxx_a = dot(vx, xm.T)
-      for iw,comega in enumerate(ww):
-        zvxx_a[iw,:] = vxx_a * (fn - fm)/ (comega - (em - en))
-      rf0 += einsum('wa,b->wab', zvxx_a, vxx_a)
-  
-  rf0 = rf0 / self.nspin
+  for s in range(self.nspin):
+    n2e = self.ksn2e[0,s,:]
+    n2f = self.ksn2f[0,s,:]
+    n2x = self.x[s,:,:]
+    for en,fn,xn in zip(n2e,n2f,n2x):
+      vx = dot(v, xn)
+      for em,fm,xm in zip(n2e,n2f,n2x):
+        vxx_a = dot(vx, xm.T)
+        for iw,comega in enumerate(ww):
+          zvxx_a[iw,:] = vxx_a * (fn - fm)/ (comega - (em - en))
+        rf0 += einsum('wa,b->wab', zvxx_a, vxx_a)
   
   t2 = timer()
   if self.verbosity>0: print(__name__, 'rf0_ref_loop', t2-t1)

@@ -16,17 +16,16 @@ class KnowValues(unittest.TestCase):
     from pyscf.nao.m_fermi_dirac import fermi_dirac_occupations
     """ Spin-resolved case GW procedure. """
     #print(__name__, dir(gto_mf_uhf))
-    gw = gw_c(mf=gto_mf_uhf, gto=mol, verbosity=2, niter_max_ev=8, pb_algorithm='pp')
-    print(__name__, 'nfermi =', gw.nfermi)
-    print(__name__, 'e_tot =', e_tot)
+    gw = gw_c(mf=gto_mf_uhf, gto=mol, verbosity=0, niter_max_ev=8, pb_algorithm='pp')
     self.assertEqual(gw.nspin, 2)
+
+    #print(__name__, 'nfermi =', gw.nfermi)
+    #print(__name__, 'e_tot =', e_tot)
     
     gw.kernel_gw()
-    print(gw.mo_energy*27.2114)
-    print(gw.mo_energy_gw*27.2114)
-    print(gw.ksn2f)
+    gw.report()
+    self.assertAlmostEqual(gw.mo_energy_gw[0,0,2]*27.2114, -8.4558357834412305)
     #print(__name__, gw.nspin)
-    
     #print(__name__)
     #print(gw.mo_occ)
     #print(gw.nelec)

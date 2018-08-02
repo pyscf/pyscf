@@ -290,7 +290,22 @@ class gw(scf):
         
       if err<self.tol_ev : break
     return sn2eval_gw
-
+    
+  def report(self):
+    """ Prints the energy levels """
+    emfev = self.mo_energy[0].T*27.2114
+    egwev = self.mo_energy_gw[0].T*27.2114
+    if self.nspin==1:
+      print("  n  %14s %14s %7s " % ("E_mf", "E_gw", "occ") )
+      for ie,(emf,egw,f) in enumerate(zip(emfev,egwev,self.ksn2f[0].T)):
+        print("%5d  %14.7f %14.7f %7.2f " % (ie, emf[0], egw[0], f[0]) )
+    elif self.nspin==2:
+      print("  n  %14s %14s %7s   | %14s %14s %7s" % ("E_mf_up", "E_gw_up", "occ_up", "E_mf_down", "E_gw_down", "occ_down") )
+      for ie,(emf,egw,f) in enumerate(zip(emfev,egwev,self.ksn2f[0].T)):
+        print("%5d  %14.7f %14.7f %7.2f | %14.7f %14.7f %7.2f" % (ie, emf[0], egw[0], f[0],  emf[1], egw[1], f[1]) )
+    else:
+      raise RuntimeError('not implemented...')
+    
   def make_mo_g0w0(self):
     """ This creates the fields mo_energy_g0w0, and mo_coeff_g0w0 """
 
