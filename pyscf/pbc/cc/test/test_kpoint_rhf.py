@@ -109,9 +109,8 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(ehf, ehf_bench, 9)
         self.assertAlmostEqual(ecc, ecc_bench, 9)
 
-    def _test_cu_metallic_nonequal_occ(self, kmf, cell, nk=[1,1,1]):
+    def _test_cu_metallic_nonequal_occ(self, kmf, cell, ecc1_bench=-0.9646107739333411):
         assert cell.mesh == [7, 7, 7]
-        ecc1_bench = -0.9646107739333411
         max_cycle = 5  # Too expensive to do more
 
         # The following calculation at full convergence gives -0.711071910294612
@@ -124,7 +123,7 @@ class KnownValues(unittest.TestCase):
 
         self.assertAlmostEqual(ecc1, ecc1_bench, 6)
 
-    def _test_cu_metallic_frozen_occ(self, kmf, cell, nk=[1,1,1]):
+    def _test_cu_metallic_frozen_occ(self, kmf, cell):
         assert cell.mesh == [7, 7, 7]
         ecc2_bench = -0.7651806468801496
         max_cycle = 5
@@ -140,7 +139,7 @@ class KnownValues(unittest.TestCase):
 
         self.assertAlmostEqual(ecc2, ecc2_bench, 6)
 
-    def _test_cu_metallic_frozen_vir(self, kmf, cell, nk=[1,1,1]):
+    def _test_cu_metallic_frozen_vir(self, kmf, cell):
         assert cell.mesh == [7, 7, 7]
         ecc3_bench = -0.76794053711557086
         max_cycle = 5
@@ -215,9 +214,9 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(ehf, ehf_bench, 6)
 
         # Run CC calculations
-        self._test_cu_metallic_nonequal_occ(kmf, cell, nk=nk)
-        self._test_cu_metallic_frozen_occ(kmf, cell, nk=nk)
-        self._test_cu_metallic_frozen_vir(kmf, cell, nk=nk)
+        self._test_cu_metallic_nonequal_occ(kmf, cell)
+        self._test_cu_metallic_frozen_occ(kmf, cell)
+        self._test_cu_metallic_frozen_vir(kmf, cell)
 
     def test_ccsd_t_high_cost(self):
         n = 14
