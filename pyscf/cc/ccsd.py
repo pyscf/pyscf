@@ -138,7 +138,7 @@ def update_amps(mycc, t1, t2, eris):
         eris_oovv = numpy.empty((nocc,nocc,p1-p0,nvir))
         def load_oovv(p0, p1):
             eris_oovv[:] = eris.oovv[:,:,p0:p1]
-        with lib.call_in_background(load_oovv) as prefetch_oovv:
+        with lib.call_in_background(load_oovv, sync=not mycc.async_io) as prefetch_oovv:
             #:eris_oovv = eris.oovv[:,:,p0:p1]
             prefetch_oovv(p0, p1)
             foo += numpy.einsum('kc,kcji->ij', 2*t1[:,p0:p1], eris_ovoo)
@@ -157,7 +157,7 @@ def update_amps(mycc, t1, t2, eris):
         eris_ovvo = numpy.empty((nocc,p1-p0,nvir,nocc))
         def load_ovvo(p0, p1):
             eris_ovvo[:] = eris.ovvo[:,p0:p1]
-        with lib.call_in_background(load_ovvo) as prefetch_ovvo:
+        with lib.call_in_background(load_ovvo, sync=not mycc.async_io) as prefetch_ovvo:
             #:eris_ovvo = eris.ovvo[:,p0:p1]
             prefetch_ovvo(p0, p1)
             t1new[:,p0:p1] -= numpy.einsum('jb,jiab->ia', t1, eris_oovv)
@@ -192,7 +192,7 @@ def update_amps(mycc, t1, t2, eris):
 
         def update_wVooV(q0, q1, tau):
             wVooV[:] += lib.einsum('bkic,jkca->bija', eris_voov[:,:,:,q0:q1], tau)
-        with lib.call_in_background(update_wVooV) as update_wVooV:
+        with lib.call_in_background(update_wVooV, sync=not mycc.async_io) as update_wVooV:
             for q0, q1 in lib.prange(0, nvir, blksize):
                 tau  = t2[:,:,q0:q1] * .5
                 tau += numpy.einsum('ia,jb->ijab', t1[:,q0:q1], t1)
@@ -203,7 +203,7 @@ def update_amps(mycc, t1, t2, eris):
             t2new[:,:,q0:q1] += tmp.transpose(2,0,1,3)
             tmp *= .5
             t2new[:,:,q0:q1] += tmp.transpose(0,2,1,3)
-        with lib.call_in_background(update_t2) as update_t2:
+        with lib.call_in_background(update_t2, sync=not mycc.async_io) as update_t2:
             for q0, q1 in lib.prange(0, nvir, blksize):
                 tmp = lib.einsum('jkca,ckib->jaib', t2[:,:,p0:p1,q0:q1], wVooV)
                 #:t2new[:,:,q0:q1] += tmp.transpose(2,0,1,3)
@@ -218,7 +218,7 @@ def update_amps(mycc, t1, t2, eris):
         eris_voov = None
         def update_wVOov(q0, q1, tau):
             wVOov[:,:,:,q0:q1] += .5 * lib.einsum('aikc,kcjb->aijb', eris_VOov, tau)
-        with lib.call_in_background(update_wVOov) as update_wVOov:
+        with lib.call_in_background(update_wVOov, sync=not mycc.async_io) as update_wVOov:
             for q0, q1 in lib.prange(0, nvir, blksize):
                 tau  = t2[:,:,q0:q1].transpose(1,3,0,2) * 2
                 tau -= t2[:,:,q0:q1].transpose(0,3,1,2)
@@ -228,7 +228,7 @@ def update_amps(mycc, t1, t2, eris):
                 tau = None
         def update_t2(q0, q1, theta):
             t2new[:,:,q0:q1] += lib.einsum('kica,ckjb->ijab', theta, wVOov)
-        with lib.call_in_background(update_t2) as update_t2:
+        with lib.call_in_background(update_t2, sync=not mycc.async_io) as update_t2:
             for q0, q1 in lib.prange(0, nvir, blksize):
                 theta  = t2[:,:,p0:p1,q0:q1] * 2
                 theta -= t2[:,:,p0:p1,q0:q1].transpose(1,0,2,3)
