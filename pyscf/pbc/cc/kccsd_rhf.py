@@ -288,6 +288,42 @@ def update_amps(cc, t1, t2, eris):
     return t1new, t2new
 
 
+def vector_to_amplitudes_ip(vector, nmo, nocc, nkpts):
+    nvir = nmo - nocc
+
+    r1 = vector[:nocc].copy()
+    r2 = vector[nocc:].copy().reshape(nkpts, nkpts, nocc, nocc, nvir)
+    return [r1, r2]
+
+
+def amplitudes_to_vector_ip(r1, r2):
+    nkpts, _, nocc, _, nvir = r2.shape
+    size = nocc + nkpts * nkpts * nocc * nocc * nvir
+
+    vector = np.zeros(size, r1.dtype)
+    vector[:nocc] = r1
+    vector[nocc:] = r2.reshape(-1)
+    return vector
+
+
+def vector_to_amplitudes_ea(vector, nmo, nocc, nkpts):
+    nvir = nmo - nocc
+
+    r1 = vector[:nvir].copy()
+    r2 = vector[nvir:].copy().reshape(nkpts, nkpts, nocc, nvir, nvir)
+    return [r1, r2]
+
+
+def amplitudes_to_vector_ea(r1, r2):
+    nkpts, _, nocc, _, nvir = r2.shape
+    size = nvir + nkpts * nkpts * nocc * nvir * nvir
+
+    vector = np.zeros(size, r1.dtype)
+    vector[:nvir] = r1
+    vector[nvir:] = r2.reshape(-1)
+    return vector
+
+
 def energy(cc, t1, t2, eris):
     nkpts, nocc, nvir = t1.shape
     kconserv = cc.khelper.kconserv
@@ -664,41 +700,10 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         return vector
 
     def vector_to_amplitudes_ip(self, vector):
-        nocc = self.nocc
-        nvir = self.nmo - nocc
-        nkpts = self.nkpts
-
-        r1 = vector[:nocc].copy()
-        r2 = vector[nocc:].copy().reshape(nkpts, nkpts, nocc, nocc, nvir)
-        # r2 = np.zeros((nkpts,nkpts,nocc,nocc,nvir), vector.dtype)
-        # index = nocc
-        # for ki in range(nkpts):
-        #    for kj in range(nkpts):
-        #        for i in range(nocc):
-        #            for j in range(nocc):
-        #                for a in range(nvir):
-        #                    r2[ki,kj,i,j,a] =  vector[index]
-        #                    index += 1
-        return [r1, r2]
+        return vector_to_amplitudes_ip(vector, self.nmo, self.nocc, self.nkpts)
 
     def amplitudes_to_vector_ip(self, r1, r2):
-        nocc = self.nocc
-        nvir = self.nmo - nocc
-        nkpts = self.nkpts
-        size = nocc + nkpts * nkpts * nocc * nocc * nvir
-
-        vector = np.zeros((size), r1.dtype)
-        vector[:nocc] = r1.copy()
-        vector[nocc:] = r2.copy().reshape(nkpts * nkpts * nocc * nocc * nvir)
-        # index = nocc
-        # for ki in range(nkpts):
-        #    for kj in range(nkpts):
-        #        for i in range(nocc):
-        #            for j in range(nocc):
-        #                for a in range(nvir):
-        #                    vector[index] = r2[ki,kj,i,j,a]
-        #                    index += 1
-        return vector
+        return amplitudes_to_vector_ip(r1, r2)
 
     def mask_frozen_ip(self, vector, kshift, const=LARGE_DENOM):
         '''Replaces all frozen orbital indices of `vector` with the value `const`.'''
@@ -954,41 +959,10 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         return vector
 
     def vector_to_amplitudes_ea(self, vector):
-        nocc = self.nocc
-        nvir = self.nmo - nocc
-        nkpts = self.nkpts
-
-        r1 = vector[:nvir].copy()
-        r2 = vector[nvir:].copy().reshape(nkpts, nkpts, nocc, nvir, nvir)
-        # r2 = np.zeros((nkpts,nkpts,nocc,nvir,nvir), vector.dtype)
-        # index = nvir
-        # for kj in range(nkpts):
-        #    for ka in range(nkpts):
-        #        for j in range(nocc):
-        #            for a in range(nvir):
-        #                for b in range(nvir):
-        #                    r2[kj,ka,j,a,b] = vector[index]
-        #                    index += 1
-        return [r1, r2]
+        return vector_to_amplitudes_ea(vector, self.nmo, self.nocc, self.nkpts)
 
     def amplitudes_to_vector_ea(self, r1, r2):
-        nocc = self.nocc
-        nvir = self.nmo - nocc
-        nkpts = self.nkpts
-        size = nvir + nkpts * nkpts * nocc * nvir * nvir
-
-        vector = np.zeros((size), r1.dtype)
-        vector[:nvir] = r1.copy()
-        vector[nvir:] = r2.copy().reshape(nkpts * nkpts * nocc * nvir * nvir)
-        # index = nvir
-        # for kj in range(nkpts):
-        #    for ka in range(nkpts):
-        #        for j in range(nocc):
-        #            for a in range(nvir):
-        #                for b in range(nvir):
-        #                    vector[index] = r2[kj,ka,j,a,b]
-        #                    index += 1
-        return vector
+        return amplitudes_to_vector_ea(r1, r2)
 
     def mask_frozen_ea(self, vector, kshift, const=LARGE_DENOM):
         '''Replaces all frozen orbital indices of `vector` with the value `const`.'''
