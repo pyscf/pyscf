@@ -218,6 +218,27 @@ class KnownValues(unittest.TestCase):
         self._test_cu_metallic_frozen_occ(kmf, cell)
         self._test_cu_metallic_frozen_vir(kmf, cell)
 
+    def test_cu_metallic_smearing(self):
+        mesh = 7
+        cell = make_test_cell.test_cell_cu_metallic([mesh]*3)
+        nk = [1,1,2]
+        ehf_bench = -52.539316985400433
+
+        # KRHF calculation
+        kmf = pbcscf.addons.smearing_(pbcscf.KRHF(cell, exxdiv=None), 0.001, "fermi")
+        kmf.kpts = cell.make_kpts(nk, scaled_center=[0.0, 0.0, 0.0], wrap_around=True)
+        kmf.conv_tol_grad = 1e-6  # Stricter tol needed for answer to agree with supercell
+        ehf = kmf.scf()
+
+        self.assertAlmostEqual(ehf, ehf_bench, 6)
+        with self.assertRaises(RuntimeError):
+            self._test_cu_metallic_nonequal_occ(kmf, cell)
+        kmf.smearing_method = False
+        kmf.mo_occ = kmf.get_occ()
+
+        # Run CC calculations
+        self._test_cu_metallic_nonequal_occ(kmf, cell, -0.96676526820520137)
+
     def test_ccsd_t_high_cost(self):
         n = 14
         cell = make_test_cell.test_cell_n3([n]*3)
