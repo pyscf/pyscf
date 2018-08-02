@@ -40,6 +40,7 @@ class KnowValues(unittest.TestCase):
     def test_df_band(self):
         mf = scf.RHF(cell)
         mf.with_df = df.DF(cell).set(auxbasis='weigend')
+        mf.with_df.exp_to_discard = mf.with_df.eta
         mf.with_df.kpts_band = kband[0]
         mf.kernel()
         self.assertAlmostEqual(finger(mf.get_bands(kband[0])[0]), 1.9905548831851645, 8)
@@ -70,6 +71,7 @@ class KnowValues(unittest.TestCase):
         mf = scf.KRHF(cell)
         mf.with_df = df.DF(cell).set(auxbasis='weigend')
         mf.with_df.kpts_band = kband
+        mf.with_df.exp_to_discard = mf.with_df.eta
         mf.kpts = cell.make_kpts([2,1,1])
         mf.kernel()
         self.assertAlmostEqual(finger(mf.get_bands(kband[0])[0]), 1.9630519740658308, 8)

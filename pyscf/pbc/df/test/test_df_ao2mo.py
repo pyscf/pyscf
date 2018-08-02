@@ -17,7 +17,6 @@ import numpy
 from pyscf.pbc.df import df
 import pyscf.pbc.gto as pgto
 from pyscf import ao2mo
-df.LINEAR_DEP_THR = 1e-7
 
 L = 5.
 n = 3
@@ -42,6 +41,7 @@ class KnowValues(unittest.TestCase):
         kpts = numpy.random.random((4,3)) * .25
         kpts[3] = -numpy.einsum('ij->j', kpts[:3])
         with_df = df.DF(cell).set(auxbasis='weigend')
+        with_df.linear_dep_threshold = 1e-7
         with_df.kpts = kpts
         mo =(numpy.random.random((nao,nao)) +
              numpy.random.random((nao,nao))*1j)
@@ -58,6 +58,7 @@ class KnowValues(unittest.TestCase):
         kpts[3] = kpts[0]
         kpts[2] = kpts[1]
         with_df = df.DF(cell).set(auxbasis='weigend')
+        with_df.linear_dep_threshold = 1e-7
         with_df.kpts = kpts
         mo =(numpy.random.random((nao,nao)) +
              numpy.random.random((nao,nao))*1j)
@@ -74,6 +75,7 @@ class KnowValues(unittest.TestCase):
         kpts[2] = kpts[0]
         kpts[3] = kpts[1]
         with_df = df.DF(cell).set(auxbasis='weigend')
+        with_df.linear_dep_threshold = 1e-7
         with_df.kpts = kpts
         mo =(numpy.random.random((nao,nao)) +
              numpy.random.random((nao,nao))*1j)
@@ -87,6 +89,7 @@ class KnowValues(unittest.TestCase):
 
     def test_eri0000(self):
         with_df = df.DF(cell).set(auxbasis='weigend')
+        with_df.linear_dep_threshold = 1e-7
         with_df.kpts = numpy.zeros((4,3))
         mo =(numpy.random.random((nao,nao)) +
              numpy.random.random((nao,nao))*1j)
@@ -111,6 +114,7 @@ class KnowValues(unittest.TestCase):
         kpts = numpy.random.random((4,3)) * .25
         kpts[3] = -numpy.einsum('ij->j', kpts[:3])
         with_df = df.DF(cell).set(auxbasis='weigend')
+        with_df.linear_dep_threshold = 1e-7
         with_df.kpts = kpts
         with_df.mesh = [11]*3
         mo =(numpy.random.random((nao,nao)) +
@@ -128,6 +132,7 @@ class KnowValues(unittest.TestCase):
         kpts = numpy.random.random((4,3)) * .25
         kpts[3] = -numpy.einsum('ij->j', kpts[:3])
         with_df = df.DF(cell).set(auxbasis='weigend')
+        with_df.linear_dep_threshold = 1e-7
         with_df.kpts = kpts
         mo =(numpy.random.random((nao,nao)) +
              numpy.random.random((nao,nao))*1j)
