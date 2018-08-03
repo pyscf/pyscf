@@ -23,7 +23,6 @@ from pyscf.pbc.df import mdf
 from pyscf.pbc import df
 #from mpi4pyscf.pbc.df import mdf
 pyscf.pbc.DEBUG = False
-mdf.df.LINEAR_DEP_THR = 1e-7
 
 L = 5.
 n = 11
@@ -49,6 +48,7 @@ kpts[3] = kpts[0]-kpts[1]+kpts[2]
 kpts[4] *= 1e-5
 
 kmdf = mdf.MDF(cell)
+kmdf.linear_dep_threshold = 1e-7
 kmdf.auxbasis = 'weigend'
 kmdf.kpts = kpts
 kmdf.mesh = (11,)*3
@@ -64,6 +64,7 @@ cell1.rcut = 9.5
 cell1.build(0,0)
 
 kmdf1 = mdf.MDF(cell1)
+kmdf1.linear_dep_threshold = 1e-7
 kmdf1.auxbasis = df.aug_etb(cell1, 1.8)
 kmdf1.kpts = kpts
 kmdf1.mesh = [6]*3
@@ -76,12 +77,13 @@ def finger(a):
 
 class KnowValues(unittest.TestCase):
     def test_vbar(self):
-        auxcell = mdf.make_modrho_basis(cell, 'ccpvdz', 1.)
+        auxcell = df.df.make_modrho_basis(cell, 'ccpvdz', 1.)
         vbar = mdf.MDF(cell).auxbar(auxcell)
         self.assertAlmostEqual(finger(vbar), -0.00438699039629, 9)
 
     def test_get_eri_gamma_high_cost(self):
         odf = mdf.MDF(cell)
+        odf.linear_dep_threshold = 1e-7
         odf.auxbasis = 'weigend'
         odf.mesh = (11,)*3
         odf.eta = 0.154728892598
@@ -139,6 +141,7 @@ class KnowValues(unittest.TestCase):
 
     def test_get_eri_gamma_1(self):
         odf = mdf.MDF(cell1)
+        odf.linear_dep_threshold = 1e-7
         odf.auxbasis = df.aug_etb(cell1, 1.8)
         odf.mesh = [6]*3
         odf.eta = 0.1

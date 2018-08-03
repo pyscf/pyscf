@@ -36,4 +36,5 @@ HARTREE2WAVENUMBER = 2.194746313702e9
 E_CHARGE = 1.6021766208e-19     # C https://physics.nist.gov/cgi-bin/cuu/Value?e
 LIGHT_SPEED_SI = 299792458      # https://physics.nist.gov/cgi-bin/cuu/Value?c
 AVOGADRO = 6.022140857e23       # https://physics.nist.gov/cgi-bin/cuu/Value?na
-AU2DEBYE = 2.541746
+DEBYE = 3.335641e-30            # C*m = 1e-18/LIGHT_SPEED_SI https://cccbdb.nist.gov/debye.asp
+AU2DEBYE = E_CHARGE * BOHR*1e-10 / DEBYE # 2.541746
