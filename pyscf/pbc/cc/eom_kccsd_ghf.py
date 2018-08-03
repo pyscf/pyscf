@@ -365,7 +365,7 @@ def eaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     for kj in range(nkpts):
         for ka in range(nkpts):
             kb = kconserv[kshift,ka,kj]
-            #Hr2[kj,ka] += np.einsum('abcj,c->jab', imds.Wvvvo[ka,kb,kshift], r1[ka])
+            Hr2[kj,ka] += np.einsum('abcj,c->jab', imds.Wvvvo[ka,kb,kshift], r1)
             Hr2[kj,ka] += lib.einsum('ac,jcb->jab', imds.Fvv[ka], r2[kj,ka])
             Hr2[kj,ka] -= lib.einsum('bc,jca->jab', imds.Fvv[kb], r2[kj,kb])
 
@@ -567,7 +567,7 @@ class _IMDS:
         # 3 or 4 virtuals
         self.Wvovv = imd.Wvovv(self._cc, t1, t2, eris, kconserv)
         self.Wvvvv = imd.Wvvvv(self._cc, t1, t2, eris, kconserv)
-        #self.Wvvvo = imd.Wvvvo(self._cc, t1, t2, eris, kconserv)
+        self.Wvvvo = imd.Wvvvo(self._cc, t1, t2, eris, kconserv)
 
         self.made_ea_imds = True
         logger.timer_debug1(self, 'EOM-CCSD EA intermediates', *cput0)
