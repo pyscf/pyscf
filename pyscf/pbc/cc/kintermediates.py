@@ -227,7 +227,7 @@ def Woooo(cc,t1,t2,eris,kconserv):
 
 def Wvvvv(cc,t1,t2,eris,kconserv):
     nkpts, nocc, nvir = t1.shape
-    tau = make_tau(cc,t2,t1,t1)
+    tau = make_tau(cc,t2,t1,t1,kconserv)
     Wabef = cc_Wvvvv(cc,t1,t2,eris,kconserv)
     for ka, kb, ke in kpts_helper.loop_kkk(nkpts):
         kf = kconserv[ka, ke, kb]
@@ -303,7 +303,7 @@ def Wovoo(cc,t1,t2,eris,kconserv):
 
     return Wmbij
 
-def Wvvvo(t1,t2,eris,kconserv):
+def Wvvvo(cc,t1,t2,eris,kconserv):
     raise NotImplementedError
     nkpts, nocc, nvir = t1.shape
     eris_ovvo = -eris.ovov.transpose(0,1,3,2)

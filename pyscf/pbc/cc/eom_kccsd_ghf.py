@@ -359,13 +359,13 @@ def eaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     for kl in range(nkpts):
         Hr1 += np.einsum('ld,lad->a', imds.Fov[kl,kshift], r2)
         for kc in range(nkps):
-            Hr1 += 0.5*np.einsum('alcd,lcd->a', imds.Wvovv[kshift,kl,kc] r2[kl,kc])
+            Hr1 += 0.5*np.einsum('alcd,lcd->a', imds.Wvovv[kshift,kl,kc], r2[kl,kc])
 
     Hr2 = np.zeros_like(r2)
     for kj in range(nkpts):
         for ka in range(nkpts):
             kb = kconvserv[kshift,ka,kj]
-            Hr2[kj,ka] += np.einsum('abcj,c->jab', imds.Wvvvo[ka,kb,kshift], r1[ka])
+            #Hr2[kj,ka] += np.einsum('abcj,c->jab', imds.Wvvvo[ka,kb,kshift], r1[ka])
             Hr2[kj,ka] += lib.einsum('ac,jcb->jab', imds.Fvv[ka], r2[kj,ka])
             Hr2[kj,ka] -= lib.einsum('bc,jca->jab', imds.Fvv[kb], r2[kj,kb])
 
@@ -442,6 +442,24 @@ class EOMEA(eom_rccsd.EOM):
     eaccsd = eaccsd
     get_diag = eaccsd_diag
     matvec = eaccsd_matvec
+
+    def get_init_guess(self, nroots=1, koopmans=True, diag=None):
+        size = self.vector_size()
+        dtype = getattr(diag, 'dtype', np.double)
+        nroots = min(nroots, size)
+        guess = []
+        if koopmans:
+            for n in range(nroots):
+                g = np.zeros(size)
+                g[n] = 1.0
+                guess.append(g)
+        else:
+            idx = diag.argsort()[:nroots]
+            for i in idx:
+                g = np.zeros(size)
+                g[i] = 1.0
+                guess.append(g)
+        return guess
 
     @property
     def nkpts(self):
@@ -549,7 +567,7 @@ class _IMDS:
         # 3 or 4 virtuals
         self.Wvovv = imd.Wvovv(self._cc, t1, t2, eris, kconserv)
         self.Wvvvv = imd.Wvvvv(self._cc, t1, t2, eris, kconserv)
-        self.Wvvvo = imd.Wvvvo(self._cc, t1, t2, eris, self.Wvvvv, kconserv)
+        #self.Wvvvo = imd.Wvvvo(self._cc, t1, t2, eris, kconserv)
 
         self.made_ea_imds = True
         logger.timer_debug1(self, 'EOM-CCSD EA intermediates', *cput0)
@@ -610,9 +628,10 @@ if __name__ == '__main__':
     ecc, t1, t2 = mycc.kernel()
     print(ecc - -0.155298393321855)
 
-    eom = EOMIP(mycc)
-    e, v = eom.ipccsd(nroots=3, kptlist=[0])
-    print(e[0] + 0.8268853970451141)
+    #eom = EOMIP(mycc)
+    #e, v = eom.ipccsd(nroots=3, kptlist=[0])
+    #print(e[0] + 0.8268853970451141)
 
+    eom = EOMEA(mycc)
     e, v = eom.eaccsd(nroots=3, kptlist=[0])
     print(e[0] - 1.073716355462168)
