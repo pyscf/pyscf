@@ -390,6 +390,48 @@ def eaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     vector = amplitudes_to_vector_ea(Hr1, Hr2)
     return vector
 
+def eaccsd_diag(eom, kshift, imds=None):
+    #TODO: find a way to check this
+    if imds is None: imds = eom.make_imds()
+    t1, t2 = imds.t1, imds.t2
+    nkpts, nocc, nvir = t1.shape
+    kconserv = imds.kconserv
+
+    Hr1 = -np.diag(imds.Foo[kshift])
+
+    Hr2 = np.ones((nkpts,nkpts,nocc,nocc,nvir), dtype=t1.dtype)
+    #if eom.partition == 'mp':
+    #    foo = eom.eris.fock[:,:nocc,:nocc]
+    #    fvv = eom.eris.fock[:,nocc:,nocc:]
+    #    for ki in range(nkpts):
+    #        for kj in range(nkpts):
+    #            kb = kconserv[ki,kshift,kj]
+    #            Hr2[ki,kj]  = fvv[ka].diagonal()
+    #            Hr2[ki,kj] -= foo[ki].diagonal()[:,None,None]
+    #            Hr2[ki,kj] -= foo[kj].diagonal()[None,:,None]
+    #else:
+    #    idx = np.arange(nocc)
+    #    for ki in range(nkpts):
+    #        for kj in range(nkpts):
+    #            ka = kconserv[ki,kshift,kj]
+    #            Hr2[ki,kj]  = imds.Fvv[ka].diagonal()
+    #            Hr2[ki,kj] -= imds.Foo[ki].diagonal()[:,None,None]
+    #            Hr2[ki,kj] -= imds.Foo[kj].diagonal()[None,:,None]
+
+    #            if ki == kconserv[ki,kj,kj]:
+    #                Hr2[ki,kj] += 0.5 * np.einsum('ijij->ij', imds.Woooo[ki, kj, ki])[:,:,None]
+
+    #            Wovvo = np.einsum('iaai->ia', imds.Wovvo[ki,ka,ka])
+    #            Hr2[ki,kj] += Wovvo[:, None, :]
+    #            if ki == kj:  # and i == j
+    #                Hr2[ki,ki,idx,idx] -= Wovvo
+
+    #            Hr2[ki, kj] += 0.5 * lib.einsum('ijea,ijae->ija', imds.Woovv[ki, kj, kshift],
+    #                                            imds.t2[ki, kj, ka])
+
+    vector = amplitudes_to_vector_ea(Hr1, Hr2)
+    return vector
+
 class EOMEA(eom_rccsd.EOM):
     def __init__(self, cc):
         self.kpts = cc.kpts
@@ -398,7 +440,8 @@ class EOMEA(eom_rccsd.EOM):
 
     kernel = eaccsd
     eaccsd = eaccsd
-    #get_diag = eaccsd_diag
+    get_diag = eaccsd_diag
+    matvec = eaccsd_matvec
 
     @property
     def nkpts(self):
@@ -571,5 +614,5 @@ if __name__ == '__main__':
     e, v = eom.ipccsd(nroots=3, kptlist=[0])
     print(e[0] + 0.8268853970451141)
 
-    #e, v = eom.eaccsd(nroots=3, kptlist=[0])
-    #print(e[0] - 1.073716355462168)
+    e, v = eom.eaccsd(nroots=3, kptlist=[0])
+    print(e[0] - 1.073716355462168)
