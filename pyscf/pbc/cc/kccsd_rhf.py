@@ -288,40 +288,128 @@ def update_amps(cc, t1, t2, eris):
     return t1new, t2new
 
 
-def vector_to_amplitudes_ip(vector, nmo, nocc, nkpts):
-    nvir = nmo - nocc
+def describe_nested(data):
+    """
+    Retrieves the description of a nested array structure.
+    Args:
+        data (iterable): a nested structure to describe;
 
-    r1 = vector[:nocc].copy()
-    r2 = vector[nocc:].copy().reshape(nkpts, nkpts, nocc, nocc, nvir)
-    return [r1, r2]
+    Returns:
+        - A nested structure where numpy arrays are replaced by their shapes;
+        - The overall number of scalar elements;
+        - The common data type;
+    """
+    if isinstance(data, numpy.ndarray):
+        return data.shape, data.size, data.dtype
+    elif isinstance(data, (list, tuple)):
+        total_size = 0
+        struct = []
+        dtype = None
+        for i in data:
+            i_struct, i_size, i_dtype = describe_nested(i)
+            struct.append(i_struct)
+            total_size += i_size
+            if dtype is not None and i_dtype is not None and i_dtype != dtype:
+                raise ValueError("Several different numpy dtypes encountered: {} and {}".format(
+                    str(dtype), str(i_dtype)
+                ))
+            dtype = i.dtype
+        return struct, total_size, dtype
+    else:
+        raise ValueError("Unknown object to describe: {}".format(str(data)))
 
 
-def amplitudes_to_vector_ip(r1, r2):
-    nkpts, _, nocc, _, nvir = r2.shape
-    size = nocc + nkpts * nkpts * nocc * nocc * nvir
+def nested_to_vector(data, destination=None, offset=0):
+    """
+    Puts any nested iterable into a vector.
+    Args:
+        data (Iterable): a nested structure of numpy arrays;
+        destination (array): array to store the data to;
+        offset (int): array offset;
 
-    vector = np.zeros(size, r1.dtype)
-    vector[:nocc] = r1
-    vector[nocc:] = r2.reshape(-1)
-    return vector
+    Returns:
+        If destination is not specified, returns a vectorized data and the original nested structure to restore the data
+        into its original form. Otherwise returns a new offset.
+    """
+    if destination is None:
+        struct, total_size, dtype = describe_nested(data)
+        destination = numpy.empty(total_size, dtype=dtype)
+        rtn = True
+    else:
+        rtn = False
+
+    if isinstance(data, numpy.ndarray):
+        destination[offset:offset + data.size] = data.ravel()
+        offset += data.size
+    elif isinstance(data, (list, tuple)):
+        for i in data:
+            offset = nested_to_vector(i, destination, offset)
+    else:
+        raise ValueError("Unknown object to vectorize: {}".format(str(data)))
+
+    if rtn:
+        return destination, struct
+    else:
+        return offset
 
 
-def vector_to_amplitudes_ea(vector, nmo, nocc, nkpts):
-    nvir = nmo - nocc
+def vector_to_nested(vector, struct, copy=True, ensure_size_matches=True):
+    """
+    Retrieves the original nested structure from the vector.
+    Args:
+        vector (array): a vector to decompose;
+        struct (Iterable): a nested structure with arrays' shapes;
+        copy (bool): whether to copy arrays;
+        ensure_size_matches (bool): if True, ensures all elements from the vector are used;
 
-    r1 = vector[:nvir].copy()
-    r2 = vector[nvir:].copy().reshape(nkpts, nkpts, nocc, nvir, nvir)
-    return [r1, r2]
+    Returns:
+        A nested structure with numpy arrays and, if `ensure_size_matches=False`, the number of vector elements used.
+    """
+    if len(vector.shape) != 1:
+        raise ValueError("Only vectors accepted, got: {}".format(repr(vector.shape)))
 
+    if isinstance(struct, tuple):
+        expected_size = numpy.prod(struct)
+        if ensure_size_matches:
+            if vector.size != expected_size:
+                raise ValueError("Structure size mismatch: expected {} = {:d}, found {:d}".format(
+                    repr(struct),
+                    expected_size,
+                    vector.size,
+                ))
+        if len(vector) < expected_size:
+            raise ValueError("Additional {:d} = ({:d} = {}) - {:d} vector elements are required".format(
+                expected_size - len(vector),
+                expected_size,
+                repr(struct),
+                len(vector),
+            ))
+        a = vector[:expected_size].reshape(struct)
+        if copy:
+            a = a.copy()
 
-def amplitudes_to_vector_ea(r1, r2):
-    nkpts, _, nocc, _, nvir = r2.shape
-    size = nvir + nkpts * nkpts * nocc * nvir * nvir
+        if ensure_size_matches:
+            return a
+        else:
+            return a, expected_size
 
-    vector = np.zeros(size, r1.dtype)
-    vector[:nvir] = r1
-    vector[nvir:] = r2.reshape(-1)
-    return vector
+    elif isinstance(struct, list):
+        offset = 0
+        result = []
+        for i in struct:
+            nested, size = vector_to_nested(vector[offset:], i, copy=copy, ensure_size_matches=False)
+            offset += size
+            result.append(nested)
+
+        if ensure_size_matches:
+            if vector.size != offset:
+                raise ValueError("{:d} additional elements found".format(vector.size - offset))
+            return result
+        else:
+            return result, offset
+
+    else:
+        raise ValueError("Unknown object to compose: {}".format(str(struct)))
 
 
 def energy(cc, t1, t2, eris):
@@ -477,6 +565,10 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         size = nocc + nkpts ** 2 * nocc ** 2 * nvir
         return size
 
+    @property
+    def ip_nested_struct(self):
+        return [(self.nocc,), (self.nkpts, self.nkpts, self.nocc, self.nocc, self.nmo - self.nocc)]
+
     def ipccsd(self, nroots=1, koopmans=False, guess=None, partition=None,
                kptlist=None):
         '''Calculate (N-1)-electron charged excitations via IP-EOM-CCSD.
@@ -518,7 +610,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
             adiag = self.ipccsd_diag(kshift)
             adiag = self.mask_frozen_ip(adiag, kshift, const=LARGE_DENOM)
             if partition == 'full':
-                self._ipccsd_diag_matrix2 = self.vector_to_amplitudes_ip(adiag)[1]
+                self._ipccsd_diag_matrix2 = vector_to_nested(adiag, self.ip_nested_struct)[1]
 
             user_guess = False
             if guess:
@@ -584,7 +676,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         imds = self.imds
 
         vector = self.mask_frozen_ip(vector, kshift, const=0.0)
-        r1, r2 = self.vector_to_amplitudes_ip(vector)
+        r1, r2 = vector_to_nested(vector, self.ip_nested_struct)
 
         t1, t2 = self.t1, self.t2
         nkpts = self.nkpts
@@ -644,7 +736,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                                    - einsum('kldc,kld->c', imds.Woovv[kk, kl, kd], r2[kk, kl]))
                             Hr2[ki, kj] += -einsum('c,ijcb->ijb', tmp, t2[ki, kj, kshift])
 
-        vector = self.amplitudes_to_vector_ip(Hr1, Hr2)
+        vector, _ = nested_to_vector((Hr1, Hr2))
         vector = self.mask_frozen_ip(vector, kshift, const=0.0)
         return vector
 
@@ -696,18 +788,12 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                     Hr2[ki, kj] -= 2. * np.einsum('ijcb,jibc->ijb', t2[ki, kj, kshift], imds.Woovv[kj, ki, kd])
                     Hr2[ki, kj] += np.einsum('ijcb,ijbc->ijb', t2[ki, kj, kshift], imds.Woovv[ki, kj, kd])
 
-        vector = self.amplitudes_to_vector_ip(Hr1, Hr2)
+        vector, _ = nested_to_vector((Hr1, Hr2))
         return vector
-
-    def vector_to_amplitudes_ip(self, vector):
-        return vector_to_amplitudes_ip(vector, self.nmo, self.nocc, self.nkpts)
-
-    def amplitudes_to_vector_ip(self, r1, r2):
-        return amplitudes_to_vector_ip(r1, r2)
 
     def mask_frozen_ip(self, vector, kshift, const=LARGE_DENOM):
         '''Replaces all frozen orbital indices of `vector` with the value `const`.'''
-        r1, r2 = self.vector_to_amplitudes_ip(vector)
+        r1, r2 = vector_to_nested(vector, self.ip_nested_struct)
         nkpts, nocc, nvir = self.t1.shape
         kconserv = self.khelper.kconserv
 
@@ -730,7 +816,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                 r2[ki, kj, :, jmask_idx] = d0
                 r2[ki, kj, :, :, bmask_idx] = d0
 
-        vector = self.amplitudes_to_vector_ip(r1, r2)
+        vector, _ = nested_to_vector((r1, r2))
         return vector
 
     def vector_size_ea(self):
@@ -740,6 +826,11 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
         size = nvir + nkpts ** 2 * nvir ** 2 * nocc
         return size
+
+    @property
+    def ea_nested_struct(self):
+        nvir = self.nmo - self.nocc
+        return [(nvir,), (self.nkpts, self.nkpts, self.nocc, nvir, nvir)]
 
     def eaccsd(self, nroots=1, koopmans=False, guess=None, partition=None,
                kptlist=None):
@@ -770,7 +861,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
             adiag = self.eaccsd_diag(kshift)
             adiag = self.mask_frozen_ea(adiag, kshift, const=LARGE_DENOM)
             if partition == 'full':
-                self._eaccsd_diag_matrix2 = self.vector_to_amplitudes_ea(adiag)[1]
+                self._eaccsd_diag_matrix2 = vector_to_nested(adiag, self.ea_nested_struct)[1]
 
             user_guess = False
             if guess:
@@ -837,7 +928,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         imds = self.imds
 
         vector = self.mask_frozen_ea(vector, kshift, const=0.0)
-        r1, r2 = self.vector_to_amplitudes_ea(vector)
+        r1, r2 = vector_to_nested(vector, self.ea_nested_struct)
 
         t1, t2 = self.t1, self.t2
         nkpts = self.nkpts
@@ -905,7 +996,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                                    - einsum('kldc,lcd->k', imds.Woovv[kk, kl, kd], r2[kl, kc]))
                             Hr2[kj, ka] += -einsum('k,kjab->jab', tmp, t2[kshift, kj, ka])
 
-        vector = self.amplitudes_to_vector_ea(Hr1, Hr2)
+        vector, _ = nested_to_vector((Hr1, Hr2))
         vector = self.mask_frozen_ea(vector, kshift, const=0.0)
         return vector
 
@@ -955,18 +1046,12 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                     Hr2[kj, ka] -= 2 * np.einsum('ijab,ijab->jab', t2[kshift, kj, ka], imds.Woovv[kshift, kj, ka])
                     Hr2[kj, ka] += np.einsum('ijab,ijba->jab', t2[kshift, kj, ka], imds.Woovv[kshift, kj, kb])
 
-        vector = self.amplitudes_to_vector_ea(Hr1, Hr2)
+        vector, _ = nested_to_vector((Hr1, Hr2))
         return vector
-
-    def vector_to_amplitudes_ea(self, vector):
-        return vector_to_amplitudes_ea(vector, self.nmo, self.nocc, self.nkpts)
-
-    def amplitudes_to_vector_ea(self, r1, r2):
-        return amplitudes_to_vector_ea(r1, r2)
 
     def mask_frozen_ea(self, vector, kshift, const=LARGE_DENOM):
         '''Replaces all frozen orbital indices of `vector` with the value `const`.'''
-        r1, r2 = self.vector_to_amplitudes_ea(vector)
+        r1, r2 = vector_to_nested(vector, self.ea_nested_struct)
         nkpts, nocc, nvir = self.t1.shape
         kconserv = self.khelper.kconserv
 
@@ -989,21 +1074,19 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                 r2[kj, ka, :, amask_idx] = d0
                 r2[kj, ka, :, :, bmask_idx] = d0
 
-        vector = self.amplitudes_to_vector_ea(r1, r2)
+        vector, _ = nested_to_vector((r1, r2))
         return vector
 
-    def amplitudes_to_vector(self, t1, t2):
-        return np.hstack((t1.ravel(), t2.ravel()))
+    @property
+    def gs_nested_struct(self):
+        nvir = self.nmo - self.nocc
+        return [(self.nkpts, self.nocc, nvir), (self.nkpts,) * 3 + (self.nocc,) * 2 + (nvir,) * 2]
 
-    def vector_to_amplitudes(self, vec, nmo=None, nocc=None):
-        if nocc is None: nocc = self.nocc
-        if nmo is None: nmo = self.nmo
-        nvir = nmo - nocc
-        nkpts = self.nkpts
-        nov = nkpts * nocc * nvir
-        t1 = vec[:nov].reshape(nkpts, nocc, nvir)
-        t2 = vec[nov:].reshape(nkpts, nkpts, nkpts, nocc, nocc, nvir, nvir)
-        return t1, t2
+    def amplitudes_to_vector(self, t1, t2):
+        return nested_to_vector((t1, t2))[0]
+
+    def vector_to_amplitudes(self, vec):
+        return vector_to_nested(vec, self.gs_nested_struct)
 
 
 KRCCSD = RCCSD
