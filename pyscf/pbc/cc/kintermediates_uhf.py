@@ -34,6 +34,65 @@ def cc_Fvv(cc, t1, t2, uccsd_eris):
     from pyscf.pbc.cc import kccsd
     from pyscf.pbc.cc import kintermediates
     from pyscf.pbc.lib import kpts_helper
+    from numpy import einsum
+    import numpy as np
+
+    orbspin = uccsd_eris._kccsd_eris.orbspin
+    kconserv = kpts_helper.get_kconserv(cc._scf.cell, cc.kpts)
+
+    t1a, t1b = t1
+    t2aa, t2ab, t2bb = t2
+
+    nkpts = len(orbspin)
+    nocc_a, nocc_b = uccsd_eris.nocc
+    nocc  = nocc_a+nocc_b
+    idxva = [np.where(orbspin[k][nocc:] == 0)[0] for k in range(nkpts)]
+    idxvb = [np.where(orbspin[k][nocc:] == 1)[0] for k in range(nkpts)]
+    nvir_a = len(idxva[0])
+    nvir_b = len(idxvb[0])
+
+    fa = np.zeros((nkpts,nvir_a,nvir_a), dtype=np.complex128)
+    fb = np.zeros((nkpts,nvir_b,nvir_b), dtype=np.complex128)
+
+    tau_tildeaa,tau_tildeab,tau_tildebb=make_tau(cc,t2,t1,t1,fac=0.5)
+
+    fov_ = uccsd_eris.fock[0][:,:nocc_a,nocc_a:]
+    fOV_ = uccsd_eris.fock[1][:,:nocc_b,nocc_b:]
+    fvv_ = uccsd_eris.fock[0][:,nocc_a:,nocc_a:]
+    fVV_ = uccsd_eris.fock[1][:,nocc_b:,nocc_b:]
+    
+    for ka in range(nkpts):
+     fa[ka]+=fvv_[ka]
+     fb[ka]+=fVV_[ka]
+     fa[ka]-=0.5*einsum('me,ma->ae',fov_[ka],t1a[ka])
+     fb[ka]-=0.5*einsum('me,ma->ae',fOV_[ka],t1b[ka])
+     for km in range(nkpts):
+      fa[ka]+=einsum('mf,aemf->ae',t1a[km],uccsd_eris.vvov[ka,ka,km])
+      fa[ka]-=einsum('mf,afme->ae',t1a[km],uccsd_eris.vvov[ka,km,km])
+      fa[ka]+=einsum('mf,aemf->ae',t1b[km],uccsd_eris.vvOV[ka,ka,km])
+
+      fb[ka]+=einsum('mf,aemf->ae',t1b[km],uccsd_eris.VVOV[ka,ka,km])
+      fb[ka]-=einsum('mf,afme->ae',t1b[km],uccsd_eris.VVOV[ka,km,km])
+      fb[ka]+=einsum('mf,aemf->ae',t1a[km],uccsd_eris.VVov[ka,ka,km])
+
+      for kn in range(nkpts):
+       fa[ka]-=0.5*einsum('mnaf,menf->ae',tau_tildeaa[km,kn,ka],uccsd_eris.ovov[km,ka,kn]) # v
+       fa[ka]-=0.5*einsum('mNaF,meNF->ae',tau_tildeab[km,kn,ka],uccsd_eris.ovOV[km,ka,kn]) # v
+       kf=kconserv[km,ka,kn]
+       fa[ka]+=0.5*einsum('mnaf,mfne->ae',tau_tildeaa[km,kn,ka],uccsd_eris.ovov[km,kf,kn]) # v
+       fa[ka]-=0.5*einsum('nMaF,MFne->ae',tau_tildeab[kn,km,ka],uccsd_eris.OVov[km,kf,kn]) # c
+
+       fb[ka]-=0.5*einsum('mnaf,menf->ae',tau_tildebb[km,kn,ka],uccsd_eris.OVOV[km,ka,kn]) # v
+       fb[ka]-=0.5*einsum('NmFa,meNF->ae',tau_tildeab[kn,km,kf],uccsd_eris.OVov[km,ka,kn]) # v
+       kf=kconserv[km,ka,kn]
+       fb[ka]+=0.5*einsum('mnaf,mfne->ae',tau_tildebb[km,kn,ka],uccsd_eris.OVOV[km,kf,kn]) # v
+       fb[ka]-=0.5*einsum('MnFa,MFne->ae',tau_tildeab[km,kn,kf],uccsd_eris.ovOV[km,kf,kn]) # c
+
+    '''
+    from pyscf.pbc.cc import kccsd_uhf
+    from pyscf.pbc.cc import kccsd
+    from pyscf.pbc.cc import kintermediates
+    from pyscf.pbc.lib import kpts_helper
     orbspin = uccsd_eris._kccsd_eris.orbspin
     kconserv = kpts_helper.get_kconserv(cc._scf.cell, cc.kpts)
 
@@ -50,10 +109,81 @@ def cc_Fvv(cc, t1, t2, uccsd_eris):
     # Use only uccsd_eris the spatial-orbital integral tensor in Chemist's notation
 
     Fvv, FVV = kccsd_uhf._eri_spin2spatial(gkccsd_Fvv, 'vv', uccsd_eris)
-    return Fvv, FVV
+
+    t1 = kccsd.spatial2spin((t1a, t1b), orbspin, kconserv)
+    t2 = kccsd.spatial2spin((t2aa, t2ab, t2bb), orbspin, kconserv)
+
+    gkccsd_Fvv = kintermediates.cc_Fvv(cc, t1, t2, uccsd_eris._kccsd_eris)
+
+    # Use only uccsd_eris the spatial-orbital integral tensor in Chemist's notation
+    Fvv, FVV = kccsd_uhf._eri_spin2spatial(gkccsd_Fvv, 'vv', uccsd_eris)
+    for ka in range(nkpts):
+     print ka,np.abs(fa[ka]-Fvv[ka]).max(),np.abs(fb[ka]-FVV[ka]).max()
+    '''
+
+    return fa,fb #Fvv, FVV
 
 
 def cc_Foo(cc, t1, t2, uccsd_eris):
+    from pyscf.pbc.cc import kccsd_uhf
+    from pyscf.pbc.cc import kccsd
+    from pyscf.pbc.cc import kintermediates
+    from pyscf.pbc.lib import kpts_helper
+    from numpy import einsum
+    orbspin = uccsd_eris._kccsd_eris.orbspin
+    kconserv = kpts_helper.get_kconserv(cc._scf.cell, cc.kpts)
+
+    t1a, t1b = t1
+    t2aa, t2ab, t2bb = t2
+
+    nkpts = len(orbspin)
+    nocc_a, nocc_b = uccsd_eris.nocc
+    nocc  = nocc_a+nocc_b
+    idxva = [np.where(orbspin[k][nocc:] == 0)[0] for k in range(nkpts)]
+    idxvb = [np.where(orbspin[k][nocc:] == 1)[0] for k in range(nkpts)]
+    nvir_a = len(idxva[0])
+    nvir_b = len(idxvb[0])
+
+    fa = np.zeros((nkpts,nocc_a,nocc_a), dtype=np.complex128)
+    fb = np.zeros((nkpts,nocc_b,nocc_b), dtype=np.complex128)
+
+    tau_tildeaa,tau_tildeab,tau_tildebb=make_tau(cc,t2,t1,t1,fac=0.5)
+
+    fov_ = uccsd_eris.fock[0][:,:nocc_a,nocc_a:]
+    fOV_ = uccsd_eris.fock[1][:,:nocc_b,nocc_b:]
+    foo_ = uccsd_eris.fock[0][:,:nocc_a,:nocc_a]
+    fOO_ = uccsd_eris.fock[1][:,:nocc_b,:nocc_b]
+
+    for ka in range(nkpts):
+     fa[ka]+=foo_[ka]
+     fb[ka]+=fOO_[ka]
+     fa[ka]+=0.5*einsum('me,ne->mn',fov_[ka],t1a[ka])
+     fb[ka]+=0.5*einsum('me,ne->mn',fOV_[ka],t1b[ka])
+     for km in range(nkpts):
+      fa[ka]+=einsum('oa,mnoa->mn',t1a[km],uccsd_eris.ooov[ka,ka,km])
+      fa[ka]+=einsum('oa,mnoa->mn',t1b[km],uccsd_eris.ooOV[ka,ka,km])
+      fa[ka]-=einsum('oa,maon->mn',t1a[km],uccsd_eris.ovoo[ka,km,km])
+
+      fb[ka]+=einsum('oa,mnoa->mn',t1b[km],uccsd_eris.OOOV[ka,ka,km])
+      fb[ka]+=einsum('oa,mnoa->mn',t1a[km],uccsd_eris.OOov[ka,ka,km])
+      fb[ka]-=einsum('oa,maon->mn',t1b[km],uccsd_eris.OVOO[ka,km,km])
+
+    for km in range(nkpts):
+     for kn in range(nkpts):
+      for ke in range(nkpts):
+       fa[km]+=0.5*einsum('inef,menf->mi',tau_tildeaa[km,kn,ke],uccsd_eris.ovov[km,ke,kn]) # v
+       fa[km]+=0.5*einsum('iNeF,meNF->mi',tau_tildeab[km,kn,ke],uccsd_eris.ovOV[km,ke,kn]) # v
+       kf=kconserv[km,ke,kn]
+       fa[km]-=0.5*einsum('inef,mfne->mi',tau_tildeaa[km,kn,ke],uccsd_eris.ovov[km,kf,kn]) # v
+       fb[km]+=0.5*einsum('NiEf,mfNE->mi',tau_tildeab[kn,km,ke],uccsd_eris.OVov[km,kf,kn]) # c
+
+       fb[km]+=0.5*einsum('INEF,MENF->MI',tau_tildebb[km,kn,ke],uccsd_eris.OVOV[km,ke,kn]) # v
+       fb[km]+=0.5*einsum('nIfE,MEnf->MI',tau_tildeab[kn,km,kf],uccsd_eris.OVov[km,ke,kn]) # v
+       kf=kconserv[km,ke,kn]
+       fb[km]-=0.5*einsum('INEF,MFNE->MI',tau_tildebb[km,kn,ke],uccsd_eris.OVOV[km,kf,kn]) # v
+       fa[km]+=0.5*einsum('InFe,MFne->MI',tau_tildeab[km,kn,kf],uccsd_eris.ovOV[km,kf,kn]) # c
+
+    '''
     from pyscf.pbc.cc import kccsd_uhf
     from pyscf.pbc.cc import kccsd
     from pyscf.pbc.cc import kintermediates
@@ -69,10 +199,63 @@ def cc_Foo(cc, t1, t2, uccsd_eris):
     gkccsd_Foo = kintermediates.cc_Foo(cc, t1, t2, uccsd_eris._kccsd_eris)
 
     Foo, FOO = kccsd_uhf._eri_spin2spatial(gkccsd_Foo, 'oo', uccsd_eris)
-    return Foo, FOO
+
+    t1 = kccsd.spatial2spin((t1a, t1b), orbspin, kconserv)
+    t2 = kccsd.spatial2spin((t2aa, t2ab, t2bb), orbspin, kconserv)
+
+    gkccsd_Foo = kintermediates.cc_Foo(cc, t1, t2, uccsd_eris._kccsd_eris)
+
+    Foo, FOO = kccsd_uhf._eri_spin2spatial(gkccsd_Foo, 'oo', uccsd_eris)
+
+    for ka in range(nkpts):
+     print ka,np.abs(fa[ka]-Foo[ka]).max(),np.abs(fb[ka]-FOO[ka]).max()
+    '''
+
+    return fa,fb #Foo, FOO
 
 
 def cc_Fov(cc, t1, t2, uccsd_eris):
+
+    from pyscf.pbc.cc import kccsd_uhf
+    from pyscf.pbc.cc import kccsd
+    from pyscf.pbc.cc import kintermediates
+    from pyscf.pbc.lib import kpts_helper
+
+    import numpy as np
+    from numpy import einsum
+
+    orbspin = uccsd_eris._kccsd_eris.orbspin
+    kconserv = kpts_helper.get_kconserv(cc._scf.cell, cc.kpts)
+
+    t1a, t1b = t1
+    t2aa, t2ab, t2bb = t2
+
+    nkpts = len(orbspin)
+    nocc_a, nocc_b = uccsd_eris.nocc
+    nocc  = nocc_a+nocc_b
+    idxva = [np.where(orbspin[k][nocc:] == 0)[0] for k in range(nkpts)]
+    idxvb = [np.where(orbspin[k][nocc:] == 1)[0] for k in range(nkpts)]
+    nvir_a = len(idxva[0])
+    nvir_b = len(idxvb[0])
+
+    fov_ = uccsd_eris.fock[0][:,:nocc_a,nocc_a:]
+    fOV_ = uccsd_eris.fock[1][:,:nocc_b,nocc_b:]
+
+    fa = np.zeros((nkpts,nocc_a,nvir_a), dtype=np.complex128)
+    fb = np.zeros((nkpts,nocc_b,nvir_b), dtype=np.complex128)
+
+    for km in range(nkpts):
+     fa[km]+=fov_[km]
+     fb[km]+=fOV_[km]
+     for kn in range(nkpts):
+      fa[km]+=einsum('nf,menf->me',t1a[kn],uccsd_eris.ovov[km,km,kn])
+      fa[km]+=einsum('nf,menf->me',t1b[kn],uccsd_eris.ovOV[km,km,kn])
+      fa[km]-=einsum('nf,mfne->me',t1a[kn],uccsd_eris.ovov[km,kn,kn])
+      fb[km]+=einsum('nf,menf->me',t1b[kn],uccsd_eris.OVOV[km,km,kn])
+      fb[km]+=einsum('nf,menf->me',t1a[kn],uccsd_eris.OVov[km,km,kn])
+      fb[km]-=einsum('nf,mfne->me',t1b[kn],uccsd_eris.OVOV[km,kn,kn])
+
+    '''
     from pyscf.pbc.cc import kccsd_uhf
     from pyscf.pbc.cc import kccsd
     from pyscf.pbc.cc import kintermediates
@@ -88,7 +271,16 @@ def cc_Fov(cc, t1, t2, uccsd_eris):
     gkccsd_Fov = kintermediates.cc_Fov(cc, t1, t2, uccsd_eris._kccsd_eris)
 
     Fov, FOV = kccsd_uhf._eri_spin2spatial(gkccsd_Fov, 'ov', uccsd_eris)
-    return Fov, FOV
+
+    t1 = kccsd.spatial2spin((t1a, t1b), orbspin, kconserv)
+    t2 = kccsd.spatial2spin((t2aa, t2ab, t2bb), orbspin, kconserv)
+    gkccsd_Fov = kintermediates.cc_Fov(cc, t1, t2, uccsd_eris._kccsd_eris)
+    Fov, FOV = kccsd_uhf._eri_spin2spatial(gkccsd_Fov, 'ov', uccsd_eris)
+    for ka in range(nkpts):
+     print ka,np.abs(fa[ka]-Fov[ka]).max(),np.abs(fb[ka]-FOV[ka]).max()
+    '''
+
+    return fa,fb #Fov, FOV
 
 def cc_Woooo(cc, t1, t2, uccsd_eris):
     ''' This function returns the Js and Ks intermediates for Wmnij
