@@ -314,7 +314,7 @@ def describe_nested(data):
                 raise ValueError("Several different numpy dtypes encountered: {} and {}".format(
                     str(dtype), str(i_dtype)
                 ))
-            dtype = i.dtype
+            dtype = i_dtype
         return struct, total_size, dtype
     else:
         raise ValueError("Unknown object to describe: {}".format(str(data)))
