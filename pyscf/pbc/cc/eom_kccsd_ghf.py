@@ -348,6 +348,25 @@ def eaccsd(eom, nroots=1, koopmans=False, guess=None, left=False,
     return ipccsd(eom, nroots, koopmans, guess, left, eris, imds,
                   partition, kptlist, dtype)
 
+def eaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
+    '''2ph operators are of the form s_{ij}^{a }, i.e. 'ia' indices are coupled.
+    This differs from the restricted case that uses s_{ij}^{ b}.'''
+    if imds is None: imds = eom.make_imds()
+    nocc = eom.nocc
+    nmo = eom.nmo
+    nvir = nmo - nocc
+    nkpts = eom.nkpts
+    kconserv = imds.kconserv
+    r1, r2 = vector_to_amplitudes_ea(vector, nkpts, nmo, nocc)
+    print np.linalg.norm(r1), np.linalg.norm(r2)
+
+    Hr1 = np.einsum('ac,c->a', imds.Fvv[kshift], r1)
+
+    Hr2 = np.zeros_like(r2)
+
+    vector = amplitudes_to_vector_ea(Hr1, Hr2)
+    return vector
+
 class EOMEA(eom_rccsd.EOM):
     def __init__(self, cc):
         self.kpts = cc.kpts
