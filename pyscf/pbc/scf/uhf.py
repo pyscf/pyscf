@@ -169,6 +169,11 @@ class UHF(mol_uhf.UHF, pbchf.SCF):
             mo_coeff = (mo_coeff[0][0], mo_coeff[1][0])
         return mo_energy, mo_coeff
 
+    def dip_moment(self, mol=None, dm=None, unit='Debye', verbose=logger.NOTE,
+                   **kwargs):
+        # skip dipole memont for crystal
+        return
+
     def get_init_guess(self, cell=None, key='minao'):
         if cell is None: cell = self.cell
         dm = mol_uhf.UHF.get_init_guess(self, cell, key)

@@ -97,6 +97,11 @@ class ROHF(mol_rohf.ROHF, pbchf.RHF):
         '''
         raise NotImplementedError
 
+    def dip_moment(self, mol=None, dm=None, unit='Debye', verbose=logger.NOTE,
+                   **kwargs):
+        # skip dipole memont for crystal
+        return
+
     def get_init_guess(self, cell=None, key='minao'):
         if cell is None: cell = self.cell
         dm = mol_rohf.ROHF.get_init_guess(self, cell, key)
