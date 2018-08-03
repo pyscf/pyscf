@@ -306,21 +306,23 @@ def Wovoo(cc,t1,t2,eris,kconserv):
 def Wvvvo(cc,t1,t2,eris,kconserv):
     raise NotImplementedError
     nkpts, nocc, nvir = t1.shape
-    eris_ovvo = -eris.ovov.transpose(0,1,3,2)
-    eris_vvvo = eris.ovvv.transpose(2,3,1,0).conj()
-    eris_oovo = -eris.ooov.transpose(0,1,3,2)
     tmp1 = einsum('mbef,miaf->abei',eris.ovvv,t2)
     tmp2 = ( einsum('ma,mbei->abei',t1,eris_ovvo)
             - einsum('ma,nibf,mnef->abei',t1,t2,eris.oovv) )
+
     FFov = Fov(t1,t2,eris,kconserv)
     WWvvvv = Wvvvv(t1,t2,eris,kconserv)
     tau = make_tau(cc,t2,t1,t1,kconserv)
 
     Wamef = numpy.empty((nkpts, nkpts, nkpts, nvir, nvir, nvir, nocc), dtype=eris.ovvv.dtype)
     for ka, kb, ke in kpts_helper.loop_kkk(nkpts):
-        Wabei[ka, kb, ke] = # = ( eris_vvvo - einsum('me,miab->abei',FFov,t2)
-                        #+ einsum('if,abef->abei',t1,WWvvvv)
-                        #+ 0.5 * einsum('mnei,mnab->abei',eris_oovo,tau)
-                        #- tmp1 + tmp1.transpose(1,0,2,3)
-                        #- tmp2 + tmp2.transpose(1,0,2,3) )
+        ki = kconserv[ka, ke, kb]
+        Wabei[ka, kb, ke] = eris.ovvv[ki, ke, kb].conj().transpose(3, 2, 1, 0)
+        Wabei[ka, kb, ke] += einsum('if,abef->abei',t1,WWvvvv)
+        Wabei[ka, kb, ke] -= einsum('me,miab->abei',FFov[ke],t2[ke, ki, ka])
+        for km in range(nkpts):
+            kn = kconserv[ka, km, kb]
+            Wabei[ka, kb, ke] += 0.5 * einsum('nmie,mnab->abei',
+                                              eris.ooov[kn, km, ki],
+                                              tau[km, kn, ka])
     return Wabei
