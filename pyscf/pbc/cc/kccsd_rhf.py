@@ -518,8 +518,9 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
             if nroots == 1:
                 evals_k, evecs_k = [evals_k], [evecs_k]
+
             for n, en, vn in zip(range(nroots), evals_k, evecs_k):
-                r1, r2 = eom.vector_to_amplitudes(vn)
+                r1, r2 = self.vector_to_amplitudes_ip(vn)
                 qp_weight = np.linalg.norm(r1)**2
                 logger.info(self, 'EOM-CCSD root %d E = %.16g  qpwt = %0.6g',
                             n, en, qp_weight)
@@ -527,6 +528,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         return evals_k, evecs_k
 
     def ipccsd_matvec(self, vector):
+        '''2ph operators are of the form s_{ij}^{ b}, i.e. 'jb' indices are coupled.'''
         # Ref: Nooijen and Snijders, J. Chem. Phys. 102, 1681 (1995) Eqs.(8)-(9)
         if not hasattr(self,'imds'):
             self.imds = _IMDS(self)
@@ -535,6 +537,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         imds = self.imds
 
         r1,r2 = self.vector_to_amplitudes_ip(vector)
+        print np.linalg.norm(r1), np.linalg.norm(r2)
 
         t1,t2 = self.t1, self.t2
         nkpts = self.nkpts
@@ -1378,7 +1381,8 @@ if __name__ == '__main__':
     C 0.000000000000   0.000000000000   0.000000000000
     C 1.685068664391   1.685068664391   1.685068664391
     '''
-    cell.basis = 'gth-szv'
+    cell.basis = { 'C': [[0, (0.8, 1.0)],
+                         [1, (1.0, 1.0)]]}
     cell.pseudo = 'gth-pade'
     cell.a = '''
     0.000000000, 3.370137329, 3.370137329
@@ -1393,8 +1397,14 @@ if __name__ == '__main__':
     ehf = kmf.kernel()
 
     mycc = cc.KRCCSD(kmf)
+    mycc.conv_tol = 1e-10
+    mycc.conv_tol_normt = 1e-10
     ecc, t1, t2 = mycc.kernel()
     print(ecc - -0.155298393321855)
+
+    mycc.ipccsd(nroots=3, kptlist=[0])
+    mycc.eaccsd(nroots=3, kptlist=[0])
+    exit()
 
     ####
     cell = gto.Cell()
