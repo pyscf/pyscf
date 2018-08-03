@@ -256,6 +256,30 @@ def ipccsd_diag(eom, imds=None):
     Hr1a = -np.diag(imds.Foo)
     Hr1b = -np.diag(imds.FOO)
 
+    
+
+    ########### sample ###########
+    Fvv_diag = np.diag(imds.Fvv)
+    Foo_diag = np.diag(imds.Foo)
+    FOO_diag = np.diag(imds.FOO)
+    FVV_diag = np.diag(imds.FVV)
+
+    Woooo_slice = np.einsum('iijj->ij',imds.Woooo)
+    Wovvo_slice = np.einsum('iaai->ia',imds.Wovvo)
+    WooOO_slice = np.einsum('jjii->ij',imds.WooOO)
+    WOvvO_slice = np.einsum('iaai->ia',imds.WOvvO)
+    WooOO_slice_T = np.einsum('iijj->ij',imds.WooOO)
+    WoVVo_slice = np.einsum('iaai->ia',imds.WoVVo)
+    WOVVO_slice = np.einsum('jaaj->ja',imds.WOVVO)
+    WOOOO_slice = np.einsum('iijj->ij',imds.WOOOO)
+
+    Wovov_t2_dot = np.einsum('jaib,jiab->ija',imds.Wovov,t2aa)
+    WovOV_t2_dot = np.einsum('ibja,ijba->ija',imds.WovOV,t2ab)
+    WovOV_t2_dot_T = np.einsum('jaib,jiab->ija',imds.WovOV,t2ab)
+    WOVOV_t2_dot = np.einsum('jaib,jiab->ija',imds.WOVOV,t2bb)
+    
+    ########### end sample ###########
+
     Hr2aaa = np.zeros((nocc_a,nocc_a,nvir_a),dtype=dtype)
     for i in range(nocc_a):
      for j in range(nocc_a):
@@ -265,6 +289,17 @@ def ipccsd_diag(eom, imds=None):
        +imds.Wovvo[i,a,a,i] \
        +imds.Wovvo[j,a,a,j] \
        -(np.dot(imds.Wovov[j,a,i,:], t2aa[j,i,a,:]))
+
+    #-----optimize---------
+    Hr2aaa_n = Fvv_diag[None,None,:] - Foo_diag[:,None,None] - Foo_diag[None,:,None] \
+             + Woooo_slice[:,:,None] + Wovvo_slice[:,None,:] + Wovvo_slice[None,:,:] \
+             - Wovov_t2_dot
+
+    print "first term: ", (np.abs(Hr2aaa_n - Hr2aaa)).max()
+    #-----end optimize---------
+
+    
+    ########### end sample ###########
 
     Hr2baa = np.zeros((nocc_b,nocc_a,nvir_a),dtype=dtype)
     for i in range(nocc_b):
@@ -276,6 +311,18 @@ def ipccsd_diag(eom, imds=None):
        +imds.Wovvo[j,a,a,j] \
        -np.dot(imds.WovOV[j,a,i,:], t2ab[j,i,a,:])
 
+    #-----optimize---------
+    Hr2baa_n = Fvv_diag[None,None,:] - FOO_diag[:,None,None] - Foo_diag[None,:,None] \
+             + WooOO_slice[:,:,None] + WOvvO_slice[:,None,:] + Wovvo_slice[None,:,:] \
+             - WovOV_t2_dot_T
+
+    print "second term: ", (np.abs(Hr2baa_n - Hr2baa)).max()
+    #-----end optimize---------
+
+    ########### sample ###########
+    
+    ########### end sample ###########
+
     Hr2abb = np.zeros((nocc_a,nocc_b,nvir_b),dtype=dtype)
     for i in range(nocc_a):
      for j in range(nocc_b):
@@ -285,7 +332,17 @@ def ipccsd_diag(eom, imds=None):
        +imds.WoVVo[i,a,a,i] \
        +imds.WOVVO[j,a,a,j] \
        -np.dot(imds.WovOV[i,:,j,a], t2ab[i,j,:,a])
+    #-----optimize---------
+    Hr2abb_n = FVV_diag[None,None,:] - Foo_diag[:,None,None] - FOO_diag[None,:,None] \
+             + WooOO_slice_T[:,:,None] + WoVVo_slice[:,None,:] + WOVVO_slice[None,:,:] \
+             - WovOV_t2_dot
 
+    print "third term: ", (np.abs(Hr2abb_n - Hr2abb)).max()
+    #-----end optimize---------
+    
+    ########### sample ###########
+    
+    ########### end sample ###########
     Hr2bbb = np.zeros((nocc_b,nocc_b,nvir_b),dtype=dtype)
     for i in range(nocc_b):
      for j in range(nocc_b):
@@ -295,6 +352,15 @@ def ipccsd_diag(eom, imds=None):
        +imds.WOVVO[i,a,a,i] \
        +imds.WOVVO[j,a,a,j] \
        -(np.dot(imds.WOVOV[j,a,i,:],t2bb[j,i,a,:]))
+
+    #-----optimize---------
+    Hr2bbb_n = FVV_diag[None,None,:] - FOO_diag[:,None,None] - FOO_diag[None,:,None] \
+             + WOOOO_slice[:,:,None] + WOVVO_slice[:,None,:] + WOVVO_slice[None,:,:] \
+             - WOVOV_t2_dot
+
+    print "fourth term: ", (np.abs(Hr2bbb_n - Hr2bbb)).max()
+
+    #-----end optimize---------
 
     vector = amplitudes_to_vector_ip([Hr1a, Hr1b], [Hr2aaa, Hr2baa, Hr2abb, Hr2bbb])
     return vector
