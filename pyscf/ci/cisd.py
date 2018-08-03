@@ -215,7 +215,7 @@ def tn_addrs_signs(norb, nelec, n_excite):
     '''
     if n_excite > nelec:
         print("Warning: Not enough occupied orbitals to excite.")
-        return 0, 0
+        return [0], [0]
     nocc = nelec
 
     hole_strs = cistring.gen_strings4orblist(range(nocc), nocc - n_excite)
