@@ -68,29 +68,40 @@ class ao_log_c(log_mesh_c):
 
   Examples:
   '''
-  def __init__(self):
+  def __init__(self, **kw):
     """ Initializes numerical orbitals  """
     log_mesh_c.__init__(self)
+    if 'ao_log' in kw : # this is creating a deepcopy of all attributes
+      import copy
+      ao = kw['ao_log']
+      for a in ao.__dict__.keys():
+        try:
+          setattr(self, a, copy.deepcopy(getattr(ao, a)))
+        except:
+          pass
     return
     
-  def init_ao_log_gto_suggest_mesh(self, gto, sv, rcut_tol=1e-7, **kvargs):
-    """ Get's radial orbitals and angular momenta from a previous pySCF calculation, intializes numerical orbitals from the Gaussian type of orbitals etc."""
-    self.init_log_mesh_gto(gto, rcut_tol, **kvargs)
-    self._init_ao_log_gto(gto, sv, rcut_tol)
+  def init_ao_log_gto_suggest_mesh(self, rcut_tol=1e-7, **kw):
+    """ Get's radial orbitals and angular momenta from a Mole object, intializes numerical orbitals from the Gaussian type of orbitals etc."""
+    self.init_log_mesh_gto(rcut_tol=rcut_tol, **kw)
+    self._init_ao_log_gto(rcut_tol=rcut_tol, **kw)
     return self
 
-  def init_ao_log_gto_lm(self, gto, sv, lm, rcut_tol=1e-7):
+  def init_ao_log_gto_lm(self, lm, rcut_tol=1e-7, **kw):
     """ Get's radial orbitals and angular momenta from a previous pySCF calculation, with a given log mesh (radial grid)"""
     self.init_log_mesh(lm.rr, lm.pp)
-    self._init_ao_log_gto(gto, sv, rcut_tol)
+    self._init_ao_log_gto(rcut_tol=1e-7, **kw)
     return self
 
-  def _init_ao_log_gto(self, gto, sv, rcut_tol):
+  def _init_ao_log_gto(self, **kw):
     """ supposed to be private """
     import numpy as np
     from pyscf.nao.m_log_interp import log_interp_c
 
     self.interp_rr,self.interp_pp = log_interp_c(self.rr), log_interp_c(self.pp)
+    sv = nao = kw['nao']
+    rcut_tol = kw['rcut_tol']
+    gto = kw['gto'] if 'gto' in kw else nao.gto
     self.sp_mu2j = [0]*sv.nspecies
     self.psi_log = [0]*sv.nspecies
     self.psi_log_rl = [0]*sv.nspecies
@@ -149,7 +160,7 @@ class ao_log_c(log_mesh_c):
 
   #
   #  
-  def init_ao_log_ion(self, sp2ion, **kvargs):
+  def init_ao_log_ion(self, sp2ion, **kw):
     """
         Reads data from a previous SIESTA calculation,
         interpolates the orbitals on a single log mesh.
@@ -158,21 +169,49 @@ class ao_log_c(log_mesh_c):
     from pyscf.nao.m_log_interp import log_interp_c
     from pyscf.nao.m_siesta_ion_interp import siesta_ion_interp
     from pyscf.nao.m_siesta_ion_add_sp2 import _siesta_ion_add_sp2
+    from pyscf.nao.m_spline_diff2 import spline_diff2
+    from pyscf.nao.m_spline_interp import spline_interp
+    
     import numpy as np
 
-    self.init_log_mesh_ion(sp2ion, **kvargs)
+    self.init_log_mesh_ion(sp2ion, **kw)
+    #print(__name__, self.nr)
+    #print(__name__, self.rr)
+    #print(__name__, self.rmax)
+    #print(__name__, self.rmin)
+    #print(__name__, self.kmax)
     self.interp_rr,self.interp_pp = log_interp_c(self.rr), log_interp_c(self.pp)
     _siesta_ion_add_sp2(self, sp2ion) # adds the fields for counting, .nspecies etc.
     self.jmx = max([mu2j.max() for mu2j in self.sp_mu2j])
     self.sp2norbs = np.array([mu2s[self.sp2nmult[sp]] for sp,mu2s in enumerate(self.sp_mu2s)], dtype='int64')
-        
-    self.psi_log = siesta_ion_interp(self.rr, sp2ion, 1)
-    self.psi_log_rl = siesta_ion_interp(self.rr, sp2ion, 0)
 
     self.sp2ion = sp2ion
     
-    self.sp_mu2rcut = [ np.array(ion["paos"]["cutoff"], dtype='float64') for ion in sp2ion]
-    self.sp2rcut = np.array([np.amax(rcuts) for rcuts in self.sp_mu2rcut], dtype='float64')
+    rr = self.rr
+    nr = len(rr)
+    
+    #print(__name__, 'self.jmx', self.jmx)
+    #print(__name__, 'self.sp2norbs', self.sp2norbs)
+    #print(__name__, 'self.sp2norbs', dir(self))
+    #print(__name__, 'self.sp_mu2j', self.sp_mu2j)
+    #print(__name__, 'self.sp_mu2rcut', self.sp_mu2rcut)
+    #print(__name__, 'self.sp_mu2s', self.sp_mu2s)
+    
+    self.psi_log = siesta_ion_interp(rr, sp2ion, 1)
+    self.psi_log_rl = siesta_ion_interp(rr, sp2ion, 0)
+    
+    self.sp2vna = []     # Interpolate a Neutral-atom potential V_NA(r) for each specie 
+    for ion in sp2ion:
+      vna = np.zeros(nr)
+      if ion["vna"] is not None:
+        h,dat = ion["vna"]["delta"], ion["vna"]["data"][0][:, 1]
+        yy_diff2 = spline_diff2(h, dat, 0.0, 1.0e301)
+        for ir,r in enumerate(rr): 
+          vna[ir] = spline_interp(h, dat, yy_diff2, r)
+      self.sp2vna.append(vna*0.5) # given in Rydberg?
+
+    self.sp_mu2rcut = [ np.array(ion["paos"]["cutoff"]) for ion in sp2ion]
+    self.sp2rcut = np.array([np.amax(rcuts) for rcuts in self.sp_mu2rcut])
     self.sp2charge = [int(ion['z']) for ion in self.sp2ion]
     self.sp2valence = [int(ion['valence']) for ion in self.sp2ion]
 

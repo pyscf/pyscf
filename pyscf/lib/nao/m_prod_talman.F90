@@ -608,9 +608,9 @@ subroutine prdred(phia,la,ra,phib,lb,rb,rcen,lbdmxa,rhotb,rr,nr,jtb,clbdtb,lbdtb
   real(8) :: ya(nr), yb(nr)
   real(8) :: raa,rbb,a1,a2,f1,f2,sumb,aa,bb,cc,thrj1,thrj2,r2aa,r2bb
   !real(8) :: t1,t2,tt(9)
-  real(8) :: coeff1(-2:3), coeff2(-2:3)
+!  real(8) :: coeff1(-2:3), coeff2(-2:3)
   integer :: i,ix,ijmx,ij,clbd,kappa,kpmax,igla, lbd1_p_lbd2
-  integer(c_int64_t) :: k, nr8
+  integer(c_int64_t) :: nr8
   integer :: lbd1,lbdp1,lbd2,lbdp2,lc,lcmin,lcmax,lcp,lcpmin,lcpmax,clbdp
   real(8), allocatable :: plval(:,:), fval(:,:)
   real(8) :: yz(ord)

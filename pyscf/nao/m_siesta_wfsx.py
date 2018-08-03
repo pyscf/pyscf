@@ -64,8 +64,14 @@ def siesta_wfsx_sread(w, sdata, nreim):
 
 
 class siesta_wfsx_c():
-  def __init__(self, label='siesta', chdir='.', fname=None, force_gamma=None):
+  def __init__(self, **kw):
 
+    #, label='siesta', chdir='.', fname=None, force_gamma=None
+    label = kw['label'] if 'label' in kw else 'siesta'
+    chdir = kw['cd'] if 'cd' in kw else '.'
+    fname = kw['fname'] if 'fname' in kw else None
+    force_gamma = kw['force_gamma'] if 'force_gamma' in kw else None
+    
     nreim = -999
     if force_gamma is not None:
       if force_gamma : nreim = 1

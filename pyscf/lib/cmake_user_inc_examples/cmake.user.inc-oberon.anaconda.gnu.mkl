@@ -1,0 +1,26 @@
+enable_language(Fortran)
+message("CMAKE_Fortran_COMPILER: ${CMAKE_Fortran_COMPILER}")
+message("CMAKE_Fortran_FLAGS: ${CMAKE_Fortran_FLAGS}")
+
+set(MKLROOT "/software/anaconda-python2.7-4.3.1/pkgs/mkl-2017.0.1-0/lib/")
+
+set(BLAS_LIBRARIES "-L${MKLROOT} -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_core -lmkl_def -liomp5 -lpthread -lm -ldl")
+message("BLAS libraries: ${BLAS_LIBRARIES}")
+
+set(LAPACK_LIBRARIES "-L${MKLROOT} -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_core -lmkl_def -liomp5 -lpthread -lm -ldl")
+message("LAPACK libraries: ${LAPACK_LIBRARIES}")
+
+add_subdirectory(nao)
+add_subdirectory(sparsetools)
+
+# Add the following modules on oberon
+#
+# intel/2015a
+# CMake/3.0.0-foss-2015a
+# git/2.4.1-GCC-4.9.2
+# anaconda/4.3.1-python2.7
+#
+# Execute before cmake
+#
+#  git config --global http.sslVerify false
+#

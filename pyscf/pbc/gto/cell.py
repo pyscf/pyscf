@@ -341,7 +341,7 @@ def conc_cell(cell1, cell2):
     return cell3
 
 def intor_cross(intor, cell1, cell2, comp=None, hermi=0, kpts=None, kpt=None,
-                **kwargs):
+                shls_slice=None, **kwargs):
     r'''1-electron integrals from two cells like
 
     .. math::
@@ -365,10 +365,14 @@ def intor_cross(intor, cell1, cell2, comp=None, hermi=0, kpts=None, kpt=None,
     pcell._atm, pcell._bas, pcell._env = \
     atm, bas, env = conc_env(cell1._atm, cell1._bas, cell1._env,
                              cell2._atm, cell2._bas, cell2._env)
-    shls_slice = (0, cell1.nbas, cell1.nbas, pcell.nbas)
+    if shls_slice is None:
+        shls_slice = (0, cell1.nbas, 0, cell2.nbas)
+    i0, i1, j0, j1 = shls_slice[:4]
+    j0 += cell1.nbas
+    j1 += cell1.nbas
     ao_loc = moleintor.make_loc(bas, intor)
-    ni = ao_loc[shls_slice[1]] - ao_loc[shls_slice[0]]
-    nj = ao_loc[shls_slice[3]] - ao_loc[shls_slice[2]]
+    ni = ao_loc[i1] - ao_loc[i0]
+    nj = ao_loc[j1] - ao_loc[j0]
     out = np.empty((nkpts,comp,ni,nj), dtype=np.complex128)
 
     if hermi == 0:
@@ -393,7 +397,7 @@ def intor_cross(intor, cell1, cell2, comp=None, hermi=0, kpts=None, kpt=None,
         ctypes.c_int(nkpts), ctypes.c_int(comp), ctypes.c_int(len(Ls)),
         Ls.ctypes.data_as(ctypes.c_void_p),
         expkL.ctypes.data_as(ctypes.c_void_p),
-        (ctypes.c_int*4)(*(shls_slice[:4])),
+        (ctypes.c_int*4)(i0, i1, j0, j1),
         ao_loc.ctypes.data_as(ctypes.c_void_p), cintopt, cpbcopt,
         atm.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(pcell.natm),
         bas.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(pcell.nbas),
@@ -686,8 +690,8 @@ def get_ewald_params(cell, precision=INTEGRAL_PRECISION, mesh=None):
             mesh = cell.mesh
         mesh = _cut_mesh_for_ewald(cell, mesh)
         Gmax = min(np.asarray(mesh)//2 * lib.norm(cell.reciprocal_vectors(), axis=1))
-        log_precision = np.log(precision/(4*np.pi*Gmax**2))
-        ew_eta = np.sqrt(-Gmax**2/(4*log_precision))
+        log_precision = np.log(precision/(4*np.pi*(Gmax+1e-100)**2))
+        ew_eta = np.sqrt(-Gmax**2/(4*log_precision)) + 1e-100
         ew_cut = _estimate_rcut(ew_eta**2, 0, 1., precision)
     else:
 # Non-uniform PW grids are used for low-dimensional ewald summation.  The cutoff
@@ -1507,7 +1511,7 @@ class Cell(mole.Mole):
     __add__ = conc_cell
 
     def pbc_intor(self, intor, comp=None, hermi=0, kpts=None, kpt=None,
-                  **kwargs):
+                  shls_slice=None, **kwargs):
         r'''One-electron integrals with PBC.
 
         .. math::
@@ -1521,7 +1525,8 @@ class Cell(mole.Mole):
             # FIXME: Whether to check _built and call build?  ._bas and .basis
             # may not be consistent. calling .build() may leads to wrong intor env.
             #self.build(False, False)
-        return intor_cross(intor, self, self, comp, hermi, kpts, kpt, **kwargs)
+        return intor_cross(intor, self, self, comp, hermi, kpts, kpt,
+                           shls_slice, **kwargs)
 
     @lib.with_doc(pbc_eval_gto.__doc__)
     def pbc_eval_gto(self, eval_name, coords, comp=None, kpts=None, kpt=None,

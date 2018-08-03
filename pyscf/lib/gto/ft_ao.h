@@ -122,4 +122,3 @@ int GTO_ft_ovlp_sph(double complex *out, int *shls, int *dims,
                     double *Gv, double *b, int *gxyz, int *gs, int nGv,
                     int *atm, int natm, int *bas, int nbas, double *env);
 
-void GTOplain_vrr2d(double *out, double *g, double *gbuf2, CINTEnvVars *envs);

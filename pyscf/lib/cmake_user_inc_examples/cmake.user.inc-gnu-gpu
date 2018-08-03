@@ -1,0 +1,10 @@
+enable_language(Fortran)
+
+set(CMAKE_Fortran_FLAGS "-DTIMING -pedantic -O3 -Wall -ffree-line-length-0")
+#set(CMAKE_Fortran_FLAGS "-pedantic -O0 -Wall -Wall -fbounds-check -fbacktrace -ffree-line-length-0")
+
+set(HOST_COMPILER "${CMAKE_C_COMPILER}")
+set(CUDA_FLAGS "-O3 -Xcompiler ${OpenMP_C_FLAGS}")
+
+add_subdirectory(nao)
+add_subdirectory(sparsetools)

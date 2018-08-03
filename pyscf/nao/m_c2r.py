@@ -97,3 +97,17 @@ class c2r_c():
              self._conj_c2r[mm1+self._j,-mm1+self._j] * mat[-mm1+jm,mm2+jm]).real
         #if j1==2 and j2==1:
         #  print( mm1,mm2, rmat[mm1+jm,mm2+jm] )
+
+  def c2r_vector(self, clm, l, si, fi):
+
+      assert(clm.dtype == np.complex128)
+      rsh = np.zeros(clm.shape, dtype=np.float64)
+
+      for m in range(-l, l+1):
+          if m == 0:
+              rsh[si + m + l] = self._c2r[m, m]*clm[si + m + l]
+          else:
+              rsh[si + m + l] = self._c2r[m, m]*clm[si + m + l] +\
+                      self._c2r[m, -m]*clm[fi - m - l]
+
+      return rsh

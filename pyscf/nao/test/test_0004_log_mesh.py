@@ -30,7 +30,7 @@ class KnowValues(unittest.TestCase):
 
   def test_log_mesh_gto(self):
     """ Test construction  of log mesh for GTOs"""
-    lm = log_mesh_c().init_log_mesh_gto(mol, rmin=1e-6)
+    lm = log_mesh_c().init_log_mesh_gto(gto=mol, rmin=1e-6)
     self.assertEqual(lm.nr, 1024)
     self.assertAlmostEqual(lm.rr[0], 1e-6)
     self.assertAlmostEqual(lm.rr[-1], 11.494152344675497)
@@ -62,6 +62,4 @@ class KnowValues(unittest.TestCase):
     self.assertAlmostEqual(lm.pp[-1], 318.3098861837907)
     self.assertAlmostEqual(lm.pp[0], 0.021220659078919384)
 
-    
-if __name__ == "__main__":
-  unittest.main()
+if __name__ == "__main__": unittest.main()

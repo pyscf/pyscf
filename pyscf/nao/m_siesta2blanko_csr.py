@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import numpy as np
-from numpy import empty 
 
 #
 #
@@ -57,7 +56,7 @@ def _siesta2blanko_csr_slow(orb2m, mat, orb_sc2orb_uc=None):
     col_data = mat.data[mat.indptr[row]:mat.indptr[row+1]]
     col_data = col_data * (-1)**m1
     
-    col_phase = numpy.empty((len(col_data)), dtype='int8')
+    col_phase = np.empty((len(col_data)), dtype='int8')
     for ind in range(mat.indptr[row],mat.indptr[row+1]):
       icol = mat.indices[ind]
       if(icol>=n): icol=orb_sc2orb_uc[icol]

@@ -14,6 +14,7 @@
 
 from __future__ import print_function, division
 import os,unittest,numpy as np
+from pyscf import gto, dft
 
 class KnowValues(unittest.TestCase):
 
@@ -22,7 +23,6 @@ class KnowValues(unittest.TestCase):
     #
     # Author: Qiming Sun <osirpt.sun@gmail.com>
     #
-    from pyscf import gto, dft
     '''
     A simple example to run DFT calculation.
     See pyscf/dft/vxc.py for the complete list of available XC functional
