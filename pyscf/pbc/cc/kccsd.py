@@ -74,24 +74,24 @@ def update_amps(cc, t1, t2, eris):
     foo = fock[:, :nocc, :nocc].copy()
     fvv = fock[:, nocc:, nocc:].copy()
 
-    tau = imdk.make_tau(cc, t2, t1, t1)
+    # Get the momentum conservation array
+    # Note: chemist's notation for momentum conserving t2(ki,kj,ka,kb), even though
+    # integrals are in physics notation
+    kconserv = kpts_helper.get_kconserv(cc._scf.cell, cc.kpts)
 
-    Fvv = imdk.cc_Fvv(cc, t1, t2, eris)
-    Foo = imdk.cc_Foo(cc, t1, t2, eris)
-    Fov = imdk.cc_Fov(cc, t1, t2, eris)
-    Woooo = imdk.cc_Woooo(cc, t1, t2, eris)
-    Wvvvv = imdk.cc_Wvvvv(cc, t1, t2, eris)
-    Wovvo = imdk.cc_Wovvo(cc, t1, t2, eris)
+    tau = imdk.make_tau(cc, t2, t1, t1, kconserv)
+
+    Fvv = imdk.cc_Fvv(cc, t1, t2, eris, kconserv)
+    Foo = imdk.cc_Foo(cc, t1, t2, eris, kconserv)
+    Fov = imdk.cc_Fov(cc, t1, t2, eris, kconserv)
+    Woooo = imdk.cc_Woooo(cc, t1, t2, eris, kconserv)
+    Wvvvv = imdk.cc_Wvvvv(cc, t1, t2, eris, kconserv)
+    Wovvo = imdk.cc_Wovvo(cc, t1, t2, eris, kconserv)
 
     # Move energy terms to the other side
     for k in range(nkpts):
         Fvv[k] -= numpy.diag(numpy.diag(fvv[k]))
         Foo[k] -= numpy.diag(numpy.diag(foo[k]))
-
-    # Get the momentum conservation array
-    # Note: chemist's notation for momentum conserving t2(ki,kj,ka,kb), even though
-    # integrals are in physics notation
-    kconserv = kpts_helper.get_kconserv(cc._scf.cell, cc.kpts)
 
     eris_ovvo = numpy.zeros(shape=(nkpts, nkpts, nkpts, nocc, nvir, nvir, nocc), dtype=t2.dtype)
     eris_oovo = numpy.zeros(shape=(nkpts, nkpts, nkpts, nocc, nocc, nvir, nocc), dtype=t2.dtype)
@@ -459,10 +459,8 @@ def _make_eris_incore(cc, mo_coeff=None):
     #    raise NotImplementedError('Different occupancies found for different k-points')
 
     if mo_coeff is None:
-        # If mo_coeff is not canonical orbital
-        # TODO does this work for k-points? changed to conjugate.
-        raise NotImplementedError
         mo_coeff = cc.mo_coeff
+
     nao = mo_coeff[0].shape[0]
     dtype = mo_coeff[0].dtype
 
@@ -745,4 +743,3 @@ if __name__ == '__main__':
     mycc = KGCCSD(kmf)
     ecc, t1, t2 = mycc.kernel()
     print(ecc - -0.155298393321855)
-
