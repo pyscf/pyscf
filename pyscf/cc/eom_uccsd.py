@@ -22,7 +22,6 @@ from pyscf import ao2mo
 from pyscf.cc import ccsd
 from pyscf.cc import uccsd
 from pyscf.cc import eom_rccsd
-from pyscf.cc import eom_gccsd
 from pyscf.cc import addons
 from pyscf.cc import uintermediates
 
@@ -262,7 +261,7 @@ def ipccsd_diag(eom, imds=None):
      for j in range(nocc_a):
       for a in range(nvir_a):
        Hr2aaa[i,j,a]=imds.Fvv[a,a]-imds.Foo[i,i]-imds.Foo[j,j] \
-       +0.5*(imds.Woooo[i,i,j,j]-imds.Woooo[j,i,i,j]) \
+       +imds.Woooo[i,i,j,j] \
        +imds.Wovvo[i,a,a,i] \
        +imds.Wovvo[j,a,a,j] \
        -(np.dot(imds.Wovov[j,a,i,:], t2aa[j,i,a,:]))
@@ -292,7 +291,7 @@ def ipccsd_diag(eom, imds=None):
      for j in range(nocc_b):
       for a in range(nvir_b):
        Hr2bbb[i,j,a]=imds.FVV[a,a]-imds.FOO[i,i]-imds.FOO[j,j] \
-       +0.5*(imds.WOOOO[i,i,j,j]-imds.WOOOO[j,i,i,j]) \
+       +imds.WOOOO[i,i,j,j] \
        +imds.WOVVO[i,a,a,i] \
        +imds.WOVVO[j,a,a,j] \
        -(np.dot(imds.WOVOV[j,a,i,:],t2bb[j,i,a,:]))
@@ -854,6 +853,7 @@ def eeccsd(eom, nroots=1, koopmans=False, guess=None, eris=None, imds=None):
     if guess and guess[0].size == spinvec_size:
         raise NotImplementedError
         #TODO: initial guess from GCCSD EOM amplitudes
+        #from pyscf.cc import eom_gccsd
         #orbspin = scf.addons.get_ghf_orbspin(eris.mo_coeff)
         #nmo = np.sum(eom.nmo)
         #nocc = np.sum(eom.nocc)
@@ -2671,92 +2671,6 @@ def enforce_symm_2p_spin_ip(r1, r2, orbspin):
 def enforce_symm_2p_spin_ea(r1, r2, orbspin):
     return enforce_symm_2p_spin(r1, r2, orbspin, 'ea')
 
-def _eri_spin2spatial(chemist_eri_spin, eri_label, orbspin, nocc):
-    idxoa = np.where(orbspin[:nocc] == 0)[0]
-    idxob = np.where(orbspin[:nocc] == 1)[0]
-    idxva = np.where(orbspin[nocc:] == 0)[0]
-    idxvb = np.where(orbspin[nocc:] == 1)[0]
-    nvir_a = len(idxva)
-    nvir_b = len(idxvb)
-    nocc_a = len(idxoa)
-    nocc_b = len(idxob)
-
-    def select_idx(s):
-        if s.lower() == 'o':
-            return idxoa, idxob
-        else:
-            return idxva, idxvb
-
-    if len(eri_label) == 2:
-        idx1a, idx1b = select_idx(eri_label[0])
-        idx2a, idx2b = select_idx(eri_label[1])
-
-        fa = np.zeros((len(idx1a),len(idx2a)), dtype=np.complex128)
-        fb = np.zeros((len(idx1b),len(idx2b)), dtype=np.complex128)
-        fa = chemist_eri_spin[idx1a[:,None],idx2a]
-        fb = chemist_eri_spin[idx1b[:,None],idx2b]
-        return fa, fb
-
-    idx1a, idx1b = select_idx(eri_label[0])
-    idx2a, idx2b = select_idx(eri_label[1])
-    idx3a, idx3b = select_idx(eri_label[2])
-    idx4a, idx4b = select_idx(eri_label[3])
-
-    eri_aaaa = np.zeros((len(idx1a),len(idx2a),len(idx3a),len(idx4a)), dtype=chemist_eri_spin.dtype)
-    eri_aabb = np.zeros((len(idx1a),len(idx2a),len(idx3b),len(idx4b)), dtype=chemist_eri_spin.dtype)
-    eri_bbaa = np.zeros((len(idx1b),len(idx2b),len(idx3a),len(idx4a)), dtype=chemist_eri_spin.dtype)
-    eri_bbbb = np.zeros((len(idx1b),len(idx2b),len(idx3b),len(idx4b)), dtype=chemist_eri_spin.dtype)
-
-    eri_aaaa = chemist_eri_spin[idx1a[:,None,None,None],idx2a[:,None,None],idx3a[:,None],idx4a]
-    eri_aabb = chemist_eri_spin[idx1a[:,None,None,None],idx2a[:,None,None],idx3b[:,None],idx4b]
-    eri_bbaa = chemist_eri_spin[idx1b[:,None,None,None],idx2b[:,None,None],idx3a[:,None],idx4a]
-    eri_bbbb = chemist_eri_spin[idx1b[:,None,None,None],idx2b[:,None,None],idx3b[:,None],idx4b]
-    return eri_aaaa, eri_aabb, eri_bbaa, eri_bbbb
-
-
-def _eri_spatial2spin(eri_aa_ab_ba_bb, eri_label, orbspin, nocc):
-    idxoa = np.where(orbspin[:nocc] == 0)[0]
-    idxob = np.where(orbspin[:nocc] == 1)[0]
-    idxva = np.where(orbspin[nocc:] == 0)[0]
-    idxvb = np.where(orbspin[nocc:] == 1)[0]
-    nvir_a = len(idxva)
-    nvir_b = len(idxvb)
-    nocc_a = len(idxoa)
-    nocc_b = len(idxob)
-
-    def select_idx(s):
-        if s.lower() == 'o':
-            return idxoa, idxob
-        else:
-            return idxva, idxvb
-
-    if len(eri_label) == 2:
-        idx1a, idx1b = select_idx(eri_label[0])
-        idx2a, idx2b = select_idx(eri_label[1])
-
-        fa, fb = eri_aa_ab_ba_bb
-        f = np.zeros((len(idx1a)+len(idx1b),
-                      len(idx2a)+len(idx2b)), dtype=fa.dtype)
-        f[idx1a[:,None],idx2a] = fa
-        f[idx1b[:,None],idx2b] = fb
-        return f
-
-    idx1a, idx1b = select_idx(eri_label[0])
-    idx2a, idx2b = select_idx(eri_label[1])
-    idx3a, idx3b = select_idx(eri_label[2])
-    idx4a, idx4b = select_idx(eri_label[3])
-
-    eri_aaaa, eri_aabb, eri_bbaa, eri_bbbb = eri_aa_ab_ba_bb
-    eri = np.zeros((len(idx1a)+len(idx1b),
-                    len(idx2a)+len(idx2b),
-                    len(idx3a)+len(idx3b),
-                    len(idx4a)+len(idx4b)), dtype=eri_aa_ab_ba_bb[0].dtype)
-    eri[idx1a[:,None,None,None],idx2a[:,None,None],idx3a[:,None],idx4a] = eri_aaaa
-    eri[idx1a[:,None,None,None],idx2a[:,None,None],idx3b[:,None],idx4b] = eri_aabb
-    eri[idx1b[:,None,None,None],idx2b[:,None,None],idx3a[:,None],idx4a] = eri_bbaa
-    eri[idx1b[:,None,None,None],idx2b[:,None,None],idx3b[:,None],idx4b] = eri_bbbb
-    return eri
-
 if __name__ == '__main__':
     from pyscf import scf
     from pyscf import gto
@@ -2812,14 +2726,6 @@ if __name__ == '__main__':
         eris[orbspin[:,None] != orbspin] = 0
         eris[:,:,orbspin[:,None] != orbspin] = 0
         return eris
-
-    import pyscf.cc.addons
-    from pyscf.cc import gccsd
-    mygcc = pyscf.cc.addons.convert_to_gccsd(mycc)
-    mygcc._ucc = mycc
-    mygcc._ucc_eris = eris
-    eris = gccsd._make_eris_incore(mygcc)#, ao2mofn=my_ao2mo)
-    orbspin = eris.orbspin
 
     ## EOM-IP
     myeom = EOMIP(mycc)
