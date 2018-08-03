@@ -196,13 +196,8 @@ def ipccsd_matvec(eom, vector, kshift, imds=None, diag=None):
             Hr2[ki, kj] -= lib.einsum('maej,mie->ija', imds.Wovvo[km, ka, ke],
                                       r2[km, ki])
 
-    tmp = np.zeros(nvir, dtype=Hr2.dtype)
-    for km, kn in itertools.product(range(nkpts), repeat=2):
-        tmp = lib.einsum('mnef,mnf->e', imds.Woovv[km, kn, kshift], r2[km, kn])
-
-    for ki, kj in itertools.product(range(nkpts), repeat=2):
-        ka = kconserv[ki, kshift, kj]
-        Hr2[ki, kj] += 0.5*lib.einsum('e,ijae->ija', tmp, imds.t2[ki, kj, ka])
+    tmp = lib.einsum('xymnef,xymnf->e', imds.Woovv[:, :, kshift], r2[:, :])  # contract_{km, kn}
+    Hr2[:, :] += 0.5 * lib.einsum('e,xyjiea->xyija', tmp, imds.t2[:, :, kshift])  # sum_{ki, kj}
 
     vector = amplitudes_to_vector_ip(Hr1, Hr2)
     return vector
@@ -363,6 +358,23 @@ def eaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     Hr1 = np.einsum('ac,c->a', imds.Fvv[kshift], r1)
 
     Hr2 = np.zeros_like(r2)
+    for kj, ka in itertools.product(range(nkpts), repeat=2):
+        kb = kconserv[kshift, ka, kj]
+        Hr2[kj, ka] -= lib.einsum('lj,lab->jab', imds.Foo[kj], r2[kj, ka])
+
+        for kd in range(nkpts):
+            kl = kconserv[kj, kb, kd]
+            Hr2[kj, ka] += lib.einsum('lbdj,lad->jab', imds.Wovvo[kl, kb, kd], r2[kl, ka])
+
+            # P(ab)
+            kl = kconserv[kj, ka, kd]
+            Hr2[kj, ka] -= lib.einsum('ladj,lbd->jab', imds.Wovvo[kl, ka, kd], r2[kl, kb])
+
+            kc = kconserv[ka, kd, kb]
+            Hr2[kj, ka] += 0.5 * lib.einsum('abcd,jcd->jab', imds.Wvvvv[ka, kb, kc], r2[kj, kc])
+
+    tmp = lib.einsum('xyklcd,xylcd->k', imds.Woovv[kshift, :, :], r2[:, :])  # contract_{kl, kc}
+    Hr2[:, :] -= 0.5*lib.einsum('k,xykjab->xyjab', tmp, imds.t2[kshift, :, :])  # sum_{kj, ka]
 
     vector = amplitudes_to_vector_ea(Hr1, Hr2)
     return vector
