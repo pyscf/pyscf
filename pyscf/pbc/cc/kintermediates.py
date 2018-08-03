@@ -303,15 +303,15 @@ def Wovoo(cc,t1,t2,eris,kconserv):
 
     return Wmbij
 
-def Wvvvo(cc,t1,t2,eris,kconserv):
-    raise NotImplementedError
+def Wvvvo(cc,t1,t2,eris,kconserv,WWvvvv=None):
     nkpts, nocc, nvir = t1.shape
     tmp1 = einsum('mbef,miaf->abei',eris.ovvv,t2)
     tmp2 = ( einsum('ma,mbei->abei',t1,eris_ovvo)
             - einsum('ma,nibf,mnef->abei',t1,t2,eris.oovv) )
 
     FFov = Fov(t1,t2,eris,kconserv)
-    WWvvvv = Wvvvv(t1,t2,eris,kconserv)
+    if WWvvvv is None:
+        WWvvvv = Wvvvv(t1,t2,eris,kconserv)
     tau = make_tau(cc,t2,t1,t1,kconserv)
 
     Wamef = numpy.empty((nkpts, nkpts, nkpts, nvir, nvir, nvir, nocc), dtype=eris.ovvv.dtype)

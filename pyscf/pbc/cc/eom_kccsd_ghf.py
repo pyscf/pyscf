@@ -270,7 +270,7 @@ class EOMIP(eom_rccsd.EOM):
 
     def get_init_guess(self, nroots=1, koopmans=True, diag=None):
         size = self.vector_size()
-        dtype = getattr(diag, 'dtype', np.double)
+        dtype = getattr(diag, 'dtype', np.complex)
         nroots = min(nroots, size)
         guess = []
         if koopmans:
@@ -357,14 +357,14 @@ def eaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
 
     Hr1 = np.einsum('ac,c->a', imds.Fvv[kshift], r1)
     for kl in range(nkpts):
-        Hr1 += np.einsum('ld,lad->a', imds.Fov[kl,kshift], r2)
-        for kc in range(nkps):
+        Hr1 += np.einsum('ld,lad->a', imds.Fov[kshift], r2[kl, kshift])
+        for kc in range(nkpts):
             Hr1 += 0.5*np.einsum('alcd,lcd->a', imds.Wvovv[kshift,kl,kc], r2[kl,kc])
 
     Hr2 = np.zeros_like(r2)
     for kj in range(nkpts):
         for ka in range(nkpts):
-            kb = kconvserv[kshift,ka,kj]
+            kb = kconserv[kshift,ka,kj]
             #Hr2[kj,ka] += np.einsum('abcj,c->jab', imds.Wvvvo[ka,kb,kshift], r1[ka])
             Hr2[kj,ka] += lib.einsum('ac,jcb->jab', imds.Fvv[ka], r2[kj,ka])
             Hr2[kj,ka] -= lib.einsum('bc,jca->jab', imds.Fvv[kb], r2[kj,kb])
@@ -445,18 +445,18 @@ class EOMEA(eom_rccsd.EOM):
 
     def get_init_guess(self, nroots=1, koopmans=True, diag=None):
         size = self.vector_size()
-        dtype = getattr(diag, 'dtype', np.double)
+        dtype = getattr(diag, 'dtype', np.complex)
         nroots = min(nroots, size)
         guess = []
         if koopmans:
             for n in range(nroots):
-                g = np.zeros(size)
+                g = np.zeros(size, dtype=dtype)
                 g[n] = 1.0
                 guess.append(g)
         else:
             idx = diag.argsort()[:nroots]
             for i in idx:
-                g = np.zeros(size)
+                g = np.zeros(size, dtype=dtype)
                 g[i] = 1.0
                 guess.append(g)
         return guess
