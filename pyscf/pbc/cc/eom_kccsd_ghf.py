@@ -356,6 +356,17 @@ def eaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     print np.linalg.norm(r1), np.linalg.norm(r2)
 
     Hr1 = np.einsum('ac,c->a', imds.Fvv[kshift], r1)
+    for kl in range(nkpts):
+        Hr1 += np.einsum('ld,lad->a', imds.Fov[kl,kshift], r2)
+        for kc in range(nkps):
+            Hr1 += 0.5*np.einsum('alcd,lcd->a', imds.Wvovv[kshift,kl,kc] r2[kl,kc])
+
+    for kj in range(nkpts):
+        for ka in range(nkpts):
+            kb = kconvserv[kshift,ka,kj]
+            Hr2[kj,ka] += np.einsum('abcj,c->jab', imds.Wvvvo[ka,kb,kshift], r1[ka])
+            Hr2[kj,ka] += lib.einsum('ac,jcb->jab', imds.Fvv[ka], r2[kj,ka])
+            Hr2[kj,ka] -= lib.einsum('bc,jca->jab', imds.Fvv[kb], r2[kj,kb])
 
     Hr2 = np.zeros_like(r2)
     for kj, ka in itertools.product(range(nkpts), repeat=2):
