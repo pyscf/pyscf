@@ -288,6 +288,7 @@ def update_amps(cc, t1, t2, eris):
     return t1new, t2new
 
 
+# TODO: pull these 3 methods to pyscf.util and make tests
 def describe_nested(data):
     """
     Retrieves the description of a nested array structure.
