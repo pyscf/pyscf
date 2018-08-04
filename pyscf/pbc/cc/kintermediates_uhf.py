@@ -29,7 +29,7 @@ def make_tau(cc, t2, t1, t1p, fac=1.):
             tauab[ki,kj,ki] += np.einsum('jb,ia->ijab', fac*.5*t1[1][kj], t1p[0][ki])
     return tauaa, tauab, taubb
 
-def cc_Fvv(cc, t1, t2, uccsd_eris):
+def cc_Fvv(cc, t1, t2, eris):
     from pyscf.pbc.cc import kccsd_uhf
     from pyscf.pbc.cc import kccsd
     from pyscf.pbc.cc import kintermediates
@@ -37,14 +37,14 @@ def cc_Fvv(cc, t1, t2, uccsd_eris):
     from numpy import einsum
     import numpy as np
 
-    orbspin = uccsd_eris._kccsd_eris.orbspin
+    orbspin = eris._kccsd_eris.orbspin
     kconserv = kpts_helper.get_kconserv(cc._scf.cell, cc.kpts)
 
     t1a, t1b = t1
     t2aa, t2ab, t2bb = t2
 
     nkpts = len(orbspin)
-    nocc_a, nocc_b = uccsd_eris.nocc
+    nocc_a, nocc_b = eris.nocc
     nocc  = nocc_a+nocc_b
     idxva = [np.where(orbspin[k][nocc:] == 0)[0] for k in range(nkpts)]
     idxvb = [np.where(orbspin[k][nocc:] == 1)[0] for k in range(nkpts)]
@@ -56,88 +56,55 @@ def cc_Fvv(cc, t1, t2, uccsd_eris):
 
     tau_tildeaa,tau_tildeab,tau_tildebb=make_tau(cc,t2,t1,t1,fac=0.5)
 
-    fov_ = uccsd_eris.fock[0][:,:nocc_a,nocc_a:]
-    fOV_ = uccsd_eris.fock[1][:,:nocc_b,nocc_b:]
-    fvv_ = uccsd_eris.fock[0][:,nocc_a:,nocc_a:]
-    fVV_ = uccsd_eris.fock[1][:,nocc_b:,nocc_b:]
-    
+    fov_ = eris.fock[0][:,:nocc_a,nocc_a:]
+    fOV_ = eris.fock[1][:,:nocc_b,nocc_b:]
+    fvv_ = eris.fock[0][:,nocc_a:,nocc_a:]
+    fVV_ = eris.fock[1][:,nocc_b:,nocc_b:]
+
     for ka in range(nkpts):
      fa[ka]+=fvv_[ka]
      fb[ka]+=fVV_[ka]
      fa[ka]-=0.5*einsum('me,ma->ae',fov_[ka],t1a[ka])
      fb[ka]-=0.5*einsum('me,ma->ae',fOV_[ka],t1b[ka])
      for km in range(nkpts):
-      fa[ka]+=einsum('mf,aemf->ae',t1a[km],uccsd_eris.vvov[ka,ka,km])
-      fa[ka]-=einsum('mf,afme->ae',t1a[km],uccsd_eris.vvov[ka,km,km])
-      fa[ka]+=einsum('mf,aemf->ae',t1b[km],uccsd_eris.vvOV[ka,ka,km])
+      fa[ka]+=einsum('mf,aemf->ae',t1a[km],eris.vvov[ka,ka,km])
+      fa[ka]-=einsum('mf,afme->ae',t1a[km],eris.vvov[ka,km,km])
+      fa[ka]+=einsum('mf,aemf->ae',t1b[km],eris.vvOV[ka,ka,km])
 
-      fb[ka]+=einsum('mf,aemf->ae',t1b[km],uccsd_eris.VVOV[ka,ka,km])
-      fb[ka]-=einsum('mf,afme->ae',t1b[km],uccsd_eris.VVOV[ka,km,km])
-      fb[ka]+=einsum('mf,aemf->ae',t1a[km],uccsd_eris.VVov[ka,ka,km])
+      fb[ka]+=einsum('mf,aemf->ae',t1b[km],eris.VVOV[ka,ka,km])
+      fb[ka]-=einsum('mf,afme->ae',t1b[km],eris.VVOV[ka,km,km])
+      fb[ka]+=einsum('mf,aemf->ae',t1a[km],eris.VVov[ka,ka,km])
 
       for kn in range(nkpts):
-       fa[ka]-=0.5*einsum('mnaf,menf->ae',tau_tildeaa[km,kn,ka],uccsd_eris.ovov[km,ka,kn]) # v
-       fa[ka]-=0.5*einsum('mNaF,meNF->ae',tau_tildeab[km,kn,ka],uccsd_eris.ovOV[km,ka,kn]) # v
+       fa[ka]-=0.5*einsum('mnaf,menf->ae',tau_tildeaa[km,kn,ka],eris.ovov[km,ka,kn]) # v
+       fa[ka]-=0.5*einsum('mNaF,meNF->ae',tau_tildeab[km,kn,ka],eris.ovOV[km,ka,kn]) # v
        kf=kconserv[km,ka,kn]
-       fa[ka]+=0.5*einsum('mnaf,mfne->ae',tau_tildeaa[km,kn,ka],uccsd_eris.ovov[km,kf,kn]) # v
-       fa[ka]-=0.5*einsum('nMaF,MFne->ae',tau_tildeab[kn,km,ka],uccsd_eris.OVov[km,kf,kn]) # c
+       fa[ka]+=0.5*einsum('mnaf,mfne->ae',tau_tildeaa[km,kn,ka],eris.ovov[km,kf,kn]) # v
+       fa[ka]-=0.5*einsum('nMaF,neMF->ae',tau_tildeab[kn,km,ka],eris.ovOV[kn,ka,km]) # c
 
-       fb[ka]-=0.5*einsum('mnaf,menf->ae',tau_tildebb[km,kn,ka],uccsd_eris.OVOV[km,ka,kn]) # v
-       fb[ka]-=0.5*einsum('NmFa,meNF->ae',tau_tildeab[kn,km,kf],uccsd_eris.OVov[km,ka,kn]) # v
+       fb[ka]-=0.5*einsum('mnaf,menf->ae',tau_tildebb[km,kn,ka],eris.OVOV[km,ka,kn]) # v
+       fb[ka]-=0.5*einsum('nmfa,nfme->ae',tau_tildeab[kn,km,kf],eris.ovOV[kn,kf,km]) # v
        kf=kconserv[km,ka,kn]
-       fb[ka]+=0.5*einsum('mnaf,mfne->ae',tau_tildebb[km,kn,ka],uccsd_eris.OVOV[km,kf,kn]) # v
-       fb[ka]-=0.5*einsum('MnFa,MFne->ae',tau_tildeab[km,kn,kf],uccsd_eris.ovOV[km,kf,kn]) # c
-
-    '''
-    from pyscf.pbc.cc import kccsd_uhf
-    from pyscf.pbc.cc import kccsd
-    from pyscf.pbc.cc import kintermediates
-    from pyscf.pbc.lib import kpts_helper
-    orbspin = uccsd_eris._kccsd_eris.orbspin
-    kconserv = kpts_helper.get_kconserv(cc._scf.cell, cc.kpts)
-
-    t1a, t1b = t1
-    t2aa, t2ab, t2bb = t2
-    t1 = kccsd.spatial2spin((t1a, t1b), orbspin, kconserv)
-    t2 = kccsd.spatial2spin((t2aa, t2ab, t2bb), orbspin, kconserv)
-
-    # mimic the UCCSD contraction with the kccsd.cc_Fvv function as below.
-    # It should be removed when finishing the project
-    # uccsd_eris._kccsd_eris holds KCCSD spin-orbital tensor, anti-symmetrized, Physicist's notation
-    gkccsd_Fvv = kintermediates.cc_Fvv(cc, t1, t2, uccsd_eris._kccsd_eris)
-
-    # Use only uccsd_eris the spatial-orbital integral tensor in Chemist's notation
-
-    Fvv, FVV = kccsd_uhf._eri_spin2spatial(gkccsd_Fvv, 'vv', uccsd_eris)
-
-    t1 = kccsd.spatial2spin((t1a, t1b), orbspin, kconserv)
-    t2 = kccsd.spatial2spin((t2aa, t2ab, t2bb), orbspin, kconserv)
-
-    gkccsd_Fvv = kintermediates.cc_Fvv(cc, t1, t2, uccsd_eris._kccsd_eris)
-
-    # Use only uccsd_eris the spatial-orbital integral tensor in Chemist's notation
-    Fvv, FVV = kccsd_uhf._eri_spin2spatial(gkccsd_Fvv, 'vv', uccsd_eris)
-    for ka in range(nkpts):
-     print ka,np.abs(fa[ka]-Fvv[ka]).max(),np.abs(fb[ka]-FVV[ka]).max()
-    '''
+       fb[ka]+=0.5*einsum('mnaf,mfne->ae',tau_tildebb[km,kn,ka],eris.OVOV[km,kf,kn]) # v
+       fb[ka]-=0.5*einsum('MnFa,MFne->ae',tau_tildeab[km,kn,kf],eris.ovOV[km,kf,kn]) # c
 
     return fa,fb #Fvv, FVV
 
 
-def cc_Foo(cc, t1, t2, uccsd_eris):
+def cc_Foo(cc, t1, t2, eris):
     from pyscf.pbc.cc import kccsd_uhf
     from pyscf.pbc.cc import kccsd
     from pyscf.pbc.cc import kintermediates
     from pyscf.pbc.lib import kpts_helper
     from numpy import einsum
-    orbspin = uccsd_eris._kccsd_eris.orbspin
+    orbspin = eris._kccsd_eris.orbspin
     kconserv = kpts_helper.get_kconserv(cc._scf.cell, cc.kpts)
 
     t1a, t1b = t1
     t2aa, t2ab, t2bb = t2
 
     nkpts = len(orbspin)
-    nocc_a, nocc_b = uccsd_eris.nocc
+    nocc_a, nocc_b = eris.nocc
     nocc  = nocc_a+nocc_b
     idxva = [np.where(orbspin[k][nocc:] == 0)[0] for k in range(nkpts)]
     idxvb = [np.where(orbspin[k][nocc:] == 1)[0] for k in range(nkpts)]
@@ -149,10 +116,10 @@ def cc_Foo(cc, t1, t2, uccsd_eris):
 
     tau_tildeaa,tau_tildeab,tau_tildebb=make_tau(cc,t2,t1,t1,fac=0.5)
 
-    fov_ = uccsd_eris.fock[0][:,:nocc_a,nocc_a:]
-    fOV_ = uccsd_eris.fock[1][:,:nocc_b,nocc_b:]
-    foo_ = uccsd_eris.fock[0][:,:nocc_a,:nocc_a]
-    fOO_ = uccsd_eris.fock[1][:,:nocc_b,:nocc_b]
+    fov_ = eris.fock[0][:,:nocc_a,nocc_a:]
+    fOV_ = eris.fock[1][:,:nocc_b,nocc_b:]
+    foo_ = eris.fock[0][:,:nocc_a,:nocc_a]
+    fOO_ = eris.fock[1][:,:nocc_b,:nocc_b]
 
     for ka in range(nkpts):
      fa[ka]+=foo_[ka]
@@ -160,61 +127,33 @@ def cc_Foo(cc, t1, t2, uccsd_eris):
      fa[ka]+=0.5*einsum('me,ne->mn',fov_[ka],t1a[ka])
      fb[ka]+=0.5*einsum('me,ne->mn',fOV_[ka],t1b[ka])
      for km in range(nkpts):
-      fa[ka]+=einsum('oa,mnoa->mn',t1a[km],uccsd_eris.ooov[ka,ka,km])
-      fa[ka]+=einsum('oa,mnoa->mn',t1b[km],uccsd_eris.ooOV[ka,ka,km])
-      fa[ka]-=einsum('oa,maon->mn',t1a[km],uccsd_eris.ovoo[ka,km,km])
+      fa[ka]+=einsum('oa,mnoa->mn',t1a[km],eris.ooov[ka,ka,km])
+      fa[ka]+=einsum('oa,mnoa->mn',t1b[km],eris.ooOV[ka,ka,km])
+      fa[ka]-=einsum('oa,maon->mn',t1a[km],eris.ovoo[ka,km,km])
 
-      fb[ka]+=einsum('oa,mnoa->mn',t1b[km],uccsd_eris.OOOV[ka,ka,km])
-      fb[ka]+=einsum('oa,mnoa->mn',t1a[km],uccsd_eris.OOov[ka,ka,km])
-      fb[ka]-=einsum('oa,maon->mn',t1b[km],uccsd_eris.OVOO[ka,km,km])
+      fb[ka]+=einsum('oa,mnoa->mn',t1b[km],eris.OOOV[ka,ka,km])
+      fb[ka]+=einsum('oa,mnoa->mn',t1a[km],eris.OOov[ka,ka,km])
+      fb[ka]-=einsum('oa,maon->mn',t1b[km],eris.OVOO[ka,km,km])
 
     for km in range(nkpts):
      for kn in range(nkpts):
       for ke in range(nkpts):
-       fa[km]+=0.5*einsum('inef,menf->mi',tau_tildeaa[km,kn,ke],uccsd_eris.ovov[km,ke,kn]) # v
-       fa[km]+=0.5*einsum('iNeF,meNF->mi',tau_tildeab[km,kn,ke],uccsd_eris.ovOV[km,ke,kn]) # v
+       fa[km]+=0.5*einsum('inef,menf->mi',tau_tildeaa[km,kn,ke],eris.ovov[km,ke,kn]) # v
+       fa[km]+=0.5*einsum('iNeF,meNF->mi',tau_tildeab[km,kn,ke],eris.ovOV[km,ke,kn]) # v
        kf=kconserv[km,ke,kn]
-       fa[km]-=0.5*einsum('inef,mfne->mi',tau_tildeaa[km,kn,ke],uccsd_eris.ovov[km,kf,kn]) # v
-       fb[km]+=0.5*einsum('NiEf,mfNE->mi',tau_tildeab[kn,km,ke],uccsd_eris.OVov[km,kf,kn]) # c
+       fa[km]-=0.5*einsum('inef,mfne->mi',tau_tildeaa[km,kn,ke],eris.ovov[km,kf,kn]) # v
+       fb[km]+=0.5*einsum('NiEf,NEmf->mi',tau_tildeab[kn,km,ke],eris.ovOV[kn,ke,km]) # c
 
-       fb[km]+=0.5*einsum('INEF,MENF->MI',tau_tildebb[km,kn,ke],uccsd_eris.OVOV[km,ke,kn]) # v
-       fb[km]+=0.5*einsum('nIfE,MEnf->MI',tau_tildeab[kn,km,kf],uccsd_eris.OVov[km,ke,kn]) # v
+       fb[km]+=0.5*einsum('INEF,MENF->MI',tau_tildebb[km,kn,ke],eris.OVOV[km,ke,kn]) # v
+       fb[km]+=0.5*einsum('nIfE,nfME->MI',tau_tildeab[kn,km,kf],eris.ovOV[kn,kf,km]) # v
        kf=kconserv[km,ke,kn]
-       fb[km]-=0.5*einsum('INEF,MFNE->MI',tau_tildebb[km,kn,ke],uccsd_eris.OVOV[km,kf,kn]) # v
-       fa[km]+=0.5*einsum('InFe,MFne->MI',tau_tildeab[km,kn,kf],uccsd_eris.ovOV[km,kf,kn]) # c
-
-    '''
-    from pyscf.pbc.cc import kccsd_uhf
-    from pyscf.pbc.cc import kccsd
-    from pyscf.pbc.cc import kintermediates
-    from pyscf.pbc.lib import kpts_helper
-    orbspin = uccsd_eris._kccsd_eris.orbspin
-    kconserv = kpts_helper.get_kconserv(cc._scf.cell, cc.kpts)
-
-    t1a, t1b = t1
-    t2aa, t2ab, t2bb = t2
-    t1 = kccsd.spatial2spin((t1a, t1b), orbspin, kconserv)
-    t2 = kccsd.spatial2spin((t2aa, t2ab, t2bb), orbspin, kconserv)
-
-    gkccsd_Foo = kintermediates.cc_Foo(cc, t1, t2, uccsd_eris._kccsd_eris)
-
-    Foo, FOO = kccsd_uhf._eri_spin2spatial(gkccsd_Foo, 'oo', uccsd_eris)
-
-    t1 = kccsd.spatial2spin((t1a, t1b), orbspin, kconserv)
-    t2 = kccsd.spatial2spin((t2aa, t2ab, t2bb), orbspin, kconserv)
-
-    gkccsd_Foo = kintermediates.cc_Foo(cc, t1, t2, uccsd_eris._kccsd_eris)
-
-    Foo, FOO = kccsd_uhf._eri_spin2spatial(gkccsd_Foo, 'oo', uccsd_eris)
-
-    for ka in range(nkpts):
-     print ka,np.abs(fa[ka]-Foo[ka]).max(),np.abs(fb[ka]-FOO[ka]).max()
-    '''
+       fb[km]-=0.5*einsum('INEF,MFNE->MI',tau_tildebb[km,kn,ke],eris.OVOV[km,kf,kn]) # v
+       fa[km]+=0.5*einsum('InFe,MFne->MI',tau_tildeab[km,kn,kf],eris.ovOV[km,kf,kn]) # c
 
     return fa,fb #Foo, FOO
 
 
-def cc_Fov(cc, t1, t2, uccsd_eris):
+def cc_Fov(cc, t1, t2, eris):
 
     from pyscf.pbc.cc import kccsd_uhf
     from pyscf.pbc.cc import kccsd
@@ -224,22 +163,22 @@ def cc_Fov(cc, t1, t2, uccsd_eris):
     import numpy as np
     from numpy import einsum
 
-    orbspin = uccsd_eris._kccsd_eris.orbspin
+    orbspin = eris._kccsd_eris.orbspin
     kconserv = kpts_helper.get_kconserv(cc._scf.cell, cc.kpts)
 
     t1a, t1b = t1
     t2aa, t2ab, t2bb = t2
 
     nkpts = len(orbspin)
-    nocc_a, nocc_b = uccsd_eris.nocc
+    nocc_a, nocc_b = eris.nocc
     nocc  = nocc_a+nocc_b
     idxva = [np.where(orbspin[k][nocc:] == 0)[0] for k in range(nkpts)]
     idxvb = [np.where(orbspin[k][nocc:] == 1)[0] for k in range(nkpts)]
     nvir_a = len(idxva[0])
     nvir_b = len(idxvb[0])
 
-    fov_ = uccsd_eris.fock[0][:,:nocc_a,nocc_a:]
-    fOV_ = uccsd_eris.fock[1][:,:nocc_b,nocc_b:]
+    fov_ = eris.fock[0][:,:nocc_a,nocc_a:]
+    fOV_ = eris.fock[1][:,:nocc_b,nocc_b:]
 
     fa = np.zeros((nkpts,nocc_a,nvir_a), dtype=np.complex128)
     fb = np.zeros((nkpts,nocc_b,nvir_b), dtype=np.complex128)
@@ -248,41 +187,16 @@ def cc_Fov(cc, t1, t2, uccsd_eris):
      fa[km]+=fov_[km]
      fb[km]+=fOV_[km]
      for kn in range(nkpts):
-      fa[km]+=einsum('nf,menf->me',t1a[kn],uccsd_eris.ovov[km,km,kn])
-      fa[km]+=einsum('nf,menf->me',t1b[kn],uccsd_eris.ovOV[km,km,kn])
-      fa[km]-=einsum('nf,mfne->me',t1a[kn],uccsd_eris.ovov[km,kn,kn])
-      fb[km]+=einsum('nf,menf->me',t1b[kn],uccsd_eris.OVOV[km,km,kn])
-      fb[km]+=einsum('nf,menf->me',t1a[kn],uccsd_eris.OVov[km,km,kn])
-      fb[km]-=einsum('nf,mfne->me',t1b[kn],uccsd_eris.OVOV[km,kn,kn])
-
-    '''
-    from pyscf.pbc.cc import kccsd_uhf
-    from pyscf.pbc.cc import kccsd
-    from pyscf.pbc.cc import kintermediates
-    from pyscf.pbc.lib import kpts_helper
-    orbspin = uccsd_eris._kccsd_eris.orbspin
-    kconserv = kpts_helper.get_kconserv(cc._scf.cell, cc.kpts)
-
-    t1a, t1b = t1
-    t2aa, t2ab, t2bb = t2
-    t1 = kccsd.spatial2spin((t1a, t1b), orbspin, kconserv)
-    t2 = kccsd.spatial2spin((t2aa, t2ab, t2bb), orbspin, kconserv)
-
-    gkccsd_Fov = kintermediates.cc_Fov(cc, t1, t2, uccsd_eris._kccsd_eris)
-
-    Fov, FOV = kccsd_uhf._eri_spin2spatial(gkccsd_Fov, 'ov', uccsd_eris)
-
-    t1 = kccsd.spatial2spin((t1a, t1b), orbspin, kconserv)
-    t2 = kccsd.spatial2spin((t2aa, t2ab, t2bb), orbspin, kconserv)
-    gkccsd_Fov = kintermediates.cc_Fov(cc, t1, t2, uccsd_eris._kccsd_eris)
-    Fov, FOV = kccsd_uhf._eri_spin2spatial(gkccsd_Fov, 'ov', uccsd_eris)
-    for ka in range(nkpts):
-     print ka,np.abs(fa[ka]-Fov[ka]).max(),np.abs(fb[ka]-FOV[ka]).max()
-    '''
+      fa[km]+=einsum('nf,menf->me',t1a[kn],eris.ovov[km,km,kn])
+      fa[km]+=einsum('nf,menf->me',t1b[kn],eris.ovOV[km,km,kn])
+      fa[km]-=einsum('nf,mfne->me',t1a[kn],eris.ovov[km,kn,kn])
+      fb[km]+=einsum('nf,menf->me',t1b[kn],eris.OVOV[km,km,kn])
+      fb[km]+=einsum('nf,nfme->me',t1a[kn],eris.ovOV[kn,kn,km])
+      fb[km]-=einsum('nf,mfne->me',t1b[kn],eris.OVOV[km,kn,kn])
 
     return fa,fb #Fov, FOV
 
-def cc_Woooo(cc, t1, t2, uccsd_eris):
+def cc_Woooo(cc, t1, t2, eris):
     ''' This function returns the Js and Ks intermediates for Wmnij
     intermediates in physicist's notation, eg,[km,kn,ki,m,n,i,j]. abba and
     baab for cross excitation in chemist's notation, eg,
@@ -294,10 +208,9 @@ def cc_Woooo(cc, t1, t2, uccsd_eris):
     nkpts, nocca, nvira = t1a.shape
     noccb, nvirb = t1b.shape[1:]
 
-    Wmnij_aaaaJ = uccsd_eris.oooo.transpose(0,2,1,3,5,4,6).copy()
-    Wmnij_aabbJ = uccsd_eris.ooOO.transpose(0,2,1,3,5,4,6).copy()
-    Wmnij_bbaaJ = uccsd_eris.OOoo.transpose(0,2,1,3,5,4,6).copy()
-    Wmnij_bbbbJ = uccsd_eris.OOOO.transpose(0,2,1,3,5,4,6).copy()
+    Wmnij_aaaaJ = eris.oooo.transpose(0,2,1,3,5,4,6).copy()
+    Wmnij_aabbJ = eris.ooOO.transpose(0,2,1,3,5,4,6).copy()
+    Wmnij_bbbbJ = eris.OOOO.transpose(0,2,1,3,5,4,6).copy()
 
     Wmnij_abbaJ = np.zeros([nkpts,nkpts,nkpts,nocca,noccb,noccb,nocca], dtype=Wmnij_aabbJ.dtype)
     Wmnij_baabJ = np.zeros([nkpts,nkpts,nkpts,noccb,nocca,nocca,noccb], dtype=Wmnij_aabbJ.dtype)
@@ -305,36 +218,29 @@ def cc_Woooo(cc, t1, t2, uccsd_eris):
     kconserv = cc.khelper.kconserv
     P = kconserv_mat(cc.nkpts, cc.khelper.kconserv)
     tau_aa, tau_ab, tau_bb = make_tau(cc, t2, t1, t1)
-    tau_ba = np.einsum('badjilk,abcd->abcijkl', tau_ab, P)
     for km in range(nkpts):
         for kn in range(nkpts):
-            tmp_aaaaJ = einsum('xje, ymnie->yxmnij', t1a, uccsd_eris.ooov.transpose(0,2,1,3,5,4,6)[km,kn])
-            tmp_aaaaJ-= einsum('yie, xmnje->yxmnij', t1a, uccsd_eris.ooov.transpose(0,2,1,3,5,4,6)[km,kn])
-            tmp_bbbbJ = einsum('xje, ymnie->yxmnij', t1b, uccsd_eris.OOOV.transpose(0,2,1,3,5,4,6)[km,kn])
-            tmp_bbbbJ-= einsum('yie, xmnje->yxmnij', t1b, uccsd_eris.OOOV.transpose(0,2,1,3,5,4,6)[km,kn])
-            tmp_aabbJ = einsum('xje, ymnie->yxmnij', t1b, uccsd_eris.ooOV.transpose(0,2,1,3,5,4,6)[km,kn])
-            tmp_bbaaJ = einsum('xje, ymnie->yxmnij', t1a, uccsd_eris.OOov.transpose(0,2,1,3,5,4,6)[km,kn])
-            tmp_abbaJ = -einsum('yie,xmjne->yxmnij', t1b, uccsd_eris.ooOV[km,:,kn])
-            tmp_baabJ = -einsum('yie,xmjne->yxmnij', t1a, uccsd_eris.OOov[km,:,kn])
+            tmp_aaaaJ = einsum('xje, ymine->yxmnij', t1a, eris.ooov[km,:,kn])
+            tmp_aaaaJ-= einsum('yie, xmjne->yxmnij', t1a, eris.ooov[km,:,kn])
+            tmp_bbbbJ = einsum('xje, ymine->yxmnij', t1b, eris.OOOV[km,:,kn])
+            tmp_bbbbJ-= einsum('yie, xmjne->yxmnij', t1b, eris.OOOV[km,:,kn])
+            tmp_aabbJ = einsum('xje, ymine->yxmnij', t1b, eris.ooOV[km,:,kn])
+            tmp_bbaaJ = einsum('xje, ymine->yxmnij', t1a, eris.OOov[km,:,kn])
+            tmp_abbaJ = -einsum('yie,xmjne->yxmnij', t1b, eris.ooOV[km,:,kn])
+            tmp_baabJ = -einsum('yie,xmjne->yxmnij', t1a, eris.OOov[km,:,kn])
 
             for ki in range(nkpts):
                 kj = kconserv[km,ki,kn]
                 Wmnij_aaaaJ[km,kn,ki] += tmp_aaaaJ[ki,kj]
-                Wmnij_aaaaJ[km,kn,ki] += 0.25*einsum('xijef,xmnef->mnij',
-                        tau_aa[ki,kj],uccsd_eris.ovov.transpose(0,2,1,3,5,4,6)[km,kn])
+                Wmnij_aaaaJ[km,kn,ki] += 0.25*einsum('xijef,xmenf->mnij', tau_aa[ki,kj],eris.ovov[km,:,kn])
                 Wmnij_bbbbJ[km,kn,ki] += tmp_bbbbJ[ki,kj]
-                Wmnij_bbbbJ[km,kn,ki] += 0.25*einsum('xijef,xmnef->mnij',
-                        tau_bb[ki,kj],uccsd_eris.OVOV.transpose(0,2,1,3,5,4,6)[km,kn])
+                Wmnij_bbbbJ[km,kn,ki] += 0.25*einsum('xijef,xmenf->mnij', tau_bb[ki,kj],eris.OVOV[km,:,kn])
                 Wmnij_aabbJ[km,kn,ki] +=tmp_aabbJ[ki,kj]
-                Wmnij_aabbJ[km,kn,ki] += 0.25*einsum('xijef,xmnef->mnij',
-                        tau_ab[ki,kj],uccsd_eris.ovOV.transpose(0,2,1,3,5,4,6)[km,kn])
-                Wmnij_bbaaJ[km,kn,ki] +=tmp_bbaaJ[ki,kj]
-                Wmnij_bbaaJ[km,kn,ki] += 0.25*einsum('xijef,xmnef->mnij',
-                        tau_ba[ki,kj],uccsd_eris.OVov.transpose(0,2,1,3,5,4,6)[km,kn])
+                Wmnij_aabbJ[km,kn,ki] += 0.25*einsum('xijef,xmenf->mnij', tau_ab[ki,kj],eris.ovOV[km,:,kn])
                 Wmnij_abbaJ[km,kn,ki] += tmp_abbaJ[ki,kj]
-                Wmnij_abbaJ[km,kn,ki] -=0.25*einsum('yijfe,ynfme->mnij', tau_ba[ki,kj], uccsd_eris.OVov[kn,:,km])
+                Wmnij_abbaJ[km,kn,ki] -=0.25*einsum('yjief,ymenf->mnij', tau_ab[kj,ki], eris.ovOV[km,:,kn])
                 Wmnij_baabJ[km,kn,ki] += tmp_baabJ[ki,kj]
-                Wmnij_baabJ[km,kn,ki] -=0.25*einsum('yijfe,ynfme->mnij', tau_ab[ki,kj], uccsd_eris.ovOV[kn,:,km])
+                Wmnij_baabJ[km,kn,ki] -=0.25*einsum('yijfe,ynfme->mnij', tau_ab[ki,kj], eris.ovOV[kn,:,km])
 
     ##### Symmetry relations in Wmnij
     Wmnij_aaaaK = Wmnij_aaaaJ.transpose(1,0,2,4,3,5,6)
@@ -367,7 +273,7 @@ def cc_Wvvvv(cc, t1, t2, eris):
     WVVVV = WVVVV - WVVVV.transpose(2,1,0,5,4,3,6)
     return Wvvvv, WvvVV, WVVVV
 
-def cc_Wovvo(cc, t1, t2, uccsd_eris):
+def cc_Wovvo(cc, t1, t2, eris):
     '''
     This function returns the Js and Ks intermediates for Wmnij intermediates
     in physicist's notation, eg,[km,kn,ki,m,n,i,j]. abba and baab stands for
@@ -381,69 +287,73 @@ def cc_Wovvo(cc, t1, t2, uccsd_eris):
     kconserv = kpts_helper.get_kconserv(cc._scf.cell, cc.kpts)
 
     P = kconserv_mat(cc.nkpts, cc.khelper.kconserv)
-    Wmbej_aaaaJ = np.einsum('xyzaijb,xzyw->ywxibaj', uccsd_eris.voov.conj(), P)
-    Wmbej_aabbJ = np.einsum('xyzaijb,xzyw->ywxibaj', uccsd_eris.voOV.conj(), P)
-    Wmbej_bbaaJ = np.einsum('xyzaijb,xzyw->ywxibaj', uccsd_eris.VOov.conj(), P)
-    Wmbej_bbbbJ = np.einsum('xyzaijb,xzyw->ywxibaj', uccsd_eris.VOOV.conj(), P)
+    Wmbej_aaaaJ = np.einsum('xyzaijb,xzyw->ywxibaj', eris.voov.conj(), P)
+    Wmbej_aabbJ = np.einsum('xyzaijb,xzyw->ywxibaj', eris.voOV.conj(), P)
+    Wmbej_bbaaJ = np.einsum('wzybjia,xzyw->ywxibaj', eris.voOV       , P)
+    Wmbej_bbbbJ = np.einsum('xyzaijb,xzyw->ywxibaj', eris.VOOV.conj(), P)
     Wmbej_abbaJ = np.zeros([nkpts, nkpts, nkpts, nocca, nvirb, nvirb, nocca], dtype = Wmbej_aaaaJ.dtype)
     Wmbej_baabJ = np.zeros([nkpts, nkpts, nkpts, noccb, nvira, nvira, noccb], dtype = Wmbej_aaaaJ.dtype)
 
-    Wmbej_aaaaK = uccsd_eris.vvoo.transpose(2,1,0,5,4,3,6).transpose(0,2,1,3,5,4,6).copy()
+    Wmbej_aaaaK = eris.vvoo.transpose(2,1,0,5,4,3,6).transpose(0,2,1,3,5,4,6).copy()
     Wmbej_aabbK = np.zeros(Wmbej_aabbJ.shape, dtype = Wmbej_aabbJ.dtype)
     Wmbej_bbaaK = np.zeros(Wmbej_bbaaJ.shape, dtype = Wmbej_bbaaJ.dtype)
-    Wmbej_bbbbK = uccsd_eris.VVOO.transpose(2,1,0,5,4,3,6).transpose(0,2,1,3,5,4,6).copy()
-    Wmbej_abbaK = uccsd_eris.VVoo.transpose(2,1,0,5,4,3,6).transpose(0,2,1,3,5,4,6).copy()
-    Wmbej_baabK = uccsd_eris.vvOO.transpose(2,1,0,5,4,3,6).transpose(0,2,1,3,5,4,6).copy()
+    Wmbej_bbbbK = eris.VVOO.transpose(2,1,0,5,4,3,6).transpose(0,2,1,3,5,4,6).copy()
+    Wmbej_abbaK = eris.VVoo.transpose(2,1,0,5,4,3,6).transpose(0,2,1,3,5,4,6).copy()
+    Wmbej_baabK = eris.vvOO.transpose(2,1,0,5,4,3,6).transpose(0,2,1,3,5,4,6).copy()
 
     for km in range(nkpts):
         for kb in range(nkpts):
             for ke in range(nkpts):
                 kj = kconserv[km,ke,kb]
-                Wmbej_aaaaJ[km,kb,ke] += einsum('jf, mbef->mbej', t1a[kj,:,:], uccsd_eris.ovvv.transpose(0,2,1,3,5,4,6)[km,kb,ke])
-                Wmbej_bbbbJ[km,kb,ke] += einsum('jf, mbef->mbej', t1b[kj,:,:], uccsd_eris.OVVV.transpose(0,2,1,3,5,4,6)[km,kb,ke])
-                Wmbej_aabbJ[km,kb,ke] += einsum('jf, mbef->mbej', t1b[kj,:,:], uccsd_eris.ovVV.transpose(0,2,1,3,5,4,6)[km,kb,ke])
-                Wmbej_bbaaJ[km,kb,ke] += einsum('jf, mbef->mbej', t1a[kj,:,:], uccsd_eris.OVvv.transpose(0,2,1,3,5,4,6)[km,kb,ke])
+                Wmbej_aaaaJ[km,kb,ke] += einsum('jf, mebf->mbej', t1a[kj,:,:], eris.ovvv[km,ke,kb])
+                Wmbej_bbbbJ[km,kb,ke] += einsum('jf, mebf->mbej', t1b[kj,:,:], eris.OVVV[km,ke,kb])
+                Wmbej_aabbJ[km,kb,ke] += einsum('jf, mebf->mbej', t1b[kj,:,:], eris.ovVV[km,ke,kb])
+                Wmbej_bbaaJ[km,kb,ke] += einsum('jf, mebf->mbej', t1a[kj,:,:], eris.OVvv[km,ke,kb])
                 ##### warnings for Ks
-                Wmbej_aaaaK[km,kb,ke] += einsum('jf, mbef->mbej', t1a[kj,:,:], uccsd_eris.vvov.transpose(2,1,0,5,4,3,6).transpose(0,2,1,3,5,4,6)[km,kb,ke])
-                Wmbej_bbbbK[km,kb,ke] += einsum('jf, mbef->mbej', t1b[kj,:,:], uccsd_eris.VVOV.transpose(2,1,0,5,4,3,6).transpose(0,2,1,3,5,4,6)[km,kb,ke])
-                Wmbej_abbaK[km,kb,ke] += einsum('jf, mbef->mbej', t1a[kj,:,:], uccsd_eris.VVov.transpose(2,1,0,5,4,3,6).transpose(0,2,1,3,5,4,6)[km,kb,ke])
-                Wmbej_baabK[km,kb,ke] += einsum('jf, mbef->mbej', t1b[kj,:,:], uccsd_eris.vvOV.transpose(2,1,0,5,4,3,6).transpose(0,2,1,3,5,4,6)[km,kb,ke])
+                Wmbej_aaaaK[km,kb,ke] += einsum('jf, bemf->mbej', t1a[kj,:,:], eris.vvov[kb,ke,km])
+                Wmbej_bbbbK[km,kb,ke] += einsum('jf, bemf->mbej', t1b[kj,:,:], eris.VVOV[kb,ke,km])
+                Wmbej_abbaK[km,kb,ke] += einsum('jf, bemf->mbej', t1a[kj,:,:], eris.VVov[kb,ke,km])
+                Wmbej_baabK[km,kb,ke] += einsum('jf, bemf->mbej', t1b[kj,:,:], eris.vvOV[kb,ke,km])
 
-                Wmbej_aaaaJ[km,kb,ke] -= einsum('nb, mnej->mbej', t1a[kb,:,:], uccsd_eris.ovoo.transpose(0,2,1,3,5,4,6)[km,kb,ke])
-                Wmbej_bbbbJ[km,kb,ke] -= einsum('nb, mnej->mbej', t1b[kb,:,:], uccsd_eris.OVOO.transpose(0,2,1,3,5,4,6)[km,kb,ke])
-                Wmbej_aabbJ[km,kb,ke] -= einsum('nb, mnej->mbej', t1b[kb,:,:], uccsd_eris.ovOO.transpose(0,2,1,3,5,4,6)[km,kb,ke])
-                Wmbej_bbaaJ[km,kb,ke] -= einsum('nb, mnej->mbej', t1a[kb,:,:], uccsd_eris.OVoo.transpose(0,2,1,3,5,4,6)[km,kb,ke])
+                Wmbej_aaaaJ[km,kb,ke] -= einsum('nb, menj->mbej', t1a[kb,:,:], eris.ovoo[km,ke,kb])
+                Wmbej_bbbbJ[km,kb,ke] -= einsum('nb, menj->mbej', t1b[kb,:,:], eris.OVOO[km,ke,kb])
+                Wmbej_aabbJ[km,kb,ke] -= einsum('nb, menj->mbej', t1b[kb,:,:], eris.ovOO[km,ke,kb])
+                Wmbej_bbaaJ[km,kb,ke] -= einsum('nb, menj->mbej', t1a[kb,:,:], eris.OVoo[km,ke,kb])
 
-                Wmbej_aaaaK[km,kb,ke] -= einsum('nb, mnej->mbej', t1a[kb,:,:], uccsd_eris.ovoo.transpose(2,1,0,5,4,3,6).transpose(0,2,1,3,5,4,6)[km,kb,ke])
-                Wmbej_bbbbK[km,kb,ke] -= einsum('nb, mnej->mbej', t1b[kb,:,:], uccsd_eris.OVOO.transpose(2,1,0,5,4,3,6).transpose(0,2,1,3,5,4,6)[km,kb,ke])
-                Wmbej_abbaK[km,kb,ke] -= einsum('nb, mnej->mbej', t1b[kb,:,:], uccsd_eris.OVoo.transpose(2,1,0,5,4,3,6).transpose(0,2,1,3,5,4,6)[km,kb,ke])
-                Wmbej_baabK[km,kb,ke] -= einsum('nb, mnej->mbej', t1a[kb,:,:], uccsd_eris.ovOO.transpose(2,1,0,5,4,3,6).transpose(0,2,1,3,5,4,6)[km,kb,ke])
+                Wmbej_aaaaK[km,kb,ke] -= einsum('nb, nemj->mbej', t1a[kb,:,:], eris.ovoo[kb,ke,km])
+                Wmbej_bbbbK[km,kb,ke] -= einsum('nb, nemj->mbej', t1b[kb,:,:], eris.OVOO[kb,ke,km])
+                Wmbej_abbaK[km,kb,ke] -= einsum('nb, nemj->mbej', t1b[kb,:,:], eris.OVoo[kb,ke,km])
+                Wmbej_baabK[km,kb,ke] -= einsum('nb, nemj->mbej', t1a[kb,:,:], eris.ovOO[kb,ke,km])
 
                 for kn in range(nkpts):
                     kf = kconserv[km,ke,kn]
 
-                    Wmbej_aaaaJ[km,kb,ke] += -0.5*einsum('jnfb,mnef->mbej', t2aa[kj,kn,kf], uccsd_eris.ovov.transpose(0,2,1,3,5,4,6)[km,kn,ke])+0.5*einsum('jnbf,mnef->mbej',t2ab[kj,kn,kb], uccsd_eris.ovOV.transpose(0,2,1,3,5,4,6)[km,kn,ke])
-                    Wmbej_bbbbJ[km,kb,ke] += -0.5*einsum('jnfb,mnef->mbej', t2bb[kj,kn,kf], uccsd_eris.OVOV.transpose(0,2,1,3,5,4,6)[km,kn,ke])+0.5*einsum('njfb,mnef->mbej',t2ab[kn,kj,kf], uccsd_eris.OVov.transpose(0,2,1,3,5,4,6)[km,kn,ke])
-                    Wmbej_aabbJ[km,kb,ke] += 0.5*einsum('njfb,mnef->mbej', t2ab[kn,kj,kf], uccsd_eris.ovov.transpose(0,2,1,3,5,4,6)[km,kn,ke]) - 0.5*einsum('jnfb,mnef->mbej',t2bb[kj,kn,kf],uccsd_eris.ovOV.transpose(0,2,1,3,5,4,6)[km,kn,ke])
-                    Wmbej_bbaaJ[km,kb,ke] += -0.5*einsum('jnfb,mnef->mbej', t2aa[kj,kn,kf], uccsd_eris.OVov.transpose(0,2,1,3,5,4,6)[km,kn,ke]) + 0.5*einsum('jnbf,mnef->mbej',t2ab[kj,kn,kb], uccsd_eris.OVOV.transpose(0,2,1,3,5,4,6)[km,kn,ke])
+                    Wmbej_aaaaJ[km,kb,ke] -= 0.5*einsum('jnfb,menf->mbej', t2aa[kj,kn,kf], eris.ovov[km,ke,kn])
+                    Wmbej_aaaaJ[km,kb,ke] += 0.5*einsum('jnbf,menf->mbej', t2ab[kj,kn,kb], eris.ovOV[km,ke,kn])
+                    Wmbej_bbbbJ[km,kb,ke] -= 0.5*einsum('jnfb,menf->mbej', t2bb[kj,kn,kf], eris.OVOV[km,ke,kn])
+                    Wmbej_bbbbJ[km,kb,ke] += 0.5*einsum('njfb,nfme->mbej', t2ab[kn,kj,kf], eris.ovOV[kn,kf,km])
+                    Wmbej_aabbJ[km,kb,ke] += 0.5*einsum('njfb,menf->mbej', t2ab[kn,kj,kf], eris.ovov[km,ke,kn])
+                    Wmbej_aabbJ[km,kb,ke] -= 0.5*einsum('jnfb,menf->mbej', t2bb[kj,kn,kf], eris.ovOV[km,ke,kn])
+                    Wmbej_bbaaJ[km,kb,ke] -= 0.5*einsum('jnfb,nfme->mbej', t2aa[kj,kn,kf], eris.ovOV[kn,kf,km])
+                    Wmbej_bbaaJ[km,kb,ke] += 0.5*einsum('jnbf,menf->mbej', t2ab[kj,kn,kb], eris.OVOV[km,ke,kn])
 
-                    Wmbej_aaaaK[km,kb,ke] += -0.5*einsum('jnfb,mnef->mbej',t2aa[kj,kn,kf], uccsd_eris.ovov.transpose(2,1,0,5,4,3,6).transpose(0,2,1,3,5,4,6)[km,kn,ke])
-                    Wmbej_bbbbK[km,kb,ke] += -0.5*einsum('jnfb,mnef->mbej',t2bb[kj,kn,kf], uccsd_eris.OVOV.transpose(2,1,0,5,4,3,6).transpose(0,2,1,3,5,4,6)[km,kn,ke])
-                    Wmbej_aabbK[km,kb,ke] += 0.5*einsum('njfb,mnef->mbej',t2ab[kn,kj,kf], uccsd_eris.ovov.transpose(2,1,0,5,4,3,6).transpose(0,2,1,3,5,4,6)[km,kn,ke])
-                    Wmbej_bbaaK[km,kb,ke] += 0.5*einsum('jnbf,mnef->mbej',t2ab[kj,kn,kb], uccsd_eris.OVOV.transpose(2,1,0,5,4,3,6).transpose(0,2,1,3,5,4,6)[km,kn,ke])
-                    Wmbej_abbaK[km,kb,ke] += -0.5*einsum('jnfb,mnef->mbej',t2ab[kj,kn,kf], uccsd_eris.OVov.transpose(2,1,0,5,4,3,6).transpose(0,2,1,3,5,4,6)[km,kn,ke])
-                    Wmbej_baabK[km,kb,ke] += -0.5*einsum('njbf,mnef->mbej',t2ab[kn,kj,kb], uccsd_eris.ovOV.transpose(2,1,0,5,4,3,6).transpose(0,2,1,3,5,4,6)[km,kn,ke])
+                    Wmbej_aaaaK[km,kb,ke] -= 0.5*einsum('jnfb,nemf->mbej', t2aa[kj,kn,kf], eris.ovov[kn,ke,km])
+                    Wmbej_bbbbK[km,kb,ke] -= 0.5*einsum('jnfb,nemf->mbej', t2bb[kj,kn,kf], eris.OVOV[kn,ke,km])
+                    Wmbej_aabbK[km,kb,ke] += 0.5*einsum('njfb,nemf->mbej', t2ab[kn,kj,kf], eris.ovov[kn,ke,km])
+                    Wmbej_bbaaK[km,kb,ke] += 0.5*einsum('jnbf,nemf->mbej', t2ab[kj,kn,kb], eris.OVOV[kn,ke,km])
+                    Wmbej_abbaK[km,kb,ke] -= 0.5*einsum('jnfb,mfne->mbej', t2ab[kj,kn,kf], eris.ovOV[km,kf,kn])
+                    Wmbej_baabK[km,kb,ke] -= 0.5*einsum('njbf,nemf->mbej', t2ab[kn,kj,kb], eris.ovOV[kn,ke,km])
 
                     if kn == kb and kf == kj:
-                        Wmbej_aaaaJ[km,kb,ke] += -einsum('jf,nb,mnef->mbej',t1a[kj],t1a[kn], uccsd_eris.ovov.transpose(0,2,1,3,5,4,6)[km,kn,ke])
-                        Wmbej_bbbbJ[km,kb,ke] += -einsum('jf,nb,mnef->mbej',t1b[kj],t1b[kn], uccsd_eris.OVOV.transpose(0,2,1,3,5,4,6)[km,kn,ke])
-                        Wmbej_aabbJ[km,kb,ke] += -einsum('jf,nb,mnef->mbej',t1b[kj],t1b[kn], uccsd_eris.ovOV.transpose(0,2,1,3,5,4,6)[km,kn,ke])
-                        Wmbej_bbaaJ[km,kb,ke] += -einsum('jf,nb,mnef->mbej',t1a[kj],t1a[kn], uccsd_eris.OVov.transpose(0,2,1,3,5,4,6)[km,kn,ke])
+                        Wmbej_aaaaJ[km,kb,ke] += -einsum('jf,nb,menf->mbej',t1a[kj],t1a[kn], eris.ovov[km,ke,kn])
+                        Wmbej_bbbbJ[km,kb,ke] += -einsum('jf,nb,menf->mbej',t1b[kj],t1b[kn], eris.OVOV[km,ke,kn])
+                        Wmbej_aabbJ[km,kb,ke] += -einsum('jf,nb,menf->mbej',t1b[kj],t1b[kn], eris.ovOV[km,ke,kn])
+                        Wmbej_bbaaJ[km,kb,ke] += -einsum('jf,nb,nfme->mbej',t1a[kj],t1a[kn], eris.ovOV[kn,kf,km])
 
-                        Wmbej_aaaaK[km,kb,ke] += -einsum('jf,nb,mnef->mbej',t1a[kj],t1a[kn], uccsd_eris.ovov.transpose(2,1,0,5,4,3,6).transpose(0,2,1,3,5,4,6)[km,kn,ke])
-                        Wmbej_bbbbK[km,kb,ke] += -einsum('jf,nb,mnef->mbej',t1b[kj],t1b[kn], uccsd_eris.OVOV.transpose(2,1,0,5,4,3,6).transpose(0,2,1,3,5,4,6)[km,kn,ke])
-                        Wmbej_abbaK[km,kb,ke] += -einsum('jf,nb,mnef->mbej',t1a[kj],t1b[kn], uccsd_eris.OVov.transpose(2,1,0,5,4,3,6).transpose(0,2,1,3,5,4,6)[km,kn,ke])
-                        Wmbej_baabK[km,kb,ke] += -einsum('jf,nb,mnef->mbej',t1b[kj],t1a[kn], uccsd_eris.ovOV.transpose(2,1,0,5,4,3,6).transpose(0,2,1,3,5,4,6)[km,kn,ke])
+                        Wmbej_aaaaK[km,kb,ke] += -einsum('jf,nb,nemf->mbej',t1a[kj],t1a[kn], eris.ovov[kn,ke,km])
+                        Wmbej_bbbbK[km,kb,ke] += -einsum('jf,nb,nemf->mbej',t1b[kj],t1b[kn], eris.OVOV[kn,ke,km])
+                        Wmbej_abbaK[km,kb,ke] += -einsum('jf,nb,mfne->mbej',t1a[kj],t1b[kn], eris.ovOV[km,kf,kn])
+                        Wmbej_baabK[km,kb,ke] += -einsum('jf,nb,nemf->mbej',t1b[kj],t1a[kn], eris.ovOV[kn,ke,km])
 
     Wovvo = Wmbej_aaaaJ.transpose(0,2,1,3,5,4,6) - Wmbej_aaaaK.transpose(0,2,1,3,5,4,6)
     WovVO = Wmbej_aabbJ.transpose(0,2,1,3,5,4,6) - Wmbej_aabbK.transpose(0,2,1,3,5,4,6)
