@@ -701,6 +701,55 @@ def eaccsd_diag(eom, imds=None):
 
     Hr1a = np.diag(imds.Fvv)
     Hr1b = np.diag(imds.FVV)
+
+    #-------------- intermediates
+
+    Fvv_diag = np.diag(imds.Fvv)
+    Foo_diag = np.diag(imds.Foo)
+    FOO_diag = np.diag(imds.FOO)
+    FVV_diag = np.diag(imds.FVV)
+
+    Wovvo_slice = np.einsum('jbbj->jb',imds.Wovvo)
+    Wovov_t2_dot = np.einsum('iajb,ijab->jab',imds.Wovov,t2aa)
+    WoVVo_slice  = np.einsum('jaaj->ja',imds.WoVVo)
+    WovOV_t2_dot = np.einsum('jbia,ijab->jab',imds.WovOV,t2ba)
+    WOVVO_slice = np.einsum('jaaj->ja',imds.WOVVO)
+    WOvvO_slice = np.einsum('jbbj->jb',imds.WOvvO)
+    WovOV_t2_dot_T = np.einsum('ibja,ijba->jab',imds.WovOV,t2ab)
+    WOVOV_t2_dot = np.einsum('iajb,ijab->jab',imds.WOVOV,t2bb)
+
+    #-------------- contraction
+
+    Hr2aaa = Fvv_diag[None,:,None]+Fvv_diag[None,None,:]-Foo_diag[:,None,None]+ \
+             Wovvo_slice[:,None,:]+Wovvo_slice[:,:,None]-Wovov_t2_dot
+
+    Hr2aba = FVV_diag[None,:,None]+Fvv_diag[None,None,:]-Foo_diag[:,None,None]+ \
+             Wovvo_slice[:,None,:]+WoVVo_slice[:,:,None]-WovOV_t2_dot
+
+    Hr2bab = -FOO_diag[:,None,None]+FVV_diag[None,:,None]+Fvv_diag[None,None,:]+ \
+             WOVVO_slice[:,:,None]+WOvvO_slice[:,None,:]-WovOV_t2_dot_T
+    Hr2bab = Hr2bab.transpose(0,2,1)
+
+    Hr2bbb = -FOO_diag[:,None,None]+FVV_diag[None,:,None]+FVV_diag[None,None,:]+ \
+             WOVVO_slice[:,:,None]+WOVVO_slice[:,None,:]-WOVOV_t2_dot
+
+    #-------------- imds.Wvvvv not None
+
+    if(imds.Wvvvv is not None):
+      Wvvvv_slice_A = np.einsum('aabb->ab',imds.Wvvvv)
+      Wvvvv_slice_B = np.einsum('abba->ab',imds.Wvvvv)
+      Hr2aaa += 0.5*Wvvvv_slice_A[None,:,:]-0.5*Wvvvv_slice_B[None,:,:]
+      WVVvv_slice = np.einsum('aabb->ab',imds.WVVvv)
+      Hr2aba += WVVvv_slice[None,:,:]
+      WvvVV_slice = np.einsum('aabb->ab',imds.WvvVV)
+      Hr2bab += WvvVV_slice[None,:,:]
+      WVVVV_slice_A = np.einsum('aabb->ab',imds.WVVVV)
+      WVVVV_slice_B = np.einsum('abba->ab',imds.WVVVV)
+      Hr2bbb += 0.5*WVVVV_slice_A[None,:,:]-0.5*WVVVV_slice_B[None,:,:]
+
+    #-------------- original implementation
+
+    '''
     Hr2aaa = np.zeros((nocc_a,nvir_a,nvir_a), dtype=dtype)
     Hr2bab = np.zeros((nocc_b,nvir_a,nvir_b), dtype=dtype)
     Hr2aba = np.zeros((nocc_a,nvir_b,nvir_a), dtype=dtype)
@@ -764,6 +813,13 @@ def eaccsd_diag(eom, imds=None):
                 Hr2bbb[j,a,b] += imds.WOVVO[j,b,b,j]
                 Hr2bbb[j,a,b] += imds.WOVVO[j,a,a,j]
                 Hr2bbb[j,a,b] -= (np.dot(imds.WOVOV[:,a,j,b], t2bb[:,j,a,b]))
+    #-------------- comparison
+
+    print np.abs(Hr2aaa-Hr2aaa_n).max()
+    print np.abs(Hr2aba-Hr2aba_n).max()
+    print np.abs(Hr2bab-Hr2bab_n).max()
+    print np.abs(Hr2bbb-Hr2bbb_n).max()
+    '''
 
     vector = amplitudes_to_vector_ea((Hr1a,Hr1b), (Hr2aaa,Hr2aba,Hr2bab,Hr2bbb))
     return vector
@@ -2745,21 +2801,20 @@ if __name__ == '__main__':
 #    Hvector = myeom.matvec(vector, imds=imds)
 #    print('ip', lib.finger(Hvector) - (21.67127462317093-19.068987454261908j))
     print('diag', lib.finger(myeom.get_diag()) - (-9.6676217223549763+9.325219825942975j))
-    exit()
 
     # EOM-EA
     myeom = EOMEA(mycc)
     imds = myeom.make_imds()
-    orbspin = eris.orbspin
-
-    np.random.seed(1)
-    r1 = np.random.rand(nvir)*1j + np.random.rand(nvir) - 0.5 - 0.5*1j
-    r2 = np.random.rand(nocc * nvir**2)*1j + np.random.rand(nocc * nvir**2) - 0.5 - 0.5*1j
-    r2 = r2.reshape(nocc, nvir, nvir)
-    r1, r2 = enforce_symm_2p_spin_ea(r1, r2, orbspin)
-    r1, r2 = spin2spatial_ea(r1, r2, orbspin)
-
-    vector = myeom.amplitudes_to_vector(r1, r2)
+#    orbspin = eris.orbspin
+#
+#    np.random.seed(1)
+#    r1 = np.random.rand(nvir)*1j + np.random.rand(nvir) - 0.5 - 0.5*1j
+#    r2 = np.random.rand(nocc * nvir**2)*1j + np.random.rand(nocc * nvir**2) - 0.5 - 0.5*1j
+#    r2 = r2.reshape(nocc, nvir, nvir)
+#    r1, r2 = enforce_symm_2p_spin_ea(r1, r2, orbspin)
+#    r1, r2 = spin2spatial_ea(r1, r2, orbspin)
+#
+#    vector = myeom.amplitudes_to_vector(r1, r2)
 #    r1x, r2x = myeom.vector_to_amplitudes(vector)
 #    print(abs(r1[0]-r1x[0]).max())
 #    print(abs(r1[1]-r1x[1]).max())
