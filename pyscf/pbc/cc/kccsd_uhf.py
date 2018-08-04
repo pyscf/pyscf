@@ -32,8 +32,8 @@ from pyscf.pbc import scf
 from pyscf.cc import uccsd
 from pyscf.pbc.lib import kpts_helper
 from pyscf.pbc.lib.kpts_helper import member, gamma_point
-from pyscf import __config__
 from pyscf.pbc.cc import kintermediates_uhf
+from pyscf import __config__
 
 einsum = lib.einsum
 
@@ -81,10 +81,10 @@ def update_amps(cc, t1, t2, eris):
     Ht1a += einsum('xyximae,yme->xia', t2ab, FOV_)
     Ht1b += einsum('xyximae,yme->xia', t2bb, FOV_)
     Ht1b += einsum('yxymiea,yme->xia', t2ab, Fov_)
-    Ht1a -= np.einsum('xyzmnae,ywxnemi,xyzw->zia', t2aa, eris.ovoo, P)
-    Ht1a -= np.einsum('xyzmNaE,ywxNEmi,xyzw->zia', t2ab, eris.OVoo, P)
-    Ht1b -= np.einsum('xyzmnae,ywxnemi,xyzw->zia', t2bb, eris.OVOO, P)
-    Ht1b -= np.einsum('yxwnmea,ywxnemi,xyzw->zia', t2ab, eris.ovOO, P)
+    Ht1a -= np.einsum('xyzmnae,xzymine,xyzw->zia', t2aa, eris.ooov, P)
+    Ht1a -= np.einsum('xyzmNaE,xzymiNE,xyzw->zia', t2ab, eris.ooOV, P)
+    Ht1b -= np.einsum('xyzmnae,xzymine,xyzw->zia', t2bb, eris.OOOV, P)
+    Ht1b -= np.einsum('yxwnmea,xzymine,xyzw->zia', t2ab, eris.OOov, P)
 
     for ka in range(nkpts):
         Ht1a[ka] += einsum('ie,ae->ia', t1a[ka], Fvv_[ka])
@@ -97,7 +97,7 @@ def update_amps(cc, t1, t2, eris):
             # <ma||if> = [mi|af] - [mf|ai]
             #         => [mi|af] - [fm|ia]
             Ht1a[ka] += einsum('mf,aimf->ia', t1a[km], eris.voov[ka, ka, km])
-            Ht1a[ka] -= einsum('mf,afmi->ia', t1a[km], eris.vvoo[ka, km, km])
+            Ht1a[ka] -= einsum('mf,miaf->ia', t1a[km], eris.oovv[km, ka, ka])
             Ht1a[ka] += einsum('MF,aiMF->ia', t1b[km], eris.voOV[ka, ka, km])
 
             # miaf - mfai => miaf - fmia
@@ -108,11 +108,10 @@ def update_amps(cc, t1, t2, eris):
             for kf in range(nkpts):
                 ki = ka
                 ke = kconserv[ki, kf, km]
-                Ht1a[ka] += einsum('imef,aemf->ia', t2aa[ki, km, ke], eris.vvov[ka, ke, km])
-                Ht1a[ka] += einsum('iMeF,aeMF->ia', t2ab[ki, km, ke], eris.vvOV[ka, ke, km])
-
-                Ht1b[ka] += einsum('IMEF,AEMF->IA', t2bb[ki, km, ke], eris.VVOV[ka, ke, km])
-                Ht1b[ka] += einsum('mIfE,AEmf->IA', t2ab[km, ki, kf], eris.VVov[ka, ke, km])
+                Ht1a[ka] += einsum('imef,fmea->ia', t2aa[ki,km,ke], eris.vovv[kf,km,ke].conj())
+                Ht1a[ka] += einsum('iMeF,FMea->ia', t2ab[ki,km,ke], eris.VOvv[kf,km,ke].conj())
+                Ht1b[ka] += einsum('IMEF,FMEA->IA', t2bb[ki,km,ke], eris.VOVV[kf,km,ke].conj())
+                Ht1b[ka] += einsum('mIfE,fmEA->IA', t2ab[km,ki,kf], eris.voVV[kf,km,ke].conj())
 
     for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
         kb = kconserv[ki, ka, kj]
@@ -271,12 +270,12 @@ def update_amps(cc, t1, t2, eris):
         u2aa[kx,ky,kz] -= lib.einsum('ie,ma,bjme->ijab',t1a[kx],t1a[kz],eris.voov[ku,kw,kz])
 
 
-    #:u2aa += np.einsum('xie,yuxjbea,yxuz->xyzijab', t1a, eris.ovvv.conj(), P)
+    #:u2aa += np.einsum('xie,uyzbjae,uzyx->xyzijab', t1a, eris.vovv, P)
     #:u2aa -= np.einsum('zma,xzyimjb->xyzijab', t1a, eris.ooov.conj())
 
     for ky, kx, ku in kpts_helper.loop_kkk(nkpts):
         kz = kconserv[ky, ku, kx]
-        u2aa[kx, ky, kz] += lib.einsum('ie, jbea->ijab', t1a[kx], eris.ovvv[ky,ku,kx].conj())
+        u2aa[kx, ky, kz] += lib.einsum('ie, bjae->ijab', t1a[kx], eris.vovv[ku,ky,kz])
         u2aa[kx, ky, kz] -= lib.einsum('ma, imjb->ijab', t1a[kz], eris.ooov[kx,kz,ky].conj())
 
     u2aa = u2aa - u2aa.transpose(1,0,2,4,3,5,6)
@@ -303,12 +302,12 @@ def update_amps(cc, t1, t2, eris):
         u2bb[kx, ky, kz] += lib.einsum('ie, ma, mjbe->ijab',t1b[kx],t1b[kz],eris.OOVV[kz,kw,ku])
         u2bb[kx, ky, kz] -= lib.einsum('ie, ma, bjme->ijab', t1b[kx], t1b[kz],eris.VOOV[ku,kw,kz])
 
-    #:u2bb += np.einsum('xie,yuxjbea,yxuz->xyzijab', t1b, eris.OVVV.conj(), P)
+    #:u2bb += np.einsum('xie,uzybjae,uzyx->xyzijab', t1b, eris.VOVV, P)
     #:u2bb -= np.einsum('zma,xzyimjb->xyzijab', t1b, eris.OOOV.conj())
 
     for ky, kx, ku in kpts_helper.loop_kkk(nkpts):
         kz = kconserv[ky, ku, kx]
-        u2bb[kx,ky,kz] += lib.einsum('ie,jbea->ijab', t1b[kx], eris.OVVV[ky,ku,kx].conj())
+        u2bb[kx,ky,kz] += lib.einsum('ie,bjae->ijab', t1b[kx], eris.VOVV[ku,ky,kz])
 
     for kx, kz, ky in kpts_helper.loop_kkk(nkpts):
         u2bb[kx,ky,kz] -= lib.einsum('ma, imjb-> ijab', t1b[kz], eris.OOOV[kx,kz,ky].conj())
@@ -317,14 +316,14 @@ def update_amps(cc, t1, t2, eris):
     u2bb = u2bb - np.einsum('xyzijab,xyzu->xyuijba', u2bb, P)
     Ht2bb += u2bb
 
-    #:Ht2ab += np.einsum('xie,yuxJBea,yxuz->xyziJaB', t1a, eris.OVvv.conj(), P)
-    #:Ht2ab += np.einsum('yJE,xzyiaEB,xyzu->xyziJaB', t1b, eris.ovVV.conj(), P)
+    #:Ht2ab += np.einsum('xie,uyzBJae,uzyx->xyziJaB', t1a, eris.VOvv, P)
+    #:Ht2ab += np.einsum('yJE,zxuaiBE,zuxy->xyziJaB', t1b, eris.voVV, P)
     #:Ht2ab -= np.einsum('zma,xzyimjb->xyzijab', t1a, eris.ooOV.conj())
     #:Ht2ab -= np.einsum('umb,yuxjmia,xyuz->xyzijab', t1b, eris.OOov.conj(), P)
     for ky, kx, ku in kpts_helper.loop_kkk(nkpts):
         kz = kconserv[ky,ku,kx]
-        Ht2ab[kx,ky,kz] += lib.einsum('ie, jbea-> ijab', t1a[kx], eris.OVvv[ky,ku,kx].conj())
-        Ht2ab[kx,ky,kz] += lib.einsum('je, iaeb-> ijab', t1b[ky], eris.ovVV[kx,kz,ky].conj())
+        Ht2ab[kx,ky,kz] += lib.einsum('ie, bjae-> ijab', t1a[kx], eris.VOvv[ku,ky,kz])
+        Ht2ab[kx,ky,kz] += lib.einsum('je, aibe-> ijab', t1b[ky], eris.voVV[kz,kx,ku])
 
     for kx, kz, ky in kpts_helper.loop_kkk(nkpts):
         Ht2ab[kx,ky,kz] -= lib.einsum('ma, imjb->ijab', t1a[kz], eris.ooOV[kx,kz,ky].conj())
@@ -715,9 +714,6 @@ UCCSD = KUCCSD
 
 
 def _make_eris_incore(cc, mo_coeff=None):
-    import copy
-    from pyscf.pbc import scf
-    from pyscf.pbc.cc import kccsd
     cput0 = (time.clock(), time.time())
     log = logger.new_logger(cc)
     eris = uccsd._ChemistsERIs()
@@ -725,74 +721,115 @@ def _make_eris_incore(cc, mo_coeff=None):
         mo_coeff = cc.mo_coeff
     eris.mo_coeff = mo_coeff  # TODO: handle frozen orbitals
     eris.nocc = cc.nocc
-    eris.cell = cc._scf.cell  # TODO: delete later
-    eris.kpts = cc.kpts  # TODO: delete later
 
-    kgcc = kccsd.GCCSD(scf.addons.convert_to_ghf(cc._scf))
-    _kccsd_eris = eris._kccsd_eris = kccsd._make_eris_incore(kgcc, kgcc._scf.mo_coeff)
-    orbspin = eris._kccsd_eris.orbspin
+    kpts = cc.kpts
+    mo_a, mo_b = mo_coeff
     nkpts = cc.nkpts
     nocca, noccb = eris.nocc
     nmoa, nmob = cc.nmo
     nvira, nvirb = nmoa - nocca, nmob - noccb
-    nocc = nocca + noccb
-    nvir = nvira + nvirb
-    idxoa = [np.where(orbspin[k][:nocc] == 0)[0] for k in range(nkpts)]
-    idxob = [np.where(orbspin[k][:nocc] == 1)[0] for k in range(nkpts)]
-    idxva = [np.where(orbspin[k][nocc:] == 0)[0] for k in range(nkpts)]
-    idxvb = [np.where(orbspin[k][nocc:] == 1)[0] for k in range(nkpts)]
 
     # Re-make our fock MO matrix elements from density and fock AO
-    focka = [_kccsd_eris.fock[k][orbspin[k]==0][:,orbspin[k]==0] for k in range(nkpts)]
-    fockb = [_kccsd_eris.fock[k][orbspin[k]==1][:,orbspin[k]==1] for k in range(nkpts)]
+    dm = cc._scf.make_rdm1(cc.mo_coeff, cc.mo_occ)
+    hcore = cc._scf.get_hcore()
+    vhf = cc._scf.get_veff(cc._scf.cell, dm)
+    focka = [reduce(np.dot, (mo.conj().T, hcore[k]+vhf[0][k], mo))
+             for k, mo in enumerate(mo_a)]
+    fockb = [reduce(np.dot, (mo.conj().T, hcore[k]+vhf[1][k], mo))
+             for k, mo in enumerate(mo_b)]
     eris.fock = (np.asarray(focka), np.asarray(fockb))
 
-    kpts = cc.kpts
-    nao = _kccsd_eris.mo_coeff[0].shape[0] // 2
-    kconserv = kpts_helper.get_kconserv(cc._scf.cell, cc.kpts)
-    so_coeff = [mo[:nao] + mo[nao:] for mo in _kccsd_eris.mo_coeff]
+    # The momentum conservation array
+    kconserv = cc.khelper.kconserv
 
-    nocc = nocca + noccb
-    nvir = nvira + nvirb
-    nmo = nocc + nvir
-    eri = np.empty((nkpts, nkpts, nkpts, nmo, nmo, nmo, nmo), dtype=np.complex128)
+    dtype = mo_coeff[0][0].dtype
+    eris.oooo = np.empty((nkpts,nkpts,nkpts,nocca,nocca,nocca,nocca), dtype=dtype)
+    eris.ooov = np.empty((nkpts,nkpts,nkpts,nocca,nocca,nocca,nvira), dtype=dtype)
+    eris.oovv = np.empty((nkpts,nkpts,nkpts,nocca,nocca,nvira,nvira), dtype=dtype)
+    eris.ovov = np.empty((nkpts,nkpts,nkpts,nocca,nvira,nocca,nvira), dtype=dtype)
+    eris.voov = np.empty((nkpts,nkpts,nkpts,nvira,nocca,nocca,nvira), dtype=dtype)
+    eris.vovv = np.empty((nkpts,nkpts,nkpts,nvira,nocca,nvira,nvira), dtype=dtype)
+    eris.vvvv = np.empty((nkpts,nkpts,nkpts,nvira,nvira,nvira,nvira), dtype=dtype)
     fao2mo = cc._scf.with_df.ao2mo
     for kp, kq, kr in kpts_helper.loop_kkk(nkpts):
-        ks = kconserv[kp, kq, kr]
-        eri_kpt = fao2mo(
-            (so_coeff[kp], so_coeff[kq], so_coeff[kr], so_coeff[ks]), (kpts[kp], kpts[kq], kpts[kr], kpts[ks]),
-            compact=False)
-        eri_kpt[(orbspin[kp][:, None] != orbspin[kq]).ravel()] = 0
-        eri_kpt[:, (orbspin[kr][:, None] != orbspin[ks]).ravel()] = 0
-        eri_kpt = eri_kpt.reshape(nmo, nmo, nmo, nmo)
-        eri[kp, kq, kr] = eri_kpt
-    # In chemist's notation
-    oooo = eri[:, :, :, :nocc, :nocc, :nocc, :nocc] / nkpts
-    ooov = eri[:, :, :, :nocc, :nocc, :nocc, nocc:] / nkpts
-    ovoo = eri[:, :, :, :nocc, nocc:, :nocc, :nocc] / nkpts
-    oovv = eri[:, :, :, :nocc, :nocc, nocc:, nocc:] / nkpts
-    vvoo = eri[:, :, :, nocc:, nocc:, :nocc, :nocc] / nkpts
-    ovov = eri[:, :, :, :nocc, nocc:, :nocc, nocc:] / nkpts
-    ovvv = eri[:, :, :, :nocc, nocc:, nocc:, nocc:] / nkpts
-    voov = eri[:, :, :, nocc:, :nocc, :nocc, nocc:] / nkpts
-    vovv = eri[:, :, :, nocc:, :nocc, nocc:, nocc:] / nkpts
-    vvov = eri[:, :, :, nocc:, nocc:, :nocc, nocc:] / nkpts
-    vvvv = eri[:, :, :, nocc:, nocc:, nocc:, nocc:] / nkpts
-    ovvo = eri[:, :, :, :nocc, nocc:, nocc:, :nocc] / nkpts
-    ovvv = eri[:, :, :, :nocc, nocc:, nocc:, nocc:] / nkpts
-    vvoo = eri[:, :, :, nocc:, nocc:, :nocc, :nocc] / nkpts
+        ks = kconserv[kp,kq,kr]
+        eri_kpt = fao2mo((mo_a[kp],mo_a[kq],mo_a[kr],mo_a[ks]),
+                         (kpts[kp],kpts[kq],kpts[kr],kpts[ks]), compact=False)
+        eri_kpt = eri_kpt.reshape(nmoa,nmoa,nmoa,nmoa)
 
-    eris.oooo, eris.ooOO, _        , eris.OOOO = _eri_spin2spatial(oooo, 'oooo', eris)
-    eris.ooov, eris.ooOV, eris.OOov, eris.OOOV = _eri_spin2spatial(ooov, 'ooov', eris)
-    eris.ovoo, eris.ovOO, eris.OVoo, eris.OVOO = _eri_spin2spatial(ovoo, 'ovoo', eris)
-    eris.oovv, eris.ooVV, eris.OOvv, eris.OOVV = _eri_spin2spatial(oovv, 'oovv', eris)
-    eris.vvoo, eris.vvOO, eris.VVoo, eris.VVOO = _eri_spin2spatial(vvoo, 'vvoo', eris)
-    eris.ovov, eris.ovOV, _        , eris.OVOV = _eri_spin2spatial(ovov, 'ovov', eris)
-    eris.voov, eris.voOV, _        , eris.VOOV = _eri_spin2spatial(voov, 'voov', eris)
-    eris.vovv, eris.voVV, eris.VOvv, eris.VOVV = _eri_spin2spatial(vovv, 'vovv', eris)
-    eris.vvov, eris.vvOV, eris.VVov, eris.VVOV = _eri_spin2spatial(vvov, 'vvov', eris)
-    eris.ovvv, eris.ovVV, eris.OVvv, eris.OVVV = _eri_spin2spatial(ovvv, 'ovvv', eris)
-    eris.vvvv, eris.vvVV, _        , eris.VVVV = _eri_spin2spatial(vvvv, 'vvvv', eris)
+        eris.oooo[kp,kq,kr] = eri_kpt[:nocca,:nocca,:nocca,:nocca] / nkpts
+        eris.ooov[kp,kq,kr] = eri_kpt[:nocca,:nocca,:nocca,nocca:] / nkpts
+        eris.oovv[kp,kq,kr] = eri_kpt[:nocca,:nocca,nocca:,nocca:] / nkpts
+        eris.ovov[kp,kq,kr] = eri_kpt[:nocca,nocca:,:nocca,nocca:] / nkpts
+        eris.voov[kp,kq,kr] = eri_kpt[nocca:,:nocca,:nocca,nocca:] / nkpts
+        eris.vovv[kp,kq,kr] = eri_kpt[nocca:,:nocca,nocca:,nocca:] / nkpts
+        eris.vvvv[kp,kq,kr] = eri_kpt[nocca:,nocca:,nocca:,nocca:] / nkpts
+
+    eris.OOOO = np.empty((nkpts,nkpts,nkpts,noccb,noccb,noccb,noccb), dtype=dtype)
+    eris.OOOV = np.empty((nkpts,nkpts,nkpts,noccb,noccb,noccb,nvirb), dtype=dtype)
+    eris.OOVV = np.empty((nkpts,nkpts,nkpts,noccb,noccb,nvirb,nvirb), dtype=dtype)
+    eris.OVOV = np.empty((nkpts,nkpts,nkpts,noccb,nvirb,noccb,nvirb), dtype=dtype)
+    eris.VOOV = np.empty((nkpts,nkpts,nkpts,nvirb,noccb,noccb,nvirb), dtype=dtype)
+    eris.VOVV = np.empty((nkpts,nkpts,nkpts,nvirb,noccb,nvirb,nvirb), dtype=dtype)
+    eris.VVVV = np.empty((nkpts,nkpts,nkpts,nvirb,nvirb,nvirb,nvirb), dtype=dtype)
+    fao2mo = cc._scf.with_df.ao2mo
+    for kp, kq, kr in kpts_helper.loop_kkk(nkpts):
+        ks = kconserv[kp,kq,kr]
+        eri_kpt = fao2mo((mo_b[kp],mo_b[kq],mo_b[kr],mo_b[ks]),
+                         (kpts[kp],kpts[kq],kpts[kr],kpts[ks]), compact=False)
+        eri_kpt = eri_kpt.reshape(nmob,nmob,nmob,nmob)
+
+        eris.OOOO[kp,kq,kr] = eri_kpt[:noccb,:noccb,:noccb,:noccb] / nkpts
+        eris.OOOV[kp,kq,kr] = eri_kpt[:noccb,:noccb,:noccb,noccb:] / nkpts
+        eris.OOVV[kp,kq,kr] = eri_kpt[:noccb,:noccb,noccb:,noccb:] / nkpts
+        eris.OVOV[kp,kq,kr] = eri_kpt[:noccb,noccb:,:noccb,noccb:] / nkpts
+        eris.VOOV[kp,kq,kr] = eri_kpt[noccb:,:noccb,:noccb,noccb:] / nkpts
+        eris.VOVV[kp,kq,kr] = eri_kpt[noccb:,:noccb,noccb:,noccb:] / nkpts
+        eris.VVVV[kp,kq,kr] = eri_kpt[noccb:,noccb:,noccb:,noccb:] / nkpts
+
+    eris.ooOO = np.empty((nkpts,nkpts,nkpts,nocca,nocca,noccb,noccb), dtype=dtype)
+    eris.ooOV = np.empty((nkpts,nkpts,nkpts,nocca,nocca,noccb,nvirb), dtype=dtype)
+    eris.ooVV = np.empty((nkpts,nkpts,nkpts,nocca,nocca,nvirb,nvirb), dtype=dtype)
+    eris.ovOV = np.empty((nkpts,nkpts,nkpts,nocca,nvira,noccb,nvirb), dtype=dtype)
+    eris.voOV = np.empty((nkpts,nkpts,nkpts,nvira,nocca,noccb,nvirb), dtype=dtype)
+    eris.voVV = np.empty((nkpts,nkpts,nkpts,nvira,nocca,nvirb,nvirb), dtype=dtype)
+    eris.vvVV = np.empty((nkpts,nkpts,nkpts,nvira,nvira,nvirb,nvirb), dtype=dtype)
+    fao2mo = cc._scf.with_df.ao2mo
+    for kp, kq, kr in kpts_helper.loop_kkk(nkpts):
+        ks = kconserv[kp,kq,kr]
+        eri_kpt = fao2mo((mo_a[kp],mo_a[kq],mo_b[kr],mo_b[ks]),
+                         (kpts[kp],kpts[kq],kpts[kr],kpts[ks]), compact=False)
+        eri_kpt = eri_kpt.reshape(nmoa,nmoa,nmob,nmob)
+
+        eris.ooOO[kp,kq,kr] = eri_kpt[:nocca,:nocca,:noccb,:noccb] / nkpts
+        eris.ooOV[kp,kq,kr] = eri_kpt[:nocca,:nocca,:noccb,noccb:] / nkpts
+        eris.ooVV[kp,kq,kr] = eri_kpt[:nocca,:nocca,noccb:,noccb:] / nkpts
+        eris.ovOV[kp,kq,kr] = eri_kpt[:nocca,nocca:,:noccb,noccb:] / nkpts
+        eris.voOV[kp,kq,kr] = eri_kpt[nocca:,:nocca,:noccb,noccb:] / nkpts
+        eris.voVV[kp,kq,kr] = eri_kpt[nocca:,:nocca,noccb:,noccb:] / nkpts
+        eris.vvVV[kp,kq,kr] = eri_kpt[nocca:,nocca:,noccb:,noccb:] / nkpts
+
+    eris.OOoo = np.empty((nkpts,nkpts,nkpts,noccb,noccb,nocca,nocca), dtype=dtype)
+    eris.OOov = np.empty((nkpts,nkpts,nkpts,noccb,noccb,nocca,nvira), dtype=dtype)
+    eris.OOvv = np.empty((nkpts,nkpts,nkpts,noccb,noccb,nvira,nvira), dtype=dtype)
+    eris.OVov = np.empty((nkpts,nkpts,nkpts,noccb,nvirb,nocca,nvira), dtype=dtype)
+    eris.VOov = np.empty((nkpts,nkpts,nkpts,nvirb,noccb,nocca,nvira), dtype=dtype)
+    eris.VOvv = np.empty((nkpts,nkpts,nkpts,nvirb,noccb,nvira,nvira), dtype=dtype)
+    eris.VVvv = np.empty((nkpts,nkpts,nkpts,nvirb,nvirb,nvira,nvira), dtype=dtype)
+    fao2mo = cc._scf.with_df.ao2mo
+    for kp, kq, kr in kpts_helper.loop_kkk(nkpts):
+        ks = kconserv[kp,kq,kr]
+        eri_kpt = fao2mo((mo_b[kp],mo_b[kq],mo_a[kr],mo_a[ks]),
+                         (kpts[kp],kpts[kq],kpts[kr],kpts[ks]), compact=False)
+        eri_kpt = eri_kpt.reshape(nmob,nmob,nmoa,nmoa)
+
+        eris.OOoo[kp,kq,kr] = eri_kpt[:noccb,:noccb,:nocca,:nocca] / nkpts
+        eris.OOov[kp,kq,kr] = eri_kpt[:noccb,:noccb,:nocca,nocca:] / nkpts
+        eris.OOvv[kp,kq,kr] = eri_kpt[:noccb,:noccb,nocca:,nocca:] / nkpts
+        eris.OVov[kp,kq,kr] = eri_kpt[:noccb,noccb:,:nocca,nocca:] / nkpts
+        eris.VOov[kp,kq,kr] = eri_kpt[noccb:,:noccb,:nocca,nocca:] / nkpts
+        eris.VOvv[kp,kq,kr] = eri_kpt[noccb:,:noccb,nocca:,nocca:] / nkpts
+        eris.VVvv[kp,kq,kr] = eri_kpt[noccb:,noccb:,nocca:,nocca:] / nkpts
 
     log.timer('CCSD integral transformation', *cput0)
     return eris
@@ -855,118 +892,6 @@ def _make_df_eris(cc, mo_coeff=None):
                     _ao2mo.r_e2(Lpq, mo_b, (0, nmob, nmob, nmob+nvirb), tao, ao_loc,
                                 out=eris.LPV[ki,kj])
     return eris
-
-
-def _eri_spin2spatial(chemist_eri_spin, vvvv, eris, cross_ab=False):
-    orbspin = eris._kccsd_eris.orbspin
-    nocc_a, nocc_b = eris.nocc
-    nocc = nocc_a + nocc_b
-    nkpts = len(orbspin)
-    idxoa = [np.where(orbspin[k][:nocc] == 0)[0] for k in range(nkpts)]
-    idxob = [np.where(orbspin[k][:nocc] == 1)[0] for k in range(nkpts)]
-    idxva = [np.where(orbspin[k][nocc:] == 0)[0] for k in range(nkpts)]
-    idxvb = [np.where(orbspin[k][nocc:] == 1)[0] for k in range(nkpts)]
-    nvir_a = len(idxva[0])
-    nvir_b = len(idxvb[0])
-
-    def select_idx(s):
-        if s.lower() == 'o':
-            return idxoa, idxob
-        else:
-            return idxva, idxvb
-
-    if len(vvvv) == 2:
-        idx1a, idx1b = select_idx(vvvv[0])
-        idx2a, idx2b = select_idx(vvvv[1])
-
-        fa = np.zeros((nkpts,len(idx1a[0]),len(idx2a[0])), dtype=np.complex128)
-        fb = np.zeros((nkpts,len(idx1b[0]),len(idx2b[0])), dtype=np.complex128)
-        for k in range(nkpts):
-            fa[k] = chemist_eri_spin[k, idx1a[k][:,None],idx2a[k]]
-            fb[k] = chemist_eri_spin[k, idx1b[k][:,None],idx2b[k]]
-        return fa, fb
-
-    idx1a, idx1b = select_idx(vvvv[0])
-    idx2a, idx2b = select_idx(vvvv[1])
-    idx3a, idx3b = select_idx(vvvv[2])
-    idx4a, idx4b = select_idx(vvvv[3])
-
-    eri_aaaa = np.zeros((nkpts,nkpts,nkpts,len(idx1a[0]),len(idx2a[0]),len(idx3a[0]),len(idx4a[0])), dtype=np.complex128)
-    eri_aabb = np.zeros((nkpts,nkpts,nkpts,len(idx1a[0]),len(idx2a[0]),len(idx3b[0]),len(idx4b[0])), dtype=np.complex128)
-    eri_bbaa = np.zeros((nkpts,nkpts,nkpts,len(idx1b[0]),len(idx2b[0]),len(idx3a[0]),len(idx4a[0])), dtype=np.complex128)
-    eri_bbbb = np.zeros((nkpts,nkpts,nkpts,len(idx1b[0]),len(idx2b[0]),len(idx3b[0]),len(idx4b[0])), dtype=np.complex128)
-    if cross_ab:
-        eri_abba = np.zeros((nkpts,nkpts,nkpts,len(idx1a[0]),len(idx2b[0]),len(idx3b[0]),len(idx4a[0])), dtype=np.complex128)
-        eri_baab = np.zeros((nkpts,nkpts,nkpts,len(idx1b[0]),len(idx2a[0]),len(idx3a[0]),len(idx4b[0])), dtype=np.complex128)
-    kconserv = kpts_helper.get_kconserv(eris.cell, eris.kpts)
-    for ki, kj, kk in kpts_helper.loop_kkk(nkpts):
-        kl = kconserv[ki, kj, kk]
-        eri_aaaa[ki,kj,kk] = chemist_eri_spin[ki,kj,kk, idx1a[ki][:,None,None,None],idx2a[kj][:,None,None],idx3a[kk][:,None],idx4a[kl]]
-        eri_aabb[ki,kj,kk] = chemist_eri_spin[ki,kj,kk, idx1a[ki][:,None,None,None],idx2a[kj][:,None,None],idx3b[kk][:,None],idx4b[kl]]
-        eri_bbaa[ki,kj,kk] = chemist_eri_spin[ki,kj,kk, idx1b[ki][:,None,None,None],idx2b[kj][:,None,None],idx3a[kk][:,None],idx4a[kl]]
-        eri_bbbb[ki,kj,kk] = chemist_eri_spin[ki,kj,kk, idx1b[ki][:,None,None,None],idx2b[kj][:,None,None],idx3b[kk][:,None],idx4b[kl]]
-        if cross_ab:
-            eri_abba[ki,kj,kk] = chemist_eri_spin[ki,kj,kk, idx1a[ki][:,None,None,None],idx2b[kj][:,None,None],idx3b[kk][:,None],idx4a[kl]]
-            eri_baab[ki,kj,kk] = chemist_eri_spin[ki,kj,kk, idx1b[ki][:,None,None,None],idx2a[kj][:,None,None],idx3a[kk][:,None],idx4b[kl]]
-    if cross_ab:
-        return eri_aaaa, eri_aabb, eri_bbaa, eri_bbbb, eri_abba, eri_baab
-    else:
-        return eri_aaaa, eri_aabb, eri_bbaa, eri_bbbb
-
-def _eri_spatial2spin(eri_aa_ab_ba_bb, vvvv, eris, cross_ab=False):
-    orbspin = eris._kccsd_eris.orbspin
-    nocc_a, nocc_b = eris.nocc
-    nocc = nocc_a + nocc_b
-    nkpts = len(orbspin)
-    idxoa = [np.where(orbspin[k][:nocc] == 0)[0] for k in range(nkpts)]
-    idxob = [np.where(orbspin[k][:nocc] == 1)[0] for k in range(nkpts)]
-    idxva = [np.where(orbspin[k][nocc:] == 0)[0] for k in range(nkpts)]
-    idxvb = [np.where(orbspin[k][nocc:] == 1)[0] for k in range(nkpts)]
-    nvir_a = len(idxva[0])
-    nvir_b = len(idxvb[0])
-
-    def select_idx(s):
-        if s.lower() == 'o':
-            return idxoa, idxob
-        else:
-            return idxva, idxvb
-
-    if len(vvvv) == 2:
-        idx1a, idx1b = select_idx(vvvv[0])
-        idx2a, idx2b = select_idx(vvvv[1])
-
-        fa, fb = eri_aa_ab_ba_bb
-        f = np.zeros((nkpts, len(idx1a[0])+len(idx1b[0]),
-                      len(idx2a[0])+len(idx2b[0])), dtype=np.complex128)
-        for k in range(nkpts):
-            f[k, idx1a[k][:,None],idx2a[k]] = fa[k]
-            f[k, idx1b[k][:,None],idx2b[k]] = fb[k]
-        return f
-
-    idx1a, idx1b = select_idx(vvvv[0])
-    idx2a, idx2b = select_idx(vvvv[1])
-    idx3a, idx3b = select_idx(vvvv[2])
-    idx4a, idx4b = select_idx(vvvv[3])
-
-    if cross_ab:
-        eri_aaaa, eri_aabb, eri_bbaa, eri_bbbb, eri_abba, eri_baab = eri_aa_ab_ba_bb
-    else:
-        eri_aaaa, eri_aabb, eri_bbaa, eri_bbbb = eri_aa_ab_ba_bb
-    eri = np.zeros((nkpts,nkpts,nkpts, len(idx1a[0])+len(idx1b[0]),
-                    len(idx2a[0])+len(idx2b[0]),
-                    len(idx3a[0])+len(idx3b[0]),
-                    len(idx4a[0])+len(idx4b[0])), dtype=np.complex128)
-    kconserv = kpts_helper.get_kconserv(eris.cell, eris.kpts)
-    for ki, kj, kk in kpts_helper.loop_kkk(nkpts):
-        kl = kconserv[ki, kj, kk]
-        eri[ki,kj,kk, idx1a[ki][:,None,None,None],idx2a[kj][:,None,None],idx3a[kk][:,None],idx4a[kl]] = eri_aaaa[ki,kj,kk]
-        eri[ki,kj,kk, idx1a[ki][:,None,None,None],idx2a[kj][:,None,None],idx3b[kk][:,None],idx4b[kl]] = eri_aabb[ki,kj,kk]
-        eri[ki,kj,kk, idx1b[ki][:,None,None,None],idx2b[kj][:,None,None],idx3a[kk][:,None],idx4a[kl]] = eri_bbaa[ki,kj,kk]
-        eri[ki,kj,kk, idx1b[ki][:,None,None,None],idx2b[kj][:,None,None],idx3b[kk][:,None],idx4b[kl]] = eri_bbbb[ki,kj,kk]
-        if cross_ab:
-            eri[ki,kj,kk, idx1a[ki][:,None,None,None],idx2b[kj][:,None,None],idx3b[kk][:,None],idx4a[kl]] = eri_abba[ki,kj,kk]
-            eri[ki,kj,kk, idx1b[ki][:,None,None,None],idx2a[kj][:,None,None],idx3a[kk][:,None],idx4b[kl]] = eri_baab[ki,kj,kk]
-    return eri
 
 
 if __name__ == '__main__':
@@ -1091,10 +1016,6 @@ if __name__ == '__main__':
                abs(lib.finger(eris.ooOV) - (-0.052655392703214066+0.69533309442418556j) )<1e-12,
                abs(lib.finger(eris.OOov) - (-0.2111361247200903+0.85087916975274647j)   )<1e-12,
                abs(lib.finger(eris.OOOV) - (-0.36995992208047412-0.18887278030885621j)  )<1e-12,
-               abs(lib.finger(eris.ovoo) - (0.064679657406340865-0.26135121262538796j)  )<1e-12,
-               abs(lib.finger(eris.ovOO) - (-0.083726296343498027-0.11161884011304812j) )<1e-12,
-               abs(lib.finger(eris.OVoo) - (0.34544415955929914-0.21060155815254916j)   )<1e-12,
-               abs(lib.finger(eris.OVOO) - (0.26454243402310207+0.53184639438115811j)   )<1e-12,
                abs(lib.finger(eris.oovv) - (0.21107397525051516+0.0048714991438174871j) )<1e-12,
                abs(lib.finger(eris.ooVV) - (-0.076411225687065987+0.11080438166425896j) )<1e-12,
                abs(lib.finger(eris.OOvv) - (-0.17880337626095003-0.24174716216954206j)  )<1e-12,
@@ -1111,14 +1032,6 @@ if __name__ == '__main__':
                abs(lib.finger(eris.voVV) - (-0.28989635223866056+0.9644368822688475j)   )<1e-12,
                abs(lib.finger(eris.VOvv) - (-0.32428269235420271+0.0029847254383674748j))<1e-12,
                abs(lib.finger(eris.VOVV) - (0.45031779746222456-0.36858577475752041j)   )<1e-12,
-               abs(lib.finger(eris.vvov) - (0.44946238585745646+0.42400525363842456j)   )<1e-12,
-               abs(lib.finger(eris.vvOV) - (-0.74190544626233623-0.097576600712789563j) )<1e-12,
-               abs(lib.finger(eris.VVov) - (-0.15342277525821491+0.073588105583647645j) )<1e-12,
-               abs(lib.finger(eris.VVOV) - (0.098181295079146552-0.22723769359562551j)  )<1e-12,
-               abs(lib.finger(eris.ovvv) - (-0.11931758021020517-0.042960455989790675j) )<1e-12,
-               abs(lib.finger(eris.ovVV) - (-0.41387487464432227-0.18814695646204407j)  )<1e-12,
-               abs(lib.finger(eris.OVvv) - (0.28537407241226509+0.11022174930209988j)   )<1e-12,
-               abs(lib.finger(eris.OVVV) - (-0.0077182360878450401-0.18823427386325062j))<1e-12,
                abs(lib.finger(eris.vvvv) - (-0.080512851258903173-0.2868384266725581j)  )<1e-12,
                abs(lib.finger(eris.vvVV) - (-0.5137063762484736+1.1036785801263898j)    )<1e-12,
                #abs(lib.finger(eris.VVvv) - (0.16468487082491939+0.25730725586992997j)   )<1e-12,
