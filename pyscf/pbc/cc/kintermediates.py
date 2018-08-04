@@ -305,16 +305,31 @@ def Wovoo(cc,t1,t2,eris,kconserv):
 
 def Wvvvo(cc,t1,t2,eris,kconserv,WWvvvv=None):
     nkpts, nocc, nvir = t1.shape
-    #tmp1 = einsum('mbef,miaf->abei',eris.ovvv,t2)
-    #tmp2 = ( einsum('ma,mbei->abei',t1,eris_ovvo)
-    #        - einsum('ma,nibf,mnef->abei',t1,t2,eris.oovv) )
-
     FFov = Fov(cc,t1,t2,eris,kconserv)
     if WWvvvv is None:
         WWvvvv = Wvvvv(cc,t1,t2,eris,kconserv)
+
+    eris_ovvo = numpy.zeros(shape=(nkpts,nkpts,nkpts,nocc,nvir,nvir,nocc),dtype=t2.dtype)
+    for km in range(nkpts):
+        for kb in range(nkpts):
+            for ke in range(nkpts):
+                kj = kconserv[km,ke,kb]
+                eris_ovvo[km,kb,ke] = -eris.ovov[km,kb,kj].transpose(0,1,3,2)
+
+    tmp1 = numpy.zeros((nkpts, nkpts, nkpts, nvir, nvir, nvir, nocc),dtype=t2.dtype)
+    tmp2 = numpy.zeros((nkpts, nkpts, nkpts, nvir, nvir, nvir, nocc),dtype=t2.dtype)
+    for ka, kb, ke in kpts_helper.loop_kkk(nkpts):
+        ki = kconserv[ka,ke,kb]
+        tmp2[ka,kb,ke] += einsum('ma,mbei->abei',t1[ka],eris_ovvo[ka,kb,ke])
+        for kn in range(nkpts):
+            tmp2[ka,kb,ke] -= einsum('ma,nibf,mnef->abei',t1[ka],t2[kn,ki,kb],eris.oovv[km,kn,ke])
+        for km in range(nkpts):
+            tmp1[ka,kb,ke] += einsum('mbef,miaf->abei',eris.ovvv[km,kb,ke],t2[km,ki,ka])
     tau = make_tau(cc,t2,t1,t1,kconserv)
 
     Wabei = numpy.empty((nkpts, nkpts, nkpts, nvir, nvir, nvir, nocc), dtype=eris.ovvv.dtype)
+    Wabei -= tmp1 - tmp1.transpose(1,0,2,4,3,5,6)
+    Wabei -= tmp2 - tmp2.transpose(1,0,2,4,3,5,6)
     for ka, kb, ke in kpts_helper.loop_kkk(nkpts):
         ki = kconserv[ka, ke, kb]
         Wabei[ka, kb, ke] = eris.ovvv[ki, ke, kb].conj().transpose(3, 2, 1, 0)
