@@ -196,13 +196,8 @@ def ipccsd_matvec(eom, vector, kshift, imds=None, diag=None):
             Hr2[ki, kj] -= lib.einsum('maej,mie->ija', imds.Wovvo[km, ka, ke],
                                       r2[km, ki])
 
-    tmp = np.zeros(nvir, dtype=Hr2.dtype)
-    for km, kn in itertools.product(range(nkpts), repeat=2):
-        tmp = lib.einsum('mnef,mnf->e', imds.Woovv[km, kn, kshift], r2[km, kn])
-
-    for ki, kj in itertools.product(range(nkpts), repeat=2):
-        ka = kconserv[ki, kshift, kj]
-        Hr2[ki, kj] += 0.5*lib.einsum('e,ijae->ija', tmp, imds.t2[ki, kj, ka])
+    tmp = lib.einsum('xymnef,xymnf->e', imds.Woovv[:, :, kshift], r2[:, :])  # contract_{km, kn}
+    Hr2[:, :] += 0.5 * lib.einsum('e,xyjiea->xyija', tmp, imds.t2[:, :, kshift])  # sum_{ki, kj}
 
     vector = amplitudes_to_vector_ip(Hr1, Hr2)
     return vector
@@ -275,7 +270,7 @@ class EOMIP(eom_rccsd.EOM):
 
     def get_init_guess(self, nroots=1, koopmans=True, diag=None):
         size = self.vector_size()
-        dtype = getattr(diag, 'dtype', np.double)
+        dtype = getattr(diag, 'dtype', np.complex)
         nroots = min(nroots, size)
         guess = []
         if koopmans:
@@ -361,8 +356,78 @@ def eaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     print np.linalg.norm(r1), np.linalg.norm(r2)
 
     Hr1 = np.einsum('ac,c->a', imds.Fvv[kshift], r1)
+    for kl in range(nkpts):
+        Hr1 += np.einsum('ld,lad->a', imds.Fov[kshift], r2[kl, kshift])
+        for kc in range(nkpts):
+            Hr1 += 0.5*np.einsum('alcd,lcd->a', imds.Wvovv[kshift,kl,kc], r2[kl,kc])
 
     Hr2 = np.zeros_like(r2)
+    for kj in range(nkpts):
+        for ka in range(nkpts):
+            kb = kconserv[kshift,ka,kj]
+            Hr2[kj,ka] += np.einsum('abcj,c->jab', imds.Wvvvo[ka,kb,kshift], r1)
+            Hr2[kj,ka] += lib.einsum('ac,jcb->jab', imds.Fvv[ka], r2[kj,ka])
+            Hr2[kj,ka] -= lib.einsum('bc,jca->jab', imds.Fvv[kb], r2[kj,kb])
+
+    for kj, ka in itertools.product(range(nkpts), repeat=2):
+        kb = kconserv[kshift, ka, kj]
+        Hr2[kj, ka] -= lib.einsum('lj,lab->jab', imds.Foo[kj], r2[kj, ka])
+
+        for kd in range(nkpts):
+            kl = kconserv[kj, kb, kd]
+            Hr2[kj, ka] += lib.einsum('lbdj,lad->jab', imds.Wovvo[kl, kb, kd], r2[kl, ka])
+
+            # P(ab)
+            kl = kconserv[kj, ka, kd]
+            Hr2[kj, ka] -= lib.einsum('ladj,lbd->jab', imds.Wovvo[kl, ka, kd], r2[kl, kb])
+
+            kc = kconserv[ka, kd, kb]
+            Hr2[kj, ka] += 0.5 * lib.einsum('abcd,jcd->jab', imds.Wvvvv[ka, kb, kc], r2[kj, kc])
+
+    tmp = lib.einsum('xyklcd,xylcd->k', imds.Woovv[kshift, :, :], r2[:, :])  # contract_{kl, kc}
+    Hr2[:, :] -= 0.5*lib.einsum('k,xykjab->xyjab', tmp, imds.t2[kshift, :, :])  # sum_{kj, ka]
+
+    vector = amplitudes_to_vector_ea(Hr1, Hr2)
+    return vector
+
+def eaccsd_diag(eom, kshift, imds=None):
+    #TODO: find a way to check this
+    if imds is None: imds = eom.make_imds()
+    t1, t2 = imds.t1, imds.t2
+    nkpts, nocc, nvir = t1.shape
+    kconserv = imds.kconserv
+
+    Hr1 = -np.diag(imds.Foo[kshift])
+
+    Hr2 = np.ones((nkpts,nkpts,nocc,nocc,nvir), dtype=t1.dtype)
+    #if eom.partition == 'mp':
+    #    foo = eom.eris.fock[:,:nocc,:nocc]
+    #    fvv = eom.eris.fock[:,nocc:,nocc:]
+    #    for ki in range(nkpts):
+    #        for kj in range(nkpts):
+    #            kb = kconserv[ki,kshift,kj]
+    #            Hr2[ki,kj]  = fvv[ka].diagonal()
+    #            Hr2[ki,kj] -= foo[ki].diagonal()[:,None,None]
+    #            Hr2[ki,kj] -= foo[kj].diagonal()[None,:,None]
+    #else:
+    #    idx = np.arange(nocc)
+    #    for ki in range(nkpts):
+    #        for kj in range(nkpts):
+    #            ka = kconserv[ki,kshift,kj]
+    #            Hr2[ki,kj]  = imds.Fvv[ka].diagonal()
+    #            Hr2[ki,kj] -= imds.Foo[ki].diagonal()[:,None,None]
+    #            Hr2[ki,kj] -= imds.Foo[kj].diagonal()[None,:,None]
+
+    #            if ki == kconserv[ki,kj,kj]:
+    #                Hr2[ki,kj] += 0.5 * np.einsum('ijij->ij', imds.Woooo[ki, kj, ki])[:,:,None]
+
+    #            Wovvo = np.einsum('iaai->ia', imds.Wovvo[ki,ka,ka])
+    #            Hr2[ki,kj] += Wovvo[:, None, :]
+    #            if ki == kj:  # and i == j
+    #                Hr2[ki,ki,idx,idx] -= Wovvo
+
+    #            Hr2[ki, kj] += 0.5 * lib.einsum('ijea,ijae->ija', imds.Woovv[ki, kj, kshift],
+    #                                            imds.t2[ki, kj, ka])
 
     vector = amplitudes_to_vector_ea(Hr1, Hr2)
     return vector
@@ -375,7 +440,26 @@ class EOMEA(eom_rccsd.EOM):
 
     kernel = eaccsd
     eaccsd = eaccsd
-    #get_diag = eaccsd_diag
+    get_diag = eaccsd_diag
+    matvec = eaccsd_matvec
+
+    def get_init_guess(self, nroots=1, koopmans=True, diag=None):
+        size = self.vector_size()
+        dtype = getattr(diag, 'dtype', np.complex)
+        nroots = min(nroots, size)
+        guess = []
+        if koopmans:
+            for n in range(nroots):
+                g = np.zeros(size, dtype=dtype)
+                g[n] = 1.0
+                guess.append(g)
+        else:
+            idx = diag.argsort()[:nroots]
+            for i in idx:
+                g = np.zeros(size, dtype=dtype)
+                g[i] = 1.0
+                guess.append(g)
+        return guess
 
     @property
     def nkpts(self):
@@ -483,7 +567,7 @@ class _IMDS:
         # 3 or 4 virtuals
         self.Wvovv = imd.Wvovv(self._cc, t1, t2, eris, kconserv)
         self.Wvvvv = imd.Wvvvv(self._cc, t1, t2, eris, kconserv)
-        self.Wvvvo = imd.Wvvvo(self._cc, t1, t2, eris, self.Wvvvv, kconserv)
+        self.Wvvvo = imd.Wvvvo(self._cc, t1, t2, eris, kconserv)
 
         self.made_ea_imds = True
         logger.timer_debug1(self, 'EOM-CCSD EA intermediates', *cput0)
@@ -544,9 +628,10 @@ if __name__ == '__main__':
     ecc, t1, t2 = mycc.kernel()
     print(ecc - -0.155298393321855)
 
-    eom = EOMIP(mycc)
-    e, v = eom.ipccsd(nroots=3, kptlist=[0])
-    print(e[0] + 0.8268853970451141)
+    #eom = EOMIP(mycc)
+    #e, v = eom.ipccsd(nroots=3, kptlist=[0])
+    #print(e[0] + 0.8268853970451141)
 
-    #e, v = eom.eaccsd(nroots=3, kptlist=[0])
-    #print(e[0] - 1.073716355462168)
+    eom = EOMEA(mycc)
+    e, v = eom.eaccsd(nroots=3, kptlist=[0])
+    print(e[0] - 1.073716355462168)

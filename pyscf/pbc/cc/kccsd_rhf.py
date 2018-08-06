@@ -859,10 +859,10 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         # Eq. (31)
         # 2p1h-1p block
         Hr2 = np.zeros(r2.shape, dtype=t1.dtype)
-        for kj in range(nkpts):
-            for ka in range(nkpts):
-                kb = kconserv[kshift, ka, kj]
-                Hr2[kj, ka] += einsum('abcj,c->jab', imds.Wvvvo[ka, kb, kshift], r1)
+        #for kj in range(nkpts):
+        #    for ka in range(nkpts):
+        #        kb = kconserv[kshift,ka,kj]
+        #        Hr2[kj,ka] += einsum('abcj,c->jab',imds.Wvvvo[ka,kb,kshift],r1)
         # 2p1h-2p1h block
         if self.ea_partition == 'mp':
             nkpts, nocc, nvir = self.t1.shape
