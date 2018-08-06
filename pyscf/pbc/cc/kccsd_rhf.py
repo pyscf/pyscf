@@ -824,7 +824,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                 evals_k, evecs_k = [evals_k], [evecs_k]
 
             for n, en, vn in zip(range(nroots), evals_k, evecs_k):
-                r1, r2 = self.vector_to_amplitudes_ip(vn)
+                r1, r2 = self.vector_to_amplitudes_ea(vn)
                 qp_weight = np.linalg.norm(r1)**2
                 logger.info(self, 'EOM root %d E = %.16g  qpwt = %0.6g',
                             n, en, qp_weight)
