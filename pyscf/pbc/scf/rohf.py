@@ -24,6 +24,7 @@ See Also:
 '''
 
 import numpy as np
+from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import rohf as mol_rohf
 from pyscf.pbc.scf import hf as pbchf
@@ -107,10 +108,10 @@ class ROHF(mol_rohf.ROHF, pbchf.RHF):
         dm = mol_rohf.ROHF.get_init_guess(self, cell, key)
         if cell.dimension < 3:
             if isinstance(dm, np.ndarray) and dm.ndim == 2:
-                ne = np.einsum('ij,ji', dm, self.get_ovlp(cell))
+                ne = np.einsum('ij,ji->', dm, self.get_ovlp(cell))
             else:
-                ne = np.einsum('xij,ji', dm, self.get_ovlp(cell))
-            if abs(ne - cell.nelectron).sum() > 1e-7:
+                ne = np.einsum('xij,ji->', dm, self.get_ovlp(cell))
+            if abs(ne - cell.nelectron).max() > 1e-7:
                 logger.warn(self, 'Big error detected in the electron number '
                             'of initial guess density matrix (Ne/cell = %g)!\n'
                             '  This can cause huge error in Fock matrix and '

@@ -80,8 +80,11 @@ def get_pp_loc_part2(cell, kpts=None):
             buf += numpy.einsum('...i->...', v)
 
     if isinstance(buf, int):
-        lib.logger.warn(cell, 'cell.pseudo were specified but its elements %s '
-                        'were not found in the system.', cell._pseudo.keys())
+        if any(cell.atom_symbol(ia) in cell._pseudo for ia in range(cell.natm)):
+            pass
+        else:
+            lib.logger.warn(cell, 'cell.pseudo was specified but its elements %s '
+                             'were not found in the system.', cell._pseudo.keys())
         vpploc = [0] * nkpts
     else:
         buf = buf.reshape(nkpts,-1)
