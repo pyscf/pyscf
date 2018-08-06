@@ -19,8 +19,6 @@ from pyscf import lib
 def spatial2spin(tx, orbspin=None):
     '''Convert T1/T2 of spatial orbital representation to T1/T2 of
     spin-orbital representation
-
-    call orbspin_of_sorted_mo_energy to get orbspin
     '''
     if isinstance(tx, numpy.ndarray) and tx.ndim == 2:
         # RCCSD t1 amplitudes
@@ -81,7 +79,6 @@ def spatial2spin(tx, orbspin=None):
 spatial2spinorb = spatial2spin
 
 def spin2spatial(tx, orbspin):
-    '''call orbspin_of_sorted_mo_energy to get orbspin'''
     if tx.ndim == 2:  # t1
         nocc, nvir = tx.shape
     else:
