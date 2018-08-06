@@ -25,6 +25,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.pbc import scf
 from pyscf.cc import gccsd
+from pyscf.cc import ccsd
 from pyscf.pbc.mp.kmp2 import get_frozen_mask, get_nmo, get_nocc
 from pyscf.pbc.cc import kintermediates as imdk
 from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM
@@ -40,61 +41,6 @@ DEBUG = False
 
 #einsum = numpy.einsum
 einsum = lib.einsum
-
-
-def kernel(cc, eris, t1=None, t2=None, max_cycle=50, tol=1e-8, tolnormt=1e-6,
-           max_memory=2000, verbose=logger.INFO):
-    """Exactly the same as pyscf.cc.ccsd.kernel, which calls a
-    *local* energy() function."""
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(cc.stdout, verbose)
-
-    assert (isinstance(eris, gccsd._PhysicistsERIs))
-    if t1 is None and t2 is None:
-        t1, t2 = cc.init_amps(eris)[1:]
-    elif t1 is None:
-        nocc = cc.nocc
-        nvir = cc.nmo - nocc
-        nkpts = cc.nkpts
-        t1 = numpy.zeros((nkpts, nocc, nvir), numpy.complex128)
-    elif t2 is None:
-        t2 = cc.init_amps(eris)[2]
-
-    cput1 = cput0 = (time.clock(), time.time())
-    nkpts, nocc, nvir = t1.shape
-    eold = 0
-    eccsd = 0
-
-    if isinstance(cc.diis, lib.diis.DIIS):
-        adiis = cc.diis
-    elif cc.diis:
-        adiis = lib.diis.DIIS(cc, cc.diis_file)
-        adiis.space = cc.diis_space
-    else:
-        adiis = None
-
-    conv = False
-    for istep in range(max_cycle):
-        t1new, t2new = cc.update_amps(t1, t2, eris, max_memory)
-        normt = numpy.linalg.norm(t1new - t1) + numpy.linalg.norm(t2new - t2)
-        if cc.iterative_damping < 1.0:
-            alpha = cc.iterative_damping
-            t1, t2 = (1-alpha)*t1 + alpha*t1new, (1-alpha)*t2 + alpha*t2new
-        else:
-            t1, t2 = t1new, t2new
-        t1new = t2new = None
-
-        t1, t2 = cc.run_diis(t1, t2, istep, normt, eccsd - eold, adiis)
-        eold, eccsd = eccsd, energy(cc, t1, t2, eris)
-        log.info('istep = %d  E(CCSD) = %.15g  dE = %.9g  norm(t1,t2) = %.6g', istep, eccsd, eccsd - eold, normt)
-        cput1 = log.timer('CCSD iter', *cput1)
-        if abs(eccsd - eold) < tol and normt < tolnormt:
-            conv = True
-            break
-    log.timer('CCSD', *cput0)
-    return conv, eccsd, t1, t2
 
 
 def energy(cc, t1, t2, eris):
@@ -118,7 +64,7 @@ def energy(cc, t1, t2, eris):
     return e.real
 
 
-def update_amps(cc, t1, t2, eris, max_memory=2000):
+def update_amps(cc, t1, t2, eris):
     time0 = time.clock(), time.time()
     log = logger.Logger(cc.stdout, cc.verbose)
     nkpts, nocc, nvir = t1.shape
@@ -128,24 +74,24 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     foo = fock[:, :nocc, :nocc].copy()
     fvv = fock[:, nocc:, nocc:].copy()
 
-    tau = imdk.make_tau(cc, t2, t1, t1)
+    # Get the momentum conservation array
+    # Note: chemist's notation for momentum conserving t2(ki,kj,ka,kb), even though
+    # integrals are in physics notation
+    kconserv = kpts_helper.get_kconserv(cc._scf.cell, cc.kpts)
 
-    Fvv = imdk.cc_Fvv(cc, t1, t2, eris)
-    Foo = imdk.cc_Foo(cc, t1, t2, eris)
-    Fov = imdk.cc_Fov(cc, t1, t2, eris)
-    Woooo = imdk.cc_Woooo(cc, t1, t2, eris)
-    Wvvvv = imdk.cc_Wvvvv(cc, t1, t2, eris)
-    Wovvo = imdk.cc_Wovvo(cc, t1, t2, eris)
+    tau = imdk.make_tau(cc, t2, t1, t1, kconserv)
+
+    Fvv = imdk.cc_Fvv(cc, t1, t2, eris, kconserv)
+    Foo = imdk.cc_Foo(cc, t1, t2, eris, kconserv)
+    Fov = imdk.cc_Fov(cc, t1, t2, eris, kconserv)
+    Woooo = imdk.cc_Woooo(cc, t1, t2, eris, kconserv)
+    Wvvvv = imdk.cc_Wvvvv(cc, t1, t2, eris, kconserv)
+    Wovvo = imdk.cc_Wovvo(cc, t1, t2, eris, kconserv)
 
     # Move energy terms to the other side
     for k in range(nkpts):
         Fvv[k] -= numpy.diag(numpy.diag(fvv[k]))
         Foo[k] -= numpy.diag(numpy.diag(foo[k]))
-
-    # Get the momentum conservation array
-    # Note: chemist's notation for momentum conserving t2(ki,kj,ka,kb), even though
-    # integrals are in physics notation
-    kconserv = kpts_helper.get_kconserv(cc._scf.cell, cc.kpts)
 
     eris_ovvo = numpy.zeros(shape=(nkpts, nkpts, nkpts, nocc, nvir, nvir, nocc), dtype=t2.dtype)
     eris_oovo = numpy.zeros(shape=(nkpts, nkpts, nkpts, nocc, nocc, nvir, nocc), dtype=t2.dtype)
@@ -268,6 +214,110 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
 
     return t1new, t2new
 
+def spatial2spin(tx, orbspin, kconserv):
+    '''Convert T1/T2 of spatial orbital representation to T1/T2 of
+    spin-orbital representation
+    '''
+    if isinstance(tx, numpy.ndarray) and tx.ndim == 3:
+        # KRCCSD t1 amplitudes
+        return spatial2spin((tx,tx), orbspin, kconserv)
+    elif isinstance(tx, numpy.ndarray) and tx.ndim == 7:
+        # KRCCSD t2 amplitudes
+        t2aa = tx - tx.transpose(0,1,2,4,3,5,6)
+        return spatial2spin((t2aa,tx,t2aa), orbspin, kconserv)
+    elif len(tx) == 2:  # KUCCSD t1
+        t1a, t1b = tx
+        nocc_a, nvir_a = t1a.shape[1:]
+        nocc_b, nvir_b = t1b.shape[1:]
+    else:  # KUCCSD t2
+        t2aa, t2ab, t2bb = tx
+        nocc_a, nocc_b, nvir_a, nvir_b = t2ab.shape[3:]
+
+    nkpts = len(orbspin)
+    nocc = nocc_a + nocc_b
+    nvir = nvir_a + nvir_b
+    idxoa = [numpy.where(orbspin[k][:nocc] == 0)[0] for k in range(nkpts)]
+    idxob = [numpy.where(orbspin[k][:nocc] == 1)[0] for k in range(nkpts)]
+    idxva = [numpy.where(orbspin[k][nocc:] == 0)[0] for k in range(nkpts)]
+    idxvb = [numpy.where(orbspin[k][nocc:] == 1)[0] for k in range(nkpts)]
+
+    if len(tx) == 2:  # t1
+        t1 = numpy.zeros((nkpts,nocc,nvir), dtype=t1a.dtype)
+        for k in range(nkpts):
+            lib.takebak_2d(t1[k], t1a[k], idxoa[k], idxva[k])
+            lib.takebak_2d(t1[k], t1b[k], idxob[k], idxvb[k])
+        t1 = lib.tag_array(t1, orbspin=orbspin)
+        return t1
+
+    else:
+        t2 = numpy.zeros((nkpts,nkpts,nkpts,nocc**2,nvir**2), dtype=t2aa.dtype)
+        for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
+            kb = kconserv[ki,ka,kj]
+            idxoaa = idxoa[ki][:,None] * nocc + idxoa[kj]
+            idxoab = idxoa[ki][:,None] * nocc + idxob[kj]
+            idxoba = idxob[kj][:,None] * nocc + idxoa[ki]
+            idxobb = idxob[ki][:,None] * nocc + idxob[kj]
+            idxvaa = idxva[ka][:,None] * nvir + idxva[kb]
+            idxvab = idxva[ka][:,None] * nvir + idxvb[kb]
+            idxvba = idxvb[kb][:,None] * nvir + idxva[ka]
+            idxvbb = idxvb[ka][:,None] * nvir + idxvb[kb]
+            tmp2aa = t2aa[ki,kj,ka].reshape(nocc_a*nocc_a,nvir_a*nvir_a)
+            tmp2bb = t2bb[ki,kj,ka].reshape(nocc_b*nocc_b,nvir_b*nvir_b)
+            tmp2ab = t2ab[ki,kj,ka].reshape(nocc_a*nocc_b,nvir_a*nvir_b)
+            lib.takebak_2d(t2[ki,kj,ka], tmp2aa, idxoaa.ravel()  , idxvaa.ravel()  )
+            lib.takebak_2d(t2[ki,kj,ka], tmp2bb, idxobb.ravel()  , idxvbb.ravel()  )
+            lib.takebak_2d(t2[ki,kj,ka], tmp2ab, idxoab.ravel()  , idxvab.ravel()  )
+            lib.takebak_2d(t2[kj,ki,kb], tmp2ab, idxoba.T.ravel(), idxvba.T.ravel())
+
+            abba = -tmp2ab
+            lib.takebak_2d(t2[ki,kj,kb], abba, idxoab.ravel()  , idxvba.T.ravel())
+            lib.takebak_2d(t2[kj,ki,ka], abba, idxoba.T.ravel(), idxvab.ravel()  )
+        t2 = t2.reshape(nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir)
+        t2 = lib.tag_array(t2, orbspin=orbspin)
+        return t2
+
+def spin2spatial(tx, orbspin, kconserv):
+    if tx.ndim == 3:  # t1
+        nocc, nvir = tx.shape[1:]
+    else:
+        nocc, nvir = tx.shape[4:6]
+    nkpts = len(tx)
+
+    idxoa = [numpy.where(orbspin[k][:nocc] == 0)[0] for k in range(nkpts)]
+    idxob = [numpy.where(orbspin[k][:nocc] == 1)[0] for k in range(nkpts)]
+    idxva = [numpy.where(orbspin[k][nocc:] == 0)[0] for k in range(nkpts)]
+    idxvb = [numpy.where(orbspin[k][nocc:] == 1)[0] for k in range(nkpts)]
+    nocc_a = len(idxoa[0])
+    nocc_b = len(idxob[0])
+    nvir_a = len(idxva[0])
+    nvir_b = len(idxvb[0])
+
+    if tx.ndim == 3:  # t1
+        t1a = numpy.zeros((nkpts,nocc_a,nvir_a), dtype=tx.dtype)
+        t1b = numpy.zeros((nkpts,nocc_b,nvir_b), dtype=tx.dtype)
+        for k in range(nkpts):
+            lib.take_2d(tx[k], idxoa[k], idxva[k], out=t1a[k])
+            lib.take_2d(tx[k], idxob[k], idxvb[k], out=t1b[k])
+        return t1a, t1b
+
+    else:
+        t2aa = numpy.zeros((nkpts,nkpts,nkpts,nocc_a,nocc_a,nvir_a,nvir_a), dtype=tx.dtype)
+        t2ab = numpy.zeros((nkpts,nkpts,nkpts,nocc_a,nocc_b,nvir_a,nvir_b), dtype=tx.dtype)
+        t2bb = numpy.zeros((nkpts,nkpts,nkpts,nocc_b,nocc_b,nvir_b,nvir_b), dtype=tx.dtype)
+        t2 = tx.reshape(nkpts,nkpts,nkpts,nocc**2,nvir**2)
+        for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
+            kb = kconserv[ki,ka,kj]
+            idxoaa = idxoa[ki][:,None] * nocc + idxoa[kj]
+            idxoab = idxoa[ki][:,None] * nocc + idxob[kj]
+            idxobb = idxob[ki][:,None] * nocc + idxob[kj]
+            idxvaa = idxva[ka][:,None] * nvir + idxva[kb]
+            idxvab = idxva[ka][:,None] * nvir + idxvb[kb]
+            idxvbb = idxvb[ka][:,None] * nvir + idxvb[kb]
+            lib.take_2d(t2[ki,kj,ka], idxoaa.ravel(), idxvaa.ravel(), out=t2aa[ki,kj,ka])
+            lib.take_2d(t2[ki,kj,ka], idxobb.ravel(), idxvbb.ravel(), out=t2bb[ki,kj,ka])
+            lib.take_2d(t2[ki,kj,ka], idxoab.ravel(), idxvab.ravel(), out=t2ab[ki,kj,ka])
+        return t2aa, t2ab, t2bb
+
 
 class GCCSD(gccsd.GCCSD):
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
@@ -327,21 +377,15 @@ class GCCSD(gccsd.GCCSD):
 
     def ccsd(self, t1=None, t2=None, eris=None, **kwargs):
         if eris is None: eris = self.ao2mo(self.mo_coeff)
-        self.eris = eris
-        self.converged, self.e_corr, self.t1, self.t2 = \
-                kernel(self, eris, t1, t2, max_cycle=self.max_cycle,
-                       tol=self.conv_tol,
-                       tolnormt=self.conv_tol_normt,
-                       max_memory=self.max_memory, verbose=self.verbose)
-        if self.converged:
-            logger.info(self, 'CCSD converged')
-        else:
-            logger.info(self, 'CCSD not converge')
-        if self._scf.e_tot == 0:
-            logger.info(self, 'E_corr = %.16g', self.e_corr)
-        else:
-            logger.info(self, 'E(CCSD) = %.16g  E_corr = %.16g', self.e_corr + self._scf.e_tot, self.e_corr)
-        return self.e_corr, self.t1, self.t2
+        e_corr, self.t1, self.t2 = ccsd.CCSD.ccsd(self, t1, t2, eris)
+        if hasattr(eris, 'orbspin') and eris.orbspin is not None:
+            self.t1 = lib.tag_array(self.t1, orbspin=eris.orbspin)
+            self.t2 = lib.tag_array(self.t2, orbspin=eris.orbspin)
+        return e_corr, self.t1, self.t2
+
+    update_amps = update_amps
+
+    energy = energy
 
     def ao2mo(self, mo_coeff=None):
         nkpts = self.nkpts
@@ -353,9 +397,6 @@ class GCCSD(gccsd.GCCSD):
             return _make_eris_incore(self, mo_coeff)
         else:
             raise NotImplementedError
-
-    def update_amps(self, t1, t2, eris, max_memory=2000):
-        return update_amps(self, t1, t2, eris, max_memory)
 
     def amplitudes_to_vector(self, t1, t2):
         return numpy.hstack((t1.ravel(), t2.ravel()))
@@ -370,8 +411,37 @@ class GCCSD(gccsd.GCCSD):
         t2 = vec[nov:].reshape(nkpts, nkpts, nkpts, nocc, nocc, nvir, nvir)
         return t1, t2
 
+    def spatial2spin(self, tx, orbspin=None, kconserv=None):
+        if orbspin is None:
+            if hasattr(self.mo_coeff[0], 'orbspin'):
+                orbspin = [self.mo_coeff[k].orbspin[idx]
+                           for k, idx in enumerate(self.get_frozen_mask())]
+            else:
+                orbspin = numpy.zeros((self.nkpts,self.nmo), dtype=int)
+                orbspin[:,1::2] = 1
+        if kconserv is None:
+            kconserv = kpts_helper.get_kconserv(self._scf.cell, self.kpts)
+        return spatial2spin(tx, orbspin, kconserv)
 
-CCSD = GCCSD
+    def spin2spatial(self, tx, orbspin=None, kconserv=None):
+        if orbspin is None:
+            if hasattr(self.mo_coeff[0], 'orbspin'):
+                orbspin = [self.mo_coeff[k].orbspin[idx]
+                           for k, idx in enumerate(self.get_frozen_mask())]
+            else:
+                orbspin = numpy.zeros((self.nkpts,self.nmo), dtype=int)
+                orbspin[:,1::2] = 1
+        if kconserv is None:
+            kconserv = kpts_helper.get_kconserv(self._scf.cell, self.kpts)
+        return spin2spatial(tx, orbspin, kconserv)
+
+    def from_uccsd(self, t1, t2, orbspin=None):
+        return self.spatial2spin(t1, orbspin), self.spatial2spin(t2, orbspin)
+
+    def to_uccsd(self, t1, t2, orbspin=None):
+        return spin2spatial(t1, orbspin), spin2spatial(t2, orbspin)
+
+CCSD = KCCSD = KGCCSD = GCCSD
 
 
 def _make_eris_incore(cc, mo_coeff=None):
@@ -390,10 +460,7 @@ def _make_eris_incore(cc, mo_coeff=None):
 
     if mo_coeff is None:
         mo_coeff = cc.mo_coeff
-    #else:
-    #    # If mo_coeff is not canonical orbital
-    #    # TODO does this work for k-points? changed to conjugate.
-    #    raise NotImplementedError
+
     nao = mo_coeff[0].shape[0]
     dtype = mo_coeff[0].dtype
 
@@ -549,3 +616,130 @@ def check_antisymm_34(cc, kpts, integrals):
     print("antisymmetrization : max diff = %.15g" % diff)
     if diff > 1e-5:
         print("Energy cutoff (or cell.mesh) is not enough to converge AO integrals.")
+
+imd = imdk
+class _IMDS:
+    # Identical to molecular rccsd_slow
+    def __init__(self, cc):
+        self.verbose = cc.verbose
+        self.stdout = cc.stdout
+        self.t1 = cc.t1
+        self.t2 = cc.t2
+        self.eris = cc.eris
+        self.kconserv = cc.khelper.kconserv
+        self.made_ip_imds = False
+        self.made_ea_imds = False
+        self._made_shared_2e = False
+        self._fimd = None
+
+    def _make_shared_1e(self):
+        cput0 = (time.clock(), time.time())
+        log = logger.Logger(self.stdout, self.verbose)
+
+        t1,t2,eris = self.t1, self.t2, self.eris
+        kconserv = self.kconserv
+        self.Loo = imd.Loo(t1,t2,eris,kconserv)
+        self.Lvv = imd.Lvv(t1,t2,eris,kconserv)
+        self.Fov = imd.cc_Fov(t1,t2,eris,kconserv)
+
+        log.timer('EOM-CCSD shared one-electron intermediates', *cput0)
+
+    def _make_shared_2e(self):
+        cput0 = (time.clock(), time.time())
+        log = logger.Logger(self.stdout, self.verbose)
+
+        t1,t2,eris = self.t1, self.t2, self.eris
+        kconserv = self.kconserv
+
+        # TODO: check whether to hold Wovov Wovvo in memory
+        if self._fimd is None:
+            self._fimd = lib.H5TmpFile()
+        nkpts, nocc, nvir = t1.shape
+        self._fimd.create_dataset('ovov', (nkpts,nkpts,nkpts,nocc,nvir,nocc,nvir), t1.dtype.char)
+        self._fimd.create_dataset('ovvo', (nkpts,nkpts,nkpts,nocc,nvir,nvir,nocc), t1.dtype.char)
+
+        # 2 virtuals
+        self.Wovov = imd.Wovov(t1,t2,eris,kconserv, self._fimd['ovov'])
+        self.Wovvo = imd.Wovvo(t1,t2,eris,kconserv, self._fimd['ovvo'])
+        self.Woovv = eris.oovv
+
+        log.timer('EOM-CCSD shared two-electron intermediates', *cput0)
+
+    def make_ip(self, ip_partition=None):
+        self._make_shared_1e()
+        if self._made_shared_2e is False and ip_partition != 'mp':
+            self._make_shared_2e()
+            self._made_shared_2e = True
+
+        cput0 = (time.clock(), time.time())
+        log = logger.Logger(self.stdout, self.verbose)
+
+        t1,t2,eris = self.t1, self.t2, self.eris
+        kconserv = self.kconserv
+
+        nkpts, nocc, nvir = t1.shape
+        self._fimd.create_dataset('oooo', (nkpts,nkpts,nkpts,nocc,nocc,nocc,nocc), t1.dtype.char)
+        self._fimd.create_dataset('ooov', (nkpts,nkpts,nkpts,nocc,nocc,nocc,nvir), t1.dtype.char)
+        self._fimd.create_dataset('ovoo', (nkpts,nkpts,nkpts,nocc,nvir,nocc,nocc), t1.dtype.char)
+
+        # 0 or 1 virtuals
+        if ip_partition != 'mp':
+            self.Woooo = imd.Woooo(t1,t2,eris,kconserv, self._fimd['oooo'])
+        self.Wooov = imd.Wooov(t1,t2,eris,kconserv, self._fimd['ooov'])
+        self.Wovoo = imd.Wovoo(t1,t2,eris,kconserv, self._fimd['ovoo'])
+        self.made_ip_imds = True
+        log.timer('EOM-CCSD IP intermediates', *cput0)
+
+    def make_ea(self, ea_partition=None):
+        self._make_shared_1e()
+        if self._made_shared_2e is False and ea_partition != 'mp':
+            self._make_shared_2e()
+            self._made_shared_2e = True
+
+        cput0 = (time.clock(), time.time())
+        log = logger.Logger(self.stdout, self.verbose)
+
+        t1,t2,eris = self.t1, self.t2, self.eris
+        kconserv = self.kconserv
+
+        nkpts, nocc, nvir = t1.shape
+        self._fimd.create_dataset('vovv', (nkpts,nkpts,nkpts,nvir,nocc,nvir,nvir), t1.dtype.char)
+        self._fimd.create_dataset('vvvo', (nkpts,nkpts,nkpts,nvir,nvir,nvir,nocc), t1.dtype.char)
+        self._fimd.create_dataset('vvvv', (nkpts,nkpts,nkpts,nvir,nvir,nvir,nvir), t1.dtype.char)
+
+        # 3 or 4 virtuals
+        self.Wvovv = imd.Wvovv(t1,t2,eris,kconserv, self._fimd['vovv'])
+        if ea_partition == 'mp' and np.all(t1 == 0):
+            self.Wvvvo = imd.Wvvvo(t1,t2,eris,kconserv, self._fimd['vvvo'])
+        else:
+            self.Wvvvv = imd.Wvvvv(t1,t2,eris,kconserv, self._fimd['vvvv'])
+            self.Wvvvo = imd.Wvvvo(t1,t2,eris,kconserv,self.Wvvvv, self._fimd['vvvo'])
+        self.made_ea_imds = True
+        log.timer('EOM-CCSD EA intermediates', *cput0)
+
+if __name__ == '__main__':
+    from pyscf.pbc import gto, scf, cc
+
+    cell = gto.Cell()
+    cell.atom='''
+    C 0.000000000000   0.000000000000   0.000000000000
+    C 1.685068664391   1.685068664391   1.685068664391
+    '''
+    cell.basis = 'gth-szv'
+    cell.pseudo = 'gth-pade'
+    cell.a = '''
+    0.000000000, 3.370137329, 3.370137329
+    3.370137329, 0.000000000, 3.370137329
+    3.370137329, 3.370137329, 0.000000000'''
+    cell.unit = 'B'
+    cell.verbose = 5
+    cell.build()
+
+    # Running HF and CCSD with 1x1x2 Monkhorst-Pack k-point mesh
+    kmf = scf.KRHF(cell, kpts=cell.make_kpts([1,1,2]), exxdiv=None)
+    ehf = kmf.kernel()
+    kmf = scf.addons.convert_to_ghf(kmf)
+
+    mycc = KGCCSD(kmf)
+    ecc, t1, t2 = mycc.kernel()
+    print(ecc - -0.155298393321855)
