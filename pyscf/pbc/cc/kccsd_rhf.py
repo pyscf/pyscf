@@ -539,10 +539,11 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
             for n, en, vn in zip(range(nroots), evals_k, evecs_k):
                 r1, r2 = self.vector_to_amplitudes_ip(vn)
                 qp_weight = np.linalg.norm(r1)**2
-                logger.info(self, 'EOM-CCSD root %d E = %.16g  qpwt = %0.6g',
+                logger.info(self, 'EOM root %d E = %.16g  qpwt = %0.6g',
                             n, en, qp_weight)
         log.timer('EOM-CCSD', *cput0)
-        return evals_k, evecs_k
+        self.eip = evals
+        return self.eip, evecs
 
     def ipccsd_matvec(self, vector, kshift):
         '''2ph operators are of the form s_{ij}^{ b}, i.e. 'jb' indices are coupled.'''
@@ -821,11 +822,13 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
             if nroots == 1:
                 evals_k, evecs_k = [evals_k], [evecs_k]
-            nvir = self.nmo - self.nocc
+
             for n, en, vn in zip(range(nroots), evals_k, evecs_k):
-                logger.info(self, 'EA root %d E = %.16g  qpwt = %0.6g',
-                            n, en, np.linalg.norm(vn[:nvir]) ** 2)
-        log.timer('EA-CCSD', *cput0)
+                r1, r2 = self.vector_to_amplitudes_ip(vn)
+                qp_weight = np.linalg.norm(r1)**2
+                logger.info(self, 'EOM root %d E = %.16g  qpwt = %0.6g',
+                            n, en, qp_weight)
+        log.timer('EOM-CCSD', *cput0)
         self.eea = evals
         return self.eea, evecs
 
