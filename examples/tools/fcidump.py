@@ -22,25 +22,38 @@ mol = gto.M(
 )
 myhf = scf.RHF(mol)
 myhf.kernel()
-c = myhf.mo_coeff
 
 #
-# FCIDUMP for given 1e and 2e integrals
+# Example 1: Convert an SCF object to FCIDUMP
 #
+tools.fcidump.from_scf(myhf, 'fcidump.example1')
+
+
+#
+# Example 2: Given a set of orbitals to transform integrals then dump the
+# integrals to FCIDUMP
+#
+tools.fcidump.from_mo(mol, 'fcidump.example2', myhf.mo_coeff)
+
+
+#
+# Exampel 3: FCIDUMP for given 1e and 2e integrals
+#
+c = myhf.mo_coeff
 h1e = reduce(numpy.dot, (c.T, myhf.get_hcore(), c))
 eri = ao2mo.kernel(mol, c)
 
-tools.fcidump.from_integrals('fcidump.example1', h1e, eri, c.shape[1],
+tools.fcidump.from_integrals('fcidump.example3', h1e, eri, c.shape[1],
                              mol.nelectron, ms=0)
 
 #
-# Bypass small matrix elements in FCIDUMP
+# Exampel 4: Ignore small matrix elements in FCIDUMP
 #
-tools.fcidump.from_integrals('fcidump.example2', h1e, eri, c.shape[1],
+tools.fcidump.from_integrals('fcidump.example4', h1e, eri, c.shape[1],
                              mol.nelectron, ms=0, tol=1e-10)
 
 #
-# Inculde the symmetry information in FCIDUMP
+# Example 5: Inculde the symmetry information in FCIDUMP
 #
 # to write the irreps for each orbital, first use pyscf.symm.label_orb_symm to
 # get the irrep ids
@@ -74,5 +87,5 @@ MOLPRO_ID = {'D2h': { 'Ag' : 1,
 
 orbsym = [MOLPRO_ID[mol.groupname][i]
           for i in symm.label_orb_symm(mol, mol.irrep_name, mol.symm_orb, c)]
-tools.fcidump.from_integrals('fcidump.example3', h1e, eri, c.shape[1],
+tools.fcidump.from_integrals('fcidump.example5', h1e, eri, c.shape[1],
                              mol.nelectron, ms=0, orbsym=orbsym)
