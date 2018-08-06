@@ -12,6 +12,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# Author: Qiming Sun <osirpt.sun@gmail.com>
+#         James D. McClain
+#         Jason Yu
+#         Shining Sun
+#         Mario Motta
+#         Chong Sun
+#
 
 import time
 import numpy as np
@@ -721,7 +729,7 @@ def eaccsd_diag(eom, imds=None):
                 Hr2aaa[j,a,b] += imds.Wovvo[j,b,b,j]
                 Hr2aaa[j,a,b] += imds.Wovvo[j,a,a,j]
                 if imds.Wvvvv is not None:
-                    Hr2aaa[j,a,b] += 0.5*(Wvvvva[a,b,b]-Wvvvva[b,b,a])
+                    Hr2aaa[j,a,b] += Wvvvva[a,b,b]
                 Hr2aaa[j,a,b] += -np.dot(imds.Wovov[:,a,j,b], t2aa[:,j,a,b])
 
     Hr2aba = np.zeros((nocc_a, nvir_b, nvir_a),dtype=dtype)
@@ -764,7 +772,7 @@ def eaccsd_diag(eom, imds=None):
                 Hr2bbb[j,a,b] += imds.FVV[a,a]
                 Hr2bbb[j,a,b] += imds.FVV[b,b]
                 if imds.Wvvvv is not None:
-                    Hr2bbb[j,a,b] += 0.5*(WVVVVa[a,b,b]-WVVVVa[b,b,a])
+                    Hr2bbb[j,a,b] += WVVVVa[a,b,b]
                 Hr2bbb[j,a,b] += imds.WOVVO[j,b,b,j]
                 Hr2bbb[j,a,b] += imds.WOVVO[j,a,a,j]
                 Hr2bbb[j,a,b] -= (np.dot(imds.WOVOV[:,a,j,b], t2bb[:,j,a,b]))
@@ -2727,34 +2735,40 @@ if __name__ == '__main__':
         eris[:,:,orbspin[:,None] != orbspin] = 0
         return eris
 
+    import pyscf.cc.addons
+    from pyscf.cc import gccsd
+    mygcc = pyscf.cc.addons.convert_to_gccsd(mycc)
+    mygcc._ucc = mycc
+    mygcc._ucc_eris = eris
+    eris = gccsd._make_eris_incore(mygcc)#, ao2mofn=my_ao2mo)
+    orbspin = eris.orbspin
+
     ## EOM-IP
     myeom = EOMIP(mycc)
     imds = myeom.make_imds()
 
-#    np.random.seed(1)
-#    r1 = np.random.rand(nocc)*1j + np.random.rand(nocc) - 0.5 - 0.5*1j
-#    r2 = np.random.rand(nocc**2 * nvir)*1j + np.random.rand(nocc**2 * nvir) - 0.5 - 0.5*1j
-#    r2 = r2.reshape(nocc, nocc, nvir)
-#    r1, r2 = enforce_symm_2p_spin_ip(r1, r2, orbspin)
-#    r1, r2 = spin2spatial_ip(r1, r2, orbspin)
-#
-#    vector = myeom.amplitudes_to_vector(r1, r2)
-##    r1x, r2x = myeom.vector_to_amplitudes(vector)
-##    print(abs(r1[0]-r1x[0]).max())
-##    print(abs(r1[1]-r1x[1]).max())
-##    print(abs(r2[0]-r2x[0]).max())
-##    print(abs(r2[1]-r2x[1]).max())
-##    print(abs(r2[2]-r2x[2]).max())
-##    print(abs(r2[3]-r2x[3]).max())
-#    Hvector = myeom.matvec(vector, imds=imds)
-#    print('ip', lib.finger(Hvector) - (21.67127462317093-19.068987454261908j))
+    np.random.seed(1)
+    r1 = np.random.rand(nocc)*1j + np.random.rand(nocc) - 0.5 - 0.5*1j
+    r2 = np.random.rand(nocc**2 * nvir)*1j + np.random.rand(nocc**2 * nvir) - 0.5 - 0.5*1j
+    r2 = r2.reshape(nocc, nocc, nvir)
+    r1, r2 = enforce_symm_2p_spin_ip(r1, r2, orbspin)
+    r1, r2 = spin2spatial_ip(r1, r2, orbspin)
+
+    vector = myeom.amplitudes_to_vector(r1, r2)
+#    r1x, r2x = myeom.vector_to_amplitudes(vector)
+#    print(abs(r1[0]-r1x[0]).max())
+#    print(abs(r1[1]-r1x[1]).max())
+#    print(abs(r2[0]-r2x[0]).max())
+#    print(abs(r2[1]-r2x[1]).max())
+#    print(abs(r2[2]-r2x[2]).max())
+#    print(abs(r2[3]-r2x[3]).max())
+    Hvector = myeom.matvec(vector, imds=imds)
+    print('ip', lib.finger(Hvector) - (21.67127462317093-19.068987454261908j))
     print('diag', lib.finger(myeom.get_diag()) - (-9.6676217223549763+9.325219825942975j))
-    exit()
 
     # EOM-EA
     myeom = EOMEA(mycc)
     imds = myeom.make_imds()
-    orbspin = eris.orbspin
 
     np.random.seed(1)
     r1 = np.random.rand(nvir)*1j + np.random.rand(nvir) - 0.5 - 0.5*1j
@@ -2771,13 +2785,9 @@ if __name__ == '__main__':
 #    print(abs(r2[1]-r2x[1]).max())
 #    print(abs(r2[2]-r2x[2]).max())
 #    print(abs(r2[3]-r2x[3]).max())
-#    Hvector = myeom.matvec(vector, imds=imds)
-#    print('ea', lib.finger(Hvector) - (6.5543877287461187-13.175055314063574j))
+    Hvector = myeom.matvec(vector, imds=imds)
+    print('ea', lib.finger(Hvector) - (6.5543877287461187-13.175055314063574j))
     print('diag', lib.finger(myeom.get_diag()) - (-57.353207240857785+1.4052857730841204j))
-    #mycc = KUCCSD(kmf)
-    #eris = mycc.ao2mo()
-    #t1, t2 = rand_t1_t2(mycc)
-    #Ht1, Ht2 = mycc.update_amps(t1, t2, eris)
 
     #mycc = rccsd.RCCSD(mf)
     #ecc, t1, t2 = mycc.kernel()
@@ -2787,6 +2797,5 @@ if __name__ == '__main__':
    # print("IP energies... (right eigenvector)")
    # e,v = myeom.ipccsd(nroots=2)
     #assert(abs(e[0] - 0.3092874788775446) < 1e-10)
-    #print 0.35362137
     #print(e[1] - 0.3092874632094273)
     #print(e[2] - 0.4011171508707691)
