@@ -494,14 +494,12 @@ def project_mol(mol, dual_basis={}):
 # changed and insert the mo_coeff to g_op, h_op.
 # Seems the high order terms do not help optimization?
 def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
-                  conv_tol_grad=None, verbose=None):
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(mf.stdout, mf.verbose)
+                  conv_tol_grad=None, max_stepsize=None, verbose=None):
+    log = logger.new_logger(mf, verbose)
 
     if conv_tol_grad is None:
         conv_tol_grad = numpy.sqrt(mf.conv_tol*.1)
+#TODO: dynamically adjust max_stepsize, as done in mc1step.py
 
     t2m = (time.clock(), time.time())
     g_orb, h_op, h_diag = mf.gen_g_hop(mo_coeff, mo_occ, fock_ao)

@@ -289,7 +289,7 @@ def tril_product(*iterables, **kwds):
         Specifying no `tril_idx` is equivalent to just a cartesian product.
 
         >>> list(tril_product(range(2), repeat=2))
-        [(0, 0), (0, 0), (0, 1), (0, 1), (1, 0), (1, 0), (1, 1), (1, 1)]
+        [(0, 0), (0, 1), (1, 0), (1, 1)]
 
         We can specify only sub-indices to satisfy a lower-triangular form:
 
@@ -314,6 +314,7 @@ def tril_product(*iterables, **kwds):
     for tup in itertools.product(*iterables, repeat=repeat):
         if ntril_idx == 0:
             yield tup
+            continue
 
         if all([tup[tril_idx[i]] >= tup[tril_idx[i+1]] for i in range(ntril_idx-1)]):
             yield tup
@@ -721,10 +722,14 @@ def background_process(func, *args, **kwargs):
 bg = background = bg_thread = background_thread
 bp = bg_process = background_process
 
-
+ASYNC_IO = getattr(__config__, 'ASYNC_IO', True)
 class call_in_background(object):
     '''Within this macro, function(s) can be executed asynchronously (the
     given functions are executed in background).
+
+    Attributes:
+        sync (bool): Whether to run in synchronized mode.  The default value
+            is False (asynchoronized mode).
 
     Examples:
 
@@ -744,25 +749,19 @@ class call_in_background(object):
     def __init__(self, *fns, **kwargs):
         self.fns = fns
         self.handler = None
-        if 'sync' in kwargs.keys():
-            self.sync = kwargs['sync']
-        else:
-            self.sync = False
+        self.sync = kwargs.get('sync', not ASYNC_IO)
 
-    if not getattr(__config__, 'ASYNC_IO', True) or h5py.version.version[:4] == '2.2.': # h5py-2.2.* has bug in threading mode
+    if h5py.version.version[:4] == '2.2.': # h5py-2.2.* has bug in threading mode
         # Disable back-ground mode
         def __enter__(self):
             if len(self.fns) == 1:
                 return self.fns[0]
             else:
                 return self.fns
-    else:
 
+    else:
         def __enter__(self):
-            if self.sync:
-                def def_async_fn(fn):
-                    return fn
-            elif imp.lock_held():
+            if self.sync or imp.lock_held():
 # Some modules like nosetests, coverage etc
 #   python -m unittest test_xxx.py  or  nosetests test_xxx.py
 # hang when Python multi-threading was used in the import stage due to (Python

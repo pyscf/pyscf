@@ -8,7 +8,7 @@
   - Second order SCF
   - General JK contraction function
   - DIIS, EDIIS, ADIIS and second order solver
-  - SCF wavefunction stability analysis
+  - SCF wavefunction (RHF, UHF, GHF) stability analysis
   - Generalized Hartree-Fock (GHF)
 
 
