@@ -388,6 +388,7 @@ class EOMEA(eom_rccsd.EOM):
             raise NotImplementedError
             matvec = lambda xs: [self.l_matvec(x, kshift, imds, diag) for x in xs]
         else:
+            raise NotImplementedError
             matvec = lambda xs: [self.matvec(x, kshift, imds, diag) for x in xs]
         return matvec, diag
 
