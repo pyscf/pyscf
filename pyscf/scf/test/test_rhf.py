@@ -176,7 +176,7 @@ class KnownValues(unittest.TestCase):
     def test_analyze(self):
         popandchg, dip = mf.analyze()
         self.assertAlmostEqual(numpy.linalg.norm(popandchg[0]), 4.0049440587033116, 6)
-        self.assertAlmostEqual(numpy.linalg.norm(dip), 2.05844441822, 8)
+        self.assertAlmostEqual(numpy.linalg.norm(dip), 2.0584447549532596, 8)
         popandchg, dip = mf.analyze(with_meta_lowdin=False)
         self.assertAlmostEqual(numpy.linalg.norm(popandchg[0]), 3.2031790129016922, 6)
 

@@ -893,6 +893,7 @@ def ewald(cell, ew_eta=None, ew_cut=None):
                 ewg += val.sum()
         ewg *= inv_area*0.5
     else:
+        # For 0D and 1D Coulobm, see Table I of PRB, 73, 205119
         raise NotImplementedError('Low dimension ft_type ',
             low_dim_ft_type, ' not implemented for dimension ',
             cell.dimension)
@@ -977,7 +978,7 @@ def classify_ecp_pseudo(cell, ecp, pp):
     def classify(ecp, pp_alias):
         if isinstance(ecp, (str, unicode)):
             if pseudo._format_pseudo_name(ecp)[0] in pp_alias:
-                return {}, str(ecp)
+                return {}, {'default': str(ecp)}
         elif isinstance(ecp, dict):
             ecp_as_pp = {}
             for atom in ecp:
@@ -1186,19 +1187,24 @@ class Cell(mole.Mole):
             self.gs = kwargs['gs']
 
         # Set-up pseudopotential if it exists
-        # This must happen before build() because it affects
-        # tot_electrons() via atom_charge()
+        # This must be done before build() because it affects
+        # tot_electrons() via the call to .atom_charge()
 
         self.ecp, self.pseudo = classify_ecp_pseudo(self, self.ecp, self.pseudo)
         if self.pseudo is not None:
+            _atom = self.format_atom(self.atom)
+            uniq_atoms = set([a[0] for a in _atom])
             if isinstance(self.pseudo, (str, unicode)):
                 # specify global pseudo for whole molecule
-                _atom = self.format_atom(self.atom, unit=self.unit)
-                uniq_atoms = set([a[0] for a in _atom])
-                self._pseudo = self.format_pseudo(dict([(a, str(self.pseudo))
-                                                      for a in uniq_atoms]))
+                _pseudo = dict([(a, str(self.pseudo)) for a in uniq_atoms])
+            elif 'default' in self.pseudo:
+                default_pseudo = self.pseudo['default']
+                _pseudo = dict(((a, default_pseudo) for a in uniq_atoms))
+                _pseudo.update(self.pseudo)
+                del(_pseudo['default'])
             else:
-                self._pseudo = self.format_pseudo(self.pseudo)
+                _pseudo = self.pseudo
+            self._pseudo = self.format_pseudo(_pseudo)
 
         # Do regular Mole.build
         _built = self._built
