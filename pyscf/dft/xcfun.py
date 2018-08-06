@@ -792,7 +792,10 @@ def _eval_xc(fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
 
     fn_ids = [x[0] for x in fn_facs]
     facs   = [x[1] for x in fn_facs]
-    if all((is_lda(x) for x in fn_ids)):  # LDA
+
+    n = len(fn_ids)
+    if (n == 0 or  # xc_code = '' or xc_code = 'HF', an empty functional
+        all((is_lda(x) for x in fn_ids))):  # LDA
         if spin == 0:
             nvar = 1
         else:
@@ -809,16 +812,16 @@ def _eval_xc(fn_facs, rho, spin=0, relativity=0, deriv=1, verbose=None):
             nvar = 5
     outlen = (math.factorial(nvar+deriv) //
               (math.factorial(nvar) * math.factorial(deriv)))
-    outbuf = numpy.empty((ngrids,outlen))
+    outbuf = numpy.zeros((ngrids,outlen))
 
-    n = len(fn_ids)
-    _itrf.XCFUN_eval_xc(ctypes.c_int(n),
-                        (ctypes.c_int*n)(*fn_ids), (ctypes.c_double*n)(*facs),
-                        ctypes.c_int(spin),
-                        ctypes.c_int(deriv), ctypes.c_int(ngrids),
-                        rho_u.ctypes.data_as(ctypes.c_void_p),
-                        rho_d.ctypes.data_as(ctypes.c_void_p),
-                        outbuf.ctypes.data_as(ctypes.c_void_p))
+    if n > 0:
+        _itrf.XCFUN_eval_xc(ctypes.c_int(n),
+                            (ctypes.c_int*n)(*fn_ids), (ctypes.c_double*n)(*facs),
+                            ctypes.c_int(spin),
+                            ctypes.c_int(deriv), ctypes.c_int(ngrids),
+                            rho_u.ctypes.data_as(ctypes.c_void_p),
+                            rho_d.ctypes.data_as(ctypes.c_void_p),
+                            outbuf.ctypes.data_as(ctypes.c_void_p))
 
     outbuf = outbuf.T
     exc = outbuf[0]

@@ -1023,14 +1023,17 @@ def vector_to_amplitudes_eomsf(vector, nmo, nocc):
     nmoa, nmob = nmo
     nvira, nvirb = nmoa-nocca, nmob-noccb
 
-    t1ab = vector[:nocca*nvirb].reshape(nocca,nvirb).copy()
-    t1ba = vector[nocca*nvirb:nocca*nvirb+noccb*nvira].reshape(noccb,nvira).copy()
-    pvec = vector[t1ab.size+t1ba.size:]
-
     nbaaa = noccb*nocca*nvira*(nvira-1)//2
     naaba = nocca*(nocca-1)//2*nvirb*nvira
     nabbb = nocca*noccb*nvirb*(nvirb-1)//2
     nbbab = noccb*(noccb-1)//2*nvira*nvirb
+    sizes = (nocca*nvirb, noccb*nvira, nbaaa, naaba, nabbb, nbbab)
+    sections = np.cumsum(sizes[:-1])
+    t1ab, t1ba, vbaaa, vaaba, vabbb, vbbab = np.split(vector, sections)
+
+    t1ab = t1ab.reshape(nocca,nvirb).copy()
+    t1ba = t1ba.reshape(noccb,nvira).copy()
+
     t2baaa = np.zeros((noccb*nocca,nvira*nvira), dtype=vector.dtype)
     t2aaba = np.zeros((nocca*nocca,nvirb*nvira), dtype=vector.dtype)
     t2abbb = np.zeros((nocca*noccb,nvirb*nvirb), dtype=vector.dtype)
@@ -1042,18 +1045,18 @@ def vector_to_amplitudes_eomsf(vector, nmo, nocc):
     oidxab = np.arange(nocca*noccb, dtype=np.int32)
     vidxab = np.arange(nvira*nvirb, dtype=np.int32)
 
-    v = pvec[:nbaaa].reshape(noccb*nocca,-1)
-    lib.takebak_2d(t2baaa, v, oidxab, vtrila[0]*nvira+vtrila[1])
-    lib.takebak_2d(t2baaa,-v, oidxab, vtrila[1]*nvira+vtrila[0])
-    v = pvec[nbaaa:nbaaa+naaba].reshape(-1,nvirb*nvira)
-    lib.takebak_2d(t2aaba, v, otrila[0]*nocca+otrila[1], vidxab)
-    lib.takebak_2d(t2aaba,-v, otrila[1]*nocca+otrila[0], vidxab)
-    v = pvec[nbaaa+naaba:nbaaa+naaba+nabbb].reshape(nocca*noccb,-1)
-    lib.takebak_2d(t2abbb, v, oidxab, vtrilb[0]*nvirb+vtrilb[1])
-    lib.takebak_2d(t2abbb,-v, oidxab, vtrilb[1]*nvirb+vtrilb[0])
-    v = pvec[nbaaa+naaba+nabbb:].reshape(-1,nvira*nvirb)
-    lib.takebak_2d(t2bbab, v, otrilb[0]*noccb+otrilb[1], vidxab)
-    lib.takebak_2d(t2bbab,-v, otrilb[1]*noccb+otrilb[0], vidxab)
+    vbaaa = vbaaa.reshape(noccb*nocca,-1)
+    lib.takebak_2d(t2baaa, vbaaa, oidxab, vtrila[0]*nvira+vtrila[1])
+    lib.takebak_2d(t2baaa,-vbaaa, oidxab, vtrila[1]*nvira+vtrila[0])
+    vaaba = vaaba.reshape(-1,nvirb*nvira)
+    lib.takebak_2d(t2aaba, vaaba, otrila[0]*nocca+otrila[1], vidxab)
+    lib.takebak_2d(t2aaba,-vaaba, otrila[1]*nocca+otrila[0], vidxab)
+    vabbb = vabbb.reshape(nocca*noccb,-1)
+    lib.takebak_2d(t2abbb, vabbb, oidxab, vtrilb[0]*nvirb+vtrilb[1])
+    lib.takebak_2d(t2abbb,-vabbb, oidxab, vtrilb[1]*nvirb+vtrilb[0])
+    vbbab = vbbab.reshape(-1,nvira*nvirb)
+    lib.takebak_2d(t2bbab, vbbab, otrilb[0]*noccb+otrilb[1], vidxab)
+    lib.takebak_2d(t2bbab,-vbbab, otrilb[1]*noccb+otrilb[0], vidxab)
     t2baaa = t2baaa.reshape(noccb,nocca,nvira,nvira)
     t2aaba = t2aaba.reshape(nocca,nocca,nvirb,nvira)
     t2abbb = t2abbb.reshape(nocca,noccb,nvirb,nvirb)

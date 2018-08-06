@@ -306,10 +306,17 @@ def conc_cell(cell1, cell2):
     cell3.a = cell1.a
     cell3.mesh = np.max((cell1.mesh, cell2.mesh), axis=0)
 
-    if cell1.ke_cutoff is None or cell2.ke_cutoff is None:
+    ke_cutoff1 = cell1.ke_cutoff
+    ke_cutoff2 = cell2.ke_cutoff
+    if ke_cutoff1 is None and ke_cutoff2 is None:
         cell3.ke_cutoff = None
     else:
-        cell3.ke_cutoff = max(cell1.ke_cutoff, cell2.ke_cutoff)
+        if ke_cutoff1 is None:
+            ke_cutoff1 = estimate_ke_cutoff(cell1, cell1.precision)
+        if ke_cutoff2 is None:
+            ke_cutoff2 = estimate_ke_cutoff(cell2, cell2.precision)
+        cell3.ke_cutoff = max(ke_cutoff1, ke_cutoff2)
+
     cell3.precision = min(cell1.precision, cell2.precision)
     cell3.dimension = max(cell1.dimension, cell2.dimension)
     cell3.low_dim_ft_type = cell1.low_dim_ft_type or cell2.low_dim_ft_type
@@ -462,12 +469,24 @@ def bas_rcut(cell, bas_id, precision=INTEGRAL_PRECISION):
 
 def _estimate_ke_cutoff(alpha, l, c, precision=INTEGRAL_PRECISION, weight=1.):
     '''Energy cutoff estimation'''
+    #if l == 0:
+    #    log_k0 = 2.5 + np.log(alpha) / 2
+    #    log_rest = np.log(2*alpha*16*np.pi**2*c**4/precision)
+    #    Ecut = (log_rest - log_k0) * 2 * alpha
+    #    Ecut[Ecut <= 0] = .5
+    #    log_k0 = .5 * np.log(Ecut*2)
+    #    Ecut = (log_rest - log_k0) * 2 * alpha
+    #    Ecut[Ecut <= 0] = .5
+    #    return Ecut
+
     log_k0 = 2.5 + np.log(alpha) / 2
     l2fac2 = scipy.misc.factorial2(l*2+1)
-    log_rest = np.log(precision*l2fac2**2*(4*alpha)**(l*2+1) / (32*np.pi**2*c**4*weight))
+    log_rest = np.log(precision*l2fac2**2*(4*alpha)**(l*2+1) / (32*np.pi**2*c**4))
     Ecut = 2*alpha * (log_k0*(4*l+3) - log_rest)
-    log_k0 = .5 * np.log(abs(Ecut)*2)
+    Ecut[Ecut <= 0] = .5
+    log_k0 = .5 * np.log(Ecut*2)
     Ecut = 2*alpha * (log_k0*(4*l+3) - log_rest)
+    Ecut[Ecut <= 0] = .5
     return Ecut
 
 def estimate_ke_cutoff(cell, precision=INTEGRAL_PRECISION):
@@ -580,7 +599,7 @@ def get_Gv(cell, mesh=None, **kwargs):
     gxyz = lib.cartesian_prod((gx, gy, gz))
 
     b = cell.reciprocal_vectors()
-    Gv = np.dot(gxyz, b)
+    Gv = lib.ddot(gxyz, b)
     return Gv
 
 def get_Gv_weights(cell, mesh=None, **kwargs):
@@ -760,8 +779,14 @@ def ewald(cell, ew_eta=None, ew_cut=None):
     See Also:
         pyscf.pbc.gto.get_ewald_params
     '''
+    # If lattice parameter is not set, the cell object is treated as a mole
+    # object. The nuclear repulsion energy is computed.
+    if cell.a is None:
+        return mole.energy_nuc(cell)
+
     if cell.natm == 0:
         return 0
+
     if ew_eta is None: ew_eta = cell.ew_eta
     if ew_cut is None: ew_cut = cell.ew_cut
     chargs = cell.atom_charges()
@@ -1151,8 +1176,6 @@ class Cell(mole.Mole):
         if ke_cutoff is not None: self.ke_cutoff = ke_cutoff
         if low_dim_ft_type is not None: self.low_dim_ft_type = low_dim_ft_type
 
-        assert(self.a is not None)
-
         if 'unit' in kwargs:
             self.unit = kwargs['unit']
 
@@ -1177,7 +1200,7 @@ class Cell(mole.Mole):
             else:
                 self._pseudo = self.format_pseudo(self.pseudo)
 
-        # Do regular Mole.build with usual kwargs
+        # Do regular Mole.build
         _built = self._built
         mole.Mole.build(self, False, parse_arg, *args, **kwargs)
 
@@ -1253,6 +1276,13 @@ class Cell(mole.Mole):
             logger.info(self, 'Discarded %d diffused primitive functions, '
                         '%d contracted functions', nprim_drop, nctr_drop)
             #logger.debug1(self, 'Old shells %s', steep_shls)
+
+        # The rest initialization requires lattice parameters.  If .a is not
+        # set, pass the rest initialization.
+        if self.a is None:
+            if dump_input and not _built and self.verbose > logger.NOTE:
+                self.dump_input()
+            return self
 
         if self.rcut is None:
             self.rcut = max([self.bas_rcut(ib, self.precision)
@@ -1550,10 +1580,11 @@ class Cell(mole.Mole):
         '''Return a Mole object using the same atoms and basis functions as
         the Cell object.
         '''
-        mol = mole.Mole()
-        cell_dic = [(key, getattr(self, key)) for key in mol.__dict__.keys()]
-        mol.__dict__.update(cell_dic)
-        return mol
+        #FIXME: should cell be converted to mole object?  If cell is converted
+        # and a mole object is returned, many attributes (e.g. the GTH basis,
+        # gth-PP) will not be recognized by mole.build function.
+        self.a = None
+        return self
 
     def has_ecp(self):
         '''Whether pesudo potential is used in the system.'''

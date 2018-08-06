@@ -336,7 +336,6 @@ class KSCF(pbchf.SCF):
         kpts : (nks,3) ndarray
             The sampling k-points in Cartesian coordinates, in units of 1/Bohr.
     '''
-    conv_tol = getattr(__config__, 'pbc_scf_KSCF_conv_tol', 1e-7)
     conv_tol_grad = getattr(__config__, 'pbc_scf_KSCF_conv_tol_grad', None)
     direct_scf = getattr(__config__, 'pbc_scf_SCF_direct_scf', False)
 
@@ -351,6 +350,7 @@ class KSCF(pbchf.SCF):
         self.with_df = df.FFTDF(cell)
         self.exxdiv = exxdiv
         self.kpts = kpts
+        self.conv_tol = cell.precision * 10
 
         self.exx_built = False
         self._keys = self._keys.union(['cell', 'exx_built', 'exxdiv', 'with_df'])

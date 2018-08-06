@@ -30,12 +30,14 @@ def _fftn_blas(f, mesh):
     expRGx = np.exp(np.einsum('x,k->xk', -2j*np.pi*np.arange(mesh[0]), Gx))
     expRGy = np.exp(np.einsum('x,k->xk', -2j*np.pi*np.arange(mesh[1]), Gy))
     expRGz = np.exp(np.einsum('x,k->xk', -2j*np.pi*np.arange(mesh[2]), Gz))
-    g0 = g = lib.transpose(f.reshape(-1, mesh[1]*mesh[2])).astype(np.complex128)
-    g1 = np.empty_like(g0)
-    g = lib.dot(g.reshape(-1,mesh[0])  , expRGx, c=g1.reshape(-1,mesh[0]))
-    g = lib.dot(g.reshape(mesh[1],-1).T, expRGy, c=g0.reshape(-1,mesh[1]))
-    g = lib.dot(g.reshape(mesh[2],-1).T, expRGz, c=g1.reshape(-1,mesh[2]))
-    return g.reshape(-1, *mesh)
+    out = np.empty(f.shape, dtype=np.complex128)
+    buf = np.empty(mesh, dtype=np.complex128)
+    for i, fi in enumerate(f):
+        buf[:] = fi.reshape(mesh)
+        g = lib.dot(buf.reshape(mesh[0],-1).T, expRGx, c=out[i].reshape(-1,mesh[0]))
+        g = lib.dot(g.reshape(mesh[1],-1).T, expRGy, c=buf.reshape(-1,mesh[1]))
+        g = lib.dot(g.reshape(mesh[2],-1).T, expRGz, c=out[i].reshape(-1,mesh[2]))
+    return out.reshape(-1, *mesh)
 
 def _ifftn_blas(g, mesh):
     Gx = np.fft.fftfreq(mesh[0])
@@ -44,12 +46,14 @@ def _ifftn_blas(g, mesh):
     expRGx = np.exp(np.einsum('x,k->xk', 2j*np.pi*np.arange(mesh[0]), Gx))
     expRGy = np.exp(np.einsum('x,k->xk', 2j*np.pi*np.arange(mesh[1]), Gy))
     expRGz = np.exp(np.einsum('x,k->xk', 2j*np.pi*np.arange(mesh[2]), Gz))
-    f0 = f = lib.transpose(g.reshape(-1, mesh[1]*mesh[2])).astype(np.complex128)
-    f1 = np.empty_like(f0)
-    f = lib.dot(f.reshape(-1,mesh[0])  , expRGx, 1./mesh[0], c=f1.reshape(-1,mesh[0]))
-    f = lib.dot(f.reshape(mesh[1],-1).T, expRGy, 1./mesh[1], c=f0.reshape(-1,mesh[1]))
-    f = lib.dot(f.reshape(mesh[2],-1).T, expRGz, 1./mesh[2], c=f1.reshape(-1,mesh[2]))
-    return f.reshape(-1, *mesh)
+    out = np.empty(g.shape, dtype=np.complex128)
+    buf = np.empty(mesh, dtype=np.complex128)
+    for i, gi in enumerate(g):
+        buf[:] = gi.reshape(mesh)
+        f = lib.dot(buf.reshape(mesh[0],-1).T, expRGx, 1./mesh[0], c=out[i].reshape(-1,mesh[0]))
+        f = lib.dot(f.reshape(mesh[1],-1).T, expRGy, 1./mesh[1], c=buf.reshape(-1,mesh[1]))
+        f = lib.dot(f.reshape(mesh[2],-1).T, expRGz, 1./mesh[2], c=out[i].reshape(-1,mesh[2]))
+    return out.reshape(-1, *mesh)
 
 if FFT_ENGINE == 'FFTW':
     # pyfftw is slower than np.fft in most cases
@@ -217,7 +221,11 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
     if Gv is None:
         Gv = cell.get_Gv(mesh)
 
-    kG = k + Gv
+    if abs(k).sum() > 1e-9:
+        kG = k + Gv
+    else:
+        kG = Gv
+
     equal2boundary = np.zeros(Gv.shape[0], dtype=bool)
     if wrap_around and abs(k).sum() > 1e-9:
         # Here we 'wrap around' the high frequency k+G vectors into their lower

@@ -616,7 +616,7 @@ def _scale_ao(ao, wv, out=None):
     aow = numpy.ndarray((nao,ngrids), dtype=ao.dtype, buffer=out).T
 
     if not ao.flags.c_contiguous:
-        aow = numpy.einsum('nip,np->pi', ao, wv, out=aow)
+        aow = numpy.einsum('nip,np->pi', ao, wv)
     elif aow.dtype == numpy.double:
         libdft.VXC_dscale_ao(aow.ctypes.data_as(ctypes.c_void_p),
                              ao.ctypes.data_as(ctypes.c_void_p),
@@ -630,7 +630,7 @@ def _scale_ao(ao, wv, out=None):
                              ctypes.c_int(comp), ctypes.c_int(nao),
                              ctypes.c_int(ngrids))
     else:
-        aow = numpy.einsum('nip,np->pi', ao, wv, out=aow)
+        aow = numpy.einsum('nip,np->pi', ao, wv)
     return aow
 
 def _contract_rho(bra, ket):

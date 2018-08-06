@@ -201,17 +201,44 @@ def dot(v1, v2, nmo, nocc):
     return val
 
 def t1strs(norb, nelec):
-    '''FCI strings (address) for CIS single-excitation amplitues'''
+    '''Compute the FCI strings (address) for CIS single-excitation amplitudes
+    and the signs of the coefficients when transferring the reference from
+    physics vacuum to HF vacuum.
+    '''
+    addrs, signs = tn_addrs_signs(norb, nelec, 1)
+    return addrs, signs
+
+def tn_addrs_signs(norb, nelec, n_excite):
+    '''Compute the FCI strings (address) for CIS n-excitation amplitudes and
+    the signs of the coefficients when transferring the reference from physics
+    vacuum to HF vacuum.
+    '''
+    assert(n_excite <= nelec)
     nocc = nelec
-    hf_str = int('1'*nocc, 2)
-    addrs = []
-    signs = []
-    for a in range(nocc, norb):
-        for i in reversed(range(nocc)):
-            str1 = hf_str ^ (1 << i) | (1 << a)
-            addrs.append(cistring.str2addr(norb, nelec, str1))
-            signs.append(cistring.cre_des_sign(a, i, hf_str))
-    return numpy.asarray(addrs), numpy.asarray(signs)
+
+    hole_strs = cistring.gen_strings4orblist(range(nocc), nocc - n_excite)
+    # For HF vacuum, hole operators are ordered from low-lying to high-lying
+    # orbitals. It leads to the opposite string ordering.
+    hole_strs = hole_strs[::-1]
+    hole_sum = numpy.zeros(len(hole_strs), dtype=int)
+    for i in range(nocc):
+        hole_at_i = (hole_strs & (1<<i)) == 0
+        hole_sum[hole_at_i] += i
+
+    # The hole operators are listed from low-lying to high-lying orbitals
+    # (from left to right).  For i-th (0-based) hole operator, the number of
+    # orbitals which are higher than i determines the sign.  This number
+    # equals to nocc-(i+1).  After removing the highest hole operator, nocc
+    # becomes nocc-1, the sign for next hole operator j will be associated to
+    # nocc-1-(j+1).  By iteratively calling this procedure, the overall sign
+    # for annihilating three holes is (-1)**(3*nocc - 6 - sum i)
+    sign = (-1) ** (n_excite * nocc - n_excite*(n_excite+1)//2 - hole_sum)
+
+    particle_strs = cistring.gen_strings4orblist(range(nocc, norb), n_excite)
+    strs = hole_strs[:,None] ^ particle_strs
+    addrs = cistring.strs2addr(norb, nocc, strs.ravel())
+    signs = numpy.vstack([sign] * len(particle_strs)).T.ravel()
+    return addrs, signs
 
 def to_fcivec(cisdvec, norb, nelec, frozen=0):
     '''Convert CISD coefficients to FCI coefficients'''
@@ -234,30 +261,23 @@ def to_fcivec(cisdvec, norb, nelec, frozen=0):
     nmo = norb - nfroz
     nvir = nmo - nocc
     c0, c1, c2 = cisdvec_to_amplitudes(cisdvec, nmo, nocc)
-    t1addr, t1sign = t1strs(nmo, nocc)
+    t1addr, t1sign = tn_addrs_signs(nmo, nocc, 1)
 
     na = cistring.num_strings(nmo, nocc)
     fcivec = numpy.zeros((na,na))
     fcivec[0,0] = c0
-    c1 = c1[::-1].T.ravel()
-    fcivec[0,t1addr] = fcivec[t1addr,0] = c1 * t1sign
-    c2ab = c2[::-1,::-1].transpose(2,0,3,1).reshape(nocc*nvir,-1)
+    fcivec[0,t1addr] = fcivec[t1addr,0] = c1.ravel() * t1sign
+    c2ab = c2.transpose(0,2,1,3).reshape(nocc*nvir,-1)
     c2ab = numpy.einsum('i,j,ij->ij', t1sign, t1sign, c2ab)
-    lib.takebak_2d(fcivec, c2ab, t1addr, t1addr)
+    fcivec[t1addr[:,None],t1addr] = c2ab
 
     if nocc > 1 and nvir > 1:
-        hf_str = int('1'*nocc, 2)
-        for a in range(nocc, nmo):
-            for b in range(nocc, a):
-                for i in reversed(range(1, nocc)):
-                    for j in reversed(range(i)):
-                        c2aa = c2[i,j,a-nocc,b-nocc] - c2[j,i,a-nocc,b-nocc]
-                        str1 = hf_str ^ (1 << j) | (1 << b)
-                        c2aa*= cistring.cre_des_sign(b, j, hf_str)
-                        c2aa*= cistring.cre_des_sign(a, i, str1)
-                        str1^= (1 << i) | (1 << a)
-                        addr = cistring.str2addr(nmo, nocc, str1)
-                        fcivec[0,addr] = fcivec[addr,0] = c2aa
+        c2aa = c2 - c2.transpose(1,0,2,3)
+        ooidx = numpy.tril_indices(nocc, -1)
+        vvidx = numpy.tril_indices(nvir, -1)
+        c2aa = c2aa[ooidx][:,vvidx[0],vvidx[1]]
+        t2addr, t2sign = tn_addrs_signs(nmo, nocc, 2)
+        fcivec[0,t2addr] = fcivec[t2addr,0] = c2aa.ravel() * t2sign
 
     if nfroz == 0:
         return fcivec
@@ -298,6 +318,7 @@ def from_fcivec(ci0, norb, nelec, frozen=0):
     '''Extract CISD coefficients from FCI coefficients'''
     if frozen is not 0:
         raise NotImplementedError
+
     if isinstance(nelec, (int, numpy.number)):
         nelecb = nelec//2
         neleca = nelec - nelecb
@@ -309,10 +330,10 @@ def from_fcivec(ci0, norb, nelec, frozen=0):
 
     c0 = ci0[0,0]
     c1 = ci0[0,t1addr] * t1sign
-    c2 = numpy.einsum('i,j,ij->ij', t1sign, t1sign, ci0[t1addr][:,t1addr])
-    c1 = c1.reshape(nvir,nocc).T
-    c2 = c2.reshape(nvir,nocc,nvir,nocc).transpose(1,3,0,2)
-    return amplitudes_to_cisdvec(c0, c1[::-1], c2[::-1,::-1])
+    c2 = numpy.einsum('i,j,ij->ij', t1sign, t1sign, ci0[t1addr[:,None],t1addr])
+    c1 = c1.reshape(nocc,nvir)
+    c2 = c2.reshape(nocc,nvir,nocc,nvir).transpose(0,2,1,3)
+    return amplitudes_to_cisdvec(c0, c1, c2)
 
 def make_rdm1(myci, civec=None, nmo=None, nocc=None):
     '''
@@ -554,6 +575,46 @@ def as_scanner(ci):
 
 
 class CISD(lib.StreamObject):
+    '''restricted CISD
+
+    Attributes:
+        verbose : int
+            Print level.  Default value equals to :class:`Mole.verbose`
+        max_memory : float or int
+            Allowed memory in MB.  Default value equals to :class:`Mole.max_memory`
+        conv_tol : float
+            converge threshold.  Default is 1e-9.
+        max_cycle : int
+            max number of iterations.  Default is 50.
+        max_space : int
+            Davidson diagonalization space size.  Default is 12.
+        direct : bool
+            AO-direct CISD. Default is False.
+        async_io : bool
+            Allow for asynchronous function execution. Default is True.
+        frozen : int or list
+            If integer is given, the inner-most orbitals are frozen from CI
+            amplitudes.  Given the orbital indices (0-based) in a list, both
+            occupied and virtual orbitals can be frozen in CI calculation.
+
+            >>> mol = gto.M(atom = 'H 0 0 0; F 0 0 1.1', basis = 'ccpvdz')
+            >>> mf = scf.RHF(mol).run()
+            >>> # freeze 2 core orbitals
+            >>> myci = ci.CISD(mf).set(frozen = 2).run()
+            >>> # freeze 2 core orbitals and 3 high lying unoccupied orbitals
+            >>> myci.set(frozen = [0,1,16,17,18]).run()
+
+    Saved results
+
+        converged : bool
+            CISD converged or not
+        e_corr : float
+            CISD correlation correction
+        e_tot : float
+            Total CCSD energy (HF + correlation)
+        ci :
+            CI wavefunction coefficients
+    '''
 
     conv_tol = getattr(__config__, 'ci_cisd_CISD_conv_tol', 1e-9)
     max_cycle = getattr(__config__, 'ci_cisd_CISD_max_cycle', 50)
@@ -565,8 +626,12 @@ class CISD(lib.StreamObject):
 
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
         if 'dft' in str(mf.__module__):
-             raise RuntimeError('CISD Warning: The first argument mf is a DFT object. '
-                                'CISD calculation should be initialized with HF object.')
+            raise RuntimeError('CISD Warning: The first argument mf is a DFT object. '
+                               'CISD calculation should be initialized with HF object.\n'
+                               'DFT object can be converted to HF object with '
+                               'the code below:\n'
+                               '    mf_hf = scf.RHF(mol)\n'
+                               '    mf_hf.__dict__.update(mf_dft.__dict__)\n')
 
         if mo_coeff is None: mo_coeff = mf.mo_coeff
         if mo_occ   is None: mo_occ   = mf.mo_occ

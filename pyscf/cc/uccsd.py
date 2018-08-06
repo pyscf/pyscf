@@ -400,13 +400,13 @@ def vector_to_amplitudes(vector, nmo, nocc):
         #return ccsd.vector_to_amplitudes_s4(vector, nmo, nocc)
         raise RuntimeError('Input vector is GCCSD vecotr')
     else:
-        size = vector.size
         sizea = nocca * nvira + nocca*(nocca-1)//2*nvira*(nvira-1)//2
         sizeb = noccb * nvirb + noccb*(noccb-1)//2*nvirb*(nvirb-1)//2
-        sizeab = nocca * noccb * nvira * nvirb
-        t1a, t2aa = ccsd.vector_to_amplitudes_s4(vector[:sizea], nmoa, nocca)
-        t1b, t2bb = ccsd.vector_to_amplitudes_s4(vector[sizea:sizea+sizeb], nmob, noccb)
-        t2ab = vector[size-sizeab:].copy().reshape(nocca,noccb,nvira,nvirb)
+        sections = np.cumsum([sizea, sizeb])
+        veca, vecb, t2ab = np.split(vector, sections)
+        t1a, t2aa = ccsd.vector_to_amplitudes_s4(veca, nmoa, nocca)
+        t1b, t2bb = ccsd.vector_to_amplitudes_s4(vecb, nmob, noccb)
+        t2ab = t2ab.copy().reshape(nocca,noccb,nvira,nvirb)
         return (t1a,t1b), (t2aa,t2ab,t2bb)
 
 def amplitudes_from_rccsd(t1, t2):

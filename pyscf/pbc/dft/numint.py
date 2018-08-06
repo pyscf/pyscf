@@ -24,6 +24,8 @@ from pyscf import lib
 from pyscf.dft import numint
 from pyscf.dft.numint import eval_mat, _dot_ao_ao, _dot_ao_dm
 from pyscf.dft.numint import _scale_ao, _contract_rho
+from pyscf.dft.numint import _rks_gga_wv0, _rks_gga_wv1
+from pyscf.dft.numint import _uks_gga_wv0, _uks_gga_wv1
 from pyscf.dft.numint import OCCDROP
 from pyscf.pbc.dft.gen_grid import libpbc, make_mask, BLKSIZE
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, member
@@ -618,10 +620,9 @@ def nr_rks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
                 fxc0 = (fxc[0][ip:ip+ngrid], fxc[1][ip:ip+ngrid], fxc[2][ip:ip+ngrid])
                 ip += ngrid
 
-            wv = numpy.empty((4,ngrid))
             for i in range(nset):
                 rho1 = make_rho(i, ao_k1, mask, xctype)
-                wv = numint._rks_gga_wv1(rho, rho1, vxc0, fxc0, weight)
+                wv = _rks_gga_wv1(rho, rho1, vxc0, fxc0, weight)
                 vmat[i] += ni._fxc_mat(cell, ao_k1, wv, mask, xctype, ao_loc)
 
         # call swapaxes method to swap last two indices because vmat may be a 3D
@@ -648,6 +649,8 @@ def nr_rks_fxc_st(ni, cell, grids, xc_code, dm0, dms_alpha, relativity=0, single
 
     Ref. CPL, 256, 454
     '''
+    if kpts is None:
+        kpts = numpy.zeros((1,3))
     xctype = ni._xc_type(xc_code)
 
     make_rho, nset, nao = ni._gen_rho_evaluator(cell, dms_alpha)
@@ -718,8 +721,8 @@ def nr_rks_fxc_st(ni, cell, grids, xc_code, dm0, dms_alpha, relativity=0, single
                 # rho1[0 ] = |b><j| z_{bj}
                 # rho1[1:] = \nabla(|b><j|) z_{bj}
                 rho1 = make_rho(i, ao_k1, mask, xctype)
-                wv = numint._rks_gga_wv1(rho, rho1, (None,fgamma),
-                                         (frho,frhogamma,fgg), weight)
+                wv = _rks_gga_wv1(rho, rho1, (None,fgamma),
+                                  (frho,frhogamma,fgg), weight)
                 vmat[i] += ni._fxc_mat(cell, ao_k1, wv, mask, xctype, ao_loc)
 
         for i in range(nset):  # for (\nabla\mu) \nu + \mu (\nabla\nu)
@@ -840,8 +843,8 @@ def nr_uks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
             for i in range(nset):
                 rho1a = make_rhoa(i, ao_k1, mask, xctype)
                 rho1b = make_rhob(i, ao_k1, mask, xctype)
-                wva, wvb = numint._uks_gga_wv1((rho0a,rho0b), (rho1a,rho1b),
-                                               vxc0, fxc0, weight)
+                wva, wvb = _uks_gga_wv1((rho0a,rho0b), (rho1a,rho1b),
+                                        vxc0, fxc0, weight)
                 vmata[i] += ni._fxc_mat(cell, ao_k1, wva, mask, xctype, ao_loc)
                 vmatb[i] += ni._fxc_mat(cell, ao_k1, wvb, mask, xctype, ao_loc)
 

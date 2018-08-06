@@ -35,6 +35,7 @@ from pyscf.pbc.scf import khf
 from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import numint
 from pyscf.dft.rks import define_xc_
+from pyscf.pbc.dft import multigrid
 from pyscf import __config__
 
 
@@ -61,6 +62,17 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     if kpt is None: kpt = ks.kpt
     t0 = (time.clock(), time.time())
 
+    omega, alpha, hyb = ks._numint.rsh_and_hybrid_coeff(ks.xc, spin=cell.spin)
+    hybrid = abs(hyb) > 1e-10
+
+    if not hybrid and isinstance(ks.with_df, multigrid.MultiGridFFTDF):
+        n, exc, vxc = multigrid.nr_rks(ks.with_df, ks.xc, dm, hermi,
+                                       kpt.reshape(1,3), kpts_band,
+                                       with_j=True, return_j=False)
+        logger.debug(ks, 'nelec by numeric integration = %s', n)
+        t0 = logger.timer(ks, 'vxc', *t0)
+        return vxc
+
     ground_state = (isinstance(dm, numpy.ndarray) and dm.ndim == 2
                     and kpts_band is None)
 
@@ -80,8 +92,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         logger.debug(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
 
-    omega, alpha, hyb = ks._numint.rsh_and_hybrid_coeff(ks.xc, spin=cell.spin)
-    if abs(hyb) < 1e-10:
+    if not hybrid:
         vj = ks.get_j(cell, dm, hermi, kpt, kpts_band)
         vxc += vj
     else:

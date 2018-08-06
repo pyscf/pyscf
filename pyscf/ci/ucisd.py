@@ -356,7 +356,7 @@ def cisdvec_to_amplitudes(civec, nmo, nocc):
     return c0, (c1a,c1b), (c2aa,c2ab,c2bb)
 
 def to_fcivec(cisdvec, norb, nelec, frozen=0):
-    from pyscf.ci.gcisd import t2strs
+    '''Convert CISD coefficients to FCI coefficients'''
     if isinstance(nelec, (int, numpy.number)):
         nelecb = nelec//2
         neleca = nelec - nelecb
@@ -386,31 +386,31 @@ def to_fcivec(cisdvec, norb, nelec, frozen=0):
     c0, c1, c2 = cisdvec_to_amplitudes(cisdvec, nmo, nocc)
     c1a, c1b = c1
     c2aa, c2ab, c2bb = c2
-    t1addra, t1signa = cisd.t1strs(nmoa, nocca)
-    t1addrb, t1signb = cisd.t1strs(nmob, noccb)
+    t1addra, t1signa = cisd.tn_addrs_signs(nmoa, nocca, 1)
+    t1addrb, t1signb = cisd.tn_addrs_signs(nmob, noccb, 1)
 
     na = cistring.num_strings(nmoa, nocca)
     nb = cistring.num_strings(nmob, noccb)
     fcivec = numpy.zeros((na,nb))
     fcivec[0,0] = c0
-    fcivec[t1addra,0] = c1a[::-1].T.ravel() * t1signa
-    fcivec[0,t1addrb] = c1b[::-1].T.ravel() * t1signb
-    c2ab = c2ab[::-1,::-1].transpose(2,0,3,1).reshape(nocca*nvira,-1)
+    fcivec[t1addra,0] = c1a.ravel() * t1signa
+    fcivec[0,t1addrb] = c1b.ravel() * t1signb
+    c2ab = c2ab.transpose(0,2,1,3).reshape(nocca*nvira,-1)
     c2ab = numpy.einsum('i,j,ij->ij', t1signa, t1signb, c2ab)
-    lib.takebak_2d(fcivec, c2ab, t1addra, t1addrb)
+    fcivec[t1addra[:,None],t1addrb] = c2ab
 
     if nocca > 1 and nvira > 1:
         ooidx = numpy.tril_indices(nocca, -1)
         vvidx = numpy.tril_indices(nvira, -1)
         c2aa = c2aa[ooidx][:,vvidx[0],vvidx[1]]
-        t2addra, t2signa = t2strs(nmoa, nocca)
-        fcivec[t2addra,0] = c2aa[::-1].T.ravel() * t2signa
+        t2addra, t2signa = cisd.tn_addrs_signs(nmoa, nocca, 2)
+        fcivec[t2addra,0] = c2aa.ravel() * t2signa
     if noccb > 1 and nvirb > 1:
         ooidx = numpy.tril_indices(noccb, -1)
         vvidx = numpy.tril_indices(nvirb, -1)
         c2bb = c2bb[ooidx][:,vvidx[0],vvidx[1]]
-        t2addrb, t2signb = t2strs(nmob, noccb)
-        fcivec[0,t2addrb] = c2bb[::-1].T.ravel() * t2signb
+        t2addrb, t2signb = cisd.tn_addrs_signs(nmob, noccb, 2)
+        fcivec[0,t2addrb] = c2bb.ravel() * t2signb
 
     if nfroza == nfrozb == 0:
         return fcivec
@@ -458,7 +458,7 @@ def to_fcivec(cisdvec, norb, nelec, frozen=0):
     return fcivec1
 
 def from_fcivec(ci0, norb, nelec, frozen=0):
-    from pyscf.ci.gcisd import t2strs
+    '''Extract CISD coefficients from FCI coefficients'''
     if frozen is not 0:
         raise NotImplementedError
     if isinstance(nelec, (int, numpy.number)):
@@ -471,25 +471,24 @@ def from_fcivec(ci0, norb, nelec, frozen=0):
     nocc = nocca, noccb = neleca, nelecb
     nvira = norba - nocca
     nvirb = norbb - noccb
-    t1addra, t1signa = cisd.t1strs(norba, nocca)
-    t1addrb, t1signb = cisd.t1strs(norbb, noccb)
+    t1addra, t1signa = cisd.tn_addrs_signs(norba, nocca, 1)
+    t1addrb, t1signb = cisd.tn_addrs_signs(norbb, noccb, 1)
 
     na = cistring.num_strings(norba, nocca)
     nb = cistring.num_strings(norbb, noccb)
     ci0 = ci0.reshape(na,nb)
     c0 = ci0[0,0]
-    c1a = ((ci0[t1addra,0] * t1signa).reshape(nvira,nocca).T)[::-1]
-    c1b = ((ci0[0,t1addrb] * t1signb).reshape(nvirb,noccb).T)[::-1]
+    c1a = (ci0[t1addra,0] * t1signa).reshape(nocca,nvira)
+    c1b = (ci0[0,t1addrb] * t1signb).reshape(noccb,nvirb)
 
-    c2ab = numpy.einsum('i,j,ij->ij', t1signa, t1signb, ci0[t1addra][:,t1addrb])
-    c2ab = c2ab.reshape(nvira,nocca,nvirb,noccb).transpose(1,3,0,2)
-    c2ab = c2ab[::-1,::-1]
-    t2addra, t2signa = t2strs(norba, nocca)
-    c2aa = (ci0[t2addra,0] * t2signa).reshape(nvira*(nvira-1)//2,-1).T
-    c2aa = _unpack_4fold(c2aa[::-1], nocca, nvira)
-    t2addrb, t2signb = t2strs(norbb, noccb)
-    c2bb = (ci0[0,t2addrb] * t2signb).reshape(nvirb*(nvirb-1)//2,-1).T
-    c2bb = _unpack_4fold(c2bb[::-1], noccb, nvirb)
+    c2ab = numpy.einsum('i,j,ij->ij', t1signa, t1signb, ci0[t1addra[:,None],t1addrb])
+    c2ab = c2ab.reshape(nocca,nvira,noccb,nvirb).transpose(0,2,1,3)
+    t2addra, t2signa = cisd.tn_addrs_signs(norba, nocca, 2)
+    t2addrb, t2signb = cisd.tn_addrs_signs(norbb, noccb, 2)
+    c2aa = (ci0[t2addra,0] * t2signa).reshape(nocca*(nocca-1)//2, nvira*(nvira-1)//2)
+    c2aa = _unpack_4fold(c2aa, nocca, nvira)
+    c2bb = (ci0[0,t2addrb] * t2signb).reshape(noccb*(noccb-1)//2, nvirb*(nvirb-1)//2)
+    c2bb = _unpack_4fold(c2bb, noccb, nvirb)
 
     return amplitudes_to_cisdvec(c0, (c1a,c1b), (c2aa,c2ab,c2bb))
 
