@@ -264,45 +264,41 @@ def ipccsd_diag(eom, imds=None):
     Hr1a = -np.diag(imds.Foo)
     Hr1b = -np.diag(imds.FOO)
 
-    Hr2aaa = np.zeros((nocc_a,nocc_a,nvir_a),dtype=dtype)
-    for i in range(nocc_a):
-     for j in range(nocc_a):
-      for a in range(nvir_a):
-       Hr2aaa[i,j,a]=imds.Fvv[a,a]-imds.Foo[i,i]-imds.Foo[j,j] \
-       +imds.Woooo[i,i,j,j] \
-       +imds.Wovvo[i,a,a,i] \
-       +imds.Wovvo[j,a,a,j] \
-       -(np.dot(imds.Wovov[j,a,i,:], t2aa[j,i,a,:]))
+    Fvv_diag = np.diag(imds.Fvv)
+    Foo_diag = np.diag(imds.Foo)
+    FOO_diag = np.diag(imds.FOO)
+    FVV_diag = np.diag(imds.FVV)
 
-    Hr2baa = np.zeros((nocc_b,nocc_a,nvir_a),dtype=dtype)
-    for i in range(nocc_b):
-     for j in range(nocc_a):
-      for a in range(nvir_a):
-       Hr2baa[i,j,a]=imds.Fvv[a,a]-imds.FOO[i,i]-imds.Foo[j,j] \
-       +(imds.WooOO[j,j,i,i]) \
-       +imds.WOvvO[i,a,a,i] \
-       +imds.Wovvo[j,a,a,j] \
-       -np.dot(imds.WovOV[j,a,i,:], t2ab[j,i,a,:])
+    Woooo_slice = np.einsum('iijj->ij',imds.Woooo)
+    Wovvo_slice = np.einsum('iaai->ia',imds.Wovvo)
+    WooOO_slice = np.einsum('jjii->ij',imds.WooOO)
+    WOvvO_slice = np.einsum('iaai->ia',imds.WOvvO)
+    WooOO_slice_T = np.einsum('iijj->ij',imds.WooOO)
+    WoVVo_slice = np.einsum('iaai->ia',imds.WoVVo)
+    WOVVO_slice = np.einsum('jaaj->ja',imds.WOVVO)
+    WOOOO_slice = np.einsum('iijj->ij',imds.WOOOO)
 
-    Hr2abb = np.zeros((nocc_a,nocc_b,nvir_b),dtype=dtype)
-    for i in range(nocc_a):
-     for j in range(nocc_b):
-      for a in range(nvir_b):
-       Hr2abb[i,j,a]=imds.FVV[a,a]-imds.Foo[i,i]-imds.FOO[j,j] \
-       +(imds.WooOO[i,i,j,j]) \
-       +imds.WoVVo[i,a,a,i] \
-       +imds.WOVVO[j,a,a,j] \
-       -np.dot(imds.WovOV[i,:,j,a], t2ab[i,j,:,a])
+    Wovov_t2_dot = np.einsum('jaib,jiab->ija',imds.Wovov,t2aa)
+    WovOV_t2_dot = np.einsum('ibja,ijba->ija',imds.WovOV,t2ab)
+    WovOV_t2_dot_T = np.einsum('jaib,jiab->ija',imds.WovOV,t2ab)
+    WOVOV_t2_dot = np.einsum('jaib,jiab->ija',imds.WOVOV,t2bb)
+    
+    Hr2aaa = Fvv_diag[None,None,:] - Foo_diag[:,None,None] - Foo_diag[None,:,None] \
+             + Woooo_slice[:,:,None] + Wovvo_slice[:,None,:] + Wovvo_slice[None,:,:] \
+             - Wovov_t2_dot
 
-    Hr2bbb = np.zeros((nocc_b,nocc_b,nvir_b),dtype=dtype)
-    for i in range(nocc_b):
-     for j in range(nocc_b):
-      for a in range(nvir_b):
-       Hr2bbb[i,j,a]=imds.FVV[a,a]-imds.FOO[i,i]-imds.FOO[j,j] \
-       +imds.WOOOO[i,i,j,j] \
-       +imds.WOVVO[i,a,a,i] \
-       +imds.WOVVO[j,a,a,j] \
-       -(np.dot(imds.WOVOV[j,a,i,:],t2bb[j,i,a,:]))
+    Hr2baa = Fvv_diag[None,None,:] - FOO_diag[:,None,None] - Foo_diag[None,:,None] \
+             + WooOO_slice[:,:,None] + WOvvO_slice[:,None,:] + Wovvo_slice[None,:,:] \
+             - WovOV_t2_dot_T
+
+    Hr2abb = FVV_diag[None,None,:] - Foo_diag[:,None,None] - FOO_diag[None,:,None] \
+             + WooOO_slice_T[:,:,None] + WoVVo_slice[:,None,:] + WOVVO_slice[None,:,:] \
+             - WovOV_t2_dot
+
+    Hr2bbb = FVV_diag[None,None,:] - FOO_diag[:,None,None] - FOO_diag[None,:,None] \
+             + WOOOO_slice[:,:,None] + WOVVO_slice[:,None,:] + WOVVO_slice[None,:,:] \
+             - WOVOV_t2_dot
+
 
     vector = amplitudes_to_vector_ip([Hr1a, Hr1b], [Hr2aaa, Hr2baa, Hr2abb, Hr2bbb])
     return vector
@@ -713,6 +709,55 @@ def eaccsd_diag(eom, imds=None):
 
     Hr1a = np.diag(imds.Fvv)
     Hr1b = np.diag(imds.FVV)
+
+    #-------------- intermediates
+
+    Fvv_diag = np.diag(imds.Fvv)
+    Foo_diag = np.diag(imds.Foo)
+    FOO_diag = np.diag(imds.FOO)
+    FVV_diag = np.diag(imds.FVV)
+
+    Wovvo_slice = np.einsum('jbbj->jb',imds.Wovvo)
+    Wovov_t2_dot = np.einsum('iajb,ijab->jab',imds.Wovov,t2aa)
+    WoVVo_slice  = np.einsum('jaaj->ja',imds.WoVVo)
+    WovOV_t2_dot = np.einsum('jbia,ijab->jab',imds.WovOV,t2ba)
+    WOVVO_slice = np.einsum('jaaj->ja',imds.WOVVO)
+    WOvvO_slice = np.einsum('jbbj->jb',imds.WOvvO)
+    WovOV_t2_dot_T = np.einsum('ibja,ijba->jab',imds.WovOV,t2ab)
+    WOVOV_t2_dot = np.einsum('iajb,ijab->jab',imds.WOVOV,t2bb)
+
+    #-------------- contraction
+
+    Hr2aaa = Fvv_diag[None,:,None]+Fvv_diag[None,None,:]-Foo_diag[:,None,None]+ \
+             Wovvo_slice[:,None,:]+Wovvo_slice[:,:,None]-Wovov_t2_dot
+
+    Hr2aba = FVV_diag[None,:,None]+Fvv_diag[None,None,:]-Foo_diag[:,None,None]+ \
+             Wovvo_slice[:,None,:]+WoVVo_slice[:,:,None]-WovOV_t2_dot
+
+    Hr2bab = -FOO_diag[:,None,None]+FVV_diag[None,:,None]+Fvv_diag[None,None,:]+ \
+             WOVVO_slice[:,:,None]+WOvvO_slice[:,None,:]-WovOV_t2_dot_T
+    Hr2bab = Hr2bab.transpose(0,2,1)
+
+    Hr2bbb = -FOO_diag[:,None,None]+FVV_diag[None,:,None]+FVV_diag[None,None,:]+ \
+             WOVVO_slice[:,:,None]+WOVVO_slice[:,None,:]-WOVOV_t2_dot
+
+    #-------------- imds.Wvvvv not None
+
+    if(imds.Wvvvv is not None):
+      Wvvvv_slice_A = np.einsum('aabb->ab',imds.Wvvvv)
+      Wvvvv_slice_B = np.einsum('abba->ab',imds.Wvvvv)
+      Hr2aaa += 0.5*Wvvvv_slice_A[None,:,:]-0.5*Wvvvv_slice_B[None,:,:]
+      WVVvv_slice = np.einsum('aabb->ab',imds.WVVvv)
+      Hr2aba += WVVvv_slice[None,:,:]
+      WvvVV_slice = np.einsum('aabb->ab',imds.WvvVV)
+      Hr2bab += WvvVV_slice[None,:,:]
+      WVVVV_slice_A = np.einsum('aabb->ab',imds.WVVVV)
+      WVVVV_slice_B = np.einsum('abba->ab',imds.WVVVV)
+      Hr2bbb += 0.5*WVVVV_slice_A[None,:,:]-0.5*WVVVV_slice_B[None,:,:]
+
+    #-------------- original implementation
+
+    '''
     Hr2aaa = np.zeros((nocc_a,nvir_a,nvir_a), dtype=dtype)
     Hr2bab = np.zeros((nocc_b,nvir_a,nvir_b), dtype=dtype)
     Hr2aba = np.zeros((nocc_a,nvir_b,nvir_a), dtype=dtype)
@@ -776,6 +821,13 @@ def eaccsd_diag(eom, imds=None):
                 Hr2bbb[j,a,b] += imds.WOVVO[j,b,b,j]
                 Hr2bbb[j,a,b] += imds.WOVVO[j,a,a,j]
                 Hr2bbb[j,a,b] -= (np.dot(imds.WOVOV[:,a,j,b], t2bb[:,j,a,b]))
+    #-------------- comparison
+
+    print np.abs(Hr2aaa-Hr2aaa_n).max()
+    print np.abs(Hr2aba-Hr2aba_n).max()
+    print np.abs(Hr2bab-Hr2bab_n).max()
+    print np.abs(Hr2bbb-Hr2bbb_n).max()
+    '''
 
     vector = amplitudes_to_vector_ea((Hr1a,Hr1b), (Hr2aaa,Hr2aba,Hr2bab,Hr2bbb))
     return vector
