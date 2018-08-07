@@ -120,16 +120,29 @@ class UHF(mol_uhf.UHF, pbchf.SCF):
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         pbchf.SCF.__init__(self, cell, kpt, exxdiv)
         self.nelec = None
-        self._keys = self._keys.union(['nelec'])
+
+    @property
+    def nelec(self):
+        if self._nelec is not None:
+            return self._nelec
+        else:
+            cell = self.cell
+            ne = cell.nelectron
+            nalpha = (ne + cell.spin) // 2
+            nbeta = nalpha - cell.spin
+            if nalpha + nbeta != ne:
+                raise RuntimeError('Electron number %d and spin %d are not consistent\n'
+                                   'Note cell.spin = 2S = Nalpha - Nbeta, not 2S+1' %
+                                   (ne, self.spin))
+            return nalpha, nbeta
+    @nelec.setter
+    def nelec(self, x):
+        self._nelec = x
 
     def dump_flags(self):
         pbchf.SCF.dump_flags(self)
-        if self.nelec is None:
-            nelec = self.cell.nelec
-        else:
-            nelec = self.nelec
         logger.info(self, 'number of electrons per unit cell  '
-                    'alpha = %d beta = %d', *nelec)
+                    'alpha = %d beta = %d', *self.nelec)
         return self
 
     build = pbchf.SCF.build

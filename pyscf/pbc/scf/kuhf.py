@@ -98,9 +98,7 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
 
     if mo_energy_kpts is None: mo_energy_kpts = mf.mo_energy
 
-    nkpts = len(mo_energy_kpts[0])
-
-    nocc_a = mf.nelec[0] * nkpts
+    nocc_a, nocc_b = mf.nelec
     mo_energy = np.sort(np.hstack(mo_energy_kpts[0]))
     fermi_a = mo_energy[nocc_a-1]
     mo_occ_kpts = [[], []]
@@ -111,8 +109,7 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
     else:
         logger.info(mf, 'alpha HOMO = %.12g  (no LUMO because of small basis) ', fermi_a)
 
-    if mf.nelec[1] > 0:
-        nocc_b = mf.nelec[1] * nkpts
+    if nocc_b > 0:
         mo_energy = np.sort(np.hstack(mo_energy_kpts[1]))
         fermi_b = mo_energy[nocc_b-1]
         for mo_e in mo_energy_kpts[1]:
@@ -331,8 +328,25 @@ class KUHF(pbcuhf.UHF, khf.KSCF):
     def __init__(self, cell, kpts=np.zeros((1,3)),
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         khf.KSCF.__init__(self, cell, kpts, exxdiv)
-        self.nelec = cell.nelec
-        self._keys = self._keys.union(['nelec'])
+        self.nelec = None
+
+    @property
+    def nelec(self):
+        if self._nelec is not None:
+            return self._nelec
+        else:
+            cell = self.cell
+            nkpts = len(self.kpts)
+            nalpha = (cell.tot_electrons(nkpts) + cell.spin) // 2
+            nbeta = nalpha - cell.spin
+            if nalpha + nbeta != ne:
+                raise RuntimeError('Electron number %d and spin %d are not consistent\n'
+                                   'Note cell.spin = 2S = Nalpha - Nbeta, not 2S+1' %
+                                   (ne, self.spin))
+            return nalpha, nbeta
+    @nelec.setter
+    def nelec(self, x):
+        self._nelec = x
 
     def dump_flags(self):
         khf.KSCF.dump_flags(self)
@@ -375,7 +389,10 @@ class KUHF(pbcuhf.UHF, khf.KSCF):
 
         if cell.dimension < 3:
             ne = np.einsum('xkij,kji->xk', dm_kpts, self.get_ovlp(cell)).real
-            nelec = np.asarray(cell.nelec).reshape(2,1)
+            # FIXME: consider the fractional num_electron or not? This maybe
+            # relates to the charged system.
+            nkpts = len(self.kpts)
+            nelec = np.asarray(self.nelec).reshape(2,1) / float(nkpts)
             if np.any(abs(ne - nelec) > 1e-7):
                 logger.warn(self, 'Big error detected in the electron number '
                             'of initial guess density matrix (Ne/cell = %g)!\n'

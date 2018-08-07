@@ -535,11 +535,7 @@ class SymAdaptedROHF(rohf.ROHF):
                 if irname not in self.mol.irrep_name:
                     logger.warn(self, 'No irrep %s', irname)
 
-            if getattr(self, 'nelec', None) is None:
-                nelec = self.mol.nelec
-            else:
-                nelec = self.nelec
-            check_irrep_nelec(mol, self.irrep_nelec, nelec)
+            check_irrep_nelec(mol, self.irrep_nelec, self.nelec)
         return hf.RHF.build(self, mol)
 
     @lib.with_doc(eig.__doc__)
@@ -612,12 +608,7 @@ class SymAdaptedROHF(rohf.ROHF):
                                                    mo_ea[rest_idx], mo_eb[rest_idx],
                                                    ncore, nopen)
 
-        if self.nelec is None:
-            nelec = self.mol.nelec
-        else:
-            nelec = self.nelec
-        ncore = nelec[1]
-        nocc  = nelec[0]
+        nocc, ncore = self.nelec
         nopen = nocc - ncore
         vir_idx = (mo_occ==0)
         if self.verbose >= logger.INFO and nocc < nmo and ncore > 0:

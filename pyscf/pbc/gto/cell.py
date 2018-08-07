@@ -1059,6 +1059,12 @@ def _split_basis(cell, delimiter=EXP_DELIMITER):
     pcell._env = _env
     return pcell, scipy.linalg.block_diag(*contr_coeff)
 
+def tot_electrons(cell, nkpts=1):
+    '''Total number of electrons
+    '''
+    nelectron = cell.atom_charges().sum() * nkpts - cell.charge
+    return int(nelectron)
+
 
 class Cell(mole.Mole):
     '''A Cell object holds the basic information of a crystal.
@@ -1135,13 +1141,15 @@ class Cell(mole.Mole):
 # Overwriting nelec method to avoid this check.
         @property
         def nelec(self):
-            ne = self.nelectron
+            ne = self.tot_electrons()
             nalpha = (ne + self.spin) // 2
             nbeta = nalpha - self.spin
             if nalpha + nbeta != ne:
                 warnings.warn('Electron number %d and spin %d are not consistent '
                               'in unit cell\n' % (ne, self.spin))
             return nalpha, nbeta
+
+    tot_electrons = tot_electrons
 
 #Note: Exculde dump_input, parse_arg, basis from kwargs to avoid parsing twice
     def build(self, dump_input=True, parse_arg=True,

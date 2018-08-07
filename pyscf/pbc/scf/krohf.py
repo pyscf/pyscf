@@ -130,10 +130,7 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
     else:
         mo_ea_kpts = mo_eb_kpts = mo_energy_kpts
 
-    nkpts = len(mo_energy_kpts)
-    nocc_a = mf.nelec[0] * nkpts
-    nocc_b = mf.nelec[1] * nkpts
-
+    nocc_a, nocc_b = mf.nelec
     mo_energy_kpts1 = np.hstack(mo_energy_kpts)
     mo_energy = np.sort(mo_energy_kpts1)
     if nocc_b > 0:
@@ -266,8 +263,25 @@ class KROHF(pbcrohf.ROHF, khf.KRHF):
     def __init__(self, cell, kpts=np.zeros((1,3)),
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         khf.KSCF.__init__(self, cell, kpts, exxdiv)
-        self.nelec = cell.nelec
-        self._keys = self._keys.union(['nelec'])
+        self.nelec = None
+
+    @property
+    def nelec(self):
+        if self._nelec is not None:
+            return self._nelec
+        else:
+            cell = self.cell
+            nkpts = len(self.kpts)
+            nalpha = (cell.tot_electrons(nkpts) + cell.spin) // 2
+            nbeta = nalpha - cell.spin
+            if nalpha + nbeta != ne:
+                raise RuntimeError('Electron number %d and spin %d are not consistent\n'
+                                   'Note cell.spin = 2S = Nalpha - Nbeta, not 2S+1' %
+                                   (ne, self.spin))
+            return nalpha, nbeta
+    @nelec.setter
+    def nelec(self, x):
+        self._nelec = x
 
     def dump_flags(self):
         khf.KSCF.dump_flags(self)
@@ -306,7 +320,10 @@ class KROHF(pbcrohf.ROHF, khf.KRHF):
 
         if cell.dimension < 3:
             ne = np.einsum('xkij,kji->xk', dm_kpts, self.get_ovlp(cell))
-            nelec = np.asarray(cell.nelec).reshape(2,1)
+            # FIXME: consider the fractional num_electron or not? This maybe
+            # relates to the charged system.
+            nkpts = len(self.kpts)
+            nelec = np.asarray(self.nelec).reshape(2,1) / float(nkpts)
             if np.any(abs(ne - nelec) > 1e-7):
                 logger.warn(self, 'Big error detected in the electron number '
                             'of initial guess density matrix (Ne/cell = %g)!\n'

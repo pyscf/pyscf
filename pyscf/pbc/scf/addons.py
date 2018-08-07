@@ -60,7 +60,6 @@ def smearing_(mf, sigma=None, method=SMEARING_METHOD):
     mf_class = mf.__class__
     is_uhf = isinstance(mf, uhf.UHF)
     is_khf = isinstance(mf, khf.KSCF)
-    cell_nelec = mf.cell.nelectron
 
     def fermi_smearing_occ(m, mo_energy_kpts, sigma):
         occ = numpy.zeros_like(mo_energy_kpts)
@@ -92,12 +91,13 @@ def smearing_(mf, sigma=None, method=SMEARING_METHOD):
             nkpts = len(mf.kpts)
         else:
             nkpts = 1
+        nelectron = mf.cell.tot_electrons(nkpts)
         if is_uhf:
-            nocc = cell_nelec * nkpts
+            nocc = nelectron
             mo_es = numpy.append(numpy.hstack(mo_energy_kpts[0]),
                                  numpy.hstack(mo_energy_kpts[1]))
         else:
-            nocc = cell_nelec * nkpts // 2
+            nocc = nelectron // 2
             mo_es = numpy.hstack(mo_energy_kpts)
 
         if mf.smearing_method.lower() == 'fermi':  # Fermi-Dirac smearing
@@ -112,7 +112,7 @@ def smearing_(mf, sigma=None, method=SMEARING_METHOD):
             mo_occ_kpts = f_occ(m, mo_es, sigma)
             if not is_uhf:
                 mo_occ_kpts *= 2
-            return ( mo_occ_kpts.sum()/nkpts - cell_nelec )**2
+            return (mo_occ_kpts.sum() - nelectron)**2
         res = scipy.optimize.minimize(nelec_cost_fn, fermi, method='Powell')
         mu = res.x
         mo_occs = f = f_occ(mu, mo_es, sigma)
@@ -144,7 +144,7 @@ def smearing_(mf, sigma=None, method=SMEARING_METHOD):
                 mo_occ_kpts = mo_occs
 
         logger.debug(mf, '    Fermi level %g  Sum mo_occ_kpts = %s  should equal nelec = %s',
-                     fermi, mo_occs.sum()/nkpts, cell_nelec)
+                     fermi, mo_occs.sum(), nelectron)
         logger.info(mf, '    sigma = %g  Optimized mu = %.12g  entropy = %.12g',
                     mf.sigma, mu, mf.entropy)
 
