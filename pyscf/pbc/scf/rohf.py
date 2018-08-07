@@ -37,6 +37,8 @@ get_occ = mol_rohf.get_occ
 get_grad = mol_rohf.get_grad
 make_rdm1 = mol_rohf.make_rdm1
 energy_elec = mol_rohf.energy_elec
+dip_moment = pbcuhf.dip_moment
+get_rho = pbcuhf.get_rho
 
 class ROHF(mol_rohf.ROHF, pbchf.RHF):
     '''ROHF class for PBCs.
@@ -98,10 +100,17 @@ class ROHF(mol_rohf.ROHF, pbchf.RHF):
         '''
         raise NotImplementedError
 
-    def dip_moment(self, mol=None, dm=None, unit='Debye', verbose=logger.NOTE,
+    get_rho = get_rho
+
+    @lib.with_doc(dip_moment.__doc__)
+    def dip_moment(self, cell=None, dm=None, unit='Debye', verbose=logger.NOTE,
                    **kwargs):
-        # skip dipole memont for crystal
-        return
+        if dm is None:
+            dm = self.make_rdm1()
+        rho = kwargs.pop('rho', None)
+        if rho is None:
+            rho = self.get_rho(dm)
+        return dip_moment(cell, dm, unit, verbose, rho=rho, kpt=self.kpt, **kwargs)
 
     def get_init_guess(self, cell=None, key='minao'):
         if cell is None: cell = self.cell

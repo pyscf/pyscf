@@ -206,6 +206,8 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
 
 
 energy_elec = kuhf.energy_elec
+dip_moment = kuhf.dip_moment
+get_rho = kuhf.get_rho
 
 
 @lib.with_doc(khf.mulliken_meta.__doc__)
@@ -391,10 +393,17 @@ class KROHF(pbcrohf.ROHF, khf.KRHF):
         return mulliken_meta(cell, dm, s=s, verbose=verbose,
                              pre_orth_method=pre_orth_method)
 
-    def dip_moment(self, mol=None, dm=None, unit='Debye', verbose=logger.NOTE,
+    get_rho = get_rho
+
+    @lib.with_doc(dip_moment.__doc__)
+    def dip_moment(self, cell=None, dm=None, unit='Debye', verbose=logger.NOTE,
                    **kwargs):
-        # skip dipole memont for crystal
-        return
+        if dm is None:
+            dm = self.make_rdm1()
+        rho = kwargs.pop('rho', None)
+        if rho is None:
+            rho = self.get_rho(dm)
+        return dip_moment(cell, dm, unit, verbose, rho=rho, kpts=self.kpts, **kwargs)
 
     @lib.with_doc(pbcrohf.ROHF.spin_square.__doc__)
     def spin_square(self, mo_coeff=None, s=None):

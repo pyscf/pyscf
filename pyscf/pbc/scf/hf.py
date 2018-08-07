@@ -32,6 +32,7 @@ import h5py
 from pyscf.scf import hf as mol_hf
 from pyscf import lib
 from pyscf.lib import logger
+from pyscf.data import nist
 from pyscf.scf.hf import make_rdm1
 from pyscf.pbc import tools
 from pyscf.pbc.gto import ecp
@@ -197,6 +198,62 @@ get_occ = mol_hf.get_occ
 get_grad = mol_hf.get_grad
 make_rdm1 = mol_hf.make_rdm1
 energy_elec = mol_hf.energy_elec
+
+
+def dip_moment(cell, dm, unit='Debye', verbose=logger.NOTE,
+               grids=None, rho=None, kpt=np.zeros(3)):
+    ''' Dipole moment in the unit cell.
+
+    Args:
+         cell : an instance of :class:`Cell`
+
+         dm (ndarray) : density matrix
+
+    Return:
+        A list: the dipole moment on x, y and z components
+    '''
+    from pyscf.pbc.dft import gen_grid
+    from pyscf.pbc.dft import numint
+    log = logger.new_logger(cell, verbose)
+    if grids is None:
+        grids = gen_grid.UniformGrids(cell)
+    if rho is None:
+        rho = numint.NumInt().get_rho(cell, dm, grids, kpt, cell.max_memory)
+
+    charges = cell.atom_charges()
+    coords  = cell.atom_coords()
+    charge_center = np.einsum('i,ix->x', charges, coords) / charges.sum()
+
+    a = cell.lattice_vectors()
+    b = np.linalg.inv(a).T
+    r = grids.coords
+    # shift the unit cell
+    rfrac = np.linalg.solve(r - charge_center, b.T)
+    rfrac -= np.floor(rfrac)
+    r = lib.dot(rfrac, a)
+
+    dip = -np.einsum('g,g,gx->x', rho, grids.weights, r)
+
+    if unit.upper() == 'DEBYE':
+        dip *= nist.AU2DEBYE
+        log.note('Dipole moment(X, Y, Z, Debye): %8.5f, %8.5f, %8.5f', *dip)
+    else:
+        log.note('Dipole moment(X, Y, Z, A.U.): %8.5f, %8.5f, %8.5f', *dip)
+    return dip
+
+def get_rho(mf, dm=None, grids=None, kpt=None):
+    '''Compute density in real space
+    '''
+    from pyscf.pbc.dft import gen_grid
+    from pyscf.pbc.dft import numint
+    if dm is None:
+        dm = mf.make_rdm1()
+    if grids is None:
+        grids = gen_grid.UniformGrids(cell)
+    if kpt is None:
+        kpt = mf.kpt
+    ni = numint.NumInt()
+    return ni.get_rho(mf.cell, dm, grids, kpt, mf.max_memory)
 
 
 class SCF(mol_hf.SCF):
@@ -409,10 +466,15 @@ class SCF(mol_hf.SCF):
 
     get_bands = get_bands
 
-    def dip_moment(self, mol=None, dm=None, unit='Debye', verbose=logger.NOTE,
+    get_rho = get_rho
+
+    @lib.with_doc(dip_moment.__doc__)
+    def dip_moment(self, cell=None, dm=None, unit='Debye', verbose=logger.NOTE,
                    **kwargs):
-        # skip dipole memont for crystal
-        return
+        rho = kwargs.pop('rho', None)
+        if rho is None:
+            rho = self.get_rho(dm)
+        return dip_moment(cell, dm, unit, verbose, rho=rho, kpt=self.kpt, **kwargs)
 
     def get_init_guess(self, cell=None, key='minao'):
         if cell is None: cell = self.cell

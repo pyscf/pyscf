@@ -111,6 +111,13 @@ def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf=None):
     logger.debug(mf, 'E1 = %s  Ecoul = %s  Exc = %s', e1, vhf.ecoul, vhf.exc)
     return tot_e, vhf.ecoul + vhf.exc
 
+@lib.with_doc(kuhf.get_rho.__doc__)
+def get_rho(mf, dm=None, grids=None, kpts=None):
+    from pyscf.pbc.dft import krks
+    if dm is None:
+        dm = self.make_rdm1()
+    return krks.get_rho(mf, dm[0]+dm[1], grids, kpts)
+
 
 class KUKS(kuhf.KUHF):
     '''RKS class adapted for PBCs with k-point sampling.
@@ -125,8 +132,8 @@ class KUKS(kuhf.KUHF):
         self.grids.dump_flags()
 
     get_veff = get_veff
-
     energy_elec = energy_elec
+    get_rho = get_rho
 
     define_xc_ = rks.define_xc_
 

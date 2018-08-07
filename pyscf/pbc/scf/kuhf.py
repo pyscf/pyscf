@@ -298,6 +298,29 @@ def init_guess_by_chkfile(cell, chkfile_name, project=None, kpts=None):
     return dm
 
 
+def dip_moment(cell, dm_kpts, unit='Debye', verbose=logger.NOTE,
+               grids=None, rho=None, kpts=np.zeros((1,3))):
+    ''' Dipole moment in the unit cell.
+
+    Args:
+         cell : an instance of :class:`Cell`
+
+         dm_kpts (two lists of ndarrays) : KUHF density matrices of k-points
+
+    Return:
+        A list: the dipole moment on x, y and z components
+    '''
+    dm_kpts = dm_kpts[0] + dm_kpts[1]
+    return khf.dip_moment(cell, dm_kpts, unit, verbose, grids, rho, kpts)
+
+def get_rho(mf, dm=None, grids=None, kpts=None):
+    '''Compute density in real space
+    '''
+    if dm is None:
+        dm = mf.make_rdm1()
+    return khf.get_rho(dm[0] + dm[1], grids, kpts)
+
+
 class KUHF(pbcuhf.UHF, khf.KSCF):
     '''UHF class with k-point sampling.
     '''
@@ -454,10 +477,17 @@ class KUHF(pbcuhf.UHF, khf.KSCF):
         return mulliken_meta(cell, dm, s=s, verbose=verbose,
                              pre_orth_method=pre_orth_method)
 
-    def dip_moment(self, mol=None, dm=None, unit='Debye', verbose=logger.NOTE,
+    get_rho = get_rho
+
+    @lib.with_doc(dip_moment.__doc__)
+    def dip_moment(self, cell=None, dm=None, unit='Debye', verbose=logger.NOTE,
                    **kwargs):
-        # skip dipole memont for crystal
-        return
+        if dm is None:
+            dm = self.make_rdm1()
+        rho = kwargs.pop('rho', None)
+        if rho is None:
+            rho = self.get_rho(dm)
+        return dip_moment(cell, dm, unit, verbose, rho=rho, kpts=self.kpts, **kwargs)
 
     @lib.with_doc(mol_uhf.spin_square.__doc__)
     def spin_square(self, mo_coeff=None, s=None):

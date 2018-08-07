@@ -325,6 +325,41 @@ def init_guess_by_chkfile(cell, chkfile_name, project=None, kpts=None):
     return dm[0] + dm[1]
 
 
+def dip_moment(cell, dm_kpts, unit='Debye', verbose=logger.NOTE,
+               grids=None, rho=None, kpts=np.zeros((1,3))):
+    ''' Dipole moment in the unit cell.
+
+    Args:
+         cell : an instance of :class:`Cell`
+
+         dm_kpts (a list of ndarrays) : density matrices of k-points
+
+    Return:
+        A list: the dipole moment on x, y and z components
+    '''
+    from pyscf.pbc.dft import gen_grid
+    from pyscf.pbc.dft import numint
+    if grids is None:
+        grids = gen_grid.UniformGrids(cell)
+    if rho is None:
+        rho = numint.KNumInt().get_rho(cell, dm, grids, kpts, cell.max_memory)
+    return pbchf.dip_moment(cell, dm_kpts, unit, verbose, grids, rho, kpts)
+
+def get_rho(mf, dm=None, grids=None, kpts=None):
+    '''Compute density in real space
+    '''
+    from pyscf.pbc.dft import gen_grid
+    from pyscf.pbc.dft import numint
+    if dm is None:
+        dm = mf.make_rdm1()
+    if grids is None:
+        grids = gen_grid.UniformGrids(cell)
+    if kpts is None:
+        kpts = mf.kpts
+    ni = numint.KNumInt()
+    return ni.get_rho(mf.cell, dm, grids, kpts, mf.max_memory)
+
+
 class KSCF(pbchf.SCF):
     '''SCF base class with k-point sampling.
 
@@ -589,10 +624,15 @@ class KSCF(pbchf.SCF):
         return mulliken_meta(cell, dm, s=s, verbose=verbose,
                              pre_orth_method=pre_orth_method)
 
-    def dip_moment(self, mol=None, dm=None, unit='Debye', verbose=logger.NOTE,
+    get_rho = get_rho
+
+    @lib.with_doc(dip_moment.__doc__)
+    def dip_moment(self, cell=None, dm=None, unit='Debye', verbose=logger.NOTE,
                    **kwargs):
-        # skip dipole memont for crystal
-        return
+        rho = kwargs.pop('rho', None)
+        if rho is None:
+            rho = self.get_rho(dm)
+        return dip_moment(cell, dm, unit, verbose, rho=rho, kpts=self.kpts, **kwargs)
 
     canonicalize = canonicalize
 

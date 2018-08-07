@@ -277,6 +277,7 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
                 coulG = weights*4*np.pi/absG2
             coulG[absG2==0] = -2*np.pi*(np.pi/np.linalg.norm(b[2]))**2 #-pi*L_z^2/2
         else:
+            # For 0D and 1D Coulobm, see Table I of PRB, 73, 205119
             raise NotImplementedError('no method for PBC dimension %s, '
                 'dim-type %s and exxdiv = %s' %
                 (cell.dimension, low_dim_ft_type, exxdiv))

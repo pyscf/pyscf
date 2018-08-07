@@ -87,6 +87,29 @@ def init_guess_by_chkfile(cell, chkfile_name, project=None, kpt=None):
     return dm
 
 
+def dip_moment(cell, dm, unit='Debye', verbose=logger.NOTE,
+               grids=None, rho=None, kpt=np.zeros(3)):
+    ''' Dipole moment in the unit cell.
+
+    Args:
+         cell : an instance of :class:`Cell`
+
+         dm_kpts (a list of ndarrays) : density matrices of k-points
+
+    Return:
+        A list: the dipole moment on x, y and z components
+    '''
+    dm = dm[0] + dm[1]
+    return pbchf.dip_moment(cell, dm, unit, verbose, grids, rho, kpt)
+
+def get_rho(mf, dm=None, grids=None, kpt=None):
+    '''Compute density in real space
+    '''
+    if dm is None:
+        dm = mf.make_rdm1()
+    return pbchf.get_rho(dm[0] + dm[1], grids, kpt)
+
+
 class UHF(mol_uhf.UHF, pbchf.SCF):
     '''UHF class for PBCs.
     '''
@@ -169,10 +192,17 @@ class UHF(mol_uhf.UHF, pbchf.SCF):
             mo_coeff = (mo_coeff[0][0], mo_coeff[1][0])
         return mo_energy, mo_coeff
 
-    def dip_moment(self, mol=None, dm=None, unit='Debye', verbose=logger.NOTE,
+    get_rho = get_rho
+
+    @lib.with_doc(dip_moment.__doc__)
+    def dip_moment(self, cell=None, dm=None, unit='Debye', verbose=logger.NOTE,
                    **kwargs):
-        # skip dipole memont for crystal
-        return
+        if dm is None:
+            dm = self.make_rdm1()
+        rho = kwargs.pop('rho', None)
+        if rho is None:
+            rho = self.get_rho(dm[0] + dm[1])
+        return dip_moment(cell, dm, unit, verbose, rho=rho, kpt=self.kpt, **kwargs)
 
     def get_init_guess(self, cell=None, key='minao'):
         if cell is None: cell = self.cell

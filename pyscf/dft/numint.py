@@ -1822,6 +1822,7 @@ def get_rho(ni, mol, dm, grids, max_memory=2000):
     '''Density in real space
     '''
     make_rho, nset, nao = ni._gen_rho_evaluator(mol, dm, 1)
+    assert(nset == 1)
     rho = numpy.empty(grids.weights.size)
     p1 = 0
     for ao, mask, weight, coords \

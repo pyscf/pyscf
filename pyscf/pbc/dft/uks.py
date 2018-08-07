@@ -102,6 +102,12 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     vxc = lib.tag_array(vxc, ecoul=ecoul, exc=exc, vj=None, vk=None)
     return vxc
 
+@lib.with_doc(pbcuhf.get_rho.__doc__)
+def get_rho(mf, dm=None, grids=None, kpt=None):
+    if dm is None:
+        dm = self.make_rdm1()
+    return rks.get_rho(mf, dm[0]+dm[1], grids, kpt)
+
 
 class UKS(pbcuhf.UHF):
     '''UKS class adapted for PBCs.
@@ -120,6 +126,8 @@ class UKS(pbcuhf.UHF):
 
     get_veff = get_veff
     energy_elec = pyscf.dft.uks.energy_elec
+    get_rho = get_rho
+
     define_xc_ = rks.define_xc_
 
     density_fit = rks._patch_df_beckegrids(pbcuhf.UHF.density_fit)

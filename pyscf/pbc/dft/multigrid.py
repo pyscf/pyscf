@@ -1375,6 +1375,22 @@ def _gen_uhf_response(mf, dm0, with_j=True, hermi=0):
     return vind
 
 
+def get_rho(mydf, dm, kpts=numpy.zeros((1,3))):
+    '''Density in real space
+    '''
+    cell = mydf.cell
+    hermi = 1
+    rhoG = _eval_rhoG(mydf, numpy.asarray(dm), hermi, kpts, deriv=0)
+
+    mesh = mydf.mesh
+    ngrids = numpy.prod(mesh)
+    weight = cell.vol / ngrids
+    # *(1./weight) because rhoR is scaled by weight in _eval_rhoG.  When
+    # computing rhoR with IFFT, the weight factor is not needed.
+    rhoR = tools.ifft(rhoG.reshape(ngrids), mesh).real * (1./weight)
+    return rhoR
+
+
 def multi_grids_tasks(cell, fft_mesh=None, verbose=None):
     if TASKS_TYPE == 'rcut':
         return multi_grids_tasks_for_rcut(cell, fft_mesh, verbose)
@@ -1691,6 +1707,8 @@ class MultiGridFFTDF(fft.FFTDF):
             if with_j:
                 vj = get_j_kpts(self, dm, hermi, kpts, kpts_band)
         return vj, vk
+
+    get_rho = get_rho
 
 
 def multigrid(mf):
