@@ -1368,7 +1368,8 @@ class _IMDS:
         self.made_ip_imds = False
         self.made_ea_imds = False
         self._made_shared_2e = False
-        self._fimd = None
+        # TODO: check whether to hold all stuff in memory
+        self._fimd = lib.H5TmpFile() if hasattr(self.eris, "feri1") else None
 
     def _make_shared_1e(self):
         cput0 = (time.clock(), time.time())
@@ -1389,16 +1390,16 @@ class _IMDS:
         t1, t2, eris = self.t1, self.t2, self.eris
         kconserv = self.kconserv
 
-        # TODO: check whether to hold Wovov Wovvo in memory
-        if self._fimd is None:
-            self._fimd = lib.H5TmpFile()
-        nkpts, nocc, nvir = t1.shape
-        self._fimd.create_dataset('ovov', (nkpts, nkpts, nkpts, nocc, nvir, nocc, nvir), t1.dtype.char)
-        self._fimd.create_dataset('ovvo', (nkpts, nkpts, nkpts, nocc, nvir, nvir, nocc), t1.dtype.char)
+        if self._fimd is not None:
+            nkpts, nocc, nvir = t1.shape
+            ovov_dest = self._fimd.create_dataset('ovov', (nkpts, nkpts, nkpts, nocc, nvir, nocc, nvir), t1.dtype.char)
+            ovvo_dest = self._fimd.create_dataset('ovvo', (nkpts, nkpts, nkpts, nocc, nvir, nvir, nocc), t1.dtype.char)
+        else:
+            ovov_dest = ovvo_dest = None
 
         # 2 virtuals
-        self.Wovov = imd.Wovov(t1, t2, eris, kconserv, self._fimd['ovov'])
-        self.Wovvo = imd.Wovvo(t1, t2, eris, kconserv, self._fimd['ovvo'])
+        self.Wovov = imd.Wovov(t1, t2, eris, kconserv, ovov_dest)
+        self.Wovvo = imd.Wovvo(t1, t2, eris, kconserv, ovvo_dest)
         self.Woovv = eris.oovv
 
         log.timer('EOM-CCSD shared two-electron intermediates', *cput0)
@@ -1415,16 +1416,19 @@ class _IMDS:
         t1, t2, eris = self.t1, self.t2, self.eris
         kconserv = self.kconserv
 
-        nkpts, nocc, nvir = t1.shape
-        self._fimd.create_dataset('oooo', (nkpts, nkpts, nkpts, nocc, nocc, nocc, nocc), t1.dtype.char)
-        self._fimd.create_dataset('ooov', (nkpts, nkpts, nkpts, nocc, nocc, nocc, nvir), t1.dtype.char)
-        self._fimd.create_dataset('ovoo', (nkpts, nkpts, nkpts, nocc, nvir, nocc, nocc), t1.dtype.char)
+        if self._fimd is not None:
+            nkpts, nocc, nvir = t1.shape
+            oooo_dest = self._fimd.create_dataset('oooo', (nkpts, nkpts, nkpts, nocc, nocc, nocc, nocc), t1.dtype.char)
+            ooov_dest = self._fimd.create_dataset('ooov', (nkpts, nkpts, nkpts, nocc, nocc, nocc, nvir), t1.dtype.char)
+            ovoo_dest = self._fimd.create_dataset('ovoo', (nkpts, nkpts, nkpts, nocc, nvir, nocc, nocc), t1.dtype.char)
+        else:
+            oooo_dest = ooov_dest = ovoo_dest = None
 
         # 0 or 1 virtuals
         if ip_partition != 'mp':
-            self.Woooo = imd.Woooo(t1, t2, eris, kconserv, self._fimd['oooo'])
-        self.Wooov = imd.Wooov(t1, t2, eris, kconserv, self._fimd['ooov'])
-        self.Wovoo = imd.Wovoo(t1, t2, eris, kconserv, self._fimd['ovoo'])
+            self.Woooo = imd.Woooo(t1, t2, eris, kconserv, oooo_dest)
+        self.Wooov = imd.Wooov(t1, t2, eris, kconserv, ooov_dest)
+        self.Wovoo = imd.Wovoo(t1, t2, eris, kconserv, ovoo_dest)
         self.made_ip_imds = True
         log.timer('EOM-CCSD IP intermediates', *cput0)
 
@@ -1440,18 +1444,21 @@ class _IMDS:
         t1, t2, eris = self.t1, self.t2, self.eris
         kconserv = self.kconserv
 
-        nkpts, nocc, nvir = t1.shape
-        self._fimd.create_dataset('vovv', (nkpts, nkpts, nkpts, nvir, nocc, nvir, nvir), t1.dtype.char)
-        self._fimd.create_dataset('vvvo', (nkpts, nkpts, nkpts, nvir, nvir, nvir, nocc), t1.dtype.char)
-        self._fimd.create_dataset('vvvv', (nkpts, nkpts, nkpts, nvir, nvir, nvir, nvir), t1.dtype.char)
+        if self._fimd is not None:
+            nkpts, nocc, nvir = t1.shape
+            vovv_dest = self._fimd.create_dataset('vovv', (nkpts, nkpts, nkpts, nvir, nocc, nvir, nvir), t1.dtype.char)
+            vvvo_dest = self._fimd.create_dataset('vvvo', (nkpts, nkpts, nkpts, nvir, nvir, nvir, nocc), t1.dtype.char)
+            vvvv_dest = self._fimd.create_dataset('vvvv', (nkpts, nkpts, nkpts, nvir, nvir, nvir, nvir), t1.dtype.char)
+        else:
+            vovv_dest = vvvo_dest = vvvv_dest = None
 
         # 3 or 4 virtuals
-        self.Wvovv = imd.Wvovv(t1, t2, eris, kconserv, self._fimd['vovv'])
+        self.Wvovv = imd.Wvovv(t1, t2, eris, kconserv, vovv_dest)
         if ea_partition == 'mp' and np.all(t1 == 0):
-            self.Wvvvo = imd.Wvvvo(t1, t2, eris, kconserv, self._fimd['vvvo'])
+            self.Wvvvo = imd.Wvvvo(t1, t2, eris, kconserv, vvvo_dest)
         else:
-            self.Wvvvv = imd.Wvvvv(t1, t2, eris, kconserv, self._fimd['vvvv'])
-            self.Wvvvo = imd.Wvvvo(t1, t2, eris, kconserv, self.Wvvvv, self._fimd['vvvo'])
+            self.Wvvvv = imd.Wvvvv(t1, t2, eris, kconserv, vvvv_dest)
+            self.Wvvvo = imd.Wvvvo(t1, t2, eris, kconserv, self.Wvvvv, vvvo_dest)
         self.made_ea_imds = True
         log.timer('EOM-CCSD EA intermediates', *cput0)
 
