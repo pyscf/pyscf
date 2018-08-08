@@ -14,7 +14,7 @@
 
 from __future__ import print_function, division
 
-def kmat_den(mf, dm=None, algo='fci', **kw):
+def kmat_den(mf, dm=None, algo=None, **kw):
   """
   Computes the matrix elements of Fock exchange operator
   Args:
@@ -24,6 +24,7 @@ def kmat_den(mf, dm=None, algo='fci', **kw):
   """
   from scipy.sparse import csr_matrix
   import numpy as np
+  from numpy import einsum 
 
   pb,hk=mf.add_pb_hk(**kw)
   dm = mf.make_rdm1() if dm is None else dm
@@ -37,10 +38,16 @@ def kmat_den(mf, dm=None, algo='fci', **kw):
     print(nspin)
     raise RuntimeError('nspin>2?')
     
-  algol = algo.lower()
+  algol = algo.lower() if algo is not None else 'ac_vertex_fm'
+
   if algol=='fci':
     mf.fci_den = abcd2v = mf.fci_den if hasattr(mf, 'fci_den') else pb.comp_fci_den(hk)
-    kmat = np.einsum('abcd,...bc->...ad', abcd2v, dm)
+    kmat = einsum('abcd,...bc->...ad', abcd2v, dm)
+  elif algol=='ac_vertex_fm':
+    pab2v = pb.get_ac_vertex_array()
+    pcd = einsum('pq,qcd->pcd', hk, pab2v)
+    pac = einsum('pab,...bc->...pac', pab2v, dm)
+    kmat = einsum('...pac,pcd->...ad', pac, pcd)
   else:
     print('algo=', algo)
     raise RuntimeError('unknown algorithm')

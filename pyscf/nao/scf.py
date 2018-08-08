@@ -14,6 +14,7 @@ class scf(tddft_iter):
   def __init__(self, **kw):
     """ Constructor a self-consistent field """
     self.perform_scf = kw['perform_scf'] if 'perform_scf' in kw else False
+    self.kmat_algo = kw['kmat_algo'] if 'kmat_algo' in kw else None
     for x in ['xc_code', 'dealloc_hsx', 'dtype']: kw.pop(x,None)
     tddft_iter.__init__(self, dtype=np.float64, xc_code='RPA', dealloc_hsx=False, **kw)
     #print(__name__, ' dtype ', self.dtype)
@@ -107,7 +108,8 @@ class scf(tddft_iter):
     '''Compute K matrix for the given density matrix.'''
     from pyscf.nao.m_kmat_den import kmat_den
     if dm is None: dm = self.make_rdm1()
-    return kmat_den(self, dm=dm, **kw)
+    print(__name__, ' get_k: self.kmat_algo ', self.kmat_algo)
+    return kmat_den(self, dm=dm, algo=self.kmat_algo, **kw)
 
   def get_jk(self, mol=None, dm=None, hermi=1, **kw):
     if dm is None: dm = self.make_rdm1()
