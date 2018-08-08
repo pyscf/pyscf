@@ -233,7 +233,7 @@ def describe_nested(data):
         - The overall number of scalar elements;
         - The common data type;
     """
-    if isinstance(data, numpy.ndarray):
+    if isinstance(data, np.ndarray):
         return data.shape, data.size, data.dtype
     elif isinstance(data, (list, tuple)):
         total_size = 0
@@ -267,12 +267,12 @@ def nested_to_vector(data, destination=None, offset=0):
     """
     if destination is None:
         struct, total_size, dtype = describe_nested(data)
-        destination = numpy.empty(total_size, dtype=dtype)
+        destination = np.empty(total_size, dtype=dtype)
         rtn = True
     else:
         rtn = False
 
-    if isinstance(data, numpy.ndarray):
+    if isinstance(data, np.ndarray):
         destination[offset:offset + data.size] = data.ravel()
         offset += data.size
     elif isinstance(data, (list, tuple)):
@@ -303,7 +303,7 @@ def vector_to_nested(vector, struct, copy=True, ensure_size_matches=True):
         raise ValueError("Only vectors accepted, got: {}".format(repr(vector.shape)))
 
     if isinstance(struct, tuple):
-        expected_size = numpy.prod(struct)
+        expected_size = np.prod(struct)
         if ensure_size_matches:
             if vector.size != expected_size:
                 raise ValueError("Structure size mismatch: expected {} = {:d}, found {:d}".format(
