@@ -305,6 +305,8 @@ class gw(scf):
         print("%5d  %14.7f %14.7f %7.2f | %14.7f %14.7f %7.2f" % (ie, emf[0], egw[0], f[0],  emf[1], egw[1], f[1]) )
     else:
       raise RuntimeError('not implemented...')
+    print('\fGW HOMO energy    (eV): {}\t{}'.format(egwev[self.nfermi[0]-1,0],egwev[self.nfermi[1]-1,1]))
+    print('\fGW LUMO energy    (eV): {}\t{}'.format(egwev[self.nfermi[0],0],egwev[self.nfermi[1],1]))
     
   def make_mo_g0w0(self):
     """ This creates the fields mo_energy_g0w0, and mo_coeff_g0w0 """
