@@ -322,17 +322,16 @@ def Wvvvo(cc,t1,t2,eris,kconserv,WWvvvv=None):
         ki = kconserv[ka,ke,kb]
         tmp2[ka,kb,ke] += einsum('ma,mbei->abei',t1[ka],eris_ovvo[ka,kb,ke])
         for kn in range(nkpts):
-            tmp2[ka,kb,ke] -= einsum('ma,nibf,mnef->abei',t1[ka],t2[kn,ki,kb],eris.oovv[km,kn,ke])
+            tmp2[ka,kb,ke] -= einsum('ma,nibf,mnef->abei',t1[ka],t2[kn,ki,kb],eris.oovv[ka,kn,ke])
         for km in range(nkpts):
             tmp1[ka,kb,ke] += einsum('mbef,miaf->abei',eris.ovvv[km,kb,ke],t2[km,ki,ka])
     tau = make_tau(cc,t2,t1,t1,kconserv)
 
-    Wabei = numpy.empty((nkpts, nkpts, nkpts, nvir, nvir, nvir, nocc), dtype=eris.ovvv.dtype)
-    Wabei -= tmp1 - tmp1.transpose(1,0,2,4,3,5,6)
+    Wabei = -tmp1 + tmp1.transpose(1,0,2,4,3,5,6)
     Wabei -= tmp2 - tmp2.transpose(1,0,2,4,3,5,6)
     for ka, kb, ke in kpts_helper.loop_kkk(nkpts):
         ki = kconserv[ka, ke, kb]
-        Wabei[ka, kb, ke] = eris.ovvv[ki, ke, kb].conj().transpose(3, 2, 1, 0)
+        Wabei[ka, kb, ke] += eris.ovvv[ki, ke, kb].conj().transpose(3, 2, 1, 0)
         Wabei[ka, kb, ke] += einsum('if,abef->abei',t1[ki],WWvvvv[ka, kb, ke])
         Wabei[ka, kb, ke] -= einsum('me,miab->abei',FFov[ke],t2[ke, ki, ka])
         for km in range(nkpts):
