@@ -40,6 +40,8 @@ from pyscf.pbc.cc import kintermediates as imd
 
 einsum = lib.einsum
 
+ITER=0
+
 def kernel(eom, nroots=1, koopmans=False, guess=None, left=False,
            eris=None, imds=None, partition=None, kptlist=None,
            dtype=None, **kwargs):
@@ -357,21 +359,17 @@ def eaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
 
     Hr1 = np.einsum('ac,c->a', imds.Fvv[kshift], r1)
     for kl in range(nkpts):
-        Hr1 += np.einsum('ld,lad->a', imds.Fov[kshift], r2[kl, kshift])
+        Hr1 += np.einsum('ld,lad->a', imds.Fov[kl], r2[kl, kshift])
         for kc in range(nkpts):
             Hr1 += 0.5*np.einsum('alcd,lcd->a', imds.Wvovv[kshift,kl,kc], r2[kl,kc])
 
     Hr2 = np.zeros_like(r2)
-    for kj in range(nkpts):
-        for ka in range(nkpts):
-            kb = kconserv[kshift,ka,kj]
-            Hr2[kj,ka] += np.einsum('abcj,c->jab', imds.Wvvvo[ka,kb,kshift], r1)
-            Hr2[kj,ka] += lib.einsum('ac,jcb->jab', imds.Fvv[ka], r2[kj,ka])
-            Hr2[kj,ka] -= lib.einsum('bc,jca->jab', imds.Fvv[kb], r2[kj,kb])
-
     for kj, ka in itertools.product(range(nkpts), repeat=2):
-        kb = kconserv[kshift, ka, kj]
-        Hr2[kj, ka] -= lib.einsum('lj,lab->jab', imds.Foo[kj], r2[kj, ka])
+        kb = kconserv[kshift,ka,kj]
+        Hr2[kj,ka] += np.einsum('abcj,c->jab', imds.Wvvvo[ka,kb,kshift], r1)
+        Hr2[kj,ka] += lib.einsum('ac,jcb->jab', imds.Fvv[ka], r2[kj,ka])
+        Hr2[kj,ka] -= lib.einsum('bc,jca->jab', imds.Fvv[kb], r2[kj,kb])
+        Hr2[kj,ka] -= lib.einsum('lj,lab->jab', imds.Foo[kj], r2[kj,ka])
 
         for kd in range(nkpts):
             kl = kconserv[kj, kb, kd]
@@ -397,9 +395,9 @@ def eaccsd_diag(eom, kshift, imds=None):
     nkpts, nocc, nvir = t1.shape
     kconserv = imds.kconserv
 
-    Hr1 = -np.diag(imds.Foo[kshift])
+    Hr1 = np.ones((nvir,), dtype=t1.dtype)
 
-    Hr2 = np.ones((nkpts,nkpts,nocc,nocc,nvir), dtype=t1.dtype)
+    Hr2 = np.ones((nkpts,nkpts,nocc,nvir,nvir), dtype=t1.dtype)
     #if eom.partition == 'mp':
     #    foo = eom.eris.fock[:,:nocc,:nocc]
     #    fvv = eom.eris.fock[:,nocc:,nocc:]
@@ -564,6 +562,9 @@ class _IMDS:
         kconserv = self.kconserv
         t1, t2, eris = self.t1, self.t2, self.eris
 
+        # FIXME DELETE WOOOO
+        # 0 or 1 virtuals
+        self.Woooo = imd.Woooo(self._cc, t1, t2, eris, kconserv)
         # 3 or 4 virtuals
         self.Wvovv = imd.Wvovv(self._cc, t1, t2, eris, kconserv)
         self.Wvvvv = imd.Wvvvv(self._cc, t1, t2, eris, kconserv)
@@ -622,16 +623,15 @@ if __name__ == '__main__':
     ehf = kmf.kernel()
 
     mycc = cc.KGCCSD(kmf)
-    mycc.conv_tol = 1e-10
-    mycc.conv_tol_normt = 1e-9
+    mycc.conv_tol = 1e-12
+    mycc.conv_tol_normt = 1e-10
     eris = mycc.ao2mo(mycc.mo_coeff)
     ecc, t1, t2 = mycc.kernel()
     print(ecc - -0.155298393321855)
 
-    #eom = EOMIP(mycc)
-    #e, v = eom.ipccsd(nroots=3, kptlist=[0])
-    #print(e[0] + 0.8268853970451141)
+    eom = EOMIP(mycc)
+    e, v = eom.ipccsd(nroots=2, kptlist=[0])
 
     eom = EOMEA(mycc)
-    e, v = eom.eaccsd(nroots=3, kptlist=[0])
-    print(e[0] - 1.073716355462168)
+    eom.max_cycle = 100
+    e, v = eom.eaccsd(nroots=2, koopmans=True, kptlist=[0])
