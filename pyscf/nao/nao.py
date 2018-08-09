@@ -78,7 +78,7 @@ class nao():
       self.init_label(**kw)
       self.init_libnao_orbs()
     elif 'wfsx_fname' in kw: # init atomic orbitals with WFSX file from SIESTA output
-      self.init_wfsx(**kw)
+      self.init_wfsx_fname(**kw)
       self.init_libnao_orbs()
     elif 'gpaw' in kw:
       self.init_gpaw(**kw)
@@ -189,11 +189,12 @@ class nao():
   #
   #
   #
-  def init_wfsx(self, **kw):
+  def init_wfsx_fname(self, **kw):
     """
       Initialise system var starting with a given WFSX file
     """
-
+    from pyscf.nao.m_tools import read_xyz
+    from pyscf.nao.m_fermi_energy import fermi_energy
     from pyscf.nao.m_siesta_xml import siesta_xml
     from pyscf.nao.m_siesta_wfsx import siesta_wfsx_c
     from pyscf.nao.m_siesta_ion_xml import siesta_ion_xml
@@ -205,24 +206,22 @@ class nao():
 
     fname = kw['wfsx_fname'] if 'wfsx_fname' in kw else None
     self.wfsx = siesta_wfsx_c(fname=fname, **kw)
-    print(__name__, dir(self.wfsx))
+    self.hsx = siesta_hsx_c(fname=cd+'/'+self.label+'.HSX', **kw)
+    self.norbs_sc = self.wfsx.norbs if self.hsx.orb_sc2orb_uc is None else len(self.hsx.orb_sc2orb_uc)
     self.natm = self.natoms = max(self.wfsx.orb2atm)
     self.norbs = len(self.wfsx.orb2atm)
     self.norbs_sc = self.norbs
     self.nspin = self.wfsx.nspin
     self.ucell = np.eye(3)
     self.nkpoints  = self.wfsx.nkpoints
-    
+
     self.sp2ion = []
     for sp in self.wfsx.sp2strspecie: self.sp2ion.append(siesta_ion_xml(cd+'/'+sp+'.ion.xml'))
     _siesta_ion_add_sp2(self, self.sp2ion)
     self.ao_log = ao_log_c().init_ao_log_ion(self.sp2ion, **kw)
-    
-    print(__name__, self.natoms, self.norbs)
-
+      
     strspecie2sp = {}
-    # initialise a dictionary with species string as key
-    # associated to the specie number
+    # initialise a dictionary with species string as a key associated to the specie number
     for sp,strsp in enumerate(self.wfsx.sp2strspecie): strspecie2sp[strsp] = sp
     
     # list of atoms associated to them specie number
@@ -239,6 +238,58 @@ class nao():
     for atom,sp in enumerate(self.atom2sp):
         self.atom2mu_s[atom+1]=self.atom2mu_s[atom]+self.ao_log.sp2nmult[sp]
 
+    self.nbas = self.atom2mu_s[-1] # total number of radial orbitals
+    self.mu2orb_s = np.zeros((self.nbas+1), dtype=np.int64)
+    for sp,mu_s in zip(self.atom2sp,self.atom2mu_s):
+      for mu,j in enumerate(self.ao_log.sp_mu2j[sp]): self.mu2orb_s[mu_s+mu+1] = self.mu2orb_s[mu_s+mu] + 2*j+1
+
+
+    #t1 = timer()
+    orb2m = self.get_orb2m()
+    _siesta2blanko_csr(orb2m, self.hsx.s4_csr, self.hsx.orb_sc2orb_uc)
+
+    for s in range(self.nspin):
+      _siesta2blanko_csr(orb2m, self.hsx.spin2h4_csr[s], self.hsx.orb_sc2orb_uc)
+
+    for k in range(self.nkpoints):
+      for s in range(self.nspin):
+        for n in range(self.norbs):
+          _siesta2blanko_denvec(orb2m, self.wfsx.x[k,s,n,:,:])
+    #t2 = timer(); print(t2-t1, 'rsh wfsx'); t1 = timer()
+
+    # Get self.atom2coord via .xml or .xyz files
+    try:
+      self.xml_dict = siesta_xml(cd+'/'+self.label+'.xml')
+      self.atom2coord = self.xml_dict['atom2coord']
+      self.fermi_energy = self.xml_dict['fermi_energy']
+    except:
+      print(__name__, 'no siesta.xml file --> excepting with siesta.xyz file')
+      a2sym,a2coord = read_xyz(cd+'/'+self.label+'.xyz')
+      self.atom2coord = a2coord*1.8897259886
+      # cross-check of loaded .xyz file:
+      atom2sym_ref = np.array([self.sp2ion[sp]['symbol'].strip() for atom,sp in enumerate(self.atom2sp)])
+      for ia,(a1,a2) in enumerate(zip(a2sym,atom2sym_ref)):
+        if a1!=a2: raise RuntimeError('.xyz wrong? %d %s %s '% (ia, a1,a2))
+      self.fermi_energy = fermi_energy(self.wfsx.ksn2e, self.hsx.nelec, self.hsx.telec)
+
+
+    self.sp2symbol = [str(ion['symbol'].replace(' ', '')) for ion in self.sp2ion]
+    self.sp2charge = self.ao_log.sp2charge
+    self.state = 'should be useful for something'
+
+    # Trying to be similar to mole object from pySCF 
+    self._xc_code   = 'LDA,PZ' # estimate how ? 
+    self._nelectron = self.hsx.nelec
+    self.cart = False
+    self.spin = self.nspin-1
+    self.stdout = sys.stdout
+    self.symmetry = False
+    self.symmetry_subgroup = None
+    self._built = True 
+    self.max_memory = 20000
+    self.incore_anyway = False        
+    self._atom = [(self.sp2symbol[sp], list(self.atom2coord[ia,:])) for ia,sp in enumerate(self.atom2sp)]
+      
     return self
 
   #
