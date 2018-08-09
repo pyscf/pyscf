@@ -23,7 +23,7 @@ class mf(nao):
       self.init_mo_coeff_label(**kw)
       self.k2xyzw = self.xml_dict["k2xyzw"]
       self.xc_code = 'LDA,PZ' # just a guess...
-    elif 'wfsx' in kw: # init KS orbitals with WFSX file from SIESTA output
+    elif 'wfsx_fname' in kw: # init KS orbitals with WFSX file from SIESTA output
       self.init_mo_coeff_wfsx(**kw)
       self.xc_code = 'LDA,PZ' # just a guess...
     elif 'fireball' in kw: # init KS orbitals with Fireball
@@ -45,7 +45,22 @@ class mf(nao):
       if self.verbosity>0: print(__name__, ' dtype ', self.dtype, ' norbs ', self.norbs)
       #self.pb.init_prod_basis_pp_batch(nao=self, **kw)
  
-  def init_mo_coeff_wfsx(self, **kw):
+  def init_mo_coeff_wfsx(self, **kw): 
+    from pyscf.nao.m_fermi_dirac import fermi_dirac_occupations
+    self.mo_coeff = np.require(self.wfsx.x, dtype=self.dtype, requirements='CW')
+    self.mo_energy = np.require(self.wfsx.ksn2e, dtype=self.dtype, requirements='CW')
+    self.telec = kw['telec'] if 'telec' in kw else self.hsx.telec
+    if self.nspin==1:
+      self.nelec = kw['nelec'] if 'nelec' in kw else np.array([self.hsx.nelec])
+    elif self.nspin==2:
+      self.nelec = kw['nelec'] if 'nelec' in kw else np.array([int(self.hsx.nelec/2), int(self.hsx.nelec/2)])      
+      print(__name__, 'not sure here: self.nelec', self.nelec)
+    else:
+      raise RuntimeError('0>nspin>2?')
+      
+    self.fermi_energy = kw['fermi_energy'] if 'fermi_energy' in kw else self.fermi_energy
+    ksn2fd = fermi_dirac_occupations(self.telec, self.mo_energy, self.fermi_energy)
+    self.mo_occ = (3-self.nspin)*ksn2fd
     return 0
 
 
