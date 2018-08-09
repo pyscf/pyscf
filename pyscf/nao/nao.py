@@ -77,6 +77,9 @@ class nao():
     elif 'label' in kw:
       self.init_label(**kw)
       self.init_libnao_orbs()
+    elif 'wfsx_fname' in kw: # init atomic orbitals with WFSX file from SIESTA output
+      self.init_wfsx(**kw)
+      self.init_libnao_orbs()
     elif 'gpaw' in kw:
       self.init_gpaw(**kw)
       self.init_libnao_orbs()
@@ -181,6 +184,61 @@ class nao():
         chdir (string): calculation directory
     """
     fireball_import(self, **kw)
+    return self
+
+  #
+  #
+  #
+  def init_wfsx(self, **kw):
+    """
+      Initialise system var starting with a given WFSX file
+    """
+
+    from pyscf.nao.m_siesta_xml import siesta_xml
+    from pyscf.nao.m_siesta_wfsx import siesta_wfsx_c
+    from pyscf.nao.m_siesta_ion_xml import siesta_ion_xml
+    from pyscf.nao.m_siesta_hsx import siesta_hsx_c
+    from timeit import default_timer as timer
+
+    self.label = label = kw['label'] if 'label' in kw else 'siesta'
+    self.cd = cd = kw['cd'] if 'cd' in kw else '.'
+
+    fname = kw['wfsx_fname'] if 'wfsx_fname' in kw else None
+    self.wfsx = siesta_wfsx_c(fname=fname, **kw)
+    print(__name__, dir(self.wfsx))
+    self.natm = self.natoms = max(self.wfsx.orb2atm)
+    self.norbs = len(self.wfsx.orb2atm)
+    self.norbs_sc = self.norbs
+    self.nspin = self.wfsx.nspin
+    self.ucell = np.eye(3)
+    self.nkpoints  = self.wfsx.nkpoints
+    
+    self.sp2ion = []
+    for sp in self.wfsx.sp2strspecie: self.sp2ion.append(siesta_ion_xml(cd+'/'+sp+'.ion.xml'))
+    _siesta_ion_add_sp2(self, self.sp2ion)
+    self.ao_log = ao_log_c().init_ao_log_ion(self.sp2ion, **kw)
+    
+    print(__name__, self.natoms, self.norbs)
+
+    strspecie2sp = {}
+    # initialise a dictionary with species string as key
+    # associated to the specie number
+    for sp,strsp in enumerate(self.wfsx.sp2strspecie): strspecie2sp[strsp] = sp
+    
+    # list of atoms associated to them specie number
+    self.atom2sp = np.empty((self.natm), dtype=np.int64)
+    for o,atom in enumerate(self.wfsx.orb2atm):
+      self.atom2sp[atom-1] = strspecie2sp[self.wfsx.orb2strspecie[o]]
+
+    self.atom2s = np.zeros((self.natm+1), dtype=np.int64)
+    for atom,sp in enumerate(self.atom2sp):
+        self.atom2s[atom+1]=self.atom2s[atom]+self.ao_log.sp2norbs[sp]
+
+    # atom2mu_s list of atom associated to them multipletts (radial orbitals)
+    self.atom2mu_s = np.zeros((self.natm+1), dtype=np.int64)
+    for atom,sp in enumerate(self.atom2sp):
+        self.atom2mu_s[atom+1]=self.atom2mu_s[atom]+self.ao_log.sp2nmult[sp]
+
     return self
 
   #

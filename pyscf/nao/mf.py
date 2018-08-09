@@ -23,6 +23,9 @@ class mf(nao):
       self.init_mo_coeff_label(**kw)
       self.k2xyzw = self.xml_dict["k2xyzw"]
       self.xc_code = 'LDA,PZ' # just a guess...
+    elif 'wfsx' in kw: # init KS orbitals with WFSX file from SIESTA output
+      self.init_mo_coeff_wfsx(**kw)
+      self.xc_code = 'LDA,PZ' # just a guess...
     elif 'fireball' in kw: # init KS orbitals with Fireball
       self.init_mo_coeff_fireball(**kw)
       self.xc_code = 'GGA,PBE' # just a guess...
@@ -41,6 +44,10 @@ class mf(nao):
       self.pb = prod_basis(nao=self, **kw)
       if self.verbosity>0: print(__name__, ' dtype ', self.dtype, ' norbs ', self.norbs)
       #self.pb.init_prod_basis_pp_batch(nao=self, **kw)
+ 
+  def init_mo_coeff_wfsx(self, **kw):
+    return 0
+
 
   def make_rdm1(self, mo_coeff=None, mo_occ=None):
     # from pyscf.scf.hf import make_rdm1 -- different index order here
