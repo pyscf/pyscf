@@ -922,7 +922,7 @@ def readEnergy(DMRGCI):
 def DMRGSCF(mf, norb, nelec, maxM=1000, tol=1.e-8, *args, **kwargs):
     '''Shortcut function to setup CASSCF using the DMRG solver.  The DMRG
     solver is properly initialized in this function so that the 1-step
-    algorithm can applied with DMRG-CASSCF.
+    algorithm can be applied with DMRG-CASSCF.
 
     Examples:
 

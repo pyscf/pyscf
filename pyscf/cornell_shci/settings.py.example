@@ -1,0 +1,6 @@
+import os
+
+SHCIEXE = '/path/to/shci'
+SHCIRUNTIMEDIR = os.path.join(os.environ['TMPDIR'], str(os.getpid()))
+MPIPREFIX = '' #'mpirun -np 2'  # change to srun for SLURM job system
+
