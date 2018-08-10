@@ -267,10 +267,10 @@ def spin2spatial_ea_doublet(r1, r2, orbspin, kconserv, kshift):
     r2bbb = np.zeros((nkpts,nkpts,nocc_b,nvir_b,nvir_b), dtype=r2.dtype)
     for kj, ka in itertools.product(range(nkpts), repeat=2):
         kb = kconserv[kshift, ka, kj]
-        idxvaa = idxva[ka][:,None] * nocc + idxva[kb]
-        idxvab = idxva[ka][:,None] * nocc + idxvb[kb]
-        idxvba = idxvb[ka][:,None] * nocc + idxva[kb]
-        idxvbb = idxvb[ka][:,None] * nocc + idxvb[kb]
+        idxvaa = idxva[ka][:,None] * nvir + idxva[kb]
+        idxvab = idxva[ka][:,None] * nvir + idxvb[kb]
+        idxvba = idxvb[ka][:,None] * nvir + idxva[kb]
+        idxvbb = idxvb[ka][:,None] * nvir + idxvb[kb]
 
         r2_tmp = r2[kj, ka].reshape(nocc, nvir**2)
         r2aaa_tmp = lib.take_2d(r2_tmp, idxoa[kj], idxvaa.ravel())
