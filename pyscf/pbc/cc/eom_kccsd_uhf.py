@@ -284,14 +284,15 @@ def spin2spatial_ea_doublet(r1, r2, orbspin, kconserv, kshift):
         r2bbb[kj, ka] = r2bbb_tmp.reshape(nocc_b, nvir_b, nvir_b)
     return [r1a, r1b], [r2aaa, r2aba, r2bab, r2bbb]
 
-def spatial2spin_ea(r1, r2, orbspin=None):
+def spatial2spin_ea(r1, r2, orbspin=None, kconserv, kshift):
     '''Convert R1/R2 of spatial orbital representation to R1/R2 of
     spin-orbital representation
     '''
     r1a, r1b = r1
     r2aaa, r2aba, r2bab, r2bbb = r2
-    nocc_a, nvir_a = r2aaa.shape[:2]
-    nocc_b, nvir_b = r2bbb.shape[:2]
+
+    nkpts, nocc_a, nvir_a = np.array(r2aaa.shape)[[0, 2, 3]]
+    nkpts, nocc_b, nvir_b = np.array(r2bbb.shape)[[0, 2, 3]]
 
     if orbspin is None:
         orbspin = np.zeros((nocc_a+nvir_a)*2, dtype=int)
@@ -299,39 +300,41 @@ def spatial2spin_ea(r1, r2, orbspin=None):
 
     nocc = nocc_a + nocc_b
     nvir = nvir_a + nvir_b
-    idxoa = np.where(orbspin[:nocc] == 0)[0]
-    idxob = np.where(orbspin[:nocc] == 1)[0]
-    idxva = np.where(orbspin[nocc:] == 0)[0]
-    idxvb = np.where(orbspin[nocc:] == 1)[0]
+
+    idxoa = [np.where(orbspin[k][:nocc] == 0)[0] for k in range(nkpts)]
+    idxob = [np.where(orbspin[k][:nocc] == 1)[0] for k in range(nkpts)]
+    idxva = [np.where(orbspin[k][nocc:] == 0)[0] for k in range(nkpts)]
+    idxvb = [np.where(orbspin[k][nocc:] == 1)[0] for k in range(nkpts)]
 
     r1 = np.zeros((nvir), dtype=r1a.dtype)
-    r1[idxva] = r1a
-    r1[idxvb] = r1b
+    r1[idxva[kshift]] = r1a
+    r1[idxvb[kshift]] = r1b
 
-    r2 = np.zeros((nocc, nvir**2), dtype=r2aaa.dtype)
-    idxoaa = idxoa[:,None] * nocc + idxoa
-    idxoab = idxoa[:,None] * nocc + idxob
-    idxoba = idxob[:,None] * nocc + idxoa
-    idxobb = idxob[:,None] * nocc + idxob
-    idxvaa = idxva[:,None] * nvir + idxva
-    idxvab = idxva[:,None] * nvir + idxvb
-    idxvba = idxvb[:,None] * nvir + idxva
-    idxvbb = idxvb[:,None] * nvir + idxvb
+    r2 = np.zeros((nkpts,nkpts,nocc,nvir**2), dtype=r2aaa.dtype)
+    
 
-    r2aaa = r2aaa.reshape(nocc_a, nvir_a*nvir_a)
-    r2aba = r2aba.reshape(nocc_a, nvir_b*nvir_a)
-    r2bab = r2bab.reshape(nocc_b, nvir_a*nvir_b)
-    r2bbb = r2bbb.reshape(nocc_b, nvir_b*nvir_b)
+    for kj, ka in itertools.product(range(nkpts), repeat=2):
+        kb = kconserv[kshift, ka, kj]
+        idxvaa = idxva[ka][:,None] * nvir + idxva[kb]
+        idxvab = idxva[ka][:,None] * nvir + idxvb[kb]
+        idxvba = idxvb[ka][:,None] * nvir + idxva[kb]
+        idxvbb = idxvb[ka][:,None] * nvir + idxvb[kb]
 
-    lib.takebak_2d(r2, r2aaa, idxoa.ravel(), idxvaa.ravel())
-    lib.takebak_2d(r2, r2aba, idxoa.ravel(), idxvba.ravel())
-    lib.takebak_2d(r2, r2bab, idxob.ravel(), idxvab.ravel())
-    lib.takebak_2d(r2, r2bbb, idxob.ravel(), idxvbb.ravel())
-    r2aab = -r2aba
-    r2bba = -r2bab
-    lib.takebak_2d(r2, r2bba, idxob.ravel(), idxvba.T.ravel())
-    lib.takebak_2d(r2, r2aab, idxoa.ravel(), idxvab.T.ravel())
-    r2 = r2.reshape(nocc, nvir, nvir)
+        r2aaa_tmp = r2aaa[kj,ka].reshape(nocc_a, nvir_a*nvir_a)
+        r2aba_tmp = r2aba[kj,ka].reshape(nocc_a, nvir_b*nvir_a)
+        r2bab_tmp = r2bab[kj,ka].reshape(nocc_b, nvir_a*nvir_b)
+        r2bbb_tmp = r2bbb[kj,ka].reshape(nocc_b, nvir_b*nvir_b)
+
+        lib.takebak_2d(r2[kj,ka], r2aaa_tmp, idxoa[kj].ravel(), idxvaa.ravel())
+        lib.takebak_2d(r2[kj,ka], r2aba_tmp, idxoa[kj].ravel(), idxvba.ravel())
+        lib.takebak_2d(r2[kj,ka], r2bab_tmp, idxob[kj].ravel(), idxvab.ravel())
+        lib.takebak_2d(r2[kj,ka], r2bbb_tmp, idxob[kj].ravel(), idxvbb.ravel())
+        r2aab_tmp = -r2aba_tmp
+        r2bba_tmp = -r2bab_tmp
+        lib.takebak_2d(r2[kj,ka], r2bba_tmp, idxob[kj].ravel(), idxvba.T.ravel())
+        lib.takebak_2d(r2[kj,ka], r2aab_tmp, idxoa[kj].ravel(), idxvab.T.ravel())
+    
+    r2 = r2.reshape(nkpts, nkpts, nocc, nvir, nvir)
     return r1, r2
 
 def vector_to_amplitudes_ea(vector, nkpts, nmo, nocc):
