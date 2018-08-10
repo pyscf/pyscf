@@ -28,7 +28,7 @@ import time
 import tempfile
 import copy
 import shutil
-from subprocess import check_call, CalledProcessError
+from subprocess import check_call, check_output, CalledProcessError
 import numpy
 from pyscf.lib import logger
 from pyscf import lib
