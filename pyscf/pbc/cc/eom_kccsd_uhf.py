@@ -82,14 +82,14 @@ def enforce_2p_spin_doublet(r2, orbspin, kconserv, kshift, excitation):
         #          np.linalg.norm(tmp + r2[kj, ki].transpose(1, 0, 2))
     else:
         for kj, ka in itertools.product(range(nkpts), repeat=2):
-            kb = kconserv[kshift, kj, ka]
+            kb = kconserv[kshift, ka, kj]
             if ka > kb:  # Avoid double-counting of anti-symmetrization
                 continue
 
-            idxvaa = idxva[ka][:,None] * nvir + idxva[kshift]
-            idxvab = idxva[ka][:,None] * nvir + idxvb[kshift]
-            idxvba = idxvb[ka][:,None] * nvir + idxva[kshift]
-            idxvbb = idxvb[ka][:,None] * nvir + idxvb[kshift]
+            idxvaa = idxva[ka][:,None] * nvir + idxva[kb]
+            idxvab = idxva[ka][:,None] * nvir + idxvb[kb]
+            idxvba = idxvb[ka][:,None] * nvir + idxva[kb]
+            idxvbb = idxvb[ka][:,None] * nvir + idxvb[kb]
 
             r2_tmp = 0.5 * (r2[kj, ka] - r2[kj, kb].transpose(0, 2, 1))
             r2_tmp = r2_tmp.reshape(nocc, nvir**2)
@@ -103,9 +103,10 @@ def enforce_2p_spin_doublet(r2, orbspin, kconserv, kshift, excitation):
         # Check...
         #
         #for kj, ka in itertools.product(range(nkpts), repeat=2):
+        #    kb = kconserv[kshift, ka, kj]
         #    tmp = r2[kj, ka]
         #    print np.linalg.norm(tmp.imag), np.linalg.norm(tmp.real), \
-        #          np.linalg.norm(tmp + r2[kj, ka].transpose(0, 2, 1))
+        #          np.linalg.norm(tmp + r2[kj, kb].transpose(0, 2, 1))
     return r2
 
 ########################################
@@ -342,43 +343,34 @@ def spatial2spin_ea(r1, r2, orbspin=None):
     r2 = r2.reshape(nocc, nvir, nvir)
     return r1, r2
 
-#def vector_to_amplitudes_ea(vector, nmo, nocc):
-#    nocca, noccb = nocc
-#    nmoa, nmob = nmo
-#    nvira, nvirb = nmoa-nocca, nmob-noccb
-#
-#    sizes = (nvira, nvirb, nocca*nvira*(nvira-1)//2, nocca*nvirb*nvira,
-#             noccb*nvira*nvirb, noccb*nvirb*(nvirb-1)//2)
-#    sections = np.cumsum(sizes[:-1])
-#    r1a, r1b, r2a, r2aba, r2bab, r2b = np.split(vector, sections)
-#    r2a = r2a.reshape(nocca,nvira*(nvira-1)//2)
-#    r2b = r2b.reshape(noccb,nvirb*(nvirb-1)//2)
-#    r2aba = r2aba.reshape(nocca,nvirb,nvira).copy()
-#    r2bab = r2bab.reshape(noccb,nvira,nvirb).copy()
-#
-#    idxa = np.tril_indices(nvira, -1)
-#    idxb = np.tril_indices(nvirb, -1)
-#    r2aaa = np.zeros((nocca,nvira,nvira), vector.dtype)
-#    r2bbb = np.zeros((noccb,nvirb,nvirb), vector.dtype)
-#    r2aaa[:,idxa[0],idxa[1]] = r2a
-#    r2aaa[:,idxa[1],idxa[0]] =-r2a
-#    r2bbb[:,idxb[0],idxb[1]] = r2b
-#    r2bbb[:,idxb[1],idxb[0]] =-r2b
-#
-#    r1 = (r1a.copy(), r1b.copy())
-#    r2 = (r2aaa, r2aba, r2bab, r2bbb)
-#    return r1, r2
-#
-#def amplitudes_to_vector_ea(r1, r2):
-#    r1a, r1b = r1
-#    r2aaa, r2aba, r2bab, r2bbb = r2
-#    nocca, nvirb, nvira = r2aba.shape
-#    idxa = np.tril_indices(nvira, -1)
-#    idxb = np.tril_indices(nvirb, -1)
-#    return np.hstack((r1a, r1b,
-#                      r2aaa[:,idxa[0],idxa[1]].ravel(),
-#                      r2aba.ravel(), r2bab.ravel(),
-#                      r2bbb[:,idxb[0],idxb[1]].ravel()))
+def vector_to_amplitudes_ea(vector, nmo, nocc):
+    nocca, noccb = nocc
+    nmoa, nmob = nmo
+    nvira, nvirb = nmoa-nocca, nmob-noccb
+
+    sizes = (nvira, nvirb, nkpts**2*nocca*nvira*nvira, nkpts**2*nocca*nvirb*nvira,
+             nkpts**2*noccb*nvira*nvirb, nkpts**2*noccb*nvirb*nvirb)
+    sections = np.cumsum(sizes[:-1])
+    r1a, r1b, r2a, r2aba, r2bab, r2b = np.split(vector, sections)
+    r2a = r2a.reshape(nocca,nvira*nvira)
+    r2b = r2b.reshape(noccb,nvirb*nvirb)
+    r2aba = r2aba.reshape(nocca,nvirb,nvira).copy()
+    r2bab = r2bab.reshape(noccb,nvira,nvirb).copy()
+
+    r2aaa = r2a
+    r2bbb = r2b
+
+    r1 = (r1a.copy(), r1b.copy())
+    r2 = (r2aaa, r2aba, r2bab, r2bbb)
+    return r1, r2
+
+def amplitudes_to_vector_ea(r1, r2):
+    r1a, r1b = r1
+    r2aaa, r2aba, r2bab, r2bbb = r2
+    return np.hstack((r1a, r1b,
+                      r2aaa.ravel(),
+                      r2aba.ravel(), r2bab.ravel(),
+                      r2bbb.ravel()))
 
 if __name__ == '__main__':
     from pyscf.pbc import gto, scf, cc
