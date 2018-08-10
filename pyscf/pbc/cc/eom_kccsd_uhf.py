@@ -82,14 +82,14 @@ def enforce_2p_spin_doublet(r2, orbspin, kconserv, kshift, excitation):
         #          np.linalg.norm(tmp + r2[kj, ki].transpose(1, 0, 2))
     else:
         for kj, ka in itertools.product(range(nkpts), repeat=2):
-            kb = kconserv[kshift, kj, ka]
+            kb = kconserv[kshift, ka, kj]
             if ka > kb:  # Avoid double-counting of anti-symmetrization
                 continue
 
-            idxvaa = idxva[ka][:,None] * nvir + idxva[kshift]
-            idxvab = idxva[ka][:,None] * nvir + idxvb[kshift]
-            idxvba = idxvb[ka][:,None] * nvir + idxva[kshift]
-            idxvbb = idxvb[ka][:,None] * nvir + idxvb[kshift]
+            idxvaa = idxva[ka][:,None] * nvir + idxva[kb]
+            idxvab = idxva[ka][:,None] * nvir + idxvb[kb]
+            idxvba = idxvb[ka][:,None] * nvir + idxva[kb]
+            idxvbb = idxvb[ka][:,None] * nvir + idxvb[kb]
 
             r2_tmp = 0.5 * (r2[kj, ka] - r2[kj, kb].transpose(0, 2, 1))
             r2_tmp = r2_tmp.reshape(nocc, nvir**2)
@@ -103,9 +103,10 @@ def enforce_2p_spin_doublet(r2, orbspin, kconserv, kshift, excitation):
         # Check...
         #
         #for kj, ka in itertools.product(range(nkpts), repeat=2):
+        #    kb = kconserv[kshift, ka, kj]
         #    tmp = r2[kj, ka]
         #    print np.linalg.norm(tmp.imag), np.linalg.norm(tmp.real), \
-        #          np.linalg.norm(tmp + r2[kj, ka].transpose(0, 2, 1))
+        #          np.linalg.norm(tmp + r2[kj, kb].transpose(0, 2, 1))
     return r2
 
 ########################################
@@ -137,10 +138,10 @@ def spin2spatial_ip_doublet(r1, r2, orbspin, kconserv, kshift):
     r1a = r1[idxoa[kshift]]
     r1b = r1[idxob[kshift]]
 
-    r2aaa = np.zeros((nkpts,nkpts,nkpts,nocc_a,nocc_a,nvir_a), dtype=r2.dtype)
-    r2baa = np.zeros((nkpts,nkpts,nkpts,nocc_b,nocc_a,nvir_a), dtype=r2.dtype)
-    r2abb = np.zeros((nkpts,nkpts,nkpts,nocc_a,nocc_b,nvir_b), dtype=r2.dtype)
-    r2bbb = np.zeros((nkpts,nkpts,nkpts,nocc_b,nocc_b,nvir_b), dtype=r2.dtype)
+    r2aaa = np.zeros((nkpts,nkpts,nocc_a,nocc_a,nvir_a), dtype=r2.dtype)
+    r2baa = np.zeros((nkpts,nkpts,nocc_b,nocc_a,nvir_a), dtype=r2.dtype)
+    r2abb = np.zeros((nkpts,nkpts,nocc_a,nocc_b,nvir_b), dtype=r2.dtype)
+    r2bbb = np.zeros((nkpts,nkpts,nocc_b,nocc_b,nvir_b), dtype=r2.dtype)
     for ki, kj in itertools.product(range(nkpts), repeat=2):
         ka = kconserv[ki, kshift, kj]
         idxoaa = idxoa[ki][:,None] * nocc + idxoa[kj]
@@ -203,44 +204,33 @@ def spatial2spin_ip_doublet(r1, r2, orbspin=None):
     #lib.takebak_2d(r2, r2bab, idxoba.T.ravel(), idxvb.ravel())
     return r1, r2.reshape(nocc, nocc, nvir)
 
-#def amplitudes_to_vector_ip(r1, r2):
-#    '''For spin orbitals'''
-#    r1a, r1b = r1
-#    r2aaa, r2baa, r2abb, r2bbb = r2
-#    nocca, noccb, nvirb = r2abb.shape
-#    idxa = np.tril_indices(nocca, -1)
-#    idxb = np.tril_indices(noccb, -1)
-#    return np.hstack((r1a, r1b,
-#                      r2aaa[idxa].ravel(), r2baa.ravel(),
-#                      r2abb.ravel(), r2bbb[idxb].ravel()))
-#
-#def vector_to_amplitudes_ip(vector, nmo, nocc):
-#    '''For spin orbitals'''
-#    nocca, noccb = nocc
-#    nmoa, nmob = nmo
-#    nvira, nvirb = nmoa-nocca, nmob-noccb
-#
-#    sizes = (nocca, noccb, nocca*(nocca-1)//2*nvira, noccb*nocca*nvira,
-#             nocca*noccb*nvirb, noccb*(noccb-1)//2*nvirb)
-#    sections = np.cumsum(sizes[:-1])
-#    r1a, r1b, r2a, r2baa, r2abb, r2b = np.split(vector, sections)
-#    r2a = r2a.reshape(nocca*(nocca-1)//2,nvira)
-#    r2b = r2b.reshape(noccb*(noccb-1)//2,nvirb)
-#    r2baa = r2baa.reshape(noccb,nocca,nvira).copy()
-#    r2abb = r2abb.reshape(nocca,noccb,nvirb).copy()
-#
-#    idxa = np.tril_indices(nocca, -1)
-#    idxb = np.tril_indices(noccb, -1)
-#    r2aaa = np.zeros((nocca,nocca,nvira), vector.dtype)
-#    r2bbb = np.zeros((noccb,noccb,nvirb), vector.dtype)
-#    r2aaa[idxa[0],idxa[1]] = r2a
-#    r2aaa[idxa[1],idxa[0]] =-r2a
-#    r2bbb[idxb[0],idxb[1]] = r2b
-#    r2bbb[idxb[1],idxb[0]] =-r2b
-#
-#    r1 = (r1a.copy(), r1b.copy())
-#    r2 = (r2aaa, r2baa, r2abb, r2bbb)
-#    return r1, r2
+def amplitudes_to_vector_ip(r1, r2):
+    '''For spin orbitals'''
+    r1a, r1b = r1
+    r2aaa, r2baa, r2abb, r2bbb = r2
+    return np.hstack((r1a, r1b,
+                      r2aaa.ravel(), r2baa.ravel(),
+                      r2abb.ravel(), r2bbb.ravel()))
+
+def vector_to_amplitudes_ip(vector, nkpts, nmo, nocc):
+    '''For spin orbitals'''
+    nocca, noccb = nocc
+    nmoa, nmob = nmo
+    nvira, nvirb = nmoa-nocca, nmob-noccb
+
+    sizes = (nocca, noccb, nkpts**2*nocca*nocca*nvira, nkpts**2*noccb*nocca*nvira,
+             nkpts**2*nocca*noccb*nvirb, nkpts**2*noccb*noccb*nvirb)
+    sections = np.cumsum(sizes[:-1])
+    r1a, r1b, r2aaa, r2baa, r2abb, r2bbb = np.split(vector, sections)
+
+    r2aaa = r2aaa.reshape(nkpts,nkpts,nocca,nocca,nvira).copy()
+    r2baa = r2baa.reshape(nkpts,nkpts,noccb,nocca,nvira).copy()
+    r2abb = r2abb.reshape(nkpts,nkpts,nocca,noccb,nvirb).copy()
+    r2bbb = r2bbb.reshape(nkpts,nkpts,noccb,noccb,nvirb).copy()
+
+    r1 = (r1a.copy(), r1b.copy())
+    r2 = (r2aaa, r2baa, r2abb, r2bbb)
+    return r1, r2
 
 ########################################
 # EOM-EA-CCSD
@@ -345,43 +335,32 @@ def spatial2spin_ea(r1, r2, orbspin=None, kconserv, kshift):
     r2 = r2.reshape(nkpts, nkpts, nocc, nvir, nvir)
     return r1, r2
 
-#def vector_to_amplitudes_ea(vector, nmo, nocc):
-#    nocca, noccb = nocc
-#    nmoa, nmob = nmo
-#    nvira, nvirb = nmoa-nocca, nmob-noccb
-#
-#    sizes = (nvira, nvirb, nocca*nvira*(nvira-1)//2, nocca*nvirb*nvira,
-#             noccb*nvira*nvirb, noccb*nvirb*(nvirb-1)//2)
-#    sections = np.cumsum(sizes[:-1])
-#    r1a, r1b, r2a, r2aba, r2bab, r2b = np.split(vector, sections)
-#    r2a = r2a.reshape(nocca,nvira*(nvira-1)//2)
-#    r2b = r2b.reshape(noccb,nvirb*(nvirb-1)//2)
-#    r2aba = r2aba.reshape(nocca,nvirb,nvira).copy()
-#    r2bab = r2bab.reshape(noccb,nvira,nvirb).copy()
-#
-#    idxa = np.tril_indices(nvira, -1)
-#    idxb = np.tril_indices(nvirb, -1)
-#    r2aaa = np.zeros((nocca,nvira,nvira), vector.dtype)
-#    r2bbb = np.zeros((noccb,nvirb,nvirb), vector.dtype)
-#    r2aaa[:,idxa[0],idxa[1]] = r2a
-#    r2aaa[:,idxa[1],idxa[0]] =-r2a
-#    r2bbb[:,idxb[0],idxb[1]] = r2b
-#    r2bbb[:,idxb[1],idxb[0]] =-r2b
-#
-#    r1 = (r1a.copy(), r1b.copy())
-#    r2 = (r2aaa, r2aba, r2bab, r2bbb)
-#    return r1, r2
-#
-#def amplitudes_to_vector_ea(r1, r2):
-#    r1a, r1b = r1
-#    r2aaa, r2aba, r2bab, r2bbb = r2
-#    nocca, nvirb, nvira = r2aba.shape
-#    idxa = np.tril_indices(nvira, -1)
-#    idxb = np.tril_indices(nvirb, -1)
-#    return np.hstack((r1a, r1b,
-#                      r2aaa[:,idxa[0],idxa[1]].ravel(),
-#                      r2aba.ravel(), r2bab.ravel(),
-#                      r2bbb[:,idxb[0],idxb[1]].ravel()))
+def vector_to_amplitudes_ea(vector, nkpts, nmo, nocc):
+    nocca, noccb = nocc
+    nmoa, nmob = nmo
+    nvira, nvirb = nmoa-nocca, nmob-noccb
+
+    sizes = (nvira, nvirb, nkpts**2*nocca*nvira*nvira, nkpts**2*nocca*nvirb*nvira,
+             nkpts**2*noccb*nvira*nvirb, nkpts**2*noccb*nvirb*nvirb)
+    sections = np.cumsum(sizes[:-1])
+    r1a, r1b, r2a, r2aba, r2bab, r2b = np.split(vector, sections)
+
+    r2aaa = r2aaa.reshape(nocca,nvira,nvira).copy()
+    r2aba = r2aba.reshape(nocca,nvirb,nvira).copy()
+    r2bab = r2bab.reshape(noccb,nvira,nvirb).copy()
+    r2bbb = r2bab.reshape(noccb,nvirb,nvirb).copy()
+
+    r1 = (r1a.copy(), r1b.copy())
+    r2 = (r2aaa, r2aba, r2bab, r2bbb)
+    return r1, r2
+
+def amplitudes_to_vector_ea(r1, r2):
+    r1a, r1b = r1
+    r2aaa, r2aba, r2bab, r2bbb = r2
+    return np.hstack((r1a, r1b,
+                      r2aaa.ravel(),
+                      r2aba.ravel(), r2bab.ravel(),
+                      r2bbb.ravel()))
 
 if __name__ == '__main__':
     from pyscf.pbc import gto, scf, cc
@@ -492,6 +471,9 @@ if __name__ == '__main__':
     [r1a, r1b], [r2aaa, r2baa, r2abb, r2bbb] = \
         spin2spatial_ip_doublet(spin_r1_ip, spin_r2_ip, orbspin, kconserv, kshift)
 
+    vector = amplitudes_to_vector_ip([r1a, r1b], [r2aaa, r2baa, r2abb, r2bbb])
+    r1, r2 = vector_to_amplitudes_ip(vector, nkpts, [nmoa, nmob], [nocca, noccb]) #[r1a, r1b], [r2aaa, r2baa, r2abb, r2bbb])
+
     # EA version
     spin_r1_ea = (np.random.rand(nvir)*1j +
                   np.random.rand(nvir) - 0.5 - 0.5*1j)
@@ -501,3 +483,4 @@ if __name__ == '__main__':
     spin_r2_ea = enforce_2p_spin_ea_doublet(spin_r2_ea, orbspin, kconserv, kshift)
     [r1a, r1b], [r2aaa, r2baa, r2abb, r2bbb] = \
         spin2spatial_ip_doublet(spin_r1_ea, spin_r2_ea, orbspin, kconserv, kshift)
+
