@@ -24,7 +24,6 @@ SHCI solver for CASCI and CASSCF.
 import os
 import sys
 import json
-import glob
 import time
 import tempfile
 import copy
@@ -32,12 +31,10 @@ import shutil
 from subprocess import check_call, CalledProcessError
 import numpy
 from pyscf.lib import logger
-from pyscf.lib import chkfile
 from pyscf import lib
 from pyscf import tools
 from pyscf import ao2mo
 from pyscf import mcscf
-from pyscf import symm
 from pyscf.cornell_shci import symmetry
 
 # Settings
@@ -124,6 +121,9 @@ class SHCI(lib.StreamObject):
         self.executable = settings.SHCIEXE
         self.mpiprefix = settings.MPIPREFIX
         self.runtimedir = getattr(settings, 'SHCIRUNTIMEDIR', '.')
+        if os.path.exists(self.runtimedir):
+            shutil.rmtree(self.runtimedir)
+
         self.configfile = 'config.json' # DO NOT modify
         self.integralfile = 'FCIDUMP'   # DO NOT modify
         self.outputfile = 'output.dat'
@@ -161,7 +161,8 @@ class SHCI(lib.StreamObject):
         dm_file = os.path.join(self.runtimedir, '1rdm.csv')
         if not (os.path.isfile(dm_file) and
                 os.path.isfile(get_wfn_file(self, state))):
-            write_config(self, nelec, {'get_1rdm_csv': True})
+            write_config(self, nelec, {'get_1rdm_csv': True,
+                                       'load_integrals_cache': True})
             execute_shci(self)
 
         i, j, val = numpy.loadtxt(dm_file, dtype=numpy.dtype('i,i,d'),
@@ -187,7 +188,8 @@ class SHCI(lib.StreamObject):
         dm_file = os.path.join(self.runtimedir, '2rdm.csv')
         if not (os.path.isfile(dm_file) and
                 os.path.isfile(get_wfn_file(self, state))):
-            write_config(self, nelec, {'get_2rdm_csv': True})
+            write_config(self, nelec, {'get_2rdm_csv': True,
+                                       'load_integrals_cache': True})
             execute_shci(self)
 
         # two_rdm is dumped as
@@ -224,7 +226,10 @@ class SHCI(lib.StreamObject):
         if 'orbsym' in kwargs:
             self.orbsym = kwargs['orbsym']
         writeIntegralFile(self, h1e, eri, norb, nelec, ecore)
-        write_config(self, nelec, {})
+        conf = {}
+        if 'tol' in kwargs:
+            conf['tol'] = kwargs['tol']
+        write_config(self, nelec, conf)
 
         if self.dryrun:
             logger.info(self, 'Only write integrals and config')
@@ -263,7 +268,12 @@ class SHCI(lib.StreamObject):
             self.orbsym = kwargs['orbsym']
         writeIntegralFile(self, h1e, eri, norb, nelec, ecore)
         # approx_kernel is called by CASSCF solver only. 2pdm is always needed.
-        write_config(self, nelec, {'get_2rdm_csv': True, 'tol': self.conv_tol*1e3})
+        conf = {'get_2rdm_csv': True}
+        if 'tol' in kwargs:
+            conf['tol'] = kwargs['tol']
+        else:
+            conf['tol'] = self.conv_tol * 1e3
+        write_config(self, nelec, conf)
 
         execute_shci(self)
         if self.verbose >= logger.DEBUG1:
@@ -282,7 +292,8 @@ class SHCI(lib.StreamObject):
         state_id = civec
         if not ('s2' in self.config and
                 os.path.isfile(get_wfn_file(self, state_id))):
-            write_config(self, nelec, {'s2': True})
+            write_config(self, nelec, {'s2': True,
+                                       'load_integrals_cache': True})
             execute_shci(self)
 
         result = get_result(self)

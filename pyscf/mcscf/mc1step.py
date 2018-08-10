@@ -1007,15 +1007,15 @@ class CASSCF(casci.CASCI):
             tol = None
         if hasattr(self.fcisolver, 'approx_kernel'):
             fn = self.fcisolver.approx_kernel
-            ci1 = fn(h1, h2, ncas, nelecas, ecore=ecore, ci0=ci0,
-                     tol=tol, max_memory=self.max_memory)[1]
+            e, ci1 = fn(h1, h2, ncas, nelecas, ecore=ecore, ci0=ci0,
+                        tol=tol, max_memory=self.max_memory)
             return ci1, None
         elif not (hasattr(self.fcisolver, 'contract_2e') and
                   hasattr(self.fcisolver, 'absorb_h1e')):
             fn = self.fcisolver.kernel
-            ci1 = fn(h1, h2, ncas, nelecas, ecore=ecore, ci0=ci0,
-                     tol=tol, max_memory=self.max_memory,
-                     max_cycle=self.ci_response_space)[1]
+            e, ci1 = fn(h1, h2, ncas, nelecas, ecore=ecore, ci0=ci0,
+                        tol=tol, max_memory=self.max_memory,
+                        max_cycle=self.ci_response_space)
             return ci1, None
 
         h2eff = self.fcisolver.absorb_h1e(h1, h2, ncas, nelecas, .5)
@@ -1026,8 +1026,8 @@ class CASSCF(casci.CASCI):
             logger.debug(self, 'CI step by full response')
             # full response
             max_memory = max(400, self.max_memory-lib.current_memory()[0])
-            e, ci1 = self.fcisolver.kernel(h1, h2, ncas, nelecas, ci0=ci0,
-                                           tol=tol, max_memory=max_memory)
+            e, ci1 = self.fcisolver.kernel(h1, h2, ncas, nelecas, ecore=ecore,
+                                           ci0=ci0, tol=tol, max_memory=max_memory)
         else:
             nd = min(max(self.ci_response_space, 2), ci0.size)
             logger.debug(self, 'CI step by %dD subspace response', nd)
