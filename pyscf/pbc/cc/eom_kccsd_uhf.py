@@ -81,15 +81,31 @@ def enforce_2p_spin_doublet(r2, orbspin, kconserv, kshift, excitation):
         #    print np.linalg.norm(tmp.imag), np.linalg.norm(tmp.real), \
         #          np.linalg.norm(tmp + r2[kj, ki].transpose(1, 0, 2))
     else:
-        raise NotImplementedError
         for kj, ka in itertools.product(range(nkpts), repeat=2):
-            ki = kconserv[kshift, kj, ka]
+            kb = kconserv[kshift, kj, ka]
+            if ka > kb:  # Avoid double-counting of anti-symmetrization
+                continue
+
             idxvaa = idxva[ka][:,None] * nvir + idxva[kshift]
             idxvab = idxva[ka][:,None] * nvir + idxvb[kshift]
             idxvba = idxvb[ka][:,None] * nvir + idxva[kshift]
             idxvbb = idxvb[ka][:,None] * nvir + idxvb[kshift]
 
-            # TODO
+            r2_tmp = 0.5 * (r2[kj, ka] - r2[kj, kb].transpose(0, 2, 1))
+            r2_tmp = r2_tmp.reshape(nocc, nvir**2)
+            # Zero out states with +/- 3 unpaired spins
+            r2_tmp[idxva[kshift], idxvbb.ravel()[None, :]] = 0.0
+            r2_tmp[idxvb[kshift], idxvaa.ravel()[None, :]] = 0.0
+
+            r2[kj, ka] = r2_tmp.reshape(nocc, nvir, nvir)
+            r2[kj, kb] = -r2[kj, ka].transpose(0, 2, 1)
+
+        # Check...
+        #
+        #for kj, ka in itertools.product(range(nkpts), repeat=2):
+        #    tmp = r2[kj, ka]
+        #    print np.linalg.norm(tmp.imag), np.linalg.norm(tmp.real), \
+        #          np.linalg.norm(tmp + r2[kj, ka].transpose(0, 2, 1))
     return r2
 
 ########################################
@@ -462,12 +478,23 @@ if __name__ == '__main__':
     nmo = nmoa + nmob
     nocc = nocca + noccb
     nvir = nmo - nocc
-    spin_r1_ip = (np.random.rand(nvir)*1j +
-                  np.random.rand(nvir) - 0.5 - 0.5*1j)
+
+    # IP version
+    spin_r1_ip = (np.random.rand(nocc)*1j +
+                  np.random.rand(nocc) - 0.5 - 0.5*1j)
     spin_r2_ip = (np.random.rand(nkpts**2 * nocc**2 * nvir) +
                   np.random.rand(nkpts**2 * nocc**2 * nvir)*1j - 0.5 - 0.5*1j)
     spin_r2_ip = spin_r2_ip.reshape(nkpts, nkpts, nocc, nocc, nvir)
     spin_r2_ip = enforce_2p_spin_ip_doublet(spin_r2_ip, orbspin, kconserv, kshift)
     [r1a, r1b], [r2aaa, r2baa, r2abb, r2bbb] = \
         spin2spatial_ip_doublet(spin_r1_ip, spin_r2_ip, orbspin, kconserv, kshift)
-    #r1, r2 = spin2spatial_ea(r1, r2, orbspin)
+
+    # EA version
+    spin_r1_ea = (np.random.rand(nvir)*1j +
+                  np.random.rand(nvir) - 0.5 - 0.5*1j)
+    spin_r2_ea = (np.random.rand(nkpts**2 * nocc * nvir**2) +
+                  np.random.rand(nkpts**2 * nocc * nvir**2)*1j - 0.5 - 0.5*1j)
+    spin_r2_ea = spin_r2_ea.reshape(nkpts, nkpts, nocc, nvir, nvir)
+    spin_r2_ea = enforce_2p_spin_ea_doublet(spin_r2_ea, orbspin, kconserv, kshift)
+    [r1a, r1b], [r2aaa, r2baa, r2abb, r2bbb] = \
+        spin2spatial_ip_doublet(spin_r1_ea, spin_r2_ea, orbspin, kconserv, kshift)
