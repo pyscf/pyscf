@@ -317,8 +317,8 @@ class EOMIP(eom_rccsd.EOM):
         nkpts = self.nkpts
         return nocc + nkpts**2*nocc*nocc*nvir
 
-    def make_imds(self, eris=None):
-        imds = _IMDS(self._cc, eris)
+    def make_imds(self, eris=None, t1=None, t2=None):
+        imds = _IMDS(self._cc, eris, t1, t2)
         imds.make_ip()
         return imds
 
