@@ -536,18 +536,33 @@ dsyev = eigh
 
 
 def pick_real_eigs(w, v, nroots, x0):
-    # Here we pick the eigenvalues with smallest imaginary component,
-    # where we are forced to choose at least one eigenvalue.
+    '''This function searchs the real eigenvalues or eigenvalues with small
+    imaginary component, then constructs approximate real eigenvectors if
+    quasi-real eigenvalues were found.
+    '''
     abs_imag = abs(w.imag)
-    max_imag_tol = max(1e-4,min(abs_imag)*1.1)
+    max_imag_tol = max(1e-3, min(abs_imag)*1.1)
     realidx = numpy.where((abs_imag < max_imag_tol))[0]
     if len(realidx) < nroots and w.size >= nroots:
-        idx = w.real.argsort()
         warnings.warn('%d eigenvalues with imaginary part > 0.01\n' %
                       numpy.count_nonzero(abs_imag > 1e-2))
-    else:
-        idx = realidx[w[realidx].real.argsort()]
-    return w[idx].real, v[:,idx].real, idx
+
+    w, v, idx = _eigs_cmplx2real(w, v, realidx)
+    return w, v, realidx[idx]
+
+# If the complex eigenvalue has small imaginary part, both the real part
+# and the imaginary part of the eigenvector can approximately be used as
+# the "real" eigen solutions.
+def _eigs_cmplx2real(w, v, real_idx):
+    idx = real_idx[w[real_idx].real.argsort()]
+    w = w[idx]
+    v = v[:,idx]
+    degen_idx = numpy.where(w.imag != 0)[0]
+    if degen_idx.size > 0:
+        # Take the imaginary part of the "degenerated" eigenvectors as an
+        # independent eigenvector
+        v[:,degen_idx[1::2]] = v[:,degen_idx[1::2]].imag
+    return w.real, v.real, idx
 
 def eig(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         lindep=DAVIDSON_LINDEP, max_memory=MAX_MEMORY,

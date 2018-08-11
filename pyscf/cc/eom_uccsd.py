@@ -282,7 +282,7 @@ def ipccsd_diag(eom, imds=None):
     WovOV_t2_dot = np.einsum('ibja,ijba->ija',imds.WovOV,t2ab)
     WovOV_t2_dot_T = np.einsum('jaib,jiab->ija',imds.WovOV,t2ab)
     WOVOV_t2_dot = np.einsum('jaib,jiab->ija',imds.WOVOV,t2bb)
-    
+
     Hr2aaa = Fvv_diag[None,None,:] - Foo_diag[:,None,None] - Foo_diag[None,:,None] \
              + Woooo_slice[:,:,None] + Wovvo_slice[:,None,:] + Wovvo_slice[None,:,:] \
              - Wovov_t2_dot
@@ -298,7 +298,6 @@ def ipccsd_diag(eom, imds=None):
     Hr2bbb = FVV_diag[None,None,:] - FOO_diag[:,None,None] - FOO_diag[None,:,None] \
              + WOOOO_slice[:,:,None] + WOVVO_slice[:,None,:] + WOVVO_slice[None,:,:] \
              - WOVOV_t2_dot
-
 
     vector = amplitudes_to_vector_ip([Hr1a, Hr1b], [Hr2aaa, Hr2baa, Hr2abb, Hr2bbb])
     return vector
@@ -741,93 +740,17 @@ def eaccsd_diag(eom, imds=None):
     Hr2bbb = -FOO_diag[:,None,None]+FVV_diag[None,:,None]+FVV_diag[None,None,:]+ \
              WOVVO_slice[:,:,None]+WOVVO_slice[:,None,:]-WOVOV_t2_dot
 
-    #-------------- imds.Wvvvv not None
-
-    if(imds.Wvvvv is not None):
-      Wvvvv_slice_A = np.einsum('aabb->ab',imds.Wvvvv)
-      Wvvvv_slice_B = np.einsum('abba->ab',imds.Wvvvv)
-      Hr2aaa += 0.5*Wvvvv_slice_A[None,:,:]-0.5*Wvvvv_slice_B[None,:,:]
-      WVVvv_slice = np.einsum('aabb->ab',imds.WVVvv)
-      Hr2aba += WVVvv_slice[None,:,:]
-      WvvVV_slice = np.einsum('aabb->ab',imds.WvvVV)
-      Hr2bab += WvvVV_slice[None,:,:]
-      WVVVV_slice_A = np.einsum('aabb->ab',imds.WVVVV)
-      WVVVV_slice_B = np.einsum('abba->ab',imds.WVVVV)
-      Hr2bbb += 0.5*WVVVV_slice_A[None,:,:]-0.5*WVVVV_slice_B[None,:,:]
-
-    #-------------- original implementation
-
-    '''
-    Hr2aaa = np.zeros((nocc_a,nvir_a,nvir_a), dtype=dtype)
-    Hr2bab = np.zeros((nocc_b,nvir_a,nvir_b), dtype=dtype)
-    Hr2aba = np.zeros((nocc_a,nvir_b,nvir_a), dtype=dtype)
-    Hr2bbb = np.zeros((nocc_b,nvir_b,nvir_b), dtype=dtype)
-
-    for j in range(nocc_a):
-        for a in range(nvir_a):
-            if imds.Wvvvv is not None:
-                Wvvvva = np.array(imds.Wvvvv[a])
-            for b in range(nvir_a):
-                Hr2aaa[j,a,b] += imds.Fvv[a,a]
-                Hr2aaa[j,a,b] += imds.Fvv[b,b]
-                Hr2aaa[j,a,b] += -imds.Foo[j,j]
-                Hr2aaa[j,a,b] += imds.Wovvo[j,b,b,j]
-                Hr2aaa[j,a,b] += imds.Wovvo[j,a,a,j]
-                if imds.Wvvvv is not None:
-                    Hr2aaa[j,a,b] += Wvvvva[a,b,b]
-                Hr2aaa[j,a,b] += -np.dot(imds.Wovov[:,a,j,b], t2aa[:,j,a,b])
-
-    Hr2aba = np.zeros((nocc_a, nvir_b, nvir_a),dtype=dtype)
-    for j in range(nocc_a):
-        for a in range(nvir_b):
-            if imds.Wvvvv is not None:
-                WVVvva = np.array(imds.WVVvv[a])
-            for b in range(nvir_a):
-                Hr2aba[j,a,b] += imds.FVV[a,a]
-                Hr2aba[j,a,b] += imds.Fvv[b,b]
-                Hr2aba[j,a,b] += -imds.Foo[j,j]
-                Hr2aba[j,a,b] += imds.Wovvo[j,b,b,j]
-                Hr2aba[j,a,b] += imds.WoVVo[j,a,a,j]
-                if imds.Wvvvv is not None:
-                    Hr2aba[j,a,b] += WVVvva[a,b,b]
-                Hr2aba[j,a,b] -= np.dot(imds.WovOV[j,b,:,a], t2ba[:,j,a,b])
-
-    Hr2bab = np.zeros((nocc_b,nvir_a,nvir_b),dtype=dtype)
-    for a in range(nvir_b):
-        for b in range(nvir_a):
-            if imds.Wvvvv is not None:
-                WvvVVb = np.array(imds.WvvVV[b])
-            for j in range(nocc_b):
-                Hr2bab[j,b,a] = -imds.FOO[j,j]
-                Hr2bab[j,b,a] += imds.Fvv[b,b]
-                Hr2bab[j,b,a] += imds.FVV[a,a]
-                if imds.Wvvvv is not None:
-                    Hr2bab[j,b,a] += (WvvVVb[b,a,a])
-                Hr2bab[j,b,a] += imds.WOVVO[j,a,a,j]
-                Hr2bab[j,b,a] += imds.WOvvO[j,b,b,j]
-                Hr2bab[j,b,a] -= np.dot(imds.WovOV[:,b,j,a], t2ab[:,j,b,a])
-
-    Hr2bbb = np.zeros((nocc_b,nvir_b,nvir_b),dtype=dtype)
-    for a in range(nvir_b):
-        if imds.Wvvvv is not None:
-            WVVVVa = np.array(imds.WVVVV[a])
-        for b in range(nvir_b):
-            for j in range(nocc_b):
-                Hr2bbb[j,a,b] = -imds.FOO[j,j]
-                Hr2bbb[j,a,b] += imds.FVV[a,a]
-                Hr2bbb[j,a,b] += imds.FVV[b,b]
-                if imds.Wvvvv is not None:
-                    Hr2bbb[j,a,b] += WVVVVa[a,b,b]
-                Hr2bbb[j,a,b] += imds.WOVVO[j,b,b,j]
-                Hr2bbb[j,a,b] += imds.WOVVO[j,a,a,j]
-                Hr2bbb[j,a,b] -= (np.dot(imds.WOVOV[:,a,j,b], t2bb[:,j,a,b]))
-    #-------------- comparison
-
-    print np.abs(Hr2aaa-Hr2aaa_n).max()
-    print np.abs(Hr2aba-Hr2aba_n).max()
-    print np.abs(Hr2bab-Hr2bab_n).max()
-    print np.abs(Hr2bbb-Hr2bbb_n).max()
-    '''
+    if imds.Wvvvv is not None:
+        Wvvvv_slice_A = np.einsum('aabb->ab',imds.Wvvvv)
+        Wvvvv_slice_B = np.einsum('abba->ab',imds.Wvvvv)
+        Hr2aaa += 0.5*Wvvvv_slice_A[None,:,:]-0.5*Wvvvv_slice_B[None,:,:]
+        WVVvv_slice = np.einsum('aabb->ab',imds.WVVvv)
+        Hr2aba += WVVvv_slice[None,:,:]
+        WvvVV_slice = np.einsum('aabb->ab',imds.WvvVV)
+        Hr2bab += WvvVV_slice[None,:,:]
+        WVVVV_slice_A = np.einsum('aabb->ab',imds.WVVVV)
+        WVVVV_slice_B = np.einsum('abba->ab',imds.WVVVV)
+        Hr2bbb += 0.5*WVVVV_slice_A[None,:,:]-0.5*WVVVV_slice_B[None,:,:]
 
     vector = amplitudes_to_vector_ea((Hr1a,Hr1b), (Hr2aaa,Hr2aba,Hr2bab,Hr2bbb))
     return vector
