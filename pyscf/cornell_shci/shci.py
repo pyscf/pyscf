@@ -52,6 +52,8 @@ except ImportError:
                          % os.path.join(os.path.dirname(__file__), 'settings.py'))
         raise ImportError('settings.py not found')
 
+sys.path.append(os.path.dirname(settings.SHCIEXE))
+from hc_client import HcClient
 
 # The default parameters in config file
 CONFIG = {
@@ -120,9 +122,7 @@ class SHCI(lib.StreamObject):
 
         self.executable = settings.SHCIEXE
         self.mpiprefix = settings.MPIPREFIX
-        self.runtimedir = getattr(settings, 'SHCIRUNTIMEDIR', '.')
-        if os.path.exists(self.runtimedir):
-            shutil.rmtree(self.runtimedir)
+        self.runtimedir = '.'#getattr(settings, 'SHCIRUNTIMEDIR', '.')
 
         self.configfile = 'config.json' # DO NOT modify
         self.integralfile = 'FCIDUMP'   # DO NOT modify
@@ -215,10 +215,11 @@ class SHCI(lib.StreamObject):
         rdm1 = numpy.einsum('ikjj->ki', rdm2) / (nelectrons - 1)
         return rdm1, rdm2
 
-    def kernel(self, h1e, eri, norb, nelec, ecore=0, restart=False, **kwargs):
+    def kernel(self, h1e, eri, norb, nelec, ci0=None, ecore=0, restart=False,
+               **kwargs):
         state_id = min(self.config['eps_vars'])
 
-        if restart or 'ci0' in kwargs:
+        if restart or ci0 is not None:
             wfn_file = get_wfn_file(self, state_id)
             if os.path.isfile(wfn_file):
                 shutil.move(wfn_file, get_wfn_file(self, state_id * 2))
@@ -257,9 +258,10 @@ class SHCI(lib.StreamObject):
             raise RuntimeError('Eigenstate %s not found' % wfn_file)
         return calc_e, roots
 
-    def approx_kernel(self, h1e, eri, norb, nelec, ecore=0, restart=False, **kwargs):
+    def approx_kernel(self, h1e, eri, norb, nelec, ci0=None, ecore=0,
+                      restart=False, **kwargs):
         state_id = min(self.config['eps_vars'])
-        if restart or 'ci0' in kwargs:
+        if restart or ci0 is not None:
             wfn_file = get_wfn_file(self, state_id)
             if os.path.isfile(wfn_file):
                 shutil.move(wfn_file, get_wfn_file(self, state_id * 2))
@@ -300,6 +302,22 @@ class SHCI(lib.StreamObject):
         ss = result['s2']
         s = numpy.sqrt(ss+.25) - .5
         return ss, s*2+1
+
+    def contract_2e(self, eri, civec, norb, nelec, client=None, **kwargs):
+        if client is None:
+            if hasattr(self, '_client'):
+                if not (os.path.isfile(os.path.join(self.runtimedir, self.integralfile)) and
+                        os.path.isfile(os.path.join(self.runtimedir, self.configfile))):
+                    raise RuntimeError('FCIDUMP or config.json not found')
+
+                self._client = HcClient(nProcs=1, shciPath=self.executable,
+                                        runtimePath=self.runtimedir)
+                client.startServer()
+            client = self._client
+        else:
+            self._client = client
+
+        return client.Hc(civec)
 
 
 def write_config(shciobj, nelec, config):
@@ -442,6 +460,27 @@ def dryrun(mc, mo_coeff=None):
     mc.fcisolver.dryrun = bak
 
 
+class shci_client(object):
+    '''Run SHCI in client mode
+    '''
+    def __init__(self, shciobj):
+        self._client = HcClient(nProcs=1, shciPath=shciobj.executable,
+                                runtimePath=shciobj.runtimedir)
+        self._shciobj = shciobj
+
+    def __enter__(self):
+        shciobj = self._shciobj
+        if not (os.path.isfile(os.path.join(shciobj.runtimedir, shciobj.integralfile)) and
+                os.path.isfile(os.path.join(shciobj.runtimedir, shciobj.configfile))):
+            raise RuntimeError('FCIDUMP or config.json not found')
+
+        self._client.startServer()
+        return self._client
+
+    def __exit__(self, type, value, traceback):
+        self._client.exit()
+
+
 if __name__ == '__main__':
     from pyscf import gto, scf, mcscf
     from pyscf.cornell_shci import shci
@@ -467,9 +506,9 @@ if __name__ == '__main__':
     nelec = 10
     dimer_atom = 'N'
 
-#    mch = mcscf.CASCI(mf, norb, nelec)
-#    mch.fcisolver = SHCI(mf.mol)
-#    mch.kernel()
+    mch = mcscf.CASCI(mf, norb, nelec)
+    mch.fcisolver = SHCI(mf.mol)
+    mch.kernel()
 #    dm2 = mch.fcisolver.make_rdm12(0, norb, nelec)[1]
 #
 #    mc1 = mcscf.CASCI(mf, norb, nelec)
@@ -477,10 +516,14 @@ if __name__ == '__main__':
 #    dm2ref = mc1.fcisolver.make_rdm12(mc1.ci, norb, nelec)[1]
 #    print abs(dm2ref-dm2).max()
 #    exit()
-
-    mch = shci.SHCISCF( mf, norb, nelec )
-    mch.internal_rotation = True
-    mch.kernel()
+#
+#    mch = shci.SHCISCF( mf, norb, nelec )
+#    mch.internal_rotation = True
+#    mch.kernel()
 
 #    mc1 = mcscf.CASSCF(mf, norb, nelec)
 #    mc1.kernel()
+
+    with shci_client(mch.fcisolver) as client:
+        coefs = client.getCoefs()
+        c = client.Hc(coefs)
