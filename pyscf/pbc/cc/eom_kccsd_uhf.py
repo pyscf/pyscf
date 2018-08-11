@@ -144,25 +144,55 @@ def spin2spatial_ip_doublet(r1, r2, orbspin, kconserv, kshift):
         r2bbb[ki, kj] = r2bbb_tmp.reshape(nocc_b, nocc_b, nvir_b)
     return [r1a, r1b], [r2aaa, r2baa, r2abb, r2bbb]
 
-def spatial2spin_ip_doublet(r1, r2, orbspin=None):
+def spatial2spin_ip_doublet(r1, r2, kshift, orbspin=None):
     '''Convert R1/R2 of spatial orbital representation to R1/R2 of
     spin-orbital representation
     '''
     r1a, r1b = r1
     r2aaa, r2baa, r2abb, r2bbb = r2
-    nkpts, nocc_a, nvir_a = np.array(r2aaa.shape)[[0, 1, 2]]
-    nkpts, nocc_b, nvir_b = np.array(r2bbb.shape)[[0, 1, 2]]
+    nkpts, nocc_a, nvir_a = np.array(r2aaa.shape)[[1, 3, 4]]
+    nkpts, nocc_b, nvir_b = np.array(r2bbb.shape)[[1, 3, 4]]
 
     if orbspin is None:
-        orbspin = np.zeros((nocc_a+nvir_a)*2, dtype=int)
-        orbspin[1::2] = 1
+        orbspin = np.zeros((nkpts, nocc_a+nocc_b+nvir_a+nvir_b), dtype=int)
+        orbspin[:,1::2] = 1
 
     nocc = nocc_a + nocc_b
     nvir = nvir_a + nvir_b
 
-    r1 = np.zeros((nocc), dtype=r1a.dtype)
-    r1[idxoa] = r1a
-    r1[idxob] = r1b
+    idxoa = [np.where(orbspin[k][:nocc] == 0)[0] for k in range(nkpts)]
+    idxob = [np.where(orbspin[k][:nocc] == 1)[0] for k in range(nkpts)]
+    idxva = [np.where(orbspin[k][nocc:] == 0)[0] for k in range(nkpts)]
+    idxvb = [np.where(orbspin[k][nocc:] == 1)[0] for k in range(nkpts)]
+
+    r1 = np.zeros(nocc, dtype = r1a.dtype)
+    r1[idxoa[kshift]] = r1a
+    r1[idxob[kshift]] = r1b
+
+    r2 = np.zeros((nkpts, nkpts, nocc**2, nvir), dtype = r2aaa.dtype)
+    for ki, kj in itertools.product(range(nkpts), repeat=2):
+        ka = kconserv[ki, kshift, kj]
+        idxoaa = idxoa[ki][:,None] * nocc + idxoa[kj]
+        idxoab = idxoa[ki][:,None] * nocc + idxob[kj]
+        idxoba = idxob[ki][:,None] * nocc + idxoa[kj]
+        idxobb = idxob[ki][:,None] * nocc + idxob[kj]
+
+        r2aaa_tmp = r2aaa[ki,kj].reshape(nocc_a * nocc_a, nvir_a)
+        r2baa_tmp = r2baa[ki,kj].reshape(nocc_b * nocc_a, nvir_a)
+        r2abb_tmp = r2abb[ki,kj].reshape(nocc_a * nocc_b, nvir_b)
+        r2bbb_tmp = r2bbb[ki,kj].reshape(nocc_b * nocc_b, nvir_b)
+        lib.takebak_2d(r2[ki,kj], r2aaa_tmp, idxoaa.ravel(), idxva.ravel())
+        lib.takebak_2d(r2[ki,kj], r2baa_tmp, idxoba.ravel(), idxva.ravel())
+        lib.takebak_2d(r2[ki,kj], r2abb_tmp, idxoab.ravel(), idxvb.ravel())
+        lib.takebak_2d(r2[ki,kj], r2bbb_tmp, idxobb.ravel(), idxvb.ravel())
+
+        r2aba_tmp = - r2baa[kj,ki].reshape(nocc_a * nocc_b, nvir_a)
+        r2bab_tmp = - r2abb[kj,ki].reshape(nocc_a * nocc_b, nvir_a)
+
+        lib.takebak_2d(r2[ki,kj], r2aba_tmp, idxoab.T.ravel(), idxva.ravel())
+        lib.takebak_2d(r2[ki,kj], r2bab_tmp, idxoba.T.ravel(), idxvb.ravel())
+
+
 
     #r2 = np.zeros((nocc**2, nvir), dtype=r2aaa.dtype)
     #idxoaa = idxoa[:,None] * nocc + idxoa
@@ -185,7 +215,7 @@ def spatial2spin_ip_doublet(r1, r2, orbspin=None):
     #r2bab = -r2abb
     #lib.takebak_2d(r2, r2aba, idxoab.T.ravel(), idxva.ravel())
     #lib.takebak_2d(r2, r2bab, idxoba.T.ravel(), idxvb.ravel())
-    return r1, r2.reshape(nocc, nocc, nvir)
+    return r1, r2.reshape(nkpts, nkpts, nocc, nocc, nvir)
 
 #def amplitudes_to_vector_ip(r1, r2):
 #    '''For spin orbitals'''
