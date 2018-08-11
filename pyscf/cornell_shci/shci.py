@@ -52,8 +52,11 @@ except ImportError:
                          % os.path.join(os.path.dirname(__file__), 'settings.py'))
         raise ImportError('settings.py not found')
 
-sys.path.append(os.path.dirname(settings.SHCIEXE))
-from hc_client import HcClient
+try:
+    sys.path.append(os.path.dirname(settings.SHCIEXE))
+    from hc_client import HcClient
+except:
+    pass
 
 # The default parameters in config file
 CONFIG = {
@@ -437,7 +440,7 @@ def SHCISCF(mf, norb, nelec, tol=1.e-8, *args, **kwargs):
 
     Examples:
 
-    from pyscf.cornell_shci import shci
+    >>> from pyscf.cornell_shci import shci
     >>> mol = gto.M(atom='C 0 0 0; C 0 0 1')
     >>> mf = scf.RHF(mol).run()
     >>> mc = shci.SHCISCF(mf, 4, 4)
@@ -461,11 +464,24 @@ def dryrun(mc, mo_coeff=None):
 
 
 class shci_client(object):
-    '''Run SHCI in client mode
+    '''Run SHCI in client mode for matrix-vector operation H*c
+
+    Examples:
+
+    >>> from pyscf.cornell_shci import shci
+    >>> mol = gto.M(atom='C 0 0 0; C 0 0 1')
+    >>> mf = scf.RHF(mol).run()
+    >>> mc = mcscf.CASCI(mf, 8, 8)
+    >>> mc.fcisolver = shci.SHCI(mol)
+    >>> mc.kernel()
+    >>> with shci.shci_client(mc.fcisolver) as sc:
+    ...     civec = sc.getCoefs()
+    ...     hc = sc.Hc(civec)
     '''
     def __init__(self, shciobj):
-        self._client = HcClient(nProcs=1, shciPath=shciobj.executable,
-                                runtimePath=shciobj.runtimedir)
+        client = HcClient(nProcs=1, shciPath=shciobj.executable,
+                          runtimePath=shciobj.runtimedir)
+        shciobj._client = client
         self._shciobj = shciobj
 
     def __enter__(self):
@@ -474,11 +490,11 @@ class shci_client(object):
                 os.path.isfile(os.path.join(shciobj.runtimedir, shciobj.configfile))):
             raise RuntimeError('FCIDUMP or config.json not found')
 
-        self._client.startServer()
-        return self._client
+        shciobj._client.startServer()
+        return shciobj._client
 
     def __exit__(self, type, value, traceback):
-        self._client.exit()
+        self.shciobj._client.exit()
 
 
 if __name__ == '__main__':
@@ -509,21 +525,21 @@ if __name__ == '__main__':
     mch = mcscf.CASCI(mf, norb, nelec)
     mch.fcisolver = SHCI(mf.mol)
     mch.kernel()
-#    dm2 = mch.fcisolver.make_rdm12(0, norb, nelec)[1]
+    dm2 = mch.fcisolver.make_rdm12(0, norb, nelec)[1]
 #
 #    mc1 = mcscf.CASCI(mf, norb, nelec)
 #    mc1.kernel(mch.mo_coeff)
 #    dm2ref = mc1.fcisolver.make_rdm12(mc1.ci, norb, nelec)[1]
 #    print abs(dm2ref-dm2).max()
 #    exit()
-#
-#    mch = shci.SHCISCF( mf, norb, nelec )
-#    mch.internal_rotation = True
-#    mch.kernel()
+
+    mch = shci.SHCISCF( mf, norb, nelec )
+    mch.internal_rotation = True
+    mch.kernel()
 
 #    mc1 = mcscf.CASSCF(mf, norb, nelec)
 #    mc1.kernel()
 
-    with shci_client(mch.fcisolver) as client:
-        coefs = client.getCoefs()
-        c = client.Hc(coefs)
+#    with shci_client(mch.fcisolver) as client:
+#        coefs = client.getCoefs()
+#        c = client.Hc(coefs)
