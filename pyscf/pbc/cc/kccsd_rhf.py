@@ -321,7 +321,6 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         assert (isinstance(mf, scf.khf.KSCF))
         pyscf.cc.ccsd.CCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
         self.kpts = mf.kpts
-        self.mo_energy = mf.mo_energy
         self.khelper = kpts_helper.KptsHelper(mf.cell, mf.kpts)
         self.made_ee_imds = False
         self.made_ip_imds = False
@@ -330,7 +329,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         self.ea_partition = None
         self.max_space = 20
 
-        keys = set(['kpts', 'mo_energy', 'khelper', 'made_ee_imds',
+        keys = set(['kpts', 'khelper', 'made_ee_imds',
                     'made_ip_imds', 'made_ea_imds', 'ip_partition',
                     'ea_partition', 'max_space'])
         self._keys = self._keys.union(keys)
