@@ -2001,13 +2001,18 @@ class Mole(lib.StreamObject):
             _basis = self.basis
         self._basis = self.format_basis(_basis)
 
-# TODO: Consider ECP info into symmetry
+# TODO: Consider ECP info in point group symmetry initialization
         if self.ecp:
             if isinstance(self.ecp, (str, unicode)):
-                self._ecp = self.format_ecp(dict([(a, str(self.ecp))
-                                                  for a in uniq_atoms]))
+                _ecp = dict([(a, str(self.ecp)) for a in uniq_atoms])
+            elif 'default' in self.ecp:
+                default_ecp = self.ecp['default']
+                _ecp = dict(((a, default_ecp) for a in uniq_atoms))
+                _ecp.update(self.ecp)
+                del(_ecp['default'])
             else:
-                self._ecp = self.format_ecp(self.ecp)
+                _ecp = self.ecp
+            self._ecp = self.format_ecp(_ecp)
 
         if self.symmetry:
             from pyscf import symm

@@ -391,6 +391,11 @@ class KROHF(pbcrohf.ROHF, khf.KRHF):
         return mulliken_meta(cell, dm, s=s, verbose=verbose,
                              pre_orth_method=pre_orth_method)
 
+    def dip_moment(self, mol=None, dm=None, unit='Debye', verbose=logger.NOTE,
+                   **kwargs):
+        # skip dipole memont for crystal
+        return
+
     @lib.with_doc(pbcrohf.ROHF.spin_square.__doc__)
     def spin_square(self, mo_coeff=None, s=None):
         '''Treating the k-point sampling wfn as a giant Slater determinant,

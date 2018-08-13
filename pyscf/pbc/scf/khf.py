@@ -589,6 +589,11 @@ class KSCF(pbchf.SCF):
         return mulliken_meta(cell, dm, s=s, verbose=verbose,
                              pre_orth_method=pre_orth_method)
 
+    def dip_moment(self, mol=None, dm=None, unit='Debye', verbose=logger.NOTE,
+                   **kwargs):
+        # skip dipole memont for crystal
+        return
+
     canonicalize = canonicalize
 
     def density_fit(self, auxbasis=None, with_df=None):

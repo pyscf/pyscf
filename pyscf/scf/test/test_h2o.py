@@ -70,7 +70,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(mf.scf(), -75.578396379589748, 9)
         pop_chg, dip = mf.analyze()
         self.assertAlmostEqual(lib.finger(pop_chg[0]), 1.0036241405313113, 9)
-        self.assertAlmostEqual(lib.finger(dip), -1.4000444730836665, 9)
+        self.assertAlmostEqual(lib.finger(dip), -1.4000447020842097, 9)
 
     def test_nr_uhf(self):
         uhf = scf.UHF(mol)

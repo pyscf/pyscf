@@ -409,6 +409,11 @@ class SCF(mol_hf.SCF):
 
     get_bands = get_bands
 
+    def dip_moment(self, mol=None, dm=None, unit='Debye', verbose=logger.NOTE,
+                   **kwargs):
+        # skip dipole memont for crystal
+        return
+
     def get_init_guess(self, cell=None, key='minao'):
         if cell is None: cell = self.cell
         dm = mol_hf.SCF.get_init_guess(self, cell, key)
