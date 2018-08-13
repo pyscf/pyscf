@@ -32,6 +32,15 @@ method = 'davidson'
 
 VERBOSE = False
 
+try:
+# Temporary fix for davidson when using mpicc
+    from mpi4py import MPI
+    FOUND_MPI4PY = True
+    MPI_RANK = MPI.COMM_WORLD.Get_rank()
+    MPI_COMM = MPI.COMM_WORLD
+except (ImportError, OSError):
+    FOUND_MPI4PY = False
+
 def eigs(matvec, size, nroots, Adiag=None, guess=False, verbose=logger.INFO):
     '''Davidson diagonalization method to solve A c = E c
     when A is not Hermitian.
@@ -154,6 +163,9 @@ def davidson(mult_by_A, N, neig, Adiag=None, verbose=logger.INFO):
 
         # orthonormalize xi wrt b
         bxi,R = np.linalg.qr(np.column_stack((b,xi)))
+        if FOUND_MPI4PY:  # Ensure all processes search in same direction
+            bxi = MPI_COMM.bcast(bxi)
+
         # append orthonormalized xi to b
         b = np.column_stack((b,bxi[:,-1]))
 

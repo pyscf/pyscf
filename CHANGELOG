@@ -2,11 +2,12 @@ PySCF 1.6 alpha (2018-09-??)
 ----------------------------
 * Added
   - X2C-UKS (LDA functional only)
-  - PBC gamma point ROHF/ROKS
-  - PBC KROHF/KROKS for k-point sampling
+  - PBC gamma point ROHF/ROKS and GKS
+  - PBC KROHF/KROKS and KGKS for k-point sampling
   - DFT Coulomb and XC integrals with multigrid
   - Periodic UCCSD with k-point sampling
   - perturbative DMRG method
+  - Interface to Cornell SHCI
 * Improved
   - numint performance (eval_rho, eval_mat)
 

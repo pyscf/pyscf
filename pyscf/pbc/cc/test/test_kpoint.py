@@ -17,7 +17,6 @@
 #          Timothy Berkelbach <tim.berkelbach@gmail.com>
 #
 
-#import unittest
 import unittest
 import numpy as np
 

@@ -12,37 +12,878 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# Author: Qiming Sun <osirpt.sun@gmail.com>
+#         James D. McClain
+#         Jason Yu
+#         Shining Sun
+#         Mario Motta
+#         Chong Sun
+#
 
 import time
 import numpy as np
 
 from pyscf import lib
-from pyscf import scf
 from pyscf.lib import logger
+from pyscf import ao2mo
 from pyscf.cc import ccsd
 from pyscf.cc import uccsd
 from pyscf.cc import eom_rccsd
-from pyscf.cc import eom_gccsd
 from pyscf.cc import addons
-
+from pyscf.cc import uintermediates
 
 ########################################
 # EOM-IP-CCSD
 ########################################
 
-class EOMIP(eom_gccsd.EOMIP):
+def vector_to_amplitudes_ip(vector, nmo, nocc):
+    '''For spin orbitals'''
+    nocca, noccb = nocc
+    nmoa, nmob = nmo
+    nvira, nvirb = nmoa-nocca, nmob-noccb
+
+    sizes = (nocca, noccb, nocca*(nocca-1)//2*nvira, noccb*nocca*nvira,
+             nocca*noccb*nvirb, noccb*(noccb-1)//2*nvirb)
+    sections = np.cumsum(sizes[:-1])
+    r1a, r1b, r2a, r2baa, r2abb, r2b = np.split(vector, sections)
+    r2a = r2a.reshape(nocca*(nocca-1)//2,nvira)
+    r2b = r2b.reshape(noccb*(noccb-1)//2,nvirb)
+    r2baa = r2baa.reshape(noccb,nocca,nvira).copy()
+    r2abb = r2abb.reshape(nocca,noccb,nvirb).copy()
+
+    idxa = np.tril_indices(nocca, -1)
+    idxb = np.tril_indices(noccb, -1)
+    r2aaa = np.zeros((nocca,nocca,nvira), vector.dtype)
+    r2bbb = np.zeros((noccb,noccb,nvirb), vector.dtype)
+    r2aaa[idxa[0],idxa[1]] = r2a
+    r2aaa[idxa[1],idxa[0]] =-r2a
+    r2bbb[idxb[0],idxb[1]] = r2b
+    r2bbb[idxb[1],idxb[0]] =-r2b
+
+    r1 = (r1a.copy(), r1b.copy())
+    r2 = (r2aaa, r2baa, r2abb, r2bbb)
+    return r1, r2
+
+def amplitudes_to_vector_ip(r1, r2):
+    '''For spin orbitals'''
+    r1a, r1b = r1
+    r2aaa, r2baa, r2abb, r2bbb = r2
+    nocca, noccb, nvirb = r2abb.shape
+    idxa = np.tril_indices(nocca, -1)
+    idxb = np.tril_indices(noccb, -1)
+    return np.hstack((r1a, r1b,
+                      r2aaa[idxa].ravel(), r2baa.ravel(),
+                      r2abb.ravel(), r2bbb[idxb].ravel()))
+
+def spatial2spin_ip(r1, r2, orbspin=None):
+    '''Convert R1/R2 of spatial orbital representation to R1/R2 of
+    spin-orbital representation
+    '''
+    r1a, r1b = r1
+    r2aaa, r2baa, r2abb, r2bbb = r2
+    nocc_a, nvir_a = r2aaa.shape[1:]
+    nocc_b, nvir_b = r2bbb.shape[1:]
+
+    if orbspin is None:
+        orbspin = np.zeros((nocc_a+nvir_a)*2, dtype=int)
+        orbspin[1::2] = 1
+
+    nocc = nocc_a + nocc_b
+    nvir = nvir_a + nvir_b
+    idxoa = np.where(orbspin[:nocc] == 0)[0]
+    idxob = np.where(orbspin[:nocc] == 1)[0]
+    idxva = np.where(orbspin[nocc:] == 0)[0]
+    idxvb = np.where(orbspin[nocc:] == 1)[0]
+
+    r1 = np.zeros((nocc), dtype=r1a.dtype)
+    r1[idxoa] = r1a
+    r1[idxob] = r1b
+
+    r2 = np.zeros((nocc**2, nvir), dtype=r2aaa.dtype)
+    idxoaa = idxoa[:,None] * nocc + idxoa
+    idxoab = idxoa[:,None] * nocc + idxob
+    idxoba = idxob[:,None] * nocc + idxoa
+    idxobb = idxob[:,None] * nocc + idxob
+    idxvaa = idxva[:,None] * nvir + idxva
+    idxvab = idxva[:,None] * nvir + idxvb
+    idxvba = idxvb[:,None] * nvir + idxva
+    idxvbb = idxvb[:,None] * nvir + idxvb
+    r2aaa = r2aaa.reshape(nocc_a*nocc_a, nvir_a)
+    r2baa = r2baa.reshape(nocc_b*nocc_a, nvir_a)
+    r2abb = r2abb.reshape(nocc_a*nocc_b, nvir_b)
+    r2bbb = r2bbb.reshape(nocc_b*nocc_b, nvir_b)
+    lib.takebak_2d(r2, r2aaa, idxoaa.ravel(), idxva.ravel())
+    lib.takebak_2d(r2, r2baa, idxoba.ravel(), idxva.ravel())
+    lib.takebak_2d(r2, r2abb, idxoab.ravel(), idxvb.ravel())
+    lib.takebak_2d(r2, r2bbb, idxobb.ravel(), idxvb.ravel())
+    r2aba = -r2baa
+    r2bab = -r2abb
+    lib.takebak_2d(r2, r2aba, idxoab.T.ravel(), idxva.ravel())
+    lib.takebak_2d(r2, r2bab, idxoba.T.ravel(), idxvb.ravel())
+    return r1, r2.reshape(nocc, nocc, nvir)
+
+def spin2spatial_ip(r1, r2, orbspin):
+    nocc, nvir = r2.shape[1:]
+
+    idxoa = np.where(orbspin[:nocc] == 0)[0]
+    idxob = np.where(orbspin[:nocc] == 1)[0]
+    idxva = np.where(orbspin[nocc:] == 0)[0]
+    idxvb = np.where(orbspin[nocc:] == 1)[0]
+    nocc_a = len(idxoa)
+    nocc_b = len(idxob)
+    nvir_a = len(idxva)
+    nvir_b = len(idxvb)
+
+    r1a = r1[idxoa]
+    r1b = r1[idxob]
+
+    idxoaa = idxoa[:,None] * nocc + idxoa
+    idxoab = idxoa[:,None] * nocc + idxob
+    idxoba = idxob[:,None] * nocc + idxoa
+    idxobb = idxob[:,None] * nocc + idxob
+    idxvaa = idxva[:,None] * nvir + idxva
+    idxvab = idxva[:,None] * nvir + idxvb
+    idxvba = idxvb[:,None] * nvir + idxva
+    idxvbb = idxvb[:,None] * nvir + idxvb
+
+    r2 = r2.reshape(nocc**2, nvir)
+    r2aaa = lib.take_2d(r2, idxoaa.ravel(), idxva.ravel())
+    r2baa = lib.take_2d(r2, idxoba.ravel(), idxva.ravel())
+    r2abb = lib.take_2d(r2, idxoab.ravel(), idxvb.ravel())
+    r2bbb = lib.take_2d(r2, idxobb.ravel(), idxvb.ravel())
+
+    r2aaa = r2aaa.reshape(nocc_a, nocc_a, nvir_a)
+    r2baa = r2baa.reshape(nocc_b, nocc_a, nvir_a)
+    r2abb = r2abb.reshape(nocc_a, nocc_b, nvir_b)
+    r2bbb = r2bbb.reshape(nocc_b, nocc_b, nvir_b)
+    return [r1a, r1b], [r2aaa, r2baa, r2abb, r2bbb]
+
+def ipccsd_matvec(eom, vector, imds=None, diag=None):
+    '''For spin orbitals
+    R2 operators of the form s_{ij}^{ b}, i.e. indices jb are coupled.'''
+    # Ref: Tu, Wang, and Li, J. Chem. Phys. 136, 174102 (2012) Eqs.(8)-(9)
+    if imds is None: imds = eom.make_imds()
+    t1, t2, eris = imds.t1, imds.t2, imds.eris
+    t1a, t1b = t1
+    t2aa, t2ab, t2bb = t2
+    nocca, noccb, nvira, nvirb = t2ab.shape
+    nmoa, nmob = nocca+nvira, noccb+nvirb
+    r1, r2 = vector_to_amplitudes_ip(vector, (nmoa,nmob), (nocca,noccb))
+    r1a, r1b = r1
+    r2aaa, r2baa, r2abb, r2bbb = r2
+
+    #Foo, Fov, and Wooov
+    Hr1a  = np.einsum('me,mie->i', imds.Fov, r2aaa)
+    Hr1a -= np.einsum('ME,iME->i', imds.FOV, r2abb)
+    Hr1b  = np.einsum('ME,MIE->I', imds.FOV, r2bbb)
+    Hr1b -= np.einsum('me,Ime->I', imds.Fov, r2baa)
+
+    Hr1a += -np.einsum('mi,m->i', imds.Foo, r1a)
+    Hr1b += -np.einsum('MI,M->I', imds.FOO, r1b)
+
+    Hr1a += -0.5*np.einsum('nime,mne->i', imds.Wooov, r2aaa)
+    Hr1b +=      np.einsum('NIme,Nme->I', imds.WOOov, r2baa)
+    Hr1b += -0.5*np.einsum('NIME,MNE->I', imds.WOOOV, r2bbb)
+    Hr1a +=      np.einsum('niME,nME->i', imds.WooOV, r2abb)
+
+    # Fvv term
+    Hr2aaa = lib.einsum('be,ije->ijb', imds.Fvv, r2aaa)
+    Hr2abb = lib.einsum('BE,iJE->iJB', imds.FVV, r2abb)
+    Hr2bbb = lib.einsum('BE,IJE->IJB', imds.FVV, r2bbb)
+    Hr2baa = lib.einsum('be,Ije->Ijb', imds.Fvv, r2baa)
+
+    # Foo term
+    tmpa = lib.einsum('mi,mjb->ijb', imds.Foo, r2aaa)
+    Hr2aaa -= tmpa - tmpa.transpose((1,0,2))
+    Hr2abb -= lib.einsum('mi,mJB->iJB', imds.Foo, r2abb)
+    Hr2abb -= lib.einsum('MJ,iMB->iJB', imds.FOO, r2abb)
+    Hr2baa -= lib.einsum('MI,Mjb->Ijb', imds.FOO, r2baa)
+    Hr2baa -= lib.einsum('mj,Imb->Ijb', imds.Foo, r2baa)
+    tmpb = lib.einsum('MI,MJB->IJB', imds.FOO, r2bbb)
+    Hr2bbb -= tmpb - tmpb.transpose((1,0,2))
+
+    # Wovoo term
+    Hr2aaa -= np.einsum('mjbi,m->ijb', imds.Woovo, r1a)
+    Hr2abb += np.einsum('miBJ,m->iJB', imds.WooVO, r1a)
+    Hr2baa += np.einsum('MIbj,M->Ijb', imds.WOOvo, r1b)
+    Hr2bbb -= np.einsum('MJBI,M->IJB', imds.WOOVO, r1b)
+
+    # Woooo term
+    Hr2aaa += .5 * lib.einsum('minj,mnb->ijb', imds.Woooo, r2aaa)
+    Hr2abb +=      lib.einsum('miNJ,mNB->iJB', imds.WooOO, r2abb)
+    Hr2bbb += .5 * lib.einsum('MINJ,MNB->IJB', imds.WOOOO, r2bbb)
+    Hr2baa +=      lib.einsum('njMI,Mnb->Ijb', imds.WooOO, r2baa)
+
+    # Wovvo terms
+    tmp = lib.einsum('mebj,ime->ijb', imds.Wovvo, r2aaa)
+    tmp += lib.einsum('MEbj,iME->ijb', imds.WOVvo, r2abb)
+    Hr2aaa += tmp - tmp.transpose(1, 0, 2)
+
+    WooVV = -imds.WoVVo.transpose(0,3,2,1)
+    WOOvv = -imds.WOvvO.transpose(0,3,2,1)
+    Hr2abb += lib.einsum('MEBJ,iME->iJB', imds.WOVVO, r2abb)
+    Hr2abb += lib.einsum('meBJ,ime->iJB', imds.WovVO, r2aaa)
+    Hr2abb += -lib.einsum('miBE,mJE->iJB', WooVV, r2abb)
+
+    Hr2baa += lib.einsum('meaj,Ime->Ija', imds.Wovvo, r2baa)
+    Hr2baa += lib.einsum('MEaj,IME->Ija', imds.WOVvo, r2bbb)
+    Hr2baa += -lib.einsum('MIab,Mjb->Ija', WOOvv, r2baa)
+
+    tmp = lib.einsum('MEBJ,IME->IJB', imds.WOVVO, r2bbb)
+    tmp += lib.einsum('meBJ,Ime->IJB', imds.WovVO, r2baa)
+    Hr2bbb += tmp - tmp.transpose(1, 0, 2)
+
+    # T2 term
+    Hr2aaa -= 0.5 * lib.einsum('menf,mnf,jibe->ijb', imds.Wovov, r2aaa, t2aa)
+    Hr2aaa -= lib.einsum('meNF,mNF,jibe->ijb', imds.WovOV, r2abb, t2aa)
+
+    Hr2abb -= 0.5 * lib.einsum('menf,mnf,iJeB->iJB', imds.Wovov, r2aaa, t2ab)
+    Hr2abb -= lib.einsum('meNF,mNF,iJeB->iJB', imds.WovOV, r2abb, t2ab)
+
+    Hr2baa -= 0.5 * lib.einsum('MENF,MNF,jIbE->Ijb', imds.WOVOV, r2bbb, t2ab)
+    Hr2baa -= lib.einsum('nfME,Mnf,jIbE->Ijb', imds.WovOV, r2baa, t2ab)
+
+    Hr2bbb -= 0.5 * lib.einsum('MENF,MNF,JIBE->IJB', imds.WOVOV, r2bbb, t2bb)
+    Hr2bbb -= lib.einsum('nfME,Mnf,JIBE->IJB', imds.WovOV, r2baa, t2bb)
+
+    vector = amplitudes_to_vector_ip([Hr1a, Hr1b], [Hr2aaa, Hr2baa, Hr2abb, Hr2bbb])
+    return vector
+
+def ipccsd_diag(eom, imds=None):
+    if imds is None: imds = eom.make_imds()
+    t1, t2 = imds.t1, imds.t2
+    t1a, t1b = t1
+    t2aa, t2ab, t2bb = t2
+    t2ba = t2ab.transpose(1,0,3,2)
+
+    nocc_a, nvir_a = t1a.shape
+    nocc_b, nvir_b = t1b.shape
+    dtype = np.result_type(t1a,t1b,t2aa,t2ab,t2bb)
+
+    Hr1a = -np.diag(imds.Foo)
+    Hr1b = -np.diag(imds.FOO)
+
+    Fvv_diag = np.diag(imds.Fvv)
+    Foo_diag = np.diag(imds.Foo)
+    FOO_diag = np.diag(imds.FOO)
+    FVV_diag = np.diag(imds.FVV)
+
+    Woooo_slice = np.einsum('iijj->ij',imds.Woooo)
+    Wovvo_slice = np.einsum('iaai->ia',imds.Wovvo)
+    WooOO_slice = np.einsum('jjii->ij',imds.WooOO)
+    WOvvO_slice = np.einsum('iaai->ia',imds.WOvvO)
+    WooOO_slice_T = np.einsum('iijj->ij',imds.WooOO)
+    WoVVo_slice = np.einsum('iaai->ia',imds.WoVVo)
+    WOVVO_slice = np.einsum('jaaj->ja',imds.WOVVO)
+    WOOOO_slice = np.einsum('iijj->ij',imds.WOOOO)
+
+    Wovov_t2_dot = np.einsum('jaib,jiab->ija',imds.Wovov,t2aa)
+    WovOV_t2_dot = np.einsum('ibja,ijba->ija',imds.WovOV,t2ab)
+    WovOV_t2_dot_T = np.einsum('jaib,jiab->ija',imds.WovOV,t2ab)
+    WOVOV_t2_dot = np.einsum('jaib,jiab->ija',imds.WOVOV,t2bb)
+    
+    Hr2aaa = Fvv_diag[None,None,:] - Foo_diag[:,None,None] - Foo_diag[None,:,None] \
+             + Woooo_slice[:,:,None] + Wovvo_slice[:,None,:] + Wovvo_slice[None,:,:] \
+             - Wovov_t2_dot
+
+    Hr2baa = Fvv_diag[None,None,:] - FOO_diag[:,None,None] - Foo_diag[None,:,None] \
+             + WooOO_slice[:,:,None] + WOvvO_slice[:,None,:] + Wovvo_slice[None,:,:] \
+             - WovOV_t2_dot_T
+
+    Hr2abb = FVV_diag[None,None,:] - Foo_diag[:,None,None] - FOO_diag[None,:,None] \
+             + WooOO_slice_T[:,:,None] + WoVVo_slice[:,None,:] + WOVVO_slice[None,:,:] \
+             - WovOV_t2_dot
+
+    Hr2bbb = FVV_diag[None,None,:] - FOO_diag[:,None,None] - FOO_diag[None,:,None] \
+             + WOOOO_slice[:,:,None] + WOVVO_slice[:,None,:] + WOVVO_slice[None,:,:] \
+             - WOVOV_t2_dot
+
+
+    vector = amplitudes_to_vector_ip([Hr1a, Hr1b], [Hr2aaa, Hr2baa, Hr2abb, Hr2bbb])
+    return vector
+
+
+class EOMIP(eom_rccsd.EOMIP):
+    matvec = ipccsd_matvec
+    l_matvec = None
+    get_diag = ipccsd_diag
+    ipccsd_star = None
+
     def __init__(self, cc):
-        gcc = addons.convert_to_gccsd(cc)
-        eom_gccsd.EOMIP.__init__(self, gcc)
+        eom_rccsd.EOMIP.__init__(self, cc)
+        self.nocc = cc.get_nocc()
+        self.nmo = cc.get_nmo()
+
+    def get_init_guess(self, nroots=1, koopmans=True, diag=None):
+        if koopmans:
+            nocca, noccb = self.nocc
+            idx = diag[:nocca+noccb].argsort()
+        else:
+            idx = diag.argsort()
+
+        size = self.vector_size()
+        dtype = getattr(diag, 'dtype', np.double)
+        nroots = min(nroots, size)
+        guess = []
+        for i in idx[:nroots]:
+            g = np.zeros(size, dtype)
+            g[i] = 1.0
+            guess.append(g)
+        return guess
+
+    def vector_to_amplitudes(self, vector, nmo=None, nocc=None):
+        if nmo is None: nmo = self.nmo
+        if nocc is None: nocc = self.nocc
+        return vector_to_amplitudes_ip(vector, nmo, nocc)
+
+    def amplitudes_to_vector(self, r1, r2):
+        return amplitudes_to_vector_ip(r1, r2)
+
+    def vector_size(self):
+        '''size of the vector based on spin-orbital basis'''
+        nocca, noccb = self.nocc
+        nmoa, nmob = self.nmo
+        nvira, nvirb = nmoa-nocca, nmob-noccb
+        return (nocca + noccb
+                + nocca*(nocca-1)//2*nvira + noccb*nocca*nvira
+                + nocca*noccb*nvirb + noccb*(noccb-1)//2*nvirb)
+
+    def make_imds(self, eris=None):
+        imds = _IMDS(self._cc, eris)
+        imds.make_ip()
+        return imds
 
 ########################################
 # EOM-EA-CCSD
 ########################################
 
-class EOMEA(eom_gccsd.EOMEA):
+def vector_to_amplitudes_ea(vector, nmo, nocc):
+    nocca, noccb = nocc
+    nmoa, nmob = nmo
+    nvira, nvirb = nmoa-nocca, nmob-noccb
+
+    sizes = (nvira, nvirb, nocca*nvira*(nvira-1)//2, nocca*nvirb*nvira,
+             noccb*nvira*nvirb, noccb*nvirb*(nvirb-1)//2)
+    sections = np.cumsum(sizes[:-1])
+    r1a, r1b, r2a, r2aba, r2bab, r2b = np.split(vector, sections)
+    r2a = r2a.reshape(nocca,nvira*(nvira-1)//2)
+    r2b = r2b.reshape(noccb,nvirb*(nvirb-1)//2)
+    r2aba = r2aba.reshape(nocca,nvirb,nvira).copy()
+    r2bab = r2bab.reshape(noccb,nvira,nvirb).copy()
+
+    idxa = np.tril_indices(nvira, -1)
+    idxb = np.tril_indices(nvirb, -1)
+    r2aaa = np.zeros((nocca,nvira,nvira), vector.dtype)
+    r2bbb = np.zeros((noccb,nvirb,nvirb), vector.dtype)
+    r2aaa[:,idxa[0],idxa[1]] = r2a
+    r2aaa[:,idxa[1],idxa[0]] =-r2a
+    r2bbb[:,idxb[0],idxb[1]] = r2b
+    r2bbb[:,idxb[1],idxb[0]] =-r2b
+
+    r1 = (r1a.copy(), r1b.copy())
+    r2 = (r2aaa, r2aba, r2bab, r2bbb)
+    return r1, r2
+
+def amplitudes_to_vector_ea(r1, r2):
+    r1a, r1b = r1
+    r2aaa, r2aba, r2bab, r2bbb = r2
+    nocca, nvirb, nvira = r2aba.shape
+    idxa = np.tril_indices(nvira, -1)
+    idxb = np.tril_indices(nvirb, -1)
+    return np.hstack((r1a, r1b,
+                      r2aaa[:,idxa[0],idxa[1]].ravel(),
+                      r2aba.ravel(), r2bab.ravel(),
+                      r2bbb[:,idxb[0],idxb[1]].ravel()))
+
+def spatial2spin_ea(r1, r2, orbspin=None):
+    '''Convert R1/R2 of spatial orbital representation to R1/R2 of
+    spin-orbital representation
+    '''
+    r1a, r1b = r1
+    r2aaa, r2aba, r2bab, r2bbb = r2
+    nocc_a, nvir_a = r2aaa.shape[:2]
+    nocc_b, nvir_b = r2bbb.shape[:2]
+
+    if orbspin is None:
+        orbspin = np.zeros((nocc_a+nvir_a)*2, dtype=int)
+        orbspin[1::2] = 1
+
+    nocc = nocc_a + nocc_b
+    nvir = nvir_a + nvir_b
+    idxoa = np.where(orbspin[:nocc] == 0)[0]
+    idxob = np.where(orbspin[:nocc] == 1)[0]
+    idxva = np.where(orbspin[nocc:] == 0)[0]
+    idxvb = np.where(orbspin[nocc:] == 1)[0]
+
+    r1 = np.zeros((nvir), dtype=r1a.dtype)
+    r1[idxva] = r1a
+    r1[idxvb] = r1b
+
+    r2 = np.zeros((nocc, nvir**2), dtype=r2aaa.dtype)
+    idxoaa = idxoa[:,None] * nocc + idxoa
+    idxoab = idxoa[:,None] * nocc + idxob
+    idxoba = idxob[:,None] * nocc + idxoa
+    idxobb = idxob[:,None] * nocc + idxob
+    idxvaa = idxva[:,None] * nvir + idxva
+    idxvab = idxva[:,None] * nvir + idxvb
+    idxvba = idxvb[:,None] * nvir + idxva
+    idxvbb = idxvb[:,None] * nvir + idxvb
+
+    r2aaa = r2aaa.reshape(nocc_a, nvir_a*nvir_a)
+    r2aba = r2aba.reshape(nocc_a, nvir_b*nvir_a)
+    r2bab = r2bab.reshape(nocc_b, nvir_a*nvir_b)
+    r2bbb = r2bbb.reshape(nocc_b, nvir_b*nvir_b)
+
+    lib.takebak_2d(r2, r2aaa, idxoa.ravel(), idxvaa.ravel())
+    lib.takebak_2d(r2, r2aba, idxoa.ravel(), idxvba.ravel())
+    lib.takebak_2d(r2, r2bab, idxob.ravel(), idxvab.ravel())
+    lib.takebak_2d(r2, r2bbb, idxob.ravel(), idxvbb.ravel())
+    r2aab = -r2aba
+    r2bba = -r2bab
+    lib.takebak_2d(r2, r2bba, idxob.ravel(), idxvba.T.ravel())
+    lib.takebak_2d(r2, r2aab, idxoa.ravel(), idxvab.T.ravel())
+    r2 = r2.reshape(nocc, nvir, nvir)
+    return r1, r2
+
+def spin2spatial_ea(r1, r2, orbspin):
+    nocc, nvir = r2.shape[:2]
+
+    idxoa = np.where(orbspin[:nocc] == 0)[0]
+    idxob = np.where(orbspin[:nocc] == 1)[0]
+    idxva = np.where(orbspin[nocc:] == 0)[0]
+    idxvb = np.where(orbspin[nocc:] == 1)[0]
+    nocc_a = len(idxoa)
+    nocc_b = len(idxob)
+    nvir_a = len(idxva)
+    nvir_b = len(idxvb)
+
+    r1a = r1[idxva]
+    r1b = r1[idxvb]
+
+    idxoaa = idxoa[:,None] * nocc + idxoa
+    idxoab = idxoa[:,None] * nocc + idxob
+    idxoba = idxob[:,None] * nocc + idxoa
+    idxobb = idxob[:,None] * nocc + idxob
+    idxvaa = idxva[:,None] * nvir + idxva
+    idxvab = idxva[:,None] * nvir + idxvb
+    idxvba = idxvb[:,None] * nvir + idxva
+    idxvbb = idxvb[:,None] * nvir + idxvb
+
+    r2 = r2.reshape(nocc, nvir**2)
+    r2aaa = lib.take_2d(r2, idxoa.ravel(), idxvaa.ravel())
+    r2aba = lib.take_2d(r2, idxoa.ravel(), idxvba.ravel())
+    r2bab = lib.take_2d(r2, idxob.ravel(), idxvab.ravel())
+    r2bbb = lib.take_2d(r2, idxob.ravel(), idxvbb.ravel())
+
+    r2aaa = r2aaa.reshape(nocc_a, nvir_a, nvir_a)
+    r2aba = r2aba.reshape(nocc_a, nvir_b, nvir_a)
+    r2bab = r2bab.reshape(nocc_b, nvir_a, nvir_b)
+    r2bbb = r2bbb.reshape(nocc_b, nvir_b, nvir_b)
+    return [r1a, r1b], [r2aaa, r2aba, r2bab, r2bbb]
+
+def eaccsd_matvec(eom, vector, imds=None, diag=None):
+    '''For spin orbitals.
+
+    R2 operators of the form s_{ j}^{ab}, i.e. indices jb are coupled.'''
+    # Ref: Nooijen and Bartlett, J. Chem. Phys. 102, 3629 (1994) Eqs.(30)-(31)
+    if imds is None: imds = eom.make_imds()
+    t1, t2, eris = imds.t1, imds.t2, imds.eris
+    t1a, t1b = t1
+    t2aa, t2ab, t2bb = t2
+    nocca, noccb, nvira, nvirb = t2ab.shape
+    nmoa, nmob = nocca+nvira, noccb+nvirb
+    r1, r2 = vector_to_amplitudes_ea(vector, (nmoa,nmob), (nocca,noccb))
+    r1a, r1b = r1
+    r2aaa, r2aba, r2bab, r2bbb = r2
+
+    # Fov terms
+    Hr1a  = np.einsum('ld,lad->a', imds.Fov, r2aaa)
+    Hr1a += np.einsum('LD,LaD->a', imds.FOV, r2bab)
+    Hr1b  = np.einsum('ld,lAd->A', imds.Fov, r2aba)
+    Hr1b += np.einsum('LD,LAD->A', imds.FOV, r2bbb)
+
+    # Fvv terms
+    Hr1a += np.einsum('ac,c->a', imds.Fvv, r1a)
+    Hr1b += np.einsum('AC,C->A', imds.FVV, r1b)
+
+    # Wvovv
+    Hr1a += 0.5*lib.einsum('acld,lcd->a', imds.Wvvov, r2aaa)
+    Hr1a +=     lib.einsum('acLD,LcD->a', imds.WvvOV, r2bab)
+    Hr1b += 0.5*lib.einsum('ACLD,LCD->A', imds.WVVOV, r2bbb)
+    Hr1b +=     lib.einsum('ACld,lCd->A', imds.WVVov, r2aba)
+
+    #** Wvvvv term
+    #:Hr2aaa = lib.einsum('acbd,jcd->jab', eris_vvvv, r2aaa)
+    #:Hr2aba = lib.einsum('bdac,jcd->jab', eris_vvVV, r2aba)
+    #:Hr2bab = lib.einsum('acbd,jcd->jab', eris_vvVV, r2bab)
+    #:Hr2bbb = lib.einsum('acbd,jcd->jab', eris_VVVV, r2bbb)
+    u2 = (r2aaa + np.einsum('c,jd->jcd', r1a, t1a) - np.einsum('d,jc->jcd', r1a, t1a),
+          r2aba + np.einsum('c,jd->jcd', r1b, t1a),
+          r2bab + np.einsum('c,jd->jcd', r1a, t1b),
+          r2bbb + np.einsum('c,jd->jcd', r1b, t1b) - np.einsum('d,jc->jcd', r1b, t1b))
+    Hr2aaa, Hr2aba, Hr2bab, Hr2bbb = _add_vvvv_ea(eom._cc, u2, eris)
+    u2 = None
+
+    tauaa, tauab, taubb = uccsd.make_tau(t2, t1, t1)
+    eris_ovov = np.asarray(eris.ovov)
+    eris_OVOV = np.asarray(eris.OVOV)
+    eris_ovOV = np.asarray(eris.ovOV)
+    tmpaaa = lib.einsum('menf,jef->mnj', eris_ovov, r2aaa) * .5
+    Hr2aaa += lib.einsum('mnj,mnab->jab', tmpaaa, tauaa)
+    tmpaaa = tauaa = None
+
+    tmpbbb = lib.einsum('menf,jef->mnj', eris_OVOV, r2bbb) * .5
+    Hr2bbb += lib.einsum('mnj,mnab->jab', tmpbbb, taubb)
+    tmpbbb = taubb = None
+
+    tmpabb = lib.einsum('menf,jef->mnj', eris_ovOV, r2bab)
+    Hr2bab += lib.einsum('mnj,mnab->jab', tmpabb, tauab)
+    tmpaba = lib.einsum('nfme,jef->nmj', eris_ovOV, r2aba)
+    Hr2aba += lib.einsum('nmj,nmba->jab', tmpaba, tauab)
+    tmpbab = tmpaba = tauab = None
+    eris_ovov = eris_OVOV = eris_ovOV = None
+
+    eris_ovvv = imds.eris.get_ovvv(slice(None))
+    tmpaaa = lib.einsum('mebf,jef->mjb', eris_ovvv, r2aaa)
+    tmpaaa = lib.einsum('mjb,ma->jab', tmpaaa, t1a)
+    Hr2aaa-= tmpaaa - tmpaaa.transpose(0,2,1)
+    tmpaaa = eris_ovvv = None
+
+    eris_OVVV = imds.eris.get_OVVV(slice(None))
+    tmpbbb = lib.einsum('mebf,jef->mjb', eris_OVVV, r2bbb)
+    tmpbbb = lib.einsum('mjb,ma->jab', tmpbbb, t1b)
+    Hr2bbb-= tmpbbb - tmpbbb.transpose(0,2,1)
+    tmpbbb = eris_OVVV = None
+
+    eris_ovVV = imds.eris.get_ovVV(slice(None))
+    eris_OVvv = imds.eris.get_OVvv(slice(None))
+    tmpaab = lib.einsum('meBF,jFe->mjB', eris_ovVV, r2aba)
+    Hr2aba-= lib.einsum('mjB,ma->jBa', tmpaab, t1a)
+    tmpabb = lib.einsum('meBF,JeF->mJB', eris_ovVV, r2bab)
+    Hr2bab-= lib.einsum('mJB,ma->JaB', tmpabb, t1a)
+    tmpaab = tmpabb = eris_ovVV = None
+
+    tmpbaa = lib.einsum('MEbf,jEf->Mjb', eris_OVvv, r2aba)
+    Hr2aba-= lib.einsum('Mjb,MA->jAb', tmpbaa, t1b)
+    tmpbba = lib.einsum('MEbf,JfE->MJb', eris_OVvv, r2bab)
+    Hr2bab-= lib.einsum('MJb,MA->JbA', tmpbba, t1b)
+    tmpbaa = tmpbba = eris_OVvv = None
+    #** Wvvvv term end
+
+    # Wvvvo
+    Hr2aaa += np.einsum('acbj,c->jab', imds.Wvvvo, r1a)
+    Hr2bbb += np.einsum('ACBJ,C->JAB', imds.WVVVO, r1b)
+    Hr2bab += np.einsum('acBJ,c->JaB', imds.WvvVO, r1a)
+    Hr2aba += np.einsum('ACbj,C->jAb', imds.WVVvo, r1b)
+
+    # Wovvo
+    tmp2aa = lib.einsum('ldbj,lad->jab', imds.Wovvo, r2aaa)
+    tmp2aa += lib.einsum('ldbj,lad->jab', imds.WOVvo, r2bab)
+    Hr2aaa += tmp2aa - tmp2aa.transpose(0,2,1)
+
+    Hr2bab += lib.einsum('ldbj,lad->jab', imds.WovVO, r2aaa)
+    Hr2bab += lib.einsum('ldbj,lad->jab', imds.WOVVO, r2bab)
+    Hr2bab += lib.einsum('ldaj,ldb->jab', imds.WOvvO, r2bab)
+
+    Hr2aba += lib.einsum('ldbj,lad->jab', imds.WOVvo, r2bbb)
+    Hr2aba += lib.einsum('ldbj,lad->jab', imds.Wovvo, r2aba)
+    Hr2aba += lib.einsum('ldaj,ldb->jab', imds.WoVVo, r2aba)
+
+    tmp2bb = lib.einsum('ldbj,lad->jab', imds.WOVVO, r2bbb)
+    tmp2bb += lib.einsum('ldbj,lad->jab', imds.WovVO, r2aba)
+    Hr2bbb += tmp2bb - tmp2bb.transpose(0,2,1)
+
+    #Fvv Term
+    tmpa = lib.einsum('ac,jcb->jab', imds.Fvv, r2aaa)
+    Hr2aaa += tmpa - tmpa.transpose((0,2,1))
+    Hr2aba += lib.einsum('AC,jCb->jAb', imds.FVV, r2aba)
+    Hr2bab += lib.einsum('ac,JcB->JaB', imds.Fvv, r2bab)
+    Hr2aba += lib.einsum('bc, jAc -> jAb', imds.Fvv, r2aba)
+    Hr2bab += lib.einsum('BC, JaC -> JaB', imds.FVV, r2bab)
+    tmpb = lib.einsum('AC,JCB->JAB', imds.FVV, r2bbb)
+    Hr2bbb += tmpb - tmpb.transpose((0,2,1))
+
+    #Foo Term
+    Hr2aaa -= lib.einsum('lj,lab->jab', imds.Foo, r2aaa)
+    Hr2bbb -= lib.einsum('LJ,LAB->JAB', imds.FOO, r2bbb)
+    Hr2bab -= lib.einsum('LJ,LaB->JaB', imds.FOO, r2bab)
+    Hr2aba -= lib.einsum('lj,lAb->jAb', imds.Foo, r2aba)
+
+    # Woovv term
+    Hr2aaa -= 0.5 * lib.einsum('kcld,lcd,kjab->jab', imds.Wovov, r2aaa, t2aa)
+    Hr2bab -= 0.5 * lib.einsum('kcld,lcd,kJaB->JaB', imds.Wovov, r2aaa, t2ab)
+
+    Hr2aba -= lib.einsum('ldKC,lCd,jKbA->jAb', imds.WovOV, r2aba, t2ab)
+    Hr2aaa -= lib.einsum('kcLD,LcD,kjab->jab', imds.WovOV, r2bab, t2aa)
+
+    Hr2aba -= 0.5 * lib.einsum('KCLD,LCD,jKbA->jAb', imds.WOVOV, r2bbb, t2ab)
+    Hr2bbb -= 0.5 * lib.einsum('KCLD,LCD,KJAB->JAB', imds.WOVOV, r2bbb, t2bb)
+
+    Hr2bbb -= lib.einsum('ldKC,lCd,KJAB->JAB', imds.WovOV, r2aba, t2bb)
+    Hr2bab -= lib.einsum('kcLD,LcD,kJaB->JaB', imds.WovOV, r2bab, t2ab)
+
+    vector = amplitudes_to_vector_ea([Hr1a, Hr1b], [Hr2aaa, Hr2aba, Hr2bab, Hr2bbb])
+    return vector
+
+def _add_vvvv_ea(mycc, r2, eris):
+    time0 = time.clock(), time.time()
+    log = logger.Logger(mycc.stdout, mycc.verbose)
+    r2aaa, r2aba, r2bab, r2bbb = r2
+
+    if mycc.direct:
+        if hasattr(eris, 'mo_coeff') and eris.mo_coeff is not None:
+            mo_a, mo_b = eris.mo_coeff
+        else:
+            moidxa, moidxb = mycc.get_frozen_mask()
+            mo_a = mycc.mo_coeff[0][:,moidxa]
+            mo_b = mycc.mo_coeff[1][:,moidxb]
+        nao = mo_a.shape[0]
+
+        r2aaa = lib.einsum('xab,pa->xpb', r2aaa, mo_a[:,nocca:])
+        r2aaa = lib.einsum('xab,pb->xap', r2aaa, mo_a[:,nocca:])
+        r2aba = lib.einsum('xab,pa->xpb', r2aba, mo_b[:,noccb:])
+        r2aba = lib.einsum('xab,pb->xap', r2aba, mo_a[:,nocca:])
+        r2bab = lib.einsum('xab,pa->xpb', r2bab, mo_a[:,nocca:])
+        r2bab = lib.einsum('xab,pb->xap', r2bab, mo_b[:,noccb:])
+        r2bbb = lib.einsum('xab,pa->xpb', r2bbb, mo_b[:,noccb:])
+        r2bbb = lib.einsum('xab,pb->xap', r2bbb, mo_b[:,noccb:])
+
+        r2 = np.vstack((r2aaa, r2aba, r2bab, r2bbb))
+        r2aaa = r2aba = r2bab = r2bbb = None
+        time0 = log.timer_debug1('vvvv-tau', *time0)
+
+        buf = ccsd._contract_vvvv_t2(mycc, mycc.mol, None, r2, log=log)
+        sections = np.cumsum([nocca,nocca,noccb])
+        Hr2aaa, Hr2aba, Hr2bab, Hr2bbb = np.split(buf, sections)
+        buf = None
+
+        Hr2aaa = lib.einsum('xpb,pa->xab', Hr2aaa, mo_a[:,nocca:])
+        Hr2aaa = lib.einsum('xap,pb->xab', Hr2aaa, mo_a[:,nocca:])
+        Hr2aba = lib.einsum('xpb,pa->xab', Hr2aba, mo_b[:,noccb:])
+        Hr2aba = lib.einsum('xap,pb->xab', Hr2aba, mo_a[:,nocca:])
+        Hr2bab = lib.einsum('xpb,pa->xab', Hr2bab, mo_a[:,nocca:])
+        Hr2bab = lib.einsum('xap,pb->xab', Hr2bab, mo_b[:,noccb:])
+        Hr2bbb = lib.einsum('xpb,pa->xab', Hr2bbb, mo_b[:,noccb:])
+        Hr2bbb = lib.einsum('xap,pb->xab', Hr2bbb, mo_b[:,noccb:])
+
+    elif r2aaa.dtype == np.double:
+        r2aab = np.asarray(r2aba.transpose(0,2,1), order='C')
+        Hr2aab = eris._contract_vvVV_t2(mycc, r2aab, mycc.direct, None)
+        Hr2aba = np.asarray(Hr2aab.transpose(0,2,1), order='C')
+        r2aab = Hr2aab = None
+        Hr2bab = eris._contract_vvVV_t2(mycc, r2bab, mycc.direct, None)
+        Hr2aaa = eris._contract_vvvv_t2(mycc, r2aaa, mycc.direct, None)
+        Hr2bbb = eris._contract_VVVV_t2(mycc, r2bbb, mycc.direct, None)
+
+    else:
+        noccb, nvira, nvirb = r2bab.shape
+        eris_vvvv = ao2mo.restore(1, np.asarray(eris.vvvv), nvira)
+        Hr2aaa = lib.einsum('acbd,jcd->jab', eris_vvvv, r2aaa)
+        eris_vvvv = None
+
+        eris_VVVV = ao2mo.restore(1, np.asarray(eris.VVVV), nvirb)
+        Hr2bbb = lib.einsum('acbd,jcd->jab', eris_VVVV, r2bbb)
+        eris_VVVV = None
+
+        sqa = lib.square_mat_in_trilu_indices(nvira)
+        sqb = lib.square_mat_in_trilu_indices(nvirb)
+        eris_vvVV = np.asarray(eris.vvVV)[:,sqb][sqa]
+        Hr2aba = lib.einsum('bdac,jcd->jab', eris_vvVV, r2aba)
+        Hr2bab = lib.einsum('acbd,jcd->jab', eris_vvVV, r2bab)
+        eris_vvVV = None
+
+    return Hr2aaa, Hr2aba, Hr2bab, Hr2bbb
+
+def eaccsd_diag(eom, imds=None):
+    if imds is None: imds = eom.make_imds()
+
+    t1, t2 = imds.t1, imds.t2
+    t1a, t1b = t1
+    t2aa, t2ab, t2bb = t2
+    t2ba = t2ab.transpose(1,0,3,2)
+
+    nocc_a, nvir_a = t1a.shape
+    nocc_b, nvir_b = t1b.shape
+    dtype = np.result_type(t1a,t1b,t2aa,t2ab,t2bb)
+
+    Hr1a = np.diag(imds.Fvv)
+    Hr1b = np.diag(imds.FVV)
+
+    #-------------- intermediates
+
+    Fvv_diag = np.diag(imds.Fvv)
+    Foo_diag = np.diag(imds.Foo)
+    FOO_diag = np.diag(imds.FOO)
+    FVV_diag = np.diag(imds.FVV)
+
+    Wovvo_slice = np.einsum('jbbj->jb',imds.Wovvo)
+    Wovov_t2_dot = np.einsum('iajb,ijab->jab',imds.Wovov,t2aa)
+    WoVVo_slice  = np.einsum('jaaj->ja',imds.WoVVo)
+    WovOV_t2_dot = np.einsum('jbia,ijab->jab',imds.WovOV,t2ba)
+    WOVVO_slice = np.einsum('jaaj->ja',imds.WOVVO)
+    WOvvO_slice = np.einsum('jbbj->jb',imds.WOvvO)
+    WovOV_t2_dot_T = np.einsum('ibja,ijba->jab',imds.WovOV,t2ab)
+    WOVOV_t2_dot = np.einsum('iajb,ijab->jab',imds.WOVOV,t2bb)
+
+    #-------------- contraction
+
+    Hr2aaa = Fvv_diag[None,:,None]+Fvv_diag[None,None,:]-Foo_diag[:,None,None]+ \
+             Wovvo_slice[:,None,:]+Wovvo_slice[:,:,None]-Wovov_t2_dot
+
+    Hr2aba = FVV_diag[None,:,None]+Fvv_diag[None,None,:]-Foo_diag[:,None,None]+ \
+             Wovvo_slice[:,None,:]+WoVVo_slice[:,:,None]-WovOV_t2_dot
+
+    Hr2bab = -FOO_diag[:,None,None]+FVV_diag[None,:,None]+Fvv_diag[None,None,:]+ \
+             WOVVO_slice[:,:,None]+WOvvO_slice[:,None,:]-WovOV_t2_dot_T
+    Hr2bab = Hr2bab.transpose(0,2,1)
+
+    Hr2bbb = -FOO_diag[:,None,None]+FVV_diag[None,:,None]+FVV_diag[None,None,:]+ \
+             WOVVO_slice[:,:,None]+WOVVO_slice[:,None,:]-WOVOV_t2_dot
+
+    #-------------- imds.Wvvvv not None
+
+    if(imds.Wvvvv is not None):
+      Wvvvv_slice_A = np.einsum('aabb->ab',imds.Wvvvv)
+      Wvvvv_slice_B = np.einsum('abba->ab',imds.Wvvvv)
+      Hr2aaa += 0.5*Wvvvv_slice_A[None,:,:]-0.5*Wvvvv_slice_B[None,:,:]
+      WVVvv_slice = np.einsum('aabb->ab',imds.WVVvv)
+      Hr2aba += WVVvv_slice[None,:,:]
+      WvvVV_slice = np.einsum('aabb->ab',imds.WvvVV)
+      Hr2bab += WvvVV_slice[None,:,:]
+      WVVVV_slice_A = np.einsum('aabb->ab',imds.WVVVV)
+      WVVVV_slice_B = np.einsum('abba->ab',imds.WVVVV)
+      Hr2bbb += 0.5*WVVVV_slice_A[None,:,:]-0.5*WVVVV_slice_B[None,:,:]
+
+    #-------------- original implementation
+
+    '''
+    Hr2aaa = np.zeros((nocc_a,nvir_a,nvir_a), dtype=dtype)
+    Hr2bab = np.zeros((nocc_b,nvir_a,nvir_b), dtype=dtype)
+    Hr2aba = np.zeros((nocc_a,nvir_b,nvir_a), dtype=dtype)
+    Hr2bbb = np.zeros((nocc_b,nvir_b,nvir_b), dtype=dtype)
+
+    for j in range(nocc_a):
+        for a in range(nvir_a):
+            if imds.Wvvvv is not None:
+                Wvvvva = np.array(imds.Wvvvv[a])
+            for b in range(nvir_a):
+                Hr2aaa[j,a,b] += imds.Fvv[a,a]
+                Hr2aaa[j,a,b] += imds.Fvv[b,b]
+                Hr2aaa[j,a,b] += -imds.Foo[j,j]
+                Hr2aaa[j,a,b] += imds.Wovvo[j,b,b,j]
+                Hr2aaa[j,a,b] += imds.Wovvo[j,a,a,j]
+                if imds.Wvvvv is not None:
+                    Hr2aaa[j,a,b] += Wvvvva[a,b,b]
+                Hr2aaa[j,a,b] += -np.dot(imds.Wovov[:,a,j,b], t2aa[:,j,a,b])
+
+    Hr2aba = np.zeros((nocc_a, nvir_b, nvir_a),dtype=dtype)
+    for j in range(nocc_a):
+        for a in range(nvir_b):
+            if imds.Wvvvv is not None:
+                WVVvva = np.array(imds.WVVvv[a])
+            for b in range(nvir_a):
+                Hr2aba[j,a,b] += imds.FVV[a,a]
+                Hr2aba[j,a,b] += imds.Fvv[b,b]
+                Hr2aba[j,a,b] += -imds.Foo[j,j]
+                Hr2aba[j,a,b] += imds.Wovvo[j,b,b,j]
+                Hr2aba[j,a,b] += imds.WoVVo[j,a,a,j]
+                if imds.Wvvvv is not None:
+                    Hr2aba[j,a,b] += WVVvva[a,b,b]
+                Hr2aba[j,a,b] -= np.dot(imds.WovOV[j,b,:,a], t2ba[:,j,a,b])
+
+    Hr2bab = np.zeros((nocc_b,nvir_a,nvir_b),dtype=dtype)
+    for a in range(nvir_b):
+        for b in range(nvir_a):
+            if imds.Wvvvv is not None:
+                WvvVVb = np.array(imds.WvvVV[b])
+            for j in range(nocc_b):
+                Hr2bab[j,b,a] = -imds.FOO[j,j]
+                Hr2bab[j,b,a] += imds.Fvv[b,b]
+                Hr2bab[j,b,a] += imds.FVV[a,a]
+                if imds.Wvvvv is not None:
+                    Hr2bab[j,b,a] += (WvvVVb[b,a,a])
+                Hr2bab[j,b,a] += imds.WOVVO[j,a,a,j]
+                Hr2bab[j,b,a] += imds.WOvvO[j,b,b,j]
+                Hr2bab[j,b,a] -= np.dot(imds.WovOV[:,b,j,a], t2ab[:,j,b,a])
+
+    Hr2bbb = np.zeros((nocc_b,nvir_b,nvir_b),dtype=dtype)
+    for a in range(nvir_b):
+        if imds.Wvvvv is not None:
+            WVVVVa = np.array(imds.WVVVV[a])
+        for b in range(nvir_b):
+            for j in range(nocc_b):
+                Hr2bbb[j,a,b] = -imds.FOO[j,j]
+                Hr2bbb[j,a,b] += imds.FVV[a,a]
+                Hr2bbb[j,a,b] += imds.FVV[b,b]
+                if imds.Wvvvv is not None:
+                    Hr2bbb[j,a,b] += WVVVVa[a,b,b]
+                Hr2bbb[j,a,b] += imds.WOVVO[j,b,b,j]
+                Hr2bbb[j,a,b] += imds.WOVVO[j,a,a,j]
+                Hr2bbb[j,a,b] -= (np.dot(imds.WOVOV[:,a,j,b], t2bb[:,j,a,b]))
+    #-------------- comparison
+
+    print np.abs(Hr2aaa-Hr2aaa_n).max()
+    print np.abs(Hr2aba-Hr2aba_n).max()
+    print np.abs(Hr2bab-Hr2bab_n).max()
+    print np.abs(Hr2bbb-Hr2bbb_n).max()
+    '''
+
+    vector = amplitudes_to_vector_ea((Hr1a,Hr1b), (Hr2aaa,Hr2aba,Hr2bab,Hr2bbb))
+    return vector
+
+
+class EOMEA(eom_rccsd.EOMEA):
+    matvec = eaccsd_matvec
+    l_matvec = None
+    get_diag = eaccsd_diag
+    eaccsd_star = None
+
     def __init__(self, cc):
-        gcc = addons.convert_to_gccsd(cc)
-        eom_gccsd.EOMEA.__init__(self, gcc)
+        eom_rccsd.EOMEA.__init__(self, cc)
+        self.nocc = cc.get_nocc()
+        self.nmo = cc.get_nmo()
+
+    def get_init_guess(self, nroots=1, koopmans=True, diag=None):
+        if koopmans:
+            nocca, noccb = self.nocc
+            nmoa, nmob = self.nmo
+            nvira, nvirb = nmoa-nocca, nmob-noccb
+            idx = diag[:nvira+nvirb].argsort()
+        else:
+            idx = diag.argsort()
+
+        size = self.vector_size()
+        dtype = getattr(diag, 'dtype', np.double)
+        nroots = min(nroots, size)
+        guess = []
+        for i in idx[:nroots]:
+            g = np.zeros(size, dtype)
+            g[i] = 1.0
+            guess.append(g)
+        return guess
+
+    def vector_to_amplitudes(self, vector, nmo=None, nocc=None):
+        if nmo is None: nmo = self.nmo
+        if nocc is None: nocc = self.nocc
+        return vector_to_amplitudes_ea(vector, nmo, nocc)
+
+    def amplitudes_to_vector(self, r1, r2):
+        return amplitudes_to_vector_ea(r1, r2)
+
+    def vector_size(self):
+        '''size of the vector based on spin-orbital basis'''
+        nocca, noccb = self.nocc
+        nmoa, nmob = self.nmo
+        nvira, nvirb = nmoa-nocca, nmob-noccb
+        return (nvira + nvirb
+                + nocca*nvira*(nvira-1)//2 + nocca*nvirb*nvira
+                + noccb*nvira*nvirb + noccb*nvirb*(nvirb-1)//2)
+
+    def make_imds(self, eris=None):
+        imds = _IMDS(self._cc, eris=eris)
+        imds.make_ea()
+        return imds
 
 ########################################
 # EOM-EE-CCSD
@@ -72,6 +913,7 @@ def eeccsd(eom, nroots=1, koopmans=False, guess=None, eris=None, imds=None):
     if guess and guess[0].size == spinvec_size:
         raise NotImplementedError
         #TODO: initial guess from GCCSD EOM amplitudes
+        #from pyscf.cc import eom_gccsd
         #orbspin = scf.addons.get_ghf_orbspin(eris.mo_coeff)
         #nmo = np.sum(eom.nmo)
         #nocc = np.sum(eom.nocc)
@@ -324,12 +1166,9 @@ def eomee_ccsd_matvec(eom, vector, imds=None):
     r1a, r1b = r1
     r2aa, r2ab, r2bb = r2
 
-    #:eris_vvvv = ao2mo.restore(1, np.asarray(eris.vvvv), nvirb)
-    #:eris_VVVV = ao2mo.restore(1, np.asarray(eris.VVVV), nvirb)
-    #:eris_vvVV = _restore(np.asarray(eris.vvVV), nvira, nvirb)
-    #:Hr2aa += lib.einsum('ijef,aebf->ijab', tau2aa, eris_vvvv) * .5
-    #:Hr2bb += lib.einsum('ijef,aebf->ijab', tau2bb, eris_VVVV) * .5
-    #:Hr2ab += lib.einsum('iJeF,aeBF->iJaB', tau2ab, eris_vvVV)
+    #:Hr2aa += lib.einsum('ijef,aebf->ijab', tau2aa, eris.vvvv) * .5
+    #:Hr2bb += lib.einsum('ijef,aebf->ijab', tau2bb, eris.VVVV) * .5
+    #:Hr2ab += lib.einsum('iJeF,aeBF->iJaB', tau2ab, eris.vvVV)
     tau2aa, tau2ab, tau2bb = uccsd.make_tau(r2, r1, t1, 2)
     Hr2aa, Hr2ab, Hr2bb = eom._cc._add_vvvv(None, (tau2aa,tau2ab,tau2bb), eris)
     Hr2aa *= .5
@@ -345,9 +1184,9 @@ def eomee_ccsd_matvec(eom, vector, imds=None):
     Hr1b += np.einsum('me,imae->ia',imds.Fovb, r2bb)
     Hr1b += np.einsum('me,mIeA->IA',imds.Fova, r2ab)
 
-    Hr2aa += lib.einsum('mnij,mnab->ijab', imds.woooo, r2aa) * .25
-    Hr2bb += lib.einsum('mnij,mnab->ijab', imds.wOOOO, r2bb) * .25
-    Hr2ab += lib.einsum('mNiJ,mNaB->iJaB', imds.woOoO, r2ab)
+    Hr2aa += lib.einsum('minj,mnab->ijab', imds.woooo, r2aa) * .25
+    Hr2bb += lib.einsum('minj,mnab->ijab', imds.wOOOO, r2bb) * .25
+    Hr2ab += lib.einsum('miNJ,mNaB->iJaB', imds.wooOO, r2ab)
     Hr2aa += lib.einsum('be,ijae->ijab', imds.Fvva, r2aa)
     Hr2bb += lib.einsum('be,ijae->ijab', imds.Fvvb, r2bb)
     Hr2ab += lib.einsum('BE,iJaE->iJaB', imds.Fvvb, r2ab)
@@ -443,19 +1282,19 @@ def eomee_ccsd_matvec(eom, vector, imds=None):
     tauaa = uccsd.make_tau_aa(t2aa, t1a, t1a)
     tmpaa = lib.einsum('menf,ijef->mnij', eris_ovov, tau2aa)
     Hr2aa += lib.einsum('mnij,mnab->ijab', tmpaa, tauaa) * 0.25
-    tau2aa = tauaa = None
+    tmpaa = tau2aa = tauaa = None
 
     tau2bb = uccsd.make_tau_aa(r2bb, r1b, t1b, 2)
     taubb = uccsd.make_tau_aa(t2bb, t1b, t1b)
     tmpbb = lib.einsum('menf,ijef->mnij', eris_OVOV, tau2bb)
     Hr2bb += lib.einsum('mnij,mnab->ijab', tmpbb, taubb) * 0.25
-    tau2bb = taubb = None
+    tmpbb = tau2bb = taubb = None
 
     tau2ab = uccsd.make_tau_ab(r2ab, r1 , t1 , 2)
     tauab = uccsd.make_tau_ab(t2ab, t1 , t1)
     tmpab = lib.einsum('meNF,iJeF->mNiJ', eris_ovOV, tau2ab)
     Hr2ab += lib.einsum('mNiJ,mNaB->iJaB', tmpab, tauab)
-    tau2ab = tauab = None
+    tmpab = tau2ab = tauab = None
 
     tmpa = lib.einsum('menf,imef->ni', eris_ovov, r2aa)
     tmpa-= lib.einsum('neMF,iMeF->ni', eris_ovOV, r2ab)
@@ -491,14 +1330,14 @@ def eomee_ccsd_matvec(eom, vector, imds=None):
     Hr2ab-= lib.einsum('mBiJ,ma->iJaB', imds.woVoO, r1a)
     Hr2ab-= lib.einsum('MbJi,MA->iJbA', imds.wOvOo, r1b)
 
-    Hr1a-= 0.5*lib.einsum('mnie,mnae->ia', imds.wooov, r2aa)
-    Hr1a-=     lib.einsum('mNiE,mNaE->ia', imds.woOoV, r2ab)
-    Hr1b-= 0.5*lib.einsum('mnie,mnae->ia', imds.wOOOV, r2bb)
-    Hr1b-=     lib.einsum('MnIe,nMeA->IA', imds.wOoOv, r2ab)
-    tmpa = lib.einsum('mnie,me->ni', imds.wooov, r1a)
-    tmpa-= lib.einsum('nMiE,ME->ni', imds.woOoV, r1b)
-    tmpb = lib.einsum('mnie,me->ni', imds.wOOOV, r1b)
-    tmpb-= lib.einsum('NmIe,me->NI', imds.wOoOv, r1a)
+    Hr1a-= 0.5*lib.einsum('mine,mnae->ia', imds.wooov, r2aa)
+    Hr1a-=     lib.einsum('miNE,mNaE->ia', imds.wooOV, r2ab)
+    Hr1b-= 0.5*lib.einsum('mine,mnae->ia', imds.wOOOV, r2bb)
+    Hr1b-=     lib.einsum('MIne,nMeA->IA', imds.wOOov, r2ab)
+    tmpa = lib.einsum('mine,me->ni', imds.wooov, r1a)
+    tmpa-= lib.einsum('niME,ME->ni', imds.wooOV, r1b)
+    tmpb = lib.einsum('mine,me->ni', imds.wOOOV, r1b)
+    tmpb-= lib.einsum('NIme,me->NI', imds.wOOov, r1a)
     Hr2aa+= lib.einsum('ni,njab->ijab', tmpa, t2aa)
     Hr2bb+= lib.einsum('ni,njab->ijab', tmpb, t2bb)
     Hr2ab+= lib.einsum('ni,nJaB->iJaB', tmpa, t2ab)
@@ -556,10 +1395,10 @@ def eomsf_ccsd_matvec(eom, vector, imds=None):
     Hr1ba -= np.einsum('mi,ma->ia', imds.Foob, r1ba)
     Hr1ba += np.einsum('me,imae->ia', imds.Fova, r2baaa)
     Hr1ba += np.einsum('me,imae->ia', imds.Fovb, r2bbab)
-    Hr2baaa = .5 *lib.einsum('nMjI,Mnab->Ijab', imds.woOoO, r2baaa)
-    Hr2aaba = .25*lib.einsum('mnij,mnAb->ijAb', imds.woooo, r2aaba)
-    Hr2abbb = .5 *lib.einsum('mNiJ,mNAB->iJAB', imds.woOoO, r2abbb)
-    Hr2bbab = .25*lib.einsum('MNIJ,MNaB->IJaB', imds.wOOOO, r2bbab)
+    Hr2baaa = .5 *lib.einsum('njMI,Mnab->Ijab', imds.wooOO, r2baaa)
+    Hr2aaba = .25*lib.einsum('minj,mnAb->ijAb', imds.woooo, r2aaba)
+    Hr2abbb = .5 *lib.einsum('miNJ,mNAB->iJAB', imds.wooOO, r2abbb)
+    Hr2bbab = .25*lib.einsum('MINJ,MNaB->IJaB', imds.wOOOO, r2bbab)
     Hr2baaa += lib.einsum('be,Ijae->Ijab', imds.Fvva   , r2baaa)
     Hr2baaa -= lib.einsum('mj,imab->ijab', imds.Fooa*.5, r2baaa)
     Hr2baaa -= lib.einsum('MJ,Miab->Jiab', imds.Foob*.5, r2baaa)
@@ -656,12 +1495,12 @@ def eomsf_ccsd_matvec(eom, vector, imds=None):
     Hr2abbb -= lib.einsum('mBiJ,mA->iJAB', imds.woVoO, r1ab   )
     Hr2aaba -= lib.einsum('mbij,mA->ijAb', imds.wovoo, r1ab*.5)
 
-    Hr1ab -= 0.5*lib.einsum('mnie,mnAe->iA', imds.wooov, r2aaba)
-    Hr1ab -=     lib.einsum('mNiE,mNAE->iA', imds.woOoV, r2abbb)
-    Hr1ba -= 0.5*lib.einsum('MNIE,MNaE->Ia', imds.wOOOV, r2bbab)
-    Hr1ba -=     lib.einsum('MnIe,Mnae->Ia', imds.wOoOv, r2baaa)
-    tmp1ab = lib.einsum('MnIe,Me->nI', imds.wOoOv, r1ba)
-    tmp1ba = lib.einsum('mNiE,mE->Ni', imds.woOoV, r1ab)
+    Hr1ab -= 0.5*lib.einsum('mine,mnAe->iA', imds.wooov, r2aaba)
+    Hr1ab -=     lib.einsum('miNE,mNAE->iA', imds.wooOV, r2abbb)
+    Hr1ba -= 0.5*lib.einsum('MINE,MNaE->Ia', imds.wOOOV, r2bbab)
+    Hr1ba -=     lib.einsum('MIne,Mnae->Ia', imds.wOOov, r2baaa)
+    tmp1ab = lib.einsum('MIne,Me->nI', imds.wOOov, r1ba)
+    tmp1ba = lib.einsum('miNE,mE->Ni', imds.wooOV, r1ab)
     Hr2baaa += lib.einsum('nI,njab->Ijab', tmp1ab*.5, t2aa)
     Hr2bbab += lib.einsum('nI,nJaB->IJaB', tmp1ab   , t2ab)
     Hr2abbb += lib.einsum('Ni,NJAB->iJAB', tmp1ba*.5, t2bb)
@@ -727,13 +1566,10 @@ def eomsf_ccsd_matvec(eom, vector, imds=None):
     Hr2abbb -= lib.einsum('eB,iJeA->iJAB', tmpab*.5, t2ab) * 2
     eris_ovov = eris_OVOV = eris_ovOV = None
 
-    #:eris_vvvv = ao2mo.restore(1, np.asarray(eris.vvvv), nvirb)
-    #:eris_VVVV = ao2mo.restore(1, np.asarray(eris.VVVV), nvirb)
-    #:eris_vvVV = _restore(np.asarray(eris.vvVV), nvira, nvirb)
-    #:Hr2baaa += .5*lib.einsum('Ijef,aebf->Ijab', tau2baaa, eris_vvvv)
-    #:Hr2abbb += .5*lib.einsum('iJEF,AEBF->iJAB', tau2abbb, eris_VVVV)
-    #:Hr2bbab += .5*lib.einsum('IJeF,aeBF->IJaB', tau2bbab, eris_vvVV)
-    #:Hr2aaba += .5*lib.einsum('ijEf,bfAE->ijAb', tau2aaba, eris_vvVV)
+    #:Hr2baaa += .5*lib.einsum('Ijef,aebf->Ijab', tau2baaa, eris.vvvv)
+    #:Hr2abbb += .5*lib.einsum('iJEF,AEBF->iJAB', tau2abbb, eris.VVVV)
+    #:Hr2bbab += .5*lib.einsum('IJeF,aeBF->IJaB', tau2bbab, eris.vvVV)
+    #:Hr2aaba += .5*lib.einsum('ijEf,bfAE->ijAb', tau2aaba, eris.vvVV)
     fakeri = uccsd._ChemistsERIs()
     fakeri.mol = eris.mol
 
@@ -875,11 +1711,11 @@ def eeccsd_diag(eom, imds=None):
     Hr2bbab += Wovba.reshape(noccb,1,nvira,1)
     Hr2bbab += Wovba.reshape(1,noccb,nvira,1)
 
-    Wooaa  = np.einsum('ijij->ij', imds.woooo).copy()
+    Wooaa  = np.einsum('iijj->ij', imds.woooo).copy()
     Wooaa -= np.einsum('ijji->ij', imds.woooo)
-    Woobb  = np.einsum('ijij->ij', imds.wOOOO).copy()
+    Woobb  = np.einsum('iijj->ij', imds.wOOOO).copy()
     Woobb -= np.einsum('ijji->ij', imds.wOOOO)
-    Wooab = np.einsum('ijij->ij', imds.woOoO)
+    Wooab = np.einsum('iijj->ij', imds.wooOO)
     Wooba = Wooab.T
     Wooaa *= .5
     Woobb *= .5
@@ -990,7 +1826,7 @@ class EOMEE(eom_rccsd.EOMEE):
         return nocc*nvir + nocc*(nocc-1)//2*nvir*(nvir-1)//2
 
     def make_imds(self, eris=None):
-        imds = _IMDS(self._cc, eris)
+        imds = _IMDS(self._cc, eris=eris)
         imds.make_ee()
         return imds
 
@@ -1120,11 +1956,126 @@ class _IMDS:
         self.made_ea_imds = False
         self.made_ee_imds = False
 
+    def _make_shared(self):
+        cput0 = (time.clock(), time.time())
+
+        t1, t2, eris = self.t1, self.t2, self.eris
+        self.Foo, self.FOO = uintermediates.Foo(t1, t2, eris)
+        self.Fvv, self.FVV = uintermediates.Fvv(t1, t2, eris)
+        self.Fov, self.FOV = uintermediates.Fov(t1, t2, eris)
+
+        # 2 virtuals
+        self.Wovvo, self.WovVO, self.WOVvo, self.WOVVO, self.WoVVo, self.WOvvO = \
+                uintermediates.Wovvo(t1, t2, eris)
+        Wovov = np.asarray(eris.ovov)
+        WOVOV = np.asarray(eris.OVOV)
+        Wovov = Wovov - Wovov.transpose(0,3,2,1)
+        WOVOV = WOVOV - WOVOV.transpose(0,3,2,1)
+        self.Wovov = Wovov
+        self.WovOV = eris.ovOV
+        self.WOVov = None
+        self.WOVOV = WOVOV
+
+        self._made_shared = True
+        logger.timer_debug1(self, 'EOM-CCSD shared intermediates', *cput0)
+        return self
+
     def make_ip(self):
-        raise NotImplementedError
+        if not self._made_shared:
+            self._make_shared()
+
+        cput0 = (time.clock(), time.time())
+
+        t1, t2, eris = self.t1, self.t2, self.eris
+
+        # 0 or 1 virtuals
+        self.Woooo, self.WooOO, _         , self.WOOOO = uintermediates.Woooo(t1, t2, eris)
+        self.Wooov, self.WooOV, self.WOOov, self.WOOOV = uintermediates.Wooov(t1, t2, eris)
+        self.Woovo, self.WooVO, self.WOOvo, self.WOOVO = uintermediates.Woovo(t1, t2, eris)
+
+        self.made_ip_imds = True
+        logger.timer_debug1(self, 'EOM-UCCSD IP intermediates', *cput0)
+        return self
 
     def make_ea(self):
-        raise NotImplementedError
+        if not self._made_shared:
+            self._make_shared()
+
+        cput0 = (time.clock(), time.time())
+
+        t1, t2, eris = self.t1, self.t2, self.eris
+
+        # 3 or 4 virtuals
+        self.Wvvov, self.WvvOV, self.WVVov, self.WVVOV = uintermediates.Wvvov(t1, t2, eris)
+        self.Wvvvv = None  # too expensive to hold Wvvvv
+        self.Wvvvo, self.WvvVO, self.WVVvo, self.WVVVO = uintermediates.Wvvvo(t1, t2, eris)
+
+        # The contribution of Wvvvv
+        t1a, t1b = t1
+        # The contraction to eris.vvvv is included in eaccsd_matvec
+        #:vvvv = eris.vvvv - eris.vvvv.transpose(0,3,2,1)
+        #:VVVV = eris.VVVV - eris.VVVV.transpose(0,3,2,1)
+        #:self.Wvvvo += lib.einsum('abef,if->abei',      vvvv, t1a)
+        #:self.WvvVO += lib.einsum('abef,if->abei', eris_vvVV, t1b)
+        #:self.WVVvo += lib.einsum('efab,if->abei', eris_vvVV, t1a)
+        #:self.WVVVO += lib.einsum('abef,if->abei',      VVVV, t1b)
+
+        tauaa, tauab, taubb = uccsd.make_tau(t2, t1, t1)
+        eris_ovov = np.asarray(eris.ovov)
+        eris_OVOV = np.asarray(eris.OVOV)
+        eris_ovOV = np.asarray(eris.ovOV)
+        ovov = eris_ovov - eris_ovov.transpose(0,3,2,1)
+        OVOV = eris_OVOV - eris_OVOV.transpose(0,3,2,1)
+        tmp = lib.einsum('menf,if->meni',      ovov, t1a) * .5
+        self.Wvvvo += lib.einsum('meni,mnab->aebi', tmp, tauaa)
+        tmp = tauaa = None
+
+        tmp = lib.einsum('menf,if->meni',      OVOV, t1b) * .5
+        self.WVVVO += lib.einsum('meni,mnab->aebi', tmp, taubb)
+        tmp = taubb = None
+
+        tmp = lib.einsum('menf,if->meni', eris_ovOV, t1b)
+        self.WvvVO += lib.einsum('meni,mnab->aebi', tmp, tauab)
+        tmp = lib.einsum('nfme,if->meni', eris_ovOV, t1a)
+        self.WVVvo += lib.einsum('meni,nmba->aebi', tmp, tauab)
+        tmpbab = tmpaba = tauab = None
+        ovov = OVOV = eris_ovov = eris_OVOV = eris_ovOV = None
+
+        eris_ovvv = eris.get_ovvv(slice(None))
+        ovvv = eris_ovvv - eris_ovvv.transpose(0,3,2,1)
+        tmp = lib.einsum('mebf,if->mebi', ovvv, t1a)
+        tmp = lib.einsum('mebi,ma->aebi', tmp, t1a)
+        self.Wvvvo -= tmp - tmp.transpose(2,1,0,3)
+        tmp = eris_ovvv = ovvv = None
+
+        eris_OVVV = eris.get_OVVV(slice(None))
+        OVVV = eris_OVVV - eris_OVVV.transpose(0,3,2,1)
+        tmp = lib.einsum('mebf,if->mebi', OVVV, t1b)
+        tmp = lib.einsum('mebi,ma->aebi', tmp, t1b)
+        self.WVVVO -= tmp - tmp.transpose(2,1,0,3)
+        tmp = eris_OVVV = OVVV = None
+
+        eris_ovVV = eris.get_ovVV(slice(None))
+        eris_OVvv = eris.get_OVvv(slice(None))
+        tmpaabb = lib.einsum('mebf,if->mebi', eris_ovVV, t1b)
+        tmpbaab = lib.einsum('mebf,ie->mfbi', eris_OVvv, t1b)
+        tmp  = lib.einsum('mebi,ma->aebi', tmpaabb, t1a)
+        tmp += lib.einsum('mfbi,ma->bfai', tmpbaab, t1b)
+        self.WvvVO -= tmp
+        tmp = tmpaabb = tmpbaab = None
+
+        tmpbbaa = lib.einsum('mebf,if->mebi', eris_OVvv, t1a)
+        tmpabba = lib.einsum('mebf,ie->mfbi', eris_ovVV, t1a)
+        tmp  = lib.einsum('mebi,ma->aebi', tmpbbaa, t1b)
+        tmp += lib.einsum('mfbi,ma->bfai', tmpabba, t1a)
+        self.WVVvo -= tmp
+        tmp = tmpbbaa = tmpabba = None
+        eris_ovVV = eris_OVvv = None
+        # The contribution of Wvvvv end
+
+        self.made_ea_imds = True
+        logger.timer_debug1(self, 'EOM-UCCSD EA intermediates', *cput0)
+        return self
 
     def make_ee(self):
         cput0 = (time.clock(), time.time())
@@ -1134,6 +2085,7 @@ class _IMDS:
         t1a, t1b = t1
         t2aa, t2ab, t2bb = t2
         nocca, noccb, nvira, nvirb = t2ab.shape
+        dtype = np.result_type(t1a, t1b, t2aa, t2ab, t2bb)
 
         fooa = eris.focka[:nocca,:nocca]
         foob = eris.fockb[:noccb,:noccb]
@@ -1142,22 +2094,22 @@ class _IMDS:
         fvva = eris.focka[nocca:,nocca:]
         fvvb = eris.fockb[noccb:,noccb:]
 
-        self.Fooa = np.zeros((nocca,nocca))
-        self.Foob = np.zeros((noccb,noccb))
-        self.Fvva = np.zeros((nvira,nvira))
-        self.Fvvb = np.zeros((nvirb,nvirb))
+        self.Fooa = np.zeros((nocca,nocca), dtype=dtype)
+        self.Foob = np.zeros((noccb,noccb), dtype=dtype)
+        self.Fvva = np.zeros((nvira,nvira), dtype=dtype)
+        self.Fvvb = np.zeros((nvirb,nvirb), dtype=dtype)
 
-        wovvo = np.zeros((nocca,nvira,nvira,nocca))
-        wOVVO = np.zeros((noccb,nvirb,nvirb,noccb))
-        woVvO = np.zeros((nocca,nvirb,nvira,noccb))
-        woVVo = np.zeros((nocca,nvirb,nvirb,nocca))
-        wOvVo = np.zeros((noccb,nvira,nvirb,nocca))
-        wOvvO = np.zeros((noccb,nvira,nvira,noccb))
+        wovvo = np.zeros((nocca,nvira,nvira,nocca), dtype=dtype)
+        wOVVO = np.zeros((noccb,nvirb,nvirb,noccb), dtype=dtype)
+        woVvO = np.zeros((nocca,nvirb,nvira,noccb), dtype=dtype)
+        woVVo = np.zeros((nocca,nvirb,nvirb,nocca), dtype=dtype)
+        wOvVo = np.zeros((noccb,nvira,nvirb,nocca), dtype=dtype)
+        wOvvO = np.zeros((noccb,nvira,nvira,noccb), dtype=dtype)
 
-        wovoo = np.zeros((nocca,nvira,nocca,nocca))
-        wOVOO = np.zeros((noccb,nvirb,noccb,noccb))
-        woVoO = np.zeros((nocca,nvirb,nocca,noccb))
-        wOvOo = np.zeros((noccb,nvira,noccb,nocca))
+        wovoo = np.zeros((nocca,nvira,nocca,nocca), dtype=dtype)
+        wOVOO = np.zeros((noccb,nvirb,noccb,noccb), dtype=dtype)
+        woVoO = np.zeros((nocca,nvirb,nocca,noccb), dtype=dtype)
+        wOvOo = np.zeros((noccb,nvira,noccb,nocca), dtype=dtype)
 
         tauaa, tauab, taubb = uccsd.make_tau(t2, t1, t1)
         #:eris_ovvv = lib.unpack_tril(np.asarray(eris.ovvv).reshape(nocca*nvira,-1)).reshape(nocca,nvira,nvira,nvira)
@@ -1290,10 +2242,10 @@ class _IMDS:
         eris_ovOO = np.asarray(eris.ovOO)
         ovoo = eris_ovoo - eris_ovoo.transpose(2,1,0,3)
         OVOO = eris_OVOO - eris_OVOO.transpose(2,1,0,3)
-        woooo = lib.einsum('je,nemi->mnij', t1a,      ovoo)
-        wOOOO = lib.einsum('je,nemi->mnij', t1b,      OVOO)
-        woOoO = lib.einsum('JE,NEmi->mNiJ', t1b, eris_OVoo)
-        woOOo = lib.einsum('je,meNI->mNIj',-t1a, eris_ovOO)
+        woooo = lib.einsum('je,nemi->minj', t1a,      ovoo)
+        wOOOO = lib.einsum('je,nemi->minj', t1b,      OVOO)
+        wooOO = lib.einsum('JE,NEmi->miNJ', t1b, eris_OVoo)
+        woOOo = lib.einsum('je,meNI->mINj',-t1a, eris_ovOO)
         tmpaa = lib.einsum('nemi,jnbe->mbij',      ovoo, t2aa)
         tmpaa+= lib.einsum('NEmi,jNbE->mbij', eris_OVoo, t2ab)
         tmpbb = lib.einsum('nemi,jnbe->mbij',      OVOO, t2bb)
@@ -1306,20 +2258,20 @@ class _IMDS:
         wOvOo -= lib.einsum('MEni,nJbE->MbJi', eris_OVoo, t2ab)
         wovoo += tmpaa - tmpaa.transpose(0,1,3,2)
         wOVOO += tmpbb - tmpbb.transpose(0,1,3,2)
-        self.wooov =      ovoo.transpose(2,0,3,1).copy()
-        self.wOOOV =      OVOO.transpose(2,0,3,1).copy()
-        self.woOoV = eris_OVoo.transpose(2,0,3,1).copy()
-        self.wOoOv = eris_ovOO.transpose(2,0,3,1).copy()
-        self.wOooV =-eris_OVoo.transpose(0,2,3,1).copy()
-        self.woOOv =-eris_ovOO.transpose(0,2,3,1).copy()
+        self.wooov = np.array(     ovoo.transpose(2,3,0,1), dtype=dtype)
+        self.wOOOV = np.array(     OVOO.transpose(2,3,0,1), dtype=dtype)
+        self.wooOV = np.array(eris_OVoo.transpose(2,3,0,1), dtype=dtype)
+        self.wOOov = np.array(eris_ovOO.transpose(2,3,0,1), dtype=dtype)
+#X        self.wOooV =-np.array(eris_OVoo.transpose(0,3,2,1), dtype=dtype)
+#X        self.woOOv =-np.array(eris_ovOO.transpose(0,3,2,1), dtype=dtype)
         eris_ovoo = eris_OVOO = eris_ovOO = eris_OVoo = None
 
-        woooo += np.asarray(eris.oooo).transpose(0,2,1,3)
-        wOOOO += np.asarray(eris.OOOO).transpose(0,2,1,3)
-        woOoO += np.asarray(eris.ooOO).transpose(0,2,1,3)
-        self.woooo = woooo - woooo.transpose(0,1,3,2)
-        self.wOOOO = wOOOO - wOOOO.transpose(0,1,3,2)
-        self.woOoO = woOoO - woOOo.transpose(0,1,3,2)
+        woooo += np.asarray(eris.oooo)
+        wOOOO += np.asarray(eris.OOOO)
+        wooOO += np.asarray(eris.ooOO)
+        self.woooo = woooo - woooo.transpose(0,3,2,1)
+        self.wOOOO = wOOOO - wOOOO.transpose(0,3,2,1)
+        self.wooOO = wooOO - woOOo.transpose(0,3,2,1)
 
         eris_ovov = np.asarray(eris.ovov)
         eris_OVOV = np.asarray(eris.OVOV)
@@ -1327,16 +2279,16 @@ class _IMDS:
         ovov = eris_ovov - eris_ovov.transpose(0,3,2,1)
         OVOV = eris_OVOV - eris_OVOV.transpose(0,3,2,1)
         tauaa, tauab, taubb = uccsd.make_tau(t2,t1,t1)
-        self.woooo += 0.5*lib.einsum('ijef,menf->mnij', tauaa,      ovov)
-        self.wOOOO += 0.5*lib.einsum('ijef,menf->mnij', taubb,      OVOV)
-        self.woOoO +=     lib.einsum('iJeF,meNF->mNiJ', tauab, eris_ovOV)
+        self.woooo += 0.5*lib.einsum('ijef,menf->minj', tauaa,      ovov)
+        self.wOOOO += 0.5*lib.einsum('ijef,menf->minj', taubb,      OVOV)
+        self.wooOO +=     lib.einsum('iJeF,meNF->miNJ', tauab, eris_ovOV)
 
-        self.wooov += lib.einsum('if,mfne->mnie', t1a,      ovov)
-        self.wOOOV += lib.einsum('if,mfne->mnie', t1b,      OVOV)
-        self.woOoV += lib.einsum('if,mfNE->mNiE', t1a, eris_ovOV)
-        self.wOoOv += lib.einsum('IF,neMF->MnIe', t1b, eris_ovOV)
-        self.wOooV -= lib.einsum('if,nfME->MniE', t1a, eris_ovOV)
-        self.woOOv -= lib.einsum('IF,meNF->mNIe', t1b, eris_ovOV)
+        self.wooov += lib.einsum('if,mfne->mine', t1a,      ovov)
+        self.wOOOV += lib.einsum('if,mfne->mine', t1b,      OVOV)
+        self.wooOV += lib.einsum('if,mfNE->miNE', t1a, eris_ovOV)
+        self.wOOov += lib.einsum('IF,neMF->MIne', t1b, eris_ovOV)
+#X        self.wOooV -= lib.einsum('if,nfME->MinE', t1a, eris_ovOV)
+#X        self.woOOv -= lib.einsum('IF,meNF->mINe', t1b, eris_ovOV)
 
         tmp1aa = lib.einsum('njbf,menf->mbej', t2aa,      ovov)
         tmp1aa-= lib.einsum('jNbF,meNF->mbej', t2ab, eris_ovOV)
@@ -1400,10 +2352,10 @@ class _IMDS:
         wOVOO -= lib.einsum('me,ijbe->mbij', self.Fovb, t2bb)
         woVoO += lib.einsum('me,iJeB->mBiJ', self.Fova, t2ab)
         wOvOo += lib.einsum('ME,jIbE->MbIj', self.Fovb, t2ab)
-        wovoo -= lib.einsum('nb,mnij->mbij', t1a, self.woooo)
-        wOVOO -= lib.einsum('nb,mnij->mbij', t1b, self.wOOOO)
-        woVoO -= lib.einsum('NB,mNiJ->mBiJ', t1b, self.woOoO)
-        wOvOo -= lib.einsum('nb,nMjI->MbIj', t1a, self.woOoO)
+        wovoo -= lib.einsum('nb,minj->mbij', t1a, self.woooo)
+        wOVOO -= lib.einsum('nb,minj->mbij', t1b, self.wOOOO)
+        woVoO -= lib.einsum('NB,miNJ->mBiJ', t1b, self.wooOO)
+        wOvOo -= lib.einsum('nb,njMI->MbIj', t1a, self.wooOO)
         eris_ovvo = eris_OVVO = eris_OVvo = eris_ovVO = None
         eris_oovv = eris_OOVV = eris_OOvv = eris_ooVV = None
 
@@ -1662,5 +2614,243 @@ class _IMDS:
             self.wVoVv[:,i0:i1] = wVoVv
 
         self.made_ee_imds = True
-        log.timer('EOM-CCSD EE intermediates', *cput0)
+        log.timer('EOM-UCCSD EE intermediates', *cput0)
 
+def rand_mf(mol, seed=1):
+    from pyscf import scf
+    from pyscf import gto
+    from pyscf import lo
+    mol = gto.Mole()
+    mol.atom = [
+        [8 , (0. , 0.     , 0.)],
+        [1 , (0. , -0.757 , 0.587)],
+        [1 , (0. , 0.757  , 0.587)]]
+    mol.basis = 'sto-3g'
+    mol.verbose = 0
+    mol.spin = 0
+    mol.build()
+
+    np.random.seed(seed)
+
+    mf = scf.UHF(mol).run(conv_tol=1e-14)
+    nmo = mol.nao_nr()
+    mf.mo_occ = np.zeros((2,nmo))
+    mf.mo_occ[0,:4] = 1
+    mf.mo_occ[1,:2] = 1
+    mf.mo_energy = np.arange(nmo) + np.random.random((2,nmo)) * .3
+    mf.mo_energy[mf.mo_occ == 0] += 2
+
+    mo = np.random.random((2,nmo,nmo))
+    s = mf.get_ovlp()
+    mf.mo_coeff = np.empty_like(mo)
+    mf.mo_coeff[0] = lo.orth.vec_lowdin(mo[0], s)
+    mf.mo_coeff[1] = lo.orth.vec_lowdin(mo[1], s)
+    return mf
+
+def rand_cc_t1_t2(mf, seed=1):
+    from pyscf import ao2mo
+    from pyscf.cc import uccsd
+    mycc = uccsd.UCCSD(mf)
+
+    nocca, noccb = mycc.nocc
+    nmoa, nmob = mycc.nmo
+    nvira, nvirb = nmoa - nocca, nmob - noccb
+    def my_ao2mo(mo):
+        eris = ao2mo.kernel(mycc._scf._eri, mo, compact=False)
+        eris = ao2mo.restore(1, eris, mf.mol.nao_nr())
+
+        eris = eris + np.cos(eris)*1j
+        eris = eris + eris.transpose(1, 0, 3, 2)
+        eris = eris + eris.conj().transpose(2, 3, 0, 1)
+        return eris
+    eris = uccsd._make_eris_incore(mycc)#, ao2mofn=my_ao2mo)
+
+    np.random.seed(seed)
+    t1a = (np.random.random((nocca,nvira)) +
+           np.random.random((nocca,nvira))*1j - .5 - .5j)
+    t1b = (np.random.random((noccb,nvirb)) +
+           np.random.random((noccb,nvirb))*1j - .5 - .5j)
+    t2aa = (np.random.random((nocca,nocca,nvira,nvira)) +
+            np.random.random((nocca,nocca,nvira,nvira))*1j - .5 - .5j)
+    t2aa = t2aa - t2aa.transpose(1, 0, 2, 3)
+    t2aa = t2aa - t2aa.transpose(0, 1, 3, 2)
+
+    t2ab = (np.random.random((nocca,noccb,nvira,nvirb)) +
+            np.random.random((nocca,noccb,nvira,nvirb))*1j - .5 - .5j)
+
+    t2bb = (np.random.random((noccb,noccb,nvirb,nvirb)) +
+            np.random.random((noccb,noccb,nvirb,nvirb))*1j - .5 - .5j)
+    t2bb = t2bb - t2bb.transpose(1, 0, 2, 3)
+    t2bb = t2bb - t2bb.transpose(0, 1, 3, 2)
+
+    t1 = (t1a, t1b)
+    t2 = (t2aa, t2ab, t2bb)
+    return mycc, eris, t1, t2
+
+def enforce_symm_2p_spin(r1, r2, orbspin, excitation):
+    assert(excitation in ['ip', 'ea'])
+    if excitation == 'ip':
+        nocc, nvir = r2.shape[1:]
+    elif excitation == 'ea':
+        nocc, nvir = r2.shape[:2]
+    else:
+        raise NotImplementedError
+
+    idxoa = np.where(orbspin[:nocc] == 0)[0]
+    idxob = np.where(orbspin[:nocc] == 1)[0]
+    idxva = np.where(orbspin[nocc:] == 0)[0]
+    idxvb = np.where(orbspin[nocc:] == 1)[0]
+
+    idxoaa = idxoa[:,None] * nocc + idxoa
+    idxoab = idxoa[:,None] * nocc + idxob
+    idxoba = idxob[:,None] * nocc + idxoa
+    idxobb = idxob[:,None] * nocc + idxob
+    idxvaa = idxva[:,None] * nvir + idxva
+    idxvab = idxva[:,None] * nvir + idxvb
+    idxvba = idxvb[:,None] * nvir + idxva
+    idxvbb = idxvb[:,None] * nvir + idxvb
+
+    if excitation == 'ip':
+        r2 = r2 - r2.transpose(1, 0, 2)
+
+        r2 = r2.reshape(nocc**2, nvir)
+        r2[idxobb.ravel()[:, None], idxva.ravel()] = 0.0
+        r2[idxoaa.ravel()[:, None], idxvb.ravel()] = 0.0
+        r2 = r2.reshape(nocc, nocc, nvir)
+
+    if excitation == 'ea':
+        r2 = r2 - r2.transpose(0, 2, 1)
+
+        r2 = r2.reshape(nocc, nvir**2)
+        r2[idxoa.ravel(), idxvbb.ravel()[:, None]] = 0.0
+        r2[idxob.ravel(), idxvaa.ravel()[:, None]] = 0.0
+        r2 = r2.reshape(nocc, nvir, nvir)
+
+    return r1, r2
+
+def enforce_symm_2p_spin_ip(r1, r2, orbspin):
+    return enforce_symm_2p_spin(r1, r2, orbspin, 'ip')
+
+def enforce_symm_2p_spin_ea(r1, r2, orbspin):
+    return enforce_symm_2p_spin(r1, r2, orbspin, 'ea')
+
+if __name__ == '__main__':
+    from pyscf import scf
+    from pyscf import gto
+    from pyscf import ao2mo
+    from pyscf.cc import rccsd
+    from pyscf import lo
+
+    mol = gto.Mole()
+    mol.atom = [
+        [8 , (0. , 0.     , 0.)],
+        [1 , (0. , -0.757 , 0.587)],
+        [1 , (0. , 0.757  , 0.587)]]
+    mol.basis = 'sto-3g'
+    mol.verbose = 0
+    mol.spin = 0
+    mol.build()
+
+    mf = rand_mf(mol)
+    mycc, eris, t1, t2 = rand_cc_t1_t2(mf)
+    mycc.t1 = t1
+    mycc.t2 = t2
+
+    nocca, noccb = mycc.nocc
+    nmoa, nmob = mycc.nmo
+    nvira, nvirb = nmoa - nocca, nmob - noccb
+    nocc = nocca + noccb
+    nvir = nvira + nvirb
+    nmo = nocc + nvir
+
+    def my_ao2mo(mo):
+        if isinstance(mo, np.ndarray) and mo.ndim == 2:
+            nmos = tuple([mo.shape[1]] * 4)
+        else:
+            nmos = [x.shape[1] for x in mo]
+
+        nao, nmo = mo.shape
+        mo_a = mo[:nao//2]
+        mo_b = mo[nao//2:]
+        orbspin = mo.orbspin
+
+#        eris = ao2mo.kernel(mygcc._scf._eri, mo_a + mo_b)
+#        sym_forbid = (orbspin[:,None] != orbspin)[np.tril_indices(nmo)]
+#        eris[sym_forbid,:] = 0
+#        eris[:,sym_forbid] = 0
+#        eris = ao2mo.restore(1, eris, nao)
+#        return eris
+        eris =(np.random.random((nmo,nmo,nmo,nmo)) +
+               np.random.random((nmo,nmo,nmo,nmo)) * 1j)
+
+        eris = eris + np.cos(eris)*1j
+        eris = eris + eris.transpose(1, 0, 3, 2)
+        eris = eris + eris.conj().transpose(2, 3, 0, 1)
+        eris[orbspin[:,None] != orbspin] = 0
+        eris[:,:,orbspin[:,None] != orbspin] = 0
+        return eris
+
+    import pyscf.cc.addons
+    from pyscf.cc import gccsd
+    mygcc = pyscf.cc.addons.convert_to_gccsd(mycc)
+    mygcc._ucc = mycc
+    mygcc._ucc_eris = eris
+    eris = gccsd._make_eris_incore(mygcc)#, ao2mofn=my_ao2mo)
+    orbspin = eris.orbspin
+
+    ## EOM-IP
+    myeom = EOMIP(mycc)
+    imds = myeom.make_imds()
+
+    np.random.seed(1)
+    r1 = np.random.rand(nocc)*1j + np.random.rand(nocc) - 0.5 - 0.5*1j
+    r2 = np.random.rand(nocc**2 * nvir)*1j + np.random.rand(nocc**2 * nvir) - 0.5 - 0.5*1j
+    r2 = r2.reshape(nocc, nocc, nvir)
+    r1, r2 = enforce_symm_2p_spin_ip(r1, r2, orbspin)
+    r1, r2 = spin2spatial_ip(r1, r2, orbspin)
+
+    vector = myeom.amplitudes_to_vector(r1, r2)
+#    r1x, r2x = myeom.vector_to_amplitudes(vector)
+#    print(abs(r1[0]-r1x[0]).max())
+#    print(abs(r1[1]-r1x[1]).max())
+#    print(abs(r2[0]-r2x[0]).max())
+#    print(abs(r2[1]-r2x[1]).max())
+#    print(abs(r2[2]-r2x[2]).max())
+#    print(abs(r2[3]-r2x[3]).max())
+    Hvector = myeom.matvec(vector, imds=imds)
+    print('ip', lib.finger(Hvector) - (21.67127462317093-19.068987454261908j))
+    print('diag', lib.finger(myeom.get_diag()) - (-9.6676217223549763+9.325219825942975j))
+
+    # EOM-EA
+    myeom = EOMEA(mycc)
+    imds = myeom.make_imds()
+
+    np.random.seed(1)
+    r1 = np.random.rand(nvir)*1j + np.random.rand(nvir) - 0.5 - 0.5*1j
+    r2 = np.random.rand(nocc * nvir**2)*1j + np.random.rand(nocc * nvir**2) - 0.5 - 0.5*1j
+    r2 = r2.reshape(nocc, nvir, nvir)
+    r1, r2 = enforce_symm_2p_spin_ea(r1, r2, orbspin)
+    r1, r2 = spin2spatial_ea(r1, r2, orbspin)
+
+    vector = myeom.amplitudes_to_vector(r1, r2)
+#    r1x, r2x = myeom.vector_to_amplitudes(vector)
+#    print(abs(r1[0]-r1x[0]).max())
+#    print(abs(r1[1]-r1x[1]).max())
+#    print(abs(r2[0]-r2x[0]).max())
+#    print(abs(r2[1]-r2x[1]).max())
+#    print(abs(r2[2]-r2x[2]).max())
+#    print(abs(r2[3]-r2x[3]).max())
+    Hvector = myeom.matvec(vector, imds=imds)
+    print('ea', lib.finger(Hvector) - (6.5543877287461187-13.175055314063574j))
+    print('diag', lib.finger(myeom.get_diag()) - (-57.353207240857785+1.4052857730841204j))
+
+    #mycc = rccsd.RCCSD(mf)
+    #ecc, t1, t2 = mycc.kernel()
+    #print(ecc - -0.21334326214236796)
+
+   # myeom = EOMIP(mycc)
+   # print("IP energies... (right eigenvector)")
+   # e,v = myeom.ipccsd(nroots=2)
+    #assert(abs(e[0] - 0.3092874788775446) < 1e-10)
+    #print(e[1] - 0.3092874632094273)
+    #print(e[2] - 0.4011171508707691)
