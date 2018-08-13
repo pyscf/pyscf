@@ -62,8 +62,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         ks.grids.build(with_non0tab=True)
         if (isinstance(ks.grids, gen_grid.BeckeGrids) and
             ks.small_rho_cutoff > 1e-20 and ground_state):
-            ks.grids = rks.prune_small_rho_grids_(ks, cell, dm[0]+dm[1],
-                                                  ks.grids, kpts)
+            ks.grids = rks.prune_small_rho_grids_(ks, cell, dm, ks.grids, kpts)
         t0 = logger.timer(ks, 'setting up grids', *t0)
 
     if hermi == 2:  # because rho = 0

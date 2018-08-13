@@ -226,11 +226,11 @@ def dip_moment(cell, dm, unit='Debye', verbose=logger.NOTE,
 
     a = cell.lattice_vectors()
     b = np.linalg.inv(a).T
-    r = grids.coords
     # shift the unit cell
-    rfrac = np.linalg.solve(r - charge_center, b.T)
+    rfrac = lib.dot(grids.coords - charge_center, b.T)
     rfrac -= np.floor(rfrac)
     r = lib.dot(rfrac, a)
+    r = grids.coords
 
     dip = -np.einsum('g,g,gx->x', rho, grids.weights, r)
 
@@ -249,11 +249,55 @@ def get_rho(mf, dm=None, grids=None, kpt=None):
     if dm is None:
         dm = mf.make_rdm1()
     if grids is None:
-        grids = gen_grid.UniformGrids(cell)
+        grids = gen_grid.UniformGrids(mf.cell)
     if kpt is None:
         kpt = mf.kpt
     ni = numint.NumInt()
     return ni.get_rho(mf.cell, dm, grids, kpt, mf.max_memory)
+
+def _dip_correction(mf):
+    '''Makov-Payne corrections for charged systems.'''
+    from pyscf.pbc.dft import gen_grid
+    cell = mf.cell
+    grids = gen_grid.UniformGrids(cell)
+    dm = mf.make_rdm1()
+    rho = mf.get_rho(dm, grids, mf.kpt)
+    dip = mf.dip_moment(mf.cell, dm, unit='Au', grids=grids, rho=rho)
+
+    #           SC              BCC             FCC
+    madelung = (-2.83729747948, -3.63923344951, -4.58486207411)
+    vol = cell.vol
+    L = vol ** (1./3)
+    chg = cell.charge
+
+    # epsilon is the dielectric constant of the system. For systems
+    # surrounded by vacuum, epsilon = 1.
+    epsilon = 1
+
+    # Energy correction of point charges of a simple cubic lattice.
+    de_mono = - chg**2 * np.array(madelung) / (2 * L * epsilon)
+
+    # dipole energy correction
+    de_dip = -2.*np.pi/(3*cell.vol) * np.linalg.norm(dip)**2
+
+    # quadrupole energy correction
+    a = cell.lattice_vectors()
+    if abs(a - np.eye(3)*L).max() > 1e-5:
+        logger.warn(mf, 'System is not cubic cell. Quadrupole energy '
+                    'correction can be used for cubic cell only.')
+    charges = cell.atom_charges()
+    coords  = cell.atom_coords()
+    charge_center = np.einsum('i,ix->x', charges, coords) / charges.sum()
+    b = np.linalg.inv(a).T
+    # shift the unit cell
+    rfrac = lib.dot(grids.coords - charge_center, b.T)
+    rfrac -= np.floor(rfrac)
+    r = lib.dot(rfrac, a)
+    quad = np.einsum('g,g,gx,gx->', rho, grids.weights, r, r)
+    de_quad = 2.*np.pi/(3*cell.vol) * quad
+
+    de = de_mono + de_dip + de_quad
+    return de_mono, de_dip, de_quad, de
 
 
 class SCF(mol_hf.SCF):
@@ -266,8 +310,8 @@ class SCF(mol_hf.SCF):
         exxdiv : str
             Exchange divergence treatment, can be one of
 
-            | None : ignore G=0 contribution in exchange integral
-            | 'ewald' : Ewald summation for G=0 in exchange integral
+            | None : ignore G=0 contribution in exchange
+            | 'ewald' : Ewald probe charge correction (JCP, 122, 234102)
 
         with_df : density fitting object
             Default is the FFT based DF model. For all-electron calculation,
@@ -475,6 +519,38 @@ class SCF(mol_hf.SCF):
         if rho is None:
             rho = self.get_rho(dm)
         return dip_moment(cell, dm, unit, verbose, rho=rho, kpt=self.kpt, **kwargs)
+
+    def _finalize(self):
+        '''Hook for dumping results and clearing up the object.'''
+        mol_hf.SCF._finalize(self)
+
+        cell = self.cell
+        if cell.charge != 0:
+            logger.note(self, 'Makov-Payne correction for charged PBC systems')
+            # PRB 51 (1995), 4014
+            # PRB 77 (2008), 115139
+            if cell.dimension != 3 and not isinstance(self.with_df, df.fft.FFTDF):
+                logger.warn(self, 'Correction for low-dimension AFTDF/GDF/MDF '
+                            'is not implemented.')
+                return self
+            elif cell.low_dim_ft_type == 'analytic_2d_1':
+                logger.warn(self, 'Correction for truncated Coulomb operator '
+                            'is not implemented.')
+                return self
+
+            if self.verbose >= logger.NOTE:
+                de_mono, de_dip, de_quad, de = _dip_correction(self)
+                write = self.stdout.write
+                write('Corrections (AU)\n')
+                write('       Monopole      Dipole          Quadrupole    total\n')
+                write('SC   %12.8f   %12.8f   %12.8f   %12.8f\n' %
+                      (de_mono[0], de_dip   , de_quad   , de[0]))
+                write('BCC  %12.8f   %12.8f   %12.8f   %12.8f\n' %
+                      (de_mono[1], de_dip   , de_quad   , de[1]))
+                write('FCC  %12.8f   %12.8f   %12.8f   %12.8f\n' %
+                      (de_mono[2], de_dip   , de_quad   , de[2]))
+
+        return self
 
     def get_init_guess(self, cell=None, key='minao'):
         if cell is None: cell = self.cell

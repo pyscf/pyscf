@@ -116,7 +116,7 @@ def get_rho(mf, dm=None, grids=None, kpts=None):
     if dm is None: dm = mf.make_rdm1()
     if grids is None: grids = mf.grids
     if kpts is None: kpts = mf.kpts
-    is isinstance(mf.with_df, multigrid.MultiGridFFTDF):
+    if isinstance(mf.with_df, multigrid.MultiGridFFTDF):
         rho = mf.with_df.get_rho(dm, kpts)
     else:
         rho = mf._numint.get_rho(cell, dm, grids, kpts, mf.max_memory)

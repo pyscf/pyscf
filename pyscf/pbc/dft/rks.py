@@ -112,8 +112,6 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     vxc = lib.tag_array(vxc, ecoul=ecoul, exc=exc, vj=None, vk=None)
     return vxc
 
-get_rho
-
 def _patch_df_beckegrids(density_fit):
     def new_df(self, auxbasis=None, mesh=None):
         mf = density_fit(self, auxbasis, mesh)
@@ -126,11 +124,7 @@ def _patch_df_beckegrids(density_fit):
 
 NELEC_ERROR_TOL = getattr(__config__, 'pbc_dft_rks_prune_error_tol', 0.02)
 def prune_small_rho_grids_(ks, cell, dm, grids, kpts):
-    is isinstance(ks.with_df, multigrid.MultiGridFFTDF):
-        rho = ks.with_df.get_rho(dm, kpts)
-    else:
-        rho = ks._numint.get_rho(cell, dm, grids, kpts, ks.max_memory)
-
+    rho = ks.get_rho(dm, grids, kpts)
     n = numpy.dot(rho, grids.weights)
     if abs(n-cell.nelectron) < NELEC_ERROR_TOL*n:
         rho *= grids.weights
@@ -147,10 +141,10 @@ def get_rho(mf, dm=None, grids=None, kpt=None):
     if dm is None: dm = mf.make_rdm1()
     if grids is None: grids = mf.grids
     if kpt is None: kpt = mf.kpt
-    is isinstance(mf.with_df, multigrid.MultiGridFFTDF):
+    if isinstance(mf.with_df, multigrid.MultiGridFFTDF):
         rho = mf.with_df.get_rho(dm, kpt)
     else:
-        rho = mf._numint.get_rho(cell, dm, grids, kpt, mf.max_memory)
+        rho = mf._numint.get_rho(mf.cell, dm, grids, kpt, mf.max_memory)
     return rho
 
 

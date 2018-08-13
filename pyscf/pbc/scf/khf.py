@@ -176,7 +176,7 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
     if mo_energy_kpts is None: mo_energy_kpts = mf.mo_energy
 
     nkpts = len(mo_energy_kpts)
-    nocc = cell.tot_electrons(nkpts) // 2
+    nocc = mf.cell.tot_electrons(nkpts) // 2
 
     mo_energy = np.sort(np.hstack(mo_energy_kpts))
     fermi = mo_energy[nocc-1]
