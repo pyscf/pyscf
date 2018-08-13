@@ -60,7 +60,10 @@ class lsofcsr_c():
 
   def __getitem__(self, i):
     return self.lsofcsr[i] 
-
+  
+  def __len__(self):
+    return len(self.lsofcsr)
+         
   def toarray(self):
     vab_arr = zeros(self.shape)
     if self.axis==2 :

@@ -108,7 +108,7 @@ class scf(tddft_iter):
     '''Compute K matrix for the given density matrix.'''
     from pyscf.nao.m_kmat_den import kmat_den
     if dm is None: dm = self.make_rdm1()
-    print(__name__, ' get_k: self.kmat_algo ', self.kmat_algo)
+    #print(__name__, ' get_k: self.kmat_algo ', self.kmat_algo)
     return kmat_den(self, dm=dm, algo=self.kmat_algo, **kw)
 
   def get_jk(self, mol=None, dm=None, hermi=1, **kw):

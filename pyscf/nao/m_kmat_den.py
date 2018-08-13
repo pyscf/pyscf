@@ -41,14 +41,19 @@ def kmat_den(mf, dm=None, algo=None, **kw):
   algol = algo.lower() if algo is not None else 'ac_vertex_fm'
 
   if algol=='fci':
+
     mf.fci_den = abcd2v = mf.fci_den if hasattr(mf, 'fci_den') else pb.comp_fci_den(hk)
     kmat = einsum('abcd,...bc->...ad', abcd2v, dm)
+
   elif algol=='ac_vertex_fm':
+
     pab2v = pb.get_ac_vertex_array()
     pcd = einsum('pq,qcd->pcd', hk, pab2v)
     pac = einsum('pab,...bc->...pac', pab2v, dm)
     kmat = einsum('...pac,pcd->...ad', pac, pcd)
+
   elif algol=='dp_vertex_fm':
+    
     dab2v = pb.get_dp_vertex_array()
     da2cc = pb.get_da2cc_den()
     dq2v  = einsum('dp,pq->dq', da2cc, hk)
@@ -56,17 +61,55 @@ def kmat_den(mf, dm=None, algo=None, **kw):
     dac   = einsum('dab,...bc->...dac', dab2v, dm)
     pac   = einsum('...dac,dp->...pac', dac, da2cc)
     kmat  = einsum('...pac,pcd->...ad', pac, pcd)
+
   elif algol=='dp_vertex_loops_fm':
+    
     dab2v = pb.get_dp_vertex_array()
     da2cc = pb.get_da2cc_den()
     dq2v  = einsum('dp,pq->dq', da2cc, hk)
     kmat  = np.zeros_like(dm)
     for d in range(n):
-      pc2   = einsum('dq,da->qa', dq2v, dab2v[:,:,d])
+      pc2 = einsum('dq,da->qa', dq2v, dab2v[:,:,d])
       for a in range(n):
         dc  = einsum('db,...bc->...dc', dab2v[:,a,:], dm)
         pc1  = einsum('...dc,dp->...pc', dc, da2cc)
         kmat[...,a,d]  = einsum('...pc,pc->...', pc1, pc2)
+        
+  elif algol=='dp_vertex_loops_sm':
+    """ This algorithm uses some sparsity, but it has O(N^4) complexity
+      because the pc1 and pc2 auxilaries are stored in the dense format.
+      Moreover, pc1 and pc2 auxiliaries in atom-centered product basis generate
+      rather dense matrices. Therefore, it is desirable to use dominant
+      products to store/treat these auxiliaries."""
+       
+    #dab2v_den = pb.get_dp_vertex_array()
+    dab2v = pb.get_dp_vertex_doubly_sparse(axis=1)
+    da2cc = pb.get_da2cc_sparse().tocsr()
+    qd2v  = (da2cc @ hk).transpose()
+    kmat  = np.zeros_like(dm)
+
+    if len(dm.shape)==3: # if spin index is present
+      #print(type(dab2v), dab2v.shape, dab2v.axis)
+      #print(dir(dab2v))
+      #print(len(dab2v))
+      #print(dab2v[0].shape, type(dab2v[0]))
+      for d in range(n):
+        #pc2 = einsum('dq,da->qa', dq2v, dab2v_den[:,:,d])
+        pc2 = qd2v @ dab2v[d]
+        for s in range(mf.nspin):
+          for a in range(n):
+            #dc  = einsum('db,bc->dc', dab2v_den[:,a,:], dm[s])
+            dc  = dab2v[a] @ dm[s]
+            pc1 = da2cc.T @ dc
+            kmat[s,a,d]  = (pc1*pc2).sum()
+    elif len(dm.shape)==2: # if spin index is absent
+      for d in range(n):
+        pc2 = qd2v @ dab2v[d]
+        for a in range(n):
+          dc  = dab2v[a] @ dm
+          pc1 = da2cc.T @ dc
+          kmat[a,d]  = (pc1*pc2).sum()
+
   else:
     print('algo=', algo)
     raise RuntimeError('unknown algorithm')
