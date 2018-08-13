@@ -22,7 +22,6 @@ def kmat_den(mf, dm=None, algo=None, **kw):
   Returns:
     matrix elements
   """
-  from scipy.sparse import csr_matrix
   import numpy as np
   from numpy import einsum 
 
