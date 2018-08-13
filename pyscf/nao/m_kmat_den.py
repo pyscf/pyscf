@@ -48,6 +48,25 @@ def kmat_den(mf, dm=None, algo=None, **kw):
     pcd = einsum('pq,qcd->pcd', hk, pab2v)
     pac = einsum('pab,...bc->...pac', pab2v, dm)
     kmat = einsum('...pac,pcd->...ad', pac, pcd)
+  elif algol=='dp_vertex_fm':
+    dab2v = pb.get_dp_vertex_array()
+    da2cc = pb.get_da2cc_den()
+    dq2v  = einsum('dp,pq->dq', da2cc, hk)
+    pcd   = einsum('dq,dab->qab', dq2v, dab2v)
+    dac   = einsum('dab,...bc->...dac', dab2v, dm)
+    pac   = einsum('...dac,dp->...pac', dac, da2cc)
+    kmat  = einsum('...pac,pcd->...ad', pac, pcd)
+  elif algol=='dp_vertex_loops_fm':
+    dab2v = pb.get_dp_vertex_array()
+    da2cc = pb.get_da2cc_den()
+    dq2v  = einsum('dp,pq->dq', da2cc, hk)
+    kmat  = np.zeros_like(dm)
+    for d in range(n):
+      pc2   = einsum('dq,da->qa', dq2v, dab2v[:,:,d])
+      for a in range(n):
+        dc  = einsum('db,...bc->...dc', dab2v[:,a,:], dm)
+        pc1  = einsum('...dc,dp->...pc', dc, da2cc)
+        kmat[...,a,d]  = einsum('...pc,pc->...', pc1, pc2)
   else:
     print('algo=', algo)
     raise RuntimeError('unknown algorithm')
