@@ -19,6 +19,9 @@
 
 '''
 SHCI solver for CASCI and CASSCF.
+
+Cornell SHCI program Arrow is developed by Cyrus Umrigar, Junhao Li.  You'll
+need to contact Cyrus Umrigar to get the program.
 '''
 
 import os
