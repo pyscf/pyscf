@@ -225,10 +225,12 @@ class SHCI(lib.StreamObject):
                **kwargs):
         state_id = min(self.config['eps_vars'])
 
-        if restart or ci0 is not None:
-            wfn_file = get_wfn_file(self, state_id)
-            if os.path.isfile(wfn_file):
+        wfn_file = get_wfn_file(self, state_id)
+        if os.path.isfile(wfn_file):
+            if restart or ci0 is not None:
                 shutil.move(wfn_file, get_wfn_file(self, state_id * 2))
+            else:
+                os.remove(wfn_file)
 
         if 'orbsym' in kwargs:
             self.orbsym = kwargs['orbsym']
@@ -267,10 +269,13 @@ class SHCI(lib.StreamObject):
     def approx_kernel(self, h1e, eri, norb, nelec, ci0=None, ecore=0,
                       restart=False, **kwargs):
         state_id = min(self.config['eps_vars'])
-        if restart or ci0 is not None:
-            wfn_file = get_wfn_file(self, state_id)
-            if os.path.isfile(wfn_file):
+
+        wfn_file = get_wfn_file(self, state_id)
+        if os.path.isfile(wfn_file):
+            if restart or ci0 is not None:
                 shutil.move(wfn_file, get_wfn_file(self, state_id * 2))
+            else:
+                os.remove(wfn_file)
 
         if 'orbsym' in kwargs:
             self.orbsym = kwargs['orbsym']
@@ -525,10 +530,10 @@ if __name__ == '__main__':
     nelec = 10
     dimer_atom = 'N'
 
-    mch = mcscf.CASCI(mf, norb, nelec)
-    mch.fcisolver = SHCI(mf.mol)
-    mch.kernel()
-    dm2 = mch.fcisolver.make_rdm12(0, norb, nelec)[1]
+#    mch = mcscf.CASCI(mf, norb, nelec)
+#    mch.fcisolver = SHCI(mf.mol)
+#    mch.kernel()
+#    dm2 = mch.fcisolver.make_rdm12(0, norb, nelec)[1]
 #
 #    mc1 = mcscf.CASCI(mf, norb, nelec)
 #    mc1.kernel(mch.mo_coeff)
