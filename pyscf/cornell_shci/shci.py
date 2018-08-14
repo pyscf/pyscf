@@ -165,7 +165,8 @@ class SHCI(lib.StreamObject):
 
     def make_rdm1(self, state, norb, nelec, **kwargs):
         dm_file = os.path.join(self.runtimedir, '1rdm.csv')
-        if not (os.path.isfile(dm_file) and
+        if not ('get_1rdm_csv' in self.config and
+                os.path.isfile(dm_file) and
                 os.path.isfile(get_wfn_file(self, state))):
             write_config(self, nelec, {'get_1rdm_csv': True,
                                        'load_integrals_cache': True})
@@ -192,7 +193,8 @@ class SHCI(lib.StreamObject):
 
     def make_rdm12(self, state, norb, nelec, **kwargs):
         dm_file = os.path.join(self.runtimedir, '2rdm.csv')
-        if not (os.path.isfile(dm_file) and
+        if not ('get_2rdm_csv' in self.config and
+                os.path.isfile(dm_file) and
                 os.path.isfile(get_wfn_file(self, state))):
             write_config(self, nelec, {'get_2rdm_csv': True,
                                        'load_integrals_cache': True})
@@ -230,7 +232,7 @@ class SHCI(lib.StreamObject):
             if restart or ci0 is not None:
                 shutil.move(wfn_file, get_wfn_file(self, state_id * 2))
             else:
-                os.remove(wfn_file)
+                self.cleanup()
 
         if 'orbsym' in kwargs:
             self.orbsym = kwargs['orbsym']
@@ -275,7 +277,7 @@ class SHCI(lib.StreamObject):
             if restart or ci0 is not None:
                 shutil.move(wfn_file, get_wfn_file(self, state_id * 2))
             else:
-                os.remove(wfn_file)
+                self.cleanup()
 
         if 'orbsym' in kwargs:
             self.orbsym = kwargs['orbsym']
@@ -329,6 +331,8 @@ class SHCI(lib.StreamObject):
             self._client = client
 
         return client.Hc(civec)
+
+    cleanup = cleanup
 
 
 def write_config(shciobj, nelec, config):
@@ -439,6 +443,21 @@ def get_wfn_file(shciobj, state_id=None):
         state_id = min(shciobj.config['eps_vars'])
     wfn_file = os.path.join(shciobj.runtimedir, 'wf_eps1_%.2e.dat' % state_id)
     return wfn_file
+
+def cleanup(shciobj, state_id=None):
+    files = [os.path.join(shciobj.runtimedir, '1rdm.csv'),
+             os.path.join(shciobj.runtimedir, '2rdm.csv'),
+             os.path.join(shciobj.runtimedir, shciobj.configfile),
+             os.path.join(shciobj.runtimedir, shciobj.integralfile),
+             os.path.join(shciobj.runtimedir, shciobj.outputfile),
+             os.path.join(shciobj.runtimedir, 'integrals_cache.dat'),
+             ]
+    for state_id in shciobj.config['eps_vars']:
+        files.append(get_wfn_file(shciobj, state_id))
+
+    for f in files:
+        if os.path.isfile(f):
+            os.remove(f)
 
 
 def SHCISCF(mf, norb, nelec, tol=1.e-8, *args, **kwargs):
