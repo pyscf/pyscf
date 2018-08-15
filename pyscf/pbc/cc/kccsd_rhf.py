@@ -487,7 +487,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         return pyscf.cc.ccsd.CCSD.dump_flags(self)
 
     @property
-    def gs_nested_struct(self):
+    def ccsd_vector_desc(self):
         """Description of the ground-state vector."""
         nvir = self.nmo - self.nocc
         return [(self.nkpts, self.nocc, nvir), (self.nkpts,) * 3 + (self.nocc,) * 2 + (nvir,) * 2]
@@ -498,18 +498,34 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
     def vector_to_amplitudes(self, vec):
         """Ground state vector to apmplitudes."""
-        return vector_to_nested(vec, self.gs_nested_struct)
+        return vector_to_nested(vec, self.ccsd_vector_desc)
 
     @property
-    def ip_nested_struct(self):
+    def ip_vector_desc(self):
         """Description of the IP vector."""
         return [(self.nocc,), (self.nkpts, self.nkpts, self.nocc, self.nocc, self.nmo - self.nocc)]
 
+    def ip_amplitudes_to_vector(self, t1, t2):
+        """Ground state amplitudes to a vector."""
+        return nested_to_vector((t1, t2))[0]
+
+    def ip_vector_to_amplitudes(self, vec):
+        """Ground state vector to apmplitudes."""
+        return vector_to_nested(vec, self.ip_vector_desc)
+
     @property
-    def ea_nested_struct(self):
+    def ea_vector_desc(self):
         """Description of the EA vector."""
         nvir = self.nmo - self.nocc
         return [(nvir,), (self.nkpts, self.nkpts, self.nocc, nvir, nvir)]
+
+    def ea_amplitudes_to_vector(self, t1, t2):
+        """Ground state amplitudes to a vector."""
+        return nested_to_vector((t1, t2))[0]
+
+    def ea_vector_to_amplitudes(self, vec):
+        """Ground state vector to apmplitudes."""
+        return vector_to_nested(vec, self.ea_vector_desc)
 
     def init_amps(self, eris):
         time0 = time.clock(), time.time()
@@ -638,7 +654,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
             adiag = self.ipccsd_diag(kshift)
             adiag = self.mask_frozen_ip(adiag, kshift, const=LARGE_DENOM)
             if partition == 'full':
-                self._ipccsd_diag_matrix2 = vector_to_nested(adiag, self.ip_nested_struct)[1]
+                self._ipccsd_diag_matrix2 = self.ip_vector_to_amplitudes(adiag)[1]
 
             user_guess = False
             if guess:
@@ -690,7 +706,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                 evals_k, evecs_k = [evals_k], [evecs_k]
 
             for n, en, vn in zip(range(nroots), evals_k, evecs_k):
-                r1, r2 = vector_to_nested(vn, self.ip_nested_struct)
+                r1, r2 = self.ip_vector_to_amplitudes(vn)
                 qp_weight = np.linalg.norm(r1) ** 2
                 logger.info(self, 'EOM root %d E = %.16g  qpwt = %0.6g',
                             n, en, qp_weight)
@@ -708,7 +724,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         imds = self.imds
 
         vector = self.mask_frozen_ip(vector, kshift, const=0.0)
-        r1, r2 = vector_to_nested(vector, self.ip_nested_struct)
+        r1, r2 = self.ip_vector_to_amplitudes(vector)
 
         t1, t2 = self.t1, self.t2
         nkpts = self.nkpts
@@ -768,9 +784,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                                    - einsum('kldc,kld->c', imds.Woovv[kk, kl, kd], r2[kk, kl]))
                             Hr2[ki, kj] += -einsum('c,ijcb->ijb', tmp, t2[ki, kj, kshift])
 
-        vector, _ = nested_to_vector((Hr1, Hr2))
-        vector = self.mask_frozen_ip(vector, kshift, const=0.0)
-        return vector
+        return self.mask_frozen_ip(self.ip_amplitudes_to_vector(Hr1, Hr2), kshift, const=0.0)
 
     def ipccsd_diag(self, kshift):
         if not hasattr(self, 'imds'):
@@ -820,12 +834,11 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                     Hr2[ki, kj] -= 2. * np.einsum('ijcb,jibc->ijb', t2[ki, kj, kshift], imds.Woovv[kj, ki, kd])
                     Hr2[ki, kj] += np.einsum('ijcb,ijbc->ijb', t2[ki, kj, kshift], imds.Woovv[ki, kj, kd])
 
-        vector, _ = nested_to_vector((Hr1, Hr2))
-        return vector
+        return self.ip_amplitudes_to_vector(Hr1, Hr2)
 
     def mask_frozen_ip(self, vector, kshift, const=LARGE_DENOM):
         '''Replaces all frozen orbital indices of `vector` with the value `const`.'''
-        r1, r2 = vector_to_nested(vector, self.ip_nested_struct)
+        r1, r2 = self.ip_vector_to_amplitudes(vector)
         nkpts, nocc, nvir = self.t1.shape
         kconserv = self.khelper.kconserv
 
@@ -848,8 +861,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                 r2[ki, kj, :, jmask_idx] = d0
                 r2[ki, kj, :, :, bmask_idx] = d0
 
-        vector, _ = nested_to_vector((r1, r2))
-        return vector
+        return self.ip_amplitudes_to_vector(r1, r2)
 
     def vector_size_ea(self):
         nocc = self.nocc
@@ -888,7 +900,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
             adiag = self.eaccsd_diag(kshift)
             adiag = self.mask_frozen_ea(adiag, kshift, const=LARGE_DENOM)
             if partition == 'full':
-                self._eaccsd_diag_matrix2 = vector_to_nested(adiag, self.ea_nested_struct)[1]
+                self._eaccsd_diag_matrix2 = self.ea_vector_to_amplitudes(adiag)[1]
 
             user_guess = False
             if guess:
@@ -940,7 +952,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                 evals_k, evecs_k = [evals_k], [evecs_k]
 
             for n, en, vn in zip(range(nroots), evals_k, evecs_k):
-                r1, r2 = vector_to_nested(vn, self.ea_nested_struct)
+                r1, r2 = self.ea_vector_to_amplitudes(vn)
                 qp_weight = np.linalg.norm(r1) ** 2
                 logger.info(self, 'EOM root %d E = %.16g  qpwt = %0.6g',
                             n, en, qp_weight)
@@ -957,7 +969,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         imds = self.imds
 
         vector = self.mask_frozen_ea(vector, kshift, const=0.0)
-        r1, r2 = vector_to_nested(vector, self.ea_nested_struct)
+        r1, r2 = self.ea_vector_to_amplitudes(vector)
 
         t1, t2 = self.t1, self.t2
         nkpts = self.nkpts
@@ -1025,9 +1037,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                                    - einsum('kldc,lcd->k', imds.Woovv[kk, kl, kd], r2[kl, kc]))
                             Hr2[kj, ka] += -einsum('k,kjab->jab', tmp, t2[kshift, kj, ka])
 
-        vector, _ = nested_to_vector((Hr1, Hr2))
-        vector = self.mask_frozen_ea(vector, kshift, const=0.0)
-        return vector
+        return self.mask_frozen_ea(self.ea_amplitudes_to_vector(Hr1, Hr2), kshift, const=0.0)
 
     def eaccsd_diag(self, kshift):
         if not hasattr(self, 'imds'):
@@ -1075,12 +1085,11 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                     Hr2[kj, ka] -= 2 * np.einsum('ijab,ijab->jab', t2[kshift, kj, ka], imds.Woovv[kshift, kj, ka])
                     Hr2[kj, ka] += np.einsum('ijab,ijba->jab', t2[kshift, kj, ka], imds.Woovv[kshift, kj, kb])
 
-        vector, _ = nested_to_vector((Hr1, Hr2))
-        return vector
+        return self.ea_amplitudes_to_vector(Hr1, Hr2)
 
     def mask_frozen_ea(self, vector, kshift, const=LARGE_DENOM):
         '''Replaces all frozen orbital indices of `vector` with the value `const`.'''
-        r1, r2 = vector_to_nested(vector, self.ea_nested_struct)
+        r1, r2 = self.ea_vector_to_amplitudes(vector)
         nkpts, nocc, nvir = self.t1.shape
         kconserv = self.khelper.kconserv
 
@@ -1103,8 +1112,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                 r2[kj, ka, :, amask_idx] = d0
                 r2[kj, ka, :, :, bmask_idx] = d0
 
-        vector, _ = nested_to_vector((r1, r2))
-        return vector
+        return self.ea_amplitudes_to_vector(r1, r2)
 
 
 KRCCSD = RCCSD
