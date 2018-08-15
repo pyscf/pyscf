@@ -486,6 +486,31 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
     def dump_flags(self):
         return pyscf.cc.ccsd.CCSD.dump_flags(self)
 
+    @property
+    def gs_nested_struct(self):
+        """Description of the ground-state vector."""
+        nvir = self.nmo - self.nocc
+        return [(self.nkpts, self.nocc, nvir), (self.nkpts,) * 3 + (self.nocc,) * 2 + (nvir,) * 2]
+
+    def amplitudes_to_vector(self, t1, t2):
+        """Ground state amplitudes to a vector."""
+        return nested_to_vector((t1, t2))[0]
+
+    def vector_to_amplitudes(self, vec):
+        """Ground state vector to apmplitudes."""
+        return vector_to_nested(vec, self.gs_nested_struct)
+
+    @property
+    def ip_nested_struct(self):
+        """Description of the IP vector."""
+        return [(self.nocc,), (self.nkpts, self.nkpts, self.nocc, self.nocc, self.nmo - self.nocc)]
+
+    @property
+    def ea_nested_struct(self):
+        """Description of the EA vector."""
+        nvir = self.nmo - self.nocc
+        return [(nvir,), (self.nkpts, self.nkpts, self.nocc, nvir, nvir)]
+
     def init_amps(self, eris):
         time0 = time.clock(), time.time()
         nocc = self.nocc
@@ -571,10 +596,6 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
         size = nocc + nkpts ** 2 * nocc ** 2 * nvir
         return size
-
-    @property
-    def ip_nested_struct(self):
-        return [(self.nocc,), (self.nkpts, self.nkpts, self.nocc, self.nocc, self.nmo - self.nocc)]
 
     def ipccsd(self, nroots=1, koopmans=False, guess=None, partition=None,
                kptlist=None):
@@ -838,11 +859,6 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         size = nvir + nkpts ** 2 * nvir ** 2 * nocc
         return size
 
-    @property
-    def ea_nested_struct(self):
-        nvir = self.nmo - self.nocc
-        return [(nvir,), (self.nkpts, self.nkpts, self.nocc, nvir, nvir)]
-
     def eaccsd(self, nroots=1, koopmans=False, guess=None, partition=None,
                kptlist=None):
         '''Calculate (N+1)-electron charged excitations via EA-EOM-CCSD.
@@ -1089,17 +1105,6 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
         vector, _ = nested_to_vector((r1, r2))
         return vector
-
-    @property
-    def gs_nested_struct(self):
-        nvir = self.nmo - self.nocc
-        return [(self.nkpts, self.nocc, nvir), (self.nkpts,) * 3 + (self.nocc,) * 2 + (nvir,) * 2]
-
-    def amplitudes_to_vector(self, t1, t2):
-        return nested_to_vector((t1, t2))[0]
-
-    def vector_to_amplitudes(self, vec):
-        return vector_to_nested(vec, self.gs_nested_struct)
 
 
 KRCCSD = RCCSD
