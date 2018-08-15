@@ -186,7 +186,7 @@ def davidson(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
             the eigenvectors during the iterations.  The first iteration has
             one eigenvector, the next iteration has two, the third iterastion
             has 4, ..., until the subspace size > nroots.
-        precond : function(dx, e, x0) => array_like_dx
+        precond : diagonal elements of the matrix or  function(dx, e, x0) => array_like_dx
             Preconditioner to generate new trial vector.
             The argument dx is a residual vector ``a*x0-e*x0``; e is the current
             eigenvalue; x0 is the current eigenvector.
@@ -273,7 +273,7 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
             the eigenvectors during the iterations.  The first iteration has
             one eigenvector, the next iteration has two, the third iterastion
             has 4, ..., until the subspace size > nroots.
-        precond : function(dx, e, x0) => array_like_dx
+        precond : diagonal elements of the matrix or  function(dx, e, x0) => array_like_dx
             Preconditioner to generate new trial vector.
             The argument dx is a residual vector ``a*x0-e*x0``; e is the current
             eigenvalue; x0 is the current eigenvector.
@@ -344,6 +344,9 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
     else:
         toloose = tol_residual
     log.debug1('tol %g  toloose %g', tol, toloose)
+
+    if not callable(precond):
+        precond = make_diag_precond(precond)
 
     if callable(x0):  # lazy initialization to reduce memory footprint
         x0 = x0()
@@ -522,6 +525,15 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
     return numpy.asarray(conv), e, x0
 
 
+def make_diag_precond(diag, level_shift=0):
+    '''Generate the preconditioner function with the diagonal function.'''
+    def precond(dx, e, *args):
+        diagd = diag - (e - level_shift)
+        diagd[abs(diagd)<1e-8] = 1e-8
+        return dx/diagd
+    return precond
+
+
 def eigh(a, *args, **kwargs):
     nroots = kwargs.get('nroots', 1)
     if isinstance(a, numpy.ndarray) and a.ndim == 2:
@@ -566,7 +578,7 @@ def eig(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
             the eigenvectors during the iterations.  The first iteration has
             one eigenvector, the next iteration has two, the third iterastion
             has 4, ..., until the subspace size > nroots.
-        precond : function(dx, e, x0) => array_like_dx
+        precond : diagonal elements of the matrix or  function(dx, e, x0) => array_like_dx
             Preconditioner to generate new trial vector.
             The argument dx is a residual vector ``a*x0-e*x0``; e is the current
             eigenvalue; x0 is the current eigenvector.
@@ -666,6 +678,9 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
     else:
         toloose = tol_residual
     log.debug1('tol %g  toloose %g', tol, toloose)
+
+    if not callable(precond):
+        precond = make_diag_precond(precond)
 
     if callable(x0):
         x0 = x0()
@@ -860,7 +875,7 @@ def dgeev(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
             abop applies two matrix vector multiplications and returns tuple (Ax, Bx)
         x0 : 1D array
             Initial guess
-        precond : function(dx, e, x0) => array_like_dx
+        precond : diagonal elements of the matrix or  function(dx, e, x0) => array_like_dx
             Preconditioner to generate new trial vector.
             The argument dx is a residual vector ``a*x0-e*x0``; e is the current
             eigenvalue; x0 is the current eigenvector.
@@ -924,7 +939,7 @@ def dgeev1(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
             abop applies two matrix vector multiplications and returns tuple (Ax, Bx)
         x0 : 1D array
             Initial guess
-        precond : function(dx, e, x0) => array_like_dx
+        precond : diagonal elements of the matrix or  function(dx, e, x0) => array_like_dx
             Preconditioner to generate new trial vector.
             The argument dx is a residual vector ``a*x0-e*x0``; e is the current
             eigenvalue; x0 is the current eigenvector.
@@ -976,6 +991,9 @@ def dgeev1(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
         toloose = numpy.sqrt(tol) * 1e-2
     else:
         toloose = tol_residual
+
+    if not callable(precond):
+        precond = make_diag_precond(precond)
 
     if isinstance(x0, numpy.ndarray) and x0.ndim == 1:
         x0 = [x0]
@@ -1246,6 +1264,9 @@ def dsolve(aop, b, precond, tol=1e-12, max_cycle=30, dot=numpy.dot,
         toloose = numpy.sqrt(tol)
     else:
         toloose = tol_residual
+
+    if not callable(precond):
+        precond = make_diag_precond(precond)
 
     xs = [precond(b)]
     ax = [aop(xs[-1])]
