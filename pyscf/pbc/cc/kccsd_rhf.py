@@ -1212,9 +1212,9 @@ def padded_mo_coeff(cc, mo_coeff):
     padding_convention = padding_k_idx(cc, kind="joint")
     nkpts = cc.nkpts
 
-    result = np.zeros((nkpts,) + mo_coeff.shape, dtype=mo_coeff.dtype)
+    result = np.zeros((nkpts, mo_coeff[0].shape[0], cc.nmo), dtype=mo_coeff[0].dtype)
     for k in range(nkpts):
-        result[k, :, padding_convention[k]] = mo_coeff[k][:, frozen_mask[k]]
+        result[np.ix_([k], np.arange(result.shape[1]), padding_convention[k])] = mo_coeff[k][:, frozen_mask[k]]
 
     return result
 
