@@ -249,7 +249,7 @@ class SHCI(lib.StreamObject):
 
         if restart or ci0 is not None:
             if self.verbose >= logger.DEBUG1:
-                logger.debug1('restart was set. wf is read from wf_eps* file.')
+                logger.debug1(self, 'restart was set. wf is read from wf_eps* file.')
             self.cleanup(remove_wf=False)
             wfn_file = get_wfn_file(self, state_id)
             if os.path.isfile(wfn_file):
