@@ -30,6 +30,7 @@ import json
 import time
 import tempfile
 import copy
+import glob
 import shutil
 from subprocess import check_call, check_output, CalledProcessError
 import numpy
@@ -103,6 +104,23 @@ CONFIG = {
 ## set it for G-
 #     'adavanced' : False,
 }
+
+def cleanup(shciobj, remove_wf=False):
+    files = ['1rdm.csv',
+             '2rdm.csv',
+             shciobj.configfile,
+             shciobj.integralfile,
+             shciobj.outputfile,
+             'integrals_cache.dat',
+             'result.json',
+             ]
+    if remove_wf:
+        wfn_files = glob.glob(os.path.join(shciobj.runtimedir, 'wf_*'))
+        files.extend(wfn_files)
+
+    for f in files:
+        if os.path.isfile(os.path.join(shciobj.runtimedir, f)):
+            os.remove(os.path.join(shciobj.runtimedir, f))
 
 
 class SHCI(lib.StreamObject):
@@ -223,16 +241,19 @@ class SHCI(lib.StreamObject):
         rdm1 = numpy.einsum('ikjj->ki', rdm2) / (nelectrons - 1)
         return rdm1, rdm2
 
-    def kernel(self, h1e, eri, norb, nelec, ci0=None, ecore=0, restart=False,
+    def kernel(self, h1e, eri, norb, nelec, ci0=None, ecore=0, restart=None,
                **kwargs):
+        if restart is None:
+            restart = self.restart
         state_id = min(self.config['eps_vars'])
 
-        wfn_file = get_wfn_file(self, state_id)
-        if os.path.isfile(wfn_file):
-            if restart or ci0 is not None:
+        if restart or ci0 is not None:
+            self.cleanup(remove_wf=False)
+            wfn_file = get_wfn_file(self, state_id)
+            if os.path.isfile(wfn_file):
                 shutil.move(wfn_file, get_wfn_file(self, state_id * 2))
-            else:
-                self.cleanup()
+        else:
+            self.cleanup(remove_wf=True)
 
         if 'orbsym' in kwargs:
             self.orbsym = kwargs['orbsym']
@@ -265,19 +286,22 @@ class SHCI(lib.StreamObject):
         # Each eps_vars is associated to one approximate wfn.
         roots = state_id = min(self.config['eps_vars'])
         if not os.path.isfile(get_wfn_file(self, state_id)):
-            raise RuntimeError('Eigenstate %s not found' % wfn_file)
+            raise RuntimeError('Eigenstate %s not found' % get_wfn_file(self, state_id))
         return calc_e, roots
 
     def approx_kernel(self, h1e, eri, norb, nelec, ci0=None, ecore=0,
-                      restart=False, **kwargs):
+                      restart=None, **kwargs):
+        if restart is None:
+            restart = self.restart
         state_id = min(self.config['eps_vars'])
 
-        wfn_file = get_wfn_file(self, state_id)
-        if os.path.isfile(wfn_file):
-            if restart or ci0 is not None:
+        if restart or ci0 is not None:
+            self.cleanup(remove_wf=False)
+            wfn_file = get_wfn_file(self, state_id)
+            if os.path.isfile(wfn_file):
                 shutil.move(wfn_file, get_wfn_file(self, state_id * 2))
-            else:
-                self.cleanup()
+        else:
+            self.cleanup(remove_wf=True)
 
         if 'orbsym' in kwargs:
             self.orbsym = kwargs['orbsym']
@@ -300,7 +324,7 @@ class SHCI(lib.StreamObject):
         # Each eps_vars is associated to one approximate wfn.
         roots = state_id = min(self.config['eps_vars'])
         if not os.path.isfile(get_wfn_file(self, state_id)):
-            raise RuntimeError('Eigenstate %s not found' % wfn_file)
+            raise RuntimeError('Eigenstate %s not found' % get_wfn_file(self, state_id))
         return calc_e, roots
 
     def spin_square(self, civec, norb, nelec):
@@ -443,21 +467,6 @@ def get_wfn_file(shciobj, state_id=None):
         state_id = min(shciobj.config['eps_vars'])
     wfn_file = os.path.join(shciobj.runtimedir, 'wf_eps1_%.2e.dat' % state_id)
     return wfn_file
-
-def cleanup(shciobj, state_id=None):
-    files = [os.path.join(shciobj.runtimedir, '1rdm.csv'),
-             os.path.join(shciobj.runtimedir, '2rdm.csv'),
-             os.path.join(shciobj.runtimedir, shciobj.configfile),
-             os.path.join(shciobj.runtimedir, shciobj.integralfile),
-             os.path.join(shciobj.runtimedir, shciobj.outputfile),
-             os.path.join(shciobj.runtimedir, 'integrals_cache.dat'),
-             ]
-    for state_id in shciobj.config['eps_vars']:
-        files.append(get_wfn_file(shciobj, state_id))
-
-    for f in files:
-        if os.path.isfile(f):
-            os.remove(f)
 
 
 def SHCISCF(mf, norb, nelec, tol=1.e-8, *args, **kwargs):
