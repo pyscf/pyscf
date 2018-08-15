@@ -1105,62 +1105,113 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 KRCCSD = RCCSD
 
 
-def pad_frozen_kpt_mo_coeff(cc, mo_coeff):
-    '''Creates the mo_coeff and fock molecular orbital matrix elements for
-    frozen orbitals.
+def padding_k_idx(cc, kind="split"):
+    """
+    A convention used for padding vectors, matrices and tensors in case when occupation numbers depend on the k-point
+    index.
 
-    The padded molecular orbital coefficients at each k-point are done so that
-    the first `nocc[ikpt]` and last `nvir[ikpt]` molecular orbital coefficients
-    of the padded array are the same as those of `mo_coeff` while the remaining
-    elements in the array are zero.  Here `nocc[ikpt]` and `nvir[ikpt]`
+    This implementation stores k-dependent Fock and other matrix in dense arrays with additional dimensions
+    corresponding to k-point indexes. In case when the occupation numbers depend on the k-point index (i.e. a metal) or
+    when some k-points have more Bloch basis functions than others the corresponding data structure has to be padded
+    with entries that are not used (fictitious occupied and virtual degrees of freedom). Current convention stores these
+    states at the Fermi level as shown in the following example.
 
-    Note:
-        When remaking the fock matrix elements with the padded arrays, some
-        fock matrix elements will be zero.  This needs to be accounted for in
-        most algorithms.
+    +----+--------+--------+--------+
+    |    |  k=0   |  k=1   |  k=2   |
+    |    +--------+--------+--------+
+    |    | nocc=2 | nocc=3 | nocc=2 |
+    |    | nvir=4 | nvir=3 | nvir=3 |
+    +====+========+========+========+
+    | v3 |  k0v3  |  k1v2  |  k2v2  |
+    +----+--------+--------+--------+
+    | v2 |  k0v2  |  k1v1  |  k2v1  |
+    +----+--------+--------+--------+
+    | v1 |  k0v1  |  k1v0  |  k2v0  |
+    +----+--------+--------+--------+
+    | v0 |  k0v0  |        |        |
+    +====+========+========+========+
+    |          Fermi level          |
+    +====+========+========+========+
+    | o2 |        |  k1o2  |        |
+    +----+--------+--------+--------+
+    | o1 |  k0o1  |  k1o1  |  k2o1  |
+    +----+--------+--------+--------+
+    | o0 |  k0o0  |  k1o0  |  k2o0  |
+    +----+--------+--------+--------+
+
+    In the above example, `get_nmo(cc, per_kpoint=True) == (6, 6, 5)`, `get_nocc(cc, per_kpoint) == (2, 3, 2)`. The
+    resulting dense `get_nmo(cc) == 7` and `get_nocc(cc) == 3` correspond to padded dimensions. This function will
+    return the following indexes corresponding to the filled entries of the above table:
+
+    >>> padding_k_idx(cc, kind="split")
+    ([(0, 1), (0, 1, 2), (0, 1)], [(0, 1, 2, 3), (1, 2, 3), (1, 2, 3)])
+
+    >>> padding_k_idx(cc, kind="joint")
+    [(0, 1, 3, 4, 5, 6), (0, 1, 2, 4, 5, 6), (0, 1, 4, 5, 6)]
 
     Args:
-        cc (:class:`CCSD`): Coupled-cluster object storing results of a coupled-
-            cluster calculation.
-        mo_coeff (:obj:`ndarray`): Molecular orbital coefficients.
+        cc (RCCSD): a kernel object with the model;
+        kind (str): either "split" (occupied and virtual spaces are split) or "joint" (occupied and virtual spaces are
+        the joint;
 
     Returns:
-        padded_mo_coeff (:obj:list of `ndarray`): Molecular orbital coefficients
-            with padding from frozen orbitals.
-    '''
-    moidx = get_frozen_mask(cc)
-    nkpts = cc.nkpts
-    nocc = cc.nocc
-    nmo = cc.nmo
-    nvir = nmo - nocc
+        Two lists corresponding to the occupied and virtual spaces for kind="split". Each list contains integer arrays
+        with indexes pointing to actual non-zero entries in the padded vector/matrix/tensor. If kind="joint", a single
+        list of arrays is returned corresponding to the entire MO space.
+    """
+    if kind not in ("split", "joint"):
+        raise ValueError("The 'kind' argument must be one of 'split', 'joint'")
 
-    nao = mo_coeff[0].shape[0]
-    dtype = mo_coeff[0].dtype
+    if kind == "split":
+        indexes_o = []
+        indexes_v = []
+    else:
+        indexes = []
+
+    dense_o = cc.nocc
+    dense_nmo = cc.nmo
+    dense_v = dense_nmo - dense_o
 
     nocc_per_kpt = np.asarray(get_nocc(cc, per_kpoint=True))
     nmo_per_kpt = np.asarray(get_nmo(cc, per_kpoint=True))
 
-    padded_moidx = []
+    for k_o, k_nmo in zip(nocc_per_kpt, nmo_per_kpt):
+        k_v = k_nmo - k_o
+        if kind == "split":
+            indexes_o.append(np.arange(k_o))
+            indexes_v.append(np.arange(dense_v - k_v, dense_v))
+        else:
+            indexes.append(np.concatenate((
+                np.arange(k_o),
+                np.arange(dense_nmo - k_v, dense_nmo),
+            )))
+
+    if kind == "split":
+        return indexes_o, indexes_v
+
+    else:
+        return indexes
+
+
+def padded_mo_coeff(cc, mo_coeff):
+    """
+    Pads coefficients of active MOs.
+    Args:
+        cc (RCCSD): a kernel object with the model;
+        mo_coeff (ndarray): original non-padded molecular coefficients;
+
+    Returns:
+        Padded molecular coefficients.
+    """
+    frozen_mask = get_frozen_mask(cc)
+    padding_convention = padding_k_idx(cc, kind="joint")
+    nkpts = cc.nkpts
+
+    result = np.zeros((nkpts,) + mo_coeff.shape, dtype=mo_coeff.dtype)
     for k in range(nkpts):
-        kpt_nocc = nocc_per_kpt[k]
-        kpt_nvir = nmo_per_kpt[k] - kpt_nocc
-        kpt_padded_moidx = np.concatenate((np.ones(kpt_nocc, dtype=np.bool),
-                                           np.zeros(nmo - kpt_nocc - kpt_nvir, dtype=np.bool),
-                                           np.ones(kpt_nvir, dtype=np.bool)))
-        padded_moidx.append(kpt_padded_moidx)
+        result[k, :, padding_convention[k]] = mo_coeff[k][:, frozen_mask[k]]
 
-    mo_coeff = []
-    # Here we will work with two index arrays; one is for our original (small) moidx
-    # array while the next is for our new (large) padded array.
-    for k in range(nkpts):
-        kpt_moidx = moidx[k]
-        kpt_padded_moidx = padded_moidx[k]
-
-        mo = np.zeros((nao, nmo), dtype=dtype)
-        mo[:, kpt_padded_moidx] = cc.mo_coeff[k][:, kpt_moidx]
-        mo_coeff.append(mo)
-
-    return mo_coeff
+    return result
 
 
 class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
@@ -1182,7 +1233,7 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
             mo_coeff = cc.mo_coeff
         dtype = mo_coeff[0].dtype
 
-        mo_coeff = self.mo_coeff = pad_frozen_kpt_mo_coeff(cc, mo_coeff)
+        mo_coeff = self.mo_coeff = padded_mo_coeff(cc, mo_coeff)
 
         # Re-make our fock MO matrix elements from density and fock AO
         dm = cc._scf.make_rdm1(cc.mo_coeff, cc.mo_occ)
