@@ -200,7 +200,7 @@ def smearing_(mf, sigma=None, method=SMEARING_METHOD):
     return mf
 
 
-def canonical_occ_(mf):
+def canonical_occ_(mf, nelec=None):
     '''Label the occupancies for each orbital for sampled k-points.
     This is for KUHF objects.
     Each k-point has a fixed number of up and down electrons in this,
@@ -213,10 +213,10 @@ def canonical_occ_(mf):
     def get_occ(mo_energy_kpts=None, mo_coeff=None):
         if mo_energy_kpts is None: mo_energy_kpts = mf.mo_energy
 
-        if getattr(mf, 'nelec', None) is None:
-            nelec = mf.cell.nelec
+        if nelec is None:
+            cell_nelec = mf.cell.nelec
         else:
-            nelec = mf.nelec
+            cell_nelec = nelec
 
         homo=[-1e8,-1e8]
         lumo=[1e8,1e8]
@@ -225,7 +225,7 @@ def canonical_occ_(mf):
             for k, mo_energy in enumerate(mo_energy_kpts[s]):
                 e_idx = numpy.argsort(mo_energy)
                 e_sort = mo_energy[e_idx]
-                n = nelec[s]
+                n = cell_nelec[s]
                 mo_occ = numpy.zeros_like(mo_energy)
                 mo_occ[e_idx[:n]] = 1
                 homo[s] = max(homo[s], e_sort[n-1])
