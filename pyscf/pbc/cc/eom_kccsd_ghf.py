@@ -314,7 +314,6 @@ def ipccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     nkpts = eom.nkpts
     kconserv = imds.kconserv
     r1, r2 = vector_to_amplitudes_ip(vector, nkpts, nmo, nocc)
-    print np.linalg.norm(r1), np.linalg.norm(r2)
 
     Hr1 = -np.einsum('mi,m->i', imds.Foo[kshift], r1)
     for km in range(nkpts):
@@ -599,7 +598,6 @@ def eaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     nkpts = eom.nkpts
     kconserv = imds.kconserv
     r1, r2 = vector_to_amplitudes_ea(vector, nkpts, nmo, nocc)
-    print np.linalg.norm(r1), np.linalg.norm(r2)
 
     Hr1 = np.einsum('ac,c->a', imds.Fvv[kshift], r1)
     for kl in range(nkpts):
