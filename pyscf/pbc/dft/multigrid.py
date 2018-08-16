@@ -934,7 +934,7 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     ecoul = .5 * numpy.einsum('ng,ng->n', rhoG[:,0].real, vG.real)
     ecoul+= .5 * numpy.einsum('ng,ng->n', rhoG[:,0].imag, vG.imag)
     ecoul /= cell.vol
-    log.debug('Coulomb energy %s', ecoul)
+    log.debug('Multigrid Coulomb energy %s', ecoul)
 
     weight = cell.vol / ngrids
     # *(1./weight) because rhoR is scaled by weight in _eval_rhoG.  When
@@ -961,6 +961,7 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
         ecoul = ecoul[0]
         nelec = nelec[0]
         excsum = excsum[0]
+    log.debug('Multigrid exc %s  nelec %s', excsum, nelec)
 
     kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
     if xctype == 'LDA':
@@ -1034,7 +1035,7 @@ def nr_uks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     ecoul = .5 * numpy.einsum('ng,g->', rhoG[:,0].real, vG.real)
     ecoul+= .5 * numpy.einsum('ng,g->', rhoG[:,0].imag, vG.imag)
     ecoul /= cell.vol
-    log.debug('Coulomb energy %s', ecoul)
+    log.debug('Multigrid Coulomb energy %s', ecoul)
 
     weight = cell.vol / ngrids
     # *(1./weight) because rhoR is scaled by weight in _eval_rhoG.  When
@@ -1060,6 +1061,7 @@ def nr_uks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     wv_freq = tools.fft(numpy.vstack((wva,wvb)), mesh)
     wv_freq = wv_freq.reshape(2,-1,*mesh)
     rhoR = rhoG = None
+    log.debug('Multigrid exc %g  nelec %s', excsum, nelec)
 
     kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
     if xctype == 'LDA':
