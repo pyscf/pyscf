@@ -8,6 +8,7 @@ PySCF 1.6 alpha (2018-09-??)
   - Periodic UCCSD with k-point sampling
   - perturbative DMRG method
   - Interface to Cornell SHCI
+  - Makov-Payne correction
 * Improved
   - numint performance (eval_rho, eval_mat)
 

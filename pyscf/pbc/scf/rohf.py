@@ -84,6 +84,7 @@ class ROHF(mol_rohf.ROHF, pbchf.RHF):
     get_k = pbchf.SCF.get_k
     get_jk_incore = pbchf.SCF.get_jk_incore
     energy_tot = pbchf.SCF.energy_tot
+    _finalize = pbchf.SCF._finalize
 
     def get_veff(self, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
                  kpt=None, kpts_band=None):

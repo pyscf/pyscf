@@ -220,19 +220,27 @@ def dip_moment(cell, dm, unit='Debye', verbose=logger.NOTE,
     if rho is None:
         rho = numint.NumInt().get_rho(cell, dm, grids, kpt, cell.max_memory)
 
+    # The origin of the dipole moment is not uniquely defined. It can be
+    # arbitrary point inside the unit cell. We use the charge center of the
+    # positive point charges as the origin of multipole.
     charges = cell.atom_charges()
     coords  = cell.atom_coords()
     charge_center = np.einsum('i,ix->x', charges, coords) / charges.sum()
+    log.debug('Charge center %s', charge_center)
 
+    # Move the unit cell to the location around the charge center.
     a = cell.lattice_vectors()
     b = np.linalg.inv(a).T
-    # shift the unit cell
-    rfrac = lib.dot(grids.coords - charge_center, b.T)
-    rfrac -= np.floor(rfrac)
-    r = lib.dot(rfrac, a)
-    r = grids.coords
-
-    dip = -np.einsum('g,g,gx->x', rho, grids.weights, r)
+    r_frac = lib.dot(grids.coords - charge_center, b.T)
+    # Grids on the boundary (r_frac == +/-0.5) of the new cell may lead to
+    # unbalenced contributions to dipole moment. Exclude them from the dipole
+    # and quadrupole
+    r_frac[r_frac== 0.5] = 0
+    r_frac[r_frac==-0.5] = 0
+    r_frac[r_frac > 0.5] -= 1
+    r_frac[r_frac <-0.5] += 1
+    r = lib.dot(r_frac, a)
+    dip = e_dip = -np.einsum('g,g,gx->x', rho, grids.weights, r)
 
     if unit.upper() == 'DEBYE':
         dip *= nist.AU2DEBYE
@@ -282,22 +290,54 @@ def _dip_correction(mf):
 
     # quadrupole energy correction
     a = cell.lattice_vectors()
+    b = np.linalg.inv(a).T
     if abs(a - np.eye(3)*L).max() > 1e-5:
         logger.warn(mf, 'System is not cubic cell. Quadrupole energy '
                     'correction can be used for cubic cell only.')
     charges = cell.atom_charges()
     coords  = cell.atom_coords()
     charge_center = np.einsum('i,ix->x', charges, coords) / charges.sum()
-    b = np.linalg.inv(a).T
-    # shift the unit cell
-    rfrac = lib.dot(grids.coords - charge_center, b.T)
-    rfrac -= np.floor(rfrac)
-    r = lib.dot(rfrac, a)
+
+    r_frac = lib.dot(grids.coords - charge_center, b.T)
+    r_frac[r_frac== 0.5] = 0
+    r_frac[r_frac==-0.5] = 0
+    r_frac[r_frac > 0.5] -= 1
+    r_frac[r_frac <-0.5] += 1
+    r = lib.dot(r_frac, a)
     quad = np.einsum('g,g,gx,gx->', rho, grids.weights, r, r)
     de_quad = 2.*np.pi/(3*cell.vol) * quad
 
     de = de_mono + de_dip + de_quad
     return de_mono, de_dip, de_quad, de
+
+def makov_payne_correction(mf):
+    '''Makov-Payne correction (Phys. Rev. B, 51, 4014)
+    '''
+    cell = mf.cell
+    logger.note(mf, 'Makov-Payne correction for charged 3D PBC systems')
+    # PRB 51 (1995), 4014
+    # PRB 77 (2008), 115139
+    if cell.dimension != 3 and not isinstance(mf.with_df, df.fft.FFTDF):
+        logger.warn(mf, 'Correction for low-dimension AFTDF/GDF/MDF '
+                    'is not available.')
+        return mf
+    elif cell.low_dim_ft_type == 'analytic_2d_1':
+        logger.warn(mf, 'Correction for truncated Coulomb operator '
+                    'is not available.')
+        return mf
+
+    if mf.verbose >= logger.NOTE:
+        de_mono, de_dip, de_quad, de = _dip_correction(mf)
+        write = mf.stdout.write
+        write('Corrections (AU)\n')
+        write('       Monopole      Dipole          Quadrupole    total\n')
+        write('SC   %12.8f   %12.8f   %12.8f   %12.8f\n' %
+              (de_mono[0], de_dip   , de_quad   , de[0]))
+        write('BCC  %12.8f   %12.8f   %12.8f   %12.8f\n' %
+              (de_mono[1], de_dip   , de_quad   , de[1]))
+        write('FCC  %12.8f   %12.8f   %12.8f   %12.8f\n' %
+              (de_mono[2], de_dip   , de_quad   , de[2]))
+    return mf
 
 
 class SCF(mol_hf.SCF):
@@ -524,32 +564,8 @@ class SCF(mol_hf.SCF):
         '''Hook for dumping results and clearing up the object.'''
         mol_hf.SCF._finalize(self)
 
-        cell = self.cell
-        if cell.charge != 0:
-            logger.note(self, 'Makov-Payne correction for charged PBC systems')
-            # PRB 51 (1995), 4014
-            # PRB 77 (2008), 115139
-            if cell.dimension != 3 and not isinstance(self.with_df, df.fft.FFTDF):
-                logger.warn(self, 'Correction for low-dimension AFTDF/GDF/MDF '
-                            'is not implemented.')
-                return self
-            elif cell.low_dim_ft_type == 'analytic_2d_1':
-                logger.warn(self, 'Correction for truncated Coulomb operator '
-                            'is not implemented.')
-                return self
-
-            if self.verbose >= logger.NOTE:
-                de_mono, de_dip, de_quad, de = _dip_correction(self)
-                write = self.stdout.write
-                write('Corrections (AU)\n')
-                write('       Monopole      Dipole          Quadrupole    total\n')
-                write('SC   %12.8f   %12.8f   %12.8f   %12.8f\n' %
-                      (de_mono[0], de_dip   , de_quad   , de[0]))
-                write('BCC  %12.8f   %12.8f   %12.8f   %12.8f\n' %
-                      (de_mono[1], de_dip   , de_quad   , de[1]))
-                write('FCC  %12.8f   %12.8f   %12.8f   %12.8f\n' %
-                      (de_mono[2], de_dip   , de_quad   , de[2]))
-
+        if self.cell.charge != 0:
+            makov_payne_correction(self)
         return self
 
     def get_init_guess(self, cell=None, key='minao'):
