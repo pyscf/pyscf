@@ -272,7 +272,8 @@ class KROHF(pbcrohf.ROHF, khf.KRHF):
         else:
             cell = self.cell
             nkpts = len(self.kpts)
-            nalpha = (cell.tot_electrons(nkpts) + cell.spin) // 2
+            ne = cell.tot_electrons(nkpts)
+            nalpha = (ne + cell.spin) // 2
             nbeta = nalpha - cell.spin
             if nalpha + nbeta != ne:
                 raise RuntimeError('Electron number %d and spin %d are not consistent\n'

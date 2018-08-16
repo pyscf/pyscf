@@ -17,6 +17,7 @@ from pyscf.pbc import scf
 from pyscf.pbc.cc import ccsd
 
 def RCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
+    from pyscf.lib import logger
     mf = scf.addons.convert_to_rhf(mf)
     if mf.cell.dimension == 3 and mf.exxdiv is not None:
         logger.warn(mf, 'mf.exxdiv is %s. It should be set to None in PBC '
@@ -26,6 +27,7 @@ def RCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
 CCSD = RCCSD
 
 def UCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
+    from pyscf.lib import logger
     mf = scf.addons.convert_to_uhf(mf)
     if mf.cell.dimension == 3 and mf.exxdiv is not None:
         logger.warn(mf, 'mf.exxdiv is %s. It should be set to None in PBC '
@@ -33,6 +35,7 @@ def UCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
     return ccsd.UCCSD(mf, frozen, mo_coeff, mo_occ)
 
 def GCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
+    from pyscf.lib import logger
     mf = scf.addons.convert_to_ghf(mf)
     if mf.cell.dimension == 3 and mf.exxdiv is not None:
         logger.warn(mf, 'mf.exxdiv is %s. It should be set to None in PBC '
@@ -40,6 +43,7 @@ def GCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
     return ccsd.GCCSD(mf, frozen, mo_coeff, mo_occ)
 
 def KGCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
+    from pyscf.lib import logger
     from pyscf.pbc.cc import kccsd
     mf = scf.addons.convert_to_ghf(mf)
     if mf.cell.dimension == 3 and mf.exxdiv is not None:
@@ -48,6 +52,7 @@ def KGCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
     return kccsd.GCCSD(mf, frozen, mo_coeff, mo_occ)
 
 def KRCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
+    from pyscf.lib import logger
     from pyscf.pbc.cc import kccsd_rhf
     mf = scf.addons.convert_to_rhf(mf)
     if mf.cell.dimension == 3 and mf.exxdiv is not None:
@@ -58,7 +63,7 @@ def KRCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
 KCCSD = KRCCSD
 
 def KUCCSD(mf, frozen=0, mo_coeff=None, mo_occ=None):
-    raise NotImplementedError
+    from pyscf.lib import logger
     from pyscf.pbc.cc import kccsd_uhf
     mf = scf.addons.convert_to_uhf(mf)
     if mf.cell.dimension == 3 and mf.exxdiv is not None:

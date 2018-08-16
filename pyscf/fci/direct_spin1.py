@@ -526,7 +526,7 @@ def make_pspace_precond(hdiag, pspaceig, pspaceci, addr, level_shift=0):
     return precond
 
 def make_diag_precond(hdiag, pspaceig, pspaceci, addr, level_shift=0):
-    return lib.make_diag_precond(hdiagd, level_shift)
+    return lib.make_diag_precond(hdiag, level_shift)
 
 
 class FCISolver(lib.StreamObject):
