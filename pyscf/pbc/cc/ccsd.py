@@ -23,6 +23,8 @@ from pyscf.pbc import mp
 
 class RCCSD(rccsd.RCCSD):
     def ccsd(self, t1=None, t2=None, eris=None, mbpt2=False):
+        from pyscf.pbc.df.df_ao2mo import warn_pbc2d_eri
+        warn_pbc2d_eri(self._scf)
         if mbpt2:
             pt = mp.RMP2(self._scf, self.frozen, self.mo_coeff, self.mo_occ)
             self.e_corr, self.t2 = pt.kernel(eris=eris)
@@ -37,6 +39,8 @@ class RCCSD(rccsd.RCCSD):
 
 class UCCSD(uccsd.UCCSD):
     def ccsd(self, t1=None, t2=None, eris=None, mbpt2=False):
+        from pyscf.pbc.df.df_ao2mo import warn_pbc2d_eri
+        warn_pbc2d_eri(self._scf)
         if mbpt2:
             pt = mp.UMP2(self._scf, self.frozen, self.mo_coeff, self.mo_occ)
             self.e_corr, self.t2 = pt.kernel(eris=eris)
@@ -53,6 +57,8 @@ class UCCSD(uccsd.UCCSD):
 
 class GCCSD(gccsd.GCCSD):
     def ccsd(self, t1=None, t2=None, eris=None, mbpt2=False):
+        from pyscf.pbc.df.df_ao2mo import warn_pbc2d_eri
+        warn_pbc2d_eri(self._scf)
         if mbpt2:
             from pyscf.pbc.mp import mp2
             pt = mp2.GMP2(self._scf, self.frozen, self.mo_coeff, self.mo_occ)
