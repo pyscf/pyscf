@@ -1060,7 +1060,6 @@ def nr_uks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     wv_freq = tools.fft(numpy.vstack((wva,wvb)), mesh)
     wv_freq = wv_freq.reshape(2,-1,*mesh)
     rhoR = rhoG = None
-    print excsum, nelec, ecoul
 
     kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
     if xctype == 'LDA':
