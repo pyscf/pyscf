@@ -30,6 +30,7 @@ import json
 import time
 import tempfile
 import copy
+import glob
 import shutil
 from subprocess import check_call, check_output, CalledProcessError
 import numpy
@@ -104,6 +105,23 @@ CONFIG = {
 #     'adavanced' : False,
 }
 
+def cleanup(shciobj, remove_wf=False):
+    files = ['1rdm.csv',
+             '2rdm.csv',
+             shciobj.configfile,
+             shciobj.integralfile,
+             shciobj.outputfile,
+             'integrals_cache.dat',
+             'result.json',
+             ]
+    if remove_wf:
+        wfn_files = glob.glob(os.path.join(shciobj.runtimedir, 'wf_*'))
+        files.extend(wfn_files)
+
+    for f in files:
+        if os.path.isfile(os.path.join(shciobj.runtimedir, f)):
+            os.remove(os.path.join(shciobj.runtimedir, f))
+
 
 class SHCI(lib.StreamObject):
     r'''SHCI program interface and object to hold SHCI program input
@@ -165,7 +183,8 @@ class SHCI(lib.StreamObject):
 
     def make_rdm1(self, state, norb, nelec, **kwargs):
         dm_file = os.path.join(self.runtimedir, '1rdm.csv')
-        if not (os.path.isfile(dm_file) and
+        if not ('get_1rdm_csv' in self.config and
+                os.path.isfile(dm_file) and
                 os.path.isfile(get_wfn_file(self, state))):
             write_config(self, nelec, {'get_1rdm_csv': True,
                                        'load_integrals_cache': True})
@@ -192,7 +211,8 @@ class SHCI(lib.StreamObject):
 
     def make_rdm12(self, state, norb, nelec, **kwargs):
         dm_file = os.path.join(self.runtimedir, '2rdm.csv')
-        if not (os.path.isfile(dm_file) and
+        if not ('get_2rdm_csv' in self.config and
+                os.path.isfile(dm_file) and
                 os.path.isfile(get_wfn_file(self, state))):
             write_config(self, nelec, {'get_2rdm_csv': True,
                                        'load_integrals_cache': True})
@@ -221,14 +241,21 @@ class SHCI(lib.StreamObject):
         rdm1 = numpy.einsum('ikjj->ki', rdm2) / (nelectrons - 1)
         return rdm1, rdm2
 
-    def kernel(self, h1e, eri, norb, nelec, ci0=None, ecore=0, restart=False,
+    def kernel(self, h1e, eri, norb, nelec, ci0=None, ecore=0, restart=None,
                **kwargs):
+        if restart is None:
+            restart = self.restart
         state_id = min(self.config['eps_vars'])
 
         if restart or ci0 is not None:
+            if self.verbose >= logger.DEBUG1:
+                logger.debug1(self, 'restart was set. wf is read from wf_eps* file.')
+            self.cleanup(remove_wf=False)
             wfn_file = get_wfn_file(self, state_id)
             if os.path.isfile(wfn_file):
                 shutil.move(wfn_file, get_wfn_file(self, state_id * 2))
+        else:
+            self.cleanup(remove_wf=True)
 
         if 'orbsym' in kwargs:
             self.orbsym = kwargs['orbsym']
@@ -261,16 +288,22 @@ class SHCI(lib.StreamObject):
         # Each eps_vars is associated to one approximate wfn.
         roots = state_id = min(self.config['eps_vars'])
         if not os.path.isfile(get_wfn_file(self, state_id)):
-            raise RuntimeError('Eigenstate %s not found' % wfn_file)
+            raise RuntimeError('Eigenstate %s not found' % get_wfn_file(self, state_id))
         return calc_e, roots
 
     def approx_kernel(self, h1e, eri, norb, nelec, ci0=None, ecore=0,
-                      restart=False, **kwargs):
+                      restart=None, **kwargs):
+        if restart is None:
+            restart = self.restart
         state_id = min(self.config['eps_vars'])
+
         if restart or ci0 is not None:
+            self.cleanup(remove_wf=False)
             wfn_file = get_wfn_file(self, state_id)
             if os.path.isfile(wfn_file):
                 shutil.move(wfn_file, get_wfn_file(self, state_id * 2))
+        else:
+            self.cleanup(remove_wf=True)
 
         if 'orbsym' in kwargs:
             self.orbsym = kwargs['orbsym']
@@ -293,7 +326,7 @@ class SHCI(lib.StreamObject):
         # Each eps_vars is associated to one approximate wfn.
         roots = state_id = min(self.config['eps_vars'])
         if not os.path.isfile(get_wfn_file(self, state_id)):
-            raise RuntimeError('Eigenstate %s not found' % wfn_file)
+            raise RuntimeError('Eigenstate %s not found' % get_wfn_file(self, state_id))
         return calc_e, roots
 
     def spin_square(self, civec, norb, nelec):
@@ -324,6 +357,8 @@ class SHCI(lib.StreamObject):
             self._client = client
 
         return client.Hc(civec)
+
+    cleanup = cleanup
 
 
 def write_config(shciobj, nelec, config):
@@ -525,10 +560,10 @@ if __name__ == '__main__':
     nelec = 10
     dimer_atom = 'N'
 
-    mch = mcscf.CASCI(mf, norb, nelec)
-    mch.fcisolver = SHCI(mf.mol)
-    mch.kernel()
-    dm2 = mch.fcisolver.make_rdm12(0, norb, nelec)[1]
+#    mch = mcscf.CASCI(mf, norb, nelec)
+#    mch.fcisolver = SHCI(mf.mol)
+#    mch.kernel()
+#    dm2 = mch.fcisolver.make_rdm12(0, norb, nelec)[1]
 #
 #    mc1 = mcscf.CASCI(mf, norb, nelec)
 #    mc1.kernel(mch.mo_coeff)
