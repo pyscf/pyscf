@@ -39,6 +39,8 @@ class TDA(uhf.TDA):
         assert(isinstance(mf, scf.khf.KSCF))
         self.cell = mf.cell
         uhf.TDA.__init__(self, mf)
+        from pyscf.pbc.df.df_ao2mo import warn_pbc2d_eri
+        warn_pbc2d_eri(mf)
 
     def get_vind(self, mf):
         '''Compute Ax'''

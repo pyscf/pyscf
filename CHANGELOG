@@ -13,8 +13,8 @@ PySCF 1.6 alpha (2018-09-??)
   - numint performance (eval_rho, eval_mat)
 
 
-PySCF 1.5.2
------------
+PySCF 1.5.2 (2018-08-15)
+------------------------
 * Improved
   - IO performance of pbc.GDF initialization
   - Default linear dependence treatment in GDF to improve accuracy

@@ -30,7 +30,6 @@ from pyscf import __config__
 
 def get_eri(mydf, kpts=None,
             compact=getattr(__config__, 'pbc_df_ao2mo_get_eri_compact', True)):
-    warn_pbc2d_eri(mydf)
     if mydf._cderi is None:
         mydf.build()
 
@@ -238,11 +237,10 @@ def warn_pbc2d_eri(mydf):
     if mydf.cell.dimension in (1, 2):
         with warnings.catch_warnings():
             warnings.simplefilter('once', PBC2DIntegralsWarning)
-            warnings.warn('\nAFT/GDF/MDF 2-electron integrals for 1D and 2D '
-                          'PBC systems were designed for mean-field methods.\n'
-                          'The treatment of removing G=0 component may not be '
-                          'proper for post-HF calculations.  It is still in '
-                          'testing\n')
+            warnings.warn('\n2-electron integrals for 1D and 2D PBC systems '
+                          'were designed for SCF methods only.\n'
+                          'The post-HF treatment for low-dimension system is '
+                          'problematic in pyscf-1.5.* or any older version.\n')
 
 
 if __name__ == '__main__':
