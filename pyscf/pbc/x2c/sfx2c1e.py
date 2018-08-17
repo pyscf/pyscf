@@ -200,10 +200,6 @@ def get_pnucp(mydf, kpts=None):
         wj = numpy.zeros((nkpts,nao_pair), dtype=numpy.complex128)
         SI = cell.get_SI(Gv)
         vG = numpy.einsum('i,ix->x', charge, SI) * coulG
-        if cell.dimension == 1 or cell.dimension == 2:
-            G0idx, SI_on_z = pbcgto.cell._SI_for_uniform_model_charge(cell, Gv)
-            vG[G0idx] += charge.sum() * SI_on_z * coulG[G0idx]
-
         wj = numpy.zeros((nkpts,nao_pair), dtype=numpy.complex128)
 
     else:
@@ -224,18 +220,9 @@ def get_pnucp(mydf, kpts=None):
         aoaux = ft_ao.ft_ao(nuccell, Gv)
         vG = numpy.einsum('i,xi->x', charge, aoaux) * coulG
         if cell.dimension != 0:
-            if cell.dimension == 1 or cell.dimension == 2:
-                Gv, Gvbase, kws = cell.get_Gv_weights(mydf.mesh)
-                G0idx, SI_on_z = pbcgto.cell._SI_for_uniform_model_charge(cell, Gv)
-                ZSI = numpy.einsum("i,ix->x", charge, cell.get_SI(Gv[G0idx]))
-                nucbar = numpy.einsum('i,i,i', ZSI.conj(), coulG[G0idx], SI_on_z)
-                nucbar -= numpy.einsum('i,i', vG[G0idx].conj(), SI_on_z)
-                if abs(kpts).sum() < 1e-9:
-                    nucbar = nucbar.real
-                vG[G0idx] += charge.sum() * SI_on_z * coulG[G0idx]
-            else: # cell.dimension == 3
-                nucbar = sum([z/nuccell.bas_exp(i)[0] for i,z in enumerate(charge)])
-                nucbar *= numpy.pi/cell.vol
+            #FIXME cell.dimension: the potential of background charge for 1D and 2D system
+            nucbar = sum([z/nuccell.bas_exp(i)[0] for i,z in enumerate(charge)])
+            nucbar *= numpy.pi/cell.vol
 
             ovlp = cell.pbc_intor('int1e_kin', 1, lib.HERMITIAN, kpts_lst)
             for k in range(nkpts):
@@ -254,15 +241,6 @@ def get_pnucp(mydf, kpts=None):
             else:
                 wj[k] += numpy.einsum('k,kx->x', vG[p0:p1].conj(), aoao)
     t1 = log.timer_debug1('contracting pnucp', *t1)
-
-    if cell.dimension == 1 or cell.dimension == 2:
-        t = cell.pbc_intor('int1e_kin', 1, lib.HERMITIAN, kpts_lst)
-        G0idx, SI_on_z = pbcgto.cell._SI_for_uniform_model_charge(cell, Gv)
-        Zmod = numpy.einsum('i,i', vG[G0idx].conj(), SI_on_z)
-        if abs(kpts).sum() < 1e-9:
-            Zmod = Zmod.real
-        for k, kpt in enumerate(kpts_lst):
-            wj[k] -= Zmod*2 * lib.pack_tril(t[k])
 
     wj_kpts = []
     for k, kpt in enumerate(kpts_lst):

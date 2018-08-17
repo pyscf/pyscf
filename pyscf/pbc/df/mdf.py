@@ -206,6 +206,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
                 for k, idx in enumerate(adapted_ji_idx):
                     v = [feri['j3c-junk/%d/%d'%(idx,i)][0,col0:col1].T for i in range(nsegs)]
                     v = fuse(numpy.vstack(v))
+                    #FIXME cell.dimension: 1D and 2D
                     if is_zero(kpt) and cell.dimension == 3:
                         for i, c in enumerate(vbar):
                             if c != 0:
@@ -232,16 +233,6 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
 VALENCE_EXP = getattr(__config__, 'pbc_df_mdf_valence_exp', 1.0)
 def _mesh_for_valence(cell, valence_exp=VALENCE_EXP):
     '''Energy cutoff estimation'''
-    b = cell.reciprocal_vectors()
-    if cell.dimension == 0:
-        w = 1
-    elif cell.dimension == 1:
-        w = numpy.linalg.norm(b[0]) / (2*numpy.pi)
-    elif cell.dimension == 2:
-        w = numpy.linalg.norm(numpy.cross(b[0], b[1])) / (2*numpy.pi)**2
-    else:
-        w = abs(numpy.linalg.det(b)) / (2*numpy.pi)**3
-
     precision = cell.precision * 10
     Ecut_max = 0
     for i in range(cell.nbas):
@@ -249,7 +240,7 @@ def _mesh_for_valence(cell, valence_exp=VALENCE_EXP):
         es = cell.bas_exp(i).copy()
         es[es>valence_exp] = valence_exp
         cs = abs(cell.bas_ctr_coeff(i)).max(axis=1)
-        ke_guess = gto.cell._estimate_ke_cutoff(es, l, cs, precision, w)
+        ke_guess = gto.cell._estimate_ke_cutoff(es, l, cs, precision)
         Ecut_max = max(Ecut_max, ke_guess.max())
     mesh = tools.cutoff_to_mesh(cell.lattice_vectors(), Ecut_max)
     mesh = numpy.min((mesh, cell.mesh), axis=0)

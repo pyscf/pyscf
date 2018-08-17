@@ -508,40 +508,23 @@ def estimate_ke_cutoff(cell, precision=INTEGRAL_PRECISION):
 
 def error_for_ke_cutoff(cell, ke_cutoff):
     b = cell.reciprocal_vectors()
-    if cell.dimension == 0:
-        w = 1
-    elif cell.dimension == 1:
-        w = np.linalg.norm(b[0]) / (2*np.pi)
-    elif cell.dimension == 2:
-        w = np.linalg.norm(np.cross(b[0], b[1])) / (2*np.pi)**2
-    else:
-        w = abs(np.linalg.det(b)) / (2*np.pi)**3
-
     kmax = np.sqrt(ke_cutoff*2)
     errmax = 0
     for i in range(cell.nbas):
         l = cell.bas_angular(i)
         es = cell.bas_exp(i)
         cs = abs(cell.bas_ctr_coeff(i)).max(axis=1)
-        fac = 256*np.pi**4*cs**4*w / scipy.misc.factorial2(l*2+1)**2
+        fac = (256*np.pi**4*cs**4 * scipy.misc.factorial2(l*4+3)
+               / scipy.misc.factorial2(l*2+1)**2)
         efac = np.exp(-ke_cutoff/(2*es))
-        if 0:
-            ka = scipy.misc.factorial2(l*4+3) * (2*es)**(2*l+2)
-            err0 = np.sqrt(np.pi*es)*scipy.special.erfc(kmax/np.sqrt(4*es)) * ka
-            ka *= efac * kmax
-            for m in range(l*2+2):
-                err0 += ka
-                ka *= ke_cutoff / (es * (2*m+3))
-            errmax = max(errmax, (fac/(4*es)**(2*l+2)*err0).max())
-        else:
-            err1 = .5*fac/(4*es)**(2*l+1) * kmax**(4*l+3) * efac
-            errmax = max(errmax, err1.max())
-            if np.any(ke_cutoff < 5*es):
-                err2 = (1.41*efac+2.51)*fac/(4*es)**(2*l+2) * kmax**(4*l+5)
-                errmax = max(errmax, err2[ke_cutoff<5*es].max())
-            if np.any(ke_cutoff < es):
-                err2 = (1.41*efac+2.51)*fac/2**(2*l+2) * np.sqrt(2*es)
-                errmax = max(errmax, err2[ke_cutoff<es].max())
+        err1 = .5*fac/(4*es)**(2*l+1) * kmax**(4*l+3) * efac
+        errmax = max(errmax, err1.max())
+        if np.any(ke_cutoff < 5*es):
+            err2 = (1.41*efac+2.51)*fac/(4*es)**(2*l+2) * kmax**(4*l+5)
+            errmax = max(errmax, err2[ke_cutoff<5*es].max())
+        if np.any(ke_cutoff < es):
+            err2 = (1.41*efac+2.51)*fac/2**(2*l+2) * np.sqrt(2*es)
+            errmax = max(errmax, err2[ke_cutoff<es].max())
     return errmax
 
 def get_bounding_sphere(cell, rcut):
@@ -626,24 +609,23 @@ def get_Gv_weights(cell, mesh=None, **kwargs):
     rx = np.fft.fftfreq(mesh[0], 1./mesh[0])
     ry = np.fft.fftfreq(mesh[1], 1./mesh[1])
     rz = np.fft.fftfreq(mesh[2], 1./mesh[2])
-    if cell.dimension == 0:
-        rx, wx = plus_minus(mesh[0]//2)
-        ry, wy = plus_minus(mesh[1]//2)
-        rz, wz = plus_minus(mesh[2]//2)
-        rx /= np.linalg.norm(b[0])
-        ry /= np.linalg.norm(b[1])
-        rz /= np.linalg.norm(b[2])
-        weights = np.einsum('i,j,k->ijk', wx, wy, wz).reshape(-1)
-    elif cell.dimension == 1:
-        wx = np.repeat(np.linalg.norm(b[0]), mesh[0])
-        ry, wy = plus_minus(mesh[1]//2)
-        rz, wz = plus_minus(mesh[2]//2)
-        ry /= np.linalg.norm(b[1])
-        rz /= np.linalg.norm(b[2])
-        weights = np.einsum('i,j,k->ijk', wx, wy, wz).reshape(-1)
-    elif cell.dimension == 2:
-        # Don't redefine the grids
-        if low_dim_ft_type is None:
+    if cell.dimension != 3 and low_dim_ft_type == 'infinity_vacuum':
+        if cell.dimension == 0:
+            rx, wx = plus_minus(mesh[0]//2)
+            ry, wy = plus_minus(mesh[1]//2)
+            rz, wz = plus_minus(mesh[2]//2)
+            rx /= np.linalg.norm(b[0])
+            ry /= np.linalg.norm(b[1])
+            rz /= np.linalg.norm(b[2])
+            weights = np.einsum('i,j,k->ijk', wx, wy, wz).reshape(-1)
+        elif cell.dimension == 1:
+            wx = np.repeat(np.linalg.norm(b[0]), mesh[0])
+            ry, wy = plus_minus(mesh[1]//2)
+            rz, wz = plus_minus(mesh[2]//2)
+            ry /= np.linalg.norm(b[1])
+            rz /= np.linalg.norm(b[2])
+            weights = np.einsum('i,j,k->ijk', wx, wy, wz).reshape(-1)
+        elif cell.dimension == 2:
             area = np.linalg.norm(np.cross(b[0], b[1]))
             wxy = np.repeat(area, mesh[0]*mesh[1])
             rz, wz = plus_minus(mesh[2]//2)
@@ -653,12 +635,8 @@ def get_Gv_weights(cell, mesh=None, **kwargs):
         weights = abs(np.linalg.det(b))
     Gvbase = (rx, ry, rz)
     Gv = np.dot(lib.cartesian_prod(Gvbase), b)
-    # This could be appropriate to catch any bugs
-    if cell.dimension == 2 and low_dim_ft_type is not None:
-        weights = None
-    else:
-        # 1/cell.vol == det(b)/(2pi)^3
-        weights *= 1/(2*np.pi)**3
+    # 1/cell.vol == det(b)/(2pi)^3
+    weights *= 1/(2*np.pi)**3
     return Gv, Gvbase, weights
 
 def get_SI(cell, Gv=None):
@@ -700,7 +678,13 @@ def get_ewald_params(cell, precision=INTEGRAL_PRECISION, mesh=None):
     '''
     if cell.natm == 0:
         return 0, 0
-    elif cell.dimension == 3:
+    elif cell.dimension != 3 and cell.low_dim_ft_type == 'infinity_vacuum':
+# Non-uniform PW grids are used for low-dimensional ewald summation.  The cutoff
+# estimation for long range part based on exp(G^2/(4*eta^2)) does not work for
+# non-uniform grids.  Smooth model density is preferred.
+        ew_cut = cell.rcut
+        ew_eta = np.sqrt(max(np.log(4*np.pi*ew_cut**2/precision)/ew_cut**2, .1))
+    else:
         if mesh is None:
             mesh = cell.mesh
         mesh = _cut_mesh_for_ewald(cell, mesh)
@@ -708,12 +692,6 @@ def get_ewald_params(cell, precision=INTEGRAL_PRECISION, mesh=None):
         log_precision = np.log(precision/(4*np.pi*(Gmax+1e-100)**2))
         ew_eta = np.sqrt(-Gmax**2/(4*log_precision)) + 1e-100
         ew_cut = _estimate_rcut(ew_eta**2, 0, 1., precision)
-    else:
-# Non-uniform PW grids are used for low-dimensional ewald summation.  The cutoff
-# estimation for long range part based on exp(G^2/(4*eta^2)) does not work for
-# non-uniform grids.  Smooth model density is preferred.
-        ew_cut = cell.rcut
-        ew_eta = np.sqrt(max(np.log(4*np.pi*ew_cut**2/precision)/ew_cut**2, .1))
     return ew_eta, ew_cut
 
 def _cut_mesh_for_ewald(cell, mesh):
@@ -724,44 +702,6 @@ def _cut_mesh_for_ewald(cell, mesh):
     mesh_max[mesh_max<80] = 80
     mesh[mesh>mesh_max] = mesh_max[mesh>mesh_max]
     return mesh
-
-# In testing: two types of background charge.
-if 1:
-    def _SI_for_uniform_model_charge(cell, Gv):
-        '''
-        Background charge on one plane which passes through the charge center.
-        '''
-        chargs = cell.atom_charges()
-        coords = cell.atom_coords()
-        charge_center = mole.charge_center(cell._atom, chargs, coords)
-        if cell.dimension == 1:
-            G0idx = (Gv[:,0] == 0)
-            SI_on_z = np.exp(-1j * np.einsum('gx,x->g', Gv[G0idx,1:], charge_center[1:]))
-        elif cell.dimension == 2:
-            G0idx = (Gv[:,0] == 0) & (Gv[:,1] == 0)
-            SI_on_z = np.exp(-1j * (Gv[G0idx,2] * charge_center[2]))
-        else:
-            G0idx = SI_on_z = None
-        return G0idx, SI_on_z
-else:
-    def _SI_for_uniform_model_charge(cell, Gv):
-        '''
-        Background charge on multiple planes.  Each plane passes through one
-        nucleus.
-        '''
-        chargs = cell.atom_charges()
-        coords = cell.atom_coords()
-        if cell.dimension == 1:
-            G0idx = (Gv[:,0] == 0)
-            SI_on_z = np.exp(-1j * np.einsum('gx,ix->ig', Gv[G0idx,1:], coords[:,1:]))
-            SI_on_z = np.einsum("i,ig->g", chargs, SI_on_z) / chargs.sum()
-        elif cell.dimension == 2:
-            G0idx = (Gv[:,0] == 0) & (Gv[:,1] == 0)
-            SI_on_z = np.exp(-1j * np.einsum('g,i->ig', Gv[G0idx,2], coords[:,2]))
-            SI_on_z = np.einsum("i,ig->g", chargs, SI_on_z) / chargs.sum()
-        else:
-            G0idx = SI_on_z = None
-        return G0idx, SI_on_z
 
 def ewald(cell, ew_eta=None, ew_cut=None):
     '''Perform real (R) and reciprocal (G) space Ewald sum for the energy.
@@ -787,7 +727,7 @@ def ewald(cell, ew_eta=None, ew_cut=None):
     if ew_cut is None: ew_cut = cell.ew_cut
     chargs = cell.atom_charges()
     coords = cell.atom_coords()
-    low_dim_ft_type = cell.low_dim_ft_type
+
     Lall = cell.get_lattice_Ls(rcut=ew_cut)
     ewovrl = 0.
     for i, qi in enumerate(chargs):
@@ -805,6 +745,7 @@ def ewald(cell, ew_eta=None, ew_cut=None):
 
     # last line of Eq. (F.5) in Martin
     ewself  = -.5 * np.dot(chargs,chargs) * 2 * ew_eta / np.sqrt(np.pi)
+    #FIXME: check PRB, 87, 165122
     if cell.dimension == 3:
         ewself += -.5 * np.sum(chargs)**2 * np.pi/(ew_eta**2 * cell.vol)
 
@@ -822,26 +763,14 @@ def ewald(cell, ew_eta=None, ew_cut=None):
     Gv, Gvbase, weights = cell.get_Gv_weights(mesh)
     absG2 = np.einsum('gi,gi->g', Gv, Gv)
     absG2[absG2==0] = 1e200
-    if low_dim_ft_type is None or cell.dimension == 3:
+    if cell.dimension != 2 or low_dim_ft_type == 'infinity_vacuum':
         coulG = 4*np.pi / absG2
         coulG *= weights
         ZSI = np.einsum("i,ij->j", chargs, cell.get_SI(Gv))
         ZexpG2 = ZSI * np.exp(-absG2/(4*ew_eta**2))
+        ewg = .5 * np.einsum('i,i,i', ZSI.conj(), ZexpG2, coulG).real
 
-        if cell.dimension == 1 or cell.dimension == 2:
-            G0idx, SI_on_z = _SI_for_uniform_model_charge(cell, Gv)
-            bg_charge = chargs.sum() * SI_on_z
-            ZexpG2[G0idx] -= bg_charge
-            ZSI_without_bg = ZSI[G0idx] - bg_charge
-            # (m-s|Z)
-            ewg = .5 * np.einsum('i,i,i', ZSI.conj(), ZexpG2, coulG).real
-            # (Z-s|s)
-            ewg -= .5 * np.einsum('i,i,i', ZSI_without_bg.conj(), bg_charge,
-                                  coulG[G0idx]).real
-        else:
-            ewg = .5 * np.einsum('i,i,i', ZSI.conj(), ZexpG2, coulG).real
-
-    elif low_dim_ft_type == 'analytic_2d_1' and cell.dimension == 2:
+    elif cell.dimension == 2:  # Truncated Coulomb
         # The following 2D ewald summation is taken from:
         # R. Sundararaman and T. Arias PRB 87, 2013
         def fn(eta,Gnorm,z):
@@ -852,8 +781,7 @@ def ewald(cell, ew_eta=None, ew_cut=None):
                 ret = np.exp(Gnorm_z)*scipy.special.erfc(Gnorm/2./eta + eta*z)
             if len(large_idx) > 0:
                 x = Gnorm[large_idx]/2./eta + eta*z
-                ret[large_idx] = (np.exp(Gnorm[large_idx]*z-x**2)/np.sqrt(np.pi)/x *
-                                      (1 - 0.5/x**2) )
+                ret[large_idx] = np.exp(Gnorm[large_idx]*z-x**2) * scipy.special.erfcx(x)
             return ret
         def gn(eta,Gnorm,z):
             return np.pi/Gnorm*(fn(eta,Gnorm,z) + fn(eta,Gnorm,-z))
@@ -1299,7 +1227,7 @@ class Cell(mole.Mole):
                              for ib in range(self.nbas)] + [0])
 
         _a = self.lattice_vectors()
-        if np.linalg.det(_a) < 0 and self.dimension == 3:
+        if np.linalg.det(_a) < 0:
             sys.stderr.write('''WARNING!
   Lattice are not in right-handed coordinate system. This can cause wrong value for some integrals.
   It's recommended to resort the lattice vectors to\na = %s\n\n''' % _a[[0,2,1]])

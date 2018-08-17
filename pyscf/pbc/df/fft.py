@@ -204,11 +204,6 @@ class FFTDF(lib.StreamObject):
             raise RuntimeError('FFTDF method does not support 0D/1D low-dimension '
                                'PBC system.  DF, MDF or AFTDF methods should '
                                'be used.\nSee also examples/pbc/31-low_dimensional_pbc.py')
-        if cell.dimension == 2 and self.low_dim_ft_type is None:
-            raise RuntimeError('FFTDF method does not support low_dim_ft_type of None '
-                               'for 2D systems.  Supported types include \'analytic_2d_1\'. '
-                               '\nSee also examples/pbc/32-graphene.py')
-
         if not cell.has_ecp():
             logger.warn(self, 'FFTDF integrals are found in all-electron '
                         'calculation.  It often causes huge error.\n'
@@ -247,10 +242,6 @@ class FFTDF(lib.StreamObject):
             raise RuntimeError('FFTDF method does not support low-dimension '
                                'PBC system.  DF, MDF or AFTDF methods should '
                                'be used.\nSee also examples/pbc/31-low_dimensional_pbc.py')
-        if cell.dimension == 2 and self.low_dim_ft_type is None:
-            raise RuntimeError('FFTDF method only supports low_dim_ft_type of None '
-                               'for 2D systems.  Supported types include \'analytic_2d_1\'. '
-                               '\nSee also examples/pbc/32-graphene.py')
 
         max_memory = max(2000, self.max_memory-lib.current_memory()[0])
         ni = self._numint

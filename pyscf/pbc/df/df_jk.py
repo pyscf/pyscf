@@ -403,13 +403,6 @@ def zdotNC(aR, aI, bR, bI, alpha=1, cR=None, cI=None, beta=0):
     return cR, cI
 
 def _ewald_exxdiv_for_G0(cell, kpts, dms, vk, kpts_band=None):
-    if (cell.dimension == 1 or
-        (cell.dimension == 2 and cell.low_dim_ft_type is None)):
-        return _ewald_exxdiv_1d2d(cell, kpts, dms, vk, kpts_band)
-    else:
-        return _ewald_exxdiv_3d(cell, kpts, dms, vk, kpts_band)
-
-def _ewald_exxdiv_3d(cell, kpts, dms, vk, kpts_band=None):
     s = cell.pbc_intor('int1e_ovlp', hermi=1, kpts=kpts)
     madelung = tools.pbc.madelung(cell, kpts)
     if kpts is None:

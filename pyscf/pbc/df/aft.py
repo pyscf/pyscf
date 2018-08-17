@@ -104,11 +104,6 @@ def get_nuc(mydf, kpts=None):
         vpplocG = -numpy.einsum('ij,ij->j', cell.get_SI(Gv), vpplocG)
         v1 = -vpplocG.copy()
 
-        if cell.dimension == 1 or cell.dimension == 2:
-            G0idx, SI_on_z = pbcgto.cell._SI_for_uniform_model_charge(cell, Gv)
-            coulG = 4*numpy.pi / numpy.linalg.norm(Gv[G0idx], axis=1)**2
-            vpplocG[G0idx] += charges.sum() * SI_on_z * coulG
-
         vpplocG *= kws
         vG = vpplocG
         vj = numpy.zeros((nkpts,nao_pair), dtype=numpy.complex128)
@@ -144,10 +139,6 @@ def get_nuc(mydf, kpts=None):
         coulG = tools.get_coulG(cell, kpt_allow, mesh=mesh, Gv=Gv) * kws
         aoaux = ft_ao.ft_ao(nuccell, Gv)
         vG = numpy.einsum('i,xi->x', -charges, aoaux) * coulG
-
-        if cell.dimension == 1 or cell.dimension == 2:
-            G0idx, SI_on_z = pbcgto.cell._SI_for_uniform_model_charge(cell, Gv)
-            vG[G0idx] += charges.sum() * SI_on_z * coulG[G0idx]
 
     max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
     for aoaoks, p0, p1 in mydf.ft_loop(mesh, kpt_allow, kpts_lst,
@@ -209,18 +200,9 @@ def _int_nuc_vloc(mydf, nuccell, kpts, intor='int3c2e', aosym='s2', comp=1):
         assert(comp == 1)
         charge = -cell.atom_charges()
 
-        if cell.dimension == 1 or cell.dimension == 2:
-            Gv, Gvbase, kws = cell.get_Gv_weights(mydf.mesh)
-            G0idx, SI_on_z = pbcgto.cell._SI_for_uniform_model_charge(cell, Gv)
-            ZSI = numpy.einsum("i,ix->x", charge, cell.get_SI(Gv[G0idx]))
-            ZSI -= numpy.einsum('i,xi->x', charge, ft_ao.ft_ao(nuccell, Gv[G0idx]))
-            coulG = 4*numpy.pi / numpy.linalg.norm(Gv[G0idx], axis=1)**2
-            nucbar = numpy.einsum('i,i,i,i', ZSI.conj(), coulG, kws[G0idx], SI_on_z)
-            if abs(kpts).sum() < 1e-9:
-                nucbar = nucbar.real
-        else: # cell.dimension == 3
-            nucbar = sum([z/nuccell.bas_exp(i)[0] for i,z in enumerate(charge)])
-            nucbar *= numpy.pi/cell.vol
+        #FIXME cell.dimension: the potential of background charge for 1D and 2D system
+        nucbar = sum([z/nuccell.bas_exp(i)[0] for i,z in enumerate(charge)])
+        nucbar *= numpy.pi/cell.vol
 
         ovlp = cell.pbc_intor('int1e_ovlp', 1, lib.HERMITIAN, kpts)
         for k in range(nkpts):
@@ -390,14 +372,6 @@ class AFTDF(lib.StreamObject):
             nj = ao_loc[shls_slice[3]] - ao_loc[shls_slice[2]]
             nij = ni*nj
 
-        if (abs(q).sum() < 1e-6 and (cell.dimension == 1 or cell.dimension == 2)):
-            if aosym == 's2':
-                s = lib.pack_tril(cell.pbc_intor('int1e_ovlp', kpt=kptj))
-            else:
-                s = cell.pbc_intor('int1e_ovlp', kpt=kptj).ravel()
-        else:
-            s = None
-
         if blksize is None:
             blksize = min(max(64, int(max_memory*1e6*.75/(nij*16*comp))), 16384)
             sublk = int(blksize//4)
@@ -414,9 +388,6 @@ class AFTDF(lib.StreamObject):
                                          b, gxyz[p0:p1], Gvbase, q,
                                          kptj.reshape(1,3), intor, comp, out=buf)[0]
             aoao = aoao.reshape(p1-p0,nij)
-            if s is not None:  # to remove the divergent integrals
-                G0idx, SI_on_z = pbcgto.cell._SI_for_uniform_model_charge(cell, Gv[p0:p1])
-                aoao[G0idx] -= numpy.einsum('g,i->gi', SI_on_z, s)
 
             for i0, i1 in lib.prange(0, p1-p0, sublk):
                 nG = i1 - i0
@@ -465,14 +436,6 @@ class AFTDF(lib.StreamObject):
             nj = ao_loc[shls_slice[3]] - ao_loc[shls_slice[2]]
             nij = ni*nj
 
-        if (abs(q).sum() < 1e-6 and intor[:11] == 'GTO_ft_ovlp' and
-            (cell.dimension == 1 or cell.dimension == 2)):
-            s = cell.pbc_intor('int1e_ovlp', kpts=kpts)
-            if aosym == 's2':
-                s = [lib.pack_tril(x) for x in s]
-        else:
-            s = None
-
         blksize = max(16, int(max_memory*.9e6/(nij*nkpts*16*comp)))
         blksize = min(blksize, ngrids, 16384)
         buf = numpy.empty(nkpts*nij*blksize*comp, dtype=numpy.complex128)
@@ -481,13 +444,6 @@ class AFTDF(lib.StreamObject):
             dat = ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
                                         b, gxyz[p0:p1], Gvbase, q, kpts,
                                         intor, comp, out=buf)
-
-            if s is not None:  # to remove the divergent part in 1D/2D systems
-                G0idx, SI_on_z = pbcgto.cell._SI_for_uniform_model_charge(cell, Gv[p0:p1])
-                if SI_on_z.size > 0:
-                    for k, kpt in enumerate(kpts):
-                        dat[k][G0idx] -= numpy.einsum('g,...->g...', SI_on_z, s[k])
-
             yield dat, p0, p1
 
     weighted_coulG = weighted_coulG

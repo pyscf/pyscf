@@ -55,10 +55,11 @@ def get_alphas_gth(cell, low_dim_ft_type=None):
         cfacs = [1., 3., 15., 105.]
         alphas[ia] = ( 2*np.pi*Zia*rloc**2
                      + (2*np.pi)**(3/2.)*rloc**3*np.dot(cexp,cfacs[:nexp]) )
-    if low_dim_ft_type is None or cell.dimension == 3:
+    if cell.dimension == 3 or low_dim_ft_type == 'infinity_vacuum':
         # Do nothing
         return alphas
-    elif low_dim_ft_type == 'analytic_2d_1' and cell.dimension == 2:
+
+    elif cell.dimension == 2:
         for ia in range(cell.natm):
             symb = cell.atom_symbol(ia)
             if symb not in cell._pseudo:
@@ -87,7 +88,6 @@ def get_vlocG(cell, Gv=None, low_dim_ft_type=None):
     '''
     if Gv is None: Gv = cell.Gv
     vlocG = get_gth_vlocG(cell, Gv, low_dim_ft_type)
-    vlocG[:,0] = 0.
     return vlocG
 
 def get_gth_vlocG(cell, Gv, low_dim_ft_type=None):
@@ -108,7 +108,7 @@ def get_gth_vlocG(cell, Gv, low_dim_ft_type=None):
         coulG[absG2==0] = 0
 
     vlocG = np.zeros((cell.natm,len(G)))
-    if low_dim_ft_type is None:
+    if cell.dimension == 3 or low_dim_ft_type == 'infinity_vacuum':
         for ia in range(cell.natm):
             Zia = cell.atom_charge(ia)
             symb = cell.atom_symbol(ia)
@@ -129,7 +129,7 @@ def get_gth_vlocG(cell, Gv, low_dim_ft_type=None):
             vlocG[ia,:] = ( Zia * coulG * np.exp(-0.5*G_red**2)
                            - (2*np.pi)**(3/2.)*rloc**3*np.exp(-0.5*G_red**2)*(
                                 np.dot(cexp, cfacs[:nexp])) )
-    elif low_dim_ft_type == 'analytic_2d_1' and cell.dimension == 2:
+    elif cell.dimension == 2:
         # The following 2D ewald summation is taken from:
         # Minary, Tuckerman, Pihakari, Martyna J. Chem. Phys. 116, 5351 (2002)
 
@@ -146,9 +146,11 @@ def get_gth_vlocG(cell, Gv, low_dim_ft_type=None):
         for ia in range(cell.natm):
             Zia = cell.atom_charge(ia)
             symb = cell.atom_symbol(ia)
+# FIXME: the mixed pseudo-potential and normal nuclear attraction potential
             if symb not in cell._pseudo:
                 vlocG[ia] = Zia * coulG
                 continue
+
             pp = cell._pseudo[symb]
             rloc, nexp, cexp = pp[1:3+1]
 
@@ -159,7 +161,6 @@ def get_gth_vlocG(cell, Gv, low_dim_ft_type=None):
                      15 - 10*G_red**2 + G_red**4,
                      105 - 105*G_red**2 + 21*G_red**4 - G_red**6])
 
-            gzero = (G == 0.0)
             ew_eta = 1./np.sqrt(2)/rloc
 
             JexpG2 = np.exp(-absG2/(4*ew_eta**2)) * coulG
@@ -179,8 +180,7 @@ def get_gth_vlocG(cell, Gv, low_dim_ft_type=None):
                                    0.5*np.exp( Gxy[small_idx]*lzd2)*scipy.special.erfc( (ew_eta**2 * lz + Gxy[small_idx]) / (2.*ew_eta)) )
             if len(large_idx) > 0:
                 x = (ew_eta**2 * lz + Gxy[large_idx]) / (2.*ew_eta)
-                JexpG2[large_idx] += 0.5 * fac[large_idx] * (np.exp(Gxy[large_idx]*lzd2-x**2)/np.sqrt(np.pi)/x *
-                                      (1 - 0.5/x**2) )
+                JexpG2[large_idx] += 0.5 * fac[large_idx] * (np.exp(Gxy[large_idx]*lzd2-x**2) * scipy.special.erfcx(x))
 
             # Note the signs -- potential here is positive
             vlocG[ia,:] = ( Zia * JexpG2
