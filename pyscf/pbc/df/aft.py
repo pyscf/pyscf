@@ -46,39 +46,31 @@ def estimate_eta(cell, cutoff=CUTOFF):
     boundary, density ~ 4pi rmax^2 exp(-eta/2*rmax^2) ~ 1e-12
     '''
     # r^5 to guarantee at least up to f shell converging at boundary
-    eta = max(numpy.log(4*numpy.pi*cell.rcut**5/cutoff)/cell.rcut**2*2,
+    lmax = min(numpy.max(cell._bas[:,gto.ANG_OF]), 3)
+    eta = max(numpy.log(4*numpy.pi*cell.rcut**(lmax+2)/cutoff)/cell.rcut**2*2,
               ETA_MIN)
     return eta
 
 def estimate_eta_for_ke_cutoff(cell, ke_cutoff, precision=PRECISION):
-    b = cell.reciprocal_vectors()
-    if cell.dimension == 0:
-        w = 1
-    elif cell.dimension == 1:
-        w = numpy.linalg.norm(b[0]) / (2*numpy.pi)
-    elif cell.dimension == 2:
-        w = numpy.linalg.norm(numpy.cross(b[0], b[1])) / (2*numpy.pi)**2
-    else:
-        w = abs(numpy.linalg.det(b)) / (2*numpy.pi)**3
-    lmax = min(3, numpy.max(cell._bas[:,gto.ANG_OF]))
-    fac = scipy.misc.factorial2(lmax*2+1)
-    eta = ke_cutoff / ((4+2*lmax)*numpy.log(2*ke_cutoff) -
-                       2*numpy.log(3*fac*precision/(32*numpy.pi**2*w)))
+    '''Given ke_cutoff, the upper limit of eta to guarantee the required
+    precision in Coulomb integrals.
+    '''
+    lmax = numpy.max(cell._bas[:,gto.ANG_OF])
+    kmax = (ke_cutoff*2)**.5
+    log_rest = numpy.log(precision / (32*numpy.pi**2 * kmax**(lmax*2-1)))
+    log_eta = -1
+    eta = kmax**2/4 / (-log_eta - log_rest)
     return eta
 
 def estimate_ke_cutoff_for_eta(cell, eta, precision=PRECISION):
-    b = cell.reciprocal_vectors()
-    if cell.dimension == 0:
-        w = 1
-    elif cell.dimension == 1:
-        w = numpy.linalg.norm(b[0]) / (2*numpy.pi)
-    elif cell.dimension == 2:
-        w = numpy.linalg.norm(numpy.cross(b[0], b[1])) / (2*numpy.pi)**2
-    else:
-        w = abs(numpy.linalg.det(b)) / (2*numpy.pi)**3
-    lmax = min(3, numpy.max(cell._bas[:,gto.ANG_OF]))
-    fac = scipy.misc.factorial2(lmax*2+1)
-    Ecut = 2 * eta * (8+4*lmax - numpy.log(3*fac*precision*(4*eta)**lmax/(32*numpy.pi**2*w)))
+    '''Given eta, the lower limit of ke_cutoff to guarantee the required
+    precision in Coulomb integrals.
+    '''
+    lmax = numpy.max(cell._bas[:,gto.ANG_OF])
+    log_k0 = 5 + numpy.log(eta) / 2
+    log_rest = numpy.log(precision / (32*numpy.pi**2*eta))
+    Ecut = 2*eta * (log_k0*(lmax*2-1) - log_rest)
+    Ecut = max(Ecut, .5)
     return Ecut
 
 def get_nuc(mydf, kpts=None):
