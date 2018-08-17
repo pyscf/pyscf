@@ -50,7 +50,7 @@ def update_amps(cc, t1, t2, eris):
     Ht2ab = np.zeros_like(t2ab)
     Ht2bb = np.zeros_like(t2bb)
 
-    nocca, nvira = t1a.shape[1:]
+    nkpts, nocca, nvira = t1a.shape
     noccb, nvirb = t1b.shape[1:]
     fvv_ = eris.fock[0][:,nocca:,nocca:]
     fVV_ = eris.fock[1][:,noccb:,noccb:]
@@ -74,7 +74,7 @@ def update_amps(cc, t1, t2, eris):
     kconserv = cc.khelper.kconserv
 
     # T1 equation
-    P = kintermediates_uhf.kconserv_mat(cc.nkpts, cc.khelper.kconserv)
+    P = kintermediates_uhf.kconserv_mat(nkpts, cc.khelper.kconserv)
     Ht1a += fov_.conj()
     Ht1b += fOV_.conj()
     Ht1a += einsum('xyximae,yme->xia', t2aa, Fov_)
@@ -381,7 +381,7 @@ def energy(cc, t1, t2, eris):
     kka, noa, nva = t1a.shape
     kkb, nob, nvb = t1b.shape
     assert(kka == kkb)
-    nkbps = kka
+    nkpts = kka
     s = 0.0 + 0j
     fa, fb = eris.fock
     for ki in range(nkpts):
