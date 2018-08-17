@@ -727,7 +727,7 @@ def ewald(cell, ew_eta=None, ew_cut=None):
     if ew_cut is None: ew_cut = cell.ew_cut
     chargs = cell.atom_charges()
     coords = cell.atom_coords()
-
+    low_dim_ft_type = cell.low_dim_ft_type
     Lall = cell.get_lattice_Ls(rcut=ew_cut)
     ewovrl = 0.
     for i, qi in enumerate(chargs):

@@ -423,57 +423,6 @@ def _ewald_exxdiv_for_G0(cell, kpts, dms, vk, kpts_band=None):
                 for i,dm in enumerate(dms):
                     vk[i,kp] += madelung * reduce(numpy.dot, (s[k], dm[k], s[k]))
 
-def _ewald_exxdiv_1d2d(cell, kpts, dms, vk, kpts_band=None):
-    s = cell.pbc_intor('int1e_ovlp', hermi=1, kpts=kpts)
-    madelung = tools.pbc.madelung(cell, kpts)
-
-    Gv, Gvbase, kws = cell.get_Gv_weights(cell.mesh)
-    G0idx, SI_on_z = gto.cell._SI_for_uniform_model_charge(cell, Gv)
-    coulG = 4*numpy.pi / numpy.linalg.norm(Gv[G0idx], axis=1)**2
-    wcoulG = coulG * kws[G0idx]
-    aoao_ij = ft_ao._ft_aopair_kpts(cell, Gv[G0idx], kptjs=kpts)
-    aoao_kl = ft_ao._ft_aopair_kpts(cell,-Gv[G0idx], kptjs=kpts)
-
-    def _contract_(vk, dms, s, aoao_ij, aoao_kl, kweight):
-        # Without removing aoao(Gx=0,Gy=0), the summation of vk and ewald probe
-        # charge correction (as _ewald_exxdiv_3d did) gives the reasonable
-        # finite value for vk.  Here madelung constant and vk were calculated
-        # without (Gx=0,Gy=0).  The code below restores the (Gx=0,Gy=0) part.
-        madelung_mod = numpy.einsum('g,g,g', SI_on_z.conj(), wcoulG, SI_on_z)
-        tmp_ij = numpy.einsum('gij,g,g->ij', aoao_ij, wcoulG, SI_on_z.conj())
-        tmp_kl = numpy.einsum('gij,g,g->ij', aoao_kl, wcoulG, SI_on_z       )
-        for i,dm in enumerate(dms):
-            #:aoaomod_ij = aoao_ij - numpy.einsum('g,ij->gij', SI_on_z       , s)
-            #:aoaomod_kl = aoao_kl - numpy.einsum('g,ij->gij', SI_on_z.conj(), s)
-            #:ktmp  = kweight * lib.einsum('gij,jk,g,gkl->il', aoao_ij   , dm, wcoulG, aoao_kl   )
-            #:ktmp -= kweight * lib.einsum('gij,jk,g,gkl->il', aoaomod_ij, dm, wcoulG, aoaomod_kl)
-            #:ktmp += (madelung - kweight*wcoulG.sum()) * reduce(numpy.dot, (s, dm, s))
-            ktmp  = kweight * lib.einsum('ij,jk,kl->il', tmp_ij, dm, s)
-            ktmp += kweight * lib.einsum('ij,jk,kl->il', s, dm, tmp_kl)
-            ktmp += ((madelung - kweight*wcoulG.sum() - kweight * madelung_mod)
-                     * reduce(numpy.dot, (s, dm, s)))
-            if vk.dtype == numpy.double:
-                vk[i] += ktmp.real
-            else:
-                vk[i] += ktmp
-
-    if kpts is None:
-        _contract_(vk, dms, s, aoao_ij[0], aoao_kl[0], 1)
-
-    elif numpy.shape(kpts) == (3,):
-        if kpts_band is None or is_zero(kpts_band-kpts):
-            _contract_(vk, dms, s, aoao_ij[0], aoao_kl[0], 1)
-
-    elif kpts_band is None or numpy.array_equal(kpts, kpts_band):
-        nkpts = len(kpts)
-        for k in range(nkpts):
-            _contract_(vk[:,k], dms[:,k], s[k], aoao_ij[k], aoao_kl[k], 1./nkpts)
-    else:
-        nkpts = len(kpts)
-        for k, kpt in enumerate(kpts):
-            for kp in member(kpt, kpts_band.reshape(-1,3)):
-                _contract_(vk[:,kp], dms[:,k], s[k], aoao_ij[k], aoao_kl[k], 1./nkpts)
-
 
 if __name__ == '__main__':
     import pyscf.pbc.gto as pgto

@@ -35,6 +35,7 @@ class RCCSD(rccsd.RCCSD):
 
     def ao2mo(self, mo_coeff=None):
         ao2mofn = mp.mp2._gen_ao2mofn(self._scf)
+        #TODO: set exxdiv=None
         return rccsd._make_eris_incore(self, mo_coeff, ao2mofn=ao2mofn)
 
 class UCCSD(uccsd.UCCSD):

@@ -28,7 +28,8 @@ class RMP2(mp2.RMP2):
 
     def ao2mo(self, mo_coeff=None):
         ao2mofn = _gen_ao2mofn(self._scf)
-        return mp2._make_eris(self, mo_coeff, ao2mofn, self.verbose)
+        eris = mp2._make_eris(self, mo_coeff, ao2mofn, self.verbose)
+        return eris
 
 class UMP2(ump2.UMP2):
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
@@ -40,7 +41,8 @@ class UMP2(ump2.UMP2):
 
     def ao2mo(self, mo_coeff=None):
         ao2mofn = _gen_ao2mofn(self._scf)
-        return ump2._make_eris(self, mo_coeff, ao2mofn, self.verbose)
+        eris = ump2._make_eris(self, mo_coeff, ao2mofn, self.verbose)
+        return eris
 
 class GMP2(gmp2.GMP2):
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):

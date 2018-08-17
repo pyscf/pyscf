@@ -115,6 +115,7 @@ def get_gth_vlocG(cell, Gv, low_dim_ft_type=None):
             if symb not in cell._pseudo:
                 vlocG[ia] = Zia * coulG
                 continue
+
             pp = cell._pseudo[symb]
             rloc, nexp, cexp = pp[1:3+1]
 
@@ -146,8 +147,8 @@ def get_gth_vlocG(cell, Gv, low_dim_ft_type=None):
         for ia in range(cell.natm):
             Zia = cell.atom_charge(ia)
             symb = cell.atom_symbol(ia)
-# FIXME: the mixed pseudo-potential and normal nuclear attraction potential
             if symb not in cell._pseudo:
+# FIXME: the mixed pseudo-potential and normal nuclear attraction potential
                 vlocG[ia] = Zia * coulG
                 continue
 
