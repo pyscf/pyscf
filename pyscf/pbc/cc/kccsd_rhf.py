@@ -411,7 +411,7 @@ def add_vvvv_(cc, Ht2, t1, t2, eris):
     else:
         fimd = lib.H5TmpFile()
         _Wvvvv = fimd.create_dataset('vvvv', (nkpts,nkpts,nkpts,nvir,nvir,nvir,nvir), t1.dtype.char)
-        _Wvvvv = imdk.cc_Wvvvv(t1, t2, eris, kconserv, Wvvvv)
+        _Wvvvv = imdk.cc_Wvvvv(t1, t2, eris, kconserv, _Wvvvv)
         def get_Wvvvv(ka, kb, kc):
             return _Wvvvv[ka,kb,kc]
 

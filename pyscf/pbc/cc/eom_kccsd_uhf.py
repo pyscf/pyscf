@@ -752,7 +752,7 @@ if __name__ == '__main__':
     imds = myeom.make_imds(eris=kccsd_eris, t1=spin_t1, t2=spin_t2)
     imds._uccsd_eris = eris
     imds._uccsd_imds = _IMDS(mycc, eris=eris)
-    imds._uccsd_imds.make_ip()
+    imds._uccsd_imds.make_ea()
 
     spin_r1_ea = (np.random.rand(nvir)*1j +
                   np.random.rand(nvir) - 0.5 - 0.5*1j)

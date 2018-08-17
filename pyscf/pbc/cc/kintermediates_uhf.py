@@ -43,37 +43,37 @@ def cc_Fvv(cc, t1, t2, eris):
 
     tau_tildeaa,tau_tildeab,tau_tildebb=make_tau(cc,t2,t1,t1,fac=0.5)
 
-    fov_ = eris.fock[0][:,:nocc_a,nocc_a:]
-    fOV_ = eris.fock[1][:,:nocc_b,nocc_b:]
-    fvv_ = eris.fock[0][:,nocc_a:,nocc_a:]
-    fVV_ = eris.fock[1][:,nocc_b:,nocc_b:]
+    fov = eris.fock[0][:,:nocc_a,nocc_a:]
+    fOV = eris.fock[1][:,:nocc_b,nocc_b:]
+    fvv = eris.fock[0][:,nocc_a:,nocc_a:]
+    fVV = eris.fock[1][:,nocc_b:,nocc_b:]
 
     for ka in range(nkpts):
-     fa[ka]+=fvv_[ka]
-     fb[ka]+=fVV_[ka]
-     fa[ka]-=0.5*einsum('me,ma->ae',fov_[ka],t1a[ka])
-     fb[ka]-=0.5*einsum('me,ma->ae',fOV_[ka],t1b[ka])
-     for km in range(nkpts):
-      fa[ka]+=einsum('mf,fmea->ae',t1a[km], eris.vovv[km,km,ka].conj())
-      fa[ka]-=einsum('mf,emfa->ae',t1a[km], eris.vovv[ka,km,km].conj())
-      fa[ka]+=einsum('mf,fmea->ae',t1b[km], eris.VOvv[km,km,ka].conj())
+        fa[ka]+=fvv[ka]
+        fb[ka]+=fVV[ka]
+        fa[ka]-=0.5*einsum('me,ma->ae',fov[ka],t1a[ka])
+        fb[ka]-=0.5*einsum('me,ma->ae',fOV[ka],t1b[ka])
+        for km in range(nkpts):
+            fa[ka]+=einsum('mf,fmea->ae',t1a[km], eris.vovv[km,km,ka].conj())
+            fa[ka]-=einsum('mf,emfa->ae',t1a[km], eris.vovv[ka,km,km].conj())
+            fa[ka]+=einsum('mf,fmea->ae',t1b[km], eris.VOvv[km,km,ka].conj())
 
-      fb[ka]+=einsum('mf,fmea->ae',t1b[km], eris.VOVV[km,km,ka].conj())
-      fb[ka]-=einsum('mf,emfa->ae',t1b[km], eris.VOVV[ka,km,km].conj())
-      fb[ka]+=einsum('mf,fmea->ae',t1a[km], eris.voVV[km,km,ka].conj())
+            fb[ka]+=einsum('mf,fmea->ae',t1b[km], eris.VOVV[km,km,ka].conj())
+            fb[ka]-=einsum('mf,emfa->ae',t1b[km], eris.VOVV[ka,km,km].conj())
+            fb[ka]+=einsum('mf,fmea->ae',t1a[km], eris.voVV[km,km,ka].conj())
 
-      for kn in range(nkpts):
-       fa[ka]-=0.5*einsum('mnaf,menf->ae',tau_tildeaa[km,kn,ka],eris.ovov[km,ka,kn]) # v
-       fa[ka]-=0.5*einsum('mNaF,meNF->ae',tau_tildeab[km,kn,ka],eris.ovOV[km,ka,kn]) # v
-       kf=kconserv[km,ka,kn]
-       fa[ka]+=0.5*einsum('mnaf,mfne->ae',tau_tildeaa[km,kn,ka],eris.ovov[km,kf,kn]) # v
-       fa[ka]-=0.5*einsum('nMaF,neMF->ae',tau_tildeab[kn,km,ka],eris.ovOV[kn,ka,km]) # c
+            for kn in range(nkpts):
+                fa[ka]-=0.5*einsum('mnaf,menf->ae',tau_tildeaa[km,kn,ka],eris.ovov[km,ka,kn]) # v
+                fa[ka]-=0.5*einsum('mNaF,meNF->ae',tau_tildeab[km,kn,ka],eris.ovOV[km,ka,kn]) # v
+                kf=kconserv[km,ka,kn]
+                fa[ka]+=0.5*einsum('mnaf,mfne->ae',tau_tildeaa[km,kn,ka],eris.ovov[km,kf,kn]) # v
+                fa[ka]-=0.5*einsum('nMaF,neMF->ae',tau_tildeab[kn,km,ka],eris.ovOV[kn,ka,km]) # c
 
-       fb[ka]-=0.5*einsum('mnaf,menf->ae',tau_tildebb[km,kn,ka],eris.OVOV[km,ka,kn]) # v
-       fb[ka]-=0.5*einsum('nmfa,nfme->ae',tau_tildeab[kn,km,kf],eris.ovOV[kn,kf,km]) # v
-       kf=kconserv[km,ka,kn]
-       fb[ka]+=0.5*einsum('mnaf,mfne->ae',tau_tildebb[km,kn,ka],eris.OVOV[km,kf,kn]) # v
-       fb[ka]-=0.5*einsum('MnFa,MFne->ae',tau_tildeab[km,kn,kf],eris.ovOV[km,kf,kn]) # c
+                fb[ka]-=0.5*einsum('mnaf,menf->ae',tau_tildebb[km,kn,ka],eris.OVOV[km,ka,kn]) # v
+                fb[ka]-=0.5*einsum('nmfa,nfme->ae',tau_tildeab[kn,km,kf],eris.ovOV[kn,kf,km]) # v
+                kf=kconserv[km,ka,kn]
+                fb[ka]+=0.5*einsum('mnaf,mfne->ae',tau_tildebb[km,kn,ka],eris.OVOV[km,kf,kn]) # v
+                fb[ka]-=0.5*einsum('MnFa,MFne->ae',tau_tildeab[km,kn,kf],eris.ovOV[km,kf,kn]) # c
 
     return fa,fb #Fvv, FVV
 
@@ -91,39 +91,39 @@ def cc_Foo(cc, t1, t2, eris):
 
     tau_tildeaa,tau_tildeab,tau_tildebb=make_tau(cc,t2,t1,t1,fac=0.5)
 
-    fov_ = eris.fock[0][:,:nocc_a,nocc_a:]
-    fOV_ = eris.fock[1][:,:nocc_b,nocc_b:]
-    foo_ = eris.fock[0][:,:nocc_a,:nocc_a]
-    fOO_ = eris.fock[1][:,:nocc_b,:nocc_b]
+    fov = eris.fock[0][:,:nocc_a,nocc_a:]
+    fOV = eris.fock[1][:,:nocc_b,nocc_b:]
+    foo = eris.fock[0][:,:nocc_a,:nocc_a]
+    fOO = eris.fock[1][:,:nocc_b,:nocc_b]
 
     for ka in range(nkpts):
-     fa[ka]+=foo_[ka]
-     fb[ka]+=fOO_[ka]
-     fa[ka]+=0.5*einsum('me,ne->mn',fov_[ka],t1a[ka])
-     fb[ka]+=0.5*einsum('me,ne->mn',fOV_[ka],t1b[ka])
-     for km in range(nkpts):
-      fa[ka]+=einsum('oa,mnoa->mn',t1a[km],eris.ooov[ka,ka,km])
-      fa[ka]+=einsum('oa,mnoa->mn',t1b[km],eris.ooOV[ka,ka,km])
-      fa[ka]-=einsum('oa,onma->mn',t1a[km],eris.ooov[km,ka,ka])
+        fa[ka]+=foo[ka]
+        fb[ka]+=fOO[ka]
+        fa[ka]+=0.5*einsum('me,ne->mn',fov[ka],t1a[ka])
+        fb[ka]+=0.5*einsum('me,ne->mn',fOV[ka],t1b[ka])
+        for km in range(nkpts):
+            fa[ka]+=einsum('oa,mnoa->mn',t1a[km],eris.ooov[ka,ka,km])
+            fa[ka]+=einsum('oa,mnoa->mn',t1b[km],eris.ooOV[ka,ka,km])
+            fa[ka]-=einsum('oa,onma->mn',t1a[km],eris.ooov[km,ka,ka])
 
-      fb[ka]+=einsum('oa,mnoa->mn',t1b[km],eris.OOOV[ka,ka,km])
-      fb[ka]+=einsum('oa,mnoa->mn',t1a[km],eris.OOov[ka,ka,km])
-      fb[ka]-=einsum('oa,onma->mn',t1b[km],eris.OOOV[km,ka,ka])
+            fb[ka]+=einsum('oa,mnoa->mn',t1b[km],eris.OOOV[ka,ka,km])
+            fb[ka]+=einsum('oa,mnoa->mn',t1a[km],eris.OOov[ka,ka,km])
+            fb[ka]-=einsum('oa,onma->mn',t1b[km],eris.OOOV[km,ka,ka])
 
     for km in range(nkpts):
-     for kn in range(nkpts):
-      for ke in range(nkpts):
-       fa[km]+=0.5*einsum('inef,menf->mi',tau_tildeaa[km,kn,ke],eris.ovov[km,ke,kn]) # v
-       fa[km]+=0.5*einsum('iNeF,meNF->mi',tau_tildeab[km,kn,ke],eris.ovOV[km,ke,kn]) # v
-       kf=kconserv[km,ke,kn]
-       fa[km]-=0.5*einsum('inef,mfne->mi',tau_tildeaa[km,kn,ke],eris.ovov[km,kf,kn]) # v
-       fb[km]+=0.5*einsum('NiEf,NEmf->mi',tau_tildeab[kn,km,ke],eris.ovOV[kn,ke,km]) # c
+        for kn in range(nkpts):
+            for ke in range(nkpts):
+                fa[km]+=0.5*einsum('inef,menf->mi',tau_tildeaa[km,kn,ke],eris.ovov[km,ke,kn]) # v
+                fa[km]+=0.5*einsum('iNeF,meNF->mi',tau_tildeab[km,kn,ke],eris.ovOV[km,ke,kn]) # v
+                kf=kconserv[km,ke,kn]
+                fa[km]-=0.5*einsum('inef,mfne->mi',tau_tildeaa[km,kn,ke],eris.ovov[km,kf,kn]) # v
+                fb[km]+=0.5*einsum('NiEf,NEmf->mi',tau_tildeab[kn,km,ke],eris.ovOV[kn,ke,km]) # c
 
-       fb[km]+=0.5*einsum('INEF,MENF->MI',tau_tildebb[km,kn,ke],eris.OVOV[km,ke,kn]) # v
-       fb[km]+=0.5*einsum('nIfE,nfME->MI',tau_tildeab[kn,km,kf],eris.ovOV[kn,kf,km]) # v
-       kf=kconserv[km,ke,kn]
-       fb[km]-=0.5*einsum('INEF,MFNE->MI',tau_tildebb[km,kn,ke],eris.OVOV[km,kf,kn]) # v
-       fa[km]+=0.5*einsum('InFe,MFne->MI',tau_tildeab[km,kn,kf],eris.ovOV[km,kf,kn]) # c
+                fb[km]+=0.5*einsum('INEF,MENF->MI',tau_tildebb[km,kn,ke],eris.OVOV[km,ke,kn]) # v
+                fb[km]+=0.5*einsum('nIfE,nfME->MI',tau_tildeab[kn,km,kf],eris.ovOV[kn,kf,km]) # v
+                kf=kconserv[km,ke,kn]
+                fb[km]-=0.5*einsum('INEF,MFNE->MI',tau_tildebb[km,kn,ke],eris.OVOV[km,kf,kn]) # v
+                fa[km]+=0.5*einsum('InFe,MFne->MI',tau_tildeab[km,kn,kf],eris.ovOV[km,kf,kn]) # c
 
     return fa,fb #Foo, FOO
 
@@ -136,24 +136,24 @@ def cc_Fov(cc, t1, t2, eris):
 
     kconserv = cc.khelper.kconserv
 
-    fov_ = eris.fock[0][:,:nocc_a,nocc_a:]
-    fOV_ = eris.fock[1][:,:nocc_b,nocc_b:]
+    fov = eris.fock[0][:,:nocc_a,nocc_a:]
+    fOV = eris.fock[1][:,:nocc_b,nocc_b:]
 
     fa = np.zeros((nkpts,nocc_a,nvir_a), dtype=np.complex128)
     fb = np.zeros((nkpts,nocc_b,nvir_b), dtype=np.complex128)
 
     for km in range(nkpts):
-     fa[km]+=fov_[km]
-     fb[km]+=fOV_[km]
-     for kn in range(nkpts):
-      fa[km]+=einsum('nf,menf->me',t1a[kn],eris.ovov[km,km,kn])
-      fa[km]+=einsum('nf,menf->me',t1b[kn],eris.ovOV[km,km,kn])
-      fa[km]-=einsum('nf,mfne->me',t1a[kn],eris.ovov[km,kn,kn])
-      fb[km]+=einsum('nf,menf->me',t1b[kn],eris.OVOV[km,km,kn])
-      fb[km]+=einsum('nf,nfme->me',t1a[kn],eris.ovOV[kn,kn,km])
-      fb[km]-=einsum('nf,mfne->me',t1b[kn],eris.OVOV[km,kn,kn])
+        fa[km]+=fov[km]
+        fb[km]+=fOV[km]
+        for kn in range(nkpts):
+            fa[km]+=einsum('nf,menf->me',t1a[kn],eris.ovov[km,km,kn])
+            fa[km]+=einsum('nf,menf->me',t1b[kn],eris.ovOV[km,km,kn])
+            fa[km]-=einsum('nf,mfne->me',t1a[kn],eris.ovov[km,kn,kn])
+            fb[km]+=einsum('nf,menf->me',t1b[kn],eris.OVOV[km,km,kn])
+            fb[km]+=einsum('nf,nfme->me',t1a[kn],eris.ovOV[kn,kn,km])
+            fb[km]-=einsum('nf,mfne->me',t1b[kn],eris.OVOV[km,kn,kn])
 
-    return fa,fb #Fov, FOV
+    return fa,fb
 
 def cc_Woooo(cc, t1, t2, eris):
     ''' This function returns the Js and Ks intermediates for Wmnij
