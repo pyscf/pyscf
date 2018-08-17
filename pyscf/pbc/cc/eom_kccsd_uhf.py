@@ -332,6 +332,15 @@ def eaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     #Hr1b += 0.5*lib.einsum('ACLD,LCD->A', imds.WVVOV, r2bbb)
     #Hr1b +=     lib.einsum('ACld,lCd->A', imds.WVVov, r2aba)
 
+    '''
+    for kc, kd in itertools.product(range(nkpts), repeat=2):
+        kl = kconserv[kc, kshift, kd]
+        Hr1a += 0.5*lib.einsum('acld,lcd->a', Wvvov[ka,kc,kl],r2aaa[kl,kc]
+        Hr1a += lib.einsum('acLD,LcD->a', WvvOV[ka,kc,kl],r2bab[kl,kc]
+        Hr1b += 0.5*lib.einsum('ACLD,LCD->A', WVVOV[ka,kc,kl],r2bbb[kl,kc]
+        Hr1b += lib.einsum('ACld,lCd->A', WVVov[ka,kc,kl], r2aba[kl,kc]
+    '''
+
     r2aaa, r2aba, r2bab, r2bbb = spatial_r2
     Hr2aaa = np.zeros((nkpts, nkpts, nocca, nvira, nvira), dtype=r2.dtype)
     Hr2aba = np.zeros((nkpts, nkpts, nocca, nvirb, nvira), dtype=r2.dtype)
