@@ -203,21 +203,46 @@ def cc_Woooo(cc, t1, t2, eris):
 
 def cc_Wvvvv(cc, t1, t2, eris):
     t1a, t1b = t1
-    P = kconserv_mat(cc.nkpts, cc.khelper.kconserv)
+    nkpts = cc.nkpts
+    kconserv = cc.khelper.kconserv
+    P = kconserv_mat(nkpts, kconserv)
 
-    Wvvvv = eris.vvvv.copy()
-    Wvvvv += np.einsum('ymb,zyxemfa,zxyw->wzyaebf', t1a, eris.vovv.conj(), P)
-    Wvvvv -= np.einsum('ymb,xyzfmea,xzyw->wzyaebf', t1a, eris.vovv.conj(), P)
-    Wvvvv = Wvvvv - Wvvvv.transpose(2,1,0,5,4,3,6)
+    #:wvvvv = eris.vvvv.copy()
+    #:Wvvvv += np.einsum('ymb,zyxemfa,zxyw->wzyaebf', t1a, eris.vovv.conj(), P)
+    #:Wvvvv -= np.einsum('ymb,xyzfmea,xzyw->wzyaebf', t1a, eris.vovv.conj(), P)
+    #:Wvvvv = Wvvvv - Wvvvv.transpose(2,1,0,5,4,3,6)
+    Wvvvv = np.zeros_like(eris.vvvv)
+    for ka, kb, ke in kpts_helper.loop_kkk(cc.nkpts):
+        kf = kconserv[ka,ke,kb]
+        aebf = eris.vvvv[ka,ke,kb].copy()
+        aebf += np.einsum('mb,emfa->aebf', t1a[kb], eris.vovv[ke,kb,kf].conj())
+        aebf -= np.einsum('mb,fmea->aebf', t1a[kb], eris.vovv[kf,kb,ke].conj())
+        Wvvvv[ka,ke,kb] += aebf
+        Wvvvv[kb,ke,ka] -= aebf.transpose(2,1,0,3)
 
-    WvvVV = eris.vvVV.copy()
-    WvvVV -= np.einsum('xma,zxwemFB,zwxy->xzyaeBF', t1a, eris.voVV.conj(), P)
-    WvvVV -= np.einsum('yMB,wyzFMea,wzyx->xzyaeBF', t1b, eris.VOvv.conj(), P)
+    #:WvvVV = eris.vvVV.copy()
+    #:WvvVV -= np.einsum('xma,zxwemFB,zwxy->xzyaeBF', t1a, eris.voVV.conj(), P)
+    #:WvvVV -= np.einsum('yMB,wyzFMea,wzyx->xzyaeBF', t1b, eris.VOvv.conj(), P)
+    WvvVV = np.empty_like(eris.vvVV)
+    for ka, kb, ke in kpts_helper.loop_kkk(cc.nkpts):
+        kf = kconserv[ka,ke,kb]
+        aebf = eris.vvVV[ka,ke,kb].copy()
+        aebf -= np.einsum('ma,emfb->aebf', t1a[ka], eris.voVV[ke,ka,kf].conj())
+        aebf -= np.einsum('mb,fmea->aebf', t1b[kb], eris.VOvv[kf,kb,ke].conj())
+        WvvVV[ka,ke,kb] = aebf
 
-    WVVVV = eris.VVVV.copy()
-    WVVVV += np.einsum('ymb,zyxemfa,zxyw->wzyaebf', t1b, eris.VOVV.conj(), P)
-    WVVVV -= np.einsum('ymb,xyzfmea,xzyw->wzyaebf', t1b, eris.VOVV.conj(), P)
-    WVVVV = WVVVV - WVVVV.transpose(2,1,0,5,4,3,6)
+    #:WVVVV = eris.VVVV.copy()
+    #:WVVVV += np.einsum('ymb,zyxemfa,zxyw->wzyaebf', t1b, eris.VOVV.conj(), P)
+    #:WVVVV -= np.einsum('ymb,xyzfmea,xzyw->wzyaebf', t1b, eris.VOVV.conj(), P)
+    #:WVVVV = WVVVV - WVVVV.transpose(2,1,0,5,4,3,6)
+    WVVVV = np.zeros_like(eris.VVVV)
+    for ka, kb, ke in kpts_helper.loop_kkk(cc.nkpts):
+        kf = kconserv[ka,ke,kb]
+        aebf = eris.VVVV[ka,ke,kb].copy()
+        aebf += np.einsum('mb,emfa->aebf', t1b[kb], eris.VOVV[ke,kb,kf].conj())
+        aebf -= np.einsum('mb,fmea->aebf', t1b[kb], eris.VOVV[kf,kb,ke].conj())
+        WVVVV[ka,ke,kb] += aebf
+        WVVVV[kb,ke,ka] -= aebf.transpose(2,1,0,3)
     return Wvvvv, WvvVV, WVVVV
 
 def Wvvvv(cc, t1, t2, eris):

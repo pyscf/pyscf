@@ -304,18 +304,6 @@ def eaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
             kl = kconserv[kj, ka, kd]
             Hr2[kj, ka] -= lib.einsum('ladj,lbd->jab', imds.Wovvo[kl, ka, kd], r2[kl, kb])
 
-#    for kj, ka in itertools.product(range(nkpts), repeat=2):
-#        kb = kconserv[kshift,ka,kj]
-#        for kd in range(nkpts):
-#            kc = kconserv[ka, kd, kb]
-#            Hr2[kj, ka] += 0.5 * lib.einsum('abcd,jcd->jab', imds.Wvvvv[ka, kb, kc], r2[kj, kc])
-#
-#    for kj, ka in itertools.product(range(nkpts), repeat=2):
-#        kb = kconserv[kshift,ka,kj]
-#        for kd in range(nkpts):
-#            kc = kconserv[ka, kd, kb]
-#            Hr2[kj, ka] -= 0.5 * lib.einsum('abcd,jcd->jab', imds.eris.vvvv[ka, kb, kc], r2[kj, kc])
-
     tmp = lib.einsum('xyklcd,xylcd->k', imds.Woovv[kshift, :, :], r2[:, :])  # contract_{kl, kc}
     Hr2[:, :] -= 0.5*lib.einsum('k,xykjab->xyjab', tmp, imds.t2[kshift, :, :])  # sum_{kj, ka]
 
@@ -553,73 +541,8 @@ class _IMDS:
 
         # 3 or 4 virtuals
         #self.Wvvov, self.WvvOV, self.WVVov, self.WVVOV = kintermediates_uhf.Wvvov(t1, t2, eris)  # TODO
-        #self.Wvvvv = None  # too expensive to hold Wvvvv
-        #self.Wvvvo, self.WvvVO, self.WVVvo, self.WVVVO = kintermediates_uhf.Wvvvo(t1, t2, eris)  # TODO
-
-        self.Wvvvv, self.WvvVV, self.WVVVV = kintermediates_uhf.Wvvvv(self._cc, t1, t2, eris)
-        # The contribution of Wvvvv
-        t1a, t1b = t1
-        # The contraction to eris.vvvv is included in eaccsd_matvec
-        # TODO: Not included in current kccsd implementation
-        #:vvvv = eris.vvvv - eris.vvvv.transpose(0,3,2,1)
-        #:VVVV = eris.VVVV - eris.VVVV.transpose(0,3,2,1)
-        #:self.Wvvvo += lib.einsum('abef,if->abei',      vvvv, t1a)
-        #:self.WvvVO += lib.einsum('abef,if->abei', eris_vvVV, t1b)
-        #:self.WVVvo += lib.einsum('efab,if->abei', eris_vvVV, t1a)
-        #:self.WVVVO += lib.einsum('abef,if->abei',      VVVV, t1b)
-
-#?        tauaa, tauab, taubb = uccsd.make_tau(t2, t1, t1)
-#?        eris_ovov = np.asarray(eris.ovov)
-#?        eris_OVOV = np.asarray(eris.OVOV)
-#?        eris_ovOV = np.asarray(eris.ovOV)
-#?        ovov = eris_ovov - eris_ovov.transpose(0,3,2,1)
-#?        OVOV = eris_OVOV - eris_OVOV.transpose(0,3,2,1)
-#?        tmp = lib.einsum('menf,if->meni',      ovov, t1a) * .5
-#?        self.Wvvvo += lib.einsum('meni,mnab->aebi', tmp, tauaa)
-#?        tmp = tauaa = None
-#?
-#?        tmp = lib.einsum('menf,if->meni',      OVOV, t1b) * .5
-#?        self.WVVVO += lib.einsum('meni,mnab->aebi', tmp, taubb)
-#?        tmp = taubb = None
-#?
-#?        tmp = lib.einsum('menf,if->meni', eris_ovOV, t1b)
-#?        self.WvvVO += lib.einsum('meni,mnab->aebi', tmp, tauab)
-#?        tmp = lib.einsum('nfme,if->meni', eris_ovOV, t1a)
-#?        self.WVVvo += lib.einsum('meni,nmba->aebi', tmp, tauab)
-#?        tmpbab = tmpaba = tauab = None
-#?        ovov = OVOV = eris_ovov = eris_OVOV = eris_ovOV = None
-#?
-#?        eris_ovvv = eris.get_ovvv(slice(None))
-#?        ovvv = eris_ovvv - eris_ovvv.transpose(0,3,2,1)
-#?        tmp = lib.einsum('mebf,if->mebi', ovvv, t1a)
-#?        tmp = lib.einsum('mebi,ma->aebi', tmp, t1a)
-#?        self.Wvvvo -= tmp - tmp.transpose(2,1,0,3)
-#?        tmp = eris_ovvv = ovvv = None
-#?
-#?        eris_OVVV = eris.get_OVVV(slice(None))
-#?        OVVV = eris_OVVV - eris_OVVV.transpose(0,3,2,1)
-#?        tmp = lib.einsum('mebf,if->mebi', OVVV, t1b)
-#?        tmp = lib.einsum('mebi,ma->aebi', tmp, t1b)
-#?        self.WVVVO -= tmp - tmp.transpose(2,1,0,3)
-#?        tmp = eris_OVVV = OVVV = None
-#?
-#?        eris_ovVV = eris.get_ovVV(slice(None))
-#?        eris_OVvv = eris.get_OVvv(slice(None))
-#?        tmpaabb = lib.einsum('mebf,if->mebi', eris_ovVV, t1b)
-#?        tmpbaab = lib.einsum('mebf,ie->mfbi', eris_OVvv, t1b)
-#?        tmp  = lib.einsum('mebi,ma->aebi', tmpaabb, t1a)
-#?        tmp += lib.einsum('mfbi,ma->bfai', tmpbaab, t1b)
-#?        self.WvvVO -= tmp
-#?        tmp = tmpaabb = tmpbaab = None
-#?
-#?        tmpbbaa = lib.einsum('mebf,if->mebi', eris_OVvv, t1a)
-#?        tmpabba = lib.einsum('mebf,ie->mfbi', eris_ovVV, t1a)
-#?        tmp  = lib.einsum('mebi,ma->aebi', tmpbbaa, t1b)
-#?        tmp += lib.einsum('mfbi,ma->bfai', tmpabba, t1a)
-#?        self.WVVvo -= tmp
-#?        tmp = tmpbbaa = tmpabba = None
-#?        eris_ovVV = eris_OVvv = None
-#?        # The contribution of Wvvvv end
+        self.Wvvvv, self.WvvVV, self.WVVVV = Wvvvv = kintermediates_uhf.Wvvvv(self._cc, t1, t2, eris)
+        #self.Wvvvo, self.WvvVO, self.WVVvo, self.WVVVO = kintermediates_uhf.Wvvvo(t1, t2, eris, Wvvvv)  # TODO
 
         self.made_ea_imds = True
         logger.timer_debug1(self, 'EOM-KUCCSD EA intermediates', *cput0)
