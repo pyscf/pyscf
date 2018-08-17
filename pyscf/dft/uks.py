@@ -25,7 +25,6 @@ import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import uhf
-from pyscf.scf import jk
 from pyscf.dft import rks
 
 
@@ -130,7 +129,7 @@ def energy_elec(ks, dm=None, h1e=None, vhf=None):
 
 class UKS(uhf.UHF):
     '''Unrestricted Kohn-Sham
-    See pyscf/dft/rks.py RKS class for the usage of the attributes'''
+    See pyscf/dft/rks.py RKS class for document of the attributes'''
     def __init__(self, mol):
         uhf.UHF.__init__(self, mol)
         rks._dft_common_init_(self)

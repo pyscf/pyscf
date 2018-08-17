@@ -36,7 +36,7 @@ from pyscf.pbc.df import outcore
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import df
 from pyscf.pbc.df import aft
-from pyscf.pbc.df.df import make_modrho_basis, fuse_auxcell
+from pyscf.pbc.df.df import fuse_auxcell
 from pyscf.pbc.df.df_jk import zdotNN, zdotCN, zdotNC
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, unique
 from pyscf.pbc.df import mdf_jk
@@ -271,7 +271,19 @@ class MDF(df.DF):
         self.kpts_band = None
         self._auxbasis = None
         self.mesh = _mesh_for_valence(cell)
+
+        # In MDF, fitting PWs (self.mesh), and parameters eta and exp_to_discard
+        # are related to each other. The compensated function does not need to
+        # be very smooth. It just needs to be expanded by the specified PWs
+        # (self.mesh). self.eta is estimated on the fly based on the value of
+        # self.mesh.
         self.eta = None
+
+        # Any functions which are more diffused than the compensated Gaussian
+        # are linearly dependent to the PWs. They can be removed from the
+        # auxiliary set without affecting the accuracy of MDF. exp_to_discard
+        # can be set to the value of self.eta
+        self.exp_to_discard = None
 
 # Not input options
         self.exxdiv = None  # to mimic KRHF/KUHF object in function get_coulG
@@ -299,6 +311,16 @@ class MDF(df.DF):
     @eta.setter
     def eta(self, x):
         self._eta = x
+
+    @property
+    def exp_to_discard(self):
+        if self._exp_to_drop is not None:
+            return self._exp_to_drop
+        else:
+            return self.eta
+    @exp_to_discard.setter
+    def exp_to_discard(self, x):
+        self._exp_to_drop = x
 
     _make_j3c = _make_j3c
 

@@ -36,6 +36,7 @@ cell.a = '''
 3.370137329, 0.000000000, 3.370137329
 3.370137329, 3.370137329, 0.000000000'''
 cell.unit = 'B'
+cell.mesh = [13,13,13]
 cell.build()
 
 
@@ -133,7 +134,6 @@ class KnownValues(unittest.TestCase):
 
         self.assertAlmostEqual(lib.finger(eris.oooo), 0.10126616996580763    -0.89787173918481156j  , 12)
         self.assertAlmostEqual(lib.finger(eris.ooov), -0.035814310241888067  +0.20393025075274804j  , 12)
-        self.assertAlmostEqual(lib.finger(eris.ovoo), -0.50722786843501422   +0.37774766995055753j  , 12)
         self.assertAlmostEqual(lib.finger(eris.oovv), -0.032378345849800663  +0.015060519910448879j , 12)
         self.assertAlmostEqual(lib.finger(eris.ovov), 0.017919215232962762   -0.37180556037878837j  , 12)
         self.assertAlmostEqual(lib.finger(eris.voov), -0.33038865500581482   +0.18384096784449852j  , 12)
@@ -142,7 +142,6 @@ class KnownValues(unittest.TestCase):
 
         self.assertAlmostEqual(lib.finger(eris.OOOO), 0.022687859086726745   +0.0076542690105189095j, 12)
         self.assertAlmostEqual(lib.finger(eris.OOOV), -0.024119030579269278  -0.15249100640417029j  , 12)
-        self.assertAlmostEqual(lib.finger(eris.OVOO), 0.081213986182876771   +0.060433570182479225j , 12)
         self.assertAlmostEqual(lib.finger(eris.OOVV), 0.085942751462484687   -0.27088394382044989j  , 12)
         self.assertAlmostEqual(lib.finger(eris.OVOV), 0.35291244981540776    +0.080119865729794376j , 12)
         self.assertAlmostEqual(lib.finger(eris.VOOV), 0.0045484393536995267  +0.0094123990059577414j, 12)
@@ -151,7 +150,6 @@ class KnownValues(unittest.TestCase):
 
         self.assertAlmostEqual(lib.finger(eris.ooOO), -0.32831508979976765   -0.32180378432620471j  , 12)
         self.assertAlmostEqual(lib.finger(eris.ooOV), 0.33617152217704632    -0.34130555912360216j  , 12)
-        self.assertAlmostEqual(lib.finger(eris.ovOO), 0.12883458658998678    -0.16524270928065571j  , 12)
         self.assertAlmostEqual(lib.finger(eris.ooVV), -0.00011230004797088339-1.2850251519380604j   , 12)
         self.assertAlmostEqual(lib.finger(eris.ovOV), 0.1365118156144336     +0.16999367231786541j  , 12)
         self.assertAlmostEqual(lib.finger(eris.voOV), 0.19736044623396901    -0.047060848969879901j , 12)
@@ -160,7 +158,6 @@ class KnownValues(unittest.TestCase):
 
         self.assertAlmostEqual(lib.finger(eris.OOoo), 0.031140414688898856   -0.23913617484062258j  , 12)
         self.assertAlmostEqual(lib.finger(eris.OOov), 0.20355552926191381    +0.18712171841650935j  , 12)
-        self.assertAlmostEqual(lib.finger(eris.OVoo), 0.36687877218911796    -0.083646655779619272j , 12)
         self.assertAlmostEqual(lib.finger(eris.OOvv), 0.070789122903945706   -0.013360818695166678j , 12)
         self.assertAlmostEqual(lib.finger(eris.OVov), 0.38230103404493437    -0.019845885264560274j , 12)
         self.assertAlmostEqual(lib.finger(eris.VOov), 0.081760186267865437   -0.052409714443657308j , 12)

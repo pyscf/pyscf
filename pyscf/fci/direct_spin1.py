@@ -526,11 +526,7 @@ def make_pspace_precond(hdiag, pspaceig, pspaceci, addr, level_shift=0):
     return precond
 
 def make_diag_precond(hdiag, pspaceig, pspaceci, addr, level_shift=0):
-    def precond(x, e, *args):
-        hdiagd = hdiag-(e-level_shift)
-        hdiagd[abs(hdiagd)<1e-8] = 1e-8
-        return x/hdiagd
-    return precond
+    return lib.make_diag_precond(hdiag, level_shift)
 
 
 class FCISolver(lib.StreamObject):

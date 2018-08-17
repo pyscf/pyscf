@@ -112,7 +112,7 @@ def kernel(eom, nroots=1, koopmans=False, guess=None, left=False,
             def pickeig(w, v, nr, envs):
                 x0 = lib.linalg_helper._gen_x0(envs['v'], envs['xs'])
                 idx = np.argmax( np.abs(np.dot(np.array(guess).conj(),np.array(x0).T)), axis=1 )
-                return w[idx].real, v[:,idx].real, idx
+                return lib.linalg_helper._eigs_cmplx2real(w, v, idx)
             conv_k, evals_k, evecs_k = eig(matvec, guess, precond, pick=pickeig,
                                            tol=eom.conv_tol, max_cycle=eom.max_cycle,
                                            max_space=eom.max_space, nroots=nroots, verbose=eom.verbose)
@@ -710,6 +710,7 @@ class EOMEA(eom_rccsd.EOM):
             raise NotImplementedError
             matvec = lambda xs: [self.l_matvec(x, kshift, imds, diag) for x in xs]
         else:
+            raise NotImplementedError
             matvec = lambda xs: [self.matvec(x, kshift, imds, diag) for x in xs]
         return matvec, diag
 

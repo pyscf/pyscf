@@ -321,3 +321,8 @@ def UKS(mol, *args):
     from pyscf import dft
     return dft.UKS(mol, *args)
 
+def GKS(mol, *args):
+    from pyscf import dft
+    return dft.GKS(mol, *args)
+
+

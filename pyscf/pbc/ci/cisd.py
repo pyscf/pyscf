@@ -22,7 +22,10 @@ class RCISD(cisd.RCISD):
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
         if abs(mf.kpt).max() > 1e-9:
             raise NotImplementedError
+        from pyscf.pbc.df.df_ao2mo import warn_pbc2d_eri
+        warn_pbc2d_eri(mf)
         cisd.RCISD.__init__(self, mf, frozen, mo_coeff, mo_occ)
+
     def ao2mo(self, mo_coeff=None):
         from pyscf.cc import rccsd
         ao2mofn = mp.mp2._gen_ao2mofn(self._scf)
@@ -32,12 +35,20 @@ class UCISD(ucisd.UCISD):
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
         if abs(mf.kpt).max() > 1e-9:
             raise NotImplementedError
+        from pyscf.pbc.df.df_ao2mo import warn_pbc2d_eri
+        warn_pbc2d_eri(mf)
         ucisd.UCISD.__init__(self, mf, frozen, mo_coeff, mo_occ)
+
     def ao2mo(self, mo_coeff=None):
         ao2mofn = mp.mp2._gen_ao2mofn(self._scf)
         return ucisd.uccsd._make_eris_incore(self, mo_coeff, ao2mofn=ao2mofn)
 
 class GCISD(gcisd.GCISD):
+    def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+        from pyscf.pbc.df.df_ao2mo import warn_pbc2d_eri
+        warn_pbc2d_eri(mf)
+        gcisd.GCISD.__init__(self, mf, frozen, mo_coeff, mo_occ)
+
     def ao2mo(self, mo_coeff=None):
         with_df = self._scf.with_df
         kpt = self._scf.kpt

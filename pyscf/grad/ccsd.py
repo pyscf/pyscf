@@ -267,7 +267,7 @@ def _response_dm1(mycc, Xvo, eris=None):
             v = reduce(numpy.dot, (mo_coeff[:,nocc:].T, v, mo_coeff[:,:nocc]))
             return v * 2
     else:
-        mo_energy = eris.fock.diagonal()
+        mo_energy = eris.mo_energy
         mo_occ = numpy.zeros_like(mo_energy)
         mo_occ[:nocc] = 2
         ovvo = numpy.empty((nocc,nvir,nvir,nocc))

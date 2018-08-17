@@ -905,14 +905,15 @@ def cache_xc_kernel(ni, cell, grids, xc_code, mo_coeff, mo_occ, spin=0,
     return rho, vxc, fxc
 
 
-def get_rho(ni, cell, dm, grids, kpt=numpy.zeros(3), max_memory=2000):
-    '''Indices of density which are larger than given cutoff
+def get_rho(ni, cell, dm, grids, kpts=numpy.zeros((1,3)), max_memory=2000):
+    '''Density in real space
     '''
     make_rho, nset, nao = ni._gen_rho_evaluator(cell, dm)
+    assert(nset == 1)
     rho = numpy.empty(grids.weights.size)
     p1 = 0
     for ao_k1, ao_k2, mask, weight, coords \
-            in ni.block_loop(cell, grids, nao, 0, kpt, None, max_memory):
+            in ni.block_loop(cell, grids, nao, 0, kpts, None, max_memory):
         p0, p1 = p1, p1 + weight.size
         rho[p0:p1] = make_rho(0, ao_k1, mask, 'LDA')
     return rho

@@ -2,19 +2,22 @@ PySCF 1.6 alpha (2018-09-??)
 ----------------------------
 * Added
   - X2C-UKS (LDA functional only)
-  - PBC gamma point ROHF/ROKS
-  - PBC KROHF/KROKS for k-point sampling
+  - PBC gamma point ROHF/ROKS and GKS
+  - PBC KROHF/KROKS and KGKS for k-point sampling
   - DFT Coulomb and XC integrals with multigrid
   - Periodic UCCSD with k-point sampling
   - perturbative DMRG method
+  - Interface to Cornell SHCI
+  - Makov-Payne correction
 * Improved
   - numint performance (eval_rho, eval_mat)
 
 
-PySCF 1.5.2
------------
+PySCF 1.5.2 (2018-08-15)
+------------------------
 * Improved
   - IO performance of pbc.GDF initialization
+  - Default linear dependence treatment in GDF to improve accuracy
 * Bugfix
   - selected_ci 2-particle density matrices for two electron systems
 

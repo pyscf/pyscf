@@ -934,7 +934,7 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     ecoul = .5 * numpy.einsum('ng,ng->n', rhoG[:,0].real, vG.real)
     ecoul+= .5 * numpy.einsum('ng,ng->n', rhoG[:,0].imag, vG.imag)
     ecoul /= cell.vol
-    log.debug('Coulomb energy %s', ecoul)
+    log.debug('Multigrid Coulomb energy %s', ecoul)
 
     weight = cell.vol / ngrids
     # *(1./weight) because rhoR is scaled by weight in _eval_rhoG.  When
@@ -961,6 +961,7 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
         ecoul = ecoul[0]
         nelec = nelec[0]
         excsum = excsum[0]
+    log.debug('Multigrid exc %s  nelec %s', excsum, nelec)
 
     kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
     if xctype == 'LDA':
@@ -1034,7 +1035,7 @@ def nr_uks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     ecoul = .5 * numpy.einsum('ng,g->', rhoG[:,0].real, vG.real)
     ecoul+= .5 * numpy.einsum('ng,g->', rhoG[:,0].imag, vG.imag)
     ecoul /= cell.vol
-    log.debug('Coulomb energy %s', ecoul)
+    log.debug('Multigrid Coulomb energy %s', ecoul)
 
     weight = cell.vol / ngrids
     # *(1./weight) because rhoR is scaled by weight in _eval_rhoG.  When
@@ -1060,6 +1061,7 @@ def nr_uks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
     wv_freq = tools.fft(numpy.vstack((wva,wvb)), mesh)
     wv_freq = wv_freq.reshape(2,-1,*mesh)
     rhoR = rhoG = None
+    log.debug('Multigrid exc %g  nelec %s', excsum, nelec)
 
     kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
     if xctype == 'LDA':
@@ -1375,6 +1377,22 @@ def _gen_uhf_response(mf, dm0, with_j=True, hermi=0):
     return vind
 
 
+def get_rho(mydf, dm, kpts=numpy.zeros((1,3))):
+    '''Density in real space
+    '''
+    cell = mydf.cell
+    hermi = 1
+    rhoG = _eval_rhoG(mydf, numpy.asarray(dm), hermi, kpts, deriv=0)
+
+    mesh = mydf.mesh
+    ngrids = numpy.prod(mesh)
+    weight = cell.vol / ngrids
+    # *(1./weight) because rhoR is scaled by weight in _eval_rhoG.  When
+    # computing rhoR with IFFT, the weight factor is not needed.
+    rhoR = tools.ifft(rhoG.reshape(ngrids), mesh).real * (1./weight)
+    return rhoR
+
+
 def multi_grids_tasks(cell, fft_mesh=None, verbose=None):
     if TASKS_TYPE == 'rcut':
         return multi_grids_tasks_for_rcut(cell, fft_mesh, verbose)
@@ -1630,9 +1648,9 @@ def _primitive_gto_cutoff(cell):
     '''Cutoff raidus, above which each shell decays to a value less than the
     required precsion'''
     precision = cell.precision * EXTRA_PREC
+
     log_prec = numpy.log(precision)
     b = cell.reciprocal_vectors(norm_to=1)
-    ke_factor = abs(numpy.linalg.det(b))
     rcut = []
     ke_cutoff = []
     for ib in range(cell.nbas):
@@ -1643,7 +1661,10 @@ def _primitive_gto_cutoff(cell):
         r = (((l+2)*numpy.log(r)+numpy.log(cs) - log_prec) / es)**.5
         r = (((l+2)*numpy.log(r)+numpy.log(cs) - log_prec) / es)**.5
 
-        ke_guess = gto.cell._estimate_ke_cutoff(es, l, cs, precision, ke_factor)
+# Errors in total number of electrons were observed with the default
+# precision. The energy cutoff (or the integration mesh) is not enough to
+# produce the desired accuracy. Scale precision by 0.1 to decrease the error.
+        ke_guess = gto.cell._estimate_ke_cutoff(es, l, cs, precision*0.1)
 
         rcut.append(r)
         ke_cutoff.append(ke_guess)
@@ -1691,6 +1712,8 @@ class MultiGridFFTDF(fft.FFTDF):
             if with_j:
                 vj = get_j_kpts(self, dm, hermi, kpts, kpts_band)
         return vj, vk
+
+    get_rho = get_rho
 
 
 def multigrid(mf):

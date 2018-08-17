@@ -58,6 +58,8 @@ class ROKS(rohf.ROHF):
 
     get_veff = get_veff
     energy_elec = pyscf.dft.uks.energy_elec
+    get_rho = uks.get_rho
+
     define_xc_ = rks.define_xc_
 
     density_fit = rks._patch_df_beckegrids(rohf.ROHF.density_fit)

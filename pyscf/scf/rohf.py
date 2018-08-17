@@ -311,20 +311,30 @@ class ROHF(hf.RHF):
     def __init__(self, mol):
         hf.SCF.__init__(self, mol)
         self.nelec = None
-        self._keys = self._keys.union(['nelec'])
+
+    @property
+    def nelec(self):
+        if self._nelec is not None:
+            return self._nelec
+        else:
+            return self.mol.nelec
+    @nelec.setter
+    def nelec(self, x):
+        self._nelec = x
+
+    @property
+    def nelectron_alpha(self):
+        return self.nelec[0]
+    @nelectron_alpha.setter
+    def nelectron_alpha(self, x):
+        logger.warn(self, 'WARN: Attribute .nelectron_alpha is deprecated. '
+                    'Set .nelec instead')
+        #raise RuntimeError('API updates')
+        self.nelec = (x, self.mol.nelectron-x)
 
     def dump_flags(self):
         hf.SCF.dump_flags(self)
-        if hasattr(self, 'nelectron_alpha'):  # pragma: no cover
-            logger.warn(self, 'Note the API updates: attribute nelectron_alpha was replaced by attribute nelec')
-            #raise RuntimeError('API updates')
-            self.nelec = (self.nelectron_alpha,
-                          self.mol.nelectron-self.nelectron_alpha)
-            delattr(self, 'nelectron_alpha')
-        if getattr(self, 'nelec', None) is None:
-            nelec = self.mol.nelec
-        else:
-            nelec = self.nelec
+        nelec = self.nelec
         logger.info(self, 'num. doubly occ = %d  num. singly occ = %d',
                     nelec[1], nelec[0]-nelec[1])
 

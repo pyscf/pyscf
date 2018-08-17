@@ -517,7 +517,8 @@ class GHF(hf.SCF):
         from pyscf.scf.stability import ghf_stability
         return ghf_stability(self, verbose)
 
-    nuc_grad_method = None
+    def nuc_grad_method(self):
+        raise NotImplementedError
 
 def _from_rhf_init_dm(dm, breaksym=True):
     dma = dm * .5

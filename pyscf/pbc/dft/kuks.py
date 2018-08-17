@@ -62,8 +62,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         ks.grids.build(with_non0tab=True)
         if (isinstance(ks.grids, gen_grid.BeckeGrids) and
             ks.small_rho_cutoff > 1e-20 and ground_state):
-            ks.grids = rks.prune_small_rho_grids_(ks, cell, dm[0]+dm[1],
-                                                  ks.grids, kpts)
+            ks.grids = rks.prune_small_rho_grids_(ks, cell, dm, ks.grids, kpts)
         t0 = logger.timer(ks, 'setting up grids', *t0)
 
     if hermi == 2:  # because rho = 0
@@ -111,6 +110,13 @@ def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf=None):
     logger.debug(mf, 'E1 = %s  Ecoul = %s  Exc = %s', e1, vhf.ecoul, vhf.exc)
     return tot_e, vhf.ecoul + vhf.exc
 
+@lib.with_doc(kuhf.get_rho.__doc__)
+def get_rho(mf, dm=None, grids=None, kpts=None):
+    from pyscf.pbc.dft import krks
+    if dm is None:
+        dm = self.make_rdm1()
+    return krks.get_rho(mf, dm[0]+dm[1], grids, kpts)
+
 
 class KUKS(kuhf.KUHF):
     '''RKS class adapted for PBCs with k-point sampling.
@@ -125,8 +131,8 @@ class KUKS(kuhf.KUHF):
         self.grids.dump_flags()
 
     get_veff = get_veff
-
     energy_elec = energy_elec
+    get_rho = get_rho
 
     define_xc_ = rks.define_xc_
 

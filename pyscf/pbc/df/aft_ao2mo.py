@@ -38,7 +38,6 @@ from pyscf import __config__
 
 def get_eri(mydf, kpts=None,
             compact=getattr(__config__, 'pbc_df_ao2mo_get_eri_compact', True)):
-    warn_pbc2d_eri(mydf)
     cell = mydf.cell
     nao = cell.nao_nr()
     kptijkl = _format_kpts(kpts)

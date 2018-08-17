@@ -23,7 +23,6 @@ from pyscf.pbc.df import df_jk
 #from mpi4pyscf.pbc.df import df
 #from mpi4pyscf.pbc.df import df_jk
 pyscf.pbc.DEBUG = False
-df.LINEAR_DEP_THR = 1e-7
 
 L = 5.
 n = 11
@@ -52,6 +51,7 @@ class KnowValues(unittest.TestCase):
         mf = df_jk.density_fit(mf0, auxbasis='weigend', mesh=(11,)*3)
         mf.with_df.mesh = cell.mesh
         mf.with_df.eta = 0.3
+        mf.with_df.exp_to_discard = 0.3
         dm = mf.get_init_guess()
         vj, vk = mf.get_jk(cell, dm)
         ej1 = numpy.einsum('ij,ji->', vj, dm)
@@ -72,8 +72,10 @@ class KnowValues(unittest.TestCase):
         numpy.random.seed(1)
         kpt = numpy.random.random(3)
         mydf = df.DF(cell, [kpt]).set(auxbasis='weigend')
+        mydf.linear_dep_threshold = 1e-7
         mydf.mesh = cell.mesh
         mydf.eta = 0.3
+        mydf.exp_to_discard = mydf.eta
         vj, vk = mydf.get_jk(dm, 1, kpt, exxdiv=None)
         ej1 = numpy.einsum('ij,ji->', vj, dm)
         ek1 = numpy.einsum('ij,ji->', vk, dm)
@@ -90,8 +92,10 @@ class KnowValues(unittest.TestCase):
         dm = dm + dm.T
         dm[:2,-3:] *= .5
         jkdf = df.DF(cell).set(auxbasis='weigend')
+        jkdf.linear_dep_threshold = 1e-7
         jkdf.mesh = (11,)*3
         jkdf.eta = 0.3
+        jkdf.exp_to_discard = jkdf.eta
         vj0, vk0 = jkdf.get_jk(dm, hermi=0, exxdiv=None)
         ej0 = numpy.einsum('ij,ji->', vj0, dm)
         ek0 = numpy.einsum('ij,ji->', vk0, dm)
@@ -104,11 +108,13 @@ class KnowValues(unittest.TestCase):
         dm = numpy.random.random((4,nao,nao))
         dm = dm + dm.transpose(0,2,1)
         mydf = df.DF(cell).set(auxbasis='weigend')
+        mydf.linear_dep_threshold = 1e-7
         mydf.kpts = numpy.random.random((4,3))
         mydf.mesh = numpy.asarray((11,)*3)
         mydf.auxbasis = 'weigend'
         mydf.mesh = cell.mesh
         mydf.eta = 0.3
+        mydf.exp_to_discard = mydf.eta
         vj = df_jk.get_j_kpts(mydf, dm, 1, mydf.kpts)
         self.assertAlmostEqual(finger(vj[0]), (0.49176180692009197-0.11891083594538684j ), 9)
         self.assertAlmostEqual(finger(vj[1]), (0.54900852073326378-0.04600354345316908j ), 9)
@@ -121,11 +127,13 @@ class KnowValues(unittest.TestCase):
         dm = numpy.random.random((4,nao,nao))
         dm = dm + dm.transpose(0,2,1)
         mydf = df.DF(cell).set(auxbasis='weigend')
+        mydf.linear_dep_threshold = 1e-7
         mydf.kpts = numpy.random.random((4,3))
         mydf.mesh = numpy.asarray((11,)*3)
         mydf.exxdiv = None
         mydf.mesh = cell.mesh
         mydf.eta = 0.3
+        mydf.exp_to_discard = mydf.eta
         mydf.auxbasis = 'weigend'
         vk = df_jk.get_k_kpts(mydf, dm, 0, mydf.kpts)
         self.assertAlmostEqual(finger(vk[0]), (-2.8332400193836929 -1.0578696472684668j  ), 9)
@@ -153,11 +161,13 @@ class KnowValues(unittest.TestCase):
         nao = cell.nao_nr()
         dm = numpy.random.random((8,nao,nao))
         mydf = df.DF(cell).set(auxbasis='weigend')
+        mydf.linear_dep_threshold = 1e-7
         mydf.kpts = kpts
         mydf.auxbasis = {'He': [(0, (4.096, 1)), (0, (2.56, 1)), (0, (1.6, 1)), (0, (1., 1))]}
         mydf.exxdiv = None
         mydf.mesh = cell.mesh
         mydf.eta = 0.3
+        mydf.exp_to_discard = mydf.eta
         vk = df_jk.get_k_kpts(mydf, dm, 0, mydf.kpts)
         self.assertAlmostEqual(finger(vk[0]), (0.54220010040518218-0.00787204295681934j  ), 9)
         self.assertAlmostEqual(finger(vk[1]), (0.35987105007103914+0.0036047438452865574j), 9)
@@ -184,11 +194,13 @@ class KnowValues(unittest.TestCase):
                                   [ .25, .25,-.25],
                                   [ .25, .25, .25]])
         mydf = df.DF(cell).set(auxbasis='weigend')
+        mydf.linear_dep_threshold = 1e-7
         mydf.kpts = kpts
         mydf.auxbasis = {'He': [(0, (4.096, 1)), (0, (2.56, 1)), (0, (1.6, 1)), (0, (1., 1))]}
         mydf.exxdiv = None
         mydf.mesh = cell.mesh
         mydf.eta = 0.3
+        mydf.exp_to_discard = mydf.eta
         nao = cell.nao_nr()
         numpy.random.seed(1)
         dm = numpy.random.random((8,nao,nao))

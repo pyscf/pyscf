@@ -32,6 +32,7 @@ import h5py
 from pyscf.scf import hf as mol_hf
 from pyscf import lib
 from pyscf.lib import logger
+from pyscf.data import nist
 from pyscf.scf.hf import make_rdm1
 from pyscf.pbc import tools
 from pyscf.pbc.gto import ecp
@@ -199,6 +200,146 @@ make_rdm1 = mol_hf.make_rdm1
 energy_elec = mol_hf.energy_elec
 
 
+def dip_moment(cell, dm, unit='Debye', verbose=logger.NOTE,
+               grids=None, rho=None, kpt=np.zeros(3)):
+    ''' Dipole moment in the unit cell.
+
+    Args:
+         cell : an instance of :class:`Cell`
+
+         dm (ndarray) : density matrix
+
+    Return:
+        A list: the dipole moment on x, y and z components
+    '''
+    from pyscf.pbc.dft import gen_grid
+    from pyscf.pbc.dft import numint
+    log = logger.new_logger(cell, verbose)
+    if grids is None:
+        grids = gen_grid.UniformGrids(cell)
+    if rho is None:
+        rho = numint.NumInt().get_rho(cell, dm, grids, kpt, cell.max_memory)
+
+    # The origin of the dipole moment is not uniquely defined. It can be
+    # arbitrary point inside the unit cell. We use the charge center of the
+    # positive point charges as the origin of multipole.
+    charges = cell.atom_charges()
+    coords  = cell.atom_coords()
+    charge_center = np.einsum('i,ix->x', charges, coords) / charges.sum()
+    log.debug('Charge center %s', charge_center)
+
+    # Move the unit cell to the location around the charge center.
+    a = cell.lattice_vectors()
+    b = np.linalg.inv(a).T
+    r_frac = lib.dot(grids.coords - charge_center, b.T)
+    # Grids on the boundary (r_frac == +/-0.5) of the new cell may lead to
+    # unbalenced contributions to dipole moment. Exclude them from the dipole
+    # and quadrupole
+    r_frac[r_frac== 0.5] = 0
+    r_frac[r_frac==-0.5] = 0
+    r_frac[r_frac > 0.5] -= 1
+    r_frac[r_frac <-0.5] += 1
+    r = lib.dot(r_frac, a)
+    dip = e_dip = -np.einsum('g,g,gx->x', rho, grids.weights, r)
+
+    if unit.upper() == 'DEBYE':
+        dip *= nist.AU2DEBYE
+        log.note('Dipole moment(X, Y, Z, Debye): %8.5f, %8.5f, %8.5f', *dip)
+    else:
+        log.note('Dipole moment(X, Y, Z, A.U.): %8.5f, %8.5f, %8.5f', *dip)
+    return dip
+
+def get_rho(mf, dm=None, grids=None, kpt=None):
+    '''Compute density in real space
+    '''
+    from pyscf.pbc.dft import gen_grid
+    from pyscf.pbc.dft import numint
+    if dm is None:
+        dm = mf.make_rdm1()
+    if grids is None:
+        grids = gen_grid.UniformGrids(mf.cell)
+    if kpt is None:
+        kpt = mf.kpt
+    ni = numint.NumInt()
+    return ni.get_rho(mf.cell, dm, grids, kpt, mf.max_memory)
+
+def _dip_correction(mf):
+    '''Makov-Payne corrections for charged systems.'''
+    from pyscf.pbc.dft import gen_grid
+    cell = mf.cell
+    grids = gen_grid.UniformGrids(cell)
+    dm = mf.make_rdm1()
+    rho = mf.get_rho(dm, grids, mf.kpt)
+    dip = mf.dip_moment(mf.cell, dm, unit='Au', grids=grids, rho=rho)
+
+    #           SC              BCC             FCC
+    madelung = (-2.83729747948, -3.63923344951, -4.58486207411)
+    vol = cell.vol
+    L = vol ** (1./3)
+    chg = cell.charge
+
+    # epsilon is the dielectric constant of the system. For systems
+    # surrounded by vacuum, epsilon = 1.
+    epsilon = 1
+
+    # Energy correction of point charges of a simple cubic lattice.
+    de_mono = - chg**2 * np.array(madelung) / (2 * L * epsilon)
+
+    # dipole energy correction
+    de_dip = -2.*np.pi/(3*cell.vol) * np.linalg.norm(dip)**2
+
+    # quadrupole energy correction
+    a = cell.lattice_vectors()
+    b = np.linalg.inv(a).T
+    if abs(a - np.eye(3)*L).max() > 1e-5:
+        logger.warn(mf, 'System is not cubic cell. Quadrupole energy '
+                    'correction can be used for cubic cell only.')
+    charges = cell.atom_charges()
+    coords  = cell.atom_coords()
+    charge_center = np.einsum('i,ix->x', charges, coords) / charges.sum()
+
+    r_frac = lib.dot(grids.coords - charge_center, b.T)
+    r_frac[r_frac== 0.5] = 0
+    r_frac[r_frac==-0.5] = 0
+    r_frac[r_frac > 0.5] -= 1
+    r_frac[r_frac <-0.5] += 1
+    r = lib.dot(r_frac, a)
+    quad = np.einsum('g,g,gx,gx->', rho, grids.weights, r, r)
+    de_quad = 2.*np.pi/(3*cell.vol) * quad
+
+    de = de_mono + de_dip + de_quad
+    return de_mono, de_dip, de_quad, de
+
+def makov_payne_correction(mf):
+    '''Makov-Payne correction (Phys. Rev. B, 51, 4014)
+    '''
+    cell = mf.cell
+    logger.note(mf, 'Makov-Payne correction for charged 3D PBC systems')
+    # PRB 51 (1995), 4014
+    # PRB 77 (2008), 115139
+    if cell.dimension != 3 and not isinstance(mf.with_df, df.fft.FFTDF):
+        logger.warn(mf, 'Correction for low-dimension AFTDF/GDF/MDF '
+                    'is not available.')
+        return mf
+    elif cell.low_dim_ft_type == 'analytic_2d_1':
+        logger.warn(mf, 'Correction for truncated Coulomb operator '
+                    'is not available.')
+        return mf
+
+    if mf.verbose >= logger.NOTE:
+        de_mono, de_dip, de_quad, de = _dip_correction(mf)
+        write = mf.stdout.write
+        write('Corrections (AU)\n')
+        write('       Monopole      Dipole          Quadrupole    total\n')
+        write('SC   %12.8f   %12.8f   %12.8f   %12.8f\n' %
+              (de_mono[0], de_dip   , de_quad   , de[0]))
+        write('BCC  %12.8f   %12.8f   %12.8f   %12.8f\n' %
+              (de_mono[1], de_dip   , de_quad   , de[1]))
+        write('FCC  %12.8f   %12.8f   %12.8f   %12.8f\n' %
+              (de_mono[2], de_dip   , de_quad   , de[2]))
+    return mf
+
+
 class SCF(mol_hf.SCF):
     '''SCF base class adapted for PBCs.
 
@@ -209,8 +350,8 @@ class SCF(mol_hf.SCF):
         exxdiv : str
             Exchange divergence treatment, can be one of
 
-            | None : ignore G=0 contribution in exchange integral
-            | 'ewald' : Ewald summation for G=0 in exchange integral
+            | None : ignore G=0 contribution in exchange
+            | 'ewald' : Ewald probe charge correction (JCP, 122, 234102)
 
         with_df : density fitting object
             Default is the FFT based DF model. For all-electron calculation,
@@ -408,6 +549,24 @@ class SCF(mol_hf.SCF):
         return self.cell.energy_nuc()
 
     get_bands = get_bands
+
+    get_rho = get_rho
+
+    @lib.with_doc(dip_moment.__doc__)
+    def dip_moment(self, cell=None, dm=None, unit='Debye', verbose=logger.NOTE,
+                   **kwargs):
+        rho = kwargs.pop('rho', None)
+        if rho is None:
+            rho = self.get_rho(dm)
+        return dip_moment(cell, dm, unit, verbose, rho=rho, kpt=self.kpt, **kwargs)
+
+    def _finalize(self):
+        '''Hook for dumping results and clearing up the object.'''
+        mol_hf.SCF._finalize(self)
+
+        if self.cell.charge != 0:
+            makov_payne_correction(self)
+        return self
 
     def get_init_guess(self, cell=None, key='minao'):
         if cell is None: cell = self.cell

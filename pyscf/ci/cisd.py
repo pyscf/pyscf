@@ -213,7 +213,9 @@ def tn_addrs_signs(norb, nelec, n_excite):
     the signs of the coefficients when transferring the reference from physics
     vacuum to HF vacuum.
     '''
-    assert(n_excite <= nelec)
+    if n_excite > nelec:
+        print("Warning: Not enough occupied orbitals to excite.")
+        return [0], [0]
     nocc = nelec
 
     hole_strs = cistring.gen_strings4orblist(range(nocc), nocc - n_excite)
