@@ -47,7 +47,7 @@ def make_intermediates(mycc, t1, t2, eris):
     eris_ovoo = numpy.asarray(eris.ovoo)
     eris_ovov = numpy.asarray(eris.ovov)
 
-    mo_e = eris.fock.diagonal()
+    mo_e = eris.mo_energy
     eia = lib.direct_sum('i-a->ia', mo_e[:nocc], mo_e[nocc:])
     d3 = lib.direct_sum('ia,jb,kc->ijkabc', eia, eia, eia)
 

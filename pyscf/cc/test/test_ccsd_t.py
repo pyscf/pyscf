@@ -69,6 +69,7 @@ class KnownValues(unittest.TestCase):
         mycc.mo_energy = mycc._scf.mo_energy = numpy.arange(0., nocc+nvir)
         f = numpy.random.random((nmo,nmo)) * .1
         eris.fock = f+f.T + numpy.diag(numpy.arange(nmo))
+        eris.mo_energy = eris.fock.diagonal()
         e = ccsd_t.kernel(mycc, eris, t1, t2)
         self.assertAlmostEqual(e, -45.96028705175308, 9)
 
@@ -161,6 +162,7 @@ class KnownValues(unittest.TestCase):
         f = (numpy.random.random((nmo,nmo)) * .1 +
              numpy.random.random((nmo,nmo)) * .1j)
         eris.fock = f+f.T.conj() + numpy.diag(numpy.arange(nmo))
+        eris.mo_energy = eris.fock.diagonal().real
         e0 = ccsd_t.kernel(mcc, eris, t1, t2)
 
         eri2 = numpy.zeros((nmo*2,nmo*2,nmo*2,nmo*2), dtype=numpy.complex)
@@ -179,6 +181,7 @@ class KnownValues(unittest.TestCase):
         eris1.oovv = eri2[:nocc*2,:nocc*2,nocc*2:,nocc*2:]
         eris1.ooov = eri2[:nocc*2,:nocc*2,:nocc*2,nocc*2:]
         eris1.fock = fock
+        eris1.mo_energy = fock.diagonal().real
         t1 = gccsd.spatial2spin(t1, orbspin)
         t2 = gccsd.spatial2spin(t2, orbspin)
         gcc = gccsd.GCCSD(scf.GHF(gto.M()))

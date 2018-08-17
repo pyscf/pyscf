@@ -43,13 +43,12 @@ def update_amps(cc, t1, t2, eris):
     t1a, t1b = t1
     t2aa, t2ab, t2bb = t2
     nocca, noccb, nvira, nvirb = t2ab.shape
-
-    fooa = eris.focka[:nocca,:nocca]
-    foob = eris.fockb[:noccb,:noccb]
+    mo_ea_o = eris.mo_energy[0][:nocca]
+    mo_ea_v = eris.mo_energy[0][nocca:]
+    mo_eb_o = eris.mo_energy[1][:noccb]
+    mo_eb_v = eris.mo_energy[1][noccb:]
     fova = eris.focka[:nocca,nocca:]
     fovb = eris.fockb[:noccb,noccb:]
-    fvva = eris.focka[nocca:,nocca:]
-    fvvb = eris.fockb[noccb:,noccb:]
 
     u1a = np.zeros_like(t1a)
     u1b = np.zeros_like(t1b)
@@ -68,10 +67,10 @@ def update_amps(cc, t1, t2, eris):
     Foob =  .5 * lib.einsum('me,ie->mi', fovb, t1b)
     Fvva = -.5 * lib.einsum('me,ma->ae', fova, t1a)
     Fvvb = -.5 * lib.einsum('me,ma->ae', fovb, t1b)
-    Fooa += fooa - np.diag(np.diag(fooa))
-    Foob += foob - np.diag(np.diag(foob))
-    Fvva += fvva - np.diag(np.diag(fvva))
-    Fvvb += fvvb - np.diag(np.diag(fvvb))
+    Fooa += eris.focka[:nocca,:nocca] - np.diag(mo_ea_o)
+    Foob += eris.fockb[:noccb,:noccb] - np.diag(mo_eb_o)
+    Fvva += eris.focka[nocca:,nocca:] - np.diag(mo_ea_v)
+    Fvvb += eris.fockb[noccb:,noccb:] - np.diag(mo_eb_v)
     dtype = u2aa.dtype
     wovvo = np.zeros((nocca,nvira,nvira,nocca), dtype=dtype)
     wOVVO = np.zeros((noccb,nvirb,nvirb,noccb), dtype=dtype)
@@ -325,8 +324,8 @@ def update_amps(cc, t1, t2, eris):
     u2bb = u2bb - u2bb.transpose(0,1,3,2)
     u2bb = u2bb - u2bb.transpose(1,0,2,3)
 
-    eia_a = lib.direct_sum('i-a->ia', fooa.diagonal(), fvva.diagonal())
-    eia_b = lib.direct_sum('i-a->ia', foob.diagonal(), fvvb.diagonal())
+    eia_a = lib.direct_sum('i-a->ia', mo_ea_o, mo_ea_v)
+    eia_b = lib.direct_sum('i-a->ia', mo_eb_o, mo_eb_v)
     u1a /= eia_a
     u1b /= eia_b
 
@@ -556,14 +555,14 @@ class UCCSD(ccsd.CCSD):
             eris = self.ao2mo(self.mo_coeff)
         nocca, noccb = self.nocc
 
-        fooa = eris.focka[:nocca,:nocca]
-        foob = eris.fockb[:noccb,:noccb]
         fova = eris.focka[:nocca,nocca:]
         fovb = eris.fockb[:noccb,noccb:]
-        fvva = eris.focka[nocca:,nocca:]
-        fvvb = eris.fockb[noccb:,noccb:]
-        eia_a = lib.direct_sum('i-a->ia', fooa.diagonal(), fvva.diagonal())
-        eia_b = lib.direct_sum('i-a->ia', foob.diagonal(), fvvb.diagonal())
+        mo_ea_o = eris.mo_energy[0][:nocca]
+        mo_ea_v = eris.mo_energy[0][nocca:]
+        mo_eb_o = eris.mo_energy[1][:noccb]
+        mo_eb_v = eris.mo_energy[1][noccb:]
+        eia_a = lib.direct_sum('i-a->ia', mo_ea_o, mo_ea_v)
+        eia_b = lib.direct_sum('i-a->ia', mo_eb_o, mo_eb_v)
 
         t1a = fova.conj() / eia_a
         t1b = fovb.conj() / eia_b
@@ -769,14 +768,14 @@ class _ChemistsERIs(ccsd._ChemistsERIs):
         self.focka = reduce(np.dot, (mo_coeff[0].conj().T, fockao[0], mo_coeff[0]))
         self.fockb = reduce(np.dot, (mo_coeff[1].conj().T, fockao[1], mo_coeff[1]))
         self.fock = (self.focka, self.fockb)
-        self.nocc = mycc.nocc
-        self.nocca, self.noccb = self.nocc
+        nocca, noccb = self.nocc = mycc.nocc
         self.mol = mycc.mol
 
         mo_ea = self.focka.diagonal()
         mo_eb = self.fockb.diagonal()
-        gap_a = abs(mo_ea[:self.nocca,None] - mo_ea[None,self.nocca:])
-        gap_b = abs(mo_eb[:self.noccb,None] - mo_eb[None,self.noccb:])
+        self.mo_energy = (mo_ea.real, mo_eb.real)
+        gap_a = abs(mo_ea[:nocca,None] - mo_ea[None,nocca:])
+        gap_b = abs(mo_eb[:noccb,None] - mo_eb[None,noccb:])
         if gap_a.size > 0:
             gap_a = gap_a.min()
         else:

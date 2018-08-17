@@ -629,6 +629,7 @@ def _add_vvvv_ea(mycc, r2, eris):
     time0 = time.clock(), time.time()
     log = logger.Logger(mycc.stdout, mycc.verbose)
     r2aaa, r2aba, r2bab, r2bbb = r2
+    nocca, noccb = mycc.nocc
 
     if mycc.direct:
         if hasattr(eris, 'mo_coeff') and eris.mo_coeff is not None:
@@ -652,7 +653,7 @@ def _add_vvvv_ea(mycc, r2, eris):
         r2aaa = r2aba = r2bab = r2bbb = None
         time0 = log.timer_debug1('vvvv-tau', *time0)
 
-        buf = ccsd._contract_vvvv_t2(mycc, mycc.mol, None, r2, log=log)
+        buf = ccsd._contract_vvvv_t2(mycc, mycc.mol, None, r2, verbose=log)
         sections = np.cumsum([nocca,nocca,noccb])
         Hr2aaa, Hr2aba, Hr2bab, Hr2bbb = np.split(buf, sections)
         buf = None
