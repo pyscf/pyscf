@@ -74,7 +74,7 @@ def update_amps(cc, t1, t2, eris):
     kconserv = cc.khelper.kconserv
 
     # T1 equation
-    P = kintermediates_uhf.kconserv_mat(cc.nkpts, cc.khelper.kconserv)
+    P = kintermediates_uhf.kconserv_mat(nkpts, cc.khelper.kconserv)
     Ht1a += fov_.conj()
     Ht1b += fOV_.conj()
     Ht1a += einsum('xyximae,yme->xia', t2aa, Fov_)

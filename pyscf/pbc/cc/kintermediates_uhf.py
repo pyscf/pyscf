@@ -205,7 +205,6 @@ def cc_Wvvvv(cc, t1, t2, eris):
     t1a, t1b = t1
     P = kconserv_mat(cc.nkpts, cc.khelper.kconserv)
 
-    tauaa, tauab, taubb = make_tau(cc, t2, t1, t1)
     Wvvvv = eris.vvvv.copy()
     Wvvvv += np.einsum('ymb,zyxemfa,zxyw->wzyaebf', t1a, eris.vovv.conj(), P)
     Wvvvv -= np.einsum('ymb,xyzfmea,xzyw->wzyaebf', t1a, eris.vovv.conj(), P)
@@ -219,6 +218,23 @@ def cc_Wvvvv(cc, t1, t2, eris):
     WVVVV += np.einsum('ymb,zyxemfa,zxyw->wzyaebf', t1b, eris.VOVV.conj(), P)
     WVVVV -= np.einsum('ymb,xyzfmea,xzyw->wzyaebf', t1b, eris.VOVV.conj(), P)
     WVVVV = WVVVV - WVVVV.transpose(2,1,0,5,4,3,6)
+    return Wvvvv, WvvVV, WVVVV
+
+def Wvvvv(cc, t1, t2, eris):
+    t1a, t1b = t1
+    nkpts = cc.nkpts
+    kconserv = cc.khelper.kconserv
+    P = kconserv_mat(nkpts, kconserv)
+
+    tauaa, tauab, taubb = make_tau(cc, t2, t1, t1)
+    Wvvvv, WvvVV, WVVVV = cc_Wvvvv(cc, t1, t2, eris)
+    for ka, kb, ke in kpts_helper.loop_kkk(cc.nkpts):
+        kf = kconserv[ka,ke,kb]
+        for km in range(nkpts):
+            kn = kconserv[ka,km,kb]
+            Wvvvv[ka,ke,kb] += einsum('mnab,menf->aebf', tauaa[km,kn,ka], eris.ovov[km,ke,kn])
+            WvvVV[ka,ke,kb] += einsum('mNaB,meNF->aeBF', tauab[km,kn,ka], eris.ovOV[km,ke,kn])
+            WVVVV[ka,ke,kb] += einsum('mnab,menf->aebf', taubb[km,kn,ka], eris.OVOV[km,ke,kn])
     return Wvvvv, WvvVV, WVVVV
 
 def cc_Wovvo(cc, t1, t2, eris):
