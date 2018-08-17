@@ -524,7 +524,7 @@ def check_sanity(obj, keysref, stdout=sys.stdout):
     objkeys = [x for x in obj.__dict__ if not x.startswith('_')]
     keysub = set(objkeys) - set(keysref)
     if keysub:
-        class_attr = set(obj.__class__.__dict__)
+        class_attr = set(dir(obj.__class__))
         keyin = keysub.intersection(class_attr)
         if keyin:
             msg = ('Overwritten attributes  %s  of %s\n' %
