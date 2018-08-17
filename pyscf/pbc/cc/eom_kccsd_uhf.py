@@ -89,7 +89,7 @@ def ipccsd_matvec(eom, vector, kshift, imds=None, diag=None):
 
     Hr1 = -0.0*np.einsum('mi,m->i', imds.Foo[kshift], r1)
     for km in range(nkpts):
-        Hr1 += np.einsum('me,mie->i', imds.Fov[km], r2[km, kshift])
+        #Hr1 += np.einsum('me,mie->i', imds.Fov[km], r2[km, kshift])
         for kn in range(nkpts):
             Hr1 += - 0.5 * np.einsum('nmie,mne->i', imds.Wooov[kn, km, kshift],
                                      r2[km, kn])
@@ -97,10 +97,10 @@ def ipccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     Hr2 = np.zeros_like(r2)
     for ki, kj in itertools.product(range(nkpts), repeat=2):
         ka = kconserv[ki, kshift, kj]
-        Hr2[ki, kj] += lib.einsum('ae,ije->ija', imds.Fvv[ka], r2[ki, kj])
+        #Hr2[ki, kj] += lib.einsum('ae,ije->ija', imds.Fvv[ka], r2[ki, kj])
 
-        Hr2[ki, kj] -= lib.einsum('mi,mja->ija', imds.Foo[ki], r2[ki, kj])
-        Hr2[ki, kj] += lib.einsum('mj,mia->ija', imds.Foo[kj], r2[kj, ki])
+        #Hr2[ki, kj] -= lib.einsum('mi,mja->ija', imds.Foo[ki], r2[ki, kj])
+        #Hr2[ki, kj] += lib.einsum('mj,mia->ija', imds.Foo[kj], r2[kj, ki])
 
         Hr2[ki, kj] -= np.einsum('maji,m->ija', imds.Wovoo[kshift, ka, kj], r1)
         #for km in range(nkpts):
@@ -128,11 +128,13 @@ def ipccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     Hr1a = np.zeros((nocca), dtype=r1.dtype)
     Hr1b = np.zeros((noccb), dtype=r1.dtype)
 
+    r2aaa, r2baa, r2abb, r2bbb = spatial_r2
     ##Foo, Fov, and Wooov
-    #Hr1a  = np.einsum('me,mie->i', imds.Fov, r2aaa)
-    #Hr1a -= np.einsum('ME,iME->i', imds.FOV, r2abb)
-    #Hr1b  = np.einsum('ME,MIE->I', imds.FOV, r2bbb)
-    #Hr1b -= np.einsum('me,Ime->I', imds.Fov, r2baa)
+    for km in range(nkpts):
+    	Hr1a += np.einsum('me,mie->i', uccsd_imds.Fov[km], r2aaa[km,kshift])
+    	Hr1a -= np.einsum('ME,iME->i', uccsd_imds.FOV[km], r2abb[kshift,km])
+    	Hr1b += np.einsum('ME,MIE->I', uccsd_imds.FOV[km], r2bbb[km,kshift])
+    	Hr1b -= np.einsum('me,Ime->I', uccsd_imds.Fov[km], r2baa[kshift,km])
 
     spatial_Foo = uccsd_imds.Foo
     spatial_FOO = uccsd_imds.FOO
@@ -144,27 +146,31 @@ def ipccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     #Hr1b += -0.5*np.einsum('NIME,MNE->I', imds.WOOOV, r2bbb)
     #Hr1a +=      np.einsum('niME,nME->i', imds.WooOV, r2abb)
 
-    r2aaa, r2baa, r2abb, r2bbb = spatial_r2
     Hr2aaa = np.zeros((nkpts, nkpts, nocca, nocca, nvira), dtype=r2.dtype)
     Hr2baa = np.zeros((nkpts, nkpts, noccb, nocca, nvira), dtype=r2.dtype)
     Hr2abb = np.zeros((nkpts, nkpts, nocca, noccb, nvirb), dtype=r2.dtype)
     Hr2bbb = np.zeros((nkpts, nkpts, noccb, noccb, nvirb), dtype=r2.dtype)
 
-    ## Fvv term
-    #Hr2aaa = lib.einsum('be,ije->ijb', imds.Fvv, r2aaa)
-    #Hr2abb = lib.einsum('BE,iJE->iJB', imds.FVV, r2abb)
-    #Hr2bbb = lib.einsum('BE,IJE->IJB', imds.FVV, r2bbb)
-    #Hr2baa = lib.einsum('be,Ije->Ijb', imds.Fvv, r2baa)
+    # Fvv term
+    for kb, ki in itertools.product(range(nkpts),repeat=2):
+        kj = kconserv[kshift,ki, kb]
+        Hr2aaa[ki,kj] += lib.einsum('be,ije->ijb', uccsd_imds.Fvv[kb], r2aaa[ki,kj])
+        Hr2abb[ki,kj] += lib.einsum('BE,iJE->iJB', uccsd_imds.FVV[kb], r2abb[ki,kj])
+        Hr2bbb[ki,kj] += lib.einsum('BE,IJE->IJB', uccsd_imds.FVV[kb], r2bbb[ki,kj])
+        Hr2baa[ki,kj] += lib.einsum('be,Ije->Ijb', uccsd_imds.Fvv[kb], r2baa[ki,kj])
 
     ## Foo term
-    #tmpa = lib.einsum('mi,mjb->ijb', imds.Foo, r2aaa)
-    #Hr2aaa -= tmpa - tmpa.transpose((1,0,2))
-    #Hr2abb -= lib.einsum('mi,mJB->iJB', imds.Foo, r2abb)
-    #Hr2abb -= lib.einsum('MJ,iMB->iJB', imds.FOO, r2abb)
-    #Hr2baa -= lib.einsum('MI,Mjb->Ijb', imds.FOO, r2baa)
-    #Hr2baa -= lib.einsum('mj,Imb->Ijb', imds.Foo, r2baa)
-    #tmpb = lib.einsum('MI,MJB->IJB', imds.FOO, r2bbb)
-    #Hr2bbb -= tmpb - tmpb.transpose((1,0,2))
+    for ki, kj in itertools.product(range(nkpts), repeat=2):
+    	tmpa = lib.einsum('mi,mjb->ijb', uccsd_imds.Foo[ki], r2aaa[ki,kj])
+        tmpb = lib.einsum('mj,mib->ijb', uccsd_imds.Foo[kj], r2aaa[kj,ki])
+    	Hr2aaa[ki,kj] -= tmpa - tmpb
+    	Hr2abb[ki,kj] -= lib.einsum('mi,mJB->iJB', uccsd_imds.Foo[ki], r2abb[ki,kj])
+    	Hr2abb[ki,kj] -= lib.einsum('MJ,iMB->iJB', uccsd_imds.FOO[kj], r2abb[ki,kj])
+    	Hr2baa[ki,kj] -= lib.einsum('MI,Mjb->Ijb', uccsd_imds.FOO[ki], r2baa[ki,kj])
+    	Hr2baa[ki,kj] -= lib.einsum('mj,Imb->Ijb', uccsd_imds.Foo[kj], r2baa[ki,kj])
+    	tmpb = lib.einsum('MI,MJB->IJB', uccsd_imds.FOO[ki], r2bbb[ki,kj])
+    	tmpa = lib.einsum('MJ,MIB->IJB', uccsd_imds.FOO[kj], r2bbb[kj,ki])
+    	Hr2bbb[ki,kj] -= tmpb - tmpa
 
     ## Wovoo term
     #Hr2aaa -= np.einsum('mjbi,m->ijb', imds.Woovo, r1a)
@@ -739,12 +745,12 @@ if __name__ == '__main__':
     [Hr1a, Hr1b], [Hr2aaa, Hr2baa, Hr2abb, Hr2bbb] = \
             eom_kgccsd.spin2spatial_ip_doublet(Hr1, Hr2, kconserv, kshift, orbspin)
 
-    print('ea Hr1a',   abs(lib.finger(Hr1a)   - (-0.34462696543560045-1.6104596956729178j)))
-    print('ea Hr1b',   abs(lib.finger(Hr1b)   - (-0.055793611517250929+0.22169994342782473j)))
-    print('ea Hr2aaa', abs(lib.finger(Hr2aaa) - (0.64317341651618687-1.9454081575555195j)))
-    print('ea Hr2baa', abs(lib.finger(Hr2baa) - (2.8978462590588068+2.1220361054795198j)))
-    print('ea Hr2abb', abs(lib.finger(Hr2abb) - (1.5482378135185952-5.4536785087220636j)))
-    print('ea Hr2bbb', abs(lib.finger(Hr2bbb) - (0.43434684782030114+0.24259097270424451j)))
+    print('ip Hr1a',   abs(lib.finger(Hr1a)   - (-0.34462696543560045-1.6104596956729178j)))
+    print('ip Hr1b',   abs(lib.finger(Hr1b)   - (-0.055793611517250929+0.22169994342782473j)))
+    print('ip Hr2aaa', abs(lib.finger(Hr2aaa) - (0.64317341651618687-1.9454081575555195j)))
+    print('ip Hr2baa', abs(lib.finger(Hr2baa) - (2.8978462590588068+2.1220361054795198j)))
+    print('ip Hr2abb', abs(lib.finger(Hr2abb) - (1.5482378135185952-5.4536785087220636j)))
+    print('ip Hr2bbb', abs(lib.finger(Hr2bbb) - (0.43434684782030114+0.24259097270424451j)))
 
     # EA version
     myeom = EOMEA(mycc)
