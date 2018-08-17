@@ -560,7 +560,7 @@ def pick_real_eigs(w, v, nroots, x0):
                       numpy.count_nonzero(abs_imag > 1e-2))
 
     w, v, idx = _eigs_cmplx2real(w, v, realidx)
-    return w, v, realidx[idx]
+    return w, v, idx
 
 # If the complex eigenvalue has small imaginary part, both the real part
 # and the imaginary part of the eigenvector can approximately be used as

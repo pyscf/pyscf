@@ -696,14 +696,14 @@ def _add_vvvv_ea(mycc, r2, eris):
 
 def eaccsd_diag(eom, imds=None):
     if imds is None: imds = eom.make_imds()
-
+    eris = imds.eris
     t1, t2 = imds.t1, imds.t2
     t1a, t1b = t1
     t2aa, t2ab, t2bb = t2
     t2ba = t2ab.transpose(1,0,3,2)
 
-    nocc_a, nvir_a = t1a.shape
-    nocc_b, nvir_b = t1b.shape
+    nocca, nvira = t1a.shape
+    noccb, nvirb = t1b.shape
     dtype = np.result_type(t1a,t1b,t2aa,t2ab,t2bb)
 
     Hr1a = np.diag(imds.Fvv)
@@ -740,17 +740,81 @@ def eaccsd_diag(eom, imds=None):
     Hr2bbb = -FOO_diag[:,None,None]+FVV_diag[None,:,None]+FVV_diag[None,None,:]+ \
              WOVVO_slice[:,:,None]+WOVVO_slice[:,None,:]-WOVOV_t2_dot
 
-    if imds.Wvvvv is not None:
-        Wvvvv_slice_A = np.einsum('aabb->ab',imds.Wvvvv)
-        Wvvvv_slice_B = np.einsum('abba->ab',imds.Wvvvv)
-        Hr2aaa += 0.5*Wvvvv_slice_A[None,:,:]-0.5*Wvvvv_slice_B[None,:,:]
-        WVVvv_slice = np.einsum('aabb->ab',imds.WVVvv)
-        Hr2aba += WVVvv_slice[None,:,:]
-        WvvVV_slice = np.einsum('aabb->ab',imds.WvvVV)
-        Hr2bab += WvvVV_slice[None,:,:]
-        WVVVV_slice_A = np.einsum('aabb->ab',imds.WVVVV)
-        WVVVV_slice_B = np.einsum('abba->ab',imds.WVVVV)
-        Hr2bbb += 0.5*WVVVV_slice_A[None,:,:]-0.5*WVVVV_slice_B[None,:,:]
+#    if imds.Wvvvv is not None:
+#        Wvvvv_slice = np.einsum('aabb->ab',imds.Wvvvv)
+#        Hr2aaa += 0.5 * Wvvvv_slice[None,:,:]
+#        WVVvv_slice = np.einsum('aabb->ba',imds.WvvVV)
+#        Hr2aba += WVVvv_slice[None,:,:]
+#        WvvVV_slice = np.einsum('aabb->ab',imds.WvvVV)
+#        Hr2bab += WvvVV_slice[None,:,:]
+#        WVVVV_slice = np.einsum('aabb->ab',imds.WVVVV)
+#        Hr2bbb += 0.5 * WVVVV_slice[None,:,:]
+
+# TODO: test Wvvvv contribution
+    # See also the code for Wvvvv contribution in function eeccsd_diag
+    tauaa, tauab, taubb = uccsd.make_tau(t2, t1, t1)
+    eris_ovov = np.asarray(eris.ovov)
+    eris_OVOV = np.asarray(eris.OVOV)
+    eris_ovOV = np.asarray(eris.ovOV)
+    Wvvaa = .5*np.einsum('mnab,manb->ab', tauaa, eris_ovov)
+    Wvvbb = .5*np.einsum('mnab,manb->ab', taubb, eris_OVOV)
+    Wvvab =    np.einsum('mNaB,maNB->aB', tauab, eris_ovOV)
+    eris_ovov = eris_OVOV = eris_ovOV = None
+
+    mem_now = lib.current_memory()[0]
+    max_memory = max(0, eom.max_memory - mem_now)
+    blksize = min(nocca, max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvira**3*3))))
+    for p0,p1 in lib.prange(0, nocca, blksize):
+        ovvv = eris.get_ovvv(slice(p0,p1))  # ovvv = eris.ovvv[p0:p1]
+        Wvvaa += np.einsum('mb,maab->ab', t1a[p0:p1], ovvv)
+        Wvvaa -= np.einsum('mb,mbaa->ab', t1a[p0:p1], ovvv)
+        ovvv = None
+    blksize = min(noccb, max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvirb**3*3))))
+    for p0, p1 in lib.prange(0, noccb, blksize):
+        OVVV = eris.get_OVVV(slice(p0,p1))  # OVVV = eris.OVVV[p0:p1]
+        Wvvbb += np.einsum('mb,maab->ab', t1b[p0:p1], OVVV)
+        Wvvbb -= np.einsum('mb,mbaa->ab', t1b[p0:p1], OVVV)
+        OVVV = None
+    blksize = min(nocca, max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvira*nvirb**2*3))))
+    for p0,p1 in lib.prange(0, nocca, blksize):
+        ovVV = eris.get_ovVV(slice(p0,p1))  # ovVV = eris.ovVV[p0:p1]
+        Wvvab -= np.einsum('mb,mbaa->ba', t1a[p0:p1], ovVV)
+        ovVV = None
+    blksize = min(noccb, max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvirb*nvira**2*3))))
+    for p0, p1 in lib.prange(0, noccb, blksize):
+        OVvv = eris.get_OVvv(slice(p0,p1))  # OVvv = eris.OVvv[p0:p1]
+        Wvvab -= np.einsum('mb,mbaa->ab', t1b[p0:p1], OVvv)
+        OVvv = None
+    Wvvaa = Wvvaa + Wvvaa.T
+    Wvvbb = Wvvbb + Wvvbb.T
+    if eris.vvvv is not None:
+        for i in range(nvira):
+            i0 = i*(i+1)//2
+            vvv = lib.unpack_tril(np.asarray(eris.vvvv[i0:i0+i+1]))
+            tmp = np.einsum('bb->b', vvv[i])
+            Wvvaa[i] += tmp
+            tmp = np.einsum('bb->b', vvv[:,:i+1,i])
+            Wvvaa[i,:i+1] -= tmp
+            Wvvaa[:i  ,i] -= tmp[:i]
+            vvv = lib.unpack_tril(np.asarray(eris.vvVV[i0:i0+i+1]))
+            Wvvab[i] += np.einsum('bb->b', vvv[i])
+            vvv = None
+        for i in range(nvirb):
+            i0 = i*(i+1)//2
+            vvv = lib.unpack_tril(np.asarray(eris.VVVV[i0:i0+i+1]))
+            tmp = np.einsum('bb->b', vvv[i])
+            Wvvbb[i] += tmp
+            tmp = np.einsum('bb->b', vvv[:,:i+1,i])
+            Wvvbb[i,:i+1] -= tmp
+            Wvvbb[:i  ,i] -= tmp[:i]
+            vvv = None
+    Wvvba = Wvvab.T
+
+    Hr2aaa += Wvvaa[None,:,:]
+    Hr2aba += Wvvba[None,:,:]
+    Hr2bab += Wvvab[None,:,:]
+    Hr2bbb += Wvvbb[None,:,:]
+    # Wvvvv contribution end
 
     vector = amplitudes_to_vector_ea((Hr1a,Hr1b), (Hr2aaa,Hr2aba,Hr2bab,Hr2bbb))
     return vector
