@@ -1,3 +1,4 @@
+import itertools
 import numpy as np
 from functools import reduce
 
@@ -308,3 +309,83 @@ def kconserv_mat(nkpts, kconserv):
                 kb = kconserv[ki,ka,kj]
                 P[ki,kj,ka,kb] = 1
     return P
+
+def Foo(cc,t1,t2,eris):
+    kconserv = cc.khelper.kconserv
+    t1a, t1b = t1
+    t2aa, t2ab, t2bb = t2
+    _, _, nkpts, nocca, noccb, nvira, nvirb = t2ab.shape
+
+    Fova, Fovb = cc_Fov(cc,t1,t2,eris)
+    Fooa, Foob = cc_Foo(cc,t1,t2,eris)
+    for ki in range(nkpts):
+        Fooa[ki] += 0.5*einsum('ie,me->mi',t1a[ki],Fova[ki])
+        Foob[ki] += 0.5*einsum('ie,me->mi',t1b[ki],Fovb[ki])
+    return Fooa, Foob
+
+def Fvv(cc,t1,t2,eris):
+    kconserv = cc.khelper.kconserv
+    t1a, t1b = t1
+    t2aa, t2ab, t2bb = t2
+    _, _, nkpts, nocca, noccb, nvira, nvirb = t2ab.shape
+
+    Fova, Fovb = cc_Fov(cc,t1,t2,eris)
+    Fvva, Fvvb = cc_Fvv(cc,t1,t2,eris)
+    for ka in range(nkpts):
+        Fvva[ka] -= 0.5*lib.einsum('me,ma->ae', Fova[ka], t1a[ka])
+        Fvvb[ka] -= 0.5*lib.einsum('me,ma->ae', Fovb[ka], t1b[ka])
+    return Fvva, Fvvb
+
+def Fov(cc,t1,t2,eris):
+    kconserv = cc.khelper.kconserv
+    Fme = cc_Fov(cc,t1,t2,eris)
+    return Fme
+
+def Woooo(cc,t1,t2,eris):
+    kconserv = cc.khelper.kconserv
+    t1a, t1b = t1
+    t2aa, t2ab, t2bb = t2
+    _, _, nkpts, nocca, noccb, nvira, nvirb = t2ab.shape
+
+    Woooo = eris.oooo.copy()
+    WooOO = eris.ooOO.copy()
+    WOOOO = eris.OOOO.copy()
+
+    tau_aa, tau_ab, tau_bb = make_tau(cc, t2, t1, t1)
+    for km in range(nkpts):
+        for kn in range(nkpts):
+            tmp_aaaaJ = einsum('xje, ymine->yxminj', t1a, eris.ooov[km,:,kn])
+            tmp_aaaaJ-= einsum('yie, xmjne->yxminj', t1a, eris.ooov[km,:,kn])
+            tmp_bbbbJ = einsum('xje, ymine->yxminj', t1b, eris.OOOV[km,:,kn])
+            tmp_bbbbJ-= einsum('yie, xmjne->yxminj', t1b, eris.OOOV[km,:,kn])
+            tmp_aabbJ = einsum('xje, ymine->yxminj', t1b, eris.ooOV[km,:,kn])
+            tmp_bbaaJ = einsum('xje, ymine->yxminj', t1a, eris.OOov[km,:,kn])
+            tmp_abbaJ = -einsum('yie,xmjne->yxminj', t1b, eris.ooOV[km,:,kn])
+            tmp_baabJ = -einsum('yie,xmjne->yxminj', t1a, eris.OOov[km,:,kn])
+            tmp_aabbJ = einsum('xje, ymine->yxminj', t1b, eris.ooOV[km,:,kn])
+
+            for ki in range(nkpts):
+                kj = kconserv[km,ki,kn]
+                Woooo[km,ki,kn] += tmp_aaaaJ[ki,kj]
+                WOOOO[km,ki,kn] += tmp_bbbbJ[ki,kj]
+                WooOO[km,ki,kn] += tmp_aabbJ[ki,kj]
+                WooOO[kn,ki,km] -= tmp_baabJ[ki,kj].transpose(2,1,0,3)
+
+    Woooo = Woooo - Woooo.transpose(2,1,0,5,4,3,6)
+    WOOOO = WOOOO - WOOOO.transpose(2,1,0,5,4,3,6)
+
+    for km, ki, kn in itertools.product(range(nkpts), repeat=3):
+        kj = kconserv[km, ki, kn]
+
+        for ke in range(nkpts):
+            kf = kconserv[km, ke, kn]
+
+            ovov = eris.ovov[km, ke, kn] - eris.ovov[km, kf, kn].transpose(0,3,2,1)
+            OVOV = eris.OVOV[km, ke, kn] - eris.OVOV[km, kf, kn].transpose(0,3,2,1)
+
+            Woooo[km, ki, kn] += 0.5*lib.einsum('ijef,menf->minj', tau_aa[ki, kj, ke],      ovov)
+            WOOOO[km, ki, kn] += 0.5*lib.einsum('IJEF,MENF->MINJ', tau_bb[ki, kj, ke],      OVOV)
+            WooOO[km, ki, kn] +=     lib.einsum('iJeF,meNF->miNJ', tau_ab[ki, kj, ke], eris.ovOV[km, ke, kn])
+
+    WOOoo = None
+    return Woooo, WooOO, WOOoo, WOOOO

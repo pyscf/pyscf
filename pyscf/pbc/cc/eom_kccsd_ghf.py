@@ -40,8 +40,6 @@ from pyscf.pbc.cc import kintermediates as imd
 
 einsum = lib.einsum
 
-ITER=0
-
 def kernel(eom, nroots=1, koopmans=False, guess=None, left=False,
            eris=None, imds=None, partition=None, kptlist=None,
            dtype=None, **kwargs):
@@ -138,7 +136,7 @@ def kernel(eom, nroots=1, koopmans=False, guess=None, left=False,
     log.timer('EOM-CCSD', *cput0)
     return convs, evals, evecs
 
-def enforce_2p_spin_doublet(r2, orbspin, kconserv, kshift, excitation):
+def enforce_2p_spin_doublet(r2, kconserv, kshift, orbspin, excitation):
     '''Enforces condition that net spin can only change by +/- 1/2'''
     assert(excitation in ['ip', 'ea'])
     if excitation == 'ip':
@@ -198,10 +196,10 @@ def enforce_2p_spin_doublet(r2, orbspin, kconserv, kshift, excitation):
 # EOM-IP-CCSD
 ########################################
 
-def enforce_2p_spin_ip_doublet(r2, orbspin, kconserv, kshift):
-    return enforce_2p_spin_doublet(r2, orbspin, kconserv, kshift, 'ip')
+def enforce_2p_spin_ip_doublet(r2, kconserv, kshift, orbspin):
+    return enforce_2p_spin_doublet(r2, kconserv, kshift, orbspin, 'ip')
 
-def spin2spatial_ip_doublet(r1, r2, orbspin, kconserv, kshift):
+def spin2spatial_ip_doublet(r1, r2, kconserv, kshift, orbspin):
     '''Convert R1/R2 of spin orbital representation to R1/R2 of
     spatial orbital representation '''
     nkpts, nocc, nvir = np.array(r2.shape)[[1, 3, 4]]
@@ -475,10 +473,10 @@ class EOMIP(eom_rccsd.EOM):
 # EOM-EA-CCSD
 ########################################
 
-def enforce_2p_spin_ea_doublet(r2, orbspin, kconserv, kshift):
-    return enforce_2p_spin_doublet(r2, orbspin, kconserv, kshift, 'ea')
+def enforce_2p_spin_ea_doublet(r2, kconserv, kshift, orbspin):
+    return enforce_2p_spin_doublet(r2, kconserv, kshift, orbspin, 'ea')
 
-def spin2spatial_ea_doublet(r1, r2, orbspin, kconserv, kshift):
+def spin2spatial_ea_doublet(r1, r2, kconserv, kshift, orbspin):
     '''Convert R1/R2 of spin orbital representation to R1/R2 of
     spatial orbital representation'''
     nkpts, nocc, nvir = np.array(r2.shape)[[1, 2, 3]]
