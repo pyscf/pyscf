@@ -63,8 +63,7 @@ def kernel(eom, nroots=1, koopmans=False, guess=None, left=False,
             s = np.dot(np.asarray(guess).conj(), np.asarray(x0).T)
             s = np.dot(s.conj().T, s).diagonal()
             idx = np.argsort(-s)[:nroots]
-            idx = idx[np.argsort(w[idx])]  # sort eigenvalue w
-            return w[idx].real, v[:,idx].real, idx
+            return lib.linalg_helper._eigs_cmplx2real(w, v, idx)
         conv, es, vs = eig(matvec, guess, precond, pick=eig_close_to_init_guess,
                            tol=eom.conv_tol, max_cycle=eom.max_cycle,
                            max_space=eom.max_space, nroots=nroots, verbose=log)
