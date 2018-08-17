@@ -187,10 +187,10 @@ class KnownValues(unittest.TestCase):
                       0.5 - 0.5*1j)
         spin_r2_ip = spin_r2_ip.reshape(nkpts, nkpts, (nocc[0]+nocc[1]),
                                         (nocc[0]+nocc[1]), (nvir[0]+nvir[1]))
-        spin_r2_ip = eom_kccsd_ghf.enforce_2p_spin_ip_doublet(spin_r2_ip, orbspin, kconserv, kshift)
+        spin_r2_ip = eom_kccsd_ghf.enforce_2p_spin_ip_doublet(spin_r2_ip, kconserv, kshift, orbspin)
 
         [r1a, r1b], [r2aaa, r2baa, r2abb, r2bbb] = \
-            eom_kccsd_ghf.spin2spatial_ip_doublet(spin_r1_ip, spin_r2_ip, orbspin, kconserv, kshift)
+            eom_kccsd_ghf.spin2spatial_ip_doublet(spin_r1_ip, spin_r2_ip, kconserv, kshift, orbspin)
 
         r1, r2 = eom_kccsd_ghf.spatial2spin_ip_doublet([r1a, r1b], [r2aaa, r2baa, r2abb, r2bbb],
                                                        kconserv, kshift, orbspin=orbspin)
@@ -218,10 +218,10 @@ class KnownValues(unittest.TestCase):
                       0.5 - 0.5*1j)
         spin_r2_ea = spin_r2_ea.reshape(nkpts, nkpts, (nocc[0]+nocc[1]),
                                         (nvir[0]+nvir[1]), (nvir[0]+nvir[1]))
-        spin_r2_ea = eom_kccsd_ghf.enforce_2p_spin_ea_doublet(spin_r2_ea, orbspin, kconserv, kshift)
+        spin_r2_ea = eom_kccsd_ghf.enforce_2p_spin_ea_doublet(spin_r2_ea, kconserv, kshift, orbspin)
 
         [r1a, r1b], [r2aaa, r2baa, r2abb, r2bbb] = \
-            eom_kccsd_ghf.spin2spatial_ea_doublet(spin_r1_ea, spin_r2_ea, orbspin, kconserv, kshift)
+            eom_kccsd_ghf.spin2spatial_ea_doublet(spin_r1_ea, spin_r2_ea, kconserv, kshift, orbspin)
 
         r1, r2 = eom_kccsd_ghf.spatial2spin_ea_doublet([r1a, r1b], [r2aaa, r2baa, r2abb, r2bbb],
                                                        kconserv, kshift, orbspin=orbspin)
