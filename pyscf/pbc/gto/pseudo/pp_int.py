@@ -26,6 +26,7 @@ For GTH/HGH PPs, see:
 import ctypes
 import copy
 import numpy
+import scipy.special
 from pyscf import lib
 from pyscf import gto
 
@@ -39,22 +40,66 @@ def get_pp_loc_part1(cell, kpts=None):
 def get_gth_vlocG_part1(cell, Gv):
     '''PRB, 58, 3641 Eq (5) first term
     '''
+    from pyscf.pbc import tools
+    coulG = tools.get_coulG(cell, Gv=Gv, low_dim_ft_type=cell.low_dim_ft_type)
     G2 = numpy.einsum('ix,ix->i', Gv, Gv)
-    with numpy.errstate(divide='ignore'):
-        coulG = 4*numpy.pi / G2
-        coulG[G2==0] = 0
+    G0idx = numpy.where(G2==0)[0]
 
-    vlocG = numpy.zeros((cell.natm, len(G2)))
-    for ia in range(cell.natm):
-        Zia = cell.atom_charge(ia)
-        symb = cell.atom_symbol(ia)
-        vlocG[ia] = Zia * coulG
-        if symb in cell._pseudo:
+    if cell.dimension == 3 or cell.low_dim_ft_type == 'inf_vacuum':
+        vlocG = numpy.zeros((cell.natm, len(G2)))
+        for ia in range(cell.natm):
+            Zia = cell.atom_charge(ia)
+            symb = cell.atom_symbol(ia)
+            vlocG[ia] = Zia * coulG
+            if symb in cell._pseudo:
+                pp = cell._pseudo[symb]
+                rloc, nexp, cexp = pp[1:3+1]
+                vlocG[ia] *= numpy.exp(-0.5*rloc**2 * G2)
+# Note the sign of G=0 differs to the rest, see get_gth_vlocG, get_alphas_gth
+                vlocG[ia,G0idx] = -2*numpy.pi*Zia*rloc**2
+
+    elif cell.dimension == 2:
+        # The following 2D ewald summation is taken from:
+        # Minary, Tuckerman, Pihakari, Martyna J. Chem. Phys. 116, 5351 (2002)
+        vlocG = numpy.zeros((cell.natm,len(G2)))
+        b = cell.reciprocal_vectors()
+        inv_area = numpy.linalg.norm(numpy.cross(b[0], b[1]))/(2*numpy.pi)**2
+        lzd2 = cell.vol * inv_area / 2
+        lz = lzd2*2.
+
+        G2[G0idx] = 1e200
+        Gxy = numpy.linalg.norm(Gv[:,:2],axis=1)
+        Gz = abs(Gv[:,2])
+
+        for ia in range(cell.natm):
+            Zia = cell.atom_charge(ia)
+            symb = cell.atom_symbol(ia)
+            if symb not in cell._pseudo:
+# FIXME: the mixed pseudo-potential and normal nuclear attraction potential
+                vlocG[ia] = Zia * coulG
+                continue
+
             pp = cell._pseudo[symb]
             rloc, nexp, cexp = pp[1:3+1]
-            vlocG[ia] *= numpy.exp(-0.5*rloc**2 * G2)
-# Note the sign of G=0 differs to the rest, see get_gth_vlocG, get_alphas_gth
-            vlocG[ia,0] = -2*numpy.pi*Zia*rloc**2
+
+            ew_eta = 1./numpy.sqrt(2)/rloc
+            JexpG2 = 4*numpy.pi / G2 * numpy.exp(-G2/(4*ew_eta**2))
+            fac = 4*numpy.pi / G2 * numpy.cos(Gz*lzd2)
+            JexpG2 -= fac * numpy.exp(-Gxy*lzd2)
+            eta_z1 = (ew_eta**2 * lz + Gxy) / (2.*ew_eta)
+            eta_z2 = (ew_eta**2 * lz - Gxy) / (2.*ew_eta)
+            JexpG2 += fac * 0.5*(numpy.exp(-eta_z1**2)*scipy.special.erfcx(eta_z2)
+                               + numpy.exp(-eta_z2**2)*scipy.special.erfcx(eta_z1) )
+            vlocG[ia,:] = Zia * JexpG2
+
+            JexpG0 = ( - numpy.pi * lz**2 / 2. * scipy.special.erf( ew_eta * lzd2 )
+                       + numpy.pi/ew_eta**2 * scipy.special.erfc(ew_eta*lzd2)
+                       - numpy.sqrt(numpy.pi)*lz/ew_eta * numpy.exp( - (ew_eta*lzd2)**2 ) )
+            vlocG[ia,0] = -2*numpy.pi*Zia*rloc**2 + Zia*JexpG0
+    else:
+        raise NotImplementedError('Low dimension ft_type ',
+            cell.low_dim_ft_type, ' not implemented for dimension ',
+            cell.dimension)
     return vlocG
 
 # part2 Vnuc - Vloc

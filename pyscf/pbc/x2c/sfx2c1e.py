@@ -219,8 +219,7 @@ def get_pnucp(mydf, kpts=None):
 
         aoaux = ft_ao.ft_ao(nuccell, Gv)
         vG = numpy.einsum('i,xi->x', charge, aoaux) * coulG
-        if cell.dimension != 0:
-            #FIXME cell.dimension: the potential of background charge for 1D and 2D system
+        if cell.dimension == 3:
             nucbar = sum([z/nuccell.bas_exp(i)[0] for i,z in enumerate(charge)])
             nucbar *= numpy.pi/cell.vol
 

@@ -609,7 +609,7 @@ def get_Gv_weights(cell, mesh=None, **kwargs):
     rx = np.fft.fftfreq(mesh[0], 1./mesh[0])
     ry = np.fft.fftfreq(mesh[1], 1./mesh[1])
     rz = np.fft.fftfreq(mesh[2], 1./mesh[2])
-    if cell.dimension != 3 and low_dim_ft_type == 'infinity_vacuum':
+    if cell.dimension != 3 and low_dim_ft_type == 'inf_vacuum':
         if cell.dimension == 0:
             rx, wx = plus_minus(mesh[0]//2)
             ry, wy = plus_minus(mesh[1]//2)
@@ -678,7 +678,7 @@ def get_ewald_params(cell, precision=INTEGRAL_PRECISION, mesh=None):
     '''
     if cell.natm == 0:
         return 0, 0
-    elif cell.dimension != 3 and cell.low_dim_ft_type == 'infinity_vacuum':
+    elif cell.dimension != 3 and cell.low_dim_ft_type == 'inf_vacuum':
 # Non-uniform PW grids are used for low-dimensional ewald summation.  The cutoff
 # estimation for long range part based on exp(G^2/(4*eta^2)) does not work for
 # non-uniform grids.  Smooth model density is preferred.
@@ -763,7 +763,7 @@ def ewald(cell, ew_eta=None, ew_cut=None):
     Gv, Gvbase, weights = cell.get_Gv_weights(mesh)
     absG2 = np.einsum('gi,gi->g', Gv, Gv)
     absG2[absG2==0] = 1e200
-    if cell.dimension != 2 or low_dim_ft_type == 'infinity_vacuum':
+    if cell.dimension != 2 or low_dim_ft_type == 'inf_vacuum':
         coulG = 4*np.pi / absG2
         coulG *= weights
         ZSI = np.einsum("i,ij->j", chargs, cell.get_SI(Gv))
@@ -1231,6 +1231,7 @@ class Cell(mole.Mole):
             sys.stderr.write('''WARNING!
   Lattice are not in right-handed coordinate system. This can cause wrong value for some integrals.
   It's recommended to resort the lattice vectors to\na = %s\n\n''' % _a[[0,2,1]])
+        #TODO: For 0D, 1D, 2D systems, check if vacuum is large enough. See Fig 1 of PRB, 73, 2015119
 
         if self.mesh is None:
             if self.ke_cutoff is None:
@@ -1238,12 +1239,10 @@ class Cell(mole.Mole):
             else:
                 ke_cutoff = self.ke_cutoff
             self.mesh = pbctools.cutoff_to_mesh(_a, ke_cutoff)
-            if self.dimension < 3 and self.low_dim_ft_type is None:
+            if self.dimension < 3 and self.low_dim_ft_type == 'inf_vacuum':
                 #prec ~ exp(-0.436392335*mesh -2.99944305)*nelec
                 meshz = (np.log(self.nelectron/self.precision)-2.99944305)/0.436392335
                 self.mesh[self.dimension:] = int(meshz)
-            elif self.dimension < 2 and self.low_dim_ft_type is not None:
-                raise NotImplementedError
 
         if self.ew_eta is None or self.ew_cut is None:
             self.ew_eta, self.ew_cut = self.get_ewald_params(self.precision, self.mesh)

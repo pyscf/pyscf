@@ -260,55 +260,12 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
         kpts = k.reshape(1,3)
     Nk = len(kpts)
 
-    if not exxdiv:
-        if cell.dimension == 3 or low_dim_ft_type is None:
-            with np.errstate(divide='ignore'):
-                coulG = 4*np.pi/absG2
-            coulG[absG2==0] = 0
-        elif cell.dimension == 2 and low_dim_ft_type == 'analytic_2d_1':
-            # The following 2D analytical fourier transform is taken from:
-            # R. Sundararaman and T. Arias PRB 87, 2013
-            b = cell.reciprocal_vectors()
-            Ld2 = np.pi/np.linalg.norm(b[2])
-            Gz = kG[:,2]
-            Gp = np.linalg.norm(kG[:,:2], axis=1)
-            weights = 1. - np.cos(Gz*Ld2) * np.exp(-Gp*Ld2)
-            with np.errstate(divide='ignore', invalid='ignore'):
-                coulG = weights*4*np.pi/absG2
-            coulG[absG2==0] = -2*np.pi*(np.pi/np.linalg.norm(b[2]))**2 #-pi*L_z^2/2
-        else:
-            # For 0D and 1D Coulobm, see Table I of PRB, 73, 205119
-            raise NotImplementedError('no method for PBC dimension %s, '
-                'dim-type %s and exxdiv = %s' %
-                (cell.dimension, low_dim_ft_type, exxdiv))
-    elif exxdiv == 'vcut_sph':  # PRB 77 193110
+    if exxdiv == 'vcut_sph':  # PRB 77 193110
         Rc = (3*Nk*cell.vol/(4*np.pi))**(1./3)
         with np.errstate(divide='ignore',invalid='ignore'):
             coulG = 4*np.pi/absG2*(1.0 - np.cos(np.sqrt(absG2)*Rc))
         coulG[absG2==0] = 4*np.pi*0.5*Rc**2
-    elif exxdiv == 'ewald':
-        G0_idx = np.where(absG2==0)[0]
-        if cell.dimension == 3 or low_dim_ft_type is None:
-            with np.errstate(divide='ignore'):
-                coulG = 4*np.pi/absG2
-            if len(G0_idx) > 0:
-                coulG[G0_idx] = Nk*cell.vol*madelung(cell, kpts)
-        elif cell.dimension == 2 and low_dim_ft_type == 'analytic_2d_1':
-            b = cell.reciprocal_vectors()
-            Ld2 = np.pi/np.linalg.norm(b[2])
-            Gz = kG[:,2]
-            Gp = np.linalg.norm(kG[:,:2], axis=1)
-            weights = 1. - np.cos(Gz*Ld2) * np.exp(-Gp*Ld2)
-            with np.errstate(divide='ignore', invalid='ignore'):
-                coulG = weights*4*np.pi/absG2
-            if len(G0_idx) > 0:
-                coulG[G0_idx] = -2*np.pi*(np.pi/
-                                np.linalg.norm(b[2]))**2 #-pi*L_z^2/2
-                coulG[G0_idx] += Nk*cell.vol*madelung(cell, kpts)
-        else:
-            raise NotImplementedError('no method for PBC dimension %s, '
-                'dim-type %s and exxdiv = %s' %
-                (cell.dimension, low_dim_ft_type, exxdiv))
+
     elif exxdiv == 'vcut_ws':  # PRB 87, 165122
         assert(cell.dimension == 3)
         if not hasattr(mf, '_ws_exx'):
@@ -332,6 +289,36 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
         is_lt_maxqv = (abs(kG) <= maxqv).all(axis=1)
         coulG = coulG.astype(np.complex128)
         coulG[is_lt_maxqv] += exx_vq[qidx[is_lt_maxqv]]
+
+    else:
+        G0_idx = np.where(absG2==0)[0]
+        if cell.dimension != 2 or low_dim_ft_type == 'inf_vacuum':
+            with np.errstate(divide='ignore'):
+                coulG = 4*np.pi/absG2
+            if exxdiv == 'ewald' and len(G0_idx) > 0:
+                coulG[G0_idx] = Nk*cell.vol*madelung(cell, kpts)
+            else:
+                coulG[G0_idx] = 0
+
+        elif cell.dimension == 2:
+            # The following 2D analytical fourier transform is taken from:
+            # R. Sundararaman and T. Arias PRB 87, 2013
+            b = cell.reciprocal_vectors()
+            Ld2 = np.pi/np.linalg.norm(b[2])
+            Gz = kG[:,2]
+            Gp = np.linalg.norm(kG[:,:2], axis=1)
+            weights = 1. - np.cos(Gz*Ld2) * np.exp(-Gp*Ld2)
+            with np.errstate(divide='ignore', invalid='ignore'):
+                coulG = weights*4*np.pi/absG2
+            if len(G0_idx) > 0:
+                coulG[G0_idx] = -2*np.pi*(np.pi/np.linalg.norm(b[2]))**2 #-pi*L_z^2/2
+            if exxdiv == 'ewald':
+                coulG[G0_idx] += Nk*cell.vol*madelung(cell, kpts)
+        else:
+            # For 0D and 1D Coulobm, see Table I of PRB, 73, 205119
+            raise NotImplementedError('no method for PBC dimension %s, '
+                'dim-type %s and exxdiv = %s' %
+                (cell.dimension, low_dim_ft_type, exxdiv))
 
     coulG[equal2boundary] = 0
 

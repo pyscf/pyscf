@@ -342,7 +342,8 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
                 for k, idx in enumerate(adapted_ji_idx):
                     v = numpy.vstack([fswap['j3c-junk/%d/%d'%(idx,i)][0,col0:col1].T
                                       for i in range(nsegs)])
-                    #FIXME cell.dimension: 1D and 2D
+                    # vbar is the interaction between the background charge
+                    # and the auxiliary basis.  0D, 1D, 2D do not have vbar.
                     if is_zero(kpt) and cell.dimension == 3:
                         for i in numpy.where(vbar != 0)[0]:
                             v[i] -= vbar[i] * ovlp[k][col0:col1]

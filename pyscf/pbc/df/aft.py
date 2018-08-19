@@ -66,6 +66,7 @@ def estimate_ke_cutoff_for_eta(cell, eta, precision=PRECISION):
     '''Given eta, the lower limit of ke_cutoff to guarantee the required
     precision in Coulomb integrals.
     '''
+    eta = max(eta, 0.2)
     lmax = numpy.max(cell._bas[:,gto.ANG_OF])
     log_k0 = 5 + numpy.log(eta) / 2
     log_rest = numpy.log(precision / (32*numpy.pi**2*eta))
@@ -74,6 +75,18 @@ def estimate_ke_cutoff_for_eta(cell, eta, precision=PRECISION):
     return Ecut
 
 def get_nuc(mydf, kpts=None):
+    _pseudo_bak = mydf.cell._pseudo
+    if not _pseudo_bak:
+        return get_pp_loc_part1(mydf, kpts)
+    else:
+        #logger.warn(mydf, 'Pseudopotential is found in the cell. get_nuc '
+        #            'will ignore the pseudopotential.')
+        mydf.cell._pseudo = {}
+        nuc = get_pp_loc_part1(mydf, kpts)
+        mydf.cell._pseudo = _pseudo_bak
+        return nuc
+
+def get_pp_loc_part1(mydf, kpts=None):
     cell = mydf.cell
     if kpts is None:
         kpts_lst = numpy.zeros((1,3))
@@ -102,7 +115,6 @@ def get_nuc(mydf, kpts=None):
 
         vpplocG = pseudo.pp_int.get_gth_vlocG_part1(cell, Gv)
         vpplocG = -numpy.einsum('ij,ij->j', cell.get_SI(Gv), vpplocG)
-        v1 = -vpplocG.copy()
 
         vpplocG *= kws
         vG = vpplocG
@@ -116,9 +128,11 @@ def get_nuc(mydf, kpts=None):
                 logger.warn(mydf, 'mesh %s is not enough for AFTDF.get_nuc function '
                             'to get integral accuracy %g.\nRecommended mesh is %s.',
                             mesh, cell.precision, mesh_guess)
-            mesh_min = numpy.min((mesh_guess[:cell.dimension],
-                                  mesh[:cell.dimension]), axis=0)
-            mesh[:cell.dimension] = mesh_min.astype(int)
+            mesh_min = numpy.min((mesh_guess, mesh), axis=0)
+            if cell.low_dim_ft_type == 'inf_vacuum':
+                mesh[:cell.dimension] = mesh_min[:cell.dimension]
+            else:
+                mesh = mesh_min
         Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
 
         nuccell = copy.copy(cell)
@@ -136,7 +150,8 @@ def get_nuc(mydf, kpts=None):
         vj = lib.asarray(mydf._int_nuc_vloc(nuccell, kpts_lst))
         t0 = t1 = log.timer_debug1('vnuc pass1: analytic int', *t0)
 
-        coulG = tools.get_coulG(cell, kpt_allow, mesh=mesh, Gv=Gv) * kws
+        coulG = tools.get_coulG(cell, kpt_allow, mesh=mesh, Gv=Gv,
+                                low_dim_ft_type=cell.low_dim_ft_type) * kws
         aoaux = ft_ao.ft_ao(nuccell, Gv)
         vG = numpy.einsum('i,xi->x', -charges, aoaux) * coulG
 
@@ -195,12 +210,13 @@ def _int_nuc_vloc(mydf, nuccell, kpts, intor='int3c2e', aosym='s2', comp=1):
         buf = buf.reshape(nkpts,comp,nao_pair,nchg)
         mat = numpy.einsum('kcxz,z->kcx', buf, charge)
 
-    if cell.dimension != 0 and intor in ('int3c2e', 'int3c2e_sph',
+    # vbar is the interaction between the background charge
+    # and the compensating function.  0D, 1D, 2D do not have vbar.
+    if cell.dimension == 3 and intor in ('int3c2e', 'int3c2e_sph',
                                          'int3c2e_cart'):
         assert(comp == 1)
         charge = -cell.atom_charges()
 
-        #FIXME cell.dimension: the potential of background charge for 1D and 2D system
         nucbar = sum([z/nuccell.bas_exp(i)[0] for i,z in enumerate(charge)])
         nucbar *= numpy.pi/cell.vol
 
@@ -213,8 +229,6 @@ def _int_nuc_vloc(mydf, nuccell, kpts, intor='int3c2e', aosym='s2', comp=1):
 
     return mat
 
-get_pp_loc_part1 = get_nuc
-
 def get_pp(mydf, kpts=None):
     '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.
     '''
@@ -225,7 +239,7 @@ def get_pp(mydf, kpts=None):
         kpts_lst = numpy.reshape(kpts, (-1,3))
     nkpts = len(kpts_lst)
 
-    vloc1 = mydf.get_nuc(kpts_lst)
+    vloc1 = get_pp_loc_part1(mydf, kpts_lst)
     vloc2 = pseudo.pp_int.get_pp_loc_part2(cell, kpts_lst)
     vpp = pseudo.pp_int.get_pp_nl(cell, kpts_lst)
     for k in range(nkpts):
@@ -513,7 +527,7 @@ class AFTDF(lib.StreamObject):
 # Since the real-space lattice-sum for nuclear attraction is not implemented,
 # use the 3c2e code with steep gaussians to mimic nuclear density
 def _fake_nuc(cell):
-    fakenuc = gto.Mole()
+    fakenuc = copy.copy(cell)
     fakenuc._atm = cell._atm.copy()
     fakenuc._atm[:,gto.PTR_COORD] = numpy.arange(gto.PTR_ENV_START,
                                                  gto.PTR_ENV_START+cell.natm*3,3)

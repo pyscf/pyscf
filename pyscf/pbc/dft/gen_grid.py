@@ -144,7 +144,7 @@ def get_becke_grids(cell, atom_grid={}, radi_method=dft.radi.gauss_chebyshev,
 # When low_dim_ft_type is set, pbc_eval_gto treats the 2D system as a 3D system.
 # To get the correct particle number in numint module, the atomic grids needs to
 # be consistent with the treatment in pbc_eval_gto (see issue 164).
-    if cell.low_dim_ft_type == 'infinity_vacuum':
+    if cell.low_dim_ft_type == 'inf_vacuum':
         dimension = cell.dimension
     else:
         dimension = 3

@@ -55,23 +55,28 @@ def get_alphas_gth(cell, low_dim_ft_type=None):
         cfacs = [1., 3., 15., 105.]
         alphas[ia] = ( 2*np.pi*Zia*rloc**2
                      + (2*np.pi)**(3/2.)*rloc**3*np.dot(cexp,cfacs[:nexp]) )
-    if cell.dimension == 3 or low_dim_ft_type == 'infinity_vacuum':
+
+    if cell.dimension == 3 or low_dim_ft_type == 'inf_vacuum':
         # Do nothing
         return alphas
 
     elif cell.dimension == 2:
+        b = cell.reciprocal_vectors()
+        inv_area = np.linalg.norm(np.cross(b[0], b[1]))/(2*np.pi)**2
+        lzd2 = cell.vol * inv_area / 2
+        lz = lzd2*2.
         for ia in range(cell.natm):
             symb = cell.atom_symbol(ia)
+            Zia = cell.atom_charge(ia)
             if symb not in cell._pseudo:
+                alphas[ia] = Zia * 2 * np.pi * lzd2**2
                 continue
 
-            Zia = cell.atom_charge(ia)
-            b = cell.reciprocal_vectors()
-            inv_area = np.linalg.norm(np.cross(b[0], b[1]))/(2*np.pi)**2
-            lzd2 = cell.vol * inv_area / 2
-            lz = lzd2*2.
+            pp = cell._pseudo[symb]
+            rloc, nexp, cexp = pp[1:3+1]
             ew_eta = 1./np.sqrt(2)/rloc
-            JexpG0 = ( - np.pi * lz**2 / 2. * scipy.special.erf( ew_eta * lzd2 ) + np.pi/ew_eta**2 * scipy.special.erfc(ew_eta*lzd2)
+            JexpG0 = ( - np.pi * lz**2 / 2. * scipy.special.erf( ew_eta * lzd2 )
+                       + np.pi/ew_eta**2 * scipy.special.erfc(ew_eta*lzd2)
                        - np.sqrt(np.pi)*lz/ew_eta * np.exp( - (ew_eta*lzd2)**2 ) )
             alphas[ia] -= Zia*JexpG0
     else:
@@ -88,6 +93,7 @@ def get_vlocG(cell, Gv=None, low_dim_ft_type=None):
     '''
     if Gv is None: Gv = cell.Gv
     vlocG = get_gth_vlocG(cell, Gv, low_dim_ft_type)
+    vlocG[:,0] = 0
     return vlocG
 
 def get_gth_vlocG(cell, Gv, low_dim_ft_type=None):
@@ -101,14 +107,14 @@ def get_gth_vlocG(cell, Gv, low_dim_ft_type=None):
     Returns:
          (natm, ngrids) ndarray
     '''
-    absG2 = np.einsum('xi,xi->x', Gv, Gv)
-    G = np.sqrt(absG2)
-    with np.errstate(divide='ignore'):
-        coulG = 4*np.pi / absG2
-        coulG[absG2==0] = 0
+    from pyscf.pbc import tools
+    coulG = tools.get_coulG(cell, Gv=Gv, low_dim_ft_type=cell.low_dim_ft_type)
+    absG2 = G2 = np.einsum('ix,ix->i', Gv, Gv)
+    G0idx = np.where(G2==0)[0]
+    G = np.sqrt(G2)
 
-    vlocG = np.zeros((cell.natm,len(G)))
-    if cell.dimension == 3 or low_dim_ft_type == 'infinity_vacuum':
+    if cell.dimension == 3 or low_dim_ft_type == 'inf_vacuum':
+        vlocG = np.zeros((cell.natm,len(G)))
         for ia in range(cell.natm):
             Zia = cell.atom_charge(ia)
             symb = cell.atom_symbol(ia)
@@ -120,11 +126,10 @@ def get_gth_vlocG(cell, Gv, low_dim_ft_type=None):
             rloc, nexp, cexp = pp[1:3+1]
 
             G_red = G*rloc
-            cfacs = np.array(
-                    [1*G_red**0,
+            cfacs = [1*G_red**0,
                      3 - G_red**2,
                      15 - 10*G_red**2 + G_red**4,
-                     105 - 105*G_red**2 + 21*G_red**4 - G_red**6])
+                     105 - 105*G_red**2 + 21*G_red**4 - G_red**6]
 
             # Note the signs -- potential here is positive
             vlocG[ia,:] = ( Zia * coulG * np.exp(-0.5*G_red**2)
@@ -133,7 +138,6 @@ def get_gth_vlocG(cell, Gv, low_dim_ft_type=None):
     elif cell.dimension == 2:
         # The following 2D ewald summation is taken from:
         # Minary, Tuckerman, Pihakari, Martyna J. Chem. Phys. 116, 5351 (2002)
-
         vlocG = np.zeros((cell.natm,len(G)))
         b = cell.reciprocal_vectors()
         inv_area = np.linalg.norm(np.cross(b[0], b[1]))/(2*np.pi)**2
@@ -156,32 +160,24 @@ def get_gth_vlocG(cell, Gv, low_dim_ft_type=None):
             rloc, nexp, cexp = pp[1:3+1]
 
             G_red = G*rloc
-            cfacs = np.array(
-                    [1*G_red**0,
+            cfacs = [1*G_red**0,
                      3 - G_red**2,
                      15 - 10*G_red**2 + G_red**4,
-                     105 - 105*G_red**2 + 21*G_red**4 - G_red**6])
+                     105 - 105*G_red**2 + 21*G_red**4 - G_red**6]
 
             ew_eta = 1./np.sqrt(2)/rloc
-
-            JexpG2 = np.exp(-absG2/(4*ew_eta**2)) * coulG
+            JexpG2 = 4*np.pi / absG2 * np.exp(-absG2/(4*ew_eta**2))
             fac = 4*np.pi / absG2 * np.cos(Gz*lzd2)
             JexpG2 += ( - fac *
                         (       np.exp(-Gxy*lzd2)
-                          - 0.5*np.exp(-Gxy*lzd2)*scipy.special.erfc( (ew_eta**2 * lz - Gxy) / (2.*ew_eta))
+#                          - 0.5*np.exp(-Gxy*lzd2)*scipy.special.erfc( (ew_eta**2 * lz - Gxy) / (2.*ew_eta))
+#                          - 0.5*np.exp( Gxy*lzd2)*scipy.special.erfc( (ew_eta**2 * lz + Gxy) / (2.*ew_eta))
                         )
-                        #+ np.exp(-absG2/(4*ew_eta**2)) * np.real(scipy.special.erfc((ew_eta**2 * lz - 1j*Gz) / (2.*ew_eta)))
                       )
-
-            # Adding in contribution from the term, avoiding overflow from exponent
-            #    - 0.5*np.exp( Gxy*lzd2)*scipy.special.erfc( (ew_eta**2 * lz + Gxy) / (2.*ew_eta))
-            small_idx = Gxy*lzd2 < 20.0
-            large_idx = ~small_idx
-            JexpG2[small_idx] += ( 4*np.pi / absG2[small_idx] * np.cos(Gz[small_idx]*lzd2) *
-                                   0.5*np.exp( Gxy[small_idx]*lzd2)*scipy.special.erfc( (ew_eta**2 * lz + Gxy[small_idx]) / (2.*ew_eta)) )
-            if len(large_idx) > 0:
-                x = (ew_eta**2 * lz + Gxy[large_idx]) / (2.*ew_eta)
-                JexpG2[large_idx] += 0.5 * fac[large_idx] * (np.exp(Gxy[large_idx]*lzd2-x**2) * scipy.special.erfcx(x))
+            eta_z1 = (ew_eta**2 * lz + Gxy) / (2.*ew_eta)
+            eta_z2 = (ew_eta**2 * lz - Gxy) / (2.*ew_eta)
+            JexpG2 += fac * 0.5*(np.exp(-eta_z1**2)*scipy.special.erfcx(eta_z2)
+                               + np.exp(-eta_z2**2)*scipy.special.erfcx(eta_z1) )
 
             # Note the signs -- potential here is positive
             vlocG[ia,:] = ( Zia * JexpG2
