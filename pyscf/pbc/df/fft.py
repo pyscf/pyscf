@@ -39,14 +39,13 @@ def get_nuc(mydf, kpts=None):
     else:
         kpts_lst = numpy.reshape(kpts, (-1,3))
 
-    low_dim_ft_type = mydf.low_dim_ft_type
     mesh = mydf.mesh
     charge = -cell.atom_charges()
     Gv = cell.get_Gv(mesh)
     SI = cell.get_SI(Gv)
     rhoG = numpy.dot(charge, SI)
 
-    coulG = tools.get_coulG(cell, mesh=mesh, Gv=Gv, low_dim_ft_type=low_dim_ft_type)
+    coulG = tools.get_coulG(cell, mesh=mesh, Gv=Gv)
     vneG = rhoG * coulG
     vneR = tools.ifft(vneG, mydf.mesh).real
 
@@ -71,11 +70,10 @@ def get_pp(mydf, kpts=None):
     else:
         kpts_lst = numpy.reshape(kpts, (-1,3))
 
-    low_dim_ft_type = mydf.low_dim_ft_type
     mesh = mydf.mesh
     SI = cell.get_SI()
     Gv = cell.get_Gv(mesh)
-    vpplocG = pseudo.get_vlocG(cell, Gv, low_dim_ft_type)
+    vpplocG = pseudo.get_vlocG(cell, Gv)
     vpplocG = -numpy.einsum('ij,ij->j', SI, vpplocG)
     ngrids = len(vpplocG)
 
@@ -167,7 +165,6 @@ class FFTDF(lib.StreamObject):
         self.stdout = cell.stdout
         self.verbose = cell.verbose
         self.max_memory = cell.max_memory
-        self.low_dim_ft_type = cell.low_dim_ft_type
 
         self.kpts = kpts
         self.grids = gen_grid.UniformGrids(cell)
@@ -293,8 +290,7 @@ class FFTDF(lib.StreamObject):
         if blksize is None:
             blksize = self.blockdim
         kpts0 = numpy.zeros((2,3))
-        coulG = tools.get_coulG(self.cell, numpy.zeros(3), mesh=self.mesh,
-                                low_dim_ft_type=self.low_dim_ft_type)
+        coulG = tools.get_coulG(self.cell, numpy.zeros(3), mesh=self.mesh)
         ngrids = len(coulG)
         ao_pairs_G = self.get_ao_pairs_G(kpts0, compact=True)
         ao_pairs_G *= numpy.sqrt(coulG*(self.cell.vol/ngrids**2)).reshape(-1,1)

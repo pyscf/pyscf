@@ -727,7 +727,6 @@ def ewald(cell, ew_eta=None, ew_cut=None):
     if ew_cut is None: ew_cut = cell.ew_cut
     chargs = cell.atom_charges()
     coords = cell.atom_coords()
-    low_dim_ft_type = cell.low_dim_ft_type
     Lall = cell.get_lattice_Ls(rcut=ew_cut)
     ewovrl = 0.
     for i, qi in enumerate(chargs):
@@ -763,7 +762,7 @@ def ewald(cell, ew_eta=None, ew_cut=None):
     Gv, Gvbase, weights = cell.get_Gv_weights(mesh)
     absG2 = np.einsum('gi,gi->g', Gv, Gv)
     absG2[absG2==0] = 1e200
-    if cell.dimension != 2 or low_dim_ft_type == 'inf_vacuum':
+    if cell.dimension != 2 or cell.low_dim_ft_type == 'inf_vacuum':
         coulG = 4*np.pi / absG2
         coulG *= weights
         ZSI = np.einsum("i,ij->j", chargs, cell.get_SI(Gv))

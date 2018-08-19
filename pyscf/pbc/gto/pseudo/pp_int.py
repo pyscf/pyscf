@@ -41,7 +41,7 @@ def get_gth_vlocG_part1(cell, Gv):
     '''PRB, 58, 3641 Eq (5) first term
     '''
     from pyscf.pbc import tools
-    coulG = tools.get_coulG(cell, Gv=Gv, low_dim_ft_type=cell.low_dim_ft_type)
+    coulG = tools.get_coulG(cell, Gv=Gv)
     G2 = numpy.einsum('ix,ix->i', Gv, Gv)
     G0idx = numpy.where(G2==0)[0]
 

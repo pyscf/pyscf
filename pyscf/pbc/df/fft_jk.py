@@ -50,7 +50,6 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None):
     '''
     cell = mydf.cell
     mesh = mydf.mesh
-    low_dim_ft_type = mydf.low_dim_ft_type
 
     ni = mydf._numint
     make_rho, nset, nao = ni._gen_rho_evaluator(cell, dm_kpts, hermi)
@@ -58,7 +57,7 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None):
     dms = _format_dms(dm_kpts, kpts)
     nset, nkpts, nao = dms.shape[:3]
 
-    coulG = tools.get_coulG(cell, mesh=mesh, low_dim_ft_type=low_dim_ft_type)
+    coulG = tools.get_coulG(cell, mesh=mesh)
     ngrids = len(coulG)
 
     vR = rhoR = np.zeros((nset,ngrids))
@@ -109,7 +108,6 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
     '''
     cell = mydf.cell
     mesh = mydf.mesh
-    low_dim_ft_type = mydf.low_dim_ft_type
     coords = cell.gen_uniform_grids(mesh)
     ngrids = coords.shape[0]
 
@@ -176,11 +174,9 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
             # that arise from the FFT.
             mydf.exxdiv = exxdiv
             if exxdiv == 'ewald' or exxdiv is None:
-                coulG = tools.get_coulG(cell, kpt2-kpt1, False, mydf, mesh,
-                                        low_dim_ft_type=low_dim_ft_type)
+                coulG = tools.get_coulG(cell, kpt2-kpt1, False, mydf, mesh)
             else:
-                coulG = tools.get_coulG(cell, kpt2-kpt1, True, mydf, mesh,
-                                        low_dim_ft_type=low_dim_ft_type)
+                coulG = tools.get_coulG(cell, kpt2-kpt1, True, mydf, mesh)
             if is_zero(kpt1-kpt2):
                 expmikr = np.array(1.)
             else:

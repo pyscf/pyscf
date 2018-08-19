@@ -150,8 +150,7 @@ def get_pp_loc_part1(mydf, kpts=None):
         vj = lib.asarray(mydf._int_nuc_vloc(nuccell, kpts_lst))
         t0 = t1 = log.timer_debug1('vnuc pass1: analytic int', *t0)
 
-        coulG = tools.get_coulG(cell, kpt_allow, mesh=mesh, Gv=Gv,
-                                low_dim_ft_type=cell.low_dim_ft_type) * kws
+        coulG = tools.get_coulG(cell, kpt_allow, mesh=mesh, Gv=Gv) * kws
         aoaux = ft_ao.ft_ao(nuccell, Gv)
         vG = numpy.einsum('i,xi->x', -charges, aoaux) * coulG
 
@@ -253,8 +252,7 @@ def weighted_coulG(mydf, kpt=numpy.zeros(3), exx=False, mesh=None):
     if mesh is None:
         mesh = mydf.mesh
     Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
-    coulG = tools.get_coulG(cell, kpt, exx, mydf, mesh, Gv,
-                            low_dim_ft_type=cell.low_dim_ft_type)
+    coulG = tools.get_coulG(cell, kpt, exx, mydf, mesh, Gv)
     coulG *= kws
     return coulG
 
@@ -299,12 +297,6 @@ class AFTDF(lib.StreamObject):
     def check_sanity(self):
         lib.StreamObject.check_sanity(self)
         cell = self.cell
-        if cell.low_dim_ft_type is not None:
-            raise ValueError('AFTDF detected a non-None cell.low_dim_ft_type! '
-                             'The cell.low_dim_ft_type should only be \nset when '
-                             'using with_df = FFTDF. Please set mf.with_df equal '
-                             'to FFTDF or set cell.low_dim_ft_type \n(= %s) to None. '
-                              % (cell.low_dim_ft_type))
         if not cell.has_ecp():
             logger.warn(self, 'AFTDF integrals are found in all-electron '
                         'calculation.  It often causes huge error.\n'

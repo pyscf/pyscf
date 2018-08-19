@@ -30,7 +30,7 @@ from pyscf import lib
 from pyscf.gto import mole
 from pyscf.pbc.gto.pseudo import pp_int
 
-def get_alphas(cell, low_dim_ft_type=None):
+def get_alphas(cell):
     '''alpha parameters from the non-divergent Hartree+Vloc G=0 term.
 
     See ewald.pdf
@@ -38,24 +38,24 @@ def get_alphas(cell, low_dim_ft_type=None):
     Returns:
         alphas : (natm,) ndarray
     '''
-    return get_alphas_gth(cell, low_dim_ft_type)
+    return get_alphas_gth(cell)
 
-def get_alphas_gth(cell, low_dim_ft_type=None):
+def get_alphas_gth(cell):
     '''alpha parameters for the local GTH pseudopotential.'''
     G0 = np.zeros((1,3))
-    return -get_gth_vlocG(cell, G0, low_dim_ft_type)
+    return -get_gth_vlocG(cell, G0)
 
-def get_vlocG(cell, Gv=None, low_dim_ft_type=None):
+def get_vlocG(cell, Gv=None):
     '''Local PP kernel in G space: Vloc(G)
 
     Returns:
         (natm, ngrids) ndarray
     '''
     if Gv is None: Gv = cell.Gv
-    vlocG = get_gth_vlocG(cell, Gv, low_dim_ft_type)
+    vlocG = get_gth_vlocG(cell, Gv)
     return vlocG
 
-def get_gth_vlocG(cell, Gv, low_dim_ft_type=None):
+def get_gth_vlocG(cell, Gv):
     '''Local part of the GTH pseudopotential.
 
     See MH (4.79).
@@ -209,7 +209,7 @@ def cart2polar(rvec):
     return r, theta, phi
 
 
-def get_pp(cell, kpt=np.zeros(3), low_dim_ft_type=None):
+def get_pp(cell, kpt=np.zeros(3)):
     '''Get the periodic pseudotential nuc-el AO matrix
     '''
     from pyscf.pbc import tools
@@ -218,9 +218,9 @@ def get_pp(cell, kpt=np.zeros(3), low_dim_ft_type=None):
     nao = cell.nao_nr()
 
     SI = cell.get_SI()
-    vlocG = get_vlocG(cell, low_dim_ft_type)
+    vlocG = get_vlocG(cell)
     vpplocG = -np.sum(SI * vlocG, axis=0)
-    vpplocG[0] = np.sum(get_alphas(cell, low_dim_ft_type)) # from get_jvloc_G0 function
+    vpplocG[0] = np.sum(get_alphas(cell)) # from get_jvloc_G0 function
 
     # vpploc evaluated in real-space
     vpplocR = tools.ifft(vpplocG, cell.mesh).real
@@ -275,8 +275,8 @@ def get_pp(cell, kpt=np.zeros(3), low_dim_ft_type=None):
         return vpploc + vppnl
 
 
-def get_jvloc_G0(cell, kpt=np.zeros(3), low_dim_ft_type=None):
+def get_jvloc_G0(cell, kpt=np.zeros(3)):
     '''Get the (separately divergent) Hartree + Vloc G=0 contribution.
     '''
     ovlp = cell.pbc_intor('int1e_ovlp', hermi=1, kpts=kpt)
-    return 1./cell.vol * np.sum(get_alphas(cell, low_dim_ft_type)) * ovlp
+    return 1./cell.vol * np.sum(get_alphas(cell)) * ovlp

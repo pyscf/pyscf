@@ -304,14 +304,13 @@ def get_nuc(mydf, kpts=None):
     else:
         kpts_lst = numpy.reshape(kpts, (-1,3))
 
-    low_dim_ft_type = mydf.low_dim_ft_type
     mesh = mydf.mesh
     charge = -cell.atom_charges()
     Gv = cell.get_Gv(mesh)
     SI = cell.get_SI(Gv)
     rhoG = numpy.dot(charge, SI)
 
-    coulG = tools.get_coulG(cell, mesh=mesh, Gv=Gv, low_dim_ft_type=low_dim_ft_type)
+    coulG = tools.get_coulG(cell, mesh=mesh, Gv=Gv)
     vneG = rhoG * coulG
     vne = _get_j_pass2(mydf, vneG, kpts_lst)[0]
 
@@ -329,14 +328,13 @@ def get_pp(mydf, kpts=None):
     else:
         kpts_lst = numpy.reshape(kpts, (-1,3))
 
-    low_dim_ft_type = mydf.low_dim_ft_type
     mesh = mydf.mesh
     SI = cell.get_SI()
     Gv = cell.get_Gv(mesh)
-    vpplocG = pseudo.get_vlocG(cell, Gv, low_dim_ft_type)
+    vpplocG = pseudo.get_vlocG(cell, Gv)
     vpplocG = -numpy.einsum('ij,ij->j', SI, vpplocG)
     # from get_jvloc_G0 function
-    vpplocG[0] = numpy.sum(pseudo.get_alphas(cell, low_dim_ft_type))
+    vpplocG[0] = numpy.sum(pseudo.get_alphas(cell))
     ngrids = len(vpplocG)
 
     vpp = _get_j_pass2(mydf, vpplocG, kpts_lst)[0]
@@ -431,7 +429,7 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None):
     cell = mydf.cell
     dm_kpts = numpy.asarray(dm_kpts)
     rhoG = _eval_rhoG(mydf, dm_kpts, hermi, kpts, deriv=0)
-    coulG = tools.get_coulG(cell, mesh=cell.mesh, low_dim_ft_type=mydf.low_dim_ft_type)
+    coulG = tools.get_coulG(cell, mesh=cell.mesh)
     #:vG = numpy.einsum('ng,g->ng', rhoG[:,0], coulG)
     vG = rhoG[:,0]
     vG *= coulG
@@ -929,7 +927,7 @@ def nr_rks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
 
     mesh = mydf.mesh
     ngrids = numpy.prod(mesh)
-    coulG = tools.get_coulG(cell, mesh=mesh, low_dim_ft_type=mydf.low_dim_ft_type)
+    coulG = tools.get_coulG(cell, mesh=mesh)
     vG = numpy.einsum('ng,g->ng', rhoG[:,0], coulG)
     ecoul = .5 * numpy.einsum('ng,ng->n', rhoG[:,0].real, vG.real)
     ecoul+= .5 * numpy.einsum('ng,ng->n', rhoG[:,0].imag, vG.imag)
@@ -1030,7 +1028,7 @@ def nr_uks(mydf, xc_code, dm_kpts, hermi=1, kpts=None,
 
     mesh = mydf.mesh
     ngrids = numpy.prod(mesh)
-    coulG = tools.get_coulG(cell, mesh=mesh, low_dim_ft_type=mydf.low_dim_ft_type)
+    coulG = tools.get_coulG(cell, mesh=mesh)
     vG = numpy.einsum('ng,g->g', rhoG[:,0], coulG)
     ecoul = .5 * numpy.einsum('ng,g->', rhoG[:,0].real, vG.real)
     ecoul+= .5 * numpy.einsum('ng,g->', rhoG[:,0].imag, vG.imag)
@@ -1120,7 +1118,7 @@ def nr_rks_fxc(mydf, xc_code, dm0, dms, hermi=1, with_j=False,
     rho1 = tools.ifft(rhoG.reshape(-1,ngrids), mesh).real * (1./weight)
     rho1 = rho1.reshape(nset,-1,ngrids)
     if with_j:
-        coulG = tools.get_coulG(cell, mesh=mesh, low_dim_ft_type=mydf.low_dim_ft_type)
+        coulG = tools.get_coulG(cell, mesh=mesh)
         vG = rhoG[:,0] * coulG
         vG = vG.reshape(nset, *mesh)
 
@@ -1182,7 +1180,7 @@ def nr_rks_fxc_st(mydf, xc_code, dm0, dms_alpha, hermi=1, singlet=True, with_j=F
     rho1 = tools.ifft(rhoG.reshape(-1,ngrids), mesh).real * (1./weight)
     rho1 = rho1.reshape(nset,-1,ngrids)
     if with_j:
-        coulG = tools.get_coulG(cell, mesh=mesh, low_dim_ft_type=mydf.low_dim_ft_type)
+        coulG = tools.get_coulG(cell, mesh=mesh)
         vG = rhoG[:,0] * coulG
         vG = vG.reshape(nset, *mesh)
 
@@ -1264,7 +1262,7 @@ def nr_uks_fxc(mydf, xc_code, dm0, dms, hermi=1, with_j=False,
     rho1 = tools.ifft(rhoG.reshape(-1,ngrids), mesh).real * (1./weight)
     rho1 = rho1.reshape(nset,-1,ngrids)
     if with_j:
-        coulG = tools.get_coulG(cell, mesh=mesh, low_dim_ft_type=mydf.low_dim_ft_type)
+        coulG = tools.get_coulG(cell, mesh=mesh)
         vG = (rhoG[0,0] + rhoG[1,0]) * coulG
         vG = vG.reshape(mesh)
 

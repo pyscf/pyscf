@@ -188,7 +188,7 @@ def ifftk(g, mesh, expikr):
 
 
 def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
-              wrap_around=True, low_dim_ft_type=None, **kwargs):
+              wrap_around=True, **kwargs):
     '''Calculate the Coulomb kernel for all G-vectors, handling G=0 and exchange.
 
     Args:
@@ -292,7 +292,7 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
 
     else:
         G0_idx = np.where(absG2==0)[0]
-        if cell.dimension != 2 or low_dim_ft_type == 'inf_vacuum':
+        if cell.dimension != 2 or cell.low_dim_ft_type == 'inf_vacuum':
             with np.errstate(divide='ignore'):
                 coulG = 4*np.pi/absG2
             if exxdiv == 'ewald' and len(G0_idx) > 0:
@@ -318,7 +318,7 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
             # For 0D and 1D Coulobm, see Table I of PRB, 73, 205119
             raise NotImplementedError('no method for PBC dimension %s, '
                 'dim-type %s and exxdiv = %s' %
-                (cell.dimension, low_dim_ft_type, exxdiv))
+                (cell.dimension, cell.low_dim_ft_type, exxdiv))
 
     coulG[equal2boundary] = 0
 
