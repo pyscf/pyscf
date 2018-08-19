@@ -76,22 +76,20 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
     for k, kpt in enumerate(uniq_kpts):
         aoaux = ft_ao.ft_ao(fused_cell, Gv, None, b, gxyz, Gvbase, kpt).T
         aoaux = fuse(aoaux)
-        coulG = numpy.sqrt(mydf.weighted_coulG(kpt, False, mesh))
-        kLR = (aoaux.real * coulG).T
-        kLI = (aoaux.imag * coulG).T
-        if not kLR.flags.c_contiguous: kLR = lib.transpose(kLR.T)
-        if not kLI.flags.c_contiguous: kLI = lib.transpose(kLI.T)
+        coulG = mydf.weighted_coulG(kpt, False, mesh)
+        LkR = numpy.asarray(aoaux.real, order='C')
+        LkI = numpy.asarray(aoaux.imag, order='C')
 
         j2c_k = fuse(fuse(j2c[k]).T).T.copy()
         if is_zero(kpt):  # kpti == kptj
-            j2c_k -= lib.dot(kLR.T, kLR)
-            j2c_k -= lib.dot(kLI.T, kLI)
+            j2c_k -= lib.dot(LkR*coulG, LkR.T)
+            j2c_k -= lib.dot(LkI*coulG, LkI.T)
         else:
              # aoaux ~ kpt_ij, aoaux.conj() ~ kpt_kl
-            j2cR, j2cI = zdotCN(kLR.T, kLI.T, kLR, kLI)
+            j2cR, j2cI = zdotCN(LkR*coulG, LkI*coulG, LkR.T, LkI.T)
             j2c_k -= j2cR + j2cI * 1j
         fswap['j2c/%d'%k] = j2c_k
-        aoaux = kLR = kLI = j2cR = j2cI = coulG = None
+        aoaux = LkR = LkI = j2cR = j2cI = coulG = None
     j2c = None
 
     feri = h5py.File(cderi_file)

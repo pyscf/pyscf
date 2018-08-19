@@ -179,48 +179,24 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
     # j2c ~ (-kpt_ji | kpt_ji)
     j2c = fused_cell.pbc_intor('int2c2e', hermi=1, kpts=uniq_kpts)
 
-# An alternative method to evalute j2c. This method might have larger numerical error?
-#    chgcell = make_modchg_basis(auxcell, mydf.eta)
-#    for k, kpt in enumerate(uniq_kpts):
-#        aoaux = ft_ao.ft_ao(chgcell, Gv, None, b, gxyz, Gvbase, kpt).T
-#        coulG = numpy.sqrt(mydf.weighted_coulG(kpt, False, mesh))
-#        LkR = aoaux.real * coulG
-#        LkI = aoaux.imag * coulG
-#        j2caux = numpy.zeros_like(j2c[k])
-#        j2caux[naux:,naux:] = j2c[k][naux:,naux:]
-#        if is_zero(kpt):  # kpti == kptj
-#            j2caux[naux:,naux:] -= lib.ddot(LkR, LkR.T)
-#            j2caux[naux:,naux:] -= lib.ddot(LkI, LkI.T)
-#            j2c[k] = j2c[k][:naux,:naux] - fuse(fuse(j2caux.T).T)
-#            vbar = fuse(mydf.auxbar(fused_cell))
-#            s = (vbar != 0).astype(numpy.double)
-#            j2c[k] -= numpy.einsum('i,j->ij', vbar, s)
-#            j2c[k] -= numpy.einsum('i,j->ij', s, vbar)
-#        else:
-#            j2cR, j2cI = zdotCN(LkR, LkI, LkR.T, LkI.T)
-#            j2caux[naux:,naux:] -= j2cR + j2cI * 1j
-#            j2c[k] = j2c[k][:naux,:naux] - fuse(fuse(j2caux.T).T)
-#        fswap['j2c/%d'%k] = fuse(fuse(j2c[k]).T).T
-#        aoaux = LkR = LkI = coulG = None
-
     max_memory = max(2000, mydf.max_memory - lib.current_memory()[0])
     blksize = max(2048, int(max_memory*.5e6/16/fused_cell.nao_nr()))
     log.debug2('max_memory %s (MB)  blocksize %s', max_memory, blksize)
     for k, kpt in enumerate(uniq_kpts):
-        coulG = numpy.sqrt(mydf.weighted_coulG(kpt, False, mesh))
+        coulG = mydf.weighted_coulG(kpt, False, mesh)
         for p0, p1 in lib.prange(0, ngrids, blksize):
-            aoaux = ft_ao.ft_ao(fused_cell, Gv[p0:p1], None, b, gxyz[p0:p1], Gvbase, kpt)
-            aoaux = aoaux.T
-            LkR = aoaux.real * coulG[p0:p1]
-            LkI = aoaux.imag * coulG[p0:p1]
+            aoaux = ft_ao.ft_ao(fused_cell, Gv[p0:p1], None, b, gxyz[p0:p1], Gvbase, kpt).T
+            LkR = numpy.asarray(aoaux.real, order='C')
+            LkI = numpy.asarray(aoaux.imag, order='C')
             aoaux = None
 
             if is_zero(kpt):  # kpti == kptj
-                j2c[k][naux:] -= lib.ddot(LkR[naux:], LkR.T)
-                j2c[k][naux:] -= lib.ddot(LkI[naux:], LkI.T)
+                j2c[k][naux:] -= lib.ddot(LkR[naux:]*coulG[p0:p1], LkR.T)
+                j2c[k][naux:] -= lib.ddot(LkI[naux:]*coulG[p0:p1], LkI.T)
                 j2c[k][:naux,naux:] = j2c[k][naux:,:naux].T
             else:
-                j2cR, j2cI = zdotCN(LkR[naux:], LkI[naux:], LkR.T, LkI.T)
+                j2cR, j2cI = zdotCN(LkR[naux:]*coulG[p0:p1],
+                                    LkI[naux:]*coulG[p0:p1], LkR.T, LkI.T)
                 j2c[k][naux:] -= j2cR + j2cI * 1j
                 j2c[k][:naux,naux:] = j2c[k][naux:,:naux].T.conj()
             LkR = LkI = None

@@ -226,7 +226,6 @@ def _int_nuc_vloc(mydf, nuccell, kpts, intor='int3c2e', aosym='s2', comp=1):
                 mat[k] -= nucbar * ovlp[k].reshape(nao_pair)
             else:
                 mat[k] -= nucbar * lib.pack_tril(ovlp[k])
-
     return mat
 
 def get_pp(mydf, kpts=None):
@@ -254,7 +253,8 @@ def weighted_coulG(mydf, kpt=numpy.zeros(3), exx=False, mesh=None):
     if mesh is None:
         mesh = mydf.mesh
     Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
-    coulG = tools.get_coulG(cell, kpt, exx, mydf, mesh, Gv)
+    coulG = tools.get_coulG(cell, kpt, exx, mydf, mesh, Gv,
+                            low_dim_ft_type=cell.low_dim_ft_type)
     coulG *= kws
     return coulG
 
@@ -505,10 +505,14 @@ class AFTDF(lib.StreamObject):
 # With this function to mimic the molecular DF.loop function, the pbc gamma
 # point DF object can be used in the molecular code
     def loop(self, blksize=None):
+        if self.dimension in (1, 2):
+            raise RuntimeError('1D and 2D systems are not supported.')
+
         if blksize is None:
             blksize = self.blockdim
-        Lpq = None
+        # coulG of 1D and 2D has negative elements.
         coulG = self.weighted_coulG()
+        Lpq = None
         for pqkR, pqkI, p0, p1 in self.pw_loop(aosym='s2', blksize=blksize):
             vG = numpy.sqrt(coulG[p0:p1])
             pqkR *= vG

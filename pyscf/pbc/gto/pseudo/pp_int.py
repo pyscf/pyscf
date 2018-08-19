@@ -50,12 +50,13 @@ def get_gth_vlocG_part1(cell, Gv):
         for ia in range(cell.natm):
             Zia = cell.atom_charge(ia)
             symb = cell.atom_symbol(ia)
+            # Note the signs -- potential here is positive
             vlocG[ia] = Zia * coulG
             if symb in cell._pseudo:
                 pp = cell._pseudo[symb]
                 rloc, nexp, cexp = pp[1:3+1]
                 vlocG[ia] *= numpy.exp(-0.5*rloc**2 * G2)
-# Note the sign of G=0 differs to the rest, see get_gth_vlocG, get_alphas_gth
+                # alpha parameters from the non-divergent Hartree+Vloc G=0 term.
                 vlocG[ia,G0idx] = -2*numpy.pi*Zia*rloc**2
 
     elif cell.dimension == 2:
@@ -75,7 +76,6 @@ def get_gth_vlocG_part1(cell, Gv):
             Zia = cell.atom_charge(ia)
             symb = cell.atom_symbol(ia)
             if symb not in cell._pseudo:
-# FIXME: the mixed pseudo-potential and normal nuclear attraction potential
                 vlocG[ia] = Zia * coulG
                 continue
 
@@ -95,7 +95,7 @@ def get_gth_vlocG_part1(cell, Gv):
             JexpG0 = ( - numpy.pi * lz**2 / 2. * scipy.special.erf( ew_eta * lzd2 )
                        + numpy.pi/ew_eta**2 * scipy.special.erfc(ew_eta*lzd2)
                        - numpy.sqrt(numpy.pi)*lz/ew_eta * numpy.exp( - (ew_eta*lzd2)**2 ) )
-            vlocG[ia,0] = -2*numpy.pi*Zia*rloc**2 + Zia*JexpG0
+            vlocG[ia,G0idx] = -2*numpy.pi*Zia*rloc**2 + Zia*JexpG0
     else:
         raise NotImplementedError('Low dimension ft_type ',
             cell.low_dim_ft_type, ' not implemented for dimension ',

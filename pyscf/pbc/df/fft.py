@@ -77,8 +77,6 @@ def get_pp(mydf, kpts=None):
     Gv = cell.get_Gv(mesh)
     vpplocG = pseudo.get_vlocG(cell, Gv, low_dim_ft_type)
     vpplocG = -numpy.einsum('ij,ij->j', SI, vpplocG)
-    # from get_jvloc_G0 function
-    vpplocG[0] = numpy.sum(pseudo.get_alphas(cell, low_dim_ft_type))
     ngrids = len(vpplocG)
 
     # vpploc evaluated in real-space
