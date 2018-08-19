@@ -317,12 +317,8 @@ def makov_payne_correction(mf):
     logger.note(mf, 'Makov-Payne correction for charged 3D PBC systems')
     # PRB 51 (1995), 4014
     # PRB 77 (2008), 115139
-    if cell.dimension != 3 and not isinstance(mf.with_df, df.fft.FFTDF):
-        logger.warn(mf, 'Correction for low-dimension AFTDF/GDF/MDF '
-                    'is not available.')
-        return mf
-    elif cell.low_dim_ft_type == 'analytic_2d_1':
-        logger.warn(mf, 'Correction for truncated Coulomb operator '
+    if cell.dimension != 3:
+        logger.warn(mf, 'Correction for low-dimension PBC systems'
                     'is not available.')
         return mf
 
