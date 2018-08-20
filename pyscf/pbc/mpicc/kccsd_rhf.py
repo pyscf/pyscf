@@ -40,7 +40,7 @@ from pyscf.pbc.mpitools import mpi_load_balancer, mpi
 from pyscf.pbc.tools.tril import tril_index, unpack_tril
 from pyscf.pbc.lib import kpts_helper
 import pyscf.pbc.cc.kccsd_rhf
-from pyscf.pbc.cc.kccsd_rhf import pad_frozen_kpt_mo_coeff
+from pyscf.pbc.cc.kccsd_rhf import padded_mo_coeff
 
 from mpi4py import MPI
 
@@ -2559,7 +2559,7 @@ class _ERIS:
         dtype = mo_coeff[0].dtype
 
         # If we have frozen orbitals then get back the fock/mo_coeff with appropriate padding
-        mo_coeff = pad_frozen_kpt_mo_coeff(cc, mo_coeff)
+        mo_coeff = padded_mo_coeff(cc, mo_coeff)
 
         # Re-make our fock MO matrix elements from density and fock AO
         dm = cc._scf.make_rdm1(cc.mo_coeff, cc.mo_occ)
