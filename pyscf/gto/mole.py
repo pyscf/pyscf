@@ -1856,7 +1856,7 @@ class Mole(lib.StreamObject):
     @property
     def nelectron(self):
         if self._nelectron is None:
-            return tot_electrons(self)
+            return self.tot_electrons()
         else:
             return self._nelectron
     @nelectron.setter

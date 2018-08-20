@@ -469,19 +469,25 @@ def bas_rcut(cell, bas_id, precision=INTEGRAL_PRECISION):
 
 def _estimate_ke_cutoff(alpha, l, c, precision=INTEGRAL_PRECISION, weight=1.):
     '''Energy cutoff estimation'''
-    #if l == 0:
-    #    log_k0 = 2.5 + np.log(alpha) / 2
-    #    log_rest = np.log(2*alpha*16*np.pi**2*c**4/precision)
-    #    Ecut = (log_rest - log_k0) * 2 * alpha
-    #    Ecut[Ecut <= 0] = .5
-    #    log_k0 = .5 * np.log(Ecut*2)
-    #    Ecut = (log_rest - log_k0) * 2 * alpha
-    #    Ecut[Ecut <= 0] = .5
-    #    return Ecut
-
-    log_k0 = 2.5 + np.log(alpha) / 2
+    # This function estimates the energy cutoff for (ii|ii) type of electron
+    # repulsion integrals. The energy cutoff for nuclear attraction is larger
+    # than the energy cutoff for ERIs.  The estimated error is roughly
+    #     error ~ 64 pi^3 c^2 /((2l+1)!!(4a)^l) (2Ecut)^{l+.5} e^{-Ecut/4a}
+    # log_k0 = 3 + np.log(alpha) / 2
+    # l2fac2 = scipy.misc.factorial2(l*2+1)
+    # log_rest = np.log(precision*l2fac2*(4*alpha)**l / (16*np.pi**2*c**2))
+    # Enuc_cut = 4*alpha * (log_k0*(2*l+1) - log_rest)
+    # Enuc_cut[Enuc_cut <= 0] = .5
+    # log_k0 = .5 * np.log(Ecut*2)
+    # Enuc_cut = 4*alpha * (log_k0*(2*l+1) - log_rest)
+    # Enuc_cut[Enuc_cut <= 0] = .5
+    #
+    # However, nuclear attraction can be evaluated with the trick of Ewald
+    # summation which largely reduces the requirements to the energy cutoff.
+    # In practice, the cutoff estimation for ERIs as below should be enough.
+    log_k0 = 3 + np.log(alpha) / 2
     l2fac2 = scipy.misc.factorial2(l*2+1)
-    log_rest = np.log(precision*l2fac2**2*(4*alpha)**(l*2+1) / (32*np.pi**2*c**4))
+    log_rest = np.log(precision*l2fac2**2*(4*alpha)**(l*2+1) / (128*np.pi**4*c**4))
     Ecut = 2*alpha * (log_k0*(4*l+3) - log_rest)
     Ecut[Ecut <= 0] = .5
     log_k0 = .5 * np.log(Ecut*2)
@@ -491,22 +497,12 @@ def _estimate_ke_cutoff(alpha, l, c, precision=INTEGRAL_PRECISION, weight=1.):
 
 def estimate_ke_cutoff(cell, precision=INTEGRAL_PRECISION):
     '''Energy cutoff estimation'''
-    b = cell.reciprocal_vectors()
-    if cell.dimension == 0:
-        w = 1
-    elif cell.dimension == 1:
-        w = np.linalg.norm(b[0]) / (2*np.pi)
-    elif cell.dimension == 2:
-        w = np.linalg.norm(np.cross(b[0], b[1])) / (2*np.pi)**2
-    else:
-        w = abs(np.linalg.det(b)) / (2*np.pi)**3
-
     Ecut_max = 0
     for i in range(cell.nbas):
         l = cell.bas_angular(i)
         es = cell.bas_exp(i)
         cs = abs(cell.bas_ctr_coeff(i)).max(axis=1)
-        ke_guess = _estimate_ke_cutoff(es, l, cs, precision, w)
+        ke_guess = _estimate_ke_cutoff(es, l, cs, precision)
         Ecut_max = max(Ecut_max, ke_guess.max())
     return Ecut_max
 
@@ -527,7 +523,7 @@ def error_for_ke_cutoff(cell, ke_cutoff):
         l = cell.bas_angular(i)
         es = cell.bas_exp(i)
         cs = abs(cell.bas_ctr_coeff(i)).max(axis=1)
-        fac = 64*np.pi**2*cs**4*w / scipy.misc.factorial2(l*2+1)**2
+        fac = 256*np.pi**4*cs**4*w / scipy.misc.factorial2(l*2+1)**2
         efac = np.exp(-ke_cutoff/(2*es))
         if 0:
             ka = scipy.misc.factorial2(l*4+3) * (2*es)**(2*l+2)
@@ -1059,6 +1055,12 @@ def _split_basis(cell, delimiter=EXP_DELIMITER):
     pcell._env = _env
     return pcell, scipy.linalg.block_diag(*contr_coeff)
 
+def tot_electrons(cell, nkpts=1):
+    '''Total number of electrons
+    '''
+    nelectron = cell.atom_charges().sum() * nkpts - cell.charge
+    return int(nelectron)
+
 
 class Cell(mole.Mole):
     '''A Cell object holds the basic information of a crystal.
@@ -1135,13 +1137,15 @@ class Cell(mole.Mole):
 # Overwriting nelec method to avoid this check.
         @property
         def nelec(self):
-            ne = self.nelectron
+            ne = self.tot_electrons()
             nalpha = (ne + self.spin) // 2
             nbeta = nalpha - self.spin
             if nalpha + nbeta != ne:
                 warnings.warn('Electron number %d and spin %d are not consistent '
                               'in unit cell\n' % (ne, self.spin))
             return nalpha, nbeta
+
+    tot_electrons = tot_electrons
 
 #Note: Exculde dump_input, parse_arg, basis from kwargs to avoid parsing twice
     def build(self, dump_input=True, parse_arg=True,

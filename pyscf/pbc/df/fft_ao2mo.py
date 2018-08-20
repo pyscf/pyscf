@@ -101,6 +101,8 @@ def get_eri(mydf, kpts=None,
 def general(mydf, mo_coeffs, kpts=None,
             compact=getattr(__config__, 'pbc_df_ao2mo_general_compact', True)):
     '''General MO integral transformation'''
+    from pyscf.pbc.df.df_ao2mo import warn_pbc2d_eri
+    warn_pbc2d_eri(mydf)
     cell = mydf.cell
     low_dim_ft_type = cell.low_dim_ft_type
     kptijkl = _format_kpts(kpts)

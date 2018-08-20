@@ -32,8 +32,7 @@ from pyscf.fci import cistring
 from pyscf.cc.ccsd import _unpack_4fold
 
 def make_diagonal(myci, eris):
-    nocca = eris.nocca
-    noccb = eris.noccb
+    nocca, noccb = myci.nocc
     nmoa = eris.focka.shape[0]
     nmob = eris.fockb.shape[1]
     nvira = nmoa - nocca
@@ -112,8 +111,7 @@ def make_diagonal(myci, eris):
                                  (e2diag_aa, e2diag_ab, e2diag_bb))
 
 def contract(myci, civec, eris):
-    nocca = eris.nocca
-    noccb = eris.noccb
+    nocca, noccb = eris.nocc
     nmoa = eris.focka.shape[0]
     nmob = eris.fockb.shape[0]
     nvira = nmoa - nocca
@@ -764,8 +762,7 @@ class UCISD(cisd.CISD):
 
     def get_init_guess(self, eris=None, nroots=1, diag=None):
         if eris is None: eris = self.ao2mo(self.mo_coeff)
-        nocca = eris.nocca
-        noccb = eris.noccb
+        nocca, noccb = self.nocc
         mo_ea = eris.focka.diagonal()
         mo_eb = eris.fockb.diagonal()
         eia_a = mo_ea[:nocca,None] - mo_ea[None,nocca:]

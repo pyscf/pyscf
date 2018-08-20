@@ -176,7 +176,7 @@ def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
     if mo_energy_kpts is None: mo_energy_kpts = mf.mo_energy
 
     nkpts = len(mo_energy_kpts)
-    nocc = (mf.cell.nelectron * nkpts) // 2
+    nocc = mf.cell.tot_electrons(nkpts) // 2
 
     mo_energy = np.sort(np.hstack(mo_energy_kpts))
     fermi = mo_energy[nocc-1]
@@ -325,6 +325,41 @@ def init_guess_by_chkfile(cell, chkfile_name, project=None, kpts=None):
     return dm[0] + dm[1]
 
 
+def dip_moment(cell, dm_kpts, unit='Debye', verbose=logger.NOTE,
+               grids=None, rho=None, kpts=np.zeros((1,3))):
+    ''' Dipole moment in the unit cell.
+
+    Args:
+         cell : an instance of :class:`Cell`
+
+         dm_kpts (a list of ndarrays) : density matrices of k-points
+
+    Return:
+        A list: the dipole moment on x, y and z components
+    '''
+    from pyscf.pbc.dft import gen_grid
+    from pyscf.pbc.dft import numint
+    if grids is None:
+        grids = gen_grid.UniformGrids(cell)
+    if rho is None:
+        rho = numint.KNumInt().get_rho(cell, dm, grids, kpts, cell.max_memory)
+    return pbchf.dip_moment(cell, dm_kpts, unit, verbose, grids, rho, kpts)
+
+def get_rho(mf, dm=None, grids=None, kpts=None):
+    '''Compute density in real space
+    '''
+    from pyscf.pbc.dft import gen_grid
+    from pyscf.pbc.dft import numint
+    if dm is None:
+        dm = mf.make_rdm1()
+    if grids is None:
+        grids = gen_grid.UniformGrids(cell)
+    if kpts is None:
+        kpts = mf.kpts
+    ni = numint.KNumInt()
+    return ni.get_rho(mf.cell, dm, grids, kpts, mf.max_memory)
+
+
 class KSCF(pbchf.SCF):
     '''SCF base class with k-point sampling.
 
@@ -392,9 +427,13 @@ class KSCF(pbchf.SCF):
             isinstance(self.exxdiv, str) and self.exxdiv.lower() == 'ewald'):
             madelung = tools.pbc.madelung(self.cell, [self.kpts])
             logger.info(self, '    madelung (= occupied orbital energy shift) = %s', madelung)
+            nkpts = len(self.kpts)
+            # FIXME: consider the fractional num_electron or not? This maybe
+            # relates to the charged system.
+            nelectron = float(self.cell.tot_electrons(nkpts)) / nkpts
             logger.info(self, '    Total energy shift due to Ewald probe charge'
                         ' = -1/2 * Nelec*madelung/cell.vol = %.12g',
-                        madelung*self.cell.nelectron * -.5)
+                        madelung*nelectron * -.5)
         logger.info(self, 'DF object = %s', self.with_df)
         if not hasattr(self.with_df, 'build'):
             # .dump_flags() is called in pbc.df.build function
@@ -448,14 +487,18 @@ class KSCF(pbchf.SCF):
 
         if cell.dimension < 3:
             ne = np.einsum('kij,kji->k', dm_kpts, self.get_ovlp(cell)).real
-            if np.any(abs(ne - cell.nelectron) > 1e-7):
+            # FIXME: consider the fractional num_electron or not? This maybe
+            # relates to the charged system.
+            nkpts = len(self.kpts)
+            nelectron = float(self.cell.tot_electrons(nkpts)) / nkpts
+            if np.any(abs(ne - nelectron) > 1e-7):
                 logger.warn(self, 'Big error detected in the electron number '
                             'of initial guess density matrix (Ne/cell = %g)!\n'
                             '  This can cause huge error in Fock matrix and '
                             'lead to instability in SCF for low-dimensional '
                             'systems.\n  DM is normalized to correct number '
                             'of electrons', ne.mean())
-                dm_kpts *= cell.nelectron / ne.reshape(-1,1,1)
+                dm_kpts *= nelectron / ne.reshape(-1,1,1)
         return dm_kpts
 
     def init_guess_by_1e(self, cell=None):
@@ -589,10 +632,15 @@ class KSCF(pbchf.SCF):
         return mulliken_meta(cell, dm, s=s, verbose=verbose,
                              pre_orth_method=pre_orth_method)
 
-    def dip_moment(self, mol=None, dm=None, unit='Debye', verbose=logger.NOTE,
+    get_rho = get_rho
+
+    @lib.with_doc(dip_moment.__doc__)
+    def dip_moment(self, cell=None, dm=None, unit='Debye', verbose=logger.NOTE,
                    **kwargs):
-        # skip dipole memont for crystal
-        return
+        rho = kwargs.pop('rho', None)
+        if rho is None:
+            rho = self.get_rho(dm)
+        return dip_moment(cell, dm, unit, verbose, rho=rho, kpts=self.kpts, **kwargs)
 
     canonicalize = canonicalize
 

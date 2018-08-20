@@ -100,6 +100,7 @@ class KnownValues(unittest.TestCase):
         t2 = t2 - t2.transpose(1,0,2,3)
         t1 = (numpy.random.random((nocc,nvir)) +
               numpy.random.random((nocc,nvir))*.8j - .5-.4j)
+        eris.mo_energy = eris.fock.diagonal().real
 
         gcc = cc.gccsd.GCCSD(scf.GHF(gto.M()))
         self.assertAlmostEqual(gccsd_t.kernel(gcc, eris, t1, t2),

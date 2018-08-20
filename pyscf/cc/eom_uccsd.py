@@ -282,7 +282,7 @@ def ipccsd_diag(eom, imds=None):
     WovOV_t2_dot = np.einsum('ibja,ijba->ija',imds.WovOV,t2ab)
     WovOV_t2_dot_T = np.einsum('jaib,jiab->ija',imds.WovOV,t2ab)
     WOVOV_t2_dot = np.einsum('jaib,jiab->ija',imds.WOVOV,t2bb)
-    
+
     Hr2aaa = Fvv_diag[None,None,:] - Foo_diag[:,None,None] - Foo_diag[None,:,None] \
              + Woooo_slice[:,:,None] + Wovvo_slice[:,None,:] + Wovvo_slice[None,:,:] \
              - Wovov_t2_dot
@@ -298,7 +298,6 @@ def ipccsd_diag(eom, imds=None):
     Hr2bbb = FVV_diag[None,None,:] - FOO_diag[:,None,None] - FOO_diag[None,:,None] \
              + WOOOO_slice[:,:,None] + WOVVO_slice[:,None,:] + WOVVO_slice[None,:,:] \
              - WOVOV_t2_dot
-
 
     vector = amplitudes_to_vector_ip([Hr1a, Hr1b], [Hr2aaa, Hr2baa, Hr2abb, Hr2bbb])
     return vector
@@ -630,6 +629,7 @@ def _add_vvvv_ea(mycc, r2, eris):
     time0 = time.clock(), time.time()
     log = logger.Logger(mycc.stdout, mycc.verbose)
     r2aaa, r2aba, r2bab, r2bbb = r2
+    nocca, noccb = mycc.nocc
 
     if mycc.direct:
         if hasattr(eris, 'mo_coeff') and eris.mo_coeff is not None:
@@ -653,7 +653,7 @@ def _add_vvvv_ea(mycc, r2, eris):
         r2aaa = r2aba = r2bab = r2bbb = None
         time0 = log.timer_debug1('vvvv-tau', *time0)
 
-        buf = ccsd._contract_vvvv_t2(mycc, mycc.mol, None, r2, log=log)
+        buf = ccsd._contract_vvvv_t2(mycc, mycc.mol, None, r2, verbose=log)
         sections = np.cumsum([nocca,nocca,noccb])
         Hr2aaa, Hr2aba, Hr2bab, Hr2bbb = np.split(buf, sections)
         buf = None
@@ -697,14 +697,14 @@ def _add_vvvv_ea(mycc, r2, eris):
 
 def eaccsd_diag(eom, imds=None):
     if imds is None: imds = eom.make_imds()
-
+    eris = imds.eris
     t1, t2 = imds.t1, imds.t2
     t1a, t1b = t1
     t2aa, t2ab, t2bb = t2
     t2ba = t2ab.transpose(1,0,3,2)
 
-    nocc_a, nvir_a = t1a.shape
-    nocc_b, nvir_b = t1b.shape
+    nocca, nvira = t1a.shape
+    noccb, nvirb = t1b.shape
     dtype = np.result_type(t1a,t1b,t2aa,t2ab,t2bb)
 
     Hr1a = np.diag(imds.Fvv)
@@ -741,93 +741,81 @@ def eaccsd_diag(eom, imds=None):
     Hr2bbb = -FOO_diag[:,None,None]+FVV_diag[None,:,None]+FVV_diag[None,None,:]+ \
              WOVVO_slice[:,:,None]+WOVVO_slice[:,None,:]-WOVOV_t2_dot
 
-    #-------------- imds.Wvvvv not None
+#    if imds.Wvvvv is not None:
+#        Wvvvv_slice = np.einsum('aabb->ab',imds.Wvvvv)
+#        Hr2aaa += 0.5 * Wvvvv_slice[None,:,:]
+#        WVVvv_slice = np.einsum('aabb->ba',imds.WvvVV)
+#        Hr2aba += WVVvv_slice[None,:,:]
+#        WvvVV_slice = np.einsum('aabb->ab',imds.WvvVV)
+#        Hr2bab += WvvVV_slice[None,:,:]
+#        WVVVV_slice = np.einsum('aabb->ab',imds.WVVVV)
+#        Hr2bbb += 0.5 * WVVVV_slice[None,:,:]
 
-    if(imds.Wvvvv is not None):
-      Wvvvv_slice_A = np.einsum('aabb->ab',imds.Wvvvv)
-      Wvvvv_slice_B = np.einsum('abba->ab',imds.Wvvvv)
-      Hr2aaa += 0.5*Wvvvv_slice_A[None,:,:]-0.5*Wvvvv_slice_B[None,:,:]
-      WVVvv_slice = np.einsum('aabb->ab',imds.WVVvv)
-      Hr2aba += WVVvv_slice[None,:,:]
-      WvvVV_slice = np.einsum('aabb->ab',imds.WvvVV)
-      Hr2bab += WvvVV_slice[None,:,:]
-      WVVVV_slice_A = np.einsum('aabb->ab',imds.WVVVV)
-      WVVVV_slice_B = np.einsum('abba->ab',imds.WVVVV)
-      Hr2bbb += 0.5*WVVVV_slice_A[None,:,:]-0.5*WVVVV_slice_B[None,:,:]
+# TODO: test Wvvvv contribution
+    # See also the code for Wvvvv contribution in function eeccsd_diag
+    tauaa, tauab, taubb = uccsd.make_tau(t2, t1, t1)
+    eris_ovov = np.asarray(eris.ovov)
+    eris_OVOV = np.asarray(eris.OVOV)
+    eris_ovOV = np.asarray(eris.ovOV)
+    Wvvaa = .5*np.einsum('mnab,manb->ab', tauaa, eris_ovov)
+    Wvvbb = .5*np.einsum('mnab,manb->ab', taubb, eris_OVOV)
+    Wvvab =    np.einsum('mNaB,maNB->aB', tauab, eris_ovOV)
+    eris_ovov = eris_OVOV = eris_ovOV = None
 
-    #-------------- original implementation
+    mem_now = lib.current_memory()[0]
+    max_memory = max(0, eom.max_memory - mem_now)
+    blksize = min(nocca, max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvira**3*3))))
+    for p0,p1 in lib.prange(0, nocca, blksize):
+        ovvv = eris.get_ovvv(slice(p0,p1))  # ovvv = eris.ovvv[p0:p1]
+        Wvvaa += np.einsum('mb,maab->ab', t1a[p0:p1], ovvv)
+        Wvvaa -= np.einsum('mb,mbaa->ab', t1a[p0:p1], ovvv)
+        ovvv = None
+    blksize = min(noccb, max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvirb**3*3))))
+    for p0, p1 in lib.prange(0, noccb, blksize):
+        OVVV = eris.get_OVVV(slice(p0,p1))  # OVVV = eris.OVVV[p0:p1]
+        Wvvbb += np.einsum('mb,maab->ab', t1b[p0:p1], OVVV)
+        Wvvbb -= np.einsum('mb,mbaa->ab', t1b[p0:p1], OVVV)
+        OVVV = None
+    blksize = min(nocca, max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvira*nvirb**2*3))))
+    for p0,p1 in lib.prange(0, nocca, blksize):
+        ovVV = eris.get_ovVV(slice(p0,p1))  # ovVV = eris.ovVV[p0:p1]
+        Wvvab -= np.einsum('mb,mbaa->ba', t1a[p0:p1], ovVV)
+        ovVV = None
+    blksize = min(noccb, max(ccsd.BLKMIN, int(max_memory*1e6/8/(nvirb*nvira**2*3))))
+    for p0, p1 in lib.prange(0, noccb, blksize):
+        OVvv = eris.get_OVvv(slice(p0,p1))  # OVvv = eris.OVvv[p0:p1]
+        Wvvab -= np.einsum('mb,mbaa->ab', t1b[p0:p1], OVvv)
+        OVvv = None
+    Wvvaa = Wvvaa + Wvvaa.T
+    Wvvbb = Wvvbb + Wvvbb.T
+    if eris.vvvv is not None:
+        for i in range(nvira):
+            i0 = i*(i+1)//2
+            vvv = lib.unpack_tril(np.asarray(eris.vvvv[i0:i0+i+1]))
+            tmp = np.einsum('bb->b', vvv[i])
+            Wvvaa[i] += tmp
+            tmp = np.einsum('bb->b', vvv[:,:i+1,i])
+            Wvvaa[i,:i+1] -= tmp
+            Wvvaa[:i  ,i] -= tmp[:i]
+            vvv = lib.unpack_tril(np.asarray(eris.vvVV[i0:i0+i+1]))
+            Wvvab[i] += np.einsum('bb->b', vvv[i])
+            vvv = None
+        for i in range(nvirb):
+            i0 = i*(i+1)//2
+            vvv = lib.unpack_tril(np.asarray(eris.VVVV[i0:i0+i+1]))
+            tmp = np.einsum('bb->b', vvv[i])
+            Wvvbb[i] += tmp
+            tmp = np.einsum('bb->b', vvv[:,:i+1,i])
+            Wvvbb[i,:i+1] -= tmp
+            Wvvbb[:i  ,i] -= tmp[:i]
+            vvv = None
+    Wvvba = Wvvab.T
 
-    '''
-    Hr2aaa = np.zeros((nocc_a,nvir_a,nvir_a), dtype=dtype)
-    Hr2bab = np.zeros((nocc_b,nvir_a,nvir_b), dtype=dtype)
-    Hr2aba = np.zeros((nocc_a,nvir_b,nvir_a), dtype=dtype)
-    Hr2bbb = np.zeros((nocc_b,nvir_b,nvir_b), dtype=dtype)
-
-    for j in range(nocc_a):
-        for a in range(nvir_a):
-            if imds.Wvvvv is not None:
-                Wvvvva = np.array(imds.Wvvvv[a])
-            for b in range(nvir_a):
-                Hr2aaa[j,a,b] += imds.Fvv[a,a]
-                Hr2aaa[j,a,b] += imds.Fvv[b,b]
-                Hr2aaa[j,a,b] += -imds.Foo[j,j]
-                Hr2aaa[j,a,b] += imds.Wovvo[j,b,b,j]
-                Hr2aaa[j,a,b] += imds.Wovvo[j,a,a,j]
-                if imds.Wvvvv is not None:
-                    Hr2aaa[j,a,b] += Wvvvva[a,b,b]
-                Hr2aaa[j,a,b] += -np.dot(imds.Wovov[:,a,j,b], t2aa[:,j,a,b])
-
-    Hr2aba = np.zeros((nocc_a, nvir_b, nvir_a),dtype=dtype)
-    for j in range(nocc_a):
-        for a in range(nvir_b):
-            if imds.Wvvvv is not None:
-                WVVvva = np.array(imds.WVVvv[a])
-            for b in range(nvir_a):
-                Hr2aba[j,a,b] += imds.FVV[a,a]
-                Hr2aba[j,a,b] += imds.Fvv[b,b]
-                Hr2aba[j,a,b] += -imds.Foo[j,j]
-                Hr2aba[j,a,b] += imds.Wovvo[j,b,b,j]
-                Hr2aba[j,a,b] += imds.WoVVo[j,a,a,j]
-                if imds.Wvvvv is not None:
-                    Hr2aba[j,a,b] += WVVvva[a,b,b]
-                Hr2aba[j,a,b] -= np.dot(imds.WovOV[j,b,:,a], t2ba[:,j,a,b])
-
-    Hr2bab = np.zeros((nocc_b,nvir_a,nvir_b),dtype=dtype)
-    for a in range(nvir_b):
-        for b in range(nvir_a):
-            if imds.Wvvvv is not None:
-                WvvVVb = np.array(imds.WvvVV[b])
-            for j in range(nocc_b):
-                Hr2bab[j,b,a] = -imds.FOO[j,j]
-                Hr2bab[j,b,a] += imds.Fvv[b,b]
-                Hr2bab[j,b,a] += imds.FVV[a,a]
-                if imds.Wvvvv is not None:
-                    Hr2bab[j,b,a] += (WvvVVb[b,a,a])
-                Hr2bab[j,b,a] += imds.WOVVO[j,a,a,j]
-                Hr2bab[j,b,a] += imds.WOvvO[j,b,b,j]
-                Hr2bab[j,b,a] -= np.dot(imds.WovOV[:,b,j,a], t2ab[:,j,b,a])
-
-    Hr2bbb = np.zeros((nocc_b,nvir_b,nvir_b),dtype=dtype)
-    for a in range(nvir_b):
-        if imds.Wvvvv is not None:
-            WVVVVa = np.array(imds.WVVVV[a])
-        for b in range(nvir_b):
-            for j in range(nocc_b):
-                Hr2bbb[j,a,b] = -imds.FOO[j,j]
-                Hr2bbb[j,a,b] += imds.FVV[a,a]
-                Hr2bbb[j,a,b] += imds.FVV[b,b]
-                if imds.Wvvvv is not None:
-                    Hr2bbb[j,a,b] += WVVVVa[a,b,b]
-                Hr2bbb[j,a,b] += imds.WOVVO[j,b,b,j]
-                Hr2bbb[j,a,b] += imds.WOVVO[j,a,a,j]
-                Hr2bbb[j,a,b] -= (np.dot(imds.WOVOV[:,a,j,b], t2bb[:,j,a,b]))
-    #-------------- comparison
-
-    print np.abs(Hr2aaa-Hr2aaa_n).max()
-    print np.abs(Hr2aba-Hr2aba_n).max()
-    print np.abs(Hr2bab-Hr2bab_n).max()
-    print np.abs(Hr2bbb-Hr2bbb_n).max()
-    '''
+    Hr2aaa += Wvvaa[None,:,:]
+    Hr2aba += Wvvba[None,:,:]
+    Hr2bab += Wvvab[None,:,:]
+    Hr2bbb += Wvvbb[None,:,:]
+    # Wvvvv contribution end
 
     vector = amplitudes_to_vector_ea((Hr1a,Hr1b), (Hr2aaa,Hr2aba,Hr2bab,Hr2bbb))
     return vector

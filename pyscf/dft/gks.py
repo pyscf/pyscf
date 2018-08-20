@@ -17,55 +17,58 @@
 #
 
 '''
-Non-relativistic Unrestricted Kohn-Sham
+Generalized Kohn-Sham
 '''
 
 import time
 import numpy
+import scipy.linalg
 from pyscf import lib
 from pyscf.lib import logger
-from pyscf.scf import uhf
+from pyscf.scf import ghf
 from pyscf.dft import rks
 
 
 def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
-    '''Coulomb + XC functional for UKS.  See pyscf/dft/rks.py
-    :func:`get_veff` fore more details.
+    '''Coulomb + XC functional for GKS.
     '''
     if mol is None: mol = self.mol
     if dm is None: dm = ks.make_rdm1()
-    if not isinstance(dm, numpy.ndarray):
-        dm = numpy.asarray(dm)
-    if dm.ndim == 2:  # RHF DM
-        dm = numpy.asarray((dm*.5,dm*.5))
-    ground_state = (dm.ndim == 3 and dm.shape[0] == 2)
-
     t0 = (time.clock(), time.time())
+
+    ground_state = (isinstance(dm, numpy.ndarray) and dm.ndim == 2)
+
+    assert(hermi == 1)
+    dm = numpy.asarray(dm)
+    nso = dm.shape[-1]
+    nao = nso // 2
+    dm_a = dm[...,:nao,:nao].real
+    dm_b = dm[...,nao:,nao:].real
 
     if ks.grids.coords is None:
         ks.grids.build(with_non0tab=True)
         if ks.small_rho_cutoff > 1e-20 and ground_state:
-            ks.grids = rks.prune_small_rho_grids_(ks, mol, dm[0]+dm[1], ks.grids)
+            ks.grids = rks.prune_small_rho_grids_(ks, mol, dm_a+dm_b, ks.grids)
         t0 = logger.timer(ks, 'setting up grids', *t0)
     if ks.nlc != '':
         if ks.nlcgrids.coords is None:
             ks.nlcgrids.build(with_non0tab=True)
             if ks.small_rho_cutoff > 1e-20 and ground_state:
-                ks.nlcgrids = rks.prune_small_rho_grids_(ks, mol, dm[0]+dm[1], ks.nlcgrids)
+                ks.nlcgrids = rks.prune_small_rho_grids_(ks, mol, dm_a+dm_b, ks.nlcgrids)
             t0 = logger.timer(ks, 'setting up nlc grids', *t0)
 
     ni = ks._numint
-    if hermi == 2:  # because rho = 0
-        n, exc, vxc = (0,0), 0, 0
-    else:
-        n, exc, vxc = ni.nr_uks(mol, ks.grids, ks.xc, dm)
-        if ks.nlc != '':
-            assert('VV10' in ks.nlc.upper())
-            _, enlc, vnlc = ni.nr_rks(mol, ks.nlcgrids, ks.xc+'__'+ks.nlc, dm[0]+dm[1])
-            exc += enlc
-            vxc += vnlc
-        logger.debug(ks, 'nelec by numeric integration = %s', n)
-        t0 = logger.timer(ks, 'vxc', *t0)
+    n, exc, vxc = ni.nr_uks(mol, ks.grids, ks.xc, (dm_a,dm_b))
+    if ks.nlc != '':
+        assert('VV10' in ks.nlc.upper())
+        _, enlc, vnlc = ni.nr_rks(mol, ks.nlcgrids, ks.xc+'__'+ks.nlc, dm_a+dm_b)
+        exc += enlc
+        vxc += vnlc
+    logger.debug(ks, 'nelec by numeric integration = %s', n)
+    t0 = logger.timer(ks, 'vxc', *t0)
+    if vxc.ndim == 4:
+        raise NotImplementedError
+    vxc = numpy.asarray(scipy.linalg.block_diag(*vxc), dtype=dm.dtype)
 
     #enabling range-separated hybrids
     omega, alpha, hyb = ni.rsh_and_hybrid_coeff(ks.xc, spin=mol.spin)
@@ -75,10 +78,10 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
         if (ks._eri is None and ks.direct_scf and
             getattr(vhf_last, 'vj', None) is not None):
             ddm = numpy.asarray(dm) - numpy.asarray(dm_last)
-            vj = ks.get_j(mol, ddm[0]+ddm[1], hermi)
+            vj = ks.get_j(mol, ddm, hermi)
             vj += vhf_last.vj
         else:
-            vj = ks.get_j(mol, dm[0]+dm[1], hermi)
+            vj = ks.get_j(mol, dm, hermi)
         vxc += vj
     else:
         if (ks._eri is None and ks.direct_scf and
@@ -87,55 +90,67 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
             vj, vk = ks.get_jk(mol, ddm, hermi)
             vk *= hyb
             if abs(omega) > 1e-10:
-                vklr = rks._get_k_lr(mol, ddm, omega, hermi)
+                vklr = _get_k_lr(mol, ddm, omega, hermi)
                 vklr *= (alpha - hyb)
                 vk += vklr
-            vj = vj[0] + vj[1] + vhf_last.vj
+            vj += vhf_last.vj
             vk += vhf_last.vk
         else:
             vj, vk = ks.get_jk(mol, dm, hermi)
-            vj = vj[0] + vj[1]
             vk *= hyb
             if abs(omega) > 1e-10:
-                vklr = rks._get_k_lr(mol, dm, omega, hermi)
+                vklr = _get_k_lr(mol, dm, omega, hermi)
                 vklr *= (alpha - hyb)
                 vk += vklr
         vxc += vj - vk
 
         if ground_state:
-            exc -=(numpy.einsum('ij,ji', dm[0], vk[0]) +
-                   numpy.einsum('ij,ji', dm[1], vk[1])) * .5
+            exc -= numpy.einsum('ij,ji', dm, vk).real * .5
     if ground_state:
-        ecoul = numpy.einsum('ij,ji', dm[0]+dm[1], vj) * .5
+        ecoul = numpy.einsum('ij,ji', dm, vj).real * .5
     else:
         ecoul = None
 
     vxc = lib.tag_array(vxc, ecoul=ecoul, exc=exc, vj=vj, vk=vk)
     return vxc
 
+def _get_k_lr(mol, dm, omega=0, hermi=0):
+    nso = dm.shape[-1]
+    nao = nso // 2
+    dms = dm.reshape(-1,nso,nso)
+    n_dm = dms.shape[0]
 
-def energy_elec(ks, dm=None, h1e=None, vhf=None):
-    if dm is None: dm = ks.make_rdm1()
-    if h1e is None: h1e = ks.get_hcore()
-    if vhf is None or getattr(vhf, 'ecoul', None) is None:
-        vhf = ks.get_veff(ks.mol, dm)
-    if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
-        dm = numpy.array((dm*.5, dm*.5))
-    e1 = numpy.einsum('ij,ji', h1e, dm[0]) + numpy.einsum('ij,ji', h1e, dm[1])
-    tot_e = e1.real + vhf.ecoul + vhf.exc
-    logger.debug(ks, 'Ecoul = %s  Exc = %s', vhf.ecoul, vhf.exc)
-    return tot_e, vhf.ecoul+vhf.exc
+    dmaa = dms[:,:nao,:nao]
+    dmab = dms[:,nao:,:nao]
+    dmbb = dms[:,nao:,nao:]
+    dms = numpy.vstack((dmaa, dmbb, dmab))
+    if dm.dtype == numpy.complex128:
+        dms = numpy.vstack((dms.real, dms.imag))
+        hermi = 0
+
+    k1 = rks._get_k_lr(mol, dms, omega, hermi)
+    k1 = k1.reshape(-1,n_dm,nao,nao)
+
+    if dm.dtype == numpy.complex128:
+        k1 = k1[:3] + k1[3:] * 1j
+
+    vk = numpy.zeros((n_dm,nso,nso), dm.dtype)
+    vk[:,:nao,:nao] = k1[0]
+    vk[:,nao:,nao:] = k1[1]
+    vk[:,:nao,nao:] = k1[2]
+    vk[:,nao:,:nao] = k1[2].transpose(0,2,1).conj()
+    vk = vk.reshape(dm.shape)
+    return vk
 
 
-class UKS(uhf.UHF):
-    '''Unrestricted Kohn-Sham
-    See pyscf/dft/rks.py RKS class for document of the attributes'''
+class GKS(ghf.GHF):
+    '''Generalized Kohn-Sham'''
     def __init__(self, mol):
-        uhf.UHF.__init__(self, mol)
+        ghf.GHF.__init__(self, mol)
         rks._dft_common_init_(self)
 
     def dump_flags(self):
-        uhf.UHF.dump_flags(self)
+        ghf.GHF.dump_flags(self)
         logger.info(self, 'XC functionals = %s', self.xc)
         if self.nlc!='':
             logger.info(self, 'NLC functional = %s', self.nlc)
@@ -143,26 +158,33 @@ class UKS(uhf.UHF):
         self.grids.dump_flags()
 
     get_veff = get_veff
-    energy_elec = energy_elec
+    energy_elec = rks.energy_elec
     define_xc_ = rks.define_xc_
 
     def nuc_grad_method(self):
-        from pyscf.grad import uks
-        return uks.Gradients(self)
+        raise NotImplementedError
 
 
 if __name__ == '__main__':
     from pyscf import gto
     mol = gto.Mole()
-    mol.verbose = 7
-    mol.output = '/dev/null'#'out_rks'
-
-    mol.atom.extend([['He', (0.,0.,0.)], ])
-    mol.basis = { 'He': 'cc-pvdz'}
-    #mol.grids = { 'He': (10, 14),}
+    mol.verbose = 3
+    mol.atom = 'H 0 0 0; H 0 0 1; O .5 .6 .2'
+    mol.basis = 'ccpvdz'
     mol.build()
 
-    m = UKS(mol)
-    m.xc = 'b3lyp'
-    print(m.scf())  # -2.89992555753
+    mf = GKS(mol)
+    mf.xc = 'b3lyp'
+    mf.kernel()
 
+    dm = mf.init_guess_by_1e(mol)
+    dm = dm + 0j
+    nao = mol.nao_nr()
+    numpy.random.seed(12)
+    dm[:nao,nao:] = numpy.random.random((nao,nao)) * .1j
+    dm[nao:,:nao] = dm[:nao,nao:].T.conj()
+    mf.kernel(dm)
+    mf.canonicalize(mf.mo_coeff, mf.mo_occ)
+    mf.analyze()
+    print(mf.spin_square())
+    print(mf.e_tot - -76.2760115704274)

@@ -111,6 +111,17 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     vxc = lib.tag_array(vxc, ecoul=ecoul, exc=exc, vj=None, vk=None)
     return vxc
 
+@lib.with_doc(khf.get_rho.__doc__)
+def get_rho(mf, dm=None, grids=None, kpts=None):
+    if dm is None: dm = mf.make_rdm1()
+    if grids is None: grids = mf.grids
+    if kpts is None: kpts = mf.kpts
+    if isinstance(mf.with_df, multigrid.MultiGridFFTDF):
+        rho = mf.with_df.get_rho(dm, kpts)
+    else:
+        rho = mf._numint.get_rho(mf.cell, dm, grids, kpts, mf.max_memory)
+    return rho
+
 
 class KRKS(khf.KRHF):
     '''RKS class adapted for PBCs with k-point sampling.
@@ -137,6 +148,8 @@ class KRKS(khf.KRHF):
         tot_e = e1 + vhf.ecoul + vhf.exc
         logger.debug(self, 'E1 = %s  Ecoul = %s  Exc = %s', e1, vhf.ecoul, vhf.exc)
         return tot_e, vhf.ecoul + vhf.exc
+
+    get_rho = get_rho
 
     define_xc_ = rks.define_xc_
 

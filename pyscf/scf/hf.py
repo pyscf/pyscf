@@ -990,10 +990,7 @@ def dip_moment(mol, dm, unit='Debye', verbose=logger.NOTE, **kwargs):
         A list: the dipole moment on x, y and z component
     '''
 
-    if isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(mol.stdout, verbose)
+    log = logger.new_logger(mol, verbose)
 
     if 'unit_symbol' in kwargs:  # pragma: no cover
         log.warn('Kwarg "unit_symbol" was deprecated. It was replaced by kwarg '

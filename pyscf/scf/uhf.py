@@ -248,10 +248,7 @@ def get_occ(mf, mo_energy=None, mo_coeff=None):
     e_sort_a = mo_energy[0][e_idx_a]
     e_sort_b = mo_energy[1][e_idx_b]
     nmo = mo_energy[0].size
-    if mf.nelec is None:
-        n_a, n_b = mf.mol.nelec
-    else:
-        n_a, n_b = mf.nelec
+    n_a, n_b = mf.nelec
     mo_occ = numpy.zeros_like(mo_energy)
     mo_occ[0,e_idx_a[:n_a]] = 1
     mo_occ[1,e_idx_b[:n_b]] = 1
@@ -650,23 +647,31 @@ class UHF(hf.SCF):
         # self.mo_coeff => [mo_a, mo_b]
         # self.mo_occ => [mo_occ_a, mo_occ_b]
         # self.mo_energy => [mo_energy_a, mo_energy_b]
-
         self.nelec = None
-        self._keys = self._keys.union(['nelec'])
+
+    @property
+    def nelec(self):
+        if self._nelec is not None:
+            return self._nelec
+        else:
+            return self.mol.nelec
+    @nelec.setter
+    def nelec(self, x):
+        self._nelec = x
+
+    @property
+    def nelectron_alpha(self):
+        return self.nelec[0]
+    @nelectron_alpha.setter
+    def nelectron_alpha(self, x):
+        logger.warn(self, 'WARN: Attribute .nelectron_alpha is deprecated. '
+                    'Set .nelec instead')
+        #raise RuntimeError('API updates')
+        self.nelec = (x, self.mol.nelectron-x)
 
     def dump_flags(self):
-        if hasattr(self, 'nelectron_alpha'):  # pragma: no cover
-            logger.warn(self, 'Note the API updates: attribute nelectron_alpha was replaced by attribute nelec')
-            #raise RuntimeError('API updates')
-            self.nelec = (self.nelectron_alpha,
-                          self.mol.nelectron-self.nelectron_alpha)
-            delattr(self, 'nelectron_alpha')
-        if self.nelec is None:
-            nelec = self.mol.nelec
-        else:
-            nelec = self.nelec
         hf.SCF.dump_flags(self)
-        logger.info(self, 'number electrons alpha = %d  beta = %d', *nelec)
+        logger.info(self, 'number electrons alpha = %d  beta = %d', *self.nelec)
 
     def eig(self, fock, s):
         e_a, c_a = self._eigh(fock[0], s)

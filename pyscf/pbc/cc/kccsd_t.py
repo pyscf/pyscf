@@ -51,7 +51,7 @@ def kernel(mycc, eris=None, t1=None, t2=None, max_memory=2000, verbose=logger.IN
     else:
         log = logger.Logger(mycc.stdout, verbose)
 
-    if eris is None: eris = mycc.eris
+    if eris is None: eris = mycc.ao2mo()
     if t1 is None: t1 = mycc.t1
     if t2 is None: t2 = mycc.t2
 

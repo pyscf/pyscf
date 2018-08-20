@@ -37,6 +37,8 @@ get_occ = mol_rohf.get_occ
 get_grad = mol_rohf.get_grad
 make_rdm1 = mol_rohf.make_rdm1
 energy_elec = mol_rohf.energy_elec
+dip_moment = pbcuhf.dip_moment
+get_rho = pbcuhf.get_rho
 
 class ROHF(mol_rohf.ROHF, pbchf.RHF):
     '''ROHF class for PBCs.
@@ -48,16 +50,29 @@ class ROHF(mol_rohf.ROHF, pbchf.RHF):
                  exxdiv=getattr(__config__, 'pbc_scf_SCF_exxdiv', 'ewald')):
         pbchf.SCF.__init__(self, cell, kpt, exxdiv)
         self.nelec = None
-        self._keys = self._keys.union(['nelec'])
+
+    @property
+    def nelec(self):
+        if self._nelec is not None:
+            return self._nelec
+        else:
+            cell = self.cell
+            ne = cell.nelectron
+            nalpha = (ne + cell.spin) // 2
+            nbeta = nalpha - cell.spin
+            if nalpha + nbeta != ne:
+                raise RuntimeError('Electron number %d and spin %d are not consistent\n'
+                                   'Note cell.spin = 2S = Nalpha - Nbeta, not 2S+1' %
+                                   (ne, self.spin))
+            return nalpha, nbeta
+    @nelec.setter
+    def nelec(self, x):
+        self._nelec = x
 
     def dump_flags(self):
         pbchf.SCF.dump_flags(self)
-        if self.nelec is None:
-            nelec = self.cell.nelec
-        else:
-            nelec = self.nelec
         logger.info(self, 'number of electrons per unit cell  '
-                    'alpha = %d beta = %d', *nelec)
+                    'alpha = %d beta = %d', *self.nelec)
         return self
 
     build = pbchf.SCF.build
@@ -69,6 +84,7 @@ class ROHF(mol_rohf.ROHF, pbchf.RHF):
     get_k = pbchf.SCF.get_k
     get_jk_incore = pbchf.SCF.get_jk_incore
     energy_tot = pbchf.SCF.energy_tot
+    _finalize = pbchf.SCF._finalize
 
     def get_veff(self, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
                  kpt=None, kpts_band=None):
@@ -98,10 +114,17 @@ class ROHF(mol_rohf.ROHF, pbchf.RHF):
         '''
         raise NotImplementedError
 
-    def dip_moment(self, mol=None, dm=None, unit='Debye', verbose=logger.NOTE,
+    get_rho = get_rho
+
+    @lib.with_doc(dip_moment.__doc__)
+    def dip_moment(self, cell=None, dm=None, unit='Debye', verbose=logger.NOTE,
                    **kwargs):
-        # skip dipole memont for crystal
-        return
+        if dm is None:
+            dm = self.make_rdm1()
+        rho = kwargs.pop('rho', None)
+        if rho is None:
+            rho = self.get_rho(dm)
+        return dip_moment(cell, dm, unit, verbose, rho=rho, kpt=self.kpt, **kwargs)
 
     def get_init_guess(self, cell=None, key='minao'):
         if cell is None: cell = self.cell

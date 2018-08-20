@@ -54,6 +54,8 @@ class KROKS(krohf.KROHF):
 
     get_veff = get_veff
     energy_elec = energy_elec
+    get_rho = kuks.get_rho
+
     define_xc_ = rks.define_xc_
 
     density_fit = rks._patch_df_beckegrids(krohf.KROHF.density_fit)
