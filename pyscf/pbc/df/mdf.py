@@ -131,10 +131,10 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
             aosym = 's2'
             nao_pair = nao*(nao+1)//2
 
-            vbar = fuse(mydf.auxbar(fused_cell))
-            ovlp = cell.pbc_intor('int1e_ovlp', hermi=1, kpts=adapted_kptjs)
-            for k, ji in enumerate(adapted_ji_idx):
-                ovlp[k] = lib.pack_tril(ovlp[k])
+            if cell.dimension == 3:
+                vbar = mydf.auxbar(fused_cell)
+                ovlp = cell.pbc_intor('int1e_ovlp', hermi=1, kpts=adapted_kptjs)
+                ovlp = [lib.pack_tril(s) for s in ovlp]
         else:
             aosym = 's1'
             nao_pair = nao**2
@@ -227,7 +227,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
     feri.close()
 
 
-# valence_exp = 1. is the Gaussian typicall sits in valence
+# valence_exp = 1. are typically the Gaussians in the valence
 VALENCE_EXP = getattr(__config__, 'pbc_df_mdf_valence_exp', 1.0)
 def _mesh_for_valence(cell, valence_exp=VALENCE_EXP):
     '''Energy cutoff estimation'''
@@ -242,7 +242,8 @@ def _mesh_for_valence(cell, valence_exp=VALENCE_EXP):
         Ecut_max = max(Ecut_max, ke_guess.max())
     mesh = tools.cutoff_to_mesh(cell.lattice_vectors(), Ecut_max)
     mesh = numpy.min((mesh, cell.mesh), axis=0)
-    mesh[cell.dimension:] = cell.mesh[cell.dimension:]
+    if cell.low_dim_ft_type == 'inf_vacuum':
+        mesh[cell.dimension:] = cell.mesh[cell.dimension:]
     return mesh
 del(VALENCE_EXP)
 
@@ -251,6 +252,10 @@ class MDF(df.DF):
     '''Gaussian and planewaves mixed density fitting
     '''
     def __init__(self, cell, kpts=numpy.zeros((1,3))):
+        if cell.dimension in (1, 2) and cell.low_dim_ft_type != 'inf_vacuum':
+            raise NotImplementedError('1D or 2D ERIs are not postive definite. '
+                                      'They cannot be fit into the current DF '
+                                      'structure.')
         self.cell = cell
         self.stdout = cell.stdout
         self.verbose = cell.verbose

@@ -246,9 +246,10 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
             aosym = 's2'
             nao_pair = nao*(nao+1)//2
 
-            vbar = mydf.auxbar(fused_cell)
-            ovlp = cell.pbc_intor('int1e_ovlp', hermi=1, kpts=adapted_kptjs)
-            ovlp = [lib.pack_tril(s) for s in ovlp]
+            if cell.dimension == 3:
+                vbar = mydf.auxbar(fused_cell)
+                ovlp = cell.pbc_intor('int1e_ovlp', hermi=1, kpts=adapted_kptjs)
+                ovlp = [lib.pack_tril(s) for s in ovlp]
         else:
             aosym = 's1'
             nao_pair = nao**2
@@ -343,6 +344,10 @@ class GDF(aft.AFTDF):
     '''Gaussian density fitting
     '''
     def __init__(self, cell, kpts=numpy.zeros((1,3))):
+        if cell.dimension in (1, 2) and cell.low_dim_ft_type != 'inf_vacuum':
+            raise NotImplementedError('1D or 2D ERIs are not postive definite. '
+                                      'They cannot be fit into the current DF '
+                                      'structure.')
         self.cell = cell
         self.stdout = cell.stdout
         self.verbose = cell.verbose
@@ -368,7 +373,8 @@ class GDF(aft.AFTDF):
                 self.eta = eta_guess
                 ke_cutoff = aft.estimate_ke_cutoff_for_eta(cell, self.eta, cell.precision)
                 self.mesh = tools.cutoff_to_mesh(cell.lattice_vectors(), ke_cutoff)
-                self.mesh[cell.dimension:] = cell.mesh[cell.dimension:]
+                if cell.low_dim_ft_type == 'inf_vacuum':
+                    self.mesh[cell.dimension:] = cell.mesh[cell.dimension:]
 
         # exp_to_discard to remove diffused fitting functions. The diffused
         # fitting functions may cause linear dependency in DF metric. Removing
