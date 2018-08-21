@@ -65,48 +65,42 @@ def loop_kkk(nkpts):
     return itertools.product(range_nkpts, range_nkpts, range_nkpts)
 
 
-def get_kconserv(cell, kpts):
-    r'''Get the momentum conservation array for a set of k-points.
+def get_kconserv(cell, kpts, spec="+-+-", tol=1e-9):
+    r"""
+    A momentum conservation lookup array for a set of k-points.
 
-    Given k-point indices (k, l, m) the array kconserv[k,l,m] returns
-    the index n that satifies momentum conservation,
+    Args:
+        cell (Cell): the unit cell of a pbc model;
+        kpts (ndarray): a numpy array with k-points in cartesian coordinates;
+        spec (str): a string specifying the sum where each symbol corresponds to the sign of the corresponding term;
+        tol (float): the tolerance to compare to zero;
+
+    Returns:
+        Given k-point indices the array kconserv returns the last index that satifies momentum conservation. In the sum
+        of four terms with indexes (k, l, m, n) and signs "+-+-" the condition reads:
 
         (k(k) - k(l) + k(m) - k(n)) \dot a = 2n\pi
 
-    This is used for symmetry e.g. integrals of the form
-        [\phi*[k](1) \phi[l](1) | \phi*[m](2) \phi[n](2)]
-    are zero unless n satisfies the above.
-    '''
+        This is used for symmetry e.g. integrals of the form [\phi*[k](1) \phi[l](1) | \phi*[m](2) \phi[n](2)] are zero
+        unless n satisfies the above.
+    """
+    if not set(spec).issubset("+-"):
+        raise ValueError("The 'spec' keyword has to be a string of \"+\" and \"-\"")
+    kpts = np.array(kpts)
     nkpts = kpts.shape[0]
     a = cell.lattice_vectors() / (2 * np.pi)
 
-    kconserv = np.zeros((nkpts, nkpts, nkpts), dtype=int)
-    kvMLK = kpts[:, None, None, :] - kpts[:, None, :] + kpts
-    for N, kvN in enumerate(kpts):
-        kvMLKN = np.einsum('klmx,wx->mlkw', kvMLK - kvN, a)
-        # check whether (1/(2pi) k_{KLMN} dot a) is an integer
-        kvMLKN_int = np.rint(kvMLKN)
-        mask = np.einsum('klmw->mlk', abs(kvMLKN - kvMLKN_int)) < 1e-9
-        kconserv[mask] = N
-    return kconserv
-
-    if kconserv is None:
-        kconserv = get_kconserv(cell, kpts)
-
-    arr_offset = []
-    arr_size = []
-    offset = 0
-    for kk, kl, km in loop_kkk(nkpts):
-        kn = kconserv[kk, kl, km]
-
-        # Get array size for these k-points and add offset
-        size = np.prod([norb_per_kpt[x] for x in [kk, kl, km, kn]])
-
-        arr_size.append(size)
-        arr_offset.append(offset)
-
-        offset += size
-    return arr_offset, arr_size, (arr_size[-1] + arr_offset[-1])
+    ksum = np.zeros((nkpts, ) * len(spec) + (kpts.shape[-1],), dtype=kpts.dtype)
+    for i, sign in enumerate(spec):
+        ix = (np.newaxis,) * i + (slice(None),) + (np.newaxis,) * (len(spec) - i - 1) + (slice(None),)
+        if sign == "+":
+            ksum += kpts[ix]
+        else:
+            ksum -= kpts[ix]
+    ksum = np.einsum("...x,wx->...w", ksum, a)
+    mask = np.all(abs(ksum - np.rint(ksum)) < tol, axis=-1)
+    result = np.apply_along_axis(lambda _: np.where(_)[0][0], -1, mask)
+    return result
 
 
 def check_kpt_antiperm_symmetry(array, idx1, idx2, tolerance=1e-8):
