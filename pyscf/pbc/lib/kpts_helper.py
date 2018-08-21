@@ -30,12 +30,16 @@ KPT_DIFF_TOL = getattr(__config__, 'pbc_lib_kpts_helper_kpt_diff_tol', 1e-6)
 
 def is_zero(kpt):
     return abs(np.asarray(kpt)).sum() < KPT_DIFF_TOL
+
+
 gamma_point = is_zero
 
+
 def member(kpt, kpts):
-    kpts = np.reshape(kpts, (len(kpts),kpt.size))
-    dk = np.einsum('ki->k', abs(kpts-kpt.ravel()))
+    kpts = np.reshape(kpts, (len(kpts), kpt.size))
+    dk = np.einsum('ki->k', abs(kpts - kpt.ravel()))
     return np.where(dk < KPT_DIFF_TOL)[0]
+
 
 def unique(kpts):
     kpts = np.asarray(kpts)
@@ -49,15 +53,17 @@ def unique(kpts):
         if not seen[i]:
             uniq_kpts.append(kpt)
             uniq_index.append(i)
-            idx = abs(kpt-kpts).sum(axis=1) < KPT_DIFF_TOL
+            idx = abs(kpt - kpts).sum(axis=1) < KPT_DIFF_TOL
             uniq_inverse[idx] = n
             seen[idx] = True
             n += 1
     return np.asarray(uniq_kpts), np.asarray(uniq_index), uniq_inverse
 
+
 def loop_kkk(nkpts):
     range_nkpts = range(nkpts)
     return itertools.product(range_nkpts, range_nkpts, range_nkpts)
+
 
 def get_kconserv(cell, kpts):
     r'''Get the momentum conservation array for a set of k-points.
@@ -72,10 +78,10 @@ def get_kconserv(cell, kpts):
     are zero unless n satisfies the above.
     '''
     nkpts = kpts.shape[0]
-    a = cell.lattice_vectors() / (2*np.pi)
+    a = cell.lattice_vectors() / (2 * np.pi)
 
-    kconserv = np.zeros((nkpts,nkpts,nkpts), dtype=int)
-    kvMLK = kpts[:,None,None,:] - kpts[:,None,:] + kpts
+    kconserv = np.zeros((nkpts, nkpts, nkpts), dtype=int)
+    kvMLK = kpts[:, None, None, :] - kpts[:, None, :] + kpts
     for N, kvN in enumerate(kpts):
         kvMLKN = np.einsum('klmx,wx->mlkw', kvMLK - kvN, a)
         # check whether (1/(2pi) k_{KLMN} dot a) is an integer
@@ -83,7 +89,6 @@ def get_kconserv(cell, kpts):
         mask = np.einsum('klmw->mlk', abs(kvMLKN - kvMLKN_int)) < 1e-9
         kconserv[mask] = N
     return kconserv
-
 
     if kconserv is None:
         kconserv = get_kconserv(cell, kpts)
@@ -137,14 +142,14 @@ def check_kpt_antiperm_symmetry(array, idx1, idx2, tolerance=1e-8):
         True
     '''
     # Checking to make sure bounds of idx1 and idx2 are O.K.
-    assert(idx1 >= 0 and idx2 >= 0 and 'indices to swap must be non-negative!')
+    assert (idx1 >= 0 and idx2 >= 0 and 'indices to swap must be non-negative!')
 
     array_shape_len = len(array.shape)
     nparticles = (array_shape_len + 1) / 4
-    assert(idx1 < (2 * nparticles - 1) and idx2 < (2 * nparticles - 1) and
-           'This function does not support the swapping of the last k-point index '
-           '(This k-point is implicitly not indexed due to conservation of momentum '
-           'between k-points.).')
+    assert (idx1 < (2 * nparticles - 1) and idx2 < (2 * nparticles - 1) and
+            'This function does not support the swapping of the last k-point index '
+            '(This k-point is implicitly not indexed due to conservation of momentum '
+            'between k-points.).')
 
     if (nparticles > 3):
         raise NotImplementedError('Currently set up for only up to 3 particle '
@@ -158,13 +163,13 @@ def check_kpt_antiperm_symmetry(array, idx1, idx2, tolerance=1e-8):
     orb_idx2 = (2 * nparticles - 1) + idx2
 
     # Sign of permutation
-    sign = (-1)**(abs(idx1 - idx2) + 1)
+    sign = (-1) ** (abs(idx1 - idx2) + 1)
     out_array_indices = np.arange(array_shape_len)
 
     out_array_indices[kpt_idx1], out_array_indices[kpt_idx2] = \
-            out_array_indices[kpt_idx2], out_array_indices[kpt_idx1]
+        out_array_indices[kpt_idx2], out_array_indices[kpt_idx1]
     out_array_indices[orb_idx1], out_array_indices[orb_idx2] = \
-            out_array_indices[orb_idx2], out_array_indices[orb_idx1]
+        out_array_indices[orb_idx2], out_array_indices[orb_idx1]
     antisymmetric = (np.linalg.norm(array + array.transpose(out_array_indices)) <
                      tolerance)
     return antisymmetric
@@ -181,14 +186,14 @@ def get_kconserv3(cell, kpts, kijkab):
     where these kpoints are stored in kijkab[ki, kj, kk, ka, kb].
     '''
     nkpts = kpts.shape[0]
-    a = cell.lattice_vectors() / (2*np.pi)
+    a = cell.lattice_vectors() / (2 * np.pi)
 
     kpts_i, kpts_j, kpts_k, kpts_a, kpts_b = \
-            [kpts[x].reshape(-1,3) for x in kijkab]
+        [kpts[x].reshape(-1, 3) for x in kijkab]
     shape = [np.size(x) for x in kijkab]
     kconserv = np.zeros(shape, dtype=int)
 
-    kv_kab = kpts_k[:,None,None,:] - kpts_a[:,None,:] - kpts_b
+    kv_kab = kpts_k[:, None, None, :] - kpts_a[:, None, :] - kpts_b
     for i, kpti in enumerate(kpts_i):
         for j, kptj in enumerate(kpts_j):
             kv_ijkab = kv_kab + kpti + kptj
@@ -196,10 +201,10 @@ def get_kconserv3(cell, kpts, kijkab):
                 s = np.einsum('kabx,wx->kabw', kv_ijkab - kptc, a)
                 s_int = np.rint(s)
                 mask = np.einsum('kabw->kab', abs(s - s_int)) < 1e-9
-                kconserv[i,j,mask] = c
+                kconserv[i, j, mask] = c
 
     new_shape = [shape[i] for i, x in enumerate(kijkab)
-                 if not isinstance(x, (int,np.int))]
+                 if not isinstance(x, (int, np.int))]
     kconserv = kconserv.reshape(new_shape)
     return kconserv
 
@@ -219,36 +224,35 @@ class KptsHelper(lib.StreamObject):
         '''
         self.kconserv = get_kconserv(cell, kpts)
         nkpts = len(kpts)
-        temp = range(0,nkpts)
-        kptlist = lib.cartesian_prod((temp,temp,temp))
-        completed = np.zeros((nkpts,nkpts,nkpts), dtype=bool)
+        temp = range(0, nkpts)
+        kptlist = lib.cartesian_prod((temp, temp, temp))
+        completed = np.zeros((nkpts, nkpts, nkpts), dtype=bool)
 
-        self._operation = np.zeros((nkpts,nkpts,nkpts), dtype=int)
+        self._operation = np.zeros((nkpts, nkpts, nkpts), dtype=int)
         self.symm_map = OrderedDict()
 
         for kpt in kptlist:
             kpt = tuple(kpt)
-            kp,kq,kr = kpt
-            if not completed[kp,kq,kr]:
+            kp, kq, kr = kpt
+            if not completed[kp, kq, kr]:
                 self.symm_map[kpt] = list()
-                ks = self.kconserv[kp,kq,kr]
+                ks = self.kconserv[kp, kq, kr]
 
-                completed[kp,kq,kr] = True
-                self._operation[kp,kq,kr] = 0
-                self.symm_map[kpt].append((kp,kq,kr))
+                completed[kp, kq, kr] = True
+                self._operation[kp, kq, kr] = 0
+                self.symm_map[kpt].append((kp, kq, kr))
 
-                completed[kr,ks,kp] = True
-                self._operation[kr,ks,kp] = 1 #.transpose(2,3,0,1)
-                self.symm_map[kpt].append((kr,ks,kp))
+                completed[kr, ks, kp] = True
+                self._operation[kr, ks, kp] = 1  # .transpose(2,3,0,1)
+                self.symm_map[kpt].append((kr, ks, kp))
 
-                completed[kq,kp,ks] = True
-                self._operation[kq,kp,ks] = 2 #np.conj(.transpose(1,0,3,2))
-                self.symm_map[kpt].append((kq,kp,ks))
+                completed[kq, kp, ks] = True
+                self._operation[kq, kp, ks] = 2  # np.conj(.transpose(1,0,3,2))
+                self.symm_map[kpt].append((kq, kp, ks))
 
-                completed[ks,kr,kq] = True
-                self._operation[ks,kr,kq] = 3 #np.conj(.transpose(3,2,1,0))
-                self.symm_map[kpt].append((ks,kr,kq))
-
+                completed[ks, kr, kq] = True
+                self._operation[ks, kr, kq] = 3  # np.conj(.transpose(3,2,1,0))
+                self.symm_map[kpt].append((ks, kr, kq))
 
     def transform_symm(self, eri_kpt, kp, kq, kr):
         '''Return the symmetry-related ERI at any set of k-points.
@@ -259,13 +263,12 @@ class KptsHelper(lib.StreamObject):
             kp, kq, kr : int
                 The indices of the k-points at which the ERI is desired.
         '''
-        operation = self._operation[kp,kq,kr]
+        operation = self._operation[kp, kq, kr]
         if operation == 0:
             return eri_kpt
         if operation == 1:
-            return eri_kpt.transpose(2,3,0,1)
+            return eri_kpt.transpose(2, 3, 0, 1)
         if operation == 2:
-            return np.conj(eri_kpt.transpose(1,0,3,2))
+            return np.conj(eri_kpt.transpose(1, 0, 3, 2))
         if operation == 3:
-            return np.conj(eri_kpt.transpose(3,2,1,0))
-
+            return np.conj(eri_kpt.transpose(3, 2, 1, 0))
