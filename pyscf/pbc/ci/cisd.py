@@ -31,9 +31,8 @@ class RCISD(cisd.RCISD):
         from pyscf.pbc import tools
         from pyscf.pbc.cc.ccsd import _adjust_occ
         ao2mofn = mp.mp2._gen_ao2mofn(self._scf)
-        exx_bak, self._scf.exxdiv = self._scf.exxdiv, None
-        eris = rccsd._make_eris_incore(self, mo_coeff, ao2mofn=ao2mofn)
-        self._scf.exxdiv = exx_bak
+        with lib.temporary_env(self._scf, exxdiv=None):
+            eris = rccsd._make_eris_incore(self, mo_coeff, ao2mofn=ao2mofn)
 
         if mo_coeff is self._scf.mo_coeff:
             eris.mo_energy = self._scf.mo_energy[self.get_frozen_mask()]
@@ -54,9 +53,8 @@ class UCISD(ucisd.UCISD):
         from pyscf.pbc import tools
         from pyscf.pbc.cc.ccsd import _adjust_occ
         ao2mofn = mp.mp2._gen_ao2mofn(self._scf)
-        exx_bak, self._scf.exxdiv = self._scf.exxdiv, None
-        eris = ucisd.uccsd._make_eris_incore(self, mo_coeff, ao2mofn=ao2mofn)
-        self._scf.exxdiv = exx_bak
+        with lib.temporary_env(self._scf, exxdiv=None):
+            eris = ucisd.uccsd._make_eris_incore(self, mo_coeff, ao2mofn=ao2mofn)
 
         if mo_coeff is self._scf.mo_coeff:
             idxa, idxb = self.get_frozen_mask()
@@ -99,9 +97,9 @@ class GCISD(gcisd.GCISD):
                 eri[sym_forbid,:,:] = 0
                 eri[:,:,sym_forbid] = 0
             return eri
-        exx_bak, self._scf.exxdiv = self._scf.exxdiv, None
-        eris = gcisd.gccsd._make_eris_incore(self, mo_coeff, ao2mofn=ao2mofn)
-        self._scf.exxdiv = exx_bak
+
+        with lib.temporary_env(self._scf, exxdiv=None):
+            eris = gcisd.gccsd._make_eris_incore(self, mo_coeff, ao2mofn=ao2mofn)
 
         if mo_coeff is self._scf.mo_coeff:
             eris.mo_energy = self._scf.mo_energy[self.get_frozen_mask()]

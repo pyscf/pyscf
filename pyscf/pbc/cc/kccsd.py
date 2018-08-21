@@ -512,15 +512,14 @@ def _make_eris_incore(cc, mo_coeff=None):
             eris.orbspin.append(orbspin)
         eris.mo_coeff.append(mo)
 
-    # _scf.exxdiv affects eris.fock. HF exchange correction should be excluded
-    # from the Fock matrix.
-    exx_bak, cc._scf.exxdiv = cc._scf.exxdiv, None
     # Re-make our fock MO matrix elements from density and fock AO
     dm = cc._scf.make_rdm1(cc.mo_coeff, cc.mo_occ)
-    fockao = cc._scf.get_hcore() + cc._scf.get_veff(cell, dm)
+    with lib.temporary_env(cc._scf, exxdiv=None):
+        # _scf.exxdiv affects eris.fock. HF exchange correction should be
+        # excluded from the Fock matrix.
+        fockao = cc._scf.get_hcore() + cc._scf.get_veff(cell, dm)
     eris.fock = numpy.asarray([reduce(numpy.dot, (mo.T.conj(), fockao[k], mo))
                                for k, mo in enumerate(eris.mo_coeff)])
-    cc._scf.exxdiv = exx_bak
 
     eris.mo_energy = [eris.fock[k].diagonal().real for k in range(nkpts)]
     # Add HFX correction in the eris.mo_energy to improve convergence in

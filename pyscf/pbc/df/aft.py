@@ -75,16 +75,9 @@ def estimate_ke_cutoff_for_eta(cell, eta, precision=PRECISION):
     return Ecut
 
 def get_nuc(mydf, kpts=None):
-    _pseudo_bak = mydf.cell._pseudo
-    if not _pseudo_bak:
+    # Pseudopotential is ignored when computing just the nuclear attraction
+    with lib.temporary_env(mydf.cell, _pseudo={}):
         return get_pp_loc_part1(mydf, kpts)
-    else:
-        #logger.warn(mydf, 'Pseudopotential is found in the cell. get_nuc '
-        #            'will ignore the pseudopotential.')
-        mydf.cell._pseudo = {}
-        nuc = get_pp_loc_part1(mydf, kpts)
-        mydf.cell._pseudo = _pseudo_bak
-        return nuc
 
 def get_pp_loc_part1(mydf, kpts=None):
     cell = mydf.cell

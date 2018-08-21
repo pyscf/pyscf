@@ -1180,15 +1180,14 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
 
         mo_coeff = self.mo_coeff = pad_frozen_kpt_mo_coeff(cc, mo_coeff)
 
-        # _scf.exxdiv affects eris.fock. HF exchange correction should be
-        # excluded from the Fock matrix.
-        exx_bak, cc._scf.exxdiv = cc._scf.exxdiv, None
         # Re-make our fock MO matrix elements from density and fock AO
         dm = cc._scf.make_rdm1(cc.mo_coeff, cc.mo_occ)
-        fockao = cc._scf.get_hcore() + cc._scf.get_veff(cell, dm)
+        with lib.temporary_env(self._scf, exxdiv=None):
+            # _scf.exxdiv affects eris.fock. HF exchange correction should be
+            # excluded from the Fock matrix.
+            fockao = cc._scf.get_hcore() + cc._scf.get_veff(cell, dm)
         self.fock = np.asarray([reduce(np.dot, (mo.T.conj(),fockao[k], mo))
                                 for k, mo in enumerate(mo_coeff)])
-        cc._scf.exxdiv = exx_bak
 
         self.mo_energy = [self.fock[k].diagonal().real for k in range(nkpts)]
         # Add HFX correction in the self.mo_energy to improve convergence in
@@ -1365,10 +1364,14 @@ def _init_df_eris(cc, eris):
     if cc._scf.with_df._cderi is None:
         cc._scf.with_df.build()
 
+    cell = cc._scf.cell
+    if cell.dimension == 2:
+        raise NotImplementedError
+
     nocc = mycc.nocc
     nmo = mycc.nmo
     nvir = nmo - nocc
-    nao = cc._scf.cell.nao_nr()
+    nao = cell.nao_nr()
 
     kpts = cc.kpts
     nkpts = len(kpts)

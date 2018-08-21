@@ -38,9 +38,8 @@ class RCCSD(rccsd.RCCSD):
         ao2mofn = mp.mp2._gen_ao2mofn(self._scf)
         # _scf.exxdiv affects eris.fock. HF exchange correction should be
         # excluded from the Fock matrix.
-        exx_bak, self._scf.exxdiv = self._scf.exxdiv, None
-        eris = rccsd._make_eris_incore(self, mo_coeff, ao2mofn=ao2mofn)
-        self._scf.exxdiv = exx_bak
+        with lib.temporary_env(self._scf, exxdiv=None):
+            eris = rccsd._make_eris_incore(self, mo_coeff, ao2mofn=ao2mofn)
 
         # eris.mo_energy so far is just the diagonal part of the Fock matrix
         # without the exxdiv treatment. Here to add the exchange correction to
@@ -76,9 +75,8 @@ class UCCSD(uccsd.UCCSD):
         ao2mofn = mp.mp2._gen_ao2mofn(self._scf)
         # _scf.exxdiv affects eris.fock. HF exchange correction should be
         # excluded from the Fock matrix.
-        exx_bak, self._scf.exxdiv = self._scf.exxdiv, None
-        eris = uccsd._make_eris_incore(self, mo_coeff, ao2mofn=ao2mofn)
-        self._scf.exxdiv = exx_bak
+        with lib.temporary_env(self._scf, exxdiv=None):
+            eris = uccsd._make_eris_incore(self, mo_coeff, ao2mofn=ao2mofn)
 
         if mo_coeff is self._scf.mo_coeff:
             idxa, idxb = self.get_frozen_mask()
@@ -126,11 +124,11 @@ class GCCSD(gccsd.GCCSD):
                 eri[sym_forbid,:,:] = 0
                 eri[:,:,sym_forbid] = 0
             return eri
+
         # _scf.exxdiv affects eris.fock. HF exchange correction should be
         # excluded from the Fock matrix.
-        exx_bak, self._scf.exxdiv = self._scf.exxdiv, None
-        eris = gccsd._make_eris_incore(self, mo_coeff, ao2mofn=ao2mofn)
-        self._scf.exxdiv = exx_bak
+        with lib.temporary_env(self._scf, exxdiv=None):
+            eris = gccsd._make_eris_incore(self, mo_coeff, ao2mofn=ao2mofn)
 
         if mo_coeff is self._scf.mo_coeff:
             eris.mo_energy = self._scf.mo_energy[self.get_frozen_mask()]

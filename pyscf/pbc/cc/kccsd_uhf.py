@@ -732,7 +732,8 @@ def _make_eris_incore(cc, mo_coeff=None):
     # Re-make our fock MO matrix elements from density and fock AO
     dm = cc._scf.make_rdm1(cc.mo_coeff, cc.mo_occ)
     hcore = cc._scf.get_hcore()
-    vhf = cc._scf.get_veff(cell, dm)
+    with lib.temporary_env(cc._scf, exxdiv=None):
+        vhf = cc._scf.get_veff(cell, dm)
     focka = [reduce(np.dot, (mo.conj().T, hcore[k]+vhf[0][k], mo))
              for k, mo in enumerate(mo_a)]
     fockb = [reduce(np.dot, (mo.conj().T, hcore[k]+vhf[1][k], mo))
@@ -845,7 +846,9 @@ def _make_df_eris(cc, mo_coeff=None):
     from pyscf.ao2mo import _ao2mo
     if cc._scf.with_df._cderi is None:
         cc._scf.with_df.build()
-    if cc.cell.dimension == 2:
+
+    cell = cc._scf.cell
+    if cell.dimension == 2:
         raise NotImplementedError
 
     eris = _make_eris_incore(cc, mo_coeff)
@@ -853,7 +856,7 @@ def _make_df_eris(cc, mo_coeff=None):
     nocca, noccb = mycc.nocc
     nmoa, nmob = mycc.nmo
     nvira, nvirb = nmoa - nocca, nmob - noccb
-    nao = cc._scf.cell.nao_nr()
+    nao = cell.nao_nr()
     mo_kpts_a, mo_kpts_b = eris.mo_coeff
 
     kpts = cc.kpts
