@@ -108,6 +108,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
         kLR = Gaux.T.real.copy('C')
         kLI = Gaux.T.imag.copy('C')
         j2c = numpy.asarray(fswap['j2c/%d'%uniq_kptji_id])
+        j2c_negative = None
 # Note large difference may be found in results between the CD/eig treatments.
 # In some systems, small integral errors can lead to different treatments of
 # linear dependency which can be observed in the total energy/orbital energy
@@ -121,11 +122,15 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
         w, v = scipy.linalg.eigh(j2c)
         log.debug('MDF metric for kpt %s cond = %.4g, drop %d bfns',
                   uniq_kptji_id, w[-1]/w[0], numpy.count_nonzero(w<mydf.linear_dep_threshold))
-        v = v[:,w>mydf.linear_dep_threshold].T.conj()
-        v /= numpy.sqrt(w[w>mydf.linear_dep_threshold]).reshape(-1,1)
-        j2c = v
+        v1 = v[:,w>mydf.linear_dep_threshold].T.conj()
+        v1 /= numpy.sqrt(w[w>mydf.linear_dep_threshold]).reshape(-1,1)
+        j2c = v1
+        if cell.dimension < 3 and cell.low_dim_ft_type != 'inf_vacuum':
+            v2 = v[:,w<-mydf.linear_dep_threshold].conj().T
+            v2 /= numpy.sqrt(-w[w<-mydf.linear_dep_threshold]).reshape(-1,1)
+            j2c_negative = v2
         j2ctag = 'eig'
-        naux0 = j2c.shape[0]
+        w = v = None
 
         if is_zero(kpt):  # kpti == kptj
             aosym = 's2'
@@ -188,9 +193,13 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
                     v = j3cR[k] + j3cI[k] * 1j
                 if j2ctag == 'CD':
                     v = scipy.linalg.solve_triangular(j2c, v, lower=True, overwrite_b=True)
+                    feri['j3c/%d/%d'%(ji,istep)] = v
                 else:
-                    v = lib.dot(j2c, v)
-                feri['j3c/%d/%d'%(ji,istep)] = v
+                    feri['j3c/%d/%d'%(ji,istep)] = lib.dot(j2c, v)
+
+                # low-dimension systems
+                if j2c_negative is not None:
+                    feri['j3c-/%d/%d'%(ji,istep)] = lib.dot(j2c_negative, v)
 
         with lib.call_in_background(pw_contract) as compute:
             col1 = 0
@@ -252,10 +261,6 @@ class MDF(df.DF):
     '''Gaussian and planewaves mixed density fitting
     '''
     def __init__(self, cell, kpts=numpy.zeros((1,3))):
-        if cell.dimension in (1, 2) and cell.low_dim_ft_type != 'inf_vacuum':
-            raise NotImplementedError('1D or 2D ERIs are not postive definite. '
-                                      'They cannot be fit into the current DF '
-                                      'structure.')
         self.cell = cell
         self.stdout = cell.stdout
         self.verbose = cell.verbose

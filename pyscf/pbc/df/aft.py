@@ -497,8 +497,10 @@ class AFTDF(lib.StreamObject):
 # With this function to mimic the molecular DF.loop function, the pbc gamma
 # point DF object can be used in the molecular code
     def loop(self, blksize=None):
-        if self.dimension in (1, 2):
-            raise RuntimeError('1D and 2D systems are not supported.')
+        if self.cell.dimension < 3 and self.cell.low_dim_ft_type != 'inf_vacuum':
+            raise RuntimeError('ERIs of 1D and 2D systems are not positive '
+                               'definite. Current API only supports postive '
+                               'definite ERIs.')
 
         if blksize is None:
             blksize = self.blockdim

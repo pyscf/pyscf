@@ -222,6 +222,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
         kLI = Gaux.imag.copy('C')
         Gaux = None
         j2c = numpy.asarray(fswap['j2c/%d'%uniq_kptji_id])
+        j2c_negative = None
         try:
             j2c = scipy.linalg.cholesky(j2c, lower=True)
             j2ctag = 'CD'
@@ -236,11 +237,15 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
             log.debug('DF metric linear dependency for kpt %s', uniq_kptji_id)
             log.debug('cond = %.4g, drop %d bfns',
                       w[-1]/w[0], numpy.count_nonzero(w<mydf.linear_dep_threshold))
-            v = v[:,w>mydf.linear_dep_threshold].T.conj()
-            v /= numpy.sqrt(w[w>mydf.linear_dep_threshold]).reshape(-1,1)
-            j2c = v
+            v1 = v[:,w>mydf.linear_dep_threshold].conj().T
+            v1 /= numpy.sqrt(w[w>mydf.linear_dep_threshold]).reshape(-1,1)
+            j2c = v1
+            if cell.dimension < 3 and cell.low_dim_ft_type != 'inf_vacuum':
+                v2 = v[:,w<-mydf.linear_dep_threshold].conj().T
+                v2 /= numpy.sqrt(-w[w<-mydf.linear_dep_threshold]).reshape(-1,1)
+                j2c_negative = v2
+            w = v = None
             j2ctag = 'eig'
-        naux0 = j2c.shape[0]
 
         if is_zero(kpt):  # kpti == kptj
             aosym = 's2'
@@ -303,9 +308,13 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
                     v = fuse(j3cR[k] + j3cI[k] * 1j)
                 if j2ctag == 'CD':
                     v = scipy.linalg.solve_triangular(j2c, v, lower=True, overwrite_b=True)
+                    feri['j3c/%d/%d'%(ji,istep)] = v
                 else:
-                    v = lib.dot(j2c, v)
-                feri['j3c/%d/%d'%(ji,istep)] = v
+                    feri['j3c/%d/%d'%(ji,istep)] = lib.dot(j2c, v)
+
+                # low-dimension systems
+                if j2c_negative is not None:
+                    feri['j3c-/%d/%d'%(ji,istep)] = lib.dot(j2c_negative, v)
 
         with lib.call_in_background(pw_contract) as compute:
             col1 = 0
@@ -344,10 +353,6 @@ class GDF(aft.AFTDF):
     '''Gaussian density fitting
     '''
     def __init__(self, cell, kpts=numpy.zeros((1,3))):
-        if cell.dimension in (1, 2) and cell.low_dim_ft_type != 'inf_vacuum':
-            raise NotImplementedError('1D or 2D ERIs are not postive definite. '
-                                      'They cannot be fit into the current DF '
-                                      'structure.')
         self.cell = cell
         self.stdout = cell.stdout
         self.verbose = cell.verbose
@@ -552,10 +557,11 @@ class GDF(aft.AFTDF):
         '''Short range part'''
         if self._cderi is None:
             self.build()
+        cell = self.cell
         kpti, kptj = kpti_kptj
         unpack = is_zero(kpti-kptj) and not compact
         is_real = is_zero(kpti_kptj)
-        nao = self.cell.nao_nr()
+        nao = cell.nao_nr()
         if blksize is None:
             if is_real:
                 if unpack:
@@ -593,11 +599,20 @@ class GDF(aft.AFTDF):
             return LpqR, LpqI
 
         LpqR = LpqI = None
-        with _load3c(self._cderi, 'j3c', kpti_kptj) as j3c:
+        with _load3c(self._cderi, 'j3c', kpti_kptj, 'j3c-kptij') as j3c:
             naux = j3c.shape[0]
             for b0, b1 in lib.prange(0, naux, blksize):
                 LpqR, LpqI = load(j3c, b0, b1, LpqR, LpqI)
-                yield LpqR, LpqI
+                yield LpqR, LpqI, 1
+
+        if cell.dimension < 3 and cell.low_dim_ft_type != 'inf_vacuum':
+            # Truncated Coulomb operator is not postive definite. Load the
+            # CDERI tensor of negative part.
+            with _load3c(self._cderi, 'j3c-', kpti_kptj, 'j3c-kptij') as j3c:
+                naux = j3c.shape[0]
+                for b0, b1 in lib.prange(0, naux, blksize):
+                    LpqR, LpqI = load(j3c, b0, b1, LpqR, LpqI)
+                    yield LpqR, LpqI, -1
 
     weighted_coulG = aft.weighted_coulG
     _int_nuc_vloc = aft._int_nuc_vloc
@@ -643,9 +658,14 @@ class GDF(aft.AFTDF):
 # With this function to mimic the molecular DF.loop function, the pbc gamma
 # point DF object can be used in the molecular code
     def loop(self, blksize=None):
+        if self.cell.dimension < 3 and self.cell.low_dim_ft_type != 'inf_vacuum':
+            raise RuntimeError('ERIs of 1D and 2D systems are not positive '
+                               'definite. Current API only supports postive '
+                               'definite ERIs.')
+
         if blksize is None:
             blksize = self.blockdim
-        for LpqR, LpqI in self.sr_loop(compact=True, blksize=blksize):
+        for LpqR, LpqI, sign in self.sr_loop(compact=True, blksize=blksize):
 # LpqI should be 0 for gamma point DF
 #            assert(numpy.linalg.norm(LpqI) < 1e-12)
             yield LpqR
@@ -738,16 +758,24 @@ def fuse_auxcell(mydf, auxcell):
 
 
 class _load3c(object):
-    def __init__(self, cderi, label, kpti_kptj):
+    def __init__(self, cderi, label, kpti_kptj, kptij_label=None):
         self.cderi = cderi
         self.label = label
+        if kptij_label is None:
+            self.kptij_label = label + '-kptij'
+        else:
+            self.kptij_label = kptij_label
         self.kpti_kptj = kpti_kptj
         self.feri = None
 
     def __enter__(self):
         self.feri = h5py.File(self.cderi, 'r')
+        if self.label not in self.feri:
+            # Return a size-0 array to skip the loop in sr_loop
+            return numpy.zeros(0)
+
         kpti_kptj = numpy.asarray(self.kpti_kptj)
-        kptij_lst = self.feri['%s-kptij'%self.label].value
+        kptij_lst = self.feri[self.kptij_label].value
         k_id = member(kpti_kptj, kptij_lst)
         if len(k_id) > 0:
             dat = self.feri['%s/%d' % (self.label, k_id[0])]

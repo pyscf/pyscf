@@ -71,6 +71,7 @@ def kernel(myci, eris, ci0=None, max_cycle=50, tol=1e-8, verbose=logger.INFO):
     return conv, ecisd, ci
 
 def make_diagonal(myci, eris):
+    # DO NOT use eris.mo_energy, it may differ to eris.fock.diagonal()
     mo_energy = eris.fock.diagonal()
     nmo = mo_energy.size
     jdiag = numpy.zeros((nmo,nmo))
