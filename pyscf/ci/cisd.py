@@ -751,7 +751,7 @@ class CISD(lib.StreamObject):
         # MP2 initial guess
         if eris is None: eris = self.ao2mo(self.mo_coeff)
         nocc = self.nocc
-        mo_e = eris.fock.diagonal()
+        mo_e = eris.mo_energy
         e_ia = lib.direct_sum('i-a->ia', mo_e[:nocc], mo_e[nocc:])
         ci0 = 1
         ci1 = eris.fock[:nocc,nocc:] / e_ia

@@ -763,8 +763,7 @@ class UCISD(cisd.CISD):
     def get_init_guess(self, eris=None, nroots=1, diag=None):
         if eris is None: eris = self.ao2mo(self.mo_coeff)
         nocca, noccb = self.nocc
-        mo_ea = eris.focka.diagonal()
-        mo_eb = eris.fockb.diagonal()
+        mo_ea, mo_eb = eris.mo_energy
         eia_a = mo_ea[:nocca,None] - mo_ea[None,nocca:]
         eia_b = mo_eb[:noccb,None] - mo_eb[None,noccb:]
         t1a = eris.focka[:nocca,nocca:].conj() / eia_a

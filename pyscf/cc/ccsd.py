@@ -1200,6 +1200,11 @@ class _ChemistsERIs:
         nocc = self.nocc = mycc.nocc
         self.mol = mycc.mol
 
+        # Note self.mo_energy can be different to fock.diagonal().
+        # self.mo_energy is used in the initial guess function (to generate
+        # MP2 amplitudes) and CCSD update_amps preconditioner.
+        # fock.diagonal() should only be used to compute the expectation value
+        # of Slater determinants.
         mo_e = self.mo_energy = self.fock.diagonal().real
         try:
             gap = abs(mo_e[:nocc,None] - mo_e[None,nocc:]).min()
