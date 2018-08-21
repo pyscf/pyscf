@@ -29,7 +29,10 @@ class RCISD(cisd.RCISD):
     def ao2mo(self, mo_coeff=None):
         from pyscf.cc import rccsd
         ao2mofn = mp.mp2._gen_ao2mofn(self._scf)
-        return rccsd._make_eris_incore(self, mo_coeff, ao2mofn=ao2mofn)
+        exx_bak, self._scf.exxdiv = self._scf.exxdiv, None
+        eris = rccsd._make_eris_incore(self, mo_coeff, ao2mofn=ao2mofn)
+        self._scf.exxdiv = exx_bak
+        return eris
 
 class UCISD(ucisd.UCISD):
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
@@ -41,7 +44,10 @@ class UCISD(ucisd.UCISD):
 
     def ao2mo(self, mo_coeff=None):
         ao2mofn = mp.mp2._gen_ao2mofn(self._scf)
-        return ucisd.uccsd._make_eris_incore(self, mo_coeff, ao2mofn=ao2mofn)
+        exx_bak, self._scf.exxdiv = self._scf.exxdiv, None
+        eris = ucisd.uccsd._make_eris_incore(self, mo_coeff, ao2mofn=ao2mofn)
+        self._scf.exxdiv = exx_bak
+        return eris
 
 class GCISD(gcisd.GCISD):
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
@@ -71,4 +77,7 @@ class GCISD(gcisd.GCISD):
                 eri[sym_forbid,:,:] = 0
                 eri[:,:,sym_forbid] = 0
             return eri
-        return gcisd.gccsd._make_eris_incore(self, mo_coeff, ao2mofn=ao2mofn)
+        exx_bak, self._scf.exxdiv = self._scf.exxdiv, None
+        eris = gcisd.gccsd._make_eris_incore(self, mo_coeff, ao2mofn=ao2mofn)
+        self._scf.exxdiv = exx_bak
+        return eris

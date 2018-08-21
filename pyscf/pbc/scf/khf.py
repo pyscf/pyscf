@@ -432,7 +432,7 @@ class KSCF(pbchf.SCF):
             # relates to the charged system.
             nelectron = float(self.cell.tot_electrons(nkpts)) / nkpts
             logger.info(self, '    Total energy shift due to Ewald probe charge'
-                        ' = -1/2 * Nelec*madelung/cell.vol = %.12g',
+                        ' = -1/2 * Nelec*madelung = %.12g',
                         madelung*nelectron * -.5)
         logger.info(self, 'DF object = %s', self.with_df)
         if not hasattr(self.with_df, 'build'):

@@ -55,6 +55,8 @@ def update_amps(cc, t1, t2, eris):
     log = logger.Logger(cc.stdout, cc.verbose)
     nkpts, nocc, nvir = t1.shape
     fock = eris.fock
+    mo_e_o = [e[:nocc] for e in eris.mo_energy]
+    mo_e_v = [e[nocc:] + cc.level_shift for e in eris.mo_energy]
 
     fov = fock[:, :nocc, nocc:]
     foo = fock[:, :nocc, :nocc]
@@ -70,10 +72,10 @@ def update_amps(cc, t1, t2, eris):
 
     # Move energy terms to the other side
     for k in range(nkpts):
-        Foo[k] -= np.diag(np.diag(foo[k]))
-        Fvv[k] -= np.diag(np.diag(fvv[k]))
-        Loo[k] -= np.diag(np.diag(foo[k]))
-        Lvv[k] -= np.diag(np.diag(fvv[k]))
+        Foo[k][np.diag_indices(nocc)] -= mo_e_o[k]
+        Fvv[k][np.diag_indices(nvir)] -= mo_e_v[k]
+        Loo[k][np.diag_indices(nocc)] -= mo_e_o[k]
+        Lvv[k][np.diag_indices(nvir)] -= mo_e_v[k]
     time1 = log.timer_debug1('intermediates', *time1)
 
     # T1 equation
@@ -201,15 +203,15 @@ def update_amps(cc, t1, t2, eris):
     time1 = log.timer_debug1('t2 voov', *time1)
 
     for ki in range(nkpts):
-        eia = foo[ki].diagonal()[:, None] - fvv[ki].diagonal()
+        eia = mo_e_o[ki][:,None] - mo_e_v[ki]
         # When padding the occupied/virtual arrays, some fock elements will be zero
         eia[abs(eia) < LOOSE_ZERO_TOL] = LARGE_DENOM
         t1new[ki] /= eia
 
     for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
         kb = kconserv[ki, ka, kj]
-        eia = np.diagonal(foo[ki]).reshape(-1, 1) - np.diagonal(fvv[ka])
-        ejb = np.diagonal(foo[kj]).reshape(-1, 1) - np.diagonal(fvv[kb])
+        eia = mo_e_o[ki][:,None] - mo_e_v[ka]
+        ejb = mo_e_o[kj][:,None] - mo_e_v[kb]
         eijab = eia[:, None, :, None] + ejb[:, None, :]
         # Due to padding; see above discussion concerning t1new in update_amps()
         eijab[abs(eijab) < LOOSE_ZERO_TOL] = LARGE_DENOM
@@ -244,13 +246,12 @@ def describe_nested(data):
             struct.append(i_struct)
             total_size += i_size
             if dtype is not None and i_dtype is not None and i_dtype != dtype:
-                raise ValueError("Several different numpy dtypes encountered: {} and {}".format(
-                    str(dtype), str(i_dtype)
-                ))
+                raise ValueError("Several different numpy dtypes encountered: %s and %s" %
+                                 (str(dtype), str(i_dtype)))
             dtype = i_dtype
         return struct, total_size, dtype
     else:
-        raise ValueError("Unknown object to describe: {}".format(str(data)))
+        raise ValueError("Unknown object to describe: %s" % str(data))
 
 
 def nested_to_vector(data, destination=None, offset=0):
@@ -279,7 +280,7 @@ def nested_to_vector(data, destination=None, offset=0):
         for i in data:
             offset = nested_to_vector(i, destination, offset)
     else:
-        raise ValueError("Unknown object to vectorize: {}".format(str(data)))
+        raise ValueError("Unknown object to vectorize: %s" % str(data))
 
     if rtn:
         return destination, struct
@@ -300,24 +301,18 @@ def vector_to_nested(vector, struct, copy=True, ensure_size_matches=True):
         A nested structure with numpy arrays and, if `ensure_size_matches=False`, the number of vector elements used.
     """
     if len(vector.shape) != 1:
-        raise ValueError("Only vectors accepted, got: {}".format(repr(vector.shape)))
+        raise ValueError("Only vectors accepted, got: %s" % repr(vector.shape))
 
     if isinstance(struct, tuple):
         expected_size = np.prod(struct)
         if ensure_size_matches:
             if vector.size != expected_size:
-                raise ValueError("Structure size mismatch: expected {} = {:d}, found {:d}".format(
-                    repr(struct),
-                    expected_size,
-                    vector.size,
-                ))
+                raise ValueError("Structure size mismatch: expected %s = %d, found %d" %
+                                 (repr(struct), expected_size, vector.size,))
         if len(vector) < expected_size:
-            raise ValueError("Additional {:d} = ({:d} = {}) - {:d} vector elements are required".format(
-                expected_size - len(vector),
-                expected_size,
-                repr(struct),
-                len(vector),
-            ))
+            raise ValueError("Additional %d = (%d = %s) - %d vector elements are required" %
+                             (expected_size - len(vector), expected_size,
+                              repr(struct), len(vector),))
         a = vector[:expected_size].reshape(struct)
         if copy:
             a = a.copy()
@@ -337,13 +332,13 @@ def vector_to_nested(vector, struct, copy=True, ensure_size_matches=True):
 
         if ensure_size_matches:
             if vector.size != offset:
-                raise ValueError("{:d} additional elements found".format(vector.size - offset))
+                raise ValueError("%d additional elements found" % (vector.size - offset))
             return result
         else:
             return result, offset
 
     else:
-        raise ValueError("Unknown object to compose: {}".format(str(struct)))
+        raise ValueError("Unknown object to compose: %s" % (str(struct)))
 
 
 def energy(cc, t1, t2, eris):
@@ -489,8 +484,8 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         nkpts = self.nkpts
         t1 = np.zeros((nkpts,nocc,nvir), dtype=eris.fock.dtype)
         t2 = np.empty((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=eris.fock.dtype)
-        foo = eris.fock[:,:nocc,:nocc].copy()
-        fvv = eris.fock[:,nocc:,nocc:].copy()
+        mo_e_o = [eris.mo_energy[k][:nocc] for k in range(nkpts)]
+        mo_e_v = [eris.mo_energy[k][nocc:] for k in range(nkpts)]
 
         emp2 = 0
         kconserv = self.khelper.kconserv
@@ -500,8 +495,8 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                 continue
 
             kb = kconserv[ki, ka, kj]
-            eia = foo[ki].diagonal().real[:, None] - fvv[ka].diagonal().real
-            ejb = foo[kj].diagonal().real[:, None] - fvv[kb].diagonal().real
+            eia = mo_e_o[ki][:,None] - mo_e_v[ka]
+            ejb = mo_e_o[kj][:,None] - mo_e_v[kb]
             eijab = lib.direct_sum('ia,jb->ijab', eia, ejb)
             # Due to padding; see above discussion concerning t1new in update_amps()
             idx = abs(eijab) < LOOSE_ZERO_TOL
@@ -1164,8 +1159,11 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
     def __init__(self, cc, mo_coeff=None, method='incore',
                  ao2mofn=pyscf.ao2mo.outcore.general_iofree):
         from pyscf.pbc import df
+        from pyscf.pbc import tools
+        from pyscf.pbc.cc.ccsd import _adjust_occ
         cput0 = (time.clock(), time.time())
         moidx = get_frozen_mask(cc)
+        cell = cc._scf.cell
         nkpts = cc.nkpts
         nocc = cc.nocc
         nmo = cc.nmo
@@ -1181,12 +1179,26 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
 
         mo_coeff = self.mo_coeff = pad_frozen_kpt_mo_coeff(cc, mo_coeff)
 
+        # _scf.exxdiv affects eris.fock. HF exchange correction should be
+        # excluded from the Fock matrix.
+        exx_bak, cc._scf.exxdiv = cc._scf.exxdiv, None
         # Re-make our fock MO matrix elements from density and fock AO
         dm = cc._scf.make_rdm1(cc.mo_coeff, cc.mo_occ)
-        fockao = cc._scf.get_hcore() + cc._scf.get_veff(cc._scf.cell, dm)
-        self.fock = np.asarray([reduce(np.dot,
-                                       (mo_coeff[k].T.conj(),fockao[k], mo_coeff[k]))
+        fockao = cc._scf.get_hcore() + cc._scf.get_veff(cell, dm)
+        self.fock = np.asarray([reduce(np.dot, (mo.T.conj(),fockao[k], mo))
                                 for k, mo in enumerate(mo_coeff)])
+        cc._scf.exxdiv = exx_bak
+
+        self.mo_energy = [self.fock[k].diagonal().real for k in range(nkpts)]
+        # Add HFX correction in the self.mo_energy to improve convergence in
+        # CCSD iteration. It is useful for the 2D systems since their occupied and
+        # the virtual orbital energies may overlap which may lead to numerical
+        # issue in the CCSD iterations.
+        # FIXME: Whether to add this correction for other exxdiv treatments?
+        # Without the correction, MP2 energy may be largely off the correct value.
+        madelung = tools.madelung(cell, kpts)
+        self.mo_energy = [_adjust_occ(mo_e, nocc, -madelung)
+                          for k, mo_e in enumerate(self.mo_energy)]
 
         nocc_per_kpt = np.asarray(get_nocc(cc, per_kpoint=True))
         nmo_per_kpt  = np.asarray(get_nmo(cc, per_kpoint=True))

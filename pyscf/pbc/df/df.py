@@ -385,7 +385,7 @@ class GDF(aft.AFTDF):
         # 0 since v1.5.2.
         self.exp_to_discard = cell.exp_to_discard
 
-# Not input options
+        # The following attributes are not input options.
         self.exxdiv = None  # to mimic KRHF/KUHF object in function get_coulG
         self.auxcell = None
         self.blockdim = getattr(__config__, 'pbc_df_df_DF_blockdim', 240)

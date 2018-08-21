@@ -50,7 +50,7 @@ def update_amps(cc, t1, t2, eris):
     Ht2ab = np.zeros_like(t2ab)
     Ht2bb = np.zeros_like(t2bb)
 
-    nocca, nvira = t1a.shape[1:]
+    nkpts, nocca, nvira = t1a.shape
     noccb, nvirb = t1b.shape[1:]
     fvv_ = eris.fock[0][:,nocca:,nocca:]
     fVV_ = eris.fock[1][:,noccb:,noccb:]
@@ -59,16 +59,21 @@ def update_amps(cc, t1, t2, eris):
     fov_ = eris.fock[0][:,:nocca,nocca:]
     fOV_ = eris.fock[1][:,:noccb,noccb:]
 
+    mo_ea_o = [e[:nocca] for e in eris.mo_energy[0]]
+    mo_eb_o = [e[:noccb] for e in eris.mo_energy[1]]
+    mo_ea_v = [e[nocca:] for e in eris.mo_energy[0]]
+    mo_eb_v = [e[noccb:] for e in eris.mo_energy[1]]
+
     Fvv_, FVV_ = kintermediates_uhf.cc_Fvv(cc, t1, t2, eris)
     Foo_, FOO_ = kintermediates_uhf.cc_Foo(cc, t1, t2, eris)
     Fov_, FOV_ = kintermediates_uhf.cc_Fov(cc, t1, t2, eris)
 
     # Move energy terms to the other side
     for k in range(nkpts):
-        Fvv_[k] -= np.diag(np.diag(fvv_[k]))
-        FVV_[k] -= np.diag(np.diag(fVV_[k]))
-        Foo_[k] -= np.diag(np.diag(foo_[k]))
-        FOO_[k] -= np.diag(np.diag(fOO_[k]))
+        Fvv_[k][np.diag_indices(nvira)] -= mo_ea_v[k]
+        FVV_[k][np.diag_indices(nvirb)] -= mo_eb_v[k]
+        Foo_[k][np.diag_indices(nocca)] -= mo_ea_o[k]
+        FOO_[k][np.diag_indices(noccb)] -= mo_eb_o[k]
 
     # Get the momentum conservation array
     kconserv = cc.khelper.kconserv
@@ -331,11 +336,6 @@ def update_amps(cc, t1, t2, eris):
     for kx, ky, ku in kpts_helper.loop_kkk(nkpts):
         kz = kconserv[kx, ku, ky]
         Ht2ab[kx,ky,kz] -= lib.einsum('mb,jmia->ijab',t1b[ku],eris.OOov[ky,ku,kx].conj())
-
-    mo_ea_v = [fvv_[k].diagonal() for k in range(nkpts)]
-    mo_eb_v = [fVV_[k].diagonal() for k in range(nkpts)]
-    mo_ea_o = [foo_[k].diagonal() for k in range(nkpts)]
-    mo_eb_o = [fOO_[k].diagonal() for k in range(nkpts)]
 
     eia = []
     eIA = []
@@ -644,9 +644,6 @@ class KUCCSD(uccsd.UCCSD):
         nmoa, nmob = self.nmo
         nvira, nvirb = nmoa - nocca, nmob - noccb
 
-        nocc = nocca + noccb
-        nvir = nvira + nvirb
-
         nkpts = self.nkpts
         t1a = np.zeros((nkpts, nocca, nvira), dtype=np.complex128)
         t1b = np.zeros((nkpts, noccb, nvirb), dtype=np.complex128)
@@ -654,21 +651,21 @@ class KUCCSD(uccsd.UCCSD):
         t2aa = np.zeros((nkpts, nkpts, nkpts, nocca, nocca, nvira, nvira), dtype=np.complex128)
         t2ab = np.zeros((nkpts, nkpts, nkpts, nocca, noccb, nvira, nvirb), dtype=np.complex128)
         t2bb = np.zeros((nkpts, nkpts, nkpts, noccb, noccb, nvirb, nvirb), dtype=np.complex128)
-        fa, fb = eris.fock
-        fooa = fa[:,:nocca,:nocca]
-        foob = fb[:,:noccb,:noccb]
-        fvva = fa[:,nocca:,nocca:]
-        fvvb = fb[:,noccb:,noccb:]
+
+        mo_ea_o = [e[:nocca] for e in eris.mo_energy[0]]
+        mo_eb_o = [e[:noccb] for e in eris.mo_energy[1]]
+        mo_ea_v = [e[nocca:] for e in eris.mo_energy[0]]
+        mo_eb_v = [e[noccb:] for e in eris.mo_energy[1]]
 
         kconserv = kpts_helper.get_kconserv(self._scf.cell, self.kpts)
         for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
             kb = kconserv[ki, ka, kj]
-            Daa = (fooa[ki].diagonal()[:, None, None, None] + fooa[kj].diagonal()[None, :, None, None] -
-                     fvva[ka].diagonal()[None, None, :, None] - fvva[kb].diagonal()[None, None, None, :])
-            Dab = (fooa[ki].diagonal()[:, None, None, None] + foob[kj].diagonal()[None, :, None, None] -
-                     fvva[ka].diagonal()[None, None, :, None] - fvvb[kb].diagonal()[None, None, None, :])
-            Dbb = (foob[ki].diagonal()[:, None, None, None] + foob[kj].diagonal()[None, :, None, None] -
-                     fvvb[ka].diagonal()[None, None, :, None] - fvvb[kb].diagonal()[None, None, None, :])
+            Daa = (mo_ea_o[ki][:,None,None,None] + mo_ea_o[kj][None,:,None,None] -
+                   mo_ea_v[ka][None,None,:,None] - mo_ea_v[kb][None,None,None,:])
+            Dab = (mo_ea_o[ki][:,None,None,None] + mo_eb_o[kj][None,:,None,None] -
+                   mo_ea_v[ka][None,None,:,None] - mo_eb_v[kb][None,None,None,:])
+            Dbb = (mo_eb_o[ki][:,None,None,None] + mo_eb_o[kj][None,:,None,None] -
+                   mo_eb_v[ka][None,None,:,None] - mo_eb_v[kb][None,None,None,:])
 
             # Due to padding; see above discussion concerning t1new in update_amps()
             idx = np.where(abs(Daa) < LOOSE_ZERO_TOL)[0]
@@ -678,15 +675,12 @@ class KUCCSD(uccsd.UCCSD):
             idx = np.where(abs(Dbb) < LOOSE_ZERO_TOL)[0]
             Dbb[idx] = LARGE_DENOM
 
-            t2aa[ki,kj,ka,:,:,:,:] = eris.ovov[ki,ka,kj,:,:,:,:].transpose((0,2,1,3))/Daa \
-                    - eris.ovov[kj,ka,ki,:,:,:,:].transpose((2,0,1,3))/Daa
-            t2ab[ki,kj,ka,:,:,:,:] = eris.ovOV[ki,ka,kj,:,:,:,:].transpose((0,2,1,3))/Dab
-            t2bb[ki,kj,ka,:,:,:,:] = eris.OVOV[ki,ka,kj,:,:,:,:].transpose((0,2,1,3))/Dbb \
-                    - eris.OVOV[kj,ka,ki,:,:,:,:].transpose((2,0,1,3))/Dbb
+            t2aa[ki,kj,ka] = eris.ovov[ki,ka,kj].conj().transpose((0,2,1,3)) / Daa
+            t2aa[ki,kj,ka]-= eris.ovov[kj,ka,ki].conj().transpose((2,0,1,3)) / Daa
+            t2ab[ki,kj,ka] = eris.ovOV[ki,ka,kj].conj().transpose((0,2,1,3)) / Dab
+            t2bb[ki,kj,ka] = eris.OVOV[ki,ka,kj].conj().transpose((0,2,1,3)) / Dbb
+            t2bb[ki,kj,ka]-= eris.OVOV[kj,ka,ki].conj().transpose((2,0,1,3)) / Dbb
 
-        t2aa = np.conj(t2aa)
-        t2ab = np.conj(t2ab)
-        t2bb = np.conj(t2bb)
         t2 = (t2aa,t2ab,t2bb)
 
         d = 0.0 + 0.j
@@ -714,12 +708,17 @@ UCCSD = KUCCSD
 
 
 def _make_eris_incore(cc, mo_coeff=None):
+    from pyscf.pbc import tools
+    from pyscf.pbc.cc.ccsd import _adjust_occ
+    if not (cc.frozen is None or cc.frozen == 0):
+        raise NotImplementedError('cc.frozen = %s' % cc.frozen)
+
     cput0 = (time.clock(), time.time())
     log = logger.new_logger(cc)
     eris = uccsd._ChemistsERIs()
     if mo_coeff is None:
         mo_coeff = cc.mo_coeff
-    eris.mo_coeff = mo_coeff  # TODO: handle frozen orbitals
+    eris.mo_coeff = mo_coeff
     eris.nocc = cc.nocc
 
     kpts = cc.kpts
@@ -738,6 +737,13 @@ def _make_eris_incore(cc, mo_coeff=None):
     fockb = [reduce(np.dot, (mo.conj().T, hcore[k]+vhf[1][k], mo))
              for k, mo in enumerate(mo_b)]
     eris.fock = (np.asarray(focka), np.asarray(fockb))
+
+    madelung = tools.madelung(cell, kpts)
+    mo_ea = [focka[k].diagonal().real for k in range(nkpts)]
+    mo_eb = [fockb[k].diagonal().real for k in range(nkpts)]
+    mo_ea = [_adjust_occ(e, nocca, -madelung) for e in mo_ea]
+    mo_eb = [_adjust_occ(e, noccb, -madelung) for e in mo_eb]
+    eris.mo_energy = (mo_ea, mo_eb)
 
     # The momentum conservation array
     kconserv = cc.khelper.kconserv
@@ -867,11 +873,13 @@ def _make_df_eris(cc, mo_coeff=None):
                 kpti_kptj = np.array((kpti,kptj))
                 k_id = member(kpti_kptj, kptij_lst)
                 if len(k_id) > 0:
-                    Lpq = np.asarray(f['j3c/' + str(k_id[0])])
+                    dat = f['j3c/' + str(k_id[0])]
+                    Lpq = np.hstack([dat[str(i)] for i in range(len(dat))])
                 else:
                     kptji = kpti_kptj[[1,0]]
                     k_id = member(kptji, kptij_lst)
-                    Lpq = np.asarray(f['j3c/' + str(k_id[0])])
+                    dat = f['j3c/' + str(k_id[0])]
+                    Lpq = np.hstack([dat[str(i)] for i in range(len(dat))])
                     Lpq = lib.transpose(Lpq.reshape(naux,nao,nao), axes=(0,2,1))
                     Lpq = Lpq.conj()
 

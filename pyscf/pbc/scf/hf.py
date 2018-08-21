@@ -405,7 +405,7 @@ class SCF(mol_hf.SCF):
             madelung = tools.pbc.madelung(self.cell, [self.kpt])
             logger.info(self, '    madelung (= occupied orbital energy shift) = %s', madelung)
             logger.info(self, '    Total energy shift due to Ewald probe charge'
-                        ' = -1/2 * Nelec*madelung/cell.vol = %.12g',
+                        ' = -1/2 * Nelec*madelung = %.12g',
                         madelung*self.cell.nelectron * -.5)
         logger.info(self, 'DF object = %s', self.with_df)
         if not hasattr(self.with_df, 'build'):

@@ -32,7 +32,7 @@ from pyscf.fci import cistring
 from pyscf.cc.ccsd import _unpack_4fold
 
 def make_diagonal(myci, eris):
-    nocca, noccb = myci.nocc
+    nocca, noccb = eris.nocc
     nmoa = eris.focka.shape[0]
     nmob = eris.fockb.shape[1]
     nvira = nmoa - nocca

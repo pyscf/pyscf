@@ -327,8 +327,7 @@ class _PhysicistsERIs:
         self.fock = reduce(np.dot, (mo_coeff.conj().T, fockao, mo_coeff))
         self.nocc = mycc.nocc
 
-        mo_e = self.fock.diagonal()
-        self.mo_energy = mo_e.real
+        mo_e = self.mo_energy = self.fock.diagonal().real
         gap = abs(mo_e[:self.nocc,None] - mo_e[None,self.nocc:]).min()
         if gap < 1e-5:
             logger.warn(mycc, 'HOMO-LUMO gap %s too small for GCCSD', gap)

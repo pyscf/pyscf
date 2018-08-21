@@ -279,7 +279,7 @@ class MDF(df.DF):
         # can be set to the value of self.eta
         self.exp_to_discard = None
 
-# Not input options
+        # The following attributes are not input options.
         self.exxdiv = None  # to mimic KRHF/KUHF object in function get_coulG
         self.auxcell = None
         self.blockdim = getattr(__config__, 'df_df_DF_blockdim', 240)

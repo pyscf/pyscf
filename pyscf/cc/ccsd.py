@@ -1200,8 +1200,7 @@ class _ChemistsERIs:
         nocc = self.nocc = mycc.nocc
         self.mol = mycc.mol
 
-        mo_e = self.fock.diagonal()
-        self.mo_energy = mo_e.real
+        mo_e = self.mo_energy = self.fock.diagonal().real
         try:
             gap = abs(mo_e[:nocc,None] - mo_e[None,nocc:]).min()
             if gap < 1e-5:

@@ -281,7 +281,7 @@ class AFTDF(lib.StreamObject):
         # to mimic molecular DF object
         self.blockdim = getattr(__config__, 'pbc_df_df_DF_blockdim', 240)
 
-# Not input options
+        # The following attributes are not input options.
         self.exxdiv = None  # to mimic KRHF/KUHF object in function get_coulG
         self._keys = set(self.__dict__.keys())
 
