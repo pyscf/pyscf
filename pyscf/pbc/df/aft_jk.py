@@ -307,8 +307,8 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
             pLqR = lib.transpose(pqkR, axes=(0,2,1), out=pLqR).reshape(-1,nao)
             pLqI = lib.transpose(pqkI, axes=(0,2,1), out=pLqI).reshape(-1,nao)
             nG = p1 - p0
-            iLkR = numpy.ndarray((nao*nG,nao), buffer=pqkR)
-            iLkI = numpy.ndarray((nao*nG,nao), buffer=pqkI)
+            iLkR = numpy.ndarray((nao,nG,nao), buffer=pqkR)
+            iLkI = numpy.ndarray((nao,nG,nao), buffer=pqkI)
             for i in range(nset):
                 if k_real:
                     lib.dot(pLqR, dmsR[i], 1, iLkR.reshape(nao*nG,nao))

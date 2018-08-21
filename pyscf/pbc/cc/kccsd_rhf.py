@@ -1182,7 +1182,7 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
 
         # Re-make our fock MO matrix elements from density and fock AO
         dm = cc._scf.make_rdm1(cc.mo_coeff, cc.mo_occ)
-        with lib.temporary_env(self._scf, exxdiv=None):
+        with lib.temporary_env(cc._scf, exxdiv=None):
             # _scf.exxdiv affects eris.fock. HF exchange correction should be
             # excluded from the Fock matrix.
             fockao = cc._scf.get_hcore() + cc._scf.get_veff(cell, dm)
