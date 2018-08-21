@@ -95,16 +95,16 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None):
     for k, kpt in enumerate(kpts):
         kptii = numpy.asarray((kpt,kpt))
         p1 = 0
-        for LpqR, LpqI in mydf.sr_loop(kptii, max_memory, False):
+        for LpqR, LpqI, sign in mydf.sr_loop(kptii, max_memory, False):
             p0, p1 = p1, p1+LpqR.shape[0]
             #:Lpq = (LpqR + LpqI*1j).reshape(-1,nao,nao)
             #:rhoR[:,p0:p1] += numpy.einsum('Lpq,xqp->xL', Lpq, dms[:,k]).real
             #:rhoI[:,p0:p1] += numpy.einsum('Lpq,xqp->xL', Lpq, dms[:,k]).imag
-            rhoR[:,p0:p1] += numpy.einsum('Lp,xp->xL', LpqR, dmsR[:,k])
-            rhoI[:,p0:p1] += numpy.einsum('Lp,xp->xL', LpqR, dmsI[:,k])
+            rhoR[:,p0:p1] += sign * numpy.einsum('Lp,xp->xL', LpqR, dmsR[:,k])
+            rhoI[:,p0:p1] += sign * numpy.einsum('Lp,xp->xL', LpqR, dmsI[:,k])
             if LpqI is not None:
-                rhoR[:,p0:p1] -= numpy.einsum('Lp,xp->xL', LpqI, dmsI[:,k])
-                rhoI[:,p0:p1] += numpy.einsum('Lp,xp->xL', LpqI, dmsR[:,k])
+                rhoR[:,p0:p1] -= sign * numpy.einsum('Lp,xp->xL', LpqI, dmsI[:,k])
+                rhoI[:,p0:p1] += sign * numpy.einsum('Lp,xp->xL', LpqI, dmsR[:,k])
             LpqR = LpqI = None
     t1 = log.timer_debug1('get_j pass 1', *t1)
 
@@ -116,17 +116,17 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None):
     for k, kpt in enumerate(kpts_band):
         kptii = numpy.asarray((kpt,kpt))
         p1 = 0
-        for LpqR, LpqI in mydf.sr_loop(kptii, max_memory, True):
+        for LpqR, LpqI, sign in mydf.sr_loop(kptii, max_memory, True):
             p0, p1 = p1, p1+LpqR.shape[0]
             #:Lpq = (LpqR + LpqI*1j)#.reshape(-1,nao,nao)
             #:vjR[:,k] += numpy.dot(rho[:,p0:p1], Lpq).real
             #:vjI[:,k] += numpy.dot(rho[:,p0:p1], Lpq).imag
-            vjR[:,k] += numpy.dot(rhoR[:,p0:p1], LpqR)
+            vjR[:,k] += sign * numpy.dot(rhoR[:,p0:p1], LpqR)
             if not j_real:
-                vjI[:,k] += numpy.dot(rhoI[:,p0:p1], LpqR)
+                vjI[:,k] += sign * numpy.dot(rhoI[:,p0:p1], LpqR)
                 if LpqI is not None:
-                    vjR[:,k] -= numpy.dot(rhoI[:,p0:p1], LpqI)
-                    vjI[:,k] += numpy.dot(rhoR[:,p0:p1], LpqI)
+                    vjR[:,k] -= sign * numpy.dot(rhoI[:,p0:p1], LpqI)
+                    vjI[:,k] += sign * numpy.dot(rhoR[:,p0:p1], LpqI)
             LpqR = LpqI = None
     t1 = log.timer_debug1('get_j pass 2', *t1)
 
@@ -172,7 +172,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
         kpti = kpts[ki]
         kptj = kpts_band[kj]
 
-        for LpqR, LpqI in mydf.sr_loop((kpti,kptj), max_memory, False):
+        for LpqR, LpqI, sign in mydf.sr_loop((kpti,kptj), max_memory, False):
             nrow = LpqR.shape[0]
             pLqR = numpy.ndarray((nao,nrow,nao), buffer=bufR)
             pLqI = numpy.ndarray((nao,nrow,nao), buffer=bufI)
@@ -186,7 +186,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
                        pLqI.reshape(nao,-1), 1, tmpR, tmpI)
                 zdotCN(pLqR.reshape(-1,nao).T, pLqI.reshape(-1,nao).T,
                        tmpR.reshape(-1,nao), tmpI.reshape(-1,nao),
-                       1, vkR[i,kj], vkI[i,kj], 1)
+                       sign, vkR[i,kj], vkI[i,kj], 1)
 
             if swap_2e:
                 tmpR = tmpR.reshape(nao*nrow,nao)
@@ -196,7 +196,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
                            dmsR[i,kj], dmsI[i,kj], 1, tmpR, tmpI)
                     zdotNC(tmpR.reshape(nao,-1), tmpI.reshape(nao,-1),
                            pLqR.reshape(nao,-1).T, pLqI.reshape(nao,-1).T,
-                           1, vkR[i,ki], vkI[i,ki], 1)
+                           sign, vkR[i,ki], vkI[i,ki], 1)
 
     if kpts_band is kpts:  # normal k-points HF/DFT
         for ki in range(nkpts):
@@ -297,7 +297,7 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
                        1, vkR[i], vkI[i], 1)
     pLqI = None
     thread_k = None
-    for LpqR, LpqI in mydf.sr_loop(kptii, max_memory, False):
+    for LpqR, LpqI, sign in mydf.sr_loop(kptii, max_memory, False):
         LpqR = LpqR.reshape(-1,nao,nao)
         t1 = log.timer_debug1('        load', *t1)
         if thread_k is not None:
@@ -311,11 +311,11 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
                 rhoR -= numpy.einsum('Lpq,xpq->xL', LpqI, dmsI)
                 rhoI  = numpy.einsum('Lpq,xpq->xL', LpqR, dmsI)
                 rhoI += numpy.einsum('Lpq,xpq->xL', LpqI, dmsR)
-            vjR += numpy.einsum('xL,Lpq->xpq', rhoR, LpqR)
+            vjR += sign * numpy.einsum('xL,Lpq->xpq', rhoR, LpqR)
             if not j_real:
-                vjR -= numpy.einsum('xL,Lpq->xpq', rhoI, LpqI)
-                vjI += numpy.einsum('xL,Lpq->xpq', rhoR, LpqI)
-                vjI += numpy.einsum('xL,Lpq->xpq', rhoI, LpqR)
+                vjR -= sign * numpy.einsum('xL,Lpq->xpq', rhoI, LpqI)
+                vjI += sign * numpy.einsum('xL,Lpq->xpq', rhoR, LpqI)
+                vjI += sign * numpy.einsum('xL,Lpq->xpq', rhoI, LpqR)
 
         t1 = log.timer_debug1('        with_j', *t1)
         if with_k:

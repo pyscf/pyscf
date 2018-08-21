@@ -240,7 +240,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
             v1 = v[:,w>mydf.linear_dep_threshold].conj().T
             v1 /= numpy.sqrt(w[w>mydf.linear_dep_threshold]).reshape(-1,1)
             j2c = v1
-            if cell.dimension < 3 and cell.low_dim_ft_type != 'inf_vacuum':
+            if cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum':
                 v2 = v[:,w<-mydf.linear_dep_threshold].conj().T
                 v2 /= numpy.sqrt(-w[w<-mydf.linear_dep_threshold]).reshape(-1,1)
                 j2c_negative = v2
@@ -378,7 +378,7 @@ class GDF(aft.AFTDF):
                 self.eta = eta_guess
                 ke_cutoff = aft.estimate_ke_cutoff_for_eta(cell, self.eta, cell.precision)
                 self.mesh = tools.cutoff_to_mesh(cell.lattice_vectors(), ke_cutoff)
-                if cell.low_dim_ft_type == 'inf_vacuum':
+                if cell.dimension < 2 or cell.low_dim_ft_type == 'inf_vacuum':
                     self.mesh[cell.dimension:] = cell.mesh[cell.dimension:]
 
         # exp_to_discard to remove diffused fitting functions. The diffused
@@ -605,7 +605,7 @@ class GDF(aft.AFTDF):
                 LpqR, LpqI = load(j3c, b0, b1, LpqR, LpqI)
                 yield LpqR, LpqI, 1
 
-        if cell.dimension < 3 and cell.low_dim_ft_type != 'inf_vacuum':
+        if cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum':
             # Truncated Coulomb operator is not postive definite. Load the
             # CDERI tensor of negative part.
             with _load3c(self._cderi, 'j3c-', kpti_kptj, 'j3c-kptij') as j3c:
@@ -658,8 +658,9 @@ class GDF(aft.AFTDF):
 # With this function to mimic the molecular DF.loop function, the pbc gamma
 # point DF object can be used in the molecular code
     def loop(self, blksize=None):
-        if self.cell.dimension < 3 and self.cell.low_dim_ft_type != 'inf_vacuum':
-            raise RuntimeError('ERIs of 1D and 2D systems are not positive '
+        cell = self.cell
+        if cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum':
+            raise RuntimeError('ERIs of PBC-2D systems are not positive '
                                'definite. Current API only supports postive '
                                'definite ERIs.')
 

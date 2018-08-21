@@ -295,9 +295,6 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
         if cell.dimension != 2 or cell.low_dim_ft_type == 'inf_vacuum':
             with np.errstate(divide='ignore'):
                 coulG = 4*np.pi/absG2
-            if exxdiv == 'ewald' and len(G0_idx) > 0:
-                coulG[G0_idx] = Nk*cell.vol*madelung(cell, kpts)
-            else:
                 coulG[G0_idx] = 0
 
         elif cell.dimension == 2:
@@ -312,13 +309,30 @@ def get_coulG(cell, k=np.zeros(3), exx=False, mf=None, mesh=None, Gv=None,
                 coulG = weights*4*np.pi/absG2
             if len(G0_idx) > 0:
                 coulG[G0_idx] = -2*np.pi*(np.pi/np.linalg.norm(b[2]))**2 #-pi*L_z^2/2
-            if exxdiv == 'ewald':
-                coulG[G0_idx] += Nk*cell.vol*madelung(cell, kpts)
-        else:
-            # For 0D and 1D Coulobm, see Table I of PRB, 73, 205119
-            raise NotImplementedError('no method for PBC dimension %s, '
-                'dim-type %s and exxdiv = %s' %
-                (cell.dimension, cell.low_dim_ft_type, exxdiv))
+
+        elif cell.dimension == 1:
+            logger.warn(cell, 'No method for PBC dimension 1, dim-type %s.'
+                        '  cell.low_dim_ft_type="inf_vacuum"  should be set.',
+                        cell.low_dim_ft_type)
+            raise NotImplementedError
+
+            # Carlo A. Rozzi, PRB 73, 205119 (2006)
+            a = cell.lattice_vectors()
+            # Rc is the cylindrical radius
+            Rc = np.sqrt(cell.vol / np.linalg.norm(a[0])) / 2
+            Gx = abs(kG[:,0])
+            Gp = np.linalg.norm(kG[:,1:], axis=1)
+            with np.errstate(divide='ignore', invalid='ignore'):
+                weights = 1 + Gp*Rc * scipy.special.j1(Gp*Rc) * scipy.special.k0(Gx*Rc)
+                weights -= Gx*Rc * scipy.special.j0(Gp*Rc) * scipy.special.k1(Gx*Rc)
+                coulG = 4*np.pi/absG2 * weights
+                # TODO: numerical integation
+                # coulG[Gx==0] = -4*np.pi * (dr * r * scipy.special.j0(Gp*r) * np.log(r)).sum()
+            if len(G0_idx) > 0:
+                coulG[G0_idx] = -np.pi*Rc**2 * (2*np.log(Rc) - 1)
+
+        if cell.dimension > 0 and exxdiv == 'ewald' and len(G0_idx) > 0:
+            coulG[G0_idx] += Nk*cell.vol*madelung(cell, kpts)
 
     coulG[equal2boundary] = 0
 

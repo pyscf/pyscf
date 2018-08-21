@@ -234,13 +234,13 @@ def _ztrans(Lpq, zij, moij, ijslice, Lrs, zkl, mokl, klslice, sym):
 class PBC2DIntegralsWarning(RuntimeWarning):
     pass
 def warn_pbc2d_eri(mydf):
-    if mydf.cell.dimension in (1, 2):
+    cell = mydf.cell
+    if cell.dimension == 2 and cell.low_dim_ft_type == 'inf_vacuum':
         with warnings.catch_warnings():
             warnings.simplefilter('once', PBC2DIntegralsWarning)
-            warnings.warn('\n2-electron integrals for 1D and 2D PBC systems '
-                          'were designed for SCF methods only.\n'
-                          'The post-HF treatment for low-dimension system is '
-                          'problematic in pyscf-1.5.* or any older version.\n')
+            warnings.warn('\nERIs of PBC-2D systems with infinity vacuum are '
+                          'singular.  cell.low_dim_ft_type = None  should be '
+                          'set.\n')
 
 
 if __name__ == '__main__':

@@ -1262,6 +1262,8 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
 
             if not (cc.direct and type(cc._scf.with_df) is df.GDF):
                 self.vvvv = self.feri1.create_dataset('vvvv', (nkpts,nkpts,nkpts,nvir,nvir,nvir,nvir), dtype.char)
+            elif cell.dimension == 2:
+                raise NotImplementedError
 
             # <ij|pq>  = (ip|jq)
             cput1 = time.clock(), time.time()

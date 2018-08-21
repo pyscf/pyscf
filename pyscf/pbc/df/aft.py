@@ -129,7 +129,7 @@ def get_pp_loc_part1(mydf, kpts=None):
                             'to get integral accuracy %g.\nRecommended mesh is %s.',
                             mesh, cell.precision, mesh_guess)
             mesh_min = numpy.min((mesh_guess, mesh), axis=0)
-            if cell.low_dim_ft_type == 'inf_vacuum':
+            if cell.dimension < 2 or cell.low_dim_ft_type == 'inf_vacuum':
                 mesh[:cell.dimension] = mesh_min[:cell.dimension]
             else:
                 mesh = mesh_min
@@ -497,8 +497,9 @@ class AFTDF(lib.StreamObject):
 # With this function to mimic the molecular DF.loop function, the pbc gamma
 # point DF object can be used in the molecular code
     def loop(self, blksize=None):
-        if self.cell.dimension < 3 and self.cell.low_dim_ft_type != 'inf_vacuum':
-            raise RuntimeError('ERIs of 1D and 2D systems are not positive '
+        cell = self.cell
+        if cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum':
+            raise RuntimeError('ERIs of PBC-2D systems are not positive '
                                'definite. Current API only supports postive '
                                'definite ERIs.')
 

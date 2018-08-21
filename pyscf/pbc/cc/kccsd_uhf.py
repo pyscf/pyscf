@@ -845,6 +845,8 @@ def _make_df_eris(cc, mo_coeff=None):
     from pyscf.ao2mo import _ao2mo
     if cc._scf.with_df._cderi is None:
         cc._scf.with_df.build()
+    if cc.cell.dimension == 2:
+        raise NotImplementedError
 
     eris = _make_eris_incore(cc, mo_coeff)
 

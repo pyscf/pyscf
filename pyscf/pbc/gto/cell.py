@@ -604,13 +604,15 @@ def get_Gv_weights(cell, mesh=None, **kwargs):
         #return np.hstack((0,rs,-rs[::-1])), np.hstack((0,ws,ws[::-1]))
         return np.hstack((rs,-rs[::-1])), np.hstack((ws,ws[::-1]))
 
-    low_dim_ft_type = cell.low_dim_ft_type
     # Default, the 3D uniform grids
-    b = cell.reciprocal_vectors()
     rx = np.fft.fftfreq(mesh[0], 1./mesh[0])
     ry = np.fft.fftfreq(mesh[1], 1./mesh[1])
     rz = np.fft.fftfreq(mesh[2], 1./mesh[2])
-    if cell.dimension < 3 and low_dim_ft_type == 'inf_vacuum':
+    b = cell.reciprocal_vectors()
+    weights = abs(np.linalg.det(b))
+
+    if (cell.dimension < 2 or
+        (cell.dimension == 2 and cell.low_dim_ft_type == 'inf_vacuum')):
         if cell.dimension == 0:
             rx, wx = plus_minus(mesh[0]//2)
             ry, wy = plus_minus(mesh[1]//2)
@@ -632,8 +634,7 @@ def get_Gv_weights(cell, mesh=None, **kwargs):
             rz, wz = plus_minus(mesh[2]//2)
             rz /= np.linalg.norm(b[2])
             weights = np.einsum('i,k->ik', wxy, wz).reshape(-1)
-    else:  # dimension == 3
-        weights = abs(np.linalg.det(b))
+
     Gvbase = (rx, ry, rz)
     Gv = np.dot(lib.cartesian_prod(Gvbase), b)
     # 1/cell.vol == det(b)/(2pi)^3
@@ -679,7 +680,8 @@ def get_ewald_params(cell, precision=INTEGRAL_PRECISION, mesh=None):
     '''
     if cell.natm == 0:
         return 0, 0
-    elif cell.dimension < 3 and cell.low_dim_ft_type == 'inf_vacuum':
+    elif (cell.dimension < 2 or
+          (cell.dimension == 2 and cell.low_dim_ft_type == 'inf_vacuum')):
 # Non-uniform PW grids are used for low-dimensional ewald summation.  The cutoff
 # estimation for long range part based on exp(G^2/(4*eta^2)) does not work for
 # non-uniform grids.  Smooth model density is preferred.
@@ -699,7 +701,10 @@ def _cut_mesh_for_ewald(cell, mesh):
     mesh = np.copy(mesh)
     mesh_max = np.asarray(np.linalg.norm(cell.lattice_vectors(), axis=1) * 2,
                           dtype=int)  # roughly 2 grids per bohr
-    mesh_max[cell.dimension:] = mesh[cell.dimension:]
+    if (cell.dimension < 2 or
+        (cell.dimension == 2 and cell.low_dim_ft_type == 'inf_vacuum')):
+        mesh_max[cell.dimension:] = mesh[cell.dimension:]
+
     mesh_max[mesh_max<80] = 80
     mesh[mesh>mesh_max] = mesh_max[mesh>mesh_max]
     return mesh
@@ -763,7 +768,7 @@ def ewald(cell, ew_eta=None, ew_cut=None):
     Gv, Gvbase, weights = cell.get_Gv_weights(mesh)
     absG2 = np.einsum('gi,gi->g', Gv, Gv)
     absG2[absG2==0] = 1e200
-    if cell.dimension == 3 or cell.low_dim_ft_type == 'inf_vacuum':
+    if cell.dimension != 2 or cell.low_dim_ft_type == 'inf_vacuum':
         coulG = 4*np.pi / absG2
         coulG *= weights
         ZSI = np.einsum("i,ij->j", chargs, cell.get_SI(Gv))
@@ -818,10 +823,10 @@ def ewald(cell, ew_eta=None, ew_cut=None):
         ewg *= inv_area*0.5
 
     else:
-        # For 0D and 1D Coulobm, see Table I of PRB, 73, 205119
-        raise NotImplementedError('Low dimension ft_type ',
-            low_dim_ft_type, ' not implemented for dimension ',
-            cell.dimension)
+        logger.warn(cell, 'No method for PBC dimension %s, dim-type %s.'
+                    '  cell.low_dim_ft_type="inf_vacuum"  should be set.',
+                    cell.dimension, cell.low_dim_ft_type)
+        raise NotImplementedError
 
     logger.debug(cell, 'Ewald components = %.15g, %.15g, %.15g', ewovrl, ewself, ewg)
     return ewovrl + ewself + ewg
@@ -1232,7 +1237,14 @@ class Cell(mole.Mole):
             sys.stderr.write('''WARNING!
   Lattice are not in right-handed coordinate system. This can cause wrong value for some integrals.
   It's recommended to resort the lattice vectors to\na = %s\n\n''' % _a[[0,2,1]])
-        #TODO: For 0D, 1D, 2D systems, check if vacuum is large enough. See Fig 1 of PRB, 73, 2015119
+
+        # check vacuum size. See Fig 1 of PRB, 73, 2015119
+        if self.dimension == 2 and self.low_dim_ft_type != 'inf_vacuum':
+            Lz_guess = self.rcut*(1+np.sqrt(2))
+            if np.linalg.norm(_a[2]) < 0.6 * Lz_guess:
+                sys.stderr.write('''WARNING!
+  Size of vacuum may not be enough. The recommended vacuum size is %s AA (%s Bohr)\n\n'''
+                                 % (Lz_guess*param.BOHR, Lz_guess))
 
         if self.mesh is None:
             if self.ke_cutoff is None:
@@ -1240,7 +1252,9 @@ class Cell(mole.Mole):
             else:
                 ke_cutoff = self.ke_cutoff
             self.mesh = pbctools.cutoff_to_mesh(_a, ke_cutoff)
-            if self.dimension < 3 and self.low_dim_ft_type == 'inf_vacuum':
+
+            if (self.dimension < 2 or
+                (self.dimension == 2 and self.low_dim_ft_type == 'inf_vacuum')):
                 #prec ~ exp(-0.436392335*mesh -2.99944305)*nelec
                 meshz = (np.log(self.nelectron/self.precision)-2.99944305)/0.436392335
                 self.mesh[self.dimension:] = int(meshz)
@@ -1254,6 +1268,7 @@ class Cell(mole.Mole):
             logger.info(self, '                 a2 [%.9f, %.9f, %.9f]', *_a[1])
             logger.info(self, '                 a3 [%.9f, %.9f, %.9f]', *_a[2])
             logger.info(self, 'dimension = %s', self.dimension)
+            logger.info(self, 'low_dim_ft_type = %s', self.low_dim_ft_type)
             logger.info(self, 'Cell volume = %g', self.vol)
             if self.exp_to_discard is not None:
                 logger.info(self, 'exp_to_discard = %s', self.exp_to_discard)
@@ -1269,7 +1284,7 @@ class Cell(mole.Mole):
                 logger.info(self, 'mesh = %s (%d PWs)',
                             self.mesh, np.prod(self.mesh))
                 Ecut = pbctools.mesh_to_cutoff(self.lattice_vectors(), self.mesh)
-                logger.info(self, '    = ke_cutoff %s', Ecut[:self.dimension])
+                logger.info(self, '    = ke_cutoff %s', Ecut)
             logger.info(self, 'ew_eta = %g', self.ew_eta)
             logger.info(self, 'ew_cut = %s (nimgs = %s)', self.ew_cut,
                         self.get_bounding_sphere(self.ew_cut))

@@ -58,7 +58,7 @@ def tearDownModule():
     cell.stdout.close()
     del cell, kmf, kumf
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_analyze(self):
         rpop, rchg = kmf.analyze() # pop at gamma point
         upop, uchg = kumf.analyze()

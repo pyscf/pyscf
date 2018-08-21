@@ -45,7 +45,7 @@ def get_gth_vlocG_part1(cell, Gv):
     G2 = numpy.einsum('ix,ix->i', Gv, Gv)
     G0idx = numpy.where(G2==0)[0]
 
-    if cell.dimension == 3 or cell.low_dim_ft_type == 'inf_vacuum':
+    if cell.dimension != 2 or cell.low_dim_ft_type == 'inf_vacuum':
         vlocG = numpy.zeros((cell.natm, len(G2)))
         for ia in range(cell.natm):
             Zia = cell.atom_charge(ia)

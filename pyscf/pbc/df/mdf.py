@@ -125,7 +125,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
         v1 = v[:,w>mydf.linear_dep_threshold].T.conj()
         v1 /= numpy.sqrt(w[w>mydf.linear_dep_threshold]).reshape(-1,1)
         j2c = v1
-        if cell.dimension < 3 and cell.low_dim_ft_type != 'inf_vacuum':
+        if cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum':
             v2 = v[:,w<-mydf.linear_dep_threshold].conj().T
             v2 /= numpy.sqrt(-w[w<-mydf.linear_dep_threshold]).reshape(-1,1)
             j2c_negative = v2
@@ -249,7 +249,7 @@ def _mesh_for_valence(cell, valence_exp=VALENCE_EXP):
         Ecut_max = max(Ecut_max, ke_guess.max())
     mesh = tools.cutoff_to_mesh(cell.lattice_vectors(), Ecut_max)
     mesh = numpy.min((mesh, cell.mesh), axis=0)
-    if cell.low_dim_ft_type == 'inf_vacuum':
+    if cell.dimension < 2 or cell.low_dim_ft_type == 'inf_vacuum':
         mesh[cell.dimension:] = cell.mesh[cell.dimension:]
     return mesh
 del(VALENCE_EXP)
