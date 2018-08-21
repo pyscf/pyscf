@@ -1417,8 +1417,8 @@ def _init_df_eris(cc, eris):
     if cc._scf.with_df._cderi is None:
         cc._scf.with_df.build()
 
-    nocc = mycc.nocc
-    nmo = mycc.nmo
+    nocc = cc.nocc
+    nmo = cc.nmo
     nvir = nmo - nocc
     nao = cc._scf.cell.nao_nr()
 
