@@ -496,9 +496,8 @@ def dryrun(mc, mo_coeff=None):
     '''Generate FCIDUMP and SHCI config file'''
     if mo_coeff is None:
         mo_coeff = mc.mo_coeff
-    bak, mc.fcisolver.dryrun = mc.fcisolver.dryrun, True
-    mc.casci(mo_coeff)
-    mc.fcisolver.dryrun = bak
+    with lib.temporary_env(mc.fcisolver, dryrun=True):
+        mc.casci(mo_coeff)
 
 
 class shci_client(object):
