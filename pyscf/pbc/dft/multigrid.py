@@ -1682,11 +1682,11 @@ class MultiGridFFTDF(fft.FFTDF):
     get_nuc = get_nuc
 
     def get_jk(self, dm, hermi=1, kpts=None, kpts_band=None,
-               with_j=True, with_k=False, exxdiv='ewald'):
+               with_j=True, with_k=True, exxdiv='ewald'):
         from pyscf.pbc.df import fft_jk
         if with_k:
             logger.warn(self, 'MultiGridFFTDF does not support HFX. '
-                        'The FFTDF get_jk function is called.')
+                        'HFX is computed by FFTDF.get_k_kpts function.')
 
         if kpts is None:
             if numpy.all(self.kpts == 0): # Gamma-point J/K by default
