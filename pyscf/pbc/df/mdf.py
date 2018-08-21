@@ -314,13 +314,13 @@ class MDF(df.DF):
 
     @property
     def exp_to_discard(self):
-        if self._exp_to_drop is not None:
-            return self._exp_to_drop
+        if self._exp_to_discard is not None:
+            return self._exp_to_discard
         else:
             return self.eta
     @exp_to_discard.setter
     def exp_to_discard(self, x):
-        self._exp_to_drop = x
+        self._exp_to_discard = x
 
     _make_j3c = _make_j3c
 
