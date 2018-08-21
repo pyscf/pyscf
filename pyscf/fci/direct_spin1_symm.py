@@ -352,9 +352,8 @@ class FCISolver(direct_spin1.FCISolver):
         self.norb = norb
         self.nelec = nelec
 
-        wfnsym = self.guess_wfnsym(norb, nelec, ci0, wfnsym, **kwargs)
-
         with lib.temporary_env(self, orbsym=orbsym, wfnsym=wfnsym):
+            self.wfnsym = self.guess_wfnsym(norb, nelec, ci0, wfnsym, **kwargs)
             e, c = direct_spin1.kernel_ms1(self, h1e, eri, norb, nelec, ci0, None,
                                            tol, lindep, max_cycle, max_space,
                                            nroots, davidson_only, pspace_size,
