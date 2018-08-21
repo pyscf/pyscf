@@ -1164,6 +1164,7 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
         cput0 = (time.clock(), time.time())
         moidx = get_frozen_mask(cc)
         cell = cc._scf.cell
+        kpts = cc.kpts
         nkpts = cc.nkpts
         nocc = cc.nocc
         nmo = cc.nmo
@@ -1210,7 +1211,7 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
             if gap < 1e-5:
                 logger.warn(cc, 'HOMO-LUMO gap %s too small for KCCSD at '
                                 'k-point %d %s. May cause issues in convergence.',
-                            gap, kp, cc.kpts[kp])
+                            gap, kp, kpts[kp])
 
         mem_incore, mem_outcore, mem_basic = _mem_usage(nkpts, nocc, nvir)
         mem_now = lib.current_memory()[0]
@@ -1234,7 +1235,7 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
             for (ikp,ikq,ikr) in khelper.symm_map.keys():
                 iks = kconserv[ikp,ikq,ikr]
                 eri_kpt = fao2mo((mo_coeff[ikp],mo_coeff[ikq],mo_coeff[ikr],mo_coeff[iks]),
-                                 (cc.kpts[ikp],cc.kpts[ikq],cc.kpts[ikr],cc.kpts[iks]), compact=False)
+                                 (kpts[ikp],kpts[ikq],kpts[ikr],kpts[iks]), compact=False)
                 if dtype == np.float: eri_kpt = eri_kpt.real
                 eri_kpt = eri_kpt.reshape(nmo, nmo, nmo, nmo)
                 for (kp, kq, kr) in khelper.symm_map[(ikp, ikq, ikr)]:
@@ -1271,7 +1272,7 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
                         orbo_p = mo_coeff[kp][:, :nocc]
                         orbo_r = mo_coeff[kr][:, :nocc]
                         buf_kpt = fao2mo((orbo_p, mo_coeff[kq], orbo_r, mo_coeff[ks]),
-                                         (cc.kpts[kp], cc.kpts[kq], cc.kpts[kr], cc.kpts[ks]), compact=False)
+                                         (kpts[kp], kpts[kq], kpts[kr], kpts[ks]), compact=False)
                         if mo_coeff[0].dtype == np.float: buf_kpt = buf_kpt.real
                         buf_kpt = buf_kpt.reshape(nocc, nmo, nocc, nmo).transpose(0, 2, 1, 3)
                         self.dtype = buf_kpt.dtype
@@ -1289,7 +1290,7 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
                         orbo_p = mo_coeff[kp][:, :nocc]
                         orbv_r = mo_coeff[kr][:, nocc:]
                         buf_kpt = fao2mo((orbo_p, mo_coeff[kq], orbv_r, mo_coeff[ks]),
-                                         (cc.kpts[kp], cc.kpts[kq], cc.kpts[kr], cc.kpts[ks]), compact=False)
+                                         (kpts[kp], kpts[kq], kpts[kr], kpts[ks]), compact=False)
                         if mo_coeff[0].dtype == np.float: buf_kpt = buf_kpt.real
                         buf_kpt = buf_kpt.reshape(nocc,nmo,nvir,nmo).transpose(0,2,1,3)
                         self.ovov[kp,kr,kq,:,:,:,:] = buf_kpt[:,:,:nocc,nocc:] / nkpts
@@ -1311,7 +1312,7 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
             #            for a in range(nvir):
             #                orbva_p = orbv_p[:,a].reshape(-1,1)
             #                buf_kpt = fao2mo((orbva_p,orbv_q,orbv_r,orbv_s),
-            #                                 (cc.kpts[kp],cc.kpts[kq],cc.kpts[kr],cc.kpts[ks]), compact=False)
+            #                                 (kpts[kp],kpts[kq],kpts[kr],kpts[ks]), compact=False)
             #                if mo_coeff[0].dtype == np.float: buf_kpt = buf_kpt.real
             #                buf_kpt = buf_kpt.reshape((1,nvir,nvir,nvir)).transpose(0,2,1,3)
             #                self.vvvv[kp,kr,kq,a,:,:,:] = buf_kpt[:] / nkpts
@@ -1331,7 +1332,7 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
                     orbv_s = mo_coeff[iks][:,nocc:]
                     # unit cell is small enough to handle vvvv in-core
                     buf_kpt = fao2mo((orbv_p,orbv_q,orbv_r,orbv_s),
-                                     cc.kpts[[ikp,ikq,ikr,iks]], compact=False)
+                                     kpts[[ikp,ikq,ikr,iks]], compact=False)
                     if dtype == np.float: buf_kpt = buf_kpt.real
                     buf_kpt = buf_kpt.reshape((nvir,nvir,nvir,nvir))
                     for (kp,kq,kr) in khelper.symm_map[(ikp,ikq,ikr)]:
@@ -1344,7 +1345,7 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
                     for a in range(nvir):
                         orbva_p = orbv_p[:, a].reshape(-1, 1)
                         buf_kpt = fao2mo((orbva_p, orbv_q, orbv_r, orbv_s),
-                                         (cc.kpts[ikp], cc.kpts[ikq], cc.kpts[ikr], cc.kpts[iks]), compact=False)
+                                         (kpts[ikp], kpts[ikq], kpts[ikr], kpts[iks]), compact=False)
                         if mo_coeff[0].dtype == np.float: buf_kpt = buf_kpt.real
                         buf_kpt = buf_kpt.reshape((1, nvir, nvir, nvir)).transpose(0, 2, 1, 3)
 

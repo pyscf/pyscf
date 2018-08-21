@@ -192,6 +192,7 @@ def pack(cell):
     cldic['ew_eta'] = cell.ew_eta
     cldic['ew_cut'] = cell.ew_cut
     cldic['dimension'] = cell.dimension
+    cldic['low_dim_ft_type'] = cell.low_dim_ft_type
     return cldic
 
 def unpack(celldic):
@@ -609,7 +610,7 @@ def get_Gv_weights(cell, mesh=None, **kwargs):
     rx = np.fft.fftfreq(mesh[0], 1./mesh[0])
     ry = np.fft.fftfreq(mesh[1], 1./mesh[1])
     rz = np.fft.fftfreq(mesh[2], 1./mesh[2])
-    if cell.dimension != 3 and low_dim_ft_type == 'inf_vacuum':
+    if cell.dimension < 3 and low_dim_ft_type == 'inf_vacuum':
         if cell.dimension == 0:
             rx, wx = plus_minus(mesh[0]//2)
             ry, wy = plus_minus(mesh[1]//2)
@@ -678,7 +679,7 @@ def get_ewald_params(cell, precision=INTEGRAL_PRECISION, mesh=None):
     '''
     if cell.natm == 0:
         return 0, 0
-    elif cell.dimension != 3 and cell.low_dim_ft_type == 'inf_vacuum':
+    elif cell.dimension < 3 and cell.low_dim_ft_type == 'inf_vacuum':
 # Non-uniform PW grids are used for low-dimensional ewald summation.  The cutoff
 # estimation for long range part based on exp(G^2/(4*eta^2)) does not work for
 # non-uniform grids.  Smooth model density is preferred.
@@ -762,7 +763,7 @@ def ewald(cell, ew_eta=None, ew_cut=None):
     Gv, Gvbase, weights = cell.get_Gv_weights(mesh)
     absG2 = np.einsum('gi,gi->g', Gv, Gv)
     absG2[absG2==0] = 1e200
-    if cell.dimension != 2 or cell.low_dim_ft_type == 'inf_vacuum':
+    if cell.dimension == 3 or cell.low_dim_ft_type == 'inf_vacuum':
         coulG = 4*np.pi / absG2
         coulG *= weights
         ZSI = np.einsum("i,ij->j", chargs, cell.get_SI(Gv))
@@ -815,6 +816,7 @@ def ewald(cell, ew_eta=None, ew_cut=None):
                 val = qij*gn0(ew_eta,rij[2])
                 ewg += val.sum()
         ewg *= inv_area*0.5
+
     else:
         # For 0D and 1D Coulobm, see Table I of PRB, 73, 205119
         raise NotImplementedError('Low dimension ft_type ',

@@ -252,7 +252,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
             nao_pair = nao*(nao+1)//2
 
             if cell.dimension == 3:
-                vbar = mydf.auxbar(fused_cell)
+                vbar = fuse(mydf.auxbar(fused_cell))
                 ovlp = cell.pbc_intor('int1e_ovlp', hermi=1, kpts=adapted_kptjs)
                 ovlp = [lib.pack_tril(s) for s in ovlp]
         else:

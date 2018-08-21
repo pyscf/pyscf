@@ -141,6 +141,45 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(cell.ewald(2, 10), -2.3711356723457615, 9)
         self.assertAlmostEqual(cell.ewald(2,  5), -2.3711356723457615, 9)
 
+    def test_ewald_2d_inf_vacuum(self):
+        cell = pgto.Cell()
+        cell.a = numpy.eye(3) * 4
+        cell.atom = 'He 0 0 0; He 0 1 1'
+        cell.unit = 'B'
+        cell.mesh = [9,9,60]
+        cell.verbose = 0
+        cell.dimension = 2
+        cell.low_dim_ft_type = 'inf_vacuum'
+        cell.rcut = 3.6
+        cell.build()
+        self.assertAlmostEqual(cell.ewald(), 3898143.7149599474, 4)
+
+    def test_ewald_1d_inf_vacuum(self):
+        cell = pgto.Cell()
+        cell.a = numpy.eye(3) * 4
+        cell.atom = 'He 0 0 0; He 0 1 1'
+        cell.unit = 'B'
+        cell.mesh = [9,60,60]
+        cell.verbose = 0
+        cell.dimension = 1
+        cell.low_dim_ft_type = 'inf_vacuum'
+        cell.rcut = 3.6
+        cell.build()
+        self.assertAlmostEqual(cell.ewald(), 70.875156940393225, 8)
+
+    def test_ewald_0d_inf_vacuum(self):
+        cell = pgto.Cell()
+        cell.a = numpy.eye(3)
+        cell.atom = 'He 0 0 0; He 0 1 1'
+        cell.unit = 'B'
+        cell.mesh = [60] * 3
+        cell.verbose = 0
+        cell.dimension = 0
+        cell.low_dim_ft_type = 'inf_vacuum'
+        cell.build()
+        eref = cell.to_mol().energy_nuc()
+        self.assertAlmostEqual(cell.ewald(), eref, 2)
+
     def test_ewald_2d(self):
         cell = pgto.Cell()
         cell.a = numpy.eye(3) * 4
@@ -151,7 +190,7 @@ class KnownValues(unittest.TestCase):
         cell.dimension = 2
         cell.rcut = 3.6
         cell.build()
-        self.assertAlmostEqual(cell.ewald(), -2.0207698225112987, 6)
+        self.assertAlmostEqual(cell.ewald(), -5.1194779101355596, 9)
 
     def test_ewald_1d(self):
         cell = pgto.Cell()
@@ -163,7 +202,7 @@ class KnownValues(unittest.TestCase):
         cell.dimension = 1
         cell.rcut = 3.6
         cell.build()
-        self.assertAlmostEqual(cell.ewald(), 6.4055183018897317, 4)
+        self.assertAlmostEqual(cell.ewald(), -1.6312586077542817, 8)
 
     def test_ewald_0d(self):
         cell = pgto.Cell()

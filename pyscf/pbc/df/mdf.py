@@ -137,7 +137,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
             nao_pair = nao*(nao+1)//2
 
             if cell.dimension == 3:
-                vbar = mydf.auxbar(fused_cell)
+                vbar = fuse(mydf.auxbar(fused_cell))
                 ovlp = cell.pbc_intor('int1e_ovlp', hermi=1, kpts=adapted_kptjs)
                 ovlp = [lib.pack_tril(s) for s in ovlp]
         else:
@@ -213,11 +213,9 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
                 for k, idx in enumerate(adapted_ji_idx):
                     v = [feri['j3c-junk/%d/%d'%(idx,i)][0,col0:col1].T for i in range(nsegs)]
                     v = fuse(numpy.vstack(v))
-                    #FIXME cell.dimension: 1D and 2D
                     if is_zero(kpt) and cell.dimension == 3:
-                        for i, c in enumerate(vbar):
-                            if c != 0:
-                                v[i] -= c * ovlp[k][col0:col1]
+                        for i in numpy.where(vbar != 0)[0]:
+                            v[i] -= vbar[i] * ovlp[k][col0:col1]
                     j3cR.append(numpy.asarray(v.real, order='C'))
                     if is_zero(kpt) and gamma_point(adapted_kptjs[k]):
                         j3cI.append(None)
