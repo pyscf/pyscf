@@ -608,6 +608,7 @@ class GDF(aft.AFTDF):
         if cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum':
             # Truncated Coulomb operator is not postive definite. Load the
             # CDERI tensor of negative part.
+            LpqR = LpqI = None
             with _load3c(self._cderi, 'j3c-', kpti_kptj, 'j3c-kptij') as j3c:
                 naux = j3c.shape[0]
                 for b0, b1 in lib.prange(0, naux, blksize):
@@ -677,8 +678,21 @@ class GDF(aft.AFTDF):
         if self._cderi is None:
             self.build()
         # self._cderi['j3c/k_id/seg_id']
-        with addons.load(self._cderi, 'j3c/0/0') as feri:
-            return feri.shape[0]
+        with addons.load(self._cderi, 'j3c/0') as feri:
+            if isinstance(feri, h5py.Group):
+                naux = feri['0'].shape[0]
+            else:
+                naux = feri.shape[0]
+
+        cell = self.cell
+        if cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum':
+            with h5py.File(self._cderi, 'r') as feri:
+                if 'j3c-' in feri:
+                    if isinstance(feri['j3c-/0'], h5py.Group):
+                        naux += feri['j3c-/0/0'].shape[0]
+                    else:
+                        naux += feri['j3c-/0'].shape[0]
+        return naux
 
 DF = GDF
 

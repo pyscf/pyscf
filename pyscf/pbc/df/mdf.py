@@ -85,7 +85,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
             j2c_k -= lib.dot(LkR*coulG, LkR.T)
             j2c_k -= lib.dot(LkI*coulG, LkI.T)
         else:
-             # aoaux ~ kpt_ij, aoaux.conj() ~ kpt_kl
+            # aoaux ~ kpt_ij, aoaux.conj() ~ kpt_kl
             j2cR, j2cI = zdotCN(LkR*coulG, LkI*coulG, LkR.T, LkI.T)
             j2c_k -= j2cR + j2cI * 1j
         fswap['j2c/%d'%k] = j2c_k
@@ -311,13 +311,13 @@ class MDF(df.DF):
 
     @property
     def exp_to_discard(self):
-        if self._exp_to_drop is not None:
-            return self._exp_to_drop
+        if self._exp_to_discard is not None:
+            return self._exp_to_discard
         else:
             return self.eta
     @exp_to_discard.setter
     def exp_to_discard(self, x):
-        self._exp_to_drop = x
+        self._exp_to_discard = x
 
     _make_j3c = _make_j3c
 

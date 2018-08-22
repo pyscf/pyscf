@@ -174,10 +174,10 @@ def energy_elec(ks, dm=None, h1e=None, vhf=None):
     if h1e is None: h1e = ks.get_hcore()
     if vhf is None or getattr(vhf, 'ecoul', None) is None:
         vhf = ks.get_veff(ks.mol, dm)
-    e1 = numpy.einsum('ij,ji', h1e, dm).real
+    e1 = numpy.einsum('ij,ji', h1e, dm)
     tot_e = e1 + vhf.ecoul + vhf.exc
-    logger.debug(ks, 'Ecoul = %s  Exc = %s', vhf.ecoul, vhf.exc)
-    return tot_e, vhf.ecoul+vhf.exc
+    logger.debug(ks, 'E1 = %s  Ecoul = %s  Exc = %s', e1, vhf.ecoul, vhf.exc)
+    return tot_e.real, vhf.ecoul+vhf.exc
 
 
 NELEC_ERROR_TOL = getattr(__config__, 'dft_rks_prune_error_tol', 0.02)
