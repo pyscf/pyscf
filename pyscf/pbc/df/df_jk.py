@@ -217,8 +217,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
         vk_kpts = vkR + vkI * 1j
     vk_kpts *= 1./nkpts
 
-    if exxdiv:
-        assert(exxdiv.lower() == 'ewald')
+    if exxdiv == 'ewald':
         _ewald_exxdiv_for_G0(cell, kpts, dms, vk_kpts, kpts_band)
 
     return _format_jks(vk_kpts, dm_kpts, input_band, kpts)
@@ -345,8 +344,7 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
             vk = vkR
         else:
             vk = vkR + vkI * 1j
-        if exxdiv:
-            assert(exxdiv.lower() == 'ewald')
+        if exxdiv == 'ewald':
             _ewald_exxdiv_for_G0(cell, kpt, dms, vk)
         vk = vk.reshape(dm.shape)
 

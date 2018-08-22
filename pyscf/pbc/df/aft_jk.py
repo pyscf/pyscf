@@ -217,9 +217,9 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
 
     # Add ewald_exxdiv contribution because G=0 was not included in the
     # non-uniform grids
-    if (cell.dimension < 2 or
-        (cell.dimension == 2 and cell.low_dim_ft_type == 'inf_vacuum')):
-        assert(exxdiv.lower() == 'ewald')
+    if (exxdiv == 'ewald' and
+        (cell.dimension < 2 or  # 0D and 1D are computed with inf_vacuum
+         (cell.dimension == 2 and cell.low_dim_ft_type == 'inf_vacuum'))):
         _ewald_exxdiv_for_G0(cell, kpts_band, dms, vk_kpts, kpts_band)
 
     return _format_jks(vk_kpts, dm_kpts, input_band, kpts)
@@ -342,9 +342,9 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
             vk = vkR + vkI * 1j
         # Add ewald_exxdiv contribution because G=0 was not included in the
         # non-uniform grids
-        if (cell.dimension < 2 or
-            (cell.dimension == 2 and cell.low_dim_ft_type == 'inf_vacuum')):
-            assert(exxdiv.lower() == 'ewald')
+        if (exxdiv == 'ewald' and
+            (cell.dimension < 2 or  # 0D and 1D are computed with inf_vacuum
+             (cell.dimension == 2 and cell.low_dim_ft_type == 'inf_vacuum'))):
             _ewald_exxdiv_for_G0(cell, kpt, dms, vk)
         vk = vk.reshape(dm.shape)
     return vj, vk
