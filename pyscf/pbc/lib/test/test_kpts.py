@@ -45,3 +45,14 @@ class KnownValues(unittest.TestCase):
         kijkab = [range(nkpts),range(nkpts),1,range(nkpts),range(nkpts)]
         kconserve = tools.get_kconserv3(cell, kpts, kijkab)
         self.assertAlmostEqual(lib.finger(kconserve), -3.1172758206126852, 0)
+
+    def test_kconserv_raise(self):
+        cell = pbcgto.Cell()
+        cell.atom = 'He 0 0 0'
+        cell.a = '''0.      1.7834  1.7834
+                    1.7834  0.      1.7834
+                    1.7834  1.7834  0.    '''
+        cell.build()
+        kpts = ((0, 0, 0), (1, 1, 1))
+        with self.assertRaises(ValueError):
+            tools.get_kconserv(cell, kpts)

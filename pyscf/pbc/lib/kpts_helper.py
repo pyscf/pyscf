@@ -99,6 +99,11 @@ def get_kconserv(cell, kpts, spec="+-+-", tol=1e-9):
             ksum -= kpts[ix]
     ksum = np.einsum("...x,wx->...w", ksum, a)
     mask = np.all(abs(ksum - np.rint(ksum)) < tol, axis=-1)
+    test = np.apply_along_axis(lambda _: len(np.where(_)[0]), -1, mask)
+    test = np.where(test != 1)
+    if len(test[0]) > 0:
+        raise ValueError("Momentum is not conserved: following index triples have no matching kconserv "
+                         "index: {}".format(repr(np.array(test).T)))
     result = np.apply_along_axis(lambda _: np.where(_)[0][0], -1, mask)
     return result
 
