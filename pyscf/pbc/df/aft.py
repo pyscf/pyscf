@@ -100,7 +100,7 @@ def get_pp_loc_part1(mydf, kpts=None):
         if cell.dimension > 0:
             ke_guess = estimate_ke_cutoff(cell, cell.precision)
             mesh_guess = tools.cutoff_to_mesh(cell.lattice_vectors(), ke_guess)
-            if numpy.any(mesh < mesh_guess*.8):
+            if numpy.any(mesh[:cell.dimension] < mesh_guess[:cell.dimension]*.8):
                 logger.warn(mydf, 'mesh %s is not enough for AFTDF.get_nuc function '
                             'to get integral accuracy %g.\nRecommended mesh is %s.',
                             mesh, cell.precision, mesh_guess)

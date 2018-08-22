@@ -80,7 +80,7 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None):
     dm_kpts = lib.asarray(dm_kpts, order='C')
     dms = _format_dms(dm_kpts, kpts)
     nset, nkpts, nao = dms.shape[:3]
-    naux = mydf.get_naoaux()
+    naux = mydf.auxcell.nao_nr()
     nao_pair = nao * (nao+1) // 2
 
     kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
