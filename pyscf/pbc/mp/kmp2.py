@@ -33,11 +33,12 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.mp import mp2
 from pyscf.pbc.lib import kpts_helper
-
+from pyscf.lib.parameters import LARGE_DENOM
 
 def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE):
+    nmo = mp.nmo
     nocc = mp.nocc
-    nvir = mp.nmo - nocc
+    nvir = nmo - nocc
     nkpts = mp.nkpts
 
     eia = np.zeros((nocc,nvir))
@@ -47,6 +48,22 @@ def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE):
     kconserv = mp.khelper.kconserv
     emp2 = 0.
     oovv_ij = np.zeros((nkpts,nocc,nocc,nvir,nvir), dtype=mo_coeff[0].dtype)
+
+    # Check if these are padded mo coefficients and energies
+    if not np.all([x.shape[0] == nmo for x in mo_coeff]):
+        mo_coeff = padded_mo_coeff(mp, mo_coeff)
+
+    if not np.all([x.shape[0] == nmo for x in mo_energy]):
+        mo_energy = padded_mo_energy(mp, mo_energy)
+
+    mo_e_o = [mo_energy[k][:nocc] for k in range(nkpts)]
+    mo_e_v = [mo_energy[k][nocc:] for k in range(nkpts)]
+
+    # Get location of padded elements in occupied and virtual space
+    nonzero_padding = padding_k_idx(mp, kind="split")
+    zero_occ_padding = [np.setdiff1d(np.arange(nocc), x) for x in nonzero_padding[0]]
+    zero_vir_padding = [np.setdiff1d(np.arange(nvir), x) for x in nonzero_padding[1]]
+
     for ki in range(nkpts):
       for kj in range(nkpts):
         for ka in range(nkpts):
@@ -60,8 +77,13 @@ def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE):
                             compact=False).reshape(nocc,nvir,nocc,nvir).transpose(0,2,1,3) / nkpts
         for ka in range(nkpts):
             kb = kconserv[ki,ka,kj]
-            eia = mo_energy[ki][:nocc].reshape(-1,1) - mo_energy[ka][nocc:]
-            ejb = mo_energy[kj][:nocc].reshape(-1,1) - mo_energy[kb][nocc:]
+
+            eia = mo_e_o[ki][:,None] - mo_e_v[ka]
+            eia[np.ix_(zero_occ_padding[ki], zero_vir_padding[ka])] = LARGE_DENOM
+
+            ejb = mo_e_o[kj][:,None] - mo_e_v[kb]
+            ejb[np.ix_(zero_occ_padding[kj], zero_vir_padding[kb])] = LARGE_DENOM
+
             eijab = lib.direct_sum('ia,jb->ijab',eia,ejb)
             t2_ijab = np.conj(oovv_ij[ka]/eijab)
             woovv = 2*oovv_ij[ka] - oovv_ij[kb].transpose(0,1,3,2)
@@ -70,6 +92,137 @@ def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE):
     emp2 /= nkpts
 
     return emp2, None
+
+
+def padding_k_idx(mp, kind="split"):
+    """A convention used for padding vectors, matrices and tensors in case when occupation numbers depend on the
+    k-point index.
+
+    This implementation stores k-dependent Fock and other matrix in dense arrays with additional dimensions
+    corresponding to k-point indexes. In case when the occupation numbers depend on the k-point index (i.e. a metal) or
+    when some k-points have more Bloch basis functions than others the corresponding data structure has to be padded
+    with entries that are not used (fictitious occupied and virtual degrees of freedom). Current convention stores these
+    states at the Fermi level as shown in the following example.
+
+    +----+--------+--------+--------+
+    |    |  k=0   |  k=1   |  k=2   |
+    |    +--------+--------+--------+
+    |    | nocc=2 | nocc=3 | nocc=2 |
+    |    | nvir=4 | nvir=3 | nvir=3 |
+    +====+========+========+========+
+    | v3 |  k0v3  |  k1v2  |  k2v2  |
+    +----+--------+--------+--------+
+    | v2 |  k0v2  |  k1v1  |  k2v1  |
+    +----+--------+--------+--------+
+    | v1 |  k0v1  |  k1v0  |  k2v0  |
+    +----+--------+--------+--------+
+    | v0 |  k0v0  |        |        |
+    +====+========+========+========+
+    |          Fermi level          |
+    +====+========+========+========+
+    | o2 |        |  k1o2  |        |
+    +----+--------+--------+--------+
+    | o1 |  k0o1  |  k1o1  |  k2o1  |
+    +----+--------+--------+--------+
+    | o0 |  k0o0  |  k1o0  |  k2o0  |
+    +----+--------+--------+--------+
+
+    In the above example, `get_nmo(mp, per_kpoint=True) == (6, 6, 5)`, `get_nocc(mp, per_kpoint) == (2, 3, 2)`. The
+    resulting dense `get_nmo(mp) == 7` and `get_nocc(mp) == 3` correspond to padded dimensions. This function will
+    return the following indexes corresponding to the filled entries of the above table:
+
+    >>> padding_k_idx(mp, kind="split")
+    ([(0, 1), (0, 1, 2), (0, 1)], [(0, 1, 2, 3), (1, 2, 3), (1, 2, 3)])
+
+    >>> padding_k_idx(mp, kind="joint")
+    [(0, 1, 3, 4, 5, 6), (0, 1, 2, 4, 5, 6), (0, 1, 4, 5, 6)]
+
+    Args:
+        mp (:class:`MP2`): An instantiation of an SCF or post-Hartree-Fock object.
+        kind (str): either "split" (occupied and virtual spaces are split) or "joint" (occupied and virtual spaces are
+        the joint;
+
+    Returns:
+        Two lists corresponding to the occupied and virtual spaces for kind="split". Each list contains integer arrays
+        with indexes pointing to actual non-zero entries in the padded vector/matrix/tensor. If kind="joint", a single
+        list of arrays is returned corresponding to the entire MO space.
+    """
+    if kind not in ("split", "joint"):
+        raise ValueError("The 'kind' argument must be one of 'split', 'joint'")
+
+    if kind == "split":
+        indexes_o = []
+        indexes_v = []
+    else:
+        indexes = []
+
+    dense_o = mp.nocc
+    dense_nmo = mp.nmo
+    dense_v = dense_nmo - dense_o
+
+    nocc_per_kpt = np.asarray(get_nocc(mp, per_kpoint=True))
+    nmo_per_kpt = np.asarray(get_nmo(mp, per_kpoint=True))
+
+    for k_o, k_nmo in zip(nocc_per_kpt, nmo_per_kpt):
+        k_v = k_nmo - k_o
+        if kind == "split":
+            indexes_o.append(np.arange(k_o))
+            indexes_v.append(np.arange(dense_v - k_v, dense_v))
+        else:
+            indexes.append(np.concatenate((
+                np.arange(k_o),
+                np.arange(dense_nmo - k_v, dense_nmo),
+            )))
+
+    if kind == "split":
+        return indexes_o, indexes_v
+
+    else:
+        return indexes
+
+
+def padded_mo_energy(mp, mo_energy):
+    """
+    Pads coefficients of active MOs.
+
+    Args:
+        mp (:class:`MP2`): An instantiation of an SCF or post-Hartree-Fock object.
+        mo_energy (ndarray): original non-padded molecular energies;
+
+    Returns:
+        Padded molecular energies.
+    """
+    frozen_mask = get_frozen_mask(mp)
+    padding_convention = padding_k_idx(mp, kind="joint")
+    nkpts = mp.nkpts
+
+    result = LARGE_DENOM * np.ones((nkpts, mp.nmo), dtype=mo_energy[0].dtype)
+    for k in range(nkpts):
+        result[np.ix_([k], padding_convention[k])] = mo_energy[k][frozen_mask[k]]
+
+    return result
+
+
+def padded_mo_coeff(mp, mo_coeff):
+    """
+    Pads coefficients of active MOs.
+
+    Args:
+        mp (:class:`MP2`): An instantiation of an SCF or post-Hartree-Fock object.
+        mo_coeff (ndarray): original non-padded molecular coefficients;
+
+    Returns:
+        Padded molecular coefficients.
+    """
+    frozen_mask = get_frozen_mask(mp)
+    padding_convention = padding_k_idx(mp, kind="joint")
+    nkpts = mp.nkpts
+
+    result = np.zeros((nkpts, mo_coeff[0].shape[0], mp.nmo), dtype=mo_coeff[0].dtype)
+    for k in range(nkpts):
+        result[np.ix_([k], np.arange(result.shape[1]), padding_convention[k])] = mo_coeff[k][:, frozen_mask[k]]
+
+    return result
 
 
 def _frozen_sanity_check(frozen, mo_occ, kpt_idx):
@@ -118,7 +271,7 @@ def get_nocc(mp, per_kpoint=False):
     account frozen orbitals.
 
     Args:
-        mp (:class:`MP2`): An instantiation of an MP2, SCF, or other mean-field object.
+        mp (:class:`MP2`): An instantiation of an SCF or post-Hartree-Fock object.
         per_kpoint (bool, optional): True returns the number of occupied
             orbitals at each k-point.  False gives the max of this list.
 
@@ -160,8 +313,8 @@ def get_nocc(mp, per_kpoint=False):
     else:
         raise NotImplementedError
 
-    assert all(np.array(nocc) > 0), ('Must have occupied orbitals! \n\nnocc %s\nfrozen %s\nmo_occ %s' %
-           (nocc, mp.frozen, mp.mo_occ))
+    #assert all(np.array(nocc) > 0), ('Must have occupied orbitals! \n\nnocc %s\nfrozen %s\nmo_occ %s' %
+    #       (nocc, mp.frozen, mp.mo_occ))
 
     if not per_kpoint:
         nocc = np.amax(nocc)
@@ -181,7 +334,7 @@ def get_nmo(mp, per_kpoint=False):
         as a list of number of orbitals at each k-point.
 
     Args:
-        mp (:class:`MP2`): An instantiation of an MP2, SCF, or other mean-field object.
+        mp (:class:`MP2`): An instantiation of an SCF or post-Hartree-Fock object.
         per_kpoint (bool, optional): True returns the number of orbitals at each k-point.
             For a description of False, see Note.
 
@@ -210,8 +363,8 @@ def get_nmo(mp, per_kpoint=False):
     else:
         raise NotImplementedError
 
-    assert all(np.array(nmo) > 0), ('Must have a positive number of orbitals!\n\nnmo %s\nfrozen %s\nmo_occ %s' %
-           (nmo, mp.frozen, mp.mo_occ))
+    #assert all(np.array(nmo) > 0), ('Must have a positive number of orbitals!\n\nnmo %s\nfrozen %s\nmo_occ %s' %
+    #       (nmo, mp.frozen, mp.mo_occ))
 
     if not per_kpoint:
         # Depending on whether there are more occupied bands, we want to make sure that
@@ -230,7 +383,7 @@ def get_frozen_mask(mp):
     calculations.
 
     Args:
-        mp (:class:`MP2`): An instantiation of an MP2, SCF, or other mean-field object.
+        mp (:class:`MP2`): An instantiation of an SCF or post-Hartree-Fock object.
 
     Returns:
         moidx (list of :obj:`ndarray` of `np.bool`): Boolean mask of orbitals to include.
