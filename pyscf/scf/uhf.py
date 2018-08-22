@@ -312,7 +312,7 @@ def energy_elec(mf, dm=None, h1e=None, vhf=None):
     e1+= numpy.einsum('ij,ji', h1e, dm[1])
     e_coul =(numpy.einsum('ij,ji', vhf[0], dm[0]) +
              numpy.einsum('ij,ji', vhf[1], dm[1])) * .5
-    logger.debug(ks, 'E1 = %s  Ecoul = %s', e1, e_coul.real)
+    logger.debug(mf, 'E1 = %s  Ecoul = %s', e1, e_coul.real)
     return (e1+e_coul).real, e_coul
 
 # mo_a and mo_b are occupied orbitals
