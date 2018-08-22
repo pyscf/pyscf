@@ -23,7 +23,6 @@ from pyscf.pbc import mp
 
 class RCCSD(rccsd.RCCSD):
     def ccsd(self, t1=None, t2=None, eris=None, mbpt2=False):
-        from pyscf.pbc import tools
         from pyscf.pbc.df.df_ao2mo import warn_pbc2d_eri
         warn_pbc2d_eri(self._scf)
         if mbpt2:
@@ -35,6 +34,7 @@ class RCCSD(rccsd.RCCSD):
         return rccsd.RCCSD.ccsd(self, t1, t2, eris)
 
     def ao2mo(self, mo_coeff=None):
+        from pyscf.pbc import tools
         ao2mofn = mp.mp2._gen_ao2mofn(self._scf)
         # _scf.exxdiv affects eris.fock. HF exchange correction should be
         # excluded from the Fock matrix.
@@ -72,6 +72,7 @@ class UCCSD(uccsd.UCCSD):
         return uccsd.UCCSD.ccsd(self, t1, t2, eris)
 
     def ao2mo(self, mo_coeff=None):
+        from pyscf.pbc import tools
         ao2mofn = mp.mp2._gen_ao2mofn(self._scf)
         # _scf.exxdiv affects eris.fock. HF exchange correction should be
         # excluded from the Fock matrix.
@@ -103,6 +104,7 @@ class GCCSD(gccsd.GCCSD):
         return gccsd.GCCSD.ccsd(self, t1, t2, eris)
 
     def ao2mo(self, mo_coeff=None):
+        from pyscf.pbc import tools
         with_df = self._scf.with_df
         kpt = self._scf.kpt
         def ao2mofn(mo_coeff):
