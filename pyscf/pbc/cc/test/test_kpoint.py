@@ -111,7 +111,7 @@ class KnownValues(unittest.TestCase):
         cc.diis_start_cycle = 1
         ecc, t1, t2 = cc.kernel()
         self.assertAlmostEqual(ehf, ehf_bench, 9)
-        self.assertAlmostEqual(ecc, ecc_bench, 9)
+        self.assertAlmostEqual(ecc, ecc_bench, 7)
 
     def _test_cu_metallic_nonequal_occ(self, kmf, cell, nk=[1,1,1]):
         assert cell.mesh == [7, 7, 7]
@@ -124,7 +124,9 @@ class KnownValues(unittest.TestCase):
         mycc.diis_start_cycle = 1
         mycc.iterative_damping = 0.04
         mycc.max_cycle = max_cycle
-        ecc1, t1, t2 = mycc.kernel()
+        eris = mycc.ao2mo()
+        eris.mo_energy = [f.diagonal() for f in eris.fock]
+        ecc1, t1, t2 = mycc.kernel(eris=eris)
 
         self.assertAlmostEqual(ecc1, ecc1_bench, 6)
 
@@ -140,7 +142,9 @@ class KnownValues(unittest.TestCase):
         mycc.diis_start_cycle = 1
         mycc.iterative_damping = 0.04
         mycc.max_cycle = max_cycle
-        ecc2, t1, t2 = mycc.kernel()
+        eris = mycc.ao2mo()
+        eris.mo_energy = [f.diagonal() for f in eris.fock]
+        ecc2, t1, t2 = mycc.kernel(eris=eris)
 
         self.assertAlmostEqual(ecc2, ecc2_bench, 6)
 
@@ -155,7 +159,9 @@ class KnownValues(unittest.TestCase):
         mycc = pyscf.pbc.cc.KGCCSD(kmf, frozen=[[2, 3, 34, 35], [0, 1]])
         mycc.max_cycle = max_cycle
         mycc.iterative_damping = 0.05
-        ecc3, t1, t2 = mycc.kernel()
+        eris = mycc.ao2mo()
+        eris.mo_energy = [f.diagonal() for f in eris.fock]
+        ecc3, t1, t2 = mycc.kernel(eris=eris)
 
         self.assertAlmostEqual(ecc3, ecc3_bench, 6)
 

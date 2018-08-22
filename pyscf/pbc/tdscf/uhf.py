@@ -82,7 +82,8 @@ class TDA(uhf.TDA):
                     dmvo[0,i,k] = reduce(numpy.dot, (orbva[k], dm1a[k], orboa[k].T.conj()))
                     dmvo[1,i,k] = reduce(numpy.dot, (orbvb[k], dm1b[k], orbob[k].T.conj()))
 
-            v1ao = vresp(dmvo)
+            with lib.temporary_env(mf, exxdiv=None):
+                v1ao = vresp(dmvo)
             v1s = []
             for i in range(nz):
                 dm1a, dm1b = zs[i]
@@ -192,7 +193,8 @@ class TDHF(TDA):
                     dmy = reduce(numpy.dot, (orbob[k], yb[k].T, orbvb[k].T.conj()))
                     dmvo[1,i,k] = dmx + dmy  # AX + BY
 
-            v1ao = vresp(dmvo)
+            with lib.temporary_env(mf, exxdiv=None):
+                v1ao = vresp(dmvo)
             v1s = []
             for i in range(nz):
                 xa, xb = x1s[i]

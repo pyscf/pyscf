@@ -45,7 +45,6 @@ def get_eri(mydf, kpts=None,
             compact=getattr(__config__, 'pbc_df_ao2mo_get_eri_compact', True)):
     cell = mydf.cell
     nao = cell.nao_nr()
-    low_dim_ft_type = cell.low_dim_ft_type
     kptijkl = _format_kpts(kpts)
     if not _iskconserv(cell, kptijkl):
         lib.logger.warn(cell, 'fft_ao2mo: momentum conservation not found in '
@@ -54,7 +53,7 @@ def get_eri(mydf, kpts=None,
 
     kpti, kptj, kptk, kptl = kptijkl
     q = kptj - kpti
-    coulG = tools.get_coulG(cell, q, mesh=mydf.mesh, low_dim_ft_type=low_dim_ft_type)
+    coulG = tools.get_coulG(cell, q, mesh=mydf.mesh)
     coords = cell.gen_uniform_grids(mydf.mesh)
     max_memory = mydf.max_memory - lib.current_memory()[0]
 
@@ -104,7 +103,6 @@ def general(mydf, mo_coeffs, kpts=None,
     from pyscf.pbc.df.df_ao2mo import warn_pbc2d_eri
     warn_pbc2d_eri(mydf)
     cell = mydf.cell
-    low_dim_ft_type = cell.low_dim_ft_type
     kptijkl = _format_kpts(kpts)
     kpti, kptj, kptk, kptl = kptijkl
     if isinstance(mo_coeffs, numpy.ndarray) and mo_coeffs.ndim == 2:
@@ -117,14 +115,15 @@ def general(mydf, mo_coeffs, kpts=None,
 
     allreal = not any(numpy.iscomplexobj(mo) for mo in mo_coeffs)
     q = kptj - kpti
-    coulG = tools.get_coulG(cell, q, mesh=mydf.mesh, low_dim_ft_type=low_dim_ft_type)
+    coulG = tools.get_coulG(cell, q, mesh=mydf.mesh)
     coords = cell.gen_uniform_grids(mydf.mesh)
     max_memory = mydf.max_memory - lib.current_memory()[0]
 
     if gamma_point(kptijkl) and allreal:
         ao = mydf._numint.eval_ao(cell, coords, kpti)[0]
-        if ((iden_coeffs(mo_coeffs[0], mo_coeffs[2]) and
-             iden_coeffs(mo_coeffs[1], mo_coeffs[3]))):
+        if ((iden_coeffs(mo_coeffs[0], mo_coeffs[1]) and
+             iden_coeffs(mo_coeffs[0], mo_coeffs[2]) and
+             iden_coeffs(mo_coeffs[0], mo_coeffs[3]))):
             moiT = mojT = numpy.asarray(lib.dot(mo_coeffs[0].T,ao.T), order='C')
             ao = None
             max_memory = max_memory - moiT.nbytes*1e-6

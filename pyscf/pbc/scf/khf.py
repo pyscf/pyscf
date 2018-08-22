@@ -432,7 +432,7 @@ class KSCF(pbchf.SCF):
             # relates to the charged system.
             nelectron = float(self.cell.tot_electrons(nkpts)) / nkpts
             logger.info(self, '    Total energy shift due to Ewald probe charge'
-                        ' = -1/2 * Nelec*madelung/cell.vol = %.12g',
+                        ' = -1/2 * Nelec*madelung = %.12g',
                         madelung*nelectron * -.5)
         logger.info(self, 'DF object = %s', self.with_df)
         if not hasattr(self.with_df, 'build'):
@@ -646,11 +646,11 @@ class KSCF(pbchf.SCF):
 
     def density_fit(self, auxbasis=None, with_df=None):
         from pyscf.pbc.df import df_jk
-        return df_jk.density_fit(self, auxbasis, with_df)
+        return df_jk.density_fit(self, auxbasis, with_df=with_df)
 
     def mix_density_fit(self, auxbasis=None, with_df=None):
         from pyscf.pbc.df import mdf_jk
-        return mdf_jk.density_fit(self, auxbasis, with_df)
+        return mdf_jk.density_fit(self, auxbasis, with_df=with_df)
 
     def stability(self,
                   internal=getattr(__config__, 'pbc_scf_KSCF_stability_internal', True),

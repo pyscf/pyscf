@@ -105,10 +105,10 @@ def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf=None):
 
     weight = 1./len(h1e_kpts)
     e1 = weight *(np.einsum('kij,kji', h1e_kpts, dm_kpts[0]) +
-                  np.einsum('kij,kji', h1e_kpts, dm_kpts[1])).real
+                  np.einsum('kij,kji', h1e_kpts, dm_kpts[1]))
     tot_e = e1 + vhf.ecoul + vhf.exc
     logger.debug(mf, 'E1 = %s  Ecoul = %s  Exc = %s', e1, vhf.ecoul, vhf.exc)
-    return tot_e, vhf.ecoul + vhf.exc
+    return tot_e.real, vhf.ecoul + vhf.exc
 
 @lib.with_doc(kuhf.get_rho.__doc__)
 def get_rho(mf, dm=None, grids=None, kpts=None):

@@ -345,25 +345,19 @@ class FCISolver(direct_spin1.FCISolver):
                nroots=None, davidson_only=None, pspace_size=None,
                orbsym=None, wfnsym=None, ecore=0, **kwargs):
         if nroots is None: nroots = self.nroots
-        if orbsym is not None:
-            self.orbsym, orbsym_bak = orbsym, self.orbsym
-        if wfnsym is None:
-            wfnsym = self.wfnsym
+        if orbsym is None: orbsym = self.orbsym
+        if wfnsym is None: wfnsym = self.wfnsym
         if self.verbose >= logger.WARN:
             self.check_sanity()
         self.norb = norb
         self.nelec = nelec
 
-        nelec = direct_spin1._unpack_nelec(nelec, self.spin)
-        wfnsym_bak = self.wfnsym
-        self.wfnsym = self.guess_wfnsym(norb, nelec, ci0, wfnsym, **kwargs)
-        e, c = direct_spin1.kernel_ms1(self, h1e, eri, norb, nelec, ci0, None,
-                                       tol, lindep, max_cycle, max_space, nroots,
-                                       davidson_only, pspace_size, ecore=ecore,
-                                       **kwargs)
-        if orbsym is not None:
-            self.orbsym = orbsym_bak
-        self.wfnsym = wfnsym_bak
+        with lib.temporary_env(self, orbsym=orbsym, wfnsym=wfnsym):
+            self.wfnsym = self.guess_wfnsym(norb, nelec, ci0, wfnsym, **kwargs)
+            e, c = direct_spin1.kernel_ms1(self, h1e, eri, norb, nelec, ci0, None,
+                                           tol, lindep, max_cycle, max_space,
+                                           nroots, davidson_only, pspace_size,
+                                           ecore=ecore, **kwargs)
         self.eci, self.ci = e, c
         return e, c
 

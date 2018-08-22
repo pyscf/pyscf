@@ -80,12 +80,13 @@ class KnownValues(unittest.TestCase):
         kpts = cell.get_abs_kpts([.5,.5,.5]).reshape(1,3)
         mf = pbcscf.KRHF(cell, kpts=kpts).run(conv_tol=1e-9)
         kcc = pyscf.pbc.cc.kccsd_rhf.RCCSD(mf)
+        kcc.level_shift = .05
         e0 = kcc.kernel()[0]
 
         mf = pbcscf.RHF(cell, kpt=kpts[0]).run(conv_tol=1e-9)
         mycc = pyscf.pbc.cc.RCCSD(mf)
         e1 = mycc.kernel()[0]
-        self.assertAlmostEqual(e0, e1, 7)
+        self.assertAlmostEqual(e0, e1, 5)
 
     def test_frozen_n3(self):
         mesh = 5
@@ -107,7 +108,7 @@ class KnownValues(unittest.TestCase):
         cc.diis_start_cycle = 1
         ecc, t1, t2 = cc.kernel()
         self.assertAlmostEqual(ehf, ehf_bench, 9)
-        self.assertAlmostEqual(ecc, ecc_bench, 9)
+        self.assertAlmostEqual(ecc, ecc_bench, 8)
 
     def _test_cu_metallic_nonequal_occ(self, kmf, cell, ecc1_bench=-0.9646107739333411):
         assert cell.mesh == [7, 7, 7]
@@ -119,7 +120,9 @@ class KnownValues(unittest.TestCase):
         mycc.diis_start_cycle = 1
         mycc.iterative_damping = 0.05
         mycc.max_cycle = max_cycle
-        ecc1, t1, t2 = mycc.kernel()
+        eris = mycc.ao2mo()
+        eris.mo_energy = [f.diagonal() for f in eris.fock]
+        ecc1, t1, t2 = mycc.kernel(eris=eris)
 
         self.assertAlmostEqual(ecc1, ecc1_bench, 6)
 
@@ -135,7 +138,9 @@ class KnownValues(unittest.TestCase):
         mycc.diis_start_cycle = 1
         mycc.iterative_damping = 0.05
         mycc.max_cycle = max_cycle
-        ecc2, t1, t2 = mycc.kernel()
+        eris = mycc.ao2mo()
+        eris.mo_energy = [f.diagonal() for f in eris.fock]
+        ecc2, t1, t2 = mycc.kernel(eris=eris)
 
         self.assertAlmostEqual(ecc2, ecc2_bench, 6)
 
@@ -151,7 +156,9 @@ class KnownValues(unittest.TestCase):
         mycc.diis_start_cycle = 1
         mycc.max_cycle = max_cycle
         mycc.iterative_damping = 0.05
-        ecc3, t1, t2 = mycc.kernel()
+        eris = mycc.ao2mo()
+        eris.mo_energy = [f.diagonal() for f in eris.fock]
+        ecc3, t1, t2 = mycc.kernel(eris=eris)
 
         self.assertAlmostEqual(ecc3, ecc3_bench, 6)
 
@@ -245,7 +252,7 @@ class KnownValues(unittest.TestCase):
 
         kpts = cell.make_kpts([1, 1, 2])
         kpts -= kpts[0]
-        kmf = pbcscf.KRHF(cell, kpts=kpts, exxdiv=None)
+        kmf = pbcscf.KRHF(cell, kpts=kpts)
         ehf = kmf.kernel()
 
         mycc = pyscf.pbc.cc.KRCCSD(kmf)

@@ -321,7 +321,7 @@ class GCISD(cisd.CISD):
         # MP2 initial guess
         if eris is None: eris = self.ao2mo(self.mo_coeff)
         time0 = time.clock(), time.time()
-        mo_e = eris.fock.diagonal()
+        mo_e = eris.mo_energy
         nocc = self.nocc
         eia = mo_e[:nocc,None] - mo_e[None,nocc:]
         eijab = lib.direct_sum('ia,jb->ijab',eia,eia)

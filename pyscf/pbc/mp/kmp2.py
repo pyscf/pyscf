@@ -279,7 +279,6 @@ class KMP2(mp2.MP2):
         self.mo_energy = mf.mo_energy
         self.nkpts = len(self.kpts)
         self.khelper = kpts_helper.KptsHelper(mf.cell, mf.kpts)
-        self.mo_energy = mf.mo_energy
         self.mo_coeff = mo_coeff
         self.mo_occ = mo_occ
         self._nocc = None

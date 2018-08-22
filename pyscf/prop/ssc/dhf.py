@@ -66,9 +66,8 @@ def make_dia(sscobj, mol, dm0, nuc_pair=None, mb='RMB'):
 
 def sa01sa01_integral(mol, orig1, orig2):
     '''vec{r}_A/r_A^3 times sigma vec{r}_B/r_B^3 times sigma'''
-    mol.cart, cart_bak = True, mol.cart
-    s = rhf_ssc.dso_integral(mol, orig1, orig2)
-    mol.cart = cart_bak
+    with lib.temporary_env(mol, cart=True):
+        s = rhf_ssc.dso_integral(mol, orig1, orig2)
 
     nao = s.shape[-1]
     gout = numpy.empty((3,3,4,nao,nao))

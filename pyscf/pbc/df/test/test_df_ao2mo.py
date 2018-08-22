@@ -14,6 +14,7 @@
 
 import unittest
 import numpy
+from pyscf import lib
 from pyscf.pbc.df import df
 import pyscf.pbc.gto as pgto
 from pyscf import ao2mo
@@ -36,7 +37,7 @@ def finger(a):
     w = np.cos(np.arange(a.size))
     return np.dot(w, a.ravel())
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_eri1111(self):
         kpts = numpy.random.random((4,3)) * .25
         kpts[3] = -numpy.einsum('ij->j', kpts[:3])
@@ -110,7 +111,6 @@ class KnowValues(unittest.TestCase):
         self.assertAlmostEqual(abs(eri1.reshape(eri0.shape)-eri0).sum(), 0, 9)
 
     def test_1d(self):
-        cell.dimension = 1
         kpts = numpy.random.random((4,3)) * .25
         kpts[3] = -numpy.einsum('ij->j', kpts[:3])
         with_df = df.DF(cell).set(auxbasis='weigend')
@@ -119,16 +119,17 @@ class KnowValues(unittest.TestCase):
         with_df.mesh = [11]*3
         mo =(numpy.random.random((nao,nao)) +
              numpy.random.random((nao,nao))*1j)
-        eri = with_df.get_eri(kpts).reshape((nao,)*4)
+        with lib.temporary_env(cell, dimension = 1):
+            eri = with_df.get_eri(kpts).reshape((nao,)*4)
         eri0 = numpy.einsum('pjkl,pi->ijkl', eri , mo.conj())
         eri0 = numpy.einsum('ipkl,pj->ijkl', eri0, mo       )
         eri0 = numpy.einsum('ijpl,pk->ijkl', eri0, mo.conj())
         eri0 = numpy.einsum('ijkp,pl->ijkl', eri0, mo       )
-        eri1 = with_df.ao2mo(mo, kpts)
+        with lib.temporary_env(cell, dimension = 1):
+            eri1 = with_df.ao2mo(mo, kpts)
         self.assertAlmostEqual(abs(eri1.reshape(eri0.shape)-eri0).sum(), 0, 9)
 
     def test_2d(self):
-        cell.dimension = 2
         kpts = numpy.random.random((4,3)) * .25
         kpts[3] = -numpy.einsum('ij->j', kpts[:3])
         with_df = df.DF(cell).set(auxbasis='weigend')
@@ -136,12 +137,14 @@ class KnowValues(unittest.TestCase):
         with_df.kpts = kpts
         mo =(numpy.random.random((nao,nao)) +
              numpy.random.random((nao,nao))*1j)
-        eri = with_df.get_eri(kpts).reshape((nao,)*4)
+        with lib.temporary_env(cell, dimension = 2):
+            eri = with_df.get_eri(kpts).reshape((nao,)*4)
         eri0 = numpy.einsum('pjkl,pi->ijkl', eri , mo.conj())
         eri0 = numpy.einsum('ipkl,pj->ijkl', eri0, mo       )
         eri0 = numpy.einsum('ijpl,pk->ijkl', eri0, mo.conj())
         eri0 = numpy.einsum('ijkp,pl->ijkl', eri0, mo       )
-        eri1 = with_df.ao2mo(mo, kpts)
+        with lib.temporary_env(cell, dimension = 2):
+            eri1 = with_df.ao2mo(mo, kpts)
         self.assertAlmostEqual(abs(eri1.reshape(eri0.shape)-eri0).sum(), 0, 9)
 
 if __name__ == '__main__':

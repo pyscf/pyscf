@@ -80,7 +80,7 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None):
     dm_kpts = lib.asarray(dm_kpts, order='C')
     dms = _format_dms(dm_kpts, kpts)
     nset, nkpts, nao = dms.shape[:3]
-    naux = mydf.get_naoaux()
+    naux = mydf.auxcell.nao_nr()
     nao_pair = nao * (nao+1) // 2
 
     kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
@@ -95,16 +95,16 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None):
     for k, kpt in enumerate(kpts):
         kptii = numpy.asarray((kpt,kpt))
         p1 = 0
-        for LpqR, LpqI in mydf.sr_loop(kptii, max_memory, False):
+        for LpqR, LpqI, sign in mydf.sr_loop(kptii, max_memory, False):
             p0, p1 = p1, p1+LpqR.shape[0]
             #:Lpq = (LpqR + LpqI*1j).reshape(-1,nao,nao)
             #:rhoR[:,p0:p1] += numpy.einsum('Lpq,xqp->xL', Lpq, dms[:,k]).real
             #:rhoI[:,p0:p1] += numpy.einsum('Lpq,xqp->xL', Lpq, dms[:,k]).imag
-            rhoR[:,p0:p1] += numpy.einsum('Lp,xp->xL', LpqR, dmsR[:,k])
-            rhoI[:,p0:p1] += numpy.einsum('Lp,xp->xL', LpqR, dmsI[:,k])
+            rhoR[:,p0:p1] += sign * numpy.einsum('Lp,xp->xL', LpqR, dmsR[:,k])
+            rhoI[:,p0:p1] += sign * numpy.einsum('Lp,xp->xL', LpqR, dmsI[:,k])
             if LpqI is not None:
-                rhoR[:,p0:p1] -= numpy.einsum('Lp,xp->xL', LpqI, dmsI[:,k])
-                rhoI[:,p0:p1] += numpy.einsum('Lp,xp->xL', LpqI, dmsR[:,k])
+                rhoR[:,p0:p1] -= sign * numpy.einsum('Lp,xp->xL', LpqI, dmsI[:,k])
+                rhoI[:,p0:p1] += sign * numpy.einsum('Lp,xp->xL', LpqI, dmsR[:,k])
             LpqR = LpqI = None
     t1 = log.timer_debug1('get_j pass 1', *t1)
 
@@ -116,7 +116,7 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None):
     for k, kpt in enumerate(kpts_band):
         kptii = numpy.asarray((kpt,kpt))
         p1 = 0
-        for LpqR, LpqI in mydf.sr_loop(kptii, max_memory, True):
+        for LpqR, LpqI, sign in mydf.sr_loop(kptii, max_memory, True):
             p0, p1 = p1, p1+LpqR.shape[0]
             #:Lpq = (LpqR + LpqI*1j)#.reshape(-1,nao,nao)
             #:vjR[:,k] += numpy.dot(rho[:,p0:p1], Lpq).real
@@ -172,7 +172,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
         kpti = kpts[ki]
         kptj = kpts_band[kj]
 
-        for LpqR, LpqI in mydf.sr_loop((kpti,kptj), max_memory, False):
+        for LpqR, LpqI, sign in mydf.sr_loop((kpti,kptj), max_memory, False):
             nrow = LpqR.shape[0]
             pLqR = numpy.ndarray((nao,nrow,nao), buffer=bufR)
             pLqI = numpy.ndarray((nao,nrow,nao), buffer=bufI)
@@ -186,7 +186,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
                        pLqI.reshape(nao,-1), 1, tmpR, tmpI)
                 zdotCN(pLqR.reshape(-1,nao).T, pLqI.reshape(-1,nao).T,
                        tmpR.reshape(-1,nao), tmpI.reshape(-1,nao),
-                       1, vkR[i,kj], vkI[i,kj], 1)
+                       sign, vkR[i,kj], vkI[i,kj], 1)
 
             if swap_2e:
                 tmpR = tmpR.reshape(nao*nrow,nao)
@@ -196,7 +196,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
                            dmsR[i,kj], dmsI[i,kj], 1, tmpR, tmpI)
                     zdotNC(tmpR.reshape(nao,-1), tmpI.reshape(nao,-1),
                            pLqR.reshape(nao,-1).T, pLqI.reshape(nao,-1).T,
-                           1, vkR[i,ki], vkI[i,ki], 1)
+                           sign, vkR[i,ki], vkI[i,ki], 1)
 
     if kpts_band is kpts:  # normal k-points HF/DFT
         for ki in range(nkpts):
@@ -217,8 +217,7 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None,
         vk_kpts = vkR + vkI * 1j
     vk_kpts *= 1./nkpts
 
-    if exxdiv:
-        assert(exxdiv.lower() == 'ewald')
+    if exxdiv == 'ewald':
         _ewald_exxdiv_for_G0(cell, kpts, dms, vk_kpts, kpts_band)
 
     return _format_jks(vk_kpts, dm_kpts, input_band, kpts)
@@ -297,7 +296,7 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
                        1, vkR[i], vkI[i], 1)
     pLqI = None
     thread_k = None
-    for LpqR, LpqI in mydf.sr_loop(kptii, max_memory, False):
+    for LpqR, LpqI, sign in mydf.sr_loop(kptii, max_memory, False):
         LpqR = LpqR.reshape(-1,nao,nao)
         t1 = log.timer_debug1('        load', *t1)
         if thread_k is not None:
@@ -311,11 +310,11 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
                 rhoR -= numpy.einsum('Lpq,xpq->xL', LpqI, dmsI)
                 rhoI  = numpy.einsum('Lpq,xpq->xL', LpqR, dmsI)
                 rhoI += numpy.einsum('Lpq,xpq->xL', LpqI, dmsR)
-            vjR += numpy.einsum('xL,Lpq->xpq', rhoR, LpqR)
+            vjR += sign * numpy.einsum('xL,Lpq->xpq', rhoR, LpqR)
             if not j_real:
-                vjR -= numpy.einsum('xL,Lpq->xpq', rhoI, LpqI)
-                vjI += numpy.einsum('xL,Lpq->xpq', rhoR, LpqI)
-                vjI += numpy.einsum('xL,Lpq->xpq', rhoI, LpqR)
+                vjR -= sign * numpy.einsum('xL,Lpq->xpq', rhoI, LpqI)
+                vjI += sign * numpy.einsum('xL,Lpq->xpq', rhoR, LpqI)
+                vjI += sign * numpy.einsum('xL,Lpq->xpq', rhoI, LpqR)
 
         t1 = log.timer_debug1('        with_j', *t1)
         if with_k:
@@ -345,8 +344,7 @@ def get_jk(mydf, dm, hermi=1, kpt=numpy.zeros(3),
             vk = vkR
         else:
             vk = vkR + vkI * 1j
-        if exxdiv:
-            assert(exxdiv.lower() == 'ewald')
+        if exxdiv == 'ewald':
             _ewald_exxdiv_for_G0(cell, kpt, dms, vk)
         vk = vk.reshape(dm.shape)
 
@@ -403,13 +401,6 @@ def zdotNC(aR, aI, bR, bI, alpha=1, cR=None, cI=None, beta=0):
     return cR, cI
 
 def _ewald_exxdiv_for_G0(cell, kpts, dms, vk, kpts_band=None):
-    if (cell.dimension == 1 or
-        (cell.dimension == 2 and cell.low_dim_ft_type is None)):
-        return _ewald_exxdiv_1d2d(cell, kpts, dms, vk, kpts_band)
-    else:
-        return _ewald_exxdiv_3d(cell, kpts, dms, vk, kpts_band)
-
-def _ewald_exxdiv_3d(cell, kpts, dms, vk, kpts_band=None):
     s = cell.pbc_intor('int1e_ovlp', hermi=1, kpts=kpts)
     madelung = tools.pbc.madelung(cell, kpts)
     if kpts is None:
@@ -429,57 +420,6 @@ def _ewald_exxdiv_3d(cell, kpts, dms, vk, kpts_band=None):
             for kp in member(kpt, kpts_band.reshape(-1,3)):
                 for i,dm in enumerate(dms):
                     vk[i,kp] += madelung * reduce(numpy.dot, (s[k], dm[k], s[k]))
-
-def _ewald_exxdiv_1d2d(cell, kpts, dms, vk, kpts_band=None):
-    s = cell.pbc_intor('int1e_ovlp', hermi=1, kpts=kpts)
-    madelung = tools.pbc.madelung(cell, kpts)
-
-    Gv, Gvbase, kws = cell.get_Gv_weights(cell.mesh)
-    G0idx, SI_on_z = gto.cell._SI_for_uniform_model_charge(cell, Gv)
-    coulG = 4*numpy.pi / numpy.linalg.norm(Gv[G0idx], axis=1)**2
-    wcoulG = coulG * kws[G0idx]
-    aoao_ij = ft_ao._ft_aopair_kpts(cell, Gv[G0idx], kptjs=kpts)
-    aoao_kl = ft_ao._ft_aopair_kpts(cell,-Gv[G0idx], kptjs=kpts)
-
-    def _contract_(vk, dms, s, aoao_ij, aoao_kl, kweight):
-        # Without removing aoao(Gx=0,Gy=0), the summation of vk and ewald probe
-        # charge correction (as _ewald_exxdiv_3d did) gives the reasonable
-        # finite value for vk.  Here madelung constant and vk were calculated
-        # without (Gx=0,Gy=0).  The code below restores the (Gx=0,Gy=0) part.
-        madelung_mod = numpy.einsum('g,g,g', SI_on_z.conj(), wcoulG, SI_on_z)
-        tmp_ij = numpy.einsum('gij,g,g->ij', aoao_ij, wcoulG, SI_on_z.conj())
-        tmp_kl = numpy.einsum('gij,g,g->ij', aoao_kl, wcoulG, SI_on_z       )
-        for i,dm in enumerate(dms):
-            #:aoaomod_ij = aoao_ij - numpy.einsum('g,ij->gij', SI_on_z       , s)
-            #:aoaomod_kl = aoao_kl - numpy.einsum('g,ij->gij', SI_on_z.conj(), s)
-            #:ktmp  = kweight * lib.einsum('gij,jk,g,gkl->il', aoao_ij   , dm, wcoulG, aoao_kl   )
-            #:ktmp -= kweight * lib.einsum('gij,jk,g,gkl->il', aoaomod_ij, dm, wcoulG, aoaomod_kl)
-            #:ktmp += (madelung - kweight*wcoulG.sum()) * reduce(numpy.dot, (s, dm, s))
-            ktmp  = kweight * lib.einsum('ij,jk,kl->il', tmp_ij, dm, s)
-            ktmp += kweight * lib.einsum('ij,jk,kl->il', s, dm, tmp_kl)
-            ktmp += ((madelung - kweight*wcoulG.sum() - kweight * madelung_mod)
-                     * reduce(numpy.dot, (s, dm, s)))
-            if vk.dtype == numpy.double:
-                vk[i] += ktmp.real
-            else:
-                vk[i] += ktmp
-
-    if kpts is None:
-        _contract_(vk, dms, s, aoao_ij[0], aoao_kl[0], 1)
-
-    elif numpy.shape(kpts) == (3,):
-        if kpts_band is None or is_zero(kpts_band-kpts):
-            _contract_(vk, dms, s, aoao_ij[0], aoao_kl[0], 1)
-
-    elif kpts_band is None or numpy.array_equal(kpts, kpts_band):
-        nkpts = len(kpts)
-        for k in range(nkpts):
-            _contract_(vk[:,k], dms[:,k], s[k], aoao_ij[k], aoao_kl[k], 1./nkpts)
-    else:
-        nkpts = len(kpts)
-        for k, kpt in enumerate(kpts):
-            for kp in member(kpt, kpts_band.reshape(-1,3)):
-                _contract_(vk[:,kp], dms[:,k], s[k], aoao_ij[k], aoao_kl[k], 1./nkpts)
 
 
 if __name__ == '__main__':

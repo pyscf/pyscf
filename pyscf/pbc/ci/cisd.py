@@ -28,8 +28,18 @@ class RCISD(cisd.RCISD):
 
     def ao2mo(self, mo_coeff=None):
         from pyscf.cc import rccsd
+        from pyscf.pbc import tools
+        from pyscf.pbc.cc.ccsd import _adjust_occ
         ao2mofn = mp.mp2._gen_ao2mofn(self._scf)
-        return rccsd._make_eris_incore(self, mo_coeff, ao2mofn=ao2mofn)
+        with lib.temporary_env(self._scf, exxdiv=None):
+            eris = rccsd._make_eris_incore(self, mo_coeff, ao2mofn=ao2mofn)
+
+        if mo_coeff is self._scf.mo_coeff:
+            eris.mo_energy = self._scf.mo_energy[self.get_frozen_mask()]
+        else:
+            madelung = tools.madelung(self._scf.cell, self._scf.kpt)
+            eris.mo_energy = _adjust_occ(eris.mo_energy, eris.nocc, -madelung)
+        return eris
 
 class UCISD(ucisd.UCISD):
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
@@ -40,8 +50,22 @@ class UCISD(ucisd.UCISD):
         ucisd.UCISD.__init__(self, mf, frozen, mo_coeff, mo_occ)
 
     def ao2mo(self, mo_coeff=None):
+        from pyscf.pbc import tools
+        from pyscf.pbc.cc.ccsd import _adjust_occ
         ao2mofn = mp.mp2._gen_ao2mofn(self._scf)
-        return ucisd.uccsd._make_eris_incore(self, mo_coeff, ao2mofn=ao2mofn)
+        with lib.temporary_env(self._scf, exxdiv=None):
+            eris = ucisd.uccsd._make_eris_incore(self, mo_coeff, ao2mofn=ao2mofn)
+
+        if mo_coeff is self._scf.mo_coeff:
+            idxa, idxb = self.get_frozen_mask()
+            mo_e_a, mo_e_b = self._scf.mo_energy
+            eris.mo_energy = (mo_e_a[idxa], mo_e_b[idxb])
+        else:
+            nocca, noccb = eris.nocc
+            madelung = tools.madelung(self._scf.cell, self._scf.kpt)
+            eris.mo_energy = (_adjust_occ(eris.mo_energy[0], nocca, -madelung),
+                              _adjust_occ(eris.mo_energy[1], noccb, -madelung))
+        return eris
 
 class GCISD(gcisd.GCISD):
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
@@ -50,6 +74,8 @@ class GCISD(gcisd.GCISD):
         gcisd.GCISD.__init__(self, mf, frozen, mo_coeff, mo_occ)
 
     def ao2mo(self, mo_coeff=None):
+        from pyscf.pbc import tools
+        from pyscf.pbc.cc.ccsd import _adjust_occ
         with_df = self._scf.with_df
         kpt = self._scf.kpt
         def ao2mofn(mo_coeff):
@@ -71,4 +97,13 @@ class GCISD(gcisd.GCISD):
                 eri[sym_forbid,:,:] = 0
                 eri[:,:,sym_forbid] = 0
             return eri
-        return gcisd.gccsd._make_eris_incore(self, mo_coeff, ao2mofn=ao2mofn)
+
+        with lib.temporary_env(self._scf, exxdiv=None):
+            eris = gcisd.gccsd._make_eris_incore(self, mo_coeff, ao2mofn=ao2mofn)
+
+        if mo_coeff is self._scf.mo_coeff:
+            eris.mo_energy = self._scf.mo_energy[self.get_frozen_mask()]
+        else:
+            madelung = tools.madelung(self._scf.cell, self._scf.kpt)
+            eris.mo_energy = _adjust_occ(eris.mo_energy, eris.nocc, -madelung)
+        return eris

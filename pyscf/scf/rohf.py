@@ -232,9 +232,7 @@ def energy_elec(mf, dm=None, h1e=None, vhf=None):
     if dm is None: dm = mf.make_rdm1()
     elif isinstance(dm, numpy.ndarray) and dm.ndim == 2:
         dm = numpy.array((dm*.5, dm*.5))
-    ee, ecoul = uhf.energy_elec(mf, dm, h1e, vhf)
-    logger.debug(mf, 'Ecoul = %.15g', ecoul)
-    return ee, ecoul
+    return uhf.energy_elec(mf, dm, h1e, vhf)
 
 get_veff = uhf.get_veff
 
