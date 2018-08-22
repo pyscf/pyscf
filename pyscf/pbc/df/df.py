@@ -241,9 +241,9 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
             v1 /= numpy.sqrt(w[w>mydf.linear_dep_threshold]).reshape(-1,1)
             j2c = v1
             if cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum':
-                v2 = v[:,w<-mydf.linear_dep_threshold].conj().T
-                v2 /= numpy.sqrt(-w[w<-mydf.linear_dep_threshold]).reshape(-1,1)
-                j2c_negative = v2
+                idx = numpy.where(w < -mydf.linear_dep_threshold)[0]
+                if len(idx) > 0:
+                    j2c_negative = (v[:,idx]/numpy.sqrt(-w[idx])).conj().T
             w = v = None
             j2ctag = 'eig'
 
