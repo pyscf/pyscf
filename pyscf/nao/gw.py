@@ -8,6 +8,7 @@ from timeit import default_timer as timer
 from pyscf.nao.m_rf0_den import rf0_den, rf0_cmplx_ref_blk, rf0_cmplx_ref, rf0_cmplx_vertex_dp, rf0_cmplx_vertex_ac
 from pyscf.nao.m_rf_den import rf_den
 from pyscf.nao.m_rf_den_pyscf import rf_den_pyscf
+from pyscf.data.nist import HARTREE2EV
 
 starting_time=timer()
 class gw(scf):
@@ -27,12 +28,13 @@ class gw(scf):
     self.rescf = kw['rescf'] if 'rescf' in kw else False
     self.bsize = kw['bsize'] if 'bsize' in kw else min(40, self.norbs)
     self.tdscf = kw['tdscf'] if 'tdscf' in kw else None
-    if sum(self.nelec) == 1: raise RuntimeError('use RHF')
-    elif self.nspin==1: self.nocc_0t = nocc_0t = np.array([int(self.nelec/2)])
+    #if sum(self.nelec) == 1: raise RuntimeError('use RHF')
+    
+    if self.nspin==1: self.nocc_0t = nocc_0t = np.array([int((self.nelec+1)/2)])
     elif self.nspin==2: self.nocc_0t = nocc_0t = self.nelec
     else: raise RuntimeError('nspin>2?')
 
-    if self.verbosity>0: print(__name__, 'nocc_0t =', nocc_0t, 'spin =', self.spin, 'nspin =', self.nspin)
+    if self.verbosity>0: print(__name__, 'nocc_0t =', nocc_0t, 'spin =', self.spin, 'nspin =', self.nspin, 'nfermi = ', self.nfermi)
 
     if 'nocc' in kw:
       s2nocc = [kw['nocc']] if type(kw['nocc'])==int else kw['nocc']
@@ -42,7 +44,7 @@ class gw(scf):
     
     if 'nvrt' in kw:
       s2nvrt = [kw['nvrt']] if type(kw['nvrt'])==int else kw['nvrt']
-      self.nvrt = array([(i,j) for i,j in zip(s2nvrt,self.norbs-nocc_0t)])
+      self.nvrt = array([min(i,j) for i,j in zip(s2nvrt,self.norbs-nocc_0t)])
     else :
       self.nvrt = array([min(6,j) for j in self.norbs-nocc_0t])
 
@@ -114,7 +116,7 @@ class gw(scf):
     E_fermi = self.fermi_energy
     E_homo = amax(E[where(E<=E_fermi)])
     #first issue >=,E gap goes to 0 for H, when HOMO and E_fermi are identical, and 'tmax_def' goes to infinity
-    E_gap  = amin(E[where(E>=E_fermi)]) - E_homo  
+    E_gap  = amin(E[where(E>E_fermi)]) - E_homo  
     E_maxdiff = amax(E) - amin(E)
     d = amin(abs(E_homo-E)[where(abs(E_homo-E)>1e-4)])
     wmin_def = sqrt(tol * (d**3) * (E_gap**3)/(d**2+E_gap**2))
@@ -274,7 +276,7 @@ class gw(scf):
       self.nn_conv.append( range(max(nocc_0t-nocc_conv,0), min(nocc_0t+nvrt_conv,self.norbs)))
 
     # iterations to converge the 
-    print('-'*60,'|G0W0 corrections of eigenvalues|','-'*60)    
+    if self.verbosity>0: print('-'*60,'|G0W0 corrections of eigenvalues|','-'*60)    
     for i in range(self.niter_max_ev):
       sn2i = self.gw_corr_int(sn2eval_gw)
       sn2r = self.gw_corr_res(sn2eval_gw)
@@ -290,15 +292,15 @@ class gw(scf):
         np.set_printoptions(linewidth=1000)
         print('Iteration #{}  Relative Error: {:.6f}'.format(i+1, err))
         for s,n2ev in enumerate(sn2eval_gw):
-          print('Spin{}\t{}\t{}\t{}'.format(s+1, n2ev[0:5]*27.2114, sn2i[s][0:5], sn2r[s][0:5]))
+          print('Spin{}\t{}\t{}\t{}'.format(s+1, n2ev[0:5]*HARTREE2EV, sn2i[s][0:5], sn2r[s][0:5]))
         
       if err<self.tol_ev : break
     return sn2eval_gw
     
   def report(self):
     """ Prints the energy levels """
-    emfev = self.mo_energy[0].T*27.2114
-    egwev = self.mo_energy_gw[0].T*27.2114
+    emfev = self.mo_energy[0].T * HARTREE2EV
+    egwev = self.mo_energy_gw[0].T * HARTREE2EV
     print('-'*30,'|G0W0 eigenvalues (eV)|','-'*30)
     if self.nspin==1:
       print("\f   n  %14s %14s %7s " % ("E_mf", "E_gw", "occ") )
@@ -306,7 +308,7 @@ class gw(scf):
         print("%5d  %14.7f %14.7f %7.2f " % (ie, emf[0], egw[0], f[0]) )
       print('\fG0W0 HOMO energy    (eV): {:.7f}'.format(egwev[self.nfermi[0]-1,0]))
       print('G0W0 LUMO energy    (eV): {:.7f}'.format(egwev[self.nfermi[0],0]))
-      print('G0W0 HOMO-LUMO gap  (eV): {:.7f}\t{:.7f}'.format(egwev[self.nfermi[0],0]-egwev[self.nfermi[0]-1,0]))
+      print('G0W0 HOMO-LUMO gap  (eV): {:.7f}'.format(egwev[self.nfermi[0],0]-egwev[self.nfermi[0]-1,0]))
     elif self.nspin==2:
       print("\f    n %14s %14s  %7s | %14s %14s  %7s" % ("E_mf_up", "E_gw_up", "occ_up", "E_mf_down", "E_gw_down", "occ_down") )
       for ie,(emf,egw,f) in enumerate(zip(emfev,egwev,self.mo_occ[0].T)):
@@ -324,7 +326,7 @@ class gw(scf):
     """ This creates the fields mo_energy_g0w0, and mo_coeff_g0w0 """
 
     self.h0_vh_x_expval = self.get_h0_vh_x_expval()
-    if self.verbosity>0:
+    if self.verbosity>1:
       print(__name__, '.h0_vh_x_expval: ')
       print(self.h0_vh_x_expval)
 
