@@ -9,6 +9,7 @@ from pyscf.nao.m_rf0_den import rf0_den, rf0_cmplx_ref_blk, rf0_cmplx_ref, rf0_c
 from pyscf.nao.m_rf_den import rf_den
 from pyscf.nao.m_rf_den_pyscf import rf_den_pyscf
 
+starting_time=timer()
 class gw(scf):
   """ G0W0 with integration along imaginary axis """
   
@@ -26,8 +27,8 @@ class gw(scf):
     self.rescf = kw['rescf'] if 'rescf' in kw else False
     self.bsize = kw['bsize'] if 'bsize' in kw else min(40, self.norbs)
     self.tdscf = kw['tdscf'] if 'tdscf' in kw else None
-    
-    if self.nspin==1: self.nocc_0t = nocc_0t = np.array([int(self.nelec/2)])
+    if sum(self.nelec) == 1: raise RuntimeError('use RHF')
+    elif self.nspin==1: self.nocc_0t = nocc_0t = np.array([int(self.nelec/2)])
     elif self.nspin==2: self.nocc_0t = nocc_0t = self.nelec
     else: raise RuntimeError('nspin>2?')
 
@@ -38,12 +39,13 @@ class gw(scf):
       self.nocc = array([min(i,j) for i,j in zip(s2nocc,nocc_0t)])
     else :
       self.nocc = array([min(6,j) for j in nocc_0t])
-      
+    
     if 'nvrt' in kw:
       s2nvrt = [kw['nvrt']] if type(kw['nvrt'])==int else kw['nvrt']
-      self.nvrt = array([min(i,j) for i,j in zip(s2nvrt,self.norbs-nocc_0t)])
+      self.nvrt = array([(i,j) for i,j in zip(s2nvrt,self.norbs-nocc_0t)])
     else :
       self.nvrt = array([min(6,j) for j in self.norbs-nocc_0t])
+
     if self.verbosity>0: print(__name__, 'nocc =', self.nocc, 'nvrt =', self.nvrt)
 
     self.start_st,self.finish_st = self.nocc_0t-self.nocc, self.nocc_0t+self.nvrt
@@ -111,6 +113,7 @@ class gw(scf):
     E = self.ksn2e[0,0,:]
     E_fermi = self.fermi_energy
     E_homo = amax(E[where(E<=E_fermi)])
+    #first issue >=,E gap goes to 0 for H, when HOMO and E_fermi are identical, and 'tmax_def' goes to infinity
     E_gap  = amin(E[where(E>=E_fermi)]) - E_homo  
     E_maxdiff = amax(E) - amin(E)
     d = amin(abs(E_homo-E)[where(abs(E_homo-E)>1e-4)])
@@ -270,7 +273,8 @@ class gw(scf):
     for nocc_0t,nocc_conv,nvrt_conv in zip(self.nocc_0t, self.nocc_conv, self.nvrt_conv):
       self.nn_conv.append( range(max(nocc_0t-nocc_conv,0), min(nocc_0t+nvrt_conv,self.norbs)))
 
-    # iterations to converge the     
+    # iterations to converge the 
+    print('-'*60,'|G0W0 corrections of eigenvalues|','-'*60)    
     for i in range(self.niter_max_ev):
       sn2i = self.gw_corr_int(sn2eval_gw)
       sn2r = self.gw_corr_res(sn2eval_gw)
@@ -284,9 +288,9 @@ class gw(scf):
 
       if self.verbosity>0:
         np.set_printoptions(linewidth=1000)
-        #print(__name__, 'iter_ev =', i, 'err =', err, 'sn2eval_gw =')
+        print('Iteration #{}  Relative Error: {:.6f}'.format(i+1, err))
         for s,n2ev in enumerate(sn2eval_gw):
-          print(s, n2ev[0:5], sn2i[s][0:5], sn2r[s][0:5])
+          print('Spin{}\t{}\t{}\t{}'.format(s+1, n2ev[0:5]*27.2114, sn2i[s][0:5], sn2r[s][0:5]))
         
       if err<self.tol_ev : break
     return sn2eval_gw
@@ -295,22 +299,26 @@ class gw(scf):
     """ Prints the energy levels """
     emfev = self.mo_energy[0].T*27.2114
     egwev = self.mo_energy_gw[0].T*27.2114
+    print('-'*30,'|G0W0 eigenvalues (eV)|','-'*30)
     if self.nspin==1:
-      print("  n  %14s %14s %7s " % ("E_mf", "E_gw", "occ") )
-      for ie,(emf,egw,f) in enumerate(zip(emfev,egwev,self.ksn2f[0].T)):
+      print("\f   n  %14s %14s %7s " % ("E_mf", "E_gw", "occ") )
+      for ie,(emf,egw,f) in enumerate(zip(emfev,egwev,self.mo_occ[0].T)):
         print("%5d  %14.7f %14.7f %7.2f " % (ie, emf[0], egw[0], f[0]) )
-      print('GW HOMO energy    (eV): {:14.7f}'.format(egwev[self.nfermi[0]-1,0]))
-      print('GW LUMO energy    (eV): {:14.7f}'.format(egwev[self.nfermi[0],0]))
-
+      print('\fG0W0 HOMO energy    (eV): {:.7f}'.format(egwev[self.nfermi[0]-1,0]))
+      print('G0W0 LUMO energy    (eV): {:.7f}'.format(egwev[self.nfermi[0],0]))
+      print('G0W0 HOMO-LUMO gap  (eV): {:.7f}\t{:.7f}'.format(egwev[self.nfermi[0],0]-egwev[self.nfermi[0]-1,0]))
     elif self.nspin==2:
-      print("  n  %14s %14s %7s   | %14s %14s %7s" % ("E_mf_up", "E_gw_up", "occ_up", "E_mf_down", "E_gw_down", "occ_down") )
-      for ie,(emf,egw,f) in enumerate(zip(emfev,egwev,self.ksn2f[0].T)):
+      print("\f    n %14s %14s  %7s | %14s %14s  %7s" % ("E_mf_up", "E_gw_up", "occ_up", "E_mf_down", "E_gw_down", "occ_down") )
+      for ie,(emf,egw,f) in enumerate(zip(emfev,egwev,self.mo_occ[0].T)):
         print("%5d  %14.7f %14.7f %7.2f | %14.7f %14.7f %7.2f" % (ie, emf[0], egw[0], f[0],  emf[1], egw[1], f[1]) )
       print('')
-      print('G0W0 HOMO energy    (eV): {:14.7f}\t{:14.7f}'.format(egwev[self.nfermi[0]-1,0],egwev[self.nfermi[1]-1,1]))
-      print('G0W0 LUMO energy    (eV): {:14.7f}\t{:14.7f}'.format(egwev[self.nfermi[0],0],egwev[self.nfermi[1],1]))
+      print('\fG0W0 HOMO energy    (eV): {:.7f}\t{:.7f}'.format(egwev[self.nfermi[0]-1,0],egwev[self.nfermi[1]-1,1]))
+      print('G0W0 LUMO energy    (eV): {:.7f}\t{:.7f}'.format(egwev[self.nfermi[0],0],egwev[self.nfermi[1],1]))
+      print('G0W0 HOMO-LUMO gap  (eV): {:.7f}\t{:.7f}'.format(egwev[self.nfermi[0],0]-egwev[self.nfermi[0]-1,0],egwev[self.nfermi[1],1]-egwev[self.nfermi[1]-1,1]))
     else:
       raise RuntimeError('not implemented...')
+    t= int(timer() - starting_time)
+    print('\fTotal running time is: {:02d}:{:02d}:{:02d}'.format(t // 3600, (t % 3600 // 60), t % 60))
     
   def make_mo_g0w0(self):
     """ This creates the fields mo_energy_g0w0, and mo_coeff_g0w0 """
@@ -337,7 +345,6 @@ class gw(scf):
       #print(scissor_occ, scissor_vrt)
       mm_occ = list(set(range(self.nocc_0t[s]))-set(nn_occ))
       mm_vrt = list(set(range(self.nocc_0t[s],self.norbs)) - set(nn_vrt))
-      #print(mm_occ, mm_vrt)
       self.mo_energy_gw[0,s,mm_occ] +=scissor_occ
       self.mo_energy_gw[0,s,mm_vrt] +=scissor_vrt
       #print(self.mo_energy_g0w0)
@@ -349,6 +356,6 @@ class gw(scf):
     self.xc_code = 'GW'
     if self.verbosity>0:
       print(__name__, ' self.mo_energy_gw, self.xc_code ', self.xc_code)
-      print(self.mo_energy_gw)
+      print('\fMatrix of GW-corrected eigenvalues:',self.mo_energy_gw)
         
   kernel_gw = make_mo_g0w0
