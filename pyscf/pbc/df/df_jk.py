@@ -121,12 +121,12 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), kpts_band=None):
             #:Lpq = (LpqR + LpqI*1j)#.reshape(-1,nao,nao)
             #:vjR[:,k] += numpy.dot(rho[:,p0:p1], Lpq).real
             #:vjI[:,k] += numpy.dot(rho[:,p0:p1], Lpq).imag
-            vjR[:,k] += sign * numpy.dot(rhoR[:,p0:p1], LpqR)
+            vjR[:,k] += numpy.dot(rhoR[:,p0:p1], LpqR)
             if not j_real:
-                vjI[:,k] += sign * numpy.dot(rhoI[:,p0:p1], LpqR)
+                vjI[:,k] += numpy.dot(rhoI[:,p0:p1], LpqR)
                 if LpqI is not None:
-                    vjR[:,k] -= sign * numpy.dot(rhoI[:,p0:p1], LpqI)
-                    vjI[:,k] += sign * numpy.dot(rhoR[:,p0:p1], LpqI)
+                    vjR[:,k] -= numpy.dot(rhoI[:,p0:p1], LpqI)
+                    vjI[:,k] += numpy.dot(rhoR[:,p0:p1], LpqI)
             LpqR = LpqI = None
     t1 = log.timer_debug1('get_j pass 2', *t1)
 
