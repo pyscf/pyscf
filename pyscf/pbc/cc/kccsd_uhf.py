@@ -879,13 +879,19 @@ def _make_df_eris(cc, mo_coeff=None):
                 kpti_kptj = np.array((kpti,kptj))
                 k_id = member(kpti_kptj, kptij_lst)
                 if len(k_id) > 0:
-                    dat = f['j3c/' + str(k_id[0])]
-                    Lpq = np.hstack([dat[str(i)] for i in range(len(dat))])
+                    dat = f['j3c/%d' % k_id[0]]
+                    if isinstance(dat, h5py.Group):
+                        Lpq = np.hstack([dat[str(i)] for i in range(len(dat))])
+                    else:
+                        Lpq = np.asarray(dat)
                 else:
                     kptji = kpti_kptj[[1,0]]
                     k_id = member(kptji, kptij_lst)
-                    dat = f['j3c/' + str(k_id[0])]
-                    Lpq = np.hstack([dat[str(i)] for i in range(len(dat))])
+                    dat = f['j3c/%d' % k_id[0]]
+                    if isinstance(dat, h5py.Group):
+                        Lpq = np.hstack([dat[str(i)] for i in range(len(dat))])
+                    else:
+                        Lpq = np.asarray(dat)
                     Lpq = lib.transpose(Lpq.reshape(naux,nao,nao), axes=(0,2,1))
                     Lpq = Lpq.conj()
 
