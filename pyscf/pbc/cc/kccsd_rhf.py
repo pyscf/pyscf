@@ -1699,7 +1699,7 @@ if __name__ == '__main__':
     eris = mycc.ao2mo()
     t1, t2 = rand_t1_t2(mycc)
     Ht1, Ht2 = mycc.update_amps(t1, t2, eris)
-    print(lib.finger(Ht1) - (-4.6808039711608824 + 9.4962987225515789j))
+    print(lib.finger(Ht1) - (-4.6808039711608824 + 9.4962987225515789j))  # FIXME
     print(lib.finger(Ht2) - (18.613685230812546 + 114.66975731912211j))
 
     kmf = kmf.density_fit(auxbasis=[[0, (1., 1.)], [0, (.5, 1.)]])
@@ -1707,5 +1707,5 @@ if __name__ == '__main__':
     eris = _ERIS(mycc, mycc.mo_coeff, method='outcore')
     t1, t2 = rand_t1_t2(mycc)
     Ht1, Ht2 = mycc.update_amps(t1, t2, eris)
-    print(lib.finger(Ht1) - (-3.6611794882508244 + 9.2241044317516554j))
+    print(lib.finger(Ht1) - (-3.6611794882508244 + 9.2241044317516554j))  # FIXME
     print(lib.finger(Ht2) - (-196.88536721771101 - 432.29569128644886j))

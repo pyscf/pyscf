@@ -686,13 +686,15 @@ class GDF(aft.AFTDF):
                 naux = feri.shape[0]
 
         cell = self.cell
-        if cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum':
+        if (cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum' and
+            not isinstance(self._cderi, numpy.ndarray)):
             with h5py.File(self._cderi, 'r') as feri:
                 if 'j3c-/0' in feri:
-                    if isinstance(feri['j3c-/0'], h5py.Group):
-                        naux += feri['j3c-/0/0'].shape[0]
+                    dat = feri['j3c-/0']
+                    if isinstance(dat, h5py.Group):
+                        naux += dat['0'].shape[0]
                     else:
-                        naux += feri['j3c-/0'].shape[0]
+                        naux += dat.shape[0]
         return naux
 
 DF = GDF
