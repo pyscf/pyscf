@@ -123,8 +123,9 @@ def general(mydf, mo_coeffs, kpts=None,
 
     if gamma_point(kptijkl) and allreal:
         ao = mydf._numint.eval_ao(cell, coords, kpti)[0]
-        if ((iden_coeffs(mo_coeffs[0], mo_coeffs[2]) and
-             iden_coeffs(mo_coeffs[1], mo_coeffs[3]))):
+        if ((iden_coeffs(mo_coeffs[0], mo_coeffs[1]) and
+             iden_coeffs(mo_coeffs[0], mo_coeffs[2]) and
+             iden_coeffs(mo_coeffs[0], mo_coeffs[3]))):
             moiT = mojT = numpy.asarray(lib.dot(mo_coeffs[0].T,ao.T), order='C')
             ao = None
             max_memory = max_memory - moiT.nbytes*1e-6
