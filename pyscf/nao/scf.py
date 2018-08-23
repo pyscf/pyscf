@@ -108,7 +108,16 @@ class scf(tddft_iter):
     '''Compute K matrix for the given density matrix.'''
     from pyscf.nao.m_kmat_den import kmat_den
     if dm is None: dm = self.make_rdm1()
-    #print(__name__, ' get_k: self.kmat_algo ', self.kmat_algo)
+    
+    if False:
+      print(__name__, ' get_k: self.kmat_algo ', self.kmat_algo, dm.shape)
+      if len(dm.shape)==5:
+        print(__name__, 'nelec dm', (dm[0,:,:,:,0]*self.overlap_lil().toarray()).sum())
+      elif len(dm.shape)==2 or len(dm.shape)==3:
+        print(__name__, 'nelec dm', (dm*self.overlap_lil().toarray()).sum())
+      else:
+        print(__name__, dm.shape)
+        
     return kmat_den(self, dm=dm, algo=self.kmat_algo, **kw)
 
   def get_jk(self, mol=None, dm=None, hermi=1, **kw):

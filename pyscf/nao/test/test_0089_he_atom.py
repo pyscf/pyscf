@@ -13,7 +13,7 @@ class KnowValues(unittest.TestCase):
     from pyscf.nao.m_fermi_dirac import fermi_dirac_occupations
     from io import StringIO
     """ Spin-resolved case GW procedure. """
-    gw = gw_c(mf=gto_mf, gto=mol, verbosity=1, niter_max_ev=16, kmat_algo='dp_vertex_loops_sm')
+    gw = gw_c(mf=gto_mf, gto=mol, verbosity=1, niter_max_ev=16, rescf=True, kmat_algo='dp_vertex_loops_sm')
     self.assertEqual(gw.nspin, 2)
     gw.kernel_gw()
     gw.report()

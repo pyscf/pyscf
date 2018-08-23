@@ -96,7 +96,7 @@ class gw(scf):
     if self.nspin==1:
       mat = self.get_hcore()+self.get_j()-0.5*self.get_k()
       mat1 = dot(self.mo_coeff[0,0,:,:,0], mat)
-      expval = einsum('nb,...nb->...n', mat1, self.mo_coeff[0,:,:,:,0])
+      expval = einsum('nb,nb->n', mat1, self.mo_coeff[0,0,:,:,0])
     elif self.nspin==2:
       vh = self.get_j()
       mat = self.get_hcore()+vh[0]+vh[1]-self.get_k()

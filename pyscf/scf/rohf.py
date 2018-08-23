@@ -220,7 +220,7 @@ def get_grad(mo_coeff, mo_occ, fock):
     return g[uniq_var_a | uniq_var_b]
 
 def make_rdm1(mo_coeff, mo_occ):
-    '''One-particle densit matrix.  mo_occ is a 1D array, with occupancy 1 or 2.
+    '''One-particle density matrix.  mo_occ is a 1D array, with occupancy 1 or 2.
     '''
     mo_a = mo_coeff[:,mo_occ>0]
     mo_b = mo_coeff[:,mo_occ==2]

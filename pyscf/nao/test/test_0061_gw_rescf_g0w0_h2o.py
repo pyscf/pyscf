@@ -37,7 +37,7 @@ class KnowValues(unittest.TestCase):
     gw.kernel_gw()
 
     np.savetxt('eigvals_g0w0_pyscf_rescf_water_0061.txt', gw.mo_energy_gw[0,:,:].T)
-    gw.report()
+    #gw.report()
     
     for e,eref_str in zip(gw.mo_energy_gw[0,0,:],fc.splitlines()):
       self.assertAlmostEqual(e,float(eref_str))
