@@ -843,6 +843,7 @@ def _make_eris_incore(cc, mo_coeff=None):
     return eris
 
 def _make_df_eris(cc, mo_coeff=None):
+    from pyscf.pbc.df import df
     from pyscf.ao2mo import _ao2mo
     if cc._scf.with_df._cderi is None:
         cc._scf.with_df.build()
@@ -877,23 +878,7 @@ def _make_df_eris(cc, mo_coeff=None):
         for ki, kpti in enumerate(kpts):
             for kj, kptj in enumerate(kpts):
                 kpti_kptj = np.array((kpti,kptj))
-                k_id = member(kpti_kptj, kptij_lst)
-                if len(k_id) > 0:
-                    dat = f['j3c/%d' % k_id[0]]
-                    if isinstance(dat, h5py.Group):
-                        Lpq = np.hstack([dat[str(i)] for i in range(len(dat))])
-                    else:
-                        Lpq = np.asarray(dat)
-                else:
-                    kptji = kpti_kptj[[1,0]]
-                    k_id = member(kptji, kptij_lst)
-                    dat = f['j3c/%d' % k_id[0]]
-                    if isinstance(dat, h5py.Group):
-                        Lpq = np.hstack([dat[str(i)] for i in range(len(dat))])
-                    else:
-                        Lpq = np.asarray(dat)
-                    Lpq = lib.transpose(Lpq.reshape(naux,nao,nao), axes=(0,2,1))
-                    Lpq = Lpq.conj()
+                Lpq = np.asarray(df._getitem(f, 'j3c', kpti_kptj, kptij_lst))
 
                 mo_a = np.hstack((mo_kpts_a[ki], mo_kpts_a[kj][:,nocca:]))
                 mo_b = np.hstack((mo_kpts_b[ki], mo_kpts_b[kj][:,noccb:]))

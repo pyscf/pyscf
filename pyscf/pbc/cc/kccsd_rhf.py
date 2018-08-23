@@ -1427,6 +1427,7 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
 
 
 def _init_df_eris(cc, eris):
+    from pyscf.pbc.df import df
     from pyscf.ao2mo import _ao2mo
     if cc._scf.with_df._cderi is None:
         cc._scf.with_df.build()
@@ -1457,23 +1458,7 @@ def _init_df_eris(cc, eris):
         for ki, kpti in enumerate(kpts):
             for kj, kptj in enumerate(kpts):
                 kpti_kptj = np.array((kpti, kptj))
-                k_id = member(kpti_kptj, kptij_lst)
-                if len(k_id) > 0:
-                    dat = f['j3c/%d' % k_id[0]]
-                    if isinstance(dat, h5py.Group):
-                        Lpq = np.hstack([dat[str(i)] for i in range(len(dat))])
-                    else:
-                        Lpq = np.asarray(dat)
-                else:
-                    kptji = kpti_kptj[[1, 0]]
-                    k_id = member(kptji, kptij_lst)
-                    dat = f['j3c/%d' % k_id[0]]
-                    if isinstance(dat, h5py.Group):
-                        Lpq = np.hstack([dat[str(i)] for i in range(len(dat))])
-                    else:
-                        Lpq = np.asarray(dat)
-                    Lpq = lib.transpose(Lpq.reshape(naux, nao, nao), axes=(0, 2, 1))
-                    Lpq = Lpq.conj()
+                Lpq = np.asarray(df._getitem(f, 'j3c', kpti_kptj, kptij_lst))
 
                 mo = np.hstack((eris.mo_coeff[ki], eris.mo_coeff[kj][:, nocc:]))
                 mo = np.asarray(mo, dtype=dtype, order='F')
