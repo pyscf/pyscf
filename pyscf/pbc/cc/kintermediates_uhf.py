@@ -430,3 +430,80 @@ def Woooo(cc,t1,t2,eris):
 
     WOOoo = None
     return Woooo, WooOO, WOOoo, WOOOO
+
+def Wovoo(cc,t1,t2,eris):
+    kconserv = cc.khelper.kconserv
+    t1a, t1b = t1
+    t2aa, t2ab, t2bb = t2
+    _, _, nkpts, nocca, noccb, nvira, nvirb = t2ab.shape
+
+    Woovo = eris.oovo - eris.vooo.transpose(2,1,0,5,4,3,6)
+    WooVO = eris.ooVO
+    WOOvo = eris.OOvo
+    WOOVO = eris.OOVO - eris.VOOO.transpose(2,1,0,5,4,3,6)
+
+    ooov = eris.ooov - eris.ooov.transpose(2,1,0,5,4,3,6)
+    OOOV = eris.OOOV - eris.OOOV.transpose(2,1,0,5,4,3,6)
+
+    ovvo = eris.ovvo - eris.vvoo.transpose(2,1,0,5,4,3,6)
+    OVVO = eris.OVVO - eris.VVOO.transpose(2,1,0,5,4,3,6)
+
+    ovov = eris.ovov - eris.ovov.transpose(2,1,0,5,4,3,6)
+    OVOV = eris.OVOV - eris.OVOV.transpose(2,1,0,5,4,3,6)
+
+    for km, kb, ki in kpts_helper.loop_kkk(nkpts):
+        kj = kconserv[km, ki, kb]
+        for kn in range(nkpts):
+
+            ke = kconserv[km,ki,kn]
+            Woovo[km,ki,kb] += einsum('mine,jnbe->mibj', ooov[km,ki,kn], t2aa[kj,kn,kb]) + einsum('miNE,jNbE->mibj', eris.ooOV[km,ki,kn], t2ab[kj,kn,kb])
+            WooVO[km,ki,kb] += einsum('mine,nJeB->miBJ', ooov[km,ki,kn], t2ab[kn,kj,ke]) + einsum('miNE,JNBE->miBJ', eris.ooOV[km,ki,kn], t2bb[kj,kn,kb])
+            WOOvo[km,ki,kb] += einsum('MINE,jNbE->MIbj', OOOV[km,ki,kn], t2ab[kj,kn,kb]) + einsum('MIne,jnbe->MIbj', eris.OOov[km,ki,kn], t2aa[kj,kn,kb])
+            WOOVO[km,ki,kb] += einsum('MINE,JNBE->MIBJ', OOOV[km,ki,kn], t2bb[kj,kn,kb]) + einsum('MIne,nJeB->MIBJ', eris.OOvo[km,ki,kn], t2ab[kn,kj,ke])
+
+        Woovo[km,ki,kb] += einsum('ie,mebj->mibj', t1a[ki], ovvo[km,ki,kb])
+        WooVO[km,ki,kb] += einsum('ie,meBJ->miBJ', t1a[ki], eris.ovVO[km,ki,kb])
+        WOOvo[km,ki,kb] += einsum('IE,MEbj->MIbj', t1b[ki], eris.OVvo[km,ki,kb])
+        WOOVO[km,ki,kb] += einsum('IE,MEBJ->MIBJ', t1b[ki], OVVO[km,ki,kb])
+
+
+        for kf in range(nkpts):
+            kn = kconserv[kb, kj, kf]
+
+            Woovo[km, ki, kb] -= einsum('ie,njbf,menf->mbij', t1a[ki], t2aa[kn,kj,kb], ovov) - einsum('ie,jNbF,meNF->mbij', t1a[ki], t2ab[kj,kn,kb], eris.ovOV[km,ki,kn])
+            WooVO[km, ki, kb] -= -einsum('ie,nJfB,menf->mBiJ', t1a[ki], t2ab[kn,kj,kf], ovov) + einsum('ie,NJBF,meNF->mBiJ', t1a[ki], t2bb[kn,kj,kb], eris.ovOV[km,ki,kn])
+            WOOvo[km, ki, kb] -= -einsum('IE,jNbF,MENF->MbIj', t1b[ki], t2ab[kj,kn,kb], OVOV) + einsum('IE,njbf,MEnf->MbIj', t1b[ki], t2aa[kn,kj,kb], eris.OVov[km,ki,kn])
+            WOOVO[km, ki, kb] -= einsum('IE,NJBF,MENF->MBIJ', t1b[ki], t2bb[kn,kj,kb], OVOV) - einsum('IE,nJfB,MEnf->MBIJ', t1b[ki], t2ab[kn,kj,kf], eris.OVov[km,ki,kn])
+        # P(ij)
+        for kn in range(nkpts):
+            Wmbij[km, kb, ki] -= einsum('mnje,inbe->mbij', eris.ooov[km, kn, kj], t2[ki, kn, kb])
+
+            ke = kconserv[km,kj,kn]
+            Woovo[km,ki,kb] -= einsum('mjne,inbe->mibj', ooov[km,kj,kn], t2aa[ki,kn,kb]) + einsum('mjNE,iNbE->mibj', eris.ooOV[km,kj,kn], t2ab[ki,kn,kb])
+            WooVO[km,ki,kb] -= einsum('meNJ,iNeB->miBJ', eris.ovOO[km,ke,kn], t2ab[ki,kn,ke])
+            WOOvo[km,ki,kb] -= einsum('MEnj,nIbE->MIbj', eris.OVoo[km,ke,kn], t2ab[kn,ki,kb])
+            WOOVO[km,ki,kb] -= einsum('MJNE,INBE->MIBJ', OOOV[km,kj,kn], t2bb[ki,kn,kb]) + einsum('MJne,nIeB->MIBJ', eris.OOvo[km,kj,kn], t2ab[kn,ki,ke])
+
+
+
+
+            #### stop line
+
+        Wmbij[km, kb, ki] -= einsum('je,mbei->mbij', t1[kj], -eris.ovov[km, kb, ki].transpose(0, 1, 3, 2))
+        for kf in range(nkpts):
+            kn = kconserv[kb, ki, kf]
+            Wmbij[km, kb, ki] += einsum('je,nibf,mnef->mbij', t1[kj], t2[kn, ki, kb], eris.oovv[km, kn, kj])
+
+    Fov, FOV = Fov(cc, t1, t2, eris)
+    Woooo, WooOO, WOOoo, WOOOO = Woooo(cc,t1,t2,eris)
+    tauaa, tauab, taubb = make_tau(cc, t2, t1, t1p, fac=1.)
+    for km, kb, ki in kpts_helper.loop_kkk(nkpts):
+        kj = kconserv[km, ki, kb]
+        Wmbij[km, kb, ki] -= einsum('me,ijbe->mbij', FFov[km], t2[ki, kj, kb])
+        Wmbij[km, kb, ki] -= einsum('nb,mnij->mbij', t1[kb], WWoooo[km, kb, ki])
+
+    for km, kb, ki in kpts_helper.loop_kkk(nkpts):
+        kj = kconserv[km, ki, kb]
+        Wmbij[km, kb, ki] += 0.5 * einsum('xmbef,xijef->mbij', eris.ovvv[km, kb, :], tau[ki, kj, :])
+
+    return Wmbij
