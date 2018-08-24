@@ -13,6 +13,24 @@
 # limitations under the License.
 
 from __future__ import print_function, division
+import numba as nb
+from numpy import dot
+import scipy.sparse as sparse
+
+def dp_kmat_loops_sm0(dab2v, da2cc, dm, hk, nnp, kmat):
+  for mu,a_ap2v in enumerate(dab2v):
+    cc = da2cc[mu].toarray().reshape(nnp)
+    q2v = dot( cc, hk )
+    a_bp = sparse.csr_matrix(a_ap2v * dm)
+    for nu,bp_b2v in enumerate(dab2v):
+      q2cc = da2cc[nu].toarray().reshape(nnp)
+      v = (q2cc * q2v).sum()
+      ab2sigma = (a_bp * bp_b2v * v)
+      if ab2sigma.count_nonzero()>0 : kmat[ab2sigma.nonzero()] += ab2sigma.data
+  return kmat
+  
+dp_kmat_loops_sm0_nb = nb.jit(nopython=True)(dp_kmat_loops_sm0)
+
 
 def kmat_den(mf, dm=None, algo=None, **kw):
   """
@@ -134,15 +152,16 @@ def kmat_den(mf, dm=None, algo=None, **kw):
             if ab2sigma.count_nonzero()>0 : kmat[s][ab2sigma.nonzero()] += ab2sigma.data
               
     elif len(dm.shape)==2: # if spin index is absent
-      for mu,a_ap2v in enumerate(dab2v):
-        cc = da2cc[mu].toarray().reshape(nnp)
-        q2v = dot( cc, hk )
-        a_bp = sparse.csr_matrix(a_ap2v * dm)
-        for nu,bp_b2v in enumerate(dab2v):
-          q2cc = da2cc[nu].toarray().reshape(nnp)
-          v = (q2cc * q2v).sum()
-          ab2sigma = (a_bp * bp_b2v * v)
-          if ab2sigma.count_nonzero()>0 : kmat[ab2sigma.nonzero()] += ab2sigma.data
+      kmat = dp_kmat_loops_sm0(dab2v, da2cc, dm, hk, nnp, kmat)
+      #for mu,a_ap2v in enumerate(dab2v):
+        #cc = da2cc[mu].toarray().reshape(nnp)
+        #q2v = dot( cc, hk )
+        #a_bp = sparse.csr_matrix(a_ap2v * dm)
+        #for nu,bp_b2v in enumerate(dab2v):
+          #q2cc = da2cc[nu].toarray().reshape(nnp)
+          #v = (q2cc * q2v).sum()
+          #ab2sigma = (a_bp * bp_b2v * v)
+          #if ab2sigma.count_nonzero()>0 : kmat[ab2sigma.nonzero()] += ab2sigma.data
     else:
       print(dm.shape)
       raise RuntimeError('to impl dm.shape')
