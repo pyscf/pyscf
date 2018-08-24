@@ -3,7 +3,7 @@ import unittest, numpy as np
 from pyscf import gto, scf
 from pyscf.nao import gw as gw_c
 
-mol = gto.M( verbose = 1, atom = '''He 0.0 0.0 0.0''', basis = 'aug-cc-pvtz', spin = 0, )
+mol = gto.M( verbose = 1, atom = '''F 0.0 0.0 0.0''', basis = 'aug-cc-pvdz', spin = 1, )
 gto_mf = scf.UHF(mol)
 e_tot = gto_mf.kernel()
 
@@ -15,8 +15,8 @@ class KnowValues(unittest.TestCase):
     self.assertEqual(gw.nspin, 2)
     gw.kernel_gw()
     #gw.report()
-    np.savetxt('eigvals_g0w0_pyscf_rescf_he_0089.txt', gw.mo_energy_gw[0,:,:].T)
-    ev_ref = np.loadtxt('eigvals_g0w0_pyscf_rescf_he_0089.txt-ref').T
+    np.savetxt('eigvals_g0w0_pyscf_rescf_f_0101.txt', gw.mo_energy_gw[0,:,:].T)
+    ev_ref = np.loadtxt('eigvals_g0w0_pyscf_rescf_f_0101.txt-ref').T
     for n2e,n2r in zip(gw.mo_energy_gw[0], ev_ref):
       for e,r in zip(n2e,n2r): self.assertAlmostEqual(e, r)
           

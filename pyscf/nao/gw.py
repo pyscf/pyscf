@@ -276,7 +276,7 @@ class gw(scf):
       self.nn_conv.append( range(max(nocc_0t-nocc_conv,0), min(nocc_0t+nvrt_conv,self.norbs)))
 
     # iterations to converge the 
-    if self.verbosity>0: print('-'*60,'|G0W0 corrections of eigenvalues|','-'*60)    
+    if self.verbosity>0: print('-'*59,'| G0W0 corrections of eigenvalues |','-'*59)
     for i in range(self.niter_max_ev):
       sn2i = self.gw_corr_int(sn2eval_gw)
       sn2r = self.gw_corr_res(sn2eval_gw)
@@ -289,11 +289,12 @@ class gw(scf):
       for s,nn_conv in enumerate(self.nn_conv): err += abs(sn2mismatch[s,nn_conv]).sum()/len(nn_conv)
 
       if self.verbosity>0:
-        np.set_printoptions(linewidth=1000)
+        np.set_printoptions(linewidth=1000, suppress=True, precision=5)
         print('Iteration #{}  Relative Error: {:.6f}'.format(i+1, err))
       if self.verbosity>1:
-        for s,n2ev in enumerate(sn2eval_gw):
-          print('Spin{}\t{}\t{}\t{}'.format(s+1, n2ev[0:5]*HARTREE2EV, sn2i[s][0:5], sn2r[s][0:5]))
+        #print(sn2mismatch)
+        for s,(n2ev,nn_conv) in enumerate(zip(sn2eval_gw, self.nn_conv)):
+          print('Spin{} {}'.format(s+1, n2ev[nn_conv]*HARTREE2EV)) #, sn2i[s][nn_conv]*HARTREE2EV, sn2r[s][nn_conv]*HARTREE2EV))
         
       if err<self.tol_ev : break
     return sn2eval_gw
@@ -328,8 +329,9 @@ class gw(scf):
 
     self.h0_vh_x_expval = self.get_h0_vh_x_expval()
     if self.verbosity>1:
+      np.set_printoptions(linewidth=1000, suppress=True, precision=5)
       print(__name__, '.h0_vh_x_expval: ')
-      print(self.h0_vh_x_expval)
+      print(self.h0_vh_x_expval* HARTREE2EV)
 
     if not hasattr(self,'sn2eval_gw'): self.sn2eval_gw=self.g0w0_eigvals() # Comp. GW-corrections
     
@@ -351,7 +353,7 @@ class gw(scf):
       self.mo_energy_gw[0,s,mm_occ] +=scissor_occ
       self.mo_energy_gw[0,s,mm_vrt] +=scissor_vrt
       #print(self.mo_energy_g0w0)
-      if self.verbosity>0: print(__name__, 'np.argsort(self.mo_energy_gw)', np.argsort(self.mo_energy_gw[0,s,:]))
+      if self.verbosity>0: print(__name__, 'Spin'+str(s+1), 'np.argsort(self.mo_energy_gw)', np.argsort(self.mo_energy_gw[0,s,:]))
       argsrt = np.argsort(self.mo_energy_gw[0,s,:])
       self.mo_energy_gw[0,s,:] = np.sort(self.mo_energy_gw[0,s,:])
       for n,m in enumerate(argsrt): self.mo_coeff_gw[0,0,n] = self.mo_coeff[0,0,m]

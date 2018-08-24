@@ -25,7 +25,6 @@ e_tot = gto_mf.kernel()
 class KnowValues(unittest.TestCase):
 
   def test_0090_h_atom(self):
-    from io import StringIO
     """ Spin-resolved case GW procedure. """
     return
     gw = gw_c(mf=gto_mf, gto=mol, verbosity=2, niter_max_ev=16, kmat_algo='dp_vertex_loops_sm')
