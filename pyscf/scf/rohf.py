@@ -313,6 +313,8 @@ class ROHF(hf.RHF):
         self.nelec = None
         self._keys = self._keys.union(['nelec'])
 
+    check_sanity = hf.SCF.check_sanity
+
     def dump_flags(self):
         hf.SCF.dump_flags(self)
         if hasattr(self, 'nelectron_alpha'):  # pragma: no cover

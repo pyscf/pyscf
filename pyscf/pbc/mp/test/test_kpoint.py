@@ -51,7 +51,7 @@ class KnownValues(unittest.TestCase):
         mp_111 = -2.4124398409652723e-05
         escf, emp = run_kcell(cell,nk)
         self.assertAlmostEqual(escf, hf_111, 9)
-        self.assertAlmostEqual(emp, mp_111, 6)
+        self.assertAlmostEqual(emp, -5.9717580693927882e-06, 9)
 
     def test_311_high_cost(self):
         nk = (3, 1, 1)
@@ -59,7 +59,7 @@ class KnownValues(unittest.TestCase):
         mp_311 = -8.3491016166387105e-06
         escf, emp = run_kcell(cell,nk)
         self.assertAlmostEqual(escf,hf_311, 9)
-        self.assertAlmostEqual(emp, mp_311, 6)
+        self.assertAlmostEqual(emp, mp_311, 9)
 
 if __name__ == '__main__':
     print("Full kpoint test")

@@ -256,20 +256,22 @@ static void set_dmcond(double *dmcond, double *dmscond, double complex *dm,
         double complex *pdm;
 
         for (ish = 0; ish < nbas; ish++) {
-        for (jsh = 0; jsh < nbas; jsh++) {
+        for (jsh = 0; jsh <= ish; jsh++) {
                 dmax = 0;
                 for (iset = 0; iset < nset; iset++) {
                         dmaxi = 0;
                         pdm = dm + nao*nao*iset;
                         for (i = ao_loc[ish]; i < ao_loc[ish+1]; i++) {
                         for (j = ao_loc[jsh]; j < ao_loc[jsh+1]; j++) {
-                                tmp = cabs(pdm[i*nao+j]);
+                                tmp = .5 * (cabs(pdm[i*nao+j]) + cabs(pdm[j*nao+i]));
                                 dmaxi = MAX(dmaxi, tmp);
                         } }
                         dmscond[iset*nbas*nbas+ish*nbas+jsh] = dmaxi;
+                        dmscond[iset*nbas*nbas+jsh*nbas+ish] = dmaxi;
                         dmax = MAX(dmax, dmaxi);
                 }
                 dmcond[ish*nbas+jsh] = dmax;
+                dmcond[jsh*nbas+ish] = dmax;
         } }
 }
 
