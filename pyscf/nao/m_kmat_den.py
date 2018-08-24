@@ -50,7 +50,7 @@ def kmat_den(mf, dm=None, algo=None, **kw):
     pcd = einsum('pq,qcd->pcd', hk, pab2v)
     pac = einsum('pab,...bc->...pac', pab2v, dm)
     kmat = einsum('...pac,pcd->...ad', pac, pcd)
-
+    
   elif algol=='dp_vertex_fm':
     
     dab2v = pb.get_dp_vertex_array()
@@ -108,17 +108,44 @@ def kmat_den(mf, dm=None, algo=None, **kw):
           dc  = (dab2v[a] * dm)
           pc1 = (da2cc.T * dc)
           kmat[a,d]  = (pc1*pc2).sum()
-
+    else:
+      print(dm.shape)
+      raise RuntimeError('to impl dm.shape')
+      
   elif algol=='dp_vertex_loops_sm0':
     """ Loops over product indices """
-       
+    import scipy.sparse as sparse
+    
     dab2v = pb.get_dp_vertex_doubly_sparse(axis=0)
     da2cc = pb.get_da2cc_sparse().tocsr()
-
+    kmat  = np.zeros_like(dm)
+    nnd,nnp = da2cc.shape
+    
     if len(dm.shape)==3: # if spin index is present
-      RuntimeError('to impl')
+      for s in range(mf.nspin):
+        for mu,a_ap2v in enumerate(dab2v):
+          cc = da2cc[mu].toarray().reshape(nnp)
+          q2v = dot( cc, hk )
+          a_bp = sparse.csr_matrix(a_ap2v * dm[s])
+          for nu,bp_b2v in enumerate(dab2v):
+            q2cc = da2cc[nu].toarray().reshape(nnp)
+            v = (q2cc * q2v).sum()
+            ab2sigma = (a_bp * bp_b2v * v)
+            if ab2sigma.count_nonzero()>0 : kmat[s][ab2sigma.nonzero()] += ab2sigma.data
+              
     elif len(dm.shape)==2: # if spin index is absent
-      RuntimeError('to impl')
+      for mu,a_ap2v in enumerate(dab2v):
+        cc = da2cc[mu].toarray().reshape(nnp)
+        q2v = dot( cc, hk )
+        a_bp = sparse.csr_matrix(a_ap2v * dm)
+        for nu,bp_b2v in enumerate(dab2v):
+          q2cc = da2cc[nu].toarray().reshape(nnp)
+          v = (q2cc * q2v).sum()
+          ab2sigma = (a_bp * bp_b2v * v)
+          if ab2sigma.count_nonzero()>0 : kmat[ab2sigma.nonzero()] += ab2sigma.data
+    else:
+      print(dm.shape)
+      raise RuntimeError('to impl dm.shape')
 
   else:
     print('algo=', algo)

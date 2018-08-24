@@ -14,7 +14,7 @@ class KnowValues(unittest.TestCase):
     from io import StringIO
     """ Spin-resolved case GW procedure. """
     #print(__name__, dir(gto_mf_uhf))
-    gw = gw_c(mf=gto_mf_uhf, gto=mol, verbosity=0, niter_max_ev=6, kmat_algo='dp_vertex_loops_sm', jcutoff=12)
+    gw = gw_c(mf=gto_mf_uhf, gto=mol, verbosity=0, niter_max_ev=6, kmat_algo='dp_vertex_loops_sm0', jcutoff=12)
     #print(__name__, 'nfermi =', gw.nfermi)
     #print(__name__, 'e_tot =', e_tot)
     self.assertEqual(gw.nspin, 2)
