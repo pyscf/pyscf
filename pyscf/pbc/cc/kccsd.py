@@ -532,6 +532,18 @@ def _make_eris_incore(cc, mo_coeff=None):
     eris.mo_energy = [_adjust_occ(mo_e, nocc, -madelung)
                       for k, mo_e in enumerate(eris.mo_energy)]
 
+    # Get location of padded elements in occupied and virtual space.
+    nocc_per_kpt = get_nocc(cc, per_kpoint=True)
+    nonzero_padding = padding_k_idx(cc, kind="joint")
+
+    # Check direct and indirect gaps for possible issues with CCSD convergence.
+    mo_e = [self.mo_energy[kp][nonzero_padding[kp]] for kp in range(nkpts)]
+    mo_e = np.sort([y for x in mo_e for y in x])  # Sort de-nested array
+    gap = mo_e[np.sum(nocc_per_kpt)] - mo_e[np.sum(nocc_per_kpt)-1]
+    if gap < 1e-5:
+        logger.warn(cc, 'HOMO-LUMO gap %s too small for KCCSD. '
+                        'May cause issues in convergence.', gap)
+
     kconserv = kpts_helper.get_kconserv(cell, kpts)
     # The bottom nao//2 coefficients are down (up) spin while the top are up (down).
     # These are 'spin-less' quantities; spin-conservation will be added manually.

@@ -28,7 +28,8 @@ from pyscf.lib import logger
 import pyscf.cc
 import pyscf.cc.ccsd
 from pyscf.pbc import scf
-from pyscf.pbc.mp.kmp2 import get_frozen_mask, get_nocc, get_nmo, padded_mo_coeff
+from pyscf.pbc.mp.kmp2 import (get_frozen_mask, get_nocc, get_nmo,
+                               padded_mo_coeff, padding_k_idx)
 from pyscf.pbc.cc import kintermediates_rhf as imdk
 from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM
 from pyscf.lib import linalg_helper
@@ -57,6 +58,9 @@ def update_amps(cc, t1, t2, eris):
     fock = eris.fock
     mo_e_o = [e[:nocc] for e in eris.mo_energy]
     mo_e_v = [e[nocc:] + cc.level_shift for e in eris.mo_energy]
+
+    # Get location of padded elements in occupied and virtual space
+    nonzero_opadding, nonzero_vpadding = padding_k_idx(cc, kind="split")
 
     fov = fock[:, :nocc, nocc:]
     foo = fock[:, :nocc, :nocc]
@@ -203,18 +207,24 @@ def update_amps(cc, t1, t2, eris):
     time1 = log.timer_debug1('t2 voov', *time1)
 
     for ki in range(nkpts):
-        eia = mo_e_o[ki][:,None] - mo_e_v[ki]
-        # When padding the occupied/virtual arrays, some fock elements will be zero
-        eia[abs(eia) < LOOSE_ZERO_TOL] = LARGE_DENOM
+        ka = ki
+        # Remove zero/padded elements from denominator
+        eia = LARGE_DENOM * np.ones((nocc, nvir), dtype=eris.mo_energy[0].dtype)
+        n0_ovp_ia = np.ix_(nonzero_opadding[ki], nonzero_vpadding[ka])
+        eia[n0_ovp_ia] = (mo_e_o[ki][:,None] - mo_e_v[ka])[n0_ovp_ia]
         t1new[ki] /= eia
 
     for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
         kb = kconserv[ki, ka, kj]
-        eia = mo_e_o[ki][:,None] - mo_e_v[ka]
-        ejb = mo_e_o[kj][:,None] - mo_e_v[kb]
+        # For LARGE_DENOM, see t1new update above
+        eia = LARGE_DENOM * np.ones((nocc, nvir), dtype=eris.mo_energy[0].dtype)
+        n0_ovp_ia = np.ix_(nonzero_opadding[ki], nonzero_vpadding[ka])
+        eia[n0_ovp_ia] = (mo_e_o[ki][:,None] - mo_e_v[ka])[n0_ovp_ia]
+
+        ejb = LARGE_DENOM * np.ones((nocc, nvir), dtype=eris.mo_energy[0].dtype)
+        n0_ovp_jb = np.ix_(nonzero_opadding[kj], nonzero_vpadding[kb])
+        ejb[n0_ovp_jb] = (mo_e_o[kj][:,None] - mo_e_v[kb])[n0_ovp_jb]
         eijab = eia[:, None, :, None] + ejb[:, None, :]
-        # Due to padding; see above discussion concerning t1new in update_amps()
-        eijab[abs(eijab) < LOOSE_ZERO_TOL] = LARGE_DENOM
 
         t2new[ki, kj, ka] /= eijab
 
@@ -531,6 +541,9 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         mo_e_o = [eris.mo_energy[k][:nocc] for k in range(nkpts)]
         mo_e_v = [eris.mo_energy[k][nocc:] for k in range(nkpts)]
 
+        # Get location of padded elements in occupied and virtual space
+        nonzero_opadding, nonzero_vpadding = padding_k_idx(self, kind="split")
+
         emp2 = 0
         kconserv = self.khelper.kconserv
         touched = np.zeros((nkpts, nkpts, nkpts), dtype=bool)
@@ -539,12 +552,15 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                 continue
 
             kb = kconserv[ki, ka, kj]
-            eia = mo_e_o[ki][:,None] - mo_e_v[ka]
-            ejb = mo_e_o[kj][:,None] - mo_e_v[kb]
-            eijab = lib.direct_sum('ia,jb->ijab', eia, ejb)
-            # Due to padding; see above discussion concerning t1new in update_amps()
-            idx = abs(eijab) < LOOSE_ZERO_TOL
-            eijab[idx] = LARGE_DENOM
+            # For discussion of LARGE_DENOM, see t1new update above
+            eia = LARGE_DENOM * np.ones((nocc, nvir), dtype=eris.mo_energy[0].dtype)
+            n0_ovp_ia = np.ix_(nonzero_opadding[ki], nonzero_vpadding[ka])
+            eia[n0_ovp_ia] = (mo_e_o[ki][:,None] - mo_e_v[ka])[n0_ovp_ia]
+
+            ejb = LARGE_DENOM * np.ones((nocc, nvir), dtype=eris.mo_energy[0].dtype)
+            n0_ovp_jb = np.ix_(nonzero_opadding[kj], nonzero_vpadding[kb])
+            ejb[n0_ovp_jb] = (mo_e_o[kj][:,None] - mo_e_v[kb])[n0_ovp_jb]
+            eijab = eia[:, None, :, None] + ejb[:, None, :]
 
             eris_ijab = eris.oovv[ki, kj, ka]
             eris_ijba = eris.oovv[ki, kj, kb]
@@ -653,15 +669,16 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
             user_guess = False
             if guess:
                 user_guess = True
-                assert len(guess) == nroots
-                for g in guess:
+                assert len(guess[k]) == nroots
+                for g in guess[k]:
                     assert g.size == size
             else:
                 guess = []
                 if koopmans:
-                    foo_kshift = self.eris.fock[kshift, :nocc, :nocc]
-                    nonfrozen_idx = np.where(abs(foo_kshift.diagonal()) > LOOSE_ZERO_TOL)[0]
-                    for n in nonfrozen_idx[::-1][:nroots]:
+                    # Get location of padded elements in occupied and virtual space
+                    nonzero_opadding = padding_k_idx(self, kind="split")[0]
+
+                    for n in nonzero_opadding[::-1][:nroots]:
                         g = np.zeros(size)
                         g[n] = 1.0
                         g = self.mask_frozen_ip(g, kshift, const=0.0)
@@ -691,6 +708,8 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                 evals_k, evecs_k = eig(lambda _arg: self.ipccsd_matvec(_arg, kshift), guess, precond,
                                        tol=self.conv_tol, max_cycle=self.max_cycle,
                                        max_space=self.max_space, nroots=nroots, verbose=self.verbose)
+            if not user_guess:
+                guess = None
 
             evals_k = evals_k.real
             evals[k] = evals_k
@@ -836,26 +855,20 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         nkpts, nocc, nvir = self.t1.shape
         kconserv = self.khelper.kconserv
 
-        fock = self.eris.fock
-        foo = fock[:, :nocc, :nocc]
-        fvv = fock[:, nocc:, nocc:]
-        d0 = np.array(const, dtype=r2.dtype)
+        # Get location of padded elements in occupied and virtual space
+        nonzero_opadding, nonzero_vpadding = padding_k_idx(self, kind="split")
 
-        r1_mask_idx = abs(foo[kshift].diagonal()) < LOOSE_ZERO_TOL
-        r1[r1_mask_idx] = d0
+        new_r1 = const * np.ones_like(r1)
+        new_r2 = const * np.ones_like(r2)
+
+        new_r1[nonzero_opadding[kshift]] = r1[nonzero_opadding[kshift]]
         for ki in range(nkpts):
-            imask_idx = abs(foo[ki].diagonal()) < LOOSE_ZERO_TOL
             for kj in range(nkpts):
                 kb = kconserv[ki, kshift, kj]
-                jmask_idx = abs(foo[kj].diagonal()) < LOOSE_ZERO_TOL
-                bmask_idx = abs(fvv[kb].diagonal()) < LOOSE_ZERO_TOL
+                idx = np.ix_([ki], [kj], nonzero_opadding[ki], nonzero_opadding[kj], nonzero_vpadding[kb])
+                new_r2[idx] = r2[idx]
 
-                d0 = const * np.array(1.0, dtype=r2.dtype)
-                r2[ki, kj, imask_idx] = d0
-                r2[ki, kj, :, jmask_idx] = d0
-                r2[ki, kj, :, :, bmask_idx] = d0
-
-        return self.ip_amplitudes_to_vector(r1, r2)
+        return self.ip_amplitudes_to_vector(new_r1, new_r2)
 
     def vector_size_ea(self):
         nocc = self.nocc
@@ -899,15 +912,16 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
             user_guess = False
             if guess:
                 user_guess = True
-                assert len(guess) == nroots
-                for g in guess:
+                assert len(guess[k]) == nroots
+                for g in guess[k]:
                     assert g.size == size
             else:
                 guess = []
                 if koopmans:
-                    fvv_kshift = self.eris.fock[kshift, nocc:, nocc:]
-                    nonfrozen_idx = np.where(abs(fvv_kshift.diagonal()) > LOOSE_ZERO_TOL)[0]
-                    for n in nonfrozen_idx[:nroots]:
+                    # Get location of padded elements in occupied and virtual space
+                    nonzero_vpadding = padding_k_idx(self, kind="split")[1]
+
+                    for n in nonzero_vpadding[:nroots]:
                         g = np.zeros(size)
                         g[n] = 1.0
                         g = self.mask_frozen_ea(g, kshift, const=0.0)
@@ -937,6 +951,8 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                 evals_k, evecs_k = eig(lambda _arg: self.eaccsd_matvec(_arg, kshift), guess, precond,
                                        tol=self.conv_tol, max_cycle=self.max_cycle,
                                        max_space=self.max_space, nroots=nroots, verbose=self.verbose)
+            if not user_guess:
+                guess = None
 
             evals_k = evals_k.real
             evals[k] = evals_k
@@ -1087,30 +1103,23 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         nkpts, nocc, nvir = self.t1.shape
         kconserv = self.khelper.kconserv
 
-        fock = self.eris.fock
-        foo = fock[:, :nocc, :nocc]
-        fvv = fock[:, nocc:, nocc:]
-        d0 = np.array(const, dtype=r2.dtype)
+        # Get location of padded elements in occupied and virtual space
+        nonzero_opadding, nonzero_vpadding = padding_k_idx(self, kind="split")
 
-        r1_mask_idx = abs(fvv[kshift].diagonal()) < LOOSE_ZERO_TOL
-        r1[r1_mask_idx] = d0
+        new_r1 = const * np.ones_like(r1)
+        new_r2 = const * np.ones_like(r2)
+
+        new_r1[nonzero_vpadding[kshift]] = r1[nonzero_vpadding[kshift]]
         for kj in range(nkpts):
-            jmask_idx = abs(foo[kj].diagonal()) < LOOSE_ZERO_TOL
             for ka in range(nkpts):
                 kb = kconserv[kshift, ka, kj]
-                amask_idx = abs(fvv[ka].diagonal()) < LOOSE_ZERO_TOL
-                bmask_idx = abs(fvv[kb].diagonal()) < LOOSE_ZERO_TOL
+                idx = np.ix_([kj], [ka], nonzero_opadding[kj], nonzero_vpadding[ka], nonzero_vpadding[kb])
+                new_r2[idx] = r2[idx]
 
-                d0 = const * np.array(1.0, dtype=r2.dtype)
-                r2[kj, ka, jmask_idx] = d0
-                r2[kj, ka, :, amask_idx] = d0
-                r2[kj, ka, :, :, bmask_idx] = d0
-
-        return self.ea_amplitudes_to_vector(r1, r2)
+        return self.ip_amplitudes_to_vector(new_r1, new_r2)
 
 
 KRCCSD = RCCSD
-
 
 class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
     def __init__(self, cc, mo_coeff=None, method='incore',
@@ -1157,17 +1166,17 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
         self.mo_energy = [_adjust_occ(mo_e, nocc, -madelung)
                           for k, mo_e in enumerate(self.mo_energy)]
 
-        nocc_per_kpt = np.asarray(get_nocc(cc, per_kpoint=True))
-        nmo_per_kpt = np.asarray(get_nmo(cc, per_kpoint=True))
-        nvir_per_kpt = nmo_per_kpt - nocc_per_kpt
-        for kp in range(nkpts):
-            mo_e = self.fock[kp].diagonal().real
-            gap = abs(mo_e[:nocc_per_kpt[kp]][:, None] -
-                      mo_e[-nvir_per_kpt[kp]:]).min()
-            if gap < 1e-5:
-                logger.warn(cc, 'HOMO-LUMO gap %s too small for KCCSD at '
-                                'k-point %d %s. May cause issues in convergence.',
-                            gap, kp, kpts[kp])
+        # Get location of padded elements in occupied and virtual space.
+        nocc_per_kpt = get_nocc(cc, per_kpoint=True)
+        nonzero_padding = padding_k_idx(cc, kind="joint")
+
+        # Check direct and indirect gaps for possible issues with CCSD convergence.
+        mo_e = [self.mo_energy[kp][nonzero_padding[kp]] for kp in range(nkpts)]
+        mo_e = np.sort([y for x in mo_e for y in x])  # Sort de-nested array
+        gap = mo_e[np.sum(nocc_per_kpt)] - mo_e[np.sum(nocc_per_kpt)-1]
+        if gap < 1e-5:
+            logger.warn(cc, 'HOMO-LUMO gap %s too small for KCCSD. '
+                            'May cause issues in convergence.', gap)
 
         mem_incore, mem_outcore, mem_basic = _mem_usage(nkpts, nocc, nvir)
         mem_now = lib.current_memory()[0]

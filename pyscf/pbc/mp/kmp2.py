@@ -59,10 +59,8 @@ def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE):
     mo_e_o = [mo_energy[k][:nocc] for k in range(nkpts)]
     mo_e_v = [mo_energy[k][nocc:] for k in range(nkpts)]
 
-    # Get location of padded elements in occupied and virtual space
-    nonzero_padding = padding_k_idx(mp, kind="split")
-    zero_occ_padding = [np.setdiff1d(np.arange(nocc), x) for x in nonzero_padding[0]]
-    zero_vir_padding = [np.setdiff1d(np.arange(nvir), x) for x in nonzero_padding[1]]
+    # Get location of non-zero/padded elements in occupied and virtual space
+    nonzero_opadding, nonzero_vpadding = padding_k_idx(mp, kind="split")
 
     for ki in range(nkpts):
       for kj in range(nkpts):
@@ -78,11 +76,14 @@ def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE):
         for ka in range(nkpts):
             kb = kconserv[ki,ka,kj]
 
-            eia = mo_e_o[ki][:,None] - mo_e_v[ka]
-            eia[np.ix_(zero_occ_padding[ki], zero_vir_padding[ka])] = LARGE_DENOM
+            # Remove zero/padded elements from denominator
+            eia = LARGE_DENOM * np.ones((nocc, nvir), dtype=mo_energy[0].dtype)
+            n0_ovp_ia = np.ix_(nonzero_opadding[ki], nonzero_vpadding[ka])
+            eia[n0_ovp_ia] = (mo_e_o[ki][:,None] - mo_e_v[ka])[n0_ovp_ia]
 
-            ejb = mo_e_o[kj][:,None] - mo_e_v[kb]
-            ejb[np.ix_(zero_occ_padding[kj], zero_vir_padding[kb])] = LARGE_DENOM
+            ejb = LARGE_DENOM * np.ones((nocc, nvir), dtype=mo_energy[0].dtype)
+            n0_ovp_jb = np.ix_(nonzero_opadding[kj], nonzero_vpadding[kb])
+            ejb[n0_ovp_jb] = (mo_e_o[kj][:,None] - mo_e_v[kb])[n0_ovp_jb]
 
             eijab = lib.direct_sum('ia,jb->ijab',eia,ejb)
             t2_ijab = np.conj(oovv_ij[ka]/eijab)
@@ -196,7 +197,7 @@ def padded_mo_energy(mp, mo_energy):
     padding_convention = padding_k_idx(mp, kind="joint")
     nkpts = mp.nkpts
 
-    result = LARGE_DENOM * np.ones((nkpts, mp.nmo), dtype=mo_energy[0].dtype)
+    result = np.zeros((nkpts, mp.nmo), dtype=mo_energy[0].dtype)
     for k in range(nkpts):
         result[np.ix_([k], padding_convention[k])] = mo_energy[k][frozen_mask[k]]
 
