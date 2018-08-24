@@ -28,7 +28,7 @@ class gw(scf):
     self.rescf = kw['rescf'] if 'rescf' in kw else False
     self.bsize = kw['bsize'] if 'bsize' in kw else min(40, self.norbs)
     self.tdscf = kw['tdscf'] if 'tdscf' in kw else None
-    #if sum(self.nelec) == 1: raise RuntimeError('use RHF')
+    if sum(self.nelec) == 1: raise RuntimeError('Not implemented H, sorry :-) Look into scf/__init__.py for HF1e class...')
     
     if self.nspin==1: self.nocc_0t = nocc_0t = np.array([int((self.nelec+1)/2)])
     elif self.nspin==2: self.nocc_0t = nocc_0t = self.nelec
