@@ -71,11 +71,11 @@ def kernel(gw, mo_energy, mo_coeff, td_e, td_xy, eris=None,
 
     nexc = len(td_e)
     # factor of 2 for normalization, see tddft/rhf.py
-    td_xy = 2*np.asarray(td_xy) # (nexc, 2, nvir, nocc)
-    td_z = np.sum(td_xy, axis=1).reshape(nexc,nvir,nocc)
-    tdm_oo = einsum('vai,iapq->vpq', td_z, eris.ovoo)
-    tdm_ov = einsum('vai,iapq->vpq', td_z, eris.ovov)
-    tdm_vv = einsum('vai,iapq->vpq', td_z, eris.ovvv)
+    td_xy = 2*np.asarray(td_xy) # (nexc, 2, nocc, nvir)
+    td_z = np.sum(td_xy, axis=1).reshape(nexc,nocc,nvir)
+    tdm_oo = einsum('via,iapq->vpq', td_z, eris.ovoo)
+    tdm_ov = einsum('via,iapq->vpq', td_z, eris.ovov)
+    tdm_vv = einsum('via,iapq->vpq', td_z, eris.ovvv)
     tdm = []
     for oo,ov,vv in zip(tdm_oo,tdm_ov,tdm_vv):
         tdm.append(np.array(np.bmat([[oo, ov],[ov.T, vv]])))
