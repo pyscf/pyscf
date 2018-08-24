@@ -115,6 +115,32 @@ int CVHFnrs8_prescreen(int *shls, CVHFOpt *opt,
             || (  opt->dm_cond[i*n+l] > dmin));
 }
 
+int CVHFnrs8_vk_prescreen(int *shls, CVHFOpt *opt,
+                          int *atm, int *bas, double *env)
+{
+        if (!opt) {
+                return 1; // no screen
+        }
+        int i = shls[0];
+        int j = shls[1];
+        int k = shls[2];
+        int l = shls[3];
+        int n = opt->nbas;
+        assert(opt->q_cond);
+        assert(opt->dm_cond);
+        assert(i < n);
+        assert(j < n);
+        assert(k < n);
+        assert(l < n);
+        double qijkl = opt->q_cond[i*n+j] * opt->q_cond[k*n+l];
+        double dmin = opt->direct_scf_cutoff / qijkl;
+        return qijkl > opt->direct_scf_cutoff
+            &&((  opt->dm_cond[j*n+k] > dmin)
+            || (  opt->dm_cond[j*n+l] > dmin)
+            || (  opt->dm_cond[i*n+k] > dmin)
+            || (  opt->dm_cond[i*n+l] > dmin));
+}
+
 // return flag to decide whether transpose01324
 int CVHFr_vknoscreen(int *shls, CVHFOpt *opt,
                      double **dms_cond, int n_dm, double *dm_atleast,
