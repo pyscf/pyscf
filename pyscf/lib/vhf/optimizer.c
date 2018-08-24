@@ -98,21 +98,23 @@ int CVHFnrs8_prescreen(int *shls, CVHFOpt *opt,
         int k = shls[2];
         int l = shls[3];
         int n = opt->nbas;
-        assert(opt->q_cond);
-        assert(opt->dm_cond);
+        double *q_cond = opt->q_cond;
+        double *dm_cond = opt->dm_cond;
+        assert(q_cond);
+        assert(dm_cond);
         assert(i < n);
         assert(j < n);
         assert(k < n);
         assert(l < n);
-        double qijkl = opt->q_cond[i*n+j] * opt->q_cond[k*n+l];
+        double qijkl = q_cond[i*n+j] * q_cond[k*n+l];
         double dmin = opt->direct_scf_cutoff / qijkl;
         return qijkl > opt->direct_scf_cutoff
-            &&((4*opt->dm_cond[j*n+i] > dmin)
-            || (4*opt->dm_cond[l*n+k] > dmin)
-            || (  opt->dm_cond[j*n+k] > dmin)
-            || (  opt->dm_cond[j*n+l] > dmin)
-            || (  opt->dm_cond[i*n+k] > dmin)
-            || (  opt->dm_cond[i*n+l] > dmin));
+            &&((4*dm_cond[j*n+i] > dmin)
+            || (4*dm_cond[l*n+k] > dmin)
+            || (  dm_cond[j*n+k] > dmin)
+            || (  dm_cond[j*n+l] > dmin)
+            || (  dm_cond[i*n+k] > dmin)
+            || (  dm_cond[i*n+l] > dmin));
 }
 
 int CVHFnrs8_vk_prescreen(int *shls, CVHFOpt *opt,
@@ -233,17 +235,21 @@ void CVHFsetnr_direct_scf_dm(CVHFOpt *opt, double *dm, int nset, int *ao_loc,
         int iset;
         double *pdm;
         for (ish = 0; ish < nbas; ish++) {
-        for (jsh = 0; jsh < nbas; jsh++) {
+        for (jsh = 0; jsh <= ish; jsh++) {
                 dmax = 0;
                 for (iset = 0; iset < nset; iset++) {
                         pdm = dm + nao*nao*iset;
                         for (i = ao_loc[ish]; i < ao_loc[ish+1]; i++) {
                         for (j = ao_loc[jsh]; j < ao_loc[jsh+1]; j++) {
-                                tmp = fabs(pdm[i*nao+j]);
+// symmetrize dm_cond because nrs8_prescreen only tests the lower (or upper)
+// triangular part of dm_cond. If density matrix is not hermitian, some
+// integrals may be skipped incorrectly.
+                                tmp = .5 * (fabs(pdm[i*nao+j]) + fabs(pdm[j*nao+i]));
                                 dmax = MAX(dmax, tmp);
                         } }
                 }
                 opt->dm_cond[ish*nbas+jsh] = dmax;
+                opt->dm_cond[jsh*nbas+ish] = dmax;
         } }
 }
 

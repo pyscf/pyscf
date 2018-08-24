@@ -330,6 +330,8 @@ class ROHF(hf.RHF):
         #raise RuntimeError('API updates')
         self.nelec = (x, self.mol.nelectron-x)
 
+    check_sanity = hf.SCF.check_sanity
+
     def dump_flags(self):
         hf.SCF.dump_flags(self)
         nelec = self.nelec

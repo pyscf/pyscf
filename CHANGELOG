@@ -15,6 +15,12 @@ PySCF 1.6 alpha (2018-09-??)
   - CCSD convergency for 2D-PBC AFTDF, GDF and MDF methods
 
 
+PySCF 1.5.3
+-----------
+* Bugfix
+  - get_jk prescreen for non-hermitian density matrices.
+
+
 PySCF 1.5.2 (2018-08-15)
 ------------------------
 * Improved
