@@ -12,11 +12,13 @@ class KnowValues(unittest.TestCase):
   def test_0089_he_atom(self):
     from io import StringIO
     """ Spin-resolved case GW procedure. """
-    gw = gw_c(mf=gto_mf, gto=mol, verbosity=1, niter_max_ev=16, rescf=True, kmat_algo='dp_vertex_loops_sm')
+    gw = gw_c(mf=gto_mf, gto=mol, verbosity=0, niter_max_ev=16, rescf=True, kmat_algo='dp_vertex_loops_sm')
     self.assertEqual(gw.nspin, 2)
     gw.kernel_gw()
-    gw.report()
+    #gw.report()
     np.savetxt('eigvals_g0w0_pyscf_rescf_he_0089.txt', gw.mo_energy_gw[0,:,:].T)
-
+    ev_ref = np.loadtxt('eigvals_g0w0_pyscf_rescf_he_0089.txt-ref').T
+    for n2e,n2r in zip(gw.mo_energy_gw[0], ev_ref):
+      for e,r in zip(n2e,n2r): self.assertAlmostEqual(e, r)
           
 if __name__ == "__main__": unittest.main()

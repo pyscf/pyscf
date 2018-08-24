@@ -291,6 +291,7 @@ class gw(scf):
       if self.verbosity>0:
         np.set_printoptions(linewidth=1000)
         print('Iteration #{}  Relative Error: {:.6f}'.format(i+1, err))
+      if self.verbosity>1:
         for s,n2ev in enumerate(sn2eval_gw):
           print('Spin{}\t{}\t{}\t{}'.format(s+1, n2ev[0:5]*HARTREE2EV, sn2i[s][0:5], sn2r[s][0:5]))
         
@@ -358,6 +359,6 @@ class gw(scf):
     self.xc_code = 'GW'
     if self.verbosity>0:
       print(__name__, ' self.mo_energy_gw, self.xc_code ', self.xc_code)
-      print('\fMatrix of GW-corrected eigenvalues:',self.mo_energy_gw)
+      #print('\fMatrix of GW-corrected eigenvalues:',self.mo_energy_gw)
         
   kernel_gw = make_mo_g0w0
