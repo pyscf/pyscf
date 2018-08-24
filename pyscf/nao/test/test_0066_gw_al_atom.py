@@ -11,7 +11,7 @@ class KnowValues(unittest.TestCase):
 
   def test_0066_al_atom(self):
     """ Spin-resolved case GW procedure. """
-    gw = gw_c(mf=gto_mf, gto=mol, verbosity=0, niter_max_ev=16, nocc=3, nvrt=3, kmat_algo='dp_vertex_loops_sm')
+    gw = gw_c(mf=gto_mf, gto=mol, verbosity=0, niter_max_ev=16, nocc=3, nvrt=3)
     self.assertEqual(gw.nspin, 2)
     gw.kernel_gw()
     #gw.report()
