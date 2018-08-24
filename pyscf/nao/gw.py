@@ -299,7 +299,9 @@ class gw(scf):
         for s,n2ev in enumerate(sn2eval_gw):
           print('Spin{} {}'.format(s+1, n2ev[:]*HARTREE2EV)) #, sn2i[s][:]*HARTREE2EV, sn2r[s][:]*HARTREE2EV))
         
-      if err<self.tol_ev : break
+      if err<self.tol_ev : 
+        print('-'*60,'| Convergence has been reached |','-'*61,'\f')
+        break
     return sn2eval_gw
     
   def report(self):
