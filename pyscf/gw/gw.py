@@ -32,10 +32,13 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf import ao2mo
 from pyscf import dft
-from pyscf.mp.mp2 import get_nocc, get_nmo, get_frozen_mask
+from pyscf.mp.mp2 import get_nocc, get_nmo, get_frozen_mask, _mo_without_core
 from pyscf import __config__
 
 einsum = lib.einsum
+
+BLKMIN = getattr(__config__, 'cc_ccsd_blkmin', 4)
+MEMORYMIN = getattr(__config__, 'cc_ccsd_memorymin', 2000)
 
 def kernel(gw, mo_energy, mo_coeff, td_e, td_xy, eris=None,
            orbs=None, verbose=logger.NOTE):
@@ -65,12 +68,12 @@ def kernel(gw, mo_energy, mo_coeff, td_e, td_xy, eris=None,
     nvir = nmo-nocc
 
     vk_oo = -np.einsum('piiq->pq', eris.oooo)
-    vk_ov = -np.einsum('piiq->pq', eris.ooov)
+    vk_ov = -np.einsum('iqpi->pq', eris.ovoo)
     vk_vv = -np.einsum('ipqi->pq', eris.ovvo).conj()
     vk = np.array(np.bmat([[vk_oo, vk_ov],[vk_ov.T, vk_vv]]))
 
     nexc = len(td_e)
-    # factor of 2 for normalization, see tddft/rhf.py
+    # factor of 2 for normalization, see tdscf/rhf.py
     td_xy = 2*np.asarray(td_xy) # (nexc, 2, nocc, nvir)
     td_z = np.sum(td_xy, axis=1).reshape(nexc,nocc,nvir)
     tdm_oo = einsum('via,iapq->vpq', td_z, eris.ovoo)
@@ -229,101 +232,135 @@ class GW(lib.StreamObject):
         return self.mo_energy
 
     def ao2mo(self, mo_coeff=None):
-        return _ERIS(self, mo_coeff)
-
-
-def _mem_usage(nocc, nvir):
-    incore = (nocc+nvir)**4
-    # Roughly, factor of two for safety
-    incore *= 2
-    basic = nocc*nvir**3
-    outcore = basic
-    return incore*8/1e6, outcore*8/1e6, basic*8/1e6
-
-
-class _ERIS:
-    '''Almost identical to rccsd ERIS except ovvv is dense and no vvvv.
-    '''
-    def __init__(self, cc, mo_coeff=None, method='incore',
-                 ao2mofn=ao2mo.full):
-        cput0 = (time.clock(), time.time())
-        moidx = get_frozen_mask(cc)
-        if mo_coeff is None:
-            self.mo_coeff = mo_coeff = cc.mo_coeff[:,moidx]
-        else:  # If mo_coeff is not canonical orbital
-            self.mo_coeff = mo_coeff = mo_coeff[:,moidx]
-        dm = cc._scf.make_rdm1(cc.mo_coeff, cc.mo_occ)
-        fockao = cc._scf.get_hcore() + cc._scf.get_veff(cc.mol, dm)
-        self.fock = reduce(numpy.dot, (mo_coeff.T, fockao, mo_coeff))
-
-        nocc = cc.nocc
-        nmo = cc.nmo
-        nvir = nmo - nocc
-        mem_incore, mem_outcore, mem_basic = _mem_usage(nocc, nvir)
+        nmo = self.nmo
+        nao = self.mo_coeff.shape[0]
+        nmo_pair = nmo * (nmo+1) // 2
+        nao_pair = nao * (nao+1) // 2
+        mem_incore = (max(nao_pair**2, nmo**4) + nmo_pair**2) * 8/1e6
         mem_now = lib.current_memory()[0]
+        if (self._scf._eri is not None and
+            (mem_incore+mem_now < self.max_memory) or self.mol.incore_anyway):
+            return _make_eris_incore(self, mo_coeff)
 
-        log = logger.Logger(cc.stdout, cc.verbose)
-        if (method == 'incore' and (mem_incore+mem_now < cc.max_memory)
-            or cc.mol.incore_anyway):
-            if ao2mofn == ao2mo.full:
-                if cc._scf._eri is not None:
-                    eri = ao2mo.restore(1, ao2mofn(cc._scf._eri, mo_coeff), nmo)
-                else:
-                    eri = ao2mo.restore(1, ao2mofn(cc._scf.mol, mo_coeff, compact=0), nmo)
-            else:
-                eri = ao2mofn(cc._scf.mol, (mo_coeff,mo_coeff,mo_coeff,mo_coeff), compact=0)
-                if mo_coeff.dtype == np.float: eri = eri.real
-                eri = eri.reshape((nmo,)*4)
-
-            self.dtype = eri.dtype
-            self.oooo = eri[:nocc,:nocc,:nocc,:nocc].copy()
-            self.ooov = eri[:nocc,:nocc,:nocc,nocc:].copy()
-            self.ovoo = eri[:nocc,nocc:,:nocc,:nocc].copy()
-            self.oovo = eri[:nocc,:nocc,nocc:,:nocc].copy()
-            self.ovov = eri[:nocc,nocc:,:nocc,nocc:].copy()
-            self.oovv = eri[:nocc,:nocc,nocc:,nocc:].copy()
-            self.ovvo = eri[:nocc,nocc:,nocc:,:nocc].copy()
-            self.ovvv = eri[:nocc,nocc:,nocc:,nocc:].copy()
-
-        elif hasattr(cc._scf, 'with_df') and cc._scf.with_df:
+        elif hasattr(self._scf, 'with_df'):
+            logger.warn(self, 'GW detected DF being used in the HF object. '
+                        'MO integrals are computed based on the DF 3-index tensors.\n'
+                        'Developer TODO:  Write dfgw.GW for the '
+                        'DF-GW calculations')
             raise NotImplementedError
+            #return _make_df_eris_outcore(self, mo_coeff)
 
         else:
-            orbo = mo_coeff[:,:nocc]
-            self.dtype = mo_coeff.dtype
-            ds_type = mo_coeff.dtype.char
-            self.feri = lib.H5TmpFile()
-            self.oooo = self.feri.create_dataset('oooo', (nocc,nocc,nocc,nocc), ds_type)
-            self.ooov = self.feri.create_dataset('ooov', (nocc,nocc,nocc,nvir), ds_type)
-            self.ovoo = self.feri.create_dataset('ovoo', (nocc,nvir,nocc,nocc), ds_type)
-            self.oovo = self.feri.create_dataset('oovo', (nocc,nocc,nvir,nocc), ds_type)
-            self.ovov = self.feri.create_dataset('ovov', (nocc,nvir,nocc,nvir), ds_type)
-            self.oovv = self.feri.create_dataset('oovv', (nocc,nocc,nvir,nvir), ds_type)
-            self.ovvo = self.feri.create_dataset('ovvo', (nocc,nvir,nvir,nocc), ds_type)
-            self.ovvv = self.feri.create_dataset('ovvv', (nocc,nvir,nvir,nvir), ds_type)
+            return _make_eris_outcore(self, mo_coeff)
 
-            cput1 = time.clock(), time.time()
-            # <ij||pq> = <ij|pq> - <ij|qp> = (ip|jq) - (iq|jp)
-            tmpfile2 = tempfile.NamedTemporaryFile(dir=lib.param.TMPDIR)
-            ao2mo.general(cc.mol, (orbo,mo_coeff,mo_coeff,mo_coeff), tmpfile2.name, 'aa')
-            with h5py.File(tmpfile2.name) as f:
-                buf = numpy.empty((nmo,nmo,nmo))
-                for i in range(nocc):
-                    lib.unpack_tril(f['aa'][i*nmo:(i+1)*nmo], out=buf)
-                    self.oooo[i] = buf[:nocc,:nocc,:nocc]
-                    self.ooov[i] = buf[:nocc,:nocc,nocc:]
-                    self.ovoo[i] = buf[nocc:,:nocc,:nocc]
-                    self.ovov[i] = buf[nocc:,:nocc,nocc:]
-                    self.oovo[i] = buf[:nocc,nocc:,:nocc]
-                    self.oovv[i] = buf[:nocc,nocc:,nocc:]
-                    self.ovvo[i] = buf[nocc:,nocc:,:nocc]
-                    self.ovvv[i] = buf[nocc:,nocc:,nocc:]
-                del(f['aa'])
-                buf = None
 
-            cput1 = log.timer_debug1('transforming oopq, ovpq', *cput1)
+class _ChemistsERIs:
+    '''(pq|rs)
 
-        log.timer('GW integral transformation', *cput0)
+    Identical to rccsd _ChemistsERIs except no vvvv.'''
+    def __init__(self, mol=None):
+        self.mol = mol
+        self.mo_coeff = None
+        self.nocc = None
+        self.fock = None
+
+        self.oooo = None
+        self.ovoo = None
+        self.oovv = None
+        self.ovvo = None
+        self.ovov = None
+        self.ovvv = None
+
+    def _common_init_(self, mycc, mo_coeff=None):
+        if mo_coeff is None:
+            mo_coeff = mycc.mo_coeff
+        self.mo_coeff = mo_coeff = _mo_without_core(mycc, mo_coeff)
+# Note: Recomputed fock matrix since SCF may not be fully converged.
+        dm = mycc._scf.make_rdm1(mycc.mo_coeff, mycc.mo_occ)
+        fockao = mycc._scf.get_hcore() + mycc._scf.get_veff(mycc.mol, dm)
+        self.fock = reduce(numpy.dot, (mo_coeff.conj().T, fockao, mo_coeff))
+        self.nocc = mycc.nocc
+        self.mol = mycc.mol
+
+        mo_e = self.fock.diagonal()
+        try:
+            gap = abs(mo_e[:self.nocc,None] - mo_e[None,self.nocc:]).min()
+            if gap < 1e-5:
+                logger.warn(mycc, 'HOMO-LUMO gap %s too small for GW', gap)
+        except ValueError:  # gap.size == 0
+            pass
+        return self
+
+def _make_eris_incore(mycc, mo_coeff=None, ao2mofn=None):
+    cput0 = (time.clock(), time.time())
+    eris = _ChemistsERIs()
+    eris._common_init_(mycc, mo_coeff)
+    nocc = eris.nocc
+    nmo = eris.fock.shape[0]
+
+    if callable(ao2mofn):
+        eri1 = ao2mofn(eris.mo_coeff).reshape([nmo]*4)
+    else:
+        eri1 = ao2mo.incore.full(mycc._scf._eri, eris.mo_coeff)
+        eri1 = ao2mo.restore(1, eri1, nmo)
+    eris.oooo = eri1[:nocc,:nocc,:nocc,:nocc].copy()
+    eris.ovoo = eri1[:nocc,nocc:,:nocc,:nocc].copy()
+    eris.ovov = eri1[:nocc,nocc:,:nocc,nocc:].copy()
+    eris.oovv = eri1[:nocc,:nocc,nocc:,nocc:].copy()
+    eris.ovvo = eri1[:nocc,nocc:,nocc:,:nocc].copy()
+    eris.ovvv = eri1[:nocc,nocc:,nocc:,nocc:].copy()
+    logger.timer(mycc, 'GW integral transformation', *cput0)
+    return eris
+
+def _make_eris_outcore(mycc, mo_coeff=None):
+    cput0 = (time.clock(), time.time())
+    log = logger.Logger(mycc.stdout, mycc.verbose)
+    eris = _ChemistsERIs()
+    eris._common_init_(mycc, mo_coeff)
+
+    mol = mycc.mol
+    mo_coeff = eris.mo_coeff
+    nocc = eris.nocc
+    nao, nmo = mo_coeff.shape
+    nvir = nmo - nocc
+    eris.feri1 = lib.H5TmpFile()
+    eris.oooo = eris.feri1.create_dataset('oooo', (nocc,nocc,nocc,nocc), 'f8')
+    eris.ovoo = eris.feri1.create_dataset('ovoo', (nocc,nvir,nocc,nocc), 'f8', chunks=(nocc,1,nocc,nocc))
+    eris.ovov = eris.feri1.create_dataset('ovov', (nocc,nvir,nocc,nvir), 'f8', chunks=(nocc,1,nocc,nvir))
+    eris.ovvo = eris.feri1.create_dataset('ovvo', (nocc,nvir,nvir,nocc), 'f8', chunks=(nocc,1,nvir,nocc))
+    eris.ovvv = eris.feri1.create_dataset('ovvv', (nocc,nvir,nvir,nvir), 'f8', chunks=(nocc,1,nvir,nvir))
+    eris.oovv = eris.feri1.create_dataset('oovv', (nocc,nocc,nvir,nvir), 'f8', chunks=(nocc,nocc,1,nvir))
+    max_memory = max(MEMORYMIN, mycc.max_memory-lib.current_memory()[0])
+
+    ftmp = lib.H5TmpFile()
+    ao2mo.full(mol, mo_coeff, ftmp, max_memory=max_memory, verbose=log)
+    eri = ftmp['eri_mo']
+
+    nocc_pair = nocc*(nocc+1)//2
+    tril2sq = lib.square_mat_in_trilu_indices(nmo)
+    oo = eri[:nocc_pair]
+    eris.oooo[:] = ao2mo.restore(1, oo[:,:nocc_pair], nocc)
+    oovv = lib.take_2d(oo, tril2sq[:nocc,:nocc].ravel(), tril2sq[nocc:,nocc:].ravel())
+    eris.oovv[:] = oovv.reshape(nocc,nocc,nvir,nvir)
+    oo = oovv = None
+
+    tril2sq = lib.square_mat_in_trilu_indices(nmo)
+    blksize = min(nvir, max(BLKMIN, int(max_memory*1e6/8/nmo**3/2)))
+    for p0, p1 in lib.prange(0, nvir, blksize):
+        q0, q1 = p0+nocc, p1+nocc
+        off0 = q0*(q0+1)//2
+        off1 = q1*(q1+1)//2
+        buf = lib.unpack_tril(eri[off0:off1])
+
+        tmp = buf[ tril2sq[q0:q1,:nocc] - off0 ]
+        eris.ovoo[:,p0:p1] = tmp[:,:,:nocc,:nocc].transpose(1,0,2,3)
+        eris.ovvo[:,p0:p1] = tmp[:,:,nocc:,:nocc].transpose(1,0,2,3)
+        eris.ovov[:,p0:p1] = tmp[:,:,:nocc,nocc:].transpose(1,0,2,3)
+        eris.ovvv[:,p0:p1] = tmp[:,:,nocc:,nocc:].transpose(1,0,2,3)
+
+        buf = tmp = None
+    log.timer('GW integral transformation', *cput0)
+    return eris
 
 
 if __name__ == '__main__':
