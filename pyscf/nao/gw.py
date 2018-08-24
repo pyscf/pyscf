@@ -96,7 +96,7 @@ class gw(scf):
     if self.nspin==1:
       mat = self.get_hcore()+self.get_j()-0.5*self.get_k()
       mat1 = dot(self.mo_coeff[0,0,:,:,0], mat)
-      expval = einsum('nb,nb->n', mat1, self.mo_coeff[0,0,:,:,0])
+      expval = einsum('nb,nb->n', mat1, self.mo_coeff[0,0,:,:,0]).reshape((1,self.norbs))
     elif self.nspin==2:
       vh = self.get_j()
       mat = self.get_hcore()+vh[0]+vh[1]-self.get_k()
@@ -281,7 +281,10 @@ class gw(scf):
       sn2i = self.gw_corr_int(sn2eval_gw)
       sn2r = self.gw_corr_res(sn2eval_gw)
       
-      sn2eval_gw = [evhf[nn]+n2i+n2r for s,(evhf,n2i,n2r,nn) in enumerate(zip(self.h0_vh_x_expval,sn2i,sn2r,self.nn)) ]
+      sn2eval_gw = []
+      for s,(evhf,n2i,n2r,nn) in enumerate(zip(self.h0_vh_x_expval,sn2i,sn2r,self.nn)):
+        sn2eval_gw.append(evhf[nn]+n2i+n2r)
+        
       sn2mismatch = zeros((self.nspin,self.norbs))
       for s, nn in enumerate(self.nn): sn2mismatch[s,nn] = sn2eval_gw[s][:]-sn2eval_gw_prev[s][:]
       sn2eval_gw_prev = copy(sn2eval_gw)
@@ -293,8 +296,8 @@ class gw(scf):
         print('Iteration #{}  Relative Error: {:.6f}'.format(i+1, err))
       if self.verbosity>1:
         #print(sn2mismatch)
-        for s,(n2ev,nn_conv) in enumerate(zip(sn2eval_gw, self.nn_conv)):
-          print('Spin{} {}'.format(s+1, n2ev[nn_conv]*HARTREE2EV)) #, sn2i[s][nn_conv]*HARTREE2EV, sn2r[s][nn_conv]*HARTREE2EV))
+        for s,n2ev in enumerate(sn2eval_gw):
+          print('Spin{} {}'.format(s+1, n2ev[:]*HARTREE2EV)) #, sn2i[s][:]*HARTREE2EV, sn2r[s][:]*HARTREE2EV))
         
       if err<self.tol_ev : break
     return sn2eval_gw
@@ -360,7 +363,7 @@ class gw(scf):
  
     self.xc_code = 'GW'
     if self.verbosity>0:
-      print(__name__, ' self.mo_energy_gw, self.xc_code ', self.xc_code)
+      print(__name__, 'self.xc_code', self.xc_code)
       #print('\fMatrix of GW-corrected eigenvalues:',self.mo_energy_gw)
         
   kernel_gw = make_mo_g0w0

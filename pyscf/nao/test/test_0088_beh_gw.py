@@ -23,7 +23,7 @@ class KnowValues(unittest.TestCase):
     #print(__name__, 'e_tot =', e_tot)
     
     gw.kernel_gw()
-    gw.report()
+    #gw.report()
     self.assertAlmostEqual(gw.mo_energy_gw[0,0,2]*27.2114, -8.4558357834412305)
     #print(__name__, gw.nspin)
     #print(__name__)

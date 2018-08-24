@@ -23,7 +23,7 @@ def kmat_den(mf, dm=None, algo=None, **kw):
     matrix elements
   """
   import numpy as np
-  from numpy import einsum 
+  from numpy import einsum, dot
 
   pb,hk=mf.add_pb_hk(**kw)
   dm = mf.make_rdm1() if dm is None else dm
@@ -80,11 +80,10 @@ def kmat_den(mf, dm=None, algo=None, **kw):
       Moreover, pc1 and pc2 auxiliaries in atom-centered product basis generate
       rather dense matrices. Therefore, it is desirable to use dominant
       products to store/treat these auxiliaries."""
-       
-    #dab2v_den = pb.get_dp_vertex_array()
+
     dab2v = pb.get_dp_vertex_doubly_sparse(axis=1)
     da2cc = pb.get_da2cc_sparse().tocsr()
-    qd2v  = (da2cc @ hk).transpose()
+    qd2v  = (da2cc * hk).transpose()
     kmat  = np.zeros_like(dm)
 
     if len(dm.shape)==3: # if spin index is present
@@ -94,20 +93,32 @@ def kmat_den(mf, dm=None, algo=None, **kw):
       #print(dab2v[0].shape, type(dab2v[0]))
       for d in range(n):
         #pc2 = einsum('dq,da->qa', dq2v, dab2v_den[:,:,d])
-        pc2 = qd2v @ dab2v[d]
+        #print(da2cc.shape, hk.shape, qd2v.shape, dab2v[d].shape)
+        pc2 = (qd2v * dab2v[d])
         for s in range(mf.nspin):
           for a in range(n):
             #dc  = einsum('db,bc->dc', dab2v_den[:,a,:], dm[s])
-            dc  = dab2v[a] @ dm[s]
-            pc1 = da2cc.T @ dc
+            dc  = (dab2v[a] * dm[s])
+            pc1 = (da2cc.T * dc)
             kmat[s,a,d]  = (pc1*pc2).sum()
     elif len(dm.shape)==2: # if spin index is absent
       for d in range(n):
-        pc2 = qd2v @ dab2v[d]
+        pc2 = (qd2v * dab2v[d])
         for a in range(n):
-          dc  = dab2v[a] @ dm
-          pc1 = da2cc.T @ dc
+          dc  = (dab2v[a] * dm)
+          pc1 = (da2cc.T * dc)
           kmat[a,d]  = (pc1*pc2).sum()
+
+  elif algol=='dp_vertex_loops_sm0':
+    """ Loops over product indices """
+       
+    dab2v = pb.get_dp_vertex_doubly_sparse(axis=0)
+    da2cc = pb.get_da2cc_sparse().tocsr()
+
+    if len(dm.shape)==3: # if spin index is present
+      RuntimeError('to impl')
+    elif len(dm.shape)==2: # if spin index is absent
+      RuntimeError('to impl')
 
   else:
     print('algo=', algo)

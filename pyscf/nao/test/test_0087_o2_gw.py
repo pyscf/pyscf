@@ -11,7 +11,6 @@ e_tot = gto_mf_uhf.kernel()
 class KnowValues(unittest.TestCase):
 
   def test_o2_gw_0087(self):
-    from pyscf.nao.m_fermi_dirac import fermi_dirac_occupations
     from io import StringIO
     """ Spin-resolved case GW procedure. """
     #print(__name__, dir(gto_mf_uhf))
