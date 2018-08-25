@@ -163,6 +163,10 @@ def kmat_den(mf, dm=None, algo=None, **kw):
       raise RuntimeError('?dm.shape?')
 
   elif algol=='sm0_sum':
+    """ 
+    This algorithm is using two sparse representations of the product vertex V^ab_mu.
+    The algorithm was not realized before and it seems to be superior to the algorithm sm0_prd (see above).
+    """
     import scipy.sparse as sparse
           
     dab2v = pb.get_dp_vertex_doubly_sparse(axis=0)
@@ -172,6 +176,7 @@ def kmat_den(mf, dm=None, algo=None, **kw):
     (nnd,nnp),n = da2cc.shape,dm.shape[-1]
     
     if len(dm.shape)==3: # if spin index is present
+      
       for s in range(mf.nspin):
         for mu,a_ap2v in enumerate(dab2v):
           cc = da2cc[mu].toarray().reshape(nnp)
