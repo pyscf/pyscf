@@ -125,7 +125,7 @@ class KnownValues(unittest.TestCase):
     def test_frompointer(self):
         s = numpy.ones(4, dtype=numpy.int16)
         ptr = s.ctypes.data
-        a = frompointer(ptr, count=2, dtype=numpy.int32)
+        a = lib.frompointer(ptr, count=2, dtype=numpy.int32)
         self.assertTrue(numpy.array_equal(a, [65537, 65537]))
 
 
