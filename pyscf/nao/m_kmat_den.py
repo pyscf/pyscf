@@ -37,7 +37,7 @@ def kmat_den(mf, dm=None, algo=None, **kw):
     print(nspin)
     raise RuntimeError('nspin>2?')
     
-  algol = algo.lower() if algo is not None else 'ac_vertex_fm'
+  algol = algo.lower() if algo is not None else 'sm0_sum'
   
   gen_spy_png = kw['gen_spy_png'] if 'gen_spy_png' in kw else False
   
@@ -166,27 +166,32 @@ def kmat_den(mf, dm=None, algo=None, **kw):
     import scipy.sparse as sparse
           
     dab2v = pb.get_dp_vertex_doubly_sparse(axis=0)
+    dab2v_csr = pb.get_dp_vertex_sparse().tocsr()
     da2cc = pb.get_da2cc_sparse().tocsr()
     kmat  = np.zeros_like(dm)
-    nnd,nnp = da2cc.shape
+    (nnd,nnp),n = da2cc.shape,dm.shape[-1]
     
     if len(dm.shape)==3: # if spin index is present
-      raise RuntimeError('3')              
+      for s in range(mf.nspin):
+        for mu,a_ap2v in enumerate(dab2v):
+          cc = da2cc[mu].toarray().reshape(nnp)
+          q2v = dot( cc, hk )
+          nu2v = da2cc * q2v
+          a_bp2vd = sparse.csr_matrix(a_ap2v * dm[s])
+          bp_b2hv = sparse.csr_matrix((nu2v * dab2v_csr).reshape((n,n)))
+          ab_kmat = (a_bp2vd * bp_b2hv)
+          kmat[s][ab_kmat.nonzero()] += ab_kmat.data
+        
     elif len(dm.shape)==2: # if spin index is absent
-      ab2sigma = np.zeros_like(dm)
+
       for mu,a_ap2v in enumerate(dab2v):
         cc = da2cc[mu].toarray().reshape(nnp)
         q2v = dot( cc, hk )
-        a_bp = sparse.csr_matrix(a_ap2v * dm)
-        
-        ab2sigma.fill(0.0)
-        for nu,bp_b2v in enumerate(dab2v):
-          q2cc = da2cc[nu].toarray().reshape(nnp)
-          v = (q2cc * q2v).sum()
-          ab2sigma[bp_b2v.nonzero()] += (bp_b2v.data * v)
-        
-        ab_kmat = (a_bp * ab2sigma)
-        kmat[ab_kmat.nonzero()] += ab_kmat[ab_kmat.nonzero()]
+        nu2v = da2cc * q2v
+        a_bp2vd = sparse.csr_matrix(a_ap2v * dm)
+        bp_b2hv = sparse.csr_matrix((nu2v * dab2v_csr).reshape((n,n)))
+        ab_kmat = (a_bp2vd * bp_b2hv)
+        kmat[ab_kmat.nonzero()] += ab_kmat.data
         
     else:
       print(dm.shape)
