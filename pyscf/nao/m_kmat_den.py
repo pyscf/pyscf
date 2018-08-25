@@ -38,7 +38,9 @@ def kmat_den(mf, dm=None, algo=None, **kw):
     raise RuntimeError('nspin>2?')
     
   algol = algo.lower() if algo is not None else 'ac_vertex_fm'
-
+  
+  gen_spy_png = kw['gen_spy_png'] if 'gen_spy_png' in kw else False
+  
   if algol=='fci':
 
     mf.fci_den = abcd2v = mf.fci_den if hasattr(mf, 'fci_den') else pb.comp_fci_den(hk)
@@ -112,9 +114,12 @@ def kmat_den(mf, dm=None, algo=None, **kw):
       print(dm.shape)
       raise RuntimeError('to impl dm.shape')
 
-  elif algol=='dp_vertex_loops_sm0':
+  elif algol=='sm0_prd':
     import scipy.sparse as sparse
-    
+    if gen_spy_png: 
+      import matplotlib.pyplot as plt
+      plt.ioff()
+          
     dab2v = pb.get_dp_vertex_doubly_sparse(axis=0)
     da2cc = pb.get_da2cc_sparse().tocsr()
     kmat  = np.zeros_like(dm)
@@ -137,11 +142,52 @@ def kmat_den(mf, dm=None, algo=None, **kw):
         cc = da2cc[mu].toarray().reshape(nnp)
         q2v = dot( cc, hk )
         a_bp = sparse.csr_matrix(a_ap2v * dm)
+
+        if gen_spy_png:
+          plt.spy(a_bp.toarray())
+          fname = "spy-v-dm-{:06d}.png".format(mu); print(fname)
+          plt.savefig(fname, bbox_inches='tight'); plt.close()
+        
         for nu,bp_b2v in enumerate(dab2v):
           q2cc = da2cc[nu].toarray().reshape(nnp)
           v = (q2cc * q2v).sum()
           ab2sigma = (a_bp * bp_b2v * v)
+          if gen_spy_png:
+            plt.spy(ab2sigma.toarray())
+            fname = "spy-v-dm-v-{:06d}-{:06d}.png".format(mu,nu); print(fname)
+            plt.savefig(fname, bbox_inches='tight'); plt.close()
+
           if ab2sigma.count_nonzero()>0 : kmat[ab2sigma.nonzero()] += ab2sigma.data
+    else:
+      print(dm.shape)
+      raise RuntimeError('?dm.shape?')
+
+  elif algol=='sm0_sum':
+    import scipy.sparse as sparse
+          
+    dab2v = pb.get_dp_vertex_doubly_sparse(axis=0)
+    da2cc = pb.get_da2cc_sparse().tocsr()
+    kmat  = np.zeros_like(dm)
+    nnd,nnp = da2cc.shape
+    
+    if len(dm.shape)==3: # if spin index is present
+      raise RuntimeError('3')              
+    elif len(dm.shape)==2: # if spin index is absent
+      ab2sigma = np.zeros_like(dm)
+      for mu,a_ap2v in enumerate(dab2v):
+        cc = da2cc[mu].toarray().reshape(nnp)
+        q2v = dot( cc, hk )
+        a_bp = sparse.csr_matrix(a_ap2v * dm)
+        
+        ab2sigma.fill(0.0)
+        for nu,bp_b2v in enumerate(dab2v):
+          q2cc = da2cc[nu].toarray().reshape(nnp)
+          v = (q2cc * q2v).sum()
+          ab2sigma[bp_b2v.nonzero()] += (bp_b2v.data * v)
+        
+        ab_kmat = (a_bp * ab2sigma)
+        kmat[ab_kmat.nonzero()] += ab_kmat[ab_kmat.nonzero()]
+        
     else:
       print(dm.shape)
       raise RuntimeError('?dm.shape?')

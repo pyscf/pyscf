@@ -561,6 +561,19 @@ class prod_basis():
   def get_nprod(self):
     """ Number of (atom-centered) products """
     return self.c2s[-1]
+
+  def generate_png_spy_dp_vertex(self):
+    import matplotlib.pyplot as plt
+    plt.ioff()
+    dab2v = self.get_dp_vertex_doubly_sparse()
+    for i,ab2v in enumerate(dab2v): 
+      plt.spy(ab2v.toarray())
+      fname = "spy-v-{:06d}.png".format(i)
+      print(fname)
+      plt.savefig(fname, bbox_inches='tight')
+      plt.close()
+    return 0
+
 #
 #
 #
