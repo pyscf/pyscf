@@ -609,7 +609,8 @@ class GDF(aft.AFTDF):
             # Truncated Coulomb operator is not postive definite. Load the
             # CDERI tensor of negative part.
             LpqR = LpqI = None
-            with _load3c(self._cderi, 'j3c-', kpti_kptj, 'j3c-kptij') as j3c:
+            with _load3c(self._cderi, 'j3c-', kpti_kptj, 'j3c-kptij',
+                         ignore_key_error=True) as j3c:
                 naux = j3c.shape[0]
                 for b0, b1 in lib.prange(0, naux, blksize):
                     LpqR, LpqI = load(j3c, b0, b1, LpqR, LpqI)
@@ -776,7 +777,8 @@ def fuse_auxcell(mydf, auxcell):
 
 
 class _load3c(object):
-    def __init__(self, cderi, label, kpti_kptj, kptij_label=None):
+    def __init__(self, cderi, label, kpti_kptj, kptij_label=None,
+                 ignore_key_error=False):
         self.cderi = cderi
         self.label = label
         if kptij_label is None:
@@ -785,12 +787,16 @@ class _load3c(object):
             self.kptij_label = kptij_label
         self.kpti_kptj = kpti_kptj
         self.feri = None
+        self.ignore_key_error = ignore_key_error
 
     def __enter__(self):
         self.feri = h5py.File(self.cderi, 'r')
         if self.label not in self.feri:
             # Return a size-0 array to skip the loop in sr_loop
-            return numpy.zeros(0)
+            if self.ignore_key_error:
+                return numpy.zeros(0)
+            else:
+                raise KeyError('Key "%s" not found' % self.label)
 
         kpti_kptj = numpy.asarray(self.kpti_kptj)
         kptij_lst = self.feri[self.kptij_label].value
@@ -804,8 +810,10 @@ def _getitem(h5group, label, kpti_kptj, kptij_lst):
     if len(k_id) > 0:
         key = label + '/' + str(k_id[0])
         if key not in h5group:
-            raise RuntimeError
-            return numpy.zeros(0)
+            if self.ignore_key_error:
+                return numpy.zeros(0)
+            else:
+                raise KeyError('Key "%s" not found' % key)
 
         dat = h5group[key]
         if isinstance(dat, h5py.Group):
@@ -828,8 +836,10 @@ def _getitem(h5group, label, kpti_kptj, kptij_lst):
 
         key = label + '/' + str(k_id[0])
         if key not in h5group:
-            raise RuntimeError
-            return numpy.zeros(0)
+            if self.ignore_key_error:
+                return numpy.zeros(0)
+            else:
+                raise KeyError('Key "%s" not found' % key)
 
 #TODO: put the numpy.hstack() call in _load_and_unpack class to lazily load
 # the 3D tensor if it is too big.
