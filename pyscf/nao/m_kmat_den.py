@@ -184,8 +184,8 @@ def kmat_den(mf, dm=None, algo=None, **kw):
           nu2v = da2cc * q2v
           a_bp2vd = sparse.csr_matrix(a_ap2v * dm[s])
           bp_b2hv = sparse.csr_matrix((nu2v * dab2v_csr).reshape((n,n)))
-          ab_kmat = a_bp2vd * bp_b2hv
-          kmat[s][ab_kmat.nonzero()] += ab_kmat.data
+          ab2vdhv = a_bp2vd * bp_b2hv
+          kmat[s][ab2vdhv.nonzero()] += ab2vdhv.data
         
     elif len(dm.shape)==2: # if spin index is absent
 
@@ -195,8 +195,8 @@ def kmat_den(mf, dm=None, algo=None, **kw):
         nu2v = da2cc * q2v
         a_bp2vd = sparse.csr_matrix(a_ap2v * dm)
         bp_b2hv = sparse.csr_matrix((nu2v * dab2v_csr).reshape((n,n)))
-        ab_kmat = a_bp2vd * bp_b2hv
-        kmat[ab_kmat.nonzero()] += ab_kmat.data
+        ab2vdhv = a_bp2vd * bp_b2hv
+        kmat[ab2vdhv.nonzero()] += ab2vdhv.data
         
     else:
       print(dm.shape)
