@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+#supcell.build()
 # Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -24,9 +25,7 @@ from pyscf.pbc import gto as pbcgto
 from pyscf.pbc import scf as pbcscf
 
 import pyscf.cc
-import pyscf.pbc.cc
-import pyscf.pbc.cc.kccsd_rhf
-import pyscf.pbc.cc.ccsd
+import pyscf.pbc.mpicc as pbcc
 import make_test_cell
 
 import pyscf.pbc.cc.kccsd_t_rhf as kccsd_t_rhf
@@ -46,13 +45,16 @@ def run_kcell(cell, n, nk):
     ekpt = kmf.scf()
 
 
-    cc = pyscf.pbc.cc.kccsd_rhf.RCCSD(kmf)
+    cc = pbcc.kccsd_rhf.RCCSD(kmf)
     cc.conv_tol=1e-8
     cc.verbose = 7
     ecc, t1, t2 = cc.kernel()
     return ekpt, ecc
 
 class KnownValues(unittest.TestCase):
+    def __init__(self):
+        pass
+
     def test_311_n1_high_cost(self):
         L = 7.0
         n = 9
@@ -79,12 +81,12 @@ class KnownValues(unittest.TestCase):
 
         kpts = cell.get_abs_kpts([.5,.5,.5]).reshape(1,3)
         mf = pbcscf.KRHF(cell, kpts=kpts).run(conv_tol=1e-9)
-        kcc = pyscf.pbc.cc.kccsd_rhf.RCCSD(mf)
+        kcc = pbcc.kccsd_rhf.RCCSD(mf)
         kcc.level_shift = .05
         e0 = kcc.kernel()[0]
 
         mf = pbcscf.RHF(cell, kpt=kpts[0]).run(conv_tol=1e-9)
-        mycc = pyscf.pbc.cc.RCCSD(mf)
+        mycc = pbcc.RCCSD(mf)
         e1 = mycc.kernel()[0]
         self.assertAlmostEqual(e0, e1, 5)
 
@@ -104,7 +106,7 @@ class KnownValues(unittest.TestCase):
 
         # KRCCSD calculation, equivalent to running supercell
         # calculation with frozen=[0,1,2] (if done with larger mesh)
-        cc = pyscf.pbc.cc.kccsd_rhf.RCCSD(kmf, frozen=[[0],[0,1]])
+        cc = pbcc.kccsd_rhf.RCCSD(kmf, frozen=[[0],[0,1]])
         cc.diis_start_cycle = 1
         ecc, t1, t2 = cc.kernel()
         self.assertAlmostEqual(ehf, ehf_bench, 9)
@@ -116,7 +118,7 @@ class KnownValues(unittest.TestCase):
 
         # The following calculation at full convergence gives -0.711071910294612
         # for a cell.mesh = [25, 25, 25].
-        mycc = pyscf.pbc.cc.kccsd_rhf.RCCSD(kmf, frozen=0)
+        mycc = pbcc.kccsd_rhf.RCCSD(kmf, frozen=0)
         mycc.diis_start_cycle = 1
         mycc.iterative_damping = 0.05
         mycc.max_cycle = max_cycle
@@ -134,7 +136,7 @@ class KnownValues(unittest.TestCase):
         # The following calculation at full convergence gives -0.6440448716452378
         # for a cell.mesh = [25, 25, 25].  It is equivalent to an RHF supercell [1, 1, 2]
         # calculation with frozen = [0, 3].
-        mycc = pyscf.pbc.cc.kccsd_rhf.RCCSD(kmf, frozen=[[2, 3], [0, 1]])
+        mycc = pbcc.kccsd_rhf.RCCSD(kmf, frozen=[[2, 3], [0, 1]])
         mycc.diis_start_cycle = 1
         mycc.iterative_damping = 0.05
         mycc.max_cycle = max_cycle
@@ -152,7 +154,7 @@ class KnownValues(unittest.TestCase):
         # The following calculation at full convergence gives -0.58688462599474
         # for a cell.mesh = [25, 25, 25].  It is equivalent to a supercell [1, 1, 2]
         # calculation with frozen = [0, 3, 35].
-        mycc = pyscf.pbc.cc.kccsd_rhf.RCCSD(kmf, frozen=[[1, 17], [0]])
+        mycc = pbcc.kccsd_rhf.RCCSD(kmf, frozen=[[1, 17], [0]])
         mycc.diis_start_cycle = 1
         mycc.max_cycle = max_cycle
         mycc.iterative_damping = 0.05
@@ -180,7 +182,7 @@ class KnownValues(unittest.TestCase):
             kmf = pbcscf.RHF(supcell, exxdiv=None)
             ehf = kmf.scf()
 
-            mycc = pyscf.pbc.cc.RCCSD(kmf, frozen=[0, 3, 35])
+            mycc = pbcc.RCCSD(kmf, frozen=[0, 3, 35])
             mycc.max_cycle = max_cycle
             mycc.iterative_damping = 0.04
             ecc, t1, t2 = mycc.kernel()
@@ -255,14 +257,105 @@ class KnownValues(unittest.TestCase):
         kmf = pbcscf.KRHF(cell, kpts=kpts)
         ehf = kmf.kernel()
 
-        mycc = pyscf.pbc.cc.KRCCSD(kmf)
+        mycc = pbcc.KRCCSD(kmf)
         ecc, t1, t2 = mycc.kernel()
 
         energy_t = kccsd_t_rhf.kernel(mycc)
         energy_t_bench = -0.00191443154358
         self.assertAlmostEqual(energy_t, energy_t_bench, 6)
 
+    def test_h4_fcc_k2(self):
+        cell = pbcgto.Cell()
+        cell.atom = [['H', (0.000000000, 0.000000000 , 0.000000000 )],
+        ['H', (0.000000000 , 0.500000000 , 0.250000000)],
+        ['H', (0.500000000 , 0.500000000 , 0.500000000)],
+        ['H',(0.500000000 , 0.000000000 , 0.750000000)]]
+        cell.unit = 'Bohr'
+        cell.a = [[2.293668126,0.,0.],[0.,2.293668126,0],[0,0,5.843888814]]
+        cell.verbose = 7
+        cell.spin = 0
+        cell.charge = 0
+        cell.basis = [[0, [1.2, 1]], [1, [1.0, 1]]]
+        cell.pseudo = 'gth-pade'
+        cell.max_memory = 50000
+        for i in range(len(cell.atom)):
+            cell.atom[i][1] = tuple(np.dot(np.array(cell.atom[i][1]),np.array(cell.a)))
+        cell.build()
+
+        nmp = [2, 1, 1]
+
+        kmf = pbcscf.KRHF(cell)
+        kmf.kpts = cell.make_kpts(nmp, scaled_center=[0.0,0.0,0.0])
+        e = kmf.kernel()
+
+        #mymp = pbmp.KMP2(kmf)
+        #ekmp2, _ = mymp.kernel()
+        #print("KMP2 corr energy (per unit cell) = ", ekmp2)
+
+        mycc = pbcc.KCCSD(kmf)
+        ekccsd, _, _ = mycc.kernel()
+        self.assertAlmostEqual(ekccsd, -0.1627768398339486, 6)
+        e = mycc.eaccsd(nroots=1, kptlist=(0,))[0]
+        self.assertAlmostEqual(e, 0.9484477009723242, 6)
+        e = mycc.eaccsd(nroots=1, kptlist=(1,))[0]
+        self.assertAlmostEqual(e, 0.5809626097420821, 6)
+
+        from pyscf.pbc.tools.pbc import super_cell
+        supcell = super_cell(cell, nmp)
+        supcell.build()
+        mf = pbcscf.KRHF(supcell) #.density_fit(auxbasis='weigend')
+        e = mf.kernel()
+
+        ##mysmp = pbmp.KMP2(mf)
+        ##emp2, _ = mysmp.kernel()
+        ##print("MP2 corr energy (per unit cell) = ", emp2 / np.prod(nmp))
+
+        myscc = pbcc.KCCSD(mf)
+        eccsd, _, _ = myscc.kernel()
+        eccsd /= np.prod(nmp)
+        self.assertAlmostEqual(eccsd, -0.1627768398339486, 6)
+        e = myscc.eaccsd(nroots=1, kptlist=(0,))[0]
+        self.assertAlmostEqual(e, 0.5809626097420821, 6)
+
+    def test_h4_fcc_k2_shift(self):
+        cell = pbcgto.Cell()
+        cell.atom = [['H', (0.000000000, 0.000000000 , 0.000000000 )],
+        ['H', (0.000000000 , 0.500000000 , 0.250000000)],
+        ['H', (0.500000000 , 0.500000000 , 0.500000000)],
+        ['H',(0.500000000 , 0.000000000 , 0.750000000)]]
+        cell.unit = 'Bohr'
+        cell.a = [[2.293668126,0.,0.],[0.,2.293668126,0],[0,0,5.843888814]]
+        cell.verbose = 7
+        cell.spin = 0
+        cell.charge = 0
+        cell.basis = 'gth-szv'
+        cell.pseudo = 'gth-pade'
+        cell.max_memory = 50000
+        for i in range(len(cell.atom)):
+            cell.atom[i][1] = tuple(np.dot(np.array(cell.atom[i][1]),np.array(cell.a)))
+        cell.build()
+
+        nmp = [2, 1, 1]
+
+        kmf = pbcscf.KRHF(cell)
+        kmf.kpts = cell.make_kpts(nmp, scaled_center=[0.5,0.5,0.0])
+        e = kmf.kernel()
+
+        #mymp = pbmp.KMP2(kmf)
+        #ekmp2, _ = mymp.kernel()
+        #print("KMP2 corr energy (per unit cell) = ", ekmp2)
+
+        mycc = pbcc.KCCSD(kmf)
+        ekccsd, _, _ = mycc.kernel()
+        self.assertAlmostEqual(ekccsd, -0.1960427358068873, 6)
+
+        mycc = pbcc.KRCCSD(kmf)
+        ekccsd, _, _ = mycc.kernel()
+        self.assertAlmostEqual(ekccsd, -0.1960427358068873, 6)
+
 if __name__ == '__main__':
     print("Full kpoint_rhf test")
-    unittest.main()
+    #unittest.main()
+    k = KnownValues()
+    k.test_h4_fcc_k2_shift()
 
