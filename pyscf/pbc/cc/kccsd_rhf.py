@@ -1097,7 +1097,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         for kj in range(nkpts):
             jmask_idx = abs(foo[kj].diagonal()) < LOOSE_ZERO_TOL
             for ka in range(nkpts):
-                kb = kconserv[kj, kshift, ka]
+                kb = kconserv[kshift, ka, kj]
                 amask_idx = abs(fvv[ka].diagonal()) < LOOSE_ZERO_TOL
                 bmask_idx = abs(fvv[kb].diagonal()) < LOOSE_ZERO_TOL
 
