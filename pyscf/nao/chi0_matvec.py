@@ -82,7 +82,7 @@ class chi0_matvec(mf):
     self.moms0,self.moms1 = pb.comp_moments(dtype=self.dtype)
     self.nprod = self.moms0.size
 
-    if self.verbosity>0 : print(__name__, ' nprod ', self.nprod, ' cc_da.shape ', self.cc_da.shape)
+    if self.verbosity>0 : print(__name__,'\t====> Number of products = {} and their shape = {}'.format(self.nprod, self.cc_da.shape))
 
     self.td_GPU = tddft_iter_gpu_c(GPU, self.mo_coeff[0, 0, :, :, 0], self.ksn2f, self.ksn2e, 
             self.norbs, self.nfermi, self.nprod, self.vstart)

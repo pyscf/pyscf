@@ -38,11 +38,11 @@ class mf(nao):
       pass
     else:
       raise RuntimeError('unknown constructor')
-    if self.verbosity>0: print(__name__, ' pseudo ', self.pseudo)
+    if self.verbosity>0: print(__name__,'\t\t====> Prepared pseudopotential: ', self.pseudo)
     self.init_libnao()
     if self.gen_pb:
       self.pb = prod_basis(nao=self, **kw)
-      if self.verbosity>0: print(__name__, ' dtype ', self.dtype, ' norbs ', self.norbs)
+      if self.verbosity>0: print(__name__,'\t\t====> Number of orbitals: ', self.norbs)
       #self.pb.init_prod_basis_pp_batch(nao=self, **kw)
  
   def init_mo_coeff_wfsx(self, **kw): 

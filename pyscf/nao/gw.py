@@ -34,7 +34,7 @@ class gw(scf):
     elif self.nspin==2: self.nocc_0t = nocc_0t = self.nelec
     else: raise RuntimeError('nspin>2?')
 
-    if self.verbosity>0: print(__name__, 'nocc_0t =', nocc_0t, 'spin =', self.spin, 'nspin =', self.nspin, 'nfermi = ', self.nfermi)
+    if self.verbosity>0: print(__name__,'\t\t====> Number of occupied states = {}, states up to fermi level= {}, nspin = {}, and spin variance between channels = {}'.format(nocc_0t,self.nfermi,self.nspin,self.spin))
 
     if 'nocc' in kw:
       s2nocc = [kw['nocc']] if type(kw['nocc'])==int else kw['nocc']
@@ -48,12 +48,12 @@ class gw(scf):
     else :
       self.nvrt = array([min(6,j) for j in self.norbs-nocc_0t])
 
-    if self.verbosity>0: print(__name__, 'nocc =', self.nocc, 'nvrt =', self.nvrt)
+    if self.verbosity>0: print(__name__,'\t\t====> Number of ocupied states are = {}, Number of virtual states = {}'.format(self.nocc, self.nvrt))
 
     self.start_st,self.finish_st = self.nocc_0t-self.nocc, self.nocc_0t+self.nvrt
 
     self.nn = [range(self.start_st[s], self.finish_st[s]) for s in range(self.nspin)] # list of states to correct?
-    if self.verbosity>0: print(__name__, 'nn =', self.nn)
+    if self.verbosity>0: print(__name__,'\t\t====> Number of states will be corrected by GW = {}\n'.format(self.nn))
 
     if 'nocc_conv' in kw:
       s2nocc_conv = [kw['nocc_conv']] if type(kw['nocc_conv'])==int else kw['nocc_conv']
@@ -116,7 +116,7 @@ class gw(scf):
     E_fermi = self.fermi_energy
     E_homo = amax(E[where(E<=E_fermi)])
     #first issue >=,E gap goes to 0 for H, when HOMO and E_fermi are identical, and 'tmax_def' goes to infinity
-    E_gap  = amin(E[where(E>E_fermi)]) - E_homo  
+    E_gap  = amin(E[where(E>=E_fermi)]) - E_homo  
     E_maxdiff = amax(E) - amin(E)
     d = amin(abs(E_homo-E)[where(abs(E_homo-E)>1e-4)])
     wmin_def = sqrt(tol * (d**3) * (E_gap**3)/(d**2+E_gap**2))
@@ -293,7 +293,7 @@ class gw(scf):
 
       if self.verbosity>0:
         np.set_printoptions(linewidth=1000, suppress=True, precision=5)
-        print('Iteration #{}  Relative Error: {:.6f}'.format(i+1, err))
+        print('Iteration #{}  Relative Error: {:.7f}'.format(i+1, err))
       if self.verbosity>1:
         #print(sn2mismatch)
         for s,n2ev in enumerate(sn2eval_gw):
@@ -327,7 +327,7 @@ class gw(scf):
     else:
       raise RuntimeError('not implemented...')
     t= int(timer() - starting_time)
-    print('\fTotal running time is: {:02d}:{:02d}:{:02d}'.format(t // 3600, (t % 3600 // 60), t % 60))
+    print('\fTotal running time is: {:02d}:{:02d}:{:02d}\nJOB DONE!'.format(t // 3600, (t % 3600 // 60), t % 60))
     
   def make_mo_g0w0(self):
     """ This creates the fields mo_energy_g0w0, and mo_coeff_g0w0 """
@@ -335,8 +335,7 @@ class gw(scf):
     self.h0_vh_x_expval = self.get_h0_vh_x_expval()
     if self.verbosity>1:
       np.set_printoptions(linewidth=1000, suppress=True, precision=5)
-      print(__name__, '.h0_vh_x_expval: ')
-      print(self.h0_vh_x_expval* HARTREE2EV)
+      print('h0_vh_x_expval:\n{}\f'.format(self.h0_vh_x_expval* HARTREE2EV))
 
     if not hasattr(self,'sn2eval_gw'): self.sn2eval_gw=self.g0w0_eigvals() # Comp. GW-corrections
     
@@ -365,7 +364,7 @@ class gw(scf):
  
     self.xc_code = 'GW'
     if self.verbosity>0:
-      print(__name__, 'self.xc_code', self.xc_code)
+      print(__name__,'\t\t====> Performed xc_code: {}\f '.format(self.xc_code))
       #print('\fMatrix of GW-corrected eigenvalues:',self.mo_energy_gw)
         
   kernel_gw = make_mo_g0w0
