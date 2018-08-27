@@ -89,7 +89,7 @@ Installation
 
 Tutorials
 ---------
-* An Ipython notebook of user-guide can be found in https://github.com/nmardirossian/PySCF_Tutorial.
+* A user-guide written in Ipython notebook can be found in https://github.com/nmardirossian/PySCF_Tutorial.
   This repository documents the basic structure of PySCF input script and the
   use of regular methods which were routinely executed in most quantum chemistry
   packages.  It also provides an implementation to drive PySCF program in a

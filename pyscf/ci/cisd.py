@@ -338,6 +338,78 @@ def from_fcivec(ci0, norb, nelec, frozen=0):
     c2 = c2.reshape(nocc,nvir,nocc,nvir).transpose(0,2,1,3)
     return amplitudes_to_cisdvec(c0, c1, c2)
 
+def overlap(cibra, ciket, nmo, nocc, s=None):
+    '''Overlap between two CISD wavefunctions.
+
+    Args:
+        s : 2D array
+            The overlap matrix of non-orthogonal one-particle basis
+    '''
+    if s is None:
+        return dot(cibra, ciket, nmo, nocc)
+
+    nvir = nmo - nocc
+    nov = nocc * nvir
+
+    bra0, bra1, bra2 = cisdvec_to_amplitudes(cibra, nmo, nocc)
+    ket0, ket1, ket2 = cisdvec_to_amplitudes(ciket, nmo, nocc)
+    ooidx = numpy.tril_indices(nocc, -1)
+    vvidx = numpy.tril_indices(nvir, -1)
+    bra2aa = bra2 - bra2.transpose(1,0,2,3)
+    bra2aa = lib.take_2d(bra2aa.reshape(nocc**2,nvir**2),
+                         ooidx[0]*nocc+ooidx[1], vvidx[0]*nvir+vvidx[1])
+    ket2aa = ket2 - ket2.transpose(1,0,2,3)
+    ket2aa = lib.take_2d(ket2aa.reshape(nocc**2,nvir**2),
+                         ooidx[0]*nocc+ooidx[1], vvidx[0]*nvir+vvidx[1])
+
+    occlist0 = numpy.arange(nocc).reshape(1,nocc)
+    occlists = numpy.repeat(occlist0, 1+nov+bra2aa.size, axis=0)
+    occlist0 = occlists[:1]
+    occlist1 = occlists[1:1+nov]
+    occlist2 = occlists[1+nov:]
+
+    ia = 0
+    for i in range(nocc):
+        for a in range(nocc, nmo):
+            occlist1[ia,i] = a
+            ia += 1
+
+    ia = 0
+    for i in range(nocc):
+        for j in range(i):
+            for a in range(nocc, nmo):
+                for b in range(nocc, a):
+                    occlist2[ia,i] = a
+                    occlist2[ia,j] = b
+                    ia += 1
+
+    na = len(occlists)
+    trans = numpy.empty((na,na))
+    for i, idx in enumerate(occlists):
+        s_sub = s[idx].T.copy()
+        minors = s_sub[occlists]
+        trans[i,:] = numpy.linalg.det(minors)
+
+    # Mimic the transformation einsum('ab,ap->pb', FCI, trans).
+    # The wavefunction FCI has the [excitation_alpha,excitation_beta]
+    # representation.  The zero blocks like FCI[S_alpha,D_beta],
+    # FCI[D_alpha,D_beta], are explicitly excluded.
+    bra_mat = numpy.zeros((na,na))
+    bra_mat[0,0] = bra0
+    bra_mat[0,1:1+nov] = bra_mat[1:1+nov,0] = bra1.ravel()
+    bra_mat[0,1+nov:] = bra_mat[1+nov:,0] = bra2aa.ravel()
+    bra_mat[1:1+nov,1:1+nov] = bra2.transpose(0,2,1,3).reshape(nov,nov)
+    c_s = lib.einsum('ab,ap,bq->pq', bra_mat, trans, trans)
+    ovlp  =  c_s[0,0] * ket0
+    ovlp += numpy.dot(c_s[0,1:1+nov], ket1.ravel())
+    ovlp += numpy.dot(c_s[1:1+nov,0], ket1.ravel())
+    ovlp += numpy.dot(c_s[0,1+nov:] , ket2aa.ravel())
+    ovlp += numpy.dot(c_s[1+nov:,0] , ket2aa.ravel())
+    ovlp += numpy.einsum('ijab,iajb->', ket2,
+                         c_s[1:1+nov,1:1+nov].reshape(nocc,nvir,nocc,nvir))
+    return ovlp
+
+
 def make_rdm1(myci, civec=None, nmo=None, nocc=None):
     '''
     Spin-traced one-particle density matrix in MO basis (the occupied-virtual

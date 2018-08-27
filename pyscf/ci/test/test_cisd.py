@@ -369,6 +369,25 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(numpy.all(addrsr == addrs))
         self.assertTrue(numpy.all(signsr == signs))
 
+    def test_overlap(self):
+        nmo = 6
+        nocc = 3
+        nvir = nmo - nocc
+        c2 = numpy.random.rand(nocc,nocc,nvir,nvir)
+        cibra = cisd.amplitudes_to_cisdvec(numpy.random.rand(1),
+                                           numpy.random.rand(nocc,nvir),
+                                           c2+c2.transpose(1,0,3,2))
+        c2 = numpy.random.rand(nocc,nocc,nvir,nvir)
+        ciket = cisd.amplitudes_to_cisdvec(numpy.random.rand(1),
+                                           numpy.random.rand(nocc,nvir),
+                                           c2+c2.transpose(1,0,3,2))
+        fcibra = cisd.to_fcivec(cibra, nmo, nocc*2)
+        fciket = cisd.to_fcivec(ciket, nmo, nocc*2)
+        s_mo = numpy.random.random((nmo,nmo))
+        s0 = fci.addons.overlap(fcibra, fciket, nmo, nocc*2, s_mo)
+        s1 = cisd.overlap(cibra, ciket, nmo, nocc, s_mo)
+        self.assertAlmostEqual(s1, s0, 9)
+
 
 def t1_strs_ref(norb, nelec):
     nocc = nelec
