@@ -153,3 +153,20 @@ def kmat_den(mf, dm=None, algo=None, **kw):
 
   return kmat
 
+
+def plt_chess(self):
+    """Shows Matrix elements in chessboard"""
+    import matplotlib.pylab as plt
+    plt.ion()
+    for i, ab in enumerate(self): 
+        print('Matrix No.#{}, Size: {}, Type:{}'.format(i+1, ab.shape, type(ab)))
+        if type(ab) != 'numpy.ndarray': ab = ab.toarray()
+        fig = plt.figure()
+        ax = fig.add_subplot(1,1,1)
+        ax.set_aspect('equal')
+        plt.imshow(ab, interpolation='nearest', cmap=plt.cm.ocean)
+        plt.colorbar()
+        plt.show()
+        plt.pause(0.7)
+        plt.close(fig)
+
