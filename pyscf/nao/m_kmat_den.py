@@ -11,8 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 from __future__ import print_function, division
+
 
 def kmat_den(mf, dm=None, algo=None, **kw):
   """
@@ -37,8 +37,10 @@ def kmat_den(mf, dm=None, algo=None, **kw):
     print(nspin)
     raise RuntimeError('nspin>2?')
     
-  algol = algo.lower() if algo is not None else 'ac_vertex_fm'
-
+  algol = algo.lower() if algo is not None else 'sm0_sum'
+  
+  gen_spy_png = kw['gen_spy_png'] if 'gen_spy_png' in kw else False
+  
   if algol=='fci':
 
     mf.fci_den = abcd2v = mf.fci_den if hasattr(mf, 'fci_den') else pb.comp_fci_den(hk)
@@ -111,11 +113,13 @@ def kmat_den(mf, dm=None, algo=None, **kw):
     else:
       print(dm.shape)
       raise RuntimeError('to impl dm.shape')
-      
-  elif algol=='dp_vertex_loops_sm0':
-    """ Loops over product indices """
+
+  elif algol=='sm0_prd':
     import scipy.sparse as sparse
-    
+    if gen_spy_png: 
+      import matplotlib.pyplot as plt
+      plt.ioff()
+          
     dab2v = pb.get_dp_vertex_doubly_sparse(axis=0)
     da2cc = pb.get_da2cc_sparse().tocsr()
     kmat  = np.zeros_like(dm)
@@ -138,14 +142,65 @@ def kmat_den(mf, dm=None, algo=None, **kw):
         cc = da2cc[mu].toarray().reshape(nnp)
         q2v = dot( cc, hk )
         a_bp = sparse.csr_matrix(a_ap2v * dm)
+
+        if gen_spy_png:
+          plt.spy(a_bp.toarray())
+          fname = "spy-v-dm-{:06d}.png".format(mu); print(fname)
+          plt.savefig(fname, bbox_inches='tight'); plt.close()
+        
         for nu,bp_b2v in enumerate(dab2v):
           q2cc = da2cc[nu].toarray().reshape(nnp)
           v = (q2cc * q2v).sum()
           ab2sigma = (a_bp * bp_b2v * v)
+          if gen_spy_png:
+            plt.spy(ab2sigma.toarray())
+            fname = "spy-v-dm-v-{:06d}-{:06d}.png".format(mu,nu); print(fname)
+            plt.savefig(fname, bbox_inches='tight'); plt.close()
+
           if ab2sigma.count_nonzero()>0 : kmat[ab2sigma.nonzero()] += ab2sigma.data
     else:
       print(dm.shape)
-      raise RuntimeError('to impl dm.shape')
+      raise RuntimeError('?dm.shape?')
+
+  elif algol=='sm0_sum':
+    """ 
+    This algorithm is using two sparse representations of the product vertex V^ab_mu.
+    The algorithm was not realized before and it seems to be superior to the algorithm sm0_prd (see above).
+    """
+    import scipy.sparse as sparse
+          
+    dab2v = pb.get_dp_vertex_doubly_sparse(axis=0)
+    dab2v_csr = pb.get_dp_vertex_sparse().tocsr()
+    da2cc = pb.get_da2cc_sparse().tocsr()
+    kmat  = np.zeros_like(dm)
+    (nnd,nnp),n = da2cc.shape,dm.shape[-1]
+    
+    if len(dm.shape)==3: # if spin index is present
+      
+      for s in range(mf.nspin):
+        for mu,a_ap2v in enumerate(dab2v):
+          cc = da2cc[mu].toarray().reshape(nnp)
+          q2v = dot( cc, hk )
+          nu2v = da2cc * q2v
+          a_bp2vd = sparse.csr_matrix(a_ap2v * dm[s])
+          bp_b2hv = sparse.csr_matrix((nu2v * dab2v_csr).reshape((n,n)))
+          ab2vdhv = a_bp2vd * bp_b2hv
+          kmat[s][ab2vdhv.nonzero()] += ab2vdhv.data
+        
+    elif len(dm.shape)==2: # if spin index is absent
+
+      for mu,a_ap2v in enumerate(dab2v):
+        cc = da2cc[mu].toarray().reshape(nnp)
+        q2v = dot( cc, hk )
+        nu2v = da2cc * q2v
+        a_bp2vd = sparse.csr_matrix(a_ap2v * dm)
+        bp_b2hv = sparse.csr_matrix((nu2v * dab2v_csr).reshape((n,n)))
+        ab2vdhv = a_bp2vd * bp_b2hv
+        kmat[ab2vdhv.nonzero()] += ab2vdhv.data
+        
+    else:
+      print(dm.shape)
+      raise RuntimeError('?dm.shape?')
 
   else:
     print('algo=', algo)

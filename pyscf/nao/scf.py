@@ -117,8 +117,9 @@ class scf(tddft_iter):
         print(__name__, 'nelec dm', (dm*self.overlap_lil().toarray()).sum())
       else:
         print(__name__, dm.shape)
-        
-    return kmat_den(self, dm=dm, algo=self.kmat_algo, **kw)
+    
+    kmat_algo = kw['kmat_algo'] if 'kmat_algo' in kw else self.kmat_algo
+    return kmat_den(self, dm=dm, algo=kmat_algo, **kw)
 
   def get_jk(self, mol=None, dm=None, hermi=1, **kw):
     if dm is None: dm = self.make_rdm1()
