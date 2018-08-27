@@ -400,13 +400,14 @@ class SCF(mol_hf.SCF):
         logger.info(self, '******** PBC SCF flags ********')
         logger.info(self, 'kpt = %s', self.kpt)
         logger.info(self, 'Exchange divergence treatment (exxdiv) = %s', self.exxdiv)
-        if (self.cell.dimension == 3 and
+        cell = self.cell
+        if ((cell.dimension >= 2 and cell.low_dim_ft_type != 'inf_vacuum') and
             isinstance(self.exxdiv, str) and self.exxdiv.lower() == 'ewald'):
-            madelung = tools.pbc.madelung(self.cell, [self.kpt])
+            madelung = tools.pbc.madelung(cell, [self.kpt])
             logger.info(self, '    madelung (= occupied orbital energy shift) = %s', madelung)
             logger.info(self, '    Total energy shift due to Ewald probe charge'
                         ' = -1/2 * Nelec*madelung = %.12g',
-                        madelung*self.cell.nelectron * -.5)
+                        madelung*cell.nelectron * -.5)
         logger.info(self, 'DF object = %s', self.with_df)
         if not hasattr(self.with_df, 'build'):
             # .dump_flags() is called in pbc.df.build function
