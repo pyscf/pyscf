@@ -38,7 +38,7 @@ def kmat_den(mf, dm=None, algo=None, **kw):
     raise RuntimeError('nspin>2?')
     
   algol = algo.lower() if algo is not None else 'sm0_sum'
-  print("\f====> Matrix elements of Fock exchange operator was calculated by using '{}' algorithm.\f".format(algol))
+  print(__name__, "\t====> Matrix elements of Fock exchange operator was calculated by using '{}' algorithm.\f".format(algol))
   gen_spy_png = kw['gen_spy_png'] if 'gen_spy_png' in kw else False
   
   if algol=='fci':

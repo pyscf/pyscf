@@ -8,7 +8,7 @@ from pyscf.nao.m_tddft_iter_gpu import tddft_iter_gpu_c
 from pyscf.nao.m_chi0_noxv import chi0_mv_gpu, chi0_mv
 from pyscf.nao.m_blas_wrapper import spmv_wrapper
 from copy import copy
-
+from pyscf.data.nist import HARTREE2EV
 
 class chi0_matvec(mf):
   """ A class to organize the application of non-interacting response to a vector """
@@ -63,11 +63,11 @@ class chi0_matvec(mf):
     self.xvrt = [self.mo_coeff[0,s,vstart:,:,0] for s,vstart in enumerate(self.vstart)]
  
     if self.verbosity>1 :
-      print(__name__, ' self.dtype ', self.dtype)
-      print(__name__, ' self.xocc[0].dtype ', self.xocc[0].dtype)
-      print(__name__, ' self.xvrt[0].dtype ', self.xvrt[0].dtype)
-      print(__name__, ' self.ksn2e.dtype ', self.ksn2e.dtype)
-      print(__name__, ' self.ksn2f.dtype ', self.ksn2f.dtype)
+      #print(__name__, '\t====> self.dtype ', self.dtype)
+      print(__name__, '\t====> self.xocc[0].dtype ', self.xocc[0].dtype)
+      print(__name__, '\t====> self.xvrt[0].dtype ', self.xvrt[0].dtype)
+      print(__name__, '\t====> Molecular orbital energies (ksn2e) (eV):\n{},\tType: {}'.format(self.ksn2e*HARTREE2EV,self.ksn2e.dtype))
+      print(__name__, '\t====> Occupied states (ksn2f):\n{},\tType: {}'.format(self.ksn2f,self.ksn2f.dtype))
 
     self.rf0_ncalls = 0
             
