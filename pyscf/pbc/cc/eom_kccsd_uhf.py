@@ -435,7 +435,7 @@ def eaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
         kb = kconserv[kshift, ka, kj]
         tmpa = lib.einsum('ac,jcb->jab', uccsd_imds.Fvv[ka], r2aaa[kj,ka])
         tmpb = lib.einsum('bc,jca->jab', uccsd_imds.Fvv[kb], r2aaa[kj,kb])
-        Hr2aaa[kj,ka] += tmpa - tmpb 
+        Hr2aaa[kj,ka] += tmpa - tmpb
         Hr2aba[kj,ka] += lib.einsum('AC,jCb->jAb', uccsd_imds.FVV[ka], r2aba[kj,ka])
         Hr2bab[kj,ka] += lib.einsum('ac,JcB->JaB', uccsd_imds.Fvv[ka], r2bab[kj,ka])
         Hr2aba[kj,ka] += lib.einsum('bc, jAc -> jAb', uccsd_imds.Fvv[kb], r2aba[kj,ka])
@@ -665,9 +665,44 @@ if __name__ == '__main__':
     # IP version
     myeom = EOMIP(mycc)
     imds = myeom.make_imds(eris=kccsd_eris, t1=spin_t1, t2=spin_t2)
-    imds._uccsd_eris = eris
-    imds._uccsd_imds = _IMDS(mycc, eris=eris)
-    imds._uccsd_imds.make_ip()
+    #imds._uccsd_eris = eris
+    #imds._uccsd_imds = _IMDS(mycc, eris=eris)
+    #imds._uccsd_imds.make_ip()
+
+    from kintermediates import Woooo as goooo
+    g = goooo(kgcc,spin_t1,spin_t2,kccsd_eris,kconserv).transpose(0,2,1,3,5,4,6)
+    goooo = g[:,:,:,0:nocca,0:nocca,0:nocca,0:nocca]
+    print(np.linalg.norm(goooo))
+    from kintermediates_uhf import Woooo
+    Woooo, WooOO, WOOoo, WOOOO = Woooo(cc,t1,t2,eris, kconserv)
+    print(np.linalg.norm(Woooo))
+    _eri_spin2spatial(Woooo_J, 'oooo', uccsd_eris, cross_ab=True)
+    exit()
+
+    ##### test block
+
+    from kintermediates import Wovoo as govoo
+    gw = govoo(kgcc,spin_t1,spin_t2,kccsd_eris,kconserv).transpose(0,2,1,3,5,4,6)
+
+    goovo = gw[:,:,:,0:nocca,0:nocca,0:nvira,0:nocca]
+    gooVO = gw[:,:,:,0:nocca,0:nocca,nvira:,nocca:]
+    gOOvo = gw[:,:,:,nocca:,nocca:,0:nvira,0:nocca]
+    gOOVO = gw[:,:,:,nocca:,nocca:,nvira:,nocca:]
+    print(np.linalg.norm(goovo))
+    from kintermediates_uhf import Wovoo
+    Woovo, WooVO, WOOvo, WOOVO = Wovoo(cc,t1,t2,eris, kconserv)
+    #print(gw[0,0,0,0,0,0,1])
+    #print(Woovo[0,0,0,0,0,0,1])
+    exit()
+    print(Woovo.shape, WooVO.shape, WOOvo.shape, WOOVO.shape)
+    print(np.linalg.norm(goovo - Woovo))
+    print(np.linalg.norm(gooVO - WooVO))
+    print(np.linalg.norm(gOOvo - WOOvo))
+    print(np.linalg.norm(gOOVO - WOOVO))
+    exit()
+
+
+    ##### end block
 
     spin_r1_ip = (np.random.rand(nocc)*1j +
                   np.random.rand(nocc) - 0.5 - 0.5*1j)
