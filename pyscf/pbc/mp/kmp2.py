@@ -252,17 +252,17 @@ def _frozen_sanity_check(frozen, mo_occ, kpt_idx):
         raise RuntimeError('Freezing orbital not in MO list!\n\nkpt_idx %s\n'
                            'frozen %s\nmax orbital idx %s' % (kpt_idx, frozen, len(mo_occ) - 1))
 
-    occ_idx = np.where(mo_occ > 0)
-    max_occ_idx = np.max(occ_idx)
-    frozen_nocc = len(frozen[frozen <= max_occ_idx])
-    if frozen_nocc >= nocc:
-        raise RuntimeError('Cannot freeze all occupied orbitals!:\n\n'
-                           'kpt_idx %s\nfrozen %s\nmo_occ %s' % (kpt_idx, frozen, mo_occ))
+    #occ_idx = np.where(mo_occ > 0)
+    #max_occ_idx = np.max(occ_idx)
+    #frozen_nocc = len(frozen[frozen <= max_occ_idx])
+    #if frozen_nocc >= nocc:
+    #    raise RuntimeError('Cannot freeze all occupied orbitals!:\n\n'
+    #                       'kpt_idx %s\nfrozen %s\nmo_occ %s' % (kpt_idx, frozen, mo_occ))
 
-    frozen_nvir = len(frozen[frozen > max_occ_idx])
-    if frozen_nvir >= nvir:
-        raise RuntimeError('Cannot freeze all virtual orbitals!:\n\n'
-                           'kpt_idx %s\nfrozen %s\nmo_occ %s' % (kpt_idx, frozen, mo_occ))
+    #frozen_nvir = len(frozen[frozen > max_occ_idx])
+    #if frozen_nvir >= nvir:
+    #    raise RuntimeError('Cannot freeze all virtual orbitals!:\n\n'
+    #                       'kpt_idx %s\nfrozen %s\nmo_occ %s' % (kpt_idx, frozen, mo_occ))
 
 
 def get_nocc(mp, per_kpoint=False):
