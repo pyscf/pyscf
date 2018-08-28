@@ -431,6 +431,7 @@ def Woooo(cc,t1,t2,eris, kconserv):
     WOOoo = None
     return Woooo, WooOO, WOOoo, WOOOO
 
+
 def Wovoo(cc,t1,t2,eris, kconserv):
     #kconserv = kpts_helper.get_kconserv(cc.cell, cc.kpts)
     #kconserv = cc.khelper.kconserv
@@ -553,3 +554,115 @@ def Wovoo(cc,t1,t2,eris, kconserv):
         WOOVO[km,kb,ki] += 0.5 * einsum('xMBEF,xIJEF->MIBJ', OVVV[km,kb,:], taubb[ki,kj,:])
 
     return Woovo, WooVO, WOOvo, WOOVO
+
+# vvvv is a string, ('oooo', 'ooov', ..., 'vvvv')
+# orbspin can be accessed through general spin-orbital kintermediates eris
+# orbspin = eris.mo_coeff.orbspin
+def _eri_spin2spatial(chemist_eri_spin, vvvv, eris, orbspin, cross_ab=False):
+    nocc_a, nocc_b = eris.nocc
+    nocc = nocc_a + nocc_b
+    nkpts = len(orbspin)
+    idxoa = [np.where(orbspin[k][:nocc] == 0)[0] for k in range(nkpts)]
+    idxob = [np.where(orbspin[k][:nocc] == 1)[0] for k in range(nkpts)]
+    idxva = [np.where(orbspin[k][nocc:] == 0)[0] for k in range(nkpts)]
+    idxvb = [np.where(orbspin[k][nocc:] == 1)[0] for k in range(nkpts)]
+    nvir_a = len(idxva[0])
+    nvir_b = len(idxvb[0])
+
+    def select_idx(s):
+        if s.lower() == 'o':
+            return idxoa, idxob
+        else:
+            return idxva, idxvb
+
+    if len(vvvv) == 2:
+        idx1a, idx1b = select_idx(vvvv[0])
+        idx2a, idx2b = select_idx(vvvv[1])
+
+        fa = np.zeros((nkpts,len(idx1a[0]),len(idx2a[0])), dtype=np.complex128)
+        fb = np.zeros((nkpts,len(idx1b[0]),len(idx2b[0])), dtype=np.complex128)
+        for k in range(nkpts):
+            fa[k] = chemist_eri_spin[k, idx1a[k][:,None],idx2a[k]]
+            fb[k] = chemist_eri_spin[k, idx1b[k][:,None],idx2b[k]]
+        return fa, fb
+
+    idx1a, idx1b = select_idx(vvvv[0])
+    idx2a, idx2b = select_idx(vvvv[1])
+    idx3a, idx3b = select_idx(vvvv[2])
+    idx4a, idx4b = select_idx(vvvv[3])
+
+    eri_aaaa = np.zeros((nkpts,nkpts,nkpts,len(idx1a[0]),len(idx2a[0]),len(idx3a[0]),len(idx4a[0])), dtype=np.complex128)
+    eri_aabb = np.zeros((nkpts,nkpts,nkpts,len(idx1a[0]),len(idx2a[0]),len(idx3b[0]),len(idx4b[0])), dtype=np.complex128)
+    eri_bbaa = np.zeros((nkpts,nkpts,nkpts,len(idx1b[0]),len(idx2b[0]),len(idx3a[0]),len(idx4a[0])), dtype=np.complex128)
+    eri_bbbb = np.zeros((nkpts,nkpts,nkpts,len(idx1b[0]),len(idx2b[0]),len(idx3b[0]),len(idx4b[0])), dtype=np.complex128)
+    if cross_ab:
+        eri_abba = np.zeros((nkpts,nkpts,nkpts,len(idx1a[0]),len(idx2b[0]),len(idx3b[0]),len(idx4a[0])), dtype=np.complex128)
+        eri_baab = np.zeros((nkpts,nkpts,nkpts,len(idx1b[0]),len(idx2a[0]),len(idx3a[0]),len(idx4b[0])), dtype=np.complex128)
+    kconserv = kpts_helper.get_kconserv(eris.cell, eris.kpts)
+    for ki, kj, kk in kpts_helper.loop_kkk(nkpts):
+        kl = kconserv[ki, kj, kk]
+        eri_aaaa[ki,kj,kk] = chemist_eri_spin[ki,kj,kk, idx1a[ki][:,None,None,None],idx2a[kj][:,None,None],idx3a[kk][:,None],idx4a[kl]]
+        eri_aabb[ki,kj,kk] = chemist_eri_spin[ki,kj,kk, idx1a[ki][:,None,None,None],idx2a[kj][:,None,None],idx3b[kk][:,None],idx4b[kl]]
+        eri_bbaa[ki,kj,kk] = chemist_eri_spin[ki,kj,kk, idx1b[ki][:,None,None,None],idx2b[kj][:,None,None],idx3a[kk][:,None],idx4a[kl]]
+        eri_bbbb[ki,kj,kk] = chemist_eri_spin[ki,kj,kk, idx1b[ki][:,None,None,None],idx2b[kj][:,None,None],idx3b[kk][:,None],idx4b[kl]]
+        if cross_ab:
+            eri_abba[ki,kj,kk] = chemist_eri_spin[ki,kj,kk, idx1a[ki][:,None,None,None],idx2b[kj][:,None,None],idx3b[kk][:,None],idx4a[kl]]
+            eri_baab[ki,kj,kk] = chemist_eri_spin[ki,kj,kk, idx1b[ki][:,None,None,None],idx2a[kj][:,None,None],idx3a[kk][:,None],idx4b[kl]]
+    if cross_ab:
+        return eri_aaaa, eri_aabb, eri_bbaa, eri_bbbb, eri_abba, eri_baab
+    else:
+        return eri_aaaa, eri_aabb, eri_bbaa, eri_bbbb
+
+def _eri_spatial2spin(eri_aa_ab_ba_bb, vvvv, eris, orbspin, cross_ab=False):
+    nocc_a, nocc_b = eris.nocc
+    nocc = nocc_a + nocc_b
+    nkpts = len(orbspin)
+    idxoa = [np.where(orbspin[k][:nocc] == 0)[0] for k in range(nkpts)]
+    idxob = [np.where(orbspin[k][:nocc] == 1)[0] for k in range(nkpts)]
+    idxva = [np.where(orbspin[k][nocc:] == 0)[0] for k in range(nkpts)]
+    idxvb = [np.where(orbspin[k][nocc:] == 1)[0] for k in range(nkpts)]
+    nvir_a = len(idxva[0])
+    nvir_b = len(idxvb[0])
+
+    def select_idx(s):
+        if s.lower() == 'o':
+            return idxoa, idxob
+        else:
+            return idxva, idxvb
+
+    if len(vvvv) == 2:
+        idx1a, idx1b = select_idx(vvvv[0])
+        idx2a, idx2b = select_idx(vvvv[1])
+
+        fa, fb = eri_aa_ab_ba_bb
+        f = np.zeros((nkpts, len(idx1a[0])+len(idx1b[0]),
+                      len(idx2a[0])+len(idx2b[0])), dtype=np.complex128)
+        for k in range(nkpts):
+            f[k, idx1a[k][:,None],idx2a[k]] = fa[k]
+            f[k, idx1b[k][:,None],idx2b[k]] = fb[k]
+        return f
+
+    idx1a, idx1b = select_idx(vvvv[0])
+    idx2a, idx2b = select_idx(vvvv[1])
+    idx3a, idx3b = select_idx(vvvv[2])
+    idx4a, idx4b = select_idx(vvvv[3])
+
+    if cross_ab:
+        eri_aaaa, eri_aabb, eri_bbaa, eri_bbbb, eri_abba, eri_baab = eri_aa_ab_ba_bb
+    else:
+        eri_aaaa, eri_aabb, eri_bbaa, eri_bbbb = eri_aa_ab_ba_bb
+    eri = np.zeros((nkpts,nkpts,nkpts, len(idx1a[0])+len(idx1b[0]),
+                    len(idx2a[0])+len(idx2b[0]),
+                    len(idx3a[0])+len(idx3b[0]),
+                    len(idx4a[0])+len(idx4b[0])), dtype=np.complex128)
+    kconserv = kpts_helper.get_kconserv(eris.cell, eris.kpts)
+    for ki, kj, kk in kpts_helper.loop_kkk(nkpts):
+        kl = kconserv[ki, kj, kk]
+        eri[ki,kj,kk, idx1a[ki][:,None,None,None],idx2a[kj][:,None,None],idx3a[kk][:,None],idx4a[kl]] = eri_aaaa[ki,kj,kk]
+        eri[ki,kj,kk, idx1a[ki][:,None,None,None],idx2a[kj][:,None,None],idx3b[kk][:,None],idx4b[kl]] = eri_aabb[ki,kj,kk]
+        eri[ki,kj,kk, idx1b[ki][:,None,None,None],idx2b[kj][:,None,None],idx3a[kk][:,None],idx4a[kl]] = eri_bbaa[ki,kj,kk]
+        eri[ki,kj,kk, idx1b[ki][:,None,None,None],idx2b[kj][:,None,None],idx3b[kk][:,None],idx4b[kl]] = eri_bbbb[ki,kj,kk]
+        if cross_ab:
+            eri[ki,kj,kk, idx1a[ki][:,None,None,None],idx2b[kj][:,None,None],idx3b[kk][:,None],idx4a[kl]] = eri_abba[ki,kj,kk]
+            eri[ki,kj,kk, idx1b[ki][:,None,None,None],idx2a[kj][:,None,None],idx3a[kk][:,None],idx4b[kl]] = eri_baab[ki,kj,kk]
+    return eri
