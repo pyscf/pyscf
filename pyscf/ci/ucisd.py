@@ -32,7 +32,7 @@ from pyscf.fci import cistring
 from pyscf.cc.ccsd import _unpack_4fold
 
 def make_diagonal(myci, eris):
-    nocca, noccb = myci.nocc
+    nocca, noccb = eris.nocc
     nmoa = eris.focka.shape[0]
     nmob = eris.fockb.shape[1]
     nvira = nmoa - nocca
@@ -490,6 +490,115 @@ def from_fcivec(ci0, norb, nelec, frozen=0):
 
     return amplitudes_to_cisdvec(c0, (c1a,c1b), (c2aa,c2ab,c2bb))
 
+def overlap(cibra, ciket, nmo, nocc, s=None):
+    '''Overlap between two CISD wavefunctions.
+
+    Args:
+        s : a list of 2D arrays
+            The overlap matrix of non-orthogonal one-particle basis
+    '''
+    if s is None:
+        return dot(cibra, ciket, nmo, nocc)
+
+    if isinstance(nmo, (int, numpy.integer)):
+        nmoa = nmob = nmo
+    else:
+        nmoa, nmob = nmo
+    nocca, noccb = nocc
+    nvira, nvirb = nmoa - nocca, nmob - noccb
+
+    bra0, bra1, bra2 = cisdvec_to_amplitudes(cibra, (nmoa,nmob), nocc)
+    ket0, ket1, ket2 = cisdvec_to_amplitudes(ciket, (nmoa,nmob), nocc)
+
+    ooidx = numpy.tril_indices(nocca, -1)
+    vvidx = numpy.tril_indices(nvira, -1)
+    bra2aa = lib.take_2d(bra2[0].reshape(nocca**2,nvira**2),
+                         ooidx[0]*nocca+ooidx[1], vvidx[0]*nvira+vvidx[1])
+    ket2aa = lib.take_2d(ket2[0].reshape(nocca**2,nvira**2),
+                         ooidx[0]*nocca+ooidx[1], vvidx[0]*nvira+vvidx[1])
+
+    ooidx = numpy.tril_indices(noccb, -1)
+    vvidx = numpy.tril_indices(nvirb, -1)
+    bra2bb = lib.take_2d(bra2[2].reshape(noccb**2,nvirb**2),
+                         ooidx[0]*noccb+ooidx[1], vvidx[0]*nvirb+vvidx[1])
+    ket2bb = lib.take_2d(ket2[2].reshape(noccb**2,nvirb**2),
+                         ooidx[0]*noccb+ooidx[1], vvidx[0]*nvirb+vvidx[1])
+
+    nova = nocca * nvira
+    novb = noccb * nvirb
+    occlist0a = numpy.arange(nocca).reshape(1,nocca)
+    occlist0b = numpy.arange(noccb).reshape(1,noccb)
+    occlistsa = numpy.repeat(occlist0a, 1+nova+bra2aa.size, axis=0)
+    occlistsb = numpy.repeat(occlist0b, 1+novb+bra2bb.size, axis=0)
+    occlist0a = occlistsa[:1]
+    occlist1a = occlistsa[1:1+nova]
+    occlist2a = occlistsa[1+nova:]
+    occlist0b = occlistsb[:1]
+    occlist1b = occlistsb[1:1+novb]
+    occlist2b = occlistsb[1+novb:]
+
+    ia = 0
+    for i in range(nocca):
+        for a in range(nocca, nmoa):
+            occlist1a[ia,i] = a
+            ia += 1
+    ia = 0
+    for i in range(noccb):
+        for a in range(noccb, nmob):
+            occlist1b[ia,i] = a
+            ia += 1
+
+    ia = 0
+    for i in range(nocca):
+        for j in range(i):
+            for a in range(nocca, nmoa):
+                for b in range(nocca, a):
+                    occlist2a[ia,i] = a
+                    occlist2a[ia,j] = b
+                    ia += 1
+    ia = 0
+    for i in range(noccb):
+        for j in range(i):
+            for a in range(noccb, nmob):
+                for b in range(noccb, a):
+                    occlist2b[ia,i] = a
+                    occlist2b[ia,j] = b
+                    ia += 1
+
+    na = len(occlistsa)
+    trans_a = numpy.empty((na,na))
+    for i, idx in enumerate(occlistsa):
+        s_sub = s[0][idx].T.copy()
+        minors = s_sub[occlistsa]
+        trans_a[i,:] = numpy.linalg.det(minors)
+    nb = len(occlistsb)
+    trans_b = numpy.empty((nb,nb))
+    for i, idx in enumerate(occlistsb):
+        s_sub = s[1][idx].T.copy()
+        minors = s_sub[occlistsb]
+        trans_b[i,:] = numpy.linalg.det(minors)
+
+    # Mimic the transformation einsum('ab,ap->pb', FCI, trans).
+    # The wavefunction FCI has the [excitation_alpha,excitation_beta]
+    # representation.  The zero blocks like FCI[S_alpha,D_beta],
+    # FCI[D_alpha,D_beta], are explicitly excluded.
+    bra_mat = numpy.zeros((na,nb))
+    bra_mat[0,0] = bra0
+    bra_mat[1:1+nova,0] = bra1[0].ravel()
+    bra_mat[0,1:1+novb] = bra1[1].ravel()
+    bra_mat[1+nova:,0] = bra2aa.ravel()
+    bra_mat[0,1+novb:] = bra2bb.ravel()
+    bra_mat[1:1+nova,1:1+novb] = bra2[1].transpose(0,2,1,3).reshape(nova,novb)
+    c_s = lib.einsum('ab,ap,bq->pq', bra_mat, trans_a, trans_b)
+    ovlp  =  c_s[0,0] * ket0
+    ovlp += numpy.dot(c_s[1:1+nova,0], ket1[0].ravel())
+    ovlp += numpy.dot(c_s[0,1:1+novb], ket1[1].ravel())
+    ovlp += numpy.dot(c_s[1+nova:,0] , ket2aa.ravel())
+    ovlp += numpy.dot(c_s[0,1+novb:] , ket2bb.ravel())
+    ovlp += numpy.einsum('ijab,iajb->', ket2[1],
+                         c_s[1:1+nova,1:1+novb].reshape(nocca,nvira,noccb,nvirb))
+    return ovlp
+
 
 def make_rdm1(myci, civec=None, nmo=None, nocc=None):
     r'''
@@ -763,8 +872,7 @@ class UCISD(cisd.CISD):
     def get_init_guess(self, eris=None, nroots=1, diag=None):
         if eris is None: eris = self.ao2mo(self.mo_coeff)
         nocca, noccb = self.nocc
-        mo_ea = eris.focka.diagonal()
-        mo_eb = eris.fockb.diagonal()
+        mo_ea, mo_eb = eris.mo_energy
         eia_a = mo_ea[:nocca,None] - mo_ea[None,nocca:]
         eia_b = mo_eb[:noccb,None] - mo_eb[None,noccb:]
         t1a = eris.focka[:nocca,nocca:].conj() / eia_a
@@ -879,33 +987,60 @@ if __name__ == '__main__':
         ['H', ( 0., 0.757 , 0.587)],]
     mol.basis = {'H': 'sto-3g',
                  'O': 'sto-3g',}
-    mol.build()
-    mf = scf.UHF(mol).run(conv_tol=1e-14)
-    myci = CISD(mf)
-    eris = myci.ao2mo()
-    ecisd, civec = myci.kernel(eris=eris)
-    print(ecisd - -0.048878084082066106)
+#    mol.build()
+#    mf = scf.UHF(mol).run(conv_tol=1e-14)
+#    myci = CISD(mf)
+#    eris = myci.ao2mo()
+#    ecisd, civec = myci.kernel(eris=eris)
+#    print(ecisd - -0.048878084082066106)
+#
+#    nmoa = mf.mo_energy[0].size
+#    nmob = mf.mo_energy[1].size
+#    rdm1 = myci.make_rdm1(civec)
+#    rdm2 = myci.make_rdm2(civec)
+#    eri_aa = ao2mo.kernel(mf._eri, mf.mo_coeff[0], compact=False).reshape([nmoa]*4)
+#    eri_bb = ao2mo.kernel(mf._eri, mf.mo_coeff[1], compact=False).reshape([nmob]*4)
+#    eri_ab = ao2mo.kernel(mf._eri, [mf.mo_coeff[0], mf.mo_coeff[0],
+#                                    mf.mo_coeff[1], mf.mo_coeff[1]], compact=False)
+#    eri_ab = eri_ab.reshape(nmoa,nmoa,nmob,nmob)
+#    h1a = reduce(numpy.dot, (mf.mo_coeff[0].T, mf.get_hcore(), mf.mo_coeff[0]))
+#    h1b = reduce(numpy.dot, (mf.mo_coeff[1].T, mf.get_hcore(), mf.mo_coeff[1]))
+#    e2 = (numpy.einsum('ij,ji', h1a, rdm1[0]) +
+#          numpy.einsum('ij,ji', h1b, rdm1[1]) +
+#          numpy.einsum('ijkl,ijkl', eri_aa, rdm2[0]) * .5 +
+#          numpy.einsum('ijkl,ijkl', eri_ab, rdm2[1])      +
+#          numpy.einsum('ijkl,ijkl', eri_bb, rdm2[2]) * .5)
+#    print(ecisd + mf.e_tot - mol.energy_nuc() - e2)   # = 0
+#
+#    print(abs(rdm1[0] - (numpy.einsum('ijkk->ji', rdm2[0]) +
+#                         numpy.einsum('ijkk->ji', rdm2[1]))/(mol.nelectron-1)).sum())
+#    print(abs(rdm1[1] - (numpy.einsum('ijkk->ji', rdm2[2]) +
+#                         numpy.einsum('kkij->ji', rdm2[1]))/(mol.nelectron-1)).sum())
 
-    nmoa = mf.mo_energy[0].size
-    nmob = mf.mo_energy[1].size
-    rdm1 = myci.make_rdm1(civec)
-    rdm2 = myci.make_rdm2(civec)
-    eri_aa = ao2mo.kernel(mf._eri, mf.mo_coeff[0], compact=False).reshape([nmoa]*4)
-    eri_bb = ao2mo.kernel(mf._eri, mf.mo_coeff[1], compact=False).reshape([nmob]*4)
-    eri_ab = ao2mo.kernel(mf._eri, [mf.mo_coeff[0], mf.mo_coeff[0],
-                                    mf.mo_coeff[1], mf.mo_coeff[1]], compact=False)
-    eri_ab = eri_ab.reshape(nmoa,nmoa,nmob,nmob)
-    h1a = reduce(numpy.dot, (mf.mo_coeff[0].T, mf.get_hcore(), mf.mo_coeff[0]))
-    h1b = reduce(numpy.dot, (mf.mo_coeff[1].T, mf.get_hcore(), mf.mo_coeff[1]))
-    e2 = (numpy.einsum('ij,ji', h1a, rdm1[0]) +
-          numpy.einsum('ij,ji', h1b, rdm1[1]) +
-          numpy.einsum('ijkl,ijkl', eri_aa, rdm2[0]) * .5 +
-          numpy.einsum('ijkl,ijkl', eri_ab, rdm2[1])      +
-          numpy.einsum('ijkl,ijkl', eri_bb, rdm2[2]) * .5)
-    print(ecisd + mf.e_tot - mol.energy_nuc() - e2)   # = 0
-
-    print(abs(rdm1[0] - (numpy.einsum('ijkk->ji', rdm2[0]) +
-                         numpy.einsum('ijkk->ji', rdm2[1]))/(mol.nelectron-1)).sum())
-    print(abs(rdm1[1] - (numpy.einsum('ijkk->ji', rdm2[2]) +
-                         numpy.einsum('kkij->ji', rdm2[1]))/(mol.nelectron-1)).sum())
-
+    if 1:
+        from pyscf.ci import ucisd
+        from pyscf import fci
+        nmo = 8
+        nocc = nocca, noccb = (4,3)
+        numpy.random.seed(2)
+        nvira, nvirb = nmo-nocca, nmo-noccb
+        cibra = ucisd.amplitudes_to_cisdvec(numpy.random.rand(1),
+                                            (numpy.random.rand(nocca,nvira),
+                                             numpy.random.rand(noccb,nvirb)),
+                                            (numpy.random.rand(nocca,nocca,nvira,nvira),
+                                             numpy.random.rand(nocca,noccb,nvira,nvirb),
+                                             numpy.random.rand(noccb,noccb,nvirb,nvirb)))
+        ciket = ucisd.amplitudes_to_cisdvec(numpy.random.rand(1),
+                                            (numpy.random.rand(nocca,nvira),
+                                             numpy.random.rand(noccb,nvirb)),
+                                            (numpy.random.rand(nocca,nocca,nvira,nvira),
+                                             numpy.random.rand(nocca,noccb,nvira,nvirb),
+                                             numpy.random.rand(noccb,noccb,nvirb,nvirb)))
+        fcibra = ucisd.to_fcivec(cibra, nmo, nocc)
+        fciket = ucisd.to_fcivec(ciket, nmo, nocc)
+        s_mo = (numpy.random.random((nmo,nmo)),
+                numpy.random.random((nmo,nmo)))
+        s_mo = (s_mo[0], s_mo[0])
+        s0 = fci.addons.overlap(fcibra, fciket, nmo, nocc, s_mo)
+        s1 = ucisd.overlap(cibra, ciket, nmo, nocc, s_mo)
+        print(s1, s0, 9)

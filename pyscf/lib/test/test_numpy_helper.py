@@ -122,6 +122,13 @@ class KnownValues(unittest.TestCase):
         a = a - a.T
         self.assertAlmostEqual(abs(scipy.linalg.expm(a) - lib.expm(a)).max(), 0, 12)
 
+    def test_frompointer(self):
+        s = numpy.ones(4, dtype=numpy.int16)
+        ptr = s.ctypes.data
+        a = lib.frompointer(ptr, count=2, dtype=numpy.int32)
+        self.assertTrue(numpy.array_equal(a, [65537, 65537]))
+
+
 if __name__ == "__main__":
     print("Full Tests for numpy_helper")
     unittest.main()

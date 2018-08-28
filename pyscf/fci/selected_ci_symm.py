@@ -182,29 +182,24 @@ class SelectedCI(selected_ci.SelectedCI):
                nroots=None, davidson_only=None, pspace_size=None,
                orbsym=None, wfnsym=None, ecore=0, **kwargs):
         if nroots is None: nroots = self.nroots
-        if orbsym is not None:
-            self.orbsym, orbsym_bak = orbsym, self.orbsym
-        if wfnsym is not None:
-            self.wfnsym, wfnsym_bak = wfnsym, self.wfnsym
+        if orbsym is None: orbsym = self.orbsym
+        if wfnsym is None: wfnsym = self.wfnsym
         if self.verbose >= logger.WARN:
             self.check_sanity()
 
-        wfnsym0 = self.guess_wfnsym(norb, nelec, ci0, self.wfnsym, **kwargs)
-        e, c = selected_ci.kernel_float_space(self, h1e, eri, norb, nelec, ci0,
-                                              tol, lindep, max_cycle, max_space,
-                                              nroots, davidson_only, ecore=ecore,
-                                              **kwargs)
-        if self.wfnsym is not None:
-            strsa, strsb = c._strs
-            if nroots > 1:
-                c = [addons._symmetrize_wfn(ci, strsa, strsb, self.orbsym, wfnsym0)
-                     for ci in c]
-            else:
-                c = addons._symmetrize_wfn(c, strsa, strsb, self.orbsym, wfnsym0)
-        if orbsym is not None:
-            self.orbsym = orbsym_bak
-        if wfnsym is not None:
-            self.wfnsym = wfnsym_bak
+        with lib.temporary_env(self, orbsym=orbsym, wfnsym=wfnsym):
+            wfnsym0 = self.guess_wfnsym(norb, nelec, ci0, wfnsym, **kwargs)
+            e, c = selected_ci.kernel_float_space(self, h1e, eri, norb, nelec, ci0,
+                                                  tol, lindep, max_cycle, max_space,
+                                                  nroots, davidson_only, ecore=ecore,
+                                                  **kwargs)
+            if wfnsym is not None:
+                strsa, strsb = c._strs
+                if nroots > 1:
+                    c = [addons._symmetrize_wfn(ci, strsa, strsb, self.orbsym, wfnsym0)
+                         for ci in c]
+                else:
+                    c = addons._symmetrize_wfn(c, strsa, strsb, self.orbsym, wfnsym0)
 
         self.eci, self.ci = e, c
         return e, c

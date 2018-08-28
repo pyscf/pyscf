@@ -38,7 +38,7 @@ cell.build()
 
 def run_kcell(cell, nk):
     abs_kpts = cell.make_kpts(nk, wrap_around=True)
-    kmf = pbchf.KRHF(cell, abs_kpts, exxdiv=None)
+    kmf = pbchf.KRHF(cell, abs_kpts)
     kmf.conv_tol = 1e-12
     ekpt = kmf.scf()
     mp = pyscf.pbc.mp.kmp2.KMP2(kmf).run()
@@ -47,19 +47,15 @@ def run_kcell(cell, nk):
 class KnownValues(unittest.TestCase):
     def test_111(self):
         nk = (1, 1, 1)
-        hf_111 = -0.79932851980207353
-        mp_111 = -2.4124398409652723e-05
         escf, emp = run_kcell(cell,nk)
-        self.assertAlmostEqual(escf, hf_111, 9)
-        self.assertAlmostEqual(emp, mp_111, 6)
+        self.assertAlmostEqual(escf, -1.2061049658473704, 9)
+        self.assertAlmostEqual(emp, -5.44597932944397e-06, 9)
 
     def test_311_high_cost(self):
         nk = (3, 1, 1)
-        hf_311 = -0.85656225114216422
-        mp_311 = -8.3491016166387105e-06
         escf, emp = run_kcell(cell,nk)
-        self.assertAlmostEqual(escf,hf_311, 9)
-        self.assertAlmostEqual(emp, mp_311, 6)
+        self.assertAlmostEqual(escf, -1.0585001200928885, 9)
+        self.assertAlmostEqual(emp, -7.9832274354253814e-06, 9)
 
 if __name__ == '__main__':
     print("Full kpoint test")

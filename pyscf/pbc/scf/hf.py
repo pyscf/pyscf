@@ -317,12 +317,8 @@ def makov_payne_correction(mf):
     logger.note(mf, 'Makov-Payne correction for charged 3D PBC systems')
     # PRB 51 (1995), 4014
     # PRB 77 (2008), 115139
-    if cell.dimension != 3 and not isinstance(mf.with_df, df.fft.FFTDF):
-        logger.warn(mf, 'Correction for low-dimension AFTDF/GDF/MDF '
-                    'is not available.')
-        return mf
-    elif cell.low_dim_ft_type == 'analytic_2d_1':
-        logger.warn(mf, 'Correction for truncated Coulomb operator '
+    if cell.dimension != 3:
+        logger.warn(mf, 'Correction for low-dimension PBC systems'
                     'is not available.')
         return mf
 
@@ -409,7 +405,7 @@ class SCF(mol_hf.SCF):
             madelung = tools.pbc.madelung(self.cell, [self.kpt])
             logger.info(self, '    madelung (= occupied orbital energy shift) = %s', madelung)
             logger.info(self, '    Total energy shift due to Ewald probe charge'
-                        ' = -1/2 * Nelec*madelung/cell.vol = %.12g',
+                        ' = -1/2 * Nelec*madelung = %.12g',
                         madelung*self.cell.nelectron * -.5)
         logger.info(self, 'DF object = %s', self.with_df)
         if not hasattr(self.with_df, 'build'):
@@ -614,11 +610,11 @@ class SCF(mol_hf.SCF):
 
     def density_fit(self, auxbasis=None, with_df=None):
         from pyscf.pbc.df import df_jk
-        return df_jk.density_fit(self, auxbasis, with_df)
+        return df_jk.density_fit(self, auxbasis, with_df=with_df)
 
     def mix_density_fit(self, auxbasis=None, with_df=None):
         from pyscf.pbc.df import mdf_jk
-        return mdf_jk.density_fit(self, auxbasis, with_df)
+        return mdf_jk.density_fit(self, auxbasis, with_df=with_df)
 
     def sfx2c1e(self):
         from pyscf.pbc.x2c import sfx2c1e

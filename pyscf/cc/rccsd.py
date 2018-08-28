@@ -113,12 +113,14 @@ def update_amps(cc, t1, t2, eris):
     else:
         Loo = imd.Loo(t1, t2, eris)
         Lvv = imd.Lvv(t1, t2, eris)
-        Loo -= np.diag(np.diag(foo))
-        Lvv -= np.diag(np.diag(fvv))
+        Loo[np.diag_indices(nocc)] -= mo_e_o
+        Lvv[np.diag_indices(nvir)] -= mo_e_v
+
         Woooo = imd.cc_Woooo(t1, t2, eris)
         Wvoov = imd.cc_Wvoov(t1, t2, eris)
         Wvovo = imd.cc_Wvovo(t1, t2, eris)
         Wvvvv = imd.cc_Wvvvv(t1, t2, eris)
+
         tau = t2 + np.einsum('ia,jb->ijab', t1, t1)
         t2new += lib.einsum('klij,klab->ijab', Woooo, tau)
         t2new += lib.einsum('abcd,ijcd->ijab', Wvvvv, tau)

@@ -602,9 +602,8 @@ class UCCSD(ccsd.CCSD):
         if mbpt2:
             pt = ump2.UMP2(self._scf, self.frozen, self.mo_coeff, self.mo_occ)
             self.e_corr, self.t2 = pt.kernel(eris=eris)
-            nocca, noccb = self.nocc
-            nmoa, nmob = self.nmo
-            nvira, nvirb = nmoa-nocca, nmob-noccb
+            t2ab = self.t2[1]
+            nocca, noccb, nvira, nvirb = t2ab.shape
             self.t1 = (np.zeros((nocca,nvira)), np.zeros((noccb,nvirb)))
             return self.e_corr, self.t1, self.t2
 
@@ -771,9 +770,9 @@ class _ChemistsERIs(ccsd._ChemistsERIs):
         nocca, noccb = self.nocc = mycc.nocc
         self.mol = mycc.mol
 
-        mo_ea = self.focka.diagonal()
-        mo_eb = self.fockb.diagonal()
-        self.mo_energy = (mo_ea.real, mo_eb.real)
+        mo_ea = self.focka.diagonal().real
+        mo_eb = self.fockb.diagonal().real
+        self.mo_energy = (mo_ea, mo_eb)
         gap_a = abs(mo_ea[:nocca,None] - mo_ea[None,nocca:])
         gap_b = abs(mo_eb[:noccb,None] - mo_eb[None,noccb:])
         if gap_a.size > 0:

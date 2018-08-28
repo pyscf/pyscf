@@ -524,7 +524,7 @@ def check_sanity(obj, keysref, stdout=sys.stdout):
     objkeys = [x for x in obj.__dict__ if not x.startswith('_')]
     keysub = set(objkeys) - set(keysref)
     if keysub:
-        class_attr = set(obj.__class__.__dict__)
+        class_attr = set(dir(obj.__class__))
         keyin = keysub.intersection(class_attr)
         if keyin:
             msg = ('Overwritten attributes  %s  of %s\n' %
@@ -859,7 +859,32 @@ class GradScanner:
         conv = getattr(self.base, 'converged', True)
         return conv
 
-class light_speed(object):
+class temporary_env(object):
+    '''Within the context of this macro, the attributes of the object are
+    temporarily updated. When the program goes out of the scope of the
+    context, the original value of each attribute will be restored.
+
+    Examples:
+
+    >>> with temporary_env(lib.param, LIGHT_SPEED=15., BOHR=2.5):
+    ...     print(lib.param.LIGHT_SPEED, lib.param.BOHR)
+    15. 2.5
+    >>> print(lib.param.LIGHT_SPEED, lib.param.BOHR)
+    137.03599967994 0.52917721092
+    '''
+    def __init__(self, obj, **kwargs):
+        self.obj = obj
+        keys = [key for key in kwargs.keys() if hasattr(obj, key)]
+        self.env_bak = [(key, getattr(obj, key)) for key in keys]
+        self.env_new = [(key, kwargs[key]) for key in keys]
+    def __enter__(self):
+        for k, v in self.env_new:
+            setattr(self.obj, k, v)
+    def __exit__(self, type, value, traceback):
+        for k, v in self.env_bak:
+            setattr(self.obj, k, v)
+
+class light_speed(temporary_env):
     '''Within the context of this macro, the environment varialbe LIGHT_SPEED
     can be customized.
 
@@ -872,13 +897,11 @@ class light_speed(object):
     137.03599967994
     '''
     def __init__(self, c):
-        self.bak = param.LIGHT_SPEED
+        temporary_env.__init__(self, param, LIGHT_SPEED=c)
         self.c = c
     def __enter__(self):
-        param.LIGHT_SPEED = self.c
+        temporary_env.__enter__(self)
         return self.c
-    def __exit__(self, type, value, traceback):
-        param.LIGHT_SPEED = self.bak
 
 
 if __name__ == '__main__':

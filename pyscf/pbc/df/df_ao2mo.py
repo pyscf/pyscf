@@ -49,8 +49,8 @@ def get_eri(mydf, kpts=None,
 # gamma point, the integral is real and with s4 symmetry
     if gamma_point(kptijkl):
         eriR = numpy.zeros((nao_pair,nao_pair))
-        for LpqR, LpqI in mydf.sr_loop(kptijkl[:2], max_memory, True):
-            lib.ddot(LpqR.T, LpqR, 1, eriR, 1)
+        for LpqR, LpqI, sign in mydf.sr_loop(kptijkl[:2], max_memory, True):
+            lib.ddot(LpqR.T, LpqR, sign, eriR, 1)
             LpqR = LpqI = None
         if not compact:
             eriR = ao2mo.restore(1, eriR, nao).reshape(nao**2,-1)
@@ -59,8 +59,8 @@ def get_eri(mydf, kpts=None,
     elif is_zero(kpti-kptk) and is_zero(kptj-kptl):
         eriR = numpy.zeros((nao*nao,nao*nao))
         eriI = numpy.zeros((nao*nao,nao*nao))
-        for LpqR, LpqI in mydf.sr_loop(kptijkl[:2], max_memory, False):
-            zdotNN(LpqR.T, LpqI.T, LpqR, LpqI, 1, eriR, eriI, 1)
+        for LpqR, LpqI, sign in mydf.sr_loop(kptijkl[:2], max_memory, False):
+            zdotNN(LpqR.T, LpqI.T, LpqR, LpqI, sign, eriR, eriI, 1)
             LpqR = LpqI = None
         return eriR + eriI*1j
 
@@ -74,8 +74,8 @@ def get_eri(mydf, kpts=None,
     elif is_zero(kpti-kptl) and is_zero(kptj-kptk):
         eriR = numpy.zeros((nao*nao,nao*nao))
         eriI = numpy.zeros((nao*nao,nao*nao))
-        for LpqR, LpqI in mydf.sr_loop(kptijkl[:2], max_memory, False):
-            zdotNC(LpqR.T, LpqI.T, LpqR, LpqI, 1, eriR, eriI, 1)
+        for LpqR, LpqI, sign in mydf.sr_loop(kptijkl[:2], max_memory, False):
+            zdotNC(LpqR.T, LpqI.T, LpqR, LpqI, sign, eriR, eriI, 1)
             LpqR = LpqI = None
 # transpose(0,1,3,2) because
 # j == k && i == l  =>
@@ -94,10 +94,10 @@ def get_eri(mydf, kpts=None,
     else:
         eriR = numpy.zeros((nao*nao,nao*nao))
         eriI = numpy.zeros((nao*nao,nao*nao))
-        for (LpqR, LpqI), (LrsR, LrsI) in \
+        for (LpqR, LpqI, sign), (LrsR, LrsI, sign1) in \
                 lib.izip(mydf.sr_loop(kptijkl[:2], max_memory, False),
                          mydf.sr_loop(kptijkl[2:], max_memory, False)):
-            zdotNN(LpqR.T, LpqI.T, LrsR, LrsI, 1, eriR, eriI, 1)
+            zdotNN(LpqR.T, LpqI.T, LrsR, LrsI, sign, eriR, eriI, 1)
             LpqR = LpqI = LrsR = LrsI = None
         return eriR + eriI*1j
 
@@ -130,10 +130,10 @@ def general(mydf, mo_coeffs, kpts=None,
         sym = (iden_coeffs(mo_coeffs[0], mo_coeffs[2]) and
                iden_coeffs(mo_coeffs[1], mo_coeffs[3]))
         ijR = klR = None
-        for LpqR, LpqI in mydf.sr_loop(kptijkl[:2], max_memory, True):
+        for LpqR, LpqI, sign in mydf.sr_loop(kptijkl[:2], max_memory, True):
             ijR, klR = _dtrans(LpqR, ijR, ijmosym, moij, ijslice,
                                LpqR, klR, klmosym, mokl, klslice, sym)
-            lib.ddot(ijR.T, klR, 1, eri_mo, 1)
+            lib.ddot(ijR.T, klR, sign, eri_mo, 1)
             LpqR = LpqI = None
         return eri_mo
 
@@ -146,11 +146,11 @@ def general(mydf, mo_coeffs, kpts=None,
                iden_coeffs(mo_coeffs[1], mo_coeffs[3]))
 
         zij = zkl = None
-        for LpqR, LpqI in mydf.sr_loop(kptijkl[:2], max_memory, False):
+        for LpqR, LpqI, sign in mydf.sr_loop(kptijkl[:2], max_memory, False):
             buf = LpqR+LpqI*1j
             zij, zkl = _ztrans(buf, zij, moij, ijslice,
                                buf, zkl, mokl, klslice, sym)
-            lib.dot(zij.T, zkl, 1, eri_mo, 1)
+            lib.dot(zij.T, zkl, sign, eri_mo, 1)
             LpqR = LpqI = buf = None
         return eri_mo
 
@@ -167,11 +167,11 @@ def general(mydf, mo_coeffs, kpts=None,
                iden_coeffs(mo_coeffs[1], mo_coeffs[2]))
 
         zij = zlk = None
-        for LpqR, LpqI in mydf.sr_loop(kptijkl[:2], max_memory, False):
+        for LpqR, LpqI, sign in mydf.sr_loop(kptijkl[:2], max_memory, False):
             buf = LpqR+LpqI*1j
             zij, zlk = _ztrans(buf, zij, moij, ijslice,
                                buf, zlk, molk, lkslice, sym)
-            lib.dot(zij.T, zlk.conj(), 1, eri_mo, 1)
+            lib.dot(zij.T, zlk.conj(), sign, eri_mo, 1)
             LpqR = LpqI = buf = None
         nmok = mo_coeffs[2].shape[1]
         nmol = mo_coeffs[3].shape[1]
@@ -192,12 +192,12 @@ def general(mydf, mo_coeffs, kpts=None,
         eri_mo = numpy.zeros((nij_pair,nkl_pair), dtype=numpy.complex)
 
         zij = zkl = None
-        for (LpqR, LpqI), (LrsR, LrsI) in \
+        for (LpqR, LpqI, sign), (LrsR, LrsI, sign1) in \
                 lib.izip(mydf.sr_loop(kptijkl[:2], max_memory, False),
                          mydf.sr_loop(kptijkl[2:], max_memory, False)):
             zij, zkl = _ztrans(LpqR+LpqI*1j, zij, moij, ijslice,
                                LrsR+LrsI*1j, zkl, mokl, klslice, False)
-            lib.dot(zij.T, zkl, 1, eri_mo, 1)
+            lib.dot(zij.T, zkl, sign, eri_mo, 1)
             LpqR = LpqI = LrsR = LrsI = None
         return eri_mo
 
@@ -234,13 +234,13 @@ def _ztrans(Lpq, zij, moij, ijslice, Lrs, zkl, mokl, klslice, sym):
 class PBC2DIntegralsWarning(RuntimeWarning):
     pass
 def warn_pbc2d_eri(mydf):
-    if mydf.cell.dimension in (1, 2):
+    cell = mydf.cell
+    if cell.dimension == 2 and cell.low_dim_ft_type == 'inf_vacuum':
         with warnings.catch_warnings():
             warnings.simplefilter('once', PBC2DIntegralsWarning)
-            warnings.warn('\n2-electron integrals for 1D and 2D PBC systems '
-                          'were designed for SCF methods only.\n'
-                          'The post-HF treatment for low-dimension system is '
-                          'problematic in pyscf-1.5.* or any older version.\n')
+            warnings.warn('\nERIs of PBC-2D systems with infinity vacuum are '
+                          'singular.  cell.low_dim_ft_type = None  should be '
+                          'set.\n')
 
 
 if __name__ == '__main__':
