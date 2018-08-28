@@ -13,7 +13,6 @@
 # limitations under the License.
 from __future__ import print_function, division
 
-
 def kmat_den(mf, dm=None, algo=None, **kw):
   """
   Computes the matrix elements of Fock exchange operator
