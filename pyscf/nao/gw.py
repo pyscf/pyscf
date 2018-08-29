@@ -276,7 +276,7 @@ class gw(scf):
       self.nn_conv.append( range(max(nocc_0t-nocc_conv,0), min(nocc_0t+nvrt_conv,self.norbs)))
 
     # iterations to converge the 
-    if self.verbosity>0: print('-'*59,'| G0W0 corrections of eigenvalues |','-'*59)
+    if self.verbosity>0: print('-'*len(sn2eval_gw[0])*4,'|  G0W0 corrections of eigenvalues  |','-'*len(sn2eval_gw[0])*4)
     for i in range(self.niter_max_ev):
       sn2i = self.gw_corr_int(sn2eval_gw)
       sn2r = self.gw_corr_res(sn2eval_gw)
@@ -300,7 +300,7 @@ class gw(scf):
           print('Spin{} {}'.format(s+1, n2ev[:]*HARTREE2EV)) #, sn2i[s][:]*HARTREE2EV, sn2r[s][:]*HARTREE2EV))
         
       if err<self.tol_ev : 
-        print('-'*60,'| Convergence has been reached |','-'*61,'\f')
+        if self.verbosity>0: print('-'*len(sn2eval_gw[0])*4,' |  Convergence has been reached  | ','-'*len(sn2eval_gw[0])*4,'\f')
         break
     return sn2eval_gw
     
@@ -336,8 +336,9 @@ class gw(scf):
 
     self.h0_vh_x_expval = self.get_h0_vh_x_expval()
     if self.verbosity>1:
-      np.set_printoptions(linewidth=1000, suppress=True, precision=5)
-      print(__name__,'\t\t====> h0_vh_x_expval:\n{}\f'.format(self.h0_vh_x_expval* HARTREE2EV))
+      print(__name__,'\t\t====> h0_vh_x_expval:\n no.\t  H_up\t\t  H_down')
+      for i , (ab) in enumerate(zip(self.h0_vh_x_expval[0].T* HARTREE2EV,self.h0_vh_x_expval[1].T* HARTREE2EV)):
+	    print(' {:d}\t{:f}\t{:f}'.format(i+1, ab[0],ab[1]))
 
     if not hasattr(self,'sn2eval_gw'): self.sn2eval_gw=self.g0w0_eigvals() # Comp. GW-corrections
     

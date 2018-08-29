@@ -119,6 +119,7 @@ class scf(tddft_iter):
         print(__name__, dm.shape)
     
     kmat_algo = kw['kmat_algo'] if 'kmat_algo' in kw else self.kmat_algo
+    if self.verbosity>1: print(__name__, "\t\t====> Matrix elements of Fock exchange operator will be calculated by using '{}' algorithm.\f".format(kmat_algo))
     return kmat_den(self, dm=dm, algo=kmat_algo, **kw)
 
   def get_jk(self, mol=None, dm=None, hermi=1, **kw):
