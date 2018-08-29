@@ -21,14 +21,137 @@
 import unittest
 import numpy as np
 
+from pyscf.lib import finger
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc import scf as pbcscf
 
 import pyscf.cc
 import pyscf.pbc.mpicc as pbcc
 import make_test_cell
-
+from pyscf.pbc.lib import kpts_helper
+#from pyscf.pbc.cc.kccsd_rhf import kconserve_pmatrix
 import pyscf.pbc.cc.kccsd_t_rhf as kccsd_t_rhf
+
+
+cell = pbcgto.Cell()
+cell.atom = '''
+He 0.000000000000   0.000000000000   0.000000000000
+He 1.685068664391   1.685068664391   1.685068664391
+'''
+cell.basis = [[0, (1., 1.)], [0, (.5, 1.)]]
+cell.a = '''
+0.000000000, 3.370137329, 3.370137329
+3.370137329, 0.000000000, 3.370137329
+3.370137329, 3.370137329, 0.000000000'''
+cell.unit = 'B'
+#cell.verbose = 7
+cell.output = '/dev/null'
+cell.build()
+
+# Helper functions
+def kconserve_pmatrix(nkpts, kconserv):
+    Ps = np.zeros((nkpts, nkpts, nkpts, nkpts))
+    for ki in range(nkpts):
+        for kj in range(nkpts):
+            for ka in range(nkpts):
+                # Chemist's notation for momentum conserving t2(ki,kj,ka,kb)
+                kb = kconserv[ki, ka, kj]
+                Ps[ki, kj, ka, kb] = 1
+    return Ps
+
+def rand_t1_t2(kmf, mycc):
+    nkpts = mycc.nkpts
+    nocc = mycc.nocc
+    nmo = mycc.nmo
+    nvir = nmo - nocc
+    np.random.seed(1)
+    t1 = (np.random.random((nkpts, nocc, nvir)) +
+          np.random.random((nkpts, nocc, nvir)) * 1j - .5 - .5j)
+    t2 = (np.random.random((nkpts, nkpts, nkpts, nocc, nocc, nvir, nvir)) +
+          np.random.random((nkpts, nkpts, nkpts, nocc, nocc, nvir, nvir)) * 1j - .5 - .5j)
+    kconserv = kpts_helper.get_kconserv(kmf.cell, kmf.kpts)
+    Ps = kconserve_pmatrix(nkpts, kconserv)
+    t2 = t2 + np.einsum('xyzijab,xyzw->yxwjiba', t2, Ps)
+    return t1, t2
+
+def rand_r1_r2_ip(kmf, mycc):
+    nkpts = mycc.nkpts
+    nocc = mycc.nocc
+    nmo = mycc.nmo
+    nvir = nmo - nocc
+    np.random.seed(1)
+    r1 = (np.random.random((nocc,)) +
+          np.random.random((nocc,)) * 1j - .5 - .5j)
+    r2 = (np.random.random((nkpts, nkpts, nocc, nocc, nvir)) +
+          np.random.random((nkpts, nkpts, nocc, nocc, nvir)) * 1j - .5 - .5j)
+    return r1, r2
+
+def rand_r1_r2_ea(kmf, mycc):
+    nkpts = mycc.nkpts
+    nocc = mycc.nocc
+    nmo = mycc.nmo
+    nvir = nmo - nocc
+    np.random.seed(1)
+    r1 = (np.random.random((nvir,)) +
+          np.random.random((nvir,)) * 1j - .5 - .5j)
+    r2 = (np.random.random((nkpts, nkpts, nocc, nvir, nvir)) +
+          np.random.random((nkpts, nkpts, nocc, nvir, nvir)) * 1j - .5 - .5j)
+    return r1, r2
+
+def make_rand_kmf():
+    np.random.seed(2)
+    kmf = pbcscf.KRHF(cell, kpts=cell.make_kpts([1, 1, 3]))
+    kmf.exxdiv = None
+    nmo = cell.nao_nr()
+    kmf.mo_occ = np.zeros((3, nmo))
+    kmf.mo_occ[:, :2] = 2
+    kmf.mo_energy = np.arange(nmo) + np.random.random((3, nmo)) * .3
+    kmf.mo_energy[kmf.mo_occ == 0] += 2
+    kmf.mo_coeff = (np.random.random((3, nmo, nmo)) +
+                    np.random.random((3, nmo, nmo)) * 1j - .5 - .5j)
+    # Round to make this insensitive to small changes between PySCF versions
+    mat_veff = kmf.get_veff().round(4)
+    mat_hcore = kmf.get_hcore().round(4)
+    kmf.get_veff = lambda *x: mat_veff
+    kmf.get_hcore = lambda *x: mat_hcore
+    return kmf
+
+rand_kmf = make_rand_kmf()
+
+#TODO Delete me; these functions were used to check the changes on
+#     master and dev to see whether the answers were the same after
+#     changes to the eris.mo_energy
+def _run_ip_matvec(cc, r1, r2, kshift):
+    try:  # Different naming & calling conventions between master/dev
+        vector = cc.ip_amplitudes_to_vector(r1, r2)
+    except:
+        vector = cc.amplitudes_to_vector_ip(r1, r2)
+    try:
+        vector = cc.ipccsd_matvec(vector, kshift)
+    except:
+        cc.kshift = kshift
+        vector = cc.ipccsd_matvec(vector)
+    try:
+        Hr1, Hr2 = cc.ip_vector_to_amplitudes(vector)
+    except:
+        Hr1, Hr2 = cc.vector_to_amplitudes_ip(vector)
+    return Hr1, Hr2
+
+def _run_ea_matvec(cc, r1, r2, kshift):
+    try:  # Different naming & calling conventions between master/dev
+        vector = cc.ea_amplitudes_to_vector(r1, r2)
+    except:
+        vector = cc.amplitudes_to_vector_ea(r1, r2)
+    try:
+        vector = cc.eaccsd_matvec(vector, kshift)
+    except:
+        cc.kshift = kshift
+        vector = cc.eaccsd_matvec(vector)
+    try:
+        Hr1, Hr2 = cc.ea_vector_to_amplitudes(vector)
+    except:
+        Hr1, Hr2 = cc.vector_to_amplitudes_ea(vector)
+    return Hr1, Hr2
 
 def run_kcell(cell, n, nk):
     #############################################
@@ -47,14 +170,11 @@ def run_kcell(cell, n, nk):
 
     cc = pbcc.kccsd_rhf.RCCSD(kmf)
     cc.conv_tol=1e-8
-    cc.verbose = 7
+    #cc.verbose = 7
     ecc, t1, t2 = cc.kernel()
     return ekpt, ecc
 
 class KnownValues(unittest.TestCase):
-    def __init__(self):
-        pass
-
     def test_311_n1_high_cost(self):
         L = 7.0
         n = 9
@@ -257,27 +377,224 @@ class KnownValues(unittest.TestCase):
         kmf = pbcscf.KRHF(cell, kpts=kpts)
         ehf = kmf.kernel()
 
-        mycc = pbcc.KRCCSD(kmf)
-        ecc, t1, t2 = mycc.kernel()
+        rand_cc = pbcc.KRCCSD(kmf)
+        ecc, t1, t2 = rand_cc.kernel()
 
-        energy_t = kccsd_t_rhf.kernel(mycc)
+        energy_t = kccsd_t_rhf.kernel(rand_cc)
         energy_t_bench = -0.00191443154358
         self.assertAlmostEqual(energy_t, energy_t_bench, 6)
 
+    def test_rand_ccsd(self):
+        '''Single (eom-)ccsd iteration with random t1/t2.'''
+        rand_cc = pbcc.KRCCSD(rand_kmf)
+        eris = rand_cc.ao2mo(rand_kmf.mo_coeff)
+        eris.mo_energy = [eris.fock[k].diagonal() for k in range(rand_cc.nkpts)]
+        t1, t2 = rand_t1_t2(rand_kmf, rand_cc)
+        rand_cc.t1, rand_cc.t2, rand_cc.eris = t1, t2, eris
+
+        t1, t2 = rand_cc.t1, rand_cc.t2
+        Ht1, Ht2 = rand_cc.update_amps(t1, t2, eris)
+        self.assertAlmostEqual(finger(Ht1), (-4.6942326686+9.50185397111j), 6)
+        self.assertAlmostEqual(finger(Ht2), (17.1490394799+110.137726574j), 6)
+
+        # Excited state results
+        kshift = 0
+        r1, r2 = rand_r1_r2_ip(rand_kmf, rand_cc)
+        Hr1, Hr2 = _run_ip_matvec(rand_cc, r1, r2, kshift)
+        self.assertAlmostEqual(finger(Hr1), (-0.456418558025-0.0485067398162j), 6)
+        self.assertAlmostEqual(finger(Hr2), (0.616016341219+2.08777776589j), 6)
+
+        r1, r2 = rand_r1_r2_ea(rand_kmf, rand_cc)
+        Hr1, Hr2 = _run_ea_matvec(rand_cc, r1, r2, kshift)
+        self.assertAlmostEqual(finger(Hr1), (-0.234979092885-0.218401823892j), 6)
+        self.assertAlmostEqual(finger(Hr2), (-3.56244154449+2.12051064183j), 6)
+
+    def test_rand_ccsd_frozen0(self):
+        '''Single (eom-)ccsd iteration with random t1/t2 and lowest lying orbital
+        at multiple k-points frozen.'''
+        rand_cc = pbcc.KRCCSD(rand_kmf, frozen=1)
+        eris = rand_cc.ao2mo(rand_kmf.mo_coeff)
+        eris.mo_energy = [eris.fock[k].diagonal() for k in range(rand_cc.nkpts)]
+
+        t1, t2 = rand_t1_t2(rand_kmf, rand_cc)
+        Ht1, Ht2 = rand_cc.update_amps(t1, t2, eris)
+        self.assertAlmostEqual(finger(Ht1), (-8.06918006043+8.2779236131j), 6)
+        self.assertAlmostEqual(finger(Ht2), (30.6692903818-14.2701276046j), 6)
+
+        frozen = [[0,],[0,],[0,]]
+        rand_cc = pbcc.KRCCSD(rand_kmf, frozen=frozen)
+        eris = rand_cc.ao2mo(rand_kmf.mo_coeff)
+        eris.mo_energy = [eris.fock[k].diagonal() for k in range(rand_cc.nkpts)]
+        t1, t2 = rand_t1_t2(rand_kmf, rand_cc)
+        Ht1, Ht2 = rand_cc.update_amps(t1, t2, eris)
+        self.assertAlmostEqual(finger(Ht1), (-8.06918006043+8.2779236131j), 6)
+        self.assertAlmostEqual(finger(Ht2), (30.6692903818-14.2701276046j), 6)
+
+        # Excited state results
+        rand_cc.t1, rand_cc.t2, rand_cc.eris = t1, t2, eris
+
+        kshift = 0
+        r1, r2 = rand_r1_r2_ip(rand_kmf, rand_cc)
+        Hr1, Hr2 = _run_ip_matvec(rand_cc, r1, r2, kshift)
+        self.assertAlmostEqual(finger(Hr1), (0.289384011655-0.394002590665j), 6)
+        self.assertAlmostEqual(finger(Hr2), (0.056437476036+0.156522915807j), 6)
+
+        r1, r2 = rand_r1_r2_ea(rand_kmf, rand_cc)
+        Hr1, Hr2 = _run_ea_matvec(rand_cc, r1, r2, kshift)
+        self.assertAlmostEqual(finger(Hr1), (0.298028415374+0.0944020804565j), 6)
+        self.assertAlmostEqual(finger(Hr2), (-0.243561845158+0.869173612894j), 6)
+
+    def test_rand_ccsd_frozen1(self):
+        '''Single (eom-)ccsd iteration with random t1/t2 and single frozen occupied
+        orbital.'''
+        frozen = [[0,],[],[]]
+        rand_cc = pbcc.KRCCSD(rand_kmf, frozen=frozen)
+        eris = rand_cc.ao2mo(rand_kmf.mo_coeff)
+        eris.mo_energy = [eris.fock[k].diagonal() for k in range(rand_cc.nkpts)]
+        t1, t2 = rand_t1_t2(rand_kmf, rand_cc)
+        # Manually zero'ing out the frozen elements of the t1/t2
+        # N.B. the 0'th element frozen means we are freezing the 1'th
+        #      element in the current padding scheme
+        t1[0, 1] = 0.0
+        t2[0, :, :, 1, :] = 0.0
+        t2[:, 0, :, :, 1] = 0.0
+
+        Ht1, Ht2 = rand_cc.update_amps(t1, t2, eris)
+        self.assertAlmostEqual(finger(Ht1), (-9.31532552971+16.3972283898j), 6)
+        self.assertAlmostEqual(finger(Ht2), (-4.42939435314+52.147616355j), 6)
+
+        # Excited state results
+        rand_cc.t1, rand_cc.t2, rand_cc.eris = t1, t2, eris
+
+        kshift = 0
+        r1, r2 = rand_r1_r2_ip(rand_kmf, rand_cc)
+        r1[1] = 0.0
+        r2[0, :, 1] = 0.0
+        r2[:, 0, :, 1] = 0.0
+        Hr1, Hr2 = _run_ip_matvec(rand_cc, r1, r2, kshift)
+        self.assertAlmostEqual(finger(Hr1), (-0.558560718395-0.344470539404j), 6)
+        self.assertAlmostEqual(finger(Hr2), (0.882960101238+0.0752022769822j), 6)
+
+        r1, r2 = rand_r1_r2_ea(rand_kmf, rand_cc)
+        r2[0, :, 1] = 0.0
+        Hr1, Hr2 = _run_ea_matvec(rand_cc, r1, r2, kshift)
+        self.assertAlmostEqual(finger(Hr1), (0.010947007472-0.287095461151j), 6)
+        self.assertAlmostEqual(finger(Hr2), (-2.58907863831+0.685390702884j), 6)
+
+    def test_rand_ccsd_frozen2(self):
+        '''Single (eom-)ccsd iteration with random t1/t2 and full occupied frozen
+        at a single k-point.'''
+        frozen = [[],[0,1],[]]
+        rand_cc = pbcc.KRCCSD(rand_kmf, frozen=frozen)
+        eris = rand_cc.ao2mo(rand_kmf.mo_coeff)
+        eris.mo_energy = [eris.fock[k].diagonal() for k in range(rand_cc.nkpts)]
+        t1, t2 = rand_t1_t2(rand_kmf, rand_cc)
+        # Manually zero'ing out the frozen elements of the t1/t2
+        # N.B. the 0'th element frozen means we are freezing the 1'th
+        #      element in the current padding scheme
+        t1[1, [0,1]] = 0.0
+        t2[1, :, :, [0,1], :] = 0.0
+        t2[:, 1, :, :, [0,1]] = 0.0
+
+        Ht1, Ht2 = rand_cc.update_amps(t1, t2, eris)
+        self.assertAlmostEqual(finger(Ht1), (-0.931278705177+2.16347477318j), 6)
+        self.assertAlmostEqual(finger(Ht2), (29.0079567454-0.114082762172j), 6)
+
+        # Excited state results
+        rand_cc.t1, rand_cc.t2, rand_cc.eris = t1, t2, eris
+
+        kshift = 1
+        r1, r2 = rand_r1_r2_ip(rand_kmf, rand_cc)
+        r1[[0,1]] = 0.0
+        r2[1, :, [0,1]] = 0.0
+        r2[:, 1, :, [0,1]] = 0.0
+        Hr1, Hr2 = _run_ip_matvec(rand_cc, r1, r2, kshift)
+        self.assertAlmostEqual(finger(Hr1), (0.0 + 0.0j), 6)
+        self.assertAlmostEqual(finger(Hr2), (-0.336011745573-0.0454220386975j), 6)
+
+        r1, r2 = rand_r1_r2_ea(rand_kmf, rand_cc)
+        r2[1, :, [0,1]] = 0.0
+        Hr1, Hr2 = _run_ea_matvec(rand_cc, r1, r2, kshift)
+        self.assertAlmostEqual(finger(Hr1), (-0.00152035195068-0.502318229581j), 6)
+        self.assertAlmostEqual(finger(Hr2), (-1.59488320866+0.838903632811j), 6)
+
+    def test_rand_ccsd_frozen3(self):
+        '''Single (eom-)ccsd iteration with random t1/t2 and single frozen virtual
+        orbital.'''
+        kconserv = kpts_helper.get_kconserv(rand_kmf.cell, rand_kmf.kpts)
+
+        frozen = [[],[],[3]]  # freezing one virtual
+        rand_cc = pbcc.KRCCSD(rand_kmf, frozen=frozen)
+        eris = rand_cc.ao2mo(rand_kmf.mo_coeff)
+        eris.mo_energy = [eris.fock[k].diagonal() for k in range(rand_cc.nkpts)]
+        t1, t2 = rand_t1_t2(rand_kmf, rand_cc)
+        # Manually zero'ing out the frozen elements of the t1/t2
+        t1[2, :, 0] = 0.0
+        for ki in range(rand_cc.nkpts):
+          for kj in range(rand_cc.nkpts):
+            for ka in range(rand_cc.nkpts):
+              kb = kconserv[ki, ka, kj]
+              if ka == 2:
+                  t2[ki, kj, ka, :, :, 0] = 0.0
+              if kb == 2:
+                  t2[ki, kj, ka, :, :, :, 0] = 0.0
+
+        Ht1, Ht2 = rand_cc.update_amps(t1, t2, eris)
+        self.assertAlmostEqual(finger(Ht1), (5.3320153970710118-7.9402122992688602j), 6)
+        self.assertAlmostEqual(finger(Ht2), (-236.46389414847206-360.1605297160217j), 6)
+
+        # Excited state results
+        rand_cc.t1, rand_cc.t2, rand_cc.eris = t1, t2, eris
+
+        kshift = 2
+        r1, r2 = rand_r1_r2_ip(rand_kmf, rand_cc)
+        r1[0] = 0.0
+        for ki in range(rand_cc.nkpts):
+          for kj in range(rand_cc.nkpts):
+            ka = kconserv[ki, kshift, kj]
+            if ka == 2:
+                r2[ki, kj, :, :, 0] = 0.0
+
+        Hr1, Hr2 = _run_ip_matvec(rand_cc, r1, r2, kshift)
+        self.assertAlmostEqual(finger(Hr1), (0.4067595510145880 +  0.0770280877446436j), 6)
+        self.assertAlmostEqual(finger(Hr2), (0.0926714318228812 + -1.0702702421619084j), 6)
+
+        r1, r2 = rand_r1_r2_ea(rand_kmf, rand_cc)
+        r1[0] = 0.0
+        for kj in range(rand_cc.nkpts):
+          for ka in range(rand_cc.nkpts):
+            kb = kconserv[kshift, ka, kj]
+            if ka == 2:
+                r2[kj, ka, :, 0, :] = 0.0
+            if kb == 2:
+                r2[kj, ka, :, :, 0] = 0.0
+
+        Hr1, Hr2 = _run_ea_matvec(rand_cc, r1, r2, kshift)
+        self.assertAlmostEqual(finger(Hr1), (0.0070404498167285 + -0.1646809321907418j), 6)
+        self.assertAlmostEqual(finger(Hr2), (0.4518315588945250 + -0.5508323185152750j), 6)
+
     def test_h4_fcc_k2(self):
+        '''Metallic hydrogen fcc lattice.  Checks versus a corresponding
+        supercell calculation.
+
+        NOTE: different versions of the davidson may converge to a different
+        solution for the k-point IP/EA eom.  If you're getting the wrong
+        root, check to see if it's contained in the supercell set of
+        eigenvalues.'''
         cell = pbcgto.Cell()
-        cell.atom = [['H', (0.000000000, 0.000000000 , 0.000000000 )],
-        ['H', (0.000000000 , 0.500000000 , 0.250000000)],
-        ['H', (0.500000000 , 0.500000000 , 0.500000000)],
-        ['H',(0.500000000 , 0.000000000 , 0.750000000)]]
+        cell.atom = [['H', (0.000000000, 0.000000000, 0.000000000)],
+                     ['H', (0.000000000, 0.500000000, 0.250000000)],
+                     ['H', (0.500000000, 0.500000000, 0.500000000)],
+                     ['H', (0.500000000, 0.000000000, 0.750000000)]]
         cell.unit = 'Bohr'
-        cell.a = [[2.293668126,0.,0.],[0.,2.293668126,0],[0,0,5.843888814]]
+        cell.a = [[1.,0.,0.],[0.,1.,0],[0,0,2.2]]
         cell.verbose = 7
         cell.spin = 0
         cell.charge = 0
-        cell.basis = [[0, [1.2, 1]], [1, [1.0, 1]]]
+        cell.basis = [[0, [1.0, 1]],]
         cell.pseudo = 'gth-pade'
-        cell.max_memory = 50000
+        cell.output = '/dev/null'
+        cell.max_memory = 1000
         for i in range(len(cell.atom)):
             cell.atom[i][1] = tuple(np.dot(np.array(cell.atom[i][1]),np.array(cell.a)))
         cell.build()
@@ -294,43 +611,70 @@ class KnownValues(unittest.TestCase):
 
         mycc = pbcc.KCCSD(kmf)
         ekccsd, _, _ = mycc.kernel()
-        self.assertAlmostEqual(ekccsd, -0.1627768398339486, 6)
-        e = mycc.eaccsd(nroots=1, kptlist=(0,))[0]
-        self.assertAlmostEqual(e, 0.9484477009723242, 6)
-        e = mycc.eaccsd(nroots=1, kptlist=(1,))[0]
-        self.assertAlmostEqual(e, 0.5809626097420821, 6)
+        self.assertAlmostEqual(ekccsd, -0.06146759560406628, 6)
 
+        # Getting more roots than 1 is difficult
+        e = mycc.eaccsd(nroots=1, kptlist=(0,))[0]
+        self.assertAlmostEqual(e, 5.079427283440857, 6)
+        e = mycc.eaccsd(nroots=1, kptlist=(1,))[0]
+        self.assertAlmostEqual(e, 4.183328878177331, 6)
+
+        e = mycc.ipccsd(nroots=1, kptlist=(0,))[0]
+        self.assertAlmostEqual(e, -3.471710821544506, 6)
+        e = mycc.ipccsd(nroots=1, kptlist=(1,))[0]
+        self.assertAlmostEqual(e, -4.272015727359054, 6)
+
+        # Start of supercell calculations
         from pyscf.pbc.tools.pbc import super_cell
         supcell = super_cell(cell, nmp)
         supcell.build()
-        mf = pbcscf.KRHF(supcell) #.density_fit(auxbasis='weigend')
+        mf = pbcscf.KRHF(supcell)
         e = mf.kernel()
 
-        ##mysmp = pbmp.KMP2(mf)
-        ##emp2, _ = mysmp.kernel()
-        ##print("MP2 corr energy (per unit cell) = ", emp2 / np.prod(nmp))
+        #mysmp = pbmp.KMP2(mf)
+        #emp2, _ = mysmp.kernel()
+        #print("MP2 corr energy (per unit cell) = ", emp2 / np.prod(nmp))
 
         myscc = pbcc.KCCSD(mf)
         eccsd, _, _ = myscc.kernel()
         eccsd /= np.prod(nmp)
-        self.assertAlmostEqual(eccsd, -0.1627768398339486, 6)
-        e = myscc.eaccsd(nroots=1, kptlist=(0,))[0]
-        self.assertAlmostEqual(e, 0.5809626097420821, 6)
+        self.assertAlmostEqual(eccsd, -0.06146759560406628, 6)
 
-    def test_h4_fcc_k2_shift(self):
+        e = myscc.eaccsd(nroots=4, kptlist=(0,))[0]
+        self.assertAlmostEqual(e[0][0], 4.183328873793568, 6)
+        self.assertAlmostEqual(e[0][1], 4.225034294249784, 6)
+        self.assertAlmostEqual(e[0][2], 5.068962665511664, 6)
+        self.assertAlmostEqual(e[0][3], 5.07942727935064 , 6)
+
+        e = myscc.ipccsd(nroots=4, kptlist=(0,))[0]
+        self.assertAlmostEqual(e[0][0], -4.272015724869052, 6)
+        self.assertAlmostEqual(e[0][1], -4.254298274388934, 6)
+        self.assertAlmostEqual(e[0][2], -3.471710821688812, 6)
+        self.assertAlmostEqual(e[0][3], -3.462817764320668, 6)
+
+    def test_h4_fcc_k2_frozen(self):
+        '''Metallic hydrogen fcc lattice with frozen lowest lying occupied
+        and highest lying virtual orbitals.  Checks versus a corresponding
+        supercell calculation.
+
+        NOTE: different versions of the davidson may converge to a different
+        solution for the k-point IP/EA eom.  If you're getting the wrong
+        root, check to see if it's contained in the supercell set of
+        eigenvalues.'''
         cell = pbcgto.Cell()
-        cell.atom = [['H', (0.000000000, 0.000000000 , 0.000000000 )],
-        ['H', (0.000000000 , 0.500000000 , 0.250000000)],
-        ['H', (0.500000000 , 0.500000000 , 0.500000000)],
-        ['H',(0.500000000 , 0.000000000 , 0.750000000)]]
+        cell.atom = [['H', (0.000000000, 0.000000000, 0.000000000)],
+                     ['H', (0.000000000, 0.500000000, 0.250000000)],
+                     ['H', (0.500000000, 0.500000000, 0.500000000)],
+                     ['H', (0.500000000, 0.000000000, 0.750000000)]]
         cell.unit = 'Bohr'
-        cell.a = [[2.293668126,0.,0.],[0.,2.293668126,0],[0,0,5.843888814]]
+        cell.a = [[1.,0.,0.],[0.,1.,0],[0,0,2.2]]
         cell.verbose = 7
         cell.spin = 0
         cell.charge = 0
-        cell.basis = 'gth-szv'
+        cell.basis = [[0, [1.0, 1]],]
         cell.pseudo = 'gth-pade'
-        cell.max_memory = 50000
+        cell.output = '/dev/null'
+        cell.max_memory = 1000
         for i in range(len(cell.atom)):
             cell.atom[i][1] = tuple(np.dot(np.array(cell.atom[i][1]),np.array(cell.a)))
         cell.build()
@@ -338,24 +682,57 @@ class KnownValues(unittest.TestCase):
         nmp = [2, 1, 1]
 
         kmf = pbcscf.KRHF(cell)
-        kmf.kpts = cell.make_kpts(nmp, scaled_center=[0.5,0.5,0.0])
+        kmf.kpts = cell.make_kpts(nmp, scaled_center=[0.0,0.0,0.0])
         e = kmf.kernel()
 
         #mymp = pbmp.KMP2(kmf)
         #ekmp2, _ = mymp.kernel()
         #print("KMP2 corr energy (per unit cell) = ", ekmp2)
 
-        mycc = pbcc.KCCSD(kmf)
+        frozen = [[0, 3], []]
+        mycc = pbcc.KCCSD(kmf, frozen=frozen)
         ekccsd, _, _ = mycc.kernel()
-        self.assertAlmostEqual(ekccsd, -0.1960427358068873, 6)
+        self.assertAlmostEqual(ekccsd, -0.04683399814247455, 6)
 
-        mycc = pbcc.KRCCSD(kmf)
-        ekccsd, _, _ = mycc.kernel()
-        self.assertAlmostEqual(ekccsd, -0.1960427358068873, 6)
+        # Getting more roots than 1 is difficult
+        e = mycc.eaccsd(nroots=1, kptlist=(0,))[0]
+        self.assertAlmostEqual(e, 5.060562738181741, 6)
+        e = mycc.eaccsd(nroots=1, kptlist=(1,))[0]
+        self.assertAlmostEqual(e, 4.188511644938458, 6)
+
+        e = mycc.ipccsd(nroots=1, kptlist=(0,))[0]
+        self.assertAlmostEqual(e, -3.477663551987023, 6)
+        e = mycc.ipccsd(nroots=1, kptlist=(1,))[0]
+        self.assertAlmostEqual(e, -4.23523412155825, 6)
+
+        # Start of supercell calculations
+        from pyscf.pbc.tools.pbc import super_cell
+        supcell = super_cell(cell, nmp)
+        supcell.build()
+        mf = pbcscf.KRHF(supcell)
+        e = mf.kernel()
+
+        #mysmp = pbmp.KMP2(mf)
+        #emp2, _ = mysmp.kernel()
+        #print("MP2 corr energy (per unit cell) = ", emp2 / np.prod(nmp))
+
+        myscc = pbcc.KCCSD(mf, frozen=[0, 7])
+        eccsd, _, _ = myscc.kernel()
+        eccsd /= np.prod(nmp)
+        self.assertAlmostEqual(eccsd, -0.04683401678904569, 6)
+
+        e = myscc.eaccsd(nroots=4, kptlist=(0,))[0]
+        self.assertAlmostEqual(e[0][0], 4.188511680212755, 6)
+        self.assertAlmostEqual(e[0][1], 4.205924087610756, 6)
+        self.assertAlmostEqual(e[0][2], 5.060562771978923, 6)
+        self.assertAlmostEqual(e[0][3], 5.077249823137741, 6)
+
+        e = myscc.ipccsd(nroots=4, kptlist=(0,))[0]
+        self.assertAlmostEqual(e[0][0], -4.261818242746091, 6)
+        self.assertAlmostEqual(e[0][1], -4.235233956876479, 6)
+        self.assertAlmostEqual(e[0][2], -3.477663568390151, 6)
+        self.assertAlmostEqual(e[0][3], -3.459133332687474, 6)
 
 if __name__ == '__main__':
     print("Full kpoint_rhf test")
-    #unittest.main()
-    k = KnownValues()
-    k.test_h4_fcc_k2_shift()
-
+    unittest.main()
