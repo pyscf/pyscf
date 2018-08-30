@@ -2,10 +2,9 @@ from __future__ import print_function, division
 import numpy as np
 from numpy import array, argmax, einsum, require, zeros, dot
 from timeit import default_timer as timer
-from pyscf.nao import tddft_iter
 from pyscf.nao import gw
 from scipy.linalg import blas
-from pyscf.nao.m_pack2den import pack2den_u, pack2den_l
+from pyscf.nao.m_pack2den import pack2den_l
 
 class bse_iter(gw):
 
@@ -60,7 +59,7 @@ class bse_iter(gw):
       w_c_4p = (((v_dab.T*(cc_da*  self.si_c([0.0])[0].real ))*cc_da.T)*v_dab).reshape([n*n,n*n])
       self.kernel_4p -= 0.5*einsum('abcd->bcad', w_c_4p.reshape([n,n,n,n])).reshape([n*n,n*n])
       self.kernel_4p_w = self.kernel_4p # .kernel_4p_w -- this will be used in the iterative procedure
-      print(self.kernel_4p_w.dtype, __name__, self.kernel_4p_w.sum())
+      #print(self.kernel_4p_w.dtype, __name__, self.kernel_4p_w.sum())
 
     if xc=='GW' or xc=='GWw':
       self.define_e_x_l0(self.mo_energy_gw, self.mo_coeff_gw)

@@ -5,6 +5,7 @@ from pyscf.scf import hf, uhf
 from copy import copy
 from pyscf.nao.m_pack2den import pack2den_u, pack2den_l
 from pyscf.nao.m_vhartree_coo import vhartree_coo
+from timeit import default_timer as timer
 
 #
 #
@@ -15,6 +16,7 @@ class scf(tddft_iter):
     """ Constructor a self-consistent field """
     self.perform_scf = kw['perform_scf'] if 'perform_scf' in kw else False
     self.kmat_algo = kw['kmat_algo'] if 'kmat_algo' in kw else None
+    self.kmat_timing = 0.0 if 'kmat_timing' in kw else None
     for x in ['xc_code', 'dealloc_hsx', 'dtype']: kw.pop(x,None)
     tddft_iter.__init__(self, dtype=np.float64, xc_code='RPA', dealloc_hsx=False, **kw)
     #print(__name__, ' dtype ', self.dtype)
@@ -119,8 +121,15 @@ class scf(tddft_iter):
         print(__name__, dm.shape)
     
     kmat_algo = kw['kmat_algo'] if 'kmat_algo' in kw else self.kmat_algo
+
     if self.verbosity>1: print(__name__, "\t\t====> Matrix elements of Fock exchange operator will be calculated by using '{}' algorithm.\f".format(kmat_algo))
     return kmat_den(self, dm=dm, algo=kmat_algo, **kw)
+
+    if self.kmat_timing is not None: t1 = timer()
+    kmat = kmat_den(self, dm=dm, algo=kmat_algo, **kw)
+    if self.kmat_timing is not None: self.kmat_timing += timer()-t1
+    return kmat
+
 
   def get_jk(self, mol=None, dm=None, hermi=1, **kw):
     if dm is None: dm = self.make_rdm1()
