@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-#supcell.build()
 # Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,7 +25,7 @@ from pyscf.pbc import gto as pbcgto
 from pyscf.pbc import scf as pbcscf
 
 import pyscf.cc
-import pyscf.pbc.mpicc as pbcc
+import pyscf.pbc.cc as pbcc
 import make_test_cell
 from pyscf.pbc.lib import kpts_helper
 #from pyscf.pbc.cc.kccsd_rhf import kconserve_pmatrix
@@ -99,6 +98,9 @@ def rand_r1_r2_ea(kmf, mycc):
     return r1, r2
 
 def make_rand_kmf():
+    # Not perfect way to generate a random mf.
+    # CSC = 1 is not satisfied and the fock matrix is neither
+    # diagonal nor sorted.
     np.random.seed(2)
     kmf = pbcscf.KRHF(cell, kpts=cell.make_kpts([1, 1, 3]))
     kmf.exxdiv = None
@@ -594,7 +596,7 @@ class KnownValues(unittest.TestCase):
         cell.basis = [[0, [1.0, 1]],]
         cell.pseudo = 'gth-pade'
         cell.output = '/dev/null'
-        cell.max_memory = 1000
+        #cell.max_memory = 1000
         for i in range(len(cell.atom)):
             cell.atom[i][1] = tuple(np.dot(np.array(cell.atom[i][1]),np.array(cell.a)))
         cell.build()
@@ -604,10 +606,6 @@ class KnownValues(unittest.TestCase):
         kmf = pbcscf.KRHF(cell)
         kmf.kpts = cell.make_kpts(nmp, scaled_center=[0.0,0.0,0.0])
         e = kmf.kernel()
-
-        #mymp = pbmp.KMP2(kmf)
-        #ekmp2, _ = mymp.kernel()
-        #print("KMP2 corr energy (per unit cell) = ", ekmp2)
 
         mycc = pbcc.KCCSD(kmf)
         ekccsd, _, _ = mycc.kernel()
@@ -631,10 +629,6 @@ class KnownValues(unittest.TestCase):
         mf = pbcscf.KRHF(supcell)
         e = mf.kernel()
 
-        #mysmp = pbmp.KMP2(mf)
-        #emp2, _ = mysmp.kernel()
-        #print("MP2 corr energy (per unit cell) = ", emp2 / np.prod(nmp))
-
         myscc = pbcc.KCCSD(mf)
         eccsd, _, _ = myscc.kernel()
         eccsd /= np.prod(nmp)
@@ -651,6 +645,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e[0][1], -4.254298274388934, 6)
         self.assertAlmostEqual(e[0][2], -3.471710821688812, 6)
         self.assertAlmostEqual(e[0][3], -3.462817764320668, 6)
+
 
     def test_h4_fcc_k2_frozen(self):
         '''Metallic hydrogen fcc lattice with frozen lowest lying occupied
@@ -674,7 +669,7 @@ class KnownValues(unittest.TestCase):
         cell.basis = [[0, [1.0, 1]],]
         cell.pseudo = 'gth-pade'
         cell.output = '/dev/null'
-        cell.max_memory = 1000
+        #cell.max_memory = 1000
         for i in range(len(cell.atom)):
             cell.atom[i][1] = tuple(np.dot(np.array(cell.atom[i][1]),np.array(cell.a)))
         cell.build()
@@ -684,10 +679,6 @@ class KnownValues(unittest.TestCase):
         kmf = pbcscf.KRHF(cell)
         kmf.kpts = cell.make_kpts(nmp, scaled_center=[0.0,0.0,0.0])
         e = kmf.kernel()
-
-        #mymp = pbmp.KMP2(kmf)
-        #ekmp2, _ = mymp.kernel()
-        #print("KMP2 corr energy (per unit cell) = ", ekmp2)
 
         frozen = [[0, 3], []]
         mycc = pbcc.KCCSD(kmf, frozen=frozen)
@@ -711,10 +702,6 @@ class KnownValues(unittest.TestCase):
         supcell.build()
         mf = pbcscf.KRHF(supcell)
         e = mf.kernel()
-
-        #mysmp = pbmp.KMP2(mf)
-        #emp2, _ = mysmp.kernel()
-        #print("MP2 corr energy (per unit cell) = ", emp2 / np.prod(nmp))
 
         myscc = pbcc.KCCSD(mf, frozen=[0, 7])
         eccsd, _, _ = myscc.kernel()
