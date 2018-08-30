@@ -61,36 +61,37 @@ def pdos(mf, zomegas, nkpoints=1):
 #
 # Example of plotting DOS calculated by GW calculation.
 #
-import numpy as np
-import matplotlib.pyplot as plt
-from pyscf import gto, scf
-from pyscf.nao import gw as gw_c
+if __name__=='__main__':
+    import numpy as np
+    import matplotlib.pyplot as plt
+    from pyscf import gto, scf
+    from pyscf.nao import gw as gw_c
 
-mol = gto.M( verbose = 0, atom = '''Be 0.0, 0.0, 0.269654 ; H 0.0, 0.0, -1.078616''', basis = 'cc-pvdz', spin=1, charge=0)
-gto_mf_UHF = scf.UHF(mol)
-gto_mf_UHF.kernel()
-gw = gw_c(mf=gto_mf_UHF, gto=mol, verbosity=1, niter_max_ev=20)  
-omegas = np.arange(-1.0, 1.0, 0.005)+1j*0.01
-dos= gw.lsoa_dos(omegas)
-pdos= gw.pdos(omegas)
-data=np.zeros((pdos.shape[0]+2, pdos.shape[1]))
-data[0,:] = omegas.real*27.2114
-data[1, :] = dos.clip(min=0)
-data[2:, :] = pdos.clip(min=0)
-np.savetxt('dos.dat', data.T, fmt='%14.6f', header='  Energy(eV)\t    Total DOS\t   s_state\t  p_state\t d_state')
-#plotting
-x = data.T [:,0]    #Energies
-y1 = data.T [:,1]   #Total DOS
-y2 = data.T [:,2]   #s_state
-y3 = data.T [:,3]   #p_state
-y4 = data.T [:,4]   #d_state
-plt.plot(x, y1, label='Total DOS')
-plt.plot(x, y2, label='s_state')
-plt.plot(x, y3, label='p_state')
-plt.plot(x, y4, label='d_state')
-plt.axvline(x=gw.fermi_energy*27.2114,color='k', linestyle='--', label='Fermi Energy')
-plt.title('DOS', fontsize=20)
-plt.xlabel('Energy (eV)', fontsize=15) 
-plt.ylabel('Density of States (electron/eV)', fontsize=15)
-plt.legend()
-plt.show()
+    mol = gto.M( verbose = 0, atom = '''Be 0.0, 0.0, 0.269654 ; H 0.0, 0.0, -1.078616''', basis = 'cc-pvdz', spin=1, charge=0)
+    gto_mf_UHF = scf.UHF(mol)
+    gto_mf_UHF.kernel()
+    gw = gw_c(mf=gto_mf_UHF, gto=mol, verbosity=1, niter_max_ev=20)  
+    omegas = np.arange(-1.0, 1.0, 0.005)+1j*0.01
+    dos= gw.lsoa_dos(omegas)
+    pdos= gw.pdos(omegas)
+    data=np.zeros((pdos.shape[0]+2, pdos.shape[1]))
+    data[0,:] = omegas.real*27.2114
+    data[1, :] = dos.clip(min=0)
+    data[2:, :] = pdos.clip(min=0)
+    np.savetxt('dos.dat', data.T, fmt='%14.6f', header='  Energy(eV)\t     Total DOS\t    s_state\t   p_state\t  d_state')
+    #plotting
+    x = data.T [:,0]    #Energies
+    y1 = data.T [:,1]   #Total DOS
+    y2 = data.T [:,2]   #s_state
+    y3 = data.T [:,3]   #p_state
+    y4 = data.T [:,4]   #d_state
+    plt.plot(x, y1, label='Total DOS')
+    plt.plot(x, y2, label='s_state')
+    plt.plot(x, y3, label='p_state')
+    plt.plot(x, y4, label='d_state')
+    plt.axvline(x=gw.fermi_energy*27.2114,color='k', linestyle='--', label='Fermi Energy')
+    plt.title('DOS', fontsize=20)
+    plt.xlabel('Energy (eV)', fontsize=15) 
+    plt.ylabel('Density of States (electron/eV)', fontsize=15)
+    plt.legend()
+    plt.show()

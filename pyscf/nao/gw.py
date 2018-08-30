@@ -48,12 +48,12 @@ class gw(scf):
     else :
       self.nvrt = array([min(6,j) for j in self.norbs-nocc_0t])
 
-    if self.verbosity>0: print(__name__,'\t\t====> Number of ocupied states are = {}, Number of virtual states = {}'.format(self.nocc, self.nvrt))
+    if self.verbosity>0: print(__name__,'\t\t====> Number of ocupied states are (nocc) = {}, Number of virtual states (nvrt) = {}'.format(self.nocc, self.nvrt))
 
     self.start_st,self.finish_st = self.nocc_0t-self.nocc, self.nocc_0t+self.nvrt
 
     self.nn = [range(self.start_st[s], self.finish_st[s]) for s in range(self.nspin)] # list of states to correct?
-    if self.verbosity>0: print(__name__,'\t\t====> Number of states will be corrected by GW = {}\n'.format(self.nn))
+    if self.verbosity>0: print(__name__,'\t\t====> Indices of states to be corrected = {}\n'.format(self.nn))
 
     if 'nocc_conv' in kw:
       s2nocc_conv = [kw['nocc_conv']] if type(kw['nocc_conv'])==int else kw['nocc_conv']
@@ -115,8 +115,7 @@ class gw(scf):
     E = self.ksn2e[0,0,:]
     E_fermi = self.fermi_energy
     E_homo = amax(E[where(E<=E_fermi)])
-    #first issue >=,E gap goes to 0 for H, when HOMO and E_fermi are identical, and 'tmax_def' goes to infinity
-    E_gap  = amin(E[where(E>=E_fermi)]) - E_homo  
+    E_gap  = amin(E[where(E>E_fermi)]) - E_homo  
     E_maxdiff = amax(E) - amin(E)
     d = amin(abs(E_homo-E)[where(abs(E_homo-E)>1e-4)])
     wmin_def = sqrt(tol * (d**3) * (E_gap**3)/(d**2+E_gap**2))
@@ -336,7 +335,7 @@ class gw(scf):
 
     self.h0_vh_x_expval = self.get_h0_vh_x_expval()
     if self.verbosity>1:
-      print(__name__,'\t\t====> h0_vh_x_expval:\n no.\t  H_up\t\t  H_down')
+      print(__name__,'\t\t====> Expectation values of Hartree-Fock Hamiltonian (eV):\n no.\t  H_up\t\t  H_down')
       for i , (ab) in enumerate(zip(self.h0_vh_x_expval[0].T* HARTREE2EV,self.h0_vh_x_expval[1].T* HARTREE2EV)):
 	    print(' {:d}\t{:f}\t{:f}'.format(i+1, ab[0],ab[1]))
 

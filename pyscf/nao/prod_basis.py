@@ -149,11 +149,11 @@ class prod_basis():
       ld = p2srncc_cp.shape[1]
       #print('npairs  p2srncc_cp.shape', npairs, p2srncc_cp.shape)
       if nao.verbosity>0:
-        t2 = timer(); print('call vrtx_cc_batch ', t2-t1, 'npairs ', npairs); t1=timer()
+        t2 = timer(); print(__name__,'\t====> Time for call vrtx_cc_batch: {:.2f} Sec, npairs: {}'.format(t2-t1, npairs)); t1=timer()
       libnao.vrtx_cc_batch( c_int64(npairs), p2srncc_cp.ctypes.data_as(POINTER(c_double)), 
         c_int64(ld), p2ndp.ctypes.data_as(POINTER(c_int64)))
       if nao.verbosity>0:
-        t2 = timer(); print('after vrtx_cc_batch ', t2-t1); t1=timer()
+        t2 = timer(); print(__name__,'\t====> Time after vrtx_cc_batch:\t {:.2f} Sec'.format(t2-t1)); t1=timer()
       nout = 0
       sp2norbs = sv.ao_log.sp2norbs
       for srncc,ndp,npac in zip(p2srncc,p2ndp,p2npac):
@@ -573,7 +573,22 @@ class prod_basis():
       plt.savefig(fname, bbox_inches='tight')
       plt.close()
     return 0
-
+  
+  def plt_chess(self):
+    """Shows Matrix elements in chessboard"""
+    import matplotlib.pylab as plt
+    plt.ion()
+    for i, ab in enumerate(self): 
+        print('Matrix No.#{}, Size: {}, Type: {}'.format(i+1, ab.shape, type(ab)))
+        if type(ab) != 'numpy.ndarray': ab = ab.toarray()
+        fig = plt.figure()
+        ax = fig.add_subplot(1,1,1)
+        ax.set_aspect('equal')
+        plt.imshow(ab, interpolation='nearest', cmap=plt.cm.ocean)
+        plt.colorbar()
+        plt.show()
+        plt.pause(0.7)
+        plt.close(fig)
 #
 #
 #

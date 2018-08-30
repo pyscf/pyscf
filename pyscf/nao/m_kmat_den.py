@@ -38,7 +38,7 @@ def kmat_den(mf, dm=None, algo=None, **kw):
     raise RuntimeError('nspin>2?')
     
   algol = algo.lower() if algo is not None else 'sm0_sum'
-  print(__name__, "\t====> Matrix elements of Fock exchange operator was calculated by using '{}' algorithm.\f".format(algol))
+  #if scf.verbosity>0: print(__name__, "\t====> Matrix elements of Fock exchange operator was calculated by using '{}' algorithm.\f".format(algol))
   gen_spy_png = kw['gen_spy_png'] if 'gen_spy_png' in kw else False
   
   if algol=='fci':
@@ -207,21 +207,3 @@ def kmat_den(mf, dm=None, algo=None, **kw):
     raise RuntimeError('unknown algorithm')
 
   return kmat
-
-
-def plt_chess(self):
-    """Shows Matrix elements in chessboard"""
-    import matplotlib.pylab as plt
-    plt.ion()
-    for i, ab in enumerate(self): 
-        print('Matrix No.#{}, Size: {}, Type:{}'.format(i+1, ab.shape, type(ab)))
-        if type(ab) != 'numpy.ndarray': ab = ab.toarray()
-        fig = plt.figure()
-        ax = fig.add_subplot(1,1,1)
-        ax.set_aspect('equal')
-        plt.imshow(ab, interpolation='nearest', cmap=plt.cm.ocean)
-        plt.colorbar()
-        plt.show()
-        plt.pause(0.7)
-        plt.close(fig)
-

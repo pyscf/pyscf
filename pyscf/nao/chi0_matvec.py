@@ -67,7 +67,7 @@ class chi0_matvec(mf):
       print(__name__, '\t====> self.xocc[0].dtype ', self.xocc[0].dtype)
       print(__name__, '\t====> self.xvrt[0].dtype ', self.xvrt[0].dtype)
       print(__name__, '\t====> Molecular orbital energies (ksn2e) (eV):\n{},\tType: {}'.format(self.ksn2e*HARTREE2EV,self.ksn2e.dtype))
-      print(__name__, '\t====> Occupied states (ksn2f):\n{},\tType: {}'.format(self.ksn2f,self.ksn2f.dtype))
+      print(__name__, '\t====> Occupation of states (ksn2f):\n{},\tType: {}'.format(self.ksn2f,self.ksn2f.dtype))
 
     self.rf0_ncalls = 0
             
@@ -82,10 +82,8 @@ class chi0_matvec(mf):
     self.moms0,self.moms1 = pb.comp_moments(dtype=self.dtype)
     self.nprod = self.moms0.size
 
-    if self.verbosity>0 : print(__name__,'\t====> Number of products = {} and their shape = {}'.format(self.nprod, self.cc_da.shape))
-
-    self.td_GPU = tddft_iter_gpu_c(GPU, self.mo_coeff[0, 0, :, :, 0], self.ksn2f, self.ksn2e, 
-            self.norbs, self.nfermi, self.nprod, self.vstart)
+    if self.verbosity>0 : print(__name__,'\t====> Number of dominant products {} and Number of atom-centered products {}'.format(self.cc_da.shape[1], self.cc_da.shape[0]))
+    self.td_GPU = tddft_iter_gpu_c(GPU, self.mo_coeff[0, 0, :, :, 0], self.ksn2f, self.ksn2e, self.norbs, self.nfermi, self.nprod, self.vstart)
 
   def apply_rf0(self, v, comega=1j*0.0):
     """ This applies the non-interacting response function to a vector (a set of vectors?) """
