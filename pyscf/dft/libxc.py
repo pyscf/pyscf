@@ -406,7 +406,15 @@ XC = XC_CODES = {
 'XC_HYB_MGGA_XC_M11'           :  462, # M11 functional from Minnesota
 'XC_HYB_MGGA_X_MVSH'           :  474, # MVS hybrid
 'XC_HYB_MGGA_XC_WB97M_V'       :  531, # Mardirossian and Head-Gordon
+
+# new SCAN for libxc-4.2.3
 #
+'XC_MGGA_C_SCAN_RVV10'         :  292, # SCAN correlation + rVV10 correlation
+'XC_MGGA_C_SCAN_VV10'          :  584, # SCAN correlation +  VV10 correlation
+'XC_MGGA_X_REVSCAN'            :  581, # revised SCAN
+'XC_MGGA_C_REVSCAN'            :  582, # revised SCAN correlation
+'XC_MGGA_C_REVSCAN_VV10'       :  585, # revised SCAN correlation
+
 # alias
 #
 'LDA'           : 1 ,
@@ -526,6 +534,11 @@ XC_ALIAS = {
     'SCAN0'             : 'SCAN0,SCAN',
     'PBEOP'             : 'PBE,OP_PBE',
     'BOP'               : 'B88,OP_B88',
+    # new in libxc-4.2.3
+    'REVSCAN'           : 'XC_MGGA_X_REVSCAN,XC_MGGA_C_REVSCAN',
+    'REVSCAN_VV10'      : 'XC_MGGA_X_REVSCAN,XC_MGGA_C_REVSCAN_VV10',
+    'SCAN_VV10'         : 'XC_MGGA_X_SCAN,XC_MGGA_C_SCAN_VV10',
+    'SCAN_RVV10'        : 'XC_MGGA_X_SCAN,XC_MGGA_C_SCAN_RVV10',
 }
 XC_ALIAS.update([(key.replace('-',''), XC_ALIAS[key])
                  for key in XC_ALIAS if '-' in key])
