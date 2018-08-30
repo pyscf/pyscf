@@ -793,7 +793,6 @@ def make_env(atoms, basis, pre_env=[], nucmod={}, nucprop={}):
                 nuclear_model = _parse_nuc_mod(nucmod[symb])
             elif stdsymb in nucmod:
                 nuclear_model = _parse_nuc_mod(nucmod[stdsymb])
-        print prop
         atm0, env0 = make_atm_env(atom, ptr_env, nuclear_model, prop)
         ptr_env = ptr_env + len(env0)
         _atm.append(atm0)
@@ -3208,7 +3207,6 @@ def dyall_nuc_mod(nuc_charge, nucprop={}):
 
     Ref. L. Visscher and K. Dyall, At. Data Nucl. Data Tables, 67, 207 (1997)
     '''
-    print 'mass' in nucprop
     mass = nucprop.get('mass', elements.ISOTOPE_MAIN[nuc_charge])
     r = (0.836 * mass**(1./3) + 0.570) / 52917.7249;
     zeta = 1.5 / (r**2);

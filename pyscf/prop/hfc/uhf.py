@@ -31,6 +31,7 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.dft import numint
 from pyscf.prop.nmr import uhf as uhf_nmr
+from pyscf.prop.ssc import rhf as rhf_ssc
 from pyscf.prop.ssc import uhf as uhf_ssc
 from pyscf.prop.ssc.rhf import _dm1_mo2ao
 from pyscf.prop.zfs.uhf import koseki_charge
@@ -55,20 +56,16 @@ def make_fcsd(hfcobj, dm0, hfc_nuc=None, verbose=None):
     au2MHz = nist.HARTREE2J / nist.PLANCK * 1e-6
     fac = nist.ALPHA**2 / 2 / effspin * e_gyro * au2MHz
 
-    coords = mol.atom_coords()
-    ao = numint.eval_ao(mol, coords)
-
-    nao = dma.shape[0]
     hfc = []
     for i, atm_id in enumerate(hfc_nuc):
         nuc_gyro = get_nuc_g_factor(mol.atom_symbol(atm_id)) * nuc_mag
-        mol.set_rinv_origin(mol.atom_coord(atm_id))
-# a01p[mu,sigma] the imaginary part of integral <vec{r}/r^3 cross p>
-        a01p = mol.intor('int1e_sa01sp', 12).reshape(3,4,nao,nao)
-        h1 = -(a01p[:,:3] + a01p[:,:3].transpose(0,1,3,2))
+        h1 = rhf_ssc._get_integrals_fcsd(mol, atm_id)
         fcsd = numpy.einsum('xyij,ji->xy', h1, spindm)
-        fc = 8*numpy.pi/3 * numpy.einsum('i,j,ji', ao[atm_id], ao[atm_id], spindm)
-        sd = fcsd - numpy.eye(3) * fc
+
+        h1fc = rhf_ssc._get_integrals_fc(mol, atm_id)
+        fc = numpy.einsum('ij,ji', h1fc, spindm)
+
+        sd = fcsd + numpy.eye(3) * fc
 
         log.info('FC of atom %d  %s (in MHz)', atm_id, fac * nuc_gyro * fc)
         if hfcobj.verbose >= logger.INFO:

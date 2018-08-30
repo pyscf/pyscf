@@ -225,6 +225,8 @@ def dip_moment(cell, dm, unit='Debye', verbose=logger.NOTE,
     # positive point charges as the origin of multipole.
     charges = cell.atom_charges()
     coords  = cell.atom_coords()
+    #FIXME: dipole moment is divergent in the crystal with infinite number of
+    #images. determine charge_center iteratively to avoid dipole memont?
     charge_center = np.einsum('i,ix->x', charges, coords) / charges.sum()
     log.debug('Charge center %s', charge_center)
 
