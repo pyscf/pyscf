@@ -960,9 +960,23 @@ def energy_tril(cc, t1, t2, eris):
     e /= nkpts
     return e.real
 
+def _update_procs_mf(mf):
+    '''Update mean-field objects to be the same on all processors'''
+    mo_coeff  = comm.bcast(mf.mo_coeff, root=0)
+    mo_energy = comm.bcast(mf.mo_energy, root=0)
+    mo_occ    = comm.bcast(mf.mo_occ, root=0)
+    kpts      = comm.bcast(mf.kpts, root=0)
+
+    mf.mo_coeff = mo_coeff
+    mf.mo_energy = mo_energy
+    mf.mo_occ = mo_occ
+    mf.kpts  = kpts
+    return mf
+
 class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
 
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+        mf = _update_procs_mf(mf)
         pyscf.pbc.cc.kccsd_rhf.RCCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
         self.kconserv = kpts_helper.get_kconserv(mf.cell, mf.kpts)
 
@@ -1044,7 +1058,7 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         self.emp2 /= nkpts
 
         if rank == 0:
-            logger.info(self, 'Init t2, MP2 energy = %.15g', self.emp2)
+            logger.info(self, 'Init t2, MP2 energy (with fock eigenvalue shift) = %.15g', self.emp2)
             logger.timer(self, 'init mp2', *time0)
         return self.emp2, t1, t2_tril
 

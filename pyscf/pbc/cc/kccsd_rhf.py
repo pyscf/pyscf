@@ -577,7 +577,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
             touched[ki, kj, ka] = touched[ki, kj, kb] = True
 
         self.emp2 = emp2.real / nkpts
-        logger.info(self, 'Init t2, MP2 energy = %.15g', self.emp2)
+        logger.info(self, 'Init t2, MP2 energy (with fock eigenvalue shift) = %.15g', self.emp2)
         logger.timer(self, 'init mp2', *time0)
         return self.emp2, t1, t2
 
