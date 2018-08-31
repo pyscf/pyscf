@@ -17,6 +17,7 @@
 #          Timothy Berkelbach <tim.berkelbach@gmail.com>
 #
 
+import copy
 import time
 import numpy
 import os
@@ -962,16 +963,19 @@ def energy_tril(cc, t1, t2, eris):
 
 def _update_procs_mf(mf):
     '''Update mean-field objects to be the same on all processors'''
+    mf1 = copy.copy(mf)
+
     mo_coeff  = comm.bcast(mf.mo_coeff, root=0)
     mo_energy = comm.bcast(mf.mo_energy, root=0)
     mo_occ    = comm.bcast(mf.mo_occ, root=0)
     kpts      = comm.bcast(mf.kpts, root=0)
 
-    mf.mo_coeff = mo_coeff
-    mf.mo_energy = mo_energy
-    mf.mo_occ = mo_occ
-    mf.kpts  = kpts
-    return mf
+    mf1.mo_coeff = mo_coeff
+    mf1.mo_energy = mo_energy
+    mf1.mo_occ = mo_occ
+    mf1.kpts  = kpts
+    comm.Barrier()
+    return mf1
 
 class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
 
