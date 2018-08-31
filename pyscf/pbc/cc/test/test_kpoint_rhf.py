@@ -613,14 +613,14 @@ class KnownValues(unittest.TestCase):
 
         # Getting more roots than 1 is difficult
         e = mycc.eaccsd(nroots=1, kptlist=(0,))[0]
-        self.assertAlmostEqual(e, 5.079427283440857, 6)
+        self.assertAlmostEqual(e[0][0], 5.079427283440857, 6)
         e = mycc.eaccsd(nroots=1, kptlist=(1,))[0]
-        self.assertAlmostEqual(e, 4.183328878177331, 6)
+        self.assertAlmostEqual(e[0][0], 4.183328878177331, 6)
 
         e = mycc.ipccsd(nroots=1, kptlist=(0,))[0]
-        self.assertAlmostEqual(e, -3.471710821544506, 6)
+        self.assertAlmostEqual(e[0][0], -3.471710821544506, 6)
         e = mycc.ipccsd(nroots=1, kptlist=(1,))[0]
-        self.assertAlmostEqual(e, -4.272015727359054, 6)
+        self.assertAlmostEqual(e[0][0], -4.272015727359054, 6)
 
         # Start of supercell calculations
         from pyscf.pbc.tools.pbc import super_cell
@@ -687,14 +687,14 @@ class KnownValues(unittest.TestCase):
 
         # Getting more roots than 1 is difficult
         e = mycc.eaccsd(nroots=1, kptlist=(0,))[0]
-        self.assertAlmostEqual(e, 5.060562738181741, 6)
+        self.assertAlmostEqual(e[0][0], 5.060562738181741, 6)
         e = mycc.eaccsd(nroots=1, kptlist=(1,))[0]
-        self.assertAlmostEqual(e, 4.188511644938458, 6)
+        self.assertAlmostEqual(e[0][0], 4.188511644938458, 6)
 
         e = mycc.ipccsd(nroots=1, kptlist=(0,))[0]
-        self.assertAlmostEqual(e, -3.477663551987023, 6)
+        self.assertAlmostEqual(e[0][0], -3.477663551987023, 6)
         e = mycc.ipccsd(nroots=1, kptlist=(1,))[0]
-        self.assertAlmostEqual(e, -4.23523412155825, 6)
+        self.assertAlmostEqual(e[0][0], -4.23523412155825, 6)
 
         # Start of supercell calculations
         from pyscf.pbc.tools.pbc import super_cell
