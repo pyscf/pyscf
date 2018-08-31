@@ -177,7 +177,7 @@ def padding_k_idx(mp, kind="split"):
 
 def padded_mo_energy(mp, mo_energy):
     """
-    Pads coefficients of active MOs.
+    Pads energies of active MOs.
 
     Args:
         mp (:class:`MP2`): An instantiation of an SCF or post-Hartree-Fock object.
@@ -293,8 +293,8 @@ def get_nocc(mp, per_kpoint=False):
     else:
         raise NotImplementedError
 
-    #assert all(np.array(nocc) > 0), ('Must have occupied orbitals! \n\nnocc %s\nfrozen %s\nmo_occ %s' %
-    #       (nocc, mp.frozen, mp.mo_occ))
+    assert any(np.array(nocc) > 0), ('Must have occupied orbitals! \n\nnocc %s\nfrozen %s\nmo_occ %s' %
+           (nocc, mp.frozen, mp.mo_occ))
 
     if not per_kpoint:
         nocc = np.amax(nocc)
@@ -343,8 +343,8 @@ def get_nmo(mp, per_kpoint=False):
     else:
         raise NotImplementedError
 
-    #assert all(np.array(nmo) > 0), ('Must have a positive number of orbitals!\n\nnmo %s\nfrozen %s\nmo_occ %s' %
-    #       (nmo, mp.frozen, mp.mo_occ))
+    assert all(np.array(nmo) > 0), ('Must have a positive number of orbitals!\n\nnmo %s\nfrozen %s\nmo_occ %s' %
+           (nmo, mp.frozen, mp.mo_occ))
 
     if not per_kpoint:
         # Depending on whether there are more occupied bands, we want to make sure that
