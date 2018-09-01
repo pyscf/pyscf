@@ -55,18 +55,6 @@ class KnownValues(unittest.TestCase):
         self.assertListEqual(nmo, [4, 4])
 
     def test_frozen_list2(self):
-        # Freeze all occupied for the second k-point
-        mp = fake_mp(frozen=[0, 1,], mo_occ=[np.array([2, 2, 2, 0, 0]), np.array([2, 2, 0, 0, 0])], nkpts=2)
-        self.assertRaises(RuntimeError, get_nocc, mp)
-        self.assertRaises(RuntimeError, get_nmo, mp)  # Fails because it pads by calling get_nocc
-        self.assertRaises(RuntimeError, get_nocc, mp, per_kpoint=True)
-        self.assertRaises(RuntimeError, get_nmo, mp, per_kpoint=True)
-
-        # Freeze all virtual at the first k-point
-        mp = fake_mp(frozen=[3, 4], mo_occ=[np.array([2, 2, 2, 0, 0]), np.array([2, 2, 0, 0, 0])], nkpts=2)
-        self.assertRaises(RuntimeError, get_nocc, mp)
-        self.assertRaises(RuntimeError, get_nmo, mp)  # Fails because it pads by calling get_nocc
-
         # Freeze virtual not contained in set
         mp = fake_mp(frozen=[4, 5], mo_occ=[np.array([2, 2, 2, 0, 0]), np.array([2, 2, 0, 0, 0])], nkpts=2)
         self.assertRaises(RuntimeError, get_nocc, mp)

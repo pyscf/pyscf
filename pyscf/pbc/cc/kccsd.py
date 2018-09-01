@@ -26,7 +26,8 @@ from pyscf.lib import logger
 from pyscf.pbc import scf
 from pyscf.cc import gccsd
 from pyscf.cc import ccsd
-from pyscf.pbc.mp.kmp2 import get_frozen_mask, get_nmo, get_nocc
+from pyscf.pbc.mp.kmp2 import (get_frozen_mask, get_nmo, get_nocc,
+                               padded_mo_coeff, padding_k_idx)
 from pyscf.pbc.cc import kintermediates as imdk
 from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM
 from pyscf.pbc.lib import kpts_helper
@@ -71,6 +72,9 @@ def update_amps(cc, t1, t2, eris):
     fock = eris.fock
     mo_e_o = [e[:nocc] for e in eris.mo_energy]
     mo_e_v = [e[nocc:] + cc.level_shift for e in eris.mo_energy]
+
+    # Get location of padded elements in occupied and virtual space
+    nonzero_opadding, nonzero_vpadding = padding_k_idx(cc, kind="split")
 
     fov = fock[:, :nocc, nocc:].copy()
     foo = fock[:, :nocc, :nocc].copy()
@@ -192,21 +196,25 @@ def update_amps(cc, t1, t2, eris):
         t2new[ki, kj, ka] += tmp
 
     for ki in range(nkpts):
-        eia = mo_e_o[ki][:,None] - mo_e_v[ki][None,:]
-        # When padding the occupied/virtual arrays, some fock elements will be zero
-        idx = numpy.where(abs(eia) < LOOSE_ZERO_TOL)[0]
-        eia[idx] = LARGE_DENOM
-
+        ka = ki
+        # Remove zero/padded elements from denominator
+        eia = LARGE_DENOM * numpy.ones((nocc, nvir), dtype=eris.mo_energy[0].dtype)
+        n0_ovp_ia = numpy.ix_(nonzero_opadding[ki], nonzero_vpadding[ka])
+        eia[n0_ovp_ia] = (mo_e_o[ki][:,None] - mo_e_v[ka])[n0_ovp_ia]
         t1new[ki] /= eia
 
     kconserv = kpts_helper.get_kconserv(cc._scf.cell, cc.kpts)
     for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
         kb = kconserv[ki, ka, kj]
-        eijab = (mo_e_o[ki][:,None,None,None] + mo_e_o[kj][None,:,None,None] -
-                 mo_e_v[ka][None,None,:,None] - mo_e_v[kb][None,None,None,:])
-        # Due to padding; see above discussion concerning t1new in update_amps()
-        idx = numpy.where(abs(eijab) < LOOSE_ZERO_TOL)[0]
-        eijab[idx] = LARGE_DENOM
+        # For LARGE_DENOM, see t1new update above
+        eia = LARGE_DENOM * numpy.ones((nocc, nvir), dtype=eris.mo_energy[0].dtype)
+        n0_ovp_ia = numpy.ix_(nonzero_opadding[ki], nonzero_vpadding[ka])
+        eia[n0_ovp_ia] = (mo_e_o[ki][:,None] - mo_e_v[ka])[n0_ovp_ia]
+
+        ejb = LARGE_DENOM * numpy.ones((nocc, nvir), dtype=eris.mo_energy[0].dtype)
+        n0_ovp_jb = numpy.ix_(nonzero_opadding[kj], nonzero_vpadding[kb])
+        ejb[n0_ovp_jb] = (mo_e_o[kj][:,None] - mo_e_v[kb])[n0_ovp_jb]
+        eijab = eia[:, None, :, None] + ejb[:, None, :]
 
         t2new[ki, kj, ka] /= eijab
 
@@ -356,14 +364,21 @@ class GCCSD(gccsd.GCCSD):
         fov = eris.fock[:, :nocc, nocc:].copy()
         eris_oovv = eris.oovv.copy()
 
+        # Get location of padded elements in occupied and virtual space
+        nonzero_opadding, nonzero_vpadding = padding_k_idx(self, kind="split")
+
         kconserv = kpts_helper.get_kconserv(self._scf.cell, self.kpts)
         for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
             kb = kconserv[ki, ka, kj]
-            eijab = (mo_e_o[ki][:,None,None,None] + mo_e_o[kj][None,:,None,None] -
-                     mo_e_v[ka][None,None,:,None] - mo_e_v[kb][None,None,None,:])
-            # Due to padding; see above discussion concerning t1new in update_amps()
-            idx = numpy.where(abs(eijab) < LOOSE_ZERO_TOL)[0]
-            eijab[idx] = LARGE_DENOM
+            # For LARGE_DENOM, see t1new update above
+            eia = LARGE_DENOM * numpy.ones((nocc, nvir), dtype=eris.mo_energy[0].dtype)
+            n0_ovp_ia = numpy.ix_(nonzero_opadding[ki], nonzero_vpadding[ka])
+            eia[n0_ovp_ia] = (mo_e_o[ki][:,None] - mo_e_v[ka])[n0_ovp_ia]
+
+            ejb = LARGE_DENOM * numpy.ones((nocc, nvir), dtype=eris.mo_energy[0].dtype)
+            n0_ovp_jb = numpy.ix_(nonzero_opadding[kj], nonzero_vpadding[kb])
+            ejb[n0_ovp_jb] = (mo_e_o[kj][:,None] - mo_e_v[kb])[n0_ovp_jb]
+            eijab = eia[:, None, :, None] + ejb[:, None, :]
 
             t2[ki, kj, ka] = eris_oovv[ki, kj, ka] / eijab
 
@@ -531,6 +546,18 @@ def _make_eris_incore(cc, mo_coeff=None):
     madelung = tools.madelung(cell, kpts)
     eris.mo_energy = [_adjust_occ(mo_e, nocc, -madelung)
                       for k, mo_e in enumerate(eris.mo_energy)]
+
+    # Get location of padded elements in occupied and virtual space.
+    nocc_per_kpt = get_nocc(cc, per_kpoint=True)
+    nonzero_padding = padding_k_idx(cc, kind="joint")
+
+    # Check direct and indirect gaps for possible issues with CCSD convergence.
+    mo_e = [eris.mo_energy[kp][nonzero_padding[kp]] for kp in range(nkpts)]
+    mo_e = numpy.sort([y for x in mo_e for y in x])  # Sort de-nested array
+    gap = mo_e[numpy.sum(nocc_per_kpt)] - mo_e[numpy.sum(nocc_per_kpt)-1]
+    if gap < 1e-5:
+        logger.warn(cc, 'HOMO-LUMO gap %s too small for KCCSD. '
+                        'May cause issues in convergence.', gap)
 
     kconserv = kpts_helper.get_kconserv(cell, kpts)
     # The bottom nao//2 coefficients are down (up) spin while the top are up (down).
