@@ -616,23 +616,14 @@ def conc_mol(mol1, mol2):
     mol3.unit = mol1.unit
     mol3._basis = dict(mol2._basis)
     mol3._basis.update(mol1._basis)
-    if mol2._ecp is None:
-        mol3._ecp = mol1._ecp
-    elif mol1._ecp is None:
-        mol3._ecp = mol2._ecp
-    else:
-        mol3._ecp = dict(mol2._ecp)
-        mol3._ecp.update(mol1._ecp)
 
-    if isinstance(mol1.nucmod, dict):
-        mol3.nucmod.update(mol1.nucmod)
-    if isinstance(mol2.nucmod, dict):
-        mol3.nucmod.update(mol2.nucmod)
+    mol3._pseudo.update(mol1._pseudo)
+    mol3._pseudo.update(mol2._pseudo)
+    mol3._ecp.update(mol1._ecp)
+    mol3._ecp.update(mol2._ecp)
 
-    if isinstance(mol1.nucprop, dict):
-        mol3.nucprop.update(mol1.nucprop)
-    if isinstance(mol2.nucprop, dict):
-        mol3.nucprop.update(mol2.nucprop)
+    mol3.nucprop.update(mol1.nucprop)
+    mol3.nucprop.update(mol2.nucprop)
 
     if not mol1._built:
         logger.warn(mol1, 'Warning: intor envs of %s not initialized.', mol1)
@@ -1860,6 +1851,13 @@ class Mole(lib.StreamObject):
         self._ecp = {}
         self._built = False
 
+        # _pseudo is created to make the mol object consistenet with the mol
+        # object converted from Cell.to_mol(). It is initialized in the
+        # Cell.build() method only. Assigning _pseudo to mol object basically
+        # has no effects. Mole.build() method does not have code to access the
+        # contents of _pseudo.
+        self._pseudo = {}
+
         keys = set(('verbose', 'unit', 'cart', 'incore_anyway'))
         self._keys = set(self.__dict__.keys()).union(keys)
         self.__dict__.update(kwargs)
@@ -2513,7 +2511,7 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
 
     def has_ecp(self):
         '''Whether pesudo potential is used in the system.'''
-        return len(self._ecpbas) > 0
+        return len(self._ecpbas) > 0 or self._pseudo
 
 
 #######################################################
