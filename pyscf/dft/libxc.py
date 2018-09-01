@@ -79,12 +79,32 @@ XC = XC_CODES = {
 'XC_LDA_K_TF'                  :   50, # Thomas-Fermi kinetic energy functional
 'XC_LDA_K_LP'                  :   51, # Lee and Parr Gaussian ansatz
 'XC_LDA_XC_KSDT'               :  259, # Karasiev et al. parametrization
+'XC_LDA_C_CHACHIYO'            :  287, # Chachiyo simple 2 parameter correlation
+'XC_LDA_C_LP96'                :  289, # Liu-Parr correlation
+'XC_LDA_X_REL'                 :  532, # Relativistic exchange
+'XC_LDA_XC_1D_EHWLRG_1'        :  536, # LDA constructed from slab-like systems of 1 electron
+'XC_LDA_XC_1D_EHWLRG_2'        :  537, # LDA constructed from slab-like systems of 2 electrons
+'XC_LDA_XC_1D_EHWLRG_3'        :  538, # LDA constructed from slab-like systems of 3 electrons
+'XC_LDA_X_ERF'                 :  546, # Attenuated exchange LDA (erf)
+'XC_LDA_XC_LP_A'               :  547, # Lee-Parr reparametrization B
+'XC_LDA_XC_LP_B'               :  548, # Lee-Parr reparametrization B
+'XC_LDA_X_RAE'                 :  549, # Rae self-energy corrected exchange
+'XC_LDA_K_ZLP'                 :  550, # kinetic energy version of ZLP
+'XC_LDA_C_MCWEENY'             :  551, # McWeeny 76
+'XC_LDA_C_BR78'                :  552, # Brual & Rothstein 78
+'XC_LDA_C_PK09'                :  554, # Proynov and Kong 2009
+'XC_LDA_C_OW_LYP'              :  573, # Wigner with corresponding LYP parameters
+'XC_LDA_C_OW'                  :  574, # Optimized Wigner
+'XC_LDA_XC_GDSMFB'             :  577, # Groth et al. parametrization
+'XC_LDA_C_GK72'                :  578, # Gordon and Kim 1972
+'XC_LDA_C_KARASIEV'            :  579, # Karasiev reparameterization of Chachiyo
+'XC_LDA_K_LP96'                :  580, # Liu-Parr kinetic
 'XC_GGA_X_GAM'                 :   32, # GAM functional from Minnesota
 'XC_GGA_C_GAM'                 :   33, # GAM functional from Minnesota
 'XC_GGA_X_HCTH_A'              :   34, # HCTH-A
 'XC_GGA_X_EV93'                :   35, # Engel and Vosko
-'XC_GGA_X_BGCP'                :   38, # Burke, Cancio, Gould, and Pittalis
-'XC_GGA_C_BGCP'                :   39, # Burke, Cancio, Gould, and Pittalis
+'XC_GGA_X_BCGP'                :   38, # Burke, Cancio, Gould, and Pittalis
+'XC_GGA_C_BCGP'                :   39, # Burke, Cancio, Gould, and Pittalis
 'XC_GGA_X_LAMBDA_OC2_N'        :   40, # lambda_OC2(N) version of PBE
 'XC_GGA_X_B86_R'               :   41, # Revised Becke 86 Xalpha,beta,gamma (with mod. grad. correction)
 'XC_GGA_X_LAMBDA_CH_N'         :   44, # lambda_CH(N) version of PBE
@@ -98,7 +118,7 @@ XC = XC_CODES = {
 'XC_GGA_K_APBEINT'             :   54, # interpolated version of APBE
 'XC_GGA_K_REVAPBE'             :   55, # revised APBE
 'XC_GGA_X_AK13'                :   56, # Armiento & Kuemmel 2013
-'XC_GGA_K_MEYER'               :   57, # Meyer, Wang, and Young
+'XC_GGA_K_MEYER'               :   57, # Meyer,  Wang, and Young
 'XC_GGA_X_LV_RPW86'            :   58, # Berland and Hyldgaard
 'XC_GGA_X_PBE_TCA'             :   59, # PBE revised by Tognetti et al
 'XC_GGA_X_PBEINT'              :   60, # PBE for hybrid interfaces
@@ -122,9 +142,9 @@ XC = XC_CODES = {
 'XC_GGA_C_OP_B88'              :   87, # one-parameter progressive functional (B88 version)
 'XC_GGA_C_FT97'                :   88, # Filatov & Thiel correlation
 'XC_GGA_C_SPBE'                :   89, # PBE correlation to be used with the SSB exchange
-'XC_GGA_X_SSB_SW'              :   90, # Swarta, Sola and Bickelhaupt correction to PBE
-'XC_GGA_X_SSB'                 :   91, # Swarta, Sola and Bickelhaupt
-'XC_GGA_X_SSB_D'               :   92, # Swarta, Sola and Bickelhaupt dispersion
+'XC_GGA_X_SSB_SW'              :   90, # Swart, Sola and Bickelhaupt correction to PBE
+'XC_GGA_X_SSB'                 :   91, # Swart, Sola and Bickelhaupt
+'XC_GGA_X_SSB_D'               :   92, # Swart, Sola and Bickelhaupt dispersion
 'XC_GGA_XC_HCTH_407P'          :   93, # HCTH/407+
 'XC_GGA_XC_HCTH_P76'           :   94, # HCTH p=7/6
 'XC_GGA_XC_HCTH_P14'           :   95, # HCTH p=1/4
@@ -177,7 +197,7 @@ XC = XC_CODES = {
 'XC_GGA_X_RGE2'                :  142, # Regularized PBE
 'XC_GGA_C_RGE2'                :  143, # Regularized PBE
 'XC_GGA_X_RPW86'               :  144, # refitted Perdew & Wang 86
-'XC_GGA_X_KT1'                 :  145, # Keal and Tozer version 1
+'XC_GGA_X_KT1'                 :  145, # Exchange part of Keal and Tozer version 1
 'XC_GGA_XC_KT2'                :  146, # Keal and Tozer version 2
 'XC_GGA_C_WL'                  :  147, # Wilson & Levy
 'XC_GGA_C_WI'                  :  148, # Wilson & Ivanov
@@ -193,12 +213,13 @@ XC = XC_CODES = {
 'XC_GGA_X_C09X'                :  158, # C09x to be used with the VdW of Rutgers-Chalmers
 'XC_GGA_C_SOGGA11_X'           :  159, # To be used with HYB_GGA_X_SOGGA11_X
 'XC_GGA_X_LB'                  :  160, # van Leeuwen & Baerends
-'XC_GGA_XC_HCTH_93'            :  161, # HCTH functional fitted to 93 molecules
+'XC_GGA_XC_HCTH_93'            :  161, # HCTH functional fitted to  93 molecules
 'XC_GGA_XC_HCTH_120'           :  162, # HCTH functional fitted to 120 molecules
 'XC_GGA_XC_HCTH_147'           :  163, # HCTH functional fitted to 147 molecules
 'XC_GGA_XC_HCTH_407'           :  164, # HCTH functional fitted to 407 molecules
 'XC_GGA_XC_EDF1'               :  165, # Empirical functionals from Adamson, Gill, and Pople
 'XC_GGA_XC_XLYP'               :  166, # XLYP functional
+'XC_GGA_XC_KT1'                :  167, # Keal and Tozer version 1
 'XC_GGA_XC_B97_D'              :  170, # Grimme functional to be used with C6 vdW term
 'XC_GGA_XC_PBE1W'              :  173, # Functionals fitted for water
 'XC_GGA_XC_MPWLYP1W'           :  174, # Functionals fitted for water
@@ -228,6 +249,17 @@ XC = XC_CODES = {
 'XC_GGA_C_OP_PW91'             :  262, # one-parameter progressive functional (PW91 version)
 'XC_GGA_X_PBEFE'               :  265, # PBE for formation energies
 'XC_GGA_X_CAP'                 :  270, # Correct Asymptotic Potential
+'XC_GGA_X_EB88'                :  271, # Non-empirical (excogitated) B88 functional of Becke and Elliott
+'XC_GGA_C_PBE_MOL'             :  272, # Del Campo, Gazquez, Trickey and Vela (PBE-like)
+'XC_GGA_K_ABSP3'               :  277, # gamma-TFvW form by Acharya et al [g = 1 - 1.513/N^0.35]
+'XC_GGA_K_ABSP4'               :  278, # gamma-TFvW form by Acharya et al [g = l = 1/(1 + 1.332/N^(1/3))]
+'XC_GGA_C_BMK'                 :  280, # Boese-Martin for kinetics
+'XC_GGA_C_TAU_HCTH'            :  281, # correlation part of tau-hcth
+'XC_GGA_C_HYB_TAU_HCTH'        :  283, # correlation part of hyb_tau-hcth
+'XC_GGA_X_BEEFVDW'             :  285, # BEEF-vdW exchange
+'XC_GGA_XC_BEEFVDW'            :  286, # BEEF-vdW exchange-correlation
+'XC_GGA_X_PBETRANS'            :  291, # Gradient-based interpolation between PBE and revPBE
+'XC_GGA_X_CHACHIYO'            :  298, # Chachiyo exchange
 'XC_GGA_K_VW'                  :  500, # von Weiszaecker functional
 'XC_GGA_K_GE2'                 :  501, # Second-order gradient expansion (l = 1/9)
 'XC_GGA_K_GOLDEN'              :  502, # TF-lambda-vW form by Golden (l = 13/45)
@@ -259,8 +291,32 @@ XC = XC_CODES = {
 'XC_GGA_X_HJS_B97X'            :  528, # HJS screened exchange B97x version
 'XC_GGA_X_ITYH'                :  529, # short-range recipe for exchange GGA functionals
 'XC_GGA_X_SFAT'                :  530, # short-range recipe for exchange GGA functionals
+'XC_GGA_X_SG4'                 :  533, # Semiclassical GGA at fourth order
+'XC_GGA_C_SG4'                 :  534, # Semiclassical GGA at fourth order
+'XC_GGA_X_GG99'                :  535, # Gilbert and Gill 1999
+'XC_GGA_X_PBEPOW'              :  539, # PBE power
+'XC_GGA_X_KGG99'               :  544, # Gilbert and Gill 1999 (mixed)
+'XC_GGA_XC_HLE16'              :  545, # high local exchange 2016
+'XC_GGA_C_SCAN_E0'             :  553, # GGA component of SCAN
+'XC_GGA_C_GAPC'                :  555, # GapC
+'XC_GGA_C_GAPLOC'              :  556, # Gaploc
+'XC_GGA_C_ZVPBEINT'            :  557, # another spin-dependent correction to PBEint
+'XC_GGA_C_ZVPBESOL'            :  558, # another spin-dependent correction to PBEsol
+'XC_GGA_C_TM_LYP'              :  559, # Takkar and McCarthy reparametrization
+'XC_GGA_C_TM_PBE'              :  560, # Thakkar and McCarthy reparametrization
+'XC_GGA_C_W94'                 :  561, # Wilson 94 (Eq. 25)
+'XC_GGA_C_CS1'                 :  565, # A dynamical correlation functional
+'XC_GGA_X_B88M'                :  570, # Becke 88 reoptimized to be used with mgga_c_tau1
+'XC_GGA_K_PBE3'                :  595, # Three parameter PBE-like expansion
+'XC_GGA_K_PBE4'                :  596, # Four  parameter PBE-like expansion
+'XC_GGA_K_EXP4'                :  597, # Intermediate form between PBE3 and PBE4
 'XC_HYB_GGA_X_N12_SX'          :   81, # N12-SX functional from Minnesota
 'XC_HYB_GGA_XC_B97_1P'         :  266, # version of B97 by Cohen and Handy
+'XC_HYB_GGA_XC_PBE_MOL0'       :  273, # PBEmol0
+'XC_HYB_GGA_XC_PBE_SOL0'       :  274, # PBEsol0
+'XC_HYB_GGA_XC_PBEB0'          :  275, # PBEbeta0
+'XC_HYB_GGA_XC_PBE_MOLB0'      :  276, # PBEmolbeta0
+'XC_HYB_GGA_XC_PBE50'          :  290, # PBE0 with 50% exx
 'XC_HYB_GGA_XC_B3PW91'         :  401, # The original (ACM) hybrid of Becke
 'XC_HYB_GGA_XC_B3LYP'          :  402, # The (in)famous B3LYP
 'XC_HYB_GGA_XC_B3P86'          :  403, # Perdew 86 hybrid similar to B3PW91
@@ -316,19 +372,28 @@ XC = XC_CODES = {
 'XC_HYB_GGA_XC_B3LYP5'         :  475, # B3LYP with VWN functional 5 instead of RPA
 'XC_HYB_GGA_XC_EDF2'           :  476, # Empirical functional from Lin, George and Gill
 'XC_HYB_GGA_XC_CAP0'           :  477, # Correct Asymptotic Potential hybrid
+'XC_HYB_GGA_XC_LC_WPBE'        :  478, # Long-range corrected functional by Vydrov and Scuseria
+'XC_HYB_GGA_XC_HSE12'          :  479, # HSE12 by Moussa, Schultz and Chelikowsky
+'XC_HYB_GGA_XC_HSE12S'         :  480, # Short-range HSE12 by Moussa, Schultz, and Chelikowsky
+'XC_HYB_GGA_XC_HSE_SOL'        :  481, # HSEsol functional by Schimka, Harl, and Kresse
+'XC_HYB_GGA_XC_CAM_QTP_01'     :  482, # CAM-QTP(01): CAM-B3LYP retuned using ionization potentials of water
+'XC_HYB_GGA_XC_MPW1LYP'        :  483, # Becke 1-parameter mixture of mPW91 and LYP
+'XC_HYB_GGA_XC_MPW1PBE'        :  484, # Becke 1-parameter mixture of mPW91 and PBE
+'XC_HYB_GGA_XC_KMLYP'          :  485, # Kang-Musgrave hybrid
+'XC_HYB_GGA_XC_B5050LYP'       :  572, # Like B3LYP but more exact exchange
 'XC_MGGA_C_DLDF'               :   37, # Dispersionless Density Functional
 'XC_MGGA_XC_ZLP'               :   42, # Zhao, Levy & Parr, Eq. (21)
 'XC_MGGA_XC_OTPSS_D'           :   64, # oTPSS_D functional of Goerigk and Grimme
 'XC_MGGA_C_CS'                 :   72, # Colle and Salvetti
-'XC_MGGA_C_MN12_SX'            :   73, # Worker for MN12-SX functional
-'XC_MGGA_C_MN12_L'             :   74, # MN12-L functional from Minnesota
-'XC_MGGA_C_M11_L'              :   75, # M11-L functional from Minnesota
-'XC_MGGA_C_M11'                :   76, # Worker for M11 functional
-'XC_MGGA_C_M08_SO'             :   77, # Worker for M08-SO functional
-'XC_MGGA_C_M08_HX'             :   78, # Worker for M08-HX functional
+'XC_MGGA_C_MN12_SX'            :   73, # MN12-SX correlation functional from Minnesota
+'XC_MGGA_C_MN12_L'             :   74, # MN12-L correlation functional from Minnesota
+'XC_MGGA_C_M11_L'              :   75, # M11-L correlation functional from Minnesota
+'XC_MGGA_C_M11'                :   76, # M11 correlation functional from Minnesota
+'XC_MGGA_C_M08_SO'             :   77, # M08-SO correlation functional from Minnesota
+'XC_MGGA_C_M08_HX'             :   78, # M08-HX correlation functional from Minnesota
 'XC_MGGA_X_LTA'                :  201, # Local tau approximation of Ernzerhof & Scuseria
-'XC_MGGA_X_TPSS'               :  202, # Perdew, Tao, Staroverov & Scuseria exchange
-'XC_MGGA_X_M06_L'              :  203, # M06-Local functional of Minnesota
+'XC_MGGA_X_TPSS'               :  202, # Tao, Perdew, Staroverov & Scuseria exchange
+'XC_MGGA_X_M06_L'              :  203, # M06-L exchange functional from Minnesota
 'XC_MGGA_X_GVT4'               :  204, # GVT4 from Van Voorhis and Scuseria
 'XC_MGGA_X_TAU_HCTH'           :  205, # tau-HCTH from Boese and Handy
 'XC_MGGA_X_BR89'               :  206, # Becke-Roussel 89
@@ -337,84 +402,96 @@ XC = XC_CODES = {
 'XC_MGGA_X_RPP09'              :  209, # Rasanen, Pittalis, and Proetto correction to Becke & Johnson
 'XC_MGGA_X_2D_PRHG07'          :  210, # Pittalis, Rasanen, Helbig, Gross Exchange Functional
 'XC_MGGA_X_2D_PRHG07_PRP10'    :  211, # PRGH07 with PRP10 correction
-'XC_MGGA_X_REVTPSS'            :  212, # revised Perdew, Tao, Staroverov & Scuseria exchange
+'XC_MGGA_X_REVTPSS'            :  212, # revised Tao, Perdew, Staroverov & Scuseria exchange
 'XC_MGGA_X_PKZB'               :  213, # Perdew, Kurth, Zupan, and Blaha
-'XC_MGGA_X_M05'                :  214, # Worker for M05 functional
-'XC_MGGA_X_M05_2X'             :  215, # Worker for M05-2X functional
-'XC_MGGA_X_M06_HF'             :  216, # Worker for M06-HF functional
-'XC_MGGA_X_M06'                :  217, # Worker for M06 functional
-'XC_MGGA_X_M06_2X'             :  218, # Worker for M06-2X functional
-'XC_MGGA_X_M08_HX'             :  219, # Worker for M08-HX functional
-'XC_MGGA_X_M08_SO'             :  220, # Worker for M08-SO functional
 'XC_MGGA_X_MS0'                :  221, # MS exchange of Sun, Xiao, and Ruzsinszky
 'XC_MGGA_X_MS1'                :  222, # MS1 exchange of Sun, et al
 'XC_MGGA_X_MS2'                :  223, # MS2 exchange of Sun, et al
-'XC_MGGA_X_M11'                :  225, # Worker for M11 functional
-'XC_MGGA_X_M11_L'              :  226, # M11-L functional from Minnesota
-'XC_MGGA_X_MN12_L'             :  227, # MN12-L functional from Minnesota
-'XC_MGGA_C_CC06'               :  229, # Cancio and Chou 2006
+'XC_MGGA_X_M11_L'              :  226, # M11-L exchange functional from Minnesota
+'XC_MGGA_X_MN12_L'             :  227, # MN12-L exchange functional from Minnesota
+'XC_MGGA_XC_CC06'              :  229, # Cancio and Chou 2006
 'XC_MGGA_X_MK00'               :  230, # Exchange for accurate virtual orbital energies
-'XC_MGGA_C_TPSS'               :  231, # Perdew, Tao, Staroverov & Scuseria correlation
+'XC_MGGA_C_TPSS'               :  231, # Tao, Perdew, Staroverov & Scuseria correlation
 'XC_MGGA_C_VSXC'               :  232, # VSxc from Van Voorhis and Scuseria (correlation part)
-'XC_MGGA_C_M06_L'              :  233, # M06-Local functional from Minnesota
-'XC_MGGA_C_M06_HF'             :  234, # Worker for M06-HF functional
-'XC_MGGA_C_M06'                :  235, # Worker for M06 functional
-'XC_MGGA_C_M06_2X'             :  236, # Worker for M06-2X functional
-'XC_MGGA_C_M05'                :  237, # Worker for M05 functional
-'XC_MGGA_C_M05_2X'             :  238, # Worker for M05-2X functional
+'XC_MGGA_C_M06_L'              :  233, # M06-L correlation functional from Minnesota
+'XC_MGGA_C_M06_HF'             :  234, # M06-HF correlation functional from Minnesota
+'XC_MGGA_C_M06'                :  235, # M06 correlation functional from Minnesota
+'XC_MGGA_C_M06_2X'             :  236, # M06-2X correlation functional from Minnesota
+'XC_MGGA_C_M05'                :  237, # M05 correlation functional from Minnesota
+'XC_MGGA_C_M05_2X'             :  238, # M05-2X correlation functional from Minnesota
 'XC_MGGA_C_PKZB'               :  239, # Perdew, Kurth, Zupan, and Blaha
 'XC_MGGA_C_BC95'               :  240, # Becke correlation 95
 'XC_MGGA_C_REVTPSS'            :  241, # revised TPSS correlation
 'XC_MGGA_XC_TPSSLYP1W'         :  242, # Functionals fitted for water
 'XC_MGGA_X_MK00B'              :  243, # Exchange for accurate virtual orbital energies (v. B)
 'XC_MGGA_X_BLOC'               :  244, # functional with balanced localization
-'XC_MGGA_X_MODTPSS'            :  245, # Modified Perdew, Tao, Staroverov & Scuseria exchange
+'XC_MGGA_X_MODTPSS'            :  245, # Modified Tao, Perdew, Staroverov & Scuseria exchange
 'XC_MGGA_C_TPSSLOC'            :  247, # Semilocal dynamical correlation
 'XC_MGGA_X_MBEEF'              :  249, # mBEEF exchange
 'XC_MGGA_X_MBEEFVDW'           :  250, # mBEEF-vdW exchange
 'XC_MGGA_XC_B97M_V'            :  254, # Mardirossian and Head-Gordon
 'XC_MGGA_X_MVS'                :  257, # MVS exchange of Sun, Perdew, and Ruzsinszky
-'XC_MGGA_X_MN15_L'             :  260, # MN15-L functional from Minnesota
-'XC_MGGA_C_MN15_L'             :  261, # MN15-L functional from Minnesota
+'XC_MGGA_X_MN15_L'             :  260, # MN15-L exhange functional from Minnesota
+'XC_MGGA_C_MN15_L'             :  261, # MN15-L correlation functional from Minnesota
 'XC_MGGA_X_SCAN'               :  263, # SCAN exchange of Sun, Ruzsinszky, and Perdew
 'XC_MGGA_C_SCAN'               :  267, # SCAN correlation
-'XC_MGGA_C_MN15'               :  269, # MN15 functional from Minnesota
+'XC_MGGA_C_MN15'               :  269, # MN15 correlation functional from Minnesota
+'XC_MGGA_X_B00'                :  284, # Becke 2000
+'XC_MGGA_XC_HLE17'             :  288, # high local exchange 2017
+'XC_MGGA_C_SCAN_RVV10'         :  292, # SCAN correlation + rVV10 correlation
+'XC_MGGA_X_REVM06_L'           :  293, # revised M06-L exchange functional from Minnesota
+'XC_MGGA_C_REVM06_L'           :  294, # Revised M06-L correlation functional from Minnesota
+'XC_MGGA_X_TM'                 :  540, # Tao and Mo 2016
+'XC_MGGA_X_VT84'               :  541, # meta-GGA version of VT{8,4} GGA
+'XC_MGGA_X_SA_TPSS'            :  542, # TPSS with correct surface asymptotics
+'XC_MGGA_K_PC07'               :  543, # Perdew and Constantin 2007
+'XC_MGGA_C_KCIS'               :  562, # Krieger, Chen, Iafrate, and Savin
+'XC_MGGA_XC_LP90'              :  564, # Lee & Parr, Eq. (56)
+'XC_MGGA_C_B88'                :  571, # Meta-GGA correlation by Becke
+'XC_MGGA_X_GX'                 :  575, # GX functional of Loos
+'XC_MGGA_X_PBE_GX'             :  576, # PBE-GX functional of Loos
+'XC_MGGA_X_REVSCAN'            :  581, # revised SCAN
+'XC_MGGA_C_REVSCAN'            :  582, # revised SCAN correlation
+'XC_MGGA_C_SCAN_VV10'          :  584, # SCAN correlation +  VV10 correlation
+'XC_MGGA_C_REVSCAN_VV10'       :  585, # revised SCAN correlation
+'XC_MGGA_X_BR89_EXPLICIT'      :  586, # Becke-Roussel 89 with an explicit inversion of x(y)
 'XC_HYB_MGGA_X_DLDF'           :   36, # Dispersionless Density Functional
 'XC_HYB_MGGA_X_MS2H'           :  224, # MS2 hybrid exchange of Sun, et al
-'XC_HYB_MGGA_X_MN12_SX'        :  248, # MN12-SX hybrid functional from Minnesota
-'XC_HYB_MGGA_X_SCAN0'          :  264, # SCAN hybrid
-'XC_HYB_MGGA_X_MN15'           :  268, # MN15 functional from Minnesota
-'XC_HYB_MGGA_XC_M05'           :  438, # M05 functional from Minnesota
-'XC_HYB_MGGA_XC_M05_2X'        :  439, # M05-2X functional from Minnesota
+'XC_HYB_MGGA_X_MN12_SX'        :  248, # MN12-SX hybrid exchange functional from Minnesota
+'XC_HYB_MGGA_X_SCAN0'          :  264, # SCAN hybrid exchange
+'XC_HYB_MGGA_X_MN15'           :  268, # MN15 hybrid exchange functional from Minnesota
+'XC_HYB_MGGA_X_BMK'            :  279, # Boese-Martin for kinetics
+'XC_HYB_MGGA_X_TAU_HCTH'       :  282, # Hybrid version of tau-HCTH
+'XC_HYB_MGGA_X_M08_HX'         :  295, # M08-HX exchange functional from Minnesota
+'XC_HYB_MGGA_X_M08_SO'         :  296, # M08-SO exchange functional from Minnesota
+'XC_HYB_MGGA_X_M11'            :  297, # M11 hybrid exchange functional from Minnesota
+'XC_HYB_MGGA_X_M05'            :  438, # M05 hybrid exchange functional from Minnesota
+'XC_HYB_MGGA_X_M05_2X'         :  439, # M05-2X hybrid exchange functional from Minnesota
 'XC_HYB_MGGA_XC_B88B95'        :  440, # Mixture of B88 with BC95 (B1B95)
 'XC_HYB_MGGA_XC_B86B95'        :  441, # Mixture of B86 with BC95
 'XC_HYB_MGGA_XC_PW86B95'       :  442, # Mixture of PW86 with BC95
 'XC_HYB_MGGA_XC_BB1K'          :  443, # Mixture of B88 with BC95 from Zhao and Truhlar
-'XC_HYB_MGGA_XC_M06_HF'        :  444, # M06-HF functional from Minnesota
+'XC_HYB_MGGA_X_M06_HF'         :  444, # M06-HF hybrid exchange functional from Minnesota
 'XC_HYB_MGGA_XC_MPW1B95'       :  445, # Mixture of mPW91 with BC95 from Zhao and Truhlar
 'XC_HYB_MGGA_XC_MPWB1K'        :  446, # Mixture of mPW91 with BC95 for kinetics
 'XC_HYB_MGGA_XC_X1B95'         :  447, # Mixture of X with BC95
 'XC_HYB_MGGA_XC_XB1K'          :  448, # Mixture of X with BC95 for kinetics
-'XC_HYB_MGGA_XC_M06'           :  449, # M06 functional from Minnesota
-'XC_HYB_MGGA_XC_M06_2X'        :  450, # M06-2X functional from Minnesota
+'XC_HYB_MGGA_X_M06'            :  449, # M06 hybrid exchange functional from Minnesota
+'XC_HYB_MGGA_X_M06_2X'         :  450, # M06-2X hybrid exchange functional from Minnesota
 'XC_HYB_MGGA_XC_PW6B95'        :  451, # Mixture of PW91 with BC95 from Zhao and Truhlar
 'XC_HYB_MGGA_XC_PWB6K'         :  452, # Mixture of PW91 with BC95 from Zhao and Truhlar for kinetics
 'XC_HYB_MGGA_XC_TPSSH'         :  457, # TPSS hybrid
 'XC_HYB_MGGA_XC_REVTPSSH'      :  458, # revTPSS hybrid
-'XC_HYB_MGGA_XC_M08_HX'        :  460, # M08-HX functional from Minnesota
-'XC_HYB_MGGA_XC_M08_SO'        :  461, # M08-SO functional from Minnesota
-'XC_HYB_MGGA_XC_M11'           :  462, # M11 functional from Minnesota
-'XC_HYB_MGGA_X_MVSH'           :  474, # MVS hybrid
+'XC_HYB_MGGA_X_MVSH'           :  474, # MVSh hybrid
 'XC_HYB_MGGA_XC_WB97M_V'       :  531, # Mardirossian and Head-Gordon
-
-# new SCAN for libxc-4.2.3
+'XC_HYB_MGGA_XC_B0KCIS'        :  563, # Hybrid based on KCIS
+'XC_HYB_MGGA_XC_MPW1KCIS'      :  566, # Modified Perdew-Wang + KCIS hybrid
+'XC_HYB_MGGA_XC_MPWKCIS1K'     :  567, # Modified Perdew-Wang + KCIS hybrid with more exact exchange
+'XC_HYB_MGGA_XC_PBE1KCIS'      :  568, # Perdew-Burke-Ernzerhof + KCIS hybrid
+'XC_HYB_MGGA_XC_TPSS1KCIS'     :  569, # TPSS hybrid with KCIS correlation
+'XC_HYB_MGGA_X_REVSCAN0'       :  583, # revised SCAN hybrid exchange
+'XC_HYB_MGGA_XC_B98'           :  598, # Becke 98
 #
-'XC_MGGA_C_SCAN_RVV10'         :  292, # SCAN correlation + rVV10 correlation
-'XC_MGGA_C_SCAN_VV10'          :  584, # SCAN correlation +  VV10 correlation
-'XC_MGGA_X_REVSCAN'            :  581, # revised SCAN
-'XC_MGGA_C_REVSCAN'            :  582, # revised SCAN correlation
-'XC_MGGA_C_REVSCAN_VV10'       :  585, # revised SCAN correlation
-
 # alias
 #
 'LDA'           : 1 ,
@@ -543,7 +620,8 @@ XC_ALIAS = {
 XC_ALIAS.update([(key.replace('-',''), XC_ALIAS[key])
                  for key in XC_ALIAS if '-' in key])
 
-VV10_XC = set(('B97M_V', 'WB97M_V', 'WB97X_V', 'VV10', 'LC_VV10'))
+VV10_XC = set(('B97M_V', 'WB97M_V', 'WB97X_V', 'VV10', 'LC_VV10',
+               'REVSCAN_VV10', 'SCAN_VV10', 'SCAN_RVV10'))
 
 PROBLEMATIC_XC = dict([(XC_CODES[x], x) for x in
                        ('XC_GGA_C_SPBE', 'XC_MGGA_X_TPSS', 'XC_MGGA_X_REVTPSS',
@@ -1235,12 +1313,11 @@ if __name__ == '__main__':
         ["O" , (0. , 0.     , 0.)],
         [1   , (0. , -0.757 , 0.587)],
         [1   , (0. , 0.757  , 0.587)] ],
-        )#basis = '6311g**',)
+        )
     mf = dft.RKS(mol)
-    mf._numint.libxc = dft.xcfun
+    #mf._numint.libxc = dft.xcfun
     mf.xc = 'camb3lyp'
     mf.kernel()
-    exit()
     mf.xc = 'b88,lyp'
     eref = mf.kernel()
 
@@ -1252,4 +1329,4 @@ if __name__ == '__main__':
     mf = dft.RKS(mol)
     mf._numint = define_xc(mf._numint, 'B3LYP5')
     e1 = mf.kernel()
-    print(e1 - -76.4102840115744)
+    print(e1 - -75.2753037898599)
