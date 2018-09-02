@@ -431,7 +431,7 @@ class KSCF(pbchf.SCF):
             nkpts = len(self.kpts)
             # FIXME: consider the fractional num_electron or not? This maybe
             # relates to the charged system.
-            nelectron = float(self.tot_electrons(nkpts)) / nkpts
+            nelectron = float(self.cell.tot_electrons(nkpts)) / nkpts
             logger.info(self, '    Total energy shift due to Ewald probe charge'
                         ' = -1/2 * Nelec*madelung = %.12g',
                         madelung*nelectron * -.5)
