@@ -392,7 +392,7 @@ def _gamma2_outcore(myci, civec, nmo, nocc, h5fobj, compress_vvvv=False):
     #:dvvvv = lib.einsum('ijab,ijcd->abcd', c2, c2)
     max_memory = max(0, myci.max_memory - lib.current_memory()[0])
     unit = max(nocc**2*nvir*2+nocc*nvir**2*3 + 1, nvir**3*2+nocc*nvir**2 + 1)
-    blksize = min(nvir, max(BLKMIN, int(max_memory*.95e6/8/unit)))
+    blksize = min(nvir, max(BLKMIN, int(max_memory*.9e6/8/unit)))
     iobuflen = int(256e6/8/blksize)
     log.debug1('rdm intermediates: block size = %d, nvir = %d in %d blocks',
                blksize, nocc, int((nvir+blksize-1)/blksize))

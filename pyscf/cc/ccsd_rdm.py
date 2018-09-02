@@ -148,8 +148,9 @@ def _gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj, compress_vvvv=False):
     goovv = goooo = None
 
     max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
-    unit = max(nocc**2*nvir*2+nocc*nvir**2*3, nvir**3*2+nocc*nvir**2)
-    blksize = min(nvir, max(ccsd.BLKMIN, int(max_memory*.95e6/8/unit)))
+    unit = max(nocc**2*nvir*2+nocc*nvir**2*3,
+               nvir**3*2+nocc*nvir**2*2+nocc**2*nvir*2)
+    blksize = min(nvir, max(ccsd.BLKMIN, int(max_memory*.9e6/8/unit)))
     iobuflen = int(256e6/8/blksize)
     log.debug1('rdm intermediates pass 3: block size = %d, nvir = %d in %d blocks',
                blksize, nocc, int((nvir+blksize-1)/blksize))
