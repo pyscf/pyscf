@@ -20,6 +20,7 @@ PySCF 1.5.3
 -----------
 * Bugfix
   - get_jk prescreen for non-hermitian density matrices.
+  - Inaccurate estimation of memory usage in ccsd rdm.
 
 
 PySCF 1.5.2 (2018-08-15)
