@@ -404,9 +404,17 @@ XC = XC_CODES = {
 'XC_MGGA_X_2D_PRHG07_PRP10'    :  211, # PRGH07 with PRP10 correction
 'XC_MGGA_X_REVTPSS'            :  212, # revised Tao, Perdew, Staroverov & Scuseria exchange
 'XC_MGGA_X_PKZB'               :  213, # Perdew, Kurth, Zupan, and Blaha
+'XC_MGGA_X_M05'                :  214, # Worker for M05 functional
+'XC_MGGA_X_M05_2X'             :  215, # Worker for M05-2X functional
+'XC_MGGA_X_M06_HF'             :  216, # Worker for M06-HF functional
+'XC_MGGA_X_M06'                :  217, # Worker for M06 functional
+'XC_MGGA_X_M06_2X'             :  218, # Worker for M06-2X functional
+'XC_MGGA_X_M08_HX'             :  219, # Worker for M08-HX functional
+'XC_MGGA_X_M08_SO'             :  220, # Worker for M08-SO functional
 'XC_MGGA_X_MS0'                :  221, # MS exchange of Sun, Xiao, and Ruzsinszky
 'XC_MGGA_X_MS1'                :  222, # MS1 exchange of Sun, et al
 'XC_MGGA_X_MS2'                :  223, # MS2 exchange of Sun, et al
+'XC_MGGA_X_M11'                :  225, # Worker for M11 functional
 'XC_MGGA_X_M11_L'              :  226, # M11-L exchange functional from Minnesota
 'XC_MGGA_X_MN12_L'             :  227, # MN12-L exchange functional from Minnesota
 'XC_MGGA_XC_CC06'              :  229, # Cancio and Chou 2006
@@ -465,8 +473,13 @@ XC = XC_CODES = {
 'XC_HYB_MGGA_X_M08_HX'         :  295, # M08-HX exchange functional from Minnesota
 'XC_HYB_MGGA_X_M08_SO'         :  296, # M08-SO exchange functional from Minnesota
 'XC_HYB_MGGA_X_M11'            :  297, # M11 hybrid exchange functional from Minnesota
-'XC_HYB_MGGA_X_M05'            :  438, # M05 hybrid exchange functional from Minnesota
-'XC_HYB_MGGA_X_M05_2X'         :  439, # M05-2X hybrid exchange functional from Minnesota
+# In libxc-4.2.3, they are 'XC_HYB_MGGA_X_M05', 'XC_HYB_MGGA_X_M05_2X'.
+# When these keys are used, the parser may incorrectly pick them for
+# xc_code='m05,' when XC_MGGA_X_M05 is actually targeted.  XC_MGGA_X_M05
+# agrees to the xcfun M05X very well. Not sure which M05X should be
+# used by default when using libxc-4.2.3.
+'XC_HYB_MGGA_XC_M05'           :  438, # M05 functional from Minnesota
+'XC_HYB_MGGA_XC_M05_2X'        :  439, # M05-2X functional from Minnesota
 'XC_HYB_MGGA_XC_B88B95'        :  440, # Mixture of B88 with BC95 (B1B95)
 'XC_HYB_MGGA_XC_B86B95'        :  441, # Mixture of B86 with BC95
 'XC_HYB_MGGA_XC_PW86B95'       :  442, # Mixture of PW86 with BC95
@@ -476,12 +489,20 @@ XC = XC_CODES = {
 'XC_HYB_MGGA_XC_MPWB1K'        :  446, # Mixture of mPW91 with BC95 for kinetics
 'XC_HYB_MGGA_XC_X1B95'         :  447, # Mixture of X with BC95
 'XC_HYB_MGGA_XC_XB1K'          :  448, # Mixture of X with BC95 for kinetics
-'XC_HYB_MGGA_X_M06'            :  449, # M06 hybrid exchange functional from Minnesota
-'XC_HYB_MGGA_X_M06_2X'         :  450, # M06-2X hybrid exchange functional from Minnesota
+# In libxc-4.2.3, they are 'XC_HYB_MGGA_X_M06', 'XC_HYB_MGGA_X_M06_2X'.
+# When these keys are used, the parser may incorrectly pick them for
+# xc_code='m06,' when XC_MGGA_X_M06 is actually targeted.  XC_MGGA_X_M06
+# agrees to the xcfun M06X very well. Not sure which M06X should be
+# used by default when using libxc-4.2.3.
+'XC_HYB_MGGA_XC_M06'           :  449, # M06 functional from Minnesota
+'XC_HYB_MGGA_XC_M06_2X'        :  450, # M06-2X functional from Minnesota
 'XC_HYB_MGGA_XC_PW6B95'        :  451, # Mixture of PW91 with BC95 from Zhao and Truhlar
 'XC_HYB_MGGA_XC_PWB6K'         :  452, # Mixture of PW91 with BC95 from Zhao and Truhlar for kinetics
 'XC_HYB_MGGA_XC_TPSSH'         :  457, # TPSS hybrid
 'XC_HYB_MGGA_XC_REVTPSSH'      :  458, # revTPSS hybrid
+'XC_HYB_MGGA_XC_M08_HX'        :  460, # M08-HX functional from Minnesota
+'XC_HYB_MGGA_XC_M08_SO'        :  461, # M08-SO functional from Minnesota
+'XC_HYB_MGGA_XC_M11'           :  462, # M11 functional from Minnesota
 'XC_HYB_MGGA_X_MVSH'           :  474, # MVSh hybrid
 'XC_HYB_MGGA_XC_WB97M_V'       :  531, # Mardirossian and Head-Gordon
 'XC_HYB_MGGA_XC_B0KCIS'        :  563, # Hybrid based on KCIS
@@ -935,8 +956,9 @@ def parse_xc(description):
                                 x_id = possible_xc.pop()
                             sys.stderr.write('XC parser takes %s\n' % x_id)
                             sys.stderr.write('You can add prefix to %s for a '
-                                             'specific functional (e.g. X_%s)\n'
-                                             % (key, key))
+                                             'specific functional (e.g. X_%s, '
+                                             'HYB_MGGA_X_%s)\n'
+                                             % (key, key, key))
                         else:
                             x_id = possible_xc.pop()
                         x_id = XC_CODES[x_id]
