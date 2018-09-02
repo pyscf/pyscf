@@ -97,7 +97,7 @@ def grad_nuc(mol, atmlst=None):
 def get_hcore(mol):
     '''Part of the nuclear gradients of core Hamiltonian'''
     h = mol.intor('int1e_ipkin', comp=3)
-    if mol._pesudo:
+    if mol._pseudo:
         NotImplementedError('Nuclear gradients for GTH PP')
     else:
         h+= mol.intor('int1e_ipnuc', comp=3)

@@ -2510,7 +2510,7 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
         return self
 
     def has_ecp(self):
-        '''Whether pesudo potential is used in the system.'''
+        '''Whether pseudo potential is used in the system.'''
         return len(self._ecpbas) > 0 or self._pseudo
 
 

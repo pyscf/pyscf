@@ -18,7 +18,7 @@
 
 '''Analytic GTH-PP integrals for open boundary conditions.
 
-See also pyscf/pbc/gto/pesudo/pp_int.py
+See also pyscf/pbc/gto/pseudo/pp_int.py
 '''
 
 import numpy
