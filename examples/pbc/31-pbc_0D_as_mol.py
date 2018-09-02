@@ -27,12 +27,21 @@ print('E(HF) with 0D PBC RHF calculation %s' % mf.e_tot)
 #
 # Convert cell to mol.
 #
-# Except the lattice vectors, the mole inherits all characters from cell, like
-# the geometry, the basis sets, the pseudopotential.
+# Except lattice vectors, the mole object inherits all parameters from the
+# cell object, like geometry, basis sets, and pseudopotential.  Using the
+# generated mol object with molecular code, it should produce the same results
+# as the 0D PBC calculation
 #
 mol = cell.to_mol()
 mf = scf.RHF(mol).run()
 print('E(HF) with molecular RHF calculation %s' % mf.e_tot)
+
+# Cell and Mole have almost the same structure. If cell was fed to the
+# molecular functions, the code is able to handle the cell without any
+# errors. However, due to the different treatments of nuclear repulsion
+# energy, a small discrepancy will be found in the total energy.
+mf = scf.RHF(cell).run()
+print('E(HF) of molecular RHF with cell %s' % mf.e_tot)
 
 #
 # Convert mol back to cell.
