@@ -440,8 +440,7 @@ def _make_eris_outcore(mycc, mo_coeff=None):
             tmp = None
         cput0 = log.timer_debug1('transforming ovvv', *cput0)
 
-        eris.vvvv = feri.create_dataset('vvvv', (nvir,nvir,nvir,nvir), 'f8',
-                                        chunks=(nvir,blksize,nvir,nvir))
+        eris.vvvv = feri.create_dataset('vvvv', (nvir,nvir,nvir,nvir), 'f8')
         tril2sq = lib.square_mat_in_trilu_indices(nvir)
         fswap = lib.H5TmpFile()
         ao2mo.kernel(mycc.mol, (orbv_a,orbv_a,orbv_a,orbv_a), fswap, 'aaaa',
@@ -509,8 +508,7 @@ def _make_eris_outcore(mycc, mo_coeff=None):
             tmp = None
         cput0 = log.timer_debug1('transforming ovvv', *cput0)
 
-        eris.vvvv = feri.create_dataset('vvvv', (nvir,nvir,nvir,nvir), 'f8',
-                                        chunks=(nvir,blksize,nvir,nvir))
+        eris.vvvv = feri.create_dataset('vvvv', (nvir,nvir,nvir,nvir), 'f8')
         sym_forbid = (orbspin[nocc:,None]!=orbspin[nocc:])[np.tril_indices(nvir)]
         tril2sq = lib.square_mat_in_trilu_indices(nvir)
 
