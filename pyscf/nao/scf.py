@@ -130,6 +130,7 @@ class scf(tddft_iter):
     if self.kmat_timing is not None: self.kmat_timing += timer()-t1
     return kmat
 
+
   def get_jk(self, mol=None, dm=None, hermi=1, **kw):
     if dm is None: dm = self.make_rdm1()
     j = self.get_j(dm, **kw)
