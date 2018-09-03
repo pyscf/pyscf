@@ -37,7 +37,7 @@ class KnownValues(unittest.TestCase):
         h1ref = lib.einsum('i,ixy,dip,diq->xypq', grids.weights/dd**5, rr, ao, ao)
 
         h1ao = rhf_efg._get_sfx2c_quadrupole_integrals(mol, 0)
-        self.assertAlmostEqual(abs(h1ref - h1ao).max(), 0, 5)
+        self.assertAlmostEqual(abs(h1ref - h1ao).max(), 0, 4)
 
 
 if __name__ == "__main__":
