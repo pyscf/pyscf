@@ -102,6 +102,8 @@ def write_amplitudes(t1, t2, filename="t_amplitudes.hdf5"):
 def read_eom_amplitudes(vec_shape, filename="reom_amplitudes.hdf5", vec=None):
     task_list = generate_max_task_list(vec_shape)
     read_success = False
+    return False, None  # TODO: find a way to make the amplitudes are consistent
+                        # with the signs of the eris/t-amplitudes when restarting
     print("attempting to read in eom amplitudes from file ", filename)
     if os.path.isfile(filename):
         print("reading eom amplitudes from file. shape=", vec_shape)
@@ -1210,7 +1212,7 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
             nfrozen = np.sum(self.mask_frozen_ip(np.zeros(size, dtype=int), kshift, const=1))
             nroots = min(nroots, size - nfrozen)
         evals = np.zeros((len(kptlist),nroots), np.float)
-        evecs = np.zeros((len(kptlist),size,nroots), np.complex)
+        evecs = np.zeros((len(kptlist),nroots,size), np.complex)
 
         for k,kshift in enumerate(kptlist):
             self.kshift = kshift
@@ -1219,16 +1221,19 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
             precond = lambda dx, e, x0: dx/(diag-e)
             # Initial guess from file
             amplitude_filename = "__ripccsd" + str(kshift) + "__.hdf5"
-            rsuccess, x0 = read_eom_amplitudes((size,nroots),filename=amplitude_filename)
-            if not rsuccess:
-                x0 = np.zeros_like(diag)
-                x0[np.argmin(diag)] = 1.0
-            if nroots == 1:
-                #evals[k], evecs[k,:,0] = eig(self.ipccsd_matvec, x0, precond, nroots=nroots, verbose=self.verbose, tol=1e-14, max_cycle=50, max_space=100)
-                conv, evals[k], evecs[k,:] = eigs(self.ipccsd_matvec, size, nroots, Adiag=diag, verbose=self.verbose)
-            else:
-                #evals[k], evecs[k] = eig(self.ipccsd_matvec, x0, precond, nroots=nroots, verbose=self.verbose, tol=1e-14, max_cycle=50, max_space=100)
-                conv, evals[k], evecs[k,:] = eigs(self.ipccsd_matvec, size, nroots, Adiag=diag, verbose=self.verbose)
+            rsuccess, x0 = read_eom_amplitudes((nroots,size),filename=amplitude_filename)
+            if x0 is not None:
+                x0 = x0.T
+            #if not rsuccess:
+            #    x0 = np.zeros_like(diag)
+            #    x0[np.argmin(diag)] = 1.0
+
+            conv, evals_k, evecs_k = eigs(self.ipccsd_matvec, size, nroots, x0=x0, Adiag=diag, verbose=self.verbose)
+
+            evals_k = evals_k.real
+            evals[k] = evals_k
+            evecs[k] = evecs_k.T
+
             write_eom_amplitudes(evecs[k],filename=amplitude_filename)
         time0 = log.timer_debug1('converge ip-ccsd', *time0)
         comm.Barrier()
@@ -1357,7 +1362,7 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
             nfrozen = np.sum(self.mask_frozen_ip(np.zeros(size, dtype=int), kshift, const=1))
             nroots = min(nroots, size - nfrozen)
         evals = np.zeros((len(kptlist),nroots), np.float)
-        evecs = np.zeros((len(kptlist),size,nroots), np.complex)
+        evecs = np.zeros((len(kptlist),nroots,size), np.complex)
 
         for k,kshift in enumerate(kptlist):
             self.kshift = kshift
@@ -1365,17 +1370,20 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
             precond = lambda dx, e, x0: dx/(diag-e)
             # Initial guess from file
             amplitude_filename = "__lipccsd" + str(kshift) + "__.hdf5"
-            rsuccess, x0 = read_eom_amplitudes((size,nroots),amplitude_filename)
-            if not rsuccess:
-                x0 = np.zeros_like(diag)
-                x0[np.argmin(diag)] = 1.0
-            if nroots == 1:
-                #evals[k], evecs[k,:,0] = eig(self.lipccsd_matvec, x0, precond, nroots=nroots, verbose=self.verbose, tol=1e-14, max_cycle=50, max_space=100)
-                conv, evals[k], evecs[k,:] = eigs(self.lipccsd_matvec, size, nroots, Adiag=diag, verbose=self.verbose)
-            else:
-                #evals[k], evecs[k] = eig(self.lipccsd_matvec, x0, precond, nroots=nroots, verbose=self.verbose, tol=1e-14, max_cycle=50, max_space=100)
-                conv, evals[k], evecs[k,:] = eigs(self.lipccsd_matvec, size, nroots, Adiag=diag, verbose=self.verbose)
-            write_eom_amplitudes(evecs[k],amplitude_filename)
+            rsuccess, x0 = read_eom_amplitudes((nroots,size),filename=amplitude_filename)
+            if x0 is not None:
+                x0 = x0.T
+            #if not rsuccess:
+            #    x0 = np.zeros_like(diag)
+            #    x0[np.argmin(diag)] = 1.0
+
+            conv, evals_k, evecs_k = eigs(self.lipccsd_matvec, size, nroots, x0=x0, Adiag=diag, verbose=self.verbose)
+
+            evals_k = evals_k.real
+            evals[k] = evals_k
+            evecs[k] = evecs_k.T
+
+            write_eom_amplitudes(evecs[k],filename=amplitude_filename)
         time0 = log.timer_debug1('converge ip-ccsd', *time0)
         comm.Barrier()
         return evals.real, evecs
@@ -1579,7 +1587,8 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         fvv = eris.fock[:,nocc:,nocc:]
 
         e = []
-        for _eval, _evec, _levec in zip(ipccsd_evals, ipccsd_evecs.T, lipccsd_evecs.T):
+        assert len(ipccsd_evecs.shape) == 2  # Done at a single k-point, kshift
+        for _eval, _evec, _levec in zip(ipccsd_evals, ipccsd_evecs, lipccsd_evecs):
             l1,l2 = self.vector_to_amplitudes_ip(_levec)
             r1,r2 = self.vector_to_amplitudes_ip(_evec)
 
@@ -1930,7 +1939,7 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
             nfrozen = np.sum(self.mask_frozen_ea(np.zeros(size, dtype=int), kshift, const=1))
             nroots = min(nroots, size - nfrozen)
         evals = np.zeros((len(kptlist),nroots), np.float)
-        evecs = np.zeros((len(kptlist),size,nroots), np.complex)
+        evecs = np.zeros((len(kptlist),nroots,size), np.complex)
 
         for k,kshift in enumerate(kptlist):
             self.kshift = kshift
@@ -1939,17 +1948,20 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
             precond = lambda dx, e, x0: dx/(diag-e)
             # Initial guess from file
             amplitude_filename = "__reaccsd" + str(kshift) + "__.hdf5"
-            rsuccess, x0 = read_eom_amplitudes((size,nroots),amplitude_filename)
-            if not rsuccess:
-                x0 = np.zeros_like(diag)
-                x0[np.argmin(diag)] = 1.0
-            if nroots == 1:
-                #evals[k], evecs[k,:,0] = eig(self.eaccsd_matvec, x0, precond, nroots=nroots, verbose=self.verbose, tol=1e-14, max_cycle=50, max_space=100)
-                conv, evals[k], evecs[k,:] = eigs(self.eaccsd_matvec, size, nroots, Adiag=diag, verbose=self.verbose)
-            else:
-                #evals[k], evecs[k] = eig(self.eaccsd_matvec, x0, precond, nroots=nroots, verbose=self.verbose, tol=1e-14, max_cycle=50, max_space=100)
-                conv, evals[k], evecs[k,:] = eigs(self.eaccsd_matvec, size, nroots, Adiag=diag, verbose=self.verbose)
-            write_eom_amplitudes(evecs[k],amplitude_filename)
+            rsuccess, x0 = read_eom_amplitudes((nroots,size),filename=amplitude_filename)
+            if x0 is not None:
+                x0 = x0.T
+            #if not rsuccess:
+            #    x0 = np.zeros_like(diag)
+            #    x0[np.argmin(diag)] = 1.0
+
+            conv, evals_k, evecs_k = eigs(self.eaccsd_matvec, size, nroots, x0=x0, Adiag=diag, verbose=self.verbose)
+
+            evals_k = evals_k.real
+            evals[k] = evals_k
+            evecs[k] = evecs_k.T
+
+            write_eom_amplitudes(evecs[k],filename=amplitude_filename)
         time0 = log.timer_debug1('converge ea-ccsd', *time0)
         comm.Barrier()
         return evals.real, evecs
@@ -2098,7 +2110,7 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
             nfrozen = np.sum(self.mask_frozen_ea(np.zeros(size, dtype=int), kshift, const=1))
             nroots = min(nroots, size - nfrozen)
         evals = np.zeros((len(kptlist),nroots), np.float)
-        evecs = np.zeros((len(kptlist),size,nroots), np.complex)
+        evecs = np.zeros((len(kptlist),nroots,size), np.complex)
 
         for k,kshift in enumerate(kptlist):
             self.kshift = kshift
@@ -2106,16 +2118,19 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
             precond = lambda dx, e, x0: dx/(diag-e)
             # Initial guess from file
             amplitude_filename = "__leaccsd" + str(kshift) + "__.hdf5"
-            rsuccess, x0 = read_eom_amplitudes((size,nroots),amplitude_filename)
-            if not rsuccess:
-                x0 = np.zeros_like(diag)
-                x0[np.argmin(diag)] = 1.0
-            if nroots == 1:
-                #evals[k], evecs[k,:,0] = eig(self.leaccsd_matvec, x0, precond, nroots=nroots, verbose=self.verbose, tol=1e-14, max_cycle=50, max_space=100)
-                conv, evals[k], evecs[k,:] = eigs(self.leaccsd_matvec, size, nroots, Adiag=diag, verbose=self.verbose)
-            else:
-                #evals[k], evecs[k] = eig(self.leaccsd_matvec, x0, precond, nroots=nroots, verbose=self.verbose, tol=1e-14, max_cycle=50, max_space=100)
-                conv, evals[k], evecs[k,:] = eigs(self.leaccsd_matvec, size, nroots, Adiag=diag, verbose=self.verbose)
+            rsuccess, x0 = read_eom_amplitudes((nroots,size),filename=amplitude_filename)
+            if x0 is not None:
+                x0 = x0.T
+            #if not rsuccess:
+            #    x0 = np.zeros_like(diag)
+            #    x0[np.argmin(diag)] = 1.0
+
+            conv, evals_k, evecs_k = eigs(self.leaccsd_matvec, size, nroots, x0=x0, Adiag=diag, verbose=self.verbose)
+
+            evals_k = evals_k.real
+            evals[k] = evals_k
+            evecs[k] = evecs_k.T
+
             write_eom_amplitudes(evecs[k],amplitude_filename)
         time0 = log.timer_debug1('converge lea-ccsd', *time0)
         comm.Barrier()
@@ -2287,7 +2302,9 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         fvv = eris.fock[:,nocc:,nocc:]
 
         e = []
-        for _eval, _evec, _levec in zip(eaccsd_evals, eaccsd_evecs.T, leaccsd_evecs.T):
+        assert len(eaccsd_evecs.shape) == 2  # Done at a single k-point, kshift
+        for _eval, _evec, _levec in zip(eaccsd_evals, eaccsd_evecs, leaccsd_evecs):
+            print _eval, _evec.shape, _levec.shape
             l1,l2 = self.vector_to_amplitudes_ea(_levec)
             r1,r2 = self.vector_to_amplitudes_ea(_evec)
 
