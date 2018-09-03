@@ -133,7 +133,8 @@ def _make_df_eris(cc, mo_coeff=None):
     eris.ovov = eris.feri.create_dataset('ovov', (nocc,nvir,nocc,nvir), 'f8', chunks=(nocc,1,nocc,nvir))
     eris.ovvo = eris.feri.create_dataset('ovvo', (nocc,nvir,nvir,nocc), 'f8', chunks=(nocc,1,nvir,nocc))
     eris.oovv = eris.feri.create_dataset('oovv', (nocc,nocc,nvir,nvir), 'f8', chunks=(nocc,nocc,1,nvir))
-    chunks = (nvir_pair, min(naux,with_df.blockdim))
+    # nrow ~ 4e9/8/blockdim to ensure hdf5 chunk < 4GB
+    chunks = (min(nvir_pair,int(4e8/with_df.blockdim)), min(naux,with_df.blockdim))
     eris.vvL = eris.feri.create_dataset('vvL', (nvir_pair,naux), 'f8', chunks=chunks)
 
     Loo = numpy.empty((naux,nocc,nocc))
@@ -173,7 +174,7 @@ def _make_df_eris(cc, mo_coeff=None):
 
     Lov = Lov.reshape(naux,nocc,nvir)
     vblk = max(nocc, int((max_memory*.15e6/8)/(nocc*nvir_pair)))
-    vvblk = min(nvir_pair, max(4, int((max_memory*.8e6/8)/(vblk*nocc+naux))))
+    vvblk = int(min(nvir_pair, 4e8/nocc, max(4, (max_memory*.8e6/8)/(vblk*nocc+naux))))
     eris.ovvv = eris.feri.create_dataset('ovvv', (nocc,nvir,nvir_pair), 'f8',
                                          chunks=(nocc,1,vvblk))
     for q0, q1 in lib.prange(0, nvir_pair, vvblk):
