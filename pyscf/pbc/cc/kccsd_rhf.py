@@ -1352,8 +1352,8 @@ def _init_df_eris(cc, eris):
     if cc._scf.with_df._cderi is None:
         cc._scf.with_df.build()
 
-    nocc = mycc.nocc
-    nmo = mycc.nmo
+    nocc = cc.nocc
+    nmo = cc.nmo
     nvir = nmo - nocc
     nao = cc._scf.cell.nao_nr()
 
@@ -1632,4 +1632,3 @@ if __name__ == '__main__':
     Ht1, Ht2 = mycc.update_amps(t1, t2, eris)
     print(lib.finger(Ht1) - (-3.6611794882508244+9.2241044317516554j))
     print(lib.finger(Ht2) - (-196.88536721771101-432.29569128644886j))
-
