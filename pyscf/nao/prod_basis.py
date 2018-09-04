@@ -563,6 +563,7 @@ class prod_basis():
     return self.c2s[-1]
 
   def generate_png_spy_dp_vertex(self):
+    """Produces pictures of the dominant product vertex in a common black-and-white way"""
     import matplotlib.pyplot as plt
     plt.ioff()
     dab2v = self.get_dp_vertex_doubly_sparse()
@@ -574,20 +575,21 @@ class prod_basis():
       plt.close()
     return 0
   
-  def plt_chess(self):
-    """Shows Matrix elements in chessboard"""
+  def generate_png_chess_dp_vertex(self):
+    """Produces pictures of the dominant product vertex a chessboard convention"""
     import matplotlib.pylab as plt
-    plt.ion()
-    for i, ab in enumerate(self): 
-        print('Matrix No.#{}, Size: {}, Type: {}'.format(i+1, ab.shape, type(ab)))
+    plt.ioff()
+    dab2v = self.get_dp_vertex_doubly_sparse()
+    for i, ab in enumerate(dab2v): 
+        fname = "chess-v-{:06d}.png".format(i)
+        print('Matrix No.#{}, Size: {}, Type: {}'.format(i+1, ab.shape, type(ab)), fname)
         if type(ab) != 'numpy.ndarray': ab = ab.toarray()
         fig = plt.figure()
         ax = fig.add_subplot(1,1,1)
         ax.set_aspect('equal')
         plt.imshow(ab, interpolation='nearest', cmap=plt.cm.ocean)
         plt.colorbar()
-        plt.show()
-        plt.pause(0.7)
+        plt.savefig(fname)
         plt.close(fig)
 #
 #
