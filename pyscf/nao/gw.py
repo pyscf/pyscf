@@ -115,7 +115,7 @@ class gw(scf):
     E = self.ksn2e[0,0,:]
     E_fermi = self.fermi_energy
     E_homo = amax(E[where(E<=E_fermi)])
-    E_gap  = amin(E[where(E>=E_fermi)]) - E_homo  
+    E_gap  = amin(E[where(E>E_fermi)]) - E_homo  
     E_maxdiff = amax(E) - amin(E)
     d = amin(abs(E_homo-E)[where(abs(E_homo-E)>1e-4)])
     wmin_def = sqrt(tol * (d**3) * (E_gap**3)/(d**2+E_gap**2))
