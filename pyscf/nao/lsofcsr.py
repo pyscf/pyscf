@@ -35,7 +35,10 @@ def lsofcsr(coo3, dtype=float, shape=None, axis=0):
   #print( shape )
   
   iir = [i for i in range(len(shape)) if i!=axis]
-  #print(iir)
+  #print(__name__, iir)
+  #print(__name__, type(it), type(it[0]==0))
+  #print(__name__, it[0]==0)
+  
   
   lsofcsr = [0] * shape[axis]
   sh = [shape[i] for i in iir]
@@ -65,7 +68,7 @@ class lsofcsr_c():
     return len(self.lsofcsr)
          
   def toarray(self):
-    vab_arr = zeros(self.shape)
+    vab_arr = zeros(self.shape, dtype=self.dtype)
     if self.axis==2 :
       for b,m in enumerate(self): vab_arr[:,:,b]=m.toarray()
     elif self.axis==1:

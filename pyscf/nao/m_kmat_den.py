@@ -167,12 +167,15 @@ def kmat_den(mf, dm=None, algo=None, **kw):
     The algorithm was not realized before and it seems to be superior to the algorithm sm0_prd (see above).
     """
     import scipy.sparse as sparse
-          
+    from timeit import default_timer as timer
+    t1 = timer()
     dab2v = pb.get_dp_vertex_doubly_sparse(axis=0)
     dab2v_csr = pb.get_dp_vertex_sparse().tocsr()
     da2cc = pb.get_da2cc_sparse().tocsr()
     kmat  = np.zeros_like(dm)
     (nnd,nnp),n = da2cc.shape,dm.shape[-1]
+    t2 = timer(); 
+    #print('runtime sm0_sum_before_loop: ', t2-t1); t1=t2
     
     if len(dm.shape)==3: # if spin index is present
       

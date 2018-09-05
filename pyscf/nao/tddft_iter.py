@@ -55,7 +55,7 @@ class tddft_iter(chi0_matvec):
         print(' xc_code', xc_code, xc, xc_code.split(','))
         raise RuntimeError('unkn xc_code')
 
-    if self.verbosity>0 : print(__name__,'\t====> Performed xc_code:', self.xc_code)
+    if self.verbosity>0 : print(__name__,'\t====> self.xc_code:', self.xc_code)
 
   def load_kernel_method(self, kernel_fname, kernel_format="npy", kernel_path_hdf5=None, **kwargs):
 
