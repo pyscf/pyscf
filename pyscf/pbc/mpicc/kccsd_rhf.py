@@ -2648,6 +2648,7 @@ class _ERIS:
             fockao = cc._scf.get_hcore() + cc._scf.get_veff(cell, dm)
         self.fock = np.asarray([reduce(np.dot, (mo.T.conj(), fockao[k], mo))
                                 for k, mo in enumerate(mo_coeff)])
+        self.fock = comm.bcast(self.fock, root=0)  # Ensure all processes have same fock
 
         self.mo_energy = [self.fock[k].diagonal().real for k in range(nkpts)]
         # Add HFX correction in the self.mo_energy to improve convergence in
