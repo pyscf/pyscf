@@ -9,6 +9,7 @@ from pyscf.nao.m_rf0_den import rf0_den, rf0_cmplx_ref_blk, rf0_cmplx_ref, rf0_c
 from pyscf.nao.m_rf_den import rf_den
 from pyscf.nao.m_rf_den_pyscf import rf_den_pyscf
 from pyscf.data.nist import HARTREE2EV
+from pyscf.nao.m_valance import *
 
 starting_time=timer()
 class gw(scf):
@@ -28,6 +29,7 @@ class gw(scf):
     self.rescf = kw['rescf'] if 'rescf' in kw else False
     self.bsize = kw['bsize'] if 'bsize' in kw else min(40, self.norbs)
     self.tdscf = kw['tdscf'] if 'tdscf' in kw else None
+    self.frozen_core = kw['frozen_core'] if 'frozen_core' in kw else None
     if sum(self.nelec) == 1: raise RuntimeError('Not implemented H, sorry :-) Look into scf/__init__.py for HF1e class...')
     
     if self.nspin==1: self.nocc_0t = nocc_0t = np.array([int((self.nelec+1)/2)])
@@ -50,7 +52,9 @@ class gw(scf):
 
     if self.verbosity>0: print(__name__,'\t\t====> Number of ocupied states are (nocc) = {}, Number of virtual states (nvrt) = {}'.format(self.nocc, self.nvrt))
 
-    self.start_st,self.finish_st = self.nocc_0t-self.nocc, self.nocc_0t+self.nvrt
+    #self.start_st,self.finish_st = self.nocc_0t-self.nocc, self.nocc_0t+self.nvrt
+    frozen_core = kw['frozen_core'] if 'frozen_core' in kw else self.frozen_core
+    self.start_st,self.finish_st = get_start (self.mol.atom, self.nspin, self.mol.natm,algo=frozen_core,**kw), self.nocc_0t+self.nvrt
 
     self.nn = [range(self.start_st[s], self.finish_st[s]) for s in range(self.nspin)] # list of states
     if self.verbosity>0: print(__name__,'\t\t====> Indices of states to be corrected = {}\n'.format(self.nn))
@@ -383,6 +387,6 @@ class gw(scf):
     self.xc_code = 'GW'
     if self.verbosity>0:
       print(__name__,'\t\t====> Performed xc_code: {}\n '.format(self.xc_code))
-      print('\nConverged GW-corrected eigenvalues:\n',self.mo_energy_gw)
+      print('\nConverged GW-corrected eigenvalues:\n',self.mo_energy_gw*HARTREE2EV)
         
   kernel_gw = make_mo_g0w0
