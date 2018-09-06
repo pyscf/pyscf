@@ -426,38 +426,36 @@ class prod_basis():
         raise RuntimeError('pt?')
     return nnz
 
-  def get_dp_vertex_sparse_loops(self, dtype=np.float64, sparseformat=coo_matrix):
-    """ Returns the product vertex coefficients as 3d array for dominant products, in a sparse format coo(p,ab)"""
-    nnz = self.get_dp_vertex_nnz()
-    irow,icol,data = zeros(nnz, dtype=int), zeros(nnz, dtype=int), zeros(nnz, dtype=dtype) # Start to construct coo matrix
-
-    atom2so = self.sv.atom2s
-    nfdp = self.dpc2s[-1]
-    n = self.sv.atom2s[-1]
-    inz = 0
-    for atom,[sd,fd,pt,spp] in enumerate(zip(self.dpc2s,self.dpc2s[1:],self.dpc2t,self.dpc2sp)):
-      if pt!=1: continue
-      s,f = atom2so[atom:atom+2]
-      for p in range(sd,fd):
-        for a in range(s,f):
-          for b in range(s,f):
-            irow[inz],icol[inz],data[inz] = p,a+b*n,self.prod_log.sp2vertex[spp][p-sd,a-s,b-s]
-            inz+=1
-
-    for atom, [sd,fd,pt,spp] in enumerate(zip(self.dpc2s,self.dpc2s[1:],self.dpc2t,self.dpc2sp)):
-      if pt!=2: continue
-      inf= self.bp2info[spp]
-      a,b = inf.atoms
-      sa,fa,sb,fb = atom2so[a],atom2so[a+1],atom2so[b],atom2so[b+1]
-      for p in range(sd,fd):
-        for a in range(sa,fa):
-          for b in range(sb,fb):
-            irow[inz],icol[inz],data[inz] = p,a+b*n,inf.vrtx[p-sd,a-sa,b-sb]; inz+=1;
-            irow[inz],icol[inz],data[inz] = p,b+a*n,inf.vrtx[p-sd,a-sa,b-sb]; inz+=1;
-    return sparseformat((data, (irow, icol)), dtype=dtype, shape=(nfdp,n*n))
 
   def get_dp_vertex_doubly_sparse(self, dtype=np.float64, sparseformat=lsofcsr_c, axis=0):
-    """ Returns the product vertex coefficients for dominant products as an one-dimensional array of sparse matrices """
+    """ Returns the product vertex coefficients for dominant products as a one-dimensional array of sparse matrices """
+    nnz = self.get_dp_vertex_nnz()
+    i1,i2,i3,data = zeros(nnz, dtype=int), zeros(nnz, dtype=int), zeros(nnz, dtype=int), zeros(nnz, dtype=dtype)
+    atom2s,dpc2s,nfdp,n = self.sv.atom2s, self.dpc2s,self.dpc2s[-1],self.sv.atom2s[-1]
+
+    inz = 0
+    for s,f,sd,fd,pt,spp in zip(atom2s,atom2s[1:],dpc2s,dpc2s[1:],self.dpc2t,self.dpc2sp):
+      size = self.prod_log.sp2vertex[spp].size
+      lv = self.prod_log.sp2vertex[spp].reshape(size)
+      dd,aa,bb = np.mgrid[sd:fd,s:f,s:f].reshape((3,size))
+      i1[inz:inz+size],i2[inz:inz+size],i3[inz:inz+size],data[inz:inz+size] = dd,aa,bb,lv
+      inz+=size
+
+    for sd,fd,pt,spp in zip(dpc2s,dpc2s[1:],self.dpc2t,self.dpc2sp):
+      if pt!=2: continue
+      inf,(a,b),size = self.bp2info[spp],self.bp2info[spp].atoms,self.bp2info[spp].vrtx.size
+      sa,fa,sb,fb = atom2s[a],atom2s[a+1],atom2s[b],atom2s[b+1]
+      dd,aa,bb = np.mgrid[sd:fd,sa:fa,sb:fb].reshape((3,size))
+      i1[inz:inz+size],i2[inz:inz+size],i3[inz:inz+size] = dd,aa,bb
+      data[inz:inz+size] = inf.vrtx.reshape(size)
+      inz+=size
+      i1[inz:inz+size],i2[inz:inz+size],i3[inz:inz+size] = dd,bb,aa
+      data[inz:inz+size] = inf.vrtx.reshape(size)
+      inz+=size
+    return sparseformat((data, (i1, i2, i3)), dtype=dtype, shape=(nfdp,n,n), axis=axis)
+
+  def get_dp_vertex_doubly_sparse_loops(self, dtype=np.float64, sparseformat=lsofcsr_c, axis=0):
+    """ Returns the product vertex coefficients for dominant products as a one-dimensional array of sparse matrices, slow version """
     nnz = self.get_dp_vertex_nnz()
     i1,i2,i3,data = zeros(nnz, dtype=int), zeros(nnz, dtype=int), zeros(nnz, dtype=int), zeros(nnz, dtype=dtype)
     a2s,n,nfdp,lv = self.sv.atom2s,self.sv.atom2s[-1],self.dpc2s[-1],self.prod_log.sp2vertex # local "aliases"
@@ -512,6 +510,36 @@ class prod_basis():
       data[inz:inz+size] = inf.vrtx.reshape(size)
       inz+=size
       
+    return sparseformat((data, (irow, icol)), dtype=dtype, shape=(nfdp,n*n))
+
+  def get_dp_vertex_sparse_loops(self, dtype=np.float64, sparseformat=coo_matrix):
+    """ Returns the product vertex coefficients as 3d array for dominant products, in a sparse format coo(p,ab) slow version"""
+    nnz = self.get_dp_vertex_nnz()
+    irow,icol,data = zeros(nnz, dtype=int), zeros(nnz, dtype=int), zeros(nnz, dtype=dtype) # Start to construct coo matrix
+
+    atom2so = self.sv.atom2s
+    nfdp = self.dpc2s[-1]
+    n = self.sv.atom2s[-1]
+    inz = 0
+    for atom,[sd,fd,pt,spp] in enumerate(zip(self.dpc2s,self.dpc2s[1:],self.dpc2t,self.dpc2sp)):
+      if pt!=1: continue
+      s,f = atom2so[atom:atom+2]
+      for p in range(sd,fd):
+        for a in range(s,f):
+          for b in range(s,f):
+            irow[inz],icol[inz],data[inz] = p,a+b*n,self.prod_log.sp2vertex[spp][p-sd,a-s,b-s]
+            inz+=1
+
+    for atom, [sd,fd,pt,spp] in enumerate(zip(self.dpc2s,self.dpc2s[1:],self.dpc2t,self.dpc2sp)):
+      if pt!=2: continue
+      inf= self.bp2info[spp]
+      a,b = inf.atoms
+      sa,fa,sb,fb = atom2so[a],atom2so[a+1],atom2so[b],atom2so[b+1]
+      for p in range(sd,fd):
+        for a in range(sa,fa):
+          for b in range(sb,fb):
+            irow[inz],icol[inz],data[inz] = p,a+b*n,inf.vrtx[p-sd,a-sa,b-sb]; inz+=1;
+            irow[inz],icol[inz],data[inz] = p,b+a*n,inf.vrtx[p-sd,a-sa,b-sb]; inz+=1;
     return sparseformat((data, (irow, icol)), dtype=dtype, shape=(nfdp,n*n))
 
 
