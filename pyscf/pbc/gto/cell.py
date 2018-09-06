@@ -325,21 +325,13 @@ def conc_cell(cell1, cell2):
     cell3.ew_cut = max(cell1.ew_cut, cell2.ew_cut)
     cell3.rcut = max(cell1.rcut, cell2.rcut)
 
-    if cell2._pseudo is None:
-        cell3._pseudo = cell1._pseudo
-    elif cell1._pseudo is None:
-        cell3._pseudo = cell2._pseudo
-    else:
-        cell3._pseudo = dict(cell2._pseudo)
-        cell3._pseudo.update(cell1._pseudo)
+    cell3._pseudo.update(cell1._pseudo)
+    cell3._pseudo.update(cell2._pseudo)
+    cell3._ecp.update(cell1._ecp)
+    cell3._ecp.update(cell2._ecp)
 
-    if cell2._ecp is None:
-        cell3._ecp = cell1._ecp
-    elif cell1._ecp is None:
-        cell3._ecp = cell2._ecp
-    else:
-        cell3._ecp = dict(cell2._ecp)
-        cell3._ecp.update(cell1._ecp)
+    cell3.nucprop.update(cell1.nucprop)
+    cell3.nucprop.update(cell2.nucprop)
 
     if not cell1._built:
         logger.warn(cell1, 'Warning: intor envs of %s not initialized.', cell1)
@@ -1059,8 +1051,6 @@ class Cell(mole.Mole):
 
 ##################################################
 # don't modify the following variables, they are not input arguments
-        self._pseudo = {}
-
         keys = set(('precision', 'exp_to_discard'))
         self._keys = self._keys.union(self.__dict__).union(keys)
 
@@ -1537,11 +1527,13 @@ class Cell(mole.Mole):
         #FIXME: should cell be converted to mole object?  If cell is converted
         # and a mole object is returned, many attributes (e.g. the GTH basis,
         # gth-PP) will not be recognized by mole.build function.
-        self.a = None
-        return self
+        mol = self.view(mole.Mole)
+        delattr(mol, 'a')
+        delattr(mol, 'mesh')
+        return mol
 
     def has_ecp(self):
-        '''Whether pesudo potential is used in the system.'''
+        '''Whether pseudo potential is used in the system.'''
         return self.pseudo or self._pseudo or (len(self._ecpbas) > 0)
 
     def apply(self, fn, *args, **kwargs):

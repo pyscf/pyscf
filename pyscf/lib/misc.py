@@ -875,14 +875,17 @@ class temporary_env(object):
     def __init__(self, obj, **kwargs):
         self.obj = obj
         keys = [key for key in kwargs.keys() if hasattr(obj, key)]
-        self.env_bak = [(key, getattr(obj, key)) for key in keys]
+        self.env_bak = [(key, getattr(obj, key, 'TO_DEL')) for key in keys]
         self.env_new = [(key, kwargs[key]) for key in keys]
     def __enter__(self):
         for k, v in self.env_new:
             setattr(self.obj, k, v)
     def __exit__(self, type, value, traceback):
         for k, v in self.env_bak:
-            setattr(self.obj, k, v)
+            if isinstance(v, str) and v == 'TO_DEL':
+                delattr(self.obj, k)
+            else:
+                setattr(self.obj, k, v)
 
 class light_speed(temporary_env):
     '''Within the context of this macro, the environment varialbe LIGHT_SPEED

@@ -8,7 +8,8 @@ PySCF 1.6 alpha (2018-09-??)
   - Periodic UCCSD with k-point sampling
   - perturbative DMRG method
   - Interface to Cornell SHCI
-  - Makov-Payne correction
+  - PBC dipole memont and Makov-Payne correction
+  - Overlap of two CISD wavefunctions
 * Improved
   - numint performance (eval_rho, eval_mat)
   - Energy cutoff estimation
@@ -19,6 +20,7 @@ PySCF 1.5.3
 -----------
 * Bugfix
   - get_jk prescreen for non-hermitian density matrices.
+  - Inaccurate estimation of memory usage in ccsd rdm.
 
 
 PySCF 1.5.2 (2018-08-15)

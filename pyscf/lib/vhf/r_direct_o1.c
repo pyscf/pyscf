@@ -283,7 +283,7 @@ void CVHFr_direct_drv(int (*intor)(), void (*fdot)(), void (**fjk)(),
                       CINTOpt *cintopt, CVHFOpt *vhfopt,
                       int *atm, int natm, int *bas, int nbas, double *env)
 {
-        const int nao = ao_loc[nbas];
+        const size_t nao = ao_loc[nbas];
         int *tao = malloc(sizeof(int)*nao);
         CVHFtimerev_map(tao, bas, nbas);
         IntorEnvs envs = {natm, nbas, atm, bas, env, shls_slice, ao_loc, tao,

@@ -289,8 +289,17 @@ def get_hcore(mol):
     array([[-0.93767904, -0.59316327],
            [-0.59316327, -0.93767904]])
     '''
-    h = mol.intor_symmetric('int1e_kin') + mol.intor_symmetric('int1e_nuc')
-    if mol.has_ecp():
+    h = mol.intor_symmetric('int1e_kin')
+
+    if mol._pseudo:
+        # Although mol._pseudo for GTH PP is only available in Cell, GTH PP
+        # may exist if mol is converted from cell object.
+        from pyscf.gto import pp_int
+        h += pp_int.get_gth_pp(mol)
+    else:
+        h+= mol.intor_symmetric('int1e_nuc')
+
+    if len(mol._ecpbas) > 0:
         h += mol.intor_symmetric('ECPscalar')
     return h
 

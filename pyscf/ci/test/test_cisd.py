@@ -370,6 +370,7 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(numpy.all(signsr == signs))
 
     def test_overlap(self):
+        numpy.random.seed(1)
         nmo = 6
         nocc = 3
         nvir = nmo - nocc

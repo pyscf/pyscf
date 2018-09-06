@@ -756,7 +756,7 @@ def _degeneracy(e, decimals):
     degen = [numpy.count_nonzero(idx==i) for i in range(len(u))]
     return degen
 
-def _pesudo_vectors(vs):
+def _pseudo_vectors(vs):
     idy0 = abs(vs[:,1])<TOLERANCE
     idz0 = abs(vs[:,2])<TOLERANCE
     vs = vs.copy()
@@ -776,7 +776,7 @@ def _remove_dupvec(vs):
             x = numpy.sum(abs(vs[1:]-vs[0]), axis=1)
             rest = rm_iter(vs[1:][x>TOLERANCE])
             return numpy.vstack((vs[0], rest))
-    return rm_iter(_pesudo_vectors(vs))
+    return rm_iter(_pseudo_vectors(vs))
 
 def _make_axes(z, x):
     y = numpy.cross(z, x)

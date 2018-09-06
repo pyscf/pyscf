@@ -423,9 +423,10 @@ class KSCF(pbchf.SCF):
         #    if self.exx_built is False:
         #        self.precompute_exx()
         #    logger.info(self, 'WS alpha = %s', self.exx_alpha)
-        if (self.cell.dimension == 3 and
+        cell = self.cell
+        if ((cell.dimension >= 2 and cell.low_dim_ft_type != 'inf_vacuum') and
             isinstance(self.exxdiv, str) and self.exxdiv.lower() == 'ewald'):
-            madelung = tools.pbc.madelung(self.cell, [self.kpts])
+            madelung = tools.pbc.madelung(cell, [self.kpts])
             logger.info(self, '    madelung (= occupied orbital energy shift) = %s', madelung)
             nkpts = len(self.kpts)
             # FIXME: consider the fractional num_electron or not? This maybe

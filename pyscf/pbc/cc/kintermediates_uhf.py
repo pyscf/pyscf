@@ -6,6 +6,9 @@ from pyscf.pbc.lib import kpts_helper
 
 einsum = lib.einsum
 
+#FIXME: the dtype of each intermediates. When the khf is at gamma point, the
+# dtype is inconsistent between intermediates and t amplitudes
+
 def make_tau(cc, t2, t1, t1p, fac=1.):
     t2aa, t2ab, t2bb = t2
     nkpts = len(t2aa)
@@ -165,10 +168,11 @@ def cc_Woooo(cc, t1, t2, eris):
     t2aa, t2ab, t2bb = t2
     nkpts, nocca, nvira = t1a.shape
     noccb, nvirb = t1b.shape[1:]
+    dtype = np.result_type(t1a, t1b, t2aa, t2ab, t2bb)
 
-    Woooo = eris.oooo.copy()
-    WooOO = eris.ooOO.copy()
-    WOOOO = eris.OOOO.copy()
+    Woooo = np.zeros(eris.oooo.shape, dtype=dtype)
+    WooOO = np.zeros(eris.ooOO.shape, dtype=dtype)
+    WOOOO = np.zeros(eris.OOOO.shape, dtype=dtype)
 
     kconserv = cc.khelper.kconserv
     P = kconserv_mat(cc.nkpts, cc.khelper.kconserv)
@@ -186,6 +190,9 @@ def cc_Woooo(cc, t1, t2, eris):
 
             for ki in range(nkpts):
                 kj = kconserv[km,ki,kn]
+                Woooo[km,ki,kn] += eris.oooo[km,ki,kn]
+                WooOO[km,ki,kn] += eris.ooOO[km,ki,kn]
+                WOOOO[km,ki,kn] += eris.OOOO[km,ki,kn]
                 Woooo[km,ki,kn] += tmp_aaaaJ[ki,kj]
                 Woooo[km,ki,kn] += 0.25*einsum('xijef,xmenf->minj', tau_aa[ki,kj],eris.ovov[km,:,kn])
                 WOOOO[km,ki,kn] += tmp_bbbbJ[ki,kj]

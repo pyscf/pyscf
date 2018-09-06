@@ -800,17 +800,18 @@ class _load3c(object):
 
         kpti_kptj = numpy.asarray(self.kpti_kptj)
         kptij_lst = self.feri[self.kptij_label].value
-        return _getitem(self.feri, self.label, kpti_kptj, kptij_lst)
+        return _getitem(self.feri, self.label, kpti_kptj, kptij_lst,
+                        self.ignore_key_error)
 
     def __exit__(self, type, value, traceback):
         self.feri.close()
 
-def _getitem(h5group, label, kpti_kptj, kptij_lst):
+def _getitem(h5group, label, kpti_kptj, kptij_lst, ignore_key_error):
     k_id = member(kpti_kptj, kptij_lst)
     if len(k_id) > 0:
         key = label + '/' + str(k_id[0])
         if key not in h5group:
-            if self.ignore_key_error:
+            if ignore_key_error:
                 return numpy.zeros(0)
             else:
                 raise KeyError('Key "%s" not found' % key)
@@ -836,7 +837,7 @@ def _getitem(h5group, label, kpti_kptj, kptij_lst):
 
         key = label + '/' + str(k_id[0])
         if key not in h5group:
-            if self.ignore_key_error:
+            if ignore_key_error:
                 return numpy.zeros(0)
             else:
                 raise KeyError('Key "%s" not found' % key)
