@@ -173,7 +173,7 @@ class prod_basis():
         nnc = np.array([ndp,npac], dtype=int64)
         s = f;  f=s+np.prod(nnn); vrtx  = dout[s:f].reshape(nnn)
         s = f;  f=s+np.prod(nnc); ccoe  = dout[s:f].reshape(nnc)
-        icc2s = np.zeros(len(icc2a)+1, dtype=int64)
+        icc2s = zeros(len(icc2a)+1, dtype=int64)
         for icc,a in enumerate(icc2a): icc2s[icc+1] = icc2s[icc] + self.prod_log.sp2norbs[sv.atom2sp[a]]
         pbiloc = prod_biloc_c(atoms=array([a2,a1]),vrtx=vrtx,cc2a=icc2a,cc2s=icc2s,cc=ccoe)
         self.bp2info.append(pbiloc)
@@ -211,7 +211,7 @@ class prod_basis():
   
   def chain_data(self):
     """ This subroutine creates a buffer of information to communicate the system variables and the local product vertex to libnao. Later, one will be able to generate the bilocal vertex and conversion coefficient for a given pair of atom species and their coordinates ."""
-    from numpy import zeros, concatenate as conc
+    from numpy import concatenate as conc
 
     aos,sv,pl = self.sv.ao_log, self.sv, self.prod_log
     assert aos.nr==pl.nr
@@ -309,7 +309,7 @@ class prod_basis():
     if ncc!=len(icc2a): raise RuntimeError('ncc!=len(icc2a)')
     s = 10; f=s+np.prod(nnn); vrtx  = dout[s:f].reshape(nnn)
     s = f;  f=s+np.prod(nnc); ccoe  = dout[s:f].reshape(nnc)
-    icc2s = np.zeros(len(icc2a)+1, dtype=np.int64)
+    icc2s = zeros(len(icc2a)+1, dtype=np.int64)
     for icc,a in enumerate(icc2a): icc2s[icc+1] = icc2s[icc] + self.prod_log.sp2norbs[sv.atom2sp[a]]
     pbiloc = prod_biloc_c(atoms=array([a2,a1]),vrtx=vrtx,cc2a=icc2a,cc2s=icc2s,cc=ccoe)
     
@@ -326,7 +326,7 @@ class prod_basis():
   def get_da2cc_den(self, dtype=np.float64):
     """ Returns Conversion Coefficients as dense matrix """
     nfdp,nfap = self.dpc2s[-1],self.c2s[-1]
-    da2cc = np.zeros((nfdp,nfap), dtype=dtype)
+    da2cc = zeros((nfdp,nfap), dtype=dtype)
     for sd,fd,pt in zip(self.dpc2s,self.dpc2s[1:],self.dpc2t):
       if pt==1: da2cc[sd:fd,sd:fd] = np.identity(fd-sd)
 
@@ -355,7 +355,7 @@ class prod_basis():
 
     nfdp,nfap = self.dpc2s[-1],self.c2s[-1]
     nnz = self.get_da2cc_nnz()
-    irow,icol,data = zeros(nnz, dtype=np.int32),zeros(nnz, dtype=np.int32), zeros(nnz, dtype=dtype) # Start to construct coo matrix
+    irow,icol,data = zeros(nnz, dtype=int),zeros(nnz, dtype=int), zeros(nnz, dtype=dtype) # Start to construct coo matrix
 
     inz = 0
     for atom, [sd,fd,pt] in enumerate(zip(self.dpc2s,self.dpc2s[1:],self.dpc2t)):
@@ -379,7 +379,7 @@ class prod_basis():
     atom2so = self.sv.atom2s
     nfap = self.c2s[-1]
     n = self.sv.atom2s[-1]
-    pab2v = np.require( np.zeros((nfap,n,n), dtype=dtype), requirements='CW')
+    pab2v = np.require( zeros((nfap,n,n), dtype=dtype), requirements='CW')
     for atom,[sd,fd,pt,spp] in enumerate(zip(self.dpc2s,self.dpc2s[1:],self.dpc2t,self.dpc2sp)):
       if pt!=1: continue
       s,f = atom2so[atom:atom+2]
@@ -401,7 +401,7 @@ class prod_basis():
     atom2so = self.sv.atom2s
     nfdp = self.dpc2s[-1]
     n = self.sv.atom2s[-1]
-    pab2v = np.require(np.zeros((nfdp,n,n), dtype=dtype), requirements='CW')
+    pab2v = np.require(zeros((nfdp,n,n), dtype=dtype), requirements='CW')
     for atom,[sd,fd,pt,spp] in enumerate(zip(self.dpc2s,self.dpc2s[1:],self.dpc2t,self.dpc2sp)):
       if pt!=1: continue
       s,f = atom2so[atom:atom+2]
@@ -531,7 +531,7 @@ class prod_basis():
       c2n.append(inf.vrtx.shape[0]); c2t.append(2); c2sp.append(ibp);
 
     ndpc = len(c2n)  # number of product centers in this vertex 
-    c2s = np.zeros(ndpc+1, np.int64 ) # product Center -> Start index of a product function in a global counting for this vertex
+    c2s = zeros(ndpc+1, np.int64 ) # product Center -> Start index of a product function in a global counting for this vertex
     for c in range(ndpc): c2s[c+1] = c2s[c] + c2n[c]
     return c2s,c2t,c2sp
 
@@ -539,8 +539,8 @@ class prod_basis():
     """ Computes the scalar and dipole moments for the all functions in the product basis """
     sp2mom0, sp2mom1 = self.prod_log.comp_moments()
     n = self.c2s[-1]
-    mom0 = np.require(np.zeros(n, dtype=dtype), requirements='CW')
-    mom1 = np.require(np.zeros((n,3), dtype=dtype), requirements='CW')
+    mom0 = np.require(zeros(n, dtype=dtype), requirements='CW')
+    mom1 = np.require(zeros((n,3), dtype=dtype), requirements='CW')
     for a,[sp,coord,s,f] in enumerate(zip(self.sv.atom2sp,self.sv.atom2coord,self.c2s,self.c2s[1:])):
       mom0[s:f],mom1[s:f,:] = sp2mom0[sp], einsum('j,k->jk', sp2mom0[sp],coord)+sp2mom1[sp]
     return mom0,mom1
