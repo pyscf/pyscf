@@ -35,7 +35,7 @@ to try out the package::
 
 '''
 
-__version__ = '1.5.2'
+__version__ = '1.5.3'
 
 import os
 import sys
