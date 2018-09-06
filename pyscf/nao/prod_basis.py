@@ -150,11 +150,11 @@ class prod_basis():
       ld = p2srncc_cp.shape[1]
       #print('npairs  p2srncc_cp.shape', npairs, p2srncc_cp.shape)
       if nao.verbosity>0:
-        t2 = timer(); print(__name__,'\t====> Time for call vrtx_cc_batch: {:.2f} Sec, npairs: {}'.format(t2-t1, npairs)); t1=timer()
+        t2 = timer(); print(__name__,'\t====> Time for call vrtx_cc_batch: {:.2f} sec, npairs: {}'.format(t2-t1, npairs)); t1=timer()
       libnao.vrtx_cc_batch( c_int64(npairs), p2srncc_cp.ctypes.data_as(POINTER(c_double)), 
         c_int64(ld), p2ndp.ctypes.data_as(POINTER(c_int64)))
       if nao.verbosity>0:
-        t2 = timer(); print(__name__,'\t====> Time after vrtx_cc_batch:\t {:.2f} Sec'.format(t2-t1)); t1=timer()
+        t2 = timer(); print(__name__,'\t====> Time after vrtx_cc_batch:\t {:.2f} sec'.format(t2-t1)); t1=timer()
       nout = 0
       sp2norbs = sv.ao_log.sp2norbs
       for srncc,ndp,npac in zip(p2srncc,p2ndp,p2npac):
