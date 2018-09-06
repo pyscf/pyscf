@@ -2,7 +2,7 @@ from __future__ import print_function, division
 import numpy as np
 from scipy.sparse import coo_matrix
 from pyscf.nao.lsofcsr import lsofcsr_c
-from numpy import array, einsum, zeros, int64, sqrt
+from numpy import array, einsum, zeros, int64, sqrt, int32
 from ctypes import POINTER, c_double, c_int64, byref
 from pyscf.nao.m_libnao import libnao
 from timeit import default_timer as timer
@@ -66,6 +66,7 @@ class prod_basis():
     self.nao = nao
     self.tol_loc = kw['tol_loc'] if 'tol_loc' in kw else 1e-5
     self.tol_biloc = kw['tol_biloc'] if 'tol_biloc' in kw else 1e-6
+    self.tol_elim = kw['tol_elim'] if 'tol_elim' in kw else 1e-16
     self.ac_rcut_ratio = kw['ac_rcut_ratio'] if 'ac_rcut_ratio' in kw else 1.0
     self.ac_npc_max = kw['ac_npc_max'] if 'ac_npc_max' in kw else 8
     self.pb_algorithm = kw['pb_algorithm'].lower() if 'pb_algorithm' in kw else 'pp'
@@ -416,25 +417,19 @@ class prod_basis():
     return pab2v
 
   def get_dp_vertex_nnz(self):
-    """ Number of non-zero elements in the dominant product vertex """
-    atom2so = self.sv.atom2s
+    """ Number of non-zero elements in the dominant product vertex : can be speedup, but..."""
     nnz = 0
-    for atom,[sd,fd,pt,spp] in enumerate(zip(self.dpc2s,self.dpc2s[1:],self.dpc2t,self.dpc2sp)):
-      if pt!=1: continue
-      s,f = atom2so[atom:atom+2]
-      nnz = nnz + (fd-sd)*(f-s)**2
-
-    for sd,fd,pt,spp in zip(self.dpc2s,self.dpc2s[1:],self.dpc2t,self.dpc2sp):
-      if pt!=2: continue
-      a,b = self.bp2info[spp].atoms
-      sa,fa,sb,fb = atom2so[a],atom2so[a+1],atom2so[b],atom2so[b+1]
-      nnz = nnz + 2*(fd-sd)*(fb-sb)*(fa-sa)
+    for pt,spp in zip(self.dpc2t,self.dpc2sp):
+      if pt==1: nnz += self.prod_log.sp2vertex[spp].size
+      elif pt==2: nnz += 2*self.bp2info[spp].vrtx.size
+      else:
+        raise RuntimeError('pt?')
     return nnz
 
-  def get_dp_vertex_sparse(self, dtype=np.float64, sparseformat=coo_matrix):
+  def get_dp_vertex_sparse_loops(self, dtype=np.float64, sparseformat=coo_matrix):
     """ Returns the product vertex coefficients as 3d array for dominant products, in a sparse format coo(p,ab)"""
     nnz = self.get_dp_vertex_nnz()
-    irow,icol,data = zeros(nnz, dtype=np.int32), zeros(nnz, dtype=np.int32), zeros(nnz, dtype=dtype) # Start to construct coo matrix
+    irow,icol,data = zeros(nnz, dtype=int), zeros(nnz, dtype=int), zeros(nnz, dtype=dtype) # Start to construct coo matrix
 
     atom2so = self.sv.atom2s
     nfdp = self.dpc2s[-1]
@@ -487,6 +482,42 @@ class prod_basis():
             i1[inz],i2[inz],i3[inz],data[inz] = p,a,b,inf.vrtx[p-sd,a-sa,b-sb]; inz+=1;
             i1[inz],i2[inz],i3[inz],data[inz] = p,b,a,inf.vrtx[p-sd,a-sa,b-sb]; inz+=1;
     return sparseformat((data, (i1, i2, i3)), dtype=dtype, shape=(nfdp,n,n), axis=axis)
+
+
+  def get_dp_vertex_sparse(self, dtype=np.float64, sparseformat=coo_matrix):
+    """ Returns the product vertex coefficients as 3d array for dominant products, in a sparse format coo(p,ab) by default"""
+    nnz = self.get_dp_vertex_nnz()
+    irow,icol,data = zeros(nnz, dtype=int), zeros(nnz, dtype=int), zeros(nnz, dtype=dtype) # Start to construct coo matrix
+
+    atom2s,dpc2s,nfdp,n = self.sv.atom2s, self.dpc2s,self.dpc2s[-1],self.sv.atom2s[-1]
+
+    inz = 0
+    for s,f,sd,fd,pt,spp in zip(atom2s,atom2s[1:],dpc2s,dpc2s[1:],self.dpc2t,self.dpc2sp):
+      size = self.prod_log.sp2vertex[spp].size
+      lv = self.prod_log.sp2vertex[spp].reshape(size)
+      dd,aa,bb = np.mgrid[sd:fd,s:f,s:f].reshape((3,size))
+      irow[inz:inz+size] = dd
+      icol[inz:inz+size] = aa+bb*n
+      data[inz:inz+size] = lv
+      inz+=size
+
+    for sd,fd,pt,spp in zip(dpc2s,dpc2s[1:],self.dpc2t,self.dpc2sp):
+      if pt!=2: continue
+      inf,(a,b),size = self.bp2info[spp],self.bp2info[spp].atoms,self.bp2info[spp].vrtx.size
+      sa,fa,sb,fb = atom2s[a],atom2s[a+1],atom2s[b],atom2s[b+1]
+      dd,aa,bb = np.mgrid[sd:fd,sa:fa,sb:fb].reshape((3,size))
+      irow[inz:inz+size] = dd
+      icol[inz:inz+size] = aa+bb*n
+      data[inz:inz+size] = inf.vrtx.reshape(size)
+      inz+=size
+
+      irow[inz:inz+size] = dd
+      icol[inz:inz+size] = bb+aa*n
+      data[inz:inz+size] = inf.vrtx.reshape(size)
+      inz+=size
+      
+    return sparseformat((data, (irow, icol)), dtype=dtype, shape=(nfdp,n*n))
+
 
   def comp_fci_den(self, hk, dtype=np.float64):
     """ Compute the four-center integrals and return it in a dense storage """

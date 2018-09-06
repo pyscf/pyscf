@@ -30,7 +30,7 @@ def lsofcsr(coo3, dtype=float, shape=None, axis=0):
   (d, it) = coo3
   assert len(it)==3
   for ia in it: assert len(d)==len(ia)
-  shape = (max(ia) for ia in it) if shape is None else shape
+  shape = [max(ia)+1 for ia in it] if shape is None else shape
   #print( len(d) )
   #print( shape )
   
@@ -39,11 +39,11 @@ def lsofcsr(coo3, dtype=float, shape=None, axis=0):
   #print(__name__, type(it), type(it[0]==0))
   #print(__name__, it[0]==0)
   
-  
   lsofcsr = [0] * shape[axis]
   sh = [shape[i] for i in iir]
   #print(sh, shape)
   for i in range(shape[axis]):
+    #print(i, type(it[axis]==i))
     mask = it[axis]==i
     csrm = csr_matrix( (extract(mask,d), (extract(mask,it[iir[0]]),extract(mask,it[iir[1]]) )), shape=sh, dtype=dtype)
     csrm.eliminate_zeros()
