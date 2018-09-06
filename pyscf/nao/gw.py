@@ -52,7 +52,7 @@ class gw(scf):
 
     self.start_st,self.finish_st = self.nocc_0t-self.nocc, self.nocc_0t+self.nvrt
 
-    self.nn = [range(self.start_st[s]+1, self.finish_st[s]) for s in range(self.nspin)] # list of states will be started from [1:]
+    self.nn = [range(self.start_st[s], self.finish_st[s]) for s in range(self.nspin)] # list of states
     if self.verbosity>0: print(__name__,'\t\t====> Indices of states to be corrected = {}\n'.format(self.nn))
 
     if 'nocc_conv' in kw:
