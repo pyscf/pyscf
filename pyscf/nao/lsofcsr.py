@@ -15,6 +15,7 @@
 from __future__ import print_function, division
 from numpy import zeros,extract, array
 from scipy.sparse import csr_matrix
+from timeit import default_timer as timer
 
 #
 def lsofcsr(coo3, dtype=float, shape=None, axis=0):
@@ -41,13 +42,14 @@ def lsofcsr(coo3, dtype=float, shape=None, axis=0):
   
   lsofcsr = [0] * shape[axis]
   sh = [shape[i] for i in iir]
-  #print(sh, shape)
   for i in range(shape[axis]):
-    #print(i, type(it[axis]==i))
     mask = it[axis]==i
     csrm = csr_matrix( (extract(mask,d), (extract(mask,it[iir[0]]),extract(mask,it[iir[1]]) )), shape=sh, dtype=dtype)
     csrm.eliminate_zeros()
     lsofcsr[i] = csrm
+    
+  #print(__name__, 'ttot', ttot)
+  
   return lsofcsr
 
 #

@@ -195,16 +195,31 @@ def kmat_den(mf, dm=None, algo=None, **kw):
           kmat[s][ab2vdhv.nonzero()] += ab2vdhv.data
         
     elif len(dm.shape)==2: # if spin index is absent
-
+      
+      tt = np.zeros(8)
+      ttt = np.zeros(7)
       for mu,a_ap2v in enumerate(dab2v):
+        tt[0] = timer();
         cc = da2cc[mu].toarray().reshape(nnp)
+        tt[1] = timer(); 
         q2v = dot( cc, hk )
+        tt[2] = timer(); 
         nu2v = da2cc * q2v
+        tt[3] = timer();
         a_bp2vd = sparse.csr_matrix(a_ap2v * dm)
-        bp_b2hv = sparse.csr_matrix((nu2v * dab2v_csr).reshape((n,n)))
+        tt[4] = timer();
+        #bp_b2hv = sparse.csr_matrix((nu2v * dab2v_csr).reshape((n,n)))
+        bp_b2hv = (nu2v * dab2v_csr).reshape((n,n))
+        tt[5] = timer();
         ab2vdhv = a_bp2vd * bp_b2hv
-        kmat[ab2vdhv.nonzero()] += ab2vdhv.data
+        tt[6] = timer()
+        #kmat[ab2vdhv.nonzero()] += ab2vdhv.data
+        kmat += ab2vdhv
+        tt[7] = timer()
+        ttt += tt[1:8]-tt[0:7]
         
+      #print(__name__, 'ttt cycles', ttt)
+      
     else:
       print(dm.shape)
       raise RuntimeError('?dm.shape?')
