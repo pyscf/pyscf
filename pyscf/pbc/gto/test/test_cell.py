@@ -63,6 +63,11 @@ class KnownValues(unittest.TestCase):
         a = cl1.get_SI()
         self.assertAlmostEqual(finger(a), (16.506917823339265+1.6393578329869585j), 10)
 
+        np.random.seed(2)
+        Gv = np.random.random((5,3))
+        a = cl1.get_SI(Gv)
+        self.assertAlmostEqual(finger(a), (0.65237631847195221-1.5736011413431059j), 10)
+
     def test_mixed_basis(self):
         cl = pgto.Cell()
         cl.build(

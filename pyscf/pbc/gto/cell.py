@@ -588,14 +588,6 @@ def get_Gv_weights(cell, mesh=None, **kwargs):
                       'the number of PWs (=2*gs+1) along each direction.')
         mesh = [2*n+1 for n in kwargs['gs']]
 
-    def plus_minus(n):
-        #rs, ws = radi.delley(n)
-        #rs, ws = radi.treutler_ahlrichs(n)
-        #rs, ws = radi.mura_knowles(n)
-        rs, ws = radi.gauss_chebyshev(n)
-        #return np.hstack((0,rs,-rs[::-1])), np.hstack((0,ws,ws[::-1]))
-        return np.hstack((rs,-rs[::-1])), np.hstack((ws,ws[::-1]))
-
     # Default, the 3D uniform grids
     rx = np.fft.fftfreq(mesh[0], 1./mesh[0])
     ry = np.fft.fftfreq(mesh[1], 1./mesh[1])
@@ -606,24 +598,24 @@ def get_Gv_weights(cell, mesh=None, **kwargs):
     if (cell.dimension < 2 or
         (cell.dimension == 2 and cell.low_dim_ft_type == 'inf_vacuum')):
         if cell.dimension == 0:
-            rx, wx = plus_minus(mesh[0]//2)
-            ry, wy = plus_minus(mesh[1]//2)
-            rz, wz = plus_minus(mesh[2]//2)
+            rx, wx = _non_uniform_Gv_base(mesh[0]//2)
+            ry, wy = _non_uniform_Gv_base(mesh[1]//2)
+            rz, wz = _non_uniform_Gv_base(mesh[2]//2)
             rx /= np.linalg.norm(b[0])
             ry /= np.linalg.norm(b[1])
             rz /= np.linalg.norm(b[2])
             weights = np.einsum('i,j,k->ijk', wx, wy, wz).reshape(-1)
         elif cell.dimension == 1:
             wx = np.repeat(np.linalg.norm(b[0]), mesh[0])
-            ry, wy = plus_minus(mesh[1]//2)
-            rz, wz = plus_minus(mesh[2]//2)
+            ry, wy = _non_uniform_Gv_base(mesh[1]//2)
+            rz, wz = _non_uniform_Gv_base(mesh[2]//2)
             ry /= np.linalg.norm(b[1])
             rz /= np.linalg.norm(b[2])
             weights = np.einsum('i,j,k->ijk', wx, wy, wz).reshape(-1)
         elif cell.dimension == 2:
             area = np.linalg.norm(np.cross(b[0], b[1]))
             wxy = np.repeat(area, mesh[0]*mesh[1])
-            rz, wz = plus_minus(mesh[2]//2)
+            rz, wz = _non_uniform_Gv_base(mesh[2]//2)
             rz /= np.linalg.norm(b[2])
             weights = np.einsum('i,k->ik', wxy, wz).reshape(-1)
 
@@ -633,8 +625,16 @@ def get_Gv_weights(cell, mesh=None, **kwargs):
     weights *= 1/(2*np.pi)**3
     return Gv, Gvbase, weights
 
+def _non_uniform_Gv_base(n):
+    #rs, ws = radi.delley(n)
+    #rs, ws = radi.treutler_ahlrichs(n)
+    #rs, ws = radi.mura_knowles(n)
+    rs, ws = radi.gauss_chebyshev(n)
+    #return np.hstack((0,rs,-rs[::-1])), np.hstack((0,ws,ws[::-1]))
+    return np.hstack((rs,-rs[::-1])), np.hstack((ws,ws[::-1]))
+
 def get_SI(cell, Gv=None):
-    '''Calculate the structure factor for all atoms; see MH (3.34).
+    '''Calculate the structure factor (0D, 1D, 2D, 3D) for all atoms; see MH (3.34).
 
     Args:
         cell : instance of :class:`Cell`
@@ -646,10 +646,19 @@ def get_SI(cell, Gv=None):
         SI : (natm, ngrids) ndarray, dtype=np.complex128
             The structure factor for each atom at each G-vector.
     '''
-    if Gv is None:
-        Gv = cell.get_Gv()
     coords = cell.atom_coords()
-    SI = np.exp(-1j*np.dot(coords, Gv.T))
+    ngrids = np.prod(cell.mesh)
+    if Gv is None or Gv.shape[0] == ngrids:
+        basex, basey, basez = cell.get_Gv_weights(cell.mesh)[1]
+        b = cell.reciprocal_vectors()
+        rb = np.dot(coords, b.T)
+        SIx = np.exp(-1j*np.einsum('z,g->zg', rb[:,0], basex))
+        SIy = np.exp(-1j*np.einsum('z,g->zg', rb[:,1], basey))
+        SIz = np.exp(-1j*np.einsum('z,g->zg', rb[:,2], basez))
+        SI = SIx[:,:,None,None] * SIy[:,None,:,None] * SIz[:,None,None,:]
+        SI = SI.reshape(-1,ngrids)
+    else:
+        SI = np.exp(-1j*np.dot(coords, Gv.T))
     return SI
 
 def get_ewald_params(cell, precision=INTEGRAL_PRECISION, mesh=None):
@@ -726,6 +735,14 @@ def ewald(cell, ew_eta=None, ew_cut=None):
     chargs = cell.atom_charges()
     coords = cell.atom_coords()
     Lall = cell.get_lattice_Ls(rcut=ew_cut)
+
+    rLij = coords[:,None,:] - coords[None,:,:] + Lall[:,None,None,:]
+    r = np.sqrt(np.einsum('Lijx,Lijx->Lij', rLij, rLij))
+    rLij = None
+    r[r<1e-16] = 1e200
+    ewovrl = .5 * np.einsum('i,j,Lij->', chargs, chargs,
+                            scipy.special.erfc(ew_eta * r) / r)
+
     ewovrl = 0.
     for i, qi in enumerate(chargs):
         ri = coords[i]
@@ -742,7 +759,6 @@ def ewald(cell, ew_eta=None, ew_cut=None):
 
     # last line of Eq. (F.5) in Martin
     ewself  = -.5 * np.dot(chargs,chargs) * 2 * ew_eta / np.sqrt(np.pi)
-    #FIXME: check PRB, 87, 165122
     if cell.dimension == 3:
         ewself += -.5 * np.sum(chargs)**2 * np.pi/(ew_eta**2 * cell.vol)
 
