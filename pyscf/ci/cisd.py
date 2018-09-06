@@ -579,7 +579,7 @@ def _gamma2_outcore(myci, civec, nmo, nocc, h5fobj, compress_vvvv=False):
                blksize, nocc, int((nvir+blksize-1)/blksize))
     dtype = numpy.result_type(civec).char
     dovvv = h5fobj.create_dataset('dovvv', (nocc,nvir,nvir,nvir), dtype,
-                                  chunks=(nocc,nvir,blksize,nvir))
+                                  chunks=(nocc,min(nocc,nvir),1,nvir))
     if compress_vvvv:
         dvvvv = h5fobj.create_dataset('dvvvv', (nvir_pair,nvir_pair), dtype)
     else:

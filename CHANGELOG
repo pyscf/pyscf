@@ -21,6 +21,8 @@ PySCF 1.5.3
 * Bugfix
   - get_jk prescreen for non-hermitian density matrices.
   - Inaccurate estimation of memory usage in ccsd rdm.
+  - Frozen orbital EA-EOM-KRCCSD
+  - IOError due to 4GB chunk size limit in HDF5 format
 
 
 PySCF 1.5.2 (2018-08-15)
