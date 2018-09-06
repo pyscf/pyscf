@@ -806,7 +806,7 @@ class _load3c(object):
     def __exit__(self, type, value, traceback):
         self.feri.close()
 
-def _getitem(h5group, label, kpti_kptj, kptij_lst, ignore_key_error):
+def _getitem(h5group, label, kpti_kptj, kptij_lst, ignore_key_error=False):
     k_id = member(kpti_kptj, kptij_lst)
     if len(k_id) > 0:
         key = label + '/' + str(k_id[0])

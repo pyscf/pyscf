@@ -1336,8 +1336,8 @@ def _init_df_eris(cc, eris):
     if cell.dimension == 2:
         raise NotImplementedError
 
-    nocc = mycc.nocc
-    nmo = mycc.nmo
+    nocc = cc.nocc
+    nmo = cc.nmo
     nvir = nmo - nocc
     nao = cell.nao_nr()
 
@@ -1551,7 +1551,6 @@ if __name__ == '__main__':
     e_ip, _ = mycc.ipccsd(nroots=3, kptlist=(0,))
     e_ea, _ = mycc.eaccsd(nroots=3, kptlist=(0,))
     print(e_ip, e_ea)
-    exit()
 
     ####
     cell = gto.Cell()
@@ -1600,7 +1599,7 @@ if __name__ == '__main__':
     t1, t2 = rand_t1_t2(mycc)
     Ht1, Ht2 = mycc.update_amps(t1, t2, eris)
     print(lib.finger(Ht1) - (-4.6808039711608824 + 9.4962987225515789j))  # FIXME
-    print(lib.finger(Ht2) - (18.613685230812546 + 114.66975731912211j))
+    print(lib.finger(Ht2) - (18.613685230812546 + 114.66975731912211j))  # FIXME
 
     kmf = kmf.density_fit(auxbasis=[[0, (1., 1.)], [0, (.5, 1.)]])
     mycc = KRCCSD(kmf)
@@ -1608,4 +1607,4 @@ if __name__ == '__main__':
     t1, t2 = rand_t1_t2(mycc)
     Ht1, Ht2 = mycc.update_amps(t1, t2, eris)
     print(lib.finger(Ht1) - (-3.6611794882508244 + 9.2241044317516554j))  # FIXME
-    print(lib.finger(Ht2) - (-196.88536721771101 - 432.29569128644886j))
+    print(lib.finger(Ht2) - (-196.88536721771101 - 432.29569128644886j))  # FIXME
