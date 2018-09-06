@@ -1336,8 +1336,8 @@ def _init_df_eris(cc, eris):
     if cell.dimension == 2:
         raise NotImplementedError
 
-    nocc = mycc.nocc
-    nmo = mycc.nmo
+    nocc = cc.nocc
+    nmo = cc.nmo
     nvir = nmo - nocc
     nao = cell.nao_nr()
 
