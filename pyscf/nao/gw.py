@@ -9,7 +9,7 @@ from pyscf.nao.m_rf0_den import rf0_den, rf0_cmplx_ref_blk, rf0_cmplx_ref, rf0_c
 from pyscf.nao.m_rf_den import rf_den
 from pyscf.nao.m_rf_den_pyscf import rf_den_pyscf
 from pyscf.data.nist import HARTREE2EV
-from pyscf.nao.m_valance import *
+from pyscf.nao.m_valence import get_start
 
 starting_time=timer()
 class gw(scf):
@@ -54,8 +54,9 @@ class gw(scf):
 
     #self.start_st,self.finish_st = self.nocc_0t-self.nocc, self.nocc_0t+self.nvrt
     frozen_core = kw['frozen_core'] if 'frozen_core' in kw else self.frozen_core
-    self.start_st,self.finish_st = get_start (self.mol.atom, self.nspin, self.mol.natm,algo=frozen_core,**kw), self.nocc_0t+self.nvrt
-
+    if frozen_core is not None: self.start_st = get_start (self, algo=frozen_core, **kw)
+    else: self.start_st = self.nocc_0t-self.nocc
+    self.finish_st = self.nocc_0t+self.nvrt
     self.nn = [range(self.start_st[s], self.finish_st[s]) for s in range(self.nspin)] # list of states
     if self.verbosity>0: print(__name__,'\t\t====> Indices of states to be corrected = {}\n'.format(self.nn))
 
