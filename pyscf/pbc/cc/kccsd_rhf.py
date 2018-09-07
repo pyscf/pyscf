@@ -1225,7 +1225,7 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
             self.voov = self.feri1.create_dataset('voov', (nkpts, nkpts, nkpts, nvir, nocc, nocc, nvir), dtype.char)
             self.vovv = self.feri1.create_dataset('vovv', (nkpts, nkpts, nkpts, nvir, nocc, nvir, nvir), dtype.char)
 
-            if not (cc.direct and type(cc._scf.with_df) is df.GDF):
+            if True:#not (cc.direct and type(cc._scf.with_df) is df.GDF):
                 self.vvvv = self.feri1.create_dataset('vvvv', (nkpts,nkpts,nkpts,nvir,nvir,nvir,nvir), dtype.char)
             elif cell.dimension == 2:
                 raise NotImplementedError
@@ -1287,7 +1287,7 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
 
             cput1 = time.clock(), time.time()
             mem_now = lib.current_memory()[0]
-            if cc.direct and type(cc._scf.with_df) is df.GDF:
+            if False:#cc.direct and type(cc._scf.with_df) is df.GDF:
                 _init_df_eris(cc, self)
 
             elif nvir ** 4 * 16 / 1e6 + mem_now < cc.max_memory:
