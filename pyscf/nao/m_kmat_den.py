@@ -195,7 +195,8 @@ def kmat_den(mf, dm=None, algo=None, **kw):
           kmat[s][ab2vdhv.nonzero()] += ab2vdhv.data
         
     elif len(dm.shape)==2: # if spin index is absent
-      
+      # [   14.59955484   314.09553769  1113.57001527   140.44369524   687.34180544   89.05969492    28.3846701 ]
+
       tt = np.zeros(8)
       ttt = np.zeros(7)
       for mu,a_ap2v in enumerate(dab2v):
@@ -218,7 +219,7 @@ def kmat_den(mf, dm=None, algo=None, **kw):
         tt[7] = timer()
         ttt += tt[1:8]-tt[0:7]
         
-      #print(__name__, 'ttt cycles', ttt)
+      print(__name__, 'ttt cycles', ttt)
       
     else:
       print(dm.shape)
