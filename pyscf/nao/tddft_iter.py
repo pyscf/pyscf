@@ -156,7 +156,8 @@ class tddft_iter(chi0_matvec):
 
   def comp_polariz_inter_ave(self, comegas, tmp_fname=None):
     """  Compute average interacting polarizability  """
-    p_avg = np.zeros(comegas.shape, dtype=self.dtypeComplex)
+    sh = comegas.shape if hasattr(comegas, 'shape') else (len(comegas))
+    p_avg = np.zeros(sh, dtype=self.dtypeComplex)
 
     if tmp_fname is not None:
         if not isinstance(tmp_fname, str):
