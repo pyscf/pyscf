@@ -747,10 +747,10 @@ def transform_ci_for_orbital_rotation(ci, norb, nelec, u):
         #    for j in range(na):
         #        uij = u[occ_masks[i]][:,occ_masks[j]]
         #        trans_ci_a[i,j] = numpy.linalg.det(uij)
-        occ_idx_all_strs = numpy.where(occ_masks)[1]
+        occ_idx_all_strs = numpy.where(occ_masks)[1].reshape(na,neleca)
         for i in range(na):
             ui = ua[occ_masks[i]].T.copy()
-            minors = numpy.take(ui, occ_idx_all_strs, axis=0).reshape(na,neleca,neleca)
+            minors = ui[occ_idx_all_strs]
             trans_ci_a[i,:] = numpy.linalg.det(minors)
 
     if neleca == nelecb and numpy.allclose(ua, ub):
@@ -765,10 +765,10 @@ def transform_ci_for_orbital_rotation(ci, norb, nelec, u):
             #    for j in range(nb):
             #        uij = u[occ_masks[i]][:,occ_masks[j]]
             #        trans_ci_b[i,j] = numpy.linalg.det(uij)
-            occ_idx_all_strs = numpy.where(occ_masks)[1]
+            occ_idx_all_strs = numpy.where(occ_masks)[1].reshape(nb,nelecb)
             for i in range(nb):
                 ui = ub[occ_masks[i]].T.copy()
-                minors = numpy.take(ui, occ_idx_all_strs, axis=0).reshape(nb,nelecb,nelecb)
+                minors = ui[occ_idx_all_strs]
                 trans_ci_b[i,:] = numpy.linalg.det(minors)
 
     # Transform old basis to new basis for all alpha-electron excitations

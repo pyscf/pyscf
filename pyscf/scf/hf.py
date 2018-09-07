@@ -264,10 +264,10 @@ def energy_elec(mf, dm=None, h1e=None, vhf=None):
     if dm is None: dm = mf.make_rdm1()
     if h1e is None: h1e = mf.get_hcore()
     if vhf is None: vhf = mf.get_veff(mf.mol, dm)
-    e1 = numpy.einsum('ij,ji', h1e, dm).real
-    e_coul = numpy.einsum('ij,ji', vhf, dm).real * .5
-    logger.debug(mf, 'E_coul = %.15g', e_coul)
-    return e1+e_coul, e_coul
+    e1 = numpy.einsum('ij,ji', h1e, dm)
+    e_coul = numpy.einsum('ij,ji', vhf, dm) * .5
+    logger.debug(mf, 'E1 = %s  E_coul = %s', e1, e_coul)
+    return (e1+e_coul).real, e_coul
 
 
 def energy_tot(mf, dm=None, h1e=None, vhf=None):
@@ -289,8 +289,17 @@ def get_hcore(mol):
     array([[-0.93767904, -0.59316327],
            [-0.59316327, -0.93767904]])
     '''
-    h = mol.intor_symmetric('int1e_kin') + mol.intor_symmetric('int1e_nuc')
-    if mol.has_ecp():
+    h = mol.intor_symmetric('int1e_kin')
+
+    if mol._pseudo:
+        # Although mol._pseudo for GTH PP is only available in Cell, GTH PP
+        # may exist if mol is converted from cell object.
+        from pyscf.gto import pp_int
+        h += pp_int.get_gth_pp(mol)
+    else:
+        h+= mol.intor_symmetric('int1e_nuc')
+
+    if len(mol._ecpbas) > 0:
         h += mol.intor_symmetric('ECPscalar')
     return h
 

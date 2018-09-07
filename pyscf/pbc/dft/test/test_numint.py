@@ -272,6 +272,7 @@ class KnowValues(unittest.TestCase):
         cell.atom = 'He     1.    0.       1.'
         cell.basis = {'He': '321g'}
         cell.dimension = 2
+        cell.low_dim_ft_type = 'inf_vacuum'
         cell.verbose = 0
         cell.mesh = [10,10,30]
         cell.build()
@@ -292,6 +293,7 @@ class KnowValues(unittest.TestCase):
         cell.atom = 'He     1.    0.       1.'
         cell.basis = {'He': '321g'}
         cell.dimension = 1
+        cell.low_dim_ft_type = 'inf_vacuum'
         cell.verbose = 0
         cell.mesh = [10,30,30]
         cell.build()

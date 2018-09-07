@@ -40,7 +40,7 @@ with open('/proc/cpuinfo') as f:
             break
 with open('/proc/meminfo') as f:
     log.note(f.readline()[:-1])
-log.note('OMP_NUM_THREADS=%s\n', os.environ['OMP_NUM_THREADS'])
+log.note('OMP_NUM_THREADS=%s\n', os.environ.get('OMP_NUM_THREADS', None))
 
 #for bas in ('3-21g', '6-31g*', 'cc-pVTZ', 'ANO-Roos-TZ'):
 for bas in ('ANO-Roos-TZ',):

@@ -109,7 +109,7 @@ def _gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj, compress_vvvv=False):
     unit = nocc**2*nvir*6
     blksize = min(nocc, nvir, max(ccsd.BLKMIN, int(max_memory*.95e6/8/unit)))
     doovv = h5fobj.create_dataset('doovv', (nocc,nocc,nvir,nvir), dtype,
-                                  chunks=(nocc,nocc,blksize,nvir))
+                                  chunks=(nocc,nocc,1,nvir))
 
     log.debug1('rdm intermediates pass 2: block size = %d, nvir = %d in %d blocks',
                blksize, nvir, int((nvir+blksize-1)/blksize))
@@ -148,13 +148,14 @@ def _gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj, compress_vvvv=False):
     goovv = goooo = None
 
     max_memory = max(0, mycc.max_memory - lib.current_memory()[0])
-    unit = max(nocc**2*nvir*2+nocc*nvir**2*3, nvir**3*2+nocc*nvir**2)
-    blksize = min(nvir, max(ccsd.BLKMIN, int(max_memory*.95e6/8/unit)))
+    unit = max(nocc**2*nvir*2+nocc*nvir**2*3,
+               nvir**3*2+nocc*nvir**2*2+nocc**2*nvir*2)
+    blksize = min(nvir, max(ccsd.BLKMIN, int(max_memory*.9e6/8/unit)))
     iobuflen = int(256e6/8/blksize)
     log.debug1('rdm intermediates pass 3: block size = %d, nvir = %d in %d blocks',
                blksize, nocc, int((nvir+blksize-1)/blksize))
     dovvv = h5fobj.create_dataset('dovvv', (nocc,nvir,nvir,nvir), dtype,
-                                  chunks=(nocc,nvir,blksize,nvir))
+                                  chunks=(nocc,min(nocc,nvir),1,nvir))
     time1 = time.clock(), time.time()
     for istep, (p0, p1) in enumerate(lib.prange(0, nvir, blksize)):
         l2tmp = l2[:,:,p0:p1]

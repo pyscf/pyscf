@@ -39,14 +39,13 @@ def get_nuc(mydf, kpts=None):
     else:
         kpts_lst = numpy.reshape(kpts, (-1,3))
 
-    low_dim_ft_type = mydf.low_dim_ft_type
     mesh = mydf.mesh
     charge = -cell.atom_charges()
     Gv = cell.get_Gv(mesh)
     SI = cell.get_SI(Gv)
     rhoG = numpy.dot(charge, SI)
 
-    coulG = tools.get_coulG(cell, mesh=mesh, Gv=Gv, low_dim_ft_type=low_dim_ft_type)
+    coulG = tools.get_coulG(cell, mesh=mesh, Gv=Gv)
     vneG = rhoG * coulG
     vneR = tools.ifft(vneG, mydf.mesh).real
 
@@ -71,14 +70,11 @@ def get_pp(mydf, kpts=None):
     else:
         kpts_lst = numpy.reshape(kpts, (-1,3))
 
-    low_dim_ft_type = mydf.low_dim_ft_type
     mesh = mydf.mesh
     SI = cell.get_SI()
     Gv = cell.get_Gv(mesh)
-    vpplocG = pseudo.get_vlocG(cell, Gv, low_dim_ft_type)
+    vpplocG = pseudo.get_vlocG(cell, Gv)
     vpplocG = -numpy.einsum('ij,ij->j', SI, vpplocG)
-    # from get_jvloc_G0 function
-    vpplocG[0] = numpy.sum(pseudo.get_alphas(cell, low_dim_ft_type))
     ngrids = len(vpplocG)
 
     # vpploc evaluated in real-space
@@ -169,7 +165,6 @@ class FFTDF(lib.StreamObject):
         self.stdout = cell.stdout
         self.verbose = cell.verbose
         self.max_memory = cell.max_memory
-        self.low_dim_ft_type = cell.low_dim_ft_type
 
         self.kpts = kpts
         self.grids = gen_grid.UniformGrids(cell)
@@ -177,8 +172,10 @@ class FFTDF(lib.StreamObject):
         # to mimic molecular DF object
         self.blockdim = getattr(__config__, 'pbc_df_df_DF_blockdim', 240)
 
-# Not input options
-        self.exxdiv = None  # to mimic KRHF/KUHF object in function get_coulG
+        # The following attributes are not input options.
+        # self.exxdiv has no effects. It was set in the get_k_kpts function to
+        # mimic the KRHF/KUHF object in the call to tools.get_coulG.
+        self.exxdiv = None
         self._numint = numint.KNumInt()
         self._keys = set(self.__dict__.keys())
 
@@ -200,15 +197,11 @@ class FFTDF(lib.StreamObject):
     def check_sanity(self):
         lib.StreamObject.check_sanity(self)
         cell = self.cell
-        if cell.dimension < 2:
+        if (cell.dimension < 2 or
+            (cell.dimension == 2 and cell.low_dim_ft_type == 'inf_vacuum')):
             raise RuntimeError('FFTDF method does not support 0D/1D low-dimension '
                                'PBC system.  DF, MDF or AFTDF methods should '
                                'be used.\nSee also examples/pbc/31-low_dimensional_pbc.py')
-        if cell.dimension == 2 and self.low_dim_ft_type is None:
-            raise RuntimeError('FFTDF method does not support low_dim_ft_type of None '
-                               'for 2D systems.  Supported types include \'analytic_2d_1\'. '
-                               '\nSee also examples/pbc/32-graphene.py')
-
         if not cell.has_ecp():
             logger.warn(self, 'FFTDF integrals are found in all-electron '
                         'calculation.  It often causes huge error.\n'
@@ -243,14 +236,11 @@ class FFTDF(lib.StreamObject):
         if kpts is None: kpts = self.kpts
         kpts = numpy.asarray(kpts)
 
-        if cell.dimension < 2:
+        if (cell.dimension < 2 or
+            (cell.dimension == 2 and cell.low_dim_ft_type == 'inf_vacuum')):
             raise RuntimeError('FFTDF method does not support low-dimension '
                                'PBC system.  DF, MDF or AFTDF methods should '
                                'be used.\nSee also examples/pbc/31-low_dimensional_pbc.py')
-        if cell.dimension == 2 and self.low_dim_ft_type is None:
-            raise RuntimeError('FFTDF method only supports low_dim_ft_type of None '
-                               'for 2D systems.  Supported types include \'analytic_2d_1\'. '
-                               '\nSee also examples/pbc/32-graphene.py')
 
         max_memory = max(2000, self.max_memory-lib.current_memory()[0])
         ni = self._numint
@@ -301,11 +291,15 @@ class FFTDF(lib.StreamObject):
 # With this function to mimic the molecular DF.loop function, the pbc gamma
 # point DF object can be used in the molecular code
     def loop(self, blksize=None):
+        if self.cell.dimension < 3:
+            raise RuntimeError('ERIs of 1D and 2D systems are not positive '
+                               'definite. Current API only supports postive '
+                               'definite ERIs.')
+
         if blksize is None:
             blksize = self.blockdim
         kpts0 = numpy.zeros((2,3))
-        coulG = tools.get_coulG(self.cell, numpy.zeros(3), mesh=self.mesh,
-                                low_dim_ft_type=self.low_dim_ft_type)
+        coulG = tools.get_coulG(self.cell, numpy.zeros(3), mesh=self.mesh)
         ngrids = len(coulG)
         ao_pairs_G = self.get_ao_pairs_G(kpts0, compact=True)
         ao_pairs_G *= numpy.sqrt(coulG*(self.cell.vol/ngrids**2)).reshape(-1,1)

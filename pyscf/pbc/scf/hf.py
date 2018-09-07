@@ -201,7 +201,7 @@ energy_elec = mol_hf.energy_elec
 
 
 def dip_moment(cell, dm, unit='Debye', verbose=logger.NOTE,
-               grids=None, rho=None, kpt=np.zeros(3)):
+               grids=None, rho=None, kpt=np.zeros(3), origin=None):
     ''' Dipole moment in the unit cell.
 
     Args:
@@ -212,35 +212,48 @@ def dip_moment(cell, dm, unit='Debye', verbose=logger.NOTE,
     Return:
         A list: the dipole moment on x, y and z components
     '''
+    from pyscf.pbc import gto
+    from pyscf.pbc import tools
     from pyscf.pbc.dft import gen_grid
     from pyscf.pbc.dft import numint
+    if cell.dimension != 3:
+        # raise NotImplementedError
+        return numpy.zeros(3)
+
     log = logger.new_logger(cell, verbose)
+    a = cell.lattice_vectors()
+    b = np.linalg.inv(a).T
+
     if grids is None:
         grids = gen_grid.UniformGrids(cell)
+        #? FIXME: Less requirements on the density accuracy.
+        #ke_cutoff = gto.estimate_ke_cutoff(cell, 1e-5)
+        #grids.mesh = tools.cutoff_to_mesh(a, ke_cutoff)
     if rho is None:
         rho = numint.NumInt().get_rho(cell, dm, grids, kpt, cell.max_memory)
 
-    # The origin of the dipole moment is not uniquely defined. It can be
-    # arbitrary point inside the unit cell. We use the charge center of the
-    # positive point charges as the origin of multipole.
-    charges = cell.atom_charges()
-    coords  = cell.atom_coords()
-    charge_center = np.einsum('i,ix->x', charges, coords) / charges.sum()
-    log.debug('Charge center %s', charge_center)
+    if origin is None:
+        origin = _search_dipole_gauge_origin(cell, grids, rho, log)
 
-    # Move the unit cell to the location around the charge center.
-    a = cell.lattice_vectors()
-    b = np.linalg.inv(a).T
-    r_frac = lib.dot(grids.coords - charge_center, b.T)
-    # Grids on the boundary (r_frac == +/-0.5) of the new cell may lead to
-    # unbalenced contributions to dipole moment. Exclude them from the dipole
-    # and quadrupole
-    r_frac[r_frac== 0.5] = 0
-    r_frac[r_frac==-0.5] = 0
-    r_frac[r_frac > 0.5] -= 1
-    r_frac[r_frac <-0.5] += 1
-    r = lib.dot(r_frac, a)
-    dip = e_dip = -np.einsum('g,g,gx->x', rho, grids.weights, r)
+    # Move the unit cell to the position around the origin.
+    def shift_grids(r):
+        r_frac = lib.dot(r - origin, b.T)
+        # Grids on the boundary (r_frac == +/-0.5) of the new cell may lead to
+        # unbalanced contributions to the dipole moment. Exclude them from the
+        # dipole and quadrupole
+        r_frac[r_frac== 0.5] = 0
+        r_frac[r_frac==-0.5] = 0
+        r_frac[r_frac > 0.5] -= 1
+        r_frac[r_frac <-0.5] += 1
+        r = lib.dot(r_frac, a)
+        return r
+    r = shift_grids(grids.coords)
+    e_dip = np.einsum('g,g,gx->x', rho, grids.weights, r)
+
+    charges = cell.atom_charges()
+    r = shift_grids(cell.atom_coords())
+    nuc_dip = np.einsum('g,gx->x', charges, r)
+    dip = nuc_dip - e_dip
 
     if unit.upper() == 'DEBYE':
         dip *= nist.AU2DEBYE
@@ -248,6 +261,97 @@ def dip_moment(cell, dm, unit='Debye', verbose=logger.NOTE,
     else:
         log.note('Dipole moment(X, Y, Z, A.U.): %8.5f, %8.5f, %8.5f', *dip)
     return dip
+
+def _search_dipole_gauge_origin(cell, grids, rho, log):
+    '''Optimize the position of the unit cell in crystal. With a proper unit
+    cell, the nuclear charge center and the electron density center are at the
+    same point. This function returns the origin of such unit cell.
+    '''
+    from pyscf.pbc.dft import gen_grid
+    a = cell.lattice_vectors()
+    b = np.linalg.inv(a).T
+    charges = cell.atom_charges()
+    coords  = cell.atom_coords()
+
+    origin = np.einsum('i,ix->x', charges, coords) / charges.sum()
+    log.debug1('Initial guess of origin center %s', origin)
+    nelec = np.dot(rho, grids.weights)
+
+    # The dipole moment in the crystal is not uniquely defined. Depending on
+    # the position and the shape of the unit cell, the value of dipole moment
+    # can be very different. The optimization below searches the boundary of
+    # cell inside which the nuclear charge center and electron density charge
+    # center locate at the same point. The gauge origin will be chosen at the
+    # center of unit cell.
+    if (cell.dimension == 3 and
+        # For orthogonal lattice only
+        abs(np.diag(a.diagonal())).max() and
+        isinstance(grids, gen_grid.UniformGrids)):
+        gridxyz = grids.coords.T.reshape(3, *grids.mesh)
+        gridbase = (gridxyz[0,:,0,0], gridxyz[1,0,:,0], gridxyz[2,0,0,:])
+        wxyz = grids.weights.reshape(grids.mesh)
+        rhoxyz = rho.reshape(grids.mesh)
+
+        def search_orig(ix, origin):
+            nx = grids.mesh[ix]
+            Lx = a[ix,ix]
+            g = gridbase[ix] - origin
+            g_frac = (g * b[ix,ix]).round(6)
+            g[g_frac == .5]  = 0
+            g[g_frac ==-.5]  = 0
+            g[g_frac >  .5] -= Lx
+            g[g_frac < -.5] += Lx
+            meanx = np.einsum('xyz,xyz->'+('xyz'[ix]), rhoxyz, wxyz) / nelec
+            ex = meanx * g
+
+            r_nuc = coords[:,ix] - origin
+            r_frac = (r_nuc * b[ix,ix]).round(6)
+            r_nuc[r_frac == .5]  = 0
+            r_nuc[r_frac ==-.5]  = 0
+            r_nuc[r_frac >  .5] -= Lx
+            r_nuc[r_frac < -.5] += Lx
+            nuc_dip = np.dot(charges, r_nuc) / charges.sum()
+
+            # ex.sum() ~ electron dipole wrt the given origin
+            dipx = nuc_dip - ex.sum()
+
+            g = gridbase[ix] - origin
+            sorted_meanx = np.hstack((meanx[g >= Lx/2],
+                                      meanx[(g < Lx/2) & (g >= -Lx/2)],
+                                      meanx[g < -Lx/2]))
+            if abs(dipx) < 1e-3:
+                offx = 0
+            elif dipx > 0:
+                # To cancel the positive dipole, move electrons to the right side
+                rcum_dip = np.append(0, np.cumsum(sorted_meanx * Lx))
+                idx = np.where(rcum_dip > dipx)[0][0]
+                dx = (rcum_dip[idx] - dipx) / (rcum_dip[idx] - rcum_dip[idx-1])
+                offx = (idx - dx) * Lx/nx
+            else:
+                # To cancel the negative dipole, move electrons to the left side
+                lcum_dip = np.append(0, np.cumsum(sorted_meanx[::-1] * Lx))
+                idx = np.where(lcum_dip > -dipx)[0][0]
+                dx = (lcum_dip[idx] - -dipx) / (lcum_dip[idx] - lcum_dip[idx-1])
+                offx = -(idx - dx) * Lx/nx
+            return origin + offx
+
+        wbar = grids.weights[0]**(1./3)
+        for i in range(4):
+            orig_last = origin
+            origin[0] = search_orig(0, origin[0])
+            origin[1] = search_orig(1, origin[1])
+            origin[2] = search_orig(2, origin[2])
+            if abs(origin - orig_last).max() < wbar:
+                break
+            log.debug1('iter %d: origin %s', i, origin)
+    else:
+    # If the grids are non-cubic grids, regenerating the grids is expensive if
+    # the position or the shape of the unit cell is changed. The position of
+    # the unit cell is not optimized. The gauge origin is set to the nuclear
+    # charge center of the original unit cell.
+        pass
+
+    return origin
 
 def get_rho(mf, dm=None, grids=None, kpt=None):
     '''Compute density in real space
@@ -265,12 +369,33 @@ def get_rho(mf, dm=None, grids=None, kpt=None):
 
 def _dip_correction(mf):
     '''Makov-Payne corrections for charged systems.'''
+    from pyscf.pbc import gto
+    from pyscf.pbc import tools
     from pyscf.pbc.dft import gen_grid
+    log = logger.new_logger(mf)
     cell = mf.cell
+    a = cell.lattice_vectors()
+    b = np.linalg.inv(a).T
+
     grids = gen_grid.UniformGrids(cell)
+    ke_cutoff = gto.estimate_ke_cutoff(cell, 1e-5)
+    grids.mesh = tools.cutoff_to_mesh(a, ke_cutoff)
+
     dm = mf.make_rdm1()
     rho = mf.get_rho(dm, grids, mf.kpt)
-    dip = mf.dip_moment(mf.cell, dm, unit='Au', grids=grids, rho=rho)
+    origin = _search_dipole_gauge_origin(cell, grids, rho, log)
+
+    def shift_grids(r):
+        r_frac = lib.dot(r - origin, b.T)
+        # Grids on the boundary (r_frac == +/-0.5) of the new cell may lead to
+        # unbalanced contributions to the dipole moment. Exclude them from the
+        # dipole and quadrupole
+        r_frac[r_frac== 0.5] = 0
+        r_frac[r_frac==-0.5] = 0
+        r_frac[r_frac > 0.5] -= 1
+        r_frac[r_frac <-0.5] += 1
+        r = lib.dot(r_frac, a)
+        return r
 
     #           SC              BCC             FCC
     madelung = (-2.83729747948, -3.63923344951, -4.58486207411)
@@ -286,25 +411,22 @@ def _dip_correction(mf):
     de_mono = - chg**2 * np.array(madelung) / (2 * L * epsilon)
 
     # dipole energy correction
+    r_e = shift_grids(grids.coords)
+    r_nuc = shift_grids(cell.atom_coords())
+    charges = cell.atom_charges()
+    e_dip = np.einsum('g,g,gx->x', rho, grids.weights, r_e)
+    nuc_dip = np.einsum('g,gx->x', charges, r_nuc)
+    dip = nuc_dip - e_dip
     de_dip = -2.*np.pi/(3*cell.vol) * np.linalg.norm(dip)**2
 
     # quadrupole energy correction
-    a = cell.lattice_vectors()
-    b = np.linalg.inv(a).T
     if abs(a - np.eye(3)*L).max() > 1e-5:
         logger.warn(mf, 'System is not cubic cell. Quadrupole energy '
-                    'correction can be used for cubic cell only.')
-    charges = cell.atom_charges()
-    coords  = cell.atom_coords()
-    charge_center = np.einsum('i,ix->x', charges, coords) / charges.sum()
-
-    r_frac = lib.dot(grids.coords - charge_center, b.T)
-    r_frac[r_frac== 0.5] = 0
-    r_frac[r_frac==-0.5] = 0
-    r_frac[r_frac > 0.5] -= 1
-    r_frac[r_frac <-0.5] += 1
-    r = lib.dot(r_frac, a)
-    quad = np.einsum('g,g,gx,gx->', rho, grids.weights, r, r)
+                    'correction is inaccurate since it is developed based on '
+                    'cubic cell.')
+    e_quad = np.einsum('g,g,gx,gx->', rho, grids.weights, r_e, r_e)
+    nuc_quad = np.einsum('g,gx,gx->', charges, r_nuc, r_nuc)
+    quad = nuc_quad - e_quad
     de_quad = 2.*np.pi/(3*cell.vol) * quad
 
     de = de_mono + de_dip + de_quad
@@ -317,12 +439,8 @@ def makov_payne_correction(mf):
     logger.note(mf, 'Makov-Payne correction for charged 3D PBC systems')
     # PRB 51 (1995), 4014
     # PRB 77 (2008), 115139
-    if cell.dimension != 3 and not isinstance(mf.with_df, df.fft.FFTDF):
-        logger.warn(mf, 'Correction for low-dimension AFTDF/GDF/MDF '
-                    'is not available.')
-        return mf
-    elif cell.low_dim_ft_type == 'analytic_2d_1':
-        logger.warn(mf, 'Correction for truncated Coulomb operator '
+    if cell.dimension != 3:
+        logger.warn(mf, 'Correction for low-dimension PBC systems'
                     'is not available.')
         return mf
 
@@ -404,13 +522,14 @@ class SCF(mol_hf.SCF):
         logger.info(self, '******** PBC SCF flags ********')
         logger.info(self, 'kpt = %s', self.kpt)
         logger.info(self, 'Exchange divergence treatment (exxdiv) = %s', self.exxdiv)
-        if (self.cell.dimension == 3 and
+        cell = self.cell
+        if ((cell.dimension >= 2 and cell.low_dim_ft_type != 'inf_vacuum') and
             isinstance(self.exxdiv, str) and self.exxdiv.lower() == 'ewald'):
-            madelung = tools.pbc.madelung(self.cell, [self.kpt])
+            madelung = tools.pbc.madelung(cell, [self.kpt])
             logger.info(self, '    madelung (= occupied orbital energy shift) = %s', madelung)
             logger.info(self, '    Total energy shift due to Ewald probe charge'
-                        ' = -1/2 * Nelec*madelung/cell.vol = %.12g',
-                        madelung*self.cell.nelectron * -.5)
+                        ' = -1/2 * Nelec*madelung = %.12g',
+                        madelung*cell.nelectron * -.5)
         logger.info(self, 'DF object = %s', self.with_df)
         if not hasattr(self.with_df, 'build'):
             # .dump_flags() is called in pbc.df.build function
@@ -556,6 +675,8 @@ class SCF(mol_hf.SCF):
     def dip_moment(self, cell=None, dm=None, unit='Debye', verbose=logger.NOTE,
                    **kwargs):
         rho = kwargs.pop('rho', None)
+        if cell is None:
+            cell = self.cell
         if rho is None:
             rho = self.get_rho(dm)
         return dip_moment(cell, dm, unit, verbose, rho=rho, kpt=self.kpt, **kwargs)
@@ -614,11 +735,11 @@ class SCF(mol_hf.SCF):
 
     def density_fit(self, auxbasis=None, with_df=None):
         from pyscf.pbc.df import df_jk
-        return df_jk.density_fit(self, auxbasis, with_df)
+        return df_jk.density_fit(self, auxbasis, with_df=with_df)
 
     def mix_density_fit(self, auxbasis=None, with_df=None):
         from pyscf.pbc.df import mdf_jk
-        return mdf_jk.density_fit(self, auxbasis, with_df)
+        return mdf_jk.density_fit(self, auxbasis, with_df=with_df)
 
     def sfx2c1e(self):
         from pyscf.pbc.x2c import sfx2c1e

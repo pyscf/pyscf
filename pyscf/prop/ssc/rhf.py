@@ -204,28 +204,44 @@ def make_h1_fc(mol, mo_coeff, mo_occ, atmlst):
     return h1
 
 def make_h1_fcsd(mol, mo_coeff, mo_occ, atmlst):
+    '''MO integrals for FC + SD'''
     orbo = mo_coeff[:,mo_occ> 0]
     orbv = mo_coeff[:,mo_occ==0]
-    nao, nmo = mo_coeff.shape
 
     h1 = []
     for ia in atmlst:
-        mol.set_rinv_origin(mol.atom_coord(ia))
-# Should equal to
-#        a01p = mol.intor('int1e_sa01sp', 12).reshape(3,4,nao,nao)
-#        h1ao = -(a01p[:,:3] + a01p[:,:3].transpose(0,1,3,2))
-        ipipv = mol.intor('int1e_ipiprinv', 9).reshape(3,3,nao,nao)
-        ipvip = mol.intor('int1e_iprinvip', 9).reshape(3,3,nao,nao)
-        h1ao = ipipv + ipvip  # (nabla i | r/r^3 | j)
-        h1ao = h1ao + h1ao.transpose(0,1,3,2)
-        trace = h1ao[0,0] + h1ao[1,1] + h1ao[2,2]
-        h1ao[0,0] -= trace
-        h1ao[1,1] -= trace
-        h1ao[2,2] -= trace
+        h1ao = _get_integrals_fcsd(mol, ia)
         for i in range(3):
             for j in range(3):
                 h1.append(orbv.T.conj().dot(h1ao[i,j]).dot(orbo) * .5)
     return h1
+
+def _get_integrals_fcsd(mol, atm_id):
+    '''AO integrals for FC + SD'''
+    nao = mol.nao
+    DEBUG = False
+    with mol.with_rinv_origin(mol.atom_coord(atm_id)):
+        # Compute the integrals of quadrupole operator 
+        # (3 \vec{r} \vec{r} - r^2) / r^5
+        if DEBUG:
+            ipipv = mol.intor('int1e_ipiprinv', 9).reshape(3,3,nao,nao)
+            ipvip = mol.intor('int1e_iprinvip', 9).reshape(3,3,nao,nao)
+            h1ao = ipipv + ipvip  # (nabla i | r/r^3 | j)
+            h1ao = h1ao + h1ao.transpose(0,1,3,2)
+            trace = h1ao[0,0] + h1ao[1,1] + h1ao[2,2]
+            h1ao[0,0] -= trace
+            h1ao[1,1] -= trace
+            h1ao[2,2] -= trace
+        else:
+            a01p = mol.intor('int1e_sa01sp', 12).reshape(3,4,nao,nao)
+            h1ao = -(a01p[:,:3] + a01p[:,:3].transpose(0,1,3,2))
+    return h1ao
+
+def _get_integrals_fc(mol, atm_id):
+    '''AO integrals for FC'''
+    coords = mol.atom_coord(atm_id).reshape(1, 3)
+    ao = mol.eval_gto('GTOval', coords)
+    return -8*numpy.pi/3 * numpy.einsum('ip,iq->pq', ao, ao)
 
 def _uniq_atoms(nuc_pair):
     atm1lst = sorted(set([i for i,j in nuc_pair]))

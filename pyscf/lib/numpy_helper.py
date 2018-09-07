@@ -835,6 +835,30 @@ def asarray(a, dtype=None, order=None):
         pass
     return numpy.asarray(a, dtype, order)
 
+def frompointer(pointer, count, dtype=float):
+    '''Interpret a buffer that the pointer refers to as a 1-dimensional array.
+
+    Args:
+        pointer : int or ctypes pointer
+            address of a buffer
+        count : int
+            Number of items to read.
+        dtype : data-type, optional
+            Data-type of the returned array; default: float.
+
+    Examples:
+
+    >>> s = numpy.ones(3, dtype=numpy.int32)
+    >>> ptr = s.ctypes.data
+    >>> frompointer(ptr, count=6, dtype=numpy.int16)
+    [1, 0, 1, 0, 1, 0]
+    '''
+    dtype = numpy.dtype(dtype)
+    count *= dtype.itemsize
+    buf = (ctypes.c_char * count).from_address(pointer)
+    a = numpy.ndarray(count, dtype=numpy.int8, buffer=buf)
+    return a.view(dtype)
+
 from distutils.version import LooseVersion
 if LooseVersion(numpy.__version__) <= LooseVersion('1.6.0'):
     def norm(x, ord=None, axis=None):

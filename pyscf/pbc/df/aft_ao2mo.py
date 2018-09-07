@@ -60,11 +60,8 @@ def get_eri(mydf, kpts=None,
         for pqkR, pqkI, p0, p1 \
                 in mydf.pw_loop(mesh, kptijkl[:2], q, max_memory=max_memory,
                                 aosym='s2'):
-            vG = numpy.sqrt(coulG[p0:p1])
-            pqkR *= vG
-            pqkI *= vG
-            lib.ddot(pqkR, pqkR.T, 1, eriR, 1)
-            lib.ddot(pqkI, pqkI.T, 1, eriR, 1)
+            lib.ddot(pqkR*coulG[p0:p1], pqkR.T, 1, eriR, 1)
+            lib.ddot(pqkI*coulG[p0:p1], pqkI.T, 1, eriR, 1)
             pqkR = pqkI = None
         if not compact:
             eriR = ao2mo.restore(1, eriR, nao).reshape(nao**2,-1)
@@ -80,11 +77,9 @@ def get_eri(mydf, kpts=None,
         eriI = numpy.zeros((nao**2,nao**2))
         for pqkR, pqkI, p0, p1 \
                 in mydf.pw_loop(mesh, kptijkl[:2], q, max_memory=max_memory):
-            vG = numpy.sqrt(coulG[p0:p1])
-            pqkR *= vG
-            pqkI *= vG
 # rho_pq(G+k_pq) * conj(rho_rs(G-k_rs))
-            zdotNC(pqkR, pqkI, pqkR.T, pqkI.T, 1, eriR, eriI, 1)
+            zdotNC(pqkR*coulG[p0:p1], pqkI*coulG[p0:p1], pqkR.T, pqkI.T,
+                   1, eriR, eriI, 1)
             pqkR = pqkI = None
         pqkR = pqkI = coulG = None
 # transpose(0,1,3,2) because
@@ -162,17 +157,14 @@ def general(mydf, mo_coeffs, kpts=None,
         for pqkR, pqkI, p0, p1 \
                 in mydf.pw_loop(mesh, kptijkl[:2], q, max_memory=max_memory,
                                 aosym='s2'):
-            vG = numpy.sqrt(coulG[p0:p1])
-            pqkR *= vG
-            pqkI *= vG
             buf = lib.transpose(pqkR, out=buf)
             ijR, klR = _dtrans(buf, ijR, ijmosym, moij, ijslice,
                                buf, klR, klmosym, mokl, klslice, sym)
-            lib.ddot(ijR.T, klR, 1, eri_mo, 1)
+            lib.ddot(ijR.T, klR*coulG[p0:p1,None], 1, eri_mo, 1)
             buf = lib.transpose(pqkI, out=buf)
             ijI, klI = _dtrans(buf, ijI, ijmosym, moij, ijslice,
                                buf, klI, klmosym, mokl, klslice, sym)
-            lib.ddot(ijI.T, klI, 1, eri_mo, 1)
+            lib.ddot(ijI.T, klI*coulG[p0:p1,None], 1, eri_mo, 1)
             pqkR = pqkI = None
         return eri_mo
 
@@ -192,10 +184,9 @@ def general(mydf, mo_coeffs, kpts=None,
         for pqkR, pqkI, p0, p1 \
                 in mydf.pw_loop(mesh, kptijkl[:2], q, max_memory=max_memory):
             buf = lib.transpose(pqkR+pqkI*1j, out=buf)
-            buf *= numpy.sqrt(coulG[p0:p1]).reshape(-1,1)
             zij, zlk = _ztrans(buf, zij, moij, ijslice,
                                buf, zlk, molk, lkslice, sym)
-            lib.dot(zij.T, zlk.conj(), 1, eri_mo, 1)
+            lib.dot(zij.T, zlk.conj()*coulG[p0:p1,None], 1, eri_mo, 1)
             pqkR = pqkI = None
         nmok = mo_coeffs[2].shape[1]
         nmol = mo_coeffs[3].shape[1]
@@ -225,7 +216,7 @@ def general(mydf, mo_coeffs, kpts=None,
             zij = _ao2mo.r_e2(buf, moij, ijslice, tao, ao_loc, out=zij)
             buf = lib.transpose(rskR-rskI*1j, out=buf)
             zkl = _ao2mo.r_e2(buf, mokl, klslice, tao, ao_loc, out=zkl)
-            zij *= coulG[p0:p1].reshape(-1,1)
+            zij *= coulG[p0:p1,None]
             lib.dot(zij.T, zkl, 1, eri_mo, 1)
             pqkR = pqkI = rskR = rskI = None
         return eri_mo

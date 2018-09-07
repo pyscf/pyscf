@@ -414,12 +414,26 @@ O    SP
         mol1.atom = mol0.atom
         mol1.nucmod = 'G'
         mol1.verbose = 5
+        mol1.nucprop = {'H': {'mass': 3}}
         mol1.output = '/dev/null'
         mol1.build(False, False)
-        mol1.set_nuc_mod(1, 2)
+        mol1.set_nuc_mod(0, 2)
         self.assertTrue(mol1._atm[1,gto.NUC_MOD_OF] == gto.NUC_GAUSS)
+        self.assertAlmostEqual(mol1._env[mol1._atm[0,gto.PTR_ZETA]], 2, 9)
+        self.assertAlmostEqual(mol1._env[mol1._atm[1,gto.PTR_ZETA]], 586314366.54656982, 4)
+
         mol1.set_nuc_mod(1, 0)
         self.assertTrue(mol1._atm[1,gto.NUC_MOD_OF] == gto.NUC_POINT)
+
+        mol1.nucmod = None
+        mol1.build(False, False)
+        self.assertTrue(mol1._atm[1,gto.NUC_MOD_OF] == gto.NUC_POINT)
+
+        mol1.nucmod = {'H': gto.filatov_nuc_mod}
+        mol1.build(False, False)
+        self.assertTrue(mol1._atm[0,gto.NUC_MOD_OF] == gto.NUC_GAUSS)
+        self.assertTrue(mol1._atm[1,gto.NUC_MOD_OF] == gto.NUC_POINT)
+        self.assertTrue(mol1._atm[2,gto.NUC_MOD_OF] == gto.NUC_GAUSS)
 
     def test_zmat(self):
         coord = numpy.array((

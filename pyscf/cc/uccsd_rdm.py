@@ -26,6 +26,8 @@ from pyscf import ao2mo
 #einsum = numpy.einsum
 einsum = lib.einsum
 
+#TODO: optimize memory use
+
 def _gamma1_intermediates(cc, t1, t2, l1, l2):
     t1a, t1b = t1
     t2aa, t2ab, t2bb = t2
