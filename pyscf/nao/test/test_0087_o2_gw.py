@@ -22,7 +22,7 @@ class KnowValues(unittest.TestCase):
     #gw.report()
     np.savetxt('eigvals_g0w0_pyscf_rescf_o2_0087.txt', gw.mo_energy_gw[0,:,:].T)
 
-    reflines = """-2.066794262507180235e+01 -2.059606842160618001e+01
+    reflines = u"""-2.066794262507180235e+01 -2.059606842160618001e+01 
 -2.066739073401323168e+01 -2.026688493419162995e+01
 -1.597844973588707695e+00 -1.404839916644314624e+00
 -1.065759004553683331e+00 -9.223326834974986399e-01
@@ -50,7 +50,7 @@ class KnowValues(unittest.TestCase):
 3.519722767487217574e+00 3.582380444764414751e+00
 3.519722767487221127e+00 3.582380444764418304e+00
 4.112903441748526845e+00 4.146312536608574462e+00
-    """
+    """ #u unicodes the string in python 2.7
     eeref = np.loadtxt(StringIO(reflines)).T
     for e1r,e2r, e1,e2 in zip(eeref[0], eeref[1], gw.mo_energy_gw[0,0,:], gw.mo_energy_gw[0,1,:]):
       #print(e1r,e1,e2r,e2)

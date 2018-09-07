@@ -13,7 +13,7 @@ class KnowValues(unittest.TestCase):
     gw = gw_c(mf=gto_mf, gto=mol)
     sf = gw.get_snmw2sf()
     self.assertEqual(len(sf), 1)
-    self.assertEqual(sf[0].shape, (6,10,32))    #for decreased number of cerrected states, otherwise sf[0].shape = (7,10,32)
+    self.assertEqual(sf[0].shape, (7,10,32))
     
     
 if __name__ == "__main__": unittest.main()
