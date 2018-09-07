@@ -133,6 +133,7 @@ def get_nuc_g_factor(symb, mass=None):
 
 # Nuclear electric quadrupole moments
 # http://dx.doi.org/10.1016/j.adt.2015.12.002
+# Q in units of the barn (1 barn = 10-28 m2 ).
 ISOTOPE_QUAD_MOMENT = (
     (0  , 0.  , 0.       ),
     (2  , 1.  , 0.002862 ),  # H

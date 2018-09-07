@@ -17,9 +17,9 @@
 #
 
 '''
+(In testing)
 Electric field gradients, nuclear quadrupolar coupling and Mossbauer
 spectroscopy for non-relativistic (or sf-x2c) mean-field and post-HF methods.
-(In testing)
 
 Ref:
 
@@ -84,7 +84,7 @@ def kernel(method, efg_nuc=None):
         h1fc = rhf_ssc._get_integrals_fc(mol, atm_id)
 
         if with_x2c:
-            # J. Autschbach, D. Peng, and Markus. JCTC, 8, 4239 (2012)
+            # J. Autschbach, D. Peng, and R. Markus. JCTC, 8, 4239 (2012)
             h1SS = _get_sfx2c_quadrupole_integrals(xmol, atm_id)
             h1 += lib.einsum('xypq,pi,qj->xyij', h1SS, rmat, rmat) * (.25/c**2)
 
@@ -108,7 +108,7 @@ def _analyze(mol, atm_id, v, log):
     # Ground-state quadrupole moment is non zero only if the nucleus has I > 1/2.
     # CQ is nuclear quadruplar coupling constant. Q is nuclear electric
     # quadrupole moment.
-    I, Q = ISOTOPE_QUAD_MOMENT[Z][1:3]
+    isotope, I, Q = ISOTOPE_QUAD_MOMENT[Z]
     if mol.nucprop:
         if atm_id+1 in mol.nucprop:
             prop = mol.nucprop[atm_id+1]
@@ -118,19 +118,20 @@ def _analyze(mol, atm_id, v, log):
             prop = mol.nucprop[stdsymb]
         else:
             prop = {}
+        isotope = prop.get('isotope', isotope)
         I = prop.get('I', I)
         Q = prop.get('Q', Q)
 
-    log.info('--\nEFG for %d %s: I = %g  Q = %g fm^2',
-             atm_id, symb, I, Q)
+    log.info('--\nEFG for %d %s: Isotope %s  I = %g  Q = %g barn',
+             atm_id, symb, isotope, I, Q)
 
     # Principal axis system and asymmetry parameter
     e, pas = numpy.linalg.eigh(v)
-    # The principle components are ordered Vxx <= Vyy <= Vzz
+    # The principle components are ordered Vzz > Vxx >= Vyy
     if abs(e[2]) > abs(e[0]):
-        Vxx, Vyy, Vzz = e
+        Vyy, Vxx, Vzz = e
     else:
-        Vxx, Vyy, Vzz = e[::-1]
+        Vyy, Vxx, Vzz = e[::-1]
         pas = pas[:,::-1]
 
     log.info('EFG eigen (au)        PAS')
@@ -141,16 +142,17 @@ def _analyze(mol, atm_id, v, log):
     eta = (Vxx - Vyy) / Vzz
     log.info('Quadrupolar asymmetry parameter %.9g', eta)
 
-    # 1e-30 m^2 fm^-2
-    au2MHz = nist.E_CHARGE * nist.AUEFG / nist.PLANCK * 1e-6 * 1e-30
+    # 1 barn = 1e-28 m^2
+    au2MHz = nist.E_CHARGE * nist.AUEFG / nist.PLANCK * 1e-6 * 1e-28
 
     if stdsymb in ('Fe', 'Sn'):
         # Mossbauer spectroscopy
         # Eq 2.14 of http://www.cmp.liv.ac.uk/frink/thesis/thesis/node18.html
         qQ = 0.5 * Vzz * Q * au2MHz
         Delta = qQ * (1 + eta**2/3)**.5
-        log.info('Quadrupolar coupling constant %.9g MHz', CQ)
-        log.info('Quadrupole splitting [e^2qQ/2(1+eta^2/3)^.5] %.9g MHz', Delta)
+        log.info('Quadrupolar coupling constant %.9g MHz', 2*qQ)
+        log.info('e^2qQ/2 = %.9g MHz', qQ)
+        log.info('Delta = e^2qQ/2(1+eta^2/3)^.5 = %.9g MHz', Delta)
     elif I > 0.5:
         # EFG has no effect on the I = 1/2 ground state
         CQ = Vzz * Q * au2MHz

@@ -111,7 +111,8 @@ class X2C(x2c.X2C):
     basis = getattr(__config__, 'pbc_x2c_X2C_basis', None)
 
     def __init__(self, cell, kpts=None):
-        self.cell = self.mol = cell
+        self.cell = cell
+        x2c.X2C.__init__(cell)
 
 class SpinFreeX2C(X2C):
     def get_hcore(self, cell=None, kpts=None):
@@ -170,6 +171,29 @@ class SpinFreeX2C(X2C):
         if kpts is None or numpy.shape(kpts) == (3,):
             h1_kpts = h1_kpts[0]
         return lib.asarray(h1_kpts)
+
+    def get_xmat(self, cell=None, kpts=None):
+        if cell is None: cell = self.cell
+        xcell, contr_coeff = self.get_xmol(cell)
+        c = lib.param.LIGHT_SPEED
+        assert('1E' in self.approx.upper())
+        if 'ATOM' in self.approx.upper():
+            atom_slices = xcell.offset_nr_by_atom()
+            nao = xcell.nao_nr()
+            x = numpy.zeros((nao,nao))
+            for ia in range(xcell.natm):
+                ish0, ish1, p0, p1 = atom_slices[ia]
+                shls_slice = (ish0, ish1, ish0, ish1)
+                t1 = xcell.intor('int1e_kin', shls_slice=shls_slice)
+                s1 = xcell.intor('int1e_ovlp', shls_slice=shls_slice)
+                with xcell.with_rinv_as_nucleus(ia):
+                    z = -xcell.atom_charge(ia)
+                    v1 = z * xcell.intor('int1e_rinv', shls_slice=shls_slice)
+                    w1 = z * xcell.intor('int1e_prinvp', shls_slice=shls_slice)
+                x[p0:p1,p0:p1] = x2c._x2c1e_xmatrix(t1, v1, w1, s1, c)
+        else:
+            raise NotImplementedError
+        return x
 
 
 # Use Ewald-like technique to compute spVsp.
