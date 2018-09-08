@@ -531,6 +531,26 @@ def Woovo(cc,t1,t2,eris, kconserv):
 
     return Woovo, WooVO, WOOvo, WOOVO
 
+def Wooov(cc, t1, t2, eris, kconserv):
+	t1a, t1b = t1
+	t2aa, t2ab, t2bb = t2
+	_, _, nkpts, nocca, noccb, nvira, nvirb = t2ab.shape
+
+	P = kconserv_mat(nkpts, kconserv)
+	Wooov = np.einsum('xyzmine,xzyw->xyzmine', eris.ooov, P) - np.einsum('zyxnime,xzyw->xyzmine', eris.ooov, P)
+	WooOV = np.einsum('xyzmiNE,xzyw->xyzmiNE', eris.ooOV, P)
+	WOOov = np.einsum('xyzMIne,xzyw->xyzMIne', eris.OOov, P)
+	WOOOV = np.einsum('xyzMINE,xzyw->xyzMINE', eris.OOOV, P) - np.einsum('zyxNIME,xzyw->xyzMINE', eris.OOOV, P)
+
+	Wooov += np.einsum('yif,xyzmfne->xyzmine', t1a, eris.ovov) - np.einsum('yif,xwzmenf,xzyw->xyzmine', t1a, eris.ovov, P)
+	WooOV += np.einsum('yif,xyzmfNE->xyzmiNE', t1a, eris.ovOV)
+	WOOov += np.einsum('yIF,xyzMFne->xyzMIne', t1b, eris.OVov)
+	WOOOV += np.einsum('yIF,xyzMFNE->xyzMINE', t1b, eris.OVOV) - np.einsum('yIF,xwzMENF,xzyw->xyzMINE', t1b, eris.OVOV, P)
+
+	return Wooov, WooOV, WOOov, WOOOV
+
+
+
 # vvvv is a string, ('oooo', 'ooov', ..., 'vvvv')
 # orbspin can be accessed through general spin-orbital kintermediates eris
 # orbspin = eris.mo_coeff.orbspin

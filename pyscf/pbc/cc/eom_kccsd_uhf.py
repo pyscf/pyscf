@@ -688,7 +688,9 @@ if __name__ == '__main__':
     #from kintermediates_uhf import Woooo
     #Woooo, WooOO, WOOoo, WOOOO = Woooo(cc,t1,t2,eris, kconserv)
     #print(np.linalg.norm(WOOOO - gOOOO))
-    from kintermediates import Wovoo as govoo
+
+    '''
+	from kintermediates import Wovoo as govoo
     g = govoo(kgcc,spin_t1,spin_t2,kccsd_eris,kconserv).transpose(0,2,1,3,5,4,6)
     from kintermediates_uhf import Woovo
     goovo, gooVO, gOOvo, gOOVO, goOVo, gOovO = _eri_spin2spatial(g, 'oovo', kccsd_eris, (nocca, noccb), orbspin, cross_ab=True)
@@ -697,9 +699,20 @@ if __name__ == '__main__':
     print(np.linalg.norm(gooVO - WooVO))
     print(np.linalg.norm(gOOvo - WOOvo))
     print(np.linalg.norm(gOOVO - WOOVO))
+	'''		
+    
+    from kintermediates import Wooov as gfunc
+    from kintermediates_uhf import Wooov
+    g = gfunc(kgcc,spin_t1,spin_t2,kccsd_eris,kconserv).transpose(0,2,1,3,5,4,6)
+    gooov, gooOV, gOOov, gOOOV, _, _ = _eri_spin2spatial(g, 'ooov', kccsd_eris, (nocca, noccb), orbspin, cross_ab=True)
+    Wooov, WooOV, WOOov, WOOOV = Wooov(cc, t1, t2, eris, kconserv)
+    print np.linalg.norm(gooov - Wooov)
+    print np.linalg.norm(gooOV - WooOV)
+    print np.linalg.norm(gOOov - WOOov)
+    print np.linalg.norm(gOOOV - WOOOV)
 
     exit()
-
+	
     ##### test block
 
     from kintermediates import Wovoo as govoo
