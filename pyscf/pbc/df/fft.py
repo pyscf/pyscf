@@ -279,6 +279,7 @@ class FFTDF(lib.StreamObject):
 
     get_eri = get_ao_eri = fft_ao2mo.get_eri
     ao2mo = get_mo_eri = fft_ao2mo.general
+    ao2mo_7d = fft_ao2mo.ao2mo_7d
     get_ao_pairs_G = get_ao_pairs = fft_ao2mo.get_ao_pairs_G
     get_mo_pairs_G = get_mo_pairs = fft_ao2mo.get_mo_pairs_G
 
