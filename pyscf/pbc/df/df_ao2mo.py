@@ -94,9 +94,10 @@ def get_eri(mydf, kpts=None,
     else:
         eriR = numpy.zeros((nao*nao,nao*nao))
         eriI = numpy.zeros((nao*nao,nao*nao))
+        blksize = int(max_memory*1e6/16/nao**2)
         for (LpqR, LpqI, sign), (LrsR, LrsI, sign1) in \
-                lib.izip(mydf.sr_loop(kptijkl[:2], max_memory, False),
-                         mydf.sr_loop(kptijkl[2:], max_memory, False)):
+                lib.izip(mydf.sr_loop(kptijkl[:2], max_memory, False, blksize),
+                         mydf.sr_loop(kptijkl[2:], max_memory, False, blksize)):
             zdotNN(LpqR.T, LpqI.T, LrsR, LrsI, sign, eriR, eriI, 1)
             LpqR = LpqI = LrsR = LrsI = None
         return eriR + eriI*1j
@@ -190,11 +191,13 @@ def general(mydf, mo_coeffs, kpts=None,
         nij_pair, moij, ijslice = _conc_mos(mo_coeffs[0], mo_coeffs[1])[1:]
         nkl_pair, mokl, klslice = _conc_mos(mo_coeffs[2], mo_coeffs[3])[1:]
         eri_mo = numpy.zeros((nij_pair,nkl_pair), dtype=numpy.complex)
+        blksize = int(min(max_memory*1e6/16/nij_pair,
+                          max_memory*1e6/16/nkl_pair))
 
         zij = zkl = None
         for (LpqR, LpqI, sign), (LrsR, LrsI, sign1) in \
-                lib.izip(mydf.sr_loop(kptijkl[:2], max_memory, False),
-                         mydf.sr_loop(kptijkl[2:], max_memory, False)):
+                lib.izip(mydf.sr_loop(kptijkl[:2], max_memory, False, blksize),
+                         mydf.sr_loop(kptijkl[2:], max_memory, False, blksize)):
             zij, zkl = _ztrans(LpqR+LpqI*1j, zij, moij, ijslice,
                                LrsR+LrsI*1j, zkl, mokl, klslice, False)
             lib.dot(zij.T, zkl, sign, eri_mo, 1)
