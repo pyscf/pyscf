@@ -17,9 +17,9 @@
 #
 
 '''
+(In testing)
 Electric field gradients, nuclear quadrupolar coupling and Mossbauer
 spectroscopy for relativistic 4-component DHF and DKS methods.
-(In testing)
 '''
 
 import numpy

@@ -743,20 +743,6 @@ def ewald(cell, ew_eta=None, ew_cut=None):
     ewovrl = .5 * np.einsum('i,j,Lij->', chargs, chargs,
                             scipy.special.erfc(ew_eta * r) / r)
 
-    ewovrl = 0.
-    for i, qi in enumerate(chargs):
-        ri = coords[i]
-        for j in range(i):
-            qj = chargs[j]
-            rj = coords[j]
-            r1 = ri-rj + Lall
-            r = np.sqrt(np.einsum('ji,ji->j', r1, r1))
-            ewovrl += (qi * qj / r * scipy.special.erfc(ew_eta * r)).sum()
-    # exclude the point where Lall == 0
-    r = lib.norm(Lall, axis=1)
-    r[r<1e-16] = 1e200
-    ewovrl += .5 * (chargs**2).sum() * (1./r * scipy.special.erfc(ew_eta * r)).sum()
-
     # last line of Eq. (F.5) in Martin
     ewself  = -.5 * np.dot(chargs,chargs) * 2 * ew_eta / np.sqrt(np.pi)
     if cell.dimension == 3:
