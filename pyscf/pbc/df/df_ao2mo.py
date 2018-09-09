@@ -44,7 +44,7 @@ def get_eri(mydf, kpts=None,
 
     kpti, kptj, kptk, kptl = kptijkl
     nao_pair = nao * (nao+1) // 2
-    max_memory = max(2000, mydf.max_memory-lib.current_memory()[0]-nao**4*16/1e6) * .5
+    max_memory = max(2000, mydf.max_memory-lib.current_memory()[0]-nao**4*16/1e6)
 
 ####################
 # gamma point, the integral is real and with s4 symmetry
@@ -95,7 +95,7 @@ def get_eri(mydf, kpts=None,
     else:
         eriR = numpy.zeros((nao*nao,nao*nao))
         eriI = numpy.zeros((nao*nao,nao*nao))
-        blksize = int(max_memory*1e6/16/nao**2)
+        blksize = int(max_memory*.4e6/16/nao**2)
         for (LpqR, LpqI, sign), (LrsR, LrsI, sign1) in \
                 lib.izip(mydf.sr_loop(kptijkl[:2], max_memory, False, blksize),
                          mydf.sr_loop(kptijkl[2:], max_memory, False, blksize)):
@@ -121,7 +121,7 @@ def general(mydf, mo_coeffs, kpts=None,
         return numpy.zeros([mo.shape[1] for mo in mo_coeffs])
 
     all_real = not any(numpy.iscomplexobj(mo) for mo in mo_coeffs)
-    max_memory = max(2000, (mydf.max_memory - lib.current_memory()[0])) * .5
+    max_memory = max(2000, (mydf.max_memory - lib.current_memory()[0]))
 
 ####################
 # gamma point, the integral is real and with s4 symmetry
@@ -192,9 +192,9 @@ def general(mydf, mo_coeffs, kpts=None,
         nij_pair, moij, ijslice = _conc_mos(mo_coeffs[0], mo_coeffs[1])[1:]
         nkl_pair, mokl, klslice = _conc_mos(mo_coeffs[2], mo_coeffs[3])[1:]
         eri_mo = numpy.zeros((nij_pair,nkl_pair), dtype=numpy.complex)
-        blksize = int(min(max_memory*1e6/16/nij_pair,
-                          max_memory*1e6/16/nkl_pair))
 
+        blksize = int(min(max_memory*.4e6/16/nij_pair,
+                          max_memory*.4e6/16/nkl_pair))
         zij = zkl = None
         for (LpqR, LpqI, sign), (LrsR, LrsI, sign1) in \
                 lib.izip(mydf.sr_loop(kptijkl[:2], max_memory, False, blksize),

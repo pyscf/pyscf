@@ -350,14 +350,15 @@ def ao2mo_7d(mydf, mo_coeff_kpts, kpts=None, factor=1, out=None):
     else:
         mo_coeff_kpts = list(mo_coeff_kpts)
 
+    mo_ids = [id(x) for x in mo_coeff_kpts]
     moTs = []
     coords = cell.gen_uniform_grids(mydf.mesh)
     aos = mydf._numint.eval_ao(cell, coords, kpts)
-    for n, mo_kpts in enumerate(mo_coeff_kpts):
-        if mo_kpts in mo_coeff_kpts[:n]:
-            moTs.append(moTs[mo_coeff_kpts[:n].index(mo_kpts)])
+    for n, mo_id in enumerate(mo_ids):
+        if mo_id in mo_ids[:n]:
+            moTs.append(moTs[mo_ids[:n].index(mo_id)])
         else:
-            moTs.append([lib.dot(mo.T, aos[k].T) for k,mo in enumerate(mo_kpts)])
+            moTs.append([lib.dot(mo.T, aos[k].T) for k,mo in enumerate(mo_coeff_kpts[n])])
 
     # Shape of the orbitals can be different on different k-points. The
     # orbital coefficients must be formatted (padded by zeros) so that the
