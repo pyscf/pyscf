@@ -313,7 +313,7 @@ class gw(scf):
     import re
     emfev = self.mo_energy[0].T * HARTREE2EV
     egwev = self.mo_energy_gw[0].T * HARTREE2EV
-    file_name= re.sub('[^A-Za-z]', '', self.mol.atom)
+    file_name= ''.join(self.get_symbols())
     with open('report_'+file_name+'.out','w') as out_file:
         print('-'*30,'|G0W0 eigenvalues (eV)|','-'*30)
         out_file.write('-'*30+'|G0W0 eigenvalues (eV)|'+'-'*30+'\n')

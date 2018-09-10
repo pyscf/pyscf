@@ -595,6 +595,10 @@ class nao():
     else:
       return self._nelectron
 
+  def get_symbols (self):
+    atm_list = [ self.sp2symbol[sp] for sp in self.atom2sp ]
+    return atm_list
+
 #
 # Example of reading pySCF orbitals.
 #

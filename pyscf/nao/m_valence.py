@@ -41,28 +41,58 @@ configuration = {
 'Kr': [18, 10, 2, 6]      # 36  Kr,[Ar] 3d10 4s2 4p6
 }
 
-#Produces a list of atomic symbols
-def get_symbols (self):
-  #a2s = [gw.sp2symbol[sp] for sp in gw.atom2sp]
-  atm_ls=[]
-  for i in range (self.natm):
-      atm_ls=np.append(atm_ls, self.mol.atom_symbol(i))
-  return atm_ls
+#'atom' : {'core' :  [ [1s], [2s, 2p], [3p, 3d]], 'valence': [ Mean valenece[ s, p, d ], Full valence[ s, p, d ], Extended Valence[ s, p, d ] ] },
 
+data = {
+'H' : { 'core': [ [0], [ 0, 0 ], [ 0, 0 ]], 'valence': [ [ 2, 0, 0 ], [ 2, 6, 0 ], [ 2, 6, 0 ] ] },         #  1  H, 1s1
+'He': { 'core': [ [0], [ 0, 0 ], [ 0, 0 ]], 'valence': [ [ 2, 0, 0 ], [ 2, 6, 0 ], [ 2, 6, 0 ] ] },         #  2  He,1s2
+'Li': { 'core': [ [2], [ 0, 0 ], [ 0, 0 ]], 'valence': [ [ 2, 6, 0 ], [ 2, 6, 0 ], [ 2, 6, 0 ] ] },         #  3  Li,[He] 2s1
+'Be': { 'core': [ [2], [ 0, 0 ], [ 0, 0 ]], 'valence': [ [ 2, 6, 0 ], [ 2, 6, 0 ], [ 2, 6, 0 ] ] },         #  4  Be,[He] 2s2
+'B' : { 'core': [ [2], [ 0, 0 ], [ 0, 0 ]], 'valence': [ [ 2, 6, 0 ], [ 2, 6, 0 ], [ 2, 6, 0 ] ] },         #  5  B, [He] 2s2 2p1
+'C' : { 'core': [ [2], [ 0, 0 ], [ 0, 0 ]], 'valence': [ [ 2, 6, 0 ], [ 2, 6, 0 ], [ 2, 6, 0 ] ] },         #  6  C, [He] 2s2 2p2
+'N' : { 'core': [ [2], [ 0, 0 ], [ 0, 0 ]], 'valence': [ [ 2, 6, 0 ], [ 2, 6, 0 ], [ 2, 6, 0 ] ] },         #  7  N, [He] 2s2 2p3
+'O' : { 'core': [ [2], [ 0, 0 ], [ 0, 0 ]], 'valence': [ [ 2, 6, 0 ], [ 2, 6, 0 ], [ 2, 6, 0 ] ] },         #  8  O, [He] 2s2 2p4
+'F' : { 'core': [ [2], [ 0, 0 ], [ 0, 0 ]], 'valence': [ [ 2, 6, 0 ], [ 2, 6, 0 ], [ 2, 6, 0 ] ] },         #  9  F, [He] 2s2 2p5
+'Ne': { 'core': [ [2], [ 0, 0 ], [ 0, 0 ]], 'valence': [ [ 2, 6, 0 ], [ 2, 6, 0 ], [ 2, 6, 0 ] ] },         # 10  Ne,[He] 2s2 2p6
+'Na': { 'core': [ [2], [ 2, 6 ], [ 0, 0 ]], 'valence': [ [ 2, 6, 0 ], [ 2, 6, 10], [ 2, 6, 10] ] },         # 11  Na,[Ne] 3s1
+'Mg': { 'core': [ [2], [ 2, 6 ], [ 0, 0 ]], 'valence': [ [ 2, 6, 0 ], [ 2, 6, 10], [ 2, 6, 10] ] },         # 12  Mg,[Ne] 3s2
+'Al': { 'core': [ [2], [ 2, 6 ], [ 0, 0 ]], 'valence': [ [ 2, 6, 0 ], [ 2, 6, 10], [ 2, 6, 10] ] },         # 13  Al,[Ne] 3s2 3p1
+'Si': { 'core': [ [2], [ 2, 6 ], [ 0, 0 ]], 'valence': [ [ 2, 6, 0 ], [ 2, 6, 10], [ 2, 6, 10] ] },         # 14  Si,[Ne] 3s2 3p2
+'P' : { 'core': [ [2], [ 2, 6 ], [ 0, 0 ]], 'valence': [ [ 2, 6, 0 ], [ 2, 6, 10], [ 2, 6, 10] ] },         # 15  P, [Ne] 3s2 3p3
+'S' : { 'core': [ [2], [ 2, 6 ], [ 0, 0 ]], 'valence': [ [ 2, 6, 0 ], [ 2, 6, 10], [ 2, 6, 10] ] },         # 16  S, [Ne] 3s2 3p4
+'Cl': { 'core': [ [2], [ 2, 6 ], [ 0, 0 ]], 'valence': [ [ 2, 6, 0 ], [ 2, 6, 10], [ 2, 6, 10] ] },         # 17  Cl,[Ne] 3s2 3p5
+'Ar': { 'core': [ [2], [ 2, 6 ], [ 0, 0 ]], 'valence': [ [ 2, 6, 0 ], [ 2, 6, 10], [ 2, 6, 10] ] },         # 18  Ar,[Ne] 3s2 3p6
+'K' : { 'core': [ [2], [ 2, 6 ], [ 0, 0 ]], 'valence': [ [ 2, 6, 10], [ 2, 6, 10], [ 2, 6, 10] ] },         # 19  K, [Ar] 4s1
+'Ca': { 'core': [ [2], [ 2, 6 ], [ 0, 0 ]], 'valence': [ [ 2, 6, 10], [ 2, 6, 10], [ 2, 6, 10] ] },         # 20  Ca,[Ar] 4s2
+'Sc': { 'core': [ [2], [ 2, 6 ], [ 0, 0 ]], 'valence': [ [ 2, 6, 10], [ 2, 6, 10], [ 2, 6, 10] ] },         # 21  Sc,[Ar] 3d1 4s2
+'Ti': { 'core': [ [2], [ 2, 6 ], [ 6, 0 ]], 'valence': [ [ 2, 6, 10], [ 2, 6, 10], [ 2, 6, 10] ] },         # 22  Ti,[Ar] 3d2 4s2
+'V' : { 'core': [ [2], [ 2, 6 ], [ 6, 0 ]], 'valence': [ [ 2, 6, 10], [ 2, 6, 10], [ 2, 6, 10] ] },         # 23  V, [Ar] 3d3 4s2
+'Cr': { 'core': [ [2], [ 2, 6 ], [ 6, 0 ]], 'valence': [ [ 2, 6, 10], [ 2, 6, 10], [ 2, 6, 10] ] },         # 24  Cr,[Ar] 3d4 4s2
+'Mn': { 'core': [ [2], [ 2, 6 ], [ 6, 0 ]], 'valence': [ [ 2, 6, 10], [ 2, 6, 10], [ 2, 6, 10] ] },         # 25  Mn,[Ar] 3d5 4s2
+'Fe': { 'core': [ [2], [ 2, 6 ], [ 6, 0 ]], 'valence': [ [ 2, 6, 10], [ 2, 6, 10], [ 2, 6, 10] ] },         # 26  Fe,[Ar] 3d6 4s2
+'Co': { 'core': [ [2], [ 2, 6 ], [ 6, 0 ]], 'valence': [ [ 2, 6, 10], [ 2, 6, 10], [ 2, 6, 10] ] },         # 27  Co,[Ar] 3d7 4s2
+'Ni': { 'core': [ [2], [ 2, 6 ], [ 6, 0 ]], 'valence': [ [ 2, 6, 10], [ 2, 6, 10], [ 2, 6, 10] ] },         # 28  Ni,[Ar] 3d8 4s2
+'Cu': { 'core': [ [2], [ 2, 6 ], [ 6, 0 ]], 'valence': [ [ 2, 6, 10], [ 2, 6, 10], [ 2, 6, 10] ] },         # 29  Cu,[Ar] 3d9 4s2
+'Zn': { 'core': [ [2], [ 2, 6 ], [ 6, 0 ]], 'valence': [ [ 2, 6, 10], [ 2, 6, 10], [ 2, 6, 10] ] },         # 30  Zn,[Ar] 3d10 4s2
+'Ga': { 'core': [ [2], [ 2, 6 ], [ 6, 0 ]], 'valence': [ [ 2, 6, 10], [ 2, 6, 10], [ 2, 6, 10] ] },         # 31  Ga,[Ar] 3d10 4s2 4p1
+'Ge': { 'core': [ [2], [ 2, 6 ], [ 6, 10]], 'valence': [ [ 2, 6, 0 ], [ 2, 6, 10], [ 2, 6, 10] ] },         # 32  Ge,[Ar] 3d10 4s2 4p2
+'As': { 'core': [ [2], [ 2, 6 ], [ 6, 10]], 'valence': [ [ 2, 6, 0 ], [ 2, 6, 10], [ 2, 6, 10] ] },         # 33  As,[Ar] 3d10 4s2 4p3
+'Se': { 'core': [ [2], [ 2, 6 ], [ 6, 10]], 'valence': [ [ 2, 6, 0 ], [ 2, 6, 10], [ 2, 6, 10] ] },         # 34  Se,[Ar] 3d10 4s2 4p4
+'Br': { 'core': [ [2], [ 2, 6 ], [ 6, 10]], 'valence': [ [ 2, 6, 0 ], [ 2, 6, 10], [ 2, 6, 10] ] },         # 35  Br,[Ar] 3d10 4s2 4p5
+'Kr': { 'core': [ [2], [ 2, 6 ], [ 6, 10]], 'valence': [ [ 2, 6, 0 ], [ 2, 6, 10], [ 2, 6, 10] ] }}         # 36  Kr,[Ar] 3d10 4s2 4p6
 
 #Counts number of valence electrons
 def n_valence (self):
-  atm_ls = get_symbols (self)
+  atm_ls = self.get_symbols()
   v=0
   for x in range(len (atm_ls)):
       if atm_ls[x] in configuration.keys():
 	      v+= sum(configuration[atm_ls[x]][-2:])
   return v
 
-
 #Counts number of core electrons  
 def n_core (self):
-  atm_ls = get_symbols (self)
+  atm_ls = self.get_symbols()
   core = self.nelectron - n_valence (self)
   return core
 
