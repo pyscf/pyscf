@@ -344,7 +344,6 @@ class nao():
 
     _siesta_ion_add_sp2(self, self.sp2ion)
     self.ao_log = ao_log_c().init_ao_log_ion(self.sp2ion, **kw)
-
     self.atom2coord = self.xml_dict['atom2coord']
     self.natm=self.natoms=len(self.xml_dict['atom2sp'])
     self.norbs  = self.wfsx.norbs 
