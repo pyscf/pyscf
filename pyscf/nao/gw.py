@@ -9,7 +9,7 @@ from pyscf.nao.m_rf0_den import rf0_den, rf0_cmplx_ref_blk, rf0_cmplx_ref, rf0_c
 from pyscf.nao.m_rf_den import rf_den
 from pyscf.nao.m_rf_den_pyscf import rf_den_pyscf
 from pyscf.data.nist import HARTREE2EV
-from pyscf.nao.m_valence import get_start
+from pyscf.nao.m_valence import get_str_fin
 
 starting_time=timer()
 class gw(scf):
@@ -54,9 +54,12 @@ class gw(scf):
 
     #self.start_st,self.finish_st = self.nocc_0t-self.nocc, self.nocc_0t+self.nvrt
     frozen_core = kw['frozen_core'] if 'frozen_core' in kw else self.frozen_core
-    if frozen_core is not None: self.start_st = get_start (self, algo=frozen_core, **kw)
-    else: self.start_st = self.nocc_0t-self.nocc
-    self.finish_st = self.nocc_0t+self.nvrt
+    if frozen_core is not None: 
+        st_fi = get_str_fin (self, algo=frozen_core, **kw)
+        self.start_st, self.finish_st = st_fi[0], st_fi[1]
+    else: 
+        self.start_st = self.nocc_0t-self.nocc
+        self.finish_st = self.nocc_0t+self.nvrt
     self.nn = [range(self.start_st[s], self.finish_st[s]) for s in range(self.nspin)] # list of states
     if self.verbosity>0: print(__name__,'\t\t====> Indices of states to be corrected = {}\n'.format(self.nn))
 
@@ -355,7 +358,7 @@ class gw(scf):
     """ This creates the fields mo_energy_g0w0, and mo_coeff_g0w0 """
 
     self.h0_vh_x_expval = self.get_h0_vh_x_expval()
-    if self.verbosity>1:
+    if self.verbosity>2:
       print(__name__,'\t\t====> Expectation values of Hartree-Fock Hamiltonian (eV):\n no.\t  H_up\t\t  H_down')
       for i , (ab) in enumerate(zip(self.h0_vh_x_expval[0].T* HARTREE2EV,self.h0_vh_x_expval[1].T* HARTREE2EV)):
 	      print(' {:d}\t{:f}\t{:f}'.format(i+1, ab[0],ab[1]))

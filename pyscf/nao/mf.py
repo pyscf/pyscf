@@ -50,7 +50,7 @@ class mf(nao):
       self.v_dab = pb.get_dp_vertex_sparse(dtype=self.dtype).tocsr()
       self.cc_da = cc = pb.get_da2cc_sparse(dtype=self.dtype).tocsr()
       self.nprod = self.cc_da.shape[1]
-      if self.verbosity>0: print(__name__,'\t====> Number of dominant and atom-centered products {}'.format(cc.shape))
+      if self.verbosity>0: print(__name__,'\t\t====> Number of dominant and atom-centered products {}'.format(cc.shape))
 
       #self.pb.init_prod_basis_pp_batch(nao=self, **kw)
  

@@ -96,25 +96,55 @@ def n_core (self):
   core = self.nelectron - n_valence (self)
   return core
 
+
+def n_core_vale (self):
+  atm_ls = self.get_symbols()
+  v1,v2,v3,c = 0,0,0,0
+  for x in range(len (atm_ls)):
+      if atm_ls[x] in data.keys():
+          co = data[atm_ls[x]]['core']
+          mv = data[atm_ls[x]]['valence'][0]
+          fv = data[atm_ls[x]]['valence'][0:2]
+          ev = data[atm_ls[x]]['valence']
+          c += sum( sum(s) if isinstance(s, list) else s for s in co )    #core
+          v1+= sum( mv )                                                  #mean valence
+          v2+= sum( sum(s) if isinstance(s, list) else s for s in fv )    #full valence
+          v3+= sum( sum(s) if isinstance(s, list) else s for s in ev )    #extended valence
+  co_va = np.array([c,v1,v2,v3])
+  return co_va
+
+
 #Produces a list of valence states to be corrected by GW  
-def get_start (self,frozen_core,**kw):
+def get_str_fin (self,frozen_core,**kw):
   if frozen_core == True :
     val = n_valence (self)
     if self.nspin == 2:
         if self.natm == 1:
             core = n_core (self)
-            starting = np.array([core//2 , core//2 ])
+            starting = np.array([core//2 , core//2 ]) 
         else:
             if val<= 4 : starting = np.array([0 , 0])
             elif val <= 20 and val > 4: starting = np.array([2 , 2])
             elif val <= 36 and val > 20: starting = np.array([10 , 10])
             elif val <= 72 and val > 36: starting = np.array([18 , 18])
             else: starting = np.array([36 , 36])
+        finishing = starting + 12
     elif self.nspin == 1:
         starting = self.nocc_0t+self.nvrt
+        
   elif frozen_core == False :
     starting = np.array([0 , 0])
+    finishing = np.array([self.mo_energy.shape[2],self.mo_energy.shape[2]])
+  elif type(self.frozen_core) is float or int:
+    bnd1 = self.fermi_energy - self.frozen_core/27.2114
+    bnd2 = self.fermi_energy + self.frozen_core/27.2114
+    a=[]
+    for i in range(len(self.mo_energy[0,0,:])):
+        if self.mo_energy[0,0,i] >= bnd1 and self.mo_energy[0,0,i]<= bnd2 :
+            a.append(i)
+    starting = np.array([min(a),min(a)])
+    finishing = np.array([max(a),max(a)])   
   else:
-    raise RuntimeError('Unknown!! Frozen core is defined by True or False!')
-  print(__name__,'\t====> States to be corrected start from: ',starting)
-  return starting
+    raise RuntimeError('Unknown!! Frozen core is defined by True, False or a Number!')
+  if self.verbosity>0:print(__name__,'\t====> States to be corrected start from {} to {}.'.format(starting,finishing))
+  return np.array([starting, finishing])
