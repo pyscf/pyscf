@@ -31,12 +31,13 @@ def get_default_log_mesh_param4gto(gto, tol_in=None):
     for sid in gto.atom_shell_ids(ia):
       for power,coeffs in zip(gto.bas_exp(sid), gto.bas_ctr_coeff(sid)):
         for coeff in coeffs:
+          if coeff==0.0: raise RuntimeError('coeff==0.0')
           rmin_gcs = min(rmin_gcs, np.sqrt( abs(np.log(1.0-tol)/power )))
           rmax_gcs = max(rmax_gcs, np.sqrt( abs(np.log(abs(coeff))-np.log(tol))/power ))
           akmx_gcs = max(akmx_gcs, np.sqrt( abs(np.log(abs(coeff))-np.log(tol))*4*power ))
-
-  if rmin_gcs<1e-9 : print('rmin_gcs<1e-9')     # Last check 
-  if rmax_gcs>1e+2 : print('rmax_gcs>1e+2')
+  
+  if rmin_gcs<1e-9 : print('rmin_gcs<1e-9', __name__)     # Last check 
+  if rmax_gcs>1e+3 : print('rmax_gcs>1e+3', __name__)
   if akmx_gcs>1e+4 : print('akmx_gcs>1e+4', __name__)
   return 1024,rmin_gcs,rmax_gcs,akmx_gcs
 
@@ -84,12 +85,11 @@ def log_mesh(nr, rmin, rmax, kmax=None):
   These grids are used in James Talman's subroutines. 
   """
   assert(type(nr)==int and nr>2)
-  
   rhomin=np.log(rmin)
   rhomax=np.log(rmax)
   kmax = 1.0/rmin/np.pi if kmax is None else kmax
   kapmin=np.log(kmax)-rhomax+rhomin
-
+  
   rr=np.array(np.exp( np.linspace(rhomin, rhomax, nr)) )
   pp=np.array(rr*(np.exp(kapmin)/rr[0]))
 
