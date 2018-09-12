@@ -37,6 +37,7 @@ to try out the package::
 
 __version__ = '1.5.3'
 
+from functools import reduce
 import os
 import sys
 from distutils.version import LooseVersion
