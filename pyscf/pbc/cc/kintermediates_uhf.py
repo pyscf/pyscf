@@ -445,68 +445,63 @@ def Woovo(cc,t1,t2,eris, kconserv):
     WOOvo = np.einsum('xyzIMjb, xzyw->yxwMIbj', eris.OOov, P).conj()
     WOOVO = np.einsum('xyzIMJB, xzyw->yxwMIBJ', eris.OOOV, P).conj() - np.einsum('zyxJMIB, xzyw->yxwMIBJ', eris.OOOV, P).conj()
 
-    ooov = eris.ooov - eris.ooov.transpose(2,1,0,5,4,3,6)
-    OOOV = eris.OOOV - eris.OOOV.transpose(2,1,0,5,4,3,6)
-
-    ovvo = np.einsum('xyzemjb, xzyw->yxwmebj', eris.voov, P).conj() - np.einsum('yzwmjbe, xzyw->yxwmebj', eris.oovv, P)
-    OVVO = np.einsum('xyzEMJB, xzyw->yxwMEBJ', eris.VOOV, P).conj() - np.einsum('yzwMJBE, xzyw->yxwMEBJ', eris.OOVV, P)
-    ovVO = np.einsum('xyzemJB, xzyw->yxwmeBJ', eris.voOV, P).conj()
-    OVvo = np.einsum('xyzEMjb, xzyw->yxwMEbj', eris.VOov, P).conj()
-
-    ovov = eris.ovov - eris.ovov.transpose(2,1,0,5,4,3,6)
-    OVOV = eris.OVOV - eris.OVOV.transpose(2,1,0,5,4,3,6)
-
-    ovvv = np.einsum('xyzemfb, xzyw->yxwmebf', eris.vovv, P).conj() - np.einsum('zyxfmeb, xzyw->yxwmebf', eris.vovv, P).conj()
-    OVVV = np.einsum('xyzEMFB, xzyw->yxwMEBF', eris.VOVV, P).conj() - np.einsum('zyxFMEB, xzyw->yxwMEBF', eris.VOVV, P).conj()
-    ovVV = np.einsum('xyzemFB, xzyw->yxwmeBF', eris.voVV, P).conj()
-    vvOV = np.einsum('xyzEMfb, xzyw->wzybfME', eris.VOvv, P).conj()
-
     for km, kb, ki in kpts_helper.loop_kkk(nkpts):
         kj = kconserv[km, ki, kb]
         for kn in range(nkpts):
-
             ke = kconserv[km,ki,kn]
-            Woovo[km,ki,kb] += einsum('mine,jnbe->mibj', ooov[km,ki,kn], t2aa[kj,kn,kb]) + einsum('miNE,jNbE->mibj', eris.ooOV[km,ki,kn], t2ab[kj,kn,kb])
-            WooVO[km,ki,kb] += einsum('mine,nJeB->miBJ', ooov[km,ki,kn], t2ab[kn,kj,ke]) + einsum('miNE,JNBE->miBJ', eris.ooOV[km,ki,kn], t2bb[kj,kn,kb])
-            WOOvo[km,ki,kb] += einsum('MINE,jNbE->MIbj', OOOV[km,ki,kn], t2ab[kj,kn,kb]) + einsum('MIne,jnbe->MIbj', eris.OOov[km,ki,kn], t2aa[kj,kn,kb])
-            WOOVO[km,ki,kb] += einsum('MINE,JNBE->MIBJ', OOOV[km,ki,kn], t2bb[kj,kn,kb]) + einsum('MIne,nJeB->MIBJ', eris.OOov[km,ki,kn], t2ab[kn,kj,ke])
+            ooov = eris.ooov[km,ki,kn] - eris.ooov[kn,ki,km].transpose(2,1,0,3)
+            OOOV = eris.OOOV[km,ki,kn] - eris.OOOV[kn,ki,km].transpose(2,1,0,3)
 
-        Woovo[km,ki,kb] += einsum('ie,mebj->mibj', t1a[ki], ovvo[km,ki,kb])
-        WooVO[km,ki,kb] += einsum('ie,meBJ->miBJ', t1a[ki], ovVO[km,ki,kb])
-        WOOvo[km,ki,kb] += einsum('IE,MEbj->MIbj', t1b[ki], OVvo[km,ki,kb])
-        WOOVO[km,ki,kb] += einsum('IE,MEBJ->MIBJ', t1b[ki], OVVO[km,ki,kb])
+            Woovo[km,ki,kb] += einsum('mine,jnbe->mibj', ooov, t2aa[kj,kn,kb]) + einsum('miNE,jNbE->mibj', eris.ooOV[km,ki,kn], t2ab[kj,kn,kb])
+            WooVO[km,ki,kb] += einsum('mine,nJeB->miBJ', ooov, t2ab[kn,kj,ke]) + einsum('miNE,JNBE->miBJ', eris.ooOV[km,ki,kn], t2bb[kj,kn,kb])
+            WOOvo[km,ki,kb] += einsum('MINE,jNbE->MIbj', OOOV, t2ab[kj,kn,kb]) + einsum('MIne,jnbe->MIbj', eris.OOov[km,ki,kn], t2aa[kj,kn,kb])
+            WOOVO[km,ki,kb] += einsum('MINE,JNBE->MIBJ', OOOV, t2bb[kj,kn,kb]) + einsum('MIne,nJeB->MIBJ', eris.OOov[km,ki,kn], t2ab[kn,kj,ke])
+            # P(ij)
+            ke = kconserv[km,kj,kn]
+            ooov = eris.ooov[km,kj,kn] - eris.ooov[kn,kj,km].transpose(2,1,0,3)
+            OOOV = eris.OOOV[km,kj,kn] - eris.OOOV[kn,kj,km].transpose(2,1,0,3)
+
+            Woovo[km,ki,kb] -= einsum('mjne,inbe->mibj', ooov, t2aa[ki,kn,kb]) + einsum('mjNE,iNbE->mibj', eris.ooOV[km,kj,kn], t2ab[ki,kn,kb])
+            WooVO[km,ki,kb] -= einsum('NJme,iNeB->miBJ', eris.OOov[kn,kj,km], t2ab[ki,kn,ke])
+            WOOvo[km,ki,kb] -= einsum('njME,nIbE->MIbj', eris.ooOV[kn,kj,km], t2ab[kn,ki,kb])
+            WOOVO[km,ki,kb] -= einsum('MJNE,INBE->MIBJ', OOOV, t2bb[ki,kn,kb]) + einsum('MJne,nIeB->MIBJ', eris.OOov[km,kj,kn], t2ab[kn,ki,ke])
+
+        ovvo = eris.voov[ki,km,kj].transpose(1,0,3,2).conj() - eris.oovv[km,kj,kb].transpose(0,3,2,1)
+        OVVO = eris.VOOV[ki,km,kj].transpose(1,0,3,2).conj() - eris.OOVV[km,kj,kb].transpose(0,3,2,1)
+        ovVO = eris.voOV[ki,km,kj].transpose(1,0,3,2).conj()
+        OVvo = eris.VOov[ki,km,kj].transpose(1,0,3,2).conj()
+        Woovo[km,ki,kb] += einsum('ie,mebj->mibj', t1a[ki], ovvo)
+        WooVO[km,ki,kb] += einsum('ie,meBJ->miBJ', t1a[ki], ovVO)
+        WOOvo[km,ki,kb] += einsum('IE,MEbj->MIbj', t1b[ki], OVvo)
+        WOOVO[km,ki,kb] += einsum('IE,MEBJ->MIBJ', t1b[ki], OVVO)
+        #P(ij)
+        ovvo = eris.voov[kj,km,ki].transpose(1,0,3,2).conj() - eris.oovv[km,ki,kb].transpose(0,3,2,1)
+        OVVO = eris.VOOV[kj,km,ki].transpose(1,0,3,2).conj() - eris.OOVV[km,ki,kb].transpose(0,3,2,1)
+        Woovo[km,ki,kb] -= einsum('je,mebi->mibj', t1a[kj], ovvo)
+        WooVO[km,ki,kb] -= -einsum('JE,miBE->miBJ', t1b[kj], eris.ooVV[km,ki,kb])
+        WOOvo[km,ki,kb] -= -einsum('je,MIbe->MIbj', t1a[kj], eris.OOvv[km,ki,kb])
+        WOOVO[km,ki,kb] -= einsum('JE,MEBI->MIBJ', t1b[kj], OVVO)
 
 
         for kf in range(nkpts):
             kn = kconserv[kb, kj, kf]
-            Woovo[km,ki,kb] -= einsum('ie,njbf,menf->mibj', t1a[ki], t2aa[kn,kj,kb], ovov[km,ki,kn]) - einsum('ie,jNbF,meNF->mibj', t1a[ki], t2ab[kj,kn,kb], eris.ovOV[km,ki,kn])
-            WooVO[km,ki,kb] -= -einsum('ie,nJfB,menf->miBJ', t1a[ki], t2ab[kn,kj,kf], ovov[km,ki,kn]) + einsum('ie,NJBF,meNF->miBJ', t1a[ki], t2bb[kn,kj,kb], eris.ovOV[km,ki,kn])
-            WOOvo[km,ki,kb] -= -einsum('IE,jNbF,MENF->MIbj', t1b[ki], t2ab[kj,kn,kb], OVOV[km,ki,kn]) + einsum('IE,njbf,MEnf->MIbj', t1b[ki], t2aa[kn,kj,kb], eris.OVov[km,ki,kn])
-            WOOVO[km,ki,kb] -= einsum('IE,NJBF,MENF->MIBJ', t1b[ki], t2bb[kn,kj,kb], OVOV[km,ki,kn]) - einsum('IE,nJfB,MEnf->MIBJ', t1b[ki], t2ab[kn,kj,kf], eris.OVov[km,ki,kn])
-
-        for kn in range(nkpts):
-
-            ke = kconserv[km,kj,kn]
-            Woovo[km,ki,kb] -= einsum('mjne,inbe->mibj', ooov[km,kj,kn], t2aa[ki,kn,kb]) + einsum('mjNE,iNbE->mibj', eris.ooOV[km,kj,kn], t2ab[ki,kn,kb])
-            WooVO[km,ki,kb] -= einsum('NJme,iNeB->miBJ', eris.OOov[kn,kj,km], t2ab[ki,kn,ke])
-            WOOvo[km,ki,kb] -= einsum('njME,nIbE->MIbj', eris.ooOV[kn,kj,km], t2ab[kn,ki,kb])
-            WOOVO[km,ki,kb] -= einsum('MJNE,INBE->MIBJ', OOOV[km,kj,kn], t2bb[ki,kn,kb]) + einsum('MJne,nIeB->MIBJ', eris.OOov[km,kj,kn], t2ab[kn,ki,ke])
-
-
-        Woovo[km,ki,kb] -= einsum('je,mebi->mibj', t1a[kj], ovvo[km,kj,kb])
-        WooVO[km,ki,kb] -= -einsum('JE,miBE->miBJ', t1b[kj], eris.ooVV[km,ki,kb])
-        WOOvo[km,ki,kb] -= -einsum('je,MIbe->MIbj', t1a[kj], eris.OOvv[km,ki,kb])
-        WOOVO[km,ki,kb] -= einsum('JE,MEBI->MIBJ', t1b[kj], OVVO[km,kj,kb])
-
-        for kf in range(nkpts):
+            ovov = eris.ovov[km,ki,kn] - eris.ovov[km,kf,kn].transpose(0,3,2,1)
+            OVOV = eris.OVOV[km,ki,kn] - eris.OVOV[km,kf,kn].transpose(0,3,2,1)
+            Woovo[km,ki,kb] -= einsum('ie,njbf,menf->mibj', t1a[ki], t2aa[kn,kj,kb], ovov) - einsum('ie,jNbF,meNF->mibj', t1a[ki], t2ab[kj,kn,kb], eris.ovOV[km,ki,kn])
+            WooVO[km,ki,kb] -= -einsum('ie,nJfB,menf->miBJ', t1a[ki], t2ab[kn,kj,kf], ovov) + einsum('ie,NJBF,meNF->miBJ', t1a[ki], t2bb[kn,kj,kb], eris.ovOV[km,ki,kn])
+            WOOvo[km,ki,kb] -= -einsum('IE,jNbF,MENF->MIbj', t1b[ki], t2ab[kj,kn,kb], OVOV) + einsum('IE,njbf,MEnf->MIbj', t1b[ki], t2aa[kn,kj,kb], eris.OVov[km,ki,kn])
+            WOOVO[km,ki,kb] -= einsum('IE,NJBF,MENF->MIBJ', t1b[ki], t2bb[kn,kj,kb], OVOV) - einsum('IE,nJfB,MEnf->MIBJ', t1b[ki], t2ab[kn,kj,kf], eris.OVov[km,ki,kn])
+            #P(ij)
             kn = kconserv[kb, ki, kf]
-            Woovo[km,ki,kb] += einsum('je,nibf,menf->mibj', t1a[kj], t2aa[kn,ki,kb], ovov[km,kj,kn]) - einsum('je,iNbF,meNF->mibj', t1a[kj], t2ab[ki,kn,kb], eris.ovOV[km,kj,kn])
+            ovov = eris.ovov[km,kj,kn] - eris.ovov[km,kf,kn].transpose(0,3,2,1)
+            OVOV = eris.OVOV[km,kj,kn] - eris.OVOV[km,kf,kn].transpose(0,3,2,1)
+            Woovo[km,ki,kb] += einsum('je,nibf,menf->mibj', t1a[kj], t2aa[kn,ki,kb], ovov) - einsum('je,iNbF,meNF->mibj', t1a[kj], t2ab[ki,kn,kb], eris.ovOV[km,kj,kn])
             WooVO[km,ki,kb] += -einsum('JE,iNfB,mfNE->miBJ', t1b[kj], t2ab[ki,kn,kf], eris.ovOV[km, kf, kn])
             WOOvo[km,ki,kb] += -einsum('je,nIbF,MFne->MIbj', t1a[kj], t2ab[kn,ki,kb], eris.OVov[km, kf, kn])
-            WOOVO[km,ki,kb] += einsum('JE,NIBF,MENF->MIBJ', t1b[kj], t2bb[kn,ki,kb], OVOV[km,kj,kn]) - einsum('JE,nIfB,MEnf->MIBJ', t1b[kj], t2ab[kn,ki,kf], eris.OVov[km,kj,kn])
+            WOOVO[km,ki,kb] += einsum('JE,NIBF,MENF->MIBJ', t1b[kj], t2bb[kn,ki,kb], OVOV) - einsum('JE,nIfB,MEnf->MIBJ', t1b[kj], t2ab[kn,ki,kf], eris.OVov[km,kj,kn])
 
     Fme, FME = Fov(cc, t1, t2, eris)
-    Wmibj, WmiBJ, WMIbj, WMIBJ = Woooo(cc,t1,t2,eris, kconserv)
+    Wminj, WmiNJ, WMInj, WMINJ = Woooo(cc,t1,t2,eris, kconserv)
     tauaa, tauab, taubb = make_tau(cc, t2, t1, t1, fac=1.)
     for km, kb, ki in kpts_helper.loop_kkk(nkpts):
         kj = kconserv[km, ki, kb]
@@ -516,18 +511,23 @@ def Woovo(cc,t1,t2,eris, kconserv):
         WOOvo[km,ki,kb] -= -einsum('ME,jIbE->MIbj', FME[km], t2ab[kj,ki,kb])
         WOOVO[km,ki,kb] -= einsum('ME,IJBE->MIBJ', FME[km], t2bb[ki,kj,kb])
 
-        Woovo[km,ki,kb] -= einsum('nb, minj->mibj', t1a[kb], Wmibj[km, ki, kb])
-        WooVO[km,ki,kb] -= einsum('NB, miNJ->miBJ', t1b[kb], WmiBJ[km, ki, kb])
-        WOOvo[km,ki,kb] -= einsum('nb, njMI->MIbj', t1a[kb], WmiBJ[kb, kj, km])
-        WOOVO[km,ki,kb] -= einsum('NB, MINJ->MIBJ', t1b[kb], WMIBJ[km, ki, kb])
-
+        Woovo[km,ki,kb] -= einsum('nb, minj->mibj', t1a[kb], Wminj[km, ki, kb])
+        WooVO[km,ki,kb] -= einsum('NB, miNJ->miBJ', t1b[kb], WmiNJ[km, ki, kb])
+        WOOvo[km,ki,kb] -= einsum('nb, njMI->MIbj', t1a[kb], WmiNJ[kb, kj, km])
+        WOOVO[km,ki,kb] -= einsum('NB, MINJ->MIBJ', t1b[kb], WMINJ[km, ki, kb])
 
     for km, kb, ki in kpts_helper.loop_kkk(nkpts):
         kj = kconserv[km, ki, kb]
-        Woovo[km,ki,kb] += 0.5 * einsum('xmebf,xijef->mibj', ovvv[km,:,kb], tauaa[ki,kj,:])
-        WooVO[km,ki,kb] += einsum('xmeBF,xiJeF->miBJ', ovVV[km,:,kb], tauab[ki,kj,:])
-        WOOvo[km,ki,kb] += einsum('xbfME,xjIfE->MIbj', vvOV[kb,:,km], tauab[kj,ki,:])
-        WOOVO[km,ki,kb] += 0.5 * einsum('xMEBF,xIJEF->MIBJ', OVVV[km,:,kb], taubb[ki,kj,:])
+        for ke in range(nkpts):
+            kf = kconserv[km,ke,kb]
+            ovvv = eris.vovv[ke,km,kf].transpose(1,0,3,2).conj() - eris.vovv[kf,km,ke].transpose(1,2,3,0).conj()
+            OVVV = eris.VOVV[ke,km,kf].transpose(1,0,3,2).conj() - eris.VOVV[kf,km,ke].transpose(1,2,3,0).conj()
+            ovVV = eris.voVV[ke,km,kf].transpose(1,0,3,2).conj()
+            OVvv = eris.VOvv[ke,km,kf].transpose(1,0,3,2).conj()
+            Woovo[km,ki,kb] += 0.5 * einsum('mebf,ijef->mibj', ovvv, tauaa[ki,kj,ke])
+            WooVO[km,ki,kb] += einsum('meBF,iJeF->miBJ', ovVV, tauab[ki,kj,ke])
+            WOOvo[km,ki,kb] += einsum('MEbf,jIfE->MIbj', OVvv, tauab[kj,ki,kf])
+            WOOVO[km,ki,kb] += 0.5 * einsum('MEBF,IJEF->MIBJ', OVVV, taubb[ki,kj,ke])
 
     return Woovo, WooVO, WOOvo, WOOVO
 
