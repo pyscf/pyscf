@@ -304,7 +304,7 @@ def eaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     #uccsd_imds.eris.kpts = eom._cc.kpts
     #Waaaa, Waabb, Wbbaa, Wbbbb = kintermediates_uhf._eri_spin2spatial(imds.Wvovv.transpose(0,2,1,3,5,4,6), 'vvov', uccsd_imds.eris, orbspin)
     #Waaaa, Waabb, Wbbaa, Wbbbb = kintermediates_uhf._eri_spin2spatial(imds.Wvvvo.transpose(0,2,1,3,5,4,6), 'vvvo', uccsd_imds.eris, orbspin)
-    
+
     Hr2 = np.zeros_like(r2)
     for kj, ka in itertools.product(range(nkpts), repeat=2):
         kb = kconserv[kshift,ka,kj]
@@ -441,10 +441,10 @@ def eaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
 
     for ka, kj, in itertools.product(range(nkpts),repeat=2):
         kb = kconserv[kshift,ka,kj]
-        kc = kshift 
+        kc = kshift
         Hr2aaa[kj,ka] += np.einsum('acbj,c->jab', uimds.Wvvvo[ka,kc,kb], r1a)
         Hr2bbb[kj,ka] += np.einsum('ACBJ,C->JAB', uimds.WVVVO[ka,kc,kb], r1b)
-        
+
         Hr2bab[kj,ka] += np.einsum('acBJ,c->JaB', uimds.WvvVO[ka,kc,kb], r1a)
         Hr2aba[kj,ka] += np.einsum('ACbj,C->jAb', uimds.WVVvo[ka,kc,kb], r1b)
 
@@ -575,7 +575,7 @@ class _IMDS:
         # 0 or 1 virtuals
         self.Woooo, self.WooOO, _         , self.WOOOO = kintermediates_uhf.Woooo(self._cc, t1, t2, eris)
         #self.Wooov, self.WooOV, self.WOOov, self.WOOOV = kintermediates_uhf.Wooov(t1, t2, eris)  # TODO
-        self.Woovo, self.WooVO, self.WOOvo, self.WOOVO = kintermediates_uhf.Woovo(self._cc, t1, t2, eris, kconserv= self._cc.khelper.kconserv)  # TODO
+        self.Woovo, self.WooVO, self.WOOvo, self.WOOVO = kintermediates_uhf.Woovo(self._cc, t1, t2, eris)  # TODO
 
         self.made_ip_imds = True
         logger.timer_debug1(self, 'EOM-KUCCSD IP intermediates', *cput0)
@@ -591,9 +591,9 @@ class _IMDS:
 
         # 3 or 4 virtuals
         #self.Wvovv, self.WvoVV, self.WVOvv, self.WVOVV = kintermediates_uhf.Wvovv(self._cc, t1, t2, eris)
-        self.Wvvov, self.WvvOV, self.WVVov, self.WVVOV = kintermediates_uhf.Wvvov(self._cc, t1, t2, eris)  
+        self.Wvvov, self.WvvOV, self.WVVov, self.WVVOV = kintermediates_uhf.Wvvov(self._cc, t1, t2, eris)
         self.Wvvvv, self.WvvVV, self.WVVVV = Wvvvv = kintermediates_uhf.Wvvvv(self._cc, t1, t2, eris)
-        self.Wvvvo, self.WvvVO, self.WVVvo, self.WVVVO = kintermediates_uhf.Wvvvo(self._cc, t1, t2, eris)  
+        self.Wvvvo, self.WvvVO, self.WVVvo, self.WVVVO = kintermediates_uhf.Wvvvo(self._cc, t1, t2, eris)
 
         self.made_ea_imds = True
         logger.timer_debug1(self, 'EOM-KUCCSD EA intermediates', *cput0)
@@ -712,26 +712,24 @@ if __name__ == '__main__':
     orbspin = kccsd_eris.orbspin
     kccsd_eris.cell = cell
     kccsd_eris.kpts = kgcc.kpts
-    cc.cell = cell
-    cc.kpts = kgcc.kpts
+
     #goooo, gooOO, gOOoo, gOOOO = _eri_spin2spatial(g, 'oooo', kccsd_eris, (nocca, noccb), orbspin, cross_ab=False)
     #print(np.linalg.norm(goooo))
     #from kintermediates_uhf import Woooo
     #Woooo, WooOO, WOOoo, WOOOO = Woooo(cc,t1,t2,eris, kconserv)
     #print(np.linalg.norm(WOOOO - gOOOO))
-
     '''
 	from kintermediates import Wovoo as govoo
     g = govoo(kgcc,spin_t1,spin_t2,kccsd_eris,kconserv).transpose(0,2,1,3,5,4,6)
     from kintermediates_uhf import Woovo
     goovo, gooVO, gOOvo, gOOVO, goOVo, gOovO = _eri_spin2spatial(g, 'oovo', kccsd_eris, (nocca, noccb), orbspin, cross_ab=True)
-    Woovo, WooVO, WOOvo, WOOVO = Woovo(cc, t1, t2, eris, kconserv)
+    Woovo, WooVO, WOOvo, WOOVO = Woovo(cc, t1, t2, eris)
     print(np.linalg.norm(goovo - Woovo))
     print(np.linalg.norm(gooVO - WooVO))
     print(np.linalg.norm(gOOvo - WOOvo))
     print(np.linalg.norm(gOOVO - WOOVO))
-	'''		
-    
+    '''
+
     from kintermediates import Wooov as gfunc
     from kintermediates_uhf import Wooov
     g = gfunc(kgcc,spin_t1,spin_t2,kccsd_eris,kconserv).transpose(0,2,1,3,5,4,6)
@@ -743,31 +741,7 @@ if __name__ == '__main__':
     print np.linalg.norm(gOOOV - WOOOV)
 
     exit()
-	
-    ##### test block
 
-    from kintermediates import Wovoo as govoo
-    gw = govoo(kgcc,spin_t1,spin_t2,kccsd_eris,kconserv).transpose(0,2,1,3,5,4,6)
-
-    goovo = gw[:,:,:,0:nocca,0:nocca,0:nvira,0:nocca]
-    gooVO = gw[:,:,:,0:nocca,0:nocca,nvira:,nocca:]
-    gOOvo = gw[:,:,:,nocca:,nocca:,0:nvira,0:nocca]
-    gOOVO = gw[:,:,:,nocca:,nocca:,nvira:,nocca:]
-    print(np.linalg.norm(goovo))
-    from kintermediates_uhf import Woovo
-    Woovo, WooVO, WOOvo, WOOVO = Woovo(cc,t1,t2,eris, kconserv)
-    #print(gw[0,0,0,0,0,0,1])
-    #print(Woovo[0,0,0,0,0,0,1])
-    exit()
-    print(Woovo.shape, WooVO.shape, WOOvo.shape, WOOVO.shape)
-    print(np.linalg.norm(goovo - Woovo))
-    print(np.linalg.norm(gooVO - WooVO))
-    print(np.linalg.norm(gOOvo - WOOvo))
-    print(np.linalg.norm(gOOVO - WOOVO))
-    exit()
-
-
-    ##### end block
 
     spin_r1_ip = (np.random.rand(nocc)*1j +
                   np.random.rand(nocc) - 0.5 - 0.5*1j)
