@@ -134,7 +134,7 @@ def cc_Fov(cc, t1, t2, eris):
     nkpts, nocc_a, nvir_a = t1a.shape
     nocc_b, nvir_b = t1b.shape[1:]
 
-    kconserv = kpts_helper.get_kconserv(cc.cell, cc.kpts)
+    kconserv = cc.khelper.kconserv
 
     fov = eris.fock[0][:,:nocc_a,nocc_a:]
     fOV = eris.fock[1][:,:nocc_b,nocc_b:]
@@ -156,12 +156,6 @@ def cc_Fov(cc, t1, t2, eris):
     return fa,fb
 
 def cc_Woooo(cc, t1, t2, eris):
-    ''' This function returns the Js and Ks intermediates for Wmnij
-    intermediates in physicist's notation, eg,[km,kn,ki,m,n,i,j]. abba and
-    baab for cross excitation in chemist's notation, eg,
-    abba->(alpha:mj, beta:ni)
-    '''
-
     t1a, t1b = t1
     t2aa, t2ab, t2bb = t2
     nkpts, nocca, nvira = t1a.shape
@@ -263,12 +257,6 @@ def Wvvvv(cc, t1, t2, eris):
     return Wvvvv, WvvVV, WVVVV
 
 def cc_Wovvo(cc, t1, t2, eris):
-    '''
-    This function returns the Js and Ks intermediates for Wmnij intermediates
-    in physicist's notation, eg,[km,kn,ki,m,n,i,j]. abba and baab stands for
-    cross excitation in chemist's notation, eg, abba->(alpha:mj, beta:ni)
-    '''
-
     t1a, t1b = t1
     t2aa, t2ab, t2bb = t2
     nkpts, nocca, nvira = t1a.shape
@@ -378,12 +366,216 @@ def Fvv(cc,t1,t2,eris):
     return Fvva, Fvvb
 
 def Fov(cc,t1,t2,eris):
-    kconserv = kpts_helper.get_kconserv(cc.cell, cc.kpts)
+    kconserv = cc.khelper.kconserv
     Fme = cc_Fov(cc,t1,t2,eris)
     return Fme
 
-def Woooo(cc,t1,t2,eris, kconserv):
-    #kconserv = cc.khelper.kconserv
+def Wvvov(cc,t1,t2,eris):
+    kconserv = cc.khelper.kconserv
+    t1a, t1b = t1
+    t2aa, t2ab, t2bb = t2
+    _, _, nkpts, nocca, noccb, nvira, nvirb = t2ab.shape
+
+    Wvvov = np.zeros((nkpts,nkpts,nkpts,nvira,nvira,nocca,nvira),dtype=t1a.dtype)
+    WvvOV = np.zeros((nkpts,nkpts,nkpts,nvira,nvira,noccb,nvirb),dtype=t1a.dtype)
+    WVVov = np.zeros((nkpts,nkpts,nkpts,nvirb,nvirb,nocca,nvira),dtype=t1a.dtype)
+    WVVOV = np.zeros((nkpts,nkpts,nkpts,nvirb,nvirb,noccb,nvirb),dtype=t1a.dtype)
+
+    for kn, km, ke in itertools.product(range(nkpts),repeat=3):
+        kf = kconserv[kn, ke, km]
+        ka = kn
+        Wvvov[ka,ke,km] += eris.vovv[kf,km,ke].transpose(3,2,1,0).conj() - eris.vovv[ke,km,kf].transpose(3,0,1,2).conj()
+        WVVov[ka,ke,km] += eris.voVV[kf,km,ke].transpose(3,2,1,0).conj()
+        WvvOV[ka,ke,km] += eris.VOvv[kf,km,ke].transpose(3,2,1,0).conj()
+        WVVOV[ka,ke,km] += eris.VOVV[kf,km,ke].transpose(3,2,1,0).conj() - eris.VOVV[ke,km,kf].transpose(3,0,1,2).conj()
+
+        ovov = eris.ovov[kn, ke, km] - eris.ovov[kn, kf, km].transpose(0,3,2,1)
+        OVOV = eris.OVOV[kn, ke, km] - eris.OVOV[kn, kf, km].transpose(0,3,2,1)
+
+        Wvvov[ka,ke,km] += -lib.einsum('na,nemf->aemf',t1a[kn],ovov)
+        WvvOV[ka,ke,km] += -lib.einsum('na,neMF->aeMF',t1a[kn],eris.ovOV[kn,ke,km])
+        WVVov[ka,ke,km] += -lib.einsum('NA,NEmf->AEmf',t1b[kn],eris.OVov[kn,ke,km])
+        WVVOV[ka,ke,km] += -lib.einsum('NA,NEMF->AEMF',t1b[kn],OVOV)
+
+    return Wvvov, WvvOV, WVVov, WVVOV
+
+def Wvvvo(cc,t1,t2,eris):
+    kconserv = cc.khelper.kconserv
+    t1a, t1b = t1
+    t2aa, t2ab, t2bb = t2
+    _, _, nkpts, nocca, noccb, nvira, nvirb = t2ab.shape
+
+
+    fova, fovb = cc_Fov(cc, t1, t2, eris)
+    Wvvvv_imd, WvvVV, WVVVV = Wvvvv(cc,t1,t2,eris)
+    tauaa, tauab, taubb = make_tau(cc, t2, t1, t1)
+
+    Wvvvo = np.zeros((nkpts,nkpts,nkpts,nvira,nvira,nvira,nocca),dtype=t1a.dtype)
+    WvvVO = np.zeros((nkpts,nkpts,nkpts,nvira,nvira,nvirb,noccb),dtype=t1a.dtype)
+    WVVvo = np.zeros((nkpts,nkpts,nkpts,nvirb,nvirb,nvira,nocca),dtype=t1a.dtype)
+    WVVVO = np.zeros((nkpts,nkpts,nkpts,nvirb,nvirb,nvirb,noccb),dtype=t1a.dtype)
+
+    for ka, ke, kb in itertools.product(range(nkpts),repeat=3):
+        ki = kconserv[ka, ke, kb]
+        # - <mb||ef> t2(miaf)
+        for km in range(nkpts):
+            kf = kconserv[km,ke,kb]
+            ovvv = eris.vovv[ke,km,kf].transpose(1,0,3,2).conj() - eris.vovv[kf,km,ke].transpose(1,2,3,0).conj()
+            OVvv = eris.VOvv[ke,km,kf].transpose(1,0,3,2).conj()
+            ovVV = eris.voVV[ke,km,kf].transpose(1,0,3,2).conj()
+            OVVV = eris.VOVV[ke,km,kf].transpose(1,0,3,2).conj() - eris.VOVV[kf,km,ke].transpose(1,2,3,0).conj()
+
+            aebi = lib.einsum('mebf,miaf->aebi',ovvv,t2aa[km,ki,ka])
+            aebi += lib.einsum('MFbe,iMaF->aebi',eris.VOvv[kf,km,ke].transpose(1,0,3,2).conj(),t2ab[ki,km,ka])
+            Wvvvo[ka,ke,kb] -= aebi
+            # P(ab) for all alpha spin
+            Wvvvo[kb,ke,ka] += aebi.transpose(2,1,0,3)
+        
+            WVVvo[ka,ke,kb] -= lib.einsum('MEbf,iMfA->AEbi',OVvv,t2ab[ki,km,kf])
+            WvvVO[ka,ke,kb] -= lib.einsum('meBF,mIaF->aeBI',ovVV,t2ab[km,ki,ka])
+        
+            AEBI = lib.einsum('MEBF,MIAF->AEBI',OVVV,t2bb[km,ki,ka])
+            AEBI += lib.einsum('mfBE,mIfA->AEBI',eris.voVV[kf,km,ke].transpose(1,0,3,2).conj(),t2ab[km,ki,kf])
+            WVVVO[ka,ke,kb] -= AEBI
+            # P(ab) for all beta spin
+            WVVVO[kb,ke,ka] += AEBI.transpose(2,1,0,3)
+
+        # - t1(ma) (<mb||ei> - t2(nibf) <mn||ef>)
+        km = ka
+        ovvo = eris.voov[ke,km,ki].transpose(1,0,3,2).conj() - eris.oovv[km,ki,kb].transpose(0,3,2,1)
+        OVvo = eris.VOov[ke,km,ki].transpose(1,0,3,2).conj()
+        ovVO = eris.voOV[ke,km,ki].transpose(1,0,3,2).conj()
+        OVVO = eris.VOOV[ke,km,ki].transpose(1,0,3,2).conj() - eris.OOVV[km,ki,kb].transpose(0,3,2,1)
+
+        tmp1aa = np.zeros((nocca, nvira, nvira, nocca),dtype=t1a.dtype)
+        tmp1ab = np.zeros((nocca, nvira, nvirb, noccb),dtype=t1a.dtype)
+        tmp1ba = np.zeros((noccb, nvirb, nvira, nocca),dtype=t1a.dtype)
+        tmp1bb = np.zeros((noccb, nvirb, nvirb, noccb),dtype=t1a.dtype)
+
+        for kn in range(nkpts):
+            kf = kconserv[km,ke,kn]
+            ovov = eris.ovov[km,ke,kn] - eris.ovov[km,kf,kn].transpose(0,3,2,1)
+            OVov = eris.OVov[km,ke,kn]
+            ovOV = eris.ovOV[km,ke,kn]
+            OVOV = eris.OVOV[km,ke,kn] - eris.OVOV[km,kf,kn].transpose(0,3,2,1)
+
+            tmp1aa -= np.einsum('nibf,menf->mebi',t2aa[kn,ki,kb], ovov)
+            tmp1aa += np.einsum('iNbF,meNF->mebi',t2ab[ki,kn,kb], ovOV)
+
+            tmp1ab += np.einsum('nIfB,menf->meBI',t2ab[kn,ki,kf], ovov)
+            tmp1ab -= np.einsum('NIBF,meNF->meBI',t2bb[kn,ki,kb], ovOV)
+
+            tmp1ba += np.einsum('iNbF,MENF->MEbi',t2ab[ki,kn,kb], OVOV)
+            tmp1ba -= np.einsum('nibf,MEnf->MEbi',t2aa[kn,ki,kb], OVov)
+
+            tmp1bb -= np.einsum('NIBF,MENF->MEBI',t2bb[kn,ki,kb], OVOV)
+            tmp1bb += np.einsum('nIfB,MEnf->MEBI',t2ab[kn,ki,kf], OVov)
+
+        aebi = np.einsum('ma,mebi->aebi',t1a[km],(ovvo+tmp1aa))
+        Wvvvo[ka,ke,kb] -= aebi
+
+        WVVvo[ka,ke,kb] -= np.einsum('MA,MEbi->AEbi',t1b[km],OVvo+tmp1ba)
+        WvvVO[ka,ke,kb] -= np.einsum('ma,meBI->aeBI',t1a[km],ovVO+tmp1ab)
+
+        AEBI = np.einsum('MA,MEBI->AEBI',t1b[km],(OVVO+tmp1bb))
+        WVVVO[ka,ke,kb] -= AEBI
+
+
+    for ka, ke, kb in itertools.product(range(nkpts),repeat=3):
+        ki = kconserv[ka, ke, kb]
+        # P(ab) <mb||ef> t2(miaf) (alpha alpha beta beta) and (beta beta alpha alpha)
+        for km in range(nkpts):
+            kf = kconserv[km,ke,ka]
+            OVVV = eris.VOVV[ke,km,kf].transpose(1,0,3,2).conj() - eris.VOVV[kf,km,ke].transpose(1,2,3,0).conj()
+            ovvv = eris.vovv[ke,km,kf].transpose(1,0,3,2).conj() - eris.vovv[kf,km,ke].transpose(1,2,3,0).conj()
+
+            WVVvo[ka,ke,kb] -= lib.einsum('mfAE,mibf->AEbi', eris.voVV[kf,km,ke].transpose(1,0,3,2).conj(), t2aa[km,ki,kb])
+            WVVvo[ka,ke,kb] -= lib.einsum('MEAF,iMbF->AEbi', OVVV, t2ab[ki,km,kb])
+
+            WvvVO[ka,ke,kb] -= lib.einsum('MFae,MIBF->aeBI', eris.VOvv[kf,km,ke].transpose(1,0,3,2).conj(), t2bb[km,ki,kb])
+            WvvVO[ka,ke,kb] -= lib.einsum('meaf,mIfB->aeBI', ovvv, t2ab[km,ki,kf])
+        
+        # P(ab) -t1(ma) (<mb||ei> - t2(nibf) <mn||ef>) for all spin configurations
+        km = kb
+        ovvo = eris.voov[ke,km,ki].transpose(1,0,3,2).conj() - eris.oovv[km,ki,ka].transpose(0,3,2,1)
+        OVVO = eris.VOOV[ke,km,ki].transpose(1,0,3,2).conj() - eris.OOVV[km,ki,ka].transpose(0,3,2,1)
+
+        tmp1aa = np.zeros((nocca, nvira, nvira, nocca),dtype=t1a.dtype)
+        tmp1ab = np.zeros((noccb, nvira, nvira, noccb),dtype=t1a.dtype)
+        tmp1ba = np.zeros((nocca, nvirb, nvirb, nocca),dtype=t1a.dtype)
+        tmp1bb = np.zeros((noccb, nvirb, nvirb, noccb),dtype=t1a.dtype)
+
+        for kn in range(nkpts):
+            kf = kconserv[km,ke,kn]
+            ovov = eris.ovov[km,ke,kn] - eris.ovov[km,kf,kn].transpose(0,3,2,1)
+            OVov = eris.OVov[km,ke,kn]
+            ovOV = eris.ovOV[km,ke,kn]
+            OVOV = eris.OVOV[km,ke,kn] - eris.OVOV[km,kf,kn].transpose(0,3,2,1)
+
+            tmp1aa -= np.einsum('niaf,menf->meai',t2aa[kn,ki,ka], ovov)
+            tmp1aa += np.einsum('iNaF,meNF->meai',t2ab[ki,kn,ka], ovOV)
+
+            tmp1ab += np.einsum('nIaF,MFne->MeaI',t2ab[kn,ki,ka], eris.OVov[km,kf,kn])
+
+            tmp1ba += np.einsum('iNfA,mfNE->mEAi',t2ab[ki,kn,kf], eris.ovOV[km,kf,kn])
+
+            tmp1bb -= np.einsum('NIAF,MENF->MEAI',t2bb[kn,ki,ka], OVOV)
+            tmp1bb += np.einsum('nIfA,MEnf->MEAI',t2ab[kn,ki,kf], OVov)
+
+        aebi = np.einsum('mb,meai->aebi',t1a[km],(ovvo+tmp1aa))
+        Wvvvo[ka,ke,kb] += aebi
+
+        WVVvo[ka,ke,kb] += np.einsum('mb,mEAi->AEbi',t1a[km], -eris.ooVV[km,ki,ka].transpose(0,3,2,1)+tmp1ba)
+        WvvVO[ka,ke,kb] += np.einsum('MB,MeaI->aeBI',t1b[km], -eris.OOvv[km,ki,ka].transpose(0,3,2,1)+tmp1ab)
+
+        AEBI = np.einsum('MB,MEAI->AEBI',t1b[km],(OVVO+tmp1bb))
+        WVVVO[ka,ke,kb] += AEBI
+
+    # Remaining terms
+    for ka, ke, kb in itertools.product(range(nkpts),repeat=3):
+        ki = kconserv[ka, ke, kb]
+        Wvvvo[ka,ke,kb] += eris.vovv[kb,ki,ka].transpose(2,3,0,1) - eris.vovv[ka,ki,kb].transpose(0,3,2,1)
+        WVVvo[ka,ke,kb] += eris.voVV[kb,ki,ka].transpose(2,3,0,1)
+        WvvVO[ka,ke,kb] += eris.VOvv[kb,ki,ka].transpose(2,3,0,1)
+        WVVVO[ka,ke,kb] += eris.VOVV[kb,ki,ka].transpose(2,3,0,1) - eris.VOVV[ka,ki,kb].transpose(0,3,2,1)
+        
+        Wvvvo[ka,ke,kb] -= lib.einsum('me,miab->aebi',fova[ke],t2aa[ke,ki,ka])
+        WVVvo[ka,ke,kb] -= lib.einsum('ME,iMbA->AEbi',fovb[ke],t2ab[ki,ke,kb])
+        WvvVO[ka,ke,kb] -= lib.einsum('me,mIaB->aeBI',fova[ke],t2ab[ke,ki,ka])
+        WVVVO[ka,ke,kb] -= lib.einsum('ME,MIAB->AEBI',fovb[ke],t2bb[ke,ki,ka])
+
+        Wvvvo[ka,ke,kb] += lib.einsum('if,aebf->aebi',t1a[ki],Wvvvv_imd[ka,ke,kb])
+        WVVvo[ka,ke,kb] += lib.einsum('if,bfAE->AEbi',t1a[ki],WvvVV[kb,ki,ka])
+        WvvVO[ka,ke,kb] += lib.einsum('IF,aeBF->aeBI',t1b[ki],WvvVV[ka,ke,kb])
+        WVVVO[ka,ke,kb] += lib.einsum('IF,AEBF->AEBI',t1b[ki],WVVVV[ka,ke,kb])
+        
+        for km in range(nkpts):
+            kn = kconserv[ka,km,kb]
+            ovoo = eris.ooov[kn,ki,km].transpose(2,3,0,1) - eris.ooov[km,ki,kn].transpose(0,3,2,1)
+            ovOO = eris.OOov[kn,ki,km].transpose(2,3,0,1)
+
+            ooOV = eris.ooOV[km,ki,kn]
+            OOov = eris.OOov[km,ki,kn]
+
+            OVoo = eris.ooOV[kn,ki,km].transpose(2,3,0,1)
+            OVOO = eris.OOOV[kn,ki,km].transpose(2,3,0,1) - eris.OOOV[km,ki,kn].transpose(0,3,2,1)
+
+            Wvvvo[ka,ke,kb] += 0.5*lib.einsum('meni,mnab->aebi',ovoo,tauaa[km,kn,ka])
+
+            WVVvo[ka,ke,kb] += 0.5*lib.einsum('MEni,nMbA->AEbi',OVoo,tauab[kn,km,kb])
+            WVVvo[ka,ke,kb] += 0.5*lib.einsum('miNE,mNbA->AEbi',ooOV,tauab[km,kn,kb])
+
+            WvvVO[ka,ke,kb] += 0.5*lib.einsum('meNI,mNaB->aeBI',ovOO,tauab[km,kn,ka])
+            WvvVO[ka,ke,kb] += 0.5*lib.einsum('MIne,nMaB->aeBI',OOov,tauab[kn,km,ka])
+
+            WVVVO[ka,ke,kb] += 0.5*lib.einsum('MENI,MNAB->AEBI',OVOO,taubb[km,kn,ka])
+
+
+    return Wvvvo, WvvVO, WVVvo, WVVVO 
+
+
+def Woooo(cc,t1,t2,eris):
+    kconserv = cc.khelper.kconserv
     t1a, t1b = t1
     t2aa, t2ab, t2bb = t2
     _, _, nkpts, nocca, noccb, nvira, nvirb = t2ab.shape
@@ -431,14 +623,9 @@ def Woooo(cc,t1,t2,eris, kconserv):
     WOOoo = None
     return Woooo, WooOO, WOOoo, WOOOO
 
-
-def Woovo(cc,t1,t2,eris, kconserv):
+def Woovo(cc,t1,t2,eris,kconserv):
     #kconserv = kpts_helper.get_kconserv(cc.cell, cc.kpts)
     #kconserv = cc.khelper.kconserv
-    t1a, t1b = t1
-    t2aa, t2ab, t2bb = t2
-    _, _, nkpts, nocca, noccb, nvira, nvirb = t2ab.shape
-
     P = kconserv_mat(nkpts, kconserv)
     Woovo = np.einsum('xyzimjb, xzyw->yxwmibj', eris.ooov, P).conj() - np.einsum('zyxjmib, xzyw->yxwmibj', eris.ooov, P).conj()
     WooVO = np.einsum('xyzimJB, xzyw->yxwmiBJ', eris.ooOV, P).conj()
@@ -530,6 +717,23 @@ def Woovo(cc,t1,t2,eris, kconserv):
             WOOVO[km,ki,kb] += 0.5 * einsum('MEBF,IJEF->MIBJ', OVVV, taubb[ki,kj,ke])
 
     return Woovo, WooVO, WOOvo, WOOVO
+
+def Wooov(cc, t1, t2, eris, kconserv):
+	t1a, t1b = t1
+	nkpts = t1a.shape[0]
+
+	P = kconserv_mat(nkpts, kconserv)
+	Wooov = eris.ooov - np.einsum('zyxnime,xzyw->xyzmine', eris.ooov, P)
+	WooOV = eris.ooOV 
+	WOOov = eris.OOov
+	WOOOV = eris.OOOV - np.einsum('zyxNIME,xzyw->xyzMINE', eris.OOOV, P)
+
+	Wooov += np.einsum('yif,xyzmfne->xyzmine', t1a, eris.ovov) - np.einsum('yif,xwzmenf,xzyw->xyzmine', t1a, eris.ovov, P)
+	WooOV += np.einsum('yif,xyzmfNE->xyzmiNE', t1a, eris.ovOV)
+	WOOov += np.einsum('yIF,xyzMFne->xyzMIne', t1b, eris.OVov)
+	WOOOV += np.einsum('yIF,xyzMFNE->xyzMINE', t1b, eris.OVOV) - np.einsum('yIF,xwzMENF,xzyw->xyzMINE', t1b, eris.OVOV, P)
+
+	return Wooov, WooOV, WOOov, WOOOV
 
 # vvvv is a string, ('oooo', 'ooov', ..., 'vvvv')
 # orbspin can be accessed through general spin-orbital kintermediates eris
@@ -642,3 +846,24 @@ def _eri_spatial2spin(eri_aa_ab_ba_bb, vvvv, eris, orbspin, cross_ab=False):
             eri[ki,kj,kk, idx1a[ki][:,None,None,None],idx2b[kj][:,None,None],idx3b[kk][:,None],idx4a[kl]] = eri_abba[ki,kj,kk]
             eri[ki,kj,kk, idx1b[ki][:,None,None,None],idx2a[kj][:,None,None],idx3a[kk][:,None],idx4b[kl]] = eri_baab[ki,kj,kk]
     return eri
+
+def Wovvo(cc, t1, t2, eris):
+    kconserv = cc.khelper.kconserv
+    t1a, t1b = t1
+    t2aa, t2ab, t2bb = t2
+    _, _, nkpts, nocca, noccb, nvira, nvirb = t2ab.shape
+
+    Wovvo, WovVO, WOVvo, WOVVO, WoVVo, WOvvO = cc_Wovvo(cc,t1,t2,eris)
+    for km, kb, ke in kpts_helper.loop_kkk(nkpts):
+        kj = kconserv[km, ke, kb]
+        for kn in range(nkpts):
+            kf = kconserv[km, ke, kn]
+            Wovvo[km, kb, ke] -= einsum('jnbf,mnef->mbej',t2aa[km, kn, ke],
+                                        eris.oovv[kn, kj, kb])
+            WOVVO[km, kb, ke] -= einsum('NJBF,MNEF->MBEJ',t2bb[km, kn, ke],
+                                        eris.OOVV[kn, kj, kb])
+            WOVvo[km, kb, ke] -= einsum('NjBf,MNef->MBej',t2ab[km, kn, ke],
+                                        eris.oovv[kn, kj, kb])
+            WovVO[km, kb, ke] -= einsum('nJbF,mnEF->mbEJ',t2ab[km, kn, ke],
+                                        eris.oovv[kn, kj, kb])
+    return Wovvo, WovVO, WOVvo, WOVVO

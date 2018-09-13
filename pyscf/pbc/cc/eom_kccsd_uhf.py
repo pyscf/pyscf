@@ -295,15 +295,20 @@ def eaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     # k-point spin orbital version of eaccsd
 
     Hr1 = 0.0*np.einsum('ac,c->a', imds.Fvv[kshift], r1)
-    for kl in range(nkpts):
+#    for kl in range(nkpts):
         #Hr1 += np.einsum('ld,lad->a', imds.Fov[kl], r2[kl, kshift])
-        for kc in range(nkpts):
-            Hr1 += 0.5*np.einsum('alcd,lcd->a', imds.Wvovv[kshift,kl,kc], r2[kl,kc])
+#        for kc in range(nkpts):
+#            Hr1 += 0.5*np.einsum('alcd,lcd->a', imds.Wvovv[kshift,kl,kc], r2[kl,kc])
 
+    #uccsd_imds.eris.cell = cell
+    #uccsd_imds.eris.kpts = eom._cc.kpts
+    #Waaaa, Waabb, Wbbaa, Wbbbb = kintermediates_uhf._eri_spin2spatial(imds.Wvovv.transpose(0,2,1,3,5,4,6), 'vvov', uccsd_imds.eris, orbspin)
+    #Waaaa, Waabb, Wbbaa, Wbbbb = kintermediates_uhf._eri_spin2spatial(imds.Wvvvo.transpose(0,2,1,3,5,4,6), 'vvvo', uccsd_imds.eris, orbspin)
+    
     Hr2 = np.zeros_like(r2)
     for kj, ka in itertools.product(range(nkpts), repeat=2):
         kb = kconserv[kshift,ka,kj]
-        Hr2[kj,ka] += np.einsum('abcj,c->jab', imds.Wvvvo[ka,kb,kshift], r1)
+        #Hr2[kj,ka] += np.einsum('abcj,c->jab', imds.Wvvvo[ka,kb,kshift], r1)
         #Hr2[kj,ka] += lib.einsum('ac,jcb->jab', imds.Fvv[ka], r2[kj,ka])
         #Hr2[kj,ka] -= lib.einsum('bc,jca->jab', imds.Fvv[kb], r2[kj,kb])
         #Hr2[kj,ka] -= lib.einsum('lj,lab->jab', imds.Foo[kj], r2[kj,ka])
@@ -343,6 +348,17 @@ def eaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     #   Hr1a +=     lib.einsum('acLD,LcD->a', imds.WvvOV, r2bab)
     #   Hr1b += 0.5*lib.einsum('ACLD,LCD->A', imds.WVVOV, r2bbb)
     #   Hr1b +=     lib.einsum('ACld,lCd->A', imds.WVVov, r2aba)
+
+    for kc, kl in itertools.product(range(nkpts), repeat=2):
+        Hr1a += 0.5*lib.einsum('acld,lcd->a', uccsd_imds.Wvvov[kshift,kc,kl], r2aaa[kl,kc])
+        Hr1a +=     lib.einsum('acLD,LcD->a', uccsd_imds.WvvOV[kshift,kc,kl], r2bab[kl,kc])
+        Hr1b += 0.5*lib.einsum('ACLD,LCD->A', uccsd_imds.WVVOV[kshift,kc,kl], r2bbb[kl,kc])
+        Hr1b +=     lib.einsum('ACld,lCd->A', uccsd_imds.WVVov[kshift,kc,kl], r2aba[kl,kc])
+
+    #print np.linalg.norm(Waaaa-uccsd_imds.Wvvov)
+    #print np.linalg.norm(Waabb-uccsd_imds.WvvOV)
+    #print np.linalg.norm(Wbbaa-uccsd_imds.WVVov)
+    #print np.linalg.norm(Wbbbb-uccsd_imds.WVVOV)
 
     Hr2aaa = np.zeros((nkpts, nkpts, nocca, nvira, nvira), dtype=r2.dtype)
     Hr2aba = np.zeros((nkpts, nkpts, nocca, nvirb, nvira), dtype=r2.dtype)
@@ -417,6 +433,20 @@ def eaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     #Hr2bbb += np.einsum('ACBJ,C->JAB', imds.WVVVO, r1b)
     #Hr2bab += np.einsum('acBJ,c->JaB', imds.WvvVO, r1a)
     #Hr2aba += np.einsum('ACbj,C->jAb', imds.WVVvo, r1b)
+
+    #print np.linalg.norm(Waaaa-uccsd_imds.Wvvvo)
+    #print np.linalg.norm(Waabb-uccsd_imds.WvvVO)
+    #print np.linalg.norm(Wbbaa-uccsd_imds.WVVvo)
+    #print np.linalg.norm(Wbbbb-uccsd_imds.WVVVO)
+
+    for ka, kj, in itertools.product(range(nkpts),repeat=2):
+        kb = kconserv[kshift,ka,kj]
+        kc = kshift 
+        Hr2aaa[kj,ka] += np.einsum('acbj,c->jab', uimds.Wvvvo[ka,kc,kb], r1a)
+        Hr2bbb[kj,ka] += np.einsum('ACBJ,C->JAB', uimds.WVVVO[ka,kc,kb], r1b)
+        
+        Hr2bab[kj,ka] += np.einsum('acBJ,c->JaB', uimds.WvvVO[ka,kc,kb], r1a)
+        Hr2aba[kj,ka] += np.einsum('ACbj,C->jAb', uimds.WVVvo[ka,kc,kb], r1b)
 
     ## Wovvo
     #tmp2aa = lib.einsum('ldbj,lad->jab', imds.Wovvo, r2aaa)
@@ -560,9 +590,10 @@ class _IMDS:
         t1, t2, eris = self.t1, self.t2, self.eris
 
         # 3 or 4 virtuals
-        #self.Wvvov, self.WvvOV, self.WVVov, self.WVVOV = kintermediates_uhf.Wvvov(t1, t2, eris)  # TODO
+        #self.Wvovv, self.WvoVV, self.WVOvv, self.WVOVV = kintermediates_uhf.Wvovv(self._cc, t1, t2, eris)
+        self.Wvvov, self.WvvOV, self.WVVov, self.WVVOV = kintermediates_uhf.Wvvov(self._cc, t1, t2, eris)  
         self.Wvvvv, self.WvvVV, self.WVVVV = Wvvvv = kintermediates_uhf.Wvvvv(self._cc, t1, t2, eris)
-        #self.Wvvvo, self.WvvVO, self.WVVvo, self.WVVVO = kintermediates_uhf.Wvvvo(t1, t2, eris, Wvvvv)  # TODO
+        self.Wvvvo, self.WvvVO, self.WVVvo, self.WVVVO = kintermediates_uhf.Wvvvo(self._cc, t1, t2, eris)  
 
         self.made_ea_imds = True
         logger.timer_debug1(self, 'EOM-KUCCSD EA intermediates', *cput0)
@@ -688,7 +719,9 @@ if __name__ == '__main__':
     #from kintermediates_uhf import Woooo
     #Woooo, WooOO, WOOoo, WOOOO = Woooo(cc,t1,t2,eris, kconserv)
     #print(np.linalg.norm(WOOOO - gOOOO))
-    from kintermediates import Wovoo as govoo
+
+    '''
+	from kintermediates import Wovoo as govoo
     g = govoo(kgcc,spin_t1,spin_t2,kccsd_eris,kconserv).transpose(0,2,1,3,5,4,6)
     from kintermediates_uhf import Woovo
     goovo, gooVO, gOOvo, gOOVO, goOVo, gOovO = _eri_spin2spatial(g, 'oovo', kccsd_eris, (nocca, noccb), orbspin, cross_ab=True)
@@ -697,9 +730,20 @@ if __name__ == '__main__':
     print(np.linalg.norm(gooVO - WooVO))
     print(np.linalg.norm(gOOvo - WOOvo))
     print(np.linalg.norm(gOOVO - WOOVO))
+	'''		
+    
+    from kintermediates import Wooov as gfunc
+    from kintermediates_uhf import Wooov
+    g = gfunc(kgcc,spin_t1,spin_t2,kccsd_eris,kconserv).transpose(0,2,1,3,5,4,6)
+    gooov, gooOV, gOOov, gOOOV, _, _ = _eri_spin2spatial(g, 'ooov', kccsd_eris, (nocca, noccb), orbspin, cross_ab=True)
+    Wooov, WooOV, WOOov, WOOOV = Wooov(cc, t1, t2, eris, kconserv)
+    print np.linalg.norm(gooov - Wooov)
+    print np.linalg.norm(gooOV - WooOV)
+    print np.linalg.norm(gOOov - WOOov)
+    print np.linalg.norm(gOOOV - WOOOV)
 
     exit()
-
+	
     ##### test block
 
     from kintermediates import Wovoo as govoo
