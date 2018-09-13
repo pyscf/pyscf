@@ -31,7 +31,7 @@ def get_default_log_mesh_param4gto(gto, tol_in=None):
     for sid in gto.atom_shell_ids(ia):
       for power,coeffs in zip(gto.bas_exp(sid), gto.bas_ctr_coeff(sid)):
         for coeff in coeffs:
-          if coeff==0.0: raise RuntimeError('coeff==0.0')
+          if coeff==0.0: continue
           rmin_gcs = min(rmin_gcs, np.sqrt( abs(np.log(1.0-tol)/power )))
           rmax_gcs = max(rmax_gcs, np.sqrt( abs(np.log(abs(coeff))-np.log(tol))/power ))
           akmx_gcs = max(akmx_gcs, np.sqrt( abs(np.log(abs(coeff))-np.log(tol))*4*power ))
