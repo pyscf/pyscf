@@ -74,7 +74,7 @@ def update_amps(cc, t1, t2, eris):
     kconserv = cc.khelper.kconserv
 
     # T1 equation
-    P = kintermediates_uhf.kconserv_mat(cc.nkpts, cc.khelper.kconserv)
+    P = kintermediates_uhf.kconserv_mat(nkpts, cc.khelper.kconserv)
     Ht1a += fov_.conj()
     Ht1b += fOV_.conj()
     Ht1a += einsum('xyximae,yme->xia', t2aa, Fov_)
@@ -750,6 +750,8 @@ def _make_eris_incore(cc, mo_coeff=None):
     eris.voov = np.empty((nkpts,nkpts,nkpts,nvira,nocca,nocca,nvira), dtype=dtype)
     eris.vovv = np.empty((nkpts,nkpts,nkpts,nvira,nocca,nvira,nvira), dtype=dtype)
     eris.vvvv = np.empty((nkpts,nkpts,nkpts,nvira,nvira,nvira,nvira), dtype=dtype)
+    eris.oovo = np.empty((nkpts,nkpts,nkpts,nocca,nocca,nvira,nocca), dtype=dtype)
+    eris.vooo = np.empty((nkpts,nkpts,nkpts,nvira,nocca,nocca,nocca), dtype=dtype)
     fao2mo = cc._scf.with_df.ao2mo
     for kp, kq, kr in kpts_helper.loop_kkk(nkpts):
         ks = kconserv[kp,kq,kr]
@@ -764,6 +766,8 @@ def _make_eris_incore(cc, mo_coeff=None):
         eris.voov[kp,kq,kr] = eri_kpt[nocca:,:nocca,:nocca,nocca:] / nkpts
         eris.vovv[kp,kq,kr] = eri_kpt[nocca:,:nocca,nocca:,nocca:] / nkpts
         eris.vvvv[kp,kq,kr] = eri_kpt[nocca:,nocca:,nocca:,nocca:] / nkpts
+        eris.oovo[kp,kq,kr] = eri_kpt[:nocca,:nocca,nocca:,:nocca] / nkpts
+        eris.vooo[kp,kq,kr] = eri_kpt[nocca:,:nocca,:nocca,:nocca] / nkpts
 
     eris.OOOO = np.empty((nkpts,nkpts,nkpts,noccb,noccb,noccb,noccb), dtype=dtype)
     eris.OOOV = np.empty((nkpts,nkpts,nkpts,noccb,noccb,noccb,nvirb), dtype=dtype)

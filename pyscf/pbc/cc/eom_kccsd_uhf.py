@@ -172,11 +172,17 @@ def ipccsd_matvec(eom, vector, kshift, imds=None, diag=None):
         tmpa = lib.einsum('MJ,MIB->IJB', uccsd_imds.FOO[kj], r2bbb[kj,ki])
         Hr2bbb[ki,kj] -= tmpb - tmpa
 
-    ## Wovoo term
+    ## Wovoo term work on this part
     #Hr2aaa -= np.einsum('mjbi,m->ijb', imds.Woovo, r1a)
     #Hr2abb += np.einsum('miBJ,m->iJB', imds.WooVO, r1a)
     #Hr2baa += np.einsum('MIbj,M->Ijb', imds.WOOvo, r1b)
     #Hr2bbb -= np.einsum('MJBI,M->IJB', imds.WOOVO, r1b)
+    for ki, kj in itertools.product(range(nkpts), repeat=2):
+        kb = kconserv[ki, kshift, kj]
+        Hr2aaa[ki,kj] -= np.einsum('mjbi,m->ijb', imds._uccsd_imds.Woovo[kshift,kj,kb], r1a)
+        Hr2abb[ki,kj] += np.einsum('miBJ,m->iJB', imds._uccsd_imds.WooVO[kshift,ki,kb], r1a)
+        Hr2baa[ki,kj] += np.einsum('MIbj,M->Ijb', imds._uccsd_imds.WOOvo[kshift,ki,kb], r1b)
+        Hr2bbb[ki,kj] -= np.einsum('MJBI,M->IJB', imds._uccsd_imds.WOOVO[kshift,kj,kb], r1b)
 
     # Woooo term
     for ki, kj in itertools.product(range(nkpts), repeat=2):
@@ -465,7 +471,7 @@ def eaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
         kb = kconserv[kshift, ka, kj]
         tmpa = lib.einsum('ac,jcb->jab', uccsd_imds.Fvv[ka], r2aaa[kj,ka])
         tmpb = lib.einsum('bc,jca->jab', uccsd_imds.Fvv[kb], r2aaa[kj,kb])
-        Hr2aaa[kj,ka] += tmpa - tmpb 
+        Hr2aaa[kj,ka] += tmpa - tmpb
         Hr2aba[kj,ka] += lib.einsum('AC,jCb->jAb', uccsd_imds.FVV[ka], r2aba[kj,ka])
         Hr2bab[kj,ka] += lib.einsum('ac,JcB->JaB', uccsd_imds.Fvv[ka], r2bab[kj,ka])
         Hr2aba[kj,ka] += lib.einsum('bc, jAc -> jAb', uccsd_imds.Fvv[kb], r2aba[kj,ka])
@@ -569,7 +575,7 @@ class _IMDS:
         # 0 or 1 virtuals
         self.Woooo, self.WooOO, _         , self.WOOOO = kintermediates_uhf.Woooo(self._cc, t1, t2, eris)
         #self.Wooov, self.WooOV, self.WOOov, self.WOOOV = kintermediates_uhf.Wooov(t1, t2, eris)  # TODO
-        #self.Woovo, self.WooVO, self.WOOvo, self.WOOVO = kintermediates_uhf.Woovo(t1, t2, eris)  # TODO
+        self.Woovo, self.WooVO, self.WOOvo, self.WOOVO = kintermediates_uhf.Woovo(self._cc, t1, t2, eris, kconserv= self._cc.khelper.kconserv)  # TODO
 
         self.made_ip_imds = True
         logger.timer_debug1(self, 'EOM-KUCCSD IP intermediates', *cput0)
@@ -585,9 +591,9 @@ class _IMDS:
 
         # 3 or 4 virtuals
         #self.Wvovv, self.WvoVV, self.WVOvv, self.WVOVV = kintermediates_uhf.Wvovv(self._cc, t1, t2, eris)
-        self.Wvvov, self.WvvOV, self.WVVov, self.WVVOV = kintermediates_uhf.Wvvov(self._cc, t1, t2, eris)  # TODO
+        self.Wvvov, self.WvvOV, self.WVVov, self.WVVOV = kintermediates_uhf.Wvvov(self._cc, t1, t2, eris)  
         self.Wvvvv, self.WvvVV, self.WVVVV = Wvvvv = kintermediates_uhf.Wvvvv(self._cc, t1, t2, eris)
-        self.Wvvvo, self.WvvVO, self.WVVvo, self.WVVVO = kintermediates_uhf.Wvvvo(self._cc, t1, t2, eris)  # TODO
+        self.Wvvvo, self.WvvVO, self.WVVvo, self.WVVVO = kintermediates_uhf.Wvvvo(self._cc, t1, t2, eris)  
 
         self.made_ea_imds = True
         logger.timer_debug1(self, 'EOM-KUCCSD EA intermediates', *cput0)
@@ -696,9 +702,72 @@ if __name__ == '__main__':
     # IP version
     myeom = EOMIP(mycc)
     imds = myeom.make_imds(eris=kccsd_eris, t1=spin_t1, t2=spin_t2)
-    imds._uccsd_eris = eris
-    imds._uccsd_imds = _IMDS(mycc, eris=eris)
-    imds._uccsd_imds.make_ip()
+    #imds._uccsd_eris = eris
+    #imds._uccsd_imds = _IMDS(mycc, eris=eris)
+    #imds._uccsd_imds.make_ip()
+
+    from kintermediates import Woooo as goooo
+    g = goooo(kgcc,spin_t1,spin_t2,kccsd_eris,kconserv).transpose(0,2,1,3,5,4,6)
+    from kintermediates_uhf import _eri_spin2spatial
+    orbspin = kccsd_eris.orbspin
+    kccsd_eris.cell = cell
+    kccsd_eris.kpts = kgcc.kpts
+    cc.cell = cell
+    cc.kpts = kgcc.kpts
+    #goooo, gooOO, gOOoo, gOOOO = _eri_spin2spatial(g, 'oooo', kccsd_eris, (nocca, noccb), orbspin, cross_ab=False)
+    #print(np.linalg.norm(goooo))
+    #from kintermediates_uhf import Woooo
+    #Woooo, WooOO, WOOoo, WOOOO = Woooo(cc,t1,t2,eris, kconserv)
+    #print(np.linalg.norm(WOOOO - gOOOO))
+
+    '''
+	from kintermediates import Wovoo as govoo
+    g = govoo(kgcc,spin_t1,spin_t2,kccsd_eris,kconserv).transpose(0,2,1,3,5,4,6)
+    from kintermediates_uhf import Woovo
+    goovo, gooVO, gOOvo, gOOVO, goOVo, gOovO = _eri_spin2spatial(g, 'oovo', kccsd_eris, (nocca, noccb), orbspin, cross_ab=True)
+    Woovo, WooVO, WOOvo, WOOVO = Woovo(cc, t1, t2, eris, kconserv)
+    print(np.linalg.norm(goovo - Woovo))
+    print(np.linalg.norm(gooVO - WooVO))
+    print(np.linalg.norm(gOOvo - WOOvo))
+    print(np.linalg.norm(gOOVO - WOOVO))
+	'''		
+    
+    from kintermediates import Wooov as gfunc
+    from kintermediates_uhf import Wooov
+    g = gfunc(kgcc,spin_t1,spin_t2,kccsd_eris,kconserv).transpose(0,2,1,3,5,4,6)
+    gooov, gooOV, gOOov, gOOOV, _, _ = _eri_spin2spatial(g, 'ooov', kccsd_eris, (nocca, noccb), orbspin, cross_ab=True)
+    Wooov, WooOV, WOOov, WOOOV = Wooov(cc, t1, t2, eris, kconserv)
+    print np.linalg.norm(gooov - Wooov)
+    print np.linalg.norm(gooOV - WooOV)
+    print np.linalg.norm(gOOov - WOOov)
+    print np.linalg.norm(gOOOV - WOOOV)
+
+    exit()
+	
+    ##### test block
+
+    from kintermediates import Wovoo as govoo
+    gw = govoo(kgcc,spin_t1,spin_t2,kccsd_eris,kconserv).transpose(0,2,1,3,5,4,6)
+
+    goovo = gw[:,:,:,0:nocca,0:nocca,0:nvira,0:nocca]
+    gooVO = gw[:,:,:,0:nocca,0:nocca,nvira:,nocca:]
+    gOOvo = gw[:,:,:,nocca:,nocca:,0:nvira,0:nocca]
+    gOOVO = gw[:,:,:,nocca:,nocca:,nvira:,nocca:]
+    print(np.linalg.norm(goovo))
+    from kintermediates_uhf import Woovo
+    Woovo, WooVO, WOOvo, WOOVO = Woovo(cc,t1,t2,eris, kconserv)
+    #print(gw[0,0,0,0,0,0,1])
+    #print(Woovo[0,0,0,0,0,0,1])
+    exit()
+    print(Woovo.shape, WooVO.shape, WOOvo.shape, WOOVO.shape)
+    print(np.linalg.norm(goovo - Woovo))
+    print(np.linalg.norm(gooVO - WooVO))
+    print(np.linalg.norm(gOOvo - WOOvo))
+    print(np.linalg.norm(gOOVO - WOOVO))
+    exit()
+
+
+    ##### end block
 
     spin_r1_ip = (np.random.rand(nocc)*1j +
                   np.random.rand(nocc) - 0.5 - 0.5*1j)
