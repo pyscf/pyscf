@@ -32,7 +32,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     '''Coulomb + XC functional for UKS.  See pyscf/dft/rks.py
     :func:`get_veff` fore more details.
     '''
-    if mol is None: mol = self.mol
+    if mol is None: mol = ks.mol
     if dm is None: dm = ks.make_rdm1()
     if not isinstance(dm, numpy.ndarray):
         dm = numpy.asarray(dm)
