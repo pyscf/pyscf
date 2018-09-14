@@ -17,9 +17,9 @@
 #
 
 '''
+(In testing)
 Electric field gradients, nuclear quadrupolar coupling and Mossbauer
 spectroscopy for non-relativistic (or sf-x2c) mean-field and post-HF methods.
-(In testing)
 
 Ref:
 
@@ -37,7 +37,6 @@ from pyscf import lib
 from pyscf import scf
 from pyscf import mcscf
 from pyscf import x2c
-from pyscf.prop.ssc import rhf as rhf_ssc
 from pyscf.data import nist
 from pyscf.data import elements
 from pyscf.data.nucprop import ISOTOPE_QUAD_MOMENT
@@ -48,11 +47,19 @@ def kernel(method, efg_nuc=None):
     if efg_nuc is None:
         efg_nuc = range(mol.natm)
 
+    dm = method.make_rdm1()
     if isinstance(method, (scf.hf.SCF, mcscf.casci.CASCI)):
-        dm = method.make_rdm1()
+        # The DM returned by make_rdm1 is in AO basis
+        if not (isinstance(dm, numpy.ndarray) and dm.ndim == 2):
+            # UHF density matrix
+            dm = dm[0] + dm[1]
     else:
         mo = method.mo_coeff
-        dm = lib.einsum('pi,ij,qj->pq', mo, method.make_rdm1(), mo.conj())
+        if not (isinstance(dm, numpy.ndarray) and dm.ndim == 2):
+            dm =(lib.einsum('pi,ij,qj->pq', mo[0], dm[0], mo[0].conj()) +
+                 lib.einsum('pi,ij,qj->pq', mo[1], dm[1], mo[1].conj()))
+        else:
+            dm = lib.einsum('pi,ij,qj->pq', mo, dm, mo.conj())
 
     if isinstance(method, scf.hf.SCF):
         with_x2c = getattr(method, 'with_x2c', None)
@@ -70,28 +77,20 @@ def kernel(method, efg_nuc=None):
         if contr_coeff is not None:
             rmat = numpy.dot(rmat, contr_coeff)
 
-    if not (isinstance(dm, numpy.ndarray) and dm.ndim == 2):
-        # UHF density matrix
-        dm = dm[0] + dm[1]
-
     log.info('\nElectric Field Gradient Tensor Results')
     efg = []
     for i, atm_id in enumerate(efg_nuc):
         # The electronic quadrupole operator (3 \vec{r} \vec{r} - r^2) / r^5
         # Note the difference to HFC tensor. Spin density matrix was used in
         # HFC tensor.
-        h1 = rhf_ssc._get_integrals_fcsd(mol, atm_id)
-        h1fc = rhf_ssc._get_integrals_fc(mol, atm_id)
+        h1 = _get_quadrupole_integrals(mol, atm_id)
 
         if with_x2c:
-            # J. Autschbach, D. Peng, and Markus. JCTC, 8, 4239 (2012)
+            # J. Autschbach, D. Peng, and R. Markus. JCTC, 8, 4239 (2012)
             h1SS = _get_sfx2c_quadrupole_integrals(xmol, atm_id)
             h1 += lib.einsum('xypq,pi,qj->xyij', h1SS, rmat, rmat) * (.25/c**2)
 
-        fcsd = numpy.einsum('xyij,ji->xy', h1, dm)
-        fc = numpy.einsum('ij,ji->', h1fc, dm)
-        efg_e = fcsd + numpy.eye(3) * fc
-
+        efg_e = numpy.einsum('xyij,ji->xy', h1, dm)
         efg_nuc = _get_quad_nuc(mol, atm_id)
         v = efg_nuc - efg_e
         efg.append(v)
@@ -108,7 +107,7 @@ def _analyze(mol, atm_id, v, log):
     # Ground-state quadrupole moment is non zero only if the nucleus has I > 1/2.
     # CQ is nuclear quadruplar coupling constant. Q is nuclear electric
     # quadrupole moment.
-    I, Q = ISOTOPE_QUAD_MOMENT[Z][1:3]
+    isotope, I, Q = ISOTOPE_QUAD_MOMENT[Z]
     if mol.nucprop:
         if atm_id+1 in mol.nucprop:
             prop = mol.nucprop[atm_id+1]
@@ -118,19 +117,20 @@ def _analyze(mol, atm_id, v, log):
             prop = mol.nucprop[stdsymb]
         else:
             prop = {}
+        isotope = prop.get('isotope', isotope)
         I = prop.get('I', I)
         Q = prop.get('Q', Q)
 
-    log.info('--\nEFG for %d %s: I = %g  Q = %g fm^2',
-             atm_id, symb, I, Q)
+    log.info('--\nEFG for %d %s: Isotope %s  I = %g  Q = %g barn',
+             atm_id, symb, isotope, I, Q)
 
     # Principal axis system and asymmetry parameter
     e, pas = numpy.linalg.eigh(v)
-    # The principle components are ordered Vxx <= Vyy <= Vzz
+    # The principle components are ordered Vzz > Vxx >= Vyy
     if abs(e[2]) > abs(e[0]):
-        Vxx, Vyy, Vzz = e
+        Vyy, Vxx, Vzz = e
     else:
-        Vxx, Vyy, Vzz = e[::-1]
+        Vyy, Vxx, Vzz = e[::-1]
         pas = pas[:,::-1]
 
     log.info('EFG eigen (au)        PAS')
@@ -141,16 +141,17 @@ def _analyze(mol, atm_id, v, log):
     eta = (Vxx - Vyy) / Vzz
     log.info('Quadrupolar asymmetry parameter %.9g', eta)
 
-    # 1e-30 m^2 fm^-2
-    au2MHz = nist.E_CHARGE * nist.AUEFG / nist.PLANCK * 1e-6 * 1e-30
+    # 1 barn = 1e-28 m^2
+    au2MHz = nist.E_CHARGE * nist.AUEFG / nist.PLANCK * 1e-6 * 1e-28
 
     if stdsymb in ('Fe', 'Sn'):
         # Mossbauer spectroscopy
         # Eq 2.14 of http://www.cmp.liv.ac.uk/frink/thesis/thesis/node18.html
         qQ = 0.5 * Vzz * Q * au2MHz
         Delta = qQ * (1 + eta**2/3)**.5
-        log.info('Quadrupolar coupling constant %.9g MHz', CQ)
-        log.info('Quadrupole splitting [e^2qQ/2(1+eta^2/3)^.5] %.9g MHz', Delta)
+        log.info('Quadrupolar coupling constant %.9g MHz', 2*qQ)
+        log.info('e^2qQ/2 = %.9g MHz', qQ)
+        log.info('Delta = e^2qQ/2(1+eta^2/3)^.5 = %.9g MHz', Delta)
     elif I > 0.5:
         # EFG has no effect on the I = 1/2 ground state
         CQ = Vzz * Q * au2MHz
@@ -171,6 +172,25 @@ def _get_quad_nuc(mol, atm_id):
     efg_nuc = numpy.einsum('i,ixy->xy', z/d**5, rr)
     return efg_nuc
 
+def _get_quadrupole_integrals(mol, atm_id):
+    nao = mol.nao
+    with mol.with_rinv_origin(mol.atom_coord(atm_id)):
+        # Compute the integrals of quadrupole operator 
+        # (3 \vec{r} \vec{r} - r^2) / r^5
+        ipipv = mol.intor('int1e_ipiprinv', 9).reshape(3,3,nao,nao)
+        ipvip = mol.intor('int1e_iprinvip', 9).reshape(3,3,nao,nao)
+        h1ao = ipipv + ipvip  # (nabla i | r/r^3 | j)
+        h1ao = h1ao + h1ao.transpose(0,1,3,2)
+
+    coords = mol.atom_coord(atm_id).reshape(1, 3)
+    ao = mol.eval_gto('GTOval', coords)
+    fc = 4*numpy.pi/3 * numpy.einsum('ip,iq->pq', ao, ao)
+
+    h1ao[0,0] += fc
+    h1ao[1,1] += fc
+    h1ao[2,2] += fc
+    return h1ao
+
 def _get_sfx2c_quadrupole_integrals(mol, atm_id):
     nao = mol.nao
     with mol.with_rinv_origin(mol.atom_coord(atm_id)):
@@ -180,14 +200,10 @@ def _get_sfx2c_quadrupole_integrals(mol, atm_id):
         ipvip = mol.intor('int1e_ipprinvpip', 9).reshape(3,3,nao,nao)
         h1ao = ipipv + ipvip  # (nabla i | r/r^3 | j)
         h1ao = h1ao + h1ao.transpose(0,1,3,2)
-        trace = h1ao[0,0] + h1ao[1,1] + h1ao[2,2]
-        h1ao[0,0] -= trace
-        h1ao[1,1] -= trace
-        h1ao[2,2] -= trace
 
     coords = mol.atom_coord(atm_id).reshape(1, 3)
     ao = mol.eval_gto('GTOval_ip', coords, comp=3)
-    fc = -8*numpy.pi/3 * numpy.einsum('dip,diq->pq', ao, ao)
+    fc = 4*numpy.pi/3 * numpy.einsum('dip,diq->pq', ao, ao)
 
     h1ao[0,0] += fc
     h1ao[1,1] += fc

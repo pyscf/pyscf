@@ -20,6 +20,8 @@
 '''
 SHCI solver for CASCI and CASSCF.
 '''
+
+from functools import reduce
 import ctypes
 import os
 import sys

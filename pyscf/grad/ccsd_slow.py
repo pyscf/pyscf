@@ -22,6 +22,7 @@ RCCSD
 Ref: JCP, 90, 1752
 '''
 
+from functools import reduce
 import time
 import numpy
 import scipy.linalg

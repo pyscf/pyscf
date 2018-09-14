@@ -344,6 +344,7 @@ class MDF(df.DF):
 
     get_eri = get_ao_eri = mdf_ao2mo.get_eri
     ao2mo = get_mo_eri = mdf_ao2mo.general
+    ao2mo_7d = mdf_ao2mo.ao2mo_7d
 
     def update_mp(self):
         pass

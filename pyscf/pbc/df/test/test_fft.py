@@ -27,6 +27,7 @@ from pyscf.pbc import lib as pbclib
 from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import numint
 from pyscf.pbc import tools
+from pyscf.pbc.lib import kpts_helper
 
 #einsum = np.einsum
 einsum = lib.einsum
@@ -800,6 +801,37 @@ class KnowValues(unittest.TestCase):
         eri_mo0 = get_mo_eri(cell2, mos, kpts1)
         eri_mo1 = df.get_mo_eri(mos, kpts1)
         self.assertTrue(np.allclose(eri_mo1, eri_mo0, atol=1e-9, rtol=1e-9))
+
+    def test_ao2mo_7d(self):
+        L = 3.
+        n = 6
+        cell = pgto.Cell()
+        cell.a = numpy.diag([L,L,L])
+        cell.mesh = [n,n,n]
+        cell.atom = '''He    2.    2.2      2.
+                       He    1.2   1.       1.'''
+        cell.basis = {'He': [[0, (1.2, 1)], [1, (0.6, 1)]]}
+        cell.verbose = 0
+        cell.build(0,0)
+
+        kpts = cell.make_kpts([1,3,1])
+        nkpts = len(kpts)
+        nao = cell.nao_nr()
+        numpy.random.seed(1)
+        mo =(numpy.random.random((nkpts,nao,nao)) +
+             numpy.random.random((nkpts,nao,nao))*1j)
+
+        with_df = fft.FFTDF(cell, kpts)
+        out = with_df.ao2mo_7d(mo, kpts)
+        ref = numpy.empty_like(out)
+
+        kconserv = kpts_helper.get_kconserv(cell, kpts)
+        for ki, kj, kk in kpts_helper.loop_kkk(nkpts):
+            kl = kconserv[ki, kj, kk]
+            tmp = with_df.ao2mo((mo[ki], mo[kj], mo[kk], mo[kl]), kpts[[ki,kj,kk,kl]])
+            ref[ki,kj,kk] = tmp.reshape([nao]*4)
+
+        self.assertAlmostEqual(abs(out-ref).max(), 0, 12)
 
 
 if __name__ == '__main__':

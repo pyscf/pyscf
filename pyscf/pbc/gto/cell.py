@@ -115,7 +115,7 @@ def format_pseudo(pseudo_tab):
 def make_pseudo_env(cell, _atm, _pseudo, pre_env=[]):
     for ia, atom in enumerate(cell._atom):
         symb = atom[0]
-        if symb in _pseudo:
+        if symb in _pseudo and _atm[ia,0] != 0:  # pass ghost atoms.
             _atm[ia,0] = sum(_pseudo[symb][0])
     _pseudobas = None
     return _atm, _pseudobas, pre_env
@@ -663,6 +663,8 @@ def get_SI(cell, Gv=None):
 
 def get_ewald_params(cell, precision=INTEGRAL_PRECISION, mesh=None):
     r'''Choose a reasonable value of Ewald 'eta' and 'cut' parameters.
+    eta^2 is the exponent coefficient of the model Gaussian charge for nucleus
+    at R:  \frac{eta^3}{pi^1.5} e^{-eta^2 (r-R)^2}
 
     Choice is based on largest G vector and desired relative precision.
 
@@ -742,20 +744,6 @@ def ewald(cell, ew_eta=None, ew_cut=None):
     r[r<1e-16] = 1e200
     ewovrl = .5 * np.einsum('i,j,Lij->', chargs, chargs,
                             scipy.special.erfc(ew_eta * r) / r)
-
-    ewovrl = 0.
-    for i, qi in enumerate(chargs):
-        ri = coords[i]
-        for j in range(i):
-            qj = chargs[j]
-            rj = coords[j]
-            r1 = ri-rj + Lall
-            r = np.sqrt(np.einsum('ji,ji->j', r1, r1))
-            ewovrl += (qi * qj / r * scipy.special.erfc(ew_eta * r)).sum()
-    # exclude the point where Lall == 0
-    r = lib.norm(Lall, axis=1)
-    r[r<1e-16] = 1e200
-    ewovrl += .5 * (chargs**2).sum() * (1./r * scipy.special.erfc(ew_eta * r)).sum()
 
     # last line of Eq. (F.5) in Martin
     ewself  = -.5 * np.dot(chargs,chargs) * 2 * ew_eta / np.sqrt(np.pi)
