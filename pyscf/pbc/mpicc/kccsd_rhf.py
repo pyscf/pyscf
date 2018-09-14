@@ -18,6 +18,7 @@
 #
 
 import copy
+from functools import reduce
 import time
 import numpy
 import os
