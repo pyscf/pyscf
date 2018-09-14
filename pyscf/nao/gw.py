@@ -60,8 +60,9 @@ class gw(scf):
     else: 
         self.start_st = self.nocc_0t-self.nocc
         self.finish_st = self.nocc_0t+self.nvrt
+    if self.verbosity>0: print(__name__,'\t\t====> Indices of states to be corrected start from {} to {} \n'.format(self.start_st,self.finish_st))
     self.nn = [range(self.start_st[s], self.finish_st[s]) for s in range(self.nspin)] # list of states
-    if self.verbosity>0: print(__name__,'\t\t====> Indices of states to be corrected = {}\n'.format(self.nn))
+    
 
     if 'nocc_conv' in kw:
       s2nocc_conv = [kw['nocc_conv']] if type(kw['nocc_conv'])==int else kw['nocc_conv']
@@ -283,7 +284,7 @@ class gw(scf):
       self.nn_conv.append( range(max(nocc_0t-nocc_conv,0), min(nocc_0t+nvrt_conv,self.norbs)))
 
     # iterations to converge the 
-    if self.verbosity>0: print('-'*len(sn2eval_gw[0])*4,'|  G0W0 corrections of eigenvalues  |','-'*len(sn2eval_gw[0])*4)
+    if self.verbosity>0: print('-'*30,'|  G0W0 corrections of eigenvalues  |','-'*30+'\n')
     for i in range(self.niter_max_ev):
       sn2i = self.gw_corr_int(sn2eval_gw)
       sn2r = self.gw_corr_res(sn2eval_gw)
@@ -307,7 +308,7 @@ class gw(scf):
           print('Spin{} {}'.format(s+1, n2ev[:]*HARTREE2EV)) #, sn2i[s][:]*HARTREE2EV, sn2r[s][:]*HARTREE2EV))
         
       if err<self.tol_ev : 
-        if self.verbosity>0: print('-'*len(sn2eval_gw[0])*4,' |  Convergence has been reached  | ','-'*len(sn2eval_gw[0])*4,'\n')
+        if self.verbosity>0: print('-'*30,' |  Convergence has been reached  | ','-'*30,'\n')
         break
     return sn2eval_gw
     

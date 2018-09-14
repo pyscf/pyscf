@@ -120,15 +120,16 @@ def get_str_fin (self,frozen_core,**kw):
     val = n_valence (self)
     if self.nspin == 2:
         if self.natm == 1:
-            core = n_core (self)
-            starting = np.array([core//2 , core//2 ]) 
+            co_va = n_core_vale (self)
+            starting = np.array([co_va[0]//2 , co_va[0]//2 ])
+            finishing = np.array([co_va[2]//2 , co_va[2]//2 ]) 
         else:
             if val<= 4 : starting = np.array([0 , 0])
             elif val <= 20 and val > 4: starting = np.array([2 , 2])
             elif val <= 36 and val > 20: starting = np.array([10 , 10])
             elif val <= 72 and val > 36: starting = np.array([18 , 18])
             else: starting = np.array([36 , 36])
-        finishing = starting + 12
+            finishing = starting + 12
     elif self.nspin == 1:
         starting = self.nocc_0t+self.nvrt
         
@@ -146,5 +147,5 @@ def get_str_fin (self,frozen_core,**kw):
     finishing = np.array([max(a),max(a)])   
   else:
     raise RuntimeError('Unknown!! Frozen core is defined by True, False or a Number!')
-  if self.verbosity>0:print(__name__,'\t====> States to be corrected start from {} to {}.'.format(starting,finishing))
+  #if self.verbosity>0:print(__name__,'\t====> States to be corrected start from {} to {}.'.format(starting,finishing))
   return np.array([starting, finishing])
