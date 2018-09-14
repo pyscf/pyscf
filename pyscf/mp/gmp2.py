@@ -288,6 +288,7 @@ del(WITH_T2)
 
 
 if __name__ == '__main__':
+    from functools import reduce
     from pyscf import scf
     from pyscf import gto
     mol = gto.Mole()

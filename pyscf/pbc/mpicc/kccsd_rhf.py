@@ -17,6 +17,7 @@
 #          Timothy Berkelbach <tim.berkelbach@gmail.com>
 #
 
+from functools import reduce
 import time
 import numpy
 import os

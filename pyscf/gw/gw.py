@@ -21,6 +21,7 @@
 G0W0 approximation
 '''
 
+from functools import reduce
 import time
 import tempfile
 import numpy

@@ -107,6 +107,7 @@ def make_rdm2(mycc, t1, t2, l1, l2, eris=None):
 
 
 if __name__ == '__main__':
+    from functools import reduce
     from pyscf import gto
     from pyscf import scf
     from pyscf import ao2mo

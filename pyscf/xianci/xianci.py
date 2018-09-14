@@ -21,6 +21,7 @@
 Generate Xian-CI input file and integral file
 '''
 
+from functools import reduce
 import numpy
 import h5py
 from pyscf import ao2mo
