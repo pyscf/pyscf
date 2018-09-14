@@ -20,6 +20,9 @@
 #include <stdio.h>
 #include "config.h"
 #include "cint.h"
+#include "np_helper/np_helper.h"
+
+#define BLKSIZE 8
 
 int GTOmax_shell_dim(int *ao_loc, int *shls_slice, int ncenter);
 int GTOmax_cache_size(int (*intor)(), int *shls_slice, int ncenter,
@@ -29,7 +32,7 @@ int GTOmax_cache_size(int (*intor)(), int *shls_slice, int ncenter,
  * out[naoi,naoj,naok,comp] in F-order
  */
 void GTOnr3c_fill_s1(int (*intor)(), double *out, double *buf,
-                     int comp, int ish, int jsh,
+                     int comp, int jobid,
                      int *shls_slice, int *ao_loc, CINTOpt *cintopt,
                      int *atm, int natm, int *bas, int nbas, double *env)
 {
@@ -39,29 +42,37 @@ void GTOnr3c_fill_s1(int (*intor)(), double *out, double *buf,
         const int jsh1 = shls_slice[3];
         const int ksh0 = shls_slice[4];
         const int ksh1 = shls_slice[5];
+        const int njsh = jsh1 - jsh0;
+        const int nksh = ksh1 - ksh0;
+
+        const int ksh = jobid % nksh + ksh0;
+        const int jstart = jobid / nksh * BLKSIZE;
+        const int jend = MIN(jstart + BLKSIZE, njsh);
+        if (jstart >= jend) {
+                return;
+        }
+
         const size_t naoi = ao_loc[ish1] - ao_loc[ish0];
         const size_t naoj = ao_loc[jsh1] - ao_loc[jsh0];
         const size_t naok = ao_loc[ksh1] - ao_loc[ksh0];
-        const size_t nij = naoi * naoj;
         const int dims[] = {naoi, naoj, naok};
 
-        ish += ish0;
-        jsh += jsh0;
-        const int ip = ao_loc[ish] - ao_loc[ish0];
-        const int jp = ao_loc[jsh] - ao_loc[jsh0];
-        out += jp * naoi + ip;
+        const int k0 = ao_loc[ksh] - ao_loc[ksh0];
+        out += naoi * naoj * k0;
 
-        int ksh, k0;
-        int shls[3];
+        int ish, jsh, j, i0, j0;
+        int shls[3] = {0, 0, ksh};
 
-        shls[0] = ish;
-        shls[1] = jsh;
-
-        for (ksh = ksh0; ksh < ksh1; ksh++) {
-                shls[2] = ksh;
-                k0 = ao_loc[ksh  ] - ao_loc[ksh0];
-                (*intor)(out+k0*nij, dims, shls, atm, natm, bas, nbas, env, cintopt, buf);
-        }
+        for (j = jstart; j < jend; j++) {
+        for (ish = ish0; ish < ish1; ish++) {
+                jsh = j + jsh0;
+                shls[0] = ish;
+                shls[1] = jsh;
+                i0 = ao_loc[ish] - ao_loc[ish0];
+                j0 = ao_loc[jsh] - ao_loc[jsh0];
+                (*intor)(out+j0*naoi+i0, dims, shls, atm, natm, bas, nbas, env,
+                         cintopt, buf);
+        } }
 }
 
 
@@ -119,23 +130,25 @@ static void dcopy_s2_ieqj(double *out, double *in, int comp,
  *     [      \]
  */
 void GTOnr3c_fill_s2ij(int (*intor)(), double *out, double *buf,
-                       int comp, int ish, int jsh,
+                       int comp, int jobid,
                        int *shls_slice, int *ao_loc, CINTOpt *cintopt,
                        int *atm, int natm, int *bas, int nbas, double *env)
 {
         const int ish0 = shls_slice[0];
         const int ish1 = shls_slice[1];
         const int jsh0 = shls_slice[2];
-        ish += ish0;
-        jsh += jsh0;
-        const int ip = ao_loc[ish];
-        const int jp = ao_loc[jsh] - ao_loc[jsh0];
-        if (ip < jp) {
+        const int ksh0 = shls_slice[4];
+        const int ksh1 = shls_slice[5];
+        const int nish = ish1 - ish0;
+        const int nksh = ksh1 - ksh0;
+
+        const int ksh = jobid % nksh + ksh0;
+        const int istart = jobid / nksh * BLKSIZE;
+        const int iend = MIN(istart + BLKSIZE, nish);
+        if (istart >= iend) {
                 return;
         }
 
-        const int ksh0 = shls_slice[4];
-        const int ksh1 = shls_slice[5];
         const int i0 = ao_loc[ish0];
         const int i1 = ao_loc[ish1];
         const size_t naok = ao_loc[ksh1] - ao_loc[ksh0];
@@ -143,33 +156,40 @@ void GTOnr3c_fill_s2ij(int (*intor)(), double *out, double *buf,
         const size_t nij = i1 * (i1 + 1) / 2 - off;
         const size_t nijk = nij * naok;
 
-        const int di = ao_loc[ish+1] - ao_loc[ish];
-        const int dj = ao_loc[jsh+1] - ao_loc[jsh];
-        out += ip * (ip + 1) / 2 - off + jp;
+        const int dk = ao_loc[ksh+1] - ao_loc[ksh];
+        const int k0 = ao_loc[ksh] - ao_loc[ksh0];
+        out += nij * k0;
 
-        int ksh, dk, k0;
-        int shls[3];
-        dk = GTOmax_shell_dim(ao_loc, shls_slice, 3);
-        double *cache = buf + di * dj * dk * comp;
+        int i, j, ish, jsh, ip, jp, di, dj;
+        int shls[3] = {0, 0, ksh};
+        di = GTOmax_shell_dim(ao_loc, shls_slice, 2);
+        double *cache = buf + di * di * dk * comp;
+        double *pout;
 
-        shls[0] = ish;
-        shls[1] = jsh;
+        for (i = istart; i < iend; i++) {
+        for (j = 0; j <= i; j++) {
+                ish = i + ish0;
+                jsh = j + jsh0;
+                shls[0] = ish;
+                shls[1] = jsh;
+                di = ao_loc[ish+1] - ao_loc[ish];
+                dj = ao_loc[jsh+1] - ao_loc[jsh];
+                ip = ao_loc[ish];
+                jp = ao_loc[jsh] - ao_loc[jsh0];
 
-        for (ksh = ksh0; ksh < ksh1; ksh++) {
-                shls[2] = ksh;
-                dk = ao_loc[ksh+1] - ao_loc[ksh];
-                k0 = ao_loc[ksh  ] - ao_loc[ksh0];
                 (*intor)(buf, NULL, shls, atm, natm, bas, nbas, env, cintopt, cache);
+
+                pout = out + ip * (ip + 1) / 2 - off + jp;
                 if (ip != jp) {
-                        dcopy_s2_igtj(out+k0*nij, buf, comp, ip, nij, nijk, di, dj, dk);
+                        dcopy_s2_igtj(pout, buf, comp, ip, nij, nijk, di, dj, dk);
                 } else {
-                        dcopy_s2_ieqj(out+k0*nij, buf, comp, ip, nij, nijk, di, dj, dk);
+                        dcopy_s2_ieqj(pout, buf, comp, ip, nij, nijk, di, dj, dk);
                 }
-        }
+        } }
 }
 
 void GTOnr3c_fill_s2jk(int (*intor)(), double *out, double *buf,
-                       int comp, int ish, int jsh,
+                       int comp, int jobid,
                        int *shls_slice, int *ao_loc, CINTOpt *cintopt,
                        int *atm, int natm, int *bas, int nbas, double *env)
 {
@@ -185,25 +205,28 @@ void GTOnr3c_drv(int (*intor)(), void (*fill)(), double *eri, int comp,
         const int ish1 = shls_slice[1];
         const int jsh0 = shls_slice[2];
         const int jsh1 = shls_slice[3];
+        const int ksh0 = shls_slice[4];
+        const int ksh1 = shls_slice[5];
         const int nish = ish1 - ish0;
         const int njsh = jsh1 - jsh0;
+        const int nksh = ksh1 - ksh0;
         const int di = GTOmax_shell_dim(ao_loc, shls_slice, 3);
         const int cache_size = GTOmax_cache_size(intor, shls_slice, 3,
                                                  atm, natm, bas, nbas, env);
+        const int njobs = (MAX(nish,njsh) / BLKSIZE + 1) * nksh;
 
 #pragma omp parallel default(none) \
         shared(intor, fill, eri, comp, shls_slice, ao_loc, cintopt, \
                atm, natm, bas, nbas, env)
 {
-        int ish, jsh, ij;
+        int jobid;
         double *buf = malloc(sizeof(double) * (di*di*di*comp + cache_size));
 #pragma omp for schedule(dynamic)
-        for (ij = 0; ij < nish*njsh; ij++) {
-                ish = ij / njsh;
-                jsh = ij % njsh;
-                (*fill)(intor, eri, buf, comp, ish, jsh, shls_slice, ao_loc,
+        for (jobid = 0; jobid < njobs; jobid++) {
+                (*fill)(intor, eri, buf, comp, jobid, shls_slice, ao_loc,
                         cintopt, atm, natm, bas, nbas, env);
         }
         free(buf);
 }
 }
+

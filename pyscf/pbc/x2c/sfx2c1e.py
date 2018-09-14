@@ -112,7 +112,7 @@ class X2C(x2c.X2C):
 
     def __init__(self, cell, kpts=None):
         self.cell = cell
-        x2c.X2C.__init__(cell)
+        x2c.X2C.__init__(self, cell)
 
 class SpinFreeX2C(X2C):
     def get_hcore(self, cell=None, kpts=None):
