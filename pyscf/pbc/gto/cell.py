@@ -115,7 +115,7 @@ def format_pseudo(pseudo_tab):
 def make_pseudo_env(cell, _atm, _pseudo, pre_env=[]):
     for ia, atom in enumerate(cell._atom):
         symb = atom[0]
-        if symb in _pseudo:
+        if symb in _pseudo and _atm[ia,0] != 0:  # pass ghost atoms.
             _atm[ia,0] = sum(_pseudo[symb][0])
     _pseudobas = None
     return _atm, _pseudobas, pre_env
