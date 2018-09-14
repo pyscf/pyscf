@@ -33,12 +33,12 @@ KE_SCALING = getattr(__config__, 'pbc_df_aft_ke_cutoff_scaling', 0.75)
 
 
 def get_nuc(mydf, kpts=None):
-    cell = mydf.cell
     if kpts is None:
         kpts_lst = numpy.zeros((1,3))
     else:
         kpts_lst = numpy.reshape(kpts, (-1,3))
 
+    cell = mydf.cell
     mesh = mydf.mesh
     charge = -cell.atom_charges()
     Gv = cell.get_Gv(mesh)
@@ -47,7 +47,7 @@ def get_nuc(mydf, kpts=None):
 
     coulG = tools.get_coulG(cell, mesh=mesh, Gv=Gv)
     vneG = rhoG * coulG
-    vneR = tools.ifft(vneG, mydf.mesh).real
+    vneR = tools.ifft(vneG, mesh).real
 
     vne = [0] * len(kpts_lst)
     for ao_ks_etc, p0, p1 in mydf.aoR_loop(mydf.grids, kpts_lst):

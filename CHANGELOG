@@ -10,6 +10,7 @@ PySCF 1.6 alpha (2018-09-??)
   - Interface to Cornell SHCI
   - PBC dipole memont and Makov-Payne correction
   - Overlap of two CISD wavefunctions
+  - EFG and Mossbauer spectroscopy of crystal and molecule
 * Improved
   - numint performance (eval_rho, eval_mat)
   - Energy cutoff estimation

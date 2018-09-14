@@ -663,6 +663,8 @@ def get_SI(cell, Gv=None):
 
 def get_ewald_params(cell, precision=INTEGRAL_PRECISION, mesh=None):
     r'''Choose a reasonable value of Ewald 'eta' and 'cut' parameters.
+    eta^2 is the exponent coefficient of the model Gaussian charge for nucleus
+    at R:  \frac{eta^3}{pi^1.5} e^{-eta^2 (r-R)^2}
 
     Choice is based on largest G vector and desired relative precision.
 

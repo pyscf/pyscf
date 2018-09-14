@@ -23,6 +23,7 @@ import numpy as np
 from pyscf.lib import finger
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc import scf as pbcscf
+from pyscf.pbc import df as pbc_df
 
 import pyscf.cc
 import pyscf.pbc.cc as pbcc
@@ -233,6 +234,43 @@ class KnownValues(unittest.TestCase):
         ecc, t1, t2 = cc.kernel()
         self.assertAlmostEqual(ehf, ehf_bench, 9)
         self.assertAlmostEqual(ecc, ecc_bench, 8)
+
+    def test_ao2mo(self):
+        kmf = make_rand_kmf()
+        rand_cc = pbcc.KRCCSD(kmf)
+        # incore
+        eris1 = pbcc.kccsd_rhf._ERIS(rand_cc, rand_kmf.mo_coeff)
+        self.assertAlmostEqual(finger(eris1.oooo),  0.13691900935600992+0.026617355192746089j, 12)
+        self.assertAlmostEqual(finger(eris1.ooov),  0.11364240700567171-0.041695025273248622j, 12)
+        self.assertAlmostEqual(finger(eris1.oovv), -0.23285827477217841+0.019174699732188771j, 12)
+        self.assertAlmostEqual(finger(eris1.ovov), -0.43577673177721338-0.25735127894943477j , 12)
+        self.assertAlmostEqual(finger(eris1.voov), -0.38516873139657298+0.26042322219884251j , 12)
+        self.assertAlmostEqual(finger(eris1.vovv), -0.12844875724711163+0.17587781601517866j , 12)
+        self.assertAlmostEqual(finger(eris1.vvvv), -0.39587103797107615-0.001692506310261882j, 12)
+
+        # outcore
+        eris2 = pbcc.kccsd_rhf._ERIS(rand_cc, rand_kmf.mo_coeff,
+                                    method='outcore')
+        self.assertAlmostEqual(abs(eris2.oooo - eris1.oooo).max(), 0, 12)
+        self.assertAlmostEqual(abs(eris2.ooov - eris1.ooov).max(), 0, 12)
+        self.assertAlmostEqual(abs(eris2.oovv - eris1.oovv).max(), 0, 12)
+        self.assertAlmostEqual(abs(eris2.ovov - eris1.ovov).max(), 0, 12)
+        self.assertAlmostEqual(abs(eris2.voov - eris1.voov).max(), 0, 12)
+        self.assertAlmostEqual(abs(eris2.vovv - eris1.vovv).max(), 0, 12)
+        self.assertAlmostEqual(abs(eris2.vvvv - eris1.vvvv).max(), 0, 12)
+
+        # df
+        rand_cc.direct = True
+        rand_cc._scf.with_df = pbc_df.GDF(kmf.cell, kmf.kpts)
+        eris3 = pbcc.kccsd_rhf._ERIS(rand_cc, rand_kmf.mo_coeff,
+                                     method='outcore')
+        self.assertAlmostEqual(finger(eris3.oooo),  0.13807643615247372+0.027068810055556621j, 12)
+        self.assertAlmostEqual(finger(eris3.ooov),  0.11503403217777325-0.040880282128360104j, 12)
+        self.assertAlmostEqual(finger(eris3.oovv), -0.23166000420319702+0.019228089540275023j, 12)
+        self.assertAlmostEqual(finger(eris3.ovov), -0.43333292231518528-0.25422730092646378j , 12)
+        self.assertAlmostEqual(finger(eris3.voov), -0.38514231913922037+0.2608685307447523j  , 12)
+        self.assertAlmostEqual(finger(eris3.vovv), -0.12653400071328597+0.17634730800584489j , 12)
+        self.assertAlmostEqual(finger(eris3.Lpv ), -2.2567245764033323 +0.76488030281400821j, 12)
 
     def _test_cu_metallic_nonequal_occ(self, kmf, cell, ecc1_bench=-0.9646107739333411):
         assert cell.mesh == [7, 7, 7]

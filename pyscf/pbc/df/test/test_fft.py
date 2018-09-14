@@ -27,6 +27,7 @@ from pyscf.pbc import lib as pbclib
 from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import numint
 from pyscf.pbc import tools
+from pyscf.pbc.lib import kpts_helper
 
 #einsum = np.einsum
 einsum = lib.einsum

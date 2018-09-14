@@ -828,9 +828,8 @@ def asarray(a, dtype=None, order=None):
     '''Convert a list of N-dim arrays to a (N+1) dim array.  It is equivalent to
     numpy.asarray function.
     '''
-    try:
-        a0_shape = numpy.shape(a[0])
-        a = numpy.vstack(a).reshape(-1, *a0_shape)
+    try:  # numpy.stack function is not available in numpy-1.8
+        a = numpy.stack(a)
     except:
         pass
     return numpy.asarray(a, dtype, order)
