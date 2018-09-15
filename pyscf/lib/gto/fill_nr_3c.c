@@ -221,7 +221,7 @@ void GTOnr3c_drv(int (*intor)(), void (*fill)(), double *eri, int comp,
 {
         int jobid;
         double *buf = malloc(sizeof(double) * (di*di*di*comp + cache_size));
-#pragma omp for schedule(dynamic)
+#pragma omp for nowait schedule(dynamic)
         for (jobid = 0; jobid < njobs; jobid++) {
                 (*fill)(intor, eri, buf, comp, jobid, shls_slice, ao_loc,
                         cintopt, atm, natm, bas, nbas, env);
