@@ -42,12 +42,11 @@ void GTOnr3c_fill_s1(int (*intor)(), double *out, double *buf,
         const int jsh1 = shls_slice[3];
         const int ksh0 = shls_slice[4];
         const int ksh1 = shls_slice[5];
-        const int njsh = jsh1 - jsh0;
         const int nksh = ksh1 - ksh0;
 
         const int ksh = jobid % nksh + ksh0;
-        const int jstart = jobid / nksh * BLKSIZE;
-        const int jend = MIN(jstart + BLKSIZE, njsh);
+        const int jstart = jobid / nksh * BLKSIZE + jsh0;
+        const int jend = MIN(jstart + BLKSIZE, jsh1);
         if (jstart >= jend) {
                 return;
         }
@@ -60,12 +59,11 @@ void GTOnr3c_fill_s1(int (*intor)(), double *out, double *buf,
         const int k0 = ao_loc[ksh] - ao_loc[ksh0];
         out += naoi * naoj * k0;
 
-        int ish, jsh, j, i0, j0;
+        int ish, jsh, i0, j0;
         int shls[3] = {0, 0, ksh};
 
-        for (j = jstart; j < jend; j++) {
+        for (jsh = jstart; jsh < jend; jsh++) {
         for (ish = ish0; ish < ish1; ish++) {
-                jsh = j + jsh0;
                 shls[0] = ish;
                 shls[1] = jsh;
                 i0 = ao_loc[ish] - ao_loc[ish0];
@@ -137,14 +135,14 @@ void GTOnr3c_fill_s2ij(int (*intor)(), double *out, double *buf,
         const int ish0 = shls_slice[0];
         const int ish1 = shls_slice[1];
         const int jsh0 = shls_slice[2];
+        const int jsh1 = shls_slice[3];
         const int ksh0 = shls_slice[4];
         const int ksh1 = shls_slice[5];
-        const int nish = ish1 - ish0;
         const int nksh = ksh1 - ksh0;
 
         const int ksh = jobid % nksh + ksh0;
-        const int istart = jobid / nksh * BLKSIZE;
-        const int iend = MIN(istart + BLKSIZE, nish);
+        const int istart = jobid / nksh * BLKSIZE + ish0;
+        const int iend = MIN(istart + BLKSIZE, ish1);
         if (istart >= iend) {
                 return;
         }
@@ -160,22 +158,23 @@ void GTOnr3c_fill_s2ij(int (*intor)(), double *out, double *buf,
         const int k0 = ao_loc[ksh] - ao_loc[ksh0];
         out += nij * k0;
 
-        int i, j, ish, jsh, ip, jp, di, dj;
+        int ish, jsh, ip, jp, di, dj;
         int shls[3] = {0, 0, ksh};
         di = GTOmax_shell_dim(ao_loc, shls_slice, 2);
         double *cache = buf + di * di * dk * comp;
         double *pout;
 
-        for (i = istart; i < iend; i++) {
-        for (j = 0; j <= i; j++) {
-                ish = i + ish0;
-                jsh = j + jsh0;
+        for (ish = istart; ish < iend; ish++) {
+        for (jsh = jsh0; jsh < jsh1; jsh++) {
+                ip = ao_loc[ish];
+                jp = ao_loc[jsh] - ao_loc[jsh0];
+                if (ip < jp) {
+                        continue;
+                }
                 shls[0] = ish;
                 shls[1] = jsh;
                 di = ao_loc[ish+1] - ao_loc[ish];
                 dj = ao_loc[jsh+1] - ao_loc[jsh];
-                ip = ao_loc[ish];
-                jp = ao_loc[jsh] - ao_loc[jsh0];
 
                 (*intor)(buf, NULL, shls, atm, natm, bas, nbas, env, cintopt, cache);
 
