@@ -52,50 +52,53 @@ def update_amps(cc, t1, t2, eris):
 
     nkpts, nocca, nvira = t1a.shape
     noccb, nvirb = t1b.shape[1:]
-    fvv_ = eris.fock[0][:,nocca:,nocca:]
-    fVV_ = eris.fock[1][:,noccb:,noccb:]
-    foo_ = eris.fock[0][:,:nocca,:nocca]
-    fOO_ = eris.fock[1][:,:noccb,:noccb]
-    fov_ = eris.fock[0][:,:nocca,nocca:]
-    fOV_ = eris.fock[1][:,:noccb,noccb:]
+    fov = eris.fock[0][:,:nocca,nocca:]
+    fOV = eris.fock[1][:,:noccb,noccb:]
 
-    mo_ea_o = [e[:nocca] for e in eris.mo_energy[0]]
-    mo_eb_o = [e[:noccb] for e in eris.mo_energy[1]]
-    mo_ea_v = [e[nocca:] for e in eris.mo_energy[0]]
-    mo_eb_v = [e[noccb:] for e in eris.mo_energy[1]]
+    mo_ea_o = np.asarray([e[:nocca] for e in eris.mo_energy[0]])
+    mo_eb_o = np.asarray([e[:noccb] for e in eris.mo_energy[1]])
+    mo_ea_v = np.asarray([e[nocca:] for e in eris.mo_energy[0]])
+    mo_eb_v = np.asarray([e[noccb:] for e in eris.mo_energy[1]])
 
-    Fvv_, FVV_ = kintermediates_uhf.cc_Fvv(cc, t1, t2, eris)
-    Foo_, FOO_ = kintermediates_uhf.cc_Foo(cc, t1, t2, eris)
-    Fov_, FOV_ = kintermediates_uhf.cc_Fov(cc, t1, t2, eris)
+    Fvv, FVV = kintermediates_uhf.cc_Fvv(cc, t1, t2, eris)
+    Foo, FOO = kintermediates_uhf.cc_Foo(cc, t1, t2, eris)
+    Fov, FOV = kintermediates_uhf.cc_Fov(cc, t1, t2, eris)
 
     # Move energy terms to the other side
     for k in range(nkpts):
-        Fvv_[k][np.diag_indices(nvira)] -= mo_ea_v[k]
-        FVV_[k][np.diag_indices(nvirb)] -= mo_eb_v[k]
-        Foo_[k][np.diag_indices(nocca)] -= mo_ea_o[k]
-        FOO_[k][np.diag_indices(noccb)] -= mo_eb_o[k]
+        Fvv[k][np.diag_indices(nvira)] -= mo_ea_v[k]
+        FVV[k][np.diag_indices(nvirb)] -= mo_eb_v[k]
+        Foo[k][np.diag_indices(nocca)] -= mo_ea_o[k]
+        FOO[k][np.diag_indices(noccb)] -= mo_eb_o[k]
 
     # Get the momentum conservation array
     kconserv = cc.khelper.kconserv
 
     # T1 equation
-    P = kintermediates_uhf.kconserv_mat(nkpts, cc.khelper.kconserv)
-    Ht1a += fov_.conj()
-    Ht1b += fOV_.conj()
-    Ht1a += einsum('xyximae,yme->xia', t2aa, Fov_)
-    Ht1a += einsum('xyximae,yme->xia', t2ab, FOV_)
-    Ht1b += einsum('xyximae,yme->xia', t2bb, FOV_)
-    Ht1b += einsum('yxymiea,yme->xia', t2ab, Fov_)
-    Ht1a -= np.einsum('xyzmnae,xzymine,xyzw->zia', t2aa, eris.ooov, P)
-    Ht1a -= np.einsum('xyzmNaE,xzymiNE,xyzw->zia', t2ab, eris.ooOV, P)
-    Ht1b -= np.einsum('xyzmnae,xzymine,xyzw->zia', t2bb, eris.OOOV, P)
-    Ht1b -= np.einsum('yxwnmea,xzymine,xyzw->zia', t2ab, eris.OOov, P)
+    Ht1a += fov.conj()
+    Ht1b += fOV.conj()
+    Ht1a += einsum('xyximae,yme->xia', t2aa, Fov)
+    Ht1a += einsum('xyximae,yme->xia', t2ab, FOV)
+    Ht1b += einsum('xyximae,yme->xia', t2bb, FOV)
+    Ht1b += einsum('yxymiea,yme->xia', t2ab, Fov)
+
+    #P = kintermediates_uhf.kconserv_mat(nkpts, cc.khelper.kconserv)
+    #:Ht1a -= np.einsum('xyzmnae,xzymine->zia', t2aa, eris.ooov)
+    #:Ht1a -= np.einsum('xyzmNaE,xzymiNE->zia', t2ab, eris.ooOV)
+    #:Ht1b -= np.einsum('xyzmnae,xzymine->zia', t2bb, eris.OOOV)
+    #:Ht1b -= np.einsum('yxwnmea,xzymine,xyzw->zia', t2ab, eris.OOov, P)
+    for km, kn, ka in kpts_helper.loop_kkk(nkpts):
+        Ht1a[ka] -= einsum('mnae,mine->ia', t2aa[km,kn,ka], eris.ooov[km,ka,kn])
+        Ht1a[ka] -= einsum('mNaE,miNE->ia', t2ab[km,kn,ka], eris.ooOV[km,ka,kn])
+        Ht1b[ka] -= einsum('mnae,mine->ia', t2bb[km,kn,ka], eris.OOOV[km,ka,kn])
+        ke = kconserv[km,ka,kn]
+        Ht1b[ka] -= einsum('nmea,mine->ia', t2ab[kn,km,ke], eris.OOov[km,ka,kn])
 
     for ka in range(nkpts):
-        Ht1a[ka] += einsum('ie,ae->ia', t1a[ka], Fvv_[ka])
-        Ht1b[ka] += einsum('ie,ae->ia', t1b[ka], FVV_[ka])
-        Ht1a[ka] -= einsum('ma,mi->ia', t1a[ka], Foo_[ka])
-        Ht1b[ka] -= einsum('ma,mi->ia', t1b[ka], FOO_[ka])
+        Ht1a[ka] += einsum('ie,ae->ia', t1a[ka], Fvv[ka])
+        Ht1b[ka] += einsum('ie,ae->ia', t1b[ka], FVV[ka])
+        Ht1a[ka] -= einsum('ma,mi->ia', t1a[ka], Foo[ka])
+        Ht1b[ka] -= einsum('ma,mi->ia', t1b[ka], FOO[ka])
 
         for km in range(nkpts):
             # ka == ki; km == kf == km
@@ -122,204 +125,184 @@ def update_amps(cc, t1, t2, eris):
         kb = kconserv[ki, ka, kj]
 
         # Fvv equation
-        Ftmpa_kb = Fvv_[kb] - 0.5 * einsum('mb,me->be', t1a[kb], Fov_[kb])
-        Ftmpb_kb = FVV_[kb] - 0.5 * einsum('MB,ME->BE', t1b[kb], FOV_[kb])
+        Ftmpa_kb = Fvv[kb] - 0.5 * einsum('mb,me->be', t1a[kb], Fov[kb])
+        Ftmpb_kb = FVV[kb] - 0.5 * einsum('MB,ME->BE', t1b[kb], FOV[kb])
+        Ftmpa_ka = Fvv[ka] - 0.5 * einsum('mb,me->be', t1a[ka], Fov[ka])
+        Ftmpb_ka = FVV[ka] - 0.5 * einsum('MB,ME->BE', t1b[ka], FOV[ka])
 
-        Ftmpa_ka = Fvv_[ka] - 0.5 * einsum('mb,me->be', t1a[ka], Fov_[ka])
-        Ftmpb_ka = FVV_[ka] - 0.5 * einsum('MB,ME->BE', t1b[ka], FOV_[ka])
-
-        tmp = einsum('ijae,be->ijab', t2aa[ki, kj, ka], Ftmpa_kb)
-        Ht2aa[ki, kj, ka] += tmp
-
-        tmp = einsum('IJAE,BE->IJAB', t2bb[ki, kj, ka], Ftmpb_kb)
-        Ht2bb[ki, kj, ka] += tmp
-
-        tmp = einsum('iJaE,BE->iJaB', t2ab[ki, kj, ka], Ftmpb_kb)
-        Ht2ab[ki, kj, ka] += tmp
-
-        tmp = einsum('iJeB,ae->iJaB', t2ab[ki, kj, ka], Ftmpa_ka)
-        Ht2ab[ki, kj, ka] += tmp
-
-        #P(ab)
-        tmp = einsum('ijbe,ae->ijab', t2aa[ki, kj, kb], Ftmpa_ka)
-        Ht2aa[ki, kj, ka] -= tmp
-
-        tmp = einsum('IJBE,AE->IJAB', t2bb[ki, kj, kb], Ftmpb_ka)
-        Ht2bb[ki, kj, ka] -= tmp
+        Ht2aa[ki, kj, ka] += einsum('ijae,be->ijab', t2aa[ki, kj, ka], Ftmpa_kb) * .5
+        Ht2bb[ki, kj, ka] += einsum('IJAE,BE->IJAB', t2bb[ki, kj, ka], Ftmpb_kb) * .5
+        Ht2ab[ki, kj, ka] += einsum('iJaE,BE->iJaB', t2ab[ki, kj, ka], Ftmpb_kb)
+        Ht2ab[ki, kj, ka] += einsum('iJeB,ae->iJaB', t2ab[ki, kj, ka], Ftmpa_ka)
 
         # Foo equation
-        Ftmpa_kj = Foo_[kj] + 0.5 * einsum('je,me->mj', t1a[kj], Fov_[kj])
-        Ftmpb_kj = FOO_[kj] + 0.5 * einsum('JE,ME->MJ', t1b[kj], FOV_[kj])
+        Ftmpa_kj = Foo[kj] + 0.5 * einsum('je,me->mj', t1a[kj], Fov[kj])
+        Ftmpb_kj = FOO[kj] + 0.5 * einsum('JE,ME->MJ', t1b[kj], FOV[kj])
+        Ftmpa_ki = Foo[ki] + 0.5 * einsum('je,me->mj', t1a[ki], Fov[ki])
+        Ftmpb_ki = FOO[ki] + 0.5 * einsum('JE,ME->MJ', t1b[ki], FOV[ki])
 
-        Ftmpa_ki = Foo_[ki] + 0.5 * einsum('je,me->mj', t1a[ki], Fov_[ki])
-        Ftmpb_ki = FOO_[ki] + 0.5 * einsum('JE,ME->MJ', t1b[ki], FOV_[ki])
-
-        tmp = einsum('imab,mj->ijab', t2aa[ki, kj, ka], Ftmpa_kj)
-        Ht2aa[ki, kj, ka] -= tmp
-
-        tmp = einsum('IMAB,MJ->IJAB', t2bb[ki, kj, ka], Ftmpb_kj)
-        Ht2bb[ki, kj, ka] -= tmp
-
-        tmp = einsum('iMaB,MJ->iJaB', t2ab[ki, kj, ka], Ftmpb_kj)
-        Ht2ab[ki, kj, ka] -= tmp
-
-        tmp = einsum('mJaB,mi->iJaB', t2ab[ki, kj, ka], Ftmpa_ki)
-        Ht2ab[ki, kj, ka] -= tmp
-
-        #P(ij)
-        tmp = einsum('jmab,mi->ijab', t2aa[kj, ki, ka], Ftmpa_ki)
-        Ht2aa[ki, kj, ka] += tmp
-
-        tmp = einsum('JMAB,MI->IJAB', t2bb[kj, ki, ka], Ftmpb_ki)
-        Ht2bb[ki, kj, ka] += tmp
+        Ht2aa[ki, kj, ka] -= einsum('imab,mj->ijab', t2aa[ki, kj, ka], Ftmpa_kj) * .5
+        Ht2bb[ki, kj, ka] -= einsum('IMAB,MJ->IJAB', t2bb[ki, kj, ka], Ftmpb_kj) * .5
+        Ht2ab[ki, kj, ka] -= einsum('iMaB,MJ->iJaB', t2ab[ki, kj, ka], Ftmpb_kj)
+        Ht2ab[ki, kj, ka] -= einsum('mJaB,mi->iJaB', t2ab[ki, kj, ka], Ftmpa_ki)
 
     # T2 equation
-    eris_ovov = np.asarray(eris.ovov)
-    eris_OVOV = np.asarray(eris.OVOV)
-    eris_ovOV = np.asarray(eris.ovOV)
-    Ht2aa += (eris_ovov.transpose(0,2,1,3,5,4,6) - eris_ovov.transpose(2,0,1,5,3,4,6)).conj()
-    Ht2bb += (eris_OVOV.transpose(0,2,1,3,5,4,6) - eris_OVOV.transpose(2,0,1,5,3,4,6)).conj()
-    Ht2ab += eris_ovOV.transpose(0,2,1,3,5,4,6).conj()
+    #:Ht2aa += (eris.ovov.transpose(0,2,1,3,5,4,6) - eris.ovov.transpose(2,0,1,5,3,4,6)).conj()
+    #:Ht2bb += (eris.OVOV.transpose(0,2,1,3,5,4,6) - eris.OVOV.transpose(2,0,1,5,3,4,6)).conj()
+    #:Ht2ab += eris.ovOV.transpose(0,2,1,3,5,4,6).conj()
+    for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
+        Ht2aa[ki,kj,ka] += eris.ovov[ki,ka,kj].conj().transpose(0,2,1,3) * .5
+        Ht2bb[ki,kj,ka] += eris.OVOV[ki,ka,kj].conj().transpose(0,2,1,3) * .5
+        Ht2ab[ki,kj,ka] += eris.ovOV[ki,ka,kj].conj().transpose(0,2,1,3)
 
     tauaa, tauab, taubb = kintermediates_uhf.make_tau(cc, t2, t1, t1)
     Woooo, WooOO, WOOOO = kintermediates_uhf.cc_Woooo(cc, t1, t2, eris)
+
     # Add the contributions from Wvvvv
-    Woooo += .5 * np.einsum('xwymenf,uvwijef,xywz,uvwz->xuyminj', eris_ovov, tauaa, P, P)
-    WOOOO += .5 * np.einsum('xwymenf,uvwijef,xywz,uvwz->xuyminj', eris_OVOV, taubb, P, P)
-    WooOO += .5 * np.einsum('xwymeNF,uvwiJeF,xywz,uvwz->xuymiNJ', eris_ovOV, tauab, P, P)
-    Ht2aa += np.einsum('xuyminj,xywmnab,xyuv->uvwijab', Woooo, tauaa, P) * .5
-    Ht2bb += np.einsum('xuyminj,xywmnab,xyuv->uvwijab', WOOOO, taubb, P) * .5
-    Ht2ab += np.einsum('xuymiNJ,xywmNaB,xyuv->uvwiJaB', WooOO, tauab, P)
+    #:Woooo += .5 * np.einsum('xwymenf,uvwijef,xywz,uvwz->xuyminj', eris.ovov, tauaa, P, P)
+    #:WOOOO += .5 * np.einsum('xwymenf,uvwijef,xywz,uvwz->xuyminj', eris.OVOV, taubb, P, P)
+    #:WooOO += .5 * np.einsum('xwymeNF,uvwiJeF,xywz,uvwz->xuymiNJ', eris.ovOV, tauab, P, P)
+    for km, ke, kn in kpts_helper.loop_kkk(nkpts):
+        kf = kconserv[km,ke,kn]
+        ovov = eris.ovov[km,ke,kn]
+        OVOV = eris.OVOV[km,ke,kn]
+        ovOV = eris.ovOV[km,ke,kn]
+        for ki in range(nkpts):
+            kj = kconserv[ke,ki,kf]
+            Woooo[km,ki,kn] += .5 * einsum('menf,ijef->minj', ovov, tauaa[ki,kj,ke])
+            WOOOO[km,ki,kn] += .5 * einsum('menf,ijef->minj', OVOV, taubb[ki,kj,ke])
+            WooOO[km,ki,kn] += .5 * einsum('meNF,iJeF->miNJ', ovOV, tauab[ki,kj,ke])
 
-    add_vvvv_(cc, (Ht2aa, Ht2ab, Ht2bb), t1, t2, eris)
+    #:Ht2aa += np.einsum('xuyminj,xywmnab,xyuv->uvwijab', Woooo, tauaa, P) * .5
+    #:Ht2bb += np.einsum('xuyminj,xywmnab,xyuv->uvwijab', WOOOO, taubb, P) * .5
+    #:Ht2ab += np.einsum('xuymiNJ,xywmNaB,xyuv->uvwiJaB', WooOO, tauab, P)
+    for km, ki, kn in kpts_helper.loop_kkk(nkpts):
+        kj = kconserv[km,ki,kn]
+        for ka in range(nkpts):
+            Ht2aa[ki,kj,ka] += einsum('minj,mnab->ijab', Woooo[km,ki,kn], tauaa[km,kn,ka]) * .125
+            Ht2bb[ki,kj,ka] += einsum('minj,mnab->ijab', WOOOO[km,ki,kn], taubb[km,kn,ka]) * .125
+            Ht2ab[ki,kj,ka] += einsum('miNJ,mNaB->iJaB', WooOO[km,ki,kn], tauab[km,kn,ka])
+    Woooo = WOOOO = WooOO = None
 
-    Wovvo, WovVO, WOVvo, WOVVO, WoVVo, WOvvO = \
-            kintermediates_uhf.cc_Wovvo(cc, t1, t2, eris)
-
+    #:Wovvo, WovVO, WOVvo, WOVVO, WoVVo, WOvvO = \
+    #:        kintermediates_uhf.cc_Wovvo(cc, t1, t2, eris)
     #:Ht2ab += einsum('xwzimae,wvumeBJ,xwzv,wuvy->xyziJaB', t2aa, WovVO, P, P)
     #:Ht2ab += einsum('xwziMaE,wvuMEBJ,xwzv,wuvy->xyziJaB', t2ab, WOVVO, P, P)
-    #:Ht2ab -= einsum('xie,zma,uwzBJme,zuwx,xyzu->xyziJaB', t1a, t1a, eris.VOov, P, P)
-    for kx, kw, kz in kpts_helper.loop_kkk(nkpts):
-        kv = kconserv[kx, kz, kw]
-        for ku in range(nkpts):
-            ky = kconserv[kw, kv, ku]
-            Ht2ab[kx, ky, kz] += lib.einsum('imae,mebj->ijab', t2aa[kx,kw,kz], WovVO[kw,kv,ku])
-            Ht2ab[kx, ky, kz] += lib.einsum('imae,mebj->ijab', t2ab[kx,kw,kz], WOVVO[kw,kv,ku])
-
-    for kz, ku, kw in kpts_helper.loop_kkk(nkpts):
-        kx = kconserv[kz,kw,ku]
-        ky = kconserv[kz,kx,ku]
-        Ht2ab[kx, ky, kz] -= lib.einsum('ie, ma, emjb->ijab', t1a[kx], t1a[kz], eris.voOV[kx,kz,kw].conj())
-
     #:Ht2ab += einsum('wxvmIeA,wvumebj,xwzv,wuvy->yxujIbA', t2ab, Wovvo, P, P)
     #:Ht2ab += einsum('wxvMIEA,wvuMEbj,xwzv,wuvy->yxujIbA', t2bb, WOVvo, P, P)
-    #:Ht2ab -= einsum('xIE,zMA,uwzbjME,zuwx,xyzu->yxujIbA', t1b, t1b, eris.voOV, P, P)
-
-    for kx, kw, kz in kpts_helper.loop_kkk(nkpts):
-        kv = kconserv[kx, kz, kw]
-        for ku in range(nkpts):
-            ky = kconserv[kw, kv, ku]
-            Ht2ab[ky,kx,ku] += lib.einsum('miea, mebj-> jiba', t2ab[kw,kx,kv], Wovvo[kw,kv,ku])
-            Ht2ab[ky,kx,ku] += lib.einsum('miea, mebj-> jiba', t2bb[kw,kx,kv], WOVvo[kw,kv,ku])
-
-    for kz, ku, kw in kpts_helper.loop_kkk(nkpts):
-        kx = kconserv[kz, kw, ku]
-        ky = kconserv[kz, kx, ku]
-        Ht2ab[ky,kx,ku] -= lib.einsum('ie, ma, bjme->jiba', t1b[kx], t1b[kz], eris.voOV[ku,kw,kz])
-
-
     #:Ht2ab += einsum('xwviMeA,wvuMebJ,xwzv,wuvy->xyuiJbA', t2ab, WOvvO, P, P)
-    #:Ht2ab -= einsum('xie,zMA,zwuMJbe,zuwx,xyzu->xyuiJbA', t1a, t1b, eris.OOvv, P, P)
-    for kx, kw, kz in kpts_helper.loop_kkk(nkpts):
-        kv = kconserv[kx, kz, kw]
-        for ku in range(nkpts):
-            ky = kconserv[kw, kv, ku]
-            Ht2ab[kx,ky,ku] += lib.einsum('imea,mebj->ijba', t2ab[kx,kw,kv],WOvvO[kw,kv,ku])
-
-    for kz,ku,kw in kpts_helper.loop_kkk(nkpts):
-        kx = kconserv[kz, kw, ku]
-        ky = kconserv[kz, kx, ku]
-        Ht2ab[kx,ky,ku] -= lib.einsum('ie, ma, mjbe->ijba', t1a[kx], t1b[kz], eris.OOvv[kz, kw, ku])
-
     #:Ht2ab += einsum('wxzmIaE,wvumEBj,xwzv,wuvy->yxzjIaB', t2ab, WoVVo, P, P)
+    #:Ht2aa  = einsum('xwzimae,wvumebj,xwzv,wuvy->xyzijab', t2aa, Wovvo, P, P)
+    #:Ht2aa += einsum('xwziMaE,wvuMEbj,xwzv,wuvy->xyzijab', t2ab, WOVvo, P, P)
+    #:Ht2bb  = einsum('xwzimae,wvumebj,xwzv,wuvy->xyzijab', t2bb, WOVVO, P, P)
+    #:Ht2bb += einsum('wxvMiEa,wvuMEbj,xwzv,wuvy->xyzijab', t2ab, WovVO, P, P)
+    for kw in range(nkpts):
+        for ku in range(nkpts):
+            _ovvo, _ovVO, _OVvo, _OVVO, _oVVo, _OvvO = \
+                    kintermediates_uhf._cc_Wovvo_k0k2(cc, t1, t2, eris, kw, ku)
+            for kv in range(nkpts):
+                ky = kconserv[kw, kv, ku]
+                for kx in range(nkpts):
+                    kz = kconserv[kw, kv, kx]
+                    Ht2ab[kx,ky,kz] += lib.einsum('imae,mebj->ijab', t2aa[kx,kw,kz], _ovVO[kv])
+                    Ht2ab[kx,ky,kz] += lib.einsum('imae,mebj->ijab', t2ab[kx,kw,kz], _OVVO[kv])
+                    Ht2ab[ky,kx,ku] += lib.einsum('miea,mebj->jiba', t2ab[kw,kx,kv], _ovvo[kv])
+                    Ht2ab[ky,kx,ku] += lib.einsum('miea,mebj->jiba', t2bb[kw,kx,kv], _OVvo[kv])
+                    Ht2ab[kx,ky,ku] += lib.einsum('imea,mebj->ijba', t2ab[kx,kw,kv], _OvvO[kv])
+                    Ht2ab[ky,kx,kz] += lib.einsum('miae,mebj->jiab', t2ab[kw,kx,kz], _oVVo[kv])
+
+                    Ht2aa[kx,ky,kz] += lib.einsum('imae,mebj->ijab', t2aa[kx,kw,kz], _ovvo[kv])
+                    Ht2aa[kx,ky,kz] += lib.einsum('imae,mebj->ijab', t2ab[kx,kw,kz], _OVvo[kv])
+
+                    Ht2bb[kx,ky,kz] += lib.einsum('imae,mebj->ijab', t2bb[kx,kw,kz], _OVVO[kv])
+                    Ht2bb[kx,ky,kz] += lib.einsum('miea,mebj->ijab', t2ab[kw,kx,kv], _ovVO[kv])
+    _ovvo = _OVVO = _ovVO = _OVvo = _oVVo = _OvvO = None
+
+    #:Ht2ab -= einsum('xie,zma,uwzBJme,zuwx,xyzu->xyziJaB', t1a, t1a, eris.VOov, P, P)
     #:Ht2ab -= einsum('xIE,zma,zwumjBE,zuwx,xyzu->yxzjIaB', t1b, t1a, eris.ooVV, P, P)
-    for kx, kw, kz in kpts_helper.loop_kkk(nkpts):
-        kv = kconserv[kx, kz, kw]
-        for ku in range(nkpts):
-            ky = kconserv[kw, kv, ku]
-            Ht2ab[ky, kx, kz] += lib.einsum('miae,mebj->jiab', t2ab[kw,kx,kz], WoVVo[kw,kv,ku])
-
+    #:Ht2ab -= einsum('xIE,zMA,uwzbjME,zuwx,xyzu->yxujIbA', t1b, t1b, eris.voOV, P, P)
+    #:Ht2ab -= einsum('xie,zMA,zwuMJbe,zuwx,xyzu->xyuiJbA', t1a, t1b, eris.OOvv, P, P)
     for kz, ku, kw in kpts_helper.loop_kkk(nkpts):
         kx = kconserv[kz,kw,ku]
         ky = kconserv[kz,kx,ku]
-        Ht2ab[ky,kx,kz] -= lib.einsum('ie, ma, mjbe->jiab', t1b[kx], t1a[kz], eris.ooVV[kz,kw,ku])
+        tmp = lib.einsum('ie,emjb->imjb', t1a[kx], eris.voOV[kx,kz,kw].conj())
+        Ht2ab[kx,ky,kz] -= lib.einsum('ma,imjb->ijab', t1a[kz], tmp)
+        tmp = lib.einsum('mjbe,ie->mjbi', eris.ooVV[kz,kw,ku], t1b[kx])
+        Ht2ab[ky,kx,kz] -= lib.einsum('ma,mjbi->jiab', t1a[kz], tmp)
+        tmp = lib.einsum('bjme,ie->bjmi', eris.voOV[ku,kw,kz], t1b[kx])
+        Ht2ab[ky,kx,ku] -= lib.einsum('ma,bjmi->jiba', t1b[kz], tmp)
+        tmp = lib.einsum('mjbe,ie->mjbi', eris.OOvv[kz,kw,ku], t1a[kx])
+        Ht2ab[kx,ky,ku] -= lib.einsum('ma,mjbi->ijba', t1b[kz], tmp)
 
-    #:u2aa  = einsum('xwzimae,wvumebj,xwzv,wuvy->xyzijab', t2aa, Wovvo, P, P)
-    #:u2aa += einsum('xwziMaE,wvuMEbj,xwzv,wuvy->xyzijab', t2ab, WOVvo, P, P)
-    #Left this in to keep proper shape, need to replace later
-    u2aa  = np.zeros_like(t2aa)
-    for kx, kw, kz in kpts_helper.loop_kkk(nkpts):
-        kv = kconserv[kx, kz, kw]
-        for ku in range(nkpts):
-            ky = kconserv[kw, kv, ku]
-            u2aa[kx,ky,kz] += lib.einsum('imae, mebj->ijab', t2aa[kx,kw,kz], Wovvo[kw,kv,ku])
-            u2aa[kx,ky,kz] += lib.einsum('imae, mebj->ijab', t2ab[kx,kw,kz], WOVvo[kw,kv,ku])
-
-    #:u2aa += einsum('xie,zma,zwumjbe,zuwx,xyzu->xyzijab', t1a, t1a, eris.oovv, P, P)
-    #:u2aa -= einsum('xie,zma,uwzbjme,zuwx,xyzu->xyzijab', t1a, t1a, eris.voov, P, P)
-
+    #:Ht2aa += einsum('xie,zma,zwumjbe,zuwx,xyzu->xyzijab', t1a, t1a, eris.oovv, P, P)
+    #:Ht2aa -= einsum('xie,zma,uwzbjme,zuwx,xyzu->xyzijab', t1a, t1a, eris.voov, P, P)
     for kz, ku, kw in kpts_helper.loop_kkk(nkpts):
         kx = kconserv[kz,kw,ku]
         ky = kconserv[kz,kx,ku]
-        u2aa[kx,ky,kz] += lib.einsum('ie,ma,mjbe->ijab',t1a[kx],t1a[kz],eris.oovv[kz,kw,ku])
-        u2aa[kx,ky,kz] -= lib.einsum('ie,ma,bjme->ijab',t1a[kx],t1a[kz],eris.voov[ku,kw,kz])
+        tmp = lib.einsum('mjbe,ie->mjbi', eris.oovv[kz,kw,ku], t1a[kx])
+        tmp-= lib.einsum('bjme,ie->mjbi', eris.voov[ku,kw,kz], t1a[kx])
+        Ht2aa[kx,ky,kz] += lib.einsum('ma,mjbi->ijab', t1a[kz], tmp)
 
-
-    #:u2aa += np.einsum('xie,uyzbjae,uzyx->xyzijab', t1a, eris.vovv, P)
-    #:u2aa -= np.einsum('zma,xzyimjb->xyzijab', t1a, eris.ooov.conj())
-
+    #:Ht2aa += np.einsum('xie,uyzbjae,uzyx->xyzijab', t1a, eris.vovv, P)
+    #:Ht2aa -= np.einsum('zma,xzyimjb->xyzijab', t1a, eris.ooov.conj())
     for ky, kx, ku in kpts_helper.loop_kkk(nkpts):
         kz = kconserv[ky, ku, kx]
-        u2aa[kx, ky, kz] += lib.einsum('ie, bjae->ijab', t1a[kx], eris.vovv[ku,ky,kz])
-        u2aa[kx, ky, kz] -= lib.einsum('ma, imjb->ijab', t1a[kz], eris.ooov[kx,kz,ky].conj())
+        Ht2aa[kx, ky, kz] += lib.einsum('ie, bjae->ijab', t1a[kx], eris.vovv[ku,ky,kz])
+        Ht2aa[kx, ky, kz] -= lib.einsum('ma, imjb->ijab', t1a[kz], eris.ooov[kx,kz,ky].conj())
 
-    u2aa = u2aa - u2aa.transpose(1,0,2,4,3,5,6)
-    u2aa = u2aa - np.einsum('xyzijab,xyzu->xyuijba', u2aa, P)
-    Ht2aa += u2aa
+    #:Ht2aa = Ht2aa - Ht2aa.transpose(1,0,2,4,3,5,6)
+    #:Ht2aa = Ht2aa - np.einsum('xyzijab,xyzu->xyuijba', Ht2aa, P)
+    # anti-symmetrize Ht2aa inplace
+    for ki in range(nkpts):
+        tmp = Ht2aa[ki,ki] - Ht2aa[ki,ki].transpose(0,2,1,3,4)
+        kb_ = kconserv[ki,:,ki]
+        Ht2aa[ki,ki,:  ]  = tmp
+        Ht2aa[ki,ki,kb_] -= tmp.transpose(0,1,2,4,3)
 
-    #:u2bb  = einsum('xwzimae,wvumebj,xwzv,wuvy->xyzijab', t2bb, WOVVO, P, P)
-    #:u2bb += einsum('wxvMiEa,wvuMEbj,xwzv,wuvy->xyzijab', t2ab, WovVO, P, P)
-    #:u2bb += einsum('xie,zma,zwumjbe,zuwx,xyzu->xyzijab', t1b, t1b, eris.OOVV, P, P)
-    #:u2bb -= einsum('xie,zma,uwzbjme,zuwx,xyzu->xyzijab', t1b, t1b, eris.VOOV, P, P)
+        for kj in range(ki):
+            tmp = Ht2aa[ki,kj] - Ht2aa[kj,ki].transpose(0,2,1,3,4)
+            kb_ = kconserv[ki,:,kj]
 
-    u2bb = np.zeros_like(t2bb)
+            Ht2aa[ki,kj,:  ]  = tmp
+            Ht2aa[kj,ki,kb_]  = tmp.transpose(0,2,1,4,3)
+            Ht2aa[ki,kj,kb_] -= tmp.transpose(0,1,2,4,3)
+            Ht2aa[kj,ki,:  ] -= tmp.transpose(0,2,1,3,4)
 
-    for kx, kw, kz in kpts_helper.loop_kkk(nkpts):
-        kv = kconserv[kx, kz, kw]
-        for ku in range(nkpts):
-            ky = kconserv[kw,kv, ku]
-            u2bb[kx, ky, kz] += lib.einsum('imae,mebj->ijab', t2bb[kx,kw,kz], WOVVO[kw,kv,ku])
-            u2bb[kx, ky, kz] += lib.einsum('miea, mebj-> ijab', t2ab[kw,kx,kv],WovVO[kw,kv,ku])
-
+    #:Ht2bb += einsum('xie,zma,zwumjbe,zuwx,xyzu->xyzijab', t1b, t1b, eris.OOVV, P, P)
+    #:Ht2bb -= einsum('xie,zma,uwzbjme,zuwx,xyzu->xyzijab', t1b, t1b, eris.VOOV, P, P)
     for kz, ku, kw in kpts_helper.loop_kkk(nkpts):
         kx = kconserv[kz, kw, ku]
         ky = kconserv[kz, kx, ku]
-        u2bb[kx, ky, kz] += lib.einsum('ie, ma, mjbe->ijab',t1b[kx],t1b[kz],eris.OOVV[kz,kw,ku])
-        u2bb[kx, ky, kz] -= lib.einsum('ie, ma, bjme->ijab', t1b[kx], t1b[kz],eris.VOOV[ku,kw,kz])
+        tmp = lib.einsum('mjbe,ie->mjbi', eris.OOVV[kz,kw,ku], t1b[kx])
+        tmp-= lib.einsum('bjme,ie->mjbi', eris.VOOV[ku,kw,kz], t1b[kx])
+        Ht2bb[kx,ky,kz] += lib.einsum('ma,mjbi->ijab', t1b[kz], tmp)
 
-    #:u2bb += np.einsum('xie,uzybjae,uzyx->xyzijab', t1b, eris.VOVV, P)
-    #:u2bb -= np.einsum('zma,xzyimjb->xyzijab', t1b, eris.OOOV.conj())
-
+    #:Ht2bb += np.einsum('xie,uzybjae,uzyx->xyzijab', t1b, eris.VOVV, P)
+    #:Ht2bb -= np.einsum('zma,xzyimjb->xyzijab', t1b, eris.OOOV.conj())
     for ky, kx, ku in kpts_helper.loop_kkk(nkpts):
         kz = kconserv[ky, ku, kx]
-        u2bb[kx,ky,kz] += lib.einsum('ie,bjae->ijab', t1b[kx], eris.VOVV[ku,ky,kz])
+        Ht2bb[kx,ky,kz] += lib.einsum('ie,bjae->ijab', t1b[kx], eris.VOVV[ku,ky,kz])
+        Ht2bb[kx,ky,kz] -= lib.einsum('ma,imjb->ijab', t1b[kz], eris.OOOV[kx,kz,ky].conj())
 
-    for kx, kz, ky in kpts_helper.loop_kkk(nkpts):
-        u2bb[kx,ky,kz] -= lib.einsum('ma, imjb-> ijab', t1b[kz], eris.OOOV[kx,kz,ky].conj())
+    #:Ht2bb = Ht2bb - Ht2bb.transpose(1,0,2,4,3,5,6)
+    #:Ht2bb = Ht2bb - np.einsum('xyzijab,xyzu->xyuijba', Ht2bb, P)
+    # anti-symmetrize Ht2bb inplace
+    for ki in range(nkpts):
+        tmp = Ht2bb[ki,ki] - Ht2bb[ki,ki].transpose(0,2,1,3,4)
+        kb_ = kconserv[ki,:,ki]
+        Ht2bb[ki,ki,:  ]  = tmp
+        Ht2bb[ki,ki,kb_] -= tmp.transpose(0,1,2,4,3)
 
-    u2bb = u2bb - u2bb.transpose(1,0,2,4,3,5,6)
-    u2bb = u2bb - np.einsum('xyzijab,xyzu->xyuijba', u2bb, P)
-    Ht2bb += u2bb
+        for kj in range(ki):
+            tmp = Ht2bb[ki,kj] - Ht2bb[kj,ki].transpose(0,2,1,3,4)
+            kb_ = kconserv[ki,:,kj]
+
+            Ht2bb[ki,kj,:  ]  = tmp
+            Ht2bb[kj,ki,kb_]  = tmp.transpose(0,2,1,4,3)
+            Ht2bb[ki,kj,kb_] -= tmp.transpose(0,1,2,4,3)
+            Ht2bb[kj,ki,:  ] -= tmp.transpose(0,2,1,3,4)
+
+    add_vvvv_(cc, (Ht2aa, Ht2ab, Ht2bb), t1, t2, eris)
 
     #:Ht2ab += np.einsum('xie,uyzBJae,uzyx->xyziJaB', t1a, eris.VOvv, P)
     #:Ht2ab += np.einsum('yJE,zxuaiBE,zuxy->xyziJaB', t1b, eris.voVV, P)
@@ -337,27 +320,24 @@ def update_amps(cc, t1, t2, eris):
         kz = kconserv[kx, ku, ky]
         Ht2ab[kx,ky,kz] -= lib.einsum('mb,jmia->ijab',t1b[ku],eris.OOov[ky,ku,kx].conj())
 
-    eia = []
-    eIA = []
-    for ki in range(nkpts):
-        eia.append([mo_ea_o[ki][:,None] - mo_ea_v[ka] for ka in range(nkpts)])
-        eIA.append([mo_eb_o[ki][:,None] - mo_eb_v[ka] for ka in range(nkpts)])
+    eia = mo_ea_o[:,None,:,None] - mo_ea_v[None,:,None,:]
+    eIA = mo_eb_o[:,None,:,None] - mo_eb_v[None,:,None,:]
 
     for ki in range(nkpts):
-        Ht1a[ki] /= eia[ki][ki]
-        Ht1b[ki] /= eIA[ki][ki]
+        Ht1a[ki] /= eia[ki,ki]
+        Ht1b[ki] /= eIA[ki,ki]
 
     for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
         kb = kconserv[ki, ka, kj]
-        eijab = eia[ki][ka][:,None,:,None] + eia[kj][kb][:,None,:]
+        eijab = eia[ki,ka][:,None,:,None] + eia[kj,kb][:,None,:]
         eijab[abs(eijab) < LOOSE_ZERO_TOL] = LARGE_DENOM
         Ht2aa[ki,kj,ka] /= eijab
 
-        eijab = eia[ki][ka][:,None,:,None] + eIA[kj][kb][:,None,:]
+        eijab = eia[ki,ka][:,None,:,None] + eIA[kj,kb][:,None,:]
         eijab[abs(eijab) < LOOSE_ZERO_TOL] = LARGE_DENOM
         Ht2ab[ki,kj,ka] /= eijab
 
-        eijab = eIA[ki][ka][:,None,:,None] + eIA[kj][kb][:,None,:]
+        eijab = eIA[ki,ka][:,None,:,None] + eIA[kj,kb][:,None,:]
         eijab[abs(eijab) < LOOSE_ZERO_TOL] = LARGE_DENOM
         Ht2bb[ki,kj,ka] /= eijab
 
@@ -387,24 +367,22 @@ def energy(cc, t1, t2, eris):
     for ki in range(nkpts):
         s += einsum('ia,ia', fa[ki, :noa, noa:], t1a[ki, :, :])
         s += einsum('ia,ia', fb[ki, :nob, nob:], t1b[ki, :, :])
-    t1t1aa = np.zeros(shape=t2aa.shape, dtype=t2aa.dtype)
-    t1t1ab = np.zeros(shape=t2ab.shape, dtype=t2ab.dtype)
-    t1t1bb = np.zeros(shape=t2bb.shape, dtype=t2bb.dtype)
-    for ki in range(nkpts):
-        ka = ki
-        for kj in range(nkpts):
-            t1t1aa[ki, kj, ka, :, :, :, :] = einsum('ia,jb->ijab', t1a[ki, :, :], t1a[kj, :, :])
-            t1t1ab[ki, kj, ka, :, :, :, :] = einsum('ia,jb->ijab', t1a[ki, :, :], t1b[kj, :, :])
-            t1t1bb[ki, kj, ka, :, :, :, :] = einsum('ia,jb->ijab', t1b[ki, :, :], t1b[kj, :, :])
-    tauaa = t2aa + 2*t1t1aa
-    tauab = t2ab + t1t1ab
-    taubb = t2bb + 2*t1t1bb
-    d = 0.0 + 0.j
-    d += 0.25*(einsum('xzyiajb,xyzijab->',eris.ovov,tauaa)
-            - einsum('yzxjaib,xyzijab->',eris.ovov,tauaa))
-    d += einsum('xzyiajb,xyzijab->',eris.ovOV,tauab)
-    d += 0.25*(einsum('xzyiajb,xyzijab->',eris.OVOV,taubb)
-            - einsum('yzxjaib,xyzijab->',eris.OVOV,taubb))
+
+    d = 0
+    for ki, ka, kj in kpts_helper.loop_kkk(nkpts):
+        ovov = eris.ovov[ki,ka,kj]
+        OVOV = eris.OVOV[ki,ka,kj]
+        ovOV = eris.ovOV[ki,ka,kj]
+        d += np.einsum('iajb,ijab->', ovov, t2aa[ki,kj,ka]) * .5
+        d += np.einsum('iajb,ijab->', OVOV, t2bb[ki,kj,ka]) * .5
+        d += np.einsum('iajb,ijab->', ovOV, t2ab[ki,kj,ka])
+        if ka == ki:
+            d += np.einsum('iajb,ia,jb->', ovov, t1a[ki], t1a[kj]) * .5
+            d += np.einsum('iajb,ia,jb->', OVOV, t1b[ki], t1b[kj]) * .5
+            d += np.einsum('iajb,ia,jb->', ovOV, t1a[ki], t1b[kj])
+        if ka == kj:
+            d -= np.einsum('iajb,ja,ib->', ovov, t1a[kj], t1a[ki]) * .5
+            d -= np.einsum('iajb,ja,ib->', OVOV, t1b[kj], t1b[ki]) * .5
     e = s + d
     e /= nkpts
     if abs(e.imag) > 1e-4:
@@ -657,43 +635,39 @@ class KUCCSD(uccsd.UCCSD):
         t2ab = np.zeros((nkpts, nkpts, nkpts, nocca, noccb, nvira, nvirb), dtype=np.complex128)
         t2bb = np.zeros((nkpts, nkpts, nkpts, noccb, noccb, nvirb, nvirb), dtype=np.complex128)
 
-        mo_ea_o = [e[:nocca] for e in eris.mo_energy[0]]
-        mo_eb_o = [e[:noccb] for e in eris.mo_energy[1]]
-        mo_ea_v = [e[nocca:] for e in eris.mo_energy[0]]
-        mo_eb_v = [e[noccb:] for e in eris.mo_energy[1]]
+        mo_ea_o = np.asarray([e[:nocca] for e in eris.mo_energy[0]])
+        mo_eb_o = np.asarray([e[:noccb] for e in eris.mo_energy[1]])
+        mo_ea_v = np.asarray([e[nocca:] for e in eris.mo_energy[0]])
+        mo_eb_v = np.asarray([e[noccb:] for e in eris.mo_energy[1]])
+        Dia = mo_ea_o[:,None,:,None] - mo_ea_v[None,:,None,:]
+        DIA = mo_eb_o[:,None,:,None] - mo_eb_v[None,:,None,:]
 
+        d = 0.0 + 0.j
         kconserv = kpts_helper.get_kconserv(self._scf.cell, self.kpts)
         for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
             kb = kconserv[ki, ka, kj]
-            Daa = (mo_ea_o[ki][:,None,None,None] + mo_ea_o[kj][None,:,None,None] -
-                   mo_ea_v[ka][None,None,:,None] - mo_ea_v[kb][None,None,None,:])
-            Dab = (mo_ea_o[ki][:,None,None,None] + mo_eb_o[kj][None,:,None,None] -
-                   mo_ea_v[ka][None,None,:,None] - mo_eb_v[kb][None,None,None,:])
-            Dbb = (mo_eb_o[ki][:,None,None,None] + mo_eb_o[kj][None,:,None,None] -
-                   mo_eb_v[ka][None,None,:,None] - mo_eb_v[kb][None,None,None,:])
+            Daa = Dia[ki,ka][:,None,:,None] + Dia[kj,kb][:,None,:]
+            Dab = Dia[ki,ka][:,None,:,None] + DIA[kj,kb][:,None,:]
+            Dbb = DIA[ki,ka][:,None,:,None] + DIA[kj,kb][:,None,:]
 
             # Due to padding; see above discussion concerning t1new in update_amps()
-            idx = np.where(abs(Daa) < LOOSE_ZERO_TOL)[0]
-            Daa[idx] = LARGE_DENOM
-            idx = np.where(abs(Dab) < LOOSE_ZERO_TOL)[0]
-            Dab[idx] = LARGE_DENOM
-            idx = np.where(abs(Dbb) < LOOSE_ZERO_TOL)[0]
-            Dbb[idx] = LARGE_DENOM
+            Daa[abs(Daa) < LOOSE_ZERO_TOL] = LARGE_DENOM
+            Dab[abs(Dab) < LOOSE_ZERO_TOL] = LARGE_DENOM
+            Dbb[abs(Dbb) < LOOSE_ZERO_TOL] = LARGE_DENOM
 
-            t2aa[ki,kj,ka] = eris.ovov[ki,ka,kj].conj().transpose((0,2,1,3)) / Daa
-            t2aa[ki,kj,ka]-= eris.ovov[kj,ka,ki].conj().transpose((2,0,1,3)) / Daa
-            t2ab[ki,kj,ka] = eris.ovOV[ki,ka,kj].conj().transpose((0,2,1,3)) / Dab
-            t2bb[ki,kj,ka] = eris.OVOV[ki,ka,kj].conj().transpose((0,2,1,3)) / Dbb
-            t2bb[ki,kj,ka]-= eris.OVOV[kj,ka,ki].conj().transpose((2,0,1,3)) / Dbb
+            ovov = eris.ovov[ki,ka,kj] - eris.ovov[kj,ka,ki].transpose(2,1,0,3)
+            OVOV = eris.OVOV[ki,ka,kj] - eris.OVOV[kj,ka,ki].transpose(2,1,0,3)
+            ovOV = eris.ovOV[ki,ka,kj]
+            t2aa[ki,kj,ka]+= ovov.conj().transpose((0,2,1,3)) / Daa
+            t2ab[ki,kj,ka]+= ovOV.conj().transpose((0,2,1,3)) / Dab
+            t2bb[ki,kj,ka]+= OVOV.conj().transpose((0,2,1,3)) / Dbb
+
+            d += np.einsum('iajb,ijab->', ovov, t2aa[ki,kj,ka]) * .25
+            d += np.einsum('iajb,ijab->', ovOV, t2ab[ki,kj,ka])
+            d += np.einsum('iajb,ijab->', OVOV, t2bb[ki,kj,ka]) * .25
 
         t2 = (t2aa,t2ab,t2bb)
 
-        d = 0.0 + 0.j
-        d += 0.25*(einsum('xzyiajb,xyzijab->',eris.ovov,t2aa)
-                - einsum('yzxjaib,xyzijab->',eris.ovov,t2aa))
-        d += einsum('xzyiajb,xyzijab->',eris.ovOV,t2ab)
-        d += 0.25*(einsum('xzyiajb,xyzijab->',eris.OVOV,t2bb)
-                - einsum('yzxjaib,xyzijab->',eris.OVOV,t2bb))
         self.emp2 = d/nkpts
 
         logger.info(self, 'Init t2, MP2 energy = %.15g', self.emp2.real)
@@ -1152,6 +1126,12 @@ if __name__ == '__main__':
     print(abs(r1 - kgcc.spatial2spin(Ht1)).max())
     print(abs(r2 - kgcc.spatial2spin(Ht2)).max())
 
+    emp2, Ht1, Ht2 = mycc.init_amps(eris)
+    print(emp2 - -99.541294579602493)
+    print(lib.finger(Ht2[0]) - (-7.4354375955631031-11.90170810362992j) )
+    print(lib.finger(Ht2[1]) - (-1996.9219406054026-791.31127174048345j))
+    print(lib.finger(Ht2[2]) - (17.310815859824768+20.092614582725215j) )
+
     kmf = kmf.density_fit(auxbasis=[[0, (1., 1.)]])
     mycc = KUCCSD(kmf)
     eris = _make_df_eris(mycc, mycc.mo_coeff)
@@ -1169,6 +1149,8 @@ if __name__ == '__main__':
     r2 = kgcc.spatial2spin(t2)
     ge = kccsd.energy(kgcc, r1, r2, kccsd_eris)
     r1, r2 = kgcc.update_amps(r1, r2, kccsd_eris)
+    ue = energy(mycc, t1, t2, eris)
+    print(abs(ge - ue))
     print(abs(r1 - kgcc.spatial2spin(Ht1)).max())
     print(abs(r2 - kgcc.spatial2spin(Ht2)).max())
 
