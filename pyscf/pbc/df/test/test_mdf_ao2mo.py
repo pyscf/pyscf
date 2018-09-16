@@ -113,7 +113,7 @@ class KnowValues(unittest.TestCase):
         mo =(numpy.random.random((nkpts,nao,nao)) +
              numpy.random.random((nkpts,nao,nao))*1j)
 
-        with_df = df.MDF(cell, kpts)
+        with_df = mdf.MDF(cell, kpts)
         out = with_df.ao2mo_7d(mo, kpts)
         ref = numpy.empty_like(out)
 

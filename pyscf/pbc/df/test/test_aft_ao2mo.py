@@ -14,6 +14,7 @@
 
 import unittest
 import numpy
+from pyscf import ao2mo
 from pyscf.pbc.df import aft
 import pyscf.pbc.gto as pgto
 from pyscf.pbc.lib import kpts_helper

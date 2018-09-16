@@ -33,17 +33,24 @@ LINEAR_DEP_THR = getattr(__config__, 'df_df_DF_lindep', 1e-12)
 format_aux_basis = addons.make_auxmol
 
 
-# (ij|L)
-def aux_e2(mol, auxmol, intor='int3c2e_sph', aosym='s1', comp=None, out=None):
+def aux_e2(mol, auxmol, intor='int3c2e', aosym='s1', comp=None, out=None):
     '''3-center AO integrals (ij|L), where L is the auxiliary basis.
     '''
     pmol = gto.mole.conc_mol(mol, auxmol)
     shls_slice = (0, mol.nbas, 0, mol.nbas, mol.nbas, mol.nbas+auxmol.nbas)
     return pmol.intor(intor, comp, aosym=aosym, shls_slice=shls_slice, out=out)
 
-# (L|ij)
-def aux_e1(mol, auxmol, intor='int3c2e_sph', aosym='s1', comp=None, out=None):
+def aux_e1(mol, auxmol, intor='int3c2e', aosym='s1', comp=None, out=None):
     '''3-center 2-electron AO integrals (L|ij), where L is the auxiliary basis.
+
+    Note aux_e1 is basically analogous to aux_e2 function. It can be viewed as
+    the version of transposed aux_e2 tensor:
+    if comp == 1:
+        aux_e1 = aux_e2().T
+    else:
+        aux_e1 = aux_e2().transpose(0,2,1)
+
+    The same arguments as function aux_e2 can be input to aux_e1.
     '''
     out = aux_e2(mol, auxmol, intor, aosym, comp, out)
     if out.ndim == 2:  # comp == 1
@@ -53,7 +60,7 @@ def aux_e1(mol, auxmol, intor='int3c2e_sph', aosym='s1', comp=None, out=None):
     return out
 
 
-def fill_2c2e(mol, auxmol, intor='int2c2e_sph', comp=None, hermi=1, out=None):
+def fill_2c2e(mol, auxmol, intor='int2c2e', comp=None, hermi=1, out=None):
     '''2-center 2-electron AO integrals for auxiliary basis (auxmol)
     '''
     return auxmol.intor(intor, comp=comp, hermi=hermi, out=out)
@@ -62,7 +69,7 @@ def fill_2c2e(mol, auxmol, intor='int2c2e_sph', comp=None, hermi=1, out=None):
 # Note the temporary memory usage is about twice as large as the return cderi
 # array
 def cholesky_eri(mol, auxbasis='weigend+etb', auxmol=None,
-                 int3c='int3c2e_sph', aosym='s2ij', int2c='int2c2e_sph', comp=1,
+                 int3c='int3c2e', aosym='s2ij', int2c='int2c2e', comp=1,
                  verbose=0, fauxe2=aux_e2):
     '''
     Returns:
