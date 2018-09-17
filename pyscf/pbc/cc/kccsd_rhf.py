@@ -1116,7 +1116,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                 idx = np.ix_([kj], [ka], nonzero_opadding[kj], nonzero_vpadding[ka], nonzero_vpadding[kb])
                 new_r2[idx] = r2[idx]
 
-        return self.ip_amplitudes_to_vector(new_r1, new_r2)
+        return self.ea_amplitudes_to_vector(new_r1, new_r2)
 
 
 KRCCSD = RCCSD
