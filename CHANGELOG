@@ -10,6 +10,7 @@ PySCF 1.6 alpha (2018-09-??)
   - Interface to Cornell SHCI
   - PBC dipole memont and Makov-Payne correction
   - Overlap of two CISD wavefunctions
+  - EFG and Mossbauer spectroscopy of crystal and molecule
 * Improved
   - numint performance (eval_rho, eval_mat)
   - Energy cutoff estimation
@@ -17,13 +18,13 @@ PySCF 1.6 alpha (2018-09-??)
   - Integral transformation performance in GW
 
 
-PySCF 1.5.3
------------
+PySCF 1.5.3 (2018-09-06)
+------------------------
 * Bugfix
   - get_jk prescreen for non-hermitian density matrices.
   - Inaccurate estimation of memory usage in ccsd rdm.
   - Frozen orbital EA-EOM-KRCCSD
-  - IOError due to 4GB chunk size limit in HDF5 format
+  - IOError due to 4GB chunk size limit in HDF5 library
 
 
 PySCF 1.5.2 (2018-08-15)

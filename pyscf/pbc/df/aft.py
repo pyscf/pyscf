@@ -128,17 +128,7 @@ def get_pp_loc_part1(mydf, kpts=None):
                 mesh = mesh_min
         Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
 
-        nuccell = copy.copy(cell)
-        half_sph_norm = .5/numpy.sqrt(numpy.pi)
-        norm = half_sph_norm/gto.gaussian_int(2, mydf.eta)
-        chg_env = [mydf.eta, norm]
-        ptr_eta = cell._env.size
-        ptr_norm = ptr_eta + 1
-        chg_bas = [[ia, 0, 1, 1, 0, ptr_eta, ptr_norm, 0] for ia in range(cell.natm)]
-        nuccell._atm = cell._atm
-        nuccell._bas = numpy.asarray(chg_bas, dtype=numpy.int32)
-        nuccell._env = numpy.hstack((cell._env, chg_env))
-
+        nuccell = _compensate_nuccell(mydf)
         # PP-loc part1 is handled by fakenuc in _int_nuc_vloc
         vj = lib.asarray(mydf._int_nuc_vloc(nuccell, kpts_lst))
         t0 = t1 = log.timer_debug1('vnuc pass1: analytic int', *t0)
@@ -472,6 +462,7 @@ class AFTDF(lib.StreamObject):
 
     get_eri = get_ao_eri = aft_ao2mo.get_eri
     ao2mo = get_mo_eri = aft_ao2mo.general
+    ao2mo_7d = aft_ao2mo.ao2mo_7d
     get_ao_pairs_G = get_ao_pairs = aft_ao2mo.get_ao_pairs_G
     get_mo_pairs_G = get_mo_pairs = aft_ao2mo.get_mo_pairs_G
 
@@ -543,6 +534,21 @@ def _fake_nuc(cell):
     fakenuc._env = numpy.asarray(numpy.hstack(_env), dtype=numpy.double)
     fakenuc.rcut = cell.rcut
     return fakenuc
+
+def _compensate_nuccell(mydf):
+    '''A cell of the compensated Gaussian charges for nucleus'''
+    cell = mydf.cell
+    nuccell = copy.copy(cell)
+    half_sph_norm = .5/numpy.sqrt(numpy.pi)
+    norm = half_sph_norm/gto.gaussian_int(2, mydf.eta)
+    chg_env = [mydf.eta, norm]
+    ptr_eta = cell._env.size
+    ptr_norm = ptr_eta + 1
+    chg_bas = [[ia, 0, 1, 1, 0, ptr_eta, ptr_norm, 0] for ia in range(cell.natm)]
+    nuccell._atm = cell._atm
+    nuccell._bas = numpy.asarray(chg_bas, dtype=numpy.int32)
+    nuccell._env = numpy.hstack((cell._env, chg_env))
+    return nuccell
 
 del(CUTOFF, PRECISION)
 

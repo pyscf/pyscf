@@ -20,6 +20,7 @@ Ref: Stanton et al., J. Chem. Phys. 94, 4334 (1990)
 Ref: Hirata et al., J. Chem. Phys. 120, 2581 (2004)
 '''
 
+from functools import reduce
 import time
 import numpy as np
 

@@ -644,6 +644,7 @@ class GDF(aft.AFTDF):
 
     get_eri = get_ao_eri = df_ao2mo.get_eri
     ao2mo = get_mo_eri = df_ao2mo.general
+    ao2mo_7d = df_ao2mo.ao2mo_7d
 
     def update_mp(self):
         mf = copy.copy(mf)

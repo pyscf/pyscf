@@ -368,6 +368,7 @@ def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True):
 
 
 if __name__ == '__main__':
+    from functools import reduce
     from pyscf import gto
     from pyscf import scf
     from pyscf.cc import ccsd

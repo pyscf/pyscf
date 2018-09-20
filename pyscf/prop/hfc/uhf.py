@@ -31,7 +31,6 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf.dft import numint
 from pyscf.prop.nmr import uhf as uhf_nmr
-from pyscf.prop.ssc import rhf as rhf_ssc
 from pyscf.prop.ssc import uhf as uhf_ssc
 from pyscf.prop.ssc.rhf import _dm1_mo2ao
 from pyscf.prop.zfs.uhf import koseki_charge
@@ -39,7 +38,8 @@ from pyscf.prop.gtensor.uhf import align, get_jk
 from pyscf.data import nist
 from pyscf.data.gyro import get_nuc_g_factor
 
-def make_fcsd(hfcobj, dm0, hfc_nuc=None, verbose=None):
+def make_fcdip(hfcobj, dm0, hfc_nuc=None, verbose=None):
+    '''The contribution of Fermi-contact term and dipole-dipole interactions'''
     log = logger.new_logger(hfcobj, verbose)
     mol = hfcobj.mol
     if hfc_nuc is None:
@@ -59,10 +59,10 @@ def make_fcsd(hfcobj, dm0, hfc_nuc=None, verbose=None):
     hfc = []
     for i, atm_id in enumerate(hfc_nuc):
         nuc_gyro = get_nuc_g_factor(mol.atom_symbol(atm_id)) * nuc_mag
-        h1 = rhf_ssc._get_integrals_fcsd(mol, atm_id)
+        h1 = _get_integrals_fcdip(mol, atm_id)
         fcsd = numpy.einsum('xyij,ji->xy', h1, spindm)
 
-        h1fc = rhf_ssc._get_integrals_fc(mol, atm_id)
+        h1fc = _get_integrals_fc(mol, atm_id)
         fc = numpy.einsum('ij,ji', h1fc, spindm)
 
         sd = fcsd + numpy.eye(3) * fc
@@ -72,6 +72,28 @@ def make_fcsd(hfcobj, dm0, hfc_nuc=None, verbose=None):
             _write(hfcobj, align(fac*nuc_gyro*sd)[0], 'SD of atom %d (in MHz)' % atm_id)
         hfc.append(fac * nuc_gyro * fcsd)
     return numpy.asarray(hfc)
+
+def _get_integrals_fcdip(mol, atm_id):
+    '''AO integrals for FC + Dipole-dipole'''
+    nao = mol.nao
+    with mol.with_rinv_origin(mol.atom_coord(atm_id)):
+        # Note the fermi-contact part is different to the fermi-contact
+        # operator in SSC.  FC here is associated to the the integrals of
+        # (\nabla \nabla 1/r), which includes the contribution of Poisson
+        # equation, 4\pi rho.  Factor 4.\pi/3 is used in the Fermi contact
+        # contribution.  In SSC, the factor of FC part is -8\pi/3.
+        ipipv = mol.intor('int1e_ipiprinv', 9).reshape(3,3,nao,nao)
+        ipvip = mol.intor('int1e_iprinvip', 9).reshape(3,3,nao,nao)
+        h1ao = ipipv + ipvip  # (nabla i | r/r^3 | j)
+        h1ao = h1ao + h1ao.transpose(0,1,3,2)
+        trace = h1ao[0,0] + h1ao[1,1] + h1ao[2,2]
+    return h1ao
+
+def _get_integrals_fc(mol, atm_id):
+    '''AO integrals for Fermi contact term'''
+    coords = mol.atom_coord(atm_id).reshape(1, 3)
+    ao = mol.eval_gto('GTOval', coords)
+    return 4*numpy.pi/3 * numpy.einsum('ip,iq->pq', ao, ao)
 
 # Note mo1 is the imaginary part of MO^1
 def make_pso_soc(hfcobj, hfc_nuc=None):
@@ -231,7 +253,7 @@ class HyperfineCoupling(uhf_ssc.SSC):
         mol = self.mol
 
         dm0 = self._scf.make_rdm1()
-        hfc_tensor = self.make_fcsd(dm0, self.hfc_nuc)
+        hfc_tensor = self.make_fcdip(dm0, self.hfc_nuc)
         hfc_tensor += self.make_pso_soc(self.hfc_nuc)
 
         logger.timer(self, 'HFC tensor', *cput0)
@@ -242,7 +264,7 @@ class HyperfineCoupling(uhf_ssc.SSC):
                        % (atm_id, mol.atom_symbol(atm_id)))
         return hfc_tensor
 
-    make_fcsd = make_fcsd
+    make_fcdip = make_fcdip
     make_pso_soc = make_pso_soc
     solve_mo1 = solve_mo1_soc
     make_h1_soc2e = make_h1_soc2e

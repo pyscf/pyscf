@@ -115,7 +115,7 @@ def format_pseudo(pseudo_tab):
 def make_pseudo_env(cell, _atm, _pseudo, pre_env=[]):
     for ia, atom in enumerate(cell._atom):
         symb = atom[0]
-        if symb in _pseudo:
+        if symb in _pseudo and _atm[ia,0] != 0:  # pass ghost atoms.
             _atm[ia,0] = sum(_pseudo[symb][0])
     _pseudobas = None
     return _atm, _pseudobas, pre_env
@@ -663,6 +663,8 @@ def get_SI(cell, Gv=None):
 
 def get_ewald_params(cell, precision=INTEGRAL_PRECISION, mesh=None):
     r'''Choose a reasonable value of Ewald 'eta' and 'cut' parameters.
+    eta^2 is the exponent coefficient of the model Gaussian charge for nucleus
+    at R:  \frac{eta^3}{pi^1.5} e^{-eta^2 (r-R)^2}
 
     Choice is based on largest G vector and desired relative precision.
 
