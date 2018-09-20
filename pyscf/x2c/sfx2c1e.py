@@ -144,10 +144,6 @@ class SpinFreeX2C(x2c.X2C):
         c = lib.param.LIGHT_SPEED
         assert('1E' in self.approx.upper())
 
-        t = xmol.intor_symmetric('int1e_kin')
-        v = xmol.intor_symmetric('int1e_nuc')
-        s = xmol.intor_symmetric('int1e_ovlp')
-        w = xmol.intor_symmetric('int1e_pnucp')
         if 'ATOM' in self.approx.upper():
             atom_slices = xmol.offset_nr_by_atom()
             nao = xmol.nao_nr()
@@ -163,6 +159,10 @@ class SpinFreeX2C(x2c.X2C):
                     w1 = z * xmol.intor('int1e_prinvp', shls_slice=shls_slice)
                 x[p0:p1,p0:p1] = x2c._x2c1e_xmatrix(t1, v1, w1, s1, c)
         else:
+            t = xmol.intor_symmetric('int1e_kin')
+            v = xmol.intor_symmetric('int1e_nuc')
+            s = xmol.intor_symmetric('int1e_ovlp')
+            w = xmol.intor_symmetric('int1e_pnucp')
             x = x2c._x2c1e_xmatrix(t, v, w, s, c)
         return x
 

@@ -415,9 +415,8 @@ def add_vvvv_(cc, Ht2, t1, t2, eris):
             return _Wvvvv[ka, kb, kc]
     else:
         fimd = lib.H5TmpFile()
-        _Wvvvv = fimd.create_dataset('vvvv', (nkpts, nkpts, nkpts, nvir, nvir, nvir, nvir), t1.dtype.char)
-        _Wvvvv = imdk.cc_Wvvvv(t1, t2, eris, kconserv, Wvvvv)
-
+        _Wvvvv = fimd.create_dataset('vvvv', (nkpts,nkpts,nkpts,nvir,nvir,nvir,nvir), t1.dtype.char)
+        _Wvvvv = imdk.cc_Wvvvv(t1, t2, eris, kconserv, _Wvvvv)
         def get_Wvvvv(ka, kb, kc):
             return _Wvvvv[ka, kb, kc]
 
@@ -1002,8 +1001,9 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         Hr2 = np.zeros(r2.shape, dtype=np.common_type(imds.Wvvvo[0, 0, 0], r1))
         for kj in range(nkpts):
             for ka in range(nkpts):
-                kb = kconserv[kshift, ka, kj]
-                Hr2[kj, ka] += einsum('abcj,c->jab', imds.Wvvvo[ka, kb, kshift], r1)
+                kb = kconserv[kshift,ka,kj]
+                Hr2[kj,ka] += einsum('abcj,c->jab',imds.Wvvvo[ka,kb,kshift],r1)
+
         # 2p1h-2p1h block
         if self.ea_partition == 'mp':
             nkpts, nocc, nvir = self.t1.shape
@@ -1116,17 +1116,17 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                 idx = np.ix_([kj], [ka], nonzero_opadding[kj], nonzero_vpadding[ka], nonzero_vpadding[kb])
                 new_r2[idx] = r2[idx]
 
-        return self.ip_amplitudes_to_vector(new_r1, new_r2)
+        return self.ea_amplitudes_to_vector(new_r1, new_r2)
 
 
 KRCCSD = RCCSD
 
 class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
-    def __init__(self, cc, mo_coeff=None, method='incore',
-                 ao2mofn=pyscf.ao2mo.outcore.general_iofree):
+    def __init__(self, cc, mo_coeff=None, method='incore'):
         from pyscf.pbc import df
         from pyscf.pbc import tools
         from pyscf.pbc.cc.ccsd import _adjust_occ
+        log = logger.Logger(cc.stdout, cc.verbose)
         cput0 = (time.clock(), time.time())
         moidx = get_frozen_mask(cc)
         cell = cc._scf.cell
@@ -1184,18 +1184,20 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
 
         kconserv = cc.khelper.kconserv
         khelper = cc.khelper
+        orbo = np.asarray(mo_coeff[:,:,:nocc], order='C')
+        orbv = np.asarray(mo_coeff[:,:,nocc:], order='C')
 
-        log = logger.Logger(cc.stdout, cc.verbose)
         if (method == 'incore' and (mem_incore + mem_now < cc.max_memory)
-                or cc.mol.incore_anyway):
+                or cell.incore_anyway):
             log.info('using incore ERI storage')
-            self.oooo = np.zeros((nkpts,nkpts,nkpts,nocc,nocc,nocc,nocc), dtype=dtype)
-            self.ooov = np.zeros((nkpts,nkpts,nkpts,nocc,nocc,nocc,nvir), dtype=dtype)
-            self.oovv = np.zeros((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=dtype)
-            self.ovov = np.zeros((nkpts,nkpts,nkpts,nocc,nvir,nocc,nvir), dtype=dtype)
-            self.voov = np.zeros((nkpts,nkpts,nkpts,nvir,nocc,nocc,nvir), dtype=dtype)
-            self.vovv = np.zeros((nkpts,nkpts,nkpts,nvir,nocc,nvir,nvir), dtype=dtype)
-            self.vvvv = np.zeros((nkpts,nkpts,nkpts,nvir,nvir,nvir,nvir), dtype=dtype)
+            self.oooo = np.empty((nkpts,nkpts,nkpts,nocc,nocc,nocc,nocc), dtype=dtype)
+            self.ooov = np.empty((nkpts,nkpts,nkpts,nocc,nocc,nocc,nvir), dtype=dtype)
+            self.oovv = np.empty((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=dtype)
+            self.ovov = np.empty((nkpts,nkpts,nkpts,nocc,nvir,nocc,nvir), dtype=dtype)
+            self.voov = np.empty((nkpts,nkpts,nkpts,nvir,nocc,nocc,nvir), dtype=dtype)
+            self.vovv = np.empty((nkpts,nkpts,nkpts,nvir,nocc,nvir,nvir), dtype=dtype)
+            #self.vvvv = np.empty((nkpts,nkpts,nkpts,nvir,nvir,nvir,nvir), dtype=dtype)
+            self.vvvv = cc._scf.with_df.ao2mo_7d(orbv, factor=1./nkpts).transpose(0,2,1,3,5,4,6)
 
             for (ikp,ikq,ikr) in khelper.symm_map.keys():
                 iks = kconserv[ikp,ikq,ikr]
@@ -1211,7 +1213,7 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
                     self.ovov[kp, kr, kq] = eri_kpt_symm[:nocc, nocc:, :nocc, nocc:] / nkpts
                     self.voov[kp, kr, kq] = eri_kpt_symm[nocc:, :nocc, :nocc, nocc:] / nkpts
                     self.vovv[kp, kr, kq] = eri_kpt_symm[nocc:, :nocc, nocc:, nocc:] / nkpts
-                    self.vvvv[kp, kr, kq] = eri_kpt_symm[nocc:, nocc:, nocc:, nocc:] / nkpts
+                    #self.vvvv[kp, kr, kq] = eri_kpt_symm[nocc:, nocc:, nocc:, nocc:] / nkpts
 
             self.dtype = dtype
         else:
@@ -1225,10 +1227,9 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
             self.voov = self.feri1.create_dataset('voov', (nkpts, nkpts, nkpts, nvir, nocc, nocc, nvir), dtype.char)
             self.vovv = self.feri1.create_dataset('vovv', (nkpts, nkpts, nkpts, nvir, nocc, nvir, nvir), dtype.char)
 
-            if not (cc.direct and type(cc._scf.with_df) is df.GDF):
+            if (not (cc.direct and type(cc._scf.with_df) is df.GDF)
+                or cell.dimension == 2):
                 self.vvvv = self.feri1.create_dataset('vvvv', (nkpts,nkpts,nkpts,nvir,nvir,nvir,nvir), dtype.char)
-            elif cell.dimension == 2:
-                raise NotImplementedError
 
             # <ij|pq>  = (ip|jq)
             cput1 = time.clock(), time.time()
@@ -1287,7 +1288,9 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
 
             cput1 = time.clock(), time.time()
             mem_now = lib.current_memory()[0]
-            if cc.direct and type(cc._scf.with_df) is df.GDF:
+            if (cc.direct and type(cc._scf.with_df) is df.GDF
+                and cell.dimension != 2):
+                # cc._scf.with_df needs to be df.GDF only (not MDF)
                 _init_df_eris(cc, self)
 
             elif nvir ** 4 * 16 / 1e6 + mem_now < cc.max_memory:
@@ -1336,8 +1339,8 @@ def _init_df_eris(cc, eris):
     if cell.dimension == 2:
         raise NotImplementedError
 
-    nocc = mycc.nocc
-    nmo = mycc.nmo
+    nocc = cc.nocc
+    nmo = cc.nmo
     nvir = nmo - nocc
     nao = cell.nao_nr()
 
@@ -1371,29 +1374,6 @@ def _init_df_eris(cc, eris):
                     _ao2mo.r_e2(Lpq, mo, (0, nmo, nmo, nmo + nvir), tao, ao_loc,
                                 out=eris.Lpv[ki, kj])
     return eris
-
-
-def verify_eri_symmetry(nmo, nkpts, kconserv, eri):
-    # Check ERI symmetry
-    maxdiff = 0.0
-    for kp in range(nkpts):
-        for kq in range(nkpts):
-            for kr in range(nkpts):
-                ks = kconserv[kp, kq, kr]
-                for p in range(nmo):
-                    for q in range(nmo):
-                        for r in range(nmo):
-                            for s in range(nmo):
-                                pqrs = eri[kp, kq, kr, p, q, r, s]
-                                rspq = eri[kr, ks, kp, r, s, p, q]
-                                diff = np.linalg.norm(pqrs - rspq).real
-                                if diff > 1e-5:
-                                    print("** Warning: ERI diff at ")
-                                    print("kp,kq,kr,ks,p,q,r,s =", kp, kq, kr, ks, p, q, r, s)
-                                maxdiff = max(maxdiff, diff)
-    print("Max difference in (pq|rs) - (rs|pq) = %.15g" % maxdiff)
-    if maxdiff > 1e-5:
-        print("Energy cutoff (or cell.mesh) is not enough to converge AO integrals.")
 
 
 imd = imdk
@@ -1551,7 +1531,6 @@ if __name__ == '__main__':
     e_ip, _ = mycc.ipccsd(nroots=3, kptlist=(0,))
     e_ea, _ = mycc.eaccsd(nroots=3, kptlist=(0,))
     print(e_ip, e_ea)
-    exit()
 
     ####
     cell = gto.Cell()
@@ -1600,7 +1579,7 @@ if __name__ == '__main__':
     t1, t2 = rand_t1_t2(mycc)
     Ht1, Ht2 = mycc.update_amps(t1, t2, eris)
     print(lib.finger(Ht1) - (-4.6808039711608824 + 9.4962987225515789j))  # FIXME
-    print(lib.finger(Ht2) - (18.613685230812546 + 114.66975731912211j))
+    print(lib.finger(Ht2) - (18.613685230812546 + 114.66975731912211j))  # FIXME
 
     kmf = kmf.density_fit(auxbasis=[[0, (1., 1.)], [0, (.5, 1.)]])
     mycc = KRCCSD(kmf)
@@ -1608,4 +1587,4 @@ if __name__ == '__main__':
     t1, t2 = rand_t1_t2(mycc)
     Ht1, Ht2 = mycc.update_amps(t1, t2, eris)
     print(lib.finger(Ht1) - (-3.6611794882508244 + 9.2241044317516554j))  # FIXME
-    print(lib.finger(Ht2) - (-196.88536721771101 - 432.29569128644886j))
+    print(lib.finger(Ht2) - (-196.88536721771101 - 432.29569128644886j))  # FIXME

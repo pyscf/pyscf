@@ -17,6 +17,7 @@ import numpy
 from pyscf import lib
 from pyscf.pbc.df import df
 import pyscf.pbc.gto as pgto
+from pyscf.pbc.lib import kpts_helper
 from pyscf import ao2mo
 
 L = 5.
@@ -146,6 +147,37 @@ class KnownValues(unittest.TestCase):
         with lib.temporary_env(cell, dimension = 2):
             eri1 = with_df.ao2mo(mo, kpts)
         self.assertAlmostEqual(abs(eri1.reshape(eri0.shape)-eri0).sum(), 0, 9)
+
+    def test_ao2mo_7d(self):
+        L = 3.
+        n = 6
+        cell = pgto.Cell()
+        cell.a = numpy.diag([L,L,L])
+        cell.mesh = [n,n,n]
+        cell.atom = '''He    2.    2.2      2.
+                       He    1.2   1.       1.'''
+        cell.basis = {'He': [[0, (1.2, 1)], [1, (0.6, 1)]]}
+        cell.verbose = 0
+        cell.build(0,0)
+
+        kpts = cell.make_kpts([1,3,1])
+        nkpts = len(kpts)
+        nao = cell.nao_nr()
+        numpy.random.seed(1)
+        mo =(numpy.random.random((nkpts,nao,nao)) +
+             numpy.random.random((nkpts,nao,nao))*1j)
+
+        with_df = df.GDF(cell, kpts)
+        out = with_df.ao2mo_7d(mo, kpts)
+        ref = numpy.empty_like(out)
+
+        kconserv = kpts_helper.get_kconserv(cell, kpts)
+        for ki, kj, kk in kpts_helper.loop_kkk(nkpts):
+            kl = kconserv[ki, kj, kk]
+            tmp = with_df.ao2mo((mo[ki], mo[kj], mo[kk], mo[kl]), kpts[[ki,kj,kk,kl]])
+            ref[ki,kj,kk] = tmp.reshape([nao]*4)
+
+        self.assertAlmostEqual(abs(out-ref).max(), 0, 12)
 
 if __name__ == '__main__':
     print("Full Tests for df ao2mo")

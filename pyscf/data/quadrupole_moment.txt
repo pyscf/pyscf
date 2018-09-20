@@ -3,6 +3,7 @@
 # Atomic Data and Nuclear Data Tables
 # http://dx.doi.org/10.1016/j.adt.2015.12.002
 
+# Q in units of the barn (1 barn = 10-28 m2 ).
 
 Element           Nucleus          E (level) keV    T1/2              I           Q (b)
 Hydrogen          Efg at the deuterium nucleus calculated for HD and D2

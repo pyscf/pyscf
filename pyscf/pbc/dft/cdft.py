@@ -28,6 +28,7 @@ shifting of an orbital (or a linear combination of orbitals) by an arbitrary
 constant.  Allows the freedom to select thine own basis
 '''
 
+from functools import reduce
 import numpy
 from pyscf import lo, tools
 from pyscf.pbc import gto, scf, dft

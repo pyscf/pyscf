@@ -33,12 +33,12 @@ KE_SCALING = getattr(__config__, 'pbc_df_aft_ke_cutoff_scaling', 0.75)
 
 
 def get_nuc(mydf, kpts=None):
-    cell = mydf.cell
     if kpts is None:
         kpts_lst = numpy.zeros((1,3))
     else:
         kpts_lst = numpy.reshape(kpts, (-1,3))
 
+    cell = mydf.cell
     mesh = mydf.mesh
     charge = -cell.atom_charges()
     Gv = cell.get_Gv(mesh)
@@ -47,7 +47,7 @@ def get_nuc(mydf, kpts=None):
 
     coulG = tools.get_coulG(cell, mesh=mesh, Gv=Gv)
     vneG = rhoG * coulG
-    vneR = tools.ifft(vneG, mydf.mesh).real
+    vneR = tools.ifft(vneG, mesh).real
 
     vne = [0] * len(kpts_lst)
     for ao_ks_etc, p0, p1 in mydf.aoR_loop(mydf.grids, kpts_lst):
@@ -279,6 +279,7 @@ class FFTDF(lib.StreamObject):
 
     get_eri = get_ao_eri = fft_ao2mo.get_eri
     ao2mo = get_mo_eri = fft_ao2mo.general
+    ao2mo_7d = fft_ao2mo.ao2mo_7d
     get_ao_pairs_G = get_ao_pairs = fft_ao2mo.get_ao_pairs_G
     get_mo_pairs_G = get_mo_pairs = fft_ao2mo.get_mo_pairs_G
 
