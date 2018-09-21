@@ -383,7 +383,7 @@ class gw(scf):
       if self.verbosity>0: print(__name__, '\t\t====> Spin {}: Corrected Molecular orbital indices in sorted order: {}'.format(str(s+1),np.argsort(self.mo_energy_gw[0,s,:])))
       argsrt = np.argsort(self.mo_energy_gw[0,s,:])
       self.mo_energy_gw[0,s,:] = np.sort(self.mo_energy_gw[0,s,:])
-      for n,m in enumerate(argsrt): self.mo_coeff_gw[0,0,n] = self.mo_coeff[0,0,m]
+      for n,m in enumerate(argsrt): self.mo_coeff_gw[0,s,n] = self.mo_coeff[0,s,m]
  
     self.xc_code = 'GW'
     if self.verbosity>0:
