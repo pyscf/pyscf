@@ -24,5 +24,17 @@ def f(mol):
     print('Customized |g|', np.linalg.norm(g))
     return e, g
 
+#
+# Function as_pyscf_method is a wrapper that convert the "energy-gradients"
+# function to berny_solver.  The "energy-gradients" function takes the Mole
+# object as geometry input, and returns the energy and gradients of that
+# geometry.
+#
 fake_method = berny_solver.as_pyscf_method(mol, f)
-mol1 = berny_solver.optimize(fake_method)
+new_mol = berny_solver.optimize(fake_method)
+
+print('Old geometry (Bohr)')
+print(mol.atom_coords())
+
+print('New geometry (Bohr)')
+print(new_mol.atom_coords())

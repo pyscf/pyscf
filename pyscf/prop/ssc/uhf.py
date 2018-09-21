@@ -265,9 +265,7 @@ def make_h1_fcsd(mol, mo_coeff, mo_occ, atmlst):
     h1ba = []
     h1bb = []
     for ia in atmlst:
-        mol.set_rinv_origin(mol.atom_coord(ia))
-        a01p = mol.intor('int1e_sa01sp', 12).reshape(3,4,nao,nao)
-        h1ao = -(a01p[:,:3] + a01p[:,:3].transpose(0,1,3,2))
+        h1ao = rhf_ssc._get_integrals_fcsd(mol, ia)
         # *.5 due to s = 1/2 * pauli-matrix
         for i in range(3):
             for j in range(3):

@@ -28,7 +28,8 @@ from pyscf.lib import logger
 import pyscf.cc
 import pyscf.cc.ccsd
 from pyscf.pbc import scf
-from pyscf.pbc.mp.kmp2 import get_frozen_mask, get_nocc, get_nmo
+from pyscf.pbc.mp.kmp2 import (get_frozen_mask, get_nocc, get_nmo,
+                               padded_mo_coeff, padding_k_idx)
 from pyscf.pbc.cc import kintermediates_rhf as imdk
 from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM
 from pyscf.lib import linalg_helper
@@ -39,8 +40,6 @@ from pyscf import __config__
 # einsum = np.einsum
 einsum = lib.einsum
 
-ITER=0
-
 # This is restricted (R)CCSD
 # Ref: Hirata, et al., J. Chem. Phys. 120, 2581 (2004)
 
@@ -49,13 +48,19 @@ kernel = pyscf.cc.ccsd.kernel
 
 def get_normt_diff(cc, t1, t2, t1new, t2new):
     '''Calculates norm(t1 - t1new) + norm(t2 - t2new).'''
-    return np.linalg.norm(t1new-t1) + np.linalg.norm(t2new-t2)
+    return np.linalg.norm(t1new - t1) + np.linalg.norm(t2new - t2)
+
 
 def update_amps(cc, t1, t2, eris):
     time0 = time1 = time.clock(), time.time()
     log = logger.Logger(cc.stdout, cc.verbose)
     nkpts, nocc, nvir = t1.shape
     fock = eris.fock
+    mo_e_o = [e[:nocc] for e in eris.mo_energy]
+    mo_e_v = [e[nocc:] + cc.level_shift for e in eris.mo_energy]
+
+    # Get location of padded elements in occupied and virtual space
+    nonzero_opadding, nonzero_vpadding = padding_k_idx(cc, kind="split")
 
     fov = fock[:, :nocc, nocc:]
     foo = fock[:, :nocc, :nocc]
@@ -71,10 +76,10 @@ def update_amps(cc, t1, t2, eris):
 
     # Move energy terms to the other side
     for k in range(nkpts):
-        Foo[k] -= np.diag(np.diag(foo[k]))
-        Fvv[k] -= np.diag(np.diag(fvv[k]))
-        Loo[k] -= np.diag(np.diag(foo[k]))
-        Lvv[k] -= np.diag(np.diag(fvv[k]))
+        Foo[k][np.diag_indices(nocc)] -= mo_e_o[k]
+        Fvv[k][np.diag_indices(nvir)] -= mo_e_v[k]
+        Loo[k][np.diag_indices(nocc)] -= mo_e_o[k]
+        Lvv[k][np.diag_indices(nvir)] -= mo_e_v[k]
     time1 = log.timer_debug1('intermediates', *time1)
 
     # T1 equation
@@ -153,22 +158,22 @@ def update_amps(cc, t1, t2, eris):
     time1 = log.timer_debug1('t2 vvvv', *time1)
 
     for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
-        kb = kconserv[ki,ka,kj]
+        kb = kconserv[ki, ka, kj]
 
-        t2new_tmp  = einsum('ac,ijcb->ijab', Lvv[ka],t2[ki,kj,ka])
-        t2new_tmp += einsum('ki,kjab->ijab',-Loo[ki],t2[ki,kj,ka])
+        t2new_tmp = einsum('ac,ijcb->ijab', Lvv[ka], t2[ki, kj, ka])
+        t2new_tmp += einsum('ki,kjab->ijab', -Loo[ki], t2[ki, kj, ka])
 
         kc = kconserv[ka, ki, kb]
         tmp2 = np.asarray(eris.vovv[kc, ki, kb]).transpose(3, 2, 1, 0).conj() \
                - einsum('kbic,ka->abic', eris.ovov[ka, kb, ki], t1[ka])
         t2new_tmp += einsum('abic,jc->ijab', tmp2, t1[kj])
 
-        kk = kconserv[ki,ka,kj]
-        tmp2 = np.asarray(eris.ooov[kj,ki,kk]).transpose(3,2,1,0).conj() \
-                + einsum('akic,jc->akij',eris.voov[ka,kk,ki],t1[kj])
-        t2new_tmp -= einsum('akij,kb->ijab',tmp2,t1[kb])
-        t2new[ki,kj,ka] += t2new_tmp
-        t2new[kj,ki,kb] += t2new_tmp.transpose(1,0,3,2)
+        kk = kconserv[ki, ka, kj]
+        tmp2 = np.asarray(eris.ooov[kj, ki, kk]).transpose(3, 2, 1, 0).conj() \
+               + einsum('akic,jc->akij', eris.voov[ka, kk, ki], t1[kj])
+        t2new_tmp -= einsum('akij,kb->ijab', tmp2, t1[kb])
+        t2new[ki, kj, ka] += t2new_tmp
+        t2new[kj, ki, kb] += t2new_tmp.transpose(1, 0, 3, 2)
 
     mem_now = lib.current_memory()[0]
     if (nocc ** 2 * nvir ** 2 * nkpts ** 3) * 16 / 1e6 * 2 + mem_now < cc.max_memory * .9:
@@ -202,18 +207,24 @@ def update_amps(cc, t1, t2, eris):
     time1 = log.timer_debug1('t2 voov', *time1)
 
     for ki in range(nkpts):
-        eia = foo[ki].diagonal()[:, None] - fvv[ki].diagonal()
-        # When padding the occupied/virtual arrays, some fock elements will be zero
-        eia[abs(eia) < LOOSE_ZERO_TOL] = LARGE_DENOM
+        ka = ki
+        # Remove zero/padded elements from denominator
+        eia = LARGE_DENOM * np.ones((nocc, nvir), dtype=eris.mo_energy[0].dtype)
+        n0_ovp_ia = np.ix_(nonzero_opadding[ki], nonzero_vpadding[ka])
+        eia[n0_ovp_ia] = (mo_e_o[ki][:,None] - mo_e_v[ka])[n0_ovp_ia]
         t1new[ki] /= eia
 
     for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
         kb = kconserv[ki, ka, kj]
-        eia = np.diagonal(foo[ki]).reshape(-1, 1) - np.diagonal(fvv[ka])
-        ejb = np.diagonal(foo[kj]).reshape(-1, 1) - np.diagonal(fvv[kb])
+        # For LARGE_DENOM, see t1new update above
+        eia = LARGE_DENOM * np.ones((nocc, nvir), dtype=eris.mo_energy[0].dtype)
+        n0_ovp_ia = np.ix_(nonzero_opadding[ki], nonzero_vpadding[ka])
+        eia[n0_ovp_ia] = (mo_e_o[ki][:,None] - mo_e_v[ka])[n0_ovp_ia]
+
+        ejb = LARGE_DENOM * np.ones((nocc, nvir), dtype=eris.mo_energy[0].dtype)
+        n0_ovp_jb = np.ix_(nonzero_opadding[kj], nonzero_vpadding[kb])
+        ejb[n0_ovp_jb] = (mo_e_o[kj][:,None] - mo_e_v[kb])[n0_ovp_jb]
         eijab = eia[:, None, :, None] + ejb[:, None, :]
-        # Due to padding; see above discussion concerning t1new in update_amps()
-        eijab[abs(eijab) < LOOSE_ZERO_TOL] = LARGE_DENOM
 
         t2new[ki, kj, ka] /= eijab
 
@@ -245,13 +256,12 @@ def describe_nested(data):
             struct.append(i_struct)
             total_size += i_size
             if dtype is not None and i_dtype is not None and i_dtype != dtype:
-                raise ValueError("Several different numpy dtypes encountered: {} and {}".format(
-                    str(dtype), str(i_dtype)
-                ))
+                raise ValueError("Several different numpy dtypes encountered: %s and %s" %
+                                 (str(dtype), str(i_dtype)))
             dtype = i_dtype
         return struct, total_size, dtype
     else:
-        raise ValueError("Unknown object to describe: {}".format(str(data)))
+        raise ValueError("Unknown object to describe: %s" % str(data))
 
 
 def nested_to_vector(data, destination=None, offset=0):
@@ -280,7 +290,7 @@ def nested_to_vector(data, destination=None, offset=0):
         for i in data:
             offset = nested_to_vector(i, destination, offset)
     else:
-        raise ValueError("Unknown object to vectorize: {}".format(str(data)))
+        raise ValueError("Unknown object to vectorize: %s" % str(data))
 
     if rtn:
         return destination, struct
@@ -301,24 +311,18 @@ def vector_to_nested(vector, struct, copy=True, ensure_size_matches=True):
         A nested structure with numpy arrays and, if `ensure_size_matches=False`, the number of vector elements used.
     """
     if len(vector.shape) != 1:
-        raise ValueError("Only vectors accepted, got: {}".format(repr(vector.shape)))
+        raise ValueError("Only vectors accepted, got: %s" % repr(vector.shape))
 
     if isinstance(struct, tuple):
         expected_size = np.prod(struct)
         if ensure_size_matches:
             if vector.size != expected_size:
-                raise ValueError("Structure size mismatch: expected {} = {:d}, found {:d}".format(
-                    repr(struct),
-                    expected_size,
-                    vector.size,
-                ))
+                raise ValueError("Structure size mismatch: expected %s = %d, found %d" %
+                                 (repr(struct), expected_size, vector.size,))
         if len(vector) < expected_size:
-            raise ValueError("Additional {:d} = ({:d} = {}) - {:d} vector elements are required".format(
-                expected_size - len(vector),
-                expected_size,
-                repr(struct),
-                len(vector),
-            ))
+            raise ValueError("Additional %d = (%d = %s) - %d vector elements are required" %
+                             (expected_size - len(vector), expected_size,
+                              repr(struct), len(vector),))
         a = vector[:expected_size].reshape(struct)
         if copy:
             a = a.copy()
@@ -338,13 +342,13 @@ def vector_to_nested(vector, struct, copy=True, ensure_size_matches=True):
 
         if ensure_size_matches:
             if vector.size != offset:
-                raise ValueError("{:d} additional elements found".format(vector.size - offset))
+                raise ValueError("%d additional elements found" % (vector.size - offset))
             return result
         else:
             return result, offset
 
     else:
-        raise ValueError("Unknown object to compose: {}".format(str(struct)))
+        raise ValueError("Unknown object to compose: %s" % (str(struct)))
 
 
 def energy(cc, t1, t2, eris):
@@ -353,7 +357,7 @@ def energy(cc, t1, t2, eris):
     fock = eris.fock
     e = 0.0 + 1j * 0.0
     for ki in range(nkpts):
-        e += 2*einsum('ia,ia', fock[ki,:nocc,nocc:], t1[ki])
+        e += 2 * einsum('ia,ia', fock[ki, :nocc, nocc:], t1[ki])
     tau = t1t1 = np.zeros(shape=t2.shape, dtype=t2.dtype)
     for ki in range(nkpts):
         ka = ki
@@ -393,27 +397,28 @@ def add_vvvv_(cc, Ht2, t1, t2, eris):
         #:    Wvvvv *= (1./nkpts)
         #:    return Wvvvv
         def get_Wvvvv(ka, kb, kc):
-            kd = kconserv[ka,kc,kb]
-            Lbd = (eris.Lpv[kb,kd,:,nocc:] -
-                   lib.einsum('Lkd,kb->Lbd', eris.Lpv[kb,kd,:,:nocc], t1[kb]))
-            Wvvvv = lib.einsum('Lac,Lbd->abcd', eris.Lpv[ka,kc,:,nocc:], Lbd)
+            kd = kconserv[ka, kc, kb]
+            Lbd = (eris.Lpv[kb, kd, :, nocc:] -
+                   lib.einsum('Lkd,kb->Lbd', eris.Lpv[kb, kd, :, :nocc], t1[kb]))
+            Wvvvv = lib.einsum('Lac,Lbd->abcd', eris.Lpv[ka, kc, :, nocc:], Lbd)
             Lbd = None
-            kcbd = lib.einsum('Lkc,Lbd->kcbd', eris.Lpv[ka,kc,:,:nocc],
-                              eris.Lpv[kb,kd,:,nocc:])
+            kcbd = lib.einsum('Lkc,Lbd->kcbd', eris.Lpv[ka, kc, :, :nocc],
+                              eris.Lpv[kb, kd, :, nocc:])
             Wvvvv -= lib.einsum('kcbd,ka->abcd', kcbd, t1[ka])
-            Wvvvv *= (1./nkpts)
+            Wvvvv *= (1. / nkpts)
             return Wvvvv
 
-    elif (nvir**4*nkpts**3)*16/1e6 + mem_now < cc.max_memory*.9:
+    elif (nvir ** 4 * nkpts ** 3) * 16 / 1e6 + mem_now < cc.max_memory * .9:
         _Wvvvv = imdk.cc_Wvvvv(t1, t2, eris, kconserv)
+
         def get_Wvvvv(ka, kb, kc):
-            return _Wvvvv[ka,kb,kc]
+            return _Wvvvv[ka, kb, kc]
     else:
         fimd = lib.H5TmpFile()
         _Wvvvv = fimd.create_dataset('vvvv', (nkpts,nkpts,nkpts,nvir,nvir,nvir,nvir), t1.dtype.char)
         _Wvvvv = imdk.cc_Wvvvv(t1, t2, eris, kconserv, _Wvvvv)
         def get_Wvvvv(ka, kb, kc):
-            return _Wvvvv[ka,kb,kc]
+            return _Wvvvv[ka, kb, kc]
 
     #:Ps = kconserve_pmatrix(cc.nkpts, cc.khelper.kconserv)
     #:Wvvvv = einsum('xyzakcd,ykb->xyzabcd', eris.vovv, -t1)
@@ -425,29 +430,30 @@ def add_vvvv_(cc, Ht2, t1, t2, eris):
     #:tau[idx,:,idx] += einsum('xic,yjd->xyijcd', t1, t1)
     #:Ht2 += einsum('xyuijcd,zwuabcd,xyuv,zwuv->xyzijab', tau, Wvvvv, Ps, Ps)
     for ka, kb, kc in kpts_helper.loop_kkk(nkpts):
-        kd = kconserv[ka,kc,kb]
+        kd = kconserv[ka, kc, kb]
         Wvvvv = get_Wvvvv(ka, kb, kc)
         for ki in range(nkpts):
-            kj = kconserv[ka,ki,kb]
-            tau = t2[ki,kj,kc].copy()
+            kj = kconserv[ka, ki, kb]
+            tau = t2[ki, kj, kc].copy()
             if ki == kc and kj == kd:
                 tau += np.einsum('ic,jd->ijcd', t1[ki], t1[kj])
-            Ht2[ki,kj,ka] += lib.einsum('abcd,ijcd->ijab', Wvvvv, tau)
+            Ht2[ki, kj, ka] += lib.einsum('abcd,ijcd->ijab', Wvvvv, tau)
     fimd = None
     return Ht2
+
 
 # Ps is Permutation transformation matrix
 # The physical meaning of Ps matrix is the conservation of moment.
 # Given the four indices in Ps, the element shows whether moment conservation
 # holds (1) or not (0)
 def kconserve_pmatrix(nkpts, kconserv):
-    Ps = np.zeros((nkpts,nkpts,nkpts,nkpts))
+    Ps = np.zeros((nkpts, nkpts, nkpts, nkpts))
     for ki in range(nkpts):
         for kj in range(nkpts):
             for ka in range(nkpts):
                 # Chemist's notation for momentum conserving t2(ki,kj,ka,kb)
-                kb = kconserv[ki,ka,kj]
-                Ps[ki,kj,ka,kb] = 1
+                kb = kconserv[ki, ka, kj]
+                Ps[ki, kj, ka, kb] = 1
     return Ps
 
 
@@ -483,6 +489,47 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
     def dump_flags(self):
         return pyscf.cc.ccsd.CCSD.dump_flags(self)
 
+    @property
+    def ccsd_vector_desc(self):
+        """Description of the ground-state vector."""
+        nvir = self.nmo - self.nocc
+        return [(self.nkpts, self.nocc, nvir), (self.nkpts,) * 3 + (self.nocc,) * 2 + (nvir,) * 2]
+
+    def amplitudes_to_vector(self, t1, t2):
+        """Ground state amplitudes to a vector."""
+        return nested_to_vector((t1, t2))[0]
+
+    def vector_to_amplitudes(self, vec):
+        """Ground state vector to apmplitudes."""
+        return vector_to_nested(vec, self.ccsd_vector_desc)
+
+    @property
+    def ip_vector_desc(self):
+        """Description of the IP vector."""
+        return [(self.nocc,), (self.nkpts, self.nkpts, self.nocc, self.nocc, self.nmo - self.nocc)]
+
+    def ip_amplitudes_to_vector(self, t1, t2):
+        """Ground state amplitudes to a vector."""
+        return nested_to_vector((t1, t2))[0]
+
+    def ip_vector_to_amplitudes(self, vec):
+        """Ground state vector to apmplitudes."""
+        return vector_to_nested(vec, self.ip_vector_desc)
+
+    @property
+    def ea_vector_desc(self):
+        """Description of the EA vector."""
+        nvir = self.nmo - self.nocc
+        return [(nvir,), (self.nkpts, self.nkpts, self.nocc, nvir, nvir)]
+
+    def ea_amplitudes_to_vector(self, t1, t2):
+        """Ground state amplitudes to a vector."""
+        return nested_to_vector((t1, t2))[0]
+
+    def ea_vector_to_amplitudes(self, vec):
+        """Ground state vector to apmplitudes."""
+        return vector_to_nested(vec, self.ea_vector_desc)
+
     def init_amps(self, eris):
         time0 = time.clock(), time.time()
         nocc = self.nocc
@@ -490,40 +537,46 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         nkpts = self.nkpts
         t1 = np.zeros((nkpts,nocc,nvir), dtype=eris.fock.dtype)
         t2 = np.empty((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=eris.fock.dtype)
-        foo = eris.fock[:,:nocc,:nocc].copy()
-        fvv = eris.fock[:,nocc:,nocc:].copy()
+        mo_e_o = [eris.mo_energy[k][:nocc] for k in range(nkpts)]
+        mo_e_v = [eris.mo_energy[k][nocc:] for k in range(nkpts)]
+
+        # Get location of padded elements in occupied and virtual space
+        nonzero_opadding, nonzero_vpadding = padding_k_idx(self, kind="split")
 
         emp2 = 0
         kconserv = self.khelper.kconserv
-        touched = np.zeros((nkpts,nkpts,nkpts), dtype=bool)
+        touched = np.zeros((nkpts, nkpts, nkpts), dtype=bool)
         for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
             if touched[ki, kj, ka]:
                 continue
 
             kb = kconserv[ki, ka, kj]
-            eia = foo[ki].diagonal().real[:, None] - fvv[ka].diagonal().real
-            ejb = foo[kj].diagonal().real[:, None] - fvv[kb].diagonal().real
-            eijab = lib.direct_sum('ia,jb->ijab', eia, ejb)
-            # Due to padding; see above discussion concerning t1new in update_amps()
-            idx = abs(eijab) < LOOSE_ZERO_TOL
-            eijab[idx] = LARGE_DENOM
+            # For discussion of LARGE_DENOM, see t1new update above
+            eia = LARGE_DENOM * np.ones((nocc, nvir), dtype=eris.mo_energy[0].dtype)
+            n0_ovp_ia = np.ix_(nonzero_opadding[ki], nonzero_vpadding[ka])
+            eia[n0_ovp_ia] = (mo_e_o[ki][:,None] - mo_e_v[ka])[n0_ovp_ia]
 
-            eris_ijab = eris.oovv[ki,kj,ka]
-            eris_ijba = eris.oovv[ki,kj,kb]
-            t2[ki,kj,ka] = eris_ijab.conj() / eijab
-            woovv = 2*eris_ijab - eris_ijba.transpose(0,1,3,2)
-            emp2 += np.einsum('ijab,ijab', t2[ki,kj,ka], woovv)
+            ejb = LARGE_DENOM * np.ones((nocc, nvir), dtype=eris.mo_energy[0].dtype)
+            n0_ovp_jb = np.ix_(nonzero_opadding[kj], nonzero_vpadding[kb])
+            ejb[n0_ovp_jb] = (mo_e_o[kj][:,None] - mo_e_v[kb])[n0_ovp_jb]
+            eijab = eia[:, None, :, None] + ejb[:, None, :]
+
+            eris_ijab = eris.oovv[ki, kj, ka]
+            eris_ijba = eris.oovv[ki, kj, kb]
+            t2[ki, kj, ka] = eris_ijab.conj() / eijab
+            woovv = 2 * eris_ijab - eris_ijba.transpose(0, 1, 3, 2)
+            emp2 += np.einsum('ijab,ijab', t2[ki, kj, ka], woovv)
 
             if ka != kb:
-                eijba = eijab.transpose(0,1,3,2)
-                t2[ki,kj,kb] = eris_ijba.conj() / eijba
-                woovv = 2*eris_ijba - eris_ijab.transpose(0,1,3,2)
-                emp2 += np.einsum('ijab,ijab', t2[ki,kj,kb], woovv)
+                eijba = eijab.transpose(0, 1, 3, 2)
+                t2[ki, kj, kb] = eris_ijba.conj() / eijba
+                woovv = 2 * eris_ijba - eris_ijab.transpose(0, 1, 3, 2)
+                emp2 += np.einsum('ijab,ijab', t2[ki, kj, kb], woovv)
 
             touched[ki, kj, ka] = touched[ki, kj, kb] = True
 
         self.emp2 = emp2.real / nkpts
-        logger.info(self, 'Init t2, MP2 energy = %.15g', self.emp2)
+        logger.info(self, 'Init t2, MP2 energy (with fock eigenvalue shift) = %.15g', self.emp2)
         logger.timer(self, 'init mp2', *time0)
         return self.emp2, t1, t2
 
@@ -552,9 +605,9 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
         cctyp = 'CCSD'
         self.converged, self.e_corr, self.t1, self.t2 = \
-                kernel(self, eris, t1, t2, max_cycle=self.max_cycle,
-                       tol=self.conv_tol, tolnormt=self.conv_tol_normt,
-                       verbose=self.verbose)
+            kernel(self, eris, t1, t2, max_cycle=self.max_cycle,
+                   tol=self.conv_tol, tolnormt=self.conv_tol_normt,
+                   verbose=self.verbose)
         self._finalize()
         return self.e_corr, self.t1, self.t2
 
@@ -568,10 +621,6 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
         size = nocc + nkpts ** 2 * nocc ** 2 * nvir
         return size
-
-    @property
-    def ip_nested_struct(self):
-        return [(self.nocc,), (self.nkpts, self.nkpts, self.nocc, self.nocc, self.nmo - self.nocc)]
 
     def ipccsd(self, nroots=1, koopmans=False, guess=None, partition=None,
                kptlist=None):
@@ -614,21 +663,21 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
             adiag = self.ipccsd_diag(kshift)
             adiag = self.mask_frozen_ip(adiag, kshift, const=LARGE_DENOM)
             if partition == 'full':
-                self._ipccsd_diag_matrix2 = vector_to_nested(adiag, self.ip_nested_struct)[1]
-
+                self._ipccsd_diag_matrix2 = self.ip_vector_to_amplitudes(adiag)[1]
 
             user_guess = False
             if guess:
                 user_guess = True
-                assert len(guess) == nroots
-                for g in guess:
+                assert len(guess[k]) == nroots
+                for g in guess[k]:
                     assert g.size == size
             else:
                 guess = []
                 if koopmans:
-                    foo_kshift = self.eris.fock[kshift, :nocc, :nocc]
-                    nonfrozen_idx = np.where(abs(foo_kshift.diagonal()) > LOOSE_ZERO_TOL)[0]
-                    for n in nonfrozen_idx[::-1][:nroots]:
+                    # Get location of padded elements in occupied and virtual space
+                    nonzero_opadding = padding_k_idx(self, kind="split")[0]
+
+                    for n in nonzero_opadding[::-1][:nroots]:
                         g = np.zeros(size)
                         g[n] = 1.0
                         g = self.mask_frozen_ip(g, kshift, const=0.0)
@@ -658,6 +707,8 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                 evals_k, evecs_k = eig(lambda _arg: self.ipccsd_matvec(_arg, kshift), guess, precond,
                                        tol=self.conv_tol, max_cycle=self.max_cycle,
                                        max_space=self.max_space, nroots=nroots, verbose=self.verbose)
+            if not user_guess:
+                guess = None
 
             evals_k = evals_k.real
             evals[k] = evals_k
@@ -667,8 +718,8 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                 evals_k, evecs_k = [evals_k], [evecs_k]
 
             for n, en, vn in zip(range(nroots), evals_k, evecs_k):
-                r1, r2 = vector_to_nested(vn, self.ip_nested_struct)
-                qp_weight = np.linalg.norm(r1)**2
+                r1, r2 = self.ip_vector_to_amplitudes(vn)
+                qp_weight = np.linalg.norm(r1) ** 2
                 logger.info(self, 'EOM root %d E = %.16g  qpwt = %0.6g',
                             n, en, qp_weight)
         log.timer('EOM-CCSD', *cput0)
@@ -685,7 +736,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         imds = self.imds
 
         vector = self.mask_frozen_ip(vector, kshift, const=0.0)
-        r1, r2 = vector_to_nested(vector, self.ip_nested_struct)
+        r1, r2 = self.ip_vector_to_amplitudes(vector)
 
         t1, t2 = self.t1, self.t2
         nkpts = self.nkpts
@@ -745,9 +796,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                                    - einsum('kldc,kld->c', imds.Woovv[kk, kl, kd], r2[kk, kl]))
                             Hr2[ki, kj] += -einsum('c,ijcb->ijb', tmp, t2[ki, kj, kshift])
 
-        vector, _ = nested_to_vector((Hr1, Hr2))
-        vector = self.mask_frozen_ip(vector, kshift, const=0.0)
-        return vector
+        return self.mask_frozen_ip(self.ip_amplitudes_to_vector(Hr1, Hr2), kshift, const=0.0)
 
     def ipccsd_diag(self, kshift):
         if not hasattr(self, 'imds'):
@@ -797,36 +846,28 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                     Hr2[ki, kj] -= 2. * np.einsum('ijcb,jibc->ijb', t2[ki, kj, kshift], imds.Woovv[kj, ki, kd])
                     Hr2[ki, kj] += np.einsum('ijcb,ijbc->ijb', t2[ki, kj, kshift], imds.Woovv[ki, kj, kd])
 
-        vector, _ = nested_to_vector((Hr1, Hr2))
-        return vector
+        return self.ip_amplitudes_to_vector(Hr1, Hr2)
 
     def mask_frozen_ip(self, vector, kshift, const=LARGE_DENOM):
         '''Replaces all frozen orbital indices of `vector` with the value `const`.'''
-        r1, r2 = vector_to_nested(vector, self.ip_nested_struct)
+        r1, r2 = self.ip_vector_to_amplitudes(vector)
         nkpts, nocc, nvir = self.t1.shape
         kconserv = self.khelper.kconserv
 
-        fock = self.eris.fock
-        foo = fock[:, :nocc, :nocc]
-        fvv = fock[:, nocc:, nocc:]
-        d0 = np.array(const, dtype=r2.dtype)
+        # Get location of padded elements in occupied and virtual space
+        nonzero_opadding, nonzero_vpadding = padding_k_idx(self, kind="split")
 
-        r1_mask_idx = abs(foo[kshift].diagonal()) < LOOSE_ZERO_TOL
-        r1[r1_mask_idx] = d0
+        new_r1 = const * np.ones_like(r1)
+        new_r2 = const * np.ones_like(r2)
+
+        new_r1[nonzero_opadding[kshift]] = r1[nonzero_opadding[kshift]]
         for ki in range(nkpts):
-            imask_idx = abs(foo[ki].diagonal()) < LOOSE_ZERO_TOL
             for kj in range(nkpts):
                 kb = kconserv[ki, kshift, kj]
-                jmask_idx = abs(foo[kj].diagonal()) < LOOSE_ZERO_TOL
-                bmask_idx = abs(fvv[kb].diagonal()) < LOOSE_ZERO_TOL
+                idx = np.ix_([ki], [kj], nonzero_opadding[ki], nonzero_opadding[kj], nonzero_vpadding[kb])
+                new_r2[idx] = r2[idx]
 
-                d0 = const * np.array(1.0, dtype=r2.dtype)
-                r2[ki, kj, imask_idx] = d0
-                r2[ki, kj, :, jmask_idx] = d0
-                r2[ki, kj, :, :, bmask_idx] = d0
-
-        vector, _ = nested_to_vector((r1, r2))
-        return vector
+        return self.ip_amplitudes_to_vector(new_r1, new_r2)
 
     def vector_size_ea(self):
         nocc = self.nocc
@@ -835,11 +876,6 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
         size = nvir + nkpts ** 2 * nvir ** 2 * nocc
         return size
-
-    @property
-    def ea_nested_struct(self):
-        nvir = self.nmo - self.nocc
-        return [(nvir,), (self.nkpts, self.nkpts, self.nocc, nvir, nvir)]
 
     def eaccsd(self, nroots=1, koopmans=False, guess=None, partition=None,
                kptlist=None):
@@ -870,20 +906,21 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
             adiag = self.eaccsd_diag(kshift)
             adiag = self.mask_frozen_ea(adiag, kshift, const=LARGE_DENOM)
             if partition == 'full':
-                self._eaccsd_diag_matrix2 = vector_to_nested(adiag, self.ea_nested_struct)[1]
+                self._eaccsd_diag_matrix2 = self.ea_vector_to_amplitudes(adiag)[1]
 
             user_guess = False
             if guess:
                 user_guess = True
-                assert len(guess) == nroots
-                for g in guess:
+                assert len(guess[k]) == nroots
+                for g in guess[k]:
                     assert g.size == size
             else:
                 guess = []
                 if koopmans:
-                    fvv_kshift = self.eris.fock[kshift, nocc:, nocc:]
-                    nonfrozen_idx = np.where(abs(fvv_kshift.diagonal()) > LOOSE_ZERO_TOL)[0]
-                    for n in nonfrozen_idx[:nroots]:
+                    # Get location of padded elements in occupied and virtual space
+                    nonzero_vpadding = padding_k_idx(self, kind="split")[1]
+
+                    for n in nonzero_vpadding[:nroots]:
                         g = np.zeros(size)
                         g[n] = 1.0
                         g = self.mask_frozen_ea(g, kshift, const=0.0)
@@ -913,6 +950,8 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                 evals_k, evecs_k = eig(lambda _arg: self.eaccsd_matvec(_arg, kshift), guess, precond,
                                        tol=self.conv_tol, max_cycle=self.max_cycle,
                                        max_space=self.max_space, nroots=nroots, verbose=self.verbose)
+            if not user_guess:
+                guess = None
 
             evals_k = evals_k.real
             evals[k] = evals_k
@@ -922,8 +961,8 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                 evals_k, evecs_k = [evals_k], [evecs_k]
 
             for n, en, vn in zip(range(nroots), evals_k, evecs_k):
-                r1, r2 = vector_to_nested(vn, self.ea_nested_struct)
-                qp_weight = np.linalg.norm(r1)**2
+                r1, r2 = self.ea_vector_to_amplitudes(vn)
+                qp_weight = np.linalg.norm(r1) ** 2
                 logger.info(self, 'EOM root %d E = %.16g  qpwt = %0.6g',
                             n, en, qp_weight)
         log.timer('EOM-CCSD', *cput0)
@@ -939,7 +978,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         imds = self.imds
 
         vector = self.mask_frozen_ea(vector, kshift, const=0.0)
-        r1, r2 = vector_to_nested(vector, self.ea_nested_struct)
+        r1, r2 = self.ea_vector_to_amplitudes(vector)
 
         t1, t2 = self.t1, self.t2
         nkpts = self.nkpts
@@ -1008,9 +1047,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                                    - einsum('kldc,lcd->k', imds.Woovv[kk, kl, kd], r2[kl, kc]))
                             Hr2[kj, ka] += -einsum('k,kjab->jab', tmp, t2[kshift, kj, ka])
 
-        vector, _ = nested_to_vector((Hr1, Hr2))
-        vector = self.mask_frozen_ea(vector, kshift, const=0.0)
-        return vector
+        return self.mask_frozen_ea(self.ea_amplitudes_to_vector(Hr1, Hr2), kshift, const=0.0)
 
     def eaccsd_diag(self, kshift):
         if not hasattr(self, 'imds'):
@@ -1058,122 +1095,48 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                     Hr2[kj, ka] -= 2 * np.einsum('ijab,ijab->jab', t2[kshift, kj, ka], imds.Woovv[kshift, kj, ka])
                     Hr2[kj, ka] += np.einsum('ijab,ijba->jab', t2[kshift, kj, ka], imds.Woovv[kshift, kj, kb])
 
-        vector, _ = nested_to_vector((Hr1, Hr2))
-        return vector
+        return self.ea_amplitudes_to_vector(Hr1, Hr2)
 
     def mask_frozen_ea(self, vector, kshift, const=LARGE_DENOM):
         '''Replaces all frozen orbital indices of `vector` with the value `const`.'''
-        r1, r2 = vector_to_nested(vector, self.ea_nested_struct)
+        r1, r2 = self.ea_vector_to_amplitudes(vector)
         nkpts, nocc, nvir = self.t1.shape
         kconserv = self.khelper.kconserv
 
-        fock = self.eris.fock
-        foo = fock[:, :nocc, :nocc]
-        fvv = fock[:, nocc:, nocc:]
-        d0 = np.array(const, dtype=r2.dtype)
+        # Get location of padded elements in occupied and virtual space
+        nonzero_opadding, nonzero_vpadding = padding_k_idx(self, kind="split")
 
-        r1_mask_idx = abs(fvv[kshift].diagonal()) < LOOSE_ZERO_TOL
-        r1[r1_mask_idx] = d0
+        new_r1 = const * np.ones_like(r1)
+        new_r2 = const * np.ones_like(r2)
+
+        new_r1[nonzero_vpadding[kshift]] = r1[nonzero_vpadding[kshift]]
         for kj in range(nkpts):
-            jmask_idx = abs(foo[kj].diagonal()) < LOOSE_ZERO_TOL
             for ka in range(nkpts):
-                kb = kconserv[kj, kshift, ka]
-                amask_idx = abs(fvv[ka].diagonal()) < LOOSE_ZERO_TOL
-                bmask_idx = abs(fvv[kb].diagonal()) < LOOSE_ZERO_TOL
+                kb = kconserv[kshift, ka, kj]
+                idx = np.ix_([kj], [ka], nonzero_opadding[kj], nonzero_vpadding[ka], nonzero_vpadding[kb])
+                new_r2[idx] = r2[idx]
 
-                d0 = const * np.array(1.0, dtype=r2.dtype)
-                r2[kj, ka, jmask_idx] = d0
-                r2[kj, ka, :, amask_idx] = d0
-                r2[kj, ka, :, :, bmask_idx] = d0
-
-        vector, _ = nested_to_vector((r1, r2))
-        return vector
-
-    @property
-    def gs_nested_struct(self):
-        nvir = self.nmo - self.nocc
-        return [(self.nkpts, self.nocc, nvir), (self.nkpts,) * 3 + (self.nocc,) * 2 + (nvir,) * 2]
-
-    def amplitudes_to_vector(self, t1, t2):
-        return nested_to_vector((t1, t2))[0]
-
-    def vector_to_amplitudes(self, vec):
-        return vector_to_nested(vec, self.gs_nested_struct)
+        return self.ip_amplitudes_to_vector(new_r1, new_r2)
 
 
 KRCCSD = RCCSD
 
-
-def pad_frozen_kpt_mo_coeff(cc, mo_coeff):
-    '''Creates the mo_coeff and fock molecular orbital matrix elements for
-    frozen orbitals.
-
-    The padded molecular orbital coefficients at each k-point are done so that
-    the first `nocc[ikpt]` and last `nvir[ikpt]` molecular orbital coefficients
-    of the padded array are the same as those of `mo_coeff` while the remaining
-    elements in the array are zero.  Here `nocc[ikpt]` and `nvir[ikpt]`
-
-    Note:
-        When remaking the fock matrix elements with the padded arrays, some
-        fock matrix elements will be zero.  This needs to be accounted for in
-        most algorithms.
-
-    Args:
-        cc (:class:`CCSD`): Coupled-cluster object storing results of a coupled-
-            cluster calculation.
-        mo_coeff (:obj:`ndarray`): Molecular orbital coefficients.
-
-    Returns:
-        padded_mo_coeff (:obj:list of `ndarray`): Molecular orbital coefficients
-            with padding from frozen orbitals.
-    '''
-    moidx = get_frozen_mask(cc)
-    nkpts = cc.nkpts
-    nocc = cc.nocc
-    nmo = cc.nmo
-    nvir = nmo - nocc
-
-    nao = mo_coeff[0].shape[0]
-    dtype = mo_coeff[0].dtype
-
-    nocc_per_kpt = np.asarray(get_nocc(cc, per_kpoint=True))
-    nmo_per_kpt  = np.asarray(get_nmo(cc, per_kpoint=True))
-
-    padded_moidx = []
-    for k in range(nkpts):
-        kpt_nocc = nocc_per_kpt[k]
-        kpt_nvir = nmo_per_kpt[k] - kpt_nocc
-        kpt_padded_moidx = np.concatenate((np.ones(kpt_nocc, dtype=np.bool),
-                                           np.zeros(nmo - kpt_nocc - kpt_nvir, dtype=np.bool),
-                                           np.ones(kpt_nvir, dtype=np.bool)))
-        padded_moidx.append(kpt_padded_moidx)
-
-    mo_coeff = []
-    # Here we will work with two index arrays; one is for our original (small) moidx
-    # array while the next is for our new (large) padded array.
-    for k in range(nkpts):
-        kpt_moidx = moidx[k]
-        kpt_padded_moidx = padded_moidx[k]
-
-        mo = np.zeros((nao, nmo), dtype=dtype)
-        mo[:, kpt_padded_moidx] = cc.mo_coeff[k][:, kpt_moidx]
-        mo_coeff.append(mo)
-
-    return mo_coeff
-
-
 class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
-    def __init__(self, cc, mo_coeff=None, method='incore',
-                 ao2mofn=pyscf.ao2mo.outcore.general_iofree):
+    def __init__(self, cc, mo_coeff=None, method='incore'):
         from pyscf.pbc import df
+        from pyscf.pbc import tools
+        from pyscf.pbc.cc.ccsd import _adjust_occ
+        log = logger.Logger(cc.stdout, cc.verbose)
         cput0 = (time.clock(), time.time())
         moidx = get_frozen_mask(cc)
+        cell = cc._scf.cell
+        kpts = cc.kpts
         nkpts = cc.nkpts
         nocc = cc.nocc
         nmo = cc.nmo
         nvir = nmo - nocc
 
-        #if any(nocc != np.count_nonzero(cc._scf.mo_occ[k]>0)
+        # if any(nocc != np.count_nonzero(cc._scf.mo_occ[k]>0)
         #       for k in range(nkpts)):
         #    raise NotImplementedError('Different occupancies found for different k-points')
 
@@ -1181,26 +1144,39 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
             mo_coeff = cc.mo_coeff
         dtype = mo_coeff[0].dtype
 
-        mo_coeff = self.mo_coeff = pad_frozen_kpt_mo_coeff(cc, mo_coeff)
+        mo_coeff = self.mo_coeff = padded_mo_coeff(cc, mo_coeff)
 
         # Re-make our fock MO matrix elements from density and fock AO
         dm = cc._scf.make_rdm1(cc.mo_coeff, cc.mo_occ)
-        fockao = cc._scf.get_hcore() + cc._scf.get_veff(cc._scf.cell, dm)
-        self.fock = np.asarray([reduce(np.dot,
-                                       (mo_coeff[k].T.conj(),fockao[k], mo_coeff[k]))
+        with lib.temporary_env(cc._scf, exxdiv=None):
+            # _scf.exxdiv affects eris.fock. HF exchange correction should be
+            # excluded from the Fock matrix.
+            fockao = cc._scf.get_hcore() + cc._scf.get_veff(cell, dm)
+        self.fock = np.asarray([reduce(np.dot, (mo.T.conj(), fockao[k], mo))
                                 for k, mo in enumerate(mo_coeff)])
 
-        nocc_per_kpt = np.asarray(get_nocc(cc, per_kpoint=True))
-        nmo_per_kpt  = np.asarray(get_nmo(cc, per_kpoint=True))
-        nvir_per_kpt = nmo_per_kpt - nocc_per_kpt
-        for kp in range(nkpts):
-            mo_e = self.fock[kp].diagonal().real
-            gap = abs(mo_e[:nocc_per_kpt[kp]][:, None] -
-                      mo_e[-nvir_per_kpt[kp]:]).min()
-            if gap < 1e-5:
-                logger.warn(cc, 'HOMO-LUMO gap %s too small for KCCSD at '
-                                'k-point %d %s. May cause issues in convergence.',
-                            gap, kp, cc.kpts[kp])
+        self.mo_energy = [self.fock[k].diagonal().real for k in range(nkpts)]
+        # Add HFX correction in the self.mo_energy to improve convergence in
+        # CCSD iteration. It is useful for the 2D systems since their occupied and
+        # the virtual orbital energies may overlap which may lead to numerical
+        # issue in the CCSD iterations.
+        # FIXME: Whether to add this correction for other exxdiv treatments?
+        # Without the correction, MP2 energy may be largely off the correct value.
+        madelung = tools.madelung(cell, kpts)
+        self.mo_energy = [_adjust_occ(mo_e, nocc, -madelung)
+                          for k, mo_e in enumerate(self.mo_energy)]
+
+        # Get location of padded elements in occupied and virtual space.
+        nocc_per_kpt = get_nocc(cc, per_kpoint=True)
+        nonzero_padding = padding_k_idx(cc, kind="joint")
+
+        # Check direct and indirect gaps for possible issues with CCSD convergence.
+        mo_e = [self.mo_energy[kp][nonzero_padding[kp]] for kp in range(nkpts)]
+        mo_e = np.sort([y for x in mo_e for y in x])  # Sort de-nested array
+        gap = mo_e[np.sum(nocc_per_kpt)] - mo_e[np.sum(nocc_per_kpt)-1]
+        if gap < 1e-5:
+            logger.warn(cc, 'HOMO-LUMO gap %s too small for KCCSD. '
+                            'May cause issues in convergence.', gap)
 
         mem_incore, mem_outcore, mem_basic = _mem_usage(nkpts, nocc, nvir)
         mem_now = lib.current_memory()[0]
@@ -1208,23 +1184,25 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
 
         kconserv = cc.khelper.kconserv
         khelper = cc.khelper
+        orbo = np.asarray(mo_coeff[:,:,:nocc], order='C')
+        orbv = np.asarray(mo_coeff[:,:,nocc:], order='C')
 
-        log = logger.Logger(cc.stdout, cc.verbose)
         if (method == 'incore' and (mem_incore + mem_now < cc.max_memory)
-                or cc.mol.incore_anyway):
+                or cell.incore_anyway):
             log.info('using incore ERI storage')
-            self.oooo = np.zeros((nkpts,nkpts,nkpts,nocc,nocc,nocc,nocc), dtype=dtype)
-            self.ooov = np.zeros((nkpts,nkpts,nkpts,nocc,nocc,nocc,nvir), dtype=dtype)
-            self.oovv = np.zeros((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=dtype)
-            self.ovov = np.zeros((nkpts,nkpts,nkpts,nocc,nvir,nocc,nvir), dtype=dtype)
-            self.voov = np.zeros((nkpts,nkpts,nkpts,nvir,nocc,nocc,nvir), dtype=dtype)
-            self.vovv = np.zeros((nkpts,nkpts,nkpts,nvir,nocc,nvir,nvir), dtype=dtype)
-            self.vvvv = np.zeros((nkpts,nkpts,nkpts,nvir,nvir,nvir,nvir), dtype=dtype)
+            self.oooo = np.empty((nkpts,nkpts,nkpts,nocc,nocc,nocc,nocc), dtype=dtype)
+            self.ooov = np.empty((nkpts,nkpts,nkpts,nocc,nocc,nocc,nvir), dtype=dtype)
+            self.oovv = np.empty((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=dtype)
+            self.ovov = np.empty((nkpts,nkpts,nkpts,nocc,nvir,nocc,nvir), dtype=dtype)
+            self.voov = np.empty((nkpts,nkpts,nkpts,nvir,nocc,nocc,nvir), dtype=dtype)
+            self.vovv = np.empty((nkpts,nkpts,nkpts,nvir,nocc,nvir,nvir), dtype=dtype)
+            #self.vvvv = np.empty((nkpts,nkpts,nkpts,nvir,nvir,nvir,nvir), dtype=dtype)
+            self.vvvv = cc._scf.with_df.ao2mo_7d(orbv, factor=1./nkpts).transpose(0,2,1,3,5,4,6)
 
             for (ikp,ikq,ikr) in khelper.symm_map.keys():
                 iks = kconserv[ikp,ikq,ikr]
                 eri_kpt = fao2mo((mo_coeff[ikp],mo_coeff[ikq],mo_coeff[ikr],mo_coeff[iks]),
-                                 (cc.kpts[ikp],cc.kpts[ikq],cc.kpts[ikr],cc.kpts[iks]), compact=False)
+                                 (kpts[ikp],kpts[ikq],kpts[ikr],kpts[iks]), compact=False)
                 if dtype == np.float: eri_kpt = eri_kpt.real
                 eri_kpt = eri_kpt.reshape(nmo, nmo, nmo, nmo)
                 for (kp, kq, kr) in khelper.symm_map[(ikp, ikq, ikr)]:
@@ -1235,21 +1213,22 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
                     self.ovov[kp, kr, kq] = eri_kpt_symm[:nocc, nocc:, :nocc, nocc:] / nkpts
                     self.voov[kp, kr, kq] = eri_kpt_symm[nocc:, :nocc, :nocc, nocc:] / nkpts
                     self.vovv[kp, kr, kq] = eri_kpt_symm[nocc:, :nocc, nocc:, nocc:] / nkpts
-                    self.vvvv[kp, kr, kq] = eri_kpt_symm[nocc:, nocc:, nocc:, nocc:] / nkpts
+                    #self.vvvv[kp, kr, kq] = eri_kpt_symm[nocc:, nocc:, nocc:, nocc:] / nkpts
 
             self.dtype = dtype
         else:
             log.info('using HDF5 ERI storage')
             self.feri1 = lib.H5TmpFile()
 
-            self.oooo = self.feri1.create_dataset('oooo', (nkpts,nkpts,nkpts,nocc,nocc,nocc,nocc), dtype.char)
-            self.ooov = self.feri1.create_dataset('ooov', (nkpts,nkpts,nkpts,nocc,nocc,nocc,nvir), dtype.char)
-            self.oovv = self.feri1.create_dataset('oovv', (nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype.char)
-            self.ovov = self.feri1.create_dataset('ovov', (nkpts,nkpts,nkpts,nocc,nvir,nocc,nvir), dtype.char)
-            self.voov = self.feri1.create_dataset('voov', (nkpts,nkpts,nkpts,nvir,nocc,nocc,nvir), dtype.char)
-            self.vovv = self.feri1.create_dataset('vovv', (nkpts,nkpts,nkpts,nvir,nocc,nvir,nvir), dtype.char)
+            self.oooo = self.feri1.create_dataset('oooo', (nkpts, nkpts, nkpts, nocc, nocc, nocc, nocc), dtype.char)
+            self.ooov = self.feri1.create_dataset('ooov', (nkpts, nkpts, nkpts, nocc, nocc, nocc, nvir), dtype.char)
+            self.oovv = self.feri1.create_dataset('oovv', (nkpts, nkpts, nkpts, nocc, nocc, nvir, nvir), dtype.char)
+            self.ovov = self.feri1.create_dataset('ovov', (nkpts, nkpts, nkpts, nocc, nvir, nocc, nvir), dtype.char)
+            self.voov = self.feri1.create_dataset('voov', (nkpts, nkpts, nkpts, nvir, nocc, nocc, nvir), dtype.char)
+            self.vovv = self.feri1.create_dataset('vovv', (nkpts, nkpts, nkpts, nvir, nocc, nvir, nvir), dtype.char)
 
-            if not (cc.direct and type(cc._scf.with_df) is df.GDF):
+            if (not (cc.direct and type(cc._scf.with_df) is df.GDF)
+                or cell.dimension == 2):
                 self.vvvv = self.feri1.create_dataset('vvvv', (nkpts,nkpts,nkpts,nvir,nvir,nvir,nvir), dtype.char)
 
             # <ij|pq>  = (ip|jq)
@@ -1261,7 +1240,7 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
                         orbo_p = mo_coeff[kp][:, :nocc]
                         orbo_r = mo_coeff[kr][:, :nocc]
                         buf_kpt = fao2mo((orbo_p, mo_coeff[kq], orbo_r, mo_coeff[ks]),
-                                         (cc.kpts[kp], cc.kpts[kq], cc.kpts[kr], cc.kpts[ks]), compact=False)
+                                         (kpts[kp], kpts[kq], kpts[kr], kpts[ks]), compact=False)
                         if mo_coeff[0].dtype == np.float: buf_kpt = buf_kpt.real
                         buf_kpt = buf_kpt.reshape(nocc, nmo, nocc, nmo).transpose(0, 2, 1, 3)
                         self.dtype = buf_kpt.dtype
@@ -1279,13 +1258,13 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
                         orbo_p = mo_coeff[kp][:, :nocc]
                         orbv_r = mo_coeff[kr][:, nocc:]
                         buf_kpt = fao2mo((orbo_p, mo_coeff[kq], orbv_r, mo_coeff[ks]),
-                                         (cc.kpts[kp], cc.kpts[kq], cc.kpts[kr], cc.kpts[ks]), compact=False)
+                                         (kpts[kp], kpts[kq], kpts[kr], kpts[ks]), compact=False)
                         if mo_coeff[0].dtype == np.float: buf_kpt = buf_kpt.real
-                        buf_kpt = buf_kpt.reshape(nocc,nmo,nvir,nmo).transpose(0,2,1,3)
-                        self.ovov[kp,kr,kq,:,:,:,:] = buf_kpt[:,:,:nocc,nocc:] / nkpts
-#TODO: compute vovv on the fly
-                        self.vovv[kr,kp,ks,:,:,:,:] = buf_kpt[:,:,nocc:,nocc:].transpose(1,0,3,2) / nkpts
-                        self.voov[kr,kp,ks,:,:,:,:] = buf_kpt[:,:,nocc:,:nocc].transpose(1,0,3,2) / nkpts
+                        buf_kpt = buf_kpt.reshape(nocc, nmo, nvir, nmo).transpose(0, 2, 1, 3)
+                        self.ovov[kp, kr, kq, :, :, :, :] = buf_kpt[:, :, :nocc, nocc:] / nkpts
+                        # TODO: compute vovv on the fly
+                        self.vovv[kr, kp, ks, :, :, :, :] = buf_kpt[:, :, nocc:, nocc:].transpose(1, 0, 3, 2) / nkpts
+                        self.voov[kr, kp, ks, :, :, :, :] = buf_kpt[:, :, nocc:, :nocc].transpose(1, 0, 3, 2) / nkpts
             cput1 = log.timer_debug1('transforming ovpq', *cput1)
 
             ## Without k-point symmetry
@@ -1301,7 +1280,7 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
             #            for a in range(nvir):
             #                orbva_p = orbv_p[:,a].reshape(-1,1)
             #                buf_kpt = fao2mo((orbva_p,orbv_q,orbv_r,orbv_s),
-            #                                 (cc.kpts[kp],cc.kpts[kq],cc.kpts[kr],cc.kpts[ks]), compact=False)
+            #                                 (kpts[kp],kpts[kq],kpts[kr],kpts[ks]), compact=False)
             #                if mo_coeff[0].dtype == np.float: buf_kpt = buf_kpt.real
             #                buf_kpt = buf_kpt.reshape((1,nvir,nvir,nvir)).transpose(0,2,1,3)
             #                self.vvvv[kp,kr,kq,a,:,:,:] = buf_kpt[:] / nkpts
@@ -1309,32 +1288,34 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
 
             cput1 = time.clock(), time.time()
             mem_now = lib.current_memory()[0]
-            if cc.direct and type(cc._scf.with_df) is df.GDF:
+            if (cc.direct and type(cc._scf.with_df) is df.GDF
+                and cell.dimension != 2):
+                # cc._scf.with_df needs to be df.GDF only (not MDF)
                 _init_df_eris(cc, self)
 
-            elif nvir**4 * 16 / 1e6 + mem_now < cc.max_memory:
-                for (ikp,ikq,ikr) in khelper.symm_map.keys():
-                    iks = kconserv[ikp,ikq,ikr]
-                    orbv_p = mo_coeff[ikp][:,nocc:]
-                    orbv_q = mo_coeff[ikq][:,nocc:]
-                    orbv_r = mo_coeff[ikr][:,nocc:]
-                    orbv_s = mo_coeff[iks][:,nocc:]
+            elif nvir ** 4 * 16 / 1e6 + mem_now < cc.max_memory:
+                for (ikp, ikq, ikr) in khelper.symm_map.keys():
+                    iks = kconserv[ikp, ikq, ikr]
+                    orbv_p = mo_coeff[ikp][:, nocc:]
+                    orbv_q = mo_coeff[ikq][:, nocc:]
+                    orbv_r = mo_coeff[ikr][:, nocc:]
+                    orbv_s = mo_coeff[iks][:, nocc:]
                     # unit cell is small enough to handle vvvv in-core
                     buf_kpt = fao2mo((orbv_p,orbv_q,orbv_r,orbv_s),
-                                     cc.kpts[[ikp,ikq,ikr,iks]], compact=False)
+                                     kpts[[ikp,ikq,ikr,iks]], compact=False)
                     if dtype == np.float: buf_kpt = buf_kpt.real
-                    buf_kpt = buf_kpt.reshape((nvir,nvir,nvir,nvir))
-                    for (kp,kq,kr) in khelper.symm_map[(ikp,ikq,ikr)]:
-                        buf_kpt_symm = khelper.transform_symm(buf_kpt,kp,kq,kr).transpose(0,2,1,3)
-                        self.vvvv[kp,kr,kq] = buf_kpt_symm / nkpts
+                    buf_kpt = buf_kpt.reshape((nvir, nvir, nvir, nvir))
+                    for (kp, kq, kr) in khelper.symm_map[(ikp, ikq, ikr)]:
+                        buf_kpt_symm = khelper.transform_symm(buf_kpt, kp, kq, kr).transpose(0, 2, 1, 3)
+                        self.vvvv[kp, kr, kq] = buf_kpt_symm / nkpts
             else:
                 raise MemoryError('Minimal memory requirements %s MB'
-                                  % (mem_now + nvir**4/1e6*16*2))
-                for (ikp,ikq,ikr) in khelper.symm_map.keys():
+                                  % (mem_now + nvir ** 4 / 1e6 * 16 * 2))
+                for (ikp, ikq, ikr) in khelper.symm_map.keys():
                     for a in range(nvir):
                         orbva_p = orbv_p[:, a].reshape(-1, 1)
                         buf_kpt = fao2mo((orbva_p, orbv_q, orbv_r, orbv_s),
-                                         (cc.kpts[ikp], cc.kpts[ikq], cc.kpts[ikr], cc.kpts[iks]), compact=False)
+                                         (kpts[ikp], kpts[ikq], kpts[ikr], kpts[iks]), compact=False)
                         if mo_coeff[0].dtype == np.float: buf_kpt = buf_kpt.real
                         buf_kpt = buf_kpt.reshape((1, nvir, nvir, nvir)).transpose(0, 2, 1, 3)
 
@@ -1347,15 +1328,21 @@ class _ERIS:  # (pyscf.cc.ccsd._ChemistsERIs):
 
         log.timer('CCSD integral transformation', *cput0)
 
+
 def _init_df_eris(cc, eris):
+    from pyscf.pbc.df import df
     from pyscf.ao2mo import _ao2mo
     if cc._scf.with_df._cderi is None:
         cc._scf.with_df.build()
 
+    cell = cc._scf.cell
+    if cell.dimension == 2:
+        raise NotImplementedError
+
     nocc = cc.nocc
     nmo = cc.nmo
     nvir = nmo - nocc
-    nao = cc._scf.cell.nao_nr()
+    nao = cell.nao_nr()
 
     kpts = cc.kpts
     nkpts = len(kpts)
@@ -1365,7 +1352,7 @@ def _init_df_eris(cc, eris):
     else:
         dtype = np.complex128
     dtype = np.result_type(dtype, *eris.mo_coeff)
-    eris.Lpv = np.empty((nkpts,nkpts,naux,nmo,nvir), dtype=dtype)
+    eris.Lpv = np.empty((nkpts, nkpts, naux, nmo, nvir), dtype=dtype)
 
     with h5py.File(cc._scf.with_df._cderi, 'r') as f:
         kptij_lst = f['j3c-kptij'].value
@@ -1373,50 +1360,20 @@ def _init_df_eris(cc, eris):
         ao_loc = None
         for ki, kpti in enumerate(kpts):
             for kj, kptj in enumerate(kpts):
-                kpti_kptj = np.array((kpti,kptj))
-                k_id = member(kpti_kptj, kptij_lst)
-                if len(k_id) > 0:
-                    Lpq = np.asarray(f['j3c/' + str(k_id[0])])
-                else:
-                    kptji = kpti_kptj[[1,0]]
-                    k_id = member(kptji, kptij_lst)
-                    Lpq = np.asarray(f['j3c/' + str(k_id[0])])
-                    Lpq = lib.transpose(Lpq.reshape(naux,nao,nao), axes=(0,2,1))
-                    Lpq = Lpq.conj()
+                kpti_kptj = np.array((kpti, kptj))
+                Lpq = np.asarray(df._getitem(f, 'j3c', kpti_kptj, kptij_lst))
 
-                mo = np.hstack((eris.mo_coeff[ki], eris.mo_coeff[kj][:,nocc:]))
+                mo = np.hstack((eris.mo_coeff[ki], eris.mo_coeff[kj][:, nocc:]))
                 mo = np.asarray(mo, dtype=dtype, order='F')
                 if dtype == np.double:
-                    _ao2mo.nr_e2(Lpq, mo, (0, nmo, nmo, nmo+nvir), aosym='s2',
-                                 out=eris.Lpv[ki,kj])
+                    _ao2mo.nr_e2(Lpq, mo, (0, nmo, nmo, nmo + nvir), aosym='s2',
+                                 out=eris.Lpv[ki, kj])
                 else:
-                    if Lpq.size != naux*nao**2: # aosym = 's2'
+                    if Lpq.size != naux * nao ** 2:  # aosym = 's2'
                         Lpq = lib.unpack_tril(Lpq).astype(np.complex128)
-                    _ao2mo.r_e2(Lpq, mo, (0, nmo, nmo, nmo+nvir), tao, ao_loc,
-                                out=eris.Lpv[ki,kj])
+                    _ao2mo.r_e2(Lpq, mo, (0, nmo, nmo, nmo + nvir), tao, ao_loc,
+                                out=eris.Lpv[ki, kj])
     return eris
-
-def verify_eri_symmetry(nmo, nkpts, kconserv, eri):
-    # Check ERI symmetry
-    maxdiff = 0.0
-    for kp in range(nkpts):
-        for kq in range(nkpts):
-            for kr in range(nkpts):
-                ks = kconserv[kp, kq, kr]
-                for p in range(nmo):
-                    for q in range(nmo):
-                        for r in range(nmo):
-                            for s in range(nmo):
-                                pqrs = eri[kp,kq,kr,p,q,r,s]
-                                rspq = eri[kr,ks,kp,r,s,p,q]
-                                diff = np.linalg.norm(pqrs - rspq).real
-                                if diff > 1e-5:
-                                    print("** Warning: ERI diff at ")
-                                    print("kp,kq,kr,ks,p,q,r,s =", kp, kq, kr, ks, p, q, r, s)
-                                maxdiff = max(maxdiff, diff)
-    print("Max difference in (pq|rs) - (rs|pq) = %.15g" % maxdiff)
-    if maxdiff > 1e-5:
-        print("Energy cutoff (or cell.mesh) is not enough to converge AO integrals.")
 
 
 imd = imdk
@@ -1550,8 +1507,8 @@ if __name__ == '__main__':
     C 0.000000000000   0.000000000000   0.000000000000
     C 1.685068664391   1.685068664391   1.685068664391
     '''
-    cell.basis = { 'C': [[0, (0.8, 1.0)],
-                         [1, (1.0, 1.0)]]}
+    cell.basis = {'C': [[0, (0.8, 1.0)],
+                        [1, (1.0, 1.0)]]}
     cell.pseudo = 'gth-pade'
     cell.a = '''
     0.000000000, 3.370137329, 3.370137329
@@ -1580,7 +1537,7 @@ if __name__ == '__main__':
 
     ####
     cell = gto.Cell()
-    cell.atom='''
+    cell.atom = '''
     He 0.000000000000   0.000000000000   0.000000000000
     He 1.685068664391   1.685068664391   1.685068664391
     '''
@@ -1594,14 +1551,15 @@ if __name__ == '__main__':
 
     np.random.seed(2)
     # Running HF and CCSD with 1x1x2 Monkhorst-Pack k-point mesh
-    kmf = scf.KRHF(cell, kpts=cell.make_kpts([1,1,3]), exxdiv=None)
+    kmf = scf.KRHF(cell, kpts=cell.make_kpts([1, 1, 3]), exxdiv=None)
     nmo = cell.nao_nr()
-    kmf.mo_occ = np.zeros((3,nmo))
-    kmf.mo_occ[:,:2] = 2
-    kmf.mo_energy = np.arange(nmo) + np.random.random((3,nmo)) * .3
+    kmf.mo_occ = np.zeros((3, nmo))
+    kmf.mo_occ[:, :2] = 2
+    kmf.mo_energy = np.arange(nmo) + np.random.random((3, nmo)) * .3
     kmf.mo_energy[kmf.mo_occ == 0] += 2
-    kmf.mo_coeff = (np.random.random((3,nmo,nmo)) +
-                    np.random.random((3,nmo,nmo))*1j - .5-.5j)
+    kmf.mo_coeff = (np.random.random((3, nmo, nmo)) +
+                    np.random.random((3, nmo, nmo)) * 1j - .5 - .5j)
+
 
     def rand_t1_t2(mycc):
         nkpts = mycc.nkpts
@@ -1609,26 +1567,27 @@ if __name__ == '__main__':
         nmo = mycc.nmo
         nvir = nmo - nocc
         np.random.seed(1)
-        t1 = (np.random.random((nkpts,nocc,nvir)) +
-              np.random.random((nkpts,nocc,nvir))*1j - .5-.5j)
-        t2 = (np.random.random((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir)) +
-              np.random.random((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir))*1j - .5-.5j)
+        t1 = (np.random.random((nkpts, nocc, nvir)) +
+              np.random.random((nkpts, nocc, nvir)) * 1j - .5 - .5j)
+        t2 = (np.random.random((nkpts, nkpts, nkpts, nocc, nocc, nvir, nvir)) +
+              np.random.random((nkpts, nkpts, nkpts, nocc, nocc, nvir, nvir)) * 1j - .5 - .5j)
         kconserv = kpts_helper.get_kconserv(kmf.cell, kmf.kpts)
         Ps = kconserve_pmatrix(nkpts, kconserv)
         t2 = t2 + np.einsum('xyzijab,xyzw->yxwjiba', t2, Ps)
         return t1, t2
 
+
     mycc = KRCCSD(kmf)
     eris = mycc.ao2mo()
     t1, t2 = rand_t1_t2(mycc)
     Ht1, Ht2 = mycc.update_amps(t1, t2, eris)
-    print(lib.finger(Ht1) - (-4.6808039711608824+9.4962987225515789j))
-    print(lib.finger(Ht2) - (18.613685230812546+114.66975731912211j))
+    print(lib.finger(Ht1) - (-4.6808039711608824 + 9.4962987225515789j))  # FIXME
+    print(lib.finger(Ht2) - (18.613685230812546 + 114.66975731912211j))  # FIXME
 
     kmf = kmf.density_fit(auxbasis=[[0, (1., 1.)], [0, (.5, 1.)]])
     mycc = KRCCSD(kmf)
     eris = _ERIS(mycc, mycc.mo_coeff, method='outcore')
     t1, t2 = rand_t1_t2(mycc)
     Ht1, Ht2 = mycc.update_amps(t1, t2, eris)
-    print(lib.finger(Ht1) - (-3.6611794882508244+9.2241044317516554j))
-    print(lib.finger(Ht2) - (-196.88536721771101-432.29569128644886j))
+    print(lib.finger(Ht1) - (-3.6611794882508244 + 9.2241044317516554j))  # FIXME
+    print(lib.finger(Ht2) - (-196.88536721771101 - 432.29569128644886j))  # FIXME

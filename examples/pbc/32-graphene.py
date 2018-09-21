@@ -27,7 +27,8 @@ kpts = [nk,nk,1]
 Lz = 25 # Smallest Lz value for ~1e-6 convergence in absolute energy
 a = 1.42 # bond length in graphene
 fft_ke_cut = 300
-aft_mesh = [30,30,40] # Much smaller mesh needed for AFTDF
+# Much smaller mesh needed for AFTDF with the setting cell.low_dim_ft_type='inf_vacuum'
+aft_mesh = [30,30,40]
 e = []
 t = []
 pseudo = 'gth-pade'
@@ -43,6 +44,7 @@ cell.build(unit = 'B',
            atom = 'C 0 0 0; C 0 2.67303283 0',
            mesh = aft_mesh,
            dimension=2,
+           low_dim_ft_type = 'inf_vacuum',
            pseudo = pseudo,
            verbose = 7,
            precision = 1e-6,
@@ -80,7 +82,34 @@ mf.conv_tol = 1e-6
 e.append(mf.kernel())
 t.append(time.time() - t0)
 
-print('Energy (AFTDF) (FFTDF)')
+##################################################
+#
+# 2D PBC with GDF
+#
+##################################################
+t0 = time.time()
+mf = pbchf.KRHF(cell)
+mf.with_df = pdf.GDF(cell)
+mf.kpts = cell.make_kpts(kpts)
+mf.conv_tol = 1e-6
+e.append(mf.kernel())
+t.append(time.time() - t0)
+
+##################################################
+#
+# 2D PBC with MDF
+#
+##################################################
+t0 = time.time()
+mf = pbchf.KRHF(cell)
+mf.with_df = pdf.MDF(cell)
+mf.kpts = cell.make_kpts(kpts)
+mf.conv_tol = 1e-6
+e.append(mf.kernel())
+t.append(time.time() - t0)
+
+print('Energy (AFTDF) (FFTDF) (GDF)   (MDF)')
 print(e)
-print('Timing (AFTDF) (FFTDF)')
+print('Timing (AFTDF) (FFTDF) (GDF)   (MDF)')
 print(t)
+

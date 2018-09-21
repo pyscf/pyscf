@@ -66,6 +66,7 @@ def estimate_ke_cutoff_for_eta(cell, eta, precision=PRECISION):
     '''Given eta, the lower limit of ke_cutoff to guarantee the required
     precision in Coulomb integrals.
     '''
+    eta = max(eta, 0.2)
     lmax = numpy.max(cell._bas[:,gto.ANG_OF])
     log_k0 = 5 + numpy.log(eta) / 2
     log_rest = numpy.log(precision / (32*numpy.pi**2*eta))
@@ -74,6 +75,11 @@ def estimate_ke_cutoff_for_eta(cell, eta, precision=PRECISION):
     return Ecut
 
 def get_nuc(mydf, kpts=None):
+    # Pseudopotential is ignored when computing just the nuclear attraction
+    with lib.temporary_env(mydf.cell, _pseudo={}):
+        return get_pp_loc_part1(mydf, kpts)
+
+def get_pp_loc_part1(mydf, kpts=None):
     cell = mydf.cell
     if kpts is None:
         kpts_lst = numpy.zeros((1,3))
@@ -94,7 +100,7 @@ def get_nuc(mydf, kpts=None):
         if cell.dimension > 0:
             ke_guess = estimate_ke_cutoff(cell, cell.precision)
             mesh_guess = tools.cutoff_to_mesh(cell.lattice_vectors(), ke_guess)
-            if numpy.any(mesh < mesh_guess*.8):
+            if numpy.any(mesh[:cell.dimension] < mesh_guess[:cell.dimension]*.8):
                 logger.warn(mydf, 'mesh %s is not enough for AFTDF.get_nuc function '
                             'to get integral accuracy %g.\nRecommended mesh is %s.',
                             mesh, cell.precision, mesh_guess)
@@ -102,12 +108,6 @@ def get_nuc(mydf, kpts=None):
 
         vpplocG = pseudo.pp_int.get_gth_vlocG_part1(cell, Gv)
         vpplocG = -numpy.einsum('ij,ij->j', cell.get_SI(Gv), vpplocG)
-        v1 = -vpplocG.copy()
-
-        if cell.dimension == 1 or cell.dimension == 2:
-            G0idx, SI_on_z = pbcgto.cell._SI_for_uniform_model_charge(cell, Gv)
-            coulG = 4*numpy.pi / numpy.linalg.norm(Gv[G0idx], axis=1)**2
-            vpplocG[G0idx] += charges.sum() * SI_on_z * coulG
 
         vpplocG *= kws
         vG = vpplocG
@@ -121,22 +121,14 @@ def get_nuc(mydf, kpts=None):
                 logger.warn(mydf, 'mesh %s is not enough for AFTDF.get_nuc function '
                             'to get integral accuracy %g.\nRecommended mesh is %s.',
                             mesh, cell.precision, mesh_guess)
-            mesh_min = numpy.min((mesh_guess[:cell.dimension],
-                                  mesh[:cell.dimension]), axis=0)
-            mesh[:cell.dimension] = mesh_min.astype(int)
+            mesh_min = numpy.min((mesh_guess, mesh), axis=0)
+            if cell.dimension < 2 or cell.low_dim_ft_type == 'inf_vacuum':
+                mesh[:cell.dimension] = mesh_min[:cell.dimension]
+            else:
+                mesh = mesh_min
         Gv, Gvbase, kws = cell.get_Gv_weights(mesh)
 
-        nuccell = copy.copy(cell)
-        half_sph_norm = .5/numpy.sqrt(numpy.pi)
-        norm = half_sph_norm/gto.gaussian_int(2, mydf.eta)
-        chg_env = [mydf.eta, norm]
-        ptr_eta = cell._env.size
-        ptr_norm = ptr_eta + 1
-        chg_bas = [[ia, 0, 1, 1, 0, ptr_eta, ptr_norm, 0] for ia in range(cell.natm)]
-        nuccell._atm = cell._atm
-        nuccell._bas = numpy.asarray(chg_bas, dtype=numpy.int32)
-        nuccell._env = numpy.hstack((cell._env, chg_env))
-
+        nuccell = _compensate_nuccell(mydf)
         # PP-loc part1 is handled by fakenuc in _int_nuc_vloc
         vj = lib.asarray(mydf._int_nuc_vloc(nuccell, kpts_lst))
         t0 = t1 = log.timer_debug1('vnuc pass1: analytic int', *t0)
@@ -144,10 +136,6 @@ def get_nuc(mydf, kpts=None):
         coulG = tools.get_coulG(cell, kpt_allow, mesh=mesh, Gv=Gv) * kws
         aoaux = ft_ao.ft_ao(nuccell, Gv)
         vG = numpy.einsum('i,xi->x', -charges, aoaux) * coulG
-
-        if cell.dimension == 1 or cell.dimension == 2:
-            G0idx, SI_on_z = pbcgto.cell._SI_for_uniform_model_charge(cell, Gv)
-            vG[G0idx] += charges.sum() * SI_on_z * coulG[G0idx]
 
     max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
     for aoaoks, p0, p1 in mydf.ft_loop(mesh, kpt_allow, kpts_lst,
@@ -204,23 +192,15 @@ def _int_nuc_vloc(mydf, nuccell, kpts, intor='int3c2e', aosym='s2', comp=1):
         buf = buf.reshape(nkpts,comp,nao_pair,nchg)
         mat = numpy.einsum('kcxz,z->kcx', buf, charge)
 
-    if cell.dimension != 0 and intor in ('int3c2e', 'int3c2e_sph',
+    # vbar is the interaction between the background charge
+    # and the compensating function.  0D, 1D, 2D do not have vbar.
+    if cell.dimension == 3 and intor in ('int3c2e', 'int3c2e_sph',
                                          'int3c2e_cart'):
         assert(comp == 1)
         charge = -cell.atom_charges()
 
-        if cell.dimension == 1 or cell.dimension == 2:
-            Gv, Gvbase, kws = cell.get_Gv_weights(mydf.mesh)
-            G0idx, SI_on_z = pbcgto.cell._SI_for_uniform_model_charge(cell, Gv)
-            ZSI = numpy.einsum("i,ix->x", charge, cell.get_SI(Gv[G0idx]))
-            ZSI -= numpy.einsum('i,xi->x', charge, ft_ao.ft_ao(nuccell, Gv[G0idx]))
-            coulG = 4*numpy.pi / numpy.linalg.norm(Gv[G0idx], axis=1)**2
-            nucbar = numpy.einsum('i,i,i,i', ZSI.conj(), coulG, kws[G0idx], SI_on_z)
-            if abs(kpts).sum() < 1e-9:
-                nucbar = nucbar.real
-        else: # cell.dimension == 3
-            nucbar = sum([z/nuccell.bas_exp(i)[0] for i,z in enumerate(charge)])
-            nucbar *= numpy.pi/cell.vol
+        nucbar = sum([z/nuccell.bas_exp(i)[0] for i,z in enumerate(charge)])
+        nucbar *= numpy.pi/cell.vol
 
         ovlp = cell.pbc_intor('int1e_ovlp', 1, lib.HERMITIAN, kpts)
         for k in range(nkpts):
@@ -228,10 +208,7 @@ def _int_nuc_vloc(mydf, nuccell, kpts, intor='int3c2e', aosym='s2', comp=1):
                 mat[k] -= nucbar * ovlp[k].reshape(nao_pair)
             else:
                 mat[k] -= nucbar * lib.pack_tril(ovlp[k])
-
     return mat
-
-get_pp_loc_part1 = get_nuc
 
 def get_pp(mydf, kpts=None):
     '''Get the periodic pseudotential nuc-el AO matrix, with G=0 removed.
@@ -243,7 +220,7 @@ def get_pp(mydf, kpts=None):
         kpts_lst = numpy.reshape(kpts, (-1,3))
     nkpts = len(kpts_lst)
 
-    vloc1 = mydf.get_nuc(kpts_lst)
+    vloc1 = get_pp_loc_part1(mydf, kpts_lst)
     vloc2 = pseudo.pp_int.get_pp_loc_part2(cell, kpts_lst)
     vpp = pseudo.pp_int.get_pp_nl(cell, kpts_lst)
     for k in range(nkpts):
@@ -287,7 +264,7 @@ class AFTDF(lib.StreamObject):
         # to mimic molecular DF object
         self.blockdim = getattr(__config__, 'pbc_df_df_DF_blockdim', 240)
 
-# Not input options
+        # The following attributes are not input options.
         self.exxdiv = None  # to mimic KRHF/KUHF object in function get_coulG
         self._keys = set(self.__dict__.keys())
 
@@ -303,12 +280,6 @@ class AFTDF(lib.StreamObject):
     def check_sanity(self):
         lib.StreamObject.check_sanity(self)
         cell = self.cell
-        if cell.low_dim_ft_type is not None:
-            raise ValueError('AFTDF detected a non-None cell.low_dim_ft_type! '
-                             'The cell.low_dim_ft_type should only be \nset when '
-                             'using with_df = FFTDF. Please set mf.with_df equal '
-                             'to FFTDF or set cell.low_dim_ft_type \n(= %s) to None. '
-                              % (cell.low_dim_ft_type))
         if not cell.has_ecp():
             logger.warn(self, 'AFTDF integrals are found in all-electron '
                         'calculation.  It often causes huge error.\n'
@@ -390,14 +361,6 @@ class AFTDF(lib.StreamObject):
             nj = ao_loc[shls_slice[3]] - ao_loc[shls_slice[2]]
             nij = ni*nj
 
-        if (abs(q).sum() < 1e-6 and (cell.dimension == 1 or cell.dimension == 2)):
-            if aosym == 's2':
-                s = lib.pack_tril(cell.pbc_intor('int1e_ovlp', kpt=kptj))
-            else:
-                s = cell.pbc_intor('int1e_ovlp', kpt=kptj).ravel()
-        else:
-            s = None
-
         if blksize is None:
             blksize = min(max(64, int(max_memory*1e6*.75/(nij*16*comp))), 16384)
             sublk = int(blksize//4)
@@ -414,9 +377,6 @@ class AFTDF(lib.StreamObject):
                                          b, gxyz[p0:p1], Gvbase, q,
                                          kptj.reshape(1,3), intor, comp, out=buf)[0]
             aoao = aoao.reshape(p1-p0,nij)
-            if s is not None:  # to remove the divergent integrals
-                G0idx, SI_on_z = pbcgto.cell._SI_for_uniform_model_charge(cell, Gv[p0:p1])
-                aoao[G0idx] -= numpy.einsum('g,i->gi', SI_on_z, s)
 
             for i0, i1 in lib.prange(0, p1-p0, sublk):
                 nG = i1 - i0
@@ -465,14 +425,6 @@ class AFTDF(lib.StreamObject):
             nj = ao_loc[shls_slice[3]] - ao_loc[shls_slice[2]]
             nij = ni*nj
 
-        if (abs(q).sum() < 1e-6 and intor[:11] == 'GTO_ft_ovlp' and
-            (cell.dimension == 1 or cell.dimension == 2)):
-            s = cell.pbc_intor('int1e_ovlp', kpts=kpts)
-            if aosym == 's2':
-                s = [lib.pack_tril(x) for x in s]
-        else:
-            s = None
-
         blksize = max(16, int(max_memory*.9e6/(nij*nkpts*16*comp)))
         blksize = min(blksize, ngrids, 16384)
         buf = numpy.empty(nkpts*nij*blksize*comp, dtype=numpy.complex128)
@@ -481,13 +433,6 @@ class AFTDF(lib.StreamObject):
             dat = ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
                                         b, gxyz[p0:p1], Gvbase, q, kpts,
                                         intor, comp, out=buf)
-
-            if s is not None:  # to remove the divergent part in 1D/2D systems
-                G0idx, SI_on_z = pbcgto.cell._SI_for_uniform_model_charge(cell, Gv[p0:p1])
-                if SI_on_z.size > 0:
-                    for k, kpt in enumerate(kpts):
-                        dat[k][G0idx] -= numpy.einsum('g,...->g...', SI_on_z, s[k])
-
             yield dat, p0, p1
 
     weighted_coulG = weighted_coulG
@@ -517,6 +462,7 @@ class AFTDF(lib.StreamObject):
 
     get_eri = get_ao_eri = aft_ao2mo.get_eri
     ao2mo = get_mo_eri = aft_ao2mo.general
+    ao2mo_7d = aft_ao2mo.ao2mo_7d
     get_ao_pairs_G = get_ao_pairs = aft_ao2mo.get_ao_pairs_G
     get_mo_pairs_G = get_mo_pairs = aft_ao2mo.get_mo_pairs_G
 
@@ -535,10 +481,17 @@ class AFTDF(lib.StreamObject):
 # With this function to mimic the molecular DF.loop function, the pbc gamma
 # point DF object can be used in the molecular code
     def loop(self, blksize=None):
+        cell = self.cell
+        if cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum':
+            raise RuntimeError('ERIs of PBC-2D systems are not positive '
+                               'definite. Current API only supports postive '
+                               'definite ERIs.')
+
         if blksize is None:
             blksize = self.blockdim
-        Lpq = None
+        # coulG of 1D and 2D has negative elements.
         coulG = self.weighted_coulG()
+        Lpq = None
         for pqkR, pqkI, p0, p1 in self.pw_loop(aosym='s2', blksize=blksize):
             vG = numpy.sqrt(coulG[p0:p1])
             pqkR *= vG
@@ -557,7 +510,7 @@ class AFTDF(lib.StreamObject):
 # Since the real-space lattice-sum for nuclear attraction is not implemented,
 # use the 3c2e code with steep gaussians to mimic nuclear density
 def _fake_nuc(cell):
-    fakenuc = gto.Mole()
+    fakenuc = copy.copy(cell)
     fakenuc._atm = cell._atm.copy()
     fakenuc._atm[:,gto.PTR_COORD] = numpy.arange(gto.PTR_ENV_START,
                                                  gto.PTR_ENV_START+cell.natm*3,3)
@@ -581,6 +534,21 @@ def _fake_nuc(cell):
     fakenuc._env = numpy.asarray(numpy.hstack(_env), dtype=numpy.double)
     fakenuc.rcut = cell.rcut
     return fakenuc
+
+def _compensate_nuccell(mydf):
+    '''A cell of the compensated Gaussian charges for nucleus'''
+    cell = mydf.cell
+    nuccell = copy.copy(cell)
+    half_sph_norm = .5/numpy.sqrt(numpy.pi)
+    norm = half_sph_norm/gto.gaussian_int(2, mydf.eta)
+    chg_env = [mydf.eta, norm]
+    ptr_eta = cell._env.size
+    ptr_norm = ptr_eta + 1
+    chg_bas = [[ia, 0, 1, 1, 0, ptr_eta, ptr_norm, 0] for ia in range(cell.natm)]
+    nuccell._atm = cell._atm
+    nuccell._bas = numpy.asarray(chg_bas, dtype=numpy.int32)
+    nuccell._env = numpy.hstack((cell._env, chg_env))
+    return nuccell
 
 del(CUTOFF, PRECISION)
 

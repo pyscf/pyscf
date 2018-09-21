@@ -32,7 +32,7 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     '''Coulomb + XC functional for UKS.  See pyscf/dft/rks.py
     :func:`get_veff` fore more details.
     '''
-    if mol is None: mol = self.mol
+    if mol is None: mol = ks.mol
     if dm is None: dm = ks.make_rdm1()
     if not isinstance(dm, numpy.ndarray):
         dm = numpy.asarray(dm)
@@ -121,10 +121,11 @@ def energy_elec(ks, dm=None, h1e=None, vhf=None):
         vhf = ks.get_veff(ks.mol, dm)
     if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
         dm = numpy.array((dm*.5, dm*.5))
-    e1 = numpy.einsum('ij,ji', h1e, dm[0]) + numpy.einsum('ij,ji', h1e, dm[1])
-    tot_e = e1.real + vhf.ecoul + vhf.exc
-    logger.debug(ks, 'Ecoul = %s  Exc = %s', vhf.ecoul, vhf.exc)
-    return tot_e, vhf.ecoul+vhf.exc
+    e1 = numpy.einsum('ij,ji', h1e, dm[0])
+    e1+= numpy.einsum('ij,ji', h1e, dm[1])
+    tot_e = e1 + vhf.ecoul + vhf.exc
+    logger.debug(ks, 'E1 = %s  Ecoul = %s  Exc = %s', e1, vhf.ecoul, vhf.exc)
+    return tot_e.real, vhf.ecoul+vhf.exc
 
 
 class UKS(uhf.UHF):

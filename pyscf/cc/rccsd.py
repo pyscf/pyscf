@@ -113,12 +113,14 @@ def update_amps(cc, t1, t2, eris):
     else:
         Loo = imd.Loo(t1, t2, eris)
         Lvv = imd.Lvv(t1, t2, eris)
-        Loo -= np.diag(np.diag(foo))
-        Lvv -= np.diag(np.diag(fvv))
+        Loo[np.diag_indices(nocc)] -= mo_e_o
+        Lvv[np.diag_indices(nvir)] -= mo_e_v
+
         Woooo = imd.cc_Woooo(t1, t2, eris)
         Wvoov = imd.cc_Wvoov(t1, t2, eris)
         Wvovo = imd.cc_Wvovo(t1, t2, eris)
         Wvvvv = imd.cc_Wvvvv(t1, t2, eris)
+
         tau = t2 + np.einsum('ia,jb->ijab', t1, t1)
         t2new += lib.einsum('klij,klab->ijab', Woooo, tau)
         t2new += lib.einsum('abcd,ijcd->ijab', Wvvvv, tau)
@@ -286,7 +288,7 @@ def _make_eris_outcore(mycc, mo_coeff=None):
     eris.ovoo = eris.feri1.create_dataset('ovoo', (nocc,nvir,nocc,nocc), 'f8', chunks=(nocc,1,nocc,nocc))
     eris.ovov = eris.feri1.create_dataset('ovov', (nocc,nvir,nocc,nvir), 'f8', chunks=(nocc,1,nocc,nvir))
     eris.ovvo = eris.feri1.create_dataset('ovvo', (nocc,nvir,nvir,nocc), 'f8', chunks=(nocc,1,nvir,nocc))
-    eris.ovvv = eris.feri1.create_dataset('ovvv', (nocc,nvir,nvir,nvir), 'f8', chunks=(nocc,1,nvir,nvir))
+    eris.ovvv = eris.feri1.create_dataset('ovvv', (nocc,nvir,nvir,nvir), 'f8')
     eris.oovv = eris.feri1.create_dataset('oovv', (nocc,nocc,nvir,nvir), 'f8', chunks=(nocc,nocc,1,nvir))
     eris.vvvv = eris.feri1.create_dataset('vvvv', (nvir,nvir,nvir,nvir), 'f8')
     max_memory = max(MEMORYMIN, mycc.max_memory-lib.current_memory()[0])

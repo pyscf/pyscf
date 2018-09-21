@@ -119,7 +119,7 @@ def get_rho(mf, dm=None, grids=None, kpts=None):
     if isinstance(mf.with_df, multigrid.MultiGridFFTDF):
         rho = mf.with_df.get_rho(dm, kpts)
     else:
-        rho = mf._numint.get_rho(cell, dm, grids, kpts, mf.max_memory)
+        rho = mf._numint.get_rho(mf.cell, dm, grids, kpts, mf.max_memory)
     return rho
 
 
@@ -144,10 +144,10 @@ class KRKS(khf.KRHF):
             vhf = self.get_veff(self.cell, dm_kpts)
 
         weight = 1./len(h1e_kpts)
-        e1 = weight * np.einsum('kij,kji', h1e_kpts, dm_kpts).real
+        e1 = weight * np.einsum('kij,kji', h1e_kpts, dm_kpts)
         tot_e = e1 + vhf.ecoul + vhf.exc
         logger.debug(self, 'E1 = %s  Ecoul = %s  Exc = %s', e1, vhf.ecoul, vhf.exc)
-        return tot_e, vhf.ecoul + vhf.exc
+        return tot_e.real, vhf.ecoul + vhf.exc
 
     get_rho = get_rho
 

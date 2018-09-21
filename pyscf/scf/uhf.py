@@ -308,10 +308,12 @@ def energy_elec(mf, dm=None, h1e=None, vhf=None):
         dm = numpy.array((dm*.5, dm*.5))
     if vhf is None:
         vhf = mf.get_veff(mf.mol, dm)
-    e1 = numpy.einsum('ij,ij', h1e.conj(), dm[0]+dm[1])
+    e1 = numpy.einsum('ij,ji', h1e, dm[0])
+    e1+= numpy.einsum('ij,ji', h1e, dm[1])
     e_coul =(numpy.einsum('ij,ji', vhf[0], dm[0]) +
-             numpy.einsum('ij,ji', vhf[1], dm[1])).real * .5
-    return e1+e_coul, e_coul
+             numpy.einsum('ij,ji', vhf[1], dm[1])) * .5
+    logger.debug(mf, 'E1 = %s  Ecoul = %s', e1, e_coul.real)
+    return (e1+e_coul).real, e_coul
 
 # mo_a and mo_b are occupied orbitals
 def spin_square(mo, s=1):

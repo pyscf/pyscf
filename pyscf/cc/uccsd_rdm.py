@@ -26,6 +26,8 @@ from pyscf import ao2mo
 #einsum = numpy.einsum
 einsum = lib.einsum
 
+#TODO: optimize memory use
+
 def _gamma1_intermediates(cc, t1, t2, l1, l2):
     t1a, t1b = t1
     t2aa, t2ab, t2bb = t2
@@ -607,6 +609,7 @@ def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True):
 
 
 if __name__ == '__main__':
+    from functools import reduce
     from pyscf import gto
     from pyscf import scf
     from pyscf import ao2mo

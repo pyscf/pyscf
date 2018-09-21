@@ -62,6 +62,10 @@ class TDA(rhf.TDA):
         orbo = [mo_coeff[k][:,occidx[k]] for k in range(nkpts)]
         orbv = [mo_coeff[k][:,viridx[k]] for k in range(nkpts)]
         eai = _get_eai(mo_energy, mo_occ)
+        # FIXME: hdiag corresponds to the orbital energy with the exxdiv
+        # correction. The integrals in A, B matrices do not have the
+        # contribution from the exxdiv. Should the exchange correction be
+        # removed from hdiag?
         hdiag = numpy.hstack([x.ravel() for x in eai])
 
         mem_now = lib.current_memory()[0]
@@ -78,7 +82,8 @@ class TDA(rhf.TDA):
                 for k in range(nkpts):
                     dmvo[i,k] = reduce(numpy.dot, (orbv[k], dm1[k], orbo[k].T.conj()))
 
-            v1ao = vresp(dmvo)
+            with lib.temporary_env(mf, exxdiv=None):
+                v1ao = vresp(dmvo)
             v1s = []
             for i in range(nz):
                 dm1 = z1s[i]
@@ -170,7 +175,8 @@ class TDHF(TDA):
                     dmvo[i,k] = reduce(numpy.dot, (orbv[k], dmx[k], orbo[k].T.conj()))
                     dmvo[i,k]+= reduce(numpy.dot, (orbo[k], dmy[k].T, orbv[k].T.conj()))
 
-            v1ao = vresp(dmvo)
+            with lib.temporary_env(mf, exxdiv=None):
+                v1ao = vresp(dmvo)
             v1s = []
             for i in range(nz):
                 dmx = z1xs[i]

@@ -179,55 +179,24 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
     # j2c ~ (-kpt_ji | kpt_ji)
     j2c = fused_cell.pbc_intor('int2c2e', hermi=1, kpts=uniq_kpts)
 
-# An alternative method to evalute j2c. This method might have larger numerical error?
-#    chgcell = make_modchg_basis(auxcell, mydf.eta)
-#    for k, kpt in enumerate(uniq_kpts):
-#        aoaux = ft_ao.ft_ao(chgcell, Gv, None, b, gxyz, Gvbase, kpt).T
-#        coulG = numpy.sqrt(mydf.weighted_coulG(kpt, False, mesh))
-#        LkR = aoaux.real * coulG
-#        LkI = aoaux.imag * coulG
-#        j2caux = numpy.zeros_like(j2c[k])
-#        j2caux[naux:,naux:] = j2c[k][naux:,naux:]
-#        if is_zero(kpt):  # kpti == kptj
-#            j2caux[naux:,naux:] -= lib.ddot(LkR, LkR.T)
-#            j2caux[naux:,naux:] -= lib.ddot(LkI, LkI.T)
-#            j2c[k] = j2c[k][:naux,:naux] - fuse(fuse(j2caux.T).T)
-#            vbar = fuse(mydf.auxbar(fused_cell))
-#            s = (vbar != 0).astype(numpy.double)
-#            j2c[k] -= numpy.einsum('i,j->ij', vbar, s)
-#            j2c[k] -= numpy.einsum('i,j->ij', s, vbar)
-#        else:
-#            j2cR, j2cI = zdotCN(LkR, LkI, LkR.T, LkI.T)
-#            j2caux[naux:,naux:] -= j2cR + j2cI * 1j
-#            j2c[k] = j2c[k][:naux,:naux] - fuse(fuse(j2caux.T).T)
-#        fswap['j2c/%d'%k] = fuse(fuse(j2c[k]).T).T
-#        aoaux = LkR = LkI = coulG = None
-
-    if cell.dimension == 1 or cell.dimension == 2:
-        plain_ints = _gaussian_int(fused_cell)
-
     max_memory = max(2000, mydf.max_memory - lib.current_memory()[0])
     blksize = max(2048, int(max_memory*.5e6/16/fused_cell.nao_nr()))
     log.debug2('max_memory %s (MB)  blocksize %s', max_memory, blksize)
     for k, kpt in enumerate(uniq_kpts):
-        coulG = numpy.sqrt(mydf.weighted_coulG(kpt, False, mesh))
+        coulG = mydf.weighted_coulG(kpt, False, mesh)
         for p0, p1 in lib.prange(0, ngrids, blksize):
-            aoaux = ft_ao.ft_ao(fused_cell, Gv[p0:p1], None, b, gxyz[p0:p1], Gvbase, kpt)
-            if (cell.dimension == 1 or cell.dimension == 2) and is_zero(kpt):
-                G0idx, SI_on_z = pbcgto.cell._SI_for_uniform_model_charge(cell, Gv[p0:p1])
-                aoaux[G0idx] -= numpy.einsum('g,i->gi', SI_on_z, plain_ints)
-
-            aoaux = aoaux.T
-            LkR = aoaux.real * coulG[p0:p1]
-            LkI = aoaux.imag * coulG[p0:p1]
+            aoaux = ft_ao.ft_ao(fused_cell, Gv[p0:p1], None, b, gxyz[p0:p1], Gvbase, kpt).T
+            LkR = numpy.asarray(aoaux.real, order='C')
+            LkI = numpy.asarray(aoaux.imag, order='C')
             aoaux = None
 
             if is_zero(kpt):  # kpti == kptj
-                j2c[k][naux:] -= lib.ddot(LkR[naux:], LkR.T)
-                j2c[k][naux:] -= lib.ddot(LkI[naux:], LkI.T)
+                j2c[k][naux:] -= lib.ddot(LkR[naux:]*coulG[p0:p1], LkR.T)
+                j2c[k][naux:] -= lib.ddot(LkI[naux:]*coulG[p0:p1], LkI.T)
                 j2c[k][:naux,naux:] = j2c[k][naux:,:naux].T
             else:
-                j2cR, j2cI = zdotCN(LkR[naux:], LkI[naux:], LkR.T, LkI.T)
+                j2cR, j2cI = zdotCN(LkR[naux:]*coulG[p0:p1],
+                                    LkI[naux:]*coulG[p0:p1], LkR.T, LkI.T)
                 j2c[k][naux:] -= j2cR + j2cI * 1j
                 j2c[k][:naux,naux:] = j2c[k][naux:,:naux].T.conj()
             LkR = LkI = None
@@ -247,17 +216,13 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
 
         shls_slice = (auxcell.nbas, fused_cell.nbas)
         Gaux = ft_ao.ft_ao(fused_cell, Gv, shls_slice, b, gxyz, Gvbase, kpt)
-        if (cell.dimension == 1 or cell.dimension == 2) and is_zero(kpt):
-            G0idx, SI_on_z = pbcgto.cell._SI_for_uniform_model_charge(cell, Gv)
-            s = plain_ints[-Gaux.shape[1]:]  # Only compensated Gaussians
-            Gaux[G0idx] -= numpy.einsum('g,i->gi', SI_on_z, s)
-
         wcoulG = mydf.weighted_coulG(kpt, False, mesh)
         Gaux *= wcoulG.reshape(-1,1)
         kLR = Gaux.real.copy('C')
         kLI = Gaux.imag.copy('C')
         Gaux = None
         j2c = numpy.asarray(fswap['j2c/%d'%uniq_kptji_id])
+        j2c_negative = None
         try:
             j2c = scipy.linalg.cholesky(j2c, lower=True)
             j2ctag = 'CD'
@@ -272,19 +237,24 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
             log.debug('DF metric linear dependency for kpt %s', uniq_kptji_id)
             log.debug('cond = %.4g, drop %d bfns',
                       w[-1]/w[0], numpy.count_nonzero(w<mydf.linear_dep_threshold))
-            v = v[:,w>mydf.linear_dep_threshold].T.conj()
-            v /= numpy.sqrt(w[w>mydf.linear_dep_threshold]).reshape(-1,1)
-            j2c = v
+            v1 = v[:,w>mydf.linear_dep_threshold].conj().T
+            v1 /= numpy.sqrt(w[w>mydf.linear_dep_threshold]).reshape(-1,1)
+            j2c = v1
+            if cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum':
+                idx = numpy.where(w < -mydf.linear_dep_threshold)[0]
+                if len(idx) > 0:
+                    j2c_negative = (v[:,idx]/numpy.sqrt(-w[idx])).conj().T
+            w = v = None
             j2ctag = 'eig'
-        naux0 = j2c.shape[0]
 
         if is_zero(kpt):  # kpti == kptj
             aosym = 's2'
             nao_pair = nao*(nao+1)//2
 
-            vbar = mydf.auxbar(fused_cell)
-            ovlp = cell.pbc_intor('int1e_ovlp', hermi=1, kpts=adapted_kptjs)
-            ovlp = [lib.pack_tril(s) for s in ovlp]
+            if cell.dimension == 3:
+                vbar = fuse(mydf.auxbar(fused_cell))
+                ovlp = cell.pbc_intor('int1e_ovlp', hermi=1, kpts=adapted_kptjs)
+                ovlp = [lib.pack_tril(s) for s in ovlp]
         else:
             aosym = 's1'
             nao_pair = nao**2
@@ -317,23 +287,6 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
                 dat = ft_ao._ft_aopair_kpts(cell, Gv[p0:p1], shls_slice, aosym,
                                             b, gxyz[p0:p1], Gvbase, kpt,
                                             adapted_kptjs, out=buf)
-
-                if (cell.dimension == 1 or cell.dimension == 2) and is_zero(kpt):
-                    G0idx, SI_on_z = pbcgto.cell._SI_for_uniform_model_charge(cell, Gv[p0:p1])
-                    if SI_on_z.size > 0:
-                        for k, aoao in enumerate(dat):
-                            aoao[G0idx] -= numpy.einsum('g,i->gi', SI_on_z, ovlp[k])
-                            aux = fuse(ft_ao.ft_ao(fused_cell, Gv[p0:p1][G0idx]).T)
-                            vG_mod = numpy.einsum('ig,g,g->i', aux.conj(),
-                                                  wcoulG[p0:p1][G0idx], SI_on_z)
-                            if gamma_point(adapted_kptjs[k]):
-                                j3cR[k][:naux] -= vG_mod[:,None].real * ovlp[k]
-                            else:
-                                tmp = vG_mod[:,None] * ovlp[k]
-                                j3cR[k][:naux] -= tmp.real
-                                j3cI[k][:naux] -= tmp.imag
-                            tmp = aux = vG_mod
-
                 nG = p1 - p0
                 for k, ji in enumerate(adapted_ji_idx):
                     aoao = dat[k].reshape(nG,ncol)
@@ -355,9 +308,13 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
                     v = fuse(j3cR[k] + j3cI[k] * 1j)
                 if j2ctag == 'CD':
                     v = scipy.linalg.solve_triangular(j2c, v, lower=True, overwrite_b=True)
+                    feri['j3c/%d/%d'%(ji,istep)] = v
                 else:
-                    v = lib.dot(j2c, v)
-                feri['j3c/%d/%d'%(ji,istep)] = v
+                    feri['j3c/%d/%d'%(ji,istep)] = lib.dot(j2c, v)
+
+                # low-dimension systems
+                if j2c_negative is not None:
+                    feri['j3c-/%d/%d'%(ji,istep)] = lib.dot(j2c_negative, v)
 
         with lib.call_in_background(pw_contract) as compute:
             col1 = 0
@@ -371,6 +328,8 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
                 for k, idx in enumerate(adapted_ji_idx):
                     v = numpy.vstack([fswap['j3c-junk/%d/%d'%(idx,i)][0,col0:col1].T
                                       for i in range(nsegs)])
+                    # vbar is the interaction between the background charge
+                    # and the auxiliary basis.  0D, 1D, 2D do not have vbar.
                     if is_zero(kpt) and cell.dimension == 3:
                         for i in numpy.where(vbar != 0)[0]:
                             v[i] -= vbar[i] * ovlp[k][col0:col1]
@@ -419,7 +378,8 @@ class GDF(aft.AFTDF):
                 self.eta = eta_guess
                 ke_cutoff = aft.estimate_ke_cutoff_for_eta(cell, self.eta, cell.precision)
                 self.mesh = tools.cutoff_to_mesh(cell.lattice_vectors(), ke_cutoff)
-                self.mesh[cell.dimension:] = cell.mesh[cell.dimension:]
+                if cell.dimension < 2 or cell.low_dim_ft_type == 'inf_vacuum':
+                    self.mesh[cell.dimension:] = cell.mesh[cell.dimension:]
 
         # exp_to_discard to remove diffused fitting functions. The diffused
         # fitting functions may cause linear dependency in DF metric. Removing
@@ -430,7 +390,7 @@ class GDF(aft.AFTDF):
         # 0 since v1.5.2.
         self.exp_to_discard = cell.exp_to_discard
 
-# Not input options
+        # The following attributes are not input options.
         self.exxdiv = None  # to mimic KRHF/KUHF object in function get_coulG
         self.auxcell = None
         self.blockdim = getattr(__config__, 'pbc_df_df_DF_blockdim', 240)
@@ -597,10 +557,11 @@ class GDF(aft.AFTDF):
         '''Short range part'''
         if self._cderi is None:
             self.build()
+        cell = self.cell
         kpti, kptj = kpti_kptj
         unpack = is_zero(kpti-kptj) and not compact
         is_real = is_zero(kpti_kptj)
-        nao = self.cell.nao_nr()
+        nao = cell.nao_nr()
         if blksize is None:
             if is_real:
                 if unpack:
@@ -638,11 +599,22 @@ class GDF(aft.AFTDF):
             return LpqR, LpqI
 
         LpqR = LpqI = None
-        with _load3c(self._cderi, 'j3c', kpti_kptj) as j3c:
+        with _load3c(self._cderi, 'j3c', kpti_kptj, 'j3c-kptij') as j3c:
             naux = j3c.shape[0]
             for b0, b1 in lib.prange(0, naux, blksize):
                 LpqR, LpqI = load(j3c, b0, b1, LpqR, LpqI)
-                yield LpqR, LpqI
+                yield LpqR, LpqI, 1
+
+        if cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum':
+            # Truncated Coulomb operator is not postive definite. Load the
+            # CDERI tensor of negative part.
+            LpqR = LpqI = None
+            with _load3c(self._cderi, 'j3c-', kpti_kptj, 'j3c-kptij',
+                         ignore_key_error=True) as j3c:
+                naux = j3c.shape[0]
+                for b0, b1 in lib.prange(0, naux, blksize):
+                    LpqR, LpqI = load(j3c, b0, b1, LpqR, LpqI)
+                    yield LpqR, LpqI, -1
 
     weighted_coulG = aft.weighted_coulG
     _int_nuc_vloc = aft._int_nuc_vloc
@@ -672,6 +644,7 @@ class GDF(aft.AFTDF):
 
     get_eri = get_ao_eri = df_ao2mo.get_eri
     ao2mo = get_mo_eri = df_ao2mo.general
+    ao2mo_7d = df_ao2mo.ao2mo_7d
 
     def update_mp(self):
         mf = copy.copy(mf)
@@ -688,21 +661,43 @@ class GDF(aft.AFTDF):
 # With this function to mimic the molecular DF.loop function, the pbc gamma
 # point DF object can be used in the molecular code
     def loop(self, blksize=None):
+        cell = self.cell
+        if cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum':
+            raise RuntimeError('ERIs of PBC-2D systems are not positive '
+                               'definite. Current API only supports postive '
+                               'definite ERIs.')
+
         if blksize is None:
             blksize = self.blockdim
-        for LpqR, LpqI in self.sr_loop(compact=True, blksize=blksize):
+        for LpqR, LpqI, sign in self.sr_loop(compact=True, blksize=blksize):
 # LpqI should be 0 for gamma point DF
 #            assert(numpy.linalg.norm(LpqI) < 1e-12)
             yield LpqR
 
     def get_naoaux(self):
+        '''The dimension of auxiliary basis at gamma point'''
 # determine naoaux with self._cderi, because DF object may be used as CD
 # object when self._cderi is provided.
         if self._cderi is None:
             self.build()
         # self._cderi['j3c/k_id/seg_id']
-        with addons.load(self._cderi, 'j3c/0/0') as feri:
-            return feri.shape[0]
+        with addons.load(self._cderi, 'j3c/0') as feri:
+            if isinstance(feri, h5py.Group):
+                naux = feri['0'].shape[0]
+            else:
+                naux = feri.shape[0]
+
+        cell = self.cell
+        if (cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum' and
+            not isinstance(self._cderi, numpy.ndarray)):
+            with h5py.File(self._cderi, 'r') as feri:
+                if 'j3c-/0' in feri:
+                    dat = feri['j3c-/0']
+                    if isinstance(dat, h5py.Group):
+                        naux += dat['0'].shape[0]
+                    else:
+                        naux += dat.shape[0]
+        return naux
 
 DF = GDF
 
@@ -783,59 +778,104 @@ def fuse_auxcell(mydf, auxcell):
 
 
 class _load3c(object):
-    def __init__(self, cderi, label, kpti_kptj):
+    def __init__(self, cderi, label, kpti_kptj, kptij_label=None,
+                 ignore_key_error=False):
         self.cderi = cderi
         self.label = label
+        if kptij_label is None:
+            self.kptij_label = label + '-kptij'
+        else:
+            self.kptij_label = kptij_label
         self.kpti_kptj = kpti_kptj
         self.feri = None
+        self.ignore_key_error = ignore_key_error
 
     def __enter__(self):
         self.feri = h5py.File(self.cderi, 'r')
+        if self.label not in self.feri:
+            # Return a size-0 array to skip the loop in sr_loop
+            if self.ignore_key_error:
+                return numpy.zeros(0)
+            else:
+                raise KeyError('Key "%s" not found' % self.label)
+
         kpti_kptj = numpy.asarray(self.kpti_kptj)
-        kptij_lst = self.feri['%s-kptij'%self.label].value
-        k_id = member(kpti_kptj, kptij_lst)
-        if len(k_id) > 0:
-            dat = self.feri['%s/%d' % (self.label, k_id[0])]
-            if isinstance(dat, h5py.Group):
-                # Check whether the integral tensor is stored with old data
-                # foramt (v1.5.1 or older). The old format puts the entire
-                # 3-index tensor in an HDF5 dataset. The new format divides
-                # the tensor into pieces and stores them in different groups.
-                # The code below combines the slices into a single tensor.
-                dat = numpy.hstack([dat[str(i)] for i in range(len(dat))])
-
-        else:
-            # swap ki,kj due to the hermiticity
-            kptji = kpti_kptj[[1,0]]
-            k_id = member(kptji, kptij_lst)
-            if len(k_id) == 0:
-                raise RuntimeError('%s for kpts %s is not initialized.\n'
-                                   'You need to update the attribute .kpts then call '
-                                   '.build() to initialize %s.'
-                                   % (self.label, kpti_kptj, self.label))
-#TODO: put the numpy.hstack() call in _load_and_unpack class to lazily load
-# the 3D tensor if it is too big.
-            dat = self.feri['%s/%d' % (self.label, k_id[0])]
-            if isinstance(dat, h5py.Group):
-                # integral file generated by v1.5.1 or older does not need the
-                # code below.
-                dat = numpy.hstack([dat[str(i)] for i in range(len(dat))])
-
-            dat = _load_and_unpack(dat)
-        return dat
+        kptij_lst = self.feri[self.kptij_label].value
+        return _getitem(self.feri, self.label, kpti_kptj, kptij_lst,
+                        self.ignore_key_error)
 
     def __exit__(self, type, value, traceback):
         self.feri.close()
 
+def _getitem(h5group, label, kpti_kptj, kptij_lst, ignore_key_error=False):
+    k_id = member(kpti_kptj, kptij_lst)
+    if len(k_id) > 0:
+        key = label + '/' + str(k_id[0])
+        if key not in h5group:
+            if ignore_key_error:
+                return numpy.zeros(0)
+            else:
+                raise KeyError('Key "%s" not found' % key)
+
+        dat = h5group[key]
+        if isinstance(dat, h5py.Group):
+            # Check whether the integral tensor is stored with old data
+            # foramt (v1.5.1 or older). The old format puts the entire
+            # 3-index tensor in an HDF5 dataset. The new format divides
+            # the tensor into pieces and stores them in different groups.
+            # The code below combines the slices into a single tensor.
+            dat = numpy.hstack([dat[str(i)] for i in range(len(dat))])
+
+    else:
+        # swap ki,kj due to the hermiticity
+        kptji = kpti_kptj[[1,0]]
+        k_id = member(kptji, kptij_lst)
+        if len(k_id) == 0:
+            raise RuntimeError('%s for kpts %s is not initialized.\n'
+                               'You need to update the attribute .kpts then call '
+                               '.build() to initialize %s.'
+                               % (label, kpti_kptj, label))
+
+        key = label + '/' + str(k_id[0])
+        if key not in h5group:
+            if ignore_key_error:
+                return numpy.zeros(0)
+            else:
+                raise KeyError('Key "%s" not found' % key)
+
+#TODO: put the numpy.hstack() call in _load_and_unpack class to lazily load
+# the 3D tensor if it is too big.
+        dat = _load_and_unpack(h5group[key])
+    return dat
+
 class _load_and_unpack(object):
+    '''Load data lazily'''
     def __init__(self, dat):
         self.dat = dat
-        self.shape = self.dat.shape
     def __getitem__(self, s):
-        nao = int(numpy.sqrt(self.shape[1]))
-        v = numpy.asarray(self.dat[s])
-        v = lib.transpose(v.reshape(-1,nao,nao), axes=(0,2,1)).conj()
-        return v.reshape(-1,nao**2)
+        dat = self.dat
+        if isinstance(dat, h5py.Group):
+            v = numpy.hstack([dat[str(i)][s] for i in range(len(dat))])
+        else: # For mpi4pyscf, pyscf-1.5.1 or older
+            v = numpy.asarray(dat[s])
+
+        nao = int(numpy.sqrt(v.shape[-1]))
+        v1 = lib.transpose(v.reshape(-1,nao,nao), axes=(0,2,1)).conj()
+        return v1.reshape(v.shape)
+    def __array__(self):
+        '''Create a numpy array'''
+        return self[()]
+
+    @property
+    def shape(self):
+        dat = self.dat
+        if isinstance(dat, h5py.Group):
+            all_shape = [dat[str(i)].shape for i in range(len(dat))]
+            shape = all_shape[0][:-1] + (sum(x[-1] for x in all_shape),)
+            return shape
+        else: # For mpi4pyscf, pyscf-1.5.1 or older
+            return dat.shape
+
 
 def _gaussian_int(cell):
     r'''Regular gaussian integral \int g(r) dr^3'''

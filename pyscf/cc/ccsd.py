@@ -1200,8 +1200,12 @@ class _ChemistsERIs:
         nocc = self.nocc = mycc.nocc
         self.mol = mycc.mol
 
-        mo_e = self.fock.diagonal()
-        self.mo_energy = mo_e.real
+        # Note self.mo_energy can be different to fock.diagonal().
+        # self.mo_energy is used in the initial guess function (to generate
+        # MP2 amplitudes) and CCSD update_amps preconditioner.
+        # fock.diagonal() should only be used to compute the expectation value
+        # of Slater determinants.
+        mo_e = self.mo_energy = self.fock.diagonal().real
         try:
             gap = abs(mo_e[:nocc,None] - mo_e[None,nocc:]).min()
             if gap < 1e-5:
@@ -1425,7 +1429,7 @@ def _make_df_eris_outcore(mycc, mo_coeff=None):
     eris.ovoo = eris.feri1.create_dataset('ovoo', (nocc,nvir,nocc,nocc), 'f8', chunks=(nocc,1,nocc,nocc))
     eris.ovvo = eris.feri1.create_dataset('ovvo', (nocc,nvir,nvir,nocc), 'f8', chunks=(nocc,1,nvir,nocc))
     eris.ovov = eris.feri1.create_dataset('ovov', (nocc,nvir,nocc,nvir), 'f8', chunks=(nocc,1,nocc,nvir))
-    eris.ovvv = eris.feri1.create_dataset('ovvv', (nocc,nvir,nvir_pair), 'f8', chunks=(nocc,1,nvir_pair))
+    eris.ovvv = eris.feri1.create_dataset('ovvv', (nocc,nvir,nvir_pair), 'f8')
     eris.vvvv = eris.feri1.create_dataset('vvvv', (nvir_pair,nvir_pair), 'f8')
     eris.oooo[:] = lib.ddot(Loo.T, Loo).reshape(nocc,nocc,nocc,nocc)
     eris.ovoo[:] = lib.ddot(Lov.T, Loo).reshape(nocc,nvir,nocc,nocc)

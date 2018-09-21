@@ -99,6 +99,8 @@ class DFMP2(mp2.MP2):
 #        if t2 is None: t2 = self.t2
 #        return make_rdm2(self, t2, self.verbose)
 
+MP2 = DFMP2
+
 del(WITH_T2)
 
 

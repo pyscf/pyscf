@@ -828,12 +828,35 @@ def asarray(a, dtype=None, order=None):
     '''Convert a list of N-dim arrays to a (N+1) dim array.  It is equivalent to
     numpy.asarray function.
     '''
-    try:
-        a0_shape = numpy.shape(a[0])
-        a = numpy.vstack(a).reshape(-1, *a0_shape)
+    try:  # numpy.stack function is not available in numpy-1.8
+        a = numpy.stack(a)
     except:
         pass
     return numpy.asarray(a, dtype, order)
+
+def frompointer(pointer, count, dtype=float):
+    '''Interpret a buffer that the pointer refers to as a 1-dimensional array.
+
+    Args:
+        pointer : int or ctypes pointer
+            address of a buffer
+        count : int
+            Number of items to read.
+        dtype : data-type, optional
+            Data-type of the returned array; default: float.
+
+    Examples:
+
+    >>> s = numpy.ones(3, dtype=numpy.int32)
+    >>> ptr = s.ctypes.data
+    >>> frompointer(ptr, count=6, dtype=numpy.int16)
+    [1, 0, 1, 0, 1, 0]
+    '''
+    dtype = numpy.dtype(dtype)
+    count *= dtype.itemsize
+    buf = (ctypes.c_char * count).from_address(pointer)
+    a = numpy.ndarray(count, dtype=numpy.int8, buffer=buf)
+    return a.view(dtype)
 
 from distutils.version import LooseVersion
 if LooseVersion(numpy.__version__) <= LooseVersion('1.6.0'):

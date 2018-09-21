@@ -58,7 +58,7 @@ def tearDownModule():
     cell.stdout.close()
     del cell, kmf, kumf
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_analyze(self):
         rpop, rchg = kmf.analyze() # pop at gamma point
         upop, uchg = kumf.analyze()
@@ -144,6 +144,7 @@ class KnowValues(unittest.TestCase):
                    mesh = [8,20,20],
                    atom = '''He 2 0 0; He 3 0 0''',
                    dimension = 1,
+                   low_dim_ft_type = 'inf_vacuum',
                    verbose = 0,
                    basis = { 'He': [[0, (0.8, 1.0)],
                                     #[0, (1.0, 1.0)],
@@ -165,6 +166,7 @@ class KnowValues(unittest.TestCase):
                    mesh = [10,10,20],
                    atom = '''He 2 0 0; He 3 0 0''',
                    dimension = 2,
+                   low_dim_ft_type = 'inf_vacuum',
                    verbose = 0,
                    basis = { 'He': [[0, (0.8, 1.0)],
                                     #[0, (1.0, 1.0)],
@@ -186,6 +188,7 @@ class KnowValues(unittest.TestCase):
                    mesh = [8,20,20],
                    atom = '''He 2 0 0; He 3 0 0''',
                    dimension = 1,
+                   low_dim_ft_type = 'inf_vacuum',
                    verbose = 0,
                    basis = { 'He': [[0, (0.8, 1.0)],
                                     #[0, (1.0, 1.0)],
@@ -207,6 +210,7 @@ class KnowValues(unittest.TestCase):
                    mesh = [8,20,20],
                    atom = '''He 2 0 0; He 3 0 0''',
                    dimension = 1,
+                   low_dim_ft_type = 'inf_vacuum',
                    verbose = 0,
                    basis = { 'He': [[0, (0.8, 1.0)],
                                     #[0, (1.0, 1.0)],

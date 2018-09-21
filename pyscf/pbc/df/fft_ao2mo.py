@@ -37,7 +37,8 @@ from pyscf import lib
 from pyscf import ao2mo
 from pyscf.ao2mo.incore import iden_coeffs
 from pyscf.pbc import tools
-from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point
+from pyscf.pbc.lib import kpts_helper
+from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, member, unique
 from pyscf import __config__
 
 
@@ -45,7 +46,6 @@ def get_eri(mydf, kpts=None,
             compact=getattr(__config__, 'pbc_df_ao2mo_get_eri_compact', True)):
     cell = mydf.cell
     nao = cell.nao_nr()
-    low_dim_ft_type = cell.low_dim_ft_type
     kptijkl = _format_kpts(kpts)
     if not _iskconserv(cell, kptijkl):
         lib.logger.warn(cell, 'fft_ao2mo: momentum conservation not found in '
@@ -54,7 +54,7 @@ def get_eri(mydf, kpts=None,
 
     kpti, kptj, kptk, kptl = kptijkl
     q = kptj - kpti
-    coulG = tools.get_coulG(cell, q, mesh=mydf.mesh, low_dim_ft_type=low_dim_ft_type)
+    coulG = tools.get_coulG(cell, q, mesh=mydf.mesh)
     coords = cell.gen_uniform_grids(mydf.mesh)
     max_memory = mydf.max_memory - lib.current_memory()[0]
 
@@ -104,7 +104,6 @@ def general(mydf, mo_coeffs, kpts=None,
     from pyscf.pbc.df.df_ao2mo import warn_pbc2d_eri
     warn_pbc2d_eri(mydf)
     cell = mydf.cell
-    low_dim_ft_type = cell.low_dim_ft_type
     kptijkl = _format_kpts(kpts)
     kpti, kptj, kptk, kptl = kptijkl
     if isinstance(mo_coeffs, numpy.ndarray) and mo_coeffs.ndim == 2:
@@ -117,14 +116,15 @@ def general(mydf, mo_coeffs, kpts=None,
 
     allreal = not any(numpy.iscomplexobj(mo) for mo in mo_coeffs)
     q = kptj - kpti
-    coulG = tools.get_coulG(cell, q, mesh=mydf.mesh, low_dim_ft_type=low_dim_ft_type)
+    coulG = tools.get_coulG(cell, q, mesh=mydf.mesh)
     coords = cell.gen_uniform_grids(mydf.mesh)
     max_memory = mydf.max_memory - lib.current_memory()[0]
 
     if gamma_point(kptijkl) and allreal:
         ao = mydf._numint.eval_ao(cell, coords, kpti)[0]
-        if ((iden_coeffs(mo_coeffs[0], mo_coeffs[2]) and
-             iden_coeffs(mo_coeffs[1], mo_coeffs[3]))):
+        if ((iden_coeffs(mo_coeffs[0], mo_coeffs[1]) and
+             iden_coeffs(mo_coeffs[0], mo_coeffs[2]) and
+             iden_coeffs(mo_coeffs[0], mo_coeffs[3]))):
             moiT = mojT = numpy.asarray(lib.dot(mo_coeffs[0].T,ao.T), order='C')
             ao = None
             max_memory = max_memory - moiT.nbytes*1e-6
@@ -339,6 +339,90 @@ def get_mo_pairs_G(mydf, mo_coeffs, kpts=numpy.zeros((2,3)), q=None,
 
     return mo_pairs_G
 
+def ao2mo_7d(mydf, mo_coeff_kpts, kpts=None, factor=1, out=None):
+    cell = mydf.cell
+    if kpts is None:
+        kpts = mydf.kpts
+    nkpts = len(kpts)
+
+    if isinstance(mo_coeff_kpts, numpy.ndarray) and mo_coeff_kpts.ndim == 3:
+        mo_coeff_kpts = [mo_coeff_kpts] * 4
+    else:
+        mo_coeff_kpts = list(mo_coeff_kpts)
+
+    mo_ids = [id(x) for x in mo_coeff_kpts]
+    moTs = []
+    coords = cell.gen_uniform_grids(mydf.mesh)
+    aos = mydf._numint.eval_ao(cell, coords, kpts)
+    for n, mo_id in enumerate(mo_ids):
+        if mo_id in mo_ids[:n]:
+            moTs.append(moTs[mo_ids[:n].index(mo_id)])
+        else:
+            moTs.append([lib.dot(mo.T, aos[k].T) for k,mo in enumerate(mo_coeff_kpts[n])])
+
+    # Shape of the orbitals can be different on different k-points. The
+    # orbital coefficients must be formatted (padded by zeros) so that the
+    # shape of the orbital coefficients are the same on all k-points. This can
+    # be achieved by calling pbc.mp.kmp2.padded_mo_coeff function
+    nmoi, nmoj, nmok, nmol = [x.shape[2] for x in mo_coeff_kpts]
+    eri_shape = (nkpts, nkpts, nkpts, nmoi, nmoj, nmok, nmol)
+    if gamma_point(kpts):
+        dtype = numpy.result_type(*mo_coeff_kpts)
+    else:
+        dtype = numpy.complex128
+
+    if out is None:
+        out = numpy.empty(eri_shape, dtype=dtype)
+    else:
+        assert(out.shape == eri_shape)
+
+    kptij_lst = numpy.array([(ki, kj) for ki in kpts for kj in kpts])
+    kptis_lst = kptij_lst[:,0]
+    kptjs_lst = kptij_lst[:,1]
+    kpt_ji = kptjs_lst - kptis_lst
+    uniq_kpts, uniq_index, uniq_inverse = unique(kpt_ji)
+    ngrids = numpy.prod(mydf.mesh)
+
+    # To hold intermediates
+    fswap = lib.H5TmpFile()
+    kconserv = kpts_helper.get_kconserv(cell, kpts)
+    for uniq_id, kpt in enumerate(uniq_kpts):
+        q = uniq_kpts[uniq_id]
+        adapted_ji_idx = numpy.where(uniq_inverse == uniq_id)[0]
+        ki = adapted_ji_idx[0] // nkpts
+        kj = adapted_ji_idx[0] % nkpts
+
+        coulG = tools.get_coulG(cell, q, mesh=mydf.mesh)
+        coulG *= (cell.vol/ngrids) * factor
+        phase = numpy.exp(-1j * numpy.dot(coords, q))
+
+        for kk in range(nkpts):
+            kl = kconserv[ki, kj, kk]
+            mokT = moTs[2][kk]
+            molT = moTs[3][kl]
+            mo_pairs = numpy.einsum('ig,g,jg->ijg', mokT.conj(), phase.conj(), molT)
+            v = tools.ifft(mo_pairs.reshape(-1,ngrids), mydf.mesh)
+            v *= coulG
+            v = tools.fft(v.reshape(-1,ngrids), mydf.mesh)
+            v *= phase
+            fswap['zkl/'+str(kk)] = v
+
+        for ji_idx in adapted_ji_idx:
+            ki = ji_idx // nkpts
+            kj = ji_idx % nkpts
+            for kk in range(nkpts):
+                moiT = moTs[0][ki]
+                mojT = moTs[1][kj]
+                mo_pairs = numpy.einsum('ig,jg->ijg', moiT.conj(), mojT)
+                tmp = lib.dot(mo_pairs.reshape(-1,ngrids),
+                              numpy.asarray(fswap['zkl/'+str(kk)]).T)
+                if dtype == numpy.double:
+                    tmp = tmp.real
+                out[ki,kj,kk] = tmp.reshape(eri_shape[3:])
+        del(fswap['zkl'])
+
+    return out
+
 def _format_kpts(kpts):
     if kpts is None:
         kptijkl = numpy.zeros((4,3))
@@ -393,4 +477,4 @@ if __name__ == '__main__':
     eri0 = numpy.einsum('ijpl,pk->ijkl', eri0, mo.conj())
     eri0 = numpy.einsum('ijkp,pl->ijkl', eri0, mo       ).reshape(nao**2,-1)
     eri1 = with_df.ao2mo(mo, kpts)
-    print(abs(eri1-eri0).sum())
+    print(abs(eri1-eri0.reshape(eri1.shape)).sum())
