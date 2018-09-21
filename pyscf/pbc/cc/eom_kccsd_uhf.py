@@ -150,10 +150,6 @@ def ipccsd_matvec(eom, vector, kshift, imds=None, diag=None):
             Hr1b += -0.5 * np.einsum('NIME,MNE->I', imds.WOOOV[kn,kshift,km], r2bbb[km,kn])
             Hr1a +=        np.einsum('niME,nME->i', imds.WooOV[kn,kshift,km], r2abb[kn,km])
 
-    #Hr1a += -0.5*np.einsum('nime,mne->i', imds.Wooov, r2aaa)
-    #Hr1b +=      np.einsum('NIme,Nme->I', imds.WOOov, r2baa)
-    #Hr1b += -0.5*np.einsum('NIME,MNE->I', imds.WOOOV, r2bbb)
-    #Hr1a +=      np.einsum('niME,nME->i', imds.WooOV, r2abb)
 
     Hr2aaa = np.zeros((nkpts, nkpts, nocca, nocca, nvira), dtype=r2.dtype)
     Hr2baa = np.zeros((nkpts, nkpts, noccb, nocca, nvira), dtype=r2.dtype)
@@ -186,6 +182,7 @@ def ipccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     #Hr2abb += np.einsum('miBJ,m->iJB', imds.WooVO, r1a)
     #Hr2baa += np.einsum('MIbj,M->Ijb', imds.WOOvo, r1b)
     #Hr2bbb -= np.einsum('MJBI,M->IJB', imds.WOOVO, r1b)
+    ## Woovo term
     for ki, kj in itertools.product(range(nkpts), repeat=2):
         kb = kconserv[ki, kshift, kj]
         Hr2aaa[ki,kj] -= np.einsum('mjbi,m->ijb', imds._uccsd_imds.Woovo[kshift,kj,kb], r1a)
@@ -222,7 +219,7 @@ def ipccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     #tmp += lib.einsum('meBJ,Ime->IJB', imds.WovVO, r2baa)
     #Hr2bbb += tmp - tmp.transpose(1, 0, 2)
 
-    ## T2 term
+    ## T2 term, Wovov
     tmp_aaa = lib.einsum('xymenf,xymnf->e', imds.Wovov[:,kshift,:], r2aaa)
     tmp_bbb = lib.einsum('xyMENF,xyMNF->E', imds.WOVOV[:,kshift,:], r2bbb)
     tmp_abb = lib.einsum('xymeNF,xymNF->e', imds.WovOV[:,kshift,:], r2abb)
