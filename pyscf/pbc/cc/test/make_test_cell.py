@@ -111,6 +111,26 @@ def test_cell_n3(mesh=[9]*3):
     cell.build()
     return cell
 
+def test_cell_n3_diffuse():
+    """
+    Take ASE Diamond structure, input into PySCF and run
+    """
+    cell = pbcgto.Cell()
+    cell.unit = 'A'
+    cell.atom = 'C 0.,  0.,  0.; C 0.8917,  0.8917,  0.8917'
+    cell.a = '''0.      1.7834  1.7834
+                1.7834  0.      1.7834
+                1.7834  1.7834  0.    '''
+    cell.basis = {'C': [[0, (0.1, 1.0)],
+                        [1, (0.1, 1.0)]]}
+    cell.pseudo = "gth-pade"
+
+    cell.verbose = 7
+    cell.output = '/dev/null'
+    cell.build()
+    return cell
+
+
 def test_cell_cu_metallic(mesh=[9]*3):
     """
     Copper unit cell w/ special basis giving non-equal number of occupied orbitals per k-point
