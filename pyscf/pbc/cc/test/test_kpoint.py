@@ -24,11 +24,11 @@ import numpy as np
 from pyscf import gto, scf
 
 from pyscf.pbc import gto as pbcgto
-from pyscf.pbc import scf as pbchf
+from pyscf.pbc import scf as pbcscf
 from pyscf.pbc.ao2mo import eris
 import pyscf.pbc.tools
 
-import pyscf.pbc.cc
+import pyscf.pbc.cc as pbcc
 import pyscf.pbc.cc.kccsd_t as kccsd_t
 import pyscf.pbc.cc.kccsd
 
@@ -38,12 +38,12 @@ def run_kcell(cell, n, nk):
     abs_kpts = cell.make_kpts(nk, wrap_around=True)
 
     # RHF calculation
-    kmf = pbchf.KRHF(cell, abs_kpts, exxdiv=None)
+    kmf = pbcscf.KRHF(cell, abs_kpts, exxdiv=None)
     kmf.conv_tol = 1e-14
     ekpt = kmf.scf()
 
     # RCCSD calculation
-    cc = pyscf.pbc.cc.kccsd.CCSD(pbchf.addons.convert_to_ghf(kmf))
+    cc = pbcc.kccsd.CCSD(pbcscf.addons.convert_to_ghf(kmf))
     cc.conv_tol = 1e-8
     ecc, t1, t2 = cc.kernel()
     return ekpt, ecc
@@ -92,6 +92,24 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(escf,hf_311, 9)
         self.assertAlmostEqual(ecc, cc_311, 6)
 
+    def test_211_n3(self):
+        cell = make_test_cell.test_cell_n3_diffuse()
+        nk = (2, 1, 1)
+
+        abs_kpts = cell.make_kpts(nk, wrap_around=True)
+
+        # GHF calculation
+        kmf = pbcscf.KGHF(cell, abs_kpts, exxdiv=None)
+        kmf.conv_tol = 1e-14
+        escf = kmf.scf()
+        self.assertAlmostEqual(escf, -6.1870676561726574, 9)
+
+        # GCCSD calculation
+        cc = pbcc.kccsd.CCSD(kmf)
+        cc.conv_tol = 1e-8
+        ecc, t1, t2 = cc.kernel()
+        self.assertAlmostEqual(ecc, -0.067648363303697334, 6)
+
     def test_frozen_n3_high_cost(self):
         mesh = 5
         cell = make_test_cell.test_cell_n3([mesh]*3)
@@ -102,13 +120,13 @@ class KnownValues(unittest.TestCase):
         abs_kpts = cell.make_kpts(nk, with_gamma_point=True)
 
         # RHF calculation
-        kmf = pbchf.KRHF(cell, abs_kpts, exxdiv=None)
+        kmf = pbcscf.KRHF(cell, abs_kpts, exxdiv=None)
         kmf.conv_tol = 1e-9
         ehf = kmf.scf()
 
         # KGCCSD calculation, equivalent to running supercell
         # calculation with frozen=[0,1,2] (if done with larger mesh)
-        cc = pyscf.pbc.cc.kccsd.CCSD(kmf, frozen=[[0,1],[],[0]])
+        cc = pbcc.kccsd.CCSD(kmf, frozen=[[0,1],[],[0]])
         cc.diis_start_cycle = 1
         ecc, t1, t2 = cc.kernel()
         self.assertAlmostEqual(ehf, ehf_bench, 9)
@@ -121,7 +139,7 @@ class KnownValues(unittest.TestCase):
 
         # The following calculation at full convergence gives -0.711071910294612
         # for a cell.mesh = [25, 25, 25].
-        mycc = pyscf.pbc.cc.KGCCSD(kmf, frozen=0)
+        mycc = pbcc.KGCCSD(kmf, frozen=0)
         mycc.diis_start_cycle = 1
         mycc.iterative_damping = 0.04
         mycc.max_cycle = max_cycle
@@ -137,7 +155,7 @@ class KnownValues(unittest.TestCase):
         # The following calculation at full convergence gives -0.6440448716452378
         # for a cell.mesh = [25, 25, 25].  It is equivalent to a supercell [1, 1, 2]
         # calculation with frozen = [0, 3].
-        mycc = pyscf.pbc.cc.KGCCSD(kmf, frozen=[[2, 3], [0, 1]])
+        mycc = pbcc.KGCCSD(kmf, frozen=[[2, 3], [0, 1]])
         mycc.diis_start_cycle = 1
         mycc.iterative_damping = 0.04
         mycc.max_cycle = max_cycle
@@ -153,7 +171,7 @@ class KnownValues(unittest.TestCase):
         # The following calculation at full convergence gives -0.58688462599474
         # for a cell.mesh = [25, 25, 25].  It is equivalent to a supercell [1, 1, 2]
         # calculation with frozen = [0, 3, 35].
-        mycc = pyscf.pbc.cc.KGCCSD(kmf, frozen=[[2, 3, 34, 35], [0, 1]])
+        mycc = pbcc.KGCCSD(kmf, frozen=[[2, 3, 34, 35], [0, 1]])
         mycc.max_cycle = max_cycle
         mycc.iterative_damping = 0.05
         ecc3, t1, t2 = mycc.kernel()
@@ -165,10 +183,10 @@ class KnownValues(unittest.TestCase):
         if check_gamma:
             from pyscf.pbc.tools.pbc import super_cell
             supcell = super_cell(cell, nk)
-            kmf = pbchf.RHF(supcell, exxdiv=None)
+            kmf = pbcscf.RHF(supcell, exxdiv=None)
             ehf = kmf.scf()
 
-            mycc = pyscf.pbc.cc.RCCSD(kmf, frozen=[0, 3, 35])
+            mycc = pbcc.RCCSD(kmf, frozen=[0, 3, 35])
             mycc.max_cycle = max_cycle
             mycc.iterative_damping = 0.05
             ecc, t1, t2 = mycc.kernel()
@@ -184,7 +202,7 @@ class KnownValues(unittest.TestCase):
         ehf_bench = -52.5393701339723
 
         # KRHF calculation
-        kmf = pbchf.KRHF(cell, exxdiv=None)
+        kmf = pbcscf.KRHF(cell, exxdiv=None)
         kmf.kpts = cell.make_kpts(nk, scaled_center=[0.0, 0.0, 0.0], wrap_around=True)
         kmf.conv_tol_grad = 1e-6  # Stricter tol needed for answer to agree with supercell
         ehf = kmf.scf()
@@ -202,10 +220,10 @@ class KnownValues(unittest.TestCase):
 
         kpts = cell.make_kpts([1, 1, 2])
         kpts -= kpts[0]
-        kmf = pbchf.KRHF(cell, kpts=kpts, exxdiv=None)
+        kmf = pbcscf.KRHF(cell, kpts=kpts, exxdiv=None)
         ehf = kmf.kernel()
 
-        mycc = pyscf.pbc.cc.KGCCSD(kmf)
+        mycc = pbcc.KGCCSD(kmf)
         ecc, t1, t2 = mycc.kernel()
 
         energy_t = kccsd_t.kernel(mycc)
