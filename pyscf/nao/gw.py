@@ -60,8 +60,9 @@ class gw(scf):
     else: 
         self.start_st = self.nocc_0t-self.nocc
         self.finish_st = self.nocc_0t+self.nvrt
+    if self.verbosity>0: print(__name__,'\t\t====> Indices of states to be corrected start from {} to {} \n'.format(self.start_st,self.finish_st))
     self.nn = [range(self.start_st[s], self.finish_st[s]) for s in range(self.nspin)] # list of states
-    if self.verbosity>0: print(__name__,'\t\t====> Indices of states to be corrected = {}\n'.format(self.nn))
+    
 
     if 'nocc_conv' in kw:
       s2nocc_conv = [kw['nocc_conv']] if type(kw['nocc_conv'])==int else kw['nocc_conv']
@@ -283,7 +284,7 @@ class gw(scf):
       self.nn_conv.append( range(max(nocc_0t-nocc_conv,0), min(nocc_0t+nvrt_conv,self.norbs)))
 
     # iterations to converge the 
-    if self.verbosity>0: print('-'*len(sn2eval_gw[0])*4,'|  G0W0 corrections of eigenvalues  |','-'*len(sn2eval_gw[0])*4)
+    if self.verbosity>0: print('-'*30,'|  G0W0 corrections of eigenvalues  |','-'*30+'\n')
     for i in range(self.niter_max_ev):
       sn2i = self.gw_corr_int(sn2eval_gw)
       sn2r = self.gw_corr_res(sn2eval_gw)
@@ -307,7 +308,7 @@ class gw(scf):
           print('Spin{} {}'.format(s+1, n2ev[:]*HARTREE2EV)) #, sn2i[s][:]*HARTREE2EV, sn2r[s][:]*HARTREE2EV))
         
       if err<self.tol_ev : 
-        if self.verbosity>0: print('-'*len(sn2eval_gw[0])*4,' |  Convergence has been reached  | ','-'*len(sn2eval_gw[0])*4,'\n')
+        if self.verbosity>0: print('-'*30,' |  Convergence has been reached  | ','-'*30,'\n')
         break
     return sn2eval_gw
     
@@ -371,6 +372,7 @@ class gw(scf):
     #print(len(self.sn2eval_gw), type(self.sn2eval_gw))
     #print(self.nn, type(self.nn))
     #print(self.mo_energy_gw.shape, type(self.mo_energy_gw))
+    self.argsort = []
     for s,nn in enumerate(self.nn):
       self.mo_energy_gw[0,s,nn] = self.sn2eval_gw[s]
       nn_occ = [n for n in nn if n<self.nocc_0t[s]]
@@ -383,14 +385,38 @@ class gw(scf):
       self.mo_energy_gw[0,s,mm_occ] +=scissor_occ
       self.mo_energy_gw[0,s,mm_vrt] +=scissor_vrt
       #print(self.mo_energy_g0w0)
-      if self.verbosity>0: print(__name__, '\t\t====> Spin {}: Corrected Molecular orbital indices in sorted order: {}'.format(str(s+1),np.argsort(self.mo_energy_gw[0,s,:])))
       argsrt = np.argsort(self.mo_energy_gw[0,s,:])
+      self.argsort.append(argsrt)
+      if self.verbosity>0: print(__name__, '\t\t====> Spin {}: energy-sorted MO indices: {}'.format(str(s+1),argsrt))
       self.mo_energy_gw[0,s,:] = np.sort(self.mo_energy_gw[0,s,:])
-      for n,m in enumerate(argsrt): self.mo_coeff_gw[0,0,n] = self.mo_coeff[0,0,m]
+      for n,m in enumerate(argsrt): self.mo_coeff_gw[0,s,n] = self.mo_coeff[0,s,m]
  
     self.xc_code = 'GW'
     if self.verbosity>0:
       print(__name__,'\t\t====> Performed xc_code: {}\n '.format(self.xc_code))
       print('\nConverged GW-corrected eigenvalues:\n',self.mo_energy_gw*HARTREE2EV)
+    
+    return self.etot_gw()
         
   kernel_gw = make_mo_g0w0
+
+  def etot_gw(self):
+    dm1 = self.make_rdm1()
+    ecore = (self.get_hcore()*dm1[0,...,0]).sum()
+    vh,kmat = self.get_jk()
+    
+    if self.nspin==1:
+      etot = ecore + 0.5*((vh-0.5*kmat)*dm1[0,...,0]).sum()
+    elif self.nspin==2:
+      etot = ecore + 0.5*((vh[0]+vh[1]-kmat)*dm1[0,...,0]).sum()
+    else:
+      print(__name__, self.nspin)
+      raise RuntimeError('nspin?')
+    
+    ecorr = 0.0
+    for spin, (n2egw, m2emf, m2occ, n2m) in enumerate(zip(self.mo_energy_gw[0],self.mo_energy[0],self.mo_occ[0],self.argsort)):
+      for n, m in enumerate(n2m):
+        ecorr -= 0.5*m2occ[m]*(n2egw[n]-m2emf[m])
+
+    return etot+ecorr+self.energy_nuc()
+    
