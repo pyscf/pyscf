@@ -1037,12 +1037,6 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                         # imds.Wvovo[ka,kl,kd,kj] <= imds.Wovov[kl,ka,kj,kd].transpose(1,0,3,2)
                         Hr2[kj, ka] += -einsum('aldj,ldb->jab', imds.Wovov[kl, ka, kj].transpose(1, 0, 3, 2),
                                                r2[kl, kd])
-                        #for kc in range(nkpts):
-                        #    kk = kshift
-                        #    kl = kconserv[kc, kk, kd]
-                        #    tmp = (2. * einsum('klcd,lcd->k', imds.Woovv[kk, kl, kc], r2[kl, kc])
-                        #           - einsum('kldc,lcd->k', imds.Woovv[kk, kl, kd], r2[kl, kc]))
-                        #    Hr2[kj, ka] += -einsum('k,kjab->jab', tmp, t2[kshift, kj, ka])
             tmp = (2. * einsum('xyklcd,xylcd->k', imds.Woovv[kshift, :, :], r2[:, :])
                       - einsum('xylkcd,xylcd->k', imds.Woovv[:, kshift, :], r2[:, :]))
             Hr2[:, :] += -einsum('k,xykjab->xyjab', tmp, t2[kshift, :, :])
