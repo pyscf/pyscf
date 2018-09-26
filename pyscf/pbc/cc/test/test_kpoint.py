@@ -231,6 +231,24 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(escf,hf_311, 9)
         self.assertAlmostEqual(ecc, cc_311, 6)
 
+    def test_211_n3(self):
+        cell = make_test_cell.test_cell_n3_diffuse()
+        nk = (2, 1, 1)
+
+        abs_kpts = cell.make_kpts(nk, wrap_around=True)
+
+        # GHF calculation
+        kmf = pbcscf.KGHF(cell, abs_kpts, exxdiv=None)
+        kmf.conv_tol = 1e-14
+        escf = kmf.scf()
+        self.assertAlmostEqual(escf, -6.1870676561726574, 9)
+
+        # GCCSD calculation
+        cc = pbcc.kccsd.CCSD(kmf)
+        cc.conv_tol = 1e-8
+        ecc, t1, t2 = cc.kernel()
+        self.assertAlmostEqual(ecc, -0.067648363303697334, 6)
+
     def test_frozen_n3_high_cost(self):
         mesh = 5
         cell = make_test_cell.test_cell_n3([mesh]*3)
