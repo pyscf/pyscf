@@ -22,7 +22,17 @@ def polariz_inter_xx(mf, gto, tddft, comega):
   return p
 
 
+def polariz_freq_osc_strength(t2e, t2osc, comega):
+
+  p = np.zeros((len(comega)), dtype=np.complex128)
+  for osc,e in zip(t2osc, t2e):
+    for iw,w in enumerate(comega):
+      p[iw] += osc*((1.0/(w-e))-(1.0/(w+e)))
+  return p
+    
+
 def polariz_inter_ave(mf, gto, tddft, comega):
+  assert mf.mo_occ.ndim==1
   gto.set_common_orig((0.0,0.0,0.0))
   ao_dip = gto.intor_symmetric('int1e_r', comp=3)
   occidx = np.where(mf.mo_occ==2)[0]
@@ -44,6 +54,7 @@ def polariz_inter_ave(mf, gto, tddft, comega):
 
 def polariz_nonin_ave(mf, gto, comega):
   from pyscf import lib
+  assert mf.mo_occ.ndim==1
   
   gto.set_common_orig((0.0,0.0,0.0))
   ao_dip = gto.intor_symmetric('int1e_r', comp=3)

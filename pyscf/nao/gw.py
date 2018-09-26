@@ -315,9 +315,11 @@ class gw(scf):
     egwev = self.mo_energy_gw[0].T * HARTREE2EV
     file_name= re.sub('[^A-Za-z]', '', self.mol.atom)
     with open('report_'+file_name+'.out','w') as out_file:
+        print('Total energy G0W0\t{} Ha'.format(self.etot_gw))
         print('-'*30,'|G0W0 eigenvalues (eV)|','-'*30)
         out_file.write('-'*30+'|G0W0 eigenvalues (eV)|'+'-'*30+'\n')
         if self.nspin==1:
+            print('Energy-sorted MO indices \t {}'.format(self.argsort[0]))
             print("\n   n  %14s %14s %7s " % ("E_mf", "E_gw", "occ") )
             for ie,(emf,egw,f) in enumerate(zip(emfev,egwev,self.mo_occ[0].T)):
                 print("%5d  %14.7f %14.7f %7.2f " % (ie, emf[0], egw[0], f[0]) )
@@ -330,6 +332,8 @@ class gw(scf):
             print('G0W0 HOMO-LUMO gap  (eV):\t{:f}'.format(egwev[self.nfermi[0],0]-egwev[self.nfermi[0]-1,0]))
             out_file.write('G0W0 HOMO-LUMO gap  (eV):\t{:f}\n'.format(egwev[self.nfermi[0],0]-egwev[self.nfermi[0]-1,0]))
         elif self.nspin==2:
+            for s in range(2):
+              print('Energy-sorted MO indices for spin {}\t {}'.format(str(s+1),self.argsort[s][max(self.nocc_0t[s]-10,0):min(self.nocc_0t[s]+10, self.norbs)]))
             print("\n    n %14s %14s  %7s | %14s %14s  %7s" % ("E_mf_up", "E_gw_up", "occ_up", "E_mf_down", "E_gw_down", "occ_down"))
             out_file.write("\n    n %14s %14s  %7s | %14s %14s  %7s\n" % ("E_mf_up", "E_gw_up", "occ_up", "E_mf_down", "E_gw_down", "occ_down"))
             for ie,(emf,egw,f) in enumerate(zip(emfev,egwev,self.mo_occ[0].T)):
@@ -383,12 +387,13 @@ class gw(scf):
       #print(self.mo_energy_g0w0)
       argsrt = np.argsort(self.mo_energy_gw[0,s,:])
       self.argsort.append(argsrt)
-      if self.verbosity>0: print(__name__, '\t\t====> Spin {}: energy-sorted MO indices: {}'.format(str(s+1),argsrt))
+      if self.verbosity>1: 
+        print(__name__, '\t\t====> Spin {}: energy-sorted MO indices: {}'.format(str(s+1),argsrt))
       self.mo_energy_gw[0,s,:] = np.sort(self.mo_energy_gw[0,s,:])
       for n,m in enumerate(argsrt): self.mo_coeff_gw[0,s,n] = self.mo_coeff[0,s,m]
  
     self.xc_code = 'GW'
-    if self.verbosity>0:
+    if self.verbosity>1:
       print(__name__,'\t\t====> Performed xc_code: {}\n '.format(self.xc_code))
       print('\nConverged GW-corrected eigenvalues:\n',self.mo_energy_gw*HARTREE2EV)
     
@@ -413,6 +418,7 @@ class gw(scf):
     for spin, (n2egw, m2emf, m2occ, n2m) in enumerate(zip(self.mo_energy_gw[0],self.mo_energy[0],self.mo_occ[0],self.argsort)):
       for n, m in enumerate(n2m):
         ecorr -= 0.5*m2occ[m]*(n2egw[n]-m2emf[m])
-
-    return etot+ecorr+self.energy_nuc()
+    
+    self.etot_gw = etot+ecorr+self.energy_nuc()
+    return self.etot_gw
     

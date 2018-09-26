@@ -341,6 +341,31 @@ class mf(nao):
       pov[s] = np.einsum('oa,pab,vb->pov', self.mo_coeff[0,s,0:no,:,0], pab, self.mo_coeff[0,s,no:,:,0])
     return pov
 
+  def polariz_nonin_ave(self, comega):
+    from scipy.sparse import spmatrix 
+    """ Computes the non-interacting optical polarizability """
+    p = np.zeros((len(comega)), dtype=np.complex128)
+
+    x,y,z = map(spmatrix.toarray, self.dipole_coo())
+    i2d = np.array((x,y,z))
+    
+    for s in range(self.nspin):
+      n = self.mo_occ.shape[-1]
+      o,e,cc = self.mo_occ[0,s],self.mo_energy[0,s],self.mo_coeff[0,s,:,:,0]
+      oo1,ee1 = np.subtract.outer(o,o).reshape(n*n), np.subtract.outer(e,e).reshape(n*n)
+      idxoo1,idxee1 = np.where(oo1<0.0), np.where(ee1<3.0)
+      idx1 = np.intersect1d(idxoo1, idxee1)
+      nmi2d = np.einsum('nia,ma->nmi', np.einsum('iab,nb->nia', i2d, cc), cc)
+      t2osc = 1.5*(np.einsum('nmi,nmi->nm', nmi2d, nmi2d).reshape(n*n)[idx1])
+      t2e = ee1[idx1]
+      t2o = -oo1[idx1]
+      for iw,w in enumerate(comega):
+        p[iw] += (t2osc*((t2o/(w-t2e))-(t2o/(w+t2e)))).sum()
+
+    print(p.shape)
+      
+    return p
+
 #
 # Example of reading pySCF mean-field calculation.
 #
