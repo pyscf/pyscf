@@ -81,15 +81,13 @@ class chi0_matvec(mf):
 
   def apply_rf0(self, v, comega=1j*0.0):
     """ This applies the non-interacting response function to a vector (a set of vectors?) """
-    
-    assert len(v)==len(self.moms0), "%r, %r "%(len(v), len(self.moms0))
+    assert len(v)==self.nspin*len(self.moms0), "%r, %r " % (len(v), self.nspin*len(self.moms0))
     self.rf0_ncalls+=1
-    no = self.norbs
 
     if self.td_GPU.GPU is None:
-        return chi0_mv(self, v, comega)
+      return chi0_mv(self, v, comega)
     else:
-        return chi0_mv_gpu(self, v, comega) 
+      return chi0_mv_gpu(self, v, comega)
 
   def comp_polariz_nonin_xx(self, comegas):
     """  Compute the non interacting polarizability along the xx direction """
@@ -106,13 +104,13 @@ class chi0_matvec(mf):
     p_avg = np.zeros(comegas.shape, dtype=self.dtypeComplex)
 
     verbosity = kw['verbosity'] if 'verbosity' in kw else self.verbosity
-    nww, eV = len(comegas), 27.2114
-    vext = np.transpose(self.moms1)
+    nww = len(comegas)
     for xyz in range(3):
-        for iw, comega in enumerate(comegas):
-          if verbosity>1: print(xyz, iw, nww, comega*eV)
-          dn0 = self.apply_rf0(vext[xyz], comega)
-          p_avg[iw] += np.dot(dn0, vext[xyz])
+      vext = np.concatenate([self.moms1[:,xyz] for s in range(self.nspin)])
+      for iw, comega in enumerate(comegas):
+        if verbosity>1: print(__name__, xyz, iw, nww, comega*HARTREE2EV)
+        dn0 = self.apply_rf0(vext, comega)
+        p_avg[iw] += np.dot(dn0, vext)
     return p_avg/3.0
 
   def comp_dens_nonin_along_Eext(self, comegas, Eext = np.array([1.0, 0.0, 0.0])):

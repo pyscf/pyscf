@@ -14,23 +14,22 @@ def chi0_mv(self, v, comega=1j*0.0):
             v: vector describing the effective perturbation
             comega: complex frequency
     """
-
-    vext = np.zeros((v.shape[0], 2), dtype = self.dtype, order="F")
-    vext[:,0] = v.real
-    vext[:,1] = v.imag
-
     chi0_z = np.zeros(v.shape[0], dtype=self.dtypeComplex)
      
     for s in range(self.nspin):
+      sp,fp = self.nprod*s, self.nprod*(s+1)
+
       # real part
-      vdp = csr_matvec(self.cc_da, vext[:, 0])
+      #vdp = csr_matvec(self.cc_da, v[sp:fp].real)
+      vdp = csr_matvec(self.cc_da, np.require(v[sp:fp].real, requirements="C"))
       sab = (vdp*self.v_dab).reshape((self.norbs,self.norbs))
     
       nb2v = self.gemm(1.0, self.xocc[s], sab)
       nm2v_re = self.gemm(1.0, nb2v, self.xvrt[s].T)
     
       # imaginary part
-      vdp = csr_matvec(self.cc_da, vext[:, 1])
+      #vdp = csr_matvec(self.cc_da, v[sp:fp].imag)
+      vdp = csr_matvec(self.cc_da, np.require(v[sp:fp].imag, requirements="C"))
       sab = (vdp*self.v_dab).reshape((self.norbs, self.norbs))
       
       nb2v = self.gemm(1.0, self.xocc[s], sab)
@@ -64,8 +63,8 @@ def chi0_mv(self, v, comega=1j*0.0):
       vdp = csr_matvec(self.v_dab, ab2v)    
       chi0_im = vdp*self.cc_da
       
-      chi0_z += chi0_re + 1.0j*chi0_im
-
+      chi0_z[sp:fp] = chi0_re + 1.0j*chi0_im
+      
     return chi0_z
 #
 #

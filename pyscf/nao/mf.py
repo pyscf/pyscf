@@ -348,7 +348,7 @@ class mf(nao):
     x,y,z = map(spmatrix.toarray, self.dipole_coo())
     i2d = array((x,y,z))
     n = self.mo_occ.shape[-1]
-    eemax = max(comega.real)+10.0*max(comega.imag)
+    eemax = max(comega.real)+20.0*max(comega.imag)
     
     p = zeros((len(comega)), dtype=np.complex128) # result to accumulate
     

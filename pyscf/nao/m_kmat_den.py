@@ -219,7 +219,7 @@ def kmat_den(mf, dm=None, algo=None, **kw):
         tt[7] = timer()
         ttt += tt[1:8]-tt[0:7]
         
-      print(__name__, ttt)
+      #print(__name__, ttt)
       
     else:
       print(dm.shape)

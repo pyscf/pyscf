@@ -3,6 +3,7 @@ import numpy as np
 from timeit import default_timer as timer
 from pyscf.nao.chi0_matvec import chi0_matvec
 from copy import copy
+from pyscf.data.nist import HARTREE2EV
 
 class tddft_iter(chi0_matvec):
   """ 
@@ -154,8 +155,10 @@ class tddft_iter(chi0_matvec):
 
     return pxx
 
-  def comp_polariz_inter_ave(self, comegas, tmp_fname=None):
+  def comp_polariz_inter_ave(self, comegas, tmp_fname=None, **kw):
     """  Compute average interacting polarizability  """
+    
+    verbosity = kw['verbosity'] if 'verbosity' in kw else self.verbosity
     sh = comegas.shape if hasattr(comegas, 'shape') else (len(comegas))
     p_avg = np.zeros(sh, dtype=self.dtypeComplex)
 
@@ -163,26 +166,27 @@ class tddft_iter(chi0_matvec):
         if not isinstance(tmp_fname, str):
             raise ValueError("tmp_fname must be a string")
 
-
     vext = np.transpose(self.moms1)
-    nww, eV = len(comegas), 27.211386024367243
+    nww = len(comegas)
     for iw, comega in enumerate(comegas):
-        for xyz in range(3):
-            if self.verbosity>0: print(xyz, iw, nww, comega*eV)
-            veff = self.comp_veff(vext[xyz], comega)
-            dn = self.apply_rf0(veff, comega)
-            p_avg[iw] += np.dot(vext[xyz], dn)
-        if tmp_fname is not None:
-            tmp = open(tmp_fname, "a")
-            tmp.write("{0}   {1}   {2}\n".format(comega.real, p_avg[iw].real/3.0,
+      for xyz in range(3):
+        if verbosity>0: print(__name__, xyz, iw, nww, comega*HARTREE2EV)
+        veff = self.comp_veff(vext[xyz], comega)
+        dn = self.apply_rf0(veff, comega)
+        p_avg[iw] += np.dot(vext[xyz], dn)
+
+      if tmp_fname is not None:
+        tmp = open(tmp_fname, "a")
+        tmp.write("{0}   {1}   {2}\n".format(comega.real, p_avg[iw].real/3.0,
                                                               p_avg[iw].imag/3.0))
-            tmp.close() # Need to open and close the file at every freq, otherwise
+        tmp.close() # Need to open and close the file at every freq, otherwise
                     # tmp is written only at the end of the calculations, therefore,
                     # it is useless
-
     return p_avg/3.0
 
+
   polariz_inter_ave = comp_polariz_inter_ave
+  
 
   def comp_dens_inter_along_Eext(self, comegas, Eext = np.array([1.0, 0.0, 0.0]), tmp_fname=None):
     """ 
