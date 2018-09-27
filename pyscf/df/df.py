@@ -70,12 +70,12 @@ class DF(lib.StreamObject):
             When reading DF integrals from disk the chunk size to load.  It is
             used to improve the IO performance.
     '''
-    def __init__(self, mol):
+    def __init__(self, mol, auxbasis=None):
         self.mol = mol
         self.stdout = mol.stdout
         self.verbose = mol.verbose
         self.max_memory = mol.max_memory
-        self._auxbasis = None
+        self._auxbasis = auxbasis
 
 ##################################################
 # Following are not input options
