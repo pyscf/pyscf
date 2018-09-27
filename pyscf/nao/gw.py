@@ -324,7 +324,7 @@ class gw(scf):
         if self.nspin==1:
             print("\n   n  %14s %14s %7s " % ("E_mf", "E_gw", "occ") )
             for ie,(emf,egw,f) in enumerate(zip(emfev,egwev,self.mo_occ[0].T)):
-                print("%5d  %14.7f %14.7f %7.2f " % (ie, emf[0], egw[0], f[0]) )
+                print("%5d  %14.7f %14.7f %7.2f " % (ie+1, emf[0], egw[0], f[0]) )
             print('Fermi energy        (eV):\t{:f}'.format(self.fermi_energy* HARTREE2EV))
             out_file.write('Fermi energy        (eV):\t{:f}\n'.format(self.fermi_energy* HARTREE2EV))            
             print('G0W0 HOMO energy    (eV):\t{:f}'.format(egwev[self.nfermi[0]-1,0]))
@@ -347,6 +347,8 @@ class gw(scf):
             out_file.write('G0W0 LUMO energy    (eV):\t{:f}\t{:f}\n'.format(egwev[self.nfermi[0],0],egwev[self.nfermi[1],1]))
             print('G0W0 HOMO-LUMO gap  (eV):\t{:f}\t{:f}'.format(egwev[self.nfermi[0],0]-egwev[self.nfermi[0]-1,0],egwev[self.nfermi[1],1]-egwev[self.nfermi[1]-1,1]))
             out_file.write('G0W0 HOMO-LUMO gap  (eV):\t{:f}\t{:f}\n'.format(egwev[self.nfermi[0],0]-egwev[self.nfermi[0]-1,0],egwev[self.nfermi[1],1]-egwev[self.nfermi[1]-1,1]))
+            print('G0W0 Total energy   (eV):\t{:f}'.format(self.etot_gw()*HARTREE2EV))
+            out_file.write('G0W0 Total energy   (eV):\t{:0.4f}'.format(self.etot_gw()*HARTREE2EV))
         else:
             raise RuntimeError('not implemented...')
         t= int(timer() - starting_time)
@@ -361,8 +363,12 @@ class gw(scf):
     self.h0_vh_x_expval = self.get_h0_vh_x_expval()
     if self.verbosity>2:
       print(__name__,'\t\t====> Expectation values of Hartree-Fock Hamiltonian (eV):\n no.\t  H_up\t\t  H_down')
-      for i , (ab) in enumerate(zip(self.h0_vh_x_expval[0].T* HARTREE2EV,self.h0_vh_x_expval[1].T* HARTREE2EV)):
-	      print(' {:d}\t{:f}\t{:f}'.format(i+1, ab[0],ab[1]))
+      if self.nspin==1:
+        for i, ab in enumerate(zip(self.h0_vh_x_expval[0].T*HARTREE2EV)):
+            print (' {:d}\t{:f}'.format(i+1,ab[0]))
+      if self.nspin==2:
+        for i , (ab) in enumerate(zip(self.h0_vh_x_expval[0].T* HARTREE2EV,self.h0_vh_x_expval[1].T* HARTREE2EV)):
+	        print(' {:d}\t{:f}\t{:f}'.format(i+1, ab[0],ab[1]))
 
     if not hasattr(self,'sn2eval_gw'): self.sn2eval_gw=self.g0w0_eigvals() # Comp. GW-corrections
     
@@ -387,7 +393,7 @@ class gw(scf):
       #print(self.mo_energy_g0w0)
       argsrt = np.argsort(self.mo_energy_gw[0,s,:])
       self.argsort.append(argsrt)
-      if self.verbosity>0: print(__name__, '\t\t====> Spin {}: energy-sorted MO indices: {}'.format(str(s+1),argsrt))
+      if self.verbosity>0: print(__name__, '\t\t====> Spin {}: energy-sorted MO indices: {}'.format(str(s+1),argsrt+1))
       self.mo_energy_gw[0,s,:] = np.sort(self.mo_energy_gw[0,s,:])
       for n,m in enumerate(argsrt): self.mo_coeff_gw[0,s,n] = self.mo_coeff[0,s,m]
  
