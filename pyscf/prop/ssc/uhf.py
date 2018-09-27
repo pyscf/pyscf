@@ -276,20 +276,7 @@ def make_h1_fcsd(mol, mo_coeff, mo_occ, atmlst):
     return h1aa, h1ab, h1ba, h1bb
 
 
-class SpinSpinCoupling(uhf_nmr.NMR):
-    def __init__(self, scf_method):
-        mol = scf_method.mol
-        self.nuc_pair = [(i,j) for i in range(mol.natm) for j in range(i)]
-        self.with_fc = True
-        self.with_fcsd = False
-        uhf_nmr.NMR.__init__(self, scf_method)
-
-    def dump_flags(self):
-        uhf_nmr.NMR.dump_flags(self)
-        logger.info(self, 'nuc_pair %s', self.nuc_pair)
-        logger.info(self, 'with Fermi-contact  %s', self.with_fc)
-        logger.info(self, 'with Fermi-contact + spin-dipole  %s', self.with_fcsd)
-        return self
+class SpinSpinCoupling(rhf_ssc.SpinSpinCoupling):
 
     def kernel(self, mo1=None):
         if len(self.nuc_pair) == 0:

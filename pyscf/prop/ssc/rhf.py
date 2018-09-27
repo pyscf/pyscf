@@ -37,7 +37,6 @@ from pyscf.scf import cphf
 from pyscf.ao2mo import _ao2mo
 from pyscf.dft import numint
 from pyscf.soscf.newton_ah import _gen_rhf_response
-from pyscf.prop.nmr import rhf as rhf_nmr
 from pyscf.data import nist
 from pyscf.data.gyro import get_nuc_g_factor
 
@@ -87,7 +86,6 @@ def make_pso(sscobj, mol, mo1, mo_coeff, mo_occ, nuc_pair=None):
     para = []
     nocc = numpy.count_nonzero(mo_occ> 0)
     nvir = numpy.count_nonzero(mo_occ==0)
-    # *2 for doubly occupied orbitals
     atm1lst = sorted(set([i for i,j in nuc_pair]))
     atm2lst = sorted(set([j for i,j in nuc_pair]))
     atm1dic = dict([(ia,k) for k,ia in enumerate(atm1lst)])
@@ -264,19 +262,41 @@ def _write(stdout, msc3x3, title):
     stdout.flush()
 
 
-class SpinSpinCoupling(rhf_nmr.NMR):
+class SpinSpinCoupling(lib.StreamObject):
     def __init__(self, scf_method):
+        self.mol = scf_method.mol
+        self.verbose = scf_method.mol.verbose
+        self.stdout = scf_method.mol.stdout
+        self.chkfile = scf_method.chkfile
+        self._scf = scf_method
+
         mol = scf_method.mol
         self.nuc_pair = [(i,j) for i in range(mol.natm) for j in range(i)]
         self.with_fc = True
         self.with_fcsd = False
-        rhf_nmr.NMR.__init__(self, scf_method)
+
+        self.cphf = True
+        self.max_cycle_cphf = 20
+        self.conv_tol = 1e-9
+
+        self.mo10 = None
+        self.mo_e10 = None
+        self._keys = set(self.__dict__.keys())
 
     def dump_flags(self):
-        rhf_nmr.NMR.dump_flags(self)
+        log = logger.Logger(self.stdout, self.verbose)
+        log.info('\n')
+        log.info('******** %s for %s ********',
+                 self.__class__, self._scf.__class__)
         logger.info(self, 'nuc_pair %s', self.nuc_pair)
         logger.info(self, 'with Fermi-contact  %s', self.with_fc)
         logger.info(self, 'with Fermi-contact + spin-dipole  %s', self.with_fcsd)
+        if self.cphf:
+            log.info('Solving MO10 eq with CPHF.')
+            log.info('CPHF conv_tol = %g', self.conv_tol)
+            log.info('CPHF max_cycle_cphf = %d', self.max_cycle_cphf)
+        if not self._scf.converged:
+            log.warn('Ground state SCF is not converged')
         return self
 
     def kernel(self, mo1=None):
@@ -303,7 +323,7 @@ class SpinSpinCoupling(rhf_nmr.NMR):
             e11 += ssc_fc
         logger.timer(self, 'spin-spin coupling', *cput0)
 
-        if self.verbose > logger.QUIET:
+        if self.verbose >= logger.NOTE:
             nuc_mag = .5 * (nist.E_MASS/nist.PROTON_MASS)  # e*hbar/2m
             au2Hz = nist.HARTREE2J / nist.PLANCK
             #logger.debug('Unit AU -> Hz %s', au2Hz*nuc_mag**2)

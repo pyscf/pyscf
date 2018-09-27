@@ -32,7 +32,6 @@ from pyscf import gto
 from pyscf import tools
 from pyscf.lib import logger
 from pyscf.scf import cphf
-from pyscf.prop.nmr import dhf as dhf_nmr
 from pyscf.prop.ssc import rhf as rhf_ssc
 from pyscf.prop.ssc.rhf import _write
 from pyscf.data import nist
@@ -112,10 +111,9 @@ def sa01sa01_integral(mol, orig1, orig2):
     c2s_b = []
     for i in range(mol.nbas):
         l = mol.bas_angular(i)
-        c1 = gto.mole.cart2j_kappa(mol.bas_kappa(i), l, 'sp')
-        nf = (l+1)*(l+2)//2
-        c2s_a.append(c1[:nf])
-        c2s_b.append(c1[nf:])
+        ca, cb = gto.mole.cart2j_kappa(mol.bas_kappa(i), l, 'sp')
+        c2s_a.append(ca)
+        c2s_b.append(cb)
     c2s_a = scipy.linalg.block_diag(*c2s_a)
     c2s_b = scipy.linalg.block_diag(*c2s_b)
     c2s_aT = c2s_a.conj().T
@@ -179,17 +177,14 @@ def make_h1(mol, mo_coeff, mo_occ, atmlst):
     return h1
 
 
-class SpinSpinCoupling(dhf_nmr.NMR):
+class SpinSpinCoupling(rhf_ssc.SpinSpinCoupling):
     def __init__(self, scf_method):
-        mol = scf_method.mol
-        self.nuc_pair = [(i,j) for i in range(mol.natm) for j in range(i)]
-        dhf_nmr.NMR.__init__(self, scf_method)
         self.mb = 'sternheim' # or RMB, RKB
+        rhf_ssc.SpinSpinCoupling.__init__(self, scf_method)
 
     def dump_flags(self):
-        dhf_nmr.NMR.dump_flags(self)
+        rhf_ssc.SpinSpinCoupling.dump_flags(self)
         logger.info(self, 'mb = %s', self.mb)
-        logger.info(self, 'nuc_pair %s', self.nuc_pair)
         return self
 
     def kernel(self, mo1=None):
