@@ -1,6 +1,6 @@
 from __future__ import print_function, division
 import numpy as np
-from numpy import require, zeros
+from numpy import require, zeros, array, where, unravel_index, einsum
 from pyscf.nao import nao, prod_basis
 from pyscf.nao import conv_yzx2xyz_c
     
@@ -56,13 +56,13 @@ class mf(nao):
  
   def init_mo_coeff_wfsx(self, **kw): 
     from pyscf.nao.m_fermi_dirac import fermi_dirac_occupations
-    self.mo_coeff = np.require(self.wfsx.x, dtype=self.dtype, requirements='CW')
-    self.mo_energy = np.require(self.wfsx.ksn2e, dtype=self.dtype, requirements='CW')
+    self.mo_coeff = require(self.wfsx.x, dtype=self.dtype, requirements='CW')
+    self.mo_energy = require(self.wfsx.ksn2e, dtype=self.dtype, requirements='CW')
     self.telec = kw['telec'] if 'telec' in kw else self.hsx.telec
     if self.nspin==1:
-      self.nelec = kw['nelec'] if 'nelec' in kw else np.array([self.hsx.nelec])
+      self.nelec = kw['nelec'] if 'nelec' in kw else array([self.hsx.nelec])
     elif self.nspin==2:
-      self.nelec = kw['nelec'] if 'nelec' in kw else np.array([int(self.hsx.nelec/2), int(self.hsx.nelec/2)])      
+      self.nelec = kw['nelec'] if 'nelec' in kw else array([int(self.hsx.nelec/2), int(self.hsx.nelec/2)])      
       print(__name__, 'not sure here: self.nelec', self.nelec)
     else:
       raise RuntimeError('0>nspin>2?')
@@ -124,8 +124,8 @@ class mf(nao):
   def init_mo_coeff_label(self, **kw):
     """ Constructor a mean-field class from the preceeding SIESTA calculation """
     from pyscf.nao.m_fermi_dirac import fermi_dirac_occupations
-    self.mo_coeff = np.require(self.wfsx.x, dtype=self.dtype, requirements='CW')
-    self.mo_energy = np.require(self.wfsx.ksn2e, dtype=self.dtype, requirements='CW')
+    self.mo_coeff = require(self.wfsx.x, dtype=self.dtype, requirements='CW')
+    self.mo_energy = require(self.wfsx.ksn2e, dtype=self.dtype, requirements='CW')
     self.telec = kw['telec'] if 'telec' in kw else self.hsx.telec
     if self.nspin==1:
       self.nelec = kw['nelec'] if 'nelec' in kw else np.array([self.hsx.nelec])
@@ -146,7 +146,7 @@ class mf(nao):
     from pyscf.nao.m_fireball_hsx import fireball_hsx
     self.telec = kw['telec'] if 'telec' in kw else self.telec
     self.fermi_energy = kw['fermi_energy'] if 'fermi_energy' in kw else self.fermi_energy
-    self.mo_energy = np.require(fireball_get_eigen_dat(self.cd), dtype=self.dtype, requirements='CW')
+    self.mo_energy = require(fireball_get_eigen_dat(self.cd), dtype=self.dtype, requirements='CW')
     ksn2fd = fermi_dirac_occupations(self.telec, self.mo_energy, self.fermi_energy)
     self.mo_occ = (3-self.nspin)*ksn2fd
     if abs(self.nelectron-self.mo_occ.sum())>1e-6: raise RuntimeError("mo_occ wrong?" )
@@ -283,8 +283,8 @@ class mf(nao):
         for n in range(self.norbs):
           _siesta2blanko_denvec(orb2m, self.wfsx.x[k,s,n,:,:])
 
-    self.mo_coeff = np.require(self.wfsx.x, dtype=self.dtype, requirements='CW')
-    self.mo_energy = np.require(self.wfsx.ksn2e, dtype=self.dtype, requirements='CW')
+    self.mo_coeff = require(self.wfsx.x, dtype=self.dtype, requirements='CW')
+    self.mo_energy = require(self.wfsx.ksn2e, dtype=self.dtype, requirements='CW')
     self.telec = kw['telec'] if 'telec' in kw else self.hsx.telec
     self.nelec = kw['nelec'] if 'nelec' in kw else self.hsx.nelec
     self.fermi_energy = kw['fermi_energy'] if 'fermi_energy' in kw else self.fermi_energy
@@ -341,28 +341,29 @@ class mf(nao):
       pov[s] = np.einsum('oa,pab,vb->pov', self.mo_coeff[0,s,0:no,:,0], pab, self.mo_coeff[0,s,no:,:,0])
     return pov
 
-  def polariz_nonin_ave(self, comega):
+  def polariz_nonin_ave_matelem(self, comega):
     from scipy.sparse import spmatrix 
-    """ Computes the non-interacting optical polarizability """
-    p = np.zeros((len(comega)), dtype=np.complex128)
+    """ Computes the non-interacting optical polarizability via the dipole matrix elements."""
 
     x,y,z = map(spmatrix.toarray, self.dipole_coo())
-    i2d = np.array((x,y,z))
+    i2d = array((x,y,z))
+    n = self.mo_occ.shape[-1]
+    eemax = max(comega.real)+10.0*max(comega.imag)
+    
+    p = zeros((len(comega)), dtype=np.complex128) # result to accumulate
     
     for s in range(self.nspin):
-      n = self.mo_occ.shape[-1]
       o,e,cc = self.mo_occ[0,s],self.mo_energy[0,s],self.mo_coeff[0,s,:,:,0]
       oo1,ee1 = np.subtract.outer(o,o).reshape(n*n), np.subtract.outer(e,e).reshape(n*n)
-      idxoo1,idxee1 = np.where(oo1<0.0), np.where(ee1<3.0)
-      idx1 = np.intersect1d(idxoo1, idxee1)
-      nmi2d = np.einsum('nia,ma->nmi', np.einsum('iab,nb->nia', i2d, cc), cc)
-      t2osc = 1.5*(np.einsum('nmi,nmi->nm', nmi2d, nmi2d).reshape(n*n)[idx1])
-      t2e = ee1[idx1]
-      t2o = -oo1[idx1]
-      for iw,w in enumerate(comega):
-        p[iw] += (t2osc*((t2o/(w-t2e))-(t2o/(w+t2e)))).sum()
+      idx = unravel_index( np.intersect1d(where(oo1<0.0), where(ee1<eemax)), (n,n))
+      ivrt,iocc = array(list(set(idx[0]))), array(list(set(idx[1])))
+      voi2d = einsum('nia,ma->nmi', einsum('iab,nb->nia', i2d, cc[ivrt]), cc[iocc])
+      t2osc = 2.0/3.0*einsum('voi,voi->vo', voi2d, voi2d)
+      t2w =  np.subtract.outer(e[ivrt],e[iocc])
+      t2o = -np.subtract.outer(o[ivrt],o[iocc])
 
-    print(p.shape)
+      for iw,w in enumerate(comega):
+        p[iw] += 0.5*(t2osc*((t2o/(w-t2w))-(t2o/(w+t2w)))).sum()
       
     return p
 
