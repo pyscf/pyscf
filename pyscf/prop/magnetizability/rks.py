@@ -194,7 +194,7 @@ def _get_ao_coords(mol):
 
 class Magnetizability(rhf_mag.Magnetizability):
 
-    get_fock = rhf_nmr.get_fock
+    get_fock = rks_nmr.get_fock
 
     dia = dia
 
@@ -219,14 +219,14 @@ if __name__ == '__main__':
         ['Ne' , (0. , 0. , 0.)], ]
     mol.basis='631g'
     mol.build()
-#
-#    mf = dft.RKS(mol).run()
-#    mag = Magnetizability(mf).kernel()
-#    print(mag)
-#
-#    mf.set(xc = 'b3lyp').run()
-#    mag = Magnetizability(mf).kernel()
-#    print(mag)
+
+    mf = dft.RKS(mol).run()
+    mag = Magnetizability(mf).kernel()
+    print(lib.finger(mag) - 0.30375149255154221)
+
+    mf.set(xc = 'b3lyp').run()
+    mag = Magnetizability(mf).kernel()
+    print(lib.finger(mag) - 0.3022331813238171)
 
     mol.atom = [
         [1   , (0. , 0. , .917)],
@@ -234,26 +234,20 @@ if __name__ == '__main__':
     mol.basis = '6-31g'
     mol.build()
 
-    mf = dft.RKS(mol).set(xc='lda,vwn_rpa').run()
-#    mf = dft.RKS(mol).set(xc='b3lypg').run()
+    mf = dft.RKS(mol).set(xc='lda,vwn').run()
     mag = Magnetizability(mf).kernel()
-    print(mag)
+    print(lib.finger(mag) - 0.4313210213418015)
 
-#    mol.basis = 'ccpvdz'
-#    mol.build(0, 0)
-#    mf = dft.RKS(mol)
-#    mf.xc = 'b3lyp'
-#    mf.kernel()
-#    mag = Magnetizability(mf).kernel()
-#    print(mag)
-#
-#
-#    mol = gto.M(atom='''O      0.   0.       0.
-#                        H      0.  -0.757    0.587
-#                        H      0.   0.757    0.587''',
-#                basis='ccpvdz')
-#    mf = scf.RHF(mol)
-#    mf.xc = 'b3lyp'
-#    mf.run()
-#    mag = Magnetizability(mf).kernel()
-#    print(lib.finger(m) - 0.43596639996758657)
+    mf = dft.RKS(mol).set(xc='b3lyp').run()
+    mag = Magnetizability(mf).kernel()
+    print(lib.finger(mag) - 0.42828345739100998)
+
+    mol = gto.M(atom='''O      0.   0.       0.
+                        H      0.  -0.757    0.587
+                        H      0.   0.757    0.587''',
+                basis='ccpvdz')
+    mf = dft.RKS(mol)
+    mf.xc = 'b3lyp'
+    mf.run()
+    mag = Magnetizability(mf).kernel()
+    print(lib.finger(mag) - 0.61042958313712403)
