@@ -41,7 +41,8 @@ def vxc_pack(self, **kw):
   dm = kw['dm'] if 'dm' in kw else self.make_rdm1()
   kernel = kw['kernel'] if 'kernel' in kw else None
   ao_log = kw['ao_log'] if 'ao_log' in kw else self.ao_log
-  (xc_code,iskw) = (kw['xc_code'],True) if 'xc_code' in kw else (self.xc_code,False)
+  xc_code = kw['xc_code'] if 'xc_code' in kw else self.xc_code
+  kw.pop('xc_code',None)
   dtype = kw['dtype'] if 'dtype' in kw else float64
 
   aome = ao_matelem_c(ao_log.rr, ao_log.pp, sv, dm)
@@ -66,7 +67,7 @@ def vxc_pack(self, **kw):
       if atom2>atom1: continue
       if (sp2rcut[sp1]+sp2rcut[sp2])**2<=sum((rv1-rv2)**2) : continue
       
-      iab2block = xc_scalar_ni(me,sp1,rv1,sp2,rv2,**kw) if iskw else xc_scalar_ni(me,sp1,rv1,sp2,rv2,xc_code=xc_code,**kw)
+      iab2block = xc_scalar_ni(me,sp1,rv1,sp2,rv2,xc_code=xc_code,**kw)
       
       if use_numba:
         for i,ab2v in enumerate(iab2block):
