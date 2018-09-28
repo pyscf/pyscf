@@ -6,7 +6,6 @@ from timeit import default_timer as timer
 from pyscf.nao import mf
 from pyscf.nao.m_tddft_iter_gpu import tddft_iter_gpu_c
 from pyscf.nao.m_chi0_noxv import chi0_mv_gpu, chi0_mv
-from pyscf.nao.m_blas_wrapper import spmv_wrapper
 from copy import copy
 from pyscf.data.nist import HARTREE2EV
 
@@ -15,7 +14,6 @@ class chi0_matvec(mf):
 
   def __init__(self, **kw):
     from pyscf.nao.m_fermi_dirac import fermi_dirac_occupations
-    from scipy.linalg import blas
 
     self.dtype = kw['dtype'] if 'dtype' in kw else np.float32
     for x in ['dtype']: kw.pop(x, None)
@@ -29,23 +27,11 @@ class chi0_matvec(mf):
     self.fermi_energy = kw['fermi_energy'] if 'fermi_energy' in kw else self.fermi_energy
 
     assert type(self.eps)==float
-        
-    self.spmv = spmv_wrapper
-    if self.dtype == np.float32:
-      self.dtypeComplex = np.complex64
-      self.gemm = blas.sgemm
-      if self.scipy_ver > 0: self.spmv = blas.sspmv
-    elif self.dtype == np.float64:
-      self.dtypeComplex = np.complex128
-      self.gemm = blas.dgemm
-      if self.scipy_ver > 0: self.spmv = blas.dspmv
-    else:
-      raise ValueError("dtype can be only float32 or float64")
-  
-    self.div_eigenenergy_numba = None
+
+    self.div_numba = None
     if self.use_numba:
       from pyscf.nao.m_div_eigenenergy_numba import div_eigenenergy_numba
-      self.div_eigenenergy_numba = div_eigenenergy_numba
+      self.div_numba = div_eigenenergy_numba
 
     if hasattr(self, 'hsx') and self.dealloc_hsx: self.hsx.deallocate()     # deallocate hsx
 
@@ -79,15 +65,16 @@ class chi0_matvec(mf):
     self.moms0,self.moms1 = pb.comp_moments(dtype=self.dtype)
     self.td_GPU = tddft_iter_gpu_c(GPU, self.mo_coeff[0,0,:,:,0], self.ksn2f, self.ksn2e, self.norbs, self.nfermi, self.nprod, self.vstart)
 
-  def apply_rf0(self, v, comega=1j*0.0):
+  def apply_rf0(self, sp2v, comega=1j*0.0):
     """ This applies the non-interacting response function to a vector (a set of vectors?) """
-    assert len(v)==self.nspin*len(self.moms0), "%r, %r " % (len(v), self.nspin*len(self.moms0))
+    expect_shape=tuple([self.nspin*self.nprod])
+    assert np.all(sp2v.shape==expect_shape), "{} {}".format(sp2v.shape,expect_shape)
     self.rf0_ncalls+=1
 
     if self.td_GPU.GPU is None:
-      return chi0_mv(self, v, comega)
+      return chi0_mv(self, sp2v, comega)
     else:
-      return chi0_mv_gpu(self, v, comega)
+      return chi0_mv_gpu(self, sp2v, comega)
 
   def comp_polariz_nonin_xx(self, comegas):
     """  Compute the non interacting polarizability along the xx direction """
@@ -102,7 +89,6 @@ class chi0_matvec(mf):
   def comp_polariz_nonin_ave(self, comegas , **kw):
     """  Compute the average non-interacting polarizability """
     p_avg = np.zeros(comegas.shape, dtype=self.dtypeComplex)
-
     verbosity = kw['verbosity'] if 'verbosity' in kw else self.verbosity
     nww = len(comegas)
     for xyz in range(3):
@@ -110,7 +96,7 @@ class chi0_matvec(mf):
       for iw, comega in enumerate(comegas):
         if verbosity>1: print(__name__, xyz, iw, nww, comega*HARTREE2EV)
         dn0 = self.apply_rf0(vext, comega)
-        p_avg[iw] += np.dot(dn0, vext)
+        p_avg[iw] += (dn0*vext).sum()
     return p_avg/3.0
 
   def comp_dens_nonin_along_Eext(self, comegas, Eext = np.array([1.0, 0.0, 0.0])):

@@ -22,13 +22,15 @@ class KnowValues(unittest.TestCase):
 
   def test_134_h2o_rhf_rpa_pb(self):
     """ This  """
-    mol = gto.M(atom='O 0 0 0; H 0 0.489 1.074; H 0 0.489 -1.074',basis='cc-pvdz',spin=0)
-    gto_mf = scf.UHF(mol)
+    mol = gto.M(verbose=1,atom='O 0 0 0; H 0 0.489 1.074; H 0 0.489 -1.074',basis='cc-pvdz')
+    gto_mf = scf.RHF(mol)
     gto_mf.kernel()
     nao_mf = tddft_iter(gto=mol, mf=gto_mf, tol_loc=1e-5, tol_biloc=1e-7, xc_code="RPA")
     comega = np.arange(0.0, 2.0, 0.01) + 1j*0.03
-    pnonin = -nao_mf.comp_polariz_inter_ave(comega, verbosity=1).imag
+    pnonin = -nao_mf.comp_polariz_inter_ave(comega, verbosity=0).imag
     data = np.array([comega.real*HARTREE2EV, pnonin])
     np.savetxt('test_134_h2o_rhf_rpa_pb.txt', data.T, fmt=['%f','%f'])
-    
+    data_ref = np.loadtxt('test_134_h2o_rhf_rpa_pb.txt-ref').T
+    self.assertTrue(np.allclose(data_ref, data, 5))
+        
 if __name__ == "__main__": unittest.main()

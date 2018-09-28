@@ -5,67 +5,63 @@ from scipy.linalg import blas
 from pyscf.nao.m_sparsetools import csr_matvec, csc_matvec, csc_matvecs
 import math
   
-def chi0_mv(self, v, comega=1j*0.0):
+def chi0_mv(self, dvin, comega=1j*0.0, dnout=None):
     """
         Apply the non-interacting response function to a vector
         Input Parameters:
         -----------------
             self : tddft_iter or tddft_tem class
-            v: vector describing the effective perturbation
+            sp2v : vector describing the effective perturbation [spin*product] --> value
             comega: complex frequency
     """
-    chi0_z = np.zeros(v.shape[0], dtype=self.dtypeComplex)
-     
-    for s in range(self.nspin):
-      sp,fp = self.nprod*s, self.nprod*(s+1)
+    if dnout is None: dnout = np.zeros_like(dvin, dtype=self.dtypeComplex)
 
-      # real part
-      #vdp = csr_matvec(self.cc_da, v[sp:fp].real)
-      vdp = csr_matvec(self.cc_da, np.require(v[sp:fp].real, requirements="C"))
+    sp2v  = dvin.reshape((self.nspin,self.nprod))
+    sp2dn = dnout.reshape((self.nspin,self.nprod))
+    
+    for s in range(self.nspin):
+      vdp = csr_matvec(self.cc_da, sp2v[s].real)  # real part
       sab = (vdp*self.v_dab).reshape((self.norbs,self.norbs))
     
       nb2v = self.gemm(1.0, self.xocc[s], sab)
       nm2v_re = self.gemm(1.0, nb2v, self.xvrt[s].T)
     
-      # imaginary part
-      #vdp = csr_matvec(self.cc_da, v[sp:fp].imag)
-      vdp = csr_matvec(self.cc_da, np.require(v[sp:fp].imag, requirements="C"))
+      vdp = csr_matvec(self.cc_da, sp2v[s].imag)  # imaginary
       sab = (vdp*self.v_dab).reshape((self.norbs, self.norbs))
       
       nb2v = self.gemm(1.0, self.xocc[s], sab)
       nm2v_im = self.gemm(1.0, nb2v, self.xvrt[s].T)
+
+      vs,nf = self.vstart[s],self.nfermi[s]
     
       if self.use_numba:
-        self.div_eigenenergy_numba(self.ksn2e[0,s], self.ksn2f[0,s], self.nfermi[s], self.vstart[s], comega, nm2v_re, nm2v_im)
+        self.div_numba(self.ksn2e[0,s], self.ksn2f[0,s], nf, vs, comega, nm2v_re, nm2v_im)
       else:
-        for n,(en,fn) in enumerate(zip(self.ksn2e[0,s,:self.nfermi[s]], self.ksn2f[0,s,:self.nfermi[s]])):
-          for m,(em,fm) in enumerate(zip(self.ksn2e[0,s,self.vstart[s]:],self.ksn2f[0,s,self.vstart[s]:])):
+        for n,(en,fn) in enumerate(zip(self.ksn2e[0,s,:nf], self.ksn2f[0,s,:nf])):
+          for m,(em,fm) in enumerate(zip(self.ksn2e[0,s,vs:],self.ksn2f[0,s,vs:])):
             nm2v = nm2v_re[n, m] + 1.0j*nm2v_im[n, m]
             nm2v = nm2v * (fn - fm) * \
               ( 1.0 / (comega - (em - en)) - 1.0 / (comega + (em - en)) )
             nm2v_re[n, m] = nm2v.real
             nm2v_im[n, m] = nm2v.imag
 
-        #print('padding m<n, which can be also detected as negative occupation difference ')
-        for n in range(self.vstart[s]+1, self.nfermi[s]):
-          for m in range(n-self.vstart[s]):
-            nm2v_re[n,m],nm2v_im[n,m] = 0.0,0.0
+        for n in range(vs+1,nf): #padding m<n i.e. negative occupations' difference
+          for m in range(n-vs):  nm2v_re[n,m],nm2v_im[n,m] = 0.0,0.0
 
-      # real part
-      nb2v = self.gemm(1.0, nm2v_re, self.xvrt[s])
+      nb2v = self.gemm(1.0, nm2v_re, self.xvrt[s]) # real part
       ab2v = self.gemm(1.0, self.xocc[s].T, nb2v).reshape(self.norbs*self.norbs)
       vdp = csr_matvec(self.v_dab, ab2v)
       chi0_re = vdp*self.cc_da
 
-      # imag part
-      nb2v = self.gemm(1.0, nm2v_im, self.xvrt[s])
+      nb2v = self.gemm(1.0, nm2v_im, self.xvrt[s]) # imag part
       ab2v = self.gemm(1.0, self.xocc[s].T, nb2v).reshape(self.norbs*self.norbs)
       vdp = csr_matvec(self.v_dab, ab2v)    
       chi0_im = vdp*self.cc_da
       
-      chi0_z[sp:fp] = chi0_re + 1.0j*chi0_im
+      sp2dn[s] = chi0_re + 1.0j*chi0_im
       
-    return chi0_z
+    return dnout
+
 #
 #
 #

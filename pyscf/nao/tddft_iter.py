@@ -1,10 +1,16 @@
 from __future__ import print_function, division
-import numpy as np
-from timeit import default_timer as timer
-from pyscf.nao.chi0_matvec import chi0_matvec
 from copy import copy
-from pyscf.data.nist import HARTREE2EV
+import numpy as np
+from numpy import require, zeros_like
+from scipy.linalg import blas
 
+from timeit import default_timer as timer
+
+from pyscf.data.nist import HARTREE2EV
+from pyscf.nao.chi0_matvec import chi0_matvec
+from pyscf.nao.m_blas_wrapper import spmv_wrapper
+
+    
 class tddft_iter(chi0_matvec):
   """ 
     Iterative TDDFT a la PK, DF, OC JCTC
@@ -43,15 +49,34 @@ class tddft_iter(chi0_matvec):
       
     pb = self.pb
 
+    self.spmv = spmv_wrapper
+    if self.dtype == np.float32:
+      self.gemm = blas.sgemm
+      if self.scipy_ver > 0: self.spmv = blas.sspmv
+    elif self.dtype == np.float64:
+      self.gemm = blas.dgemm
+      if self.scipy_ver > 0: self.spmv = blas.dspmv
+    else:
+      raise ValueError("dtype can be only float32 or float64")
+
     if load_kernel:
       self.load_kernel_method(**kw)
     else:
-      self.kernel,self.kernel_dim = pb.comp_coulomb_pack(dtype=self.dtype) # Lower Triangular Part of the kernel
-      assert self.nprod==self.kernel_dim, "%r %r "%(self.nprod, self.kernel_dim)
-
+      self.kernel,self.kernel_dim = pb.comp_coulomb_pack(dtype=self.dtype) # Lower Triangular
+      assert self.nprod==self.kernel_dim,"{} {}".format(self.nprod,self.kernel_dim)
+      
+      if self.nspin==1:
+        self.ss2kernel = [[self.kernel]]
+      elif self.nspin==2:
+        self.ss2kernel = [[self.kernel,self.kernel], [self.kernel,self.kernel]]
+        
+      # List of POINTERS !!! of kernel [[(up,up), (up,dw)], [(dw,up), (dw,dw)]] TAKE CARE!!!
+        
       xc = xc_code.split(',')[0]
-      if xc=='RPA' or xc=='HF': pass
-      elif xc=='LDA' or xc=='GGA': self.comp_fxc_pack(kernel=self.kernel, **kw)
+      if xc=='RPA' or xc=='HF': 
+        pass
+      elif xc=='LDA' or xc=='GGA': 
+        self.comp_fxc_pack(kernel=self.kernel, **kw)
       else:
         print(' xc_code', xc_code, xc, xc_code.split(','))
         raise RuntimeError('unkn xc_code')
@@ -91,9 +116,10 @@ class tddft_iter(chi0_matvec):
   def comp_veff(self, vext, comega=1j*0.0, x0=None):
     """ This computes an effective field (scalar potential) given the external scalar potential """
     from scipy.sparse.linalg import LinearOperator
-    assert len(vext)==len(self.moms0), "%r, %r "%(len(vext), len(self.moms0))
+    nsp = self.nspin*self.nprod
+    assert len(vext)==nsp, "{} {}".format(len(vext), nsp)
     self.comega_current = comega
-    veff_op = LinearOperator((self.nprod,self.nprod), matvec=self.vext2veff_matvec, dtype=self.dtypeComplex)
+    veff_op = LinearOperator((nsp,nsp), matvec=self.vext2veff_matvec, dtype=self.dtypeComplex)
 
     if self.res_method == "relative" or self.res_method == "absolute":
         from pyscf.nao.m_lgmres import lgmres
@@ -107,41 +133,40 @@ class tddft_iter(chi0_matvec):
     else:
         raise ValueError("wrong input for res_method")
 
-    if info != 0:
-        print("LGMRES Warning: info = {0}".format(info))
+    if info != 0: print("LGMRES Warning: info = {0}".format(info))
     return resgm
   
-  def vext2veff_matvec(self, v):
-    self.matvec_ncalls+=1 
-    chi0 = self.apply_rf0(v, self.comega_current)
-    
-    # For some reason it is very difficult to pass only one dimension
-    # of an array to the fortran routines?? matvec[0, :].ctypes.data_as(POINTER(c_float))
-    # is not working!!!
+  def vext2veff_matvec(self, vin):
+    self.matvec_ncalls+=1
+    dn0 = self.apply_rf0(vin, self.comega_current)
 
-    # real part
-    chi0_reim = np.require(chi0.real, dtype=self.dtype, requirements=["A", "O"])
-    matvec_real = self.spmv(self.nprod, 1.0, self.kernel, chi0_reim, lower=1)
+    st2k  = self.ss2kernel
+    vcre  = np.zeros_like(vin, dtype=self.dtype).reshape((self.nspin,self.nprod))
+    vcim  = np.zeros_like(vin, dtype=self.dtype).reshape((self.nspin,self.nprod))
+    daux  = np.zeros((self.nprod), dtype=self.dtype)
+    s2dn0 = dn0.reshape((self.nspin,self.nprod))
     
-    # imaginary part
-    chi0_reim = np.require(chi0.imag, dtype=self.dtype, requirements=["A", "O"])
-    matvec_imag = self.spmv(self.nprod, 1.0, self.kernel, chi0_reim, lower=1)
-
-    return v - (matvec_real + 1.0j*matvec_imag)
+    for s in range(self.nspin):
+      for t in range(self.nspin):
+        daux[:] = require(s2dn0[t].real, dtype=self.dtype, requirements=["A", "O"])
+        vcre[s] += self.spmv(self.nprod, 1.0, st2k[s][t], daux, lower=1)
+    
+        daux[:] = require(s2dn0[t].imag, dtype=self.dtype, requirements=["A", "O"])
+        vcim[s] += self.spmv(self.nprod, 1.0, st2k[s][t], daux, lower=1)
+    
+    return vin - (vcre.reshape(-1) + 1.0j*vcim.reshape(-1))
 
   def comp_polariz_inter_xx(self, comegas, tmp_fname=None):
     """  Compute the interacting polarizability along the xx direction  """
     pxx = np.zeros(comegas.shape, dtype=self.dtypeComplex)
 
     if tmp_fname is not None:
-        if not isinstance(tmp_fname, str):
-            raise ValueError("tmp_fname must be a string")
-
+      assert isinstance(tmp_fname, str), "tmp_fname must be a string"
 
     vext = np.transpose(self.moms1)
     nww, eV = len(comegas), 27.2114
     for iw, comega in enumerate(comegas):
-      if self.verbosity>0: print(iw, nww, comega.real*eV)
+      if self.verbosity>0: print(iw, nww, comega.real*HARTREE2EV)
       veff = self.comp_veff(vext[0], comega)
       dn = self.apply_rf0(veff, comega)
       pxx[iw] = np.dot(vext[0], dn)
@@ -163,17 +188,16 @@ class tddft_iter(chi0_matvec):
     p_avg = np.zeros(sh, dtype=self.dtypeComplex)
 
     if tmp_fname is not None:
-        if not isinstance(tmp_fname, str):
-            raise ValueError("tmp_fname must be a string")
+      assert isinstance(tmp_fname, str), "tmp_fname must be a string"
 
-    vext = np.transpose(self.moms1)
     nww = len(comegas)
     for iw, comega in enumerate(comegas):
       for xyz in range(3):
+        vext = np.concatenate([self.moms1[:,xyz] for s in range(self.nspin)])
         if verbosity>0: print(__name__, xyz, iw, nww, comega*HARTREE2EV)
-        veff = self.comp_veff(vext[xyz], comega)
+        veff = self.comp_veff(vext, comega)
         dn = self.apply_rf0(veff, comega)
-        p_avg[iw] += np.dot(vext[xyz], dn)
+        p_avg[iw] += np.dot(vext, dn)
 
       if tmp_fname is not None:
         tmp = open(tmp_fname, "a")

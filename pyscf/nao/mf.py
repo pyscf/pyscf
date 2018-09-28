@@ -16,7 +16,14 @@ class mf(nao):
     self.dtype = kw['dtype'] if 'dtype' in kw else np.float64
     self.pseudo = hasattr(self, 'sp2ion') 
     self.gen_pb = kw['gen_pb'] if 'gen_pb' in kw else True
-    
+
+    if self.dtype == np.float32:
+      self.dtypeComplex = np.complex64
+    elif self.dtype == np.float64:
+      self.dtypeComplex = np.complex128
+    else:
+      raise ValueError("dtype can be only float32 or float64")
+
     if 'mf' in kw:
       self.init_mo_from_pyscf(**kw)      
     elif 'label' in kw: # init KS orbitals with SIESTA
