@@ -176,6 +176,77 @@ def make_h1(mol, mo_coeff, mo_occ, atmlst):
             h1.append(orbv.conj().T.dot(h01).dot(orbo))
     return h1
 
+def solve_mo1(sscobj, mo_energy=None, mo_coeff=None, mo_occ=None,
+              h1=None, s1=None, with_cphf=None):
+    cput1 = (time.clock(), time.time())
+    log = logger.Logger(sscobj.stdout, sscobj.verbose)
+    if mo_energy is None: mo_energy = sscobj._scf.mo_energy
+    if mo_coeff  is None: mo_coeff = sscobj._scf.mo_coeff
+    if mo_occ    is None: mo_occ = sscobj._scf.mo_occ
+    if with_cphf is None: with_cphf = sscobj.cphf
+
+    mol = sscobj.mol
+    if sscobj.mb.upper().startswith('ST'):  # Sternheim approximation
+        nmo = mo_occ.size
+        mo_energy = mo_energy[nmo//2:]
+        mo_coeff = mo_coeff[:,nmo//2:]
+        mo_occ = mo_occ[nmo//2:]
+
+    if h1 is None:
+        atmlst = sorted(set([j for i,j in sscobj.nuc_pair]))
+        h1 = numpy.asarray(make_h1(mol, mo_coeff, mo_occ, atmlst))
+
+    if with_cphf:
+        if callable(with_cphf):
+            vind = with_cphf
+        else:
+            vind = gen_vind(sscobj._scf, mo_coeff, mo_occ)
+        mo1, mo_e1 = cphf.solve(vind, mo_energy, mo_occ, h1, None,
+                                sscobj.max_cycle_cphf, sscobj.conv_tol,
+                                verbose=log)
+    else:
+        e_ai = lib.direct_sum('i-a->ai', mo_energy[mo_occ>0], mo_energy[mo_occ==0])
+        mo1 = h1 / e_ai
+        mo_e1 = None
+
+# Calculate RMB with approximation
+# |MO1> = Z_RMB |i> + |p> bar{C}_{pi}^1 ~= |p> C_{pi}^1
+# bar{C}_{pi}^1 ~= C_{pi}^1 - <p|Z_RMB|i>
+    if sscobj.mb.upper() == 'RMB':
+        orbo = mo_coeff[:,mo_occ> 0]
+        orbv = mo_coeff[:,mo_occ==0]
+        n4c = mo_coeff.shape[0]
+        n2c = n4c // 2
+        c = lib.param.LIGHT_SPEED
+        orbvS_T = orbv[n2c:].conj().T
+        for ia in atmlst:
+            mol.set_rinv_origin(mol.atom_coord(ia))
+            a01int = mol.intor('int1e_sa01sp_spinor', 3)
+            for k in range(3):
+                s1 = orbvS_T.dot(a01int[k].conj().T).dot(orbo[n2c:])
+                mo1[ia*3+k] -= s1 * (.25/c**2)
+
+    logger.timer(sscobj, 'solving mo1 eqn', *cput1)
+    return mo1, mo_e1
+
+def gen_vind(mf, mo_coeff, mo_occ):
+    mol = mf.mol
+    occidx = mo_occ > 0
+    orbo = mo_coeff[:, occidx]
+    orbv = mo_coeff[:,~occidx]
+    nocc = orbo.shape[1]
+    nvir = orbv.shape[1]
+    def vind(mo1):
+        #direct_scf_bak, mf.direct_scf = mf.direct_scf, False
+        dm1 = [orbv.dot(x).dot(orbo.T.conj())
+               for x in mo1.reshape(-1,nvir,nocc)]
+        dm1 = numpy.asarray([d1+d1.conj().T for d1 in dm1])
+        v1mo = numpy.asarray([orbv.conj().T.dot(x).dot(orbo)
+                              for x in mf.get_veff(mol, dm1, hermi=1)])
+        #mf.direct_scf = direct_scf_bak
+        return v1mo.ravel()
+    return vind
+
 
 class SpinSpinCoupling(rhf_ssc.SpinSpinCoupling):
     def __init__(self, scf_method):
@@ -234,73 +305,7 @@ class SpinSpinCoupling(rhf_ssc.SpinSpinCoupling):
 
     make_dia = make_dia
     make_para = make_para
-
-    def solve_mo1(self, mo_energy=None, mo_occ=None, h1=None,
-                  with_cphf=None):
-        cput1 = (time.clock(), time.time())
-        log = logger.Logger(self.stdout, self.verbose)
-        if mo_energy is None: mo_energy = self._scf.mo_energy
-        if mo_occ    is None: mo_occ = self._scf.mo_occ
-        if with_cphf is None: with_cphf = self.cphf
-
-        mol = self.mol
-        mo_coeff = self._scf.mo_coeff
-        if self.mb.upper().startswith('ST'):  # Sternheim approximation
-            nmo = mo_occ.size
-            mo_energy = mo_energy[nmo//2:]
-            mo_coeff = mo_coeff[:,nmo//2:]
-            mo_occ = mo_occ[nmo//2:]
-
-        if h1 is None:
-            atmlst = sorted(set([j for i,j in self.nuc_pair]))
-            h1 = numpy.asarray(make_h1(mol, mo_coeff, mo_occ, atmlst))
-
-        if with_cphf:
-            vind = self.gen_vind(self._scf, mo_coeff, mo_occ)
-            mo1, mo_e1 = cphf.solve(vind, mo_energy, mo_occ, h1, None,
-                                    self.max_cycle_cphf, self.conv_tol,
-                                    verbose=log)
-        else:
-            e_ai = lib.direct_sum('i-a->ai', mo_energy[mo_occ>0], mo_energy[mo_occ==0])
-            mo1 = h1 / e_ai
-            mo_e1 = None
-
-# Calculate RMB with approximation
-# |MO1> = Z_RMB |i> + |p> bar{C}_{pi}^1 ~= |p> C_{pi}^1
-# bar{C}_{pi}^1 ~= C_{pi}^1 - <p|Z_RMB|i>
-        if self.mb.upper() == 'RMB':
-            orbo = mo_coeff[:,mo_occ> 0]
-            orbv = mo_coeff[:,mo_occ==0]
-            n4c = mo_coeff.shape[0]
-            n2c = n4c // 2
-            c = lib.param.LIGHT_SPEED
-            orbvS_T = orbv[n2c:].conj().T
-            for ia in atmlst:
-                mol.set_rinv_origin(mol.atom_coord(ia))
-                a01int = mol.intor('int1e_sa01sp_spinor', 3)
-                for k in range(3):
-                    s1 = orbvS_T.dot(a01int[k].conj().T).dot(orbo[n2c:])
-                    mo1[ia*3+k] -= s1 * (.25/c**2)
-
-        logger.timer(self, 'solving mo1 eqn', *cput1)
-        return mo1, mo_e1
-
-    def gen_vind(self, mf, mo_coeff, mo_occ):
-        occidx = mo_occ > 0
-        orbo = mo_coeff[:, occidx]
-        orbv = mo_coeff[:,~occidx]
-        nocc = orbo.shape[1]
-        nvir = orbv.shape[1]
-        def vind(mo1):
-            #direct_scf_bak, mf.direct_scf = mf.direct_scf, False
-            dm1 = [orbv.dot(x).dot(orbo.T.conj())
-                   for x in mo1.reshape(-1,nvir,nocc)]
-            dm1 = numpy.asarray([d1+d1.conj().T for d1 in dm1])
-            v1mo = numpy.asarray([orbv.conj().T.dot(x).dot(orbo)
-                                  for x in mf.get_veff(self.mol, dm1, hermi=1)])
-            #mf.direct_scf = direct_scf_bak
-            return v1mo.ravel()
-        return vind
+    solve_mo1 = solve_mo1
 
 SSC = SpinSpinCoupling
 

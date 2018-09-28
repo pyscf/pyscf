@@ -40,44 +40,19 @@ from pyscf.data import nist
 
 def dia(magobj, gauge_orig=None):
     mol = magobj.mol
-    mo_energy = magobj._scf.mo_energy
-    mo_coeff = magobj._scf.mo_coeff
-    mo_occ = magobj._scf.mo_occ
+    mf = magobj._scf
+    mo_energy = mf.mo_energy
+    mo_coeff = mf.mo_coeff
+    mo_occ = mf.mo_occ
     orbo = mo_coeff[:,mo_occ > 0]
     dm0 = numpy.dot(orbo, orbo.T) * 2
     dme0 = numpy.dot(orbo * mo_energy[mo_occ > 0], orbo.T) * 2
 
+    e2 = _get_dia_1e(magobj, gauge_orig, dm0, dme0).ravel()
+
+    # Add the contributions from two-electron interactions
     if gauge_orig is None:
-        h2 = mol.intor('int1e_rr_origj', comp=9)
-    else:
-        mol.set_common_origin(gauge_orig)
-        h2 = mol.intor('int1e_rr', comp=9)
-
-    if getattr(magobj._scf, 'with_x2c', None):
-        raise NotImplementedError('X2C for magnetizability')
-
-    if getattr(magobj._scf, 'with_qmmm', None):
-        raise NotImplementedError('Magnetizability with QM/MM')
-
-    if getattr(magobj._scf, 'with_solvent', None):
-        raise NotImplementedError('Magnetizability with Solvent')
-
-    e2 = numpy.einsum('xpq,qp->x', h2, dm0)
-    diag = [0, 4, 8]  # XX, YY, ZZ
-    e2[diag] -= e2[diag].sum()
-    e2 *= -.25
-
-    if gauge_orig is None:
-        e2 += numpy.einsum('qp,xpq->x', dm0, mol.intor('int1e_grjxp', comp=9))
-        e2 += numpy.einsum('qp,xpq->x', dm0, mol.intor('int1e_ggkin', comp=9))
-        e2 += numpy.einsum('qp,xpq->x', dm0, mol.intor('int1e_ggnuc', comp=9))
-        if mol.has_ecp():
-            raise NotImplementedError
-            e2+= numpy.einsum('qp,xpq->x', dm0, mol.intor('ECPscalar_ggnuc', comp=9))
-
-        e2 -= numpy.einsum('qp,xpq->x', dme0, mol.intor('int1e_ggovlp', comp=9))
-
-        # + 1/2 Tr[(J^{(2)} - K^{(2)}), DM]
+        # + 1/2 Tr[(J^{[20]} - K^{[20]}), DM]
         # Symmetry between 'ijkl,ji->s2kl' and 'ijkl,lk->s2ij' can be used.
         #vs = jk.get_jk(mol, [dm0]*4, ['ijkl,ji->s2kl',
         #                              'ijkl,lk->s2ij',
@@ -108,16 +83,53 @@ def dia(magobj, gauge_orig=None):
 
     return e2.reshape(3, 3)
 
+def _get_dia_1e(magobj, gauge_orig, dm0, dme0):
+    '''The dia-magnetic magnetizability from one-electron operators'''
+    mol = magobj.mol
+    mf = magobj._scf
+
+    if gauge_orig is None:
+        h2 = mol.intor('int1e_rr_origj', comp=9)
+    else:
+        mol.set_common_origin(gauge_orig)
+        h2 = mol.intor('int1e_rr', comp=9)
+
+    if getattr(mf, 'with_x2c', None):
+        raise NotImplementedError('X2C for magnetizability')
+
+    if getattr(mf, 'with_qmmm', None):
+        raise NotImplementedError('Magnetizability with QM/MM')
+
+    if getattr(mf, 'with_solvent', None):
+        raise NotImplementedError('Magnetizability with Solvent')
+
+    e2 = numpy.einsum('xpq,qp->x', h2, dm0)
+    diag = [0, 4, 8]  # XX, YY, ZZ
+    e2[diag] -= e2[diag].sum()
+    e2 *= -.25
+
+    # If gauge_orig is None, computing the GIAO contributions
+    if gauge_orig is None:
+        e2 += numpy.einsum('qp,xpq->x', dm0, mol.intor('int1e_grjxp', comp=9))
+        e2 += numpy.einsum('qp,xpq->x', dm0, mol.intor('int1e_ggkin', comp=9))
+        e2 += numpy.einsum('qp,xpq->x', dm0, mol.intor('int1e_ggnuc', comp=9))
+        if mol.has_ecp():
+            raise NotImplementedError
+            e2+= numpy.einsum('qp,xpq->x', dm0, mol.intor('ECPscalar_ggnuc', comp=9))
+
+        e2 -= numpy.einsum('qp,xpq->x', dme0, mol.intor('int1e_ggovlp', comp=9))
+    return e2.reshape(3, 3)
+
 
 # Note mo10 is the imaginary part of MO^1
 def para(magobj, gauge_orig=None, h1=None, s1=None, with_cphf=None):
     '''Paramagnetic susceptibility tensor
 
     Kwargs:
-        h1: (3,N,N) array
-            First order Fock matrix.
-        s1: (3,N,N) array
-            First order overlap matrix.
+        h1: (3,nmo,nocc) array
+            First order Fock matrix in MO basis.
+        s1: (3,nmo,nocc) array
+            First order overlap matrix in MO basis.
         with_cphf : boolean or  function(dm_mo) => v1_mo
             If a boolean value is given, the value determines whether CPHF
             equation will be solved or not. The induced potential will be
@@ -133,12 +145,11 @@ def para(magobj, gauge_orig=None, h1=None, s1=None, with_cphf=None):
     mo_energy = mf.mo_energy
     mo_coeff = mf.mo_coeff
     mo_occ = mf.mo_occ
-    orbo = mo_coeff[:,mo_occ>0]
-    nocc = orbo.shape[1]
-    nao, nmo = mo_coeff.shape
+    occidx = mo_occ > 0
+    orbo = mo_coeff[:,occidx]
 
     if h1 is None:
-        # Imaginary part of H10
+        # Imaginary part of F10
         dm0 = mf.make_rdm1(mo_coeff, mo_occ)
         h1 = lib.einsum('xpq,pi,qj->xij', magobj.get_fock(mol, dm0, gauge_orig),
                         mo_coeff.conj(), orbo)
@@ -153,7 +164,6 @@ def para(magobj, gauge_orig=None, h1=None, s1=None, with_cphf=None):
                                    h1, s1, with_cphf)
     cput1 = logger.timer(magobj, 'solving mo1 eqn', *cput1)
 
-    occidx = mo_occ > 0
     mag_para = numpy.einsum('yji,xji->xy', mo1, h1)
     mag_para-= numpy.einsum('yji,xji,i->xy', mo1, s1, mo_energy[occidx])
     # + c.c.
@@ -226,7 +236,6 @@ class Magnetizability(lib.StreamObject):
 
     dia = dia
     para = para
-
     get_fock = rhf_nmr.get_fock
 
     def get_ovlp(self, mol=None, gauge_orig=None):

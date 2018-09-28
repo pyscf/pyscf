@@ -47,40 +47,12 @@ def dia(magobj, gauge_orig=None):
     dm0 = lib.tag_array(dm0, mo_coeff=mo_coeff, mo_occ=mo_occ)
     dme0 = numpy.dot(orbo * mo_energy[mo_occ > 0], orbo.T) * 2
 
-    if gauge_orig is None:
-        h2 = mol.intor('int1e_rr_origj', comp=9)
-    else:
-        mol.set_common_origin(gauge_orig)
-        h2 = mol.intor('int1e_rr', comp=9)
-
-    if getattr(magobj._scf, 'with_x2c', None):
-        raise NotImplementedError('X2C for magnetizability')
-
-    if getattr(magobj._scf, 'with_qmmm', None):
-        raise NotImplementedError('Magnetizability with QM/MM')
-
-    if getattr(magobj._scf, 'with_solvent', None):
-        raise NotImplementedError('Magnetizability with Solvent')
-
-    e2 = numpy.einsum('xpq,qp->x', h2, dm0)
-    diag = [0, 4, 8]  # XX, YY, ZZ
-    e2[diag] -= e2[diag].sum()
-    e2 *= -.25
+    e2 = rhf_mag._get_dia_1e(magobj, gauge_orig, dm0, dme0)
 
     if gauge_orig is not None:
         return e2
 
-    # If gauge_orig is None, computing the GIAO contributions
-    # 1-electron operator integrals
-    e2 += numpy.einsum('qp,xpq->x', dm0, mol.intor('int1e_grjxp', comp=9))
-    e2 += numpy.einsum('qp,xpq->x', dm0, mol.intor('int1e_ggkin', comp=9))
-    e2 += numpy.einsum('qp,xpq->x', dm0, mol.intor('int1e_ggnuc', comp=9))
-    if mol.has_ecp():
-        raise NotImplementedError
-        e2+= numpy.einsum('qp,xpq->x', dm0, mol.intor('ECPscalar_ggnuc', comp=9))
-    e2 -= numpy.einsum('qp,xpq->x', dme0, mol.intor('int1e_ggovlp', comp=9))
-
-    # 2nd order Vxc integrals
+    # 2nd order Vxc integrals from GIAO
     grids = mf.grids
     ni = mf._numint
     xc_code = mf.xc
@@ -147,9 +119,10 @@ def dia(magobj, gauge_orig=None):
     vxc20[:,2]  = Rx * vmat[:,1] - Ry * vmat[:,0]
     vxc20 *= -1
 
-    e2 += numpy.einsum('qp,xypq->xy', dm0, vxc20).ravel()
+    e2 += numpy.einsum('qp,xypq->xy', dm0, vxc20)
     vxc20 = vmat = None
 
+    e2 = e2.ravel()
     # Handle the hybrid functional and the range-separated functional
     if abs(hyb) > 1e-10:
         vs = jk.get_jk(mol, [dm0]*3, ['ijkl,ji->s2kl',

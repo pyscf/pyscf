@@ -275,6 +275,73 @@ def make_h1_fcsd(mol, mo_coeff, mo_occ, atmlst):
                 h1bb.append(orbvb.T.conj().dot(h1ao[i,j]).dot(orbob) * .5)
     return h1aa, h1ab, h1ba, h1bb
 
+def solve_mo1(sscobj, mo_energy=None, mo_coeff=None, mo_occ=None,
+              h1=None, s1=None, with_cphf=None):
+    cput1 = (time.clock(), time.time())
+    log = logger.Logger(sscobj.stdout, sscobj.verbose)
+    if mo_energy is None: mo_energy = sscobj._scf.mo_energy
+    if mo_coeff  is None: mo_coeff = sscobj._scf.mo_coeff
+    if mo_occ    is None: mo_occ = sscobj._scf.mo_occ
+    if with_cphf is None: with_cphf = sscobj.cphf
+
+    mol = sscobj.mol
+    if h1 is None:
+        atmlst = sorted(set([j for i,j in sscobj.nuc_pair]))
+        h1a, h1b = make_h1_pso(mol, sscobj._scf.mo_coeff, mo_occ, atmlst)
+    else:
+        h1a, h1b = h1
+    h1a = numpy.asarray(h1a)
+    h1b = numpy.asarray(h1b)
+
+    if with_cphf:
+        if callable(with_cphf):
+            vind = with_cphf
+        else:
+            vind = gen_vind(sscobj._scf, mo_coeff, mo_occ)
+        mo1, mo_e1 = ucphf.solve(vind, mo_energy, mo_occ, (h1a,h1b), None,
+                                 sscobj.max_cycle_cphf, sscobj.conv_tol,
+                                 verbose=log)
+    else:
+        eai_aa = lib.direct_sum('i-a->ai', mo_energy[0][mo_occ[0]>0], mo_energy[0][mo_occ[0]==0])
+        eai_bb = lib.direct_sum('i-a->ai', mo_energy[1][mo_occ[1]>0], mo_energy[1][mo_occ[1]==0])
+        mo1 = (h1a * (1/eai_aa), h1b * (1/eai_bb))
+        mo_e1 = None
+
+    logger.timer(sscobj, 'solving mo1 eqn', *cput1)
+    return mo1, mo_e1
+
+def gen_vind(mf, mo_coeff, mo_occ):
+    '''Induced potential associated with h1_PSO'''
+    vresp = _gen_uhf_response(mf, with_j=False, hermi=0)
+    occidxa = mo_occ[0] > 0
+    occidxb = mo_occ[1] > 0
+    orboa = mo_coeff[0][:, occidxa]
+    orbva = mo_coeff[0][:,~occidxa]
+    orbob = mo_coeff[1][:, occidxb]
+    orbvb = mo_coeff[1][:,~occidxb]
+    nocca = orboa.shape[1]
+    noccb = orbob.shape[1]
+    nvira = orbva.shape[1]
+    nvirb = orbvb.shape[1]
+    nova = nocca * nvira
+    novb = noccb * nvirb
+    mo_va_oa = numpy.asarray(numpy.hstack((orbva,orboa)), order='F')
+    mo_vb_ob = numpy.asarray(numpy.hstack((orbvb,orbob)), order='F')
+    def vind(mo1):
+        mo1a = mo1.reshape(-1,nova+novb)[:,:nova].reshape(-1,nvira,nocca)
+        mo1b = mo1.reshape(-1,nova+novb)[:,nova:].reshape(-1,nvirb,noccb)
+        nset = mo1a.shape[0]
+        dm1a = _dm1_mo2ao(mo1a, orbva, orboa)
+        dm1b = _dm1_mo2ao(mo1b, orbvb, orbob)
+        dm1 = numpy.asarray([dm1a-dm1a.transpose(0,2,1),
+                             dm1b-dm1b.transpose(0,2,1)])
+        v1 = vresp(dm1)
+        v1a = _ao2mo.nr_e2(v1[0], mo_va_oa, (0,nvira,nvira,nvira+nocca))
+        v1b = _ao2mo.nr_e2(v1[1], mo_vb_ob, (0,nvirb,nvirb,nvirb+noccb))
+        v1mo = numpy.hstack((v1a.reshape(nset,-1), v1b.reshape(nset,-1)))
+        return v1mo.ravel()
+    return vind
+
 
 class SpinSpinCoupling(rhf_ssc.SpinSpinCoupling):
 
@@ -346,68 +413,7 @@ class SpinSpinCoupling(rhf_ssc.SpinSpinCoupling):
             ssc_para += self.make_fc(mol, mo1, mo_coeff, mo_occ)
         return ssc_para
 
-    def solve_mo1(self, mo_energy=None, mo_occ=None, h1=None, with_cphf=None):
-        cput1 = (time.clock(), time.time())
-        log = logger.Logger(self.stdout, self.verbose)
-        if mo_energy is None: mo_energy = self._scf.mo_energy
-        if mo_occ    is None: mo_occ = self._scf.mo_occ
-        if with_cphf is None: with_cphf = self.cphf
-
-        mol = self.mol
-        mo_coeff = self._scf.mo_coeff
-        if h1 is None:
-            atmlst = sorted(set([j for i,j in self.nuc_pair]))
-            h1a, h1b = make_h1_pso(mol, self._scf.mo_coeff, mo_occ, atmlst)
-        else:
-            h1a, h1b = h1
-        h1a = numpy.asarray(h1a)
-        h1b = numpy.asarray(h1b)
-
-        if with_cphf:
-            vind = self.gen_vind(self._scf, mo_coeff, mo_occ)
-            mo1, mo_e1 = ucphf.solve(vind, mo_energy, mo_occ, (h1a,h1b), None,
-                                     self.max_cycle_cphf, self.conv_tol,
-                                     verbose=log)
-        else:
-            eai_aa = lib.direct_sum('i-a->ai', mo_energy[0][mo_occ[0]>0], mo_energy[0][mo_occ[0]==0])
-            eai_bb = lib.direct_sum('i-a->ai', mo_energy[1][mo_occ[1]>0], mo_energy[1][mo_occ[1]==0])
-            mo1 = (h1a * (1/eai_aa), h1b * (1/eai_bb))
-            mo_e1 = None
-
-        logger.timer(self, 'solving mo1 eqn', *cput1)
-        return mo1, mo_e1
-
-    def gen_vind(self, mf, mo_coeff, mo_occ):
-        '''Induced potential associated with h1_PSO'''
-        vresp = _gen_uhf_response(mf, with_j=False, hermi=0)
-        occidxa = mo_occ[0] > 0
-        occidxb = mo_occ[1] > 0
-        orboa = mo_coeff[0][:, occidxa]
-        orbva = mo_coeff[0][:,~occidxa]
-        orbob = mo_coeff[1][:, occidxb]
-        orbvb = mo_coeff[1][:,~occidxb]
-        nocca = orboa.shape[1]
-        noccb = orbob.shape[1]
-        nvira = orbva.shape[1]
-        nvirb = orbvb.shape[1]
-        nova = nocca * nvira
-        novb = noccb * nvirb
-        mo_va_oa = numpy.asarray(numpy.hstack((orbva,orboa)), order='F')
-        mo_vb_ob = numpy.asarray(numpy.hstack((orbvb,orbob)), order='F')
-        def vind(mo1):
-            mo1a = mo1.reshape(-1,nova+novb)[:,:nova].reshape(-1,nvira,nocca)
-            mo1b = mo1.reshape(-1,nova+novb)[:,nova:].reshape(-1,nvirb,noccb)
-            nset = mo1a.shape[0]
-            dm1a = _dm1_mo2ao(mo1a, orbva, orboa)
-            dm1b = _dm1_mo2ao(mo1b, orbvb, orbob)
-            dm1 = numpy.asarray([dm1a-dm1a.transpose(0,2,1),
-                                 dm1b-dm1b.transpose(0,2,1)])
-            v1 = vresp(dm1)
-            v1a = _ao2mo.nr_e2(v1[0], mo_va_oa, (0,nvira,nvira,nvira+nocca))
-            v1b = _ao2mo.nr_e2(v1[1], mo_vb_ob, (0,nvirb,nvirb,nvirb+noccb))
-            v1mo = numpy.hstack((v1a.reshape(nset,-1), v1b.reshape(nset,-1)))
-            return v1mo.ravel()
-        return vind
+    solve_mo1 = solve_mo1
 
 SSC = SpinSpinCoupling
 

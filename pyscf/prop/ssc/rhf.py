@@ -254,6 +254,54 @@ def _dm1_mo2ao(dm1, ket, bra):
     dm1 = dm1.reshape(nao,nset,nbra).transpose(1,0,2).reshape(nset*nao,nbra)
     return lib.ddot(dm1, bra.T).reshape(nset,nao,nao)
 
+
+def solve_mo1(sscobj, mo_energy=None, mo_coeff=None, mo_occ=None,
+              h1=None, s1=None, with_cphf=None):
+    cput1 = (time.clock(), time.time())
+    log = logger.Logger(sscobj.stdout, sscobj.verbose)
+    if mo_energy is None: mo_energy = sscobj._scf.mo_energy
+    if mo_coeff  is None: mo_coeff = sscobj._scf.mo_coeff
+    if mo_occ    is None: mo_occ = sscobj._scf.mo_occ
+    if with_cphf is None: with_cphf = sscobj.cphf
+
+    mol = sscobj.mol
+    if h1 is None:
+        atmlst = sorted(set([j for i,j in sscobj.nuc_pair]))
+        h1 = numpy.asarray(make_h1_pso(mol, mo_coeff, mo_occ, atmlst))
+
+    if with_cphf:
+        if callable(with_cphf):
+            vind = with_cphf
+        else:
+            vind = gen_vind(sscobj._scf, mo_coeff, mo_occ)
+        mo1, mo_e1 = cphf.solve(vind, mo_energy, mo_occ, h1, None,
+                                sscobj.max_cycle_cphf, sscobj.conv_tol,
+                                verbose=log)
+    else:
+        e_ai = lib.direct_sum('i-a->ai', mo_energy[mo_occ>0], mo_energy[mo_occ==0])
+        mo1 = h1 * (1 / e_ai)
+        mo_e1 = None
+    logger.timer(sscobj, 'solving mo1 eqn', *cput1)
+    return mo1, mo_e1
+
+def gen_vind(mf, mo_coeff, mo_occ):
+    '''Induced potential associated with h1_PSO'''
+    vresp = _gen_rhf_response(mf, hermi=2)
+    occidx = mo_occ > 0
+    orbo = mo_coeff[:, occidx]
+    orbv = mo_coeff[:,~occidx]
+    nocc = orbo.shape[1]
+    nao, nmo = mo_coeff.shape
+    nvir = nmo - nocc
+    def vind(mo1):
+        dm1 = [reduce(numpy.dot, (orbv, x*2, orbo.T.conj()))
+               for x in mo1.reshape(-1,nvir,nocc)]
+        dm1 = numpy.asarray([d1-d1.conj().T for d1 in dm1])
+        v1mo = numpy.asarray([reduce(numpy.dot, (orbv.T.conj(), x, orbo))
+                              for x in vresp(dm1)])
+        return v1mo.ravel()
+    return vind
+
 def _write(stdout, msc3x3, title):
     stdout.write('%s\n' % title)
     stdout.write('mu_x %s\n' % str(msc3x3[0]))
@@ -364,50 +412,7 @@ class SpinSpinCoupling(lib.StreamObject):
             ssc_para += self.make_fc(mol, mo1, mo_coeff, mo_occ)
         return ssc_para
 
-    def solve_mo1(self, mo_energy=None, mo_occ=None, h1=None, with_cphf=None):
-        cput1 = (time.clock(), time.time())
-        log = logger.Logger(self.stdout, self.verbose)
-        if mo_energy is None: mo_energy = self._scf.mo_energy
-        if mo_occ    is None: mo_occ = self._scf.mo_occ
-        if with_cphf is None: with_cphf = self.cphf
-
-        mol = self.mol
-        mo_coeff = self._scf.mo_coeff
-        if h1 is None:
-            atmlst = sorted(set([j for i,j in self.nuc_pair]))
-            h1 = numpy.asarray(make_h1_pso(mol, mo_coeff, mo_occ, atmlst))
-
-        if with_cphf:
-            vind = self.gen_vind(self._scf, mo_coeff, mo_occ)
-            mo1, mo_e1 = cphf.solve(vind, mo_energy, mo_occ, h1, None,
-                                    self.max_cycle_cphf, self.conv_tol,
-                                    verbose=log)
-        else:
-            e_ai = lib.direct_sum('i-a->ai', mo_energy[mo_occ>0], mo_energy[mo_occ==0])
-            mo1 = h1 * (1 / e_ai)
-            mo_e1 = None
-        logger.timer(self, 'solving mo1 eqn', *cput1)
-        return mo1, mo_e1
-
-    def gen_vind(self, mf, mo_coeff, mo_occ):
-        '''Induced potential associated with h1_PSO'''
-        vresp = _gen_rhf_response(mf, hermi=2)
-        occidx = mo_occ > 0
-        orbo = mo_coeff[:, occidx]
-        orbv = mo_coeff[:,~occidx]
-        nocc = orbo.shape[1]
-        nao, nmo = mo_coeff.shape
-        nvir = nmo - nocc
-        def vind(mo1):
-            #direct_scf_bak, mf.direct_scf = mf.direct_scf, False
-            dm1 = [reduce(numpy.dot, (orbv, x*2, orbo.T.conj()))
-                   for x in mo1.reshape(-1,nvir,nocc)]
-            dm1 = numpy.asarray([d1-d1.conj().T for d1 in dm1])
-            v1mo = numpy.asarray([reduce(numpy.dot, (orbv.T.conj(), x, orbo))
-                                  for x in vresp(dm1)])
-            #mf.direct_scf = direct_scf_bak
-            return v1mo.ravel()
-        return vind
+    solve_mo1 = solve_mo1
 
 SSC = SpinSpinCoupling
 

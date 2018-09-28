@@ -118,10 +118,10 @@ def get_jk(mol, dm0):
     intor = mol._add_suffix('int2e_ig1')
     vj, vk = _vhf.direct_mapdm(intor,  # (g i,j|k,l)
                                'a4ij', ('lk->s1ij', 'jk->s1il'),
-                               -dm0, 3, # xyz, 3 components
+                               dm0, 3, # xyz, 3 components
                                mol._atm, mol._bas, mol._env)
     vk = vk - numpy.swapaxes(vk, -1, -2)
-    return vj, vk
+    return -vj, -vk
 
 def make_h10giao(mol, dm0):
     vj, vk = get_jk(mol, dm0)
@@ -143,6 +143,23 @@ def make_s10(mol, gauge_orig=None):
         s1 = numpy.zeros((3,nao,nao))
     return s1
 get_ovlp = make_s10
+
+
+def _solve_mo1_uncoupled(mo_energy, mo_occ, h1, s1):
+    '''uncoupled first order equation'''
+    e_a = mo_energy[mo_occ==0]
+    e_i = mo_energy[mo_occ>0]
+    e_ai = 1 / (e_a.reshape(-1,1) - e_i)
+
+    hs = h1 - s1 * e_i
+
+    mo10 = numpy.empty_like(hs)
+    mo10[:,mo_occ==0,:] = -hs[:,mo_occ==0,:] * e_ai
+    mo10[:,mo_occ>0,:] = -s1[:,mo_occ>0,:] * .5
+
+    e_ji = e_i.reshape(-1,1) - e_i
+    mo_e10 = hs[:,mo_occ>0,:] + mo10[:,mo_occ>0,:] * e_ji
+    return mo10, mo_e10
 
 #TODO: merge to hessian.rhf.solve_mo1 function
 def solve_mo1(nmrobj, mo_energy=None, mo_coeff=None, mo_occ=None,
@@ -184,17 +201,7 @@ def solve_mo1(nmrobj, mo_energy=None, mo_coeff=None, mo_occ=None,
                                   nmrobj.max_cycle_cphf, nmrobj.conv_tol,
                                   verbose=log)
     else:
-        e_a = mo_energy[mo_occ==0]
-        e_i = mo_energy[mo_occ>0]
-        e_ai = 1 / (e_a.reshape(-1,1) - e_i)
-
-        hs = h1 - s1 * e_i
-        mo10 = numpy.empty_like(hs)
-        mo10[:,mo_occ==0,:] = -hs[:,mo_occ==0,:] * e_ai
-        mo10[:,mo_occ>0,:] = -s1[:,mo_occ>0,:] * .5
-
-        e_ji = e_i.reshape(-1,1) - e_i
-        mo_e10 = hs[:,mo_occ>0,:] + mo10[:,mo_occ>0,:] * e_ji
+        mo10, mo_e10 = _solve_mo1_uncoupled(mo_energy, mo_occ, h1, s1)
 
     log.timer('solving mo1 eqn', *cput1)
     return mo10, mo_e10
