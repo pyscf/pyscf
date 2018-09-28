@@ -17,9 +17,13 @@
 #
 
 from pyscf.prop.nmr import rhf
+from pyscf.prop.nmr import uhf
 from pyscf.prop.nmr import dhf
 from pyscf.prop.nmr import rks
+from pyscf.prop.nmr import uks
 
-from pyscf.prop.nmr.rhf import NMR as RHF
-from pyscf.prop.nmr.dhf import NMR as DHF
-from pyscf.prop.nmr.rks import NMR as RKS
+RHF = rhf.NMR
+UHF = uhf.NMR
+DHF = dhf.NMR
+RKS = rks.NMR
+UKS = uks.NMR
