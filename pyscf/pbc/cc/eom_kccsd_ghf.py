@@ -375,20 +375,17 @@ def ipccsd_diag(eom, kshift, imds=None):
         for ki in range(nkpts):
             for kj in range(nkpts):
                 ka = kconserv[ki,kshift,kj]
-                Hr2[ki,kj]  = imds.Fvv[ka].diagonal()
+                Hr2[ki,kj] += imds.Fvv[ka].diagonal()[None,None,:]
                 Hr2[ki,kj] -= imds.Foo[ki].diagonal()[:,None,None]
                 Hr2[ki,kj] -= imds.Foo[kj].diagonal()[None,:,None]
 
                 if ki == kconserv[ki,kj,kj]:
-                    Hr2[ki,kj] += 0.5 * np.einsum('ijij->ij', imds.Woooo[ki, kj, ki])[:,:,None]
+                    Hr2[ki,kj] += np.einsum('ijij->ij', imds.Woooo[ki, kj, ki])[:,:,None]
 
-                Wovvo = np.einsum('iaai->ia', imds.Wovvo[ki,ka,ka])
-                Hr2[ki,kj] += Wovvo[:, None, :]
-                if ki == kj:  # and i == j
-                    Hr2[ki,ki,idx,idx] -= Wovvo
+                Hr2[ki, kj] += lib.einsum('iaai->ia', imds.Wovvo[ki, ka, ka])[:,None,:]
+                Hr2[ki, kj] += lib.einsum('jaaj->ja', imds.Wovvo[kj, ka, ka])[None,:,:]
 
-                Hr2[ki, kj] += 0.5 * lib.einsum('ijea,ijae->ija', imds.Woovv[ki, kj, kshift],
-                                                imds.t2[ki, kj, ka])
+                Hr2[ki, kj] += lib.einsum('ijea,jiea->ija',imds.Woovv[ki,kj,kshift], imds.t2[ki,kj,kshift])
 
     vector = amplitudes_to_vector_ip(Hr1, Hr2)
     return vector
