@@ -728,8 +728,8 @@ def _make_eris_incore(cc, mo_coeff=None):
     eris.OOoo = None
     eris.OOov = np.empty((nkpts,nkpts,nkpts,noccb,noccb,nocca,nvira), dtype=dtype)
     eris.OOvv = np.empty((nkpts,nkpts,nkpts,noccb,noccb,nvira,nvira), dtype=dtype)
-    eris.OVov = None
-    eris.VOov = None
+    eris.OVov = np.empty((nkpts,nkpts,nkpts,noccb,nvirb,nocca,nvira), dtype=dtype)
+    eris.VOov = np.empty((nkpts,nkpts,nkpts,nvirb,noccb,nocca,nvira), dtype=dtype)
     eris.VOvv = np.empty((nkpts,nkpts,nkpts,nvirb,noccb,nvira,nvira), dtype=dtype)
 
     _kuccsd_eris_common_(cc, eris)
@@ -848,8 +848,8 @@ def _kuccsd_eris_common_(cc, eris, buf=None):
         #eris.OOoo[kp,kq,kr] = tmp[:noccb,:noccb,:nocca,:nocca]
         eris.OOov[kp,kq,kr] = tmp[:noccb,:noccb,:nocca,nocca:]
         eris.OOvv[kp,kq,kr] = tmp[:noccb,:noccb,nocca:,nocca:]
-        #eris.OVov[kp,kq,kr] = tmp[:noccb,noccb:,:nocca,nocca:]
-        #eris.VOov[kq,kp,ks] = tmp[:noccb,noccb:,nocca:,:nocca].conj().transpose(1,0,3,2)
+        eris.OVov[kp,kq,kr] = tmp[:noccb,noccb:,:nocca,nocca:]
+        eris.VOov[kq,kp,ks] = tmp[:noccb,noccb:,nocca:,:nocca].conj().transpose(1,0,3,2)
         eris.VOvv[kq,kp,ks] = tmp[:noccb,noccb:,nocca:,nocca:].conj().transpose(1,0,3,2)
     oppp = None
 
