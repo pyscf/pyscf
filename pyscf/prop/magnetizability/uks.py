@@ -17,7 +17,7 @@
 #
 
 '''
-Non-relativistic magnetizability tensor for DFT
+Non-relativistic magnetizability tensor for UKS
 (In testing)
 
 Refs:
@@ -26,26 +26,33 @@ Refs:
 '''
 
 
+import time
+from functools import reduce
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.scf import jk
 from pyscf.dft import numint
-from pyscf.prop.nmr import rhf as rhf_nmr
-from pyscf.prop.nmr import rks as rks_nmr
+from pyscf.prop.nmr import uks as uks_nmr
 from pyscf.prop.magnetizability import rhf as rhf_mag
+from pyscf.prop.magnetizability import uhf as uhf_mag
+from pyscf.prop.magnetizability import rks as rks_mag
 
 
 def dia(magobj, gauge_orig=None):
     mol = magobj.mol
     mf = magobj._scf
-    mo_energy = mf.mo_energy
-    mo_coeff = mf.mo_coeff
-    mo_occ = mf.mo_occ
-    orbo = mo_coeff[:,mo_occ > 0]
-    dm0 = numpy.dot(orbo, orbo.T) * 2
-    dm0 = lib.tag_array(dm0, mo_coeff=mo_coeff, mo_occ=mo_occ)
-    dme0 = numpy.dot(orbo * mo_energy[mo_occ > 0], orbo.T) * 2
+    mo_energy = magobj._scf.mo_energy
+    mo_coeff = magobj._scf.mo_coeff
+    mo_occ = magobj._scf.mo_occ
+    orboa = mo_coeff[0][:,mo_occ[0] > 0]
+    orbob = mo_coeff[1][:,mo_occ[1] > 0]
+    dm0a = lib.tag_array(orboa.dot(orboa.T), mo_coeff=mo_coeff[0], mo_occ=mo_occ[0])
+    dm0b = lib.tag_array(orbob.dot(orbob.T), mo_coeff=mo_coeff[1], mo_occ=mo_occ[1])
+    dm0 = dm0a + dm0b
+    dme0a = numpy.dot(orboa * mo_energy[0][mo_occ[0] > 0], orboa.T)
+    dme0b = numpy.dot(orbob * mo_energy[1][mo_occ[1] > 0], orbob.T)
+    dme0 = dme0a + dme0b
 
     e2 = rhf_mag._get_dia_1e(magobj, gauge_orig, dm0, dme0)
 
@@ -59,25 +66,30 @@ def dia(magobj, gauge_orig=None):
     xctype = ni._xc_type(xc_code)
     omega, alpha, hyb = ni.rsh_and_hybrid_coeff(xc_code, mol.spin)
 
-    make_rho, nset, nao = ni._gen_rho_evaluator(mol, dm0, hermi=1)
+    make_rhoa, nset, nao = ni._gen_rho_evaluator(mol, dm0a, hermi=1)
+    make_rhob            = ni._gen_rho_evaluator(mol, dm0b, hermi=1)[0]
     ngrids = len(grids.weights)
     mem_now = lib.current_memory()[0]
     max_memory = max(2000, mf.max_memory*.9-mem_now)
     BLKSIZE = numint.BLKSIZE
     blksize = min(int(max_memory/12*1e6/8/nao/BLKSIZE)*BLKSIZE, ngrids)
 
-    vmat = numpy.zeros((3,3,nao,nao))
+    vmata = numpy.zeros((3,3,nao,nao))
+    vmatb = numpy.zeros((3,3,nao,nao))
     if xctype == 'LDA':
         ao_deriv = 0
         for ao, mask, weight, coords \
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory,
                                  blksize=blksize):
-            rho = make_rho(0, ao, mask, 'LDA')
-            vxc = ni.eval_xc(xc_code, rho, 0, deriv=1)[1]
+            rho = (make_rhoa(0, ao, mask, 'LDA'),
+                   make_rhob(0, ao, mask, 'LDA'))
+            vxc = ni.eval_xc(xc_code, rho, spin=1, deriv=1)[1]
             vrho = vxc[0]
             r_ao = numpy.einsum('pi,px->pxi', ao, coords)
-            aow = numpy.einsum('pxi,p,p->pxi', r_ao, weight, vrho)
-            vmat += lib.einsum('pxi,pyj->xyij', r_ao, aow)
+            aow = numpy.einsum('pxi,p,p->pxi', r_ao, weight, vrho[:,0])
+            vmata += lib.einsum('pxi,pyj->xyij', r_ao, aow)
+            aow = numpy.einsum('pxi,p,p->pxi', r_ao, weight, vrho[:,1])
+            vmatb += lib.einsum('pxi,pyj->xyij', r_ao, aow)
             rho = vxc = vrho = aow = None
 
     elif xctype == 'GGA':
@@ -85,9 +97,10 @@ def dia(magobj, gauge_orig=None):
         for ao, mask, weight, coords \
                 in ni.block_loop(mol, grids, nao, ao_deriv, max_memory,
                                  blksize=blksize):
-            rho = make_rho(0, ao, mask, 'GGA')
-            vxc = ni.eval_xc(xc_code, rho, 0, deriv=1)[1]
-            wv = numint._rks_gga_wv0(rho, vxc, weight)
+            rho = (make_rhoa(0, ao, mask, 'GGA'),
+                   make_rhob(0, ao, mask, 'GGA'))
+            vxc = ni.eval_xc(xc_code, rho, spin=1, deriv=1)[1]
+            wva, wvb = numint._uks_gga_wv0(rho, vxc, weight)
 
             # Computing \nabla (r * AO) = r * \nabla AO + [\nabla,r]_- * AO
             r_ao = numpy.einsum('npi,px->npxi', ao, coords)
@@ -95,43 +108,56 @@ def dia(magobj, gauge_orig=None):
             r_ao[2,:,1] += ao[0]
             r_ao[3,:,2] += ao[0]
 
-            aow = numpy.einsum('npxi,np->pxi', r_ao, wv)
-            vmat += lib.einsum('pxi,pyj->xyij', r_ao[0], aow)
+            aow = numpy.einsum('npxi,np->pxi', r_ao, wva)
+            vmata += lib.einsum('pxi,pyj->xyij', r_ao[0], aow)
+            aow = numpy.einsum('npxi,np->pxi', r_ao, wvb)
+            vmata += lib.einsum('pxi,pyj->xyij', r_ao[0], aow)
             rho = vxc = vrho = vsigma = wv = aow = None
 
-        vmat = vmat + vmat.transpose(0,1,3,2)
+        vmata = vmata + vmata.transpose(0,1,3,2)
+        vmatb = vmatb + vmatb.transpose(0,1,3,2)
 
     else:
         raise NotImplementedError('meta-GGA')
 
-    vmat = _add_giao_phase(mol, vmat)
-    e2 += numpy.einsum('qp,xypq->xy', dm0, vmat)
-    vmat = None
+    vmata = rks_mag._add_giao_phase(mol, vmata)
+    vmatb = rks_mag._add_giao_phase(mol, vmatb)
+    e2 += numpy.einsum('qp,xypq->xy', dm0a, vmata)
+    e2 += numpy.einsum('qp,xypq->xy', dm0b, vmatb)
+    vmata = vmatb = None
 
     e2 = e2.ravel()
     # Handle the hybrid functional and the range-separated functional
     if abs(hyb) > 1e-10:
-        vs = jk.get_jk(mol, [dm0]*3, ['ijkl,ji->s2kl',
-                                      'ijkl,jk->s1il',
-                                      'ijkl,li->s1kj'],
+        vs = jk.get_jk(mol, [dm0, dm0a, dm0a, dm0b, dm0b],
+                       ['ijkl,ji->s2kl',
+                        'ijkl,jk->s1il', 'ijkl,li->s1kj',
+                        'ijkl,jk->s1il', 'ijkl,li->s1kj'],
                        'int2e_gg1', 's4', 9, hermi=1)
         e2 += numpy.einsum('xpq,qp->x', vs[0], dm0)
-        e2 -= numpy.einsum('xpq,qp->x', vs[1], dm0) * .25 * hyb
-        e2 -= numpy.einsum('xpq,qp->x', vs[2], dm0) * .25 * hyb
-        vk = jk.get_jk(mol, dm0, 'ijkl,jk->s1il',
+        e2 -= numpy.einsum('xpq,qp->x', vs[1], dm0a) * .5 * hyb
+        e2 -= numpy.einsum('xpq,qp->x', vs[2], dm0a) * .5 * hyb
+        e2 -= numpy.einsum('xpq,qp->x', vs[3], dm0b) * .5 * hyb
+        e2 -= numpy.einsum('xpq,qp->x', vs[4], dm0b) * .5 * hyb
+        vk = jk.get_jk(mol, [dm0a, dm0b], ['ijkl,jk->s1il', 'ijkl,jk->s1il'],
                        'int2e_g1g2', 'aa4', 9, hermi=0)
-        e2 -= numpy.einsum('xpq,qp->x', vk, dm0) * .5 * hyb
+        e2 -= numpy.einsum('xpq,qp->x', vk[0], dm0a) * hyb
+        e2 -= numpy.einsum('xpq,qp->x', vk[1], dm0b) * hyb
 
         if abs(omega) > 1e-10:
             with mol.with_range_coulomb(omega):
-                vs = jk.get_jk(mol, [dm0]*2, ['ijkl,jk->s1il',
-                                              'ijkl,li->s1kj'],
+                vs = jk.get_jk(mol, [dm0a, dm0a, dm0b, dm0b],
+                               ['ijkl,jk->s1il', 'ijkl,li->s1kj',
+                                'ijkl,jk->s1il', 'ijkl,li->s1kj'],
                                'int2e_gg1', 's4', 9, hermi=1)
-                e2 -= numpy.einsum('xpq,qp->x', vs[0], dm0) * .25 * (alpha-hyb)
-                e2 -= numpy.einsum('xpq,qp->x', vs[1], dm0) * .25 * (alpha-hyb)
-                vk = jk.get_jk(mol, dm0, 'ijkl,jk->s1il',
+                e2 -= numpy.einsum('xpq,qp->x', vs[0], dm0a) * .5 * (alpha-hyb)
+                e2 -= numpy.einsum('xpq,qp->x', vs[1], dm0a) * .5 * (alpha-hyb)
+                e2 -= numpy.einsum('xpq,qp->x', vs[2], dm0b) * .5 * (alpha-hyb)
+                e2 -= numpy.einsum('xpq,qp->x', vs[3], dm0b) * .5 * (alpha-hyb)
+                vk = jk.get_jk(mol, [dm0a, dm0b], ['ijkl,jk->s1il', 'ijkl,jk->s1il'],
                                'int2e_g1g2', 'aa4', 9, hermi=0)
-                e2 -= numpy.einsum('xpq,qp->x', vk, dm0) * .5 * (alpha-hyb)
+                e2 -= numpy.einsum('xpq,qp->x', vk[0], dm0a) * (alpha-hyb)
+                e2 -= numpy.einsum('xpq,qp->x', vk[1], dm0b) * (alpha-hyb)
 
     else:
         vj = jk.get_jk(mol, dm0, 'ijkl,ji->s2kl',
@@ -141,45 +167,9 @@ def dia(magobj, gauge_orig=None):
     return e2.reshape(3, 3)
 
 
-def _get_ao_coords(mol):
-    atom_coords = mol.atom_coords()
-    nao = mol.nao_nr()
-    ao_coords = numpy.empty((nao, 3))
-    aoslices = mol.aoslice_by_atom()
-    for atm_id, (ish0, ish1, i0, i1) in enumerate(aoslices):
-        ao_coords[i0:i1] = atom_coords[atm_id]
-    return ao_coords
-
-def _add_giao_phase(mol, vmat):
-    '''Add the factor i/2*(Ri-Rj) of the GIAO phase e^{i/2 (Ri-Rj) times r}'''
-    ao_coords = _get_ao_coords(mol)
-    Rx = .5 * (ao_coords[:,0:1] - ao_coords[:,0])
-    Ry = .5 * (ao_coords[:,1:2] - ao_coords[:,1])
-    Rz = .5 * (ao_coords[:,2:3] - ao_coords[:,2])
-    vxc20 = numpy.empty_like(vmat)
-    vxc20[0]  = Ry * vmat[2] - Rz * vmat[1]
-    vxc20[1]  = Rz * vmat[0] - Rx * vmat[2]
-    vxc20[2]  = Rx * vmat[1] - Ry * vmat[0]
-    vxc20, vmat = vmat, vxc20
-    vxc20[:,0]  = Ry * vmat[:,2] - Rz * vmat[:,1]
-    vxc20[:,1]  = Rz * vmat[:,0] - Rx * vmat[:,2]
-    vxc20[:,2]  = Rx * vmat[:,1] - Ry * vmat[:,0]
-    vxc20 *= -1
-    return vxc20
-
-
-class Magnetizability(rhf_mag.Magnetizability):
+class Magnetizability(uhf_mag.Magnetizability):
     dia = dia
-    get_fock = rks_nmr.get_fock
-
-    def solve_mo1(self, mo_energy=None, mo_coeff=None, mo_occ=None,
-                  h1=None, s1=None, with_cphf=None):
-        if with_cphf is None:
-            with_cphf = self.cphf
-        libxc = self._scf._numint.libxc
-        with_cphf = with_cphf and libxc.is_hybrid_xc(self._scf.xc)
-        return rhf_nmr.solve_mo1(self, mo_energy, mo_coeff, mo_occ,
-                                 h1, s1, with_cphf)
+    get_fock = uks_nmr.get_fock
 
 
 if __name__ == '__main__':
@@ -194,7 +184,7 @@ if __name__ == '__main__':
     mol.basis='631g'
     mol.build()
 
-    mf = dft.RKS(mol).run()
+    mf = dft.UKS(mol).run()
     mag = Magnetizability(mf).kernel()
     print(lib.finger(mag) - 0.30375149255154221)
 
@@ -208,20 +198,20 @@ if __name__ == '__main__':
     mol.basis = '6-31g'
     mol.build()
 
-    mf = dft.RKS(mol).set(xc='lda,vwn').run()
+    mf = dft.UKS(mol).set(xc='lda,vwn').run()
     mag = Magnetizability(mf).kernel()
     print(lib.finger(mag) - 0.4313210213418015)
 
-    mf = dft.RKS(mol).set(xc='b3lyp').run()
+    mf = dft.UKS(mol).set(xc='b3lyp').run()
     mag = Magnetizability(mf).kernel()
     print(lib.finger(mag) - 0.42828345739100998)
 
     mol = gto.M(atom='''O      0.   0.       0.
                         H      0.  -0.757    0.587
                         H      0.   0.757    0.587''',
-                basis='ccpvdz')
-    mf = dft.RKS(mol)
+                basis='ccpvdz', spin=2)
+    mf = dft.UKS(mol)
     mf.xc = 'b3lyp'
     mf.run()
     mag = Magnetizability(mf).kernel()
-    print(lib.finger(mag) - 0.61042958313712403)
+    print(lib.finger(mag) - 5.166125828878557)
