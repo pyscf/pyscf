@@ -197,7 +197,7 @@ class Magnetizability(lib.StreamObject):
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)
         log.info('\n')
-        log.info('******** %s for %s ********',
+        log.info('******** %s for %s (In testing) ********',
                  self.__class__, self._scf.__class__)
         if self.gauge_orig is None:
             log.info('gauge = GIAO')

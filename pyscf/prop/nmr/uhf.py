@@ -154,12 +154,12 @@ def solve_mo1(nmrobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     orbob = mo_coeff[1][:,mo_occ[1]>0]
     if h1 is None:
         dm0 = nmrobj._scf.make_rdm1(mo_coeff, mo_occ)
-        h1 = nmrobj.make_h10(mol, dm0)
+        h1 = nmrobj.get_fock(mol, dm0)
         h1 = (lib.einsum('xpq,pi,qj->xij', h1[0], mo_coeff[0].conj(), orboa),
               lib.einsum('xpq,pi,qj->xij', h1[1], mo_coeff[1].conj(), orbob))
         cput1 = log.timer('first order Fock matrix', *cput1)
     if s1 is None:
-        s1 = nmrobj.make_s10(mol)
+        s1 = nmrobj.get_ovlp(mol)
         s1 = (lib.einsum('xpq,pi,qj->xij', s1, mo_coeff[0].conj(), orboa),
               lib.einsum('xpq,pi,qj->xij', s1, mo_coeff[1].conj(), orbob))
 

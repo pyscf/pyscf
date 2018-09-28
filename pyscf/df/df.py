@@ -100,7 +100,7 @@ class DF(lib.StreamObject):
 
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)
-        log.info('******** %s flags ********', self.__class__)
+        log.info('******** %s ********', self.__class__)
         if self.auxmol is None:
             log.info('auxbasis = %s', self.auxbasis)
         else:

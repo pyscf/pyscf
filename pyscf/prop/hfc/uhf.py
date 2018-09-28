@@ -224,7 +224,7 @@ def _write(hfcobj, tensor, title):
         hfcobj.stdout.flush()
 
 
-class HyperfineCoupling(uhf_ssc.SSC):
+class HyperfineCoupling(lib.StreamObject):
     '''dE = I dot gtensor dot s'''
     def __init__(self, scf_method):
         self.mol = scf_method.mol

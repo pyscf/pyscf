@@ -166,10 +166,8 @@ def _get_ao_coords(mol):
 
 
 class Magnetizability(rhf_mag.Magnetizability):
-
-    get_fock = rks_nmr.get_fock
-
     dia = dia
+    get_fock = rks_nmr.get_fock
 
     def solve_mo1(self, mo_energy=None, mo_coeff=None, mo_occ=None,
                   h1=None, s1=None, with_cphf=None):

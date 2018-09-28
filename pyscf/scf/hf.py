@@ -1297,7 +1297,7 @@ class SCF(lib.StreamObject):
             return self
 
         logger.info(self, '\n')
-        logger.info(self, '******** %s flags ********', self.__class__)
+        logger.info(self, '******** %s ********', self.__class__)
         method = []
         cls = self.__class__
         while cls != SCF:
