@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from __future__ import division, print_function
+import numpy as np
 from pyscf.nao.m_ao_matelem import build_3dgrid
 from pyscf.nao.m_dens_libnao import dens_libnao
 from pyscf.nao.m_ao_eval_libnao import ao_eval_libnao as ao_eval
@@ -44,12 +45,11 @@ def xc_scalar_ni(me, sp1,R1, sp2,R2, xc_code, deriv, **kw):
     #print(' vxc[0].shape ', vxc[0].shape)
     ao1 = ao1 * grids.weights * vxc[0]
   elif deriv==2:
-    ao1 = ao1 * grids.weights * fxc[0]
+    ao1 = np.einsum('ox,x...->ox...', ao1 * grids.weights, fxc[0])
   else:
     print(' deriv ', deriv)
     raise RuntimeError('!deriv!')
 
   ao2 = ao_eval(me.ao2, R2, sp2, grids.coords)
-  overlaps = blas.dgemm(1.0, ao1, ao2.T)
-
+  overlaps = np.einsum('ax...,bx->...ab', ao1, ao2)
   return overlaps

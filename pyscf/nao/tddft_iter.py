@@ -79,11 +79,16 @@ class tddft_iter(chi0_matvec):
         self.ss2kernel = [[self.kernel,self.kernel], [self.kernel,self.kernel]]
         
       # List of POINTERS !!! of kernel [[(up,up), (up,dw)], [(dw,up), (dw,dw)]] TAKE CARE!!!
-        
+      
+      nk = self.nprod*(self.nprod+1)//2
       if xc=='RPA' or xc=='HF': 
         pass
       elif xc=='LDA' or xc=='GGA': 
-        self.comp_fxc_pack(kernel=self.kernel, **kw)
+        if self.nspin==1:
+          self.comp_fxc_pack(kernel=self.kernel.reshape((1,nk)), **kw)
+        elif self.nspin==2:
+          kkk = self.comp_fxc_pack(**kw)+self.kernel
+          self.ss2kernel = [[kkk[0],kkk[1]], [kkk[1],kkk[2]]]
       else:
         print(' xc_code', xc_code, xc, xc_code.split(','))
         raise RuntimeError('unkn xc_code')
@@ -118,7 +123,7 @@ class tddft_iter(chi0_matvec):
   def comp_fxc_pack(self, **kw): 
     """Computes the packed version of the TDDFT interaction kernel """
     from pyscf.nao.m_vxc_pack import vxc_pack
-    vxc_pack(self, deriv=2, ao_log=self.pb.prod_log, **kw)
+    return vxc_pack(self, deriv=2, ao_log=self.pb.prod_log, **kw)
 
   def comp_veff(self, vext, comega=1j*0.0, x0=None):
     """ This computes an effective field (scalar potential) given the external scalar potential """
