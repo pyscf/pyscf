@@ -1007,8 +1007,8 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
                             oovv_ijba = numpy.array(eris.oovv[ki,kj,kb]).transpose(0,1,3,2)
                             woovv = 2.*oovv_ijab - oovv_ijba
 
-                            t2_tril[tril_index(kj,ki),kb] = numpy.conj(oovv_ijab.transpose(0,1,3,2) / eijab)
-                            local_mp2 += numpy.dot(t2_tril[tril_index(kj,ki),kb].flatten(),woovv.flatten())
+                            tmp = numpy.conj(oovv_ijab / eijab)
+                            local_mp2 += numpy.dot(tmp.flatten(),woovv.flatten())
             loader.slave_finished()
 
         comm.Allreduce(MPI.IN_PLACE, local_mp2, op=MPI.SUM)
