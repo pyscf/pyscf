@@ -72,7 +72,7 @@ class TestHe(unittest.TestCase):
         
         I = np.zeros((diag.shape[0],diag.shape[0]),dtype=complex)
         I[:nocc,:nocc] = np.identity(nocc,dtype=complex)
-        indices = get_identity(nocc,nvir,nkpts,I)
+        indices = get_ip_identity(nocc,nvir,nkpts,I)
         H = np.zeros((I.shape[0],len(indices)),dtype=complex)
         for j,idx in enumerate(indices):
             H[:,j] = kccsd_ghf.ipccsd_matvec(eom,I[:,idx],0,imds=imds)
@@ -89,19 +89,19 @@ class TestHe(unittest.TestCase):
         kpts = cell.make_kpts([1,1,2])
         kmf = pbcscf.KGHF(cell, kpts, exxdiv=None)
         Escf = kmf.scf()
-        self._test_diag(kmf)
+        self._test_ip_diag(kmf)
 
     def test_he_212_ip_diag(self):
         kpts = cell.make_kpts([2,1,2])
         kmf = pbcscf.KGHF(cell, kpts, exxdiv=None)
         Escf = kmf.scf()
-        self._test_diag(kmf)
+        self._test_ip_diag(kmf)
 
     def test_he_131_ip_diag(self):
         kpts = cell.make_kpts([1,3,1])
         kmf = pbcscf.KGHF(cell, kpts, exxdiv=None)
         Escf = kmf.scf()
-        self._test_diag(kmf)
+        self._test_ip_diag(kmf)
 
     def test_supercell_vs_kpt(self):
         # Running HF and CCSD with 1x1x2 Monkhorst-Pack k-point mesh
