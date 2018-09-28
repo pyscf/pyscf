@@ -1007,8 +1007,8 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
                             oovv_ijba = numpy.array(eris.oovv[ki,kj,kb]).transpose(0,1,3,2)
                             woovv = 2.*oovv_ijab - oovv_ijba
 
-                            t2_tril[tril_index(kj,ki),kb] = numpy.conj(oovv_ijab.transpose(0,1,3,2) / eijab)
-                            local_mp2 += numpy.dot(t2_tril[tril_index(kj,ki),kb].flatten(),woovv.flatten())
+                            tmp = numpy.conj(oovv_ijab / eijab)
+                            local_mp2 += numpy.dot(tmp.flatten(),woovv.flatten())
             loader.slave_finished()
 
         comm.Allreduce(MPI.IN_PLACE, local_mp2, op=MPI.SUM)
@@ -1175,6 +1175,18 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         time0 = log.timer_debug1('converge ip-ccsd', *time0)
         comm.Barrier()
         return evals.real, evecs
+
+    def run_diis(self, t1, t2, istep, normt, de, adiis):
+        if rank == 0:
+            if (adiis and
+                istep >= self.diis_start_cycle and
+                abs(de) < self.diis_start_energy_diff):
+                vec = self.amplitudes_to_vector(t1, t2)
+                t1, t2 = self.vector_to_amplitudes(adiis.update(vec))
+                logger.debug1(self, 'DIIS for step %d', istep)
+        safeBcastInPlace(MPI.COMM_WORLD, t1)
+        safeBcastInPlace(MPI.COMM_WORLD, t2)
+        return t1, t2
 
     def ipccsd_matvec(self, vector):
         # Ref: Z. Tu, F. Wang, and X. Li, J. Chem. Phys. 136, 174102 (2012) Eqs.(8)-(9)

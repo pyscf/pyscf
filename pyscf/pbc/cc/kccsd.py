@@ -449,19 +449,45 @@ def _make_eris_incore(cc, mo_coeff=None):
     kconserv = kpts_helper.get_kconserv(cc._scf.cell, cc.kpts)
     # The bottom nao//2 coefficients are down (up) spin while the top are up (down).
     # These are 'spin-less' quantities; spin-conservation will be added manually.
-    so_coeff = [mo[:nao // 2] + mo[nao // 2:] for mo in eris.mo_coeff]
+    if not hasattr(mo_coeff[0], 'orbspin'):
+        # The bottom nao//2 coefficients are down (up) spin while the top are up (down).
+        mo_a_coeff = [mo[:nao // 2] for mo in eris.mo_coeff]
+        mo_b_coeff = [mo[nao // 2:] for mo in eris.mo_coeff]
 
-    eri = numpy.empty((nkpts, nkpts, nkpts, nmo, nmo, nmo, nmo), dtype=numpy.complex128)
-    fao2mo = cc._scf.with_df.ao2mo
-    for kp, kq, kr in kpts_helper.loop_kkk(nkpts):
-        ks = kconserv[kp, kq, kr]
-        eri_kpt = fao2mo(
-            (so_coeff[kp], so_coeff[kq], so_coeff[kr], so_coeff[ks]), (kpts[kp], kpts[kq], kpts[kr], kpts[ks]),
-            compact=False)
-        eri_kpt[(eris.orbspin[kp][:, None] != eris.orbspin[kq]).ravel()] = 0
-        eri_kpt[:, (eris.orbspin[kr][:, None] != eris.orbspin[ks]).ravel()] = 0
-        eri_kpt = eri_kpt.reshape(nmo, nmo, nmo, nmo)
-        eri[kp, kq, kr] = eri_kpt
+        eri = numpy.empty((nkpts, nkpts, nkpts, nmo, nmo, nmo, nmo), dtype=numpy.complex128)
+        fao2mo = cc._scf.with_df.ao2mo
+        for kp, kq, kr in kpts_helper.loop_kkk(nkpts):
+            ks = kconserv[kp, kq, kr]
+            eri_kpt = fao2mo(
+                (mo_a_coeff[kp], mo_a_coeff[kq], mo_a_coeff[kr], mo_a_coeff[ks]), (kpts[kp], kpts[kq], kpts[kr], kpts[ks]),
+                compact=False)
+            eri_kpt += fao2mo(
+                (mo_b_coeff[kp], mo_b_coeff[kq], mo_b_coeff[kr], mo_b_coeff[ks]), (kpts[kp], kpts[kq], kpts[kr], kpts[ks]),
+                compact=False)
+            eri_kpt += fao2mo(
+                (mo_a_coeff[kp], mo_a_coeff[kq], mo_b_coeff[kr], mo_b_coeff[ks]), (kpts[kp], kpts[kq], kpts[kr], kpts[ks]),
+                compact=False)
+            eri_kpt += fao2mo(
+                (mo_b_coeff[kp], mo_b_coeff[kq], mo_a_coeff[kr], mo_a_coeff[ks]), (kpts[kp], kpts[kq], kpts[kr], kpts[ks]),
+                compact=False)
+
+            eri_kpt = eri_kpt.reshape(nmo, nmo, nmo, nmo)
+            eri[kp, kq, kr] = eri_kpt
+    else:
+        mo_a_coeff = [mo[:nao // 2] + mo[nao // 2:] for mo in eris.mo_coeff]
+
+        eri = numpy.empty((nkpts, nkpts, nkpts, nmo, nmo, nmo, nmo), dtype=numpy.complex128)
+        fao2mo = cc._scf.with_df.ao2mo
+        for kp, kq, kr in kpts_helper.loop_kkk(nkpts):
+            ks = kconserv[kp, kq, kr]
+            eri_kpt = fao2mo(
+                (mo_a_coeff[kp], mo_a_coeff[kq], mo_a_coeff[kr], mo_a_coeff[ks]), (kpts[kp], kpts[kq], kpts[kr], kpts[ks]),
+                compact=False)
+
+            eri_kpt[(eris.orbspin[kp][:, None] != eris.orbspin[kq]).ravel()] = 0
+            eri_kpt[:, (eris.orbspin[kr][:, None] != eris.orbspin[ks]).ravel()] = 0
+            eri_kpt = eri_kpt.reshape(nmo, nmo, nmo, nmo)
+            eri[kp, kq, kr] = eri_kpt
 
     # Check some antisymmetrized properties of the integrals
     if DEBUG:
