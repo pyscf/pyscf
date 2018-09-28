@@ -57,6 +57,8 @@ class tddft_iter(chi0_matvec):
     else:
       raise ValueError("dtype can be only float32 or float64")
 
+    xc = xc_code.split(',')[0]
+
     if load_kernel:
       self.load_kernel_method(**kw)
 
@@ -64,6 +66,8 @@ class tddft_iter(chi0_matvec):
         self.ss2kernel = [[self.kernel]]
       elif self.nspin==2:
         self.ss2kernel = [[self.kernel,self.kernel], [self.kernel,self.kernel]]
+
+      if xc!='RPA' and self.nspin!=1: raise RuntimeError('not sure it would work')
 
     else:
       self.kernel,self.kernel_dim = pb.comp_coulomb_pack(dtype=self.dtype) # Lower Triangular
@@ -76,7 +80,6 @@ class tddft_iter(chi0_matvec):
         
       # List of POINTERS !!! of kernel [[(up,up), (up,dw)], [(dw,up), (dw,dw)]] TAKE CARE!!!
         
-      xc = xc_code.split(',')[0]
       if xc=='RPA' or xc=='HF': 
         pass
       elif xc=='LDA' or xc=='GGA': 
@@ -87,7 +90,7 @@ class tddft_iter(chi0_matvec):
 
     if self.verbosity>0 : print(__name__,'\t====> self.xc_code:', self.xc_code)
 
-  def load_kernel_method(self, kernel_fname, kernel_format="npy", kernel_path_hdf5=None, **kwargs):
+  def load_kernel_method(self, kernel_fname, kernel_format="npy", kernel_path_hdf5=None):
 
       if kernel_format == "npy":
           self.kernel = self.dtype(np.load(kernel_fname))
