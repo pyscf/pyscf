@@ -52,4 +52,5 @@ def xc_scalar_ni(me, sp1,R1, sp2,R2, xc_code, deriv, **kw):
 
   ao2 = ao_eval(me.ao2, R2, sp2, grids.coords)
   overlaps = np.einsum('ax...,bx->...ab', ao1, ao2)
+  if me.sv.nspin==1: overlaps = overlaps.reshape(tuple([1]+list(overlaps.shape)))
   return overlaps

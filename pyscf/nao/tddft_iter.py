@@ -50,12 +50,10 @@ class tddft_iter(chi0_matvec):
     pb = self.pb
 
     self.spmv = spmv_wrapper
-    if self.dtype == np.float32:
-      if self.scipy_ver > 0: self.spmv = blas.sspmv
-    elif self.dtype == np.float64:
-      if self.scipy_ver > 0: self.spmv = blas.dspmv
-    else:
-      raise ValueError("dtype can be only float32 or float64")
+    if self.scipy_ver > 0:
+      if self.dtype == np.float32: self.spmv = blas.sspmv
+      elif self.dtype == np.float64: self.spmv = blas.dspmv
+      else: raise ValueError("dtype can be only float32 or float64")
 
     xc = xc_code.split(',')[0]
 

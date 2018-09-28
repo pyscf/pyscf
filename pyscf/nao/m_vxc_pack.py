@@ -69,7 +69,7 @@ def vxc_pack(self, **kw):
       iab2block = xc_scalar_ni(me,sp1,rv1,sp2,rv2,**kw) if iskw else xc_scalar_ni(me,sp1,rv1,sp2,rv2,xc_code=xc_code,**kw)
       
       if use_numba:
-        for i,ab2v in enumerate(iab2block): 
+        for i,ab2v in enumerate(iab2block):
           fill_triu_v2(ab2v, kernel[i], s1, f1, s2, f2, norbs, add=True)
       else:
         for i,ab2v in enumerate(iab2block):
