@@ -32,17 +32,25 @@ from pyscf.soscf.newton_ah import _gen_rhf_response
 from pyscf.data import nist
 
 
-# flatten([[XX, XY, XZ],
-#          [YX, YY, YZ],
-#          [ZX, ZY, ZZ]])
-TENSOR_IDX = numpy.arange(9)
-def dia(mol, dm0, gauge_orig=None, shielding_nuc=None):
-    '''Note the side effects of set_common_origin'''
+def dia(nmrobj, mol=None, dm0=None, gauge_orig=None, shielding_nuc=None):
+    if mol is None: mol = nmrobj.mol
+    if gauge_orig is None: gauge_orig = nmrobj.gauge_orig
+    if shielding_nuc is None: shielding_nuc = nmrobj.shielding_nuc
+    if dm0 is None: dm0 = nmrobj._scf.make_rdm1()
 
-    if shielding_nuc is None:
-        shielding_nuc = range(mol.natm)
     if gauge_orig is not None:
+        # Note the side effects of set_common_origin
         mol.set_common_origin(gauge_orig)
+
+    mf = nmrobj._scf
+    if getattr(mf, 'with_x2c', None):
+        raise NotImplementedError('X2C for NMR shielding')
+
+    if getattr(mf, 'with_qmmm', None):
+        raise NotImplementedError('NMR shielding with QM/MM')
+
+    if getattr(mf, 'with_solvent', None):
+        raise NotImplementedError('NMR shielding with Solvent')
 
     msc_dia = []
     for n, atm_id in enumerate(shielding_nuc):
@@ -61,19 +69,18 @@ def dia(mol, dm0, gauge_orig=None, shielding_nuc=None):
         a11 = numpy.einsum('xij,ij->x', h11, dm0)
         msc_dia.append(a11)
 
-#    if getattr(nmrobj._scf, 'with_x2c', None):
-#        raise NotImplementedError('X2C for NMR shielding')
-    # TODO: Solvent effects
-    # TODO: QM/MM interface
-
     # XX, XY, XZ, YX, YY, YZ, ZX, ZY, ZZ = 1..9
     # => [[XX, XY, XZ], [YX, YY, YZ], [ZX, ZY, ZZ]]
     return numpy.array(msc_dia).reshape(-1, 3, 3)
 
-# Note mo10 is the imaginary part of MO^1
-def para(mol, mo10, mo_coeff, mo_occ, shielding_nuc=None):
-    if shielding_nuc is None:
-        shielding_nuc = range(mol.natm)
+
+def para(nmrobj, mol=None, mo10=None, mo_coeff=None, mo_occ=None,
+         shielding_nuc=None):
+    if mol is None:           mol = nmrobj.mol
+    if mo_coeff is None:      mo_coeff = nmrobj._scf.mo_coeff
+    if mo_occ is None:        mo_occ = nmrobj._scf.mo_occ
+    if shielding_nuc is None: shielding_nuc = nmrobj.shielding_nuc
+
     para_vir = numpy.empty((len(shielding_nuc),3,3))
     para_occ = numpy.empty((len(shielding_nuc),3,3))
     occidx = mo_occ > 0
@@ -273,6 +280,7 @@ class NMR(lib.StreamObject):
             log.warn('Ground state SCF is not converged')
         return self
 
+    # Note mo10 is the imaginary part of MO^1
     def kernel(self, mo1=None):
         return self.shielding(mo1)
     def shielding(self, mo1=None):
@@ -282,7 +290,12 @@ class NMR(lib.StreamObject):
 
         unit_ppm = nist.ALPHA**2 * 1e6
         msc_dia = self.dia() * unit_ppm
+
+        if mo1 is None:
+            self.mo10, self.mo_e10 = self.solve_mo1()
+            mo1 = self.mo10
         msc_para, para_vir, para_occ = self.para(mo10=mo1)
+
         msc_para *= unit_ppm
         para_vir *= unit_ppm
         para_occ *= unit_ppm
@@ -301,33 +314,16 @@ class NMR(lib.StreamObject):
                     _write(self.stdout, para_vir[i], 'vir part of para-magnetism')
         return e11
 
-    def dia(self, mol=None, dm0=None, gauge_orig=None, shielding_nuc=None):
-        if mol is None: mol = self.mol
-        if gauge_orig is None: gauge_orig = self.gauge_orig
-        if shielding_nuc is None: shielding_nuc = self.shielding_nuc
-        if dm0 is None: dm0 = self._scf.make_rdm1()
-        return dia(mol, dm0, gauge_orig, shielding_nuc)
-
-    def para(self, mol=None, mo10=None, mo_coeff=None, mo_occ=None,
-             shielding_nuc=None):
-        if mol is None:           mol = self.mol
-        if mo_coeff is None:      mo_coeff = self._scf.mo_coeff
-        if mo_occ is None:        mo_occ = self._scf.mo_occ
-        if shielding_nuc is None: shielding_nuc = self.shielding_nuc
-        if mo10 is None:
-            self.mo10, self.mo_e10 = self.solve_mo1()
-            mo10 = self.mo10
-        return para(mol, mo10, mo_coeff, mo_occ, shielding_nuc)
-
+    dia = dia
+    para = para
     make_h10 = get_fock = get_fock
+    solve_mo1 = solve_mo1
 
     def make_s10(self, mol=None, gauge_orig=None):
         if mol is None: mol = self.mol
         if gauge_orig is None: gauge_orig = self.gauge_orig
         return make_s10(mol, gauge_orig)
     get_ovlp = make_s10
-
-    solve_mo1 = solve_mo1
 
 
 def _write(stdout, msc3x3, title):

@@ -32,14 +32,19 @@ from pyscf.soscf.newton_ah import _gen_uhf_response
 from pyscf.prop.nmr import rhf as rhf_nmr
 
 
-def dia(mol, dm0, gauge_orig=None, shielding_nuc=None):
+def dia(nmrobj, mol=None, dm0=None, gauge_orig=None, shielding_nuc=None):
+    if dm0 is None: dm0 = nmrobj._scf.make_rdm1()
     if not (isinstance(dm0, numpy.ndarray) and dm0.ndim == 2):
         dm0 = dm0[0] + dm0[1]
-    return rhf_nmr.dia(mol, dm0, gauge_orig, shielding_nuc)
+    return rhf_nmr.dia(nmrobj, mol, dm0, gauge_orig, shielding_nuc)
 
-def para(mol, mo10, mo_coeff, mo_occ, shielding_nuc=None):
-    if shielding_nuc is None:
-        shielding_nuc = range(mol.natm)
+def para(nmrobj, mol=None, mo10=None, mo_coeff=None, mo_occ=None,
+         shielding_nuc=None):
+    if mol is None:           mol = nmrobj.mol
+    if mo_coeff is None:      mo_coeff = nmrobj._scf.mo_coeff
+    if mo_occ is None:        mo_occ = nmrobj._scf.mo_occ
+    if shielding_nuc is None: shielding_nuc = nmrobj.shielding_nuc
+
     para_vir = numpy.empty((len(shielding_nuc),3,3))
     para_occ = numpy.empty((len(shielding_nuc),3,3))
     occidxa = mo_occ[0] > 0
@@ -215,27 +220,9 @@ class NMR(rhf_nmr.NMR):
                             'g-tensor and HFC tensors.', s2)
         return rhf_nmr.NMR.shielding(self, mo1)
 
-    def dia(self, mol=None, dm0=None, gauge_orig=None, shielding_nuc=None):
-        if mol is None: mol = self.mol
-        if dm0 is None: dm0 = self._scf.make_rdm1()
-        if not (isinstance(dm0, numpy.ndarray) and dm0.ndim == 2):
-            # spin-traced 1pdm
-            dm0 = dm0[0] + dm0[1]
-        return rhf_nmr.dia(mol, dm0, gauge_orig, shielding_nuc)
-
-    def para(self, mol=None, mo10=None, mo_coeff=None, mo_occ=None,
-             shielding_nuc=None):
-        if mol is None:           mol = self.mol
-        if mo_coeff is None:      mo_coeff = self._scf.mo_coeff
-        if mo_occ is None:        mo_occ = self._scf.mo_occ
-        if shielding_nuc is None: shielding_nuc = self.shielding_nuc
-        if mo10 is None:
-            self.mo10, self.mo_e10 = self.solve_mo1()
-            mo10 = self.mo10
-        return para(mol, mo10, mo_coeff, mo_occ, shielding_nuc)
-
+    dia = dia
+    para = para
     make_h10 = get_fock = get_fock
-
     solve_mo1 = solve_mo1
 
 
@@ -259,17 +246,17 @@ if __name__ == '__main__':
     nmr.cphf = True
     #nmr.gauge_orig = (0,0,0)
     msc = nmr.kernel() # _xx,_yy = 375.232839, _zz = 483.002139
-    print(lib.finger(msc) - -132.22894626177765)
+    print(lib.finger(msc) - -132.22895063293751)
 
     nmr.cphf = True
     nmr.gauge_orig = (1,1,1)
     msc = nmr.shielding()
-    print(lib.finger(msc) - 4.0519712753371522)
+    print(lib.finger(msc) - -108.48536089934709)
 
     nmr.cphf = False
     nmr.gauge_orig = None
     msc = nmr.shielding()
-    print(lib.finger(msc) - -133.26525857962628)
+    print(lib.finger(msc) - -133.26526049655627)
 
     mol.atom.extend([
         [1 , (1. , 0.3, .417)],
