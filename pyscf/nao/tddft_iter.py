@@ -51,16 +51,20 @@ class tddft_iter(chi0_matvec):
 
     self.spmv = spmv_wrapper
     if self.dtype == np.float32:
-      self.gemm = blas.sgemm
       if self.scipy_ver > 0: self.spmv = blas.sspmv
     elif self.dtype == np.float64:
-      self.gemm = blas.dgemm
       if self.scipy_ver > 0: self.spmv = blas.dspmv
     else:
       raise ValueError("dtype can be only float32 or float64")
 
     if load_kernel:
       self.load_kernel_method(**kw)
+
+      if self.nspin==1:
+        self.ss2kernel = [[self.kernel]]
+      elif self.nspin==2:
+        self.ss2kernel = [[self.kernel,self.kernel], [self.kernel,self.kernel]]
+
     else:
       self.kernel,self.kernel_dim = pb.comp_coulomb_pack(dtype=self.dtype) # Lower Triangular
       assert self.nprod==self.kernel_dim,"{} {}".format(self.nprod,self.kernel_dim)

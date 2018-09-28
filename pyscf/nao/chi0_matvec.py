@@ -1,12 +1,14 @@
 from __future__ import print_function, division
+from copy import copy
 import numpy as np
 from numpy import array, argmax
 from scipy.sparse import csr_matrix, coo_matrix
 from timeit import default_timer as timer
+from scipy.linalg import blas
+
 from pyscf.nao import mf
 from pyscf.nao.m_tddft_iter_gpu import tddft_iter_gpu_c
 from pyscf.nao.m_chi0_noxv import chi0_mv_gpu, chi0_mv
-from copy import copy
 from pyscf.data.nist import HARTREE2EV
 
 class chi0_matvec(mf):
@@ -18,6 +20,13 @@ class chi0_matvec(mf):
     self.dtype = kw['dtype'] if 'dtype' in kw else np.float32
     for x in ['dtype']: kw.pop(x, None)
     mf.__init__(self, dtype=self.dtype, **kw)
+
+    if self.dtype == np.float32:
+      self.gemm = blas.sgemm
+    elif self.dtype == np.float64:
+      self.gemm = blas.dgemm
+    else:
+      raise ValueError("dtype can be only float32 or float64")
 
     self.dealloc_hsx = kw['dealloc_hsx'] if 'dealloc_hsx' in kw else True
     self.eps = kw['iter_broadening'] if 'iter_broadening' in kw else 0.00367493
