@@ -700,16 +700,12 @@ def Woooo(cc,t1,t2,eris):
     kconserv = cc.khelper.kconserv
     t1a, t1b = t1
     t2aa, t2ab, t2bb = t2
-    nkpts, nocca, noccb, nvira, nvirb = t2ab.shape[2:]
+    _, _, nkpts, nocca, noccb, nvira, nvirb = t2ab.shape
 
     dtype = np.result_type(*t2)
     Woooo = np.zeros(eris.oooo.shape, dtype=dtype)
     WooOO = np.zeros(eris.ooOO.shape, dtype=dtype)
     WOOOO = np.zeros(eris.OOOO.shape, dtype=dtype)
-
-    Woooo = eris.oooo.copy()
-    WooOO = eris.ooOO.copy()
-    WOOOO = eris.OOOO.copy()
 
     tau_aa, tau_ab, tau_bb = make_tau(cc, t2, t1, t1)
     for km in range(nkpts):
@@ -719,13 +715,10 @@ def Woooo(cc,t1,t2,eris):
             tmp_bbbbJ = einsum('xje, ymine->yxminj', t1b, eris.OOOV[km,:,kn])
             tmp_bbbbJ-= einsum('yie, xmjne->yxminj', t1b, eris.OOOV[km,:,kn])
             tmp_aabbJ = einsum('xje, ymine->yxminj', t1b, eris.ooOV[km,:,kn])
+            tmp_bbaaJ = einsum('xje, ymine->yxminj', t1a, eris.OOov[km,:,kn])
+            tmp_abbaJ = -einsum('yie,xmjne->yxminj', t1b, eris.ooOV[km,:,kn])
             tmp_baabJ = -einsum('yie,xmjne->yxminj', t1a, eris.OOov[km,:,kn])
-
-            for ki in range(nkpts):
-                kj = kconserv[km,ki,kn]
-                Woooo[km,ki,kn] += eris.oooo[km,ki,kn]
-                WooOO[km,ki,kn] += eris.ooOO[km,ki,kn]
-                WOOOO[km,ki,kn] += eris.OOOO[km,ki,kn]
+            tmp_aabbJ = einsum('xje, ymine->yxminj', t1b, eris.ooOV[km,:,kn])
 
             for ki in range(nkpts):
                 kj = kconserv[km,ki,kn]
@@ -733,6 +726,9 @@ def Woooo(cc,t1,t2,eris):
                 WOOOO[km,ki,kn] += tmp_bbbbJ[ki,kj]
                 WooOO[km,ki,kn] += tmp_aabbJ[ki,kj]
                 WooOO[kn,ki,km] -= tmp_baabJ[ki,kj].transpose(2,1,0,3)
+                Woooo[km,ki,kn] += eris.oooo[km,ki,kn]
+                WooOO[km,ki,kn] += eris.ooOO[km,ki,kn]
+                WOOOO[km,ki,kn] += eris.OOOO[km,ki,kn]
 
     Woooo = Woooo - Woooo.transpose(2,1,0,5,4,3,6)
     WOOOO = WOOOO - WOOOO.transpose(2,1,0,5,4,3,6)
@@ -918,8 +914,8 @@ def Wooov(cc, t1, t2, eris, kconserv):
 
     P = kconserv_mat(nkpts, kconserv)
     Wooov = eris.ooov - np.einsum('zyxnime,xzyw->xyzmine', eris.ooov, P)
-    WooOV = eris.ooOV
-    WOOov = eris.OOov
+    WooOV = eris.ooOV.copy()
+    WOOov = eris.OOov.copy()
     WOOOV = eris.OOOV - np.einsum('zyxNIME,xzyw->xyzMINE', eris.OOOV, P)
 
     Wooov += np.einsum('yif,xyzmfne->xyzmine', t1a, eris.ovov) - np.einsum('yif,xwzmenf,xzyw->xyzmine', t1a, eris.ovov, P)
