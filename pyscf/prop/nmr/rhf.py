@@ -60,6 +60,12 @@ def dia(mol, dm0, gauge_orig=None, shielding_nuc=None):
             h11 += mol.intor('int1e_a01gp', 9)
         a11 = numpy.einsum('xij,ij->x', h11, dm0)
         msc_dia.append(a11)
+
+#    if getattr(nmrobj._scf, 'with_x2c', None):
+#        raise NotImplementedError('X2C for NMR shielding')
+    # TODO: Solvent effects
+    # TODO: QM/MM interface
+
     # XX, XY, XZ, YX, YY, YZ, ZX, ZY, ZZ = 1..9
     # => [[XX, XY, XZ], [YX, YY, YZ], [ZX, ZY, ZZ]]
     return numpy.array(msc_dia).reshape(-1, 3, 3)
@@ -89,7 +95,7 @@ def para(mol, mo10, mo_coeff, mo_occ, shielding_nuc=None):
     return msc_para, para_vir, para_occ
 
 def make_h10(mol, dm0, gauge_orig=None, verbose=logger.WARN):
-    '''Imaginary part of H10 operator
+    '''Imaginary part of first order Fock operator
 
     Note the side effects of set_common_origin
     '''
@@ -195,7 +201,9 @@ def solve_mo1(nmrobj, mo_energy=None, mo_coeff=None, mo_occ=None,
 
 
 def get_fock(nmrobj, mol=None, dm0=None, gauge_orig=None):
-    '''First order Fock matrix wrt external magnetic field'''
+    r'''First order partial derivatives of Fock matrix wrt external magnetic
+    field.  \frac{\partial F}{\partial B}
+    '''
     if mol is None: mol = nmrobj.mol
     if dm0 is None: dm0 = nmrobj._scf.make_rdm1()
     if gauge_orig is None: gauge_orig = nmrobj.gauge_orig

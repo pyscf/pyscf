@@ -17,7 +17,7 @@
 #
 
 '''
-Non-relativistic magnetizability tensor
+Non-relativistic magnetizability tensor for RHF
 (In testing)
 
 Refs:
@@ -52,31 +52,49 @@ def dia(magobj, gauge_orig=None):
     else:
         mol.set_common_origin(gauge_orig)
         h2 = mol.intor('int1e_rr', comp=9)
+
+    if getattr(magobj._scf, 'with_x2c', None):
+        raise NotImplementedError('X2C for magnetizability')
+
+    if getattr(magobj._scf, 'with_qmmm', None):
+        raise NotImplementedError('Magnetizability with QM/MM')
+
+    if getattr(magobj._scf, 'with_solvent', None):
+        raise NotImplementedError('Magnetizability with Solvent')
+
     e2 = numpy.einsum('xpq,qp->x', h2, dm0)
     diag = [0, 4, 8]  # XX, YY, ZZ
     e2[diag] -= e2[diag].sum()
     e2 *= -.25
 
     if gauge_orig is None:
-        e2+= numpy.einsum('qp,xpq->x', dm0, mol.intor('int1e_grjxp', comp=9))
-        e2+= numpy.einsum('qp,xpq->x', dm0, mol.intor('int1e_ggkin', comp=9))
-        e2+= numpy.einsum('qp,xpq->x', dm0, mol.intor('int1e_ggnuc', comp=9))
+        e2 += numpy.einsum('qp,xpq->x', dm0, mol.intor('int1e_grjxp', comp=9))
+        e2 += numpy.einsum('qp,xpq->x', dm0, mol.intor('int1e_ggkin', comp=9))
+        e2 += numpy.einsum('qp,xpq->x', dm0, mol.intor('int1e_ggnuc', comp=9))
         if mol.has_ecp():
             raise NotImplementedError
             e2+= numpy.einsum('qp,xpq->x', dm0, mol.intor('ECPscalar_ggnuc', comp=9))
 
-        e2-= numpy.einsum('qp,xpq->x', dme0, mol.intor('int1e_ggovlp', comp=9))
+        e2 -= numpy.einsum('qp,xpq->x', dme0, mol.intor('int1e_ggovlp', comp=9))
 
         # + 1/2 Tr[(J^{(2)} - K^{(2)}), DM]
-        vs = jk.get_jk(mol, [dm0]*4, ['ijkl,ji->s2kl',
-                                      'ijkl,lk->s2ij',
+        # Symmetry between 'ijkl,ji->s2kl' and 'ijkl,lk->s2ij' can be used.
+        #vs = jk.get_jk(mol, [dm0]*4, ['ijkl,ji->s2kl',
+        #                              'ijkl,lk->s2ij',
+        #                              'ijkl,jk->s1il',
+        #                              'ijkl,li->s1kj'],
+        #               'int2e_gg1', 's4', 9, hermi=1)
+        #e2 += numpy.einsum('xpq,qp->x', vs[0], dm0) * .5
+        #e2 += numpy.einsum('xpq,qp->x', vs[1], dm0) * .5
+        #e2 -= numpy.einsum('xpq,qp->x', vs[2], dm0) * .25
+        #e2 -= numpy.einsum('xpq,qp->x', vs[3], dm0) * .25
+        vs = jk.get_jk(mol, [dm0]*3, ['ijkl,ji->s2kl',
                                       'ijkl,jk->s1il',
                                       'ijkl,li->s1kj'],
                        'int2e_gg1', 's4', 9, hermi=1)
-        e2 += numpy.einsum('xpq,qp->x', vs[0], dm0) * .5
-        e2 += numpy.einsum('xpq,qp->x', vs[1], dm0) * .5
+        e2 += numpy.einsum('xpq,qp->x', vs[0], dm0)
+        e2 -= numpy.einsum('xpq,qp->x', vs[1], dm0) * .25
         e2 -= numpy.einsum('xpq,qp->x', vs[2], dm0) * .25
-        e2 -= numpy.einsum('xpq,qp->x', vs[3], dm0) * .25
 
         # J does not have contribution because integrals are anti-symmetric
         #vs = jk.get_jk(mol, [dm0]*2, ['ijkl,ji->s2kl',
@@ -145,7 +163,7 @@ def para(magobj, gauge_orig=None, h1=None, s1=None, with_cphf=None):
 
     # *2 for double occupancy.
     mag_para *= 2
-    return mag_para, numpy.zeros((3,3)), numpy.zeros((3,3))
+    return mag_para
 
 
 class Magnetizability(lib.StreamObject):
@@ -189,7 +207,7 @@ class Magnetizability(lib.StreamObject):
         self.dump_flags()
 
         mag_dia = self.dia(self.gauge_orig)
-        mag_para, para_vir, para_occ = self.para(self.gauge_orig)
+        mag_para = self.para(self.gauge_orig)
         e2 = mag_para + mag_dia
 
         logger.timer(self, 'Magnetizability', *cput0)
@@ -221,13 +239,15 @@ if __name__ == '__main__':
     from pyscf import gto
     from pyscf import scf
     mol = gto.Mole()
+    mol.verbose = 7
+    mol.output = '/dev/null'
     mol.atom = '''h  ,  0.   0.   0.
                   F  ,  0.   0.   .917'''
     mol.basis = '631g'
     mol.build()
 
-    rhf = scf.RHF(mol).run()
-    mag = Magnetizability(rhf)
+    mf = scf.RHF(mol).run()
+    mag = Magnetizability(mf)
     mag.cphf = True
     m = mag.kernel()
     print(lib.finger(m) - 0.43596639996758657)
@@ -240,3 +260,14 @@ if __name__ == '__main__':
     mag.cphf = False
     m = mag.kernel()
     print(lib.finger(m) - 0.7973915717274408)
+
+
+    mol = gto.M(atom='''O      0.   0.       0.
+                        H      0.  -0.757    0.587
+                        H      0.   0.757    0.587''',
+                basis='ccpvdz')
+    mf = scf.RHF(mol).run()
+    mag = Magnetizability(mf)
+    mag.cphf = True
+    m = mag.kernel()
+    print(lib.finger(m) - 0.62173669377370366)
