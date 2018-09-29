@@ -560,8 +560,6 @@ def _make_eris_incore(cc, mo_coeff=None):
                         'May cause issues in convergence.', gap)
 
     kconserv = kpts_helper.get_kconserv(cell, kpts)
-    # The bottom nao//2 coefficients are down (up) spin while the top are up (down).
-    # These are 'spin-less' quantities; spin-conservation will be added manually.
     if not hasattr(mo_coeff[0], 'orbspin'):
         # The bottom nao//2 coefficients are down (up) spin while the top are up (down).
         mo_a_coeff = [mo[:nao // 2] for mo in eris.mo_coeff]
