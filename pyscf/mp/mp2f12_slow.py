@@ -66,6 +66,7 @@ def trans(eri, mos):
     return eri1
 
 def energy_f12(mf, auxmol, zeta):
+    logger.info(mf, '******** MP2-F12 (In testing) ********')
     mol = mf.mol
     mo_coeff = mf.mo_coeff
     mo_energy = mf.mo_energy

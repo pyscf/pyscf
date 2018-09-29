@@ -911,7 +911,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)
         log.info('')
-        log.info('******** %s flags ********', self.__class__)
+        log.info('******** %s ********', self.__class__)
         log.info('CC2 = %g', self.cc2)
         log.info('CCSD nocc = %s, nmo = %s', self.nocc, self.nmo)
         if self.frozen is not 0:

@@ -16,14 +16,25 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
-from pyscf.prop.nmr import rhf
-from pyscf.prop.nmr import uhf
-from pyscf.prop.nmr import dhf
-from pyscf.prop.nmr import rks
-from pyscf.prop.nmr import uks
+'''
+Non-relativistic RKS spin-spin coupling (SSC) constants
+'''
 
-RHF = rhf.NMR
-UHF = uhf.NMR
-DHF = dhf.NMR
-RKS = rks.NMR
-UKS = uks.NMR
+# RHF and RKS have the same code for SSC tensors
+from pyscf.prop.ssc.rhf import SpinSpinCoupling, SSC
+from pyscf.prop.ssc.rhf import make_dso, make_pso
+
+if __name__ == '__main__':
+    from pyscf import gto, lib, dft
+    mol = gto.M(atom='''
+                O 0 0      0
+                H 0 -0.757 0.587
+                H 0  0.757 0.587''',
+                basis='6-31g', verbose=3)
+
+    mf = dft.RKS(mol).set(xc='b3lyp').run()
+    ssc = SSC(mf)
+    ssc.with_fc = True
+    ssc.with_fcsd = True
+    jj = ssc.kernel()
+    print(lib.finger(jj)*1e8 - -0.33428832201108766)

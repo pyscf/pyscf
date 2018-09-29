@@ -17,9 +17,9 @@
 #
 
 '''
-(In testing)
 Electric field gradients, nuclear quadrupolar coupling and Mossbauer
 spectroscopy for non-relativistic (or sf-x2c) mean-field and post-HF methods.
+(In testing)
 
 Ref:
 
@@ -43,6 +43,7 @@ from pyscf.data.nucprop import ISOTOPE_QUAD_MOMENT
 
 def kernel(method, efg_nuc=None):
     log = lib.logger.Logger(method.stdout, method.verbose)
+    log.info('\n******** EFG for non-relativistic methods (In testing) ********')
     mol = method.mol
     if efg_nuc is None:
         efg_nuc = range(mol.natm)

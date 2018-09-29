@@ -151,7 +151,7 @@ class Boys(ciah.CIAHOptimizer):
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)
         log.info('\n')
-        log.info('******** %s flags ********', self.__class__)
+        log.info('******** %s ********', self.__class__)
         log.info('conv_tol = %s'       , self.conv_tol       )
         log.info('conv_tol_grad = %s'  , self.conv_tol_grad  )
         log.info('max_cycle = %s'      , self.max_cycle      )

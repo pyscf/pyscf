@@ -552,9 +552,9 @@ def make_rdm1(mo_coeff, mo_occ):
     '''
     mocc = mo_coeff[:,mo_occ>0]
 # DO NOT make tag_array for dm1 here because this DM array may be modified and
-# passed to functions like get_jk, get_vxc.  These function may take the tag
-# (mo_coeff, mo_occ) to compute the potential if tags was found in the DM
-# matrix and modifications to DM matrix may be ignored.
+# passed to functions like get_jk, get_vxc.  These functions may take the tags
+# (mo_coeff, mo_occ) to compute the potential if tags were found in the DM
+# array and modifications to DM array may be ignored.
     return numpy.dot(mocc*mo_occ[mo_occ>0], mocc.T.conj())
 
 
@@ -1297,7 +1297,7 @@ class SCF(lib.StreamObject):
             return self
 
         logger.info(self, '\n')
-        logger.info(self, '******** %s flags ********', self.__class__)
+        logger.info(self, '******** %s ********', self.__class__)
         method = []
         cls = self.__class__
         while cls != SCF:

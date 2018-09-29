@@ -824,7 +824,7 @@ class CISD(lib.StreamObject):
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)
         log.info('')
-        log.info('******** %s flags ********', self.__class__)
+        log.info('******** %s ********', self.__class__)
         log.info('CISD nocc = %s, nmo = %s', self.nocc, self.nmo)
         if self.frozen is not 0:
             log.info('frozen orbitals %s', str(self.frozen))

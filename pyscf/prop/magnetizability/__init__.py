@@ -12,9 +12,18 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# Author: Qiming Sun <osirpt.sun@gmail.com>
+#
 
-from pyscf.prop.gtensor import uhf
-from pyscf.prop.gtensor import uks
+from pyscf.prop.magnetizability import rhf
+from pyscf.prop.magnetizability import uhf
+#from pyscf.prop.magnetizability import dhf
+from pyscf.prop.magnetizability import rks
+from pyscf.prop.magnetizability import uks
 
-UHF = uhf.GTensor
-UKS = uks.GTensor
+RHF = rhf.Magnetizability
+UHF = uhf.Magnetizability
+#DHF = dhf.Magnetizability
+RKS = rks.Magnetizability
+UKS = uks.Magnetizability

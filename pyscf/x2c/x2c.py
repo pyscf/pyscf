@@ -41,7 +41,7 @@ class X2C(lib.StreamObject):
     def dump_flags(self):
         log = logger.Logger(self.mol.stdout, self.mol.verbose)
         log.info('\n')
-        log.info('******** %s flags ********', self.__class__)
+        log.info('******** %s ********', self.__class__)
         log.info('exp_drop = %g', self.exp_drop)
         log.info('approx = %s',    self.approx)
         log.info('xuncontract = %d', self.xuncontract)

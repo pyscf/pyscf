@@ -141,6 +141,8 @@
   - 4-component DHF g-tensor
   - Non-relativistic UHF zero-field splitting
   - Molecular electrostatic potential (MEP)
+  - EFG and Mossbauer spectroscopy
+  - Non-relativistic RHF, UHF, RKS, UKS magnetizability
 
 * MRPT
 
@@ -167,6 +169,7 @@
   - Low-dimensional (0D, 1D, 2D) PBC systems
   - (restricted and unrestricted) TDA, TDHF and TDDFT with k-point sampling
   - Multigrid DFT
+  - EFG and Mossbauer spectroscopy
 
 
 * Relativistic effects

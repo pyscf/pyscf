@@ -424,7 +424,7 @@ class GDF(aft.AFTDF):
     def dump_flags(self, log=None):
         log = logger.new_logger(self, log)
         log.info('\n')
-        log.info('******** %s flags ********', self.__class__)
+        log.info('******** %s ********', self.__class__)
         log.info('mesh = %s (%d PWs)', self.mesh, numpy.prod(self.mesh))
         if self.auxcell is None:
             log.info('auxbasis = %s', self.auxbasis)

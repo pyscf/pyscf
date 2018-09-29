@@ -789,12 +789,9 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                         Hr2[ki, kj] += -einsum('lbjd,ild->ijb', imds.Wovov[kl, kb, kj], r2[ki, kl])  # typo in Ref
                         kd = kconserv[kl, ki, kb]
                         Hr2[ki, kj] += -einsum('lbid,ljd->ijb', imds.Wovov[kl, kb, ki], r2[kl, kj])
-                        for kk in range(nkpts):
-                            kc = kshift
-                            kd = kconserv[kl, kc, kk]
-                            tmp = (2. * einsum('lkdc,kld->c', imds.Woovv[kl, kk, kd], r2[kk, kl])
-                                   - einsum('kldc,kld->c', imds.Woovv[kk, kl, kd], r2[kk, kl]))
-                            Hr2[ki, kj] += -einsum('c,ijcb->ijb', tmp, t2[ki, kj, kshift])
+            tmp = (2. * einsum('xyklcd,xykld->c', imds.Woovv[:, :, kshift], r2[:, :])
+                      - einsum('yxlkcd,xykld->c', imds.Woovv[:, :, kshift], r2[:, :]))
+            Hr2[:, :] += -einsum('c,xyijcb->xyijb', tmp, t2[:, :, kshift])
 
         return self.mask_frozen_ip(self.ip_amplitudes_to_vector(Hr1, Hr2), kshift, const=0.0)
 
@@ -1040,12 +1037,9 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                         # imds.Wvovo[ka,kl,kd,kj] <= imds.Wovov[kl,ka,kj,kd].transpose(1,0,3,2)
                         Hr2[kj, ka] += -einsum('aldj,ldb->jab', imds.Wovov[kl, ka, kj].transpose(1, 0, 3, 2),
                                                r2[kl, kd])
-                        for kc in range(nkpts):
-                            kk = kshift
-                            kl = kconserv[kc, kk, kd]
-                            tmp = (2. * einsum('klcd,lcd->k', imds.Woovv[kk, kl, kc], r2[kl, kc])
-                                   - einsum('kldc,lcd->k', imds.Woovv[kk, kl, kd], r2[kl, kc]))
-                            Hr2[kj, ka] += -einsum('k,kjab->jab', tmp, t2[kshift, kj, ka])
+            tmp = (2. * einsum('xyklcd,xylcd->k', imds.Woovv[kshift, :, :], r2[:, :])
+                      - einsum('xylkcd,xylcd->k', imds.Woovv[:, kshift, :], r2[:, :]))
+            Hr2[:, :] += -einsum('k,xykjab->xyjab', tmp, t2[kshift, :, :])
 
         return self.mask_frozen_ea(self.ea_amplitudes_to_vector(Hr1, Hr2), kshift, const=0.0)
 

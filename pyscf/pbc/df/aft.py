@@ -270,7 +270,7 @@ class AFTDF(lib.StreamObject):
 
     def dump_flags(self):
         logger.info(self, '\n')
-        logger.info(self, '******** %s flags ********', self.__class__)
+        logger.info(self, '******** %s ********', self.__class__)
         logger.info(self, 'mesh = %s (%d PWs)', self.mesh, numpy.prod(self.mesh))
         logger.info(self, 'eta = %s', self.eta)
         logger.info(self, 'len(kpts) = %d', len(self.kpts))

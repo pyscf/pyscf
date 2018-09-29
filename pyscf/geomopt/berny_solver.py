@@ -15,7 +15,6 @@
 
 '''
 Interface to geometry optimizer pyberny https://github.com/azag0/pyberny
-(In testing)
 '''
 
 from __future__ import absolute_import
