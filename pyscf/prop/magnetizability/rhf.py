@@ -46,6 +46,7 @@ def dia(magobj, gauge_orig=None):
     mo_occ = mf.mo_occ
     orbo = mo_coeff[:,mo_occ > 0]
     dm0 = numpy.dot(orbo, orbo.T) * 2
+    # Energy weighted density matrix
     dme0 = numpy.dot(orbo * mo_energy[mo_occ > 0], orbo.T) * 2
 
     e2 = _get_dia_1e(magobj, gauge_orig, dm0, dme0).ravel()
@@ -84,7 +85,13 @@ def dia(magobj, gauge_orig=None):
     return e2.reshape(3, 3)
 
 def _get_dia_1e(magobj, gauge_orig, dm0, dme0):
-    '''The dia-magnetic magnetizability from one-electron operators'''
+    '''The dia-magnetic magnetizability from one-electron operators.
+
+    Args:
+        dm0 : Density matrix
+
+        dme0 : Energy-weighted density matrix
+    '''
     mol = magobj.mol
     mf = magobj._scf
 

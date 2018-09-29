@@ -175,7 +175,7 @@ if __name__ == '__main__':
     mf.kernel()
     nmr = NMR(mf)
     msc = nmr.kernel() # _xx,_yy,_zz = 55.131555
-    print(lib.finger(msc) - 110.73521186810554)
+    print(lib.finger(msc) -  110.73521186810918)
 
     mol.atom = [
         [1   , (0. , 0. , .917)],
@@ -188,7 +188,7 @@ if __name__ == '__main__':
     mf.kernel()
     nmr = NMR(mf)
     msc = nmr.kernel() # _xx,_yy = 368.881201, _zz = 482.413385
-    print(lib.finger(msc) - -131.70852942238707)
+    print(lib.finger(msc) - -131.70852986500839)
 
     mol.basis = 'ccpvdz'
     mol.build(0, 0)
@@ -197,4 +197,4 @@ if __name__ == '__main__':
     mf.kernel()
     nmr = NMR(mf)
     msc = nmr.kernel() # _xx,_yy = 387.102778, _zz = 482.207925
-    print(lib.finger(msc) - -132.27068269141097)
+    print(lib.finger(msc) - -132.27069885713573)

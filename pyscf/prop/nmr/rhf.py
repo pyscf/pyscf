@@ -229,7 +229,7 @@ def get_fock(nmrobj, mol=None, dm0=None, gauge_orig=None):
 
 def gen_vind(mf, mo_coeff, mo_occ):
     '''Induced potential'''
-    vresp = _gen_rhf_response(mf, hermi=2)
+    vresp = _gen_rhf_response(mf, singlet=True, hermi=2)
     occidx = mo_occ > 0
     orbo = mo_coeff[:,occidx]
     nocc = orbo.shape[1]
