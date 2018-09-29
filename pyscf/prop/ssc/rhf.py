@@ -153,7 +153,7 @@ def solve_mo1_fc(sscobj, h1):
     nvir = orbv.shape[1]
     nmo = nocc + nvir
 
-    vresp = _gen_rhf_response(mf, singlet=False, hermi=1)
+    vresp = _gen_rhf_response(sscobj._scf, singlet=False, hermi=1)
     mo_v_o = numpy.asarray(numpy.hstack((orbv,orbo)), order='F')
     def vind(mo1):
         dm1 = _dm1_mo2ao(mo1.reshape(nset,nvir,nocc), orbv, orbo*2)  # *2 for double occupancy

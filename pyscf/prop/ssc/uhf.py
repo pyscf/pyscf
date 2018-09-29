@@ -155,7 +155,7 @@ def solve_mo1_fc(sscobj, h1):
                            mo1_fc[2].reshape(nset,-1),
                            mo1_fc[3].reshape(nset,-1)))
 
-    vresp = _gen_uhf_response(mf, with_j=False, hermi=1)
+    vresp = _gen_uhf_response(sscobj._scf, with_j=False, hermi=1)
     mo_va_oa = numpy.asarray(numpy.hstack((orbva,orboa)), order='F')
     mo_va_ob = numpy.asarray(numpy.hstack((orbva,orbob)), order='F')
     mo_vb_oa = numpy.asarray(numpy.hstack((orbvb,orboa)), order='F')
