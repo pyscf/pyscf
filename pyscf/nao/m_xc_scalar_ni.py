@@ -17,7 +17,6 @@ import numpy as np
 from pyscf.nao.m_ao_matelem import build_3dgrid
 from pyscf.nao.m_dens_libnao import dens_libnao
 from pyscf.nao.m_ao_eval_libnao import ao_eval_libnao as ao_eval
-import scipy.linalg.blas as blas
 from pyscf.dft import libxc
 
 #
@@ -42,8 +41,8 @@ def xc_scalar_ni(me, sp1,R1, sp2,R2, xc_code, deriv, **kw):
   ao1 = ao_eval(me.ao1, R1, sp1, grids.coords)
  
   if deriv==1 :
-    #print(' vxc[0].shape ', vxc[0].shape)
     ao1 = ao1 * grids.weights * vxc[0]
+
   elif deriv==2:
     xq = fxc[0] if fxc[0].ndim>1 else fxc[0].reshape((fxc[0].size,1))
     ao1 = np.einsum('ax,xq->qax', ao1 * grids.weights, xq)
@@ -52,5 +51,4 @@ def xc_scalar_ni(me, sp1,R1, sp2,R2, xc_code, deriv, **kw):
     raise RuntimeError('!deriv!')
 
   ao2 = ao_eval(me.ao2, R2, sp2, grids.coords)
-  overlaps = np.einsum('qax,bx->qab', ao1, ao2)
-  return overlaps
+  return np.einsum('qax,bx->qab', ao1, ao2)
