@@ -30,7 +30,7 @@ class KnowValues(unittest.TestCase):
     pnonin = -nao_mf.polariz_nonin_ave_matelem(comega).imag
     data = np.array([comega.real*HARTREE2EV, pnonin])
     np.savetxt('test_137_h2o_rks_nonin_pb.txt', data.T, fmt=['%f','%f'])
-    #data_ref = np.loadtxt('test_137_h2o_rks_nonin_pb.txt-ref').T
-    #self.assertTrue(np.allclose(data_ref, data, 5))
+    data_ref = np.loadtxt('test_137_h2o_rks_nonin_pb.txt-ref').T
+    self.assertTrue(np.allclose(data_ref, data, 5))
         
 if __name__ == "__main__": unittest.main()
