@@ -52,6 +52,16 @@ def make_dso(sscobj, mol, dm0, nuc_pair=None):
         a11 = -numpy.einsum('xyij,ji->xy', h11, dm0)
         a11 = a11 - a11.trace() * numpy.eye(3)
         ssc_dia.append(a11)
+
+    mf = sscobj._scf
+    if getattr(mf, 'with_x2c', None):
+        raise NotImplementedError('X2C for SSC')
+
+    if getattr(mf, 'with_qmmm', None):
+        raise NotImplementedError('SSC with QM/MM')
+
+    if getattr(mf, 'with_solvent', None):
+        raise NotImplementedError('SSC with Solvent')
     return numpy.asarray(ssc_dia) * nist.ALPHA**4
 
 def dso_integral(mol, orig1, orig2):
@@ -161,7 +171,8 @@ def solve_mo1_fc(sscobj, h1):
         v1 *= eai
         return v1.ravel()
 
-    mo1 = lib.krylov(vind, mo1.ravel(), tol=1e-9, max_cycle=20, verbose=log)
+    mo1 = lib.krylov(vind, mo1.ravel(), tol=sscobj.conv_tol,
+                     max_cycle=sscobj.max_cycle_cphf, verbose=log)
     log.timer('solving FC CPHF eqn', *cput1)
     return mo1.reshape(nset,nvir,nocc)
 
@@ -185,7 +196,7 @@ def make_fcsd(sscobj, nuc_pair=None):
         at1 = atm1dic[i]
         at2 = atm2dic[j]
         e = numpy.einsum('xwij,ywij->xy', h1[at1], mo1[at2])
-        para.append(e*4)  # *4 for +c.c. and for double occupancy
+        para.append(e*4)  # *4 for +c.c. and double occupancy
     return numpy.asarray(para) * nist.ALPHA**4
 
 
@@ -286,7 +297,7 @@ def solve_mo1(sscobj, mo_energy=None, mo_coeff=None, mo_occ=None,
 
 def gen_vind(mf, mo_coeff, mo_occ):
     '''Induced potential associated with h1_PSO'''
-    vresp = _gen_rhf_response(mf, hermi=2)
+    vresp = _gen_rhf_response(mf, singlet=True, hermi=2)
     occidx = mo_occ > 0
     orbo = mo_coeff[:, occidx]
     orbv = mo_coeff[:,~occidx]
@@ -441,3 +452,21 @@ if __name__ == '__main__':
     jj = ssc.kernel()
     print(jj)
     print(lib.finger(jj)*1e8 - 0.12374812977885304)
+
+    mol = gto.M(atom='''
+                O 0 0      0
+                H 0 -0.757 0.587
+                H 0  0.757 0.587''',
+                basis='ccpvdz')
+
+    mf = scf.RHF(mol).run()
+    ssc = SSC(mf)
+    ssc.with_fc = True
+    ssc.with_fcsd = True
+    jj = ssc.kernel()
+    print(lib.finger(jj)*1e8 - -0.11191697931377538)
+
+    ssc.with_fc = True
+    ssc.with_fcsd = False
+    jj = ssc.kernel()
+    print(lib.finger(jj)*1e8 - 0.82442034395656116)
