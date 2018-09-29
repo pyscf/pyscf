@@ -20,7 +20,7 @@ from pyscf.data.nist import HARTREE2EV
 
 class KnowValues(unittest.TestCase):
 
-  def test_141_h2o_uks_rpa_pb(self):
+  def test_141_h2o_uks_pz_pb(self):
     """ This  """
     mol = gto.M(verbose=1,atom='O 0 0 0; H 0 0.489 1.074; H 0 0.489 -1.074',basis='cc-pvdz')
     gto_mf = dft.UKS(mol)
@@ -30,7 +30,7 @@ class KnowValues(unittest.TestCase):
     pnonin = -nao_mf.comp_polariz_inter_ave(comega, verbosity=0).imag
     data = np.array([comega.real*HARTREE2EV, pnonin])
     np.savetxt('test_141_h2o_uks_pz_pb.txt', data.T, fmt=['%f','%f'])
-    #data_ref = np.loadtxt('test_136_h2o_rks_rpa_pb.txt-ref').T
-    #self.assertTrue(np.allclose(data_ref, data, 5))
+    data_ref = np.loadtxt('test_141_h2o_uks_pz_pb.txt-ref').T
+    self.assertTrue(np.allclose(data_ref, data, 5))
         
 if __name__ == "__main__": unittest.main()

@@ -47,8 +47,6 @@ class tddft_iter(chi0_matvec):
       print('no pb?')
       return
       
-    pb = self.pb
-
     self.spmv = spmv_wrapper
     if self.scipy_ver > 0:
       if self.dtype == np.float32: self.spmv = blas.sspmv
@@ -68,7 +66,7 @@ class tddft_iter(chi0_matvec):
       if xc!='RPA' and self.nspin!=1: raise RuntimeError('not sure it would work')
 
     else:
-      self.kernel,self.kernel_dim = pb.comp_coulomb_pack(dtype=self.dtype) # Lower Triangular
+      self.kernel,self.kernel_dim = self.pb.comp_coulomb_pack(dtype=self.dtype) # Lower Triangular
       assert self.nprod==self.kernel_dim,"{} {}".format(self.nprod,self.kernel_dim)
       
       if self.nspin==1:
@@ -93,8 +91,10 @@ class tddft_iter(chi0_matvec):
 
     if self.verbosity>0 : print(__name__,'\t====> self.xc_code:', self.xc_code)
 
-  def load_kernel_method(self, kernel_fname, kernel_format="npy", kernel_path_hdf5=None):
 
+  def load_kernel_method(self, kernel_fname, kernel_format="npy", kernel_path_hdf5=None):
+      """ Loads from file and initializes .kernel field... Useful? Rewrite?"""
+    
       if kernel_format == "npy":
           self.kernel = self.dtype(np.load(kernel_fname))
       elif kernel_format == "txt":
@@ -132,14 +132,14 @@ class tddft_iter(chi0_matvec):
     veff_op = LinearOperator((nsp,nsp), matvec=self.vext2veff_matvec, dtype=self.dtypeComplex)
 
     if self.res_method == "relative" or self.res_method == "absolute":
-        from pyscf.nao.m_lgmres import lgmres
-        resgm, info = lgmres(veff_op, np.require(vext, dtype=self.dtypeComplex, 
-            requirements='C'), x0=x0, tol=self.tddft_iter_tol, maxiter=self.maxiter, res=self.res_method)
+      from pyscf.nao.m_lgmres import lgmres
+      resgm, info = lgmres(veff_op, np.require(vext, dtype=self.dtypeComplex, 
+        requirements='C'), x0=x0, tol=self.tddft_iter_tol, maxiter=self.maxiter, res=self.res_method)
     elif self.res_method == "both":
-        # use the non-modified lgmres scipy version
-        from scipy.sparse.linalg import lgmres
-        resgm, info = lgmres(veff_op, np.require(vext, dtype=self.dtypeComplex, 
-            requirements='C'), x0=x0, tol=self.tddft_iter_tol, maxiter=self.maxiter)
+      # use the non-modified lgmres scipy version
+      from scipy.sparse.linalg import lgmres
+      resgm, info = lgmres(veff_op, np.require(vext, dtype=self.dtypeComplex, 
+        requirements='C'), x0=x0, tol=self.tddft_iter_tol, maxiter=self.maxiter)
     else:
         raise ValueError("wrong input for res_method")
 
@@ -158,11 +158,11 @@ class tddft_iter(chi0_matvec):
     
     for s in range(self.nspin):
       for t in range(self.nspin):
-        daux[:] = require(s2dn0[t].real, dtype=self.dtype, requirements=["A", "O"])
-        vcre[s] += self.spmv(self.nprod, 1.0, st2k[s][t], daux, lower=1)
+        daux[:]  = require(s2dn0[t].real, dtype=self.dtype, requirements=["A", "O"])
+        vcre[s] += self.spmv(self.nprod, 1.0, st2k[s][t], daux)
     
-        daux[:] = require(s2dn0[t].imag, dtype=self.dtype, requirements=["A", "O"])
-        vcim[s] += self.spmv(self.nprod, 1.0, st2k[s][t], daux, lower=1)
+        daux[:]  = require(s2dn0[t].imag, dtype=self.dtype, requirements=["A", "O"])
+        vcim[s] += self.spmv(self.nprod, 1.0, st2k[s][t], daux)
     
     return vin - (vcre.reshape(-1) + 1.0j*vcim.reshape(-1))
 

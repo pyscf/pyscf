@@ -45,12 +45,12 @@ def xc_scalar_ni(me, sp1,R1, sp2,R2, xc_code, deriv, **kw):
     #print(' vxc[0].shape ', vxc[0].shape)
     ao1 = ao1 * grids.weights * vxc[0]
   elif deriv==2:
-    ao1 = np.einsum('ox,x...->ox...', ao1 * grids.weights, fxc[0])
+    xq = fxc[0] if fxc[0].ndim>1 else fxc[0].reshape((fxc[0].size,1))
+    ao1 = np.einsum('ax,xq->qax', ao1 * grids.weights, xq)
   else:
     print(' deriv ', deriv)
     raise RuntimeError('!deriv!')
 
   ao2 = ao_eval(me.ao2, R2, sp2, grids.coords)
-  overlaps = np.einsum('ax...,bx->...ab', ao1, ao2)
-  if me.sv.nspin==1: overlaps = overlaps.reshape(tuple([1]+list(overlaps.shape)))
+  overlaps = np.einsum('qax,bx->qab', ao1, ao2)
   return overlaps

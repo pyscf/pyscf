@@ -15,12 +15,6 @@
 from __future__ import print_function, division
 import numpy as np
 from numpy import array, int64, zeros, float64
-try:
-    import numba as nb
-    from pyscf.nao.m_numba_utils import fill_triu_v2
-    use_numba = True
-except:
-    use_numba = False
 
 #
 #
@@ -35,6 +29,7 @@ def vxc_pack(self, **kw):
   """
   from pyscf.nao.m_xc_scalar_ni import xc_scalar_ni
   from pyscf.nao.m_ao_matelem import ao_matelem_c
+  from pyscf.nao.m_pack2den import cp_block_pack_u
 
   #sv, dm, xc_code, deriv, kernel=None, ao_log=None, dtype=float64, **kvargs
   sv = self
@@ -52,7 +47,6 @@ def vxc_pack(self, **kw):
   sp2rcut = array([max(mu2rcut) for mu2rcut in me.ao1.sp_mu2rcut])
   norbs = atom2s[-1]
 
-  #ind = triu_indices(norbs)
   if kernel is None: 
     kernel = zeros(( (self.nspin-1)*2+1, norbs*(norbs+1)//2), dtype=dtype )
 
@@ -66,21 +60,9 @@ def vxc_pack(self, **kw):
     for atom2,[sp2,rv2,s2,f2] in enumerate(zip(sv.atom2sp,sv.atom2coord,atom2s,atom2s[1:])):
       if atom2>atom1: continue
       if (sp2rcut[sp1]+sp2rcut[sp2])**2<=sum((rv1-rv2)**2) : continue
-      
+
       iab2block = xc_scalar_ni(me,sp1,rv1,sp2,rv2,xc_code=xc_code,**kw)
-      
-      if use_numba:
-        for i,ab2v in enumerate(iab2block):
-          fill_triu_v2(ab2v, kernel[i], s1, f1, s2, f2, norbs, add=True)
-      else:
-        for i,ab2v in enumerate(iab2block):
-          for i1 in range(s1,f1):
-            for i2 in range(s2, min(i1+1, f2)):
-              ind = 0
-              if i2 > 0:
-                for beta in range(1, i2+1):
-                  ind += norbs -beta
-              ind += i1
-              kernel[i,ind] += xc[i1-s1,i2-s2]
-               
+      for i,ab2v in enumerate(iab2block):
+        cp_block_pack_u(ab2v, s1, f1, s2, f2, kernel[i], add=True)
+
   return kernel

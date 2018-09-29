@@ -30,7 +30,7 @@ class KnowValues(unittest.TestCase):
     pnonin = -nao_mf.comp_polariz_inter_ave(comega, verbosity=0).imag
     data = np.array([comega.real*HARTREE2EV, pnonin])
     np.savetxt('test_138_h2o_rks_pz_pb.txt', data.T, fmt=['%f','%f'])
-    #data_ref = np.loadtxt('test_136_h2o_rks_rpa_pb.txt-ref').T
-    #self.assertTrue(np.allclose(data_ref, data, 5))
+    data_ref = np.loadtxt('test_138_h2o_rks_pz_pb.txt-ref').T
+    self.assertTrue(np.allclose(data_ref, data, 5))
         
 if __name__ == "__main__": unittest.main()

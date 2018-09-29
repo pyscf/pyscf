@@ -36,7 +36,8 @@ def vxc_lil(self, **kw):
   dm = kw['dm'] if 'dm' in kw else self.make_rdm1()
   kernel = kw['kernel'] if 'kernel' in kw else None
   ao_log = kw['ao_log'] if 'ao_log' in kw else self.ao_log
-  (xc_code,iskw) = (kw['xc_code'],True) if 'xc_code' in kw else (self.xc_code,False)
+  xc_code = kw['xc_code'] if 'xc_code' in kw else self.xc_code
+  kw.pop('xc_code',None)
   dtype = kw['dtype'] if 'dtype' in kw else float64
   
   aome = ao_matelem_c(sv.ao_log.rr, sv.ao_log.pp, sv, dm)
@@ -50,6 +51,7 @@ def vxc_lil(self, **kw):
   for atom1,[sp1,rv1,s1,f1] in enumerate(zip(sv.atom2sp,sv.atom2coord,atom2s,atom2s[1:])):
     for atom2,[sp2,rv2,s2,f2] in enumerate(zip(sv.atom2sp,sv.atom2coord,atom2s,atom2s[1:])):
       if (sp2rcut[sp1]+sp2rcut[sp2])**2<=sum((rv1-rv2)**2) : continue
-      lil[s1:f1,s2:f2] = xc_scalar_ni(me,sp1,rv1,sp2,rv2,**kw) if iskw else xc_scalar_ni(me,sp1,rv1,sp2,rv2,xc_code=xc_code,**kw)
+      blk = xc_scalar_ni(me,sp1,rv1,sp2,rv2,xc_code=xc_code,**kw)
+      lil[s1:f1,s2:f2] = blk[0]
 
   return lil
