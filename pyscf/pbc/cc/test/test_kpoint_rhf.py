@@ -131,7 +131,7 @@ def _run_ip_matvec(cc, r1, r2, kshift):
     except:
         vector = cc.amplitudes_to_vector_ip(r1, r2)
     try:
-        vector = cc.ipccsd_matvec(vector, kshift)
+        vector = eom_kccsd_rhf_ip.ipccsd_matvec(cc, vector, kshift)
     except:
         cc.kshift = kshift
         vector = cc.ipccsd_matvec(vector)
@@ -409,7 +409,7 @@ class KnownValues(unittest.TestCase):
 
         # IP
         idx = padding_k_idx(mycc, kind="split")[0][0]
-        guess = np.zeros(mycc.vector_size_ip())
+        guess = np.zeros(eom_kccsd_rhf_ip.vector_size_ip(mycc))
         for i in range(mycc.nocc):
             if i not in idx:
                 guess[i] = 1
