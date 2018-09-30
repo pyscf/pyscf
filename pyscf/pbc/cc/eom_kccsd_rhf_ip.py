@@ -30,19 +30,3 @@ def ip_amplitudes_to_vector(cc, t1, t2):
 def ip_vector_to_amplitudes(cc, vec):
     """Ground state vector to apmplitudes."""
     return vector_to_nested(vec, ip_vector_desc(cc))
-
-
-def ea_vector_desc(cc):
-    """Description of the EA vector."""
-    nvir = cc.nmo - cc.nocc
-    return [(nvir,), (cc.nkpts, cc.nkpts, cc.nocc, nvir, nvir)]
-
-
-def ea_amplitudes_to_vector(cc, t1, t2):
-    """Ground state amplitudes to a vector."""
-    return nested_to_vector((t1, t2))[0]
-
-
-def ea_vector_to_amplitudes(cc, vec):
-    """Ground state vector to apmplitudes."""
-    return vector_to_nested(vec, ea_vector_desc(cc))

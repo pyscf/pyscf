@@ -31,7 +31,8 @@ from pyscf.pbc import scf
 from pyscf.pbc.mp.kmp2 import (get_frozen_mask, get_nocc, get_nmo,
                                padded_mo_coeff, padding_k_idx)
 from pyscf.pbc.cc import kintermediates_rhf as imdk
-from pyscf.pbc.cc.eom_kccsd_rhf import ip_amplitudes_to_vector, ip_vector_to_amplitudes, ea_amplitudes_to_vector, ea_vector_to_amplitudes
+from pyscf.pbc.cc.eom_kccsd_rhf_ip import ip_amplitudes_to_vector, ip_vector_to_amplitudes
+from pyscf.pbc.cc.eom_kccsd_rhf_ea import ea_amplitudes_to_vector, ea_vector_to_amplitudes
 from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM
 from pyscf.lib import linalg_helper
 from pyscf.pbc.lib import kpts_helper
