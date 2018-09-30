@@ -13,7 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Author: Artem Pulkin
+# Authors: Artem Pulkin, pyscf authors
+
 from pyscf.lib import logger, linalg_helper, einsum
 from pyscf.lib.parameters import LARGE_DENOM
 
@@ -40,16 +41,16 @@ def ip_vector_to_amplitudes(cc, vec):
     return vector_to_nested(vec, ip_vector_desc(cc))
 
 
-def vector_size_ip(self):
-    nocc = self.nocc
-    nvir = self.nmo - nocc
-    nkpts = self.nkpts
+def vector_size_ip(cc):
+    nocc = cc.nocc
+    nvir = cc.nmo - nocc
+    nkpts = cc.nkpts
 
     size = nocc + nkpts ** 2 * nocc ** 2 * nvir
     return size
 
 
-def ipccsd(self, nroots=1, koopmans=False, guess=None, partition=None,
+def ipccsd(cc, nroots=1, koopmans=False, guess=None, partition=None,
            kptlist=None):
     '''Calculate (N-1)-electron charged excitations via IP-EOM-CCSD.
 
@@ -69,28 +70,28 @@ def ipccsd(self, nroots=1, koopmans=False, guess=None, partition=None,
             List of k-point indices for which eigenvalues are requested.
     '''
     cput0 = (time.clock(), time.time())
-    log = logger.Logger(self.stdout, self.verbose)
-    nocc = self.nocc
-    nvir = self.nmo - nocc
-    nkpts = self.nkpts
+    log = logger.Logger(cc.stdout, cc.verbose)
+    nocc = cc.nocc
+    nvir = cc.nmo - nocc
+    nkpts = cc.nkpts
     if kptlist is None:
         kptlist = range(nkpts)
-    size = vector_size_ip(self)
+    size = vector_size_ip(cc)
     for k, kshift in enumerate(kptlist):
-        nfrozen = np.sum(mask_frozen_ip(self, np.zeros(size, dtype=int), kshift, const=1))
+        nfrozen = np.sum(mask_frozen_ip(cc, np.zeros(size, dtype=int), kshift, const=1))
         nroots = min(nroots, size - nfrozen)
     if partition:
         partition = partition.lower()
         assert partition in ['mp', 'full']
-    self.ip_partition = partition
+    cc.ip_partition = partition
     evals = np.zeros((len(kptlist), nroots), np.float)
     evecs = np.zeros((len(kptlist), nroots, size), np.complex)
 
     for k, kshift in enumerate(kptlist):
-        adiag = ipccsd_diag(self, kshift)
-        adiag = mask_frozen_ip(self, adiag, kshift, const=LARGE_DENOM)
+        adiag = ipccsd_diag(cc, kshift)
+        adiag = mask_frozen_ip(cc, adiag, kshift, const=LARGE_DENOM)
         if partition == 'full':
-            self._ipccsd_diag_matrix2 = ip_vector_to_amplitudes(self, adiag)[1]
+            cc._ipccsd_diag_matrix2 = ip_vector_to_amplitudes(cc, adiag)[1]
 
         if guess is not None:
             guess_k = guess[k]
@@ -101,19 +102,19 @@ def ipccsd(self, nroots=1, koopmans=False, guess=None, partition=None,
             guess_k = []
             if koopmans:
                 # Get location of padded elements in occupied and virtual space
-                nonzero_opadding = padding_k_idx(self, kind="split")[0][kshift]
+                nonzero_opadding = padding_k_idx(cc, kind="split")[0][kshift]
 
                 for n in nonzero_opadding[::-1][:nroots]:
                     g = np.zeros(size)
                     g[n] = 1.0
-                    g = mask_frozen_ip(self, g, kshift, const=0.0)
+                    g = mask_frozen_ip(cc, g, kshift, const=0.0)
                     guess_k.append(g)
             else:
                 idx = adiag.argsort()[:nroots]
                 for i in idx:
                     g = np.zeros(size)
                     g[i] = 1.0
-                    g = mask_frozen_ip(self, g, kshift, const=0.0)
+                    g = mask_frozen_ip(cc, g, kshift, const=0.0)
                     guess_k.append(g)
 
         def precond(r, e0, x0):
@@ -126,13 +127,13 @@ def ipccsd(self, nroots=1, koopmans=False, guess=None, partition=None,
                 idx = np.argmax(np.abs(np.dot(np.array(guess_k).conj(), np.array(x0).T)), axis=1)
                 return linalg_helper._eigs_cmplx2real(w, v, idx)
 
-            evals_k, evecs_k = eig(lambda _arg: ipccsd_matvec(self, _arg, kshift), guess_k, precond, pick=pickeig,
-                                   tol=self.conv_tol, max_cycle=self.max_cycle,
-                                   max_space=self.max_space, nroots=nroots, verbose=self.verbose)
+            evals_k, evecs_k = eig(lambda _arg: ipccsd_matvec(cc, _arg, kshift), guess_k, precond, pick=pickeig,
+                                   tol=cc.conv_tol, max_cycle=cc.max_cycle,
+                                   max_space=cc.max_space, nroots=nroots, verbose=cc.verbose)
         else:
-            evals_k, evecs_k = eig(lambda _arg: ipccsd_matvec(self, _arg, kshift), guess_k, precond,
-                                   tol=self.conv_tol, max_cycle=self.max_cycle,
-                                   max_space=self.max_space, nroots=nroots, verbose=self.verbose)
+            evals_k, evecs_k = eig(lambda _arg: ipccsd_matvec(cc, _arg, kshift), guess_k, precond,
+                                   tol=cc.conv_tol, max_cycle=cc.max_cycle,
+                                   max_space=cc.max_space, nroots=nroots, verbose=cc.verbose)
 
         evals_k = evals_k.real
         evals[k] = evals_k
@@ -142,64 +143,64 @@ def ipccsd(self, nroots=1, koopmans=False, guess=None, partition=None,
             evals_k, evecs_k = [evals_k], [evecs_k]
 
         for n, en, vn in zip(range(nroots), evals_k, evecs_k):
-            r1, r2 = ip_vector_to_amplitudes(self, vn)
+            r1, r2 = ip_vector_to_amplitudes(cc, vn)
             qp_weight = np.linalg.norm(r1) ** 2
-            logger.info(self, 'EOM root %d E = %.16g  qpwt = %0.6g',
+            logger.info(cc, 'EOM root %d E = %.16g  qpwt = %0.6g',
                         n, en, qp_weight)
     log.timer('EOM-CCSD', *cput0)
-    self.eip = evals
-    return self.eip, evecs
+    cc.eip = evals
+    return cc.eip, evecs
 
 
-def ipccsd_matvec(self, vector, kshift):
+def ipccsd_matvec(cc, vector, k):
     '''2ph operators are of the form s_{ij}^{ b}, i.e. 'jb' indices are coupled.'''
     # Ref: Nooijen and Snijders, J. Chem. Phys. 102, 1681 (1995) Eqs.(8)-(9)
-    if not self.imds.made_ip_imds:
-        self.imds.make_ip(self.ip_partition)
-    imds = self.imds
+    if not cc.imds.made_ip_imds:
+        cc.imds.make_ip(cc.ip_partition)
+    imds = cc.imds
 
-    vector = mask_frozen_ip(self, vector, kshift, const=0.0)
-    r1, r2 = ip_vector_to_amplitudes(self, vector)
+    vector = mask_frozen_ip(cc, vector, k, const=0.0)
+    r1, r2 = ip_vector_to_amplitudes(cc, vector)
 
-    t1, t2 = self.t1, self.t2
-    nkpts = self.nkpts
-    kconserv = self.khelper.kconserv
+    t1, t2 = cc.t1, cc.t2
+    nkpts = cc.nkpts
+    kconserv = cc.khelper.kconserv
 
     # 1h-1h block
-    Hr1 = -einsum('ki,k->i', imds.Loo[kshift], r1)
+    Hr1 = -einsum('ki,k->i', imds.Loo[k], r1)
     # 1h-2h1p block
     for kl in range(nkpts):
-        Hr1 += 2. * einsum('ld,ild->i', imds.Fov[kl], r2[kshift, kl])
-        Hr1 += -einsum('ld,lid->i', imds.Fov[kl], r2[kl, kshift])
+        Hr1 += 2. * einsum('ld,ild->i', imds.Fov[kl], r2[k, kl])
+        Hr1 += -einsum('ld,lid->i', imds.Fov[kl], r2[kl, k])
         for kk in range(nkpts):
-            kd = kconserv[kk, kshift, kl]
-            Hr1 += -2. * einsum('klid,kld->i', imds.Wooov[kk, kl, kshift], r2[kk, kl])
-            Hr1 += einsum('lkid,kld->i', imds.Wooov[kl, kk, kshift], r2[kk, kl])
+            kd = kconserv[kk, k, kl]
+            Hr1 += -2. * einsum('klid,kld->i', imds.Wooov[kk, kl, k], r2[kk, kl])
+            Hr1 += einsum('lkid,kld->i', imds.Wooov[kl, kk, k], r2[kk, kl])
 
     Hr2 = np.zeros(r2.shape, dtype=np.common_type(imds.Wovoo[0, 0, 0], r1))
     # 2h1p-1h block
     for ki in range(nkpts):
         for kj in range(nkpts):
-            kb = kconserv[ki, kshift, kj]
-            Hr2[ki, kj] -= einsum('kbij,k->ijb', imds.Wovoo[kshift, kb, ki], r1)
+            kb = kconserv[ki, k, kj]
+            Hr2[ki, kj] -= einsum('kbij,k->ijb', imds.Wovoo[k, kb, ki], r1)
     # 2h1p-2h1p block
-    if self.ip_partition == 'mp':
-        nkpts, nocc, nvir = self.t1.shape
-        fock = self.eris.fock
+    if cc.ip_partition == 'mp':
+        nkpts, nocc, nvir = cc.t1.shape
+        fock = cc.eris.fock
         foo = fock[:, :nocc, :nocc]
         fvv = fock[:, nocc:, nocc:]
         for ki in range(nkpts):
             for kj in range(nkpts):
-                kb = kconserv[ki, kshift, kj]
+                kb = kconserv[ki, k, kj]
                 Hr2[ki, kj] += einsum('bd,ijd->ijb', fvv[kb], r2[ki, kj])
                 Hr2[ki, kj] -= einsum('li,ljb->ijb', foo[ki], r2[ki, kj])
                 Hr2[ki, kj] -= einsum('lj,ilb->ijb', foo[kj], r2[ki, kj])
-    elif self.ip_partition == 'full':
-        Hr2 += self._ipccsd_diag_matrix2 * r2
+    elif cc.ip_partition == 'full':
+        Hr2 += cc._ipccsd_diag_matrix2 * r2
     else:
         for ki in range(nkpts):
             for kj in range(nkpts):
-                kb = kconserv[ki, kshift, kj]
+                kb = kconserv[ki, k, kj]
                 Hr2[ki, kj] += einsum('bd,ijd->ijb', imds.Lvv[kb], r2[ki, kj])
                 Hr2[ki, kj] -= einsum('li,ljb->ijb', imds.Loo[ki], r2[ki, kj])
                 Hr2[ki, kj] -= einsum('lj,ilb->ijb', imds.Loo[kj], r2[ki, kj])
@@ -212,31 +213,31 @@ def ipccsd_matvec(self, vector, kshift):
                     Hr2[ki, kj] += -einsum('lbjd,ild->ijb', imds.Wovov[kl, kb, kj], r2[ki, kl])  # typo in Ref
                     kd = kconserv[kl, ki, kb]
                     Hr2[ki, kj] += -einsum('lbid,ljd->ijb', imds.Wovov[kl, kb, ki], r2[kl, kj])
-        tmp = (2. * einsum('xyklcd,xykld->c', imds.Woovv[:, :, kshift], r2[:, :])
-               - einsum('yxlkcd,xykld->c', imds.Woovv[:, :, kshift], r2[:, :]))
-        Hr2[:, :] += -einsum('c,xyijcb->xyijb', tmp, t2[:, :, kshift])
+        tmp = (2. * einsum('xyklcd,xykld->c', imds.Woovv[:, :, k], r2[:, :])
+               - einsum('yxlkcd,xykld->c', imds.Woovv[:, :, k], r2[:, :]))
+        Hr2[:, :] += -einsum('c,xyijcb->xyijb', tmp, t2[:, :, k])
 
-    return mask_frozen_ip(self, ip_amplitudes_to_vector(self, Hr1, Hr2), kshift, const=0.0)
+    return mask_frozen_ip(cc, ip_amplitudes_to_vector(cc, Hr1, Hr2), k, const=0.0)
 
 
-def ipccsd_diag(self, kshift):
-    if not self.imds.made_ip_imds:
-        self.imds.make_ip(self.ip_partition)
-    imds = self.imds
+def ipccsd_diag(cc, k):
+    if not cc.imds.made_ip_imds:
+        cc.imds.make_ip(cc.ip_partition)
+    imds = cc.imds
 
-    t1, t2 = self.t1, self.t2
+    t1, t2 = cc.t1, cc.t2
     nkpts, nocc, nvir = t1.shape
-    kconserv = self.khelper.kconserv
+    kconserv = cc.khelper.kconserv
 
-    Hr1 = -np.diag(imds.Loo[kshift])
+    Hr1 = -np.diag(imds.Loo[k])
 
     Hr2 = np.zeros((nkpts, nkpts, nocc, nocc, nvir), dtype=t1.dtype)
-    if self.ip_partition == 'mp':
-        foo = self.eris.fock[:, :nocc, :nocc]
-        fvv = self.eris.fock[:, nocc:, nocc:]
+    if cc.ip_partition == 'mp':
+        foo = cc.eris.fock[:, :nocc, :nocc]
+        fvv = cc.eris.fock[:, nocc:, nocc:]
         for ki in range(nkpts):
             for kj in range(nkpts):
-                kb = kconserv[ki, kshift, kj]
+                kb = kconserv[ki, k, kj]
                 Hr2[ki, kj] = fvv[kb].diagonal()
                 Hr2[ki, kj] -= foo[ki].diagonal()[:, None, None]
                 Hr2[ki, kj] -= foo[kj].diagonal()[:, None]
@@ -244,7 +245,7 @@ def ipccsd_diag(self, kshift):
         idx = np.arange(nocc)
         for ki in range(nkpts):
             for kj in range(nkpts):
-                kb = kconserv[ki, kshift, kj]
+                kb = kconserv[ki, k, kj]
                 Hr2[ki, kj] = imds.Lvv[kb].diagonal()
                 Hr2[ki, kj] -= imds.Loo[ki].diagonal()[:, None, None]
                 Hr2[ki, kj] -= imds.Loo[kj].diagonal()[:, None]
@@ -261,30 +262,30 @@ def ipccsd_diag(self, kshift):
 
                 Hr2[ki, kj] -= np.einsum('ibib->ib', imds.Wovov[ki, kb, ki])[:, None, :]
 
-                kd = kconserv[kj, kshift, ki]
-                Hr2[ki, kj] -= 2. * np.einsum('ijcb,jibc->ijb', t2[ki, kj, kshift], imds.Woovv[kj, ki, kd])
-                Hr2[ki, kj] += np.einsum('ijcb,ijbc->ijb', t2[ki, kj, kshift], imds.Woovv[ki, kj, kd])
+                kd = kconserv[kj, k, ki]
+                Hr2[ki, kj] -= 2. * np.einsum('ijcb,jibc->ijb', t2[ki, kj, k], imds.Woovv[kj, ki, kd])
+                Hr2[ki, kj] += np.einsum('ijcb,ijbc->ijb', t2[ki, kj, k], imds.Woovv[ki, kj, kd])
 
-    return ip_amplitudes_to_vector(self, Hr1, Hr2)
+    return ip_amplitudes_to_vector(cc, Hr1, Hr2)
 
 
-def mask_frozen_ip(self, vector, kshift, const=LARGE_DENOM):
+def mask_frozen_ip(cc, vector, k, const=LARGE_DENOM):
     '''Replaces all frozen orbital indices of `vector` with the value `const`.'''
-    r1, r2 = ip_vector_to_amplitudes(self, vector)
-    nkpts, nocc, nvir = self.t1.shape
-    kconserv = self.khelper.kconserv
+    r1, r2 = ip_vector_to_amplitudes(cc, vector)
+    nkpts, nocc, nvir = cc.t1.shape
+    kconserv = cc.khelper.kconserv
 
     # Get location of padded elements in occupied and virtual space
-    nonzero_opadding, nonzero_vpadding = padding_k_idx(self, kind="split")
+    nonzero_opadding, nonzero_vpadding = padding_k_idx(cc, kind="split")
 
     new_r1 = const * np.ones_like(r1)
     new_r2 = const * np.ones_like(r2)
 
-    new_r1[nonzero_opadding[kshift]] = r1[nonzero_opadding[kshift]]
+    new_r1[nonzero_opadding[k]] = r1[nonzero_opadding[k]]
     for ki in range(nkpts):
         for kj in range(nkpts):
-            kb = kconserv[ki, kshift, kj]
+            kb = kconserv[ki, k, kj]
             idx = np.ix_([ki], [kj], nonzero_opadding[ki], nonzero_opadding[kj], nonzero_vpadding[kb])
             new_r2[idx] = r2[idx]
 
-    return ip_amplitudes_to_vector(self, new_r1, new_r2)
+    return ip_amplitudes_to_vector(cc, new_r1, new_r2)
