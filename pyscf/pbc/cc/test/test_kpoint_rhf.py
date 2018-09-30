@@ -127,32 +127,32 @@ rand_kmf = make_rand_kmf()
 #     changes to the eris.mo_energy
 def _run_ip_matvec(cc, r1, r2, kshift):
     try:  # Different naming & calling conventions between master/dev
-        vector = eom_kccsd_rhf_ip.ip_amplitudes_to_vector(cc, r1, r2)
+        vector = eom_kccsd_rhf_ip.a2v(cc, r1, r2)
     except:
         vector = cc.amplitudes_to_vector_ip(r1, r2)
     try:
-        vector = eom_kccsd_rhf_ip.ipccsd_matvec(cc, vector, kshift)
+        vector = eom_kccsd_rhf_ip.matvec(cc, vector, kshift)
     except:
         cc.kshift = kshift
         vector = cc.ipccsd_matvec(vector)
     try:
-        Hr1, Hr2 = eom_kccsd_rhf_ip.ip_vector_to_amplitudes(cc, vector)
+        Hr1, Hr2 = eom_kccsd_rhf_ip.v2a(cc, vector)
     except:
         Hr1, Hr2 = cc.vector_to_amplitudes_ip(vector)
     return Hr1, Hr2
 
 def _run_ea_matvec(cc, r1, r2, kshift):
     try:  # Different naming & calling conventions between master/dev
-        vector = eom_kccsd_rhf_ea.ea_amplitudes_to_vector(cc, r1, r2)
+        vector = eom_kccsd_rhf_ea.a2v(cc, r1, r2)
     except:
         vector = cc.amplitudes_to_vector_ea(r1, r2)
     try:
-        vector = eom_kccsd_rhf_ea.eaccsd_matvec(cc, vector, kshift)
+        vector = eom_kccsd_rhf_ea.matvec(cc, vector, kshift)
     except:
         cc.kshift = kshift
         vector = cc.eaccsd_matvec(vector)
     try:
-        Hr1, Hr2 = eom_kccsd_rhf_ea.ea_vector_to_amplitudes(cc, vector)
+        Hr1, Hr2 = eom_kccsd_rhf_ea.v2a(cc, vector)
     except:
         Hr1, Hr2 = cc.vector_to_amplitudes_ea(vector)
     return Hr1, Hr2
@@ -409,7 +409,7 @@ class KnownValues(unittest.TestCase):
 
         # IP
         idx = padding_k_idx(mycc, kind="split")[0][0]
-        guess = np.zeros(eom_kccsd_rhf_ip.vector_size_ip(mycc))
+        guess = np.zeros(eom_kccsd_rhf_ip.vector_size(mycc))
         for i in range(mycc.nocc):
             if i not in idx:
                 guess[i] = 1
@@ -422,7 +422,7 @@ class KnownValues(unittest.TestCase):
 
         # EA
         idx = padding_k_idx(mycc, kind="split")[1][1]
-        guess = np.zeros(eom_kccsd_rhf_ea.vector_size_ea(mycc))
+        guess = np.zeros(eom_kccsd_rhf_ea.vector_size(mycc))
         for i in range(mycc.nmo - mycc.nocc):
             if i not in idx:
                 guess[i] = 1

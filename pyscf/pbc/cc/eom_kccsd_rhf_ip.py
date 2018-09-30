@@ -26,22 +26,22 @@ import numpy as np
 import time
 
 
-def ip_vector_desc(cc):
+def vector_spec(cc):
     """Description of the IP vector."""
     return [(cc.nocc,), (cc.nkpts, cc.nkpts, cc.nocc, cc.nocc, cc.nmo - cc.nocc)]
 
 
-def ip_amplitudes_to_vector(cc, t1, t2):
+def a2v(cc, t1, t2):
     """Ground state amplitudes to a vector."""
     return nested_to_vector((t1, t2))[0]
 
 
-def ip_vector_to_amplitudes(cc, vec):
+def v2a(cc, vec):
     """Ground state vector to apmplitudes."""
-    return vector_to_nested(vec, ip_vector_desc(cc))
+    return vector_to_nested(vec, vector_spec(cc))
 
 
-def vector_size_ip(cc):
+def vector_size(cc):
     nocc = cc.nocc
     nvir = cc.nmo - nocc
     nkpts = cc.nkpts
@@ -50,7 +50,7 @@ def vector_size_ip(cc):
     return size
 
 
-def ipccsd(cc, nroots=1, koopmans=False, guess=None, partition=None,
+def kernel(cc, nroots=1, koopmans=False, guess=None, partition=None,
            kptlist=None):
     '''Calculate (N-1)-electron charged excitations via IP-EOM-CCSD.
 
@@ -76,9 +76,9 @@ def ipccsd(cc, nroots=1, koopmans=False, guess=None, partition=None,
     nkpts = cc.nkpts
     if kptlist is None:
         kptlist = range(nkpts)
-    size = vector_size_ip(cc)
+    size = vector_size(cc)
     for k, kshift in enumerate(kptlist):
-        nfrozen = np.sum(mask_frozen_ip(cc, np.zeros(size, dtype=int), kshift, const=1))
+        nfrozen = np.sum(mask_frozen(cc, np.zeros(size, dtype=int), kshift, const=1))
         nroots = min(nroots, size - nfrozen)
     if partition:
         partition = partition.lower()
@@ -88,10 +88,10 @@ def ipccsd(cc, nroots=1, koopmans=False, guess=None, partition=None,
     evecs = np.zeros((len(kptlist), nroots, size), np.complex)
 
     for k, kshift in enumerate(kptlist):
-        adiag = ipccsd_diag(cc, kshift)
-        adiag = mask_frozen_ip(cc, adiag, kshift, const=LARGE_DENOM)
+        adiag = diag(cc, kshift)
+        adiag = mask_frozen(cc, adiag, kshift, const=LARGE_DENOM)
         if partition == 'full':
-            cc._ipccsd_diag_matrix2 = ip_vector_to_amplitudes(cc, adiag)[1]
+            cc._ipccsd_diag_matrix2 = v2a(cc, adiag)[1]
 
         if guess is not None:
             guess_k = guess[k]
@@ -107,14 +107,14 @@ def ipccsd(cc, nroots=1, koopmans=False, guess=None, partition=None,
                 for n in nonzero_opadding[::-1][:nroots]:
                     g = np.zeros(size)
                     g[n] = 1.0
-                    g = mask_frozen_ip(cc, g, kshift, const=0.0)
+                    g = mask_frozen(cc, g, kshift, const=0.0)
                     guess_k.append(g)
             else:
                 idx = adiag.argsort()[:nroots]
                 for i in idx:
                     g = np.zeros(size)
                     g[i] = 1.0
-                    g = mask_frozen_ip(cc, g, kshift, const=0.0)
+                    g = mask_frozen(cc, g, kshift, const=0.0)
                     guess_k.append(g)
 
         def precond(r, e0, x0):
@@ -127,11 +127,11 @@ def ipccsd(cc, nroots=1, koopmans=False, guess=None, partition=None,
                 idx = np.argmax(np.abs(np.dot(np.array(guess_k).conj(), np.array(x0).T)), axis=1)
                 return linalg_helper._eigs_cmplx2real(w, v, idx)
 
-            evals_k, evecs_k = eig(lambda _arg: ipccsd_matvec(cc, _arg, kshift), guess_k, precond, pick=pickeig,
+            evals_k, evecs_k = eig(lambda _arg: matvec(cc, _arg, kshift), guess_k, precond, pick=pickeig,
                                    tol=cc.conv_tol, max_cycle=cc.max_cycle,
                                    max_space=cc.max_space, nroots=nroots, verbose=cc.verbose)
         else:
-            evals_k, evecs_k = eig(lambda _arg: ipccsd_matvec(cc, _arg, kshift), guess_k, precond,
+            evals_k, evecs_k = eig(lambda _arg: matvec(cc, _arg, kshift), guess_k, precond,
                                    tol=cc.conv_tol, max_cycle=cc.max_cycle,
                                    max_space=cc.max_space, nroots=nroots, verbose=cc.verbose)
 
@@ -143,7 +143,7 @@ def ipccsd(cc, nroots=1, koopmans=False, guess=None, partition=None,
             evals_k, evecs_k = [evals_k], [evecs_k]
 
         for n, en, vn in zip(range(nroots), evals_k, evecs_k):
-            r1, r2 = ip_vector_to_amplitudes(cc, vn)
+            r1, r2 = v2a(cc, vn)
             qp_weight = np.linalg.norm(r1) ** 2
             logger.info(cc, 'EOM root %d E = %.16g  qpwt = %0.6g',
                         n, en, qp_weight)
@@ -152,15 +152,15 @@ def ipccsd(cc, nroots=1, koopmans=False, guess=None, partition=None,
     return cc.eip, evecs
 
 
-def ipccsd_matvec(cc, vector, k):
+def matvec(cc, vector, k):
     '''2ph operators are of the form s_{ij}^{ b}, i.e. 'jb' indices are coupled.'''
     # Ref: Nooijen and Snijders, J. Chem. Phys. 102, 1681 (1995) Eqs.(8)-(9)
     if not cc.imds.made_ip_imds:
         cc.imds.make_ip(cc.ip_partition)
     imds = cc.imds
 
-    vector = mask_frozen_ip(cc, vector, k, const=0.0)
-    r1, r2 = ip_vector_to_amplitudes(cc, vector)
+    vector = mask_frozen(cc, vector, k, const=0.0)
+    r1, r2 = v2a(cc, vector)
 
     t1, t2 = cc.t1, cc.t2
     nkpts = cc.nkpts
@@ -217,10 +217,10 @@ def ipccsd_matvec(cc, vector, k):
                - einsum('yxlkcd,xykld->c', imds.Woovv[:, :, k], r2[:, :]))
         Hr2[:, :] += -einsum('c,xyijcb->xyijb', tmp, t2[:, :, k])
 
-    return mask_frozen_ip(cc, ip_amplitudes_to_vector(cc, Hr1, Hr2), k, const=0.0)
+    return mask_frozen(cc, a2v(cc, Hr1, Hr2), k, const=0.0)
 
 
-def ipccsd_diag(cc, k):
+def diag(cc, k):
     if not cc.imds.made_ip_imds:
         cc.imds.make_ip(cc.ip_partition)
     imds = cc.imds
@@ -266,12 +266,12 @@ def ipccsd_diag(cc, k):
                 Hr2[ki, kj] -= 2. * np.einsum('ijcb,jibc->ijb', t2[ki, kj, k], imds.Woovv[kj, ki, kd])
                 Hr2[ki, kj] += np.einsum('ijcb,ijbc->ijb', t2[ki, kj, k], imds.Woovv[ki, kj, kd])
 
-    return ip_amplitudes_to_vector(cc, Hr1, Hr2)
+    return a2v(cc, Hr1, Hr2)
 
 
-def mask_frozen_ip(cc, vector, k, const=LARGE_DENOM):
+def mask_frozen(cc, vector, k, const=LARGE_DENOM):
     '''Replaces all frozen orbital indices of `vector` with the value `const`.'''
-    r1, r2 = ip_vector_to_amplitudes(cc, vector)
+    r1, r2 = v2a(cc, vector)
     nkpts, nocc, nvir = cc.t1.shape
     kconserv = cc.khelper.kconserv
 
@@ -288,4 +288,4 @@ def mask_frozen_ip(cc, vector, k, const=LARGE_DENOM):
             idx = np.ix_([ki], [kj], nonzero_opadding[ki], nonzero_opadding[kj], nonzero_vpadding[kb])
             new_r2[idx] = r2[idx]
 
-    return ip_amplitudes_to_vector(cc, new_r1, new_r2)
+    return a2v(cc, new_r1, new_r2)

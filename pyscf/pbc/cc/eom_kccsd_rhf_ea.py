@@ -26,23 +26,23 @@ import numpy as np
 import time
 
 
-def ea_vector_desc(cc):
+def vector_spec(cc):
     """Description of the EA vector."""
     nvir = cc.nmo - cc.nocc
     return [(nvir,), (cc.nkpts, cc.nkpts, cc.nocc, nvir, nvir)]
 
 
-def ea_amplitudes_to_vector(cc, t1, t2):
+def a2v(cc, t1, t2):
     """Ground state amplitudes to a vector."""
     return nested_to_vector((t1, t2))[0]
 
 
-def ea_vector_to_amplitudes(cc, vec):
+def v2a(cc, vec):
     """Ground state vector to apmplitudes."""
-    return vector_to_nested(vec, ea_vector_desc(cc))
+    return vector_to_nested(vec, vector_spec(cc))
 
 
-def vector_size_ea(cc):
+def vector_size(cc):
     nocc = cc.nocc
     nvir = cc.nmo - nocc
     nkpts = cc.nkpts
@@ -51,7 +51,7 @@ def vector_size_ea(cc):
     return size
 
 
-def eaccsd(cc, nroots=1, koopmans=False, guess=None, partition=None,
+def kernel(cc, nroots=1, koopmans=False, guess=None, partition=None,
            kptlist=None):
     '''Calculate (N+1)-electron charged excitations via EA-EOM-CCSD.
 
@@ -65,9 +65,9 @@ def eaccsd(cc, nroots=1, koopmans=False, guess=None, partition=None,
     nkpts = cc.nkpts
     if kptlist is None:
         kptlist = range(nkpts)
-    size = vector_size_ea(cc)
+    size = vector_size(cc)
     for k, kshift in enumerate(kptlist):
-        nfrozen = np.sum(mask_frozen_ea(cc, np.zeros(size, dtype=int), kshift, const=1))
+        nfrozen = np.sum(mask_frozen(cc, np.zeros(size, dtype=int), kshift, const=1))
         nroots = min(nroots, size - nfrozen)
     if partition:
         partition = partition.lower()
@@ -77,10 +77,10 @@ def eaccsd(cc, nroots=1, koopmans=False, guess=None, partition=None,
     evecs = np.zeros((len(kptlist), nroots, size), np.complex)
 
     for k, kshift in enumerate(kptlist):
-        adiag = eaccsd_diag(cc, kshift)
-        adiag = mask_frozen_ea(cc, adiag, kshift, const=LARGE_DENOM)
+        adiag = diag(cc, kshift)
+        adiag = mask_frozen(cc, adiag, kshift, const=LARGE_DENOM)
         if partition == 'full':
-            cc._eaccsd_diag_matrix2 = ea_vector_to_amplitudes(cc, adiag)[1]
+            cc._eaccsd_diag_matrix2 = v2a(cc, adiag)[1]
 
         if guess is not None:
             guess_k = guess[k]
@@ -96,14 +96,14 @@ def eaccsd(cc, nroots=1, koopmans=False, guess=None, partition=None,
                 for n in nonzero_vpadding[:nroots]:
                     g = np.zeros(size)
                     g[n] = 1.0
-                    g = mask_frozen_ea(cc, g, kshift, const=0.0)
+                    g = mask_frozen(cc, g, kshift, const=0.0)
                     guess_k.append(g)
             else:
                 idx = adiag.argsort()[:nroots]
                 for i in idx:
                     g = np.zeros(size)
                     g[i] = 1.0
-                    g = mask_frozen_ea(cc, g, kshift, const=0.0)
+                    g = mask_frozen(cc, g, kshift, const=0.0)
                     guess_k.append(g)
 
         def precond(r, e0, x0):
@@ -116,11 +116,11 @@ def eaccsd(cc, nroots=1, koopmans=False, guess=None, partition=None,
                 idx = np.argmax(np.abs(np.dot(np.array(guess_k).conj(), np.array(x0).T)), axis=1)
                 return linalg_helper._eigs_cmplx2real(w, v, idx)
 
-            evals_k, evecs_k = eig(lambda _arg: eaccsd_matvec(cc, _arg, kshift), guess_k, precond, pick=pickeig,
+            evals_k, evecs_k = eig(lambda _arg: matvec(cc, _arg, kshift), guess_k, precond, pick=pickeig,
                                    tol=cc.conv_tol, max_cycle=cc.max_cycle,
                                    max_space=cc.max_space, nroots=nroots, verbose=cc.verbose)
         else:
-            evals_k, evecs_k = eig(lambda _arg: eaccsd_matvec(cc, _arg, kshift), guess_k, precond,
+            evals_k, evecs_k = eig(lambda _arg: matvec(cc, _arg, kshift), guess_k, precond,
                                    tol=cc.conv_tol, max_cycle=cc.max_cycle,
                                    max_space=cc.max_space, nroots=nroots, verbose=cc.verbose)
 
@@ -132,7 +132,7 @@ def eaccsd(cc, nroots=1, koopmans=False, guess=None, partition=None,
             evals_k, evecs_k = [evals_k], [evecs_k]
 
         for n, en, vn in zip(range(nroots), evals_k, evecs_k):
-            r1, r2 = ea_vector_to_amplitudes(cc, vn)
+            r1, r2 = v2a(cc, vn)
             qp_weight = np.linalg.norm(r1) ** 2
             logger.info(cc, 'EOM root %d E = %.16g  qpwt = %0.6g',
                         n, en, qp_weight)
@@ -141,14 +141,14 @@ def eaccsd(cc, nroots=1, koopmans=False, guess=None, partition=None,
     return cc.eea, evecs
 
 
-def eaccsd_matvec(cc, vector, k):
+def matvec(cc, vector, k):
     # Ref: Nooijen and Bartlett, J. Chem. Phys. 102, 3629 (1994) Eqs.(30)-(31)
     if not cc.imds.made_ea_imds:
         cc.imds.make_ea(cc.ea_partition)
     imds = cc.imds
 
-    vector = mask_frozen_ea(cc, vector, k, const=0.0)
-    r1, r2 = ea_vector_to_amplitudes(cc, vector)
+    vector = mask_frozen(cc, vector, k, const=0.0)
+    r1, r2 = v2a(cc, vector)
 
     t1, t2 = cc.t1, cc.t2
     nkpts = cc.nkpts
@@ -214,10 +214,10 @@ def eaccsd_matvec(cc, vector, k):
                - einsum('xylkcd,xylcd->k', imds.Woovv[:, k, :], r2[:, :]))
         Hr2[:, :] += -einsum('k,xykjab->xyjab', tmp, t2[k, :, :])
 
-    return mask_frozen_ea(cc, ea_amplitudes_to_vector(cc, Hr1, Hr2), k, const=0.0)
+    return mask_frozen(cc, a2v(cc, Hr1, Hr2), k, const=0.0)
 
 
-def eaccsd_diag(cc, k):
+def diag(cc, k):
     if not cc.imds.made_ea_imds:
         cc.imds.make_ea(cc.ea_partition)
     imds = cc.imds
@@ -261,12 +261,12 @@ def eaccsd_diag(cc, k):
                 Hr2[kj, ka] -= 2 * np.einsum('ijab,ijab->jab', t2[k, kj, ka], imds.Woovv[k, kj, ka])
                 Hr2[kj, ka] += np.einsum('ijab,ijba->jab', t2[k, kj, ka], imds.Woovv[k, kj, kb])
 
-    return ea_amplitudes_to_vector(cc, Hr1, Hr2)
+    return a2v(cc, Hr1, Hr2)
 
 
-def mask_frozen_ea(cc, vector, k, const=LARGE_DENOM):
+def mask_frozen(cc, vector, k, const=LARGE_DENOM):
     '''Replaces all frozen orbital indices of `vector` with the value `const`.'''
-    r1, r2 = ea_vector_to_amplitudes(cc, vector)
+    r1, r2 = v2a(cc, vector)
     nkpts, nocc, nvir = cc.t1.shape
     kconserv = cc.khelper.kconserv
 
@@ -283,4 +283,4 @@ def mask_frozen_ea(cc, vector, k, const=LARGE_DENOM):
             idx = np.ix_([kj], [ka], nonzero_opadding[kj], nonzero_vpadding[ka], nonzero_vpadding[kb])
             new_r2[idx] = r2[idx]
 
-    return ea_amplitudes_to_vector(cc, new_r1, new_r2)
+    return a2v(cc, new_r1, new_r2)
