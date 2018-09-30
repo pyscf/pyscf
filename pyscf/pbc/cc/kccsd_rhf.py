@@ -31,6 +31,7 @@ from pyscf.pbc import scf
 from pyscf.pbc.mp.kmp2 import (get_frozen_mask, get_nocc, get_nmo,
                                padded_mo_coeff, padding_k_idx)
 from pyscf.pbc.cc import kintermediates_rhf as imdk
+from pyscf.pbc.cc.eom_kccsd_rhf import ip_amplitudes_to_vector, ip_vector_to_amplitudes, ea_amplitudes_to_vector, ea_vector_to_amplitudes
 from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM
 from pyscf.lib import linalg_helper
 from pyscf.pbc.lib import kpts_helper
@@ -385,33 +386,6 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         """Ground state vector to apmplitudes."""
         return vector_to_nested(vec, self.ccsd_vector_desc)
 
-    @property
-    def ip_vector_desc(self):
-        """Description of the IP vector."""
-        return [(self.nocc,), (self.nkpts, self.nkpts, self.nocc, self.nocc, self.nmo - self.nocc)]
-
-    def ip_amplitudes_to_vector(self, t1, t2):
-        """Ground state amplitudes to a vector."""
-        return nested_to_vector((t1, t2))[0]
-
-    def ip_vector_to_amplitudes(self, vec):
-        """Ground state vector to apmplitudes."""
-        return vector_to_nested(vec, self.ip_vector_desc)
-
-    @property
-    def ea_vector_desc(self):
-        """Description of the EA vector."""
-        nvir = self.nmo - self.nocc
-        return [(nvir,), (self.nkpts, self.nkpts, self.nocc, nvir, nvir)]
-
-    def ea_amplitudes_to_vector(self, t1, t2):
-        """Ground state amplitudes to a vector."""
-        return nested_to_vector((t1, t2))[0]
-
-    def ea_vector_to_amplitudes(self, vec):
-        """Ground state vector to apmplitudes."""
-        return vector_to_nested(vec, self.ea_vector_desc)
-
     def init_amps(self, eris):
         time0 = time.clock(), time.time()
         nocc = self.nocc
@@ -545,7 +519,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
             adiag = self.ipccsd_diag(kshift)
             adiag = self.mask_frozen_ip(adiag, kshift, const=LARGE_DENOM)
             if partition == 'full':
-                self._ipccsd_diag_matrix2 = self.ip_vector_to_amplitudes(adiag)[1]
+                self._ipccsd_diag_matrix2 = ip_vector_to_amplitudes(self, adiag)[1]
 
             if guess is not None:
                 guess_k = guess[k]
@@ -597,7 +571,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                 evals_k, evecs_k = [evals_k], [evecs_k]
 
             for n, en, vn in zip(range(nroots), evals_k, evecs_k):
-                r1, r2 = self.ip_vector_to_amplitudes(vn)
+                r1, r2 = ip_vector_to_amplitudes(self, vn)
                 qp_weight = np.linalg.norm(r1) ** 2
                 logger.info(self, 'EOM root %d E = %.16g  qpwt = %0.6g',
                             n, en, qp_weight)
@@ -615,7 +589,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         imds = self.imds
 
         vector = self.mask_frozen_ip(vector, kshift, const=0.0)
-        r1, r2 = self.ip_vector_to_amplitudes(vector)
+        r1, r2 = ip_vector_to_amplitudes(self, vector)
 
         t1, t2 = self.t1, self.t2
         nkpts = self.nkpts
@@ -672,7 +646,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                       - einsum('yxlkcd,xykld->c', imds.Woovv[:, :, kshift], r2[:, :]))
             Hr2[:, :] += -einsum('c,xyijcb->xyijb', tmp, t2[:, :, kshift])
 
-        return self.mask_frozen_ip(self.ip_amplitudes_to_vector(Hr1, Hr2), kshift, const=0.0)
+        return self.mask_frozen_ip(ip_amplitudes_to_vector(self, Hr1, Hr2), kshift, const=0.0)
 
     def ipccsd_diag(self, kshift):
         if not hasattr(self, 'imds'):
@@ -722,11 +696,11 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                     Hr2[ki, kj] -= 2. * np.einsum('ijcb,jibc->ijb', t2[ki, kj, kshift], imds.Woovv[kj, ki, kd])
                     Hr2[ki, kj] += np.einsum('ijcb,ijbc->ijb', t2[ki, kj, kshift], imds.Woovv[ki, kj, kd])
 
-        return self.ip_amplitudes_to_vector(Hr1, Hr2)
+        return ip_amplitudes_to_vector(self, Hr1, Hr2)
 
     def mask_frozen_ip(self, vector, kshift, const=LARGE_DENOM):
         '''Replaces all frozen orbital indices of `vector` with the value `const`.'''
-        r1, r2 = self.ip_vector_to_amplitudes(vector)
+        r1, r2 = ip_vector_to_amplitudes(self, vector)
         nkpts, nocc, nvir = self.t1.shape
         kconserv = self.khelper.kconserv
 
@@ -743,7 +717,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                 idx = np.ix_([ki], [kj], nonzero_opadding[ki], nonzero_opadding[kj], nonzero_vpadding[kb])
                 new_r2[idx] = r2[idx]
 
-        return self.ip_amplitudes_to_vector(new_r1, new_r2)
+        return ip_amplitudes_to_vector(self, new_r1, new_r2)
 
     def vector_size_ea(self):
         nocc = self.nocc
@@ -782,7 +756,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
             adiag = self.eaccsd_diag(kshift)
             adiag = self.mask_frozen_ea(adiag, kshift, const=LARGE_DENOM)
             if partition == 'full':
-                self._eaccsd_diag_matrix2 = self.ea_vector_to_amplitudes(adiag)[1]
+                self._eaccsd_diag_matrix2 = ea_vector_to_amplitudes(self, adiag)[1]
 
             if guess is not None:
                 guess_k = guess[k]
@@ -834,7 +808,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                 evals_k, evecs_k = [evals_k], [evecs_k]
 
             for n, en, vn in zip(range(nroots), evals_k, evecs_k):
-                r1, r2 = self.ea_vector_to_amplitudes(vn)
+                r1, r2 = ea_vector_to_amplitudes(self, vn)
                 qp_weight = np.linalg.norm(r1) ** 2
                 logger.info(self, 'EOM root %d E = %.16g  qpwt = %0.6g',
                             n, en, qp_weight)
@@ -851,7 +825,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         imds = self.imds
 
         vector = self.mask_frozen_ea(vector, kshift, const=0.0)
-        r1, r2 = self.ea_vector_to_amplitudes(vector)
+        r1, r2 = ea_vector_to_amplitudes(self, vector)
 
         t1, t2 = self.t1, self.t2
         nkpts = self.nkpts
@@ -917,7 +891,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                       - einsum('xylkcd,xylcd->k', imds.Woovv[:, kshift, :], r2[:, :]))
             Hr2[:, :] += -einsum('k,xykjab->xyjab', tmp, t2[kshift, :, :])
 
-        return self.mask_frozen_ea(self.ea_amplitudes_to_vector(Hr1, Hr2), kshift, const=0.0)
+        return self.mask_frozen_ea(ea_amplitudes_to_vector(self, Hr1, Hr2), kshift, const=0.0)
 
     def eaccsd_diag(self, kshift):
         if not hasattr(self, 'imds'):
@@ -965,11 +939,11 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                     Hr2[kj, ka] -= 2 * np.einsum('ijab,ijab->jab', t2[kshift, kj, ka], imds.Woovv[kshift, kj, ka])
                     Hr2[kj, ka] += np.einsum('ijab,ijba->jab', t2[kshift, kj, ka], imds.Woovv[kshift, kj, kb])
 
-        return self.ea_amplitudes_to_vector(Hr1, Hr2)
+        return ea_amplitudes_to_vector(self, Hr1, Hr2)
 
     def mask_frozen_ea(self, vector, kshift, const=LARGE_DENOM):
         '''Replaces all frozen orbital indices of `vector` with the value `const`.'''
-        r1, r2 = self.ea_vector_to_amplitudes(vector)
+        r1, r2 = ea_vector_to_amplitudes(self, vector)
         nkpts, nocc, nvir = self.t1.shape
         kconserv = self.khelper.kconserv
 
@@ -986,7 +960,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                 idx = np.ix_([kj], [ka], nonzero_opadding[kj], nonzero_vpadding[ka], nonzero_vpadding[kb])
                 new_r2[idx] = r2[idx]
 
-        return self.ea_amplitudes_to_vector(new_r1, new_r2)
+        return ea_amplitudes_to_vector(self, new_r1, new_r2)
 
 
 KRCCSD = RCCSD
