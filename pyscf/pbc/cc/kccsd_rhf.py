@@ -665,14 +665,13 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
             if partition == 'full':
                 self._ipccsd_diag_matrix2 = self.ip_vector_to_amplitudes(adiag)[1]
 
-            user_guess = False
-            if guess:
-                user_guess = True
-                assert len(guess[k]) == nroots
-                for g in guess[k]:
+            if guess is not None:
+                guess_k = guess[k]
+                assert len(guess_k) == nroots
+                for g in guess_k:
                     assert g.size == size
             else:
-                guess = []
+                guess_k = []
                 if koopmans:
                     # Get location of padded elements in occupied and virtual space
                     nonzero_opadding = padding_k_idx(self, kind="split")[0][kshift]
@@ -681,34 +680,32 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                         g = np.zeros(size)
                         g[n] = 1.0
                         g = self.mask_frozen_ip(g, kshift, const=0.0)
-                        guess.append(g)
+                        guess_k.append(g)
                 else:
                     idx = adiag.argsort()[:nroots]
                     for i in idx:
                         g = np.zeros(size)
                         g[i] = 1.0
                         g = self.mask_frozen_ip(g, kshift, const=0.0)
-                        guess.append(g)
+                        guess_k.append(g)
 
             def precond(r, e0, x0):
                 return r / (e0 - adiag + 1e-12)
 
             eig = linalg_helper.eig
-            if user_guess or koopmans:
+            if guess is not None or koopmans:
                 def pickeig(w, v, nr, envs):
                     x0 = linalg_helper._gen_x0(envs['v'], envs['xs'])
-                    idx = np.argmax(np.abs(np.dot(np.array(guess).conj(), np.array(x0).T)), axis=1)
+                    idx = np.argmax(np.abs(np.dot(np.array(guess_k).conj(), np.array(x0).T)), axis=1)
                     return lib.linalg_helper._eigs_cmplx2real(w, v, idx)
 
-                evals_k, evecs_k = eig(lambda _arg: self.ipccsd_matvec(_arg, kshift), guess, precond, pick=pickeig,
+                evals_k, evecs_k = eig(lambda _arg: self.ipccsd_matvec(_arg, kshift), guess_k, precond, pick=pickeig,
                                        tol=self.conv_tol, max_cycle=self.max_cycle,
                                        max_space=self.max_space, nroots=nroots, verbose=self.verbose)
             else:
-                evals_k, evecs_k = eig(lambda _arg: self.ipccsd_matvec(_arg, kshift), guess, precond,
+                evals_k, evecs_k = eig(lambda _arg: self.ipccsd_matvec(_arg, kshift), guess_k, precond,
                                        tol=self.conv_tol, max_cycle=self.max_cycle,
                                        max_space=self.max_space, nroots=nroots, verbose=self.verbose)
-            if not user_guess:
-                guess = None
 
             evals_k = evals_k.real
             evals[k] = evals_k
@@ -905,14 +902,13 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
             if partition == 'full':
                 self._eaccsd_diag_matrix2 = self.ea_vector_to_amplitudes(adiag)[1]
 
-            user_guess = False
-            if guess:
-                user_guess = True
-                assert len(guess[k]) == nroots
-                for g in guess[k]:
+            if guess is not None:
+                guess_k = guess[k]
+                assert len(guess_k) == nroots
+                for g in guess_k:
                     assert g.size == size
             else:
-                guess = []
+                guess_k = []
                 if koopmans:
                     # Get location of padded elements in occupied and virtual space
                     nonzero_vpadding = padding_k_idx(self, kind="split")[1][kshift]
@@ -921,34 +917,32 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                         g = np.zeros(size)
                         g[n] = 1.0
                         g = self.mask_frozen_ea(g, kshift, const=0.0)
-                        guess.append(g)
+                        guess_k.append(g)
                 else:
                     idx = adiag.argsort()[:nroots]
                     for i in idx:
                         g = np.zeros(size)
                         g[i] = 1.0
                         g = self.mask_frozen_ea(g, kshift, const=0.0)
-                        guess.append(g)
+                        guess_k.append(g)
 
             def precond(r, e0, x0):
                 return r / (e0 - adiag + 1e-12)
 
             eig = linalg_helper.eig
-            if user_guess or koopmans:
+            if guess is not None or koopmans:
                 def pickeig(w, v, nr, envs):
                     x0 = linalg_helper._gen_x0(envs['v'], envs['xs'])
-                    idx = np.argmax(np.abs(np.dot(np.array(guess).conj(), np.array(x0).T)), axis=1)
+                    idx = np.argmax(np.abs(np.dot(np.array(guess_k).conj(), np.array(x0).T)), axis=1)
                     return lib.linalg_helper._eigs_cmplx2real(w, v, idx)
 
-                evals_k, evecs_k = eig(lambda _arg: self.eaccsd_matvec(_arg, kshift), guess, precond, pick=pickeig,
+                evals_k, evecs_k = eig(lambda _arg: self.eaccsd_matvec(_arg, kshift), guess_k, precond, pick=pickeig,
                                        tol=self.conv_tol, max_cycle=self.max_cycle,
                                        max_space=self.max_space, nroots=nroots, verbose=self.verbose)
             else:
-                evals_k, evecs_k = eig(lambda _arg: self.eaccsd_matvec(_arg, kshift), guess, precond,
+                evals_k, evecs_k = eig(lambda _arg: self.eaccsd_matvec(_arg, kshift), guess_k, precond,
                                        tol=self.conv_tol, max_cycle=self.max_cycle,
                                        max_space=self.max_space, nroots=nroots, verbose=self.verbose)
-            if not user_guess:
-                guess = None
 
             evals_k = evals_k.real
             evals[k] = evals_k
