@@ -24,6 +24,7 @@ import numpy as np
 
 import time
 
+
 def ip_vector_desc(cc):
     """Description of the IP vector."""
     return [(cc.nocc,), (cc.nkpts, cc.nkpts, cc.nocc, cc.nocc, cc.nmo - cc.nocc)]
@@ -149,6 +150,7 @@ def ipccsd(self, nroots=1, koopmans=False, guess=None, partition=None,
     self.eip = evals
     return self.eip, evecs
 
+
 def ipccsd_matvec(self, vector, kshift):
     '''2ph operators are of the form s_{ij}^{ b}, i.e. 'jb' indices are coupled.'''
     # Ref: Nooijen and Snijders, J. Chem. Phys. 102, 1681 (1995) Eqs.(8)-(9)
@@ -211,10 +213,11 @@ def ipccsd_matvec(self, vector, kshift):
                     kd = kconserv[kl, ki, kb]
                     Hr2[ki, kj] += -einsum('lbid,ljd->ijb', imds.Wovov[kl, kb, ki], r2[kl, kj])
         tmp = (2. * einsum('xyklcd,xykld->c', imds.Woovv[:, :, kshift], r2[:, :])
-                  - einsum('yxlkcd,xykld->c', imds.Woovv[:, :, kshift], r2[:, :]))
+               - einsum('yxlkcd,xykld->c', imds.Woovv[:, :, kshift], r2[:, :]))
         Hr2[:, :] += -einsum('c,xyijcb->xyijb', tmp, t2[:, :, kshift])
 
     return mask_frozen_ip(self, ip_amplitudes_to_vector(self, Hr1, Hr2), kshift, const=0.0)
+
 
 def ipccsd_diag(self, kshift):
     if not self.imds.made_ip_imds:
@@ -263,6 +266,7 @@ def ipccsd_diag(self, kshift):
                 Hr2[ki, kj] += np.einsum('ijcb,ijbc->ijb', t2[ki, kj, kshift], imds.Woovv[ki, kj, kd])
 
     return ip_amplitudes_to_vector(self, Hr1, Hr2)
+
 
 def mask_frozen_ip(self, vector, kshift, const=LARGE_DENOM):
     '''Replaces all frozen orbital indices of `vector` with the value `const`.'''

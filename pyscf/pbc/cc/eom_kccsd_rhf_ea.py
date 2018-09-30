@@ -40,6 +40,7 @@ def ea_vector_to_amplitudes(cc, vec):
     """Ground state vector to apmplitudes."""
     return vector_to_nested(vec, ea_vector_desc(cc))
 
+
 def vector_size_ea(self):
     nocc = self.nocc
     nvir = self.nmo - nocc
@@ -47,6 +48,7 @@ def vector_size_ea(self):
 
     size = nvir + nkpts ** 2 * nvir ** 2 * nocc
     return size
+
 
 def eaccsd(self, nroots=1, koopmans=False, guess=None, partition=None,
            kptlist=None):
@@ -137,6 +139,7 @@ def eaccsd(self, nroots=1, koopmans=False, guess=None, partition=None,
     self.eea = evals
     return self.eea, evecs
 
+
 def eaccsd_matvec(self, vector, kshift):
     # Ref: Nooijen and Bartlett, J. Chem. Phys. 102, 3629 (1994) Eqs.(30)-(31)
     if not self.imds.made_ea_imds:
@@ -167,8 +170,8 @@ def eaccsd_matvec(self, vector, kshift):
     Hr2 = np.zeros(r2.shape, dtype=np.common_type(imds.Wvvvo[0, 0, 0], r1))
     for kj in range(nkpts):
         for ka in range(nkpts):
-            kb = kconserv[kshift,ka,kj]
-            Hr2[kj,ka] += einsum('abcj,c->jab',imds.Wvvvo[ka,kb,kshift],r1)
+            kb = kconserv[kshift, ka, kj]
+            Hr2[kj, ka] += einsum('abcj,c->jab', imds.Wvvvo[ka, kb, kshift], r1)
 
     # 2p1h-2p1h block
     if self.ea_partition == 'mp':
@@ -207,10 +210,11 @@ def eaccsd_matvec(self, vector, kshift):
                     Hr2[kj, ka] += -einsum('aldj,ldb->jab', imds.Wovov[kl, ka, kj].transpose(1, 0, 3, 2),
                                            r2[kl, kd])
         tmp = (2. * einsum('xyklcd,xylcd->k', imds.Woovv[kshift, :, :], r2[:, :])
-                  - einsum('xylkcd,xylcd->k', imds.Woovv[:, kshift, :], r2[:, :]))
+               - einsum('xylkcd,xylcd->k', imds.Woovv[:, kshift, :], r2[:, :]))
         Hr2[:, :] += -einsum('k,xykjab->xyjab', tmp, t2[kshift, :, :])
 
     return mask_frozen_ea(self, ea_amplitudes_to_vector(self, Hr1, Hr2), kshift, const=0.0)
+
 
 def eaccsd_diag(self, kshift):
     if not self.imds.made_ea_imds:
@@ -257,6 +261,7 @@ def eaccsd_diag(self, kshift):
                 Hr2[kj, ka] += np.einsum('ijab,ijba->jab', t2[kshift, kj, ka], imds.Woovv[kshift, kj, kb])
 
     return ea_amplitudes_to_vector(self, Hr1, Hr2)
+
 
 def mask_frozen_ea(self, vector, kshift, const=LARGE_DENOM):
     '''Replaces all frozen orbital indices of `vector` with the value `const`.'''
