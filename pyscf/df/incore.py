@@ -33,12 +33,30 @@ LINEAR_DEP_THR = getattr(__config__, 'df_df_DF_lindep', 1e-12)
 format_aux_basis = addons.make_auxmol
 
 
-def aux_e2(mol, auxmol, intor='int3c2e', aosym='s1', comp=None, out=None):
+def aux_e2(mol, auxmol, intor='int3c2e', aosym='s1', comp=None, out=None,
+           cintopt=None):
     '''3-center AO integrals (ij|L), where L is the auxiliary basis.
+
+    Kwargs:
+        cintopt : Libcint-3.14 and newer version support to compute int3c2e
+            without the opt for the 3rd index.  It can be precomputed to
+            reduce the overhead of cintopt initialization repeatedly.
+
+            cintopt = gto.moleintor.make_cintopt(mol._atm, mol._bas, mol._env, intor)
     '''
-    pmol = gto.mole.conc_mol(mol, auxmol)
+    from pyscf.gto.moleintor import getints, make_cintopt
     shls_slice = (0, mol.nbas, 0, mol.nbas, mol.nbas, mol.nbas+auxmol.nbas)
-    return pmol.intor(intor, comp, aosym=aosym, shls_slice=shls_slice, out=out)
+
+    # Extract the call of the two lines below
+    #  pmol = gto.mole.conc_mol(mol, auxmol)
+    #  return pmol.intor(intor, comp, aosym=aosym, shls_slice=shls_slice, out=out)
+    intor = mol._add_suffix(intor)
+    hermi = 0
+    ao_loc = None
+    atm, bas, env = gto.mole.conc_env(mol._atm, mol._bas, mol._env,
+                                      auxmol._atm, auxmol._bas, auxmol._env)
+    return getints(intor, atm, bas, env, shls_slice, comp, hermi, aosym,
+                   ao_loc, cintopt, out)
 
 def aux_e1(mol, auxmol, intor='int3c2e', aosym='s1', comp=None, out=None):
     '''3-center 2-electron AO integrals (L|ij), where L is the auxiliary basis.
