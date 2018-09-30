@@ -147,7 +147,7 @@ def _run_ea_matvec(cc, r1, r2, kshift):
     except:
         vector = cc.amplitudes_to_vector_ea(r1, r2)
     try:
-        vector = cc.eaccsd_matvec(vector, kshift)
+        vector = eom_kccsd_rhf_ea.eaccsd_matvec(cc, vector, kshift)
     except:
         cc.kshift = kshift
         vector = cc.eaccsd_matvec(vector)
@@ -422,7 +422,7 @@ class KnownValues(unittest.TestCase):
 
         # EA
         idx = padding_k_idx(mycc, kind="split")[1][1]
-        guess = np.zeros(mycc.vector_size_ea())
+        guess = np.zeros(eom_kccsd_rhf_ea.vector_size_ea(mycc))
         for i in range(mycc.nmo - mycc.nocc):
             if i not in idx:
                 guess[i] = 1
