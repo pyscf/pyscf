@@ -26,6 +26,7 @@ from pyscf.pbc import scf as pbcscf
 from pyscf.pbc import df as pbc_df
 
 import pyscf.pbc.cc as pbcc
+from pyscf.pbc.cc import eom_kccsd_rhf_ip, eom_kccsd_rhf_ea
 from pyscf.pbc.mp.kmp2 import padding_k_idx
 import make_test_cell
 from pyscf.pbc.lib import kpts_helper
@@ -126,7 +127,7 @@ rand_kmf = make_rand_kmf()
 #     changes to the eris.mo_energy
 def _run_ip_matvec(cc, r1, r2, kshift):
     try:  # Different naming & calling conventions between master/dev
-        vector = cc.ip_amplitudes_to_vector(r1, r2)
+        vector = eom_kccsd_rhf_ip.ip_amplitudes_to_vector(cc, r1, r2)
     except:
         vector = cc.amplitudes_to_vector_ip(r1, r2)
     try:
@@ -135,14 +136,14 @@ def _run_ip_matvec(cc, r1, r2, kshift):
         cc.kshift = kshift
         vector = cc.ipccsd_matvec(vector)
     try:
-        Hr1, Hr2 = cc.ip_vector_to_amplitudes(vector)
+        Hr1, Hr2 = eom_kccsd_rhf_ip.ip_vector_to_amplitudes(cc, vector)
     except:
         Hr1, Hr2 = cc.vector_to_amplitudes_ip(vector)
     return Hr1, Hr2
 
 def _run_ea_matvec(cc, r1, r2, kshift):
     try:  # Different naming & calling conventions between master/dev
-        vector = cc.ea_amplitudes_to_vector(r1, r2)
+        vector = eom_kccsd_rhf_ea.ea_amplitudes_to_vector(cc, r1, r2)
     except:
         vector = cc.amplitudes_to_vector_ea(r1, r2)
     try:
@@ -151,7 +152,7 @@ def _run_ea_matvec(cc, r1, r2, kshift):
         cc.kshift = kshift
         vector = cc.eaccsd_matvec(vector)
     try:
-        Hr1, Hr2 = cc.ea_vector_to_amplitudes(vector)
+        Hr1, Hr2 = eom_kccsd_rhf_ea.ea_vector_to_amplitudes(cc, vector)
     except:
         Hr1, Hr2 = cc.vector_to_amplitudes_ea(vector)
     return Hr1, Hr2
