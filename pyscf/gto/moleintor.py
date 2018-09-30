@@ -507,7 +507,15 @@ def getints3c(intor_name, atm, bas, env, shls_slice=None, comp=1,
         fill = getattr(libcgto, 'GTOnr3c_fill_'+aosym)
 
     if mat.size > 0:
+        # Generating opt for all indices leads to large overhead and poor OMP
+        # speedup for solvent model and COSX functions. In these methods,
+        # the third index of the three center integrals corresponds to a
+        # large number of grids. Initializing the opt for the third index is
+        # not necessary.  Libcint-3.14 and newer support to compute cint3c2e
+        # without the opt for the 3rd index.
         if cintopt is None:
+            cintopt = lib.c_null_ptr()
+        else:
             cintopt = make_cintopt(atm, bas, env, intor_name)
 
         drv(getattr(libcgto, intor_name), fill,

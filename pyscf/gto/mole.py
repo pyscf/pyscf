@@ -2843,8 +2843,7 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
         else:
             bas = self._bas
         return moleintor.getints(intor, self._atm, bas, self._env,
-                                 shls_slice, comp=comp, hermi=hermi,
-                                 aosym=aosym, out=out)
+                                 shls_slice, comp, hermi, aosym, out=out)
 
     def _add_suffix(self, intor, cart=None):
         if not (intor[:4] == 'cint' or
