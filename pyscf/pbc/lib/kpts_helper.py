@@ -204,6 +204,123 @@ def get_kconserv3(cell, kpts, kijkab):
     return kconserv
 
 
+def describe_nested(data):
+    """
+    Retrieves the description of a nested array structure.
+    Args:
+        data (iterable): a nested structure to describe;
+
+    Returns:
+        - A nested structure where numpy arrays are replaced by their shapes;
+        - The overall number of scalar elements;
+        - The common data type;
+    """
+    if isinstance(data, np.ndarray):
+        return data.shape, data.size, data.dtype
+    elif isinstance(data, (list, tuple)):
+        total_size = 0
+        struct = []
+        dtype = None
+        for i in data:
+            i_struct, i_size, i_dtype = describe_nested(i)
+            struct.append(i_struct)
+            total_size += i_size
+            if dtype is not None and i_dtype is not None and i_dtype != dtype:
+                raise ValueError("Several different numpy dtypes encountered: %s and %s" %
+                                 (str(dtype), str(i_dtype)))
+            dtype = i_dtype
+        return struct, total_size, dtype
+    else:
+        raise ValueError("Unknown object to describe: %s" % str(data))
+
+
+def nested_to_vector(data, destination=None, offset=0):
+    """
+    Puts any nested iterable into a vector.
+    Args:
+        data (Iterable): a nested structure of numpy arrays;
+        destination (array): array to store the data to;
+        offset (int): array offset;
+
+    Returns:
+        If destination is not specified, returns a vectorized data and the original nested structure to restore the data
+        into its original form. Otherwise returns a new offset.
+    """
+    if destination is None:
+        struct, total_size, dtype = describe_nested(data)
+        destination = np.empty(total_size, dtype=dtype)
+        rtn = True
+    else:
+        rtn = False
+
+    if isinstance(data, np.ndarray):
+        destination[offset:offset + data.size] = data.ravel()
+        offset += data.size
+    elif isinstance(data, (list, tuple)):
+        for i in data:
+            offset = nested_to_vector(i, destination, offset)
+    else:
+        raise ValueError("Unknown object to vectorize: %s" % str(data))
+
+    if rtn:
+        return destination, struct
+    else:
+        return offset
+
+
+def vector_to_nested(vector, struct, copy=True, ensure_size_matches=True):
+    """
+    Retrieves the original nested structure from the vector.
+    Args:
+        vector (array): a vector to decompose;
+        struct (Iterable): a nested structure with arrays' shapes;
+        copy (bool): whether to copy arrays;
+        ensure_size_matches (bool): if True, ensures all elements from the vector are used;
+
+    Returns:
+        A nested structure with numpy arrays and, if `ensure_size_matches=False`, the number of vector elements used.
+    """
+    if len(vector.shape) != 1:
+        raise ValueError("Only vectors accepted, got: %s" % repr(vector.shape))
+
+    if isinstance(struct, tuple):
+        expected_size = np.prod(struct)
+        if ensure_size_matches:
+            if vector.size != expected_size:
+                raise ValueError("Structure size mismatch: expected %s = %d, found %d" %
+                                 (repr(struct), expected_size, vector.size,))
+        if len(vector) < expected_size:
+            raise ValueError("Additional %d = (%d = %s) - %d vector elements are required" %
+                             (expected_size - len(vector), expected_size,
+                              repr(struct), len(vector),))
+        a = vector[:expected_size].reshape(struct)
+        if copy:
+            a = a.copy()
+
+        if ensure_size_matches:
+            return a
+        else:
+            return a, expected_size
+
+    elif isinstance(struct, list):
+        offset = 0
+        result = []
+        for i in struct:
+            nested, size = vector_to_nested(vector[offset:], i, copy=copy, ensure_size_matches=False)
+            offset += size
+            result.append(nested)
+
+        if ensure_size_matches:
+            if vector.size != offset:
+                raise ValueError("%d additional elements found" % (vector.size - offset))
+            return result
+        else:
+            return result, offset
+
+    else:
+        raise ValueError("Unknown object to compose: %s" % (str(struct)))
+
+
 class KptsHelper(lib.StreamObject):
     def __init__(self, cell, kpts):
         '''Helper class for handling k-points in correlated calculations.
