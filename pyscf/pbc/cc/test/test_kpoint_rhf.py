@@ -289,6 +289,23 @@ class KnownValues(unittest.TestCase):
 
         self.assertAlmostEqual(ecc1, ecc1_bench, 6)
 
+        nroots = 3
+        # Default
+        eip_d = mycc.ipccsd(nroots=nroots)[0]
+        # Koopmans
+        eip_k = mycc.ipccsd(nroots=nroots, koopmans=True)[0]
+        # Manual (Koopmans)
+        guess = []
+        for i in range(mycc.nkpts):
+            guess.append(np.zeros((nroots, eom_kccsd_rhf_ip.vector_size(mycc, i))))
+            nocc = mycc.get_nocc(True)[i]
+            rr = np.arange(nroots)
+            guess[-1][rr, nocc - rr - 1] = 1
+        eip_m = mycc.ipccsd(nroots=3, guess=guess)[0]
+
+        np.testing.assert_allclose(eip_k, eip_m)
+        np.testing.assert_allclose(eip_d[:, 0], eip_k[:, 0], atol=1e-4)
+
     def _test_cu_metallic_frozen_occ(self, kmf, cell):
         assert cell.mesh == [7, 7, 7]
         ecc2_bench = -0.7651806468801496
