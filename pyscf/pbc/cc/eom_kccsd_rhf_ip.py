@@ -26,7 +26,7 @@ import numpy as np
 import time
 
 
-def a2v(cc, t1, t2):
+def a2v(cc, t1, t2, k):
     """IP amplitudes to a vector."""
     vc = VectorComposer(t1.dtype)
     vc.put(t1)
@@ -34,18 +34,15 @@ def a2v(cc, t1, t2):
     return vc.flush()
 
 
-def v2a(cc, vec):
+def v2a(cc, vec, k):
     """IP vector to apmplitudes."""
     vs = VectorSplitter(vec)
     return vs.get(cc.nocc), vs.get((cc.nkpts, cc.nkpts, cc.nocc, cc.nocc, cc.nmo - cc.nocc))
 
 
-def vector_size(cc):
+def vector_size(cc, k):
     """The total number of elements in IP vector."""
-    nocc = cc.nocc
-    nvir = cc.nmo - nocc
-    nkpts = cc.nkpts
-    return nocc + nkpts ** 2 * nocc ** 2 * nvir
+    return cc.nocc + np.prod((cc.nkpts, cc.nkpts, cc.nocc, cc.nocc, cc.nmo - cc.nocc))
 
 
 def kernel(cc, nroots=1, koopmans=False, guess=None, partition=None,
@@ -74,8 +71,8 @@ def kernel(cc, nroots=1, koopmans=False, guess=None, partition=None,
     nkpts = cc.nkpts
     if kptlist is None:
         kptlist = range(nkpts)
-    size = vector_size(cc)
     for k, kshift in enumerate(kptlist):
+        size = vector_size(cc, kshift)
         nfrozen = np.sum(mask_frozen(cc, np.zeros(size, dtype=int), kshift, const=1))
         nroots = min(nroots, size - nfrozen)
     if partition:
@@ -88,6 +85,7 @@ def kernel(cc, nroots=1, koopmans=False, guess=None, partition=None,
     for k, kshift in enumerate(kptlist):
         adiag = diag(cc, kshift)
         adiag = mask_frozen(cc, adiag, kshift, const=LARGE_DENOM)
+        size = vector_size(cc, kshift)
         if partition == 'full':
             cc._ipccsd_diag_matrix2 = v2a(cc, adiag)[1]
 
@@ -141,7 +139,7 @@ def kernel(cc, nroots=1, koopmans=False, guess=None, partition=None,
             evals_k, evecs_k = [evals_k], [evecs_k]
 
         for n, en, vn in zip(range(nroots), evals_k, evecs_k):
-            r1, r2 = v2a(cc, vn)
+            r1, r2 = v2a(cc, vn, kshift)
             qp_weight = np.linalg.norm(r1) ** 2
             logger.info(cc, 'EOM root %d E = %.16g  qpwt = %0.6g',
                         n, en, qp_weight)
@@ -158,7 +156,7 @@ def matvec(cc, vector, k):
     imds = cc.imds
 
     vector = mask_frozen(cc, vector, k, const=0.0)
-    r1, r2 = v2a(cc, vector)
+    r1, r2 = v2a(cc, vector, k)
 
     t1, t2 = cc.t1, cc.t2
     nkpts = cc.nkpts
@@ -215,7 +213,7 @@ def matvec(cc, vector, k):
                - einsum('yxlkcd,xykld->c', imds.Woovv[:, :, k], r2[:, :]))
         Hr2[:, :] += -einsum('c,xyijcb->xyijb', tmp, t2[:, :, k])
 
-    return mask_frozen(cc, a2v(cc, Hr1, Hr2), k, const=0.0)
+    return mask_frozen(cc, a2v(cc, Hr1, Hr2, k), k, const=0.0)
 
 
 def diag(cc, k):
@@ -265,12 +263,12 @@ def diag(cc, k):
                 Hr2[ki, kj] -= 2. * np.einsum('ijcb,jibc->ijb', t2[ki, kj, k], imds.Woovv[kj, ki, kd])
                 Hr2[ki, kj] += np.einsum('ijcb,ijbc->ijb', t2[ki, kj, k], imds.Woovv[ki, kj, kd])
 
-    return a2v(cc, Hr1, Hr2)
+    return a2v(cc, Hr1, Hr2, k)
 
 
 def mask_frozen(cc, vector, k, const=LARGE_DENOM):
     '''Replaces all frozen orbital indices of `vector` with the value `const`.'''
-    r1, r2 = v2a(cc, vector)
+    r1, r2 = v2a(cc, vector, k)
     nkpts, nocc, nvir = cc.t1.shape
     kconserv = cc.khelper.kconserv
 
@@ -287,4 +285,4 @@ def mask_frozen(cc, vector, k, const=LARGE_DENOM):
             idx = np.ix_([ki], [kj], nonzero_opadding[ki], nonzero_opadding[kj], nonzero_vpadding[kb])
             new_r2[idx] = r2[idx]
 
-    return a2v(cc, new_r1, new_r2)
+    return a2v(cc, new_r1, new_r2, k)

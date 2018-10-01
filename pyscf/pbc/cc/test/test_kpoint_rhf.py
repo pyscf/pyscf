@@ -127,7 +127,7 @@ rand_kmf = make_rand_kmf()
 #     changes to the eris.mo_energy
 def _run_ip_matvec(cc, r1, r2, kshift):
     try:  # Different naming & calling conventions between master/dev
-        vector = eom_kccsd_rhf_ip.a2v(cc, r1, r2)
+        vector = eom_kccsd_rhf_ip.a2v(cc, r1, r2, kshift)
     except:
         vector = cc.amplitudes_to_vector_ip(r1, r2)
     try:
@@ -136,7 +136,7 @@ def _run_ip_matvec(cc, r1, r2, kshift):
         cc.kshift = kshift
         vector = cc.ipccsd_matvec(vector)
     try:
-        Hr1, Hr2 = eom_kccsd_rhf_ip.v2a(cc, vector)
+        Hr1, Hr2 = eom_kccsd_rhf_ip.v2a(cc, vector, kshift)
     except:
         Hr1, Hr2 = cc.vector_to_amplitudes_ip(vector)
     return Hr1, Hr2
@@ -409,7 +409,7 @@ class KnownValues(unittest.TestCase):
 
         # IP
         idx = padding_k_idx(mycc, kind="split")[0][0]
-        guess = np.zeros(eom_kccsd_rhf_ip.vector_size(mycc))
+        guess = np.zeros(eom_kccsd_rhf_ip.vector_size(mycc, 0))
         for i in range(mycc.nocc):
             if i not in idx:
                 guess[i] = 1
