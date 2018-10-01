@@ -374,15 +374,6 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
     def dump_flags(self):
         return pyscf.cc.ccsd.CCSD.dump_flags(self)
 
-    @property
-    def ccsd_vector_desc(self):
-        """Description of the ground-state vector."""
-        nvir = self.nmo - self.nocc
-        return (
-            dict(type="array", shape=(self.nkpts, self.nocc, nvir)),
-            dict(type="array", shape=(self.nkpts,) * 3 + (self.nocc,) * 2 + (nvir,) * 2),
-        )
-
     def amplitudes_to_vector(self, t1, t2):
         """Ground state amplitudes to a vector."""
         vc = VectorComposer(t1.dtype)
@@ -394,7 +385,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
         """Ground state vector to apmplitudes."""
         vs = VectorSplitter(vec)
         nvir = self.nmo - self.nocc
-        return vs.get(self.nkpts, self.nocc, nvir), vs.get((self.nkpts,) * 3 + (self.nocc,) * 2 + (nvir,) * 2)
+        return vs.get((self.nkpts, self.nocc, nvir)), vs.get((self.nkpts,) * 3 + (self.nocc,) * 2 + (nvir,) * 2)
 
     def init_amps(self, eris):
         time0 = time.clock(), time.time()

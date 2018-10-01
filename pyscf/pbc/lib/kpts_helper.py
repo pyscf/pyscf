@@ -259,7 +259,7 @@ class VectorSplitter(object):
         self.__data__ = vector
         self.__offset__ = 0
 
-    def get(self, *shape):
+    def get(self, shape):
         """
         Retrieves the next array.
         Args:
@@ -268,8 +268,8 @@ class VectorSplitter(object):
         Returns:
             The array.
         """
-        if len(shape) == 1 and isinstance(shape[0], (list, tuple)):
-            shape = shape[0]
+        if isinstance(shape, int):
+            shape = (shape,)
         s = np.prod(shape)
         avail = self.__data__.size - self.__offset__
         if s > avail:

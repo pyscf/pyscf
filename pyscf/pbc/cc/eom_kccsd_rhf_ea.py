@@ -38,7 +38,7 @@ def v2a(cc, vec):
     """EA vector to apmplitudes."""
     vs = VectorSplitter(vec)
     nvir = cc.nmo - cc.nocc
-    return vs.get(nvir), vs.get(cc.nkpts, cc.nkpts, cc.nocc, nvir, nvir)
+    return vs.get(nvir), vs.get((cc.nkpts, cc.nkpts, cc.nocc, nvir, nvir))
 
 
 def vector_size(cc):

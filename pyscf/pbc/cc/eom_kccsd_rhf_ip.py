@@ -37,7 +37,7 @@ def a2v(cc, t1, t2):
 def v2a(cc, vec):
     """IP vector to apmplitudes."""
     vs = VectorSplitter(vec)
-    return vs.get(cc.nocc), vs.get(cc.nkpts, cc.nkpts, cc.nocc, cc.nocc, cc.nmo - cc.nocc)
+    return vs.get(cc.nocc), vs.get((cc.nkpts, cc.nkpts, cc.nocc, cc.nocc, cc.nmo - cc.nocc))
 
 
 def vector_size(cc):
