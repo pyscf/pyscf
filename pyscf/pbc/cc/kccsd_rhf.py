@@ -675,7 +675,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                 guess = []
                 if koopmans:
                     # Get location of padded elements in occupied and virtual space
-                    nonzero_opadding = padding_k_idx(self, kind="split")[0]
+                    nonzero_opadding = padding_k_idx(self, kind="split")[0][kshift]
 
                     for n in nonzero_opadding[::-1][:nroots]:
                         g = np.zeros(size)
@@ -915,7 +915,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                 guess = []
                 if koopmans:
                     # Get location of padded elements in occupied and virtual space
-                    nonzero_vpadding = padding_k_idx(self, kind="split")[1]
+                    nonzero_vpadding = padding_k_idx(self, kind="split")[1][kshift]
 
                     for n in nonzero_vpadding[:nroots]:
                         g = np.zeros(size)
