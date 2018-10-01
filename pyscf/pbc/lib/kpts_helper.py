@@ -20,6 +20,7 @@
 
 import itertools
 from collections import OrderedDict
+from numbers import Number
 import numpy as np
 import scipy.linalg
 from pyscf import lib
@@ -269,10 +270,14 @@ class VectorSplitter(object):
         Returns:
             The array.
         """
-        if isinstance(destination, int):
+        if isinstance(destination, Number):
             destination = np.zeros((destination,), dtype=self.__data__.dtype)
         elif isinstance(destination, tuple):
             destination = np.zeros(destination, dtype=self.__data__.dtype)
+        elif isinstance(destination, np.ndarray):
+            pass
+        else:
+            raise ValueError("Unknown destination: %s" % str(destination))
 
         if slc is None:
             take_size = np.prod(destination.shape)
