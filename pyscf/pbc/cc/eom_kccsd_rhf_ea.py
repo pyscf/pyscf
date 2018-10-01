@@ -27,6 +27,7 @@ import time
 
 
 def iter_12(cc, k):
+    """Iterates over EA index slices."""
     o, v = padding_k_idx(cc, kind="split")
     kconserv = cc.khelper.kconserv
 
@@ -39,6 +40,7 @@ def iter_12(cc, k):
 
 
 def a2v(cc, t1, t2, k):
+    """EA amplitudes to vector."""
     itr = iter_12(cc, k)
 
     vc = VectorComposer(t1.dtype)
