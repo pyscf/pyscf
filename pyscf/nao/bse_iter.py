@@ -17,8 +17,7 @@ class bse_iter(gw):
     """
     xc_code_kw = kw['xc_code'] if 'xc_code' in kw else None
     gw.__init__(self, **kw)
-    #print(__name__, ' dtype ', self.dtype)
-
+    
     self.l0_ncalls = 0
     self.dip_ab = [d.toarray() for d in self.dipole_coo()]
     self.norbs2 = self.norbs**2
@@ -76,40 +75,45 @@ class bse_iter(gw):
     """
     from pyscf.nao.m_fermi_dirac import fermi_dirac_occupations
 
-    self.ksn2e_l0 = require(zeros((1,self.nspin,self.norbs)), dtype=self.dtype, requirements='CW')
-    self.ksn2e_l0[0,0,:] = mo_energy
+    self.ksn2e_l0 = np.copy(mo_energy).reshape((self.nspin,self.norbs))
 
     ksn2fd = fermi_dirac_occupations(self.telec, self.ksn2e_l0, self.fermi_energy)
-    if all(ksn2fd[0,0,:]>self.nfermi_tol):
-      print(__name__, self.telec, nfermi_tol, ksn2fd[0,0,:])
+    if np.all(ksn2fd>self.nfermi_tol):
+      print(__name__, self.telec, nfermi_tol, ksn2fd)
       raise RuntimeError('telec is too high?')
     self.ksn2f_l0 = (3-self.nspin)*ksn2fd
 
-    self.x_l0 = mo_coeff[0,:,:,:,0]
-    self.nfermi_l0 = array([argmax(ksn2fd[0,s,:]<self.nfermi_tol) for s in range(self.nspin)], dtype=int)
-    self.vstart_l0 = array([argmax(1.0-ksn2fd[0,s,:]>=self.nfermi_tol) for s in range(self.nspin)], dtype=int)
+    self.x_l0 = np.copy(mo_coeff).reshape((self.nspin,self.norbs,self.norbs)) 
+
+    tol = self.nfermi_tol
+    self.nfermi_l0 = array([argmax(ksn2fd[s,:]<tol) for s in range(self.nspin)], dtype=int)
+    self.vstart_l0 = array([argmax(1-ksn2fd[s,:]>=tol) for s in range(self.nspin)], dtype=int)
     self.xocc_l0 = [mo_coeff[0,s,:nfermi,:,0] for s,nfermi in enumerate(self.nfermi_l0)]
     self.xvrt_l0 = [mo_coeff[0,s,vstart:,:,0] for s,vstart in enumerate(self.vstart_l0)]
 
-
   def apply_l0(self, sab, comega=1j*0.0):
     """ This applies the non-interacting four point Green's function to a suitable vector (e.g. dipole matrix elements)"""
-    assert sab.size==(self.norbs2), "%r,%r"%(sab.size,self.norbs2)
-
-    sab = sab.reshape([self.norbs,self.norbs])
+    assert sab.size==(self.nspin*self.norbs2)
     self.l0_ncalls+=1
-
-    nm2v = zeros((self.norbs,self.norbs), self.dtypeComplex)
-    nm2v[self.vstart_l0[0]:, :self.nfermi_l0[0]] = blas.cgemm(1.0, dot(self.xvrt_l0[0], sab), self.xocc_l0[0].T)
-    nm2v[:self.nfermi_l0[0], self.vstart_l0[0]:] = blas.cgemm(1.0, dot(self.xocc_l0[0], sab), self.xvrt_l0[0].T)
     
-    for n,[en,fn] in enumerate(zip(self.ksn2e_l0[0,0,:],self.ksn2f_l0[0,0,:])):
-      for m,[em,fm] in enumerate(zip(self.ksn2e_l0[0,0,:],self.ksn2f_l0[0,0,:])):
-        nm2v[n,m] = nm2v[n,m] * (fn-fm) * ( 1.0 / (comega - (em - en)))
+    sab = sab.reshape((self.nspin, self.norbs,self.norbs))
+    ab2v = np.zeros_like(sab, dtype=self.dtypeComplex)
+    
+    for s,(ab,xv,xo,x,n2e,n2f) in enumerate(zip(
+      sab,self.xvrt_l0,self.xocc_l0,self.x_l0,self.ksn2e_l0,self.ksn2f_l0)):
+        
+      nm2v = zeros((self.norbs,self.norbs), self.dtypeComplex)
+      nm2v[self.vstart_l0[s]:, :self.nfermi_l0[s]] = blas.cgemm(1.0, dot(xv,ab),xo.T)
+      nm2v[:self.nfermi_l0[s], self.vstart_l0[s]:] = blas.cgemm(1.0, dot(xo,ab),xv.T)
+    
+      for n,(en,fn) in enumerate(zip(n2e,n2f)):
+        for m,(em,fm) in enumerate(zip(n2e,n2f)):
+          nm2v[n,m] = nm2v[n,m] * (fn-fm) / (comega - (em - en))
 
-    nb2v = blas.cgemm(1.0, nm2v, self.x_l0[0])
-    ab2v = blas.cgemm(1.0, self.x_l0[0].T, nb2v)
-    return ab2v
+      nb2v = blas.cgemm(1.0, nm2v, x)
+      ab2v[s] += blas.cgemm(1.0, x.T, nb2v)
+      
+    return ab2v.reshape(-1)
 
   def apply_l0_exp(self, sab, comega=1j*0.0):
     """ This applies the non-interacting four point Green's function to a suitable vector (e.g. dipole matrix elements)"""
@@ -228,9 +232,10 @@ class bse_iter(gw):
     """ Non-interacting average polarizability """
     p = np.zeros(len(comegas), dtype=self.dtypeComplex)
     for iw,omega in enumerate(comegas):
-      for ixyz in range(3):
-        vab = self.apply_l0(self.dip_ab[ixyz], omega)
-        p[iw] += (vab*self.dip_ab[ixyz]).sum()/3.0
+      for dip in self.dip_ab:
+        d = np.concatenate([dip.reshape(-1) for s in range(self.nspin)])
+        vab = self.apply_l0(d, omega)
+        p[iw] += (vab*d).sum()/3.0
     return p
 
   def comp_polariz_inter_ave(self, comegas):
