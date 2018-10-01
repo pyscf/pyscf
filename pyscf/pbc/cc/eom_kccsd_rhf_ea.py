@@ -70,7 +70,7 @@ def kernel(cc, nroots=1, koopmans=False, guess=None, partition=None,
         assert partition in ['mp', 'full']
     cc.ea_partition = partition
     evals = np.zeros((len(kptlist), nroots), np.float)
-    evecs = np.zeros((len(kptlist), nroots, size), np.complex)
+    evecs = []
 
     for k, kshift in enumerate(kptlist):
         adiag = diag(cc, kshift)
@@ -123,7 +123,7 @@ def kernel(cc, nroots=1, koopmans=False, guess=None, partition=None,
 
         evals_k = evals_k.real
         evals[k] = evals_k
-        evecs[k] = evecs_k
+        evecs.append(evecs_k)
 
         if nroots == 1:
             evals_k, evecs_k = [evals_k], [evecs_k]
