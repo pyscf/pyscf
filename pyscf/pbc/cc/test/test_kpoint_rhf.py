@@ -289,11 +289,12 @@ class KnownValues(unittest.TestCase):
 
         self.assertAlmostEqual(ecc1, ecc1_bench, 6)
 
+        # IP
         nroots = 3
         # Default
-        eip_d = mycc.ipccsd(nroots=nroots)[0]
+        eip_d, _ = mycc.ipccsd(nroots=nroots)
         # Koopmans
-        eip_k = mycc.ipccsd(nroots=nroots, koopmans=True)[0]
+        eip_k, _ = mycc.ipccsd(nroots=nroots, koopmans=True)
         # Manual (Koopmans)
         guess = []
         for i in range(mycc.nkpts):
@@ -301,10 +302,26 @@ class KnownValues(unittest.TestCase):
             nocc = mycc.get_nocc(True)[i]
             rr = np.arange(nroots)
             guess[-1][rr, nocc - rr - 1] = 1
-        eip_m = mycc.ipccsd(nroots=3, guess=guess)[0]
+        eip_m, _ = mycc.ipccsd(nroots=3, guess=guess)
 
         np.testing.assert_allclose(eip_k, eip_m)
         np.testing.assert_allclose(eip_d[:, 0], eip_k[:, 0], atol=1e-4)
+
+        # EA
+        # Default
+        eea_d, _ = mycc.eaccsd(nroots=nroots)
+        # Koopmans
+        eea_k, _ = mycc.eaccsd(nroots=nroots, koopmans=True)
+        # Manual (Koopmans)
+        guess = []
+        for i in range(mycc.nkpts):
+            guess.append(np.zeros((nroots, eom_kccsd_rhf_ea.vector_size(mycc, i))))
+            rr = np.arange(nroots)
+            guess[-1][rr, rr] = 1
+        eea_m, _ = mycc.eaccsd(nroots=3, guess=guess)
+
+        np.testing.assert_allclose(eea_k, eea_m)
+        np.testing.assert_allclose(eea_d[1, :], eea_k[1, :], atol=1e-4)
 
     def _test_cu_metallic_frozen_occ(self, kmf, cell):
         assert cell.mesh == [7, 7, 7]
