@@ -110,7 +110,7 @@ def kernel(cc, nroots=1, koopmans=False, guess=None, partition=None,
         adiag = mask_frozen(cc, adiag, kshift, const=LARGE_DENOM)
         size = vector_size(cc, kshift)
         if partition == 'full':
-            cc._ipccsd_diag_matrix2 = v2a(cc, adiag)[1]
+            cc._ipccsd_diag_matrix2 = v2a(cc, adiag, kshift)[1]
 
         if guess is not None:
             guess_k = guess[k]
