@@ -44,16 +44,16 @@ def vxc_lil(self, **kw):
   atom2s = zeros((self.natm+1), dtype=int64)
   for atom,sp in enumerate(self.atom2sp): atom2s[atom+1]=atom2s[atom]+me.ao1.sp2norbs[sp]
   
-  sqm = [zeros((atom2s[-1],atom2s[-1]), dtype=dtype) for i in range((self.nspin-1)*2+1)]  
+  #sqm = [zeros((atom2s[-1],atom2s[-1]), dtype=dtype) for i in range((self.nspin-1)*2+1)]  
   lil = [lil_matrix((atom2s[-1],atom2s[-1]), dtype=dtype) for i in range((self.nspin-1)*2+1)]
 
   for atom1,[sp1,rv1,s1,f1] in enumerate(zip(self.atom2sp,self.atom2coord,atom2s,atom2s[1:])):
     for atom2,[sp2,rv2,s2,f2] in enumerate(zip(self.atom2sp,self.atom2coord,atom2s,atom2s[1:])):
       blk = xc_scalar_ni(me,sp1,rv1,sp2,rv2,xc_code=xc_code,**kw)
       for i,b in enumerate(blk): lil[i][s1:f1,s2:f2] = b[:,:]
-      for i,b in enumerate(blk): sqm[i][s1:f1,s2:f2] = b[:,:]
+      #for i,b in enumerate(blk): sqm[i][s1:f1,s2:f2] = b[:,:]
 
-  for i,m in enumerate(sqm):
-    print(__name__, i, abs(m-m.T).sum(), abs(m).sum())
+  #for i,m in enumerate(sqm):
+  #  print(__name__, i, abs(m-m.T).sum(), abs(m).sum())
 
   return lil
