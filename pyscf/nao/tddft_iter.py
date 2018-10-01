@@ -1,4 +1,5 @@
 from __future__ import print_function, division
+import sys
 from copy import copy
 import numpy as np
 from numpy import require, zeros_like
@@ -72,19 +73,18 @@ class tddft_iter(chi0_matvec):
       if self.nspin==1:
         self.ss2kernel = [[self.kernel]]
       elif self.nspin==2:
-        self.ss2kernel = [[self.kernel,self.kernel], [self.kernel,self.kernel]]
+        self.ss2kernel = [[[self.kernel,0.0],[self.kernel,0.0]], [[self.kernel,0.0],[self.kernel,0.0]]]
         
       # List of POINTERS !!! of kernel [[(up,up), (up,dw)], [(dw,up), (dw,dw)]] TAKE CARE!!!
       
-      nk = self.nprod*(self.nprod+1)//2
       if xc=='RPA' or xc=='HF': 
         pass
       elif xc=='LDA' or xc=='GGA': 
         if self.nspin==1:
-          self.comp_fxc_pack(kernel=self.kernel.reshape((1,nk)), **kw)
+          self.comp_fxc_pack(kernel=self.kernel.reshape((1,self.nprod*(self.nprod+1)//2)), **kw)
         elif self.nspin==2:
-          kkk = self.comp_fxc_pack(**kw)+self.kernel
-          self.ss2kernel = [[kkk[0],kkk[1]], [kkk[1],kkk[2]]]
+          h,k = self.kernel, [m.tocsr() for m in self.comp_fxc_lil(**kw)]
+          self.ss2kernel = [[[h,k[0]],[h,k[1]]], [[h,k[1]],[h,k[2]]]]
       else:
         print(' xc_code', xc_code, xc, xc_code.split(','))
         raise RuntimeError('unkn xc_code')
@@ -145,26 +145,45 @@ class tddft_iter(chi0_matvec):
 
     if info != 0: print("LGMRES Warning: info = {0}".format(info))
     return resgm
-  
+
   def vext2veff_matvec(self, vin):
     self.matvec_ncalls+=1
     dn0 = self.apply_rf0(vin, self.comega_current)
+    vcre,vcim = self.apply_kernel(dn0)
+    return vin - (vcre + 1.0j*vcim)
 
-    st2k  = self.ss2kernel
-    vcre  = np.zeros_like(vin, dtype=self.dtype).reshape((self.nspin,self.nprod))
-    vcim  = np.zeros_like(vin, dtype=self.dtype).reshape((self.nspin,self.nprod))
-    daux  = np.zeros((self.nprod), dtype=self.dtype)
-    s2dn0 = dn0.reshape((self.nspin,self.nprod))
+  def apply_kernel(self, dn):
+    if self.nspin==1:
+      return self.apply_kernel_nspin1(dn)
+    elif self.nspin==2:
+      return self.apply_kernel_nspin2(dn)
+
+  def apply_kernel_nspin1(self, dn):
     
+    daux  = np.zeros(self.nprod, dtype=self.dtype)
+    daux[:] = require(dn.real, dtype=self.dtype, requirements=["A","O"])
+    vcre = self.spmv(self.nprod, 1.0, self.kernel, daux)
+    
+    daux[:] = require(dn.imag, dtype=self.dtype, requirements=["A","O"])
+    vcim = self.spmv(self.nprod, 1.0, self.kernel, daux)
+    return vcre,vcim
+
+  def apply_kernel_nspin2(self, dn):
+
+    st2k = self.ss2kernel
+    vcre = np.zeros((2,self.nspin,self.nprod), dtype=self.dtype)
+    daux = np.zeros((self.nprod), dtype=self.dtype)
+    s2dn = dn.reshape((self.nspin,self.nprod))
+
     for s in range(self.nspin):
       for t in range(self.nspin):
-        daux[:]  = require(s2dn0[t].real, dtype=self.dtype, requirements=["A", "O"])
-        vcre[s] += self.spmv(self.nprod, 1.0, st2k[s][t], daux)
-    
-        daux[:]  = require(s2dn0[t].imag, dtype=self.dtype, requirements=["A", "O"])
-        vcim[s] += self.spmv(self.nprod, 1.0, st2k[s][t], daux)
-    
-    return vin - (vcre.reshape(-1) + 1.0j*vcim.reshape(-1))
+        for ireim,sreim in enumerate(('real', 'imag')):
+          daux[:] = require(getattr(s2dn[t], sreim), dtype=self.dtype, requirements=["A","O"])
+          vcre[ireim,s] += self.spmv(self.nprod, 1.0, st2k[s][t][0], daux)
+          vcre[ireim,s] += st2k[s][t][1]*daux
+
+    return vcre[0].reshape(-1),vcre[1].reshape(-1)
+
 
   def comp_polariz_inter_xx(self, comegas, tmp_fname=None):
     """  Compute the interacting polarizability along the xx direction  """

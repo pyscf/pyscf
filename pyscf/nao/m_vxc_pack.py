@@ -29,7 +29,7 @@ def vxc_pack(self, **kw):
   """
   from pyscf.nao.m_xc_scalar_ni import xc_scalar_ni
   from pyscf.nao.m_ao_matelem import ao_matelem_c
-  from pyscf.nao.m_pack2den import cp_block_pack_u
+  from pyscf.nao.m_pack2den import cp_block_pack_u, pack2den_u
 
   #sv, dm, xc_code, deriv, kernel=None, ao_log=None, dtype=float64, **kvargs
   sv = self
@@ -47,6 +47,8 @@ def vxc_pack(self, **kw):
   sp2rcut = array([max(mu2rcut) for mu2rcut in me.ao1.sp_mu2rcut])
   norbs = atom2s[-1]
 
+  if self.nspin>1 : raise RuntimeWarning(__name__ + ': fxc are generally not symmetric.')
+  
   if kernel is None: 
     kernel = zeros(( (self.nspin-1)*2+1, norbs*(norbs+1)//2), dtype=dtype )
 
@@ -55,6 +57,8 @@ def vxc_pack(self, **kw):
     print('(self.nspin-1)*2+1 ', (self.nspin-1)*2+1      )
     print('norbs*(norbs+1)//2 ', int(norbs*(norbs+1)//2) )
     raise ValueError("wrong dimension for kernel")
+
+  #sqk = zeros(( (self.nspin-1)*2+1, norbs,norbs), dtype=dtype )
 
   for atom1,[sp1,rv1,s1,f1] in enumerate(zip(sv.atom2sp,sv.atom2coord,atom2s,atom2s[1:])):
     for atom2,[sp2,rv2,s2,f2] in enumerate(zip(sv.atom2sp,sv.atom2coord,atom2s,atom2s[1:])):

@@ -236,8 +236,10 @@ class mf(nao):
     if init_dens_libnao()!=0 : raise RuntimeError('init_dens_libnao()!=0')
     return dens_libnao(coords, self.nspin)
 
-  def exc(self, dm, xc_code, **kw):   # Compute exchange-correlation energies
+  def exc(self, dm=None, xc_code=None, **kw):   # Compute exchange-correlation energies
     from pyscf.nao.m_exc import exc
+    dm = self.make_rdm1() if dm is None else dm
+    xc_code = self.xc_code if xc_code is None else xc_code
     return exc(self, dm, xc_code, **kw)
 
   def get_init_guess(self, mol=None, key=None):
