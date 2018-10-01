@@ -18,7 +18,7 @@
 from pyscf.lib import logger, linalg_helper, einsum
 from pyscf.lib.parameters import LARGE_DENOM
 
-from pyscf.pbc.lib.kpts_helper import nested_to_vector, vector_to_nested
+from pyscf.pbc.lib.kpts_helper import VectorSplitter, VectorComposer
 from pyscf.pbc.mp.kmp2 import padding_k_idx
 
 import numpy as np
@@ -26,22 +26,18 @@ import numpy as np
 import time
 
 
-def vector_spec(cc):
-    """Description of the IP vector."""
-    return (
-        dict(type="array", shape=(cc.nocc,)),
-        dict(type="array", shape=(cc.nkpts, cc.nkpts, cc.nocc, cc.nocc, cc.nmo - cc.nocc)),
-    )
-
-
 def a2v(cc, t1, t2):
     """IP amplitudes to a vector."""
-    return nested_to_vector((t1, t2))[0]
+    vc = VectorComposer(t1.dtype)
+    vc.put(t1)
+    vc.put(t2)
+    return vc.flush()
 
 
 def v2a(cc, vec):
     """IP vector to apmplitudes."""
-    return vector_to_nested(vec, vector_spec(cc))
+    vs = VectorSplitter(vec)
+    return vs.get(cc.nocc), vs.get(cc.nkpts, cc.nkpts, cc.nocc, cc.nocc, cc.nmo - cc.nocc)
 
 
 def vector_size(cc):

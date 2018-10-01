@@ -204,204 +204,86 @@ def get_kconserv3(cell, kpts, kijkab):
     return kconserv
 
 
-def describe_nested(data):
-    """
-    Retrieves the description of a nested array structure.
-    Args:
-        data (iterable): a nested structure to describe;
+class VectorComposer(object):
+    def __init__(self, dtype):
+        """
+        Composes vectors.
+        Args:
+            dtype (type): array data type;
+        """
+        self.__dtype__ = dtype
+        self.__transactions__ = []
+        self.__total_size__ = 0
+        self.__data__ = None
 
-    Returns:
-        - A nested structure where numpy arrays are replaced by their shapes;
-        - The overall number of scalar elements;
-        - The common data type;
-    """
-    if isinstance(data, np.ndarray):
-        return dict(
-            type="array",
-            shape=data.shape,
-        ), data.size, data.dtype
-    elif isinstance(data, (list, tuple)):
-        total_size = 0
-        struct = []
-        dtype = None
-        for i in data:
-            i_struct, i_size, i_dtype = describe_nested(i)
-            struct.append(i_struct)
-            total_size += i_size
-            if dtype is not None and i_dtype is not None and i_dtype != dtype:
-                raise ValueError("Several different numpy dtypes encountered: %s and %s" %
-                                 (str(dtype), str(i_dtype)))
-            dtype = i_dtype
-        return struct, total_size, dtype
-    else:
-        raise ValueError("Unknown object to describe: %s" % str(data))
+    def put(self, a):
+        """
+        Puts array into vector.
+        Args:
+            a (ndarray): array to put;
+        """
+        if a.dtype != self.__dtype__:
+            raise ValueError("dtype mismatch: passed %s vs expected %s" % (a.dtype, self.dtype))
+        self.__transactions__.append(a)
+        self.__total_size__ += a.size
 
-
-def nested_to_vector(data, destination=None, offset=0):
-    """
-    Puts any nested iterable into a vector.
-    Args:
-        data (Iterable): a nested structure of numpy arrays;
-        destination (array): array to store the data to;
-        offset (int): array offset;
-
-    Returns:
-        If destination is not specified, returns a vectorized data and the original nested structure to restore the data
-        into its original form. Otherwise returns a new offset.
-    """
-    if destination is None:
-        struct, total_size, dtype = describe_nested(data)
-        destination = np.empty(total_size, dtype=dtype)
-        rtn = True
-    else:
-        rtn = False
-
-    if isinstance(data, np.ndarray):
-        destination[offset:offset + data.size] = data.ravel()
-        offset += data.size
-    elif isinstance(data, (list, tuple)):
-        for i in data:
-            offset = nested_to_vector(i, destination, offset)
-    else:
-        raise ValueError("Unknown object to vectorize: %s" % str(data))
-
-    if rtn:
-        return destination, struct
-    else:
-        return offset
-
-
-def vector_to_nested(vector, struct, copy=True, ensure_size_matches=True, destination=None, destination_indexes=None):
-    """
-    Retrieves the original nested structure from the vector.
-    Args:
-        vector (ndarray): a vector to decompose;
-        struct (Iterable): a nested structure with arrays' shapes;
-        copy (bool): whether to copy arrays;
-        ensure_size_matches (bool): if True, ensures all elements from the vector are used;
-        destination (ndarray): an array to write to;
-        destination_indexes (Iterable): first indexes to the array;
-
-    Returns:
-        A nested structure with numpy arrays and, if `ensure_size_matches=False`, the number of vector elements used.
-    """
-    if len(vector.shape) != 1:
-        raise ValueError("Only vectors accepted, got: %s" % repr(vector.shape))
-
-    if destination_indexes is None:
-        destination_indexes = tuple()
-
-    if isinstance(struct, dict):
-
-        if "type" not in struct:
-            raise ValueError("Missing 'type' key in structure: {}".format(struct))
-
-        # Case: array
-        if struct["type"] == "array":
-
-            shape = struct["shape"]
-            expected_size = np.prod(shape)
-            if ensure_size_matches:
-                if vector.size != expected_size:
-                    raise ValueError("Structure size mismatch: expected %s = %d, found %d" %
-                                     (repr(shape), expected_size, vector.size,))
-            if len(vector) < expected_size:
-                raise ValueError("Additional %d = (%d = %s) - %d vector elements are required" %
-                                 (expected_size - len(vector), expected_size,
-                                  repr(shape), len(vector),))
-
-            if destination is None:
-                if "slice" in struct:
-                    raise ValueError("Cannot apply slice without destination array")
-                a = vector[:expected_size].reshape(shape)
-                if copy:
-                    a = a.copy()
-                if ensure_size_matches:
-                    return a
-                else:
-                    return a, expected_size
-
-            else:
-                if "slice" in struct:
-                    slc = struct["slice"]
-                    destination_indexes = destination_indexes + slc
-                else:
-                    if shape != destination.shape[len(destination_indexes):]:
-                        raise ValueError("Composite array shape mismatch: expected %s, found %s" %
-                                         (shape, destination.shape[len(destination_indexes):]))
-                destination[np.ix_(*destination_indexes)] = vector[:expected_size].reshape(shape)
-                if ensure_size_matches:
-                    return destination
-                else:
-                    return destination, expected_size
-
-        # Case: composite
-        elif struct["type"] == "composite":
-
-            shape = struct["shape"]
-            dtype = struct["dtype"]
-            underlying_struct = struct["data"]
-            if destination is not None:
-                if shape != destination.shape[len(destination_indexes):]:
-                    raise ValueError("Composite array shape mismatch: expected %s, found %s" %
-                                     (shape, destination.shape[len(destination_indexes):]))
-                if dtype != destination.dtype:
-                    raise ValueError("Dtype mismatch: expected %s, found %s" % (destination.dtype, dtype))
-            else:
-                destination = np.zeros(struct["shape"], dtype=struct["dtype"])
-                destination_indexes = tuple()
-
-            return vector_to_nested(vector, underlying_struct,
-                                    ensure_size_matches=ensure_size_matches,
-                                    destination=destination,
-                                    destination_indexes=destination_indexes
-                                    )
-
-        else:
-            raise ValueError("Unknown structure type: {}".format(struct["type"]))
-
-    # Case: nested
-    elif isinstance(struct, (list, tuple)):
-
-        if destination is None:
+    def flush(self):
+        """
+        Composes the vector.
+        Returns:
+            The composed vector.
+        """
+        if self.__data__ is None:
+            self.__data__ = result = np.empty(self.__total_size__, dtype=self.__dtype__)
             offset = 0
-            result = []
-            for i in struct:
-                nested, size = vector_to_nested(vector[offset:], i, copy=copy, ensure_size_matches=False)
-                offset += size
-                result.append(nested)
-
-            if ensure_size_matches:
-                if vector.size != offset:
-                    raise ValueError("%d additional elements found" % (vector.size - offset))
-                return result
-            else:
-                return result, offset
-
         else:
-            expected_len = destination.shape[len(destination_indexes)]
-            if len(struct) != expected_len:
-                raise ValueError("Nested length mismatch: expected %d, found %d" % (expected_len, len(struct)))
+            offset = self.__data__.size
+            self.__data__ = result = np.empty(self.__total_size__ + self.__data__.size, dtype=self.__dtype__)
 
-            offset = 0
-            for i, element in enumerate(struct):
-                offset += vector_to_nested(
-                    vector[offset:],
-                    element,
-                    ensure_size_matches=False,
-                    destination=destination,
-                    destination_indexes=destination_indexes + ((i,),),
-                )[1]
+        for i in self.__transactions__:
+            s = i.size
+            result[offset:offset + s] = i.reshape(-1)
+            offset += s
+        self.__transactions__ = []
 
-            if ensure_size_matches:
-                if vector.size != offset:
-                    raise ValueError("%d additional elements found" % (vector.size - offset))
-                return destination
-            else:
-                return destination, offset
+        return result
 
-    else:
-        raise ValueError("Unknown object to compose: %s" % (str(struct)))
+
+class VectorSplitter(object):
+    def __init__(self, vector):
+        """
+        Splits vectors into pieces.
+        Args:
+            vector (ndarray): vector to split;
+        """
+        self.__data__ = vector
+        self.__offset__ = 0
+
+    def get(self, *shape):
+        """
+        Retrieves the next array.
+        Args:
+            *shape: the shape of the array;
+
+        Returns:
+            The array.
+        """
+        if len(shape) == 1 and isinstance(shape[0], (list, tuple)):
+            shape = shape[0]
+        s = np.prod(shape)
+        avail = self.__data__.size - self.__offset__
+        if s > avail:
+            raise ValueError("Insufficient # of elements: required %d %s, found %d" % (s, shape, avail))
+        result = self.__data__[self.__offset__:self.__offset__ + s].reshape(shape)
+        self.__offset__ += s
+        return result
+
+    def truncate(self):
+        """
+        Truncates the data vector.
+        """
+        self.__data__ = self.__data__[self.__offset__:].copy()
+        self.__offset__ = 0
 
 
 class KptsHelper(lib.StreamObject):

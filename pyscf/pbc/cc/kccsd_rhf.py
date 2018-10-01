@@ -36,7 +36,7 @@ from pyscf.pbc.cc.eom_kccsd_rhf_ea import kernel as kernel_ea
 from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM
 from pyscf.lib import linalg_helper
 from pyscf.pbc.lib import kpts_helper
-from pyscf.pbc.lib.kpts_helper import member, gamma_point, nested_to_vector, vector_to_nested
+from pyscf.pbc.lib.kpts_helper import member, gamma_point, VectorComposer, VectorSplitter
 from pyscf import __config__
 
 # einsum = np.einsum
@@ -385,11 +385,16 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
 
     def amplitudes_to_vector(self, t1, t2):
         """Ground state amplitudes to a vector."""
-        return nested_to_vector((t1, t2))[0]
+        vc = VectorComposer(t1.dtype)
+        vc.put(t1)
+        vc.put(t2)
+        return vc.flush()
 
     def vector_to_amplitudes(self, vec):
         """Ground state vector to apmplitudes."""
-        return vector_to_nested(vec, self.ccsd_vector_desc)
+        vs = VectorSplitter(vec)
+        nvir = self.nmo - self.nocc
+        return vs.get(self.nkpts, self.nocc, nvir), vs.get((self.nkpts,) * 3 + (self.nocc,) * 2 + (nvir,) * 2)
 
     def init_amps(self, eris):
         time0 = time.clock(), time.time()

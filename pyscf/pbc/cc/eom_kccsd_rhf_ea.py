@@ -18,7 +18,7 @@
 from pyscf.lib import logger, linalg_helper, einsum
 from pyscf.lib.parameters import LARGE_DENOM
 
-from pyscf.pbc.lib.kpts_helper import nested_to_vector, vector_to_nested
+from pyscf.pbc.lib.kpts_helper import VectorSplitter, VectorComposer
 from pyscf.pbc.mp.kmp2 import padding_k_idx
 
 import numpy as np
@@ -26,23 +26,19 @@ import numpy as np
 import time
 
 
-def vector_spec(cc):
-    """Description of the EA vector."""
-    nvir = cc.nmo - cc.nocc
-    return (
-        dict(type="array", shape=(nvir,)),
-        dict(type="array", shape=(cc.nkpts, cc.nkpts, cc.nocc, nvir, nvir)),
-    )
-
-
 def a2v(cc, t1, t2):
     """EA amplitudes to a vector."""
-    return nested_to_vector((t1, t2))[0]
+    vc = VectorComposer(t1.dtype)
+    vc.put(t1)
+    vc.put(t2)
+    return vc.flush()
 
 
 def v2a(cc, vec):
     """EA vector to apmplitudes."""
-    return vector_to_nested(vec, vector_spec(cc))
+    vs = VectorSplitter(vec)
+    nvir = cc.nmo - cc.nocc
+    return vs.get(nvir), vs.get(cc.nkpts, cc.nkpts, cc.nocc, nvir, nvir)
 
 
 def vector_size(cc):
