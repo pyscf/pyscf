@@ -10,6 +10,7 @@ from timeit import default_timer as timer
 from pyscf.data.nist import HARTREE2EV
 from pyscf.nao.chi0_matvec import chi0_matvec
 from pyscf.nao.m_blas_wrapper import spmv_wrapper
+from pyscf.nao.m_pack2den import pack2den_u
 
     
 class tddft_iter(chi0_matvec):
@@ -73,7 +74,7 @@ class tddft_iter(chi0_matvec):
       if self.nspin==1:
         self.ss2kernel = [[self.kernel]]
       elif self.nspin==2:
-        self.ss2kernel = [[[self.kernel,0.0],[self.kernel,0.0]], [[self.kernel,0.0],[self.kernel,0.0]]]
+        self.ss2kernel = [[self.kernel,self.kernel], [self.kernel,self.kernel]]
         
       # List of POINTERS !!! of kernel [[(up,up), (up,dw)], [(dw,up), (dw,dw)]] TAKE CARE!!!
       
@@ -83,8 +84,11 @@ class tddft_iter(chi0_matvec):
         if self.nspin==1:
           self.comp_fxc_pack(kernel=self.kernel.reshape((1,self.nprod*(self.nprod+1)//2)), **kw)
         elif self.nspin==2:
-          h,k = self.kernel, [m.tocsr() for m in self.comp_fxc_lil(**kw)]
-          self.ss2kernel = [[[h,k[0]],[h,k[1]]], [[h,k[1]],[h,k[2]]]]
+          kkk = self.comp_fxc_pack(**kw) + self.kernel
+          self.ss2kernel = [[kkk[0], kkk[1]], [kkk[1],kkk[2]]]
+          for s in range(self.nspin):
+            for t in range(self.nspin): assert self.ss2kernel[s][t].dtype==self.dtype
+
       else:
         print(' xc_code', xc_code, xc, xc_code.split(','))
         raise RuntimeError('unkn xc_code')
@@ -170,7 +174,6 @@ class tddft_iter(chi0_matvec):
 
   def apply_kernel_nspin2(self, dn):
 
-    st2k = self.ss2kernel
     vcre = np.zeros((2,self.nspin,self.nprod), dtype=self.dtype)
     daux = np.zeros((self.nprod), dtype=self.dtype)
     s2dn = dn.reshape((self.nspin,self.nprod))
@@ -179,8 +182,7 @@ class tddft_iter(chi0_matvec):
       for t in range(self.nspin):
         for ireim,sreim in enumerate(('real', 'imag')):
           daux[:] = require(getattr(s2dn[t], sreim), dtype=self.dtype, requirements=["A","O"])
-          vcre[ireim,s] += self.spmv(self.nprod, 1.0, st2k[s][t][0], daux)
-          vcre[ireim,s] += st2k[s][t][1]*daux
+          vcre[ireim,s] += self.spmv(self.nprod, 1.0, self.ss2kernel[s][t], daux)
 
     return vcre[0].reshape(-1),vcre[1].reshape(-1)
 

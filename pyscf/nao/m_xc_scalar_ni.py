@@ -34,10 +34,18 @@ def xc_scalar_ni(me, sp1,R1, sp2,R2, xc_code, deriv, **kw):
       matrix of orbital overlaps
     The procedure uses the numerical integration in coordinate space.
   """
+
   grids = build_3dgrid(me, sp1, R1, sp2, R2, **kw)
   rho = dens_libnao(grids.coords, me.sv.nspin)
-  exc, vxc, fxc, kxc = libxc.eval_xc(xc_code, rho.T, spin=me.sv.nspin-1, deriv=deriv)
 
+  THRS = 1e-12 
+  if me.sv.nspin==1: 
+    rho[rho<THRS] = 0.0
+  elif me.sv.nspin==2:
+    msk = np.logical_or(rho[:,0]<THRS, rho[:,1]<THRS)
+    rho[msk,0],rho[msk,1] = 0.0,0.0
+  
+  exc, vxc, fxc, kxc = libxc.eval_xc(xc_code, rho.T, spin=me.sv.nspin-1, deriv=deriv)
   ao1 = ao_eval(me.ao1, R1, sp1, grids.coords)
  
   if deriv==1 :

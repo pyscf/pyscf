@@ -25,12 +25,14 @@ class KnowValues(unittest.TestCase):
     mol = gto.M(verbose=1,atom='B 0 0 0; H 0 0.489 1.074; H 0 0.489 -1.074',basis='cc-pvdz',spin=3)
     gto_mf = dft.UKS(mol)
     gto_mf.kernel()
+    
     nao_mf = tddft_iter(gto=mol, mf=gto_mf, tol_loc=1e-5, tol_biloc=1e-7, xc_code='RPA')
+    
     comega = np.arange(0.0, 2.0, 0.01) + 1j*0.03
     polave = -nao_mf.polariz_inter_ave(comega, verbosity=0).imag
     data = np.array([comega.real*HARTREE2EV, polave])
     np.savetxt('test_143_h2b_uks_rpa_pb.txt', data.T, fmt=['%f','%f'])
-    #data_ref = np.loadtxt('test_131_h2b_uhf_nonin_pb.txt-ref').T
-    #self.assertTrue(np.allclose(data_ref, data, 5))
+    data_ref = np.loadtxt('test_143_h2b_uks_rpa_pb.txt-ref').T
+    self.assertTrue(np.allclose(data_ref, data, 5))
     
 if __name__ == "__main__": unittest.main()

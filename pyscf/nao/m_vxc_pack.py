@@ -38,7 +38,7 @@ def vxc_pack(self, **kw):
   ao_log = kw['ao_log'] if 'ao_log' in kw else self.ao_log
   xc_code = kw['xc_code'] if 'xc_code' in kw else self.xc_code
   kw.pop('xc_code',None)
-  dtype = kw['dtype'] if 'dtype' in kw else float64
+  dtype = kw['dtype'] if 'dtype' in kw else self.dtype
 
   aome = ao_matelem_c(ao_log.rr, ao_log.pp, sv, dm)
   me = aome.init_one_set(ao_log)
@@ -47,8 +47,6 @@ def vxc_pack(self, **kw):
   sp2rcut = array([max(mu2rcut) for mu2rcut in me.ao1.sp_mu2rcut])
   norbs = atom2s[-1]
 
-  if self.nspin>1 : raise RuntimeWarning(__name__ + ': fxc are generally not symmetric.')
-  
   if kernel is None: 
     kernel = zeros(( (self.nspin-1)*2+1, norbs*(norbs+1)//2), dtype=dtype )
 
@@ -57,8 +55,6 @@ def vxc_pack(self, **kw):
     print('(self.nspin-1)*2+1 ', (self.nspin-1)*2+1      )
     print('norbs*(norbs+1)//2 ', int(norbs*(norbs+1)//2) )
     raise ValueError("wrong dimension for kernel")
-
-  #sqk = zeros(( (self.nspin-1)*2+1, norbs,norbs), dtype=dtype )
 
   for atom1,[sp1,rv1,s1,f1] in enumerate(zip(sv.atom2sp,sv.atom2coord,atom2s,atom2s[1:])):
     for atom2,[sp2,rv2,s2,f2] in enumerate(zip(sv.atom2sp,sv.atom2coord,atom2s,atom2s[1:])):
