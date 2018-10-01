@@ -4,7 +4,7 @@ from numpy import array, argmax, einsum, require, zeros, dot
 from timeit import default_timer as timer
 from pyscf.nao import gw
 from scipy.linalg import blas
-from pyscf.nao.m_pack2den import pack2den_l
+from pyscf.nao.m_pack2den import pack2den_u
 
 class bse_iter(gw):
 
@@ -22,7 +22,7 @@ class bse_iter(gw):
     self.l0_ncalls = 0
     self.dip_ab = [d.toarray() for d in self.dipole_coo()]
     self.norbs2 = self.norbs**2
-    kernel_den = pack2den_l(self.kernel)
+    kernel_den = pack2den_u(self.kernel)
     n = self.norbs
     v_dab = self.v_dab
     cc_da = self.cc_da
@@ -33,7 +33,7 @@ class bse_iter(gw):
     #print(type(self.kernel_4p), self.kernel_4p.shape, 'this is just a reference kernel, must be removed later for sure')
 
     self.xc_code = self.xc_code if xc_code_kw is None else xc_code_kw 
-    xc = self.xc_code.split(',')[0]
+    xc = self.xc_code.split(',')[0].upper()
     if self.verbosity>0: 
       print(__name__, '     xc_code_mf ', self.xc_code_mf)
       print(__name__, ' xc_code_kernel ', self.xc_code_kernel)

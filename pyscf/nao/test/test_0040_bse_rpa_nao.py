@@ -18,7 +18,7 @@ from pyscf.nao import bse_iter
 
 class KnowValues(unittest.TestCase):
 
-  def test_bse_rpa(self):
+  def test_0040_bse_rpa_nao(self):
     """ Compute polarization with RPA via 2-point non-local potentials (BSE solver)  """
     from timeit import default_timer as timer
 
