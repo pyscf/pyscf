@@ -29,7 +29,10 @@ import time
 def vector_spec(cc):
     """Description of the EA vector."""
     nvir = cc.nmo - cc.nocc
-    return [(nvir,), (cc.nkpts, cc.nkpts, cc.nocc, nvir, nvir)]
+    return (
+        dict(type="array", shape=(nvir,)),
+        dict(type="array", shape=(cc.nkpts, cc.nkpts, cc.nocc, nvir, nvir)),
+    )
 
 
 def a2v(cc, t1, t2):

@@ -378,7 +378,10 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
     def ccsd_vector_desc(self):
         """Description of the ground-state vector."""
         nvir = self.nmo - self.nocc
-        return [(self.nkpts, self.nocc, nvir), (self.nkpts,) * 3 + (self.nocc,) * 2 + (nvir,) * 2]
+        return (
+            dict(type="array", shape=(self.nkpts, self.nocc, nvir)),
+            dict(type="array", shape=(self.nkpts,) * 3 + (self.nocc,) * 2 + (nvir,) * 2),
+        )
 
     def amplitudes_to_vector(self, t1, t2):
         """Ground state amplitudes to a vector."""

@@ -28,7 +28,10 @@ import time
 
 def vector_spec(cc):
     """Description of the IP vector."""
-    return [(cc.nocc,), (cc.nkpts, cc.nkpts, cc.nocc, cc.nocc, cc.nmo - cc.nocc)]
+    return (
+        dict(type="array", shape=(cc.nocc,)),
+        dict(type="array", shape=(cc.nkpts, cc.nkpts, cc.nocc, cc.nocc, cc.nmo - cc.nocc)),
+    )
 
 
 def a2v(cc, t1, t2):

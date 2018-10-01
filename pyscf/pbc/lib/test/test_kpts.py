@@ -55,7 +55,15 @@ class TestVecNested(unittest.TestCase):
             (numpy.random.rand(9),),
         )
         vec, desc = nested_to_vector(struct)
-        self.assertEqual(desc, [[(3, 1, 4), (5,)], [(9,)]])
+        self.assertEqual(desc, [
+            [
+                dict(type="array", shape=(3, 1, 4)),
+                dict(type="array", shape=(5,)),
+            ],
+            [
+                dict(type="array", shape=(9,)),
+            ]
+        ])
         self.assertEqual(len(vec), 3 * 4 + 5 + 9)
         struct_recovered = vector_to_nested(vec, desc)
         testing.assert_equal(struct, struct_recovered)

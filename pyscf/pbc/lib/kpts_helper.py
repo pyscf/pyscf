@@ -216,7 +216,10 @@ def describe_nested(data):
         - The common data type;
     """
     if isinstance(data, np.ndarray):
-        return data.shape, data.size, data.dtype
+        return dict(
+            type="array",
+            shape=data.shape,
+        ), data.size, data.dtype
     elif isinstance(data, (list, tuple)):
         total_size = 0
         struct = []
@@ -283,26 +286,34 @@ def vector_to_nested(vector, struct, copy=True, ensure_size_matches=True):
     if len(vector.shape) != 1:
         raise ValueError("Only vectors accepted, got: %s" % repr(vector.shape))
 
-    if isinstance(struct, tuple):
-        expected_size = np.prod(struct)
-        if ensure_size_matches:
-            if vector.size != expected_size:
-                raise ValueError("Structure size mismatch: expected %s = %d, found %d" %
-                                 (repr(struct), expected_size, vector.size,))
-        if len(vector) < expected_size:
-            raise ValueError("Additional %d = (%d = %s) - %d vector elements are required" %
-                             (expected_size - len(vector), expected_size,
-                              repr(struct), len(vector),))
-        a = vector[:expected_size].reshape(struct)
-        if copy:
-            a = a.copy()
+    if isinstance(struct, dict):
+        if "type" not in struct:
+            raise ValueError("Missing 'type' key in structure: {}".format(struct))
 
-        if ensure_size_matches:
-            return a
+        if struct["type"] == "array":
+            shape = struct["shape"]
+            expected_size = np.prod(shape)
+            if ensure_size_matches:
+                if vector.size != expected_size:
+                    raise ValueError("Structure size mismatch: expected %s = %d, found %d" %
+                                     (repr(shape), expected_size, vector.size,))
+            if len(vector) < expected_size:
+                raise ValueError("Additional %d = (%d = %s) - %d vector elements are required" %
+                                 (expected_size - len(vector), expected_size,
+                                  repr(shape), len(vector),))
+            a = vector[:expected_size].reshape(shape)
+            if copy:
+                a = a.copy()
+
+            if ensure_size_matches:
+                return a
+            else:
+                return a, expected_size
+
         else:
-            return a, expected_size
+            raise ValueError("Unknown structure type: {}".format(struct["type"]))
 
-    elif isinstance(struct, list):
+    elif isinstance(struct, (list, tuple)):
         offset = 0
         result = []
         for i in struct:
