@@ -271,14 +271,16 @@ def nested_to_vector(data, destination=None, offset=0):
         return offset
 
 
-def vector_to_nested(vector, struct, copy=True, ensure_size_matches=True):
+def vector_to_nested(vector, struct, copy=True, ensure_size_matches=True, destination=None, destination_indexes=None):
     """
     Retrieves the original nested structure from the vector.
     Args:
-        vector (array): a vector to decompose;
+        vector (ndarray): a vector to decompose;
         struct (Iterable): a nested structure with arrays' shapes;
         copy (bool): whether to copy arrays;
         ensure_size_matches (bool): if True, ensures all elements from the vector are used;
+        destination (ndarray): an array to write to;
+        destination_indexes (Iterable): first indexes to the array;
 
     Returns:
         A nested structure with numpy arrays and, if `ensure_size_matches=False`, the number of vector elements used.
@@ -286,11 +288,17 @@ def vector_to_nested(vector, struct, copy=True, ensure_size_matches=True):
     if len(vector.shape) != 1:
         raise ValueError("Only vectors accepted, got: %s" % repr(vector.shape))
 
+    if destination_indexes is None:
+        destination_indexes = tuple()
+
     if isinstance(struct, dict):
+
         if "type" not in struct:
             raise ValueError("Missing 'type' key in structure: {}".format(struct))
 
+        # Case: array
         if struct["type"] == "array":
+
             shape = struct["shape"]
             expected_size = np.prod(shape)
             if ensure_size_matches:
@@ -301,32 +309,90 @@ def vector_to_nested(vector, struct, copy=True, ensure_size_matches=True):
                 raise ValueError("Additional %d = (%d = %s) - %d vector elements are required" %
                                  (expected_size - len(vector), expected_size,
                                   repr(shape), len(vector),))
-            a = vector[:expected_size].reshape(shape)
-            if copy:
-                a = a.copy()
 
-            if ensure_size_matches:
-                return a
+            if destination is None:
+                a = vector[:expected_size].reshape(shape)
+                if copy:
+                    a = a.copy()
+                if ensure_size_matches:
+                    return a
+                else:
+                    return a, expected_size
+
             else:
-                return a, expected_size
+                if shape != destination.shape[len(destination_indexes):]:
+                    raise ValueError("Composite array shape mismatch: expected %s, found %s" %
+                                     (shape, destination.shape[len(destination_indexes):]))
+                destination[np.ix_(*destination_indexes)] = vector[:expected_size].reshape(shape)
+                if ensure_size_matches:
+                    return destination
+                else:
+                    return destination, expected_size
+
+        # Case: composite
+        elif struct["type"] == "composite":
+
+            shape = struct["shape"]
+            dtype = struct["dtype"]
+            underlying_struct = struct["data"]
+            if destination is not None:
+                if shape != destination.shape[len(destination_indexes):]:
+                    raise ValueError("Composite array shape mismatch: expected %s, found %s" %
+                                     (shape, destination.shape[len(destination_indexes):]))
+                if dtype != destination.dtype:
+                    raise ValueError("Dtype mismatch: expected %s, found %s" % (destination.dtype, dtype))
+            else:
+                destination = np.zeros(struct["shape"], dtype=struct["dtype"])
+                destination_indexes = tuple()
+
+            return vector_to_nested(vector, underlying_struct,
+                                    ensure_size_matches=ensure_size_matches,
+                                    destination=destination,
+                                    destination_indexes=destination_indexes
+                                    )
 
         else:
             raise ValueError("Unknown structure type: {}".format(struct["type"]))
 
+    # Case: nested
     elif isinstance(struct, (list, tuple)):
-        offset = 0
-        result = []
-        for i in struct:
-            nested, size = vector_to_nested(vector[offset:], i, copy=copy, ensure_size_matches=False)
-            offset += size
-            result.append(nested)
 
-        if ensure_size_matches:
-            if vector.size != offset:
-                raise ValueError("%d additional elements found" % (vector.size - offset))
-            return result
+        if destination is None:
+            offset = 0
+            result = []
+            for i in struct:
+                nested, size = vector_to_nested(vector[offset:], i, copy=copy, ensure_size_matches=False)
+                offset += size
+                result.append(nested)
+
+            if ensure_size_matches:
+                if vector.size != offset:
+                    raise ValueError("%d additional elements found" % (vector.size - offset))
+                return result
+            else:
+                return result, offset
+
         else:
-            return result, offset
+            expected_len = destination.shape[len(destination_indexes)]
+            if len(struct) != expected_len:
+                raise ValueError("Nested length mismatch: expected %d, found %d" % (expected_len, len(struct)))
+
+            offset = 0
+            for i, element in enumerate(struct):
+                offset += vector_to_nested(
+                    vector[offset:],
+                    element,
+                    ensure_size_matches=False,
+                    destination=destination,
+                    destination_indexes=destination_indexes + ((i,),),
+                )
+
+            if ensure_size_matches:
+                if vector.size != offset:
+                    raise ValueError("%d additional elements found" % (vector.size - offset))
+                return destination
+            else:
+                return destination, offset
 
     else:
         raise ValueError("Unknown object to compose: %s" % (str(struct)))

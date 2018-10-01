@@ -67,3 +67,27 @@ class TestVecNested(unittest.TestCase):
         self.assertEqual(len(vec), 3 * 4 + 5 + 9)
         struct_recovered = vector_to_nested(vec, desc)
         testing.assert_equal(struct, struct_recovered)
+
+    def test_composite(self):
+        struct = (
+            (numpy.random.rand(3, 1, 4), numpy.zeros(5)),
+            (numpy.random.rand(9),),
+        )
+        vec, desc = nested_to_vector(struct)
+
+        # Test orig
+        desc = ((desc[0][0], desc[0][1]), desc[1])
+        struct_recovered = vector_to_nested(vec, desc)
+        testing.assert_equal(struct, struct_recovered)
+
+        # Test modif
+        desc = ((dict(
+            type="composite",
+            dtype=float,
+            shape=(3, 1, 4),
+            data=(
+                dict(type="array", shape=(1, 4)),
+            ) * 3,
+        ), desc[0][1]), desc[1])
+        struct_recovered = vector_to_nested(vec, desc)
+        testing.assert_equal(struct, struct_recovered)
