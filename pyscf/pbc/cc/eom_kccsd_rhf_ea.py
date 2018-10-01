@@ -26,25 +26,47 @@ import numpy as np
 import time
 
 
+def iter_12(cc, k):
+    o, v = padding_k_idx(cc, kind="split")
+    kconserv = cc.khelper.kconserv
+
+    yield (v[k],)
+
+    for ki in range(cc.nkpts):
+        for ka in range(cc.nkpts):
+            kb = kconserv[k, ka, ki]
+            yield (ki,), (ka,), o[ki], v[ka], v[kb]
+
+
 def a2v(cc, t1, t2, k):
-    """EA amplitudes to a vector."""
+    itr = iter_12(cc, k)
+
     vc = VectorComposer(t1.dtype)
-    vc.put(t1)
-    vc.put(t2)
+    vc.put(t1[np.ix_(*next(itr))])
+    for slc in itr:
+        vc.put(t2[np.ix_(*slc)])
     return vc.flush()
 
 
 def v2a(cc, vec, k):
     """EA vector to apmplitudes."""
+    itr = iter_12(cc, k)
+    nvirt = cc.nmo - cc.nocc
+
     vs = VectorSplitter(vec)
-    nvir = cc.nmo - cc.nocc
-    return vs.get(nvir), vs.get((cc.nkpts, cc.nkpts, cc.nocc, nvir, nvir))
+    r1 = vs.get(nvirt, slc=next(itr))
+    r2 = np.zeros((cc.nkpts, cc.nkpts, cc.nocc, nvirt, nvirt), vec.dtype)
+    for slc in itr:
+        vs.get(r2, slc=slc)
+    return r1, r2
 
 
 def vector_size(cc, k):
     """The total number of elements in EA vector."""
-    nvir = cc.nmo - cc.nocc
-    return (cc.nmo - cc.nocc) + np.prod((cc.nkpts, cc.nkpts, cc.nocc, nvir, nvir))
+    size = 0
+    for slc in iter_12(cc, k):
+        size += np.prod(tuple(len(i) for i in slc))
+    return size
 
 
 def kernel(cc, nroots=1, koopmans=False, guess=None, partition=None,
