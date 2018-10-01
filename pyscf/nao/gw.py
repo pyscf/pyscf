@@ -1,14 +1,16 @@
 from __future__ import print_function, division
 import sys, numpy as np
-from numpy import stack, dot, zeros, einsum, pi, log, array, require
-from pyscf.nao import scf
 from copy import copy
-from pyscf.nao.m_pack2den import pack2den_u, pack2den_l
 from timeit import default_timer as timer
-from pyscf.nao.m_rf0_den import rf0_den, rf0_cmplx_ref_blk, rf0_cmplx_ref, rf0_cmplx_vertex_dp, rf0_cmplx_vertex_ac
+from numpy import stack, dot, zeros, einsum, pi, log, array, require
+
+from pyscf.data.nist import HARTREE2EV
+
+from pyscf.nao import scf
+from pyscf.nao.m_rf0_den import rf0_den, rf0_cmplx_ref_blk, rf0_cmplx_ref
+from pyscf.nao.m_rf0_den import rf0_cmplx_vertex_dp, rf0_cmplx_vertex_ac
 from pyscf.nao.m_rf_den import rf_den
 from pyscf.nao.m_rf_den_pyscf import rf_den_pyscf
-from pyscf.data.nist import HARTREE2EV
 from pyscf.nao.m_valence import get_start
 
 starting_time=timer()

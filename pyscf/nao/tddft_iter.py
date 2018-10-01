@@ -82,7 +82,7 @@ class tddft_iter(chi0_matvec):
         pass
       elif xc=='LDA' or xc=='GGA': 
         if self.nspin==1:
-          self.comp_fxc_pack(kernel=self.kernel.reshape((1,self.nprod*(self.nprod+1)//2)), **kw)
+          self.comp_fxc_pack(kernel=self.kernel, **kw)
         elif self.nspin==2:
           kkk = self.comp_fxc_pack(**kw) + self.kernel
           self.ss2kernel = [[kkk[0], kkk[1]], [kkk[1],kkk[2]]]

@@ -22,15 +22,6 @@ class bse_iter(gw):
     self.l0_ncalls = 0
     self.dip_ab = [d.toarray() for d in self.dipole_coo()]
     self.norbs2 = self.norbs**2
-    kernel_den = pack2den_u(self.kernel)
-    n = self.norbs
-    v_dab = self.v_dab
-    cc_da = self.cc_da
-    # self.x = self.mo_coeff[0,:,:,:,0] 
-    
-    """ Start with the Hartree kernel """
-    self.kernel_4p = (((v_dab.T*(cc_da*kernel_den))*cc_da.T)*v_dab).reshape([n*n,n*n])
-    #print(type(self.kernel_4p), self.kernel_4p.shape, 'this is just a reference kernel, must be removed later for sure')
 
     self.xc_code = self.xc_code if xc_code_kw is None else xc_code_kw 
     xc = self.xc_code.split(',')[0].upper()
@@ -39,6 +30,19 @@ class bse_iter(gw):
       print(__name__, ' xc_code_kernel ', self.xc_code_kernel)
       print(__name__, '    xc_code_scf ', self.xc_code_scf)
       print(__name__, '        xc_code ', self.xc_code)
+
+    if (xc=='LDA' or xc=='GGA') and self.xc_code_kernel.upper()=='RPA':
+      """ Need to add LDA or GGA xc kernel to Hartree kernel..."""
+      self.comp_fxc_pack(kernel=self.kernel, **kw)
+
+    kernel_den = pack2den_u(self.kernel)
+    n = self.norbs
+    v_dab = self.v_dab
+    cc_da = self.cc_da
+    # self.x = self.mo_coeff[0,:,:,:,0] 
+    
+    """ Start with the Hartree kernel """
+    self.kernel_4p = (((v_dab.T*(cc_da*kernel_den))*cc_da.T)*v_dab).reshape([n*n,n*n])
       
     if xc=='CIS' or xc=='HF' or xc=='GW':
       """ Add exchange operator """

@@ -34,7 +34,6 @@ def vxc_pack(self, **kw):
   #sv, dm, xc_code, deriv, kernel=None, ao_log=None, dtype=float64, **kvargs
   sv = self
   dm = kw['dm'] if 'dm' in kw else self.make_rdm1()
-  kernel = kw['kernel'] if 'kernel' in kw else None
   ao_log = kw['ao_log'] if 'ao_log' in kw else self.ao_log
   xc_code = kw['xc_code'] if 'xc_code' in kw else self.xc_code
   kw.pop('xc_code',None)
@@ -47,14 +46,8 @@ def vxc_pack(self, **kw):
   sp2rcut = array([max(mu2rcut) for mu2rcut in me.ao1.sp_mu2rcut])
   norbs = atom2s[-1]
 
-  if kernel is None: 
-    kernel = zeros(( (self.nspin-1)*2+1, norbs*(norbs+1)//2), dtype=dtype )
-
-  if np.any(kernel.shape!=((self.nspin-1)*2+1, int(norbs*(norbs+1)//2))):
-    print(__name__, 'kernel.shape       ', kernel.shape)
-    print('(self.nspin-1)*2+1 ', (self.nspin-1)*2+1      )
-    print('norbs*(norbs+1)//2 ', int(norbs*(norbs+1)//2) )
-    raise ValueError("wrong dimension for kernel")
+  nq,npk = (self.nspin-1)*2+1, norbs*(norbs+1)//2
+  kernel = kw['kernel'].reshape((nq, npk)) if 'kernel' in kw else zeros((nq, npk), dtype=dtype)
 
   for atom1,[sp1,rv1,s1,f1] in enumerate(zip(sv.atom2sp,sv.atom2coord,atom2s,atom2s[1:])):
     for atom2,[sp2,rv2,s2,f2] in enumerate(zip(sv.atom2sp,sv.atom2coord,atom2s,atom2s[1:])):
