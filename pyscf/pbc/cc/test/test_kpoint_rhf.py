@@ -388,51 +388,6 @@ class KnownValues(unittest.TestCase):
         self._test_cu_metallic_frozen_occ(kmf, cell)
         self._test_cu_metallic_frozen_vir(kmf, cell)
 
-    def test_padding_zero_roots_avoided(self):
-        mesh = 7
-        cell = make_test_cell.test_cell_cu_metallic([mesh]*3)
-        nk = [1,1,2]
-        ehf_bench = -52.5393701339723
-
-        # KRHF calculation
-        kmf = pbcscf.KRHF(cell, exxdiv=None)
-        kmf.kpts = cell.make_kpts(nk, scaled_center=[0.0, 0.0, 0.0], wrap_around=True)
-        kmf.conv_tol_grad = 1e-6  # Stricter tol needed for answer to agree with supercell
-        ehf = kmf.scf()
-
-        self.assertAlmostEqual(ehf, ehf_bench, 6)
-        # Ensure non-equal occupations
-        self.assertNotEquals(kmf.mo_occ[0].sum(), kmf.mo_occ[1].sum())
-
-        mycc = pbcc.KRCCSD(kmf)
-        mycc.kernel()
-
-        # IP
-        idx = padding_k_idx(mycc, kind="split")[0][0]
-        guess = np.zeros(eom_kccsd_rhf_ip.vector_size(mycc, 0))
-        for i in range(mycc.nocc):
-            if i not in idx:
-                guess[i] = 1
-                break
-        else:
-            raise RuntimeError("Padded index not found")
-
-        e_ip, _ = mycc.ipccsd(nroots=1, kptlist=[0], guess=guess[np.newaxis, np.newaxis, :])
-        self.assertAlmostEqual(e_ip[0][0], 0)
-
-        # EA
-        idx = padding_k_idx(mycc, kind="split")[1][1]
-        guess = np.zeros(eom_kccsd_rhf_ea.vector_size(mycc, 0))
-        for i in range(mycc.nmo - mycc.nocc):
-            if i not in idx:
-                guess[i] = 1
-                break
-        else:
-            raise RuntimeError("Padded index not found")
-
-        e_ea, _ = mycc.eaccsd(nroots=1, kptlist=[1], guess=guess[np.newaxis, np.newaxis, :])
-        self.assertAlmostEqual(e_ea[0][0], 0)
-
     def test_cu_metallic_smearing(self):
         mesh = 7
         cell = make_test_cell.test_cell_cu_metallic([mesh]*3)
