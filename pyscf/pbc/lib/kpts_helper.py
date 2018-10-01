@@ -311,6 +311,8 @@ def vector_to_nested(vector, struct, copy=True, ensure_size_matches=True, destin
                                   repr(shape), len(vector),))
 
             if destination is None:
+                if "slice" in struct:
+                    raise ValueError("Cannot apply slice without destination array")
                 a = vector[:expected_size].reshape(shape)
                 if copy:
                     a = a.copy()
@@ -320,9 +322,13 @@ def vector_to_nested(vector, struct, copy=True, ensure_size_matches=True, destin
                     return a, expected_size
 
             else:
-                if shape != destination.shape[len(destination_indexes):]:
-                    raise ValueError("Composite array shape mismatch: expected %s, found %s" %
-                                     (shape, destination.shape[len(destination_indexes):]))
+                if "slice" in struct:
+                    slc = struct["slice"]
+                    destination_indexes = destination_indexes + slc
+                else:
+                    if shape != destination.shape[len(destination_indexes):]:
+                        raise ValueError("Composite array shape mismatch: expected %s, found %s" %
+                                         (shape, destination.shape[len(destination_indexes):]))
                 destination[np.ix_(*destination_indexes)] = vector[:expected_size].reshape(shape)
                 if ensure_size_matches:
                     return destination
@@ -385,7 +391,7 @@ def vector_to_nested(vector, struct, copy=True, ensure_size_matches=True, destin
                     ensure_size_matches=False,
                     destination=destination,
                     destination_indexes=destination_indexes + ((i,),),
-                )
+                )[1]
 
             if ensure_size_matches:
                 if vector.size != offset:

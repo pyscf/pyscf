@@ -91,3 +91,21 @@ class TestVecNested(unittest.TestCase):
         ), desc[0][1]), desc[1])
         struct_recovered = vector_to_nested(vec, desc)
         testing.assert_equal(struct, struct_recovered)
+
+    def test_slice(self):
+        dense = numpy.random.rand(3, 1, 4)
+        vec = dense.reshape(-1)
+        desc = dict(type="composite", shape=(3, 2, 4), dtype=float, data=dict(
+            type="array",
+            shape=(3, 1, 4),
+        ))
+        with self.assertRaises(ValueError):
+            vector_to_nested(vec, desc)
+        desc = dict(type="composite", shape=(3, 2, 4), dtype=float, data=dict(
+            type="array",
+            shape=(3, 1, 4),
+            slice=((0, 1, 2), (1,)),
+        ))
+        struct_recovered = vector_to_nested(vec, desc)
+        testing.assert_equal(dense, struct_recovered[:, (1,), :])
+        testing.assert_equal(0, struct_recovered[:, (0,), :])
