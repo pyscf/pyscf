@@ -32,22 +32,21 @@ def vector_spec(cc):
 
 
 def a2v(cc, t1, t2):
-    """Ground state amplitudes to a vector."""
+    """IP amplitudes to a vector."""
     return nested_to_vector((t1, t2))[0]
 
 
 def v2a(cc, vec):
-    """Ground state vector to apmplitudes."""
+    """IP vector to apmplitudes."""
     return vector_to_nested(vec, vector_spec(cc))
 
 
 def vector_size(cc):
+    """The total number of elements in IP vector."""
     nocc = cc.nocc
     nvir = cc.nmo - nocc
     nkpts = cc.nkpts
-
-    size = nocc + nkpts ** 2 * nocc ** 2 * nvir
-    return size
+    return nocc + nkpts ** 2 * nocc ** 2 * nvir
 
 
 def kernel(cc, nroots=1, koopmans=False, guess=None, partition=None,
@@ -221,6 +220,7 @@ def matvec(cc, vector, k):
 
 
 def diag(cc, k):
+    """Diagonal for the IP vector update."""
     if not cc.imds.made_ip_imds:
         cc.imds.make_ip(cc.ip_partition)
     imds = cc.imds
