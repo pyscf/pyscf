@@ -120,12 +120,10 @@ def kernel(cc, nroots=1, koopmans=False, guess=None, partition=None,
         else:
             guess_k = []
             if koopmans:
-                # Get location of padded elements in occupied and virtual space
-                nonzero_opadding = padding_k_idx(cc, kind="split")[0][kshift]
-
-                for n in nonzero_opadding[::-1][:nroots]:
+                for n in range(nroots):
                     g = np.zeros(size)
-                    g[n] = 1.0
+                    nocc = cc.get_nocc(True)[kshift]
+                    g[nocc-n-1] = 1.0
                     g = mask_frozen(cc, g, kshift, const=0.0)
                     guess_k.append(g)
             else:

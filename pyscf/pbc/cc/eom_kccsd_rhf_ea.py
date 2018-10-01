@@ -109,10 +109,7 @@ def kernel(cc, nroots=1, koopmans=False, guess=None, partition=None,
         else:
             guess_k = []
             if koopmans:
-                # Get location of padded elements in occupied and virtual space
-                nonzero_vpadding = padding_k_idx(cc, kind="split")[1][kshift]
-
-                for n in nonzero_vpadding[:nroots]:
+                for n in range(nroots):
                     g = np.zeros(size)
                     g[n] = 1.0
                     g = mask_frozen(cc, g, kshift, const=0.0)
