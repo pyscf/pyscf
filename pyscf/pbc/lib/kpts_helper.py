@@ -259,24 +259,40 @@ class VectorSplitter(object):
         self.__data__ = vector
         self.__offset__ = 0
 
-    def get(self, shape):
+    def get(self, destination, slc=None):
         """
         Retrieves the next array.
         Args:
-            *shape: the shape of the array;
+            destination: the shape of the destination array or the destination array itself;
+            slc: an optional slice;
 
         Returns:
             The array.
         """
-        if isinstance(shape, int):
-            shape = (shape,)
-        s = np.prod(shape)
+        if isinstance(destination, int):
+            destination = np.zeros((destination,), dtype=self.__data__.dtype)
+        elif isinstance(destination, tuple):
+            destination = np.zeros(destination, dtype=self.__data__.dtype)
+
+        if slc is None:
+            take_size = np.prod(destination.shape)
+            take_shape = destination.shape
+        else:
+            slc = np.ix_(*slc)
+            take_size = destination[slc].size
+            take_shape = destination[slc].shape
+
         avail = self.__data__.size - self.__offset__
-        if s > avail:
-            raise ValueError("Insufficient # of elements: required %d %s, found %d" % (s, shape, avail))
-        result = self.__data__[self.__offset__:self.__offset__ + s].reshape(shape)
-        self.__offset__ += s
-        return result
+        if take_size > avail:
+            raise ValueError("Insufficient # of elements: required %d %s, found %d" % (take_size, take_shape, avail))
+
+        if slc is None:
+            destination[:] = self.__data__[self.__offset__:self.__offset__ + take_size].reshape(take_shape)
+        else:
+            destination[slc] = self.__data__[self.__offset__:self.__offset__ + take_size].reshape(take_shape)
+
+        self.__offset__ += take_size
+        return destination
 
     def truncate(self):
         """
