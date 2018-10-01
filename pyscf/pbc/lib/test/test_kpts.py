@@ -15,11 +15,12 @@
 
 import unittest
 import numpy
+from numpy import testing
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc import tools
 from pyscf.pbc.scf import khf
 from pyscf import lib
-
+from pyscf.pbc.lib.kpts_helper import describe_nested, nested_to_vector, vector_to_nested
 
 class KnownValues(unittest.TestCase):
     def test_kconserve(self):
@@ -45,3 +46,16 @@ class KnownValues(unittest.TestCase):
         kijkab = [range(nkpts),range(nkpts),1,range(nkpts),range(nkpts)]
         kconserve = tools.get_kconserv3(cell, kpts, kijkab)
         self.assertAlmostEqual(lib.finger(kconserve), -3.1172758206126852, 0)
+
+
+class TestVecNested(unittest.TestCase):
+    def test_1(self):
+        struct = (
+            (numpy.random.rand(3, 1, 4), numpy.zeros(5)),
+            (numpy.random.rand(9),),
+        )
+        vec, desc = nested_to_vector(struct)
+        self.assertEqual(desc, [[(3, 1, 4), (5,)], [(9,)]])
+        self.assertEqual(len(vec), 3 * 4 + 5 + 9)
+        struct_recovered = vector_to_nested(vec, desc)
+        testing.assert_equal(struct, struct_recovered)
