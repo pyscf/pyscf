@@ -20,7 +20,6 @@ from pyscf.pbc import gto as pbcgto
 from pyscf.pbc import tools
 from pyscf.pbc.scf import khf
 from pyscf import lib
-from pyscf.pbc.lib.kpts_helper import describe_nested, nested_to_vector, vector_to_nested
 
 class KnownValues(unittest.TestCase):
     def test_kconserve(self):
