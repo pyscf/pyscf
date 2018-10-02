@@ -39,7 +39,7 @@ def iter_12(cc, k):
             yield (ki,), (kj,), o[ki], o[kj], v[kb]
 
 
-def a2v(cc, t1, t2, k):
+def amplitudes_to_vector(cc, t1, t2, k):
     """IP amplitudes to vector."""
     itr = iter_12(cc, k)
 
@@ -50,7 +50,7 @@ def a2v(cc, t1, t2, k):
     return vc.flush()
 
 
-def v2a(cc, vec, k):
+def vector_to_amplitudes(cc, vec, k):
     """IP vector to apmplitudes."""
     itr = iter_12(cc, k)
 
@@ -112,7 +112,7 @@ def kernel(cc, nroots=1, koopmans=False, guess=None, partition=None,
         adiag = mask_frozen(cc, adiag, kshift, const=LARGE_DENOM)
         size = vector_size(cc, kshift)
         if partition == 'full':
-            cc._ipccsd_diag_matrix2 = v2a(cc, adiag, kshift)[1]
+            cc._ipccsd_diag_matrix2 = vector_to_amplitudes(cc, adiag, kshift)[1]
 
         if guess is not None:
             guess_k = guess[k]
@@ -162,7 +162,7 @@ def kernel(cc, nroots=1, koopmans=False, guess=None, partition=None,
             evals_k, evecs_k = [evals_k], [evecs_k]
 
         for n, en, vn in zip(range(nroots), evals_k, evecs_k):
-            r1, r2 = v2a(cc, vn, kshift)
+            r1, r2 = vector_to_amplitudes(cc, vn, kshift)
             qp_weight = np.linalg.norm(r1) ** 2
             logger.info(cc, 'EOM root %d E = %.16g  qpwt = %0.6g',
                         n, en, qp_weight)
@@ -179,7 +179,7 @@ def matvec(cc, vector, k):
     imds = cc.imds
 
     vector = mask_frozen(cc, vector, k, const=0.0)
-    r1, r2 = v2a(cc, vector, k)
+    r1, r2 = vector_to_amplitudes(cc, vector, k)
 
     t1, t2 = cc.t1, cc.t2
     nkpts = cc.nkpts
@@ -236,7 +236,7 @@ def matvec(cc, vector, k):
                - einsum('yxlkcd,xykld->c', imds.Woovv[:, :, k], r2[:, :]))
         Hr2[:, :] += -einsum('c,xyijcb->xyijb', tmp, t2[:, :, k])
 
-    return mask_frozen(cc, a2v(cc, Hr1, Hr2, k), k, const=0.0)
+    return mask_frozen(cc, amplitudes_to_vector(cc, Hr1, Hr2, k), k, const=0.0)
 
 
 def diag(cc, k):
@@ -286,12 +286,12 @@ def diag(cc, k):
                 Hr2[ki, kj] -= 2. * np.einsum('ijcb,jibc->ijb', t2[ki, kj, k], imds.Woovv[kj, ki, kd])
                 Hr2[ki, kj] += np.einsum('ijcb,ijbc->ijb', t2[ki, kj, k], imds.Woovv[ki, kj, kd])
 
-    return a2v(cc, Hr1, Hr2, k)
+    return amplitudes_to_vector(cc, Hr1, Hr2, k)
 
 
 def mask_frozen(cc, vector, k, const=LARGE_DENOM):
     '''Replaces all frozen orbital indices of `vector` with the value `const`.'''
-    r1, r2 = v2a(cc, vector, k)
+    r1, r2 = vector_to_amplitudes(cc, vector, k)
     nkpts, nocc, nvir = cc.t1.shape
     kconserv = cc.khelper.kconserv
 
@@ -308,4 +308,4 @@ def mask_frozen(cc, vector, k, const=LARGE_DENOM):
             idx = np.ix_([ki], [kj], nonzero_opadding[ki], nonzero_opadding[kj], nonzero_vpadding[kb])
             new_r2[idx] = r2[idx]
 
-    return a2v(cc, new_r1, new_r2, k)
+    return amplitudes_to_vector(cc, new_r1, new_r2, k)
