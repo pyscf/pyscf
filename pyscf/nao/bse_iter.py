@@ -151,7 +151,7 @@ class bse_iter(gw):
     
     self.comega_current = comega
     xc = self.xc_code.split(',')[0].upper()
-    if xc=='GWW':
+    if xc=='GWW': # to be removed
       """ 
         Add a correlation operator: frequency-dependent screened interaction 
         K_c(12,34,omega) = - 0.5 W_c(1,2,omega) delta(13)delta(24) 
