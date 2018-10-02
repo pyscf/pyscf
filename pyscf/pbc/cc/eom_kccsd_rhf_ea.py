@@ -42,6 +42,7 @@ def iter_12(cc, k):
 def amplitudes_to_vector(cc, t1, t2, k):
     """EA amplitudes to vector."""
     itr = iter_12(cc, k)
+    t1, t2 = np.asarray(t1), np.asarray(t2)
 
     vc = VectorComposer(t1.dtype)
     vc.put(t1[np.ix_(*next(itr))])
