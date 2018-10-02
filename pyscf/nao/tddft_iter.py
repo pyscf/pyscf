@@ -243,7 +243,7 @@ class tddft_iter(chi0_matvec):
   polariz_inter_ave = comp_polariz_inter_ave
   
 
-  def comp_dens_inter_along_Eext(self, comegas, Eext = np.array([1.0, 0.0, 0.0]), tmp_fname=None):
+  def comp_dens_inter_along_Eext(self, comegas, Eext=np.array([1.0,0.0,0.0]),tmp_fname=None):
     """ 
         Compute a the average interacting polarizability along the Eext direction
         for the frequencies comegas.

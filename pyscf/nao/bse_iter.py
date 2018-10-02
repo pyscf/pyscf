@@ -32,6 +32,7 @@ class bse_iter(gw):
 
     if (xc=='LDA' or xc=='GGA') and self.xc_code_kernel.upper()=='RPA':
       """ Need to add LDA or GGA xc kernel to Hartree kernel..."""
+      assert self.nspin==1, "Cannot be right for nspin==2"
       self.comp_fxc_pack(kernel=self.kernel, **kw)
 
     kernel_den = pack2den_u(self.kernel)
@@ -46,13 +47,8 @@ class bse_iter(gw):
     if xc=='CIS' or xc=='HF' or xc=='GW':
       """ Add exchange operator """
       self.kernel_4p -= 0.5*einsum('abcd->bcad', self.kernel_4p.reshape([n,n,n,n])).reshape([n*n,n*n])
-      self.kernel_4p_w = self.kernel_4p # .kernel_4p_w -- this will be used in the iterative procedure
-    elif xc=='GWw':
-      """ Add exchange operator """
-      self.kernel_4p -= 0.5*einsum('abcd->bcad', self.kernel_4p.reshape([n,n,n,n])).reshape([n*n,n*n])
-      self.si_aa_comega = None
     elif xc=='RPA' or xc=='LDA' or xc=='GGA':
-      self.kernel_4p_w = self.kernel_4p
+      pass 
     else :
       print(' ?? xc_code ', self.xc_code, xc)
       raise RuntimeError('??? xc_code ???')
@@ -61,10 +57,14 @@ class bse_iter(gw):
       """ Add correlation operator """
       w_c_4p = (((v_dab.T*(cc_da*  self.si_c([0.0])[0].real ))*cc_da.T)*v_dab).reshape([n*n,n*n])
       self.kernel_4p -= 0.5*einsum('abcd->bcad', w_c_4p.reshape([n,n,n,n])).reshape([n*n,n*n])
-      self.kernel_4p_w = self.kernel_4p # .kernel_4p_w -- this will be used in the iterative procedure
-      #print(self.kernel_4p_w.dtype, __name__, self.kernel_4p_w.sum())
 
-    if xc=='GW' or xc=='GWW':
+    # Kernel kernel_4p must be fine by now
+    if self.nspin==1:
+      self.ss2kernel_4p = [[self.kernel_4p]]
+    elif self.nspin==2:
+      self.ss2kernel_4p = [[self.kernel_4p, self.kernel_4p], [self.kernel_4p,self.kernel_4p]]
+
+    if xc=='GW':
       self.define_e_x_l0(self.mo_energy_gw, self.mo_coeff_gw)
     else:
       self.define_e_x_l0(self.mo_energy, self.mo_coeff)
@@ -150,38 +150,46 @@ class bse_iter(gw):
     assert sext.size==nsnn
     
     self.comega_current = comega
-    xc = self.xc_code.split(',')[0].upper()
-    if xc=='GWW': # to be removed
-      """ 
-        Add a correlation operator: frequency-dependent screened interaction 
-        K_c(12,34,omega) = - 0.5 W_c(1,2,omega) delta(13)delta(24) 
-        REMARK: this is only to see the effect of using single frequency in L, L0 and K
-      """
-      if self.si_aa_comega != comega:
-        self.si_aa_comega,n,v_dab,cc_da = comega,self.norbs,self.v_dab,self.cc_da
-        si_aa = self.si_c([comega])[0]
-        w_c_4p = (((v_dab.T*(cc_da*  si_aa ))*cc_da.T)*v_dab).reshape([n*n,n*n])
-        self.kernel_4p_w = self.kernel_4p - 0.5*einsum('abcd->bcad', w_c_4p.reshape([n,n,n,n])).reshape([n*n,n*n])
-        #print(self.kernel_4p_w.dtype, comega, self.kernel_4p_w.sum())
-        
     op = LinearOperator((nsnn,nsnn), matvec=self.sext2seff_matvec, dtype=self.dtypeComplex)
     sext_shape = np.require(sext.reshape(nsnn), dtype=self.dtypeComplex, requirements='C')
     resgm,info = gmres_alias(op, sext_shape, tol=self.tddft_iter_tol)
-    return (resgm.reshape([self.norbs,self.norbs]),info)
+    return (resgm.reshape(-1),info)
 
   def sext2seff_matvec(self, sab):
     """ This is operator which we effectively want to have inverted (1 - K L0) and find the action of it's 
     inverse by solving a linear equation with a GMRES method. See the method seff(...)"""
     self.matvec_ncalls+=1 
-    l0 = self.apply_l0(sab, self.comega_current)
-    
-    l0_reim = require(l0.real, dtype=self.dtype, requirements=["A","O"])  # real part
-    mv_real = dot(self.kernel_4p_w, l0_reim)
-    
-    l0_reim = require(l0.imag, dtype=self.dtype, requirements=["A", "O"]) # imaginary
-    mv_imag = dot(self.kernel_4p_w, l0_reim)
+    kl0v = self.apply_kernel4p( self.apply_l0(sab, self.comega_current) )
+    return sab - kl0v
 
-    return sab - (mv_real + 1.0j*mv_imag)
+  def apply_kernel4p(self, ddm):
+    """ This applies the 4-point interaction kernel. This operator can be arbitrarily complex,
+    therefore we formulate it as a procedure. """
+    if self.nspin==1:
+      return self.apply_kernel4p_nspin1(ddm)
+    elif self.nspin==2:
+      return self.apply_kernel4p_nspin2(ddm)
+
+  def apply_kernel4p_nspin1(self, ddm):
+    reim = require(ddm.real, dtype=self.dtype, requirements=["A","O"]) # real part
+    mv_real = dot(self.kernel_4p, reim)
+    
+    reim = require(ddm.imag, dtype=self.dtype, requirements=["A","O"]) # imaginary
+    mv_imag = dot(self.kernel_4p, reim)
+    return mv_real+1j*mv_imag
+
+  def apply_kernel4p_nspin2(self, ddm):
+    res = np.zeros((2,self.nspin,self.norbs2), dtype=self.dtype)
+    aux = np.zeros((self.norbs2), dtype=self.dtype)
+    s2ddm = ddm.reshape((self.nspin,self.norbs2))
+
+    for s in range(self.nspin):
+      for t in range(self.nspin):
+        for ireim,sreim in enumerate(('real', 'imag')):
+          aux[:] = require(getattr(s2ddm[t], sreim), dtype=self.dtype, requirements=["A","O"])
+          res[ireim,s] += np.dot(self.ss2kernel_4p[s][t], aux)
+
+    return res[0].reshape(-1)+1j*res[1].reshape(-1)
 
   def apply_l(self, sab, comega=1j*0.0):
     """ This applies the interacting, two-point Green's function to a suitable vector (e.g. dipole matrix elements)"""
@@ -189,7 +197,7 @@ class bse_iter(gw):
     return self.apply_l0( seff, comega )
 
   def comp_polariz_nonin_ave(self, comegas):
-    """ Non-interacting average polarizability """
+    """ Non-interacting average polarizability, i.e. <d |L0| d>"""
     p = np.zeros(len(comegas), dtype=self.dtypeComplex)
     for iw,omega in enumerate(comegas):
       for dip in self.dip_ab:
@@ -200,7 +208,7 @@ class bse_iter(gw):
     return p
 
   def comp_polariz_inter_ave(self, comegas):
-    """ Compute a direction-averaged interacting polarizability  """
+    """ Compute a direction-averaged interacting polarizability, i.e. <d |L| d>  """
     p = np.zeros(len(comegas), dtype=self.dtypeComplex)
     for iw,omega in enumerate(comegas):
       for dip in self.dip_ab:
