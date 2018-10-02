@@ -64,7 +64,7 @@ class bse_iter(gw):
       self.kernel_4p_w = self.kernel_4p # .kernel_4p_w -- this will be used in the iterative procedure
       #print(self.kernel_4p_w.dtype, __name__, self.kernel_4p_w.sum())
 
-    if xc=='GW' or xc=='GWw':
+    if xc=='GW' or xc=='GWW':
       self.define_e_x_l0(self.mo_energy_gw, self.mo_coeff_gw)
     else:
       self.define_e_x_l0(self.mo_energy, self.mo_coeff)
@@ -115,67 +115,24 @@ class bse_iter(gw):
       
     return ab2v.reshape(-1)
 
-  def apply_l0_exp(self, sab, comega=1j*0.0):
-    """ This applies the non-interacting four point Green's function to a suitable vector (e.g. dipole matrix elements)"""
-    assert sab.size==(self.norbs2), "%r,%r"%(sab.size,self.norbs2)
-
-    sab = sab.reshape([self.norbs,self.norbs])
-    self.l0_ncalls+=1
-    nb2v = dot(self.x_l0[0], sab)
-    nm2v = blas.cgemm(1.0, nb2v, self.x_l0[0].T)
-    print(nm2v.dtype)
-    print(nm2v[self.vstart_l0[0]:, :self.nfermi_l0[0]])
-    print(nm2v[:self.nfermi_l0[0], self.vstart_l0[0]:])
-    
-    nm2v = zeros((self.norbs,self.norbs), self.dtypeComplex)
-    nb2v1 = dot(self.xocc_l0[0], sab)
-    nm2v1 = blas.cgemm(1.0, nb2v1, self.xvrt_l0[0].T)
-
-    nb2v2 = dot(self.xvrt_l0[0], sab)
-    nm2v2 = blas.cgemm(1.0, nb2v2, self.xocc_l0[0].T)
-
-    nm2v[self.vstart_l0[0]:, :self.nfermi_l0[0]] = nm2v2
-    nm2v[:self.nfermi_l0[0], self.vstart_l0[0]:] = nm2v1
-    
-    print(nm2v.dtype, nm2v1.shape, nm2v1.dtype)
-    print(nm2v[self.vstart_l0[0]:, :self.nfermi_l0[0]])
-    print(nm2v[:self.nfermi_l0[0], self.vstart_l0[0]:])
-    #raise RuntimeError('11')
-    
-    #nm2v2 = np.copy(nm2v1)
-    #for n,[en,fn] in enumerate(zip(self.ksn2e[0,0,:self.nfermi],self.ksn2f[0,0,:self.nfermi])):
-      #for m,[em,fm] in enumerate(zip(self.ksn2e[0,0,self.vstart:],self.ksn2f[0,0,self.vstart:])):
-        #nm2v1[n,m] = nm2v1[n,m] * (fn-fm) * ( 1.0 / (comega - (em - en)))
-    
-    #for n,[en,fn] in enumerate(zip(self.ksn2e[0,0,:self.nfermi],self.ksn2f[0,0,:self.nfermi])):
-      #for m,[em,fm] in enumerate(zip(self.ksn2e[0,0,self.vstart:],self.ksn2f[0,0,self.vstart:])):
-        #nm2v2[n,m] = nm2v2[n,m] * (fm-fn) * ( 1.0 / (comega - (en - em)))
-
-    for n,[en,fn] in enumerate(zip(self.ksn2e_l0[0,0,:],self.ksn2f_l0[0,0,:])):
-      for m,[em,fm] in enumerate(zip(self.ksn2e_l0[0,0,:],self.ksn2f_l0[0,0,:])):
-        nm2v[n,m] = nm2v[n,m] * (fn-fm) * ( 1.0 / (comega - (em - en)))
-    
-    nb2v = blas.cgemm(1.0, nm2v, self.x_l0[0])
-    ab2v = blas.cgemm(1.0, self.x_l0[0].T, nb2v)
-    return ab2v
-
   def apply_l0_ref(self, sab, comega=1j*0.0):
     """ This applies the non-interacting four point Green's function to a suitable vector (e.g. dipole matrix elements)"""
-    assert sab.size==(self.norbs2), "%r,%r"%(sab.size,self.norbs2)
-
-    sab = sab.reshape([self.norbs,self.norbs])
+    assert sab.size==(self.nspin*self.norbs2)
     self.l0_ncalls+=1
-    nb2v = dot(self.x_l0[0], sab)
-    nm2v = blas.cgemm(1.0, nb2v, self.x_l0[0].T)
+        
+    sab = sab.reshape((self.nspin,self.norbs,self.norbs))
+    ab2v = np.zeros_like(sab, dtype=self.dtypeComplex)
+    for s in range(self.nspin):
+      nb2v = dot(self.x_l0[s], sab[s])
+      nm2v = blas.cgemm(1.0, nb2v, self.x_l0[s].T)
     
-    for n,[en,fn] in enumerate(zip(self.ksn2e_l0[0,0,:],self.ksn2f_l0[0,0,:])):
-      for m,[em,fm] in enumerate(zip(self.ksn2e_l0[0,0,:],self.ksn2f_l0[0,0,:])):
-        nm2v[n,m] = nm2v[n,m] * (fn-fm) * ( 1.0 / (comega - (em - en)))
+      for n,[en,fn] in enumerate(zip(self.ksn2e_l0[s,:],self.ksn2f_l0[s,:])):
+        for m,[em,fm] in enumerate(zip(self.ksn2e_l0[s,:],self.ksn2f_l0[s,:])):
+          nm2v[n,m] = nm2v[n,m] * (fn-fm) * ( 1.0 / (comega - (em - en)))
 
-    nb2v = blas.cgemm(1.0, nm2v, self.x_l0[0])
-    ab2v = blas.cgemm(1.0, self.x_l0[0].T, nb2v)
-    return ab2v
-
+      nb2v = blas.cgemm(1.0, nm2v, self.x_l0[s])
+      ab2v[s] += blas.cgemm(1.0, self.x_l0[s].T, nb2v)
+    return ab2v.reshape(-1)
 
   def seff(self, sext, comega=1j*0.0):
     """ This computes an effective two point field (scalar non-local potential) given an external two point field.
@@ -186,15 +143,19 @@ class bse_iter(gw):
 
         The operator (1 - K L0) is named self.sext2seff_matvec """
     
-    from scipy.sparse.linalg import gmres, lgmres as gmres_alias, LinearOperator
-    assert sext.size==(self.norbs2), "%r,%r"%(sext.size,self.norbs2)
-
+    from scipy.sparse.linalg import LinearOperator
+    from scipy.sparse.linalg import lgmres as gmres_alias
+    #from spipy.sparse.linalg import gmres as gmres_alias
+    nsnn = self.nspin*self.norbs2
+    assert sext.size==nsnn
+    
     self.comega_current = comega
-    xc = self.xc_code.split(',')[0]
-    if xc=='GWw':
+    xc = self.xc_code.split(',')[0].upper()
+    if xc=='GWW':
       """ 
         Add a correlation operator: frequency-dependent screened interaction 
         K_c(12,34,omega) = - 0.5 W_c(1,2,omega) delta(13)delta(24) 
+        REMARK: this is only to see the effect of using single frequency in L, L0 and K
       """
       if self.si_aa_comega != comega:
         self.si_aa_comega,n,v_dab,cc_da = comega,self.norbs,self.v_dab,self.cc_da
@@ -203,8 +164,8 @@ class bse_iter(gw):
         self.kernel_4p_w = self.kernel_4p - 0.5*einsum('abcd->bcad', w_c_4p.reshape([n,n,n,n])).reshape([n*n,n*n])
         #print(self.kernel_4p_w.dtype, comega, self.kernel_4p_w.sum())
         
-    op = LinearOperator((self.norbs2,self.norbs2), matvec=self.sext2seff_matvec, dtype=self.dtypeComplex)
-    sext_shape = np.require(sext.reshape(self.norbs2), dtype=self.dtypeComplex, requirements='C')
+    op = LinearOperator((nsnn,nsnn), matvec=self.sext2seff_matvec, dtype=self.dtypeComplex)
+    sext_shape = np.require(sext.reshape(nsnn), dtype=self.dtypeComplex, requirements='C')
     resgm,info = gmres_alias(op, sext_shape, tol=self.tddft_iter_tol)
     return (resgm.reshape([self.norbs,self.norbs]),info)
 
@@ -212,19 +173,18 @@ class bse_iter(gw):
     """ This is operator which we effectively want to have inverted (1 - K L0) and find the action of it's 
     inverse by solving a linear equation with a GMRES method. See the method seff(...)"""
     self.matvec_ncalls+=1 
+    l0 = self.apply_l0(sab, self.comega_current)
     
-    l0 = self.apply_l0(sab, self.comega_current).reshape(self.norbs2)
-    
-    l0_reim = require(l0.real, dtype=self.dtype, requirements=["A", "O"])     # real part
+    l0_reim = require(l0.real, dtype=self.dtype, requirements=["A","O"])  # real part
     mv_real = dot(self.kernel_4p_w, l0_reim)
     
-    l0_reim = require(l0.imag, dtype=self.dtype, requirements=["A", "O"])     # imaginary part
+    l0_reim = require(l0.imag, dtype=self.dtype, requirements=["A", "O"]) # imaginary
     mv_imag = dot(self.kernel_4p_w, l0_reim)
 
     return sab - (mv_real + 1.0j*mv_imag)
 
   def apply_l(self, sab, comega=1j*0.0):
-    """ This applies the interacting four point Green's function to a suitable vector (e.g. dipole matrix elements)"""
+    """ This applies the interacting, two-point Green's function to a suitable vector (e.g. dipole matrix elements)"""
     seff,info = self.seff(sab, comega)
     return self.apply_l0( seff, comega )
 
@@ -233,6 +193,7 @@ class bse_iter(gw):
     p = np.zeros(len(comegas), dtype=self.dtypeComplex)
     for iw,omega in enumerate(comegas):
       for dip in self.dip_ab:
+        if self.verbosity>1: print(__name__, ixyz, iw)
         d = np.concatenate([dip.reshape(-1) for s in range(self.nspin)])
         vab = self.apply_l0(d, omega)
         p[iw] += (vab*d).sum()/3.0
