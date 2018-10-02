@@ -29,7 +29,7 @@ import pyscf.cc
 import pyscf.cc.ccsd
 from pyscf.pbc import scf
 from pyscf.pbc.mp.kmp2 import (get_frozen_mask, get_nocc, get_nmo,
-                               padded_mo_coeff, padding_k_idx)
+                               padded_mo_coeff, padding_k_idx_mp as padding_k_idx)
 from pyscf.pbc.cc import kintermediates_rhf as imdk
 from pyscf.pbc.cc.eom_kccsd_rhf_ip import kernel as kernel_ip
 from pyscf.pbc.cc.eom_kccsd_rhf_ea import kernel as kernel_ea
