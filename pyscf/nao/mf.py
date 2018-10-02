@@ -350,6 +350,30 @@ class mf(nao):
       pov[s] = np.einsum('oa,pab,vb->pov', self.mo_coeff[0,s,0:no,:,0], pab, self.mo_coeff[0,s,no:,:,0])
     return pov
 
+  def nonin_osc_strength(self):
+    from scipy.sparse import spmatrix 
+    """ Computes the non-interacting oscillator strengths and energies """
+
+    x,y,z = map(spmatrix.toarray, self.dipole_coo())
+    i2d = array((x,y,z))
+    n = self.mo_occ.shape[-1]
+    
+    p = zeros((len(comega)), dtype=np.complex128) # result to accumulate
+    
+    for s in range(self.nspin):
+      o,e,cc = self.mo_occ[0,s],self.mo_energy[0,s],self.mo_coeff[0,s,:,:,0]
+      oo1,ee1 = np.subtract.outer(o,o).reshape(n*n), np.subtract.outer(e,e).reshape(n*n)
+      idx = unravel_index( np.intersect1d(where(oo1<0.0), where(ee1<eemax)), (n,n))
+      ivrt,iocc = array(list(set(idx[0]))), array(list(set(idx[1])))
+      voi2d = einsum('nia,ma->nmi', einsum('iab,nb->nia', i2d, cc[ivrt]), cc[iocc])
+      t2osc = 2.0/3.0*einsum('voi,voi->vo', voi2d, voi2d)
+      t2w =  np.subtract.outer(e[ivrt],e[iocc])
+      t2o = -np.subtract.outer(o[ivrt],o[iocc])
+
+      for iw,w in enumerate(comega):
+        p[iw] += 0.5*(t2osc*((t2o/(w-t2w))-(t2o/(w+t2w)))).sum()      
+    return p
+
   def polariz_nonin_ave_matelem(self, comega):
     from scipy.sparse import spmatrix 
     """ Computes the non-interacting optical polarizability via the dipole matrix elements."""

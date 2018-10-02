@@ -2,7 +2,7 @@ from __future__ import print_function, division
 import unittest, numpy as np
 from pyscf import gto, tddft, scf
 from pyscf.nao import bse_iter
-from pyscf.nao import polariz_inter_ave, polariz_nonin_ave
+from pyscf.nao import polariz_freq_osc_strength
 from pyscf.data.nist import HARTREE2EV
 
 class KnowValues(unittest.TestCase):
@@ -13,15 +13,15 @@ class KnowValues(unittest.TestCase):
     gto_hf = scf.RKS(mol)
     gto_hf.kernel()
     gto_td = tddft.dRPA(gto_hf)
-    gto_td.nstates = 95
+    gto_td.nstates = 195
     gto_td.kernel()
 
     omegas = np.arange(0.0, 2.0, 0.01) + 1j*0.03
-    p_ave = -polariz_inter_ave(gto_hf, mol, gto_td, omegas).imag
+    p_ave = -polariz_freq_osc_strength(gto_td.e, gto_td.oscillator_strength(), omegas).imag
     data = np.array([omegas.real*HARTREE2EV, p_ave])
     np.savetxt('test_0148_bse_h2o_rks_rpa_pyscf.txt', data.T, fmt=['%f','%f'])
     data_ref = np.loadtxt('test_0148_bse_h2o_rks_rpa_pyscf.txt-ref').T
-    self.assertTrue(np.allclose(data_ref, data, 5))
+    self.assertTrue(np.allclose(data_ref, data, atol=1e-6, rtol=1e-3))
     
     nao_td  = bse_iter(mf=gto_hf, gto=mol, verbosity=0, xc_code='RPA')
 
@@ -29,6 +29,6 @@ class KnowValues(unittest.TestCase):
     data = np.array([omegas.real*HARTREE2EV, p_iter])
     np.savetxt('test_0148_bse_h2o_rks_rpa_nao.txt', data.T, fmt=['%f','%f'])
     data_ref = np.loadtxt('test_0148_bse_h2o_rks_rpa_nao.txt-ref').T
-    self.assertTrue(np.allclose(data_ref, data, 5))
+    self.assertTrue(np.allclose(data_ref, data, atol=1e-6, rtol=1e-3))
     
 if __name__ == "__main__": unittest.main()

@@ -18,7 +18,7 @@ class KnowValues(unittest.TestCase):
     data = np.array([omegas.real*HARTREE2EV, p_ave])
     np.savetxt('test_0145_bse_h2o_rhf_nonin_pyscf.txt', data.T, fmt=['%f','%f'])
     data_ref = np.loadtxt('test_0145_bse_h2o_rhf_nonin_pyscf.txt-ref').T
-    self.assertTrue(np.allclose(data_ref, data, 5))
+    self.assertTrue(np.allclose(data_ref, data, atol=1e-6, rtol=1e-3))
     
     nao_td  = bse_iter(mf=gto_mf, gto=mol, verbosity=0)
 
@@ -26,6 +26,6 @@ class KnowValues(unittest.TestCase):
     data = np.array([omegas.real*HARTREE2EV, polariz])
     np.savetxt('test_0145_bse_h2o_rhf_nonin_nao.txt', data.T, fmt=['%f','%f'])
     data_ref = np.loadtxt('test_0145_bse_h2o_rhf_nonin_nao.txt-ref').T
-    self.assertTrue(np.allclose(data_ref, data, 5))
+    self.assertTrue(np.allclose(data_ref, data, atol=1e-6, rtol=1e-3))
         
 if __name__ == "__main__": unittest.main()

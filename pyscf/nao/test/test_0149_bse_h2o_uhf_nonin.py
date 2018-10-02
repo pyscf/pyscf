@@ -2,7 +2,7 @@ from __future__ import print_function, division
 import unittest, numpy as np
 from pyscf import gto, tddft, scf
 from pyscf.nao import bse_iter
-from pyscf.nao import polariz_inter_ave, polariz_nonin_ave
+from pyscf.nao import polariz_nonin_ave
 from pyscf.data.nist import HARTREE2EV
 
 class KnowValues(unittest.TestCase):
@@ -18,7 +18,7 @@ class KnowValues(unittest.TestCase):
     data = np.array([omegas.real*HARTREE2EV, p_ave])
     np.savetxt('test_0149_bse_h2o_uhf_nonin_pyscf.txt', data.T, fmt=['%f','%f'])
     data_ref = np.loadtxt('test_0149_bse_h2o_uhf_nonin_pyscf.txt-ref').T
-    self.assertTrue(np.allclose(data_ref, data, 5))
+    self.assertTrue(np.allclose(data_ref, data, atol=1e-6, rtol=1e-3))
     
     nao_td  = bse_iter(mf=gto_mf, gto=mol, verbosity=0)
 
@@ -26,6 +26,6 @@ class KnowValues(unittest.TestCase):
     data = np.array([omegas.real*HARTREE2EV, polariz])
     np.savetxt('test_0149_bse_h2o_uhf_nonin_nao.txt', data.T, fmt=['%f','%f'])
     data_ref = np.loadtxt('test_0149_bse_h2o_uhf_nonin_nao.txt-ref').T
-    self.assertTrue(np.allclose(data_ref, data, 5))
-        
+    self.assertTrue(np.allclose(data_ref, data, atol=1e-6, rtol=1e-3))
+
 if __name__ == "__main__": unittest.main()

@@ -33,6 +33,6 @@ class KnowValues(unittest.TestCase):
     data = np.array([comega.real*HARTREE2EV, polave])
     np.savetxt('test_143_h2b_uks_rpa_pb.txt', data.T, fmt=['%f','%f'])
     data_ref = np.loadtxt('test_143_h2b_uks_rpa_pb.txt-ref').T
-    self.assertTrue(np.allclose(data_ref, data, 5))
+    self.assertTrue(np.allclose(data_ref, data, atol=1e-6, rtol=1e-3))
     
 if __name__ == "__main__": unittest.main()

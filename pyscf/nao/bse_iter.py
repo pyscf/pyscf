@@ -242,8 +242,9 @@ class bse_iter(gw):
     """ Compute a direction-averaged interacting polarizability  """
     p = np.zeros(len(comegas), dtype=self.dtypeComplex)
     for iw,omega in enumerate(comegas):
-      for ixyz in range(3):
+      for dip in self.dip_ab:
         if self.verbosity>1: print(__name__, ixyz, iw)
-        vab = self.apply_l(self.dip_ab[ixyz], omega)
-        p[iw] += (vab*self.dip_ab[ixyz]).sum()/3.0
+        d = np.concatenate([dip.reshape(-1) for s in range(self.nspin)])
+        vab = self.apply_l(d, omega)
+        p[iw] += (vab*d).sum()/3.0
     return p
