@@ -49,16 +49,13 @@ def xc_scalar_ni(me, sp1,R1, sp2,R2, xc_code, deriv, **kw):
   ao1 = ao_eval(me.ao1, R1, sp1, grids.coords)
  
   if deriv==1 :
-    ao1 = ao1 * grids.weights * vxc[0]
-
+    xq = vxc[0] if vxc[0].ndim>1 else vxc[0].reshape((vxc[0].size,1))
   elif deriv==2:
     xq = fxc[0] if fxc[0].ndim>1 else fxc[0].reshape((fxc[0].size,1))
-    ao11 = np.einsum('ax,x,xq->qax', ao1, grids.weights, xq)
   else:
     print(' deriv ', deriv)
     raise RuntimeError('!deriv!')
 
-  #print(__name__, np.einsum( 'xs,x',  rho, grids.weights), np.einsum( 'xq,x',  xq, grids.weights), (exc*grids.weights).sum())
-
+  ao1 = np.einsum('ax,x,xq->qax', ao1, grids.weights, xq)
   ao2 = ao_eval(me.ao2, R2, sp2, grids.coords)
-  return np.einsum('qax,bx->qab', ao11, ao2)
+  return np.einsum('qax,bx->qab', ao1, ao2)

@@ -96,7 +96,7 @@ class tddft_iter(chi0_matvec):
     if self.verbosity>0 : print(__name__,'\t====> self.xc_code:', self.xc_code)
 
 
-  def load_kernel_method(self, kernel_fname, kernel_format="npy", kernel_path_hdf5=None):
+  def load_kernel_method(self, kernel_fname, kernel_format="npy", kernel_path_hdf5=None, **kw):
       """ Loads from file and initializes .kernel field... Useful? Rewrite?"""
     
       if kernel_format == "npy":

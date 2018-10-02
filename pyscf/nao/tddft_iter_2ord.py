@@ -17,10 +17,10 @@ class tddft_iter_2ord(tddft_iter):
     chi0 = self.apply_rf0(v, w)
     
     chi0_reim = require(chi0.real, dtype=self.dtype, requirements=["A", "O"])
-    matvec_real = self.spmv(self.nprod, 1.0, self.kernel, chi0_reim, lower=1)
+    matvec_real = self.spmv(self.nprod, 1.0, self.kernel, chi0_reim)
     
     chi0_reim = require(chi0.imag, dtype=self.dtype, requirements=["A", "O"])
-    matvec_imag = self.spmv(self.nprod, 1.0, self.kernel, chi0_reim, lower=1)
+    matvec_imag = self.spmv(self.nprod, 1.0, self.kernel, chi0_reim)
 
     return (matvec_real + 1.0j*matvec_imag)
 
