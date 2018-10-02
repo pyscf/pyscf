@@ -33,6 +33,7 @@ class bse_iter(gw):
 
     n, v_dab, cc_da = self.norbs,self.v_dab,self.cc_da
 
+    # Ugly here!!!!
     q2k = np.zeros(( (self.nspin-1)*2+1,self.nprod,self.nprod), dtype=self.dtype)
     for q in range((self.nspin-1)*2+1): q2k[q,:,:] = pack2den_u(self.kernel)
     
