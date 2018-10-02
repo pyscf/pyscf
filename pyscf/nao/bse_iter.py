@@ -30,40 +30,42 @@ class bse_iter(gw):
       print(__name__, '    xc_code_scf ', self.xc_code_scf)
       print(__name__, '        xc_code ', self.xc_code)
 
+    assert self.xc_code_kernel.upper()=='RPA', '{} ?'.format(self.xc_code_kernel)
 
-    n, v_dab, cc_da = self.norbs,self.v_dab,self.cc_da
+    # Allocation of kernels in the product basis to be used in Hartree and exchange-type kernels
+    dtype, ns, np = self.dtype, self.nspin, self.nprod
+    self.q2hk = zeros((2*ns-1,np,np),dtype=dtype) if xc in ['LDA','GGA'] else zeros((1,np,np),dtype=dtype)
 
-    # Ugly here!!!!
-    q2k = np.zeros(( (self.nspin-1)*2+1,self.nprod,self.nprod), dtype=self.dtype)
-    for q in range((self.nspin-1)*2+1): q2k[q,:,:] = pack2den_u(self.kernel)
-    
-    if (xc=='LDA' or xc=='GGA') and self.xc_code_kernel.upper()=='RPA': 
-      fxc_lda = self.comp_fxc_pack(**kw)
-      for q,fxc_pack in enumerate(fxc_lda): q2k[q,:,:] += pack2den_u(fxc_pack)
+    if xc in ['CIS','HF']: self.q2xk = self.q2hk
+    elif xc in ['GW']: self.q2xk = zeros((1,np,np),dtype=dtype)
+    else: self.q2xk = None
+      
+    # Computation of kernels in the product basis...
+    for fh in self.q2hk: fh[:,:]=pack2den_u(self.kernel)
+    if xc in ['LDA', 'GGA']:
+      for q,m in enumerate(self.comp_fxc_pack(**kw)): self.q2hk[q] += pack2den_u(m)
+    elif xc in ['GW']:
+      self.q2xk[0]=pack2den_u(self.kernel)+self.si_c([0.0])[0].real
 
-    q2k_4p = np.zeros(( (self.nspin-1)*2+1,n*n,n*n), dtype=self.dtype)
-    for q,fhxc in enumerate(q2k):
+    # Allocation of the four-point kernel(s) which is to be used when RAM available
+    n, v_dab, cc_da = self.norbs, self.v_dab, self.cc_da
+    self.q2k_4p = zeros((2*ns-1,n*n,n*n),dtype=dtype) if xc in ['LDA','GGA'] else zeros((1,n*n,n*n),dtype=dtype)
+    q2k_4p = self.q2k_4p
+    # Computation of the four-point interaction kernel...
+    for q,fhxc in enumerate(self.q2hk): # Start with Hartree interaction kernel 
       q2k_4p[q] = (((v_dab.T*(cc_da*fhxc))*cc_da.T)*v_dab).reshape([n*n,n*n])
       
-    if xc=='CIS' or xc=='HF' or xc=='GW': # Add exchange operator
-      q2k_4p[0] -= 0.5*einsum('abcd->bcad', q2k_4p[0].reshape([n,n,n,n])).reshape([n*n,n*n])
-    elif xc=='RPA':
-      pass
-    elif xc=='LDA' or xc=='GGA':
-      pass
-    else :
-      print(' ?? xc_code ', self.xc_code, xc)
-      raise RuntimeError('??? xc_code ???')
+    if xc in ['CIS', 'HF', 'GW']: # Add exchange interaction kernel 
+      w_xc_4p = (((v_dab.T*(cc_da* self.q2xk[0] ))*cc_da.T)*v_dab).reshape([n*n,n*n])
+      q2k_4p[0] -= 0.5*einsum('abcd->bcad', w_xc_4p.reshape([n,n,n,n])).reshape([n*n,n*n])
 
-    if xc=='GW': # Add correlation operator
-      w_c_4p = (((v_dab.T*(cc_da*  self.si_c([0.0])[0].real ))*cc_da.T)*v_dab).reshape([n*n,n*n])
-      q2k_4p[0] -= 0.5*einsum('abcd->bcad', w_c_4p.reshape([n,n,n,n])).reshape([n*n,n*n])
-
-    # Kernel kernel_4p must be fine by now
     if self.nspin==1:
       self.ss2kernel_4p = [[q2k_4p[0]]]
     elif self.nspin==2:
-      self.ss2kernel_4p = [[q2k_4p[0], q2k_4p[1]], [q2k_4p[1],q2k_4p[2]]]
+      if len(q2k_4p)==1 :
+        self.ss2kernel_4p = [[q2k_4p[0], q2k_4p[0]], [q2k_4p[0],q2k_4p[0]]]
+      else:
+        self.ss2kernel_4p = [[q2k_4p[0], q2k_4p[1]], [q2k_4p[1],q2k_4p[2]]]
 
     if xc=='GW':
       self.define_e_x_l0(self.mo_energy_gw, self.mo_coeff_gw, **kw)
