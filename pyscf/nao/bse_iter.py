@@ -55,7 +55,7 @@ class bse_iter(gw):
     for q,fhxc in enumerate(self.q2hk): # Start with Hartree interaction kernel 
       q2k_4p[q] = (((v_dab.T*(cc_da*fhxc))*cc_da.T)*v_dab).reshape([n*n,n*n])
       
-    if xc in ['CIS', 'HF', 'GW']: # Add exchange interaction kernel 
+    if xc in ['CIS', 'HF', 'GW']: # Add Fock-like (exchange) interaction kernel 
       w_xc_4p = (((v_dab.T*(cc_da* self.q2xk[0] ))*cc_da.T)*v_dab).reshape([n*n,n*n])
       q2k_4p[0] -= 0.5*einsum('abcd->bcad', w_xc_4p.reshape([n,n,n,n])).reshape([n*n,n*n])
 
