@@ -109,21 +109,16 @@ class mf(nao):
     self.xc_code = mf.xc if hasattr(mf, 'xc') else 'HF'
     self.k2xyzw = np.array([[0.0,0.0,0.0,1.0]])
     nspin,n=self.nspin,self.norbs
-    self.mo_coeff =  require(zeros((1,nspin,n,n,1), dtype=self.dtype), requirements='CW')
-    self.mo_energy = require(zeros((1,nspin,n), dtype=self.dtype), requirements='CW')
-    self.mo_occ =    require(zeros((1,nspin,n),dtype=self.dtype), requirements='CW')
 
+    self.mo_occ = require( self.mf.mo_occ.reshape((1,self.nspin,n)), requirements='CW')
+    self.mo_energy = require( np.asarray(self.mf.mo_energy).reshape((1,self.nspin,n)), requirements='CW')
+    
+    self.mo_coeff =  require(zeros((1,nspin,n,n,1), dtype=self.dtype), requirements='CW')
     conv = conv_yzx2xyz_c(kw['gto'])
-    if nspin==1 :
-      self.mo_coeff[0,0,:,:,0] = conv.conv_yzx2xyz_1d(self.mf.mo_coeff, conv.m_xyz2m_yzx).T
-      self.mo_energy[0,0,:] = self.mf.mo_energy
-      self.mo_occ[0,0,:] = self.mf.mo_occ
-    else:
-      for s in range(self.nspin):
-        self.mo_coeff[0,s,:,:,0] = conv.conv_yzx2xyz_1d(self.mf.mo_coeff[s], conv.m_xyz2m_yzx).T
-        self.mo_energy[0,s,:] = self.mf.mo_energy[s]
-      self.mo_occ[0,0:self.nspin,:] = self.mf.mo_occ
-      
+    aaux = np.asarray(self.mf.mo_coeff).reshape((self.nspin,n,n))
+    for s in range(nspin):
+      self.mo_coeff[0,s,:,:,0] = conv.conv_yzx2xyz_1d(aaux[s], conv.m_xyz2m_yzx).T
+
     self.nelec = kw['nelec'] if 'nelec' in kw else np.array([int(s2o.sum()) for s2o in self.mo_occ[0]])
     fermi = comput_fermi_energy(self.mo_energy, sum(self.nelec), self.telec)
     self.fermi_energy = kw['fermi_energy'] if 'fermi_energy' in kw else fermi
@@ -384,9 +379,14 @@ class mf(nao):
     eemax = max(comega.real)+20.0*max(comega.imag)
     
     p = zeros((len(comega)), dtype=np.complex128) # result to accumulate
-    
+
+    #print(__name__, 'Fermi energy', self.fermi_energy)
+    #np.set_printoptions(linewidth=1000)
     for s in range(self.nspin):
       o,e,cc = self.mo_occ[0,s],self.mo_energy[0,s],self.mo_coeff[0,s,:,:,0]
+      #print(o[:10])
+      #print(e[:10])
+
       oo1,ee1 = np.subtract.outer(o,o).reshape(n*n), np.subtract.outer(e,e).reshape(n*n)
       idx = unravel_index( np.intersect1d(where(oo1<0.0), where(ee1<eemax)), (n,n))
       ivrt,iocc = array(list(set(idx[0]))), array(list(set(idx[1])))

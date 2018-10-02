@@ -44,16 +44,21 @@ class chi0_matvec(mf):
 
     if hasattr(self, 'hsx') and self.dealloc_hsx: self.hsx.deallocate()     # deallocate hsx
 
-    self.ksn2e = self.mo_energy
-    ksn2fd = fermi_dirac_occupations(self.telec, self.ksn2e, self.fermi_energy)
-    for s,n2fd in enumerate(ksn2fd[0]):
-      if not all(n2fd>self.nfermi_tol): continue
-      print(self.telec, s, self.nfermi_tol, n2fd)
-      raise RuntimeError(__name__, 'telec is too high?')
-
-    self.ksn2f = (3-self.nspin)*ksn2fd
-    self.nfermi = array([argmax(ksn2fd[0,s,:]<self.nfermi_tol) for s in range(self.nspin)], dtype=int)
-    self.vstart = array([argmax(1.0-ksn2fd[0,s,:]>=self.nfermi_tol) for s in range(self.nspin)], dtype=int)
+    self.ksn2e = self.mo_energy # Just a pointer here. Is it ok?
+    
+    if 'fermi_energy' in kw:
+      print(__name__, 'Fermi energy is specified => recompute occupations')
+      ksn2fd = fermi_dirac_occupations(self.telec, self.ksn2e, self.fermi_energy)
+      for s,n2fd in enumerate(ksn2fd[0]):
+        if not all(n2fd>self.nfermi_tol): continue
+        print(self.telec, s, self.nfermi_tol, n2fd)
+        raise RuntimeError(__name__, 'telec is too high?')
+      ksn2f = self.ksn2f = (3-self.nspin)*ksn2fd
+    else:
+      ksn2f = self.ksn2f = self.mo_occ
+    
+    self.nfermi = array([argmax(ksn2f[0,s]<self.nfermi_tol) for s in range(self.nspin)], dtype=int)
+    self.vstart = array([argmax(1.0-ksn2f[0,s]>=self.nfermi_tol) for s in range(self.nspin)], dtype=int)
     self.xocc = [self.mo_coeff[0,s,:nfermi,:,0] for s,nfermi in enumerate(self.nfermi)]
     self.xvrt = [self.mo_coeff[0,s,vstart:,:,0] for s,vstart in enumerate(self.vstart)]
  
@@ -61,8 +66,8 @@ class chi0_matvec(mf):
       #print(__name__, '\t====> self.dtype ', self.dtype)
       print(__name__, '\t====> self.xocc[0].dtype ', self.xocc[0].dtype)
       print(__name__, '\t====> self.xvrt[0].dtype ', self.xvrt[0].dtype)
-      print(__name__, '\t====> Molecular orbital energies (ksn2e) (eV):\n{},\tType: {}'.format(self.ksn2e*HARTREE2EV,self.ksn2e.dtype))
-      print(__name__, '\t====> Occupation of states (ksn2f):\n{},\tType: {}'.format(self.ksn2f,self.ksn2f.dtype))
+      print(__name__, '\t====> MO energies (ksn2e) (eV):\n{},\tType: {}'.format(self.ksn2e*HARTREE2EV,self.ksn2e.dtype))
+      print(__name__, '\t====> Occupations (ksn2f):\n{},\tType: {}'.format(self.ksn2f,self.ksn2f.dtype))
 
     self.rf0_ncalls = 0
             

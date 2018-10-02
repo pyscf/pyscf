@@ -35,8 +35,8 @@ class KnowValues(unittest.TestCase):
     p_ave = -polariz_freq_osc_strength(gto_td.e, gto_td.oscillator_strength(), omegas).imag
     data = np.array([omegas.real*HARTREE2EV, p_ave])
     np.savetxt('test_0153_bse_h2b_uks_rpa_pyscf.txt', data.T, fmt=['%f','%f'])
-    #data_ref = np.loadtxt('test_0153_bse_h2b_uks_rpa_pyscf.txt-ref').T
-    #self.assertTrue(np.allclose(data_ref, data, atol=1e-6, rtol=1e-3))
+    data_ref = np.loadtxt('test_0153_bse_h2b_uks_rpa_pyscf.txt-ref').T
+    self.assertTrue(np.allclose(data_ref, data, atol=1e-6, rtol=1e-3))
     
     nao_td  = bse_iter(mf=gto_mf, gto=mol, verbosity=0, xc_code='RPA')
 

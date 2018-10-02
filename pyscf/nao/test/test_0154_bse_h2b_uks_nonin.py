@@ -32,19 +32,21 @@ class KnowValues(unittest.TestCase):
     p_ave = -polariz_nonin_ave(gto_mf, mol, omegas).imag
     data = np.array([omegas.real*HARTREE2EV, p_ave])
     np.savetxt('test_0154_bse_h2b_uks_nonin_pyscf.txt', data.T, fmt=['%f','%f'])
-    #data_ref = np.loadtxt('test_0153_bse_h2b_uks_rpa_pyscf.txt-ref').T
-    #self.assertTrue(np.allclose(data_ref, data, atol=1e-6, rtol=1e-3))
+    data_ref = np.loadtxt('test_0154_bse_h2b_uks_nonin_pyscf.txt-ref').T
+    self.assertTrue(np.allclose(data_ref, data, atol=1e-6, rtol=1e-3))
     
     nao_td  = bse_iter(mf=gto_mf, gto=mol, verbosity=0, xc_code='RPA')
 
     polariz = -nao_td.polariz_nonin_ave_matelem(omegas).imag
     data = np.array([omegas.real*HARTREE2EV, polariz])
     np.savetxt('test_0154_bse_h2b_uks_nonin_matelem.txt', data.T, fmt=['%f','%f'])
+    data_ref = np.loadtxt('test_0154_bse_h2b_uks_nonin_matelem.txt-ref').T
+    self.assertTrue(np.allclose(data_ref, data, atol=1e-6, rtol=1e-3))
 
     polariz = -nao_td.comp_polariz_nonin_ave(omegas).imag
     data = np.array([omegas.real*HARTREE2EV, polariz])
     np.savetxt('test_0154_bse_h2b_uks_nonin_nao.txt', data.T, fmt=['%f','%f'])
-    #data_ref = np.loadtxt('test_0154_bse_h2b_uks_nonin_nao.txt-ref').T
-    #self.assertTrue(np.allclose(data_ref, data, atol=1e-6, rtol=1e-3))
+    data_ref = np.loadtxt('test_0154_bse_h2b_uks_nonin_nao.txt-ref').T
+    self.assertTrue(np.allclose(data_ref, data, atol=1e-6, rtol=1e-3))
     
 if __name__ == "__main__": unittest.main()

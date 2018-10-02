@@ -30,66 +30,76 @@ class bse_iter(gw):
       print(__name__, '    xc_code_scf ', self.xc_code_scf)
       print(__name__, '        xc_code ', self.xc_code)
 
-    if (xc=='LDA' or xc=='GGA') and self.xc_code_kernel.upper()=='RPA':
-      """ Need to add LDA or GGA xc kernel to Hartree kernel..."""
-      assert self.nspin==1, "Cannot be right for nspin==2"
-      self.comp_fxc_pack(kernel=self.kernel, **kw)
 
-    kernel_den = pack2den_u(self.kernel)
-    n = self.norbs
-    v_dab = self.v_dab
-    cc_da = self.cc_da
-    # self.x = self.mo_coeff[0,:,:,:,0] 
+    n, v_dab, cc_da = self.norbs,self.v_dab,self.cc_da
+
+    q2k = np.zeros(( (self.nspin-1)*2+1,self.nprod,self.nprod), dtype=self.dtype)
+    for q in range((self.nspin-1)*2+1): q2k[q,:,:] = pack2den_u(self.kernel)
     
-    """ Start with the Hartree kernel """
-    self.kernel_4p = (((v_dab.T*(cc_da*kernel_den))*cc_da.T)*v_dab).reshape([n*n,n*n])
+    if (xc=='LDA' or xc=='GGA') and self.xc_code_kernel.upper()=='RPA': 
+      fxc_lda = self.comp_fxc_pack(**kw)
+      for q,fxc_pack in enumerate(fxc_lda): q2k[q,:,:] += pack2den_u(fxc_pack)
+
+    q2k_4p = np.zeros(( (self.nspin-1)*2+1,n*n,n*n), dtype=self.dtype)
+    for q,fhxc in enumerate(q2k):
+      q2k_4p[q] = (((v_dab.T*(cc_da*fhxc))*cc_da.T)*v_dab).reshape([n*n,n*n])
       
-    if xc=='CIS' or xc=='HF' or xc=='GW':
-      """ Add exchange operator """
-      self.kernel_4p -= 0.5*einsum('abcd->bcad', self.kernel_4p.reshape([n,n,n,n])).reshape([n*n,n*n])
-    elif xc=='RPA' or xc=='LDA' or xc=='GGA':
-      pass 
+    if xc=='CIS' or xc=='HF' or xc=='GW': # Add exchange operator
+      q2k_4p[0] -= 0.5*einsum('abcd->bcad', q2k_4p[0].reshape([n,n,n,n])).reshape([n*n,n*n])
+    elif xc=='RPA':
+      pass
+    elif xc=='LDA' or xc=='GGA':
+      pass
     else :
       print(' ?? xc_code ', self.xc_code, xc)
       raise RuntimeError('??? xc_code ???')
 
-    if xc=='GW':
-      """ Add correlation operator """
+    if xc=='GW': # Add correlation operator
       w_c_4p = (((v_dab.T*(cc_da*  self.si_c([0.0])[0].real ))*cc_da.T)*v_dab).reshape([n*n,n*n])
-      self.kernel_4p -= 0.5*einsum('abcd->bcad', w_c_4p.reshape([n,n,n,n])).reshape([n*n,n*n])
+      q2k_4p[0] -= 0.5*einsum('abcd->bcad', w_c_4p.reshape([n,n,n,n])).reshape([n*n,n*n])
 
     # Kernel kernel_4p must be fine by now
     if self.nspin==1:
-      self.ss2kernel_4p = [[self.kernel_4p]]
+      self.ss2kernel_4p = [[q2k_4p[0]]]
     elif self.nspin==2:
-      self.ss2kernel_4p = [[self.kernel_4p, self.kernel_4p], [self.kernel_4p,self.kernel_4p]]
+      self.ss2kernel_4p = [[q2k_4p[0], q2k_4p[1]], [q2k_4p[1],q2k_4p[2]]]
 
     if xc=='GW':
-      self.define_e_x_l0(self.mo_energy_gw, self.mo_coeff_gw)
+      self.define_e_x_l0(self.mo_energy_gw, self.mo_coeff_gw, **kw)
     else:
-      self.define_e_x_l0(self.mo_energy, self.mo_coeff)
+      self.define_e_x_l0(self.mo_energy, self.mo_coeff, **kw)
 
-  def define_e_x_l0(self, mo_energy, mo_coeff):
-    """
-      Define eigenvalues and eigenvectors which will be used in the two-particle Green's function L0(1,2,3,4)
-    """
-    from pyscf.nao.m_fermi_dirac import fermi_dirac_occupations
+    #print(__name__, 'Fermi energy', self.fermi_energy)
+    #np.set_printoptions(linewidth=1000)
+    #for s in range(self.nspin):
+    #  print(self.ksn2f_l0[s][:10])
+    #  print(self.ksn2e_l0[s][:10])
 
+
+  def define_e_x_l0(self, mo_energy, mo_coeff, **kw):
+    """  Define eigenvalues and eigenvecs for the two-particle Green's function L0(1,2,3,4) """
     self.ksn2e_l0 = np.copy(mo_energy).reshape((self.nspin,self.norbs))
 
-    ksn2fd = fermi_dirac_occupations(self.telec, self.ksn2e_l0, self.fermi_energy)
-    if np.all(ksn2fd>self.nfermi_tol):
-      print(__name__, self.telec, nfermi_tol, ksn2fd)
-      raise RuntimeError('telec is too high?')
-    self.ksn2f_l0 = (3-self.nspin)*ksn2fd
+    if 'fermi_energy' in kw:
+      from pyscf.nao.m_fermi_dirac import fermi_dirac_occupations
+      self.fermi_energy = kw['fermi_energy']
+      print(__name__, 'Fermi energy is specified => recompute occupations')
+      ksn2fd = fermi_dirac_occupations(self.telec, self.ksn2e, self.fermi_energy)
+      for s,n2fd in enumerate(ksn2fd[0]):
+        if not all(n2fd>self.nfermi_tol): continue
+        print(self.telec, s, self.nfermi_tol, n2fd)
+        raise RuntimeError(__name__, 'telec is too high?')
+      ksn2f = self.ksn2f_l0 = (3-self.nspin)*ksn2fd
+    else:
+      ksn2f = self.ksn2f_l0 = self.mo_occ.reshape((self.nspin,self.norbs))
 
     self.x_l0 = np.copy(mo_coeff).reshape((self.nspin,self.norbs,self.norbs)) 
 
     tol = self.nfermi_tol
-    self.nfermi_l0 = array([argmax(ksn2fd[s,:]<tol) for s in range(self.nspin)], dtype=int)
-    self.vstart_l0 = array([argmax(1-ksn2fd[s,:]>=tol) for s in range(self.nspin)], dtype=int)
-    self.xocc_l0 = [mo_coeff[0,s,:nfermi,:,0] for s,nfermi in enumerate(self.nfermi_l0)]
-    self.xvrt_l0 = [mo_coeff[0,s,vstart:,:,0] for s,vstart in enumerate(self.vstart_l0)]
+    self.nfermi_l0 = array([argmax(ksn2f[s]<tol) for s in range(self.nspin)], dtype=int)
+    self.vstart_l0 = array([argmax(1-ksn2f[s]>=tol) for s in range(self.nspin)], dtype=int)
+    self.xocc_l0 = [mo_coeff[0,s,:nf,:,0] for s,nf in enumerate(self.nfermi_l0)]
+    self.xvrt_l0 = [mo_coeff[0,s,vs:,:,0] for s,vs in enumerate(self.vstart_l0)]
 
   def apply_l0(self, sab, comega=1j*0.0):
     """ This applies the non-interacting four point Green's function to a suitable vector (e.g. dipole matrix elements)"""
@@ -172,10 +182,10 @@ class bse_iter(gw):
 
   def apply_kernel4p_nspin1(self, ddm):
     reim = require(ddm.real, dtype=self.dtype, requirements=["A","O"]) # real part
-    mv_real = dot(self.kernel_4p, reim)
+    mv_real = dot(self.ss2kernel_4p[0][0], reim)
     
     reim = require(ddm.imag, dtype=self.dtype, requirements=["A","O"]) # imaginary
-    mv_imag = dot(self.kernel_4p, reim)
+    mv_imag = dot(self.ss2kernel_4p[0][0], reim)
     return mv_real+1j*mv_imag
 
   def apply_kernel4p_nspin2(self, ddm):
