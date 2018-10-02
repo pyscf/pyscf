@@ -140,6 +140,7 @@ class KnownValues(unittest.TestCase):
         erig.vvvv = eri1[nocc:,nocc:,nocc:,nocc:].copy()
         mo_e = np.array([mf.mo_energy]*2)
         erig.fock = np.diag(mo_e.T.ravel())
+        erig.mo_energy = erig.fock.diagonal()
 
         myccg = gccsd.GCCSD(scf.addons.convert_to_ghf(mf))
         t1, t2 = myccg.amplitudes_from_ccsd(t1, t2)

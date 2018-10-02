@@ -267,7 +267,7 @@ def _response_dm1(mycc, Xvo, eris=None):
             v = reduce(numpy.dot, (mo_coeff[:,nocc:].T, v, mo_coeff[:,:nocc]))
             return v * 2
     else:
-        mo_energy = eris.fock.diagonal()
+        mo_energy = eris.mo_energy
         mo_occ = numpy.zeros_like(mo_energy)
         mo_occ[:nocc] = 2
         ovvo = numpy.empty((nocc,nvir,nvir,nocc))
@@ -327,7 +327,8 @@ def _rdm2_mo2ao(mycc, d2, mo_coeff, fsave=None):
     max_memory = mycc.max_memory - lib.current_memory()[0]
     blksize = int(max_memory*1e6/8/(nao_pair+nmo**2))
     blksize = min(nvir_pair, max(ccsd.BLKMIN, blksize))
-    fswap.create_dataset('v', (nao_pair,nvir_pair), 'f8', chunks=(nao_pair,blksize))
+    chunks_vv = (int(min(blksize,4e8/blksize)), blksize)
+    fswap.create_dataset('v', (nao_pair,nvir_pair), 'f8', chunks=chunks_vv)
     for p0, p1 in lib.prange(0, nvir_pair, blksize):
         fswap['v'][:,p0:p1] = _trans(lib.unpack_tril(_cp(dvvvv[p0:p1])),
                                      (nocc,nmo,nocc,nmo)).T
@@ -336,7 +337,7 @@ def _rdm2_mo2ao(mycc, d2, mo_coeff, fsave=None):
 # transform dm2_ij to get lower triangular (dm2+dm2.transpose(0,1,3,2))
     blksize = int(max_memory*1e6/8/(nao_pair+nmo**2))
     blksize = min(nao_pair, max(ccsd.BLKMIN, blksize))
-    fswap.create_dataset('o', (nmo,nocc,nao_pair), 'f8', chunks=(nmo,nocc,blksize))
+    fswap.create_dataset('o', (nmo,nocc,nao_pair), 'f8', chunks=(nocc,nocc,blksize))
     buf1 = numpy.zeros((nocc,nocc,nmo,nmo))
     buf1[:,:,:nocc,:nocc] = doooo
     buf1[:,:,nocc:,nocc:] = _cp(doovv)
@@ -356,7 +357,7 @@ def _rdm2_mo2ao(mycc, d2, mo_coeff, fsave=None):
     dovoo = buf1 = None
 
 # transform dm2_kl then dm2 + dm2.transpose(2,3,0,1)
-    gsave = fsave.create_dataset('dm2', (nao_pair,nao_pair), 'f8', chunks=(nao_pair,blksize))
+    gsave = fsave.create_dataset('dm2', (nao_pair,nao_pair), 'f8', chunks=chunks_vv)
     for p0, p1 in lib.prange(0, nao_pair, blksize):
         buf1 = numpy.zeros((p1-p0,nmo,nmo))
         buf1[:,nocc:,nocc:] = lib.unpack_tril(_cp(fswap['v'][p0:p1]))

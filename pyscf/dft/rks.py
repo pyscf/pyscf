@@ -23,7 +23,6 @@ Non-relativistic restricted Kohn-Sham
 import time
 import numpy
 from pyscf import lib
-from pyscf import gto
 from pyscf.lib import logger
 from pyscf.scf import hf
 from pyscf.scf import jk
@@ -143,9 +142,6 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
     return vxc
 
 def _get_k_lr(mol, dm, omega=0, hermi=0):
-    omega_bak = mol._env[gto.PTR_RANGE_OMEGA]
-    mol.set_range_coulomb(omega)
-
     dm = numpy.asarray(dm)
 # Note, ks object caches the ERIs for small systems. The cached eris are
 # computed with regular Coulomb operator. ks.get_jk or ks.get_k do not evalute
@@ -153,9 +149,10 @@ def _get_k_lr(mol, dm, omega=0, hermi=0):
 # function computes the K matrix with the modified Coulomb operator.
     nao = dm.shape[-1]
     dms = dm.reshape(-1,nao,nao)
-    vklr = jk.get_jk(mol, dms, ['ijkl,jk->il']*len(dms))
-
-    mol.set_range_coulomb(omega_bak)
+    with mol.with_range_coulomb(omega):
+        # Compute the long range part of ERIs temporarily with omega. Restore
+        # the original omega when the block ends
+        vklr = jk.get_jk(mol, dms, ['ijkl,jk->il']*len(dms))
     return numpy.asarray(vklr).reshape(dm.shape)
 
 
@@ -177,10 +174,10 @@ def energy_elec(ks, dm=None, h1e=None, vhf=None):
     if h1e is None: h1e = ks.get_hcore()
     if vhf is None or getattr(vhf, 'ecoul', None) is None:
         vhf = ks.get_veff(ks.mol, dm)
-    e1 = numpy.einsum('ij,ji', h1e, dm).real
+    e1 = numpy.einsum('ij,ji', h1e, dm)
     tot_e = e1 + vhf.ecoul + vhf.exc
-    logger.debug(ks, 'Ecoul = %s  Exc = %s', vhf.ecoul, vhf.exc)
-    return tot_e, vhf.ecoul+vhf.exc
+    logger.debug(ks, 'E1 = %s  Ecoul = %s  Exc = %s', e1, vhf.ecoul, vhf.exc)
+    return tot_e.real, vhf.ecoul+vhf.exc
 
 
 NELEC_ERROR_TOL = getattr(__config__, 'dft_rks_prune_error_tol', 0.02)

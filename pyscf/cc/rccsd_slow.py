@@ -20,6 +20,7 @@ Ref: Stanton et al., J. Chem. Phys. 94, 4334 (1990)
 Ref: Hirata et al., J. Chem. Phys. 120, 2581 (2004)
 '''
 
+from functools import reduce
 import time
 import numpy as np
 
@@ -296,7 +297,7 @@ class RCCSD(ccsd.CCSD):
             def pickeig(w, v, nr, envs):
                 x0 = linalg_helper._gen_x0(envs['v'], envs['xs'])
                 idx = np.argmax( np.abs(np.dot(np.array(guess).conj(),np.array(x0).T)), axis=1 )
-                return w[idx].real, v[:,idx].real, idx
+                return lib.linalg_helper._eigs_cmplx2real(w, v, idx)
             eip, evecs = eig(matvec, guess, precond, pick=pickeig,
                              tol=self.conv_tol, max_cycle=self.max_cycle,
                              max_space=self.max_space, nroots=nroots, verbose=self.verbose)
@@ -581,7 +582,7 @@ class RCCSD(ccsd.CCSD):
             def pickeig(w, v, nr, envs):
                 x0 = linalg_helper._gen_x0(envs['v'], envs['xs'])
                 idx = np.argmax( np.abs(np.dot(np.array(guess).conj(),np.array(x0).T)), axis=1 )
-                return w[idx].real, v[:,idx].real, idx
+                return lib.linalg_helper._eigs_cmplx2real(w, v, idx)
             eea, evecs = eig(matvec, guess, precond, pick=pickeig,
                              tol=self.conv_tol, max_cycle=self.max_cycle,
                              max_space=self.max_space, nroots=nroots, verbose=self.verbose)
@@ -892,7 +893,7 @@ class RCCSD(ccsd.CCSD):
             def pickeig(w, v, nr, envs):
                 x0 = linalg_helper._gen_x0(envs['v'], envs['xs'])
                 idx = np.argmax( np.abs(np.dot(np.array(guess).conj(),np.array(x0).T)), axis=1 )
-                return w[idx].real, v[:,idx].real, idx
+                return lib.linalg_helper._eigs_cmplx2real(w, v, idx)
             eee, evecs = eig(self.eeccsd_matvec, guess, precond, pick=pickeig,
                              tol=self.conv_tol, max_cycle=self.max_cycle,
                              max_space=self.max_space, nroots=nroots, verbose=self.verbose)

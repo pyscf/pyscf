@@ -41,7 +41,7 @@ class X2C(lib.StreamObject):
     def dump_flags(self):
         log = logger.Logger(self.mol.stdout, self.mol.verbose)
         log.info('\n')
-        log.info('******** %s flags ********', self.__class__)
+        log.info('******** %s ********', self.__class__)
         log.info('exp_drop = %g', self.exp_drop)
         log.info('approx = %s',    self.approx)
         log.info('xuncontract = %d', self.xuncontract)
@@ -106,6 +106,36 @@ class X2C(lib.StreamObject):
             contr_coeff[1::2,1::2] = contr_coeff_nr
             h1 = reduce(numpy.dot, (contr_coeff.T.conj(), h1, contr_coeff))
         return h1
+
+    def get_xmat(self, mol=None):
+        if mol is None:
+            xmol = self.get_xmol(mol)[0]
+        else:
+            xmol = mol
+        c = lib.param.LIGHT_SPEED
+        assert('1E' in self.approx.upper())
+
+        s = xmol.intor_symmetric('int1e_ovlp_spinor')
+        t = xmol.intor_symmetric('int1e_spsp_spinor') * .5
+        v = xmol.intor_symmetric('int1e_nuc_spinor')
+        w = xmol.intor_symmetric('int1e_spnucsp_spinor')
+        if 'ATOM' in self.approx.upper():
+            atom_slices = xmol.offset_2c_by_atom()
+            n2c = xmol.nao_2c()
+            x = numpy.zeros((n2c,n2c), dtype=numpy.complex)
+            for ia in range(xmol.natm):
+                ish0, ish1, p0, p1 = atom_slices[ia]
+                shls_slice = (ish0, ish1, ish0, ish1)
+                s1 = xmol.intor('int1e_ovlp_spinor', shls_slice=shls_slice)
+                t1 = xmol.intor('int1e_spsp_spinor', shls_slice=shls_slice) * .5
+                with xmol.with_rinv_as_nucleus(ia):
+                    z = -xmol.atom_charge(ia)
+                    v1 = z*xmol.intor('int1e_rinv_spinor', shls_slice=shls_slice)
+                    w1 = z*xmol.intor('int1e_sprinvsp_spinor', shls_slice=shls_slice)
+                x[p0:p1,p0:p1] = _x2c1e_xmatrix(t1, v1, w1, s1, c)
+        else:
+            x = _x2c1e_xmatrix(t, v, w, s, c)
+        return x
 
 
 def get_hcore(mol):

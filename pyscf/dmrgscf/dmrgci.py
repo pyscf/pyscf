@@ -905,7 +905,7 @@ def executeBLOCK(DMRGCI):
     except CalledProcessError as err:
         logger.error(DMRGCI, cmd)
         outFile = os.path.join(DMRGCI.runtimeDir, outFile)
-        DMRGCI.stdout.write(check_output(['tail', '-100', outFile]))
+        DMRGCI.stdout.write(check_output(['tail', '-100', outFile]).decode())
         raise err
 
 def readEnergy(DMRGCI):
@@ -922,7 +922,7 @@ def readEnergy(DMRGCI):
 def DMRGSCF(mf, norb, nelec, maxM=1000, tol=1.e-8, *args, **kwargs):
     '''Shortcut function to setup CASSCF using the DMRG solver.  The DMRG
     solver is properly initialized in this function so that the 1-step
-    algorithm can applied with DMRG-CASSCF.
+    algorithm can be applied with DMRG-CASSCF.
 
     Examples:
 

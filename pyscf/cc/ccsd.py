@@ -98,6 +98,8 @@ def update_amps(mycc, t1, t2, eris):
     nocc, nvir = t1.shape
     nov = nocc*nvir
     fock = eris.fock
+    mo_e_o = eris.mo_energy[:nocc]
+    mo_e_v = eris.mo_energy[nocc:] + mycc.level_shift
 
     t1new = numpy.zeros_like(t1)
     t2new = mycc._add_vvvv(t1, t2, eris, t2sym='jiba')
@@ -108,12 +110,10 @@ def update_amps(mycc, t1, t2, eris):
     fov = fock[:nocc,nocc:].copy()
     t1new += fov
 
-    foo = fock[:nocc,:nocc].copy()
-    foo[numpy.diag_indices(nocc)] = 0
+    foo = fock[:nocc,:nocc] - numpy.diag(mo_e_o)
     foo += .5 * numpy.einsum('ia,ja->ij', fock[:nocc,nocc:], t1)
 
-    fvv = fock[nocc:,nocc:].copy()
-    fvv[numpy.diag_indices(nvir)] = 0
+    fvv = fock[nocc:,nocc:] - numpy.diag(mo_e_v)
     fvv -= .5 * numpy.einsum('ia,ib->ab', t1, fock[:nocc,nocc:])
 
     if mycc.incore_complete:
@@ -138,7 +138,7 @@ def update_amps(mycc, t1, t2, eris):
         eris_oovv = numpy.empty((nocc,nocc,p1-p0,nvir))
         def load_oovv(p0, p1):
             eris_oovv[:] = eris.oovv[:,:,p0:p1]
-        with lib.call_in_background(load_oovv) as prefetch_oovv:
+        with lib.call_in_background(load_oovv, sync=not mycc.async_io) as prefetch_oovv:
             #:eris_oovv = eris.oovv[:,:,p0:p1]
             prefetch_oovv(p0, p1)
             foo += numpy.einsum('kc,kcji->ij', 2*t1[:,p0:p1], eris_ovoo)
@@ -157,7 +157,7 @@ def update_amps(mycc, t1, t2, eris):
         eris_ovvo = numpy.empty((nocc,p1-p0,nvir,nocc))
         def load_ovvo(p0, p1):
             eris_ovvo[:] = eris.ovvo[:,p0:p1]
-        with lib.call_in_background(load_ovvo) as prefetch_ovvo:
+        with lib.call_in_background(load_ovvo, sync=not mycc.async_io) as prefetch_ovvo:
             #:eris_ovvo = eris.ovvo[:,p0:p1]
             prefetch_ovvo(p0, p1)
             t1new[:,p0:p1] -= numpy.einsum('jb,jiab->ia', t1, eris_oovv)
@@ -192,7 +192,7 @@ def update_amps(mycc, t1, t2, eris):
 
         def update_wVooV(q0, q1, tau):
             wVooV[:] += lib.einsum('bkic,jkca->bija', eris_voov[:,:,:,q0:q1], tau)
-        with lib.call_in_background(update_wVooV) as update_wVooV:
+        with lib.call_in_background(update_wVooV, sync=not mycc.async_io) as update_wVooV:
             for q0, q1 in lib.prange(0, nvir, blksize):
                 tau  = t2[:,:,q0:q1] * .5
                 tau += numpy.einsum('ia,jb->ijab', t1[:,q0:q1], t1)
@@ -203,7 +203,7 @@ def update_amps(mycc, t1, t2, eris):
             t2new[:,:,q0:q1] += tmp.transpose(2,0,1,3)
             tmp *= .5
             t2new[:,:,q0:q1] += tmp.transpose(0,2,1,3)
-        with lib.call_in_background(update_t2) as update_t2:
+        with lib.call_in_background(update_t2, sync=not mycc.async_io) as update_t2:
             for q0, q1 in lib.prange(0, nvir, blksize):
                 tmp = lib.einsum('jkca,ckib->jaib', t2[:,:,p0:p1,q0:q1], wVooV)
                 #:t2new[:,:,q0:q1] += tmp.transpose(2,0,1,3)
@@ -218,7 +218,7 @@ def update_amps(mycc, t1, t2, eris):
         eris_voov = None
         def update_wVOov(q0, q1, tau):
             wVOov[:,:,:,q0:q1] += .5 * lib.einsum('aikc,kcjb->aijb', eris_VOov, tau)
-        with lib.call_in_background(update_wVOov) as update_wVOov:
+        with lib.call_in_background(update_wVOov, sync=not mycc.async_io) as update_wVOov:
             for q0, q1 in lib.prange(0, nvir, blksize):
                 tau  = t2[:,:,q0:q1].transpose(1,3,0,2) * 2
                 tau -= t2[:,:,q0:q1].transpose(0,3,1,2)
@@ -228,7 +228,7 @@ def update_amps(mycc, t1, t2, eris):
                 tau = None
         def update_t2(q0, q1, theta):
             t2new[:,:,q0:q1] += lib.einsum('kica,ckjb->ijab', theta, wVOov)
-        with lib.call_in_background(update_t2) as update_t2:
+        with lib.call_in_background(update_t2, sync=not mycc.async_io) as update_t2:
             for q0, q1 in lib.prange(0, nvir, blksize):
                 theta  = t2[:,:,p0:p1,q0:q1] * 2
                 theta -= t2[:,:,p0:p1,q0:q1].transpose(1,0,2,3)
@@ -254,8 +254,7 @@ def update_amps(mycc, t1, t2, eris):
     t2new += lib.einsum('ijac,bc->ijab', t2, ft_ab)
     t2new -= lib.einsum('ki,kjab->ijab', ft_ij, t2)
 
-    mo_e = fock.diagonal()
-    eia = mo_e[:nocc,None] - mo_e[None,nocc:]
+    eia = mo_e_o[:,None] - mo_e_v
     t1new += numpy.einsum('ib,ab->ia', t1, fvv)
     t1new -= numpy.einsum('ja,ji->ia', t1, foo)
     t1new /= eia
@@ -787,6 +786,8 @@ class CCSD(lib.StreamObject):
             Allow for asynchronous function execution. Default is True.
         incore_complete : bool
             Avoid all I/O (also for DIIS). Default is False.
+        level_shift : float
+            A shift on virtual orbital energies to stablize the CCSD iteration
         frozen : int or list
             If integer is given, the inner-most orbitals are frozen from CC
             amplitudes.  Given the orbital indices (0-based) in a list, both
@@ -840,7 +841,11 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
 
         if 'dft' in str(mf.__module__):
             raise RuntimeError('CCSD Warning: The first argument mf is a DFT object. '
-                               'CCSD calculation should be initialized with HF object.')
+                               'CCSD calculation should be initialized with HF object.\n'
+                               'DFT object can be converted to HF object with '
+                               'the code below:\n'
+                               '    mf_hf = scf.RHF(mol)\n'
+                               '    mf_hf.__dict__.update(mf_dft.__dict__)\n')
 
         if mo_coeff  is None: mo_coeff  = mf.mo_coeff
         if mo_occ    is None: mo_occ    = mf.mo_occ
@@ -853,6 +858,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
 
         self.frozen = frozen
         self.incore_complete = self.incore_complete or self.mol.incore_anyway
+        self.level_shift = 0
 
 ##################################################
 # don't modify the following attributes, they are not input options
@@ -905,7 +911,7 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)
         log.info('')
-        log.info('******** %s flags ********', self.__class__)
+        log.info('******** %s ********', self.__class__)
         log.info('CC2 = %g', self.cc2)
         log.info('CCSD nocc = %s, nmo = %s', self.nocc, self.nmo)
         if self.frozen is not 0:
@@ -934,23 +940,25 @@ http://sunqm.net/pyscf/code-rule.html#api-rules for the details of API conventio
         time0 = time.clock(), time.time()
         if eris is None:
             eris = self.ao2mo(self.mo_coeff)
-        mo_e = eris.fock.diagonal()
+        mo_e = eris.mo_energy
         nocc = self.nocc
         nvir = mo_e.size - nocc
         eia = mo_e[:nocc,None] - mo_e[None,nocc:]
+
         t1 = eris.fock[:nocc,nocc:] / eia
-        t2 = numpy.empty((nocc,nocc,nvir,nvir))
+        t2 = numpy.empty((nocc,nocc,nvir,nvir), dtype=eris.ovov.dtype)
         max_memory = self.max_memory - lib.current_memory()[0]
         blksize = int(min(nvir, max(BLKMIN, max_memory*.3e6/8/(nocc**2*nvir+1))))
-        self.emp2 = 0
+        emp2 = 0
         for p0, p1 in lib.prange(0, nvir, blksize):
-            eris_ovvo = eris.ovvo[:,p0:p1]
-            t2[:,:,p0:p1] = (eris_ovvo.transpose(0,3,1,2)
+            eris_ovov = eris.ovov[:,p0:p1]
+            t2[:,:,p0:p1] = (eris_ovov.transpose(0,2,1,3).conj()
                              / lib.direct_sum('ia,jb->ijab', eia[:,p0:p1], eia))
-            self.emp2 += 2 * numpy.einsum('ijab,iabj', t2[:,:,p0:p1], eris_ovvo)
-            self.emp2 -=     numpy.einsum('jiab,iabj', t2[:,:,p0:p1], eris_ovvo)
+            emp2 += 2 * numpy.einsum('ijab,iajb', t2[:,:,p0:p1], eris_ovov)
+            emp2 -=     numpy.einsum('jiab,iajb', t2[:,:,p0:p1], eris_ovov)
+        self.emp2 = emp2.real
 
-        logger.info(self, 'Init t2, MP2 energy = %.15g', self.emp2)
+        logger.info(self, 'Init t2, MP2 energy = %.15g', emp2.real)
         logger.timer(self, 'init mp2', *time0)
         return self.emp2, t1, t2
 
@@ -1189,14 +1197,22 @@ class _ChemistsERIs:
         dm = mycc._scf.make_rdm1(mycc.mo_coeff, mycc.mo_occ)
         fockao = mycc._scf.get_hcore() + mycc._scf.get_veff(mycc.mol, dm)
         self.fock = reduce(numpy.dot, (mo_coeff.conj().T, fockao, mo_coeff))
-        self.nocc = mycc.nocc
+        nocc = self.nocc = mycc.nocc
         self.mol = mycc.mol
 
-        mo_e = self.fock.diagonal()
+        # Note self.mo_energy can be different to fock.diagonal().
+        # self.mo_energy is used in the initial guess function (to generate
+        # MP2 amplitudes) and CCSD update_amps preconditioner.
+        # fock.diagonal() should only be used to compute the expectation value
+        # of Slater determinants.
+        mo_e = self.mo_energy = self.fock.diagonal().real
         try:
-            gap = abs(mo_e[:self.nocc,None] - mo_e[None,self.nocc:]).min()
+            gap = abs(mo_e[:nocc,None] - mo_e[None,nocc:]).min()
             if gap < 1e-5:
-                logger.warn(mycc, 'HOMO-LUMO gap %s too small for CCSD', gap)
+                logger.warn(mycc, 'HOMO-LUMO gap %s too small for CCSD.\n'
+                            'CCSD may be difficult to converge. Increasing '
+                            'CCSD Attribute level_shift may improve '
+                            'convergence.', gap)
         except ValueError:  # gap.size == 0
             pass
         return self
@@ -1412,12 +1428,14 @@ def _make_df_eris_outcore(mycc, mo_coeff=None):
     eris.oovv = eris.feri1.create_dataset('oovv', (nocc,nocc,nvir,nvir), 'f8', chunks=(nocc,nocc,1,nvir))
     eris.ovoo = eris.feri1.create_dataset('ovoo', (nocc,nvir,nocc,nocc), 'f8', chunks=(nocc,1,nocc,nocc))
     eris.ovvo = eris.feri1.create_dataset('ovvo', (nocc,nvir,nvir,nocc), 'f8', chunks=(nocc,1,nvir,nocc))
-    eris.ovvv = eris.feri1.create_dataset('ovvv', (nocc,nvir,nvir_pair), 'f8', chunks=(nocc,1,nvir_pair))
+    eris.ovov = eris.feri1.create_dataset('ovov', (nocc,nvir,nocc,nvir), 'f8', chunks=(nocc,1,nocc,nvir))
+    eris.ovvv = eris.feri1.create_dataset('ovvv', (nocc,nvir,nvir_pair), 'f8')
     eris.vvvv = eris.feri1.create_dataset('vvvv', (nvir_pair,nvir_pair), 'f8')
     eris.oooo[:] = lib.ddot(Loo.T, Loo).reshape(nocc,nocc,nocc,nocc)
     eris.ovoo[:] = lib.ddot(Lov.T, Loo).reshape(nocc,nvir,nocc,nocc)
     eris.oovv[:] = lib.unpack_tril(lib.ddot(Loo.T, Lvv)).reshape(nocc,nocc,nvir,nvir)
     eris.ovvo[:] = lib.ddot(Lov.T, Lvo).reshape(nocc,nvir,nvir,nocc)
+    eris.ovov[:] = lib.ddot(Lov.T, Lov).reshape(nocc,nvir,nocc,nvir)
     eris.ovvv[:] = lib.ddot(Lov.T, Lvv).reshape(nocc,nvir,nvir_pair)
     eris.vvvv[:] = lib.ddot(Lvv.T, Lvv)
     log.timer('CCSD integral transformation', *cput0)

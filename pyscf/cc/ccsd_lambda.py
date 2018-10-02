@@ -244,6 +244,8 @@ def update_lambda(mycc, t1, t2, l1, l2, eris=None, imds=None):
     nocc, nvir = t1.shape
     nov = nocc * nvir
     fov = eris.fock[:nocc,nocc:]
+    mo_e_o = eris.mo_energy[:nocc]
+    mo_e_v = eris.mo_energy[nocc:] + mycc.level_shift
 
     theta = t2*2 - t2.transpose(0,1,3,2)
     mba = lib.einsum('klca,klcb->ba', l2, theta)
@@ -263,17 +265,20 @@ def update_lambda(mycc, t1, t2, l1, l2, eris=None, imds=None):
     l2new *= .5  # *.5 because of l2+l2.transpose(1,0,3,2) in the end
     tmp = tmp1 = None
 
+    w1 = imds.w1 - numpy.diag(mo_e_v)
+    w2 = imds.w2 - numpy.diag(mo_e_o)
+
     l1new += fov
-    l1new += numpy.einsum('ib,ba->ia', l1, imds.w1)
-    l1new -= numpy.einsum('ja,ij->ia', l1, imds.w2)
+    l1new += numpy.einsum('ib,ba->ia', l1, w1)
+    l1new -= numpy.einsum('ja,ij->ia', l1, w2)
     l1new -= numpy.einsum('ik,ka->ia', mij, imds.w4)
     l1new -= numpy.einsum('ca,ic->ia', mba, imds.w4)
     l1new += numpy.einsum('ijab,bj->ia', l2, imds.w3) * 2
     l1new -= numpy.einsum('ijba,bj->ia', l2, imds.w3)
 
     l2new += numpy.einsum('ia,jb->ijab', l1, imds.w4)
-    l2new += lib.einsum('jibc,ca->jiba', l2, imds.w1)
-    l2new -= lib.einsum('jk,kiba->jiba', imds.w2, l2)
+    l2new += lib.einsum('jibc,ca->jiba', l2, w1)
+    l2new -= lib.einsum('jk,kiba->jiba', w2, l2)
 
     eris_ovoo = _cp(eris.ovoo)
     l1new -= numpy.einsum('iajk,kj->ia', eris_ovoo, mij1) * 2
@@ -345,10 +350,8 @@ def update_lambda(mycc, t1, t2, l1, l2, eris=None, imds=None):
     saved_woooo = m3 = None
     #time1 = log.timer_debug1('lambda pass [%d:%d]'%(p0, p1), *time1)
 
-    mo_e = eris.fock.diagonal()
-    eia = lib.direct_sum('i-a->ia', mo_e[:nocc], mo_e[nocc:])
+    eia = lib.direct_sum('i-a->ia', mo_e_o, mo_e_v)
     l1new /= eia
-    l1new += l1
 
 #    l2new = l2new + l2new.transpose(1,0,3,2)
 #    l2new /= lib.direct_sum('ia+jb->ijab', eia, eia)
@@ -361,7 +364,6 @@ def update_lambda(mycc, t1, t2, l1, l2, eris=None, imds=None):
             l2new[:i,i] = l2new[i,:i].transpose(0,2,1)
         l2new[i,i] = l2new[i,i] + l2new[i,i].T
         l2new[i,i] /= lib.direct_sum('a,b->ab', eia[i], eia[i])
-    l2new += l2
 
     time0 = log.timer_debug1('update l1 l2', *time0)
     return l1new, l2new
@@ -405,6 +407,7 @@ if __name__ == '__main__':
     eris.ovvv = eri0[:nocc,nocc:,nocc:,nocc:][:,:,idx[0],idx[1]].copy()
     eris.vvvv = ao2mo.restore(4,eri0[nocc:,nocc:,nocc:,nocc:],nvir)
     eris.fock = fock0
+    eris.mo_energy = fock0.diagonal()
 
     imds = make_intermediates(mcc, t1, t2, eris)
     l1new, l2new = update_lambda(mcc, t1, t2, l1, l2, eris, imds)

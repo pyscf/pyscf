@@ -15,7 +15,6 @@
 
 '''
 Interface to geometry optimizer pyberny https://github.com/azag0/pyberny
-(In testing)
 '''
 
 from __future__ import absolute_import
@@ -46,7 +45,12 @@ def to_berny_geom(mol, include_ghost=INCLUDE_GHOST):
         atmlst = numpy.where(atom_charges != 0)[0]  # Exclude ghost atoms
         species = [mol.atom_symbol(i) for i in atmlst]
         coords = mol.atom_coords()[atmlst] * lib.param.BOHR
-    return geomlib.Molecule(species, coords)
+
+    # geomlib.Geometry is available in the new version of pyberny solver. (issue #212)
+    if hasattr(geomlib, 'Geometry'):
+        return geomlib.Geometry(species, coords)
+    else:
+        return geomlib.Molecule(species, coords)
 
 def _geom_to_atom(mol, geom, include_ghost):
     atoms = list(geom)

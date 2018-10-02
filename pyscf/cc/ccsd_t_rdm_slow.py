@@ -30,7 +30,7 @@ def _gamma1_intermediates(mycc, t1, t2, l1, l2, eris=None, for_grad=False):
     eris_ovoo = numpy.asarray(eris.ovoo)
     eris_ovov = numpy.asarray(eris.ovov)
 
-    mo_e = eris.fock.diagonal()
+    mo_e = eris.mo_energy
     eia = lib.direct_sum('i-a->ia', mo_e[:nocc], mo_e[nocc:])
     d3 = lib.direct_sum('ia,jb,kc->ijkabc', eia, eia, eia)
 
@@ -74,7 +74,7 @@ def _gamma2_intermediates(mycc, t1, t2, l1, l2, eris=None,
     eris_ovoo = numpy.asarray(eris.ovoo)
     eris_ovov = numpy.asarray(eris.ovov)
 
-    mo_e = eris.fock.diagonal()
+    mo_e = eris.mo_energy
     eia = lib.direct_sum('i-a->ia', mo_e[:nocc], mo_e[nocc:])
     d3 = lib.direct_sum('ia,jb,kc->ijkabc', eia, eia, eia)
 
@@ -128,6 +128,7 @@ def r6(w):
 
 
 if __name__ == '__main__':
+    from functools import reduce
     from pyscf import gto
     from pyscf import scf
     from pyscf.cc import ccsd

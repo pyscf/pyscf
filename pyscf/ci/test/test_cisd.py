@@ -346,6 +346,125 @@ class KnownValues(unittest.TestCase):
         self.assertEqual(lib.chkfile.load(mf.chkfile, 'cisd/e_corr'),
                          myci.e_corr)
 
+    def test_tn_addrs_signs(self):
+        norb = 12
+        nelec = 6
+        addrs, signs = ci.cisd.tn_addrs_signs(norb, nelec, 1)
+        addrsr, signsr = t1_strs_ref(norb, nelec)
+        self.assertTrue(numpy.all(addrsr == addrs))
+        self.assertTrue(numpy.all(signsr == signs))
+
+        addrs, signs = ci.cisd.tn_addrs_signs(norb, nelec, 2)
+        addrsr, signsr = t2_strs_ref(norb, nelec)
+        self.assertTrue(numpy.all(addrsr == addrs))
+        self.assertTrue(numpy.all(signsr == signs))
+
+        addrs, signs = ci.cisd.tn_addrs_signs(norb, nelec, 3)
+        addrsr, signsr = t3_strs_ref(norb, nelec)
+        self.assertTrue(numpy.all(addrsr == addrs))
+        self.assertTrue(numpy.all(signsr == signs))
+
+        addrs, signs = ci.cisd.tn_addrs_signs(norb, nelec, 4)
+        addrsr, signsr = t4_strs_ref(norb, nelec)
+        self.assertTrue(numpy.all(addrsr == addrs))
+        self.assertTrue(numpy.all(signsr == signs))
+
+    def test_overlap(self):
+        numpy.random.seed(1)
+        nmo = 6
+        nocc = 3
+        nvir = nmo - nocc
+        c2 = numpy.random.rand(nocc,nocc,nvir,nvir)
+        cibra = cisd.amplitudes_to_cisdvec(numpy.random.rand(1),
+                                           numpy.random.rand(nocc,nvir),
+                                           c2+c2.transpose(1,0,3,2))
+        c2 = numpy.random.rand(nocc,nocc,nvir,nvir)
+        ciket = cisd.amplitudes_to_cisdvec(numpy.random.rand(1),
+                                           numpy.random.rand(nocc,nvir),
+                                           c2+c2.transpose(1,0,3,2))
+        fcibra = cisd.to_fcivec(cibra, nmo, nocc*2)
+        fciket = cisd.to_fcivec(ciket, nmo, nocc*2)
+        s_mo = numpy.random.random((nmo,nmo))
+        s0 = fci.addons.overlap(fcibra, fciket, nmo, nocc*2, s_mo)
+        s1 = cisd.overlap(cibra, ciket, nmo, nocc, s_mo)
+        self.assertAlmostEqual(s1, s0, 9)
+
+
+def t1_strs_ref(norb, nelec):
+    nocc = nelec
+    hf_str = int('1'*nocc, 2)
+    addrs = []
+    signs = []
+    for i in range(nocc):
+        for a in range(nocc, norb):
+            str1 = hf_str ^ (1 << i) | (1 << a)
+            addrs.append(fci.cistring.str2addr(norb, nelec, str1))
+            signs.append(fci.cistring.cre_des_sign(a, i, hf_str))
+    return numpy.asarray(addrs), numpy.asarray(signs)
+
+def t2_strs_ref(norb, nelec):
+    nocc = nelec
+    hf_str = int('1'*nocc, 2)
+    addrs = []
+    signs = []
+    for i in range(1, nocc):
+        for j in range(i):
+            for a in range(nocc, norb):
+                for b in range(nocc, a):
+                    str1 = hf_str ^ (1 << j) | (1 << b)
+                    sign = fci.cistring.cre_des_sign(b, j, hf_str)
+                    sign*= fci.cistring.cre_des_sign(a, i, str1)
+                    str2 = str1 ^ (1 << i) | (1 << a)
+                    addrs.append(fci.cistring.str2addr(norb, nocc, str2))
+                    signs.append(sign)
+    return numpy.asarray(addrs), numpy.asarray(signs)
+
+def t3_strs_ref(norb, nelec):
+    nocc = nelec
+    hf_str = int('1'*nocc, 2)
+    addrs = []
+    signs = []
+    for i in range(2, nocc):
+        for j in range(1, i):
+            for k in range(j):
+                for a in range(nocc, norb):
+                    for b in range(nocc, a):
+                        for c in range(nocc, b):
+                            str1 = hf_str ^ (1 << k) | (1 << c)
+                            str2 = str1 ^ (1 << j) | (1 << b)
+                            sign = fci.cistring.cre_des_sign(c, k, hf_str)
+                            sign*= fci.cistring.cre_des_sign(b, j, str1)
+                            sign*= fci.cistring.cre_des_sign(a, i, str2)
+                            str3 = str2 ^ (1 << i) | (1 << a)
+                            addrs.append(fci.cistring.str2addr(norb, nocc, str3))
+                            signs.append(sign)
+    return numpy.asarray(addrs), numpy.asarray(signs)
+
+def t4_strs_ref(norb, nelec):
+    nocc = nelec
+    hf_str = int('1'*nocc, 2)
+    addrs = []
+    signs = []
+    for i in range(3, nocc):
+        for j in range(2, i):
+            for k in range(1, j):
+                for l in range(k):
+                    for a in range(nocc, norb):
+                        for b in range(nocc, a):
+                            for c in range(nocc, b):
+                                for d in range(nocc, c):
+                                    str1 = hf_str ^ (1 << l) | (1 << d)
+                                    str2 = str1 ^ (1 << k) | (1 << c)
+                                    str3 = str2 ^ (1 << j) | (1 << b)
+                                    sign = fci.cistring.cre_des_sign(d, l, hf_str)
+                                    sign*= fci.cistring.cre_des_sign(c, k, str1)
+                                    sign*= fci.cistring.cre_des_sign(b, j, str2)
+                                    sign*= fci.cistring.cre_des_sign(a, i, str3)
+                                    str4 = str3 ^ (1 << i) | (1 << a)
+                                    addrs.append(fci.cistring.str2addr(norb, nocc, str4))
+                                    signs.append(sign)
+    return numpy.asarray(addrs), numpy.asarray(signs)
+
 
 if __name__ == "__main__":
     print("Full Tests for CISD")

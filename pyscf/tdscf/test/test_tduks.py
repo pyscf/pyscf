@@ -34,7 +34,7 @@ mol.basis = '631g'
 mol.build()
 
 mf = scf.UHF(mol).run()
-td_hf = tdscf.TDHF(mf).run()
+td_hf = tdscf.TDHF(mf).run(conv_tol=1e-12)
 
 mf_lda = dft.UKS(mol).set(xc='lda', conv_tol=1e-12)
 mf_lda.grids.prune = None
@@ -279,7 +279,7 @@ class KnownValues(unittest.TestCase):
         f = td_hf.oscillator_strength(gauge='length')
         self.assertAlmostEqual(lib.finger(f), 0.16147450863004867, 7)
         f = td_hf.oscillator_strength(gauge='velocity', order=2)
-        self.assertAlmostEqual(lib.finger(f), 0.19750347627735745, 7)
+        self.assertAlmostEqual(lib.finger(f), 0.19750347627735745, 6)
         td_hf.analyze()
 
     def test_init(self):

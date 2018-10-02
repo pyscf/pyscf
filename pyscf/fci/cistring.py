@@ -46,9 +46,9 @@ def gen_strings4orblist(orb_list, nelec):
 
     assert(nelec >= 0)
     if nelec == 0:
-        return [0]
+        return numpy.asarray([0], dtype=numpy.int64)
     elif nelec > len(orb_list):
-        return []
+        return numpy.asarray([], dtype=numpy.int64)
     def gen_str_iter(orb_list, nelec):
         if nelec == 1:
             res = [(1<<i) for i in orb_list]

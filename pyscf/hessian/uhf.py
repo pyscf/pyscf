@@ -20,6 +20,7 @@
 Non-relativistic UHF analytical Hessian
 '''
 
+from functools import reduce
 import time
 import numpy
 from pyscf import lib

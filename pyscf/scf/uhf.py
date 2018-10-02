@@ -133,6 +133,10 @@ def make_rdm1(mo_coeff, mo_occ):
     mo_b = mo_coeff[1]
     dm_a = numpy.dot(mo_a*mo_occ[0], mo_a.T.conj())
     dm_b = numpy.dot(mo_b*mo_occ[1], mo_b.T.conj())
+# DO NOT make tag_array for DM here because the DM arrays may be modified and
+# passed to functions like get_jk, get_vxc.  These functions may take the tags
+# (mo_coeff, mo_occ) to compute the potential if tags were found in the DM
+# arrays and modifications to DM arrays may be ignored.
     return numpy.array((dm_a,dm_b))
 
 def get_veff(mol, dm, dm_last=0, vhf_last=0, hermi=1, vhfopt=None):
@@ -248,10 +252,7 @@ def get_occ(mf, mo_energy=None, mo_coeff=None):
     e_sort_a = mo_energy[0][e_idx_a]
     e_sort_b = mo_energy[1][e_idx_b]
     nmo = mo_energy[0].size
-    if mf.nelec is None:
-        n_a, n_b = mf.mol.nelec
-    else:
-        n_a, n_b = mf.nelec
+    n_a, n_b = mf.nelec
     mo_occ = numpy.zeros_like(mo_energy)
     mo_occ[0,e_idx_a[:n_a]] = 1
     mo_occ[1,e_idx_b[:n_b]] = 1
@@ -311,10 +312,12 @@ def energy_elec(mf, dm=None, h1e=None, vhf=None):
         dm = numpy.array((dm*.5, dm*.5))
     if vhf is None:
         vhf = mf.get_veff(mf.mol, dm)
-    e1 = numpy.einsum('ij,ij', h1e.conj(), dm[0]+dm[1])
+    e1 = numpy.einsum('ij,ji', h1e, dm[0])
+    e1+= numpy.einsum('ij,ji', h1e, dm[1])
     e_coul =(numpy.einsum('ij,ji', vhf[0], dm[0]) +
-             numpy.einsum('ij,ji', vhf[1], dm[1])).real * .5
-    return e1+e_coul, e_coul
+             numpy.einsum('ij,ji', vhf[1], dm[1])) * .5
+    logger.debug(mf, 'E1 = %s  Ecoul = %s', e1, e_coul.real)
+    return (e1+e_coul).real, e_coul
 
 # mo_a and mo_b are occupied orbitals
 def spin_square(mo, s=1):
@@ -650,23 +653,31 @@ class UHF(hf.SCF):
         # self.mo_coeff => [mo_a, mo_b]
         # self.mo_occ => [mo_occ_a, mo_occ_b]
         # self.mo_energy => [mo_energy_a, mo_energy_b]
-
         self.nelec = None
-        self._keys = self._keys.union(['nelec'])
+
+    @property
+    def nelec(self):
+        if self._nelec is not None:
+            return self._nelec
+        else:
+            return self.mol.nelec
+    @nelec.setter
+    def nelec(self, x):
+        self._nelec = x
+
+    @property
+    def nelectron_alpha(self):
+        return self.nelec[0]
+    @nelectron_alpha.setter
+    def nelectron_alpha(self, x):
+        logger.warn(self, 'WARN: Attribute .nelectron_alpha is deprecated. '
+                    'Set .nelec instead')
+        #raise RuntimeError('API updates')
+        self.nelec = (x, self.mol.nelectron-x)
 
     def dump_flags(self):
-        if hasattr(self, 'nelectron_alpha'):  # pragma: no cover
-            logger.warn(self, 'Note the API updates: attribute nelectron_alpha was replaced by attribute nelec')
-            #raise RuntimeError('API updates')
-            self.nelec = (self.nelectron_alpha,
-                          self.mol.nelectron-self.nelectron_alpha)
-            delattr(self, 'nelectron_alpha')
-        if self.nelec is None:
-            nelec = self.mol.nelec
-        else:
-            nelec = self.nelec
         hf.SCF.dump_flags(self)
-        logger.info(self, 'number electrons alpha = %d  beta = %d', *nelec)
+        logger.info(self, 'number electrons alpha = %d  beta = %d', *self.nelec)
 
     def eig(self, fock, s):
         e_a, c_a = self._eigh(fock[0], s)

@@ -36,7 +36,7 @@ from pyscf.pbc.df import outcore
 from pyscf.pbc.df import ft_ao
 from pyscf.pbc.df import df
 from pyscf.pbc.df import aft
-from pyscf.pbc.df.df import make_modrho_basis, fuse_auxcell
+from pyscf.pbc.df.df import fuse_auxcell
 from pyscf.pbc.df.df_jk import zdotNN, zdotCN, zdotNC
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, unique
 from pyscf.pbc.df import mdf_jk
@@ -76,22 +76,20 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
     for k, kpt in enumerate(uniq_kpts):
         aoaux = ft_ao.ft_ao(fused_cell, Gv, None, b, gxyz, Gvbase, kpt).T
         aoaux = fuse(aoaux)
-        coulG = numpy.sqrt(mydf.weighted_coulG(kpt, False, mesh))
-        kLR = (aoaux.real * coulG).T
-        kLI = (aoaux.imag * coulG).T
-        if not kLR.flags.c_contiguous: kLR = lib.transpose(kLR.T)
-        if not kLI.flags.c_contiguous: kLI = lib.transpose(kLI.T)
+        coulG = mydf.weighted_coulG(kpt, False, mesh)
+        LkR = numpy.asarray(aoaux.real, order='C')
+        LkI = numpy.asarray(aoaux.imag, order='C')
 
         j2c_k = fuse(fuse(j2c[k]).T).T.copy()
         if is_zero(kpt):  # kpti == kptj
-            j2c_k -= lib.dot(kLR.T, kLR)
-            j2c_k -= lib.dot(kLI.T, kLI)
+            j2c_k -= lib.dot(LkR*coulG, LkR.T)
+            j2c_k -= lib.dot(LkI*coulG, LkI.T)
         else:
-             # aoaux ~ kpt_ij, aoaux.conj() ~ kpt_kl
-            j2cR, j2cI = zdotCN(kLR.T, kLI.T, kLR, kLI)
+            # aoaux ~ kpt_ij, aoaux.conj() ~ kpt_kl
+            j2cR, j2cI = zdotCN(LkR*coulG, LkI*coulG, LkR.T, LkI.T)
             j2c_k -= j2cR + j2cI * 1j
         fswap['j2c/%d'%k] = j2c_k
-        aoaux = kLR = kLI = j2cR = j2cI = coulG = None
+        aoaux = LkR = LkI = j2cR = j2cI = coulG = None
     j2c = None
 
     feri = h5py.File(cderi_file)
@@ -110,6 +108,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
         kLR = Gaux.T.real.copy('C')
         kLI = Gaux.T.imag.copy('C')
         j2c = numpy.asarray(fswap['j2c/%d'%uniq_kptji_id])
+        j2c_negative = None
 # Note large difference may be found in results between the CD/eig treatments.
 # In some systems, small integral errors can lead to different treatments of
 # linear dependency which can be observed in the total energy/orbital energy
@@ -123,20 +122,24 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
         w, v = scipy.linalg.eigh(j2c)
         log.debug('MDF metric for kpt %s cond = %.4g, drop %d bfns',
                   uniq_kptji_id, w[-1]/w[0], numpy.count_nonzero(w<mydf.linear_dep_threshold))
-        v = v[:,w>mydf.linear_dep_threshold].T.conj()
-        v /= numpy.sqrt(w[w>mydf.linear_dep_threshold]).reshape(-1,1)
-        j2c = v
+        v1 = v[:,w>mydf.linear_dep_threshold].T.conj()
+        v1 /= numpy.sqrt(w[w>mydf.linear_dep_threshold]).reshape(-1,1)
+        j2c = v1
+        if cell.dimension == 2 and cell.low_dim_ft_type != 'inf_vacuum':
+            idx = numpy.where(w < -mydf.linear_dep_threshold)[0]
+            if len(idx) > 0:
+                j2c_negative = (v[:,idx]/numpy.sqrt(-w[idx])).conj().T
         j2ctag = 'eig'
-        naux0 = j2c.shape[0]
+        w = v = v1 = None
 
         if is_zero(kpt):  # kpti == kptj
             aosym = 's2'
             nao_pair = nao*(nao+1)//2
 
-            vbar = fuse(mydf.auxbar(fused_cell))
-            ovlp = cell.pbc_intor('int1e_ovlp', hermi=1, kpts=adapted_kptjs)
-            for k, ji in enumerate(adapted_ji_idx):
-                ovlp[k] = lib.pack_tril(ovlp[k])
+            if cell.dimension == 3:
+                vbar = fuse(mydf.auxbar(fused_cell))
+                ovlp = cell.pbc_intor('int1e_ovlp', hermi=1, kpts=adapted_kptjs)
+                ovlp = [lib.pack_tril(s) for s in ovlp]
         else:
             aosym = 's1'
             nao_pair = nao**2
@@ -190,9 +193,13 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
                     v = j3cR[k] + j3cI[k] * 1j
                 if j2ctag == 'CD':
                     v = scipy.linalg.solve_triangular(j2c, v, lower=True, overwrite_b=True)
+                    feri['j3c/%d/%d'%(ji,istep)] = v
                 else:
-                    v = lib.dot(j2c, v)
-                feri['j3c/%d/%d'%(ji,istep)] = v
+                    feri['j3c/%d/%d'%(ji,istep)] = lib.dot(j2c, v)
+
+                # low-dimension systems
+                if j2c_negative is not None:
+                    feri['j3c-/%d/%d'%(ji,istep)] = lib.dot(j2c_negative, v)
 
         with lib.call_in_background(pw_contract) as compute:
             col1 = 0
@@ -207,9 +214,8 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
                     v = [feri['j3c-junk/%d/%d'%(idx,i)][0,col0:col1].T for i in range(nsegs)]
                     v = fuse(numpy.vstack(v))
                     if is_zero(kpt) and cell.dimension == 3:
-                        for i, c in enumerate(vbar):
-                            if c != 0:
-                                v[i] -= c * ovlp[k][col0:col1]
+                        for i in numpy.where(vbar != 0)[0]:
+                            v[i] -= vbar[i] * ovlp[k][col0:col1]
                     j3cR.append(numpy.asarray(v.real, order='C'))
                     if is_zero(kpt) and gamma_point(adapted_kptjs[k]):
                         j3cI.append(None)
@@ -228,20 +234,10 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
     feri.close()
 
 
-# valence_exp = 1. is the Gaussian typicall sits in valence
+# valence_exp = 1. are typically the Gaussians in the valence
 VALENCE_EXP = getattr(__config__, 'pbc_df_mdf_valence_exp', 1.0)
 def _mesh_for_valence(cell, valence_exp=VALENCE_EXP):
     '''Energy cutoff estimation'''
-    b = cell.reciprocal_vectors()
-    if cell.dimension == 0:
-        w = 1
-    elif cell.dimension == 1:
-        w = numpy.linalg.norm(b[0]) / (2*numpy.pi)
-    elif cell.dimension == 2:
-        w = numpy.linalg.norm(numpy.cross(b[0], b[1])) / (2*numpy.pi)**2
-    else:
-        w = abs(numpy.linalg.det(b)) / (2*numpy.pi)**3
-
     precision = cell.precision * 10
     Ecut_max = 0
     for i in range(cell.nbas):
@@ -249,11 +245,12 @@ def _mesh_for_valence(cell, valence_exp=VALENCE_EXP):
         es = cell.bas_exp(i).copy()
         es[es>valence_exp] = valence_exp
         cs = abs(cell.bas_ctr_coeff(i)).max(axis=1)
-        ke_guess = gto.cell._estimate_ke_cutoff(es, l, cs, precision, w)
+        ke_guess = gto.cell._estimate_ke_cutoff(es, l, cs, precision)
         Ecut_max = max(Ecut_max, ke_guess.max())
     mesh = tools.cutoff_to_mesh(cell.lattice_vectors(), Ecut_max)
     mesh = numpy.min((mesh, cell.mesh), axis=0)
-    mesh[cell.dimension:] = cell.mesh[cell.dimension:]
+    if cell.dimension < 2 or cell.low_dim_ft_type == 'inf_vacuum':
+        mesh[cell.dimension:] = cell.mesh[cell.dimension:]
     return mesh
 del(VALENCE_EXP)
 
@@ -271,9 +268,21 @@ class MDF(df.DF):
         self.kpts_band = None
         self._auxbasis = None
         self.mesh = _mesh_for_valence(cell)
+
+        # In MDF, fitting PWs (self.mesh), and parameters eta and exp_to_discard
+        # are related to each other. The compensated function does not need to
+        # be very smooth. It just needs to be expanded by the specified PWs
+        # (self.mesh). self.eta is estimated on the fly based on the value of
+        # self.mesh.
         self.eta = None
 
-# Not input options
+        # Any functions which are more diffused than the compensated Gaussian
+        # are linearly dependent to the PWs. They can be removed from the
+        # auxiliary set without affecting the accuracy of MDF. exp_to_discard
+        # can be set to the value of self.eta
+        self.exp_to_discard = None
+
+        # The following attributes are not input options.
         self.exxdiv = None  # to mimic KRHF/KUHF object in function get_coulG
         self.auxcell = None
         self.blockdim = getattr(__config__, 'df_df_DF_blockdim', 240)
@@ -300,6 +309,16 @@ class MDF(df.DF):
     def eta(self, x):
         self._eta = x
 
+    @property
+    def exp_to_discard(self):
+        if self._exp_to_discard is not None:
+            return self._exp_to_discard
+        else:
+            return self.eta
+    @exp_to_discard.setter
+    def exp_to_discard(self, x):
+        self._exp_to_discard = x
+
     _make_j3c = _make_j3c
 
     def get_jk(self, dm, hermi=1, kpts=None, kpts_band=None,
@@ -325,6 +344,7 @@ class MDF(df.DF):
 
     get_eri = get_ao_eri = mdf_ao2mo.get_eri
     ao2mo = get_mo_eri = mdf_ao2mo.general
+    ao2mo_7d = mdf_ao2mo.ao2mo_7d
 
     def update_mp(self):
         pass

@@ -1,6 +1,7 @@
-* Hartree-Fock (up to ~5000 basis)
+* Hartree-Fock
 
-  - Non-relativistic restricted open-shell, unrestricted HF
+  - Non-relativistic restricted open-shell, unrestricted HF (~5000 basis for
+    serial version, ~30000 basis in MPI mode)
   - Scalar relativistic HF
   - 2-component relativistic HF
   - 4-component relativistic Dirac-Hartree-Fock
@@ -12,9 +13,10 @@
   - Generalized Hartree-Fock (GHF)
 
 
-* DFT (up to ~5000 basis)
+* DFT
 
   - Non-relativistic restricted, restricted open-shell, unrestricted Kohn-Sham
+    (~5000 basis for serial version, ~30000 basis in MPI mode)
   - Scalar relativistic DFT
   - Density fitting DFT
   - General XC functional evaluator (for Libxc or XcFun)
@@ -139,6 +141,8 @@
   - 4-component DHF g-tensor
   - Non-relativistic UHF zero-field splitting
   - Molecular electrostatic potential (MEP)
+  - EFG and Mossbauer spectroscopy
+  - Non-relativistic RHF, UHF, RKS, UKS magnetizability
 
 * MRPT
 
@@ -165,6 +169,7 @@
   - Low-dimensional (0D, 1D, 2D) PBC systems
   - (restricted and unrestricted) TDA, TDHF and TDDFT with k-point sampling
   - Multigrid DFT
+  - EFG and Mossbauer spectroscopy
 
 
 * Relativistic effects

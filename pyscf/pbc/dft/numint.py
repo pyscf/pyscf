@@ -24,6 +24,8 @@ from pyscf import lib
 from pyscf.dft import numint
 from pyscf.dft.numint import eval_mat, _dot_ao_ao, _dot_ao_dm
 from pyscf.dft.numint import _scale_ao, _contract_rho
+from pyscf.dft.numint import _rks_gga_wv0, _rks_gga_wv1
+from pyscf.dft.numint import _uks_gga_wv0, _uks_gga_wv1
 from pyscf.dft.numint import OCCDROP
 from pyscf.pbc.dft.gen_grid import libpbc, make_mask, BLKSIZE
 from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, member
@@ -618,10 +620,9 @@ def nr_rks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
                 fxc0 = (fxc[0][ip:ip+ngrid], fxc[1][ip:ip+ngrid], fxc[2][ip:ip+ngrid])
                 ip += ngrid
 
-            wv = numpy.empty((4,ngrid))
             for i in range(nset):
                 rho1 = make_rho(i, ao_k1, mask, xctype)
-                wv = numint._rks_gga_wv1(rho, rho1, vxc0, fxc0, weight)
+                wv = _rks_gga_wv1(rho, rho1, vxc0, fxc0, weight)
                 vmat[i] += ni._fxc_mat(cell, ao_k1, wv, mask, xctype, ao_loc)
 
         # call swapaxes method to swap last two indices because vmat may be a 3D
@@ -648,6 +649,8 @@ def nr_rks_fxc_st(ni, cell, grids, xc_code, dm0, dms_alpha, relativity=0, single
 
     Ref. CPL, 256, 454
     '''
+    if kpts is None:
+        kpts = numpy.zeros((1,3))
     xctype = ni._xc_type(xc_code)
 
     make_rho, nset, nao = ni._gen_rho_evaluator(cell, dms_alpha)
@@ -718,8 +721,8 @@ def nr_rks_fxc_st(ni, cell, grids, xc_code, dm0, dms_alpha, relativity=0, single
                 # rho1[0 ] = |b><j| z_{bj}
                 # rho1[1:] = \nabla(|b><j|) z_{bj}
                 rho1 = make_rho(i, ao_k1, mask, xctype)
-                wv = numint._rks_gga_wv1(rho, rho1, (None,fgamma),
-                                         (frho,frhogamma,fgg), weight)
+                wv = _rks_gga_wv1(rho, rho1, (None,fgamma),
+                                  (frho,frhogamma,fgg), weight)
                 vmat[i] += ni._fxc_mat(cell, ao_k1, wv, mask, xctype, ao_loc)
 
         for i in range(nset):  # for (\nabla\mu) \nu + \mu (\nabla\nu)
@@ -784,9 +787,9 @@ def nr_uks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
 
     if ((xctype == 'LDA' and fxc is None) or
         (xctype == 'GGA' and rho0 is None)):
-        dm0a, dm0b = _format_uks_dm(dms)
-        make_rho0a = ni._gen_rho_evaluator(cell, dm0a, 1)
-        make_rho0b = ni._gen_rho_evaluator(cell, dm0b, 1)
+        dm0a, dm0b = _format_uks_dm(dm0)
+        make_rho0a = ni._gen_rho_evaluator(cell, dm0a, 1)[0]
+        make_rho0b = ni._gen_rho_evaluator(cell, dm0b, 1)[0]
 
     shls_slice = (0, cell.nbas)
     ao_loc = cell.ao_loc_nr()
@@ -840,8 +843,8 @@ def nr_uks_fxc(ni, cell, grids, xc_code, dm0, dms, relativity=0, hermi=0,
             for i in range(nset):
                 rho1a = make_rhoa(i, ao_k1, mask, xctype)
                 rho1b = make_rhob(i, ao_k1, mask, xctype)
-                wva, wvb = numint._uks_gga_wv1((rho0a,rho0b), (rho1a,rho1b),
-                                               vxc0, fxc0, weight)
+                wva, wvb = _uks_gga_wv1((rho0a,rho0b), (rho1a,rho1b),
+                                        vxc0, fxc0, weight)
                 vmata[i] += ni._fxc_mat(cell, ao_k1, wva, mask, xctype, ao_loc)
                 vmatb[i] += ni._fxc_mat(cell, ao_k1, wvb, mask, xctype, ao_loc)
 
@@ -902,14 +905,15 @@ def cache_xc_kernel(ni, cell, grids, xc_code, mo_coeff, mo_occ, spin=0,
     return rho, vxc, fxc
 
 
-def get_rho(ni, cell, dm, grids, kpt=numpy.zeros(3), max_memory=2000):
-    '''Indices of density which are larger than given cutoff
+def get_rho(ni, cell, dm, grids, kpts=numpy.zeros((1,3)), max_memory=2000):
+    '''Density in real space
     '''
     make_rho, nset, nao = ni._gen_rho_evaluator(cell, dm)
+    assert(nset == 1)
     rho = numpy.empty(grids.weights.size)
     p1 = 0
     for ao_k1, ao_k2, mask, weight, coords \
-            in ni.block_loop(cell, grids, nao, 0, kpt, None, max_memory):
+            in ni.block_loop(cell, grids, nao, 0, kpts, None, max_memory):
         p0, p1 = p1, p1 + weight.size
         rho[p0:p1] = make_rho(0, ao_k1, mask, 'LDA')
     return rho
@@ -1007,8 +1011,8 @@ class NumInt(numint.NumInt):
         comp = (deriv+1)*(deriv+2)*(deriv+3)//6
 # NOTE to index grids.non0tab, the blksize needs to be the integer multiplier of BLKSIZE
         if blksize is None:
-            blksize = max(1, int(max_memory*1e6/(comp*2*nao*16*BLKSIZE)))*BLKSIZE
-            blksize = min(blksize, ngrids, BLKSIZE*1200)
+            blksize = int(max_memory*1e6/(comp*2*nao*16*BLKSIZE))*BLKSIZE
+            blksize = max(BLKSIZE, min(blksize, ngrids, BLKSIZE*1200))
         if non0tab is None:
             non0tab = grids.non0tab
         if non0tab is None:
@@ -1175,8 +1179,8 @@ class KNumInt(numint.NumInt):
         comp = (deriv+1)*(deriv+2)*(deriv+3)//6
 # NOTE to index grids.non0tab, the blksize needs to be the integer multiplier of BLKSIZE
         if blksize is None:
-            blksize = max(1, int(max_memory*1e6/(comp*2*nkpts*nao*16*BLKSIZE)))*BLKSIZE
-            blksize = min(blksize, ngrids, BLKSIZE*1200)
+            blksize = int(max_memory*1e6/(comp*2*nkpts*nao*16*BLKSIZE))*BLKSIZE
+            blksize = max(BLKSIZE, min(blksize, ngrids, BLKSIZE*1200))
         if non0tab is None:
             non0tab = grids.non0tab
         if non0tab is None:

@@ -50,7 +50,7 @@ class VHFOpt(object):
                                    c_env.ctypes.data_as(ctypes.c_void_p))
         self._this.contents.fprescreen = _fpointer(prescreen)
 
-        if prescreen != 'CVHFnoscreen':
+        if prescreen != 'CVHFnoscreen' and qcondname is not None:
             ao_loc = make_loc(c_bas, self._intor)
             fsetqcond = getattr(libcvhf, qcondname)
             fsetqcond(self._this,
@@ -354,10 +354,6 @@ def direct_bindm(intor, aosym, jkdescript,
     dmsptr = (ctypes.c_void_p*(n_dm))()
     vjkptr = (ctypes.c_void_p*(n_dm))()
     for i, (dmsym, vsym) in enumerate(descr_sym):
-        if dmsym in ('ij', 'kl', 'il', 'kj'):
-            sys.stderr.write('not support DM description %s, transpose to %s\n' %
-                             (dmsym, dmsym[::-1]))
-            dmsym = dmsym[::-1]
         f1 = _fpointer('CVHFnr%s_%s_%s'%(aosym, dmsym, vsym))
 
         assert(dms[i].shape == get_dims(dmsym, shls_slice, ao_loc))

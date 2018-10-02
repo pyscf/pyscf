@@ -31,6 +31,7 @@ from pyscf.lib import logger
 from pyscf.pbc.scf import kuhf
 from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import rks
+from pyscf.pbc.dft import multigrid
 
 
 def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
@@ -43,6 +44,17 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     if kpts is None: kpts = ks.kpts
     t0 = (time.clock(), time.time())
 
+    omega, alpha, hyb = ks._numint.rsh_and_hybrid_coeff(ks.xc, spin=cell.spin)
+    hybrid = abs(hyb) > 1e-10
+
+    if not hybrid and isinstance(ks.with_df, multigrid.MultiGridFFTDF):
+        n, exc, vxc = multigrid.nr_uks(ks.with_df, ks.xc, dm, hermi,
+                                       kpts, kpts_band,
+                                       with_j=True, return_j=False)
+        logger.debug(ks, 'nelec by numeric integration = %s', n)
+        t0 = logger.timer(ks, 'vxc', *t0)
+        return vxc
+
     # ndim = 4 : dm.shape = ([alpha,beta], nkpts, nao, nao)
     ground_state = (dm.ndim == 4 and dm.shape[0] == 2 and kpts_band is None)
 
@@ -50,8 +62,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         ks.grids.build(with_non0tab=True)
         if (isinstance(ks.grids, gen_grid.BeckeGrids) and
             ks.small_rho_cutoff > 1e-20 and ground_state):
-            ks.grids = rks.prune_small_rho_grids_(ks, cell, dm[0]+dm[1],
-                                                  ks.grids, kpts)
+            ks.grids = rks.prune_small_rho_grids_(ks, cell, dm, ks.grids, kpts)
         t0 = logger.timer(ks, 'setting up grids', *t0)
 
     if hermi == 2:  # because rho = 0
@@ -64,8 +75,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
 
     weight = 1./len(kpts)
 
-    omega, alpha, hyb = ks._numint.rsh_and_hybrid_coeff(ks.xc, spin=cell.spin)
-    if abs(hyb) < 1e-10:
+    if not hybrid:
         vj = ks.get_j(cell, dm[0]+dm[1], hermi, kpts, kpts_band)
         vxc += vj
     else:
@@ -95,10 +105,17 @@ def energy_elec(mf, dm_kpts=None, h1e_kpts=None, vhf=None):
 
     weight = 1./len(h1e_kpts)
     e1 = weight *(np.einsum('kij,kji', h1e_kpts, dm_kpts[0]) +
-                  np.einsum('kij,kji', h1e_kpts, dm_kpts[1])).real
+                  np.einsum('kij,kji', h1e_kpts, dm_kpts[1]))
     tot_e = e1 + vhf.ecoul + vhf.exc
     logger.debug(mf, 'E1 = %s  Ecoul = %s  Exc = %s', e1, vhf.ecoul, vhf.exc)
-    return tot_e, vhf.ecoul + vhf.exc
+    return tot_e.real, vhf.ecoul + vhf.exc
+
+@lib.with_doc(kuhf.get_rho.__doc__)
+def get_rho(mf, dm=None, grids=None, kpts=None):
+    from pyscf.pbc.dft import krks
+    if dm is None:
+        dm = self.make_rdm1()
+    return krks.get_rho(mf, dm[0]+dm[1], grids, kpts)
 
 
 class KUKS(kuhf.KUHF):
@@ -114,8 +131,8 @@ class KUKS(kuhf.KUHF):
         self.grids.dump_flags()
 
     get_veff = get_veff
-
     energy_elec = energy_elec
+    get_rho = get_rho
 
     define_xc_ = rks.define_xc_
 

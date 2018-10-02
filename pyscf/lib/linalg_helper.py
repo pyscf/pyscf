@@ -186,7 +186,7 @@ def davidson(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
             the eigenvectors during the iterations.  The first iteration has
             one eigenvector, the next iteration has two, the third iterastion
             has 4, ..., until the subspace size > nroots.
-        precond : function(dx, e, x0) => array_like_dx
+        precond : diagonal elements of the matrix or  function(dx, e, x0) => array_like_dx
             Preconditioner to generate new trial vector.
             The argument dx is a residual vector ``a*x0-e*x0``; e is the current
             eigenvalue; x0 is the current eigenvector.
@@ -273,7 +273,7 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
             the eigenvectors during the iterations.  The first iteration has
             one eigenvector, the next iteration has two, the third iterastion
             has 4, ..., until the subspace size > nroots.
-        precond : function(dx, e, x0) => array_like_dx
+        precond : diagonal elements of the matrix or  function(dx, e, x0) => array_like_dx
             Preconditioner to generate new trial vector.
             The argument dx is a residual vector ``a*x0-e*x0``; e is the current
             eigenvalue; x0 is the current eigenvector.
@@ -345,12 +345,15 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         toloose = tol_residual
     log.debug1('tol %g  toloose %g', tol, toloose)
 
+    if not callable(precond):
+        precond = make_diag_precond(precond)
+
     if callable(x0):  # lazy initialization to reduce memory footprint
         x0 = x0()
     if isinstance(x0, numpy.ndarray) and x0.ndim == 1:
         x0 = [x0]
     #max_cycle = min(max_cycle, x0[0].size)
-    max_space = max_space + nroots * 3
+    max_space = max_space + (nroots-1) * 3
     # max_space*2 for holding ax and xs, nroots*2 for holding axt and xt
     _incore = max_memory*1e6/x0[0].nbytes > max_space*2+nroots*3
     lessio = lessio and not _incore
@@ -522,6 +525,15 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
     return numpy.asarray(conv), e, x0
 
 
+def make_diag_precond(diag, level_shift=0):
+    '''Generate the preconditioner function with the diagonal function.'''
+    def precond(dx, e, *args):
+        diagd = diag - (e - level_shift)
+        diagd[abs(diagd)<1e-8] = 1e-8
+        return dx/diagd
+    return precond
+
+
 def eigh(a, *args, **kwargs):
     nroots = kwargs.get('nroots', 1)
     if isinstance(a, numpy.ndarray) and a.ndim == 2:
@@ -536,18 +548,33 @@ dsyev = eigh
 
 
 def pick_real_eigs(w, v, nroots, x0):
-    # Here we pick the eigenvalues with smallest imaginary component,
-    # where we are forced to choose at least one eigenvalue.
+    '''This function searchs the real eigenvalues or eigenvalues with small
+    imaginary component, then constructs approximate real eigenvectors if
+    quasi-real eigenvalues were found.
+    '''
     abs_imag = abs(w.imag)
-    max_imag_tol = max(1e-4,min(abs_imag)*1.1)
+    max_imag_tol = max(1e-3, min(abs_imag)*1.1)
     realidx = numpy.where((abs_imag < max_imag_tol))[0]
     if len(realidx) < nroots and w.size >= nroots:
-        idx = w.real.argsort()
         warnings.warn('%d eigenvalues with imaginary part > 0.01\n' %
                       numpy.count_nonzero(abs_imag > 1e-2))
-    else:
-        idx = realidx[w[realidx].real.argsort()]
-    return w[idx].real, v[:,idx].real, idx
+
+    w, v, idx = _eigs_cmplx2real(w, v, realidx)
+    return w, v, idx
+
+# If the complex eigenvalue has small imaginary part, both the real part
+# and the imaginary part of the eigenvector can approximately be used as
+# the "real" eigen solutions.
+def _eigs_cmplx2real(w, v, real_idx):
+    idx = real_idx[w[real_idx].real.argsort()]
+    w = w[idx]
+    v = v[:,idx]
+    degen_idx = numpy.where(w.imag != 0)[0]
+    if degen_idx.size > 0:
+        # Take the imaginary part of the "degenerated" eigenvectors as an
+        # independent eigenvector
+        v[:,degen_idx[1::2]] = v[:,degen_idx[1::2]].imag
+    return w.real, v.real, idx
 
 def eig(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         lindep=DAVIDSON_LINDEP, max_memory=MAX_MEMORY,
@@ -566,7 +593,7 @@ def eig(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
             the eigenvectors during the iterations.  The first iteration has
             one eigenvector, the next iteration has two, the third iterastion
             has 4, ..., until the subspace size > nroots.
-        precond : function(dx, e, x0) => array_like_dx
+        precond : diagonal elements of the matrix or  function(dx, e, x0) => array_like_dx
             Preconditioner to generate new trial vector.
             The argument dx is a residual vector ``a*x0-e*x0``; e is the current
             eigenvalue; x0 is the current eigenvector.
@@ -667,14 +694,17 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         toloose = tol_residual
     log.debug1('tol %g  toloose %g', tol, toloose)
 
+    if not callable(precond):
+        precond = make_diag_precond(precond)
+
     if callable(x0):
         x0 = x0()
     if isinstance(x0, numpy.ndarray) and x0.ndim == 1:
         x0 = [x0]
     #max_cycle = min(max_cycle, x0[0].size)
-    max_space = max_space + nroots * 4
+    max_space = max_space + (nroots-1) * 4
     # max_space*2 for holding ax and xs, nroots*2 for holding axt and xt
-    _incore = max_memory*1e6/x0[0].nbytes > max_space*2+nroots * 3
+    _incore = max_memory*1e6/x0[0].nbytes > max_space*2+nroots*3
     lessio = lessio and not _incore
     log.debug1('max_cycle %d  max_space %d  max_memory %d  incore %s',
                max_cycle, max_space, max_memory, _incore)
@@ -860,7 +890,7 @@ def dgeev(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
             abop applies two matrix vector multiplications and returns tuple (Ax, Bx)
         x0 : 1D array
             Initial guess
-        precond : function(dx, e, x0) => array_like_dx
+        precond : diagonal elements of the matrix or  function(dx, e, x0) => array_like_dx
             Preconditioner to generate new trial vector.
             The argument dx is a residual vector ``a*x0-e*x0``; e is the current
             eigenvalue; x0 is the current eigenvector.
@@ -924,7 +954,7 @@ def dgeev1(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
             abop applies two matrix vector multiplications and returns tuple (Ax, Bx)
         x0 : 1D array
             Initial guess
-        precond : function(dx, e, x0) => array_like_dx
+        precond : diagonal elements of the matrix or  function(dx, e, x0) => array_like_dx
             Preconditioner to generate new trial vector.
             The argument dx is a residual vector ``a*x0-e*x0``; e is the current
             eigenvalue; x0 is the current eigenvector.
@@ -977,10 +1007,13 @@ def dgeev1(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
     else:
         toloose = tol_residual
 
+    if not callable(precond):
+        precond = make_diag_precond(precond)
+
     if isinstance(x0, numpy.ndarray) and x0.ndim == 1:
         x0 = [x0]
     #max_cycle = min(max_cycle, x0[0].size)
-    max_space = max_space + nroots * 3
+    max_space = max_space + (nroots-1) * 3
     # max_space*3 for holding ax, bx and xs, nroots*3 for holding axt, bxt and xt
     _incore = max_memory*1e6/x0[0].nbytes > max_space*3+nroots*3
     lessio = lessio and not _incore
@@ -1246,6 +1279,9 @@ def dsolve(aop, b, precond, tol=1e-12, max_cycle=30, dot=numpy.dot,
         toloose = numpy.sqrt(tol)
     else:
         toloose = tol_residual
+
+    if not callable(precond):
+        precond = make_diag_precond(precond)
 
     xs = [precond(b)]
     ax = [aop(xs[-1])]

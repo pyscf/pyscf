@@ -22,6 +22,14 @@ mol.nucmod = {'O': 1}  # Use gaussian nuclear model for oxygen
 mol.build()
 
 #
+# Attribute nucmod can be initialized as a function. The function should
+# take the nuc_charge as input argument and return the charge distribution
+# value "zeta".
+#
+mol.nucmod = {'O': gto.filatov_nuc_mod, 'H': 0}
+mol.build()
+
+#
 # The default gaussian nuclear model is Dyall's nuclear model
 # See L. Visscher and K. Dyall, At. Data Nucl. Data Tables, 67, 207 (1997)
 # If other gaussian nuclear charge distribution are required,

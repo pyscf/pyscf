@@ -101,6 +101,8 @@ def solve_withs1(fvind, mo_energy, mo_occ, h1, s1,
     v1mo = fvind(mo1.reshape(h1.shape)).reshape(-1,nmo,nocc)
     mo1[:,viridx] = mo1base[:,viridx] - v1mo[:,viridx]*e_ai
 
+    # mo_e1 has the same symmetry as the first order Fock matrix (hermitian or
+    # anti-hermitian). mo_e1 = v1mo - s1*lib.direct_sum('i+j->ij',e_i,e_i)
     mo_e1 += mo1[:,occidx] * lib.direct_sum('i-j->ij', e_i, e_i)
     mo_e1 += v1mo[:,occidx,:]
 

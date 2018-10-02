@@ -20,6 +20,7 @@
 Non-relativistic RHF analytical Hessian
 '''
 
+from functools import reduce
 import time
 import numpy
 from pyscf import lib
@@ -206,9 +207,12 @@ def make_h1(hessobj, mo_coeff, mo_occ, chkfile=None, atmlst=None, verbose=None):
 def get_hcore(mol):
     '''Part of the second derivatives of core Hamiltonian'''
     h1aa = mol.intor('int1e_ipipkin', comp=9)
-    h1aa+= mol.intor('int1e_ipipnuc', comp=9)
     h1ab = mol.intor('int1e_ipkinip', comp=9)
-    h1ab+= mol.intor('int1e_ipnucip', comp=9)
+    if mol._pseudo:
+        NotImplementedError('Nuclear hessian for GTH PP')
+    else:
+        h1aa+= mol.intor('int1e_ipipnuc', comp=9)
+        h1ab+= mol.intor('int1e_ipnucip', comp=9)
     if mol.has_ecp():
         h1aa += mol.intor('ECPscalar_ipipnuc', comp=9)
         h1ab += mol.intor('ECPscalar_ipnucip', comp=9)
@@ -249,6 +253,13 @@ def _get_jk(mol, intor, comp, aosym, script_dms,
 
 def solve_mo1(mf, mo_energy, mo_coeff, mo_occ, h1ao_or_chkfile,
               fx=None, atmlst=None, max_memory=4000, verbose=None):
+    '''Solve the first order equation
+
+    Kwargs:
+        fx : function(dm_mo) => v1_mo
+            A function to generate the induced potential.
+            See also the function gen_vind.
+    '''
     mol = mf.mol
     if atmlst is None: atmlst = range(mol.natm)
 
@@ -400,7 +411,7 @@ def gen_hop(hobj, mo_energy=None, mo_coeff=None, mo_occ=None, verbose=None):
         mo_e1 = mo_e1.reshape(nocc,nocc)
         dm1 = numpy.einsum('pi,qi->pq', mo1, mocc)
         dme1 = numpy.einsum('pi,qi,i->pq', mo1, mocc, mo_energy[mo_occ>0])
-        dme1 = dme1 + dme1.T + reduce(numpy.dot, (mocc, mo_e1, mocc.T))
+        dme1 = dme1 + dme1.T + reduce(numpy.dot, (mocc, mo_e1.T, mocc.T))
 
         for ja in range(natm):
             q0, q1 = aoslices[ja][2:]

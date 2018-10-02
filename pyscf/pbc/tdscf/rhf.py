@@ -44,6 +44,8 @@ class TDA(rhf.TDA):
         assert(isinstance(mf, scf.khf.KSCF))
         self.cell = mf.cell
         rhf.TDA.__init__(self, mf)
+        from pyscf.pbc.df.df_ao2mo import warn_pbc2d_eri
+        warn_pbc2d_eri(mf)
 
     def get_vind(self, mf):
         singlet = self.singlet
@@ -60,6 +62,10 @@ class TDA(rhf.TDA):
         orbo = [mo_coeff[k][:,occidx[k]] for k in range(nkpts)]
         orbv = [mo_coeff[k][:,viridx[k]] for k in range(nkpts)]
         eai = _get_eai(mo_energy, mo_occ)
+        # FIXME: hdiag corresponds to the orbital energy with the exxdiv
+        # correction. The integrals in A, B matrices do not have the
+        # contribution from the exxdiv. Should the exchange correction be
+        # removed from hdiag?
         hdiag = numpy.hstack([x.ravel() for x in eai])
 
         mem_now = lib.current_memory()[0]
@@ -76,7 +82,8 @@ class TDA(rhf.TDA):
                 for k in range(nkpts):
                     dmvo[i,k] = reduce(numpy.dot, (orbv[k], dm1[k], orbo[k].T.conj()))
 
-            v1ao = vresp(dmvo)
+            with lib.temporary_env(mf, exxdiv=None):
+                v1ao = vresp(dmvo)
             v1s = []
             for i in range(nz):
                 dm1 = z1s[i]
@@ -168,7 +175,8 @@ class TDHF(TDA):
                     dmvo[i,k] = reduce(numpy.dot, (orbv[k], dmx[k], orbo[k].T.conj()))
                     dmvo[i,k]+= reduce(numpy.dot, (orbo[k], dmy[k].T, orbv[k].T.conj()))
 
-            v1ao = vresp(dmvo)
+            with lib.temporary_env(mf, exxdiv=None):
+                v1ao = vresp(dmvo)
             v1s = []
             for i in range(nz):
                 dmx = z1xs[i]
@@ -210,8 +218,7 @@ class TDHF(TDA):
         def pickeig(w, v, nroots, envs):
             realidx = numpy.where((abs(w.imag) < REAL_EIG_THRESHOLD) &
                                   (w.real > POSTIVE_EIG_THRESHOLD))[0]
-            idx = realidx[w[realidx].real.argsort()]
-            return w[idx].real, v[:,idx].real, idx
+            return lib.linalg_helper._eigs_cmplx2real(w, v, realidx)
 
         self.converged, w, x1 = \
                 lib.davidson_nosym1(vind, x0, precond,

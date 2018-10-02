@@ -2,19 +2,37 @@ PySCF 1.6 alpha (2018-09-??)
 ----------------------------
 * Added
   - X2C-UKS (LDA functional only)
-  - PBC gamma point ROHF/ROKS
-  - PBC KROHF/KROKS for k-point sampling
+  - PBC gamma point ROHF/ROKS and GKS
+  - PBC KROHF/KROKS and KGKS for k-point sampling
   - DFT Coulomb and XC integrals with multigrid
   - Periodic UCCSD with k-point sampling
   - perturbative DMRG method
+  - Interface to Cornell SHCI
+  - PBC dipole memont and Makov-Payne correction
+  - Overlap of two CISD wavefunctions
+  - EFG and Mossbauer spectroscopy of crystal and molecule
+  - Molecular magnetizability for HF and DFT
 * Improved
   - numint performance (eval_rho, eval_mat)
+  - Energy cutoff estimation
+  - CCSD convergency for 2D-PBC AFTDF, GDF and MDF methods
+  - Integral transformation performance in GW
 
 
-PySCF 1.5.2
------------
+PySCF 1.5.3 (2018-09-06)
+------------------------
+* Bugfix
+  - get_jk prescreen for non-hermitian density matrices.
+  - Inaccurate estimation of memory usage in ccsd rdm.
+  - Frozen orbital EA-EOM-KRCCSD
+  - IOError due to 4GB chunk size limit in HDF5 library
+
+
+PySCF 1.5.2 (2018-08-15)
+------------------------
 * Improved
   - IO performance of pbc.GDF initialization
+  - Default linear dependence treatment in GDF to improve accuracy
 * Bugfix
   - selected_ci 2-particle density matrices for two electron systems
 

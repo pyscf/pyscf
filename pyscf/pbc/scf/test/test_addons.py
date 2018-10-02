@@ -273,7 +273,8 @@ class KnowValues(unittest.TestCase):
         self.assertTrue (isinstance(mf1.convert_from_(kmf_u.mix_density_fit()).with_df, df.mdf.MDF))
 
     def test_canonical_occ(self):
-        mf1 = pscf.kuhf.KUHF(cell)
+        kpts = numpy.random.rand(2,3)
+        mf1 = pscf.kuhf.KUHF(cell, kpts)
         mo_energy_kpts = [numpy.array([[0, 2, 3, 4],[0, 0, 1, 2]])] * 2
         occ_ref = numpy.array([[[1, 0, 0, 0], [1, 1, 1, 0]]]*2)
         occ = mf1.get_occ(mo_energy_kpts)

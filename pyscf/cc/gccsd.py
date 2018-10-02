@@ -40,8 +40,8 @@ def update_amps(cc, t1, t2, eris):
     fock = eris.fock
 
     fov = fock[:nocc,nocc:]
-    foo = fock[:nocc,:nocc]
-    fvv = fock[nocc:,nocc:]
+    mo_e_o = eris.mo_energy[:nocc]
+    mo_e_v = eris.mo_energy[nocc:] + cc.level_shift
 
     tau = imd.make_tau(t2, t1, t1)
 
@@ -53,8 +53,8 @@ def update_amps(cc, t1, t2, eris):
     Wovvo = imd.cc_Wovvo(t1, t2, eris)
 
     # Move energy terms to the other side
-    Fvv -= np.diag(np.diag(fvv))
-    Foo -= np.diag(np.diag(foo))
+    Fvv[np.diag_indices(nvir)] -= mo_e_v
+    Foo[np.diag_indices(nocc)] -= mo_e_o
 
     # T1 equation
     t1new  =  einsum('ie,ae->ia', t1, Fvv)
@@ -85,8 +85,7 @@ def update_amps(cc, t1, t2, eris):
     tmp = einsum('ma,ijmb->ijab', t1, np.asarray(eris.ooov).conj())
     t2new -= (tmp - tmp.transpose(0,1,3,2))
 
-    mo_e = eris.fock.diagonal().real
-    eia = mo_e[:nocc,None] - mo_e[None,nocc:]
+    eia = mo_e_o[:,None] - mo_e_v
     eijab = lib.direct_sum('ia,jb->ijab', eia, eia)
     t1new /= eia
     t2new /= eijab
@@ -125,7 +124,7 @@ class GCCSD(ccsd.CCSD):
     def init_amps(self, eris=None):
         if eris is None:
             eris = self.ao2mo(self.mo_coeff)
-        mo_e = eris.fock.diagonal().real
+        mo_e = eris.mo_energy
         nocc = self.nocc
         eia = mo_e[:nocc,None] - mo_e[None,nocc:]
         eijab = lib.direct_sum('ia,jb->ijab', eia, eia)
@@ -328,7 +327,7 @@ class _PhysicistsERIs:
         self.fock = reduce(np.dot, (mo_coeff.conj().T, fockao, mo_coeff))
         self.nocc = mycc.nocc
 
-        mo_e = self.fock.diagonal()
+        mo_e = self.mo_energy = self.fock.diagonal().real
         gap = abs(mo_e[:self.nocc,None] - mo_e[None,self.nocc:]).min()
         if gap < 1e-5:
             logger.warn(mycc, 'HOMO-LUMO gap %s too small for GCCSD', gap)
@@ -440,8 +439,7 @@ def _make_eris_outcore(mycc, mo_coeff=None):
             tmp = None
         cput0 = log.timer_debug1('transforming ovvv', *cput0)
 
-        eris.vvvv = feri.create_dataset('vvvv', (nvir,nvir,nvir,nvir), 'f8',
-                                        chunks=(nvir,blksize,nvir,nvir))
+        eris.vvvv = feri.create_dataset('vvvv', (nvir,nvir,nvir,nvir), 'f8')
         tril2sq = lib.square_mat_in_trilu_indices(nvir)
         fswap = lib.H5TmpFile()
         ao2mo.kernel(mycc.mol, (orbv_a,orbv_a,orbv_a,orbv_a), fswap, 'aaaa',
@@ -509,8 +507,7 @@ def _make_eris_outcore(mycc, mo_coeff=None):
             tmp = None
         cput0 = log.timer_debug1('transforming ovvv', *cput0)
 
-        eris.vvvv = feri.create_dataset('vvvv', (nvir,nvir,nvir,nvir), 'f8',
-                                        chunks=(nvir,blksize,nvir,nvir))
+        eris.vvvv = feri.create_dataset('vvvv', (nvir,nvir,nvir,nvir), 'f8')
         sym_forbid = (orbspin[nocc:,None]!=orbspin[nocc:])[np.tril_indices(nvir)]
         tril2sq = lib.square_mat_in_trilu_indices(nvir)
 

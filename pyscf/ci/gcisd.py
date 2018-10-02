@@ -156,25 +156,6 @@ def to_ucisdvec(civec, nmo, nocc, orbspin):
                       'norm(UCISD) = %s' % unorm)
     return ucisdvec
 
-t1strs = cisd.t1strs
-
-def t2strs(norb, nelec):
-    nocc = nelec
-    hf_str = int('1'*nocc, 2)
-    addrs = []
-    signs = []
-    for a in range(nocc+1, norb):
-        for b in range(nocc, a):
-            for i in reversed(range(1,nocc)):
-                for j in reversed(range(i)):
-                    str1 = hf_str ^ (1 << j) | (1 << b)
-                    sign = cistring.cre_des_sign(b, j, hf_str)
-                    sign*= cistring.cre_des_sign(a, i, str1)
-                    str1^= (1 << i) | (1 << a)
-                    addrs.append(cistring.str2addr(norb, nelec, str1))
-                    signs.append(sign)
-    return numpy.asarray(addrs), numpy.asarray(signs)
-
 def to_fcivec(cisdvec, nelec, orbspin, frozen=0):
     assert(numpy.count_nonzero(orbspin == 0) ==
            numpy.count_nonzero(orbspin == 1))
@@ -340,7 +321,7 @@ class GCISD(cisd.CISD):
         # MP2 initial guess
         if eris is None: eris = self.ao2mo(self.mo_coeff)
         time0 = time.clock(), time.time()
-        mo_e = eris.fock.diagonal()
+        mo_e = eris.mo_energy
         nocc = self.nocc
         eia = mo_e[:nocc,None] - mo_e[None,nocc:]
         eijab = lib.direct_sum('ia,jb->ijab',eia,eia)

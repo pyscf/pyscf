@@ -39,6 +39,8 @@ class TDA(uhf.TDA):
         assert(isinstance(mf, scf.khf.KSCF))
         self.cell = mf.cell
         uhf.TDA.__init__(self, mf)
+        from pyscf.pbc.df.df_ao2mo import warn_pbc2d_eri
+        warn_pbc2d_eri(mf)
 
     def get_vind(self, mf):
         '''Compute Ax'''
@@ -80,7 +82,8 @@ class TDA(uhf.TDA):
                     dmvo[0,i,k] = reduce(numpy.dot, (orbva[k], dm1a[k], orboa[k].T.conj()))
                     dmvo[1,i,k] = reduce(numpy.dot, (orbvb[k], dm1b[k], orbob[k].T.conj()))
 
-            v1ao = vresp(dmvo)
+            with lib.temporary_env(mf, exxdiv=None):
+                v1ao = vresp(dmvo)
             v1s = []
             for i in range(nz):
                 dm1a, dm1b = zs[i]
@@ -190,7 +193,8 @@ class TDHF(TDA):
                     dmy = reduce(numpy.dot, (orbob[k], yb[k].T, orbvb[k].T.conj()))
                     dmvo[1,i,k] = dmx + dmy  # AX + BY
 
-            v1ao = vresp(dmvo)
+            with lib.temporary_env(mf, exxdiv=None):
+                v1ao = vresp(dmvo)
             v1s = []
             for i in range(nz):
                 xa, xb = x1s[i]
@@ -237,8 +241,7 @@ class TDHF(TDA):
         def pickeig(w, v, nroots, envs):
             realidx = numpy.where((abs(w.imag) < REAL_EIG_THRESHOLD) &
                                   (w.real > POSTIVE_EIG_THRESHOLD))[0]
-            idx = realidx[w[realidx].real.argsort()]
-            return w[idx].real, v[:,idx].real, idx
+            return lib.linalg_helper._eigs_cmplx2real(w, v, realidx)
 
         self.converged, w, x1 = \
                 lib.davidson_nosym1(vind, x0, precond,

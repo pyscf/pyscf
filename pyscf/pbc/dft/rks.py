@@ -35,6 +35,7 @@ from pyscf.pbc.scf import khf
 from pyscf.pbc.dft import gen_grid
 from pyscf.pbc.dft import numint
 from pyscf.dft.rks import define_xc_
+from pyscf.pbc.dft import multigrid
 from pyscf import __config__
 
 
@@ -61,6 +62,17 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     if kpt is None: kpt = ks.kpt
     t0 = (time.clock(), time.time())
 
+    omega, alpha, hyb = ks._numint.rsh_and_hybrid_coeff(ks.xc, spin=cell.spin)
+    hybrid = abs(hyb) > 1e-10
+
+    if not hybrid and isinstance(ks.with_df, multigrid.MultiGridFFTDF):
+        n, exc, vxc = multigrid.nr_rks(ks.with_df, ks.xc, dm, hermi,
+                                       kpt.reshape(1,3), kpts_band,
+                                       with_j=True, return_j=False)
+        logger.debug(ks, 'nelec by numeric integration = %s', n)
+        t0 = logger.timer(ks, 'vxc', *t0)
+        return vxc
+
     ground_state = (isinstance(dm, numpy.ndarray) and dm.ndim == 2
                     and kpts_band is None)
 
@@ -80,8 +92,7 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
         logger.debug(ks, 'nelec by numeric integration = %s', n)
         t0 = logger.timer(ks, 'vxc', *t0)
 
-    omega, alpha, hyb = ks._numint.rsh_and_hybrid_coeff(ks.xc, spin=cell.spin)
-    if abs(hyb) < 1e-10:
+    if not hybrid:
         vj = ks.get_j(cell, dm, hermi, kpt, kpts_band)
         vxc += vj
     else:
@@ -101,10 +112,9 @@ def get_veff(ks, cell=None, dm=None, dm_last=0, vhf_last=0, hermi=1,
     vxc = lib.tag_array(vxc, ecoul=ecoul, exc=exc, vj=None, vk=None)
     return vxc
 
-
 def _patch_df_beckegrids(density_fit):
-    def new_df(self, auxbasis=None, mesh=None):
-        mf = density_fit(self, auxbasis, mesh)
+    def new_df(self, auxbasis=None, mesh=None, with_df=None):
+        mf = density_fit(self, auxbasis, mesh, with_df)
         mf.with_df._j_only = True
         mf.grids = gen_grid.BeckeGrids(self.cell)
         mf.grids.level = getattr(__config__, 'pbc_dft_rks_RKS_grids_level',
@@ -113,18 +123,29 @@ def _patch_df_beckegrids(density_fit):
     return new_df
 
 NELEC_ERROR_TOL = getattr(__config__, 'pbc_dft_rks_prune_error_tol', 0.02)
-def prune_small_rho_grids_(ks, mol, dm, grids, kpts):
-    rho = ks._numint.get_rho(mol, dm, grids, kpts, ks.max_memory)
+def prune_small_rho_grids_(ks, cell, dm, grids, kpts):
+    rho = ks.get_rho(dm, grids, kpts)
     n = numpy.dot(rho, grids.weights)
-    if abs(n-mol.nelectron) < NELEC_ERROR_TOL*n:
+    if abs(n-cell.nelectron) < NELEC_ERROR_TOL*n:
         rho *= grids.weights
         idx = abs(rho) > ks.small_rho_cutoff / grids.weights.size
         logger.debug(ks, 'Drop grids %d',
                      grids.weights.size - numpy.count_nonzero(idx))
         grids.coords  = numpy.asarray(grids.coords [idx], order='C')
         grids.weights = numpy.asarray(grids.weights[idx], order='C')
-        grids.non0tab = grids.make_mask(mol, grids.coords)
+        grids.non0tab = grids.make_mask(cell, grids.coords)
     return grids
+
+@lib.with_doc(pbchf.get_rho.__doc__)
+def get_rho(mf, dm=None, grids=None, kpt=None):
+    if dm is None: dm = mf.make_rdm1()
+    if grids is None: grids = mf.grids
+    if kpt is None: kpt = mf.kpt
+    if isinstance(mf.with_df, multigrid.MultiGridFFTDF):
+        rho = mf.with_df.get_rho(dm, kpt)
+    else:
+        rho = mf._numint.get_rho(mf.cell, dm, grids, kpt, mf.max_memory)
+    return rho
 
 
 class RKS(pbchf.RHF):
@@ -144,10 +165,13 @@ class RKS(pbchf.RHF):
 
     get_veff = get_veff
     energy_elec = pyscf.dft.rks.energy_elec
+    get_rho = get_rho
+
     define_xc_ = define_xc_
 
     density_fit = _patch_df_beckegrids(pbchf.RHF.density_fit)
     mix_density_fit = _patch_df_beckegrids(pbchf.RHF.mix_density_fit)
+
 
 def _dft_common_init_(mf):
     mf.xc = 'LDA,VWN'

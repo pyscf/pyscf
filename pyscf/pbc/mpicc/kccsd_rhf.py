@@ -17,6 +17,8 @@
 #          Timothy Berkelbach <tim.berkelbach@gmail.com>
 #
 
+import copy
+from functools import reduce
 import time
 import numpy
 import os
@@ -29,7 +31,7 @@ import pyscf.ao2mo
 from pyscf.lib import logger
 import pyscf.cc
 import pyscf.cc.ccsd
-from pyscf.pbc.mp.kmp2 import get_frozen_mask, get_nocc, get_nmo
+from pyscf.pbc.mp.kmp2 import get_frozen_mask, get_nocc, get_nmo, padded_mo_coeff, padding_k_idx
 from pyscf.pbc.mpicc import kintermediates_rhf as imdk
 from pyscf.pbc.lib.linalg_helper import eigs
 from pyscf.lib.linalg_helper import eig
@@ -40,7 +42,7 @@ from pyscf.pbc.mpitools import mpi_load_balancer, mpi
 from pyscf.pbc.tools.tril import tril_index, unpack_tril
 from pyscf.pbc.lib import kpts_helper
 import pyscf.pbc.cc.kccsd_rhf
-from pyscf.pbc.cc.kccsd_rhf import pad_frozen_kpt_mo_coeff
+from pyscf.pbc.cc.kccsd_rhf import padded_mo_coeff
 
 from mpi4py import MPI
 
@@ -101,6 +103,8 @@ def write_amplitudes(t1, t2, filename="t_amplitudes.hdf5"):
 def read_eom_amplitudes(vec_shape, filename="reom_amplitudes.hdf5", vec=None):
     task_list = generate_max_task_list(vec_shape)
     read_success = False
+    return False, None  # TODO: find a way to make the amplitudes are consistent
+                        # with the signs of the eris/t-amplitudes when restarting
     print("attempting to read in eom amplitudes from file ", filename)
     if os.path.isfile(filename):
         print("reading eom amplitudes from file. shape=", vec_shape)
@@ -134,6 +138,35 @@ def write_eom_amplitudes(vec, filename="reom_amplitudes.hdf5"):
         feri.close()
     return
 
+def restore_from_diis_(mycc, diis_file, inplace=True):
+    '''Reuse an existed DIIS object in the CCSD calculation.
+    The CCSD amplitudes will be restored from the DIIS object to generate t1
+    and t2 amplitudes. The t1/t2 amplitudes of the CCSD object will be
+    overwritten by the generated t1 and t2 amplitudes. The amplitudes vector
+    and error vector will be reused in the CCSD calculation.
+    '''
+    adiis = lib.diis.DIIS(mycc, mycc.diis_file, incore=mycc.incore_complete)
+    if rank == 0:
+        adiis.restore(diis_file, inplace=inplace)
+
+        ccvec = adiis.extrapolate()
+        t1, t2 = mycc.vector_to_amplitudes(ccvec)
+    info = None
+    if rank == 0:
+        info = (t1.shape, t2.shape, np.result_type(t1, t2))
+    info = MPI.COMM_WORLD.bcast(info)
+
+    if rank != 0:  # Create empty arrays for master to bcast into
+        t1_shape, t2_shape, dtype = info
+        t1 = np.empty(t1_shape, dtype=dtype)
+        t2 = np.empty(t2_shape, dtype=dtype)
+    safeBcastInPlace(MPI.COMM_WORLD, t1)
+    safeBcastInPlace(MPI.COMM_WORLD, t2)
+    mycc.t1, mycc.t2 = t1, t2
+    if inplace:
+        mycc.diis = adiis
+    return mycc
+
 def get_normt_diff(cc, t1, t2, t1new, t2new):
     '''Calculates norm(t1 - t1new) + norm(t2 - t2new).'''
     normt = safeNormDiff(t1new, t1) + safeNormDiff(t2new, t2)  # Blocking; saves memory
@@ -142,6 +175,11 @@ def get_normt_diff(cc, t1, t2, t1new, t2new):
 def update_t1(cc,t1,t2,eris,ints1e):
     nkpts, nocc, nvir = t1.shape
     fock = eris.fock
+    mo_e_o = [e[:nocc] for e in eris.mo_energy]
+    mo_e_v = [e[nocc:] + cc.level_shift for e in eris.mo_energy]
+
+    # Get location of padded elements in occupied and virtual space
+    nonzero_opadding, nonzero_vpadding = padding_k_idx(cc, kind="split")
 
     fov = fock[:,:nocc,nocc:]
     foo = fock[:,:nocc,:nocc]
@@ -258,6 +296,12 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     nkpts, nocc, nvir = t1.shape
     fock = eris.fock
     tril_shape = ((nkpts)*(nkpts+1))/2
+
+    mo_e_o = [e[:nocc] for e in eris.mo_energy]
+    mo_e_v = [e[nocc:] + cc.level_shift for e in eris.mo_energy]
+
+    # Get location of padded elements in occupied and virtual space
+    nonzero_opadding, nonzero_vpadding = padding_k_idx(cc, kind="split")
     #t2tmp = numpy.zeros((tril_shape,nkpts,nocc,nocc,nvir,nvir),dtype=t2.dtype)
     #for ki in range(nkpts):
     #    for kj in range(nkpts):
@@ -290,10 +334,11 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     if rank == 0:
         print("done making intermediates...")
     # Move energy terms to the other side
-    Foo -= foo
-    Fvv -= fvv
-    Loo -= foo
-    Lvv -= fvv
+    for k in range(nkpts):
+        Foo[k][np.diag_indices(nocc)] -= mo_e_o[k]
+        Fvv[k][np.diag_indices(nvir)] -= mo_e_v[k]
+        Loo[k][np.diag_indices(nocc)] -= mo_e_o[k]
+        Lvv[k][np.diag_indices(nvir)] -= mo_e_v[k]
 
     kconserv = cc.kconserv
 
@@ -865,23 +910,28 @@ def update_amps(cc, t1, t2, eris, max_memory=2000):
     comm.Barrier()
     safeAllreduceInPlace(comm, t2new_tril)
 
-    eia = numpy.zeros(shape=t1new.shape, dtype=t1new.dtype)
     for ki in range(nkpts):
-        eia = foo[ki].diagonal()[:,None] - fvv[ki].diagonal()
-        # When padding the occupied/virtual arrays, some fock elements will be zero
-        eia[abs(eia) < LOOSE_ZERO_TOL] = LARGE_DENOM
+        ka = ki
+        # Remove zero/padded elements from denominator
+        eia = LARGE_DENOM * np.ones((nocc, nvir), dtype=eris.mo_energy[0].dtype)
+        n0_ovp_ia = np.ix_(nonzero_opadding[ki], nonzero_vpadding[ka])
+        eia[n0_ovp_ia] = (mo_e_o[ki][:,None] - mo_e_v[ka])[n0_ovp_ia]
         t1new[ki] /= eia
 
     for ki, kj, ka in kpts_helper.loop_kkk(nkpts):
         if ki > kj:
             continue
 
-        kb = kconserv[ki,ka,kj]
-        eia = np.diagonal(foo[ki]).reshape(-1,1) - np.diagonal(fvv[ka])
-        ejb = np.diagonal(foo[kj]).reshape(-1,1) - np.diagonal(fvv[kb])
-        eijab = eia[:,None,:,None] + ejb[:,None,:]
-        # Due to padding; see above discussion concerning t1new in update_amps()
-        eijab[abs(eijab) < LOOSE_ZERO_TOL] = LARGE_DENOM
+        kb = kconserv[ki, ka, kj]
+        # For LARGE_DENOM, see t1new update above
+        eia = LARGE_DENOM * np.ones((nocc, nvir), dtype=eris.mo_energy[0].dtype)
+        n0_ovp_ia = np.ix_(nonzero_opadding[ki], nonzero_vpadding[ka])
+        eia[n0_ovp_ia] = (mo_e_o[ki][:,None] - mo_e_v[ka])[n0_ovp_ia]
+
+        ejb = LARGE_DENOM * np.ones((nocc, nvir), dtype=eris.mo_energy[0].dtype)
+        n0_ovp_jb = np.ix_(nonzero_opadding[kj], nonzero_vpadding[kb])
+        ejb[n0_ovp_jb] = (mo_e_o[kj][:,None] - mo_e_v[kb])[n0_ovp_jb]
+        eijab = eia[:, None, :, None] + ejb[:, None, :]
 
         t2new_tril[tril_index(ki,kj),ka] /= eijab
 
@@ -943,9 +993,26 @@ def energy_tril(cc, t1, t2, eris):
     e /= nkpts
     return e.real
 
+def _update_procs_mf(mf):
+    '''Update mean-field objects to be the same on all processors'''
+    mf1 = copy.copy(mf)
+
+    mo_coeff  = comm.bcast(mf.mo_coeff, root=0)
+    mo_energy = comm.bcast(mf.mo_energy, root=0)
+    mo_occ    = comm.bcast(mf.mo_occ, root=0)
+    kpts      = comm.bcast(mf.kpts, root=0)
+
+    mf1.mo_coeff = mo_coeff
+    mf1.mo_energy = mo_energy
+    mf1.mo_occ = mo_occ
+    mf1.kpts  = kpts
+    comm.Barrier()
+    return mf1
+
 class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
 
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
+        mf = _update_procs_mf(mf)
         pyscf.pbc.cc.kccsd_rhf.RCCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
         self.kconserv = kpts_helper.get_kconserv(mf.cell, mf.kpts)
 
@@ -958,13 +1025,15 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         tril_shape = ((nkpts)*(nkpts+1))/2
         t2_tril = numpy.zeros((tril_shape,nkpts,nocc,nocc,nvir,nvir),dtype=numpy.complex128)
         local_mp2 = numpy.array(0.0,dtype=numpy.complex128)
-        #woovv = numpy.empty((nkpts,nkpts,nkpts,nocc,nocc,nvir,nvir), dtype=numpy.complex128)
         self.emp2 = 0
-        foo = eris.fock[:,:nocc,:nocc].copy()
-        fvv = eris.fock[:,nocc:,nocc:].copy()
-        #eris_oovv = numpy.asarray(eris.oovv).copy()
         eia = numpy.zeros((nocc,nvir))
         eijab = numpy.zeros((nocc,nocc,nvir,nvir))
+
+        mo_e_o = [e[:nocc] for e in eris.mo_energy]
+        mo_e_v = [e[nocc:] for e in eris.mo_energy]
+
+        # Get location of padded elements in occupied and virtual space
+        nonzero_opadding, nonzero_vpadding = padding_k_idx(self, kind="split")
 
         kconserv = self.kconserv
         loader = mpi_load_balancer.load_balancer(BLKSIZE=(1,1,nkpts,))
@@ -982,32 +1051,41 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
                     if ki <= kj:
                         for ka in ranges2:
                             kb = kconserv[ki,ka,kj]
-                            eia = numpy.diagonal(foo[ki]).reshape(-1,1) - numpy.diagonal(fvv[ka])
-                            ejb = numpy.diagonal(foo[kj]).reshape(-1,1) - numpy.diagonal(fvv[kb])
-                            eijab = pyscf.lib.direct_sum('ia,jb->ijab',eia,ejb)
-                            # Due to padding; see above discussion concerning t1new in update_amps()
-                            idx = abs(eijab) < LOOSE_ZERO_TOL
-                            eijab[idx] = LARGE_DENOM
+                            # For discussion of LARGE_DENOM, see t1new update above
+                            eia = LARGE_DENOM * np.ones((nocc, nvir), dtype=eris.mo_energy[0].dtype)
+                            n0_ovp_ia = np.ix_(nonzero_opadding[ki], nonzero_vpadding[ka])
+                            eia[n0_ovp_ia] = (mo_e_o[ki][:,None] - mo_e_v[ka])[n0_ovp_ia]
+
+                            ejb = LARGE_DENOM * np.ones((nocc, nvir), dtype=eris.mo_energy[0].dtype)
+                            n0_ovp_jb = np.ix_(nonzero_opadding[kj], nonzero_vpadding[kb])
+                            ejb[n0_ovp_jb] = (mo_e_o[kj][:,None] - mo_e_v[kb])[n0_ovp_jb]
+                            eijab = eia[:, None, :, None] + ejb[:, None, :]
 
                             oovv_ijab = numpy.array(eris.oovv[ki,kj,ka])
                             oovv_ijba = numpy.array(eris.oovv[ki,kj,kb]).transpose(0,1,3,2)
                             woovv = 2.*oovv_ijab - oovv_ijba
-                            #woovv = (2*eris_oovv[ki,kj,ka] - eris_oovv[ki,kj,kb].transpose(0,1,3,2))
-                            #t2[ki,kj,ka] = numpy.conj(eris_oovv[ki,kj,ka] / eijab)
+
                             t2_tril[tril_index(ki,kj),ka] = numpy.conj(oovv_ijab / eijab)
                             local_mp2 += numpy.dot(t2_tril[tril_index(ki,kj),ka].flatten(),woovv.flatten())
                     if kj < ki:
                         for ka in ranges2:
                             kb = kconserv[ki,ka,kj]
-                            eia = numpy.diagonal(foo[ki]).reshape(-1,1) - numpy.diagonal(fvv[ka])
-                            ejb = numpy.diagonal(foo[kj]).reshape(-1,1) - numpy.diagonal(fvv[kb])
-                            eijab = pyscf.lib.direct_sum('ia,jb->ijab',eia,ejb)
+                            # For discussion of LARGE_DENOM, see t1new update above
+                            eia = LARGE_DENOM * np.ones((nocc, nvir), dtype=eris.mo_energy[0].dtype)
+                            n0_ovp_ia = np.ix_(nonzero_opadding[ki], nonzero_vpadding[ka])
+                            eia[n0_ovp_ia] = (mo_e_o[ki][:,None] - mo_e_v[ka])[n0_ovp_ia]
+
+                            ejb = LARGE_DENOM * np.ones((nocc, nvir), dtype=eris.mo_energy[0].dtype)
+                            n0_ovp_jb = np.ix_(nonzero_opadding[kj], nonzero_vpadding[kb])
+                            ejb[n0_ovp_jb] = (mo_e_o[kj][:,None] - mo_e_v[kb])[n0_ovp_jb]
+                            eijab = eia[:, None, :, None] + ejb[:, None, :]
+
                             oovv_ijab = numpy.array(eris.oovv[ki,kj,ka])
                             oovv_ijba = numpy.array(eris.oovv[ki,kj,kb]).transpose(0,1,3,2)
                             woovv = 2.*oovv_ijab - oovv_ijba
 
-                            t2_tril[tril_index(kj,ki),kb] = numpy.conj(oovv_ijab.transpose(0,1,3,2) / eijab)
-                            local_mp2 += numpy.dot(t2_tril[tril_index(kj,ki),kb].flatten(),woovv.flatten())
+                            tmp = numpy.conj(oovv_ijab / eijab)
+                            local_mp2 += numpy.dot(tmp.flatten(),woovv.flatten())
             loader.slave_finished()
 
         comm.Allreduce(MPI.IN_PLACE, local_mp2, op=MPI.SUM)
@@ -1016,7 +1094,7 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         self.emp2 /= nkpts
 
         if rank == 0:
-            logger.info(self, 'Init t2, MP2 energy = %.15g', self.emp2)
+            logger.info(self, 'Init t2, MP2 energy (with fock eigenvalue shift) = %.15g', self.emp2)
             logger.timer(self, 'init mp2', *time0)
         return self.emp2, t1, t2_tril
 
@@ -1035,14 +1113,27 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         eia = numpy.zeros((nocc,nvir))
         eijab = numpy.zeros((nocc,nocc,nvir,nvir))
 
+        mo_e_o = [e[:nocc] for e in eris.mo_energy]
+        mo_e_v = [e[nocc:] for e in eris.mo_energy]
+
+        # Get location of padded elements in occupied and virtual space
+        nonzero_opadding, nonzero_vpadding = padding_k_idx(cc, kind="split")
+
         kconserv = self.kconserv
         for ki in range(nkpts):
           for kj in range(nkpts):
             for ka in range(nkpts):
                 kb = kconserv[ki,ka,kj]
-                eia = np.diagonal(foo[ki]).reshape(-1,1) - np.diagonal(fvv[ka])
-                ejb = np.diagonal(foo[kj]).reshape(-1,1) - np.diagonal(fvv[kb])
-                eijab = lib.direct_sum('ia,jb->ijab',eia,ejb)
+                # For discussion of LARGE_DENOM, see t1new update above
+                eia = LARGE_DENOM * np.ones((nocc, nvir), dtype=eris.mo_energy[0].dtype)
+                n0_ovp_ia = np.ix_(nonzero_opadding[ki], nonzero_vpadding[ka])
+                eia[n0_ovp_ia] = (mo_e_o[ki][:,None] - mo_e_v[ka])[n0_ovp_ia]
+
+                ejb = LARGE_DENOM * np.ones((nocc, nvir), dtype=eris.mo_energy[0].dtype)
+                n0_ovp_jb = np.ix_(nonzero_opadding[kj], nonzero_vpadding[kb])
+                ejb[n0_ovp_jb] = (mo_e_o[kj][:,None] - mo_e_v[kb])[n0_ovp_jb]
+                eijab = eia[:, None, :, None] + ejb[:, None, :]
+
                 woovv[ki,kj,ka] = (2*eris_oovv[ki,kj,ka] - eris_oovv[ki,kj,kb].transpose(0,1,3,2))
                 t2[ki,kj,ka] = eris_oovv[ki,kj,ka] / eijab
 
@@ -1148,36 +1239,54 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         size = self.vector_size_ip()
         for k,kshift in enumerate(kptlist):
             self.kshift = kshift
-            nfrozen = np.sum(self.mask_frozen_ip(np.zeros(size, dtype=int), const=1))
+            nfrozen = np.sum(self.mask_frozen_ip(np.zeros(size, dtype=int), kshift, const=1))
             nroots = min(nroots, size - nfrozen)
         evals = np.zeros((len(kptlist),nroots), np.float)
-        evecs = np.zeros((len(kptlist),size,nroots), np.complex)
+        evecs = np.zeros((len(kptlist),nroots,size), np.complex)
 
         for k,kshift in enumerate(kptlist):
             self.kshift = kshift
             diag = self.ipccsd_diag()
-            diag = self.mask_frozen_ip(diag, const=LARGE_DENOM)
+            diag = self.mask_frozen_ip(diag, kshift, const=LARGE_DENOM)
             precond = lambda dx, e, x0: dx/(diag-e)
             # Initial guess from file
             amplitude_filename = "__ripccsd" + str(kshift) + "__.hdf5"
-            rsuccess, x0 = read_eom_amplitudes((size,nroots),filename=amplitude_filename)
-            if not rsuccess:
-                x0 = np.zeros_like(diag)
-                x0[np.argmin(diag)] = 1.0
-            if nroots == 1:
-                #evals[k], evecs[k,:,0] = eig(self.ipccsd_matvec, x0, precond, nroots=nroots, verbose=self.verbose, tol=1e-14, max_cycle=50, max_space=100)
-                conv, evals[k], evecs[k,:] = eigs(self.ipccsd_matvec, size, nroots, Adiag=diag, verbose=self.verbose)
-            else:
-                #evals[k], evecs[k] = eig(self.ipccsd_matvec, x0, precond, nroots=nroots, verbose=self.verbose, tol=1e-14, max_cycle=50, max_space=100)
-                conv, evals[k], evecs[k,:] = eigs(self.ipccsd_matvec, size, nroots, Adiag=diag, verbose=self.verbose)
+            rsuccess, x0 = read_eom_amplitudes((nroots,size),filename=amplitude_filename)
+            if x0 is not None:
+                x0 = x0.T
+            #if not rsuccess:
+            #    x0 = np.zeros_like(diag)
+            #    x0[np.argmin(diag)] = 1.0
+
+            conv, evals_k, evecs_k = eigs(self.ipccsd_matvec, size, nroots, x0=x0, Adiag=diag, verbose=self.verbose)
+
+            evals_k = evals_k.real
+            evals[k] = evals_k
+            evecs[k] = evecs_k.T
+
             write_eom_amplitudes(evecs[k],filename=amplitude_filename)
         time0 = log.timer_debug1('converge ip-ccsd', *time0)
         comm.Barrier()
         return evals.real, evecs
 
+    restore_from_diis_ = restore_from_diis_
+
+    def run_diis(self, t1, t2, istep, normt, de, adiis):
+        if rank == 0:
+            if (adiis and
+                istep >= self.diis_start_cycle and
+                abs(de) < self.diis_start_energy_diff):
+                vec = self.amplitudes_to_vector(t1, t2)
+                t1, t2 = self.vector_to_amplitudes(adiis.update(vec))
+                logger.debug1(self, 'DIIS for step %d', istep)
+        safeBcastInPlace(MPI.COMM_WORLD, t1)
+        safeBcastInPlace(MPI.COMM_WORLD, t2)
+        return t1, t2
+
     def ipccsd_matvec(self, vector):
+        kshift = self.kshift
         # Ref: Z. Tu, F. Wang, and X. Li, J. Chem. Phys. 136, 174102 (2012) Eqs.(8)-(9)
-        vector = self.mask_frozen_ip(vector, const=0.0)
+        vector = self.mask_frozen_ip(vector, kshift, const=0.0)
         r1,r2 = self.vector_to_amplitudes_ip(vector)
         r1 = comm.bcast(r1, root=0)
         r2 = comm.bcast(r2, root=0)
@@ -1186,7 +1295,6 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         t1,t2 = self.t1, self.t2
         nkpts,nocc,nvir = self.t1.shape
         nkpts = self.nkpts
-        kshift = self.kshift
         kconserv = self.kconserv
 
         if not self.made_ip_imds:
@@ -1281,7 +1389,7 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         comm.Allreduce(MPI.IN_PLACE, Hr2, op=MPI.SUM)
 
         vector = self.amplitudes_to_vector_ip(Hr1,Hr2)
-        vector = self.mask_frozen_ip(vector, const=0.0)
+        vector = self.mask_frozen_ip(vector, kshift, const=0.0)
         return vector
 
     def lipccsd(self, nroots=2*4, kptlist=None):
@@ -1295,10 +1403,10 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         size = self.vector_size_ip()
         for k,kshift in enumerate(kptlist):
             self.kshift = kshift
-            nfrozen = np.sum(self.mask_frozen_ip(np.zeros(size, dtype=int), const=1))
+            nfrozen = np.sum(self.mask_frozen_ip(np.zeros(size, dtype=int), kshift, const=1))
             nroots = min(nroots, size - nfrozen)
         evals = np.zeros((len(kptlist),nroots), np.float)
-        evecs = np.zeros((len(kptlist),size,nroots), np.complex)
+        evecs = np.zeros((len(kptlist),nroots,size), np.complex)
 
         for k,kshift in enumerate(kptlist):
             self.kshift = kshift
@@ -1306,24 +1414,28 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
             precond = lambda dx, e, x0: dx/(diag-e)
             # Initial guess from file
             amplitude_filename = "__lipccsd" + str(kshift) + "__.hdf5"
-            rsuccess, x0 = read_eom_amplitudes((size,nroots),amplitude_filename)
-            if not rsuccess:
-                x0 = np.zeros_like(diag)
-                x0[np.argmin(diag)] = 1.0
-            if nroots == 1:
-                #evals[k], evecs[k,:,0] = eig(self.lipccsd_matvec, x0, precond, nroots=nroots, verbose=self.verbose, tol=1e-14, max_cycle=50, max_space=100)
-                conv, evals[k], evecs[k,:] = eigs(self.lipccsd_matvec, size, nroots, Adiag=diag, verbose=self.verbose)
-            else:
-                #evals[k], evecs[k] = eig(self.lipccsd_matvec, x0, precond, nroots=nroots, verbose=self.verbose, tol=1e-14, max_cycle=50, max_space=100)
-                conv, evals[k], evecs[k,:] = eigs(self.lipccsd_matvec, size, nroots, Adiag=diag, verbose=self.verbose)
-            write_eom_amplitudes(evecs[k],amplitude_filename)
+            rsuccess, x0 = read_eom_amplitudes((nroots,size),filename=amplitude_filename)
+            if x0 is not None:
+                x0 = x0.T
+            #if not rsuccess:
+            #    x0 = np.zeros_like(diag)
+            #    x0[np.argmin(diag)] = 1.0
+
+            conv, evals_k, evecs_k = eigs(self.lipccsd_matvec, size, nroots, x0=x0, Adiag=diag, verbose=self.verbose)
+
+            evals_k = evals_k.real
+            evals[k] = evals_k
+            evecs[k] = evecs_k.T
+
+            write_eom_amplitudes(evecs[k],filename=amplitude_filename)
         time0 = log.timer_debug1('converge ip-ccsd', *time0)
         comm.Barrier()
         return evals.real, evecs
 
     def lipccsd_matvec(self, vector):
         # Ref: Z. Tu, F. Wang, and X. Li, J. Chem. Phys. 136, 174102 (2012) Eqs.(8)-(9)
-        vector = self.mask_frozen_ip(vector, const=0.0)
+        kshift = self.kshift
+        vector = self.mask_frozen_ip(vector, kshift, const=0.0)
         r1,r2 = self.vector_to_amplitudes_ip(vector)
         r1 = comm.bcast(r1, root=0)
         r2 = comm.bcast(r2, root=0)
@@ -1332,7 +1444,6 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         t1,t2 = self.t1, self.t2
         nkpts,nocc,nvir = self.t1.shape
         nkpts = self.nkpts
-        kshift = self.kshift
         kconserv = self.kconserv
 
         if not self.made_ip_imds:
@@ -1466,7 +1577,7 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         comm.Allreduce(MPI.IN_PLACE, Hr2, op=MPI.SUM)
 
         vector = self.amplitudes_to_vector_ip(Hr1,Hr2)
-        vector = self.mask_frozen_ip(vector, const=0.0)
+        vector = self.mask_frozen_ip(vector, kshift, const=0.0)
         return vector
 
 
@@ -1520,7 +1631,8 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         fvv = eris.fock[:,nocc:,nocc:]
 
         e = []
-        for _eval, _evec, _levec in zip(ipccsd_evals, ipccsd_evecs.T, lipccsd_evecs.T):
+        assert len(ipccsd_evecs.shape) == 2  # Done at a single k-point, kshift
+        for _eval, _evec, _levec in zip(ipccsd_evals, ipccsd_evecs, lipccsd_evecs):
             l1,l2 = self.vector_to_amplitudes_ip(_levec)
             r1,r2 = self.vector_to_amplitudes_ip(_evec)
 
@@ -1868,36 +1980,40 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         size = self.vector_size_ea()
         for k,kshift in enumerate(kptlist):
             self.kshift = kshift
-            nfrozen = np.sum(self.mask_frozen_ea(np.zeros(size, dtype=int), const=1))
+            nfrozen = np.sum(self.mask_frozen_ea(np.zeros(size, dtype=int), kshift, const=1))
             nroots = min(nroots, size - nfrozen)
         evals = np.zeros((len(kptlist),nroots), np.float)
-        evecs = np.zeros((len(kptlist),size,nroots), np.complex)
+        evecs = np.zeros((len(kptlist),nroots,size), np.complex)
 
         for k,kshift in enumerate(kptlist):
             self.kshift = kshift
             diag = self.eaccsd_diag()
-            diag = self.mask_frozen_ea(diag, const=LARGE_DENOM)
+            diag = self.mask_frozen_ea(diag, kshift, const=LARGE_DENOM)
             precond = lambda dx, e, x0: dx/(diag-e)
             # Initial guess from file
             amplitude_filename = "__reaccsd" + str(kshift) + "__.hdf5"
-            rsuccess, x0 = read_eom_amplitudes((size,nroots),amplitude_filename)
-            if not rsuccess:
-                x0 = np.zeros_like(diag)
-                x0[np.argmin(diag)] = 1.0
-            if nroots == 1:
-                #evals[k], evecs[k,:,0] = eig(self.eaccsd_matvec, x0, precond, nroots=nroots, verbose=self.verbose, tol=1e-14, max_cycle=50, max_space=100)
-                conv, evals[k], evecs[k,:] = eigs(self.eaccsd_matvec, size, nroots, Adiag=diag, verbose=self.verbose)
-            else:
-                #evals[k], evecs[k] = eig(self.eaccsd_matvec, x0, precond, nroots=nroots, verbose=self.verbose, tol=1e-14, max_cycle=50, max_space=100)
-                conv, evals[k], evecs[k,:] = eigs(self.eaccsd_matvec, size, nroots, Adiag=diag, verbose=self.verbose)
-            write_eom_amplitudes(evecs[k],amplitude_filename)
+            rsuccess, x0 = read_eom_amplitudes((nroots,size),filename=amplitude_filename)
+            if x0 is not None:
+                x0 = x0.T
+            #if not rsuccess:
+            #    x0 = np.zeros_like(diag)
+            #    x0[np.argmin(diag)] = 1.0
+
+            conv, evals_k, evecs_k = eigs(self.eaccsd_matvec, size, nroots, x0=x0, Adiag=diag, verbose=self.verbose)
+
+            evals_k = evals_k.real
+            evals[k] = evals_k
+            evecs[k] = evecs_k.T
+
+            write_eom_amplitudes(evecs[k],filename=amplitude_filename)
         time0 = log.timer_debug1('converge ea-ccsd', *time0)
         comm.Barrier()
         return evals.real, evecs
 
     def eaccsd_matvec(self, vector):
         # Ref: Nooijen and Bartlett, J. Chem. Phys. 102, 3629 (1994) Eqs.(30)-(31)
-        vector = self.mask_frozen_ea(vector, const=0.0)
+        kshift = self.kshift
+        vector = self.mask_frozen_ea(vector, kshift, const=0.0)
         r1,r2 = self.vector_to_amplitudes_ea(vector)
         r1 = comm.bcast(r1, root=0)
         r2 = comm.bcast(r2, root=0)
@@ -1905,7 +2021,6 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         t1,t2 = self.t1, self.t2
         nkpts,nocc,nvir = self.t1.shape
         nkpts = self.nkpts
-        kshift = self.kshift
         kconserv = self.kconserv
 
         if not self.made_ea_imds:
@@ -2022,7 +2137,7 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         comm.Allreduce(MPI.IN_PLACE, Hr2, op=MPI.SUM)
 
         vector = self.amplitudes_to_vector_ea(Hr1,Hr2)
-        vector = self.mask_frozen_ea(vector, const=0.0)
+        vector = self.mask_frozen_ea(vector, kshift, const=0.0)
         return vector
 
     def leaccsd(self, nroots=2*4, kptlist=None):
@@ -2036,10 +2151,10 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         size = self.vector_size_ea()
         for k,kshift in enumerate(kptlist):
             self.kshift = kshift
-            nfrozen = np.sum(self.mask_frozen_ea(np.zeros(size, dtype=int), const=1))
+            nfrozen = np.sum(self.mask_frozen_ea(np.zeros(size, dtype=int), kshift, const=1))
             nroots = min(nroots, size - nfrozen)
         evals = np.zeros((len(kptlist),nroots), np.float)
-        evecs = np.zeros((len(kptlist),size,nroots), np.complex)
+        evecs = np.zeros((len(kptlist),nroots,size), np.complex)
 
         for k,kshift in enumerate(kptlist):
             self.kshift = kshift
@@ -2047,16 +2162,19 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
             precond = lambda dx, e, x0: dx/(diag-e)
             # Initial guess from file
             amplitude_filename = "__leaccsd" + str(kshift) + "__.hdf5"
-            rsuccess, x0 = read_eom_amplitudes((size,nroots),amplitude_filename)
-            if not rsuccess:
-                x0 = np.zeros_like(diag)
-                x0[np.argmin(diag)] = 1.0
-            if nroots == 1:
-                #evals[k], evecs[k,:,0] = eig(self.leaccsd_matvec, x0, precond, nroots=nroots, verbose=self.verbose, tol=1e-14, max_cycle=50, max_space=100)
-                conv, evals[k], evecs[k,:] = eigs(self.leaccsd_matvec, size, nroots, Adiag=diag, verbose=self.verbose)
-            else:
-                #evals[k], evecs[k] = eig(self.leaccsd_matvec, x0, precond, nroots=nroots, verbose=self.verbose, tol=1e-14, max_cycle=50, max_space=100)
-                conv, evals[k], evecs[k,:] = eigs(self.leaccsd_matvec, size, nroots, Adiag=diag, verbose=self.verbose)
+            rsuccess, x0 = read_eom_amplitudes((nroots,size),filename=amplitude_filename)
+            if x0 is not None:
+                x0 = x0.T
+            #if not rsuccess:
+            #    x0 = np.zeros_like(diag)
+            #    x0[np.argmin(diag)] = 1.0
+
+            conv, evals_k, evecs_k = eigs(self.leaccsd_matvec, size, nroots, x0=x0, Adiag=diag, verbose=self.verbose)
+
+            evals_k = evals_k.real
+            evals[k] = evals_k
+            evecs[k] = evecs_k.T
+
             write_eom_amplitudes(evecs[k],amplitude_filename)
         time0 = log.timer_debug1('converge lea-ccsd', *time0)
         comm.Barrier()
@@ -2228,7 +2346,9 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         fvv = eris.fock[:,nocc:,nocc:]
 
         e = []
-        for _eval, _evec, _levec in zip(eaccsd_evals, eaccsd_evecs.T, leaccsd_evecs.T):
+        assert len(eaccsd_evecs.shape) == 2  # Done at a single k-point, kshift
+        for _eval, _evec, _levec in zip(eaccsd_evals, eaccsd_evecs, leaccsd_evecs):
+            print _eval, _evec.shape, _levec.shape
             l1,l2 = self.vector_to_amplitudes_ea(_levec)
             r1,r2 = self.vector_to_amplitudes_ea(_evec)
 
@@ -2544,8 +2664,12 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
 
 class _ERIS:
     def __init__(self, cc, mo_coeff=None, method='incore'):
+        from pyscf.pbc import tools
+        from pyscf.pbc.cc.ccsd import _adjust_occ
         cput0 = (time.clock(), time.time())
         moidx = get_frozen_mask(cc)
+        cell = cc._scf.cell
+        kpts = cc.kpts
         nkpts = cc.nkpts
         nocc = cc.nocc
         nmo = cc.nmo
@@ -2558,27 +2682,40 @@ class _ERIS:
             mo_coeff = cc.mo_coeff
         dtype = mo_coeff[0].dtype
 
-        # If we have frozen orbitals then get back the fock/mo_coeff with appropriate padding
-        mo_coeff = pad_frozen_kpt_mo_coeff(cc, mo_coeff)
+        mo_coeff = self.mo_coeff = padded_mo_coeff(cc, mo_coeff)
 
         # Re-make our fock MO matrix elements from density and fock AO
         dm = cc._scf.make_rdm1(cc.mo_coeff, cc.mo_occ)
-        fockao = cc._scf.get_hcore() + cc._scf.get_veff(cc._scf.cell, dm)
-        self.fock = numpy.asarray([reduce(numpy.dot,
-                                  (mo_coeff[k].T.conj(), fockao[k], mo_coeff[k]))
-                                  for k, mo in enumerate(mo_coeff)])
+        with lib.temporary_env(cc._scf, exxdiv=None):
+            # _scf.exxdiv affects eris.fock. HF exchange correction should be
+            # excluded from the Fock matrix.
+            fockao = cc._scf.get_hcore() + cc._scf.get_veff(cell, dm)
+        self.fock = np.asarray([reduce(np.dot, (mo.T.conj(), fockao[k], mo))
+                                for k, mo in enumerate(mo_coeff)])
+        self.fock = comm.bcast(self.fock, root=0)  # Ensure all processes have same fock
 
-        nocc_per_kpt = numpy.asarray(get_nocc(cc, per_kpoint=True))
-        nmo_per_kpt  = numpy.asarray(get_nmo(cc, per_kpoint=True))
-        nvir_per_kpt = nmo_per_kpt - nocc_per_kpt
-        for kp in range(nkpts):
-            mo_e = self.fock[kp].diagonal().real
-            gap = abs(mo_e[:nocc_per_kpt[kp]][:, None] -
-                      mo_e[-nvir_per_kpt[kp]:]).min()
-            if gap < 1e-5:
-                logger.warn(cc, 'HOMO-LUMO gap %s too small for KCCSD at '
-                            'k-point %d %s. May cause issues in convergence.',
-                            gap, kp, cc.kpts[kp])
+        self.mo_energy = [self.fock[k].diagonal().real for k in range(nkpts)]
+        # Add HFX correction in the self.mo_energy to improve convergence in
+        # CCSD iteration. It is useful for the 2D systems since their occupied and
+        # the virtual orbital energies may overlap which may lead to numerical
+        # issue in the CCSD iterations.
+        # FIXME: Whether to add this correction for other exxdiv treatments?
+        # Without the correction, MP2 energy may be largely off the correct value.
+        madelung = tools.madelung(cell, kpts)
+        self.mo_energy = [_adjust_occ(mo_e, nocc, -madelung)
+                          for k, mo_e in enumerate(self.mo_energy)]
+
+        # Get location of padded elements in occupied and virtual space.
+        nocc_per_kpt = get_nocc(cc, per_kpoint=True)
+        nonzero_padding = padding_k_idx(cc, kind="joint")
+
+        # Check direct and indirect gaps for possible issues with CCSD convergence.
+        mo_e = [self.mo_energy[kp][nonzero_padding[kp]] for kp in range(nkpts)]
+        mo_e = np.sort([y for x in mo_e for y in x])  # Sort de-nested array
+        gap = mo_e[np.sum(nocc_per_kpt)] - mo_e[np.sum(nocc_per_kpt)-1]
+        if gap < 1e-5:
+            logger.warn(cc, 'HOMO-LUMO gap %s too small for KCCSD. '
+                            'May cause issues in convergence.', gap)
 
         mem_now = pyscf.lib.current_memory()[0]
         fao2mo = cc._scf.with_df.ao2mo

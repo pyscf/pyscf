@@ -294,6 +294,14 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                         'deriviative is not available. Its contribution is '
                         'not included in the response function.')
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
+        hybrid = abs(hyb) > 1e-10
+
+        # mf can be pbc.dft.RKS object with multigrid
+        if (not hybrid and
+            'MultiGridFFTDF' == getattr(mf, 'with_df', None).__class__.__name__):
+            from pyscf.pbc.dft import multigrid
+            dm0 = mf.make_rdm1(mo_coeff, mo_occ)
+            return multigrid._gen_rhf_response(mf, dm0, singlet, hermi)
 
         if singlet is None:  # for newton solver
             rho0, vxc, fxc = ni.cache_xc_kernel(mol, mf.grids, mf.xc,
@@ -307,7 +315,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
             mem_now = lib.current_memory()[0]
             max_memory = max(2000, mf.max_memory*.8-mem_now)
 
-        if singlet is None:
+        if singlet is None:  # Without specify singlet, general case
             def vind(dm1):
                 # The singlet hessian
                 if hermi == 2:
@@ -315,7 +323,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                 else:
                     v1 = ni.nr_rks_fxc(mol, mf.grids, mf.xc, dm0, dm1, 0, hermi,
                                        rho0, vxc, fxc, max_memory=max_memory)
-                if abs(hyb) > 1e-10:
+                if hybrid:
                     if hermi != 2:
                         vj, vk = mf.get_jk(mol, dm1, hermi=hermi)
                         vk *= hyb
@@ -338,7 +346,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                                               True, rho0, vxc, fxc,
                                               max_memory=max_memory)
                     v1 *= .5
-                if abs(hyb) > 1e-10:
+                if hybrid:
                     if hermi != 2:
                         vj, vk = mf.get_jk(mol, dm1, hermi=hermi)
                         vk *= hyb
@@ -350,7 +358,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                 elif hermi != 2:
                     v1 += mf.get_j(mol, dm1, hermi=hermi)
                 return v1
-        else:
+        else:  # triplet
             def vind(dm1):
                 if hermi == 2:
                     v1 = numpy.zeros_like(dm1)
@@ -360,7 +368,7 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
                                               False, rho0, vxc, fxc,
                                               max_memory=max_memory)
                     v1 *= .5
-                if abs(hyb) > 1e-10:
+                if hybrid:
                     vk = mf.get_k(mol, dm1, hermi=hermi)
                     vk *= hyb
                     if abs(omega) > 1e-10:  # For range separated Coulomb
@@ -387,7 +395,6 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
     mol = mf.mol
     if hasattr(mf, 'xc') and hasattr(mf, '_numint'):
         from pyscf.dft import rks
-        from pyscf.dft import numint
         ni = mf._numint
         ni.libxc.test_deriv_order(mf.xc, 2, raise_error=True)
         if getattr(mf, 'nlc', '') != '':
@@ -395,6 +402,14 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
                         'deriviative is not available. Its contribution is '
                         'not included in the response function.')
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
+        hybrid = abs(hyb) > 1e-10
+
+        # mf can be pbc.dft.UKS object with multigrid
+        if (not hybrid and
+            'MultiGridFFTDF' == getattr(mf, 'with_df', None).__class__.__name__):
+            from pyscf.pbc.dft import multigrid
+            dm0 = mf.make_rdm1(mo_coeff, mo_occ)
+            return multigrid._gen_uhf_response(mf, dm0, with_j, hermi)
 
         rho0, vxc, fxc = ni.cache_xc_kernel(mol, mf.grids, mf.xc,
                                             mo_coeff, mo_occ, 1)
@@ -412,7 +427,7 @@ def _gen_uhf_response(mf, mo_coeff=None, mo_occ=None,
             else:
                 v1 = ni.nr_uks_fxc(mol, mf.grids, mf.xc, dm0, dm1, 0, hermi,
                                    rho0, vxc, fxc, max_memory=max_memory)
-            if abs(hyb) < 1e-10:
+            if not hybrid:
                 if with_j:
                     vj = mf.get_j(mol, dm1, hermi=hermi)
                     v1 += vj[0] + vj[1]
@@ -666,8 +681,9 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
     dm = mf.make_rdm1(mo_coeff, mo_occ)
 # call mf._scf.get_veff, to avoid density_fit module polluting get_veff function
     vhf = mf._scf.get_veff(mol, dm)
+    e_tot = mf._scf.energy_tot(dm, h1e, vhf)
     fock = mf.get_fock(h1e, s1e, vhf, dm, level_shift_factor=0)
-    log.info('Initial guess |g|= %g',
+    log.info('Initial guess E= %.15g  |g|= %g', e_tot,
              numpy.linalg.norm(mf._scf.get_grad(mo_coeff, mo_occ, fock)))
 # NOTE: DO NOT change the initial guess mo_occ, mo_coeff
     mo_energy, mo_tmp = mf.eig(fock, s1e)

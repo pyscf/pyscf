@@ -352,7 +352,7 @@ class MP2(lib.StreamObject):
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)
         log.info('')
-        log.info('******** %s flags ********', self.__class__)
+        log.info('******** %s ********', self.__class__)
         log.info('nocc = %s, nmo = %s', self.nocc, self.nmo)
         if self.frozen is not 0:
             log.info('frozen orbitals %s', self.frozen)
@@ -540,9 +540,8 @@ def _ao2mo_ovov(mp, orbo, orbv, feri, max_memory=2000, verbose=None):
     time1 = time0 = log.timer('mp2 ao2mo_ovov pass1', *time0)
     eri = eribuf = tmp_i = tmp_li = buf_i = buf_li = buf1 = None
 
-    chunks = (nvir,nvir)
     h5dat = feri.create_dataset('ovov', (nocc*nvir,nocc*nvir), 'f8',
-                                chunks=chunks)
+                                chunks=(nvir,nvir))
     occblk = int(min(nocc, max(4, 250/nocc, max_memory*.9e6/8/(nao**2*nocc)/5)))
     def load(i0, eri):
         if i0 < nocc:

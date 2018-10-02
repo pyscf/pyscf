@@ -70,7 +70,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(mf.scf(), -75.578396379589748, 9)
         pop_chg, dip = mf.analyze()
         self.assertAlmostEqual(lib.finger(pop_chg[0]), 1.0036241405313113, 9)
-        self.assertAlmostEqual(lib.finger(dip), -1.4000444730836665, 9)
+        self.assertAlmostEqual(lib.finger(dip), -1.4000447020842097, 9)
 
     def test_nr_uhf(self):
         uhf = scf.UHF(mol)
@@ -337,6 +337,7 @@ class KnownValues(unittest.TestCase):
         self.assertTrue(isinstance(scf.RKS(mol_u), dft.roks.ROKS))
         self.assertTrue(isinstance(scf.UKS(mol_r), dft.uks.UKS))
         self.assertTrue(isinstance(scf.ROKS(mol_r), dft.roks.ROKS))
+        self.assertTrue(isinstance(scf.GKS(mol_r), dft.gks.GKS))
         self.assertTrue(isinstance(scf.KS(mol_r), dft.rks.RKS))
         self.assertTrue(isinstance(scf.KS(mol_u), dft.uks.UKS))
 
