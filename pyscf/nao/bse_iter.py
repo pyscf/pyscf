@@ -33,11 +33,11 @@ class bse_iter(gw):
     assert self.xc_code_kernel.upper()=='RPA', '{} ?'.format(self.xc_code_kernel)
 
     # Allocation of kernels in the product basis to be used in Hartree and exchange-type kernels
-    dtype, ns, np = self.dtype, self.nspin, self.nprod
-    self.q2hk = zeros((2*ns-1,np,np),dtype=dtype) if xc in ['LDA','GGA'] else zeros((1,np,np),dtype=dtype)
+    dtype, ns, p = self.dtype, self.nspin, self.nprod
+    self.q2hk = zeros((2*ns-1,p,p),dtype=dtype) if xc in ['LDA','GGA'] else zeros((1,p,p),dtype=dtype)
 
     if xc in ['CIS','HF']: self.q2xk = self.q2hk
-    elif xc in ['GW']: self.q2xk = zeros((1,np,np),dtype=dtype)
+    elif xc in ['GW']: self.q2xk = zeros((1,p,p),dtype=dtype)
     else: self.q2xk = None
       
     # Computation of kernels in the product basis...
@@ -75,8 +75,11 @@ class bse_iter(gw):
     #print(__name__, 'Fermi energy', self.fermi_energy)
     #np.set_printoptions(linewidth=1000)
     #for s in range(self.nspin):
-    #  print(self.ksn2f_l0[s][:10])
-    #  print(self.ksn2e_l0[s][:10])
+    #  print(self.ksn2f_l0[s,:10])
+    #  print(self.ksn2e_l0[s,:10])
+    #for s in range(self.nspin):
+    #  print(self.mo_energy[0,s,:10])
+    #  print(self.mo_occ[0,s,:10])
 
 
   def define_e_x_l0(self, mo_energy, mo_coeff, **kw):

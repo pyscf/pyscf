@@ -316,6 +316,7 @@ class gw(scf):
     emfev = self.mo_energy[0].T * HARTREE2EV
     egwev = self.mo_energy_gw[0].T * HARTREE2EV
     file_name= re.sub('[^A-Za-z]', '', self.mol.atom)
+    # The output should be possible to write more concise...
     with open('report_'+file_name+'.out','w') as out_file:
         print('Total energy G0W0\t{} Ha'.format(self.etot_gw))
         print('-'*30,'|G0W0 eigenvalues (eV)|','-'*30)
