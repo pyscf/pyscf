@@ -21,9 +21,9 @@ from pyscf.nao.m_polariz_inter_ave import polariz_freq_osc_strength
 
 class KnowValues(unittest.TestCase):
 
-  def test_158_bse_h2o_uhf_cis(self):
+  def test_0162_bse_h2o_spin2_uhf_cis(self):
     """ This  """
-    mol = gto.M(verbose=1,atom='O 0 0 0; H 0 0.489 1.074; H 0 0.489 -1.074',basis='cc-pvdz')
+    mol = gto.M(verbose=1,atom='O 0 0 0; H 0 0.489 1.074; H 0 0.489 -1.074',basis='cc-pvdz',spin=2)
 
     gto_mf = scf.UHF(mol)
     gto_mf.kernel()
@@ -34,16 +34,16 @@ class KnowValues(unittest.TestCase):
     omegas = np.arange(0.0, 2.0, 0.01) + 1j*0.03
     p_ave = -polariz_freq_osc_strength(gto_td.e, gto_td.oscillator_strength(), omegas).imag
     data = np.array([omegas.real*HARTREE2EV, p_ave])
-    np.savetxt('test_0158_bse_h2o_uhf_cis_pyscf.txt', data.T, fmt=['%f','%f'])
-    data_ref = np.loadtxt('test_0158_bse_h2o_uhf_cis_pyscf.txt-ref').T
-    self.assertTrue(np.allclose(data_ref, data, atol=1e-6, rtol=1e-3))
+    np.savetxt('test_0162_bse_h2o_spin2_uhf_cis_pyscf.txt', data.T, fmt=['%f','%f'])
+    #data_ref = np.loadtxt('test_0162_bse_h2o_spin2_uhf_cis_pyscf.txt-ref').T
+    #self.assertTrue(np.allclose(data_ref, data, atol=1e-6, rtol=1e-3))
     
     nao_td  = bse_iter(mf=gto_mf, gto=mol, verbosity=0, xc_code='CIS')
 
     polariz = -nao_td.comp_polariz_inter_ave(omegas).imag
     data = np.array([omegas.real*HARTREE2EV, polariz])
-    np.savetxt('test_0158_bse_h2o_uhf_cis_nao.txt', data.T, fmt=['%f','%f'])
-    data_ref = np.loadtxt('test_0158_bse_h2o_uhf_cis_nao.txt-ref').T
+    np.savetxt('test_0162_bse_h2o_spin2_uhf_cis_nao.txt', data.T, fmt=['%f','%f'])
+    data_ref = np.loadtxt('test_0162_bse_h2o_spin2_uhf_cis_nao.txt-ref').T
     self.assertTrue(np.allclose(data_ref, data, atol=1e-6, rtol=1e-3), \
       msg="{}".format(abs(data_ref-data).sum()/data.size))
     

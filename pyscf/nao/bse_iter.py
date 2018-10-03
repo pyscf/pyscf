@@ -49,8 +49,17 @@ class bse_iter(gw):
 
     # Allocation of the four-point kernel(s) which is to be used when RAM available
     n, v_dab, cc_da = self.norbs, self.v_dab, self.cc_da
-    self.q2k_4p = zeros((2*ns-1,n*n,n*n),dtype=dtype) if xc in ['LDA','GGA'] else zeros((1,n*n,n*n),dtype=dtype)
-    q2k_4p = self.q2k_4p
+    if xc in ['LDA','GGA']:
+      self.q2k_4p = zeros((2*ns-1,n*n,n*n),dtype=dtype)
+    elif xc in ['HF', 'CIS', 'GW']: # 1 or 2? Examples of UHF+TD of H2O and H2B(spin=3): 158, 159
+      self.q2k_4p = zeros((1, n*n, n*n),dtype=dtype) 
+    elif xc in ['RPA']:
+      self.q2k_4p = zeros((1, n*n, n*n),dtype=dtype)
+    else:
+      raise RuntimeError('Unknown funct: '+xc)
+      
+    q2k_4p = self.q2k_4p # q2k_4p is now alias to the  self.q2k_4p
+    
     # Computation of the four-point interaction kernel...
     for q,fhxc in enumerate(self.q2hk): # Start with Hartree interaction kernel 
       q2k_4p[q] = (((v_dab.T*(cc_da*fhxc))*cc_da.T)*v_dab).reshape([n*n,n*n])
@@ -64,6 +73,8 @@ class bse_iter(gw):
     elif self.nspin==2:
       if len(q2k_4p)==1 :
         self.ss2kernel_4p = [[q2k_4p[0], q2k_4p[0]], [q2k_4p[0],q2k_4p[0]]]
+      elif len(q2k_4p)==2 : # # 1 or 2? Examples of UHF+TD of H2O and H2B(spin=3): 158, 159
+        self.ss2kernel_4p = [[q2k_4p[0], q2k_4p[1]], [q2k_4p[1],q2k_4p[0]]]
       else:
         self.ss2kernel_4p = [[q2k_4p[0], q2k_4p[1]], [q2k_4p[1],q2k_4p[2]]]
 
