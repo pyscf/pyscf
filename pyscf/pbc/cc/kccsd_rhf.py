@@ -31,8 +31,8 @@ from pyscf.pbc import scf
 from pyscf.pbc.mp.kmp2 import (get_frozen_mask, get_nocc, get_nmo,
                                padded_mo_coeff, padding_k_idx_mp as padding_k_idx)
 from pyscf.pbc.cc import kintermediates_rhf as imdk
-from pyscf.pbc.cc.eom_kccsd_rhf_ip import kernel as kernel_ip
-from pyscf.pbc.cc.eom_kccsd_rhf_ea import kernel as kernel_ea
+from pyscf.pbc.cc.eom_kccsd_rhf import (ipccsd, eaccsd, amplitudes_to_vector_ip, vector_to_amplitudes_ip,
+    amplitudes_to_vector_ea, vector_to_amplitudes_ea)
 from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM
 from pyscf.lib import linalg_helper
 from pyscf.pbc.lib import kpts_helper
@@ -472,8 +472,12 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
     def ao2mo(self, mo_coeff=None):
         return _ERIS(self, mo_coeff)
 
-    ipccsd = kernel_ip
-    eaccsd = kernel_ea
+    ipccsd = ipccsd
+    eaccsd = eaccsd
+    amplitudes_to_vector_ea = amplitudes_to_vector_ea
+    amplitudes_to_vector_ip = amplitudes_to_vector_ip
+    vector_to_amplitudes_ea = vector_to_amplitudes_ea
+    vector_to_amplitudes_ip = vector_to_amplitudes_ip
 
     @property
     def imds(self):
