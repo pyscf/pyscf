@@ -53,6 +53,10 @@ def amplitudes_to_vector(cc, t1, t2, k):
 
 def vector_to_amplitudes(cc, vec, k):
     """EA vector to apmplitudes."""
+    expected_vs = vector_size(cc, k)
+    if expected_vs != len(vec):
+        raise ValueError("The size of the vector passed {:d} should be exactly {:d}".format(len(vec), expected_vs))
+
     itr = iter_12(cc, k)
     nvirt = cc.nmo - cc.nocc
 
