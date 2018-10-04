@@ -161,6 +161,26 @@ class bse_iter(gw):
       ab2v[s] += blas.cgemm(1.0, self.x_l0[s].T, nb2v)
     return ab2v.reshape(-1)
 
+  def apply_l0_spin_non_diag(self, sab, comega=1j*0.0):
+    """ The definition of L0 which is not spin-diagonal even for parallel-spin references"""
+    assert sab.size==(self.nspin*self.norbs2)
+    self.l0_ncalls+=1
+        
+    sab = sab.reshape((self.nspin,self.norbs,self.norbs))
+    ab2v = np.zeros_like(sab, dtype=self.dtypeComplex)
+    for ns in range(self.nspin):
+      for ms in range(self.nspin):
+        nb2v = dot(self.x_l0[ns], sab[ns])
+        nm2v = blas.cgemm(1.0, nb2v, self.x_l0[ms].T)
+    
+        for n,[en,fn] in enumerate(zip(self.ksn2e_l0[ns,:],self.ksn2f_l0[ns,:])):
+          for m,[em,fm] in enumerate(zip(self.ksn2e_l0[ms,:],self.ksn2f_l0[ms,:])):
+            nm2v[n,m] = nm2v[n,m] * (fn-fm) * ( 1.0 / (comega - (em - en)))
+
+        nb2v = blas.cgemm(1.0, nm2v, self.x_l0[ms])
+        ab2v[ns] += blas.cgemm(0.5, self.x_l0[ns].T, nb2v)
+    return ab2v.reshape(-1)
+
   def seff(self, sext, comega=1j*0.0):
     """ This computes an effective two point field (scalar non-local potential) given an external two point field.
         L = L0 (1 - K L0)^-1
