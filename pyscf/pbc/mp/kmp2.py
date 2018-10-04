@@ -53,7 +53,7 @@ def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE):
     mo_e_v = [mo_energy[k][nocc:] for k in range(nkpts)]
 
     # Get location of non-zero/padded elements in occupied and virtual space
-    nonzero_opadding, nonzero_vpadding = padding_k_idx(mp, kind="split")
+    nonzero_opadding, nonzero_vpadding = padding_k_idx_mp(mp, kind="split")
 
     for ki in range(nkpts):
       for kj in range(nkpts):
@@ -88,7 +88,7 @@ def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE):
     return emp2, None
 
 
-def padding_k_idx(mp, kind="split"):
+def padding_k_idx(nmo, nocc, kind="split"):
     """A convention used for padding vectors, matrices and tensors in case when occupation numbers depend on the
     k-point index.
 
@@ -125,14 +125,15 @@ def padding_k_idx(mp, kind="split"):
     resulting dense `get_nmo(mp) == 7` and `get_nocc(mp) == 3` correspond to padded dimensions. This function will
     return the following indexes corresponding to the filled entries of the above table:
 
-    >>> padding_k_idx(mp, kind="split")
+    >>> padding_k_idx_mp(mp, kind="split")
     ([(0, 1), (0, 1, 2), (0, 1)], [(0, 1, 2, 3), (1, 2, 3), (1, 2, 3)])
 
-    >>> padding_k_idx(mp, kind="joint")
+    >>> padding_k_idx_mp(mp, kind="joint")
     [(0, 1, 3, 4, 5, 6), (0, 1, 2, 4, 5, 6), (0, 1, 4, 5, 6)]
 
     Args:
-        mp (:class:`MP2`): An instantiation of an SCF or post-Hartree-Fock object.
+        nmo (Iterable): k-dependent orbital number;
+        nocc (Iterable): k-dependent occupation numbers;
         kind (str): either "split" (occupied and virtual spaces are split) or "joint" (occupied and virtual spaces are
         the joint;
 
@@ -150,14 +151,14 @@ def padding_k_idx(mp, kind="split"):
     else:
         indexes = []
 
-    dense_o = mp.nocc
-    dense_nmo = mp.nmo
-    dense_v = dense_nmo - dense_o
+    nocc = np.array(nocc)
+    nmo = np.array(nmo)
+    nvirt = nmo - nocc
+    dense_o = np.amax(nocc)
+    dense_v = np.amax(nvirt)
+    dense_nmo = dense_o + dense_v
 
-    nocc_per_kpt = np.asarray(get_nocc(mp, per_kpoint=True))
-    nmo_per_kpt = np.asarray(get_nmo(mp, per_kpoint=True))
-
-    for k_o, k_nmo in zip(nocc_per_kpt, nmo_per_kpt):
+    for k_o, k_nmo in zip(nocc, nmo):
         k_v = k_nmo - k_o
         if kind == "split":
             indexes_o.append(np.arange(k_o))
@@ -175,6 +176,11 @@ def padding_k_idx(mp, kind="split"):
         return indexes
 
 
+def padding_k_idx_mp(mp, kind="split"):
+    """An alias to padding_k_idx with an MP-like object argument."""
+    return padding_k_idx(mp.get_nmo(per_kpoint=True), mp.get_nocc(per_kpoint=True), kind=kind)
+
+
 def padded_mo_energy(mp, mo_energy):
     """
     Pads energies of active MOs.
@@ -187,7 +193,7 @@ def padded_mo_energy(mp, mo_energy):
         Padded molecular energies.
     """
     frozen_mask = get_frozen_mask(mp)
-    padding_convention = padding_k_idx(mp, kind="joint")
+    padding_convention = padding_k_idx_mp(mp, kind="joint")
     nkpts = mp.nkpts
 
     result = np.zeros((nkpts, mp.nmo), dtype=mo_energy[0].dtype)
@@ -209,7 +215,7 @@ def padded_mo_coeff(mp, mo_coeff):
         Padded molecular coefficients.
     """
     frozen_mask = get_frozen_mask(mp)
-    padding_convention = padding_k_idx(mp, kind="joint")
+    padding_convention = padding_k_idx_mp(mp, kind="joint")
     nkpts = mp.nkpts
 
     result = np.zeros((nkpts, mo_coeff[0].shape[0], mp.nmo), dtype=mo_coeff[0].dtype)

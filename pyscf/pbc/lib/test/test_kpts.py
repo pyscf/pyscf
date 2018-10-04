@@ -15,11 +15,11 @@
 
 import unittest
 import numpy
+from numpy import testing
 from pyscf.pbc import gto as pbcgto
 from pyscf.pbc import tools
 from pyscf.pbc.scf import khf
 from pyscf import lib
-
 
 class KnownValues(unittest.TestCase):
     def test_kconserve(self):
