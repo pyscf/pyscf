@@ -147,12 +147,12 @@ def kernel(cc, nroots=1, koopmans=False, guess=None, partition=None,
                                    tol=cc.conv_tol, max_cycle=cc.max_cycle,
                                    max_space=cc.max_space, nroots=nroots, verbose=cc.verbose)
 
+        if nroots == 1:
+            evals_k, evecs_k = np.array([evals_k]), np.array([evecs_k])
+
         evals_k = evals_k.real
         evals[k] = evals_k
         evecs.append(evecs_k)
-
-        if nroots == 1:
-            evals_k, evecs_k = [evals_k], [evecs_k]
 
         for n, en, vn in zip(range(nroots), evals_k, evecs_k):
             r1, r2 = vector_to_amplitudes(cc, vn, kshift)
