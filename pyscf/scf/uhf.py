@@ -133,6 +133,10 @@ def make_rdm1(mo_coeff, mo_occ):
     mo_b = mo_coeff[1]
     dm_a = numpy.dot(mo_a*mo_occ[0], mo_a.T.conj())
     dm_b = numpy.dot(mo_b*mo_occ[1], mo_b.T.conj())
+# DO NOT make tag_array for DM here because the DM arrays may be modified and
+# passed to functions like get_jk, get_vxc.  These functions may take the tags
+# (mo_coeff, mo_occ) to compute the potential if tags were found in the DM
+# arrays and modifications to DM arrays may be ignored.
     return numpy.array((dm_a,dm_b))
 
 def get_veff(mol, dm, dm_last=0, vhf_last=0, hermi=1, vhfopt=None):

@@ -112,7 +112,7 @@ class EOM(lib.StreamObject):
 
     def dump_flags(self):
         logger.info(self, '')
-        logger.info(self, '******** %s flags ********', self.__class__)
+        logger.info(self, '******** %s ********', self.__class__)
         logger.info(self, 'max_space = %d', self.max_space)
         logger.info(self, 'max_cycle = %d', self.max_cycle)
         logger.info(self, 'conv_tol = %s', self.conv_tol)

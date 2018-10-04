@@ -38,7 +38,7 @@ LINEAR_DEP_THR = getattr(__config__, 'df_df_DF_lindep', 1e-12)
 #
 
 def cholesky_eri(mol, erifile, auxbasis='weigend+etb', dataname='j3c', tmpdir=None,
-                 int3c='int3c2e_sph', aosym='s2ij', int2c='int2c2e_sph', comp=1,
+                 int3c='int3c2e', aosym='s2ij', int2c='int2c2e', comp=1,
                  max_memory=MAX_MEMORY, ioblk_size=IOBLK_SIZE, auxmol=None,
                  verbose=logger.NOTE):
     '''3-center 2-electron AO integrals
@@ -109,7 +109,7 @@ def cholesky_eri(mol, erifile, auxbasis='weigend+etb', dataname='j3c', tmpdir=No
 
 # store cderi in blocks
 def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='j3c',
-                   int3c='int3c2e_sph', aosym='s2ij', int2c='int2c2e_sph',
+                   int3c='int3c2e', aosym='s2ij', int2c='int2c2e',
                    comp=1, ioblk_size=IOBLK_SIZE, auxmol=None,
                    verbose=logger.NOTE):
     '''3-center 2-electron AO integrals
@@ -152,6 +152,7 @@ def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='j3c',
             cderi = lib.dot(low.T, b)
         feri[label] = cderi
 
+    int3c = mol._add_suffix(int3c)
     int3c = gto.moleintor.ascint3(int3c)
     atm, bas, env = gto.mole.conc_env(mol._atm, mol._bas, mol._env,
                                       auxmol._atm, auxmol._bas, auxmol._env)
@@ -170,6 +171,12 @@ def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='j3c',
               naoaux*nao_pair*8/1e6, comp*buflen*naoaux*8/1e6)
     if log.verbose >= logger.DEBUG1:
         log.debug1('shranges = %s', shranges)
+    # TODO: Libcint-3.14 and newer version support to compute int3c2e without
+    # the opt for the 3rd index.
+    #if '3c2e' in int3c:
+    #    cintopt = gto.moleintor.make_cintopt(atm, mol._bas, env, int3c)
+    #else:
+    #    cintopt = gto.moleintor.make_cintopt(atm, bas, env, int3c)
     cintopt = gto.moleintor.make_cintopt(atm, bas, env, int3c)
     bufs1 = numpy.empty((comp*max([x[2] for x in shranges]),naoaux))
 
@@ -193,7 +200,7 @@ def cholesky_eri_b(mol, erifile, auxbasis='weigend+etb', dataname='j3c',
 
 
 def general(mol, mo_coeffs, erifile, auxbasis='weigend+etb', dataname='eri_mo', tmpdir=None,
-            int3c='int3c2e_sph', aosym='s2ij', int2c='int2c2e_sph', comp=1,
+            int3c='int3c2e', aosym='s2ij', int2c='int2c2e', comp=1,
             max_memory=MAX_MEMORY, ioblk_size=IOBLK_SIZE, verbose=0, compact=True):
     ''' Transform ij of (ij|L) to MOs.
     '''

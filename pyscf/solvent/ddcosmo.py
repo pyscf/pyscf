@@ -441,7 +441,7 @@ class DDCOSMO(lib.StreamObject):
         self._keys = set(self.__dict__.keys())
 
     def dump_flags(self):
-        logger.info(self, '******** %s flags ********', self.__class__)
+        logger.info(self, '******** %s ********', self.__class__)
         logger.info(self, 'lebedev_order = %s (%d grids per sphere)',
                     self.lebedev_order, gen_grid.LEBEDEV_ORDER[self.lebedev_order])
         logger.info(self, 'lmax = %s'         , self.lmax)

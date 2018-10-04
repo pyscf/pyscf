@@ -62,10 +62,12 @@ class KnownValues(unittest.TestCase):
 
         j3c = df.incore.aux_e2(mol, auxmol, intor='int3c2e_sph', aosym='s1')
         self.assertTrue(numpy.allclose(eri0, j3c.reshape(nao,nao,naoaux)))
+        self.assertAlmostEqual(lib.finger(j3c), 48.11812978990752, 9)
 
         idx = numpy.tril_indices(nao)
         j3c = df.incore.aux_e2(mol, auxmol, intor='int3c2e_sph', aosym='s2ij')
         self.assertTrue(numpy.allclose(eri0[idx], j3c))
+        self.assertAlmostEqual(lib.finger(j3c), 4.6774743051154459, 9)
 
     def test_aux_e1(self):
         j3c1 = df.incore.aux_e1(mol, auxmol, intor='int3c2e', aosym='s2ij')

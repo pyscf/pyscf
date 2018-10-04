@@ -89,12 +89,42 @@ def kernel(hfcobj, with_gaunt=False, verbose=None):
         hfc.append(e01)
     return numpy.asarray(hfc)
 
-class HyperfineCoupling(dhf_ssc.SSC):
-    def __init__(self, mf):
-        dhf_ssc.SSC.__init__(self, mf)
+class HyperfineCoupling(lib.StreamObject):
+    def __init__(self, scf_method):
+        self.mol = scf_method.mol
+        self.verbose = scf_method.mol.verbose
+        self.stdout = scf_method.mol.stdout
+        self.chkfile = scf_method.chkfile
+        self._scf = scf_method
+
+        self.mb = 'sternheim' # or RMB, RKB
+
+        self.cphf = True
+        self.max_cycle_cphf = 20
+        self.conv_tol = 1e-9
+
+        self.mo10 = None
+        self.mo_e10 = None
+        self._keys = set(self.__dict__.keys())
+
+    def dump_flags(self):
+        log = logger.Logger(self.stdout, self.verbose)
+        log.info('\n')
+        log.info('******** %s for %s (In testing) ********',
+                 self.__class__, self._scf.__class__)
         lib.logger.warn(self, 'DHF-HFC is an experimental feature. It is '
                         'still in testing.\nFeatures and APIs may be changed '
                         'in the future.')
+        logger.info(self, 'nuc_pair %s', self.nuc_pair)
+        logger.info(self, 'mb = %s', self.mb)
+        if self.cphf:
+            log.info('Solving MO10 eq with CPHF.')
+            log.info('CPHF conv_tol = %g', self.conv_tol)
+            log.info('CPHF max_cycle_cphf = %d', self.max_cycle_cphf)
+        if not self._scf.converged:
+            log.warn('Ground state SCF is not converged')
+        return self
+
     kernel = kernel
 
 HFC = HyperfineCoupling
