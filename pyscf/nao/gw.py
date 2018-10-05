@@ -425,3 +425,7 @@ class gw(scf):
     self.etot_gw = etot+ecorr+self.energy_nuc()
     return self.etot_gw
     
+  def spin_square(self):
+    from pyscf.nao.mf import mf
+    mo_coeff = self.mo_coeff_gw if hasattr(self, 'mo_energy_gw') else self.mo_coeff
+    return mf.spin_square(self, mo_coeff=mo_coeff)

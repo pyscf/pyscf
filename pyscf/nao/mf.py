@@ -399,6 +399,27 @@ class mf(nao):
         p[iw] += 0.5*(t2osc*((t2o/(w-t2w))-(t2o/(w+t2w)))).sum()
       
     return p
+    
+  def spin_square(self, mo_coeff=None, mo_occ=None):
+    from functools import reduce
+    
+    if self.nspin==1:
+      return 0.0,1.0
+      
+    elif self.nspin==2:
+      
+      mo_coeff = self.mo_coeff if mo_coeff is None else mo_coeff
+      mo_occ = self.mo_occ if mo_occ is None else mo_occ
+
+      mo_a, mo_b = mo_coeff[0,0,mo_occ[0,0]>0,:,0], mo_coeff[0,1,mo_occ[0,1]>0,:,0]
+      nocc_a, nocc_b = mo_a.shape[0], mo_b.shape[0]
+      over = self.overlap_coo().toarray()
+      s = reduce(np.dot, (mo_a, over, mo_b.T))
+      ssxy = (nocc_a+nocc_b) * 0.5 - np.einsum('ij,ij->', s.conj(), s)
+      ssz = (nocc_b-nocc_a)**2 * 0.25
+      ss = (ssxy + ssz).real
+      s = np.sqrt(ss+0.25) - 0.5
+    return ss, s*2+1
 
 #
 # Example of reading pySCF mean-field calculation.
