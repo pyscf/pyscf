@@ -401,21 +401,22 @@ class mf(nao):
     return p
     
   def spin_square(self, mo_coeff=None, mo_occ=None):
-    from functools import reduce
     
     if self.nspin==1:
       return 0.0,1.0
       
     elif self.nspin==2:
+      from functools import reduce
       
       mo_coeff = self.mo_coeff if mo_coeff is None else mo_coeff
       mo_occ = self.mo_occ if mo_occ is None else mo_occ
 
-      mo_a, mo_b = mo_coeff[0,0,mo_occ[0,0]>0,:,0], mo_coeff[0,1,mo_occ[0,1]>0,:,0]
+      mo_a = mo_coeff[0,0,mo_occ[0,0]>0,:,0]
+      mo_b = mo_coeff[0,1,mo_occ[0,1]>0,:,0]
       nocc_a, nocc_b = mo_a.shape[0], mo_b.shape[0]
       over = self.overlap_coo().toarray()
       s = reduce(np.dot, (mo_a, over, mo_b.T))
-      ssxy = (nocc_a+nocc_b) * 0.5 - np.einsum('ij,ij->', s.conj(), s)
+      ssxy = (nocc_a+nocc_b) * 0.5 - (s.conj()*s).sum()
       ssz = (nocc_b-nocc_a)**2 * 0.25
       ss = (ssxy + ssz).real
       s = np.sqrt(ss+0.25) - 0.5
