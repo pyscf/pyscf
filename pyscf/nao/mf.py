@@ -97,25 +97,18 @@ class mf(nao):
     from pyscf.nao.m_color import color as tc
     self.telec = kw['telec'] if 'telec' in kw else 0.0000317 # 10K
     self.mf = mf = kw['mf']
-    if type(mf.mo_energy) == tuple: 
-      self.nspin = len(mf.mo_energy)
-    elif type(mf.mo_energy) == np.ndarray:
-      self.nspin = 1
-      assert mf.mo_coeff.shape[0]==mf.mo_coeff.shape[1]
-      assert len(mf.mo_coeff.shape)==2
-    else:
-      raise RuntimeError(tc.RED+'unknown type of mo_energy %s %s' % (type(mf.mo_energy), tc.ENDC))
-    
     self.xc_code = mf.xc if hasattr(mf, 'xc') else 'HF'
     self.k2xyzw = np.array([[0.0,0.0,0.0,1.0]])
-    nspin,n=self.nspin,self.norbs
-
-    self.mo_occ = require( self.mf.mo_occ.reshape((1,self.nspin,n)), requirements='CW')
-    self.mo_energy = require( np.asarray(self.mf.mo_energy).reshape((1,self.nspin,n)), requirements='CW')
     
+    self.mo_energy = np.asarray(mf.mo_energy)
+    self.nspin = self.mo_energy.ndim
+    assert self.nspin in [1,2]
+    nspin,n=self.nspin,self.norbs
+    self.mo_energy = require( self.mo_energy.reshape((1, nspin, n)), requirements='CW')
+    self.mo_occ = require( mf.mo_occ.reshape((1,nspin,n)), requirements='CW')    
     self.mo_coeff =  require(zeros((1,nspin,n,n,1), dtype=self.dtype), requirements='CW')
     conv = conv_yzx2xyz_c(kw['gto'])
-    aaux = np.asarray(self.mf.mo_coeff).reshape((self.nspin,n,n))
+    aaux = np.asarray(mf.mo_coeff).reshape((nspin,n,n))
     for s in range(nspin):
       self.mo_coeff[0,s,:,:,0] = conv.conv_yzx2xyz_1d(aaux[s], conv.m_xyz2m_yzx).T
 
@@ -401,25 +394,26 @@ class mf(nao):
     return p
     
   def spin_square(self, mo_coeff=None, mo_occ=None):
+    from functools import reduce
+
+    mo_coeff = self.mo_coeff if mo_coeff is None else mo_coeff
+    mo_occ = self.mo_occ if mo_occ is None else mo_occ
     
     if self.nspin==1:
-      return 0.0,1.0
-      
+      mo_a = mo_coeff[0,0,mo_occ[0,0]>0,:,0]
+      mo_b = mo_coeff[0,0,mo_occ[0,0]>1,:,0]
     elif self.nspin==2:
-      from functools import reduce
-      
-      mo_coeff = self.mo_coeff if mo_coeff is None else mo_coeff
-      mo_occ = self.mo_occ if mo_occ is None else mo_occ
-
       mo_a = mo_coeff[0,0,mo_occ[0,0]>0,:,0]
       mo_b = mo_coeff[0,1,mo_occ[0,1]>0,:,0]
-      nocc_a, nocc_b = mo_a.shape[0], mo_b.shape[0]
-      over = self.overlap_coo().toarray()
-      s = reduce(np.dot, (mo_a, over, mo_b.T))
-      ssxy = (nocc_a+nocc_b) * 0.5 - (s.conj()*s).sum()
-      ssz = (nocc_b-nocc_a)**2 * 0.25
-      ss = (ssxy + ssz).real
-      s = np.sqrt(ss+0.25) - 0.5
+
+    nocc_a, nocc_b = mo_a.shape[0], mo_b.shape[0]
+    over = self.overlap_coo().toarray()
+    s = reduce(np.dot, (mo_a, over, mo_b.T))
+    ssxy = (nocc_a+nocc_b) * 0.5 - (s.conj()*s).sum()
+    ssz = (nocc_b-nocc_a)**2 * 0.25
+    ss = (ssxy + ssz).real
+    s = np.sqrt(ss+0.25) - 0.5
+    
     return ss, s*2+1
 
 #
