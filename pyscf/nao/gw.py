@@ -1,7 +1,5 @@
 from __future__ import print_function, division
 import sys, numpy as np
-from numpy import stack, dot, zeros, einsum, pi, log, array, require
-from pyscf.nao import scf
 from copy import copy
 from pyscf.nao.m_pack2den import pack2den_u, pack2den_l
 import time
@@ -10,8 +8,16 @@ from pyscf.nao.m_rf_den import rf_den
 from pyscf.nao.m_rf_den_pyscf import rf_den_pyscf
 from pyscf.data.nist import HARTREE2EV
 from pyscf.nao.m_valence import get_str_fin
-
 start_time = time.time()
+from timeit import default_timer as timer
+from numpy import stack, dot, zeros, einsum, pi, log, array, require
+from pyscf.data.nist import HARTREE2EV
+from pyscf.nao import scf
+from pyscf.nao.m_rf0_den import rf0_den, rf0_cmplx_ref_blk, rf0_cmplx_ref
+from pyscf.nao.m_rf0_den import rf0_cmplx_vertex_dp, rf0_cmplx_vertex_ac
+from pyscf.nao.m_rf_den import rf_den
+from pyscf.nao.m_rf_den_pyscf import rf_den_pyscf
+from pyscf.nao.m_valence import get_start
 
 class gw(scf):
   """ G0W0 with integration along imaginary axis """
@@ -319,10 +325,14 @@ class gw(scf):
     emfev = self.mo_energy[0].T * HARTREE2EV
     egwev = self.mo_energy_gw[0].T * HARTREE2EV
     file_name= ''.join(self.get_symbols())
+    file_name= re.sub('[^A-Za-z]', '', self.mol.atom)
+    # The output should be possible to write more concise...
     with open('report_'+file_name+'.out','w') as out_file:
+        print('Total energy G0W0\t{} Ha'.format(self.etot_gw))
         print('-'*30,'|G0W0 eigenvalues (eV)|','-'*30)
         out_file.write('-'*30+'|G0W0 eigenvalues (eV)|'+'-'*30+'\n')
         if self.nspin==1:
+            print('Energy-sorted MO indices \t {}'.format(self.argsort[0]))
             print("\n   n  %14s %14s %7s " % ("E_mf", "E_gw", "occ") )
             out_file.write("\n   n  %14s %14s %7s \n" % ("E_mf", "E_gw", "occ") )
             for ie,(emf,egw,f) in enumerate(zip(emfev,egwev,self.mo_occ[0].T)):
@@ -337,6 +347,8 @@ class gw(scf):
             print('G0W0 HOMO-LUMO gap  (eV):\t{:f}'.format(egwev[self.nfermi[0],0]-egwev[self.nfermi[0]-1,0]))
             out_file.write('G0W0 HOMO-LUMO gap  (eV):\t{:f}\n'.format(egwev[self.nfermi[0],0]-egwev[self.nfermi[0]-1,0]))
         elif self.nspin==2:
+            for s in range(2):
+              print('Energy-sorted MO indices for spin {}\t {}'.format(str(s+1),self.argsort[s][max(self.nocc_0t[s]-10,0):min(self.nocc_0t[s]+10, self.norbs)]))
             print("\n    n %14s %14s  %7s | %14s %14s  %7s" % ("E_mf_up", "E_gw_up", "occ_up", "E_mf_down", "E_gw_down", "occ_down"))
             out_file.write("\n    n %14s %14s  %7s | %14s %14s  %7s\n" % ("E_mf_up", "E_gw_up", "occ_up", "E_mf_down", "E_gw_down", "occ_down"))
             for ie,(emf,egw,f) in enumerate(zip(emfev,egwev,self.mo_occ[0].T)):
@@ -398,11 +410,13 @@ class gw(scf):
       argsrt = np.argsort(self.mo_energy_gw[0,s,:])
       self.argsort.append(argsrt)
       if self.verbosity>0: print(__name__, '\t\t====> Spin {}: energy-sorted MO indices: {}'.format(str(s+1),argsrt+1))
+      if self.verbosity>1: 
+        print(__name__, '\t\t====> Spin {}: energy-sorted MO indices: {}'.format(str(s+1),argsrt))
       self.mo_energy_gw[0,s,:] = np.sort(self.mo_energy_gw[0,s,:])
       for n,m in enumerate(argsrt): self.mo_coeff_gw[0,s,n] = self.mo_coeff[0,s,m]
  
     self.xc_code = 'GW'
-    if self.verbosity>0:
+    if self.verbosity>1:
       print(__name__,'\t\t====> Performed xc_code: {}\n '.format(self.xc_code))
       print('\nConverged GW-corrected eigenvalues:\n',self.mo_energy_gw*HARTREE2EV)
     
@@ -427,6 +441,11 @@ class gw(scf):
     for spin, (n2egw, m2emf, m2occ, n2m) in enumerate(zip(self.mo_energy_gw[0],self.mo_energy[0],self.mo_occ[0],self.argsort)):
       for n, m in enumerate(n2m):
         ecorr -= 0.5*m2occ[m]*(n2egw[n]-m2emf[m])
-
-    return etot+ecorr+self.energy_nuc()
     
+    self.etot_gw = etot+ecorr+self.energy_nuc()
+    return self.etot_gw
+    
+  def spin_square(self):
+    from pyscf.nao.mf import mf
+    mo_coeff = self.mo_coeff_gw if hasattr(self, 'mo_energy_gw') else self.mo_coeff
+    return mf.spin_square(self, mo_coeff=mo_coeff)

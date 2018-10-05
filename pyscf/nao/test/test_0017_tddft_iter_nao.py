@@ -22,7 +22,6 @@ class KnowValues(unittest.TestCase):
     self.assertEqual(td.xocc[0].shape[0], 4)
     self.assertEqual(td.xvrt[0].shape[0], 19)
     dn0 = td.apply_rf0(td.moms1[:,0])
-    print(__name__, dn0.sum())
 
   def test_tddft_iter_gpu(self):
     """ Test GPU version """

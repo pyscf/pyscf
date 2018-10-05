@@ -3,7 +3,7 @@ import sys, numpy as np
 from pyscf.nao.tddft_iter import tddft_iter
 from pyscf.scf import hf, uhf
 from copy import copy
-from pyscf.nao.m_pack2den import pack2den_u, pack2den_l
+from pyscf.nao.m_pack2den import pack2den_u
 from pyscf.nao.m_vhartree_coo import vhartree_coo
 from timeit import default_timer as timer
 
@@ -24,7 +24,7 @@ class scf(tddft_iter):
     self.xc_code_kernel = copy(self.xc_code)
     self.xc_code = self.xc_code_mf
     self.dm_mf   = self.make_rdm1() # necessary to get_hcore(...) in case of pp starting point
-    self.hkernel_den = pack2den_l(self.kernel)
+    self.hkernel_den = pack2den_u(self.kernel)
     if self.nspin==1:
       self.pyscf_scf = hf.SCF(self)
     else:
@@ -74,7 +74,7 @@ class scf(tddft_iter):
       # This is wrong after a repeated SCF. A better way would be to use pseudo-potentials and really recompute.
       tkin = (0.5*self.laplace_coo()).tocsr()
       vhar = self.vhartree_coo(dm=self.dm_mf, **kw).tocsr()
-      vxc  = self.vxc_lil(dm=self.dm_mf, xc_code=self.xc_code_mf, **kw).tocsr()
+      vxc  = self.vxc_lil(dm=self.dm_mf, xc_code=self.xc_code_mf, **kw)[0].tocsr()
       vne  = self.get_hamiltonian()[0].tocsr()-tkin-vhar-vxc
     else :
       vne  = self.vnucele_coo_coulomb(**kw)

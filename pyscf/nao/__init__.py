@@ -39,4 +39,4 @@ from .scf import scf
 from .gw import gw
 from .tddft_tem import tddft_tem
 from .bse_iter import bse_iter
-from .m_polariz_inter_ave import polariz_inter_ave, polariz_nonin_ave
+from .m_polariz_inter_ave import polariz_inter_ave, polariz_nonin_ave, polariz_freq_osc_strength
