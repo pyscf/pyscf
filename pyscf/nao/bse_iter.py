@@ -247,7 +247,7 @@ class bse_iter(gw):
     """ Non-interacting average polarizability, i.e. <d |L0| d>"""
     p = np.zeros(len(comegas), dtype=self.dtypeComplex)
     for iw,omega in enumerate(comegas):
-      for dip in self.dip_ab:
+      for ixyz,dip in enumerate(self.dip_ab):
         if self.verbosity>1: print(__name__, ixyz, iw)
         d = np.concatenate([dip.reshape(-1) for s in range(self.nspin)])
         vab = self.apply_l0(d, omega)
@@ -258,7 +258,7 @@ class bse_iter(gw):
     """ Compute a direction-averaged interacting polarizability, i.e. <d |L| d>  """
     p = np.zeros(len(comegas), dtype=self.dtypeComplex)
     for iw,omega in enumerate(comegas):
-      for dip in self.dip_ab:
+      for ixyz,dip in enumerate(self.dip_ab):
         if self.verbosity>1: print(__name__, ixyz, iw)
         d = np.concatenate([dip.reshape(-1) for s in range(self.nspin)])
         vab = self.apply_l(d, omega)
