@@ -44,7 +44,8 @@ def xc_scalar_ni(me, sp1,R1, sp2,R2, xc_code, deriv, **kw):
   elif me.sv.nspin==2:
     msk = np.logical_or(rho[:,0]<THRS, rho[:,1]<THRS)
     rho[msk,0],rho[msk,1] = 0.0,0.0
-  
+
+  print(__name__, sum(rho))  
   exc, vxc, fxc, kxc = libxc.eval_xc(xc_code, rho.T, spin=me.sv.nspin-1, deriv=deriv)
   ao1 = ao_eval(me.ao1, R1, sp1, grids.coords)
  
