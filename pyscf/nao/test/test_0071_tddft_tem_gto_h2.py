@@ -18,7 +18,7 @@ nao_td  = tddft_tem(mf=gto_mf, gto=mol)
 class KnowValues(unittest.TestCase):
     
   def test_tddft_tem(self):
-    """ Interacting case """
+    """ EELS for the hydrogen dimer """
     p_iter = -nao_td.get_spectrum_inter().imag
     data = np.array([nao_td.freq.real*27.2114, p_iter])
     np.savetxt('hydrogen.tddft_tem_lda.omega.inter.pav.txt', data.T, fmt=['%f','%f'])

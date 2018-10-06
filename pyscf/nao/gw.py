@@ -1,17 +1,23 @@
 from __future__ import print_function, division
 import sys, numpy as np
-from numpy import stack, dot, zeros, einsum, pi, log, array, require
-from pyscf.nao import scf
 from copy import copy
 from pyscf.nao.m_pack2den import pack2den_u, pack2den_l
-from timeit import default_timer as timer
+import time
 from pyscf.nao.m_rf0_den import rf0_den, rf0_cmplx_ref_blk, rf0_cmplx_ref, rf0_cmplx_vertex_dp, rf0_cmplx_vertex_ac
 from pyscf.nao.m_rf_den import rf_den
 from pyscf.nao.m_rf_den_pyscf import rf_den_pyscf
 from pyscf.data.nist import HARTREE2EV
 from pyscf.nao.m_valence import get_str_fin
+from timeit import default_timer as timer
+from numpy import stack, dot, zeros, einsum, pi, log, array, require
+from pyscf.data.nist import HARTREE2EV
+from pyscf.nao import scf
+from pyscf.nao.m_rf0_den import rf0_den, rf0_cmplx_ref_blk, rf0_cmplx_ref
+from pyscf.nao.m_rf0_den import rf0_cmplx_vertex_dp, rf0_cmplx_vertex_ac
+from pyscf.nao.m_rf_den import rf_den
+from pyscf.nao.m_rf_den_pyscf import rf_den_pyscf
 
-starting_time=timer()
+start_time = time.time()
 class gw(scf):
   """ G0W0 with integration along imaginary axis """
   
@@ -318,15 +324,20 @@ class gw(scf):
     emfev = self.mo_energy[0].T * HARTREE2EV
     egwev = self.mo_energy_gw[0].T * HARTREE2EV
     file_name= ''.join(self.get_symbols())
+    file_name= re.sub('[^A-Za-z]', '', self.mol.atom)
+    # The output should be possible to write more concise...
     with open('report_'+file_name+'.out','w') as out_file:
         print('-'*30,'|G0W0 eigenvalues (eV)|','-'*30)
         out_file.write('-'*30+'|G0W0 eigenvalues (eV)|'+'-'*30+'\n')
         if self.nspin==1:
+            print('Energy-sorted MO indices \t {}'.format(self.argsort[0]))
             print("\n   n  %14s %14s %7s " % ("E_mf", "E_gw", "occ") )
+            out_file.write("\n   n  %14s %14s %7s \n" % ("E_mf", "E_gw", "occ") )
             for ie,(emf,egw,f) in enumerate(zip(emfev,egwev,self.mo_occ[0].T)):
                 print("%5d  %14.7f %14.7f %7.2f " % (ie, emf[0], egw[0], f[0]) )
-            print('Fermi energy        (eV):\t{:f}'.format(self.fermi_energy* HARTREE2EV))
-            out_file.write('Fermi energy        (eV):\t{:f}\n'.format(self.fermi_energy* HARTREE2EV))            
+                out_file.write("%5d  %14.7f %14.7f %7.2f\n" % (ie, emf[0], egw[0], f[0]) )
+            print('\nFermi energy        (eV):\t{:f}'.format(self.fermi_energy* HARTREE2EV))
+            out_file.write('\nFermi energy        (eV):\t{:f}\n'.format(self.fermi_energy* HARTREE2EV))            
             print('G0W0 HOMO energy    (eV):\t{:f}'.format(egwev[self.nfermi[0]-1,0]))
             out_file.write('G0W0 HOMO energy    (eV):\t{:f}\n'.format(egwev[self.nfermi[0]-1,0]))
             print('G0W0 LUMO energy    (eV):\t{:f}'.format(egwev[self.nfermi[0],0]))
@@ -334,13 +345,15 @@ class gw(scf):
             print('G0W0 HOMO-LUMO gap  (eV):\t{:f}'.format(egwev[self.nfermi[0],0]-egwev[self.nfermi[0]-1,0]))
             out_file.write('G0W0 HOMO-LUMO gap  (eV):\t{:f}\n'.format(egwev[self.nfermi[0],0]-egwev[self.nfermi[0]-1,0]))
         elif self.nspin==2:
+            for s in range(2):
+              print('Energy-sorted MO indices for spin {}\t {}'.format(str(s+1),self.argsort[s][max(self.nocc_0t[s]-10,0):min(self.nocc_0t[s]+10, self.norbs)]))
             print("\n    n %14s %14s  %7s | %14s %14s  %7s" % ("E_mf_up", "E_gw_up", "occ_up", "E_mf_down", "E_gw_down", "occ_down"))
             out_file.write("\n    n %14s %14s  %7s | %14s %14s  %7s\n" % ("E_mf_up", "E_gw_up", "occ_up", "E_mf_down", "E_gw_down", "occ_down"))
             for ie,(emf,egw,f) in enumerate(zip(emfev,egwev,self.mo_occ[0].T)):
-                print("%5d  %14.7f %14.7f %7.2f | %14.7f %14.7f %7.2f" % (ie+1, emf[0], egw[0], f[0],  emf[1], egw[1], f[1]) )
-                out_file.write ("%5d  %14.7f %14.7f %7.2f | %14.7f %14.7f %7.2f\n" % (ie+1, emf[0], egw[0], f[0],  emf[1], egw[1], f[1]) )
-            print('Fermi energy        (eV):\t{:f}'.format(self.fermi_energy* HARTREE2EV))
-            out_file.write('Fermi energy        (eV):\t{:f}\n'.format(self.fermi_energy* HARTREE2EV))
+                print("%5d  %14.7f %14.7f %7.2f | %14.7f %14.7f %7.2f" % (ie, emf[0], egw[0], f[0],  emf[1], egw[1], f[1]) )
+                out_file.write ("%5d  %14.7f %14.7f %7.2f | %14.7f %14.7f %7.2f\n" % (ie, emf[0], egw[0], f[0],  emf[1], egw[1], f[1]) )
+            print('\nFermi energy        (eV):\t{:f}'.format(self.fermi_energy* HARTREE2EV))
+            out_file.write('\nFermi energy        (eV):\t{:f}\n'.format(self.fermi_energy* HARTREE2EV))
             print('G0W0 HOMO energy    (eV):\t{:f}\t{:f}'.format(egwev[self.nfermi[0]-1,0],egwev[self.nfermi[1]-1,1]))
             out_file.write('G0W0 HOMO energy    (eV):\t{:f}\t{:f}\n'.format(egwev[self.nfermi[0]-1,0],egwev[self.nfermi[1]-1,1]))
             print('G0W0 LUMO energy    (eV):\t{:f}\t{:f}'.format(egwev[self.nfermi[0],0],egwev[self.nfermi[1],1]))
@@ -349,9 +362,11 @@ class gw(scf):
             out_file.write('G0W0 HOMO-LUMO gap  (eV):\t{:f}\t{:f}\n'.format(egwev[self.nfermi[0],0]-egwev[self.nfermi[0]-1,0],egwev[self.nfermi[1],1]-egwev[self.nfermi[1]-1,1]))
         else:
             raise RuntimeError('not implemented...')
-        t= int(timer() - starting_time)
-        print('\nTotal running time is: {:02d}:{:02d}:{:02d}\nJOB DONE!'.format(t // 3600, (t % 3600 // 60), t % 60))
-        out_file.write('\nTotal running time is: {:02d}:{:02d}:{:02d}\nJOB DONE!\n'.format(t // 3600, (t % 3600 // 60), t % 60))
+        print('G0W0 Total energy   (eV):\t{:0.4f}'.format(self.etot_gw*HARTREE2EV))
+        out_file.write('G0W0 Total energy   (eV):\t{:0.4f}'.format(self.etot_gw*HARTREE2EV))
+        elapsed_time = time.time() - start_time
+        print('\nTotal running time is: {}\nJOB DONE! \t {}'.format(time.strftime("%H:%M:%S", time.gmtime(elapsed_time)),time.strftime("%c")))
+        out_file.write('\nTotal running time is: {}\nJOB DONE! \t {}'.format(time.strftime("%H:%M:%S", time.gmtime(elapsed_time)),time.strftime("%c")))
         out_file.close
  
     
@@ -360,9 +375,14 @@ class gw(scf):
 
     self.h0_vh_x_expval = self.get_h0_vh_x_expval()
     if self.verbosity>2:
-      print(__name__,'\t\t====> Expectation values of Hartree-Fock Hamiltonian (eV):\n no.\t  H_up\t\t  H_down')
-      for i , (ab) in enumerate(zip(self.h0_vh_x_expval[0].T* HARTREE2EV,self.h0_vh_x_expval[1].T* HARTREE2EV)):
-	      print(' {:d}\t{:f}\t{:f}'.format(i+1, ab[0],ab[1]))
+      if self.nspin==1:
+        print(__name__,'\t\t====> Expectation values of Hartree-Fock Hamiltonian (eV):\n  no.\t\t<H>')
+        for i, ab in enumerate(zip(self.h0_vh_x_expval[0].T*HARTREE2EV)):
+            print (' %3d  %16.6f'%(i+1,ab[0]))
+      if self.nspin==2:
+        print(__name__,'\t\t====> Expectation values of Hartree-Fock Hamiltonian (eV):\n  no.\t\t<H_up>  |\t\t<H_dn>')        
+        for i , (ab) in enumerate(zip(self.h0_vh_x_expval[0].T* HARTREE2EV,self.h0_vh_x_expval[1].T* HARTREE2EV)):
+	        print(' %3d  %16.6f  | %12.6f'%(i+1, ab[0],ab[1]))
 
     if not hasattr(self,'sn2eval_gw'): self.sn2eval_gw=self.g0w0_eigvals() # Comp. GW-corrections
     
@@ -392,7 +412,7 @@ class gw(scf):
       for n,m in enumerate(argsrt): self.mo_coeff_gw[0,s,n] = self.mo_coeff[0,s,m]
  
     self.xc_code = 'GW'
-    if self.verbosity>0:
+    if self.verbosity>1:
       print(__name__,'\t\t====> Performed xc_code: {}\n '.format(self.xc_code))
       print('\nConverged GW-corrected eigenvalues:\n',self.mo_energy_gw*HARTREE2EV)
     
@@ -417,6 +437,11 @@ class gw(scf):
     for spin, (n2egw, m2emf, m2occ, n2m) in enumerate(zip(self.mo_energy_gw[0],self.mo_energy[0],self.mo_occ[0],self.argsort)):
       for n, m in enumerate(n2m):
         ecorr -= 0.5*m2occ[m]*(n2egw[n]-m2emf[m])
-
-    return etot+ecorr+self.energy_nuc()
     
+    self.etot_gw = etot+ecorr+self.energy_nuc()
+    return self.etot_gw
+    
+  def spin_square(self):
+    from pyscf.nao.mf import mf
+    mo_coeff = self.mo_coeff_gw if hasattr(self, 'mo_energy_gw') else self.mo_coeff
+    return mf.spin_square(self, mo_coeff=mo_coeff)
