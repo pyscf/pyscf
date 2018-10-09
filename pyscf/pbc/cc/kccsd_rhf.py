@@ -1331,6 +1331,10 @@ def _init_df_eris(cc, eris):
 
     cell = cc._scf.cell
     if cell.dimension == 2:
+        # 2D ERIs are not positive definite. The 3-index tensors are stored in
+        # two part. One corresponds to the positive part and one corresponds
+        # to the negative part. The negative part is not considered in the
+        # DF-driven CCSD implementation.
         raise NotImplementedError
 
     nocc = cc.nocc
