@@ -346,7 +346,7 @@ def ipccsd_matvec(eom, vector, kshift, imds=None, diag=None):
                                       r2[km, ki])
 
     tmp = lib.einsum('xymnef,xymnf->e', imds.Woovv[:, :, kshift], r2[:, :])  # contract_{km, kn}
-    Hr2[:, :] += 0.5 * lib.einsum('e,xyjiea->xyija', tmp, imds.t2[:, :, kshift])  # sum_{ki, kj}
+    Hr2[:, :] += 0.5 * lib.einsum('e,yxjiea->xyija', tmp, imds.t2[:, :, kshift])  # sum_{ki, kj}
 
     vector = amplitudes_to_vector_ip(Hr1, Hr2)
     return vector
