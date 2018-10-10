@@ -34,8 +34,12 @@ from pyscf.lib import logger
 from pyscf.mp import mp2
 from pyscf.pbc.lib import kpts_helper
 from pyscf.lib.parameters import LARGE_DENOM
+from pyscf import __config__
 
-def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE):
+WITH_T2 = getattr(__config__, 'mp_mp2_with_t2', True)
+
+
+def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE, with_t2=WITH_T2):
     nmo = mp.nmo
     nocc = mp.nocc
     nvir = nmo - nocc
@@ -54,6 +58,11 @@ def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE):
 
     # Get location of non-zero/padded elements in occupied and virtual space
     nonzero_opadding, nonzero_vpadding = padding_k_idx(mp, kind="split")
+
+    if with_t2:
+        t2 = np.empty((nkpts, nkpts, nkpts, nocc, nocc, nvir, nvir))
+    else:
+        t2 = None
 
     for ki in range(nkpts):
       for kj in range(nkpts):
@@ -80,12 +89,14 @@ def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE):
 
             eijab = lib.direct_sum('ia,jb->ijab',eia,ejb)
             t2_ijab = np.conj(oovv_ij[ka]/eijab)
+            if with_t2:
+                t2[ki, kj, ka] = t2_ijab
             woovv = 2*oovv_ij[ka] - oovv_ij[kb].transpose(0,1,3,2)
             emp2 += np.einsum('ijab,ijab', t2_ijab, woovv).real
 
     emp2 /= nkpts
 
-    return emp2, None
+    return emp2, t2
 
 
 def padding_k_idx(mp, kind="split"):
@@ -441,7 +452,7 @@ class KMP2(mp2.MP2):
     get_nmo = get_nmo
     get_frozen_mask = get_frozen_mask
 
-    def kernel(self, mo_energy=None, mo_coeff=None):
+    def kernel(self, mo_energy=None, mo_coeff=None, with_t2=WITH_T2):
         if mo_energy is None:
             mo_energy = self.mo_energy
         if mo_coeff is None:
@@ -455,7 +466,7 @@ class KMP2(mp2.MP2):
         mo_coeff, mo_energy = _add_padding(self, mo_coeff, mo_energy)
 
         self.e_corr, self.t2 = \
-                kernel(self, mo_energy, mo_coeff, verbose=self.verbose)
+                kernel(self, mo_energy, mo_coeff, verbose=self.verbose, with_t2=with_t2)
         logger.log(self, 'KMP2 energy = %.15g', self.e_corr)
         return self.e_corr, self.t2
 KRMP2 = KMP2
