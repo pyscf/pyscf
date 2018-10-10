@@ -60,7 +60,7 @@ def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE, with_t2=WITH_T2):
     nonzero_opadding, nonzero_vpadding = padding_k_idx(mp, kind="split")
 
     if with_t2:
-        t2 = np.empty((nkpts, nkpts, nkpts, nocc, nocc, nvir, nvir))
+        t2 = np.zeros((nkpts, nkpts, nkpts, nocc, nocc, nvir, nvir))
     else:
         t2 = None
 
