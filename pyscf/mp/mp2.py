@@ -92,7 +92,7 @@ def make_rdm1_ao(mp, mo_energy=None, mo_coeff=None, eris=None, verbose=logger.NO
     return rdm1
 
 def make_rdm1(mp, t2=None, eris=None, verbose=logger.NOTE):
-    '''Spin-traced one-particle density matrix in the AO basis representation.
+    '''Spin-traced one-particle density matrix in the MO basis representation.
     The occupied-virtual orbital response is not included.
 
     dm1[p,q] = <q_alpha^\dagger p_alpha> + <q_beta^\dagger p_beta>
