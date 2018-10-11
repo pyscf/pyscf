@@ -28,9 +28,10 @@ eri of size (nkpts,nocc,nocc,nvir,nvir)
 
 import time
 import numpy as np
+from scipy.linalg import block_diag
 
 from pyscf import lib
-from pyscf.lib import logger
+from pyscf.lib import logger, einsum
 from pyscf.mp import mp2
 from pyscf.pbc.lib import kpts_helper
 from pyscf.lib.parameters import LARGE_DENOM
@@ -60,7 +61,7 @@ def kernel(mp, mo_energy, mo_coeff, verbose=logger.NOTE, with_t2=WITH_T2):
     nonzero_opadding, nonzero_vpadding = padding_k_idx(mp, kind="split")
 
     if with_t2:
-        t2 = np.zeros((nkpts, nkpts, nkpts, nocc, nocc, nvir, nvir))
+        t2 = np.zeros((nkpts, nkpts, nkpts, nocc, nocc, nvir, nvir), dtype=complex)
     else:
         t2 = None
 
@@ -420,6 +421,68 @@ def _add_padding(mp, mo_coeff, mo_energy):
     return mo_coeff, mo_energy
 
 
+def make_rdm1(mp, t2=None, kind="compact"):
+    """
+    Spin-traced one-particle density matrix in the MO basis representation.
+    The occupied-virtual orbital response is not included.
+
+    dm1[p,q] = <q_alpha^\dagger p_alpha> + <q_beta^\dagger p_beta>
+
+    The convention of 1-pdm is based on McWeeney's book, Eq (5.4.20).
+    The contraction between 1-particle Hamiltonian and rdm1 is
+    E = einsum('pq,qp', h1, rdm1)
+
+    Args:
+        mp (KMP2): a KMP2 kernel object;
+        t2 (ndarray): a t2 MP2 tensor;
+        kind (str): either 'compact' or 'padded' - defines behavior for k-dependent MO basis sizes;
+
+    Returns:
+        A k-dependent single-particle density matrix.
+    """
+    if kind not in ("compact", "padded"):
+        raise ValueError("The 'kind' argument should be either 'compact' or 'padded'")
+    d_imds = _gamma1_intermediates(mp, t2=t2)
+    result = []
+    padding_idxs = padding_k_idx(mp, kind="joint")
+    for (oo, vv), idxs in zip(zip(*d_imds), padding_idxs):
+        oo += np.eye(*oo.shape)
+        d = block_diag(oo, vv)
+        d += d.conj().T
+        if kind == "padded":
+            result.append(d)
+        else:
+            result.append(d[np.ix_(idxs, idxs)])
+    return result
+
+
+def _gamma1_intermediates(mp, t2=None):
+    # Memory optimization should be here
+    if t2 is None:
+        t2 = mp.t2
+    if t2 is None:
+        raise NotImplementedError("Run kmp2.kernel with `with_t2=True`")
+    nmo = mp.nmo
+    nocc = mp.nocc
+    nvir = nmo - nocc
+    nkpts = mp.nkpts
+    dtype = t2.dtype
+
+    dm1occ = np.zeros((nkpts, nocc, nocc), dtype=dtype)
+    dm1vir = np.zeros((nkpts, nvir, nvir), dtype=dtype)
+
+    for ki in range(nkpts):
+        for kj in range(nkpts):
+            for ka in range(nkpts):
+                kb = mp.khelper.kconserv[ki, ka, kj]
+
+                dm1vir[kb] += einsum('ijax,ijay->yx', t2[ki][kj][ka].conj(), t2[ki][kj][ka]) * 2 -\
+                              einsum('ijax,ijya->yx', t2[ki][kj][ka].conj(), t2[ki][kj][kb])
+                dm1occ[kj] += einsum('ixab,iyab->xy', t2[ki][kj][ka].conj(), t2[ki][kj][ka]) * 2 -\
+                              einsum('ixab,iyba->xy', t2[ki][kj][ka].conj(), t2[ki][kj][kb])
+    return -dm1occ, dm1vir
+
+
 class KMP2(mp2.MP2):
     def __init__(self, mf, frozen=0, mo_coeff=None, mo_occ=None):
 
@@ -451,6 +514,7 @@ class KMP2(mp2.MP2):
     get_nocc = get_nocc
     get_nmo = get_nmo
     get_frozen_mask = get_frozen_mask
+    make_rdm1 = make_rdm1
 
     def kernel(self, mo_energy=None, mo_coeff=None, with_t2=WITH_T2):
         if mo_energy is None:
