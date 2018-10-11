@@ -90,7 +90,9 @@ class nao():
       self.init_fireball(**kw)
     else:
       raise RuntimeError('unknown init method')
-    
+
+    self._keys = set(self.__dict__.keys())
+
     #print(kw)
     #print(dir(kw))
 

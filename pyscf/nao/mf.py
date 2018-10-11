@@ -3,6 +3,7 @@ import numpy as np
 from numpy import require, zeros, array, where, unravel_index, einsum
 from pyscf.nao import nao, prod_basis
 from pyscf.nao import conv_yzx2xyz_c
+from pyscf.dft.rks import _dft_common_init_
     
 #
 #
@@ -30,21 +31,28 @@ class mf(nao):
       self.init_mo_coeff_label(**kw)
       self.k2xyzw = self.xml_dict["k2xyzw"]
       self.xc_code = 'LDA,PZ' # just a guess...
+      self.mol = self
     elif 'wfsx_fname' in kw: # init KS orbitals with WFSX file from SIESTA output
       self.init_mo_coeff_wfsx(**kw)
       self.xc_code = 'LDA,PZ' # just a guess...
+      self.mol = self
     elif 'fireball' in kw: # init KS orbitals with Fireball
       self.init_mo_coeff_fireball(**kw)
       self.xc_code = 'GGA,PBE' # just a guess...
+      self.mol = self
     elif 'gpaw' in kw:
       self.init_mo_coeff_label(**kw)
       self.k2xyzw = np.array([[0.0,0.0,0.0,1.0]])
       self.xc_code = 'LDA,PZ' # just a guess, but in case of GPAW there is a field...
+      self.mol = self
     elif 'openmx' in kw:
       self.xc_code = 'GGA,PBE' # just a guess...
+      self.mol = self
       pass
     else:
       raise RuntimeError('unknown constructor')
+
+    #_dft_common_init_(self)
 
     if self.verbosity>0:
       print(__name__,'\t\t====> self.pseudo: ', self.pseudo)
