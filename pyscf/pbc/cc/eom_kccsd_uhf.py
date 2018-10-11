@@ -120,8 +120,8 @@ def ipccsd_matvec(eom, vector, kshift, imds=None, diag=None):
             Hr2[ki, kj] -= lib.einsum('maej,mie->ija', imds.Wovvo[km, ka, ke],
                                       r2[km, ki])
 
-    tmp = lib.einsum('xymnef,xymnf->e', imds.Woovv[:, :, kshift], r2[:, :])  # contract_{km, kn}
-    Hr2[:, :] += 0.5 * lib.einsum('e,xyjiea->xyija', tmp, imds.t2[:, :, kshift])  # sum_{ki, kj}
+    #tmp = lib.einsum('xymnef,xymnf->e', imds.Woovv[:, :, kshift], r2[:, :])  # contract_{km, kn}
+    #Hr2[:, :] += 0.5 * lib.einsum('e,xyjiea->yxija', tmp, imds.t2[:, :, kshift])  # sum_{ki, kj}
 
     # molecular version of ipccsd
 
@@ -213,25 +213,29 @@ def ipccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     ##Hr2bbb += tmp - tmp.transpose(1, 0, 2)
 
     ## T2 term, Wovov
-    #tmp_aaa = lib.einsum('xymenf,xymnf->e', uccsd_imds.Wovov[:,kshift,:], r2aaa)
-    #tmp_bbb = lib.einsum('xyMENF,xyMNF->E', uccsd_imds.WOVOV[:,kshift,:], r2bbb)
-    #tmp_abb = lib.einsum('xymeNF,xymNF->e', uccsd_imds.WovOV[:,kshift,:], r2abb)
-    #tmp_baa = lib.einsum('xyMEnf,xyMnf->E', uccsd_imds.WOVov[:,kshift,:], r2baa)
+    tmp_aaa = lib.einsum('xymenf,xymnf->e', uccsd_imds.Wovov[:,kshift,:], r2aaa)
+    tmp_bbb = lib.einsum('xyMENF,xyMNF->E', uccsd_imds.WOVOV[:,kshift,:], r2bbb)
+    tmp_abb = lib.einsum('xymeNF,xymNF->e', uccsd_imds.WovOV[:,kshift,:], r2abb)
+    tmp_baa = np.zeros(tmp_bbb.shape, dtype=tmp_bbb.dtype)
+    for km, kn in itertools.product(range(nkpts), repeat=2):
+        kf = kconserv[kn, kshift, km]
+        tmp_baa += lib.einsum('nfME, Mnf->E', uccsd_imds.WovOV[kn, kf, km], r2baa[km, kn])
 
-    #for ki, kj in itertools.product(range(nkpts), repeat=2):
-    #    kb = kconserv[ki, kshift, kj]
 
-    #    Hr2aaa[ki,kj] -= 0.5 * lib.einsum('e,jibe->ijb', tmp_aaa, t2aa[kj,ki,kb])
-    #    Hr2aaa[ki,kj] -= lib.einsum('e,jibe->ijb', tmp_abb, t2aa[kj,ki,kb])
+    for ki, kj in itertools.product(range(nkpts), repeat=2):
+        kb = kconserv[ki, kshift, kj]
 
-    #    Hr2abb[ki,kj] -= 0.5 * lib.einsum('e,iJeB->iJB', tmp_aaa, t2ab[ki,kj,kshift])
-    #    Hr2abb[ki,kj] -= lib.einsum('e,iJeB->iJB', tmp_abb, t2ab[ki,kj,kshift])
+        Hr2aaa[ki,kj] -= 0.5 * lib.einsum('e,jibe->ijb', tmp_aaa, t2aa[kj,ki,kb])
+        Hr2aaa[ki,kj] -= lib.einsum('e,jibe->ijb', tmp_abb, t2aa[kj,ki,kb])
 
-    #    Hr2baa[ki,kj] -= 0.5 * lib.einsum('E,jIbE->Ijb', tmp_bbb, t2ab[kj,ki,kb])
-    #    Hr2baa[ki,kj] -= lib.einsum('E,jIbE->Ijb', tmp_baa, t2ab[kj,ki,kb])
+        Hr2abb[ki,kj] -= 0.5 * lib.einsum('e,iJeB->iJB', tmp_aaa, t2ab[ki,kj,kshift])
+        Hr2abb[ki,kj] -= lib.einsum('e,iJeB->iJB', tmp_abb, t2ab[ki,kj,kshift])
 
-    #    Hr2bbb[ki,kj] -= 0.5 * lib.einsum('E,JIBE->IJB', tmp_bbb, t2bb[kj,ki,kb])
-    #    Hr2bbb[ki,kj] -= lib.einsum('E,JIBE->IJB', tmp_baa, t2bb[kj,ki,kb])
+        Hr2baa[ki,kj] -= 0.5 * lib.einsum('E,jIbE->Ijb', tmp_bbb, t2ab[kj,ki,kb])
+        Hr2baa[ki,kj] -= lib.einsum('E,jIbE->Ijb', tmp_baa, t2ab[kj,ki,kb])
+
+        Hr2bbb[ki,kj] -= 0.5 * lib.einsum('E,JIBE->IJB', tmp_bbb, t2bb[kj,ki,kb])
+        Hr2bbb[ki,kj] -= lib.einsum('E,JIBE->IJB', tmp_baa, t2bb[kj,ki,kb])
 
     # j \/ b   |  i
     #    ---   |
@@ -381,8 +385,8 @@ def eaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
             kl = kconserv[kj, ka, kd]
             Hr2[kj, ka] -= lib.einsum('ladj,lbd->jab', imds.Wovvo[kl, ka, kd], r2[kl, kb])
 
-    tmp = lib.einsum('xyklcd,xylcd->k', imds.Woovv[kshift, :, :], r2[:, :])  # contract_{kl, kc}
-    Hr2[:, :] -= 0.5*lib.einsum('k,xykjab->xyjab', tmp, imds.t2[kshift, :, :])  # sum_{kj, ka]
+    #tmp = lib.einsum('xyklcd,xylcd->k', imds.Woovv[kshift, :, :], r2[:, :])  # contract_{kl, kc}
+    #Hr2[:, :] -= 0.5*lib.einsum('k,xykjab->xyjab', tmp, imds.t2[kshift, :, :])  # sum_{kj, ka]
 
     # molecular version of eaccsd
 
@@ -556,6 +560,29 @@ def eaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
 
 
     ## Woovv term
+    tmp_aaa = lib.einsum('xykcld, yxlcd->k', uccsd_imds.Wovov[kshift,:,:], r2aaa)
+    tmp_bbb = lib.einsum('xyKCLD, yxLCD->K', uccsd_imds.WOVOV[kshift,:,:], r2bbb)
+    tmp_bab = lib.einsum('xykcLD, yxLcD->k', uccsd_imds.WovOV[kshift], r2bab)
+    tmp_aba = np.zeros(tmp_bbb.shape, dtype = tmp_bbb.dtype)
+
+    for kl, kc in itertools.product(range(nkpts), repeat=2):
+        kd = kconserv[kl,kc,kshift]
+        tmp_aba += lib.einsum('ldKC, lCd->K', uccsd_imds.WovOV[kl,kd,kshift], r2aba[kl,kc])
+
+    Hr2aaa -= 0.5 * lib.einsum('k, xykjab->xyjab', tmp_aaa, t2aa[kshift])
+    Hr2bab -= 0.5 * lib.einsum('k, xykJaB->xyJaB', tmp_aaa, t2ab[kshift])
+
+    Hr2aaa -= lib.einsum('k, xykjab->xyjab', tmp_bab, t2aa[kshift])
+    Hr2bbb -= 0.5 * lib.einsum('K, xyKJAB->xyJAB', tmp_bbb, t2bb[kshift])
+
+    Hr2bbb -= lib.einsum('K, xyKJAB->xyJAB', tmp_aba, t2bb[kshift])
+    Hr2bab -= lib.einsum('k, xykJaB->xyJaB', tmp_bab, t2ab[kshift])
+
+
+    for kj, ka in itertools.product(range(nkpts), repeat=2):
+        kb = kconserv[kshift, ka, kj]
+        Hr2aba[kj, ka] -= lib.einsum('K, jKbA->jAb', tmp_aba, t2ab[kj, kshift, kb])
+        Hr2aba[kj, ka] -= 0.5 * einsum('K, jKbA->jAb', tmp_bbb, t2ab[kj, kshift, kb])
     #Hr2aaa -= 0.5 * lib.einsum('kcld,lcd,kjab->jab', imds.Wovov, r2aaa, t2aa)
     #Hr2bab -= 0.5 * lib.einsum('kcld,lcd,kJaB->JaB', imds.Wovov, r2aaa, t2ab)
 
@@ -621,7 +648,7 @@ class _IMDS:
         self.Wovov = eris.ovov - eris.ovov.transpose(2,1,0,5,4,3,6)
         self.WOVOV = eris.OVOV - eris.OVOV.transpose(2,1,0,5,4,3,6)
         self.WovOV = eris.ovOV
-        self.WOVov = eris.OVov
+        self.WOVov = None
 
         self._made_shared = True
         logger.timer_debug1(self, 'EOM-KCCSD shared intermediates', *cput0)
@@ -786,10 +813,10 @@ if __name__ == '__main__':
 
     print('ip Hr1a',   abs(lib.finger(Hr1a)   - (-0.34462696543560045-1.6104596956729178j)))
     print('ip Hr1b',   abs(lib.finger(Hr1b)   - (-0.055793611517250929+0.22169994342782473j)))
-    print('ip Hr2aaa', abs(lib.finger(Hr2aaa) - (0.64317341651618687-1.9454081575555195j)))
-    print('ip Hr2baa', abs(lib.finger(Hr2baa) - (2.8978462590588068+2.1220361054795198j)))
-    print('ip Hr2abb', abs(lib.finger(Hr2abb) - (1.5482378135185952-5.4536785087220636j)))
-    print('ip Hr2bbb', abs(lib.finger(Hr2bbb) - (0.43434684782030114+0.24259097270424451j)))
+    print('ip Hr2aaa', abs(lib.finger(Hr2aaa) - (0.692705827672665420-1.958639508839846943j)))
+    print('ip Hr2baa', abs(lib.finger(Hr2baa) - (2.892194153603884654+2.039530776282815872j)))
+    print('ip Hr2abb', abs(lib.finger(Hr2abb) - (1.618257685489421727-5.489218743953674817j)))
+    print('ip Hr2bbb', abs(lib.finger(Hr2bbb) - (0.479835513829048044+0.108406393138471210j)))
 
     # EA version
     myeom = EOMEA(mycc)
