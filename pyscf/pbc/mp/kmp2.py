@@ -450,7 +450,7 @@ def make_rdm1(mp, t2=None, kind="compact"):
         raise ValueError("The 'kind' argument should be either 'compact' or 'padded'")
     d_imds = _gamma1_intermediates(mp, t2=t2)
     result = []
-    padding_idxs = padding_k_idx(mp, kind="joint")
+    padding_idxs = padding_k_idx_mp(mp, kind="joint")
     for (oo, vv), idxs in zip(zip(*d_imds), padding_idxs):
         oo += np.eye(*oo.shape)
         d = block_diag(oo, vv)
