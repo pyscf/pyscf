@@ -37,6 +37,18 @@ from pyscf import __config__
 
 einsum = lib.einsum
 
+# --- list2array
+def mo_c_list_to_array(mo_coeff):
+    mo_coeff_tmp=[]
+    for js in range(2):
+     tmp_nk = len(mo_coeff[js])
+     tmp_nb = mo_coeff[js][0].shape[0]
+     tmp_array = np.zeros((tmp_nk,tmp_nb,tmp_nb),dtype=complex)
+     for ik in range(tmp_nk):
+      tmp_array[ik,:,:]=mo_coeff[0][ik][:,:]
+     mo_coeff_tmp.append(tmp_array)
+    return mo_coeff_tmp
+
 def update_amps(cc, t1, t2, eris):
     from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM
     time0 = time.clock(), time.time()
@@ -735,6 +747,9 @@ def _make_eris_incore(cc, mo_coeff=None):
     _kuccsd_eris_common_(cc, eris)
 
     thisdf = cc._scf.with_df
+    # --- list2array
+    mo_coeff = mo_c_list_to_array(mo_coeff)
+
     orbva = np.asarray(mo_coeff[0][:,:,nocca:], order='C')
     orbvb = np.asarray(mo_coeff[1][:,:,noccb:], order='C')
     eris.vvvv = thisdf.ao2mo_7d(orbva, factor=1./nkpts)
@@ -779,6 +794,8 @@ def _kuccsd_eris_common_(cc, eris, buf=None):
     mo_ea = [_adjust_occ(e, nocca, -madelung) for e in mo_ea]
     mo_eb = [_adjust_occ(e, noccb, -madelung) for e in mo_eb]
     eris.mo_energy = (mo_ea, mo_eb)
+    # --- list2array
+    mo_coeff = mo_c_list_to_array(mo_coeff)
 
     orboa = np.asarray(mo_coeff[0][:,:,:nocca], order='C')
     orbva = np.asarray(mo_coeff[0][:,:,nocca:], order='C')
