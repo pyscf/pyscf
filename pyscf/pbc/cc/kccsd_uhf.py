@@ -45,7 +45,7 @@ def mo_c_list_to_array(mo_coeff):
      tmp_nb = mo_coeff[js][0].shape[0]
      tmp_array = np.zeros((tmp_nk,tmp_nb,tmp_nb),dtype=complex)
      for ik in range(tmp_nk):
-      tmp_array[ik,:,:]=mo_coeff[0][ik][:,:]
+      tmp_array[ik,:,:]=mo_coeff[js][ik][:,:]
      mo_coeff_tmp.append(tmp_array)
     return mo_coeff_tmp
 
@@ -594,6 +594,9 @@ class KUCCSD(uccsd.UCCSD):
         uccsd.UCCSD.__init__(self, mf, frozen, mo_coeff, mo_occ)
         self.kpts = mf.kpts
         self.mo_energy = mf.mo_energy
+        if isinstance(self.mo_coeff[0],list):
+           self.mo_coeff=mo_c_list_to_array(self.mo_coeff)   
+
         self.khelper = kpts_helper.KptsHelper(mf.cell, self.kpts)
         self.direct = True  # If possible, use GDF to compute Wvvvv on-the-fly
 
@@ -747,9 +750,6 @@ def _make_eris_incore(cc, mo_coeff=None):
     _kuccsd_eris_common_(cc, eris)
 
     thisdf = cc._scf.with_df
-    # --- list2array
-    mo_coeff = mo_c_list_to_array(mo_coeff)
-
     orbva = np.asarray(mo_coeff[0][:,:,nocca:], order='C')
     orbvb = np.asarray(mo_coeff[1][:,:,noccb:], order='C')
     eris.vvvv = thisdf.ao2mo_7d(orbva, factor=1./nkpts)
@@ -794,9 +794,6 @@ def _kuccsd_eris_common_(cc, eris, buf=None):
     mo_ea = [_adjust_occ(e, nocca, -madelung) for e in mo_ea]
     mo_eb = [_adjust_occ(e, noccb, -madelung) for e in mo_eb]
     eris.mo_energy = (mo_ea, mo_eb)
-    # --- list2array
-    mo_coeff = mo_c_list_to_array(mo_coeff)
-
     orboa = np.asarray(mo_coeff[0][:,:,:nocca], order='C')
     orbva = np.asarray(mo_coeff[0][:,:,nocca:], order='C')
     orbob = np.asarray(mo_coeff[1][:,:,:noccb], order='C')
