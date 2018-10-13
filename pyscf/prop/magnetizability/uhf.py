@@ -70,7 +70,7 @@ def dia(magobj, gauge_orig=None):
         e2 -= numpy.einsum('xpq,qp->x', vk[0], dm0a)
         e2 -= numpy.einsum('xpq,qp->x', vk[1], dm0b)
 
-    return e2.reshape(3, 3)
+    return -e2.reshape(3, 3)
 
 
 # Note mo10 is the imaginary part of MO^1
@@ -129,7 +129,7 @@ def para(magobj, gauge_orig=None, h1=None, s1=None, with_cphf=None):
 
     mag_para-= numpy.einsum('xij,yij->xy', s1[0][:,occidxa], mo_e1[0])
     mag_para-= numpy.einsum('xij,yij->xy', s1[1][:,occidxb], mo_e1[1])
-    return mag_para
+    return -mag_para
 
 
 class Magnetizability(rhf_mag.Magnetizability):
@@ -153,16 +153,16 @@ if __name__ == '__main__':
     mag = Magnetizability(mf)
     mag.cphf = True
     m = mag.kernel()
-    print(lib.finger(m) - 0.43596639996758657)
+    print(lib.finger(m) - -0.43596639996758657)
 
     mag.gauge_orig = (0,0,1)
     m = mag.kernel()
-    print(lib.finger(m) - 0.76996086788058238)
+    print(lib.finger(m) - -0.76996086788058238)
 
     mag.gauge_orig = (0,0,1)
     mag.cphf = False
     m = mag.kernel()
-    print(lib.finger(m) - 0.7973915717274408)
+    print(lib.finger(m) - -0.7973915717274408)
 
 
     mol = gto.M(atom='''O      0.   0.       0.
@@ -173,4 +173,4 @@ if __name__ == '__main__':
     mag = Magnetizability(mf)
     mag.cphf = True
     m = mag.kernel()
-    print(lib.finger(m) - 4.6700053640388353)
+    print(lib.finger(m) - -4.6700053640388353)

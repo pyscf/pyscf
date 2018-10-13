@@ -93,22 +93,22 @@ def get_vxc_giao(ni, mol, grids, xc_code, dms, max_memory=2000, verbose=None):
             rks_nmr._gga_sum_(vmat[0], mol, ao, giao, wva, mask, shls_slice, ao_loc)
             rks_nmr._gga_sum_(vmat[1], mol, ao, giao, wvb, mask, shls_slice, ao_loc)
             rho = vxc = vrho = vsigma = wv = aow = None
-    else:
+    elif xctype == 'MGGA':
         raise NotImplementedError('meta-GGA')
 
     return vmat - vmat.transpose(0,1,3,2)
 
-def get_fock(self, mol=None, dm0=None, gauge_orig=None):
+def get_fock(nmrobj, mol=None, dm0=None, gauge_orig=None):
     '''First order Fock matrix wrt external magnetic field'''
-    if mol is None: mol = self.mol
-    if dm0 is None: dm0 = self._scf.make_rdm1()
-    if gauge_orig is None: gauge_orig = self.gauge_orig
+    if mol is None: mol = nmrobj.mol
+    if dm0 is None: dm0 = nmrobj._scf.make_rdm1()
+    if gauge_orig is None: gauge_orig = nmrobj.gauge_orig
 
     if gauge_orig is None:
-        log = logger.Logger(self.stdout, self.verbose)
+        log = logger.Logger(nmrobj.stdout, nmrobj.verbose)
         log.debug('First-order GIAO Fock matrix')
 
-        mf = self._scf
+        mf = nmrobj._scf
         ni = mf._numint
         omega, alpha, hyb = ni.rsh_and_hybrid_coeff(mf.xc, spin=mol.spin)
 
@@ -117,7 +117,7 @@ def get_fock(self, mol=None, dm0=None, gauge_orig=None):
         # Attach mo_coeff and mo_occ to improve get_vxc_giao efficiency
         dm0 = lib.tag_array(dm0, mo_coeff=mf.mo_coeff, mo_occ=mf.mo_occ)
         h1 = -get_vxc_giao(ni, mol, mf.grids, mf.xc, dm0,
-                           max_memory=max_memory, verbose=self.verbose)
+                           max_memory=max_memory, verbose=nmrobj.verbose)
 
         intor = mol._add_suffix('int2e_ig1')
         if abs(hyb) > 1e-10:
@@ -140,23 +140,23 @@ def get_fock(self, mol=None, dm0=None, gauge_orig=None):
         with mol.with_common_origin(gauge_orig):
             h1 = -.5 * mol.intor('int1e_cg_irxp', 3)
             h1 = (h1, h1)
-    if self.chkfile:
-        lib.chkfile.dump(self.chkfile, 'nmr/h1', h1)
+    if nmrobj.chkfile:
+        lib.chkfile.dump(nmrobj.chkfile, 'nmr/h1', h1)
     return h1
+
+def solve_mo1(nmrobj, mo_energy=None, mo_coeff=None, mo_occ=None,
+              h1=None, s1=None, with_cphf=None):
+    if with_cphf is None:
+        with_cphf = nmrobj.cphf
+    libxc = nmrobj._scf._numint.libxc
+    with_cphf = with_cphf and libxc.is_hybrid_xc(nmrobj._scf.xc)
+    return uhf_nmr.NMR.solve_mo1(nmrobj, mo_energy, mo_coeff, mo_occ,
+                                 h1, s1, with_cphf)
 
 
 class NMR(uhf_nmr.NMR):
-
     make_h10 = get_fock = get_fock
-
-    def solve_mo1(self, mo_energy=None, mo_coeff=None, mo_occ=None,
-                  h1=None, s1=None, with_cphf=None):
-        if with_cphf is None:
-            with_cphf = self.cphf
-        libxc = self._scf._numint.libxc
-        with_cphf = with_cphf and libxc.is_hybrid_xc(self._scf.xc)
-        return uhf_nmr.NMR.solve_mo1(self, mo_energy, mo_coeff, mo_occ,
-                                     h1, s1, with_cphf)
+    solve_mo1 = solve_mo1
 
 
 if __name__ == '__main__':

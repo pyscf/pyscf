@@ -33,6 +33,8 @@ from pyscf.data import nist
 
 
 def dia(nmrobj, mol=None, dm0=None, gauge_orig=None, shielding_nuc=None):
+    '''Diamagnetic part of NMR shielding tensors.
+    '''
     if mol is None: mol = nmrobj.mol
     if gauge_orig is None: gauge_orig = nmrobj.gauge_orig
     if shielding_nuc is None: shielding_nuc = nmrobj.shielding_nuc
@@ -76,6 +78,8 @@ def dia(nmrobj, mol=None, dm0=None, gauge_orig=None, shielding_nuc=None):
 
 def para(nmrobj, mol=None, mo10=None, mo_coeff=None, mo_occ=None,
          shielding_nuc=None):
+    '''Paramagnetic part of NMR shielding tensors.
+    '''
     if mol is None:           mol = nmrobj.mol
     if mo_coeff is None:      mo_coeff = nmrobj._scf.mo_coeff
     if mo_occ is None:        mo_occ = nmrobj._scf.mo_occ

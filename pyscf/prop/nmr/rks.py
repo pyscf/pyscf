@@ -73,7 +73,7 @@ def get_vxc_giao(ni, mol, grids, xc_code, dms, max_memory=2000, verbose=None):
             giao = mol.eval_gto('GTOval_ipig', coords, 9, non0tab=mask, out=buf[1:])
             _gga_sum_(vmat, mol, ao, giao, wv, mask, shls_slice, ao_loc)
             rho = vxc = vrho = vsigma = wv = aow = None
-    else:
+    elif xctype == 'MGGA':
         raise NotImplementedError('meta-GGA')
 
     return vmat - vmat.transpose(0,2,1)
@@ -141,18 +141,18 @@ def get_fock(nmrobj, mol=None, dm0=None, gauge_orig=None):
         lib.chkfile.dump(nmrobj.chkfile, 'nmr/h1', h1)
     return h1
 
+def solve_mo1(nmrobj, mo_energy=None, mo_coeff=None, mo_occ=None,
+              h1=None, s1=None, with_cphf=None):
+    if with_cphf is None:
+        with_cphf = nmrobj.cphf
+    libxc = nmrobj._scf._numint.libxc
+    with_cphf = with_cphf and libxc.is_hybrid_xc(nmrobj._scf.xc)
+    return rhf_nmr.solve_mo1(nmrobj, mo_energy, mo_coeff, mo_occ,
+                             h1, s1, with_cphf)
+
 class NMR(rhf_nmr.NMR):
-
     make_h10 = get_fock = get_fock
-
-    def solve_mo1(self, mo_energy=None, mo_coeff=None, mo_occ=None,
-                  h1=None, s1=None, with_cphf=None):
-        if with_cphf is None:
-            with_cphf = self.cphf
-        libxc = self._scf._numint.libxc
-        with_cphf = with_cphf and libxc.is_hybrid_xc(self._scf.xc)
-        return rhf_nmr.solve_mo1(self, mo_energy, mo_coeff, mo_occ,
-                                 h1, s1, with_cphf)
+    solve_mo1 = solve_mo1
 
 
 if __name__ == '__main__':
