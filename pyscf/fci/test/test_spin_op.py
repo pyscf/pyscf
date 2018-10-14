@@ -598,6 +598,8 @@ class KnownValues(unittest.TestCase):
         bak1 = fci.direct_spin1.contract_2e
         fci.addons.fix_spin_(fci.direct_spin1)
         e, ci0 = fci.direct_spin1.kernel(h1, h2, norb, nelec, ci0=c0)
+        fci.direct_spin0.contract_2e = bak0
+        fci.direct_spin1.contract_2e = bak1
         self.assertAlmostEqual(e, -25.4437866823, 9)
         self.assertAlmostEqual(fci.spin_op.spin_square0(ci0, norb, nelec)[0], 2, 9)
 
@@ -607,10 +609,10 @@ class KnownValues(unittest.TestCase):
         c0 = numpy.zeros((na,na))
         c0[0,0] = 1
         e, ci0 = fci.direct_spin0.kernel(h1, h2, norb, nelec, ci0=c0)
-        self.assertAlmostEqual(e, -25.4095560762, 7)
-        self.assertAlmostEqual(fci.spin_op.spin_square0(ci0, norb, nelec)[0], 0, 7)
         fci.direct_spin0.contract_2e = bak0
         fci.direct_spin1.contract_2e = bak1
+        self.assertAlmostEqual(e, -25.4095560762, 7)
+        self.assertAlmostEqual(fci.spin_op.spin_square0(ci0, norb, nelec)[0], 0, 7)
 
 
 if __name__ == "__main__":
