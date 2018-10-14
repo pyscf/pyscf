@@ -17,11 +17,7 @@
 #
 
 '''
-Non-relativistic rotational g-tensor for UHF
-
-Refs:
-[1] J. Gauss, K. Ruud, T. Helgaker, J. Chem. Phys., 105, 2804 (1996)
-[2] S. Sauer et al., Mol. Phys., 76, 445 (1991)
+Non-relativistic rotational g-tensor for UKS
 '''
 
 
@@ -55,7 +51,7 @@ def dia(magobj, gauge_orig=None):
 
 
 class RotationalGTensor(uhf_g.RotationalGTensor):
-    '''UHF rotational g-tensors'''
+    '''Rotational g-tensors for UKS'''
     dia = dia
     get_fock = uks_nmr.get_fock
     solve_mo1 = uks_nmr.solve_mo1

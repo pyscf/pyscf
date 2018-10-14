@@ -98,11 +98,12 @@ def get_vxc_giao(ni, mol, grids, xc_code, dms, max_memory=2000, verbose=None):
 
     return vmat - vmat.transpose(0,1,3,2)
 
-def get_fock(nmrobj, mol=None, dm0=None, gauge_orig=None):
+def get_fock(nmrobj, dm0=None, gauge_orig=None):
     '''First order Fock matrix wrt external magnetic field'''
-    if mol is None: mol = nmrobj.mol
     if dm0 is None: dm0 = nmrobj._scf.make_rdm1()
     if gauge_orig is None: gauge_orig = nmrobj.gauge_orig
+
+    mol = nmrobj.mol
 
     if gauge_orig is None:
         log = logger.Logger(nmrobj.stdout, nmrobj.verbose)
@@ -150,12 +151,12 @@ def solve_mo1(nmrobj, mo_energy=None, mo_coeff=None, mo_occ=None,
         with_cphf = nmrobj.cphf
     libxc = nmrobj._scf._numint.libxc
     with_cphf = with_cphf and libxc.is_hybrid_xc(nmrobj._scf.xc)
-    return uhf_nmr.NMR.solve_mo1(nmrobj, mo_energy, mo_coeff, mo_occ,
-                                 h1, s1, with_cphf)
+    return uhf_nmr.solve_mo1(nmrobj, mo_energy, mo_coeff, mo_occ,
+                             h1, s1, with_cphf)
 
 
 class NMR(uhf_nmr.NMR):
-    make_h10 = get_fock = get_fock
+    get_fock = get_fock
     solve_mo1 = solve_mo1
 
 

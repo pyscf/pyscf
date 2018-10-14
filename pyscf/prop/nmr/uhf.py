@@ -32,19 +32,19 @@ from pyscf.soscf.newton_ah import _gen_uhf_response
 from pyscf.prop.nmr import rhf as rhf_nmr
 
 
-def dia(nmrobj, mol=None, dm0=None, gauge_orig=None, shielding_nuc=None):
+def dia(nmrobj, gauge_orig=None, shielding_nuc=None, dm0=None):
     if dm0 is None: dm0 = nmrobj._scf.make_rdm1()
     if not (isinstance(dm0, numpy.ndarray) and dm0.ndim == 2):
         dm0 = dm0[0] + dm0[1]
-    return rhf_nmr.dia(nmrobj, mol, dm0, gauge_orig, shielding_nuc)
+    return rhf_nmr.dia(nmrobj, gauge_orig, shielding_nuc, dm0)
 
-def para(nmrobj, mol=None, mo10=None, mo_coeff=None, mo_occ=None,
+def para(nmrobj, mo10=None, mo_coeff=None, mo_occ=None,
          shielding_nuc=None):
-    if mol is None:           mol = nmrobj.mol
     if mo_coeff is None:      mo_coeff = nmrobj._scf.mo_coeff
     if mo_occ is None:        mo_occ = nmrobj._scf.mo_occ
     if shielding_nuc is None: shielding_nuc = nmrobj.shielding_nuc
 
+    mol = nmrobj.mol
     para_vir = numpy.empty((len(shielding_nuc),3,3))
     para_occ = numpy.empty((len(shielding_nuc),3,3))
     occidxa = mo_occ[0] > 0
@@ -94,15 +94,15 @@ def make_h10giao(mol, dm0):
     h1 -= mol.intor('int1e_igkin', 3)
     return h1
 
-def get_fock(nmrobj, mol=None, dm0=None, gauge_orig=None):
+def get_fock(nmrobj, dm0=None, gauge_orig=None):
     r'''First order partial derivatives of Fock matrix wrt external magnetic
     field.  \frac{\partial F}{\partial B}
     '''
-    if mol is None: mol = nmrobj.mol
     if dm0 is None: dm0 = nmrobj._scf.make_rdm1()
     if gauge_orig is None: gauge_orig = nmrobj.gauge_orig
+
     log = logger.Logger(nmrobj.stdout, nmrobj.verbose)
-    h1 = make_h10(mol, dm0, gauge_orig, log)
+    h1 = make_h10(nmrobj.mol, dm0, gauge_orig, log)
     if nmrobj.chkfile:
         lib.chkfile.dump(nmrobj.chkfile, 'nmr/h1', h1)
     return h1
@@ -159,7 +159,7 @@ def solve_mo1(nmrobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     orbob = mo_coeff[1][:,mo_occ[1]>0]
     if h1 is None:
         dm0 = nmrobj._scf.make_rdm1(mo_coeff, mo_occ)
-        h1 = nmrobj.get_fock(mol, dm0)
+        h1 = nmrobj.get_fock(dm0)
         h1 = (lib.einsum('xpq,pi,qj->xij', h1[0], mo_coeff[0].conj(), orboa),
               lib.einsum('xpq,pi,qj->xij', h1[1], mo_coeff[1].conj(), orbob))
         cput1 = log.timer('first order Fock matrix', *cput1)
@@ -222,7 +222,7 @@ class NMR(rhf_nmr.NMR):
 
     dia = dia
     para = para
-    make_h10 = get_fock = get_fock
+    get_fock = get_fock
     solve_mo1 = solve_mo1
 
 

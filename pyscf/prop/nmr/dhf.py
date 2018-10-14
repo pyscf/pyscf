@@ -203,7 +203,7 @@ def make_h10(mol, dm0, gauge_orig=None, mb='RMB', with_gaunt=False,
         h1 += make_h10giao(mol, dm0, with_gaunt, verbose)
     return h1
 
-def get_fock(nmrobj, mol=None, dm0=None, gauge_orig=None):
+def get_fock(nmrobj, dm0=None, gauge_orig=None):
     '''First order Fock matrix wrt external magnetic field.
     Note the side effects of set_common_origin.
     '''

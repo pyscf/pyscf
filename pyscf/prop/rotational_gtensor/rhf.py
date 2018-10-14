@@ -46,7 +46,7 @@ def dia(magobj, gauge_orig=None):
     if gauge_orig is None:
         # Eq. (35) of JCP, 105, 2804
         e2 = rhf_mag.dia(magobj, gauge_orig)
-        e2 -= rhf_mag.dia(magobj, mass_center)
+        e2-= rhf_mag.dia(magobj, mass_center)
         e2 = _safe_solve(im, e2)
         return -4 * nist.PROTON_MASS_AU * e2
     else:
@@ -76,8 +76,6 @@ def para(magobj, gauge_orig=None, h1=None, s1=None, with_cphf=None):
         # first order Hamiltonian for magnetic field except a factor of 2. It can
         # be computed using the magnetizability code.
         mag_para = rhf_mag.para(magobj, gauge_orig, h1, s1, with_cphf) * 2
-        print mag_para.diagonal()
-        exit()
 
     else:
         mf = magobj._scf
@@ -120,7 +118,8 @@ def inertia_tensor(mol):
     return im, mass_center
 
 
-def rotation_g_nuc(mol):
+def nuc(mol):
+    '''Nuclear contributions'''
     im, mass_center = inertia_tensor(mol)
     charges = mol.atom_charges()
     coords = mol.atom_coords()
@@ -160,7 +159,7 @@ class RotationalGTensor(rhf_mag.Magnetizability):
 
         mag_dia = self.dia(self.gauge_orig)
         mag_para = self.para(self.gauge_orig)
-        nuc = rotation_g_nuc(self.mol)
+        e_nuc = nuc(self.mol)
         e2 = mag_para + mag_dia + nuc
 
         logger.timer(self, 'Rotational g-tensors', *cput0)
@@ -188,7 +187,6 @@ if __name__ == '__main__':
                   F  ,  0.   0.   0.
                   '''
     mol.basis = 'ccpvdz'
-    mol.basis = '631g'
     mol.build()
 
     mf = scf.RHF(mol).run()

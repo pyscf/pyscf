@@ -24,13 +24,13 @@ class KnowValues(unittest.TestCase):
         mol = gto.M(atom='''H  ,  0.   0.   0.
                             F  ,  0.   0.   0.917
                          ''')
-        nuc = rhf.rotation_g_nuc(mol)
+        nuc = rhf.nuc(mol)
         self.assertAlmostEqual(nuc[0,0], 0.972976229429035, 9)
 
         mol = gto.M(atom='''C  ,  0.   0.   0.
                             O  ,  0.   0.   1.1283
                          ''')
-        nuc = rhf.rotation_g_nuc(mol)
+        nuc = rhf.nuc(mol)
         self.assertAlmostEqual(nuc[0,0], 0.503388273805359, 9)
 
 

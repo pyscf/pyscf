@@ -96,11 +96,12 @@ def _gga_sum_(vmat, mol, ao, giao, wv, mask, shls_slice, ao_loc):
     vmat[2] += numint._dot_ao_ao(mol, ao[0], aow, mask, shls_slice, ao_loc)
 
 
-def get_fock(nmrobj, mol=None, dm0=None, gauge_orig=None):
+def get_fock(nmrobj, dm0=None, gauge_orig=None):
     '''First order Fock matrix wrt external magnetic field'''
-    if mol is None: mol = nmrobj.mol
     if dm0 is None: dm0 = nmrobj._scf.make_rdm1()
     if gauge_orig is None: gauge_orig = nmrobj.gauge_orig
+
+    mol = nmrobj.mol
 
     if gauge_orig is None:
         log = logger.Logger(nmrobj.stdout, nmrobj.verbose)
@@ -151,7 +152,7 @@ def solve_mo1(nmrobj, mo_energy=None, mo_coeff=None, mo_occ=None,
                              h1, s1, with_cphf)
 
 class NMR(rhf_nmr.NMR):
-    make_h10 = get_fock = get_fock
+    get_fock = get_fock
     solve_mo1 = solve_mo1
 
 

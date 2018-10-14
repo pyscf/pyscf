@@ -103,7 +103,7 @@ def para(magobj, gauge_orig=None, h1=None, s1=None, with_cphf=None):
     if h1 is None:
         # Imaginary part of F10
         dm0 = (numpy.dot(orboa, orboa.T), numpy.dot(orbob, orbob.T))
-        h1 = magobj.get_fock(mol, dm0, gauge_orig)
+        h1 = magobj.get_fock(dm0, gauge_orig)
         h1 = (lib.einsum('xpq,pi,qj->xij', h1[0], mo_coeff[0].conj(), orboa),
               lib.einsum('xpq,pi,qj->xij', h1[1], mo_coeff[1].conj(), orbob))
         cput1 = log.timer('first order Fock matrix', *cput1)

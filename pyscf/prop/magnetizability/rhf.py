@@ -174,7 +174,7 @@ def para(magobj, gauge_orig=None, h1=None, s1=None, with_cphf=None):
     if h1 is None:
         # Imaginary part of F10
         dm0 = mf.make_rdm1(mo_coeff, mo_occ)
-        h1 = lib.einsum('xpq,pi,qj->xij', magobj.get_fock(mol, dm0, gauge_orig),
+        h1 = lib.einsum('xpq,pi,qj->xij', magobj.get_fock(dm0, gauge_orig),
                         mo_coeff.conj(), orbo)
     if s1 is None:
         # Imaginary part of S10
