@@ -211,8 +211,19 @@ C    SP
           H1 -0.9444878100 0.0000000000 -1.3265673200''', basis={'H':'sto3g', 'H1':'321g'}, charge=1)
         self.assertTrue(not gto.same_mol(mol3, mol2))
 
-    def test_mass_center(self):
-        self.assertAlmostEqual(abs(gto.mass_center(mol0._atom)[2]), 0.2038858832140481, 9)
+    def test_inertia_momentum(self):
+        mol1 = gto.Mole()
+        mol1.atom = mol0.atom
+        mol1.nucmod = 'G'
+        mol1.verbose = 5
+        mol1.nucprop = {'H': {'mass': 3}}
+        mol1.output = '/dev/null'
+        mol1.build(False, False)
+        self.assertAlmostEqual(lib.finger(gto.inertia_momentum(mol1)), 0.4904000666680097, 9)
+
+        mass = mol0.atom_mass_list(isotope_avg=True)
+        self.assertAlmostEqual(lib.finger(gto.inertia_momentum(mol1, mass)),
+                               0.49438098023924004, 9)
 
     def test_chiral_mol(self):
         mol1 = gto.M(atom='C 0 0 0; H 1 1 1; He -1 -1 1; Li -1 1 -1; Be 1 -1 -1')

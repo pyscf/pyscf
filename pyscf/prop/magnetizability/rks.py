@@ -18,7 +18,6 @@
 
 '''
 Non-relativistic magnetizability tensor for DFT
-(In testing)
 
 Refs:
 [1] R. Cammi, J. Chem. Phys., 109, 3185 (1998)
@@ -50,7 +49,7 @@ def dia(magobj, gauge_orig=None):
     e2 = rhf_mag._get_dia_1e(magobj, gauge_orig, dm0, dme0)
 
     if gauge_orig is not None:
-        return e2
+        return -e2
 
     # Computing the 2nd order Vxc integrals from GIAO
     grids = mf.grids
@@ -101,7 +100,7 @@ def dia(magobj, gauge_orig=None):
 
         vmat = vmat + vmat.transpose(0,1,3,2)
 
-    else:
+    elif xctype == 'MGGA':
         raise NotImplementedError('meta-GGA')
 
     vmat = _add_giao_phase(mol, vmat)
@@ -138,21 +137,11 @@ def dia(magobj, gauge_orig=None):
                        'int2e_gg1', 's4', 9, hermi=1)
         e2 += numpy.einsum('xpq,qp->x', vj, dm0)
 
-    return e2.reshape(3, 3)
-
-
-def _get_ao_coords(mol):
-    atom_coords = mol.atom_coords()
-    nao = mol.nao_nr()
-    ao_coords = numpy.empty((nao, 3))
-    aoslices = mol.aoslice_by_atom()
-    for atm_id, (ish0, ish1, i0, i1) in enumerate(aoslices):
-        ao_coords[i0:i1] = atom_coords[atm_id]
-    return ao_coords
+    return -e2.reshape(3, 3)
 
 def _add_giao_phase(mol, vmat):
     '''Add the factor i/2*(Ri-Rj) of the GIAO phase e^{i/2 (Ri-Rj) times r}'''
-    ao_coords = _get_ao_coords(mol)
+    ao_coords = rhf_mag._get_ao_coords(mol)
     Rx = .5 * (ao_coords[:,0:1] - ao_coords[:,0])
     Ry = .5 * (ao_coords[:,1:2] - ao_coords[:,1])
     Rz = .5 * (ao_coords[:,2:3] - ao_coords[:,2])
@@ -171,15 +160,7 @@ def _add_giao_phase(mol, vmat):
 class Magnetizability(rhf_mag.Magnetizability):
     dia = dia
     get_fock = rks_nmr.get_fock
-
-    def solve_mo1(self, mo_energy=None, mo_coeff=None, mo_occ=None,
-                  h1=None, s1=None, with_cphf=None):
-        if with_cphf is None:
-            with_cphf = self.cphf
-        libxc = self._scf._numint.libxc
-        with_cphf = with_cphf and libxc.is_hybrid_xc(self._scf.xc)
-        return rhf_nmr.solve_mo1(self, mo_energy, mo_coeff, mo_occ,
-                                 h1, s1, with_cphf)
+    solve_mo1 = rks_nmr.solve_mo1
 
 
 if __name__ == '__main__':
@@ -196,11 +177,11 @@ if __name__ == '__main__':
 
     mf = dft.RKS(mol).run()
     mag = Magnetizability(mf).kernel()
-    print(lib.finger(mag) - 0.30375149255154221)
+    print(lib.finger(mag) - -0.30375149255154221)
 
     mf.set(xc = 'b3lyp').run()
     mag = Magnetizability(mf).kernel()
-    print(lib.finger(mag) - 0.3022331813238171)
+    print(lib.finger(mag) - -0.3022331813238171)
 
     mol.atom = [
         [1   , (0. , 0. , .917)],
@@ -210,11 +191,11 @@ if __name__ == '__main__':
 
     mf = dft.RKS(mol).set(xc='lda,vwn').run()
     mag = Magnetizability(mf).kernel()
-    print(lib.finger(mag) - 0.4313210213418015)
+    print(lib.finger(mag) - -0.4313210213418015)
 
     mf = dft.RKS(mol).set(xc='b3lyp').run()
     mag = Magnetizability(mf).kernel()
-    print(lib.finger(mag) - 0.42828345739100998)
+    print(lib.finger(mag) - -0.42828345739100998)
 
     mol = gto.M(atom='''O      0.   0.       0.
                         H      0.  -0.757    0.587
@@ -224,4 +205,4 @@ if __name__ == '__main__':
     mf.xc = 'b3lyp'
     mf.run()
     mag = Magnetizability(mf).kernel()
-    print(lib.finger(mag) - 0.61042958313712403)
+    print(lib.finger(mag) - -0.61042958313712403)

@@ -502,25 +502,27 @@ def add_vvvv_(cc, Ht2, t1, t2, eris):
     if cc.direct and hasattr(eris, 'Lpv'):
         def get_Wvvvv(ka, kc, kb):
             kd = kconserv[ka,kc,kb]
+            Lpv = eris.Lpv
+            LPV = eris.LPV
 
-            Lbd = (eris.Lpv[kb,kd,:,nocca:] -
-                   lib.einsum('Lkd,kb->Lbd', eris.Lpv[kb,kd,:,:nocca], t1a[kb]))
-            Wvvvv = lib.einsum('Lac,Lbd->acbd', eris.Lpv[ka,kc,:,nocca:], Lbd)
-            kcbd = lib.einsum('Lkc,Lbd->kcbd', eris.Lpv[ka,kc,:,:nocca],
-                              eris.Lpv[kb,kd,:,nocca:])
+            Lbd = (Lpv[kb,kd][:,nocca:] -
+                   lib.einsum('Lkd,kb->Lbd', Lpv[kb,kd][:,:nocca], t1a[kb]))
+            Wvvvv = lib.einsum('Lac,Lbd->acbd', Lpv[ka,kc][:,nocca:], Lbd)
+            kcbd = lib.einsum('Lkc,Lbd->kcbd', Lpv[ka,kc][:,:nocca],
+                              Lpv[kb,kd][:,nocca:])
             Wvvvv -= lib.einsum('kcbd,ka->acbd', kcbd, t1a[ka])
 
-            LBD = (eris.LPV[kb,kd,:,noccb:] -
-                   lib.einsum('Lkd,kb->Lbd', eris.LPV[kb,kd,:,:noccb], t1b[kb]))
+            LBD = (LPV[kb,kd][:,noccb:] -
+                   lib.einsum('Lkd,kb->Lbd', LPV[kb,kd][:,:noccb], t1b[kb]))
 
-            WvvVV = lib.einsum('Lac,Lbd->acbd', eris.Lpv[ka,kc,:,nocca:], LBD)
-            kcbd = lib.einsum('Lkc,Lbd->kcbd', eris.Lpv[ka,kc,:,:nocca],
-                              eris.LPV[kb,kd,:,noccb:])
+            WvvVV = lib.einsum('Lac,Lbd->acbd', Lpv[ka,kc][:,nocca:], LBD)
+            kcbd = lib.einsum('Lkc,Lbd->kcbd', Lpv[ka,kc][:,:nocca],
+                              LPV[kb,kd][:,noccb:])
             WvvVV -= lib.einsum('kcbd,ka->acbd', kcbd, t1a[ka])
 
-            WVVVV = lib.einsum('Lac,Lbd->acbd', eris.LPV[ka,kc,:,noccb:], LBD)
-            kcbd = lib.einsum('Lkc,Lbd->kcbd', eris.LPV[ka,kc,:,:noccb],
-                              eris.LPV[kb,kd,:,noccb:])
+            WVVVV = lib.einsum('Lac,Lbd->acbd', LPV[ka,kc][:,noccb:], LBD)
+            kcbd = lib.einsum('Lkc,Lbd->kcbd', LPV[ka,kc][:,:noccb],
+                              LPV[kb,kd][:,noccb:])
             WVVVV -= lib.einsum('kcbd,ka->acbd', kcbd, t1b[ka])
 
             Wvvvv *= (1./nkpts)
@@ -1017,8 +1019,8 @@ def _make_df_eris(cc, mo_coeff=None):
     _kuccsd_eris_common_(cc, eris, fswap)
     fswap = None
 
-    eris.Lpv = np.zeros((nkpts,nkpts,naux,nmoa,nvira), dtype=dtype)
-    eris.LPV = np.zeros((nkpts,nkpts,naux,nmob,nvirb), dtype=dtype)
+    eris.Lpv = Lpv = np.empty((nkpts,nkpts), dtype=object)
+    eris.LPV = LPV = np.empty((nkpts,nkpts), dtype=object)
     with h5py.File(thisdf._cderi, 'r') as f:
         kptij_lst = f['j3c-kptij'].value
         tao = []
@@ -1033,17 +1035,15 @@ def _make_df_eris(cc, mo_coeff=None):
                 mo_a = np.asarray(mo_a, dtype=dtype, order='F')
                 mo_b = np.asarray(mo_b, dtype=dtype, order='F')
                 if dtype == np.double:
-                    _ao2mo.nr_e2(Lpq, mo_a, (0, nmoa, nmoa, nmoa+nvira), aosym='s2',
-                                 out=eris.Lpv[ki,kj])
-                    _ao2mo.nr_e2(Lpq, mo_b, (0, nmob, nmob, nmob+nvirb), aosym='s2',
-                                 out=eris.LPV[ki,kj])
+                    outa = _ao2mo.nr_e2(Lpq, mo_a, (0, nmoa, nmoa, nmoa+nvira), aosym='s2')
+                    outb = _ao2mo.nr_e2(Lpq, mo_b, (0, nmob, nmob, nmob+nvirb), aosym='s2')
                 else:
                     if Lpq.size != naux*nao**2: # aosym = 's2'
                         Lpq = lib.unpack_tril(Lpq).astype(np.complex128)
-                    _ao2mo.r_e2(Lpq, mo_a, (0, nmoa, nmoa, nmoa+nvira), tao, ao_loc,
-                                out=eris.Lpv[ki,kj])
-                    _ao2mo.r_e2(Lpq, mo_b, (0, nmob, nmob, nmob+nvirb), tao, ao_loc,
-                                out=eris.LPV[ki,kj])
+                    outa = _ao2mo.r_e2(Lpq, mo_a, (0, nmoa, nmoa, nmoa+nvira), tao, ao_loc)
+                    outb = _ao2mo.r_e2(Lpq, mo_b, (0, nmob, nmob, nmob+nvirb), tao, ao_loc)
+                Lpv[ki,kj] = outa
+                LPV[ki,kj] = outb
 
     return eris
 

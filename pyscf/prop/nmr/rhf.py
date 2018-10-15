@@ -32,17 +32,17 @@ from pyscf.soscf.newton_ah import _gen_rhf_response
 from pyscf.data import nist
 
 
-def dia(nmrobj, mol=None, dm0=None, gauge_orig=None, shielding_nuc=None):
-    if mol is None: mol = nmrobj.mol
-    if gauge_orig is None: gauge_orig = nmrobj.gauge_orig
+def dia(nmrobj, gauge_orig=None, shielding_nuc=None, dm0=None):
+    '''Diamagnetic part of NMR shielding tensors.
+
+    See also J. Olsen et al., Theor. Chem. Acc., 90, 421 (1995)
+    '''
     if shielding_nuc is None: shielding_nuc = nmrobj.shielding_nuc
     if dm0 is None: dm0 = nmrobj._scf.make_rdm1()
 
-    if gauge_orig is not None:
-        # Note the side effects of set_common_origin
-        mol.set_common_origin(gauge_orig)
-
+    mol = nmrobj.mol
     mf = nmrobj._scf
+
     if getattr(mf, 'with_x2c', None):
         raise NotImplementedError('X2C for NMR shielding')
 
@@ -52,35 +52,36 @@ def dia(nmrobj, mol=None, dm0=None, gauge_orig=None, shielding_nuc=None):
     if getattr(mf, 'with_solvent', None):
         raise NotImplementedError('NMR shielding with Solvent')
 
+    if gauge_orig is not None:
+        # Note the side effects of set_common_origin
+        mol.set_common_origin(gauge_orig)
+
     msc_dia = []
     for n, atm_id in enumerate(shielding_nuc):
-        mol.set_rinv_origin(mol.atom_coord(atm_id))
+        with mol.with_rinv_origin(mol.atom_coord(atm_id)):
 # a11part = (B dot) -1/2 frac{\vec{r}_N}{r_N^3} r (dot mu)
-        if gauge_orig is None:
-            h11 = mol.intor('int1e_giao_a11part', 9)
-        else:
-            h11 = mol.intor('int1e_cg_a11part', 9)
-        trh11 = -(h11[0] + h11[4] + h11[8])
-        h11[0] += trh11
-        h11[4] += trh11
-        h11[8] += trh11
-        if gauge_orig is None:
-            h11 += mol.intor('int1e_a01gp', 9)
-        a11 = numpy.einsum('xij,ij->x', h11, dm0)
-        msc_dia.append(a11)
-
-    # XX, XY, XZ, YX, YY, YZ, ZX, ZY, ZZ = 1..9
-    # => [[XX, XY, XZ], [YX, YY, YZ], [ZX, ZY, ZZ]]
+            if gauge_orig is None:
+                h11 = mol.intor('int1e_giao_a11part', comp=9)
+            else:
+                h11 = mol.intor('int1e_cg_a11part', comp=9)
+            e11 = numpy.einsum('xij,ij->x', h11, dm0).reshape(3,3)
+            e11 = e11 - numpy.eye(3) * e11.trace()
+            if gauge_orig is None:
+                h11 = mol.intor('int1e_a01gp', comp=9)
+                e11 += numpy.einsum('xij,ij->x', h11, dm0).reshape(3,3)
+        msc_dia.append(e11)
     return numpy.array(msc_dia).reshape(-1, 3, 3)
 
 
-def para(nmrobj, mol=None, mo10=None, mo_coeff=None, mo_occ=None,
-         shielding_nuc=None):
-    if mol is None:           mol = nmrobj.mol
+def para(nmrobj, mo10=None, mo_coeff=None, mo_occ=None, shielding_nuc=None):
+    '''Paramagnetic part of NMR shielding tensors.
+    '''
     if mo_coeff is None:      mo_coeff = nmrobj._scf.mo_coeff
     if mo_occ is None:        mo_occ = nmrobj._scf.mo_occ
     if shielding_nuc is None: shielding_nuc = nmrobj.shielding_nuc
+    if mo10 is None: mo10 = nmrobj.solve_mo1()[0]
 
+    mol = nmrobj.mol
     para_vir = numpy.empty((len(shielding_nuc),3,3))
     para_occ = numpy.empty((len(shielding_nuc),3,3))
     occidx = mo_occ > 0
@@ -181,18 +182,19 @@ def solve_mo1(nmrobj, mo_energy=None, mo_coeff=None, mo_occ=None,
             If a function is given, CPHF equation will be solved, and the
             given function is used to compute induced potential
     '''
-    cput1 = (time.clock(), time.time())
-    log = logger.Logger(nmrobj.stdout, nmrobj.verbose)
     if mo_energy is None: mo_energy = nmrobj._scf.mo_energy
     if mo_coeff  is None: mo_coeff = nmrobj._scf.mo_coeff
     if mo_occ    is None: mo_occ = nmrobj._scf.mo_occ
     if with_cphf is None: with_cphf = nmrobj.cphf
 
+    cput1 = (time.clock(), time.time())
+    log = logger.Logger(nmrobj.stdout, nmrobj.verbose)
+
     mol = nmrobj.mol
     orbo = mo_coeff[:,mo_occ>0]
     if h1 is None:
         dm0 = nmrobj._scf.make_rdm1(mo_coeff, mo_occ)
-        h1 = lib.einsum('xpq,pi,qj->xij', nmrobj.get_fock(mol, dm0),
+        h1 = lib.einsum('xpq,pi,qj->xij', nmrobj.get_fock(dm0),
                         mo_coeff.conj(), orbo)
         cput1 = log.timer('first order Fock matrix', *cput1)
     if s1 is None:
@@ -214,15 +216,15 @@ def solve_mo1(nmrobj, mo_energy=None, mo_coeff=None, mo_occ=None,
     return mo10, mo_e10
 
 
-def get_fock(nmrobj, mol=None, dm0=None, gauge_orig=None):
+def get_fock(nmrobj, dm0=None, gauge_orig=None):
     r'''First order partial derivatives of Fock matrix wrt external magnetic
     field.  \frac{\partial F}{\partial B}
     '''
-    if mol is None: mol = nmrobj.mol
     if dm0 is None: dm0 = nmrobj._scf.make_rdm1()
     if gauge_orig is None: gauge_orig = nmrobj.gauge_orig
+
     log = logger.Logger(nmrobj.stdout, nmrobj.verbose)
-    h1 = make_h10(mol, dm0, gauge_orig, log)
+    h1 = make_h10(nmrobj.mol, dm0, gauge_orig, log)
     if nmrobj.chkfile:
         lib.chkfile.dump(nmrobj.chkfile, 'nmr/h1', h1)
     return h1
@@ -289,13 +291,14 @@ class NMR(lib.StreamObject):
         self.dump_flags()
 
         unit_ppm = nist.ALPHA**2 * 1e6
-        msc_dia = self.dia() * unit_ppm
+        msc_dia = self.dia(self.gauge_orig)
 
         if mo1 is None:
             self.mo10, self.mo_e10 = self.solve_mo1()
             mo1 = self.mo10
         msc_para, para_vir, para_occ = self.para(mo10=mo1)
 
+        msc_dia *= unit_ppm
         msc_para *= unit_ppm
         para_vir *= unit_ppm
         para_occ *= unit_ppm
@@ -316,14 +319,13 @@ class NMR(lib.StreamObject):
 
     dia = dia
     para = para
-    make_h10 = get_fock = get_fock
+    get_fock = get_fock
     solve_mo1 = solve_mo1
 
-    def make_s10(self, mol=None, gauge_orig=None):
+    def get_ovlp(self, mol=None, gauge_orig=None):
         if mol is None: mol = self.mol
         if gauge_orig is None: gauge_orig = self.gauge_orig
-        return make_s10(mol, gauge_orig)
-    get_ovlp = make_s10
+        return get_ovlp(mol, gauge_orig)
 
 
 def _write(stdout, msc3x3, title):
