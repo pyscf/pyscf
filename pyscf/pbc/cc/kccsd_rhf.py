@@ -397,13 +397,14 @@ def add_vvvv_(cc, Ht2, t1, t2, eris):
         #:    Wvvvv *= (1./nkpts)
         #:    return Wvvvv
         def get_Wvvvv(ka, kb, kc):
+            Lpv = eris.Lpv
             kd = kconserv[ka, kc, kb]
-            Lbd = (eris.Lpv[kb, kd, :, nocc:] -
-                   lib.einsum('Lkd,kb->Lbd', eris.Lpv[kb, kd, :, :nocc], t1[kb]))
-            Wvvvv = lib.einsum('Lac,Lbd->abcd', eris.Lpv[ka, kc, :, nocc:], Lbd)
+            Lbd = (Lpv[kb,kd][:,nocc:] -
+                   lib.einsum('Lkd,kb->Lbd', Lpv[kb,kd][:,:nocc], t1[kb]))
+            Wvvvv = lib.einsum('Lac,Lbd->abcd', Lpv[ka,kc][:,nocc:], Lbd)
             Lbd = None
-            kcbd = lib.einsum('Lkc,Lbd->kcbd', eris.Lpv[ka, kc, :, :nocc],
-                              eris.Lpv[kb, kd, :, nocc:])
+            kcbd = lib.einsum('Lkc,Lbd->kcbd', Lpv[ka,kc][:,:nocc],
+                              Lpv[kb,kd][:,nocc:])
             Wvvvv -= lib.einsum('kcbd,ka->abcd', kcbd, t1[ka])
             Wvvvv *= (1. / nkpts)
             return Wvvvv
@@ -1350,7 +1351,7 @@ def _init_df_eris(cc, eris):
     else:
         dtype = np.complex128
     dtype = np.result_type(dtype, *eris.mo_coeff)
-    eris.Lpv = np.empty((nkpts, nkpts, naux, nmo, nvir), dtype=dtype)
+    eris.Lpv = Lpv = np.empty((nkpts,nkpts), dtype=object)
 
     with h5py.File(cc._scf.with_df._cderi, 'r') as f:
         kptij_lst = f['j3c-kptij'].value
@@ -1364,15 +1365,13 @@ def _init_df_eris(cc, eris):
                 mo = np.hstack((eris.mo_coeff[ki], eris.mo_coeff[kj][:, nocc:]))
                 mo = np.asarray(mo, dtype=dtype, order='F')
                 if dtype == np.double:
-                    _ao2mo.nr_e2(Lpq, mo, (0, nmo, nmo, nmo + nvir), aosym='s2',
-                                 out=eris.Lpv[ki, kj])
+                    out = _ao2mo.nr_e2(Lpq, mo, (0, nmo, nmo, nmo + nvir), aosym='s2')
                 else:
                     if Lpq.size != naux * nao ** 2:  # aosym = 's2'
                         Lpq = lib.unpack_tril(Lpq).astype(np.complex128)
-                    _ao2mo.r_e2(Lpq, mo, (0, nmo, nmo, nmo + nvir), tao, ao_loc,
-                                out=eris.Lpv[ki, kj])
+                    out = _ao2mo.r_e2(Lpq, mo, (0, nmo, nmo, nmo + nvir), tao, ao_loc)
+                Lpv[ki,kj] = out
     return eris
-
 
 imd = imdk
 
