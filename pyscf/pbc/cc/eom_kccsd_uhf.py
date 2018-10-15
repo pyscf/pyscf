@@ -89,25 +89,8 @@ def ipccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     # k-point spin orbital version of ipccsd
 
     Hr1 = -0.0*np.einsum('mi,m->i', imds.Foo[kshift], r1)
-    #for km in range(nkpts):
-    #    #Hr1 += np.einsum('me,mie->i', imds.Fov[km], r2[km, kshift])
-    #    for kn in range(nkpts):
-    #        #Hr1 += - 0.5 * np.einsum('nmie,mne->i', imds.Wooov[kn, km, kshift],
-    #        #                         r2[km, kn])
 
     Hr2 = np.zeros_like(r2)
-    for ki, kj in itertools.product(range(nkpts), repeat=2):
-        ka = kconserv[ki, kshift, kj]
-        #Hr2[ki, kj] += lib.einsum('ae,ije->ija', imds.Fvv[ka], r2[ki, kj])
-
-        #Hr2[ki, kj] -= lib.einsum('mi,mja->ija', imds.Foo[ki], r2[ki, kj])
-        #Hr2[ki, kj] += lib.einsum('mj,mia->ija', imds.Foo[kj], r2[kj, ki])
-
-        #Hr2[ki, kj] -= np.einsum('maji,m->ija', imds.Wovoo[kshift, ka, kj], r1)
-        #for km in range(nkpts):
-        #    kn = kconserv[ki, km, kj]
-        #    Hr2[ki, kj] += 0.5 * lib.einsum('mnij,mna->ija',
-        #                                    imds.Woooo[km, kn, ki], r2[km, kn])
 
     for ki, kj in itertools.product(range(nkpts), repeat=2):
         ka = kconserv[ki, kshift, kj]
@@ -120,28 +103,23 @@ def ipccsd_matvec(eom, vector, kshift, imds=None, diag=None):
             Hr2[ki, kj] -= lib.einsum('maej,mie->ija', imds.Wovvo[km, ka, ke],
                                       r2[km, ki])
 
-    #tmp = lib.einsum('xymnef,xymnf->e', imds.Woovv[:, :, kshift], r2[:, :])  # contract_{km, kn}
-    #Hr2[:, :] += 0.5 * lib.einsum('e,xyjiea->yxija', tmp, imds.t2[:, :, kshift])  # sum_{ki, kj}
-
-    # molecular version of ipccsd
-
     r1a, r1b = spatial_r1
     Hr1a = np.zeros((nocca), dtype=r1.dtype)
     Hr1b = np.zeros((noccb), dtype=r1.dtype)
 
     r2aaa, r2baa, r2abb, r2bbb = spatial_r2
-    #Foo, Fov, and Wooov
+    #Foo term
     for km in range(nkpts):
         Hr1a += np.einsum('me,mie->i', uccsd_imds.Fov[km], r2aaa[km,kshift])
         Hr1a -= np.einsum('ME,iME->i', uccsd_imds.FOV[km], r2abb[kshift,km])
         Hr1b += np.einsum('ME,MIE->I', uccsd_imds.FOV[km], r2bbb[km,kshift])
         Hr1b -= np.einsum('me,Ime->I', uccsd_imds.Fov[km], r2baa[kshift,km])
-
+    #Fov term
     spatial_Foo = uccsd_imds.Foo
     spatial_FOO = uccsd_imds.FOO
     Hr1a += -np.einsum('mi,m->i', spatial_Foo[kshift], r1a)
     Hr1b += -np.einsum('MI,M->I', spatial_FOO[kshift], r1b)
-
+    #Wooov
     for km in range(nkpts):
         for kn in range(nkpts):
             Hr1a += -0.5 * np.einsum('nime,mne->i', uccsd_imds.Wooov[kn,kshift,km], r2aaa[km,kn])
@@ -193,26 +171,7 @@ def ipccsd_matvec(eom, vector, kshift, imds=None, diag=None):
             Hr2bbb[ki, kj] += .5 * lib.einsum('MINJ,MNB->IJB', uccsd_imds.WOOOO[km, ki, kn], r2bbb[km, kn])
             Hr2baa[ki, kj] +=      lib.einsum('njMI,Mnb->Ijb', uccsd_imds.WooOO[kn, kj, km], r2baa[km, kn])
 
-    ### Wovvo terms
-    ##tmp = lib.einsum('mebj,ime->ijb', imds.Wovvo, r2aaa)
-    ##tmp += lib.einsum('MEbj,iME->ijb', imds.WOVvo, r2abb)
-    ##Hr2aaa += tmp - tmp.transpose(1, 0, 2)
-
-    ##WooVV = -imds.WoVVo.transpose(0,3,2,1)
-    ##WOOvv = -imds.WOvvO.transpose(0,3,2,1)
-    ##Hr2abb += lib.einsum('MEBJ,iME->iJB', imds.WOVVO, r2abb)
-    ##Hr2abb += lib.einsum('meBJ,ime->iJB', imds.WovVO, r2aaa)
-    ##Hr2abb += -lib.einsum('miBE,mJE->iJB', WooVV, r2abb)
-
-    ##Hr2baa += lib.einsum('meaj,Ime->Ija', imds.Wovvo, r2baa)
-    ##Hr2baa += lib.einsum('MEaj,IME->Ija', imds.WOVvo, r2bbb)
-    ##Hr2baa += -lib.einsum('MIab,Mjb->Ija', WOOvv, r2baa)
-
-    ##tmp = lib.einsum('MEBJ,IME->IJB', imds.WOVVO, r2bbb)
-    ##tmp += lib.einsum('meBJ,Ime->IJB', imds.WovVO, r2baa)
-    ##Hr2bbb += tmp - tmp.transpose(1, 0, 2)
-
-    ## T2 term, Wovov
+    ## T2 term
     tmp_aaa = lib.einsum('xymenf,xymnf->e', uccsd_imds.Wovov[:,kshift,:], r2aaa)
     tmp_bbb = lib.einsum('xyMENF,xyMNF->E', uccsd_imds.WOVOV[:,kshift,:], r2bbb)
     tmp_abb = lib.einsum('xymeNF,xymNF->e', uccsd_imds.WovOV[:,kshift,:], r2abb)
@@ -237,63 +196,6 @@ def ipccsd_matvec(eom, vector, kshift, imds=None, diag=None):
         Hr2bbb[ki,kj] -= 0.5 * lib.einsum('E,JIBE->IJB', tmp_bbb, t2bb[kj,ki,kb])
         Hr2bbb[ki,kj] -= lib.einsum('E,JIBE->IJB', tmp_baa, t2bb[kj,ki,kb])
 
-    # j \/ b   |  i
-    #    ---   |
-    #      /\  |
-    #    m \/ e|
-    #     -------
-    #for ki, kj in itertools.product(range(nkpts), repeat=2):
-    #    kb = kconserv[ki, kshift, kj]
-    #    for km in range(nkpts):
-    #        ke = kconserv[km, kshift, ki]
-    #        Hr2aaa[ki, kj] += lib.einsum('mebj,ime->ijb', uccsd_imds.Wovvo[km, ke, kb],
-    #                                     r2aaa[ki, km])
-    #        Hr2aaa[ki, kj] += lib.einsum('MEbj,iME->ijb', uccsd_imds.WOVvo[km, ke, kb],
-    #                                     r2abb[ki, km])
-
-    #        # P(ij)
-    #        ke = kconserv[km, kshift, kj]
-    #        Hr2aaa[ki, kj] -= lib.einsum('mebi,jme->ijb', uccsd_imds.Wovvo[km, ke, kb],
-    #                                     r2aaa[kj, km])
-    #        Hr2aaa[ki, kj] -= lib.einsum('MEbi,jME->ijb', uccsd_imds.WOVvo[km, ke, kb],
-    #                                     r2abb[kj, km])
-
-    #        ##############
-    #        ke = kconserv[km, kshift, ki]
-    #        Hr2abb[ki, kj] += lib.einsum('meBJ,ime->iJB', uccsd_imds.WovVO[km, ke, kb],
-    #                                     r2aaa[ki, km])
-    #        Hr2abb[ki, kj] += lib.einsum('MEBJ,iME->iJB', uccsd_imds.WOVVO[km, ke, kb],
-    #                                     r2abb[ki, km])
-    #        Hr2abb[ki, kj] -= lib.einsum('MBEJ,iME->iJB', uccsd_imds.WOVVO[km, kb, ke],
-    #                                     r2abb[ki, km])
-    #        ##############
-
-    #        ke = kconserv[km, kshift, ki]
-    #        Hr2bbb[ki, kj] += lib.einsum('MEBJ,IME->IJB', uccsd_imds.WOVVO[km, ke, kb],
-    #                                     r2bbb[ki, km])
-    #        Hr2bbb[ki, kj] += lib.einsum('meBJ,Ime->IJB', uccsd_imds.WovVO[km, ke, kb],
-    #                                     r2baa[ki, km])
-
-    #        # P(ij)
-    #        ke = kconserv[km, kshift, kj]
-    #        Hr2bbb[ki, kj] -= lib.einsum('MEBI,JME->IJB', uccsd_imds.WOVVO[km, ke, kb],
-    #                                     r2bbb[kj, km])
-    #        Hr2bbb[ki, kj] -= lib.einsum('meBI,Jme->IJB', uccsd_imds.WovVO[km, ke, kb],
-    #                                     r2baa[kj, km])
-
-    ## T2 term
-    #Hr2aaa -= 0.5 * lib.einsum('menf,mnf,jibe->ijb', imds.Wovov, r2aaa, t2aa)
-    #Hr2aaa -= lib.einsum('meNF,mNF,jibe->ijb', imds.WovOV, r2abb, t2aa)
-
-    #Hr2abb -= 0.5 * lib.einsum('menf,mnf,iJeB->iJB', imds.Wovov, r2aaa, t2ab)
-    #Hr2abb -= lib.einsum('meNF,mNF,iJeB->iJB', imds.WovOV, r2abb, t2ab)
-
-    #Hr2baa -= 0.5 * lib.einsum('MENF,MNF,jIbE->Ijb', imds.WOVOV, r2bbb, t2ab)
-    #Hr2baa -= lib.einsum('nfME,Mnf,jIbE->Ijb', imds.WovOV, r2baa, t2ab)
-
-    #Hr2bbb -= 0.5 * lib.einsum('MENF,MNF,JIBE->IJB', imds.WOVOV, r2bbb, t2bb)
-    #Hr2bbb -= lib.einsum('nfME,Mnf,JIBE->IJB', imds.WovOV, r2baa, t2bb)
-
     spatial_Hr1 = [Hr1a, Hr1b]
     spatial_Hr2 = [Hr2aaa, Hr2baa, Hr2abb, Hr2bbb]
     spin_Hr1, spin_Hr2 = eom_kgccsd.spatial2spin_ip_doublet(spatial_Hr1, spatial_Hr2,
@@ -312,6 +214,54 @@ class EOMIP(eom_kgccsd.EOMIP):
 
     #get_diag = ipccsd_diag
     matvec = ipccsd_matvec
+    def get_init_guess(self, nroots=1, koopmans=True, diag=None):
+        #TODO check this
+        size = self.vector_size()
+        dtype = getattr(diag, 'dtype', np.complex)
+        nroots = min(nroots, size)
+        guess = []
+        if koopmans:
+            nocca, noccb = self.nocc
+            idx = diag[:nocca + noccb].argsort()
+        else:
+            idx = diag.argsort()
+        for i in idx[:nroots]:
+            g = np.zeros(size, dtype)
+            g[i] = 1.0
+            guess.append(g)
+        return guess
+
+    def gen_matvec(self, kshift, imds=None, left=False, **kwargs):
+        if imds is None: imds = self.make_imds()
+        diag = self.get_diag(kshift, imds)
+        if left:
+            raise NotImplementedError
+            matvec = lambda xs: [self.l_matvec(x, kshift, imds, diag) for x in xs]
+        else:
+            matvec = lambda xs: [self.matvec(x, kshift, imds, diag) for x in xs]
+        return matvec, diag
+
+    def _vector_to_amplitudes(self, vector, nkpts=None, nmo=None, nocc=None):
+        if nmo is None: nmo = self.nmo
+        if nocc is None: nocc = self.nocc
+        if nkpts is None: nkpts = self.nkpts
+        return vector_to_amplitudes_ip(vector, nkpts, nmo, nocc)
+
+    def _amplitudes_to_vector(self, r1, r2):
+        return amplitudes_to_vector_ip(r1, r2)
+
+    def vector_size(self):
+        nocca, noccb = self.nocc
+        nmoa, nmob = self.nmo
+        nvira, nvirb = nmoa - nocca, nmob - noccb
+        nkpts = self.nkpts
+        return nocca + noccb + nkpts**2 * (nocca*(nocca - 1)//2*nvira + noccb * nocca * nvira+ nocca * noccb * nvirb + noccb*(noccb - 1)//2*nvirb)
+
+    def _make_imds(self, eris=None, t1=None, t2=None):
+        imds = _IMDS(self._cc, eris, t1, t2)
+        imds.make_ip()
+        return imds
+
 
 ########################################
 # EOM-EA-CCSD
@@ -364,18 +314,10 @@ def eaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     # k-point spin orbital version of eaccsd
 
     Hr1 = 0.0*np.einsum('ac,c->a', imds.Fvv[kshift], r1)
-    #for kl in range(nkpts):
-    #    #Hr1 += np.einsum('ld,lad->a', imds.Fov[kl], r2[kl, kshift])
-    #    #for kc in range(nkpts):
-    #    #    Hr1 += 0.5*np.einsum('alcd,lcd->a', imds.Wvovv[kshift,kl,kc], r2[kl,kc])
 
     Hr2 = np.zeros_like(r2)
     for kj, ka in itertools.product(range(nkpts), repeat=2):
         kb = kconserv[kshift,ka,kj]
-        #Hr2[kj,ka] += np.einsum('abcj,c->jab', imds.Wvvvo[ka,kb,kshift], r1)
-        #Hr2[kj,ka] += lib.einsum('ac,jcb->jab', imds.Fvv[ka], r2[kj,ka])
-        #Hr2[kj,ka] -= lib.einsum('bc,jca->jab', imds.Fvv[kb], r2[kj,kb])
-        #Hr2[kj,ka] -= lib.einsum('lj,lab->jab', imds.Foo[kj], r2[kj,ka])
 
         for kd in range(nkpts):
             kl = kconserv[kj, kb, kd]
@@ -384,11 +326,6 @@ def eaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
             # P(ab)
             kl = kconserv[kj, ka, kd]
             Hr2[kj, ka] -= lib.einsum('ladj,lbd->jab', imds.Wovvo[kl, ka, kd], r2[kl, kb])
-
-    #tmp = lib.einsum('xyklcd,xylcd->k', imds.Woovv[kshift, :, :], r2[:, :])  # contract_{kl, kc}
-    #Hr2[:, :] -= 0.5*lib.einsum('k,xykjab->xyjab', tmp, imds.t2[kshift, :, :])  # sum_{kj, ka]
-
-    # molecular version of eaccsd
 
     r1a, r1b = spatial_r1
     r2aaa, r2aba, r2bab, r2bbb = spatial_r2
@@ -421,11 +358,6 @@ def eaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     uimds = imds._uccsd_imds
     #** Wvvvv term
     if uimds.Wvvvv is not None:
-        #:P = kintermediates_uhf.kconserv_mat(nkpts, kconserv)
-        #:Hr2aaa = .5 * lib.einsum('xzyacbd,uzjcd,xyzw,uzw->uxjab', imds._uccsd_imds.Wvvvv, r2aaa, P, P[kshift])
-        #:Hr2aba =      lib.einsum('ywxbdac,uzjcd,xyzw,uzw->uxjab', imds._uccsd_imds.WvvVV, r2aba, P, P[kshift])
-        #:Hr2bab =      lib.einsum('xzyacbd,uzjcd,xyzw,uzw->uxjab', imds._uccsd_imds.WvvVV, r2bab, P, P[kshift])
-        #:Hr2bbb = .5 * lib.einsum('xzyacbd,uzjcd,xyzw,uzw->uxjab', imds._uccsd_imds.WVVVV, r2bbb, P, P[kshift])
         for kj, ka in itertools.product(range(nkpts), repeat=2):
             kb = kconserv[kshift,ka,kj]
             for kd in range(nkpts):
@@ -435,58 +367,7 @@ def eaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
                 Hr2bab[kj,ka] +=      lib.einsum('acbd,jcd->jab', uimds.WvvVV[ka,kc,kb], r2bab[kj,kc])
                 Hr2bbb[kj,ka] += .5 * lib.einsum('acbd,jcd->jab', uimds.WVVVV[ka,kc,kb], r2bbb[kj,kc])
 
-    #tauaa, tauab, taubb = uccsd.make_tau(t2, t1, t1)
-    #eris_ovov = np.asarray(eris.ovov)
-    #eris_OVOV = np.asarray(eris.OVOV)
-    #eris_ovOV = np.asarray(eris.ovOV)
-    #tmpaaa = lib.einsum('menf,jef->mnj', eris_ovov, r2aaa) * .5
-    #Hr2aaa += lib.einsum('mnj,mnab->jab', tmpaaa, tauaa)
-    #tmpaaa = tauaa = None
-
-    #tmpbbb = lib.einsum('menf,jef->mnj', eris_OVOV, r2bbb) * .5
-    #Hr2bbb += lib.einsum('mnj,mnab->jab', tmpbbb, taubb)
-    #tmpbbb = taubb = None
-
-    #tmpabb = lib.einsum('menf,jef->mnj', eris_ovOV, r2bab)
-    #Hr2bab += lib.einsum('mnj,mnab->jab', tmpabb, tauab)
-    #tmpaba = lib.einsum('nfme,jef->nmj', eris_ovOV, r2aba)
-    #Hr2aba += lib.einsum('nmj,nmba->jab', tmpaba, tauab)
-    #tmpbab = tmpaba = tauab = None
-    #eris_ovov = eris_OVOV = eris_ovOV = None
-
-    #eris_ovvv = imds.eris.get_ovvv(slice(None))
-    #tmpaaa = lib.einsum('mebf,jef->mjb', eris_ovvv, r2aaa)
-    #tmpaaa = lib.einsum('mjb,ma->jab', tmpaaa, t1a)
-    #Hr2aaa-= tmpaaa - tmpaaa.transpose(0,2,1)
-    #tmpaaa = eris_ovvv = None
-
-    #eris_OVVV = imds.eris.get_OVVV(slice(None))
-    #tmpbbb = lib.einsum('mebf,jef->mjb', eris_OVVV, r2bbb)
-    #tmpbbb = lib.einsum('mjb,ma->jab', tmpbbb, t1b)
-    #Hr2bbb-= tmpbbb - tmpbbb.transpose(0,2,1)
-    #tmpbbb = eris_OVVV = None
-
-    #eris_ovVV = imds.eris.get_ovVV(slice(None))
-    #eris_OVvv = imds.eris.get_OVvv(slice(None))
-    #tmpaab = lib.einsum('meBF,jFe->mjB', eris_ovVV, r2aba)
-    #Hr2aba-= lib.einsum('mjB,ma->jBa', tmpaab, t1a)
-    #tmpabb = lib.einsum('meBF,JeF->mJB', eris_ovVV, r2bab)
-    #Hr2bab-= lib.einsum('mJB,ma->JaB', tmpabb, t1a)
-    #tmpaab = tmpabb = eris_ovVV = None
-
-    #tmpbaa = lib.einsum('MEbf,jEf->Mjb', eris_OVvv, r2aba)
-    #Hr2aba-= lib.einsum('Mjb,MA->jAb', tmpbaa, t1b)
-    #tmpbba = lib.einsum('MEbf,JfE->MJb', eris_OVvv, r2bab)
-    #Hr2bab-= lib.einsum('MJb,MA->JbA', tmpbba, t1b)
-    #tmpbaa = tmpbba = eris_OVvv = None
-    ##** Wvvvv term end
-
-    ## Wvvvo
-    #Hr2aaa += np.einsum('acbj,c->jab', imds.Wvvvo, r1a)
-    #Hr2bbb += np.einsum('ACBJ,C->JAB', imds.WVVVO, r1b)
-    #Hr2bab += np.einsum('acBJ,c->JaB', imds.WvvVO, r1a)
-    #Hr2aba += np.einsum('ACbj,C->jAb', imds.WVVvo, r1b)
-
+    #Wvvvo term
     for ka, kj, in itertools.product(range(nkpts),repeat=2):
         kb = kconserv[kshift,ka,kj]
         kc = kshift
@@ -495,46 +376,6 @@ def eaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
 
         Hr2bab[kj,ka] += np.einsum('acBJ,c->JaB', uimds.WvvVO[ka,kc,kb], r1a)
         Hr2aba[kj,ka] += np.einsum('ACbj,C->jAb', uimds.WVVvo[ka,kc,kb], r1b)
-
-    ## Wovvo
-    #tmp2aa = lib.einsum('ldbj,lad->jab', imds.Wovvo, r2aaa)
-    #tmp2aa += lib.einsum('ldbj,lad->jab', imds.WOVvo, r2bab)
-    #Hr2aaa += tmp2aa - tmp2aa.transpose(0,2,1)
-
-    #Hr2bab += lib.einsum('ldbj,lad->jab', imds.WovVO, r2aaa)
-    #Hr2bab += lib.einsum('ldbj,lad->jab', imds.WOVVO, r2bab)
-    #Hr2bab += lib.einsum('ldaj,ldb->jab', imds.WOvvO, r2bab)
-
-    #Hr2aba += lib.einsum('ldbj,lad->jab', imds.WOVvo, r2bbb)
-    #Hr2aba += lib.einsum('ldbj,lad->jab', imds.Wovvo, r2aba)
-    #Hr2aba += lib.einsum('ldaj,ldb->jab', imds.WoVVo, r2aba)
-
-    #tmp2bb = lib.einsum('ldbj,lad->jab', imds.WOVVO, r2bbb)
-    #tmp2bb += lib.einsum('ldbj,lad->jab', imds.WovVO, r2aba)
-    #Hr2bbb += tmp2bb - tmp2bb.transpose(0,2,1)
-
-    ##Wovvo
-    #for kj, ka, in itertools.product(range(nkpts), repeat=2):
-    #    for kl in range(nkpts):
-    #        kd = kconserv[kl, ka, kshift]
-    #        kb = kconserv[kshift, ka, kj]
-    #        tmp2aa = lib.einsum('ldbj,lad->jab', uccsd_imds.Wovvo[kl, kd, kb], r2aaa[kl, ka])
-    #        tmp2aa += lib.einsum('LDbj,LaD->jab', uccsd_imds.WOVvo[kl, kd, kb], r2bab[kl, ka])
-    #        Hr2aaa[kj, ka] += tmp2aa
-    #        Hr2aaa[kj, kb] -= tmp2aa.transpose(0, 2, 1)
-
-    #        Hr2bab[kj, ka] += lib.einsum('ldBJ,lad->JaB', uccsd_imds.WovVO[kl, kd, kb], r2aaa[kl, ka])
-    #        Hr2bab[kj, ka] += lib.einsum('LDBJ,LaD->JaB', uccsd_imds.WOVVO[kl, kd, kb], r2bab[kl, ka])
-    #        Hr2bab[kj, ka] -= lib.einsum('LBDJ,LaD->JaB', uccsd_imds.WOVVO[kl, kb, kd], r2bab[kl, ka])
-
-    #        Hr2aba[kj, ka] += lib.einsum('LDbj,LAD->jAb', uccsd_imds.WOVvo[kl, kd, kb], r2bbb[kl, ka])
-    #        Hr2aba[kj, ka] += lib.einsum('ldbj,lAd->jAb', uccsd_imds.Wovvo[kl, kd, kb], r2aba[kl, ka])
-    #        Hr2aba[kj, ka] -= lib.einsum('lbdj,lAd->jAb', uccsd_imds.Wovvo[kl, kb, kd], r2aba[kl, ka])
-
-    #        tmp2bb = lib.einsum('LDBJ,LAD->JAB', uccsd_imds.WOVVO[kl, kd, kb], r2bbb[kl, ka])
-    #        tmp2bb += lib.einsum('ldBJ,lAd->JAB', uccsd_imds.WovVO[kl, kd, kb], r2aba[kl, ka])
-    #        Hr2bbb[kj, ka] += tmp2bb
-    #        Hr2bbb[kj, kb] -= tmp2bb.transpose(0, 2, 1)
 
     #Fvv Term
     for ka, kj in itertools.product(range(nkpts), repeat=2):
@@ -557,7 +398,6 @@ def eaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
         Hr2bbb[kl,ka] -= lib.einsum('LJ,LAB->JAB', uccsd_imds.FOO[kl], r2bbb[kl,ka])
         Hr2bab[kl,ka] -= lib.einsum('LJ,LaB->JaB', uccsd_imds.FOO[kl], r2bab[kl,ka])
         Hr2aba[kl,ka] -= lib.einsum('lj,lAb->jAb', uccsd_imds.Foo[kl], r2aba[kl,ka])
-
 
     ## Woovv term
     tmp_aaa = lib.einsum('xykcld, yxlcd->k', uccsd_imds.Wovov[kshift,:,:], r2aaa)
@@ -583,17 +423,6 @@ def eaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
         kb = kconserv[kshift, ka, kj]
         Hr2aba[kj, ka] -= lib.einsum('K, jKbA->jAb', tmp_aba, t2ab[kj, kshift, kb])
         Hr2aba[kj, ka] -= 0.5 * einsum('K, jKbA->jAb', tmp_bbb, t2ab[kj, kshift, kb])
-    #Hr2aaa -= 0.5 * lib.einsum('kcld,lcd,kjab->jab', imds.Wovov, r2aaa, t2aa)
-    #Hr2bab -= 0.5 * lib.einsum('kcld,lcd,kJaB->JaB', imds.Wovov, r2aaa, t2ab)
-
-    #Hr2aba -= lib.einsum('ldKC,lCd,jKbA->jAb', imds.WovOV, r2aba, t2ab)
-    #Hr2aaa -= lib.einsum('kcLD,LcD,kjab->jab', imds.WovOV, r2bab, t2aa)
-
-    #Hr2aba -= 0.5 * lib.einsum('KCLD,LCD,jKbA->jAb', imds.WOVOV, r2bbb, t2ab)
-    #Hr2bbb -= 0.5 * lib.einsum('KCLD,LCD,KJAB->JAB', imds.WOVOV, r2bbb, t2bb)
-
-    #Hr2bbb -= lib.einsum('ldKC,lCd,KJAB->JAB', imds.WovOV, r2aba, t2bb)
-    #Hr2bab -= lib.einsum('kcLD,LcD,kJaB->JaB', imds.WovOV, r2bab, t2ab)
 
     spatial_Hr1 = [Hr1a, Hr1b]
     spatial_Hr2 = [Hr2aaa, Hr2aba, Hr2bab, Hr2bbb]
@@ -613,6 +442,44 @@ class EOMEA(eom_kgccsd.EOMEA):
 
     #get_diag = eaccsd_diag
     matvec = eaccsd_matvec
+
+    def get_init_guess(self, nroots=1, koopmans=True, diag=None):
+        size = self.vector_size()
+        dtype = getattr(diag, 'dtype', np.complex)
+        nroots = min(nroots, size)
+        guess = []
+        if koopmans:
+            nocca, noccb = self.nocc
+            nmoa, nmob = self.nmo
+            nvira, nvirb = nmoa - nocca, nmob - noccb
+            idx = diag[:nvira+nvirb].argsort()
+        else:
+            idx = diag.argsort()
+        for i in idx[:nroots]:
+            g = np.zeros(size, dtype)
+            g[i] = 1.0
+            guess.append(g)
+        return guess
+
+    def _vector_to_amplitudes(self, vector, nmo=None, nocc=None):
+        if nmo is None: nmo = self.nmo
+        if nocc is None: nocc is self.nocc
+        return vector_to_amplitudes_ea(vector, nmo, nocc)
+
+    def _amplitudes_to_vector(self, r1, r2):
+        return amplitudes_to_vector_ea(r1, r2)
+
+    def vector_size(self):
+        nocca, noccb = self.nocc
+        nmoa, nmob = self.nmo
+        nvira, nvirb = nmoa - nocca, nmob - noccb
+        nkpts = self.nkpts
+        return nvira + nvirb + nkpts**2 * (nocca*nvira*(nvira-1)//2+nocca*nvirb*nvira+noccb*nvira*nvirb+noccb*nvirb*(nvirb-1)//2)
+
+    def _make_imds(self, eris=None, t1=None, t2=None):
+        imds = _IMDS(self._cc, eris, t1, t2)
+        imds.make_ea()
+        return imds
 
 class _IMDS:
     def __init__(self, cc, eris=None, t1=None, t2=None):
@@ -763,7 +630,7 @@ if __name__ == '__main__':
         t2 = (t2aa, t2ab, t2bb)
         return t1, t2
 
-    import kccsd_uhf
+    from pyscf.pbc.cc import kccsd_uhf
     mycc = kccsd_uhf.KUCCSD(kmf)
     eris = mycc.ao2mo()
 
@@ -772,7 +639,7 @@ if __name__ == '__main__':
     mycc.t2 = t2
     kconserv = kpts_helper.get_kconserv(kmf.cell, kmf.kpts)
 
-    from pyscf.pbc.cc import kccsd
+    import kccsd
     kgcc = kccsd.GCCSD(scf.addons.convert_to_ghf(kmf))
     kccsd_eris = kccsd._make_eris_incore(kgcc, kgcc._scf.mo_coeff)
     spin_t1 = kccsd.spatial2spin(t1, kccsd_eris.orbspin, kconserv)
