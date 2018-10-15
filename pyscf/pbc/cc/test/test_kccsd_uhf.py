@@ -123,6 +123,7 @@ class KnownValues(unittest.TestCase):
         kmf.mo_energy = (numpy.arange(nmo) +
                          numpy.random.random((2,3,nmo)) * .3)
         kmf.mo_energy[kmf.mo_occ == 0] += 2
+
         kmf.mo_coeff = (numpy.random.random((2,3,nmo,nmo)) +
                         numpy.random.random((2,3,nmo,nmo))*1j - .5-.5j)
 
