@@ -27,20 +27,21 @@ class KnowValues(unittest.TestCase):
     gto_mf = scf.RKS(mol)
     gto_mf.xc = 'PBE'
     gto_mf.kernel()
-    print(__name__, 'veff')
+    #print(__name__, 'veff')
     veff = gto_mf.get_veff()
-    print(veff.shape)
-    print(veff.sum())
+    #print(veff.shape)
+    #print(veff.sum())
     #gto_td = tddft.TDDFT(gto_mf)
     #gto_td.nstates = 190
     #gto_td.kernel()
     
-    print(__name__, parse_xc_name(gto_mf.xc) )
-    print(__name__, xc_type(gto_mf.xc) )
-    print(__name__, is_hybrid_xc(gto_mf.xc) )
-    print(__name__, is_gga(gto_mf.xc) )
-    print(__name__, is_lda(gto_mf.xc) )
+    #print(__name__, parse_xc_name(gto_mf.xc) )
+    #print(__name__, xc_type(gto_mf.xc) )
+    #print(__name__, is_hybrid_xc(gto_mf.xc) )
+    #print(__name__, is_gga(gto_mf.xc) )
+    #print(__name__, is_lda(gto_mf.xc) )
     
+    return 
     
     raise RuntimeError('check ')
     

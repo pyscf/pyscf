@@ -52,7 +52,13 @@ class nao():
     """  Constructor of NAO class """
 
     self.dtype = kw['dtype'] if 'dtype' in kw else np.float64
-    
+    if self.dtype == np.float32:
+      self.dtypeComplex = np.complex64
+    elif self.dtype == np.float64:
+      self.dtypeComplex = np.complex128
+    else:
+      raise ValueError("dtype can be only float32 or float64")
+
     import scipy
     if int(scipy.__version__[0])>0: 
       scipy_ver_def = 1;
@@ -94,6 +100,7 @@ class nao():
     else:
       raise RuntimeError('unknown init method')
 
+    self.pseudo = hasattr(self, 'sp2ion') 
     self._keys = set(self.__dict__.keys())
 
     #print(kw)
@@ -499,10 +506,32 @@ class nao():
   def atom_nelec_core(self, ia): return self.sp2charge[self.atom2sp[ia]]-self.ao_log.sp2valence[self.atom2sp[ia]]
   def ao_loc_nr(self): return self.mu2orb_s[0:self.natm]
 
+  def intor_symmetric(self, intor, comp=None):
+    print(__name__, intor, comp)
+    if intor=='int1e_kin':
+      return 0.5*self.laplace_coo().toarray()
+    elif intor=='int1e_nuc':
+      return self.vnucele_coo().toarray()
+    else:
+      raise RuntimeError('unknown intor '+intor)
+    return 0
+
+  def get_init_guess(self, key=None):
+    """ Compute an initial guess for the density matrix. ???? """
+    from pyscf.scf.hf import init_guess_by_minao
+    if hasattr(self, 'mol'):
+      dm = init_guess_by_minao(self.mol)
+    else:
+      dm = self.make_rdm1()  # the loaded ks orbitals will be used
+      if dm.shape[0:2]==(1,1) and dm.shape[4]==1 : dm = dm.reshape((self.norbs,self.norbs))
+    return dm
+  
+  init_guess_by_minao = get_init_guess
+
   # More functions for convenience (see PDoS)
   def get_orb2j(self): return get_orb2j(self)
   def get_orb2m(self): return get_orb2m(self)
-
+    
   def overlap_coo(self, **kw):   # Compute overlap matrix for the molecule
     from pyscf.nao.m_overlap_coo import overlap_coo
     return overlap_coo(self, **kw)
@@ -519,6 +548,23 @@ class nao():
   def vnucele_coo_coulomb(self, **kw): # Compute matrix elements of attraction by Coulomb forces from point nuclei
     from pyscf.nao.m_vnucele_coo_coulomb import vnucele_coo_coulomb
     return vnucele_coo_coulomb(self, **kw)
+
+  def vnucele_coo_pseudo(self, **kw): # Compute matrix elements of attraction by forces from pseudo atom
+    vna = self.vna_coo(**kw)
+    sop = self.overlap_coo(ao_log=self.ao_log, ao_log2=self.ao_log)
+    dm = self.make_rdm1().reshape([self.norbs, self.norbs])
+    
+    print(__name__, vna.shape, vna.dtype)
+    print(__name__, 'e_vna', (vna*dm).sum())
+    
+    vkb = np.array([0.0, 0.0])
+    return vna+vkb
+  
+  def vnucele_coo(self, **kw):
+    if self.pseudo:
+      return self.vnucele_coo_pseudo(**kw)
+    else:
+      return self.vnucele_coo_coulomb(**kw)
 
   def dipole_coo(self, **kw):   # Compute dipole matrix elements for the given system
     from pyscf.nao.m_dipole_coo import dipole_coo
@@ -611,18 +657,6 @@ class nao():
     if info.value!=0: raise RuntimeError("info!=0")
     return self
 
-  def get_init_guess(self, key=None):
-    """ Compute an initial guess for the density matrix. ???? """
-    from pyscf.scf.hf import init_guess_by_minao
-    if hasattr(self, 'mol'):
-      dm = init_guess_by_minao(self.mol)
-    else:
-      dm = self.comp_dm()  # the loaded ks orbitals will be used
-      if dm.shape[0:2]==(1,1) and dm.shape[4]==1 : dm = dm.reshape((self.norbs,self.norbs))
-    return dm
-  
-  init_guess_by_minao = get_init_guess
-  
   @property
   def nelectron(self):
     if self._nelectron is None:

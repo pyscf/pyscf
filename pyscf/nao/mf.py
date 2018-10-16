@@ -14,15 +14,6 @@ class mf(nao):
     """ Constructor a mean field class (store result of a mean-field calc, deliver density matrix etc) """
     #print(__name__, 'before construct')
     nao.__init__(self, **kw)
-    self.pseudo = hasattr(self, 'sp2ion') 
-    self.gen_pb = kw['gen_pb'] if 'gen_pb' in kw else True
-
-    if self.dtype == np.float32:
-      self.dtypeComplex = np.complex64
-    elif self.dtype == np.float64:
-      self.dtypeComplex = np.complex128
-    else:
-      raise ValueError("dtype can be only float32 or float64")
 
     if 'mf' in kw:
       self.init_mo_from_pyscf(**kw)      
@@ -52,6 +43,7 @@ class mf(nao):
 
     self.init_libnao()
 
+    self.gen_pb = kw['gen_pb'] if 'gen_pb' in kw else True
     if self.gen_pb:
       self.pb = pb = prod_basis(nao=self, **kw)
       self.v_dab = pb.get_dp_vertex_sparse(dtype=self.dtype).tocsr()
@@ -97,8 +89,8 @@ class mf(nao):
     ksn2fd = fermi_dirac_occupations(self.telec, self.mo_energy, self.fermi_energy)
     self.mo_occ = (3-self.nspin)*ksn2fd
     if abs(self.nelectron-self.mo_occ.sum())>1e-6: raise RuntimeError("mo_occ wrong?" )
-    print(__name__, ' self.nspecies ', self.nspecies)
-    print(self.sp_mu2j)
+    #print(__name__, ' self.nspecies ', self.nspecies)
+    #print(self.sp_mu2j)
     
     self.hsx = fireball_hsx(self, **kw)
     #print(self.telec)

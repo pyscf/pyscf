@@ -16,6 +16,7 @@ from __future__ import print_function, division
 from pyscf.nao.m_log_mesh import log_mesh_c
 import numpy as np
 
+
 def comp_moments(self):
   """
     Computes the scalar and dipole moments of the product functions
@@ -168,28 +169,24 @@ class ao_log_c(log_mesh_c):
 
     from pyscf.nao.m_log_interp import log_interp_c
     from pyscf.nao.m_siesta_ion_interp import siesta_ion_interp
-    from pyscf.nao.m_siesta_ion_add_sp2 import _siesta_ion_add_sp2
     from pyscf.nao.m_spline_diff2 import spline_diff2
     from pyscf.nao.m_spline_interp import spline_interp
+    from pyscf.nao.m_get_sp_mu2s import get_sp_mu2s
     
     import numpy as np
 
     self.init_log_mesh_ion(sp2ion, **kw)
-    #print(__name__, self.nr)
-    #print(__name__, self.rr)
-    #print(__name__, self.rmax)
-    #print(__name__, self.rmin)
-    #print(__name__, self.kmax)
     self.interp_rr,self.interp_pp = log_interp_c(self.rr), log_interp_c(self.pp)
-    _siesta_ion_add_sp2(self, sp2ion) # adds the fields for counting, .nspecies etc.
+    self.nspecies = len(sp2ion)
+    self.sp2nmult = np.array([ion["paos"]["npaos"] for ion in sp2ion], dtype='int64')
+    self.sp_mu2rcut = [np.array(ion["paos"]["cutoff"], dtype='float64') for ion in sp2ion]
+    self.sp_mu2j = [np.array([o["l"] for o in ion["paos"]["orbital"]], dtype='int64') for ion in sp2ion]
     self.jmx = max([mu2j.max() for mu2j in self.sp_mu2j])
+    self.sp_mu2s = get_sp_mu2s(self.sp2nmult, self.sp_mu2j)
     self.sp2norbs = np.array([mu2s[self.sp2nmult[sp]] for sp,mu2s in enumerate(self.sp_mu2s)], dtype='int64')
-
-    self.sp2ion = sp2ion
-    
-    rr = self.rr
+    rr, self.sp2ion = self.rr, sp2ion
     nr = len(rr)
-    
+
     #print(__name__, 'self.jmx', self.jmx)
     #print(__name__, 'self.sp2norbs', self.sp2norbs)
     #print(__name__, 'self.sp2norbs', dir(self))
@@ -200,15 +197,30 @@ class ao_log_c(log_mesh_c):
     self.psi_log = siesta_ion_interp(rr, sp2ion, 1)
     self.psi_log_rl = siesta_ion_interp(rr, sp2ion, 0)
     
-    self.sp2vna = []     # Interpolate a Neutral-atom potential V_NA(r) for each specie 
+    self.sp2vna = []     # Interpolate a Neutral-Atom potential V_NA(r) for each specie 
     for ion in sp2ion:
-      vna = np.zeros(nr)
       if ion["vna"] is not None:
+        vna = np.zeros(nr)
         h,dat = ion["vna"]["delta"], ion["vna"]["data"][0][:, 1]
         yy_diff2 = spline_diff2(h, dat, 0.0, 1.0e301)
-        for ir,r in enumerate(rr): 
-          vna[ir] = spline_interp(h, dat, yy_diff2, r)
-      self.sp2vna.append(vna*0.5) # given in Rydberg?
+        for ir,r in enumerate(rr): vna[ir] = spline_interp(h, dat, yy_diff2, r)
+        self.sp2vna.append(vna*0.5) # given in Rydberg?
+
+    if 'kbs' in sp2ion[0]:
+      self.sp_mu2chi_kb = [] # Interpolate the Kleinman-Bylander projectors for each specie
+      for iion,ion in enumerate(sp2ion):
+        nkb = ion["kbs"]['npaos']
+        chi_kb = np.zeros((nkb, nr))
+        for ikb,(h,dat) in enumerate(zip(ion["kbs"]["delta"],ion["kbs"]["data"])):
+          yy_diff2 = spline_diff2(h, dat[:,1], 0.0, 1.0e301)
+          for ir,r in enumerate(rr): chi_kb[ikb,ir] = spline_interp(h, dat[:,1], yy_diff2, r)
+        self.sp_mu2chi_kb.append(chi_kb)
+
+      self.sp_mu2j_kb = [ np.array([p["l"] for p in ion["kbs"]["projector"]]) for ion in sp2ion]
+      self.jmx_kb = max([mu2j.max() for mu2j in self.sp_mu2j_kb])
+      self.sp_mu2rcut_kb = [ np.array(ion["kbs"]["cutoff"]) for ion in sp2ion]
+      self.sp_mu2v_kb = [ np.array([p["ref_energy"] for p in ion["kbs"]["projector"]]) for ion in sp2ion]
+      self.sp2rcut_kb = np.array([np.amax(rcuts) for rcuts in self.sp_mu2rcut_kb])
 
     self.sp_mu2rcut = [ np.array(ion["paos"]["cutoff"]) for ion in sp2ion]
     self.sp2rcut = np.array([np.amax(rcuts) for rcuts in self.sp_mu2rcut])
@@ -228,7 +240,7 @@ class ao_log_c(log_mesh_c):
     from pyscf.nao.m_log_interp import log_interp_c
     from pyscf.nao.m_siesta_ion_interp import siesta_ion_interp
 
-    #self.setups = setups if setup is saved in ao_log, we grt the following error
+    #self.setups = setups if setup is saved in ao_log, we get the following error
     #                           while performing copy
     #    File "/home/marc/anaconda2/lib/python2.7/copy.py", line 182, in deepcopy
     #    rv = reductor(2)
