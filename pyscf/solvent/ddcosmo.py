@@ -274,8 +274,6 @@ def ddcosmo_for_casci(mc, pcmobj=None, dm=None):
 
         def kernel(self, mo_coeff=None, ci0=None, verbose=None):
             with_solvent = self.with_solvent
-            if with_solvent.frozen:
-                return oldCAS.kernel(self, mo_coeff, ci0, verbose)
 
             log = logger.new_logger(self)
             log.info('\n** Self-consistently update the solvent effects for %s **',
@@ -283,23 +281,37 @@ def ddcosmo_for_casci(mc, pcmobj=None, dm=None):
             log1 = copy.copy(log)
             log1.verbose -= 1  # Suppress a few output messages
 
+            def casci_iter_(ci0, log):
+                # self.e_tot, self.e_cas, and self.ci are updated in the call
+                # to oldCAS.kernel
+                oldCAS.kernel(self, mo_coeff, ci0, log)
+
+                if isinstance(self.e_cas, (float, numpy.number)):
+                    dm = self.make_rdm1(ci=ci0)
+                else:
+                    log.debug('Computing solvent responses to DM of state %d',
+                              with_solvent.state_id)
+                    dm = self.make_rdm1(ci=ci0[with_solvent.state_id])
+
+                with_solvent.epcm, with_solvent.vpcm = cosmo_solver_(dm)
+                edup = numpy.einsum('ij,ji->', with_solvent.vpcm, dm)
+                self.e_tot += with_solvent.epcm - edup
+                log.debug('  E_diel = %.15g', with_solvent.epcm)
+                return self.e_tot, self.e_cas, self.ci
+
+            if with_solvent.frozen:
+                with lib.temporary_env(self, _finalize=lambda:None):
+                    casci_iter_(ci0, log)
+                log.note('Total energy with solvent effects')
+                self._finalize()
+                return self.e_tot, self.e_cas, self.ci, self.mo_coeff, self.mo_energy
+
+            self.converged = False
             with lib.temporary_env(self, canonicalization=False):
                 e_tot = e_last = 0
                 for cycle in range(self.with_solvent.max_cycle):
                     log.info('\n** Solvent self-consistent cycle %d:', cycle)
-                    e_tot, e_cas, ci0 = oldCAS.kernel(self, mo_coeff, ci0, log1)[:3]
-
-                    if isinstance(self.e_cas, (float, numpy.number)):
-                        dm = self.make_rdm1(ci=ci0)
-                    else:
-                        log.debug('Computing solvent responses to DM of state %d',
-                                  with_solvent.state_id)
-                        dm = self.make_rdm1(ci=ci0[with_solvent.state_id])
-
-                    with_solvent.epcm, with_solvent.vpcm = cosmo_solver_(dm)
-                    edup = numpy.einsum('ij,ji->', with_solvent.vpcm, dm)
-                    e_tot = e_tot - edup + with_solvent.epcm
-                    log.debug('  E_diel = %.15g', with_solvent.epcm)
+                    e_tot, e_cas, ci0 = casci_iter_(ci0, log1)
 
                     de = e_tot - e_last
                     if isinstance(e_cas, (float, numpy.number)):
@@ -312,19 +324,20 @@ def ddcosmo_for_casci(mc, pcmobj=None, dm=None):
                                      cycle, i, e, de[i])
 
                     if abs(e_tot-e_last).max() < with_solvent.conv_tol:
+                        self.converged = True
                         break
                     e_last = e_tot
 
-            # An extra cycle to compute the total energy and canonicalize
-            # CAS orbitals
-            with lib.temporary_env(self, _finalize=lambda:None):
-                log.info('\n** Extra cycle for solvent effects')
-                oldCAS.kernel(self, mo_coeff, ci0, log)
-
-            log.note('Total energy with solvent effects')
-            self.e_tot += with_solvent.epcm - edup
+            if self.canonicalization:
+                self.canonicalize_(mo_coeff, self.ci,
+                                   sort=self.sorting_mo_energy,
+                                   cas_natorb=self.natorb, verbose=log)
+            if self.converged:
+                log.info('CASCI+Solvent self-consistent calculation converged')
+            else:
+                log.info('CASCI+Solvent self-consistent calculation not converged')
             self._finalize()
-            return e_tot, e_cas, ci0
+            return self.e_tot, self.e_cas, self.ci, self.mo_coeff, self.mo_energy
 
         def nuc_grad_method(self):
             from pyscf.solvent import ddcosmo_grad

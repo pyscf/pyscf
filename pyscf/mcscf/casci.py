@@ -683,6 +683,17 @@ class CASCI(lib.StreamObject):
         if self.mo_coeff is None:
             log.error('Orbitals for CASCI are not specified. The relevant SCF '
                       'object may not be initialized.')
+
+        if (getattr(self._scf, 'with_solvent', None) and
+            not getattr(self, 'with_solvent', None)):
+            log.warn('''Solvent model %s was found in SCF object.
+It is not applied to the CASSCF object. The CASSCF result is not affected by the SCF solvent model.
+To enable the solvent model for CASSCF, a decoration to CASSCF object as below needs be called
+        from pyscf import solvent
+        mc = mcscf.CASSCF(...)
+        mc = solvent.ddCOSMO(mc)
+''',
+                     self._scf.with_solvent.__class__)
         return self
 
     def get_hcore(self, mol=None):
