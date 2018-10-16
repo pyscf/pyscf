@@ -50,7 +50,7 @@ from pyscf.grad import rks as rks_grad
 # extended and used as the general interface to initialize solvent gradients.
 def ddcosmo_grad(grad_method, pcmobj=None):
     grad_method_class = grad_method.__class__
-    class WithSolventGrad(grad_method.__class__, _SolventGradients):
+    class WithSolventGrad(grad_method.__class__):
         def __init__(self, pcmobj):
             self.__dict__.update(grad_method.__dict__)
             self.with_solvent = pcmobj
@@ -60,7 +60,8 @@ def ddcosmo_grad(grad_method, pcmobj=None):
 
         def kernel(self, dm=None, atmlst=None):
             if dm is None:
-                dm = grad_method.base.make_rdm1()
+                dm = grad_method.base.make_rdm1(ao_repr=True)
+
             # de_solvent needs to be called first because _finalize method
             # is called in the grad_method.kernel function.  de_solvent is
             # required by the _finalize method.
@@ -85,9 +86,6 @@ def ddcosmo_grad(grad_method, pcmobj=None):
         pcmobj = ddcosmo.DDCOSMO(mf.mol)
     return WithSolventGrad(pcmobj)
 
-class _SolventGradients:
-    pass
-
 
 def kernel(pcmobj, dm, verbose=None):
     mol = pcmobj.mol
@@ -95,6 +93,10 @@ def kernel(pcmobj, dm, verbose=None):
     lmax = pcmobj.lmax
     if pcmobj.grids.coords is None:
         pcmobj.grids.build(with_non0tab=True)
+
+    if not (isinstance(dm, numpy.ndarray) and dm.ndim == 2):
+        # UHF density matrix
+        dm = dm[0] + dm[1]
 
     r_vdw = ddcosmo.get_atomic_radii(pcmobj)
     coords_1sph, weights_1sph = ddcosmo.make_grids_one_sphere(pcmobj.lebedev_order)

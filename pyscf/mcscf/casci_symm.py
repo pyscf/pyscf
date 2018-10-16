@@ -51,7 +51,7 @@ class SymAdaptedCASCI(casci.CASCI):
     def wfnsym(self, wfnsym):
         self.fcisolver.wfnsym = wfnsym
 
-    def kernel(self, mo_coeff=None, ci0=None):
+    def kernel(self, mo_coeff=None, ci0=None, verbose=None):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
         if ci0 is None:
@@ -59,7 +59,7 @@ class SymAdaptedCASCI(casci.CASCI):
 
         # Initialize/overwrite self.fcisolver.orbsym and self.fcisolver.wfnsym
         mo_coeff = self.mo_coeff = label_symmetry_(self, mo_coeff, ci0)
-        return casci.CASCI.kernel(self, mo_coeff, ci0)
+        return casci.CASCI.kernel(self, mo_coeff, ci0, verbose)
 
     def _eig(self, mat, b0, b1, orbsym=None):
         # self.mo_coeff.orbsym is initialized in kernel function

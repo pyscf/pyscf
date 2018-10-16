@@ -12,6 +12,7 @@ PySCF 1.6 alpha (2018-09-??)
   - Overlap of two CISD wavefunctions
   - EFG and Mossbauer spectroscopy of crystal and molecule
   - Molecular magnetizability for HF and DFT
+  - ddCOSMO and ddPCM for MCSCF, MP, CI and CC methods
 * Improved
   - numint performance (eval_rho, eval_mat)
   - Energy cutoff estimation

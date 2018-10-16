@@ -158,7 +158,7 @@ def get_jk(mol, dm, hermi=1, mf_opt=None):
                                 mol._atm, mol._bas, mol._env, mf_opt)
     return dhf._jk_triu_(vj, vk, hermi)
 
-def make_rdm1(mo_coeff, mo_occ):
+def make_rdm1(mo_coeff, mo_occ, **kwargs):
     return numpy.dot(mo_coeff*mo_occ, mo_coeff.T.conj())
 
 def init_guess_by_minao(mol):
@@ -255,10 +255,10 @@ class X2C_UHF(hf.SCF):
         logger.debug(self, '  mo_energy = %s', mo_energy)
         return mo_occ
 
-    def make_rdm1(self, mo_coeff=None, mo_occ=None):
+    def make_rdm1(self, mo_coeff=None, mo_occ=None, **kwargs):
         if mo_coeff is None: mo_coeff = self.mo_coeff
         if mo_occ is None: mo_occ = self.mo_occ
-        return make_rdm1(mo_coeff, mo_occ)
+        return make_rdm1(mo_coeff, mo_occ, **kwargs)
 
     def init_direct_scf(self, mol=None):
         if mol is None: mol = self.mol
