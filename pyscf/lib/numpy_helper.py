@@ -1071,7 +1071,8 @@ def tag_array(a, **kwargs):
     # Do not check isinstance(a, xxx) here since a may be the object of a
     # derived class of the immutable class (list, tuple, ndarray), which
     # allows to update attributes dynamically.
-    a = numpy.asarray(a).view(NPArrayWithTag)
+    if not isinstance(a, NPArrayWithTag):
+        a = numpy.asarray(a).view(NPArrayWithTag)
     a.__dict__.update(kwargs)
     return a
 
