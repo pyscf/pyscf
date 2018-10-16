@@ -1532,9 +1532,9 @@ class SCF(lib.StreamObject):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         if self.direct_scf:
-            ddm = numpy.asarray(dm) - numpy.asarray(dm_last)
+            ddm = numpy.asarray(dm) - dm_last
             vj, vk = self.get_jk(mol, ddm, hermi=hermi)
-            return numpy.asarray(vhf_last) + vj - vk * .5
+            return vhf_last + vj - vk * .5
         else:
             vj, vk = self.get_jk(mol, dm, hermi=hermi)
             return vj - vk * .5

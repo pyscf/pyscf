@@ -216,7 +216,7 @@ def _gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj, compress_vvvv=False):
     return (h5fobj['dovov'], h5fobj['dvvvv'], h5fobj['doooo'], h5fobj['doovv'],
             h5fobj['dovvo'], dvvov          , h5fobj['dovvv'], h5fobj['dooov'])
 
-def make_rdm1(mycc, t1, t2, l1, l2):
+def make_rdm1(mycc, t1, t2, l1, l2, ao_repr=False):
     '''
     Spin-traced one-particle density matrix in MO basis (the occupied-virtual
     blocks from the orbital response contribution are not included).
@@ -228,7 +228,11 @@ def make_rdm1(mycc, t1, t2, l1, l2):
     E = einsum('pq,qp', h1, rdm1)
     '''
     d1 = _gamma1_intermediates(mycc, t1, t2, l1, l2)
-    return _make_rdm1(mycc, d1, with_frozen=True)
+    dm1 = _make_rdm1(mycc, d1, with_frozen=True)
+    if ao_repr:
+        mo = mycc.mo_coeff
+        dm1 = lib.einsum('pi,ij,qj->pq', mo, dm1, mo.conj())
+    return dm1
 
 def make_rdm2(mycc, t1, t2, l1, l2):
     r'''

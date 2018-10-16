@@ -61,7 +61,7 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2,
 
     return emp2.real, t2
 
-def make_rdm1(mp, t2=None):
+def make_rdm1(mp, t2=None, ao_repr=False):
     r'''
     One-particle density matrix in the molecular spin-orbital representation
     (the occupied-virtual blocks from the orbital response contribution are
@@ -79,7 +79,7 @@ def make_rdm1(mp, t2=None):
     nocc, nvir = t2.shape[1:3]
     dov = numpy.zeros((nocc,nvir))
     d1 = doo, dov, dov.T, dvv
-    return gccsd_rdm._make_rdm1(mp, d1, with_frozen=True)
+    return gccsd_rdm._make_rdm1(mp, d1, with_frozen=True, ao_repr=ao_repr)
 
 def _gamma1_intermediates(mp, t2):
     doo = lib.einsum('imef,jmef->ij', t2.conj(), t2) *-.5

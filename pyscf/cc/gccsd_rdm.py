@@ -105,7 +105,7 @@ def _gamma2_intermediates(mycc, t1, t2, l1, l2):
     dvvov = None
     return (dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov)
 
-def make_rdm1(mycc, t1, t2, l1, l2):
+def make_rdm1(mycc, t1, t2, l1, l2, ao_repr=False):
     r'''
     One-particle density matrix in the molecular spin-orbital representation
     (the occupied-virtual blocks from the orbital response contribution are
@@ -118,7 +118,11 @@ def make_rdm1(mycc, t1, t2, l1, l2):
     E = einsum('pq,qp', h1, rdm1)
     '''
     d1 = _gamma1_intermediates(mycc, t1, t2, l1, l2)
-    return _make_rdm1(mycc, d1, with_frozen=True)
+    dm1 = _make_rdm1(mycc, d1, with_frozen=True)
+    if ao_repr:
+        mo = mycc.mo_coeff
+        dm1 = lib.einsum('pi,ij,qj->pq', mo, dm1, mo.conj())
+    return dm1
 
 def make_rdm2(mycc, t1, t2, l1, l2):
     r'''

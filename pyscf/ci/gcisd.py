@@ -195,7 +195,7 @@ def from_fcivec(ci0, nelec, orbspin, frozen=0):
     return from_ucisdvec(ucisdvec, nocc, orbspin[~frozen_mask])
 
 
-def make_rdm1(myci, civec=None, nmo=None, nocc=None):
+def make_rdm1(myci, civec=None, nmo=None, nocc=None, ao_repr=False):
     r'''
     One-particle density matrix in the molecular spin-orbital representation
     (the occupied-virtual blocks from the orbital response contribution are
@@ -211,7 +211,11 @@ def make_rdm1(myci, civec=None, nmo=None, nocc=None):
     if nmo is None: nmo = myci.nmo
     if nocc is None: nocc = myci.nocc
     d1 = _gamma1_intermediates(myci, civec, nmo, nocc)
-    return gccsd_rdm._make_rdm1(myci, d1, with_frozen=True)
+    dm1 = gccsd_rdm._make_rdm1(myci, d1, with_frozen=True)
+    if ao_repr:
+        mo = myci.mo_coeff
+        dm1 = lib.einsum('pi,ij,qj->pq', mo, dm1, mo.conj())
+    return dm1
 
 def make_rdm2(myci, civec=None, nmo=None, nocc=None):
     r'''

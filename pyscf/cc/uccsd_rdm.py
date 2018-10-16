@@ -344,7 +344,7 @@ def _gamma2_intermediates(cc, t1, t2, l1, l2, compress_vvvv=False):
     d2 = _gamma2_outcore(cc, t1, t2, l1, l2, h5fobj, compress_vvvv)
     return d2
 
-def make_rdm1(mycc, t1, t2, l1, l2):
+def make_rdm1(mycc, t1, t2, l1, l2, ao_repr=False):
     r'''
     One-particle spin density matrices dm1a, dm1b in MO basis (the
     occupied-virtual blocks due to the orbital response contribution are not
@@ -356,7 +356,13 @@ def make_rdm1(mycc, t1, t2, l1, l2):
     The convention of 1-pdm is based on McWeeney's book, Eq (5.4.20).
     '''
     d1 = _gamma1_intermediates(mycc, t1, t2, l1, l2)
-    return _make_rdm1(mycc, d1, with_frozen=True)
+    dm1 = _make_rdm1(mycc, d1, with_frozen=True)
+    if ao_repr:
+        mo_a, mo_b = mycc.mo_coeff
+        dm1a, dm1b = dm1
+        dm1 = (lib.einsum('pi,ij,qj->pq', mo_a, dm1a, mo_a),
+               lib.einsum('pi,ij,qj->pq', mo_b, dm1b, mo_b))
+    return dm1
 
 # spin-orbital rdm2 in Chemist's notation
 def make_rdm2(mycc, t1, t2, l1, l2):

@@ -1062,7 +1062,7 @@ class CASSCF(casci.CASCI):
             casdm1, casdm2 = self.fcisolver.make_rdm12(civec, self.ncas, self.nelecas)
         else:
             casdm1, casdm2 = casdm1_casdm2
-        return gen_g_hop(self, mo_coeff, 1, casdm1, casdm2, eris)[0]
+        return self.gen_g_hop(mo_coeff, 1, casdm1, casdm2, eris)[0]
 
     def _exact_paaa(self, mo, u, out=None):
         nmo = mo.shape[1]
@@ -1214,7 +1214,8 @@ def _fake_h_for_fast_casci(casscf, mo, eris):
     energy_core = casscf._scf.energy_nuc()
     energy_core += numpy.einsum('ij,ji', core_dm, hcore)
     energy_core += eris.vhf_c[:ncore,:ncore].trace()
-    h1eff = reduce(numpy.dot, (mo_cas.T, hcore, mo_cas)) + eris.vhf_c[ncore:nocc,ncore:nocc]
+    h1eff = reduce(numpy.dot, (mo_cas.T, hcore, mo_cas))
+    h1eff += eris.vhf_c[ncore:nocc,ncore:nocc]
     mc.get_h1eff = lambda *args: (h1eff, energy_core)
 
     ncore = casscf.ncore

@@ -40,6 +40,21 @@ def ddpcm_for_scf(mf, pcmobj=None):
         pcmobj = DDPCM(mf.mol)
     return ddcosmo.ddcosmo_for_scf(mf, pcmobj)
 
+def ddpcm_for_casscf(mc, pcmobj):
+    if pcmobj is None:
+        pcmobj = DDPCM(mc.mol)
+    return ddcosmo.ddcosmo_for_casscf(mc, pcmobj)
+
+def ddpcm_for_casci(mc, pcmobj):
+    if pcmobj is None:
+        pcmobj = DDPCM(mc.mol)
+    return ddcosmo.ddcosmo_for_casci(mc, pcmobj)
+
+def ddpcm_for_post_scf(method, pcmobj):
+    if pcmobj is None:
+        pcmobj = DDPCM(method.mol)
+    return ddcosmo.ddcosmo_for_post_scf(method, pcmobj)
+
 def gen_ddpcm_solver(pcmobj, verbose=None):
     mol = pcmobj.mol
     if pcmobj.grids.coords is None:
