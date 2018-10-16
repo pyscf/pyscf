@@ -379,7 +379,7 @@ class UCASCI(casci.CASCI):
         return addons.sort_mo(self, mo_coeff, caslst, base)
 
     def make_rdm1s(self, mo_coeff=None, ci=None, ncas=None, nelecas=None,
-                   ncore=None):
+                   ncore=None, **kwargs):
         if mo_coeff is None: mo_coeff = self.mo_coeff
         if ci is None: ci = self.ci
         if ncas is None: ncas = self.ncas
@@ -400,7 +400,7 @@ class UCASCI(casci.CASCI):
         return dm1a, dm1b
 
     def make_rdm1(self, mo_coeff=None, ci=None, ncas=None, nelecas=None,
-                  ncore=None):
+                  ncore=None, **kwargs):
         dm1a,dm1b = self.make_rdm1s(mo_coeff, ci, ncas, nelecas, ncore)
         return dm1a+dm1b
 

@@ -44,7 +44,7 @@ CHECK_COULOMB_IMAG = getattr(__config__, 'pbc_scf_check_coulomb_imag', True)
 canonical_occ = canonical_occ_ = addons.canonical_occ_
 
 
-def make_rdm1(mo_coeff_kpts, mo_occ_kpts):
+def make_rdm1(mo_coeff_kpts, mo_occ_kpts, **kwargs):
     '''Alpha and beta spin one particle density matrices for all k-points.
 
     Returns:
@@ -449,10 +449,10 @@ class KUHF(pbcuhf.UHF, khf.KSCF):
         e_b, c_b = khf.KSCF.eig(self, h_kpts[1], s_kpts)
         return (e_a,e_b), (c_a,c_b)
 
-    def make_rdm1(self, mo_coeff_kpts=None, mo_occ_kpts=None):
+    def make_rdm1(self, mo_coeff_kpts=None, mo_occ_kpts=None, **kwargs):
         if mo_coeff_kpts is None: mo_coeff_kpts = self.mo_coeff
         if mo_occ_kpts is None: mo_occ_kpts = self.mo_occ
-        return make_rdm1(mo_coeff_kpts, mo_occ_kpts)
+        return make_rdm1(mo_coeff_kpts, mo_occ_kpts, **kwargs)
 
     def get_bands(self, kpts_band, cell=None, dm_kpts=None, kpts=None):
         '''Get energy bands at the given (arbitrary) 'band' k-points.

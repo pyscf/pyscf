@@ -541,7 +541,7 @@ def damping(s, d, f, factor):
 
 
 # full density matrix for RHF
-def make_rdm1(mo_coeff, mo_occ):
+def make_rdm1(mo_coeff, mo_occ, **kwargs):
     '''One-particle density matrix in AO representation
 
     Args:
@@ -1430,10 +1430,10 @@ class SCF(lib.StreamObject):
 
     # full density matrix for RHF
     @lib.with_doc(make_rdm1.__doc__)
-    def make_rdm1(self, mo_coeff=None, mo_occ=None):
+    def make_rdm1(self, mo_coeff=None, mo_occ=None, **kwargs):
         if mo_occ is None: mo_occ = self.mo_occ
         if mo_coeff is None: mo_coeff = self.mo_coeff
-        return make_rdm1(mo_coeff, mo_occ)
+        return make_rdm1(mo_coeff, mo_occ, **kwargs)
 
     energy_elec = energy_elec
     energy_tot = energy_tot
