@@ -48,11 +48,12 @@ from pyscf import lib
 from pyscf.lib import logger
 from pyscf import gto
 from pyscf import df
+from pyscf import mcscf
 from pyscf.dft import gen_grid, numint
 from pyscf.data import radii
 from pyscf.symm import sph
 
-def ddcosmo_for_scf(mf, pcmobj=None, dm=None):
+def ddcosmo_for_scf(mf, solvent_obj=None, dm=None):
     '''Patch ddCOSMO to SCF (HF and DFT) method.
     
     Kwargs:
@@ -60,18 +61,18 @@ def ddcosmo_for_scf(mf, pcmobj=None, dm=None):
             matrix. A frozen ddCOSMO potential is added to the results.
     '''
     if getattr(mf, 'with_solvent', None):
-        if pcmobj is not None:
-            mf.with_solvent = pcmobj
+        if solvent_obj is not None:
+            mf.with_solvent = solvent_obj
         return mf
 
     oldMF = mf.__class__
-    if pcmobj is None:
-        pcmobj = DDCOSMO(mf.mol)
-    cosmo_solver_ = pcmobj.as_solver()
+    if solvent_obj is None:
+        solvent_obj = DDCOSMO(mf.mol)
+    cosmo_solver_ = solvent_obj.as_solver()
 
     if dm is not None:
-        pcmobj.epcm, pcmobj.vpcm = cosmo_solver_(dm)
-        pcmobj.frozen = True
+        solvent_obj.epcm, solvent_obj.vpcm = cosmo_solver_(dm)
+        solvent_obj.frozen = True
 
     class SCFWithSolvent(oldMF):
         def __init__(self, mf, solvent):
@@ -127,10 +128,10 @@ def ddcosmo_for_scf(mf, pcmobj=None, dm=None):
             grad_method = oldMF.nuc_grad_method(self)
             return ddcosmo_grad.ddcosmo_grad(grad_method, self.with_solvent)
 
-    mf1 = SCFWithSolvent(mf, pcmobj)
+    mf1 = SCFWithSolvent(mf, solvent_obj)
     return mf1
 
-def ddcosmo_for_casscf(mc, pcmobj=None, dm=None):
+def ddcosmo_for_casscf(mc, solvent_obj=None, dm=None):
     '''Patch ddCOSMO to CASSCF method.
     
     Kwargs:
@@ -138,26 +139,27 @@ def ddcosmo_for_casscf(mc, pcmobj=None, dm=None):
             matrix. A frozen ddCOSMO potential is added to the results.
     '''
     if getattr(mc, 'with_solvent', None):
-        if pcmobj is not None:
-            mc.with_solvent = pcmobj
+        if solvent_obj is not None:
+            mc.with_solvent = solvent_obj
         return mc
 
     oldCAS = mc.__class__
-    if pcmobj is None:
+    if solvent_obj is None:
         if hasattr(mc._scf, 'with_solvent'):
-            pcmobj = mc._scf.with_solvent
+            solvent_obj = mc._scf.with_solvent
         else:
-            pcmobj = DDCOSMO(mf.mol)
-    cosmo_solver_ = pcmobj.as_solver()
+            solvent_obj = DDCOSMO(mc.mol)
+    cosmo_solver_ = solvent_obj.as_solver()
 
     if dm is not None:
-        pcmobj.epcm, pcmobj.vpcm = cosmo_solver_(dm)
-        pcmobj.frozen = True
+        solvent_obj.epcm, solvent_obj.vpcm = cosmo_solver_(dm)
+        solvent_obj.frozen = True
 
     class CASSCFWithSolvent(oldCAS):
-        def __init__(self, mf, solvent):
-            self.__dict__.update(mf.__dict__)
+        def __init__(self, mc, solvent):
+            self.__dict__.update(mc.__dict__)
             self.with_solvent = solvent
+            self._e_tot_without_solvent = 0
             self._keys.update(['with_solvent'])
 
         def dump_flags(self, verbose=None):
@@ -169,9 +171,9 @@ def ddcosmo_for_casscf(mc, pcmobj=None, dm=None):
                             'converge to conv_tol=%g', self.conv_tol)
             return self
 
-        def update_casdm(self, mo, u, fcivec, e_ci, eris):
+        def update_casdm(self, mo, u, fcivec, e_ci, eris, envs={}):
             casdm1, casdm2, gci, fcivec = \
-                    oldCAS.update_casdm(self, mo, u, fcivec, e_ci, eris)
+                    oldCAS.update_casdm(self, mo, u, fcivec, e_ci, eris, envs)
 
 # The potential is generated based on the density of current micro iteration.
 # It will be added to hcore in casci function. Strictly speaking, this density
@@ -206,16 +208,33 @@ def ddcosmo_for_casscf(mc, pcmobj=None, dm=None):
             log = logger.new_logger(self, verbose)
             log.debug('Running CASCI with solvent. Note the total energy '
                       'has duplicated contributions from solvent.')
+
+            # In oldCAS.casci function, dE was computed based on the total
+            # energy without removing the duplicated solvent contributions.
+            # However, envs['elast'] is the last total energy with correct
+            # solvent effects. Hack envs['elast'] to make oldCAS.casci print
+            # the correct energy difference.
+            envs['elast'] = self._e_tot_without_solvent
             e_tot, e_cas, fcivec = oldCAS.casci(self, mo_coeff, ci0, eris,
                                                 verbose, envs)
+            self._e_tot_without_solvent = e_tot
 
             log.debug('Computing corrections to the total energy.')
-            dm = self.make_rdm1(ci=fcivec)
-            edup = numpy.einsum('ij,ji->', self.with_solvent.vpcm, dm)
-            ediel = self.with_solvent.epcm
-            log.info('Removing duplicated contributions %.15g, '
-                     'adding E_diel = %.15g to total energy.', edup, ediel)
-            e_tot = e_tot - edup + ediel
+            dm = self.make_rdm1(ci=fcivec, ao_repr=True)
+
+            with_solvent = self.with_solvent
+            if with_solvent.epcm is not None:
+                edup = numpy.einsum('ij,ji->', with_solvent.vpcm, dm)
+                ediel = with_solvent.epcm
+                e_tot = e_tot - edup + ediel
+                log.info('Removing duplication %.15g, '
+                         'adding E_diel = %.15g to total energy:\n'
+                         '    E(CASSCF+solvent) = %.15g', edup, ediel, e_tot)
+
+            # Update solvent effects for next iteration if needed
+            if not with_solvent.frozen:
+                with_solvent.epcm, with_solvent.vpcm = cosmo_solver_(dm)
+
             return e_tot, e_cas, fcivec
 
         def nuc_grad_method(self):
@@ -223,10 +242,10 @@ def ddcosmo_for_casscf(mc, pcmobj=None, dm=None):
             grad_method = oldCAS.nuc_grad_method(self)
             return ddcosmo_grad.ddcosmo_grad(grad_method, self.with_solvent)
 
-    return CASSCFWithSolvent(mc, pcmobj)
+    return CASSCFWithSolvent(mc, solvent_obj)
 
 
-def ddcosmo_for_casci(mc, pcmobj=None, dm=None):
+def ddcosmo_for_casci(mc, solvent_obj=None, dm=None):
     '''Patch ddCOSMO to CASCI method.
     
     Kwargs:
@@ -234,25 +253,25 @@ def ddcosmo_for_casci(mc, pcmobj=None, dm=None):
             matrix. A frozen ddCOSMO potential is added to the results.
     '''
     if getattr(mc, 'with_solvent', None):
-        if pcmobj is not None:
-            mc.with_solvent = pcmobj
+        if solvent_obj is not None:
+            mc.with_solvent = solvent_obj
         return mc
 
     oldCAS = mc.__class__
-    if pcmobj is None:
+    if solvent_obj is None:
         if hasattr(mc._scf, 'with_solvent'):
-            pcmobj = mc._scf.with_solvent
+            solvent_obj = mc._scf.with_solvent
         else:
-            pcmobj = DDCOSMO(mf.mol)
-    cosmo_solver_ = pcmobj.as_solver()
+            solvent_obj = DDCOSMO(mc.mol)
+    cosmo_solver_ = solvent_obj.as_solver()
 
     if dm is not None:
-        pcmobj.epcm, pcmobj.vpcm = cosmo_solver_(dm)
-        pcmobj.frozen = True
+        solvent_obj.epcm, solvent_obj.vpcm = cosmo_solver_(dm)
+        solvent_obj.frozen = True
 
     class CASCIWithSolvent(oldCAS):
-        def __init__(self, mf, solvent):
-            self.__dict__.update(mf.__dict__)
+        def __init__(self, mc, solvent):
+            self.__dict__.update(mc.__dict__)
             self.with_solvent = solvent
             self._keys.update(['with_solvent'])
 
@@ -284,7 +303,7 @@ def ddcosmo_for_casci(mc, pcmobj=None, dm=None):
             def casci_iter_(ci0, log):
                 # self.e_tot, self.e_cas, and self.ci are updated in the call
                 # to oldCAS.kernel
-                oldCAS.kernel(self, mo_coeff, ci0, log)
+                e_tot, e_cas, ci0 = oldCAS.kernel(self, mo_coeff, ci0, log)[:3]
 
                 if isinstance(self.e_cas, (float, numpy.number)):
                     dm = self.make_rdm1(ci=ci0)
@@ -293,11 +312,14 @@ def ddcosmo_for_casci(mc, pcmobj=None, dm=None):
                               with_solvent.state_id)
                     dm = self.make_rdm1(ci=ci0[with_solvent.state_id])
 
-                with_solvent.epcm, with_solvent.vpcm = cosmo_solver_(dm)
-                edup = numpy.einsum('ij,ji->', with_solvent.vpcm, dm)
-                self.e_tot += with_solvent.epcm - edup
+                if with_solvent.epcm is not None:
+                    edup = numpy.einsum('ij,ji->', with_solvent.vpcm, dm)
+                    self.e_tot += with_solvent.epcm - edup
+
+                if not with_solvent.frozen:
+                    with_solvent.epcm, with_solvent.vpcm = cosmo_solver_(dm)
                 log.debug('  E_diel = %.15g', with_solvent.epcm)
-                return self.e_tot, self.e_cas, self.ci
+                return self.e_tot, e_cas, ci0
 
             if with_solvent.frozen:
                 with lib.temporary_env(self, _finalize=lambda:None):
@@ -328,14 +350,14 @@ def ddcosmo_for_casci(mc, pcmobj=None, dm=None):
                         break
                     e_last = e_tot
 
-            if self.canonicalization:
-                self.canonicalize_(mo_coeff, self.ci,
-                                   sort=self.sorting_mo_energy,
-                                   cas_natorb=self.natorb, verbose=log)
+            # An extra cycle to canonicalize CASCI orbitals
+            with lib.temporary_env(self, _finalize=lambda:None):
+                casci_iter_(ci0, log)
             if self.converged:
-                log.info('CASCI+Solvent self-consistent calculation converged')
+                log.info('self-consistent CASCI+solvent converged')
             else:
-                log.info('CASCI+Solvent self-consistent calculation not converged')
+                log.info('self-consistent CASCI+solvent not converged')
+            log.note('Total energy with solvent effects')
             self._finalize()
             return self.e_tot, self.e_cas, self.ci, self.mo_coeff, self.mo_energy
 
@@ -344,10 +366,10 @@ def ddcosmo_for_casci(mc, pcmobj=None, dm=None):
             grad_method = oldCAS.nuc_grad_method(self)
             return ddcosmo_grad.ddcosmo_grad(grad_method, self.with_solvent)
 
-    return CASCIWithSolvent(mc, pcmobj)
+    return CASCIWithSolvent(mc, solvent_obj)
 
 
-def ddcosmo_for_post_scf(method, pcmobj=None, dm=None):
+def ddcosmo_for_post_scf(method, solvent_obj=None, dm=None):
     '''Default wrapper to patch ddCOSMO to post-SCF methods (CC, CI, MP,
     TDDFT etc.)
     
@@ -356,19 +378,19 @@ def ddcosmo_for_post_scf(method, pcmobj=None, dm=None):
             matrix. A frozen ddCOSMO potential is added to the results.
     '''
     if getattr(method, 'with_solvent', None):
-        if pcmobj is not None:
-            method.with_solvent = pcmobj
-            method._scf.with_solvent = pcmobj
+        if solvent_obj is not None:
+            method.with_solvent = solvent_obj
+            method._scf.with_solvent = solvent_obj
         return method
 
     old_method = method.__class__
 
     if getattr(method._scf, 'with_solvent', None):
         scf_with_solvent = method._scf
-        if pcmobj is not None:
-            scf_with_solvent.with_solvent = pcmobj
+        if solvent_obj is not None:
+            scf_with_solvent.with_solvent = solvent_obj
     else:
-        scf_with_solvent = ddcosmo_for_scf(method._scf, pcmobj, dm)
+        scf_with_solvent = ddcosmo_for_scf(method._scf, solvent_obj, dm)
 
     # Post-HF objects access the solvent effects indirectly through the
     # underlying ._scf object.
@@ -378,8 +400,8 @@ def ddcosmo_for_post_scf(method, pcmobj=None, dm=None):
     cosmo_solver_ = scf_with_solvent.with_solvent.as_solver()
 
     if dm is not None:
-        pcmobj.epcm, pcmobj.vpcm = cosmo_solver_(dm)
-        pcmobj.frozen = True
+        solvent_obj.epcm, solvent_obj.vpcm = cosmo_solver_(dm)
+        solvent_obj.frozen = True
 
     class PostSCFWithSolvent(old_method):
         def __init__(self, method):
@@ -396,6 +418,11 @@ def ddcosmo_for_post_scf(method, pcmobj=None, dm=None):
 
         def kernel(self, *args, **kwargs):
             with_solvent = self.with_solvent
+            # The underlying ._scf object is decorated with solvent effects.
+            # The resultant Fock matrix and orbital energies both include the
+            # effects from solvent. It means that solvent effects for post-HF
+            # methods are automatically counted if solvent is enabled at scf
+            # level.
             if with_solvent.frozen:
                 return old_method.kernel(self, *args, **kwargs)
 
@@ -416,14 +443,17 @@ def ddcosmo_for_post_scf(method, pcmobj=None, dm=None):
                 # call to the _scf iterations.
                 with lib.temporary_env(with_solvent, frozen=True):
                     e_tot = basic_scanner(self.mol)
-                dm = basic_scanner.make_rdm1(ao_repr=True)
+                    dm = basic_scanner.make_rdm1(ao_repr=True)
 
-                # The solvent potential for ._scf object is generated in the
-                # following code.
+                if with_solvent.epcm is not None:
+                    edup = numpy.einsum('ij,ji->', with_solvent.vpcm, dm)
+                    e_tot = e_tot - edup + with_solvent.epcm
+                    log.debug('  E_diel = %.15g', with_solvent.epcm)
+
+                # To generate the solvent potential for ._scf object. Since
+                # frozen is set when calling basic_scanner, the solvent
+                # effects are frozen during the scf iterations.
                 with_solvent.epcm, with_solvent.vpcm = cosmo_solver_(dm)
-                edup = numpy.einsum('ij,ji->', with_solvent.vpcm, dm)
-                e_tot = e_tot - edup + with_solvent.epcm
-                log.debug('  E_diel = %.15g', with_solvent.epcm)
 
                 de = e_tot - e_last
                 log.info('Sovlent cycle %d  E_tot = %.15g  dE = %g',
