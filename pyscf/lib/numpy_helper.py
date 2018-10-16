@@ -1068,13 +1068,15 @@ def tag_array(a, **kwargs):
     '''Attach attributes to numpy ndarray. The attribute name and value are
     obtained from the keyword arguments.
     '''
-    # Do not check isinstance(a, xxx) here since a may be the object of a
-    # derived class of the immutable class (list, tuple, ndarray), which
-    # allows to update attributes dynamically.
-    if not isinstance(a, NPArrayWithTag):
-        a = numpy.asarray(a).view(NPArrayWithTag)
-    a.__dict__.update(kwargs)
-    return a
+    # Make a shadow copy in any circumstance by converting it to an nparray.
+    # If a is an object of NPArrayWithTag, all attributes will be lost in this
+    # conversion. They need to be restored.
+    t = numpy.asarray(a).view(NPArrayWithTag)
+
+    if isinstance(a, NPArrayWithTag):
+        t.__dict__.update(a.__dict__)
+    t.__dict__.update(kwargs)
+    return t
 
 if __name__ == '__main__':
     a = numpy.random.random((30,40,5,10))
