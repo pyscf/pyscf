@@ -1584,8 +1584,12 @@ def same_mol(mol1, mol2, tol=1e-5, cmp_basis=True, ignore_chiral=False):
         return False
 
     def finger(mol, chgs, coord):
-        center = charge_center(mol._atom, chgs, coord)
-        im = inertia_momentum(mol._atom, chgs, coord)
+        center = numpy.einsum('z,zr->r', chgs, coord) / chgs.sum()
+        im = inertia_momentum(mol, chgs, coord)
+        # Divid im by chgs.sum(), to normalize im. Otherwise the input tol may
+        # not reflect the actual deviation.
+        im /= chgs.sum()
+
         w, v = scipy.linalg.eigh(im)
         axes = v.T
         if numpy.linalg.det(axes) < 0:
@@ -1640,27 +1644,47 @@ def chiral_mol(mol1, mol2=None):
     return (not same_mol(mol1, mol2, ignore_chiral=False) and
             same_mol(mol1, mol2, ignore_chiral=True))
 
-def inertia_momentum(atoms, charges=None, coords=None):
-    if charges is None:
-        charges = numpy.array([charge(a[0]) for a in atoms])
+def inertia_momentum(mol, mass=None, coords=None):
+    if mass is None:
+        mass = atom_mass_list(mol)
     if coords is None:
-        coords = numpy.array([a[1] for a in atoms], dtype=float)
-    chgcenter = numpy.einsum('i,ij->j', charges, coords)/charges.sum()
-    coords = coords - chgcenter
-    im = numpy.einsum('i,ij,ik->jk', charges, coords, coords)/charges.sum()
+        coords = mol.atom_coords()
+    mass_center = numpy.einsum('i,ij->j', mass, coords)/mass.sum()
+    coords = coords - mass_center
+    im = numpy.einsum('i,ij,ik->jk', mass, coords, coords)
     return im
 
-def charge_center(atoms, charges=None, coords=None):
-    if charges is None:
-        charges = numpy.array([charge(a[0]) for a in atoms])
-    if coords is None:
-        coords = numpy.array([a[1] for a in atoms], dtype=float)
-    rbar = numpy.einsum('i,ij->j', charges, coords)/charges.sum()
-    return rbar
+def atom_mass_list(mol, isotope_avg=False):
+    '''A list of mass for all atoms in the molecule
 
-def mass_center(atoms):
-    mass = numpy.array([elements.MASSES[charge(a[0])] for a in atoms])
-    return charge_center(atoms, mass)
+    Kwargs:
+        isotope_avg : boolean
+            Whether to use the isotope average mass as the atomic mass
+    '''
+    if isotope_avg:
+        mass_table = elements.MASSES
+    else:
+        mass_table = elements.ISOTOPE_MAIN
+
+    nucprop = mol.nucprop
+    if nucprop:
+        mass = []
+        for ia in range(mol.natm):
+            z = mol.atom_charge(ia)
+            symb = mol.atom_symbol(ia)
+            stdsymb = _std_symbol(symb)
+            if ia+1 in nucprop:
+                prop = nucprop[ia+1]
+            elif symb in nucprop:
+                prop = nucprop[symb]
+            else:
+                prop = nucprop.get(stdsymb, {})
+
+            mass.append(nucprop.get('mass', mass_table[z]))
+    else:
+        mass = [mass_table[z] for z in mol.atom_charges()]
+
+    return numpy.array(mass)
 
 def condense_to_shell(mol, mat, compressor=numpy.max):
     '''The given matrix is first partitioned to blocks, based on AO shell as
@@ -2592,6 +2616,8 @@ Note when symmetry attributes is assigned, the molecule needs to be placed in a 
         '''np.asarray([mol.atom_coords(i) for i in range(mol.natm)])'''
         ptr = self._atm[:,PTR_COORD]
         return self._env[numpy.vstack((ptr,ptr+1,ptr+2)).T]
+
+    atom_mass_list = atom_mass_list
 
     def atom_nshells(self, atm_id):
         r'''Number of basis/shells of the given atom

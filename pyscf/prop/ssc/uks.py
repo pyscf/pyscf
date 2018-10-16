@@ -21,24 +21,8 @@ Non-relativistic UKS spin-spin coupling (SSC) constants
 (In testing)
 '''
 
-
-import time
-from functools import reduce
-import numpy
-from pyscf import lib
-from pyscf import gto
-from pyscf import tools
 from pyscf.lib import logger
-from pyscf.scf import ucphf
-from pyscf.ao2mo import _ao2mo
-from pyscf.dft import numint
-from pyscf.dft import rks
-from pyscf.soscf.newton_ah import _gen_uhf_response
-from pyscf.prop.nmr import uhf as uhf_nmr
 from pyscf.prop.ssc import uhf as uhf_ssc
-from pyscf.prop.ssc.rhf import _uniq_atoms, _dm1_mo2ao, _write
-from pyscf.data import nist
-from pyscf.data.gyro import get_nuc_g_factor
 
 
 class SpinSpinCoupling(uhf_ssc.SpinSpinCoupling):

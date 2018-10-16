@@ -320,6 +320,19 @@ def _write(stdout, msc3x3, title):
     stdout.write('mu_z %s\n' % str(msc3x3[2]))
     stdout.flush()
 
+def _atom_gyro_list(mol):
+    gyro = []
+    for ia in range(mol.natm):
+        symb = mol.atom_symbol(ia)
+        if symb in mol.nucprop:
+            prop = mol.nucprop[symb]
+            mass = prop.get('mass', None)
+            gyro.append(get_nuc_g_factor(symb, mass))
+        else:
+            # Get default isotope
+            gyro.append(get_nuc_g_factor(symb))
+    return numpy.array(gyro)
+
 
 class SpinSpinCoupling(lib.StreamObject):
     def __init__(self, scf_method):
@@ -383,10 +396,12 @@ class SpinSpinCoupling(lib.StreamObject):
         logger.timer(self, 'spin-spin coupling', *cput0)
 
         if self.verbose >= logger.NOTE:
-            nuc_mag = .5 * (nist.E_MASS/nist.PROTON_MASS)  # e*hbar/2m
+            nuc_magneton = .5 * (nist.E_MASS/nist.PROTON_MASS)  # e*hbar/2m
             au2Hz = nist.HARTREE2J / nist.PLANCK
-            #logger.debug('Unit AU -> Hz %s', au2Hz*nuc_mag**2)
-            iso_ssc = au2Hz * nuc_mag ** 2 * numpy.einsum('kii->k', e11) / 3
+            unit = au2Hz * nuc_magneton ** 2
+            logger.debug(self, 'Unit AU -> Hz %s', unit)
+
+            iso_ssc = unit * numpy.einsum('kii->k', e11) / 3
             natm = mol.natm
             ktensor = numpy.zeros((natm,natm))
             for k, (i, j) in enumerate(self.nuc_pair):
@@ -399,7 +414,7 @@ class SpinSpinCoupling(lib.StreamObject):
 #                    _write(self.stdout, ssc_dia [k], 'dia-magnetism')
 #                    _write(self.stdout, ssc_para[k], 'para-magnetism')
 
-            gyro = [get_nuc_g_factor(mol.atom_symbol(ia)) for ia in range(natm)]
+            gyro = _atom_gyro_list(mol)
             jtensor = numpy.einsum('ij,i,j->ij', ktensor, gyro, gyro)
             label = ['%2d %-2s'%(ia, mol.atom_symbol(ia)) for ia in range(natm)]
             logger.note(self, 'Reduced spin-spin coupling constant K (Hz)')

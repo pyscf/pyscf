@@ -57,7 +57,7 @@ def dia(magobj, gauge_orig=None):
     e2 = rhf_mag._get_dia_1e(magobj, gauge_orig, dm0, dme0)
 
     if gauge_orig is not None:
-        return e2
+        return -e2
 
     # Computing the 2nd order Vxc integrals from GIAO
     grids = mf.grids
@@ -117,7 +117,7 @@ def dia(magobj, gauge_orig=None):
         vmata = vmata + vmata.transpose(0,1,3,2)
         vmatb = vmatb + vmatb.transpose(0,1,3,2)
 
-    else:
+    elif xctype == 'MGGA':
         raise NotImplementedError('meta-GGA')
 
     vmata = rks_mag._add_giao_phase(mol, vmata)
@@ -164,12 +164,13 @@ def dia(magobj, gauge_orig=None):
                        'int2e_gg1', 's4', 9, hermi=1)
         e2 += numpy.einsum('xpq,qp->x', vj, dm0)
 
-    return e2.reshape(3, 3)
+    return -e2.reshape(3, 3)
 
 
 class Magnetizability(uhf_mag.Magnetizability):
     dia = dia
     get_fock = uks_nmr.get_fock
+    solve_mo1 = uks_nmr.solve_mo1
 
 
 if __name__ == '__main__':
@@ -186,11 +187,11 @@ if __name__ == '__main__':
 
     mf = dft.UKS(mol).run()
     mag = Magnetizability(mf).kernel()
-    print(lib.finger(mag) - 0.30375149255154221)
+    print(lib.finger(mag) - -0.30375149255154221)
 
     mf.set(xc = 'b3lyp').run()
     mag = Magnetizability(mf).kernel()
-    print(lib.finger(mag) - 0.3022331813238171)
+    print(lib.finger(mag) - -0.3022331813238171)
 
     mol.atom = [
         [1   , (0. , 0. , .917)],
@@ -200,11 +201,11 @@ if __name__ == '__main__':
 
     mf = dft.UKS(mol).set(xc='lda,vwn').run()
     mag = Magnetizability(mf).kernel()
-    print(lib.finger(mag) - 0.4313210213418015)
+    print(lib.finger(mag) - -0.4313210213418015)
 
     mf = dft.UKS(mol).set(xc='b3lyp').run()
     mag = Magnetizability(mf).kernel()
-    print(lib.finger(mag) - 0.42828345739100998)
+    print(lib.finger(mag) - -0.42828345739100998)
 
     mol = gto.M(atom='''O      0.   0.       0.
                         H      0.  -0.757    0.587
@@ -214,4 +215,4 @@ if __name__ == '__main__':
     mf.xc = 'b3lyp'
     mf.run()
     mag = Magnetizability(mf).kernel()
-    print(lib.finger(mag) - 5.166125828878557)
+    print(lib.finger(mag) - -5.166125828878557)

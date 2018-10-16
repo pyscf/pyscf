@@ -58,13 +58,15 @@ def ddcosmo_for_scf(mf, pcmobj=None):
     cosmo_solver = pcmobj.as_solver()
 
     class SCFWithSolvent(oldMF, _Solvent):
-        def __init__(self, solvent):
-            self._solvent = solvent
+        def __init__(self, mf, solvent):
+            self.__dict__.update(mf.__dict__)
+            self.with_solvent = solvent
+            self._keys.update(['with_solvent'])
 
         def dump_flags(self):
             oldMF.dump_flags(self)
-            self._solvent.check_sanity()
-            self._solvent.dump_flags()
+            self.with_solvent.check_sanity()
+            self.with_solvent.dump_flags()
             return self
 
         def get_veff(self, mol, dm, *args, **kwargs):
@@ -80,16 +82,15 @@ def ddcosmo_for_scf(mf, pcmobj=None):
                 vhf = self.get_veff(self.mol, dm)
             e_tot, e_coul = oldMF.energy_elec(self, dm, h1e, vhf-vhf.vpcm)
             e_tot += vhf.epcm
-            logger.info(self._solvent, '  E_diel = %.15g', vhf.epcm)
+            logger.info(self.with_solvent, '  E_diel = %.15g', vhf.epcm)
             return e_tot, e_coul
 
         def nuc_grad_method(self):
             from pyscf.solvent import ddcosmo_grad
             grad_method = oldMF.nuc_grad_method(self)
-            return ddcosmo_grad.ddcosmo_grad(grad_method, self._solvent)
+            return ddcosmo_grad.ddcosmo_grad(grad_method, self.with_solvent)
 
-    mf1 = SCFWithSolvent(pcmobj)
-    mf1.__dict__.update(mf.__dict__)
+    mf1 = SCFWithSolvent(mf, pcmobj)
     return mf1
 
 class _Solvent:

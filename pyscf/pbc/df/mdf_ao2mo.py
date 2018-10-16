@@ -131,7 +131,7 @@ def ao2mo_7d(mydf, mo_coeff_kpts, kpts=None, factor=1, out=None):
 
         ki = adapted_ji_idx[0] // nkpts
         kj = adapted_ji_idx[0] % nkpts
-        kptls = kpts[[kconserv[ki, kj, :]]]
+        kptls = kpts[kconserv[ki, kj, :]]
         for aoaoks, p0, p1 in mydf.ft_loop(mydf.mesh, q, -kptls):
             for kk, aoao in enumerate(aoaoks):
                 buf = aoao.conj().transpose(1,2,0).reshape(nao**2,ngrids)

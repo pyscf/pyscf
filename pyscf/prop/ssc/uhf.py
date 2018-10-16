@@ -36,7 +36,6 @@ from pyscf.prop.nmr import uhf as uhf_nmr
 from pyscf.prop.ssc import rhf as rhf_ssc
 from pyscf.prop.ssc.rhf import _uniq_atoms, _dm1_mo2ao, _write
 from pyscf.data import nist
-from pyscf.data.gyro import get_nuc_g_factor
 
 # If GHF orbitals are considered, spin matrices of FC+SD part can be
 # explicitly considered as below. However, it is inconsistent to RHF
@@ -441,7 +440,7 @@ class SpinSpinCoupling(rhf_ssc.SpinSpinCoupling):
 #                    _write(self.stdout, ssc_dia [k], 'dia-magnetism')
 #                    _write(self.stdout, ssc_para[k], 'para-magnetism')
 
-            gyro = [get_nuc_g_factor(mol.atom_symbol(ia)) for ia in range(natm)]
+            gyro = rhf_ssc._atom_gyro_list(mol)
             jtensor = numpy.einsum('ij,i,j->ij', ktensor, gyro, gyro)
             label = ['%2d %-2s'%(ia, mol.atom_symbol(ia)) for ia in range(natm)]
             logger.note(self, 'Reduced spin-spin coupling constant K (Hz)')
