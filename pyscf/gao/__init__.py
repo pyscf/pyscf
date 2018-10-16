@@ -17,4 +17,4 @@
 
 ''' General Atomic Orbitals '''
 
-from .gao import gao
+from .gao import GAO

@@ -1,5 +1,6 @@
 from __future__ import print_function, division
 import sys, numpy as np
+from numpy import require
 
 from pyscf.nao.m_color import color as bc
 from pyscf.nao.m_system_vars_dos import system_vars_dos, system_vars_pdos
@@ -50,6 +51,8 @@ class nao():
   def __init__(self, **kw):
     """  Constructor of NAO class """
 
+    self.dtype = kw['dtype'] if 'dtype' in kw else np.float64
+    
     import scipy
     if int(scipy.__version__[0])>0: 
       scipy_ver_def = 1;
@@ -405,9 +408,38 @@ class nao():
     self.mu2orb_s = np.zeros((self.nbas+1), dtype=np.int64)
     for sp,mu_s in zip(self.atom2sp,self.atom2mu_s):
       for mu,j in enumerate(self.ao_log.sp_mu2j[sp]): self.mu2orb_s[mu_s+mu+1] = self.mu2orb_s[mu_s+mu] + 2*j+1
-        
     self._atom = [(self.sp2symbol[sp], list(self.atom2coord[ia,:])) for ia,sp in enumerate(self.atom2sp)]
+    self.init_mo_coeff_label(**kw)
     return self
+
+  def init_mo_coeff_label(self, **kw):
+    """ Constructor a mean-field class from the preceeding SIESTA calculation """
+    from pyscf.nao.m_fermi_dirac import fermi_dirac_occupations
+    self.mo_coeff = require(self.wfsx.x, dtype=self.dtype, requirements='CW')
+    self.mo_energy = require(self.wfsx.ksn2e, dtype=self.dtype, requirements='CW')
+    self.telec = kw['telec'] if 'telec' in kw else self.hsx.telec
+    if self.nspin==1:
+      self.nelec = kw['nelec'] if 'nelec' in kw else np.array([self.hsx.nelec])
+    elif self.nspin==2:
+      self.nelec = kw['nelec'] if 'nelec' in kw else np.array([int(self.hsx.nelec/2), int(self.hsx.nelec/2)])      
+      print(__name__, 'not sure here: self.nelec', self.nelec)
+    else:
+      raise RuntimeError('0>nspin>2?')
+      
+    self.fermi_energy = kw['fermi_energy'] if 'fermi_energy' in kw else self.fermi_energy
+    ksn2fd = fermi_dirac_occupations(self.telec, self.mo_energy, self.fermi_energy)
+    self.mo_occ = (3-self.nspin)*ksn2fd
+
+  def make_rdm1(self, mo_coeff=None, mo_occ=None):
+    # from pyscf.scf.hf import make_rdm1 -- different index order here
+    if mo_occ is None: mo_occ = self.mo_occ[0,:,:]
+    if mo_coeff is None: mo_coeff = self.mo_coeff[0,:,:,:,0]
+    dm = np.zeros((1,self.nspin,self.norbs,self.norbs,1))
+    for s in range(self.nspin):
+      xocc = mo_coeff[s,mo_occ[s]>0,:]
+      focc = mo_occ[s,mo_occ[s]>0]
+      dm[0,s,:,:,0] = np.dot(xocc.T.conj() * focc, xocc)
+    return dm
 
   def init_gpaw(self, **kw):
     """ Use the data from a GPAW LCAO calculations as input to initialize system variables. """
@@ -588,7 +620,9 @@ class nao():
       dm = self.comp_dm()  # the loaded ks orbitals will be used
       if dm.shape[0:2]==(1,1) and dm.shape[4]==1 : dm = dm.reshape((self.norbs,self.norbs))
     return dm
-
+  
+  init_guess_by_minao = get_init_guess
+  
   @property
   def nelectron(self):
     if self._nelectron is None:

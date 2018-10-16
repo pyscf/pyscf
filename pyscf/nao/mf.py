@@ -14,7 +14,6 @@ class mf(nao):
     """ Constructor a mean field class (store result of a mean-field calc, deliver density matrix etc) """
     #print(__name__, 'before construct')
     nao.__init__(self, **kw)
-    self.dtype = kw['dtype'] if 'dtype' in kw else np.float64
     self.pseudo = hasattr(self, 'sp2ion') 
     self.gen_pb = kw['gen_pb'] if 'gen_pb' in kw else True
 
@@ -28,11 +27,9 @@ class mf(nao):
     if 'mf' in kw:
       self.init_mo_from_pyscf(**kw)      
     elif 'label' in kw: # init KS orbitals with SIESTA
-      self.init_mo_coeff_label(**kw)
       self.k2xyzw = self.xml_dict["k2xyzw"]
       self.xc_code = 'LDA,PZ' # just a guess...
     elif 'wfsx_fname' in kw: # init KS orbitals with WFSX file from SIESTA output
-      self.init_mo_coeff_wfsx(**kw)
       self.xc_code = 'LDA,PZ' # just a guess...
     elif 'fireball' in kw: # init KS orbitals with Fireball
       self.init_mo_coeff_fireball(**kw)
@@ -63,36 +60,6 @@ class mf(nao):
       if self.verbosity>0: print(__name__,'\t====> Number of dominant and atom-centered products {}'.format(cc.shape))
 
       #self.pb.init_prod_basis_pp_batch(nao=self, **kw)
- 
-  def init_mo_coeff_wfsx(self, **kw): 
-    from pyscf.nao.m_fermi_dirac import fermi_dirac_occupations
-    self.mo_coeff = require(self.wfsx.x, dtype=self.dtype, requirements='CW')
-    self.mo_energy = require(self.wfsx.ksn2e, dtype=self.dtype, requirements='CW')
-    self.telec = kw['telec'] if 'telec' in kw else self.hsx.telec
-    if self.nspin==1:
-      self.nelec = kw['nelec'] if 'nelec' in kw else array([self.hsx.nelec])
-    elif self.nspin==2:
-      self.nelec = kw['nelec'] if 'nelec' in kw else array([int(self.hsx.nelec/2), int(self.hsx.nelec/2)])      
-      print(__name__, 'not sure here: self.nelec', self.nelec)
-    else:
-      raise RuntimeError('0>nspin>2?')
-      
-    self.fermi_energy = kw['fermi_energy'] if 'fermi_energy' in kw else self.fermi_energy
-    ksn2fd = fermi_dirac_occupations(self.telec, self.mo_energy, self.fermi_energy)
-    self.mo_occ = (3-self.nspin)*ksn2fd
-    return 0
-
-
-  def make_rdm1(self, mo_coeff=None, mo_occ=None):
-    # from pyscf.scf.hf import make_rdm1 -- different index order here
-    if mo_occ is None: mo_occ = self.mo_occ[0,:,:]
-    if mo_coeff is None: mo_coeff = self.mo_coeff[0,:,:,:,0]
-    dm = np.zeros((1,self.nspin,self.norbs,self.norbs,1))
-    for s in range(self.nspin):
-      xocc = mo_coeff[s,mo_occ[s]>0,:]
-      focc = mo_occ[s,mo_occ[s]>0]
-      dm[0,s,:,:,0] = np.dot(xocc.T.conj() * focc, xocc)
-    return dm
 
   def init_mo_from_pyscf(self, **kw):
     """ Initializing from a previous pySCF mean-field calc. """
@@ -118,24 +85,6 @@ class mf(nao):
     self.nelec = kw['nelec'] if 'nelec' in kw else np.array([int(s2o.sum()) for s2o in self.mo_occ[0]])
     fermi = comput_fermi_energy(self.mo_energy, sum(self.nelec), self.telec)
     self.fermi_energy = kw['fermi_energy'] if 'fermi_energy' in kw else fermi
-
-  def init_mo_coeff_label(self, **kw):
-    """ Constructor a mean-field class from the preceeding SIESTA calculation """
-    from pyscf.nao.m_fermi_dirac import fermi_dirac_occupations
-    self.mo_coeff = require(self.wfsx.x, dtype=self.dtype, requirements='CW')
-    self.mo_energy = require(self.wfsx.ksn2e, dtype=self.dtype, requirements='CW')
-    self.telec = kw['telec'] if 'telec' in kw else self.hsx.telec
-    if self.nspin==1:
-      self.nelec = kw['nelec'] if 'nelec' in kw else np.array([self.hsx.nelec])
-    elif self.nspin==2:
-      self.nelec = kw['nelec'] if 'nelec' in kw else np.array([int(self.hsx.nelec/2), int(self.hsx.nelec/2)])      
-      print(__name__, 'not sure here: self.nelec', self.nelec)
-    else:
-      raise RuntimeError('0>nspin>2?')
-      
-    self.fermi_energy = kw['fermi_energy'] if 'fermi_energy' in kw else self.fermi_energy
-    ksn2fd = fermi_dirac_occupations(self.telec, self.mo_energy, self.fermi_energy)
-    self.mo_occ = (3-self.nspin)*ksn2fd
 
   def init_mo_coeff_fireball(self, **kw):
     """ Constructor a mean-field class from the preceeding FIREBALL calculation """

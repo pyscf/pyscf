@@ -13,12 +13,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-from pyscf.gto import Mole
+from pyscf.gto.gto import gto
 from pyscf.nao import nao
 
-class gao(Mole):
-  '''Basic class to hold molecular structure with General Atomic Orbitals, i.e. GTO or NAO'''
 
-  def __init__(self, **kw):
-    Mole.__init__(self, **kw)
-    self.build()
+def GAO(**kw):
+  if 'atom' in kw:
+    mol = gto(**kw)
+    mol.build()
+    return mol
+  else:
+    mol = nao(**kw)
+    return mol
