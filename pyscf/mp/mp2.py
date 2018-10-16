@@ -89,11 +89,8 @@ def make_rdm1(mp, t2=None, eris=None, verbose=logger.NOTE, ao_repr=False):
     nvir = dvv.shape[0]
     dov = numpy.zeros((nocc,nvir), dtype=doo.dtype)
     dvo = dov.T
-    dm1 = ccsd_rdm._make_rdm1(mp, (doo, dov, dvo, dvv), with_frozen=True)
-    if ao_repr:
-        mo = mp.mo_coeff
-        dm1 = lib.einsum('pi,ij,qj->pq', mo, dm1, mo.conj())
-    return dm1
+    return ccsd_rdm._make_rdm1(mp, (doo, dov, dvo, dvv), with_frozen=True,
+                               ao_repr=ao_repr)
 
 def _gamma1_intermediates(mp, t2=None, eris=None):
     if t2 is None: t2 = mp.t2

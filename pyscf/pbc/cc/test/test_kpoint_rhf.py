@@ -270,7 +270,7 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(finger(eris3.ovov), -0.43333292231518528-0.25422730092646378j , 12)
         self.assertAlmostEqual(finger(eris3.voov), -0.38514231913922037+0.2608685307447523j  , 12)
         self.assertAlmostEqual(finger(eris3.vovv), -0.12653400071328597+0.17634730800584489j , 12)
-        self.assertAlmostEqual(finger(numpy.array(eris3.Lpv.tolist())),
+        self.assertAlmostEqual(finger(np.array(eris3.Lpv.tolist())),
                                -2.2567245764033323 +0.76488030281400821j, 12)
 
     def _test_cu_metallic_nonequal_occ(self, kmf, cell, ecc1_bench=-0.9646107739333411):

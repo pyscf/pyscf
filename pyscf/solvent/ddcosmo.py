@@ -89,7 +89,7 @@ def ddcosmo_for_scf(mf, pcmobj=None, dm=None):
         # get_hcore is overloaded by many post-HF methods. Modifying
         # SCF.get_hcore may lead error.
 
-        def get_veff(self, mol, dm, *args, **kwargs):
+        def get_veff(self, mol=None, dm=None, *args, **kwargs):
             vhf = oldMF.get_veff(self, mol, dm, *args, **kwargs)
             with_solvent = self.with_solvent
             if not with_solvent.frozen:

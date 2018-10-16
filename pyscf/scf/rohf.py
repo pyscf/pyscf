@@ -51,7 +51,7 @@ def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
     '''
     if h1e is None: h1e = mf.get_hcore()
     if s1e is None: s1e = mf.get_ovlp()
-    if vhf is None: vhf = mf.get_veff(dm=dm)
+    if vhf is None: vhf = mf.get_veff(mf.mol, dm)
     if dm is None: dm = mf.make_rdm1()
     if isinstance(dm, numpy.ndarray) and dm.ndim == 2:
         dm = numpy.array((dm*.5, dm*.5))

@@ -510,11 +510,7 @@ def make_rdm1(myci, civec=None, nmo=None, nocc=None, ao_repr=False):
     if nmo is None: nmo = myci.nmo
     if nocc is None: nocc = myci.nocc
     d1 = _gamma1_intermediates(myci, civec, nmo, nocc)
-    dm1 = ccsd_rdm._make_rdm1(myci, d1, with_frozen=True)
-    if ao_repr:
-        mo = myci.mo_coeff
-        dm1 = lib.einsum('pi,ij,qj->pq', mo, dm1, mo.conj())
-    return dm1
+    return ccsd_rdm._make_rdm1(myci, d1, with_frozen=True, ao_repr=ao_repr)
 
 def make_rdm2(myci, civec=None, nmo=None, nocc=None):
     r'''

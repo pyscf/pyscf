@@ -755,7 +755,7 @@ def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
             Level shift (in AU) for virtual space.  Default is 0.
     '''
     if h1e is None: h1e = mf.get_hcore()
-    if vhf is None: vhf = mf.get_veff(dm=dm)
+    if vhf is None: vhf = mf.get_veff(mf.mol, dm)
     f = h1e + vhf
     if cycle < 0 and diis is None:  # Not inside the SCF iteration
         return f

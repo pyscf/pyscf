@@ -208,7 +208,7 @@ def get_veff(mol, dm, dm_last=0, vhf_last=0, hermi=1, vhfopt=None):
 def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
              diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
     if h1e is None: h1e = mf.get_hcore()
-    if vhf is None: vhf = mf.get_veff(dm=dm)
+    if vhf is None: vhf = mf.get_veff(mf.mol, dm)
     f = h1e + vhf
     if f.ndim == 2:
         f = (f, f)

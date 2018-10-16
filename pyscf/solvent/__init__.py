@@ -42,7 +42,7 @@ def ddCOSMO(method_or_mol, solvent_obj=None):
     elif isinstance(method_or_mol, mcscf.casci.CASCI):
         return ddcosmo.ddcosmo_for_casci(method_or_mol, solvent_obj)
     elif isinstance(method_or_mol, (tdscf.rhf.TDA, tdscf.rhf.TDHF)):
-        raise NotImplementedError('Solvent model for %s' method_or_mol)
+        raise NotImplementedError('Solvent model for %s' % method_or_mol)
     else:
         return ddcosmo.ddcosmo_for_post_scf(method_or_mol, solvent_obj)
 
@@ -72,7 +72,7 @@ def ddPCM(method_or_mol, solvent_obj=None):
     elif isinstance(method_or_mol, mcscf.casci.CASCI):
         return ddpcm.ddpcm_for_casci(method_or_mol, solvent_obj)
     elif isinstance(method_or_mol, (tdscf.rhf.TDA, tdscf.rhf.TDHF)):
-        raise NotImplementedError('Solvent model for %s' method_or_mol)
+        raise NotImplementedError('Solvent model for %s' % method_or_mol)
     else:
         return ddpcm.ddpcm_for_post_scf(method_or_mol, solvent_obj)
 
