@@ -22,7 +22,7 @@ class KnowValues(unittest.TestCase):
     """ Test reading of bulk, spin-resolved SIESTA calculation  """
     
     chdir = os.path.dirname(os.path.abspath(__file__))+'/ice'
-    sv  = mf(label='siesta', cd=chdir)
+    sv  = mf(label='siesta', cd=chdir, gen_pb=False)
     sv.diag_check()
 
 if __name__ == "__main__": unittest.main()

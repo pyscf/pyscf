@@ -6,7 +6,7 @@ import numpy as np
 #
 def fireball_import(self, **kw):
   """ Calls  """
-  from pyscf.nao.m_ao_log import ao_log_c
+  from pyscf.nao.ao_log import ao_log
   from pyscf.nao.m_fireball_get_cdcoeffs_dat import fireball_get_ucell_cdcoeffs_dat
   #label, cd
   self.label = label = kw['fireball'] if 'fireball' in kw else 'out'
@@ -107,7 +107,7 @@ def fireball_import(self, **kw):
     ioncompat["valence"] = sum(ion["pao2occ"])
     self.sp2ion[sp] = ioncompat
 
-  self.ao_log = ao_log_c().init_ao_log_ion(self.sp2ion, **kw)
+  self.ao_log = ao_log(sp2ion=self.sp2ion, **kw)
   self.sp_mu2j = [mu2j for mu2j in self.ao_log.sp_mu2j ]
   
   #self.ao_log.view()

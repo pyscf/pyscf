@@ -33,6 +33,7 @@ class mf(nao):
       self.xc_code = 'GGA,PBE' # just a guess...
       pass
     else:
+      print(__name__, kw.keys())
       raise RuntimeError('unknown constructor')
 
     #_dft_common_init_(self)

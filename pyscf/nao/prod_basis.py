@@ -115,7 +115,7 @@ class prod_basis():
 
   def init_prod_basis_pp_batch(self, nao, **kw):
     """ Talman's procedure should be working well with Pseudo-Potential starting point."""
-    from pyscf.nao import prod_log_c
+    from pyscf.nao.prod_log import prod_log
     from pyscf.nao.m_prod_biloc import prod_biloc_c
 
     sv = nao
@@ -190,7 +190,7 @@ class prod_basis():
         of the dominant product vertices and the conversion coefficients by calling 
         subroutines from the library libnao.
     """
-    from pyscf.nao import prod_log_c
+    from pyscf.nao.prod_log import prod_log
     from pyscf.nao.m_libnao import libnao
     
     self.sv = sv
@@ -200,10 +200,9 @@ class prod_basis():
     
     lload = kw['load_from_hdf5'] if 'load_from_hdf5' in kw else False 
     if lload :
-      self.prod_log = prod_log_c().load_prod_log_dp(sv.ao_log, sv.sp2charge, tol_loc) # tests Fortran input
-      # Checking routine: Load Fortran data
+      self.prod_log = prod_log(ao_log=sv.ao_log, sp2charge=sv.sp2charge, tol_loc=tol_loc, load=True) # tests Fortran input
     else :
-      self.prod_log = prod_log_c().init_prod_log_dp(sv.ao_log, tol_loc) # local basis (for each specie)
+      self.prod_log = prod_log(ao_log=sv.ao_log, tol_loc=tol_loc, **kw) # local basis (for each specie)
     
     self.c2s = zeros((sv.natm+1), dtype=int64) # global product Center (atom) -> start in case of atom-centered basis
     for gc,sp in enumerate(sv.atom2sp): self.c2s[gc+1]=self.c2s[gc]+self.prod_log.sp2norbs[sp] #

@@ -13,36 +13,15 @@
 # limitations under the License.
 
 from __future__ import print_function, division
-from pyscf.nao.m_log_mesh import log_mesh_c
+from pyscf.nao.log_mesh import log_mesh
 import numpy as np
 
-
-def comp_moments(self):
-  """
-    Computes the scalar and dipole moments of the product functions
-    Args:
-      argument can be  prod_log_c    or   ao_log_c
-  """
-  rr3dr = self.rr**3*np.log(self.rr[1]/self.rr[0])
-  rr4dr = self.rr*rr3dr
-  sp2mom0,sp2mom1,cs,cd = [],[],np.sqrt(4*np.pi),np.sqrt(4*np.pi/3.0)
-  for sp,nmu in enumerate(self.sp2nmult):
-    nfunct=sum(2*self.sp_mu2j[sp]+1)
-    mom0 = np.zeros((nfunct))
-    d = np.zeros((nfunct,3))
-    for mu,[j,s] in enumerate(zip(self.sp_mu2j[sp],self.sp_mu2s[sp])):
-      if j==0:                 mom0[s]  = cs*sum(self.psi_log[sp][mu,:]*rr3dr)
-      if j==1: d[s,1]=d[s+1,2]=d[s+2,0] = cd*sum(self.psi_log[sp][mu,:]*rr4dr)
-    sp2mom0.append(mom0)
-    sp2mom1.append(d)
-  return sp2mom0,sp2mom1
-
 #
 #
 #
-class ao_log_c(log_mesh_c):
+class ao_log(log_mesh):
   '''
-  holder of radial orbitals on logarithmic grid.
+  Holder of radial orbitals on logarithmic grid.
   Args:
     ions : list of ion structures (read from ion files from siesta)
       or 
@@ -71,46 +50,50 @@ class ao_log_c(log_mesh_c):
   '''
   def __init__(self, **kw):
     """ Initializes numerical orbitals  """
-    log_mesh_c.__init__(self)
+
+    log_mesh.__init__(self, **kw)
     if 'ao_log' in kw : # this is creating a deepcopy of all attributes
       import copy
       ao = kw['ao_log']
       for a in ao.__dict__.keys():
-        try:
-          setattr(self, a, copy.deepcopy(getattr(ao, a)))
-        except:
-          pass
-    return
+        try:    setattr(self, a, copy.deepcopy(getattr(ao, a)))
+        except: pass
+
+    elif 'gto' in kw:
+      self.init_ao_log_gto(**kw)
+    elif 'sp2ion' in kw:
+      self.init_ao_log_ion(**kw)
+    elif 'setups' in kw:
+      self.init_ao_log_gpaw(**kw)
+    elif 'xyz_list' in kw:
+      pass
+    else:
+      print(kw.keys())
+      raise RuntimeError('unknown initialization method')
     
-  def init_ao_log_gto_suggest_mesh(self, rcut_tol=1e-7, **kw):
-    """ Get's radial orbitals and angular momenta from a Mole object, intializes numerical orbitals from the Gaussian type of orbitals etc."""
-    self.init_log_mesh_gto(rcut_tol=rcut_tol, **kw)
-    self._init_ao_log_gto(rcut_tol=rcut_tol, **kw)
-    return self
-
-  def init_ao_log_gto_lm(self, lm, rcut_tol=1e-7, **kw):
-    """ Get's radial orbitals and angular momenta from a previous pySCF calculation, with a given log mesh (radial grid)"""
-    self.init_log_mesh(lm.rr, lm.pp)
-    self._init_ao_log_gto(rcut_tol=1e-7, **kw)
-    return self
-
-  def _init_ao_log_gto(self, **kw):
+    
+  def init_ao_log_gto(self, **kw):
     """ supposed to be private """
     import numpy as np
     from pyscf.nao.m_log_interp import log_interp_c
 
     self.interp_rr,self.interp_pp = log_interp_c(self.rr), log_interp_c(self.pp)
-    sv = nao = kw['nao']
-    rcut_tol = kw['rcut_tol']
-    gto = kw['gto'] if 'gto' in kw else nao.gto
-    self.sp_mu2j = [0]*sv.nspecies
-    self.psi_log = [0]*sv.nspecies
-    self.psi_log_rl = [0]*sv.nspecies
-    self.sp2nmult = np.zeros(sv.nspecies, dtype=np.int64)
-    self.nspecies = sv.nspecies
-    
+
+    gto,rcut_tol = kw['gto'],self.rcut_tol
+    a2s = [gto.atom_symbol(ia) for ia in range(gto.natm) ]
+    self.sp2symbol = sorted(list(set(a2s)))
+    nspecies = self.nspecies = len(self.sp2symbol)
+    atom2sp = np.array([self.sp2symbol.index(s) for s in a2s], dtype=np.int64)
+    self.sp2charge = np.array([-999]*self.nspecies, dtype=np.int64)
+    for ia,sp in enumerate(atom2sp): self.sp2charge[sp]=gto.atom_charge(ia)
+
+    self.sp_mu2j = [0]*nspecies
+    self.psi_log = [0]*nspecies
+    self.psi_log_rl = [0]*nspecies
+    self.sp2nmult = np.zeros(nspecies, dtype=np.int64)
+   
     seen_species = [] # this is auxiliary to organize the loop over species 
-    for ia,sp in enumerate(sv.atom2sp):
+    for ia,sp in enumerate(atom2sp):
       if sp in seen_species: continue
       seen_species.append(sp)
       self.sp2nmult[sp] = nmu = sum([gto.bas_nctr(sid) for sid in gto.atom_shell_ids(ia)])
@@ -146,7 +129,6 @@ class ao_log_c(log_mesh_c):
       self.sp_mu2s.append(mu2s)
     
     self.sp2norbs = np.array([mu2s[-1] for mu2s in self.sp_mu2s])
-    self.sp2charge = sv.sp2charge
     self.sp_mu2rcut = []
     for sp, mu2ff in enumerate(self.psi_log):
       mu2rcut = np.zeros(len(mu2ff))
@@ -175,7 +157,6 @@ class ao_log_c(log_mesh_c):
     
     import numpy as np
 
-    self.init_log_mesh_ion(sp2ion, **kw)
     self.interp_rr,self.interp_pp = log_interp_c(self.rr), log_interp_c(self.pp)
     self.nspecies = len(sp2ion)
     self.sp2nmult = np.array([ion["paos"]["npaos"] for ion in sp2ion], dtype='int64')
@@ -235,7 +216,7 @@ class ao_log_c(log_mesh_c):
 
   #
   #
-  def init_ao_log_gpaw(self, setups, **kvargs):
+  def init_ao_log_gpaw(self, **kw):
     """ Reads radial orbitals from a previous GPAW calculation. """
     from pyscf.nao.m_log_interp import log_interp_c
     from pyscf.nao.m_siesta_ion_interp import siesta_ion_interp
@@ -246,9 +227,8 @@ class ao_log_c(log_mesh_c):
     #    rv = reductor(2)
     #    TypeError: can't pickle Spline objects
 
-
-    self.init_log_mesh_gpaw(setups, **kvargs)
     self.interp_rr,self.interp_pp = log_interp_c(self.rr), log_interp_c(self.pp)
+    setups = kw['setups']
     sdic = setups.setups
     self.sp2key = sdic.keys()
     #key0 = sdic.keys()[0]
@@ -339,7 +319,24 @@ class ao_log_c(log_mesh_c):
     plt.show()
 
   def comp_moments(self):
-    return comp_moments(self)
+    """
+      Computes the scalar and dipole moments of the product functions
+      Args:
+        argument can be  prod_log    or   ao_log
+    """
+    rr3dr = self.rr**3*np.log(self.rr[1]/self.rr[0])
+    rr4dr = self.rr*rr3dr
+    sp2mom0,sp2mom1,cs,cd = [],[],np.sqrt(4*np.pi),np.sqrt(4*np.pi/3.0)
+    for sp,nmu in enumerate(self.sp2nmult):
+      nfunct=sum(2*self.sp_mu2j[sp]+1)
+      mom0 = np.zeros((nfunct))
+      d = np.zeros((nfunct,3))
+      for mu,[j,s] in enumerate(zip(self.sp_mu2j[sp],self.sp_mu2s[sp])):
+        if j==0:                 mom0[s]  = cs*sum(self.psi_log[sp][mu,:]*rr3dr)
+        if j==1: d[s,1]=d[s+1,2]=d[s+2,0] = cd*sum(self.psi_log[sp][mu,:]*rr4dr)
+      sp2mom0.append(mom0)
+      sp2mom1.append(d)
+    return sp2mom0,sp2mom1
   
   def get_aoneo(self):
     """Packs the data into one array for a later transfer to the library """
@@ -386,7 +383,6 @@ if __name__=="__main__":
   from pyscf.nao.m_ao_log import ao_log_c
   """ Interpreting small Gaussian calculation """
   mol = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0', basis='ccpvdz') # coordinates in Angstrom!
-  ao_log = ao_log_c(gto=mol)
-  
-  print(ao_log.sp2norbs)
+  ao = ao_log(gto=mol)
+  print(ao.sp2norbs)
   

@@ -46,7 +46,7 @@ class KnowValues(unittest.TestCase):
     from pyscf.nao.m_ao_eval_libnao import ao_eval_libnao as ao_eval
     from pyscf.nao.m_csphar_talman_libnao import csphar_talman_libnao as csphar_jt
     from pyscf.nao.m_siesta_ion_xml import siesta_ion_xml
-    from pyscf.nao import ao_log_c
+    from pyscf.nao.ao_log import ao_log
     from numpy import sqrt, zeros, array
 
     import os
@@ -55,7 +55,7 @@ class KnowValues(unittest.TestCase):
     sp2ion = []
     sp2ion.append(siesta_ion_xml(dname+'/O.ion.xml'))
 
-    aos = ao_log_c().init_ao_log_ion(sp2ion)
+    aos = ao_log(sp2ion=sp2ion)
     jmx = aos.jmx
     pt = prod_talman_c(aos)
 

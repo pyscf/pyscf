@@ -14,7 +14,7 @@
 
 from __future__ import division, print_function
 import numpy as np
-from pyscf.nao.m_ao_log import ao_log_c
+from pyscf.nao.ao_log import ao_log
 from pyscf.nao.m_sbt import sbt_c
 from pyscf.nao.m_c2r import c2r_c
 from pyscf.nao.m_log_interp import log_interp_c

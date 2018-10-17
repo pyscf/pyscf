@@ -7,7 +7,7 @@ from pyscf.nao.m_system_vars_dos import system_vars_dos, system_vars_pdos
 from pyscf.nao.m_siesta2blanko_csr import _siesta2blanko_csr
 from pyscf.nao.m_siesta2blanko_denvec import _siesta2blanko_denvec
 from pyscf.nao.m_siesta_ion_add_sp2 import _siesta_ion_add_sp2
-from pyscf.nao.m_ao_log import ao_log_c
+from pyscf.nao.ao_log import ao_log
 from scipy.spatial.distance import cdist
     
 #
@@ -46,11 +46,11 @@ def overlap_check(sv, tol=1e-5, **kvargs):
 #
 #
 #
-class nao():
+class nao(ao_log):
 
   def __init__(self, **kw):
     """  Constructor of NAO class """
-
+   
     self.dtype = kw['dtype'] if 'dtype' in kw else np.float64
     if self.dtype == np.float32:
       self.dtypeComplex = np.complex64
@@ -98,6 +98,7 @@ class nao():
     elif 'fireball' in kw:
       self.init_fireball(**kw)
     else:
+      print(__name__, kw.keys())
       raise RuntimeError('unknown init method')
 
     self.pseudo = hasattr(self, 'sp2ion') 
@@ -136,7 +137,7 @@ class nao():
 
     self.sp2charge = [-999]*self.nspecies
     for ia,sp in enumerate(self.atom2sp): self.sp2charge[sp]=gto.atom_charge(ia)
-    self.ao_log = ao_log_c().init_ao_log_gto_suggest_mesh(nao=self, **kw)
+    self.ao_log = ao_log(**kw)
     self.atom2coord = np.zeros((self.natm, 3))
     for ia,coord in enumerate(gto.atom_coords()): self.atom2coord[ia,:]=coord # must be in Bohr already?
     self.atom2s = np.zeros((self.natm+1), dtype=np.int64)
@@ -202,9 +203,7 @@ class nao():
   #
   #
   def init_wfsx_fname(self, **kw):
-    """
-      Initialise system var starting with a given WFSX file
-    """
+    """  Initialise system var starting with a given WFSX file  """
     from pyscf.nao.m_tools import read_xyz
     from pyscf.nao.m_fermi_energy import fermi_energy
     from pyscf.nao.m_siesta_xml import siesta_xml
@@ -230,8 +229,9 @@ class nao():
     self.sp2ion = []
     for sp in self.wfsx.sp2strspecie: self.sp2ion.append(siesta_ion_xml(cd+'/'+sp+'.ion.xml'))
     _siesta_ion_add_sp2(self, self.sp2ion)
-    self.ao_log = ao_log_c().init_ao_log_ion(self.sp2ion, **kw)
-      
+    #self.ao_log = ao_log_c().init_ao_log_ion(self.sp2ion, **kw)
+    self.ao_log = ao_log(sp2ion=self.sp2ion, **kw)
+    
     strspecie2sp = {}
     # initialise a dictionary with species string as a key associated to the specie number
     for sp,strsp in enumerate(self.wfsx.sp2strspecie): strspecie2sp[strsp] = sp
@@ -355,7 +355,8 @@ class nao():
     for sp in self.wfsx.sp2strspecie: self.sp2ion.append(siesta_ion_xml(cd+'/'+sp+'.ion.xml'))
 
     _siesta_ion_add_sp2(self, self.sp2ion)
-    self.ao_log = ao_log_c().init_ao_log_ion(self.sp2ion, **kw)
+    self.ao_log = ao_log(sp2ion=self.sp2ion, **kw)
+
     self.atom2coord = self.xml_dict['atom2coord']
     self.natm=self.natoms=len(self.xml_dict['atom2sp'])
     self.norbs  = self.wfsx.norbs 
@@ -429,7 +430,7 @@ class nao():
       self.nelec = kw['nelec'] if 'nelec' in kw else np.array([self.hsx.nelec])
     elif self.nspin==2:
       self.nelec = kw['nelec'] if 'nelec' in kw else np.array([int(self.hsx.nelec/2), int(self.hsx.nelec/2)])      
-      print(__name__, 'not sure here: self.nelec', self.nelec)
+      if self.verbosity>0: print(__name__, 'not sure here: self.nelec', self.nelec)
     else:
       raise RuntimeError('0>nspin>2?')
       

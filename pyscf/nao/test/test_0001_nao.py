@@ -29,13 +29,14 @@ class KnowValues(unittest.TestCase):
 
   def test_gto2sv(self):
     """ Test transformation of the radial orbitals from GTO to NAO type"""
-    self.assertEqual((sv.natoms,sv.norbs,len(sv.ao_log.psi_log)), (3,24,2))
+    psi_log = sv.ao_log.psi_log
+    self.assertEqual((sv.natoms,sv.norbs,len(psi_log)), (3,24,2))
     rr = sv.ao_log.rr
     self.assertEqual(len(rr), 1024)
     dr = np.log(rr[1]/rr[0])
-    for mu2ff in sv.ao_log.psi_log:
+    for mu2ff in psi_log:
       for ff in mu2ff:
-        norm = (ff**2*sv.ao_log.rr**3).sum()*dr
+        norm = (ff**2*rr**3).sum()*dr
         self.assertAlmostEqual(norm, 1.0)
 
   def test_atom2sv(self):

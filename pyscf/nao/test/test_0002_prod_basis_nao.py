@@ -15,7 +15,8 @@
 from __future__ import print_function, division
 import unittest
 from pyscf import gto
-from pyscf.nao import nao, prod_log_c
+from pyscf.nao import nao
+from pyscf.nao.prod_log import prod_log as prod_log_c
 
 mol = gto.M(
     verbose = 1,
@@ -34,11 +35,12 @@ class KnowValues(unittest.TestCase):
     mf = scf.density_fit(scf.RHF(mol))
     self.assertAlmostEqual(mf.scf(), -76.025936299702536, 2)
     sv = nao(gto=mol)
-    prod_log = prod_log_c().init_prod_log_df(mf.with_df.auxmol, sv)
+    prod_log = prod_log_c(auxmol=mf.with_df.auxmol, nao=sv)
     self.assertEqual(prod_log.rr[0], sv.ao_log.rr[0])
     self.assertEqual(prod_log.pp[0], sv.ao_log.pp[0])
     self.assertEqual(prod_log.nspecies, sv.ao_log.nspecies)
-    self.assertEqual(prod_log.sp2charge, sv.ao_log.sp2charge)
+    for a,b in zip(prod_log.sp2charge, sv.ao_log.sp2charge):
+      self.assertEqual(a, b)
     #print(prod_log.sp_mu2rcut)
     #prod_log.view()
     #print(dir(mf))
@@ -49,7 +51,7 @@ class KnowValues(unittest.TestCase):
   def test_gto2sv_prod_log(self):
     """ Test what ? """
     sv = nao(gto=mol)
-    prod_log = prod_log_c().init_prod_log_dp(sv.ao_log, tol_loc=1e-4)
+    prod_log = prod_log_c(ao_log=sv.ao_log, tol_loc=1e-4)
     mae,mxe,lll=prod_log.overlap_check()
     self.assertTrue(all(lll))
     self.assertEqual(prod_log.nspecies, 2)

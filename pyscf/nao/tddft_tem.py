@@ -98,7 +98,7 @@ class tddft_tem(tddft_iter):
        
         self.check_collision(self.atom2coord)
         self.get_time_range()
-        print(calc_Vext)
+        #print(__name__, calc_Vext)
         if calc_Vext:
             self.calc_external_potential()
         else:

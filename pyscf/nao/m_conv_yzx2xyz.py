@@ -88,7 +88,8 @@ class conv_yzx2xyz_c():
 
 if __name__=='__main__':
   """  Computes coulomb overlaps (ab|cd) between 4 orbitals sitting on the same atom with GTO and compares to NAO """
-  from pyscf.nao import system_vars_c, prod_log_c, ao_matelem_c
+  from pyscf.nao import system_vars_c, ao_matelem_c
+  from pyscf.nao.prod_log import prod_log as prod_log_c
   import numpy as np
   from timeit import default_timer as timer
   from scipy.sparse import csr_matrix

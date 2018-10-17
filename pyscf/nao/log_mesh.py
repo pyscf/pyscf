@@ -79,7 +79,7 @@ def get_default_log_mesh_param4gpaw(sp2dic):
 #
 #
 #
-def log_mesh(nr, rmin, rmax, kmax=None):
+def funct_log_mesh(nr, rmin, rmax, kmax=None):
   """
   Initializes log grid in real and reciprocal (momentum) spaces.
   These grids are used in James Talman's subroutines. 
@@ -98,11 +98,20 @@ def log_mesh(nr, rmin, rmax, kmax=None):
 #
 #
 #
-class log_mesh_c():
+class log_mesh():
   ''' Constructor of the log grid used with NAOs.'''
-  def __init__(self):
-    self.state = 'call an initialize method...'
-    return
+  def __init__(self, **kw):
+    
+    if 'gto' in kw:                 self.init_log_mesh_gto(**kw)
+    elif 'sp2ion' in kw:            self.init_log_mesh_ion(**kw)
+    elif 'setups' in kw:            self.init_log_mesh_gpaw(**kw)
+    elif 'rr' in kw and 'pp' in kw: self.init_log_mesh(**kw)
+    elif 'xyz_list' in kw: pass
+    elif 'ao_log' in kw: pass
+    else:
+      print(kw.keys())
+      raise RuntimeError('unknown init method')
+
   
   def init_log_mesh_gto(self, **kw):
     """ Initialize an optimal logarithmic mesh based on Gaussian orbitals from pySCF"""
@@ -115,13 +124,13 @@ class log_mesh_c():
     self.rmax = kw['rmax'] if "rmax" in kw else rmax_def
     self.kmax = kw['kmax'] if "kmax" in kw else kmax_def
     assert(self.rmin>0.0); assert(self.kmax>0.0); assert(self.nr>2); assert(self.rmax>self.rmin);
-    self.rr,self.pp = log_mesh(self.nr, self.rmin, self.rmax, self.kmax)
-    self.state = 'can be useful for something'
+    self.rr,self.pp = funct_log_mesh(self.nr, self.rmin, self.rmax, self.kmax)
     return self
     
   
-  def init_log_mesh_ion(self, sp2ion, **kw):
+  def init_log_mesh_ion(self, **kw):
     """ Initialize an optimal logarithmic mesh based on information from SIESTA ion files"""
+    sp2ion = kw['sp2ion']
     self.sp2ion = sp2ion
     nr_def,rmin_def,rmax_def,kmax_def = get_default_log_mesh_param4ion(sp2ion)
     self.nr   = kw['nr'] if "nr" in kw else nr_def
@@ -129,33 +138,29 @@ class log_mesh_c():
     self.rmax = kw['rmax'] if "rmax" in kw else rmax_def
     self.kmax = kw['kmax'] if "kmax" in kw else kmax_def
     assert(self.rmin>0.0); assert(self.kmax>0.0); assert(self.nr>2); assert(self.rmax>self.rmin);
-    self.rr,self.pp = log_mesh(self.nr, self.rmin, self.rmax, self.kmax)
-    self.state = 'can be useful for something'
+    self.rr,self.pp = funct_log_mesh(self.nr, self.rmin, self.rmax, self.kmax)
     return self
 
-  def init_log_mesh_gpaw(self, setups, nr=None, rmin=None, rmax=None, kmax=None):
+  def init_log_mesh_gpaw(self, **kw):
     """ This initializes an optimal logarithmic mesh based on setups from GPAW"""
 
     #self.setups = setups same problem than in m_ao_log
+    setups = kw['setups']
     nr_def,rmin_def,rmax_def,kmax_def = get_default_log_mesh_param4gpaw(setups.setups)
-    self.nr = nr_def if nr is None else nr
-    self.rmin = rmin_def if rmin is None else rmin
-    self.rmax = rmax_def if rmax is None else rmax
-    self.kmax = kmax_def if kmax is None else kmax
-    assert self.rmin>0.0
-    assert self.kmax>0.0 
-    assert self.nr>2
-    assert self.rmax>self.rmin
-    self.rr,self.pp = log_mesh(self.nr, self.rmin, self.rmax, self.kmax)
-    self.state = 'can be useful for something'
+    self.nr   = kw['nr'] if "nr" in kw else nr_def
+    self.rmin = kw['rmin'] if "rmin" in kw else rmin_def
+    self.rmax = kw['rmax'] if "rmax" in kw else rmax_def
+    self.kmax = kw['kmax'] if "kmax" in kw else kmax_def
+    assert(self.rmin>0.0); assert(self.kmax>0.0); assert(self.nr>2); assert(self.rmax>self.rmin);
+    self.rr,self.pp = funct_log_mesh(self.nr, self.rmin, self.rmax, self.kmax)
     return self
 
   def init_log_mesh(self, rr, pp):
+    """ Taking over the given grid rr and pp"""
     assert(len(pp)==len(rr))
     self.rr,self.pp = rr,pp
     self.nr = len(rr)
     self.rmin = rr[0]
     self.rmax = rr[-1]
     self.kmax = pp[-1]
-    self.state = 'can be useful for something'
     return self

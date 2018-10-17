@@ -46,7 +46,8 @@ class tddft_iter(chi0_matvec):
     self.matvec_ncalls = 0
 
     if not hasattr(self, 'pb'):
-      print('no pb?')
+      print(__name__, 'no pb?')
+      print(__name__, kw.keys())
       return
       
     self.spmv = spmv_wrapper
