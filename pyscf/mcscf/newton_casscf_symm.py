@@ -28,11 +28,11 @@ from pyscf import fci
 
 class CASSCF(newton_casscf.CASSCF):
     __doc__ = newton_casscf.CASSCF.__doc__
-    def __init__(self, mf, ncas, nelecas, ncore=None, frozen=None):
-        assert(mf.mol.symmetry)
-        newton_casscf.CASSCF.__init__(self, mf, ncas, nelecas, ncore, frozen)
-        #self.fcisolver = fci.solver(mf.mol, self.nelecas[0]==self.nelecas[1], True)
-        self.fcisolver = fci.solver(mf.mol, False, True)
+    def __init__(self, mf_or_mol, ncas, nelecas, ncore=None, frozen=None):
+        newton_casscf.CASSCF.__init__(self, mf_or_mol, ncas, nelecas, ncore, frozen)
+        assert(self.mol.symmetry)
+        #self.fcisolver = fci.solver(self.mol, self.nelecas[0]==self.nelecas[1], True)
+        self.fcisolver = fci.solver(self.mol, False, True)
         self.fcisolver.max_cycle = 25
         #self.fcisolver.max_space = 25
 

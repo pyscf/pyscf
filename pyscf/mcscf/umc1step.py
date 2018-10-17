@@ -367,12 +367,12 @@ class UCASSCF(ucasci.UCASCI):
     #canonicalization = getattr(__config__, 'mcscf_umc1step_UCASSCF_canonicalization', True)
     #sorting_mo_energy = getattr(__config__, 'mcscf_umc1step_UCASSCF_sorting_mo_energy', False)
 
-    def __init__(self, mf, ncas, nelecas, ncore=None, frozen=None):
-        ucasci.UCASCI.__init__(self, mf, ncas, nelecas, ncore)
+    def __init__(self, mf_or_mol, ncas, nelecas, ncore=None, frozen=None):
+        ucasci.UCASCI.__init__(self, mf_or_mol, ncas, nelecas, ncore)
         self.frozen = frozen
 
         self.callback = None
-        self.chkfile = mf.chkfile
+        self.chkfile = self._scf.chkfile
 
         self.fcisolver.max_cycle = getattr(__config__,
                                            'mcscf_umc1step_UCASSCF_fcisolver_max_cycle', 50)
@@ -384,7 +384,7 @@ class UCASSCF(ucasci.UCASCI):
         self.e_tot = None
         self.e_cas = None
         self.ci = None
-        self.mo_coeff = mf.mo_coeff
+        self.mo_coeff = self._scf.mo_coeff
         self.converged = False
         self._max_stepsize = None
 

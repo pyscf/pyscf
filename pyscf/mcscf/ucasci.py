@@ -27,6 +27,7 @@ import numpy
 from pyscf import lib
 from pyscf.lib import logger
 import pyscf.ao2mo
+from pyscf import gto
 from pyscf import scf
 from pyscf import fci
 from pyscf.mcscf import addons
@@ -112,8 +113,13 @@ def kernel(casci, mo_coeff=None, ci0=None, verbose=logger.NOTE):
 
 class UCASCI(casci.CASCI):
     # nelecas is tuple of (nelecas_alpha, nelecas_beta)
-    def __init__(self, mf, ncas, nelecas, ncore=None):
+    def __init__(self, mf_or_mol, ncas, nelecas, ncore=None):
         #assert('UHF' == mf.__class__.__name__)
+        if isinstance(mf_or_mol, gto.Mole):
+            mf = scf.UHF(mf_or_mol)
+        else:
+            mf = mf_or_mol
+
         mol = mf.mol
         self.mol = mol
         self._scf = mf
@@ -410,8 +416,6 @@ del(WITH_META_LOWDIN, LARGE_CI_TOL)
 
 
 if __name__ == '__main__':
-    from pyscf import gto
-    from pyscf import scf
     mol = gto.Mole()
     mol.verbose = 0
     mol.output = None#"out_h2o"
