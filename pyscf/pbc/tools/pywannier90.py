@@ -768,6 +768,7 @@ if __name__ == '__main__':
     kmf = dft.KRKS(cell, abs_kpts).mix_density_fit()
     kmf.xc = 'pbe'
     ekpt = kmf.run()
+    pywannier90.save_kmf(kmf, 'chk_mf')  # Save the wave function
         
     # Run pyWannier90 and plot WFs using pyWannier90        
     num_wann = 4
@@ -779,6 +780,7 @@ if __name__ == '__main__':
     end projections
     '''
     
+    # To use the saved wave function, replace kmf with 'chk_mf'
     w90 = pywannier90.W90(kmf, cell, nk, num_wann, other_keywords = keywords)
     w90.kernel()
     w90.plot_wf(grid=[25,25,25], supercell = [1,1,1])
