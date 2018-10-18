@@ -356,6 +356,7 @@ class nao(ao_log):
 
     _siesta_ion_add_sp2(self, self.sp2ion)
     self.ao_log = ao_log(sp2ion=self.sp2ion, **kw)
+    self.kb_log = ao_log(sp2ion=self.sp2ion, fname='kbs', rr=self.ao_log.rr, pp=self.ao_log.pp)
 
     self.atom2coord = self.xml_dict['atom2coord']
     self.natm=self.natoms=len(self.xml_dict['atom2sp'])
@@ -545,6 +546,12 @@ class nao(ao_log):
     from pyscf.nao.m_overlap_coo import overlap_coo
     from pyscf.nao.m_laplace_am import laplace_am
     return overlap_coo(self, funct=laplace_am)
+
+  def vnucele_coo(self, **kw):
+    if self.pseudo:
+      return self.vnucele_coo_pseudo(**kw)
+    else:
+      return self.vnucele_coo_coulomb(**kw)
   
   def vnucele_coo_coulomb(self, **kw): # Compute matrix elements of attraction by Coulomb forces from point nuclei
     from pyscf.nao.m_vnucele_coo_coulomb import vnucele_coo_coulomb
@@ -552,21 +559,26 @@ class nao(ao_log):
 
   def vnucele_coo_pseudo(self, **kw): # Compute matrix elements of attraction by forces from pseudo atom
     vna = self.vna_coo(**kw)
-    sop = self.overlap_coo(ao_log=self.ao_log, ao_log2=self.ao_log)
-    dm = self.make_rdm1().reshape([self.norbs, self.norbs])
-    
-    print(__name__, vna.shape, vna.dtype)
-    print(__name__, 'e_vna', (vna*dm).sum())
-    
-    vkb = np.array([0.0, 0.0])
-    return vna+vkb
-  
-  def vnucele_coo(self, **kw):
-    if self.pseudo:
-      return self.vnucele_coo_pseudo(**kw)
-    else:
-      return self.vnucele_coo_coulomb(**kw)
+    vnl = self.vnl_coo()    
+    return (vna+vnl).tocoo()
 
+  def vnl_coo(self): 
+    """  Non-local part of the Hamiltonian due to Kleinman-Bylander projectors  """
+    from scipy.sparse import dia_matrix
+    sop = self.overlap_coo(ao_log=self.ao_log, ao_log2=self.kb_log).tocsr()
+    nkb = sop.shape[1]
+    vkb_dia = dia_matrix( ( self.get_vkb(), [0] ), shape = (nkb,nkb) )
+    return ((sop*vkb_dia)*sop.T).tocoo()
+
+  def get_vkb(self): 
+    """ Compose the vector of Kleinman-Bylander energies v^p = v^KB_ln, where p is a global projector index """
+    atom2s, kb = np.zeros((self.natm+1), dtype=int), self.kb_log
+    for atom,sp in enumerate(self.atom2sp): atom2s[atom+1]=atom2s[atom]+kb.sp2norbs[sp]
+    vkb = np.zeros(atom2s[-1])
+    for sp,gs in zip(self.atom2sp,atom2s):
+      for v,s,f in zip(kb.sp_mu2vkb[sp], kb.sp_mu2s[sp], kb.sp_mu2s[sp][1:]): vkb[gs+s:gs+f] = v
+    return vkb
+  
   def dipole_coo(self, **kw):   # Compute dipole matrix elements for the given system
     from pyscf.nao.m_dipole_coo import dipole_coo
     return dipole_coo(self, **kw)

@@ -15,6 +15,7 @@
 from __future__ import print_function, division
 from pyscf.nao.log_mesh import log_mesh
 import numpy as np
+import copy
 
 #
 #
@@ -53,7 +54,6 @@ class ao_log(log_mesh):
 
     log_mesh.__init__(self, **kw)
     if 'ao_log' in kw : # this is creating a deepcopy of all attributes
-      import copy
       ao = kw['ao_log']
       for a in ao.__dict__.keys():
         try:    setattr(self, a, copy.deepcopy(getattr(ao, a)))
@@ -143,83 +143,89 @@ class ao_log(log_mesh):
 
   #
   #  
-  def init_ao_log_ion(self, sp2ion, **kw):
+  def init_ao_log_ion(self, **kw):
     """
         Reads data from a previous SIESTA calculation,
-        interpolates the orbitals on a single log mesh.
+        interpolates the Pseudo-Atomic Orbitals on a single log mesh.
     """
-
     from pyscf.nao.m_log_interp import log_interp_c
-    from pyscf.nao.m_siesta_ion_interp import siesta_ion_interp
     from pyscf.nao.m_spline_diff2 import spline_diff2
     from pyscf.nao.m_spline_interp import spline_interp
-    from pyscf.nao.m_get_sp_mu2s import get_sp_mu2s
-    
-    import numpy as np
 
     self.interp_rr,self.interp_pp = log_interp_c(self.rr), log_interp_c(self.pp)
-    self.nspecies = len(sp2ion)
-    self.sp2nmult = np.array([ion["paos"]["npaos"] for ion in sp2ion], dtype='int64')
-    self.sp_mu2rcut = [np.array(ion["paos"]["cutoff"], dtype='float64') for ion in sp2ion]
-    self.sp_mu2j = [np.array([o["l"] for o in ion["paos"]["orbital"]], dtype='int64') for ion in sp2ion]
-    self.jmx = max([mu2j.max() for mu2j in self.sp_mu2j])
-    self.sp_mu2s = get_sp_mu2s(self.sp2nmult, self.sp_mu2j)
-    self.sp2norbs = np.array([mu2s[self.sp2nmult[sp]] for sp,mu2s in enumerate(self.sp_mu2s)], dtype='int64')
-    rr, self.sp2ion = self.rr, sp2ion
-    nr = len(rr)
-
-    #print(__name__, 'self.jmx', self.jmx)
-    #print(__name__, 'self.sp2norbs', self.sp2norbs)
-    #print(__name__, 'self.sp2norbs', dir(self))
-    #print(__name__, 'self.sp_mu2j', self.sp_mu2j)
-    #print(__name__, 'self.sp_mu2rcut', self.sp_mu2rcut)
-    #print(__name__, 'self.sp_mu2s', self.sp_mu2s)
+    sp2ion = self.sp2ion = kw['sp2ion']
+    fname = kw['fname'] if 'fname' in kw else 'paos'
     
-    self.psi_log = siesta_ion_interp(rr, sp2ion, 1)
-    self.psi_log_rl = siesta_ion_interp(rr, sp2ion, 0)
-    
+    if fname in sp2ion[0]: 
+      self.siesta_ion_interp(sp2ion, fname=fname)
+  
     self.sp2vna = []     # Interpolate a Neutral-Atom potential V_NA(r) for each specie 
-    for ion in sp2ion:
-      if ion["vna"] is not None:
-        vna = np.zeros(nr)
-        h,dat = ion["vna"]["delta"], ion["vna"]["data"][0][:, 1]
-        yy_diff2 = spline_diff2(h, dat, 0.0, 1.0e301)
-        for ir,r in enumerate(rr): vna[ir] = spline_interp(h, dat, yy_diff2, r)
-        self.sp2vna.append(vna*0.5) # given in Rydberg?
+    if sp2ion[0]["vna"] is not None:
+      for ion in sp2ion:
+        h,dat = ion["vna"]["delta"], ion["vna"]["data"][0][:,1]
+        d2 = spline_diff2(h, dat, 0.0, 1.0e301)
+        self.sp2vna.append(np.array([0.5*spline_interp(h, dat, d2, r) for r in self.rr])) # given in Rydberg or Hartree?
 
-    if 'kbs' in sp2ion[0]:
-      self.sp_mu2chi_kb = [] # Interpolate the Kleinman-Bylander projectors for each specie
-      for iion,ion in enumerate(sp2ion):
-        nkb = ion["kbs"]['npaos']
-        chi_kb = np.zeros((nkb, nr))
-        for ikb,(h,dat) in enumerate(zip(ion["kbs"]["delta"],ion["kbs"]["data"])):
-          yy_diff2 = spline_diff2(h, dat[:,1], 0.0, 1.0e301)
-          for ir,r in enumerate(rr): chi_kb[ikb,ir] = spline_interp(h, dat[:,1], yy_diff2, r)
-        self.sp_mu2chi_kb.append(chi_kb)
+    self.sp2chloc = []     # Interpolate the atomic charges for each specie 
+    if sp2ion[0]["chlocal"] is not None:
+      for ion in sp2ion:
+        h,dat = ion["chlocal"]["delta"], ion["chlocal"]["data"][0][:,1]
+        d2 = spline_diff2(h, dat, 0.0, 1.0e301)
+        self.sp2chloc.append(np.array([spline_interp(h, dat, d2, r) for r in self.rr])) 
 
-      self.sp_mu2j_kb = [ np.array([p["l"] for p in ion["kbs"]["projector"]]) for ion in sp2ion]
-      self.jmx_kb = max([mu2j.max() for mu2j in self.sp_mu2j_kb])
-      self.sp_mu2rcut_kb = [ np.array(ion["kbs"]["cutoff"]) for ion in sp2ion]
-      self.sp_mu2v_kb = [ np.array([p["ref_energy"] for p in ion["kbs"]["projector"]]) for ion in sp2ion]
-      self.sp2rcut_kb = np.array([np.amax(rcuts) for rcuts in self.sp_mu2rcut_kb])
-
-    self.sp_mu2rcut = [ np.array(ion["paos"]["cutoff"]) for ion in sp2ion]
-    self.sp2rcut = np.array([np.amax(rcuts) for rcuts in self.sp_mu2rcut])
-    self.sp2charge = [int(ion['z']) for ion in self.sp2ion]
-    self.sp2valence = [int(ion['valence']) for ion in self.sp2ion]
-
-    #call sp2ion_to_psi_log(sv%sp2ion, sv%rr, sv%psi_log)
-    #call init_psi_log_rl(sv%psi_log, sv%rr, sv%uc%mu_sp2j, sv%uc%sp2nmult, sv%psi_log_rl)
-    #call sp2ion_to_core(sv%sp2ion, sv%rr, sv%core_log, sv%sp2has_core, sv%sp2rcut_core)
-    
     return self
 
   #
   #
+  #
+  def siesta_ion_interp(self, sp2ion, fname='paos'):
+    from pyscf.nao.m_get_sp_mu2s import get_sp_mu2s
+    from pyscf.nao.m_spline_diff2 import spline_diff2
+    from pyscf.nao.m_spline_interp import spline_interp
+
+    """
+    Interpolation of orbitals or projectors given on linear grid in the ion dictionary  
+    rr : is the grid on which we want the function
+    sp2ion : list of dictionaries
+    fname : function name, can be 'paos' or 'kbs'
+    """
+    rr, nr, nsp = self.rr, len(self.rr), len(sp2ion)
+    pname = {'paos': 'orbital', 'kbs': 'projector'}[fname]
+
+    self.nspecies = len(sp2ion)
+    
+    self.sp2nmult = np.array([len(ion[fname]['data']) for ion in sp2ion], dtype='int64')
+    self.sp_mu2rcut = [np.array(ion[fname]["cutoff"]) for ion in sp2ion]
+    self.sp_mu2j = [np.array([o["l"] for o in ion[fname][pname]], dtype='int64') for ion in sp2ion]
+    self.jmx = max([mu2j.max() for mu2j in self.sp_mu2j])
+    self.sp_mu2s = get_sp_mu2s(self.sp2nmult, self.sp_mu2j)
+    self.sp2norbs = np.array([mu2s[self.sp2nmult[sp]] for sp,mu2s in enumerate(self.sp_mu2s)], dtype='int64')
+
+    self.sp2rcut = np.array([np.amax(rcuts) for rcuts in self.sp_mu2rcut])
+    self.sp2charge = np.array([int(ion['z']) for ion in self.sp2ion], dtype='int64')
+    self.sp2valence = np.array([int(ion['valence']) for ion in self.sp2ion], dtype='int64')
+    
+    if fname=='kbs':
+      self.sp_mu2vkb = [ np.array([p['ref_energy'] for p in ion['kbs']['projector'] ]) for ion in sp2ion]
+  
+    self.psi_log_rl = []
+    for ion in sp2ion:
+      ff = np.zeros((len(ion[fname][pname]), nr))
+      for mu,(h,dat) in enumerate(zip(ion[fname]["delta"],ion[fname]["data"])):
+        diff2 = spline_diff2(h, dat[:,1], 0.0, 1.0e301)
+        for i,r in enumerate(rr): ff[mu,i] = spline_interp(h, dat[:,1],diff2,r)
+      self.psi_log_rl.append(ff)
+
+    self.psi_log = []
+    for (mu2ff,mu2j) in zip(self.psi_log_rl, self.sp_mu2j):
+      gg = np.zeros((len(mu2j), nr))
+      for mu,(ff,j) in enumerate(zip(mu2ff,mu2j)): gg[mu] = ff*(rr**j)
+      self.psi_log.append(gg)
+
+
   def init_ao_log_gpaw(self, **kw):
     """ Reads radial orbitals from a previous GPAW calculation. """
     from pyscf.nao.m_log_interp import log_interp_c
-    from pyscf.nao.m_siesta_ion_interp import siesta_ion_interp
 
     #self.setups = setups if setup is saved in ao_log, we get the following error
     #                           while performing copy

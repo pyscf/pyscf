@@ -155,8 +155,9 @@ class log_mesh():
     self.rr,self.pp = funct_log_mesh(self.nr, self.rmin, self.rmax, self.kmax)
     return self
 
-  def init_log_mesh(self, rr, pp):
+  def init_log_mesh(self, **kw):
     """ Taking over the given grid rr and pp"""
+    rr, pp = kw['rr'], kw['pp']
     assert(len(pp)==len(rr))
     self.rr,self.pp = rr,pp
     self.nr = len(rr)

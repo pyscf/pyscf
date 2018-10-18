@@ -47,7 +47,7 @@ class KnowValues(unittest.TestCase):
     """ init ao_log with it radial orbitals from GPAW """
     if calc is None: return
     self.assertTrue(hasattr(calc, 'setups'))
-    sv = mf(gpaw=calc)
+    sv = mf(gpaw=calc, gen_pb=False)
     self.assertEqual(sv.ao_log.nr, 1024)
 
 if __name__ == "__main__": unittest.main()

@@ -47,7 +47,7 @@ class KnowValues(unittest.TestCase):
     if calc is None: return
 
     self.assertTrue(hasattr(calc, 'setups'))
-    sv = mf(gpaw=calc)
+    sv = mf(gpaw=calc, gen_pb=False)
     self.assertEqual(sv.ao_log.nr, 1024)
     over = sv.overlap_coo().toarray()
     error = sv.hsx.check_overlaps(over)
