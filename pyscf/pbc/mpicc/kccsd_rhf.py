@@ -1003,6 +1003,9 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
                             eia = numpy.diagonal(foo[ki]).reshape(-1,1) - numpy.diagonal(fvv[ka])
                             ejb = numpy.diagonal(foo[kj]).reshape(-1,1) - numpy.diagonal(fvv[kb])
                             eijab = pyscf.lib.direct_sum('ia,jb->ijab',eia,ejb)
+                            idx = abs(eijab) < LOOSE_ZERO_TOL
+                            eijab[idx] = LARGE_DENOM
+
                             oovv_ijab = numpy.array(eris.oovv[ki,kj,ka])
                             oovv_ijba = numpy.array(eris.oovv[ki,kj,kb]).transpose(0,1,3,2)
                             woovv = 2.*oovv_ijab - oovv_ijba
