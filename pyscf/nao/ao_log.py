@@ -160,14 +160,14 @@ class ao_log(log_mesh):
       self.siesta_ion_interp(sp2ion, fname=fname)
   
     self.sp2vna = []     # Interpolate a Neutral-Atom potential V_NA(r) for each specie 
-    if sp2ion[0]["vna"] is not None:
+    if "vna" in sp2ion[0]:
       for ion in sp2ion:
         h,dat = ion["vna"]["delta"], ion["vna"]["data"][0][:,1]
         d2 = spline_diff2(h, dat, 0.0, 1.0e301)
         self.sp2vna.append(np.array([0.5*spline_interp(h, dat, d2, r) for r in self.rr])) # given in Rydberg or Hartree?
 
     self.sp2chloc = []     # Interpolate the atomic charges for each specie 
-    if sp2ion[0]["chlocal"] is not None:
+    if "chlocal" in sp2ion[0]:
       for ion in sp2ion:
         h,dat = ion["chlocal"]["delta"], ion["chlocal"]["data"][0][:,1]
         d2 = spline_diff2(h, dat, 0.0, 1.0e301)

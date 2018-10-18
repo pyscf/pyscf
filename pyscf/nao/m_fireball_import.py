@@ -103,7 +103,6 @@ def fireball_import(self, **kw):
     paos = {"npaos": ion["npao"], "delta": ion["pao2delta"], "cutoff": ion["pao2rcut"], "npts": ion["pao2npts"], "data": data, 
     "orbital": [ {"l": j, "population": occ} for occ,j in zip(ion["pao2occ"],ion["pao2j"])] }
     ioncompat["paos"] = paos
-    ioncompat["vna"] = None
     ioncompat["valence"] = sum(ion["pao2occ"])
     self.sp2ion[sp] = ioncompat
 
