@@ -168,6 +168,7 @@ class mf(nao):
     coords = rr[0]+rr[1]+rr[2] # This sum creates a (3+1)D array of coordinate values [i,j,k,xyz]
     coords1 = coords.reshape((coords.size//3, 3))
     dens = self.dens_elec(coords1, self.make_rdm1()).reshape(coords.shape[0:3])
+    print(coords1[0], coords[-1])
     print(__name__, dens.sum()*dv)
     vh = fftn(dens)    
     umom = self.ucell_mom()
