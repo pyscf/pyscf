@@ -17,8 +17,8 @@ class KnowValues(unittest.TestCase):
     # siesta: Ena     =         9.253767 
 
     vnl = mf.vnl_coo().toarray()
-    Enl = HARTREE2EV*(0.5)*(vnl*rdm).sum()
-    self.assertAlmostEqual(Enl, -2.854537512350225) # This compares ok with lih.out 
+    Enl = HARTREE2EV*(vnl*rdm).sum()
+    self.assertAlmostEqual(Enl, -2.8533506650656162) # This compares ok with lih.out 
     #siesta: Enl     =        -2.853393
     
     

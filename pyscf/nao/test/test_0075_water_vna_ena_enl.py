@@ -33,9 +33,14 @@ class KnowValues(unittest.TestCase):
     #siesta: Ena     =       175.007584
     
     vnl = nao.vnl_coo().toarray()
-    Enl = (vnl*dm).sum()*(0.5)*HARTREE2EV
-    self.assertAlmostEqual(Enl, -62.190885507237752)
+    Enl = (vnl*dm).sum()*HARTREE2EV
+    self.assertAlmostEqual(Enl, -62.176213752828893)
     #siesta: Enl     =       -62.176200
+
+    vkin = 0.5*nao.laplace_coo().toarray() # Why not -0.5*Laplace ?
+    Ekin = (vkin*dm).sum()*HARTREE2EV
+    self.assertAlmostEqual(Ekin, 351.76677461783862)
+    #siesta: Ekin     =       351.769106 
 
 #siesta: Ebs     =      -103.137894
 #siesta: Eions   =       815.854478

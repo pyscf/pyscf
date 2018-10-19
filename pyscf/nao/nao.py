@@ -223,7 +223,7 @@ class nao(ao_log):
     self.norbs = len(self.wfsx.orb2atm)
     self.norbs_sc = self.norbs
     self.nspin = self.wfsx.nspin
-    self.ucell = np.eye(3)
+    self.ucell = 30.0*np.eye(3)
     self.nkpoints  = self.wfsx.nkpoints
 
     self.sp2ion = []
@@ -564,8 +564,9 @@ class nao(ao_log):
 
   def vnl_coo(self): 
     """  Non-local part of the Hamiltonian due to Kleinman-Bylander projectors  """
+    from pyscf.nao.m_overlap_am import overlap_am
     from scipy.sparse import dia_matrix
-    sop = self.overlap_coo(ao_log=self.ao_log, ao_log2=self.kb_log).tocsr()
+    sop = self.overlap_coo(ao_log=self.ao_log, ao_log2=self.kb_log, funct=overlap_am).tocsr()
     nkb = sop.shape[1]
     vkb_dia = dia_matrix( ( self.get_vkb(), [0] ), shape = (nkb,nkb) )
     return ((sop*vkb_dia)*sop.T).tocoo()
@@ -669,6 +670,26 @@ class nao(ao_log):
     libnao.init_aos_libnao(c_int64(self.norbs), byref(info))
     if info.value!=0: raise RuntimeError("info!=0")
     return self
+
+  def ucell_mom(self):  return (2*np.pi)*np.linalg.inv(self.ucell.T) # reciprocal unit cell
+
+  def get_geom_center(self): # Compute the coordinates of a geometrical center
+    return self.atom2coord.sum(axis=0)/self.natoms
+    
+  def build_3dgrid_pp_pbc(self, **kw): # Compute the equidistant grid knotes
+    """ Equidistant grid nodes and volume element """
+    from scipy.fftpack import next_fast_len
+    Ecut = kw['Ecut'] if 'Ecut' in kw else 50.0 # 50.0 Hartree by default
+    luc = np.sqrt(np.einsum('ix,ix->i', self.ucell, self.ucell))
+    nn = np.array([next_fast_len( int(np.rint(l * np.sqrt(Ecut)/2))) for l in luc], dtype=int)
+    gc = self.ucell/(nn-1) # This is probable the best for finite systems, for PBC use nn, not (nn-1)
+    dv = np.abs(np.dot(gc[0], np.cross(gc[1], gc[2] )))
+    gg = [np.array([gc[i]*j for j in range(nn[i])]) for i in range(3)]
+    center = self.atom2coord.sum(axis=0)/self.natoms
+    gg[0] = gg[0].reshape((nn[0],1,1,3))-center
+    gg[1] = gg[1].reshape((1,nn[1],1,3))-center
+    gg[2] = gg[2].reshape((1,1,nn[2],3))-center
+    return gg,dv
 
   @property
   def nelectron(self):

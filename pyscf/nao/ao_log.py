@@ -164,14 +164,14 @@ class ao_log(log_mesh):
       for ion in sp2ion:
         h,dat = ion["vna"]["delta"], ion["vna"]["data"][0][:,1]
         d2 = spline_diff2(h, dat, 0.0, 1.0e301)
-        self.sp2vna.append(np.array([0.5*spline_interp(h, dat, d2, r) for r in self.rr])) # given in Rydberg or Hartree?
+        self.sp2vna.append(np.array([0.5*spline_interp(h, dat, d2, r) for r in self.rr])) # given in Rydberg in sp2ion
 
-    self.sp2chloc = []     # Interpolate the atomic charges for each specie 
+    self.sp2chlocal = []     # Interpolate the atomic charges for each specie 
     if "chlocal" in sp2ion[0]:
       for ion in sp2ion:
         h,dat = ion["chlocal"]["delta"], ion["chlocal"]["data"][0][:,1]
         d2 = spline_diff2(h, dat, 0.0, 1.0e301)
-        self.sp2chloc.append(np.array([spline_interp(h, dat, d2, r) for r in self.rr])) 
+        self.sp2chlocal.append(np.array([spline_interp(h, dat, d2, r) for r in self.rr])) 
 
     return self
 
@@ -206,7 +206,7 @@ class ao_log(log_mesh):
     self.sp2valence = np.array([int(ion['valence']) for ion in self.sp2ion], dtype='int64')
     
     if fname=='kbs':
-      self.sp_mu2vkb = [ np.array([p['ref_energy'] for p in ion['kbs']['projector'] ]) for ion in sp2ion]
+      self.sp_mu2vkb = [ np.array([0.5*p['ref_energy'] for p in ion['kbs']['projector'] ]) for ion in sp2ion]
   
     self.psi_log_rl = []
     for ion in sp2ion:

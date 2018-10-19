@@ -14,7 +14,7 @@
 
 from __future__ import print_function, division
 import unittest
-from pyscf.nao import nao as nao_c, scf as scf_c
+from pyscf.nao import nao as nao_c
 from pyscf.data.nist import HARTREE2EV
 
 class KnowValues(unittest.TestCase):
@@ -33,9 +33,14 @@ class KnowValues(unittest.TestCase):
     #siesta: Ena     =         4.136159
     
     vnl = nao.vnl_coo().toarray()
-    Enl = (vnl*dm).sum()*(0.5)*HARTREE2EV
-    self.assertAlmostEqual(Enl, 1.3119934288925523)
+    Enl = (vnl*dm).sum()*HARTREE2EV
+    self.assertAlmostEqual(Enl, 1.3120833331377273)
     #siesta: Enl     =         1.312064
+
+    vkin = 0.5*nao.laplace_coo().toarray() # Why not -0.5*Laplace ?
+    Ekin = (vkin*dm).sum()*HARTREE2EV
+    self.assertAlmostEqual(Ekin, 2.6283947063428021)
+    #siesta: Ekin     =       2.628343
 
 #siesta: Ebs     =        -2.302303
 #siesta: Eions   =         9.635204

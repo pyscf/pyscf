@@ -12,17 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-def next235(base):
-  #assert(type(base)==float)
-  next235 = 2 * int(base/2.0+.9999)
-  if (next235<=0) : next235 = 2
-  while 100000:
-    numdiv = next235
-    while ((numdiv//2)*2 == numdiv): numdiv = numdiv//2
-    while ((numdiv//3)*3 == numdiv): numdiv = numdiv//3
-    while ((numdiv//5)*5 == numdiv): numdiv = numdiv//5
-    if numdiv == 1: return next235
-    next235 = next235 + 2
-  raise RuntimeError('too difficult to find...')
-   
-  
+from __future__ import print_function, division
+import unittest
+from pyscf.nao import nao as nao_c
+
+class KnowValues(unittest.TestCase):
+
+  def test_0077_chlocal_H2O(self):
+    """ Test chlocal field (density of bare atoms) """
+    import os
+    dname = os.path.dirname(os.path.abspath(__file__))
+    nao = nao_c(label='water', cd=dname)
+    g = nao.build_3dgrid_ae(level=3)
+    int_chlocal = (g.weights*nao.vna(g.coords, sp2v=nao.ao_log.sp2chlocal)).sum()
+    self.assertAlmostEqual(int_chlocal, -7.9999819496898787)
+
+if __name__ == "__main__": unittest.main()

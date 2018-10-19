@@ -2,7 +2,8 @@ from __future__ import print_function, division
 import os,unittest,numpy as np
 from pyscf.nao import mf as mf_c
 from pyscf.data.nist import HARTREE2EV
-    
+from pyscf.nao.m_overlap_ni import overlap_ni
+
 class KnowValues(unittest.TestCase):
 
   def test_0073_vna_vnl_N2(self):
@@ -17,9 +18,8 @@ class KnowValues(unittest.TestCase):
     # siesta: Ena     =       133.196299
 
     vnl = mf.vnl_coo().toarray()
-    Enl = HARTREE2EV*(0.5)*(vnl*rdm).sum()
-    self.assertAlmostEqual(Enl, -61.596283951911019)
+    Enl = HARTREE2EV*(vnl*rdm).sum()
+    self.assertAlmostEqual(Enl, -61.604522776730128)
     #siesta: Enl     =       -61.601204
-
 
 if __name__ == "__main__": unittest.main()
