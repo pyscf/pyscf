@@ -28,6 +28,7 @@ cell.unit = 'B'
 #cell.verbose = 7
 #cell.output = '/dev/null'
 cell.build()
+nmp = [1,1,2]
 thresh = 1e-8
 
 def get_idx_r2(nkpts,nocc,nvir,ki,kj,i,j,a):
@@ -101,6 +102,19 @@ class TestHe(unittest.TestCase):
         kmf = pbcscf.KGHF(cell, kpts, exxdiv=None)
         Escf = kmf.scf()
         self._test_diag(kmf)
+
+    def test_supercell_vs_kpt(self):
+        # Running HF and CCSD with 1x1x2 Monkhorst-Pack k-point mesh
+        kmf = pbcscf.KGHF(cell, kpts=cell.make_kpts(nmp), exxdiv=None)
+        kmf.kernel()
+        mycc = pbcc.KGCCSD(kmf)
+        mycc.conv_tol = 1e-12
+        mycc.conv_tol_normt = 1e-10
+        ecc2, t1, t2 = mycc.kernel()
+        ecc_ref = -0.01044680113334205
+        print ecc2
+        self.assertAlmostEqual(abs(ecc_ref/2. - ecc2), 0, 10)
+
 
 if __name__ == '__main__':
     unittest.main()
