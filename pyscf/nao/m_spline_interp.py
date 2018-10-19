@@ -55,4 +55,5 @@ end subroutine ! splint
   a=nhi-x/h # This is checked... different to Fortran version due to 0-based arrays
   b=1.0-a
   y=a*yy[nlo]+b*yy[nhi]+((a**3-a)*yy_diff2[nlo]+(b**3-b)*yy_diff2[nhi])*(h**2)/6.0
-  return(y)
+  
+  return y

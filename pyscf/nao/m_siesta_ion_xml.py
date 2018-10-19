@@ -258,4 +258,3 @@ if __name__=="__main__":
   ionxml = siesta_ion_xml(fname)
   print(dir(ionxml))
   
-

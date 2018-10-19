@@ -14,7 +14,7 @@
 
 from __future__ import print_function, division
 import numpy as np
-from pyscf.nao import log_mesh_c
+from pyscf.nao.log_mesh import log_mesh
 from pyscf.nao.m_libnao import libnao
 from ctypes import POINTER, c_double, c_int, byref
 
@@ -50,9 +50,9 @@ libnao.prdred.argtypes = (
 #
 #
 #
-class prod_talman_c(log_mesh_c):
+class prod_talman_c(log_mesh):
   
-  def __init__(self, log_mesh, jmx=7, ngl=96, lbdmx=14):
+  def __init__(self, lm=None, jmx=7, ngl=96, lbdmx=14):
     """
     Expansion of the products of two atomic orbitals placed at given locations and around a center between these locations 
     [1] Talman JD. Multipole Expansions for Numerical Orbital Products, Int. J. Quant. Chem. 107, 1578--1584 (2007)
@@ -66,14 +66,13 @@ class prod_talman_c(log_mesh_c):
     from pyscf.nao.m_csphar_talman_libnao import csphar_talman_libnao as csphar_jt
     assert ngl>2 
     assert jmx>-1
-    assert hasattr(log_mesh, 'rr') 
-    assert hasattr(log_mesh, 'pp')
+    assert hasattr(lm, 'rr') 
+    assert hasattr(lm, 'pp')
     
     self.ngl = ngl
     self.lbdmx = lbdmx
-    self.xx,self.ww = leggauss(ngl)
-    log_mesh_c.__init__(self)
-    self.init_log_mesh(log_mesh.rr, log_mesh.pp)
+    self.xx, self.ww = leggauss(ngl)
+    log_mesh.__init__(self, rr=lm.rr, pp=lm.pp)
 
     self.plval=np.zeros([2*(self.lbdmx+jmx+1), ngl])
     self.plval[0,:] = 1.0

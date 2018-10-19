@@ -1,13 +1,15 @@
 from __future__ import print_function, division
 import sys, numpy as np
+from numpy import require
+from scipy.spatial.distance import cdist
 
 from pyscf.nao.m_color import color as bc
 from pyscf.nao.m_system_vars_dos import system_vars_dos, system_vars_pdos
 from pyscf.nao.m_siesta2blanko_csr import _siesta2blanko_csr
 from pyscf.nao.m_siesta2blanko_denvec import _siesta2blanko_denvec
 from pyscf.nao.m_siesta_ion_add_sp2 import _siesta_ion_add_sp2
-from pyscf.nao.m_ao_log import ao_log_c
-from scipy.spatial.distance import cdist
+from pyscf.nao.ao_log import ao_log
+from pyscf.nao.mesh_affine_equ import mesh_affine_equ
     
 #
 #
@@ -45,10 +47,18 @@ def overlap_check(sv, tol=1e-5, **kvargs):
 #
 #
 #
-class nao():
+class nao(ao_log):
 
   def __init__(self, **kw):
     """  Constructor of NAO class """
+   
+    self.dtype = kw['dtype'] if 'dtype' in kw else np.float64
+    if self.dtype == np.float32:
+      self.dtypeComplex = np.complex64
+    elif self.dtype == np.float64:
+      self.dtypeComplex = np.complex128
+    else:
+      raise ValueError("dtype can be only float32 or float64")
 
     import scipy
     if int(scipy.__version__[0])>0: 
@@ -89,8 +99,10 @@ class nao():
     elif 'fireball' in kw:
       self.init_fireball(**kw)
     else:
+      print(__name__, kw.keys())
       raise RuntimeError('unknown init method')
 
+    self.pseudo = hasattr(self, 'sp2ion') 
     self._keys = set(self.__dict__.keys())
 
     #print(kw)
@@ -126,7 +138,7 @@ class nao():
 
     self.sp2charge = [-999]*self.nspecies
     for ia,sp in enumerate(self.atom2sp): self.sp2charge[sp]=gto.atom_charge(ia)
-    self.ao_log = ao_log_c().init_ao_log_gto_suggest_mesh(nao=self, **kw)
+    self.ao_log = ao_log(**kw)
     self.atom2coord = np.zeros((self.natm, 3))
     for ia,coord in enumerate(gto.atom_coords()): self.atom2coord[ia,:]=coord # must be in Bohr already?
     self.atom2s = np.zeros((self.natm+1), dtype=np.int64)
@@ -192,9 +204,7 @@ class nao():
   #
   #
   def init_wfsx_fname(self, **kw):
-    """
-      Initialise system var starting with a given WFSX file
-    """
+    """  Initialise system var starting with a given WFSX file  """
     from pyscf.nao.m_tools import read_xyz
     from pyscf.nao.m_fermi_energy import fermi_energy
     from pyscf.nao.m_siesta_xml import siesta_xml
@@ -214,14 +224,16 @@ class nao():
     self.norbs = len(self.wfsx.orb2atm)
     self.norbs_sc = self.norbs
     self.nspin = self.wfsx.nspin
-    self.ucell = np.eye(3)
+    self.ucell = 30.0*np.eye(3)
     self.nkpoints  = self.wfsx.nkpoints
 
     self.sp2ion = []
     for sp in self.wfsx.sp2strspecie: self.sp2ion.append(siesta_ion_xml(cd+'/'+sp+'.ion.xml'))
     _siesta_ion_add_sp2(self, self.sp2ion)
-    self.ao_log = ao_log_c().init_ao_log_ion(self.sp2ion, **kw)
-      
+    #self.ao_log = ao_log_c().init_ao_log_ion(self.sp2ion, **kw)
+    self.ao_log = ao_log(sp2ion=self.sp2ion, **kw)
+    self.kb_log = ao_log(sp2ion=self.sp2ion, fname='kbs', **kw)
+    
     strspecie2sp = {}
     # initialise a dictionary with species string as a key associated to the specie number
     for sp,strsp in enumerate(self.wfsx.sp2strspecie): strspecie2sp[strsp] = sp
@@ -277,7 +289,6 @@ class nao():
 
     self.sp2symbol = [str(ion['symbol'].replace(' ', '')) for ion in self.sp2ion]
     self.sp2charge = self.ao_log.sp2charge
-    self.state = 'should be useful for something'
 
     # Trying to be similar to mole object from pySCF 
     self._xc_code   = 'LDA,PZ' # estimate how ? 
@@ -291,7 +302,7 @@ class nao():
     self.max_memory = 20000
     self.incore_anyway = False        
     self._atom = [(self.sp2symbol[sp], list(self.atom2coord[ia,:])) for ia,sp in enumerate(self.atom2sp)]
-      
+    self.state = 'should be useful for something'      
     return self
 
   #
@@ -340,12 +351,15 @@ class nao():
     self.hsx = siesta_hsx_c(fname=cd+'/'+self.label+'.HSX', **kw)
     self.norbs_sc = self.wfsx.norbs if self.hsx.orb_sc2orb_uc is None else len(self.hsx.orb_sc2orb_uc)
     self.ucell = self.xml_dict["ucell"]
+    self.mesh3d = mesh_affine_equ(ucell=self.ucell, **kw)
     ##### The parameters as fields     
     self.sp2ion = []
     for sp in self.wfsx.sp2strspecie: self.sp2ion.append(siesta_ion_xml(cd+'/'+sp+'.ion.xml'))
 
     _siesta_ion_add_sp2(self, self.sp2ion)
-    self.ao_log = ao_log_c().init_ao_log_ion(self.sp2ion, **kw)
+    self.ao_log = ao_log(sp2ion=self.sp2ion, **kw)
+    self.kb_log = ao_log(sp2ion=self.sp2ion, fname='kbs', rr=self.ao_log.rr, pp=self.ao_log.pp)
+
     self.atom2coord = self.xml_dict['atom2coord']
     self.natm=self.natoms=len(self.xml_dict['atom2sp'])
     self.norbs  = self.wfsx.norbs 
@@ -388,7 +402,6 @@ class nao():
     
     self.sp2symbol = [str(ion['symbol'].replace(' ', '')) for ion in self.sp2ion]
     self.sp2charge = self.ao_log.sp2charge
-    self.state = 'should be useful for something'
 
     # Trying to be similar to mole object from pySCF 
     self._xc_code   = 'LDA,PZ' # estimate how ? 
@@ -405,9 +418,40 @@ class nao():
     self.mu2orb_s = np.zeros((self.nbas+1), dtype=np.int64)
     for sp,mu_s in zip(self.atom2sp,self.atom2mu_s):
       for mu,j in enumerate(self.ao_log.sp_mu2j[sp]): self.mu2orb_s[mu_s+mu+1] = self.mu2orb_s[mu_s+mu] + 2*j+1
-        
     self._atom = [(self.sp2symbol[sp], list(self.atom2coord[ia,:])) for ia,sp in enumerate(self.atom2sp)]
+    self.init_mo_coeff_label(**kw)
+
+    self.state = 'should be useful for something'
     return self
+
+  def init_mo_coeff_label(self, **kw):
+    """ Constructor a mean-field class from the preceeding SIESTA calculation """
+    from pyscf.nao.m_fermi_dirac import fermi_dirac_occupations
+    self.mo_coeff = require(self.wfsx.x, dtype=self.dtype, requirements='CW')
+    self.mo_energy = require(self.wfsx.ksn2e, dtype=self.dtype, requirements='CW')
+    self.telec = kw['telec'] if 'telec' in kw else self.hsx.telec
+    if self.nspin==1:
+      self.nelec = kw['nelec'] if 'nelec' in kw else np.array([self.hsx.nelec])
+    elif self.nspin==2:
+      self.nelec = kw['nelec'] if 'nelec' in kw else np.array([int(self.hsx.nelec/2), int(self.hsx.nelec/2)])      
+      if self.verbosity>0: print(__name__, 'not sure here: self.nelec', self.nelec)
+    else:
+      raise RuntimeError('0>nspin>2?')
+      
+    self.fermi_energy = kw['fermi_energy'] if 'fermi_energy' in kw else self.fermi_energy
+    ksn2fd = fermi_dirac_occupations(self.telec, self.mo_energy, self.fermi_energy)
+    self.mo_occ = (3-self.nspin)*ksn2fd
+
+  def make_rdm1(self, mo_coeff=None, mo_occ=None):
+    # from pyscf.scf.hf import make_rdm1 -- different index order here
+    if mo_occ is None: mo_occ = self.mo_occ[0,:,:]
+    if mo_coeff is None: mo_coeff = self.mo_coeff[0,:,:,:,0]
+    dm = np.zeros((1,self.nspin,self.norbs,self.norbs,1))
+    for s in range(self.nspin):
+      xocc = mo_coeff[s,mo_occ[s]>0,:]
+      focc = mo_occ[s,mo_occ[s]>0]
+      dm[0,s,:,:,0] = np.dot(xocc.T.conj() * focc, xocc)
+    return dm
 
   def init_gpaw(self, **kw):
     """ Use the data from a GPAW LCAO calculations as input to initialize system variables. """
@@ -467,10 +511,32 @@ class nao():
   def atom_nelec_core(self, ia): return self.sp2charge[self.atom2sp[ia]]-self.ao_log.sp2valence[self.atom2sp[ia]]
   def ao_loc_nr(self): return self.mu2orb_s[0:self.natm]
 
+  def intor_symmetric(self, intor, comp=None):
+    print(__name__, intor, comp)
+    if intor=='int1e_kin':
+      return 0.5*self.laplace_coo().toarray()
+    elif intor=='int1e_nuc':
+      return self.vnucele_coo().toarray()
+    else:
+      raise RuntimeError('unknown intor '+intor)
+    return 0
+
+  def get_init_guess(self, key=None):
+    """ Compute an initial guess for the density matrix. ???? """
+    from pyscf.scf.hf import init_guess_by_minao
+    if hasattr(self, 'mol'):
+      dm = init_guess_by_minao(self.mol)
+    else:
+      dm = self.make_rdm1()  # the loaded ks orbitals will be used
+      if dm.shape[0:2]==(1,1) and dm.shape[4]==1 : dm = dm.reshape((self.norbs,self.norbs))
+    return dm
+  
+  init_guess_by_minao = get_init_guess
+
   # More functions for convenience (see PDoS)
   def get_orb2j(self): return get_orb2j(self)
   def get_orb2m(self): return get_orb2m(self)
-
+    
   def overlap_coo(self, **kw):   # Compute overlap matrix for the molecule
     from pyscf.nao.m_overlap_coo import overlap_coo
     return overlap_coo(self, **kw)
@@ -483,11 +549,40 @@ class nao():
     from pyscf.nao.m_overlap_coo import overlap_coo
     from pyscf.nao.m_laplace_am import laplace_am
     return overlap_coo(self, funct=laplace_am)
+
+  def vnucele_coo(self, **kw):
+    if self.pseudo:
+      return self.vnucele_coo_pseudo(**kw)
+    else:
+      return self.vnucele_coo_coulomb(**kw)
   
   def vnucele_coo_coulomb(self, **kw): # Compute matrix elements of attraction by Coulomb forces from point nuclei
     from pyscf.nao.m_vnucele_coo_coulomb import vnucele_coo_coulomb
     return vnucele_coo_coulomb(self, **kw)
 
+  def vnucele_coo_pseudo(self, **kw): # Compute matrix elements of attraction by forces from pseudo atom
+    vna = self.vna_coo(**kw)
+    vnl = self.vnl_coo()    
+    return (vna+vnl).tocoo()
+
+  def vnl_coo(self): 
+    """  Non-local part of the Hamiltonian due to Kleinman-Bylander projectors  """
+    from pyscf.nao.m_overlap_am import overlap_am
+    from scipy.sparse import dia_matrix
+    sop = self.overlap_coo(ao_log=self.ao_log, ao_log2=self.kb_log, funct=overlap_am).tocsr()
+    nkb = sop.shape[1]
+    vkb_dia = dia_matrix( ( self.get_vkb(), [0] ), shape = (nkb,nkb) )
+    return ((sop*vkb_dia)*sop.T).tocoo()
+
+  def get_vkb(self): 
+    """ Compose the vector of Kleinman-Bylander energies v^p = v^KB_ln, where p is a global projector index """
+    atom2s, kb = np.zeros((self.natm+1), dtype=int), self.kb_log
+    for atom,sp in enumerate(self.atom2sp): atom2s[atom+1]=atom2s[atom]+kb.sp2norbs[sp]
+    vkb = np.zeros(atom2s[-1])
+    for sp,gs in zip(self.atom2sp,atom2s):
+      for v,s,f in zip(kb.sp_mu2vkb[sp], kb.sp_mu2s[sp], kb.sp_mu2s[sp][1:]): vkb[gs+s:gs+f] = v
+    return vkb
+  
   def dipole_coo(self, **kw):   # Compute dipole matrix elements for the given system
     from pyscf.nao.m_dipole_coo import dipole_coo
     return dipole_coo(self, **kw)
@@ -522,6 +617,8 @@ class nao():
     grid.level = level # precision as implemented in pyscf
     grid.build()
     return grid
+
+  def ucell_mom(self):  return (2*np.pi)*np.linalg.inv(self.ucell.T) # reciprocal unit cell
 
   def comp_aos_den(self, coords):
     """ Compute the atomic orbitals for a given set of (Cartesian) coordinates. """
@@ -578,16 +675,6 @@ class nao():
     libnao.init_aos_libnao(c_int64(self.norbs), byref(info))
     if info.value!=0: raise RuntimeError("info!=0")
     return self
-
-  def get_init_guess(self, key=None):
-    """ Compute an initial guess for the density matrix. ???? """
-    from pyscf.scf.hf import init_guess_by_minao
-    if hasattr(self, 'mol'):
-      dm = init_guess_by_minao(self.mol)
-    else:
-      dm = self.comp_dm()  # the loaded ks orbitals will be used
-      if dm.shape[0:2]==(1,1) and dm.shape[4]==1 : dm = dm.reshape((self.norbs,self.norbs))
-    return dm
 
   @property
   def nelectron(self):

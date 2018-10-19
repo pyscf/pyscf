@@ -15,10 +15,10 @@ class KnowValues(unittest.TestCase):
 
     ss_2sp1 = gto_mf.spin_square()
     
-    nao_gw = gw(gto=mol, mf=gto_mf, verbosity=1, nocc=4)
+    nao_gw = gw(gto=mol, mf=gto_mf, verbosity=0, nocc=4)
     nao_gw.kernel_gw()
-    nao_gw.report()
-    print(nao_gw.spin_square())
+    #nao_gw.report()
+    #print(nao_gw.spin_square())
 
 
 if __name__ == "__main__": unittest.main()

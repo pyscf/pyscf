@@ -13,17 +13,18 @@
 # limitations under the License.
 
 from __future__ import print_function, division
-import os,unittest,numpy as np
-from pyscf.nao import mf
+import unittest
+from pyscf.nao import nao as nao_c
 
 class KnowValues(unittest.TestCase):
 
-  def test_read_siesta_bulk_spin(self):
-    """ Test reading of bulk, spin-resolved SIESTA calculation  """
-    
-    chdir = os.path.dirname(os.path.abspath(__file__))+'/ice'
-    sv  = mf(label='siesta', cd=chdir, gen_pb=False)
-    sv.diag_check()
+  def test_0077_chlocal_H2O(self):
+    """ Test chlocal field (density of bare atoms) """
+    import os
+    dname = os.path.dirname(os.path.abspath(__file__))
+    nao = nao_c(label='water', cd=dname)
+    g = nao.build_3dgrid_ae(level=3)
+    int_chlocal = (g.weights*nao.vna(g.coords, sp2v=nao.ao_log.sp2chlocal)).sum()
+    self.assertAlmostEqual(int_chlocal, -7.9999819496898787)
 
 if __name__ == "__main__": unittest.main()
-

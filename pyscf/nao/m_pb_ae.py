@@ -6,7 +6,8 @@ from timeit import default_timer as timer
 
 def pb_ae(self, sv, tol_loc=1e-5, tol_biloc=1e-6, ac_rcut_ratio=1.0):
   """ It should work with GTOs as well."""
-  from pyscf.nao import coulomb_am, get_atom2bas_s, conv_yzx2xyz_c, prod_log_c, ls_part_centers, comp_coulomb_den
+  from pyscf.nao import coulomb_am, get_atom2bas_s, conv_yzx2xyz_c, ls_part_centers, comp_coulomb_den
+  from pyscf.nao.prod_log import prod_log
   from pyscf.nao.m_overlap_coo import overlap_coo
   from pyscf.nao.m_prod_biloc import prod_biloc_c
   from scipy.sparse import csr_matrix
@@ -18,7 +19,7 @@ def pb_ae(self, sv, tol_loc=1e-5, tol_biloc=1e-6, ac_rcut_ratio=1.0):
   self.ac_rcut_ratio = ac_rcut_ratio
   self.ac_rcut = ac_rcut_ratio*max(sv.ao_log.sp2rcut)
    
-  self.prod_log = prod_log_c().init_prod_log_dp(sv.ao_log, tol_loc) # local basis (for each specie) 
+  self.prod_log = prod_log(ao_log=sv.ao_log, tol_loc=tol_loc) # local basis (for each specie) 
   self.hkernel_csr  = csr_matrix(overlap_coo(sv, self.prod_log, coulomb_am)) # compute local part of Coulomb interaction
   self.c2s = zeros((sv.natm+1), dtype=int64) # global product Center (atom) -> start in case of atom-centered basis
   for gc,sp in enumerate(sv.atom2sp): self.c2s[gc+1]=self.c2s[gc]+self.prod_log.sp2norbs[sp] # 

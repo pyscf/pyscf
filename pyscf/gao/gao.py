@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 # Copyright 2014-2018 The PySCF Developers. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -11,19 +12,16 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+from pyscf.gto.gto import gto
+from pyscf.nao import nao
 
-from __future__ import print_function, division
-import os,unittest,numpy as np
-from pyscf.nao import mf
 
-class KnowValues(unittest.TestCase):
-
-  def test_read_siesta_bulk_spin(self):
-    """ Test reading of bulk, spin-resolved SIESTA calculation  """
-    
-    chdir = os.path.dirname(os.path.abspath(__file__))+'/ice'
-    sv  = mf(label='siesta', cd=chdir, gen_pb=False)
-    sv.diag_check()
-
-if __name__ == "__main__": unittest.main()
-
+def GAO(**kw):
+  if 'atom' in kw:
+    mol = gto(**kw)
+    mol.build()
+    return mol
+  else:
+    mol = nao(**kw)
+    return mol

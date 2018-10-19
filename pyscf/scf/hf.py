@@ -1362,7 +1362,10 @@ class SCF(lib.StreamObject):
     @lib.with_doc(init_guess_by_minao.__doc__)
     def init_guess_by_minao(self, mol=None):
         if mol is None: mol = self.mol
-        return init_guess_by_minao(mol)
+        if hasattr(mol, 'init_guess_by_minao'): 
+          return mol.init_guess_by_minao()
+        else:
+          return init_guess_by_minao(mol)
 
     @lib.with_doc(init_guess_by_atom.__doc__)
     def init_guess_by_atom(self, mol=None):

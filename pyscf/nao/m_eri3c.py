@@ -37,13 +37,14 @@ def eri3c(me, sp1,sp2,R1,R2, sp3,R3, **kvargs):
 
 
 if __name__=="__main__":
-  from pyscf.nao.m_system_vars import system_vars_c, ao_matelem_c, prod_log_c
+  from pyscf.nao.m_system_vars import system_vars_c, ao_matelem_c
+  from pyscf.nao.prod_log import prod_log as prod_log_c
   from pyscf.nao.m_eri3c import eri3c
   
   sv = system_vars_c(label='siesta')
   R0 = sv.atom2coord[0,:]
   
-  prod_log = prod_log_c(sv.ao_log)
+  prod_log = prod_log_c(ao_log=sv.ao_log)
   me_prod = ao_matelem_c(prod_log)
   vc = me_prod.coulomb_am(0, R0, 0, R0)
   eri_am = np.einsum('pab,pq->abq', prod_log.sp2vertex[0], vc)

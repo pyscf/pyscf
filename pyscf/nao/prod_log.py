@@ -18,7 +18,8 @@ from numpy import einsum
 from pyscf.nao.m_dipole_ni import dipole_ni
 from pyscf.nao.m_overlap_ni import overlap_ni
 from pyscf.nao.m_overlap_am import overlap_am
-from pyscf.nao import ao_matelem_c, ao_log_c
+from pyscf.nao import ao_matelem_c
+from pyscf.nao.ao_log import ao_log
 
 
 #
@@ -27,9 +28,8 @@ from pyscf.nao import ao_matelem_c, ao_log_c
 def overlap_check(prod_log, overlap_funct=overlap_ni, **kvargs):
   """ Computes the allclose(), mean absolute error and maximal error of the overlap reproduced by the (local) vertex."""
   from pyscf.nao.m_ao_matelem import ao_matelem_c
-  from pyscf.nao.m_ao_log import comp_moments
   me = ao_matelem_c(prod_log.rr, prod_log.pp).init_one_set(prod_log.ao_log)
-  sp2mom0,sp2mom1 = comp_moments(prod_log)
+  sp2mom0,sp2mom1 = prod_log.comp_moments()
   mael,mxel,acl=[],[],[]
   R0 = np.array([0.0,0.0,0.0])
   for sp,[vertex,mom0] in enumerate(zip(prod_log.sp2vertex,sp2mom0)):
@@ -67,7 +67,7 @@ def dipole_check(sv, prod_log, dipole_funct=dipole_ni, **kvargs):
 #
 #
 #
-class prod_log_c(ao_log_c):
+class prod_log(ao_log):
   '''
   Holder of (local) product functions and vertices.
   Args:
@@ -79,17 +79,25 @@ class prod_log_c(ao_log_c):
     via a product vertex coefficients.
   Examples:
   '''
-  def __init__(self):
-    ao_log_c.__init__(self) # only log_mesh will be initialized and all the procedures from the class ao_log.
+  def __init__(self, **kw):
+    if 'auxmol' in kw:
+      self.init_prod_log_df(**kw)
+    elif 'ao_log' in kw:
+      self.init_prod_log_dp(**kw)
+    else:
+      print(__name__, kw.keys())
+      raise RuntimeError('unknown init method')
     return
 
-  def init_prod_log_df(self, auxmol, sv, rcut_tol=1e-7):
+  def init_prod_log_df(self, **kw):
     """ Initializes the radial functions from pyscf"""
     from pyscf.df.incore import aux_e2
-    self.init_log_mesh(sv.ao_log.rr, sv.ao_log.pp)
-    self.auxmol = auxmol
-    ao_log_c.__init__(self)
-    self.init_ao_log_gto_lm(gto=auxmol, nao=sv, lm=sv.ao_log, rcut_tol=1e-7)
+    sv = kw['nao']
+    ao_log.__init__(self, ao_log=sv.ao_log)
+    auxmol = self.auxmol = kw['auxmol']
+    rcut_tol = kw['rcut_tol'] if 'rcut_tol' in kw else 1e-7
+    
+    self.init_ao_log_gto(gto=auxmol, **kw)
 #    j3c = aux_e2(sv.mol, auxmol, intor='cint3c2e_sph', aosym='s1')
 #    nao = sv.mol.nao_nr()
 #    naoaux = auxmol.nao_nr()
@@ -97,20 +105,18 @@ class prod_log_c(ao_log_c):
 #    print(nao, naoaux)
     return self
 
-  def init_prod_log_dp(self, ao_log, tol_loc=1e-5):
+  def init_prod_log_dp(self, **kw):
     """ Builds linear combinations of the original orbital products """
     from scipy.sparse import csr_matrix
     from pyscf.nao.m_local_vertex import local_vertex_c
+
+    ao_log.__init__(self, **kw)
+    self.ao_log = kw['ao_log']
+    tol_loc = self.tol_loc = kw['tol_loc']
+   
+    self.sp2nmult = np.zeros((self.nspecies), dtype=np.int64)
     
-    self.ao_log = ao_log
-    self.init_log_mesh(ao_log.rr, ao_log.pp)
-    self.nspecies = ao_log.nspecies
-    self.tol_loc = tol_loc
-    self.rr,self.pp,self.nr = ao_log.rr,ao_log.pp,ao_log.nr
-    self.interp_rr = ao_log.interp_rr
-    self.sp2nmult = np.zeros((ao_log.nspecies), dtype=np.int64)
-    
-    lvc = local_vertex_c(ao_log) # constructor of local vertices
+    lvc = local_vertex_c(kw['ao_log']) # constructor of local vertices
     self.psi_log       = [] # radial orbitals: list of numpy arrays
     self.psi_log_rl    = [] # radial orbitals times r**j: list of numpy arrays
     self.sp_mu2rcut    = [] # list of numpy arrays containing the maximal radii
@@ -121,7 +127,6 @@ class prod_log_c(ao_log_c):
     self.sp2vertex_csr = [] # going to be list of sparse matrices with dimension (nprod,norbs**2) or <mu,ab> . This is a derivative of the sp2vertex
     self.sp2inv_vv     = [] # this is a future list of matrices (<mu|ab><ab|nu>)^-1. This is a derivative of the sp2vertex
     self.sp2norbs      = np.zeros(self.nspecies, dtype=int) # number of orbitals per specie
-    self.sp2charge     = ao_log.sp2charge # copy of nuclear charges from atomic orbitals
      
     for sp,no in enumerate(lvc.ao1.sp2norbs):
       ldp = lvc.get_local_vertex(sp)
@@ -135,7 +140,7 @@ class prod_log_c(ao_log_c):
 
       mu2j = np.array([jd[0] for jd in mu2jd], dtype=np.int32)
       mu2s = np.array([0]+[sum(2*mu2j[0:mu+1]+1) for mu in range(nmult)], dtype=np.int64)
-      mu2rcut = np.array([ao_log.sp2rcut[sp]]*nmult, dtype=np.float64)
+      mu2rcut = np.array([self.ao_log.sp2rcut[sp]]*nmult, dtype=np.float64)
       
       self.sp2nmult[sp]=nmult
       self.sp_mu2j.append(mu2j)
@@ -291,7 +296,7 @@ class prod_log_c(ao_log_c):
 #
 if __name__=='__main__':
   from pyscf.nao.m_system_vars import system_vars_c
-  from pyscf.nao.m_prod_log import prod_log_c
+  from pyscf.nao.m_prod_log import prod_log as prod_log_c
   import matplotlib.pyplot as plt
   
   sv  = system_vars_c(label='siesta')

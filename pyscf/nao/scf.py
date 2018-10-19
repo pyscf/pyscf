@@ -76,6 +76,7 @@ class scf(tddft_iter):
       vhar = self.vhartree_coo(dm=self.dm_mf, **kw).tocsr()
       vxc  = self.vxc_lil(dm=self.dm_mf, xc_code=self.xc_code_mf, **kw)[0].tocsr()
       vne  = self.get_hamiltonian()[0].tocsr()-tkin-vhar-vxc
+      #print(__name__)
     else :
       vne  = self.vnucele_coo_coulomb(**kw)
     return vne.tocoo()

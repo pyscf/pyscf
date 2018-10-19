@@ -38,7 +38,7 @@ class KnowValues(unittest.TestCase):
     data_ref = np.loadtxt('test_0158_bse_h2o_uhf_cis_pyscf.txt-ref').T
     self.assertTrue(np.allclose(data_ref, data, atol=1e-6, rtol=1e-3))
     
-    nao_td  = bse_iter(mf=gto_mf, gto=mol, verbosity=1, xc_code='CIS')
+    nao_td  = bse_iter(mf=gto_mf, gto=mol, verbosity=0, xc_code='CIS')
 
     polariz = -nao_td.comp_polariz_inter_ave(omegas).imag
     data = np.array([omegas.real*HARTREE2EV, polariz])

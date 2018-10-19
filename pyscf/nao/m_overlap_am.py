@@ -33,24 +33,23 @@ def overlap_am(self, sp1, R1, sp2, R2):
     The procedure uses the angular momentum algebra and spherical Bessel transform
     to compute the bilocal overlaps.
   """
-  shape = [self.ao1.sp2norbs[sp] for sp in (sp1,sp2)]
-  overlaps = np.zeros(shape)
-  
+  overlaps = np.zeros((self.ao1.sp2norbs[sp1], self.ao2.sp2norbs[sp2]))
   R2mR1 = np.array(R2)-np.array(R1)
-  
-  psi_log = self.ao1.psi_log
-  psi_log_mom = self.ao1.psi_log_mom
-  sp_mu2rcut = self.ao1.sp_mu2rcut
-  sp2info = self.ao1.sp2info
-  
+
+  psi_log1, psi_log_mom1 = self.ao1.psi_log, self.ao1.psi_log_mom
+  sp_mu2rcut1, sp2info1 = self.ao1.sp_mu2rcut, self.ao1.sp2info
+
+  psi_log2, psi_log_mom2 = self.ao2.psi_log, self.ao2.psi_log_mom
+  sp_mu2rcut2, sp2info2 = self.ao2.sp_mu2rcut, self.ao2.sp2info
+
   ylm = csphar( R2mR1, 2*self.jmx+1 )
   dist = np.sqrt(sum(R2mR1*R2mR1))
   cS = np.zeros((self.jmx*2+1,self.jmx*2+1), dtype=np.complex128)
   cmat = np.zeros((self.jmx*2+1,self.jmx*2+1), dtype=np.complex128)
   rS = np.zeros((self.jmx*2+1,self.jmx*2+1))
   if(dist<1.0e-5): 
-    for [mu1,l1,s1,f1],ff1 in zip(sp2info[sp1],psi_log[sp1]):
-      for [mu2,l2,s2,f2],ff2 in zip(sp2info[sp2],psi_log[sp2]):
+    for [mu1,l1,s1,f1],ff1 in zip(sp2info1[sp1],psi_log1[sp1]):
+      for [mu2,l2,s2,f2],ff2 in zip(sp2info2[sp2],psi_log2[sp2]):
         cS.fill(0.0); rS.fill(0.0);
         if l1==l2 : 
           sum1 = sum(ff1 * ff2 *self.rr3_dr)
@@ -64,8 +63,8 @@ def overlap_am(self, sp1, R1, sp2, R2):
     l2S = np.zeros((2*self.jmx+1))
     ir,coeffs = comp_coeffs(self.interp_rr, dist)
     _j = self.jmx
-    for [mu2,l2,s2,f2],rcut2,ff2 in zip(sp2info[sp2],sp_mu2rcut[sp2],psi_log_mom[sp2]):
-      for [mu1,l1,s1,f1],rcut1,ff1 in zip(sp2info[sp1],sp_mu2rcut[sp1],psi_log_mom[sp1]):
+    for [mu2,l2,s2,f2],rcut2,ff2 in zip(sp2info2[sp2],sp_mu2rcut2[sp2],psi_log_mom2[sp2]):
+      for [mu1,l1,s1,f1],rcut1,ff1 in zip(sp2info1[sp1],sp_mu2rcut1[sp1],psi_log_mom1[sp1]):
         if rcut1+rcut2<dist: continue
         f1f2_mom = ff2 * ff1
         l2S.fill(0.0)

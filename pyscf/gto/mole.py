@@ -1661,7 +1661,7 @@ def condense_to_shell(mol, mat, compressor=numpy.max):
 #    .atom (input) <=>  ._atom (for python) <=> ._atm (for libcint)
 #   .basis (input) <=> ._basis (for python) <=> ._bas (for libcint)
 # input layer does not talk to libcint directly.  Data are held in python
-# internal fomrat layer.  Most of methods defined in this class only operates
+# internal format layer.  Most of methods defined in this class only operates
 # on the internal format.  Exceptions are make_env, make_atm_env, make_bas_env,
 # set_common_orig_, set_rinv_orig_ which are used to manipulate the libcint arguments.
 #
@@ -1908,7 +1908,7 @@ class Mole(lib.StreamObject):
               atom=None, basis=None, unit=None, nucmod=None, ecp=None,
               charge=None, spin=None, symmetry=None, symmetry_subgroup=None,
               cart=None):
-        '''Setup moleclue and initialize some control parameters.  Whenever you
+        '''Setup molecule and initialize some control parameters.  Whenever you
         change the value of the attributes of :class:`Mole`, you need call
         this function to refresh the internal data of Mole.
 

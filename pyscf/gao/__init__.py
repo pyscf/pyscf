@@ -11,19 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# Authors: Peter Koval
 
-from __future__ import print_function, division
-import os,unittest,numpy as np
-from pyscf.nao import mf
 
-class KnowValues(unittest.TestCase):
+''' General Atomic Orbitals '''
 
-  def test_read_siesta_bulk_spin(self):
-    """ Test reading of bulk, spin-resolved SIESTA calculation  """
-    
-    chdir = os.path.dirname(os.path.abspath(__file__))+'/ice'
-    sv  = mf(label='siesta', cd=chdir, gen_pb=False)
-    sv.diag_check()
-
-if __name__ == "__main__": unittest.main()
-
+from .gao import GAO

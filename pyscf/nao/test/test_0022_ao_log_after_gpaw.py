@@ -14,7 +14,7 @@
 
 from __future__ import print_function, division
 import os,unittest,numpy as np
-from pyscf.nao import ao_log_c
+from pyscf.nao.ao_log import ao_log
 
 try:
   from ase import Atoms
@@ -40,10 +40,10 @@ except:
 class KnowValues(unittest.TestCase):
 
   def test_ao_log_after_gpaw(self):
-    """ init ao_log_c with it radial orbitals from GPAW """
+    """ init ao_log with it radial orbitals from GPAW """
     if calc is None: return
     self.assertTrue(hasattr(calc, 'setups'))
-    aos = ao_log_c().init_ao_log_gpaw(calc.setups)
+    aos = ao_log(setups=calc.setups)
     self.assertEqual(aos.nr, 1024)
 
     #print(aos.nr)

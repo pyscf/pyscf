@@ -27,7 +27,7 @@ class KnowValues(unittest.TestCase):
     """ This is interacting polarizability with SIESTA starting point """
     from pyscf import gto, tddft, scf
     
-    mol = gto.M( verbose = 2,
+    mol = gto.M( verbose = 0,
       atom = '''H 0.0 0.0 -0.3707;  H 0.0 0.0 0.3707''', basis = 'cc-pvdz',)
 
     gto_hf = scf.RKS(mol)
@@ -50,7 +50,7 @@ class KnowValues(unittest.TestCase):
     np.savetxt(fname, data.T, fmt=['%f','%f'])
     data_ref = np.loadtxt(fname+'-ref')
     self.assertTrue(np.allclose(data_ref,data.T, rtol=0.1, atol=1e-05))
-    
+ 
     gw_nao = gw(gto=mol, mf=gto_hf, tdscf=gto_td)
     x  = gw_nao.moms1[:,0]
     

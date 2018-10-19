@@ -19,8 +19,8 @@ class KnowValues(unittest.TestCase):
     np.savetxt(fname, data.T, fmt=['%f','%f'])
     #print(__file__, fname)
     data_ref = np.loadtxt(dname+'/'+fname+'-ref')
-    print('    x.rf0_ncalls ', x.rf0_ncalls)
-    print(' x.matvec_ncalls ', x.matvec_ncalls)
+    #print('    x.rf0_ncalls ', x.rf0_ncalls)
+    #print(' x.matvec_ncalls ', x.matvec_ncalls)
     self.assertTrue(np.allclose(data_ref,data.T, rtol=1.0e-1, atol=1e-06))
 
 if __name__ == "__main__": unittest.main()
