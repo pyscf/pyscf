@@ -160,16 +160,11 @@ class mf(nao):
     from pyscf.nao.m_vxc_lil import vxc_lil
     return vxc_lil(self, deriv=1, **kw)
 
-  def vhartree_pbc(self, **kw): 
+  def vhartree_pbc(self, dens, **kw): 
     """  Compute Hartree potential for the density given in an equidistant grid  """
     from scipy.fftpack import fftn, ifftn
-    rr,dv = self.build_3dgrid_pp_pbc(**kw)
-    sh = (rr[0].shape[0], rr[1].shape[1], rr[2].shape[2])
-    coords = rr[0]+rr[1]+rr[2] # This sum creates a (3+1)D array of coordinate values [i,j,k,xyz]
-    coords1 = coords.reshape((coords.size//3, 3))
-    dens = self.dens_elec(coords1, self.make_rdm1()).reshape(coords.shape[0:3])
-    print(coords1[0], coords[-1])
-    print(__name__, dens.sum()*dv)
+    sh = self.mesh3d.shape
+    dens = dens.reshape(sh)
     vh = fftn(dens)    
     umom = self.ucell_mom()
     ii = [np.array([i-sh[j] if i>sh[j]//2 else i for i in range(sh[j])]) for j in range(3)]
@@ -182,7 +177,8 @@ class mf(nao):
             vh[i,j,k] = 0.0
           else:
             vh[i,j,k] = vh[i,j,k] / Gsq
-    return ifftn(vh).real*(4*np.pi), dv
+    vh = ifftn(vh).real*(4*np.pi)
+    return vh
     
   def dens_elec(self, coords, dm): # Compute electronic density for a given density matrix and on a given set of coordinates
     from pyscf.nao.m_dens_libnao import dens_libnao

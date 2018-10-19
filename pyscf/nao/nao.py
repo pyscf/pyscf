@@ -1,6 +1,7 @@
 from __future__ import print_function, division
 import sys, numpy as np
 from numpy import require
+from scipy.spatial.distance import cdist
 
 from pyscf.nao.m_color import color as bc
 from pyscf.nao.m_system_vars_dos import system_vars_dos, system_vars_pdos
@@ -8,7 +9,7 @@ from pyscf.nao.m_siesta2blanko_csr import _siesta2blanko_csr
 from pyscf.nao.m_siesta2blanko_denvec import _siesta2blanko_denvec
 from pyscf.nao.m_siesta_ion_add_sp2 import _siesta_ion_add_sp2
 from pyscf.nao.ao_log import ao_log
-from scipy.spatial.distance import cdist
+from pyscf.nao.mesh_affine_equ import mesh_affine_equ
     
 #
 #
@@ -231,6 +232,7 @@ class nao(ao_log):
     _siesta_ion_add_sp2(self, self.sp2ion)
     #self.ao_log = ao_log_c().init_ao_log_ion(self.sp2ion, **kw)
     self.ao_log = ao_log(sp2ion=self.sp2ion, **kw)
+    self.kb_log = ao_log(sp2ion=self.sp2ion, fname='kbs', **kw)
     
     strspecie2sp = {}
     # initialise a dictionary with species string as a key associated to the specie number
@@ -287,7 +289,6 @@ class nao(ao_log):
 
     self.sp2symbol = [str(ion['symbol'].replace(' ', '')) for ion in self.sp2ion]
     self.sp2charge = self.ao_log.sp2charge
-    self.state = 'should be useful for something'
 
     # Trying to be similar to mole object from pySCF 
     self._xc_code   = 'LDA,PZ' # estimate how ? 
@@ -301,7 +302,7 @@ class nao(ao_log):
     self.max_memory = 20000
     self.incore_anyway = False        
     self._atom = [(self.sp2symbol[sp], list(self.atom2coord[ia,:])) for ia,sp in enumerate(self.atom2sp)]
-      
+    self.state = 'should be useful for something'      
     return self
 
   #
@@ -350,6 +351,7 @@ class nao(ao_log):
     self.hsx = siesta_hsx_c(fname=cd+'/'+self.label+'.HSX', **kw)
     self.norbs_sc = self.wfsx.norbs if self.hsx.orb_sc2orb_uc is None else len(self.hsx.orb_sc2orb_uc)
     self.ucell = self.xml_dict["ucell"]
+    self.mesh3d = mesh_affine_equ(ucell=self.ucell, **kw)
     ##### The parameters as fields     
     self.sp2ion = []
     for sp in self.wfsx.sp2strspecie: self.sp2ion.append(siesta_ion_xml(cd+'/'+sp+'.ion.xml'))
@@ -400,7 +402,6 @@ class nao(ao_log):
     
     self.sp2symbol = [str(ion['symbol'].replace(' ', '')) for ion in self.sp2ion]
     self.sp2charge = self.ao_log.sp2charge
-    self.state = 'should be useful for something'
 
     # Trying to be similar to mole object from pySCF 
     self._xc_code   = 'LDA,PZ' # estimate how ? 
@@ -419,6 +420,8 @@ class nao(ao_log):
       for mu,j in enumerate(self.ao_log.sp_mu2j[sp]): self.mu2orb_s[mu_s+mu+1] = self.mu2orb_s[mu_s+mu] + 2*j+1
     self._atom = [(self.sp2symbol[sp], list(self.atom2coord[ia,:])) for ia,sp in enumerate(self.atom2sp)]
     self.init_mo_coeff_label(**kw)
+
+    self.state = 'should be useful for something'
     return self
 
   def init_mo_coeff_label(self, **kw):
@@ -615,6 +618,8 @@ class nao(ao_log):
     grid.build()
     return grid
 
+  def ucell_mom(self):  return (2*np.pi)*np.linalg.inv(self.ucell.T) # reciprocal unit cell
+
   def comp_aos_den(self, coords):
     """ Compute the atomic orbitals for a given set of (Cartesian) coordinates. """
     from pyscf.nao.m_aos_libnao import aos_libnao
@@ -670,26 +675,6 @@ class nao(ao_log):
     libnao.init_aos_libnao(c_int64(self.norbs), byref(info))
     if info.value!=0: raise RuntimeError("info!=0")
     return self
-
-  def ucell_mom(self):  return (2*np.pi)*np.linalg.inv(self.ucell.T) # reciprocal unit cell
-
-  def get_geom_center(self): # Compute the coordinates of a geometrical center
-    return self.atom2coord.sum(axis=0)/self.natoms
-    
-  def build_3dgrid_pp_pbc(self, **kw): # Compute the equidistant grid knotes
-    """ Equidistant grid nodes and volume element """
-    from scipy.fftpack import next_fast_len
-    Ecut = kw['Ecut'] if 'Ecut' in kw else 50.0 # 50.0 Hartree by default
-    luc = np.sqrt(np.einsum('ix,ix->i', self.ucell, self.ucell))
-    nn = np.array([next_fast_len( int(np.rint(l * np.sqrt(Ecut)/2))) for l in luc], dtype=int)
-    gc = self.ucell/(nn-1) # This is probable the best for finite systems, for PBC use nn, not (nn-1)
-    dv = np.abs(np.dot(gc[0], np.cross(gc[1], gc[2] )))
-    gg = [np.array([gc[i]*j for j in range(nn[i])]) for i in range(3)]
-    center = self.atom2coord.sum(axis=0)/self.natoms
-    gg[0] = gg[0].reshape((nn[0],1,1,3))-center
-    gg[1] = gg[1].reshape((1,nn[1],1,3))-center
-    gg[2] = gg[2].reshape((1,1,nn[2],3))-center
-    return gg,dv
 
   @property
   def nelectron(self):
