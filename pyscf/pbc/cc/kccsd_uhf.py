@@ -37,6 +37,24 @@ from pyscf import __config__
 
 einsum = lib.einsum
 
+
+# --- list2array
+def mo_c_list_to_array(mo_coeff):
+    mo_coeff_tmp=[]
+    for js in range(2):
+        tmp_nk = len(mo_coeff[js])
+        tmp_nb = mo_coeff[js][0].shape[0]
+        tmp_array = np.zeros((tmp_nk,tmp_nb,tmp_nb),dtype=complex)
+        for ik in range(tmp_nk):
+            tmp_array[ik,:,:]=mo_coeff[js][ik][:,:]
+        mo_coeff_tmp.append(tmp_array)
+    return mo_coeff_tmp
+
+def convert_mo_coeff(mo_coeff):
+    if isinstance(mo_coeff[0], list):
+        mo_coeff=mo_c_list_to_array(mo_coeff)
+    return mo_coeff
+
 def update_amps(cc, t1, t2, eris):
     from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM
     time0 = time.clock(), time.time()
@@ -381,7 +399,7 @@ def energy(cc, t1, t2, eris):
     kka, noa, nva = t1a.shape
     kkb, nob, nvb = t1b.shape
     assert(kka == kkb)
-    nkbps = kka
+    nkpts = kka
     s = 0.0 + 0j
     fa, fb = eris.fock
     for ki in range(nkpts):
@@ -718,6 +736,7 @@ def _make_eris_incore(cc, mo_coeff=None):
     eris = uccsd._ChemistsERIs()
     if mo_coeff is None:
         mo_coeff = cc.mo_coeff
+    mo_coeff = convert_mo_coeff(mo_coeff)  # FIXME: Remove me!
     eris.mo_coeff = mo_coeff
     eris.nocc = cc.nocc
 
@@ -785,6 +804,7 @@ def _kuccsd_eris_common_(cc, eris, buf=None):
     kpts = cc.kpts
     nkpts = cc.nkpts
     mo_coeff = eris.mo_coeff
+    mo_coeff = convert_mo_coeff(mo_coeff)  # FIXME: Remove me!
     nocca, noccb = eris.nocc
     nmoa, nmob = cc.nmo
     nvira, nvirb = nmoa - nocca, nmob - noccb
@@ -888,6 +908,7 @@ def _make_eris_outcore(cc, mo_coeff=None):
     eris = uccsd._ChemistsERIs()
     if mo_coeff is None:
         mo_coeff = cc.mo_coeff
+    mo_coeff = convert_mo_coeff(mo_coeff)  # FIXME: Remove me!
     eris.mo_coeff = mo_coeff
     eris.nocc = cc.nocc
 
