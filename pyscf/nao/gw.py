@@ -157,14 +157,71 @@ class gw(scf):
     by solving <self.nprod> linear equations (1-K chi0) W = K chi0 K or v_{ind}\sim W_{c} = (1-v\chi_{0})^{-1}v\chi_{0}v
     scr_inter[w,p,q], where w in ww, p and q in 0..self.nprod 
     """
+    #start_time1 = time.time()
     rf0 = si0 = self.rf0(ww)
-    for iw,w in enumerate(ww):                   #devide ww into 2-parts of imaginary(iw) and real(w)
-      k_c = dot(self.kernel_sq, rf0[iw,:,:])     #kernel_sq or hkernel_den is bare coloumb, rf0 is \chi_{0}, so here k_c=v*chi_{0}  
+    for iw,w in enumerate(ww):                   #devide ww into imaginary(w) and real(iw)             
+      k_c = dot(self.kernel_sq, rf0[iw,:,:])     #kernel_sq or hkernel_den is bare coloumb, rf0
+                                                 #is \chi_{0}, so here k_c=v*chi_{0}
       b = dot(k_c, self.kernel_sq)               #here v\chi_{0}v or k_c*v
       k_c = np.eye(self.nprod)-k_c               #here (1-v\chi_{0}) or 1-k_c. 1=eye(nprod) 
-      si0[iw,:,:] = solve(k_c, b)                # (1-v\chi_{0})-->1-k_c-->k_c * W = v\chi_{0}v -->b instead of inverse: K_c*W=b ==> W by using np.linalg.solve(K_c,b)
+      si0[iw,:,:] = solve(k_c, b)                # k_c * W = v\chi_{0}v = b --> W = np.linalg.solve(K_c,b)
       #np.allclose(np.dot(k_c, si0), b) == True  #Test 
+    #elapsed_time1 = time.time() - start_time1
+    #print('numpy',elapsed_time1)
+    return si0
 
+  def si_c_test(self):
+    """
+    This computes W_c using 2-lgmres for solving linear equation (1-v\chi_{0}) * W = v\chi_{0}v
+    and also stores k_c( i.e. (1-v\chi_{0}) ) as compressed using csc_martrix.
+    results are identical but both lgmres methods are much slower than np.linalg.solve !!
+    """
+    import numpy as np
+    from scipy.sparse import csc_matrix
+    from scipy.sparse.linalg import lgmres
+    from pyscf.nao.m_lgmres import lgmres as mo_lgmres
+    from numpy.linalg import solve   
+    ww = 1j*self.ww_ia
+    rf0 = np.copy(self.rf0(ww))
+    si0 = np.copy(self.rf0(ww))
+    si0_1 = np.copy(self.rf0(ww))
+    si0_2 = np.copy(self.rf0(ww))
+    si0_3 = np.copy(self.rf0(ww))            #defines 3 si_1-3 for three methods
+    for iw,w in enumerate(ww):                                
+      k_c = dot(self.kernel_sq, rf0[iw,:,:]) 
+      k_c_csc = csc_matrix(dot(self.kernel_sq, rf0[iw,:,:]))                                              
+      b = dot(k_c, self.kernel_sq)               
+      k_c_csc = csc_matrix(np.eye(self.nprod)-k_c_csc)
+      k_c = np.eye(self.nprod)-k_c
+      si0_1[iw,:,:] = solve(k_c, b)                             #method 1:  numpy.linalg.solve
+      for m in range(self.nprod): 
+         si0_2[iw,m,:],exitCode = lgmres(k_c_csc, b[m,:])       #method 2:  scipy.sparse.linalg.lgmres
+         si0_3[iw,m,:],exitCode = mo_lgmres(k_c_csc, b[m,:])    #method 3:  pyscf.nao.m_lgmres.lgmres as mo_lgmres
+      print(exitCode)                                           ## 0 indicates successful convergence
+    if (np.max(np.abs(si0_1-si0_2)) <= 5e-4):
+       si0=si0_2
+       print('OK! both lgmres methods and np.linalg.solve have identical results and diff:',np.max(np.abs(si0_1-si0_2)))
+    else:
+       si0=si0_1
+       print('Results are not similar! numpy.solve was used!')     
+    return si0
+
+  def si_c_lgmres(self,ww):
+    """This computes the correlation part of the screened interaction using lgmres"""
+    import numpy as np
+    from scipy.sparse import csc_matrix
+    from scipy.sparse.linalg import lgmres
+    from pyscf.nao.m_lgmres import lgmres as mo_lgmres
+    #ww = 1j*self.ww_ia
+    rf0 = si0 = self.rf0(ww)    #defines 3 si_1-3 for three methods
+    for iw,w in enumerate(ww):                                
+      k_c = dot(self.kernel_sq, rf0[iw,:,:]) 
+      k_c_csc = csc_matrix(dot(self.kernel_sq, rf0[iw,:,:]))                                              
+      b = dot(k_c, self.kernel_sq)               
+      k_c_csc = csc_matrix(np.eye(self.nprod)-k_c_csc)
+      for m in range(self.nprod): 
+         si0[iw,m,:],exitCode = lgmres(k_c_csc, b[m,:])       #method 2:  scipy.sparse.linalg.lgmres
+      #print(exitCode)                                           ## 0 indicates successful convergence   
     return si0
 
   def si_c_via_diagrpa(self, ww):
@@ -191,14 +248,55 @@ class gw(scf):
     for s in range(self.nspin):
       nmw2sf = zeros((len(self.nn[s]), self.norbs, self.nff_ia), dtype=self.dtype)
       #nmw2sf = zeros((len(self.nn), self.norbs, self.nff_ia), dtype=self.dtype)
-      xna = self.mo_coeff[0,s,self.nn[s],:,0]
+      xna = self.mo_coeff[0,s,self.nn[s],:,0]                                           #n runs from s...f or states will be corrected: self.nn = [range(self.start_st[s], self.finish_st[s])
       #xna = self.mo_coeff[0,s,self.nn,:,0]
-      xmb = self.mo_coeff[0,s,:,:,0]
+      xmb = self.mo_coeff[0,s,:,:,0]                                                    #m runs from 0...norbs
+      nmp2xvx = einsum('na,pab,mb->nmp', xna, v_pab, xmb)                               #This calculates nmp2xvx= X^n V_mu X^m foe each side
+      for iw,si0 in enumerate(wpq2si0):
+        nmw2sf[:,:,iw] = einsum('nmp,pq,nmq->nm', nmp2xvx, si0, nmp2xvx)                #This calculates nmp2xvx(outer loop)*real.W_mu_nu*nmp2xvx 
+      snmw2sf.append(nmw2sf)
+    return snmw2sf
+
+
+
+
+
+  
+  def get_snmw2sf_iter(self):
+    """ 
+    This iteratively computes a spectral function of the GW correction.
+    sf[spin,n,m,w] = X^n V_mu X^m W_mu_nu X^n V_nu X^m,
+    where W_mu_nu =  
+    """
+    dm = mf.make_rdm1() if dm is None else dm                                           #Density matrix as dm=D_{ab}=\sum_{occ}X_{n}^{a}X_{n}^{b}   occ?  
+    n = mf.norbs
+    if mf.nspin==1:
+        dm = dm.reshape((n,n))
+    elif mf.nspin==2:
+        dm = dm.reshape((2,n,n))    
+    
+    wpq2si0 = self.si_c(ww = 1j*self.ww_ia).real
+    v_pab = self.pb.get_ac_vertex_array()
+
+    snmw2sf = []
+    for s in range(self.nspin):
+      nmw2sf = zeros((len(self.nn[s]), self.norbs, self.nff_ia), dtype=self.dtype)
+      #nmw2sf = zeros((len(self.nn), self.norbs, self.nff_ia), dtype=self.dtype)
+      xna = self.mo_coeff[0,s,self.nn[s],:,0]                                           #n runs from s...f or states will be corrected: self.nn = [range(self.start_st[s], self.finish_st[s])
+      #xna = self.mo_coeff[0,s,self.nn,:,0]
+      xmb = self.mo_coeff[0,s,:,:,0]                                                    #m runs from 0...norbs
       nmp2xvx = einsum('na,pab,mb->nmp', xna, v_pab, xmb)                               #This calculates nmp2xvx= X^n V_mu X^m foe each side
       for iw,si0 in enumerate(wpq2si0):
         nmw2sf[:,:,iw] = einsum('nmp,pq,nmq->nm', nmp2xvx, si0, nmp2xvx)                #This calculates nmp2xvx W_mu_nu nmp2xvx 
       snmw2sf.append(nmw2sf)
     return snmw2sf
+
+
+
+
+
+
+
 
   def gw_corr_int(self, sn2w, eps=None):
     """ This computes an integral part of the GW correction at energies sn2e[spin,len(self.nn)] """
@@ -318,7 +416,7 @@ class gw(scf):
         if self.verbosity>0: print('-'*30,' |  Convergence has been reached at iteration#{}  | '.format(i+1),'-'*30,'\n')
         break
       if err>=self.tol_ev and i+1==self.niter_max_ev:
-        if self.verbosity>0: print('-'*30,' |  TAKE CARE! Convergence has not yet been reached  | ','-'*30,'\n')
+        if self.verbosity>0: print('-'*30,' |  TAKE CARE! Convergence to tolerance not achieved after {}-iterations  | '.format(self.niter_max_ev),'-'*30,'\n')
     return sn2eval_gw
     
   def report(self):
