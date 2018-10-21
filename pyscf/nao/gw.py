@@ -157,7 +157,6 @@ class gw(scf):
     by solving <self.nprod> linear equations (1-K chi0) W = K chi0 K or v_{ind}\sim W_{c} = (1-v\chi_{0})^{-1}v\chi_{0}v
     scr_inter[w,p,q], where w in ww, p and q in 0..self.nprod 
     """
-    #start_time1 = time.time()
     rf0 = si0 = self.rf0(ww)
     for iw,w in enumerate(ww):                   #devide ww into imaginary(w) and real(iw)             
       k_c = dot(self.kernel_sq, rf0[iw,:,:])     #kernel_sq or hkernel_den is bare coloumb, rf0
@@ -166,62 +165,49 @@ class gw(scf):
       k_c = np.eye(self.nprod)-k_c               #here (1-v\chi_{0}) or 1-k_c. 1=eye(nprod) 
       si0[iw,:,:] = solve(k_c, b)                # k_c * W = v\chi_{0}v = b --> W = np.linalg.solve(K_c,b)
       #np.allclose(np.dot(k_c, si0), b) == True  #Test 
-    #elapsed_time1 = time.time() - start_time1
-    #print('numpy',elapsed_time1)
     return si0
 
-  def si_c_test(self):
+  def si_c_check (self, tol = 1e-5):
     """
-    This computes W_c using 2-lgmres for solving linear equation (1-v\chi_{0}) * W = v\chi_{0}v
-    and also stores k_c( i.e. (1-v\chi_{0}) ) as compressed using csc_martrix.
-    results are identical but both lgmres methods are much slower than np.linalg.solve !!
+    This compares np.solve and lgmres methods for solving linear equation (1-v\chi_{0}) * W_c = v\chi_{0}v
     """
+    import time
     import numpy as np
-    from scipy.sparse import csc_matrix
-    from scipy.sparse.linalg import lgmres
-    from pyscf.nao.m_lgmres import lgmres as mo_lgmres
-    from numpy.linalg import solve   
     ww = 1j*self.ww_ia
-    rf0 = np.copy(self.rf0(ww))
-    si0 = np.copy(self.rf0(ww))
-    si0_1 = np.copy(self.rf0(ww))
-    si0_2 = np.copy(self.rf0(ww))
-    si0_3 = np.copy(self.rf0(ww))            #defines 3 si_1-3 for three methods
-    for iw,w in enumerate(ww):                                
-      k_c = dot(self.kernel_sq, rf0[iw,:,:]) 
-      k_c_csc = csc_matrix(dot(self.kernel_sq, rf0[iw,:,:]))                                              
-      b = dot(k_c, self.kernel_sq)               
-      k_c_csc = csc_matrix(np.eye(self.nprod)-k_c_csc)
-      k_c = np.eye(self.nprod)-k_c
-      si0_1[iw,:,:] = solve(k_c, b)                             #method 1:  numpy.linalg.solve
-      for m in range(self.nprod): 
-         si0_2[iw,m,:],exitCode = lgmres(k_c_csc, b[m,:])       #method 2:  scipy.sparse.linalg.lgmres
-         si0_3[iw,m,:],exitCode = mo_lgmres(k_c_csc, b[m,:])    #method 3:  pyscf.nao.m_lgmres.lgmres as mo_lgmres
-      print(exitCode)                                           ## 0 indicates successful convergence
-    if (np.max(np.abs(si0_1-si0_2)) <= 5e-4):
-       si0=si0_2
-       print('OK! both lgmres methods and np.linalg.solve have identical results and diff:',np.max(np.abs(si0_1-si0_2)))
+    t = time.time()
+    si0_1 = self.si_c(ww)              #method 1:  numpy.linalg.solve
+    t1 = time.time() - t
+    print('numpy: {} sec'.format(t1))
+    t2 = time.time()
+    si0_2 = self.si_c_lgmres(ww)       #method 2:  scipy.sparse.linalg.lgmres
+    t3 = time.time() - t2
+    print('lgmres: {} sec'.format(t1))
+    summ = abs(si0_1 + si0_2).sum()
+    diff = abs(si0_1 - si0_2).sum() 
+    if diff/summ < tol and diff/si0_1.size < tol:
+       print('OK! scipy.lgmres methods and np.linalg.solve have identical results')
     else:
-       si0=si0_1
-       print('Results are not similar! numpy.solve was used!')     
-    return si0
+       print('Results are NOT similar!')     
+    return [[diff/summ] , [np.amax(abs(diff))] ,[tol]]
 
   def si_c_lgmres(self,ww):
-    """This computes the correlation part of the screened interaction using lgmres"""
+    """This computes the correlation part of the screened interaction using lgmres
+       lgmres methods are much slower than np.linalg.solve !!
+    """
     import numpy as np
     from scipy.sparse import csc_matrix
     from scipy.sparse.linalg import lgmres
     from pyscf.nao.m_lgmres import lgmres as mo_lgmres
     #ww = 1j*self.ww_ia
-    rf0 = si0 = self.rf0(ww)    #defines 3 si_1-3 for three methods
+    rf0 = si0 = self.rf0(ww)    
     for iw,w in enumerate(ww):                                
       k_c = dot(self.kernel_sq, rf0[iw,:,:]) 
       k_c_csc = csc_matrix(dot(self.kernel_sq, rf0[iw,:,:]))                                              
       b = dot(k_c, self.kernel_sq)               
       k_c_csc = csc_matrix(np.eye(self.nprod)-k_c_csc)
       for m in range(self.nprod): 
-         si0[iw,m,:],exitCode = lgmres(k_c_csc, b[m,:])       #method 2:  scipy.sparse.linalg.lgmres
-      #print(exitCode)                                           ## 0 indicates successful convergence   
+         si0[iw,m,:],exitCode = lgmres(k_c_csc, b[m,:])   
+      #print(exitCode)      # 0 indicates successful convergence   
     return si0
 
   def si_c_via_diagrpa(self, ww):
@@ -335,7 +321,7 @@ class gw(scf):
 
   def lsofs_inside_contour(self, ee, w, eps):
     """ 
-      Computes number of states the eigen energies of which are located inside an integration contour.
+      Computes number of states the eigenenergies of which are located inside an integration contour.
       The integration contour depends on w 
     """ 
     nGamma_pos = 0
@@ -391,7 +377,7 @@ class gw(scf):
     if self.verbosity>0: print('-'*48,'|  G0W0 corrections of eigenvalues  |','-'*48+'\n')
     print('MAXIMUM number of iterations (Input file): {} and number of grid points: {}'.format(self.niter_max_ev,self.nff_ia))
     print('Number of GW correction at energies calculated by integral part: {} and by sigma part: {}\n'.format(np.size(self.gw_corr_int(sn2eval_gw)), np.size(self.gw_corr_int(sn2eval_gw))))
-    print('GW corection for eigen values STARTED:\n')    
+    print('GW corection for eigenvalues STARTED:\n')    
     for i in range(self.niter_max_ev):
       sn2i = self.gw_corr_int(sn2eval_gw)
       sn2r = self.gw_corr_res(sn2eval_gw)

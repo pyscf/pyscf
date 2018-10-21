@@ -592,25 +592,23 @@ class nao(ao_log):
       from pyscf import gto, scf                           
       from pyscf.nao import nao
       result = True
-      #mol = gto.M( verbose = 0, atom = '''N 0 0 0.079083; N 0 0  -1.26533''',basis ='cc-pvdz')
-      #gto_RHF = scf.ROHF(self.mol)
-      ov_pyscf = self.get_ovlp()
+      ovlp_pyscf = self.get_ovlp()
       #sv = nao(gto=mol, rcut_tol=1e-8, nr=512, rmin=1e-5) 
-      #ov_nao = sv.overlap_coo().toarray()
-      ov_nao = sv.overlap_lil().toarray()
-      diff = (ov_nao - ov_pyscf).sum()
-      summ = (ov_nao + ov_pyscf).sum()
-      if diff/summ > tol or diff/ov_nao.size > tol:
+      #ovlp_nao = sv.overlap_coo().toarray()
+      ovlp_nao = sv.overlap_lil().toarray()
+      diff = (ovlp_nao - ovlp_pyscf).sum()
+      summ = (ovlp_nao + ovlp_pyscf).sum()
+      if diff/summ > tol or diff/ovlp_nao.size > tol:
         result = False
-      ch = result,'tol:{}'.format(tol), diff/summ, 'MAX:{}'.format(np.max(np.abs(ov_nao - ov_pyscf)))
+      check = result,'tol:{}, MAX:{}'.format(tol,np.max(np.abs(ovlp_nao - ovlp_pyscf))), diff/summ
     else:
-      overnao = sv.overlap_coo(**kvargs).tocsr()
-      diff = (sv.hsx.s4_csr - overnao).sum()
-      summ = (sv.hsx.s4_csr + overnao).sum()
+      ovlp_nao = sv.overlap_coo(**kvargs).tocsr()
+      diff = (sv.hsx.s4_csr - ovlp_nao).sum()
+      summ = (sv.hsx.s4_csr + ovlp_nao).sum()
       if diff/summ > tol:
         result = False
-      ch = result,'tol:{}'.format(tol), diff/summ
-    return ch
+      check = result,'tol:{}'.format(tol), diff/summ
+    return check
 
   def energy_nuc(self, charges=None, coords=None):
     """ Potential energy of electrostatic repulsion of point nuclei """
