@@ -388,9 +388,10 @@ class gw(scf):
       self.nn_conv.append( range(max(nocc_0t-nocc_conv,0), min(nocc_0t+nvrt_conv,self.norbs)))
 
     # iterations to converge the 
-    if self.verbosity>0: print('-'*30,'|  G0W0 corrections of eigenvalues  |','-'*30+'\n')
-    print('MAXIMUM number of iterations: {} and number of grid points: {}'.format(self.niter_max_ev,self.nff_ia))
-    print('Number of GW correction at energies calculated by integral part: {} and by sigma part: {}\n'.format(np.size(self.gw_corr_int(sn2eval_gw)), np.size(self.gw_corr_int(sn2eval_gw))))    
+    if self.verbosity>0: print('-'*48,'|  G0W0 corrections of eigenvalues  |','-'*48+'\n')
+    print('MAXIMUM number of iterations (Input file): {} and number of grid points: {}'.format(self.niter_max_ev,self.nff_ia))
+    print('Number of GW correction at energies calculated by integral part: {} and by sigma part: {}\n'.format(np.size(self.gw_corr_int(sn2eval_gw)), np.size(self.gw_corr_int(sn2eval_gw))))
+    print('GW corection for eigen values STARTED:\n')    
     for i in range(self.niter_max_ev):
       sn2i = self.gw_corr_int(sn2eval_gw)
       sn2r = self.gw_corr_res(sn2eval_gw)
@@ -411,12 +412,12 @@ class gw(scf):
       if self.verbosity>1:
         #print(sn2mismatch)
         for s,n2ev in enumerate(sn2eval_gw):
-          print('Spin{} {}'.format(s+1, n2ev[:]*HARTREE2EV)) #, sn2i[s][:]*HARTREE2EV, sn2r[s][:]*HARTREE2EV))   
+          print('Spin{}: {}'.format(s+1, n2ev[:]*HARTREE2EV)) #, sn2i[s][:]*HARTREE2EV, sn2r[s][:]*HARTREE2EV))   
       if err<self.tol_ev : 
-        if self.verbosity>0: print('-'*30,' |  Convergence has been reached at iteration#{}  | '.format(i+1),'-'*30,'\n')
+        if self.verbosity>0: print('-'*43,' |  Convergence has been reached at iteration#{}  | '.format(i+1),'-'*43,'\n')
         break
       if err>=self.tol_ev and i+1==self.niter_max_ev:
-        if self.verbosity>0: print('-'*30,' |  TAKE CARE! Convergence to tolerance not achieved after {}-iterations  | '.format(self.niter_max_ev),'-'*30,'\n')
+        if self.verbosity>0: print('-'*32,' |  TAKE CARE! Convergence to tolerance not achieved after {}-iterations  | '.format(self.niter_max_ev),'-'*32,'\n')
     return sn2eval_gw
     
   def report(self):
