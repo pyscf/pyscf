@@ -15,6 +15,8 @@
 from __future__ import print_function, division
 import unittest
 from pyscf.nao import nao as nao_c
+from pyscf.nao import mf as mf_c
+from pyscf.data.nist import HARTREE2EV
 
 class KnowValues(unittest.TestCase):
 
@@ -27,4 +29,29 @@ class KnowValues(unittest.TestCase):
     int_chlocal = (g.weights*nao.vna(g.coords, sp2v=nao.ao_log.sp2chlocal)).sum()
     self.assertAlmostEqual(int_chlocal, -7.9999819496898787)
 
+  def test_0077_DUscf_H2O(self):
+    """ Test chlocal field (density of bare atoms) """
+    import os
+    dname = os.path.dirname(os.path.abspath(__file__))
+    mf = mf_c(label='water', cd=dname)
+    center = mf.atom2coord.sum(axis=0)/ mf.natoms
+    g = mf.mesh3d.get_3dgrid(center)
+    dens = mf.dens_elec(g.coords, mf.make_rdm1()).reshape(mf.mesh3d.shape)
+    dens += mf.vna(g.coords,sp2v=mf.ao_log.sp2chlocal).reshape(g.shape)
+    print(__name__, (dens*g.weights).sum())
+    vh = mf.vhartree_pbc(dens)
+    print(__name__, (vh*dens*g.weights).sum()*HARTREE2EV)
+
+    dens1 = mf.dens_elec(g.coords, mf.make_rdm1()).reshape(mf.mesh3d.shape)
+    vh1 = mf.vhartree_pbc(dens)
+
+    dens2 = mf.vna(g.coords,sp2v=mf.ao_log.sp2chlocal).reshape(g.shape)
+    vh2 = mf.vhartree_pbc(dens)
+    print(__name__, ((+vh1*dens1+vh2*dens2)*g.weights).sum()*HARTREE2EV)
+    
+    
+    
+    
+
+    
 if __name__ == "__main__": unittest.main()

@@ -52,10 +52,6 @@ class KnowValues(unittest.TestCase):
     vxc_lil = mf.vxc_lil()
     vxc  = vxc_lil[0].toarray()
 
-    #vhat  = mf.vhartree_pbc_coo(density_factors=[0,-1]).toarray()
-    #Ehat = (vhat*dm).sum()*0.5*HARTREE2EV
-    #self.assertAlmostEqual(Ehat, -120.65336476645524)
-
     vna  = mf.vna_coo().toarray()
     Ena = (vna*dm).sum()*HARTREE2EV
     self.assertAlmostEqual(Ena, -265.011709776208)
