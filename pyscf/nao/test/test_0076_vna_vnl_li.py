@@ -37,7 +37,7 @@ class KnowValues(unittest.TestCase):
     self.assertAlmostEqual(Enl, 1.3120833331377273)
     #siesta: Enl     =         1.312064
 
-    vkin = 0.5*nao.laplace_coo().toarray() # Why not -0.5*Laplace ?
+    vkin = -0.5*nao.laplace_coo().toarray() # Why not -0.5*Laplace ?
     Ekin = (vkin*dm).sum()*HARTREE2EV
     self.assertAlmostEqual(Ekin, 2.6283947063428021)
     #siesta: Ekin     =       2.628343
