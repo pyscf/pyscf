@@ -164,6 +164,18 @@ class mf(nao):
     """  Compute Hartree potential for the density given in an equidistant grid  """
     from pyscf.nao.m_vhartree_pbc import vhartree_pbc
     return vhartree_pbc(self, dens, **kw)
+
+  def vhartree_pbc_coo(self, **kw): 
+    """  Compute matrix elements of Hartree potential for the density given in an equidistant grid  """
+    from pyscf.nao.m_vhartree_pbc import vhartree_pbc
+    center = self.atom2coord.sum(axis=0)/ self.natoms
+    g = self.mesh3d.get_3dgrid(center)
+    dens = self.dens_elec(g.coords, self.make_rdm1()).reshape(g.shape)
+    s = kw['add_neutral_atom_density'] if 'add_neutral_atom_density' in kw else False
+    if s: dens+=self.vna(g.coords,sp2v=self.ao_log.sp2chlocal).reshape(g.shape)
+    #print(__name__, dens.sum()*self.mesh3d.dv)
+    vh = self.vhartree_pbc(dens)
+    return self.matelem_int3d_coo(g, vh)
     
   def dens_elec(self, coords, dm): # Compute electronic density for a given density matrix and on a given set of coordinates
     from pyscf.nao.m_dens_libnao import dens_libnao

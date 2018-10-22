@@ -555,10 +555,11 @@ class nao(ao_log):
       return self.vnucele_coo_pseudo(**kw)
     else:
       return self.vnucele_coo_coulomb(**kw)
-  
-  def vnucele_coo_coulomb(self, **kw): # Compute matrix elements of attraction by Coulomb forces from point nuclei
-    from pyscf.nao.m_vnucele_coo_coulomb import vnucele_coo_coulomb
-    return vnucele_coo_coulomb(self, **kw)
+
+  def vnucele_coo_coulomb(self, **kw):
+    g = self.build_3dgrid_ae(**kw)
+    vnuc = self.comp_vnuc_coulomb(g.coords)
+    return self.matelem_int3d_coo(g, vnuc)
 
   def vnucele_coo_pseudo(self, **kw): # Compute matrix elements of attraction by forces from pseudo atom
     vna = self.vna_coo(**kw)
@@ -648,16 +649,20 @@ class nao(ao_log):
 
   def vna_coo(self, sp2v=None, **kw):
     """ Compute matrix elements of a potential which is given as superposition of central fields from each nuclei """
-    from numpy import einsum, dot
-    from scipy.sparse import coo_matrix
     sp2v = self.ao_log.sp2vna if sp2v is None else sp2v
     g = self.build_3dgrid_ae(**kw)
-    ca2o = self.comp_aos_den(g.coords)
     vna = self.vna(g.coords, sp2v=sp2v)
-    vna_w = g.weights*vna
-    cb2vo = einsum('co,c->co', ca2o, vna_w)
-    vna = dot(ca2o.T,cb2vo)
-    return coo_matrix(vna)
+    return self.matelem_int3d_coo(g, vna)
+
+  def matelem_int3d_coo(self, g, v):
+    """ Compute matrix elements of a potential v given on the 3d grid g """
+    from numpy import einsum, dot
+    from scipy.sparse import coo_matrix
+    ca2o = self.comp_aos_den(g.coords) # compute values of atomic orbitals
+    v_w = g.weights*v.reshape(g.size)
+    cb2vo = einsum('co,c->co', ca2o, v_w)
+    v_matelem = dot(ca2o.T,cb2vo)
+    return coo_matrix(v_matelem)
 
   def init_libnao_orbs(self):
     """ Initialization of data on libnao site """

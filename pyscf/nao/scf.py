@@ -65,14 +65,14 @@ class scf(tddft_iter):
     return etot
 
   def get_hcore(self, mol=None, **kw):
-    hcore = 0.5*self.laplace_coo().toarray()
+    hcore = -0.5*self.laplace_coo().toarray()
     hcore += self.vnucele_coo(**kw).toarray()
     return hcore
 
   def vnucele_coo(self, **kw): # Compute matrix elements of nuclear-electron interaction (attraction)
     if self.pseudo:
       # This is wrong after a repeated SCF. A better way would be to use pseudo-potentials and really recompute.
-      tkin = (0.5*self.laplace_coo()).tocsr()
+      tkin = (-0.5*self.laplace_coo()).tocsr()
       vhar = self.vhartree_coo(dm=self.dm_mf, **kw).tocsr()
       vxc  = self.vxc_lil(dm=self.dm_mf, xc_code=self.xc_code_mf, **kw)[0].tocsr()
       vne  = self.get_hamiltonian()[0].tocsr()-tkin-vhar-vxc

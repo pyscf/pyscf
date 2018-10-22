@@ -45,14 +45,14 @@ class KnowValues(unittest.TestCase):
     d = abs(np.dot(mf.ucell_mom(), mf.ucell)-(2*np.pi)*np.eye(3)).sum()
     self.assertTrue(d<1e-15)
     center = mf.atom2coord.sum(axis=0)/ mf.natoms
-    coords = mf.mesh3d.get_all_coords(center).reshape((mf.mesh3d.size, 3))
-    dens = mf.dens_elec(coords, mf.make_rdm1()).reshape(mf.mesh3d.shape)
+    g = mf.mesh3d.get_3dgrid(center)
+    dens = mf.dens_elec(g.coords, mf.make_rdm1()).reshape(mf.mesh3d.shape)
     ts = timer()
     vh = mf.vhartree_pbc(dens)
     tf = timer()
     #print(__name__, tf-ts)
-    E_Hartree = 0.5*(vh*dens).sum()*mf.mesh3d.dv*HARTREE2EV
+    E_Hartree = 0.5*(vh*dens*g.weights).sum()*HARTREE2EV
     self.assertAlmostEqual(E_Hartree, 382.8718239023864)
     # siesta:       Hartree =     382.890331
-    
+
 if __name__ == "__main__": unittest.main()

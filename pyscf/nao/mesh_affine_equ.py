@@ -27,3 +27,9 @@ class mesh_affine_equ():
 
   def get_all_coords(self, center=0.0):
     return (self.rr[0]+self.rr[1]+self.rr[2])-self.center+center
+
+  def get_3dgrid(self, center=0.0):
+    """ Generate 3d Grid a la PySCF with .coords and .weights  fields """
+    self.coords = self.get_all_coords(center=center).reshape((self.size, 3))
+    self.weights = self.dv
+    return self
