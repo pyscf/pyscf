@@ -16,6 +16,7 @@ from __future__ import print_function, division
 import unittest
 import os
 import numpy as np
+from timeit import default_timer as timer
 
 from pyscf.data.nist import HARTREE2EV
 
@@ -46,7 +47,10 @@ class KnowValues(unittest.TestCase):
     center = mf.atom2coord.sum(axis=0)/ mf.natoms
     coords = mf.mesh3d.get_all_coords(center).reshape((mf.mesh3d.size, 3))
     dens = mf.dens_elec(coords, mf.make_rdm1()).reshape(mf.mesh3d.shape)
+    ts = timer()
     vh = mf.vhartree_pbc(dens)
+    tf = timer()
+    #print(__name__, tf-ts)
     E_Hartree = 0.5*(vh*dens).sum()*mf.mesh3d.dv*HARTREE2EV
     self.assertAlmostEqual(E_Hartree, 382.8718239023864)
     # siesta:       Hartree =     382.890331
