@@ -168,8 +168,7 @@ class mf(nao):
   def vhartree_pbc_coo(self, density_factors=[1,0], **kw): 
     """  Compute matrix elements of Hartree potential for the density given in an equidistant grid  """
     from pyscf.nao.m_vhartree_pbc import vhartree_pbc
-    center = self.atom2coord.sum(axis=0)/ self.natoms
-    g = self.mesh3d.get_3dgrid(center)
+    g = self.mesh3d.get_3dgrid()
     f = density_factors
     dens = np.zeros(g.shape)
     if abs(f[0])>0: dens += f[0]*self.dens_elec(g.coords, self.make_rdm1()).reshape(g.shape)

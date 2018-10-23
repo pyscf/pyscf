@@ -32,9 +32,9 @@ class KnowValues(unittest.TestCase):
     gg,dv = nao.mesh3d.rr, nao.mesh3d.dv
     self.assertAlmostEqual(dv, 0.007621441417508375)
     self.assertEqual(len(gg), 3)
-    self.assertTrue(gg[0].shape==(72,1,1,3))
-    self.assertTrue(gg[1].shape==(1,54,1,3))
-    self.assertTrue(gg[2].shape==(1,1,54,3))
+    self.assertTrue(gg[0].shape==(72,3))
+    self.assertTrue(gg[1].shape==(54,3))
+    self.assertTrue(gg[2].shape==(54,3))
     self.assertEqual(nao.mesh3d.size, 72*54*54)
 
   def test_0078_vhartree_pbc_water(self):
@@ -44,8 +44,7 @@ class KnowValues(unittest.TestCase):
     mf = mf_c(label='water', cd=dname, gen_pb=False, Ecut=100.0)
     d = abs(np.dot(mf.ucell_mom(), mf.ucell)-(2*np.pi)*np.eye(3)).sum()
     self.assertTrue(d<1e-15)
-    center = mf.atom2coord.sum(axis=0)/ mf.natoms
-    g = mf.mesh3d.get_3dgrid(center)
+    g = mf.mesh3d.get_3dgrid()
     dens = mf.dens_elec(g.coords, mf.make_rdm1()).reshape(mf.mesh3d.shape)
     ts = timer()
     vh = mf.vhartree_pbc(dens)

@@ -47,7 +47,7 @@ def overlap_check(sv, tol=1e-5, **kvargs):
 #
 #
 #
-class nao(ao_log):
+class nao():
 
   def __init__(self, **kw):
     """  Constructor of NAO class """
@@ -351,7 +351,11 @@ class nao(ao_log):
     self.hsx = siesta_hsx_c(fname=cd+'/'+self.label+'.HSX', **kw)
     self.norbs_sc = self.wfsx.norbs if self.hsx.orb_sc2orb_uc is None else len(self.hsx.orb_sc2orb_uc)
     self.ucell = self.xml_dict["ucell"]
-    self.mesh3d = mesh_affine_equ(ucell=self.ucell, **kw)
+    self.atom2coord = self.xml_dict['atom2coord']
+    self.natm=self.natoms=len(self.xml_dict['atom2sp'])
+    orig = self.atom2coord.sum(axis=0)/self.natoms
+    self.mesh3d = mesh_affine_equ(ucell=self.ucell, origin=orig, **kw)
+
     ##### The parameters as fields     
     self.sp2ion = []
     for sp in self.wfsx.sp2strspecie: self.sp2ion.append(siesta_ion_xml(cd+'/'+sp+'.ion.xml'))
@@ -360,8 +364,6 @@ class nao(ao_log):
     self.ao_log = ao_log(sp2ion=self.sp2ion, **kw)
     self.kb_log = ao_log(sp2ion=self.sp2ion, fname='kbs', rr=self.ao_log.rr, pp=self.ao_log.pp)
 
-    self.atom2coord = self.xml_dict['atom2coord']
-    self.natm=self.natoms=len(self.xml_dict['atom2sp'])
     self.norbs  = self.wfsx.norbs 
     self.nspin  = self.wfsx.nspin
     self.nkpoints  = self.wfsx.nkpoints

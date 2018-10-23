@@ -1,5 +1,5 @@
 from __future__ import print_function, division
-import sys, numpy as np
+import numpy as np
 
 class mesh_affine_equ():
 
@@ -19,17 +19,46 @@ class mesh_affine_equ():
     gc = self.ucell/(nn) # This is probable the best for finite systems, for PBC use nn, not (nn-1)
     self.dv = np.abs(np.dot(gc[0], np.cross(gc[1], gc[2] )))
     rr = [np.array([gc[i]*j for j in range(nn[i])]) for i in range(3)]
-    rr[0] = rr[0].reshape((nn[0],1,1,3))
-    rr[1] = rr[1].reshape((1,nn[1],1,3))
-    rr[2] = rr[2].reshape((1,1,nn[2],3))
     self.rr = rr
-    self.center = (rr[0][-1,0,0]+rr[1][0,-1,0]+rr[2][0,0,-1])/2.0
+    self.origin = kw['origin'] if 'origin' in kw else np.zeros(3)
 
-  def get_all_coords(self, center=0.0):
-    return (self.rr[0]+self.rr[1]+self.rr[2])-self.center+center
+  def get_mesh_center(self):
+    return (self.rr[0][-1]+self.rr[1][-1]+self.rr[2][-1])/2.0
+  
+  def get_all_coords(self):
+    rr0 = self.rr[0].reshape((self.shape[0],1,1,3))
+    rr1 = self.rr[1].reshape((1,self.shape[1],1,3))
+    rr2 = self.rr[2].reshape((1,1,self.shape[2],3))
+    return (rr0+rr1+rr2)-self.get_mesh_center()+self.origin
 
-  def get_3dgrid(self, center=0.0):
+  def get_3dgrid(self):
     """ Generate 3d Grid a la PySCF with .coords and .weights  fields """
-    self.coords = self.get_all_coords(center=center).reshape((self.size, 3))
+    self.coords = self.get_all_coords().reshape((self.size, 3))
     self.weights = self.dv
     return self
+
+  def write(self, fname, **kw):
+    import time
+    import pyscf
+    from pyscf import lib
+    
+    """  Result: .cube file with the field in the file fname.  """
+    mol = kw['mol'] # Obligatory argument
+    field = kw['field'] # Obligatory argument?
+    coord = mol.atom_coords()
+    comment = kw['comment'] if 'comment' in kw else 'none'
+    print(__name__, tuple(self.rr[0][1]))
+    
+    with open(fname, 'w') as f:
+      f.write(comment+'\n')
+      f.write('PySCF Version: %s  Date: %s\n' % (pyscf.__version__, time.ctime()))
+      f.write(('{:5d}'+'{:12.6f}'*3+'\n').format(mol.natm, *self.origin))
+      for s,rr in zip(self.shape, self.rr): f.write(('{:5d}'+'{:12.6f}'*3+'\n').format(s, *rr[1]))
+      zz = [mol.atom_charge(ia) for ia in range(mol.natm)]
+      for chg,xyz in zip(zz,coord): f.write(('{:5d}'+'{:12.6f}'*4+'\n').format(chg, chg, *xyz))
+
+      for ix in range(self.shape[0]):
+        for iy in range(self.shape[1]):
+          for iz0,iz1 in lib.prange(0, self.shape[2], 6):
+            fmt = '%13.5E' * (iz1-iz0) + '\n'
+            f.write(fmt % tuple(field[ix,iy,iz0:iz1].tolist()))

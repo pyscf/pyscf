@@ -34,20 +34,19 @@ class KnowValues(unittest.TestCase):
     import os
     dname = os.path.dirname(os.path.abspath(__file__))
     mf = mf_c(label='water', cd=dname)
-    center = mf.atom2coord.sum(axis=0)/ mf.natoms
-    g = mf.mesh3d.get_3dgrid(center)
+    g = mf.mesh3d.get_3dgrid()
     dens = mf.dens_elec(g.coords, mf.make_rdm1()).reshape(mf.mesh3d.shape)
     dens += mf.vna(g.coords,sp2v=mf.ao_log.sp2chlocal).reshape(g.shape)
-    print(__name__, (dens*g.weights).sum())
+    #print(__name__, (dens*g.weights).sum())
     vh = mf.vhartree_pbc(dens)
-    print(__name__, (vh*dens*g.weights).sum()*HARTREE2EV)
+    #print(__name__, (vh*dens*g.weights).sum()*HARTREE2EV)
 
     dens1 = mf.dens_elec(g.coords, mf.make_rdm1()).reshape(mf.mesh3d.shape)
     vh1 = mf.vhartree_pbc(dens)
 
     dens2 = mf.vna(g.coords,sp2v=mf.ao_log.sp2chlocal).reshape(g.shape)
     vh2 = mf.vhartree_pbc(dens)
-    print(__name__, ((+vh1*dens1+vh2*dens2)*g.weights).sum()*HARTREE2EV)
+    #print(__name__, ((+vh1*dens1+vh2*dens2)*g.weights).sum()*HARTREE2EV)
     
     
     
