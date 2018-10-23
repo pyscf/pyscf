@@ -46,19 +46,23 @@ class mesh_affine_equ():
     mol = kw['mol'] # Obligatory argument
     field = kw['field'] # Obligatory argument?
     coord = mol.atom_coords()
+    zz = [mol.atom_charge(ia) for ia in range(mol.natm)]
+    
     comment = kw['comment'] if 'comment' in kw else 'none'
-    print(__name__, tuple(self.rr[0][1]))
     
     with open(fname, 'w') as f:
       f.write(comment+'\n')
-      f.write('PySCF Version: %s  Date: %s\n' % (pyscf.__version__, time.ctime()))
-      f.write(('{:5d}'+'{:12.6f}'*3+'\n').format(mol.natm, *self.origin))
-      for s,rr in zip(self.shape, self.rr): f.write(('{:5d}'+'{:12.6f}'*3+'\n').format(s, *rr[1]))
-      zz = [mol.atom_charge(ia) for ia in range(mol.natm)]
-      for chg,xyz in zip(zz,coord): f.write(('{:5d}'+'{:12.6f}'*4+'\n').format(chg, chg, *xyz))
+      f.write('PySCF Version: {:s}  Date: {:s}\n'.format(pyscf.__version__, time.ctime()))
+      bo = self.origin-self.get_mesh_center()
+      f.write(('{:5d}'+'{:12.6f}'*3+'\n').format(mol.natm, *bo))
+
+      for s,rr in zip(self.shape, self.rr): 
+        f.write(('{:5d}'+'{:12.6f}'*3+'\n').format(s, *rr[1]))
+
+      for chg,xyz in zip(zz,coord): 
+        f.write(('{:5d}'+'{:12.6f}'*4+'\n').format(chg, chg, *xyz))
 
       for ix in range(self.shape[0]):
         for iy in range(self.shape[1]):
           for iz0,iz1 in lib.prange(0, self.shape[2], 6):
-            fmt = '%13.5E' * (iz1-iz0) + '\n'
-            f.write(fmt % tuple(field[ix,iy,iz0:iz1].tolist()))
+            f.write(('{:13.5e}' * (iz1-iz0) + '\n').format(*field[ix,iy,iz0:iz1]))
