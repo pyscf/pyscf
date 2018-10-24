@@ -596,8 +596,8 @@ class nao(ao_log):
       #sv = nao(gto=mol, rcut_tol=1e-8, nr=512, rmin=1e-5) 
       #ovlp_nao = sv.overlap_coo().toarray()
       ovlp_nao = sv.overlap_lil().toarray()
-      diff = (ovlp_nao - ovlp_pyscf).sum()
-      summ = (ovlp_nao + ovlp_pyscf).sum()
+      diff = (abs(ovlp_nao - ovlp_pyscf)).sum()
+      summ = (abs(ovlp_nao + ovlp_pyscf)).sum()
       if diff/summ > tol or diff/ovlp_nao.size > tol:
         result = False
       check = result,'tol:{}, MAX:{}'.format(tol,np.max(np.abs(ovlp_nao - ovlp_pyscf))), diff/summ

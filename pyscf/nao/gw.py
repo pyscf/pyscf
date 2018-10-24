@@ -167,29 +167,6 @@ class gw(scf):
       #np.allclose(np.dot(k_c, si0), b) == True  #Test 
     return si0
 
-  def si_c_check (self, tol = 1e-5):
-    """
-    This compares np.solve and lgmres methods for solving linear equation (1-v\chi_{0}) * W_c = v\chi_{0}v
-    """
-    import time
-    import numpy as np
-    ww = 1j*self.ww_ia
-    t = time.time()
-    si0_1 = self.si_c(ww)              #method 1:  numpy.linalg.solve
-    t1 = time.time() - t
-    print('numpy: {} sec'.format(t1))
-    t2 = time.time()
-    si0_2 = self.si_c_lgmres(ww)       #method 2:  scipy.sparse.linalg.lgmres
-    t3 = time.time() - t2
-    print('lgmres: {} sec'.format(t1))
-    summ = abs(si0_1 + si0_2).sum()
-    diff = abs(si0_1 - si0_2).sum() 
-    if diff/summ < tol and diff/si0_1.size < tol:
-       print('OK! scipy.lgmres methods and np.linalg.solve have identical results')
-    else:
-       print('Results are NOT similar!')     
-    return [[diff/summ] , [np.amax(abs(diff))] ,[tol]]
-
   def si_c_lgmres(self,ww):
     """This computes the correlation part of the screened interaction using lgmres
        lgmres methods are much slower than np.linalg.solve !!
@@ -209,6 +186,30 @@ class gw(scf):
          si0[iw,m,:],exitCode = lgmres(k_c_csc, b[m,:])   
       #print(exitCode)      # 0 indicates successful convergence   
     return si0
+
+  def si_c_check (self, tol = 1e-5):
+    """
+    This compares np.solve and lgmres methods for solving linear equation (1-v\chi_{0}) * W_c = v\chi_{0}v
+    """
+    import time
+    import numpy as np
+    ww = 1j*self.ww_ia
+    t = time.time()
+    si0_1 = self.si_c(ww)              #method 1:  numpy.linalg.solve
+    t1 = time.time() - t
+    print('numpy: {} sec'.format(t1))
+    t2 = time.time()
+    si0_2 = self.si_c_lgmres(ww)       #method 2:  scipy.sparse.linalg.lgmres
+    t3 = time.time() - t2
+    print('lgmres: {} sec'.format(t3))
+    summ = abs(si0_1 + si0_2).sum()
+    diff = abs(si0_1 - si0_2).sum() 
+    if diff/summ < tol and diff/si0_1.size < tol:
+       print('OK! scipy.lgmres methods and np.linalg.solve have identical results')
+    else:
+       print('Results (W_c) are NOT similar!')     
+    return [[diff/summ] , [np.amax(abs(diff))] ,[tol]]
+
 
   def si_c_via_diagrpa(self, ww):
     """ 
@@ -249,37 +250,63 @@ class gw(scf):
 
   
   def get_snmw2sf_iter(self):
-    """ 
-    This iteratively computes a spectral function of the GW correction.
-    sf[spin,n,m,w] = X^n V_mu X^m W_mu_nu X^n V_nu X^m,
-    where W_mu_nu =  
-    """
-    dm = mf.make_rdm1() if dm is None else dm                                           #Density matrix as dm=D_{ab}=\sum_{occ}X_{n}^{a}X_{n}^{b}   occ?  
-    n = mf.norbs
-    if mf.nspin==1:
-        dm = dm.reshape((n,n))
-    elif mf.nspin==2:
-        dm = dm.reshape((2,n,n))    
-    
-    wpq2si0 = self.si_c(ww = 1j*self.ww_ia).real
+    import numpy as np
+    from scipy.sparse import csc_matrix
+    from scipy.sparse.linalg import lgmres
+    sf = []
+    ww = 1j*self.ww_ia
+    rf0 = self.rf0(ww)
     v_pab = self.pb.get_ac_vertex_array()
-
-    snmw2sf = []
     for s in range(self.nspin):
-      nmw2sf = zeros((len(self.nn[s]), self.norbs, self.nff_ia), dtype=self.dtype)
-      #nmw2sf = zeros((len(self.nn), self.norbs, self.nff_ia), dtype=self.dtype)
-      xna = self.mo_coeff[0,s,self.nn[s],:,0]                                           #n runs from s...f or states will be corrected: self.nn = [range(self.start_st[s], self.finish_st[s])
-      #xna = self.mo_coeff[0,s,self.nn,:,0]
-      xmb = self.mo_coeff[0,s,:,:,0]                                                    #m runs from 0...norbs
-      nmp2xvx = einsum('na,pab,mb->nmp', xna, v_pab, xmb)                               #This calculates nmp2xvx= X^n V_mu X^m foe each side
-      for iw,si0 in enumerate(wpq2si0):
-        nmw2sf[:,:,iw] = einsum('nmp,pq,nmq->nm', nmp2xvx, si0, nmp2xvx)                #This calculates nmp2xvx W_mu_nu nmp2xvx 
-      snmw2sf.append(nmw2sf)
-    return snmw2sf
+        sf0 = np.zeros((len(self.nn[s]), self.norbs, self.nff_ia), dtype=self.dtype)  #initial zero-like matrix 
+        sf_aux =  np.zeros((len(self.nn[s]), self.nprod, self.norbs), dtype=self.dtype)
+        xna = self.mo_coeff[0,s,self.nn[s],:,0]                                     #X_{n}^{a}   n=12 states, a=norbs
+        xmb = self.mo_coeff[0,s,:,:,0]                                              #X_{m}^{b}   m=b=norbs
+        xvx = np.einsum('na,pab,mb->nmp', xna, v_pab, xmb)                          #xvx_{nm}^{mu} = X_{n}^{a} V_{mu}^{ab} X_{m}^{b}   mu=nprod ====> xvx[12,norbs,nprod]
+        #xvx1 = np.einsum('na,pab,mb->nmp', xmb, v_pab, xna)
+        for iw,w in enumerate(ww):                                
+            k_c = dot(self.kernel_sq, rf0[iw,:,:])                                  #v*ki_0     (nprod, nprod)
+            k_c_csc = csc_matrix(np.eye(self.nprod)-k_c)                            #1-v*ki_0   (nprod, nprod)
+            b = dot(k_c, self.kernel_sq)                                            #v*ki_0*v   (nprod, nprod)
+            bxvx = np.einsum('nn,pbn->pbn', b, xvx)                 #dim(nn*norbs*nprods)
+            for m in range(self.nprod):
+                for l in range(self.norbs): 
+                    sf_aux[self.nn[s],m,l],exitCode = lgmres(k_c_csc, bxvx[m,l])
+    sf0[iw,m,:]        
+    sf.append(sf0)
+    return sf
 
-
-
-
+  def get_snmw2sf_iter(self):
+    """
+    This compute spectral weight function. I = XVX W_c XVX and (1-v\chi_{0})W= v\chi_{0}v
+    so 1-v\chi_{0}) I_aux = v\chi_{0}v XVX and I= XVX I_aux    
+    """
+    import numpy as np
+    from scipy.sparse import csc_matrix
+    from scipy.sparse.linalg import lgmres
+    from numpy.linalg import solve
+    ww = 1j*self.ww_ia
+    rf0 = self.rf0(ww)
+    v_pab = self.pb.get_ac_vertex_array()
+    snm2i = []
+    for s in range(self.nspin):
+        sf_aux = np.zeros((len(self.nn[s]), self.norbs, self.nprod), dtype=self.dtype)  
+        inm = np.zeros((len(self.nn[s]), self.norbs, len(ww)), dtype=self.dtype)
+        xna = self.mo_coeff[0,s,self.nn[s],:,0] 
+        xmb = self.mo_coeff[0,s,:,:,0]       
+        xvx = np.einsum('na,pab,mb->nmp', xna, v_pab, xmb)  #XVX  
+        for iw,w in enumerate(ww):                                
+            k_c = dot(self.kernel_sq, rf0[iw,:,:])          #v\chi_{0}
+            b = dot(k_c, self.kernel_sq)                    #v\chi_{0}v
+            k_c = np.eye(self.nprod)-k_c                    #1-v\chi_{0}
+            bxvx = np.einsum('pq,nmq->nmp', b, xvx)         #right hand side of I_aux equation ndim(nn*norbs*nprod)
+            for n in range(len(self.nn[s])):
+                for m in range(self.norbs):
+                    sf_aux[n,m,:] = solve(k_c, bxvx[n,m,:]) 
+                    #sf_aux[n,m,:] ,exitCode = lgmres(k_c, bxvx[n,m,:])
+                inm[:,:,iw]=np.einsum('nmp,nmp->nm',xvx, sf_aux)    #I= XVX I_aux
+        snm2i.append(inm)
+    return snm2i
 
 
 
