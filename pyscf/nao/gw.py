@@ -244,38 +244,6 @@ class gw(scf):
       snmw2sf.append(nmw2sf)
     return snmw2sf
 
-
-
-
-
-  
-  def get_snmw2sf_iter(self):
-    import numpy as np
-    from scipy.sparse import csc_matrix
-    from scipy.sparse.linalg import lgmres
-    sf = []
-    ww = 1j*self.ww_ia
-    rf0 = self.rf0(ww)
-    v_pab = self.pb.get_ac_vertex_array()
-    for s in range(self.nspin):
-        sf0 = np.zeros((len(self.nn[s]), self.norbs, self.nff_ia), dtype=self.dtype)  #initial zero-like matrix 
-        sf_aux =  np.zeros((len(self.nn[s]), self.nprod, self.norbs), dtype=self.dtype)
-        xna = self.mo_coeff[0,s,self.nn[s],:,0]                                     #X_{n}^{a}   n=12 states, a=norbs
-        xmb = self.mo_coeff[0,s,:,:,0]                                              #X_{m}^{b}   m=b=norbs
-        xvx = np.einsum('na,pab,mb->nmp', xna, v_pab, xmb)                          #xvx_{nm}^{mu} = X_{n}^{a} V_{mu}^{ab} X_{m}^{b}   mu=nprod ====> xvx[12,norbs,nprod]
-        #xvx1 = np.einsum('na,pab,mb->nmp', xmb, v_pab, xna)
-        for iw,w in enumerate(ww):                                
-            k_c = dot(self.kernel_sq, rf0[iw,:,:])                                  #v*ki_0     (nprod, nprod)
-            k_c_csc = csc_matrix(np.eye(self.nprod)-k_c)                            #1-v*ki_0   (nprod, nprod)
-            b = dot(k_c, self.kernel_sq)                                            #v*ki_0*v   (nprod, nprod)
-            bxvx = np.einsum('nn,pbn->pbn', b, xvx)                 #dim(nn*norbs*nprods)
-            for m in range(self.nprod):
-                for l in range(self.norbs): 
-                    sf_aux[self.nn[s],m,l],exitCode = lgmres(k_c_csc, bxvx[m,l])
-    sf0[iw,m,:]        
-    sf.append(sf0)
-    return sf
-
   def get_snmw2sf_iter(self):
     """
     This compute spectral weight function. I = XVX W_c XVX and (1-v\chi_{0})W= v\chi_{0}v
@@ -299,7 +267,7 @@ class gw(scf):
             k_c = dot(self.kernel_sq, rf0[iw,:,:])          #v\chi_{0}
             b = dot(k_c, self.kernel_sq)                    #v\chi_{0}v
             k_c = np.eye(self.nprod)-k_c                    #1-v\chi_{0}
-            bxvx = np.einsum('pq,nmq->nmp', b, xvx)         #right hand side of I_aux equation ndim(nn*norbs*nprod)
+            bxvx = np.einsum('pq,nmq->nmp', b, xvx)         #rightside of I_aux equation has ndim(nn*norbs*nprod)
             for n in range(len(self.nn[s])):
                 for m in range(self.norbs):
                     sf_aux[n,m,:] = solve(k_c, bxvx[n,m,:]) 
@@ -308,8 +276,35 @@ class gw(scf):
         snm2i.append(inm)
     return snm2i
 
-
-
+  def check_veff(self):
+    """ This computes an effective field (scalar potential) given the external scalar potential as follows:
+        (1-v\chi_{0})V_{eff}=V_{ext}=X_{a}^{n}V_{\mu}^{ab}X_{b}^{m} * v\chi_{0}v * X_{a}^{n}V_{\nu}^{ab}X_{b}^{m}
+        returns V_{eff} as list for all n states(self.nn[s]).
+    """
+    import numpy as np
+    from scipy.sparse import csc_matrix
+    from scipy.sparse.linalg import lgmres
+    from numpy.linalg import solve
+    ww = 1j*self.ww_ia
+    rf0 = self.rf0(ww)
+    v_pab = self.pb.get_ac_vertex_array()                   #V_{\mu}^{ab}
+    for s in range(self.nspin):
+      v_eff = np.zeros((len(self.nn[s]), self.nprod), dtype=self.dtype)
+      v_eff_ref = np.zeros((len(self.nn[s]), self.nprod), dtype=self.dtype)
+      xna = self.mo_coeff[0,s,self.nn[s],:,0]               #X_{a}^{n}
+      xmb = self.mo_coeff[0,s,:,:,0]                        #X_{b}^{m}
+      xvx = np.einsum('na,pab,mb->nmp', xna, v_pab, xmb)    #X_{a}^{n}V_{\mu}^{ab}X_{b}^{m}
+      for iw,w in enumerate(ww):     
+          k_c = np.dot(self.kernel_sq, rf0[iw,:,:])         # v\chi_{0} 
+          b = np.dot(k_c, self.kernel_sq)                   # v\chi_{0}v 
+          k_c = np.eye(self.nprod)-k_c                      #(1-v\chi_{0})
+          bxvx = np.einsum('pq,nmq->nmp', b, xvx)           #v\chi_{0}v * X_{a}^{n}V_{\nu}^{ab}X_{b}^{m}
+          xvxbxvx = np.einsum ('nmp,nlp->np',xvx,bxvx)      #V_{ext}=X_{a}^{n}V_{\mu}^{ab}X_{b}^{m} * v\chi_{0}v * X_{a}^{n}V_{\nu}^{ab}X_{b}^{m}
+          for n in range (len(self.nn[s])):
+              v_eff_ref[n,:] = self.comp_veff(xvxbxvx[n,:]) #compute v_eff in tddft_iter class as referance
+              v_eff[n,:]=solve(k_c, xvxbxvx[n,:])           #linear eq. for finding V_{eff} --> (1-v\chi_{0})V_{eff}=V_{ext}
+    if np.allclose(v_eff,v_eff_ref,atol=1e-4)== True:       #compares both V_{eff}
+      return v_eff
 
   def gw_corr_int(self, sn2w, eps=None):
     """ This computes an integral part of the GW correction at energies sn2e[spin,len(self.nn)] """

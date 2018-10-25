@@ -599,7 +599,7 @@ class nao(ao_log):
       diff = (abs(ovlp_nao - ovlp_pyscf)).sum()
       summ = (abs(ovlp_nao + ovlp_pyscf)).sum()
       if diff/summ > tol or diff/ovlp_nao.size > tol:
-        result = False
+        result = False  #as might be expected due to the different sepherical harmonic part they must be different.
       check = result,'tol:{}, MAX:{}'.format(tol,np.max(np.abs(ovlp_nao - ovlp_pyscf))), diff/summ
     else:
       ovlp_nao = sv.overlap_coo(**kvargs).tocsr()
