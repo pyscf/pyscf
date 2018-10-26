@@ -1,6 +1,8 @@
 from __future__ import print_function, division
 import sys, numpy as np
 from numpy import require
+from timeit import default_timer as timer
+
 from scipy.spatial.distance import cdist
 
 from pyscf.nao.m_color import color as bc
@@ -38,8 +40,8 @@ def get_orb2j(sv):
 #
 def overlap_check(sv, tol=1e-5, **kvargs):
   over = sv.overlap_coo(**kvargs).tocsr()
-  diff = (sv.hsx.s4_csr-over).sum()
-  summ = (sv.hsx.s4_csr+over).sum()
+  diff = abs(sv.hsx.s4_csr-over).sum()
+  summ = abs(sv.hsx.s4_csr+over).sum()
   ac = diff/summ<tol
   if not ac: print(diff, summ)
   return ac
@@ -313,7 +315,6 @@ class nao():
     from pyscf.nao.m_siesta_wfsx import siesta_wfsx_c
     from pyscf.nao.m_siesta_ion_xml import siesta_ion_xml
     from pyscf.nao.m_siesta_hsx import siesta_hsx_c
-    from timeit import default_timer as timer
     """
       Initialise system var using only the siesta files (siesta.xml in particular is needed)
 
@@ -429,21 +430,31 @@ class nao():
   def init_mo_coeff_label(self, **kw):
     """ Constructor a mean-field class from the preceeding SIESTA calculation """
     from pyscf.nao.m_fermi_dirac import fermi_dirac_occupations
+    from pyscf.nao.m_fermi_energy import fermi_energy
+        
     self.mo_coeff = require(self.wfsx.x, dtype=self.dtype, requirements='CW')
     self.mo_energy = require(self.wfsx.ksn2e, dtype=self.dtype, requirements='CW')
     self.telec = kw['telec'] if 'telec' in kw else self.hsx.telec
     if self.nspin==1:
       self.nelec = kw['nelec'] if 'nelec' in kw else np.array([self.hsx.nelec])
     elif self.nspin==2:
-      self.nelec = kw['nelec'] if 'nelec' in kw else np.array([int(self.hsx.nelec/2), int(self.hsx.nelec/2)])      
+      self.nelec = kw['nelec'] if 'nelec' in kw else np.array([int(self.hsx.nelec/2), int(self.hsx.nelec/2)])
       if self.verbosity>0: print(__name__, 'not sure here: self.nelec', self.nelec)
     else:
       raise RuntimeError('0>nspin>2?')
-      
-    self.fermi_energy = kw['fermi_energy'] if 'fermi_energy' in kw else self.fermi_energy
+    
+    if 'fermi_energy' in kw: self.fermi_energy = kw['fermi_energy'] # possibility to redefine Fermi energy
     ksn2fd = fermi_dirac_occupations(self.telec, self.mo_energy, self.fermi_energy)
     self.mo_occ = (3-self.nspin)*ksn2fd
-
+    nelec_occ = self.mo_occ.sum(axis=-1).reshape(self.nspin)
+    if not np.allclose(self.nelec, nelec_occ, atol=1e-4):
+      fermi_guess = fermi_energy(self.wfsx.ksn2e, self.hsx.nelec, self.hsx.telec)
+      raise RuntimeWarning(
+      'occupations? \n telec: {} \n nelec expected {}\n nelec(occ) {}\n Fermi guess: {} Fermi: {}\n E_n:\n {}'.format(
+        self.telec, self.nelec, nelec_occ, fermi_guess, self.fermi_energy, self.mo_energy))
+    if 'fermi_energy' in kw: 
+      print(__name__, "mo_occ : \n {}".format(self.mo_occ))
+      
   def make_rdm1(self, mo_coeff=None, mo_occ=None):
     # from pyscf.scf.hf import make_rdm1 -- different index order here
     if mo_occ is None: mo_occ = self.mo_occ[0,:,:]

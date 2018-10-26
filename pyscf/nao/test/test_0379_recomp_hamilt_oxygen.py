@@ -28,8 +28,13 @@ class KnowValues(unittest.TestCase):
     """ Recomputing all parts of KS Hamiltonian a la SIESTA """
     import os
     dname = os.path.dirname(os.path.abspath(__file__))
-    mf = mf_c(label='oxygen', cd=dname, gen_pb=False, Ecut=100.0)
+    mf = mf_c(label='oxygen', cd=dname, gen_pb=False, fermi_energy=-0.27012188215107336, Ecut=100.0)
+    
+    mf.overlap_check()
+    mf.diag_check()
+        
     dm = mf.make_rdm1().reshape((mf.norbs, mf.norbs))
+    ab2o = mf.overlap_coo().toarray()
 
     hamilt1 = mf.get_hamiltonian()[0].toarray()
     Ebs1 = (hamilt1*dm).sum()*HARTREE2EV

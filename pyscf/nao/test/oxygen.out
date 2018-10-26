@@ -1,11 +1,11 @@
-Siesta Version: siesta-4.0--530
-Architecture  : unknown
-Compiler flags: mpif90 -O2 -fPIC -ftree-vectorize -march=native
-PP flags      : -DFC_HAVE_ABORT 
-SERIAL version
+Siesta Version: siesta-4.0b-494
+Architecture  : x86_64-mkl_mpi
+Compiler flags: mpif90 -I.  -ffixed-line-length-0    -g -O2
+PP flags      : -DFC_HAVE_FLUSH -DFC_HAVE_ABORT -DMPI 
+PARALLEL version
 
-* Running in serial mode
->> Start of run:  24-OCT-2018  10:59:47
+* Running in serial mode with MPI
+>> Start of run:  26-OCT-2018  18:20:50
 
                            ***********************       
                            *  WELCOME TO SIESTA  *       
@@ -195,6 +195,7 @@ Vna:  Cut-off radius for the neutral-atom potential:   3.937239
 atom: _________________________________________________________________________
 
 prinput: Basis input ----------------------------------------------------------
+GREETS from /home/kovalp/programs/siesta/4.0-b2/Src/atom.F     7006
 
 PAO.BasisType split     
 
@@ -272,6 +273,12 @@ redata: Dynamics option                  =     Single-point calculation
 redata: ***********************************************************************
 Total number of electrons:     6.000000
 Total ionic charge:     6.000000
+
+* ProcessorY, Blocksize:    1  14
+
+
+* Orbital distribution balance (max,min):    13    13
+
  Kpoints in:            1 . Kpoints trimmed:            1
 
 siesta: k-grid: Number of k-points =     1
@@ -311,6 +318,8 @@ siesta: Program's energy decomposition (eV):
 siesta: Ebs     =       -68.212274
 siesta: Eions   =       776.439835
 siesta: Ena     =       167.888678
+siesta: Enaatm  =      -222.571023
+siesta: Enascf  =      -222.571026
 siesta: Ekin    =       316.380281
 siesta: Enl     =       -45.207615
 siesta: DEna    =        -0.000003
@@ -328,7 +337,7 @@ siesta: FreeEng =      -426.479134
 
    scf: iscf   Eharris(eV)      E_KS(eV)   FreeEng(eV)    dDmax  Ef(eV)
    scf:    1     -426.5373     -426.3804     -426.4791  0.26557 -6.5506
-timer: Routine,Calls,Time,% =    IterSCF     1       0.032   3.09
+timer: Routine,Calls,Time,% =    IterSCF     1       0.072   5.73
    scf:    2     -426.5110     -426.4154     -426.5141  0.20484 -8.0183
    scf:    3     -426.4691     -426.4316     -426.5303  0.00260 -7.3712
    scf:    4     -426.4691     -426.4288     -426.5275  0.00364 -7.3769
@@ -346,7 +355,7 @@ siesta: E_KS - E_eggbox =      -426.4691
 
 siesta: Atomic forces (eV/Ang):
 ----------------------------------------
-   Tot    0.000000   -0.000000    0.000000
+   Tot   -0.000000    0.000000    0.000000
 ----------------------------------------
    Max    0.000000
    Res    0.000000    sqrt( Sum f_i^2 / 3N )
@@ -362,6 +371,8 @@ siesta: Program's energy decomposition (eV):
 siesta: Ebs     =       -73.185007
 siesta: Eions   =       776.439835
 siesta: Ena     =       167.888678
+siesta: Enaatm  =      -222.571023
+siesta: Enascf  =      -217.774110
 siesta: Ekin    =       308.294510
 siesta: Enl     =       -43.273074
 siesta: DEna    =         4.796913
@@ -389,8 +400,8 @@ siesta:       Ekinion =       0.000000
 siesta:         Total =    -426.469056
 
 siesta: Stress tensor (static) (eV/Ang**3):
-siesta:     0.000011    0.000000    0.000000
-siesta:    -0.000000    0.000011   -0.000000
+siesta:     0.000011   -0.000000    0.000000
+siesta:    -0.000000    0.000011    0.000000
 siesta:     0.000000   -0.000000    0.000011
 
 siesta: Cell volume =         96.304442 Ang**3
@@ -403,64 +414,63 @@ siesta:          -0.01743737         -0.01743737  kBar
 (Free)E+ p_basis*V_orbitals  =        -426.420245
 (Free)Eharris+ p_basis*V_orbitals  =        -426.420245
 
-siesta: Electric dipole (a.u.)  =    0.000000   -0.000000    0.000000
-siesta: Electric dipole (Debye) =    0.000000   -0.000000    0.000000
+siesta: Electric dipole (a.u.)  =    0.000000    0.000000    0.000000
+siesta: Electric dipole (Debye) =    0.000000    0.000000    0.000000
 
-timer: Elapsed wall time (sec) =       1.098
+timer: Elapsed wall time (sec) =       1.620
 timer: CPU execution times (sec):
 
 Routine            Calls   Time/call    Tot.time        %
-siesta                 1       2.024       2.024   100.00
-Setup                  1       0.352       0.352    17.39
+siesta                 1       3.144       3.144   100.00
+Setup                  1       0.260       0.260     8.27
 bands                  1       0.000       0.000     0.00
 KSV_init               1       0.000       0.000     0.00
-IterGeom               1       1.560       1.560    77.08
-state_init             1       0.112       0.112     5.53
+IterGeom               1       2.664       2.664    84.73
+state_init             1       0.152       0.152     4.83
 hsparse                1       0.000       0.000     0.00
-overlap                1       0.112       0.112     5.53
-Setup_H0               1       0.540       0.540    26.68
+overlap                1       0.152       0.152     4.83
+Setup_H0               1       0.772       0.772    24.55
 naefs                  2       0.000       0.000     0.00
 MolMec                 2       0.000       0.000     0.00
-kinefsm                2       0.052       0.104     5.14
-nlefsm                 2       0.176       0.352    17.39
-DHSCF_Init             1       0.084       0.084     4.15
-DHSCF1                 1       0.012       0.012     0.59
+kinefsm                2       0.072       0.144     4.58
+nlefsm                 2       0.230       0.460    14.63
+DHSCF_Init             1       0.172       0.172     5.47
+DHSCF1                 1       0.048       0.048     1.53
 INITMESH               1       0.000       0.000     0.00
-DHSCF2                 1       0.072       0.072     3.56
-REMESH                 1       0.008       0.008     0.40
-REORD                 21       0.001       0.012     0.59
-PHION                  1       0.052       0.052     2.57
-COMM_BSC              16       0.001       0.012     0.59
-POISON                 8       0.021       0.172     8.50
-fft                   16       0.008       0.128     6.32
-IterSCF                5       0.110       0.548    27.08
-setup_H                5       0.106       0.532    26.28
-DHSCF                  7       0.142       0.992    49.01
-DHSCF3                 7       0.108       0.756    37.35
-rhoofd                 7       0.023       0.160     7.91
-cellXC                 7       0.035       0.248    12.25
-vmat                   6       0.015       0.088     4.35
-writeHSX               5       0.001       0.004     0.20
-compute_dm             5       0.001       0.004     0.20
-diagon                 5       0.001       0.004     0.20
-r-eigvec               6       0.001       0.008     0.40
+DHSCF2                 1       0.124       0.124     3.94
+REMESH                 1       0.012       0.012     0.38
+REORD                 21       0.001       0.028     0.89
+PHION                  1       0.080       0.080     2.54
+COMM_BSC              16       0.002       0.024     0.76
+POISON                 8       0.089       0.708    22.52
+fft                   16       0.037       0.596    18.96
+IterSCF                5       0.251       1.256    39.95
+setup_H                5       0.249       1.244    39.57
+DHSCF                  7       0.275       1.928    61.32
+DHSCF3                 7       0.248       1.736    55.22
+rhoofd                 7       0.047       0.328    10.43
+cellXC                 7       0.057       0.400    12.72
+vmat                   6       0.029       0.176     5.60
+writeHSX               5       0.000       0.000     0.00
+compute_dm             5       0.001       0.004     0.13
+diagon                 5       0.001       0.004     0.13
+r-eigvec               6       0.001       0.004     0.13
 r-buildHS              6       0.000       0.000     0.00
-rdiag                  6       0.001       0.008     0.40
-rdiag1                 6       0.001       0.004     0.20
+rdiag                  6       0.001       0.004     0.13
+rdiag1                 6       0.000       0.000     0.00
 rdiag2                 6       0.000       0.000     0.00
-rdiag3                 6       0.001       0.004     0.20
-rdiag4                 6       0.000       0.000     0.00
+rdiag3                 6       0.000       0.000     0.00
+rdiag4                 6       0.001       0.004     0.13
 r-buildD               5       0.000       0.000     0.00
-MIXER                  4       0.001       0.004     0.20
-WriteDM                5       0.000       0.000     0.00
-PostSCF                1       0.360       0.360    17.79
-DHSCF4                 1       0.236       0.236    11.66
-dfscf                  1       0.208       0.208    10.28
+MIXER                  4       0.000       0.000     0.00
+WriteDM                5       0.001       0.004     0.13
+PostSCF                1       0.480       0.480    15.27
+DHSCF4                 1       0.192       0.192     6.11
+dfscf                  1       0.152       0.152     4.83
 overfsm                1       0.000       0.000     0.00
 state_analysis         1       0.000       0.000     0.00
 siesta_move            1       0.000       0.000     0.00
-writewave              1       0.004       0.004     0.20
+writewave              1       0.000       0.000     0.00
 optical                1       0.000       0.000     0.00
   
->> End of run:  24-OCT-2018  10:59:48
-Job completed
+>> End of run:  26-OCT-2018  18:20:52
