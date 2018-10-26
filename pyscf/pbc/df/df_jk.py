@@ -376,10 +376,19 @@ def _format_jks(v_kpts, dm_kpts, kpts_band, kpts):
     else:
         if hasattr(kpts_band, 'ndim') and kpts_band.ndim == 1:
             v_kpts = v_kpts[:,0]
-        if dm_kpts.ndim <= 3:  # nset=1
+# A temporary solution for issue 242. Looking for better way to sort out the
+# dimension of the output
+# dm_kpts.shape     kpts.shape     nset
+# (Nao,Nao)         (1 ,3)         None
+# (Ndm,Nao,Nao)     (1 ,3)         Ndm
+# (Nk,Nao,Nao)      (Nk,3)         None
+# (Ndm,Nk,Nao,Nao)  (Nk,3)         Ndm
+        if dm_kpts.ndim < 3:     # nset=None
             return v_kpts[0]
-        else:
+        elif dm_kpts.ndim == 4 or kpts.shape[0] == 1:  # nset=Ndm
             return v_kpts
+        else:
+            return v_kpts[0]
 
 def zdotNN(aR, aI, bR, bI, alpha=1, cR=None, cI=None, beta=0):
     '''c = a*b'''
