@@ -382,10 +382,10 @@ def _format_jks(v_kpts, dm_kpts, kpts_band, kpts):
 # (Ndm,Nk,Nao,Nao)  (Nk,3)         Ndm
         if dm_kpts.ndim < 3:     # nset=None
             return v_kpts[0]
-        elif dm_kpts.ndim == 4 or kpts.shape[0] == 1:  # nset=Ndm
-            return v_kpts
-        else:
+        elif dm_kpts.ndim == 3 and dm_kpts.shape[0] == kpts.shape[0]:
             return v_kpts[0]
+        else:  # dm_kpts.ndim == 4 or kpts.shape[0] == 1:  # nset=Ndm
+            return v_kpts
 
 def zdotNN(aR, aI, bR, bI, alpha=1, cR=None, cI=None, beta=0):
     '''c = a*b'''
