@@ -351,7 +351,14 @@ class nao():
     self.wfsx = siesta_wfsx_c(**kw)
     self.hsx = siesta_hsx_c(fname=cd+'/'+self.label+'.HSX', **kw)
     self.norbs_sc = self.wfsx.norbs if self.hsx.orb_sc2orb_uc is None else len(self.hsx.orb_sc2orb_uc)
-    self.ucell = self.xml_dict["ucell"]
+    if 'ucell' in kw:
+      uc = kw['ucell']
+      self.ucell = uc if type(uc)==np.ndarray else uc*np.eye(3)
+      if self.verbosity>0: print(__name__, "ucell: \n{}".format(self.ucell))
+      kw.pop('ucell')
+    else:
+      self.ucell = self.xml_dict["ucell"]
+
     self.atom2coord = self.xml_dict['atom2coord']
     self.natm=self.natoms=len(self.xml_dict['atom2sp'])
     orig = self.atom2coord.sum(axis=0)/self.natoms
