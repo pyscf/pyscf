@@ -182,6 +182,7 @@ class mf(nao):
     from pyscf.nao.m_dens_libnao import dens_libnao
     from pyscf.nao.m_init_dm_libnao import init_dm_libnao
     from pyscf.nao.m_init_dens_libnao import init_dens_libnao
+    # end of imports 
     if not self.init_sv_libnao : raise RuntimeError('not self.init_sv_libnao')
     if init_dm_libnao(dm) is None : raise RuntimeError('init_dm_libnao(dm) is None')
     if init_dens_libnao()!=0 : raise RuntimeError('init_dens_libnao()!=0')

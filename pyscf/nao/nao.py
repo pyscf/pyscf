@@ -450,10 +450,14 @@ class nao():
     if not np.allclose(self.nelec, nelec_occ, atol=1e-4):
       fermi_guess = fermi_energy(self.wfsx.ksn2e, self.hsx.nelec, self.hsx.telec)
       raise RuntimeWarning(
-      'occupations? \n telec: {} \n nelec expected {}\n nelec(occ) {}\n Fermi guess: {} Fermi: {}\n E_n:\n {}'.format(
-        self.telec, self.nelec, nelec_occ, fermi_guess, self.fermi_energy, self.mo_energy))
-    if 'fermi_energy' in kw: 
-      print(__name__, "mo_occ : \n {}".format(self.mo_occ))
+      '''occupations?\n telec: {}\n nelec expected: {}
+ nelec(occ): {}\n Fermi guess: {}\n Fermi: {}\n E_n:\n{}'''.format(
+ self.telec, self.nelec, nelec_occ, fermi_guess, self.fermi_energy, self.mo_energy))
+    if 'fermi_energy' in kw:
+      po = np.get_printoptions() 
+      np.set_printoptions(precision=2, linewidth=1000)
+      print(__name__, "mo_occ: {}".format(self.mo_occ))
+      np.set_printoptions(**po)
       
   def make_rdm1(self, mo_coeff=None, mo_occ=None):
     # from pyscf.scf.hf import make_rdm1 -- different index order here
