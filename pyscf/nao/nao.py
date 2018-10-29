@@ -453,13 +453,15 @@ class nao():
     if 'fermi_energy' in kw: self.fermi_energy = kw['fermi_energy'] # possibility to redefine Fermi energy
     ksn2fd = fermi_dirac_occupations(self.telec, self.mo_energy, self.fermi_energy)
     self.mo_occ = (3-self.nspin)*ksn2fd
-    nelec_occ = self.mo_occ.sum(axis=-1).reshape(self.nspin)
+    nelec_occ = np.einsum('ksn->s', self.mo_occ)/self.nkpoints
     if not np.allclose(self.nelec, nelec_occ, atol=1e-4):
       fermi_guess = fermi_energy(self.wfsx.ksn2e, self.hsx.nelec, self.hsx.telec)
+      np.set_printoptions(precision=2, linewidth=1000)
       raise RuntimeWarning(
-      '''occupations?\n telec: {}\n nelec expected: {}
- nelec(occ): {}\n Fermi guess: {}\n Fermi: {}\n E_n:\n{}'''.format(
+      '''occupations?\n mo_occ: \n{}\n telec: {}\n nelec expected: {}
+ nelec(occ): {}\n Fermi guess: {}\n Fermi: {}\n E_n:\n{}'''.format(self.mo_occ,
  self.telec, self.nelec, nelec_occ, fermi_guess, self.fermi_energy, self.mo_energy))
+ 
     if 'fermi_energy' in kw:
       po = np.get_printoptions() 
       np.set_printoptions(precision=2, linewidth=1000)
