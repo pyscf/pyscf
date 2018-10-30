@@ -647,6 +647,7 @@ class KUCCSD(uccsd.UCCSD):
 
     def ao2mo(self, mo_coeff=None):
         from pyscf.pbc.df.df import GDF
+        cell = self._scf.cell
         nkpts = self.nkpts
         nmoa, nmob = self.nmo
         mem_incore = nkpts**3 * (nmoa**4 + nmob**4) * 8 / 1e6
@@ -655,7 +656,7 @@ class KUCCSD(uccsd.UCCSD):
         if (mem_incore + mem_now < self.max_memory) or self.mol.incore_anyway:
             return _make_eris_incore(self, mo_coeff)
         elif (self.direct and type(self._scf.with_df) is GDF
-              and self.cell.dimension != 2):
+              and cell.dimension != 2):
             # DFKCCSD does not support MDF
             return _make_df_eris(self, mo_coeff)
         else:
