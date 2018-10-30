@@ -1232,7 +1232,8 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
     if x0 is None:
         x1 = b
     else:
-        x1 = b - (x0 + aop(x0))
+        b = b - (x0 + aop(x0))
+        x1 = b
     if x1.ndim == 1:
         x1 = x1.reshape(1, x1.size)
     nroots, ndim = x1.shape
@@ -1292,16 +1293,9 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
 
     nd = cycle + 1
     h = numpy.empty((nd,nd), dtype=x1.dtype)
-    g = numpy.zeros((nd,nroots), dtype=x1.dtype)
 
     for i in range(nd):
         xi = numpy.asarray(xs[i])
-        if b.ndim == 1:
-            g[i] = dot(xi.conj(), b)
-        else:
-            for j in range(nroots):
-                g[i] = dot(xi.conj(), b[j])
-
         if hermi:
             for j in range(i+1):
                 h[i,j] = dot(xi.conj(), ax[j])
@@ -1314,6 +1308,16 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
     # Add the contribution of I in (1+a)
     for i in range(nd):
         h[i,i] += innerprod[i]
+
+    g = numpy.zeros((nd,nroots), dtype=x1.dtype)
+    if b.ndim == 1:
+        g[0] = innerprod[0]
+    else:
+        # Restore the first nroots vectors, which are array b or b-(1+a)x0
+        for i in range(min(nd, nroots)):
+            xsi = numpy.asarray(xs[i])
+            for j in range(nroots):
+                g[i,j] = dot(xsi.conj(), b[j])
 
     c = numpy.linalg.solve(h, g)
     x = _gen_x0(c, xs)
@@ -1377,16 +1381,12 @@ def _qr(xs, dot):
     xs = (r.T).dot(qs)
     '''
     nvec = len(xs)
-    xi = numpy.asarray(xs[0])
-    norm = numpy.sqrt(dot(xi.conj(), xi).real)
-    qs = numpy.empty((nvec,xi.size), dtype=xi.dtype)
-    qs[0] = xi/norm
+    dtype = xs[0].dtype
+    qs = numpy.empty((nvec,xs[0].size), dtype=dtype)
+    rmat = numpy.empty((nvec,nvec), order='F', dtype=dtype)
 
-    rmat = numpy.zeros((nvec,nvec), order='F', dtype=xi.dtype)
-    rmat[0,0] = 1./norm
-
-    nv = 1
-    for i in range(1, nvec):
+    nv = 0
+    for i in range(nvec):
         xi = numpy.array(xs[i], copy=True)
         rmat[:,nv] = 0
         rmat[nv,nv] = 1
@@ -1403,10 +1403,7 @@ def _qr(xs, dot):
 
 def _gen_x0(v, xs):
     space, nroots = v.shape
-    x0 = []
-    for k in range(nroots):
-        xsi = numpy.asarray(xs[space-1])
-        x0.append(xsi * v[space-1,k])
+    x0 = numpy.einsum('c,x->cx', v[space-1], numpy.asarray(xs[space-1]))
     for i in reversed(range(space-1)):
         xsi = numpy.asarray(xs[i])
         for k in range(nroots):
