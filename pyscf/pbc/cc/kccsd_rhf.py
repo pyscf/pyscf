@@ -1517,6 +1517,7 @@ if __name__ == '__main__':
 
     # Running HF and CCSD with 1x1x2 Monkhorst-Pack k-point mesh
     kmf = scf.KRHF(cell, kpts=cell.make_kpts([1, 1, 2]), exxdiv=None)
+    kmf.conv_tol_grad = 1e-8
     ehf = kmf.kernel()
 
     mycc = cc.KRCCSD(kmf)
@@ -1525,9 +1526,11 @@ if __name__ == '__main__':
     ecc, t1, t2 = mycc.kernel()
     print(ecc - -0.155298393321855)
 
-    e_ip, _ = mycc.ipccsd(nroots=3, kptlist=(0,))
-    e_ea, _ = mycc.eaccsd(nroots=3, kptlist=(0,))
-    print(e_ip, e_ea)
+    #e_ip, _ = mycc.ipccsd(nroots=3, kptlist=(0,))
+    mycc.max_cycle = 100
+    e_ea, _ = mycc.eaccsd(nroots=1, koopmans=True, kptlist=(0,))
+    #print(e_ip, e_ea)
+    exit()
 
     ####
     cell = gto.Cell()
