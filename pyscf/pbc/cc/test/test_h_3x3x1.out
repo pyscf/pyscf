@@ -1,0 +1,318 @@
+#INFO: **** input file is /Users/yanggao/pyscf/pyscf/pbc/cc/test/test_h_3x3x1.py ****
+import unittest
+import numpy as np
+from pyscf.pbc import gto
+from pyscf.pbc import scf,cc
+from pyscf     import cc as mol_cc
+from pyscf.pbc.tools.pbc import super_cell
+a0  = 4
+vac = 200
+bas = [[ 3.0/2.0*a0,np.sqrt(3.0)/2.0*a0,  0],
+       [-3.0/2.0*a0,np.sqrt(3.0)/2.0*a0,  0],
+       [          0,                  0,vac]]
+pos = [['H',(-a0/2.0,0,0)],
+       ['H',( a0/2.0,0,0)]]
+
+cell = gto.M(unit='B',a=bas,atom=pos,basis='cc-pvdz',verbose=4)
+nmp  = [3,3,1]
+nk   = np.prod(nmp)
+nao  = cell.nao_nr()
+
+
+#primitive cell with k points
+kpts = cell.make_kpts(nmp)
+nkpts = len(kpts)
+kmf  = scf.KUHF(cell,kpts,exxdiv=None).density_fit()
+#kmf.chkfile = 'kpt.chk'
+nao_half = nao//2
+dmk = np.zeros([2, nkpts, nao, nao])
+for i in range(nkpts):
+    for j in range(2):
+        dmk[0][i][j,j] = 0.5
+        dmk[1][i][j+nao_half, j+nao_half] = 0.5
+
+ehf = kmf.kernel(dmk)
+
+kcc = cc.KUCCSD(kmf)
+ecc,t1,t2 = kcc.kernel()
+
+print('========================================')
+print('UHF energy (kpts) %f \n' % (float(ehf)))
+print('UCCSD correlation energy (kpts) %f \n' % (float(ecc)))
+print('========================================')
+
+# Gamma point supercell calculation
+supcell = super_cell(cell,nmp)
+
+dms = np.zeros([2, supcell.nao_nr(), supcell.nao_nr()])
+for i in range(nkpts):
+    for j in range(2):
+        dms[0][j+i*nao][j+i*nao] = 0.5
+        dms[1][j+i*nao+nao_half][j+i*nao+nao_half] = 0.5
+
+gmf = scf.UHF(supcell,exxdiv=None).density_fit()
+#gmf.chkfile = 'supcell.chk'
+ehf = gmf.kernel(dms)
+
+gcc = cc.UCCSD(gmf)
+ecc,t1,t2 = gcc.kernel()
+print('========================================')
+print('UHF energy (supercell) %f' % (float(ehf)/nk))
+print('UCCSD correlation energy (supercell) %f' % (float(ecc)/nk))
+print('========================================')
+#INFO: ******************** input file end ********************
+
+
+System: uname_result(system='Darwin', node='Yang.local', release='17.7.0', version='Darwin Kernel Version 17.7.0: Thu Jun 21 22:53:14 PDT 2018; root:xnu-4570.71.2~1/RELEASE_X86_64', machine='x86_64', processor='i386')  Threads 1
+Python 3.6.3 |Anaconda custom (64-bit)| (default, Oct  6 2017, 12:04:38) 
+[GCC 4.2.1 Compatible Clang 4.0.1 (tags/RELEASE_401/final)]
+numpy 1.11.0  scipy 1.0.0
+Date: Fri Oct 19 17:27:23 2018
+PySCF version 1.6a
+PySCF path  /Users/yanggao/pyscf/pyscf
+GIT ORIG_HEAD 3eec34a1b68b24818899be206e4b08bf050a6038
+GIT HEAD      ref: refs/heads/kuccsd
+GIT kuccsd branch  f0186f763b699b9e0eab17a925138c9828eb38f6
+
+[CONFIG] conf_file None
+[INPUT] verbose = 4
+[INPUT] num. atoms = 2
+[INPUT] num. electrons = 2
+[INPUT] charge = 0
+[INPUT] spin (= nelec alpha-beta = 2S) = 0
+[INPUT] symmetry False subgroup None
+[INPUT] Mole.unit = B
+[INPUT]  1 H     -1.058354421840   0.000000000000   0.000000000000 AA   -2.000000000000   0.000000000000   0.000000000000 Bohr
+[INPUT]  2 H      1.058354421840   0.000000000000   0.000000000000 AA    2.000000000000   0.000000000000   0.000000000000 Bohr
+
+nuclear repulsion = 9.24590771846937
+number of shells = 6
+number of NR pGTOs = 14
+number of NR cGTOs = 10
+basis = cc-pvdz
+ecp = {}
+CPU time:         0.79
+lattice vectors  a1 [6.000000000, 3.464101615, 0.000000000]
+                 a2 [-6.000000000, 3.464101615, 0.000000000]
+                 a3 [0.000000000, 0.000000000, 200.000000000]
+dimension = 3
+low_dim_ft_type = None
+Cell volume = 8313.84
+rcut = 18.1143941478 (nimgs = [4 4 1])
+lattice sum = 129 cells
+precision = 1e-08
+pseudo = None
+ke_cutoff = 545.287945595
+    = [  64   64 2103] mesh (8613888 PWs)
+ew_eta = 0.633053
+ew_cut = 10.3141699978 (nimgs = [2 2 1])
+
+
+******** <class 'pyscf.pbc.scf.kuhf.KUHF'> flags ********
+method = KUHF-UHF-UHF
+initial guess = minao
+damping factor = 0
+level shift factor = 0
+DIIS = <class 'pyscf.scf.diis.CDIIS'>
+DIIS start cycle = 1
+DIIS space = 8
+SCF tol = 1e-07
+SCF gradient tol = None
+max. SCF cycles = 50
+direct_scf = False
+chkfile to save SCF result = /var/folders/k_/m01bvlg92514tyl57sw8vyw00000gn/T/tmp_k5xq_ym
+max_memory 4000 MB (current use 0 MB)
+
+
+******** PBC SCF flags ********
+N kpts = 9
+Exchange divergence treatment (exxdiv) = None
+DF object = <pyscf.pbc.df.df.GDF object at 0x10c7da588>
+number of electrons per unit cell  alpha = 9 beta = 9
+Set gradient conv threshold to 0.000316228
+
+
+******** <class 'pyscf.pbc.df.df.GDF'> flags ********
+mesh = [  9   9 295] (23895 PWs)
+auxbasis = None
+eta = 0.2
+exp_to_discard = None
+_cderi_to_save = /var/folders/k_/m01bvlg92514tyl57sw8vyw00000gn/T/tmp9f34whhr
+len(kpts) = 9
+Drop 0 primitive fitting functions
+make aux basis, num shells = 18, num cGTOs = 46
+auxcell.rcut 10.6201543923
+init E= -0.954400713476774
+alpha HOMO = -0.706220915436  LUMO = 0.0522737779952
+beta HOMO = -0.706220915436  LUMO = 0.0522737779952
+cycle= 1 E= -1.36309989544162  delta_E= -0.409  |g|= 0.0633  |ddm|= 2.16
+alpha HOMO = -0.841198081804  LUMO = 0.070757978654
+beta HOMO = -0.841198081804  LUMO = 0.070757978654
+cycle= 2 E= -1.36354650868991  delta_E= -0.000447  |g|= 0.0269  |ddm|= 0.0661
+alpha HOMO = -0.838640439158  LUMO = 0.070866020231
+beta HOMO = -0.838640439158  LUMO = 0.070866020231
+cycle= 3 E= -1.36366985209511  delta_E= -0.000123  |g|= 0.0063  |ddm|= 0.0524
+alpha HOMO = -0.837788958098  LUMO = 0.0694831454895
+beta HOMO = -0.837788958098  LUMO = 0.0694831454895
+cycle= 4 E= -1.3636817250127  delta_E= -1.19e-05  |g|= 0.00176  |ddm|= 0.0199
+alpha HOMO = -0.83786296812  LUMO = 0.0691714313592
+beta HOMO = -0.83786296812  LUMO = 0.0691714313592
+cycle= 5 E= -1.36368226696528  delta_E= -5.42e-07  |g|= 0.000326  |ddm|= 0.00419
+alpha HOMO = -0.837764641664  LUMO = 0.0690672256106
+beta HOMO = -0.837764641664  LUMO = 0.0690672256106
+cycle= 6 E= -1.3636822866783  delta_E= -1.97e-08  |g|= 5.74e-05  |ddm|= 0.00104
+alpha HOMO = -0.837790971593  LUMO = 0.0690784019974
+beta HOMO = -0.837790971593  LUMO = 0.0690784019974
+Extra cycle  E= -1.36368228711718  delta_E= -4.39e-10  |g|= 3.3e-05  |ddm|= 7.02e-05
+converged SCF energy = -1.36368228711718
+
+******** <class 'pyscf.pbc.cc.kccsd_uhf.KUCCSD'> flags ********
+CC2 = 0
+CCSD nocc = (1, 1), nmo = (10, 10)
+max_cycle = 50
+direct = 1
+conv_tol = 1e-07
+conv_tol_normt = 1e-06
+diis_space = 6
+diis_start_cycle = 0
+diis_start_energy_diff = 1e+09
+max_memory 4000 MB (current use 0 MB)
+Init t2, MP2 energy = -0.00299021395382176
+Init E(CCSD) = -0.00299021395382176
+cycle = 1  E(CCSD) = -0.00388977956762902  dE = -0.000899565614  norm(t1,t2) = 0.0694409
+cycle = 2  E(CCSD) = -0.00444879818595147  dE = -0.000559018618  norm(t1,t2) = 0.0531102
+cycle = 3  E(CCSD) = -0.00583048888866344  dE = -0.0013816907  norm(t1,t2) = 0.0442429
+cycle = 4  E(CCSD) = -0.00660286475491034  dE = -0.000772375866  norm(t1,t2) = 0.0303514
+cycle = 5  E(CCSD) = -0.00854654171463125  dE = -0.00194367696  norm(t1,t2) = 0.0238939
+cycle = 6  E(CCSD) = -0.00901534060479539  dE = -0.00046879889  norm(t1,t2) = 0.00921322
+cycle = 7  E(CCSD) = -0.00909744388409553  dE = -8.21032793e-05  norm(t1,t2) = 0.00544896
+cycle = 8  E(CCSD) = -0.00917152261666217  dE = -7.40787326e-05  norm(t1,t2) = 0.00352091
+cycle = 9  E(CCSD) = -0.00916732751730761  dE = 4.19509935e-06  norm(t1,t2) = 0.00313794
+cycle = 10  E(CCSD) = -0.00922896487859499  dE = -6.16373613e-05  norm(t1,t2) = 0.00247512
+cycle = 11  E(CCSD) = -0.00924344443047017  dE = -1.44795519e-05  norm(t1,t2) = 0.00120674
+cycle = 12  E(CCSD) = -0.0092482767204161  dE = -4.83228995e-06  norm(t1,t2) = 0.000456967
+cycle = 13  E(CCSD) = -0.00925014803444531  dE = -1.87131403e-06  norm(t1,t2) = 0.000100919
+cycle = 14  E(CCSD) = -0.00925105684939082  dE = -9.08814946e-07  norm(t1,t2) = 3.42454e-05
+cycle = 15  E(CCSD) = -0.00925113797736524  dE = -8.11279744e-08  norm(t1,t2) = 1.21342e-05
+cycle = 16  E(CCSD) = -0.00925114194949804  dE = -3.9721328e-09  norm(t1,t2) = 6.95949e-06
+cycle = 17  E(CCSD) = -0.00925117404326727  dE = -3.20937692e-08  norm(t1,t2) = 5.38027e-06
+cycle = 18  E(CCSD) = -0.00925126432562133  dE = -9.02823541e-08  norm(t1,t2) = 4.80816e-06
+cycle = 19  E(CCSD) = -0.00925138852462181  dE = -1.24199e-07  norm(t1,t2) = 4.1834e-06
+cycle = 20  E(CCSD) = -0.0092515063156338  dE = -1.17791012e-07  norm(t1,t2) = 3.46803e-06
+cycle = 21  E(CCSD) = -0.00925159625288848  dE = -8.99372547e-08  norm(t1,t2) = 2.58548e-06
+cycle = 22  E(CCSD) = -0.00925166850226098  dE = -7.22493725e-08  norm(t1,t2) = 1.62698e-06
+cycle = 23  E(CCSD) = -0.00925170038280467  dE = -3.18805437e-08  norm(t1,t2) = 6.7749e-07
+KUCCSD converged
+E(KUCCSD) = -1.372933987499982  E_corr = -0.009251700382804666
+========================================
+UHF energy (kpts) -1.363682 
+
+UCCSD correlation energy (kpts) -0.009252 
+
+========================================
+
+
+******** <class 'pyscf.pbc.scf.uhf.UHF'> flags ********
+method = UHF-UHF
+initial guess = minao
+damping factor = 0
+level shift factor = 0
+DIIS = <class 'pyscf.scf.diis.CDIIS'>
+DIIS start cycle = 1
+DIIS space = 8
+SCF tol = 1e-07
+SCF gradient tol = None
+max. SCF cycles = 50
+direct_scf = False
+chkfile to save SCF result = /var/folders/k_/m01bvlg92514tyl57sw8vyw00000gn/T/tmppf3d___n
+max_memory 4000 MB (current use 0 MB)
+******** PBC SCF flags ********
+kpt = [ 0.  0.  0.]
+Exchange divergence treatment (exxdiv) = None
+DF object = <pyscf.pbc.df.df.GDF object at 0x10c7d4fd0>
+number of electrons per unit cell  alpha = 9 beta = 9
+Set gradient conv threshold to 0.000316228
+
+
+******** <class 'pyscf.pbc.df.df.GDF'> flags ********
+mesh = [ 27  27 295] (215055 PWs)
+auxbasis = None
+eta = 0.2
+exp_to_discard = None
+_cderi_to_save = /var/folders/k_/m01bvlg92514tyl57sw8vyw00000gn/T/tmp7isipy6e
+len(kpts) = 1
+Drop 0 primitive fitting functions
+make aux basis, num shells = 162, num cGTOs = 414
+auxcell.rcut 10.6201543923
+init E= -8.58960642129193
+  alpha nocc = 9  HOMO = -0.70622091543604  LUMO = 0.0522737779952132
+  beta  nocc = 9  HOMO = -0.706220915436039  LUMO = 0.0522737779952139
+cycle= 1 E= -12.2678990589757  delta_E= -3.68  |g|= 0.0633  |ddm|= 2.16
+  alpha nocc = 9  HOMO = -0.841198081803725  LUMO = 0.0707579786540214
+  beta  nocc = 9  HOMO = -0.841198081803725  LUMO = 0.0707579786540227
+cycle= 2 E= -12.2719185782104  delta_E= -0.00402  |g|= 0.0269  |ddm|= 0.0661
+  alpha nocc = 9  HOMO = -0.838640439158128  LUMO = 0.0708660202310034
+  beta  nocc = 9  HOMO = -0.838640439158123  LUMO = 0.0708660202310096
+cycle= 3 E= -12.2730286688571  delta_E= -0.00111  |g|= 0.0063  |ddm|= 0.0524
+  alpha nocc = 9  HOMO = -0.837788958098425  LUMO = 0.0694831454895998
+  beta  nocc = 9  HOMO = -0.837788958098412  LUMO = 0.0694831454895935
+cycle= 4 E= -12.2731355251154  delta_E= -0.000107  |g|= 0.00176  |ddm|= 0.0199
+  alpha nocc = 9  HOMO = -0.837862968120653  LUMO = 0.0691714313592372
+  beta  nocc = 9  HOMO = -0.837862968120657  LUMO = 0.0691714313592566
+cycle= 5 E= -12.2731404026887  delta_E= -4.88e-06  |g|= 0.000326  |ddm|= 0.00419
+  alpha nocc = 9  HOMO = -0.837764641663991  LUMO = 0.0690672256106994
+  beta  nocc = 9  HOMO = -0.837764641663988  LUMO = 0.0690672256107057
+cycle= 6 E= -12.2731405801057  delta_E= -1.77e-07  |g|= 5.74e-05  |ddm|= 0.00104
+  alpha nocc = 9  HOMO = -0.837800267519032  LUMO = 0.0690908187274514
+  beta  nocc = 9  HOMO = -0.837800267519035  LUMO = 0.0690908187274542
+cycle= 7 E= -12.2731405864262  delta_E= -6.32e-09  |g|= 9.69e-06  |ddm|= 0.000178
+  alpha nocc = 9  HOMO = -0.837794573685419  LUMO = 0.0690894262186018
+  beta  nocc = 9  HOMO = -0.837794573685422  LUMO = 0.0690894262186078
+Extra cycle  E= -12.2731405865605  delta_E= -1.34e-10  |g|= 5.26e-06  |ddm|= 1.3e-05
+converged SCF energy = -12.2731405865605
+
+******** <class 'pyscf.pbc.cc.ccsd.UCCSD'> flags ********
+CC2 = 0
+CCSD nocc = (9, 9), nmo = (90, 90)
+max_cycle = 50
+direct = 0
+conv_tol = 1e-07
+conv_tol_normt = 1e-06
+diis_space = 6
+diis_start_cycle = 0
+diis_start_energy_diff = 1e+09
+max_memory 4000 MB (current use 0 MB)
+Init t2, MP2 energy = -0.0204859986697385
+Init E(CCSD) = -0.0204859986968556
+cycle = 1  E(CCSD) = -0.0294223993500418  dE = -0.00893640065  norm(t1,t2) = 0.0485392
+cycle = 2  E(CCSD) = -0.0345669549189132  dE = -0.00514455557  norm(t1,t2) = 0.0393775
+cycle = 3  E(CCSD) = -0.0470429263532709  dE = -0.0124759714  norm(t1,t2) = 0.0340826
+cycle = 4  E(CCSD) = -0.0525955170153666  dE = -0.00555259066  norm(t1,t2) = 0.0239108
+cycle = 5  E(CCSD) = -0.0595163075646728  dE = -0.00692079055  norm(t1,t2) = 0.0190824
+cycle = 6  E(CCSD) = -0.0736107661140096  dE = -0.0140944585  norm(t1,t2) = 0.0159434
+cycle = 7  E(CCSD) = -0.0820261852045305  dE = -0.00841541909  norm(t1,t2) = 0.00789186
+cycle = 8  E(CCSD) = -0.0815745526680594  dE = 0.000451632536  norm(t1,t2) = 0.00403484
+cycle = 9  E(CCSD) = -0.0822408769459639  dE = -0.000666324278  norm(t1,t2) = 0.00284583
+cycle = 10  E(CCSD) = -0.0820970246023691  dE = 0.000143852344  norm(t1,t2) = 0.00228708
+cycle = 11  E(CCSD) = -0.0824505195921256  dE = -0.00035349499  norm(t1,t2) = 0.00202737
+cycle = 12  E(CCSD) = -0.0829098862704745  dE = -0.000459366678  norm(t1,t2) = 0.00177658
+cycle = 13  E(CCSD) = -0.083030077153128  dE = -0.000120190883  norm(t1,t2) = 0.000916337
+cycle = 14  E(CCSD) = -0.0832347607239555  dE = -0.000204683571  norm(t1,t2) = 0.000631099
+cycle = 15  E(CCSD) = -0.0833106268922138  dE = -7.58661683e-05  norm(t1,t2) = 0.000185032
+cycle = 16  E(CCSD) = -0.0833234354227848  dE = -1.28085306e-05  norm(t1,t2) = 7.36836e-05
+cycle = 17  E(CCSD) = -0.0833198124308417  dE = 3.62299194e-06  norm(t1,t2) = 4.93123e-05
+cycle = 18  E(CCSD) = -0.0833019082939176  dE = 1.79041369e-05  norm(t1,t2) = 4.08111e-05
+cycle = 19  E(CCSD) = -0.0832882297063348  dE = 1.36785876e-05  norm(t1,t2) = 2.52487e-05
+cycle = 20  E(CCSD) = -0.0832784531356151  dE = 9.77657072e-06  norm(t1,t2) = 1.7619e-05
+cycle = 21  E(CCSD) = -0.0832734342033161  dE = 5.0189323e-06  norm(t1,t2) = 1.10995e-05
+cycle = 22  E(CCSD) = -0.0832678978842855  dE = 5.53631903e-06  norm(t1,t2) = 8.34684e-06
+cycle = 23  E(CCSD) = -0.0832658958512354  dE = 2.00203305e-06  norm(t1,t2) = 4.68771e-06
+cycle = 24  E(CCSD) = -0.0832650081563291  dE = 8.87694906e-07  norm(t1,t2) = 2.64711e-06
+cycle = 25  E(CCSD) = -0.0832647690703154  dE = 2.39086014e-07  norm(t1,t2) = 1.23559e-06
+cycle = 26  E(CCSD) = -0.0832647272735838  dE = 4.17967316e-08  norm(t1,t2) = 7.29821e-07
+UCCSD converged
+E(UCCSD) = -12.35640531383413  E_corr = -0.08326472727358379
+========================================
+UHF energy (supercell) -1.363682
+UCCSD correlation energy (supercell) -0.009252
+========================================
