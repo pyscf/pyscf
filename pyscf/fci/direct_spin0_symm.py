@@ -234,19 +234,17 @@ class FCISolver(direct_spin0.FCISolver):
         wfnsym = direct_spin1_symm._id_wfnsym(self, norb, nelec, self.wfnsym)
         return get_init_guess(norb, nelec, nroots, hdiag, self.orbsym, wfnsym)
 
-    def guess_wfnsym(self, norb, nelec, fcivec=None, wfnsym=None, **kwargs):
+    def guess_wfnsym(self, norb, nelec, fcivec=None, wfnsym=None, orbsym=None,
+                     **kwargs):
         if fcivec is None:
             wfnsym = direct_spin1_symm._id_wfnsym(self, norb, nelec, wfnsym)
         else:
-            wfnsym = addons.guess_wfnsym(fcivec, norb, nelec, self.orbsym)
-        if 'verbose' in kwargs:
-            if isinstance(kwargs['verbose'], logger.Logger):
-                log = kwargs['verbose']
-            else:
-                log = logger.Logger(self.stdout, kwargs['verbose'])
-            log.debug('Guessing CI wfn symmetry = %s', wfnsym)
-        else:
-            logger.debug(self, 'Guessing CI wfn symmetry = %s', wfnsym)
+            if orbsym is None: orbsym = self.orbsym
+            wfnsym = addons.guess_wfnsym(fcivec, norb, nelec, orbsym)
+
+        verbose = kwargs.get('verbose', None)
+        log = logger.new_logger(self, verbose)
+        log.debug('Guessing CI wfn symmetry = %s', wfnsym)
         return wfnsym
 
     def kernel(self, h1e, eri, norb, nelec, ci0=None,
@@ -261,8 +259,8 @@ class FCISolver(direct_spin0.FCISolver):
         self.norb = norb
         self.nelec = nelec
 
+        wfnsym = self.guess_wfnsym(norb, nelec, ci0, wfnsym, orbsym, **kwargs)
         with lib.temporary_env(self, orbsym=orbsym, wfnsym=wfnsym):
-            self.wfnsym = self.guess_wfnsym(norb, nelec, ci0, wfnsym, **kwargs)
             e, c = direct_spin0.kernel_ms0(self, h1e, eri, norb, nelec, ci0, None,
                                            tol, lindep, max_cycle, max_space,
                                            nroots, davidson_only, pspace_size,

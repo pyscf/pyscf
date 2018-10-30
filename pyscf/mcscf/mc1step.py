@@ -30,6 +30,7 @@ from pyscf.mcscf import mc_ao2mo
 from pyscf.mcscf import chkfile
 from pyscf import ao2mo
 from pyscf import gto
+from pyscf import fci
 from pyscf.soscf import ciah
 from pyscf import __config__
 
@@ -1029,9 +1030,25 @@ To enable the solvent model for CASSCF, a decoration to CASSCF object as below n
             return ci1, None
 
         h2eff = self.fcisolver.absorb_h1e(h1, h2, ncas, nelecas, .5)
-        hc = self.fcisolver.contract_2e(h2eff, ci0, ncas, nelecas).ravel()
 
+        # Be careful with the symmetry adapted contract_2e function. When the
+        # symmetry adapted FCI solver is used, the symmetry of ci0 may be
+        # different to fcisolver.wfnsym. This function may output 0.
+        if isinstance(self.fcisolver, fci.direct_spin1_symm.FCI):
+            wfnsym = self.fcisolver.guess_wfnsym(self.ncas, self.nelecas, ci0)
+        else:
+            wfnsym = None
+        def contract_2e(c):
+            if wfnsym is None:
+                hc = self.fcisolver.contract_2e(h2eff, c, ncas, nelecas)
+            else:
+                with lib.temporary_env(self.fcisolver, wfnsym=wfnsym):
+                    hc = self.fcisolver.contract_2e(h2eff, c, ncas, nelecas)
+            return hc.ravel()
+
+        hc = contract_2e(ci0)
         g = hc - (e_cas-ecore) * ci0.ravel()
+
         if self.ci_response_space > 7:
             logger.debug(self, 'CI step by full response')
             # full response
@@ -1049,8 +1066,7 @@ To enable the solvent model for CASSCF, a decoration to CASSCF object as below n
             seff[0,0] = 1
             for i in range(1, nd):
                 xs.append(ax[i-1] - xs[i-1] * e_cas)
-                ax.append(self.fcisolver.contract_2e(h2eff, xs[i], ncas,
-                                                     nelecas).ravel())
+                ax.append(contract_2e(xs[i]))
                 for j in range(i+1):
                     heff[i,j] = heff[j,i] = numpy.dot(xs[i], ax[j])
                     seff[i,j] = seff[j,i] = numpy.dot(xs[i], xs[j])
