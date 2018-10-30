@@ -525,6 +525,7 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         if callable(callback):
             callback(locals())
 
+    x0 = [x for x in x0]  # nparray -> list
     return numpy.asarray(conv), e, x0
 
 
@@ -880,8 +881,11 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         e, v, idx = pick(w, v, nroots, x0)
         xl = _gen_x0(vl[:,idx[:nroots]].conj(), xs)
         x0 = _gen_x0(v[:,:nroots], xs)
+        xl = [x for x in xl]  # nparray -> list
+        x0 = [x for x in x0]  # nparray -> list
         return numpy.asarray(conv), e[:nroots], xl, x0
     else:
+        x0 = [x for x in x0]  # nparray -> list
         return numpy.asarray(conv), e, x0
 
 def dgeev(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
@@ -1171,6 +1175,7 @@ def dgeev1(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
         for k in range(nroots):
             x0[k] = abop(x0[k])[1]
 
+    x0 = [x for x in x0]  # nparray -> list
     return conv, e, x0
 
 
