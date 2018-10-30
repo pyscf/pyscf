@@ -154,7 +154,8 @@ class SelectedCI(selected_ci.SelectedCI):
     def get_init_guess(self, ci_strs, norb, nelec, nroots, hdiag):
         '''Initial guess is the single Slater determinant
         '''
-        wfnsym = direct_spin1_symm._id_wfnsym(self, norb, nelec, self.wfnsym)
+        wfnsym = direct_spin1_symm._id_wfnsym(self, norb, nelec, self.orbsym,
+                                              self.wfnsym)
         airreps = direct_spin1_symm._gen_strs_irrep(ci_strs[0], self.orbsym)
         birreps = direct_spin1_symm._gen_strs_irrep(ci_strs[1], self.orbsym)
         ci0 = direct_spin1_symm._get_init_guess(airreps, birreps,
