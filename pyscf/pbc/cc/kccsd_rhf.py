@@ -1367,10 +1367,11 @@ def _init_df_eris(cc, eris):
                 if dtype == np.double:
                     out = _ao2mo.nr_e2(Lpq, mo, (0, nmo, nmo, nmo + nvir), aosym='s2')
                 else:
-                    if Lpq.size != naux * nao ** 2:  # aosym = 's2'
+                    #Note: Lpq.shape[0] != naux if linear dependency is found in auxbasis
+                    if Lpq[0].size != nao**2: # aosym = 's2'
                         Lpq = lib.unpack_tril(Lpq).astype(np.complex128)
                     out = _ao2mo.r_e2(Lpq, mo, (0, nmo, nmo, nmo + nvir), tao, ao_loc)
-                Lpv[ki,kj] = out
+                Lpv[ki,kj] = out.reshape(-1,nmo,nvir)
     return eris
 
 imd = imdk
