@@ -1034,7 +1034,7 @@ To enable the solvent model for CASSCF, a decoration to CASSCF object as below n
         # Be careful with the symmetry adapted contract_2e function. When the
         # symmetry adapted FCI solver is used, the symmetry of ci0 may be
         # different to fcisolver.wfnsym. This function may output 0.
-        if isinstance(self.fcisolver, fci.direct_spin1_symm.FCI):
+        if hasattr(self.fcisolver, 'guess_wfnsym'):
             wfnsym = self.fcisolver.guess_wfnsym(self.ncas, self.nelecas, ci0)
         else:
             wfnsym = None
