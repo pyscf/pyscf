@@ -156,12 +156,12 @@ class DMRGCI(lib.StreamObject):
         self.spin = 0
         self.orbsym = []
         if mol is None:
-          self.groupname = None
-        else:
-          if mol.symmetry:
-            self.groupname = mol.groupname
-          else:
             self.groupname = None
+        else:
+            if mol.symmetry:
+                self.groupname = mol.groupname
+            else:
+                self.groupname = None
         ##################################################
         # don't modify the following attributes, if you do not finish part of calculation, which can be reused.
         #DO NOT CHANGE these parameters, unless you know the code in details
@@ -177,6 +177,22 @@ class DMRGCI(lib.StreamObject):
         self.returnInt = False
         self._keys = set(self.__dict__.keys())
 
+
+    @property
+    def max_memory(self):
+        if self.memory is None:
+            return self.memory
+        elif isinstance(self.memory, int):
+            return self.memory * 1e3 # GB -> MB
+        else:  # str
+            val, unit = self.memory.split(',')
+            if unit.trim().upper() == 'G':
+                return float(val) * 1e3
+            else: # MB
+                return float(val)
+    @threads.setter
+    def max_memory(self, x):
+        self.memory = x * 1e-3
 
     @property
     def threads(self):
