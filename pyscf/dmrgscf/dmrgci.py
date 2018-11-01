@@ -190,7 +190,7 @@ class DMRGCI(lib.StreamObject):
                 return float(val) * 1e3
             else: # MB
                 return float(val)
-    @threads.setter
+    @max_memory.setter
     def max_memory(self, x):
         self.memory = x * 1e-3
 
