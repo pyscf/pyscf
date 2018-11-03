@@ -1,9 +1,11 @@
 #!/usr/bin/env python
 # Author: James D Whitfield <jdwhitfield@gmail.com>
 '''
-Scan H2 molecule dissociation curve comparing UHF and RHF solutions
+Scan H2 molecule dissociation curve comparing UHF and RHF solutions per the 
+example of Szabo and Ostlund section 3.8.7
 
-The initial guess available for 
+The initial guess is obtained by mixing the HOMO and LUMO and is implemented
+as a function that can be used in other applications.
 
 See also 16-h2_scan.py, 30-scan_pes.py, 32-break_spin_symm.py
 '''

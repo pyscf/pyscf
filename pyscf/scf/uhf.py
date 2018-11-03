@@ -47,60 +47,6 @@ def init_guess_by_minao(mol, breaksym=BREAKSYM):
             dmb[p0:p1,p0:p1] = dma[p0:p1,p0:p1]
     return numpy.array((dma,dmb))
 
-def init_guess_mixed(mol,mixing_parameter=np.pi/4):
-    ''' Generate density matrix with broken spatial and spin symmetry by mixing
-    HOMO and LUMO orbitals following ansatz in Szabo and Ostlund, Sec 3.8.7.
-    
-    psi_1a = np.cos(q)*psi_homo + np.sin(q)*psi_lumo
-    psi_1b = np.cos(q)*psi_homo - np.sin(q)*psi_lumo
-        
-    psi_2a = -np.sin(q)*psi_homo + np.cos(q)*psi_lumo
-    psi_2b =  np.sin(q)*psi_homo + np.cos(q)*psi_lumo
-
-    Returns: 
-        Density matricies, a list of 2D ndarrays for alpha and beta spins
-    '''
-    # opt: q, mixing parameter 0 < q < 2 pi
-    
-    #based on init_guess_by_1e
-    h1e = hf.get_hcore(mol)
-    s1e = hf.get_ovlp(mol)
-    mo_energy, mo_coeff = hf.eig(h1e, s1e)
-    mo_occ = hf.get_occ(mo_energy, mo_coeff)
-
-    homo_idx=0
-    lumo_idx=1
-
-    for i in range(len(mo_occ)-1):
-        if mo_occ[i]>0 and mo_occ[i+1]<0:
-            homo_idx=i
-            lumo_idx=i+1
-
-    psi_homo=mo_coeff[:, homo_idx]
-    psi_lumo=mo_coeff[:, lumo_idx]
-    
-    Ca=np.zeros_like(mo_coeff)
-    Cb=np.zeros_like(mo_coeff)
-
-
-    #mix homo and lumo of alpha and beta coefficents
-    q=mixing_parameter
-
-    for k in range(mo_coeff.shape[0]):
-        if k == homo_idx:
-            Ca[:,k] = np.cos(q)*psi_homo + np.sin(q)*psi_lumo
-            Cb[:,k] = np.cos(q)*psi_homo - np.sin(q)*psi_lumo
-            continue
-        if k==lumo_idx:
-            Ca[:,k] = -np.sin(q)*psi_homo + np.cos(q)*psi_lumo
-            Cb[:,k] =  np.sin(q)*psi_homo + np.cos(q)*psi_lumo
-            continue
-        Ca[:,k]=mo_coeff[:,k]
-        Cb[:,k]=mo_coeff[:,k]
-
-    dm =pyscf.scf.UHF(mol).make_rdm1( (Ca,Cb), (mo_occ,mo_occ) )
-    return dm 
-
 def init_guess_by_1e(mol, breaksym=BREAKSYM):
     return UHF(mol).init_guess_by_1e(mol, breaksym)
 
