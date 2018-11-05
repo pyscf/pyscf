@@ -317,6 +317,8 @@ class KnownValues(unittest.TestCase):
             dm1[i,i] -= dx
         self.assertAlmostEqual(abs(vmat0-vmat1).max(), 0, 4)
 
+# TODO: add tests for direct-scf, ROHF, ROKS, .newton(), and their mixes
+
 
 if __name__ == "__main__":
     print("Full Tests for ddcosmo")

@@ -68,31 +68,8 @@ def kernel(mp, mo_energy=None, mo_coeff=None, eris=None, with_t2=WITH_T2,
 
     return emp2.real, t2
 
-def make_rdm1_ao(mp, mo_energy=None, mo_coeff=None, eris=None, verbose=logger.NOTE):
-    '''Spin-traced one-particle density matrix in the AO basis representation.
-    The occupied-virtual orbital response is not included.  This function uses
-    small amount of memory.  The MP2 t2 amplitudes are generated at the runtime
-    using the given eris object.
-
-    See also :func:`pyscf.mp.mp2.make_rdm1`
-    '''
-    if mo_energy is None or mo_coeff is None:
-        mo_energy = mp.mo_energy
-        mo_coeff = mp.mo_coeff
-    else:
-        assert(mp.frozen is 0 or mp.frozen is None)
-        mp = copy.copy(mp)
-        mp.mo_energy = mo_energy
-        mp.mo_coeff = mo_coeff
-
-    if eris is None: eris = mp.ao2mo(mo_coeff)
-
-    rdm1_mo = make_rdm1(mp, None, eris, verbose)
-    rdm1 = reduce(numpy.dot, (mo_coeff, rdm1_mo, mo_coeff.T))
-    return rdm1
-
-def make_rdm1(mp, t2=None, eris=None, verbose=logger.NOTE):
-    '''Spin-traced one-particle density matrix in the MO basis representation.
+def make_rdm1(mp, t2=None, eris=None, verbose=logger.NOTE, ao_repr=False):
+    '''Spin-traced one-particle density matrix.
     The occupied-virtual orbital response is not included.
 
     dm1[p,q] = <q_alpha^\dagger p_alpha> + <q_beta^\dagger p_beta>
@@ -100,6 +77,11 @@ def make_rdm1(mp, t2=None, eris=None, verbose=logger.NOTE):
     The convention of 1-pdm is based on McWeeney's book, Eq (5.4.20).
     The contraction between 1-particle Hamiltonian and rdm1 is
     E = einsum('pq,qp', h1, rdm1)
+
+    Kwargs:
+        ao_repr : boolean
+            Whether to transfrom 1-particle density matrix to AO
+            representation.
     '''
     from pyscf.cc import ccsd_rdm
     doo, dvv = _gamma1_intermediates(mp, t2, eris)
@@ -107,7 +89,8 @@ def make_rdm1(mp, t2=None, eris=None, verbose=logger.NOTE):
     nvir = dvv.shape[0]
     dov = numpy.zeros((nocc,nvir), dtype=doo.dtype)
     dvo = dov.T
-    return ccsd_rdm._make_rdm1(mp, (doo, dov, dvo, dvv), with_frozen=True)
+    return ccsd_rdm._make_rdm1(mp, (doo, dov, dvo, dvv), with_frozen=True,
+                               ao_repr=ao_repr)
 
 def _gamma1_intermediates(mp, t2=None, eris=None):
     if t2 is None: t2 = mp.t2

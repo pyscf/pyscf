@@ -37,6 +37,24 @@ from pyscf import __config__
 
 einsum = lib.einsum
 
+
+# --- list2array
+def mo_c_list_to_array(mo_coeff):
+    mo_coeff_tmp=[]
+    for js in range(2):
+        tmp_nk = len(mo_coeff[js])
+        tmp_nb = mo_coeff[js][0].shape[0]
+        tmp_array = np.zeros((tmp_nk,tmp_nb,tmp_nb),dtype=complex)
+        for ik in range(tmp_nk):
+            tmp_array[ik,:,:]=mo_coeff[js][ik][:,:]
+        mo_coeff_tmp.append(tmp_array)
+    return mo_coeff_tmp
+
+def convert_mo_coeff(mo_coeff):
+    if isinstance(mo_coeff[0], list):
+        mo_coeff=mo_c_list_to_array(mo_coeff)
+    return mo_coeff
+
 def update_amps(cc, t1, t2, eris):
     from pyscf.lib.parameters import LOOSE_ZERO_TOL, LARGE_DENOM
     time0 = time.clock(), time.time()
@@ -381,7 +399,7 @@ def energy(cc, t1, t2, eris):
     kka, noa, nva = t1a.shape
     kkb, nob, nvb = t1b.shape
     assert(kka == kkb)
-    nkbps = kka
+    nkpts = kka
     s = 0.0 + 0j
     fa, fb = eris.fock
     for ki in range(nkpts):
@@ -629,6 +647,7 @@ class KUCCSD(uccsd.UCCSD):
 
     def ao2mo(self, mo_coeff=None):
         from pyscf.pbc.df.df import GDF
+        cell = self._scf.cell
         nkpts = self.nkpts
         nmoa, nmob = self.nmo
         mem_incore = nkpts**3 * (nmoa**4 + nmob**4) * 8 / 1e6
@@ -637,7 +656,7 @@ class KUCCSD(uccsd.UCCSD):
         if (mem_incore + mem_now < self.max_memory) or self.mol.incore_anyway:
             return _make_eris_incore(self, mo_coeff)
         elif (self.direct and type(self._scf.with_df) is GDF
-              and self.cell.dimension != 2):
+              and cell.dimension != 2):
             # DFKCCSD does not support MDF
             return _make_df_eris(self, mo_coeff)
         else:
@@ -718,6 +737,7 @@ def _make_eris_incore(cc, mo_coeff=None):
     eris = uccsd._ChemistsERIs()
     if mo_coeff is None:
         mo_coeff = cc.mo_coeff
+    mo_coeff = convert_mo_coeff(mo_coeff)  # FIXME: Remove me!
     eris.mo_coeff = mo_coeff
     eris.nocc = cc.nocc
 
@@ -756,8 +776,8 @@ def _make_eris_incore(cc, mo_coeff=None):
     eris.OOoo = None
     eris.OOov = np.empty((nkpts,nkpts,nkpts,noccb,noccb,nocca,nvira), dtype=dtype)
     eris.OOvv = np.empty((nkpts,nkpts,nkpts,noccb,noccb,nvira,nvira), dtype=dtype)
-    eris.OVov = None
-    eris.VOov = None
+    eris.OVov = np.empty((nkpts,nkpts,nkpts,noccb,nvirb,nocca,nvira), dtype=dtype)
+    eris.VOov = np.empty((nkpts,nkpts,nkpts,nvirb,noccb,nocca,nvira), dtype=dtype)
     eris.VOvv = np.empty((nkpts,nkpts,nkpts,nvirb,noccb,nvira,nvira), dtype=dtype)
 
     _kuccsd_eris_common_(cc, eris)
@@ -785,6 +805,7 @@ def _kuccsd_eris_common_(cc, eris, buf=None):
     kpts = cc.kpts
     nkpts = cc.nkpts
     mo_coeff = eris.mo_coeff
+    mo_coeff = convert_mo_coeff(mo_coeff)  # FIXME: Remove me!
     nocca, noccb = eris.nocc
     nmoa, nmob = cc.nmo
     nvira, nvirb = nmoa - nocca, nmob - noccb
@@ -876,8 +897,8 @@ def _kuccsd_eris_common_(cc, eris, buf=None):
         #eris.OOoo[kp,kq,kr] = tmp[:noccb,:noccb,:nocca,:nocca]
         eris.OOov[kp,kq,kr] = tmp[:noccb,:noccb,:nocca,nocca:]
         eris.OOvv[kp,kq,kr] = tmp[:noccb,:noccb,nocca:,nocca:]
-        #eris.OVov[kp,kq,kr] = tmp[:noccb,noccb:,:nocca,nocca:]
-        #eris.VOov[kq,kp,ks] = tmp[:noccb,noccb:,nocca:,:nocca].conj().transpose(1,0,3,2)
+        eris.OVov[kp,kq,kr] = tmp[:noccb,noccb:,:nocca,nocca:]
+        eris.VOov[kq,kp,ks] = tmp[:noccb,noccb:,nocca:,:nocca].conj().transpose(1,0,3,2)
         eris.VOvv[kq,kp,ks] = tmp[:noccb,noccb:,nocca:,nocca:].conj().transpose(1,0,3,2)
     oppp = None
 
@@ -888,6 +909,7 @@ def _make_eris_outcore(cc, mo_coeff=None):
     eris = uccsd._ChemistsERIs()
     if mo_coeff is None:
         mo_coeff = cc.mo_coeff
+    mo_coeff = convert_mo_coeff(mo_coeff)  # FIXME: Remove me!
     eris.mo_coeff = mo_coeff
     eris.nocc = cc.nocc
 
@@ -931,8 +953,8 @@ def _make_eris_outcore(cc, mo_coeff=None):
     eris.OOoo = None
     eris.OOov = feri.create_dataset('OOov', (nkpts,nkpts,nkpts,noccb,noccb,nocca,nvira), dtype)
     eris.OOvv = feri.create_dataset('OOvv', (nkpts,nkpts,nkpts,noccb,noccb,nvira,nvira), dtype)
-    eris.OVov = None
-    eris.VOov = None
+    eris.OVov = feri.create_dataset('OVov', (nkpts,nkpts,nkpts,noccb,nvirb,nocca,nvira), dtype)
+    eris.VOov = feri.create_dataset('VOov', (nkpts,nkpts,nkpts,nvirb,noccb,nocca,nvira), dtype)
     eris.VOvv = feri.create_dataset('VOvv', (nkpts,nkpts,nkpts,nvirb,noccb,nvira,nvira), dtype)
     eris.VVvv = None
 
@@ -1010,8 +1032,8 @@ def _make_df_eris(cc, mo_coeff=None):
     eris.OOoo = None
     eris.OOov = feri.create_dataset('OOov', (nkpts,nkpts,nkpts,noccb,noccb,nocca,nvira), dtype)
     eris.OOvv = feri.create_dataset('OOvv', (nkpts,nkpts,nkpts,noccb,noccb,nvira,nvira), dtype)
-    eris.OVov = None
-    eris.VOov = None
+    eris.OVov = feri.create_dataset('OVov', (nkpts,nkpts,nkpts,noccb,nvirb,nocca,nvira), dtype)
+    eris.VOov = feri.create_dataset('VOov', (nkpts,nkpts,nkpts,nvirb,noccb,nocca,nvira), dtype)
     eris.VOvv = feri.create_dataset('VOvv', (nkpts,nkpts,nkpts,nvirb,noccb,nvira,nvira), dtype)
     eris.VVvv = None
 
@@ -1038,12 +1060,13 @@ def _make_df_eris(cc, mo_coeff=None):
                     outa = _ao2mo.nr_e2(Lpq, mo_a, (0, nmoa, nmoa, nmoa+nvira), aosym='s2')
                     outb = _ao2mo.nr_e2(Lpq, mo_b, (0, nmob, nmob, nmob+nvirb), aosym='s2')
                 else:
-                    if Lpq.size != naux*nao**2: # aosym = 's2'
+                    #Note: Lpq.shape[0] != naux if linear dependency is found in auxbasis
+                    if Lpq[0].size != nao**2: # aosym = 's2'
                         Lpq = lib.unpack_tril(Lpq).astype(np.complex128)
                     outa = _ao2mo.r_e2(Lpq, mo_a, (0, nmoa, nmoa, nmoa+nvira), tao, ao_loc)
                     outb = _ao2mo.r_e2(Lpq, mo_b, (0, nmob, nmob, nmob+nvirb), tao, ao_loc)
-                Lpv[ki,kj] = outa
-                LPV[ki,kj] = outb
+                Lpv[ki,kj] = outa.reshape(-1,nmoa,nvira)
+                LPV[ki,kj] = outb.reshape(-1,nmob,nvirb)
 
     return eris
 

@@ -67,9 +67,10 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
         sym_forbid = orbsym[viridx,None] != orbsym[occidx]
 
     if fock_ao is None:
-        if h1e is None: h1e = mf.get_hcore()
+        # dm0 is the density matrix in projected basis. Computing fock in
+        # projected basis.
         dm0 = mf.make_rdm1(mo_coeff, mo_occ)
-        fock_ao = h1e + mf.get_veff(mol, dm0)
+        fock_ao = mf.get_fock(h1e, dm=dm0)
         fock = reduce(numpy.dot, (mo_coeff.T, fock_ao, mo_coeff))
     else:
         # If fock is given, it corresponds to main basis. It needs to be
@@ -112,11 +113,9 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
 def gen_g_hop_rohf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
                    with_symmetry=True):
     if not hasattr(fock_ao, 'focka'):
-        if h1e is None: h1e = mf.get_hcore()
         dm0 = mf.make_rdm1(mo_coeff, mo_occ)
-        fock_ao = h1e + mf.get_veff(mf.mol, dm0)
-    else:
-        fock_ao = fock_ao.focka, fock_ao.fockb
+        fock_ao = mf.get_fock(h1e, dm=dm0)
+    fock_ao = fock_ao.focka, fock_ao.fockb
     mo_occa = occidxa = mo_occ > 0
     mo_occb = occidxb = mo_occ ==2
     ug, uh_op, uh_diag = gen_g_hop_uhf(mf, (mo_coeff,)*2, (mo_occa,mo_occb),
@@ -176,9 +175,8 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
         sym_forbid = numpy.hstack((sym_forbida.ravel(), sym_forbidb.ravel()))
 
     if fock_ao is None:
-        if h1e is None: h1e = mf.get_hcore()
         dm0 = mf.make_rdm1(mo_coeff, mo_occ)
-        fock_ao = h1e + mf.get_veff(mol, dm0)
+        fock_ao = mf.get_fock(h1e, dm=dm0)
         focka = reduce(numpy.dot, (mo_coeff[0].T, fock_ao[0], mo_coeff[0]))
         fockb = reduce(numpy.dot, (mo_coeff[1].T, fock_ao[1], mo_coeff[1]))
     else:
@@ -240,9 +238,8 @@ def gen_g_hop_ghf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
         sym_forbid = orbsym[viridx,None] != orbsym[occidx]
 
     if fock_ao is None:
-        if h1e is None: h1e = mf.get_hcore()
         dm0 = mf.make_rdm1(mo_coeff, mo_occ)
-        fock_ao = h1e + mf.get_veff(mol, dm0)
+        fock_ao = mf.get_fock(h1e, dm=dm0)
     fock = reduce(numpy.dot, (mo_coeff.T.conj(), fock_ao, mo_coeff))
 
     g = fock[viridx[:,None],occidx]
@@ -549,7 +546,9 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
         kfcount = 0
         ikf = 0
         dm0 = mf.make_rdm1(mo_coeff, mo_occ)
-        vhf0 = fock_ao - h1e
+        # NOTE: vhf0 cannot be computed as (fock_ao - h1e) because mf.get_fock
+        # may be overloaded and fock_ao != h1e + vhf0
+        vhf0 = mf._scf.get_veff(mf._scf.mol, dm0)
 
         for ah_end, ihop, w, dxi, hdxi, residual, seig \
                 in ciah.davidson_cc(h_op, g_op, precond, x0_guess,
@@ -612,7 +611,10 @@ def rotate_orb_cc(mf, mo_coeff, mo_occ, fock_ao, h1e,
                     vhf0 = mf._scf.get_veff(mf._scf.mol, dm, dm_last=dm0, vhf_last=vhf0)
                     kfcount += 1
                     dm0 = dm
-                    g_kf1 = mf.get_grad(mo1, mo_occ, h1e+vhf0)
+# Use API to compute fock instead of "fock=h1e+vhf0". This is because get_fock
+# is the hook being overloaded in many places.
+                    fock = mf.get_fock(h1e, vhf=vhf0)
+                    g_kf1 = mf.get_grad(mo1, mo_occ, fock)
                     norm_gkf1 = numpy.linalg.norm(g_kf1)
                     norm_dg = numpy.linalg.norm(g_kf1-g_orb)
                     jkcount += 1
@@ -679,7 +681,7 @@ def kernel(mf, mo_coeff, mo_occ, conv_tol=1e-10, conv_tol_grad=None,
     h1e = mf._scf.get_hcore(mol)
     s1e = mf._scf.get_ovlp(mol)
     dm = mf.make_rdm1(mo_coeff, mo_occ)
-# call mf._scf.get_veff, to avoid density_fit module polluting get_veff function
+# call mf._scf.get_veff, to avoid "newton().density_fit()" polluting get_veff
     vhf = mf._scf.get_veff(mol, dm)
     e_tot = mf._scf.energy_tot(dm, h1e, vhf)
     fock = mf.get_fock(h1e, s1e, vhf, dm, level_shift_factor=0)

@@ -216,7 +216,7 @@ def _gamma2_outcore(mycc, t1, t2, l1, l2, h5fobj, compress_vvvv=False):
     return (h5fobj['dovov'], h5fobj['dvvvv'], h5fobj['doooo'], h5fobj['doovv'],
             h5fobj['dovvo'], dvvov          , h5fobj['dovvv'], h5fobj['dooov'])
 
-def make_rdm1(mycc, t1, t2, l1, l2):
+def make_rdm1(mycc, t1, t2, l1, l2, ao_repr=False):
     '''
     Spin-traced one-particle density matrix in MO basis (the occupied-virtual
     blocks from the orbital response contribution are not included).
@@ -228,7 +228,7 @@ def make_rdm1(mycc, t1, t2, l1, l2):
     E = einsum('pq,qp', h1, rdm1)
     '''
     d1 = _gamma1_intermediates(mycc, t1, t2, l1, l2)
-    return _make_rdm1(mycc, d1, with_frozen=True)
+    return _make_rdm1(mycc, d1, with_frozen=True, ao_repr=ao_repr)
 
 def make_rdm2(mycc, t1, t2, l1, l2):
     r'''
@@ -244,7 +244,7 @@ def make_rdm2(mycc, t1, t2, l1, l2):
     d2 = _gamma2_outcore(mycc, t1, t2, l1, l2, f, False)
     return _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True)
 
-def _make_rdm1(mycc, d1, with_frozen=True):
+def _make_rdm1(mycc, d1, with_frozen=True, ao_repr=False):
     '''dm1[p,q] = <q_alpha^\dagger p_alpha> + <q_beta^\dagger p_beta>
 
     The convention of 1-pdm is based on McWeeney's book, Eq (5.4.20).
@@ -269,6 +269,10 @@ def _make_rdm1(mycc, d1, with_frozen=True):
         moidx = numpy.where(mycc.get_frozen_mask())[0]
         rdm1[moidx[:,None],moidx] = dm1
         dm1 = rdm1
+
+    if ao_repr:
+        mo = mycc.mo_coeff
+        dm1 = lib.einsum('pi,ij,qj->pq', mo, dm1, mo.conj())
     return dm1
 
 # Note vvvv part of 2pdm have been symmetrized.  It does not correspond to

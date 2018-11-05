@@ -56,6 +56,8 @@ class KnowValues(unittest.TestCase):
         m_ref = (m3 + m_nuc[atm_id]) * rhf.AU2KHZ
         self.assertAlmostEqual(abs(m[atm_id] - m_ref).max(), 0, 9)
 
+    #test against J. Chem. Phys. 138, 024111
+    #def test_moles(self):
 
 if __name__ == "__main__":
     print("Full Tests of RHF-NSR")

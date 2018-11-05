@@ -28,11 +28,11 @@ from pyscf import fci
 
 class CASSCF(newton_casscf.CASSCF):
     __doc__ = newton_casscf.CASSCF.__doc__
-    def __init__(self, mf, ncas, nelecas, ncore=None, frozen=None):
-        assert(mf.mol.symmetry)
-        newton_casscf.CASSCF.__init__(self, mf, ncas, nelecas, ncore, frozen)
-        #self.fcisolver = fci.solver(mf.mol, self.nelecas[0]==self.nelecas[1], True)
-        self.fcisolver = fci.solver(mf.mol, False, True)
+    def __init__(self, mf_or_mol, ncas, nelecas, ncore=None, frozen=None):
+        newton_casscf.CASSCF.__init__(self, mf_or_mol, ncas, nelecas, ncore, frozen)
+        assert(self.mol.symmetry)
+        #self.fcisolver = fci.solver(self.mol, self.nelecas[0]==self.nelecas[1], True)
+        self.fcisolver = fci.solver(self.mol, False, True)
         self.fcisolver.max_cycle = 25
         #self.fcisolver.max_space = 25
 
@@ -48,14 +48,14 @@ class CASSCF(newton_casscf.CASSCF):
         log = logger.Logger(self.stdout, self.verbose)
 
         mo_coeff = self.mo_coeff = casci_symm.label_symmetry_(self, mo_coeff)
-
-        if (hasattr(self.fcisolver, 'wfnsym') and
-            self.fcisolver.wfnsym is None and
-            hasattr(self.fcisolver, 'guess_wfnsym')):
-            wfnsym = self.fcisolver.guess_wfnsym(self.ncas, self.nelecas, ci0,
-                                                 verbose=log)
-            wfnsym = symm.irrep_id2name(self.mol.groupname, wfnsym)
-            log.info('Active space CI wfn symmetry = %s', wfnsym)
+#
+#        if (hasattr(self.fcisolver, 'wfnsym') and
+#            self.fcisolver.wfnsym is None and
+#            hasattr(self.fcisolver, 'guess_wfnsym')):
+#            wfnsym = self.fcisolver.guess_wfnsym(self.ncas, self.nelecas, ci0,
+#                                                 verbose=log)
+#            wfnsym = symm.irrep_id2name(self.mol.groupname, wfnsym)
+#            log.info('Active space CI wfn symmetry = %s', wfnsym)
 
         self.converged, self.e_tot, self.e_cas, self.ci, \
                 self.mo_coeff, self.mo_energy = \

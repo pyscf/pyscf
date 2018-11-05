@@ -541,7 +541,7 @@ def damping(s, d, f, factor):
 
 
 # full density matrix for RHF
-def make_rdm1(mo_coeff, mo_occ):
+def make_rdm1(mo_coeff, mo_occ, **kwargs):
     '''One-particle density matrix in AO representation
 
     Args:
@@ -755,7 +755,7 @@ def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
             Level shift (in AU) for virtual space.  Default is 0.
     '''
     if h1e is None: h1e = mf.get_hcore()
-    if vhf is None: vhf = mf.get_veff(dm=dm)
+    if vhf is None: vhf = mf.get_veff(mf.mol, dm)
     f = h1e + vhf
     if cycle < 0 and diis is None:  # Not inside the SCF iteration
         return f
@@ -1430,10 +1430,10 @@ class SCF(lib.StreamObject):
 
     # full density matrix for RHF
     @lib.with_doc(make_rdm1.__doc__)
-    def make_rdm1(self, mo_coeff=None, mo_occ=None):
+    def make_rdm1(self, mo_coeff=None, mo_occ=None, **kwargs):
         if mo_occ is None: mo_occ = self.mo_occ
         if mo_coeff is None: mo_coeff = self.mo_coeff
-        return make_rdm1(mo_coeff, mo_occ)
+        return make_rdm1(mo_coeff, mo_occ, **kwargs)
 
     energy_elec = energy_elec
     energy_tot = energy_tot
@@ -1532,9 +1532,9 @@ class SCF(lib.StreamObject):
         if mol is None: mol = self.mol
         if dm is None: dm = self.make_rdm1()
         if self.direct_scf:
-            ddm = numpy.asarray(dm) - numpy.asarray(dm_last)
+            ddm = numpy.asarray(dm) - dm_last
             vj, vk = self.get_jk(mol, ddm, hermi=hermi)
-            return numpy.asarray(vhf_last) + vj - vk * .5
+            return vhf_last + vj - vk * .5
         else:
             vj, vk = self.get_jk(mol, dm, hermi=hermi)
             return vj - vk * .5

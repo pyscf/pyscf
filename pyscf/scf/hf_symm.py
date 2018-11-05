@@ -660,7 +660,7 @@ class SymAdaptedROHF(rohf.ROHF):
             numpy.set_printoptions(threshold=1000)
         return mo_occ
 
-    def make_rdm1(self, mo_coeff=None, mo_occ=None):
+    def make_rdm1(self, mo_coeff=None, mo_occ=None, **kwargs):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
         if mo_occ is None:

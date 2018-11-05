@@ -32,6 +32,10 @@ def solve(fvind, mo_energy, mo_occ, h1, s1=None,
     Args:
         fvind : function
             Given density matrix, compute (ij|kl)D_{lk}*2 - (ij|kl)D_{jk}
+
+    Kwargs:
+        hermi : boolean
+            Whether the matrix defined by fvind is Hermitian or not.
     '''
     if s1 is None:
         return solve_nos1(fvind, mo_energy, mo_occ, h1,
@@ -62,13 +66,21 @@ def solve_nos1(fvind, mo_energy, mo_occ, h1,
     log.timer('krylov solver in CPHF', *t0)
     return mo1.reshape(h1.shape), None
 
-# h1 shape is (:,nvir+nocc,nocc)
+# h1 shape is (:,nocc+nvir,nocc)
 def solve_withs1(fvind, mo_energy, mo_occ, h1, s1,
                  max_cycle=20, tol=1e-9, hermi=False, verbose=logger.WARN):
     '''For field dependent basis. First order overlap matrix is non-zero.
     The first order orbitals are set to
     C^1_{ij} = -1/2 S1
     e1 = h1 - s1*e0 + (e0_j-e0_i)*c1 + vhf[c1]
+
+    Kwargs:
+        hermi : boolean
+            Whether the matrix defined by fvind is Hermitian or not.
+
+    Returns:
+        First order orbital coefficients (in MO basis) and first order orbital
+        energy matrix
     '''
     log = logger.new_logger(verbose=verbose)
     t0 = (time.clock(), time.time())

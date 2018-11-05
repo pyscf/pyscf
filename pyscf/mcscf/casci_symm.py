@@ -29,14 +29,15 @@ from pyscf import __config__
 
 
 class SymAdaptedCASCI(casci.CASCI):
-    def __init__(self, mf, ncas, nelecas, ncore=None):
-        assert(mf.mol.symmetry)
+    def __init__(self, mf_or_mol, ncas, nelecas, ncore=None):
 # Ag, A1 or A
 #TODO:        self.wfnsym = symm.param.CHARACTER_TABLE[mol.groupname][0][0]
-        casci.CASCI.__init__(self, mf, ncas, nelecas, ncore)
+        casci.CASCI.__init__(self, mf_or_mol, ncas, nelecas, ncore)
+
+        assert(self.mol.symmetry)
         singlet = (getattr(__config__, 'mcscf_casci_CASCI_fcisolver_direct_spin0', False)
                    and self.nelecas[0] == self.nelecas[1])
-        self.fcisolver = fci.solver(mf.mol, singlet, symm=True)
+        self.fcisolver = fci.solver(self.mol, singlet, symm=True)
         self.fcisolver.lindep = getattr(__config__,
                                         'mcscf_casci_CASCI_fcisolver_lindep', 1e-10)
         self.fcisolver.max_cycle = getattr(__config__,
@@ -51,7 +52,7 @@ class SymAdaptedCASCI(casci.CASCI):
     def wfnsym(self, wfnsym):
         self.fcisolver.wfnsym = wfnsym
 
-    def kernel(self, mo_coeff=None, ci0=None):
+    def kernel(self, mo_coeff=None, ci0=None, verbose=None):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
         if ci0 is None:
@@ -59,7 +60,7 @@ class SymAdaptedCASCI(casci.CASCI):
 
         # Initialize/overwrite self.fcisolver.orbsym and self.fcisolver.wfnsym
         mo_coeff = self.mo_coeff = label_symmetry_(self, mo_coeff, ci0)
-        return casci.CASCI.kernel(self, mo_coeff, ci0)
+        return casci.CASCI.kernel(self, mo_coeff, ci0, verbose)
 
     def _eig(self, mat, b0, b1, orbsym=None):
         # self.mo_coeff.orbsym is initialized in kernel function
