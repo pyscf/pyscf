@@ -1080,6 +1080,9 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
                             ejb[n0_ovp_jb] = (mo_e_o[kj][:,None] - mo_e_v[kb])[n0_ovp_jb]
                             eijab = eia[:, None, :, None] + ejb[:, None, :]
 
+                            idx = abs(eijab) < LOOSE_ZERO_TOL
+                            eijab[idx] = LARGE_DENOM
+
                             oovv_ijab = numpy.array(eris.oovv[ki,kj,ka])
                             oovv_ijba = numpy.array(eris.oovv[ki,kj,kb]).transpose(0,1,3,2)
                             woovv = 2.*oovv_ijab - oovv_ijba

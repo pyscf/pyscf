@@ -600,7 +600,7 @@ def overlap(cibra, ciket, nmo, nocc, s=None):
     return ovlp
 
 
-def make_rdm1(myci, civec=None, nmo=None, nocc=None):
+def make_rdm1(myci, civec=None, nmo=None, nocc=None, ao_repr=False):
     r'''
     One-particle spin density matrices dm1a, dm1b in MO basis (the
     occupied-virtual blocks due to the orbital response contribution are not
@@ -615,7 +615,7 @@ def make_rdm1(myci, civec=None, nmo=None, nocc=None):
     if nmo is None: nmo = myci.nmo
     if nocc is None: nocc = myci.nocc
     d1 = _gamma1_intermediates(myci, civec, nmo, nocc)
-    return uccsd_rdm._make_rdm1(myci, d1, with_frozen=True)
+    return uccsd_rdm._make_rdm1(myci, d1, with_frozen=True, ao_repr=ao_repr)
 
 def make_rdm2(myci, civec=None, nmo=None, nocc=None):
     r'''

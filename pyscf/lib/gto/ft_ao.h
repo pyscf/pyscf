@@ -62,8 +62,14 @@ typedef struct {
         int g2d_ijmax;
         int g2d_klmax;
         double common_factor;
-        double _padding1;
-        double rirj[3]; // diff by sign in different g0_2d4d algorithm
+        // The next four words are _padding1 and rirj[3] in libcint/qcint.
+        // Replace them with four words (ai, aj, ak, al)
+        //double _padding1;
+        //double rirj[3];
+        double ai;
+        double aj;
+        double ak;
+        double al;
         double rkrl[3];
         double *rx_in_rijrx;
         double *rx_in_rklrx;
@@ -73,15 +79,7 @@ typedef struct {
         double *rk;
         double *rl;
 
-        void (*f_g0_2e)();
-        void (*f_g0_2d4d)();
         void (*f_gout)();
-
-        int *idx;
-        double ai;
-        double aj;
-        double ak;
-        double al;
 
 // Other definitions in CINTEnvVars are different in libcint and qcint.
 // They should not be used in this function.

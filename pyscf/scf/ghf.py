@@ -58,7 +58,7 @@ def init_guess_by_chkfile(mol, chkfile_name, project=None):
     if project is None:
         project = not gto.same_basis_set(chk_mol, mol)
 
-    # Check whether the two molecules are similar enough
+    # Check whether the two molecules are similar
     def inertia_momentum(mol):
         im = gto.inertia_momentum(mol._atom, mol.atom_charges(),
                                   mol.atom_coords())

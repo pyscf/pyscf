@@ -134,7 +134,8 @@ class Gradients(lib.StreamObject):
         myci = self.base
         if civec is None: civec = myci.ci
         if civec is None: civec = myci.kernel(eris=eris)
-        if isinstance(civec, (list, tuple)):
+        if (isinstance(civec, (list, tuple)) or
+            (isinstance(civec, numpy.ndarray) and civec.ndim > 1)):
             if state is None:
                 state = self.state
             else:

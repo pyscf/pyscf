@@ -203,15 +203,15 @@ def make_h10(mol, dm0, gauge_orig=None, mb='RMB', with_gaunt=False,
         h1 += make_h10giao(mol, dm0, with_gaunt, verbose)
     return h1
 
-def get_fock(nmrobj, mol=None, dm0=None, gauge_orig=None):
+def get_fock(nmrobj, dm0=None, gauge_orig=None):
     '''First order Fock matrix wrt external magnetic field.
     Note the side effects of set_common_origin.
     '''
-    if mol is None: mol = nmrobj.mol
     if dm0 is None: dm0 = nmrobj._scf.make_rdm1()
     if gauge_orig is None: gauge_orig = nmrobj.gauge_orig
     t0 = (time.clock(), time.time())
     log = logger.Logger(nmrobj.stdout, nmrobj.verbose)
+    mol = nmrobj.mol
     if nmrobj.mb.upper() == 'RMB':
         h1 = make_h10rmb(mol, dm0, gauge_orig,
                          with_gaunt=nmrobj._scf.with_gaunt, verbose=log)

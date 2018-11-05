@@ -28,6 +28,7 @@ ALPHA = 7.2973525664e-3         # http://physics.nist.gov/cgi-bin/cuu/Value?alph
 G_ELECTRON = 2.00231930436182   # http://physics.nist.gov/cgi-bin/cuu/Value?gem
 E_MASS = 9.10938356e-31         # kg https://physics.nist.gov/cgi-bin/cuu/Value?me
 PROTON_MASS = 1.672621898e-27   # kg https://physics.nist.gov/cgi-bin/cuu/Value?mp
+PROTON_MASS_AU = 1.007276466879 # au https://physics.nist.gov/cgi-bin/cuu/Value?mpu|search_for=mass
 BOHR_MAGNETON = 927.4009994e-26 # J/T http://physics.nist.gov/cgi-bin/cuu/Value?mub
 NUC_MAGNETON = BOHR_MAGNETON * E_MASS / PROTON_MASS
 PLANCK = 6.626070040e-34        # J*s http://physics.nist.gov/cgi-bin/cuu/Value?h

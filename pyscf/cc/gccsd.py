@@ -228,7 +228,7 @@ class GCCSD(ccsd.CCSD):
         from pyscf.cc import eom_gccsd
         return eom_gccsd.EOMEE(self)
 
-    def make_rdm1(self, t1=None, t2=None, l1=None, l2=None):
+    def make_rdm1(self, t1=None, t2=None, l1=None, l2=None, ao_repr=False):
         '''Un-relaxed 1-particle density matrix in MO space'''
         from pyscf.cc import gccsd_rdm
         if t1 is None: t1 = self.t1
@@ -236,7 +236,7 @@ class GCCSD(ccsd.CCSD):
         if l1 is None: l1 = self.l1
         if l2 is None: l2 = self.l2
         if l1 is None: l1, l2 = self.solve_lambda(t1, t2)
-        return gccsd_rdm.make_rdm1(self, t1, t2, l1, l2)
+        return gccsd_rdm.make_rdm1(self, t1, t2, l1, l2, ao_repr=False)
 
     def make_rdm2(self, t1=None, t2=None, l1=None, l2=None):
         '''2-particle density matrix in MO space.  The density matrix is
@@ -323,7 +323,7 @@ class _PhysicistsERIs:
 
         # Note: Recomputed fock matrix since SCF may not be fully converged.
         dm = mycc._scf.make_rdm1(mycc.mo_coeff, mycc.mo_occ)
-        fockao = mycc._scf.get_hcore() + mycc._scf.get_veff(mycc.mol, dm)
+        fockao = mycc._scf.get_fock(dm=dm)
         self.fock = reduce(np.dot, (mo_coeff.conj().T, fockao, mo_coeff))
         self.nocc = mycc.nocc
 

@@ -30,12 +30,13 @@ from pyscf import __config__
 
 class SymAdaptedCASSCF(mc1step.CASSCF):
     __doc__ = mc1step.CASSCF.__doc__
-    def __init__(self, mf, ncas, nelecas, ncore=None, frozen=None):
-        assert(mf.mol.symmetry)
-        mc1step.CASSCF.__init__(self, mf, ncas, nelecas, ncore, frozen)
+    def __init__(self, mf_or_mol, ncas, nelecas, ncore=None, frozen=None):
+        mc1step.CASSCF.__init__(self, mf_or_mol, ncas, nelecas, ncore, frozen)
+
+        assert(self.mol.symmetry)
         singlet = (getattr(__config__, 'mcscf_mc1step_CASCI_fcisolver_direct_spin0', False)
                    and self.nelecas[0] == self.nelecas[1])
-        self.fcisolver = fci.solver(mf.mol, singlet, symm=True)
+        self.fcisolver = fci.solver(self.mol, singlet, symm=True)
         self.fcisolver.max_cycle = getattr(__config__,
                                            'mcscf_mc1step_CASSCF_fcisolver_max_cycle', 50)
         self.fcisolver.conv_tol = getattr(__config__,

@@ -174,7 +174,7 @@ def init_guess_by_chkfile(mol, chkfile_name, project=None):
     if project is None:
         project = not gto.same_basis_set(chk_mol, mol)
 
-    # Check whether the two molecules are similar enough
+    # Check whether the two molecules are similar
     def inertia_momentum(mol):
         im = gto.inertia_momentum(mol._atom, mol.atom_charges(),
                                   mol.atom_coords())
@@ -446,10 +446,10 @@ class UHF(hf.SCF):
         return mo_occ
 
     # full density matrix for UHF
-    def make_rdm1(self, mo_coeff=None, mo_occ=None):
+    def make_rdm1(self, mo_coeff=None, mo_occ=None, **kwargs):
         if mo_coeff is None: mo_coeff = self.mo_coeff
         if mo_occ is None: mo_occ = self.mo_occ
-        return make_rdm1(mo_coeff, mo_occ)
+        return make_rdm1(mo_coeff, mo_occ, **kwargs)
 
     def init_direct_scf(self, mol=None):
         if mol is None: mol = self.mol
@@ -586,7 +586,7 @@ class RHF(UHF):
         UHF.__init__(self, mol)
 
     # full density matrix for RHF
-    def make_rdm1(self, mo_coeff=None, mo_occ=None):
+    def make_rdm1(self, mo_coeff=None, mo_occ=None, **kwargs):
         r'''D/2 = \psi_i^\dag\psi_i = \psi_{Ti}^\dag\psi_{Ti}
         D(UHF) = \psi_i^\dag\psi_i + \psi_{Ti}^\dag\psi_{Ti}
         RHF average the density of spin up and spin down:
@@ -594,7 +594,7 @@ class RHF(UHF):
         '''
         if mo_coeff is None: mo_coeff = self.mo_coeff
         if mo_occ is None: mo_occ = self.mo_occ
-        dm = make_rdm1(mo_coeff, mo_occ)
+        dm = make_rdm1(mo_coeff, mo_occ, **kwargs)
         return (dm + time_reversal_matrix(self.mol, dm)) * .5
 
 

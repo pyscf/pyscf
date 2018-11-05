@@ -23,6 +23,7 @@ Non-relativistic magnetizability tensor for RHF
 Refs:
 [1] R. Cammi, J. Chem. Phys., 109, 3185 (1998)
 [2] Todd A. Keith, Chem. Phys., 213, 123 (1996)
+[3] S. Sauer et al., Mol. Phys., 76, 445 (1991)
 '''
 
 
@@ -38,7 +39,12 @@ from pyscf.soscf.newton_ah import _gen_rhf_response
 from pyscf.data import nist
 
 
+#TODO: Eq (102) of TCA, 90, 421 to partition the dia- and para-magnetic terms
 def dia(magobj, gauge_orig=None):
+    '''Diamagnetic term of magnetizability.
+
+    See also J. Olsen et al., Theor. Chem. Acc., 90, 421 (1995)
+    '''
     mol = magobj.mol
     mf = magobj._scf
     mo_energy = mf.mo_energy
@@ -49,10 +55,11 @@ def dia(magobj, gauge_orig=None):
     # Energy weighted density matrix
     dme0 = numpy.dot(orbo * mo_energy[mo_occ > 0], orbo.T) * 2
 
-    e2 = _get_dia_1e(magobj, gauge_orig, dm0, dme0).ravel()
+    e2 = _get_dia_1e(magobj, gauge_orig, dm0, dme0)
 
     # Add the contributions from two-electron interactions
     if gauge_orig is None:
+        e2 = e2.ravel()
         # + 1/2 Tr[(J^{[20]} - K^{[20]}), DM]
         # Symmetry between 'ijkl,ji->s2kl' and 'ijkl,lk->s2ij' can be used.
         #vs = jk.get_jk(mol, [dm0]*4, ['ijkl,ji->s2kl',
@@ -82,7 +89,10 @@ def dia(magobj, gauge_orig=None):
                        'int2e_g1g2', 'aa4', 9, hermi=0)
         e2 -= numpy.einsum('xpq,qp->x', vk, dm0) * .5
 
-    return e2.reshape(3, 3)
+    # Note the sign of magnetizability (ksi) in the Talyor expansion
+    #   E(B) = E0 - m * B - 1/2 B ksi B + ...
+    # Magnetic susceptibility chi = mu0 * ksi
+    return -e2.reshape(3, 3)
 
 def _get_dia_1e(magobj, gauge_orig, dm0, dme0):
     '''The dia-magnetic magnetizability from one-electron operators.
@@ -110,14 +120,16 @@ def _get_dia_1e(magobj, gauge_orig, dm0, dme0):
     if getattr(mf, 'with_solvent', None):
         raise NotImplementedError('Magnetizability with Solvent')
 
-    e2 = numpy.einsum('xpq,qp->x', h2, dm0)
-    diag = [0, 4, 8]  # XX, YY, ZZ
-    e2[diag] -= e2[diag].sum()
-    e2 *= -.25
+    e2 = numpy.einsum('xpq,qp->x', h2, dm0).reshape(3,3)
+    e2 = numpy.eye(3) * e2.trace() - e2
+    e2 *= .25
 
     # If gauge_orig is None, computing the GIAO contributions
     if gauge_orig is None:
-        e2 += numpy.einsum('qp,xpq->x', dm0, mol.intor('int1e_grjxp', comp=9))
+        gl = numpy.einsum('qp,xpq->x', dm0, mol.intor('int1e_grjxp', comp=9))
+        gl = gl.reshape(3,3)
+        e2 += (gl + gl.T) * .5
+        e2 = e2.ravel()
         e2 += numpy.einsum('qp,xpq->x', dm0, mol.intor('int1e_ggkin', comp=9))
         e2 += numpy.einsum('qp,xpq->x', dm0, mol.intor('int1e_ggnuc', comp=9))
         if mol.has_ecp():
@@ -125,6 +137,10 @@ def _get_dia_1e(magobj, gauge_orig, dm0, dme0):
             e2+= numpy.einsum('qp,xpq->x', dm0, mol.intor('ECPscalar_ggnuc', comp=9))
 
         e2 -= numpy.einsum('qp,xpq->x', dme0, mol.intor('int1e_ggovlp', comp=9))
+
+    # Note the sign of magnetizability (ksi) in the Talyor expansion
+    #   E(B) = E0 - m * B - 1/2 B ksi B + ...
+    # Magnetic susceptibility chi = mu0 * ksi
     return e2.reshape(3, 3)
 
 
@@ -158,7 +174,7 @@ def para(magobj, gauge_orig=None, h1=None, s1=None, with_cphf=None):
     if h1 is None:
         # Imaginary part of F10
         dm0 = mf.make_rdm1(mo_coeff, mo_occ)
-        h1 = lib.einsum('xpq,pi,qj->xij', magobj.get_fock(mol, dm0, gauge_orig),
+        h1 = lib.einsum('xpq,pi,qj->xij', magobj.get_fock(dm0, gauge_orig),
                         mo_coeff.conj(), orbo)
     if s1 is None:
         # Imaginary part of S10
@@ -180,7 +196,17 @@ def para(magobj, gauge_orig=None, h1=None, s1=None, with_cphf=None):
 
     # *2 for double occupancy.
     mag_para *= 2
-    return mag_para
+    return -mag_para
+
+
+def _get_ao_coords(mol):
+    atom_coords = mol.atom_coords()
+    nao = mol.nao_nr()
+    ao_coords = numpy.empty((nao, 3))
+    aoslices = mol.aoslice_by_atom()
+    for atm_id, (ish0, ish1, i0, i1) in enumerate(aoslices):
+        ao_coords[i0:i1] = atom_coords[atm_id]
+    return ao_coords
 
 
 class Magnetizability(lib.StreamObject):
@@ -204,7 +230,7 @@ class Magnetizability(lib.StreamObject):
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)
         log.info('\n')
-        log.info('******** %s for %s (In testing) ********',
+        log.info('******** %s for %s ********',
                  self.__class__, self._scf.__class__)
         if self.gauge_orig is None:
             log.info('gauge = GIAO')
@@ -225,12 +251,12 @@ class Magnetizability(lib.StreamObject):
 
         mag_dia = self.dia(self.gauge_orig)
         mag_para = self.para(self.gauge_orig)
-        e2 = mag_para + mag_dia
+        ksi = mag_para + mag_dia
 
         logger.timer(self, 'Magnetizability', *cput0)
         if self.verbose >= logger.NOTE:
             _write = rhf_nmr._write
-            _write(self.stdout, e2, '\nMagnetizability (au)')
+            _write(self.stdout, ksi, '\nMagnetizability (au)')
             _write(self.stdout, mag_dia, 'dia-magnetic contribution (au)')
             _write(self.stdout, mag_para, 'para-magnetic contribution (au)')
             #if self.verbose >= logger.INFO:
@@ -238,8 +264,8 @@ class Magnetizability(lib.StreamObject):
             #    _write(self.stdout, para_vir, 'vir part of para-magnetic term')
 
             unit = nist.HARTREE2J / nist.AU2TESLA**2 * 1e30
-            _write(self.stdout, e2*unit, '\nMagnetizability (10^{-30} J/T^2)')
-        return e2
+            _write(self.stdout, ksi*unit, '\nMagnetizability (10^{-30} J/T^2)')
+        return ksi
 
     dia = dia
     para = para
@@ -266,16 +292,16 @@ if __name__ == '__main__':
     mag = Magnetizability(mf)
     mag.cphf = True
     m = mag.kernel()
-    print(lib.finger(m) - 0.43596639996758657)
+    print(lib.finger(m) - -0.43596639996758657)
 
     mag.gauge_orig = (0,0,1)
     m = mag.kernel()
-    print(lib.finger(m) - 0.76996086788058238)
+    print(lib.finger(m) - -0.76996086788058238)
 
     mag.gauge_orig = (0,0,1)
     mag.cphf = False
     m = mag.kernel()
-    print(lib.finger(m) - 0.7973915717274408)
+    print(lib.finger(m) - -0.7973915717274408)
 
 
     mol = gto.M(atom='''O      0.   0.       0.
@@ -286,4 +312,4 @@ if __name__ == '__main__':
     mag = Magnetizability(mf)
     mag.cphf = True
     m = mag.kernel()
-    print(lib.finger(m) - 0.62173669377370366)
+    print(lib.finger(m) - -0.62173669377370366)

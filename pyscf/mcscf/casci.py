@@ -21,6 +21,7 @@ from functools import reduce
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
+from pyscf import gto
 from pyscf import scf
 from pyscf import ao2mo
 from pyscf import fci
@@ -529,7 +530,6 @@ def as_scanner(mc):
     >>> mc_scanner(gto.M(atom='N 0 0 0; N 0 0 1.1'))
     >>> mc_scanner(gto.M(atom='N 0 0 0; N 0 0 1.5'))
     '''
-    from pyscf import gto
     if isinstance(mc, lib.SinglePointScanner):
         return mc
 
@@ -559,6 +559,19 @@ def as_scanner(mc):
 
 class CASCI(lib.StreamObject):
     '''CASCI
+
+    Args:
+        mf_or_mol : SCF object or Mole object
+            SCF or Mole to define the problem size.
+        ncas : int
+            Number of active orbitals.
+        nelecas : int or a pair of int
+            Number of electrons in active space.
+
+    Kwargs:
+        ncore : int
+            Number of doubly occupied core orbitals. If not presented, this
+            parameter can be automatically determined.
 
     Attributes:
         verbose : int
@@ -622,7 +635,12 @@ class CASCI(lib.StreamObject):
     canonicalization = getattr(__config__, 'mcscf_casci_CASCI_canonicalization', True)
     sorting_mo_energy = getattr(__config__, 'mcscf_casci_CASCI_sorting_mo_energy', False)
 
-    def __init__(self, mf, ncas, nelecas, ncore=None):
+    def __init__(self, mf_or_mol, ncas, nelecas, ncore=None):
+        if isinstance(mf_or_mol, gto.Mole):
+            mf = scf.RHF(mf_or_mol)
+        else:
+            mf = mf_or_mol
+
         mol = mf.mol
         self.mol = mol
         self._scf = mf
@@ -644,7 +662,7 @@ class CASCI(lib.StreamObject):
             assert(isinstance(ncore, (int, numpy.integer)))
             self.ncore = ncore
         singlet = (getattr(__config__, 'mcscf_casci_CASCI_fcisolver_direct_spin0', False)
-                   and self.nelecas[0] == self.nelecas[1])
+                   and self.nelecas[0] == self.nelecas[1])  # leads to direct_spin1
         self.fcisolver = fci.solver(mol, singlet, symm=False)
 # CI solver parameters are set in fcisolver object
         self.fcisolver.lindep = getattr(__config__,
@@ -666,8 +684,8 @@ class CASCI(lib.StreamObject):
         keys = set(('natorb', 'canonicalization', 'sorting_mo_energy'))
         self._keys = set(self.__dict__.keys()).union(keys)
 
-    def dump_flags(self):
-        log = logger.Logger(self.stdout, self.verbose)
+    def dump_flags(self, verbose=None):
+        log = logger.new_logger(self, verbose)
         log.info('')
         log.info('******** CASCI flags ********')
         nvir = self.mo_coeff.shape[1] - self.ncore - self.ncas
@@ -679,10 +697,21 @@ class CASCI(lib.StreamObject):
         log.info('sorting_mo_energy = %s', self.sorting_mo_energy)
         log.info('max_memory %d (MB)', self.max_memory)
         if hasattr(self.fcisolver, 'dump_flags'):
-            self.fcisolver.dump_flags(self.verbose)
+            self.fcisolver.dump_flags(log.verbose)
         if self.mo_coeff is None:
             log.error('Orbitals for CASCI are not specified. The relevant SCF '
                       'object may not be initialized.')
+
+        if (getattr(self._scf, 'with_solvent', None) and
+            not getattr(self, 'with_solvent', None)):
+            log.warn('''Solvent model %s was found in SCF object.
+It is not applied to the CASSCF object. The CASSCF result is not affected by the SCF solvent model.
+To enable the solvent model for CASSCF, a decoration to CASSCF object as below needs be called
+        from pyscf import solvent
+        mc = mcscf.CASSCF(...)
+        mc = solvent.ddCOSMO(mc)
+''',
+                     self._scf.with_solvent.__class__)
         return self
 
     def get_hcore(self, mol=None):
@@ -736,9 +765,9 @@ class CASCI(lib.StreamObject):
         return self.h1e_for_cas(mo_coeff, ncas, ncore)
     get_h1eff.__doc__ = h1e_for_cas.__doc__
 
-    def casci(self, mo_coeff=None, ci0=None):
-        return self.kernel(mo_coeff, ci0)
-    def kernel(self, mo_coeff=None, ci0=None):
+    def casci(self, mo_coeff=None, ci0=None, verbose=None):
+        return self.kernel(mo_coeff, ci0, verbose)
+    def kernel(self, mo_coeff=None, ci0=None, verbose=None):
         '''
         Returns:
             Five elements, they are
@@ -757,12 +786,12 @@ class CASCI(lib.StreamObject):
             self.mo_coeff = mo_coeff
         if ci0 is None:
             ci0 = self.ci
+        log = logger.new_logger(self, verbose)
 
         if self.verbose >= logger.WARN:
             self.check_sanity()
-        self.dump_flags()
+        self.dump_flags(log)
 
-        log = logger.Logger(self.stdout, self.verbose)
         self.e_tot, self.e_cas, self.ci = \
                 kernel(self, mo_coeff, ci0=ci0, verbose=log)
 
@@ -851,7 +880,7 @@ class CASCI(lib.StreamObject):
         return self
 
     def make_rdm1s(self, mo_coeff=None, ci=None, ncas=None, nelecas=None,
-                   ncore=None):
+                   ncore=None, **kwargs):
         '''One-particle density matrices for alpha and beta spin on AO basis
         '''
         if mo_coeff is None: mo_coeff = self.mo_coeff
@@ -869,7 +898,7 @@ class CASCI(lib.StreamObject):
         return dm1a, dm1b
 
     def make_rdm1(self, mo_coeff=None, ci=None, ncas=None, nelecas=None,
-                  ncore=None):
+                  ncore=None, **kwargs):
         '''One-particle density matrix in AO representation
         '''
         if mo_coeff is None: mo_coeff = self.mo_coeff
@@ -920,8 +949,6 @@ del(WITH_META_LOWDIN, LARGE_CI_TOL, PENALTY)
 
 
 if __name__ == '__main__':
-    from pyscf import gto
-    from pyscf import scf
     from pyscf import mcscf
     mol = gto.Mole()
     mol.verbose = 0

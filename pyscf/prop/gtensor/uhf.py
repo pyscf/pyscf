@@ -516,11 +516,10 @@ class GTensor(lib.StreamObject):
     solve_mo1 = uhf_nmr.solve_mo1
     get_fock = uhf_nmr.get_fock
 
-    def make_s10(self, mol=None, gauge_orig=None):
+    def get_ovlp(self, mol=None, gauge_orig=None):
         if mol is None: mol = self.mol
         if gauge_orig is None: gauge_orig = self.gauge_orig
-        return rhf_nmr.make_s10(mol, gauge_orig)
-    get_ovlp = make_s10
+        return rhf_nmr.get_ovlp(mol, gauge_orig)
 
     def align(self, gtensor):
         return align(gtensor)

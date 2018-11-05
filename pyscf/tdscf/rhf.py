@@ -496,7 +496,7 @@ def transition_velocity_octupole(tdobj, xy=None):
 def _charge_center(mol):
     charges = mol.atom_charges()
     coords  = mol.atom_coords()
-    return gto.charge_center(mol, charges, coords)
+    return numpy.einsum('z,zr->r', charges, coords)/charges.sum()
 
 def _contract_multipole(tdobj, ints, hermi=True, xy=None):
     if xy is None: xy = tdobj.xy

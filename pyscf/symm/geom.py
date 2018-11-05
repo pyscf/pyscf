@@ -393,6 +393,7 @@ def symm_ops(gpname, axes=None):
 
 def symm_identical_atoms(gpname, atoms):
     ''' Requires '''
+    from pyscf import gto
     # Dooh Coov for linear molecule
     if gpname == 'Dooh':
         coords = numpy.array([a[1] for a in atoms], dtype=float)
@@ -410,13 +411,15 @@ def symm_identical_atoms(gpname, atoms):
         eql_atom_ids = [[i] for i,a in enumerate(atoms)]
         return eql_atom_ids
 
-    center = mole.charge_center(atoms)
+    charges = numpy.array([gto.charge(a[0]) for a in atoms])
+    coords = numpy.array([a[1] for a in atoms])
+    center = numpy.einsum('z,zr->r', charges, coords)/charges.sum()
+
 #    if not numpy.allclose(center, 0, atol=TOLERANCE):
 #        sys.stderr.write('WARN: Molecular charge center %s is not on (0,0,0)\n'
 #                        % center)
     opdic = symm_ops(gpname)
     ops = [opdic[op] for op in OPERATOR_TABLE[gpname]]
-    coords = numpy.array([a[1] for a in atoms], dtype=float)
     idx = argsort_coords(coords)
     coords0 = coords[idx]
 

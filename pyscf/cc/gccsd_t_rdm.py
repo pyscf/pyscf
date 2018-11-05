@@ -95,9 +95,9 @@ def _gamma2_intermediates(mycc, t1, t2, l1, l2, eris=None):
     dovvv += govvv.transpose(0,2,1,3) - govvv.transpose(0,3,1,2)
     return dovov, dvvvv, doooo, doovv, dovvo, dvvov, dovvv, dooov
 
-def make_rdm1(mycc, t1, t2, l1, l2, eris=None):
+def make_rdm1(mycc, t1, t2, l1, l2, eris=None, ao_repr=False):
     d1 = _gamma1_intermediates(mycc, t1, t2, l1, l2, eris)
-    return gccsd_rdm._make_rdm1(mycc, d1, True)
+    return gccsd_rdm._make_rdm1(mycc, d1, True, ao_repr=ao_repr)
 
 # rdm2 in Chemist's notation
 def make_rdm2(mycc, t1, t2, l1, l2, eris=None):

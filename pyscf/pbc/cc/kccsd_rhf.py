@@ -397,13 +397,14 @@ def add_vvvv_(cc, Ht2, t1, t2, eris):
         #:    Wvvvv *= (1./nkpts)
         #:    return Wvvvv
         def get_Wvvvv(ka, kb, kc):
+            Lpv = eris.Lpv
             kd = kconserv[ka, kc, kb]
-            Lbd = (eris.Lpv[kb, kd, :, nocc:] -
-                   lib.einsum('Lkd,kb->Lbd', eris.Lpv[kb, kd, :, :nocc], t1[kb]))
-            Wvvvv = lib.einsum('Lac,Lbd->abcd', eris.Lpv[ka, kc, :, nocc:], Lbd)
+            Lbd = (Lpv[kb,kd][:,nocc:] -
+                   lib.einsum('Lkd,kb->Lbd', Lpv[kb,kd][:,:nocc], t1[kb]))
+            Wvvvv = lib.einsum('Lac,Lbd->abcd', Lpv[ka,kc][:,nocc:], Lbd)
             Lbd = None
-            kcbd = lib.einsum('Lkc,Lbd->kcbd', eris.Lpv[ka, kc, :, :nocc],
-                              eris.Lpv[kb, kd, :, nocc:])
+            kcbd = lib.einsum('Lkc,Lbd->kcbd', Lpv[ka,kc][:,:nocc],
+                              Lpv[kb,kd][:,nocc:])
             Wvvvv -= lib.einsum('kcbd,ka->abcd', kcbd, t1[ka])
             Wvvvv *= (1. / nkpts)
             return Wvvvv
@@ -1331,6 +1332,10 @@ def _init_df_eris(cc, eris):
 
     cell = cc._scf.cell
     if cell.dimension == 2:
+        # 2D ERIs are not positive definite. The 3-index tensors are stored in
+        # two part. One corresponds to the positive part and one corresponds
+        # to the negative part. The negative part is not considered in the
+        # DF-driven CCSD implementation.
         raise NotImplementedError
 
     nocc = cc.nocc
@@ -1346,7 +1351,7 @@ def _init_df_eris(cc, eris):
     else:
         dtype = np.complex128
     dtype = np.result_type(dtype, *eris.mo_coeff)
-    eris.Lpv = np.empty((nkpts, nkpts, naux, nmo, nvir), dtype=dtype)
+    eris.Lpv = Lpv = np.empty((nkpts,nkpts), dtype=object)
 
     with h5py.File(cc._scf.with_df._cderi, 'r') as f:
         kptij_lst = f['j3c-kptij'].value
@@ -1360,15 +1365,14 @@ def _init_df_eris(cc, eris):
                 mo = np.hstack((eris.mo_coeff[ki], eris.mo_coeff[kj][:, nocc:]))
                 mo = np.asarray(mo, dtype=dtype, order='F')
                 if dtype == np.double:
-                    _ao2mo.nr_e2(Lpq, mo, (0, nmo, nmo, nmo + nvir), aosym='s2',
-                                 out=eris.Lpv[ki, kj])
+                    out = _ao2mo.nr_e2(Lpq, mo, (0, nmo, nmo, nmo + nvir), aosym='s2')
                 else:
-                    if Lpq.size != naux * nao ** 2:  # aosym = 's2'
+                    #Note: Lpq.shape[0] != naux if linear dependency is found in auxbasis
+                    if Lpq[0].size != nao**2: # aosym = 's2'
                         Lpq = lib.unpack_tril(Lpq).astype(np.complex128)
-                    _ao2mo.r_e2(Lpq, mo, (0, nmo, nmo, nmo + nvir), tao, ao_loc,
-                                out=eris.Lpv[ki, kj])
+                    out = _ao2mo.r_e2(Lpq, mo, (0, nmo, nmo, nmo + nvir), tao, ao_loc)
+                Lpv[ki,kj] = out.reshape(-1,nmo,nvir)
     return eris
-
 
 imd = imdk
 
@@ -1514,6 +1518,7 @@ if __name__ == '__main__':
 
     # Running HF and CCSD with 1x1x2 Monkhorst-Pack k-point mesh
     kmf = scf.KRHF(cell, kpts=cell.make_kpts([1, 1, 2]), exxdiv=None)
+    kmf.conv_tol_grad = 1e-8
     ehf = kmf.kernel()
 
     mycc = cc.KRCCSD(kmf)
@@ -1522,9 +1527,11 @@ if __name__ == '__main__':
     ecc, t1, t2 = mycc.kernel()
     print(ecc - -0.155298393321855)
 
-    e_ip, _ = mycc.ipccsd(nroots=3, kptlist=(0,))
-    e_ea, _ = mycc.eaccsd(nroots=3, kptlist=(0,))
-    print(e_ip, e_ea)
+    #e_ip, _ = mycc.ipccsd(nroots=3, kptlist=(0,))
+    mycc.max_cycle = 100
+    e_ea, _ = mycc.eaccsd(nroots=1, koopmans=True, kptlist=(0,))
+    #print(e_ip, e_ea)
+    exit()
 
     ####
     cell = gto.Cell()

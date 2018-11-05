@@ -57,11 +57,13 @@ def get_veff(ks, mol=None, dm=None, dm_last=0, vhf_last=0, hermi=1):
                 ks.nlcgrids = rks.prune_small_rho_grids_(ks, mol, dm_a+dm_b, ks.nlcgrids)
             t0 = logger.timer(ks, 'setting up nlc grids', *t0)
 
+    max_memory = ks.max_memory - lib.current_memory()[0]
     ni = ks._numint
-    n, exc, vxc = ni.nr_uks(mol, ks.grids, ks.xc, (dm_a,dm_b))
+    n, exc, vxc = ni.nr_uks(mol, ks.grids, ks.xc, (dm_a,dm_b), max_memory=max_memory)
     if ks.nlc != '':
         assert('VV10' in ks.nlc.upper())
-        _, enlc, vnlc = ni.nr_rks(mol, ks.nlcgrids, ks.xc+'__'+ks.nlc, dm_a+dm_b)
+        _, enlc, vnlc = ni.nr_rks(mol, ks.nlcgrids, ks.xc+'__'+ks.nlc, dm_a+dm_b,
+                                  max_memory=max_memory)
         exc += enlc
         vxc += vnlc
     logger.debug(ks, 'nelec by numeric integration = %s', n)

@@ -35,10 +35,25 @@ from pyscf.data import radii
 from pyscf.solvent import ddcosmo
 from pyscf.symm import sph
 
-def ddpcm_for_scf(mf, pcmobj=None):
-    if pcmobj is None:
-        pcmobj = DDPCM(mf.mol)
-    return ddcosmo.ddcosmo_for_scf(mf, pcmobj)
+def ddpcm_for_scf(mf, solvent_obj=None, dm=None):
+    if solvent_obj is None:
+        solvent_obj = DDPCM(mf.mol)
+    return ddcosmo.ddcosmo_for_scf(mf, solvent_obj, dm)
+
+def ddpcm_for_casscf(mc, solvent_obj, dm=None):
+    if solvent_obj is None:
+        solvent_obj = DDPCM(mc.mol)
+    return ddcosmo.ddcosmo_for_casscf(mc, solvent_obj, dm)
+
+def ddpcm_for_casci(mc, solvent_obj, dm=None):
+    if solvent_obj is None:
+        solvent_obj = DDPCM(mc.mol)
+    return ddcosmo.ddcosmo_for_casci(mc, solvent_obj, dm)
+
+def ddpcm_for_post_scf(method, solvent_obj, dm=None):
+    if solvent_obj is None:
+        solvent_obj = DDPCM(method.mol)
+    return ddcosmo.ddcosmo_for_post_scf(method, solvent_obj, dm)
 
 def gen_ddpcm_solver(pcmobj, verbose=None):
     mol = pcmobj.mol

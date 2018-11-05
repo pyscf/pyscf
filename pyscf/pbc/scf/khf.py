@@ -218,7 +218,7 @@ def get_grad(mo_coeff_kpts, mo_occ_kpts, fock):
     return np.hstack(grad_kpts)
 
 
-def make_rdm1(mo_coeff_kpts, mo_occ_kpts):
+def make_rdm1(mo_coeff_kpts, mo_occ_kpts, **kwargs):
     '''One particle density matrices for all k-points.
 
     Returns:
@@ -573,7 +573,7 @@ class KSCF(pbchf.SCF):
             mo_coeff_kpts.append(c)
         return eig_kpts, mo_coeff_kpts
 
-    def make_rdm1(self, mo_coeff_kpts=None, mo_occ_kpts=None):
+    def make_rdm1(self, mo_coeff_kpts=None, mo_occ_kpts=None, **kwargs):
         if mo_coeff_kpts is None:
             # Note: this is actually "self.mo_coeff_kpts"
             # which is stored in self.mo_coeff of the scf.hf.RHF superclass
@@ -583,7 +583,7 @@ class KSCF(pbchf.SCF):
             # which is stored in self.mo_occ of the scf.hf.RHF superclass
             mo_occ_kpts = self.mo_occ
 
-        return make_rdm1(mo_coeff_kpts, mo_occ_kpts)
+        return make_rdm1(mo_coeff_kpts, mo_occ_kpts, **kwargs)
 
     def get_bands(self, kpts_band, cell=None, dm_kpts=None, kpts=None):
         '''Get energy bands at the given (arbitrary) 'band' k-points.
