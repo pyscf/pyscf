@@ -25,6 +25,7 @@ import pyscf
 from pyscf import lib
 from pyscf import gto
 from pyscf import df
+from pyscf.lib import logger
 
 
 def mm_charge(scf_method, coords, charges, unit=None):
@@ -58,6 +59,11 @@ def mm_charge(scf_method, coords, charges, unit=None):
     >>> mf.kernel()
     -101.940495711284
     '''
+    from pyscf.scf import hf
+    from pyscf.mcscf import casci
+    assert(isinstance(scf_method, hf.SCF) or
+           isinstance(scf_method, casci.CASCI))
+
     if unit is None:
         unit = scf_method.mol.unit
     if unit.startswith(('B','b','au','AU')):
@@ -72,6 +78,16 @@ def mm_charge(scf_method, coords, charges, unit=None):
     class QMMM(method_class, _QMMM):
         def __init__(self):
             self.__dict__.update(scf_method.__dict__)
+
+        def dump_flags(self):
+            method_class.dump_flags(self)
+            logger.info(self, '** Add background charges for %s **',
+                        method_class)
+            if self.verbose >= logger.DEBUG:
+                logger.debug(self, 'Charge      Location')
+                for i, z in enumerate(charges):
+                    logger.debug(self, '%.9g    %s', z, coords[i])
+            return self
 
         def get_hcore(self, mol=None):
             if mol is None: mol = self.mol
@@ -148,6 +164,9 @@ def mm_charge_grad(scf_grad, coords, charges, unit=None):
     [[-0.25912357 -0.29235976 -0.38245077]
      [-1.70497052 -1.89423883  1.2794798 ]]
     '''
+    from pyscf.grad import rhf as rhf_grad
+    assert(isinstance(scf_grad, rhf_grad.Gradients))
+
     if unit is None:
         unit = scf_grad.mol.unit
     if unit.startswith(('B','b','au','AU')):
@@ -161,6 +180,16 @@ def mm_charge_grad(scf_grad, coords, charges, unit=None):
     class QMMM(scf_grad.__class__, _QMMMGrad):
         def __init__(self):
             self.__dict__.update(scf_grad.__dict__)
+
+        def dump_flags(self):
+            scf_grad.dump_flags(self)
+            logger.info(self, '** Add background charges for %s **',
+                        scf_grad)
+            if self.verbose >= logger.DEBUG1:
+                logger.debug1(self, 'Charge      Location')
+                for i, z in enumerate(charges):
+                    logger.debug1(self, '%.9g    %s', z, coords[i])
+            return self
 
         def get_hcore(self, mol=None):
             ''' (QM 1e grad) + <-d/dX i|q_mm/r_mm|j>'''
