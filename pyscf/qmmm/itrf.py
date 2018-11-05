@@ -184,7 +184,7 @@ def mm_charge_grad(scf_grad, coords, charges, unit=None):
             self.__dict__.update(scf_grad.__dict__)
 
         def dump_flags(self):
-            scf_grad.dump_flags(self)
+            scf_grad.dump_flags()
             logger.info(self, '** Add background charges for %s **',
                         scf_grad)
             if self.verbose >= logger.DEBUG1:
@@ -216,7 +216,7 @@ def mm_charge_grad(scf_grad, coords, charges, unit=None):
                     fakemol = gto.fakemol_for_charges(coords[i0:i1])
                     j3c = df.incore.aux_e2(mol, fakemol, intor, aosym='s1', comp=3)
                     v += numpy.einsum('ipqk,k->ipq', j3c, charges[i0:i1])
-            return scf_grad.get_hcore(mol) + v
+            return g_qm + v
 
         def grad_nuc(self, mol=None, atmlst=None):
             if mol is None: mol = scf_grad.mol
