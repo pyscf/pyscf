@@ -166,6 +166,8 @@ def mm_charge_grad(scf_grad, coords, charges, unit=None):
     '''
     from pyscf.grad import rhf as rhf_grad
     assert(isinstance(scf_grad, rhf_grad.Gradients))
+    if getattr(scf_grad.base, 'with_x2c', None):
+        raise NotImplementedError('X2C with QM/MM charges')
 
     if unit is None:
         unit = scf_grad.mol.unit

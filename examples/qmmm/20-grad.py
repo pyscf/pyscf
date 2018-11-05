@@ -8,8 +8,10 @@ Analytical nuclear gradients can be calculated with the background charges.
 The nuclear gradients driver (nuc_grad_method) can be called the same way as
 the regular calculations.
 
-Note: the mcscf nuclear gradients have to be calculated with the (recommended)
-first initialization method. See also example 02-mcscf.py
+Note:
+1. the mcscf nuclear gradients have to be calculated with the (recommended)
+   first initialization method. See also example 02-mcscf.py
+2. X2C gradients with QM/MM charges are not supported.
 '''
 
 import numpy

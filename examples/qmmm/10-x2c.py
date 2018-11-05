@@ -29,22 +29,25 @@ charges = (numpy.arange(5) + 1.) * -.1
 
 #
 # The order to apply X2C and QMMM matters. X2C has to be called first then the
-# QMMM charges.
+# QMMM charges. In this case, the non-relativistic QMMM charges is added to
+# the system, i.e., picture change was not applied to the QMMM charges.
 #
 mf = scf.RHF(mol).x2c()
 mf = qmmm.mm_charge(mf, coords, charges).run()
 
 #
-# If the other order was called, only the interactions between nucleus and
-# QMMM charges are included. The interactions between electrons and QMMM
-# charges are excluded.
+# If the other order was called, picture change is supposed to applied to QMMM
+# charges as well.  However, the current implementation does not support this
+# feature. This order only counts the interactions between nucleus and QMMM
+# charges. The interactions between electrons and QMMM charges are excluded.
 #
 mf = scf.RHF(mol)
 mf = qmmm.mm_charge(mf, coords, charges)
 mf = mf.x2c().run()
 print(mf.energy_elec())
 
-# The electronic part of the code above is equivalent to
+# In the current implementation, the electronic part of the code above is
+# equivalent to
 mf = scf.RHF(mol)
 mf = mf.x2c().run()
 print(mf.energy_elec())
