@@ -529,6 +529,7 @@ class nao():
 
   # More functions for similarity with Mole
   def atom_symbol(self, ia): return self.sp2symbol[self.atom2sp[ia]]
+  def atom_symbols(self): return np.array([self.sp2symbol[sp] for sp in self.atom2sp])
   def atom_charge(self, ia): return self.sp2charge[self.atom2sp[ia]]
   def atom_charges(self): return np.array([self.sp2charge[sp] for sp in self.atom2sp], dtype='int64')
   def atom_coord(self, ia): return self.atom2coord[ia,:]
@@ -661,16 +662,24 @@ class nao():
       vnuc = vnuc - Z / dd 
     return vnuc
 
-  def vna(self, coords, sp2v=None):
+  def vna(self, coords, sp2v=None, atom2coord=None):
     """ Compute the neutral-atom potential V_NA(coords) for a set of Cartesian coordinates coords.
         The subroutine could be also used for computing the non-linear core corrections or some other atom-centered fields."""
     sp2v = self.ao_log.sp2vna if sp2v is None else sp2v
     ncoo = coords.shape[0]
     vna = np.zeros(ncoo)
-    for R,sp in zip(self.atom2coord, self.atom2sp):
+    if atom2coord is None: atom2coord = self.atom2coord
+    tt = np.zeros(3)
+    for ia,(R,sp) in enumerate(zip(atom2coord, self.atom2sp)):
+      print(ia, sp, tt)
+      t0 = timer()
       dd = cdist(R.reshape((1,3)), coords).reshape(ncoo)
+      t1 = timer()
       vnaa = self.ao_log.interp_rr(sp2v[sp], dd)
-      vna = vna + vnaa 
+      t2 = timer()
+      vna = vna + vnaa
+      t3 = timer()
+      tt += (t1-t0, t2-t1, t3-t2)
     return vna
 
   def vna_coo(self, sp2v=None, **kw):
