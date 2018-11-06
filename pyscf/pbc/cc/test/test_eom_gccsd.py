@@ -45,8 +45,8 @@ def skip():
     print('GHF energy %.7f \n' % (float(ehf2)))
     print('GCCSD correlation energy  %.7f \n' % (float(ecc2)))
 
-    print ehf/2 - ehf2
-    print ecc/2 - ecc2
+    print(ehf/2 - ehf2)
+    print(ecc/2 - ecc2)
 
     quit()
 
