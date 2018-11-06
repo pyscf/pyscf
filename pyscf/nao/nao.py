@@ -662,24 +662,21 @@ class nao():
       vnuc = vnuc - Z / dd 
     return vnuc
 
-  def vna(self, coords, sp2v=None, atom2coord=None):
+  def vna(self, coords, sp2v=None, sp2rcut=None, atom2coord=None):
     """ Compute the neutral-atom potential V_NA(coords) for a set of Cartesian coordinates coords.
         The subroutine could be also used for computing the non-linear core corrections or some other atom-centered fields."""
-    sp2v = self.ao_log.sp2vna if sp2v is None else sp2v
+    if sp2v is None:
+      sp2v = self.ao_log.sp2vna
+      sp2rcut = self.ao_log.sp2rcut_vna
+
     ncoo = coords.shape[0]
     vna = np.zeros(ncoo)
     if atom2coord is None: atom2coord = self.atom2coord
-    tt = np.zeros(3)
     for ia,(R,sp) in enumerate(zip(atom2coord, self.atom2sp)):
-      print(ia, sp, tt)
-      t0 = timer()
+      print(__name__, ia, sp, sp2rcut[sp])
       dd = cdist(R.reshape((1,3)), coords).reshape(ncoo)
-      t1 = timer()
-      vnaa = self.ao_log.interp_rr(sp2v[sp], dd)
-      t2 = timer()
+      vnaa = self.ao_log.interp_rr(sp2v[sp], dd, rcut=sp2rcut[sp])
       vna = vna + vnaa
-      t3 = timer()
-      tt += (t1-t0, t2-t1, t3-t2)
     return vna
 
   def vna_coo(self, sp2v=None, **kw):

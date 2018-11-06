@@ -1,5 +1,13 @@
 from __future__ import print_function, division
 import numpy as np
+from timeit import default_timer as timer
+
+#import numba as nb
+#@nb.jit(nopython=True)
+#def sum6_nb(ff, r2k, ir2cc, fr2v):
+#  for j in range(6): fr2v+=ff[...,r2k+j]*ir2cc[j]
+#  return fr2v
+
 
 #
 #
@@ -79,6 +87,7 @@ def comp_coeffs(self, r):
   return k,i2coeff
 
 
+
 class log_interp_c():
   """    Interpolation of radial orbitals given on a log grid (m_log_mesh)  """
   def __init__(self, gg):
@@ -92,14 +101,28 @@ class log_interp_c():
     self.gammin_jt = np.log(gg[0])
     self.dg_jt = np.log(gg[1]/gg[0])
 
-  def __call__(self, ff, rr):
+  def __call__(self, ff, rr, rcut=None):
     """ Interpolation of vector data ff[...,:] and vector arguments rr[:] """
     assert ff.shape[-1]==self.nr
-    r2k,ir2cc = self.coeffs_vv(rr)
-    ifr2vv = np.zeros(tuple([6])+ff.shape[0:-1]+rr.shape[:])
-    for j in range(6): ifr2vv[j,...] = ff[...,r2k+j]
-    #print(ifr2vv.shape, ir2cc.shape)
-    return np.einsum('i...,i...->...', ifr2vv, ir2cc)
+    ffa = ff.reshape(ff.size//self.nr, ff.shape[-1])
+    if rcut is None: rcut = self.gg[-1]
+    if type(rr)!=np.ndarray:
+      rra = np.array([rr])
+    else:
+      rra = rr
+    
+    #print(__name__, type(rra), rra.shape, ffa.shape)
+    
+    #t0 = timer()
+    r2l,r2k,ir2cc = self.coeffs_vv_rcut(rra, rcut)
+    #t1 = timer()
+    fr2v = np.zeros(ffa.shape[0:-1]+rra.shape[:])
+    # print(__name__, fr2v.shape, fr2v[:,r2l[0]].shape, r2l[0].shape)
+    for j in range(6): fr2v[:,r2l[0]]+= ffa[:,r2k+j]*ir2cc[j]
+    #t2 = timer()
+    #print(__name__, t1-t0, t2-t1)
+    return fr2v.reshape(ff.shape[0:-1])
+
 
   def interp_v(self, ff, r):
     """ Interpolation right away """
@@ -145,6 +168,41 @@ class log_interp_c():
     #print('ir2c[0]    ', ir2c[0])
     #print('ir2c[1]    ', ir2c[1])
     return r2k,ir2c
+
+  def coeffs_vv_rcut(self, rr, rcut):
+    """ Compute an array of interpolation coefficients (6, rr.shape) """
+    i2less = np.where(rr<rcut)
+    rr_wh  = rr[i2less]
+    ir2c = np.zeros(tuple([6])+rr_wh.shape[:])
+    #print(__name__, i2less[0].shape)
+    
+    lr = np.ma.log(rr_wh)
+    r2k = np.zeros(lr.shape, dtype=np.int32)
+    r2k[...] = (lr-self.gammin_jt)/self.dg_jt-2
+    #print(__name__, 'r2r 1', r2k)
+  
+    r2k = np.where(r2k<0,0,r2k)
+    r2k = np.where(r2k>self.nr-6,self.nr-6,r2k)
+    hp = self.gg[0]/2
+    r2k = np.where(rr_wh<hp, 0, r2k)
+    #print('r2k 2 ', r2k)
+    
+    dy = (lr-self.gammin_jt-(r2k+2)*self.dg_jt)/self.dg_jt
+    #print('dy    ', dy)
+  
+    ir2c[0] = np.where(rr_wh<hp, 1.0, -dy*(dy**2-1.0)*(dy-2.0)*(dy-3.0)/120.0)
+    ir2c[1] = np.where(rr_wh<hp, 0.0, +5.0*dy*(dy-1.0)*(dy**2-4.0)*(dy-3.0)/120.0)
+    ir2c[2] = np.where(rr_wh<hp, 0.0, -10.0*(dy**2-1.0)*(dy**2-4.0)*(dy-3.0)/120.0)
+    ir2c[3] = np.where(rr_wh<hp, 0.0, +10.0*dy*(dy+1.0)*(dy**2-4.0)*(dy-3.0)/120.0)
+    ir2c[4] = np.where(rr_wh<hp, 0.0, -5.0*dy*(dy**2-1.0)*(dy+2.0)*(dy-3.0)/120.0)
+    ir2c[5] = np.where(rr_wh<hp, 0.0, dy*(dy**2-1.0)*(dy**2-4.0)/120.0)
+    #print('ir2c[0]    ', ir2c[0])
+    #print('ir2c[1]    ', ir2c[1])
+    #r2k_dense = np.zeros(rr.shape, dtype=np.int32)
+    #ir2c_dense = np.zeros(tuple([6])+rr.shape[:])
+    #r2k_dense[i2less] = r2k
+    #for i in range(6): ir2c_dense[i,i2less] = ir2c[i,:]
+    return i2less,r2k,ir2c
 
   coeffs=comp_coeffs
   """ Interpolation pointers and coefficients """

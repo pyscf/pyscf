@@ -159,8 +159,9 @@ class ao_log(log_mesh):
     if fname in sp2ion[0]: 
       self.siesta_ion_interp(sp2ion, fname=fname)
   
-    self.sp2vna = []     # Interpolate a Neutral-Atom potential V_NA(r) for each specie 
+    self.sp2vna = []     # Interpolate a Neutral-Atom potential V_NA(r) for each specie
     if "vna" in sp2ion[0]:
+      self.sp2rcut_vna = np.array( [ion["vna"]["cutoff"] for ion in sp2ion])
       for ion in sp2ion:
         h,dat = ion["vna"]["delta"], ion["vna"]["data"][0][:,1]
         d2 = spline_diff2(h, dat, 0.0, 1.0e301)
