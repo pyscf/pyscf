@@ -41,12 +41,19 @@ class mesh_affine_equ():
     import time
     import pyscf
     from pyscf import lib
-    
     """  Result: .cube file with the field in the file fname.  """
-    mol = kw['mol'] # Obligatory argument
+    
+    if 'mol' in kw:
+      mol = kw['mol'] # Obligatory argument
+      coord = mol.atom_coords()
+      zz = [mol.atom_charge(ia) for ia in range(mol.natm)]
+      natm = mol.natm
+    else:
+      zz = kw['a2z']
+      natm = len(zz)
+      coord = kw['a2xyz']
+
     field = kw['field'] # Obligatory argument?
-    coord = mol.atom_coords()
-    zz = [mol.atom_charge(ia) for ia in range(mol.natm)]
     
     comment = kw['comment'] if 'comment' in kw else 'none'
     
@@ -54,7 +61,7 @@ class mesh_affine_equ():
       f.write(comment+'\n')
       f.write('PySCF Version: {:s}  Date: {:s}\n'.format(pyscf.__version__, time.ctime()))
       bo = self.origin-self.get_mesh_center()
-      f.write(('{:5d}'+'{:12.6f}'*3+'\n').format(mol.natm, *bo))
+      f.write(('{:5d}'+'{:12.6f}'*3+'\n').format(natm, *bo))
 
       for s,rr in zip(self.shape, self.rr): 
         f.write(('{:5d}'+'{:12.6f}'*3+'\n').format(s, *rr[1]))
