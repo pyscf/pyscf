@@ -673,7 +673,7 @@ class nao():
     vna = np.zeros(ncoo)
     if atom2coord is None: atom2coord = self.atom2coord
     for ia,(R,sp) in enumerate(zip(atom2coord, self.atom2sp)):
-      print(__name__, ia, sp, sp2rcut[sp])
+      #print(__name__, ia, sp, sp2rcut[sp])
       dd = cdist(R.reshape((1,3)), coords).reshape(ncoo)
       vnaa = self.ao_log.interp_rr(sp2v[sp], dd, rcut=sp2rcut[sp])
       vna = vna + vnaa

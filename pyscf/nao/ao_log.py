@@ -163,14 +163,14 @@ class ao_log(log_mesh):
     if "vna" in sp2ion[0]:
       self.sp2rcut_vna = np.array( [ion["vna"]["cutoff"] for ion in sp2ion])
       for ion in sp2ion:
-        h,dat = ion["vna"]["delta"], ion["vna"]["data"][0][:,1]
+        h,dat = ion["vna"]["delta"][0], ion["vna"]["data"][0][:,1]
         d2 = spline_diff2(h, dat, 0.0, 1.0e301)
         self.sp2vna.append(np.array([0.5*spline_interp(h, dat, d2, r) for r in self.rr])) # given in Rydberg in sp2ion
 
     self.sp2chlocal = []     # Interpolate the atomic charges for each specie 
     if "chlocal" in sp2ion[0]:
       for ion in sp2ion:
-        h,dat = ion["chlocal"]["delta"], ion["chlocal"]["data"][0][:,1]
+        h,dat = ion["chlocal"]["delta"][0], ion["chlocal"]["data"][0][:,1]
         d2 = spline_diff2(h, dat, 0.0, 1.0e301)
         self.sp2chlocal.append(np.array([spline_interp(h, dat, d2, r) for r in self.rr])) 
 

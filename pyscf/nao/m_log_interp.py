@@ -104,24 +104,21 @@ class log_interp_c():
   def __call__(self, ff, rr, rcut=None):
     """ Interpolation of vector data ff[...,:] and vector arguments rr[:] """
     assert ff.shape[-1]==self.nr
-    ffa = ff.reshape(ff.size//self.nr, ff.shape[-1])
+    ffa = ff.reshape(ff.size//self.nr, self.nr)
     if rcut is None: rcut = self.gg[-1]
-    if type(rr)!=np.ndarray:
-      rra = np.array([rr])
-    else:
-      rra = rr
-    
-    #print(__name__, type(rra), rra.shape, ffa.shape)
+    rra = rr.reshape(-1) if type(rr)==np.ndarray else np.array([rr])
     
     #t0 = timer()
     r2l,r2k,ir2cc = self.coeffs_vv_rcut(rra, rcut)
     #t1 = timer()
     fr2v = np.zeros(ffa.shape[0:-1]+rra.shape[:])
-    # print(__name__, fr2v.shape, fr2v[:,r2l[0]].shape, r2l[0].shape)
+    #print(__name__, fr2v.shape, fr2v[:,r2l[0]].shape, r2l[0].shape)
+    #print(__name__, 'ff ', type(ff))
     for j in range(6): fr2v[:,r2l[0]]+= ffa[:,r2k+j]*ir2cc[j]
+
     #t2 = timer()
-    #print(__name__, t1-t0, t2-t1)
-    return fr2v.reshape(ff.shape[0:-1])
+    #print(__name__, 'times: ', t1-t0, t2-t1)
+    return fr2v.reshape((ff.shape[0:-1]+rr.shape[:]))
 
 
   def interp_v(self, ff, r):
@@ -183,25 +180,22 @@ class log_interp_c():
   
     r2k = np.where(r2k<0,0,r2k)
     r2k = np.where(r2k>self.nr-6,self.nr-6,r2k)
-    hp = self.gg[0]/2
+    hp = self.gg[0]*0.5
     r2k = np.where(rr_wh<hp, 0, r2k)
     #print('r2k 2 ', r2k)
     
-    dy = (lr-self.gammin_jt-(r2k+2)*self.dg_jt)/self.dg_jt
-    #print('dy    ', dy)
+    dy   = (lr-self.gammin_jt-(r2k+2)*self.dg_jt)/self.dg_jt
+    dy2  = dy**2
+    dydy2m1 = dy*(dy2-1.0)
+    dy2m4dym3 = (dy2-4.0)*(dy-3.0)
   
-    ir2c[0] = np.where(rr_wh<hp, 1.0, -dy*(dy**2-1.0)*(dy-2.0)*(dy-3.0)/120.0)
-    ir2c[1] = np.where(rr_wh<hp, 0.0, +5.0*dy*(dy-1.0)*(dy**2-4.0)*(dy-3.0)/120.0)
-    ir2c[2] = np.where(rr_wh<hp, 0.0, -10.0*(dy**2-1.0)*(dy**2-4.0)*(dy-3.0)/120.0)
-    ir2c[3] = np.where(rr_wh<hp, 0.0, +10.0*dy*(dy+1.0)*(dy**2-4.0)*(dy-3.0)/120.0)
-    ir2c[4] = np.where(rr_wh<hp, 0.0, -5.0*dy*(dy**2-1.0)*(dy+2.0)*(dy-3.0)/120.0)
-    ir2c[5] = np.where(rr_wh<hp, 0.0, dy*(dy**2-1.0)*(dy**2-4.0)/120.0)
-    #print('ir2c[0]    ', ir2c[0])
-    #print('ir2c[1]    ', ir2c[1])
-    #r2k_dense = np.zeros(rr.shape, dtype=np.int32)
-    #ir2c_dense = np.zeros(tuple([6])+rr.shape[:])
-    #r2k_dense[i2less] = r2k
-    #for i in range(6): ir2c_dense[i,i2less] = ir2c[i,:]
+    ir2c[0] = np.where(rr_wh<hp, 1.0,       -dydy2m1*(dy-2.0)*(dy-3.0))
+    ir2c[1] = np.where(rr_wh<hp, 0.0, + 5.0* dy* (dy-1.0)*dy2m4dym3)
+    ir2c[2] = np.where(rr_wh<hp, 0.0, -10.0*    (dy2-1.0)*dy2m4dym3)
+    ir2c[3] = np.where(rr_wh<hp, 0.0, +10.0* dy* (dy+1.0)*dy2m4dym3)
+    ir2c[4] = np.where(rr_wh<hp, 0.0, -5.0*  dydy2m1*(dy+2.0)*(dy-3.0))
+    ir2c[5] = np.where(rr_wh<hp, 0.0,        dydy2m1*(dy2-4.0))
+    ir2c = ir2c / 120.0
     return i2less,r2k,ir2c
 
   coeffs=comp_coeffs
