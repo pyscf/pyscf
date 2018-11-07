@@ -654,6 +654,14 @@ class nao():
     if not self.init_sv_libnao_orbs : raise RuntimeError('not self.init_sv_libnao')
     return aos_libnao(coords, self.norbs)
 
+  def comp_aos_py(self, coords):
+    """ Compute the atomic orbitals for a given set of (Cartesian) coordinates. """
+    res = np.zeros((len(coords), self.norbs))
+    for sp,rc,s,f in zip(self.atom2sp, self.atom2coord,self.atom2s,self.atom2s[1:]):
+      oc2v = self.ao_log.ao_eval(rc, sp, coords)
+      res[:,s:f] = oc2v.T
+    return res
+
   def comp_vnuc_coulomb(self, coords):
     ncoo = coords.shape[0]
     vnuc = np.zeros(ncoo)
@@ -662,16 +670,14 @@ class nao():
       vnuc = vnuc - Z / dd 
     return vnuc
 
-  def vna(self, coords, sp2v=None, sp2rcut=None, atom2coord=None):
+  def vna(self, coords, **kw):
     """ Compute the neutral-atom potential V_NA(coords) for a set of Cartesian coordinates coords.
         The subroutine could be also used for computing the non-linear core corrections or some other atom-centered fields."""
-    if sp2v is None:
-      sp2v = self.ao_log.sp2vna
-      sp2rcut = self.ao_log.sp2rcut_vna
+    (sp2v,sp2rcut) = (kw['sp2v'],kw['sp2rcut']) if 'sp2v' in kw else (self.ao_log.sp2vna,self.ao_log.sp2rcut_vna)
+    atom2coord = kw['atom2coord'] if 'atom2coord' in kw else self.atom2coord
 
     ncoo = coords.shape[0]
     vna = np.zeros(ncoo)
-    if atom2coord is None: atom2coord = self.atom2coord
     for ia,(R,sp) in enumerate(zip(atom2coord, self.atom2sp)):
       #print(__name__, ia, sp, sp2rcut[sp])
       dd = cdist(R.reshape((1,3)), coords).reshape(ncoo)
@@ -679,11 +685,11 @@ class nao():
       vna = vna + vnaa
     return vna
 
-  def vna_coo(self, sp2v=None, **kw):
+  def vna_coo(self, **kw):
     """ Compute matrix elements of a potential which is given as superposition of central fields from each nuclei """
     sp2v = self.ao_log.sp2vna if sp2v is None else sp2v
     g = self.build_3dgrid_ae(**kw)
-    vna = self.vna(g.coords, sp2v=sp2v)
+    vna = self.vna(g.coords, **kw)
     return self.matelem_int3d_coo(g, vna)
 
   def matelem_int3d_coo(self, g, v):
