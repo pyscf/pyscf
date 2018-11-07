@@ -17,9 +17,9 @@
 #
 
 '''
-(In testing)
 Electric field gradients, nuclear quadrupolar coupling and Mossbauer
 spectroscopy for relativistic 4-component DHF and DKS methods.
+(In testing)
 '''
 
 import numpy
@@ -28,6 +28,7 @@ from pyscf.prop.efg import rhf as rhf_efg
 
 def kernel(method, efg_nuc=None):
     log = lib.logger.Logger(method.stdout, method.verbose)
+    log.info('\n******** EFG for 4-component SCF methods (In testing) ********')
     mol = method.mol
     if efg_nuc is None:
         efg_nuc = range(mol.natm)

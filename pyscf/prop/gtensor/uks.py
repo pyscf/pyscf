@@ -31,6 +31,7 @@ import numpy
 from pyscf import lib
 from pyscf.lib import logger
 from pyscf.dft import numint
+from pyscf.prop.nmr import uks as uks_nmr
 from pyscf.prop.gtensor import uhf as uhf_g
 from pyscf.prop.gtensor.uhf import _write, align
 from pyscf.data import nist
@@ -226,6 +227,7 @@ class GTensor(uhf_g.GTensor):
         return para(self, mo10, mo_coeff, mo_occ)
 
     make_para_soc2e = make_para_soc2e
+    get_fock = uks_nmr.get_fock
 
 
 if __name__ == '__main__':

@@ -443,7 +443,7 @@ def project_init_guess(casscf, init_mo, prev_mol=None):
     return mo
 
 # on AO representation
-def make_rdm1(casscf, mo_coeff=None, ci=None):
+def make_rdm1(casscf, mo_coeff=None, ci=None, **kwargs):
     '''One-particle densit matrix in AO representation
 
     Args:
@@ -469,13 +469,13 @@ def make_rdm1(casscf, mo_coeff=None, ci=None):
     [ 0.0121563   0.0494735   0.0494735   1.95040395  1.95040395  1.98808879
       2.          2.          2.          2.        ]
     '''
-    return casscf.make_rdm1(mo_coeff, ci)
+    return casscf.make_rdm1(mo_coeff, ci, **kwargs)
 
 # make both alpha and beta density matrices
-def make_rdm1s(casscf, mo_coeff=None, ci=None):
+def make_rdm1s(casscf, mo_coeff=None, ci=None, **kwargs):
     '''Alpha and beta one-particle densit matrices in AO representation
     '''
-    return casscf.make_rdm1s(mo_coeff, ci)
+    return casscf.make_rdm1s(mo_coeff, ci, **kwargs)
 
 def _is_uhf_mo(mo_coeff):
     return not (isinstance(mo_coeff, numpy.ndarray) and mo_coeff.ndim == 2)

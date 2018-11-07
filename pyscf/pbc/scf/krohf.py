@@ -36,7 +36,7 @@ WITH_META_LOWDIN = getattr(__config__, 'pbc_scf_analyze_with_meta_lowdin', True)
 PRE_ORTH_METHOD = getattr(__config__, 'pbc_scf_analyze_pre_orth_method', 'ANO')
 
 
-def make_rdm1(mo_coeff_kpts, mo_occ_kpts):
+def make_rdm1(mo_coeff_kpts, mo_occ_kpts, **kwargs):
     '''Alpha and beta spin one particle density matrices for all k-points.
 
     Returns:
@@ -387,10 +387,10 @@ class KROHF(pbcrohf.ROHF, khf.KRHF):
                 e[k] = lib.tag_array(e[k], mo_ea=mo_ea.real, mo_eb=mo_eb.real)
         return e, c
 
-    def make_rdm1(self, mo_coeff_kpts=None, mo_occ_kpts=None):
+    def make_rdm1(self, mo_coeff_kpts=None, mo_occ_kpts=None, **kwargs):
         if mo_coeff_kpts is None: mo_coeff_kpts = self.mo_coeff
         if mo_occ_kpts is None: mo_occ_kpts = self.mo_occ
-        return make_rdm1(mo_coeff_kpts, mo_occ_kpts)
+        return make_rdm1(mo_coeff_kpts, mo_occ_kpts, **kwargs)
 
     def init_guess_by_chkfile(self, chk=None, project=True, kpts=None):
         if chk is None: chk = self.chkfile

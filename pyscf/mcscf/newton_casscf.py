@@ -600,8 +600,8 @@ class CASSCF(mc1step.CASSCF):
     >>> mc.kernel()[0]
     -109.044401882238134
     '''
-    def __init__(self, mf, ncas, nelecas, ncore=None, frozen=None):
-        casci.CASCI.__init__(self, mf, ncas, nelecas, ncore)
+    def __init__(self, mf_or_mol, ncas, nelecas, ncore=None, frozen=None):
+        casci.CASCI.__init__(self, mf_or_mol, ncas, nelecas, ncore)
         self.frozen = frozen
 # the max orbital rotation and CI increment, prefer small step size
         self.max_stepsize = .03
@@ -621,7 +621,7 @@ class CASSCF(mc1step.CASSCF):
         self.kf_trust_region = 3.
         self.kf_interval = 5
         self.internal_rotation = False
-        self.chkfile = mf.chkfile
+        self.chkfile = self._scf.chkfile
 
         self.callback = None
         self.chk_ci = False
@@ -634,8 +634,8 @@ class CASSCF(mc1step.CASSCF):
         self.e_tot = None
         self.e_cas = None
         self.ci = None
-        self.mo_coeff = mf.mo_coeff
-        self.mo_energy = mf.mo_energy
+        self.mo_coeff = self._scf.mo_coeff
+        self.mo_energy = self._scf.mo_energy
         self.converged = False
         self._max_stepsize = None
 
@@ -644,7 +644,7 @@ class CASSCF(mc1step.CASSCF):
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)
         log.info('')
-        log.info('******** %s flags ********', self.__class__)
+        log.info('******** %s ********', self.__class__)
         nvir = self.mo_coeff.shape[1] - self.ncore - self.ncas
         log.info('CAS (%de+%de, %do), ncore = %d, nvir = %d', \
                  self.nelecas[0], self.nelecas[1], self.ncas, self.ncore, nvir)

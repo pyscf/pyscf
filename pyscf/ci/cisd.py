@@ -495,7 +495,7 @@ def overlap(cibra, ciket, nmo, nocc, s=None):
 
     return ovlp
 
-def make_rdm1(myci, civec=None, nmo=None, nocc=None):
+def make_rdm1(myci, civec=None, nmo=None, nocc=None, ao_repr=False):
     '''
     Spin-traced one-particle density matrix in MO basis (the occupied-virtual
     blocks from the orbital response contribution are not included).
@@ -510,7 +510,7 @@ def make_rdm1(myci, civec=None, nmo=None, nocc=None):
     if nmo is None: nmo = myci.nmo
     if nocc is None: nocc = myci.nocc
     d1 = _gamma1_intermediates(myci, civec, nmo, nocc)
-    return ccsd_rdm._make_rdm1(myci, d1, with_frozen=True)
+    return ccsd_rdm._make_rdm1(myci, d1, with_frozen=True, ao_repr=ao_repr)
 
 def make_rdm2(myci, civec=None, nmo=None, nocc=None):
     r'''
@@ -824,7 +824,7 @@ class CISD(lib.StreamObject):
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)
         log.info('')
-        log.info('******** %s flags ********', self.__class__)
+        log.info('******** %s ********', self.__class__)
         log.info('CISD nocc = %s, nmo = %s', self.nocc, self.nmo)
         if self.frozen is not 0:
             log.info('frozen orbitals %s', str(self.frozen))

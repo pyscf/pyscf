@@ -17,9 +17,9 @@
 #
 
 '''
-(In testing)
 Electric field gradients, nuclear quadrupolar coupling and Mossbauer
 spectroscopy for non-relativistic (or sf-x2c) mean-field and post-HF methods.
+(In testing)
 
 Ref:
 
@@ -43,23 +43,15 @@ from pyscf.data.nucprop import ISOTOPE_QUAD_MOMENT
 
 def kernel(method, efg_nuc=None):
     log = lib.logger.Logger(method.stdout, method.verbose)
+    log.info('\n******** EFG for non-relativistic methods (In testing) ********')
     mol = method.mol
     if efg_nuc is None:
         efg_nuc = range(mol.natm)
 
-    dm = method.make_rdm1()
-    if isinstance(method, (scf.hf.SCF, mcscf.casci.CASCI)):
-        # The DM returned by make_rdm1 is in AO basis
-        if not (isinstance(dm, numpy.ndarray) and dm.ndim == 2):
-            # UHF density matrix
-            dm = dm[0] + dm[1]
-    else:
-        mo = method.mo_coeff
-        if not (isinstance(dm, numpy.ndarray) and dm.ndim == 2):
-            dm =(lib.einsum('pi,ij,qj->pq', mo[0], dm[0], mo[0].conj()) +
-                 lib.einsum('pi,ij,qj->pq', mo[1], dm[1], mo[1].conj()))
-        else:
-            dm = lib.einsum('pi,ij,qj->pq', mo, dm, mo.conj())
+    dm = method.make_rdm1(ao_repr=True)
+    if not (isinstance(dm, numpy.ndarray) and dm.ndim == 2):
+        # UHF density matrix
+        dm = dm[0] + dm[1]
 
     if isinstance(method, scf.hf.SCF):
         with_x2c = getattr(method, 'with_x2c', None)

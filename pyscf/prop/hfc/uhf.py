@@ -87,6 +87,8 @@ def _get_integrals_fcdip(mol, atm_id):
         h1ao = ipipv + ipvip  # (nabla i | r/r^3 | j)
         h1ao = h1ao + h1ao.transpose(0,1,3,2)
         trace = h1ao[0,0] + h1ao[1,1] + h1ao[2,2]
+        idx = numpy.arange(3)
+        h1ao[idx,idx] -= trace
     return h1ao
 
 def _get_integrals_fc(mol, atm_id):
@@ -139,7 +141,8 @@ def make_pso_soc(hfcobj, hfc_nuc=None):
         para.append(de)
     return numpy.asarray(para)
 
-def solve_mo1_soc(hfcobj, mo_energy=None, mo_occ=None, h1=None, with_cphf=None):
+def solve_mo1_soc(hfcobj, mo_energy=None, mo_coeff=None, mo_occ=None,
+                  h1=None, s1=None, with_cphf=None):
     if h1 is None:
         if mo_occ is None:
             mo_occ = hfcobj._scf.mo_occ
@@ -154,7 +157,8 @@ def solve_mo1_soc(hfcobj, mo_energy=None, mo_occ=None, h1=None, with_cphf=None):
         h1a = numpy.asarray([reduce(numpy.dot, (orbva.T, x, orboa)) for x in h1a])
         h1b = numpy.asarray([reduce(numpy.dot, (orbvb.T, x, orbob)) for x in h1b])
         h1 = (h1a, h1b)
-    mo1, mo_e1 = uhf_ssc.SSC.solve_mo1(hfcobj, mo_energy, mo_occ, h1, with_cphf)
+    mo1, mo_e1 = uhf_ssc.solve_mo1(hfcobj, mo_energy, mo_coeff, mo_occ,
+                                   h1, s1, with_cphf)
     return mo1, mo_e1
 
 def make_h1_soc(hfcobj, dm0):
@@ -220,16 +224,29 @@ def _write(hfcobj, tensor, title):
         hfcobj.stdout.flush()
 
 
-class HyperfineCoupling(uhf_ssc.SSC):
+class HyperfineCoupling(lib.StreamObject):
     '''dE = I dot gtensor dot s'''
     def __init__(self, scf_method):
+        self.mol = scf_method.mol
+        self.verbose = scf_method.mol.verbose
+        self.stdout = scf_method.mol.stdout
+        self.chkfile = scf_method.chkfile
+        self._scf = scf_method
+
         # para_soc2e can be 'SSO', 'SOO', 'SSO+SOO', None/False, True (='SSO+SOO')
         # 'SOMF', 'AMFI' (='AMFI+SSO+SOO'), 'SOMF+AMFI', 'AMFI+SSO',
         # 'AMFI+SOO', 'AMFI+SSO+SOO'
         self.para_soc2e = 'SSO+SOO'
         self.so_eff_charge = False  # Koseki effective SOC charge
         self.hfc_nuc = range(scf_method.mol.natm)
-        uhf_nmr.NMR.__init__(self, scf_method)
+
+        self.cphf = True
+        self.max_cycle_cphf = 20
+        self.conv_tol = 1e-9
+
+        self.mo10 = None
+        self.mo_e10 = None
+        self._keys = set(self.__dict__.keys())
 
     def dump_flags(self):
         logger.info(self, '\n')
@@ -281,7 +298,7 @@ if __name__ == '__main__':
     #hfc.verbose = 4
     hfc.para_soc2e = 'SSO+SOO'
     hfc.so_eff_charge = False
-    print(lib.finger(hfc.kernel()) - 1230.8972071813887)
+    print(lib.finger(hfc.kernel()) - -2050.5830130636241)
 
     mol = gto.M(atom='C 0 0 0; O 0 0 1.12',
                 basis='ccpvdz', spin=1, charge=1, verbose=3)

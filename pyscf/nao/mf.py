@@ -42,7 +42,7 @@ class mf(nao):
       if self.verbosity>0: print(__name__, ' dtype ', self.dtype, ' norbs ', self.norbs)
       #self.pb.init_prod_basis_pp_batch(nao=self, **kw)
 
-  def make_rdm1(self, mo_coeff=None, mo_occ=None):
+  def make_rdm1(self, mo_coeff=None, mo_occ=None, **kw):
     # from pyscf.scf.hf import make_rdm1 -- different index order here
     if mo_occ is None: mo_occ = self.mo_occ[0,:,:]
     if mo_coeff is None: mo_coeff = self.mo_coeff[0,:,:,:,0]

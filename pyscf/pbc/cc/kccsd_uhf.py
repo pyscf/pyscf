@@ -647,6 +647,7 @@ class KUCCSD(uccsd.UCCSD):
 
     def ao2mo(self, mo_coeff=None):
         from pyscf.pbc.df.df import GDF
+        cell = self._scf.cell
         nkpts = self.nkpts
         nmoa, nmob = self.nmo
         mem_incore = nkpts**3 * (nmoa**4 + nmob**4) * 8 / 1e6
@@ -655,7 +656,7 @@ class KUCCSD(uccsd.UCCSD):
         if (mem_incore + mem_now < self.max_memory) or self.mol.incore_anyway:
             return _make_eris_incore(self, mo_coeff)
         elif (self.direct and type(self._scf.with_df) is GDF
-              and self.cell.dimension != 2):
+              and cell.dimension != 2):
             # DFKCCSD does not support MDF
             return _make_df_eris(self, mo_coeff)
         else:
@@ -1059,7 +1060,8 @@ def _make_df_eris(cc, mo_coeff=None):
                     outa = _ao2mo.nr_e2(Lpq, mo_a, (0, nmoa, nmoa, nmoa+nvira), aosym='s2')
                     outb = _ao2mo.nr_e2(Lpq, mo_b, (0, nmob, nmob, nmob+nvirb), aosym='s2')
                 else:
-                    if Lpq.size != naux*nao**2: # aosym = 's2'
+                    #Note: Lpq.shape[0] != naux if linear dependency is found in auxbasis
+                    if Lpq[0].size != nao**2: # aosym = 's2'
                         Lpq = lib.unpack_tril(Lpq).astype(np.complex128)
                     outa = _ao2mo.r_e2(Lpq, mo_a, (0, nmoa, nmoa, nmoa+nvira), tao, ao_loc)
                     outb = _ao2mo.r_e2(Lpq, mo_b, (0, nmob, nmob, nmob+nvirb), tao, ao_loc)

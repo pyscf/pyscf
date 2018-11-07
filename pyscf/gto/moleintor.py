@@ -16,6 +16,11 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+'''
+A low level interface to libcint library. It's recommended to use the
+Mole.intor method to drive the integral evaluation funcitons.
+'''
+
 import warnings
 import ctypes
 import numpy
@@ -41,27 +46,40 @@ def getints(intor_name, atm, bas, env, shls_slice=None, comp=None, hermi=0,
             ================================  =============
             Function                          Expression
             ================================  =============
-            "int1e_ovlp_sph"                  ( \| \)
-            "int1e_nuc_sph"                   ( \| nuc \| \)
-            "int1e_kin_sph"                   (.5 \| p dot p\)
-            "int1e_ia01p_sph"                 (#C(0 1) \| nabla-rinv \| cross p\)
-            "int1e_giao_irjxp_sph"            (#C(0 1) \| r cross p\)
-            "int1e_cg_irxp_sph"               (#C(0 1) \| rc cross p\)
-            "int1e_giao_a11part_sph"          (-.5 \| nabla-rinv \| r\)
-            "int1e_cg_a11part_sph"            (-.5 \| nabla-rinv \| rc\)
-            "int1e_a01gp_sph"                 (g \| nabla-rinv cross p \|\)
-            "int1e_igkin_sph"                 (#C(0 .5) g \| p dot p\)
-            "int1e_igovlp_sph"                (#C(0 1) g \|\)
-            "int1e_ignuc_sph"                 (#C(0 1) g \| nuc \|\)
-            "int1e_z_sph"                     ( \| zc \| \)
-            "int1e_zz_sph"                    ( \| zc zc \| \)
-            "int1e_r_sph"                     ( \| rc \| \)
-            "int1e_r2_sph"                    ( \| rc dot rc \| \)
-            "int1e_rr_sph"                    ( \| rc rc \| \)
-            "int1e_rrr_sph"                   ( \| rc rc rc \| \)
-            "int1e_rrrr_sph"                  ( \| rc rc rc rc \| \)
-            "int1e_pnucp_sph"                 (p* \| nuc dot p \| \)
-            "int1e_prinvxp_sph"               (p* \| rinv cross p \| \)
+            "int1e_ovlp"                      ( \| \)
+            "int1e_nuc"                       ( \| nuc \| \)
+            "int1e_kin"                       (.5 \| p dot p\)
+            "int1e_ia01p"                     (#C(0 1) \| nabla-rinv \| cross p\)
+            "int1e_giao_irjxp"                (#C(0 1) \| r cross p\)
+            "int1e_cg_irxp"                   (#C(0 1) \| rc cross p\)
+            "int1e_giao_a11part"              (-.5 \| nabla-rinv \| r\)
+            "int1e_cg_a11part"                (-.5 \| nabla-rinv \| rc\)
+            "int1e_a01gp"                     (g \| nabla-rinv cross p \|\)
+            "int1e_igkin"                     (#C(0 .5) g \| p dot p\)
+            "int1e_igovlp"                    (#C(0 1) g \|\)
+            "int1e_ignuc"                     (#C(0 1) g \| nuc \|\)
+            "int1e_z"                         ( \| zc \| \)
+            "int1e_zz"                        ( \| zc zc \| \)
+            "int1e_r"                         ( \| rc \| \)
+            "int1e_r2"                        ( \| rc dot rc \| \)
+            "int1e_rr"                        ( \| rc rc \| \)
+            "int1e_rrr"                       ( \| rc rc rc \| \)
+            "int1e_rrrr"                      ( \| rc rc rc rc \| \)
+            "int1e_pnucp"                     (p* \| nuc dot p \| \)
+            "int1e_prinvxp"                   (p* \| rinv cross p \| \)
+            "int1e_ipovlp"                    (nabla \|\)
+            "int1e_ipkin"                     (.5 nabla \| p dot p\)
+            "int1e_ipnuc"                     (nabla \| nuc \|\)
+            "int1e_iprinv"                    (nabla \| rinv \|\)
+            "int1e_rinv"                      (\| rinv \|\)
+            "int1e_pnucxp"                    (p* \| nuc cross p \| \)
+            "int1e_irp"                       ( \| rc nabla \| \)
+            "int1e_irrp"                      ( \| rc rc nabla \| \)
+            "int1e_irpr"                      ( \| rc nabla rc \| \)
+            "int1e_ggovlp"                    ( \| g g \| \)
+            "int1e_ggkin"                     (.5 \| g g p dot p \| \)
+            "int1e_ggnuc"                     ( \| g g nuc \| \)
+            "int1e_grjxp"                     ( \| g r cross p \| \)
             "int1e_ovlp_spinor"               ( \| \)
             "int1e_nuc_spinor"                ( \| nuc \|\)
             "int1e_srsr_spinor"               (sigma dot r \| sigma dot r\)
@@ -85,37 +103,17 @@ def getints(intor_name, atm, bas, env, shls_slice=None, comp=None, hermi=0,
             "int1e_spgsa01_spinor"            (g sigma dot p \| nabla-rinv cross sigma \|\)
             "int1e_spspsp_spinor"             (sigma dot p \| sigma dot p sigma dot p\)
             "int1e_spnuc_spinor"              (sigma dot p \| nuc \|\)
-            "int1e_ovlp_cart"                 ( \| \)
-            "int1e_nuc_cart"                  ( \| nuc \| \)
-            "int1e_kin_cart"                  (.5 \| p dot p\)
-            "int1e_ia01p_cart"                (#C(0 1) \| nabla-rinv \| cross p\)
-            "int1e_giao_irjxp_cart"           (#C(0 1) \| r cross p\)
-            "int1e_cg_irxp_cart"              (#C(0 1) \| rc cross p\)
-            "int1e_giao_a11part_cart"         (-.5 \| nabla-rinv \| r\)
-            "int1e_cg_a11part_cart"           (-.5 \| nabla-rinv \| rc\)
-            "int1e_a01gp_cart"                (g \| nabla-rinv cross p \|\)
-            "int1e_igkin_cart"                (#C(0 .5) g \| p dot p\)
-            "int1e_igovlp_cart"               (#C(0 1) g \|\)
-            "int1e_ignuc_cart"                (#C(0 1) g \| nuc \|\)
-            "int1e_ipovlp_sph"                (nabla \|\)
-            "int1e_ipkin_sph"                 (.5 nabla \| p dot p\)
-            "int1e_ipnuc_sph"                 (nabla \| nuc \|\)
-            "int1e_iprinv_sph"                (nabla \| rinv \|\)
-            "int1e_rinv_sph"                  (\| rinv \|\)
             "int1e_ipovlp_spinor"             (nabla \|\)
             "int1e_ipkin_spinor"              (.5 nabla \| p dot p\)
             "int1e_ipnuc_spinor"              (nabla \| nuc \|\)
             "int1e_iprinv_spinor"             (nabla \| rinv \|\)
             "int1e_ipspnucsp_spinor"          (nabla sigma dot p \| nuc \| sigma dot p\)
             "int1e_ipsprinvsp_spinor"         (nabla sigma dot p \| rinv \| sigma dot p\)
-            "int1e_ipovlp_cart"               (nabla \|\)
-            "int1e_ipkin_cart"                (.5 nabla \| p dot p\)
-            "int1e_ipnuc_cart"                (nabla \| nuc \|\)
-            "int1e_iprinv_cart"               (nabla \| rinv \|\)
-            "int1e_rinv_cart"                 (\| rinv \|\)
-            "int2e_p1vxp1_sph"                ( p* \, cross p \| \, \) ; SSO
-            "int2e_sph"                       ( \, \| \, \)
-            "int2e_ig1_sph"                   (#C(0 1) g \, \| \, \)
+            "int2e"                           ( \, \| \, \)
+            "int2e_ig1"                       (#C(0 1) g \, \| \, \)
+            "int2e_gg1"                       (g g \, \| \, \)
+            "int2e_g1g2"                      (g \, \| g \, \)
+            "int2e_p1vxp1"                    ( p* \, cross p \| \, \) ; SSO
             "int2e_spinor"                    (, \| \, \)
             "int2e_spsp1_spinor"              (sigma dot p \, sigma dot p \| \, \)
             "int2e_spsp1spsp2_spinor"         (sigma dot p \, sigma dot p \| sigma dot p \, sigma dot p \)
@@ -138,8 +136,8 @@ def getints(intor_name, atm, bas, env, shls_slice=None, comp=None, hermi=0,
             "int2e_vsp1vsp2_spinor"           (\, sigma dot p \| \, sigma dot p\)
             "int2e_spv1spsp2_spinor"          (sigma dot p \, \| sigma dot p \, sigma dot p\)
             "int2e_vsp1spsp2_spinor"          (\, sigma dot p \| sigma dot p \, sigma dot p\)
-            "int2e_ig1_cart"                  (#C(0 1) g \, \| \, \)
-            "int2e_ip1_sph"                   (nabla \, \| \,\)
+            "int2e_ig1"                       (#C(0 1) g \, \| \, \)
+            "int2e_ip1"                       (nabla \, \| \,\)
             "int2e_ip1_spinor"                (nabla \, \| \,\)
             "int2e_ipspsp1_spinor"            (nabla sigma dot p \, sigma dot p \| \,\)
             "int2e_ip1spsp2_spinor"           (nabla \, \| sigma dot p \, sigma dot p\)
@@ -147,17 +145,17 @@ def getints(intor_name, atm, bas, env, shls_slice=None, comp=None, hermi=0,
             "int2e_ipsrsr1_spinor"            (nabla sigma dot r \, sigma dot r \| \,\)
             "int2e_ip1srsr2_spinor"           (nabla \, \| sigma dot r \, sigma dot r\)
             "int2e_ipsrsr1srsr2_spinor"       (nabla sigma dot r \, sigma dot r \| sigma dot r \, sigma dot r\)
-            "int2e_ip1_cart"                  (nabla \, \| \,\)
+            "int2e_ip1"                       (nabla \, \| \,\)
             "int2e_ssp1ssp2_spinor"           ( \, sigma dot p \| gaunt \| \, sigma dot p\)
             "int2e_cg_ssa10ssp2_spinor"       (rc cross sigma \, \| gaunt \| \, sigma dot p\)
             "int2e_giao_ssa10ssp2_spinor"     (r cross sigma  \, \| gaunt \| \, sigma dot p\)
             "int2e_gssp1ssp2_spinor"          (g \, sigma dot p  \| gaunt \| \, sigma dot p\)
-            "int2e_ipip1_sph"                 ( nabla nabla \, \| \, \)
-            "int2e_ipvip1_sph"                ( nabla \, nabla \| \, \)
-            "int2e_ip1ip2_sph"                ( nabla \, \| nabla \, \)
-            "int3c2e_ip1_sph"                 (nabla \, \| \)
-            "int3c2e_ip2_sph"                 ( \, \| nabla\)
-            "int2c2e_ip1_sph"                 (nabla \| r12 \| \)
+            "int2e_ipip1"                     ( nabla nabla \, \| \, \)
+            "int2e_ipvip1"                    ( nabla \, nabla \| \, \)
+            "int2e_ip1ip2"                    ( nabla \, \| nabla \, \)
+            "int3c2e_ip1"                     (nabla \, \| \)
+            "int3c2e_ip2"                     ( \, \| nabla\)
+            "int2c2e_ip1"                     (nabla \| r12 \| \)
             "int3c2e_spinor"                  (nabla \, \| \)
             "int3c2e_spsp1_spinor"            (nabla \, \| \)
             "int3c2e_ip1_spinor"              (nabla \, \| \)
@@ -273,14 +271,22 @@ _INTOR_FUNCTIONS = {
     'int1e_prinvp'              : (1, 1),
     'int1e_prinvxp'             : (3, 3),
     'int1e_pnucxp'              : (3, 3),
-    'int2e_p1vxp1'              : (3, 3),
+    'int1e_irp'                 : (9, 9),
+    'int1e_irrp'                : (27, 27),
+    'int1e_irpr'                : (27, 27),
+    'int1e_ggovlp'              : (9, 9),
+    'int1e_ggkin'               : (9, 9),
+    'int1e_ggnuc'               : (9, 9),
+    'int1e_grjxp'               : (9, 9),
     'int2e'                     : (1, 1),
     'int2e_ig1'                 : (3, 3),
-    'int2e_ig1ig2'              : (9, 9),
+    'int2e_gg1'                 : (9, 9),
+    'int2e_g1g2'                : (9, 9),
     'int2e_ip1v_rc1'            : (9, 9),
     'int2e_ip1v_r1'             : (9, 9),
     'int2e_ipvg1_xp1'           : (9, 9),
     'int2e_ipvg2_xp1'           : (9, 9),
+    'int2e_p1vxp1'              : (3, 3),
     'int1e_inuc_rcxp'           : (3, 3),
     'int1e_inuc_rxp'            : (3, 3),
     'int1e_sigma'               : (12,3),
@@ -293,6 +299,7 @@ _INTOR_FUNCTIONS = {
     'int1e_spnucsp'             : (4, 1),
     'int1e_sprinvsp'            : (4, 1),
     'int1e_srnucsr'             : (4, 1),
+    'int1e_sprsp'               : (12,3),
     'int1e_govlp'               : (3, 3),
     'int1e_gnuc'                : (3, 3),
     'int1e_cg_sa10sa01'         : (36,9),
@@ -441,7 +448,6 @@ def getints2c(intor_name, atm, bas, env, shls_slice=None, comp=1, hermi=0,
     if mat.size > 0:
         if cintopt is None:
             cintopt = make_cintopt(atm, bas, env, intor_name)
-#        cintopt = lib.c_null_ptr()
 
         fn = getattr(libcgto, drv_name)
         fn(getattr(libcgto, intor_name), mat.ctypes.data_as(ctypes.c_void_p),
@@ -505,8 +511,19 @@ def getints3c(intor_name, atm, bas, env, shls_slice=None, comp=1,
         fill = getattr(libcgto, 'GTOnr3c_fill_'+aosym)
 
     if mat.size > 0:
+        # Generating opt for all indices leads to large overhead and poor OMP
+        # speedup for solvent model and COSX functions. In these methods,
+        # the third index of the three center integrals corresponds to a
+        # large number of grids. Initializing the opt for the third index is
+        # not necessary.
         if cintopt is None:
-            cintopt = make_cintopt(atm, bas, env, intor_name)
+            if '3c2e' in intor_name:
+                # TODO: Libcint-3.14 and newer version support to compute
+                # int3c2e without the opt for the 3rd index.
+                #cintopt = make_cintopt(atm, bas[:max(i1, j1)], env, intor_name)
+                cintopt = lib.c_null_ptr()
+            else:
+                cintopt = make_cintopt(atm, bas, env, intor_name)
 
         drv(getattr(libcgto, intor_name), fill,
             mat.ctypes.data_as(ctypes.c_void_p), ctypes.c_int(comp),

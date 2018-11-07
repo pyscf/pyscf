@@ -138,6 +138,35 @@ def write_eom_amplitudes(vec, filename="reom_amplitudes.hdf5"):
         feri.close()
     return
 
+def restore_from_diis_(mycc, diis_file, inplace=True):
+    '''Reuse an existed DIIS object in the CCSD calculation.
+    The CCSD amplitudes will be restored from the DIIS object to generate t1
+    and t2 amplitudes. The t1/t2 amplitudes of the CCSD object will be
+    overwritten by the generated t1 and t2 amplitudes. The amplitudes vector
+    and error vector will be reused in the CCSD calculation.
+    '''
+    adiis = lib.diis.DIIS(mycc, mycc.diis_file, incore=mycc.incore_complete)
+    if rank == 0:
+        adiis.restore(diis_file, inplace=inplace)
+
+        ccvec = adiis.extrapolate()
+        t1, t2 = mycc.vector_to_amplitudes(ccvec)
+    info = None
+    if rank == 0:
+        info = (t1.shape, t2.shape, np.result_type(t1, t2))
+    info = MPI.COMM_WORLD.bcast(info)
+
+    if rank != 0:  # Create empty arrays for master to bcast into
+        t1_shape, t2_shape, dtype = info
+        t1 = np.empty(t1_shape, dtype=dtype)
+        t2 = np.empty(t2_shape, dtype=dtype)
+    safeBcastInPlace(MPI.COMM_WORLD, t1)
+    safeBcastInPlace(MPI.COMM_WORLD, t2)
+    mycc.t1, mycc.t2 = t1, t2
+    if inplace:
+        mycc.diis = adiis
+    return mycc
+
 def get_normt_diff(cc, t1, t2, t1new, t2new):
     '''Calculates norm(t1 - t1new) + norm(t2 - t2new).'''
     normt = safeNormDiff(t1new, t1) + safeNormDiff(t2new, t2)  # Blocking; saves memory
@@ -1051,12 +1080,15 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
                             ejb[n0_ovp_jb] = (mo_e_o[kj][:,None] - mo_e_v[kb])[n0_ovp_jb]
                             eijab = eia[:, None, :, None] + ejb[:, None, :]
 
+                            idx = abs(eijab) < LOOSE_ZERO_TOL
+                            eijab[idx] = LARGE_DENOM
+
                             oovv_ijab = numpy.array(eris.oovv[ki,kj,ka])
                             oovv_ijba = numpy.array(eris.oovv[ki,kj,kb]).transpose(0,1,3,2)
                             woovv = 2.*oovv_ijab - oovv_ijba
 
-                            t2_tril[tril_index(kj,ki),kb] = numpy.conj(oovv_ijab.transpose(0,1,3,2) / eijab)
-                            local_mp2 += numpy.dot(t2_tril[tril_index(kj,ki),kb].flatten(),woovv.flatten())
+                            tmp = numpy.conj(oovv_ijab / eijab)
+                            local_mp2 += numpy.dot(tmp.flatten(),woovv.flatten())
             loader.slave_finished()
 
         comm.Allreduce(MPI.IN_PLACE, local_mp2, op=MPI.SUM)
@@ -1239,6 +1271,20 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
         time0 = log.timer_debug1('converge ip-ccsd', *time0)
         comm.Barrier()
         return evals.real, evecs
+
+    restore_from_diis_ = restore_from_diis_
+
+    def run_diis(self, t1, t2, istep, normt, de, adiis):
+        if rank == 0:
+            if (adiis and
+                istep >= self.diis_start_cycle and
+                abs(de) < self.diis_start_energy_diff):
+                vec = self.amplitudes_to_vector(t1, t2)
+                t1, t2 = self.vector_to_amplitudes(adiis.update(vec))
+                logger.debug1(self, 'DIIS for step %d', istep)
+        safeBcastInPlace(MPI.COMM_WORLD, t1)
+        safeBcastInPlace(MPI.COMM_WORLD, t2)
+        return t1, t2
 
     def ipccsd_matvec(self, vector):
         kshift = self.kshift

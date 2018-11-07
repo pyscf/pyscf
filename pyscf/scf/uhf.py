@@ -83,7 +83,7 @@ def init_guess_by_chkfile(mol, chkfile_name, project=None):
     if project is None:
         project = not gto.same_basis_set(chk_mol, mol)
 
-    # Check whether the two molecules are similar enough
+    # Check whether the two molecules are similar
     def inertia_momentum(mol):
         im = gto.inertia_momentum(mol._atom, mol.atom_charges(),
                                   mol.atom_coords())
@@ -123,7 +123,7 @@ def init_guess_by_chkfile(mol, chkfile_name, project=None):
 def get_init_guess(mol, key='minao'):
     return UHF(mol).get_init_guess(mol, key)
 
-def make_rdm1(mo_coeff, mo_occ):
+def make_rdm1(mo_coeff, mo_occ, **kwargs):
     '''One-particle density matrix
 
     Returns:
@@ -133,6 +133,10 @@ def make_rdm1(mo_coeff, mo_occ):
     mo_b = mo_coeff[1]
     dm_a = numpy.dot(mo_a*mo_occ[0], mo_a.T.conj())
     dm_b = numpy.dot(mo_b*mo_occ[1], mo_b.T.conj())
+# DO NOT make tag_array for DM here because the DM arrays may be modified and
+# passed to functions like get_jk, get_vxc.  These functions may take the tags
+# (mo_coeff, mo_occ) to compute the potential if tags were found in the DM
+# arrays and modifications to DM arrays may be ignored.
     return numpy.array((dm_a,dm_b))
 
 def get_veff(mol, dm, dm_last=0, vhf_last=0, hermi=1, vhfopt=None):
@@ -204,7 +208,7 @@ def get_veff(mol, dm, dm_last=0, vhf_last=0, hermi=1, vhfopt=None):
 def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
              diis_start_cycle=None, level_shift_factor=None, damp_factor=None):
     if h1e is None: h1e = mf.get_hcore()
-    if vhf is None: vhf = mf.get_veff(dm=dm)
+    if vhf is None: vhf = mf.get_veff(mf.mol, dm)
     f = h1e + vhf
     if f.ndim == 2:
         f = (f, f)
@@ -691,12 +695,12 @@ class UHF(hf.SCF):
         return get_grad(mo_coeff, mo_occ, fock)
 
     @lib.with_doc(make_rdm1.__doc__)
-    def make_rdm1(self, mo_coeff=None, mo_occ=None):
+    def make_rdm1(self, mo_coeff=None, mo_occ=None, **kwargs):
         if mo_coeff is None:
             mo_coeff = self.mo_coeff
         if mo_occ is None:
             mo_occ = self.mo_occ
-        return make_rdm1(mo_coeff, mo_occ)
+        return make_rdm1(mo_coeff, mo_occ, **kwargs)
 
     energy_elec = energy_elec
 

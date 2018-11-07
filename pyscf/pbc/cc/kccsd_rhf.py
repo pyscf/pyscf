@@ -397,13 +397,14 @@ def add_vvvv_(cc, Ht2, t1, t2, eris):
         #:    Wvvvv *= (1./nkpts)
         #:    return Wvvvv
         def get_Wvvvv(ka, kb, kc):
+            Lpv = eris.Lpv
             kd = kconserv[ka, kc, kb]
-            Lbd = (eris.Lpv[kb, kd, :, nocc:] -
-                   lib.einsum('Lkd,kb->Lbd', eris.Lpv[kb, kd, :, :nocc], t1[kb]))
-            Wvvvv = lib.einsum('Lac,Lbd->abcd', eris.Lpv[ka, kc, :, nocc:], Lbd)
+            Lbd = (Lpv[kb,kd][:,nocc:] -
+                   lib.einsum('Lkd,kb->Lbd', Lpv[kb,kd][:,:nocc], t1[kb]))
+            Wvvvv = lib.einsum('Lac,Lbd->abcd', Lpv[ka,kc][:,nocc:], Lbd)
             Lbd = None
-            kcbd = lib.einsum('Lkc,Lbd->kcbd', eris.Lpv[ka, kc, :, :nocc],
-                              eris.Lpv[kb, kd, :, nocc:])
+            kcbd = lib.einsum('Lkc,Lbd->kcbd', Lpv[ka,kc][:,:nocc],
+                              Lpv[kb,kd][:,nocc:])
             Wvvvv -= lib.einsum('kcbd,ka->abcd', kcbd, t1[ka])
             Wvvvv *= (1. / nkpts)
             return Wvvvv
@@ -675,7 +676,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                 guess = []
                 if koopmans:
                     # Get location of padded elements in occupied and virtual space
-                    nonzero_opadding = padding_k_idx(self, kind="split")[0]
+                    nonzero_opadding = padding_k_idx(self, kind="split")[0][kshift]
 
                     for n in nonzero_opadding[::-1][:nroots]:
                         g = np.zeros(size)
@@ -789,12 +790,9 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                         Hr2[ki, kj] += -einsum('lbjd,ild->ijb', imds.Wovov[kl, kb, kj], r2[ki, kl])  # typo in Ref
                         kd = kconserv[kl, ki, kb]
                         Hr2[ki, kj] += -einsum('lbid,ljd->ijb', imds.Wovov[kl, kb, ki], r2[kl, kj])
-                        for kk in range(nkpts):
-                            kc = kshift
-                            kd = kconserv[kl, kc, kk]
-                            tmp = (2. * einsum('lkdc,kld->c', imds.Woovv[kl, kk, kd], r2[kk, kl])
-                                   - einsum('kldc,kld->c', imds.Woovv[kk, kl, kd], r2[kk, kl]))
-                            Hr2[ki, kj] += -einsum('c,ijcb->ijb', tmp, t2[ki, kj, kshift])
+            tmp = (2. * einsum('xyklcd,xykld->c', imds.Woovv[:, :, kshift], r2[:, :])
+                      - einsum('yxlkcd,xykld->c', imds.Woovv[:, :, kshift], r2[:, :]))
+            Hr2[:, :] += -einsum('c,xyijcb->xyijb', tmp, t2[:, :, kshift])
 
         return self.mask_frozen_ip(self.ip_amplitudes_to_vector(Hr1, Hr2), kshift, const=0.0)
 
@@ -918,7 +916,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                 guess = []
                 if koopmans:
                     # Get location of padded elements in occupied and virtual space
-                    nonzero_vpadding = padding_k_idx(self, kind="split")[1]
+                    nonzero_vpadding = padding_k_idx(self, kind="split")[1][kshift]
 
                     for n in nonzero_vpadding[:nroots]:
                         g = np.zeros(size)
@@ -1040,12 +1038,9 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                         # imds.Wvovo[ka,kl,kd,kj] <= imds.Wovov[kl,ka,kj,kd].transpose(1,0,3,2)
                         Hr2[kj, ka] += -einsum('aldj,ldb->jab', imds.Wovov[kl, ka, kj].transpose(1, 0, 3, 2),
                                                r2[kl, kd])
-                        for kc in range(nkpts):
-                            kk = kshift
-                            kl = kconserv[kc, kk, kd]
-                            tmp = (2. * einsum('klcd,lcd->k', imds.Woovv[kk, kl, kc], r2[kl, kc])
-                                   - einsum('kldc,lcd->k', imds.Woovv[kk, kl, kd], r2[kl, kc]))
-                            Hr2[kj, ka] += -einsum('k,kjab->jab', tmp, t2[kshift, kj, ka])
+            tmp = (2. * einsum('xyklcd,xylcd->k', imds.Woovv[kshift, :, :], r2[:, :])
+                      - einsum('xylkcd,xylcd->k', imds.Woovv[:, kshift, :], r2[:, :]))
+            Hr2[:, :] += -einsum('k,xykjab->xyjab', tmp, t2[kshift, :, :])
 
         return self.mask_frozen_ea(self.ea_amplitudes_to_vector(Hr1, Hr2), kshift, const=0.0)
 
@@ -1116,7 +1111,7 @@ class RCCSD(pyscf.cc.ccsd.CCSD):
                 idx = np.ix_([kj], [ka], nonzero_opadding[kj], nonzero_vpadding[ka], nonzero_vpadding[kb])
                 new_r2[idx] = r2[idx]
 
-        return self.ip_amplitudes_to_vector(new_r1, new_r2)
+        return self.ea_amplitudes_to_vector(new_r1, new_r2)
 
 
 KRCCSD = RCCSD
@@ -1337,6 +1332,10 @@ def _init_df_eris(cc, eris):
 
     cell = cc._scf.cell
     if cell.dimension == 2:
+        # 2D ERIs are not positive definite. The 3-index tensors are stored in
+        # two part. One corresponds to the positive part and one corresponds
+        # to the negative part. The negative part is not considered in the
+        # DF-driven CCSD implementation.
         raise NotImplementedError
 
     nocc = cc.nocc
@@ -1352,7 +1351,7 @@ def _init_df_eris(cc, eris):
     else:
         dtype = np.complex128
     dtype = np.result_type(dtype, *eris.mo_coeff)
-    eris.Lpv = np.empty((nkpts, nkpts, naux, nmo, nvir), dtype=dtype)
+    eris.Lpv = Lpv = np.empty((nkpts,nkpts), dtype=object)
 
     with h5py.File(cc._scf.with_df._cderi, 'r') as f:
         kptij_lst = f['j3c-kptij'].value
@@ -1366,15 +1365,14 @@ def _init_df_eris(cc, eris):
                 mo = np.hstack((eris.mo_coeff[ki], eris.mo_coeff[kj][:, nocc:]))
                 mo = np.asarray(mo, dtype=dtype, order='F')
                 if dtype == np.double:
-                    _ao2mo.nr_e2(Lpq, mo, (0, nmo, nmo, nmo + nvir), aosym='s2',
-                                 out=eris.Lpv[ki, kj])
+                    out = _ao2mo.nr_e2(Lpq, mo, (0, nmo, nmo, nmo + nvir), aosym='s2')
                 else:
-                    if Lpq.size != naux * nao ** 2:  # aosym = 's2'
+                    #Note: Lpq.shape[0] != naux if linear dependency is found in auxbasis
+                    if Lpq[0].size != nao**2: # aosym = 's2'
                         Lpq = lib.unpack_tril(Lpq).astype(np.complex128)
-                    _ao2mo.r_e2(Lpq, mo, (0, nmo, nmo, nmo + nvir), tao, ao_loc,
-                                out=eris.Lpv[ki, kj])
+                    out = _ao2mo.r_e2(Lpq, mo, (0, nmo, nmo, nmo + nvir), tao, ao_loc)
+                Lpv[ki,kj] = out.reshape(-1,nmo,nvir)
     return eris
-
 
 imd = imdk
 

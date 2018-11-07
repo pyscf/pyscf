@@ -91,7 +91,7 @@ class DFMP2(mp2.MP2):
             Lov = _ao2mo.nr_e2(eri1, mo, ijslice, aosym='s2', out=Lov)
             yield Lov
 
-#    def make_rdm1(self, t2=None):
+#    def make_rdm1(self, t2=None, ao_repr=False):
 #        if t2 is None: t2 = self.t2
 #        return make_rdm1(self, t2, self.verbose)
 #

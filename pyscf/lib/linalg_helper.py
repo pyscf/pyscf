@@ -378,12 +378,12 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
 # Orthogonalize xt space because the basis of subspace xs must be orthogonal
 # but the eigenvectors x0 might not be strictly orthogonal
             xt = None
-            xt, x0 = _qr(x0, dot), None
+            xt, x0 = _qr(x0, dot)[0], None
             max_dx_last = 1e9
             if SORT_EIG_BY_SIMILARITY:
                 conv = [False] * nroots
         elif len(xt) > 1:
-            xt = _qr(xt, dot)
+            xt = _qr(xt, dot)[0]
             xt = xt[:40]  # 40 trial vectors at most
 
         axt = aop(xt)
@@ -407,9 +407,11 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
                     heff[head+k,i] = dot(xt[k].conj(), axt[i-head])
                     heff[i,head+k] = heff[head+k,i].conj()
             else:
+                axi = numpy.asarray(ax[i])
                 for k in range(rnow):
-                    heff[head+k,i] = dot(xt[k].conj(), ax[i])
+                    heff[head+k,i] = dot(xt[k].conj(), axi)
                     heff[i,head+k] = heff[head+k,i].conj()
+                axi = None
         axt = None
 
         w, v = scipy.linalg.eigh(heff[:space,:space])
@@ -495,9 +497,10 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         xt = [xi for xi in xt if xi is not None]
 
         for i in range(space):
-            xsi = xs[i]
+            xsi = numpy.asarray(xs[i])
             for xi in xt:
                 xi -= xsi * dot(xsi.conj(), xi)
+            xsi = None
         norm_min = 1
         for i,xi in enumerate(xt):
             norm = numpy.sqrt(dot(xi.conj(), xi).real)
@@ -522,6 +525,7 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         if callable(callback):
             callback(locals())
 
+    x0 = [x for x in x0]  # nparray -> list
     return numpy.asarray(conv), e, x0
 
 
@@ -727,12 +731,12 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
 # Orthogonalize xt space because the basis of subspace xs must be orthogonal
 # but the eigenvectors x0 might not be strictly orthogonal
             xt = None
-            xt, x0 = _qr(x0, dot), None
+            xt, x0 = _qr(x0, dot)[0], None
             max_dx_last = 1e9
             if SORT_EIG_BY_SIMILARITY:
                 conv = [False] * nroots
         elif len(xt) > 1:
-            xt = _qr(xt, dot)
+            xt = _qr(xt, dot)[0]
             xt = xt[:40]  # 40 trial vectors at most
 
         axt = aop(xt)
@@ -754,11 +758,12 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
             for k in range(rnow):
                 heff[head+k,head+i] = dot(xt[k].conj(), axt[i])
         for i in range(head):
-            axi = ax[i]
-            xi = xs[i]
+            axi = numpy.asarray(ax[i])
+            xi = numpy.asarray(xs[i])
             for k in range(rnow):
                 heff[head+k,i] = dot(xt[k].conj(), axi)
                 heff[i,head+k] = dot(xi.conj(), axt[k])
+            axi = xi = None
 
         w, v = scipy.linalg.eig(heff[:space,:space])
         w, v, idx = pick(w, v, nroots, locals())
@@ -842,9 +847,10 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         xt = [xi for xi in xt if xi is not None]
 
         for i in range(space):
-            xsi = xs[i]
+            xsi = numpy.asarray(xs[i])
             for xi in xt:
                 xi -= xsi * dot(xsi.conj(), xi)
+            xsi = None
         norm_min = 1
         for i,xi in enumerate(xt):
             norm = numpy.sqrt(dot(xi.conj(), xi).real)
@@ -875,8 +881,11 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         e, v, idx = pick(w, v, nroots, x0)
         xl = _gen_x0(vl[:,idx[:nroots]].conj(), xs)
         x0 = _gen_x0(v[:,:nroots], xs)
+        xl = [x for x in xl]  # nparray -> list
+        x0 = [x for x in x0]  # nparray -> list
         return numpy.asarray(conv), e[:nroots], xl, x0
     else:
+        x0 = [x for x in x0]  # nparray -> list
         return numpy.asarray(conv), e, x0
 
 def dgeev(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
@@ -1035,11 +1044,11 @@ def dgeev1(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
             space = 0
 # Orthogonalize xt space because the basis of subspace xs must be orthogonal
 # but the eigenvectors x0 are very likely non-orthogonal when A is non-Hermitian.
-            xt, x0 = _qr(x0, dot), None
+            xt, x0 = _qr(x0, dot)[0], None
             e = numpy.zeros(nroots)
             fresh_start = False
         elif len(xt) > 1:
-            xt = _qr(xt, dot)
+            xt = _qr(xt, dot)[0]
             xt = xt[:40]  # 40 trial vectors at most
 
         axt, bxt = abop(xt)
@@ -1061,11 +1070,14 @@ def dgeev1(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
                         seff[head+k,i] = dot(xt[k].conj(), bxt[i-head])
                         seff[i,head+k] = seff[head+k,i].conj()
                 else:
+                    axi = numpy.asarray(ax[i])
+                    bxi = numpy.asarray(bx[i])
                     for k in range(rnow):
-                        heff[head+k,i] = dot(xt[k].conj(), ax[i])
+                        heff[head+k,i] = dot(xt[k].conj(), axi)
                         heff[i,head+k] = heff[head+k,i].conj()
-                        seff[head+k,i] = dot(xt[k].conj(), bx[i])
+                        seff[head+k,i] = dot(xt[k].conj(), bxi)
                         seff[i,head+k] = seff[head+k,i].conj()
+                    axi = bxi = None
         else:
             for i in range(space):
                 if head <= i < head+rnow:
@@ -1075,11 +1087,14 @@ def dgeev1(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
                         seff[head+k,i] = dot(xt[k].conj(), bxt[i-head])
                         seff[i,head+k] = seff[head+k,i].conj()
                 else:
+                    axi = numpy.asarray(ax[i])
+                    bxi = numpy.asarray(bx[i])
                     for k in range(rnow):
-                        heff[head+k,i] = dot(bxt[k].conj(), ax[i])
+                        heff[head+k,i] = dot(bxt[k].conj(), axi)
                         heff[i,head+k] = heff[head+k,i].conj()
-                        seff[head+k,i] = dot(xt[k].conj(), bx[i])
+                        seff[head+k,i] = dot(xt[k].conj(), bxi)
                         seff[i,head+k] = seff[head+k,i].conj()
+                    axi = bxi = None
 
         w, v = scipy.linalg.eigh(heff[:space,:space], seff[:space,:space])
         if space < nroots or e.size != nroots:
@@ -1130,9 +1145,10 @@ def dgeev1(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
                 xt[k] = None
         xt = [xi for xi in xt if xi is not None]
         for i in range(space):
+            xsi = numpy.asarray(xs[i])
             for xi in xt:
-                xsi = xs[i]
                 xi -= xsi * numpy.dot(xi, xsi)
+            xsi = None
         norm_min = 1
         for i,xi in enumerate(xt):
             norm = numpy_helper.norm(xi)
@@ -1159,11 +1175,13 @@ def dgeev1(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
         for k in range(nroots):
             x0[k] = abop(x0[k])[1]
 
+    x0 = [x for x in x0]  # nparray -> list
     return conv, e, x0
 
 
 def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
-           lindep=DSOLVE_LINDEP, callback=None, hermi=False, verbose=logger.WARN):
+           lindep=DSOLVE_LINDEP, callback=None, hermi=False,
+           max_memory=MAX_MEMORY, verbose=logger.WARN):
     '''Krylov subspace method to solve  (1+a) x = b.  Ref:
     J. A. Pople et al, Int. J.  Quantum. Chem.  Symp. 13, 225 (1979).
 
@@ -1171,6 +1189,7 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
         aop : function(x) => array_like_x
             aop(x) to mimic the matrix vector multiplication :math:`\sum_{j}a_{ij} x_j`.
             The argument is a 1D array.  The returned value is a 1D array.
+        b : a vector or a list of vectors
 
     Kwargs:
         x0 : 1D array
@@ -1192,7 +1211,7 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
             envrionment.
 
     Returns:
-        x : 1D array like b
+        x : ndarray like b
 
     Examples:
 
@@ -1212,58 +1231,103 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
     else:
         log = logger.Logger(sys.stdout, verbose)
 
-    if x0 is None:
-        xs = [b]
-    else:
-        xs = [b-(x0 + aop(x0))]
+    if not (isinstance(b, numpy.ndarray) and b.ndim == 1):
+        b = numpy.asarray(b)
 
-    innerprod = [dot(xs[0].conj(), xs[0])]
-    if innerprod[0] < lindep:
+    if x0 is None:
+        x1 = b
+    else:
+        b = b - (x0 + aop(x0))
+        x1 = b
+    if x1.ndim == 1:
+        x1 = x1.reshape(1, x1.size)
+    nroots, ndim = x1.shape
+
+    # Not exactly QR, vectors are orthogonal but not normalized
+    x1, rmat = _qr(x1, dot)
+    for i in range(len(x1)):
+        x1[i] *= rmat[i,i]
+
+    innerprod = [dot(xi.conj(), xi).real for xi in x1]
+    max_innerprod = max(innerprod)
+    if max_innerprod < lindep or max_innerprod < tol**2:
         if x0 is None:
             return numpy.zeros_like(b)
         else:
             return x0
 
-    ax = [aop(xs[0])]
+    _incore = max_memory*1e6/b.nbytes > 14
+    log.debug1('max_memory %d  incore %s', max_memory, _incore)
+    if _incore:
+        xs = []
+        ax = []
+    else:
+        xs = _Xlist()
+        ax = _Xlist()
 
-    max_cycle = min(max_cycle, b.size)
-    h = numpy.empty((max_cycle,max_cycle), dtype=ax[0].dtype)
+    max_cycle = min(max_cycle, ndim)
     for cycle in range(max_cycle):
-        x1 = ax[-1].copy()
-# Schmidt orthogonalization
-        for i in range(cycle+1):
-            s12 = h[i,cycle] = dot(xs[i].conj(), ax[-1])        # (*)
-            x1 -= (s12/innerprod[i]) * xs[i]
-        h[cycle,cycle] += innerprod[cycle]                      # (*)
-        innerprod.append(dot(x1.conj(), x1).real)
-        log.debug('krylov cycle %d  r = %g', cycle, numpy.sqrt(innerprod[-1]))
-        if innerprod[-1] < lindep or innerprod[-1] < tol**2:
-            break
-        xs.append(x1)
-        ax.append(aop(x1))
-
+        axt = aop(x1)
+        if axt.ndim == 1:
+            axt = axt.reshape(1,ndim)
+        xs.extend(x1)
+        ax.extend(axt)
         if callable(callback):
             callback(cycle, xs, ax)
 
-    log.debug('final cycle = %d', cycle)
+        x1 = axt.copy()
+        for i in range(len(xs)):
+            xsi = numpy.asarray(xs[i])
+            for j, axj in enumerate(axt):
+                x1[j] -= xsi * (dot(xsi.conj(), axj) / innerprod[i])
+        axt = None
+
+        max_innerprod = 0
+        idx = []
+        for i, xi in enumerate(x1):
+            innerprod1 = dot(xi.conj(), xi).real
+            max_innerprod = max(max_innerprod, innerprod1)
+            if innerprod1 > lindep and innerprod1 > tol**2:
+                idx.append(i)
+                innerprod.append(innerprod1)
+        log.debug('krylov cycle %d  r = %g', cycle, max_innerprod**.5)
+        if max_innerprod < lindep or max_innerprod < tol**2:
+            break
+
+        x1 = x1[idx]
 
     nd = cycle + 1
-# h = numpy.dot(xs[:nd], ax[:nd].T) + numpy.diag(innerprod[:nd])
-# to reduce IO, move upper triangle (and diagonal) part to (*)
-    if hermi:
-        for i in range(nd):
-            for j in range(i):
-                h[i,j] = h[j,i].conj()
+    h = numpy.empty((nd,nd), dtype=x1.dtype)
+
+    for i in range(nd):
+        xi = numpy.asarray(xs[i])
+        if hermi:
+            for j in range(i+1):
+                h[i,j] = dot(xi.conj(), ax[j])
+                h[j,i] = h[i,j].conj()
+        else:
+            for j in range(nd):
+                h[i,j] = dot(xi.conj(), ax[j])
+        xi = None
+
+    # Add the contribution of I in (1+a)
+    for i in range(nd):
+        h[i,i] += innerprod[i]
+
+    g = numpy.zeros((nd,nroots), dtype=x1.dtype)
+    if b.ndim == 1:
+        g[0] = innerprod[0]
     else:
-        for i in range(nd):
-            for j in range(i):
-                h[i,j] = dot(xs[i].conj(), ax[j])
-    g = numpy.zeros(nd, dtype=b.dtype)
-    g[0] = innerprod[0]
-    c = numpy.linalg.solve(h[:nd,:nd], g)
-    x = xs[0] * c[0]
-    for i in range(1, len(c)):
-        x += c[i] * xs[i]
+        # Restore the first nroots vectors, which are array b or b-(1+a)x0
+        for i in range(min(nd, nroots)):
+            xsi = numpy.asarray(xs[i])
+            for j in range(nroots):
+                g[i,j] = dot(xsi.conj(), b[j])
+
+    c = numpy.linalg.solve(h, g)
+    x = _gen_x0(c, xs)
+    if b.ndim == 1:
+        x = x[0]
 
     if x0 is not None:
         x += x0
@@ -1318,24 +1382,35 @@ def cho_solve(a, b):
 
 
 def _qr(xs, dot):
-    norm = numpy.sqrt(dot(xs[0].conj(), xs[0]).real)
-    qs = [xs[0]/norm]
-    for i in range(1, len(xs)):
-        xi = xs[i].copy()
-        for j in range(len(qs)):
-            xi -= qs[j] * dot(qs[j].conj(), xi)
+    '''QR decomposition for a list of vectors (for linearly independent vectors only).
+    xs = (r.T).dot(qs)
+    '''
+    nvec = len(xs)
+    dtype = xs[0].dtype
+    qs = numpy.empty((nvec,xs[0].size), dtype=dtype)
+    rmat = numpy.empty((nvec,nvec), order='F', dtype=dtype)
+
+    nv = 0
+    for i in range(nvec):
+        xi = numpy.array(xs[i], copy=True)
+        rmat[:,nv] = 0
+        rmat[nv,nv] = 1
+        for j in range(nv):
+            prod = dot(qs[j].conj(), xi)
+            xi -= qs[j] * prod
+            rmat[:,nv] -= rmat[:,j] * prod
         norm = numpy.sqrt(dot(xi.conj(), xi).real)
         if norm > 1e-7:
-            qs.append(xi/norm)
-    return qs
+            qs[nv] = xi/norm
+            rmat[:nv+1,nv] /= norm
+            nv += 1
+    return qs[:nv], numpy.linalg.inv(rmat[:nv,:nv])
 
 def _gen_x0(v, xs):
     space, nroots = v.shape
-    x0 = []
-    for k in range(nroots):
-        x0.append(xs[space-1] * v[space-1,k])
+    x0 = numpy.einsum('c,x->cx', v[space-1], numpy.asarray(xs[space-1]))
     for i in reversed(range(space-1)):
-        xsi = xs[i]
+        xsi = numpy.asarray(xs[i])
         for k in range(nroots):
             x0[k] += v[i,k] * xsi
     return x0
@@ -1388,22 +1463,26 @@ class _Xlist(list):
 
     def __getitem__(self, n):
         key = self.index[n]
-        return self.scr_h5[key].value
+        return self.scr_h5[str(key)]
 
     def append(self, x):
-        key = str(len(self.index) + 1)
-        if key in self.index:
-            for i in range(len(self.index)+1):
-                if str(i) not in self.index:
-                    key = str(i)
-                    break
+        length = len(self.index)
+        key = length + 1
+        index_set = set(self.index)
+        if key in index_set:
+            key = set(range(length)).difference(index_set).pop()
         self.index.append(key)
-        self.scr_h5[key] = x
+
+        self.scr_h5[str(key)] = x
         self.scr_h5.flush()
+
+    def extend(self, x):
+        for xi in x:
+            self.append(xi)
 
     def __setitem__(self, n, x):
         key = self.index[n]
-        self.scr_h5[key][:] = x
+        self.scr_h5[str(key)][:] = x
         self.scr_h5.flush()
 
     def __len__(self):
@@ -1411,12 +1490,16 @@ class _Xlist(list):
 
     def pop(self, index):
         key = self.index.pop(index)
-        del(self.scr_h5[key])
+        del(self.scr_h5[str(key)])
 
 del(SAFE_EIGH_LINDEP, DAVIDSON_LINDEP, DSOLVE_LINDEP, MAX_MEMORY)
 
 
 if __name__ == '__main__':
+    a = numpy.random.random((9,5))+numpy.random.random((9,5))*1j
+    q, r = _qr(a.T, numpy.dot)
+    print(abs(r.T.dot(q)-a.T).max())
+
     numpy.random.seed(12)
     n = 1000
     #a = numpy.random.random((n,n))
@@ -1471,7 +1554,7 @@ if __name__ == '__main__':
     print(abs(x - x1).sum())
     a_diag = a.diagonal()
     log = logger.Logger(sys.stdout, 5)
-    aop = lambda x: numpy.dot(a-numpy.diag(a_diag), x)/a_diag
+    aop = lambda x: numpy.dot(a-numpy.diag(a_diag), x.ravel())/a_diag
     x1 = krylov(aop, b/a_diag, max_cycle=50, verbose=log)
     print(abs(x - x1).sum())
     x1 = krylov(aop, b/a_diag, None, max_cycle=10, verbose=log)

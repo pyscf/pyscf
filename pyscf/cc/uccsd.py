@@ -631,7 +631,7 @@ class UCCSD(ccsd.CCSD):
         return uccsd_t.kernel(self, eris, t1, t2, self.verbose)
     uccsd_t = ccsd_t
 
-    def make_rdm1(self, t1=None, t2=None, l1=None, l2=None):
+    def make_rdm1(self, t1=None, t2=None, l1=None, l2=None, ao_repr=False):
         '''Un-relaxed 1-particle density matrix in MO space
 
         Returns:
@@ -643,7 +643,7 @@ class UCCSD(ccsd.CCSD):
         if l1 is None: l1 = self.l1
         if l2 is None: l2 = self.l2
         if l1 is None: l1, l2 = self.solve_lambda(t1, t2)
-        return uccsd_rdm.make_rdm1(self, t1, t2, l1, l2)
+        return uccsd_rdm.make_rdm1(self, t1, t2, l1, l2, ao_repr=False)
 
     def make_rdm2(self, t1=None, t2=None, l1=None, l2=None):
         '''2-particle density matrix in spin-oribital basis.
@@ -763,7 +763,7 @@ class _ChemistsERIs(ccsd._ChemistsERIs):
                 (mo_coeff[0][:,mo_idx[0]], mo_coeff[1][:,mo_idx[1]])
 # Note: Recomputed fock matrix since SCF may not be fully converged.
         dm = mycc._scf.make_rdm1(mycc.mo_coeff, mycc.mo_occ)
-        fockao = mycc._scf.get_hcore() + mycc._scf.get_veff(mycc.mol, dm)
+        fockao = mycc._scf.get_fock(dm=dm)
         self.focka = reduce(np.dot, (mo_coeff[0].conj().T, fockao[0], mo_coeff[0]))
         self.fockb = reduce(np.dot, (mo_coeff[1].conj().T, fockao[1], mo_coeff[1]))
         self.fock = (self.focka, self.fockb)

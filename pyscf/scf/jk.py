@@ -26,7 +26,7 @@ General JK contraction function for
 
 import time
 import numpy
-import pyscf.lib
+from pyscf import lib
 from pyscf import gto
 from pyscf.lib import logger
 from pyscf.scf import _vhf
@@ -156,10 +156,12 @@ def get_jk(mols, dms, scripts=['ijkl,ji->kl'], intor='int2e_sph',
     descript = []
     for script in scripts:
         dmsym, vsym = script.lower().split(',')[1].split('->')
-        if hermi == 0:
-            descript.append('->'.join((dmsym,'s1'+vsym)))
+        if vsym[:2] in ('a2', 's2', 's1'):
+            descript.append(dmsym + '->' + vsym)
+        elif hermi == 0:
+            descript.append(dmsym + '->s1' + vsym)
         else:
-            descript.append('->'.join((dmsym,'s2'+vsym)))
+            descript.append(dmsym + '->s2' + vsym)
 
     vs = _vhf.direct_bindm(intor, aosym, descript, dms, comp, atm, bas, env,
                            vhfopt=vhfopt, shls_slice=shls_slice)
@@ -167,9 +169,9 @@ def get_jk(mols, dms, scripts=['ijkl,ji->kl'], intor='int2e_sph',
         for v in vs:
             if v.ndim == 3:
                 for vi in v:
-                    pyscf.lib.hermi_triu(vi, hermi, inplace=True)
+                    lib.hermi_triu(vi, hermi, inplace=True)
             else:
-                pyscf.lib.hermi_triu(v, hermi, inplace=True)
+                lib.hermi_triu(v, hermi, inplace=True)
 
     if single_script:
         vs = vs[0]

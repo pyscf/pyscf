@@ -67,5 +67,9 @@ script:
     -e test_j_kpts
     -e test_k_kpts
     -e high_cost
+    -e skip
     -e call_in_background
     -e libxc_cam_beta_bug
+    -I test_kuccsd_supercell_vs_kpts\.py
+    -I test_kccsd_ghf\.py
+    -I test_h_.*\.py

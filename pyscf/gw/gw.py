@@ -175,7 +175,7 @@ class GW(lib.StreamObject):
     def dump_flags(self):
         log = logger.Logger(self.stdout, self.verbose)
         log.info('')
-        log.info('******** %s flags ********', self.__class__)
+        log.info('******** %s ********', self.__class__)
         log.info('method = %s', self.__class__.__name__)
         nocc = self.nocc
         nvir = self.nmo - nocc
