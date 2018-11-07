@@ -4,6 +4,7 @@ from numpy import require
 from timeit import default_timer as timer
 
 from scipy.spatial.distance import cdist
+from scipy.sparse import coo_matrix 
 
 from pyscf.nao.m_color import color as bc
 from pyscf.nao.m_system_vars_dos import system_vars_dos, system_vars_pdos
@@ -693,15 +694,29 @@ class nao():
     return self.matelem_int3d_coo(g, vna)
 
   def matelem_int3d_coo(self, g, v):
-    """ Compute matrix elements of a potential v given on the 3d grid g """
-    from numpy import einsum, dot
-    from scipy.sparse import coo_matrix
-    ca2o = self.comp_aos_den(g.coords) # compute values of atomic orbitals
-    v_w = g.weights*v.reshape(g.size)
-    cb2vo = einsum('co,c->co', ca2o, v_w)
-    v_matelem = dot(ca2o.T,cb2vo)
+    """ Compute matrix elements of a potential v given on the 3d grid g using blocks along the grid """
+    from pyscf import lib
+    
+    bsize = int(min(max(160e6 / (self.norbs*8.0), 1), g.size))
+    #print(__name__, bsize, g.size*self.norbs*8)
+    v_matelem = np.zeros((self.norbs, self.norbs))
+    va = v.reshape(-1)
+    wgts = g.weights if type(g.weights)==np.ndarray else np.repeat(g.weights, g.size)
+    for s,f in lib.prange(0,g.size,bsize):
+      ca2o = self.comp_aos_den(g.coords[s:f]) # compute values of atomic orbitals
+      v_w = (wgts[s:f]*va[s:f]).reshape((f-s,1))
+      cb2vo = ca2o*v_w
+      v_matelem += np.dot(ca2o.T,cb2vo)
     return coo_matrix(v_matelem)
 
+  def matelem_int3d_coo_ref(self, g, v):
+    """ Compute matrix elements of a potential v given on the 3d grid g """
+    ca2o = self.comp_aos_den(g.coords) # compute values of atomic orbitals
+    v_w = (g.weights*v.reshape(g.size)).reshape((g.size,1))
+    cb2vo = ca2o*v_w
+    v_matelem = np.dot(ca2o.T,cb2vo)
+    return coo_matrix(v_matelem)
+    
   def init_libnao_orbs(self):
     """ Initialization of data on libnao site """
     from pyscf.nao.m_libnao import libnao

@@ -13,19 +13,19 @@ class KnowValues(unittest.TestCase):
     """ Test the computation of atomic orbitals in coordinate space """
     
     dname = os.path.dirname(os.path.abspath(__file__))
-    mf = mf_c(verbosity=0, label='water', cd=dname, gen_pb=False, force_gamma=True, Ecut=20)
+    mf = mf_c(verbosity=0, label='water', cd=dname, gen_pb=False, force_gamma=True, Ecut=50)
     g = mf.mesh3d.get_3dgrid()
     t0 = timer()
-    oc2v1 = mf.comp_aos_den(g.coords)
+    vna = mf.vna(g.coords)
     t1 = timer()
-    oc2v2 = mf.comp_aos_py(g.coords)
+    ab2v1 = mf.matelem_int3d_coo(g, vna)
     t2 = timer()
-    
-    print(__name__, 't1 t2: ', t1-t0, t2-t1)
-    
-    print(abs(oc2v1-oc2v2).sum()/oc2v2.size, (abs(oc2v1-oc2v2).max()))
+    ab2v2 = mf.matelem_int3d_coo_ref(g, vna)
+    t3 = timer()
+    #print(__name__, 't1 t2: ', t1-t0, t2-t1, t3-t2)
+    #print(abs(ab2v1.toarray()-ab2v2.toarray()).sum()/ab2v2.size, (abs(ab2v1.toarray()-ab2v2.toarray()).max()))
         
-    self.assertTrue(np.allclose(oc2v1, oc2v2, atol=3.5e-5))
+    self.assertTrue(np.allclose(ab2v1.toarray(), ab2v2.toarray()))
 
 
 if __name__ == "__main__": unittest.main()
