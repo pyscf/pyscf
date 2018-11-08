@@ -171,6 +171,7 @@ class ao_log(log_mesh):
 
     self.sp2chlocal = []     # Interpolate the atomic charges for each specie 
     if "chlocal" in sp2ion[0]:
+      self.sp2rcut_chlocal = np.array( [ion["chlocal"]["cutoff"] for ion in sp2ion])
       for ion in sp2ion:
         h,dat = ion["chlocal"]["delta"][0], ion["chlocal"]["data"][0][:,1]
         d2 = spline_diff2(h, dat, 0.0, 1.0e301)

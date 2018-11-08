@@ -172,7 +172,7 @@ class mf(nao):
     f = density_factors
     dens = np.zeros(g.shape)
     if abs(f[0])>0: dens += f[0]*self.dens_elec(g.coords, self.make_rdm1()).reshape(g.shape)
-    if abs(f[1])>0: dens += f[1]*self.vna(g.coords,sp2v=self.ao_log.sp2chlocal).reshape(g.shape)
+    if abs(f[1])>0: dens += f[1]*self.vna(g.coords,sp2v=self.ao_log.sp2chlocal,sp2rcut=self.ao_log.sp2rcut_chlocal).reshape(g.shape)
 
     #print(__name__, dens.sum()*self.mesh3d.dv)
     vh = self.vhartree_pbc(dens)

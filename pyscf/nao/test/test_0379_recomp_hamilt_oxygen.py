@@ -54,7 +54,7 @@ class KnowValues(unittest.TestCase):
     Ekin = (tkin*dm).sum()*HARTREE2EV
     #self.assertAlmostEqual(Ekin, 308.28672736957884)
 
-    dens_atom = mf.vna(g.coords, sp2v=mf.ao_log.sp2chlocal).reshape(mf.mesh3d.shape)
+    dens_atom = mf.vna(g.coords, sp2v=mf.ao_log.sp2chlocal, sp2rcut=mf.ao_log.sp2rcut_chlocal).reshape(mf.mesh3d.shape)
     dvh3d = mf.vhartree_pbc(dens+dens_atom)
     mf.mesh3d.write('0379_dvh.cube', mol=mf, field=dvh3d, comment='dVH')
 

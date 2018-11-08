@@ -463,10 +463,10 @@ class nao():
  nelec(occ): {}\n Fermi guess: {}\n Fermi: {}\n E_n:\n{}'''.format(self.mo_occ,
  self.telec, self.nelec, nelec_occ, fermi_guess, self.fermi_energy, self.mo_energy))
  
-    if 'fermi_energy' in kw:
+    if 'fermi_energy' in kw and self.verbosity>0:
       po = np.get_printoptions() 
       np.set_printoptions(precision=2, linewidth=1000)
-      print(__name__, "mo_occ: {}".format(self.mo_occ))
+      print(__name__, "mo_occ:\n{}".format(self.mo_occ))
       np.set_printoptions(**po)
       
   def make_rdm1(self, mo_coeff=None, mo_occ=None):
@@ -655,6 +655,31 @@ class nao():
     if not self.init_sv_libnao_orbs : raise RuntimeError('not self.init_sv_libnao')
     return aos_libnao(coords, self.norbs)
 
+  def comp_aos_csr(self, coords, tol=1e-8, ram=160e6):
+    """ 
+          Compute the atomic orbitals for a given set of (Cartesian) coordinates.
+        The sparse format CSR is used for output and the computation is organized block-wise.
+        Thence, larger molecules can be tackled right away
+          coords :: set of Cartesian coordinates
+          tol :: tolerance for dropping the values 
+          ram :: size of the allowed block (in bytes)
+        Returns 
+          co2v :: CSR matrix of shape (coordinate, atomic orbital) 
+    """
+    from pyscf.nao.m_aos_libnao import aos_libnao
+    from pyscf import lib
+    from scipy.sparse import csr_matrix
+    if not self.init_sv_libnao_orbs : raise RuntimeError('not self.init_sv_libnao')
+    assert coords.shape[-1] == 3
+    nc,no = len(coords), self.norbs
+    bsize = int(min(max(ram / (no*8.0), 1), nc))
+    co2v = csr_matrix((nc,no))
+    for s,f in lib.prange(0,nc,bsize):
+      ca2o = aos_libnao(coords[s:f], no) # compute values of atomic orbitals
+      ab = np.where(abs(ca2o)>tol)
+      co2v += csr_matrix((ca2o[ab].reshape(-1), (ab[0]+s, ab[1])), shape=(nc,no))
+    return co2v
+
   def comp_aos_py(self, coords):
     """ Compute the atomic orbitals for a given set of (Cartesian) coordinates. """
     res = np.zeros((len(coords), self.norbs))
@@ -677,18 +702,17 @@ class nao():
     (sp2v,sp2rcut) = (kw['sp2v'],kw['sp2rcut']) if 'sp2v' in kw else (self.ao_log.sp2vna,self.ao_log.sp2rcut_vna)
     atom2coord = kw['atom2coord'] if 'atom2coord' in kw else self.atom2coord
 
-    ncoo = coords.shape[0]
-    vna = np.zeros(ncoo)
+    nc = coords.shape[0]
+    vna = np.zeros(nc)
     for ia,(R,sp) in enumerate(zip(atom2coord, self.atom2sp)):
       #print(__name__, ia, sp, sp2rcut[sp])
-      dd = cdist(R.reshape((1,3)), coords).reshape(ncoo)
+      dd = cdist(R.reshape((1,3)), coords).reshape(nc)
       vnaa = self.ao_log.interp_rr(sp2v[sp], dd, rcut=sp2rcut[sp])
       vna = vna + vnaa
     return vna
 
   def vna_coo(self, **kw):
     """ Compute matrix elements of a potential which is given as superposition of central fields from each nuclei """
-    sp2v = self.ao_log.sp2vna if sp2v is None else sp2v
     g = self.build_3dgrid_ae(**kw)
     vna = self.vna(g.coords, **kw)
     return self.matelem_int3d_coo(g, vna)
