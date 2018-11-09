@@ -53,6 +53,7 @@ class KnownValues(unittest.TestCase):
         e1 = td_model.e
 
         kmf = KRHF(cell, cell.make_kpts([1, 1, 1])).run()
+        kmf.exxdiv = None
         td_model = tdscf.KTDA(kmf)
         td_model.conv_tol = 1e-4
         td_model.kernel()
@@ -68,6 +69,7 @@ class KnownValues(unittest.TestCase):
         e1 = td_model.e
 
         kmf = KRHF(cell, cell.make_kpts([1, 1, 1])).run()
+        kmf.exxdiv = None
         td_model = tdscf.KTDHF(kmf)
         td_model.conv_tol = 1e-4
         td_model.kernel()
