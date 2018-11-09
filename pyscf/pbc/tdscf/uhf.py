@@ -23,7 +23,7 @@ from pyscf.lib import logger
 from pyscf.ao2mo import _ao2mo
 from pyscf.tdscf import uhf
 from pyscf.scf import uhf_symm
-from pyscf.pbc.tdscf.rhf import _get_eai
+from pyscf.pbc.tdscf.rhf import _get_e_ia
 from pyscf.pbc.scf.newton_ah import _gen_uhf_response
 from pyscf import __config__
 
@@ -62,11 +62,11 @@ class TDA(uhf.TDA):
         orbva = [mo_coeff[0][k][:,viridxa[k]] for k in range(nkpts)]
         orbvb = [mo_coeff[1][k][:,viridxb[k]] for k in range(nkpts)]
 
-        e_ai_a = _get_eai(mo_energy[0], mo_occ[0])
-        e_ai_b = _get_eai(mo_energy[1], mo_occ[1])
-        hdiag = numpy.hstack([x.ravel() for x in (e_ai_a + e_ai_b)])
-        tot_x_a = sum(x.size for x in e_ai_a)
-        tot_x_b = sum(x.size for x in e_ai_b)
+        e_ia_a = _get_e_ia(mo_energy[0], mo_occ[0])
+        e_ia_b = _get_e_ia(mo_energy[1], mo_occ[1])
+        hdiag = numpy.hstack([x.ravel() for x in (e_ia_a + e_ia_b)])
+        tot_x_a = sum(x.size for x in e_ia_a)
+        tot_x_b = sum(x.size for x in e_ia_b)
 
         mem_now = lib.current_memory()[0]
         max_memory = max(2000, self.max_memory*.8-mem_now)
@@ -75,24 +75,26 @@ class TDA(uhf.TDA):
         def vind(zs):
             nz = len(zs)
             zs = [_unpack(z, mo_occ) for z in zs]
-            dmvo = numpy.empty((2,nz,nkpts,nao,nao), dtype=numpy.complex128)
+            dmov = numpy.empty((2,nz,nkpts,nao,nao), dtype=numpy.complex128)
             for i in range(nz):
                 dm1a, dm1b = zs[i]
                 for k in range(nkpts):
-                    dmvo[0,i,k] = reduce(numpy.dot, (orbva[k], dm1a[k], orboa[k].T.conj()))
-                    dmvo[1,i,k] = reduce(numpy.dot, (orbvb[k], dm1b[k], orbob[k].T.conj()))
+                    dmov[0,i,k] = reduce(numpy.dot, (orboa[k], dm1a[k], orbva[k].conj().T))
+                    dmov[1,i,k] = reduce(numpy.dot, (orbob[k], dm1b[k], orbvb[k].conj().T))
 
-            v1ao = vresp(dmvo)
+            dmov = dmov.reshape(2*nz,nkpts,nao,nao)
+            v1ao = vresp(dmov)
+            v1ao = v1ao.reshape(2,nz,nkpts,nao,nao)
             v1s = []
             for i in range(nz):
                 dm1a, dm1b = zs[i]
                 v1as = []
                 v1bs = []
                 for k in range(nkpts):
-                    v1a = reduce(numpy.dot, (orbva[k].T.conj(), v1ao[0,i,k], orboa[k]))
-                    v1b = reduce(numpy.dot, (orbvb[k].T.conj(), v1ao[1,i,k], orbob[k]))
-                    v1a += e_ai_a[k] * dm1a[k]
-                    v1b += e_ai_b[k] * dm1b[k]
+                    v1a = reduce(numpy.dot, (orboa[k].conj().T, v1ao[0,i,k], orbva[k]))
+                    v1b = reduce(numpy.dot, (orbob[k].conj().T, v1ao[1,i,k], orbvb[k]))
+                    v1a += e_ia_a[k] * dm1a[k]
+                    v1b += e_ia_b[k] * dm1b[k]
                     v1as.append(v1a.ravel())
                     v1bs.append(v1b.ravel())
                 v1s += v1as + v1bs
@@ -105,13 +107,13 @@ class TDA(uhf.TDA):
 
         mo_energy = mf.mo_energy
         mo_occ = mf.mo_occ
-        e_ai_a = _get_eai(mo_energy[0], mo_occ[0])
-        e_ai_b = _get_eai(mo_energy[1], mo_occ[1])
-        eai = numpy.hstack([x.ravel() for x in (e_ai_a + e_ai_b)])
-        nov = eai.size
+        e_ia_a = _get_e_ia(mo_energy[0], mo_occ[0])
+        e_ia_b = _get_e_ia(mo_energy[1], mo_occ[1])
+        e_ia = numpy.hstack([x.ravel() for x in (e_ia_a + e_ia_b)])
+        nov = e_ia.size
         nroot = min(nstates, nov)
         x0 = numpy.zeros((nroot, nov))
-        idx = numpy.argsort(eai)
+        idx = numpy.argsort(e_ia)
         for i in range(nroot):
             x0[i,idx[i]] = 1  # lowest excitations
         return x0
@@ -164,12 +166,12 @@ class TDHF(TDA):
         orbva = [mo_coeff[0][k][:,viridxa[k]] for k in range(nkpts)]
         orbvb = [mo_coeff[1][k][:,viridxb[k]] for k in range(nkpts)]
 
-        e_ai_a = _get_eai(mo_energy[0], mo_occ[0])
-        e_ai_b = _get_eai(mo_energy[1], mo_occ[1])
-        hdiag = numpy.hstack([x.ravel() for x in (e_ai_a + e_ai_b)])
+        e_ia_a = _get_e_ia(mo_energy[0], mo_occ[0])
+        e_ia_b = _get_e_ia(mo_energy[1], mo_occ[1])
+        hdiag = numpy.hstack([x.ravel() for x in (e_ia_a + e_ia_b)])
         hdiag = numpy.hstack((hdiag, hdiag))
-        tot_x_a = sum(x.size for x in e_ai_a)
-        tot_x_b = sum(x.size for x in e_ai_b)
+        tot_x_a = sum(x.size for x in e_ia_a)
+        tot_x_b = sum(x.size for x in e_ia_b)
         tot_x = tot_x_a + tot_x_b
 
         mem_now = lib.current_memory()[0]
@@ -180,19 +182,21 @@ class TDHF(TDA):
             nz = len(xys)
             x1s = [_unpack(x[:tot_x], mo_occ) for x in xys]
             y1s = [_unpack(x[tot_x:], mo_occ) for x in xys]
-            dmvo = numpy.empty((2,nz,nkpts,nao,nao), dtype=numpy.complex128)
+            dmov = numpy.empty((2,nz,nkpts,nao,nao), dtype=numpy.complex128)
             for i in range(nz):
                 xa, xb = x1s[i]
                 ya, yb = y1s[i]
                 for k in range(nkpts):
-                    dmx = reduce(numpy.dot, (orbva[k], xa[k], orboa[k].T.conj()))
-                    dmy = reduce(numpy.dot, (orboa[k], ya[k].T, orbva[k].T.conj()))
-                    dmvo[0,i,k] = dmx + dmy  # AX + BY
-                    dmx = reduce(numpy.dot, (orbvb[k], xb[k], orbob[k].T.conj()))
-                    dmy = reduce(numpy.dot, (orbob[k], yb[k].T, orbvb[k].T.conj()))
-                    dmvo[1,i,k] = dmx + dmy  # AX + BY
+                    dmx = reduce(numpy.dot, (orboa[k], xa[k]  , orbva[k].conj().T))
+                    dmy = reduce(numpy.dot, (orbva[k], ya[k].T, orboa[k].conj().T))
+                    dmov[0,i,k] = dmx + dmy  # AX + BY
+                    dmx = reduce(numpy.dot, (orbob[k], xb[k]  , orbvb[k].conj().T))
+                    dmy = reduce(numpy.dot, (orbvb[k], yb[k].T, orbob[k].conj().T))
+                    dmov[1,i,k] = dmx + dmy  # AX + BY
 
-            v1ao = vresp(dmvo)
+            dmov = dmov.reshape(2*nz,nkpts,nao,nao)
+            v1ao = vresp(dmov)
+            v1ao = v1ao.reshape(2,nz,nkpts,nao,nao)
             v1s = []
             for i in range(nz):
                 xa, xb = x1s[i]
@@ -202,14 +206,14 @@ class TDHF(TDA):
                 v1ysa = []
                 v1ysb = []
                 for k in range(nkpts):
-                    v1xa = reduce(numpy.dot, (orbva[k].T.conj(), v1ao[0,i,k], orboa[k]))
-                    v1xb = reduce(numpy.dot, (orbvb[k].T.conj(), v1ao[1,i,k], orbob[k]))
-                    v1ya = reduce(numpy.dot, (orboa[k].T.conj(), v1ao[0,i,k], orbva[k])).T
-                    v1yb = reduce(numpy.dot, (orbob[k].T.conj(), v1ao[1,i,k], orbvb[k])).T
-                    v1xa+= e_ai_a[k] * xa[k]
-                    v1xb+= e_ai_b[k] * xb[k]
-                    v1ya+= e_ai_a[k] * ya[k]
-                    v1yb+= e_ai_b[k] * yb[k]
+                    v1xa = reduce(numpy.dot, (orboa[k].conj().T, v1ao[0,i,k], orbva[k]))
+                    v1xb = reduce(numpy.dot, (orbob[k].conj().T, v1ao[1,i,k], orbvb[k]))
+                    v1ya = reduce(numpy.dot, (orbva[k].conj().T, v1ao[0,i,k], orboa[k])).T
+                    v1yb = reduce(numpy.dot, (orbvb[k].conj().T, v1ao[1,i,k], orbob[k])).T
+                    v1xa+= e_ia_a[k] * xa[k]
+                    v1xb+= e_ia_b[k] * xb[k]
+                    v1ya+= e_ia_a[k] * ya[k]
+                    v1yb+= e_ia_b[k] * yb[k]
                     v1xsa.append(v1xa.ravel())
                     v1xsb.append(v1xb.ravel())
                     v1ysa.append(-v1ya.ravel())
@@ -267,23 +271,20 @@ class TDHF(TDA):
 RPA = TDHF
 
 def _unpack(vo, mo_occ):
-    nmo = mo_occ.shape[-1]
-    nocca = numpy.sum(mo_occ[0] > 0, axis=1)
-    noccb = numpy.sum(mo_occ[1] > 0, axis=1)
     za = []
     zb = []
-    ip = 0
+    p1 = 0
     for k, occ in enumerate(mo_occ[0]):
         no = numpy.count_nonzero(occ > 0)
         nv = occ.size - no
-        za.append(vo[ip:ip+nv*no].reshape(nv,no))
-        ip += nv * no
+        p0, p1 = p1, p1 + no * nv
+        za.append(vo[p0:p1].reshape(no,nv))
 
     for k, occ in enumerate(mo_occ[1]):
         no = numpy.count_nonzero(occ > 0)
         nv = occ.size - no
-        zb.append(vo[ip:ip+nv*no].reshape(nv,no))
-        ip += nv * no
+        p0, p1 = p1, p1 + no * nv
+        zb.append(vo[p0:p1].reshape(no,nv))
     return za, zb
 
 
