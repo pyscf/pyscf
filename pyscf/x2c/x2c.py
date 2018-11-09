@@ -69,6 +69,9 @@ class X2C(lib.StreamObject):
         spin-free and spin-dependent terms) in the j-adapted spinor basis.
         '''
         if mol is None: mol = self.mol
+        if mol.has_ecp():
+            raise NotImplementedError
+
         xmol, contr_coeff_nr = self.get_xmol(mol)
         c = lib.param.LIGHT_SPEED
         assert('1E' in self.approx.upper())
@@ -115,10 +118,6 @@ class X2C(lib.StreamObject):
         c = lib.param.LIGHT_SPEED
         assert('1E' in self.approx.upper())
 
-        s = xmol.intor_symmetric('int1e_ovlp_spinor')
-        t = xmol.intor_symmetric('int1e_spsp_spinor') * .5
-        v = xmol.intor_symmetric('int1e_nuc_spinor')
-        w = xmol.intor_symmetric('int1e_spnucsp_spinor')
         if 'ATOM' in self.approx.upper():
             atom_slices = xmol.offset_2c_by_atom()
             n2c = xmol.nao_2c()
@@ -134,6 +133,10 @@ class X2C(lib.StreamObject):
                     w1 = z*xmol.intor('int1e_sprinvsp_spinor', shls_slice=shls_slice)
                 x[p0:p1,p0:p1] = _x2c1e_xmatrix(t1, v1, w1, s1, c)
         else:
+            s = xmol.intor_symmetric('int1e_ovlp_spinor')
+            t = xmol.intor_symmetric('int1e_spsp_spinor') * .5
+            v = xmol.intor_symmetric('int1e_nuc_spinor')
+            w = xmol.intor_symmetric('int1e_spnucsp_spinor')
             x = _x2c1e_xmatrix(t, v, w, s, c)
         return x
 

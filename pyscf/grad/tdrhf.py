@@ -282,8 +282,8 @@ class Gradients(rhf_grad.Gradients):
 
     def _finalize(self):
         if self.verbose >= logger.NOTE:
-            logger.note(self, '--------------- %s gradients ---------------',
-                        self.base.__class__.__name__)
+            logger.note(self, '--------- %s gradients for state %d ----------',
+                        self.base.__class__.__name__, self.state)
             rhf_grad._write(self, self.mol, self.de, self.atmlst)
             logger.note(self, '----------------------------------------------')
 
