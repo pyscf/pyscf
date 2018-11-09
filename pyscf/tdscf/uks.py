@@ -83,14 +83,14 @@ class TDDFTNoHybrid(TDA):
             sym_forbidb = (orbsymb[occidxb,None] ^ orbsymb[viridxb]) != wfnsym
             sym_forbid = numpy.hstack((sym_forbida.ravel(), sym_forbidb.ravel()))
 
-        e_ai_a = (mo_energy[0][viridxa,None] - mo_energy[0][occidxa]).T
-        e_ai_b = (mo_energy[1][viridxb,None] - mo_energy[1][occidxb]).T
-        e_ai = numpy.hstack((e_ai_a.reshape(-1), e_ai_b.reshape(-1)))
+        e_ia_a = (mo_energy[0][viridxa,None] - mo_energy[0][occidxa]).T
+        e_ia_b = (mo_energy[1][viridxb,None] - mo_energy[1][occidxb]).T
+        e_ia = numpy.hstack((e_ia_a.reshape(-1), e_ia_b.reshape(-1)))
         if wfnsym is not None and mol.symmetry:
-            e_ai[sym_forbid] = 0
-        dai = numpy.sqrt(e_ai).ravel()
-        edai = e_ai.ravel() * dai
-        hdiag = e_ai.ravel() ** 2
+            e_ia[sym_forbid] = 0
+        d_ia = numpy.sqrt(e_ia).ravel()
+        ed_ia = e_ia.ravel() * d_ia
+        hdiag = e_ia.ravel() ** 2
 
         vresp = _gen_uhf_response(mf, mo_coeff, mo_occ, hermi=1)
 
@@ -101,7 +101,7 @@ class TDDFTNoHybrid(TDA):
                 zs[:,sym_forbid] = 0
             dmov = numpy.empty((2,nz,nao,nao))
             for i in range(nz):
-                z = dai * zs[i]
+                z = d_ia * zs[i]
                 za = z[:nocca*nvira].reshape(nocca,nvira)
                 zb = z[nocca*nvira:].reshape(noccb,nvirb)
                 dm = reduce(numpy.dot, (orboa, za, orbva.T))
@@ -114,8 +114,8 @@ class TDDFTNoHybrid(TDA):
             v1b = _ao2mo.nr_e2(v1ao[1], mo_coeff[1], (0,noccb,noccb,nmo))
             hx = numpy.hstack((v1a.reshape(nz,-1), v1b.reshape(nz,-1)))
             for i, z in enumerate(zs):
-                hx[i] += edai * z
-                hx[i] *= dai
+                hx[i] += ed_ia * z
+                hx[i] *= d_ia
             return hx
 
         return vind, hdiag
@@ -162,10 +162,10 @@ class TDDFTNoHybrid(TDA):
         noccb = len(occidxb)
         nvira = len(viridxa)
         nvirb = len(viridxb)
-        e_ai_a = (mo_energy[0][viridxa,None] - mo_energy[0][occidxa]).T
-        e_ai_b = (mo_energy[1][viridxb,None] - mo_energy[1][occidxb]).T
-        eai = numpy.hstack((e_ai_a.reshape(-1), e_ai_b.reshape(-1)))
-        eai = numpy.sqrt(eai)
+        e_ia_a = (mo_energy[0][viridxa,None] - mo_energy[0][occidxa]).T
+        e_ia_b = (mo_energy[1][viridxb,None] - mo_energy[1][occidxb]).T
+        e_ia = numpy.hstack((e_ia_a.reshape(-1), e_ia_b.reshape(-1)))
+        e_ia = numpy.sqrt(e_ia)
 
         e = []
         xy = []
@@ -173,8 +173,8 @@ class TDDFTNoHybrid(TDA):
             if w2[i] < POSTIVE_EIG_THRESHOLD**2:
                 continue
             w = numpy.sqrt(w2[i])
-            zp = eai * z
-            zm = w/eai * z
+            zp = e_ia * z
+            zm = w/e_ia * z
             x = (zp + zm) * .5
             y = (zp - zm) * .5
             norm = lib.norm(x)**2 - lib.norm(y)**2
