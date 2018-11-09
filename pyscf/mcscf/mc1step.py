@@ -1211,7 +1211,7 @@ def _fake_h_for_fast_casci(casscf, mo, eris):
     mo_cas = mo[:,ncore:nocc]
     core_dm = numpy.dot(mo_core, mo_core.T) * 2
     hcore = casscf.get_hcore()
-    energy_core = casscf._scf.energy_nuc()
+    energy_core = casscf.energy_nuc()
     energy_core += numpy.einsum('ij,ji', core_dm, hcore)
     energy_core += eris.vhf_c[:ncore,:ncore].trace()
     h1eff = reduce(numpy.dot, (mo_cas.T, hcore, mo_cas)) + eris.vhf_c[ncore:nocc,ncore:nocc]

@@ -61,7 +61,7 @@ def h1e_for_cas(casci, mo_coeff=None, ncas=None, ncore=None):
               mo_coeff[1][:,ncore[1]:ncore[1]+ncas])
 
     hcore = casci.get_hcore()
-    energy_core = casci._scf.energy_nuc()
+    energy_core = casci.energy_nuc()
     if mo_core[0].size == 0 and mo_core[1].size == 0:
         corevhf = (0,0)
     else:
