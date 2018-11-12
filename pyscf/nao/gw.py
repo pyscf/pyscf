@@ -302,8 +302,8 @@ class gw(scf):
             bxvx = np.einsum('pq,nmq->nmp', b, xvx)         #right hand side of I_aux equation ndim(nn*norbs*nprod)
             for n in range(len(self.nn[s])):
                 for m in range(self.norbs):
-                    sf_aux[n,m,:] = solve(k_c, bxvx[n,m,:]) 
-                    #sf_aux[n,m,:] ,exitCode = lgmres(k_c, bxvx[n,m,:])
+                    #sf_aux[n,m,:] = solve(k_c, bxvx[n,m,:]) 
+                    sf_aux[n,m,:] ,exitCode = lgmres(k_c, bxvx[n,m,:])
                 inm[:,:,iw]=np.einsum('nmp,nmp->nm',xvx, sf_aux)    #I= XVX I_aux
         snm2i.append(inm)
     return snm2i
@@ -401,10 +401,11 @@ class gw(scf):
       self.nn_conv.append( range(max(nocc_0t-nocc_conv,0), min(nocc_0t+nvrt_conv,self.norbs)))
 
     # iterations to converge the 
-    if self.verbosity>0: print('-'*48,'|  G0W0 corrections of eigenvalues  |','-'*48+'\n')
-    print('MAXIMUM number of iterations (Input file): {} and number of grid points: {}'.format(self.niter_max_ev,self.nff_ia))
-    print('Number of GW correction at energies calculated by integral part: {} and by sigma part: {}\n'.format(np.size(self.gw_corr_int(sn2eval_gw)), np.size(self.gw_corr_int(sn2eval_gw))))
-    print('GW corection for eigenvalues STARTED:\n')    
+    if self.verbosity>0: 
+        print('-'*48,'|  G0W0 corrections of eigenvalues  |','-'*48+'\n')
+        print('MAXIMUM number of iterations (Input file): {} and number of grid points: {}'.format(self.niter_max_ev,self.nff_ia))
+        print('Number of GW correction at energies calculated by integral part: {} and by sigma part: {}\n'.format(np.size(self.gw_corr_int(sn2eval_gw)), np.size(self.gw_corr_int(sn2eval_gw))))
+        print('GW corection for eigenvalues STARTED:\n')    
     for i in range(self.niter_max_ev):
       sn2i = self.gw_corr_int(sn2eval_gw)
       sn2r = self.gw_corr_res(sn2eval_gw)
