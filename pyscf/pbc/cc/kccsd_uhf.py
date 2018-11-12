@@ -104,10 +104,13 @@ def update_amps(cc, t1, t2, eris):
     Ht1a += einsum('xyximae,yme->xia', t2ab, FOV_)
     Ht1b += einsum('xyximae,yme->xia', t2bb, FOV_)
     Ht1b += einsum('yxymiea,yme->xia', t2ab, Fov_)
-    Ht1a -= np.einsum('xyzmnae,xzymine,xyzw->zia', t2aa, eris.ooov, P)
-    Ht1a -= np.einsum('xyzmNaE,xzymiNE,xyzw->zia', t2ab, eris.ooOV, P)
-    Ht1b -= np.einsum('xyzmnae,xzymine,xyzw->zia', t2bb, eris.OOOV, P)
-    Ht1b -= np.einsum('yxwnmea,xzymine,xyzw->zia', t2ab, eris.OOov, P)
+    Ht1a -= einsum('xyzmnae, xzymine->zia', t2aa, eris.ooov)
+    Ht1a -= einsum('xyzmNaE, xzymiNE->zia', t2ab, eris.ooOV)
+    #Ht1a -= einsum('xyzmnae,xzymine,xyzw->zia', t2aa, eris.ooov, P)
+    #Ht1a -= einsum('xyzmNaE,xzymiNE,xyzw->zia', t2ab, eris.ooOV, P)
+    Ht1b -= einsum('xyzmnae, xzymine->zia', t2bb, eris.OOOV)
+    #Ht1b -= einsum('xyzmnae,xzymine,xyzw->zia', t2bb, eris.OOOV, P)
+    Ht1b -= einsum('yxwnmea,xzymine,xyzw->zia', t2ab, eris.OOov, P)
 
     for ka in range(nkpts):
         Ht1a[ka] += einsum('ie,ae->ia', t1a[ka], Fvv_[ka])
@@ -201,13 +204,19 @@ def update_amps(cc, t1, t2, eris):
 
     tauaa, tauab, taubb = kintermediates_uhf.make_tau(cc, t2, t1, t1)
     Woooo, WooOO, WOOOO = kintermediates_uhf.cc_Woooo(cc, t1, t2, eris)
+
     # Add the contributions from Wvvvv
-    Woooo += .5 * np.einsum('xwymenf,uvwijef,xywz,uvwz->xuyminj', eris_ovov, tauaa, P, P)
-    WOOOO += .5 * np.einsum('xwymenf,uvwijef,xywz,uvwz->xuyminj', eris_OVOV, taubb, P, P)
-    WooOO += .5 * np.einsum('xwymeNF,uvwiJeF,xywz,uvwz->xuymiNJ', eris_ovOV, tauab, P, P)
-    Ht2aa += np.einsum('xuyminj,xywmnab,xyuv->uvwijab', Woooo, tauaa, P) * .5
-    Ht2bb += np.einsum('xuyminj,xywmnab,xyuv->uvwijab', WOOOO, taubb, P) * .5
-    Ht2ab += np.einsum('xuymiNJ,xywmNaB,xyuv->uvwiJaB', WooOO, tauab, P)
+    for km, ki, kn in kpts_helper.loop_kkk(nkpts):
+        kj = kconserv[km,ki,kn]
+        Woooo[km,ki,kn] += .5 * einsum('xmenf, xijef->minj', eris_ovov[km,:,kn], tauaa[ki,kj])
+        WOOOO[km,ki,kn] += .5 * einsum('xMENF, xIJEF->MINJ', eris_OVOV[km,:,kn], taubb[ki,kj])
+        WooOO[km,ki,kn] += .5 * einsum('xmeNF, xiJeF->miNJ', eris_ovOV[km,:,kn], tauab[ki,kj])
+
+    for km, ki, kn in kpts_helper.loop_kkk(nkpts):
+        kj = kconserv[km,ki,kn]
+        Ht2aa[ki,kj,:] += einsum('minj,wmnab->wijab', Woooo[km,ki,kn], tauaa[km,kn]) * .5
+        Ht2bb[ki,kj,:] += einsum('MINJ,wMNAB->wIJAB', WOOOO[km,ki,kn], taubb[km,kn]) * .5
+        Ht2ab[ki,kj,:] += einsum('miNJ,wmNaB->wiJaB', WooOO[km,ki,kn], tauab[km,kn])
 
     add_vvvv_(cc, (Ht2aa, Ht2ab, Ht2bb), t1, t2, eris)
 
@@ -224,35 +233,46 @@ def update_amps(cc, t1, t2, eris):
             Ht2ab[kx, ky, kz] += lib.einsum('imae,mebj->ijab', t2aa[kx,kw,kz], WovVO[kw,kv,ku])
             Ht2ab[kx, ky, kz] += lib.einsum('imae,mebj->ijab', t2ab[kx,kw,kz], WOVVO[kw,kv,ku])
 
-    for kz, ku, kw in kpts_helper.loop_kkk(nkpts):
-        kx = kconserv[kz,kw,ku]
-        ky = kconserv[kz,kx,ku]
-        Ht2ab[kx, ky, kz] -= lib.einsum('ie, ma, emjb->ijab', t1a[kx], t1a[kz], eris.voOV[kx,kz,kw].conj())
-
+    #for kz, ku, kw in kpts_helper.loop_kkk(nkpts):
+    #    kx = kconserv[kz,kw,ku]
+    #    ky = kconserv[kz,kx,ku]
+    #    continue
+    #    Ht2ab[kx, ky, kz] -= lib.einsum('ie, ma, emjb->ijab', t1a[kx], t1a[kz], eris.voOV[kx,kz,kw].conj())
+    Ht2ab -= einsum('xie, yma, xyzemjb->xzyijab', t1a, t1a, eris.voOV[:].conj())
     #:Ht2ab += einsum('wxvmIeA,wvumebj,xwzv,wuvy->yxujIbA', t2ab, Wovvo, P, P)
     #:Ht2ab += einsum('wxvMIEA,wvuMEbj,xwzv,wuvy->yxujIbA', t2bb, WOVvo, P, P)
     #:Ht2ab -= einsum('xIE,zMA,uwzbjME,zuwx,xyzu->yxujIbA', t1b, t1b, eris.voOV, P, P)
 
-    for kx, kw, kz in kpts_helper.loop_kkk(nkpts):
-        kv = kconserv[kx, kz, kw]
-        for ku in range(nkpts):
-            ky = kconserv[kw, kv, ku]
-            Ht2ab[ky,kx,ku] += lib.einsum('miea, mebj-> jiba', t2ab[kw,kx,kv], Wovvo[kw,kv,ku])
-            Ht2ab[ky,kx,ku] += lib.einsum('miea, mebj-> jiba', t2bb[kw,kx,kv], WOVvo[kw,kv,ku])
+    #for kx, kw, kz in kpts_helper.loop_kkk(nkpts):
+    #    kv = kconserv[kx, kz, kw]
+    #    for ku in range(nkpts):
+    #        ky = kconserv[kw, kv, ku]
+            #Ht2ab[ky,kx,ku] += lib.einsum('miea, mebj-> jiba', t2ab[kw,kx,kv], Wovvo[kw,kv,ku])
+            #Ht2ab[ky,kx,ku] += lib.einsum('miea, mebj-> jiba', t2bb[kw,kx,kv], WOVvo[kw,kv,ku])
+
+    for km, ke, kb in kpts_helper.loop_kkk(nkpts):
+        kj = kconserv[km, ke, kb]
+        Ht2ab[kj,:,kb] += einsum('xmiea, mebj->xjiba', t2ab[km,:,ke], Wovvo[km,ke,kb])
+        Ht2ab[kj,:,kb] += einsum('xmiea, mebj->xjiba', t2bb[km,:,ke], WOVvo[km,ke,kb])
+
 
     for kz, ku, kw in kpts_helper.loop_kkk(nkpts):
         kx = kconserv[kz, kw, ku]
         ky = kconserv[kz, kx, ku]
         Ht2ab[ky,kx,ku] -= lib.einsum('ie, ma, bjme->jiba', t1b[kx], t1b[kz], eris.voOV[ku,kw,kz])
 
-
+    
     #:Ht2ab += einsum('xwviMeA,wvuMebJ,xwzv,wuvy->xyuiJbA', t2ab, WOvvO, P, P)
     #:Ht2ab -= einsum('xie,zMA,zwuMJbe,zuwx,xyzu->xyuiJbA', t1a, t1b, eris.OOvv, P, P)
-    for kx, kw, kz in kpts_helper.loop_kkk(nkpts):
-        kv = kconserv[kx, kz, kw]
-        for ku in range(nkpts):
-            ky = kconserv[kw, kv, ku]
-            Ht2ab[kx,ky,ku] += lib.einsum('imea,mebj->ijba', t2ab[kx,kw,kv],WOvvO[kw,kv,ku])
+    #for kx, kw, kz in kpts_helper.loop_kkk(nkpts):
+    #    kv = kconserv[kx, kz, kw]
+    #    for ku in range(nkpts):
+    #        ky = kconserv[kw, kv, ku]
+    #        Ht2ab[kx,ky,ku] += lib.einsum('imea,mebj->ijba', t2ab[kx,kw,kv],WOvvO[kw,kv,ku])
+    for km, ke, kb in kpts_helper.loop_kkk(nkpts):
+        kj = kconserv[km, ke, kb]
+        Ht2ab[:,kj,kb] += einsum('ximea, mebj->xijba', t2ab[:,km,ke], WOvvO[km,ke,kb])
+
 
     for kz,ku,kw in kpts_helper.loop_kkk(nkpts):
         kx = kconserv[kz, kw, ku]
@@ -283,6 +303,7 @@ def update_amps(cc, t1, t2, eris):
             u2aa[kx,ky,kz] += lib.einsum('imae, mebj->ijab', t2aa[kx,kw,kz], Wovvo[kw,kv,ku])
             u2aa[kx,ky,kz] += lib.einsum('imae, mebj->ijab', t2ab[kx,kw,kz], WOVvo[kw,kv,ku])
 
+
     #:u2aa += einsum('xie,zma,zwumjbe,zuwx,xyzu->xyzijab', t1a, t1a, eris.oovv, P, P)
     #:u2aa -= einsum('xie,zma,uwzbjme,zuwx,xyzu->xyzijab', t1a, t1a, eris.voov, P, P)
 
@@ -302,7 +323,7 @@ def update_amps(cc, t1, t2, eris):
         u2aa[kx, ky, kz] -= lib.einsum('ma, imjb->ijab', t1a[kz], eris.ooov[kx,kz,ky].conj())
 
     u2aa = u2aa - u2aa.transpose(1,0,2,4,3,5,6)
-    u2aa = u2aa - np.einsum('xyzijab,xyzu->xyuijba', u2aa, P)
+    u2aa = u2aa - einsum('xyzijab,xyzu->xyuijba', u2aa, P)
     Ht2aa += u2aa
 
     #:u2bb  = einsum('xwzimae,wvumebj,xwzv,wuvy->xyzijab', t2bb, WOVVO, P, P)
@@ -332,11 +353,12 @@ def update_amps(cc, t1, t2, eris):
         kz = kconserv[ky, ku, kx]
         u2bb[kx,ky,kz] += lib.einsum('ie,bjae->ijab', t1b[kx], eris.VOVV[ku,ky,kz])
 
-    for kx, kz, ky in kpts_helper.loop_kkk(nkpts):
-        u2bb[kx,ky,kz] -= lib.einsum('ma, imjb-> ijab', t1b[kz], eris.OOOV[kx,kz,ky].conj())
+    #for kx, kz, ky in kpts_helper.loop_kkk(nkpts):
+    #    u2bb[kx,ky,kz] -= lib.einsum('ma, imjb-> ijab', t1b[kz], eris.OOOV[kx,kz,ky].conj())
+    u2bb -= einsum('zma, xzyimjb->xyzijab', t1b, eris.OOOV[:].conj())
 
     u2bb = u2bb - u2bb.transpose(1,0,2,4,3,5,6)
-    u2bb = u2bb - np.einsum('xyzijab,xyzu->xyuijba', u2bb, P)
+    u2bb = u2bb - einsum('xyzijab,xyzu->xyuijba', u2bb, P)
     Ht2bb += u2bb
 
     #:Ht2ab += np.einsum('xie,uyzBJae,uzyx->xyziJaB', t1a, eris.VOvv, P)
@@ -348,8 +370,9 @@ def update_amps(cc, t1, t2, eris):
         Ht2ab[kx,ky,kz] += lib.einsum('ie, bjae-> ijab', t1a[kx], eris.VOvv[ku,ky,kz])
         Ht2ab[kx,ky,kz] += lib.einsum('je, aibe-> ijab', t1b[ky], eris.voVV[kz,kx,ku])
 
-    for kx, kz, ky in kpts_helper.loop_kkk(nkpts):
-        Ht2ab[kx,ky,kz] -= lib.einsum('ma, imjb->ijab', t1a[kz], eris.ooOV[kx,kz,ky].conj())
+    #for kx, kz, ky in kpts_helper.loop_kkk(nkpts):
+    #    Ht2ab[kx,ky,kz] -= lib.einsum('ma, imjb->ijab', t1a[kz], eris.ooOV[kx,kz,ky].conj())
+    Ht2ab -= einsum('zma, xzyimjb->xyzijab', t1a, eris.ooOV[:].conj())
 
     for kx, ky, ku in kpts_helper.loop_kkk(nkpts):
         kz = kconserv[kx, ku, ky]
@@ -557,12 +580,12 @@ def add_vvvv_(cc, Ht2, t1, t2, eris):
                 tauab = t2ab[ki,kj,kc].copy()
                 taubb = t2bb[ki,kj,kc].copy()
                 if ki == kc and kj == kd:
-                    tauaa += np.einsum('ic,jd->ijcd', t1a[ki], t1a[kj])
-                    tauab += np.einsum('ic,jd->ijcd', t1a[ki], t1b[kj])
-                    taubb += np.einsum('ic,jd->ijcd', t1b[ki], t1b[kj])
+                    tauaa += einsum('ic,jd->ijcd', t1a[ki], t1a[kj])
+                    tauab += einsum('ic,jd->ijcd', t1a[ki], t1b[kj])
+                    taubb += einsum('ic,jd->ijcd', t1b[ki], t1b[kj])
                 if ki == kd and kj == kc:
-                    tauaa -= np.einsum('id,jc->ijcd', t1a[ki], t1a[kj])
-                    taubb -= np.einsum('id,jc->ijcd', t1b[ki], t1b[kj])
+                    tauaa -= einsum('id,jc->ijcd', t1a[ki], t1a[kj])
+                    taubb -= einsum('id,jc->ijcd', t1b[ki], t1b[kj])
 
                 tmp = lib.einsum('acbd,ijcd->ijab', Wvvvv, tauaa) * .5
                 Ht2aa[ki,kj,ka] += tmp
@@ -591,12 +614,12 @@ def add_vvvv_(cc, Ht2, t1, t2, eris):
                 tauab = t2ab[ki,kj,kc].copy()
                 taubb = t2bb[ki,kj,kc].copy()
                 if ki == kc and kj == kd:
-                    tauaa += np.einsum('ic,jd->ijcd', t1a[ki], t1a[kj])
-                    tauab += np.einsum('ic,jd->ijcd', t1a[ki], t1b[kj])
-                    taubb += np.einsum('ic,jd->ijcd', t1b[ki], t1b[kj])
+                    tauaa += einsum('ic,jd->ijcd', t1a[ki], t1a[kj])
+                    tauab += einsum('ic,jd->ijcd', t1a[ki], t1b[kj])
+                    taubb += einsum('ic,jd->ijcd', t1b[ki], t1b[kj])
                 if ki == kd and kj == kc:
-                    tauaa -= np.einsum('id,jc->ijcd', t1a[ki], t1a[kj])
-                    taubb -= np.einsum('id,jc->ijcd', t1b[ki], t1b[kj])
+                    tauaa -= einsum('id,jc->ijcd', t1a[ki], t1a[kj])
+                    taubb -= einsum('id,jc->ijcd', t1b[ki], t1b[kj])
 
                 Ht2aa[ki,kj,ka] += lib.einsum('acbd,ijcd->ijab', Wvvvv, tauaa) * .5
                 Ht2bb[ki,kj,ka] += lib.einsum('acbd,ijcd->ijab', WVVVV, taubb) * .5
