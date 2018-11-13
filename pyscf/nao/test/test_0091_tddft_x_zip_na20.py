@@ -10,7 +10,7 @@ class KnowValues(unittest.TestCase):
     """ This a test for compression of the eigenvectos at higher energies """
     dname = dirname(abspath(__file__))
     siesd = dname+'/sodium_20'
-    x = td_c(label='siesta', cd=siesd,x_zip=True, x_zip_emax=0.25,x_zip_eps=0.05,jcutoff=7,xc_code='RPA',nr=128)
+    x = td_c(label='siesta', cd=siesd,x_zip=True, x_zip_emax=0.25,x_zip_eps=0.05,jcutoff=7,xc_code='RPA',nr=128, fermi_energy=-0.0913346431431985)
     
     eps = 0.005
     ww = np.arange(0.0, 0.5, eps/2.0)+1j*eps

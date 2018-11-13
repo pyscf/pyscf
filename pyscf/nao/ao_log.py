@@ -13,9 +13,11 @@
 # limitations under the License.
 
 from __future__ import print_function, division
-from pyscf.nao.log_mesh import log_mesh
 import numpy as np
 import copy
+from scipy.spatial.distance import cdist
+
+from pyscf.nao.log_mesh import log_mesh
 
 #
 #
@@ -159,17 +161,19 @@ class ao_log(log_mesh):
     if fname in sp2ion[0]: 
       self.siesta_ion_interp(sp2ion, fname=fname)
   
-    self.sp2vna = []     # Interpolate a Neutral-Atom potential V_NA(r) for each specie 
+    self.sp2vna = []     # Interpolate a Neutral-Atom potential V_NA(r) for each specie
     if "vna" in sp2ion[0]:
+      self.sp2rcut_vna = np.array( [ion["vna"]["cutoff"] for ion in sp2ion])
       for ion in sp2ion:
-        h,dat = ion["vna"]["delta"], ion["vna"]["data"][0][:,1]
+        h,dat = ion["vna"]["delta"][0], ion["vna"]["data"][0][:,1]
         d2 = spline_diff2(h, dat, 0.0, 1.0e301)
         self.sp2vna.append(np.array([0.5*spline_interp(h, dat, d2, r) for r in self.rr])) # given in Rydberg in sp2ion
 
     self.sp2chlocal = []     # Interpolate the atomic charges for each specie 
     if "chlocal" in sp2ion[0]:
+      self.sp2rcut_chlocal = np.array( [ion["chlocal"]["cutoff"] for ion in sp2ion])
       for ion in sp2ion:
-        h,dat = ion["chlocal"]["delta"], ion["chlocal"]["data"][0][:,1]
+        h,dat = ion["chlocal"]["delta"][0], ion["chlocal"]["data"][0][:,1]
         d2 = spline_diff2(h, dat, 0.0, 1.0e301)
         self.sp2chlocal.append(np.array([spline_interp(h, dat, d2, r) for r in self.rr])) 
 
@@ -380,6 +384,39 @@ class ao_log(log_mesh):
     svn[i] = s+1; i+=1; f=s+nms; svn[s:f] = conc(self.sp_mu2s); s=f; # pointer to sp_mu2s
     svn[i] = s+1; # this is a terminator to simple operation
     return svn
+
+  #
+  #
+  #
+  def ao_eval(self, ra, isp, coords):
+    from pyscf.nao.m_rsphar_libnao import rsphar
+    """
+      Compute the values of atomic orbitals on given grid points
+      Args:
+        ao  : instance of ao_log_c class
+        ra  : vector where the atomic orbitals from "ao" are centered
+        isp : specie index for which we compute
+        coords: coordinates on which we compute
+      Returns:
+        res[norbs,ncoord] : array of atomic orbital values
+    """
+    rrs = cdist(ra.reshape((1,3)), coords).reshape(-1)
+    rcutmx = self.sp2rcut[isp]
+    mu_c2pao = self.interp_rr.interp_csr(self.psi_log_rl[isp], rrs, rcut=rcutmx)
+    
+    #print(__name__, mu_c2pao.shape)
+    
+    res = np.zeros((self.sp2norbs[isp],coords.shape[0]))
+    jmx_sp = self.sp_mu2j[isp].max()
+    rsh = np.zeros((jmx_sp+1)**2)
+    for icrd,(coord,r) in enumerate(zip(coords-ra, rrs)):
+      if rrs[icrd]>rcutmx: continue
+      rsphar(coord, jmx_sp, rsh)
+    
+      for mu,(j,s,f) in enumerate(zip(self.sp_mu2j[isp],self.sp_mu2s[isp],self.sp_mu2s[isp][1:])):
+        fval = mu_c2pao[mu,icrd] if j==0 else mu_c2pao[mu,icrd] * r**j
+        res[s:f,icrd] = fval * rsh[j*(j+1)-j:j*(j+1)+j+1]
+    return res
 
 #
 #

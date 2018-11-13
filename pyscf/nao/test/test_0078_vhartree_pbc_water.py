@@ -16,6 +16,7 @@ from __future__ import print_function, division
 import unittest
 import os
 import numpy as np
+from timeit import default_timer as timer
 
 from pyscf.data.nist import HARTREE2EV
 
@@ -31,9 +32,9 @@ class KnowValues(unittest.TestCase):
     gg,dv = nao.mesh3d.rr, nao.mesh3d.dv
     self.assertAlmostEqual(dv, 0.007621441417508375)
     self.assertEqual(len(gg), 3)
-    self.assertTrue(gg[0].shape==(72,1,1,3))
-    self.assertTrue(gg[1].shape==(1,54,1,3))
-    self.assertTrue(gg[2].shape==(1,1,54,3))
+    self.assertTrue(gg[0].shape==(72,3))
+    self.assertTrue(gg[1].shape==(54,3))
+    self.assertTrue(gg[2].shape==(54,3))
     self.assertEqual(nao.mesh3d.size, 72*54*54)
 
   def test_0078_vhartree_pbc_water(self):
@@ -43,12 +44,14 @@ class KnowValues(unittest.TestCase):
     mf = mf_c(label='water', cd=dname, gen_pb=False, Ecut=100.0)
     d = abs(np.dot(mf.ucell_mom(), mf.ucell)-(2*np.pi)*np.eye(3)).sum()
     self.assertTrue(d<1e-15)
-    center = mf.atom2coord.sum(axis=0)/ mf.natoms
-    coords = mf.mesh3d.get_all_coords(center).reshape((mf.mesh3d.size, 3))
-    dens = mf.dens_elec(coords, mf.make_rdm1()).reshape(mf.mesh3d.shape)
+    g = mf.mesh3d.get_3dgrid()
+    dens = mf.dens_elec(g.coords, mf.make_rdm1()).reshape(mf.mesh3d.shape)
+    ts = timer()
     vh = mf.vhartree_pbc(dens)
-    E_Hartree = 0.5*(vh*dens).sum()*mf.mesh3d.dv*HARTREE2EV
+    tf = timer()
+    #print(__name__, tf-ts)
+    E_Hartree = 0.5*(vh*dens*g.weights).sum()*HARTREE2EV
     self.assertAlmostEqual(E_Hartree, 382.8718239023864)
     # siesta:       Hartree =     382.890331
-    
+
 if __name__ == "__main__": unittest.main()

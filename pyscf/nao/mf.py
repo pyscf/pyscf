@@ -162,28 +162,27 @@ class mf(nao):
 
   def vhartree_pbc(self, dens, **kw): 
     """  Compute Hartree potential for the density given in an equidistant grid  """
-    from scipy.fftpack import fftn, ifftn
-    sh = self.mesh3d.shape
-    dens = dens.reshape(sh)
-    vh = fftn(dens)    
-    umom = self.ucell_mom()
-    ii = [np.array([i-sh[j] if i>sh[j]//2 else i for i in range(sh[j])]) for j in range(3)]
-    gg = [np.array([umom[j]*i for i in ii[j]]) for j in range(3)]
-    for i,g0 in enumerate(gg[0]):
-      for j,g1 in enumerate(gg[1]):
-        for k,g2 in enumerate(gg[2]):
-          Gsq = ((g0+g1+g2)**2).sum()
-          if abs(Gsq)<1e-14:
-            vh[i,j,k] = 0.0
-          else:
-            vh[i,j,k] = vh[i,j,k] / Gsq
-    vh = ifftn(vh).real*(4*np.pi)
-    return vh
+    from pyscf.nao.m_vhartree_pbc import vhartree_pbc
+    return vhartree_pbc(self, dens, **kw)
+
+  def vhartree_pbc_coo(self, density_factors=[1,0], **kw): 
+    """  Compute matrix elements of Hartree potential for the density given in an equidistant grid  """
+    from pyscf.nao.m_vhartree_pbc import vhartree_pbc
+    g = self.mesh3d.get_3dgrid()
+    f = density_factors
+    dens = np.zeros(g.shape)
+    if abs(f[0])>0: dens += f[0]*self.dens_elec(g.coords, self.make_rdm1()).reshape(g.shape)
+    if abs(f[1])>0: dens += f[1]*self.vna(g.coords,sp2v=self.ao_log.sp2chlocal,sp2rcut=self.ao_log.sp2rcut_chlocal).reshape(g.shape)
+
+    #print(__name__, dens.sum()*self.mesh3d.dv)
+    vh = self.vhartree_pbc(dens)
+    return self.matelem_int3d_coo(g, vh)
     
   def dens_elec(self, coords, dm): # Compute electronic density for a given density matrix and on a given set of coordinates
     from pyscf.nao.m_dens_libnao import dens_libnao
     from pyscf.nao.m_init_dm_libnao import init_dm_libnao
     from pyscf.nao.m_init_dens_libnao import init_dens_libnao
+    # end of imports 
     if not self.init_sv_libnao : raise RuntimeError('not self.init_sv_libnao')
     if init_dm_libnao(dm) is None : raise RuntimeError('init_dm_libnao(dm) is None')
     if init_dens_libnao()!=0 : raise RuntimeError('init_dens_libnao()!=0')

@@ -61,7 +61,7 @@ class KnowValues(unittest.TestCase):
     """ Test computation of kinetic energy between NAOs against those computed between GTOs"""
     from pyscf.nao.m_laplace_am import laplace_am
     tref = conv.conv_yzx2xyz_2d(mol.intor_symmetric('int1e_kin'))
-    tkin = (0.5*sv.overlap_coo(funct=laplace_am)).toarray()
+    tkin = (-0.5*sv.overlap_coo(funct=laplace_am)).toarray()
     self.assertTrue(abs(tref-tkin).sum()/len(tkin)<5e-9)
 
   def test_energy_nuc_gto_vs_nao(self):

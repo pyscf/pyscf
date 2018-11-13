@@ -47,7 +47,7 @@ class chi0_matvec(mf):
     self.ksn2e = self.mo_energy # Just a pointer here. Is it ok?
     
     if 'fermi_energy' in kw:
-      print(__name__, 'Fermi energy is specified => recompute occupations')
+      if self.verbosity>0: print(__name__, 'Fermi energy is specified => recompute occupations')
       ksn2fd = fermi_dirac_occupations(self.telec, self.ksn2e, self.fermi_energy)
       for s,n2fd in enumerate(ksn2fd[0]):
         if not all(n2fd>self.nfermi_tol): continue

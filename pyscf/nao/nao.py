@@ -1,7 +1,10 @@
 from __future__ import print_function, division
 import sys, numpy as np
 from numpy import require
+from timeit import default_timer as timer
+
 from scipy.spatial.distance import cdist
+from scipy.sparse import coo_matrix 
 
 from pyscf.nao.m_color import color as bc
 from pyscf.nao.m_system_vars_dos import system_vars_dos, system_vars_pdos
@@ -38,8 +41,8 @@ def get_orb2j(sv):
 #
 def overlap_check(sv, tol=1e-5, **kvargs):
   over = sv.overlap_coo(**kvargs).tocsr()
-  diff = (sv.hsx.s4_csr-over).sum()
-  summ = (sv.hsx.s4_csr+over).sum()
+  diff = abs(sv.hsx.s4_csr-over).sum()
+  summ = abs(sv.hsx.s4_csr+over).sum()
   ac = diff/summ<tol
   if not ac: print(diff, summ)
   return ac
@@ -47,7 +50,7 @@ def overlap_check(sv, tol=1e-5, **kvargs):
 #
 #
 #
-class nao(ao_log):
+class nao():
 
   def __init__(self, **kw):
     """  Constructor of NAO class """
@@ -313,7 +316,6 @@ class nao(ao_log):
     from pyscf.nao.m_siesta_wfsx import siesta_wfsx_c
     from pyscf.nao.m_siesta_ion_xml import siesta_ion_xml
     from pyscf.nao.m_siesta_hsx import siesta_hsx_c
-    from timeit import default_timer as timer
     """
       Initialise system var using only the siesta files (siesta.xml in particular is needed)
 
@@ -350,8 +352,19 @@ class nao(ao_log):
     self.wfsx = siesta_wfsx_c(**kw)
     self.hsx = siesta_hsx_c(fname=cd+'/'+self.label+'.HSX', **kw)
     self.norbs_sc = self.wfsx.norbs if self.hsx.orb_sc2orb_uc is None else len(self.hsx.orb_sc2orb_uc)
-    self.ucell = self.xml_dict["ucell"]
-    self.mesh3d = mesh_affine_equ(ucell=self.ucell, **kw)
+    if 'ucell' in kw:
+      uc = kw['ucell']
+      self.ucell = uc if type(uc)==np.ndarray else uc*np.eye(3)
+      if self.verbosity>0: print(__name__, "ucell: \n{}".format(self.ucell))
+      kw.pop('ucell')
+    else:
+      self.ucell = self.xml_dict["ucell"]
+
+    self.atom2coord = self.xml_dict['atom2coord']
+    self.natm=self.natoms=len(self.xml_dict['atom2sp'])
+    orig = self.atom2coord.sum(axis=0)/self.natoms
+    self.mesh3d = mesh_affine_equ(ucell=self.ucell, origin=orig, **kw)
+
     ##### The parameters as fields     
     self.sp2ion = []
     for sp in self.wfsx.sp2strspecie: self.sp2ion.append(siesta_ion_xml(cd+'/'+sp+'.ion.xml'))
@@ -360,8 +373,6 @@ class nao(ao_log):
     self.ao_log = ao_log(sp2ion=self.sp2ion, **kw)
     self.kb_log = ao_log(sp2ion=self.sp2ion, fname='kbs', rr=self.ao_log.rr, pp=self.ao_log.pp)
 
-    self.atom2coord = self.xml_dict['atom2coord']
-    self.natm=self.natoms=len(self.xml_dict['atom2sp'])
     self.norbs  = self.wfsx.norbs 
     self.nspin  = self.wfsx.nspin
     self.nkpoints  = self.wfsx.nkpoints
@@ -427,21 +438,37 @@ class nao(ao_log):
   def init_mo_coeff_label(self, **kw):
     """ Constructor a mean-field class from the preceeding SIESTA calculation """
     from pyscf.nao.m_fermi_dirac import fermi_dirac_occupations
+    from pyscf.nao.m_fermi_energy import fermi_energy
+        
     self.mo_coeff = require(self.wfsx.x, dtype=self.dtype, requirements='CW')
     self.mo_energy = require(self.wfsx.ksn2e, dtype=self.dtype, requirements='CW')
     self.telec = kw['telec'] if 'telec' in kw else self.hsx.telec
     if self.nspin==1:
       self.nelec = kw['nelec'] if 'nelec' in kw else np.array([self.hsx.nelec])
     elif self.nspin==2:
-      self.nelec = kw['nelec'] if 'nelec' in kw else np.array([int(self.hsx.nelec/2), int(self.hsx.nelec/2)])      
+      self.nelec = kw['nelec'] if 'nelec' in kw else np.array([int(self.hsx.nelec/2), int(self.hsx.nelec/2)])
       if self.verbosity>0: print(__name__, 'not sure here: self.nelec', self.nelec)
     else:
       raise RuntimeError('0>nspin>2?')
-      
-    self.fermi_energy = kw['fermi_energy'] if 'fermi_energy' in kw else self.fermi_energy
+    
+    if 'fermi_energy' in kw: self.fermi_energy = kw['fermi_energy'] # possibility to redefine Fermi energy
     ksn2fd = fermi_dirac_occupations(self.telec, self.mo_energy, self.fermi_energy)
     self.mo_occ = (3-self.nspin)*ksn2fd
-
+    nelec_occ = np.einsum('ksn->s', self.mo_occ)/self.nkpoints
+    if not np.allclose(self.nelec, nelec_occ, atol=1e-4):
+      fermi_guess = fermi_energy(self.wfsx.ksn2e, self.hsx.nelec, self.hsx.telec)
+      np.set_printoptions(precision=2, linewidth=1000)
+      raise RuntimeWarning(
+      '''occupations?\n mo_occ: \n{}\n telec: {}\n nelec expected: {}
+ nelec(occ): {}\n Fermi guess: {}\n Fermi: {}\n E_n:\n{}'''.format(self.mo_occ,
+ self.telec, self.nelec, nelec_occ, fermi_guess, self.fermi_energy, self.mo_energy))
+ 
+    if 'fermi_energy' in kw and self.verbosity>0:
+      po = np.get_printoptions() 
+      np.set_printoptions(precision=2, linewidth=1000)
+      print(__name__, "mo_occ:\n{}".format(self.mo_occ))
+      np.set_printoptions(**po)
+      
   def make_rdm1(self, mo_coeff=None, mo_occ=None):
     # from pyscf.scf.hf import make_rdm1 -- different index order here
     if mo_occ is None: mo_occ = self.mo_occ[0,:,:]
@@ -503,6 +530,7 @@ class nao(ao_log):
 
   # More functions for similarity with Mole
   def atom_symbol(self, ia): return self.sp2symbol[self.atom2sp[ia]]
+  def atom_symbols(self): return np.array([self.sp2symbol[sp] for sp in self.atom2sp])
   def atom_charge(self, ia): return self.sp2charge[self.atom2sp[ia]]
   def atom_charges(self): return np.array([self.sp2charge[sp] for sp in self.atom2sp], dtype='int64')
   def atom_coord(self, ia): return self.atom2coord[ia,:]
@@ -555,10 +583,11 @@ class nao(ao_log):
       return self.vnucele_coo_pseudo(**kw)
     else:
       return self.vnucele_coo_coulomb(**kw)
-  
-  def vnucele_coo_coulomb(self, **kw): # Compute matrix elements of attraction by Coulomb forces from point nuclei
-    from pyscf.nao.m_vnucele_coo_coulomb import vnucele_coo_coulomb
-    return vnucele_coo_coulomb(self, **kw)
+
+  def vnucele_coo_coulomb(self, **kw):
+    g = self.build_3dgrid_ae(**kw)
+    vnuc = self.comp_vnuc_coulomb(g.coords)
+    return self.matelem_int3d_coo(g, vnuc)
 
   def vnucele_coo_pseudo(self, **kw): # Compute matrix elements of attraction by forces from pseudo atom
     vna = self.vna_coo(**kw)
@@ -646,6 +675,39 @@ class nao(ao_log):
     if not self.init_sv_libnao_orbs : raise RuntimeError('not self.init_sv_libnao')
     return aos_libnao(coords, self.norbs)
 
+  def comp_aos_csr(self, coords, tol=1e-8, ram=160e6):
+    """ 
+          Compute the atomic orbitals for a given set of (Cartesian) coordinates.
+        The sparse format CSR is used for output and the computation is organized block-wise.
+        Thence, larger molecules can be tackled right away
+          coords :: set of Cartesian coordinates
+          tol :: tolerance for dropping the values 
+          ram :: size of the allowed block (in bytes)
+        Returns 
+          co2v :: CSR matrix of shape (coordinate, atomic orbital) 
+    """
+    from pyscf.nao.m_aos_libnao import aos_libnao
+    from pyscf import lib
+    from scipy.sparse import csr_matrix
+    if not self.init_sv_libnao_orbs : raise RuntimeError('not self.init_sv_libnao')
+    assert coords.shape[-1] == 3
+    nc,no = len(coords), self.norbs
+    bsize = int(min(max(ram / (no*8.0), 1), nc))
+    co2v = csr_matrix((nc,no))
+    for s,f in lib.prange(0,nc,bsize):
+      ca2o = aos_libnao(coords[s:f], no) # compute values of atomic orbitals
+      ab = np.where(abs(ca2o)>tol)
+      co2v += csr_matrix((ca2o[ab].reshape(-1), (ab[0]+s, ab[1])), shape=(nc,no))
+    return co2v
+
+  def comp_aos_py(self, coords):
+    """ Compute the atomic orbitals for a given set of (Cartesian) coordinates. """
+    res = np.zeros((len(coords), self.norbs))
+    for sp,rc,s,f in zip(self.atom2sp, self.atom2coord,self.atom2s,self.atom2s[1:]):
+      oc2v = self.ao_log.ao_eval(rc, sp, coords)
+      res[:,s:f] = oc2v.T
+    return res
+
   def comp_vnuc_coulomb(self, coords):
     ncoo = coords.shape[0]
     vnuc = np.zeros(ncoo)
@@ -654,31 +716,51 @@ class nao(ao_log):
       vnuc = vnuc - Z / dd 
     return vnuc
 
-  def vna(self, coords, sp2v=None):
+  def vna(self, coords, **kw):
     """ Compute the neutral-atom potential V_NA(coords) for a set of Cartesian coordinates coords.
         The subroutine could be also used for computing the non-linear core corrections or some other atom-centered fields."""
-    sp2v = self.ao_log.sp2vna if sp2v is None else sp2v
-    ncoo = coords.shape[0]
-    vna = np.zeros(ncoo)
-    for R,sp in zip(self.atom2coord, self.atom2sp):
-      dd = cdist(R.reshape((1,3)), coords).reshape(ncoo)
-      vnaa = self.ao_log.interp_rr(sp2v[sp], dd)
-      vna = vna + vnaa 
+    (sp2v,sp2rcut) = (kw['sp2v'],kw['sp2rcut']) if 'sp2v' in kw else (self.ao_log.sp2vna,self.ao_log.sp2rcut_vna)
+    atom2coord = kw['atom2coord'] if 'atom2coord' in kw else self.atom2coord
+
+    nc = coords.shape[0]
+    vna = np.zeros(nc)
+    for ia,(R,sp) in enumerate(zip(atom2coord, self.atom2sp)):
+      #print(__name__, ia, sp, sp2rcut[sp])
+      dd = cdist(R.reshape((1,3)), coords).reshape(nc)
+      vnaa = self.ao_log.interp_rr(sp2v[sp], dd, rcut=sp2rcut[sp])
+      vna = vna + vnaa
     return vna
 
-  def vna_coo(self, sp2v=None, **kw):
+  def vna_coo(self, **kw):
     """ Compute matrix elements of a potential which is given as superposition of central fields from each nuclei """
-    from numpy import einsum, dot
-    from scipy.sparse import coo_matrix
-    sp2v = self.ao_log.sp2vna if sp2v is None else sp2v
     g = self.build_3dgrid_ae(**kw)
-    ca2o = self.comp_aos_den(g.coords)
-    vna = self.vna(g.coords, sp2v=sp2v)
-    vna_w = g.weights*vna
-    cb2vo = einsum('co,c->co', ca2o, vna_w)
-    vna = dot(ca2o.T,cb2vo)
-    return coo_matrix(vna)
+    vna = self.vna(g.coords, **kw)
+    return self.matelem_int3d_coo(g, vna)
 
+  def matelem_int3d_coo(self, g, v):
+    """ Compute matrix elements of a potential v given on the 3d grid g using blocks along the grid """
+    from pyscf import lib
+    
+    bsize = int(min(max(160e6 / (self.norbs*8.0), 1), g.size))
+    #print(__name__, bsize, g.size*self.norbs*8)
+    v_matelem = np.zeros((self.norbs, self.norbs))
+    va = v.reshape(-1)
+    wgts = g.weights if type(g.weights)==np.ndarray else np.repeat(g.weights, g.size)
+    for s,f in lib.prange(0,g.size,bsize):
+      ca2o = self.comp_aos_den(g.coords[s:f]) # compute values of atomic orbitals
+      v_w = (wgts[s:f]*va[s:f]).reshape((f-s,1))
+      cb2vo = ca2o*v_w
+      v_matelem += np.dot(ca2o.T,cb2vo)
+    return coo_matrix(v_matelem)
+
+  def matelem_int3d_coo_ref(self, g, v):
+    """ Compute matrix elements of a potential v given on the 3d grid g """
+    ca2o = self.comp_aos_den(g.coords) # compute values of atomic orbitals
+    v_w = (g.weights*v.reshape(g.size)).reshape((g.size,1))
+    cb2vo = ca2o*v_w
+    v_matelem = np.dot(ca2o.T,cb2vo)
+    return coo_matrix(v_matelem)
+    
   def init_libnao_orbs(self):
     """ Initialization of data on libnao site """
     from pyscf.nao.m_libnao import libnao
