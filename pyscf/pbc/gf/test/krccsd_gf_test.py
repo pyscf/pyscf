@@ -7,7 +7,7 @@ import numpy as np
 from pyscf.pbc.tools.pbc import super_cell
 from pyscf.pbc import gto, scf, cc
 from pyscf import cc as mol_cc
-from pyscf.pbc.gf import KRCCGF
+from pyscf.pbc.gf import KRCCSDGF
 
 class Test(unittest.TestCase):
     def test_ip(self):
@@ -51,7 +51,7 @@ class Test(unittest.TestCase):
         mycc.kernel()
         p=[0,1,2,3]
         q=[0,1,2,3]
-        gfunccc = KRCCGF(mycc)
+        gfunccc = KRCCSDGF(mycc)
         kpts_gf_ip, kpts_gf_ea = gfunccc.kernel(kpts,p,q,omegas)
 
         spec_ip = 0.0
@@ -106,7 +106,7 @@ class Test(unittest.TestCase):
         mycc.kernel()
         p=[4,5,6,7]
         q=[4,5,6,7]
-        gfunccc = KRCCGF(mycc)
+        gfunccc = KRCCSDGF(mycc)
         kpts_gf_ip, kpts_gf_ea = gfunccc.kernel(kpts,p,q,omegas)
 
         spec_ea = 0.0

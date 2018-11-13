@@ -13,8 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from pyscf.pbc.gf import kccgf_rhf
+from pyscf.pbc.gf import krccsd_gf
 
-def KRCCGF(mycc):
-    return kccgf_rhf.OneParticleGF(mycc)
+def KRCCSDGF(mycc):
+    return krccsd_gf.OneParticleGF(mycc)
 
