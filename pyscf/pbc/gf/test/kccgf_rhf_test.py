@@ -1,5 +1,5 @@
 '''
-CCSD with k-point sampling
+Slow KCCGF-RHF Test for EA and IP
 '''
 
 import unittest
