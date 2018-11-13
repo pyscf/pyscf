@@ -16,6 +16,7 @@
 # Author:
 # James D. Mcclain
 # Timothy Berkelbach <tim.berkelbach@gmail.com>
+#
 
 import collections
 import numpy as np
