@@ -27,6 +27,7 @@ from pyscf.cc.eom_rccsd import EOMIP, EOMEA
 from pyscf.pbc.lib import kpts_helper
 import time
 import sys
+from pyscf.lib import logger
 
 ###################
 # EA Greens       #
@@ -189,17 +190,39 @@ def initial_ea_guess(cc):
 
 
 class OneParticleGF(object):
-    def __init__(self, cc, eta=0.01):
+    '''
+    One Particle Greens Function Class for KRCCSD-GF method
+
+    args:
+    
+    self
+    cc - coupled-cluster reference object
+    eta - broadening parameter 
+    conv_tol - convergence tolerance of gcrotmk solution
+    use_prev - use previous iteration's solution as initial guess
+
+    returns: 
+    
+    G_{k,pq}^{IP}, G_{k,pq}^{EA} - numpy array containing matrix elements
+                                   for k-dependent G^{IP} and G^{EA}
+    
+    '''
+    def __init__(self, cc, eta=0.01, conv_tol=1e-2, use_prev=False):
         self.cc = cc
         self.eomip = EOMIP(cc)
         self.eomea = EOMEA(cc)
         self.eta = eta
+        self.conv_tol = conv_tol
+        self.use_prev = use_prev
+        self.stdout = cc.stdout
+        self.verbose = cc.verbose
 
     def solve_ip(self, kptlist, ps, qs, omegas):
         if not isinstance(ps, collections.Iterable): ps = [ps]
         if not isinstance(qs, collections.Iterable): qs = [qs]
         cc = self.cc
-        print("solving ip portion")
+        log = logger.Logger(self.stdout, self.verbose)
+        log.debug('solving ip portion')
         S0 = initial_ip_guess(cc)
         gfvals = np.zeros((len(kptlist), len(ps),len(qs),len(omegas)),dtype=complex)
         for kp, ikpt in enumerate(kptlist): 
@@ -218,12 +241,13 @@ class OneParticleGF(object):
                     Ax = spla.LinearOperator((size,size), matr_multiply)
                     mx = spla.LinearOperator((size,size), invprecond_multiply)
 
-                    start = time.time()
-                    Sw, info = spla.gcrotmk(Ax, b_vector, x0=S0, atol=0, tol=1e-2)
-                    end = time.time()
-                    print 'past gcrotmk with info and time',info,(end-start)
-                    sys.stdout.flush()
-
+                    cpu0 = (time.clock(), time.time())
+                    if self.use_prev is False:
+                        Sw, info = spla.gcrotmk(Ax, b_vector, x0=S0, atol=0, tol=self.conv_tol)
+                    else:
+                        Sw, info = spla.gcrotmk(Ax, b_vector, x0=Sw, atol=0, tol=self.conv_tol)
+                    log.timer('Xp', *cpu0)
+                    
                     if info != 0:
                         raise RuntimeError
                     for iq,q in enumerate(qs):
@@ -237,7 +261,8 @@ class OneParticleGF(object):
         if not isinstance(ps, collections.Iterable): ps = [ps]
         if not isinstance(qs, collections.Iterable): qs = [qs]
         cc = self.cc
-        print("solving ea portion")
+        log = logger.Logger(cc.stdout, self.verbose)
+        log.debug('solving ea portion')
         S0 = initial_ea_guess(cc)
         gfvals = np.zeros((len(kptlist),len(ps),len(qs),len(omegas)),dtype=complex)
         for kp, ikpt in enumerate(kptlist):
@@ -256,12 +281,13 @@ class OneParticleGF(object):
                     Ax = spla.LinearOperator((size,size), matr_multiply)
                     mx = spla.LinearOperator((size,size), invprecond_multiply)
                     
-                    start = time.time()
-                    Sw, info = spla.gcrotmk(Ax, b_vector, x0=S0, atol=0, tol=1e-2)
-                    end = time.time()
-                    print 'past gcrotmk with info and time',info,(end-start)
-                    sys.stdout.flush()
-                    
+                    cpu0 = (time.clock(), time.time())
+                    if self.use_prev is False:
+                        Sw, info = spla.gcrotmk(Ax, b_vector, x0=S0, atol=0, tol=self.conv_tol)
+                    else:
+                        Sw, info = spla.gcrotmk(Ax, b_vector, x0=Sw, atol=0, tol=self.conv_tol)
+                    log.timer('Yq', *cpu0)
+
                     if info != 0:
                         raise RuntimeError
                     for ip,p in enumerate(ps):
