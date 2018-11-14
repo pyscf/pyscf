@@ -131,8 +131,8 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
     mo = numpy.hstack((orbo,orbv))
     nmo = nocc + nvir
 
-    eai = lib.direct_sum('a-i->ai', mo_energy[viridx], mo_energy[occidx])
-    a = numpy.diag(eai.T.ravel()).reshape(nocc,nvir,nocc,nvir)
+    e_ia = lib.direct_sum('a-i->ia', mo_energy[viridx], mo_energy[occidx])
+    a = numpy.diag(e_ia.ravel()).reshape(nocc,nvir,nocc,nvir)
     b = numpy.zeros_like(a)
 
     def add_hf_(a, b, hyb=1):
@@ -722,19 +722,19 @@ class TDA(lib.StreamObject):
         mo_occ = mf.mo_occ
         occidx = numpy.where(mo_occ==2)[0]
         viridx = numpy.where(mo_occ==0)[0]
-        eai = (mo_energy[viridx,None] - mo_energy[occidx]).T
+        e_ia = mo_energy[viridx] - mo_energy[occidx,None]
 
         if wfnsym is not None and mf.mol.symmetry:
             if isinstance(wfnsym, str):
                 wfnsym = symm.irrep_name2id(mf.mol.groupname, wfnsym)
             wfnsym = wfnsym % 10  # convert to D2h subgroup
             orbsym = hf_symm.get_orbsym(mf.mol, mf.mo_coeff) % 10
-            eai[(orbsym[occidx,None] ^ orbsym[viridx]) != wfnsym] = 1e99
+            e_ia[(orbsym[occidx,None] ^ orbsym[viridx]) != wfnsym] = 1e99
 
-        nov = eai.size
+        nov = e_ia.size
         nroot = min(nstates, nov)
         x0 = numpy.zeros((nroot, nov))
-        idx = numpy.argsort(eai.ravel())
+        idx = numpy.argsort(e_ia.ravel())
         for i in range(nroot):
             x0[i,idx[i]] = 1  # Koopmans' excitations
         return x0

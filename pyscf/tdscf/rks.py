@@ -76,12 +76,12 @@ class TDDFTNoHybrid(TDA):
             orbsym = hf_symm.get_orbsym(mol, mo_coeff) % 10
             sym_forbid = (orbsym[occidx,None] ^ orbsym[viridx]) != wfnsym
 
-        eai = (mo_energy[viridx].reshape(-1,1) - mo_energy[occidx]).T
+        e_ia = (mo_energy[viridx].reshape(-1,1) - mo_energy[occidx]).T
         if wfnsym is not None and mol.symmetry:
-            eai[sym_forbid] = 0
-        dai = numpy.sqrt(eai).ravel()
-        edai = eai.ravel() * dai
-        hdiag = eai.ravel() ** 2
+            e_ia[sym_forbid] = 0
+        d_ia = numpy.sqrt(e_ia).ravel()
+        ed_ia = e_ia.ravel() * d_ia
+        hdiag = e_ia.ravel() ** 2
 
         vresp = _gen_rhf_response(mf, singlet=singlet, hermi=1)
 
@@ -90,14 +90,14 @@ class TDDFTNoHybrid(TDA):
             dmov = numpy.empty((nz,nao,nao))
             for i, z in enumerate(zs):
                 # *2 for double occupancy
-                dm = reduce(numpy.dot, (orbo, (dai*z).reshape(nocc,nvir)*2, orbv.T))
+                dm = reduce(numpy.dot, (orbo, (d_ia*z).reshape(nocc,nvir)*2, orbv.T))
                 dmov[i] = dm + dm.T # +cc for A+B and K_{ai,jb} in A == K_{ai,bj} in B
             v1ao = vresp(dmov)
             v1ov = _ao2mo.nr_e2(v1ao, mo_coeff, (0,nocc,nocc,nmo)).reshape(-1,nocc*nvir)
             for i, z in enumerate(zs):
-                # numpy.sqrt(eai) * (eai*dai*z + v1ov)
-                v1ov[i] += edai*z
-                v1ov[i] *= dai
+                # numpy.sqrt(e_ia) * (e_ia*d_ia*z + v1ov)
+                v1ov[i] += ed_ia*z
+                v1ov[i] *= d_ia
             return v1ov.reshape(nz,-1)
 
         return vind, hdiag
@@ -138,11 +138,11 @@ class TDDFTNoHybrid(TDA):
         mo_occ = self._scf.mo_occ
         occidx = numpy.where(mo_occ==2)[0]
         viridx = numpy.where(mo_occ==0)[0]
-        eai = (mo_energy[viridx,None] - mo_energy[occidx]).T
-        eai = numpy.sqrt(eai)
+        e_ia = (mo_energy[viridx,None] - mo_energy[occidx]).T
+        e_ia = numpy.sqrt(e_ia)
         def norm_xy(w, z):
-            zp = eai * z.reshape(eai.shape)
-            zm = w/eai * z.reshape(eai.shape)
+            zp = e_ia * z.reshape(e_ia.shape)
+            zm = w/e_ia * z.reshape(e_ia.shape)
             x = (zp + zm) * .5
             y = (zp - zm) * .5
             norm = lib.norm(x)**2 - lib.norm(y)**2
