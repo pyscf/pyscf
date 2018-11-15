@@ -23,7 +23,8 @@ class Test(unittest.TestCase):
         cell.build()
 
         nmp = [1,1,2]
-        # treating 1*1*1 supercell at gamma point
+        
+        # treating 1*1*2 supercell at gamma point
         supcell = super_cell(cell,nmp)
         gmf  = scf.GHF(supcell,exxdiv=None)
         ehf  = gmf.kernel()
@@ -40,9 +41,6 @@ class Test(unittest.TestCase):
         eom = eom_gccsd.EOMEA(gcc)
         e2, v = eom.eaccsd(nroots=2, koopmans=True)
 
-        print 'ref ip',e1
-        print 'ref ea',e2
-
         # Running HF and CCSD with 1x1x2 Monkhorst-Pack k-point mesh
         kmf = scf.KGHF(cell, kpts=cell.make_kpts(nmp), exxdiv=None)
         ehf2 = kmf.kernel()
@@ -55,9 +53,6 @@ class Test(unittest.TestCase):
         print('GHF energy %.7f \n' % (float(ehf2)))
         print('GCCSD correlation energy  %.7f \n' % (float(ecc2)))
 
-        print ehf/2 - ehf2
-        print ecc/2 - ecc2
-    
         kptlist = cell.make_kpts(nmp)
         eom = EOMIP(mycc)
         e1_obt, v = eom.ipccsd(nroots=2, kptlist=[0])
