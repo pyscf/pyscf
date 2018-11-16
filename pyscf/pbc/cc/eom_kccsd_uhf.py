@@ -73,36 +73,48 @@ def vector_to_amplitudes_ip(vector, nkpts, nmo, nocc):
 def ipccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     '''2ph operators are of the form s_{ij}^{ b}, i.e. 'jb' indices are coupled'''
     if imds is None: imds = eom.make_imds()
-    nocc = eom.nocc
-    nmo = eom.nmo
-    nvir = (nmo[0]-nocc[0], nmo[1]-nocc[1])
-    nocca, noccb = nocc
-    nvira, nvirb = nvir
-    nkpts = eom.nkpts
-    kconserv = imds.kconserv
-    r1, r2 = eom.vector_to_amplitudes(vector, nkpts, nmo[0]+nmo[1], nocc[0]+nocc[1])  # spin
-    orbspin = imds.eris.orbspin
-    spatial_r1, spatial_r2 = eom_kgccsd.spin2spatial_ip_doublet(r1, r2, kconserv, kshift, orbspin)
-    uccsd_imds = imds._uccsd_imds
+    t1, t2= imds.t1, imds.t2
+    uccsd_imds = imds#._uccsd_imds   #FIXME
+    t1a, t1b = t1
     t2aa, t2ab, t2bb = t2
+    nocca, noccb, nvira, nvirb = t2ab.shape[3:]
+    nmoa, nmob = nocca + nvira, noccb + nvirb
+
+    r1, r2 = eom.vector_to_amplitudes(vector, nkpts, (nmoa, nmob), (nocca, noccb))
+
+
+
+
+    #nocc = eom.nocc
+    #nmo = eom.nmo
+    #nvir = (nmo[0]-nocc[0], nmo[1]-nocc[1])
+    #nocca, noccb = nocc
+    #nvira, nvirb = nvir
+    #nkpts = eom.nkpts
+    #kconserv = imds.kconserv
+    #r1, r2 = eom.vector_to_amplitudes(vector, nkpts, nmo[0]+nmo[1], nocc[0]+nocc[1])  # spin
+    #orbspin = imds.eris.orbspin
+    #spatial_r1, spatial_r2 = eom_kgccsd.spin2spatial_ip_doublet(r1, r2, kconserv, kshift, orbspin)
+    #uccsd_imds = imds._uccsd_imds
+    #t2aa, t2ab, t2bb = t2
 
     # k-point spin orbital version of ipccsd
 
-    Hr1 = -0.0*np.einsum('mi,m->i', imds.Foo[kshift], r1)
+    #Hr1 = -0.0*np.einsum('mi,m->i', imds.Foo[kshift], r1)
 
-    Hr2 = np.zeros_like(r2)
+    #Hr2 = np.zeros_like(r2)
 
-    r1a, r1b = spatial_r1
-    Hr1a = np.zeros((nocca), dtype=r1.dtype)
-    Hr1b = np.zeros((noccb), dtype=r1.dtype)
+    r1a, r1b = r1
+    Hr1a = np.zeros((nocca), dtype=r1a.dtype)
+    Hr1b = np.zeros((noccb), dtype=r1b.dtype)
 
-    r2aaa, r2baa, r2abb, r2bbb = spatial_r2
+    r2aaa, r2baa, r2abb, r2bbb = r2
     #Foo term
     for km in range(nkpts):
-        Hr1a += np.einsum('me,mie->i', uccsd_imds.Fov[km], r2aaa[km,kshift])
-        Hr1a -= np.einsum('ME,iME->i', uccsd_imds.FOV[km], r2abb[kshift,km])
-        Hr1b += np.einsum('ME,MIE->I', uccsd_imds.FOV[km], r2bbb[km,kshift])
-        Hr1b -= np.einsum('me,Ime->I', uccsd_imds.Fov[km], r2baa[kshift,km])
+        Hr1a += einsum('me,mie->i', uccsd_imds.Fov[km], r2aaa[km,kshift])
+        Hr1a -= einsum('ME,iME->i', uccsd_imds.FOV[km], r2abb[kshift,km])
+        Hr1b += einsum('ME,MIE->I', uccsd_imds.FOV[km], r2bbb[km,kshift])
+        Hr1b -= einsum('me,Ime->I', uccsd_imds.Fov[km], r2baa[kshift,km])
     #Fov term
     spatial_Foo = uccsd_imds.Foo
     spatial_FOO = uccsd_imds.FOO
@@ -111,15 +123,15 @@ def ipccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     #Wooov
     for km in range(nkpts):
         for kn in range(nkpts):
-            Hr1a += -0.5 * np.einsum('nime,mne->i', uccsd_imds.Wooov[kn,kshift,km], r2aaa[km,kn])
-            Hr1b +=        np.einsum('NIme,Nme->I', uccsd_imds.WOOov[kn,kshift,km], r2baa[kn,km])
-            Hr1b += -0.5 * np.einsum('NIME,MNE->I', uccsd_imds.WOOOV[kn,kshift,km], r2bbb[km,kn])
-            Hr1a +=        np.einsum('niME,nME->i', uccsd_imds.WooOV[kn,kshift,km], r2abb[kn,km])
+            Hr1a += -0.5 * einsum('nime,mne->i', uccsd_imds.Wooov[kn,kshift,km], r2aaa[km,kn])
+            Hr1b +=        einsum('NIme,Nme->I', uccsd_imds.WOOov[kn,kshift,km], r2baa[kn,km])
+            Hr1b += -0.5 * einsum('NIME,MNE->I', uccsd_imds.WOOOV[kn,kshift,km], r2bbb[km,kn])
+            Hr1a +=        einsum('niME,nME->i', uccsd_imds.WooOV[kn,kshift,km], r2abb[kn,km])
 
-    Hr2aaa = np.zeros((nkpts, nkpts, nocca, nocca, nvira), dtype=r2.dtype)
-    Hr2baa = np.zeros((nkpts, nkpts, noccb, nocca, nvira), dtype=r2.dtype)
-    Hr2abb = np.zeros((nkpts, nkpts, nocca, noccb, nvirb), dtype=r2.dtype)
-    Hr2bbb = np.zeros((nkpts, nkpts, noccb, noccb, nvirb), dtype=r2.dtype)
+    Hr2aaa = np.zeros((nkpts, nkpts, nocca, nocca, nvira), dtype=r2aaa.dtype)
+    Hr2baa = np.zeros((nkpts, nkpts, noccb, nocca, nvira), dtype=r2baa.dtype)
+    Hr2abb = np.zeros((nkpts, nkpts, nocca, noccb, nvirb), dtype=r2abb.dtype)
+    Hr2bbb = np.zeros((nkpts, nkpts, noccb, noccb, nvirb), dtype=r2bbb.dtype)
 
     # Fvv term
     for kb, ki in itertools.product(range(nkpts),repeat=2):
@@ -145,10 +157,10 @@ def ipccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     # Wovoo term
     for ki, kj in itertools.product(range(nkpts), repeat=2):
         kb = kconserv[ki, kshift, kj]
-        Hr2aaa[ki,kj] -= np.einsum('mjbi,m->ijb', uccsd_imds.Woovo[kshift,kj,kb], r1a)
-        Hr2abb[ki,kj] += np.einsum('miBJ,m->iJB', uccsd_imds.WooVO[kshift,ki,kb], r1a)
-        Hr2baa[ki,kj] += np.einsum('MIbj,M->Ijb', uccsd_imds.WOOvo[kshift,ki,kb], r1b)
-        Hr2bbb[ki,kj] -= np.einsum('MJBI,M->IJB', uccsd_imds.WOOVO[kshift,kj,kb], r1b)
+        Hr2aaa[ki,kj] -= einsum('mjbi,m->ijb', uccsd_imds.Woovo[kshift,kj,kb], r1a)
+        Hr2abb[ki,kj] += einsum('miBJ,m->iJB', uccsd_imds.WooVO[kshift,ki,kb], r1a)
+        Hr2baa[ki,kj] += einsum('MIbj,M->Ijb', uccsd_imds.WOOvo[kshift,ki,kb], r1b)
+        Hr2bbb[ki,kj] -= einsum('MJBI,M->IJB', uccsd_imds.WOOVO[kshift,kj,kb], r1b)
 
     # Woooo term
     for ki, kj in itertools.product(range(nkpts), repeat=2):
@@ -240,13 +252,14 @@ def ipccsd_matvec(eom, vector, kshift, imds=None, diag=None):
             Hr2bbb[ki, kj] -= lib.einsum('meBI,Jme->IJB', uccsd_imds.WovVO[km, ke, kb],
                                          r2baa[kj, km])
 
-    spatial_Hr1 = [Hr1a, Hr1b]
-    spatial_Hr2 = [Hr2aaa, Hr2baa, Hr2abb, Hr2bbb]
-    spin_Hr1, spin_Hr2 = eom_kgccsd.spatial2spin_ip_doublet(spatial_Hr1, spatial_Hr2,
-                                                            kconserv, kshift, orbspin)
-    Hr1 += spin_Hr1
-    Hr2 += spin_Hr2
-    vector = eom.amplitudes_to_vector(Hr1, Hr2)
+    #spatial_Hr1 = [Hr1a, Hr1b]
+    #spatial_Hr2 = [Hr2aaa, Hr2baa, Hr2abb, Hr2bbb]
+    #spin_Hr1, spin_Hr2 = eom_kgccsd.spatial2spin_ip_doublet(spatial_Hr1, spatial_Hr2,
+#                                                            kconserv, kshift, orbspin)
+    #Hr1 += spin_Hr1
+    #Hr2 += spin_Hr2
+    #vector = eom.amplitudes_to_vector(Hr1, Hr2)
+    vector = amplitudes_to_vector_ip([Hr1a, Hr1b], [Hr2aaa, Hr2baa, Hr2abb, Hr2bbb])
     return vector
 
 class EOMIP(eom_kgccsd.EOMIP):
@@ -285,13 +298,13 @@ class EOMIP(eom_kgccsd.EOMIP):
             matvec = lambda xs: [self.matvec(x, kshift, imds, diag) for x in xs]
         return matvec, diag
 
-    def _vector_to_amplitudes(self, vector, nkpts=None, nmo=None, nocc=None):
+    def vector_to_amplitudes(self, vector, nkpts=None, nmo=None, nocc=None):
         if nmo is None: nmo = self.nmo
         if nocc is None: nocc = self.nocc
         if nkpts is None: nkpts = self.nkpts
         return vector_to_amplitudes_ip(vector, nkpts, nmo, nocc)
 
-    def _amplitudes_to_vector(self, r1, r2):
+    def amplitudes_to_vector(self, r1, r2):
         return amplitudes_to_vector_ip(r1, r2)
 
     def vector_size(self):
@@ -301,7 +314,7 @@ class EOMIP(eom_kgccsd.EOMIP):
         nkpts = self.nkpts
         return nocca + noccb + nkpts**2 * (nocca*(nocca - 1)//2*nvira + noccb * nocca * nvira+ nocca * noccb * nvirb + noccb*(noccb - 1)//2*nvirb)
 
-    def _make_imds(self, eris=None, t1=None, t2=None):
+    def make_imds(self, eris=None, t1=None, t2=None):
         imds = _IMDS(self._cc, eris, t1, t2)
         imds.make_ip()
         return imds
@@ -319,12 +332,12 @@ def vector_to_amplitudes_ea(vector, nkpts, nmo, nocc):
     sizes = (nvira, nvirb, nkpts**2*nocca*nvira*nvira, nkpts**2*nocca*nvirb*nvira,
              nkpts**2*noccb*nvira*nvirb, nkpts**2*noccb*nvirb*nvirb)
     sections = np.cumsum(sizes[:-1])
-    r1a, r1b, r2a, r2aba, r2bab, r2b = np.split(vector, sections)
+    r1a, r1b, r2aaa, r2aba, r2bab, r2bbb = np.split(vector, sections)
 
-    r2aaa = r2aaa.reshape(nocca,nvira,nvira).copy()
-    r2aba = r2aba.reshape(nocca,nvirb,nvira).copy()
-    r2bab = r2bab.reshape(noccb,nvira,nvirb).copy()
-    r2bbb = r2bab.reshape(noccb,nvirb,nvirb).copy()
+    r2aaa = r2aaa.reshape(nkpts, nkpts, nocca,nvira,nvira).copy()
+    r2aba = r2aba.reshape(nkpts, nkpts, nocca,nvirb,nvira).copy()
+    r2bab = r2bab.reshape(nkpts, nkpts, noccb,nvira,nvirb).copy()
+    r2bbb = r2bbb.reshape(nkpts, nkpts, noccb,nvirb,nvirb).copy()
 
     r1 = (r1a.copy(), r1b.copy())
     r2 = (r2aaa, r2aba, r2bab, r2bbb)
@@ -341,41 +354,31 @@ def amplitudes_to_vector_ea(r1, r2):
 def eaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     '''2ph operators are of the form s_{ j}^{ab}, i.e. 'jb' indices are coupled'''
     if imds is None: imds = eom.make_imds()
-    nocc = eom.nocc
-    nmo = eom.nmo
-    nvir = (nmo[0]-nocc[0], nmo[1]-nocc[1])
-    nocca, noccb = nocc
-    nvira, nvirb = nvir
-    nkpts = eom.nkpts
-    kconserv = imds.kconserv
-    r1, r2 = eom.vector_to_amplitudes(vector, nkpts, nmo[0]+nmo[1], nocc[0]+nocc[1])  # spin
-    orbspin = imds.eris.orbspin
-    spatial_r1, spatial_r2 = eom_kgccsd.spin2spatial_ea_doublet(r1, r2, kconserv, kshift, orbspin)
-
-    uccsd_imds = imds._uccsd_imds
+    t1, t2= imds.t1, imds.t2
+    uccsd_imds = imds#._uccsd_imds   #FIXME
+    t1a, t1b = t1
     t2aa, t2ab, t2bb = t2
+    nocca, noccb, nvira, nvirb = t2ab.shape[3:]
+    nmoa, nmob = nocca + nvira, noccb + nvirb
 
-    # k-point spin orbital version of eaccsd
+    r1, r2 = eom.vector_to_amplitudes(vector, nkpts, (nmoa, nmob), (nocca, noccb))
 
-    Hr1 = 0.0*np.einsum('ac,c->a', imds.Fvv[kshift], r1)
+    r1a, r1b = r1
+    Hr1a = np.zeros((nvira), dtype=r1a.dtype)
+    Hr1b = np.zeros((nvirb), dtype=r1b.dtype)
 
-    Hr2 = np.zeros_like(r2)
-
-    r1a, r1b = spatial_r1
-    r2aaa, r2aba, r2bab, r2bbb = spatial_r2
-    Hr1a = np.zeros((nvira), dtype=r1.dtype)
-    Hr1b = np.zeros((nvirb), dtype=r1.dtype)
+    r2aaa, r2aba, r2bab, r2bbb = r2
 
     # Fov terms
     for kl in range(nkpts):
-        Hr1a += np.einsum('ld,lad->a', uccsd_imds.Fov[kl], r2aaa[kl,kshift])
-        Hr1a += np.einsum('LD,LaD->a', uccsd_imds.FOV[kl], r2bab[kl,kshift])
-        Hr1b += np.einsum('ld,lAd->A', uccsd_imds.Fov[kl], r2aba[kl,kshift])
-        Hr1b += np.einsum('LD,LAD->A', uccsd_imds.FOV[kl], r2bbb[kl,kshift])
+        Hr1a += einsum('ld,lad->a', uccsd_imds.Fov[kl], r2aaa[kl,kshift])
+        Hr1a += einsum('LD,LaD->a', uccsd_imds.FOV[kl], r2bab[kl,kshift])
+        Hr1b += einsum('ld,lAd->A', uccsd_imds.Fov[kl], r2aba[kl,kshift])
+        Hr1b += einsum('LD,LAD->A', uccsd_imds.FOV[kl], r2bbb[kl,kshift])
 
     # Fvv terms
-    Hr1a += np.einsum('ac,c->a', uccsd_imds.Fvv[kshift], r1a)
-    Hr1b += np.einsum('AC,C->A', uccsd_imds.FVV[kshift], r1b)
+    Hr1a += einsum('ac,c->a', uccsd_imds.Fvv[kshift], r1a)
+    Hr1b += einsum('AC,C->A', uccsd_imds.FVV[kshift], r1b)
 
     # Wvovv
     for kc, kl in itertools.product(range(nkpts), repeat=2):
@@ -384,32 +387,30 @@ def eaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
         Hr1b += 0.5*lib.einsum('ACLD,LCD->A', uccsd_imds.WVVOV[kshift,kc,kl], r2bbb[kl,kc])
         Hr1b +=     lib.einsum('ACld,lCd->A', uccsd_imds.WVVov[kshift,kc,kl], r2aba[kl,kc])
 
-    Hr2aaa = np.zeros((nkpts, nkpts, nocca, nvira, nvira), dtype=r2.dtype)
-    Hr2aba = np.zeros((nkpts, nkpts, nocca, nvirb, nvira), dtype=r2.dtype)
-    Hr2bab = np.zeros((nkpts, nkpts, noccb, nvira, nvirb), dtype=r2.dtype)
-    Hr2bbb = np.zeros((nkpts, nkpts, noccb, nvirb, nvirb), dtype=r2.dtype)
+    Hr2aaa = np.zeros((nkpts, nkpts, nocca, nvira, nvira), dtype=r2aaa.dtype)
+    Hr2aba = np.zeros((nkpts, nkpts, nocca, nvirb, nvira), dtype=r2aba.dtype)
+    Hr2bab = np.zeros((nkpts, nkpts, noccb, nvira, nvirb), dtype=r2bab.dtype)
+    Hr2bbb = np.zeros((nkpts, nkpts, noccb, nvirb, nvirb), dtype=r2bbb.dtype)
 
-    uimds = imds._uccsd_imds
-    #** Wvvvv term
-    if uimds.Wvvvv is not None:
+    if uccsd_imds.Wvvvv is not None:
         for kj, ka in itertools.product(range(nkpts), repeat=2):
             kb = kconserv[kshift,ka,kj]
             for kd in range(nkpts):
                 kc = kconserv[ka, kd, kb]
-                Hr2aaa[kj,ka] += .5 * lib.einsum('acbd,jcd->jab', uimds.Wvvvv[ka,kc,kb], r2aaa[kj,kc])
-                Hr2aba[kj,ka] +=      lib.einsum('bdac,jcd->jab', uimds.WvvVV[kb,kd,ka], r2aba[kj,kc])
-                Hr2bab[kj,ka] +=      lib.einsum('acbd,jcd->jab', uimds.WvvVV[ka,kc,kb], r2bab[kj,kc])
-                Hr2bbb[kj,ka] += .5 * lib.einsum('acbd,jcd->jab', uimds.WVVVV[ka,kc,kb], r2bbb[kj,kc])
+                Hr2aaa[kj,ka] += .5 * lib.einsum('acbd,jcd->jab', uccsd_imds.Wvvvv[ka,kc,kb], r2aaa[kj,kc])
+                Hr2aba[kj,ka] +=      lib.einsum('bdac,jcd->jab', uccsd_imds.WvvVV[kb,kd,ka], r2aba[kj,kc])
+                Hr2bab[kj,ka] +=      lib.einsum('acbd,jcd->jab', uccsd_imds.WvvVV[ka,kc,kb], r2bab[kj,kc])
+                Hr2bbb[kj,ka] += .5 * lib.einsum('acbd,jcd->jab', uccsd_imds.WVVVV[ka,kc,kb], r2bbb[kj,kc])
 
     #Wvvvo term
     for ka, kj, in itertools.product(range(nkpts),repeat=2):
         kb = kconserv[kshift,ka,kj]
         kc = kshift
-        Hr2aaa[kj,ka] += np.einsum('acbj,c->jab', uimds.Wvvvo[ka,kc,kb], r1a)
-        Hr2bbb[kj,ka] += np.einsum('ACBJ,C->JAB', uimds.WVVVO[ka,kc,kb], r1b)
+        Hr2aaa[kj,ka] += einsum('acbj,c->jab', uccsd_imds.Wvvvo[ka,kc,kb], r1a)
+        Hr2bbb[kj,ka] += einsum('ACBJ,C->JAB', uccsd_imds.WVVVO[ka,kc,kb], r1b)
 
-        Hr2bab[kj,ka] += np.einsum('acBJ,c->JaB', uimds.WvvVO[ka,kc,kb], r1a)
-        Hr2aba[kj,ka] += np.einsum('ACbj,C->jAb', uimds.WVVvo[ka,kc,kb], r1b)
+        Hr2bab[kj,ka] += einsum('acBJ,c->JaB', uccsd_imds.WvvVO[ka,kc,kb], r1a)
+        Hr2aba[kj,ka] += einsum('ACbj,C->jAb', uccsd_imds.WVVvo[ka,kc,kb], r1b)
 
     #Fvv Term
     for ka, kj in itertools.product(range(nkpts), repeat=2):
@@ -507,13 +508,7 @@ def eaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
             Hr2bbb[kj, ka] -= lib.einsum('ldAJ,lBd->JAB', uccsd_imds.WovVO[kl,kd,ka],
                                          r2aba[kl,kb])
 
-    spatial_Hr1 = [Hr1a, Hr1b]
-    spatial_Hr2 = [Hr2aaa, Hr2aba, Hr2bab, Hr2bbb]
-    spin_Hr1, spin_Hr2 = eom_kgccsd.spatial2spin_ea_doublet(spatial_Hr1, spatial_Hr2,
-                                                            kconserv, kshift, orbspin)
-    Hr1 += spin_Hr1
-    Hr2 += spin_Hr2
-    vector = eom.amplitudes_to_vector(Hr1, Hr2)
+    vector = amplitudes_to_vector_ea([Hr1a, Hr1b], [Hr2aaa, Hr2aba, Hr2bab, Hr2bbb])
     return vector
 
 class EOMEA(eom_kgccsd.EOMEA):
@@ -544,12 +539,13 @@ class EOMEA(eom_kgccsd.EOMEA):
             guess.append(g)
         return guess
 
-    def _vector_to_amplitudes(self, vector, nmo=None, nocc=None):
+    def vector_to_amplitudes(self, vector, nkpts=None, nmo=None, nocc=None):
         if nmo is None: nmo = self.nmo
-        if nocc is None: nocc is self.nocc
-        return vector_to_amplitudes_ea(vector, nmo, nocc)
+        if nocc is None: nocc = self.nocc
+        if nkpts is None: nkpts = self.nkpts
+        return vector_to_amplitudes_ea(vector, nkpts, nmo, nocc)
 
-    def _amplitudes_to_vector(self, r1, r2):
+    def amplitudes_to_vector(self, r1, r2):
         return amplitudes_to_vector_ea(r1, r2)
 
     def vector_size(self):
@@ -559,7 +555,7 @@ class EOMEA(eom_kgccsd.EOMEA):
         nkpts = self.nkpts
         return nvira + nvirb + nkpts**2 * (nocca*nvira*(nvira-1)//2+nocca*nvirb*nvira+noccb*nvira*nvirb+noccb*nvirb*(nvirb-1)//2)
 
-    def _make_imds(self, eris=None, t1=None, t2=None):
+    def make_imds(self, eris=None, t1=None, t2=None):
         imds = _IMDS(self._cc, eris, t1, t2)
         imds.make_ea()
         return imds
@@ -723,13 +719,9 @@ if __name__ == '__main__':
     mycc.t2 = t2
     kconserv = kpts_helper.get_kconserv(kmf.cell, kmf.kpts)
 
-    import kccsd
     kgcc = kccsd.GCCSD(scf.addons.convert_to_ghf(kmf))
     kccsd_eris = kccsd._make_eris_incore(kgcc, kgcc._scf.mo_coeff)
-    spin_t1 = kccsd.spatial2spin(t1, kccsd_eris.orbspin, kconserv)
-    spin_t2 = kccsd.spatial2spin(t2, kccsd_eris.orbspin, kconserv)
     orbspin = kccsd_eris.orbspin
-
     nkpts = mycc.nkpts
     nocca, noccb = mycc.nocc
     nmoa, nmob = mycc.nmo
@@ -743,10 +735,8 @@ if __name__ == '__main__':
     np.random.seed(0)
     # IP version
     myeom = EOMIP(mycc)
-    imds = myeom.make_imds(eris=kccsd_eris, t1=spin_t1, t2=spin_t2)
-    imds._uccsd_eris = eris
-    imds._uccsd_imds = _IMDS(mycc, eris=eris)
-    imds._uccsd_imds.make_ip()
+    imds = myeom.make_imds()
+    imds.make_ip()
 
     spin_r1_ip = (np.random.rand(nocc)*1j +
                   np.random.rand(nocc) - 0.5 - 0.5*1j)
@@ -754,27 +744,24 @@ if __name__ == '__main__':
                   np.random.rand(nkpts**2 * nocc**2 * nvir)*1j - 0.5 - 0.5*1j)
     spin_r2_ip = spin_r2_ip.reshape(nkpts, nkpts, nocc, nocc, nvir)
     spin_r2_ip = eom_kgccsd.enforce_2p_spin_ip_doublet(spin_r2_ip, kconserv, kshift, orbspin)
-    vector = eom_kgccsd.amplitudes_to_vector_ip(spin_r1_ip, spin_r2_ip)
 
-    kshift = 0
+    r1, r2 = eom_kgccsd.spin2spatial_ip_doublet(spin_r1_ip, spin_r2_ip, kconserv, kshift, orbspin)
+    vector = myeom.amplitudes_to_vector(r1, r2)
     vector = myeom.matvec(vector, kshift=kshift, imds=imds)
-    Hr1, Hr2 = myeom.vector_to_amplitudes(vector, nkpts, nmo, nocc)
-    [Hr1a, Hr1b], [Hr2aaa, Hr2baa, Hr2abb, Hr2bbb] = \
-            eom_kgccsd.spin2spatial_ip_doublet(Hr1, Hr2, kconserv, kshift, orbspin)
-
+    Hr1, Hr2 = myeom.vector_to_amplitudes(vector, nkpts, (nmoa, nmob), (nocca, noccb))
+    Hr1a, Hr1b = Hr1
+    Hr2aaa, Hr2baa, Hr2abb, Hr2bbb = Hr2
     print('ip Hr1a',   abs(lib.finger(Hr1a)   - (-0.34462696543560045-1.6104596956729178j)))
     print('ip Hr1b',   abs(lib.finger(Hr1b)   - (-0.055793611517250929+0.22169994342782473j)))
     print('ip Hr2aaa', abs(lib.finger(Hr2aaa) - (0.692705827672665420-1.958639508839846943j)))
     print('ip Hr2baa', abs(lib.finger(Hr2baa) - (2.892194153603884654+2.039530776282815872j)))
     print('ip Hr2abb', abs(lib.finger(Hr2abb) - (1.618257685489421727-5.489218743953674817j)))
     print('ip Hr2bbb', abs(lib.finger(Hr2bbb) - (0.479835513829048044+0.108406393138471210j)))
-
     # EA version
+
     myeom = EOMEA(mycc)
-    imds = myeom.make_imds(eris=kccsd_eris, t1=spin_t1, t2=spin_t2)
-    imds._uccsd_eris = eris
-    imds._uccsd_imds = _IMDS(mycc, eris=eris)
-    imds._uccsd_imds.make_ea()
+    imds = myeom.make_imds()
+    imds.make_ea()
 
     spin_r1_ea = (np.random.rand(nvir)*1j +
                   np.random.rand(nvir) - 0.5 - 0.5*1j)
@@ -782,13 +769,13 @@ if __name__ == '__main__':
                   np.random.rand(nkpts**2 * nocc * nvir**2)*1j - 0.5 - 0.5*1j)
     spin_r2_ea = spin_r2_ea.reshape(nkpts, nkpts, nocc, nvir, nvir)
     spin_r2_ea = eom_kgccsd.enforce_2p_spin_ea_doublet(spin_r2_ea, kconserv, kshift, orbspin)
-    vector = eom_kgccsd.amplitudes_to_vector_ea(spin_r1_ea, spin_r2_ea)
+    r1, r2 = eom_kgccsd.spin2spatial_ea_doublet(spin_r1_ea, spin_r2_ea, kconserv, kshift, orbspin)
 
-    kshift = 0
+    vector = myeom.amplitudes_to_vector(r1, r2)
     vector = myeom.matvec(vector, kshift=kshift, imds=imds)
-    Hr1, Hr2 = myeom.vector_to_amplitudes(vector, nkpts, nmo, nocc)
-    [Hr1a, Hr1b], [Hr2aaa, Hr2aba, Hr2bab, Hr2bbb] = \
-        eom_kgccsd.spin2spatial_ea_doublet(Hr1, Hr2, kconserv, kshift, orbspin)
+    Hr1, Hr2 = myeom.vector_to_amplitudes(vector, nkpts, (nmoa, nmob), (nocca, noccb))
+    Hr1a, Hr1b = Hr1
+    Hr2aaa, Hr2aba, Hr2bab, Hr2bbb = Hr2
 
     print('ea Hr1a',  abs(lib.finger(Hr1a)   - (-0.081373075311041126-0.51422895644026023j)))
     print('ea Hr1b',  abs(lib.finger(Hr1b)   - (-0.39518588661294807-1.3063424820239824j))  )

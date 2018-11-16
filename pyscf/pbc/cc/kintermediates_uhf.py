@@ -755,13 +755,19 @@ def Woovo(cc,t1,t2,eris):
     t2aa, t2ab, t2bb = t2
     nkpts, nocca, noccb, nvira, nvirb = t2ab.shape[2:]
     P = kconserv_mat(nkpts, kconserv)
-    Woovo = np.einsum('xyzimjb, xzyw->yxwmibj', eris.ooov, P).conj() - np.einsum('zyxjmib, xzyw->yxwmibj', eris.ooov, P).conj()
-    WooVO = np.einsum('xyzimJB, xzyw->yxwmiBJ', eris.ooOV, P).conj()
-    WOOvo = np.einsum('xyzIMjb, xzyw->yxwMIbj', eris.OOov, P).conj()
-    WOOVO = np.einsum('xyzIMJB, xzyw->yxwMIBJ', eris.OOOV, P).conj() - np.einsum('zyxJMIB, xzyw->yxwMIBJ', eris.OOOV, P).conj()
+
+    dtype = np.result_type(*t2)
+    Woovo = np.zeros((nkpts, nkpts, nkpts, nocca, nocca, nvira, nocca), dtype=dtype)
+    WooVO = np.zeros((nkpts, nkpts, nkpts, nocca, nocca, nvirb, noccb), dtype=dtype)
+    WOOvo = np.zeros((nkpts, nkpts, nkpts, noccb, noccb, nvira, nocca), dtype=dtype)
+    WOOVO = np.zeros((nkpts, nkpts, nkpts, noccb, noccb, nvirb, noccb), dtype=dtype)
 
     for km, kb, ki in kpts_helper.loop_kkk(nkpts):
         kj = kconserv[km, ki, kb]
+        Woovo[km,ki,kb] += eris.ooov[ki,km,kj].transpose(1,0,3,2).conj() - eris.ooov[kj,km,ki].transpose(1,2,3,0).conj()
+        WooVO[km,ki,kb] += eris.ooOV[ki,km,kj].transpose(1,0,3,2).conj()
+        WOOvo[km,ki,kb] += eris.OOov[ki,km,kj].transpose(1,0,3,2).conj()
+        WOOVO[km,ki,kb] += eris.OOOV[ki,km,kj].transpose(1,0,3,2).conj() - eris.OOOV[kj,km,ki].transpose(1,2,3,0).conj()
         for kn in range(nkpts):
             ke = kconserv[km,ki,kn]
             ooov = eris.ooov[km,ki,kn] - eris.ooov[kn,ki,km].transpose(2,1,0,3)
@@ -852,15 +858,15 @@ def Wooov(cc, t1, t2, eris, kconserv):
     nkpts = t1a.shape[0]
 
     P = kconserv_mat(nkpts, kconserv)
-    Wooov = eris.ooov - np.einsum('zyxnime,xzyw->xyzmine', eris.ooov, P)
+    Wooov = eris.ooov - eris.ooov.transpose(2,1,0,5,4,3,6)
     WooOV = eris.ooOV.copy()
     WOOov = eris.OOov.copy()
-    WOOOV = eris.OOOV - np.einsum('zyxNIME,xzyw->xyzMINE', eris.OOOV, P)
+    WOOOV = eris.OOOV - eris.OOOV.transpose(2,1,0,5,4,3,6)
 
-    Wooov += np.einsum('yif,xyzmfne->xyzmine', t1a, eris.ovov) - np.einsum('yif,xwzmenf,xzyw->xyzmine', t1a, eris.ovov, P)
-    WooOV += np.einsum('yif,xyzmfNE->xyzmiNE', t1a, eris.ovOV)
-    WOOov += np.einsum('yIF,xyzMFne->xyzMIne', t1b, eris.OVov)
-    WOOOV += np.einsum('yIF,xyzMFNE->xyzMINE', t1b, eris.OVOV) - np.einsum('yIF,xwzMENF,xzyw->xyzMINE', t1b, eris.OVOV, P)
+    Wooov += einsum('yif, xyzmfne->xyzmine', t1a, eris.ovov) - einsum('yif, zyxnfme->xyzmine', t1a, eris.ovov)
+    WooOV += einsum('yif,xyzmfNE->xyzmiNE', t1a, eris.ovOV)
+    WOOov += einsum('yIF,xyzMFne->xyzMIne', t1b, eris.OVov)
+    WOOOV += einsum('yIF,xyzMFNE->xyzMINE', t1b, eris.OVOV) - einsum('yIF, zyxNFME->xyzMINE', t1b, eris.OVOV)
 
     return Wooov, WooOV, WOOov, WOOOV
 
