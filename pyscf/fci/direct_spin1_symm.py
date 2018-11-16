@@ -173,11 +173,11 @@ def energy(h1e, eri, fcivec, norb, nelec, link_index=None, orbsym=None, wfnsym=0
     ci1 = contract_2e(h2e, fcivec, norb, nelec, link_index, orbsym, wfnsym)
     return numpy.dot(fcivec.ravel(), ci1.ravel())
 
-def _id_wfnsym(cis, norb, nelec, wfnsym):
+def _id_wfnsym(cis, norb, nelec, orbsym, wfnsym):
     if wfnsym is None:
         neleca, nelecb = direct_spin1._unpack_nelec(nelec)
         wfnsym = 0  # Ag, A1 or A
-        for i in cis.orbsym[nelecb:neleca]:
+        for i in orbsym[nelecb:neleca]:
             wfnsym ^= i
     elif isinstance(wfnsym, str):
         wfnsym = symm.irrep_name2id(cis.mol.groupname, wfnsym)
@@ -311,33 +311,31 @@ class FCISolver(direct_spin1.FCISolver):
                     orbsym=None, wfnsym=None, **kwargs):
         if orbsym is None: orbsym = self.orbsym
         if wfnsym is None: wfnsym = self.wfnsym
-        wfnsym = _id_wfnsym(self, norb, nelec, wfnsym)
+        wfnsym = _id_wfnsym(self, norb, nelec, orbsym, wfnsym)
         return contract_2e(eri, fcivec, norb, nelec, link_index, orbsym, wfnsym, **kwargs)
 
     def get_init_guess(self, norb, nelec, nroots, hdiag):
-        wfnsym = _id_wfnsym(self, norb, nelec, self.wfnsym)
+        wfnsym = _id_wfnsym(self, norb, nelec, self.orbsym, self.wfnsym)
         return get_init_guess(norb, nelec, nroots, hdiag, self.orbsym, wfnsym)
 
-    def guess_wfnsym(self, norb, nelec, fcivec=None, wfnsym=None, **kwargs):
+    def guess_wfnsym(self, norb, nelec, fcivec=None, orbsym=None, wfnsym=None,
+                     **kwargs):
         '''
         Guess point group symmetry of the FCI wavefunction.  If fcivec is
         given, the symmetry of fcivec is used.  Otherwise the symmetry is
         based on the HF determinant.
         '''
+        if orbsym is None:
+            orbsym = self.orbsym
         if fcivec is None:
-            wfnsym = _id_wfnsym(self, norb, nelec, wfnsym)
+            wfnsym = _id_wfnsym(self, norb, nelec, orbsym, wfnsym)
         else:
             # TODO: if wfnsym is given in the input, check whether the
             # symmetry of fcivec is consistent with given wfnsym.
-            wfnsym = addons.guess_wfnsym(fcivec, norb, nelec, self.orbsym)
-        if 'verbose' in kwargs:
-            if isinstance(kwargs['verbose'], logger.Logger):
-                log = kwargs['verbose']
-            else:
-                log = logger.Logger(self.stdout, kwargs['verbose'])
-            log.debug('Guessing CI wfn symmetry = %s', wfnsym)
-        else:
-            logger.debug(self, 'Guessing CI wfn symmetry = %s', wfnsym)
+            wfnsym = addons.guess_wfnsym(fcivec, norb, nelec, orbsym)
+        verbose = kwargs.get('verbose', None)
+        log = logger.new_logger(self, verbose)
+        log.debug('Guessing CI wfn symmetry = %s', wfnsym)
         return wfnsym
 
     def kernel(self, h1e, eri, norb, nelec, ci0=None,
@@ -352,8 +350,8 @@ class FCISolver(direct_spin1.FCISolver):
         self.norb = norb
         self.nelec = nelec
 
+        wfnsym = self.guess_wfnsym(norb, nelec, ci0, orbsym, wfnsym, **kwargs)
         with lib.temporary_env(self, orbsym=orbsym, wfnsym=wfnsym):
-            self.wfnsym = self.guess_wfnsym(norb, nelec, ci0, wfnsym, **kwargs)
             e, c = direct_spin1.kernel_ms1(self, h1e, eri, norb, nelec, ci0, None,
                                            tol, lindep, max_cycle, max_space,
                                            nroots, davidson_only, pspace_size,

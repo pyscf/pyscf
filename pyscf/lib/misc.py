@@ -874,12 +874,20 @@ class temporary_env(object):
     '''
     def __init__(self, obj, **kwargs):
         self.obj = obj
-        keys = [key for key in kwargs.keys() if hasattr(obj, key)]
-        self.env_bak = [(key, getattr(obj, key, 'TO_DEL')) for key in keys]
-        self.env_new = [(key, kwargs[key]) for key in keys]
+
+        # Should I skip the keys which are not presented in obj?
+        #keys = [key for key in kwargs.keys() if hasattr(obj, key)]
+        #self.env_bak = [(key, getattr(obj, key, 'TO_DEL')) for key in keys]
+        #self.env_new = [(key, kwargs[key]) for key in keys]
+
+        self.env_bak = [(key, getattr(obj, key, 'TO_DEL')) for key in kwargs]
+        self.env_new = [(key, kwargs[key]) for key in kwargs]
+
     def __enter__(self):
         for k, v in self.env_new:
             setattr(self.obj, k, v)
+        return self
+
     def __exit__(self, type, value, traceback):
         for k, v in self.env_bak:
             if isinstance(v, str) and v == 'TO_DEL':

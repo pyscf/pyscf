@@ -1367,10 +1367,11 @@ def _init_df_eris(cc, eris):
                 if dtype == np.double:
                     out = _ao2mo.nr_e2(Lpq, mo, (0, nmo, nmo, nmo + nvir), aosym='s2')
                 else:
-                    if Lpq.size != naux * nao ** 2:  # aosym = 's2'
+                    #Note: Lpq.shape[0] != naux if linear dependency is found in auxbasis
+                    if Lpq[0].size != nao**2: # aosym = 's2'
                         Lpq = lib.unpack_tril(Lpq).astype(np.complex128)
                     out = _ao2mo.r_e2(Lpq, mo, (0, nmo, nmo, nmo + nvir), tao, ao_loc)
-                Lpv[ki,kj] = out
+                Lpv[ki,kj] = out.reshape(-1,nmo,nvir)
     return eris
 
 imd = imdk
@@ -1517,6 +1518,7 @@ if __name__ == '__main__':
 
     # Running HF and CCSD with 1x1x2 Monkhorst-Pack k-point mesh
     kmf = scf.KRHF(cell, kpts=cell.make_kpts([1, 1, 2]), exxdiv=None)
+    kmf.conv_tol_grad = 1e-8
     ehf = kmf.kernel()
 
     mycc = cc.KRCCSD(kmf)
@@ -1525,9 +1527,11 @@ if __name__ == '__main__':
     ecc, t1, t2 = mycc.kernel()
     print(ecc - -0.155298393321855)
 
-    e_ip, _ = mycc.ipccsd(nroots=3, kptlist=(0,))
-    e_ea, _ = mycc.eaccsd(nroots=3, kptlist=(0,))
-    print(e_ip, e_ea)
+    #e_ip, _ = mycc.ipccsd(nroots=3, kptlist=(0,))
+    mycc.max_cycle = 100
+    e_ea, _ = mycc.eaccsd(nroots=1, koopmans=True, kptlist=(0,))
+    #print(e_ip, e_ea)
+    exit()
 
     ####
     cell = gto.Cell()
