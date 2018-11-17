@@ -308,7 +308,11 @@ class gw(scf):
 
   def gw_corr_int(self, sn2w, eps=None):
     """ This computes an integral part of the GW correction at energies sn2e[spin,len(self.nn)] """
-    if not hasattr(self, 'snmw2sf'): self.snmw2sf = self.get_snmw2sf()
+    if not hasattr(self, 'snmw2sf'): 
+        if self.nprod <= 250:  
+            self.snmw2sf = self.get_snmw2sf()
+        else:
+            self.snmw2sf = self.get_snmw2sf_iter()
     sn2int = [np.zeros_like(n2w, dtype=self.dtype) for n2w in sn2w ]
     eps = self.dw_excl if eps is None else eps
     #print(__name__, 'self.dw_ia', self.dw_ia, sn2w)
@@ -332,7 +336,10 @@ class gw(scf):
         lsos = self.lsofs_inside_contour(self.ksn2e[0,s,:],w,self.dw_excl)
         zww = array([pole[0] for pole in lsos])
         #print(__name__, s,n,w, 'len lsos', len(lsos))
-        si_ww = self.si_c(ww=zww)
+        if self.nprod <= 250:        
+            si_ww = self.si_c(ww=zww)
+        else:
+            si_ww = self.si_c_lgmres(ww=zww)
         xv = dot(v_pab,x[n])
         for pole,si in zip(lsos, si_ww.real):
           xvx = dot(xv, x[pole[1]])
