@@ -595,12 +595,20 @@ class CASSCF(casci.CASCI):
 
         e_tot : float
             Total MCSCF energy (electronic energy plus nuclear repulsion)
+        e_cas : float
+            CAS space FCI energy
         ci : ndarray
             CAS space FCI coefficients
-        converged : bool
-            It indicates CASSCF optimization converged or not.
         mo_coeff : ndarray
-            Optimized CASSCF orbitals coefficients
+            Optimized CASSCF orbitals coefficients. When canonicalization is
+            specified, the returned orbitals make the general Fock matrix
+            (Fock operator on top of MCSCF 1-particle density matrix)
+            diagonalized within each subspace (core, active, external).
+            If natorb (natural orbitals in active space) is specified,
+            the active segment of the mo_coeff is natural orbitls.
+        mo_energy : ndarray
+            Diagonal elements of general Fock matrix (in mo_coeff
+            representation).
 
     Examples:
 
@@ -1222,7 +1230,7 @@ def _fake_h_for_fast_casci(casscf, mo, eris):
     mo_cas = mo[:,ncore:nocc]
     core_dm = numpy.dot(mo_core, mo_core.T) * 2
     hcore = casscf.get_hcore()
-    energy_core = casscf._scf.energy_nuc()
+    energy_core = casscf.energy_nuc()
     energy_core += numpy.einsum('ij,ji', core_dm, hcore)
     energy_core += eris.vhf_c[:ncore,:ncore].trace()
     h1eff = reduce(numpy.dot, (mo_cas.T, hcore, mo_cas))

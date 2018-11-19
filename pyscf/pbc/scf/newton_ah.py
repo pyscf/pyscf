@@ -159,8 +159,12 @@ def _gen_rhf_response(mf, mo_coeff=None, mo_occ=None,
             rho0, vxc, fxc = ni.cache_xc_kernel(cell, mf.grids, mf.xc, mo_coeff,
                                                 mo_occ, 0, kpts)
         else:
+            if isinstance(mo_occ, numpy.ndarray):
+                mo_occ = mo_occ*.5
+            else:
+                mo_occ = [x*.5 for x in mo_occ]
             rho0, vxc, fxc = ni.cache_xc_kernel(cell, mf.grids, mf.xc,
-                                                [mo_coeff]*2, [mo_occ*.5]*2,
+                                                [mo_coeff]*2, [mo_occ]*2,
                                                 spin=1, kpts=kpts)
         dm0 = None #mf.make_rdm1(mo_coeff, mo_occ)
 

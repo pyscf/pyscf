@@ -1070,6 +1070,7 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
                     if kj < ki:
                         for ka in ranges2:
                             kb = kconserv[ki,ka,kj]
+<<<<<<< HEAD
                             # For discussion of LARGE_DENOM, see t1new update above
                             eia = LARGE_DENOM * np.ones((nocc, nvir), dtype=eris.mo_energy[0].dtype)
                             n0_ovp_ia = np.ix_(nonzero_opadding[ki], nonzero_vpadding[ka])
@@ -1079,6 +1080,13 @@ class RCCSD(pyscf.pbc.cc.kccsd_rhf.RCCSD):
                             n0_ovp_jb = np.ix_(nonzero_opadding[kj], nonzero_vpadding[kb])
                             ejb[n0_ovp_jb] = (mo_e_o[kj][:,None] - mo_e_v[kb])[n0_ovp_jb]
                             eijab = eia[:, None, :, None] + ejb[:, None, :]
+=======
+                            eia = numpy.diagonal(foo[ki]).reshape(-1,1) - numpy.diagonal(fvv[ka])
+                            ejb = numpy.diagonal(foo[kj]).reshape(-1,1) - numpy.diagonal(fvv[kb])
+                            eijab = pyscf.lib.direct_sum('ia,jb->ijab',eia,ejb)
+                            idx = abs(eijab) < LOOSE_ZERO_TOL
+                            eijab[idx] = LARGE_DENOM
+>>>>>>> upstream/master
 
                             oovv_ijab = numpy.array(eris.oovv[ki,kj,ka])
                             oovv_ijba = numpy.array(eris.oovv[ki,kj,kb]).transpose(0,1,3,2)

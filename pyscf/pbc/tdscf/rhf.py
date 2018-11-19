@@ -61,35 +61,48 @@ class TDA(rhf.TDA):
         viridx = [numpy.where(mo_occ[k]==0)[0] for k in range(nkpts)]
         orbo = [mo_coeff[k][:,occidx[k]] for k in range(nkpts)]
         orbv = [mo_coeff[k][:,viridx[k]] for k in range(nkpts)]
+<<<<<<< HEAD
         eai = _get_eai(mo_energy, mo_occ)
+=======
+        e_ia = _get_e_ia(mo_energy, mo_occ)
+>>>>>>> upstream/master
         # FIXME: hdiag corresponds to the orbital energy with the exxdiv
         # correction. The integrals in A, B matrices do not have the
         # contribution from the exxdiv. Should the exchange correction be
         # removed from hdiag?
+<<<<<<< HEAD
         hdiag = numpy.hstack([x.ravel() for x in eai])
+=======
+        hdiag = numpy.hstack([x.ravel() for x in e_ia])
+>>>>>>> upstream/master
 
         mem_now = lib.current_memory()[0]
         max_memory = max(2000, self.max_memory*.8-mem_now)
-        vresp = _gen_rhf_response(mf, singlet, hermi=0, max_memory=max_memory)
+        vresp = _gen_rhf_response(mf, singlet=singlet, hermi=0,
+                                  max_memory=max_memory)
 
         def vind(zs):
             nz = len(zs)
             z1s = [_unpack(z, mo_occ) for z in zs]
-            dmvo = numpy.empty((nz,nkpts,nao,nao), dtype=numpy.complex128)
+            dmov = numpy.empty((nz,nkpts,nao,nao), dtype=numpy.complex128)
             for i in range(nz):
-                # *2 for double occupancy
-                dm1 = z1s[i] * 2
                 for k in range(nkpts):
-                    dmvo[i,k] = reduce(numpy.dot, (orbv[k], dm1[k], orbo[k].T.conj()))
+                    # *2 for double occupancy
+                    dm1 = z1s[i][k] * 2
+                    dmov[i,k] = reduce(numpy.dot, (orbo[k], dm1, orbv[k].conj().T))
 
+<<<<<<< HEAD
             with lib.temporary_env(mf, exxdiv=None):
                 v1ao = vresp(dmvo)
+=======
+            v1ao = vresp(dmov)
+>>>>>>> upstream/master
             v1s = []
             for i in range(nz):
                 dm1 = z1s[i]
                 for k in range(nkpts):
-                    v1vo = reduce(numpy.dot, (orbv[k].T.conj(), v1ao[i,k], orbo[k]))
-                    v1vo += eai[k] * dm1[k]
+                    v1vo = reduce(numpy.dot, (orbo[k].conj().T, v1ao[i,k], orbv[k]))
+                    v1vo += e_ia[k] * dm1[k]
                     v1s.append(v1vo.ravel())
             return lib.asarray(v1s).reshape(nz,-1)
         return vind, hdiag
@@ -99,12 +112,12 @@ class TDA(rhf.TDA):
 
         mo_energy = mf.mo_energy
         mo_occ = mf.mo_occ
-        eai = numpy.hstack([x.ravel() for x in _get_eai(mo_energy, mo_occ)])
+        e_ia = numpy.hstack([x.ravel() for x in _get_e_ia(mo_energy, mo_occ)])
 
-        nov = eai.size
+        nov = e_ia.size
         nroot = min(nstates, nov)
         x0 = numpy.zeros((nroot, nov))
-        idx = numpy.argsort(eai.ravel())
+        idx = numpy.argsort(e_ia.ravel())
         for i in range(nroot):
             x0[i,idx[i]] = 1  # lowest excitations
         return x0
@@ -153,30 +166,35 @@ class TDHF(TDA):
         viridx = [numpy.where(mo_occ[k]==0)[0] for k in range(nkpts)]
         orbo = [mo_coeff[k][:,occidx[k]] for k in range(nkpts)]
         orbv = [mo_coeff[k][:,viridx[k]] for k in range(nkpts)]
-        eai = _get_eai(mo_energy, mo_occ)
-        hdiag = numpy.hstack([x.ravel() for x in eai])
+        e_ia = _get_e_ia(mo_energy, mo_occ)
+        hdiag = numpy.hstack([x.ravel() for x in e_ia])
         tot_x = hdiag.size
         hdiag = numpy.hstack((hdiag, hdiag))
 
         mem_now = lib.current_memory()[0]
         max_memory = max(2000, self.max_memory*.8-mem_now)
-        vresp = _gen_rhf_response(mf, singlet, hermi=0, max_memory=max_memory)
+        vresp = _gen_rhf_response(mf, singlet=singlet, hermi=0,
+                                  max_memory=max_memory)
 
         def vind(xys):
             nz = len(xys)
             z1xs = [_unpack(xy[:tot_x], mo_occ) for xy in xys]
             z1ys = [_unpack(xy[tot_x:], mo_occ) for xy in xys]
-            dmvo = numpy.empty((nz,nkpts,nao,nao), dtype=numpy.complex128)
+            dmov = numpy.empty((nz,nkpts,nao,nao), dtype=numpy.complex128)
             for i in range(nz):
-                # *2 for double occupancy
-                dmx = z1xs[i] * 2
-                dmy = z1ys[i] * 2
                 for k in range(nkpts):
-                    dmvo[i,k] = reduce(numpy.dot, (orbv[k], dmx[k], orbo[k].T.conj()))
-                    dmvo[i,k]+= reduce(numpy.dot, (orbo[k], dmy[k].T, orbv[k].T.conj()))
+                    # *2 for double occupancy
+                    dmx = z1xs[i][k] * 2
+                    dmy = z1ys[i][k] * 2
+                    dmov[i,k] = reduce(numpy.dot, (orbo[k], dmx, orbv[k].T.conj()))
+                    dmov[i,k]+= reduce(numpy.dot, (orbv[k], dmy.T, orbo[k].T.conj()))
 
+<<<<<<< HEAD
             with lib.temporary_env(mf, exxdiv=None):
                 v1ao = vresp(dmvo)
+=======
+            v1ao = vresp(dmov)
+>>>>>>> upstream/master
             v1s = []
             for i in range(nz):
                 dmx = z1xs[i]
@@ -184,10 +202,10 @@ class TDHF(TDA):
                 v1xs = []
                 v1ys = []
                 for k in range(nkpts):
-                    v1x = reduce(numpy.dot, (orbv[k].T.conj(), v1ao[i,k], orbo[k]))
-                    v1y = reduce(numpy.dot, (orbo[k].T.conj(), v1ao[i,k], orbv[k])).T
-                    v1x+= eai[k] * dmx[k]
-                    v1y+= eai[k] * dmy[k]
+                    v1x = reduce(numpy.dot, (orbo[k].T.conj(), v1ao[i,k], orbv[k]))
+                    v1y = reduce(numpy.dot, (orbv[k].T.conj(), v1ao[i,k], orbo[k])).T
+                    v1x+= e_ia[k] * dmx[k]
+                    v1y+= e_ia[k] * dmy[k]
                     v1xs.append(v1x.ravel())
                     v1ys.append(-v1y.ravel())
                 v1s += v1xs + v1ys
@@ -241,23 +259,22 @@ class TDHF(TDA):
 RPA = TDHF
 
 
-def _get_eai(mo_energy, mo_occ):
-    eai = []
+def _get_e_ia(mo_energy, mo_occ):
+    e_ia = []
     for k, occ in enumerate(mo_occ):
         occidx = occ >  0
         viridx = occ == 0
-        ai = lib.direct_sum('a-i->ai', mo_energy[k][viridx], mo_energy[k][occidx])
-        eai.append(ai)
-    return eai
+        e_ia.append(mo_energy[k][viridx] - mo_energy[k][occidx,None])
+    return e_ia
 
 def _unpack(vo, mo_occ):
     z = []
-    ip = 0
+    p1 = 0
     for k, occ in enumerate(mo_occ):
         no = numpy.count_nonzero(occ > 0)
         nv = occ.size - no
-        z.append(vo[ip:ip+nv*no].reshape(nv,no))
-        ip += nv * no
+        p0, p1 = p1, p1 + no * nv
+        z.append(vo[p0:p1].reshape(no,nv))
     return z
 
 

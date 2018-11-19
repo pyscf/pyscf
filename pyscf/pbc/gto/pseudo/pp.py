@@ -149,6 +149,11 @@ def projG_li(G, l, i, rl):
 
 def _qli(x,l,i):
     # MH Eqs. (4.82)-(4.93) :: beware typos!
+    # Mathematica formulas:
+    # p[l_, i_, r_] = Sqrt[2] r^(l + 2 (i - 1)) Exp[-r^2/(2 R^2)]/(R^(l + (4 i - 1)/2) Sqrt[Gamma[l + (4 i - 1)/2]])
+    # pG[l_, i_, G_] = Integrate[p[l, i, r] 4 Pi r^2 SphericalBesselJ[l, G r], {r, 0, Infinity}]
+    # qG[l_, i_, G_] := pG[l, i, G]/(Pi^(5/4) G^l Sqrt[R^(2 l + 3)]/Exp[(G R)^2/2])
+    # FullSimplify[qG[4, 3, G], R > 0 && G > 0]
     sqrt = np.sqrt
     if l==0 and i==0:
         return 4*sqrt(2.)
@@ -172,6 +177,18 @@ def _qli(x,l,i):
     elif l==2 and i==2:
         #return 32/3.*sqrt(2/15015.)*(63-36*x**2+4*x**4) # MH (wrong I think)
         return 32/3.*sqrt(2/15015.)*(63-18*x**2+x**4) # TCB
+    elif l==3 and i==0:
+        return 16*sqrt(1/105.)
+    elif l==3 and i==1:
+        return 32/3.*sqrt(1/1155.)*(9-x**2)
+    elif l==3 and i==2:
+        return 64/45.*sqrt(1/1001.)*(99-22*x**2+x**4)
+    elif l==4 and i==0:
+        return 16/3.*sqrt(2/105.)
+    elif l==4 and i==1:
+        return 32/3.*sqrt(2/15015.)*(11-x**2)
+    elif l==4 and i==2:
+        return 64/45.*sqrt(2/17017.)*(143-26*x**2+x**4)
     else:
         print("*** WARNING *** l =", l, ", i =", i, "not yet implemented for NL PP!")
         return 0.
