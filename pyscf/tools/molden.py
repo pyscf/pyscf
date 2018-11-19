@@ -20,6 +20,7 @@
 # http://www.cmbi.ru.nl/molden/molden_format.html
 
 import sys
+import re
 import numpy
 import pyscf
 from pyscf import lib
@@ -138,140 +139,220 @@ def from_chkfile(filename, chkfile, key='scf/mo_coeff', ignore_h=IGNORE_H):
         else:
             orbital_coeff(mol, f, mo, ene=ene, occ=occ, ignore_h=ignore_h)
 
-def parse(moldenfile):
-    return load(moldenfile)
-def load(moldenfile):
-    '''Extract mol and orbitals from molden file
-    '''
-    mol = gto.Mole()
-    with open(moldenfile, 'r') as f:
-        line = first_token(f, '[Atoms]')
-        if 'ANG' in line.upper():
-            unit = 1
+
+_SEC_RE = re.compile(r'\[[^]]+\]')
+
+def _read_one_section(molden_fp):
+    sec = [None]
+    while True:
+        line = molden_fp.readline()
+        if not line:
+            break
+
+        line = line.strip()
+        if line == '' or line[0] == '#':  # comment or blank line
+            continue
+
+        mo = _SEC_RE.match(line)
+        if mo:
+            if sec[0] is None:
+                sec[0] = line
+            else:
+                # Next section? rewind the fp pointer
+                molden_fp.seek(last_pos)
+                break
         else:
-            unit = lib.param.BOHR
+            sec.append(line)
 
-        atoms = []
-        line = f.readline()
-        while line:
-            if '[GTO]' in line:
-                break
-            dat = line.split()
-            symb, atmid, chg = dat[:3]
-            coord = numpy.array([float(x) for x in dat[3:]])*unit
-            atoms.append((gto.mole._std_symbol(symb)+atmid, coord))
-            line = f.readline()
-        mol.atom = atoms
+        last_pos = molden_fp.tell()
 
-        def read_one_bas(lsym, nb, fac):
-            fac = float(fac)
-            bas = [lib.param.ANGULARMAP[lsym],]
-            for i in range(int(nb)):
-                dat = _d2e(f.readline()).split()
-                bas.append((float(dat[0]), float(dat[1])*fac))
-            return bas
-        basis = {}
-        line = f.readline()
+    return sec
 
-# Be careful with the atom sequence in [GTO] session, it does not correspond
+def _parse_natoms(lines, envs):
+    envs['natm'] = natm = int(lines[1])
+    return natm
+
+def _parse_atoms(lines, envs):
+    if 'ANG' in lines[0].upper():
+        envs['unit'] = 1
+    unit = envs['unit']
+
+    envs['atoms'] = atoms = []
+    for line in lines[1:]:
+        dat = line.split()
+        symb, atmid, chg = dat[:3]
+        coord = numpy.array([float(x) for x in dat[3:]])*unit
+        atoms.append((gto.mole._std_symbol(symb)+atmid, coord))
+
+    if envs['natm'] is not None and envs['natm'] != len(atoms):
+        sys.stderr.write('Number of atoms in section ATOMS does not equal to N_ATOMS\n')
+    return atoms
+
+def _parse_charge(lines, envs):
+    mulliken_charges = [float(_d2e(x)) for x in lines[1:]]
+    return mulliken_charges
+
+def _parse_gto(lines, envs):
+    mol = envs['mol']
+    atoms = envs['atoms']
+    basis = {}
+    lines_iter = iter(lines)
+    next(lines_iter)  # skip section header
+
+# * Do not use iter() here. Python 2 and 3 are different in iter()
+    def read_one_bas(lsym, nb, fac=1):
+        fac = float(fac)
+        bas = [lib.param.ANGULARMAP[lsym.lower()],]
+        for i in range(int(nb)):
+            dat = _d2e(next(lines_iter)).split()
+            bas.append((float(dat[0]), float(dat[1])*fac))
+        return bas
+
+# * Be careful with the atom sequence in [GTO] session, it does not correspond
 # to the atom sequence in [Atoms] session.
-        atom_seq = []
-        while line:
-            if '[' in line:
-                break
-            dat = line.split()
-            if len(dat) == 0:
-                pass
-            elif dat[0].isdigit():
-                atom_seq.append(int(dat[0])-1)
-                symb = mol.atom[int(dat[0])-1][0]
-                basis[symb] = []
-            elif dat[0] in 'spdfghij':
-                lsym, nb, fac = dat
-                basis[symb].append(read_one_bas(lsym, nb, fac))
-            line = f.readline()
-        mol.basis = basis
-        mol.atom = [mol.atom[i] for i in atom_seq]
+    atom_seq = []
 
-        mol.cart = True
-        while line:
-            if '[5d]' in line or '[9g]' in line:
-                mol.cart = False
-            elif '[core]' in line:
-                line = f.readline()
-                while line:
-                    dat = line.split(':')
-                    if dat[0].strip().isdigit():
-                        atm_id = int(dat[0].strip()) - 1
-                        nelec_core = int(dat[1].strip())
-                        mol.ecp[atoms[atm_id][0]] = [nelec_core, []]
-                    elif '[MO]' in line:
-                        break
-                    line = f.readline()
-            if '[MO]' in line:
-                break
-            line = f.readline()
+    for line in lines_iter:
+        dat = line.split()
+        if dat[0].isdigit():
+            atom_seq.append(int(dat[0])-1)
+            symb = atoms[int(dat[0])-1][0]
+            basis[symb] = []
 
-        if mol.ecp:
-            sys.stderr.write('\nECP were dectected in the molden file.\n'
-                             'Note Molden format does not support ECP data. '
-                             'ECP information was lost when saving to molden format.\n\n')
+        elif dat[0].upper() in 'SPDFGHIJ':
+            basis[symb].append(read_one_bas(*dat))
+
+    mol.basis = envs['basis'] = basis
+    mol.atom = [atoms[i] for i in atom_seq]
+    return mol
+
+def _parse_mo(lines, envs):
+    mol = envs['mol']
+    atoms = envs['atoms']
+    if not mol._built:
         try:
             mol.build(0, 0)
         except RuntimeError:
             mol.build(0, 0, spin=1)
 
-        data = f.read()
-        data = data.split('Sym')[1:]
-        irrep_labels = []
-        mo_energy = []
-        spins = []
-        mo_occ = []
-        mo_coeff = []
-        norb_alpha = -1
-        for rawd in data:
-            lines = rawd.split('\n')
-            irrep_labels.append(lines[0].split('=')[1].strip())
+    irrep_labels = []
+    mo_energy = []
+    spins = []
+    mo_occ = []
+    mo_coeff = []
+    norb_alpha = -1
+    for line in lines[1:]:
+        line = line.upper()
+        if 'SYM' in line:
+            irrep_labels.append(line.split('=')[1].strip())
             orb = []
-            for line in lines[1:]:
-                if line.strip() == '':
-                    continue
-                elif 'Ene' in line:
-                    mo_energy.append(float(_d2e(line).split('=')[1].strip()))
-                elif 'Spin' in line:
-                    spins.append(line.split('=')[1].strip())
-                elif 'Occ' in line:
-                    mo_occ.append(float(_d2e(line.split('=')[1].strip())))
-                elif '[MO]' in line:
-                    norb_alpha = len(mo_energy)
-                else:
-                    orb.append(float(_d2e(line.split()[1])))
             mo_coeff.append(orb)
-        mo_energy = numpy.array(mo_energy)
-        mo_occ = numpy.array(mo_occ)
-        if mol.cart:
-            aoidx = numpy.argsort(order_ao_index(mol, cart=True))
-            mo_coeff = (numpy.array(mo_coeff).T)[aoidx]
-# AO are assumed to be normalized in molpro molden file
-            s = mol.intor('int1e_ovlp')
-            mo_coeff = numpy.einsum('i,ij->ij', numpy.sqrt(1/s.diagonal()), mo_coeff)
+        elif 'ENE' in line:
+            mo_energy.append(float(_d2e(line).split('=')[1].strip()))
+        elif 'SPIN' in line:
+            spins.append(line.split('=')[1].strip())
+        elif 'OCC' in line:
+            mo_occ.append(float(_d2e(line.split('=')[1].strip())))
         else:
-            aoidx = numpy.argsort(order_ao_index(mol))
-            mo_coeff = (numpy.array(mo_coeff).T)[aoidx]
-        if norb_alpha > 0:
-            irrep_labels = (irrep_labels[:norb_alpha], irrep_labels[norb_alpha:])
-            spins = (spins[:norb_alpha], spins[norb_alpha:])
-            mo_energy = (mo_energy[:norb_alpha], mo_energy[norb_alpha:])
-            mo_occ = (mo_occ[:norb_alpha], mo_occ[norb_alpha:])
-            mo_coeff = (mo_coeff[:,:norb_alpha], mo_coeff[:,norb_alpha:])
-        return mol, mo_energy, mo_coeff, mo_occ, irrep_labels, spins
+            orb.append(float(_d2e(line.split()[1])))
 
-def first_token(stream, key):
-    line = stream.readline()
-    while line:
-        if key in line:
-            return line
-        line = stream.readline()
+    mo_energy = numpy.array(mo_energy)
+    mo_occ = numpy.array(mo_occ)
+    if mol.cart:
+        aoidx = numpy.argsort(order_ao_index(mol, cart=True))
+        mo_coeff = (numpy.array(mo_coeff).T)[aoidx]
+# AO are assumed to be normalized in molpro molden file
+        s = mol.intor('int1e_ovlp')
+        mo_coeff = numpy.einsum('i,ij->ij', numpy.sqrt(1/s.diagonal()), mo_coeff)
+    else:
+        aoidx = numpy.argsort(order_ao_index(mol))
+        mo_coeff = (numpy.array(mo_coeff).T)[aoidx]
+
+    return mol, mo_energy, mo_coeff, mo_occ, irrep_labels, spins
+
+
+def _parse_core(lines, envs):
+    mol = envs['mol']
+    atoms = envs['atoms']
+    line_id = 1
+    max_lines = len(lines)
+    for line in lines[1:]:
+        dat = line.split(':')
+        if dat[0].strip().isdigit():
+            atm_id = int(dat[0].strip()) - 1
+            nelec_core = int(dat[1].strip())
+            mol.ecp[atoms[atm_id][0]] = [nelec_core, []]
+
+    if mol.ecp:
+        sys.stderr.write('\nECP were dectected in the molden file.\n'
+                         'Note Molden format does not support ECP data. '
+                         'ECP information was lost when saving to molden format.\n\n')
+    return mol.ecp
+
+_SEC_PARSER = {'GTO'      : _parse_gto,
+               'N_ATOMS'  : _parse_natoms,
+               'ATOMS'    : _parse_atoms,
+               'CHARGE'   : _parse_charge,
+               'MO'       : _parse_mo,
+               'CORE'     : _parse_core,
+               'MOLDEN FORMAT' : lambda *args: None,
+              }
+
+def load(moldenfile, verbose=0):
+    '''Extract mol and orbitals from molden file
+    '''
+    with open(moldenfile, 'r') as f:
+        mol = gto.Mole()
+        mol.cart = True
+        tokens = {'natm'  : None,
+                  'unit'  : lib.param.BOHR,
+                  'mol'   : mol,
+                  'atoms' : None,
+                  'basis' : None,
+                 }
+
+        while True:
+            lines = _read_one_section(f)
+            sec_title = lines[0]
+            if sec_title is None:
+                break
+
+            mo_section_count = 0
+            sec_title = sec_title[1:sec_title.index(']')].upper()
+            if sec_title == 'MO':
+                mol, mo_energy, mo_coeff, mo_occ, irrep_labels, spins = \
+                        _parse_mo(lines, tokens)
+                if mo_section_count >= 1:  # Append beta orbitals
+                    res = _parse_mo(lines, tokens)
+                    mo_energy    = mo_energy   , res[1]
+                    mo_coeff     = mo_coeff    , res[2]
+                    mo_occ       = mo_occ      , res[3]
+                    irrep_labels = irrep_labels, res[4]
+                    spins        = spins       , res[5]
+
+                mo_section_count += 1
+            elif sec_title in _SEC_PARSER:
+                _SEC_PARSER[sec_title.upper()](lines, tokens)
+            elif sec_title in ('5D', '7F', '9G'):
+                mol.cart = False
+            else:
+                sys.stderr.write('Unknown section %s\n' % sec_title)
+
+    if mo_section_count == 0:
+        if spins[-1][0] == 'B':  # If including beta orbitals
+            offset = spins.index(spins[-1])
+            mo_energy    = mo_energy   [:offset], mo_energy   [offset:]
+            mo_coeff     = mo_coeff    [:offset], mo_coeff    [offset:]
+            mo_occ       = mo_occ      [:offset], mo_occ      [offset:]
+            irrep_labels = irrep_labels[:offset], irrep_labels[offset:]
+            spins        = spins       [:offset], spins       [offset:]
+
+    if isinstance(mo_occ, tuple):
+        mol.spin = int(mo_occ[0].sum() - mo_occ[1].sum())
+
+    return mol, mo_energy, mo_coeff, mo_occ, irrep_labels, spins
+
+parse = read = load
 
 def _d2e(token):
     return token.replace('D', 'e').replace('d', 'e')
