@@ -145,9 +145,16 @@ def eval_rho(cell, ao, dm, non0tab=None, xctype='LDA', hermi=0, verbose=None):
     if numpy.iscomplexobj(ao) or numpy.iscomplexobj(dm):
         shls_slice = (0, cell.nbas)
         ao_loc = cell.ao_loc_nr()
+        dm = dm.astype(numpy.complex128)
+# For GGA, function eval_rho returns   real(|\nabla i> D_ij <j| + |i> D_ij <\nabla j|)
+#       = real(|\nabla i> D_ij <j| + |i> D_ij <\nabla j|)
+#       = real(|\nabla i> D_ij <j| + conj(|\nabla j> conj(D_ij) < i|))
+#       = real(|\nabla i> D_ij <j|) + real(|\nabla j> conj(D_ij) < i|)
+#       = real(|\nabla i> [D_ij + (D^\dagger)_ij] <j|)
+# symmetrization dm (D + D.conj().T) then /2 because the code below computes
+#       2*real(|\nabla i> D_ij <j|)
         if not hermi:
             dm = (dm + dm.conj().T) * .5
-        dm = dm.astype(numpy.complex128)
 
         def dot_bra(bra, aodm):
             #:rho  = numpy.einsum('pi,pi->p', bra.real, aodm.real)
@@ -1230,7 +1237,7 @@ class KNumInt(numint.NumInt):
             ndms = len(dms)
             def make_rho(idm, ao_kpts, non0tab, xctype):
                 return self.eval_rho(cell, ao_kpts, dms[idm], non0tab, xctype,
-                                     hermi=1)
+                                     hermi=hermi)
         return make_rho, ndms, nao
 
     nr_rks_fxc = nr_rks_fxc
