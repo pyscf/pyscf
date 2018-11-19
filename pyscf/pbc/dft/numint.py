@@ -1217,10 +1217,15 @@ class KNumInt(numint.NumInt):
                                       non0tab, xctype)
         else:
             if isinstance(dms[0], numpy.ndarray) and dms[0].ndim == 2:
-                dms = [numpy.asarray(dms)]
-            if not hermi:
-                #       dm.shape = (nkpts, nao, nao)
-                dms = [(dm+dm.conj().transpose(0,2,1))*.5 for dm in dms]
+                dms = [numpy.stack(dms)]
+            #if not hermi:
+            # Density (or response of density) is always real for DFT.
+            # Symmetrizing DM for gamma point should not change the value of
+            # density. However, when k-point is considered, unless dm and
+            # dm.conj().transpose produce the same real part of density, the
+            # symmetrization code below may be incorrect (proof is needed).
+            #    # dm.shape = (nkpts, nao, nao)
+            #    dms = [(dm+dm.conj().transpose(0,2,1))*.5 for dm in dms]
             nao = dms[0].shape[-1]
             ndms = len(dms)
             def make_rho(idm, ao_kpts, non0tab, xctype):
