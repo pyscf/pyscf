@@ -21,6 +21,7 @@ from functools import reduce
 import numpy
 from pyscf import lib
 from pyscf.lib import logger
+from pyscf import gto
 from pyscf import scf
 from pyscf import ao2mo
 from pyscf import fci
@@ -529,7 +530,6 @@ def as_scanner(mc):
     >>> mc_scanner(gto.M(atom='N 0 0 0; N 0 0 1.1'))
     >>> mc_scanner(gto.M(atom='N 0 0 0; N 0 0 1.5'))
     '''
-    from pyscf import gto
     if isinstance(mc, lib.SinglePointScanner):
         return mc
 
@@ -559,6 +559,19 @@ def as_scanner(mc):
 
 class CASCI(lib.StreamObject):
     '''CASCI
+
+    Args:
+        mf_or_mol : SCF object or Mole object
+            SCF or Mole to define the problem size.
+        ncas : int
+            Number of active orbitals.
+        nelecas : int or a pair of int
+            Number of electrons in active space.
+
+    Kwargs:
+        ncore : int
+            Number of doubly occupied core orbitals. If not presented, this
+            parameter can be automatically determined.
 
     Attributes:
         verbose : int
@@ -634,7 +647,12 @@ class CASCI(lib.StreamObject):
     canonicalization = getattr(__config__, 'mcscf_casci_CASCI_canonicalization', True)
     sorting_mo_energy = getattr(__config__, 'mcscf_casci_CASCI_sorting_mo_energy', False)
 
-    def __init__(self, mf, ncas, nelecas, ncore=None):
+    def __init__(self, mf_or_mol, ncas, nelecas, ncore=None):
+        if isinstance(mf_or_mol, gto.Mole):
+            mf = scf.RHF(mf_or_mol)
+        else:
+            mf = mf_or_mol
+
         mol = mf.mol
         self.mol = mol
         self._scf = mf
@@ -946,8 +964,6 @@ del(WITH_META_LOWDIN, LARGE_CI_TOL, PENALTY)
 
 
 if __name__ == '__main__':
-    from pyscf import gto
-    from pyscf import scf
     from pyscf import mcscf
     mol = gto.Mole()
     mol.verbose = 0

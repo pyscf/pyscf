@@ -36,10 +36,14 @@ to try out the package::
 '''
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 __version__ = '1.6a'
 =======
 __version__ = '1.5.4'
 >>>>>>> upstream/master
+=======
+__version__ = '1.6a'
+>>>>>>> upstream/dev
 
 import os
 import sys

@@ -29,7 +29,8 @@ from pyscf.mcscf.casci import get_fock, cas_natorb, canonicalize
 from pyscf.mcscf import mc_ao2mo
 from pyscf.mcscf import chkfile
 from pyscf import ao2mo
-from pyscf import scf
+from pyscf import gto
+from pyscf import fci
 from pyscf.soscf import ciah
 from pyscf import __config__
 
@@ -492,7 +493,6 @@ def as_scanner(mc):
     >>> e = mc_scanner(gto.M(atom='N 0 0 0; N 0 0 1.1'))
     >>> e = mc_scanner(gto.M(atom='N 0 0 0; N 0 0 1.5'))
     '''
-    from pyscf import gto
     from pyscf.mcscf.addons import project_init_guess
     if isinstance(mc, lib.SinglePointScanner):
         return mc
@@ -670,12 +670,12 @@ class CASSCF(casci.CASCI):
     canonicalization = getattr(__config__, 'mcscf_mc1step_CASSCF_canonicalization', True)
     sorting_mo_energy = getattr(__config__, 'mcscf_mc1step_CASSCF_sorting_mo_energy', False)
 
-    def __init__(self, mf, ncas, nelecas, ncore=None, frozen=None):
-        casci.CASCI.__init__(self, mf, ncas, nelecas, ncore)
+    def __init__(self, mf_or_mol, ncas, nelecas, ncore=None, frozen=None):
+        casci.CASCI.__init__(self, mf_or_mol, ncas, nelecas, ncore)
         self.frozen = frozen
 
         self.callback = None
-        self.chkfile = mf.chkfile
+        self.chkfile = self._scf.chkfile
 
         self.fcisolver.max_cycle = getattr(__config__,
                                            'mcscf_mc1step_CASSCF_fcisolver_max_cycle', 50)
@@ -687,8 +687,8 @@ class CASSCF(casci.CASCI):
         self.e_tot = None
         self.e_cas = None
         self.ci = None
-        self.mo_coeff = mf.mo_coeff
-        self.mo_energy = mf.mo_energy
+        self.mo_coeff = self._scf.mo_coeff
+        self.mo_energy = self._scf.mo_energy
         self.converged = False
         self._max_stepsize = None
 
@@ -1038,9 +1038,25 @@ To enable the solvent model for CASSCF, a decoration to CASSCF object as below n
             return ci1, None
 
         h2eff = self.fcisolver.absorb_h1e(h1, h2, ncas, nelecas, .5)
-        hc = self.fcisolver.contract_2e(h2eff, ci0, ncas, nelecas).ravel()
 
+        # Be careful with the symmetry adapted contract_2e function. When the
+        # symmetry adapted FCI solver is used, the symmetry of ci0 may be
+        # different to fcisolver.wfnsym. This function may output 0.
+        if hasattr(self.fcisolver, 'guess_wfnsym'):
+            wfnsym = self.fcisolver.guess_wfnsym(self.ncas, self.nelecas, ci0)
+        else:
+            wfnsym = None
+        def contract_2e(c):
+            if wfnsym is None:
+                hc = self.fcisolver.contract_2e(h2eff, c, ncas, nelecas)
+            else:
+                with lib.temporary_env(self.fcisolver, wfnsym=wfnsym):
+                    hc = self.fcisolver.contract_2e(h2eff, c, ncas, nelecas)
+            return hc.ravel()
+
+        hc = contract_2e(ci0)
         g = hc - (e_cas-ecore) * ci0.ravel()
+
         if self.ci_response_space > 7:
             logger.debug(self, 'CI step by full response')
             # full response
@@ -1058,8 +1074,7 @@ To enable the solvent model for CASSCF, a decoration to CASSCF object as below n
             seff[0,0] = 1
             for i in range(1, nd):
                 xs.append(ax[i-1] - xs[i-1] * e_cas)
-                ax.append(self.fcisolver.contract_2e(h2eff, xs[i], ncas,
-                                                     nelecas).ravel())
+                ax.append(contract_2e(xs[i]))
                 for j in range(i+1):
                     heff[i,j] = heff[j,i] = numpy.dot(xs[i], ax[j])
                     seff[i,j] = seff[j,i] = numpy.dot(xs[i], xs[j])
@@ -1248,9 +1263,8 @@ def expmat(a):
 
 
 if __name__ == '__main__':
-    from pyscf import gto
     from pyscf import scf
-    import pyscf.fci
+    from pyscf import fci
     from pyscf.mcscf import addons
 
     mol = gto.Mole()
@@ -1279,8 +1293,8 @@ if __name__ == '__main__':
 
     mc = CASSCF(m, 4, (3,1))
     mc.verbose = 4
-    #mc.fcisolver = pyscf.fci.direct_spin1
-    mc.fcisolver = pyscf.fci.solver(mol, False)
+    #mc.fcisolver = fci.direct_spin1
+    mc.fcisolver = fci.solver(mol, False)
     emc = kernel(mc, m.mo_coeff, verbose=4)[1]
     print(emc - -15.950852049859-mol.energy_nuc())
 
@@ -1308,8 +1322,8 @@ if __name__ == '__main__':
     mc = CASSCF(m, 4, (3,1))
     mc.verbose = 4
     mc.natorb = 1
-    #mc.fcisolver = pyscf.fci.direct_spin1
-    mc.fcisolver = pyscf.fci.solver(mol, False)
+    #mc.fcisolver = fci.direct_spin1
+    mc.fcisolver = fci.solver(mol, False)
     emc = kernel(mc, m.mo_coeff, verbose=4)[1]
     print(emc - -3.62638367550087)
 
@@ -1325,7 +1339,7 @@ if __name__ == '__main__':
     m = scf.RHF(mol)
     ehf = m.scf()
     mc = CASSCF(m, 6, 4)
-    mc.fcisolver = pyscf.fci.solver(mol)
+    mc.fcisolver = fci.solver(mol)
     mc.verbose = 4
     mo = addons.sort_mo(mc, m.mo_coeff, (3,4,6,7,8,9), 1)
     emc = mc.mc1step(mo)[0]
@@ -1335,8 +1349,8 @@ if __name__ == '__main__':
 
     mc = CASSCF(m, 6, (3,1))
     mo = addons.sort_mo(mc, m.mo_coeff, (3,4,6,7,8,9), 1)
-    #mc.fcisolver = pyscf.fci.direct_spin1
-    mc.fcisolver = pyscf.fci.solver(mol, False)
+    #mc.fcisolver = fci.direct_spin1
+    mc.fcisolver = fci.solver(mol, False)
     mc.verbose = 4
     emc = mc.mc1step(mo)[0]
     #mc.analyze()

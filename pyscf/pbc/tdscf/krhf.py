@@ -20,12 +20,20 @@
 # J. Mol. Struct. THEOCHEM, 914, 3
 #
 
+from functools import reduce
+import numpy
 from pyscf import lib
+from pyscf.lib import logger
+from pyscf.ao2mo import _ao2mo
 from pyscf.tdscf import rhf
+from pyscf.pbc.dft import numint
+from pyscf.pbc.scf.newton_ah import _gen_rhf_response
+from pyscf import __config__
 
+REAL_EIG_THRESHOLD = getattr(__config__, 'pbc_tdscf_rhf_TDDFT_pick_eig_threshold', 1e-3)
+POSTIVE_EIG_THRESHOLD = getattr(__config__, 'pbc_tdscf_rhf_TDDFT_positive_eig_threshold', 1e-3)
 
 class TDA(rhf.TDA):
-<<<<<<< HEAD
 #FIXME: numerically unstable with small mesh?
 #TODO: Add a warning message for small mesh.
 
@@ -53,20 +61,12 @@ class TDA(rhf.TDA):
         viridx = [numpy.where(mo_occ[k]==0)[0] for k in range(nkpts)]
         orbo = [mo_coeff[k][:,occidx[k]] for k in range(nkpts)]
         orbv = [mo_coeff[k][:,viridx[k]] for k in range(nkpts)]
-<<<<<<< HEAD
-        eai = _get_eai(mo_energy, mo_occ)
-=======
         e_ia = _get_e_ia(mo_energy, mo_occ)
->>>>>>> upstream/master
         # FIXME: hdiag corresponds to the orbital energy with the exxdiv
         # correction. The integrals in A, B matrices do not have the
         # contribution from the exxdiv. Should the exchange correction be
         # removed from hdiag?
-<<<<<<< HEAD
-        hdiag = numpy.hstack([x.ravel() for x in eai])
-=======
         hdiag = numpy.hstack([x.ravel() for x in e_ia])
->>>>>>> upstream/master
 
         mem_now = lib.current_memory()[0]
         max_memory = max(2000, self.max_memory*.8-mem_now)
@@ -83,12 +83,8 @@ class TDA(rhf.TDA):
                     dm1 = z1s[i][k] * 2
                     dmov[i,k] = reduce(numpy.dot, (orbo[k], dm1, orbv[k].conj().T))
 
-<<<<<<< HEAD
             with lib.temporary_env(mf, exxdiv=None):
-                v1ao = vresp(dmvo)
-=======
-            v1ao = vresp(dmov)
->>>>>>> upstream/master
+                v1ao = vresp(dmov)
             v1s = []
             for i in range(nz):
                 dm1 = z1s[i]
@@ -101,22 +97,44 @@ class TDA(rhf.TDA):
 
     def init_guess(self, mf, nstates=None):
         if nstates is None: nstates = self.nstates
-=======
-    def gen_vind(self, mf):
-        vind, hdiag = rhf.TDA.gen_vind(self, mf)
-        def vindp(x):
-            with lib.temporary_env(mf, exxdiv=None):
-                return vind(x)
-        return vindp, hdiag
->>>>>>> upstream/dev
 
-    def nuc_grad_method(self):
-        raise NotImplementedError
+        mo_energy = mf.mo_energy
+        mo_occ = mf.mo_occ
+        e_ia = numpy.hstack([x.ravel() for x in _get_e_ia(mo_energy, mo_occ)])
 
-CIS = TDA
+        nov = e_ia.size
+        nroot = min(nstates, nov)
+        x0 = numpy.zeros((nroot, nov))
+        idx = numpy.argsort(e_ia.ravel())
+        for i in range(nroot):
+            x0[i,idx[i]] = 1  # lowest excitations
+        return x0
+
+    def kernel(self, x0=None):
+        '''TDA diagonalization solver
+        '''
+        self.check_sanity()
+        self.dump_flags()
+
+        vind, hdiag = self.get_vind(self._scf)
+        precond = self.get_precond(hdiag)
+
+        if x0 is None:
+            x0 = self.init_guess(self._scf, self.nstates)
+        self.converged, self.e, x1 = \
+                lib.davidson1(vind, x0, precond,
+                              tol=self.conv_tol,
+                              nroots=self.nstates, lindep=self.lindep,
+                              max_space=self.max_space,
+                              verbose=self.verbose)
+
+        mo_occ = self._scf.mo_occ
+# 1/sqrt(2) because self.x is for alpha excitation amplitude and 2(X^+*X) = 1
+        self.xy = [(_unpack(xi*numpy.sqrt(.5), mo_occ), 0) for xi in x1]
+        return self.e, self.xy
+CIS = KTDA = TDA
 
 
-<<<<<<< HEAD
 class TDHF(TDA):
     def get_vind(self, mf):
         '''
@@ -159,12 +177,8 @@ class TDHF(TDA):
                     dmov[i,k] = reduce(numpy.dot, (orbo[k], dmx, orbv[k].T.conj()))
                     dmov[i,k]+= reduce(numpy.dot, (orbv[k], dmy.T, orbo[k].T.conj()))
 
-<<<<<<< HEAD
             with lib.temporary_env(mf, exxdiv=None):
-                v1ao = vresp(dmvo)
-=======
-            v1ao = vresp(dmov)
->>>>>>> upstream/master
+                v1ao = vresp(dmov)
             v1s = []
             for i in range(nz):
                 dmx = z1xs[i]
@@ -226,7 +240,7 @@ class TDHF(TDA):
         self.xy = [norm_xy(z) for z in x1]
 
         return self.e, self.xy
-RPA = TDHF
+RPA = KTDHF = TDHF
 
 
 def _get_e_ia(mo_energy, mo_occ):
@@ -286,18 +300,19 @@ if __name__ == '__main__':
 #mesh=12 [ 6.00253282  6.09317929  6.34799109]
 #mesh=15 [ 6.00253396  6.09317949  6.34799109]
 #MDF mesh=5 [ 6.09317489  6.09318265  6.34798637]
-=======
-class TDHF(rhf.TDHF):
-    def gen_vind(self, mf):
-        vind, hdiag = rhf.TDHF.gen_vind(self, mf)
-        def vindp(x):
-            with lib.temporary_env(mf, exxdiv=None):
-                return vind(x)
-        return vindp, hdiag
->>>>>>> upstream/dev
 
-    def nuc_grad_method(self):
-        raise NotImplementedError
+#    from pyscf.pbc import tools
+#    scell = tools.super_cell(cell, [2,1,1])
+#    mf = scf.RHF(scell).run()
+#    td = rhf.TDA(mf)
+#    td.verbose = 5
+#    print(td.kernel()[0] * 27.2114)
 
-RPA = TDRHF = TDHF
+    td = TDHF(mf)
+    td.verbose = 5
+    print(td.kernel()[0] * 27.2114)
+#mesh=9  [ 6.03860914  6.21664545  8.20305225]
+#mesh=12 [ 6.03868259  6.03860343  6.2167623 ]
+#mesh=15 [ 6.03861321  6.03861324  6.21675868]
+#MDF mesh=5 [ 6.03861693  6.03861775  6.21675694]
 

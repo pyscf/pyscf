@@ -29,14 +29,15 @@ from pyscf import __config__
 
 
 class SymAdaptedCASCI(casci.CASCI):
-    def __init__(self, mf, ncas, nelecas, ncore=None):
-        assert(mf.mol.symmetry)
+    def __init__(self, mf_or_mol, ncas, nelecas, ncore=None):
 # Ag, A1 or A
 #TODO:        self.wfnsym = symm.param.CHARACTER_TABLE[mol.groupname][0][0]
-        casci.CASCI.__init__(self, mf, ncas, nelecas, ncore)
+        casci.CASCI.__init__(self, mf_or_mol, ncas, nelecas, ncore)
+
+        assert(self.mol.symmetry)
         singlet = (getattr(__config__, 'mcscf_casci_CASCI_fcisolver_direct_spin0', False)
                    and self.nelecas[0] == self.nelecas[1])
-        self.fcisolver = fci.solver(mf.mol, singlet, symm=True)
+        self.fcisolver = fci.solver(self.mol, singlet, symm=True)
         self.fcisolver.lindep = getattr(__config__,
                                         'mcscf_casci_CASCI_fcisolver_lindep', 1e-10)
         self.fcisolver.max_cycle = getattr(__config__,

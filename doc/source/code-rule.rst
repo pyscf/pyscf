@@ -29,7 +29,7 @@ Code standard
     have minimal effects on the other modules.
 
 * Not enforced but recommended
-  - Compatibile with Python 2.6, 2.7, 3.2, 3.3, 3.4;
+  - Compatible with Python 2.6, 2.7, 3.2, 3.3, 3.4;
   - Following C89 (gnu89) standard for C code;
   - Using ctypes to bridge C/python functions
 
@@ -62,7 +62,7 @@ API convention
     three attributes ``verbose``, ``stdout`` and ``max_memory`` from
     :class:`gto.Mole`.  Overwriting them only affects the behavior of the
     local instance for that method class.  In the following example,
-    ``mf.verbose`` screens out the noises produced by :class:`RHF`
+    ``mf.verbose`` mutes the noises produced by :class:`RHF`
     method, and the output of :class:`MP2` is written in the log file
     ``example.log``::
 
@@ -75,7 +75,7 @@ API convention
     >>> mp2.stdout = open('example.log', 'w')
     >>> mp2.kernel()
 
-  - Method class are only to hold the options or enviroments (like
+  - Method class are only to hold the options or environments (like
     convergence threshold, max iterations, ...) to control the
     behavior/convergence of the method.  The intermediate status are
     **not** supposed to be saved in the method class (during the
@@ -86,17 +86,18 @@ API convention
     caller didn't provide enough parameters.
 
   - In __init__ function, initialize/define the problem size.  The
-    problem size parameters (like num orbitals etc) can be considered as
-    enviroments.  They are not supposed to be changed by other functions.
+    problem size parameters (like num_orbitals etc) can be considered as
+    environments.  They are not supposed to be changed by other functions.
 
   - Kernel functions
-    Although the method classes have various entrance/main funtion, many
+    Although the method classes have various entrance/main function, many
     of them provide an entrance function called ``kernel``.  You can
     simply call the ``kernel`` function and it will guide the program
     flow to the right main function.
 
-  - Default value of the class member functions' arguments.  Many member
-    functions can take the results of their class as the default arguments.
+  - Default value of class methods' arguments.  Many class methods
+    can take the results of the calculations which were held in the class as the
+    default arguments.
 
 * Function arguments
 

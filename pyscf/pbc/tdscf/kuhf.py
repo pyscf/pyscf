@@ -16,12 +16,21 @@
 # Author: Qiming Sun <osirpt.sun@gmail.com>
 #
 
+from functools import reduce
+import numpy
 from pyscf import lib
+from pyscf.lib import logger
+from pyscf.ao2mo import _ao2mo
 from pyscf.tdscf import uhf
+from pyscf.scf import uhf_symm
+from pyscf.pbc.tdscf.krhf import _get_e_ia
+from pyscf.pbc.scf.newton_ah import _gen_uhf_response
+from pyscf import __config__
 
+REAL_EIG_THRESHOLD = getattr(__config__, 'pbc_tdscf_uhf_TDDFT_pick_eig_threshold', 1e-3)
+POSTIVE_EIG_THRESHOLD = getattr(__config__, 'pbc_tdscf_uhf_TDDFT_positive_eig_threshold', 1e-3)
 
 class TDA(uhf.TDA):
-<<<<<<< HEAD
 
     conv_tol = getattr(__config__, 'pbc_tdscf_rhf_TDA_conv_tol', 1e-6)
 
@@ -73,14 +82,11 @@ class TDA(uhf.TDA):
                     dmov[0,i,k] = reduce(numpy.dot, (orboa[k], dm1a[k], orbva[k].conj().T))
                     dmov[1,i,k] = reduce(numpy.dot, (orbob[k], dm1b[k], orbvb[k].conj().T))
 
-<<<<<<< HEAD
             with lib.temporary_env(mf, exxdiv=None):
-                v1ao = vresp(dmvo)
-=======
-            dmov = dmov.reshape(2*nz,nkpts,nao,nao)
-            v1ao = vresp(dmov)
-            v1ao = v1ao.reshape(2,nz,nkpts,nao,nao)
->>>>>>> upstream/master
+                dmov = dmov.reshape(2*nz,nkpts,nao,nao)
+                v1ao = vresp(dmov)
+                v1ao = v1ao.reshape(2,nz,nkpts,nao,nao)
+
             v1s = []
             for i in range(nz):
                 dm1a, dm1b = zs[i]
@@ -95,22 +101,53 @@ class TDA(uhf.TDA):
                     v1bs.append(v1b.ravel())
                 v1s += v1as + v1bs
             return numpy.hstack(v1s).reshape(nz,-1)
-=======
-    def gen_vind(self, mf):
-        vind, hdiag = uhf.TDA.gen_vind(self, mf)
-        def vindp(x):
-            with lib.temporary_env(mf, exxdiv=None):
-                return vind(x)
-        return vindp, hdiag
->>>>>>> upstream/dev
 
-    def nuc_grad_method(self):
-        raise NotImplementedError
+        return vind, hdiag
 
-CIS = TDA
+    def init_guess(self, mf, nstates=None):
+        if nstates is None: nstates = self.nstates
+
+        mo_energy = mf.mo_energy
+        mo_occ = mf.mo_occ
+        e_ia_a = _get_e_ia(mo_energy[0], mo_occ[0])
+        e_ia_b = _get_e_ia(mo_energy[1], mo_occ[1])
+        e_ia = numpy.hstack([x.ravel() for x in (e_ia_a + e_ia_b)])
+        nov = e_ia.size
+        nroot = min(nstates, nov)
+        x0 = numpy.zeros((nroot, nov))
+        idx = numpy.argsort(e_ia)
+        for i in range(nroot):
+            x0[i,idx[i]] = 1  # lowest excitations
+        return x0
+
+    def kernel(self, x0=None):
+        '''TDA diagonalization solver
+        '''
+        self.check_sanity()
+        self.dump_flags()
+
+        vind, hdiag = self.get_vind(self._scf)
+        precond = self.get_precond(hdiag)
+        if x0 is None:
+            x0 = self.init_guess(self._scf, self.nstates)
+
+        self.converged, self.e, x1 = \
+                lib.davidson1(vind, x0, precond,
+                              tol=self.conv_tol,
+                              nroots=self.nstates, lindep=self.lindep,
+                              max_space=self.max_space,
+                              verbose=self.verbose)
+
+        mo_occ = self._scf.mo_occ
+        tot_x_a = sum((occ>0).sum()*(occ==0).sum() for occ in mo_occ[0])
+        self.xy = [(_unpack(xi, mo_occ),  # (X_alpha, X_beta)
+                    (0, 0))  # (Y_alpha, Y_beta)
+                   for xi in x1]
+        #TODO: analyze CIS wfn point group symmetry
+        return self.e, self.xy
+CIS = KTDA = TDA
 
 
-<<<<<<< HEAD
 class TDHF(TDA):
     def get_vind(self, mf):
         singlet = self.singlet
@@ -152,17 +189,6 @@ class TDHF(TDA):
                 xa, xb = x1s[i]
                 ya, yb = y1s[i]
                 for k in range(nkpts):
-<<<<<<< HEAD
-                    dmx = reduce(numpy.dot, (orbva[k], xa[k], orboa[k].T.conj()))
-                    dmy = reduce(numpy.dot, (orboa[k], ya[k].T, orbva[k].T.conj()))
-                    dmvo[0,i,k] = dmx + dmy  # AX + BY
-                    dmx = reduce(numpy.dot, (orbvb[k], xb[k], orbob[k].T.conj()))
-                    dmy = reduce(numpy.dot, (orbob[k], yb[k].T, orbvb[k].T.conj()))
-                    dmvo[1,i,k] = dmx + dmy  # AX + BY
-
-            with lib.temporary_env(mf, exxdiv=None):
-                v1ao = vresp(dmvo)
-=======
                     dmx = reduce(numpy.dot, (orboa[k], xa[k]  , orbva[k].conj().T))
                     dmy = reduce(numpy.dot, (orbva[k], ya[k].T, orboa[k].conj().T))
                     dmov[0,i,k] = dmx + dmy  # AX + BY
@@ -170,10 +196,11 @@ class TDHF(TDA):
                     dmy = reduce(numpy.dot, (orbvb[k], yb[k].T, orbob[k].conj().T))
                     dmov[1,i,k] = dmx + dmy  # AX + BY
 
-            dmov = dmov.reshape(2*nz,nkpts,nao,nao)
-            v1ao = vresp(dmov)
-            v1ao = v1ao.reshape(2,nz,nkpts,nao,nao)
->>>>>>> upstream/master
+            with lib.temporary_env(mf, exxdiv=None):
+                dmov = dmov.reshape(2*nz,nkpts,nao,nao)
+                v1ao = vresp(dmov)
+                v1ao = v1ao.reshape(2,nz,nkpts,nao,nao)
+
             v1s = []
             for i in range(nz):
                 xa, xb = x1s[i]
@@ -215,62 +242,102 @@ class TDHF(TDA):
         precond = self.get_precond(hdiag)
         if x0 is None:
             x0 = self.init_guess(self._scf, self.nstates)
-=======
-class TDHF(uhf.TDHF):
-    def gen_vind(self, mf):
-        vind, hdiag = uhf.TDHF.gen_vind(self, mf)
-        def vindp(x):
-            with lib.temporary_env(mf, exxdiv=None):
-                return vind(x)
-        return vindp, hdiag
->>>>>>> upstream/dev
 
-    def nuc_grad_method(self):
-        raise NotImplementedError
+        # We only need positive eigenvalues
+        def pickeig(w, v, nroots, envs):
+            realidx = numpy.where((abs(w.imag) < REAL_EIG_THRESHOLD) &
+                                  (w.real > POSTIVE_EIG_THRESHOLD))[0]
+            return lib.linalg_helper._eigs_cmplx2real(w, v, realidx)
 
+        self.converged, w, x1 = \
+                lib.davidson_nosym1(vind, x0, precond,
+                                    tol=self.conv_tol,
+                                    nroots=self.nstates, lindep=self.lindep,
+                                    max_space=self.max_space, pick=pickeig,
+                                    verbose=self.verbose)
 
-RPA = TDUHF = TDHF
+        mo_occ = self._scf.mo_occ
+        e = []
+        xy = []
+        for i, z in enumerate(x1):
+            xs, ys = z.reshape(2,-1)
+            norm = lib.norm(xs)**2 - lib.norm(ys)**2
+            if norm > 0:
+                norm = 1/numpy.sqrt(norm)
+                xs *= norm
+                ys *= norm
+                e.append(w[i])
+                xy.append((_unpack(xs, mo_occ), _unpack(ys, mo_occ)))
+        self.e = numpy.array(e)
+        self.xy = xy
+        return self.e, self.xy
+RPA = KTDHF = TDHF
 
+def _unpack(vo, mo_occ):
+    za = []
+    zb = []
+    p1 = 0
+    for k, occ in enumerate(mo_occ[0]):
+        no = numpy.count_nonzero(occ > 0)
+        nv = occ.size - no
+        p0, p1 = p1, p1 + no * nv
+        za.append(vo[p0:p1].reshape(no,nv))
+
+    for k, occ in enumerate(mo_occ[1]):
+        no = numpy.count_nonzero(occ > 0)
+        nv = occ.size - no
+        p0, p1 = p1, p1 + no * nv
+        zb.append(vo[p0:p1].reshape(no,nv))
+    return za, zb
 
 
 if __name__ == '__main__':
-    from pyscf import gto
-    from pyscf import scf
-    mol = gto.Mole()
-    mol.verbose = 0
-    mol.output = None
+    from pyscf.pbc import gto
+    from pyscf.pbc import scf
+    from pyscf.pbc import df
+    cell = gto.Cell()
+    cell.unit = 'B'
+    cell.atom = '''
+    C  0.          0.          0.        
+    C  1.68506879  1.68506879  1.68506879
+    '''
+    cell.a = '''
+    0.          3.37013758  3.37013758
+    3.37013758  0.          3.37013758
+    3.37013758  3.37013758  0.
+    '''
 
-    mol.atom = [
-        ['H' , (0. , 0. , .917)],
-        ['F' , (0. , 0. , 0.)], ]
-    mol.basis = '631g'
-    mol.build()
+    cell.basis = 'gth-szv'
+    cell.pseudo = 'gth-pade'
+    cell.mesh = [37]*3
+    cell.build()
+    mf = scf.KUHF(cell, cell.make_kpts([2,1,1])).set(exxdiv=None)
+#    mf.with_df = df.DF(cell, cell.make_kpts([2,1,1]))
+#    mf.with_df.auxbasis = 'weigend'
+#    mf.with_df._cderi = 'eri3d-df.h5'
+#    mf.with_df.build(with_j3c=False)
+    mf.run()
 
-    mf = scf.UHF(mol).run()
     td = TDA(mf)
+    td.verbose = 5
     td.nstates = 5
-    td.verbose = 3
     print(td.kernel()[0] * 27.2114)
-# [ 11.01748568  11.01748568  11.90277134  11.90277134  13.16955369]
 
     td = TDHF(mf)
+    td.verbose = 5
     td.nstates = 5
-    td.verbose = 3
     print(td.kernel()[0] * 27.2114)
-# [ 10.89192986  10.89192986  11.83487865  11.83487865  12.6344099 ]
 
-    mol.spin = 2
-    mf = scf.UHF(mol).run()
+    cell.spin = 2
+    mf = scf.KUHF(cell, cell.make_kpts([2,1,1])).set(exxdiv=None)
+    mf.run()
+
     td = TDA(mf)
-    td.nstates = 6
-    td.verbose = 3
+    td.verbose = 5
+    td.nstates = 5
     print(td.kernel()[0] * 27.2114)
-# FIXME:  first state
-# [ 0.02231607274  3.32113736  18.55977052  21.01474222  21.61501962  25.0938973 ]
 
     td = TDHF(mf)
-    td.nstates = 4
-    td.verbose = 3
+    td.verbose = 5
+    td.nstates = 5
     print(td.kernel()[0] * 27.2114)
-# [ 3.31267103  18.4954748   20.84935404  21.54808392]
-

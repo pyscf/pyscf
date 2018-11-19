@@ -21,6 +21,8 @@ from pyscf.pbc import gto
 from pyscf.pbc import scf
 from pyscf.pbc.cc import kccsd_uhf
 from pyscf.pbc.cc import kccsd
+from pyscf.pbc.cc import eom_kccsd_ghf
+from pyscf.pbc.cc import eom_kccsd_uhf
 from pyscf.pbc.lib import kpts_helper
 
 cell = gto.Cell()
@@ -121,6 +123,7 @@ class KnownValues(unittest.TestCase):
         kmf.mo_energy = (numpy.arange(nmo) +
                          numpy.random.random((2,3,nmo)) * .3)
         kmf.mo_energy[kmf.mo_occ == 0] += 2
+
         kmf.mo_coeff = (numpy.random.random((2,3,nmo,nmo)) +
                         numpy.random.random((2,3,nmo,nmo))*1j - .5-.5j)
 
@@ -162,6 +165,67 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(lib.finger(eris.VOvv), -0.036061642075282056  +0.019284185856121634j , 12)
         #self.assertAlmostEqual(lib.finger(eris.VVvv), 0.13458896578260207    -0.11322854172459119j  , 12)
 
+    def test_spatial2spin_ip(self):
+        numpy.random.seed(1)
+        kpts = cell.make_kpts([1,2,3])
+        nkpts = len(kpts)
+        nmo = (8, 8)
+        nocc = (3, 2)
+        nvir = (nmo[0]-nocc[0], nmo[1]-nocc[1])
+
+        orbspin = numpy.zeros((len(kpts),nmo[0]+nmo[1]), dtype=int)
+        orbspin[:,1::2] = 1
+        kconserv = kpts_helper.get_kconserv(cell, kpts)
+
+        kshift = 0
+        spin_r1_ip = (numpy.random.rand(nocc[0]+nocc[1])*1j +
+                      numpy.random.rand(nocc[0]+nocc[1]) - 0.5 - 0.5*1j)
+        spin_r2_ip = (numpy.random.rand(nkpts**2 * (nocc[0]+nocc[1])**2 * (nvir[0]+nvir[1])) +
+                      numpy.random.rand(nkpts**2 * (nocc[0]+nocc[1])**2 * (nvir[0]+nvir[1]))*1j -
+                      0.5 - 0.5*1j)
+        spin_r2_ip = spin_r2_ip.reshape(nkpts, nkpts, (nocc[0]+nocc[1]),
+                                        (nocc[0]+nocc[1]), (nvir[0]+nvir[1]))
+        spin_r2_ip = eom_kccsd_ghf.enforce_2p_spin_ip_doublet(spin_r2_ip, kconserv, kshift, orbspin)
+
+        [r1a, r1b], [r2aaa, r2baa, r2abb, r2bbb] = \
+            eom_kccsd_ghf.spin2spatial_ip_doublet(spin_r1_ip, spin_r2_ip, kconserv, kshift, orbspin)
+
+        r1, r2 = eom_kccsd_ghf.spatial2spin_ip_doublet([r1a, r1b], [r2aaa, r2baa, r2abb, r2bbb],
+                                                       kconserv, kshift, orbspin=orbspin)
+
+        self.assertAlmostEqual(abs(r1-spin_r1_ip).max(), 0, 12)
+        self.assertAlmostEqual(abs(r2-spin_r2_ip).max(), 0, 12)
+
+    def test_spatial2spin_ea(self):
+        numpy.random.seed(1)
+        kpts = cell.make_kpts([1,2,3])
+        nkpts = len(kpts)
+        nmo = (8, 8)
+        nocc = (3, 2)
+        nvir = (nmo[0]-nocc[0], nmo[1]-nocc[1])
+
+        orbspin = numpy.zeros((len(kpts),nmo[0]+nmo[1]), dtype=int)
+        orbspin[:,1::2] = 1
+        kconserv = kpts_helper.get_kconserv(cell, kpts)
+
+        kshift = 0
+        spin_r1_ea = (numpy.random.rand(nvir[0]+nvir[1])*1j +
+                      numpy.random.rand(nvir[0]+nvir[1]) - 0.5 - 0.5*1j)
+        spin_r2_ea = (numpy.random.rand(nkpts**2 * (nocc[0]+nocc[1])* (nvir[0]+nvir[1])**2) +
+                      numpy.random.rand(nkpts**2 * (nocc[0]+nocc[1])* (nvir[0]+nvir[1])**2)*1j -
+                      0.5 - 0.5*1j)
+        spin_r2_ea = spin_r2_ea.reshape(nkpts, nkpts, (nocc[0]+nocc[1]),
+                                        (nvir[0]+nvir[1]), (nvir[0]+nvir[1]))
+        spin_r2_ea = eom_kccsd_ghf.enforce_2p_spin_ea_doublet(spin_r2_ea, kconserv, kshift, orbspin)
+
+        [r1a, r1b], [r2aaa, r2baa, r2abb, r2bbb] = \
+            eom_kccsd_ghf.spin2spatial_ea_doublet(spin_r1_ea, spin_r2_ea, kconserv, kshift, orbspin)
+
+        r1, r2 = eom_kccsd_ghf.spatial2spin_ea_doublet([r1a, r1b], [r2aaa, r2baa, r2abb, r2bbb],
+                                                       kconserv, kshift, orbspin=orbspin)
+
+        self.assertAlmostEqual(abs(r1-spin_r1_ea).max(), 0, 12)
+        self.assertAlmostEqual(abs(r2-spin_r2_ea).max(), 0, 12)
 
 if __name__ == '__main__':
     print("KUCCSD tests")
