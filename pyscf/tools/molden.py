@@ -310,6 +310,7 @@ def load(moldenfile, verbose=0):
                   'atoms' : None,
                   'basis' : None,
                  }
+        mo_section_count = 0
 
         while True:
             lines = _read_one_section(f)
@@ -317,7 +318,6 @@ def load(moldenfile, verbose=0):
             if sec_title is None:
                 break
 
-            mo_section_count = 0
             sec_title = sec_title[1:sec_title.index(']')].upper()
             if sec_title == 'MO':
                 mol, mo_energy, mo_coeff, mo_occ, irrep_labels, spins = \
