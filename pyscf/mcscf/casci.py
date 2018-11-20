@@ -617,8 +617,20 @@ class CASCI(lib.StreamObject):
 
         e_tot : float
             Total MCSCF energy (electronic energy plus nuclear repulsion)
+        e_cas : float
+            CAS space FCI energy
         ci : ndarray
             CAS space FCI coefficients
+        mo_coeff : ndarray
+            When canonicalization is specified, the orbitals are canonical
+            orbitals which make the general Fock matrix (Fock operator on top
+            of MCSCF 1-particle density matrix) diagonalized within each
+            subspace (core, active, external).  If natorb (natural orbitals in
+            active space) is specified, the active segment of the mo_coeff is
+            natural orbitls.
+        mo_energy : ndarray
+            Diagonal elements of general Fock matrix (in mo_coeff
+            representation).
 
     Examples:
 

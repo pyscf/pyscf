@@ -70,7 +70,8 @@ class TDA(rhf.TDA):
 
         mem_now = lib.current_memory()[0]
         max_memory = max(2000, self.max_memory*.8-mem_now)
-        vresp = _gen_rhf_response(mf, singlet, hermi=0, max_memory=max_memory)
+        vresp = _gen_rhf_response(mf, singlet=singlet, hermi=0,
+                                  max_memory=max_memory)
 
         def vind(zs):
             nz = len(zs)
@@ -160,7 +161,8 @@ class TDHF(TDA):
 
         mem_now = lib.current_memory()[0]
         max_memory = max(2000, self.max_memory*.8-mem_now)
-        vresp = _gen_rhf_response(mf, singlet, hermi=0, max_memory=max_memory)
+        vresp = _gen_rhf_response(mf, singlet=singlet, hermi=0,
+                                  max_memory=max_memory)
 
         def vind(xys):
             nz = len(xys)

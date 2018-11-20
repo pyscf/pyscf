@@ -22,6 +22,7 @@ Ref:
 J. Chem. Phys. 147, 164119 (2017)
 '''
 
+import os
 import time
 import tempfile
 import numpy
@@ -51,7 +52,15 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
     log = logger.Logger(mydf.stdout, mydf.verbose)
     max_memory = max(2000, mydf.max_memory-lib.current_memory()[0])
     fused_cell, fuse = fuse_auxcell(mydf, auxcell)
-    outcore._aux_e2(cell, fused_cell, cderi_file, 'int3c2e', aosym='s2',
+
+    # Create swap file to avoid huge cderi_file. see also function
+    # pyscf.pbc.df.df._make_j3c
+    swapfile = tempfile.NamedTemporaryFile(dir=os.path.dirname(cderi_file))
+    fswap = lib.H5TmpFile(swapfile.name)
+    # Unlink swapfile to avoid trash
+    swapfile = None
+
+    outcore._aux_e2(cell, fused_cell, fswap, 'int3c2e', aosym='s2',
                     kptij_lst=kptij_lst, dataname='j3c-junk', max_memory=max_memory)
     t1 = log.timer_debug1('3c2e', *t1)
 
@@ -71,7 +80,6 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
     log.debug2('uniq_kpts %s', uniq_kpts)
     # j2c ~ (-kpt_ji | kpt_ji)
     j2c = fused_cell.pbc_intor('int2c2e', hermi=1, kpts=uniq_kpts)
-    fswap = lib.H5TmpFile()
 
     for k, kpt in enumerate(uniq_kpts):
         aoaux = ft_ao.ft_ao(fused_cell, Gv, None, b, gxyz, Gvbase, kpt).T
@@ -93,7 +101,8 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
     j2c = None
 
     feri = h5py.File(cderi_file)
-    nsegs = len(feri['j3c-junk/0'])
+    feri['j3c-kptij'] = kptij_lst
+    nsegs = len(fswap['j3c-junk/0'])
     def make_kpt(uniq_kptji_id):  # kpt = kptj - kpti
         kpt = uniq_kpts[uniq_kptji_id]
         log.debug1('kpt = %s', kpt)
@@ -211,7 +220,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
                 j3cR = []
                 j3cI = []
                 for k, idx in enumerate(adapted_ji_idx):
-                    v = [feri['j3c-junk/%d/%d'%(idx,i)][0,col0:col1].T for i in range(nsegs)]
+                    v = [fswap['j3c-junk/%d/%d'%(idx,i)][0,col0:col1].T for i in range(nsegs)]
                     v = fuse(numpy.vstack(v))
                     if is_zero(kpt) and cell.dimension == 3:
                         for i in numpy.where(vbar != 0)[0]:
@@ -224,13 +233,11 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
                     v = None
                 compute(istep, sh_range, j3cR, j3cI)
         for ji in adapted_ji_idx:
-            del(feri['j3c-junk/%d'%ji])
+            del(fswap['j3c-junk/%d'%ji])
 
     for k, kpt in enumerate(uniq_kpts):
         make_kpt(k)
 
-    feri['j3c-kptij'] = feri['j3c-junk-kptij']
-    del(feri['j3c-junk'])
     feri.close()
 
 

@@ -879,6 +879,26 @@ def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
 
 
 class TDHF(TDA):
+    '''Time-dependent Hartree-Fock
+
+    Attributes:
+        conv_tol : float
+            Diagonalization convergence tolerance.  Default is 1e-9.
+        nstates : int
+            Number of TD states to be computed. Default is 3.
+
+    Saved results:
+
+        converged : bool
+            Diagonalization converged or not
+        e : 1D array
+            excitation energy for each excited state.
+        xy : A list of two 2D arrays
+            The two 2D arrays are Excitation coefficients X (shape [nocc,nvir])
+            and de-excitation coefficients Y (shape [nocc,nvir]) for each
+            excited state.  (X,Y) are normalized to 1/2 in RHF/RKS methods and
+            normalized to 1 for UHF/UKS methods. In the TDA calculation, Y = 0.
+    '''
     @lib.with_doc(gen_tdhf_operation.__doc__)
     def gen_vind(self, mf):
         return gen_tdhf_operation(mf, singlet=self.singlet, wfnsym=self.wfnsym)
