@@ -320,10 +320,10 @@ def load(moldenfile, verbose=0):
 
             sec_title = sec_title[1:sec_title.index(']')].upper()
             if sec_title == 'MO':
-                mol, mo_energy, mo_coeff, mo_occ, irrep_labels, spins = \
-                        _parse_mo(lines, tokens)
-                if mo_section_count >= 1:  # Append beta orbitals
-                    res = _parse_mo(lines, tokens)
+                res = _parse_mo(lines, tokens)
+                if mo_section_count == 0:  # Alpha orbitals
+                    mol, mo_energy, mo_coeff, mo_occ, irrep_labels, spins = res
+                else:
                     mo_energy    = mo_energy   , res[1]
                     mo_coeff     = mo_coeff    , res[2]
                     mo_occ       = mo_occ      , res[3]
@@ -331,10 +331,13 @@ def load(moldenfile, verbose=0):
                     spins        = spins       , res[5]
 
                 mo_section_count += 1
+
             elif sec_title in _SEC_PARSER:
                 _SEC_PARSER[sec_title.upper()](lines, tokens)
+
             elif sec_title in ('5D', '7F', '9G'):
                 mol.cart = False
+
             else:
                 sys.stderr.write('Unknown section %s\n' % sec_title)
 
