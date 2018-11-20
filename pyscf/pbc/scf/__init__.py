@@ -85,7 +85,7 @@ def UKS(cell, *args):
 
 def KRKS(cell, *args):
     from pyscf.pbc import dft
-    return dft.KRKS(cell)
+    return dft.KRKS(cell, *args)
 
 def KROKS(cell, *args):
     from pyscf.pbc import dft
