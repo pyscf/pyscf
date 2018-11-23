@@ -164,7 +164,7 @@ def get_fermi(mf, mo_energy_kpts=None, mo_occ_kpts=None):
     '''
     if mo_energy_kpts is None: mo_energy_kpts = mf.mo_energy
     if mo_occ_kpts is None: mo_occ_kpts = mf.mo_occ
-    nocc = np.count_nonzero(mo_occ_kpts != 0)
+    nocc = np.count_nonzero(np.asarray(mo_occ_kpts) != 0)
     fermi = np.sort(np.hstack(mo_energy_kpts))[nocc-1]
     return fermi
 
