@@ -108,6 +108,17 @@ def get_fermi(mf, mo_energy_kpts=None, mo_occ_kpts=None):
 
     fermi_a = np.sort(np.hstack(mo_energy_kpts[0]))[nocca-1]
     fermi_b = np.sort(np.hstack(mo_energy_kpts[1]))[noccb-1]
+
+    for k, mo_e in enumerate(mo_energy_kpts[0]):
+        mo_occ = mo_occ_kpts[0][k]
+        if mo_occ[mo_e > fermi_a].sum() > 0.5:
+            logger.warn(mf, 'Alpha occupied band above Fermi level: \n'
+                        'k=%d, mo_e=%s, mo_occ=%s', k, mo_e, mo_occ)
+    for k, mo_e in enumerate(mo_energy_kpts[1]):
+        mo_occ = mo_occ_kpts[1][k]
+        if mo_occ[mo_e > fermi_b].sum() > 0.5:
+            logger.warn(mf, 'Beta occupied band above Fermi level: \n'
+                        'k=%d, mo_e=%s, mo_occ=%s', k, mo_e, mo_occ)
     return (fermi_a, fermi_b)
 
 def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
