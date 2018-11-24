@@ -126,8 +126,6 @@ class KnownValues(unittest.TestCase):
     def test_krhf(self):
         self.assertAlmostEqual(kmf.e_tot, -11.218735269838586, 8)
 
-        self.assertAlmostEqual(kmf.get_fermi(), -0.84871128782161442, 8)
-
     def test_kuhf(self):
         self.assertAlmostEqual(kumf.e_tot, -11.218735269838586, 8)
 
@@ -221,6 +219,8 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e1, -3.5112358424228809, 4)
 
     def test_get_fermi(self):
+        self.assertAlmostEqual(kmf.get_fermi(), 0.33154831914017424, 8)
+
         def occ_vir(nocc, nvir):
             occ = np.zeros(nocc+nvir)
             occ[:nocc] = 1
