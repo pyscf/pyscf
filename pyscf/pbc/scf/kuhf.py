@@ -90,6 +90,26 @@ def get_fock(mf, h1e=None, s1e=None, vhf=None, dm=None, cycle=-1, diis=None,
                   for k, s in enumerate(s_kpts)])
     return lib.asarray(f_kpts)
 
+def get_fermi(mf, mo_energy_kpts=None, mo_occ_kpts=None):
+    '''A pair of Fermi level for spin-up and spin-down orbitals
+    '''
+    if mo_energy_kpts is None: mo_energy_kpts = mf.mo_energy
+    if mo_occ_kpts is None: mo_occ_kpts = mf.mo_occ
+
+    # mo_energy_kpts and mo_occ_kpts are k-point UHF quantities
+    assert(mo_energy_kpts[0][0].ndim == 1)
+    assert(mo_occ_kpts[0][0].ndim == 1)
+
+    nocca = sum(mo_occ.sum() for mo_occ in mo_occ_kpts[0])
+    noccb = sum(mo_occ.sum() for mo_occ in mo_occ_kpts[1])
+    # nocc may not be perfect integer when smearing is enabled
+    nocca = int(nocca.round(3))
+    noccb = int(noccb.round(3))
+
+    fermi_a = np.sort(np.hstack(mo_energy_kpts[0]))[nocca-1]
+    fermi_b = np.sort(np.hstack(mo_energy_kpts[1]))[noccb-1]
+    return (fermi_a, fermi_b)
+
 def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
     '''Label the occupancies for each orbital for sampled k-points.
 
@@ -369,6 +389,7 @@ class KUHF(pbcuhf.UHF, khf.KSCF):
     get_j = khf.KSCF.get_j
     get_k = khf.KSCF.get_k
     get_fock = get_fock
+    get_fermi = get_fermi
     get_occ = get_occ
     energy_elec = energy_elec
 

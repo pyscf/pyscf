@@ -164,7 +164,15 @@ def get_fermi(mf, mo_energy_kpts=None, mo_occ_kpts=None):
     '''
     if mo_energy_kpts is None: mo_energy_kpts = mf.mo_energy
     if mo_occ_kpts is None: mo_occ_kpts = mf.mo_occ
-    nocc = np.count_nonzero(np.asarray(mo_occ_kpts) != 0)
+
+    # mo_energy_kpts and mo_occ_kpts are k-point RHF quantities
+    assert(mo_energy_kpts[0].ndim == 1)
+    assert(mo_occ_kpts[0].ndim == 1)
+
+    # occ array in mo_occ_kpts may have different size. See issue #250
+    nocc = sum(mo_occ.sum() for mo_occ in mo_occ_kpts) / 2
+    # nocc may not be perfect integer when smearing is enabled
+    nocc = int(nocc.round(3))
     fermi = np.sort(np.hstack(mo_energy_kpts))[nocc-1]
     return fermi
 
