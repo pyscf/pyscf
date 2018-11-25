@@ -940,6 +940,7 @@ class NumInt(numint.NumInt):
                   verbose=None):
         return make_mask(cell, coords, relativity, shls_slice, verbose)
 
+    @lib.with_doc(eval_rho.__doc__)
     def eval_rho(self, cell, ao, dm, non0tab=None, xctype='LDA', hermi=0, verbose=None):
         return eval_rho(cell, ao, dm, non0tab, xctype, hermi, verbose)
 
@@ -1082,7 +1083,8 @@ class KNumInt(numint.NumInt):
 
     def eval_rho(self, cell, ao_kpts, dm_kpts, non0tab=None, xctype='LDA',
                  hermi=0, verbose=None):
-        '''
+        '''Collocate the *real* density (opt. gradients) on the real-space grid.
+
         Args:
             cell : Mole or Cell object
             ao_kpts : (nkpts, ngrids, nao) ndarray

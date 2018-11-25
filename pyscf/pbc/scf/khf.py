@@ -103,7 +103,7 @@ def get_j(mf, cell, dm_kpts, kpts, kpts_band=None):
         dm_kpts : (nkpts, nao, nao) ndarray or a list of (nkpts,nao,nao) ndarray
             Density matrix at each k-point.  If a list of k-point DMs, eg,
             UHF alpha and beta DM, the alpha and beta DMs are contracted
-            separately.
+            separately.  It needs to be Hermitian.
 
     Kwargs:
         kpts_band : (k,3) ndarray
@@ -121,7 +121,7 @@ def get_jk(mf, cell, dm_kpts, kpts, kpts_band=None):
 
     Args:
         dm_kpts : (nkpts, nao, nao) ndarray
-            Density matrix at each k-point
+            Density matrix at each k-point. It needs to be Hermitian.
 
     Kwargs:
         kpts_band : (3,) ndarray
