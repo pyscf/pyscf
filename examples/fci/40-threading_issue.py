@@ -4,7 +4,10 @@
 #
 
 '''
-Different number of OpenMP threads may lead to slightly different answers
+An example to set OMP threads in FCI calculations. In old pyscf versions,
+different number of OpenMP threads may lead to slightly different answers.
+
+This issue was fixed. see github issue #249.
 '''
 
 from functools import reduce

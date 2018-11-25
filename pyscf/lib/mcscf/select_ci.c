@@ -429,6 +429,7 @@ void SCIcontract_2e_aaaa(double *eri, double *ci0, double *ci1,
                 NPomp_dsum_reduce_inplace(ci1bufs, blen*na);
 #pragma omp master
                 FCIaxpy2d(ci1+ib, ci1buf, na, nb, blen);
+#pragma omp barrier
         }
         free(ci1buf);
         free(t1buf);
@@ -661,6 +662,7 @@ void SCIcontract_2e_aaaa_symm(double *eri, double *ci0, double *ci1,
                 NPomp_dsum_reduce_inplace(ci1bufs, blen*na);
 #pragma omp master
                 FCIaxpy2d(ci1+ib, ci1buf, na, nb, blen);
+#pragma omp barrier
         }
         free(ci1buf);
         free(t1buf);

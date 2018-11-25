@@ -370,6 +370,9 @@ void FCIcontract_2e_spin0(double *eri, double *ci0, double *ci1,
                 NPomp_dsum_reduce_inplace(ci1bufs, blen*na);
 #pragma omp master
                 FCIaxpy2d(ci1+ib, ci1buf, na, na, blen);
+// An explicit barrier to ensure ci1 is updated. Without barrier, there may
+// occur race condition between FCIaxpy2d and ctr_rhf2e_kern
+#pragma omp barrier
         }
         free(ci1buf);
         free(t1buf);
@@ -411,6 +414,9 @@ void FCIcontract_2e_spin1(double *eri, double *ci0, double *ci1,
                 NPomp_dsum_reduce_inplace(ci1bufs, blen*na);
 #pragma omp master
                 FCIaxpy2d(ci1+ib, ci1buf, na, nb, blen);
+// An explicit barrier to ensure ci1 is updated. Without barrier, there may
+// occur race condition between FCIaxpy2d and ctr_rhf2e_kern
+#pragma omp barrier
         }
         free(ci1buf);
         free(t1buf);
@@ -494,6 +500,9 @@ void FCIcontract_uhf2e(double *eri_aa, double *eri_ab, double *eri_bb,
                 NPomp_dsum_reduce_inplace(ci1bufs, blen*na);
 #pragma omp master
                 FCIaxpy2d(ci1+ib, ci1buf, na, nb, blen);
+// An explicit barrier to ensure ci1 is updated. Without barrier, there may
+// occur race condition between FCIaxpy2d and ctr_uhf2e_kern
+#pragma omp barrier
         }
         free(t1buf);
         free(ci1buf);
@@ -793,6 +802,9 @@ static void loop_c2e_symm1(double *eri, double *ci0, double *ci1aa, double *ci1a
                 NPomp_dsum_reduce_inplace(ci1bufs, blen*na);
 #pragma omp master
                 FCIaxpy2d(ci1aa+ib, ci1buf, na, nb, blen);
+// An explicit barrier to ensure ci1 is updated. Without barrier, there may
+// occur race condition between FCIaxpy2d and ctr_rhf2esym_kern1
+#pragma omp barrier
         }
         free(ci1buf);
         free(t1buf);
