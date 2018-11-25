@@ -628,8 +628,8 @@ def get_jk(mol, dm, hermi=1, vhfopt=None):
         hermi : int
             Whether J, K matrix is hermitian
 
-            | 0 : no hermitian or symmetric
-            | 1 : hermitian
+            | 0 : not hermitian and not symmetric
+            | 1 : hermitian or symmetric
             | 2 : anti-hermitian
 
         vhfopt :

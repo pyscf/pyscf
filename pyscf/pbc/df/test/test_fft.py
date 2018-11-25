@@ -674,6 +674,18 @@ class KnowValues(unittest.TestCase):
         vk1 = df.get_jk(dms, kpts=kpts, kpts_band=kpts_band, exxdiv=None)[1]
         self.assertAlmostEqual(lib.finger(vk1), 10.239828255099447+2.1190549216896182j, 9)
 
+    def test_get_j_non_hermitian(self):
+        kpt = kpts[0]
+        numpy.random.seed(2)
+        nao = cell2.nao
+        dm = numpy.random.random((nao,nao))
+        mydf = fft.FFTDF(cell2)
+        v1 = mydf.get_jk(dm, hermi=0, kpts=kpts[1], with_k=False)[0]
+        eri = mydf.get_eri([kpts[1]]*4).reshape(nao,nao,nao,nao)
+        ref = numpy.einsum('ijkl,ji->kl', eri, dm)
+        self.assertAlmostEqual(abs(ref - v1).max(), 0, 12)
+        self.assertTrue(abs(ref-ref.T.conj()).max() > 1e-5)
+
     def test_get_ao_eri(self):
         df = fft.FFTDF(cell)
         eri0 = get_ao_eri(cell)
