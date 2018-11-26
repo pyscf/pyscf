@@ -764,7 +764,8 @@ def _get_j_pass2(mydf, vG, kpts=numpy.zeros((1,3)), verbose=None):
         mydf.tasks = tasks = multi_grids_tasks(cell, mydf.mesh, log)
         log.debug('Multigrid ntasks %s', len(tasks))
 
-    if gamma_point(kpts):
+    at_gamma_point = gamma_point(kpts)
+    if at_gamma_point:
         vj_kpts = numpy.zeros((nset,nkpts,nao,nao))
     else:
         vj_kpts = numpy.zeros((nset,nkpts,nao,nao), dtype=numpy.complex128)
@@ -781,10 +782,11 @@ def _get_j_pass2(mydf, vG, kpts=numpy.zeros((1,3)), verbose=None):
         #:sub_vG = vG[:,gx[:,None,None],gy[:,None],gz].reshape(nset,ngrids)
         sub_vG = _take_4d(vG, (None, gx, gy, gz)).reshape(nset,ngrids)
 
-        vR = tools.ifft(sub_vG, mesh)
-        if abs(vR.imag).max() > IMAG_TOL:
-            raise ValueError('Potential or density are not real')
-        vR = numpy.asarray(vR.real.reshape(nset,ngrids), order='C')
+        v_rs = tools.ifft(sub_vG, mesh).reshape(nset,ngrids)
+        vR = numpy.asarray(v_rs.real, order='C')
+        vI = numpy.asarray(v_rs.imag, order='C')
+        if at_gamma_point:
+            v_rs = vR
 
         idx_h = grids_dense.ao_idx
         if grids_sparse is None:
@@ -792,7 +794,7 @@ def _get_j_pass2(mydf, vG, kpts=numpy.zeros((1,3)), verbose=None):
                 ao_h = ao_h_etc[0]
                 for k in range(nkpts):
                     for i in range(nset):
-                        vj_sub = lib.dot(ao_h[k].conj().T*vR[i,p0:p1], ao_h[k])
+                        vj_sub = lib.dot(ao_h[k].conj().T*v_rs[i,p0:p1], ao_h[k])
                         vj_kpts[i,k,idx_h[:,None],idx_h] += vj_sub
                 ao_h = ao_h_etc = None
         else:
@@ -814,6 +816,14 @@ def _get_j_pass2(mydf, vG, kpts=numpy.zeros((1,3)), verbose=None):
             shls_slice = (0, nshells_h, 0, nshells_t)
             vp = eval_mat(t_cell, vR, shls_slice, 1, 0, 'LDA', kpts)
             vp = lib.einsum('nkpq,pi,qj->nkij', vp, h_coeff, t_coeff)
+
+            # Imaginary part may contribute
+            if not at_gamma_point and abs(vI).max() > IMAG_TOL:
+                vpI = eval_mat(t_cell, vI, shls_slice, 1, 0, 'LDA', kpts)
+                vpI = lib.einsum('nkpq,pi,qj->nkij', vpI, h_coeff, t_coeff)
+                vp = vp + vpI * 1j
+                vpI = None
+
             vj_kpts[:,:,idx_h[:,None],idx_h] += vp[:,:,:,:naoh]
             vj_kpts[:,:,idx_h[:,None],idx_l] += vp[:,:,:,naoh:]
 
