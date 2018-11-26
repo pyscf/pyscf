@@ -275,14 +275,14 @@ def make_rdm2(mp, t2=None):
     for i in range(nocca0):
         dm2aa[i,i,:,:] += dm1a.T
         dm2aa[:,:,i,i] += dm1a.T
-        dm2aa[:,i,i,:] -= dm1a.T
-        dm2aa[i,:,:,i] -= dm1a
+        dm2aa[:,i,i,:] -= dm1a
+        dm2aa[i,:,:,i] -= dm1a.T
         dm2ab[i,i,:,:] += dm1b.T
     for i in range(noccb0):
         dm2bb[i,i,:,:] += dm1b.T
         dm2bb[:,:,i,i] += dm1b.T
-        dm2bb[:,i,i,:] -= dm1b.T
-        dm2bb[i,:,:,i] -= dm1b
+        dm2bb[:,i,i,:] -= dm1b
+        dm2bb[i,:,:,i] -= dm1b.T
         dm2ab[:,:,i,i] += dm1a.T
 
     for i in range(nocca0):
