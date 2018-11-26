@@ -32,6 +32,12 @@ mf.kernel()
 #
 print(mf.with_df._cderi.shape)
 
+# From the compressed tensor, the three-index tensor (Lpq) can be decompressed
+# as below if memory is big enough to hold the entire tensor.
+from pyscf import lib
+Lpq = lib.unpack_tril(mf.with_df._cderi)
+print(Lpq.shape)
+
 #
 # By default, the CD tensor will be destructed.  To save the CD tensor for
 # future use, specify the filename in the attribute mf.with_df._cderi_to_save

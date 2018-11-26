@@ -354,10 +354,10 @@ def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True):
         dm1[numpy.diag_indices(nocc)] -= 2
 
         for i in range(nocc):
-            dm2[i,i,:,:] += dm1 * 2
-            dm2[:,:,i,i] += dm1 * 2
+            dm2[i,i,:,:] += dm1.T * 2
+            dm2[:,:,i,i] += dm1.T * 2
             dm2[:,i,i,:] -= dm1
-            dm2[i,:,:,i] -= dm1.conj()
+            dm2[i,:,:,i] -= dm1.T
 
         for i in range(nocc):
             for j in range(nocc):
