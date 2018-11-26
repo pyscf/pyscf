@@ -28,7 +28,6 @@
 #include "config.h"
 #include "cint.h"
 #include "np_helper/np_helper.h"
-#include "gto/ft_ao.h"
 #include "gto/grid_ao_drv.h"
 #include "vhf/fblas.h"
 
@@ -51,14 +50,6 @@
 
 double CINTsquare_dist(const double *r1, const double *r2);
 double CINTcommon_fac_sp(int l);
-void c2s_sph_1e(double *opij, double *gctr, int *dims,
-                CINTEnvVars *envs, double *cache);
-void c2s_cart_1e(double *opij, double *gctr, int *dims,
-                 CINTEnvVars *envs, double *cache);
-
-int CINTinit_int1e_EnvVars(CINTEnvVars *envs, const int *ng, const int *shls,
-                           const int *atm, const int natm,
-                           const int *bas, const int nbas, const double *env);
 
 static const int _LEN_CART[] = {
         1, 3, 6, 10, 15, 21, 28, 36, 45, 55, 66, 78, 91, 105, 120, 136
