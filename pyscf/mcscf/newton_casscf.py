@@ -433,7 +433,7 @@ def kernel(casscf, mo_coeff, tol=1e-7, conv_tol_grad=None,
     '''
     log = logger.new_logger(casscf, verbose)
     log.warn('SO-CASSCF (Second order CASSCF) is an experimental feature. '
-             'It has bad performance for large system.')
+             'Its performance is bad for large systems.')
 
     cput0 = (time.clock(), time.time())
     log.debug('Start SO-CASSCF (newton CASSCF)')

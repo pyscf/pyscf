@@ -556,10 +556,45 @@ def with_doc(doc):
 
         fn.__doc__ = doc
     '''
-    def make_fn(fn):
+    def fn_with_doc(fn):
         fn.__doc__ = doc
         return fn
-    return make_fn
+    return fn_with_doc
+
+def alias(fn, alias_name=None):
+    '''
+    The statement "fn1 = alias(fn)" in a class is equivalent to define the
+    following method in the class:
+
+    .. code-block:: python
+        def fn1(self, *args, **kwargs):
+            return self.fn(*args, **kwargs)
+
+    Using alias function instead of fn1 = fn because some methods may be
+    overloaded in the child class. Using "alias" can make sure that the
+    overloaded mehods were called when calling the aliased method.
+    '''
+    def aliased_fn(*args, **kwargs):
+        return fn(*args, **kwargs)
+
+    if alias_name is not None:
+        aliased_fn.__name__ = alias_name
+
+    doc_str = 'An alias to method %s\n' % fn.__name__
+    if sys.version_info >= (3,):
+        from inspect import signature
+        sig = str(signature(fn))
+        if alias_name is None:
+            doc_str += 'Function Signature: %s\n' % sig
+        else:
+            doc_str += 'Function Signature: %s%s\n' % (alias_name, sig)
+    doc_str += '----------------------------------------\n\n'
+
+    if fn.__doc__ is not None:
+        doc_str += fn.__doc__
+
+    aliased_fn.__doc__ = doc_str
+    return aliased_fn
 
 def import_as_method(fn, default_keys=None):
     '''
@@ -874,12 +909,20 @@ class temporary_env(object):
     '''
     def __init__(self, obj, **kwargs):
         self.obj = obj
-        keys = [key for key in kwargs.keys() if hasattr(obj, key)]
-        self.env_bak = [(key, getattr(obj, key, 'TO_DEL')) for key in keys]
-        self.env_new = [(key, kwargs[key]) for key in keys]
+
+        # Should I skip the keys which are not presented in obj?
+        #keys = [key for key in kwargs.keys() if hasattr(obj, key)]
+        #self.env_bak = [(key, getattr(obj, key, 'TO_DEL')) for key in keys]
+        #self.env_new = [(key, kwargs[key]) for key in keys]
+
+        self.env_bak = [(key, getattr(obj, key, 'TO_DEL')) for key in kwargs]
+        self.env_new = [(key, kwargs[key]) for key in kwargs]
+
     def __enter__(self):
         for k, v in self.env_new:
             setattr(self.obj, k, v)
+        return self
+
     def __exit__(self, type, value, traceback):
         for k, v in self.env_bak:
             if isinstance(v, str) and v == 'TO_DEL':

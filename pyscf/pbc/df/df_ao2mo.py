@@ -191,10 +191,12 @@ def general(mydf, mo_coeffs, kpts=None,
         mo_coeffs = _mo_as_complex(mo_coeffs)
         nij_pair, moij, ijslice = _conc_mos(mo_coeffs[0], mo_coeffs[1])[1:]
         nkl_pair, mokl, klslice = _conc_mos(mo_coeffs[2], mo_coeffs[3])[1:]
+        nao = mo_coeffs[0].shape[0]
         eri_mo = numpy.zeros((nij_pair,nkl_pair), dtype=numpy.complex)
 
-        blksize = int(min(max_memory*.4e6/16/nij_pair,
-                          max_memory*.4e6/16/nkl_pair))
+        blksize = int(min(max_memory*.3e6/16/nij_pair,
+                          max_memory*.3e6/16/nkl_pair,
+                          max_memory*.3e6/16/nao**2))
         zij = zkl = None
         for (LpqR, LpqI, sign), (LrsR, LrsI, sign1) in \
                 lib.izip(mydf.sr_loop(kptijkl[:2], max_memory, False, blksize),

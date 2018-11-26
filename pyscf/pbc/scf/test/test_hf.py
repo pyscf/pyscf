@@ -43,7 +43,7 @@ def tearDownModule():
     cell.stdout.close()
     del cell
 
-class KnowValues(unittest.TestCase):
+class KnownValues(unittest.TestCase):
     def test_hcore(self):
         h1ref = pbchf.get_hcore(cell)
         h1 = pbchf.RHF(cell).get_hcore()

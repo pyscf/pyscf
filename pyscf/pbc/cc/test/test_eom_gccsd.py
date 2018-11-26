@@ -59,7 +59,7 @@ class Test(unittest.TestCase):
         eom = EOMEA(mycc)
         e2_obt, v = eom.eaccsd(nroots=2, koopmans=True, kptlist=[0])
 
-        assert ehf/2 - ehf2 < 1e-10
-        assert ecc/2 - ecc2 < 1e-10
-        assert e1[0]-(e1_obt[0][0]) < 1e-7
-        assert e2[0]-(e2_obt[0][0]) < 1e-7
+        assert(ehf/2 - ehf2 < 1e-10)
+        assert(ecc/2 - ecc2 < 1e-10)
+        assert(e1[0]-(e1_obt[0][0]) < 1e-7)
+        assert(e2[0]-(e2_obt[0][0]) < 1e-7)

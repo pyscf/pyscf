@@ -131,8 +131,8 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
     mo = numpy.hstack((orbo,orbv))
     nmo = nocc + nvir
 
-    eai = lib.direct_sum('a-i->ai', mo_energy[viridx], mo_energy[occidx])
-    a = numpy.diag(eai.T.ravel()).reshape(nocc,nvir,nocc,nvir)
+    e_ia = lib.direct_sum('a-i->ia', mo_energy[viridx], mo_energy[occidx])
+    a = numpy.diag(e_ia.ravel()).reshape(nocc,nvir,nocc,nvir)
     b = numpy.zeros_like(a)
 
     def add_hf_(a, b, hyb=1):
@@ -722,19 +722,19 @@ class TDA(lib.StreamObject):
         mo_occ = mf.mo_occ
         occidx = numpy.where(mo_occ==2)[0]
         viridx = numpy.where(mo_occ==0)[0]
-        eai = (mo_energy[viridx,None] - mo_energy[occidx]).T
+        e_ia = mo_energy[viridx] - mo_energy[occidx,None]
 
         if wfnsym is not None and mf.mol.symmetry:
             if isinstance(wfnsym, str):
                 wfnsym = symm.irrep_name2id(mf.mol.groupname, wfnsym)
             wfnsym = wfnsym % 10  # convert to D2h subgroup
             orbsym = hf_symm.get_orbsym(mf.mol, mf.mo_coeff) % 10
-            eai[(orbsym[occidx,None] ^ orbsym[viridx]) != wfnsym] = 1e99
+            e_ia[(orbsym[occidx,None] ^ orbsym[viridx]) != wfnsym] = 1e99
 
-        nov = eai.size
+        nov = e_ia.size
         nroot = min(nstates, nov)
         x0 = numpy.zeros((nroot, nov))
-        idx = numpy.argsort(eai.ravel())
+        idx = numpy.argsort(e_ia.ravel())
         for i in range(nroot):
             x0[i,idx[i]] = 1  # Koopmans' excitations
         return x0
@@ -879,6 +879,26 @@ def gen_tdhf_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
 
 
 class TDHF(TDA):
+    '''Time-dependent Hartree-Fock
+
+    Attributes:
+        conv_tol : float
+            Diagonalization convergence tolerance.  Default is 1e-9.
+        nstates : int
+            Number of TD states to be computed. Default is 3.
+
+    Saved results:
+
+        converged : bool
+            Diagonalization converged or not
+        e : 1D array
+            excitation energy for each excited state.
+        xy : A list of two 2D arrays
+            The two 2D arrays are Excitation coefficients X (shape [nocc,nvir])
+            and de-excitation coefficients Y (shape [nocc,nvir]) for each
+            excited state.  (X,Y) are normalized to 1/2 in RHF/RKS methods and
+            normalized to 1 for UHF/UKS methods. In the TDA calculation, Y = 0.
+    '''
     @lib.with_doc(gen_tdhf_operation.__doc__)
     def gen_vind(self, mf):
         return gen_tdhf_operation(mf, singlet=self.singlet, wfnsym=self.wfnsym)

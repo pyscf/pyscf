@@ -48,14 +48,14 @@ class CASSCF(newton_casscf.CASSCF):
         log = logger.Logger(self.stdout, self.verbose)
 
         mo_coeff = self.mo_coeff = casci_symm.label_symmetry_(self, mo_coeff)
-
-        if (hasattr(self.fcisolver, 'wfnsym') and
-            self.fcisolver.wfnsym is None and
-            hasattr(self.fcisolver, 'guess_wfnsym')):
-            wfnsym = self.fcisolver.guess_wfnsym(self.ncas, self.nelecas, ci0,
-                                                 verbose=log)
-            wfnsym = symm.irrep_id2name(self.mol.groupname, wfnsym)
-            log.info('Active space CI wfn symmetry = %s', wfnsym)
+#
+#        if (hasattr(self.fcisolver, 'wfnsym') and
+#            self.fcisolver.wfnsym is None and
+#            hasattr(self.fcisolver, 'guess_wfnsym')):
+#            wfnsym = self.fcisolver.guess_wfnsym(self.ncas, self.nelecas, ci0,
+#                                                 verbose=log)
+#            wfnsym = symm.irrep_id2name(self.mol.groupname, wfnsym)
+#            log.info('Active space CI wfn symmetry = %s', wfnsym)
 
         self.converged, self.e_tot, self.e_cas, self.ci, \
                 self.mo_coeff, self.mo_energy = \

@@ -62,6 +62,7 @@ RHOG_HIGH_ORDER = getattr(__config__, 'pbc_dft_multigrid_rhog_high_order', False
 
 PTR_EXPDROP = 16
 EXPDROP = getattr(__config__, 'pbc_dft_multigrid_expdrop', 1e-12)
+IMAG_TOL = 1e-9
 
 
 def eval_mat(cell, weights, shls_slice=None, comp=1, hermi=0,
@@ -88,6 +89,7 @@ def eval_mat(cell, weights, shls_slice=None, comp=1, hermi=0,
     if mesh is None:
         mesh = cell.mesh
     weights = numpy.asarray(weights, order='C')
+    assert(weights.dtype == numpy.double)
     xctype = xctype.upper()
     n_mat = None
     if xctype == 'LDA':
@@ -168,6 +170,8 @@ def eval_mat(cell, weights, shls_slice=None, comp=1, hermi=0,
 def eval_rho(cell, dm, shls_slice=None, hermi=0, xctype='LDA', kpts=None,
              mesh=None, offset=None, submesh=None, ignore_imag=False,
              out=None):
+    '''Collocate the *real* density (opt. gradients) on the real-space grid.
+    '''
     assert(all(cell._bas[:,NPRIM_OF] == 1))
     atm, bas, env = gto.conc_env(cell._atm, cell._bas, cell._env,
                                  cell._atm, cell._bas, cell._env)
@@ -469,9 +473,11 @@ def _eval_rhoG(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), deriv=0,
             xctype = 'LDA'
             rhodim = 1
             deriv = 0
+        assert(hermi == 1 or gamma_point(kpts))
 
     elif deriv == 2:  # meta-GGA
         raise NotImplementedError
+        assert(hermi == 1 or gamma_point(kpts))
 
     ignore_imag = (hermi == 1)
 
@@ -487,17 +493,23 @@ def _eval_rhoG(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), deriv=0,
         if grids_sparse is None:
             # The first pass handles all diffused functions using the regular
             # matrix multiplication code.
-            rho = numpy.zeros((nset,rhodim,ngrids))
+            rho = numpy.zeros((nset,rhodim,ngrids), dtype=numpy.complex128)
             idx_h = grids_dense.ao_idx
             dms_hh = numpy.asarray(dms[:,:,idx_h[:,None],idx_h], order='C')
             for ao_h_etc, p0, p1 in mydf.aoR_loop(grids_dense, kpts, deriv):
                 ao_h, mask = ao_h_etc[0], ao_h_etc[2]
                 for k in range(nkpts):
                     for i in range(nset):
-                        rho_sub = numint.eval_rho(h_cell, ao_h[k], dms_hh[i,k],
-                                                  mask, xctype, hermi)
-                        rho[i,:,p0:p1] += rho_sub.real
-                ao_h = ao_h_etc = None
+                        if xctype == 'LDA':
+                            ao_dm = lib.dot(ao_h[k], dms_hh[i,k])
+                            rho_sub = numpy.einsum('xi,xi->x', ao_dm, ao_h[k].conj())
+                        else:
+                            rho_sub = numint.eval_rho(h_cell, ao_h[k], dms_hh[i,k],
+                                                      mask, xctype, hermi)
+                        rho[i,:,p0:p1] += rho_sub
+                ao_h = ao_h_etc = ao_dm = None
+            if ignore_imag:
+                rho = rho.real
         else:
             idx_h = grids_dense.ao_idx
             idx_l = grids_sparse.ao_idx
@@ -769,8 +781,10 @@ def _get_j_pass2(mydf, vG, kpts=numpy.zeros((1,3)), verbose=None):
         #:sub_vG = vG[:,gx[:,None,None],gy[:,None],gz].reshape(nset,ngrids)
         sub_vG = _take_4d(vG, (None, gx, gy, gz)).reshape(nset,ngrids)
 
-        vR = tools.ifft(sub_vG, mesh).real.reshape(nset,ngrids)
-        vR = numpy.asarray(vR, order='C')
+        vR = tools.ifft(sub_vG, mesh)
+        if abs(vR.imag).max() > IMAG_TOL:
+            raise ValueError('Potential or density are not real')
+        vR = numpy.asarray(vR.real.reshape(nset,ngrids), order='C')
 
         idx_h = grids_dense.ao_idx
         if grids_sparse is None:

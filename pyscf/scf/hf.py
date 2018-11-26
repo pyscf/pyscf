@@ -637,8 +637,8 @@ def get_jk(mol, dm, hermi=1, vhfopt=None):
         hermi : int
             Whether J, K matrix is hermitian
 
-            | 0 : no hermitian or symmetric
-            | 1 : hermitian
+            | 0 : not hermitian and not symmetric
+            | 1 : hermitian or symmetric
             | 2 : anti-hermitian
 
         vhfopt :
@@ -1448,7 +1448,7 @@ class SCF(lib.StreamObject):
     check_convergence = None
 
     def scf(self, dm0=None, **kwargs):
-        '''main routine for SCF
+        '''SCF main driver
 
         Kwargs:
             dm0 : ndarray
@@ -1478,9 +1478,7 @@ class SCF(lib.StreamObject):
         logger.timer(self, 'SCF', *cput0)
         self._finalize()
         return self.e_tot
-    def kernel(self, dm0=None, **kwargs):
-        return self.scf(dm0, **kwargs)
-    kernel.__doc__ = scf.__doc__
+    kernel = lib.alias(scf, alias_name='kernel')
 
     def _finalize(self):
         '''Hook for dumping results and clearing up the object.'''
