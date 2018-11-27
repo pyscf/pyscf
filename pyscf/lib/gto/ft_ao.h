@@ -90,9 +90,8 @@ typedef void (*FPtr_eval_gz)(double complex *out, double aij, double *rij,
                              double complex fac, double *Gv, double *b,
                              int *gxyz, int *gs, size_t NGv);
 
-void GTO_ft_init1e_envs(CINTEnvVars *envs, const int *ng, const int *shls,
-                        const int *atm, const int natm,
-                        const int *bas, const int nbas, const double *env);
+void GTO_ft_init1e_envs(CINTEnvVars *envs, int *ng, int *shls,
+                        int *atm, int natm, int *bas, int nbas, double *env);
 
 int GTO_ft_aopair_drv(double complex *out, int *dims,
                       int (*eval_aopair)(), FPtr_eval_gz eval_gz, void (*c2s)(),
