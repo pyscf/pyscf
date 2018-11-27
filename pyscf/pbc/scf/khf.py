@@ -103,7 +103,7 @@ def get_j(mf, cell, dm_kpts, kpts, kpts_band=None):
         dm_kpts : (nkpts, nao, nao) ndarray or a list of (nkpts,nao,nao) ndarray
             Density matrix at each k-point.  If a list of k-point DMs, eg,
             UHF alpha and beta DM, the alpha and beta DMs are contracted
-            separately.
+            separately.  It needs to be Hermitian.
 
     Kwargs:
         kpts_band : (k,3) ndarray
@@ -121,7 +121,7 @@ def get_jk(mf, cell, dm_kpts, kpts, kpts_band=None):
 
     Args:
         dm_kpts : (nkpts, nao, nao) ndarray
-            Density matrix at each k-point
+            Density matrix at each k-point. It needs to be Hermitian.
 
     Kwargs:
         kpts_band : (3,) ndarray
@@ -164,8 +164,22 @@ def get_fermi(mf, mo_energy_kpts=None, mo_occ_kpts=None):
     '''
     if mo_energy_kpts is None: mo_energy_kpts = mf.mo_energy
     if mo_occ_kpts is None: mo_occ_kpts = mf.mo_occ
-    nocc = np.count_nonzero(mo_occ_kpts != 0)
+
+    # mo_energy_kpts and mo_occ_kpts are k-point RHF quantities
+    assert(mo_energy_kpts[0].ndim == 1)
+    assert(mo_occ_kpts[0].ndim == 1)
+
+    # occ array in mo_occ_kpts may have different size. See issue #250
+    nocc = sum(mo_occ.sum() for mo_occ in mo_occ_kpts) / 2
+    # nocc may not be perfect integer when smearing is enabled
+    nocc = int(nocc.round(3))
     fermi = np.sort(np.hstack(mo_energy_kpts))[nocc-1]
+
+    for k, mo_e in enumerate(mo_energy_kpts):
+        mo_occ = mo_occ_kpts[k]
+        if mo_occ[mo_e > fermi].sum() > 1.:
+            logger.warn(mf, 'Occupied band above Fermi level: \n'
+                        'k=%d, mo_e=%s, mo_occ=%s', k, mo_e, mo_occ)
     return fermi
 
 def get_occ(mf, mo_energy_kpts=None, mo_coeff_kpts=None):
