@@ -184,7 +184,7 @@ class gw(scf):
       k_c_csc = csc_matrix(np.eye(self.nprod)-k_c_csc)
       for m in range(self.nprod): 
          si0[iw,m,:],exitCode = lgmres(k_c_csc, b[m,:])   
-      #print(exitCode)      # 0 indicates successful convergence   
+      if exitCode != 0: print("LGMRES has not achieved convergence: exitCode = {}".format(exitCode))   
     return si0
 
   def si_c_check (self, tol = 1e-5):
@@ -246,10 +246,13 @@ class gw(scf):
 
   def get_snmw2sf_iter(self):
     """
-    This compute spectral weight function. I = XVX W_c XVX and (1-v\chi_{0})W= v\chi_{0}v
-    so 1-v\chi_{0}) I_aux = v\chi_{0}v XVX and I= XVX I_aux    
+    This computes spectral weight function iteratively which must be much cheaper.
+    I = XVX W_c XVX and (1-v\chi_{0})W= v\chi_{0}v
+    so  1-v\chi_{0}) I_aux = v\chi_{0}v XVX 
+    and I= XVX I_aux    
     """
-    import numpy as np
+    import numpy as np    
+    from scipy.sparse.linalg import LinearOperator    
     from scipy.sparse import csc_matrix
     from scipy.sparse.linalg import lgmres
     from numpy.linalg import solve
@@ -258,8 +261,8 @@ class gw(scf):
     v_pab = self.pb.get_ac_vertex_array()
     snm2i = []
     for s in range(self.nspin):
-        sf_aux = np.zeros((len(self.nn[s]), self.norbs, self.nprod), dtype=self.dtype)  
-        inm = np.zeros((len(self.nn[s]), self.norbs, len(ww)), dtype=self.dtype)
+        sf_aux = np.zeros((len(self.nn[s]), self.norbs, self.nprod), dtype=self.dtypeComplex)  
+        inm = np.zeros((len(self.nn[s]), self.norbs, len(ww)), dtype=self.dtypeComplex)
         xna = self.mo_coeff[0,s,self.nn[s],:,0] 
         xmb = self.mo_coeff[0,s,:,:,0]       
         xvx = np.einsum('na,pab,mb->nmp', xna, v_pab, xmb)  #XVX  
@@ -267,14 +270,144 @@ class gw(scf):
             k_c = dot(self.kernel_sq, rf0[iw,:,:])          #v\chi_{0}
             b = dot(k_c, self.kernel_sq)                    #v\chi_{0}v
             k_c = np.eye(self.nprod)-k_c                    #1-v\chi_{0}
+            self.comega_current = w                         #appropriate ferequency for self.vext2veff_matvec
+            k_c_opt = LinearOperator((self.nprod,self.nprod), matvec=self.vext2veff_matvec, dtype=self.dtypeComplex)    #convert k_c as full matrix into Operator
             bxvx = np.einsum('pq,nmq->nmp', b, xvx)         #rightside of I_aux equation has ndim(nn*norbs*nprod)
             for n in range(len(self.nn[s])):
                 for m in range(self.norbs):
                     #sf_aux[n,m,:] = solve(k_c, bxvx[n,m,:]) 
-                    sf_aux[n,m,:] ,exitCode = lgmres(k_c, bxvx[n,m,:])
-                inm[:,:,iw]=np.einsum('nmp,nmp->nm',xvx, sf_aux)    #I= XVX I_aux
+                    sf_aux[n,m,:] ,exitCode = lgmres(k_c_opt, bxvx[n,m,:], tol=1e-06)
+            if exitCode != 0: print("LGMRES has not achieved convergence: exitCode = {}".format(exitCode))
+            inm[:,:,iw]=np.einsum('nmp,nmp->nm',xvx, sf_aux)    #I= XVX I_aux
         snm2i.append(inm)
     return snm2i
+
+  def get_snmw2sf_iter2(self):
+    """
+     For v\chi_{0}v XVX instead of last precedure: multiplications were done one by one to avoid storing v\chi_{0}v.
+     Results should be equal to last approache. 
+    """
+    import numpy as np    
+    from scipy.sparse.linalg import LinearOperator    
+    from scipy.sparse import csc_matrix
+    from scipy.sparse.linalg import lgmres
+    from numpy.linalg import solve
+    ww = 1j*self.ww_ia
+    rf0 = self.rf0(ww)
+    v_pab = self.pb.get_ac_vertex_array()
+    snm2i = []
+    for s in range(self.nspin):
+        sf_aux = np.zeros((len(self.nn[s]), self.norbs, self.nprod), dtype=self.dtypeComplex)  
+        inm = np.zeros((len(self.nn[s]), self.norbs, len(ww)), dtype=self.dtypeComplex)
+        xna = self.mo_coeff[0,s,self.nn[s],:,0] 
+        xmb = self.mo_coeff[0,s,:,:,0]       
+        xvx = np.einsum('na,pab,mb->nmp', xna, v_pab, xmb)
+        for iw,w in enumerate(ww):                             #iw is number of grid and w is complex plane                                
+            k_c = np.dot(self.kernel_sq, rf0[iw,:,:])          #v\chi_{0}
+            #k_c_i = self.apply_rf0(self.kernel_sq[:,0], w)
+            self.comega_current = w                             #appropriate ferequency for self.vext2veff_matvec
+            k_c_opt = LinearOperator((self.nprod,self.nprod), matvec=self.vext2veff_matvec, dtype=self.dtypeComplex)    #convert k_c as full matrix into Operator
+            for n in range(len(self.nn[s])):    
+                for m in range(self.norbs):
+                    a = np.dot(self.kernel_sq, xvx[n,m,:])      #v XVX
+                    b = self.apply_rf0(a,self.comega_current)   #\chi_{0}v XVX by using matrix vector 
+                    a = np.dot(self.kernel_sq, b)               #v\chi_{0}v XVX, this must be aquals to bxvx in last approach
+                    sf_aux[n,m,:] ,exitCode = lgmres(k_c_opt, a, tol=1e-06)
+            if exitCode != 0: print("LGMRES has not achieved convergence: exitCode = {}".format(exitCode))
+            inm[:,:,iw]=np.einsum('nmp,nmp->nm',xvx, sf_aux)    #I= XVX I_aux
+        snm2i.append(np.real(inm))
+    return snm2i
+    #return np.allclose(bxvx,a3,atol=1e-10)
+
+
+  def get_snmw2sf_iter3(self):
+    """
+     For XVX instead of last precedure: multiplications were done by reshaping matrices in 2D shape in XVX.
+    """
+    import numpy as np    
+    from scipy.sparse.linalg import LinearOperator    
+    from scipy.sparse import csc_matrix
+    from scipy.sparse.linalg import lgmres
+    from numpy.linalg import solve
+    ww = 1j*self.ww_ia
+    rf0 = self.rf0(ww)
+    
+    v_pab = self.pb.get_ac_vertex_array()       #atom-centered product basis: V_{\mu}^{ab}
+    v_pab1= v_pab.reshape(self.nprod*self.norbs, self.norbs)          #2D shape of atom-centered product
+
+    v_pd  = self.pb.get_dp_vertex_array()       #dominant product basis: V_{\widetilde{\mu}}^{ab}
+    v_pd1 = v_pd.reshape(v_pd.shape[0]*self.norbs, self.norbs)      #2D shape of dominant produc
+
+    c = self.pb.get_da2cc_den()                 #atom_centered functional: C_{\widetilde{\mu}}^{\mu}
+    #d =np.einsum('pnm,pb->bnm',v_pd1,c)         # V_{\mu}^{ab}= V_{\widetilde{\mu}}^{ab} * C_{\widetilde{\mu}}^{\mu} 
+    #print(np.allclose(v_pab,d,atol=1e-10))      #they must be twin
+
+    
+
+    #tip
+    #v1 = v_pab.T.reshape(self.norbs,-1)                     #reshapes v_pab (norb, norb*nprod), decrease 3d to 2d-matrix
+    #v2 = v1.reshape(self.norbs,self.norbs,self.nprod).T     #reshape to initial shape, so v2 is again v_pab=(norb, norb, nprod)
+
+ 
+    snm2i = []
+    for s in range(self.nspin):
+        sf_aux = np.zeros((len(self.nn[s]), self.norbs, self.nprod), dtype=self.dtypeComplex)  
+        inm = np.zeros((len(self.nn[s]), self.norbs, len(ww)), dtype=self.dtypeComplex)
+        
+        xna = self.mo_coeff[0,s,self.nn[s],:,0]             #(nstat,norbs)
+        xmb = self.mo_coeff[0,s,:,:,0]                      #(nstat,norbs)
+        xvx_ref  = np.einsum('na,pab,mb->nmp', xna, v_pab, xmb)  #einsum: direct multiplication 
+        xvx_ref2 = np.swapaxes(np.dot(xna, np.dot(v_pab,xmb.T)),1,2) #direct multiplication by usinf dot ansd swappin axis
+        #print('comparison between einsum and dot: ',np.allclose(xvx_ref,xvx_ref2,atol=1e-15))             #einsum=dot
+
+
+        #atom-centered product basis
+        #First step
+        vx  = np.dot(v_pab1,xmb.T)                               #multiplications were done one by one in 2D shape
+        vx  = vx.reshape(self.nprod,self.norbs, self.norbs) #reshape it into initial 3D shape
+        #Second step
+        xvx1 = np.swapaxes(vx,0,1)
+        xvx1 = xvx1.reshape(self.norbs,-1)
+        xvx1 = np.dot(xna,xvx1)
+        xvx1 = xvx1.reshape(len(self.nn[s]),self.nprod,self.norbs)
+        xvx1 = np.swapaxes(xvx1,1,2)
+        #print('comparison between ac and ref: ',np.allclose(xvx1,xvx_ref,atol=1e-15))                #its result is equal to the direct np.dot
+
+
+        #dominant product basis
+        #First step
+        size = self.cc_da.shape[0]
+        vxdp  = np.dot(v_pd1,xmb.T)
+        vxdp  = vxdp.reshape(size,self.norbs, self.norbs)
+        #Second step
+        xvx2 = np.swapaxes(vxdp,0,1)
+        xvx2 = xvx2.reshape(self.norbs,-1)
+        xvx2 = np.dot(xna,xvx2)
+        xvx2 = xvx2.reshape(len(self.nn[s]),size,self.norbs)
+        xvx2 = np.swapaxes(xvx2,1,2)
+        xvx2 = np.dot(xvx2,c)
+        #print('comparison between dp and ref: ',np.allclose(xvx2,xvx_ref,atol=1e-15))
+
+  
+        for iw,w in enumerate(ww):                             #iw is number of grid and w is complex plane                                
+            k_c = np.dot(self.kernel_sq, rf0[iw,:,:])          #v\chi_{0}
+            #k_c_i = self.apply_rf0(self.kernel_sq[:,0], w)
+            self.comega_current = w                             #appropriate ferequency for self.vext2veff_matvec
+            k_c_opt = LinearOperator((self.nprod,self.nprod), matvec=self.vext2veff_matvec, dtype=self.dtypeComplex)    #convert k_c as full matrix into Operator
+            for n in range(len(self.nn[s])):    
+                for m in range(self.norbs):
+                    a = np.dot(self.kernel_sq, xvx2[n,m,:])      #v XVX
+                    b = self.apply_rf0(a,self.comega_current)   #\chi_{0}v XVX by using matrix vector 
+                    a = np.dot(self.kernel_sq, b)               #v\chi_{0}v XVX, this should be aquals to bxvx in last approach
+                    sf_aux[n,m,:] ,exitCode = lgmres(k_c_opt, a, tol=1e-06)
+            if exitCode != 0: print("LGMRES has not achieved convergence: exitCode = {}".format(exitCode))
+            inm[:,:,iw]=np.einsum('nmp,nmp->nm',xvx2, sf_aux)    #I= XVX I_aux
+        snm2i.append(np.real(inm))
+    return snm2i
+
+
+
+
 
   def check_veff(self):
     """ This computes an effective field (scalar potential) given the external scalar potential as follows:
@@ -300,6 +433,7 @@ class gw(scf):
           k_c = np.eye(self.nprod)-k_c                      #(1-v\chi_{0})
           bxvx = np.einsum('pq,nmq->nmp', b, xvx)           #v\chi_{0}v * X_{a}^{n}V_{\nu}^{ab}X_{b}^{m}
           xvxbxvx = np.einsum ('nmp,nlp->np',xvx,bxvx)      #V_{ext}=X_{a}^{n}V_{\mu}^{ab}X_{b}^{m} * v\chi_{0}v * X_{a}^{n}V_{\nu}^{ab}X_{b}^{m}
+            
           for n in range (len(self.nn[s])):
               v_eff_ref[n,:] = self.comp_veff(xvxbxvx[n,:]) #compute v_eff in tddft_iter class as referance
               v_eff[n,:]=solve(k_c, xvxbxvx[n,:])           #linear eq. for finding V_{eff} --> (1-v\chi_{0})V_{eff}=V_{ext}
@@ -308,11 +442,8 @@ class gw(scf):
 
   def gw_corr_int(self, sn2w, eps=None):
     """ This computes an integral part of the GW correction at energies sn2e[spin,len(self.nn)] """
-    if not hasattr(self, 'snmw2sf'): 
-        if self.nprod <= 250:  
-            self.snmw2sf = self.get_snmw2sf()
-        else:
-            self.snmw2sf = self.get_snmw2sf_iter()
+    if not hasattr(self, 'snmw2sf'): self.snmw2sf = self.get_snmw2sf()
+
     sn2int = [np.zeros_like(n2w, dtype=self.dtype) for n2w in sn2w ]
     eps = self.dw_excl if eps is None else eps
     #print(__name__, 'self.dw_ia', self.dw_ia, sn2w)
@@ -336,10 +467,7 @@ class gw(scf):
         lsos = self.lsofs_inside_contour(self.ksn2e[0,s,:],w,self.dw_excl)
         zww = array([pole[0] for pole in lsos])
         #print(__name__, s,n,w, 'len lsos', len(lsos))
-        if self.nprod <= 250:        
-            si_ww = self.si_c(ww=zww)
-        else:
-            si_ww = self.si_c_lgmres(ww=zww)
+        si_ww = self.si_c(ww=zww)
         xv = dot(v_pab,x[n])
         for pole,si in zip(lsos, si_ww.real):
           xvx = dot(xv, x[pole[1]])

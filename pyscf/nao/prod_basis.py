@@ -483,10 +483,10 @@ class prod_basis():
 
   def get_dp_vertex_sparse(self, dtype=np.float64, sparseformat=coo_matrix):
     """ Returns the product vertex coefficients as 3d array for dominant products, in a sparse format coo(p,ab) by default"""
-    nnz = self.get_dp_vertex_nnz()
+    nnz = self.get_dp_vertex_nnz()                                                         #Number of non-zero elements in the dominant product vertex
     irow,icol,data = zeros(nnz, dtype=int), zeros(nnz, dtype=int), zeros(nnz, dtype=dtype) # Start to construct coo matrix
 
-    atom2s,dpc2s,nfdp,n = self.sv.atom2s, self.dpc2s,self.dpc2s[-1],self.sv.atom2s[-1]
+    atom2s,dpc2s,nfdp,n = self.sv.atom2s, self.dpc2s,self.dpc2s[-1],self.sv.atom2s[-1]     #self.dpc2s, self.dpc2t, self.dpc2sp: product Center -> list of the size of the basis set in this center,of center's types,of product species
 
     inz = 0
     for s,f,sd,fd,pt,spp in zip(atom2s,atom2s[1:],dpc2s,dpc2s[1:],self.dpc2t,self.dpc2sp):
