@@ -178,8 +178,8 @@ def make_rdm2(mp, t2=None, eris=None, verbose=logger.NOTE):
     for i in range(nocc0):
         dm2[i,i,:,:] += dm1.T * 2
         dm2[:,:,i,i] += dm1.T * 2
-        dm2[:,i,i,:] -= dm1.T
-        dm2[i,:,:,i] -= dm1
+        dm2[:,i,i,:] -= dm1
+        dm2[i,:,:,i] -= dm1.T
 
     for i in range(nocc0):
         for j in range(nocc0):

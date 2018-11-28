@@ -20,91 +20,50 @@ from pyscf.pbc.tdscf import rhf
 from pyscf.pbc.tdscf import uhf
 from pyscf.pbc.tdscf import rks
 from pyscf.pbc.tdscf import uks
+from pyscf.pbc.tdscf import krhf
+from pyscf.pbc.tdscf import kuhf
+from pyscf.pbc.tdscf import krks
+from pyscf.pbc.tdscf import kuks
 
 def TDHF(mf):
     import numpy
     if numpy.abs(getattr(mf, 'kpt', 0)).max() > 1e-9:
         raise NotImplementedError
-    from pyscf import tdscf
     from pyscf.pbc import scf
     if hasattr(mf, 'xc'):
         raise RuntimeError('TDHF does not support DFT object %s' % mf)
     if isinstance(mf, scf.uhf.UHF):
         #mf = scf.addons.convert_to_uhf(mf) # To remove newton decoration
-        return tdscf.uhf.TDHF(mf)
+        return uhf.TDHF(mf)
     else:
         #mf = scf.addons.convert_to_rhf(mf)
-        return tdscf.rhf.TDHF(mf)
+        return rhf.TDHF(mf)
 
 def TDA(mf):
     import numpy
     if numpy.abs(getattr(mf, 'kpt', 0)).max() > 1e-9:
         raise NotImplementedError
-    from pyscf import tdscf
     from pyscf.pbc import scf
     if isinstance(mf, scf.uhf.UHF):
         #mf = scf.addons.convert_to_uhf(mf)
-        if hasattr(mf, 'xc'):
-            return tdscf.uks.TDA(mf)
-        else:
-            return tdscf.uhf.TDA(mf)
-    else:
-        #mf = scf.addons.convert_to_rhf(mf)
-        if hasattr(mf, 'xc'):
-            return tdscf.rks.TDA(mf)
-        else:
-            return tdscf.rhf.TDA(mf)
-
-def TDDFT(mf):
-    import numpy
-    if numpy.abs(getattr(mf, 'kpt', 0)).max() > 1e-9:
-        raise NotImplementedError
-    from pyscf import tdscf
-    from pyscf.pbc import scf
-    if isinstance(mf, scf.uhf.UHF):
-        #mf = scf.addons.convert_to_uhf(mf)
-        if hasattr(mf, 'xc'):
-            if mf._numint.libxc.is_hybrid_xc(mf.xc):
-                return tdscf.uks.TDDFT(mf)
-            else:
-                return tdscf.uks.TDDFTNoHybrid(mf)
-        else:
-            return tdscf.uhf.TDHF(mf)
-    else:
-        #mf = scf.addons.convert_to_rhf(mf)
-        if hasattr(mf, 'xc'):
-            if mf._numint.libxc.is_hybrid_xc(mf.xc):
-                return tdscf.rks.TDDFT(mf)
-            else:
-                return tdscf.rks.TDDFTNoHybrid(mf)
-        else:
-            return tdscf.rhf.TDHF(mf)
-
-def KTDHF(mf):
-    from pyscf.pbc import scf
-    if hasattr(mf, 'xc'):
-        raise RuntimeError('TDHF does not support DFT object %s' % mf)
-    if isinstance(mf, scf.uhf.UHF):
-        return uhf.TDHF(mf)
-    else:
-        return rhf.TDHF(mf)
-
-def KTDA(mf):
-    from pyscf.pbc import scf
-    if isinstance(mf, scf.uhf.UHF):
         if hasattr(mf, 'xc'):
             return uks.TDA(mf)
         else:
             return uhf.TDA(mf)
     else:
+        #mf = scf.addons.convert_to_rhf(mf)
         if hasattr(mf, 'xc'):
             return rks.TDA(mf)
         else:
             return rhf.TDA(mf)
 
-def KTDDFT(mf):
+def TDDFT(mf):
+    import numpy
+    if numpy.abs(getattr(mf, 'kpt', 0)).max() > 1e-9:
+        raise NotImplementedError
     from pyscf.pbc import scf
     if isinstance(mf, scf.uhf.UHF):
+        #mf = scf.addons.convert_to_uhf(mf)
         if hasattr(mf, 'xc'):
             if mf._numint.libxc.is_hybrid_xc(mf.xc):
                 return uks.TDDFT(mf)
@@ -113,6 +72,7 @@ def KTDDFT(mf):
         else:
             return uhf.TDHF(mf)
     else:
+        #mf = scf.addons.convert_to_rhf(mf)
         if hasattr(mf, 'xc'):
             if mf._numint.libxc.is_hybrid_xc(mf.xc):
                 return rks.TDDFT(mf)
@@ -120,6 +80,47 @@ def KTDDFT(mf):
                 return rks.TDDFTNoHybrid(mf)
         else:
             return rhf.TDHF(mf)
+
+def KTDHF(mf):
+    from pyscf.pbc import scf
+    if hasattr(mf, 'xc'):
+        raise RuntimeError('TDHF does not support DFT object %s' % mf)
+    if isinstance(mf, scf.uhf.UHF):
+        return kuhf.TDHF(mf)
+    else:
+        return krhf.TDHF(mf)
+
+def KTDA(mf):
+    from pyscf.pbc import scf
+    if isinstance(mf, scf.uhf.UHF):
+        if hasattr(mf, 'xc'):
+            return kuks.TDA(mf)
+        else:
+            return kuhf.TDA(mf)
+    else:
+        if hasattr(mf, 'xc'):
+            return krks.TDA(mf)
+        else:
+            return krhf.TDA(mf)
+
+def KTDDFT(mf):
+    from pyscf.pbc import scf
+    if isinstance(mf, scf.uhf.UHF):
+        if hasattr(mf, 'xc'):
+            if mf._numint.libxc.is_hybrid_xc(mf.xc):
+                return kuks.TDDFT(mf)
+            else:
+                return kuks.TDDFTNoHybrid(mf)
+        else:
+            return kuhf.TDHF(mf)
+    else:
+        if hasattr(mf, 'xc'):
+            if mf._numint.libxc.is_hybrid_xc(mf.xc):
+                return krks.TDDFT(mf)
+            else:
+                return krks.TDDFTNoHybrid(mf)
+        else:
+            return krhf.TDHF(mf)
 
 KTD = KTDDFT
 

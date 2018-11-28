@@ -102,6 +102,9 @@ class SpinFreeX2C(x2c.X2C):
         '''1-component X2c Foldy-Wouthuysen (FW Hamiltonian  (spin-free part only)
         '''
         if mol is None: mol = self.mol
+        if mol.has_ecp():
+            raise NotImplementedError
+
         xmol, contr_coeff = self.get_xmol(mol)
         c = lib.param.LIGHT_SPEED
         assert('1E' in self.approx.upper())

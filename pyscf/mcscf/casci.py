@@ -51,7 +51,7 @@ def h1e_for_cas(casci, mo_coeff=None, ncas=None, ncore=None):
     mo_cas = mo_coeff[:,ncore:ncore+ncas]
 
     hcore = casci.get_hcore()
-    energy_core = casci._scf.energy_nuc()
+    energy_core = casci.energy_nuc()
     if mo_core.size == 0:
         corevhf = 0
     else:
@@ -295,7 +295,7 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
         mocas = mo_coeff1[:,ncore:nocc]
         hcore = mc.get_hcore()
         dm_core = numpy.dot(mo_coeff1[:,:ncore]*2, mo_coeff1[:,:ncore].T)
-        ecore = mc._scf.energy_nuc()
+        ecore = mc.energy_nuc()
         ecore+= numpy.einsum('ij,ji', hcore, dm_core)
         h1eff = reduce(numpy.dot, (mocas.T, hcore, mocas))
         if eris is not None and hasattr(eris, 'ppaa'):
@@ -617,8 +617,20 @@ class CASCI(lib.StreamObject):
 
         e_tot : float
             Total MCSCF energy (electronic energy plus nuclear repulsion)
+        e_cas : float
+            CAS space FCI energy
         ci : ndarray
             CAS space FCI coefficients
+        mo_coeff : ndarray
+            When canonicalization is specified, the orbitals are canonical
+            orbitals which make the general Fock matrix (Fock operator on top
+            of MCSCF 1-particle density matrix) diagonalized within each
+            subspace (core, active, external).  If natorb (natural orbitals in
+            active space) is specified, the active segment of the mo_coeff is
+            natural orbitls.
+        mo_energy : ndarray
+            Diagonal elements of general Fock matrix (in mo_coeff
+            representation).
 
     Examples:
 
@@ -713,6 +725,9 @@ To enable the solvent model for CASSCF, a decoration to CASSCF object as below n
 ''',
                      self._scf.with_solvent.__class__)
         return self
+
+    def energy_nuc(self):
+        return self._scf.energy_nuc()
 
     def get_hcore(self, mol=None):
         return self._scf.get_hcore(mol)

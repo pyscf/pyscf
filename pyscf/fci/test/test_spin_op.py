@@ -603,6 +603,8 @@ class KnownValues(unittest.TestCase):
         self.assertAlmostEqual(e, -25.4437866823, 9)
         self.assertAlmostEqual(fci.spin_op.spin_square0(ci0, norb, nelec)[0], 2, 9)
 
+        # Note: OMP parallelization may change the results due to round-off
+        # instability.
         nelec = (5,5)
         fci.addons.fix_spin_(fci.direct_spin0)
         na = fci.cistring.num_strings(norb, nelec[0])

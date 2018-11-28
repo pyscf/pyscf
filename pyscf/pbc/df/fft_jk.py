@@ -60,17 +60,33 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None):
     coulG = tools.get_coulG(cell, mesh=mesh)
     ngrids = len(coulG)
 
-    vR = rhoR = np.zeros((nset,ngrids))
-    for ao_ks_etc, p0, p1 in mydf.aoR_loop(mydf.grids, kpts):
-        ao_ks, mask = ao_ks_etc[0], ao_ks_etc[2]
-        for i in range(nset):
-            rhoR[i,p0:p1] += make_rho(i, ao_ks, mask, 'LDA')
-        ao = ao_ks = None
+    if hermi == 1 or gamma_point(kpts):
+        vR = rhoR = np.zeros((nset,ngrids))
+        for ao_ks_etc, p0, p1 in mydf.aoR_loop(mydf.grids, kpts):
+            ao_ks, mask = ao_ks_etc[0], ao_ks_etc[2]
+            for i in range(nset):
+                rhoR[i,p0:p1] += make_rho(i, ao_ks, mask, 'LDA')
+            ao = ao_ks = None
 
-    for i in range(nset):
-        rhoG = tools.fft(rhoR[i], mesh)
-        vG = coulG * rhoG
-        vR[i] = tools.ifft(vG, mesh).real
+        for i in range(nset):
+            rhoG = tools.fft(rhoR[i], mesh)
+            vG = coulG * rhoG
+            vR[i] = tools.ifft(vG, mesh).real
+
+    else:  # vR may be complex if the underlying density is complex
+        vR = rhoR = np.zeros((nset,ngrids), dtype=np.complex128)
+        for ao_ks_etc, p0, p1 in mydf.aoR_loop(mydf.grids, kpts):
+            ao_ks, mask = ao_ks_etc[0], ao_ks_etc[2]
+            for i in range(nset):
+                for k, ao in enumerate(ao_ks):
+                    ao_dm = lib.dot(ao, dms[i,k])
+                    rhoR[i,p0:p1] += np.einsum('xi,xi->x', ao_dm, ao.conj())
+        rhoR *= 1./nkpts
+
+        for i in range(nset):
+            rhoG = tools.fft(rhoR[i], mesh)
+            vG = coulG * rhoG
+            vR[i] = tools.ifft(vG, mesh)
 
     kpts_band, input_band = _format_kpts_band(kpts_band, kpts), kpts_band
     nband = len(kpts_band)
@@ -84,7 +100,11 @@ def get_j_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None):
     for ao_ks_etc, p0, p1 in mydf.aoR_loop(mydf.grids, kpts_band):
         ao_ks, mask = ao_ks_etc[0], ao_ks_etc[2]
         for i in range(nset):
-            vj_kpts[i] += ni.eval_mat(cell, ao_ks, 1., None, vR[i,p0:p1], mask, 'LDA')
+            # ni.eval_mat can handle real vR only
+            # vj_kpts[i] += ni.eval_mat(cell, ao_ks, 1., None, vR[i,p0:p1], mask, 'LDA')
+            for k, ao in enumerate(ao_ks):
+                aow = np.einsum('xi,x->xi', ao, vR[i,p0:p1])
+                vj_kpts[i,k] += lib.dot(ao.conj().T, aow)
 
     return _format_jks(vj_kpts, dm_kpts, input_band, kpts)
 
@@ -98,6 +118,12 @@ def get_k_kpts(mydf, dm_kpts, hermi=1, kpts=np.zeros((1,3)), kpts_band=None,
         kpts : (nkpts, 3) ndarray
 
     Kwargs:
+        hermi : int
+            Whether K matrix is hermitian
+
+            | 0 : not hermitian and not symmetric
+            | 1 : hermitian
+
         kpts_band : (3,) ndarray or (*,3) ndarray
             A list of arbitrary "band" k-points at which to evalute the matrix.
 

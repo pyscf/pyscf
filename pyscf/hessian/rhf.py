@@ -474,14 +474,16 @@ class Hessian(lib.StreamObject):
                     rinv2aa *= zi
                     rinv2ab *= zi
                     if with_ecp and iatm in ecp_atoms:
-                        rinv2aa += mol.intor('ECPscalar_ipiprinv', comp=9)
-                        rinv2ab += mol.intor('ECPscalar_iprinvip', comp=9)
+                        rinv2aa -= mol.intor('ECPscalar_ipiprinv', comp=9)
+                        rinv2ab -= mol.intor('ECPscalar_iprinvip', comp=9)
                 rinv2aa = rinv2aa.reshape(3,3,nao,nao)
                 rinv2ab = rinv2ab.reshape(3,3,nao,nao)
                 hcore = -rinv2aa - rinv2ab
                 hcore[:,:,i0:i1] += h1aa[:,:,i0:i1]
-                hcore[:,:,i0:i1] += rinv2aa[:,:,i0:i1] * 2
-                hcore[:,:,i0:i1] += rinv2ab[:,:,i0:i1] * 2
+                hcore[:,:,i0:i1] += rinv2aa[:,:,i0:i1]
+                hcore[:,:,i0:i1] += rinv2ab[:,:,i0:i1]
+                hcore[:,:,:,i0:i1] += rinv2aa[:,:,i0:i1].transpose(0,1,3,2)
+                hcore[:,:,:,i0:i1] += rinv2ab[:,:,:,i0:i1]
                 hcore[:,:,i0:i1,i0:i1] += h1ab[:,:,i0:i1,i0:i1]
 
             else:
@@ -494,8 +496,8 @@ class Hessian(lib.StreamObject):
                     rinv2aa *= zi
                     rinv2ab *= zi
                     if with_ecp and iatm in ecp_atoms:
-                        rinv2aa += mol.intor('ECPscalar_ipiprinv', comp=9, shls_slice=shls_slice)
-                        rinv2ab += mol.intor('ECPscalar_iprinvip', comp=9, shls_slice=shls_slice)
+                        rinv2aa -= mol.intor('ECPscalar_ipiprinv', comp=9, shls_slice=shls_slice)
+                        rinv2ab -= mol.intor('ECPscalar_iprinvip', comp=9, shls_slice=shls_slice)
                     hcore[:,:,j0:j1] += rinv2aa.reshape(3,3,j1-j0,nao)
                     hcore[:,:,j0:j1] += rinv2ab.reshape(3,3,j1-j0,nao).transpose(1,0,2,3)
 
@@ -506,8 +508,8 @@ class Hessian(lib.StreamObject):
                     rinv2aa *= zj
                     rinv2ab *= zj
                     if with_ecp and jatm in ecp_atoms:
-                        rinv2aa += mol.intor('ECPscalar_ipiprinv', comp=9, shls_slice=shls_slice)
-                        rinv2ab += mol.intor('ECPscalar_iprinvip', comp=9, shls_slice=shls_slice)
+                        rinv2aa -= mol.intor('ECPscalar_ipiprinv', comp=9, shls_slice=shls_slice)
+                        rinv2ab -= mol.intor('ECPscalar_iprinvip', comp=9, shls_slice=shls_slice)
                     hcore[:,:,i0:i1] += rinv2aa.reshape(3,3,i1-i0,nao)
                     hcore[:,:,i0:i1] += rinv2ab.reshape(3,3,i1-i0,nao)
             return hcore + hcore.conj().transpose(0,1,3,2)

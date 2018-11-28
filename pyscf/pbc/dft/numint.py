@@ -145,9 +145,16 @@ def eval_rho(cell, ao, dm, non0tab=None, xctype='LDA', hermi=0, verbose=None):
     if numpy.iscomplexobj(ao) or numpy.iscomplexobj(dm):
         shls_slice = (0, cell.nbas)
         ao_loc = cell.ao_loc_nr()
+        dm = dm.astype(numpy.complex128)
+# For GGA, function eval_rho returns   real(|\nabla i> D_ij <j| + |i> D_ij <\nabla j|)
+#       = real(|\nabla i> D_ij <j| + |i> D_ij <\nabla j|)
+#       = real(|\nabla i> D_ij <j| + conj(|\nabla j> conj(D_ij) < i|))
+#       = real(|\nabla i> D_ij <j|) + real(|\nabla j> conj(D_ij) < i|)
+#       = real(|\nabla i> [D_ij + (D^\dagger)_ij] <j|)
+# symmetrization dm (D + D.conj().T) then /2 because the code below computes
+#       2*real(|\nabla i> D_ij <j|)
         if not hermi:
             dm = (dm + dm.conj().T) * .5
-        dm = dm.astype(numpy.complex128)
 
         def dot_bra(bra, aodm):
             #:rho  = numpy.einsum('pi,pi->p', bra.real, aodm.real)
@@ -933,6 +940,7 @@ class NumInt(numint.NumInt):
                   verbose=None):
         return make_mask(cell, coords, relativity, shls_slice, verbose)
 
+    @lib.with_doc(eval_rho.__doc__)
     def eval_rho(self, cell, ao, dm, non0tab=None, xctype='LDA', hermi=0, verbose=None):
         return eval_rho(cell, ao, dm, non0tab, xctype, hermi, verbose)
 
@@ -1075,7 +1083,8 @@ class KNumInt(numint.NumInt):
 
     def eval_rho(self, cell, ao_kpts, dm_kpts, non0tab=None, xctype='LDA',
                  hermi=0, verbose=None):
-        '''
+        '''Collocate the *real* density (opt. gradients) on the real-space grid.
+
         Args:
             cell : Mole or Cell object
             ao_kpts : (nkpts, ngrids, nao) ndarray
@@ -1217,15 +1226,20 @@ class KNumInt(numint.NumInt):
                                       non0tab, xctype)
         else:
             if isinstance(dms[0], numpy.ndarray) and dms[0].ndim == 2:
-                dms = [numpy.asarray(dms)]
-            if not hermi:
-                #       dm.shape = (nkpts, nao, nao)
-                dms = [(dm+dm.conj().transpose(0,2,1))*.5 for dm in dms]
+                dms = [numpy.stack(dms)]
+            #if not hermi:
+            # Density (or response of density) is always real for DFT.
+            # Symmetrizing DM for gamma point should not change the value of
+            # density. However, when k-point is considered, unless dm and
+            # dm.conj().transpose produce the same real part of density, the
+            # symmetrization code below may be incorrect (proof is needed).
+            #    # dm.shape = (nkpts, nao, nao)
+            #    dms = [(dm+dm.conj().transpose(0,2,1))*.5 for dm in dms]
             nao = dms[0].shape[-1]
             ndms = len(dms)
             def make_rho(idm, ao_kpts, non0tab, xctype):
                 return self.eval_rho(cell, ao_kpts, dms[idm], non0tab, xctype,
-                                     hermi=1)
+                                     hermi=hermi)
         return make_rho, ndms, nao
 
     nr_rks_fxc = nr_rks_fxc
