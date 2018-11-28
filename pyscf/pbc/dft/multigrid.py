@@ -62,6 +62,7 @@ RHOG_HIGH_ORDER = getattr(__config__, 'pbc_dft_multigrid_rhog_high_order', False
 
 PTR_EXPDROP = 16
 EXPDROP = getattr(__config__, 'pbc_dft_multigrid_expdrop', 1e-12)
+IMAG_TOL = 1e-9
 
 
 def eval_mat(cell, weights, shls_slice=None, comp=1, hermi=0,
@@ -88,6 +89,7 @@ def eval_mat(cell, weights, shls_slice=None, comp=1, hermi=0,
     if mesh is None:
         mesh = cell.mesh
     weights = numpy.asarray(weights, order='C')
+    assert(weights.dtype == numpy.double)
     xctype = xctype.upper()
     n_mat = None
     if xctype == 'LDA':
@@ -168,6 +170,8 @@ def eval_mat(cell, weights, shls_slice=None, comp=1, hermi=0,
 def eval_rho(cell, dm, shls_slice=None, hermi=0, xctype='LDA', kpts=None,
              mesh=None, offset=None, submesh=None, ignore_imag=False,
              out=None):
+    '''Collocate the *real* density (opt. gradients) on the real-space grid.
+    '''
     assert(all(cell._bas[:,NPRIM_OF] == 1))
     atm, bas, env = gto.conc_env(cell._atm, cell._bas, cell._env,
                                  cell._atm, cell._bas, cell._env)
@@ -469,9 +473,11 @@ def _eval_rhoG(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), deriv=0,
             xctype = 'LDA'
             rhodim = 1
             deriv = 0
+        assert(hermi == 1 or gamma_point(kpts))
 
     elif deriv == 2:  # meta-GGA
         raise NotImplementedError
+        assert(hermi == 1 or gamma_point(kpts))
 
     ignore_imag = (hermi == 1)
 
@@ -487,17 +493,23 @@ def _eval_rhoG(mydf, dm_kpts, hermi=1, kpts=numpy.zeros((1,3)), deriv=0,
         if grids_sparse is None:
             # The first pass handles all diffused functions using the regular
             # matrix multiplication code.
-            rho = numpy.zeros((nset,rhodim,ngrids))
+            rho = numpy.zeros((nset,rhodim,ngrids), dtype=numpy.complex128)
             idx_h = grids_dense.ao_idx
             dms_hh = numpy.asarray(dms[:,:,idx_h[:,None],idx_h], order='C')
             for ao_h_etc, p0, p1 in mydf.aoR_loop(grids_dense, kpts, deriv):
                 ao_h, mask = ao_h_etc[0], ao_h_etc[2]
                 for k in range(nkpts):
                     for i in range(nset):
-                        rho_sub = numint.eval_rho(h_cell, ao_h[k], dms_hh[i,k],
-                                                  mask, xctype, hermi)
-                        rho[i,:,p0:p1] += rho_sub.real
-                ao_h = ao_h_etc = None
+                        if xctype == 'LDA':
+                            ao_dm = lib.dot(ao_h[k], dms_hh[i,k])
+                            rho_sub = numpy.einsum('xi,xi->x', ao_dm, ao_h[k].conj())
+                        else:
+                            rho_sub = numint.eval_rho(h_cell, ao_h[k], dms_hh[i,k],
+                                                      mask, xctype, hermi)
+                        rho[i,:,p0:p1] += rho_sub
+                ao_h = ao_h_etc = ao_dm = None
+            if ignore_imag:
+                rho = rho.real
         else:
             idx_h = grids_dense.ao_idx
             idx_l = grids_sparse.ao_idx
@@ -752,7 +764,8 @@ def _get_j_pass2(mydf, vG, kpts=numpy.zeros((1,3)), verbose=None):
         mydf.tasks = tasks = multi_grids_tasks(cell, mydf.mesh, log)
         log.debug('Multigrid ntasks %s', len(tasks))
 
-    if gamma_point(kpts):
+    at_gamma_point = gamma_point(kpts)
+    if at_gamma_point:
         vj_kpts = numpy.zeros((nset,nkpts,nao,nao))
     else:
         vj_kpts = numpy.zeros((nset,nkpts,nao,nao), dtype=numpy.complex128)
@@ -769,8 +782,11 @@ def _get_j_pass2(mydf, vG, kpts=numpy.zeros((1,3)), verbose=None):
         #:sub_vG = vG[:,gx[:,None,None],gy[:,None],gz].reshape(nset,ngrids)
         sub_vG = _take_4d(vG, (None, gx, gy, gz)).reshape(nset,ngrids)
 
-        vR = tools.ifft(sub_vG, mesh).real.reshape(nset,ngrids)
-        vR = numpy.asarray(vR, order='C')
+        v_rs = tools.ifft(sub_vG, mesh).reshape(nset,ngrids)
+        vR = numpy.asarray(v_rs.real, order='C')
+        vI = numpy.asarray(v_rs.imag, order='C')
+        if at_gamma_point:
+            v_rs = vR
 
         idx_h = grids_dense.ao_idx
         if grids_sparse is None:
@@ -778,7 +794,7 @@ def _get_j_pass2(mydf, vG, kpts=numpy.zeros((1,3)), verbose=None):
                 ao_h = ao_h_etc[0]
                 for k in range(nkpts):
                     for i in range(nset):
-                        vj_sub = lib.dot(ao_h[k].conj().T*vR[i,p0:p1], ao_h[k])
+                        vj_sub = lib.dot(ao_h[k].conj().T*v_rs[i,p0:p1], ao_h[k])
                         vj_kpts[i,k,idx_h[:,None],idx_h] += vj_sub
                 ao_h = ao_h_etc = None
         else:
@@ -800,6 +816,14 @@ def _get_j_pass2(mydf, vG, kpts=numpy.zeros((1,3)), verbose=None):
             shls_slice = (0, nshells_h, 0, nshells_t)
             vp = eval_mat(t_cell, vR, shls_slice, 1, 0, 'LDA', kpts)
             vp = lib.einsum('nkpq,pi,qj->nkij', vp, h_coeff, t_coeff)
+
+            # Imaginary part may contribute
+            if not at_gamma_point and abs(vI).max() > IMAG_TOL:
+                vpI = eval_mat(t_cell, vI, shls_slice, 1, 0, 'LDA', kpts)
+                vpI = lib.einsum('nkpq,pi,qj->nkij', vpI, h_coeff, t_coeff)
+                vp = vp + vpI * 1j
+                vpI = None
+
             vj_kpts[:,:,idx_h[:,None],idx_h] += vp[:,:,:,:naoh]
             vj_kpts[:,:,idx_h[:,None],idx_l] += vp[:,:,:,naoh:]
 
