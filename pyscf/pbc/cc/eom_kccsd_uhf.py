@@ -308,26 +308,26 @@ def ipccsd_diag(eom, kshift, imds=None):
     Hr2abb = np.zeros((nkpts,nkpts,nocc_a,nocc_b,nvir_b), dtype=t1[0].dtype)
     Hr2baa = np.zeros((nkpts,nkpts,nocc_b,nocc_a,nvir_a), dtype=t1[0].dtype)
     if eom.partition == 'mp':
-        foo = eris.fock[0][:,:nocc_a,:nocc_a]
-        fOO = eris.fock[1][:,:nocc_b,:nocc_b]
-        fvv = eris.fock[0][:,:nvir_a,:nvir_a]
-        fVV = eris.fock[1][:,:nvir_b,:nvir_b]
+        raise Exception("MP diag is not tested") # remove this to use untested code
+        #foo = eris.fock[0][:,:nocc_a,:nocc_a]
+        #fOO = eris.fock[1][:,:nocc_b,:nocc_b]
+        #fvv = eris.fock[0][:,:nvir_a,:nvir_a]
+        #fVV = eris.fock[1][:,:nvir_b,:nvir_b]
         for ki in range(nkpts):
             for kj in range(nkpts):
                 kb = kconserv[ki,kshift,kj]
-                Hr2aaa[ki,kj]  = fvv[ka].diagonal()
-                Hr2aaa[ki,kj] -= foo[ki].diagonal()[:,None,None]
-                Hr2aaa[ki,kj] -= foo[kj].diagonal()[None,:,None]
-                Hr2bbb[ki,kj]  = fVV[ka].diagonal()
-                Hr2bbb[ki,kj] -= fOO[ki].diagonal()[:,None,None]
-                Hr2bbb[ki,kj] -= fOO[kj].diagonal()[None,:,None]
-                Hr2aba[ki,kj]  = fvv[ka].diagonal()
-                Hr2aba[ki,kj] -= foo[ki].diagonal()[:,None,None]
-                Hr2aba[ki,kj] -= fOO[kj].diagonal()[None,:,None]
-                Hr2bab[ki,kj]  = fVV[ka].diagonal()
-                Hr2bab[ki,kj] -= fOO[ki].diagonal()[:,None,None]
-                Hr2bab[ki,kj] -= foo[kj].diagonal()[None,:,None]
-        raise Exception("This is not tested")
+                Hr2aaa[ki,kj]  = imds.Fvv[ka].diagonal()
+                Hr2aaa[ki,kj] -= imds.Foo[ki].diagonal()[:,None,None]
+                Hr2aaa[ki,kj] -= imds.Foo[kj].diagonal()[None,:,None]
+                Hr2bbb[ki,kj]  = imds.FVV[ka].diagonal()
+                Hr2bbb[ki,kj] -= imds.FOO[ki].diagonal()[:,None,None]
+                Hr2bbb[ki,kj] -= imds.FOO[kj].diagonal()[None,:,None]
+                Hr2aba[ki,kj]  = imds.Fvv[ka].diagonal()
+                Hr2aba[ki,kj] -= imds.Foo[ki].diagonal()[:,None,None]
+                Hr2aba[ki,kj] -= imds.FOO[kj].diagonal()[None,:,None]
+                Hr2bab[ki,kj]  = imds.FVV[ka].diagonal()
+                Hr2bab[ki,kj] -= imds.FOO[ki].diagonal()[:,None,None]
+                Hr2bab[ki,kj] -= imds.Foo[kj].diagonal()[None,:,None]
     else:
         for ka in range(nkpts):
             for ki in range(nkpts):
@@ -474,6 +474,8 @@ def eaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     t2aa, t2ab, t2bb = t2
     nocca, noccb, nvira, nvirb = t2ab.shape[3:]
     nmoa, nmob = nocca + nvira, noccb + nvirb
+    kconserv = imds.kconserv
+    nkpts = eom.nkpts
 
     r1, r2 = eom.vector_to_amplitudes(vector, nkpts, (nmoa, nmob), (nocca, noccb))
 
@@ -655,6 +657,91 @@ def eaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
 
     vector = amplitudes_to_vector_ea([Hr1a, Hr1b], [Hr2aaa, Hr2aba, Hr2bab, Hr2bbb])
     return vector
+
+def eaccsd_diag(eom, kshift, imds=None):
+    if imds is None: imds = eom.make_imds()
+    t1, t2 = imds.t1, imds.t2
+    t1a, t1b = t1
+    t2aa, t2ab, t2bb = t2
+    nkpts, nocca, nvira = t1a.shape
+    nkpts, noccb, nvirb = t1b.shape
+    kconserv = imds.kconserv
+
+    #Hr1a = np.zeros((nvira), dtype=t1a.dtype)
+    #Hr1b = np.zeros((nvirb), dtype=t1b.dtype)
+    Hr2aaa = np.zeros((nkpts,nkpts,nocca,nvira,nvira), dtype=t1a.dtype)
+    Hr2aba = np.zeros((nkpts,nkpts,nocca,nvirb,nvira), dtype=t1a.dtype)
+    Hr2bab = np.zeros((nkpts,nkpts,noccb,nvira,nvirb), dtype=t1a.dtype)
+    Hr2bbb = np.zeros((nkpts,nkpts,noccb,nvirb,nvirb), dtype=t1b.dtype)
+
+    Hr1a = np.diag(imds.Fvv[kshift])
+    Hr1b = np.diag(imds.FVV[kshift])
+    if eom.partition == 'mp':
+        raise Exception("MP diag is not tested") # remove this to use untested code
+        for kj, ka in itertools.product(range(nkpts), repeat=2):
+            kb = kconserv[kshift, ka, kj]
+            Hr2aaa[kj,ka] -= imds.Foo[kj,:,None,None]
+            Hr2aaa[kj,ka] += imds.Fvv[ka,None,:,None]
+            Hr2aaa[kj,ka] += imds.Fvv[kb,None,None,:]
+
+            Hr2aba[kj,ka] -= imds.Foo[kj,:,None,None]
+            Hr2aba[kj,ka] += imds.FVV[ka,None,:,None]
+            Hr2aba[kj,ka] += imds.Fvv[kb,None,None,:]
+
+            Hr2bab[kj,ka] -= imds.FOO[kj,:,None,None]
+            Hr2bab[kj,ka] += imds.Fvv[ka,None,:,None]
+            Hr2bab[kj,ka] += imds.FVV[kb,None,None,:]
+
+            Hr2bbb[kj,ka] -= imds.FOO[kj,:,None,None]
+            Hr2bbb[kj,ka] += imds.FVV[ka,None,:,None]
+            Hr2bbb[kj,ka] += imds.FVV[kb,None,None,:]
+    else:
+        for kj, ka in itertools.product(range(nkpts), repeat=2):
+            kb = kconserv[kshift, ka, kj]
+            # Fvv
+            Hr2aaa[kj,ka] += imds.Fvv[ka].diagonal()[None,:,None]
+            Hr2aaa[kj,ka] += imds.Fvv[kb].diagonal()[None,None,:]
+            Hr2aba[kj,ka] += imds.FVV[ka].diagonal()[None,:,None]
+            Hr2aba[kj,ka] += imds.Fvv[kb].diagonal()[None,None,:]
+            Hr2bab[kj,ka] += imds.Fvv[ka].diagonal()[None,:,None]
+            Hr2bab[kj,ka] += imds.FVV[kb].diagonal()[None,None,:]
+            Hr2bbb[kj,ka] += imds.FVV[ka].diagonal()[None,:,None]
+            Hr2bbb[kj,ka] += imds.FVV[kb].diagonal()[None,None,:]
+
+            # Foo
+            Hr2aaa[kj,ka] -= imds.Foo[kj].diagonal()[:,None,None]
+            Hr2bbb[kj,ka] -= imds.FOO[kj].diagonal()[:,None,None]
+            Hr2bab[kj,ka] -= imds.FOO[kj].diagonal()[:,None,None]
+            Hr2aba[kj,ka] -= imds.Foo[kj].diagonal()[:,None,None]
+
+            # Wvvvv
+            Hr2aaa[kj,ka] += lib.einsum('aabb->ab', imds.Wvvvv[ka,ka,kb])[None,:,:]
+            Hr2aba[kj,ka] += lib.einsum('bbAA->Ab', imds.WvvVV[kb,kb,ka])[None,:,:]
+            Hr2bab[kj,ka] += lib.einsum('aaBB->aB', imds.WvvVV[ka,ka,kb])[None,:,:]
+            Hr2bbb[kj,ka] += lib.einsum('AABB->AB', imds.WVVVV[ka,ka,kb])[None,:,:]
+
+            # Wovov term (physicist's Woovv)
+            Hr2aaa[kj,ka] -= lib.einsum('kajb, kjab->jab', imds.Wovov[kshift,ka,kj], t2aa[kshift,kj,ka])
+            Hr2aba[kj,ka] -= lib.einsum('jbKA, jKbA->jAb', imds.WovOV[kj,kb,kshift], t2ab[kj,kshift,kb])
+            Hr2bab[kj,ka] -= lib.einsum('kaJB, kJaB->JaB', imds.WovOV[kshift,ka,kj], t2ab[kshift,kj,ka])
+            Hr2bbb[kj,ka] -= lib.einsum('kajb, kjab->jab', imds.WOVOV[kshift,ka,kj], t2bb[kshift,kj,ka])
+
+            # Wovvo term
+            Hr2aaa[kj, ka] += lib.einsum('jbbj->jb', imds.Wovvo[kj,kb,kb])[:,None,:]
+            Hr2aaa[kj, ka] += lib.einsum('jaaj->ja', imds.Wovvo[kj,ka,ka])[:,:,None]
+
+            Hr2aba[kj, ka] += lib.einsum('jbbj->jb', imds.Wovvo[kj,kb,kb])[:,None,:]
+            Hr2aba[kj, ka] -= lib.einsum('jjAA->jA', imds.WooVV[kj,kj,ka])[:,:,None]
+
+            Hr2bab[kj, ka] += lib.einsum('JBBJ->JB', imds.WOVVO[kj,kb,kb])[:,None,:]
+            Hr2bab[kj, ka] -= lib.einsum('JJaa->Ja', imds.WOOvv[kj,kj,ka])[:,:,None]
+
+            Hr2bbb[kj, ka] += lib.einsum('JBBJ->JB', imds.WOVVO[kj,kb,kb])[:,None,:]
+            Hr2bbb[kj, ka] += lib.einsum('JAAJ->JA', imds.WOVVO[kj,ka,ka])[:,:,None]
+
+    vector = amplitudes_to_vector_ea((Hr1a,Hr1b), (Hr2aaa,Hr2aba,Hr2bab,Hr2bbb))
+    return vector
+
 
 class EOMEA(eom_kgccsd.EOMEA):
     def __init__(self, cc):
