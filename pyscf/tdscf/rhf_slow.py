@@ -110,7 +110,6 @@ class PhysERI(TDDFTMatrixBlocks):
 
         Args:
             model (RHF): the base model;
-            tensors or the same tensors reshaped into matrixes;
         """
         super(PhysERI, self).__init__()
         self.model = model
@@ -167,6 +166,14 @@ class PhysERI4(PhysERI):
     ]
 
     def __init__(self, model):
+        """
+        4-center integrals. Notation corresponds to RevModPhys.36.844 (Eq. 7.5).
+        Integral blocks are obtained via __getitem__. This is the general 4-fold symmetry
+        implementation for complex-valued orbitals.
+
+        Args:
+            model (RHF): the base model;
+        """
         super(PhysERI, self).__init__()
         self.model = model
 
@@ -189,6 +196,17 @@ class PhysERI8(PhysERI4):
         ((0, 3, 2, 1), False),
         ((1, 2, 3, 0), False),
     ]
+
+    def __init__(self, model):
+        """
+        4-center integrals. Notation corresponds to RevModPhys.36.844 (Eq. 7.5).
+        Integral blocks are obtained via __getitem__. This is the 8-fold symmetry
+        implementation for real-valued orbitals.
+
+        Args:
+            model (RHF): the base model;
+        """
+        super(PhysERI8, self).__init__(model)
 
 
 def build_matrix(eri):
