@@ -45,9 +45,9 @@ class H20Test(unittest.TestCase):
                 testing.assert_allclose(self.ref_m, m, atol=1e-14)
                 vals, vecs = eig(m, nroots=self.td_model_rhf.nroots)
                 testing.assert_allclose(vals, self.td_model_rhf.e, atol=1e-5)
-            except Exception as e:
+            except Exception:
                 print("When testing {} the following exception occurred:".format(eri))
-                raise e
+                raise
 
     def test_eig_kernel(self):
         """Tests default eig kernel behavior."""
