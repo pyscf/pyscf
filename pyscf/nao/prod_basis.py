@@ -511,6 +511,38 @@ class prod_basis():
       
     return sparseformat((data, (irow, icol)), dtype=dtype, shape=(nfdp,n*n))
 
+
+  def get_dp_vertex_sparse2(self, dtype=np.float64, sparseformat=coo_matrix):
+    """ Returns the product vertex coefficients as 3d array for dominant products, in a sparse format coo(pa,b) by default"""
+    import numpy as np
+    from scipy.sparse import csr_matrix, coo_matrix
+    nnz = self.get_dp_vertex_nnz()                                                           
+    irow,icol,data = np.zeros(nnz, dtype=int), np.zeros(nnz, dtype=int), np.zeros(nnz, dtype=dtype)
+    atom2s,dpc2s,nfdp,n = self.sv.atom2s, self.dpc2s, self.dpc2s[-1],self.sv.atom2s[-1]   
+
+    inz = 0
+    for s,f,sd,fd,pt,spp in zip(atom2s,atom2s[1:],dpc2s,dpc2s[1:],self.dpc2t,self.dpc2sp):
+        size = self.prod_log.sp2vertex[spp].size
+        lv = self.prod_log.sp2vertex[spp].reshape(size)
+        dd,aa,bb = np.mgrid[sd:fd,s:f,s:f].reshape((3,size))
+        irow[inz:inz+size],icol[inz:inz+size],data[inz:inz+size] = dd+aa*nfdp, bb, lv
+        inz+=size
+           
+    for sd,fd,pt,spp in zip(dpc2s,dpc2s[1:],self.dpc2t, self.dpc2sp):
+        if pt!=2: continue
+        inf,(a,b),size = self.bp2info[spp],self.bp2info[spp].atoms,self.bp2info[spp].vrtx.size
+        sa,fa,sb,fb = atom2s[a],atom2s[a+1],atom2s[b],atom2s[b+1]
+        dd,aa,bb = np.mgrid[sd:fd,sa:fa,sb:fb].reshape((3,size))
+        irow[inz:inz+size],icol[inz:inz+size] = dd+aa*nfdp, bb
+        data[inz:inz+size] = inf.vrtx.reshape(size)
+        inz+=size
+     
+        irow[inz:inz+size],icol[inz:inz+size] = dd+bb*nfdp, aa
+        data[inz:inz+size] = inf.vrtx.reshape(size)
+        inz+=size
+    return coo_matrix((data, (irow, icol)), dtype=dtype, shape=(nfdp*n,n))
+
+
   def get_dp_vertex_sparse_loops(self, dtype=np.float64, sparseformat=coo_matrix):
     """ Returns the product vertex coefficients as 3d array for dominant products, in a sparse format coo(p,ab) slow version"""
     nnz = self.get_dp_vertex_nnz()
@@ -645,6 +677,29 @@ class prod_basis():
         plt.colorbar()
         plt.savefig(fname)
         plt.close(fig)
+
+
+
+
+  def reshape_COO(a, shape):
+    """Reshape the sparse matrix (a) and returns a coo_matrix with favourable shape."""
+    from scipy.sparse import coo_matrix
+    if not hasattr(shape, '__len__') or len(shape) != 2:
+        raise ValueError('`shape` must be a sequence of two integers')
+
+    c = a.tocoo()
+    nrows, ncols = c.shape
+    size = nrows * ncols
+
+    new_size =  shape[0] * shape[1]
+    if new_size != size:
+        raise ValueError('total size of new array must be unchanged')
+
+    flat_indices = ncols * c.row + c.col
+    new_row, new_col = divmod(flat_indices, shape[1])
+
+    b = coo_matrix((c.data, (new_row, new_col)), shape=shape)
+    return b
 #
 #
 #

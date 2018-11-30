@@ -389,24 +389,20 @@ class gw(scf):
         #print('comparison between dp and ref: ',np.allclose(xvx2,xvx_ref,atol=1e-15))
 
   
-        for iw,w in enumerate(ww):                             #iw is number of grid and w is complex plane                                
-            k_c = np.dot(self.kernel_sq, rf0[iw,:,:])          #v\chi_{0}
-            #k_c_i = self.apply_rf0(self.kernel_sq[:,0], w)
+        for iw,w in enumerate(ww):                              #iw is number of grid and w is complex plane                                
+            k_c = np.dot(self.kernel_sq, rf0[iw,:,:])           #v\chi_{0}
             self.comega_current = w                             #appropriate ferequency for self.vext2veff_matvec
             k_c_opt = LinearOperator((self.nprod,self.nprod), matvec=self.vext2veff_matvec, dtype=self.dtypeComplex)    #convert k_c as full matrix into Operator
             for n in range(len(self.nn[s])):    
                 for m in range(self.norbs):
-                    a = np.dot(self.kernel_sq, xvx2[n,m,:])      #v XVX
+                    a = np.dot(self.kernel_sq, xvx2[n,m,:])     #v XVX
                     b = self.apply_rf0(a,self.comega_current)   #\chi_{0}v XVX by using matrix vector 
                     a = np.dot(self.kernel_sq, b)               #v\chi_{0}v XVX, this should be aquals to bxvx in last approach
                     sf_aux[n,m,:] ,exitCode = lgmres(k_c_opt, a, tol=1e-06)
             if exitCode != 0: print("LGMRES has not achieved convergence: exitCode = {}".format(exitCode))
-            inm[:,:,iw]=np.einsum('nmp,nmp->nm',xvx2, sf_aux)    #I= XVX I_aux
+            inm[:,:,iw]=np.einsum('nmp,nmp->nm',xvx2, sf_aux)   #I= XVX I_aux
         snm2i.append(np.real(inm))
     return snm2i
-
-
-
 
 
   def check_veff(self):
