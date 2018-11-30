@@ -16,6 +16,7 @@ from pyscf.solvent import ddcosmo
 from pyscf.solvent import ddpcm
 from pyscf.solvent.ddcosmo import DDCOSMO
 from pyscf.solvent.ddpcm import DDPCM
+from pyscf.solvent import pol_embed
 
 def ddCOSMO(method_or_mol, solvent_obj=None, dm=None):
     '''Initialize ddCOSMO model.
@@ -76,3 +77,6 @@ def ddPCM(method_or_mol, solvent_obj=None, dm=None):
     else:
         return ddpcm.ddpcm_for_post_scf(method_or_mol, solvent_obj, dm)
 
+
+def PE(method):
+    return pol_embed.pe_for_scf(method)

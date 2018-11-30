@@ -181,22 +181,24 @@ endif() # ENABLE_XCFUN
 add_subdirectory(dft)
 endif() # DISABLE_DFT
 
-option(ENABLE_cppe OFF)
+option(ENABLE_cppe "Using CPPE for Polarizable Embedding" OFF)
 if(ENABLE_cppe)
 ExternalProject_Add(cppe
             GIT_REPOSITORY https://github.com/maxscheurer/cppe
             GIT_TAG dev-psi4
-            UPDATE_COMMAND ""
+            PREFIX ${PROJECT_BINARY_DIR}/deps
+            INSTALL_DIR ${PROJECT_SOURCE_DIR}/deps
             CMAKE_ARGS -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
                        -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
                        -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
-                       -DCMAKE_INSTALL_LIBDIR:PATH=lib
+                       # -DCMAKE_INSTALL_LIBDIR:PATH=lib
+                       -DENABLE_PYTHON_INTERFACE=ON
                        # -DCMAKE_INSTALL_BINDIR=${CMAKE_INSTALL_BINDIR}
                        # -DCMAKE_INSTALL_DATADIR=${CMAKE_INSTALL_DATADIR}
                        # -DCMAKE_INSTALL_INCLUDEDIR=${CMAKE_INSTALL_INCLUDEDIR}
-                       -DBUILD_SHARED_LIBS=${BUILD_SHARED_LIBS}
+                       -DBUILD_SHARED_LIBS=ON
                        -DENABLE_OPENMP=${ENABLE_OPENMP}
-                       -DINSTALL_DEVEL_HEADERS=ON)
+                   -DINSTALL_DEVEL_HEADERS=OFF)
 endif()
 
 option(ENABLE_TBLIS "Using tblis tensor contraction library" OFF)
