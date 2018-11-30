@@ -28,7 +28,7 @@ class H20Test(unittest.TestCase):
         mol.verbose = 5
         mol.build()
 
-        cls.model_rhf = model_rhf = RHF(mol).density_fit()
+        cls.model_rhf = model_rhf = RHF(mol)
         model_rhf.kernel()
 
         cls.td_model_rhf = td_model_rhf = TDHF(model_rhf)
@@ -38,6 +38,7 @@ class H20Test(unittest.TestCase):
         cls.ref_m = retrieve_m(td_model_rhf)
 
     def test_eri(self):
+        """Tests all ERI implementations: with and without symmetries."""
         for eri in (PhysERI, PhysERI4, PhysERI8):
             m = build_matrix(eri(self.model_rhf))
             try:
@@ -49,5 +50,6 @@ class H20Test(unittest.TestCase):
                 raise e
 
     def test_eig_kernel(self):
+        """Tests default eig kernel behavior."""
         vals, vecs = kernel(self.model_rhf, driver='eig', nroots=self.td_model_rhf.nroots)
         testing.assert_allclose(vals, self.td_model_rhf.e, atol=1e-5)
