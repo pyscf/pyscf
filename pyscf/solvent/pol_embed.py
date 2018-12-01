@@ -2,21 +2,19 @@ import numpy
 
 from pyscf import lib
 from pyscf.lib import logger
-# from pyscf import gto
 
 import pyscf.lib.deps.lib.cppe as cppe
 
 
-def pe_scf(mf, pe_state=None):
+def pe_scf(mf, pe_state):
     oldMF = mf.__class__
-    if pe_state is None:
-        pe_state = PolEmbed(mf.mol)
 
     class SCFWithPE(oldMF):
         def __init__(self, pe_state):
             if not isinstance(pe_state, PolEmbed):
                 raise TypeError("Invalid type for pe_state.")
             self._pol_embed = pe_state
+            self._pe_energy = 0.0
 
         def dump_flags(self):
             oldMF.dump_flags(self)
@@ -27,6 +25,7 @@ def pe_scf(mf, pe_state=None):
         def get_veff(self, mol, dm, *args, **kwargs):
             vhf = oldMF.get_veff(self, mol, dm)
             epe, vpe = self._pol_embed.kernel(dm)
+            self._pe_energy = epe
             vhf += vpe
             return lib.tag_array(vhf, epe=epe, vpe=vpe)
 
@@ -85,6 +84,9 @@ class PolEmbed(lib.StreamObject):
     def kernel(self, dm, elec_only=False):
         '''
         '''
+        if dm.ndim == 3:
+            # UHF
+            dm = dm[0] + dm[1]
         if self.V_es is None:
             V_es = numpy.zeros((self.mol.nao, self.mol.nao),
                                dtype=numpy.float64)
@@ -116,7 +118,6 @@ class PolEmbed(lib.StreamObject):
                 elec_fields_s = self._compute_field(site, dm)
                 elec_fields[3*current_polsite:3*current_polsite + 3] = elec_fields_s
                 current_polsite += 1
-            print(elec_fields)
             self.cppe_state.update_induced_moments(elec_fields, self.iteration, False)
             induced_moments = self.cppe_state.get_induced_moments()
             current_polsite = 0
@@ -153,11 +154,10 @@ class PolEmbed(lib.StreamObject):
         integral2[1] *= 0.5
         integral2[2] *= 0.5
         integral2[5] *= 0.5
-        # TODO: prefactors!!!
+
         op0 = integral0 * moments[0] * cppe.prefactors(0)
         op1 = numpy.einsum('aij,a->ij', integral1,
                            moments[1] * cppe.prefactors(1))
-        # print(integral2[[0, 1, 2, 4, 5, 8]].shape)
         op2 = numpy.einsum('aij,a->ij',
                            integral2[[0, 1, 2, 4, 5, 8], :, :],
                            moments[2] * cppe.prefactors(2))

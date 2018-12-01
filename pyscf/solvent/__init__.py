@@ -78,5 +78,6 @@ def ddPCM(method_or_mol, solvent_obj=None, dm=None):
         return ddpcm.ddpcm_for_post_scf(method_or_mol, solvent_obj, dm)
 
 
-def PE(method):
-    return pol_embed.pe_for_scf(method)
+
+def PE(method, pe_state):
+    return pol_embed.pe_scf(method, pe_state)
