@@ -85,7 +85,7 @@ def kernel(eom, nroots=1, koopmans=False, guess=None, left=False,
         kptlist = range(nkpts)
 
     if dtype is None:
-        dtype = imds.t1.dtype
+        dtype = np.result_type(*t1)
 
     evals = np.zeros((len(kptlist),nroots), np.float)
     evecs = np.zeros((len(kptlist),nroots,size), dtype)
