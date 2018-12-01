@@ -22,7 +22,7 @@ try:
 
     def PE(method, pe_state):
         return pol_embed.pe_scf(method, pe_state)
-except ModuleNotFoundError:
+except Exception:
     pass
 
 def ddCOSMO(method_or_mol, solvent_obj=None, dm=None):
