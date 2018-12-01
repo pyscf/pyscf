@@ -111,7 +111,7 @@ def ipccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     r2aaa, r2baa, r2abb, r2bbb = r2
 
     #Fov term
-    # \sum_{kL,kD,L,D} U_{kL,kD,L,D} S_{ki,i,kL,L}^{kD,D} + \sum_{kl,kd,l,d} U_{kl,kd,l,d} S_{ki,i,kl,l}^{kd,d}    
+    # \sum_{kL,kD,L,D} U_{kL,kD,L,D} S_{ki,i,kL,L}^{kD,D} + \sum_{kl,kd,l,d} U_{kl,kd,l,d} S_{ki,i,kl,l}^{kd,d}
     for km in range(nkpts):
         Hr1a += einsum('me,mie->i', uccsd_imds.Fov[km], r2aaa[km,kshift])
         Hr1a -= einsum('ME,iME->i', uccsd_imds.FOV[km], r2abb[kshift,km])
@@ -119,12 +119,12 @@ def ipccsd_matvec(eom, vector, kshift, imds=None, diag=None):
         Hr1b -= einsum('me,Ime->I', uccsd_imds.Fov[km], r2baa[kshift,km])
 
     #Foo term
-    # -\sum_{kk,k} U_{kk,k,ki,i} s_{kk,k} 
+    # -\sum_{kk,k} U_{kk,k,ki,i} s_{kk,k}
     spatial_Foo = uccsd_imds.Foo
     spatial_FOO = uccsd_imds.FOO
     Hr1a += -np.einsum('mi,m->i', spatial_Foo[kshift], r1a)
     Hr1b += -np.einsum('MI,M->I', spatial_FOO[kshift], r1b)
-    
+
     #Wooov
     # \sum_{kk,kl,kd,k,l,d} W_{kk,ki,kl,kd,k,i,l,d} s_{kl,kk,l,k}^{kd,d}
     # \sum_{kk,kL,kD,k,L,D} W_{kk,ki,kL,kD,k,i,L,D} s_{kL,kk,L,k}^{kD,D}
@@ -153,7 +153,7 @@ def ipccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     # Foo term
     # \sum_{kl,l} U_{kl,ki,l,i} s_{kl,kj,l,j}^{kb,b} = (\bar{H}S)_{ki,kj,i,j}^{kb,b}
     # \sum_{kl,l} U_{kl,kj,l,j} S_{ki,kl,i,l}^{kb,b} = (\bar{H}S)_{ki,kj,i,j}^{kb,b}
-    
+
     # \sum_{kl,l} S_{kl,kJ,l,J}^{kB,B} U_{kl,ki,l,i} = (\bar{H}S)_{ki,kJ,i,J}^{kB,B}
     # \sum_{KL,L} S_{ki,kL,i,L}^{kB,B} U_{kL,kJ,L,J} = (\bar{H}S)_{ki,kJ,i,J}^{kB,B}
     for ki, kj in itertools.product(range(nkpts), repeat=2):
@@ -235,7 +235,7 @@ def ipccsd_matvec(eom, vector, kshift, imds=None, diag=None):
         kb = kconserv[ki, kshift, kj]
         for km in range(nkpts):
             ke = kconserv[km, kshift, ki]
-        
+
             # \sum_{kL,kD,L,D} W_{kL,kD,kb,kj,L,D,b,j} S_{ki,kL,i,L}^{kb,b}
             # \sum_{kl,kd,l,d} W_{kl,kd,kb,kj,l,d,b,j} S_{ki,kl,i,l}^{kb,b}
             Hr2aaa[ki, kj] += lib.einsum('mebj,ime->ijb', uccsd_imds.Wovvo[km, ke, kb],
@@ -383,7 +383,7 @@ class EOMIP(eom_kgccsd.EOMIP):
         self.kpts = cc.kpts
         eom_kgccsd.EOMIP.__init__(self, cc)
 
-    #get_diag = ipccsd_diag
+    get_diag = ipccsd_diag
     matvec = ipccsd_matvec
     def get_init_guess(self, nroots=1, koopmans=True, diag=None):
         #TODO check this
@@ -486,7 +486,7 @@ def eaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     r2aaa, r2aba, r2bab, r2bbb = r2
 
 
-    # BEGINNING OF MATVEC CONTRACTIONS: ref - Nooijen 1995 EOM-CC for EA 
+    # BEGINNING OF MATVEC CONTRACTIONS: ref - Nooijen 1995 EOM-CC for EA
 
     # Fov terms
     # (\bar{H}S)^a = \sum_{kL,kD, L, D} U_{kL,kD,L,D} s^{a,kD,D}_{kL,L} + \sum_{kl,kd,l,d} U_{kl, d}^{a,kd,d}_{kl,l}
@@ -544,7 +544,7 @@ def eaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     # sum_{kc,ka,kj,c,a,j} s_{kj,j}^{kc,kb,c,b} U_{ka,kc,a,c} = (\bar{H}S)^{kb, a, b}_{kj,j}
     # sum_{kd,ka,kj,d,b,j} s_{kj,j}^{ka,kd,a,d} U_{kb,kd,b,d} = (\bar{H}S)^{kb, a, b}_{kj,j}
 
-    # sum_{kc,ka,kJ,c,a,J} U_{ka,kc,a,c} s_{kJ,J}^{kc,kB,c,B} = (\bar{H}S)^{kB, a, B}_{kJ,J} 
+    # sum_{kc,ka,kJ,c,a,J} U_{ka,kc,a,c} s_{kJ,J}^{kc,kB,c,B} = (\bar{H}S)^{kB, a, B}_{kJ,J}
     # sum_{kD,ka,kj,D,a,j} U_{kb,kd,b,d} s_{kj,j}^{ka,kd,a,d} = (\bar{H}S)^{kB, a, B}_{kJ,J}
     for ka, kj in itertools.product(range(nkpts), repeat=2):
         # kb = kshift - ka + kj
@@ -570,7 +570,7 @@ def eaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
         Hr2aba[kl,ka] -= lib.einsum('lj,lAb->jAb', uccsd_imds.Foo[kl], r2aba[kl,ka])
 
     # Woovv term
-    # - \sum{kk,k} t_{kk,kj,k,j}^{ka,kb,a,b} [\sum_{kc,kD,kL,c,D,L} W_{kL,kk,kD,kc,L,k,D,c} s_{kL,L}^{kc,kD,c,D} 
+    # - \sum{kk,k} t_{kk,kj,k,j}^{ka,kb,a,b} [\sum_{kc,kD,kL,c,D,L} W_{kL,kk,kD,kc,L,k,D,c} s_{kL,L}^{kc,kD,c,D}
     # + \sum{kc,kd,kl,c,d,l} W_{kk,kl,kc,kd,k,l,c,d} s_{kl,l}^{kc,kd,c,d} ] = (\bar{H}S)^{kb, a, b}_{kj,j}
     #
     # - \sum_{kk,k} t_{kk,kJ,k,J}^{ka,kB,a,B} [ \sum{kc,kD,kL,c,D,L} W_{kk,kL,kc,kD,k,L,c,D} s_{kL,L}^{kc,kD,c,D}
@@ -622,7 +622,7 @@ def eaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
                                          r2bab[kl,kb])
 
             kl = kconserv[ka, kshift, kd]
-           
+
             # \sum_{kL,kD,L,D} W_{kL,kB,kD,kJ,L,B,D,J} s_{kL,L}^{ka,kD,a,D} = (\bar{H}S)^{kB, a, B}_{kJ,J}
             # \sum_{kl,kd,l,d} W_{kl,kB,kd,kJ,l,B,d,J} s_{kl,l}^{ka,kd,a,d} = (\bar{H}S)^{kB, a, B}_{kJ,J}
             # - \sum_{kc,kL,c,L} W_{ka,kL,kc,kJ,a,L,c,J} s_{kL,L}^{kc,kB,c,B} = (\bar{H}S)^{kB, a, B}_{kJ,J}
@@ -750,7 +750,7 @@ class EOMEA(eom_kgccsd.EOMEA):
         self.kpts = cc.kpts
         eom_kgccsd.EOMEA.__init__(self, cc)
 
-    #get_diag = eaccsd_diag
+    get_diag = eaccsd_diag
     matvec = eaccsd_matvec
 
     def get_init_guess(self, nroots=1, koopmans=True, diag=None):
