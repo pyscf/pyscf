@@ -85,7 +85,7 @@ def kernel(eom, nroots=1, koopmans=False, guess=None, left=False,
         kptlist = range(nkpts)
 
     if dtype is None:
-        dtype = np.result_type(*t1)
+        dtype = np.result_type(*imds.t1)
 
     evals = np.zeros((len(kptlist),nroots), np.float)
     evecs = np.zeros((len(kptlist),nroots,size), dtype)
@@ -700,7 +700,6 @@ class EOMEA(eom_rccsd.EOM):
             raise NotImplementedError
             matvec = lambda xs: [self.l_matvec(x, kshift, imds, diag) for x in xs]
         else:
-            raise NotImplementedError
             matvec = lambda xs: [self.matvec(x, kshift, imds, diag) for x in xs]
         return matvec, diag
 
