@@ -40,7 +40,14 @@ class H20Test(unittest.TestCase):
     def test_eri(self):
         """Tests all ERI implementations: with and without symmetries."""
         for eri in (PhysERI, PhysERI4, PhysERI8):
-            m = build_matrix(eri(self.model_rhf))
+            e = eri(self.model_rhf)
+            m = build_matrix(e)
+            if eri is PhysERI4:
+                testing.assert_equal(set(e.__eri__.keys()), {('voov',), ('vovo',), ('vvoo',)})
+
+            elif eri is PhysERI8:
+                testing.assert_equal(set(e.__eri__.keys()), {('voov',), ('vovo',)})
+
             try:
                 testing.assert_allclose(self.ref_m, m, atol=1e-14)
                 vals, vecs = eig(m, nroots=self.td_model_rhf.nroots)
