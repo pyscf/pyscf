@@ -136,7 +136,10 @@ class PhysERI(TDDFTMatrixBlocks):
         coeff = (coeff[0], coeff[2], coeff[1], coeff[3])
 
         if "with_df" in dir(self.model):
-            result = self.model.with_df.ao2mo(coeff, compact=False)
+            if "kpt" in dir(self.model):
+                result = self.model.with_df.ao2mo(coeff, (self.model.kpt,) * 4, compact=False)
+            else:
+                result = self.model.with_df.ao2mo(coeff, compact=False)
         else:
             result = ao2mo.general(self.model.mol, coeff, compact=False)
 
