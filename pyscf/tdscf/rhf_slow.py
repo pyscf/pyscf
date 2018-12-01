@@ -39,6 +39,9 @@ class TDDFTMatrixBlocks(object):
     def __calc_block__(self, item, *args):
         raise NotImplementedError
 
+    def __permute_args__(self, args, order):
+        raise NotImplementedError
+
     def get_block_ov_notation(self, item, *args):
         """
         Retrieves ERI block using 'ov' notation.
@@ -54,14 +57,16 @@ class TDDFTMatrixBlocks(object):
 
         for i, c in self.symmetries:
             key = ''.join(tuple(item[j] for j in i))
-            if key in self.__eri__:
+            pargs = (key,) + self.__permute_args__(args, i)
+            if pargs in self.__eri__:
                 if c:
-                    return self.__eri__[key, args].transpose(*i).conj()
+                    return self.__eri__[pargs].transpose(*i).conj()
                 else:
-                    return self.__eri__[key, args].transpose(*i)
+                    return self.__eri__[pargs].transpose(*i)
 
-        self.__eri__[item, args] = self.__calc_block__(item, *args)
-        return self.__eri__[item, args]
+        pargs = (item,) + self.__permute_args__(args, (0, 1, 2, 3))
+        self.__eri__[pargs] = self.__calc_block__(item, *args)
+        return self.__eri__[pargs]
 
     def __mknj2i__(self, item):
         notation = "mknj"
@@ -150,6 +155,10 @@ class PhysERI(TDDFTMatrixBlocks):
     def __calc_block__(self, item):
         slc = tuple(slice(self.nocc) if i == 'o' else slice(self.nocc, None) for i in item)
         return self.__full_eri__[slc]
+
+    def __permute_args__(self, args, order):
+        assert len(args) == 0
+        return tuple()
 
     def assemble_block(self, item):
         result = self.get_block_mknj_notation(item)
