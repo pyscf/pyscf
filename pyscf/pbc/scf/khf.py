@@ -501,19 +501,19 @@ class KSCF(pbchf.SCF):
             dm_kpts = lib.asarray([dm]*len(self.kpts))
 
         if cell.dimension < 3:
-            ne = np.einsum('kij,kji->k', dm_kpts, self.get_ovlp(cell)).real
+            ne = np.einsum('kij,kji->', dm_kpts, self.get_ovlp(cell)).real
             # FIXME: consider the fractional num_electron or not? This maybe
             # relates to the charged system.
             nkpts = len(self.kpts)
-            nelectron = float(self.cell.tot_electrons(nkpts)) / nkpts
-            if np.any(abs(ne - nelectron) > 1e-7):
+            nelectron = self.cell.tot_electrons(nkpts)
+            if abs(ne - nelectron) > 1e-7*nkpts:
                 logger.warn(self, 'Big error detected in the electron number '
                             'of initial guess density matrix (Ne/cell = %g)!\n'
                             '  This can cause huge error in Fock matrix and '
                             'lead to instability in SCF for low-dimensional '
-                            'systems.\n  DM is normalized to correct number '
-                            'of electrons', ne.mean())
-                dm_kpts *= nelectron / ne.reshape(-1,1,1)
+                            'systems.\n  DM is normalized to the number '
+                            'of electrons', ne.mean()/nkpts)
+                dm_kpts *= (nelectron / ne).reshape(-1,1,1)
         return dm_kpts
 
     def init_guess_by_1e(self, cell=None):

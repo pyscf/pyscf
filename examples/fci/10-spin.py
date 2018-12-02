@@ -69,3 +69,22 @@ mci = fci.addons.fix_spin_(mci, ss=0)
 e, civec = mci.kernel(nelec=nelec)
 print('Singlet E = %.12f  2S+1 = %.7f' %
       (e, mci.spin_square(civec, mf.mo_coeff.shape[1], nelec)[1]))
+
+
+#
+# Be careful with the trick of energy penalty.  Numerical problems may be
+# observed when function fix_spin_ was applied.
+#
+
+mol = gto.M(atom='O 0 0 0', basis='6-31G')
+m = scf.RHF(mol).run()
+norb = m.mo_coeff.shape[1]
+nelec = mol.nelec
+fs = fci.addons.fix_spin_(fci.FCI(mol, m.mo_coeff), .5)
+fs.nroots = 15
+e, fcivec = fs.kernel(verbose=5)
+# The first 5 states should be degenerated. The degeneracy may be broken.
+for i, c in enumerate(fcivec):
+    print('state = %d, E = %.9f, S^2=%.4f' %
+          (i, e[i], fci.spin_op.spin_square(c, norb, nelec)[0]))
+
