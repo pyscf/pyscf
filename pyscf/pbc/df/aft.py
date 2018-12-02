@@ -503,8 +503,13 @@ class AFTDF(lib.StreamObject):
     get_nuc = get_nuc
     get_pp = get_pp
 
+    # Note: Special exxdiv by default should not be used for an arbitrary
+    # input density matrix. When the df object was used with the molecular
+    # post-HF code, get_jk was often called with an incomplete DM (e.g. the
+    # core DM in CASCI). An SCF level exxdiv treatment is inadequate for
+    # post-HF methods.
     def get_jk(self, dm, hermi=1, kpts=None, kpts_band=None,
-               with_j=True, with_k=True, exxdiv='ewald'):
+               with_j=True, with_k=True, exxdiv=None):
         if kpts is None:
             if numpy.all(self.kpts == 0):
                 # Gamma-point calculation by default

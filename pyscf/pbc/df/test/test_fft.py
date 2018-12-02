@@ -590,7 +590,11 @@ def finger(a):
     w = np.cos(np.arange(a.size))
     return np.dot(w, a.ravel())
 
-class KnowValues(unittest.TestCase):
+def tearDownModule():
+    global cell, cell1, cell2, kpts, kpt0, kpts1, mf0
+    del cell, cell1, cell2, kpts, kpt0, kpts1, mf0
+
+class KnownValues(unittest.TestCase):
     def test_get_nuc(self):
         v0 = get_nuc(cell, kpts[0])
         v1 = fft.FFTDF(cell).get_nuc(kpts)
@@ -813,6 +817,20 @@ class KnowValues(unittest.TestCase):
         eri_mo1 = df.get_mo_eri(mos, kpts1)
         self.assertTrue(np.allclose(eri_mo1, eri_mo0, atol=1e-9, rtol=1e-9))
 
+    def test_get_jk_with_casscf(self):
+        from pyscf import mcscf
+        pcell = cell2.copy()
+        pcell.verbose = 0
+        pcell.mesh = [8]*3
+        mf = pbcscf.RHF(pcell)
+        mf.exxdiv = None
+        ehf = mf.kernel()
+
+        mc = mcscf.CASSCF(mf, 1, 2).run()
+        self.assertAlmostEqual(mc.e_tot, ehf, 9)
+
+        mc = mcscf.CASSCF(mf, 2, 0).run()
+        self.assertAlmostEqual(mc.e_tot, ehf, 9)
 
 if __name__ == '__main__':
     print("Full Tests for fft JK and ao2mo etc")
