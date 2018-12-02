@@ -583,17 +583,17 @@ def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True):
         dm1b[numpy.diag_indices(noccb)] -= 1
 
         for i in range(nocca):
-            dm2aa[i,i,:,:] += dm1a.T
-            dm2aa[:,:,i,i] += dm1a.T
+            dm2aa[i,i,:,:] += dm1a
+            dm2aa[:,:,i,i] += dm1a
             dm2aa[:,i,i,:] -= dm1a
             dm2aa[i,:,:,i] -= dm1a.T
-            dm2ab[i,i,:,:] += dm1b.T
+            dm2ab[i,i,:,:] += dm1b
         for i in range(noccb):
-            dm2bb[i,i,:,:] += dm1b.T
-            dm2bb[:,:,i,i] += dm1b.T
+            dm2bb[i,i,:,:] += dm1b
+            dm2bb[:,:,i,i] += dm1b
             dm2bb[:,i,i,:] -= dm1b
             dm2bb[i,:,:,i] -= dm1b.T
-            dm2ab[:,:,i,i] += dm1a.T
+            dm2ab[:,:,i,i] += dm1a
 
         for i in range(nocca):
             for j in range(nocca):
