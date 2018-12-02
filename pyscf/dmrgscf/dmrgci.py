@@ -478,7 +478,7 @@ class DMRGCI(lib.StreamObject):
           #   using "libunpack.unpackE3" (see lib/icmpspt/icmpspt.c)
           # - BLOCK just writes a list of all values, this is directly read
           #   using "unpackE3_BLOCK" (see below)
-          if 'stackblock' in settings.BLOCKEXE:
+          if block_version(self.executable).startswith('1.5'):
             print('Reading binary 3RDM from STACKBLOCK')
             fname = os.path.join(self.scratchDirectory,"node0", "spatial_threepdm.%d.%d.bin" %(state, state))
             fnameout = os.path.join(self.scratchDirectory,"node0", "spatial_threepdm.%d.%d.bin.unpack" %(state, state))
@@ -557,7 +557,7 @@ class DMRGCI(lib.StreamObject):
           #   using "libunpack.unpackE4" (see lib/icmpspt/icmpspt.c)
           # - BLOCK just writes a list of all values, this is directly read
           #   using "unpackE4_BLOCK" (see below)
-          if 'stackblock' in settings.BLOCKEXE:
+          if block_version(self.executable).startswith('1.5'):
             print('Reading binary 4RDM from STACKBLOCK')
             fname = os.path.join(self.scratchDirectory,"node0", "spatial_fourpdm.%d.%d.bin" %(state, state))
             fnameout = os.path.join(self.scratchDirectory,"node0", "spatial_fourpdm.%d.%d.bin.unpack" %(state, state))
