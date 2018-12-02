@@ -355,14 +355,15 @@ class KUHF(pbcuhf.UHF, khf.KSCF):
         if cell is None:
             cell = self.cell
         dm_kpts = None
-        if key.lower() == '1e':
+        key = key.lower()
+        if key == '1e' or key == 'hcore':
             dm_kpts = self.init_guess_by_1e(cell)
         elif getattr(cell, 'natm', 0) == 0:
             logger.info(self, 'No atom found in cell. Use 1e initial guess')
             dm_kpts = self.init_guess_by_1e(cell)
-        elif key.lower() == 'atom':
+        elif key == 'atom':
             dm = self.init_guess_by_atom(cell)
-        elif key.lower().startswith('chk'):
+        elif key[:3] == 'chk':
             try:
                 dm_kpts = self.from_chk()
             except (IOError, KeyError):
@@ -375,10 +376,10 @@ class KUHF(pbcuhf.UHF, khf.KSCF):
         if dm_kpts is None:
             nao = dm[0].shape[-1]
             nkpts = len(self.kpts)
-            dm_kpts = lib.asarray([dm]*nkpts).reshape(nkpts,2,nao,nao)
-            dm_kpts = dm_kpts.transpose(1,0,2,3)
+            # dm[spin,nao,nao] at gamma point -> dm_kpts[spin,nkpts,nao,nao]
+            dm_kpts = np.repeat(dm[:,None,:,:], nkpts, axis=1)
             dm_kpts[0,:] *= 1.01
-            dm_kpts[1,:] *= 0.99  # To break spin symmetry
+            dm_kpts[1,:] *= 0.99  # To slightly break spin symmetry
             assert dm_kpts.shape[0]==2
 
         if cell.dimension < 3:
