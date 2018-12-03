@@ -1,3 +1,19 @@
+"""
+This and other `_slow` modules implement the time-dependent Hartree-Fock procedure. The primary performance drawback is
+that, unlike other 'fast' routines with an implicit construction of the eigenvalue problem, these modules construct
+TDHF matrices explicitly via an AO-MO transformation, i.e. with a O(N^5) complexity scaling. As a result, regular
+`numpy.linalg.eig` can be used to retrieve TDHF roots in a reliable fashion without any issues related to the Davidson
+procedure. Several variants of TDHF are available:
+
+ * (this module) `pyscf.tdscf.rhf.slow`: the molecular implementation;
+ * `pyscf.pbc.tdscf.rhf_slow`: PBC (periodic boundary condition) implementation for RHF objects of `pyscf.pbc.scf`
+   modules;
+ * `pyscf.pbc.tdscf.krhf_slow_supercell`: PBC implementation for KRHF objects of `pyscf.pbc.scf` modules. Works with
+   an arbitrary number of k-points but has a overhead due to an effective construction of a supercell.
+ * `pyscf.pbc.tdscf.krhf_slow`: PBC implementation for KRHF objects of `pyscf.pbc.scf` modules. Works with an arbitrary
+   number of k-points and employs k-point conservation (diagonalizes matrix blocks separately).
+"""
+
 from pyscf import ao2mo
 from pyscf.lib import logger
 
@@ -10,6 +26,10 @@ class TDDFTMatrixBlocks(object):
     ]
 
     def __init__(self):
+        """
+        This a prototype class for transformed ERIs used in all TDHF calculations. It handles integral blocks and
+        the diagonal part found in Eq. 7.5 of RevModPhys.36.844. Integral blocks are obtained via __getitem__.
+        """
         self.__eri__ = {}
 
     def __get_mo_energies__(self, *args, **kwargs):
@@ -109,9 +129,8 @@ class PhysERI(TDDFTMatrixBlocks):
 
     def __init__(self, model):
         """
-        4-center integrals. Notation corresponds to RevModPhys.36.844 (Eq. 7.5).
-        Integral blocks are obtained via __getitem__. This is the slowest implementation
-        for test purposes.
+        The TDHF ERI implementation performing a full AO-MO transformation of integrals. No symmetries are employed in
+        this class.
 
         Args:
             model (RHF): the base model;
@@ -179,9 +198,8 @@ class PhysERI4(PhysERI):
 
     def __init__(self, model):
         """
-        4-center integrals. Notation corresponds to RevModPhys.36.844 (Eq. 7.5).
-        Integral blocks are obtained via __getitem__. This is the general 4-fold symmetry
-        implementation for complex-valued orbitals.
+        The TDHF ERI implementation performing a partial AO-MO transformation of integrals of a molecular system. A
+        4-fold symmetry of complex-valued orbitals is used.
 
         Args:
             model (RHF): the base model;
@@ -211,9 +229,8 @@ class PhysERI8(PhysERI4):
 
     def __init__(self, model):
         """
-        4-center integrals. Notation corresponds to RevModPhys.36.844 (Eq. 7.5).
-        Integral blocks are obtained via __getitem__. This is the 8-fold symmetry
-        implementation for real-valued orbitals.
+        The TDHF ERI implementation performing a partial AO-MO transformation of integrals of a molecular system. An
+        8-fold symmetry of real-valued orbitals is used.
 
         Args:
             model (RHF): the base model;
