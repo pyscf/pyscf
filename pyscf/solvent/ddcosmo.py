@@ -68,10 +68,9 @@ def ddcosmo_for_scf(mf, solvent_obj=None, dm=None):
     oldMF = mf.__class__
     if solvent_obj is None:
         solvent_obj = DDCOSMO(mf.mol)
-    cosmo_solver_ = solvent_obj.as_solver()
 
     if dm is not None:
-        solvent_obj.epcm, solvent_obj.vpcm = cosmo_solver_(dm)
+        solvent_obj.epcm, solvent_obj.vpcm = solvent_obj.kernel(dm)
         solvent_obj.frozen = True
 
     class SCFWithSolvent(oldMF):
@@ -94,7 +93,7 @@ def ddcosmo_for_scf(mf, solvent_obj=None, dm=None):
             vhf = oldMF.get_veff(self, mol, dm, *args, **kwargs)
             with_solvent = self.with_solvent
             if not with_solvent.frozen:
-                with_solvent.epcm, with_solvent.vpcm = cosmo_solver_(dm)
+                with_solvent.epcm, with_solvent.vpcm = with_solvent.kernel(dm)
             epcm, vpcm = with_solvent.epcm, with_solvent.vpcm
 
             # NOTE: vpcm should not be added to vhf in this place. This is
@@ -149,10 +148,9 @@ def ddcosmo_for_casscf(mc, solvent_obj=None, dm=None):
             solvent_obj = mc._scf.with_solvent
         else:
             solvent_obj = DDCOSMO(mc.mol)
-    cosmo_solver_ = solvent_obj.as_solver()
 
     if dm is not None:
-        solvent_obj.epcm, solvent_obj.vpcm = cosmo_solver_(dm)
+        solvent_obj.epcm, solvent_obj.vpcm = solvent_obj.kernel(dm)
         solvent_obj.frozen = True
 
     class CASSCFWithSolvent(oldCAS):
@@ -187,7 +185,7 @@ def ddcosmo_for_casscf(mc, solvent_obj=None, dm=None):
                 mocas = mo[:,self.ncore:self.ncore+self.ncas]
                 dm = reduce(numpy.dot, (mocas, casdm1, mocas.T))
                 dm += numpy.dot(mocore, mocore.T) * 2
-                with_solvent.epcm, with_solvent.vpcm = cosmo_solver_(dm)
+                with_solvent.epcm, with_solvent.vpcm = with_solvent.kernel(dm)
 
             return casdm1, casdm2, gci, fcivec
 
@@ -233,7 +231,7 @@ def ddcosmo_for_casscf(mc, solvent_obj=None, dm=None):
 
             # Update solvent effects for next iteration if needed
             if not with_solvent.frozen:
-                with_solvent.epcm, with_solvent.vpcm = cosmo_solver_(dm)
+                with_solvent.epcm, with_solvent.vpcm = with_solvent.kernel(dm)
 
             return e_tot, e_cas, fcivec
 
@@ -263,10 +261,9 @@ def ddcosmo_for_casci(mc, solvent_obj=None, dm=None):
             solvent_obj = mc._scf.with_solvent
         else:
             solvent_obj = DDCOSMO(mc.mol)
-    cosmo_solver_ = solvent_obj.as_solver()
 
     if dm is not None:
-        solvent_obj.epcm, solvent_obj.vpcm = cosmo_solver_(dm)
+        solvent_obj.epcm, solvent_obj.vpcm = solvent_obj.kernel(dm)
         solvent_obj.frozen = True
 
     class CASCIWithSolvent(oldCAS):
@@ -317,7 +314,7 @@ def ddcosmo_for_casci(mc, solvent_obj=None, dm=None):
                     self.e_tot += with_solvent.epcm - edup
 
                 if not with_solvent.frozen:
-                    with_solvent.epcm, with_solvent.vpcm = cosmo_solver_(dm)
+                    with_solvent.epcm, with_solvent.vpcm = with_solvent.kernel(dm)
                 log.debug('  E_diel = %.15g', with_solvent.epcm)
                 return self.e_tot, e_cas, ci0
 
@@ -397,10 +394,9 @@ def ddcosmo_for_post_scf(method, solvent_obj=None, dm=None):
     basic_scanner = method.as_scanner()
     basic_scanner._scf = scf_with_solvent.as_scanner()
 
-    cosmo_solver_ = scf_with_solvent.with_solvent.as_solver()
-
     if dm is not None:
-        solvent_obj.epcm, solvent_obj.vpcm = cosmo_solver_(dm)
+        solvent_obj = scf_with_solvent.with_solvent
+        solvent_obj.epcm, solvent_obj.vpcm = solvent_obj.kernel(dm)
         solvent_obj.frozen = True
 
     class PostSCFWithSolvent(old_method):
@@ -453,7 +449,7 @@ def ddcosmo_for_post_scf(method, solvent_obj=None, dm=None):
                 # To generate the solvent potential for ._scf object. Since
                 # frozen is set when calling basic_scanner, the solvent
                 # effects are frozen during the scf iterations.
-                with_solvent.epcm, with_solvent.vpcm = cosmo_solver_(dm)
+                with_solvent.epcm, with_solvent.vpcm = with_solvent.kernel(dm)
 
                 de = e_tot - e_last
                 log.info('Sovlent cycle %d  E_tot = %.15g  dE = %g',
@@ -849,6 +845,11 @@ class DDCOSMO(lib.StreamObject):
         self.vpcm = None
         self._dm = None
 
+        # _solver_ is a cached function returned by self.as_solver() to reduce
+        # the overhead of initialization. It should be cleared whenever the
+        # solvent parameters or the integration grids were changed.
+        self._solver_ = None
+
         self._keys = set(self.__dict__.keys())
 
     @property
@@ -868,6 +869,12 @@ class DDCOSMO(lib.StreamObject):
         else:
             self.epcm = self.vpcm = self._dm = None
 
+    def __setattr__(self, key, val):
+        if key in ('radii_table', 'atom_radii', 'lebedev_order', 'lmax',
+                   'eta', 'eps', 'grids'):
+            self._solver_ = None
+        super(DDCOSMO, self).__setattr__(key, val)
+
     def dump_flags(self):
         logger.info(self, '******** %s ********', self.__class__)
         logger.info(self, 'lebedev_order = %s (%d grids per sphere)',
@@ -884,8 +891,14 @@ class DDCOSMO(lib.StreamObject):
     def kernel(self, dm, grids=None):
         '''A single shot solvent effects for given density matrix.
         '''
-        solver_ = self.as_solver(grids)
-        epcm, vpcm = solver_(dm)
+        if (self._solver_ is None or
+# If self.grids.coords is None, it is very likely caused by the updates of the
+# "grids" parameters. The COSMO solver should be updated to adapt the new
+# integral grids.
+            self.grids.coords is None):
+            self._solver_ = self.as_solver(grids)
+
+        epcm, vpcm = self._solver_(dm)
         return epcm, vpcm
 
     energy = energy
