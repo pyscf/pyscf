@@ -75,18 +75,20 @@ class TDDFTMatrixBlocks(object):
         if len(item) != 4 or not isinstance(item, str) or not set(item).issubset('ov'):
             raise ValueError("Unknown item: {}".format(repr(item)))
 
+        pargs = (item, ) + args
+        if pargs in self.__eri__:
+            return self.__eri__[pargs]
+
+        result = self.__calc_block__(*pargs)
+
         for i, c in self.symmetries:
             key = ''.join(tuple(item[j] for j in i))
-            pargs = (key,) + self.__permute_args__(args, i)
-            if pargs in self.__eri__:
-                if c:
-                    return self.__eri__[pargs].transpose(*i).conj()
-                else:
-                    return self.__eri__[pargs].transpose(*i)
-
-        pargs = (item,) + self.__permute_args__(args, (0, 1, 2, 3))
-        self.__eri__[pargs] = self.__calc_block__(item, *args)
-        return self.__eri__[pargs]
+            _pargs = (key,) + self.__permute_args__(args, i)
+            if c:
+                self.__eri__[_pargs] = result.transpose(*i).conj()
+            else:
+                self.__eri__[_pargs] = result.transpose(*i)
+        return result
 
     def __mknj2i__(self, item):
         notation = "mknj"
