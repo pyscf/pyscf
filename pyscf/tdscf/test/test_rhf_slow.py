@@ -23,8 +23,7 @@ class H20Test(unittest.TestCase):
             [1, (0., -0.757, 0.587)],
             [1, (0., 0.757, 0.587)]]
 
-        mol.basis = {'H': 'cc-pvdz',
-                     'O': 'cc-pvdz', }
+        mol.basis = 'cc-pvdz'
         mol.verbose = 5
         mol.build()
 
@@ -36,6 +35,13 @@ class H20Test(unittest.TestCase):
         td_model_rhf.kernel()
 
         cls.ref_m = retrieve_m(td_model_rhf)
+
+    @classmethod
+    def tearDownClass(cls):
+        # These are here to remove temporary files
+        del cls.td_model_rhf
+        del cls.model_rhf
+        del cls.mol
 
     def test_eri(self):
         """Tests all ERI implementations: with and without symmetries."""
