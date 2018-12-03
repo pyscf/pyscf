@@ -54,3 +54,10 @@ class H20Test(unittest.TestCase):
         """Tests default eig kernel behavior."""
         vals, vecs = kernel(self.model_rhf, driver='eig', nroots=self.td_model_rhf.nroots)
         testing.assert_allclose(vals, self.td_model_rhf.e, atol=1e-5)
+
+    def test_symm(self):
+        """Tests 8-fold symmetry."""
+        eri = PhysERI8(self.model_rhf)
+        vals = eri.ao2mo((self.model_rhf.mo_coeff,) * 4)
+        for i, c in eri.symmetries:
+            testing.assert_allclose(vals, vals.transpose(*i), atol=1e-14)
