@@ -44,16 +44,18 @@ class DiamondTestGamma(unittest.TestCase):
 
         cls.ref_m_rhf = retrieve_m(td_model_rhf)
 
+    @classmethod
+    def tearDownClass(cls):
+        # These are here to remove temporary files
+        del cls.td_model_rhf
+        del cls.model_rhf
+        del cls.cell
+
     def test_eri(self):
         """Tests all ERI implementations: with and without symmetries."""
         for eri in (PhysERI, PhysERI4, PhysERI8):
             e = eri(self.model_rhf)
             m = build_matrix(e)
-            if eri is PhysERI4:
-                testing.assert_equal(set(e.__eri__.keys()), {('voov',), ('vovo',), ('vvoo',)})
-
-            elif eri is PhysERI8:
-                testing.assert_equal(set(e.__eri__.keys()), {('voov',), ('vovo',)})
 
             try:
                 testing.assert_allclose(self.ref_m_rhf, m, atol=1e-14)
