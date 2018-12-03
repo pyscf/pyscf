@@ -462,14 +462,15 @@ class KSCF(pbchf.SCF):
 
         if cell.dimension < 3:
             ne = np.einsum('kij,kji->k', dm_kpts, self.get_ovlp(cell)).real
-            if np.any(abs(ne - cell.nelectron) > 1e-7):
+            nelec = cell.nelectron
+            if np.any(abs(ne - nelec) > 1e-7):
                 logger.warn(self, 'Big error detected in the electron number '
                             'of initial guess density matrix (Ne/cell = %g)!\n'
                             '  This can cause huge error in Fock matrix and '
                             'lead to instability in SCF for low-dimensional '
                             'systems.\n  DM is normalized to correct number '
                             'of electrons', ne.mean())
-                dm_kpts *= cell.nelectron / ne.reshape(-1,1,1)
+                dm_kpts *= (nelec / ne).reshape(-1,1,1)
         return dm_kpts
 
     def init_guess_by_1e(self, cell=None):

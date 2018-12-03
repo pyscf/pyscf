@@ -276,20 +276,26 @@ class KROHF(pbcrohf.ROHF, khf.KRHF):
     build = khf.KSCF.build
     check_sanity = khf.KSCF.check_sanity
 
-#    get_init_guess = khf.KSCF.get_init_guess
-
+#?    def get_init_guess(self, cell=None, key='minao'):
+#?        dm_kpts = khf.KSCF.get_init_guess(self, cell, key)
+#?        if dm_kpts.ndim != 4:  # The KRHF initial guess
+#?            # dm_kpts shape should be (spin, nkpts, nao, nao)
+#?            dm_kpts = lib.asarray([dm_kpts*.5,]*2)
+#?        return dm_kpts
+#?
     def get_init_guess(self, cell=None, key='minao'):
         if cell is None:
             cell = self.cell
         dm_kpts = None
-        if key.lower() == '1e':
+        key = key.lower()
+        if key == '1e' or key == 'hcore':
             dm_kpts = self.init_guess_by_1e(cell)
         elif getattr(cell, 'natm', 0) == 0:
             logger.info(self, 'No atom found in cell. Use 1e initial guess')
             dm_kpts = self.init_guess_by_1e(cell)
-        elif key.lower() == 'atom':
+        elif key == 'atom':
             dm = self.init_guess_by_atom(cell)
-        elif key.lower().startswith('chk'):
+        elif key[:3] == 'chk':
             try:
                 dm_kpts = self.from_chk()
             except (IOError, KeyError):
@@ -300,10 +306,12 @@ class KROHF(pbcrohf.ROHF, khf.KRHF):
             dm = self.init_guess_by_minao(cell)
 
         if dm_kpts is None:
-            dm_kpts = lib.asarray([dm]*len(self.kpts))
+            nkpts = len(self.kpts)
+            # dm[spin,nao,nao] at gamma point -> dm_kpts[spin,nkpts,nao,nao]
+            dm_kpts = np.repeat(dm[:,None,:,:], nkpts, axis=1)
 
         if cell.dimension < 3:
-            ne = np.einsum('xkij,kji->xk', dm_kpts, self.get_ovlp(cell))
+            ne = np.einsum('xkij,kji->xk', dm_kpts, self.get_ovlp(cell)).real
             nelec = np.asarray(cell.nelec).reshape(2,1)
             if np.any(abs(ne - nelec) > 1e-7):
                 logger.warn(self, 'Big error detected in the electron number '
