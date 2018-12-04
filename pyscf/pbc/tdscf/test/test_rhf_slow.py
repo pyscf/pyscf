@@ -14,6 +14,20 @@ def retrieve_m(model, **kwargs):
     return vind(numpy.eye(size)).T
 
 
+def unphase(v1, v2, threshold=1e-5):
+    v1, v2 = numpy.asarray(v1).reshape(len(v1), -1), numpy.asarray(v2).reshape((len(v2), -1))
+    g1 = abs(v1) > threshold
+    g2 = abs(v2) > threshold
+    g12 = numpy.logical_and(g1, g2)
+    if numpy.any(g12.sum(axis=1) == 0):
+        raise ValueError("Cannot find an anchor for the rotation")
+    a = tuple(numpy.where(i)[0][0] for i in g12)
+    for v in (v1, v2):
+        anc = v[numpy.arange(len(v)), a]
+        v /= (anc / abs(anc))[:, numpy.newaxis]
+    return v1, v2
+
+
 class DiamondTestGamma(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -69,18 +83,4 @@ class DiamondTestGamma(unittest.TestCase):
         """Tests default eig kernel behavior."""
         vals, vecs = kernel(self.model_rhf, driver='eig', nroots=self.td_model_rhf.nroots)
         testing.assert_allclose(vals, self.td_model_rhf.e, atol=1e-5)
-
-
-# m = full_tensor(PhysERI(model_prhf))
-# m4 = full_tensor(PhysERI4(model_prhf))
-# m8 = full_tensor(PhysERI8(model_prhf))
-#
-# vals = numpy.linalg.eigvals(m)
-# vals.sort()
-# vals = vals[len(vals) // 2:][:td_model_prhf.nroots]
-#
-# testing.assert_allclose(td_model_prhf.e, vals, rtol=1e-5)
-#
-# testing.assert_allclose(ref_m, m, atol=1e-14)
-# testing.assert_allclose(ref_m, m4, atol=1e-14)
-# testing.assert_allclose(ref_m, m8, atol=1e-14)
+        testing.assert_allclose(*unphase(vecs, self.td_model_rhf.xy), atol=1e-2)
