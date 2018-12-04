@@ -68,7 +68,7 @@ if __name__=='__main__':
   print('m1 reshaped to 3D array ( p, a, b)',m1.shape)
   print('comparison between ref and m1: ====>\t ', np.allclose(m1, ref))     #compressed and reshaped matrix should be equal to referance array
 
- 
+
 
   m2 = nc.tocoo_a_pb('p,a,b->a,pb')
   print('reshaped and sparse matrix m2(a,pb): ====>\t',m2.shape) 
@@ -84,11 +84,5 @@ if __name__=='__main__':
   m3 = m3.T
   print('m3 reshaped to 3D array (p ,a , b)',m3.shape)
   print('comparison between ref and m3: ====>\t ', np.allclose(m3, ref))
-
-
-
-
-
-
 
 
