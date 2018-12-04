@@ -888,7 +888,7 @@ class DDCOSMO(lib.StreamObject):
         self.grids.dump_flags()
         return self
 
-    def kernel(self, dm, grids=None):
+    def kernel(self, dm):
         '''A single shot solvent effects for given density matrix.
         '''
         if (self._solver_ is None or
@@ -896,7 +896,7 @@ class DDCOSMO(lib.StreamObject):
 # "grids" parameters. The COSMO solver should be updated to adapt the new
 # integral grids.
             self.grids.coords is None):
-            self._solver_ = self.as_solver(grids)
+            self._solver_ = self.as_solver()
 
         epcm, vpcm = self._solver_(dm)
         return epcm, vpcm
