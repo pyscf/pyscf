@@ -283,6 +283,21 @@ def eig(m, driver=None, nroots=None):
     return vals, vecs
 
 
+def vector_to_amplitudes(vectors, nocc, nmo):
+    """
+    Transforms (reshapes) and normalizes vectors into amplitudes.
+    Args:
+        vectors (numpy.ndarray): raw eigenvectors to transform;
+        nocc (int): number of occupied orbitals;
+        nmo (int): the total number of orbitals;
+
+    Returns:
+        Amplitudes with the following shape: (# of roots, 2 (x or y), # of occupied orbitals, # of virtual orbitals).
+    """
+    vectors = vectors.reshape(2, nocc, nmo-nocc, vectors.shape[1]) / 2.**.5
+    return vectors.transpose(3, 0, 1, 2)
+
+
 def kernel(model, driver=None, nroots=None):
     """
     Calculates eigenstates and eigenvalues of the TDHF problem.
@@ -300,4 +315,5 @@ def kernel(model, driver=None, nroots=None):
     else:
         logger.debug1(model, "8-fold symmetry used (real orbitals)")
         eri = PhysERI8(model)
-    return eig(build_matrix(eri), driver=driver, nroots=nroots)
+    vals, vecs = eig(build_matrix(eri), driver=driver, nroots=nroots)
+    return vals, vector_to_amplitudes(vecs, eri.nocc, model.mo_coeff.shape[0])

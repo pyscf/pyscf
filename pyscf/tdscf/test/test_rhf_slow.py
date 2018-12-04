@@ -14,6 +14,20 @@ def retrieve_m(model, **kwargs):
     return vind(numpy.eye(size)).T
 
 
+def unphase(v1, v2, threshold=1e-5):
+    v1, v2 = numpy.asarray(v1).reshape(len(v1), -1), numpy.asarray(v2).reshape((len(v2), -1))
+    g1 = abs(v1) > threshold
+    g2 = abs(v2) > threshold
+    g12 = numpy.logical_and(g1, g2)
+    if numpy.any(g12.sum(axis=1) == 0):
+        raise ValueError("Cannot find an anchor for the rotation")
+    a = tuple(numpy.where(i)[0][0] for i in g12)
+    for v in (v1, v2):
+        anc = v[numpy.arange(len(v)), a]
+        v /= (anc / abs(anc))[:, numpy.newaxis]
+    return v1, v2
+
+
 class H20Test(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -31,7 +45,7 @@ class H20Test(unittest.TestCase):
         model_rhf.kernel()
 
         cls.td_model_rhf = td_model_rhf = TDHF(model_rhf)
-        td_model_rhf.nroots = 5
+        td_model_rhf.nroots = 4
         td_model_rhf.kernel()
 
         cls.ref_m = retrieve_m(td_model_rhf)
@@ -60,6 +74,7 @@ class H20Test(unittest.TestCase):
         """Tests default eig kernel behavior."""
         vals, vecs = kernel(self.model_rhf, driver='eig', nroots=self.td_model_rhf.nroots)
         testing.assert_allclose(vals, self.td_model_rhf.e, atol=1e-5)
+        testing.assert_allclose(*unphase(vecs, self.td_model_rhf.xy), atol=1e-2)
 
     def test_symm(self):
         """Tests 8-fold symmetry."""
