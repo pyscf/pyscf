@@ -50,6 +50,7 @@ def ov_order(model):
 
 
 class DiamondTestGamma(unittest.TestCase):
+    """Compare this (supercell_slow) @Gamma vs reference."""
     @classmethod
     def setUpClass(cls):
         cls.cell = cell = Cell()
@@ -107,6 +108,7 @@ class DiamondTestGamma(unittest.TestCase):
 
 
 class DiamondTestNoGamma(unittest.TestCase):
+    """Compare this (supercell_slow) @non-Gamma 1kp vs rhf_slow."""
     @classmethod
     def setUpClass(cls):
         cls.cell = cell = Cell()
@@ -173,6 +175,7 @@ class DiamondTestNoGamma(unittest.TestCase):
 
 
 class DiamondTestSupercell2(unittest.TestCase):
+    """Compare this (supercell_slow) @2kp vs rhf_slow (2x1x1 supercell)."""
     k = 2
     k_c = (0, 0, 0)
 
@@ -249,5 +252,6 @@ class DiamondTestSupercell2(unittest.TestCase):
 
 
 class DiamondTestSupercell3(DiamondTestSupercell2):
+    """Compare this (supercell_slow) @3kp vs rhf_slow (3x1x1 supercell)."""
     k = 3
     k_c = (.1, 0, 0)

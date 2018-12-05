@@ -52,6 +52,7 @@ def ov_order(model):
 
 
 class DiamondTest(unittest.TestCase):
+    """Compare this (krhf_slow) @2kp@Gamma vs reference and vs `krhf_slow_supercell`."""
     k = 2
     k_c = (0, 0, 0)
 

@@ -29,6 +29,7 @@ def unphase(v1, v2, threshold=1e-5):
 
 
 class DiamondTestGamma(unittest.TestCase):
+    """Compare this (rhf_slow) vs reference."""
     @classmethod
     def setUpClass(cls):
         cls.cell = cell = Cell()
