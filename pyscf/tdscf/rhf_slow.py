@@ -294,7 +294,11 @@ def vector_to_amplitudes(vectors, nocc, nmo):
     Returns:
         Amplitudes with the following shape: (# of roots, 2 (x or y), # of occupied orbitals, # of virtual orbitals).
     """
-    vectors = vectors.reshape(2, nocc, nmo-nocc, vectors.shape[1]) / 2.**.5
+    vectors = numpy.asanyarray(vectors)
+    vectors = vectors.reshape(2, nocc, nmo-nocc, vectors.shape[1])
+    norm = (abs(vectors) ** 2).sum(axis=(1, 2))
+    norm = 2 * (norm[0] - norm[1])
+    vectors /= norm ** .5
     return vectors.transpose(3, 0, 1, 2)
 
 
