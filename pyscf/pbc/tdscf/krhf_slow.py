@@ -111,6 +111,32 @@ class PhysERI8Gamma(PhysERI4Gamma):
     ]
 
 
+def vector_to_amplitudes(vectors, nocc, nmo):
+    """
+    Transforms (reshapes) and normalizes vectors into amplitudes.
+    Args:
+        vectors (numpy.ndarray): raw eigenvectors to transform;
+        nocc (tuple): numbers of occupied orbitals;
+        nmo (int): the total number of orbitals per k-point;
+
+    Returns:
+        Amplitudes with the following shape: (# of roots, 2 (x or y), # of kpts, # of kpts, # of occupied orbitals,
+        # of virtual orbitals).
+    """
+    if not all(i == nocc[0] for i in nocc):
+        raise NotImplementedError("Non-equal occupation numbers are not implemented yet")
+    nk = len(nocc)
+    nocc = nocc[0]
+    vectors = numpy.asanyarray(vectors)
+    # Compared to krhf_slow_supercell, only one k-point index is present here. The second index corresponds to
+    # momentum transfer and is integrated out
+    vectors = vectors.reshape(2, nk, nocc, nmo-nocc, vectors.shape[1])
+    norm = (abs(vectors) ** 2).sum(axis=(1, 2, 3))
+    norm = 2 * (norm[0] - norm[1])
+    vectors /= norm ** .5
+    return vectors.transpose(4, 0, 1, 2, 3)
+
+
 def kernel_gamma(model, driver=None, nroots=None):
     """
     Calculates eigenstates and eigenvalues of the TDHF problem without momentum transfer.
@@ -128,7 +154,8 @@ def kernel_gamma(model, driver=None, nroots=None):
     else:
         logger.debug1(model, "8-fold symmetry used (real orbitals)")
         eri = PhysERI8Gamma(model)
-    return eig(build_matrix(eri), driver=driver, nroots=nroots)
+    vals, vecs = eig(build_matrix(eri), driver=driver, nroots=nroots)
+    return vals, vector_to_amplitudes(vecs, eri.nocc, model.mo_coeff[0].shape[0])
 
 
 class PhysERI(PhysERI_S):
