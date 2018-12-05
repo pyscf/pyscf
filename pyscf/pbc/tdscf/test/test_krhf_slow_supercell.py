@@ -1,52 +1,15 @@
 from pyscf.pbc.gto import Cell
 from pyscf.pbc.scf import RHF, KRHF
 from pyscf.pbc.tdscf import KTDHF
-from pyscf.pbc.tdscf.krhf_slow_supercell import PhysERI, PhysERI4, PhysERI8, build_matrix, eig, kernel, k_nocc
+from pyscf.pbc.tdscf.krhf_slow_supercell import PhysERI, PhysERI4, PhysERI8, build_matrix, eig, kernel
 from pyscf.pbc.tools.pbc import super_cell
 from pyscf.tdscf.rhf_slow import PhysERI4 as PhysERI4_mol, kernel as kernel_mol
+
+from test_common import retrieve_m, make_mf_phase_well_defined, unphase, ov_order
 
 import unittest
 from numpy import testing
 import numpy
-
-
-def retrieve_m(model, **kwargs):
-    vind, hdiag = model.gen_vind(model._scf, **kwargs)
-    size = model.init_guess(model._scf, 1).shape[1]
-    return vind(numpy.eye(size)).T
-
-
-def sign(x):
-    return x / abs(x)
-
-
-def make_phase_well_defined(model):
-    if "kpts" in dir(model):
-        for i in model.mo_coeff:
-            i /= sign(i[0])[numpy.newaxis, :]
-    else:
-        model.mo_coeff /= sign(model.mo_coeff[0])[numpy.newaxis, :]
-
-
-def ov_order(model):
-    nocc = k_nocc(model)
-    e_occ = tuple(e[:o] for e, o in zip(model.mo_energy, nocc))
-    e_virt = tuple(e[o:] for e, o in zip(model.mo_energy, nocc))
-    sort_o = []
-    sort_v = []
-    for o in e_occ:
-        for v in e_virt:
-            _v, _o = numpy.meshgrid(v, o)
-            sort_o.append(_o.reshape(-1))
-            sort_v.append(_v.reshape(-1))
-    sort_o, sort_v = numpy.concatenate(sort_o), numpy.concatenate(sort_v)
-    vals = numpy.array(
-        list(zip(sort_o, sort_v)),
-        dtype=[('o', sort_o[0].dtype), ('v', sort_v[0].dtype)]
-    )
-    result = numpy.argsort(vals, order=('o', 'v'))
-    # Double for other blocks
-    return numpy.concatenate([result, result + len(result)])
 
 
 class DiamondTestGamma(unittest.TestCase):
@@ -73,7 +36,6 @@ class DiamondTestGamma(unittest.TestCase):
 
         cls.model_krhf = model_krhf = KRHF(cell)
         model_krhf.kernel()
-        # make_phase_well_defined(model_krhf)
 
         cls.td_model_krhf = td_model_krhf = KTDHF(model_krhf)
         td_model_krhf.nroots = 5
@@ -105,9 +67,17 @@ class DiamondTestGamma(unittest.TestCase):
         """Tests default eig kernel behavior."""
         vals, vecs = kernel(self.model_krhf, driver='eig', nroots=self.td_model_krhf.nroots)
         testing.assert_allclose(vals, self.td_model_krhf.e, atol=1e-5)
+        nocc = nvirt = 4
+        testing.assert_equal(vecs.shape, (self.td_model_krhf.nroots, 2, 1, 1, nocc, nvirt))
+        try:
+            testing.assert_allclose(*unphase(vecs.squeeze(), numpy.array(self.td_model_krhf.xy).squeeze()), atol=1e-2)
+        except Exception:
+            # TODO
+            print("This is a known bug: vectors #1 and #3 from davidson are wrong")
+            raise
 
 
-class DiamondTestNoGamma(unittest.TestCase):
+class DiamondTestShiftedGamma(unittest.TestCase):
     """Compare this (supercell_slow) @non-Gamma 1kp vs rhf_slow."""
     @classmethod
     def setUpClass(cls):
@@ -135,16 +105,16 @@ class DiamondTestNoGamma(unittest.TestCase):
         cls.model_rhf = model_rhf = RHF(cell, k)
         model_rhf.conv_tol = 1e-14
         model_rhf.kernel()
-        make_phase_well_defined(model_rhf)
+        make_mf_phase_well_defined(model_rhf)
 
         cls.ref_m = build_matrix(PhysERI4_mol(model_rhf))
-        cls.ref_e, _ = kernel_mol(model_rhf)
+        cls.ref_e, cls.ref_v = kernel_mol(model_rhf)
 
         # K-points
         cls.model_krhf = model_krhf = KRHF(cell, k)
         model_krhf.conv_tol = 1e-14
         model_krhf.kernel()
-        make_phase_well_defined(model_krhf)
+        make_mf_phase_well_defined(model_krhf)
 
         testing.assert_allclose(model_rhf.mo_energy, model_krhf.mo_energy[0])
         testing.assert_allclose(model_rhf.mo_coeff, model_krhf.mo_coeff[0])
@@ -171,7 +141,10 @@ class DiamondTestNoGamma(unittest.TestCase):
     def test_eig_kernel(self):
         """Tests default eig kernel behavior."""
         vals, vecs = kernel(self.model_krhf, driver='eig')
-        testing.assert_allclose(vals, self.ref_e, atol=1e-7)
+        testing.assert_allclose(vals, self.ref_e, atol=1e-12)
+        nocc = nvirt = 4
+        testing.assert_equal(vecs.shape, (len(vals), 2, 1, 1, nocc, nvirt))
+        testing.assert_allclose(*unphase(vecs.squeeze(), self.ref_v), atol=1e-7)
 
 
 class DiamondTestSupercell2(unittest.TestCase):
@@ -205,16 +178,16 @@ class DiamondTestSupercell2(unittest.TestCase):
         cls.model_rhf = model_rhf = RHF(super_cell(cell, [cls.k, 1, 1]), kpt=k[0])
         model_rhf.conv_tol = 1e-14
         model_rhf.kernel()
-        make_phase_well_defined(model_rhf)
+        make_mf_phase_well_defined(model_rhf)
 
         cls.ref_m = build_matrix(PhysERI4_mol(model_rhf))
-        cls.ref_e, _ = kernel_mol(model_rhf)
+        cls.ref_e, cls.ref_v = kernel_mol(model_rhf)
 
         # K-points
         cls.model_krhf = model_krhf = KRHF(cell, k)
         model_krhf.conv_tol = 1e-14
         model_krhf.kernel()
-        make_phase_well_defined(model_krhf)
+        make_mf_phase_well_defined(model_krhf)
         ke = numpy.concatenate(model_krhf.mo_energy)
         ke.sort()
 
@@ -249,6 +222,13 @@ class DiamondTestSupercell2(unittest.TestCase):
         """Tests default eig kernel behavior."""
         vals, vecs = kernel(self.model_krhf, driver='eig')
         testing.assert_allclose(vals, self.ref_e, atol=1e-7)
+        nocc = nvirt = 4
+        testing.assert_equal(vecs.shape, (len(vals), 2, self.k, self.k, nocc, nvirt))
+        vecs = vecs.reshape(len(vecs), -1)[:, self.ov_order]
+        testing.assert_allclose(
+            *unphase(vecs.reshape(len(vals), -1), self.ref_v.reshape(len(self.ref_v), -1)),
+            atol=1e-7
+        )
 
 
 class DiamondTestSupercell3(DiamondTestSupercell2):

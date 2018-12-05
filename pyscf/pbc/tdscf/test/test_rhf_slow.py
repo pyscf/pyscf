@@ -3,29 +3,10 @@ from pyscf.pbc.scf import RHF
 from pyscf.pbc.tdscf import TDHF
 from pyscf.pbc.tdscf.rhf_slow import PhysERI, PhysERI4, PhysERI8, build_matrix, eig, kernel
 
+from test_common import retrieve_m, unphase
+
 import unittest
 from numpy import testing
-import numpy
-
-
-def retrieve_m(model, **kwargs):
-    vind, hdiag = model.gen_vind(model._scf, **kwargs)
-    size = model.init_guess(model._scf, 1).shape[1]
-    return vind(numpy.eye(size)).T
-
-
-def unphase(v1, v2, threshold=1e-5):
-    v1, v2 = numpy.asarray(v1).reshape(len(v1), -1), numpy.asarray(v2).reshape((len(v2), -1))
-    g1 = abs(v1) > threshold
-    g2 = abs(v2) > threshold
-    g12 = numpy.logical_and(g1, g2)
-    if numpy.any(g12.sum(axis=1) == 0):
-        raise ValueError("Cannot find an anchor for the rotation")
-    a = tuple(numpy.where(i)[0][0] for i in g12)
-    for v in (v1, v2):
-        anc = v[numpy.arange(len(v)), a]
-        v /= (anc / abs(anc))[:, numpy.newaxis]
-    return v1, v2
 
 
 class DiamondTestGamma(unittest.TestCase):
