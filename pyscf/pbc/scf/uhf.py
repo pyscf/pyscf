@@ -231,7 +231,7 @@ class UHF(mol_uhf.UHF, pbchf.SCF):
                             'of initial guess density matrix (Ne/cell = %g)!\n'
                             '  This can cause huge error in Fock matrix and '
                             'lead to instability in SCF for low-dimensional '
-                            'systems.\n  DM is normalized to correct number '
+                            'systems.\n  DM is normalized to the number '
                             'of electrons', ne)
                 dm *= cell.nelectron / ne
         return dm

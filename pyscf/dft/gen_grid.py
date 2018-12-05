@@ -497,6 +497,14 @@ class Grids(lib.StreamObject):
     def size(self):
         return getattr(self.weights, 'size', 0)
 
+    def __setattr__(self, key, val):
+        if key in ('atom_grid', 'atomic_radii', 'radii_adjust', 'radi_method',
+                   'becke_scheme', 'prune', 'level'):
+            self.coords = None
+            self.weights = None
+            self.non0tab = None
+        super(Grids, self).__setattr__(key, val)
+
     def dump_flags(self):
         logger.info(self, 'radial grids: %s', self.radi_method.__doc__)
         logger.info(self, 'becke partition: %s', self.becke_scheme.__doc__)
