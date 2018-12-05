@@ -16,6 +16,7 @@ procedure. Several variants of TDHF are available:
 
 from pyscf.pbc.tdscf.krhf_slow_supercell import PhysERI as PhysERI_S, PhysERI4 as PhysERI4_S, build_matrix, eig, k_nocc
 from pyscf.lib import logger
+from pyscf.pbc.tools import get_kconserv
 
 import numpy
 import scipy
@@ -158,6 +159,21 @@ def kernel_gamma(model, driver=None, nroots=None):
     return vals, vector_to_amplitudes(vecs, eri.nocc, model.mo_coeff[0].shape[0])
 
 
+def momentum_transfer_convention(model, k):
+    """
+    This routine represents the convention for momentum transfer. For a given index k, it returns a lookup array
+    with indexes of transferred k-points for each of k-points in the problem. For `k=0` (no momentum transfer), the
+    result is simply a range of consequetive numbers `[0, 1, 2, ...][i] == i`
+    Args:
+        model (KRHF): the model;
+        k (int): momentum transfer index;
+
+    Returns:
+        An array with integers.
+    """
+    return get_kconserv(model.cell, model.kpts)[k, :, 0]
+
+
 class PhysERI(PhysERI_S):
 
     def __init__(self, model, k):
@@ -176,7 +192,7 @@ class PhysERI(PhysERI_S):
         super(PhysERI, self).__init__(model)
         self.k = k
         # Note that kconserv is in phys notation
-        self.kconserv_k0 = self.kconserv[k, :, 0]
+        self.kconserv_k0 = momentum_transfer_convention(model, k)
 
     def assemble_diag_block(self):
         result = []
