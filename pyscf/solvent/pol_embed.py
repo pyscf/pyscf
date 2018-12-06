@@ -15,6 +15,7 @@ def pe_scf(mf, pe_state):
                 raise TypeError("Invalid type for pe_state.")
             self._pol_embed = pe_state
             self._pe_energy = 0.0
+            self._lock = False # dirty hack to avoid solving for the induced moments twice in DFT calculations
 
         def dump_flags(self):
             oldMF.dump_flags(self)
@@ -24,10 +25,14 @@ def pe_scf(mf, pe_state):
 
         def get_veff(self, mol, dm, *args, **kwargs):
             vhf = oldMF.get_veff(self, mol, dm)
-            epe, vpe = self._pol_embed.kernel(dm)
-            self._pe_energy = epe
-            vhf += vpe
-            return lib.tag_array(vhf, epe=epe, vpe=vpe)
+            if not self._lock:
+                epe, vpe = self._pol_embed.kernel(dm)
+                self._pe_energy = epe
+                vhf += vpe
+                self._lock = True
+                return lib.tag_array(vhf, epe=epe, vpe=vpe)
+            else:
+                return lib.tag_array(vhf)
 
         def energy_elec(self, dm=None, h1e=None, vhf=None):
             if dm is None:
@@ -37,6 +42,7 @@ def pe_scf(mf, pe_state):
             e_tot, e_coul = oldMF.energy_elec(self, dm, h1e, vhf-vhf.vpe)
             e_tot += vhf.epe
             logger.info(self._pol_embed, '  PE Energy = %.15g', vhf.epe)
+            self._lock = False
             return e_tot, e_coul
 
         def nuc_grad_method(self):
@@ -118,7 +124,8 @@ class PolEmbed(lib.StreamObject):
                 elec_fields_s = self._compute_field(site, dm)
                 elec_fields[3*current_polsite:3*current_polsite + 3] = elec_fields_s
                 current_polsite += 1
-            self.cppe_state.update_induced_moments(elec_fields, self.iteration, False)
+            self.cppe_state.update_induced_moments(elec_fields, self.iteration,
+                                                   elec_only)
             induced_moments = self.cppe_state.get_induced_moments()
             current_polsite = 0
             for p in self.potentials:
@@ -129,7 +136,12 @@ class PolEmbed(lib.StreamObject):
                                                        moment=induced_moments[3*current_polsite:3*current_polsite + 3])
                 current_polsite += 1
         e = self.cppe_state.get_current_energies().get_total_energy()
-        vmat = self.V_es + V_ind
+        if not elec_only:
+            vmat = self.V_es + V_ind
+        else:
+            print("resp contribution")
+            vmat = V_ind
+            e = self.cppe_state.get_current_energies().get("Polarization/Electronic")
         return e, vmat
 
     def _compute_multipole_potential_integrals(self, site, order, moments):

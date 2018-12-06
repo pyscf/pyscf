@@ -56,6 +56,8 @@ def gen_tda_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
     mo_energy = mf.mo_energy
     mo_occ = mf.mo_occ
     nao, nmo = mo_coeff.shape
+    do_pe_response = hasattr(mf, "_pe_energy")
+    print("DO PE RESPONSE: ", do_pe_response)
     occidx = numpy.where(mo_occ==2)[0]
     viridx = numpy.where(mo_occ==0)[0]
     nocc = len(occidx)
@@ -103,6 +105,13 @@ def gen_tda_operation(mf, fock_ao=None, singlet=True, wfnsym=None):
         for i, z in enumerate(zs):
             v1ov[i]+= numpy.einsum('sp,qs->qp', fvv, z.reshape(nocc,nvir))
             v1ov[i]-= numpy.einsum('sp,pr->sr', foo, z.reshape(nocc,nvir))
+            # I think the PE contribution should be put in here :)
+            if do_pe_response:
+                en, v_pe_ao = mf._pol_embed.kernel(dmov[i], elec_only=True)
+                # print("v_pe_ao: ", v_pe_ao.shape)
+                v_pe_ov = lib.einsum('pq,pi,qj->ij', v_pe_ao, orbo.conj(), orbv)
+                # print(en*nist.HARTREE2EV, v_pe_ov.shape)
+                v1ov[i] += v_pe_ov
         if wfnsym is not None and mol.symmetry:
             v1ov[:,sym_forbid] = 0
         return v1ov.reshape(nz,-1)
