@@ -616,8 +616,28 @@ class nao():
     from pyscf.nao.m_dipole_coo import dipole_coo
     return dipole_coo(self, **kw)
   
-  def overlap_check(self, tol=1e-5, **kw): # Works only after init_siesta_xml(), extend ?
-    return overlap_check(self, tol=1e-5, **kw)
+  def overlap_check(self, sv , tol=1e-8, **kw): # Works for pyscf and after init_siesta_xml()
+    if hasattr(self, 'mol'):
+      from pyscf import gto, scf                           
+      from pyscf.nao import nao
+      result = True
+      ovlp_pyscf = self.get_ovlp()
+      #sv = nao(gto=mol, rcut_tol=1e-8, nr=512, rmin=1e-5) 
+      #ovlp_nao = sv.overlap_coo().toarray()
+      ovlp_nao = sv.overlap_lil().toarray()
+      diff = (abs(ovlp_nao - ovlp_pyscf)).sum()
+      summ = (abs(ovlp_nao + ovlp_pyscf)).sum()
+      if diff/summ > tol or diff/ovlp_nao.size > tol:
+        result = False  #as might be expected due to the different sepherical harmonic part they must be different.
+      check = result,'tol:{}, MAX:{}'.format(tol,np.max(np.abs(ovlp_nao - ovlp_pyscf))), diff/summ
+    else:
+      ovlp_nao = sv.overlap_coo(**kvargs).tocsr()
+      diff = (sv.hsx.s4_csr - ovlp_nao).sum()
+      summ = (sv.hsx.s4_csr + ovlp_nao).sum()
+      if diff/summ > tol:
+        result = False
+      check = result,'tol:{}'.format(tol), diff/summ
+    return check
 
   def energy_nuc(self, charges=None, coords=None):
     """ Potential energy of electrostatic repulsion of point nuclei """
@@ -765,6 +785,10 @@ class nao():
     else:
       return self._nelectron
 
+  def get_symbols (self):
+    atm_list = [ self.sp2symbol[sp] for sp in self.atom2sp ]
+    return atm_list
+
 #
 # Example of reading pySCF orbitals.
 #
@@ -776,13 +800,13 @@ if __name__=="__main__":
   mol = gto.M(atom='O 0 0 0; H 0 0 1; H 0 1 0; Be 1 0 0', basis='ccpvtz') # coordinates in Angstrom!
   sv = nao(gto=mol, rcut_tol=1e-8, nr=512, rmin=1e-5)
   
-  print(sv.ao_log.sp2norbs)
-  print(sv.ao_log.sp2nmult)
-  print(sv.ao_log.sp2rcut)
-  print(sv.ao_log.sp_mu2rcut)
-  print(sv.ao_log.nr)
-  print(sv.ao_log.rr[0:4], sv.ao_log.rr[-1:-5:-1])
-  print(sv.ao_log.psi_log[0].shape, sv.ao_log.psi_log_rl[0].shape)
+  print('sv.ao_log.sp2norbs:',sv.ao_log.sp2norbs)
+  print('sv.ao_log.sp2nmult:',sv.ao_log.sp2nmult)
+  print('sv.ao_log.sp2rcut',sv.ao_log.sp2rcut)
+  print('sv.ao_log.sp_mu2rcut',sv.ao_log.sp_mu2rcut)
+  print('sv.ao_log.nr',sv.ao_log.nr)
+  print('sv.ao_log.rr[0:4], sv.ao_log.rr[-1:-5:-1]',sv.ao_log.rr[0:4], sv.ao_log.rr[-1:-5:-1])
+  print('sv.ao_log.psi_log[0].shape, sv.ao_log.psi_log_rl[0].shape',sv.ao_log.psi_log[0].shape, sv.ao_log.psi_log_rl[0].shape)
 
   sp = 0
   for mu,[ff,j] in enumerate(zip(sv.ao_log.psi_log[sp], sv.ao_log.sp_mu2j[sp])):

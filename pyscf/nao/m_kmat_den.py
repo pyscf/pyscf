@@ -37,7 +37,7 @@ def kmat_den(mf, dm=None, algo=None, **kw):
     raise RuntimeError('nspin>2?')
     
   algol = algo.lower() if algo is not None else 'sm0_sum'
-  if mf.verbosity>0: print(__name__, "\t====> Fock exchange algorithm '{}'.\f".format(algol))
+  if mf.verbosity>1 and algol != 'sm0_sum' : print(__name__, "\t====> Fock exchange algorithm '{}'.\f".format(algol))
   gen_spy_png = kw['gen_spy_png'] if 'gen_spy_png' in kw else False
   
   if algol=='fci':

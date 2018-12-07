@@ -41,50 +41,111 @@ configuration = {
 'Kr': [18, 10, 2, 6]      # 36  Kr,[Ar] 3d10 4s2 4p6
 }
 
-#Produces a list of atomic symbols
-def get_symbols (self):
-  #a2s = [gw.sp2symbol[sp] for sp in gw.atom2sp]
-  atm_ls=[]
-  for i in range (self.natm):
-      atm_ls=np.append(atm_ls, self.mol.atom_symbol(i))
-  return atm_ls
+#'atom' : {'core' :  [ [1s], [2s, 2p], [3p, 3d]], 'valence': [ Mean valenece[ s, p, d ], Full valence[ s, p, d ], Extended Valence[ s, p, d ] ] },
 
+data = {
+'H' : { 'core': [ [0], [ 0, 0 ], [ 0, 0 ]], 'valence': [ [ 2, 0, 0 ], [ 2, 6, 0 ], [ 2, 6, 0 ] ] },         #  1  H, 1s1
+'He': { 'core': [ [0], [ 0, 0 ], [ 0, 0 ]], 'valence': [ [ 2, 0, 0 ], [ 2, 6, 0 ], [ 2, 6, 0 ] ] },         #  2  He,1s2
+'Li': { 'core': [ [2], [ 0, 0 ], [ 0, 0 ]], 'valence': [ [ 2, 6, 0 ], [ 2, 6, 0 ], [ 2, 6, 0 ] ] },         #  3  Li,[He] 2s1
+'Be': { 'core': [ [2], [ 0, 0 ], [ 0, 0 ]], 'valence': [ [ 2, 6, 0 ], [ 2, 6, 0 ], [ 2, 6, 0 ] ] },         #  4  Be,[He] 2s2
+'B' : { 'core': [ [2], [ 0, 0 ], [ 0, 0 ]], 'valence': [ [ 2, 6, 0 ], [ 2, 6, 0 ], [ 2, 6, 0 ] ] },         #  5  B, [He] 2s2 2p1
+'C' : { 'core': [ [2], [ 0, 0 ], [ 0, 0 ]], 'valence': [ [ 2, 6, 0 ], [ 2, 6, 0 ], [ 2, 6, 0 ] ] },         #  6  C, [He] 2s2 2p2
+'N' : { 'core': [ [2], [ 0, 0 ], [ 0, 0 ]], 'valence': [ [ 2, 6, 0 ], [ 2, 6, 0 ], [ 2, 6, 0 ] ] },         #  7  N, [He] 2s2 2p3
+'O' : { 'core': [ [2], [ 0, 0 ], [ 0, 0 ]], 'valence': [ [ 2, 6, 0 ], [ 2, 6, 0 ], [ 2, 6, 0 ] ] },         #  8  O, [He] 2s2 2p4
+'F' : { 'core': [ [2], [ 0, 0 ], [ 0, 0 ]], 'valence': [ [ 2, 6, 0 ], [ 2, 6, 0 ], [ 2, 6, 0 ] ] },         #  9  F, [He] 2s2 2p5
+'Ne': { 'core': [ [2], [ 0, 0 ], [ 0, 0 ]], 'valence': [ [ 2, 6, 0 ], [ 2, 6, 0 ], [ 2, 6, 0 ] ] },         # 10  Ne,[He] 2s2 2p6
+'Na': { 'core': [ [2], [ 2, 6 ], [ 0, 0 ]], 'valence': [ [ 2, 6, 0 ], [ 2, 6, 10], [ 2, 6, 10] ] },         # 11  Na,[Ne] 3s1
+'Mg': { 'core': [ [2], [ 2, 6 ], [ 0, 0 ]], 'valence': [ [ 2, 6, 0 ], [ 2, 6, 10], [ 2, 6, 10] ] },         # 12  Mg,[Ne] 3s2
+'Al': { 'core': [ [2], [ 2, 6 ], [ 0, 0 ]], 'valence': [ [ 2, 6, 0 ], [ 2, 6, 10], [ 2, 6, 10] ] },         # 13  Al,[Ne] 3s2 3p1
+'Si': { 'core': [ [2], [ 2, 6 ], [ 0, 0 ]], 'valence': [ [ 2, 6, 0 ], [ 2, 6, 10], [ 2, 6, 10] ] },         # 14  Si,[Ne] 3s2 3p2
+'P' : { 'core': [ [2], [ 2, 6 ], [ 0, 0 ]], 'valence': [ [ 2, 6, 0 ], [ 2, 6, 10], [ 2, 6, 10] ] },         # 15  P, [Ne] 3s2 3p3
+'S' : { 'core': [ [2], [ 2, 6 ], [ 0, 0 ]], 'valence': [ [ 2, 6, 0 ], [ 2, 6, 10], [ 2, 6, 10] ] },         # 16  S, [Ne] 3s2 3p4
+'Cl': { 'core': [ [2], [ 2, 6 ], [ 0, 0 ]], 'valence': [ [ 2, 6, 0 ], [ 2, 6, 10], [ 2, 6, 10] ] },         # 17  Cl,[Ne] 3s2 3p5
+'Ar': { 'core': [ [2], [ 2, 6 ], [ 0, 0 ]], 'valence': [ [ 2, 6, 0 ], [ 2, 6, 10], [ 2, 6, 10] ] },         # 18  Ar,[Ne] 3s2 3p6
+'K' : { 'core': [ [2], [ 2, 6 ], [ 0, 0 ]], 'valence': [ [ 2, 6, 10], [ 2, 6, 10], [ 2, 6, 10] ] },         # 19  K, [Ar] 4s1
+'Ca': { 'core': [ [2], [ 2, 6 ], [ 0, 0 ]], 'valence': [ [ 2, 6, 10], [ 2, 6, 10], [ 2, 6, 10] ] },         # 20  Ca,[Ar] 4s2
+'Sc': { 'core': [ [2], [ 2, 6 ], [ 0, 0 ]], 'valence': [ [ 2, 6, 10], [ 2, 6, 10], [ 2, 6, 10] ] },         # 21  Sc,[Ar] 3d1 4s2
+'Ti': { 'core': [ [2], [ 2, 6 ], [ 6, 0 ]], 'valence': [ [ 2, 6, 10], [ 2, 6, 10], [ 2, 6, 10] ] },         # 22  Ti,[Ar] 3d2 4s2
+'V' : { 'core': [ [2], [ 2, 6 ], [ 6, 0 ]], 'valence': [ [ 2, 6, 10], [ 2, 6, 10], [ 2, 6, 10] ] },         # 23  V, [Ar] 3d3 4s2
+'Cr': { 'core': [ [2], [ 2, 6 ], [ 6, 0 ]], 'valence': [ [ 2, 6, 10], [ 2, 6, 10], [ 2, 6, 10] ] },         # 24  Cr,[Ar] 3d4 4s2
+'Mn': { 'core': [ [2], [ 2, 6 ], [ 6, 0 ]], 'valence': [ [ 2, 6, 10], [ 2, 6, 10], [ 2, 6, 10] ] },         # 25  Mn,[Ar] 3d5 4s2
+'Fe': { 'core': [ [2], [ 2, 6 ], [ 6, 0 ]], 'valence': [ [ 2, 6, 10], [ 2, 6, 10], [ 2, 6, 10] ] },         # 26  Fe,[Ar] 3d6 4s2
+'Co': { 'core': [ [2], [ 2, 6 ], [ 6, 0 ]], 'valence': [ [ 2, 6, 10], [ 2, 6, 10], [ 2, 6, 10] ] },         # 27  Co,[Ar] 3d7 4s2
+'Ni': { 'core': [ [2], [ 2, 6 ], [ 6, 0 ]], 'valence': [ [ 2, 6, 10], [ 2, 6, 10], [ 2, 6, 10] ] },         # 28  Ni,[Ar] 3d8 4s2
+'Cu': { 'core': [ [2], [ 2, 6 ], [ 6, 0 ]], 'valence': [ [ 2, 6, 10], [ 2, 6, 10], [ 2, 6, 10] ] },         # 29  Cu,[Ar] 3d9 4s2
+'Zn': { 'core': [ [2], [ 2, 6 ], [ 6, 0 ]], 'valence': [ [ 2, 6, 10], [ 2, 6, 10], [ 2, 6, 10] ] },         # 30  Zn,[Ar] 3d10 4s2
+'Ga': { 'core': [ [2], [ 2, 6 ], [ 6, 0 ]], 'valence': [ [ 2, 6, 10], [ 2, 6, 10], [ 2, 6, 10] ] },         # 31  Ga,[Ar] 3d10 4s2 4p1
+'Ge': { 'core': [ [2], [ 2, 6 ], [ 6, 10]], 'valence': [ [ 2, 6, 0 ], [ 2, 6, 10], [ 2, 6, 10] ] },         # 32  Ge,[Ar] 3d10 4s2 4p2
+'As': { 'core': [ [2], [ 2, 6 ], [ 6, 10]], 'valence': [ [ 2, 6, 0 ], [ 2, 6, 10], [ 2, 6, 10] ] },         # 33  As,[Ar] 3d10 4s2 4p3
+'Se': { 'core': [ [2], [ 2, 6 ], [ 6, 10]], 'valence': [ [ 2, 6, 0 ], [ 2, 6, 10], [ 2, 6, 10] ] },         # 34  Se,[Ar] 3d10 4s2 4p4
+'Br': { 'core': [ [2], [ 2, 6 ], [ 6, 10]], 'valence': [ [ 2, 6, 0 ], [ 2, 6, 10], [ 2, 6, 10] ] },         # 35  Br,[Ar] 3d10 4s2 4p5
+'Kr': { 'core': [ [2], [ 2, 6 ], [ 6, 10]], 'valence': [ [ 2, 6, 0 ], [ 2, 6, 10], [ 2, 6, 10] ] }}         # 36  Kr,[Ar] 3d10 4s2 4p6
 
 #Counts number of valence electrons
 def n_valence (self):
-  atm_ls = get_symbols (self)
+  atm_ls = self.get_symbols()
   v=0
   for x in range(len (atm_ls)):
       if atm_ls[x] in configuration.keys():
 	      v+= sum(configuration[atm_ls[x]][-2:])
   return v
 
-
 #Counts number of core electrons  
 def n_core (self):
-  atm_ls = get_symbols (self)
+  atm_ls = self.get_symbols()
   core = self.nelectron - n_valence (self)
   return core
 
+
+def n_core_vale (self):
+  atm_ls = self.get_symbols()
+  v1,v2,v3,c = 0,0,0,0
+  for x in range(len (atm_ls)):
+      if atm_ls[x] in data.keys():
+          co = data[atm_ls[x]]['core']
+          mv = data[atm_ls[x]]['valence'][0]
+          fv = data[atm_ls[x]]['valence'][0:2]
+          ev = data[atm_ls[x]]['valence']
+          c += sum( sum(s) if isinstance(s, list) else s for s in co )    #core
+          v1+= sum( mv )                                                  #mean valence
+          v2+= sum( sum(s) if isinstance(s, list) else s for s in fv )    #full valence
+          v3+= sum( sum(s) if isinstance(s, list) else s for s in ev )    #extended valence
+  co_va = np.array([c,v1,v2,v3])
+  return co_va
+
+
 #Produces a list of valence states to be corrected by GW  
-def get_start (self,frozen_core,**kw):
+def get_str_fin (self,frozen_core,**kw):
   if frozen_core == True :
     val = n_valence (self)
     if self.nspin == 2:
         if self.natm == 1:
-            core = n_core (self)
-            starting = np.array([core//2 , core//2 ])
+            co_va = n_core_vale (self)
+            starting = np.array([co_va[0]//2 , co_va[0]//2 ])
+            finishing = np.array([co_va[2]//2 , co_va[2]//2 ]) 
         else:
             if val<= 4 : starting = np.array([0 , 0])
             elif val <= 20 and val > 4: starting = np.array([2 , 2])
             elif val <= 36 and val > 20: starting = np.array([10 , 10])
             elif val <= 72 and val > 36: starting = np.array([18 , 18])
             else: starting = np.array([36 , 36])
+            finishing = starting + 12
     elif self.nspin == 1:
         starting = self.nocc_0t+self.nvrt
+        
   elif frozen_core == False :
     starting = np.array([0 , 0])
+    finishing = np.array([self.mo_energy.shape[2],self.mo_energy.shape[2]])
+  elif type(self.frozen_core) is float or int:
+    bnd1 = self.fermi_energy - self.frozen_core/27.2114
+    bnd2 = self.fermi_energy + self.frozen_core/27.2114
+    a=[]
+    for i in range(len(self.mo_energy[0,0,:])):
+        if self.mo_energy[0,0,i] >= bnd1 and self.mo_energy[0,0,i]<= bnd2 :
+            a.append(i)
+    starting = np.array([min(a),min(a)])
+    finishing = np.array([max(a),max(a)])   
   else:
-    raise RuntimeError('Unknown!! Frozen core is defined by True or False!')
-  print(__name__,'\t====> States to be corrected start from: ',starting)
-  return starting
+    raise RuntimeError('Unknown!! Frozen core is defined by True, False or a Number!')
+  #if self.verbosity>0:print(__name__,'\t====> States to be corrected start from {} to {}.'.format(starting,finishing))
+  return np.array([starting, finishing])

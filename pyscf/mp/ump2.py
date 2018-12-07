@@ -531,6 +531,7 @@ del(WITH_T2)
 if __name__ == '__main__':
     from pyscf import scf
     from pyscf import gto
+    from functools import reduce
     mol = gto.Mole()
     mol.atom = [['O', (0.,   0., 0.)],
                 ['O', (1.21, 0., 0.)]]
