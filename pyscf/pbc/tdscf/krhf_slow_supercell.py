@@ -10,18 +10,30 @@ procedure. Several variants of TDHF are available:
    modules;
  * (this module) `pyscf.pbc.tdscf.krhf_slow_supercell`: PBC implementation for KRHF objects of `pyscf.pbc.scf` modules.
    Works with an arbitrary number of k-points but has a overhead due to an effective construction of a supercell.
- * `pyscf.pbc.tdscf.krhf_slow`: PBC implementation for KRHF objects of `pyscf.pbc.scf` modules. Works with an arbitrary
-   number of k-points and employs k-point conservation (diagonalizes matrix blocks separately).
+ * `pyscf.pbc.tdscf.krhf_slow_gamma`: A Gamma-point calculation resembling the original `pyscf.pbc.tdscf.krhf`
+   module. Despite its name, it accepts KRHF objects with an arbitrary number of k-points but finds only few TDHF roots
+   corresponding to collective oscillations without momentum transfer;
+ * `pyscf.pbc.tdscf.krhf_slow`: PBC implementation for KRHF objects of `pyscf.pbc.scf` modules. Works with
+   an arbitrary number of k-points and employs k-point conservation (diagonalizes matrix blocks separately).
 """
 
 from pyscf.pbc.tools import get_kconserv
-from pyscf.tdscf.rhf_slow import TDDFTMatrixBlocks, build_matrix, eig
+from pyscf.tdscf import rhf_slow as td
 from pyscf.lib import logger
 
 from pyscf.pbc.lib.kpts_helper import loop_kkk
 
 import numpy
 import scipy
+
+
+# Convention for these modules:
+# * PhysERI, PhysERI4, PhysERI8 are 2-electron integral routines computed directly (for debug purposes), with a 4-fold
+#   symmetry and with an 8-fold symmetry
+# * build_matrix builds the full TDHF matrix
+# * eig performs diagonalization and selects roots
+# * vector_to_amplitudes reshapes and normalizes the solution
+# * kernel assembles everything
 
 
 def k_nocc(model):
@@ -36,7 +48,7 @@ def k_nocc(model):
     return tuple(int(i.sum()) // 2 for i in model.mo_occ)
 
 
-class PhysERI(TDDFTMatrixBlocks):
+class PhysERI(td.TDDFTMatrixBlocks):
 
     def __init__(self, model):
         """
@@ -192,6 +204,10 @@ class PhysERI8(PhysERI4):
             model (KRHF): the base model;
         """
         super(PhysERI8, self).__init__(model)
+
+
+build_matrix = td.build_matrix
+eig = td.eig
 
 
 def vector_to_amplitudes(vectors, nocc, nmo):

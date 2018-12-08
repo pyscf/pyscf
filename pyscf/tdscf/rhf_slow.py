@@ -10,14 +10,26 @@ procedure. Several variants of TDHF are available:
    modules;
  * `pyscf.pbc.tdscf.krhf_slow_supercell`: PBC implementation for KRHF objects of `pyscf.pbc.scf` modules. Works with
    an arbitrary number of k-points but has a overhead due to an effective construction of a supercell.
- * `pyscf.pbc.tdscf.krhf_slow`: PBC implementation for KRHF objects of `pyscf.pbc.scf` modules. Works with an arbitrary
-   number of k-points and employs k-point conservation (diagonalizes matrix blocks separately).
+ * `pyscf.pbc.tdscf.krhf_slow_gamma`: A Gamma-point calculation resembling the original `pyscf.pbc.tdscf.krhf`
+   module. Despite its name, it accepts KRHF objects with an arbitrary number of k-points but finds only few TDHF roots
+   corresponding to collective oscillations without momentum transfer;
+ * `pyscf.pbc.tdscf.krhf_slow`: PBC implementation for KRHF objects of `pyscf.pbc.scf` modules. Works with
+   an arbitrary number of k-points and employs k-point conservation (diagonalizes matrix blocks separately).
 """
 
 from pyscf import ao2mo
 from pyscf.lib import logger
 
 import numpy
+
+
+# Convention for these modules:
+# * PhysERI, PhysERI4, PhysERI8 are 2-electron integral routines computed directly (for debug purposes), with a 4-fold
+#   symmetry and with an 8-fold symmetry
+# * build_matrix builds the full TDHF matrix
+# * eig performs diagonalization and selects roots
+# * vector_to_amplitudes reshapes and normalizes the solution
+# * kernel assembles everything
 
 
 class TDDFTMatrixBlocks(object):
@@ -124,7 +136,10 @@ class TDDFTMatrixBlocks(object):
         raise NotImplementedError
 
     def __getitem__(self, item):
-        return self.assemble_block(item)
+        if isinstance(item, str):
+            return self.assemble_block(item)
+        else:
+            return self.assemble_block(*item)
 
 
 class PhysERI(TDDFTMatrixBlocks):

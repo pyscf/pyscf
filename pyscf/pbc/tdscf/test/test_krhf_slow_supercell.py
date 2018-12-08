@@ -1,9 +1,9 @@
 from pyscf.pbc.gto import Cell
 from pyscf.pbc.scf import RHF, KRHF
 from pyscf.pbc.tdscf import KTDHF
-from pyscf.pbc.tdscf.krhf_slow_supercell import PhysERI, PhysERI4, PhysERI8, build_matrix, eig, kernel
+from pyscf.pbc.tdscf import krhf_slow_supercell as ktd
 from pyscf.pbc.tools.pbc import super_cell
-from pyscf.tdscf.rhf_slow import PhysERI4 as PhysERI4_mol, kernel as kernel_mol
+from pyscf.tdscf import rhf_slow as td
 
 from test_common import retrieve_m, make_mf_phase_well_defined, unphase, ov_order
 
@@ -52,12 +52,12 @@ class DiamondTestGamma(unittest.TestCase):
 
     def test_eri(self):
         """Tests all ERI implementations: with and without symmetries."""
-        for eri in (PhysERI, PhysERI4, PhysERI8):
+        for eri in (ktd.PhysERI, ktd.PhysERI4, ktd.PhysERI8):
             e = eri(self.model_krhf)
-            m = build_matrix(e)
+            m = ktd.build_matrix(e)
             try:
                 testing.assert_allclose(self.ref_m_krhf, m, atol=1e-14)
-                vals, vecs = eig(m, nroots=self.td_model_krhf.nroots)
+                vals, vecs = ktd.eig(m, nroots=self.td_model_krhf.nroots)
                 testing.assert_allclose(vals, self.td_model_krhf.e, atol=1e-5)
             except Exception:
                 print("When testing {} the following exception occurred:".format(eri))
@@ -65,7 +65,7 @@ class DiamondTestGamma(unittest.TestCase):
 
     def test_eig_kernel(self):
         """Tests default eig kernel behavior."""
-        vals, vecs = kernel(self.model_krhf, driver='eig', nroots=self.td_model_krhf.nroots)
+        vals, vecs = ktd.kernel(self.model_krhf, driver='eig', nroots=self.td_model_krhf.nroots)
         testing.assert_allclose(vals, self.td_model_krhf.e, atol=1e-5)
         nocc = nvirt = 4
         testing.assert_equal(vecs.shape, (self.td_model_krhf.nroots, 2, 1, 1, nocc, nvirt))
@@ -107,8 +107,8 @@ class DiamondTestShiftedGamma(unittest.TestCase):
         model_rhf.kernel()
         make_mf_phase_well_defined(model_rhf)
 
-        cls.ref_m = build_matrix(PhysERI4_mol(model_rhf))
-        cls.ref_e, cls.ref_v = kernel_mol(model_rhf)
+        cls.ref_m = td.build_matrix(td.PhysERI4(model_rhf))
+        cls.ref_e, cls.ref_v = td.kernel(model_rhf)
 
         # K-points
         cls.model_krhf = model_krhf = KRHF(cell, k)
@@ -128,9 +128,9 @@ class DiamondTestShiftedGamma(unittest.TestCase):
 
     def test_eri(self):
         """Tests all ERI implementations: with and without symmetries."""
-        for eri in (PhysERI, PhysERI4):
+        for eri in (ktd.PhysERI, ktd.PhysERI4):
             e = eri(self.model_krhf)
-            m = build_matrix(e)
+            m = ktd.build_matrix(e)
 
             try:
                 testing.assert_allclose(self.ref_m, m, atol=1e-10)
@@ -140,7 +140,7 @@ class DiamondTestShiftedGamma(unittest.TestCase):
 
     def test_eig_kernel(self):
         """Tests default eig kernel behavior."""
-        vals, vecs = kernel(self.model_krhf, driver='eig')
+        vals, vecs = ktd.kernel(self.model_krhf, driver='eig')
         testing.assert_allclose(vals, self.ref_e, atol=1e-12)
         nocc = nvirt = 4
         testing.assert_equal(vecs.shape, (len(vals), 2, 1, 1, nocc, nvirt))
@@ -180,8 +180,8 @@ class DiamondTestSupercell2(unittest.TestCase):
         model_rhf.kernel()
         make_mf_phase_well_defined(model_rhf)
 
-        cls.ref_m = build_matrix(PhysERI4_mol(model_rhf))
-        cls.ref_e, cls.ref_v = kernel_mol(model_rhf)
+        cls.ref_m = td.build_matrix(td.PhysERI4(model_rhf))
+        cls.ref_e, cls.ref_v = td.kernel(model_rhf)
 
         # K-points
         cls.model_krhf = model_krhf = KRHF(cell, k)
@@ -208,9 +208,9 @@ class DiamondTestSupercell2(unittest.TestCase):
 
     def test_eri(self):
         """Tests all ERI implementations: with and without symmetries."""
-        for eri in (PhysERI, PhysERI4, PhysERI8):
+        for eri in (ktd.PhysERI, ktd.PhysERI4, ktd.PhysERI8):
             e = eri(self.model_krhf)
-            m = build_matrix(e)
+            m = ktd.build_matrix(e)
 
             try:
                 testing.assert_allclose(self.ref_m, m[numpy.ix_(self.ov_order, self.ov_order)], atol=1e-5)
@@ -220,7 +220,7 @@ class DiamondTestSupercell2(unittest.TestCase):
 
     def test_eig_kernel(self):
         """Tests default eig kernel behavior."""
-        vals, vecs = kernel(self.model_krhf, driver='eig')
+        vals, vecs = ktd.kernel(self.model_krhf, driver='eig')
         testing.assert_allclose(vals, self.ref_e, atol=1e-7)
         nocc = nvirt = 4
         testing.assert_equal(vecs.shape, (len(vals), 2, self.k, self.k, nocc, nvirt))
