@@ -1,7 +1,7 @@
 from pyscf.gto import Mole
 from pyscf.scf import RHF
 from pyscf.tdscf import TDHF
-from pyscf.tdscf.rhf_slow import PhysERI, PhysERI4, PhysERI8, build_matrix, eig, kernel
+from pyscf.tdscf.rhf_slow import PhysERI, PhysERI4, PhysERI8, build_matrix, eig, kernel, TDRHF
 
 import numpy
 from numpy import testing
@@ -78,6 +78,14 @@ class H20Test(unittest.TestCase):
         vals, vecs = kernel(self.model_rhf, driver='eig', nroots=self.td_model_rhf.nroots)
         testing.assert_allclose(vals, self.td_model_rhf.e, atol=1e-5)
         testing.assert_allclose(*unphase(vecs, self.td_model_rhf.xy), atol=1e-2)
+
+    def test_class(self):
+        """Tests container behavior."""
+        model = TDRHF(self.model_rhf)
+        model.nroots = self.td_model_rhf.nroots
+        model.kernel()
+        testing.assert_allclose(model.e, self.td_model_rhf.e, atol=1e-5)
+        testing.assert_allclose(*unphase(model.xy, self.td_model_rhf.xy), atol=1e-2)
 
     def test_symm(self):
         """Tests 8-fold symmetry."""
