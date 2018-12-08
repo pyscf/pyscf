@@ -34,7 +34,7 @@ class DiamondTestGamma(unittest.TestCase):
         cell.verbose = 5
         cell.build()
 
-        cls.model_krhf = model_krhf = KRHF(cell)
+        cls.model_krhf = model_krhf = KRHF(cell).density_fit()
         model_krhf.kernel()
 
         cls.td_model_krhf = td_model_krhf = KTDHF(model_krhf)
@@ -72,7 +72,7 @@ class DiamondTestGamma(unittest.TestCase):
         try:
             testing.assert_allclose(*unphase(vecs.squeeze(), numpy.array(self.td_model_krhf.xy).squeeze()), atol=1e-2)
         except Exception:
-            # TODO
+            # TODO: this exception is triggered in case of fft density fitting
             print("This is a known bug: vectors #1 and #3 from davidson are wrong")
             raise
 
@@ -102,7 +102,7 @@ class DiamondTestShiftedGamma(unittest.TestCase):
         k = cell.get_abs_kpts((.1, .2, .3))
 
         # The Gamma-point reference
-        cls.model_rhf = model_rhf = RHF(cell, k)
+        cls.model_rhf = model_rhf = RHF(cell, k).density_fit()
         model_rhf.conv_tol = 1e-14
         model_rhf.kernel()
         make_mf_phase_well_defined(model_rhf)
@@ -111,7 +111,7 @@ class DiamondTestShiftedGamma(unittest.TestCase):
         cls.ref_e, cls.ref_v = td.kernel(model_rhf)
 
         # K-points
-        cls.model_krhf = model_krhf = KRHF(cell, k)
+        cls.model_krhf = model_krhf = KRHF(cell, k).density_fit()
         model_krhf.conv_tol = 1e-14
         model_krhf.kernel()
         make_mf_phase_well_defined(model_krhf)
@@ -175,7 +175,7 @@ class DiamondTestSupercell2(unittest.TestCase):
         k = cell.make_kpts([cls.k, 1, 1], scaled_center=cls.k_c)
 
         # The Gamma-point reference
-        cls.model_rhf = model_rhf = RHF(super_cell(cell, [cls.k, 1, 1]), kpt=k[0])
+        cls.model_rhf = model_rhf = RHF(super_cell(cell, [cls.k, 1, 1]), kpt=k[0]).density_fit()
         model_rhf.conv_tol = 1e-14
         model_rhf.kernel()
         make_mf_phase_well_defined(model_rhf)
@@ -184,7 +184,7 @@ class DiamondTestSupercell2(unittest.TestCase):
         cls.ref_e, cls.ref_v = td.kernel(model_rhf)
 
         # K-points
-        cls.model_krhf = model_krhf = KRHF(cell, k)
+        cls.model_krhf = model_krhf = KRHF(cell, k).density_fit()
         model_krhf.conv_tol = 1e-14
         model_krhf.kernel()
         make_mf_phase_well_defined(model_krhf)
