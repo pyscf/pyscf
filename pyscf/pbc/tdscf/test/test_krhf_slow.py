@@ -6,7 +6,7 @@ import unittest
 from numpy import testing
 import numpy
 
-from test_common import unphase
+from test_common import assert_vectors_close
 
 
 def k2k(*indexes):
@@ -83,10 +83,17 @@ class DiamondTest(unittest.TestCase):
     def test_eig_kernel_gamma(self):
         """Tests default eig kernel behavior."""
         vals, vecs = ktd.kernel(self.model_krhf, 0, driver='eig')
-        testing.assert_allclose(vals, self.ref_e_gamma, atol=1e-7)
+        testing.assert_allclose(vals, self.ref_e_gamma, atol=1e-12)
         nocc = nvirt = 4
         testing.assert_equal(vecs.shape, (len(vals), 2, self.k, nocc, nvirt))
-        testing.assert_allclose(*unphase(vecs, self.ref_v_gamma), atol=1e-6)
+        assert_vectors_close(vecs, self.ref_v_gamma, atol=1e-10)
+
+    def test_class(self):
+        """Tests container behavior."""
+        model = ktd.TDRHF(self.model_krhf)
+        model.kernel(0)
+        testing.assert_allclose(model.e[0], self.ref_e_gamma, atol=1e-12)
+        assert_vectors_close(model.xy[0], self.ref_v_gamma, atol=1e-10)
 
     def test_eri(self):
         """Tests all ERI implementations: with and without symmetries."""
@@ -161,7 +168,7 @@ class DiamondTest(unittest.TestCase):
 
             testing.assert_equal(vecs_test.shape, (self.k * o * v, 2, self.k, o, v))
             testing.assert_equal(vecs_test_padded.shape, (self.k * o * v, 2, self.k, self.k, o, v))
-            testing.assert_allclose(*unphase(vecs_test_padded, vecs_ref), atol=1e-7)
+            assert_vectors_close(vecs_test_padded, vecs_ref, atol=1e-7)
 
 
 class DiamondTest3(DiamondTest):

@@ -41,6 +41,18 @@ def unphase(v1, v2, threshold=1e-5):
     return v1, v2
 
 
+def assert_vectors_close(v1, v2, threshold=1e-5, atol=1e-8):
+    v1, v2 = unphase(v1, v2, threshold=threshold)
+    delta = abs(v1 - v2).max(axis=1)
+    wrong = delta > atol
+    if any(wrong):
+        raise AssertionError("Vectors are not close to tolerance atol={}\n\n({:d} roots mismatch)\ndelta {}".format(
+            str(atol),
+            sum(wrong),
+            ", ".join("#{:d}: {:.3e}".format(i, delta[i]) for i in numpy.argwhere(wrong)[:, 0]),
+        ))
+
+
 def ov_order(model):
     nocc = k_nocc(model)
     e_occ = tuple(e[:o] for e, o in zip(model.mo_energy, nocc))

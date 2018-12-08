@@ -1,9 +1,9 @@
 from pyscf.pbc.gto import Cell
 from pyscf.pbc.scf import RHF
 from pyscf.pbc.tdscf import TDHF
-from pyscf.pbc.tdscf.rhf_slow import PhysERI, PhysERI4, PhysERI8, build_matrix, eig, kernel
+from pyscf.pbc.tdscf.rhf_slow import PhysERI, PhysERI4, PhysERI8, build_matrix, eig, kernel, TDRHF
 
-from test_common import retrieve_m, unphase
+from test_common import retrieve_m, assert_vectors_close
 
 import unittest
 from numpy import testing
@@ -64,5 +64,13 @@ class DiamondTestGamma(unittest.TestCase):
     def test_eig_kernel(self):
         """Tests default eig kernel behavior."""
         vals, vecs = kernel(self.model_rhf, driver='eig', nroots=self.td_model_rhf.nroots)
-        testing.assert_allclose(vals, self.td_model_rhf.e, atol=1e-5)
-        testing.assert_allclose(*unphase(vecs, self.td_model_rhf.xy), atol=1e-2)
+        testing.assert_allclose(vals, self.td_model_rhf.e, atol=1e-12)
+        assert_vectors_close(vecs, self.td_model_rhf.xy, atol=1e-12)
+
+    def test_class(self):
+        """Tests container behavior."""
+        model = TDRHF(self.model_rhf)
+        model.nroots = self.td_model_rhf.nroots
+        model.kernel()
+        testing.assert_allclose(model.e, self.td_model_rhf.e, atol=1e-12)
+        assert_vectors_close(model.xy, self.td_model_rhf.xy, atol=1e-12)

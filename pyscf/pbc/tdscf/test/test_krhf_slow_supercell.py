@@ -5,7 +5,7 @@ from pyscf.pbc.tdscf import krhf_slow_supercell as ktd
 from pyscf.pbc.tools.pbc import super_cell
 from pyscf.tdscf import rhf_slow as td
 
-from test_common import retrieve_m, make_mf_phase_well_defined, unphase, ov_order
+from test_common import retrieve_m, make_mf_phase_well_defined, ov_order, assert_vectors_close
 
 import unittest
 from numpy import testing
@@ -70,10 +70,23 @@ class DiamondTestGamma(unittest.TestCase):
         nocc = nvirt = 4
         testing.assert_equal(vecs.shape, (self.td_model_krhf.nroots, 2, 1, 1, nocc, nvirt))
         try:
-            testing.assert_allclose(*unphase(vecs.squeeze(), numpy.array(self.td_model_krhf.xy).squeeze()), atol=1e-2)
+            assert_vectors_close(vecs.squeeze(), numpy.array(self.td_model_krhf.xy).squeeze(), atol=1e-12)
         except Exception:
             # TODO: this exception is triggered in case of fft density fitting
-            print("This is a known bug: vectors #1 and #3 from davidson are wrong")
+            print("This is a known bug: vectors from davidson are wrong")
+            raise
+
+    def test_class(self):
+        """Tests container behavior."""
+        model = ktd.TDRHF(self.model_krhf)
+        model.nroots = self.td_model_krhf.nroots
+        model.kernel()
+        testing.assert_allclose(model.e, self.td_model_krhf.e, atol=1e-5)
+        try:
+            assert_vectors_close(model.xy.squeeze(), numpy.array(self.td_model_krhf.xy).squeeze(), atol=1e-12)
+        except Exception:
+            # TODO: this exception is triggered in case of fft density fitting
+            print("This is a known bug: vectors from davidson are wrong")
             raise
 
 
@@ -144,7 +157,7 @@ class DiamondTestShiftedGamma(unittest.TestCase):
         testing.assert_allclose(vals, self.ref_e, atol=1e-12)
         nocc = nvirt = 4
         testing.assert_equal(vecs.shape, (len(vals), 2, 1, 1, nocc, nvirt))
-        testing.assert_allclose(*unphase(vecs.squeeze(), self.ref_v), atol=1e-7)
+        assert_vectors_close(vecs.squeeze(), self.ref_v, atol=1e-9)
 
 
 class DiamondTestSupercell2(unittest.TestCase):
@@ -225,10 +238,7 @@ class DiamondTestSupercell2(unittest.TestCase):
         nocc = nvirt = 4
         testing.assert_equal(vecs.shape, (len(vals), 2, self.k, self.k, nocc, nvirt))
         vecs = vecs.reshape(len(vecs), -1)[:, self.ov_order]
-        testing.assert_allclose(
-            *unphase(vecs.reshape(len(vals), -1), self.ref_v.reshape(len(self.ref_v), -1)),
-            atol=1e-7
-        )
+        assert_vectors_close(vecs.reshape(len(vals), -1), self.ref_v.reshape(len(self.ref_v), -1), atol=1e-7)
 
 
 class DiamondTestSupercell3(DiamondTestSupercell2):

@@ -31,6 +31,7 @@ import scipy
 # * eig performs diagonalization and selects roots
 # * vector_to_amplitudes reshapes and normalizes the solution
 # * kernel assembles everything
+# * TDRHF provides a container
 
 
 k_nocc = td.k_nocc
@@ -249,24 +250,65 @@ def vector_to_amplitudes(vectors, nocc, nmo):
     return vectors.transpose(4, 0, 1, 2, 3)
 
 
-def kernel(model, k, driver=None, nroots=None):
+def kernel(model, k, driver=None, nroots=None, return_eri=False):
     """
-    Calculates eigenstates and eigenvalues of the TDHF problem without momentum transfer.
+    Calculates eigenstates and eigenvalues of the TDHF problem.
     Args:
-        model (RHF): the HF model;
-        k (tuple, int): momentum transfer: either a pair of k-point indexes specifying the momentum transfer
-        vector or a single integer with the second index assuming the first index being zero;
+        model (RHF, PhysERI): the HF model or ERI;
+        k (tuple, int): momentum transfer: either a pair of k-point indexes specifying the momentum transfer;
         driver (str): one of the drivers;
-        nroots (int): the number of roots ot calculate (ignored for `driver` == 'eig');
+        nroots (int): the number of roots to calculate;
+        return_eri (bool): will also return ERI if True;
 
     Returns:
         Positive eigenvalues and eigenvectors.
     """
-    if numpy.iscomplexobj(model.mo_coeff):
-        logger.debug1(model, "4-fold symmetry used (complex orbitals)")
-        eri = PhysERI4(model)
+    if isinstance(model, PhysERI):
+        eri = model
+        model = eri.model
     else:
-        logger.debug1(model, "8-fold symmetry used (real orbitals)")
-        eri = PhysERI8(model)
+        if numpy.iscomplexobj(model.mo_coeff):
+            logger.debug1(model, "4-fold symmetry used (complex orbitals)")
+            eri = PhysERI4(model)
+        else:
+            logger.debug1(model, "8-fold symmetry used (real orbitals)")
+            eri = PhysERI8(model)
     vals, vecs = eig(build_matrix(eri, k), driver=driver, nroots=nroots)
-    return vals, vector_to_amplitudes(vecs, eri.nocc, model.mo_coeff[0].shape[0])
+    vecs = vector_to_amplitudes(vecs, eri.nocc, model.mo_coeff[0].shape[0])
+    if return_eri:
+        return vals, vecs, eri
+    else:
+        return vals, vecs
+
+
+class TDRHF(object):
+    def __init__(self, mf):
+        """
+        Performs TDHF calculation. Roots and eigenvectors are stored in `self.e`, `self.xy`.
+        Args:
+            mf (RHF): the base restricted Hartree-Fock model;
+        """
+        self._scf = mf
+        self.driver = None
+        self.nroots = None
+        self.eri = None
+        self.xy = {}
+        self.e = {}
+
+    def kernel(self, k):
+        """
+        Calculates eigenstates and eigenvalues of the TDHF problem.
+        Args:
+            k (tuple, int): momentum transfer: either a pair of k-point indexes specifying the momentum transfer;
+
+        Returns:
+            Positive eigenvalues and eigenvectors.
+        """
+        self.e[k], self.xy[k], self.eri = kernel(
+            self._scf if self.eri is None else self.eri,
+            k,
+            driver=self.driver,
+            nroots=self.nroots,
+            return_eri=True,
+        )
+        return self.e[k], self.xy[k]

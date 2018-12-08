@@ -26,7 +26,7 @@ procedure. Several variants of TDHF are available:
 # * kernel assembles everything
 
 # This module is simply an alias of the molecular code
-from pyscf.tdscf.rhf_slow import PhysERI, PhysERI4, PhysERI8, build_matrix, eig, vector_to_amplitudes, kernel
+from pyscf.tdscf.rhf_slow import PhysERI, PhysERI4, PhysERI8, build_matrix, eig, vector_to_amplitudes, kernel, TDRHF
 
 PhysERI = PhysERI
 PhysERI4 = PhysERI4
@@ -36,3 +36,4 @@ build_matrix = build_matrix
 eig = eig
 vector_to_amplitudes = vector_to_amplitudes
 kernel = kernel
+TDRHF = TDRHF

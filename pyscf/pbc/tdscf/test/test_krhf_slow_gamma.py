@@ -2,13 +2,12 @@ from pyscf.pbc.gto import Cell
 from pyscf.pbc.scf import KRHF
 from pyscf.pbc.tdscf import KTDHF
 from pyscf.pbc.tdscf import krhf_slow_gamma as ktd
-from pyscf.pbc.tdscf import krhf_slow_supercell as std
 
 import unittest
 from numpy import testing
 import numpy
 
-from test_common import retrieve_m, unphase
+from test_common import retrieve_m, assert_vectors_close
 
 
 class DiamondTest(unittest.TestCase):
@@ -78,8 +77,21 @@ class DiamondTest(unittest.TestCase):
         vecs_ref = numpy.asarray(self.td_model_krhf.xy)
         testing.assert_equal(vecs_ref.shape, (len(vals), 2, self.k, nocc, nvirt))
         try:
-            testing.assert_allclose(*unphase(vecs, vecs_ref), atol=1e-2)
+            assert_vectors_close(vecs, vecs_ref, atol=1e-2)
         except Exception:
             # TODO
             print("This is a known bug: vector #1 from davidson is way off.")
+            raise
+
+    def test_class(self):
+        """Tests container behavior."""
+        model = ktd.TDRHF(self.model_krhf)
+        model.nroots = self.td_model_krhf.nroots
+        model.kernel()
+        testing.assert_allclose(model.e, self.td_model_krhf.e, atol=1e-5)
+        try:
+            assert_vectors_close(model.xy, numpy.array(self.td_model_krhf.xy), atol=1e-2)
+        except Exception:
+            # TODO
+            print("This is a known bug: vector #1 from davidson is way off")
             raise
