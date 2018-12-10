@@ -3,31 +3,10 @@ from pyscf.scf import RHF
 from pyscf.tdscf import TDHF
 from pyscf.tdscf.rhf_slow import PhysERI, PhysERI4, PhysERI8, build_matrix, eig, kernel, TDRHF
 
-import numpy
 from numpy import testing
 import unittest
 
-
-def retrieve_m(model, **kwargs):
-    vind, hdiag = model.gen_vind(model._scf, **kwargs)
-    size = model.init_guess(model._scf, 1).shape[1]
-    return vind(numpy.eye(size)).T
-
-
-def unphase(v1, v2, threshold=1e-5):
-    v1, v2 = numpy.asarray(v1), numpy.asarray(v2)
-    testing.assert_equal(v1.shape, v2.shape)
-    v1, v2 = v1.reshape(len(v1), -1), v2.reshape(len(v2), -1)
-    g1 = abs(v1) > threshold
-    g2 = abs(v2) > threshold
-    g12 = numpy.logical_and(g1, g2)
-    if numpy.any(g12.sum(axis=1) == 0):
-        raise ValueError("Cannot find an anchor for the rotation")
-    a = tuple(numpy.where(i)[0][0] for i in g12)
-    for v in (v1, v2):
-        anc = v[numpy.arange(len(v)), a]
-        v /= (anc / abs(anc))[:, numpy.newaxis]
-    return v1, v2
+from test_common import retrieve_m, assert_vectors_close
 
 
 class H20Test(unittest.TestCase):
@@ -77,7 +56,7 @@ class H20Test(unittest.TestCase):
         """Tests default eig kernel behavior."""
         vals, vecs = kernel(self.model_rhf, driver='eig', nroots=self.td_model_rhf.nroots)
         testing.assert_allclose(vals, self.td_model_rhf.e, atol=1e-5)
-        testing.assert_allclose(*unphase(vecs, self.td_model_rhf.xy), atol=1e-2)
+        assert_vectors_close(vecs, self.td_model_rhf.xy, atol=1e-2)
 
     def test_class(self):
         """Tests container behavior."""
@@ -85,7 +64,7 @@ class H20Test(unittest.TestCase):
         model.nroots = self.td_model_rhf.nroots
         model.kernel()
         testing.assert_allclose(model.e, self.td_model_rhf.e, atol=1e-5)
-        testing.assert_allclose(*unphase(model.xy, self.td_model_rhf.xy), atol=1e-2)
+        assert_vectors_close(model.xy, self.td_model_rhf.xy, atol=1e-2)
 
     def test_symm(self):
         """Tests 8-fold symmetry."""
