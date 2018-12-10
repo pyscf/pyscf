@@ -404,6 +404,21 @@ class UCASCI(casci.CASCI):
         dm1a,dm1b = self.make_rdm1s(mo_coeff, ci, ncas, nelecas, ncore)
         return dm1a+dm1b
 
+    def fix_spin_(self, shift=.2, ss=None):
+        r'''Use level shift to control FCI solver spin.
+
+        .. math::
+
+            (H + shift*S^2) |\Psi\rangle = E |\Psi\rangle
+
+        Kwargs:
+            shift : float
+                Level shift for states which have different spin
+            ss : number
+                S^2 expection value == s*(s+1)
+        '''
+        fci.addons.fix_spin_(self.fcisolver, shift, ss)
+
 CASCI = UCASCI
 
 del(WITH_META_LOWDIN, LARGE_CI_TOL)
