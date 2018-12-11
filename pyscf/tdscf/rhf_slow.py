@@ -126,9 +126,9 @@ class TDDFTMatrixBlocks(object):
         n_ov = ''.join('o' if i % 2 == 0 else 'v' for i in item)
         return self.get_block_ov_notation(n_ov, *args).transpose(*numpy.argsort(item))
 
-    def assemble_block(self, item):
+    def assemble_block(self, item, *args):
         """
-        Assembles the entire TDDFT block.
+        Assembles the TDDFT block.
         Args:
             item (str): a 4-character string of 'mknj' letters;
 
@@ -139,9 +139,15 @@ class TDDFTMatrixBlocks(object):
 
     def __getitem__(self, item):
         if isinstance(item, str):
-            return self.assemble_block(item)
+            spec, args = item, tuple()
         else:
-            return self.assemble_block(*item)
+            spec, args = item[0], item[1:]
+        if set(spec) == set("mknj"):
+            return self.assemble_block(spec, *args)
+        elif set(spec).issubset("ov"):
+            return self.get_block_ov_notation(spec, *args)
+        else:
+            raise ValueError("Unknown item: {}".format(repr(item)))
 
 
 class PhysERI(TDDFTMatrixBlocks):
