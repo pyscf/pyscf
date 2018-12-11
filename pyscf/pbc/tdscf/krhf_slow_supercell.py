@@ -131,11 +131,7 @@ class PhysERI(td.TDDFTMatrixBlocks):
                 for i, _k in zip(item, k)
             ))
 
-    def __permute_args__(self, args, order):
-        k = args[0]
-        return tuple(k[i] for i in order)
-
-    def get_block_mknj_notation(self, item, k):
+    def eri_mknj(self, item, k):
         """
         Retrieves ERI block using 'mknj' notation.
         Args:
@@ -150,7 +146,7 @@ class PhysERI(td.TDDFTMatrixBlocks):
 
         item_i = self.__mknj2i__(item)
         k = tuple(k[i] for i in item_i)
-        return super(PhysERI, self).get_block_mknj_notation(item, k)
+        return super(PhysERI, self).eri_mknj(item, k)
 
     def assemble_block(self, item):
         result = []
@@ -160,7 +156,7 @@ class PhysERI(td.TDDFTMatrixBlocks):
                 result.append([])
                 for k3 in range(nkpts):
                     for k4 in range(nkpts):
-                        x = self.get_block_mknj_notation(item, (k1, k2, k3, k4))
+                        x = self.eri_mknj(item, (k1, k2, k3, k4))
                         x = x.reshape(x.shape[0] * x.shape[1], x.shape[2] * x.shape[3])
                         result[-1].append(x)
 

@@ -73,10 +73,7 @@ class TDDFTMatrixBlocks(object):
     def __calc_block__(self, item, *args):
         raise NotImplementedError
 
-    def __permute_args__(self, args, order):
-        raise NotImplementedError
-
-    def get_block_ov_notation(self, item, *args):
+    def eri_ov(self, item, *args):
         """
         Retrieves ERI block using 'ov' notation.
         Args:
@@ -89,19 +86,21 @@ class TDDFTMatrixBlocks(object):
         if len(item) != 4 or not isinstance(item, str) or not set(item).issubset('ov'):
             raise ValueError("Unknown item: {}".format(repr(item)))
 
-        pargs = (item, ) + args
-        if pargs in self.__eri__:
-            return self.__eri__[pargs]
+        args = (item, ) + args
+        if args in self.__eri__:
+            return self.__eri__[args]
 
-        result = self.__calc_block__(*pargs)
+        result = self.__calc_block__(*args)
 
-        for i, c in self.symmetries:
-            key = ''.join(tuple(item[j] for j in i))
-            _pargs = (key,) + self.__permute_args__(args, i)
-            if c:
-                self.__eri__[_pargs] = result.transpose(*i).conj()
+        for permutation, conjugation in self.symmetries:
+            permuted_args = tuple(
+                tuple(arg[_i] for _i in permutation)
+                for arg in args
+            )
+            if conjugation:
+                self.__eri__[permuted_args] = result.transpose(*permutation).conj()
             else:
-                self.__eri__[_pargs] = result.transpose(*i)
+                self.__eri__[permuted_args] = result.transpose(*permutation)
         return result
 
     def __mknj2i__(self, item):
@@ -109,7 +108,7 @@ class TDDFTMatrixBlocks(object):
         notation = dict(zip(notation, range(len(notation))))
         return tuple(notation[i] for i in item)
 
-    def get_block_mknj_notation(self, item, *args):
+    def eri_mknj(self, item, *args):
         """
         Retrieves ERI block using 'mknj' notation.
         Args:
@@ -124,7 +123,7 @@ class TDDFTMatrixBlocks(object):
 
         item = self.__mknj2i__(item)
         n_ov = ''.join('o' if i % 2 == 0 else 'v' for i in item)
-        return self.get_block_ov_notation(n_ov, *args).transpose(*numpy.argsort(item))
+        return self.eri_ov(n_ov, *args).transpose(*numpy.argsort(item))
 
     def assemble_block(self, item, *args):
         """
@@ -145,7 +144,7 @@ class TDDFTMatrixBlocks(object):
         if set(spec) == set("mknj"):
             return self.assemble_block(spec, *args)
         elif set(spec).issubset("ov"):
-            return self.get_block_ov_notation(spec, *args)
+            return self.eri_ov(spec, *args)
         else:
             raise ValueError("Unknown item: {}".format(repr(item)))
 
@@ -212,7 +211,7 @@ class PhysERI(TDDFTMatrixBlocks):
         return tuple()
 
     def assemble_block(self, item):
-        result = self.get_block_mknj_notation(item)
+        result = self.eri_mknj(item)
         o1, v1, o2, v2 = result.shape
         return result.reshape(o1 * v1, o2 * v2)
 

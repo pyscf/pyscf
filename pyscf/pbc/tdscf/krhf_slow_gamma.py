@@ -75,7 +75,7 @@ class PhysERI(td.PhysERI):
         for k1 in range(nkpts):
             result.append([])
             for k2 in range(nkpts):
-                x = self.get_block_mknj_notation(item, (k1, k1, k2, k2))
+                x = self.eri_mknj(item, (k1, k1, k2, k2))
                 x = x.reshape(x.shape[0] * x.shape[1], x.shape[2] * x.shape[3])
                 result[-1].append(x)
 
