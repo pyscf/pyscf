@@ -6,7 +6,7 @@ TDHF matrices explicitly via an AO-MO transformation, i.e. with a O(N^5) complex
 `numpy.linalg.eig` can be used to retrieve TDHF roots in a reliable fashion without any issues related to the Davidson
 procedure. Several variants of TDHF are available:
 
- * `pyscf.tdscf.rhf.slow`: the molecular implementation;
+ * `pyscf.tdscf.rhf_slow`: the molecular implementation;
  * `pyscf.pbc.tdscf.rhf_slow`: PBC (periodic boundary condition) implementation for RHF objects of `pyscf.pbc.scf`
    modules;
  * (this module) `pyscf.pbc.tdscf.krhf_slow_supercell`: PBC implementation for KRHF objects of `pyscf.pbc.scf` modules.
