@@ -237,7 +237,7 @@ class DiamondTestSupercell2(unittest.TestCase):
         nocc = nvirt = 4
         testing.assert_equal(vecs.shape, (len(vals), 2, self.k, self.k, nocc, nvirt))
         vecs = vecs.reshape(len(vecs), -1)[:, self.ov_order]
-        assert_vectors_close(vecs.reshape(len(vals), -1), self.ref_v.reshape(len(self.ref_v), -1), atol=1e-7)
+        assert_vectors_close(vecs.reshape(len(vals), -1), self.ref_v.reshape(len(self.ref_v), -1), atol=1e-6)
 
 
 class DiamondTestSupercell3(DiamondTestSupercell2):
