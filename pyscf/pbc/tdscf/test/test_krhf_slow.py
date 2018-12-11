@@ -53,12 +53,12 @@ class DiamondTest(unittest.TestCase):
         # Gamma
         cls.ref_m_gamma = m = gtd.build_matrix(gtd.PhysERI4(model_krhf))
         cls.ref_e_gamma, v = gtd.eig(m)
-        cls.ref_v_gamma = gtd.vector_to_amplitudes(v, gtd.k_nocc(model_krhf), model_krhf.mo_coeff[0].shape[0])
+        cls.ref_v_gamma = gtd.vector_to_amplitudes(v, gtd.k_nocc(model_krhf), gtd.k_nmo(model_krhf))
 
         # Supercell
         cls.ref_m = m = std.build_matrix(std.PhysERI4(model_krhf))
         cls.ref_e, v = std.eig(m)
-        cls.ref_v = std.vector_to_amplitudes(v, std.k_nocc(model_krhf), model_krhf.mo_coeff[0].shape[0])
+        cls.ref_v = std.vector_to_amplitudes(v, std.k_nocc(model_krhf), std.k_nmo(model_krhf))
 
     @classmethod
     def tearDownClass(cls):

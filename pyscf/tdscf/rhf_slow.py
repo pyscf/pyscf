@@ -168,6 +168,10 @@ class PhysERI(TDDFTMatrixBlocks):
     def nocc(self):
         return int(self.model.mo_occ.sum()) // 2
 
+    @property
+    def nmo(self):
+        return self.model.mo_coeff.shape[0]
+
     def ao2mo(self, coeff):
         """
         Phys ERI in MO basis.
@@ -339,7 +343,6 @@ def kernel(model, driver=None, nroots=None, return_eri=False):
     """
     if isinstance(model, PhysERI):
         eri = model
-        model = eri.model
     else:
         if numpy.iscomplexobj(model.mo_coeff):
             logger.debug1(model, "4-fold symmetry used (complex orbitals)")
@@ -348,7 +351,7 @@ def kernel(model, driver=None, nroots=None, return_eri=False):
             logger.debug1(model, "8-fold symmetry used (real orbitals)")
             eri = PhysERI8(model)
     vals, vecs = eig(build_matrix(eri), driver=driver, nroots=nroots)
-    vecs = vector_to_amplitudes(vecs, eri.nocc, model.mo_coeff.shape[0])
+    vecs = vector_to_amplitudes(vecs, eri.nocc, eri.nmo)
     if return_eri:
         return vals, vecs, eri
     else:

@@ -36,6 +36,7 @@ import scipy
 
 
 k_nocc = td.k_nocc
+k_nmo = td.k_nmo
 
 
 class PhysERI(td.PhysERI):
@@ -155,9 +156,12 @@ def vector_to_amplitudes(vectors, nocc, nmo):
         # of virtual orbitals).
     """
     if not all(i == nocc[0] for i in nocc):
-        raise NotImplementedError("Non-equal occupation numbers are not implemented yet")
+        raise NotImplementedError("Varying occupation numbers are not implemented yet")
     nk = len(nocc)
     nocc = nocc[0]
+    if not all(i == nmo[0] for i in nmo):
+        raise NotImplementedError("Varying AO spaces are not implemented yet")
+    nmo = nmo[0]
     vectors = numpy.asanyarray(vectors)
     # Compared to krhf_slow_supercell, only one k-point index is present here. The second index corresponds to
     # momentum transfer and is integrated out
@@ -182,7 +186,6 @@ def kernel(model, driver=None, nroots=None, return_eri=False):
     """
     if isinstance(model, PhysERI):
         eri = model
-        model = eri.model
     else:
         if numpy.iscomplexobj(model.mo_coeff):
             logger.debug1(model, "4-fold symmetry used (complex orbitals)")
@@ -191,7 +194,7 @@ def kernel(model, driver=None, nroots=None, return_eri=False):
             logger.debug1(model, "8-fold symmetry used (real orbitals)")
             eri = PhysERI8(model)
     vals, vecs = eig(build_matrix(eri), driver=driver, nroots=nroots)
-    vecs = vector_to_amplitudes(vecs, eri.nocc, model.mo_coeff[0].shape[0])
+    vecs = vector_to_amplitudes(vecs, eri.nocc, eri.nmo)
     if return_eri:
         return vals, vecs, eri
     else:

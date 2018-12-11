@@ -45,9 +45,21 @@ def k_nocc(model):
         model (RHF): the model;
 
     Returns:
-        Occupation numbers of the model.
+        Numbers of occupied orbitals in the model.
     """
     return tuple(int(i.sum()) // 2 for i in model.mo_occ)
+
+
+def k_nmo(model):
+    """
+    Retrieves number of AOs per k-point.
+    Args:
+        model (RHF): the model;
+
+    Returns:
+        Numbers of AOs in the model.
+    """
+    return tuple(i.shape[0] for i in model.mo_coeff)
 
 
 class PhysERI(td.TDDFTMatrixBlocks):
@@ -71,8 +83,13 @@ class PhysERI(td.TDDFTMatrixBlocks):
 
     @property
     def nocc(self):
-        """Occupation numbers."""
+        """Numbers of occupied orbitals."""
         return k_nocc(self.model)
+
+    @property
+    def nmo(self):
+        """Numbers of AOs per k-point."""
+        return k_nmo(self.model)
 
     def ao2mo_k(self, coeff, k):
         """
@@ -110,7 +127,7 @@ class PhysERI(td.TDDFTMatrixBlocks):
             return self.__full_eri_k__[k][slc]
         else:
             return numpy.zeros(tuple(
-                self.nocc[_k] if i == 'o' else self.model.mo_coeff[_k].shape[-1] - self.nocc[_k]
+                self.nocc[_k] if i == 'o' else self.nmo[_k] - self.nocc[_k]
                 for i, _k in zip(item, k)
             ))
 
@@ -179,7 +196,7 @@ class PhysERI4(PhysERI):
             ), k)
         else:
             return numpy.zeros(tuple(
-                self.nocc[_k] if i == 'o' else self.model.mo_coeff[_k].shape[-1] - self.nocc[_k]
+                self.nocc[_k] if i == 'o' else self.nmo[_k] - self.nocc[_k]
                 for i, _k in zip(item, k)
             ))
 
@@ -218,16 +235,19 @@ def vector_to_amplitudes(vectors, nocc, nmo):
     Args:
         vectors (numpy.ndarray): raw eigenvectors to transform;
         nocc (tuple): numbers of occupied orbitals;
-        nmo (int): the total number of orbitals per k-point;
+        nmo (tuple): the total numbers of AOs per k-point;
 
     Returns:
         Amplitudes with the following shape: (# of roots, 2 (x or y), # of kpts, # of kpts, # of occupied orbitals,
         # of virtual orbitals).
     """
     if not all(i == nocc[0] for i in nocc):
-        raise NotImplementedError("Non-equal occupation numbers are not implemented yet")
+        raise NotImplementedError("Varying occupation numbers are not implemented yet")
     nk = len(nocc)
     nocc = nocc[0]
+    if not all(i == nmo[0] for i in nmo):
+        raise NotImplementedError("Varying AO spaces are not implemented yet")
+    nmo = nmo[0]
     vectors = numpy.asanyarray(vectors)
     vectors = vectors.reshape(2, nk, nk, nocc, nmo-nocc, vectors.shape[1])
     norm = (abs(vectors) ** 2).sum(axis=(1, 2, 3, 4))
@@ -259,7 +279,7 @@ def kernel(model, driver=None, nroots=None, return_eri=False):
             logger.debug1(model, "8-fold symmetry used (real orbitals)")
             eri = PhysERI8(model)
     vals, vecs = eig(build_matrix(eri), driver=driver, nroots=nroots)
-    vecs = vector_to_amplitudes(vecs, eri.nocc, model.mo_coeff[0].shape[0])
+    vecs = vector_to_amplitudes(vecs, eri.nocc, eri.nmo)
     if return_eri:
         return vals, vecs, eri
     else:
