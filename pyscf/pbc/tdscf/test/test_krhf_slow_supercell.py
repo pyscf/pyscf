@@ -1,9 +1,8 @@
 from pyscf.pbc.gto import Cell
 from pyscf.pbc.scf import RHF, KRHF
 from pyscf.pbc.tdscf import KTDHF
-from pyscf.pbc.tdscf import krhf_slow_supercell as ktd
+from pyscf.pbc.tdscf import krhf_slow_supercell as ktd, rhf_slow as td
 from pyscf.pbc.tools.pbc import super_cell
-from pyscf.tdscf import rhf_slow as td
 
 from test_common import retrieve_m, make_mf_phase_well_defined, ov_order, assert_vectors_close
 
@@ -120,8 +119,8 @@ class DiamondTestShiftedGamma(unittest.TestCase):
         model_rhf.kernel()
         make_mf_phase_well_defined(model_rhf)
 
-        cls.ref_m = td.build_matrix(td.PhysERI4(model_rhf))
-        cls.ref_e, cls.ref_v = td.kernel(model_rhf)
+        cls.ref_e, cls.ref_v, eri = td.kernel(model_rhf, return_eri=True)
+        cls.ref_m = td.build_matrix(eri)
 
         # K-points
         cls.model_krhf = model_krhf = KRHF(cell, k).density_fit()
@@ -193,8 +192,8 @@ class DiamondTestSupercell2(unittest.TestCase):
         model_rhf.kernel()
         make_mf_phase_well_defined(model_rhf)
 
-        cls.ref_m = td.build_matrix(td.PhysERI4(model_rhf))
-        cls.ref_e, cls.ref_v = td.kernel(model_rhf)
+        cls.ref_e, cls.ref_v, eri = td.kernel(model_rhf, return_eri=True)
+        cls.ref_m = td.build_matrix(eri)
 
         # K-points
         cls.model_krhf = model_krhf = KRHF(cell, k).density_fit()
