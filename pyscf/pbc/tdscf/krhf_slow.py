@@ -77,20 +77,36 @@ class PhysERI(td.PhysERI):
         return x, y
 
     def tdhf_diag(self, block):
+        """
+        Retrieves the merged diagonal block only with specific pairs of k-indexes (k, block[k]).
+        Args:
+            block (Iterable): a list of pairs `block[k]` for each k;
+
+        Returns:
+            The diagonal block.
+        """
         result = []
         for k1, k2 in enumerate(block):
             b = self.tdhf_diag_k(k1, k2)
             result.append(b)
         return scipy.linalg.block_diag(*result)
 
-    def assemble_block(self, item, block_x, block_y):
+    def eri_mknj(self, item, block_x, block_y):
+        """
+        Retrieves the merged ERI block using 'mknj' notation with pairs of k-indexes (k1, k1, k2, k2).
+        Args:
+            item (str): a 4-character string of 'mknj' letters;
+            block_x (Iterable): a list of pairs `block_x[k]` for each k (row indexes);
+            block_y (Iterable): a list of pairs `block_y[k]` for each k (column indexes);
+
+        Returns:
+            The corresponding block of ERI (phys notation).
+        """
         result = []
         for k1, k2 in enumerate(block_x):
             result.append([])
             for k3, k4 in enumerate(block_y):
-                x = self.eri_mknj(item, (k1, k2, k3, k4))
-                x = x.reshape(x.shape[0] * x.shape[1], x.shape[2] * x.shape[3])
-                result[-1].append(x)
+                result[-1].append(self.eri_mknj_k(item, (k1, k2, k3, k4)))
         r = numpy.block(result)
         return r / len(self.model.kpts)
 

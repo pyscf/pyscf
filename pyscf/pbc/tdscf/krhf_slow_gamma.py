@@ -55,6 +55,12 @@ class PhysERI(td.PhysERI):
         super(PhysERI, self).__init__(model)
 
     def tdhf_diag(self):
+        """
+        Retrieves the merged diagonal block only with pairs of k-indexes (k, k).
+
+        Returns:
+            The diagonal block.
+        """
         result = []
         for k in range(len(self.model.kpts)):
             b = self.tdhf_diag_k(k, k)
@@ -67,15 +73,21 @@ class PhysERI(td.PhysERI):
         else:
             raise RuntimeError("The block k = {:d} + {:d} - {:d} - {:d} does not conserve momentum".format(*k))
 
-    def assemble_block(self, item):
+    def eri_mknj(self, item):
+        """
+        Retrieves the merged ERI block using 'mknj' notation with pairs of k-indexes (k1, k1, k2, k2).
+        Args:
+            item (str): a 4-character string of 'mknj' letters;
+
+        Returns:
+            The corresponding block of ERI (phys notation).
+        """
         result = []
         nkpts = len(self.model.kpts)
         for k1 in range(nkpts):
             result.append([])
             for k2 in range(nkpts):
-                x = self.eri_mknj(item, (k1, k1, k2, k2))
-                x = x.reshape(x.shape[0] * x.shape[1], x.shape[2] * x.shape[3])
-                result[-1].append(x)
+                result[-1].append(self.eri_mknj_k(item, (k1, k1, k2, k2)))
 
         r = numpy.block(result)
         return r / len(self.model.kpts)

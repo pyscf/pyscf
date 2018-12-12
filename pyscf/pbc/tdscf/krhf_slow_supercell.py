@@ -111,14 +111,30 @@ class PhysERI(td.TDDFTMatrixBlocks):
     def __get_mo_energies__(self, k1, k2):
         return self.model.mo_energy[k1][:self.nocc[k1]], self.model.mo_energy[k2][self.nocc[k2]:]
 
-    tdhf_diag_k = td.TDDFTMatrixBlocks.tdhf_diag
+    def tdhf_diag_k(self, k1, k2):
+        """
+        Retrieves the diagonal block.
+        Args:
+            k1 (int): first k-index (row);
+            k2 (int): second k-index (column);
+
+        Returns:
+            The diagonal block.
+        """
+        # Everything is already implemented in molecular code
+        return super(PhysERI, self).tdhf_diag(k1, k2)
 
     def tdhf_diag(self):
+        """
+        Retrieves the merged diagonal block with all k-indexes.
+
+        Returns:
+            The diagonal block.
+        """
         result = []
         for k1 in range(len(self.model.kpts)):
             for k2 in range(len(self.model.kpts)):
-                b = self.tdhf_diag_k(k1, k2)
-                result.append(b)
+                result.append(self.tdhf_diag_k(k1, k2))
         return scipy.linalg.block_diag(*result)
 
     def __calc_block__(self, item, k):
@@ -131,7 +147,7 @@ class PhysERI(td.TDDFTMatrixBlocks):
                 for i, _k in zip(item, k)
             ))
 
-    def eri_mknj(self, item, k):
+    def eri_mknj_k(self, item, k):
         """
         Retrieves ERI block using 'mknj' notation.
         Args:
@@ -141,14 +157,18 @@ class PhysERI(td.TDDFTMatrixBlocks):
         Returns:
             The corresponding block of ERI (phys notation).
         """
-        if len(item) != 4 or not isinstance(item, str) or set(item) != set('mknj'):
-            raise ValueError("Unknown item: {}".format(repr(item)))
-
-        item_i = self.__mknj2i__(item)
-        k = tuple(k[i] for i in item_i)
+        # Everything is already implemented in molecular code
         return super(PhysERI, self).eri_mknj(item, k)
 
-    def assemble_block(self, item):
+    def eri_mknj(self, item):
+        """
+        Retrieves the merged ERI block using 'mknj' notation with all k-indexes.
+        Args:
+            item (str): a 4-character string of 'mknj' letters;
+
+        Returns:
+            The corresponding block of ERI (phys notation).
+        """
         result = []
         nkpts = len(self.model.kpts)
         for k1 in range(nkpts):
@@ -156,9 +176,7 @@ class PhysERI(td.TDDFTMatrixBlocks):
                 result.append([])
                 for k3 in range(nkpts):
                     for k4 in range(nkpts):
-                        x = self.eri_mknj(item, (k1, k2, k3, k4))
-                        x = x.reshape(x.shape[0] * x.shape[1], x.shape[2] * x.shape[3])
-                        result[-1].append(x)
+                        result[-1].append(self.eri_mknj_k(item, (k1, k2, k3, k4)))
 
         r = numpy.block(result)
         return r / len(self.model.kpts)

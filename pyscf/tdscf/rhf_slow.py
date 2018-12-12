@@ -42,7 +42,10 @@ class TDDFTMatrixBlocks(object):
     def __init__(self):
         """
         This a prototype class for transformed ERIs used in all TDHF calculations. It handles integral blocks and
-        the diagonal part found in Eq. 7.5 of RevModPhys.36.844. Integral blocks are obtained via __getitem__.
+        the diagonal part found in Eq. 7.5 of RevModPhys.36.844. Important routines are:
+         * tdhf_diag - builds a diagonal block;
+         * eri_ov - ERI in ov notation (4-tensor);
+         * eri_mknj - ERI in mknj notation (matrix with paired dimensions);
         """
         self.__eri__ = {}
 
@@ -74,7 +77,7 @@ class TDDFTMatrixBlocks(object):
             *args: other args passed to `__calc_block__`;
 
         Returns:
-            The corresponding block of ERI (phys notation).
+            The corresponding block of ERI (4-tensor, phys notation).
         """
         if len(item) != 4 or not isinstance(item, str) or not set(item).issubset('ov'):
             raise ValueError("Unknown item: {}".format(repr(item)))
@@ -109,25 +112,21 @@ class TDDFTMatrixBlocks(object):
             *args: other arguments passed to `get_block_ov_notation`;
 
         Returns:
-            The corresponding block of ERI (phys notation).
+            The corresponding block of ERI (matrix with paired dimensions).
         """
         if len(item) != 4 or not isinstance(item, str) or set(item) != set('mknj'):
             raise ValueError("Unknown item: {}".format(repr(item)))
 
         item = self.__mknj2i__(item)
         n_ov = ''.join('o' if i % 2 == 0 else 'v' for i in item)
-        return self.eri_ov(n_ov, *args).transpose(*numpy.argsort(item))
-
-    def assemble_block(self, item, *args):
-        """
-        Assembles the TDDFT block.
-        Args:
-            item (str): a 4-character string of 'mknj' letters;
-
-        Returns:
-            The TDDFT matrix block.
-        """
-        raise NotImplementedError
+        args = tuple(
+            tuple(arg[i] for i in item)
+            for arg in args
+        )
+        result = self.eri_ov(n_ov, *args).transpose(*numpy.argsort(item))
+        i, j, k, l = result.shape
+        result = result.reshape((i * j, k * l))
+        return result
 
     def __getitem__(self, item):
         if isinstance(item, str):
@@ -135,7 +134,7 @@ class TDDFTMatrixBlocks(object):
         else:
             spec, args = item[0], item[1:]
         if set(spec) == set("mknj"):
-            return self.assemble_block(spec, *args)
+            return self.eri_mknj(spec, *args)
         elif set(spec).issubset("ov"):
             return self.eri_ov(spec, *args)
         else:
@@ -193,11 +192,6 @@ class PhysERI(TDDFTMatrixBlocks):
     def __calc_block__(self, item):
         slc = tuple(slice(self.nocc) if i == 'o' else slice(self.nocc, None) for i in item)
         return self.__full_eri__[slc]
-
-    def assemble_block(self, item):
-        result = self.eri_mknj(item)
-        o1, v1, o2, v2 = result.shape
-        return result.reshape(o1 * v1, o2 * v2)
 
 
 class PhysERI4(PhysERI):
