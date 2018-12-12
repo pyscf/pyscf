@@ -5,6 +5,7 @@ from numpy import testing
 
 
 def retrieve_m(model, **kwargs):
+    """Retrieves TDSCF matrix."""
     vind, hdiag = model.gen_vind(model._scf, **kwargs)
     size = model.init_guess(model._scf, 1).shape[1]
     return vind(numpy.eye(size)).T
@@ -14,18 +15,20 @@ def sign(x):
     return x / abs(x)
 
 
-def make_mf_phase_well_defined(model):
-    if "kpts" in dir(model):
-        for i in model.mo_coeff:
-            i /= sign(i[0])[numpy.newaxis, :]
-    else:
-        model.mo_coeff /= sign(model.mo_coeff[0])[numpy.newaxis, :]
+def pull_dim(a, dim):
+    """Pulls the specified dimension forward and reshapes array into a 2D matrix."""
+    a = a.transpose(*(
+            (dim,) + tuple(range(dim)) + tuple(range(dim + 1, len(a.shape)))
+    ))
+    a = a.reshape(len(a), -1)
+    return a
 
 
-def unphase(v1, v2, threshold=1e-5):
-    v1, v2 = numpy.asarray(v1), numpy.asarray(v2)
+def phase_difference(a, b, axis=0, threshold=1e-5):
+    """The phase difference between vectors."""
+    v1, v2 = numpy.asarray(a), numpy.asarray(b)
     testing.assert_equal(v1.shape, v2.shape)
-    v1, v2 = v1.reshape(len(v1), -1), v2.reshape(len(v2), -1)
+    v1, v2 = pull_dim(v1, axis), pull_dim(v2, axis)
     g1 = abs(v1) > threshold
     g2 = abs(v2) > threshold
     g12 = numpy.logical_and(g1, g2)
@@ -34,15 +37,53 @@ def unphase(v1, v2, threshold=1e-5):
         raise ValueError("Cannot find an anchor for the rotation, minimal value for the threshold is: {:.3e}".format(
             desired_threshold
         ))
-    a = tuple(numpy.where(i)[0][0] for i in g12)
-    for v in (v1, v2):
-        anc = v[numpy.arange(len(v)), a]
-        v /= (anc / abs(anc))[:, numpy.newaxis]
+    anchor_index = tuple(numpy.where(i)[0][0] for i in g12)
+    return sign(v2[numpy.arange(len(v2)), anchor_index]) / sign(v1[numpy.arange(len(v1)), anchor_index])
+
+
+def adjust_mf_phase(model1, model2, threshold=1e-5):
+    """Tunes the phase of the 2 mean-field models to a common value."""
+    signatures = []
+    orders = []
+
+    for m in (model1, model2):
+        if "kpts" in dir(m):
+            signatures.append(numpy.concatenate(m.mo_coeff, axis=1))
+            orders.append(numpy.argsort(numpy.concatenate(m.mo_energy)))
+        else:
+            signatures.append(m.mo_coeff)
+            orders.append(numpy.argsort(m.mo_energy))
+
+    m1, m2 = signatures
+    o1, o2 = orders
+    mdim = min(m1.shape[0], m2.shape[0])
+    m1, m2 = m1[:mdim, :][:, o1], m2[:mdim, :][:, o2]
+
+    p = phase_difference(m1, m2, axis=1, threshold=threshold)
+
+    if "kpts" in dir(model2):
+        fr = 0
+        for k, i in enumerate(model2.mo_coeff):
+            to = fr + i.shape[1]
+            slc = numpy.logical_and(fr <= o2, o2 < to)
+            i[:, o2[slc] - fr] /= p[slc][numpy.newaxis, :]
+            fr = to
+    else:
+        model2.mo_coeff[:, o2] /= p[numpy.newaxis, :]
+
+
+def remove_phase_difference(v1, v2, axis=0, threshold=1e-5):
+    """Removes the phase difference between two vectors."""
+    dtype = numpy.common_type(numpy.asarray(v1), numpy.asarray(v2))
+    v1, v2 = numpy.array(v1, dtype=dtype), numpy.array(v2, dtype=dtype)
+    v1, v2 = pull_dim(v1, axis), pull_dim(v2, axis)
+    v2 /= phase_difference(v1, v2, threshold=threshold)[:, numpy.newaxis]
     return v1, v2
 
 
-def assert_vectors_close(v1, v2, threshold=1e-5, atol=1e-8):
-    v1, v2 = unphase(v1, v2, threshold=threshold)
+def assert_vectors_close(v1, v2, axis=0, threshold=1e-5, atol=1e-8):
+    """Compares two vectors up to a phase difference."""
+    v1, v2 = remove_phase_difference(v1, v2, axis=axis, threshold=threshold)
     delta = abs(v1 - v2).max(axis=1)
     wrong = delta > atol
     if any(wrong):

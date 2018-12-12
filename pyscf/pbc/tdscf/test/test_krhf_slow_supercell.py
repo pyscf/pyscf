@@ -4,7 +4,7 @@ from pyscf.pbc.tdscf import KTDHF
 from pyscf.pbc.tdscf import krhf_slow_supercell as ktd, rhf_slow as td
 from pyscf.pbc.tools.pbc import super_cell
 
-from test_common import retrieve_m, make_mf_phase_well_defined, ov_order, assert_vectors_close
+from test_common import retrieve_m, adjust_mf_phase, ov_order, assert_vectors_close
 
 import unittest
 from numpy import testing
@@ -117,7 +117,6 @@ class DiamondTestShiftedGamma(unittest.TestCase):
         cls.model_rhf = model_rhf = RHF(cell, k).density_fit()
         model_rhf.conv_tol = 1e-14
         model_rhf.kernel()
-        make_mf_phase_well_defined(model_rhf)
 
         cls.ref_e, cls.ref_v, eri = td.kernel(model_rhf, return_eri=True)
         cls.ref_m = td.build_matrix(eri)
@@ -126,7 +125,8 @@ class DiamondTestShiftedGamma(unittest.TestCase):
         cls.model_krhf = model_krhf = KRHF(cell, k).density_fit()
         model_krhf.conv_tol = 1e-14
         model_krhf.kernel()
-        make_mf_phase_well_defined(model_krhf)
+
+        adjust_mf_phase(model_rhf, model_krhf)
 
         testing.assert_allclose(model_rhf.mo_energy, model_krhf.mo_energy[0])
         testing.assert_allclose(model_rhf.mo_coeff, model_krhf.mo_coeff[0])
@@ -190,16 +190,14 @@ class DiamondTestSupercell2(unittest.TestCase):
         cls.model_rhf = model_rhf = RHF(super_cell(cell, [cls.k, 1, 1]), kpt=k[0]).density_fit()
         model_rhf.conv_tol = 1e-14
         model_rhf.kernel()
-        make_mf_phase_well_defined(model_rhf)
-
-        cls.ref_e, cls.ref_v, eri = td.kernel(model_rhf, return_eri=True)
-        cls.ref_m = td.build_matrix(eri)
 
         # K-points
         cls.model_krhf = model_krhf = KRHF(cell, k).density_fit()
         model_krhf.conv_tol = 1e-14
         model_krhf.kernel()
-        make_mf_phase_well_defined(model_krhf)
+
+        adjust_mf_phase(model_rhf, model_krhf)
+
         ke = numpy.concatenate(model_krhf.mo_energy)
         ke.sort()
 
@@ -210,6 +208,9 @@ class DiamondTestSupercell2(unittest.TestCase):
         testing.assert_array_less(1e-4, ke[1:] - ke[:-1])
 
         cls.ov_order = ov_order(model_krhf)
+
+        cls.ref_e, cls.ref_v, eri = td.kernel(model_rhf, return_eri=True)
+        cls.ref_m = td.build_matrix(eri)
 
     @classmethod
     def tearDownClass(cls):
