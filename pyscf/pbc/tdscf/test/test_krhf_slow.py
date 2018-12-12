@@ -86,14 +86,14 @@ class DiamondTest(unittest.TestCase):
         testing.assert_allclose(vals, self.ref_e_gamma, atol=1e-12)
         nocc = nvirt = 4
         testing.assert_equal(vecs.shape, (len(vals), 2, self.k, nocc, nvirt))
-        assert_vectors_close(vecs, self.ref_v_gamma, atol=1e-10)
+        assert_vectors_close(vecs, self.ref_v_gamma, atol=1e-9)
 
     def test_class(self):
         """Tests container behavior."""
         model = ktd.TDRHF(self.model_krhf)
         model.kernel(0)
         testing.assert_allclose(model.e[0], self.ref_e_gamma, atol=1e-12)
-        assert_vectors_close(model.xy[0], self.ref_v_gamma, atol=1e-10)
+        assert_vectors_close(model.xy[0], self.ref_v_gamma, atol=1e-9)
 
     def test_eri(self):
         """Tests all ERI implementations: with and without symmetries."""
