@@ -85,11 +85,7 @@ class PhysERI(td.PhysERI):
         Returns:
             The diagonal block.
         """
-        result = []
-        for k1, k2 in enumerate(block):
-            b = self.tdhf_diag_k(k1, k2)
-            result.append(b)
-        return scipy.linalg.block_diag(*result)
+        return super(PhysERI, self).tdhf_diag(pairs=((i, block[i]) for i in range(len(self.model.kpts))))
 
     def eri_mknj(self, item, block_x, block_y):
         """

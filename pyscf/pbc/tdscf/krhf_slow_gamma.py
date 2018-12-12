@@ -56,16 +56,12 @@ class PhysERI(td.PhysERI):
 
     def tdhf_diag(self):
         """
-        Retrieves the merged diagonal block only with pairs of k-indexes (k, k).
+        Retrieves the merged diagonal block with equal pairs of k-indexes (k, k) only.
 
         Returns:
             The diagonal block.
         """
-        result = []
-        for k in range(len(self.model.kpts)):
-            b = self.tdhf_diag_k(k, k)
-            result.append(b)
-        return scipy.linalg.block_diag(*result)
+        return super(PhysERI, self).tdhf_diag(pairs=((i, i) for i in range(len(self.model.kpts))))
 
     def __calc_block__(self, item, k):
         if k in self.__full_eri_k__:

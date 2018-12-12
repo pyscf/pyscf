@@ -26,6 +26,7 @@ from pyscf.pbc.lib.kpts_helper import loop_kkk
 
 import numpy
 import scipy
+from itertools import product
 
 
 # Convention for these modules:
@@ -109,6 +110,7 @@ class PhysERI(td.TDDFTMatrixBlocks):
         ).swapaxes(1, 2)
 
     def __get_mo_energies__(self, k1, k2):
+        """This routine collects occupied and virtual MO energies."""
         return self.model.mo_energy[k1][:self.nocc[k1]], self.model.mo_energy[k2][self.nocc[k2]:]
 
     def tdhf_diag_k(self, k1, k2):
@@ -124,17 +126,20 @@ class PhysERI(td.TDDFTMatrixBlocks):
         # Everything is already implemented in molecular code
         return super(PhysERI, self).tdhf_diag(k1, k2)
 
-    def tdhf_diag(self):
+    def tdhf_diag(self, pairs=None):
         """
-        Retrieves the merged diagonal block with all k-indexes.
+        Retrieves the merged diagonal block with specified or all possible k-index pairs.
+        Args:
+            pairs (Iterable): pairs of k-points to assmble;
 
         Returns:
             The diagonal block.
         """
+        if pairs is None:
+            pairs = product(range(len(self.model.kpts)), range(len(self.model.kpts)))
         result = []
-        for k1 in range(len(self.model.kpts)):
-            for k2 in range(len(self.model.kpts)):
-                result.append(self.tdhf_diag_k(k1, k2))
+        for k1, k2 in pairs:
+            result.append(self.tdhf_diag_k(k1, k2))
         return scipy.linalg.block_diag(*result)
 
     def __calc_block__(self, item, k):
