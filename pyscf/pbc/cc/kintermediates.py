@@ -112,12 +112,15 @@ def cc_Woooo(cc,t1,t2,eris,kconserv):
             # Here, x = k_j and y = k_i
             tmp = einsum('xje,ymnie->yxmnij',t1,eris.ooov[km,kn])
             tmp = tmp - tmp.transpose(1,0,2,3,5,4)
+
+            ki = numpy.arange(nkpts)
+            kj = kconserv[km,ki,kn]
+            kij = [ki,kj]
+            Wmnij[km,kn,:] += 0.25*einsum('yxijef,xmnef->ymnij',tau[kij],eris.oovv[km,kn])
+            
             for ki in range(nkpts):
                 kj = kconserv[km,ki,kn]
                 Wmnij[km,kn,ki] += tmp[ki,kj]
-                # Here, x = k_e
-                Wmnij[km,kn,ki] += 0.25*einsum('xijef,xmnef->mnij',
-                        tau[ki,kj],eris.oovv[km,kn])
     return Wmnij
 
 def cc_Wvvvv(cc,t1,t2,eris,kconserv):
@@ -127,6 +130,12 @@ def cc_Wvvvv(cc,t1,t2,eris,kconserv):
     Wabef = eris.vvvv.copy()
     for ka in range(nkpts):
         for kb in range(nkpts):
+
+            km = numpy.arange(nkpts).tolist()
+            kn = kconserv[ka,km,kb].tolist()
+            kmn = tuple([km,kn])
+            Wabef[ka,kb] += 0.25*einsum('xmnab,xymnef->yabef',tau.transpose(2,0,1,3,4,5,6)[ka][kmn],eris.oovv[kmn])
+
             for ke in range(nkpts):
                 km = kb
                 tmp  = einsum('mb,amef->abef',t1[kb],eris_vovv[ka,km,ke])
@@ -135,10 +144,7 @@ def cc_Wvvvv(cc,t1,t2,eris,kconserv):
                 Wabef[ka,kb,ke] += -tmp
                 # km + kn - ka = kb
                 # => kn = ka - km + kb
-                for km in range(nkpts):
-                    kn = kconserv[ka,km,kb]
-                    Wabef[ka,kb,ke] += 0.25*einsum('mnab,mnef->abef',tau[km,kn,ka],
-                                                   eris.oovv[km,kn,ke])
+
     return Wabef
 
 def cc_Wovvo(cc,t1,t2,eris,kconserv):
