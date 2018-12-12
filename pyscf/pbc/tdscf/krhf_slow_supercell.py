@@ -111,13 +111,13 @@ class PhysERI(td.TDDFTMatrixBlocks):
     def __get_mo_energies__(self, k1, k2):
         return self.model.mo_energy[k1][:self.nocc[k1]], self.model.mo_energy[k2][self.nocc[k2]:]
 
-    def assemble_diag_block(self):
+    tdhf_diag_k = td.TDDFTMatrixBlocks.tdhf_diag
+
+    def tdhf_diag(self):
         result = []
         for k1 in range(len(self.model.kpts)):
             for k2 in range(len(self.model.kpts)):
-                b = self.get_diag_block(k1, k2)
-                o1, v1, o2, v2 = b.shape
-                b = b.reshape(o1 * v1, o2 * v2)
+                b = self.tdhf_diag_k(k1, k2)
                 result.append(b)
         return scipy.linalg.block_diag(*result)
 

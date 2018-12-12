@@ -54,12 +54,10 @@ class PhysERI(td.PhysERI):
         """
         super(PhysERI, self).__init__(model)
 
-    def assemble_diag_block(self):
+    def tdhf_diag(self):
         result = []
         for k in range(len(self.model.kpts)):
-            b = self.get_diag_block(k, k)
-            o1, v1, o2, v2 = b.shape
-            b = b.reshape(o1 * v1, o2 * v2)
+            b = self.tdhf_diag_k(k, k)
             result.append(b)
         return scipy.linalg.block_diag(*result)
 

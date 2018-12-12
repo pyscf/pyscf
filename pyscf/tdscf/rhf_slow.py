@@ -47,9 +47,10 @@ class TDDFTMatrixBlocks(object):
         self.__eri__ = {}
 
     def __get_mo_energies__(self, *args, **kwargs):
+        """This routine collects occupied and virtual MO energies."""
         raise NotImplementedError
 
-    def get_diag_block(self, *args):
+    def tdhf_diag(self, *args):
         """
         Retrieves the diagonal block.
         Args:
@@ -60,15 +61,7 @@ class TDDFTMatrixBlocks(object):
         """
         e_occ, e_virt = self.__get_mo_energies__(*args)
         diag = (- e_occ[:, numpy.newaxis] + e_virt[numpy.newaxis, :]).reshape(-1)
-        return numpy.diag(diag).reshape((len(e_occ), len(e_virt), len(e_occ), len(e_virt)))
-
-    def assemble_diag_block(self):
-        """
-        Assembles the diagonal part of the TDDFT blocks.
-        Returns:
-            The diagonal block.
-        """
-        raise NotImplementedError
+        return numpy.diag(diag).reshape((len(e_occ) * len(e_virt), len(e_occ) * len(e_virt)))
 
     def __calc_block__(self, item, *args):
         raise NotImplementedError
@@ -197,18 +190,9 @@ class PhysERI(TDDFTMatrixBlocks):
     def __get_mo_energies__(self):
         return self.model.mo_energy[:self.nocc], self.model.mo_energy[self.nocc:]
 
-    def assemble_diag_block(self):
-        result = self.get_diag_block()
-        o1, v1, o2, v2 = result.shape
-        return result.reshape(o1 * v1, o2 * v2)
-
     def __calc_block__(self, item):
         slc = tuple(slice(self.nocc) if i == 'o' else slice(self.nocc, None) for i in item)
         return self.__full_eri__[slc]
-
-    def __permute_args__(self, args, order):
-        assert len(args) == 0
-        return tuple()
 
     def assemble_block(self, item):
         result = self.eri_mknj(item)
@@ -275,7 +259,7 @@ def build_matrix(eri):
     Returns:
         The matrix.
     """
-    d = eri.assemble_diag_block()
+    d = eri.tdhf_diag()
     m = numpy.array([
         [d + 2 * eri["knmj"] - eri["knjm"],   2 * eri["kjmn"] - eri["kjnm"]],
         [  - 2 * eri["mnkj"] + eri["mnjk"], - 2 * eri["mjkn"] + eri["mjnk"] - d],

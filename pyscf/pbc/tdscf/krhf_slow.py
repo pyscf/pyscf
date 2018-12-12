@@ -76,12 +76,10 @@ class PhysERI(td.PhysERI):
 
         return x, y
 
-    def assemble_diag_block(self, block):
+    def tdhf_diag(self, block):
         result = []
         for k1, k2 in enumerate(block):
-            b = self.get_diag_block(k1, k2)
-            o1, v1, o2, v2 = b.shape
-            b = b.reshape(o1 * v1, o2 * v2)
+            b = self.tdhf_diag_k(k1, k2)
             result.append(b)
         return scipy.linalg.block_diag(*result)
 
@@ -209,8 +207,8 @@ def build_matrix(eri, k):
     """
     r1, r2, c1, c2 = get_block_k_ix(eri, k)
 
-    d1 = eri.assemble_diag_block(r1)
-    d2 = eri.assemble_diag_block(r2)
+    d1 = eri.tdhf_diag(r1)
+    d2 = eri.tdhf_diag(r2)
 
     m11 = d1 + 2 * eri["knmj", r1, c1] - eri["knjm", r1, c1]
     m12 = 2 * eri["kjmn", r1, c2] - eri["kjnm", r1, c2]
