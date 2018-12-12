@@ -78,15 +78,11 @@ class PhysERI(td.PhysERI):
         Returns:
             The corresponding block of ERI (phys notation).
         """
-        result = []
-        nkpts = len(self.model.kpts)
-        for k1 in range(nkpts):
-            result.append([])
-            for k2 in range(nkpts):
-                result[-1].append(self.eri_mknj_k(item, (k1, k1, k2, k2)))
-
-        r = numpy.block(result)
-        return r / len(self.model.kpts)
+        return super(PhysERI, self).eri_mknj(
+            item,
+            pairs_row=((i, i) for i in range(len(self.model.kpts))),
+            pairs_column=((i, i) for i in range(len(self.model.kpts))),
+        )
 
 
 class PhysERI4(PhysERI):

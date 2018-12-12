@@ -80,31 +80,29 @@ class PhysERI(td.PhysERI):
         """
         Retrieves the merged diagonal block only with specific pairs of k-indexes (k, block[k]).
         Args:
-            block (Iterable): a list of pairs `block[k]` for each k;
+            block (Iterable): a k-point pair `k2 = pair[k1]` for each k1;
 
         Returns:
             The diagonal block.
         """
-        return super(PhysERI, self).tdhf_diag(pairs=((i, block[i]) for i in range(len(self.model.kpts))))
+        return super(PhysERI, self).tdhf_diag(pairs=enumerate(block))
 
-    def eri_mknj(self, item, block_x, block_y):
+    def eri_mknj(self, item, pair_row, pair_column):
         """
         Retrieves the merged ERI block using 'mknj' notation with pairs of k-indexes (k1, k1, k2, k2).
         Args:
             item (str): a 4-character string of 'mknj' letters;
-            block_x (Iterable): a list of pairs `block_x[k]` for each k (row indexes);
-            block_y (Iterable): a list of pairs `block_y[k]` for each k (column indexes);
+            pair_row (Iterable): a k-point pair `k2 = pair_row[k1]` for each k1 (row indexes in the final matrix);
+            pair_column (Iterable): a k-point pair `k4 = pair_row[k3]` for each k3 (column indexes in the final matrix);
 
         Returns:
             The corresponding block of ERI (phys notation).
         """
-        result = []
-        for k1, k2 in enumerate(block_x):
-            result.append([])
-            for k3, k4 in enumerate(block_y):
-                result[-1].append(self.eri_mknj_k(item, (k1, k2, k3, k4)))
-        r = numpy.block(result)
-        return r / len(self.model.kpts)
+        return super(PhysERI, self).eri_mknj(
+            item,
+            pairs_row=enumerate(pair_row),
+            pairs_column=enumerate(pair_column),
+        )
 
 
 class PhysERI4(PhysERI):

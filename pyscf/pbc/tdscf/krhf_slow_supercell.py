@@ -165,23 +165,28 @@ class PhysERI(td.TDDFTMatrixBlocks):
         # Everything is already implemented in molecular code
         return super(PhysERI, self).eri_mknj(item, k)
 
-    def eri_mknj(self, item):
+    def eri_mknj(self, item, pairs_row=None, pairs_column=None):
         """
         Retrieves the merged ERI block using 'mknj' notation with all k-indexes.
         Args:
             item (str): a 4-character string of 'mknj' letters;
+            pairs_row (Iterable): iterator for pairs of row k-points (first index in the output matrix);
+            pairs_column (Iterable): iterator for pairs of column k-points (second index in the output matrix);
 
         Returns:
             The corresponding block of ERI (phys notation).
         """
+        if pairs_row is None:
+            pairs_row = product(range(len(self.model.kpts)), range(len(self.model.kpts)))
+        if pairs_column is None:
+            pairs_column = product(range(len(self.model.kpts)), range(len(self.model.kpts)))
+        # Second index has to support re-iterations
+        pairs_column = tuple(pairs_column)
         result = []
-        nkpts = len(self.model.kpts)
-        for k1 in range(nkpts):
-            for k2 in range(nkpts):
-                result.append([])
-                for k3 in range(nkpts):
-                    for k4 in range(nkpts):
-                        result[-1].append(self.eri_mknj_k(item, (k1, k2, k3, k4)))
+        for k1, k2 in pairs_row:
+            result.append([])
+            for k3, k4 in pairs_column:
+                result[-1].append(self.eri_mknj_k(item, (k1, k2, k3, k4)))
 
         r = numpy.block(result)
         return r / len(self.model.kpts)
