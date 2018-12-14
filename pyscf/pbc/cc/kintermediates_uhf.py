@@ -342,35 +342,21 @@ def cc_Wovvo(cc, t1, t2, eris):
                 WOvvO[km,ke,kb] += 0.5*einsum('xnjbf,xnemf->mebj', tauab[:,kj,kb], eris.ovOV[:,ke,km])
                 WovVO[km,ke,kb] -= 0.5*einsum('xnjbf,xmenf->mebj', taubb[:,kj,kb], eris.ovOV[km,ke,:])
 
-                t2ab_temp = np.zeros((nkpts,nocca,noccb,nvira,nvirb),dtype=dtype)
-                ovOV_temp = np.zeros((nkpts,nocca,nvira,noccb,nvirb),dtype=dtype)
-                for kn in range(nkpts):
-                    kf = kconserv[km,ke,kn]
-                    t2ab_temp[kn] = t2ab[kn,kj,kf]
-                    ovOV_temp[kn] = eris.ovOV[kn,kf,km]
-                WOVVO[km,ke,kb] += 0.5*einsum('xnjfb,xnfme->mebj', t2ab_temp, ovOV_temp)
-                WOVvo[km,ke,kb] -= 0.5*einsum('xnjbf,xnfme->mebj', tauaa[:,kj,kb], ovOV_temp)
-
-                for kn in range(nkpts):
-                    kf = kconserv[km,ke,kn]
-                    t2ab_temp[kn] = tauab[kj,kn,kf]
-                    ovOV_temp[kn] = eris.ovOV[km,kf,kn]
-                WoVVo[km,ke,kb] += 0.5*einsum('xjnfb,xmfne->mebj', t2ab_temp, ovOV_temp)
-                ovOV_temp = None
+                kn = range(nkpts)
+                kf = kconserv[km,ke][kn]
+                WOVVO[km,ke,kb] += 0.5*einsum('xnjfb,xnfme->mebj', t2ab[kn,kj,kf], eris.ovOV[kn,kf,km])
+                WOVvo[km,ke,kb] -= 0.5*einsum('xnjbf,xnfme->mebj', tauaa[:,kj,kb], eris.ovOV[kn,kf][km])
+                WoVVo[km,ke,kb] += 0.5*einsum('xjnfb,xmfne->mebj', tauab[kj,kn,kf], eris.ovOV[km,kf,kn])
 
                 temp_OVOV = eris.OVOV[km,ke,:] - eris.OVOV[:,ke,km].transpose((0,3,2,1,4))
                 WOVVO[km,ke,kb] -= 0.5*einsum('xnjbf,xmenf->mebj', taubb[:,kj,kb], temp_OVOV)
                 WOVvo[km,ke,kb] += 0.5*einsum('xjnbf,xmenf->mebj', t2ab[kj,:,kb], temp_OVOV)
                 temp_OVOV = None
 
-                for kn in range(nkpts):
-                    kf = kconserv[km,ke,kn]
-                    t2ab_temp[kn] = t2ab[kn,kj,kf]
                 temp_ovov = eris.ovov[:,ke,km] - eris.ovov[km,ke,:].transpose((0,3,2,1,4))
                 Wovvo[km,ke,kb] += 0.5*einsum('xnjbf,xnemf->mebj', tauaa[:,kj,kb], temp_ovov)
-                WovVO[km,ke,kb] -= 0.5*einsum('xnjfb,xnemf->mebj', t2ab_temp, temp_ovov)
+                WovVO[km,ke,kb] -= 0.5*einsum('xnjfb,xnemf->mebj', t2ab[kn,kj,kf], temp_ovov)
                 temp_ovov = None
-                t2ab_temp = None
  
     return Wovvo, WovVO, WOVvo, WOVVO, WoVVo, WOvvO
 
