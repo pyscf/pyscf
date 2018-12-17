@@ -463,7 +463,7 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         max_dx_norm = max(dx_norm)
         ide = numpy.argmax(abs(de))
         if all(conv):
-            log.debug('converge %d %d  |r|= %4.3g  e= %s  max|de|= %4.3g',
+            log.debug('converged %d %d  |r|= %4.3g  e= %s  max|de|= %4.3g',
                       icyc, space, max_dx_norm, e, de[ide])
             break
         elif (follow_state and max_dx_norm > 1 and
@@ -813,7 +813,7 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         max_dx_norm = max(dx_norm)
         ide = numpy.argmax(abs(de))
         if all(conv):
-            log.debug('converge %d %d  |r|= %4.3g  e= %s  max|de|= %4.3g',
+            log.debug('converged %d %d  |r|= %4.3g  e= %s  max|de|= %4.3g',
                       icyc, space, max_dx_norm, e, de[ide])
             break
         elif (follow_state and max_dx_norm > 1 and
@@ -1114,7 +1114,7 @@ def dgeev1(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
 
         ide = numpy.argmax(abs(de))
         if abs(de[ide]) < tol:
-            log.debug('converge %d %d  e= %s  max|de|= %4.3g',
+            log.debug('converged %d %d  e= %s  max|de|= %4.3g',
                       icyc, space, e, de[ide])
             conv = True
             break
@@ -1131,7 +1131,7 @@ def dgeev1(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
         ax0 = bx0 = None
 
         if max(dx_norm) < toloose:
-            log.debug('converge %d %d  |r|= %4.3g  e= %s  max|de|= %4.3g',
+            log.debug('converged %d %d  |r|= %4.3g  e= %s  max|de|= %4.3g',
                       icyc, space, max(dx_norm), e, de[ide])
             conv = True
             break
