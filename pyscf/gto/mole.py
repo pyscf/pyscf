@@ -1898,6 +1898,7 @@ class Mole(lib.StreamObject):
         ne = self.nelectron
         nalpha = (ne + self.spin) // 2
         nbeta = nalpha - self.spin
+        assert(nalpha >= 0 and nbeta >= 0)
         if nalpha + nbeta != ne:
             raise RuntimeError('Electron number %d and spin %d are not consistent\n'
                                'Note mol.spin = 2S = Nalpha - Nbeta, not 2S+1' %

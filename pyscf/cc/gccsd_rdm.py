@@ -229,8 +229,9 @@ def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True):
         dm1[numpy.diag_indices(nocc)] -= 1
 
         for i in range(nocc):
-            dm2[i,i,:,:] += dm1.T
-            dm2[:,:,i,i] += dm1.T
+# Be careful with the convention of dm1 and the transpose of dm2 at the end
+            dm2[i,i,:,:] += dm1
+            dm2[:,:,i,i] += dm1
             dm2[:,i,i,:] -= dm1
             dm2[i,:,:,i] -= dm1.T
 

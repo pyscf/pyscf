@@ -378,12 +378,12 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
 # Orthogonalize xt space because the basis of subspace xs must be orthogonal
 # but the eigenvectors x0 might not be strictly orthogonal
             xt = None
-            xt, x0 = _qr(x0, dot)[0], None
+            xt, x0 = _qr(x0, dot, lindep)[0], None
             max_dx_last = 1e9
             if SORT_EIG_BY_SIMILARITY:
                 conv = [False] * nroots
         elif len(xt) > 1:
-            xt = _qr(xt, dot)[0]
+            xt = _qr(xt, dot, lindep)[0]
             xt = xt[:40]  # 40 trial vectors at most
 
         axt = aop(xt)
@@ -731,12 +731,12 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
 # Orthogonalize xt space because the basis of subspace xs must be orthogonal
 # but the eigenvectors x0 might not be strictly orthogonal
             xt = None
-            xt, x0 = _qr(x0, dot)[0], None
+            xt, x0 = _qr(x0, dot, lindep)[0], None
             max_dx_last = 1e9
             if SORT_EIG_BY_SIMILARITY:
                 conv = [False] * nroots
         elif len(xt) > 1:
-            xt = _qr(xt, dot)[0]
+            xt = _qr(xt, dot, lindep)[0]
             xt = xt[:40]  # 40 trial vectors at most
 
         axt = aop(xt)
@@ -1044,11 +1044,11 @@ def dgeev1(abop, x0, precond, type=1, tol=1e-12, max_cycle=50, max_space=12,
             space = 0
 # Orthogonalize xt space because the basis of subspace xs must be orthogonal
 # but the eigenvectors x0 are very likely non-orthogonal when A is non-Hermitian.
-            xt, x0 = _qr(x0, dot)[0], None
+            xt, x0 = _qr(x0, dot, lindep)[0], None
             e = numpy.zeros(nroots)
             fresh_start = False
         elif len(xt) > 1:
-            xt = _qr(xt, dot)[0]
+            xt = _qr(xt, dot, lindep)[0]
             xt = xt[:40]  # 40 trial vectors at most
 
         axt, bxt = abop(xt)
@@ -1244,7 +1244,7 @@ def krylov(aop, b, x0=None, tol=1e-10, max_cycle=30, dot=numpy.dot,
     nroots, ndim = x1.shape
 
     # Not exactly QR, vectors are orthogonal but not normalized
-    x1, rmat = _qr(x1, dot)
+    x1, rmat = _qr(x1, dot, lindep)
     for i in range(len(x1)):
         x1[i] *= rmat[i,i]
 
@@ -1381,7 +1381,7 @@ def cho_solve(a, b):
     return scipy.linalg.solve(a, b, sym_pos=True)
 
 
-def _qr(xs, dot):
+def _qr(xs, dot, lindep=1e-14):
     '''QR decomposition for a list of vectors (for linearly independent vectors only).
     xs = (r.T).dot(qs)
     '''
@@ -1399,8 +1399,9 @@ def _qr(xs, dot):
             prod = dot(qs[j].conj(), xi)
             xi -= qs[j] * prod
             rmat[:,nv] -= rmat[:,j] * prod
-        norm = numpy.sqrt(dot(xi.conj(), xi).real)
-        if norm > 1e-7:
+        innerprod = dot(xi.conj(), xi).real
+        norm = numpy.sqrt(innerprod)
+        if innerprod > lindep:
             qs[nv] = xi/norm
             rmat[:nv+1,nv] /= norm
             nv += 1
