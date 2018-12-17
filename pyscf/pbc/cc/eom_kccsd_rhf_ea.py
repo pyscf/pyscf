@@ -110,7 +110,7 @@ def kernel(cc, nroots=1, koopmans=False, guess=None, partition=None,
 
         if guess is not None:
             guess_k = guess[k]
-            assert len(guess_k) == nroots
+            # assert len(guess_k) == nroots
             for g in guess_k:
                 assert g.size == size
         else:
@@ -141,11 +141,11 @@ def kernel(cc, nroots=1, koopmans=False, guess=None, partition=None,
 
             evals_k, evecs_k = eig(lambda _arg: matvec(cc, _arg, kshift), guess_k, precond, pick=pickeig,
                                    tol=cc.conv_tol, max_cycle=cc.max_cycle,
-                                   max_space=cc.max_space, nroots=nroots, verbose=cc.verbose)
+                                   max_space=cc.max_space, nroots=len(guess_k), verbose=cc.verbose)
         else:
             evals_k, evecs_k = eig(lambda _arg: matvec(cc, _arg, kshift), guess_k, precond,
                                    tol=cc.conv_tol, max_cycle=cc.max_cycle,
-                                   max_space=cc.max_space, nroots=nroots, verbose=cc.verbose)
+                                   max_space=cc.max_space, nroots=len(guess_k), verbose=cc.verbose)
 
         if nroots == 1:
             evals_k, evecs_k = np.array([evals_k]), np.array([evecs_k])
