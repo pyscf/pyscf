@@ -67,9 +67,9 @@ print('pz population for active space orbitals', pz_pop[cas_list])
 # algorithm will be called for molecule with symmetry. However, the orbital
 # localization above breaks the orbital spatial symmetry. If proceeding the
 # symmetry-adapted CASSCF calculation, the program may complain that the
-# CASSCF initial guess is not symmetrized after the certain attempts of
-# orbital symmetrization. The simplest operation for this problem is to mute
-# the spatial symmetry of the molecule.
+# CASSCF initial guess is not symmetrized after certain attempts of orbital
+# symmetrization. The simplest operation for this problem is to mute the
+# spatial symmetry of the molecule.
 #
 mol.symmetry = False
 
