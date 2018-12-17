@@ -159,7 +159,7 @@ class TestHe(unittest.TestCase):
         mycc.conv_tol_normt = 1e-10
         ecc2, t1, t2 = mycc.kernel()
         ecc_ref = -0.01044680113334205
-        print ecc2
+        print(ecc2)
         self.assertAlmostEqual(abs(ecc_ref/2. - ecc2), 0, 10)
 
 

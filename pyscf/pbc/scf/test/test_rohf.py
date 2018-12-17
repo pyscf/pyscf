@@ -41,11 +41,11 @@ def tearDownModule():
 
 class KnownValues(unittest.TestCase):
     def test_krohf_kernel(self):
-        nk = [1, 1, 3]
+        nk = [2, 2, 1]
         kpts = cell.make_kpts(nk, wrap_around=True)
         mf = pscf.KROHF(cell, kpts)
         mf.kernel()
-        self.assertAlmostEqual(mf.e_tot, -3.381819789636646, 8)
+        self.assertAlmostEqual(mf.e_tot, -4.569633030494753, 8)
 
     def test_rohf_kernel(self):
         mf = pscf.ROHF(cell).run()
