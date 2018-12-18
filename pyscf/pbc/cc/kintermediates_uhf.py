@@ -341,7 +341,7 @@ def cc_Wovvo(cc, t1, t2, eris):
                 kn = range(nkpts)
                 kf = kconserv[km,ke][kn]
                 WOVVO[km,ke,kb] += 0.5*einsum('xnjfb,xnfme->mebj', t2ab[kn,kj,kf], eris.ovOV[kn,kf,km])
-                WOVvo[km,ke,kb] -= 0.5*einsum('xnjbf,xnfme->mebj', tauaa[:,kj,kb], eris.ovOV[kn,kf][km])
+                WOVvo[km,ke,kb] -= 0.5*einsum('xnjbf,xnfme->mebj', tauaa[:,kj,kb], eris.ovOV[kn,kf,km])
                 WoVVo[km,ke,kb] += 0.5*einsum('xjnfb,xmfne->mebj', tauab[kj,kn,kf], eris.ovOV[km,kf,kn])
 
                 temp_OVOV = eris.OVOV[km,ke,:] - eris.OVOV[:,ke,km].transpose((0,3,2,1,4))
