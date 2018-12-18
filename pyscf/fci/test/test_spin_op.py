@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 import unittest
 from functools import reduce
 import numpy
@@ -22,7 +23,7 @@ from pyscf import ao2mo
 from pyscf import fci
 from pyscf import lib
 
-h1, h2 = numpy.load('spin_op_hamiltonian.npy')
+h1, h2 = numpy.load(os.path.realpath(os.path.join(__file__, '..', 'spin_op_hamiltonian.npy')))
 h1 = lib.unpack_tril(h1)
 
 norb = 10

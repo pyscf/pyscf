@@ -74,7 +74,7 @@ class KnownValues(unittest.TestCase):
 
     def test_analyze(self):
         (pop, chg), dip = mf.analyze()
-        self.assertAlmostEqual(numpy.linalg.norm(pop), 2.2858506185320837, 9)
+        self.assertAlmostEqual(numpy.linalg.norm(pop), 2.2858506185320837, 6)
 
     def test_scf(self):
         self.assertAlmostEqual(mf.e_tot, -76.038520455193833, 6)
