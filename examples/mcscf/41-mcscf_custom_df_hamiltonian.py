@@ -41,7 +41,7 @@ with h5py.File(ftmp.name, 'r') as file1:
 # Note, here the integral object file1['j3c'] are not loaded in memory.
 # It is still the HDF5 array object held on disk.  The HDF5 array can be used
 # the same way as the regular numpy ndarray stored in memory.
-    mf.with_df._cderi = file1['j3c']
+    mf.with_df._cderi = file1
     mf.kernel()
 
 # Note the mc object must be put inside the "with" statement block because it
