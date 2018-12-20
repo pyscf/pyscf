@@ -309,6 +309,18 @@ class KnownValues(unittest.TestCase):
             pseudo = {'Mg': 'gth-lda q2'})
         self.assertEqual(cell.atom_nelec_core(0), 10)
 
+    def pbc_intor_symmetry(self):
+        a = cl1.lattice_vectors()
+        b = numpy.linalg.inv(a).T * (numpy.pi*2)
+        kpts = numpy.random.random((4,3))
+        kpts[1] = b[0]+b[1]+b[2]-kpts[0]
+        kpts[2] = b[0]-b[1]-b[2]-kpts[0]
+        kpts[3] = b[0]-b[1]+b[2]+kpts[0]
+        s = cl1.pbc_intor('int1e_ovlp', kpts=kpts)
+        self.assertAlmostEqual(abs(s[0]-s[1].conj()).max(), 0, 12)
+        self.assertAlmostEqual(abs(s[0]-s[2].conj()).max(), 0, 12)
+        self.assertAlmostEqual(abs(s[0]-s[3]       ).max(), 0, 12)
+
 
 if __name__ == '__main__':
     print("Full Tests for pbc.gto.cell")

@@ -1067,7 +1067,7 @@ class NPArrayWithTag(numpy.ndarray):
     # Whenever the contents of the array was modified (through ufunc), the tag
     # should be expired. Overwrite the output of ufunc to restore ndarray type.
     def __array_wrap__(self, out, context=None):
-        return numpy.ndarray.__array_wrap__(self, out, context).view(np.ndarray)
+        return numpy.ndarray.__array_wrap__(self, out, context).view(numpy.ndarray)
 
 
 def tag_array(a, **kwargs):
