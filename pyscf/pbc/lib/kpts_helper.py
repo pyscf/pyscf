@@ -75,12 +75,12 @@ def get_kconserv(cell, kpts):
     a = cell.lattice_vectors() / (2*np.pi)
 
     kconserv = np.zeros((nkpts,nkpts,nkpts), dtype=int)
-    kvKLM = kpts[:,None,None,:] - kpts[:,None,:] + kpts
+    kvMLK = kpts[:,None,None,:] - kpts[:,None,:] + kpts
     for N, kvN in enumerate(kpts):
-        kvKLMN = np.einsum('wx,klmx->wklm', a, kvKLM - kvN)
+        kvMLKN = np.einsum('klmx,wx->mlkw', kvMLK - kvN, a)
         # check whether (1/(2pi) k_{KLMN} dot a) is an integer
-        kvKLMN_int = np.rint(kvKLMN)
-        mask = np.einsum('klmw->klm', abs(kvKLMN - kvKLMN_int)) < 1e-9
+        kvMLKN_int = np.rint(kvMLKN)
+        mask = np.einsum('klmw->mlk', abs(kvMLKN - kvMLKN_int)) < 1e-9
         kconserv[mask] = N
     return kconserv
 
