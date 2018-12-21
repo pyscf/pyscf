@@ -50,6 +50,8 @@ kmdf = df.DF(cell)
 kmdf.linear_dep_threshold = 1e-7
 kmdf.auxbasis = 'weigend'
 kmdf.kpts = kpts
+# Note mesh is not dense enough. It breaks the conjugation symmetry between
+# the k-points k and -k
 kmdf.mesh = (6,)*3
 
 
@@ -116,9 +118,9 @@ class KnownValues(unittest.TestCase):
     def test_get_eri_0123(self):
         eri0123 = kmdf.get_eri(kpts[:4])
         self.assertTrue(eri0123.dtype == numpy.complex128)
-        self.assertAlmostEqual(eri0123.real.sum(), 83.109470761416375, 9)
-        self.assertAlmostEqual(abs(eri0123.imag.sum()), 0.0043665162257965351, 9)
-        self.assertAlmostEqual(finger(eri0123), 0.96956682889583368-0.33175844765245077j, 9)
+        self.assertAlmostEqual(eri0123.real.sum(), 83.11500586536908, 9)
+        self.assertAlmostEqual(abs(eri0123.imag.sum()), 0.0004956147070235284, 9)
+        self.assertAlmostEqual(finger(eri0123), 0.9693838716908609-0.33172727547646297j, 9)
 
 
 

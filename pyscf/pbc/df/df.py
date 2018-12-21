@@ -206,8 +206,6 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
     j2c = coulG = None
 
     def cholesky_decomposed_metric(uniq_kptji_id):
-        kpt = uniq_kpts[uniq_kptji_id]
-
         j2c = numpy.asarray(fswap['j2c/%d'%uniq_kptji_id])
         j2c_negative = None
         try:
@@ -380,13 +378,14 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
         if done[k]:
             continue
 
+        log.debug1('Cholesky decomposition for j2c at kpt %s', k)
         cholesky_j2c = cholesky_decomposed_metric(k)
 
         # The k-point k' which has (k - k') * a = 2n pi. Metric integrals have the
         # symmetry S = S
         uniq_kptji_ids = kconserve_indices(-kpt)
-        log.log("Symmetry pattern (k - %s)*a= 2n pi", kpt)
-        log.log("    make_kpt for uniq_kptji_ids %s", uniq_kptji_ids)
+        log.debug1("Symmetry pattern (k - %s)*a= 2n pi", kpt)
+        log.debug1("    make_kpt for uniq_kptji_ids %s", uniq_kptji_ids)
         for uniq_kptji_id in uniq_kptji_ids:
             if not done[uniq_kptji_id]:
                 make_kpt(uniq_kptji_id, cholesky_j2c)
@@ -395,8 +394,8 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
         # The k-point k' which has (k + k') * a = 2n pi. Metric integrals have the
         # symmetry S = S*
         uniq_kptji_ids = kconserve_indices(kpt)
-        log.log("Symmetry pattern (k + %s)*a= 2n pi", kpt)
-        log.log("    make_kpt for %s", uniq_kptji_ids)
+        log.debug1("Symmetry pattern (k + %s)*a= 2n pi", kpt)
+        log.debug1("    make_kpt for %s", uniq_kptji_ids)
         cholesky_j2c = conj_j2c(cholesky_j2c)
         for uniq_kptji_id in uniq_kptji_ids:
             if not done[uniq_kptji_id]:
@@ -430,6 +429,11 @@ class GDF(aft.AFTDF):
             eta_guess = estimate_eta(cell, cell.precision)
             if eta_cell < eta_guess:
                 self.eta = eta_cell
+                # TODO? Round off mesh to the nearest odd numbers.
+                # Odd number of grids is preferred because even number of
+                # grids may break the conjugation symmetry between the
+                # k-points k and -k.
+                #?self.mesh = [(n//2)*2+1 for n in cell.mesh]
                 self.mesh = cell.mesh
             else:
                 self.eta = eta_guess
