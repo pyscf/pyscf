@@ -17,14 +17,17 @@ import os
 import unittest
 from functools import reduce
 import numpy
+import h5py
 from pyscf import gto
 from pyscf import scf
 from pyscf import ao2mo
 from pyscf import fci
 from pyscf import lib
 
-h1, h2 = numpy.load(os.path.realpath(os.path.join(__file__, '..', 'spin_op_hamiltonian.npy')))
-h1 = lib.unpack_tril(h1)
+hfile = os.path.realpath(os.path.join(__file__, '..', 'spin_op_hamiltonian.h5'))
+with h5py.File(hfile, 'r') as f:
+    h1 = lib.unpack_tril(f['h1'].value)
+    h2 = f['h2'].value
 
 norb = 10
 nelec = (5,5)
