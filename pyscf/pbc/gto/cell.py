@@ -988,8 +988,13 @@ def _split_basis(cell, delimiter=EXP_DELIMITER):
 def tot_electrons(cell, nkpts=1):
     '''Total number of electrons
     '''
-    nelectron = cell.atom_charges().sum() * nkpts - cell.charge
-    return int(nelectron)
+    if cell._nelectron is None:
+        nelectron = cell.atom_charges().sum() * nkpts - cell.charge
+    else: # Custom cell.nelectron stands for num. electrons per unit cell
+        nelectron = cell._nelectron * nkpts
+    # Round off to the nearest integer
+    nelectron = int(nelectron+0.5)
+    return nelectron
 
 
 class Cell(mole.Mole):
@@ -1065,7 +1070,7 @@ class Cell(mole.Mole):
 # Overwriting nelec method to avoid this check.
         @property
         def nelec(self):
-            ne = self.tot_electrons()
+            ne = self.nelectron
             nalpha = (ne + self.spin) // 2
             nbeta = nalpha - self.spin
             if nalpha + nbeta != ne:

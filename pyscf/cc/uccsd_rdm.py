@@ -586,13 +586,13 @@ def _make_rdm2(mycc, d1, d2, with_dm1=True, with_frozen=True):
             dm2aa[i,i,:,:] += dm1a
             dm2aa[:,:,i,i] += dm1a
             dm2aa[:,i,i,:] -= dm1a
-            dm2aa[i,:,:,i] -= dm1a.conj()
+            dm2aa[i,:,:,i] -= dm1a.T
             dm2ab[i,i,:,:] += dm1b
         for i in range(noccb):
             dm2bb[i,i,:,:] += dm1b
             dm2bb[:,:,i,i] += dm1b
             dm2bb[:,i,i,:] -= dm1b
-            dm2bb[i,:,:,i] -= dm1b.conj()
+            dm2bb[i,:,:,i] -= dm1b.T
             dm2ab[:,:,i,i] += dm1a
 
         for i in range(nocca):

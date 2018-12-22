@@ -85,7 +85,7 @@ def kernel(eom, nroots=1, koopmans=False, guess=None, left=False,
         kptlist = range(nkpts)
 
     if dtype is None:
-        dtype = imds.t1.dtype
+        dtype = np.result_type(*imds.t1)
 
     evals = np.zeros((len(kptlist),nroots), np.float)
     evecs = np.zeros((len(kptlist),nroots,size), dtype)
@@ -352,7 +352,6 @@ def ipccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     return vector
 
 def ipccsd_diag(eom, kshift, imds=None):
-    #TODO: find a way to check this
     if imds is None: imds = eom.make_imds()
     t1, t2 = imds.t1, imds.t2
     nkpts, nocc, nvir = t1.shape
@@ -366,18 +365,17 @@ def ipccsd_diag(eom, kshift, imds=None):
         fvv = eom.eris.fock[:,nocc:,nocc:]
         for ki in range(nkpts):
             for kj in range(nkpts):
-                kb = kconserv[ki,kshift,kj]
-                Hr2[ki,kj]  = fvv[ka].diagonal()
+                ka = kconserv[ki,kshift,kj]
                 Hr2[ki,kj] -= foo[ki].diagonal()[:,None,None]
                 Hr2[ki,kj] -= foo[kj].diagonal()[None,:,None]
+                Hr2[ki,kj] += fvv[ka].diagonal()[None,None,:]
     else:
-        idx = np.arange(nocc)
         for ki in range(nkpts):
             for kj in range(nkpts):
                 ka = kconserv[ki,kshift,kj]
-                Hr2[ki,kj] += imds.Fvv[ka].diagonal()[None,None,:]
                 Hr2[ki,kj] -= imds.Foo[ki].diagonal()[:,None,None]
                 Hr2[ki,kj] -= imds.Foo[kj].diagonal()[None,:,None]
+                Hr2[ki,kj] += imds.Fvv[ka].diagonal()[None,None,:]
 
                 if ki == kconserv[ki,kj,kj]:
                     Hr2[ki,kj] += np.einsum('ijij->ij', imds.Woooo[ki, kj, ki])[:,:,None]
@@ -385,7 +383,7 @@ def ipccsd_diag(eom, kshift, imds=None):
                 Hr2[ki, kj] += lib.einsum('iaai->ia', imds.Wovvo[ki, ka, ka])[:,None,:]
                 Hr2[ki, kj] += lib.einsum('jaaj->ja', imds.Wovvo[kj, ka, ka])[None,:,:]
 
-                Hr2[ki, kj] += lib.einsum('ijea,jiea->ija',imds.Woovv[ki,kj,kshift], imds.t2[ki,kj,kshift])
+                Hr2[ki, kj] += lib.einsum('ijea,jiea->ija',imds.Woovv[ki,kj,kshift], imds.t2[kj,ki,kshift])
 
     vector = amplitudes_to_vector_ip(Hr1, Hr2)
     return vector
@@ -626,43 +624,38 @@ def eaccsd_matvec(eom, vector, kshift, imds=None, diag=None):
     return vector
 
 def eaccsd_diag(eom, kshift, imds=None):
-    #TODO: find a way to check this
     if imds is None: imds = eom.make_imds()
     t1, t2 = imds.t1, imds.t2
     nkpts, nocc, nvir = t1.shape
     kconserv = imds.kconserv
 
-    Hr1 = np.ones((nvir,), dtype=t1.dtype)
+    Hr1 = np.diag(imds.Fvv[kshift])
 
-    Hr2 = np.ones((nkpts,nkpts,nocc,nvir,nvir), dtype=t1.dtype)
-    #if eom.partition == 'mp':
-    #    foo = eom.eris.fock[:,:nocc,:nocc]
-    #    fvv = eom.eris.fock[:,nocc:,nocc:]
-    #    for ki in range(nkpts):
-    #        for kj in range(nkpts):
-    #            kb = kconserv[ki,kshift,kj]
-    #            Hr2[ki,kj]  = fvv[ka].diagonal()
-    #            Hr2[ki,kj] -= foo[ki].diagonal()[:,None,None]
-    #            Hr2[ki,kj] -= foo[kj].diagonal()[None,:,None]
-    #else:
-    #    idx = np.arange(nocc)
-    #    for ki in range(nkpts):
-    #        for kj in range(nkpts):
-    #            ka = kconserv[ki,kshift,kj]
-    #            Hr2[ki,kj]  = imds.Fvv[ka].diagonal()
-    #            Hr2[ki,kj] -= imds.Foo[ki].diagonal()[:,None,None]
-    #            Hr2[ki,kj] -= imds.Foo[kj].diagonal()[None,:,None]
+    Hr2 = np.zeros((nkpts,nkpts,nocc,nvir,nvir), dtype=t1.dtype)
+    if eom.partition == 'mp': # This case is untested
+        foo = eom.eris.fock[:,:nocc,:nocc]
+        fvv = eom.eris.fock[:,nocc:,nocc:]
+        for kj in range(nkpts):
+            for ka in range(nkpts):
+                kb = kconserv[kshift,ka,kj]
+                Hr2[kj,ka] -= foo[kj].diagonal()[:,None,None]
+                Hr2[kj,ka] -= fvv[ka].diagonal()[None,:,None]
+                Hr2[kj,ka] += fvv[kb].diagonal()[None,None,:]
+    else:
+        for kj in range(nkpts):
+            for ka in range(nkpts):
+                kb = kconserv[kshift,ka,kj]
+                Hr2[kj,ka] -= imds.Foo[kj].diagonal()[:,None,None]
+                Hr2[kj,ka] += imds.Fvv[ka].diagonal()[None,:,None]
+                Hr2[kj,ka] += imds.Fvv[kb].diagonal()[None,None,:]
 
-    #            if ki == kconserv[ki,kj,kj]:
-    #                Hr2[ki,kj] += 0.5 * np.einsum('ijij->ij', imds.Woooo[ki, kj, ki])[:,:,None]
+                Hr2[kj,ka] += np.einsum('jbbj->jb', imds.Wovvo[kj,kb,kb])[:, None, :]
+                Hr2[kj,ka] += np.einsum('jaaj->ja', imds.Wovvo[kj,ka,ka])[:, :, None]
 
-    #            Wovvo = np.einsum('iaai->ia', imds.Wovvo[ki,ka,ka])
-    #            Hr2[ki,kj] += Wovvo[:, None, :]
-    #            if ki == kj:  # and i == j
-    #                Hr2[ki,ki,idx,idx] -= Wovvo
+                if ka == kconserv[ka,kb,kb]:
+                    Hr2[kj,ka] += np.einsum('abab->ab', imds.Wvvvv[ka,kb,ka])[None,:,:]
 
-    #            Hr2[ki, kj] += 0.5 * lib.einsum('ijea,ijae->ija', imds.Woovv[ki, kj, kshift],
-    #                                            imds.t2[ki, kj, ka])
+                Hr2[kj,ka] -= np.einsum('kjab,kjab->jab',imds.Woovv[kshift,kj,ka],imds.t2[kshift,kj,ka])
 
     vector = amplitudes_to_vector_ea(Hr1, Hr2)
     return vector
@@ -707,7 +700,6 @@ class EOMEA(eom_rccsd.EOM):
             raise NotImplementedError
             matvec = lambda xs: [self.l_matvec(x, kshift, imds, diag) for x in xs]
         else:
-            raise NotImplementedError
             matvec = lambda xs: [self.matvec(x, kshift, imds, diag) for x in xs]
         return matvec, diag
 

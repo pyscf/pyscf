@@ -75,7 +75,7 @@ class KnowValues(unittest.TestCase):
         mydf.linear_dep_threshold = 1e-7
         mydf.mesh = [11]*3
         mydf.eta = 0.3
-        vj, vk = mydf.get_jk(dm, 1, kpt)
+        vj, vk = mydf.get_jk(dm, 1, kpt, exxdiv='ewald')
         ej1 = numpy.einsum('ij,ji->', vj, dm)
         ek1 = numpy.einsum('ij,ji->', vk, dm)
         self.assertAlmostEqual(ej1, 241.29955504573206+0j, 8)

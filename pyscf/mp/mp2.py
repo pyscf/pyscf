@@ -175,6 +175,11 @@ def make_rdm2(mp, t2=None, eris=None, verbose=logger.NOTE):
             dm2[oidx[i],vidx[:,None,None],oidx[:,None],vidx] = dovov
             dm2[vidx[:,None,None],oidx[i],vidx[:,None],oidx] = dovov.conj().transpose(0,2,1)
 
+    # Be careful with convention of dm1 and dm2
+    #   dm1[q,p] = <p^\dagger q>
+    #   dm2[p,q,r,s] = < p^\dagger r^\dagger s q >
+    #   E = einsum('pq,qp', h1, dm1) + .5 * einsum('pqrs,pqrs', eri, dm2)
+    # When adding dm1 contribution, dm1 subscripts need to be flipped
     for i in range(nocc0):
         dm2[i,i,:,:] += dm1.T * 2
         dm2[:,:,i,i] += dm1.T * 2
@@ -186,7 +191,7 @@ def make_rdm2(mp, t2=None, eris=None, verbose=logger.NOTE):
             dm2[i,i,j,j] += 4
             dm2[i,j,j,i] -= 2
 
-    return dm2
+    return dm2#.transpose(1,0,3,2)
 
 
 def get_nocc(mp):

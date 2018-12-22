@@ -162,13 +162,12 @@ def cc_Wvoov(t1, t2, eris, kconserv, out=None):
     nkpts, nocc, nvir = t1.shape
     for ka in range(nkpts):
         for kk in range(nkpts):
+            voov_i  = einsum('xakdc,xid->xakic',eris.vovv[ka,kk,:],t1[:])
+            voov_i -= einsum('xlkic,la->xakic',eris.ooov[ka,kk,:],t1[ka])
+            voov_i += eris.voov[ka,kk,:]
             for ki in range(nkpts):
                 kc = kconserv[ka,ki,kk]
-                voov  = einsum('akdc,id->akic',eris.vovv[ka,kk,ki],t1[ki])
-                voov -= einsum('lkic,la->akic',eris.ooov[ka,kk,ki],t1[ka])
-                voov += eris.voov[ka,kk,ki]
-                # ==== Beginning of change ====
-                #
+
                 #for kl in range(nkpts):
                 #    # kl - kd + kk = kc
                 #    # => kd = kl - kc + kk
@@ -178,31 +177,16 @@ def cc_Wvoov(t1, t2, eris, kconserv, out=None):
                 #    Wakic[ka,kk,ki] -= 0.5*einsum('lkdc,ilda->akic',eris.oovv[kl,kk,kd],t2[ki,kl,kd])
                 #Wakic[ka,kk,ki] -= einsum('lkdc,id,la->akic',eris.oovv[ka,kk,ki],t1[ki],t1[ka])
 
-                #
-                # Making various intermediates...
-                #
-                Soovv = np.empty((nkpts,nocc,nocc,nvir,nvir),dtype=t1.dtype)
-                oovvf = np.empty((nkpts,nocc,nocc,nvir,nvir),dtype=t1.dtype)
-                t2f_1  = t2[:,ki,ka].copy()   # This is a tau-like term
-                for kl in range(nkpts):
-                    # kl - kd + kk = kc
-                    # => kd = kl - kc + kk
-                    kd = kconserv[kl,kc,kk]
-                    Soovv[kl] = 2*eris.oovv[kl,kk,kd] - eris.oovv[kl,kk,kc].transpose(0,1,3,2)
-                    oovvf[kl] = eris.oovv[kl,kk,kd]
-                    #if ki == kd and kl == ka:
-                    #    t2f_1[kl] += 2*einsum('id,la->liad',t1[ki],t1[ka])
                 kd = kconserv[ka,kc,kk]
-                t2f_1[ka] += 2*einsum('id,la->liad',t1[kd],t1[ka])
-                t2f_1  = t2f_1.reshape(nkpts*nocc,nocc,nvir,nvir)
-                oovvf  = oovvf.reshape(nkpts*nocc,nocc,nvir,nvir)
-                Soovvf = Soovv.reshape(nkpts*nocc,nocc,nvir,nvir)
-                t2f    = t2[ki,:,ka].transpose(0,2,1,3,4).reshape(nkpts*nocc,nocc,nvir,nvir)
+                tau = t2[:,ki,ka].copy()
+                tau[ka] += 2*einsum('id,la->liad',t1[kd],t1[ka])
+                oovv_tmp = np.array(eris.oovv[kk,:,kc])
+                voov_i[ki] -= 0.5*einsum('xklcd,xliad->akic',oovv_tmp,tau)
 
-                voov += 0.5*einsum('lkdc,liad->akic',Soovvf,t2f)
-                voov -= 0.5*einsum('lkdc,liad->akic',oovvf,t2f_1)
-                Wakic[ka,kk,ki] = voov
-                # =====   End of change  = ====
+                Soovv_tmp = 2*oovv_tmp - eris.oovv[:,kk,kc].transpose(0,2,1,3,4)
+                voov_i[ki] += 0.5*einsum('xklcd,xilad->akic',Soovv_tmp,t2[ki,:,ka])
+
+            Wakic[ka,kk,:] = voov_i[:]
     return Wakic
 
 def cc_Wvovo(t1, t2, eris, kconserv, out=None):
