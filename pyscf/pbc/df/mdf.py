@@ -39,7 +39,8 @@ from pyscf.pbc.df import df
 from pyscf.pbc.df import aft
 from pyscf.pbc.df.df import fuse_auxcell
 from pyscf.pbc.df.df_jk import zdotNN, zdotCN, zdotNC
-from pyscf.pbc.lib.kpts_helper import is_zero, gamma_point, unique
+from pyscf.pbc.lib.kpts_helper import (is_zero, gamma_point, member, unique,
+                                       KPT_DIFF_TOL)
 from pyscf.pbc.df import mdf_jk
 from pyscf.pbc.df import mdf_ao2mo
 from pyscf import __config__
@@ -100,22 +101,7 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
         aoaux = LkR = LkI = j2cR = j2cI = coulG = None
     j2c = None
 
-    feri = h5py.File(cderi_file)
-    feri['j3c-kptij'] = kptij_lst
-    nsegs = len(fswap['j3c-junk/0'])
-    def make_kpt(uniq_kptji_id):  # kpt = kptj - kpti
-        kpt = uniq_kpts[uniq_kptji_id]
-        log.debug1('kpt = %s', kpt)
-        adapted_ji_idx = numpy.where(uniq_inverse == uniq_kptji_id)[0]
-        adapted_kptjs = kptjs[adapted_ji_idx]
-        nkptj = len(adapted_kptjs)
-        log.debug1('adapted_ji_idx = %s', adapted_ji_idx)
-
-        Gaux = ft_ao.ft_ao(fused_cell, Gv, None, b, gxyz, Gvbase, kpt).T
-        Gaux = fuse(Gaux)
-        Gaux *= mydf.weighted_coulG(kpt, False, mesh)
-        kLR = Gaux.T.real.copy('C')
-        kLI = Gaux.T.imag.copy('C')
+    def cholesky_decomposed_metric(uniq_kptji_id):
         j2c = numpy.asarray(fswap['j2c/%d'%uniq_kptji_id])
         j2c_negative = None
 # Note large difference may be found in results between the CD/eig treatments.
@@ -139,7 +125,26 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
             if len(idx) > 0:
                 j2c_negative = (v[:,idx]/numpy.sqrt(-w[idx])).conj().T
         j2ctag = 'eig'
-        w = v = v1 = None
+        return j2c, j2c_negative, j2ctag
+
+    feri = h5py.File(cderi_file)
+    feri['j3c-kptij'] = kptij_lst
+    nsegs = len(fswap['j3c-junk/0'])
+    def make_kpt(uniq_kptji_id, cholesky_j2c):  # kpt = kptj - kpti
+        kpt = uniq_kpts[uniq_kptji_id]
+        log.debug1('kpt = %s', kpt)
+        adapted_ji_idx = numpy.where(uniq_inverse == uniq_kptji_id)[0]
+        adapted_kptjs = kptjs[adapted_ji_idx]
+        nkptj = len(adapted_kptjs)
+        log.debug1('adapted_ji_idx = %s', adapted_ji_idx)
+
+        j2c, j2c_negative, j2ctag = cholesky_j2c
+
+        Gaux = ft_ao.ft_ao(fused_cell, Gv, None, b, gxyz, Gvbase, kpt).T
+        Gaux = fuse(Gaux)
+        Gaux *= mydf.weighted_coulG(kpt, False, mesh)
+        kLR = Gaux.T.real.copy('C')
+        kLI = Gaux.T.imag.copy('C')
 
         if is_zero(kpt):  # kpti == kptj
             aosym = 's2'
@@ -235,8 +240,57 @@ def _make_j3c(mydf, cell, auxcell, kptij_lst, cderi_file):
         for ji in adapted_ji_idx:
             del(fswap['j3c-junk/%d'%ji])
 
+    # Wrapped around boundary and symmetry between k and -k can be used
+    # explicitly for the metric integrals.  We consider this symmetry
+    # because it is used in the df_ao2mo module when contracting two 3-index
+    # integral tensors to the 4-index 2e integral tensor. If the symmetry
+    # related k-points are treated separately, the resultant 3-index tensors
+    # may have inconsistent dimension due to the numerial noise when handling
+    # linear dependency of j2c.
+    def conj_j2c(cholesky_j2c):
+        j2c, j2c_negative, j2ctag = cholesky_j2c
+        if j2c_negative is None:
+            return j2c.conj(), None, j2ctag
+        else:
+            return j2c.conj(), j2c_negative.conj(), j2ctag
+
+    a = cell.lattice_vectors() / (2*numpy.pi)
+    def kconserve_indices(kpt):
+        '''search which (kpts+kpt) satisfies momentum conservation'''
+        kdif = numpy.einsum('wx,ix->wi', a, uniq_kpts + kpt)
+        kdif_int = numpy.rint(kdif)
+        mask = numpy.einsum('wi->i', abs(kdif - kdif_int)) < KPT_DIFF_TOL
+        uniq_kptji_ids = numpy.where(mask)[0]
+        return uniq_kptji_ids
+
+    done = numpy.zeros(len(uniq_kpts), dtype=bool)
     for k, kpt in enumerate(uniq_kpts):
-        make_kpt(k)
+        if done[k]:
+            continue
+
+        log.debug1('Cholesky decomposition for j2c at kpt %s', k)
+        cholesky_j2c = cholesky_decomposed_metric(k)
+
+        # The k-point k' which has (k - k') * a = 2n pi. Metric integrals have the
+        # symmetry S = S
+        uniq_kptji_ids = kconserve_indices(-kpt)
+        log.debug1("Symmetry pattern (k - %s)*a= 2n pi", kpt)
+        log.debug1("    make_kpt for uniq_kptji_ids %s", uniq_kptji_ids)
+        for uniq_kptji_id in uniq_kptji_ids:
+            if not done[uniq_kptji_id]:
+                make_kpt(uniq_kptji_id, cholesky_j2c)
+        done[uniq_kptji_ids] = True
+
+        # The k-point k' which has (k + k') * a = 2n pi. Metric integrals have the
+        # symmetry S = S*
+        uniq_kptji_ids = kconserve_indices(kpt)
+        log.debug1("Symmetry pattern (k + %s)*a= 2n pi", kpt)
+        log.debug1("    make_kpt for %s", uniq_kptji_ids)
+        cholesky_j2c = conj_j2c(cholesky_j2c)
+        for uniq_kptji_id in uniq_kptji_ids:
+            if not done[uniq_kptji_id]:
+                make_kpt(uniq_kptji_id, cholesky_j2c)
+        done[uniq_kptji_ids] = True
 
     feri.close()
 

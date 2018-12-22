@@ -45,3 +45,8 @@ class KnownValues(unittest.TestCase):
         kijkab = [range(nkpts),range(nkpts),1,range(nkpts),range(nkpts)]
         kconserve = tools.get_kconserv3(cell, kpts, kijkab)
         self.assertAlmostEqual(lib.finger(kconserve), -3.1172758206126852, 0)
+
+if __name__ == "__main__":
+    print("Tests for kpts_helper")
+    unittest.main()
+

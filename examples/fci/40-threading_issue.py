@@ -57,8 +57,10 @@ print(e)
 #
 # Another Example.
 #
-h1, h2 = numpy.load('spin_op_hamiltonian.npy')
-h1 = lib.unpack_tril(h1)
+import h5py
+with h5py.File('spin_op_hamiltonian.h5', 'r') as f:
+    h1 = lib.unpack_tril(f['h1'].value)
+    h2 = f['h2'].value
 
 norb = 10
 nelec = (5,5)
