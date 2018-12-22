@@ -25,5 +25,6 @@ myhf.kernel()
 
 # 4 orbitals, 4 electrons
 mycas = mcscf.CASSCF(myhf, 4, 4)
+# Note sort_mo by default take the 1-based orbital indices.
 mo = mycas.sort_mo([5,6,8,9])
 mycas.kernel(mo)
