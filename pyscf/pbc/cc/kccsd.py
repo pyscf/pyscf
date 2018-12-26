@@ -153,31 +153,21 @@ def update_amps(cc, t1, t2, eris):
         tmp = einsum('jmab,mi->ijab', t2[kj, ki, ka], Ftmp)
         t2new[ki, kj, ka] += tmp
 
-        for km in range(nkpts):
-            # Wminj
-            #   - km - kn + ka + kb = 0
-            # =>  kn = ka - km + kb
-            kn = kconserv[ka, km, kb]
-            t2new[ki, kj, ka] += 0.5 * einsum('mnab,mnij->ijab', tau[km, kn, ka], Woooo[km, kn, ki])
-            ke = km
-            t2new[ki, kj, ka] += 0.5 * einsum('ijef,abef->ijab', tau[ki, kj, ke], Wvvvv[ka, kb, ke])
+        km = numpy.arange(nkpts)
+        kn = kconserv[ka, km, kb]
+        kmn = [km,kn]
+        t2new[ki,kj,ka] += 0.5 * einsum('xmnab, xmnij->ijab', tau[kmn][ka], Woooo[kmn][ki])
+        ke = km
+        t2new[ki,kj,ka] += 0.5 * einsum('xijef, xabef->ijab', tau[ki,kj,:], Wvvvv[ka,kb,:])
 
-            # Wmbej
-            #     - km - kb + ke + kj = 0
-            #  => ke = km - kj + kb
-            ke = kconserv[km, kj, kb]
-            tmp = einsum('imae,mbej->ijab', t2[ki, km, ka], Wovvo[km, kb, ke])
-            #     - km - kb + ke + kj = 0
-            # =>  ke = km - kj + kb
-            #
-            # t[i,e] => ki = ke
-            # t[m,a] => km = ka
-            if km == ka and ke == ki:
-                tmp -= einsum('ie,ma,mbej->ijab', t1[ki], t1[km], eris_ovvo[km, kb, ke])
-            t2new[ki, kj, ka] += tmp
-            t2new[ki, kj, kb] -= tmp.transpose(0, 1, 3, 2)
-            t2new[kj, ki, ka] -= tmp.transpose(1, 0, 2, 3)
-            t2new[kj, ki, kb] += tmp.transpose(1, 0, 3, 2)
+        ke = kconserv[km, kj, kb]
+        kme = [km, ke]
+        tmp = einsum('ximae,xmbej->ijab', t2[ki,:,ka], Wovvo.transpose(1,0,2,3,4,5,6)[kb][kme])
+        tmp -= einsum('ie, ma, mbej->ijab', t1[ki], t1[ka], eris_ovvo[ka, kb, ki])
+        t2new[ki, kj, ka] += tmp
+        t2new[ki, kj, kb] -= tmp.transpose(0, 1, 3, 2)
+        t2new[kj, ki, ka] -= tmp.transpose(1, 0, 2, 3)
+        t2new[kj, ki, kb] += tmp.transpose(1, 0, 3, 2)
 
         ke = ki
         tmp = einsum('ie,abej->ijab', t1[ki], eris_vvvo[ka, kb, ke])
