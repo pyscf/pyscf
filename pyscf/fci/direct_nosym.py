@@ -36,6 +36,7 @@ import ctypes
 import numpy
 import scipy.linalg
 from pyscf import lib
+from pyscf import ao2mo
 from pyscf.fci import cistring
 from pyscf.fci import direct_spin1
 
@@ -117,7 +118,7 @@ def absorb_h1e(h1e, eri, norb, nelec, fac=1):
     '''
     if not isinstance(nelec, (int, numpy.number)):
         nelec = sum(nelec)
-    h2e = eri.copy()
+    h2e = ao2mo.restore(1, eri.copy(), norb)
     f1e = h1e - numpy.einsum('jiik->jk', h2e) * .5
     f1e = f1e * (1./(nelec+1e-100))
     for k in range(norb):
@@ -161,6 +162,22 @@ class FCISolver(direct_spin1.FCISolver):
                                        **kwargs)
         self.eci, self.ci = e, c
         return e, c
+
+    def eig(self, op, x0=None, precond=None, **kwargs):
+        if isinstance(op, numpy.ndarray):
+            self.converged = True
+            return scipy.linalg.eigh(op)
+
+        # TODO: check the hermitian of Hamiltonian then determine whether to
+        # call the non-hermitian diagonlization solver davidson_nosym1
+        self.converged, e, ci = \
+                lib.davidson1(lambda xs: [op(x) for x in xs],
+                              x0, precond, lessio=self.lessio, **kwargs)
+        if kwargs.get('nroots', 1) == 1:
+            self.converged = self.converged[0]
+            e = e[0]
+            ci = ci[0]
+        return e, ci
 
 FCI = FCISolver
 

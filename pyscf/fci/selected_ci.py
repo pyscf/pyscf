@@ -302,12 +302,7 @@ def kernel_fixed_space(myci, h1e, eri, norb, nelec, ci_strs, ci0=None,
                        tol=None, lindep=None, max_cycle=None, max_space=None,
                        nroots=None, davidson_only=None,
                        max_memory=None, verbose=None, ecore=0, **kwargs):
-    if verbose is None:
-        log = logger.Logger(myci.stdout, myci.verbose)
-    elif isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(myci.stdout, verbose)
+    log = logger.new_logger(myci, verbose)
     if tol is None: tol = myci.conv_tol
     if lindep is None: lindep = myci.lindep
     if max_cycle is None: max_cycle = myci.max_cycle
@@ -354,12 +349,7 @@ def kernel_float_space(myci, h1e, eri, norb, nelec, ci0=None,
                        tol=None, lindep=None, max_cycle=None, max_space=None,
                        nroots=None, davidson_only=None,
                        max_memory=None, verbose=None, ecore=0, **kwargs):
-    if verbose is None:
-        log = logger.Logger(myci.stdout, myci.verbose)
-    elif isinstance(verbose, logger.Logger):
-        log = verbose
-    else:
-        log = logger.Logger(myci.stdout, verbose)
+    log = logger.new_logger(myci, verbose)
     if tol is None: tol = myci.conv_tol
     if lindep is None: lindep = myci.lindep
     if max_cycle is None: max_cycle = myci.max_cycle
@@ -737,7 +727,7 @@ class SelectedCI(direct_spin1.FCISolver):
         self._strs = None
         keys = set(('ci_coeff_cutoff', 'select_cutoff', 'conv_tol',
                     'start_tol', 'tol_decay_rate'))
-        self._keys = set(self.__dict__.keys()).union(keys)
+        self._keys = self._keys.union(keys)
 
     def dump_flags(self, verbose=None):
         direct_spin1.FCISolver.dump_flags(self, verbose)

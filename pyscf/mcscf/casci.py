@@ -256,20 +256,6 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
         casorb_idx = numpy.argsort(occ.round(9), kind='mergesort')
         occ = occ[casorb_idx]
         ucas = ucas[:,casorb_idx]
-# restore phase
-# where_natorb gives the location of the natural orbital for the input cas
-# orbitals.  gen_strings4orblist map thes sorted strings (on CAS orbital) to
-# the unsorted determinant strings (on natural orbital). e.g.  (3o,2e) system
-#       CAS orbital      1  2  3
-#       natural orbital  3  1  2        <= by mo_1to1map
-#       CASorb-strings   0b011, 0b101, 0b110
-#                    ==  (1,2), (1,3), (2,3)
-#       natorb-strings   (3,1), (3,2), (1,2)
-#                    ==  0B101, 0B110, 0B011    <= by gen_strings4orblist
-# then argsort to translate the string representation to the address
-#       [2(=0B011), 0(=0B101), 1(=0B110)]
-# to indicate which CASorb-strings address to be loaded in each natorb-strings slot
-    where_natorb = mo_1to1map(ucas)
 
     occ = -occ
     mo_occ = numpy.zeros(mo_coeff.shape[1])
@@ -324,6 +310,8 @@ def cas_natorb(mc, mo_coeff=None, ci=None, eris=None, sort=False,
 
     if log.verbose >= logger.INFO:
         ovlp_ao = mc._scf.get_ovlp()
+        # where_natorb gives the new locations of the natural orbitals
+        where_natorb = mo_1to1map(ucas)
         log.debug('where_natorb %s', str(where_natorb))
         log.info('Natural occ %s', str(occ))
         if with_meta_lowdin:
