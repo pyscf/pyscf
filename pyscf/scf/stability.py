@@ -51,7 +51,7 @@ def rhf_stability(mf, internal=True, external=False, verbose=None):
     Returns:
         New orbitals that are more close to the stable condition.  The return
         value includes two set of orbitals.  The first corresponds to the
-        internal stablity and the second corresponds to the external stability.
+        internal stability and the second corresponds to the external stability.
     '''
     mo_i = mo_e = None
     if internal:
@@ -77,7 +77,7 @@ def uhf_stability(mf, internal=True, external=False, verbose=None):
     Returns:
         New orbitals that are more close to the stable condition.  The return
         value includes two set of orbitals.  The first corresponds to the
-        internal stablity and the second corresponds to the external stability.
+        internal stability and the second corresponds to the external stability.
     '''
     mo_i = mo_e = None
     if internal:
@@ -129,7 +129,7 @@ def ghf_stability(mf, verbose=None):
         log.note('GHF wavefunction has an internal instablity')
         mo = _rotate_mo(mf.mo_coeff, mf.mo_occ, v)
     else:
-        log.note('GHF wavefunction is stable in the intenral stablity analysis')
+        log.note('GHF wavefunction is stable in the intenral stability analysis')
         mo = mf.mo_coeff
     return mo
 
@@ -151,7 +151,7 @@ def rhf_internal(mf, with_symmetry=True, verbose=None):
         log.note('RHF/RKS wavefunction has an internal instablity')
         mo = _rotate_mo(mf.mo_coeff, mf.mo_occ, v)
     else:
-        log.note('RHF/RKS wavefunction is stable in the intenral stablity analysis')
+        log.note('RHF/RKS wavefunction is stable in the intenral stability analysis')
         mo = mf.mo_coeff
     return mo
 
@@ -178,7 +178,7 @@ def _gen_hop_rhf_external(mf, with_symmetry=True, verbose=None):
     h1e = mf.get_hcore()
     dm0 = mf.make_rdm1(mo_coeff, mo_occ)
     fock_ao = h1e + mf.get_veff(mol, dm0)
-    fock = reduce(numpy.dot, (mo_coeff.T, fock_ao, mo_coeff))
+    fock = reduce(numpy.dot, (mo_coeff.conj().T, fock_ao, mo_coeff))
     foo = fock[occidx[:,None],occidx]
     fvv = fock[viridx[:,None],viridx]
 
@@ -196,11 +196,11 @@ def _gen_hop_rhf_external(mf, with_symmetry=True, verbose=None):
         x2 = numpy.einsum('ps,sq->pq', fvv, x1)
         x2-= numpy.einsum('ps,rp->rs', foo, x1)
 
-        d1 = reduce(numpy.dot, (orbv, x1*2, orbo.T.conj()))
-        dm1 = d1 - d1.T.conj()
+        d1 = reduce(numpy.dot, (orbv, x1*2, orbo.conj().T))
+        dm1 = d1 - d1.conj().T
 # No Coulomb and fxc contribution for anti-hermitian DM
         v1 = vrespz(dm1)
-        x2 += reduce(numpy.dot, (orbv.T.conj(), v1, orbo))
+        x2 += reduce(numpy.dot, (orbv.conj().T, v1, orbo))
         if with_symmetry and mol.symmetry:
             x2[sym_forbid] = 0
         return x2.ravel()
@@ -216,10 +216,10 @@ def _gen_hop_rhf_external(mf, with_symmetry=True, verbose=None):
         x2 = numpy.einsum('ps,sq->pq', fvv, x1)
         x2-= numpy.einsum('ps,rp->rs', foo, x1)
 
-        d1 = reduce(numpy.dot, (orbv, x1*2, orbo.T.conj()))
-        dm1 = d1 + d1.T.conj()
+        d1 = reduce(numpy.dot, (orbv, x1*2, orbo.conj().T))
+        dm1 = d1 + d1.conj().T
         v1ao = vresp1(dm1)
-        x2 += reduce(numpy.dot, (orbv.T.conj(), v1ao, orbo))
+        x2 += reduce(numpy.dot, (orbv.conj().T, v1ao, orbo))
         if with_symmetry and mol.symmetry:
             x2[sym_forbid] = 0
         return x2.ravel()
@@ -243,7 +243,7 @@ def rhf_external(mf, with_symmetry=True, verbose=None):
     if e1 < -1e-5:
         log.note('RHF/RKS wavefunction has a real -> complex instablity')
     else:
-        log.note('RHF/RKS wavefunction is stable in the real -> complex stablity analysis')
+        log.note('RHF/RKS wavefunction is stable in the real -> complex stability analysis')
 
     def precond(dx, e, x0):
         hdiagd = hdiag2 - e
@@ -255,7 +255,7 @@ def rhf_external(mf, with_symmetry=True, verbose=None):
         log.note('RHF/RKS wavefunction has a RHF/RKS -> UHF/UKS instablity.')
         mo = (_rotate_mo(mf.mo_coeff, mf.mo_occ, v3), mf.mo_coeff)
     else:
-        log.note('RHF/RKS wavefunction is stable in the RHF/RKS -> UHF/UKS stablity analysis')
+        log.note('RHF/RKS wavefunction is stable in the RHF/RKS -> UHF/UKS stability analysis')
         mo = (mf.mo_coeff, mf.mo_coeff)
     return mo
 
@@ -277,7 +277,7 @@ def rohf_internal(mf, with_symmetry=True, verbose=None):
         log.note('ROHF wavefunction has an internal instablity.')
         mo = _rotate_mo(mf.mo_coeff, mf.mo_occ, v)
     else:
-        log.note('ROHF wavefunction is stable in the intenral stablity analysis')
+        log.note('ROHF wavefunction is stable in the intenral stability analysis')
         mo = mf.mo_coeff
     return mo
 
@@ -305,7 +305,7 @@ def uhf_internal(mf, with_symmetry=True, verbose=None):
         mo = (_rotate_mo(mf.mo_coeff[0], mf.mo_occ[0], v[:nocca*nvira]),
               _rotate_mo(mf.mo_coeff[1], mf.mo_occ[1], v[nocca*nvira:]))
     else:
-        log.note('UHF/UKS wavefunction is stable in the intenral stablity analysis')
+        log.note('UHF/UKS wavefunction is stable in the intenral stability analysis')
         mo = mf.mo_coeff
     return mo
 
@@ -336,8 +336,8 @@ def _gen_hop_uhf_external(mf, with_symmetry=True, verbose=None):
     h1e = mf.get_hcore()
     dm0 = mf.make_rdm1(mo_coeff, mo_occ)
     fock_ao = h1e + mf.get_veff(mol, dm0)
-    focka = reduce(numpy.dot, (mo_coeff[0].T, fock_ao[0], mo_coeff[0]))
-    fockb = reduce(numpy.dot, (mo_coeff[1].T, fock_ao[1], mo_coeff[1]))
+    focka = reduce(numpy.dot, (mo_coeff[0].conj().T, fock_ao[0], mo_coeff[0]))
+    fockb = reduce(numpy.dot, (mo_coeff[1].conj().T, fock_ao[1], mo_coeff[1]))
     fooa = focka[occidxa[:,None],occidxa]
     fvva = focka[viridxa[:,None],viridxa]
     foob = fockb[occidxb[:,None],occidxb]
@@ -364,13 +364,13 @@ def _gen_hop_uhf_external(mf, with_symmetry=True, verbose=None):
         x2b = numpy.einsum('pr,rq->pq', fvvb, x1b)
         x2b-= numpy.einsum('qs,ps->pq', foob, x1b)
 
-        d1a = reduce(numpy.dot, (orbva, x1a, orboa.T.conj()))
-        d1b = reduce(numpy.dot, (orbvb, x1b, orbob.T.conj()))
-        dm1 = numpy.array((d1a-d1a.T.conj(), d1b-d1b.T.conj()))
+        d1a = reduce(numpy.dot, (orbva, x1a, orboa.conj().T))
+        d1b = reduce(numpy.dot, (orbvb, x1b, orbob.conj().T))
+        dm1 = numpy.array((d1a-d1a.conj().T, d1b-d1b.conj().T))
 
         v1 = vrespz(dm1)
-        x2a += reduce(numpy.dot, (orbva.T.conj(), v1[0], orboa))
-        x2b += reduce(numpy.dot, (orbvb.T.conj(), v1[1], orbob))
+        x2a += reduce(numpy.dot, (orbva.conj().T, v1[0], orboa))
+        x2b += reduce(numpy.dot, (orbvb.conj().T, v1[1], orbob))
         x2 = numpy.hstack((x2a.ravel(), x2b.ravel()))
         if with_symmetry and mol.symmetry:
             x2[sym_forbid1] = 0
@@ -400,12 +400,12 @@ def _gen_hop_uhf_external(mf, with_symmetry=True, verbose=None):
         x2ba = numpy.einsum('pr,rq->pq', fvvb, x1ba)
         x2ba-= numpy.einsum('qs,ps->pq', fooa, x1ba)
 
-        d1ab = reduce(numpy.dot, (orbva, x1ab, orbob.T.conj()))
-        d1ba = reduce(numpy.dot, (orbvb, x1ba, orboa.T.conj()))
-        dm1 = numpy.array((d1ab+d1ba.T.conj(), d1ba+d1ab.T.conj()))
+        d1ab = reduce(numpy.dot, (orbva, x1ab, orbob.conj().T))
+        d1ba = reduce(numpy.dot, (orbvb, x1ba, orboa.conj().T))
+        dm1 = numpy.array((d1ab+d1ba.conj().T, d1ba+d1ab.conj().T))
         v1 = vresp1(dm1)
-        x2ab += reduce(numpy.dot, (orbva.T.conj(), v1[0], orbob))
-        x2ba += reduce(numpy.dot, (orbvb.T.conj(), v1[1], orboa))
+        x2ab += reduce(numpy.dot, (orbva.conj().T, v1[0], orbob))
+        x2ba += reduce(numpy.dot, (orbvb.conj().T, v1[1], orboa))
         x2 = numpy.hstack((x2ab.ravel(), x2ba.ravel()))
         if with_symmetry and mol.symmetry:
             x2[sym_forbid2] = 0
@@ -430,7 +430,7 @@ def uhf_external(mf, with_symmetry=True, verbose=None):
     if e1 < -1e-5:
         log.note('UHF/UKS wavefunction has a real -> complex instablity')
     else:
-        log.note('UHF/UKS wavefunction is stable in the real -> complex stablity analysis')
+        log.note('UHF/UKS wavefunction is stable in the real -> complex stability analysis')
 
     def precond(dx, e, x0):
         hdiagd = hdiag2 - e
@@ -457,12 +457,12 @@ def uhf_external(mf, with_symmetry=True, verbose=None):
         dx = numpy.zeros((nmo*2,nmo*2))
         dx[viridxa[:,None],nmo+occidxb] = v[:nvira*noccb].reshape(nvira,noccb)
         dx[nmo+viridxb[:,None],occidxa] = v[nvira*noccb:].reshape(nvirb,nocca)
-        u = newton_ah.expmat(dx - dx.T)
+        u = newton_ah.expmat(dx - dx.conj().T)
         mo = numpy.dot(mo, u)
         mo = numpy.hstack([mo[:,:nocca], mo[:,nmo:nmo+noccb],
                            mo[:,nocca:nmo], mo[:,nmo+noccb:]])
     else:
-        log.note('UHF/UKS wavefunction is stable in the UHF/UKS -> GHF/GKS stablity analysis')
+        log.note('UHF/UKS wavefunction is stable in the UHF/UKS -> GHF/GKS stability analysis')
     return mo
 
 

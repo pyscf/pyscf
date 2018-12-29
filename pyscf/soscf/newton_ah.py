@@ -71,18 +71,18 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
         # projected basis.
         dm0 = mf.make_rdm1(mo_coeff, mo_occ)
         fock_ao = mf.get_fock(h1e, dm=dm0)
-        fock = reduce(numpy.dot, (mo_coeff.T, fock_ao, mo_coeff))
+        fock = reduce(numpy.dot, (mo_coeff.conj().T, fock_ao, mo_coeff))
     else:
         # If fock is given, it corresponds to main basis. It needs to be
         # diagonalized with the mo_coeff of the main basis.
-        fock = reduce(numpy.dot, (mo_coeff0.T, fock_ao, mo_coeff0))
+        fock = reduce(numpy.dot, (mo_coeff0.conj().T, fock_ao, mo_coeff0))
 
     g = fock[viridx[:,None],occidx] * 2
 
     foo = fock[occidx[:,None],occidx]
     fvv = fock[viridx[:,None],viridx]
 
-    h_diag = (fvv.diagonal()[:,None] - foo.diagonal()) * 2
+    h_diag = (fvv.diagonal().real[:,None] - foo.diagonal().real) * 2
 
     if with_symmetry and mol.symmetry:
         g[sym_forbid] = 0
@@ -100,13 +100,17 @@ def gen_g_hop_rhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
         x2-= numpy.einsum('ps,rp->rs', foo, x)
 
         # *2 for double occupancy
-        d1 = reduce(numpy.dot, (orbv, x*2, orbo.T.conj()))
-        dm1 = d1 + d1.T.conj()
+        d1 = reduce(numpy.dot, (orbv, x*2, orbo.conj().T))
+        dm1 = d1 + d1.conj().T
         v1 = vind(dm1)
-        x2 += reduce(numpy.dot, (orbv.T.conj(), v1, orbo))
+        x2 += reduce(numpy.dot, (orbv.conj().T, v1, orbo))
         if with_symmetry and mol.symmetry:
             x2[sym_forbid] = 0
-        return x2.reshape(-1) * 2
+        # The displacement x2 corresponds to the response of rotation for bra.
+        # Hessian*x also provides the rotation for ket which equals to
+        # x2.T.conj(). The overall displacement is x2 + x2.T.conj(). This is
+        # the reason of x2.real below
+        return x2.real.ravel() * 2
 
     return g.reshape(-1), h_op, h_diag.reshape(-1)
 
@@ -177,11 +181,11 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
     if fock_ao is None:
         dm0 = mf.make_rdm1(mo_coeff, mo_occ)
         fock_ao = mf.get_fock(h1e, dm=dm0)
-        focka = reduce(numpy.dot, (mo_coeff[0].T, fock_ao[0], mo_coeff[0]))
-        fockb = reduce(numpy.dot, (mo_coeff[1].T, fock_ao[1], mo_coeff[1]))
+        focka = reduce(numpy.dot, (mo_coeff[0].conj().T, fock_ao[0], mo_coeff[0]))
+        fockb = reduce(numpy.dot, (mo_coeff[1].conj().T, fock_ao[1], mo_coeff[1]))
     else:
-        focka = reduce(numpy.dot, (mo_coeff0[0].T, fock_ao[0], mo_coeff0[0]))
-        fockb = reduce(numpy.dot, (mo_coeff0[1].T, fock_ao[1], mo_coeff0[1]))
+        focka = reduce(numpy.dot, (mo_coeff0[0].conj().T, fock_ao[0], mo_coeff0[0]))
+        fockb = reduce(numpy.dot, (mo_coeff0[1].conj().T, fock_ao[1], mo_coeff0[1]))
     fooa = focka[occidxa[:,None],occidxa]
     fvva = focka[viridxa[:,None],viridxa]
     foob = fockb[occidxb[:,None],occidxb]
@@ -190,8 +194,8 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
     g = numpy.hstack((focka[viridxa[:,None],occidxa].ravel(),
                       fockb[viridxb[:,None],occidxb].ravel()))
 
-    h_diaga = fvva.diagonal()[:,None] - fooa.diagonal()
-    h_diagb = fvvb.diagonal()[:,None] - foob.diagonal()
+    h_diaga = fvva.diagonal().real[:,None] - fooa.diagonal().real
+    h_diagb = fvvb.diagonal().real[:,None] - foob.diagonal().real
     h_diag = numpy.hstack((h_diaga.reshape(-1), h_diagb.reshape(-1)))
 
     if with_symmetry and mol.symmetry:
@@ -211,13 +215,18 @@ def gen_g_hop_uhf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
         x2b = numpy.einsum('pr,rq->pq', fvvb, x1b)
         x2b-= numpy.einsum('sq,ps->pq', foob, x1b)
 
-        d1a = reduce(numpy.dot, (orbva, x1a, orboa.T.conj()))
-        d1b = reduce(numpy.dot, (orbvb, x1b, orbob.T.conj()))
-        dm1 = numpy.array((d1a+d1a.T.conj(),d1b+d1b.T.conj()))
+        d1a = reduce(numpy.dot, (orbva, x1a, orboa.conj().T))
+        d1b = reduce(numpy.dot, (orbvb, x1b, orbob.conj().T))
+        dm1 = numpy.array((d1a+d1a.conj().T,d1b+d1b.conj().T))
         v1 = vind(dm1)
-        x2a += reduce(numpy.dot, (orbva.T.conj(), v1[0], orboa))
-        x2b += reduce(numpy.dot, (orbvb.T.conj(), v1[1], orbob))
-        x2 = numpy.hstack((x2a.ravel(), x2b.ravel()))
+        x2a += reduce(numpy.dot, (orbva.conj().T, v1[0], orboa))
+        x2b += reduce(numpy.dot, (orbvb.conj().T, v1[1], orbob))
+
+        # The displacement x2 corresponds to the response of rotation for bra.
+        # Hessian*x also provides the rotation for ket which equals to
+        # x2.T.conj(). The overall displacement is x2 + x2.T.conj(). This is
+        # the reason of x2.real below
+        x2 = numpy.hstack((x2a.real.ravel(), x2b.real.ravel()))
         if with_symmetry and mol.symmetry:
             x2[sym_forbid] = 0
         return x2
@@ -240,14 +249,14 @@ def gen_g_hop_ghf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
     if fock_ao is None:
         dm0 = mf.make_rdm1(mo_coeff, mo_occ)
         fock_ao = mf.get_fock(h1e, dm=dm0)
-    fock = reduce(numpy.dot, (mo_coeff.T.conj(), fock_ao, mo_coeff))
+    fock = reduce(numpy.dot, (mo_coeff.conj().T, fock_ao, mo_coeff))
 
     g = fock[viridx[:,None],occidx]
 
     foo = fock[occidx[:,None],occidx]
     fvv = fock[viridx[:,None],viridx]
 
-    h_diag = fvv.diagonal()[:,None] - foo.diagonal()
+    h_diag = fvv.diagonal().real[:,None] - foo.diagonal().real
 
     if with_symmetry and mol.symmetry:
         g[sym_forbid] = 0
@@ -263,13 +272,17 @@ def gen_g_hop_ghf(mf, mo_coeff, mo_occ, fock_ao=None, h1e=None,
         x2 = numpy.einsum('ps,sq->pq', fvv, x)
         x2-= numpy.einsum('ps,rp->rs', foo, x)
 
-        d1 = reduce(numpy.dot, (orbv, x, orbo.T.conj()))
-        dm1 = d1 + d1.T.conj()
+        d1 = reduce(numpy.dot, (orbv, x, orbo.conj().T))
+        dm1 = d1 + d1.conj().T
         v1 = vind(dm1)
-        x2 += reduce(numpy.dot, (orbv.T.conj(), v1, orbo))
+        x2 += reduce(numpy.dot, (orbv.conj().T, v1, orbo))
         if with_symmetry and mol.symmetry:
             x2[sym_forbid] = 0
-        return x2.ravel()
+        # The displacement x2 corresponds to the response of rotation for bra.
+        # Hessian*x also provides the rotation for ket which equals to
+        # x2.T.conj(). The overall displacement is x2 + x2.T.conj(). This is
+        # the reason of x2.real below
+        return x2.real.ravel()
 
     return g.reshape(-1), h_op, h_diag.reshape(-1)
 
@@ -972,8 +985,7 @@ def newton(mf):
         build = _CIAH_SOSCF.build
         kernel = _CIAH_SOSCF.kernel
 
-        def gen_g_hop(self, mo_coeff, mo_occ, fock_ao=None, h1e=None):
-            return gen_g_hop_rhf(self, mo_coeff, mo_occ, fock_ao, h1e)
+        gen_g_hop = gen_g_hop_rhf
 
         def rotate_mo(self, mo_coeff, u, log=None):
             mo = _CIAH_SOSCF.rotate_mo(self, mo_coeff, u, log)
@@ -989,8 +1001,7 @@ def newton(mf):
 
     if isinstance(mf, rohf.ROHF):
         class SecondOrderROHF(SecondOrderRHF):
-            def gen_g_hop(self, mo_coeff, mo_occ, fock_ao=None, h1e=None):
-                return gen_g_hop_rohf(self, mo_coeff, mo_occ, fock_ao, h1e)
+            gen_g_hop = gen_g_hop_rohf
         return SecondOrderROHF(mf)
 
     elif isinstance(mf, uhf.UHF):
@@ -1000,8 +1011,7 @@ def newton(mf):
             dump_flags = _CIAH_SOSCF.dump_flags
             build = _CIAH_SOSCF.build
 
-            def gen_g_hop(self, mo_coeff, mo_occ, fock_ao=None, h1e=None):
-                return gen_g_hop_uhf(self, mo_coeff, mo_occ, fock_ao, h1e)
+            gen_g_hop = gen_g_hop_uhf
 
             def update_rotate_matrix(self, dx, mo_occ, u0=1, mo_coeff=None):
                 occidxa = mo_occ[0] > 0
@@ -1063,8 +1073,7 @@ def newton(mf):
             build = _CIAH_SOSCF.build
             kernel = _CIAH_SOSCF.kernel
 
-            def gen_g_hop(self, mo_coeff, mo_occ, fock_ao=None, h1e=None):
-                return gen_g_hop_ghf(self, mo_coeff, mo_occ, fock_ao, h1e)
+            gen_g_hop = gen_g_hop_ghf
 
             def update_rotate_matrix(self, dx, mo_occ, u0=1, mo_coeff=None):
                 dr = hf.unpack_uniq_var(dx, mo_occ)

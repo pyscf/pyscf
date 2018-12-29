@@ -224,8 +224,8 @@ def make_rdm1(mo_coeff, mo_occ, **kwargs):
     '''
     mo_a = mo_coeff[:,mo_occ>0]
     mo_b = mo_coeff[:,mo_occ==2]
-    dm_a = numpy.dot(mo_a, mo_a.T)
-    dm_b = numpy.dot(mo_b, mo_b.T)
+    dm_a = numpy.dot(mo_a, mo_a.conj().T)
+    dm_b = numpy.dot(mo_b, mo_b.conj().T)
     return numpy.array((dm_a, dm_b))
 
 def energy_elec(mf, dm=None, h1e=None, vhf=None):
@@ -292,8 +292,9 @@ def canonicalize(mf, mo_coeff, mo_occ, fock=None):
         fock = mf.get_fock(dm=dm)
     mo_e, mo_coeff = hf.canonicalize(mf, mo_coeff, mo_occ, fock)
     if hasattr(fock, 'focka'):
-        mo_ea = numpy.einsum('pi,pi->i', mo_coeff, fock.focka.dot(mo_coeff))
-        mo_eb = numpy.einsum('pi,pi->i', mo_coeff, fock.fockb.dot(mo_coeff))
+        fa, fb = fock.focka, fock.fockb
+        mo_ea = numpy.einsum('pi,pi->i', mo_coeff.conj(), fa.dot(mo_coeff)).real
+        mo_eb = numpy.einsum('pi,pi->i', mo_coeff.conj(), fb.dot(mo_coeff)).real
         mo_e = lib.tag_array(mo_e, mo_ea=mo_ea, mo_eb=mo_eb)
     return mo_e, mo_coeff
 
@@ -367,8 +368,8 @@ class ROHF(hf.RHF):
     def eig(self, fock, s):
         e, c = self._eigh(fock, s)
         if hasattr(fock, 'focka'):
-            mo_ea = numpy.einsum('pi,pi->i', c, fock.focka.dot(c))
-            mo_eb = numpy.einsum('pi,pi->i', c, fock.fockb.dot(c))
+            mo_ea = numpy.einsum('pi,pi->i', c.conj(), fock.focka.dot(c)).real
+            mo_eb = numpy.einsum('pi,pi->i', c.conj(), fock.fockb.dot(c)).real
             e = lib.tag_array(e, mo_ea=mo_ea, mo_eb=mo_eb)
         return e, c
 
@@ -421,10 +422,7 @@ class ROHF(hf.RHF):
 
     def spin_square(self, mo_coeff=None, s=None):
         '''Spin square and multiplicity of RHF determinant'''
-        if getattr(self, 'nelec', None) is None:
-            neleca, nelecb = self.mol.nelec
-        else:
-            neleca, nelecb = self.nelec
+        neleca, nelecb = self.nelec
         ms = (neleca - nelecb) * .5
         ss = ms * (ms + 1)
         return ss, ms*2+1

@@ -359,6 +359,7 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
     lessio = lessio and not _incore
     log.debug1('max_cycle %d  max_space %d  max_memory %d  incore %s',
                max_cycle, max_space, max_memory, _incore)
+    dtype = None
     heff = None
     fresh_start = True
     e = 0
@@ -393,10 +394,12 @@ def davidson1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         rnow = len(xt)
         head, space = space, space+rnow
 
+        if dtype is None:
+            dtype = numpy.result_type(axt[0], xt[0], ax[0])
         if heff is None:  # Lazy initilize heff to determine the dtype
-            heff = numpy.empty((max_space+nroots,max_space+nroots), dtype=ax[0].dtype)
+            heff = numpy.empty((max_space+nroots,max_space+nroots), dtype=dtype)
         else:
-            heff = numpy.asarray(heff, dtype=ax[0].dtype)
+            heff = numpy.asarray(heff, dtype=dtype)
 
         elast = e
         vlast = v
@@ -712,6 +715,7 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
     lessio = lessio and not _incore
     log.debug1('max_cycle %d  max_space %d  max_memory %d  incore %s',
                max_cycle, max_space, max_memory, _incore)
+    dtype = None
     heff = None
     fresh_start = True
     e = 0
@@ -746,10 +750,12 @@ def davidson_nosym1(aop, x0, precond, tol=1e-12, max_cycle=50, max_space=12,
         rnow = len(xt)
         head, space = space, space+rnow
 
+        if dtype is None:
+            dtype = numpy.result_type(axt[0], xt[0], ax[0])
         if heff is None:  # Lazy initilize heff to determine the dtype
-            heff = numpy.empty((max_space+nroots,max_space+nroots), dtype=axt[0].dtype)
+            heff = numpy.empty((max_space+nroots,max_space+nroots), dtype=dtype)
         else:
-            heff = numpy.asarray(heff, dtype=axt[0].dtype)
+            heff = numpy.asarray(heff, dtype=dtype)
 
         elast = e
         vlast = v
@@ -1350,8 +1356,9 @@ def dsolve(aop, b, precond, tol=1e-12, max_cycle=30, dot=numpy.dot,
     xs = [precond(b)]
     ax = [aop(xs[-1])]
 
-    aeff = numpy.zeros((max_cycle,max_cycle), dtype=ax[0].dtype)
-    beff = numpy.zeros((max_cycle), dtype=ax[0].dtype)
+    dtype = numpy.result_type(ax[0], xs[0])
+    aeff = numpy.zeros((max_cycle,max_cycle), dtype=dtype)
+    beff = numpy.zeros((max_cycle), dtype=dtype)
     for istep in range(max_cycle):
         beff[istep] = dot(xs[istep], b)
         for i in range(istep+1):

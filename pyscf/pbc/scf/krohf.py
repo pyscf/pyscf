@@ -243,9 +243,10 @@ def canonicalize(mf, mo_coeff_kpts, mo_occ_kpts, fock=None):
                 mo1[:,idx] = np.dot(orb, c)
                 mo_e[idx] = e
         if hasattr(fock, 'focka'):
-            mo_ea = np.einsum('pi,pi->i', mo1.conj(), fock.focka[k].dot(mo1))
-            mo_eb = np.einsum('pi,pi->i', mo1.conj(), fock.fockb[k].dot(mo1))
-            mo_e = lib.tag_array(mo_e, mo_ea=mo_ea.real, mo_eb=mo_eb.real)
+            fa, fb = fock.focka[k], fock.fockb[k]
+            mo_ea = np.einsum('pi,pi->i', mo1.conj(), fa.dot(mo1)).real
+            mo_eb = np.einsum('pi,pi->i', mo1.conj(), fb.dot(mo1)).real
+            mo_e = lib.tag_array(mo_e, mo_ea=mo_ea, mo_eb=mo_eb)
         mo_coeff.append(mo1)
         mo_energy.append(mo_e)
     return mo_energy, mo_coeff
@@ -278,7 +279,7 @@ class KROHF(pbcrohf.ROHF, khf.KRHF):
             if nalpha + nbeta != ne:
                 raise RuntimeError('Electron number %d and spin %d are not consistent\n'
                                    'Note cell.spin = 2S = Nalpha - Nbeta, not 2S+1' %
-                                   (ne, self.spin))
+                                   (ne, cell.spin))
             return nalpha, nbeta
     @nelec.setter
     def nelec(self, x):
@@ -328,19 +329,19 @@ class KROHF(pbcrohf.ROHF, khf.KRHF):
             dm_kpts = np.repeat(dm[:,None,:,:], nkpts, axis=1)
 
         if cell.dimension < 3:
-            ne = np.einsum('xkij,kji->x', dm_kpts, self.get_ovlp(cell)).real
+            ne = np.einsum('xkij,kji->', dm_kpts, self.get_ovlp(cell)).real
             # FIXME: consider the fractional num_electron or not? This maybe
             # relates to the charged system.
             nkpts = len(self.kpts)
-            nelec = np.asarray(self.nelec)
+            nelec = sum(self.nelec)
             if np.any(abs(ne - nelec) > 1e-7*nkpts):
                 logger.warn(self, 'Big error detected in the electron number '
                             'of initial guess density matrix (Ne/cell = %g)!\n'
                             '  This can cause huge error in Fock matrix and '
                             'lead to instability in SCF for low-dimensional '
                             'systems.\n  DM is normalized to the number '
-                            'of electrons', ne.sum()/nkpts)
-                dm_kpts *= (nelec / ne).reshape(2,-1,1,1)
+                            'of electrons', ne/nkpts)
+                dm_kpts *= nelec / ne
         return dm_kpts
 
     get_hcore = khf.KSCF.get_hcore
@@ -351,6 +352,8 @@ class KROHF(pbcrohf.ROHF, khf.KRHF):
     get_fock = get_fock
     get_occ = get_occ
     energy_elec = energy_elec
+
+    get_rho = khf.KSCF.get_rho
 
     def get_veff(self, cell=None, dm_kpts=None, dm_last=0, vhf_last=0, hermi=1,
                  kpts=None, kpts_band=None):
@@ -390,9 +393,10 @@ class KROHF(pbcrohf.ROHF, khf.KRHF):
         e, c = khf.KSCF.eig(self, fock, s)
         if hasattr(fock, 'focka'):
             for k, mo in enumerate(c):
-                mo_ea = np.einsum('pi,pi->i', mo.conj(), fock.focka[k].dot(mo))
-                mo_eb = np.einsum('pi,pi->i', mo.conj(), fock.fockb[k].dot(mo))
-                e[k] = lib.tag_array(e[k], mo_ea=mo_ea.real, mo_eb=mo_eb.real)
+                fa, fb = fock.focka[k], fock.fockb[k]
+                mo_ea = np.einsum('pi,pi->i', mo.conj(), fa.dot(mo)).real
+                mo_eb = np.einsum('pi,pi->i', mo.conj(), fb.dot(mo)).real
+                e[k] = lib.tag_array(e[k], mo_ea=mo_ea, mo_eb=mo_eb)
         return e, c
 
     def make_rdm1(self, mo_coeff_kpts=None, mo_occ_kpts=None, **kwargs):
@@ -419,26 +423,17 @@ class KROHF(pbcrohf.ROHF, khf.KRHF):
         return mulliken_meta(cell, dm, s=s, verbose=verbose,
                              pre_orth_method=pre_orth_method)
 
-    get_rho = get_rho
-
     @lib.with_doc(dip_moment.__doc__)
     def dip_moment(self, cell=None, dm=None, unit='Debye', verbose=logger.NOTE,
                    **kwargs):
-        if dm is None:
-            dm = self.make_rdm1()
+        if cell is None: cell = self.cell
+        if dm is None: dm = self.make_rdm1()
         rho = kwargs.pop('rho', None)
         if rho is None:
             rho = self.get_rho(dm)
         return dip_moment(cell, dm, unit, verbose, rho=rho, kpts=self.kpts, **kwargs)
 
-    @lib.with_doc(pbcrohf.ROHF.spin_square.__doc__)
-    def spin_square(self, mo_coeff=None, s=None):
-        '''Treating the k-point sampling wfn as a giant Slater determinant,
-        the spin_square value is the <S^2> of the giant determinant.
-        '''
-        ss, s = pbcrohf.ROHF.spin_square(self, mo_coeff, s)
-        nkpts = len(self.kpts)
-        return ss * nkpts, s * nkpts
+    spin_square = pbcrohf.ROHF.spin_square
 
     get_bands = khf.KSCF.get_bands
 

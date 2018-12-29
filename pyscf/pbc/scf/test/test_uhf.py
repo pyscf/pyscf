@@ -19,7 +19,7 @@ import numpy as np
 from pyscf import lib
 from pyscf.pbc import gto as pgto
 from pyscf.pbc import scf as pscf
-from pyscf.pbc.scf import krohf
+from pyscf.pbc.scf import kuhf
 
 cell = pgto.Cell()
 cell.atom = '''
@@ -33,11 +33,10 @@ cell.verbose = 7
 cell.output = '/dev/null'
 cell.spin = 2
 cell.build()
-
 nk = [2, 2, 1]
 kpts = cell.make_kpts(nk, wrap_around=True)
-kmf = pscf.KROHF(cell, kpts).run()
-mf = pscf.ROHF(cell).run()
+kmf = pscf.KUHF(cell, kpts).run()
+mf = pscf.UHF(cell).run()
 
 def tearDownModule():
     global cell, kmf, mf
@@ -45,76 +44,70 @@ def tearDownModule():
     del cell, kmf, mf
 
 class KnownValues(unittest.TestCase):
-    def test_krohf_kernel(self):
-        self.assertAlmostEqual(kmf.e_tot, -4.569633030494753, 8)
+    def test_kuhf_kernel(self):
+        self.assertAlmostEqual(kmf.e_tot, -4.586720023431593, 8)
 
-    def test_rohf_kernel(self):
-        self.assertAlmostEqual(mf.e_tot, -3.3633746534777718, 8)
+    def test_uhf_kernel(self):
+        self.assertAlmostEqual(mf.e_tot, -3.3634535013441855, 8)
 
-    def test_krhf_vs_rhf(self):
+    def test_kuhf_vs_uhf(self):
         np.random.seed(1)
         k = np.random.random(3)
-        mf = pscf.ROHF(cell, k, exxdiv='vcut_sph')
+        mf = pscf.UHF(cell, k, exxdiv='vcut_sph')
+        dm = mf.get_init_guess(key='1e')
 
         mf.max_cycle = 1
         mf.diis = None
-        e1 = mf.kernel()
+        e1 = mf.kernel(dm)
 
-        kmf = pscf.KROHF(cell, [k], exxdiv='vcut_sph')
+        nao = cell.nao
+        kmf = pscf.KUHF(cell, [k], exxdiv='vcut_sph')
         kmf.max_cycle = 1
         kmf.diis = None
-        e2 = kmf.kernel()
+        e2 = kmf.kernel(dm.reshape(2,1,nao,nao))
         self.assertAlmostEqual(e1, e2, 9)
-        self.assertAlmostEqual(e1, -3.3035461870274085, 9)
+        self.assertAlmostEqual(e1, -3.498612316383892, 9)
 
     def test_init_guess_by_chkfile(self):
         np.random.seed(1)
         k = np.random.random(3)
-        mf = pscf.KROHF(cell, [k], exxdiv='vcut_sph')
-        mf.init_guess = 'hcore'
+        mf = pscf.KUHF(cell, [k], exxdiv='vcut_sph')
         mf.max_cycle = 1
         mf.diis = None
         e1 = mf.kernel()
-        self.assertAlmostEqual(e1, -3.4376090968645068, 9)
+        self.assertAlmostEqual(e1, -3.3058403617753886, 9)
 
-        mf1 = pscf.ROHF(cell, exxdiv='vcut_sph')
+        mf1 = pscf.UHF(cell, exxdiv='vcut_sph')
         mf1.chkfile = mf.chkfile
         mf1.init_guess = 'chkfile'
         mf1.diis = None
         mf1.max_cycle = 1
         e1 = mf1.kernel()
-        self.assertAlmostEqual(e1, -3.4190632006601662, 9)
+        self.assertAlmostEqual(e1, -3.4204798298887615, 9)
         self.assertTrue(mf1.mo_coeff[0].dtype == np.double)
 
     def test_dipole_moment(self):
         dip = mf.dip_moment()
-        self.assertAlmostEqual(lib.finger(dip), 1.6424482249196493, 9)
+        self.assertAlmostEqual(lib.finger(dip), 1.644379056097664, 9)
 
         dip = kmf.dip_moment()
-        self.assertAlmostEqual(lib.finger(dip), 0.7361493256233677, 9)
-
-    def test_get_init_guess(self):
-        cell1 = cell.copy()
-        cell1.dimension = 1
-        cell1.build(0, 0)
-        mf = pscf.ROHF(cell1)
-        dm = mf.get_init_guess(key='minao')
-        self.assertAlmostEqual(lib.finger(dm), -0.06586028869608128, 8)
-
-        mf = pscf.KROHF(cell1)
-        dm = mf.get_init_guess(key='minao')
-        self.assertAlmostEqual(lib.finger(dm), -0.06586028869608128, 8)
+        self.assertAlmostEqual(lib.finger(dip), 0.6934374246768265, 9)
 
     def test_spin_square(self):
         ss = kmf.spin_square()[0]
-        self.assertAlmostEqual(ss, 2, 9)
+        self.assertAlmostEqual(ss, 2.077383024287556, 9)
 
-    def test_analyze(self):
-        pop, chg = kmf.analyze()
-        self.assertAlmostEqual(lib.finger(pop), 1.1120443320325235, 7)
-        self.assertAlmostEqual(sum(chg), 0, 7)
-        self.assertAlmostEqual(lib.finger(chg), 0.002887875601340767, 7)
+    def test_bands(self):
+        np.random.seed(1)
+        kpts_bands = np.random.random((1,3))
+
+        e = mf.get_bands(kpts_bands)[0]
+        self.assertAlmostEqual(lib.finger(e), 0.9038555558945438, 6)
+
+        e = kmf.get_bands(kpts_bands)[0]
+        self.assertAlmostEqual(lib.finger(e), -0.30205862019368834, 6)
+
 
 if __name__ == '__main__':
-    print("Tests for PBC ROHF and PBC KROHF")
+    print("Tests for PBC UHF and PBC KUHF")
     unittest.main()
